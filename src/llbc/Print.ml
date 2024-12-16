@@ -343,8 +343,10 @@ module Values = struct
       "(" ^ String.concat ", " (List.map ty_to_string sg.inputs) ^ ")"
     in
     let output = ty_to_string sg.output in
-    inputs ^ " -> " ^ output ^ "\n- Regions_hierarchy:\n"
-    ^ abs_region_groups_to_string sg.regions_hierarchy
+    inputs ^ " -> " ^ output ^ "\n- regions_hierarchy:\n"
+    ^ region_var_groups_to_string sg.regions_hierarchy
+    ^ "\n- abs_regions_hierarchy:\n"
+    ^ abs_region_groups_to_string sg.abs_regions_hierarchy
 end
 
 (** Pretty-printing for contexts *)

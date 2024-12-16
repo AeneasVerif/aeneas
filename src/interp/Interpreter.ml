@@ -102,7 +102,15 @@ let compute_contexts (m : crate) : decls_ctx =
  *)
 let normalize_inst_fun_sig (span : Meta.span) (ctx : eval_ctx)
     (sg : inst_fun_sig) : inst_fun_sig =
-  let { regions_hierarchy = _; trait_type_constraints; inputs; output } = sg in
+  let {
+    regions_hierarchy = _;
+    abs_regions_hierarchy = _;
+    trait_type_constraints;
+    inputs;
+    output;
+  } =
+    sg
+  in
   cassert_warn __FILE__ __LINE__
     (trait_type_constraints = [])
     span
@@ -220,7 +228,7 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
   let ctx =
     create_push_abstractions_from_abs_region_groups
       (fun rg_id -> SynthInput rg_id)
-      inst_sg.regions_hierarchy region_can_end compute_abs_avalues ctx
+      inst_sg.abs_regions_hierarchy region_can_end compute_abs_avalues ctx
   in
   (* Split the variables between return var, inputs and remaining locals *)
   let body = Option.get fdef.body in
@@ -295,7 +303,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
     RegionGroupId.mapi
       (fun rg_id rg ->
         if RegionGroupId.Set.mem rg_id parent_rgs then Some rg.id else None)
-      inst_sg.regions_hierarchy
+      inst_sg.abs_regions_hierarchy
   in
   let parent_input_abs_ids =
     List.filter_map (fun x -> x) parent_input_abs_ids
@@ -331,7 +339,8 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
       let ctx =
         create_push_abstractions_from_abs_region_groups
           (fun rg_id -> SynthRet rg_id)
-          ret_inst_sg.regions_hierarchy region_can_end compute_abs_avalues ctx
+          ret_inst_sg.abs_regions_hierarchy region_can_end compute_abs_avalues
+          ctx
       in
       ctx)
     else ctx
@@ -356,7 +365,9 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
    * we are evaluating an [EndContinue]) or not.
    *)
   let current_abs_id, end_fun_synth_input =
-    let fun_abs_id = (RegionGroupId.nth inst_sg.regions_hierarchy back_id).id in
+    let fun_abs_id =
+      (RegionGroupId.nth inst_sg.abs_regions_hierarchy back_id).id
+    in
     if not inside_loop then (Some fun_abs_id, true)
     else
       (* We are inside a loop *)

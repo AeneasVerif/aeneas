@@ -1410,7 +1410,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
   let args, ctx, cc = eval_operands config span args ctx in
 
   (* Generate the abstractions and insert them in the context *)
-  let abs_ids = List.map (fun rg -> rg.id) inst_sg.regions_hierarchy in
+  let abs_ids = List.map (fun rg -> rg.id) inst_sg.abs_regions_hierarchy in
   let args_with_rtypes = List.combine args inst_sg.inputs in
 
   (* Check the type of the input arguments *)
@@ -1456,14 +1456,13 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
   let ctx =
     create_push_abstractions_from_abs_region_groups
       (fun rg_id -> FunCall (call_id, rg_id))
-      inst_sg.regions_hierarchy region_can_end compute_abs_avalues ctx
+      inst_sg.abs_regions_hierarchy region_can_end compute_abs_avalues ctx
   in
   (* Synthesize the symbolic AST *)
   let cc =
     cc_comp cc
-      (S.synthesize_regular_function_call fid call_id ctx sg regions_hierarchy
-         abs_ids generics trait_method_generics args args_places ret_spc
-         dest_place)
+      (S.synthesize_regular_function_call fid call_id ctx sg inst_sg abs_ids
+         generics trait_method_generics args args_places ret_spc dest_place)
   in
 
   (* Move the return value to its destination *)

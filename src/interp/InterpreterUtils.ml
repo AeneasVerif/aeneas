@@ -619,20 +619,21 @@ let compute_regions_hierarchy_for_fun_call (span : Meta.span option)
         RVar (Free nrid)
     end
   in
+  (* We want to make sure that we numerotate the region parameters, even the erased
+     ones, in order, before introducing fresh regions for the erased regions which
+     appear in the types parameters *)
+  let generic_regions =
+    List.map (visitor#visit_region ()) generic_args.regions
+  in
   (* Explore the types to generate the fresh regions *)
   let generic_types = List.map (visitor#visit_ty ()) generic_args.types in
 
   (* Reconstruct the generics *)
-  let fresh_regions = RegionId.Set.elements !fresh_regions in
-  let fresh_region_vars : region_var list =
-    List.map (fun index -> { Types.index; name = None }) fresh_regions
-  in
-  let fresh_regions = List.map (fun rid -> RVar (Free rid)) fresh_regions in
   let subst =
     let { regions = _; types = _; const_generics; trait_refs } = generic_args in
     let generic_args =
       {
-        regions = fresh_regions;
+        regions = generic_regions;
         types = generic_types;
         const_generics;
         trait_refs
@@ -640,9 +641,7 @@ let compute_regions_hierarchy_for_fun_call (span : Meta.span option)
       }
     in
     let tr_self : trait_instance_id = UnknownTrait __FUNCTION__ in
-    Substitute.make_subst_from_generics
-      { sg.generics with regions = fresh_region_vars }
-      generic_args tr_self
+    Substitute.make_subst_from_generics sg.generics generic_args tr_self
   in
 
   (* Substitute the inputs and outputs *)
@@ -663,6 +662,10 @@ let compute_regions_hierarchy_for_fun_call (span : Meta.span option)
         trait_type_constraints;
       } =
         generics
+      in
+      let fresh_regions = RegionId.Set.elements !fresh_regions in
+      let fresh_region_vars : region_var list =
+        List.map (fun index -> { Types.index; name = None }) fresh_regions
       in
       let open Substitute in
       let trait_clauses =
@@ -709,7 +712,11 @@ let compute_regions_hierarchy_for_fun_call (span : Meta.span option)
 
   let inst_sig =
     (* Generate fresh abstraction ids and create a substitution from region
-       group ids to abstraction ids *)
+       group ids to abstraction ids.
+
+       Remark: the region ids used here are fresh (we generated them
+       just above).
+    *)
     let asubst_map : AbstractionId.id RegionGroupId.Map.t =
       RegionGroupId.Map.of_list
         (List.map
@@ -719,13 +726,21 @@ let compute_regions_hierarchy_for_fun_call (span : Meta.span option)
     let asubst (rg_id : RegionGroupId.id) : AbstractionId.id =
       RegionGroupId.Map.find rg_id asubst_map
     in
-    let subst_region_group (rg : region_var_group) : abs_region_group =
+    let subst_abs_region_group (rg : region_var_group) : abs_region_group =
       let id = asubst rg.id in
       let parents = List.map asubst rg.parents in
       ({ id; regions = rg.regions; parents } : abs_region_group)
     in
-    let regions_hierarchy = List.map subst_region_group regions_hierarchy in
-    { regions_hierarchy; trait_type_constraints; inputs; output }
+    let abs_regions_hierarchy =
+      List.map subst_abs_region_group regions_hierarchy
+    in
+    {
+      regions_hierarchy;
+      abs_regions_hierarchy;
+      trait_type_constraints;
+      inputs;
+      output;
+    }
   in
 
   (* Compute the instantiated function signature *)

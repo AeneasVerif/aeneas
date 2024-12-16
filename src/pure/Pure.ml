@@ -1112,17 +1112,11 @@ type back_sg_info = {
 }
 [@@deriving show]
 
-(** A *decomposed* function signature. *)
-type decomposed_fun_sig = {
-  generics : generic_params;
-      (** TODO: we should analyse the signature to make the type parameters implicit whenever possible *)
-  llbc_generics : Types.generic_params;
-      (** We use the LLBC generics to generate "pretty" names, for instance
-          for the variables we introduce for the trait clauses: we derive
-          those names from the types, and when doing so it is more meaningful
-          to derive them from the original LLBC types from before the
-          simplification of types like boxes and references. *)
-  preds : predicates;
+(** A *decomposed* function type (without parameters).
+
+    This is a helper type used by the translation.
+ *)
+type decomposed_fun_type = {
   fwd_inputs : ty list;
       (** The types of the inputs of the forward function.
 
@@ -1156,6 +1150,24 @@ type decomposed_fun_sig = {
       (** Information about the backward functions *)
   fwd_info : fun_sig_info;
       (** Additional information about the forward function *)
+}
+[@@deriving show]
+
+(** A *decomposed* function signature.
+
+    This is a helper type used by the translation.
+ *)
+type decomposed_fun_sig = {
+  generics : generic_params;
+      (** TODO: we should analyse the signature to make the type parameters implicit whenever possible *)
+  llbc_generics : Types.generic_params;
+      (** We use the LLBC generics to generate "pretty" names, for instance
+          for the variables we introduce for the trait clauses: we derive
+          those names from the types, and when doing so it is more meaningful
+          to derive them from the original LLBC types from before the
+          simplification of types like boxes and references. *)
+  preds : predicates;
+  fun_ty : decomposed_fun_type;  (** The type itself *)
 }
 [@@deriving show]
 

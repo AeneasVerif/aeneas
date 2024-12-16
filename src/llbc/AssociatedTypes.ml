@@ -440,12 +440,11 @@ let ctx_normalize_erase_ty (span : Meta.span) (ctx : eval_ctx) (ty : ty) : ty =
   let ty = ctx_normalize_ty (Some span) ctx ty in
   erase_regions ty
 
-let ctx_normalize_trait_type_constraint_region_binder (span : Meta.span)
+let ctx_normalize_trait_type_constraint_region_binder (span : Meta.span option)
     (ctx : eval_ctx) (ttc : trait_type_constraint region_binder) :
     trait_type_constraint region_binder =
   norm_ctx_normalize_region_binder norm_ctx_normalize_trait_type_constraint
-    (mk_norm_ctx (Some span) ctx)
-    ttc
+    (mk_norm_ctx span ctx) ttc
 
 (** Same as [type_decl_get_instantiated_variants_fields_types] but normalizes the types *)
 let type_decl_get_inst_norm_variants_fields_rtypes (span : Meta.span)
@@ -517,12 +516,26 @@ let ctx_subst_norm_signature (span : Meta.span) (ctx : eval_ctx)
     substitute_signature asubst r_subst ty_subst cg_subst tr_subst tr_self sg
       regions_hierarchy
   in
-  let { regions_hierarchy; inputs; output; trait_type_constraints } = sg in
+  let {
+    regions_hierarchy;
+    abs_regions_hierarchy;
+    inputs;
+    output;
+    trait_type_constraints;
+  } =
+    sg
+  in
   let inputs = List.map (ctx_normalize_ty (Some span) ctx) inputs in
   let output = ctx_normalize_ty (Some span) ctx output in
   let trait_type_constraints =
     List.map
-      (ctx_normalize_trait_type_constraint_region_binder span ctx)
+      (ctx_normalize_trait_type_constraint_region_binder (Some span) ctx)
       trait_type_constraints
   in
-  { regions_hierarchy; inputs; output; trait_type_constraints }
+  {
+    regions_hierarchy;
+    abs_regions_hierarchy;
+    inputs;
+    output;
+    trait_type_constraints;
+  }

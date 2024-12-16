@@ -41,8 +41,13 @@ type call = {
           borrows (we need to perform lookups).
        *)
   sg : fun_sig option;
-      (** The uninstantiated function signature, if this is not a unop/binop *)
-  regions_hierarchy : region_var_groups;
+      (** The un-instantiated function signature, if this is not a unop/binop.
+
+          This is useful to retrieve the names of the inputs, to generate pretty
+          names in the translation.
+       *)
+  inst_sg : inst_fun_sig option;
+      (** The instantiated function signature, if this is not a unop/binop *)
   abstractions : AbstractionId.id list;
       (** The region abstractions introduced upon calling the function *)
   generics : generic_args;

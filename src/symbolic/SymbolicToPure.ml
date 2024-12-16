@@ -387,9 +387,9 @@ let abs_to_string (ctx : bs_ctx) (abs : V.abs) : string =
 let ctx_get_effect_info_for_bid (ctx : bs_ctx) (bid : RegionGroupId.id option) :
     fun_effect_info =
   match bid with
-  | None -> ctx.sg.fwd_info.effect_info
+  | None -> ctx.sg.fun_ty.fwd_info.effect_info
   | Some bid ->
-      let back_sg = RegionGroupId.Map.find bid ctx.sg.back_sg in
+      let back_sg = RegionGroupId.Map.find bid ctx.sg.fun_ty.back_sg in
       back_sg.effect_info
 
 let ctx_get_effect_info (ctx : bs_ctx) : fun_effect_info =
@@ -1047,8 +1047,9 @@ let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fun_id_or_trait_method_ref)
           let dsg = A.FunDeclId.Map.find fid ctx.fun_dsigs in
           let info =
             match gid with
-            | None -> dsg.fwd_info.effect_info
-            | Some gid -> (RegionGroupId.Map.find gid dsg.back_sg).effect_info
+            | None -> dsg.fun_ty.fwd_info.effect_info
+            | Some gid ->
+                (RegionGroupId.Map.find gid dsg.fun_ty.back_sg).effect_info
           in
           {
             info with
@@ -1070,7 +1071,7 @@ let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fun_id_or_trait_method_ref)
           | Some gid -> RegionGroupId.Map.find gid loop_info.back_effect_infos)
       | _ -> craise __FILE__ __LINE__ ctx.span "Unreachable")
 
-(** Translate a function signature to a decomposed function signature.
+(** Translate an instantiated function signature to a decomposed function signature.
 
     Note that the function also takes a list of names for the inputs, and
     computes, for every output for the backward functions, a corresponding
@@ -1078,42 +1079,33 @@ let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fun_id_or_trait_method_ref)
     of the forward function) which we use as hints to generate pretty names
     in the extracted code.
 
-    We use [bid] ("backward function id") only if we split the forward
-    and the backward functions.
+    Remark: as we take as input an instantiated function signature, we assume
+    the types have already been normalized.
+
+    - [generic_args]: the generic arguments with which the uninstantiated
+      signature was instantiated, leading to the current [sg]
  *)
-let translate_fun_sig_with_regions_hierarchy_to_decomposed
-    (span : Meta.span option) (decls_ctx : C.decls_ctx)
-    (fun_id : A.fun_id_or_trait_method_ref)
-    (regions_hierarchy : T.region_var_groups) (sg : A.fun_sig)
-    (input_names : string option list) : decomposed_fun_sig =
+let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
+    (decls_ctx : C.decls_ctx) (fun_id : A.fun_id_or_trait_method_ref)
+    (sg : A.inst_fun_sig) (input_names : string option list) :
+    decomposed_fun_type =
+  log#ldebug
+    (lazy
+      (let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
+       "translate_inst_fun_sig_with_regions_hierarchy_to_decomposed_fun_type: "
+       ^ "\n- sg.regions_hierarchy: "
+       ^ Print.Values.abs_region_groups_to_string sg.abs_regions_hierarchy
+       ^ "\n- inst_sg (inputs, output): "
+       ^ Print.Values.inst_fun_sig_to_string ctx sg
+       ^ "\n"));
+
   let fun_infos = decls_ctx.fun_ctx.fun_infos in
   let type_infos = decls_ctx.type_ctx.type_infos in
+
   (* We need an evaluation context to normalize the types (to normalize the
      associated types, etc. - for instance it may happen that the types
      refer to the types associated to a trait ref, but where the trait ref
      is a known impl). *)
-  (* Create the context *)
-  let ctx =
-    let region_groups =
-      List.map (fun (g : T.region_var_group) -> g.id) regions_hierarchy
-    in
-    let ctx =
-      InterpreterUtils.initialize_eval_ctx span decls_ctx region_groups
-        sg.generics.types sg.generics.const_generics
-    in
-    (* Compute the normalization map for the *sty* types and add it to the context *)
-    AssociatedTypes.ctx_add_norm_trait_types_from_preds span ctx
-      sg.generics.trait_type_constraints
-  in
-
-  (* Normalize the signature *)
-  let sg =
-    let ({ A.inputs; output; _ } : A.fun_sig) = sg in
-    let norm = AssociatedTypes.ctx_normalize_ty span ctx in
-    let inputs = List.map norm inputs in
-    let output = norm output in
-    { sg with A.inputs; output }
-  in
 
   (* Is the forward function stateful, and can it fail? *)
   let fwd_effect_info =
@@ -1140,7 +1132,7 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed
   (* Small helper to translate types for backward functions *)
   let translate_back_ty_for_gid (gid : T.RegionGroupId.id) (ty : T.ty) :
       ty option =
-    let rg = T.RegionGroupId.nth regions_hierarchy gid in
+    let rg = T.RegionGroupId.nth sg.regions_hierarchy gid in
     (* Compute the set of regions belonging to this group *)
     let gr_regions = T.RegionId.Set.of_list rg.regions in
     let keep_region r =
@@ -1161,7 +1153,7 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed
   let translate_back_inputs_for_gid (gid : T.RegionGroupId.id) : ty list =
     (* For now we don't support nested borrows, so we check that there
        aren't parent regions *)
-    let parents = list_ancestor_region_groups regions_hierarchy gid in
+    let parents = list_ancestor_region_groups sg.regions_hierarchy gid in
     classert_opt_span __FILE__ __LINE__
       (T.RegionGroupId.Set.is_empty parents)
       span
@@ -1301,7 +1293,7 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed
   in
   let back_sg =
     RegionGroupId.Map.of_list
-      (List.map compute_back_info_for_group regions_hierarchy)
+      (List.map compute_back_info_for_group sg.regions_hierarchy)
   in
 
   (* The additional information about the forward function *)
@@ -1337,19 +1329,77 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed
     info
   in
 
+  (* Return *)
+  { fwd_inputs; fwd_output; back_sg; fwd_info }
+
+let translate_fun_sig_with_regions_hierarchy_to_decomposed (span : span option)
+    (decls_ctx : C.decls_ctx) (fun_id : A.fun_id_or_trait_method_ref)
+    (regions_hierarchy : T.region_var_groups) (sg : A.fun_sig)
+    (input_names : string option list) : decomposed_fun_sig =
+  (* We need to normalize the signature *)
+  let inst_sg : LlbcAst.inst_fun_sig =
+    (* Create the context *)
+    let ctx =
+      let region_groups =
+        List.map (fun (g : T.region_var_group) -> g.id) regions_hierarchy
+      in
+      let ctx =
+        InterpreterUtils.initialize_eval_ctx span decls_ctx region_groups
+          sg.generics.types sg.generics.const_generics
+      in
+      (* Compute the normalization map for the *sty* types and add it to the context *)
+      AssociatedTypes.ctx_add_norm_trait_types_from_preds span ctx
+        sg.generics.trait_type_constraints
+    in
+
+    (* Normalize the signature *)
+    let ({ A.inputs; output; _ } : A.fun_sig) = sg in
+    let norm = AssociatedTypes.ctx_normalize_ty span ctx in
+    let inputs = List.map norm inputs in
+    let output = norm output in
+    let trait_type_constraints =
+      List.map
+        (AssociatedTypes.ctx_normalize_trait_type_constraint_region_binder span
+           ctx)
+        sg.generics.trait_type_constraints
+    in
+
+    let _, fresh_abs_id = V.AbstractionId.fresh_stateful_generator () in
+    let region_gr_id_abs_id_list =
+      List.map
+        (fun (rg : T.region_var_group) -> (rg.id, fresh_abs_id ()))
+        regions_hierarchy
+    in
+    let region_gr_id_to_abs =
+      RegionGroupId.Map.of_list region_gr_id_abs_id_list
+    in
+    let region_id_to_abs id = RegionGroupId.Map.find id region_gr_id_to_abs in
+    let abs_regions_hierarchy =
+      List.map
+        (fun (rg : T.region_var_group) ->
+          let id = region_id_to_abs rg.id in
+          let parents = List.map region_id_to_abs rg.parents in
+          { T.id; parents; regions = rg.regions })
+        regions_hierarchy
+    in
+    (* We need to introduce region abstraction ids *)
+    {
+      regions_hierarchy;
+      abs_regions_hierarchy;
+      trait_type_constraints;
+      inputs;
+      output;
+    }
+  in
+
   (* Generic parameters *)
   let generics, preds = translate_generic_params span sg.generics in
 
-  (* Return *)
-  {
-    generics;
-    llbc_generics = sg.generics;
-    preds;
-    fwd_inputs;
-    fwd_output;
-    back_sg;
-    fwd_info;
-  }
+  let fun_ty =
+    translate_inst_fun_sig_to_decomposed_fun_type span decls_ctx fun_id inst_sg
+      input_names
+  in
+  { generics; llbc_generics = sg.generics; preds; fun_ty }
 
 let translate_fun_sig_to_decomposed (decls_ctx : C.decls_ctx)
     (fun_id : FunDeclId.id) (sg : A.fun_sig) (input_names : string option list)
@@ -1361,6 +1411,7 @@ let translate_fun_sig_to_decomposed (decls_ctx : C.decls_ctx)
   let span =
     (FunDeclId.Map.find fun_id decls_ctx.fun_ctx.fun_decls).item_meta.span
   in
+
   translate_fun_sig_with_regions_hierarchy_to_decomposed (Some span) decls_ctx
     (FunId (FRegular fun_id)) regions_hierarchy sg input_names
 
@@ -1408,10 +1459,9 @@ let mk_back_output_ty_from_effect_info (effect_info : fun_effect_info)
     parent function region groups can be linked to a region abstraction
     introduced by the loop.
  *)
-let compute_back_tys_with_info (dsg : Pure.decomposed_fun_sig)
-    ?(keep_rg_ids : RegionGroupId.Set.t option = None)
-    (subst : (generic_args * trait_instance_id) option) :
-    (back_sg_info * ty) option list =
+let compute_back_tys_with_info (dsg : Pure.decomposed_fun_type)
+    (keep_rg_ids : RegionGroupId.Set.t option) : (back_sg_info * ty) option list
+    =
   let keep_rg_id =
     match keep_rg_ids with
     | None -> fun _ -> true
@@ -1433,30 +1483,19 @@ let compute_back_tys_with_info (dsg : Pure.decomposed_fun_sig)
             mk_back_output_ty_from_effect_info effect_info inputs output
           in
           let ty = mk_arrows inputs output in
-          (* Substitute - TODO: normalize *)
-          let ty =
-            match subst with
-            | None -> ty
-            | Some (generics, tr_self) ->
-                let subst =
-                  make_subst_from_generics dsg.generics generics tr_self
-                in
-                ty_substitute subst ty
-          in
           Some (back_sg, ty)
       else (* We ignore this region group *)
         None)
     (RegionGroupId.Map.bindings dsg.back_sg)
 
-let compute_back_tys (dsg : Pure.decomposed_fun_sig)
-    ?(keep_rg_ids : RegionGroupId.Set.t option = None)
-    (subst : (generic_args * trait_instance_id) option) : ty option list =
-  List.map (Option.map snd) (compute_back_tys_with_info dsg ~keep_rg_ids subst)
+let compute_back_tys (dsg : Pure.decomposed_fun_type)
+    (keep_rg_ids : RegionGroupId.Set.t option) : ty option list =
+  List.map (Option.map snd) (compute_back_tys_with_info dsg keep_rg_ids)
 
 (** Compute the output type of a function, from a decomposed signature
     (the output type contains the type of the value returned by the forward
     function as well as the types of the returned backward functions). *)
-let compute_output_ty_from_decomposed (dsg : Pure.decomposed_fun_sig) : ty =
+let compute_output_ty_from_decomposed (dsg : Pure.decomposed_fun_type) : ty =
   (* Compute the arrow types for all the backward functions *)
   let back_tys = List.filter_map (fun x -> x) (compute_back_tys dsg None) in
   (* Group the forward output and the types of the backward functions *)
@@ -1478,17 +1517,17 @@ let translate_fun_sig_from_decomposed (dsg : Pure.decomposed_fun_sig) : fun_sig
   let llbc_generics = dsg.llbc_generics in
   let preds = dsg.preds in
   (* Compute the effects info *)
-  let fwd_info = dsg.fwd_info in
+  let fwd_info = dsg.fun_ty.fwd_info in
   let back_effect_info =
     RegionGroupId.Map.of_list
       (List.map
          (fun ((gid, info) : RegionGroupId.id * back_sg_info) ->
            (gid, info.effect_info))
-         (RegionGroupId.Map.bindings dsg.back_sg))
+         (RegionGroupId.Map.bindings dsg.fun_ty.back_sg))
   in
   let inputs, output =
-    let output = compute_output_ty_from_decomposed dsg in
-    let inputs = dsg.fwd_inputs in
+    let output = compute_output_ty_from_decomposed dsg.fun_ty in
+    let inputs = dsg.fun_ty.fwd_inputs in
     (inputs, output)
   in
   (* Compute which input type parameters are explicit/implicit *)
@@ -1618,10 +1657,10 @@ let fresh_back_vars_for_current_fun (ctx : bs_ctx)
               ^ String.concat "" (List.filter_map (fun x -> x) region_names)
         in
         Some name)
-      (RegionGroupId.Map.bindings ctx.sg.back_sg)
+      (RegionGroupId.Map.bindings ctx.sg.fun_ty.back_sg)
   in
   let back_vars =
-    List.combine back_var_names (compute_back_tys ctx.sg ~keep_rg_ids None)
+    List.combine back_var_names (compute_back_tys ctx.sg.fun_ty keep_rg_ids)
   in
   let back_vars =
     List.map
@@ -2535,7 +2574,10 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
       ("translate_function_call:\n" ^ "\n- call.call_id:"
       ^ S.show_call_id call.call_id
       ^ "\n\n- call.generics:\n"
-      ^ ctx_generic_args_to_string ctx call.generics));
+      ^ ctx_generic_args_to_string ctx call.generics
+      ^ "\n\n- call.inst_sg:\n"
+      ^ Print.option_to_string (inst_fun_sig_to_string call.ctx) call.inst_sg
+      ^ "\n"));
   (* Translate the function call *)
   let generics = ctx_translate_fwd_generic_args ctx call.generics in
   let args =
@@ -2547,7 +2589,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
   in
   let dest_mplace = translate_opt_mplace call.dest_place in
   (* Retrieve the function id, and register the function call in the context
-   * if necessary. *)
+     if necessary. *)
   let ctx, fun_id, effect_info, args, dest_v =
     match call.call_id with
     | S.Fun (fid, call_id) ->
@@ -2575,30 +2617,20 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
         let ctx, ignore_fwd_output, back_funs_map, back_funs =
           (* We need to compute the signatures of the backward functions. *)
           let sg = Option.get call.sg in
+          let inst_sg = Option.get call.inst_sg in
           let decls_ctx = ctx.decls_ctx in
           let dsg =
-            translate_fun_sig_with_regions_hierarchy_to_decomposed
-              (Some ctx.span) decls_ctx fid call.regions_hierarchy sg
+            translate_inst_fun_sig_to_decomposed_fun_type (Some ctx.span)
+              decls_ctx fid inst_sg
               (List.map (fun _ -> None) sg.inputs)
           in
+          let back_tys = compute_back_tys_with_info dsg None in
           log#ldebug
-            (lazy ("dsg.generics:\n" ^ show_generic_params dsg.generics));
-          let tr_self, all_generics =
-            match call.trait_method_generics with
-            | None -> (UnknownTrait __FUNCTION__, generics)
-            | Some (all_generics, tr_self) ->
-                let all_generics =
-                  ctx_translate_fwd_generic_args ctx all_generics
-                in
-                let tr_self =
-                  translate_fwd_trait_instance_id (Some ctx.span)
-                    ctx.type_ctx.type_infos tr_self
-                in
-                (tr_self, all_generics)
-          in
-          let back_tys =
-            compute_back_tys_with_info dsg (Some (all_generics, tr_self))
-          in
+            (lazy
+              ("back_tys:\n "
+              ^ String.concat "\n"
+                  (List.map (pure_ty_to_string ctx)
+                     (List.map snd (List.filter_map (fun x -> x) back_tys)))));
           (* Introduce variables for the backward functions *)
           (* Compute a proper basename for the variables *)
           let back_fun_name =
@@ -2663,7 +2695,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
           let gids =
             List.map
               (fun (g : T.region_var_group) -> g.id)
-              call.regions_hierarchy
+              inst_sg.regions_hierarchy
           in
           let back_vars =
             List.map (Option.map mk_texpression_from_var) back_vars
@@ -2678,7 +2710,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
         let dest = mk_typed_pattern_from_var dest dest_mplace in
         let dest =
           (* Here there is something subtle: as we might ignore the output
-             of the forward function (because it translates to unit) we doNOT
+             of the forward function (because it translates to unit) we do NOT
              necessarily introduce in the let-binding the variable to which we
              map the symbolic value which was introduced for the output of the
              function call. This would be problematic if later we need to
@@ -2863,7 +2895,7 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
         List.map (fun ty -> (None, ty)) tys
       else
         (* Regular function body *)
-        let back_sg = RegionGroupId.Map.find bid ctx.sg.back_sg in
+        let back_sg = RegionGroupId.Map.find bid ctx.sg.fun_ty.back_sg in
         List.combine back_sg.output_names back_sg.outputs
     in
     let ctx, vars = fresh_vars vars ctx in
@@ -2952,7 +2984,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
     | Some nstate -> mk_simpl_tuple_pattern [ nstate; output ]
   in
   (* Retrieve the function id, and register the function call in the context
-     if necessary.Arith_status *)
+     if necessary. *)
   let ctx, func =
     bs_ctx_register_backward_call abs call_id rg_id back_inputs ctx
   in
@@ -2966,7 +2998,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
       (fun (arg, mp) -> mk_opt_mplace_texpression mp arg)
       (List.combine inputs args_mplaces)
   in
-  (* The backward function might have been filtered it does nothing
+  (* The backward function might have been filtered if it does nothing
      (consumes unit and returns unit). *)
   match func with
   | None -> next_e
@@ -3456,7 +3488,7 @@ and translate_forward_end (ectx : C.eval_ctx)
                We need to introduce fresh variables for the additional inputs,
                because they are locally introduced in a lambda.
             *)
-            let back_sg = RegionGroupId.Map.find bid ctx.sg.back_sg in
+            let back_sg = RegionGroupId.Map.find bid ctx.sg.fun_ty.back_sg in
             let ctx, backward_inputs_no_state =
               fresh_vars back_sg.inputs_no_state ctx
             in
@@ -3507,7 +3539,7 @@ and translate_forward_end (ectx : C.eval_ctx)
               in
               let output =
                 mk_simpl_tuple_ty
-                  (RegionGroupId.Map.find bid ctx.sg.back_sg).outputs
+                  (RegionGroupId.Map.find bid ctx.sg.fun_ty.back_sg).outputs
               in
               mk_output output
             in
@@ -3548,8 +3580,8 @@ and translate_forward_end (ectx : C.eval_ctx)
   *)
   let translate_end ctx =
     (* Compute the output of the forward function *)
-    let fwd_effect_info = ctx.sg.fwd_info.effect_info in
-    let ctx, pure_fwd_var = fresh_var None ctx.sg.fwd_output ctx in
+    let fwd_effect_info = ctx.sg.fun_ty.fwd_info.effect_info in
+    let ctx, pure_fwd_var = fresh_var None ctx.sg.fun_ty.fwd_output ctx in
     let fwd_e = translate_one_end ctx None in
 
     (* If we reached a loop: if we are *inside* a loop, we need to ignore the
@@ -3577,7 +3609,7 @@ and translate_forward_end (ectx : C.eval_ctx)
         (fun ((gid, _) : RegionGroupId.id * back_sg_info) ->
           if keep_rg_id gid then Some (translate_one_end ctx (Some gid))
           else None)
-        (RegionGroupId.Map.bindings ctx.sg.back_sg)
+        (RegionGroupId.Map.bindings ctx.sg.fun_ty.back_sg)
     in
 
     (* Compute whether the backward expressions should be evaluated straight
@@ -3593,7 +3625,7 @@ and translate_forward_end (ectx : C.eval_ctx)
                  sg.inputs = [] && sg.effect_info.can_fail
                else false)
           else None)
-        (RegionGroupId.Map.bindings ctx.sg.back_sg)
+        (RegionGroupId.Map.bindings ctx.sg.fun_ty.back_sg)
     in
 
     (* Introduce variables for the backward functions.
@@ -3604,7 +3636,7 @@ and translate_forward_end (ectx : C.eval_ctx)
     (* Create the return expressions *)
     let vars =
       let back_vars = List.filter_map (fun x -> x) back_vars in
-      if ctx.sg.fwd_info.ignore_output then back_vars
+      if ctx.sg.fun_ty.fwd_info.ignore_output then back_vars
       else pure_fwd_var :: back_vars
     in
     let vars = List.map mk_texpression_from_var vars in
@@ -3699,14 +3731,14 @@ and translate_forward_end (ectx : C.eval_ctx)
 
       (* Introduce a fresh output value for the forward function *)
       let ctx, fwd_output, output_pat =
-        if ctx.sg.fwd_info.ignore_output then
+        if ctx.sg.fun_ty.fwd_info.ignore_output then
           (* Note that we still need the forward output (which is unit),
              because even though the loop function will ignore the forward output,
              the forward expression will still compute an output (which
              will have type unit - otherwise we can't ignore it). *)
           (ctx, mk_unit_rvalue, [])
         else
-          let ctx, output_var = fresh_var None ctx.sg.fwd_output ctx in
+          let ctx, output_var = fresh_var None ctx.sg.fun_ty.fwd_output ctx in
           ( ctx,
             mk_texpression_from_var output_var,
             [ mk_typed_pattern_from_var output_var None ] )
@@ -3736,7 +3768,7 @@ and translate_forward_end (ectx : C.eval_ctx)
               | Some v -> Some (mk_typed_pattern_from_var v None))
             back_vars
         in
-        let gids = RegionGroupId.Map.keys ctx.sg.back_sg in
+        let gids = RegionGroupId.Map.keys ctx.sg.fun_ty.back_sg in
         let back_funs_map =
           RegionGroupId.Map.of_list
             (List.combine gids
@@ -3882,13 +3914,15 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   in
 
   (* The output type of the loop function *)
-  let fwd_effect_info = { ctx.sg.fwd_info.effect_info with is_rec = true } in
+  let fwd_effect_info =
+    { ctx.sg.fun_ty.fwd_info.effect_info with is_rec = true }
+  in
   let back_effect_infos, output_ty =
     (* The loop backward functions consume the same additional inputs as the parent
        function, but have custom outputs *)
     log#ldebug
       (lazy
-        (let back_sgs = RegionGroupId.Map.bindings ctx.sg.back_sg in
+        (let back_sgs = RegionGroupId.Map.bindings ctx.sg.fun_ty.back_sg in
          "translate_loop:" ^ "\n- back_sgs: "
          ^ (Print.list_to_string
               (Print.pair_to_string RegionGroupId.to_string show_back_sg_info))
@@ -3903,7 +3937,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
         (fun ((rg_id, given_back) : RegionGroupId.id * ty list) ->
           (* Lookup the effect information about the parent function region group
              associated to this loop region abstraction *)
-          let back_sg = RegionGroupId.Map.find rg_id ctx.sg.back_sg in
+          let back_sg = RegionGroupId.Map.find rg_id ctx.sg.fun_ty.back_sg in
           (* Remark: the effect info of the backward function for the loop
              is almost the same as for the backward function of the parent function.
              Quite importantly, the fact that the function is stateful and/or can fail
@@ -3935,11 +3969,11 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
     let back_tys = List.filter_map snd back_info_tys in
     let output =
       let output =
-        if ctx.sg.fwd_info.ignore_output then back_tys
-        else ctx.sg.fwd_output :: back_tys
+        if ctx.sg.fun_ty.fwd_info.ignore_output then back_tys
+        else ctx.sg.fun_ty.fwd_output :: back_tys
       in
       let output = mk_simpl_tuple_ty output in
-      let effect_info = ctx.sg.fwd_info.effect_info in
+      let effect_info = ctx.sg.fun_ty.fwd_info.effect_info in
       let output =
         if effect_info.stateful then mk_simpl_tuple_ty [ mk_state_ty; output ]
         else output
@@ -3982,11 +4016,11 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
     let mk_panic =
       (* Note that we reuse the effect information from the parent function *)
       let effect_info = ctx_get_effect_info ctx in
-      let back_tys = compute_back_tys ctx.sg None in
+      let back_tys = compute_back_tys ctx.sg.fun_ty None in
       let back_tys = List.filter_map (fun x -> x) back_tys in
       let tys =
-        if ctx.sg.fwd_info.ignore_output then back_tys
-        else ctx.sg.fwd_output :: back_tys
+        if ctx.sg.fun_ty.fwd_info.ignore_output then back_tys
+        else ctx.sg.fun_ty.fwd_output :: back_tys
       in
       let output_ty = mk_simpl_tuple_ty tys in
       if effect_info.stateful then
@@ -4250,11 +4284,11 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
               mk_result_fail_texpression_with_error_id ctx.span error_failure_id
                 output_ty
           in
-          let back_tys = compute_back_tys ctx.sg None in
+          let back_tys = compute_back_tys ctx.sg.fun_ty None in
           let back_tys = List.filter_map (fun x -> x) back_tys in
           let tys =
-            if ctx.sg.fwd_info.ignore_output then back_tys
-            else ctx.sg.fwd_output :: back_tys
+            if ctx.sg.fun_ty.fwd_info.ignore_output then back_tys
+            else ctx.sg.fun_ty.fwd_output :: back_tys
           in
           let output = mk_simpl_tuple_ty tys in
           mk_output output
