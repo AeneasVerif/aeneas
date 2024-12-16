@@ -328,6 +328,12 @@ module Values = struct
     ^ RegionId.Set.to_string None abs.regions.owned
     ^ "}" ^ can_end ^ " {\n" ^ avs ^ "\n" ^ indent ^ "}"
 
+  let abs_region_group_to_string (gr : abs_region_group) : string =
+    g_region_group_to_string RegionId.to_string AbstractionId.to_string gr
+
+  let abs_region_groups_to_string (gl : abs_region_groups) : string =
+    String.concat "\n" (List.map abs_region_group_to_string gl)
+
   let inst_fun_sig_to_string (env : fmt_env) (sg : LlbcAst.inst_fun_sig) :
       string =
     (* TODO: print the trait type constraints? *)
@@ -337,7 +343,8 @@ module Values = struct
       "(" ^ String.concat ", " (List.map ty_to_string sg.inputs) ^ ")"
     in
     let output = ty_to_string sg.output in
-    inputs ^ " -> " ^ output
+    inputs ^ " -> " ^ output ^ "\n- Regions_hierarchy:\n"
+    ^ abs_region_groups_to_string sg.regions_hierarchy
 end
 
 (** Pretty-printing for contexts *)

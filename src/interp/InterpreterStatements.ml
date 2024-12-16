@@ -1242,7 +1242,8 @@ and eval_function_call_symbolic (config : config) (span : Meta.span)
       | FunId (FRegular _) | TraitMethod _ ->
           eval_transparent_function_call_symbolic config span call
       | FunId (FBuiltin fid) ->
-          eval_builtin_function_call_symbolic config span fid call func)
+          eval_builtin_function_call_symbolic config span fid func call.args
+            call.dest)
 
 (** Evaluate a local (i.e., non-builtin) function call in concrete mode *)
 and eval_transparent_function_call_concrete (config : config) (span : Meta.span)
@@ -1523,35 +1524,75 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
 
 (** Evaluate a non-local function call in symbolic mode *)
 and eval_builtin_function_call_symbolic (config : config) (span : Meta.span)
-    (fid : builtin_fun_id) (call : call) (func : fn_ptr) : stl_cm_fun =
+    (fid : builtin_fun_id) (func : fn_ptr) (args : operand list) (dest : place)
+    : stl_cm_fun =
  fun ctx ->
-  let generics = func.generics in
-  let args = call.args in
-  let dest = call.dest in
-  (* Sanity check: make sure the type parameters don't contain regions -
-   * this is a current limitation of our synthesis *)
-  sanity_check __FILE__ __LINE__
-    (List.for_all
-       (fun ty -> not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty))
-       generics.types)
-    span;
-
-  (* In symbolic mode, the behaviour of a function call is completely defined
-   * by the signature of the function: we thus simply generate correctly
-   * instantiated signatures, and delegate the work to an auxiliary function *)
-  let regions_hierarchy =
-    LlbcAstUtils.FunIdMap.find (FBuiltin fid) ctx.fun_ctx.regions_hierarchies
-  in
-  (* There shouldn't be any reference to Self *)
-  let tr_self = UnknownTrait __FUNCTION__ in
+  (* In symbolic mode, the behavior of a function call is completely defined
+     by the signature of the function: we thus simply generate correctly
+     instantiated signatures, and delegate the work to an auxiliary function *)
   let sg = Builtin.get_builtin_fun_sig fid in
-  let inst_sig =
-    instantiate_fun_sig span ctx generics tr_self sg regions_hierarchy
-  in
+  if fid = BoxNew then begin
+    (* Special case: Box::new: we allow instantiating the type parameters with
+       types containing borrows.
 
-  (* Evaluate the function call *)
-  eval_function_call_symbolic_from_inst_sig config span (FunId (FBuiltin fid))
-    sg regions_hierarchy inst_sig generics None args dest ctx
+       TODO: this is a hack.
+    *)
+    (* Sanity check: check that we are not using nested borrows *)
+    classert __FILE__ __LINE__
+      (List.for_all
+         (fun ty ->
+           not (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos ty))
+         func.generics.types)
+      span
+      (lazy
+        ("Instantiating [Box::new] with nested borrows is not allowed for now ("
+       ^ fn_ptr_to_string ctx func ^ ")"));
+
+    (* As we allow instantiating type parameters with types containing regions,
+       we have to recompute the regions hierarchy. *)
+    let fun_name = Print.Expressions.builtin_fun_id_to_string fid in
+    let regions_hierarchy, inst_sig =
+      compute_regions_hierarchy_for_fun_call (Some span) ctx.type_ctx.type_decls
+        ctx.fun_ctx.fun_decls ctx.global_ctx.global_decls
+        ctx.trait_decls_ctx.trait_decls ctx.trait_impls_ctx.trait_impls fun_name
+        ctx.type_vars ctx.const_generic_vars func.generics sg
+    in
+    log#ldebug
+      (lazy
+        ("eval_builtin_function_call_symbolic: special case:" ^ "\n- inst_sig:"
+        ^ inst_fun_sig_to_string ctx inst_sig));
+
+    (* Evaluate the function call *)
+    eval_function_call_symbolic_from_inst_sig config span (FunId (FBuiltin fid))
+      sg regions_hierarchy inst_sig func.generics None args dest ctx
+  end
+  else begin
+    (* Sanity check: make sure the type parameters don't contain regions -
+       this is a current limitation of our synthesis.
+    *)
+    classert __FILE__ __LINE__
+      (List.for_all
+         (fun ty -> not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty))
+         func.generics.types)
+      span
+      (lazy
+        ("Instantiating the type parameters of a function with types \
+          containing borrows is not allowed for now ("
+       ^ fn_ptr_to_string ctx func ^ ")"));
+    let regions_hierarchy =
+      LlbcAstUtils.FunIdMap.find (FBuiltin fid) ctx.fun_ctx.regions_hierarchies
+    in
+
+    (* There shouldn't be any reference to Self *)
+    let tr_self = UnknownTrait __FUNCTION__ in
+    let inst_sig =
+      instantiate_fun_sig span ctx func.generics tr_self sg regions_hierarchy
+    in
+
+    (* Evaluate the function call *)
+    eval_function_call_symbolic_from_inst_sig config span (FunId (FBuiltin fid))
+      sg regions_hierarchy inst_sig func.generics None args dest ctx
+  end
 
 (** Evaluate a statement seen as a function body *)
 and eval_function_body (config : config) (body : statement) : stl_cm_fun =

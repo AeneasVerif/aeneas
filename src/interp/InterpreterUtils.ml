@@ -34,6 +34,10 @@ let generic_args_to_string = Print.EvalCtx.generic_args_to_string
 let trait_ref_to_string = Print.EvalCtx.trait_ref_to_string
 let trait_decl_ref_to_string = Print.EvalCtx.trait_decl_ref_to_string
 
+let fn_ptr_to_string (ctx : eval_ctx) (fn_ptr : fn_ptr) : string =
+  let env = Print.Contexts.eval_ctx_to_fmt_env ctx in
+  Print.Expressions.fn_ptr_to_string env fn_ptr
+
 let trait_decl_ref_region_binder_to_string =
   Print.EvalCtx.trait_decl_ref_region_binder_to_string
 
@@ -528,12 +532,7 @@ let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
     Substitute.fresh_regions_with_substs_from_vars sg.generics.regions
       fresh_region_id
   in
-  (* Generate the type substitution
-     Note that for now we don't support instantiating the type parameters with
-     types containing regions. *)
-  sanity_check __FILE__ __LINE__
-    (List.for_all TypesUtils.ty_no_regions generics.types)
-    span;
+  (* Generate the type substitution. *)
   sanity_check __FILE__ __LINE__
     (TypesUtils.trait_instance_id_no_regions tr_self)
     span;
@@ -555,3 +554,179 @@ let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
   in
   (* Return *)
   inst_sig
+
+(** Compute the regions hierarchy of an instantiated function call -
+    i.e., a function call instantiated with type parameters which might
+    contain borrows.
+    We do so by computing a "fake" function signature and by computing the regions
+    hierarchy for this signature. We return both the fake signature and the
+    regions hierarchy.
+
+    - [type_vars]: the type variables currently in the context
+    - [const_generic_vars]: the const generics currently in the context
+    - [generic_args]: the generic arguments given to the function
+    - [sg]: the original, uninstantiated signature (we need to retrieve, for
+      instance, the region outlives constraints)
+  *)
+let compute_regions_hierarchy_for_fun_call (span : Meta.span option)
+    (type_decls : type_decl TypeDeclId.Map.t)
+    (fun_decls : fun_decl FunDeclId.Map.t)
+    (global_decls : global_decl GlobalDeclId.Map.t)
+    (trait_decls : trait_decl TraitDeclId.Map.t)
+    (trait_impls : trait_impl TraitImplId.Map.t) (fun_name : string)
+    (type_vars : type_var list) (const_generic_vars : const_generic_var list)
+    (generic_args : generic_args) (sg : fun_sig) :
+    region_var_groups * inst_fun_sig =
+  (* We simply put everything into a "fake" signature, then call
+     [compute_regions_hierarchy_for_sig].
+
+     The important point is that we need to introduce fresh regions for
+     the erased regions. When doing so, in order to make sure there are
+     no collisions, we also refresh the other regions. *)
+  (* Decompose the signature *)
+  let { is_unsafe; is_closure; closure_info; generics; inputs; output } = sg in
+  (* Introduce the fresh regions *)
+  let region_map = ref RegionId.Map.empty in
+  let fresh_regions = ref RegionId.Set.empty in
+  let _, fresh_region_id = RegionId.fresh_stateful_generator () in
+  let get_region rid =
+    match RegionId.Map.find_opt rid !region_map with
+    | Some rid -> rid
+    | None ->
+        let nrid = fresh_region_id () in
+        fresh_regions := RegionId.Set.add nrid !fresh_regions;
+        region_map := RegionId.Map.add rid nrid !region_map;
+        nrid
+  in
+  let visitor =
+    object (_self : 'self)
+      inherit [_] map_ty
+
+      method! visit_region_id _ _ =
+        craise_opt_span __FILE__ __LINE__ None
+          "Region ids should not be visited directly; the visitor should catch \
+           cases that contain region ids earlier."
+
+      method! visit_RVar _ var =
+        match var with
+        | Free rid -> RVar (Free (get_region rid))
+        | Bound _ -> RVar var
+
+      method! visit_RErased _ =
+        (* Introduce a fresh region *)
+        let nrid = fresh_region_id () in
+        fresh_regions := RegionId.Set.add nrid !fresh_regions;
+        RVar (Free nrid)
+    end
+  in
+  (* Explore the types to generate the fresh regions *)
+  let generic_types = List.map (visitor#visit_ty ()) generic_args.types in
+
+  (* Reconstruct the generics *)
+  let fresh_regions = RegionId.Set.elements !fresh_regions in
+  let fresh_region_vars : region_var list =
+    List.map (fun index -> { Types.index; name = None }) fresh_regions
+  in
+  let fresh_regions = List.map (fun rid -> RVar (Free rid)) fresh_regions in
+  let subst =
+    let { regions = _; types = _; const_generics; trait_refs } = generic_args in
+    let generic_args =
+      {
+        regions = fresh_regions;
+        types = generic_types;
+        const_generics;
+        trait_refs
+        (* Keeping the same trait refs: it shouldn't have an impact *);
+      }
+    in
+    let tr_self : trait_instance_id = UnknownTrait __FUNCTION__ in
+    Substitute.make_subst_from_generics
+      { sg.generics with regions = fresh_region_vars }
+      generic_args tr_self
+  in
+
+  (* Substitute the inputs and outputs *)
+  let open Substitute in
+  let inputs = List.map (st_substitute_visitor#visit_ty subst) inputs in
+  let output = st_substitute_visitor#visit_ty subst output in
+
+  (* Compute the regions hierarchy *)
+  let trait_type_constraints, regions_hierarchy =
+    let generics : generic_params =
+      let {
+        regions = _;
+        types = _;
+        const_generics = _;
+        trait_clauses;
+        regions_outlive;
+        types_outlive;
+        trait_type_constraints;
+      } =
+        generics
+      in
+      let open Substitute in
+      let trait_clauses =
+        List.map (st_substitute_visitor#visit_trait_clause subst) trait_clauses
+      in
+      let regions_outlive =
+        List.map
+          (st_substitute_visitor#visit_region_binder
+             (st_substitute_visitor#visit_outlives_pred
+                st_substitute_visitor#visit_region
+                st_substitute_visitor#visit_region)
+             subst)
+          regions_outlive
+      in
+      let types_outlive =
+        List.map
+          (st_substitute_visitor#visit_region_binder
+             (st_substitute_visitor#visit_outlives_pred
+                st_substitute_visitor#visit_ty
+                st_substitute_visitor#visit_region)
+             subst)
+          types_outlive
+      in
+      {
+        regions = fresh_region_vars;
+        types = type_vars;
+        const_generics = const_generic_vars;
+        trait_clauses;
+        regions_outlive;
+        types_outlive;
+        trait_type_constraints;
+      }
+    in
+
+    let sg =
+      { is_unsafe; is_closure; closure_info; generics; inputs; output }
+    in
+    let regions_hierarchy =
+      RegionsHierarchy.compute_regions_hierarchy_for_sig span type_decls
+        fun_decls global_decls trait_decls trait_impls fun_name sg
+    in
+    (generics.trait_type_constraints, regions_hierarchy)
+  in
+
+  let inst_sig =
+    (* Generate fresh abstraction ids and create a substitution from region
+       group ids to abstraction ids *)
+    let asubst_map : AbstractionId.id RegionGroupId.Map.t =
+      RegionGroupId.Map.of_list
+        (List.map
+           (fun rg -> (rg.id, fresh_abstraction_id ()))
+           regions_hierarchy)
+    in
+    let asubst (rg_id : RegionGroupId.id) : AbstractionId.id =
+      RegionGroupId.Map.find rg_id asubst_map
+    in
+    let subst_region_group (rg : region_var_group) : abs_region_group =
+      let id = asubst rg.id in
+      let parents = List.map asubst rg.parents in
+      ({ id; regions = rg.regions; parents } : abs_region_group)
+    in
+    let regions_hierarchy = List.map subst_region_group regions_hierarchy in
+    { regions_hierarchy; trait_type_constraints; inputs; output }
+  in
+
+  (* Compute the instantiated function signature *)
+  (regions_hierarchy, inst_sig)

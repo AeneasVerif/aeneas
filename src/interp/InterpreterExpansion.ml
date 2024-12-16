@@ -622,7 +622,7 @@ let greedy_expand_symbolics_with_borrows (config : config) (span : Meta.span) :
       method! visit_VSymbolic _ sv =
         if
           ValuesUtils.symbolic_value_is_greedily_expandable (Some span)
-            ctx.type_ctx.type_infos sv
+            ctx.type_ctx.type_decls ctx.type_ctx.type_infos sv
         then raise (FoundSymbolicValue sv)
         else ()
 

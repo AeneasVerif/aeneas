@@ -32,8 +32,8 @@ let expand_if_borrows_at_place (config : config) (span : Meta.span)
    fun ctx ->
     let v = read_place span access p ctx in
     match
-      find_first_expandable_sv_with_borrows (Some span) ctx.type_ctx.type_infos
-        v
+      find_first_expandable_sv_with_borrows (Some span) ctx.type_ctx.type_decls
+        ctx.type_ctx.type_infos v
     with
     | None -> (ctx, fun e -> e)
     | Some sv ->
@@ -346,7 +346,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
       sanity_check __FILE__ __LINE__
         (Option.is_none
            (find_first_expandable_sv_with_borrows (Some span)
-              ctx.type_ctx.type_infos v))
+              ctx.type_ctx.type_decls ctx.type_ctx.type_infos v))
         span;
       (* Copy the value *)
       let allow_adt_copy = false in
