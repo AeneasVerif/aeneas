@@ -1,6 +1,9 @@
 //@ [coq,fstar] subdir=misc
 //! This file contains tests with ADTs containing borrows.
 
+//
+// Structures with borrows
+//
 struct SharedWrapper<'a, T>(&'a T);
 
 impl<'a, T> SharedWrapper<'a, T> {
