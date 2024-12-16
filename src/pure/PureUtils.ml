@@ -278,6 +278,11 @@ let is_cvar (e : texpression) : bool =
   | CVar _ -> true
   | _ -> false
 
+let as_pat_var (span : Meta.span) (p : typed_pattern) : var * mplace option =
+  match p.value with
+  | PatVar (v, mp) -> (v, mp)
+  | _ -> craise __FILE__ __LINE__ span "Not a var"
+
 let is_global (e : texpression) : bool =
   match e.e with
   | Qualif { id = Global _; _ } -> true
@@ -847,6 +852,9 @@ let mk_lambda (x : typed_pattern) (e : texpression) : texpression =
   let ty = TArrow (x.ty, e.ty) in
   let e = Lambda (x, e) in
   { e; ty }
+
+let mk_lambdas (xl : typed_pattern list) (e : texpression) : texpression =
+  List.fold_right mk_lambda xl e
 
 let mk_lambda_from_var (var : var) (mp : mplace option) (e : texpression) :
     texpression =
