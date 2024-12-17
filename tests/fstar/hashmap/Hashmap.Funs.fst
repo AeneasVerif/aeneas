@@ -110,11 +110,11 @@ let rec hashMap_insert_in_list_loop
   begin match ls with
   | AList_Cons ckey cvalue tl ->
     if ckey = key
-    then Ok (false, AList_Cons ckey value tl)
+    then Ok (false, (AList_Cons ckey value tl))
     else
       let* (b, tl1) = hashMap_insert_in_list_loop key value tl in
-      Ok (b, AList_Cons ckey cvalue tl1)
-  | AList_Nil -> Ok (true, AList_Cons key value AList_Nil)
+      Ok (b, (AList_Cons ckey cvalue tl1))
+  | AList_Nil -> Ok (true, (AList_Cons key value AList_Nil))
   end
 
 (** [hashmap::{hashmap::HashMap<T>}::insert_in_list]:
@@ -299,7 +299,7 @@ let rec hashMap_get_mut_in_list_loop
         fun ret ->
           let x = begin match ret with | Some x1 -> x1 | _ -> cvalue end in
           AList_Cons ckey x tl in
-      Ok (Some cvalue, back)
+      Ok ((Some cvalue), back)
     else
       let* (o, back) = hashMap_get_mut_in_list_loop tl key in
       let back1 = fun ret -> let tl1 = back ret in AList_Cons ckey cvalue tl1
@@ -349,12 +349,12 @@ let rec hashMap_remove_from_list_loop
     then
       let (mv_ls, _) = core_mem_replace ls AList_Nil in
       begin match mv_ls with
-      | AList_Cons _ cvalue tl1 -> Ok (Some cvalue, tl1)
+      | AList_Cons _ cvalue tl1 -> Ok ((Some cvalue), tl1)
       | AList_Nil -> Fail Failure
       end
     else
       let* (o, tl1) = hashMap_remove_from_list_loop key tl in
-      Ok (o, AList_Cons ckey x tl1)
+      Ok (o, (AList_Cons ckey x tl1))
   | AList_Nil -> Ok (None, AList_Nil)
   end
 

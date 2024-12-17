@@ -214,7 +214,7 @@ let get_elem_shared
     Source: 'tests/src/loops.rs', lines 149:0-151:1 *)
 let id_mut
   (#t : Type0) (ls : list_t t) : result ((list_t t) & (list_t t -> list_t t)) =
-  Ok (ls, fun ret -> ret)
+  Ok (ls, (fun ret -> ret))
 
 (** [loops::id_shared]:
     Source: 'tests/src/loops.rs', lines 153:0-155:1 *)
@@ -343,8 +343,8 @@ let rec list_nth_mut_loop_pair_merge_loop
       if i = 0
       then
         let back =
-          fun ret -> let (x, x2) = ret in (List_Cons x tl0, List_Cons x2 tl1)
-          in
+          fun ret ->
+            let (x, x2) = ret in ((List_Cons x tl0), (List_Cons x2 tl1)) in
         Ok ((x0, x1), back)
       else
         let* i1 = u32_sub i 1 in
@@ -352,7 +352,7 @@ let rec list_nth_mut_loop_pair_merge_loop
         let back1 =
           fun ret ->
             let (tl01, tl11) = back ret in
-            (List_Cons x0 tl01, List_Cons x1 tl11) in
+            ((List_Cons x0 tl01), (List_Cons x1 tl11)) in
         Ok (p, back1)
     | List_Nil -> Fail Failure
     end

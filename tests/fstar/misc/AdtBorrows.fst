@@ -79,7 +79,7 @@ type mutWrapper_t (t : Type0) = t
     Source: 'tests/src/adt-borrows.rs', lines 74:4-76:5 *)
 let mutWrapper_create
   (#t : Type0) (x : t) : result ((mutWrapper_t t) & (mutWrapper_t t -> t)) =
-  Ok (x, fun ret -> ret)
+  Ok (x, (fun ret -> ret))
 
 (** [adt_borrows::{adt_borrows::MutWrapper<'a, T>}#3::unwrap]:
     Source: 'tests/src/adt-borrows.rs', lines 78:4-80:5 *)
@@ -171,7 +171,7 @@ let array_mut_borrow
   (#n : usize) (x : array u32 n) :
   result ((array u32 n) & (array u32 n -> array u32 n))
   =
-  Ok (x, fun ret -> ret)
+  Ok (x, (fun ret -> ret))
 
 (** [adt_borrows::boxed_slice_shared_borrow]:
     Source: 'tests/src/adt-borrows.rs', lines 154:0-156:1 *)
@@ -182,7 +182,7 @@ let boxed_slice_shared_borrow (x : slice u32) : result (slice u32) =
     Source: 'tests/src/adt-borrows.rs', lines 158:0-160:1 *)
 let boxed_slice_mut_borrow
   (x : slice u32) : result ((slice u32) & (slice u32 -> slice u32)) =
-  Ok (x, fun ret -> ret)
+  Ok (x, (fun ret -> ret))
 
 (** [adt_borrows::SharedList]
     Source: 'tests/src/adt-borrows.rs', lines 165:0-168:1 *)
@@ -225,7 +225,7 @@ let mutList_push
         | _ -> (x, self)
         end in
       (ml, x1) in
-  Ok (MutList_Cons x self, back)
+  Ok ((MutList_Cons x self), back)
 
 (** [adt_borrows::{adt_borrows::MutList<'a, T>}#7::pop]:
     Source: 'tests/src/adt-borrows.rs', lines 196:4-202:5 *)
@@ -250,7 +250,7 @@ let wrap_shared_in_option (#t : Type0) (x : t) : result (option t) =
 let wrap_mut_in_option
   (#t : Type0) (x : t) : result ((option t) & (option t -> t)) =
   let back = fun ret -> begin match ret with | Some x1 -> x1 | _ -> x end in
-  Ok (Some x, back)
+  Ok ((Some x), back)
 
 (** [adt_borrows::List]
     Source: 'tests/src/adt-borrows.rs', lines 213:0-216:1 *)
@@ -289,7 +289,7 @@ let rec nth_mut_loop
         fun ret ->
           let x1 = begin match ret with | Some x2 -> x2 | _ -> x end in
           List_Cons x1 tl in
-      Ok (Some x, back)
+      Ok ((Some x), back)
     else
       let* i1 = u32_sub i 1 in
       let* (o, back) = nth_mut_loop tl i1 in
