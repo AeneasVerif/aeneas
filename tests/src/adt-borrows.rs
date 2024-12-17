@@ -158,3 +158,83 @@ fn boxed_slice_shared_borrow(x : Box<[&u32]>) -> Box<[&u32]> {
 fn boxed_slice_mut_borrow(x : Box<[&mut u32]>) -> Box<[&mut u32]> {
     x
 }
+
+//
+// Enumerations with borrows
+//
+enum SharedList<'a, T> {
+    Nil,
+    Cons(&'a T, Box<SharedList<'a, T>>),
+}
+
+impl<'a, T> SharedList<'a, T> {
+    // We consume the list in order not to use nested borrows
+    pub fn push(self, x: &'a T) -> Self {
+        SharedList::Cons(x, Box::new(self))
+    }
+
+    pub fn pop(self) -> (&'a T, Self) {
+        use SharedList::*;
+        match self {
+            Nil => panic!(),
+            Cons(hd, tl) => (hd, *tl),
+        }
+    }
+}
+
+enum MutList<'a, T> {
+    Nil,
+    Cons(&'a mut T, Box<MutList<'a, T>>),
+}
+
+impl<'a, T> MutList<'a, T> {
+    // We consume the list in order not to use nested borrows
+    pub fn push(self, x: &'a mut T) -> Self {
+        MutList::Cons(x, Box::new(self))
+    }
+
+    pub fn pop(self) -> (&'a mut T, Self) {
+        use MutList::*;
+        match self {
+            Nil => panic!(),
+            Cons(hd, tl) => (hd, *tl),
+        }
+    }
+}
+
+pub fn wrap_shared_in_option<'a, T>(x: &'a T) -> Option<&'a T> {
+    Option::Some(x)
+}
+
+pub fn wrap_mut_in_option<'a, T>(x: &'a mut T) -> Option<&'a mut T> {
+    Option::Some(x)
+}
+
+pub enum List<T> {
+    Cons(T, Box<List<T>>),
+    Nil,
+}
+
+pub fn nth_shared<T>(mut ls: &List<T>, mut i: u32) -> Option<&T> {
+    while let List::Cons(x, tl) = ls {
+        if i == 0 {
+            return Some(x);
+        } else {
+            ls = tl;
+            i -= 1;
+        }
+    }
+    None
+}
+
+pub fn nth_mut<T>(mut ls: &mut List<T>, mut i: u32) -> Option<&mut T> {
+    while let List::Cons(x, tl) = ls {
+        if i == 0 {
+            return Some(x);
+        } else {
+            ls = tl;
+            i -= 1;
+        }
+    }
+    None
+}

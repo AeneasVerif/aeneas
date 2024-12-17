@@ -111,7 +111,7 @@ Definition MutWrapper_t (T : Type) : Type := T.
     Source: 'tests/src/adt-borrows.rs', lines 74:4-76:5 *)
 Definition mutWrapper_create
   {T : Type} (x : T) : result ((MutWrapper_t T) * (MutWrapper_t T -> T)) :=
-  let back := fun (ret : MutWrapper_t T) => ret in Ok (x, back)
+  Ok (x, fun (ret : MutWrapper_t T) => ret)
 .
 
 (** [adt_borrows::{adt_borrows::MutWrapper<'a, T>}#3::unwrap]:
@@ -245,7 +245,7 @@ Definition array_mut_borrow
   {N : usize} (x : array u32 N) :
   result ((array u32 N) * (array u32 N -> array u32 N))
   :=
-  let back := fun (ret : array u32 N) => ret in Ok (x, back)
+  Ok (x, fun (ret : array u32 N) => ret)
 .
 
 (** [adt_borrows::boxed_slice_shared_borrow]:
@@ -258,7 +258,154 @@ Definition boxed_slice_shared_borrow (x : slice u32) : result (slice u32) :=
     Source: 'tests/src/adt-borrows.rs', lines 158:0-160:1 *)
 Definition boxed_slice_mut_borrow
   (x : slice u32) : result ((slice u32) * (slice u32 -> slice u32)) :=
-  let back := fun (ret : slice u32) => ret in Ok (x, back)
+  Ok (x, fun (ret : slice u32) => ret)
+.
+
+(** [adt_borrows::SharedList]
+    Source: 'tests/src/adt-borrows.rs', lines 165:0-168:1 *)
+Inductive SharedList_t (T : Type) :=
+| SharedList_Nil : SharedList_t T
+| SharedList_Cons : T -> SharedList_t T -> SharedList_t T
+.
+
+Arguments SharedList_Nil { _ }.
+Arguments SharedList_Cons { _ }.
+
+(** [adt_borrows::{adt_borrows::SharedList<'a, T>}#6::push]:
+    Source: 'tests/src/adt-borrows.rs', lines 172:4-174:5 *)
+Definition sharedList_push
+  {T : Type} (self : SharedList_t T) (x : T) : result (SharedList_t T) :=
+  Ok (SharedList_Cons x self)
+.
+
+(** [adt_borrows::{adt_borrows::SharedList<'a, T>}#6::pop]:
+    Source: 'tests/src/adt-borrows.rs', lines 176:4-182:5 *)
+Definition sharedList_pop
+  {T : Type} (self : SharedList_t T) : result (T * (SharedList_t T)) :=
+  match self with
+  | SharedList_Nil => Fail_ Failure
+  | SharedList_Cons hd tl => Ok (hd, tl)
+  end
+.
+
+(** [adt_borrows::MutList]
+    Source: 'tests/src/adt-borrows.rs', lines 185:0-188:1 *)
+Inductive MutList_t (T : Type) :=
+| MutList_Nil : MutList_t T
+| MutList_Cons : T -> MutList_t T -> MutList_t T
+.
+
+Arguments MutList_Nil { _ }.
+Arguments MutList_Cons { _ }.
+
+(** [adt_borrows::{adt_borrows::MutList<'a, T>}#7::push]:
+    Source: 'tests/src/adt-borrows.rs', lines 192:4-194:5 *)
+Definition mutList_push
+  {T : Type} (self : MutList_t T) (x : T) :
+  result ((MutList_t T) * (MutList_t T -> ((MutList_t T) * T)))
+  :=
+  let back :=
+    fun (ret : MutList_t T) =>
+      let (x1, ml) :=
+        match ret with | MutList_Cons t ml1 => (t, ml1) | _ => (x, self) end in
+      (ml, x1) in
+  Ok (MutList_Cons x self, back)
+.
+
+(** [adt_borrows::{adt_borrows::MutList<'a, T>}#7::pop]:
+    Source: 'tests/src/adt-borrows.rs', lines 196:4-202:5 *)
+Definition mutList_pop
+  {T : Type} (self : MutList_t T) :
+  result ((T * (MutList_t T)) * ((T * (MutList_t T)) -> MutList_t T))
+  :=
+  match self with
+  | MutList_Nil => Fail_ Failure
+  | MutList_Cons hd tl =>
+    let back :=
+      fun (ret : (T * (MutList_t T))) =>
+        let (t, ml) := ret in MutList_Cons t ml in
+    Ok ((hd, tl), back)
+  end
+.
+
+(** [adt_borrows::wrap_shared_in_option]:
+    Source: 'tests/src/adt-borrows.rs', lines 205:0-207:1 *)
+Definition wrap_shared_in_option {T : Type} (x : T) : result (option T) :=
+  Ok (Some x)
+.
+
+(** [adt_borrows::wrap_mut_in_option]:
+    Source: 'tests/src/adt-borrows.rs', lines 209:0-211:1 *)
+Definition wrap_mut_in_option
+  {T : Type} (x : T) : result ((option T) * (option T -> T)) :=
+  let back := fun (ret : option T) => match ret with | Some t => t | _ => x end
+    in
+  Ok (Some x, back)
+.
+
+(** [adt_borrows::List]
+    Source: 'tests/src/adt-borrows.rs', lines 213:0-216:1 *)
+Inductive List_t (T : Type) :=
+| List_Cons : T -> List_t T -> List_t T
+| List_Nil : List_t T
+.
+
+Arguments List_Cons { _ }.
+Arguments List_Nil { _ }.
+
+(** [adt_borrows::nth_shared]: loop 0:
+    Source: 'tests/src/adt-borrows.rs', lines 219:4-228:1 *)
+Fixpoint nth_shared_loop
+  {T : Type} (ls : List_t T) (i : u32) : result (option T) :=
+  match ls with
+  | List_Cons x tl =>
+    if i s= 0%u32
+    then Ok (Some x)
+    else (i1 <- u32_sub i 1%u32; nth_shared_loop tl i1)
+  | List_Nil => Ok None
+  end
+.
+
+(** [adt_borrows::nth_shared]:
+    Source: 'tests/src/adt-borrows.rs', lines 218:0-228:1 *)
+Definition nth_shared
+  {T : Type} (ls : List_t T) (i : u32) : result (option T) :=
+  nth_shared_loop ls i
+.
+
+(** [adt_borrows::nth_mut]: loop 0:
+    Source: 'tests/src/adt-borrows.rs', lines 231:4-240:1 *)
+Fixpoint nth_mut_loop
+  {T : Type} (ls : List_t T) (i : u32) :
+  result ((option T) * (option T -> List_t T))
+  :=
+  match ls with
+  | List_Cons x tl =>
+    if i s= 0%u32
+    then
+      let back :=
+        fun (ret : option T) =>
+          let t := match ret with | Some t1 => t1 | _ => x end in
+          List_Cons t tl in
+      Ok (Some x, back)
+    else (
+      i1 <- u32_sub i 1%u32;
+      p <- nth_mut_loop tl i1;
+      let (o, back) := p in
+      let back1 :=
+        fun (ret : option T) => let tl1 := back ret in List_Cons x tl1 in
+      Ok (o, back1))
+  | List_Nil => let back := fun (ret : option T) => List_Nil in Ok (None, back)
+  end
+.
+
+(** [adt_borrows::nth_mut]:
+    Source: 'tests/src/adt-borrows.rs', lines 230:0-240:1 *)
+Definition nth_mut
+  {T : Type} (ls : List_t T) (i : u32) :
+  result ((option T) * (option T -> List_t T))
+  :=
+  nth_mut_loop ls i
 .
 
 End AdtBorrows.
