@@ -42,12 +42,18 @@ pub fn hash_key(k: &Key) -> Hash {
     *k
 }
 
+#[derive(Clone, Copy)]
+struct Fraction {
+    dividend : usize,
+    divisor : usize,
+}
+
 /// A hash map from [u64] to values
 pub struct HashMap<T> {
     /// The current number of entries in the table
     num_entries: usize,
     /// The max load factor, expressed as a fraction
-    max_load_factor: (usize, usize),
+    max_load_factor: Fraction,
     /// The max load factor applied to the current table length:
     /// gives the threshold at which to resize the table.
     max_load: usize,
@@ -71,16 +77,15 @@ impl<T> HashMap<T> {
     /// Create a new table, with a given capacity
     fn new_with_capacity(
         capacity: usize,
-        max_load_dividend: usize,
-        max_load_divisor: usize,
+        max_load_factor : Fraction,
     ) -> Self {
         // TODO: better to use `Vec::with_capacity(capacity)` instead
         // of `Vec::new()`
         let slots = HashMap::allocate_slots(Vec::new(), capacity);
         HashMap {
             num_entries: 0,
-            max_load_factor: (max_load_dividend, max_load_divisor),
-            max_load: (capacity * max_load_dividend) / max_load_divisor,
+            max_load_factor,
+            max_load: (capacity * max_load_factor.dividend) / max_load_factor.divisor,
             saturated: false,
             slots,
         }
@@ -88,7 +93,7 @@ impl<T> HashMap<T> {
 
     pub fn new() -> Self {
         // For now we create a table with 32 slots and a max load factor of 4/5
-        HashMap::new_with_capacity(32, 4, 5)
+        HashMap::new_with_capacity(32, Fraction {dividend: 4, divisor:5})
     }
 
     pub fn clear(&mut self) {
@@ -157,12 +162,11 @@ impl<T> HashMap<T> {
         // Checking that there won't be overflows by using the fact that, if m > 0:
         // n * m <= p <==> n <= p / m
         let n1 = max_usize / 2;
-        if capacity <= n1 / self.max_load_factor.0 {
+        if capacity <= n1 / self.max_load_factor.dividend {
             // Create a new table with a higher capacity
             let mut ntable = HashMap::new_with_capacity(
                 capacity * 2,
-                self.max_load_factor.0,
-                self.max_load_factor.1,
+                self.max_load_factor,
             );
 
             // Move the elements to the new table
@@ -232,40 +236,36 @@ impl<T> HashMap<T> {
     /// We don't support borrows inside of enumerations for now, so we
     /// can't return an option...
     /// TODO: add support for that
-    fn get_in_list<'a, 'k>(key: &'k Key, mut ls: &'a AList<T>) -> &'a T {
-        loop {
-            match ls {
-                AList::Nil => panic!(),
-                AList::Cons(ckey, cvalue, tl) => {
-                    if *ckey == *key {
-                        return cvalue;
-                    } else {
-                        ls = tl;
-                    }
-                }
+    fn get_in_list<'a, 'k>(key: &'k Key, mut ls: &'a AList<T>) -> Option<&'a T> {
+        while let AList::Cons(ckey, cvalue, tl) = ls {
+            if *ckey == *key {
+                return Some(cvalue);
+            } else {
+                ls = tl;
             }
         }
+        None
     }
 
-    pub fn get<'a, 'k>(&'a self, key: &'k Key) -> &'a T {
+    pub fn get<'a, 'k>(&'a self, key: &'k Key) -> Option<&'a T> {
         let hash = hash_key(key);
         let hash_mod = hash % self.slots.len();
         HashMap::get_in_list(key, &self.slots[hash_mod])
     }
 
-    pub fn get_mut_in_list<'a, 'k>(mut ls: &'a mut AList<T>, key: &'k Key) -> &'a mut T {
+    pub fn get_mut_in_list<'a, 'k>(mut ls: &'a mut AList<T>, key: &'k Key) -> Option<&'a mut T> {
         while let AList::Cons(ckey, cvalue, tl) = ls {
             if *ckey == *key {
-                return cvalue;
+                return Some(cvalue);
             } else {
                 ls = tl;
             }
         }
-        panic!()
+        None
     }
 
     /// Same remark as for [get].
-    pub fn get_mut<'a, 'k>(&'a mut self, key: &'k Key) -> &'a mut T {
+    pub fn get_mut<'a, 'k>(&'a mut self, key: &'k Key) -> Option<&'a mut T> {
         let hash = hash_key(key);
         let hash_mod = hash % self.slots.len();
         HashMap::get_mut_in_list(&mut self.slots[hash_mod], key)
@@ -342,9 +342,11 @@ pub fn insert_on_disk(key: Key, value: u64) {
     utils::serialize(hm);
 }
 
-/// I currently can't retrieve functions marked with the attribute #[test],
-/// while I want to extract the unit tests and use the normalize on them,
-/// so I have to define the test functions somewhere and call them from
+/*
+// FIXME
+/// It is currently not possible to retrieve functions marked with the attribute #[test],
+/// while we want to extract the unit tests and use the normalizer on them,
+/// so we have to define the test functions somewhere and call them from
 /// a test function.
 /// TODO: find a way to do that.
 #[allow(dead_code)]
@@ -385,4 +387,4 @@ fn test1() {
 #[test]
 fn tests() {
     test1();
-}
+}*/

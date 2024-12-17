@@ -15,11 +15,17 @@ inductive AList (T : Type) :=
 | Cons : Usize → T → AList T → AList T
 | Nil : AList T
 
+/- [hashmap::Fraction]
+   Source: 'tests/src/hashmap.rs', lines 46:0-49:1 -/
+structure Fraction where
+  dividend : Usize
+  divisor : Usize
+
 /- [hashmap::HashMap]
-   Source: 'tests/src/hashmap.rs', lines 46:0-58:1 -/
+   Source: 'tests/src/hashmap.rs', lines 52:0-64:1 -/
 structure HashMap (T : Type) where
   num_entries : Usize
-  max_load_factor : (Usize × Usize)
+  max_load_factor : Fraction
   max_load : Usize
   saturated : Bool
   slots : alloc.vec.Vec (AList T)

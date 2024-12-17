@@ -20,12 +20,20 @@ Inductive AList_t (T : Type) :=
 Arguments AList_Cons { _ }.
 Arguments AList_Nil { _ }.
 
+(** [hashmap::Fraction]
+    Source: 'tests/src/hashmap.rs', lines 46:0-49:1 *)
+Record Fraction_t :=
+mkFraction_t {
+  fraction_dividend : usize; fraction_divisor : usize;
+}
+.
+
 (** [hashmap::HashMap]
-    Source: 'tests/src/hashmap.rs', lines 46:0-58:1 *)
+    Source: 'tests/src/hashmap.rs', lines 52:0-64:1 *)
 Record HashMap_t (T : Type) :=
 mkHashMap_t {
   hashMap_num_entries : usize;
-  hashMap_max_load_factor : (usize * usize);
+  hashMap_max_load_factor : Fraction_t;
   hashMap_max_load : usize;
   hashMap_saturated : bool;
   hashMap_slots : alloc_vec_Vec (AList_t T);
