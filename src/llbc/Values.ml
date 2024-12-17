@@ -180,6 +180,9 @@ type proj_marker = PNone | PLeft | PRight [@@deriving show, ord]
 
 type marker_borrow_id = proj_marker * BorrowId.id [@@deriving show, ord]
 
+type ended_borrow_mvalues = { consumed : mvalue; given_back : msymbolic_value }
+[@@deriving show, ord]
+
 module MarkerBorrowIdOrd = struct
   type t = marker_borrow_id
 
@@ -225,6 +228,9 @@ class ['self] iter_typed_avalue_base =
       fun env ids -> AbstractionId.Set.iter (self#visit_abstraction_id env) ids
 
     method visit_proj_marker : 'env -> proj_marker -> unit = fun _ _ -> ()
+
+    method visit_ended_borrow_mvalues : 'env -> ended_borrow_mvalues -> unit =
+      fun _ _ -> ()
   end
 
 (** Ancestor for {!typed_avalue} map visitor *)
@@ -247,6 +253,10 @@ class ['self] map_typed_avalue_base =
       fun env ids -> AbstractionId.Set.map (self#visit_abstraction_id env) ids
 
     method visit_proj_marker : 'env -> proj_marker -> proj_marker = fun _ x -> x
+
+    method visit_ended_borrow_mvalues
+        : 'env -> ended_borrow_mvalues -> ended_borrow_mvalues =
+      fun _ x -> x
   end
 
 (** When giving shared borrows to functions (i.e., inserting shared borrows inside
@@ -347,10 +357,12 @@ and aproj =
           
           Note that we keep the original symbolic value as a meta-value.
        *)
-  | AEndedProjBorrows of msymbolic_value * (msymbolic_value * aproj) list
+  | AEndedProjBorrows of ended_borrow_mvalues * (msymbolic_value * aproj) list
       (** The only purpose of {!AEndedProjBorrows} is to store, for synthesis
-          purposes, the symbolic value which was generated and given back upon
-          ending the borrow.
+          purposes:
+          - the symbolic value which was consumed upon creating the projection
+          - the symbolic value which was generated and given back upon
+            ending the borrows
        *)
   | AEmpty  (** Nothing to project (because there are no borrows, etc.) *)
 
@@ -446,6 +458,9 @@ and aloan_content =
           [given_back]: stores the projected given back value (useful when
           there are nested borrows: ending a loan might consume borrows which
           need to be projected in the abstraction).
+
+          [given_back_meta]: stores the (meta-)value which was consumed upon
+          ending the loan. We use this for synthesis purposes.
 
           Rk.: *DO NOT* use [visit_AEndedMutLoan]. If we update the order of
           the arguments and you forget to swap them at the level of

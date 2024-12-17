@@ -519,7 +519,10 @@ let end_aproj_borrows (span : Meta.span) (ended_regions : RegionId.Set.t)
   let update_owned (_abs : abs) (_abs_sv : symbolic_value) (_abs_proj_ty : rty)
       (local_given_back : (msymbolic_value * aproj) list) : aproj =
     (* There is nothing to project *)
-    AEndedProjBorrows (nsv, local_given_back)
+    let mvalues =
+      { consumed = mk_typed_value_from_symbolic_value sv; given_back = nsv }
+    in
+    AEndedProjBorrows (mvalues, local_given_back)
   in
   update_intersecting_aproj_borrows span ~fail_if_unchanged:true
     ~include_ancestors:false ~include_owned:true ~update_shared:None
