@@ -549,14 +549,14 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
          *   abstractions up to the one in which we are interested.
          *)
         (* Forward translation: retrieve the returned value *)
-        let fwd_e =
+        let fwd_e, ctx_return, ret_value =
           (* Pop the frame and retrieve the returned value at the same time *)
           let pop_return_value = true in
           let ret_value, ctx, cc_pop =
             pop_frame config span pop_return_value ctx
           in
           (* Generate the Return node *)
-          cc_pop (SA.Return (ctx, ret_value))
+          (cc_pop (SA.Return (ctx, ret_value)), ctx, Option.get ret_value)
         in
         (* Backward translation: introduce "return"
            abstractions to consume the return value, then end all the
@@ -581,7 +581,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
         in
         let back_el = RegionGroupId.Map.of_list back_el in
         (* Put everything together *)
-        synthesize_forward_end ctx0 None fwd_e back_el
+        SA.ForwardEnd (Some (ctx_return, ret_value), ctx0, None, fwd_e, back_el)
     | EndEnterLoop (loop_id, loop_input_values)
     | EndContinue (loop_id, loop_input_values) ->
         (* Similar to [Return]: we have to play different endings *)
@@ -618,7 +618,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
         in
         let back_el = RegionGroupId.Map.of_list back_el in
         (* Put everything together *)
-        synthesize_forward_end ctx0 (Some loop_input_values) fwd_e back_el
+        ForwardEnd (None, ctx0, Some loop_input_values, fwd_e, back_el)
     | Panic ->
         (* Note that as we explore all the execution branches, one of
          * the executions can lead to a panic *)

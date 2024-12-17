@@ -180,7 +180,13 @@ type proj_marker = PNone | PLeft | PRight [@@deriving show, ord]
 
 type marker_borrow_id = proj_marker * BorrowId.id [@@deriving show, ord]
 
-type ended_borrow_mvalues = { consumed : mvalue; given_back : msymbolic_value }
+type ended_proj_borrow_meta = {
+  consumed : msymbolic_value;
+  given_back : msymbolic_value;
+}
+[@@deriving show, ord]
+
+type ended_mut_borrow_meta = { bid : borrow_id; given_back : msymbolic_value }
 [@@deriving show, ord]
 
 module MarkerBorrowIdOrd = struct
@@ -229,7 +235,11 @@ class ['self] iter_typed_avalue_base =
 
     method visit_proj_marker : 'env -> proj_marker -> unit = fun _ _ -> ()
 
-    method visit_ended_borrow_mvalues : 'env -> ended_borrow_mvalues -> unit =
+    method visit_ended_proj_borrow_meta : 'env -> ended_proj_borrow_meta -> unit
+        =
+      fun _ _ -> ()
+
+    method visit_ended_mut_borrow_meta : 'env -> ended_mut_borrow_meta -> unit =
       fun _ _ -> ()
   end
 
@@ -254,8 +264,12 @@ class ['self] map_typed_avalue_base =
 
     method visit_proj_marker : 'env -> proj_marker -> proj_marker = fun _ x -> x
 
-    method visit_ended_borrow_mvalues
-        : 'env -> ended_borrow_mvalues -> ended_borrow_mvalues =
+    method visit_ended_proj_borrow_meta
+        : 'env -> ended_proj_borrow_meta -> ended_proj_borrow_meta =
+      fun _ x -> x
+
+    method visit_ended_mut_borrow_meta
+        : 'env -> ended_mut_borrow_meta -> ended_mut_borrow_meta =
       fun _ x -> x
   end
 
@@ -357,7 +371,7 @@ and aproj =
           
           Note that we keep the original symbolic value as a meta-value.
        *)
-  | AEndedProjBorrows of ended_borrow_mvalues * (msymbolic_value * aproj) list
+  | AEndedProjBorrows of ended_proj_borrow_meta * (msymbolic_value * aproj) list
       (** The only purpose of {!AEndedProjBorrows} is to store, for synthesis
           purposes:
           - the symbolic value which was consumed upon creating the projection
@@ -686,9 +700,10 @@ and aborrow_content =
           id) and also remove the AEndedIgnoredMutBorrow variant.
           For now, we prefer to be more precise that required.
        *)
-  | AEndedMutBorrow of msymbolic_value * typed_avalue
-      (** The sole purpose of {!AEndedMutBorrow} is to store the (symbolic) value
-          that we gave back as a meta-value, to help with the synthesis.
+  | AEndedMutBorrow of ended_mut_borrow_meta * typed_avalue
+      (** The sole purpose of {!AEndedMutBorrow} is to store meta information for
+          the synthesis, with in particular the (symbolic) value that was given
+          back upon ending the borrow.
        *)
   | AEndedSharedBorrow
       (** We don't really need {!AEndedSharedBorrow}: we simply want to be

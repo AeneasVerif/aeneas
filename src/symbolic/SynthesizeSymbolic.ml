@@ -178,11 +178,6 @@ let synthesize_assertion (ctx : Contexts.eval_ctx) (v : typed_value)
     (e : expression) =
   Assertion (ctx, v, e)
 
-let synthesize_forward_end (ctx : Contexts.eval_ctx)
-    (loop_input_values : typed_value SymbolicValueId.Map.t option)
-    (e : expression) (el : expression RegionGroupId.Map.t) =
-  ForwardEnd (ctx, loop_input_values, e, el)
-
 let synthesize_loop (loop_id : LoopId.id) (input_svalues : symbolic_value list)
     (fresh_svalues : SymbolicValueId.Set.t)
     (rg_to_given_back_tys : ty list RegionGroupId.Map.t) (end_expr : expression)

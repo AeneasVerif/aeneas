@@ -519,9 +519,7 @@ let end_aproj_borrows (span : Meta.span) (ended_regions : RegionId.Set.t)
   let update_owned (_abs : abs) (_abs_sv : symbolic_value) (_abs_proj_ty : rty)
       (local_given_back : (msymbolic_value * aproj) list) : aproj =
     (* There is nothing to project *)
-    let mvalues =
-      { consumed = mk_typed_value_from_symbolic_value sv; given_back = nsv }
-    in
+    let mvalues = { consumed = sv; given_back = nsv } in
     AEndedProjBorrows (mvalues, local_given_back)
   in
   update_intersecting_aproj_borrows span ~fail_if_unchanged:true
@@ -1340,7 +1338,8 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
             let sv = convert_avalue_to_given_back_value span av in
             (* Replace the mut borrow to register the fact that we ended
                it and store with it the freshly generated given back value *)
-            let ended_borrow = ABorrow (AEndedMutBorrow (sv, av)) in
+            let meta = { bid; given_back = sv } in
+            let ended_borrow = ABorrow (AEndedMutBorrow (meta, av)) in
             let ctx = update_aborrow span ek_all bid ended_borrow ctx in
             (* Give the value back *)
             let sv = mk_typed_value_from_symbolic_value sv in

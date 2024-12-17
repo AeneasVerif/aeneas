@@ -164,6 +164,8 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
       loops = Pure.LoopId.Map.empty;
       mk_return = None;
       mk_panic = None;
+      mut_borrow_to_consumed = BorrowId.Map.empty;
+      var_id_to_default = Pure.VarId.Map.empty;
     }
   in
 
