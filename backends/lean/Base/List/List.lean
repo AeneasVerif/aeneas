@@ -390,4 +390,13 @@ theorem lookup_not_none_imp_length_pos [BEq α] (l : List (α × β)) (key : α)
 
 end
 
+@[simp]
+theorem list_update_index_eq α [Inhabited α] (x : List α) (i : ℕ) :
+  x.update i (x.index i) = x := by
+  revert i
+  induction x
+  . simp
+  . intro i
+    dcases hi: 0 < i <;> simp_all
+
 end List
