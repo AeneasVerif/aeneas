@@ -236,8 +236,7 @@ divergent def betree.Node.lookup_first_message_for_key_loop
   | betree.List.Cons x next_msgs =>
     let (i, _) := x
     if i >= key
-    then let back := fun ret => ret
-         Result.ok (msgs, back)
+    then Result.ok (msgs, fun ret => ret)
     else
       do
       let (l, back) ←
@@ -246,9 +245,7 @@ divergent def betree.Node.lookup_first_message_for_key_loop
         fun ret => let next_msgs1 := back ret
                    betree.List.Cons x next_msgs1
       Result.ok (l, back1)
-  | betree.List.Nil =>
-    let back := fun ret => ret
-    Result.ok (betree.List.Nil, back)
+  | betree.List.Nil => Result.ok (betree.List.Nil, fun ret => ret)
 
 /- [betree::betree::{betree::betree::Node}#5::lookup_first_message_for_key]:
    Source: 'src/betree.rs', lines 792:4-810:5 -/
@@ -425,11 +422,8 @@ divergent def betree.Node.lookup_first_message_after_key_loop
         fun ret => let next_msgs1 := back ret
                    betree.List.Cons p next_msgs1
       Result.ok (l, back1)
-    else let back := fun ret => ret
-         Result.ok (msgs, back)
-  | betree.List.Nil =>
-    let back := fun ret => ret
-    Result.ok (betree.List.Nil, back)
+    else Result.ok (msgs, fun ret => ret)
+  | betree.List.Nil => Result.ok (betree.List.Nil, fun ret => ret)
 
 /- [betree::betree::{betree::betree::Node}#5::lookup_first_message_after_key]:
    Source: 'src/betree.rs', lines 694:4-706:5 -/
@@ -532,17 +526,14 @@ divergent def betree.Node.lookup_mut_in_bindings_loop
   | betree.List.Cons hd tl =>
     let (i, _) := hd
     if i >= key
-    then let back := fun ret => ret
-         Result.ok (bindings, back)
+    then Result.ok (bindings, fun ret => ret)
     else
       do
       let (l, back) ← betree.Node.lookup_mut_in_bindings_loop key tl
       let back1 := fun ret => let tl1 := back ret
                               betree.List.Cons hd tl1
       Result.ok (l, back1)
-  | betree.List.Nil =>
-    let back := fun ret => ret
-    Result.ok (betree.List.Nil, back)
+  | betree.List.Nil => Result.ok (betree.List.Nil, fun ret => ret)
 
 /- [betree::betree::{betree::betree::Node}#5::lookup_mut_in_bindings]:
    Source: 'src/betree.rs', lines 664:4-677:5 -/

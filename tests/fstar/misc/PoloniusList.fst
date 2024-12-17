@@ -20,12 +20,12 @@ let rec get_list_at_x
   begin match ls with
   | List_Cons hd tl ->
     if hd = x
-    then let back = fun ret -> ret in Ok (ls, back)
+    then Ok (ls, fun ret -> ret)
     else
       let* (l, get_list_at_x_back) = get_list_at_x tl x in
       let back =
         fun ret -> let tl1 = get_list_at_x_back ret in List_Cons hd tl1 in
       Ok (l, back)
-  | List_Nil -> let back = fun ret -> ret in Ok (List_Nil, back)
+  | List_Nil -> Ok (List_Nil, fun ret -> ret)
   end
 

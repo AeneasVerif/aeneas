@@ -191,8 +191,7 @@ divergent def list_tail_loop
     let back1 := fun ret => let tl1 := back ret
                             CList.CCons t tl1
     Result.ok (c, back1)
-  | CList.CNil => let back := fun ret => ret
-                  Result.ok (CList.CNil, back)
+  | CList.CNil => Result.ok (CList.CNil, fun ret => ret)
 
 /- [tutorial::list_tail]:
    Source: 'src/lib.rs', lines 134:0-139:1 -/

@@ -100,12 +100,9 @@ def slice_subslice_mut_
   (x : Slice U32) (y : Usize) (z : Usize) :
   Result ((Slice U32) × (Slice U32 → Slice U32))
   :=
-  do
-  let (s, index_mut_back) ←
-    core.slice.index.Slice.index_mut
-      (core.slice.index.SliceIndexRangeUsizeSliceTInst U32) x
-      { start := y, end_ := z }
-  Result.ok (s, index_mut_back)
+  core.slice.index.Slice.index_mut
+    (core.slice.index.SliceIndexRangeUsizeSliceTInst U32) x
+    { start := y, end_ := z }
 
 /- [arrays::array_to_slice_shared_]:
    Source: 'tests/src/arrays.rs', lines 75:0-77:1 -/
@@ -134,12 +131,9 @@ def array_subslice_mut_
   (x : Array U32 32#usize) (y : Usize) (z : Usize) :
   Result ((Slice U32) × (Slice U32 → Array U32 32#usize))
   :=
-  do
-  let (s, index_mut_back) ←
-    core.array.Array.index_mut (core.ops.index.IndexMutSliceTIInst
-      (core.slice.index.SliceIndexRangeUsizeSliceTInst U32)) x
-      { start := y, end_ := z }
-  Result.ok (s, index_mut_back)
+  core.array.Array.index_mut (core.ops.index.IndexMutSliceTIInst
+    (core.slice.index.SliceIndexRangeUsizeSliceTInst U32)) x
+    { start := y, end_ := z }
 
 /- [arrays::index_slice_0]:
    Source: 'tests/src/arrays.rs', lines 91:0-93:1 -/

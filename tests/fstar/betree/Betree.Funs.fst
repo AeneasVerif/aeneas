@@ -237,7 +237,7 @@ let rec betree_Node_lookup_first_message_for_key_loop
   | Betree_List_Cons x next_msgs ->
     let (i, _) = x in
     if i >= key
-    then let back = fun ret -> ret in Ok (msgs, back)
+    then Ok (msgs, fun ret -> ret)
     else
       let* (l, back) =
         betree_Node_lookup_first_message_for_key_loop key next_msgs in
@@ -245,7 +245,7 @@ let rec betree_Node_lookup_first_message_for_key_loop
         fun ret -> let next_msgs1 = back ret in Betree_List_Cons x next_msgs1
         in
       Ok (l, back1)
-  | Betree_List_Nil -> let back = fun ret -> ret in Ok (Betree_List_Nil, back)
+  | Betree_List_Nil -> Ok (Betree_List_Nil, fun ret -> ret)
   end
 
 (** [betree::betree::{betree::betree::Node}#5::lookup_first_message_for_key]:
@@ -418,8 +418,8 @@ let rec betree_Node_lookup_first_message_after_key_loop
         fun ret -> let next_msgs1 = back ret in Betree_List_Cons p next_msgs1
         in
       Ok (l, back1)
-    else let back = fun ret -> ret in Ok (msgs, back)
-  | Betree_List_Nil -> let back = fun ret -> ret in Ok (Betree_List_Nil, back)
+    else Ok (msgs, fun ret -> ret)
+  | Betree_List_Nil -> Ok (Betree_List_Nil, fun ret -> ret)
   end
 
 (** [betree::betree::{betree::betree::Node}#5::lookup_first_message_after_key]:
@@ -518,12 +518,12 @@ let rec betree_Node_lookup_mut_in_bindings_loop
   | Betree_List_Cons hd tl ->
     let (i, _) = hd in
     if i >= key
-    then let back = fun ret -> ret in Ok (bindings, back)
+    then Ok (bindings, fun ret -> ret)
     else
       let* (l, back) = betree_Node_lookup_mut_in_bindings_loop key tl in
       let back1 = fun ret -> let tl1 = back ret in Betree_List_Cons hd tl1 in
       Ok (l, back1)
-  | Betree_List_Nil -> let back = fun ret -> ret in Ok (Betree_List_Nil, back)
+  | Betree_List_Nil -> Ok (Betree_List_Nil, fun ret -> ret)
   end
 
 (** [betree::betree::{betree::betree::Node}#5::lookup_mut_in_bindings]:

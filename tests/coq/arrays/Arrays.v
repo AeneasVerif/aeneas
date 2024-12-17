@@ -107,12 +107,9 @@ Definition slice_subslice_mut_
   (x : slice u32) (y : usize) (z : usize) :
   result ((slice u32) * (slice u32 -> slice u32))
   :=
-  p <-
-    core_slice_index_Slice_index_mut
-      (core_slice_index_SliceIndexRangeUsizeSliceTInst u32) x
-      {| core_ops_range_Range_start := y; core_ops_range_Range_end_ := z |};
-  let (s, index_mut_back) := p in
-  Ok (s, index_mut_back)
+  core_slice_index_Slice_index_mut
+    (core_slice_index_SliceIndexRangeUsizeSliceTInst u32) x
+    {| core_ops_range_Range_start := y; core_ops_range_Range_end_ := z |}
 .
 
 (** [arrays::array_to_slice_shared_]:
@@ -146,12 +143,9 @@ Definition array_subslice_mut_
   (x : array u32 32%usize) (y : usize) (z : usize) :
   result ((slice u32) * (slice u32 -> array u32 32%usize))
   :=
-  p <-
-    core_array_Array_index_mut (core_ops_index_IndexMutSliceTIInst
-      (core_slice_index_SliceIndexRangeUsizeSliceTInst u32)) x
-      {| core_ops_range_Range_start := y; core_ops_range_Range_end_ := z |};
-  let (s, index_mut_back) := p in
-  Ok (s, index_mut_back)
+  core_array_Array_index_mut (core_ops_index_IndexMutSliceTIInst
+    (core_slice_index_SliceIndexRangeUsizeSliceTInst u32)) x
+    {| core_ops_range_Range_start := y; core_ops_range_Range_end_ := z |}
 .
 
 (** [arrays::index_slice_0]:

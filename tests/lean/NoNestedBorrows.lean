@@ -346,8 +346,7 @@ def id_mut_pair1
   {T1 : Type} {T2 : Type} (x : T1) (y : T2) :
   Result ((T1 × T2) × ((T1 × T2) → (T1 × T2)))
   :=
-  let back := fun ret => ret
-  Result.ok ((x, y), back)
+  Result.ok ((x, y), fun ret => ret)
 
 /- [no_nested_borrows::id_mut_pair2]:
    Source: 'tests/src/no_nested_borrows.rs', lines 351:0-353:1 -/
@@ -355,8 +354,7 @@ def id_mut_pair2
   {T1 : Type} {T2 : Type} (p : (T1 × T2)) :
   Result ((T1 × T2) × ((T1 × T2) → (T1 × T2)))
   :=
-  let back := fun ret => ret
-  Result.ok (p, back)
+  Result.ok (p, fun ret => ret)
 
 /- [no_nested_borrows::id_mut_pair3]:
    Source: 'tests/src/no_nested_borrows.rs', lines 355:0-357:1 -/
@@ -364,9 +362,7 @@ def id_mut_pair3
   {T1 : Type} {T2 : Type} (x : T1) (y : T2) :
   Result ((T1 × T2) × (T1 → T1) × (T2 → T2))
   :=
-  let back'a := fun ret => ret
-  let back'b := fun ret => ret
-  Result.ok ((x, y), back'a, back'b)
+  Result.ok ((x, y), fun ret => ret, fun ret => ret)
 
 /- [no_nested_borrows::id_mut_pair4]:
    Source: 'tests/src/no_nested_borrows.rs', lines 359:0-361:1 -/
@@ -374,9 +370,7 @@ def id_mut_pair4
   {T1 : Type} {T2 : Type} (p : (T1 × T2)) :
   Result ((T1 × T2) × (T1 → T1) × (T2 → T2))
   :=
-  let back'a := fun ret => ret
-  let back'b := fun ret => ret
-  Result.ok (p, back'a, back'b)
+  Result.ok (p, fun ret => ret, fun ret => ret)
 
 /- [no_nested_borrows::StructWithTuple]
    Source: 'tests/src/no_nested_borrows.rs', lines 366:0-368:1 -/
@@ -552,8 +546,7 @@ def borrow_mut_tuple
   {T : Type} {U : Type} (x : (T × U)) :
   Result ((T × U) × ((T × U) → (T × U)))
   :=
-  let back := fun ret => ret
-  Result.ok (x, back)
+  Result.ok (x, fun ret => ret)
 
 /- [no_nested_borrows::ExpandSimpliy::Wrapper]
    Source: 'tests/src/no_nested_borrows.rs', lines 538:4-538:32 -/

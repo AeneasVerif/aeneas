@@ -121,8 +121,7 @@ divergent def list_tail
     let back := fun ret => let tl1 := list_tail_back ret
                            CList.CCons t tl1
     Result.ok (c, back)
-  | CList.CNil => let back := fun ret => ret
-                  Result.ok (CList.CNil, back)
+  | CList.CNil => Result.ok (CList.CNil, fun ret => ret)
 
 /- Trait declaration: [demo::Counter]
    Source: 'tests/src/demo.rs', lines 99:0-101:1 -/

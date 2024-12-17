@@ -214,7 +214,7 @@ let get_elem_shared
     Source: 'tests/src/loops.rs', lines 149:0-151:1 *)
 let id_mut
   (#t : Type0) (ls : list_t t) : result ((list_t t) & (list_t t -> list_t t)) =
-  let back = fun ret -> ret in Ok (ls, back)
+  Ok (ls, fun ret -> ret)
 
 (** [loops::id_shared]:
     Source: 'tests/src/loops.rs', lines 153:0-155:1 *)

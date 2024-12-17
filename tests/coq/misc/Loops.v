@@ -277,7 +277,7 @@ Definition get_elem_shared
     Source: 'tests/src/loops.rs', lines 149:0-151:1 *)
 Definition id_mut
   {T : Type} (ls : List_t T) : result ((List_t T) * (List_t T -> List_t T)) :=
-  let back := fun (ret : List_t T) => ret in Ok (ls, back)
+  Ok (ls, fun (ret : List_t T) => ret)
 .
 
 (** [loops::id_shared]:

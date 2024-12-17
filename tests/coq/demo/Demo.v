@@ -143,8 +143,7 @@ Fixpoint list_tail
         fun (ret : CList_t T) =>
           let tl1 := list_tail_back ret in CList_CCons t tl1 in
       Ok (c, back)
-    | CList_CNil =>
-      let back := fun (ret : CList_t T) => ret in Ok (CList_CNil, back)
+    | CList_CNil => Ok (CList_CNil, fun (ret : CList_t T) => ret)
     end
   end
 .
