@@ -35,49 +35,51 @@ let compute_contexts (m : crate) : decls_ctx =
     }
   in
   (* Split the declaration groups between the declaration kinds (types, functions, etc.) *)
-  let type_decls_groups =
-    match split_declarations_to_group_maps m.declarations with
-    | Ok (type_decls_groups, _, _, _, _) -> type_decls_groups
-    | Error mixed_groups ->
-        (* We detected mixed groups: print a nice error message *)
-        let any_decl_id_to_string (id : any_decl_id) : string =
-          let kind = any_decl_id_to_kind_name id in
-          let meta = LlbcAstUtils.crate_get_item_meta m id in
-          let s =
-            match meta with
-            | None -> show_any_decl_id id
-            | Some meta ->
-                kind ^ "(" ^ span_to_string meta.span ^ "): "
-                ^ Print.name_to_string fmt_env meta.name
-          in
-          "- " ^ s
-        in
-        let group_to_msg (i : int) (g : mixed_declaration_group) : string =
-          let ids = g_declaration_group_to_list g in
-          let decls = List.map any_decl_id_to_string ids in
-          let local_requires =
-            LlbcAstUtils.find_local_transitive_dep m (AnyDeclIdSet.of_list ids)
-          in
-          let local_requires = List.map span_to_string local_requires in
-          let local_requires =
-            if local_requires <> [] then
-              "\n\n\
-               The declarations in this group are (transitively) used at the \
-               following location(s):\n"
-              ^ String.concat "\n" local_requires
-            else ""
-          in
-          "# Group "
-          ^ string_of_int (i + 1)
-          ^ ":\n" ^ String.concat "\n" decls ^ local_requires
-        in
-        let msgs = List.mapi group_to_msg mixed_groups in
-        let msgs = String.concat "\n\n" msgs in
-        craise_opt_span __FILE__ __LINE__ None
-          ("Detected groups of mixed mutually recursive definitions (such as a \
-            type mutually recursive with a function, or a function mutually \
-            recursive with a trait implementation):\n\n" ^ msgs)
+  let type_decls_groups, _, _, _, _, mixed_groups =
+    split_declarations_to_group_maps m.declarations
   in
+  (* Check if there are mixed groups: if there are, we report an error
+     and ignore those *)
+  (if mixed_groups <> [] then
+     (* We detected mixed groups: print a nice error message *)
+     let any_decl_id_to_string (id : any_decl_id) : string =
+       let kind = any_decl_id_to_kind_name id in
+       let meta = LlbcAstUtils.crate_get_item_meta m id in
+       let s =
+         match meta with
+         | None -> show_any_decl_id id
+         | Some meta ->
+             kind ^ "(" ^ span_to_string meta.span ^ "): "
+             ^ Print.name_to_string fmt_env meta.name
+       in
+       "- " ^ s
+     in
+     let group_to_msg (i : int) (g : mixed_declaration_group) : string =
+       let ids = g_declaration_group_to_list g in
+       let decls = List.map any_decl_id_to_string ids in
+       let local_requires =
+         LlbcAstUtils.find_local_transitive_dep m (AnyDeclIdSet.of_list ids)
+       in
+       let local_requires = List.map span_to_string local_requires in
+       let local_requires =
+         if local_requires <> [] then
+           "\n\n\
+            The declarations in this group are (transitively) used at the \
+            following location(s):\n"
+           ^ String.concat "\n" local_requires
+         else ""
+       in
+       "# Group "
+       ^ string_of_int (i + 1)
+       ^ ":\n" ^ String.concat "\n" decls ^ local_requires
+     in
+     let msgs = List.mapi group_to_msg mixed_groups in
+     let msgs = String.concat "\n\n" msgs in
+     save_error_opt_span __FILE__ __LINE__ None
+       ("Detected groups of mixed mutually recursive definitions (such as a \
+         type mutually recursive with a function, or a function mutually \
+         recursive with a trait implementation):\n\n" ^ msgs));
+
   let type_infos =
     TypesAnalysis.analyze_type_declarations type_decls type_decls_list
   in
@@ -189,7 +191,8 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
 
   (* Create the context *)
   let regions_hierarchy =
-    FunIdMap.find (FRegular fdef.def_id) ctx.fun_ctx.regions_hierarchies
+    silent_unwrap __FILE__ __LINE__ fdef.item_meta.span
+      (FunIdMap.find_opt (FRegular fdef.def_id) ctx.fun_ctx.regions_hierarchies)
   in
   let region_groups =
     List.map (fun (g : region_var_group) -> g.id) regions_hierarchy
@@ -308,7 +311,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
     List.filter_map (fun x -> x) parent_input_abs_ids
   in
   (* TODO: need to be careful for loops *)
-  assert (parent_input_abs_ids = []);
+  sanity_check __FILE__ __LINE__ (parent_input_abs_ids = []) fdef.item_meta.span;
 
   (* Insert the return value in the return abstractions (by applying
    * borrow projections) *)
@@ -636,8 +639,8 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
       let el = List.map (fun (ctx, res) -> finish res ctx) ctx_resl in
       (* Finish synthesizing *)
       if synthesize then Some (cc el) else None
-    with CFailure (span, msg) ->
-      if synthesize then Some (Error (span, msg)) else None
+    with CFailure error ->
+      if synthesize then Some (Error (error.span, error.msg)) else None
   in
   (* Return *)
   (input_svs, symbolic)

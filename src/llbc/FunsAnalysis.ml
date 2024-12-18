@@ -221,7 +221,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
         analyze_fun_decl_group (g_declaration_group_to_list decl);
         analyze_decl_groups decls'
     | MixedGroup ids :: _ ->
-        craise_opt_span __FILE__ __LINE__ None
+        save_error_opt_span __FILE__ __LINE__ None
           ("Mixed declaration groups are not supported yet: ["
           ^ String.concat ", "
               (List.map Charon.PrintGAst.any_decl_id_to_string

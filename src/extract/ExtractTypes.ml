@@ -31,7 +31,7 @@ let extract_literal (span : Meta.span) (fmt : F.formatter) (is_pattern : bool)
           | HOL4 ->
               F.pp_print_string fmt ("int_to_" ^ int_name sv.int_ty);
               F.pp_print_space fmt ()
-          | _ -> craise __FILE__ __LINE__ span "Unreachable");
+          | _ -> admit_raise __FILE__ __LINE__ span "Unreachable" fmt);
           (* We need to add parentheses if the value is negative *)
           if sv.value >= Z.of_int 0 then
             F.pp_print_string fmt (Z.to_string sv.value)
@@ -47,7 +47,7 @@ let extract_literal (span : Meta.span) (fmt : F.formatter) (is_pattern : bool)
                 let iname = String.lowercase_ascii (int_name sv.int_ty) in
                 F.pp_print_string fmt ("#" ^ iname)
           | HOL4 -> ()
-          | _ -> craise __FILE__ __LINE__ span "Unreachable");
+          | _ -> admit_raise __FILE__ __LINE__ span "Unreachable" fmt);
           if print_brackets then F.pp_print_string fmt ")")
   | VBool b ->
       let b =
@@ -76,8 +76,8 @@ let extract_literal (span : Meta.span) (fmt : F.formatter) (is_pattern : bool)
           F.pp_print_string fmt c;
           if inside then F.pp_print_string fmt ")")
   | VFloat _ | VStr _ | VByteStr _ ->
-      craise __FILE__ __LINE__ span
-        "Float, string and byte string literals are unsupported"
+      admit_raise __FILE__ __LINE__ span
+        "Float, string and byte string literals are unsupported" fmt
 
 (** Format a unary operation
 
@@ -137,7 +137,7 @@ let extract_unop (span : Meta.span) (extract_expr : bool -> texpression -> unit)
                    match backend () with
                    | Coq | FStar -> "scalar_cast"
                    | Lean -> "Scalar.cast"
-                   | HOL4 -> craise __FILE__ __LINE__ span "Unreachable"
+                   | HOL4 -> admit_string __FILE__ __LINE__ span "Unreachable"
                  in
                  let src =
                    if backend () <> Lean then Some (integer_type_to_string src)
@@ -150,7 +150,7 @@ let extract_unop (span : Meta.span) (extract_expr : bool -> texpression -> unit)
                    match backend () with
                    | Coq | FStar -> "scalar_cast_bool"
                    | Lean -> "Scalar.cast_bool"
-                   | HOL4 -> craise __FILE__ __LINE__ span "Unreachable"
+                   | HOL4 -> admit_string __FILE__ __LINE__ span "Unreachable"
                  in
                  let tgt = integer_type_to_string tgt in
                  (cast_str, None, Some tgt)
@@ -221,7 +221,7 @@ let extract_binop (span : Meta.span)
         | Sub -> "-"
         | Mul -> "*"
         | CheckedAdd | CheckedSub | CheckedMul ->
-            craise __FILE__ __LINE__ span
+            admit_string __FILE__ __LINE__ span
               "Checked operations are not implemented"
         | Shl -> "<<<"
         | Shr -> ">>>"
@@ -562,7 +562,9 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
                 match type_id with
                 | TAdtId id -> not (TypeDeclId.Set.mem id no_params_tys)
                 | TBuiltin _ -> true
-                | _ -> craise __FILE__ __LINE__ span "Unreachable"
+                | _ ->
+                    save_error __FILE__ __LINE__ span "Unreachable";
+                    false
               in
               if types <> [] && print_tys then (
                 let print_paren = List.length types > 1 in
@@ -592,7 +594,7 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       if inside then F.pp_print_string fmt ")"
   | TTraitType (trait_ref, type_name) -> (
       if !parameterize_trait_types then
-        craise __FILE__ __LINE__ span "Unimplemented"
+        admit_raise __FILE__ __LINE__ span "Unimplemented" fmt
       else
         let type_name =
           ctx_get_trait_type span trait_ref.trait_decl_ref.trait_decl_id
@@ -730,7 +732,7 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
   | Self ->
       (* This has a specific treatment depending on the item we're extracting
          (associated type, etc.). We should have caught this elsewhere. *)
-      save_error __FILE__ __LINE__ (Some span) "Unexpected occurrence of `Self`";
+      save_error __FILE__ __LINE__ span "Unexpected occurrence of `Self`";
       F.pp_print_string fmt "ERROR(\"Unexpected Self\")"
   | TraitImpl (id, generics) ->
       (* Lookup the the information about the explicit/implicit parameters. *)
@@ -780,7 +782,7 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
       F.pp_print_string fmt (add_brackets name)
   | UnknownTrait _ ->
       (* This is an error case *)
-      craise __FILE__ __LINE__ span "Unexpected"
+      admit_raise __FILE__ __LINE__ span "Unexpected" fmt
 
 (** Compute the names for all the top-level identifiers used in a type
     definition (type name, variant names, field names, etc. but not type
@@ -1227,11 +1229,11 @@ let extract_comment (fmt : F.formatter) (sl : string list) : unit =
   F.pp_print_string fmt rd;
   F.pp_close_box fmt ()
 
-let extract_comment_with_raw_span (ctx : extraction_ctx) (fmt : F.formatter)
+let extract_comment_with_span (ctx : extraction_ctx) (fmt : F.formatter)
     (sl : string list) (name : Types.name option)
     ?(generics : (Types.generic_params * Types.generic_args) option = None)
-    (raw_span : Meta.raw_span) : unit =
-  let raw_span = raw_span_to_string raw_span in
+    (span : Meta.span) : unit =
+  let span = span_to_string span in
   let name =
     match (name, generics) with
     | None, _ -> []
@@ -1243,7 +1245,7 @@ let extract_comment_with_raw_span (ctx : extraction_ctx) (fmt : F.formatter)
           ^ name_with_generics_to_pattern_string ctx.trans_ctx name params args;
         ]
   in
-  extract_comment fmt (sl @ [ raw_span ] @ name)
+  extract_comment fmt (sl @ [ span ] @ name)
 
 let extract_trait_clause_type (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t)
@@ -1517,9 +1519,9 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
      then Some def.item_meta.name
      else None
    in
-   extract_comment_with_raw_span ctx fmt
+   extract_comment_with_span ctx fmt
      [ "[" ^ name_to_string ctx def.item_meta.name ^ "]" ]
-     name def.item_meta.span.span);
+     name def.item_meta.span);
   F.pp_print_break fmt 0 0;
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line. Note however that in the case of Lean line breaks are important

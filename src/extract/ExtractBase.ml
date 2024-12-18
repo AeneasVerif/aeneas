@@ -8,6 +8,7 @@ module F = Format
 open ExtractBuiltin
 open TranslateCore
 open Errors
+include ExtractErrors
 
 (** The local logger *)
 let log = Logging.extract_log
@@ -281,7 +282,7 @@ let report_name_collision (id_to_string : id -> string)
      We don't link this error to any span information because we already put
      the span information about the two problematic definitions in the error
      message above. *)
-  save_error __FILE__ __LINE__ None err
+  save_error_opt_span __FILE__ __LINE__ None err
 
 let names_map_get_id_from_name (name : string) (nm : names_map) :
     (id * Meta.span option) option =
@@ -315,7 +316,7 @@ let names_map_add (id_to_string : id -> string) ((id, span) : id * span option)
        ^ ":\nThe chosen name is already in the names set: " ^ name
      in
      (* If we fail hard on errors, raise an exception *)
-     save_error __FILE__ __LINE__ span err);
+     save_error_opt_span __FILE__ __LINE__ span err);
   (* Insert *)
   names_map_add_unchecked (id, span) name nm
 
@@ -463,7 +464,7 @@ let names_maps_get (span : Meta.span option) (id_to_string : id -> string)
           "Could not find: " ^ id_to_string id ^ "\nNames map:\n"
           ^ map_to_string m
         in
-        save_error __FILE__ __LINE__ span err;
+        save_error_opt_span __FILE__ __LINE__ span err;
         "(%%%ERROR: unknown identifier\": " ^ id_to_string id ^ "\"%%%)")
   else
     let m = nm.names_map.id_to_name in
@@ -474,7 +475,7 @@ let names_maps_get (span : Meta.span option) (id_to_string : id -> string)
           "Could not find: " ^ id_to_string id ^ "\nNames map:\n"
           ^ map_to_string m
         in
-        save_error __FILE__ __LINE__ span err;
+        save_error_opt_span __FILE__ __LINE__ span err;
         "(ERROR: \"" ^ id_to_string id ^ "\")"
 
 type names_map_init = {

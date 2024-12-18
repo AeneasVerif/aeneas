@@ -205,7 +205,9 @@ let extract_adt_g_value (span : Meta.span)
         in
         if use_parentheses then F.pp_print_string fmt ")";
         ctx
-  | _ -> craise __FILE__ __LINE__ span "Inconsistent typed value"
+  | _ ->
+      admit_raise __FILE__ __LINE__ span "Inconsistently typed value" fmt;
+      ctx
 
 (* Extract globals in the same way as variables *)
 let extract_global (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
@@ -248,7 +250,7 @@ let fun_builtin_filter_types (id : FunDeclId.id) (types : 'a list)
           ^ string_of_int (List.length types)
           ^ " type arguments"
         in
-        save_error __FILE__ __LINE__ None err;
+        save_error_opt_span __FILE__ __LINE__ None err;
         Result.Error (types, err))
       else
         let filter_f =
@@ -373,7 +375,7 @@ let rec extract_texpression (span : Meta.span) (ctx : extraction_ctx)
   | StructUpdate supd -> extract_StructUpdate span ctx fmt inside e.ty supd
   | Loop _ ->
       (* The loop nodes should have been eliminated in {!PureMicroPasses} *)
-      craise __FILE__ __LINE__ span "Unreachable"
+      admit_raise __FILE__ __LINE__ span "Unreachable" fmt
   | EError (_, _) -> extract_texpression_errors fmt
 
 (* Extract an application *or* a top-level qualif (function extraction has
@@ -557,36 +559,41 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
       let explicit =
         let lookup is_trait_method fun_decl_id lp_id =
           (* Lookup the function to retrieve the signature information *)
-          let trans_fun = A.FunDeclId.Map.find fun_decl_id ctx.trans_funs in
-          let trans_fun =
-            match lp_id with
-            | None -> trans_fun.f
-            | Some lp_id -> Pure.LoopId.nth trans_fun.loops lp_id
-          in
-          let explicit = trans_fun.signature.explicit_info in
-          (* If it is a trait method, we need to remove the prefix
-             which account for the generics of the impl. *)
-          let explicit =
-            if is_trait_method then
-              (* We simply adjust the length of the explicit information to
-                 the number of generic arguments *)
-              let open Collections.List in
-              let { explicit_types; explicit_const_generics } = explicit in
-              {
-                explicit_types =
-                  drop
-                    (length explicit_types - length generics.types)
-                    explicit_types;
-                explicit_const_generics =
-                  drop
-                    (length explicit_const_generics
-                    - length generics.const_generics)
-                    explicit_const_generics;
-              }
-            else explicit
-          in
-          (* *)
-          Some explicit
+          match A.FunDeclId.Map.find_opt fun_decl_id ctx.trans_funs with
+          | None ->
+              (* Error case *)
+              opt_raise __FILE__ __LINE__ span "Unrechable";
+              None
+          | Some trans_fun ->
+              let trans_fun =
+                match lp_id with
+                | None -> trans_fun.f
+                | Some lp_id -> Pure.LoopId.nth trans_fun.loops lp_id
+              in
+              let explicit = trans_fun.signature.explicit_info in
+              (* If it is a trait method, we need to remove the prefix
+                 which accounts for the generics of the impl. *)
+              let explicit =
+                if is_trait_method then
+                  (* We simply adjust the length of the explicit information to
+                     the number of generic arguments *)
+                  let open Collections.List in
+                  let { explicit_types; explicit_const_generics } = explicit in
+                  {
+                    explicit_types =
+                      drop
+                        (length explicit_types - length generics.types)
+                        explicit_types;
+                    explicit_const_generics =
+                      drop
+                        (length explicit_const_generics
+                        - length generics.const_generics)
+                        explicit_const_generics;
+                  }
+                else explicit
+              in
+              (* *)
+              Some explicit
         in
         match fun_id with
         | FromLlbc (FunId (FRegular fun_decl_id), lp_id) ->
@@ -625,7 +632,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
       | Error (types, err) ->
           extract_generic_args span ctx fmt TypeDeclId.Set.empty ~explicit
             { generics with types };
-          save_error __FILE__ __LINE__ (Some span) err;
+          save_error __FILE__ __LINE__ span err;
           F.pp_print_string fmt
             "(\"ERROR: ill-formed builtin: invalid number of filtering \
              arguments\")");
@@ -640,12 +647,13 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
       (* Return *)
       if inside then F.pp_print_string fmt ")"
   | (Unop _ | Binop _), _ ->
-      craise __FILE__ __LINE__ span
+      admit_raise __FILE__ __LINE__ span
         ("Unreachable:\n" ^ "Function: " ^ show_fun_or_op_id fid
        ^ ",\nNumber of arguments: "
         ^ string_of_int (List.length args)
         ^ ",\nArguments: "
         ^ String.concat " " (List.map show_texpression args))
+        fmt
 
 (** Subcase of the app case: ADT constructor *)
 and extract_adt_cons (span : Meta.span) (ctx : extraction_ctx)
@@ -655,9 +663,9 @@ and extract_adt_cons (span : Meta.span) (ctx : extraction_ctx)
   let is_single_pat = false in
   (* Sanity check: make sure the expression is not a tuple constructor
      with no arguments (the properly extracted expression would be a function) *)
-  cassert __FILE__ __LINE__
+  sanity_check __FILE__ __LINE__
     (not (adt_cons.adt_id = TTuple && generics.types != [] && args = []))
-    span "Unreachable";
+    span;
   let _ =
     extract_adt_g_value span
       (fun ctx inside e ->
@@ -769,7 +777,7 @@ and extract_field_projector (span : Meta.span) (ctx : extraction_ctx)
       extract_App span ctx fmt inside (mk_app span original_app arg) args
   | [] ->
       (* No argument: shouldn't happen *)
-      craise __FILE__ __LINE__ span "Unreachable"
+      admit_raise __FILE__ __LINE__ span "Unreachable" fmt
 
 and extract_Lambda (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
     (inside : bool) (xl : typed_pattern list) (e : texpression) : unit =
@@ -839,23 +847,23 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_open_hovbox fmt ctx.indent_incr;
     let ctx =
       (* There are two cases:
-       * - do we use a notation like [x <-- y;]
-       * - do we use notation with let-bindings
-       * Note that both notations can be used for monadic let-bindings.
-       * For instance, in F*, you can write:
-       * {[
-       *   let* x = y in // monadic
-       *   ...
-       * ]}
-       * TODO: cleanup
-       * *)
+         - do we use a notation like [x <-- y;]
+         - do we use notation with let-bindings
+         Note that both notations can be used for monadic let-bindings.
+         For instance, in F*, you can write:
+         {[
+           let* x = y in // monadic
+           ...
+         ]}
+         TODO: cleanup
+      *)
       if monadic && (backend () = Coq || backend () = HOL4) then (
         let ctx = extract_typed_pattern span ctx fmt true true lv in
         F.pp_print_space fmt ();
         let arrow =
           match backend () with
           | Coq | HOL4 -> "<-"
-          | FStar | Lean -> craise __FILE__ __LINE__ span "impossible"
+          | FStar | Lean -> internal_error __FILE__ __LINE__ span
         in
         F.pp_print_string fmt arrow;
         F.pp_print_space fmt ();
@@ -1263,7 +1271,7 @@ and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
         F.pp_print_string fmt "]";
         if need_paren then F.pp_print_string fmt ")";
         F.pp_close_box fmt ()
-    | _ -> craise __FILE__ __LINE__ span "Unreachable"
+    | _ -> admit_raise __FILE__ __LINE__ span "Unreachable" fmt
 
 (** A small utility to print the parameters of a function signature.
 
@@ -1415,9 +1423,9 @@ let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
        Some def.item_meta.name
      else None
    in
-   extract_comment_with_raw_span ctx fmt
+   extract_comment_with_span ctx fmt
      [ "[" ^ name_to_string ctx def.item_meta.name ^ "]: decreases clause" ]
-     name def.item_meta.span.span);
+     name def.item_meta.span);
   F.pp_print_space fmt ();
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line *)
@@ -1484,9 +1492,9 @@ let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
-  extract_comment_with_raw_span ctx fmt
+  extract_comment_with_span ctx fmt
     [ "[" ^ name_to_string ctx def.item_meta.name ^ "]: termination measure" ]
-    None def.item_meta.span.span;
+    None def.item_meta.span;
   F.pp_print_space fmt ();
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line *)
@@ -1543,9 +1551,9 @@ let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
   in
   (* syntax <def_name> term ... term : tactic *)
   F.pp_print_break fmt 0 0;
-  extract_comment_with_raw_span ctx fmt
+  extract_comment_with_span ctx fmt
     [ "[" ^ name_to_string ctx def.item_meta.name ^ "]: decreases_by tactic" ]
-    None def.item_meta.span.span;
+    None def.item_meta.span;
   F.pp_print_space fmt ();
   F.pp_open_hvbox fmt 0;
   F.pp_print_string fmt "syntax \"";
@@ -1590,7 +1598,7 @@ let extract_fun_comment (ctx : extraction_ctx) (fmt : F.formatter)
       Some def.item_meta.name
     else None
   in
-  extract_comment_with_raw_span ctx fmt comment name def.item_meta.span.span
+  extract_comment_with_span ctx fmt comment name def.item_meta.span
 
 (** Extract a function declaration.
 
@@ -2094,9 +2102,9 @@ let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
       Some global.item_meta.name
     else None
   in
-  extract_comment_with_raw_span ctx fmt
+  extract_comment_with_span ctx fmt
     [ "[" ^ name_to_string ctx global.item_meta.name ^ "]" ]
-    name global.span.span;
+    name global.span;
   F.pp_print_space fmt ();
 
   let decl_name = ctx_get_global span global.def_id ctx in
@@ -2525,10 +2533,14 @@ let explicit_info_drop_prefix (g1 : generic_params) (g2 : explicit_info) :
 
     Extract the items for a method in a trait decl.
  *)
-let extract_trait_decl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
-    (decl : trait_decl) (item_name : string) (id : fun_decl_id) : unit =
+let extract_trait_decl_method_items_aux (ctx : extraction_ctx)
+    (fmt : F.formatter) (decl : trait_decl) (item_name : string)
+    (id : fun_decl_id) : unit =
   (* Lookup the definition *)
-  let trans = A.FunDeclId.Map.find id ctx.trans_funs in
+  let trans =
+    silent_unwrap_opt_span __FILE__ __LINE__ None
+      (A.FunDeclId.Map.find_opt id ctx.trans_funs)
+  in
   (* Extract the items *)
   let f = trans.f in
   let fun_name =
@@ -2572,6 +2584,13 @@ let extract_trait_decl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
   in
   extract_trait_decl_item ctx fmt fun_name ty
 
+let extract_trait_decl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
+    (decl : trait_decl) (item_name : string) (id : fun_decl_id) : unit =
+  try extract_trait_decl_method_items_aux ctx fmt decl item_name id
+  with CFailure _ ->
+    F.pp_print_space fmt ();
+    extract_admit fmt
+
 (** Extract a trait declaration *)
 let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (decl : trait_decl) : unit =
@@ -2585,9 +2604,9 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
        Some decl.item_meta.name
      else None
    in
-   extract_comment_with_raw_span ctx fmt
+   extract_comment_with_span ctx fmt
      [ "Trait declaration: [" ^ name_to_string ctx decl.item_meta.name ^ "]" ]
-     name decl.item_meta.span.span);
+     name decl.item_meta.span);
   F.pp_print_break fmt 0 0;
   (* Open two outer boxes for the definition, so that whenever possible it gets printed on
      one line and indents are correct.
@@ -2801,12 +2820,16 @@ let extract_trait_decl_extra_info (ctx : extraction_ctx) (fmt : F.formatter)
 
     Extract the items for a method in a trait impl.
  *)
-let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
-    (impl : trait_impl) (item_name : string) (id : fun_decl_id)
-    (impl_generics : string list * string list * string list) : unit =
+let extract_trait_impl_method_items_aux (ctx : extraction_ctx)
+    (fmt : F.formatter) (impl : trait_impl) (item_name : string)
+    (id : fun_decl_id) (impl_generics : string list * string list * string list)
+    : unit =
   let trait_decl_id = impl.impl_trait.trait_decl_id in
   (* Lookup the definition *)
-  let trans = A.FunDeclId.Map.find id ctx.trans_funs in
+  let trans =
+    silent_unwrap_opt_span __FILE__ __LINE__ None
+      (A.FunDeclId.Map.find_opt id ctx.trans_funs)
+  in
   (* Extract the items *)
   let f = trans.f in
   let fun_name =
@@ -2927,6 +2950,15 @@ let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
   in
   extract_trait_impl_item ctx fmt fun_name ty
 
+let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
+    (impl : trait_impl) (item_name : string) (id : fun_decl_id)
+    (impl_generics : string list * string list * string list) : unit =
+  try
+    extract_trait_impl_method_items_aux ctx fmt impl item_name id impl_generics
+  with CFailure _ ->
+    F.pp_print_space fmt ();
+    extract_admit fmt
+
 (** Extract a trait implementation *)
 let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     (impl : trait_impl) : unit =
@@ -2946,12 +2978,12 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
          Some (trait_decl.llbc_generics, decl_ref.decl_generics) )
      else (None, None)
    in
-   extract_comment_with_raw_span ctx fmt
+   extract_comment_with_span ctx fmt
      [
        "Trait implementation: [" ^ name_to_string ctx impl.item_meta.name ^ "]";
      ]
      (* TODO: why option option for the generics? Looks like a bug in OCaml!? *)
-     name ?generics:(Some generics) impl.item_meta.span.span);
+     name ?generics:(Some generics) impl.item_meta.span);
   F.pp_print_break fmt 0 0;
 
   (* If extracting for Lean, mark the definition as reducible *)

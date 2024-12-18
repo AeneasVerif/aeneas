@@ -100,6 +100,10 @@ let () =
 
   let spec_ls =
     [
+      ( "-print-error-emitters",
+        Arg.Set print_error_emitters,
+        " Whenever reporting an error, print the span of the source code of \
+         Aeneas which emitted the error" );
       ( "-borrow-check",
         Arg.Set borrow_check,
         " Only borrow-check the program and do not generate any translation" );
@@ -496,26 +500,23 @@ let () =
               @ trait_impls)));
         ());
 
-      (* There may be exceptions to catch *)
-      (try
-         (* Apply the pre-passes *)
-         let m = Aeneas.PrePasses.apply_passes m in
+      (* Apply the pre-passes *)
+      let m = Aeneas.PrePasses.apply_passes m in
 
-         (* Test the unit functions with the concrete interpreter *)
-         if !test_unit_functions then Test.test_unit_functions m;
+      (* Test the unit functions with the concrete interpreter *)
+      if !test_unit_functions then Test.test_unit_functions m;
 
-         (* Translate or borrow-check the crate *)
-         if !borrow_check then Aeneas.BorrowCheck.borrow_check_crate m
-         else Aeneas.Translate.translate_crate filename dest_dir m
-       with Errors.CFailure (_, _) ->
-         (* In theory it shouldn't happen, but there may be uncaught errors -
-            note that we let the [Failure] exceptions go through (they are
-            send if we use the option [-abort-on-error] *)
-         ());
+      (* Translate or borrow-check the crate *)
+      if !borrow_check then Aeneas.BorrowCheck.borrow_check_crate m
+      else Aeneas.Translate.translate_crate filename dest_dir m;
 
       if !Errors.error_list <> [] then (
         List.iter
-          (fun (span, msg) -> log#serror (Errors.format_error_message span msg))
+          (fun (file, line, span, msg) ->
+            if !print_error_emitters then
+              log#serror
+                (Errors.format_error_message_with_file_line file line span msg)
+            else log#serror (Errors.format_error_message span msg))
           (* Reverse the list of error messages so that we print them from the
              earliest to the latest. *)
           (List.rev !Errors.error_list);

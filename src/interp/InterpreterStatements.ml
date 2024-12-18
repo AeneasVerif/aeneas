@@ -662,8 +662,9 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
               ^ fun_sig_to_string ctx def.signature));
           let tr_self = UnknownTrait __FUNCTION__ in
           let regions_hierarchy =
-            LlbcAstUtils.FunIdMap.find (FRegular fid)
-              ctx.fun_ctx.regions_hierarchies
+            silent_unwrap __FILE__ __LINE__ span
+              (LlbcAstUtils.FunIdMap.find_opt (FRegular fid)
+                 ctx.fun_ctx.regions_hierarchies)
           in
           let inst_sg =
             instantiate_fun_sig span ctx func.generics tr_self def.signature

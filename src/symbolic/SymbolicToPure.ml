@@ -1080,7 +1080,10 @@ let compute_raw_fun_effect_info (span : Meta.span option)
     (gid : T.RegionGroupId.id option) : fun_effect_info =
   match fun_id with
   | TraitMethod (_, _, fid) | FunId (FRegular fid) ->
-      let info = A.FunDeclId.Map.find fid fun_infos in
+      let info =
+        silent_unwrap_opt_span __FILE__ __LINE__ span
+          (A.FunDeclId.Map.find_opt fid fun_infos)
+      in
       let stateful_group = info.stateful in
       let stateful =
         stateful_group && ((not !Config.backward_no_state_update) || gid = None)
@@ -1472,12 +1475,16 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed (span : span option)
 let translate_fun_sig_to_decomposed (decls_ctx : C.decls_ctx)
     (fun_id : FunDeclId.id) (sg : A.fun_sig) (input_names : string option list)
     : decomposed_fun_sig =
+  let span =
+    (silent_unwrap_opt_span __FILE__ __LINE__ None
+       (FunDeclId.Map.find_opt fun_id decls_ctx.fun_ctx.fun_decls))
+      .item_meta
+      .span
+  in
   (* Retrieve the list of parent backward functions *)
   let regions_hierarchy =
-    FunIdMap.find (FRegular fun_id) decls_ctx.fun_ctx.regions_hierarchies
-  in
-  let span =
-    (FunDeclId.Map.find fun_id decls_ctx.fun_ctx.fun_decls).item_meta.span
+    silent_unwrap __FILE__ __LINE__ span
+      (FunIdMap.find_opt (FRegular fun_id) decls_ctx.fun_ctx.regions_hierarchies)
   in
 
   translate_fun_sig_with_regions_hierarchy_to_decomposed (Some span) decls_ctx
@@ -2709,7 +2716,7 @@ let decompose_let_match (ctx : bs_ctx)
               (* This is a bug, but we might want to continue generating the model:
                  as an escape hatch, simply use the original variable (this will
                  lead to incorrect code of course) *)
-              save_error __FILE__ __LINE__ (Some ctx.span)
+              save_error __FILE__ __LINE__ ctx.span
                 ("Internal error: could not find variable. Please report an \
                   issue. Debugging information:" ^ "\n- v.id: "
                ^ VarId.to_string v.id ^ "\n- ctx.var_id_to_default: "
@@ -4700,13 +4707,13 @@ let translate_type_decls (ctx : Contexts.decls_ctx) : type_decl list =
   List.filter_map
     (fun d ->
       try Some (translate_type_decl ctx d)
-      with CFailure (span, _) ->
+      with CFailure error ->
         let env = PrintPure.decls_ctx_to_fmt_env ctx in
         let name = PrintPure.name_to_string env d.item_meta.name in
         let name_pattern =
           TranslateCore.name_to_pattern_string ctx d.item_meta.name
         in
-        save_error __FILE__ __LINE__ span
+        save_error_opt_span __FILE__ __LINE__ error.span
           ("Could not translate type decl '" ^ name
          ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'");
         None)

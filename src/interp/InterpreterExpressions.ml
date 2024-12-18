@@ -278,10 +278,19 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
   match op with
   | Constant cv -> (
       match cv.value with
-      | CLiteral lit ->
-          ( literal_to_typed_value span (ty_as_literal cv.ty) lit,
-            ctx,
-            fun e -> e )
+      | CLiteral lit -> (
+          (* FIXME: the str type is not in [literal_type] *)
+          match cv.ty with
+          | TAdt (TBuiltin TStr, _) ->
+              let v : typed_value = { value = VLiteral lit; ty = cv.ty } in
+              (v, ctx, fun e -> e)
+          | TLiteral lit_ty ->
+              (literal_to_typed_value span lit_ty lit, ctx, fun e -> e)
+          | _ ->
+              craise __FILE__ __LINE__ span
+                ("Encountered an incorrectly typed constant: "
+                ^ constant_expr_to_string ctx cv
+                ^ " : " ^ ty_to_string ctx cv.ty))
       | CTraitConst (trait_ref, const_name) ->
           let ctx0 = ctx in
           (* Simply introduce a fresh symbolic value *)
@@ -815,9 +824,18 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
         | TBuiltin _ -> craise __FILE__ __LINE__ span "Unreachable")
     | AggregatedArray (ety, cg) ->
         (* Sanity check: all the values have the proper type *)
-        sanity_check __FILE__ __LINE__
+        classert __FILE__ __LINE__
           (List.for_all (fun (v : typed_value) -> v.ty = ety) values)
-          span;
+          span
+          (lazy
+            ("Aggregated array: some values don't have the proper type:"
+           ^ "\n- expected type: " ^ ty_to_string ctx ety ^ "\n- values: ["
+            ^ String.concat ", "
+                (List.map
+                   (fun (v : typed_value) ->
+                     typed_value_to_string ctx v ^ " : " ^ ty_to_string ctx v.ty)
+                   values)
+            ^ "]"));
         (* Sanity check: the number of values is consistent with the length *)
         let len = (literal_as_scalar (const_generic_as_literal cg)).value in
         sanity_check __FILE__ __LINE__
@@ -829,15 +847,25 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
            value equal to the array. The reason is that otherwise, the
            array we introduce here might be duplicated in the generated
            code: by introducing a symbolic value we introduce a let-binding
-           in the generated code. *)
-        let saggregated = mk_fresh_symbolic_typed_value span ty in
-        (* Update the symbolic ast *)
-        let cf e =
-          (* Introduce the symbolic value in the AST *)
-          let sv = ValuesUtils.value_as_symbolic span saggregated.value in
-          SymbolicAst.IntroSymbolic (ctx, None, sv, VaArray values, e)
-        in
-        (saggregated, cf)
+           in the generated code.
+
+           TODO: generalize to the case where we have an array of borrows.
+           For now, we introduce a symbolic value only in the case the
+           array doesn't contain borrows.
+        *)
+        if ty_has_borrows (Some span) ctx.type_ctx.type_infos ty then
+          let value = VAdt { variant_id = None; field_values = values } in
+          let value : typed_value = { value; ty } in
+          (value, fun e -> e)
+        else
+          let saggregated = mk_fresh_symbolic_typed_value span ty in
+          (* Update the symbolic ast *)
+          let cf e =
+            (* Introduce the symbolic value in the AST *)
+            let sv = ValuesUtils.value_as_symbolic span saggregated.value in
+            SymbolicAst.IntroSymbolic (ctx, None, sv, VaArray values, e)
+          in
+          (saggregated, cf)
     | AggregatedClosure _ ->
         craise __FILE__ __LINE__ span "Closures are not supported yet"
   in
