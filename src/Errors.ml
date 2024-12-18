@@ -83,9 +83,7 @@ let craise_opt_span_silent (file : string) (line : int)
   if !Config.fail_hard then
     let msg = format_error_message_with_file_line file line span msg in
     raise (Failure msg)
-  else
-    let () = push_error file line span msg in
-    raise (CFailure { span; file; line; msg })
+  else raise (CFailure { span; file; line; msg })
 
 let craise_silent (file : string) (line : int) (span : Meta.span) (msg : string)
     =
