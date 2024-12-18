@@ -278,7 +278,10 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
           ty_info generics.types
     | TAdt (TAdtId adt_id, generics) ->
         (* Lookup the information for this type definition *)
-        let adt_info = TypeDeclId.Map.find adt_id infos in
+        let adt_info =
+          silent_unwrap_opt_span __FILE__ __LINE__ span
+            (TypeDeclId.Map.find_opt adt_id infos)
+        in
         (* Update the type info with the information from the adt *)
         let ty_info = update_ty_info ty_info None adt_info.borrows_info in
         (* Check if 'static appears in the region parameters *)

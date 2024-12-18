@@ -191,7 +191,8 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
 
   (* Create the context *)
   let regions_hierarchy =
-    FunIdMap.find (FRegular fdef.def_id) ctx.fun_ctx.regions_hierarchies
+    silent_unwrap __FILE__ __LINE__ fdef.item_meta.span
+      (FunIdMap.find_opt (FRegular fdef.def_id) ctx.fun_ctx.regions_hierarchies)
   in
   let region_groups =
     List.map (fun (g : region_var_group) -> g.id) regions_hierarchy
@@ -310,7 +311,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
     List.filter_map (fun x -> x) parent_input_abs_ids
   in
   (* TODO: need to be careful for loops *)
-  assert (parent_input_abs_ids = []);
+  sanity_check __FILE__ __LINE__ (parent_input_abs_ids = []) fdef.item_meta.span;
 
   (* Insert the return value in the return abstractions (by applying
    * borrow projections) *)
@@ -638,8 +639,8 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
       let el = List.map (fun (ctx, res) -> finish res ctx) ctx_resl in
       (* Finish synthesizing *)
       if synthesize then Some (cc el) else None
-    with CFailure (span, msg) ->
-      if synthesize then Some (Error (span, msg)) else None
+    with CFailure error ->
+      if synthesize then Some (Error (error.span, error.msg)) else None
   in
   (* Return *)
   (input_svs, symbolic)

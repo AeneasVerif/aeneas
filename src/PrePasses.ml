@@ -672,7 +672,7 @@ let apply_passes (crate : crate) : crate =
   (* Attempt to apply a pass: if it fails we replace the body by [None] *)
   let apply_function_pass (pass : fun_decl -> fun_decl) (f : fun_decl) =
     try pass f
-    with CFailure (_, _) ->
+    with CFailure _ ->
       (* The error was already registered, we don't need to register it twice.
          However, we replace the body of the function, and save an error to
          report to the user the fact that we will ignore the function body *)

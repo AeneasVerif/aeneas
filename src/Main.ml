@@ -500,22 +500,15 @@ let () =
               @ trait_impls)));
         ());
 
-      (* There may be exceptions to catch *)
-      (try
-         (* Apply the pre-passes *)
-         let m = Aeneas.PrePasses.apply_passes m in
+      (* Apply the pre-passes *)
+      let m = Aeneas.PrePasses.apply_passes m in
 
-         (* Test the unit functions with the concrete interpreter *)
-         if !test_unit_functions then Test.test_unit_functions m;
+      (* Test the unit functions with the concrete interpreter *)
+      if !test_unit_functions then Test.test_unit_functions m;
 
-         (* Translate or borrow-check the crate *)
-         if !borrow_check then Aeneas.BorrowCheck.borrow_check_crate m
-         else Aeneas.Translate.translate_crate filename dest_dir m
-       with Errors.CFailure (_, _) ->
-         (* In theory it shouldn't happen, but there may be uncaught errors -
-            note that we let the [Failure] exceptions go through (they are
-            send if we use the option [-abort-on-error] *)
-         ());
+      (* Translate or borrow-check the crate *)
+      if !borrow_check then Aeneas.BorrowCheck.borrow_check_crate m
+      else Aeneas.Translate.translate_crate filename dest_dir m;
 
       if !Errors.error_list <> [] then (
         List.iter

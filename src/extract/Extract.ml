@@ -557,7 +557,10 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
       let explicit =
         let lookup is_trait_method fun_decl_id lp_id =
           (* Lookup the function to retrieve the signature information *)
-          let trans_fun = A.FunDeclId.Map.find fun_decl_id ctx.trans_funs in
+          let trans_fun =
+            silent_unwrap __FILE__ __LINE__ span
+              (A.FunDeclId.Map.find_opt fun_decl_id ctx.trans_funs)
+          in
           let trans_fun =
             match lp_id with
             | None -> trans_fun.f
@@ -565,7 +568,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
           in
           let explicit = trans_fun.signature.explicit_info in
           (* If it is a trait method, we need to remove the prefix
-             which account for the generics of the impl. *)
+             which accounts for the generics of the impl. *)
           let explicit =
             if is_trait_method then
               (* We simply adjust the length of the explicit information to
@@ -1415,9 +1418,9 @@ let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
        Some def.item_meta.name
      else None
    in
-   extract_comment_with_raw_span ctx fmt
+   extract_comment_with_span ctx fmt
      [ "[" ^ name_to_string ctx def.item_meta.name ^ "]: decreases clause" ]
-     name def.item_meta.span.span);
+     name def.item_meta.span);
   F.pp_print_space fmt ();
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line *)
@@ -1484,9 +1487,9 @@ let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
-  extract_comment_with_raw_span ctx fmt
+  extract_comment_with_span ctx fmt
     [ "[" ^ name_to_string ctx def.item_meta.name ^ "]: termination measure" ]
-    None def.item_meta.span.span;
+    None def.item_meta.span;
   F.pp_print_space fmt ();
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line *)
@@ -1543,9 +1546,9 @@ let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
   in
   (* syntax <def_name> term ... term : tactic *)
   F.pp_print_break fmt 0 0;
-  extract_comment_with_raw_span ctx fmt
+  extract_comment_with_span ctx fmt
     [ "[" ^ name_to_string ctx def.item_meta.name ^ "]: decreases_by tactic" ]
-    None def.item_meta.span.span;
+    None def.item_meta.span;
   F.pp_print_space fmt ();
   F.pp_open_hvbox fmt 0;
   F.pp_print_string fmt "syntax \"";
@@ -1590,7 +1593,7 @@ let extract_fun_comment (ctx : extraction_ctx) (fmt : F.formatter)
       Some def.item_meta.name
     else None
   in
-  extract_comment_with_raw_span ctx fmt comment name def.item_meta.span.span
+  extract_comment_with_span ctx fmt comment name def.item_meta.span
 
 (** Extract a function declaration.
 
@@ -2094,9 +2097,9 @@ let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
       Some global.item_meta.name
     else None
   in
-  extract_comment_with_raw_span ctx fmt
+  extract_comment_with_span ctx fmt
     [ "[" ^ name_to_string ctx global.item_meta.name ^ "]" ]
-    name global.span.span;
+    name global.span;
   F.pp_print_space fmt ();
 
   let decl_name = ctx_get_global span global.def_id ctx in
@@ -2528,7 +2531,10 @@ let explicit_info_drop_prefix (g1 : generic_params) (g2 : explicit_info) :
 let extract_trait_decl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
     (decl : trait_decl) (item_name : string) (id : fun_decl_id) : unit =
   (* Lookup the definition *)
-  let trans = A.FunDeclId.Map.find id ctx.trans_funs in
+  let trans =
+    silent_unwrap_opt_span __FILE__ __LINE__ None
+      (A.FunDeclId.Map.find_opt id ctx.trans_funs)
+  in
   (* Extract the items *)
   let f = trans.f in
   let fun_name =
@@ -2585,9 +2591,9 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
        Some decl.item_meta.name
      else None
    in
-   extract_comment_with_raw_span ctx fmt
+   extract_comment_with_span ctx fmt
      [ "Trait declaration: [" ^ name_to_string ctx decl.item_meta.name ^ "]" ]
-     name decl.item_meta.span.span);
+     name decl.item_meta.span);
   F.pp_print_break fmt 0 0;
   (* Open two outer boxes for the definition, so that whenever possible it gets printed on
      one line and indents are correct.
@@ -2806,7 +2812,10 @@ let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
     (impl_generics : string list * string list * string list) : unit =
   let trait_decl_id = impl.impl_trait.trait_decl_id in
   (* Lookup the definition *)
-  let trans = A.FunDeclId.Map.find id ctx.trans_funs in
+  let trans =
+    silent_unwrap_opt_span __FILE__ __LINE__ None
+      (A.FunDeclId.Map.find_opt id ctx.trans_funs)
+  in
   (* Extract the items *)
   let f = trans.f in
   let fun_name =
@@ -2946,12 +2955,12 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
          Some (trait_decl.llbc_generics, decl_ref.decl_generics) )
      else (None, None)
    in
-   extract_comment_with_raw_span ctx fmt
+   extract_comment_with_span ctx fmt
      [
        "Trait implementation: [" ^ name_to_string ctx impl.item_meta.name ^ "]";
      ]
      (* TODO: why option option for the generics? Looks like a bug in OCaml!? *)
-     name ?generics:(Some generics) impl.item_meta.span.span);
+     name ?generics:(Some generics) impl.item_meta.span);
   F.pp_print_break fmt 0 0;
 
   (* If extracting for Lean, mark the definition as reducible *)

@@ -1227,11 +1227,11 @@ let extract_comment (fmt : F.formatter) (sl : string list) : unit =
   F.pp_print_string fmt rd;
   F.pp_close_box fmt ()
 
-let extract_comment_with_raw_span (ctx : extraction_ctx) (fmt : F.formatter)
+let extract_comment_with_span (ctx : extraction_ctx) (fmt : F.formatter)
     (sl : string list) (name : Types.name option)
     ?(generics : (Types.generic_params * Types.generic_args) option = None)
-    (raw_span : Meta.raw_span) : unit =
-  let raw_span = raw_span_to_string raw_span in
+    (span : Meta.span) : unit =
+  let span = span_to_string span in
   let name =
     match (name, generics) with
     | None, _ -> []
@@ -1243,7 +1243,7 @@ let extract_comment_with_raw_span (ctx : extraction_ctx) (fmt : F.formatter)
           ^ name_with_generics_to_pattern_string ctx.trans_ctx name params args;
         ]
   in
-  extract_comment fmt (sl @ [ raw_span ] @ name)
+  extract_comment fmt (sl @ [ span ] @ name)
 
 let extract_trait_clause_type (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t)
@@ -1517,9 +1517,9 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
      then Some def.item_meta.name
      else None
    in
-   extract_comment_with_raw_span ctx fmt
+   extract_comment_with_span ctx fmt
      [ "[" ^ name_to_string ctx def.item_meta.name ^ "]" ]
-     name def.item_meta.span.span);
+     name def.item_meta.span);
   F.pp_print_break fmt 0 0;
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line. Note however that in the case of Lean line breaks are important

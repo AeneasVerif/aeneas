@@ -17,7 +17,9 @@ let span_to_string (span : Meta.span) =
   let generated_from =
     match span.generated_from_span with
     | None -> ""
-    | Some span -> "; this macro is used at: " ^ raw_span_to_string span
+    | Some span ->
+        "; this code is generated from a macro invocation at: "
+        ^ raw_span_to_string span
   in
   "Source: " ^ raw_span_to_string span.span ^ generated_from
 
@@ -34,7 +36,15 @@ let format_error_message_with_file_line (file : string) (line : int)
   "In file " ^ file ^ ", line " ^ string_of_int line ^ ":\n"
   ^ format_error_message span msg
 
-exception CFailure of (Meta.span option * string)
+type cfailure = {
+  span : Meta.span option;
+  file : string;
+  line : int;
+  msg : string;
+}
+[@@deriving show]
+
+exception CFailure of cfailure
 
 let error_list : (string * int * Meta.span option * string) list ref = ref []
 
@@ -62,10 +72,24 @@ let craise_opt_span (file : string) (line : int) (span : Meta.span option)
     raise (Failure msg))
   else
     let () = push_error file line span msg in
-    raise (CFailure (span, msg))
+    raise (CFailure { span; file; line; msg })
 
 let craise (file : string) (line : int) (span : Meta.span) (msg : string) =
   craise_opt_span file line (Some span) msg
+
+(** Throw an exception, but do not register an error *)
+let craise_opt_span_silent (file : string) (line : int)
+    (span : Meta.span option) (msg : string) =
+  if !Config.fail_hard then
+    let msg = format_error_message_with_file_line file line span msg in
+    raise (Failure msg)
+  else
+    let () = push_error file line span msg in
+    raise (CFailure { span; file; line; msg })
+
+let craise_silent (file : string) (line : int) (span : Meta.span) (msg : string)
+    =
+  craise_opt_span_silent file line (Some span) msg
 
 (** Lazy assert *)
 let classert_opt_span (file : string) (line : int) (b : bool)
@@ -113,3 +137,15 @@ let cassert_warn (file : string) (line : int) (b : bool) (span : Meta.span)
 
 let exec_raise = craise
 let exec_assert = cassert
+
+let silent_unwrap_opt_span (file : string) (line : int)
+    (span : Meta.span option) (x : 'a option) : 'a =
+  match x with
+  | Some x -> x
+  | None ->
+      craise_opt_span_silent file line span
+        "Internal error: please file an issue"
+
+let silent_unwrap (file : string) (line : int) (span : Meta.span)
+    (x : 'a option) : 'a =
+  silent_unwrap_opt_span file line (Some span) x

@@ -303,6 +303,11 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
       Some { id; regions; parents })
     (SccId.Map.bindings sccs.sccs)
 
+(** Compute the region hierarchies for a set of function declarations.Aeneas
+
+    Remark: in case we do not abort on error, this function will ignore
+    the signatures which trigger errors.
+ *)
 let compute_regions_hierarchies (type_decls : type_decl TypeDeclId.Map.t)
     (fun_decls : fun_decl FunDeclId.Map.t)
     (global_decls : global_decl GlobalDeclId.Map.t)
@@ -338,9 +343,16 @@ let compute_regions_hierarchies (type_decls : type_decl TypeDeclId.Map.t)
       (BuiltinFunIdMap.values builtin_fun_infos)
   in
   FunIdMap.of_list
-    (List.map
+    (List.filter_map
        (fun (fid, (name, sg, span)) ->
-         ( fid,
-           compute_regions_hierarchy_for_sig span type_decls fun_decls
-             global_decls trait_decls trait_impls name sg ))
+         try
+           Some
+             ( fid,
+               compute_regions_hierarchy_for_sig span type_decls fun_decls
+                 global_decls trait_decls trait_impls name sg )
+         with CFailure error ->
+           save_error_opt_span __FILE__ __LINE__ error.span
+             ("Could not compute the region hierarchies for function '" ^ name
+            ^ " because of previous error");
+           None)
        (regular @ builtin))

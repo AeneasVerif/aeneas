@@ -1215,7 +1215,7 @@ struct
       S.sid_to_value_map :=
         SymbolicValueId.Map.add_strict id0 sv1 !S.sid_to_value_map;
 
-      (* Return - the returned value is not used: we can return  whatever
+      (* Return - the returned value is not used: we can return whatever
          we want *)
       sv0)
 

@@ -32,7 +32,8 @@ let translate_function_to_symbolics (trans_ctx : trans_ctx) (fdef : fun_decl) :
   match fdef.body with
   | None -> None
   | Some _ ->
-      (* Evaluate *)
+      (* Evaluate - note that [evaluate_function_symbolic synthesize] catches
+         exceptions to at least generate a dummy body if we do not abort on failure. *)
       let synthesize = true in
       let inputs, symb = evaluate_function_symbolic synthesize trans_ctx fdef in
       Some (inputs, Option.get symb)
@@ -210,10 +211,10 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
   try
     Some
       (translate_function_to_pure_aux trans_ctx pure_type_decls fun_dsigs fdef)
-  with CFailure (span, _) ->
+  with CFailure error ->
     let name = name_to_string trans_ctx fdef.item_meta.name in
     let name_pattern = name_to_pattern_string trans_ctx fdef.item_meta.name in
-    save_error_opt_span __FILE__ __LINE__ span
+    save_error_opt_span __FILE__ __LINE__ error.span
       ("Could not translate the function '" ^ name
      ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'");
     None
@@ -247,12 +248,12 @@ let translate_crate_to_pure (crate : crate) :
     List.filter_map
       (fun (global : global_decl) ->
         try Some (SymbolicToPure.translate_global trans_ctx global)
-        with CFailure (span, _) ->
+        with CFailure error ->
           let name = name_to_string trans_ctx global.item_meta.name in
           let name_pattern =
             name_to_pattern_string trans_ctx global.item_meta.name
           in
-          save_error_opt_span __FILE__ __LINE__ span
+          save_error_opt_span __FILE__ __LINE__ error.span
             ("Could not translate the global declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
             );
@@ -270,12 +271,12 @@ let translate_crate_to_pure (crate : crate) :
                ( fdef.def_id,
                  SymbolicToPure.translate_fun_sig_from_decl_to_decomposed
                    trans_ctx fdef )
-           with CFailure (span, _) ->
+           with CFailure error ->
              let name = name_to_string trans_ctx fdef.item_meta.name in
              let name_pattern =
                name_to_pattern_string trans_ctx fdef.item_meta.name
              in
-             save_error_opt_span __FILE__ __LINE__ span
+             save_error_opt_span __FILE__ __LINE__ error.span
                ("Could not translate the function signature of '" ^ name
               ^ " because of previous error\nName pattern: '" ^ name_pattern
               ^ "'");
@@ -283,7 +284,11 @@ let translate_crate_to_pure (crate : crate) :
          (FunDeclId.Map.values crate.fun_decls))
   in
 
-  (* Translate all the *transparent* functions *)
+  (* Translate all the *transparent* functions.
+
+     Remark: [translate_function_to_pure] catches errors of type [CFailure]
+     to allow the compilation to make progress.
+  *)
   let pure_translations =
     List.filter_map
       (translate_function_to_pure trans_ctx type_decls_map fun_dsigs)
@@ -295,12 +300,12 @@ let translate_crate_to_pure (crate : crate) :
     List.filter_map
       (fun d ->
         try Some (SymbolicToPure.translate_trait_decl trans_ctx d)
-        with CFailure (span, _) ->
+        with CFailure error ->
           let name = name_to_string trans_ctx d.item_meta.name in
           let name_pattern =
             name_to_pattern_string trans_ctx d.item_meta.name
           in
-          save_error_opt_span __FILE__ __LINE__ span
+          save_error_opt_span __FILE__ __LINE__ error.span
             ("Could not translate the trait declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
             );
@@ -313,12 +318,12 @@ let translate_crate_to_pure (crate : crate) :
     List.filter_map
       (fun d ->
         try Some (SymbolicToPure.translate_trait_impl trans_ctx d)
-        with CFailure (span, _) ->
+        with CFailure error ->
           let name = name_to_string trans_ctx d.item_meta.name in
           let name_pattern =
             name_to_pattern_string trans_ctx d.item_meta.name
           in
-          save_error_opt_span __FILE__ __LINE__ span
+          save_error_opt_span __FILE__ __LINE__ error.span
             ("Could not translate the trait instance '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
             );
@@ -532,7 +537,10 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     (id : GlobalDeclId.id) : unit =
   let global_decls = ctx.trans_ctx.global_ctx.global_decls in
   let global = GlobalDeclId.Map.find id global_decls in
-  let trans = FunDeclId.Map.find global.body ctx.trans_funs in
+  let trans =
+    silent_unwrap_opt_span __FILE__ __LINE__ None
+      (FunDeclId.Map.find_opt global.body ctx.trans_funs)
+  in
   sanity_check __FILE__ __LINE__ (trans.loops = []) global.item_meta.span;
   let body = trans.f in
 
@@ -741,7 +749,10 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
 let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
     (ctx : gen_ctx) (trait_decl_id : Pure.trait_decl_id) (extract_decl : bool)
     (extract_extra_info : bool) : unit =
-  let trait_decl = TraitDeclId.Map.find trait_decl_id ctx.trans_trait_decls in
+  let trait_decl =
+    silent_unwrap_opt_span __FILE__ __LINE__ None
+      (TraitDeclId.Map.find_opt trait_decl_id ctx.trans_trait_decls)
+  in
   (* Check if the trait declaration is builtin, in which case we ignore it *)
   let open ExtractBuiltin in
   if
@@ -878,7 +889,12 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
   if config.extract_state_type && config.extract_fun_decls then
     export_state_type ();
 
-  List.iter export_decl_group ctx.crate.declarations;
+  List.iter
+    (fun g ->
+      try export_decl_group g
+      with CFailure _ -> (* An exception was raised: ignore it *)
+                         ())
+    ctx.crate.declarations;
 
   if config.extract_state_type && not config.extract_fun_decls then
     export_state_type ()
@@ -1136,7 +1152,19 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
    * sure there are no name clashes. *)
   let ctx =
     List.fold_left
-      (fun ctx def -> Extract.extract_type_decl_register_names ctx def)
+      (fun ctx def ->
+        try Extract.extract_type_decl_register_names ctx def
+        with CFailure error ->
+          (* An exception was raised: ignore it *)
+          let name = name_to_string trans_ctx def.item_meta.name in
+          let name_pattern =
+            name_to_pattern_string trans_ctx def.item_meta.name
+          in
+          save_error_opt_span __FILE__ __LINE__ error.span
+            ("Could not generate names for the type declaration '" ^ name
+           ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
+            );
+          ctx)
       ctx
       (Pure.TypeDeclId.Map.values trans_types)
   in
@@ -1144,36 +1172,88 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
   let ctx =
     List.fold_left
       (fun ctx (trans : pure_fun_translation) ->
-        (* If requested by the user, register termination measures and decreases
-           proofs for all the recursive functions *)
-        let gen_decr_clause (def : Pure.fun_decl) =
-          !Config.extract_decreases_clauses
-          && PureUtils.FunLoopIdSet.mem
-               (def.Pure.def_id, def.Pure.loop_id)
-               rec_functions
-        in
-        (* Register the names, only if the function is not a global body -
-         * those are handled later *)
-        let is_global = trans.f.Pure.is_global_decl_body in
-        if is_global then ctx
-        else Extract.extract_fun_decl_register_names ctx gen_decr_clause trans)
+        try
+          (* If requested by the user, register termination measures and decreases
+             proofs for all the recursive functions *)
+          let gen_decr_clause (def : Pure.fun_decl) =
+            !Config.extract_decreases_clauses
+            && PureUtils.FunLoopIdSet.mem
+                 (def.Pure.def_id, def.Pure.loop_id)
+                 rec_functions
+          in
+          (* Register the names, only if the function is not a global body -
+           * those are handled later *)
+          let is_global = trans.f.Pure.is_global_decl_body in
+          if is_global then ctx
+          else Extract.extract_fun_decl_register_names ctx gen_decr_clause trans
+        with CFailure error ->
+          (* An exception was raised: ignore it *)
+          let name = name_to_string trans_ctx trans.f.item_meta.name in
+          let name_pattern =
+            name_to_pattern_string trans_ctx trans.f.item_meta.name
+          in
+          save_error_opt_span __FILE__ __LINE__ error.span
+            ("Could not generate names for the function declaration '" ^ name
+           ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
+            );
+          ctx)
       ctx
       (FunDeclId.Map.values trans_funs)
   in
 
   let ctx =
-    List.fold_left Extract.extract_global_decl_register_names ctx
+    List.fold_left
+      (fun ctx def ->
+        try Extract.extract_global_decl_register_names ctx def
+        with CFailure error ->
+          (* An exception was raised: ignore it *)
+          let name = name_to_string trans_ctx def.item_meta.name in
+          let name_pattern =
+            name_to_pattern_string trans_ctx def.item_meta.name
+          in
+          save_error_opt_span __FILE__ __LINE__ error.span
+            ("Could not generate names for the global declaration '" ^ name
+           ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
+            );
+          ctx)
+      ctx
       (GlobalDeclId.Map.values crate.global_decls)
   in
 
   let ctx =
-    List.fold_left Extract.extract_trait_decl_register_names ctx
-      trans_trait_decls
+    List.fold_left
+      (fun ctx def ->
+        try Extract.extract_trait_decl_register_names ctx def
+        with CFailure error ->
+          (* An exception was raised: ignore it *)
+          let name = name_to_string trans_ctx def.item_meta.name in
+          let name_pattern =
+            name_to_pattern_string trans_ctx def.item_meta.name
+          in
+          save_error_opt_span __FILE__ __LINE__ error.span
+            ("Could not generate names for the trait declaration '" ^ name
+           ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
+            );
+          ctx)
+      ctx trans_trait_decls
   in
 
   let ctx =
-    List.fold_left Extract.extract_trait_impl_register_names ctx
-      trans_trait_impls
+    List.fold_left
+      (fun ctx def ->
+        try Extract.extract_trait_impl_register_names ctx def
+        with CFailure error ->
+          (* An exception was raised: ignore it *)
+          let name = name_to_string trans_ctx def.item_meta.name in
+          let name_pattern =
+            name_to_pattern_string trans_ctx def.item_meta.name
+          in
+          save_error_opt_span __FILE__ __LINE__ error.span
+            ("Could not generate names for the trait implementation '" ^ name
+           ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
+            );
+          ctx)
+      ctx trans_trait_impls
   in
 
   (* Open the output file *)
