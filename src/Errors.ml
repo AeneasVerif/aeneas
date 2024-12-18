@@ -36,10 +36,10 @@ let push_error (span : Meta.span option) (msg : string) =
   error_list := (span, msg) :: !error_list
 
 (** Register an error, and throw an exception if [throw] is true *)
-let save_error (file : string) (line : int) ?(throw : bool = false)
-    (span : Meta.span option) (msg : string) =
+let save_error (file : string) (line : int) (span : Meta.span option)
+    (msg : string) =
   push_error span msg;
-  if !Config.fail_hard && throw then (
+  if !Config.fail_hard then (
     let msg = format_error_message_with_file_line file line span msg in
     log#serror (msg ^ "\n");
     raise (Failure msg))

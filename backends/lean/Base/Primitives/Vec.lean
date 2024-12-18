@@ -254,4 +254,9 @@ theorem alloc.vec.Vec.resize_spec {T} (cloneInst : core.clone.Clone T)
   . simp
   . simp [*]
 
+@[simp]
+theorem alloc.vec.Vec.update_index_eq α [Inhabited α] (x : alloc.vec.Vec α) (i : Usize) :
+  x.update i (x.val.index i.toNat) = x := by
+  simp [Vec, Subtype.eq_iff]
+
 end Primitives

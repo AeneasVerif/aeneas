@@ -50,11 +50,20 @@ let substitute_signature (asubst : RegionGroupId.id -> AbstractionId.id)
   in
   let inputs = List.map (ty_substitute subst) sg.inputs in
   let output = ty_substitute subst sg.output in
-  let subst_region_group (rg : region_var_group) : abs_region_group =
+  let subst_abs_region_group (rg : region_var_group) : abs_region_group =
     let id = asubst rg.id in
     let regions = List.map r_id_subst rg.regions in
     let parents = List.map asubst rg.parents in
     ({ id; regions; parents } : abs_region_group)
+  in
+  let abs_regions_hierarchy =
+    List.map subst_abs_region_group regions_hierarchy
+  in
+  let subst_region_group (rg : region_var_group) : region_var_group =
+    let id = rg.id in
+    let regions = List.map r_id_subst rg.regions in
+    let parents = rg.parents in
+    ({ id; regions; parents } : region_var_group)
   in
   let regions_hierarchy = List.map subst_region_group regions_hierarchy in
   let trait_type_constraints =
@@ -63,7 +72,13 @@ let substitute_signature (asubst : RegionGroupId.id -> AbstractionId.id)
          trait_type_constraint_substitute subst)
       sg.generics.trait_type_constraints
   in
-  { inputs; output; regions_hierarchy; trait_type_constraints }
+  {
+    inputs;
+    output;
+    regions_hierarchy;
+    abs_regions_hierarchy;
+    trait_type_constraints;
+  }
 
 type id_subst = {
   r_subst : RegionId.id -> RegionId.id;

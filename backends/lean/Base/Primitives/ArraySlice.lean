@@ -402,6 +402,16 @@ theorem Slice.update_subslice_spec {α : Type u} [Inhabited α] (a : Slice α) (
     have := h2 i (by int_tac) (by int_tac)
     simp [*]
 
+@[simp]
+theorem Array.update_index_eq α n [Inhabited α] (x : Array α n) (i : Usize) :
+  x.update i (x.val.index i.toNat) = x := by
+  simp [Array, Subtype.eq_iff]
+
+@[simp]
+theorem Slice.update_index_eq α [Inhabited α] (x : Slice α) (i : Usize) :
+  x.update i (x.val.index i.toNat) = x := by
+  simp [Slice, Subtype.eq_iff]
+
 /- Trait declaration: [core::slice::index::private_slice_index::Sealed] -/
 structure core.slice.index.private_slice_index.Sealed (Self : Type) where
 

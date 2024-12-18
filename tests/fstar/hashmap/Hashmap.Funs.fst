@@ -13,8 +13,25 @@ include Hashmap.Clauses
 let hash_key (k : usize) : result usize =
   Ok k
 
+(** [hashmap::{core::clone::Clone for hashmap::Fraction}#1::clone]:
+    Source: 'tests/src/hashmap.rs', lines 45:9-45:14 *)
+let clonehashmapFraction_clone (self : fraction_t) : result fraction_t =
+  Ok self
+
+(** Trait implementation: [hashmap::{core::clone::Clone for hashmap::Fraction}#1]
+    Source: 'tests/src/hashmap.rs', lines 45:9-45:14 *)
+let core_clone_ClonehashmapFraction : core_clone_Clone fraction_t = {
+  clone = clonehashmapFraction_clone;
+}
+
+(** Trait implementation: [hashmap::{core::marker::Copy for hashmap::Fraction}#2]
+    Source: 'tests/src/hashmap.rs', lines 45:16-45:20 *)
+let core_marker_CopyhashmapFraction : core_marker_Copy fraction_t = {
+  cloneInst = core_clone_ClonehashmapFraction;
+}
+
 (** [hashmap::{hashmap::HashMap<T>}::allocate_slots]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 64:8-67:9 *)
+    Source: 'tests/src/hashmap.rs', lines 70:8-73:9 *)
 let rec hashMap_allocate_slots_loop
   (#t : Type0) (slots : alloc_vec_Vec (aList_t t)) (n : usize) :
   Tot (result (alloc_vec_Vec (aList_t t)))
@@ -28,7 +45,7 @@ let rec hashMap_allocate_slots_loop
   else Ok slots
 
 (** [hashmap::{hashmap::HashMap<T>}::allocate_slots]:
-    Source: 'tests/src/hashmap.rs', lines 63:4-69:5 *)
+    Source: 'tests/src/hashmap.rs', lines 69:4-75:5 *)
 let hashMap_allocate_slots
   (#t : Type0) (slots : alloc_vec_Vec (aList_t t)) (n : usize) :
   result (alloc_vec_Vec (aList_t t))
@@ -36,32 +53,26 @@ let hashMap_allocate_slots
   hashMap_allocate_slots_loop slots n
 
 (** [hashmap::{hashmap::HashMap<T>}::new_with_capacity]:
-    Source: 'tests/src/hashmap.rs', lines 72:4-87:5 *)
+    Source: 'tests/src/hashmap.rs', lines 78:4-89:5 *)
 let hashMap_new_with_capacity
-  (t : Type0) (capacity : usize) (max_load_dividend : usize)
-  (max_load_divisor : usize) :
+  (t : Type0) (capacity : usize) (max_load_factor : fraction_t) :
   result (hashMap_t t)
   =
   let* slots = hashMap_allocate_slots (alloc_vec_Vec_new (aList_t t)) capacity
     in
-  let* i = usize_mul capacity max_load_dividend in
-  let* i1 = usize_div i max_load_divisor in
+  let* i = usize_mul capacity max_load_factor.dividend in
+  let* i1 = usize_div i max_load_factor.divisor in
   Ok
-    {
-      num_entries = 0;
-      max_load_factor = (max_load_dividend, max_load_divisor);
-      max_load = i1;
-      saturated = false;
-      slots
+    { num_entries = 0; max_load_factor; max_load = i1; saturated = false; slots
     }
 
 (** [hashmap::{hashmap::HashMap<T>}::new]:
-    Source: 'tests/src/hashmap.rs', lines 89:4-92:5 *)
+    Source: 'tests/src/hashmap.rs', lines 91:4-100:5 *)
 let hashMap_new (t : Type0) : result (hashMap_t t) =
-  hashMap_new_with_capacity t 32 4 5
+  hashMap_new_with_capacity t 32 { dividend = 4; divisor = 5 }
 
 (** [hashmap::{hashmap::HashMap<T>}::clear]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 98:8-101:9 *)
+    Source: 'tests/src/hashmap.rs', lines 106:8-109:9 *)
 let rec hashMap_clear_loop
   (#t : Type0) (slots : alloc_vec_Vec (aList_t t)) (i : usize) :
   Tot (result (alloc_vec_Vec (aList_t t)))
@@ -79,18 +90,18 @@ let rec hashMap_clear_loop
   else Ok slots
 
 (** [hashmap::{hashmap::HashMap<T>}::clear]:
-    Source: 'tests/src/hashmap.rs', lines 94:4-102:5 *)
+    Source: 'tests/src/hashmap.rs', lines 102:4-110:5 *)
 let hashMap_clear (#t : Type0) (self : hashMap_t t) : result (hashMap_t t) =
   let* hm = hashMap_clear_loop self.slots 0 in
   Ok { self with num_entries = 0; slots = hm }
 
 (** [hashmap::{hashmap::HashMap<T>}::len]:
-    Source: 'tests/src/hashmap.rs', lines 104:4-106:5 *)
+    Source: 'tests/src/hashmap.rs', lines 112:4-114:5 *)
 let hashMap_len (#t : Type0) (self : hashMap_t t) : result usize =
   Ok self.num_entries
 
 (** [hashmap::{hashmap::HashMap<T>}::insert_in_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 1:0-127:9 *)
+    Source: 'tests/src/hashmap.rs', lines 1:0-135:9 *)
 let rec hashMap_insert_in_list_loop
   (#t : Type0) (key : usize) (value : t) (ls : aList_t t) :
   Tot (result (bool & (aList_t t)))
@@ -99,15 +110,15 @@ let rec hashMap_insert_in_list_loop
   begin match ls with
   | AList_Cons ckey cvalue tl ->
     if ckey = key
-    then Ok (false, AList_Cons ckey value tl)
+    then Ok (false, (AList_Cons ckey value tl))
     else
       let* (b, tl1) = hashMap_insert_in_list_loop key value tl in
-      Ok (b, AList_Cons ckey cvalue tl1)
-  | AList_Nil -> Ok (true, AList_Cons key value AList_Nil)
+      Ok (b, (AList_Cons ckey cvalue tl1))
+  | AList_Nil -> Ok (true, (AList_Cons key value AList_Nil))
   end
 
 (** [hashmap::{hashmap::HashMap<T>}::insert_in_list]:
-    Source: 'tests/src/hashmap.rs', lines 111:4-128:5 *)
+    Source: 'tests/src/hashmap.rs', lines 119:4-136:5 *)
 let hashMap_insert_in_list
   (#t : Type0) (key : usize) (value : t) (ls : aList_t t) :
   result (bool & (aList_t t))
@@ -115,7 +126,7 @@ let hashMap_insert_in_list
   hashMap_insert_in_list_loop key value ls
 
 (** [hashmap::{hashmap::HashMap<T>}::insert_no_resize]:
-    Source: 'tests/src/hashmap.rs', lines 131:4-139:5 *)
+    Source: 'tests/src/hashmap.rs', lines 139:4-147:5 *)
 let hashMap_insert_no_resize
   (#t : Type0) (self : hashMap_t t) (key : usize) (value : t) :
   result (hashMap_t t)
@@ -135,7 +146,7 @@ let hashMap_insert_no_resize
   else let v = index_mut_back a1 in Ok { self with slots = v }
 
 (** [hashmap::{hashmap::HashMap<T>}::move_elements_from_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 197:12-204:17 *)
+    Source: 'tests/src/hashmap.rs', lines 201:12-208:17 *)
 let rec hashMap_move_elements_from_list_loop
   (#t : Type0) (ntable : hashMap_t t) (ls : aList_t t) :
   Tot (result (hashMap_t t))
@@ -149,13 +160,13 @@ let rec hashMap_move_elements_from_list_loop
   end
 
 (** [hashmap::{hashmap::HashMap<T>}::move_elements_from_list]:
-    Source: 'tests/src/hashmap.rs', lines 194:4-207:5 *)
+    Source: 'tests/src/hashmap.rs', lines 198:4-211:5 *)
 let hashMap_move_elements_from_list
   (#t : Type0) (ntable : hashMap_t t) (ls : aList_t t) : result (hashMap_t t) =
   hashMap_move_elements_from_list_loop ntable ls
 
 (** [hashmap::{hashmap::HashMap<T>}::move_elements]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 183:8-190:9 *)
+    Source: 'tests/src/hashmap.rs', lines 187:8-194:9 *)
 let rec hashMap_move_elements_loop
   (#t : Type0) (ntable : hashMap_t t) (slots : alloc_vec_Vec (aList_t t))
   (i : usize) :
@@ -176,7 +187,7 @@ let rec hashMap_move_elements_loop
   else Ok (ntable, slots)
 
 (** [hashmap::{hashmap::HashMap<T>}::move_elements]:
-    Source: 'tests/src/hashmap.rs', lines 181:4-191:5 *)
+    Source: 'tests/src/hashmap.rs', lines 185:4-195:5 *)
 let hashMap_move_elements
   (#t : Type0) (ntable : hashMap_t t) (slots : alloc_vec_Vec (aList_t t)) :
   result ((hashMap_t t) & (alloc_vec_Vec (aList_t t)))
@@ -184,24 +195,23 @@ let hashMap_move_elements
   hashMap_move_elements_loop ntable slots 0
 
 (** [hashmap::{hashmap::HashMap<T>}::try_resize]:
-    Source: 'tests/src/hashmap.rs', lines 154:4-177:5 *)
+    Source: 'tests/src/hashmap.rs', lines 162:4-181:5 *)
 let hashMap_try_resize
   (#t : Type0) (self : hashMap_t t) : result (hashMap_t t) =
   let capacity = alloc_vec_Vec_len self.slots in
   let* n1 = usize_div core_usize_max 2 in
-  let (i, i1) = self.max_load_factor in
-  let* i2 = usize_div n1 i in
-  if capacity <= i2
+  let* i = usize_div n1 self.max_load_factor.dividend in
+  if capacity <= i
   then
-    let* i3 = usize_mul capacity 2 in
-    let* ntable = hashMap_new_with_capacity t i3 i i1 in
+    let* i1 = usize_mul capacity 2 in
+    let* ntable = hashMap_new_with_capacity t i1 self.max_load_factor in
     let* p = hashMap_move_elements ntable self.slots in
     let (ntable1, _) = p in
     Ok { self with max_load = ntable1.max_load; slots = ntable1.slots }
   else Ok { self with saturated = true }
 
 (** [hashmap::{hashmap::HashMap<T>}::insert]:
-    Source: 'tests/src/hashmap.rs', lines 143:4-150:5 *)
+    Source: 'tests/src/hashmap.rs', lines 151:4-158:5 *)
 let hashMap_insert
   (#t : Type0) (self : hashMap_t t) (key : usize) (value : t) :
   result (hashMap_t t)
@@ -213,7 +223,7 @@ let hashMap_insert
   else Ok self1
 
 (** [hashmap::{hashmap::HashMap<T>}::contains_key_in_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 1:0-229:9 *)
+    Source: 'tests/src/hashmap.rs', lines 1:0-233:9 *)
 let rec hashMap_contains_key_in_list_loop
   (#t : Type0) (key : usize) (ls : aList_t t) :
   Tot (result bool)
@@ -226,13 +236,13 @@ let rec hashMap_contains_key_in_list_loop
   end
 
 (** [hashmap::{hashmap::HashMap<T>}::contains_key_in_list]:
-    Source: 'tests/src/hashmap.rs', lines 217:4-230:5 *)
+    Source: 'tests/src/hashmap.rs', lines 221:4-234:5 *)
 let hashMap_contains_key_in_list
   (#t : Type0) (key : usize) (ls : aList_t t) : result bool =
   hashMap_contains_key_in_list_loop key ls
 
 (** [hashmap::{hashmap::HashMap<T>}::contains_key]:
-    Source: 'tests/src/hashmap.rs', lines 210:4-214:5 *)
+    Source: 'tests/src/hashmap.rs', lines 214:4-218:5 *)
 let hashMap_contains_key
   (#t : Type0) (self : hashMap_t t) (key : usize) : result bool =
   let* hash = hash_key key in
@@ -244,26 +254,28 @@ let hashMap_contains_key
   hashMap_contains_key_in_list key a
 
 (** [hashmap::{hashmap::HashMap<T>}::get_in_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 236:8-248:5 *)
+    Source: 'tests/src/hashmap.rs', lines 240:8-248:5 *)
 let rec hashMap_get_in_list_loop
   (#t : Type0) (key : usize) (ls : aList_t t) :
-  Tot (result t) (decreases (hashMap_get_in_list_loop_decreases key ls))
+  Tot (result (option t))
+  (decreases (hashMap_get_in_list_loop_decreases key ls))
   =
   begin match ls with
   | AList_Cons ckey cvalue tl ->
-    if ckey = key then Ok cvalue else hashMap_get_in_list_loop key tl
-  | AList_Nil -> Fail Failure
+    if ckey = key then Ok (Some cvalue) else hashMap_get_in_list_loop key tl
+  | AList_Nil -> Ok None
   end
 
 (** [hashmap::{hashmap::HashMap<T>}::get_in_list]:
-    Source: 'tests/src/hashmap.rs', lines 235:4-248:5 *)
+    Source: 'tests/src/hashmap.rs', lines 239:4-248:5 *)
 let hashMap_get_in_list
-  (#t : Type0) (key : usize) (ls : aList_t t) : result t =
+  (#t : Type0) (key : usize) (ls : aList_t t) : result (option t) =
   hashMap_get_in_list_loop key ls
 
 (** [hashmap::{hashmap::HashMap<T>}::get]:
     Source: 'tests/src/hashmap.rs', lines 250:4-254:5 *)
-let hashMap_get (#t : Type0) (self : hashMap_t t) (key : usize) : result t =
+let hashMap_get
+  (#t : Type0) (self : hashMap_t t) (key : usize) : result (option t) =
   let* hash = hash_key key in
   let i = alloc_vec_Vec_len self.slots in
   let* hash_mod = usize_rem hash i in
@@ -276,32 +288,39 @@ let hashMap_get (#t : Type0) (self : hashMap_t t) (key : usize) : result t =
     Source: 'tests/src/hashmap.rs', lines 257:8-265:5 *)
 let rec hashMap_get_mut_in_list_loop
   (#t : Type0) (ls : aList_t t) (key : usize) :
-  Tot (result (t & (t -> aList_t t)))
+  Tot (result ((option t) & (option t -> aList_t t)))
   (decreases (hashMap_get_mut_in_list_loop_decreases ls key))
   =
   begin match ls with
   | AList_Cons ckey cvalue tl ->
     if ckey = key
-    then let back = fun ret -> AList_Cons ckey ret tl in Ok (cvalue, back)
+    then
+      let back =
+        fun ret ->
+          let x = begin match ret with | Some x1 -> x1 | _ -> cvalue end in
+          AList_Cons ckey x tl in
+      Ok ((Some cvalue), back)
     else
-      let* (x, back) = hashMap_get_mut_in_list_loop tl key in
+      let* (o, back) = hashMap_get_mut_in_list_loop tl key in
       let back1 = fun ret -> let tl1 = back ret in AList_Cons ckey cvalue tl1
         in
-      Ok (x, back1)
-  | AList_Nil -> Fail Failure
+      Ok (o, back1)
+  | AList_Nil -> let back = fun ret -> AList_Nil in Ok (None, back)
   end
 
 (** [hashmap::{hashmap::HashMap<T>}::get_mut_in_list]:
     Source: 'tests/src/hashmap.rs', lines 256:4-265:5 *)
 let hashMap_get_mut_in_list
-  (#t : Type0) (ls : aList_t t) (key : usize) : result (t & (t -> aList_t t)) =
+  (#t : Type0) (ls : aList_t t) (key : usize) :
+  result ((option t) & (option t -> aList_t t))
+  =
   hashMap_get_mut_in_list_loop ls key
 
 (** [hashmap::{hashmap::HashMap<T>}::get_mut]:
     Source: 'tests/src/hashmap.rs', lines 268:4-272:5 *)
 let hashMap_get_mut
   (#t : Type0) (self : hashMap_t t) (key : usize) :
-  result (t & (t -> hashMap_t t))
+  result ((option t) & (option t -> hashMap_t t))
   =
   let* hash = hash_key key in
   let i = alloc_vec_Vec_len self.slots in
@@ -309,13 +328,13 @@ let hashMap_get_mut
   let* (a, index_mut_back) =
     alloc_vec_Vec_index_mut (core_slice_index_SliceIndexUsizeSliceTInst
       (aList_t t)) self.slots hash_mod in
-  let* (x, get_mut_in_list_back) = hashMap_get_mut_in_list a key in
+  let* (o, get_mut_in_list_back) = hashMap_get_mut_in_list a key in
   let back =
     fun ret ->
       let a1 = get_mut_in_list_back ret in
       let v = index_mut_back a1 in
       { self with slots = v } in
-  Ok (x, back)
+  Ok (o, back)
 
 (** [hashmap::{hashmap::HashMap<T>}::remove_from_list]: loop 0:
     Source: 'tests/src/hashmap.rs', lines 1:0-299:17 *)
@@ -330,12 +349,12 @@ let rec hashMap_remove_from_list_loop
     then
       let (mv_ls, _) = core_mem_replace ls AList_Nil in
       begin match mv_ls with
-      | AList_Cons _ cvalue tl1 -> Ok (Some cvalue, tl1)
+      | AList_Cons _ cvalue tl1 -> Ok ((Some cvalue), tl1)
       | AList_Nil -> Fail Failure
       end
     else
       let* (o, tl1) = hashMap_remove_from_list_loop key tl in
-      Ok (o, AList_Cons ckey x tl1)
+      Ok (o, (AList_Cons ckey x tl1))
   | AList_Nil -> Ok (None, AList_Nil)
   end
 
@@ -375,41 +394,4 @@ let insert_on_disk
   let* (st1, hm) = utils_deserialize st in
   let* hm1 = hashMap_insert hm key value in
   utils_serialize hm1 st1
-
-(** [hashmap::test1]:
-    Source: 'tests/src/hashmap.rs', lines 351:0-383:1 *)
-let test1 : result unit =
-  let* hm = hashMap_new u64 in
-  let* hm1 = hashMap_insert hm 0 42 in
-  let* hm2 = hashMap_insert hm1 128 18 in
-  let* hm3 = hashMap_insert hm2 1024 138 in
-  let* hm4 = hashMap_insert hm3 1056 256 in
-  let* i = hashMap_get hm4 128 in
-  if i = 18
-  then
-    let* (_, get_mut_back) = hashMap_get_mut hm4 1024 in
-    let hm5 = get_mut_back 56 in
-    let* i1 = hashMap_get hm5 1024 in
-    if i1 = 56
-    then
-      let* (x, hm6) = hashMap_remove hm5 1024 in
-      begin match x with
-      | None -> Fail Failure
-      | Some x1 ->
-        if x1 = 56
-        then
-          let* i2 = hashMap_get hm6 0 in
-          if i2 = 42
-          then
-            let* i3 = hashMap_get hm6 128 in
-            if i3 = 18
-            then
-              let* i4 = hashMap_get hm6 1056 in
-              if i4 = 256 then Ok () else Fail Failure
-            else Fail Failure
-          else Fail Failure
-        else Fail Failure
-      end
-    else Fail Failure
-  else Fail Failure
 

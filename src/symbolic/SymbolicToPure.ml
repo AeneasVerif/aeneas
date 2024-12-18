@@ -282,6 +282,71 @@ type bs_ctx = {
 
            We initialize this at [None].
        *)
+  mut_borrow_to_consumed : texpression V.BorrowId.Map.t;
+      (** A map from mutable borrows consumed by region abstractions to
+          consumed values.
+
+          We use this to compute default values during the translation.
+          We need them because of the following case:
+          {[
+            fn wrap_in_option(x: &'a mut T) -> Option<&'a mut T> {
+                Some(x)
+              }
+          ]}
+
+          The translation should look like so:
+          {[
+            let wrap_in_option (x : T) : T & (Option T -> T) =
+              (x, fun x' => let Some x' = x' in x')
+          ]}
+
+          The problem is that the backward function requires unwrapping the value
+          from the option, which should have the variant [Some]. This is however
+          not something we can easily enforce in the type system at the backend
+          side, which means we actually have to generate a match which might fail.
+          In particular, for the (unreachable) [None] branch we have to produce
+          some value for [x']: we use the original value of [x], like so (note
+          that we simplify the [let x' = match ... in ...] expression later in
+          a micro-pass):
+          {[
+            let wrap_in_option (x : T) : T & (Option T -> T) =
+              let back x' =
+                let x' =
+                  match x' with
+                  | Some x' -> x'
+                  | _ -> x
+                in
+                x'
+                  (x, back)
+          ]}
+
+          **Remarks:**
+          We attempted to do store the consumed values directly when doing
+          the symbolic execution. It proved cumbersome for the following reasons:
+          - the symbolic execution is already quite complex, and keeping track
+            of those consumed values is actually non trivial especially
+            in the context of the join operation (for instance: when we join
+            two mutable borrows, which default value should we use?).
+            Generally speaking, we want to keep the symbolic execution as
+            tight as possible because this is the core of the engine.
+          - when we store a value (as a meta-value for instance), we need
+            to store the evaluation context at the same time, otherwise we
+            cannot translate it to a pure expression in the presence of shared
+            borrows (we need the evaluation context to follow the borrow
+            indirections). Making this possible would have required an important
+            refactoring of the code, as the values would have been mutually
+            recursive with the evaluation contexts.
+          On the contrary, computing this information when transforming the
+          symbolic trace to a pure model may not be the most obvious way of
+          retrieving those consumed values but in practice it is quite
+          straightforward and easy to debug.
+      *)
+  var_id_to_default : texpression VarId.Map.t;
+      (** Map from the variable identifier of a given back value and introduced
+          when deconstructing an ended abstraction, to the default value that
+          we can use when introducing the otherwise branch of the deconstructing
+          match (see [mut_borrow_to_consumed]).
+       *)
 }
 [@@deriving show]
 
@@ -387,9 +452,9 @@ let abs_to_string (ctx : bs_ctx) (abs : V.abs) : string =
 let ctx_get_effect_info_for_bid (ctx : bs_ctx) (bid : RegionGroupId.id option) :
     fun_effect_info =
   match bid with
-  | None -> ctx.sg.fwd_info.effect_info
+  | None -> ctx.sg.fun_ty.fwd_info.effect_info
   | Some bid ->
-      let back_sg = RegionGroupId.Map.find bid ctx.sg.back_sg in
+      let back_sg = RegionGroupId.Map.find bid ctx.sg.fun_ty.back_sg in
       back_sg.effect_info
 
 let ctx_get_effect_info (ctx : bs_ctx) : fun_effect_info =
@@ -402,6 +467,9 @@ let bs_ctx_lookup_llbc_type_decl (id : TypeDeclId.id) (ctx : bs_ctx) :
 let bs_ctx_lookup_llbc_fun_decl (id : A.FunDeclId.id) (ctx : bs_ctx) :
     A.fun_decl =
   A.FunDeclId.Map.find id ctx.fun_ctx.llbc_fun_decls
+
+let bs_ctx_lookup_type_decl (id : TypeDeclId.id) (ctx : bs_ctx) : type_decl =
+  TypeDeclId.Map.find id ctx.type_ctx.type_decls
 
 (* We simply ignore the bound regions *)
 let translate_region_binder (translate_value : 'a -> 'b)
@@ -722,13 +790,6 @@ let rec translate_fwd_ty (span : Meta.span option) (type_infos : type_infos)
           mk_simpl_tuple_ty t_generics.types
       | TBuiltin TBox -> (
           (* We eliminate boxes *)
-          (* No general parametricity for now *)
-          cassert_opt_span __FILE__ __LINE__
-            (not
-               (List.exists
-                  (TypesUtils.ty_has_borrows span type_infos)
-                  generics.types))
-            span "ADTs containing borrows are not supported yet";
           match t_generics.types with
           | [ bty ] -> bty
           | _ ->
@@ -821,10 +882,6 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
             Some (TAdt (type_id, generics))
           else None
       | TBuiltin TBox -> (
-          (* Don't accept ADTs (which are not tuples) with borrows for now *)
-          cassert_opt_span __FILE__ __LINE__
-            (not (TypesUtils.ty_has_borrows span type_infos ty))
-            span "ADTs containing borrows are not supported yet";
           (* Eliminate the box *)
           match generics.types with
           | [ bty ] -> translate bty
@@ -1058,8 +1115,9 @@ let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fun_id_or_trait_method_ref)
           let dsg = A.FunDeclId.Map.find fid ctx.fun_dsigs in
           let info =
             match gid with
-            | None -> dsg.fwd_info.effect_info
-            | Some gid -> (RegionGroupId.Map.find gid dsg.back_sg).effect_info
+            | None -> dsg.fun_ty.fwd_info.effect_info
+            | Some gid ->
+                (RegionGroupId.Map.find gid dsg.fun_ty.back_sg).effect_info
           in
           {
             info with
@@ -1081,7 +1139,7 @@ let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fun_id_or_trait_method_ref)
           | Some gid -> RegionGroupId.Map.find gid loop_info.back_effect_infos)
       | _ -> craise __FILE__ __LINE__ ctx.span "Unreachable")
 
-(** Translate a function signature to a decomposed function signature.
+(** Translate an instantiated function signature to a decomposed function signature.
 
     Note that the function also takes a list of names for the inputs, and
     computes, for every output for the backward functions, a corresponding
@@ -1089,42 +1147,33 @@ let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fun_id_or_trait_method_ref)
     of the forward function) which we use as hints to generate pretty names
     in the extracted code.
 
-    We use [bid] ("backward function id") only if we split the forward
-    and the backward functions.
+    Remark: as we take as input an instantiated function signature, we assume
+    the types have already been normalized.
+
+    - [generic_args]: the generic arguments with which the uninstantiated
+      signature was instantiated, leading to the current [sg]
  *)
-let translate_fun_sig_with_regions_hierarchy_to_decomposed
-    (span : Meta.span option) (decls_ctx : C.decls_ctx)
-    (fun_id : A.fun_id_or_trait_method_ref)
-    (regions_hierarchy : T.region_var_groups) (sg : A.fun_sig)
-    (input_names : string option list) : decomposed_fun_sig =
+let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
+    (decls_ctx : C.decls_ctx) (fun_id : A.fun_id_or_trait_method_ref)
+    (sg : A.inst_fun_sig) (input_names : string option list) :
+    decomposed_fun_type =
+  log#ldebug
+    (lazy
+      (let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
+       "translate_inst_fun_sig_with_regions_hierarchy_to_decomposed_fun_type: "
+       ^ "\n- sg.regions_hierarchy: "
+       ^ Print.Values.abs_region_groups_to_string sg.abs_regions_hierarchy
+       ^ "\n- inst_sg (inputs, output): "
+       ^ Print.Values.inst_fun_sig_to_string ctx sg
+       ^ "\n"));
+
   let fun_infos = decls_ctx.fun_ctx.fun_infos in
   let type_infos = decls_ctx.type_ctx.type_infos in
+
   (* We need an evaluation context to normalize the types (to normalize the
      associated types, etc. - for instance it may happen that the types
      refer to the types associated to a trait ref, but where the trait ref
      is a known impl). *)
-  (* Create the context *)
-  let ctx =
-    let region_groups =
-      List.map (fun (g : T.region_var_group) -> g.id) regions_hierarchy
-    in
-    let ctx =
-      InterpreterUtils.initialize_eval_ctx span decls_ctx region_groups
-        sg.generics.types sg.generics.const_generics
-    in
-    (* Compute the normalization map for the *sty* types and add it to the context *)
-    AssociatedTypes.ctx_add_norm_trait_types_from_preds span ctx
-      sg.generics.trait_type_constraints
-  in
-
-  (* Normalize the signature *)
-  let sg =
-    let ({ A.inputs; output; _ } : A.fun_sig) = sg in
-    let norm = AssociatedTypes.ctx_normalize_ty span ctx in
-    let inputs = List.map norm inputs in
-    let output = norm output in
-    { sg with A.inputs; output }
-  in
 
   (* Is the forward function stateful, and can it fail? *)
   let fwd_effect_info =
@@ -1151,7 +1200,7 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed
   (* Small helper to translate types for backward functions *)
   let translate_back_ty_for_gid (gid : T.RegionGroupId.id) (ty : T.ty) :
       ty option =
-    let rg = T.RegionGroupId.nth regions_hierarchy gid in
+    let rg = T.RegionGroupId.nth sg.regions_hierarchy gid in
     (* Compute the set of regions belonging to this group *)
     let gr_regions = T.RegionId.Set.of_list rg.regions in
     let keep_region r =
@@ -1172,7 +1221,7 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed
   let translate_back_inputs_for_gid (gid : T.RegionGroupId.id) : ty list =
     (* For now we don't support nested borrows, so we check that there
        aren't parent regions *)
-    let parents = list_ancestor_region_groups regions_hierarchy gid in
+    let parents = list_ancestor_region_groups sg.regions_hierarchy gid in
     classert_opt_span __FILE__ __LINE__
       (T.RegionGroupId.Set.is_empty parents)
       span
@@ -1312,7 +1361,7 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed
   in
   let back_sg =
     RegionGroupId.Map.of_list
-      (List.map compute_back_info_for_group regions_hierarchy)
+      (List.map compute_back_info_for_group sg.regions_hierarchy)
   in
 
   (* The additional information about the forward function *)
@@ -1348,19 +1397,77 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed
     info
   in
 
+  (* Return *)
+  { fwd_inputs; fwd_output; back_sg; fwd_info }
+
+let translate_fun_sig_with_regions_hierarchy_to_decomposed (span : span option)
+    (decls_ctx : C.decls_ctx) (fun_id : A.fun_id_or_trait_method_ref)
+    (regions_hierarchy : T.region_var_groups) (sg : A.fun_sig)
+    (input_names : string option list) : decomposed_fun_sig =
+  (* We need to normalize the signature *)
+  let inst_sg : LlbcAst.inst_fun_sig =
+    (* Create the context *)
+    let ctx =
+      let region_groups =
+        List.map (fun (g : T.region_var_group) -> g.id) regions_hierarchy
+      in
+      let ctx =
+        InterpreterUtils.initialize_eval_ctx span decls_ctx region_groups
+          sg.generics.types sg.generics.const_generics
+      in
+      (* Compute the normalization map for the *sty* types and add it to the context *)
+      AssociatedTypes.ctx_add_norm_trait_types_from_preds span ctx
+        sg.generics.trait_type_constraints
+    in
+
+    (* Normalize the signature *)
+    let ({ A.inputs; output; _ } : A.fun_sig) = sg in
+    let norm = AssociatedTypes.ctx_normalize_ty span ctx in
+    let inputs = List.map norm inputs in
+    let output = norm output in
+    let trait_type_constraints =
+      List.map
+        (AssociatedTypes.ctx_normalize_trait_type_constraint_region_binder span
+           ctx)
+        sg.generics.trait_type_constraints
+    in
+
+    let _, fresh_abs_id = V.AbstractionId.fresh_stateful_generator () in
+    let region_gr_id_abs_id_list =
+      List.map
+        (fun (rg : T.region_var_group) -> (rg.id, fresh_abs_id ()))
+        regions_hierarchy
+    in
+    let region_gr_id_to_abs =
+      RegionGroupId.Map.of_list region_gr_id_abs_id_list
+    in
+    let region_id_to_abs id = RegionGroupId.Map.find id region_gr_id_to_abs in
+    let abs_regions_hierarchy =
+      List.map
+        (fun (rg : T.region_var_group) ->
+          let id = region_id_to_abs rg.id in
+          let parents = List.map region_id_to_abs rg.parents in
+          { T.id; parents; regions = rg.regions })
+        regions_hierarchy
+    in
+    (* We need to introduce region abstraction ids *)
+    {
+      regions_hierarchy;
+      abs_regions_hierarchy;
+      trait_type_constraints;
+      inputs;
+      output;
+    }
+  in
+
   (* Generic parameters *)
   let generics, preds = translate_generic_params span sg.generics in
 
-  (* Return *)
-  {
-    generics;
-    llbc_generics = sg.generics;
-    preds;
-    fwd_inputs;
-    fwd_output;
-    back_sg;
-    fwd_info;
-  }
+  let fun_ty =
+    translate_inst_fun_sig_to_decomposed_fun_type span decls_ctx fun_id inst_sg
+      input_names
+  in
+  { generics; llbc_generics = sg.generics; preds; fun_ty }
 
 let translate_fun_sig_to_decomposed (decls_ctx : C.decls_ctx)
     (fun_id : FunDeclId.id) (sg : A.fun_sig) (input_names : string option list)
@@ -1372,6 +1479,7 @@ let translate_fun_sig_to_decomposed (decls_ctx : C.decls_ctx)
   let span =
     (FunDeclId.Map.find fun_id decls_ctx.fun_ctx.fun_decls).item_meta.span
   in
+
   translate_fun_sig_with_regions_hierarchy_to_decomposed (Some span) decls_ctx
     (FunId (FRegular fun_id)) regions_hierarchy sg input_names
 
@@ -1419,10 +1527,9 @@ let mk_back_output_ty_from_effect_info (effect_info : fun_effect_info)
     parent function region groups can be linked to a region abstraction
     introduced by the loop.
  *)
-let compute_back_tys_with_info (dsg : Pure.decomposed_fun_sig)
-    ?(keep_rg_ids : RegionGroupId.Set.t option = None)
-    (subst : (generic_args * trait_instance_id) option) :
-    (back_sg_info * ty) option list =
+let compute_back_tys_with_info (dsg : Pure.decomposed_fun_type)
+    (keep_rg_ids : RegionGroupId.Set.t option) : (back_sg_info * ty) option list
+    =
   let keep_rg_id =
     match keep_rg_ids with
     | None -> fun _ -> true
@@ -1444,30 +1551,19 @@ let compute_back_tys_with_info (dsg : Pure.decomposed_fun_sig)
             mk_back_output_ty_from_effect_info effect_info inputs output
           in
           let ty = mk_arrows inputs output in
-          (* Substitute - TODO: normalize *)
-          let ty =
-            match subst with
-            | None -> ty
-            | Some (generics, tr_self) ->
-                let subst =
-                  make_subst_from_generics dsg.generics generics tr_self
-                in
-                ty_substitute subst ty
-          in
           Some (back_sg, ty)
       else (* We ignore this region group *)
         None)
     (RegionGroupId.Map.bindings dsg.back_sg)
 
-let compute_back_tys (dsg : Pure.decomposed_fun_sig)
-    ?(keep_rg_ids : RegionGroupId.Set.t option = None)
-    (subst : (generic_args * trait_instance_id) option) : ty option list =
-  List.map (Option.map snd) (compute_back_tys_with_info dsg ~keep_rg_ids subst)
+let compute_back_tys (dsg : Pure.decomposed_fun_type)
+    (keep_rg_ids : RegionGroupId.Set.t option) : ty option list =
+  List.map (Option.map snd) (compute_back_tys_with_info dsg keep_rg_ids)
 
 (** Compute the output type of a function, from a decomposed signature
     (the output type contains the type of the value returned by the forward
     function as well as the types of the returned backward functions). *)
-let compute_output_ty_from_decomposed (dsg : Pure.decomposed_fun_sig) : ty =
+let compute_output_ty_from_decomposed (dsg : Pure.decomposed_fun_type) : ty =
   (* Compute the arrow types for all the backward functions *)
   let back_tys = List.filter_map (fun x -> x) (compute_back_tys dsg None) in
   (* Group the forward output and the types of the backward functions *)
@@ -1489,17 +1585,17 @@ let translate_fun_sig_from_decomposed (dsg : Pure.decomposed_fun_sig) : fun_sig
   let llbc_generics = dsg.llbc_generics in
   let preds = dsg.preds in
   (* Compute the effects info *)
-  let fwd_info = dsg.fwd_info in
+  let fwd_info = dsg.fun_ty.fwd_info in
   let back_effect_info =
     RegionGroupId.Map.of_list
       (List.map
          (fun ((gid, info) : RegionGroupId.id * back_sg_info) ->
            (gid, info.effect_info))
-         (RegionGroupId.Map.bindings dsg.back_sg))
+         (RegionGroupId.Map.bindings dsg.fun_ty.back_sg))
   in
   let inputs, output =
-    let output = compute_output_ty_from_decomposed dsg in
-    let inputs = dsg.fwd_inputs in
+    let output = compute_output_ty_from_decomposed dsg.fun_ty in
+    let inputs = dsg.fun_ty.fwd_inputs in
     (inputs, output)
   in
   (* Compute which input type parameters are explicit/implicit *)
@@ -1629,10 +1725,10 @@ let fresh_back_vars_for_current_fun (ctx : bs_ctx)
               ^ String.concat "" (List.filter_map (fun x -> x) region_names)
         in
         Some name)
-      (RegionGroupId.Map.bindings ctx.sg.back_sg)
+      (RegionGroupId.Map.bindings ctx.sg.fun_ty.back_sg)
   in
   let back_vars =
-    List.combine back_var_names (compute_back_tys ctx.sg ~keep_rg_ids None)
+    List.combine back_var_names (compute_back_tys ctx.sg.fun_ty keep_rg_ids)
   in
   let back_vars =
     List.map
@@ -1816,15 +1912,24 @@ type typed_avalue_kind =
   | UnknownProj
       (** No borrows, loans or projections inside the value so we can't know for sure *)
 
-let compute_typed_avalue_proj_kind span (av : V.typed_avalue) :
-    typed_avalue_kind =
+let compute_typed_avalue_proj_kind span type_infos
+    (abs_regions : T.RegionId.Set.t) (av : V.typed_avalue) : typed_avalue_kind =
   let has_borrows = ref false in
   let has_mut_borrows = ref false in
   let has_loans = ref false in
   let has_mut_loans = ref false in
+  let keep_region (r : T.region) =
+    match r with
+    | T.RVar (Free rid) -> T.RegionId.Set.mem rid abs_regions
+    | _ -> false
+  in
   let visitor =
     object
       inherit [_] V.iter_typed_avalue as super
+
+      method! visit_typed_avalue _ av =
+        (* Remember the type of the current value *)
+        super#visit_typed_avalue av.ty av
 
       method! visit_ALoan env lc =
         has_loans := true;
@@ -1854,19 +1959,42 @@ let compute_typed_avalue_proj_kind span (av : V.typed_avalue) :
         (* Continue exploring as a sanity check: we want to make sure we don't find loans *)
         super#visit_ABorrow env bc
 
-      method! visit_ASymbolic env aproj =
+      method! visit_ASymbolic ty aproj =
         match aproj with
-        | V.AEndedProjLoans (_, _) | AProjLoans (_, _) ->
+        | V.AEndedProjLoans (_, _) ->
+            has_loans := true;
+            (* We need to check wether the projected loans are mutable or not *)
+            if
+              TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
+                keep_region ty
+            then has_mut_loans := true;
+            (* Continue exploring (same reasons as above) *)
+            super#visit_ASymbolic ty aproj
+        | AProjLoans (_, _, _) ->
+            (* TODO: we should probably fail here *)
             has_loans := true;
             (* Continue exploring (same reasons as above) *)
-            super#visit_ASymbolic env aproj
-        | AEndedProjBorrows _ | AIgnoredProjBorrows | AProjBorrows (_, _) ->
+            super#visit_ASymbolic ty aproj
+        | AEndedProjBorrows _ ->
+            has_borrows := true;
+            (* We need to check wether the projected borrows are mutable or not *)
+            if
+              TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
+                keep_region ty
+            then has_mut_borrows := true;
+            (* Continue exploring (same reasons as above) *)
+            super#visit_ASymbolic ty aproj
+        | AProjBorrows (_, _, _) ->
+            (* TODO: we should probably fail here *)
             has_borrows := true;
             (* Continue exploring (same reasons as above) *)
-            super#visit_ASymbolic env aproj
+            super#visit_ASymbolic ty aproj
+        | AEmpty ->
+            (* Continue exploring (same reasons as above) *)
+            super#visit_ASymbolic ty aproj
     end
   in
-  visitor#visit_typed_avalue () av;
+  visitor#visit_typed_avalue av.ty av;
   cassert __FILE__ __LINE__
     ((not !has_borrows) || not !has_loans)
     span "Unreachable";
@@ -1892,18 +2020,20 @@ let compute_typed_avalue_proj_kind span (av : V.typed_avalue) :
     ]}
  *)
 let rec typed_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
-    (ectx : C.eval_ctx) (av : V.typed_avalue) : texpression option =
+    (ectx : C.eval_ctx) (abs_regions : T.RegionId.Set.t) (av : V.typed_avalue) :
+    texpression option =
   let value =
     match av.value with
-    | AAdt adt_v -> adt_avalue_to_consumed_aux ~filter ctx ectx av adt_v
+    | AAdt adt_v ->
+        adt_avalue_to_consumed_aux ~filter ctx ectx abs_regions av adt_v
     | ABottom -> craise __FILE__ __LINE__ ctx.span "Unreachable"
-    | ALoan lc -> aloan_content_to_consumed_aux ~filter ctx ectx lc
+    | ALoan lc -> aloan_content_to_consumed_aux ~filter ctx ectx abs_regions lc
     | ABorrow _ ->
         (* This value should have been generated by a loan projector: there
            can't be aborrows unless there are nested borrows, which are not
            supported yet. *)
         craise __FILE__ __LINE__ ctx.span "Unreachable"
-    | ASymbolic aproj -> aproj_to_consumed_aux ctx aproj
+    | ASymbolic aproj -> aproj_to_consumed_aux ctx abs_regions aproj
     | AIgnored mv -> (
         if filter then None
         else
@@ -1925,13 +2055,16 @@ let rec typed_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
   value
 
 and adt_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
-    (ectx : C.eval_ctx) (av : V.typed_avalue) (adt_v : V.adt_avalue) :
-    texpression option =
+    (ectx : C.eval_ctx) (abs_regions : T.RegionId.Set.t) (av : V.typed_avalue)
+    (adt_v : V.adt_avalue) : texpression option =
   (* We do not do the same thing depending on whether we visit a tuple
      or a "regular" ADT *)
   let adt_id, _ = TypesUtils.ty_as_adt av.ty in
   (* Check if the ADT contains borrows *)
-  match compute_typed_avalue_proj_kind ctx.span av with
+  match
+    compute_typed_avalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions
+      av
+  with
   | BorrowProj _ -> craise __FILE__ __LINE__ ctx.span "Unreachable"
   | UnknownProj ->
       (* If we filter: ignore the value.
@@ -1940,7 +2073,7 @@ and adt_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
       else
         let fields =
           List.map
-            (typed_avalue_to_consumed_aux ~filter ctx ectx)
+            (typed_avalue_to_consumed_aux ~filter ctx ectx abs_regions)
             adt_v.field_values
         in
         let fields = List.map Option.get fields in
@@ -1964,7 +2097,7 @@ and adt_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
           | TBuiltin _ | TAdtId _ -> borrow_kind = BShared
         in
         List.map
-          (typed_avalue_to_consumed_aux ~filter ctx ectx)
+          (typed_avalue_to_consumed_aux ~filter ctx ectx abs_regions)
           adt_v.field_values
       in
       match adt_id with
@@ -2008,7 +2141,8 @@ and adt_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
     end
 
 and aloan_content_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
-    (ectx : C.eval_ctx) (lc : V.aloan_content) : texpression option =
+    (ectx : C.eval_ctx) (_abs_regions : T.RegionId.Set.t) (lc : V.aloan_content)
+    : texpression option =
   match lc with
   | AMutLoan (_, _, _) | ASharedLoan (_, _, _, _) ->
       craise __FILE__ __LINE__ ctx.span "Unreachable"
@@ -2040,16 +2174,14 @@ and aloan_content_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
       (* This case only happens with nested borrows *)
       craise __FILE__ __LINE__ ctx.span "Unimplemented"
 
-and aproj_to_consumed_aux (ctx : bs_ctx) (aproj : V.aproj) : texpression option
-    =
+and aproj_to_consumed_aux (ctx : bs_ctx) (_abs_regions : T.RegionId.Set.t)
+    (aproj : V.aproj) : texpression option =
   match aproj with
   | V.AEndedProjLoans (msv, []) ->
       (* The symbolic value was left unchanged *)
       Some (symbolic_value_to_texpression ctx msv)
   | V.AEndedProjLoans (_, [ (mnv, child_aproj) ]) ->
-      sanity_check __FILE__ __LINE__
-        (child_aproj = AIgnoredProjBorrows)
-        ctx.span;
+      sanity_check __FILE__ __LINE__ (child_aproj = AEmpty) ctx.span;
       (* The symbolic value was updated *)
       Some (symbolic_value_to_texpression ctx mnv)
   | V.AEndedProjLoans (_, _) ->
@@ -2060,21 +2192,35 @@ and aproj_to_consumed_aux (ctx : bs_ctx) (aproj : V.aproj) : texpression option
       (* The value should have been introduced by a loan projector, and should not
          contain nested borrows, so we can't get there *)
       craise __FILE__ __LINE__ ctx.span "Unreachable"
-  | AIgnoredProjBorrows | AProjLoans (_, _) | AProjBorrows (_, _) ->
+  | AEmpty | AProjLoans (_, _, _) | AProjBorrows (_, _, _) ->
       craise __FILE__ __LINE__ ctx.span "Unreachable"
 
 let typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
-    (av : V.typed_avalue) : texpression option =
+    (abs_regions : T.RegionId.Set.t) (av : V.typed_avalue) : texpression option
+    =
   (* Check if the value was generated from a loan projector: if yes, and if
      it contains mutable loans, then we generate a consumed value (because
      upon ending the borrow we consumed a value).
      Otherwise we ignore it. *)
-  match compute_typed_avalue_proj_kind ctx.span av with
-  | LoanProj BMut -> typed_avalue_to_consumed_aux ~filter:true ctx ectx av
+  log#ldebug
+    (lazy ("typed_avalue_to_consumed: " ^ typed_avalue_to_string ectx av));
+  match
+    compute_typed_avalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions
+      av
+  with
+  | LoanProj BMut ->
+      log#ldebug
+        (lazy
+          "typed_avalue_to_consumed: the value contains mutable loan projectors");
+      typed_avalue_to_consumed_aux ~filter:true ctx ectx abs_regions av
   | LoanProj BShared | BorrowProj _ | UnknownProj ->
       (* If it is a borrow proj we ignore it. If it is an unknown projection,
          it means the value doesn't contain loans nor borrows, so nothing
          is consumed upon ending the abstraction: we can ignore it as well. *)
+      log#ldebug
+        (lazy
+          "typed_avalue_to_consumed: the value doesn't contains mutable loan \
+           projectors (ignoring it)");
       None
 
 (** Convert the abstraction values in an abstraction to consumed values.
@@ -2083,9 +2229,14 @@ let typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
  *)
 let abs_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs) :
     texpression list =
-  log#ldebug (lazy ("abs_to_consumed:\n" ^ abs_to_string ctx abs));
+  log#ldebug
+    (lazy
+      ("abs_to_consumed:\n" ^ abs_to_string ctx abs ^ "\n- raw: "
+     ^ V.show_abs abs));
   let values =
-    List.filter_map (typed_avalue_to_consumed ctx ectx) abs.avalues
+    List.filter_map
+      (typed_avalue_to_consumed ctx ectx abs.regions.owned)
+      abs.avalues
   in
   log#ldebug
     (lazy
@@ -2115,6 +2266,11 @@ let translate_opt_mplace (p : S.mplace option) : mplace option =
   | None -> None
   | Some p -> Some (translate_mplace p)
 
+type borrow_or_symbolic_id =
+  | Borrow of V.BorrowId.id
+  | Symbolic of V.SymbolicValueId.id
+[@@deriving show, ord]
+
 (** Explore an abstraction value which we know **was generated by a borrow projection**
     (this means we won't find loans or loan projectors inside it) and convert it to a
     given back value by collecting all the meta-values from the ended *borrows*.
@@ -2132,12 +2288,22 @@ let translate_opt_mplace (p : S.mplace option) : mplace option =
 
     - [under_mut]: if [true] it means we are below a mutable borrow.
       This influences whether we filter values or not.
+
+    Note that we return:
+    - an updated context (because the patterns introduce fresh variables)
+    - a map from variable ids (introduced in the returned pattern) to either
+      the mutable borrow which gave back this value, or the projected symbolic
+      value which gave it back. We need this to compute default values (see
+      [bs_ctx.mut_borrow_to_consumed]).
+    - the pattern
  *)
-let rec typed_avalue_to_given_back_aux ~(filter : bool) (mp : mplace option)
-    (av : V.typed_avalue) (ctx : bs_ctx) : bs_ctx * typed_pattern option =
+let rec typed_avalue_to_given_back_aux ~(filter : bool)
+    (abs_regions : T.RegionId.Set.t) (mp : mplace option) (av : V.typed_avalue)
+    (ctx : bs_ctx) : bs_ctx * typed_pattern option =
   let (ctx, value) : _ * typed_pattern option =
     match av.value with
-    | AAdt adt_v -> adt_avalue_to_given_back_aux ~filter av adt_v ctx
+    | AAdt adt_v ->
+        adt_avalue_to_given_back_aux ~filter abs_regions av adt_v ctx
     | ABottom -> craise __FILE__ __LINE__ ctx.span "Unreachable"
     | ALoan _ ->
         (* The avalue should have been generated by a borrow projector: this case is unreachable *)
@@ -2161,10 +2327,14 @@ let rec typed_avalue_to_given_back_aux ~(filter : bool) (mp : mplace option)
   (* Return *)
   (ctx, value)
 
-and adt_avalue_to_given_back_aux ~(filter : bool) (av : V.typed_avalue)
+and adt_avalue_to_given_back_aux ~(filter : bool)
+    (abs_regions : T.RegionId.Set.t) (av : V.typed_avalue)
     (adt_v : V.adt_avalue) (ctx : bs_ctx) : bs_ctx * typed_pattern option =
   (* Check if the ADT contains borrows *)
-  match compute_typed_avalue_proj_kind ctx.span av with
+  match
+    compute_typed_avalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions
+      av
+  with
   | LoanProj _ -> craise __FILE__ __LINE__ ctx.span "Unreachable"
   | UnknownProj ->
       (* If we filter: ignore the pattern.
@@ -2193,7 +2363,8 @@ and adt_avalue_to_given_back_aux ~(filter : bool) (av : V.typed_avalue)
           | TBuiltin _ | TAdtId _ -> borrow_kind = BShared
         in
         List.fold_left_map
-          (fun ctx fv -> typed_avalue_to_given_back_aux ~filter mp fv ctx)
+          (fun ctx fv ->
+            typed_avalue_to_given_back_aux ~filter abs_regions mp fv ctx)
           ctx adt_v.field_values
       in
       match adt_id with
@@ -2248,8 +2419,24 @@ and aborrow_content_to_given_back_aux ~(filter : bool) (mp : mplace option)
       craise __FILE__ __LINE__ ctx.span "Unreachable"
   | AEndedMutBorrow (msv, _) ->
       (* Return the meta symbolic-value *)
-      let ctx, var = fresh_var_for_symbolic_value msv ctx in
-      (ctx, Some (mk_typed_pattern_from_var var mp))
+      let ctx, var = fresh_var_for_symbolic_value msv.given_back ctx in
+      let pat = mk_typed_pattern_from_var var mp in
+      (* Lookup the default value and update the [var_id_to_default] map.
+         Note that the default value might be missing, for instance for
+         abstractions which were not introduced because of function calls but
+         rather because of loops.
+      *)
+      let ctx =
+        match V.BorrowId.Map.find_opt msv.bid ctx.mut_borrow_to_consumed with
+        | None -> ctx
+        | Some e ->
+            {
+              ctx with
+              var_id_to_default = VarId.Map.add var.id e ctx.var_id_to_default;
+            }
+      in
+      (* *)
+      (ctx, Some pat)
   | AEndedIgnoredMutBorrow _ ->
       (* This happens with nested borrows: we need to dive in *)
       craise __FILE__ __LINE__ ctx.span "Unimplemented"
@@ -2263,21 +2450,38 @@ and aproj_to_given_back_aux (mp : mplace option) (aproj : V.aproj)
     (ctx : bs_ctx) : bs_ctx * typed_pattern option =
   match aproj with
   | V.AEndedProjLoans (_, _) -> craise __FILE__ __LINE__ ctx.span "Unreachable"
-  | AEndedProjBorrows mv ->
+  | AEndedProjBorrows (mv, given_back) ->
+      cassert __FILE__ __LINE__ (given_back = []) ctx.span "Unreachable";
       (* Return the meta-value *)
-      let ctx, var = fresh_var_for_symbolic_value mv ctx in
-      (ctx, Some (mk_typed_pattern_from_var var mp))
-  | AIgnoredProjBorrows | AProjLoans (_, _) | AProjBorrows (_, _) ->
+      let ctx, var = fresh_var_for_symbolic_value mv.given_back ctx in
+      let pat = mk_typed_pattern_from_var var mp in
+      (* Register the default value *)
+      let ctx =
+        {
+          ctx with
+          var_id_to_default =
+            VarId.Map.add var.id
+              (symbolic_value_to_texpression ctx mv.consumed)
+              ctx.var_id_to_default;
+        }
+      in
+      (ctx, Some pat)
+  | AEmpty | AProjLoans (_, _, _) | AProjBorrows (_, _, _) ->
       craise __FILE__ __LINE__ ctx.span "Unreachable"
 
-let typed_avalue_to_given_back (mp : mplace option) (v : V.typed_avalue)
-    (ctx : bs_ctx) : bs_ctx * typed_pattern option =
+let typed_avalue_to_given_back (abs_regions : T.RegionId.Set.t)
+    (mp : mplace option) (v : V.typed_avalue) (ctx : bs_ctx) :
+    bs_ctx * typed_pattern option =
   (* Check if the value was generated from a borrow projector: if yes, and if
      it contains mutable borrows we generate a given back pattern (because
      upon ending the borrow the abstraction gave back a value).
      Otherwise we ignore it. *)
-  match compute_typed_avalue_proj_kind ctx.span v with
-  | BorrowProj BMut -> typed_avalue_to_given_back_aux mp ~filter:true v ctx
+  match
+    compute_typed_avalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions
+      v
+  with
+  | BorrowProj BMut ->
+      typed_avalue_to_given_back_aux abs_regions mp ~filter:true v ctx
   | BorrowProj BShared | LoanProj _ | UnknownProj ->
       (* If it is a loan proj we ignore it. If it is an unknown projection,
          it means the value doesn't contain loans nor borrows, so nothing
@@ -2297,7 +2501,8 @@ let abs_to_given_back (mpl : mplace option list option) (abs : V.abs)
   in
   let ctx, values =
     List.fold_left_map
-      (fun ctx (mp, av) -> typed_avalue_to_given_back mp av ctx)
+      (fun ctx (mp, av) ->
+        typed_avalue_to_given_back abs.regions.owned mp av ctx)
       ctx avalues
   in
   let values = List.filter_map (fun x -> x) values in
@@ -2373,6 +2578,163 @@ let eval_ctx_to_symbolic_assignments_info (ctx : bs_ctx)
 let translate_error (span : Meta.span option) (msg : string) : texpression =
   { e = EError (span, msg); ty = Error }
 
+(** Register the values consumed by a region abstraction through mutable borrows.
+
+    We need this to compute default values for given back values - see the
+    explanations about [bs_ctx.mut_borrow_to_consumed].
+*)
+let register_consumed_mut_borrows (ectx : C.eval_ctx) (ctx : bs_ctx)
+    (v : V.typed_value) : bs_ctx =
+  let ctx = ref ctx in
+  let visitor =
+    object
+      inherit [_] V.iter_typed_value as super
+
+      method! visit_VMutBorrow env bid v =
+        let e = typed_value_to_texpression !ctx ectx v in
+        ctx :=
+          {
+            !ctx with
+            mut_borrow_to_consumed =
+              V.BorrowId.Map.add bid e !ctx.mut_borrow_to_consumed;
+          };
+        super#visit_VMutBorrow env bid v
+    end
+  in
+  visitor#visit_typed_value () v;
+  !ctx
+
+(** Small helper.
+
+    We use this to properly deconstruct the values given back by backward
+    functions in the presence of enumerations. See [bs_ctx.mut_borrow_to_consumed].
+
+    This helper transforms a let-bound pattern and a bound expression
+    to properly introduce matches if necessary.
+
+    For instance, we use it to transform this:
+    {[
+      let Some x = e in
+          ^^^^^^   ^
+           pat     let-bound expression
+    ]}
+    into:
+    {[
+      let x = match e with | Some x -> x | _ -> default_value in
+          ^   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     new pat     new let-bound expression
+    ]}
+ *)
+let decompose_let_match (ctx : bs_ctx)
+    ((pat, bound) : typed_pattern * texpression) :
+    bs_ctx * (typed_pattern * texpression) =
+  log#ldebug
+    (lazy
+      ("decompose_let_match: " ^ "\n- pat: "
+      ^ typed_pattern_to_string ctx pat
+      ^ "\n- bound: "
+      ^ texpression_to_string ctx bound));
+
+  let found_enum = ref false in
+  (* We update the pattern if it deconstructs an enumeration with > 1 variants *)
+  let visitor =
+    object
+      inherit [_] reduce_expression as super
+      method zero : var list = []
+      method plus vars0 vars1 = vars0 @ vars1
+      method! visit_typed_pattern _ pat = super#visit_typed_pattern pat.ty pat
+
+      method! visit_adt_pattern ty pat =
+        (* Lookup the type decl *)
+        let type_id, _ = ty_as_adt ctx.span ty in
+        match type_id with
+        | TAdtId id ->
+            let decl = bs_ctx_lookup_type_decl id ctx in
+            begin
+              match decl.kind with
+              | Struct _ | Opaque -> ()
+              | Enum vl -> if List.length vl > 1 then found_enum := true else ()
+            end;
+            super#visit_adt_pattern ty pat
+        | TTuple ->
+            (* ok *)
+            super#visit_adt_pattern ty pat
+        | TBuiltin _ ->
+            (* Shouldn't happen *)
+            craise __FILE__ __LINE__ ctx.span "Unreachable"
+
+      method! visit_PatVar _ var _ = [ var ]
+    end
+  in
+
+  (* Visit the pattern *)
+  let vars : var list = visitor#visit_typed_pattern pat.ty pat in
+
+  (* *)
+  if !found_enum then
+    (* Found an enumeration with > 1 variants: we have to deconstruct
+       the pattern *)
+    (* First, refresh the variables - we will use fresh variables
+       in the patterns of the internal match *)
+    let (ctx, fresh_vars) : _ * var list =
+      List.fold_left_map
+        (fun ctx (var : var) -> fresh_var var.basename var.ty ctx)
+        ctx vars
+    in
+    (* Create the new pattern for the match, with the fresh variables *)
+    let subst =
+      VarId.Map.of_list
+        (List.map2 (fun (v0 : var) (v1 : var) -> (v0.id, v1)) vars fresh_vars)
+    in
+    let subst_visitor =
+      object
+        inherit [_] map_expression
+        method! visit_PatVar _ v mp = PatVar (VarId.Map.find v.id subst, mp)
+      end
+    in
+    (* Create the correct branch *)
+    let match_pat = subst_visitor#visit_typed_pattern () pat in
+    let match_e = List.map mk_texpression_from_var fresh_vars in
+    let match_e = mk_simpl_tuple_texpression ctx.span match_e in
+    let match_branch = { pat = match_pat; branch = match_e } in
+    (* Create the otherwise branch *)
+    let default_e =
+      List.map
+        (fun (v : var) ->
+          (* We need to lookup the default values corresponding to
+             each given back symbolic value *)
+          match VarId.Map.find_opt v.id ctx.var_id_to_default with
+          | Some e -> e
+          | None ->
+              (* This is a bug, but we might want to continue generating the model:
+                 as an escape hatch, simply use the original variable (this will
+                 lead to incorrect code of course) *)
+              save_error __FILE__ __LINE__ (Some ctx.span)
+                ("Internal error: could not find variable. Please report an \
+                  issue. Debugging information:" ^ "\n- v.id: "
+               ^ VarId.to_string v.id ^ "\n- ctx.var_id_to_default: "
+                ^ VarId.Map.to_string None
+                    (texpression_to_string ctx)
+                    ctx.var_id_to_default
+                ^ "\n");
+              mk_texpression_from_var v)
+        vars
+    in
+    let default_e = mk_simpl_tuple_texpression ctx.span default_e in
+    let default_pat = mk_dummy_pattern pat.ty in
+    let default_branch = { pat = default_pat; branch = default_e } in
+    let switch_e = Switch (bound, Match [ match_branch; default_branch ]) in
+    let bound = { e = switch_e; ty = match_e.ty } in
+    (* Update the pattern itself *)
+    let pat =
+      mk_simpl_tuple_pattern
+        (List.map (fun v -> mk_typed_pattern_from_var v None) vars)
+    in
+    (* *)
+    (ctx, (pat, bound))
+  else (* Nothing to do *)
+    (ctx, (pat, bound))
+
 let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
   match e with
   | S.Return (ectx, opt_v) ->
@@ -2392,12 +2754,12 @@ let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
   | IntroSymbolic (ectx, p, sv, v, e) ->
       translate_intro_symbolic ectx p sv v e ctx
   | Meta (span, e) -> translate_espan span e ctx
-  | ForwardEnd (ectx, loop_input_values, e, back_e) ->
+  | ForwardEnd (return_value, ectx, loop_input_values, e, back_e) ->
       (* Translate the end of a function, or the end of a loop.
 
          The case where we (re-)enter a loop is handled here.
       *)
-      translate_forward_end ectx loop_input_values e back_e ctx
+      translate_forward_end return_value ectx loop_input_values e back_e ctx
   | Loop loop -> translate_loop loop ctx
   | Error (span, msg) -> translate_error span msg
 
@@ -2477,7 +2839,14 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
       ("translate_function_call:\n" ^ "\n- call.call_id:"
       ^ S.show_call_id call.call_id
       ^ "\n\n- call.generics:\n"
-      ^ ctx_generic_args_to_string ctx call.generics));
+      ^ ctx_generic_args_to_string ctx call.generics
+      ^ "\n\n- call.inst_sg:\n"
+      ^ Print.option_to_string (inst_fun_sig_to_string call.ctx) call.inst_sg
+      ^ "\n"));
+  (* Register the consumed mutable borrows to compute default values *)
+  let ctx =
+    List.fold_left (register_consumed_mut_borrows call.ctx) ctx call.args
+  in
   (* Translate the function call *)
   let generics = ctx_translate_fwd_generic_args ctx call.generics in
   let args =
@@ -2489,8 +2858,8 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
   in
   let dest_mplace = translate_opt_mplace call.dest_place in
   (* Retrieve the function id, and register the function call in the context
-   * if necessary. *)
-  let ctx, fun_id, effect_info, args, dest_v =
+     if necessary. *)
+  let ctx, fun_id, effect_info, args, back_funs, dest_v =
     match call.call_id with
     | S.Fun (fid, call_id) ->
         (* Regular function call *)
@@ -2517,30 +2886,20 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
         let ctx, ignore_fwd_output, back_funs_map, back_funs =
           (* We need to compute the signatures of the backward functions. *)
           let sg = Option.get call.sg in
+          let inst_sg = Option.get call.inst_sg in
           let decls_ctx = ctx.decls_ctx in
           let dsg =
-            translate_fun_sig_with_regions_hierarchy_to_decomposed
-              (Some ctx.span) decls_ctx fid call.regions_hierarchy sg
+            translate_inst_fun_sig_to_decomposed_fun_type (Some ctx.span)
+              decls_ctx fid inst_sg
               (List.map (fun _ -> None) sg.inputs)
           in
+          let back_tys = compute_back_tys_with_info dsg None in
           log#ldebug
-            (lazy ("dsg.generics:\n" ^ show_generic_params dsg.generics));
-          let tr_self, all_generics =
-            match call.trait_method_generics with
-            | None -> (UnknownTrait __FUNCTION__, generics)
-            | Some (all_generics, tr_self) ->
-                let all_generics =
-                  ctx_translate_fwd_generic_args ctx all_generics
-                in
-                let tr_self =
-                  translate_fwd_trait_instance_id (Some ctx.span)
-                    ctx.type_ctx.type_infos tr_self
-                in
-                (tr_self, all_generics)
-          in
-          let back_tys =
-            compute_back_tys_with_info dsg (Some (all_generics, tr_self))
-          in
+            (lazy
+              ("back_tys:\n "
+              ^ String.concat "\n"
+                  (List.map (pure_ty_to_string ctx)
+                     (List.map snd (List.filter_map (fun x -> x) back_tys)))));
           (* Introduce variables for the backward functions *)
           (* Compute a proper basename for the variables *)
           let back_fun_name =
@@ -2605,7 +2964,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
           let gids =
             List.map
               (fun (g : T.region_var_group) -> g.id)
-              call.regions_hierarchy
+              inst_sg.regions_hierarchy
           in
           let back_vars =
             List.map (Option.map mk_texpression_from_var) back_vars
@@ -2620,7 +2979,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
         let dest = mk_typed_pattern_from_var dest dest_mplace in
         let dest =
           (* Here there is something subtle: as we might ignore the output
-             of the forward function (because it translates to unit) we doNOT
+             of the forward function (because it translates to unit) we do NOT
              necessarily introduce in the let-binding the variable to which we
              map the symbolic value which was introduced for the output of the
              function call. This would be problematic if later we need to
@@ -2642,7 +3001,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
         let ctx =
           bs_ctx_register_forward_call call_id call args back_funs_map ctx
         in
-        (ctx, func, effect_info, args, dest)
+        (ctx, func, effect_info, args, back_funs, dest)
     | S.Unop E.Not -> (
         match args with
         | [ arg ] ->
@@ -2664,7 +3023,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             in
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
             let dest = mk_typed_pattern_from_var dest dest_mplace in
-            (ctx, Unop (Not ty), effect_info, args, dest)
+            (ctx, Unop (Not ty), effect_info, args, [], dest)
         | _ -> craise __FILE__ __LINE__ ctx.span "Unreachable")
     | S.Unop E.Neg -> (
         match args with
@@ -2683,7 +3042,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             in
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
             let dest = mk_typed_pattern_from_var dest dest_mplace in
-            (ctx, Unop (Neg int_ty), effect_info, args, dest)
+            (ctx, Unop (Neg int_ty), effect_info, args, [], dest)
         | _ -> craise __FILE__ __LINE__ ctx.span "Unreachable")
     | S.Unop (E.Cast cast_kind) -> begin
         match cast_kind with
@@ -2700,7 +3059,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             in
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
             let dest = mk_typed_pattern_from_var dest dest_mplace in
-            (ctx, Unop (Cast (src_ty, tgt_ty)), effect_info, args, dest)
+            (ctx, Unop (Cast (src_ty, tgt_ty)), effect_info, args, [], dest)
         | CastFnPtr _ ->
             craise __FILE__ __LINE__ ctx.span "TODO: function casts"
         | CastUnsize _ ->
@@ -2730,7 +3089,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             in
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
             let dest = mk_typed_pattern_from_var dest dest_mplace in
-            (ctx, Binop (binop, int_ty0), effect_info, args, dest)
+            (ctx, Binop (binop, int_ty0), effect_info, args, [], dest)
         | _ -> craise __FILE__ __LINE__ ctx.span "Unreachable")
   in
   let func = { id = FunOrOp fun_id; generics } in
@@ -2740,11 +3099,37 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
   in
   let func_ty = mk_arrows input_tys ret_ty in
   let func = { e = Qualif func; ty = func_ty } in
-  let call = mk_apps ctx.span func args in
+  let call_e = mk_apps ctx.span func args in
+  (* This is a **hack** for [Box::new]: introduce backward functions
+     which are the identity if we instantiated [Box::new] with types
+     containing mutable borrows.
+
+     We simply replace the function call with a tuple: (call to [Box::new], backward functions).
+
+     TODO: make this general.
+  *)
+  let ctx, call_e =
+    match call.call_id with
+    | S.Fun (FunId (FBuiltin BoxNew), _) ->
+        let ctx, back_funs_bodies =
+          List.fold_left_map
+            (fun ctx (f : typed_pattern) ->
+              let ty, _ = dest_arrow_ty ctx.span f.ty in
+              let ctx, v = fresh_var (Some "back") ty ctx in
+              let pat = mk_typed_pattern_from_var v None in
+              (ctx, mk_lambda pat (mk_texpression_from_var v)))
+            ctx back_funs
+        in
+        let call_e =
+          mk_simpl_tuple_texpression ctx.span (call_e :: back_funs_bodies)
+        in
+        (ctx, call_e)
+    | _ -> (ctx, call_e)
+  in
   (* Translate the next expression *)
   let next_e = translate_expression e ctx in
   (* Put together *)
-  mk_let effect_info.can_fail dest_v call next_e
+  mk_let effect_info.can_fail dest_v call_e next_e
 
 and translate_end_abstraction (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expression) (ctx : bs_ctx) : texpression =
@@ -2805,7 +3190,7 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
         List.map (fun ty -> (None, ty)) tys
       else
         (* Regular function body *)
-        let back_sg = RegionGroupId.Map.find bid ctx.sg.back_sg in
+        let back_sg = RegionGroupId.Map.find bid ctx.sg.fun_ty.back_sg in
         List.combine back_sg.output_names back_sg.outputs
     in
     let ctx, vars = fresh_vars vars ctx in
@@ -2829,15 +3214,19 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
           consumed_values
       ^ "\n"));
 
-  (* Group the two lists *)
+  (* Prepare the let-bindings by introducing a match if necessary *)
+  let given_back_variables =
+    List.map (fun v -> mk_typed_pattern_from_var v None) given_back_variables
+  in
   let variables_values = List.combine given_back_variables consumed_values in
+
   (* Sanity check: the two lists match (same types) *)
   (* TODO: normalize the types *)
   if !Config.type_check_pure_code then
     List.iter
       (fun (var, v) ->
         sanity_check __FILE__ __LINE__
-          ((var : var).ty = (v : texpression).ty)
+          ((var : typed_pattern).ty = (v : texpression).ty)
           ctx.span)
       variables_values;
   (* Translate the next expression *)
@@ -2845,8 +3234,7 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
   (* Generate the assignemnts *)
   let monadic = false in
   List.fold_right
-    (fun (var, value) (e : texpression) ->
-      mk_let monadic (mk_typed_pattern_from_var var None) value e)
+    (fun (var, value) (e : texpression) -> mk_let monadic var value e)
     variables_values next_e
 
 and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
@@ -2894,12 +3282,12 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
     | Some nstate -> mk_simpl_tuple_pattern [ nstate; output ]
   in
   (* Retrieve the function id, and register the function call in the context
-     if necessary.Arith_status *)
+     if necessary. *)
   let ctx, func =
     bs_ctx_register_backward_call abs call_id rg_id back_inputs ctx
   in
   (* Translate the next expression *)
-  let next_e = translate_expression e ctx in
+  let next_e ctx = translate_expression e ctx in
   (* Put everything together *)
   let inputs = back_inputs in
   let args_mplaces = List.map (fun _ -> None) inputs in
@@ -2908,10 +3296,10 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
       (fun (arg, mp) -> mk_opt_mplace_texpression mp arg)
       (List.combine inputs args_mplaces)
   in
-  (* The backward function might have been filtered it does nothing
+  (* The backward function might have been filtered if it does nothing
      (consumes unit and returns unit). *)
   match func with
-  | None -> next_e
+  | None -> next_e ctx
   | Some func ->
       log#ldebug
         (lazy
@@ -2922,7 +3310,10 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
            ^ pure_ty_to_string ctx func.ty
            ^ "\n\nargs:\n" ^ String.concat "\n" args));
       let call = mk_apps ctx.span func args in
-      mk_let effect_info.can_fail output call next_e
+      (* Introduce a match if necessary *)
+      let ctx, (output, call) = decompose_let_match ctx (output, call) in
+      (* Translate the next expression and construct the let *)
+      mk_let effect_info.can_fail output call (next_e ctx)
 
 and translate_end_abstraction_identity (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expression) (ctx : bs_ctx) : texpression =
@@ -2984,8 +3375,8 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
   cassert __FILE__ __LINE__ (consumed = []) ctx.span
     "Nested borrows are not supported yet";
   (* Retrieve the values given back upon ending this abstraction - note that
-   * we don't provide meta-place information, because those assignments will
-   * be inlined anyway... *)
+     we don't provide meta-place information, because those assignments will
+     be inlined anyway... *)
   log#ldebug (lazy ("abs: " ^ abs_to_string ctx abs));
   let ctx, given_back = abs_to_given_back_no_mp abs ctx in
   log#ldebug
@@ -2993,7 +3384,7 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
       ("given back: "
       ^ Print.list_to_string (typed_pattern_to_string ctx) given_back));
   (* Link the inputs to those given back values - note that this also
-   * checks we have the same number of values, of course *)
+     checks we have the same number of values, of course *)
   let given_back_inputs = List.combine given_back inputs in
   (* Sanity check *)
   List.iter
@@ -3006,13 +3397,19 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
           ^ pure_ty_to_string ctx input.ty));
       sanity_check __FILE__ __LINE__ (given_back.ty = input.ty) ctx.span)
     given_back_inputs;
+  (* Prepare the let-bindings by introducing a match if necessary *)
+  let given_back_inputs =
+    List.map (fun (v, e) -> (v, mk_texpression_from_var e)) given_back_inputs
+  in
+  let ctx, given_back_inputs =
+    List.fold_left_map decompose_let_match ctx given_back_inputs
+  in
   (* Translate the next expression *)
   let next_e = translate_expression e ctx in
   (* Generate the assignments *)
   let monadic = false in
   List.fold_right
-    (fun (given_back, input_var) e ->
-      mk_let monadic given_back (mk_texpression_from_var input_var) e)
+    (fun (given_back, input_var) e -> mk_let monadic given_back input_var e)
     given_back_inputs next_e
 
 and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
@@ -3070,7 +3467,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
         | Some nstate -> mk_simpl_tuple_pattern [ nstate; output ]
       in
       (* Translate the next expression *)
-      let next_e = translate_expression e ctx in
+      let next_e ctx = translate_expression e ctx in
       (* Put everything together *)
       let args_mplaces = List.map (fun _ -> None) inputs in
       let args =
@@ -3089,7 +3486,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
       (* We may have filtered the backward function elsewhere if it doesn't
          do anything (doesn't consume anything and doesn't return anything) *)
       match func with
-      | None -> next_e
+      | None -> next_e ctx
       | Some func ->
           let call = mk_apps ctx.span func args in
           (* Add meta-information - this is slightly hacky: we look at the
@@ -3105,7 +3502,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
              TODO: improve the heuristics, to give weight to the hints for
              instance.
           *)
-          let next_e =
+          let next_e ctx =
             if ctx.inside_loop then
               let consumed_values = abs_to_consumed ctx ectx abs in
               let var_values = List.combine outputs consumed_values in
@@ -3118,12 +3515,13 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
                   var_values
               in
               let vars, values = List.split var_values in
-              mk_espan_symbolic_assignments vars values next_e
-            else next_e
+              mk_espan_symbolic_assignments vars values (next_e ctx)
+            else next_e ctx
           in
 
-          (* Create the let-binding *)
-          mk_let effect_info.can_fail output call next_e)
+          (* Create the let-binding - we may have to introduce a match *)
+          let ctx, (output, call) = decompose_let_match ctx (output, call) in
+          mk_let effect_info.can_fail output call (next_e ctx))
 
 and translate_global_eval (gid : A.GlobalDeclId.id) (generics : T.generic_args)
     (sval : V.symbolic_value) (e : S.expression) (ctx : bs_ctx) : texpression =
@@ -3373,10 +3771,18 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
   let var = mk_typed_pattern_from_var var mplace in
   mk_let monadic var v next_e
 
-and translate_forward_end (ectx : C.eval_ctx)
+and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
+    (ectx : C.eval_ctx)
     (loop_input_values : V.typed_value S.symbolic_value_id_map option)
     (fwd_e : S.expression) (back_e : S.expression S.region_group_id_map)
     (ctx : bs_ctx) : texpression =
+  (* Register the consumed mutable borrows to compute default values *)
+  let ctx =
+    match return_value with
+    | None -> ctx
+    | Some (ectx, v) -> register_consumed_mut_borrows ectx ctx v
+  in
+
   let translate_one_end ctx (bid : RegionGroupId.id option) =
     let ctx = { ctx with bid } in
     (* Update the current state with the additional state received by the backward
@@ -3398,7 +3804,7 @@ and translate_forward_end (ectx : C.eval_ctx)
                We need to introduce fresh variables for the additional inputs,
                because they are locally introduced in a lambda.
             *)
-            let back_sg = RegionGroupId.Map.find bid ctx.sg.back_sg in
+            let back_sg = RegionGroupId.Map.find bid ctx.sg.fun_ty.back_sg in
             let ctx, backward_inputs_no_state =
               fresh_vars back_sg.inputs_no_state ctx
             in
@@ -3449,7 +3855,7 @@ and translate_forward_end (ectx : C.eval_ctx)
               in
               let output =
                 mk_simpl_tuple_ty
-                  (RegionGroupId.Map.find bid ctx.sg.back_sg).outputs
+                  (RegionGroupId.Map.find bid ctx.sg.fun_ty.back_sg).outputs
               in
               mk_output output
             in
@@ -3490,8 +3896,8 @@ and translate_forward_end (ectx : C.eval_ctx)
   *)
   let translate_end ctx =
     (* Compute the output of the forward function *)
-    let fwd_effect_info = ctx.sg.fwd_info.effect_info in
-    let ctx, pure_fwd_var = fresh_var None ctx.sg.fwd_output ctx in
+    let fwd_effect_info = ctx.sg.fun_ty.fwd_info.effect_info in
+    let ctx, pure_fwd_var = fresh_var None ctx.sg.fun_ty.fwd_output ctx in
     let fwd_e = translate_one_end ctx None in
 
     (* If we reached a loop: if we are *inside* a loop, we need to ignore the
@@ -3519,7 +3925,7 @@ and translate_forward_end (ectx : C.eval_ctx)
         (fun ((gid, _) : RegionGroupId.id * back_sg_info) ->
           if keep_rg_id gid then Some (translate_one_end ctx (Some gid))
           else None)
-        (RegionGroupId.Map.bindings ctx.sg.back_sg)
+        (RegionGroupId.Map.bindings ctx.sg.fun_ty.back_sg)
     in
 
     (* Compute whether the backward expressions should be evaluated straight
@@ -3535,7 +3941,7 @@ and translate_forward_end (ectx : C.eval_ctx)
                  sg.inputs = [] && sg.effect_info.can_fail
                else false)
           else None)
-        (RegionGroupId.Map.bindings ctx.sg.back_sg)
+        (RegionGroupId.Map.bindings ctx.sg.fun_ty.back_sg)
     in
 
     (* Introduce variables for the backward functions.
@@ -3546,7 +3952,7 @@ and translate_forward_end (ectx : C.eval_ctx)
     (* Create the return expressions *)
     let vars =
       let back_vars = List.filter_map (fun x -> x) back_vars in
-      if ctx.sg.fwd_info.ignore_output then back_vars
+      if ctx.sg.fun_ty.fwd_info.ignore_output then back_vars
       else pure_fwd_var :: back_vars
     in
     let vars = List.map mk_texpression_from_var vars in
@@ -3641,14 +4047,14 @@ and translate_forward_end (ectx : C.eval_ctx)
 
       (* Introduce a fresh output value for the forward function *)
       let ctx, fwd_output, output_pat =
-        if ctx.sg.fwd_info.ignore_output then
+        if ctx.sg.fun_ty.fwd_info.ignore_output then
           (* Note that we still need the forward output (which is unit),
              because even though the loop function will ignore the forward output,
              the forward expression will still compute an output (which
              will have type unit - otherwise we can't ignore it). *)
           (ctx, mk_unit_rvalue, [])
         else
-          let ctx, output_var = fresh_var None ctx.sg.fwd_output ctx in
+          let ctx, output_var = fresh_var None ctx.sg.fun_ty.fwd_output ctx in
           ( ctx,
             mk_texpression_from_var output_var,
             [ mk_typed_pattern_from_var output_var None ] )
@@ -3678,7 +4084,7 @@ and translate_forward_end (ectx : C.eval_ctx)
               | Some v -> Some (mk_typed_pattern_from_var v None))
             back_vars
         in
-        let gids = RegionGroupId.Map.keys ctx.sg.back_sg in
+        let gids = RegionGroupId.Map.keys ctx.sg.fun_ty.back_sg in
         let back_funs_map =
           RegionGroupId.Map.of_list
             (List.combine gids
@@ -3824,13 +4230,15 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   in
 
   (* The output type of the loop function *)
-  let fwd_effect_info = { ctx.sg.fwd_info.effect_info with is_rec = true } in
+  let fwd_effect_info =
+    { ctx.sg.fun_ty.fwd_info.effect_info with is_rec = true }
+  in
   let back_effect_infos, output_ty =
     (* The loop backward functions consume the same additional inputs as the parent
        function, but have custom outputs *)
     log#ldebug
       (lazy
-        (let back_sgs = RegionGroupId.Map.bindings ctx.sg.back_sg in
+        (let back_sgs = RegionGroupId.Map.bindings ctx.sg.fun_ty.back_sg in
          "translate_loop:" ^ "\n- back_sgs: "
          ^ (Print.list_to_string
               (Print.pair_to_string RegionGroupId.to_string show_back_sg_info))
@@ -3845,7 +4253,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
         (fun ((rg_id, given_back) : RegionGroupId.id * ty list) ->
           (* Lookup the effect information about the parent function region group
              associated to this loop region abstraction *)
-          let back_sg = RegionGroupId.Map.find rg_id ctx.sg.back_sg in
+          let back_sg = RegionGroupId.Map.find rg_id ctx.sg.fun_ty.back_sg in
           (* Remark: the effect info of the backward function for the loop
              is almost the same as for the backward function of the parent function.
              Quite importantly, the fact that the function is stateful and/or can fail
@@ -3877,11 +4285,11 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
     let back_tys = List.filter_map snd back_info_tys in
     let output =
       let output =
-        if ctx.sg.fwd_info.ignore_output then back_tys
-        else ctx.sg.fwd_output :: back_tys
+        if ctx.sg.fun_ty.fwd_info.ignore_output then back_tys
+        else ctx.sg.fun_ty.fwd_output :: back_tys
       in
       let output = mk_simpl_tuple_ty output in
-      let effect_info = ctx.sg.fwd_info.effect_info in
+      let effect_info = ctx.sg.fun_ty.fwd_info.effect_info in
       let output =
         if effect_info.stateful then mk_simpl_tuple_ty [ mk_state_ty; output ]
         else output
@@ -3924,11 +4332,11 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
     let mk_panic =
       (* Note that we reuse the effect information from the parent function *)
       let effect_info = ctx_get_effect_info ctx in
-      let back_tys = compute_back_tys ctx.sg None in
+      let back_tys = compute_back_tys ctx.sg.fun_ty None in
       let back_tys = List.filter_map (fun x -> x) back_tys in
       let tys =
-        if ctx.sg.fwd_info.ignore_output then back_tys
-        else ctx.sg.fwd_output :: back_tys
+        if ctx.sg.fun_ty.fwd_info.ignore_output then back_tys
+        else ctx.sg.fun_ty.fwd_output :: back_tys
       in
       let output_ty = mk_simpl_tuple_ty tys in
       if effect_info.stateful then
@@ -4192,11 +4600,11 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
               mk_result_fail_texpression_with_error_id ctx.span error_failure_id
                 output_ty
           in
-          let back_tys = compute_back_tys ctx.sg None in
+          let back_tys = compute_back_tys ctx.sg.fun_ty None in
           let back_tys = List.filter_map (fun x -> x) back_tys in
           let tys =
-            if ctx.sg.fwd_info.ignore_output then back_tys
-            else ctx.sg.fwd_output :: back_tys
+            if ctx.sg.fun_ty.fwd_info.ignore_output then back_tys
+            else ctx.sg.fun_ty.fwd_output :: back_tys
           in
           let output = mk_simpl_tuple_ty tys in
           mk_output output

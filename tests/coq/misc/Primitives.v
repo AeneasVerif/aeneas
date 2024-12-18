@@ -507,7 +507,7 @@ Axiom core_isize_max : isize. (** TODO *)
 
 (** Trait declaration: [core::clone::Clone] *)
 Record core_clone_Clone (self : Type) := {
-  clone : self -> result self
+  core_clone_Clone_clone : self -> result self
 }.
 
 Definition core_clone_impls_CloneUsize_clone (x : usize) : usize := x.
@@ -525,112 +525,112 @@ Definition core_clone_impls_CloneI64_clone (x : i64) : i64 := x.
 Definition core_clone_impls_CloneI128_clone (x : i128) : i128 := x.
 
 Definition core_clone_CloneUsize : core_clone_Clone usize := {|
-  clone := fun x => Ok (core_clone_impls_CloneUsize_clone x)
+  core_clone_Clone_clone := fun x => Ok (core_clone_impls_CloneUsize_clone x)
 |}.
 
 Definition core_clone_CloneU8 : core_clone_Clone u8 := {|
-  clone := fun x => Ok (core_clone_impls_CloneU8_clone x)
+  core_clone_Clone_clone := fun x => Ok (core_clone_impls_CloneU8_clone x)
 |}.
 
 Definition core_clone_CloneU16 : core_clone_Clone u16 := {|
-  clone := fun x => Ok (core_clone_impls_CloneU16_clone x)
+  core_clone_Clone_clone := fun x => Ok (core_clone_impls_CloneU16_clone x)
 |}.
 
 Definition core_clone_CloneU32 : core_clone_Clone u32 := {|
-  clone := fun x => Ok (core_clone_impls_CloneU32_clone x)
+  core_clone_Clone_clone := fun x => Ok (core_clone_impls_CloneU32_clone x)
 |}.
 
 Definition core_clone_CloneU64 : core_clone_Clone u64 := {|
-  clone := fun x => Ok (core_clone_impls_CloneU64_clone x)
+  core_clone_Clone_clone := fun x => Ok (core_clone_impls_CloneU64_clone x)
 |}.
 
 Definition core_clone_CloneU128 : core_clone_Clone u128 := {|
-  clone := fun x => Ok (core_clone_impls_CloneU128_clone x)
+  core_clone_Clone_clone := fun x => Ok (core_clone_impls_CloneU128_clone x)
 |}.
 
 Definition core_clone_CloneIsize : core_clone_Clone isize := {|
-  clone := fun x => Ok (core_clone_impls_CloneIsize_clone x)
+  core_clone_Clone_clone := fun x => Ok (core_clone_impls_CloneIsize_clone x)
 |}.
 
 Definition core_clone_CloneI8 : core_clone_Clone i8 := {|
-  clone := fun x => Ok (core_clone_impls_CloneI8_clone x)
+  core_clone_Clone_clone := fun x => Ok (core_clone_impls_CloneI8_clone x)
 |}.
 
 Definition core_clone_CloneI16 : core_clone_Clone i16 := {|
-  clone := fun x => Ok (core_clone_impls_CloneI16_clone x)
+  core_clone_Clone_clone := fun x => Ok (core_clone_impls_CloneI16_clone x)
 |}.
 
 Definition core_clone_CloneI32 : core_clone_Clone i32 := {|
-  clone := fun x => Ok (core_clone_impls_CloneI32_clone x)
+  core_clone_Clone_clone := fun x => Ok (core_clone_impls_CloneI32_clone x)
 |}.
 
 Definition core_clone_CloneI64 : core_clone_Clone i64 := {|
-  clone := fun x => Ok (core_clone_impls_CloneI64_clone x)
+  core_clone_Clone_clone := fun x => Ok (core_clone_impls_CloneI64_clone x)
 |}.
 
 Definition core_clone_CloneI128 : core_clone_Clone i128 := {|
-  clone := fun x => Ok (core_clone_impls_CloneI128_clone x)
+  core_clone_Clone_clone := fun x => Ok (core_clone_impls_CloneI128_clone x)
 |}.
 
 Definition core_clone_impls_CloneBool_clone (b : bool) : bool := b.
 
 Definition core_clone_CloneBool : core_clone_Clone bool := {|
-  clone := fun b => Ok (core_clone_impls_CloneBool_clone b)
+  core_clone_Clone_clone := fun b => Ok (core_clone_impls_CloneBool_clone b)
 |}.
 
 Record core_marker_Copy (Self : Type) := mkcore_marker_Copy {
-  coreCloneInst : core_clone_Clone Self;
+  cloneInst : core_clone_Clone Self;
 }.
 
 Arguments mkcore_marker_Copy { _ }.
-Arguments coreCloneInst { _ } _.
+Arguments cloneInst { _ } _.
 
 Definition core_marker_CopyU8 : core_marker_Copy u8 := {|
-  coreCloneInst := core_clone_CloneU8;
+  cloneInst := core_clone_CloneU8;
 |}.
 
 Definition core_marker_CopyU16 : core_marker_Copy u16 := {|
-  coreCloneInst := core_clone_CloneU16;
+  cloneInst := core_clone_CloneU16;
 |}.
 
 Definition core_marker_CopyU32 : core_marker_Copy u32 := {|
-  coreCloneInst := core_clone_CloneU32;
+  cloneInst := core_clone_CloneU32;
 |}.
 
 Definition core_marker_CopyU64 : core_marker_Copy u64 := {|
-  coreCloneInst := core_clone_CloneU64;
+  cloneInst := core_clone_CloneU64;
 |}.
 
 Definition core_marker_CopyU128 : core_marker_Copy u128 := {|
-  coreCloneInst := core_clone_CloneU128;
+  cloneInst := core_clone_CloneU128;
 |}.
 
 Definition core_marker_CopyUsize : core_marker_Copy usize := {|
-  coreCloneInst := core_clone_CloneUsize;
+  cloneInst := core_clone_CloneUsize;
 |}.
 
 Definition core_marker_CopyI8 : core_marker_Copy i8 := {|
-  coreCloneInst := core_clone_CloneI8;
+  cloneInst := core_clone_CloneI8;
 |}.
 
 Definition core_marker_CopyI16 : core_marker_Copy i16 := {|
-  coreCloneInst := core_clone_CloneI16;
+  cloneInst := core_clone_CloneI16;
 |}.
 
 Definition core_marker_CopyI32 : core_marker_Copy i32 := {|
-  coreCloneInst := core_clone_CloneI32;
+  cloneInst := core_clone_CloneI32;
 |}.
 
 Definition core_marker_CopyI64 : core_marker_Copy i64 := {|
-  coreCloneInst := core_clone_CloneI64;
+  cloneInst := core_clone_CloneI64;
 |}.
 
 Definition core_marker_CopyI128 : core_marker_Copy i128 := {|
-  coreCloneInst := core_clone_CloneI128;
+  cloneInst := core_clone_CloneI128;
 |}.
 
 Definition core_marker_CopyIsize : core_marker_Copy isize := {|
-  coreCloneInst := core_clone_CloneIsize;
+  cloneInst := core_clone_CloneIsize;
 |}.
 
 (** [core::option::{core::option::Option<T>}::unwrap] *)

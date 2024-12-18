@@ -1007,13 +1007,16 @@ let simplify_let_bindings (ctx : trans_ctx) (def : fun_decl) : fun_decl =
     a non-primitive function call (i.e.: inline the binops, ADT constructions,
     etc.).
 
+    [inline_identity]: if [true], inline the identity functions (i.e., lambda
+    functions of the shape [fun x -> x]).
+
     TODO: we have a smallish issue which is that rvalues should be merged with
     expressions... For now, this forces us to substitute whenever we can, but
     leave the let-bindings where they are, and eliminated them in a subsequent
     pass (if they are useless).
  *)
-let inline_useless_var_reassignments ~(inline_named : bool)
-    ~(inline_const : bool) ~(inline_pure : bool) (ctx : trans_ctx)
+let inline_useless_var_assignments ~(inline_named : bool) ~(inline_const : bool)
+    ~(inline_pure : bool) ~(inline_identity : bool) (ctx : trans_ctx)
     (def : fun_decl) : fun_decl =
   let obj =
     object (self)
@@ -1031,55 +1034,67 @@ let inline_useless_var_reassignments ~(inline_named : bool)
         *)
         match (monadic, lv.value) with
         | false, PatVar (lv_var, _) ->
-            (* We can filter if: *)
-            (* 1. the left variable is unnamed or [inline_named] is true *)
-            let filter_left =
-              match (inline_named, lv_var.basename) with
-              | true, _ | _, None -> true
-              | _ -> false
-            in
-            (* And either:
-               2.1 the right-expression is a variable, a global or a const generic var *)
-            let var_or_global = is_var re || is_cvar re || is_global re in
-            (* Or:
-               2.2 the right-expression is a constant-value and we inline constant values,
-                   *or* it is a qualif with no arguments (we consider this as a const) *)
-            let const_re =
-              inline_const
-              &&
-              let is_const_adt =
-                let app, args = destruct_apps re in
-                if args = [] then
-                  match app.e with
-                  | Qualif _ -> true
-                  | StructUpdate upd -> upd.updates = []
-                  | _ -> false
-                else false
+            (* We can filter if: 1. *)
+            let filter_pure =
+              (* 1.1. the left variable is unnamed or [inline_named] is true *)
+              let filter_left =
+                match (inline_named, lv_var.basename) with
+                | true, _ | _, None -> true
+                | _ -> false
               in
-              is_const re || is_const_adt
-            in
-            (* Or:
-               2.3 the right-expression is an ADT value, a projection or a
-                   primitive function call *and* the flag [inline_pure] is set *)
-            let pure_re =
-              inline_pure
-              &&
-              let app, _ = destruct_apps re in
-              match app.e with
-              | Qualif qualif -> (
-                  match qualif.id with
-                  | AdtCons _ -> true (* ADT constructor *)
-                  | Proj _ -> true (* Projector *)
-                  | FunOrOp (Unop _ | Binop _) ->
-                      true (* primitive function call *)
-                  | FunOrOp (Fun _) -> false (* non-primitive function call *)
-                  | _ -> false)
-              | StructUpdate _ -> true (* ADT constructor *)
-              | _ -> false
-            in
-            let filter =
+              (* And either:
+                 1.2.1 the right-expression is a variable, a global or a const generic var *)
+              let var_or_global = is_var re || is_cvar re || is_global re in
+              (* Or:
+                 1.2.2 the right-expression is a constant-value and we inline constant values,
+                     *or* it is a qualif with no arguments (we consider this as a const) *)
+              let const_re =
+                inline_const
+                &&
+                let is_const_adt =
+                  let app, args = destruct_apps re in
+                  if args = [] then
+                    match app.e with
+                    | Qualif _ -> true
+                    | StructUpdate upd -> upd.updates = []
+                    | _ -> false
+                  else false
+                in
+                is_const re || is_const_adt
+              in
+              (* Or:
+                 1.2.3 the right-expression is an ADT value, a projection or a
+                     primitive function call *and* the flag [inline_pure] is set *)
+              let pure_re =
+                inline_pure
+                &&
+                let app, _ = destruct_apps re in
+                match app.e with
+                | Qualif qualif -> (
+                    match qualif.id with
+                    | AdtCons _ -> true (* ADT constructor *)
+                    | Proj _ -> true (* Projector *)
+                    | FunOrOp (Unop _ | Binop _) ->
+                        true (* primitive function call *)
+                    | FunOrOp (Fun _) -> false (* non-primitive function call *)
+                    | _ -> false)
+                | StructUpdate _ -> true (* ADT constructor *)
+                | _ -> false
+              in
               filter_left && (var_or_global || const_re || pure_re)
             in
+
+            (* Or if: 2. the let-binding bounds the identity function *)
+            let filter_id =
+              inline_identity
+              &&
+              match re.e with
+              | Lambda ({ value = PatVar (v0, _); _ }, { e = Var v1; _ }) ->
+                  v0.id = v1
+              | _ -> false
+            in
+
+            let filter = filter_pure || filter_id in
 
             (* Update the rhs (we may perform substitutions inside, and it is
              * better to do them *before* we inline it *)
@@ -2024,6 +2039,62 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
       let body = Some { body with body = obj#visit_texpression () body.body } in
       { def with body }
 
+(** Simplify the lambdas by applying beta-reduction *)
+let apply_beta_reduction (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
+  (* The map visitor *)
+  let visitor =
+    object (self)
+      inherit [_] map_expression as super
+
+      method! visit_Var env vid =
+        match VarId.Map.find_opt vid env with
+        | None -> Var vid
+        | Some e -> e.e
+
+      method! visit_texpression env e =
+        let f, args = destruct_apps e in
+        let args = List.map (self#visit_texpression env) args in
+        let pats, body = destruct_lambdas f in
+        if args <> [] && pats <> [] then
+          (* Apply the beta-reduction
+
+             First split the arguments/patterns between those that
+             will disappear and those we have to preserve.
+          *)
+          let min = Int.min (List.length args) (List.length pats) in
+          let pats, kept_pats = Collections.List.split_at pats min in
+          let args, kept_args = Collections.List.split_at args min in
+          (* Substitute *)
+          let vars =
+            List.map (fun v -> (fst (as_pat_var def.item_meta.span v)).id) pats
+          in
+          let body =
+            let env = VarId.Map.add_list (List.combine vars args) env in
+            super#visit_texpression env body
+          in
+          (* Reconstruct the term *)
+          mk_apps def.item_meta.span
+            (mk_lambdas kept_pats (super#visit_texpression env body))
+            kept_args
+        else
+          mk_apps def.item_meta.span
+            (mk_lambdas pats (super#visit_texpression env body))
+            args
+    end
+  in
+  (* Update the body *)
+  match def.body with
+  | None -> def
+  | Some body ->
+      let body =
+        Some
+          {
+            body with
+            body = visitor#visit_texpression VarId.Map.empty body.body;
+          }
+      in
+      { def with body }
+
 (** This pass simplifies uses of array/slice index operations.
 
     We perform the following transformations:
@@ -2351,10 +2422,12 @@ let end_passes :
     (* Inline the useless variable reassignments *)
     ( None,
       "inline_useless_var_assignments",
-      inline_useless_var_reassignments ~inline_named:true ~inline_const:true
-        ~inline_pure:true );
+      inline_useless_var_assignments ~inline_named:true ~inline_const:true
+        ~inline_pure:true ~inline_identity:true );
+    (* Simplify the lambdas by applying beta-reduction *)
+    (None, "apply_beta_reduction", apply_beta_reduction);
     (* Eliminate the box functions - note that the "box" types were eliminated
-     * during the symbolic to pure phase: see the comments for [eliminate_box_functions] *)
+       during the symbolic to pure phase: see the comments for [eliminate_box_functions] *)
     (None, "eliminate_box_functions", eliminate_box_functions);
     (* Filter the useless variables, assignments, function calls, etc. *)
     (None, "filter_useless", filter_useless);
@@ -2392,9 +2465,9 @@ let end_passes :
     (None, "simplify_let_bindings", simplify_let_bindings);
     (* Inline the useless vars again *)
     ( None,
-      "inline_useless_var_reassignments",
-      inline_useless_var_reassignments ~inline_named:true ~inline_const:true
-        ~inline_pure:false );
+      "inline_useless_var_assignments",
+      inline_useless_var_assignments ~inline_named:true ~inline_const:true
+        ~inline_pure:false ~inline_identity:true );
     (* Filter the useless variables again *)
     (None, "filter_useless (pass 2)", filter_useless);
     (* Simplify the let-then return again (the lambda simplification may have

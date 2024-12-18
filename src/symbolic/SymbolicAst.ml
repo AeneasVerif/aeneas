@@ -41,8 +41,13 @@ type call = {
           borrows (we need to perform lookups).
        *)
   sg : fun_sig option;
-      (** The uninstantiated function signature, if this is not a unop/binop *)
-  regions_hierarchy : region_var_groups;
+      (** The un-instantiated function signature, if this is not a unop/binop.
+
+          This is useful to retrieve the names of the inputs, to generate pretty
+          names in the translation.
+       *)
+  inst_sg : inst_fun_sig option;
+      (** The instantiated function signature, if this is not a unop/binop *)
   abstractions : AbstractionId.id list;
       (** The region abstractions introduced upon calling the function *)
   generics : generic_args;
@@ -177,31 +182,34 @@ type expression =
           value. It has the same purpose as for the {!Return} case.
        *)
   | ForwardEnd of
-      (Contexts.eval_ctx[@opaque])
+      ((Contexts.eval_ctx[@opaque]) * typed_value) option
+      * (Contexts.eval_ctx[@opaque])
       * typed_value symbolic_value_id_map option
       * expression
       * expression region_group_id_map
       (** We use this delimiter to indicate at which point we switch to the
-          generation of code specific to the backward function(s). This allows
-          us in particular to factor the work out: we don't need to replay the
-          symbolic execution up to this point, and can reuse it for the forward
-          function and all the backward functions.
+          generation of code specific to the backward function(s).
 
-          The first expression gives the end of the translation for the forward
-          function, the map from region group ids to expressions gives the end
-          of the translation for the backward functions.
-
-          The optional map from symbolic values to input values are input values
-          for loops: upon entering a loop, in the translation we call the loop
-          translation function, which takes care of the end of the execution.
-
-          The evaluation context is the context at the moment we introduce the
-          [ForwardEnd], and is used to translate the input values (see the
-          comments for the {!Return} variant).
+          The fields are:
+          - the evaluation context **after we evaluated the return value**
+          - the value consumed by the return variable
+          - the evaluation context at the moment we introduce the
+            [ForwardEnd]. We use it to translate the input values
+            (see the comments for the {!Return} variant).
+          - an optional map from symbolic values to input values.
+            We use this to compute the input values for loops: upon entering a loop,
+            in the translation we call the loop translation function, which takes
+            care of the end of the execution.
+          - the end of the translation for the forward function
+          - a map from region group ids to expressions that give the end
+            of the translation for the backward functions
 
           This case also handles the case where we (re-)enter a loop (once
           we enter a loop in symbolic mode, we don't get out: the loop is
           responsible for the end of the function).
+
+          TODO: because we store the returned value, the Return case may
+          not be useful anymore?
        *)
   | Loop of loop  (** Loop *)
   | ReturnWithLoop of loop_id * bool

@@ -124,12 +124,19 @@ let extract_adt_g_value (span : Meta.span)
         else ("(", ")")
       in
       F.pp_print_string fmt lb;
+      (* F* doesn't parse lambdas and tuples the same way as other backends: the
+         the consequence is that we need to use more parentheses... *)
+      let inside =
+        match backend () with
+        | FStar -> true
+        | _ -> false
+      in
       let ctx =
         Collections.List.fold_left_link
           (fun () ->
             F.pp_print_string fmt ",";
             F.pp_print_space fmt ())
-          (fun ctx v -> extract_value ctx false v)
+          (fun ctx v -> extract_value ctx inside v)
           ctx field_values
       in
       F.pp_print_string fmt rb;
@@ -773,7 +780,11 @@ and extract_Lambda (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
   (* Print the lambda - note that there should always be at least one variable *)
   sanity_check __FILE__ __LINE__ (xl <> []) span;
   F.pp_print_string fmt "fun";
-  let with_type = backend () = Coq in
+  let with_type =
+    match backend () with
+    | Coq -> true
+    | _ -> false
+  in
   let ctx =
     List.fold_left
       (fun ctx x ->

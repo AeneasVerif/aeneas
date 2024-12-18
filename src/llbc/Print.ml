@@ -36,8 +36,7 @@ module Values = struct
 
   let symbolic_value_proj_to_string (env : fmt_env) (sv : symbolic_value)
       (rty : ty) : string =
-    symbolic_value_id_to_pretty_string sv.sv_id
-    ^ " : " ^ ty_to_string env sv.sv_ty ^ " <: " ^ ty_to_string env rty
+    symbolic_value_id_to_pretty_string sv.sv_id ^ " <: " ^ ty_to_string env rty
 
   (* TODO: it may be a good idea to try to factorize this function with
    * typed_avalue_to_string. At some point we had done it, because [typed_value]
@@ -127,7 +126,7 @@ module Values = struct
 
   let rec aproj_to_string (env : fmt_env) (pv : aproj) : string =
     match pv with
-    | AProjLoans (sv, given_back) ->
+    | AProjLoans (sv, rty, given_back) ->
         let given_back =
           if given_back = [] then ""
           else
@@ -135,17 +134,29 @@ module Values = struct
             let given_back = List.map (aproj_to_string env) given_back in
             " (" ^ String.concat "," given_back ^ ") "
         in
-        "⌊" ^ symbolic_value_to_string env sv ^ given_back ^ "⌋"
-    | AProjBorrows (sv, rty) ->
-        "(" ^ symbolic_value_proj_to_string env sv rty ^ ")"
+        "⌊" ^ symbolic_value_proj_to_string env sv rty ^ given_back ^ "⌋"
+    | AProjBorrows (sv, rty, given_back) ->
+        let given_back =
+          if given_back = [] then ""
+          else
+            let given_back = List.map snd given_back in
+            let given_back = List.map (aproj_to_string env) given_back in
+            " (" ^ String.concat "," given_back ^ ") "
+        in
+        "(" ^ symbolic_value_proj_to_string env sv rty ^ given_back ^ ")"
     | AEndedProjLoans (_, given_back) ->
-        if given_back = [] then "_"
+        if given_back = [] then "ended_aproj_loans _"
         else
           let given_back = List.map snd given_back in
           let given_back = List.map (aproj_to_string env) given_back in
           "ended_aproj_loans (" ^ String.concat "," given_back ^ ")"
-    | AEndedProjBorrows _mv -> "_"
-    | AIgnoredProjBorrows -> "_"
+    | AEndedProjBorrows (_, given_back) ->
+        if given_back = [] then "ended_aproj_borrows _"
+        else
+          let given_back = List.map snd given_back in
+          let given_back = List.map (aproj_to_string env) given_back in
+          "ended_aproj_borrows (" ^ String.concat "," given_back ^ ")"
+    | AEmpty -> "_"
 
   (** Wrap a value inside its marker, if there is one *)
   let add_proj_marker (pm : proj_marker) (s : string) : string =
@@ -317,6 +328,12 @@ module Values = struct
     ^ RegionId.Set.to_string None abs.regions.owned
     ^ "}" ^ can_end ^ " {\n" ^ avs ^ "\n" ^ indent ^ "}"
 
+  let abs_region_group_to_string (gr : abs_region_group) : string =
+    g_region_group_to_string RegionId.to_string AbstractionId.to_string gr
+
+  let abs_region_groups_to_string (gl : abs_region_groups) : string =
+    String.concat "\n" (List.map abs_region_group_to_string gl)
+
   let inst_fun_sig_to_string (env : fmt_env) (sg : LlbcAst.inst_fun_sig) :
       string =
     (* TODO: print the trait type constraints? *)
@@ -326,7 +343,10 @@ module Values = struct
       "(" ^ String.concat ", " (List.map ty_to_string sg.inputs) ^ ")"
     in
     let output = ty_to_string sg.output in
-    inputs ^ " -> " ^ output
+    inputs ^ " -> " ^ output ^ "\n- regions_hierarchy:\n"
+    ^ region_var_groups_to_string sg.regions_hierarchy
+    ^ "\n- abs_regions_hierarchy:\n"
+    ^ abs_region_groups_to_string sg.abs_regions_hierarchy
 end
 
 (** Pretty-printing for contexts *)

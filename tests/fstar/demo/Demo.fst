@@ -121,7 +121,7 @@ let rec list_tail
       let back = fun ret -> let tl1 = list_tail_back ret in CList_CCons x tl1
         in
       Ok (c, back)
-    | CList_CNil -> let back = fun ret -> ret in Ok (CList_CNil, back)
+    | CList_CNil -> Ok (CList_CNil, (fun ret -> ret))
     end
 
 (** Trait declaration: [demo::Counter]

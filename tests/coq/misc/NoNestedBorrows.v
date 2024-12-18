@@ -353,7 +353,7 @@ Definition id_mut_pair1
   {T1 : Type} {T2 : Type} (x : T1) (y : T2) :
   result ((T1 * T2) * ((T1 * T2) -> (T1 * T2)))
   :=
-  let back := fun (ret : (T1 * T2)) => ret in Ok ((x, y), back)
+  Ok ((x, y), fun (ret : (T1 * T2)) => ret)
 .
 
 (** [no_nested_borrows::id_mut_pair2]:
@@ -362,7 +362,7 @@ Definition id_mut_pair2
   {T1 : Type} {T2 : Type} (p : (T1 * T2)) :
   result ((T1 * T2) * ((T1 * T2) -> (T1 * T2)))
   :=
-  let back := fun (ret : (T1 * T2)) => ret in Ok (p, back)
+  Ok (p, fun (ret : (T1 * T2)) => ret)
 .
 
 (** [no_nested_borrows::id_mut_pair3]:
@@ -371,9 +371,7 @@ Definition id_mut_pair3
   {T1 : Type} {T2 : Type} (x : T1) (y : T2) :
   result ((T1 * T2) * (T1 -> T1) * (T2 -> T2))
   :=
-  let back'a := fun (ret : T1) => ret in
-  let back'b := fun (ret : T2) => ret in
-  Ok ((x, y), back'a, back'b)
+  Ok ((x, y), fun (ret : T1) => ret, fun (ret : T2) => ret)
 .
 
 (** [no_nested_borrows::id_mut_pair4]:
@@ -382,9 +380,7 @@ Definition id_mut_pair4
   {T1 : Type} {T2 : Type} (p : (T1 * T2)) :
   result ((T1 * T2) * (T1 -> T1) * (T2 -> T2))
   :=
-  let back'a := fun (ret : T1) => ret in
-  let back'b := fun (ret : T2) => ret in
-  Ok (p, back'a, back'b)
+  Ok (p, fun (ret : T1) => ret, fun (ret : T2) => ret)
 .
 
 (** [no_nested_borrows::StructWithTuple]
@@ -577,7 +573,7 @@ Definition borrow_mut_tuple
   {T : Type} {U : Type} (x : (T * U)) :
   result ((T * U) * ((T * U) -> (T * U)))
   :=
-  let back := fun (ret : (T * U)) => ret in Ok (x, back)
+  Ok (x, fun (ret : (T * U)) => ret)
 .
 
 (** [no_nested_borrows::ExpandSimpliy::Wrapper]

@@ -688,16 +688,16 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
         | ASymbolic aproj, ty -> (
             let ty1 = Substitute.erase_regions ty in
             match aproj with
-            | AProjLoans (sv, _) ->
+            | AProjLoans (sv, proj_ty, _) ->
                 let ty2 = Substitute.erase_regions sv.sv_ty in
                 sanity_check __FILE__ __LINE__ (ty1 = ty2) span;
                 (* Also check that the symbolic values contain regions of interest -
                  * otherwise they should have been reduced to [_] *)
                 let abs = Option.get info in
                 sanity_check __FILE__ __LINE__
-                  (ty_has_regions_in_set abs.regions.owned sv.sv_ty)
+                  (ty_has_regions_in_set abs.regions.owned proj_ty)
                   span
-            | AProjBorrows (sv, proj_ty) ->
+            | AProjBorrows (sv, proj_ty, _) ->
                 let ty2 = Substitute.erase_regions sv.sv_ty in
                 sanity_check __FILE__ __LINE__ (ty1 = ty2) span;
                 (* Also check that the symbolic values contain regions of interest -
@@ -710,12 +710,12 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
                 List.iter
                   (fun (_, proj) ->
                     match proj with
-                    | AProjBorrows (_sv, ty') ->
+                    | AProjBorrows (_sv, ty', _) ->
                         sanity_check __FILE__ __LINE__ (ty' = ty) span
-                    | AEndedProjBorrows _ | AIgnoredProjBorrows -> ()
+                    | AEndedProjBorrows _ | AEmpty -> ()
                     | _ -> craise __FILE__ __LINE__ span "Unexpected")
                   given_back_ls
-            | AEndedProjBorrows _ | AIgnoredProjBorrows -> ())
+            | AEndedProjBorrows _ | AEmpty -> ())
         | AIgnored _, _ -> ()
         | _ ->
             log#ltrace
@@ -739,7 +739,11 @@ type proj_borrows_info = {
 }
 [@@deriving show]
 
-type proj_loans_info = { abs_id : AbstractionId.id; regions : RegionId.Set.t }
+type proj_loans_info = {
+  abs_id : AbstractionId.id;
+  regions : RegionId.Set.t;
+  proj_ty : rty;
+}
 [@@deriving show]
 
 type sv_info = {
@@ -788,9 +792,9 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
     let info = { info with aproj_borrows = binfo :: info.aproj_borrows } in
     update_info sv info
   in
-  let add_aproj_loans (sv : symbolic_value) abs_id regions : unit =
+  let add_aproj_loans (sv : symbolic_value) proj_ty abs_id regions : unit =
     let info = lookup_info sv in
-    let linfo = { abs_id; regions } in
+    let linfo = { abs_id; regions; proj_ty } in
     let info = { info with aproj_loans = linfo :: info.aproj_loans } in
     update_info sv info
   in
@@ -811,10 +815,11 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
       method! visit_aproj abs aproj =
         (let abs = Option.get abs in
          match aproj with
-         | AProjLoans (sv, _) -> add_aproj_loans sv abs.abs_id abs.regions.owned
-         | AProjBorrows (sv, proj_ty) ->
+         | AProjLoans (sv, proj_ty, _) ->
+             add_aproj_loans sv proj_ty abs.abs_id abs.regions.owned
+         | AProjBorrows (sv, proj_ty, _) ->
              add_aproj_borrows sv abs.abs_id abs.regions.owned proj_ty false
-         | AEndedProjLoans _ | AEndedProjBorrows _ | AIgnoredProjBorrows -> ());
+         | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ());
         super#visit_aproj abs aproj
     end
   in
@@ -834,15 +839,6 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
     sanity_check __FILE__ __LINE__
       (info.env_count = 0 || info.aproj_borrows = [])
       span;
-    (* A symbolic value containing borrows can't be duplicated (i.e., copied):
-     * it must be expanded first *)
-    if ty_has_borrows (Some span) ctx.type_ctx.type_infos info.ty then
-      sanity_check __FILE__ __LINE__ (info.env_count <= 1) span;
-    (* A duplicated symbolic value is necessarily copyable *)
-    sanity_check __FILE__ __LINE__
-      (info.env_count <= 1 || ty_is_copyable info.ty)
-      span;
-
     sanity_check __FILE__ __LINE__
       (info.aproj_borrows = [] || info.aproj_loans <> [])
       span;
@@ -868,7 +864,7 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
     in
     (* Check that the union of the loan projectors contains the borrow projections. *)
     List.iter
-      (fun binfo ->
+      (fun (binfo : proj_borrows_info) ->
         sanity_check __FILE__ __LINE__
           (projection_contains span info.ty loan_regions binfo.proj_ty
              binfo.regions)

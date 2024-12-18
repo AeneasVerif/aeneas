@@ -289,10 +289,7 @@ Fixpoint betree_Node_lookup_first_message_for_key_loop
     | Betree_List_Cons x next_msgs =>
       let (i, _) := x in
       if i s>= key
-      then
-        let back := fun (ret : betree_List_t (u64 * betree_Message_t)) => ret
-          in
-        Ok (msgs, back)
+      then Ok (msgs, fun (ret : betree_List_t (u64 * betree_Message_t)) => ret)
       else (
         p <- betree_Node_lookup_first_message_for_key_loop n1 key next_msgs;
         let (l, back) := p in
@@ -301,8 +298,8 @@ Fixpoint betree_Node_lookup_first_message_for_key_loop
             let next_msgs1 := back ret in Betree_List_Cons x next_msgs1 in
         Ok (l, back1))
     | Betree_List_Nil =>
-      let back := fun (ret : betree_List_t (u64 * betree_Message_t)) => ret in
-      Ok (Betree_List_Nil, back)
+      Ok (Betree_List_Nil,
+        fun (ret : betree_List_t (u64 * betree_Message_t)) => ret)
     end
   end
 .
@@ -521,13 +518,10 @@ Fixpoint betree_Node_lookup_first_message_after_key_loop
           fun (ret : betree_List_t (u64 * betree_Message_t)) =>
             let next_msgs1 := back ret in Betree_List_Cons p next_msgs1 in
         Ok (l, back1))
-      else
-        let back := fun (ret : betree_List_t (u64 * betree_Message_t)) => ret
-          in
-        Ok (msgs, back)
+      else Ok (msgs, fun (ret : betree_List_t (u64 * betree_Message_t)) => ret)
     | Betree_List_Nil =>
-      let back := fun (ret : betree_List_t (u64 * betree_Message_t)) => ret in
-      Ok (Betree_List_Nil, back)
+      Ok (Betree_List_Nil,
+        fun (ret : betree_List_t (u64 * betree_Message_t)) => ret)
     end
   end
 .
@@ -636,9 +630,7 @@ Fixpoint betree_Node_lookup_mut_in_bindings_loop
     | Betree_List_Cons hd tl =>
       let (i, _) := hd in
       if i s>= key
-      then
-        let back := fun (ret : betree_List_t (u64 * u64)) => ret in
-        Ok (bindings, back)
+      then Ok (bindings, fun (ret : betree_List_t (u64 * u64)) => ret)
       else (
         p <- betree_Node_lookup_mut_in_bindings_loop n1 key tl;
         let (l, back) := p in
@@ -647,8 +639,7 @@ Fixpoint betree_Node_lookup_mut_in_bindings_loop
             let tl1 := back ret in Betree_List_Cons hd tl1 in
         Ok (l, back1))
     | Betree_List_Nil =>
-      let back := fun (ret : betree_List_t (u64 * u64)) => ret in
-      Ok (Betree_List_Nil, back)
+      Ok (Betree_List_Nil, fun (ret : betree_List_t (u64 * u64)) => ret)
     end
   end
 .

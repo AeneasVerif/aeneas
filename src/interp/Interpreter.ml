@@ -9,7 +9,6 @@ open TypesUtils
 open Values
 open LlbcAst
 open Contexts
-open SynthesizeSymbolic
 open Errors
 module SA = SymbolicAst
 
@@ -102,7 +101,15 @@ let compute_contexts (m : crate) : decls_ctx =
  *)
 let normalize_inst_fun_sig (span : Meta.span) (ctx : eval_ctx)
     (sg : inst_fun_sig) : inst_fun_sig =
-  let { regions_hierarchy = _; trait_type_constraints; inputs; output } = sg in
+  let {
+    regions_hierarchy = _;
+    abs_regions_hierarchy = _;
+    trait_type_constraints;
+    inputs;
+    output;
+  } =
+    sg
+  in
   cassert_warn __FILE__ __LINE__
     (trait_type_constraints = [])
     span
@@ -210,7 +217,8 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
     (* Project over the values - we use *loan* projectors, as explained above *)
     let avalues =
       List.map
-        (mk_aproj_loans_value_from_symbolic_value abs.regions.owned)
+        (fun (sv : symbolic_value) ->
+          mk_aproj_loans_value_from_symbolic_value abs.regions.owned sv sv.sv_ty)
         input_svs
     in
     (ctx, avalues)
@@ -219,7 +227,7 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
   let ctx =
     create_push_abstractions_from_abs_region_groups
       (fun rg_id -> SynthInput rg_id)
-      inst_sg.regions_hierarchy region_can_end compute_abs_avalues ctx
+      inst_sg.abs_regions_hierarchy region_can_end compute_abs_avalues ctx
   in
   (* Split the variables between return var, inputs and remaining locals *)
   let body = Option.get fdef.body in
@@ -286,15 +294,15 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
   let ret_value, ctx, cc = pop_frame config span pop_return_value ctx in
 
   (* We need to find the parents regions/abstractions of the region we
-   * will end - this will allow us to, first, mark the other return
-   * regions as non-endable, and, second, end those parent regions in
-   * proper order. *)
+     will end - this will allow us to, first, mark the other return
+     regions as non-endable, and, second, end those parent regions in
+     proper order. *)
   let parent_rgs = list_ancestor_region_groups regions_hierarchy back_id in
   let parent_input_abs_ids =
     RegionGroupId.mapi
       (fun rg_id rg ->
         if RegionGroupId.Set.mem rg_id parent_rgs then Some rg.id else None)
-      inst_sg.regions_hierarchy
+      inst_sg.abs_regions_hierarchy
   in
   let parent_input_abs_ids =
     List.filter_map (fun x -> x) parent_input_abs_ids
@@ -317,11 +325,11 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
       in
 
       (* Initialize and insert the abstractions in the context.
-       *
-       * We take care of allowing to end only the regions which should end (note
-       * that this is important for soundness: this is part of the borrow checking).
-       * Also see the documentation of the [can_end] field of [abs] for more
-       * information. *)
+
+         We take care of allowing to end only the regions which should end (note
+         that this is important for soundness: this is part of the borrow checking).
+         Also see the documentation of the [can_end] field of [abs] for more
+         information. *)
       let parent_and_current_rgs = RegionGroupId.Set.add back_id parent_rgs in
       let region_can_end rid =
         RegionGroupId.Set.mem rid parent_and_current_rgs
@@ -330,7 +338,8 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
       let ctx =
         create_push_abstractions_from_abs_region_groups
           (fun rg_id -> SynthRet rg_id)
-          ret_inst_sg.regions_hierarchy region_can_end compute_abs_avalues ctx
+          ret_inst_sg.abs_regions_hierarchy region_can_end compute_abs_avalues
+          ctx
       in
       ctx)
     else ctx
@@ -355,7 +364,9 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
    * we are evaluating an [EndContinue]) or not.
    *)
   let current_abs_id, end_fun_synth_input =
-    let fun_abs_id = (RegionGroupId.nth inst_sg.regions_hierarchy back_id).id in
+    let fun_abs_id =
+      (RegionGroupId.nth inst_sg.abs_regions_hierarchy back_id).id
+    in
     if not inside_loop then (Some fun_abs_id, true)
     else
       (* We are inside a loop *)
@@ -537,14 +548,14 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
          *   abstractions up to the one in which we are interested.
          *)
         (* Forward translation: retrieve the returned value *)
-        let fwd_e =
+        let fwd_e, ctx_return, ret_value =
           (* Pop the frame and retrieve the returned value at the same time *)
           let pop_return_value = true in
           let ret_value, ctx, cc_pop =
             pop_frame config span pop_return_value ctx
           in
           (* Generate the Return node *)
-          cc_pop (SA.Return (ctx, ret_value))
+          (cc_pop (SA.Return (ctx, ret_value)), ctx, Option.get ret_value)
         in
         (* Backward translation: introduce "return"
            abstractions to consume the return value, then end all the
@@ -569,7 +580,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
         in
         let back_el = RegionGroupId.Map.of_list back_el in
         (* Put everything together *)
-        synthesize_forward_end ctx0 None fwd_e back_el
+        SA.ForwardEnd (Some (ctx_return, ret_value), ctx0, None, fwd_e, back_el)
     | EndEnterLoop (loop_id, loop_input_values)
     | EndContinue (loop_id, loop_input_values) ->
         (* Similar to [Return]: we have to play different endings *)
@@ -606,7 +617,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
         in
         let back_el = RegionGroupId.Map.of_list back_el in
         (* Put everything together *)
-        synthesize_forward_end ctx0 (Some loop_input_values) fwd_e back_el
+        ForwardEnd (None, ctx0, Some loop_input_values, fwd_e, back_el)
     | Panic ->
         (* Note that as we explore all the execution branches, one of
          * the executions can lead to a panic *)

@@ -334,8 +334,27 @@ let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
       ^ String.concat "," (List.map VarId.to_string locals)
       ^ "]"));
 
+  (* Drop the outer *loans* we find in the local variables *)
+  let ctx, cc =
+    (* Drop the loans *)
+    let locals = List.rev locals in
+    fold_left_apply_continuation
+      (fun lid ctx ->
+        drop_outer_loans_at_lplace config span
+          (mk_place_from_var_id ctx span lid)
+          ctx)
+      locals ctx
+  in
+  (* Debug *)
+  log#ldebug
+    (lazy
+      ("pop_frame: after dropping outer loans in local variables:\n"
+      ^ eval_ctx_to_string ~span:(Some span) ctx));
+
   (* Move the return value out of the return variable *)
-  let v, ctx, cc = move_return_value config span pop_return_value ctx in
+  let v, ctx, cc1 = move_return_value config span pop_return_value ctx in
+  let cc = cc_comp cc cc1 in
+  (* Check that the return value is valid (i.e., it doesn't contain the bottom value) *)
   let _ =
     match v with
     | None -> ()
@@ -344,24 +363,6 @@ let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
           (not (bottom_in_value ctx.ended_regions ret_value))
           span
   in
-
-  (* Drop the outer *loans* we find in the local variables *)
-  let ctx, cc =
-    comp cc
-      ((* Drop the loans *)
-       let locals = List.rev locals in
-       fold_left_apply_continuation
-         (fun lid ctx ->
-           drop_outer_loans_at_lplace config span
-             (mk_place_from_var_id ctx span lid)
-             ctx)
-         locals ctx)
-  in
-  (* Debug *)
-  log#ldebug
-    (lazy
-      ("pop_frame: after dropping outer loans in local variables:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx));
 
   (* Pop the frame - we remove the [Frame] delimiter, and reintroduce all
    * the local variables (which may still contain borrow permissions - but
@@ -643,7 +644,6 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
     * generic_args
     * (generic_args * trait_instance_id) option
     * fun_decl
-    * region_var_groups
     * inst_fun_sig =
   match call.func with
   | FnOpMove _ ->
@@ -669,7 +669,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
             instantiate_fun_sig span ctx func.generics tr_self def.signature
               regions_hierarchy
           in
-          (func.func, func.generics, None, def, regions_hierarchy, inst_sg)
+          (func.func, func.generics, None, def, inst_sg)
       | FunId (FBuiltin _) ->
           (* Unreachable: must be a transparent function *)
           craise __FILE__ __LINE__ span "Unreachable"
@@ -727,12 +727,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                      we also need to update the generics.
                   *)
                   let func = FunId fid in
-                  ( func,
-                    generics,
-                    Some (generics, tr_self),
-                    method_def,
-                    regions_hierarchy,
-                    inst_sg )
+                  (func, generics, Some (generics, tr_self), method_def, inst_sg)
               | None ->
                   (* If not found, lookup the methods provided by the trait *declaration*
                      (remember: for now, we forbid overriding provided methods) *)
@@ -787,7 +782,6 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                     func.generics,
                     Some (all_generics, tr_self),
                     method_def,
-                    regions_hierarchy,
                     inst_sg ))
           | _ ->
               (* We are using a local clause - we lookup the trait decl *)
@@ -824,7 +818,6 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                 func.generics,
                 Some (generics, tr_self),
                 method_def,
-                regions_hierarchy,
                 inst_sg )))
 
 (** Helper: introduce a fresh symbolic value for a global *)
@@ -1241,7 +1234,8 @@ and eval_function_call_symbolic (config : config) (span : Meta.span)
       | FunId (FRegular _) | TraitMethod _ ->
           eval_transparent_function_call_symbolic config span call
       | FunId (FBuiltin fid) ->
-          eval_builtin_function_call_symbolic config span fid call func)
+          eval_builtin_function_call_symbolic config span fid func call.args
+            call.dest)
 
 (** Evaluate a local (i.e., non-builtin) function call in concrete mode *)
 and eval_transparent_function_call_concrete (config : config) (span : Meta.span)
@@ -1343,7 +1337,7 @@ and eval_transparent_function_call_concrete (config : config) (span : Meta.span)
 and eval_transparent_function_call_symbolic (config : config) (span : Meta.span)
     (call : call) : stl_cm_fun =
  fun ctx ->
-  let func, generics, trait_method_generics, def, regions_hierarchy, inst_sg =
+  let func, generics, trait_method_generics, def, inst_sg =
     eval_transparent_function_call_symbolic_inst span call ctx
   in
   (* Sanity check: same number of inputs *)
@@ -1359,8 +1353,7 @@ and eval_transparent_function_call_symbolic (config : config) (span : Meta.span)
     span "Nested borrows are not supported yet";
   (* Evaluate the function call *)
   eval_function_call_symbolic_from_inst_sig config def.item_meta.span func
-    def.signature regions_hierarchy inst_sg generics trait_method_generics
-    call.args call.dest ctx
+    def.signature inst_sg generics trait_method_generics call.args call.dest ctx
 
 (** Evaluate a function call in symbolic mode by using the function signature.
 
@@ -1375,8 +1368,7 @@ and eval_transparent_function_call_symbolic (config : config) (span : Meta.span)
  *)
 and eval_function_call_symbolic_from_inst_sig (config : config)
     (span : Meta.span) (fid : fun_id_or_trait_method_ref) (sg : fun_sig)
-    (regions_hierarchy : region_var_groups) (inst_sg : inst_fun_sig)
-    (generics : generic_args)
+    (inst_sg : inst_fun_sig) (generics : generic_args)
     (trait_method_generics : (generic_args * trait_instance_id) option)
     (args : operand list) (dest : place) : stl_cm_fun =
  fun ctx ->
@@ -1397,7 +1389,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
   let ret_spc = mk_fresh_symbolic_value span ret_sv_ty in
   let ret_value = mk_typed_value_from_symbolic_value ret_spc in
   let ret_av regions =
-    mk_aproj_loans_value_from_symbolic_value regions ret_spc
+    mk_aproj_loans_value_from_symbolic_value regions ret_spc ret_sv_ty
   in
   let args_places =
     List.map (fun p -> S.mk_opt_place_from_op span p ctx) args
@@ -1408,7 +1400,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
   let args, ctx, cc = eval_operands config span args ctx in
 
   (* Generate the abstractions and insert them in the context *)
-  let abs_ids = List.map (fun rg -> rg.id) inst_sg.regions_hierarchy in
+  let abs_ids = List.map (fun rg -> rg.id) inst_sg.abs_regions_hierarchy in
   let args_with_rtypes = List.combine args inst_sg.inputs in
 
   (* Check the type of the input arguments *)
@@ -1454,14 +1446,13 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
   let ctx =
     create_push_abstractions_from_abs_region_groups
       (fun rg_id -> FunCall (call_id, rg_id))
-      inst_sg.regions_hierarchy region_can_end compute_abs_avalues ctx
+      inst_sg.abs_regions_hierarchy region_can_end compute_abs_avalues ctx
   in
   (* Synthesize the symbolic AST *)
   let cc =
     cc_comp cc
-      (S.synthesize_regular_function_call fid call_id ctx sg regions_hierarchy
-         abs_ids generics trait_method_generics args args_places ret_spc
-         dest_place)
+      (S.synthesize_regular_function_call fid call_id ctx sg inst_sg abs_ids
+         generics trait_method_generics args args_places ret_spc dest_place)
   in
 
   (* Move the return value to its destination *)
@@ -1522,35 +1513,75 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
 
 (** Evaluate a non-local function call in symbolic mode *)
 and eval_builtin_function_call_symbolic (config : config) (span : Meta.span)
-    (fid : builtin_fun_id) (call : call) (func : fn_ptr) : stl_cm_fun =
+    (fid : builtin_fun_id) (func : fn_ptr) (args : operand list) (dest : place)
+    : stl_cm_fun =
  fun ctx ->
-  let generics = func.generics in
-  let args = call.args in
-  let dest = call.dest in
-  (* Sanity check: make sure the type parameters don't contain regions -
-   * this is a current limitation of our synthesis *)
-  sanity_check __FILE__ __LINE__
-    (List.for_all
-       (fun ty -> not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty))
-       generics.types)
-    span;
-
-  (* In symbolic mode, the behaviour of a function call is completely defined
-   * by the signature of the function: we thus simply generate correctly
-   * instantiated signatures, and delegate the work to an auxiliary function *)
-  let regions_hierarchy =
-    LlbcAstUtils.FunIdMap.find (FBuiltin fid) ctx.fun_ctx.regions_hierarchies
-  in
-  (* There shouldn't be any reference to Self *)
-  let tr_self = UnknownTrait __FUNCTION__ in
+  (* In symbolic mode, the behavior of a function call is completely defined
+     by the signature of the function: we thus simply generate correctly
+     instantiated signatures, and delegate the work to an auxiliary function *)
   let sg = Builtin.get_builtin_fun_sig fid in
-  let inst_sig =
-    instantiate_fun_sig span ctx generics tr_self sg regions_hierarchy
-  in
+  if fid = BoxNew then begin
+    (* Special case: Box::new: we allow instantiating the type parameters with
+       types containing borrows.
 
-  (* Evaluate the function call *)
-  eval_function_call_symbolic_from_inst_sig config span (FunId (FBuiltin fid))
-    sg regions_hierarchy inst_sig generics None args dest ctx
+       TODO: this is a hack.
+    *)
+    (* Sanity check: check that we are not using nested borrows *)
+    classert __FILE__ __LINE__
+      (List.for_all
+         (fun ty ->
+           not (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos ty))
+         func.generics.types)
+      span
+      (lazy
+        ("Instantiating [Box::new] with nested borrows is not allowed for now ("
+       ^ fn_ptr_to_string ctx func ^ ")"));
+
+    (* As we allow instantiating type parameters with types containing regions,
+       we have to recompute the regions hierarchy. *)
+    let fun_name = Print.Expressions.builtin_fun_id_to_string fid in
+    let inst_sig =
+      compute_regions_hierarchy_for_fun_call (Some span) ctx.type_ctx.type_decls
+        ctx.fun_ctx.fun_decls ctx.global_ctx.global_decls
+        ctx.trait_decls_ctx.trait_decls ctx.trait_impls_ctx.trait_impls fun_name
+        ctx.type_vars ctx.const_generic_vars func.generics sg
+    in
+    log#ldebug
+      (lazy
+        ("eval_builtin_function_call_symbolic: special case:" ^ "\n- inst_sig:"
+        ^ inst_fun_sig_to_string ctx inst_sig));
+
+    (* Evaluate the function call *)
+    eval_function_call_symbolic_from_inst_sig config span (FunId (FBuiltin fid))
+      sg inst_sig func.generics None args dest ctx
+  end
+  else begin
+    (* Sanity check: make sure the type parameters don't contain regions -
+       this is a current limitation of our synthesis.
+    *)
+    classert __FILE__ __LINE__
+      (List.for_all
+         (fun ty -> not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty))
+         func.generics.types)
+      span
+      (lazy
+        ("Instantiating the type parameters of a function with types \
+          containing borrows is not allowed for now ("
+       ^ fn_ptr_to_string ctx func ^ ")"));
+    let regions_hierarchy =
+      LlbcAstUtils.FunIdMap.find (FBuiltin fid) ctx.fun_ctx.regions_hierarchies
+    in
+
+    (* There shouldn't be any reference to Self *)
+    let tr_self = UnknownTrait __FUNCTION__ in
+    let inst_sig =
+      instantiate_fun_sig span ctx func.generics tr_self sg regions_hierarchy
+    in
+
+    (* Evaluate the function call *)
+    eval_function_call_symbolic_from_inst_sig config span (FunId (FBuiltin fid))
+      sg inst_sig func.generics None args dest ctx
+  end
 
 (** Evaluate a statement seen as a function body *)
 and eval_function_body (config : config) (body : statement) : stl_cm_fun =

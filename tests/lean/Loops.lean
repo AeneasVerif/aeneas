@@ -217,8 +217,7 @@ def get_elem_shared
    Source: 'tests/src/loops.rs', lines 149:0-151:1 -/
 def id_mut
   {T : Type} (ls : List T) : Result ((List T) × (List T → List T)) :=
-  let back := fun ret => ret
-  Result.ok (ls, back)
+  Result.ok (ls, fun ret => ret)
 
 /- [loops::id_shared]:
    Source: 'tests/src/loops.rs', lines 153:0-155:1 -/

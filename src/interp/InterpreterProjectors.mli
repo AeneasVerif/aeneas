@@ -13,6 +13,8 @@ open Contexts
     [ancestor_regions]
     [see]
     [original_sv_ty]: shouldn't have erased regions
+    [proj_ty]: shouldn't have erased regions
+    [eval_ctx]
 *)
 val apply_proj_loans_on_symbolic_expansion :
   Meta.span ->
@@ -20,6 +22,8 @@ val apply_proj_loans_on_symbolic_expansion :
   RegionId.Set.t ->
   symbolic_expansion ->
   rty ->
+  rty ->
+  eval_ctx ->
   typed_avalue
 
 (** Convert a symbolic expansion *which is not a borrow* to a value *)

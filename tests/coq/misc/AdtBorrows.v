@@ -9,25 +9,25 @@ Local Open Scope Primitives_scope.
 Module AdtBorrows.
 
 (** [adt_borrows::SharedWrapper]
-    Source: 'tests/src/adt-borrows.rs', lines 4:0-4:35 *)
+    Source: 'tests/src/adt-borrows.rs', lines 7:0-7:35 *)
 Definition SharedWrapper_t (T : Type) : Type := T.
 
 (** [adt_borrows::{adt_borrows::SharedWrapper<'a, T>}::create]:
-    Source: 'tests/src/adt-borrows.rs', lines 7:4-9:5 *)
+    Source: 'tests/src/adt-borrows.rs', lines 10:4-12:5 *)
 Definition sharedWrapper_create
   {T : Type} (x : T) : result (SharedWrapper_t T) :=
   Ok x
 .
 
 (** [adt_borrows::{adt_borrows::SharedWrapper<'a, T>}::unwrap]:
-    Source: 'tests/src/adt-borrows.rs', lines 11:4-13:5 *)
+    Source: 'tests/src/adt-borrows.rs', lines 14:4-16:5 *)
 Definition sharedWrapper_unwrap
   {T : Type} (self : SharedWrapper_t T) : result T :=
   Ok self
 .
 
 (** [adt_borrows::use_shared_wrapper]:
-    Source: 'tests/src/adt-borrows.rs', lines 16:0-21:1 *)
+    Source: 'tests/src/adt-borrows.rs', lines 19:0-24:1 *)
 Definition use_shared_wrapper : result unit :=
   w <- sharedWrapper_create 0%i32;
   p <- sharedWrapper_unwrap w;
@@ -35,7 +35,7 @@ Definition use_shared_wrapper : result unit :=
 .
 
 (** [adt_borrows::SharedWrapper1]
-    Source: 'tests/src/adt-borrows.rs', lines 23:0-25:1 *)
+    Source: 'tests/src/adt-borrows.rs', lines 26:0-28:1 *)
 Record SharedWrapper1_t (T : Type) :=
 mkSharedWrapper1_t {
   sharedWrapper1_x : T;
@@ -46,21 +46,21 @@ Arguments mkSharedWrapper1_t { _ }.
 Arguments sharedWrapper1_x { _ }.
 
 (** [adt_borrows::{adt_borrows::SharedWrapper1<'a, T>}#1::create]:
-    Source: 'tests/src/adt-borrows.rs', lines 28:4-30:5 *)
+    Source: 'tests/src/adt-borrows.rs', lines 31:4-33:5 *)
 Definition sharedWrapper1_create
   {T : Type} (x : T) : result (SharedWrapper1_t T) :=
   Ok {| sharedWrapper1_x := x |}
 .
 
 (** [adt_borrows::{adt_borrows::SharedWrapper1<'a, T>}#1::unwrap]:
-    Source: 'tests/src/adt-borrows.rs', lines 32:4-34:5 *)
+    Source: 'tests/src/adt-borrows.rs', lines 35:4-37:5 *)
 Definition sharedWrapper1_unwrap
   {T : Type} (self : SharedWrapper1_t T) : result T :=
   Ok self.(sharedWrapper1_x)
 .
 
 (** [adt_borrows::use_shared_wrapper1]:
-    Source: 'tests/src/adt-borrows.rs', lines 37:0-42:1 *)
+    Source: 'tests/src/adt-borrows.rs', lines 40:0-45:1 *)
 Definition use_shared_wrapper1 : result unit :=
   w <- sharedWrapper1_create 0%i32;
   p <- sharedWrapper1_unwrap w;
@@ -68,7 +68,7 @@ Definition use_shared_wrapper1 : result unit :=
 .
 
 (** [adt_borrows::SharedWrapper2]
-    Source: 'tests/src/adt-borrows.rs', lines 44:0-47:1 *)
+    Source: 'tests/src/adt-borrows.rs', lines 47:0-50:1 *)
 Record SharedWrapper2_t (T : Type) :=
 mkSharedWrapper2_t {
   sharedWrapper2_x : T; sharedWrapper2_y : T;
@@ -80,21 +80,21 @@ Arguments sharedWrapper2_x { _ }.
 Arguments sharedWrapper2_y { _ }.
 
 (** [adt_borrows::{adt_borrows::SharedWrapper2<'a, 'b, T>}#2::create]:
-    Source: 'tests/src/adt-borrows.rs', lines 50:4-52:5 *)
+    Source: 'tests/src/adt-borrows.rs', lines 53:4-55:5 *)
 Definition sharedWrapper2_create
   {T : Type} (x : T) (y : T) : result (SharedWrapper2_t T) :=
   Ok {| sharedWrapper2_x := x; sharedWrapper2_y := y |}
 .
 
 (** [adt_borrows::{adt_borrows::SharedWrapper2<'a, 'b, T>}#2::unwrap]:
-    Source: 'tests/src/adt-borrows.rs', lines 54:4-56:5 *)
+    Source: 'tests/src/adt-borrows.rs', lines 57:4-59:5 *)
 Definition sharedWrapper2_unwrap
   {T : Type} (self : SharedWrapper2_t T) : result (T * T) :=
   Ok (self.(sharedWrapper2_x), self.(sharedWrapper2_y))
 .
 
 (** [adt_borrows::use_shared_wrapper2]:
-    Source: 'tests/src/adt-borrows.rs', lines 59:0-66:1 *)
+    Source: 'tests/src/adt-borrows.rs', lines 62:0-69:1 *)
 Definition use_shared_wrapper2 : result unit :=
   w <- sharedWrapper2_create 0%i32 1%i32;
   p <- sharedWrapper2_unwrap w;
@@ -104,25 +104,25 @@ Definition use_shared_wrapper2 : result unit :=
 .
 
 (** [adt_borrows::MutWrapper]
-    Source: 'tests/src/adt-borrows.rs', lines 68:0-68:36 *)
+    Source: 'tests/src/adt-borrows.rs', lines 71:0-71:36 *)
 Definition MutWrapper_t (T : Type) : Type := T.
 
 (** [adt_borrows::{adt_borrows::MutWrapper<'a, T>}#3::create]:
-    Source: 'tests/src/adt-borrows.rs', lines 71:4-73:5 *)
+    Source: 'tests/src/adt-borrows.rs', lines 74:4-76:5 *)
 Definition mutWrapper_create
   {T : Type} (x : T) : result ((MutWrapper_t T) * (MutWrapper_t T -> T)) :=
-  let back := fun (ret : MutWrapper_t T) => ret in Ok (x, back)
+  Ok (x, fun (ret : MutWrapper_t T) => ret)
 .
 
 (** [adt_borrows::{adt_borrows::MutWrapper<'a, T>}#3::unwrap]:
-    Source: 'tests/src/adt-borrows.rs', lines 75:4-77:5 *)
+    Source: 'tests/src/adt-borrows.rs', lines 78:4-80:5 *)
 Definition mutWrapper_unwrap
   {T : Type} (self : MutWrapper_t T) : result (T * (T -> MutWrapper_t T)) :=
   let back := fun (ret : T) => ret in Ok (self, back)
 .
 
 (** [adt_borrows::use_mut_wrapper]:
-    Source: 'tests/src/adt-borrows.rs', lines 80:0-86:1 *)
+    Source: 'tests/src/adt-borrows.rs', lines 83:0-89:1 *)
 Definition use_mut_wrapper : result unit :=
   p <- mutWrapper_create 0%i32;
   let (w, create_back) := p in
@@ -134,14 +134,14 @@ Definition use_mut_wrapper : result unit :=
 .
 
 (** [adt_borrows::MutWrapper1]
-    Source: 'tests/src/adt-borrows.rs', lines 88:0-90:1 *)
+    Source: 'tests/src/adt-borrows.rs', lines 91:0-93:1 *)
 Record MutWrapper1_t (T : Type) := mkMutWrapper1_t { mutWrapper1_x : T; }.
 
 Arguments mkMutWrapper1_t { _ }.
 Arguments mutWrapper1_x { _ }.
 
 (** [adt_borrows::{adt_borrows::MutWrapper1<'a, T>}#4::create]:
-    Source: 'tests/src/adt-borrows.rs', lines 93:4-95:5 *)
+    Source: 'tests/src/adt-borrows.rs', lines 96:4-98:5 *)
 Definition mutWrapper1_create
   {T : Type} (x : T) : result ((MutWrapper1_t T) * (MutWrapper1_t T -> T)) :=
   let back := fun (ret : MutWrapper1_t T) => ret.(mutWrapper1_x) in
@@ -149,7 +149,7 @@ Definition mutWrapper1_create
 .
 
 (** [adt_borrows::{adt_borrows::MutWrapper1<'a, T>}#4::unwrap]:
-    Source: 'tests/src/adt-borrows.rs', lines 97:4-99:5 *)
+    Source: 'tests/src/adt-borrows.rs', lines 100:4-102:5 *)
 Definition mutWrapper1_unwrap
   {T : Type} (self : MutWrapper1_t T) : result (T * (T -> MutWrapper1_t T)) :=
   let back := fun (ret : T) => {| mutWrapper1_x := ret |} in
@@ -157,7 +157,7 @@ Definition mutWrapper1_unwrap
 .
 
 (** [adt_borrows::use_mut_wrapper1]:
-    Source: 'tests/src/adt-borrows.rs', lines 102:0-108:1 *)
+    Source: 'tests/src/adt-borrows.rs', lines 105:0-111:1 *)
 Definition use_mut_wrapper1 : result unit :=
   p <- mutWrapper1_create 0%i32;
   let (w, create_back) := p in
@@ -169,7 +169,7 @@ Definition use_mut_wrapper1 : result unit :=
 .
 
 (** [adt_borrows::MutWrapper2]
-    Source: 'tests/src/adt-borrows.rs', lines 110:0-113:1 *)
+    Source: 'tests/src/adt-borrows.rs', lines 113:0-116:1 *)
 Record MutWrapper2_t (T : Type) :=
 mkMutWrapper2_t {
   mutWrapper2_x : T; mutWrapper2_y : T;
@@ -181,7 +181,7 @@ Arguments mutWrapper2_x { _ }.
 Arguments mutWrapper2_y { _ }.
 
 (** [adt_borrows::{adt_borrows::MutWrapper2<'a, 'b, T>}#5::create]:
-    Source: 'tests/src/adt-borrows.rs', lines 116:4-118:5 *)
+    Source: 'tests/src/adt-borrows.rs', lines 119:4-121:5 *)
 Definition mutWrapper2_create
   {T : Type} (x : T) (y : T) :
   result ((MutWrapper2_t T) * (MutWrapper2_t T -> T) * (MutWrapper2_t T -> T))
@@ -192,7 +192,7 @@ Definition mutWrapper2_create
 .
 
 (** [adt_borrows::{adt_borrows::MutWrapper2<'a, 'b, T>}#5::unwrap]:
-    Source: 'tests/src/adt-borrows.rs', lines 120:4-122:5 *)
+    Source: 'tests/src/adt-borrows.rs', lines 123:4-125:5 *)
 Definition mutWrapper2_unwrap
   {T : Type} (self : MutWrapper2_t T) :
   result ((T * T) * (T -> MutWrapper2_t T) * (T -> MutWrapper2_t T))
@@ -207,7 +207,7 @@ Definition mutWrapper2_unwrap
 .
 
 (** [adt_borrows::use_mut_wrapper2]:
-    Source: 'tests/src/adt-borrows.rs', lines 125:0-134:1 *)
+    Source: 'tests/src/adt-borrows.rs', lines 128:0-137:1 *)
 Definition use_mut_wrapper2 : result unit :=
   t <- mutWrapper2_create 0%i32 10%i32;
   let '(w, create_back, create_back1) := t in
@@ -230,6 +230,182 @@ Definition use_mut_wrapper2 : result unit :=
         mutWrapper2_y := (unwrap_back1 py1).(mutWrapper2_y)
       |} in
   massert (y s= 11%i32)
+.
+
+(** [adt_borrows::array_shared_borrow]:
+    Source: 'tests/src/adt-borrows.rs', lines 146:0-148:1 *)
+Definition array_shared_borrow
+  {N : usize} (x : array u32 N) : result (array u32 N) :=
+  Ok x
+.
+
+(** [adt_borrows::array_mut_borrow]:
+    Source: 'tests/src/adt-borrows.rs', lines 150:0-152:1 *)
+Definition array_mut_borrow
+  {N : usize} (x : array u32 N) :
+  result ((array u32 N) * (array u32 N -> array u32 N))
+  :=
+  Ok (x, fun (ret : array u32 N) => ret)
+.
+
+(** [adt_borrows::boxed_slice_shared_borrow]:
+    Source: 'tests/src/adt-borrows.rs', lines 154:0-156:1 *)
+Definition boxed_slice_shared_borrow (x : slice u32) : result (slice u32) :=
+  Ok x
+.
+
+(** [adt_borrows::boxed_slice_mut_borrow]:
+    Source: 'tests/src/adt-borrows.rs', lines 158:0-160:1 *)
+Definition boxed_slice_mut_borrow
+  (x : slice u32) : result ((slice u32) * (slice u32 -> slice u32)) :=
+  Ok (x, fun (ret : slice u32) => ret)
+.
+
+(** [adt_borrows::SharedList]
+    Source: 'tests/src/adt-borrows.rs', lines 165:0-168:1 *)
+Inductive SharedList_t (T : Type) :=
+| SharedList_Nil : SharedList_t T
+| SharedList_Cons : T -> SharedList_t T -> SharedList_t T
+.
+
+Arguments SharedList_Nil { _ }.
+Arguments SharedList_Cons { _ }.
+
+(** [adt_borrows::{adt_borrows::SharedList<'a, T>}#6::push]:
+    Source: 'tests/src/adt-borrows.rs', lines 172:4-174:5 *)
+Definition sharedList_push
+  {T : Type} (self : SharedList_t T) (x : T) : result (SharedList_t T) :=
+  Ok (SharedList_Cons x self)
+.
+
+(** [adt_borrows::{adt_borrows::SharedList<'a, T>}#6::pop]:
+    Source: 'tests/src/adt-borrows.rs', lines 176:4-182:5 *)
+Definition sharedList_pop
+  {T : Type} (self : SharedList_t T) : result (T * (SharedList_t T)) :=
+  match self with
+  | SharedList_Nil => Fail_ Failure
+  | SharedList_Cons hd tl => Ok (hd, tl)
+  end
+.
+
+(** [adt_borrows::MutList]
+    Source: 'tests/src/adt-borrows.rs', lines 185:0-188:1 *)
+Inductive MutList_t (T : Type) :=
+| MutList_Nil : MutList_t T
+| MutList_Cons : T -> MutList_t T -> MutList_t T
+.
+
+Arguments MutList_Nil { _ }.
+Arguments MutList_Cons { _ }.
+
+(** [adt_borrows::{adt_borrows::MutList<'a, T>}#7::push]:
+    Source: 'tests/src/adt-borrows.rs', lines 192:4-194:5 *)
+Definition mutList_push
+  {T : Type} (self : MutList_t T) (x : T) :
+  result ((MutList_t T) * (MutList_t T -> ((MutList_t T) * T)))
+  :=
+  let back :=
+    fun (ret : MutList_t T) =>
+      let (x1, ml) :=
+        match ret with | MutList_Cons t ml1 => (t, ml1) | _ => (x, self) end in
+      (ml, x1) in
+  Ok (MutList_Cons x self, back)
+.
+
+(** [adt_borrows::{adt_borrows::MutList<'a, T>}#7::pop]:
+    Source: 'tests/src/adt-borrows.rs', lines 196:4-202:5 *)
+Definition mutList_pop
+  {T : Type} (self : MutList_t T) :
+  result ((T * (MutList_t T)) * ((T * (MutList_t T)) -> MutList_t T))
+  :=
+  match self with
+  | MutList_Nil => Fail_ Failure
+  | MutList_Cons hd tl =>
+    let back :=
+      fun (ret : (T * (MutList_t T))) =>
+        let (t, ml) := ret in MutList_Cons t ml in
+    Ok ((hd, tl), back)
+  end
+.
+
+(** [adt_borrows::wrap_shared_in_option]:
+    Source: 'tests/src/adt-borrows.rs', lines 205:0-207:1 *)
+Definition wrap_shared_in_option {T : Type} (x : T) : result (option T) :=
+  Ok (Some x)
+.
+
+(** [adt_borrows::wrap_mut_in_option]:
+    Source: 'tests/src/adt-borrows.rs', lines 209:0-211:1 *)
+Definition wrap_mut_in_option
+  {T : Type} (x : T) : result ((option T) * (option T -> T)) :=
+  let back := fun (ret : option T) => match ret with | Some t => t | _ => x end
+    in
+  Ok (Some x, back)
+.
+
+(** [adt_borrows::List]
+    Source: 'tests/src/adt-borrows.rs', lines 213:0-216:1 *)
+Inductive List_t (T : Type) :=
+| List_Cons : T -> List_t T -> List_t T
+| List_Nil : List_t T
+.
+
+Arguments List_Cons { _ }.
+Arguments List_Nil { _ }.
+
+(** [adt_borrows::nth_shared]: loop 0:
+    Source: 'tests/src/adt-borrows.rs', lines 219:4-228:1 *)
+Fixpoint nth_shared_loop
+  {T : Type} (ls : List_t T) (i : u32) : result (option T) :=
+  match ls with
+  | List_Cons x tl =>
+    if i s= 0%u32
+    then Ok (Some x)
+    else (i1 <- u32_sub i 1%u32; nth_shared_loop tl i1)
+  | List_Nil => Ok None
+  end
+.
+
+(** [adt_borrows::nth_shared]:
+    Source: 'tests/src/adt-borrows.rs', lines 218:0-228:1 *)
+Definition nth_shared
+  {T : Type} (ls : List_t T) (i : u32) : result (option T) :=
+  nth_shared_loop ls i
+.
+
+(** [adt_borrows::nth_mut]: loop 0:
+    Source: 'tests/src/adt-borrows.rs', lines 231:4-240:1 *)
+Fixpoint nth_mut_loop
+  {T : Type} (ls : List_t T) (i : u32) :
+  result ((option T) * (option T -> List_t T))
+  :=
+  match ls with
+  | List_Cons x tl =>
+    if i s= 0%u32
+    then
+      let back :=
+        fun (ret : option T) =>
+          let t := match ret with | Some t1 => t1 | _ => x end in
+          List_Cons t tl in
+      Ok (Some x, back)
+    else (
+      i1 <- u32_sub i 1%u32;
+      p <- nth_mut_loop tl i1;
+      let (o, back) := p in
+      let back1 :=
+        fun (ret : option T) => let tl1 := back ret in List_Cons x tl1 in
+      Ok (o, back1))
+  | List_Nil => let back := fun (ret : option T) => List_Nil in Ok (None, back)
+  end
+.
+
+(** [adt_borrows::nth_mut]:
+    Source: 'tests/src/adt-borrows.rs', lines 230:0-240:1 *)
+Definition nth_mut
+  {T : Type} (ls : List_t T) (i : u32) :
+  result ((option T) * (option T -> List_t T))
+  :=
+  nth_mut_loop ls i
 .
 
 End AdtBorrows.

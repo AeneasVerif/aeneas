@@ -12,12 +12,16 @@ type aList_t (t : Type0) =
 | AList_Cons : usize -> t -> aList_t t -> aList_t t
 | AList_Nil : aList_t t
 
+(** [hashmap::Fraction]
+    Source: 'tests/src/hashmap.rs', lines 46:0-49:1 *)
+type fraction_t = { dividend : usize; divisor : usize; }
+
 (** [hashmap::HashMap]
-    Source: 'tests/src/hashmap.rs', lines 46:0-58:1 *)
+    Source: 'tests/src/hashmap.rs', lines 52:0-64:1 *)
 type hashMap_t (t : Type0) =
 {
   num_entries : usize;
-  max_load_factor : (usize & usize);
+  max_load_factor : fraction_t;
   max_load : usize;
   saturated : bool;
   slots : alloc_vec_Vec (aList_t t);

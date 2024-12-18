@@ -164,7 +164,30 @@ let outer_loans_in_value (v : typed_value) : bool =
     false
   with Found -> true
 
-let find_first_primitively_copyable_sv_with_borrows span
+let symbolic_value_is_greedily_expandable (span : Meta.span option)
+    (type_decls : type_decl TypeDeclId.Map.t)
+    (type_infos : TypesAnalysis.type_infos) (sv : symbolic_value) : bool =
+  if ty_has_borrows span type_infos sv.sv_ty then
+    (* Ignore arrays and slices, as we can't expand them *)
+    match sv.sv_ty with
+    | TAdt (TBuiltin (TArray | TSlice), _) -> false
+    | TAdt (TAdtId id, _) ->
+        (* Lookup the type of the ADT to check if we can expand it *)
+        let def = TypeDeclId.Map.find id type_decls in
+        begin
+          match def.kind with
+          | Struct _ | Enum ([] | [ _ ]) ->
+              (* Structure or enumeration with <= 1 variant *)
+              true
+          | Enum (_ :: _) | Alias _ | Opaque | TError _ | Union _ ->
+              (* Enumeration with > 1 variants *)
+              false
+        end
+    | _ -> true
+  else false
+
+let find_first_expandable_sv_with_borrows (span : Meta.span option)
+    (type_decls : type_decl TypeDeclId.Map.t)
     (type_infos : TypesAnalysis.type_infos) (v : typed_value) :
     symbolic_value option =
   (* The visitor *)
@@ -173,9 +196,8 @@ let find_first_primitively_copyable_sv_with_borrows span
       inherit [_] iter_typed_value
 
       method! visit_VSymbolic _ sv =
-        let ty = sv.sv_ty in
-        if ty_is_copyable ty && ty_has_borrows span type_infos ty then
-          raise (FoundSymbolicValue sv)
+        if symbolic_value_is_greedily_expandable span type_decls type_infos sv
+        then raise (FoundSymbolicValue sv)
         else ()
     end
   in
