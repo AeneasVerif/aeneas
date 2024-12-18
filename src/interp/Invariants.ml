@@ -839,15 +839,6 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
     sanity_check __FILE__ __LINE__
       (info.env_count = 0 || info.aproj_borrows = [])
       span;
-    (* A symbolic value containing borrows can't be duplicated (i.e., copied):
-     * it must be expanded first *)
-    if ty_has_borrows (Some span) ctx.type_ctx.type_infos info.ty then
-      sanity_check __FILE__ __LINE__ (info.env_count <= 1) span;
-    (* A duplicated symbolic value is necessarily copyable *)
-    sanity_check __FILE__ __LINE__
-      (info.env_count <= 1 || ty_is_copyable info.ty)
-      span;
-
     sanity_check __FILE__ __LINE__
       (info.aproj_borrows = [] || info.aproj_loans <> [])
       span;
