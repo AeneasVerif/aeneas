@@ -565,6 +565,10 @@ module EvalCtx = struct
     let env = eval_ctx_to_fmt_env ctx in
     ty_to_string env t
 
+  let constant_expr_to_string (ctx : eval_ctx) (c : constant_expr) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    constant_expr_to_string env c
+
   let generic_params_to_strings (ctx : eval_ctx) (x : generic_params) :
       string list * string list =
     let env = eval_ctx_to_fmt_env ctx in

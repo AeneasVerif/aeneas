@@ -8,12 +8,18 @@ let raw_span_to_string (raw_span : Meta.raw_span) =
   let loc_to_string (l : Meta.loc) : string =
     string_of_int l.line ^ ":" ^ string_of_int l.col
   in
-  "Source: '" ^ file ^ "', lines "
+  "'" ^ file ^ "', lines "
   ^ loc_to_string raw_span.beg_loc
   ^ "-"
   ^ loc_to_string raw_span.end_loc
 
-let span_to_string (span : Meta.span) = raw_span_to_string span.span
+let span_to_string (span : Meta.span) =
+  let generated_from =
+    match span.generated_from_span with
+    | None -> ""
+    | Some span -> "; this macro is used at: " ^ raw_span_to_string span
+  in
+  "Source: " ^ raw_span_to_string span.span ^ generated_from
 
 let format_error_message (span : Meta.span option) (msg : string) =
   let span =

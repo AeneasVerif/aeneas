@@ -520,9 +520,154 @@ let filter_type_aliases (crate : crate) : crate =
         crate.declarations;
   }
 
+(** Whenever we write a string literal in Rust, rustc actually
+    introduces a constant of type [&str].
+    Generally speaking, because [str] is unsized, it doesn't
+    make sense to manipulate values of type [str] directly.
+    But in the context of Aeneas, it is reasonable to decompose
+    those literals into: a string stored in a local variable,
+    then a borrow of this variable.
+ *)
+let decompose_str_borrows (f : fun_decl) : fun_decl =
+  (* Map  *)
+  let body =
+    match f.body with
+    | Some body ->
+        let new_locals = ref [] in
+        let _, gen =
+          VarId.mk_stateful_generator_starting_at_id
+            (VarId.of_int (List.length body.locals.vars))
+        in
+        let fresh_local ty =
+          let local = { index = gen (); var_ty = ty; name = None } in
+          new_locals := local :: !new_locals;
+          local.index
+        in
+
+        (* Function to decompose a constant literal *)
+        let decompose_rvalue (span : Meta.span) (lv : place) (rv : rvalue)
+            (next : statement option) : raw_statement =
+          let new_statements = ref [] in
+
+          (* Visit the rvalue *)
+          let visitor =
+            object
+              inherit [_] map_statement as super
+
+              (* We have to visit all the constant operands.
+                 As we might need to replace them with borrows, while borrows
+                 are rvalues (i.e., not operands) we have to introduce two
+                 intermediate statements: the string initialization, then
+                 the borrow, that we can finally move.
+              *)
+              method! visit_Constant env cv =
+                match (cv.value, cv.ty) with
+                | ( CLiteral (VStr str),
+                    TRef (_, (TAdt (TBuiltin TStr, _) as str_ty), ref_kind) ) ->
+                    (* We need to introduce intermediate assignments *)
+                    (* First the string initialization *)
+                    let local_id =
+                      let local_id = fresh_local str_ty in
+                      let new_cv : constant_expr =
+                        { value = CLiteral (VStr str); ty = str_ty }
+                      in
+                      let st =
+                        {
+                          span;
+                          content =
+                            Assign
+                              ( { kind = PlaceBase local_id; ty = str_ty },
+                                Use (Constant new_cv) );
+                          comments_before = [];
+                        }
+                      in
+                      new_statements := st :: !new_statements;
+                      local_id
+                    in
+                    (* Then the borrow *)
+                    let local_id =
+                      let nlocal_id = fresh_local cv.ty in
+                      let bkind =
+                        match ref_kind with
+                        | RMut -> BMut
+                        | RShared -> BShared
+                      in
+                      let rv =
+                        RvRef ({ kind = PlaceBase local_id; ty = str_ty }, bkind)
+                      in
+                      let lv = { kind = PlaceBase nlocal_id; ty = cv.ty } in
+                      let st =
+                        {
+                          span;
+                          content = Assign (lv, rv);
+                          comments_before = [];
+                        }
+                      in
+                      new_statements := st :: !new_statements;
+                      nlocal_id
+                    in
+                    (* Finally we can move the value *)
+                    Move { kind = PlaceBase local_id; ty = cv.ty }
+                | _ -> super#visit_Constant env cv
+            end
+          in
+
+          let rv = visitor#visit_rvalue () rv in
+
+          (* Construct the sequence *)
+          let assign =
+            { span; content = Assign (lv, rv); comments_before = [] }
+          in
+          let statements, last =
+            match next with
+            | None -> (!new_statements, assign)
+            | Some st -> (assign :: !new_statements, st)
+          in
+          (* Note that the new statements are in reverse order *)
+          (List.fold_left
+             (fun st nst ->
+               { span; content = Sequence (nst, st); comments_before = [] })
+             last statements)
+            .content
+        in
+
+        (* Visit all the statements and decompose the literals *)
+        let visitor =
+          object
+            inherit [_] map_statement as super
+            method! visit_statement _ st = super#visit_statement st.span st
+
+            method! visit_Sequence span st1 st2 =
+              match st1.content with
+              | Assign (lv, rv) -> decompose_rvalue st1.span lv rv (Some st2)
+              | _ -> super#visit_Sequence span st1 st2
+
+            method! visit_Assign span lv rv = decompose_rvalue span lv rv None
+          end
+        in
+
+        let body_body = visitor#visit_statement body.body.span body.body in
+        Some
+          {
+            body with
+            body = body_body;
+            locals =
+              {
+                body.locals with
+                vars = body.locals.vars @ List.rev !new_locals;
+              };
+          }
+    | None -> None
+  in
+  { f with body }
+
 let apply_passes (crate : crate) : crate =
   let function_passes =
-    [ remove_loop_breaks crate; remove_shallow_borrows crate ]
+    [
+      remove_loop_breaks crate;
+      remove_shallow_borrows crate;
+      decompose_str_borrows;
+    ]
   in
   (* Attempt to apply a pass: if it fails we replace the body by [None] *)
   let apply_function_pass (pass : fun_decl -> fun_decl) (f : fun_decl) =
