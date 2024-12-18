@@ -151,11 +151,11 @@ fn array_mut_borrow<'a, const N: usize>(x: [&'a mut u32; N]) -> [&'a mut u32; N]
     x
 }
 
-fn boxed_slice_shared_borrow(x : Box<[&u32]>) -> Box<[&u32]> {
+fn boxed_slice_shared_borrow(x: Box<[&u32]>) -> Box<[&u32]> {
     x
 }
 
-fn boxed_slice_mut_borrow(x : Box<[&mut u32]>) -> Box<[&mut u32]> {
+fn boxed_slice_mut_borrow(x: Box<[&mut u32]>) -> Box<[&mut u32]> {
     x
 }
 

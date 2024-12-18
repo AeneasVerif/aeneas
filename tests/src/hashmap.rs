@@ -44,8 +44,8 @@ pub fn hash_key(k: &Key) -> Hash {
 
 #[derive(Clone, Copy)]
 struct Fraction {
-    dividend : usize,
-    divisor : usize,
+    dividend: usize,
+    divisor: usize,
 }
 
 /// A hash map from [u64] to values
@@ -75,10 +75,7 @@ impl<T> HashMap<T> {
     }
 
     /// Create a new table, with a given capacity
-    fn new_with_capacity(
-        capacity: usize,
-        max_load_factor : Fraction,
-    ) -> Self {
+    fn new_with_capacity(capacity: usize, max_load_factor: Fraction) -> Self {
         // TODO: better to use `Vec::with_capacity(capacity)` instead
         // of `Vec::new()`
         let slots = HashMap::allocate_slots(Vec::new(), capacity);
@@ -93,7 +90,13 @@ impl<T> HashMap<T> {
 
     pub fn new() -> Self {
         // For now we create a table with 32 slots and a max load factor of 4/5
-        HashMap::new_with_capacity(32, Fraction {dividend: 4, divisor:5})
+        HashMap::new_with_capacity(
+            32,
+            Fraction {
+                dividend: 4,
+                divisor: 5,
+            },
+        )
     }
 
     pub fn clear(&mut self) {
@@ -164,10 +167,7 @@ impl<T> HashMap<T> {
         let n1 = max_usize / 2;
         if capacity <= n1 / self.max_load_factor.dividend {
             // Create a new table with a higher capacity
-            let mut ntable = HashMap::new_with_capacity(
-                capacity * 2,
-                self.max_load_factor,
-            );
+            let mut ntable = HashMap::new_with_capacity(capacity * 2, self.max_load_factor);
 
             // Move the elements to the new table
             HashMap::move_elements(&mut ntable, &mut self.slots);
