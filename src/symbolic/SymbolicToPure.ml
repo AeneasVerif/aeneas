@@ -2859,7 +2859,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
   let dest_mplace = translate_opt_mplace call.dest_place in
   (* Retrieve the function id, and register the function call in the context
      if necessary. *)
-  let ctx, fun_id, effect_info, args, dest_v, finish_next_e =
+  let ctx, fun_id, effect_info, args, back_funs, dest_v =
     match call.call_id with
     | S.Fun (fid, call_id) ->
         (* Regular function call *)
@@ -2974,32 +2974,6 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
           in
           (ctx, dsg.fwd_info.ignore_output, Some back_funs_map, back_funs)
         in
-        (* This is a **hack** for [Box::new]: introduce backward functions
-           which are the identity if we instantiated [Box::new] with types
-           containing mutable borrows.
-           TODO: make this general.
-        *)
-        let ctx, back_funs, finish_next_e =
-          match fid with
-          | FunId (FBuiltin BoxNew) ->
-              let ctx, back_funs_bodies =
-                List.fold_left_map
-                  (fun ctx (f : typed_pattern) ->
-                    let ty, _ = dest_arrow_ty ctx.span f.ty in
-                    let ctx, v = fresh_var (Some "back") ty ctx in
-                    let pat = mk_typed_pattern_from_var v None in
-                    (ctx, mk_lambda pat (mk_texpression_from_var v)))
-                  ctx back_funs
-              in
-              let back_funs = List.combine back_funs back_funs_bodies in
-              let finish_next_e =
-                List.fold_right
-                  (fun (pat, bound) next -> mk_let false pat bound next)
-                  back_funs
-              in
-              (ctx, [], finish_next_e)
-          | _ -> (ctx, back_funs, fun e -> e)
-        in
         (* Compute the pattern for the destination *)
         let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
         let dest = mk_typed_pattern_from_var dest dest_mplace in
@@ -3027,7 +3001,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
         let ctx =
           bs_ctx_register_forward_call call_id call args back_funs_map ctx
         in
-        (ctx, func, effect_info, args, dest, finish_next_e)
+        (ctx, func, effect_info, args, back_funs, dest)
     | S.Unop E.Not -> (
         match args with
         | [ arg ] ->
@@ -3049,7 +3023,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             in
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
             let dest = mk_typed_pattern_from_var dest dest_mplace in
-            (ctx, Unop (Not ty), effect_info, args, dest, fun e -> e)
+            (ctx, Unop (Not ty), effect_info, args, [], dest)
         | _ -> craise __FILE__ __LINE__ ctx.span "Unreachable")
     | S.Unop E.Neg -> (
         match args with
@@ -3068,7 +3042,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             in
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
             let dest = mk_typed_pattern_from_var dest dest_mplace in
-            (ctx, Unop (Neg int_ty), effect_info, args, dest, fun e -> e)
+            (ctx, Unop (Neg int_ty), effect_info, args, [], dest)
         | _ -> craise __FILE__ __LINE__ ctx.span "Unreachable")
     | S.Unop (E.Cast cast_kind) -> begin
         match cast_kind with
@@ -3085,12 +3059,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             in
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
             let dest = mk_typed_pattern_from_var dest dest_mplace in
-            ( ctx,
-              Unop (Cast (src_ty, tgt_ty)),
-              effect_info,
-              args,
-              dest,
-              fun e -> e )
+            (ctx, Unop (Cast (src_ty, tgt_ty)), effect_info, args, [], dest)
         | CastFnPtr _ ->
             craise __FILE__ __LINE__ ctx.span "TODO: function casts"
         | CastUnsize _ ->
@@ -3120,7 +3089,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             in
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
             let dest = mk_typed_pattern_from_var dest dest_mplace in
-            (ctx, Binop (binop, int_ty0), effect_info, args, dest, fun e -> e)
+            (ctx, Binop (binop, int_ty0), effect_info, args, [], dest)
         | _ -> craise __FILE__ __LINE__ ctx.span "Unreachable")
   in
   let func = { id = FunOrOp fun_id; generics } in
@@ -3130,13 +3099,37 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
   in
   let func_ty = mk_arrows input_tys ret_ty in
   let func = { e = Qualif func; ty = func_ty } in
-  let call = mk_apps ctx.span func args in
+  let call_e = mk_apps ctx.span func args in
+  (* This is a **hack** for [Box::new]: introduce backward functions
+     which are the identity if we instantiated [Box::new] with types
+     containing mutable borrows.
+
+     We simply replace the function call with a tuple: (call to [Box::new], backward functions).
+
+     TODO: make this general.
+  *)
+  let ctx, call_e =
+    match call.call_id with
+    | S.Fun (FunId (FBuiltin BoxNew), _) ->
+        let ctx, back_funs_bodies =
+          List.fold_left_map
+            (fun ctx (f : typed_pattern) ->
+              let ty, _ = dest_arrow_ty ctx.span f.ty in
+              let ctx, v = fresh_var (Some "back") ty ctx in
+              let pat = mk_typed_pattern_from_var v None in
+              (ctx, mk_lambda pat (mk_texpression_from_var v)))
+            ctx back_funs
+        in
+        let call_e =
+          mk_simpl_tuple_texpression ctx.span (call_e :: back_funs_bodies)
+        in
+        (ctx, call_e)
+    | _ -> (ctx, call_e)
+  in
   (* Translate the next expression *)
   let next_e = translate_expression e ctx in
-  (* TODO: this is a hack for [Box::new]: introduce the backward functions *)
-  let next_e = finish_next_e next_e in
   (* Put together *)
-  mk_let effect_info.can_fail dest_v call next_e
+  mk_let effect_info.can_fail dest_v call_e next_e
 
 and translate_end_abstraction (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expression) (ctx : bs_ctx) : texpression =
