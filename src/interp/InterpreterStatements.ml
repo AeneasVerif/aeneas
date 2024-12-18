@@ -644,7 +644,6 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
     * generic_args
     * (generic_args * trait_instance_id) option
     * fun_decl
-    * region_var_groups
     * inst_fun_sig =
   match call.func with
   | FnOpMove _ ->
@@ -670,7 +669,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
             instantiate_fun_sig span ctx func.generics tr_self def.signature
               regions_hierarchy
           in
-          (func.func, func.generics, None, def, regions_hierarchy, inst_sg)
+          (func.func, func.generics, None, def, inst_sg)
       | FunId (FBuiltin _) ->
           (* Unreachable: must be a transparent function *)
           craise __FILE__ __LINE__ span "Unreachable"
@@ -728,12 +727,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                      we also need to update the generics.
                   *)
                   let func = FunId fid in
-                  ( func,
-                    generics,
-                    Some (generics, tr_self),
-                    method_def,
-                    regions_hierarchy,
-                    inst_sg )
+                  (func, generics, Some (generics, tr_self), method_def, inst_sg)
               | None ->
                   (* If not found, lookup the methods provided by the trait *declaration*
                      (remember: for now, we forbid overriding provided methods) *)
@@ -788,7 +782,6 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                     func.generics,
                     Some (all_generics, tr_self),
                     method_def,
-                    regions_hierarchy,
                     inst_sg ))
           | _ ->
               (* We are using a local clause - we lookup the trait decl *)
@@ -825,7 +818,6 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                 func.generics,
                 Some (generics, tr_self),
                 method_def,
-                regions_hierarchy,
                 inst_sg )))
 
 (** Helper: introduce a fresh symbolic value for a global *)
@@ -1345,7 +1337,7 @@ and eval_transparent_function_call_concrete (config : config) (span : Meta.span)
 and eval_transparent_function_call_symbolic (config : config) (span : Meta.span)
     (call : call) : stl_cm_fun =
  fun ctx ->
-  let func, generics, trait_method_generics, def, regions_hierarchy, inst_sg =
+  let func, generics, trait_method_generics, def, inst_sg =
     eval_transparent_function_call_symbolic_inst span call ctx
   in
   (* Sanity check: same number of inputs *)
@@ -1361,8 +1353,7 @@ and eval_transparent_function_call_symbolic (config : config) (span : Meta.span)
     span "Nested borrows are not supported yet";
   (* Evaluate the function call *)
   eval_function_call_symbolic_from_inst_sig config def.item_meta.span func
-    def.signature regions_hierarchy inst_sg generics trait_method_generics
-    call.args call.dest ctx
+    def.signature inst_sg generics trait_method_generics call.args call.dest ctx
 
 (** Evaluate a function call in symbolic mode by using the function signature.
 
@@ -1377,8 +1368,7 @@ and eval_transparent_function_call_symbolic (config : config) (span : Meta.span)
  *)
 and eval_function_call_symbolic_from_inst_sig (config : config)
     (span : Meta.span) (fid : fun_id_or_trait_method_ref) (sg : fun_sig)
-    (regions_hierarchy : region_var_groups) (inst_sg : inst_fun_sig)
-    (generics : generic_args)
+    (inst_sg : inst_fun_sig) (generics : generic_args)
     (trait_method_generics : (generic_args * trait_instance_id) option)
     (args : operand list) (dest : place) : stl_cm_fun =
  fun ctx ->
@@ -1550,7 +1540,7 @@ and eval_builtin_function_call_symbolic (config : config) (span : Meta.span)
     (* As we allow instantiating type parameters with types containing regions,
        we have to recompute the regions hierarchy. *)
     let fun_name = Print.Expressions.builtin_fun_id_to_string fid in
-    let regions_hierarchy, inst_sig =
+    let inst_sig =
       compute_regions_hierarchy_for_fun_call (Some span) ctx.type_ctx.type_decls
         ctx.fun_ctx.fun_decls ctx.global_ctx.global_decls
         ctx.trait_decls_ctx.trait_decls ctx.trait_impls_ctx.trait_impls fun_name
@@ -1563,7 +1553,7 @@ and eval_builtin_function_call_symbolic (config : config) (span : Meta.span)
 
     (* Evaluate the function call *)
     eval_function_call_symbolic_from_inst_sig config span (FunId (FBuiltin fid))
-      sg regions_hierarchy inst_sig func.generics None args dest ctx
+      sg inst_sig func.generics None args dest ctx
   end
   else begin
     (* Sanity check: make sure the type parameters don't contain regions -
@@ -1590,7 +1580,7 @@ and eval_builtin_function_call_symbolic (config : config) (span : Meta.span)
 
     (* Evaluate the function call *)
     eval_function_call_symbolic_from_inst_sig config span (FunId (FBuiltin fid))
-      sg regions_hierarchy inst_sig func.generics None args dest ctx
+      sg inst_sig func.generics None args dest ctx
   end
 
 (** Evaluate a statement seen as a function body *)

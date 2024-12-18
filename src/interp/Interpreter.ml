@@ -9,7 +9,6 @@ open TypesUtils
 open Values
 open LlbcAst
 open Contexts
-open SynthesizeSymbolic
 open Errors
 module SA = SymbolicAst
 

@@ -575,8 +575,7 @@ let compute_regions_hierarchy_for_fun_call (span : Meta.span option)
     (trait_decls : trait_decl TraitDeclId.Map.t)
     (trait_impls : trait_impl TraitImplId.Map.t) (fun_name : string)
     (type_vars : type_var list) (const_generic_vars : const_generic_var list)
-    (generic_args : generic_args) (sg : fun_sig) :
-    region_var_groups * inst_fun_sig =
+    (generic_args : generic_args) (sg : fun_sig) : inst_fun_sig =
   (* We simply put everything into a "fake" signature, then call
      [compute_regions_hierarchy_for_sig].
 
@@ -710,38 +709,32 @@ let compute_regions_hierarchy_for_fun_call (span : Meta.span option)
     (generics.trait_type_constraints, regions_hierarchy)
   in
 
-  let inst_sig =
-    (* Generate fresh abstraction ids and create a substitution from region
-       group ids to abstraction ids.
-
-       Remark: the region ids used here are fresh (we generated them
-       just above).
-    *)
-    let asubst_map : AbstractionId.id RegionGroupId.Map.t =
-      RegionGroupId.Map.of_list
-        (List.map
-           (fun rg -> (rg.id, fresh_abstraction_id ()))
-           regions_hierarchy)
-    in
-    let asubst (rg_id : RegionGroupId.id) : AbstractionId.id =
-      RegionGroupId.Map.find rg_id asubst_map
-    in
-    let subst_abs_region_group (rg : region_var_group) : abs_region_group =
-      let id = asubst rg.id in
-      let parents = List.map asubst rg.parents in
-      ({ id; regions = rg.regions; parents } : abs_region_group)
-    in
-    let abs_regions_hierarchy =
-      List.map subst_abs_region_group regions_hierarchy
-    in
-    {
-      regions_hierarchy;
-      abs_regions_hierarchy;
-      trait_type_constraints;
-      inputs;
-      output;
-    }
-  in
-
   (* Compute the instantiated function signature *)
-  (regions_hierarchy, inst_sig)
+  (* Generate fresh abstraction ids and create a substitution from region
+     group ids to abstraction ids.
+
+     Remark: the region ids used here are fresh (we generated them
+     just above).
+  *)
+  let asubst_map : AbstractionId.id RegionGroupId.Map.t =
+    RegionGroupId.Map.of_list
+      (List.map (fun rg -> (rg.id, fresh_abstraction_id ())) regions_hierarchy)
+  in
+  let asubst (rg_id : RegionGroupId.id) : AbstractionId.id =
+    RegionGroupId.Map.find rg_id asubst_map
+  in
+  let subst_abs_region_group (rg : region_var_group) : abs_region_group =
+    let id = asubst rg.id in
+    let parents = List.map asubst rg.parents in
+    ({ id; regions = rg.regions; parents } : abs_region_group)
+  in
+  let abs_regions_hierarchy =
+    List.map subst_abs_region_group regions_hierarchy
+  in
+  {
+    regions_hierarchy;
+    abs_regions_hierarchy;
+    trait_type_constraints;
+    inputs;
+    output;
+  }
