@@ -408,7 +408,7 @@ let mk_app (span : Meta.span) (app : texpression) (arg : texpression) :
     texpression =
   let raise_or_return msg =
     (* We shouldn't get there, so we save an error (and eventually raise an exception) *)
-    save_error __FILE__ __LINE__ (Some span) msg;
+    save_error __FILE__ __LINE__ span msg;
     let e = App (app, arg) in
     (* Dummy type - TODO: introduce an error type *)
     let ty = app.ty in

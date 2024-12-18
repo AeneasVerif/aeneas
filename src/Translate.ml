@@ -213,7 +213,7 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
   with CFailure (span, _) ->
     let name = name_to_string trans_ctx fdef.item_meta.name in
     let name_pattern = name_to_pattern_string trans_ctx fdef.item_meta.name in
-    save_error __FILE__ __LINE__ span
+    save_error_opt_span __FILE__ __LINE__ span
       ("Could not translate the function '" ^ name
      ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'");
     None
@@ -252,7 +252,7 @@ let translate_crate_to_pure (crate : crate) :
           let name_pattern =
             name_to_pattern_string trans_ctx global.item_meta.name
           in
-          save_error __FILE__ __LINE__ span
+          save_error_opt_span __FILE__ __LINE__ span
             ("Could not translate the global declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
             );
@@ -275,7 +275,7 @@ let translate_crate_to_pure (crate : crate) :
              let name_pattern =
                name_to_pattern_string trans_ctx fdef.item_meta.name
              in
-             save_error __FILE__ __LINE__ span
+             save_error_opt_span __FILE__ __LINE__ span
                ("Could not translate the function signature of '" ^ name
               ^ " because of previous error\nName pattern: '" ^ name_pattern
               ^ "'");
@@ -300,7 +300,7 @@ let translate_crate_to_pure (crate : crate) :
           let name_pattern =
             name_to_pattern_string trans_ctx d.item_meta.name
           in
-          save_error __FILE__ __LINE__ span
+          save_error_opt_span __FILE__ __LINE__ span
             ("Could not translate the trait declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
             );
@@ -318,7 +318,7 @@ let translate_crate_to_pure (crate : crate) :
           let name_pattern =
             name_to_pattern_string trans_ctx d.item_meta.name
           in
-          save_error __FILE__ __LINE__ span
+          save_error_opt_span __FILE__ __LINE__ span
             ("Could not translate the trait instance '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
             );

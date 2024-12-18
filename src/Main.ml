@@ -100,6 +100,10 @@ let () =
 
   let spec_ls =
     [
+      ( "-print-error-emitters",
+        Arg.Set print_error_emitters,
+        " Whenever reporting an error, print the span of the source code of \
+         Aeneas which emitted the error" );
       ( "-borrow-check",
         Arg.Set borrow_check,
         " Only borrow-check the program and do not generate any translation" );
@@ -515,7 +519,11 @@ let () =
 
       if !Errors.error_list <> [] then (
         List.iter
-          (fun (span, msg) -> log#serror (Errors.format_error_message span msg))
+          (fun (file, line, span, msg) ->
+            if !print_error_emitters then
+              log#serror
+                (Errors.format_error_message_with_file_line file line span msg)
+            else log#serror (Errors.format_error_message span msg))
           (* Reverse the list of error messages so that we print them from the
              earliest to the latest. *)
           (List.rev !Errors.error_list);

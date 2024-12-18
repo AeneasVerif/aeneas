@@ -730,7 +730,7 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
   | Self ->
       (* This has a specific treatment depending on the item we're extracting
          (associated type, etc.). We should have caught this elsewhere. *)
-      save_error __FILE__ __LINE__ (Some span) "Unexpected occurrence of `Self`";
+      save_error __FILE__ __LINE__ span "Unexpected occurrence of `Self`";
       F.pp_print_string fmt "ERROR(\"Unexpected Self\")"
   | TraitImpl (id, generics) ->
       (* Lookup the the information about the explicit/implicit parameters. *)

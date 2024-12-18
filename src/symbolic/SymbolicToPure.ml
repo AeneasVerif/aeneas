@@ -2709,7 +2709,7 @@ let decompose_let_match (ctx : bs_ctx)
               (* This is a bug, but we might want to continue generating the model:
                  as an escape hatch, simply use the original variable (this will
                  lead to incorrect code of course) *)
-              save_error __FILE__ __LINE__ (Some ctx.span)
+              save_error __FILE__ __LINE__ ctx.span
                 ("Internal error: could not find variable. Please report an \
                   issue. Debugging information:" ^ "\n- v.id: "
                ^ VarId.to_string v.id ^ "\n- ctx.var_id_to_default: "
@@ -4706,7 +4706,7 @@ let translate_type_decls (ctx : Contexts.decls_ctx) : type_decl list =
         let name_pattern =
           TranslateCore.name_to_pattern_string ctx d.item_meta.name
         in
-        save_error __FILE__ __LINE__ span
+        save_error_opt_span __FILE__ __LINE__ span
           ("Could not translate type decl '" ^ name
          ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'");
         None)

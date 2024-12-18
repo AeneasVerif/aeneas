@@ -248,7 +248,7 @@ let fun_builtin_filter_types (id : FunDeclId.id) (types : 'a list)
           ^ string_of_int (List.length types)
           ^ " type arguments"
         in
-        save_error __FILE__ __LINE__ None err;
+        save_error_opt_span __FILE__ __LINE__ None err;
         Result.Error (types, err))
       else
         let filter_f =
@@ -625,7 +625,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
       | Error (types, err) ->
           extract_generic_args span ctx fmt TypeDeclId.Set.empty ~explicit
             { generics with types };
-          save_error __FILE__ __LINE__ (Some span) err;
+          save_error __FILE__ __LINE__ span err;
           F.pp_print_string fmt
             "(\"ERROR: ill-formed builtin: invalid number of filtering \
              arguments\")");

@@ -30,19 +30,23 @@ let format_error_message_with_file_line (file : string) (line : int)
 
 exception CFailure of (Meta.span option * string)
 
-let error_list : (Meta.span option * string) list ref = ref []
+let error_list : (string * int * Meta.span option * string) list ref = ref []
 
-let push_error (span : Meta.span option) (msg : string) =
-  error_list := (span, msg) :: !error_list
+let push_error (file : string) (line : int) (span : Meta.span option)
+    (msg : string) =
+  error_list := (file, line, span, msg) :: !error_list
 
 (** Register an error, and throw an exception if [throw] is true *)
-let save_error (file : string) (line : int) (span : Meta.span option)
+let save_error_opt_span (file : string) (line : int) (span : Meta.span option)
     (msg : string) =
-  push_error span msg;
+  push_error file line span msg;
   if !Config.fail_hard then (
     let msg = format_error_message_with_file_line file line span msg in
     log#serror (msg ^ "\n");
     raise (Failure msg))
+
+let save_error (file : string) (line : int) (span : Meta.span) (msg : string) =
+  save_error_opt_span file line (Some span) msg
 
 let craise_opt_span (file : string) (line : int) (span : Meta.span option)
     (msg : string) =
@@ -51,7 +55,7 @@ let craise_opt_span (file : string) (line : int) (span : Meta.span option)
     log#serror (msg ^ "\n");
     raise (Failure msg))
   else
-    let () = push_error span msg in
+    let () = push_error file line span msg in
     raise (CFailure (span, msg))
 
 let craise (file : string) (line : int) (span : Meta.span) (msg : string) =
