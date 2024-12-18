@@ -31,7 +31,7 @@ let extract_literal (span : Meta.span) (fmt : F.formatter) (is_pattern : bool)
           | HOL4 ->
               F.pp_print_string fmt ("int_to_" ^ int_name sv.int_ty);
               F.pp_print_space fmt ()
-          | _ -> craise __FILE__ __LINE__ span "Unreachable");
+          | _ -> admit_raise __FILE__ __LINE__ span "Unreachable" fmt);
           (* We need to add parentheses if the value is negative *)
           if sv.value >= Z.of_int 0 then
             F.pp_print_string fmt (Z.to_string sv.value)
@@ -47,7 +47,7 @@ let extract_literal (span : Meta.span) (fmt : F.formatter) (is_pattern : bool)
                 let iname = String.lowercase_ascii (int_name sv.int_ty) in
                 F.pp_print_string fmt ("#" ^ iname)
           | HOL4 -> ()
-          | _ -> craise __FILE__ __LINE__ span "Unreachable");
+          | _ -> admit_raise __FILE__ __LINE__ span "Unreachable" fmt);
           if print_brackets then F.pp_print_string fmt ")")
   | VBool b ->
       let b =
@@ -76,8 +76,8 @@ let extract_literal (span : Meta.span) (fmt : F.formatter) (is_pattern : bool)
           F.pp_print_string fmt c;
           if inside then F.pp_print_string fmt ")")
   | VFloat _ | VStr _ | VByteStr _ ->
-      craise __FILE__ __LINE__ span
-        "Float, string and byte string literals are unsupported"
+      admit_raise __FILE__ __LINE__ span
+        "Float, string and byte string literals are unsupported" fmt
 
 (** Format a unary operation
 
@@ -137,7 +137,7 @@ let extract_unop (span : Meta.span) (extract_expr : bool -> texpression -> unit)
                    match backend () with
                    | Coq | FStar -> "scalar_cast"
                    | Lean -> "Scalar.cast"
-                   | HOL4 -> craise __FILE__ __LINE__ span "Unreachable"
+                   | HOL4 -> admit_string __FILE__ __LINE__ span "Unreachable"
                  in
                  let src =
                    if backend () <> Lean then Some (integer_type_to_string src)
@@ -150,7 +150,7 @@ let extract_unop (span : Meta.span) (extract_expr : bool -> texpression -> unit)
                    match backend () with
                    | Coq | FStar -> "scalar_cast_bool"
                    | Lean -> "Scalar.cast_bool"
-                   | HOL4 -> craise __FILE__ __LINE__ span "Unreachable"
+                   | HOL4 -> admit_string __FILE__ __LINE__ span "Unreachable"
                  in
                  let tgt = integer_type_to_string tgt in
                  (cast_str, None, Some tgt)
@@ -221,7 +221,7 @@ let extract_binop (span : Meta.span)
         | Sub -> "-"
         | Mul -> "*"
         | CheckedAdd | CheckedSub | CheckedMul ->
-            craise __FILE__ __LINE__ span
+            admit_string __FILE__ __LINE__ span
               "Checked operations are not implemented"
         | Shl -> "<<<"
         | Shr -> ">>>"
@@ -562,7 +562,9 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
                 match type_id with
                 | TAdtId id -> not (TypeDeclId.Set.mem id no_params_tys)
                 | TBuiltin _ -> true
-                | _ -> craise __FILE__ __LINE__ span "Unreachable"
+                | _ ->
+                    save_error __FILE__ __LINE__ span "Unreachable";
+                    false
               in
               if types <> [] && print_tys then (
                 let print_paren = List.length types > 1 in
@@ -592,7 +594,7 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       if inside then F.pp_print_string fmt ")"
   | TTraitType (trait_ref, type_name) -> (
       if !parameterize_trait_types then
-        craise __FILE__ __LINE__ span "Unimplemented"
+        admit_raise __FILE__ __LINE__ span "Unimplemented" fmt
       else
         let type_name =
           ctx_get_trait_type span trait_ref.trait_decl_ref.trait_decl_id
@@ -780,7 +782,7 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
       F.pp_print_string fmt (add_brackets name)
   | UnknownTrait _ ->
       (* This is an error case *)
-      craise __FILE__ __LINE__ span "Unexpected"
+      admit_raise __FILE__ __LINE__ span "Unexpected" fmt
 
 (** Compute the names for all the top-level identifiers used in a type
     definition (type name, variant names, field names, etc. but not type

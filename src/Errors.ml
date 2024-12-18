@@ -149,3 +149,14 @@ let silent_unwrap_opt_span (file : string) (line : int)
 let silent_unwrap (file : string) (line : int) (span : Meta.span)
     (x : 'a option) : 'a =
   silent_unwrap_opt_span file line (Some span) x
+
+let opt_raise_opt_span (file : string) (line : int) (span : Meta.span option)
+    (msg : string) : unit =
+  if !Config.fail_hard then (
+    let msg = format_error_message_with_file_line file line span msg in
+    log#serror (msg ^ "\n");
+    raise (Failure msg))
+
+let opt_raise (file : string) (line : int) (span : Meta.span) (msg : string) :
+    unit =
+  opt_raise_opt_span file line (Some span) msg

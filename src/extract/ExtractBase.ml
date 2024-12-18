@@ -8,6 +8,7 @@ module F = Format
 open ExtractBuiltin
 open TranslateCore
 open Errors
+include ExtractErrors
 
 (** The local logger *)
 let log = Logging.extract_log

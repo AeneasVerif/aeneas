@@ -32,6 +32,7 @@
   Extract
   ExtractBase
   ExtractBuiltin
+  ExtractErrors
   ExtractName
   ExtractTypes
   FunsAnalysis
