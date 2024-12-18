@@ -64,7 +64,7 @@ Definition hashMap_allocate_slots
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::new_with_capacity]:
-    Source: 'tests/src/hashmap.rs', lines 78:4-92:5 *)
+    Source: 'tests/src/hashmap.rs', lines 78:4-89:5 *)
 Definition hashMap_new_with_capacity
   (T : Type) (n : nat) (capacity : usize) (max_load_factor : Fraction_t) :
   result (HashMap_t T)
@@ -83,14 +83,14 @@ Definition hashMap_new_with_capacity
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::new]:
-    Source: 'tests/src/hashmap.rs', lines 94:4-97:5 *)
+    Source: 'tests/src/hashmap.rs', lines 91:4-100:5 *)
 Definition hashMap_new (T : Type) (n : nat) : result (HashMap_t T) :=
   hashMap_new_with_capacity T n 32%usize
     {| fraction_dividend := 4%usize; fraction_divisor := 5%usize |}
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::clear]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 103:8-106:9 *)
+    Source: 'tests/src/hashmap.rs', lines 106:8-109:9 *)
 Fixpoint hashMap_clear_loop
   {T : Type} (n : nat) (slots : alloc_vec_Vec (AList_t T)) (i : usize) :
   result (alloc_vec_Vec (AList_t T))
@@ -113,7 +113,7 @@ Fixpoint hashMap_clear_loop
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::clear]:
-    Source: 'tests/src/hashmap.rs', lines 99:4-107:5 *)
+    Source: 'tests/src/hashmap.rs', lines 102:4-110:5 *)
 Definition hashMap_clear
   {T : Type} (n : nat) (self : HashMap_t T) : result (HashMap_t T) :=
   hm <- hashMap_clear_loop n self.(hashMap_slots) 0%usize;
@@ -128,13 +128,13 @@ Definition hashMap_clear
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::len]:
-    Source: 'tests/src/hashmap.rs', lines 109:4-111:5 *)
+    Source: 'tests/src/hashmap.rs', lines 112:4-114:5 *)
 Definition hashMap_len {T : Type} (self : HashMap_t T) : result usize :=
   Ok self.(hashMap_num_entries)
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::insert_in_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 1:0-132:9 *)
+    Source: 'tests/src/hashmap.rs', lines 1:0-135:9 *)
 Fixpoint hashMap_insert_in_list_loop
   {T : Type} (n : nat) (key : usize) (value : T) (ls : AList_t T) :
   result (bool * (AList_t T))
@@ -156,7 +156,7 @@ Fixpoint hashMap_insert_in_list_loop
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::insert_in_list]:
-    Source: 'tests/src/hashmap.rs', lines 116:4-133:5 *)
+    Source: 'tests/src/hashmap.rs', lines 119:4-136:5 *)
 Definition hashMap_insert_in_list
   {T : Type} (n : nat) (key : usize) (value : T) (ls : AList_t T) :
   result (bool * (AList_t T))
@@ -165,7 +165,7 @@ Definition hashMap_insert_in_list
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::insert_no_resize]:
-    Source: 'tests/src/hashmap.rs', lines 136:4-144:5 *)
+    Source: 'tests/src/hashmap.rs', lines 139:4-147:5 *)
 Definition hashMap_insert_no_resize
   {T : Type} (n : nat) (self : HashMap_t T) (key : usize) (value : T) :
   result (HashMap_t T)
@@ -267,7 +267,7 @@ Definition hashMap_move_elements
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::try_resize]:
-    Source: 'tests/src/hashmap.rs', lines 159:4-181:5 *)
+    Source: 'tests/src/hashmap.rs', lines 162:4-181:5 *)
 Definition hashMap_try_resize
   {T : Type} (n : nat) (self : HashMap_t T) : result (HashMap_t T) :=
   let capacity := alloc_vec_Vec_len self.(hashMap_slots) in
@@ -299,7 +299,7 @@ Definition hashMap_try_resize
 .
 
 (** [hashmap::{hashmap::HashMap<T>}::insert]:
-    Source: 'tests/src/hashmap.rs', lines 148:4-155:5 *)
+    Source: 'tests/src/hashmap.rs', lines 151:4-158:5 *)
 Definition hashMap_insert
   {T : Type} (n : nat) (self : HashMap_t T) (key : usize) (value : T) :
   result (HashMap_t T)

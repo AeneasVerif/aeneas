@@ -58,7 +58,7 @@ def HashMap.allocate_slots
   HashMap.allocate_slots_loop slots n
 
 /- [hashmap::{hashmap::HashMap<T>}::new_with_capacity]:
-   Source: 'tests/src/hashmap.rs', lines 78:4-92:5 -/
+   Source: 'tests/src/hashmap.rs', lines 78:4-89:5 -/
 def HashMap.new_with_capacity
   (T : Type) (capacity : Usize) (max_load_factor : Fraction) :
   Result (HashMap T)
@@ -77,13 +77,13 @@ def HashMap.new_with_capacity
     }
 
 /- [hashmap::{hashmap::HashMap<T>}::new]:
-   Source: 'tests/src/hashmap.rs', lines 94:4-97:5 -/
+   Source: 'tests/src/hashmap.rs', lines 91:4-100:5 -/
 def HashMap.new (T : Type) : Result (HashMap T) :=
   HashMap.new_with_capacity T 32#usize
     { dividend := 4#usize, divisor := 5#usize }
 
 /- [hashmap::{hashmap::HashMap<T>}::clear]: loop 0:
-   Source: 'tests/src/hashmap.rs', lines 103:8-106:9 -/
+   Source: 'tests/src/hashmap.rs', lines 106:8-109:9 -/
 divergent def HashMap.clear_loop
   {T : Type} (slots : alloc.vec.Vec (AList T)) (i : Usize) :
   Result (alloc.vec.Vec (AList T))
@@ -101,19 +101,19 @@ divergent def HashMap.clear_loop
   else Result.ok slots
 
 /- [hashmap::{hashmap::HashMap<T>}::clear]:
-   Source: 'tests/src/hashmap.rs', lines 99:4-107:5 -/
+   Source: 'tests/src/hashmap.rs', lines 102:4-110:5 -/
 def HashMap.clear {T : Type} (self : HashMap T) : Result (HashMap T) :=
   do
   let hm ← HashMap.clear_loop self.slots 0#usize
   Result.ok { self with num_entries := 0#usize, slots := hm }
 
 /- [hashmap::{hashmap::HashMap<T>}::len]:
-   Source: 'tests/src/hashmap.rs', lines 109:4-111:5 -/
+   Source: 'tests/src/hashmap.rs', lines 112:4-114:5 -/
 def HashMap.len {T : Type} (self : HashMap T) : Result Usize :=
   Result.ok self.num_entries
 
 /- [hashmap::{hashmap::HashMap<T>}::insert_in_list]: loop 0:
-   Source: 'tests/src/hashmap.rs', lines 1:0-132:9 -/
+   Source: 'tests/src/hashmap.rs', lines 1:0-135:9 -/
 divergent def HashMap.insert_in_list_loop
   {T : Type} (key : Usize) (value : T) (ls : AList T) :
   Result (Bool × (AList T))
@@ -129,7 +129,7 @@ divergent def HashMap.insert_in_list_loop
   | AList.Nil => Result.ok (true, AList.Cons key value AList.Nil)
 
 /- [hashmap::{hashmap::HashMap<T>}::insert_in_list]:
-   Source: 'tests/src/hashmap.rs', lines 116:4-133:5 -/
+   Source: 'tests/src/hashmap.rs', lines 119:4-136:5 -/
 @[reducible]
 def HashMap.insert_in_list
   {T : Type} (key : Usize) (value : T) (ls : AList T) :
@@ -138,7 +138,7 @@ def HashMap.insert_in_list
   HashMap.insert_in_list_loop key value ls
 
 /- [hashmap::{hashmap::HashMap<T>}::insert_no_resize]:
-   Source: 'tests/src/hashmap.rs', lines 136:4-144:5 -/
+   Source: 'tests/src/hashmap.rs', lines 139:4-147:5 -/
 def HashMap.insert_no_resize
   {T : Type} (self : HashMap T) (key : Usize) (value : T) :
   Result (HashMap T)
@@ -208,7 +208,7 @@ def HashMap.move_elements
   HashMap.move_elements_loop ntable slots 0#usize
 
 /- [hashmap::{hashmap::HashMap<T>}::try_resize]:
-   Source: 'tests/src/hashmap.rs', lines 159:4-181:5 -/
+   Source: 'tests/src/hashmap.rs', lines 162:4-181:5 -/
 def HashMap.try_resize {T : Type} (self : HashMap T) : Result (HashMap T) :=
   do
   let capacity := alloc.vec.Vec.len self.slots
@@ -226,7 +226,7 @@ def HashMap.try_resize {T : Type} (self : HashMap T) : Result (HashMap T) :=
   else Result.ok { self with saturated := true }
 
 /- [hashmap::{hashmap::HashMap<T>}::insert]:
-   Source: 'tests/src/hashmap.rs', lines 148:4-155:5 -/
+   Source: 'tests/src/hashmap.rs', lines 151:4-158:5 -/
 def HashMap.insert
   {T : Type} (self : HashMap T) (key : Usize) (value : T) :
   Result (HashMap T)
