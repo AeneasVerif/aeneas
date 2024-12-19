@@ -88,6 +88,11 @@ let matches_name_with_generics (c : crate) (name : Types.name)
   in
   Option.is_some (NameMatcherMap.find_with_generics_opt mctx name generics m)
 
+let activated_loggers : string list ref = ref []
+
+let add_activated_logger (name : string) =
+  activated_loggers := name :: !activated_loggers
+
 let () =
   (* Measure start time *)
   let start_time = Unix.gettimeofday () in
@@ -168,6 +173,12 @@ let () =
         Arg.Set print_unknown_externals,
         " Print all the external definitions which are not listed in the \
          builtin functions" );
+      ( "-log",
+        Arg.String add_activated_logger,
+        " Activate debugging log for a given logger designated by its name. \
+         The existing loggers are: {"
+        ^ String.concat ", " (Collections.StringMap.keys !loggers)
+        ^ "}" );
     ]
   in
 
@@ -228,6 +239,20 @@ let () =
   let check_not (cond : bool) (msg : string) =
     if cond then fail_with_error msg
   in
+
+  (* Activate the loggers *)
+  List.iter
+    (fun name ->
+      match Collections.StringMap.find_opt name !loggers with
+      | None ->
+          log#serror
+            ("The logger '" ^ name
+           ^ "' does not exist. The existing loggers are: {"
+            ^ String.concat ", " (Collections.StringMap.keys !loggers)
+            ^ "}");
+          fail false
+      | Some logger -> logger#set_level EL.Debug)
+    !activated_loggers;
 
   (* Sanity check (now that the arguments are parsed!) *)
   check_arg_implies
