@@ -157,20 +157,17 @@ Definition copy_int (x : i32) : result i32 :=
 (** [no_nested_borrows::test_unreachable]:
     Source: 'tests/src/no_nested_borrows.rs', lines 145:0-149:1 *)
 Definition test_unreachable (b : bool) : result unit :=
-  if b then Fail_ Failure else Ok tt
-.
+  massert b.
 
 (** [no_nested_borrows::test_panic]:
     Source: 'tests/src/no_nested_borrows.rs', lines 152:0-156:1 *)
 Definition test_panic (b : bool) : result unit :=
-  if b then Fail_ Failure else Ok tt
-.
+  massert b.
 
 (** [no_nested_borrows::test_panic_msg]:
     Source: 'tests/src/no_nested_borrows.rs', lines 160:0-164:1 *)
 Definition test_panic_msg (b : bool) : result unit :=
-  if b then Fail_ Failure else Ok tt
-.
+  massert b.
 
 (** [no_nested_borrows::test_copy_int]:
     Source: 'tests/src/no_nested_borrows.rs', lines 167:0-172:1 *)

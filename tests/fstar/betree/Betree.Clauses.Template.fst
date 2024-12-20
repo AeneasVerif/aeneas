@@ -35,6 +35,13 @@ let betree_ListPairU64T_partition_at_pivot_loop_decreases (#t : Type0)
   (end1 : betree_List_t (u64 & t)) (self : betree_List_t (u64 & t)) : nat =
   admit ()
 
+(** [betree::betree::{betree::betree::Node}#5::lookup_in_bindings]: decreases clause
+    Source: 'src/betree.rs', lines 650:8-660:5 *)
+unfold
+let betree_Node_lookup_in_bindings_loop_decreases (key : u64)
+  (bindings : betree_List_t (u64 & u64)) : nat =
+  admit ()
+
 (** [betree::betree::{betree::betree::Node}#5::lookup_first_message_for_key]: decreases clause
     Source: 'src/betree.rs', lines 796:8-810:5 *)
 unfold
@@ -48,13 +55,6 @@ unfold
 let betree_Node_apply_upserts_loop_decreases
   (msgs : betree_List_t (u64 & betree_Message_t)) (prev : option u64)
   (key : u64) : nat =
-  admit ()
-
-(** [betree::betree::{betree::betree::Node}#5::lookup_in_bindings]: decreases clause
-    Source: 'src/betree.rs', lines 650:8-660:5 *)
-unfold
-let betree_Node_lookup_in_bindings_loop_decreases (key : u64)
-  (bindings : betree_List_t (u64 & u64)) : nat =
   admit ()
 
 (** [betree::betree::{betree::betree::Internal}#4::lookup_in_children]: decreases clause
@@ -72,7 +72,7 @@ let betree_Node_lookup_decreases (self : betree_Node_t) (key : u64)
   admit ()
 
 (** [betree::betree::{betree::betree::Node}#5::filter_messages_for_key]: decreases clause
-    Source: 'src/betree.rs', lines 684:8-691:9 *)
+    Source: 'src/betree.rs', lines 684:8-692:5 *)
 unfold
 let betree_Node_filter_messages_for_key_loop_decreases (key : u64)
   (msgs : betree_List_t (u64 & betree_Message_t)) : nat =
