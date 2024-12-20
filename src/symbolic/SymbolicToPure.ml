@@ -3551,7 +3551,7 @@ and translate_assertion (ectx : C.eval_ctx) (v : V.typed_value)
   let func =
     { id = FunOrOp (Fun (Pure Assert)); generics = empty_generic_args }
   in
-  let func_ty = mk_arrow (TLiteral TBool) mk_unit_ty in
+  let func_ty = mk_arrow (TLiteral TBool) (mk_result_ty mk_unit_ty) in
   let func = { e = Qualif func; ty = func_ty } in
   let assertion = mk_apps ctx.span func args in
   mk_let monadic (mk_dummy_pattern mk_unit_ty) assertion next_e
