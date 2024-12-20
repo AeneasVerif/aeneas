@@ -224,6 +224,29 @@ let betree_Leaf_split
   let n1 = Betree_Node_Leaf { id = id1; size = params.split_size } in
   Ok (st2, ({ id = self.id; pivot; left = n; right = n1 }, node_id_cnt2))
 
+(** [betree::betree::{betree::betree::Node}#5::lookup_in_bindings]: loop 0:
+    Source: 'src/betree.rs', lines 650:8-660:5 *)
+let rec betree_Node_lookup_in_bindings_loop
+  (key : u64) (bindings : betree_List_t (u64 & u64)) :
+  Tot (result (option u64))
+  (decreases (betree_Node_lookup_in_bindings_loop_decreases key bindings))
+  =
+  begin match bindings with
+  | Betree_List_Cons hd tl ->
+    let (i, i1) = hd in
+    if i = key
+    then Ok (Some i1)
+    else
+      if i > key then Ok None else betree_Node_lookup_in_bindings_loop key tl
+  | Betree_List_Nil -> Ok None
+  end
+
+(** [betree::betree::{betree::betree::Node}#5::lookup_in_bindings]:
+    Source: 'src/betree.rs', lines 649:4-660:5 *)
+let betree_Node_lookup_in_bindings
+  (key : u64) (bindings : betree_List_t (u64 & u64)) : result (option u64) =
+  betree_Node_lookup_in_bindings_loop key bindings
+
 (** [betree::betree::{betree::betree::Node}#5::lookup_first_message_for_key]: loop 0:
     Source: 'src/betree.rs', lines 796:8-810:5 *)
 let rec betree_Node_lookup_first_message_for_key_loop
@@ -292,29 +315,6 @@ let betree_Node_apply_upserts
   =
   betree_Node_apply_upserts_loop msgs prev key
 
-(** [betree::betree::{betree::betree::Node}#5::lookup_in_bindings]: loop 0:
-    Source: 'src/betree.rs', lines 650:8-660:5 *)
-let rec betree_Node_lookup_in_bindings_loop
-  (key : u64) (bindings : betree_List_t (u64 & u64)) :
-  Tot (result (option u64))
-  (decreases (betree_Node_lookup_in_bindings_loop_decreases key bindings))
-  =
-  begin match bindings with
-  | Betree_List_Cons hd tl ->
-    let (i, i1) = hd in
-    if i = key
-    then Ok (Some i1)
-    else
-      if i > key then Ok None else betree_Node_lookup_in_bindings_loop key tl
-  | Betree_List_Nil -> Ok None
-  end
-
-(** [betree::betree::{betree::betree::Node}#5::lookup_in_bindings]:
-    Source: 'src/betree.rs', lines 649:4-660:5 *)
-let betree_Node_lookup_in_bindings
-  (key : u64) (bindings : betree_List_t (u64 & u64)) : result (option u64) =
-  betree_Node_lookup_in_bindings_loop key bindings
-
 (** [betree::betree::{betree::betree::Internal}#4::lookup_in_children]:
     Source: 'src/betree.rs', lines 414:4-420:5 *)
 let rec betree_Internal_lookup_in_children
@@ -374,7 +374,7 @@ and betree_Node_lookup
   end
 
 (** [betree::betree::{betree::betree::Node}#5::filter_messages_for_key]: loop 0:
-    Source: 'src/betree.rs', lines 684:8-691:9 *)
+    Source: 'src/betree.rs', lines 684:8-692:5 *)
 let rec betree_Node_filter_messages_for_key_loop
   (key : u64) (msgs : betree_List_t (u64 & betree_Message_t)) :
   Tot (result (betree_List_t (u64 & betree_Message_t)))
