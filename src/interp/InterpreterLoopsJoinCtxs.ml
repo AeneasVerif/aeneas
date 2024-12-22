@@ -211,7 +211,8 @@ let repeat_iter_borrows_merge (span : Meta.span) (old_ids : ids_sets)
       wether a value is new or not) and convert them into abstractions
     - whenever there is a new abstraction in the context, and some of
       its borrows are associated to loans in another new abstraction, we
-      merge them.
+      merge them. We also do this with loan/borrow projectors over symbolic
+      values.
     In effect, this allows us to merge newly introduced abstractions/borrows
     with their parent abstractions.
 
@@ -329,52 +330,95 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
   (*
    * Merge all the mergeable abs.
    *)
-  (* We iterate over the *new* abstractions, then over the loans in the abstractions.
-     We do this because we want to control the order in which abstractions
-     are merged (the ids are iterated in increasing order). Otherwise, we
-     could simply iterate over all the borrows in [loan_to_abs]... *)
-  let iterate ctx merge =
-    List.iter
-      (fun abs_id0 ->
-        let lids = AbstractionId.Map.find abs_id0 ctx.info.abs_to_loans in
-        MarkedBorrowId.Set.iter (fun lid -> merge (abs_id0, lid)) lids)
-      ctx.info.abs_ids
-  in
-  (* Given a loan, check if there is a fresh abstraction with the corresponding borrow *)
-  let merge_policy ctx (abs_id0, lid) =
-    if not with_markers then
-      sanity_check __FILE__ __LINE__ (fst lid = PNone) span;
-    (* If we use markers: we are doing a collapse, which means we attempt
-       to eliminate markers (and this is the only goal of the operation).
-       We thus ignore the non-marked values (we merge non-marked values
-       when doing a "real" reduce, to simplify the environment in order
-       to converge to a fixed-point, for instance). *)
-    if with_markers && fst lid = PNone then None
-    else
-      (* Find the borrow corresponding to the loan we want to eliminate *)
-      match MarkedBorrowId.Map.find_opt lid ctx.info.borrow_to_abs with
-      | None -> (* Nothing to to *) None
-      | Some abs_ids1 -> (
-          (* We need to merge *)
-          match AbstractionId.Set.elements abs_ids1 with
-          | [] -> None
-          | abs_id1 :: _ ->
-              log#ldebug
-                (lazy
-                  ("reduce_ctx: merging abstraction "
-                  ^ AbstractionId.to_string abs_id1
-                  ^ " into "
-                  ^ AbstractionId.to_string abs_id0
-                  ^ ":\n\n"
-                  ^ eval_ctx_to_string ~span:(Some span) ctx.ctx));
-              Some (abs_id0, abs_id1))
-  in
-  (* Iterate and merge *)
-  let ctx =
-    repeat_iter_borrows_merge span old_ids abs_kind can_end merge_funs iterate
-      merge_policy ctx
-  in
+  (* Because we need to manipulate different types for the concrete and the
+     symbolic loans and borrows, we introduce a functor *)
+  let module IterMerge
+      (Map : Collections.Map)
+      (Set : Collections.Set with type elt = Map.key)
+      (Marked : sig
+        val get_marker : Map.key -> proj_marker
 
+        val get_borrow_to_abs :
+          abs_borrows_loans_maps -> AbstractionId.Set.t Map.t
+
+        val get_to_loans : abs_borrows_loans_maps -> Set.t AbstractionId.Map.t
+      end) =
+  struct
+    (* We iterate over the *new* abstractions, then over the **loans**
+       (concrete or symbolic) in the abstractions.
+
+       We do this because we want to control the order in which abstractions
+       are merged (the ids are iterated in increasing order). Otherwise, we
+       could simply iterate over all the borrows in [loan_to_abs] for instance... *)
+    let iterate_loans (ctx : ctx_with_info)
+        (merge : abstraction_id * Map.key -> unit) =
+      List.iter
+        (fun abs_id0 ->
+          (* Iterate over the loans *)
+          let lids =
+            AbstractionId.Map.find abs_id0 (Marked.get_to_loans ctx.info)
+          in
+          Set.iter (fun lid -> merge (abs_id0, lid)) lids)
+        ctx.info.abs_ids
+
+    (* Given a **loan**, check if there is a fresh abstraction with the corresponding borrow *)
+    let merge_policy (ctx : ctx_with_info) (abs_id0, loan) =
+      if not with_markers then
+        sanity_check __FILE__ __LINE__ (Marked.get_marker loan = PNone) span;
+      (* If we use markers: we are doing a collapse, which means we attempt
+         to eliminate markers (and this is the only goal of the operation).
+         We thus ignore the non-marked values (we merge non-marked values
+         when doing a "real" reduce, to simplify the environment in order
+         to converge to a fixed-point, for instance). *)
+      if with_markers && Marked.get_marker loan = PNone then None
+      else
+        (* Find the *borrow* corresponding to the loan we want to eliminate
+           (hence the use of [get_borrow_to_abs]) *)
+        match Map.find_opt loan (Marked.get_borrow_to_abs ctx.info) with
+        | None -> (* Nothing to to *) None
+        | Some abs_ids1 -> (
+            (* We need to merge *)
+            match AbstractionId.Set.elements abs_ids1 with
+            | [] -> None
+            | abs_id1 :: _ ->
+                log#ldebug
+                  (lazy
+                    ("reduce_ctx: merging abstraction "
+                    ^ AbstractionId.to_string abs_id1
+                    ^ " into "
+                    ^ AbstractionId.to_string abs_id0
+                    ^ ":\n\n"
+                    ^ eval_ctx_to_string ~span:(Some span) ctx.ctx));
+                Some (abs_id0, abs_id1))
+
+    (* Iterate over the loans and merge the abstractions *)
+    let iter_merge (ctx : eval_ctx) : eval_ctx =
+      repeat_iter_borrows_merge span old_ids abs_kind can_end merge_funs
+        iterate_loans merge_policy ctx
+  end in
+  (* Instantiate the functor for the concrete borrows and loans *)
+  let module IterMergeConcrete =
+    IterMerge (MarkedBorrowId.Map) (MarkedBorrowId.Set)
+      (struct
+        let get_marker (pm, _) = pm
+        let get_borrow_to_abs info = info.borrow_to_abs
+        let get_to_loans info = info.abs_to_loans
+      end)
+  in
+  (* Instantiate the functor for the symbolic borrows and loans *)
+  let module IterMergeSymbolic =
+    IterMerge (MarkedNormSymbProj.Map) (MarkedNormSymbProj.Set)
+      (struct
+        let get_marker (proj : marked_norm_symb_proj) = proj.pm
+        let get_borrow_to_abs info = info.borrow_proj_to_abs
+        let get_to_loans info = info.abs_to_loan_projs
+      end)
+  in
+  (* Apply *)
+  let ctx = IterMergeConcrete.iter_merge ctx in
+  let ctx = IterMergeSymbolic.iter_merge ctx in
+
+  (* Debugging *)
   log#ldebug
     (lazy
       ("reduce_ctx:\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
@@ -439,90 +483,151 @@ let collapse_ctx_collapse (span : Meta.span) (loop_id : LoopId.id)
 
   (* Merge all the mergeable abs where the same element in present in both abs,
      but with left and right markers respectively.
+
+     As we have to operate over different types, with both concrete borrows and loans and
+     borrow projectors and loan projectors, we implement this as a functor.
   *)
-  (* The iter function: iterate over the abstractions, and inside an abstraction
-     over the borrows then the loans *)
-  let iter ctx f =
-    List.iter
-      (fun abs_id0 ->
-        (* Small helper *)
-        let iterate is_borrow =
-          let m =
-            if is_borrow then ctx.info.abs_to_borrows else ctx.info.abs_to_loans
+  let module IterMerge
+      (Map : Collections.Map)
+      (Set : Collections.Set with type elt = Map.key)
+      (Marked : sig
+        val get_marker : Map.key -> proj_marker
+
+        (* Remove a marker - we need this to check whether some borrows in one
+           abstraction have corresponding loans in another abstraction,
+           independently of the markers, to properly choose which abstraction
+           we merge into the other. *)
+        val unmark : Map.key -> Map.key
+
+        (* Invert a marker *)
+        val invert_proj_marker : Map.key -> Map.key
+        val get_to_borrows : abs_borrows_loans_maps -> Set.t AbstractionId.Map.t
+        val get_to_loans : abs_borrows_loans_maps -> Set.t AbstractionId.Map.t
+
+        val get_borrow_to_abs :
+          abs_borrows_loans_maps -> AbstractionId.Set.t Map.t
+
+        val get_loan_to_abs :
+          abs_borrows_loans_maps -> AbstractionId.Set.t Map.t
+      end) =
+  struct
+    (* The iter function: iterate over the abstractions, and inside an abstraction
+       over the borrows (projectors) then the loan (projectors) *)
+    let iter (ctx : ctx_with_info)
+        (f : AbstractionId.id * bool * Map.key -> unit) =
+      List.iter
+        (fun abs_id0 ->
+          (* Small helper *)
+          let iterate is_borrow =
+            let m =
+              if is_borrow then Marked.get_to_borrows ctx.info
+              else Marked.get_to_loans ctx.info
+            in
+            let ids = AbstractionId.Map.find abs_id0 m in
+            Set.iter (fun id -> f (abs_id0, is_borrow, id)) ids
           in
-          let ids = AbstractionId.Map.find abs_id0 m in
-          MarkedBorrowId.Set.iter (fun id -> f (abs_id0, is_borrow, id)) ids
-        in
-        (* Iterate over the borrows *)
-        iterate true;
-        (* Iterate over the loans *)
-        iterate false)
-      ctx.info.abs_ids
+          (* Iterate over the borrows *)
+          iterate true;
+          (* Iterate over the loans *)
+          iterate false)
+        ctx.info.abs_ids
+
+    (* Small utility: check if we need to swap two region abstractions before
+       merging them.
+
+       We might have to swap the order to make sure that if there
+       are loans in one abstraction and the corresponding borrows
+       in the other they get properly merged (if we merge them in the wrong
+       order, we might introduce borrowing cycles).
+
+       Example:
+       If we are merging abs0 and abs1 because of the marked value
+       [MB l0]:
+       {[
+         abs0 { |MB l0|, MB l1 }
+         abs1 { ︙MB l0︙, ML l1 }
+       ]}
+       we want to make sure that we swap them (abs1 goes to the
+       left) to make sure [MB l1] and [ML l1] get properly eliminated.
+
+       Remark: in case there is a borrowing cycle between the two abstractions
+       (which shouldn't happen) then there isn't much we can do, and whatever
+       the order in which we merge, we will preserve the cycle.
+    *)
+    let swap_abs (info : abs_borrows_loans_maps) (abs_id0 : abstraction_id)
+        (abs_id1 : abstraction_id) =
+      let abs0_borrows =
+        Set.of_list
+          (List.map Marked.unmark
+             (Set.elements
+                (AbstractionId.Map.find abs_id0 (Marked.get_to_borrows info))))
+      in
+      let abs1_loans =
+        Set.of_list
+          (List.map Marked.unmark
+             (Set.elements
+                (AbstractionId.Map.find abs_id1 (Marked.get_to_loans info))))
+      in
+      not (Set.disjoint abs0_borrows abs1_loans)
+
+    (* Check if there is an abstraction with the same borrow/loan id (or the
+       same projections of borrows/loans) and the dual marker, and merge them
+       if it is the case. *)
+    let merge_policy ctx (abs_id0, is_borrow, loan) =
+      if Marked.get_marker loan = PNone then None
+      else
+        (* Look for an element with the dual marker *)
+        match
+          Map.find_opt
+            (Marked.invert_proj_marker loan)
+            (if is_borrow then Marked.get_borrow_to_abs ctx.info
+             else Marked.get_loan_to_abs ctx.info)
+        with
+        | None -> (* Nothing to do *) None
+        | Some abs_ids1 -> (
+            (* We need to merge *)
+            match AbstractionId.Set.elements abs_ids1 with
+            | [] -> None
+            | abs_id1 :: _ ->
+                (* Check if we need to swap *)
+                Some
+                  (if swap_abs ctx.info abs_id0 abs_id1 then (abs_id1, abs_id0)
+                   else (abs_id0, abs_id1)))
+
+    (* Iterate and merge *)
+    let iter_merge (ctx : eval_ctx) : eval_ctx =
+      repeat_iter_borrows_merge span old_ids abs_kind can_end (Some merge_funs)
+        iter merge_policy ctx
+  end in
+  (* Instantiate the functor for concrete loans and borrows *)
+  let module IterMergeConcrete =
+    IterMerge (MarkedBorrowId.Map) (MarkedBorrowId.Set)
+      (struct
+        let get_marker (v : marked_borrow_id) = fst v
+        let unmark (_, bid) = (PNone, bid)
+        let invert_proj_marker (pm, bid) = (invert_proj_marker pm, bid)
+        let get_to_borrows info = info.abs_to_borrows
+        let get_to_loans info = info.abs_to_loans
+        let get_borrow_to_abs info = info.borrow_to_abs
+        let get_loan_to_abs info = info.loan_to_abs
+      end)
   in
-  (* Small utility: check if we need to swap two region abstractions before
-     merging them.
-
-     We might have to swap the order to make sure that if there
-     are loans in one abstraction and the corresponding borrows
-     in the other they get properly merged (if we merge them in the wrong
-     order, we might introduce borrowing cycles).
-
-     Example:
-     If we are merging abs0 and abs1 because of the marked value
-     [MB l0]:
-     {[
-       abs0 { |MB l0|, MB l1 }
-       abs1 { ︙MB l0︙, ML l1 }
-     ]}
-     we want to make sure that we swap them (abs1 goes to the
-     left) to make sure [MB l1] and [ML l1] get properly eliminated.
-
-     Remark: in case there is a borrowing cycle between the two abstractions
-     (which shouldn't happen) then there isn't much we can do, and whatever
-     the order in which we merge, we will preserve the cycle.
-  *)
-  let swap_abs info abs_id0 abs_id1 =
-    let abs0_borrows =
-      BorrowId.Set.of_list
-        (List.map snd
-           (MarkedBorrowId.Set.elements
-              (AbstractionId.Map.find abs_id0 info.abs_to_borrows)))
-    in
-    let abs1_loans =
-      BorrowId.Set.of_list
-        (List.map snd
-           (MarkedBorrowId.Set.elements
-              (AbstractionId.Map.find abs_id1 info.abs_to_loans)))
-    in
-    not (BorrowId.Set.disjoint abs0_borrows abs1_loans)
-  in
-  (* Check if there is an abstraction with the same borrow/loan id and the dual
-     marker, and merge them if it is the case. *)
-  let merge_policy ctx (abs_id0, is_borrow, (pm, bid)) =
-    if pm = PNone then None
-    else
-      (* Look for an element with the dual marker *)
-      match
-        MarkedBorrowId.Map.find_opt
-          (invert_proj_marker pm, bid)
-          (if is_borrow then ctx.info.borrow_to_abs else ctx.info.loan_to_abs)
-      with
-      | None -> (* Nothing to do *) None
-      | Some abs_ids1 -> (
-          (* We need to merge *)
-          match AbstractionId.Set.elements abs_ids1 with
-          | [] -> None
-          | abs_id1 :: _ ->
-              (* Check if we need to swap *)
-              Some
-                (if swap_abs ctx.info abs_id0 abs_id1 then (abs_id1, abs_id0)
-                 else (abs_id0, abs_id1)))
+  (* Instantiate the functor for symbolic loans and borrows *)
+  let module IterMergeSymbolic =
+    IterMerge (MarkedNormSymbProj.Map) (MarkedNormSymbProj.Set)
+      (struct
+        let get_marker (v : marked_norm_symb_proj) = v.pm
+        let unmark v = { v with pm = PNone }
+        let invert_proj_marker v = { v with pm = invert_proj_marker v.pm }
+        let get_to_borrows info = info.abs_to_borrow_projs
+        let get_to_loans info = info.abs_to_loan_projs
+        let get_borrow_to_abs info = info.borrow_proj_to_abs
+        let get_loan_to_abs info = info.loan_proj_to_abs
+      end)
   in
   (* Iterate and merge *)
-  let ctx =
-    repeat_iter_borrows_merge span old_ids abs_kind can_end (Some merge_funs)
-      iter merge_policy ctx
-  in
+  let ctx = IterMergeConcrete.iter_merge ctx in
+  let ctx = IterMergeSymbolic.iter_merge ctx in
 
   log#ldebug
     (lazy

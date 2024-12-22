@@ -2396,12 +2396,12 @@ type merge_duplicates_funcs = {
  *)
 let typed_avalue_split_marker (span : Meta.span) (ctx : eval_ctx)
     (av : typed_avalue) : typed_avalue list =
-  let mk_split pm mk_value =
-    if pm = PNone then [ mk_value PLeft; mk_value PRight ] else [ av ]
+  let mk_split mk_value = [ mk_value PLeft; mk_value PRight ] in
+  let mk_opt_split pm mk_value =
+    if pm = PNone then mk_split mk_value else [ av ]
   in
   match av.value with
-  | AAdt _ | ABottom | ASymbolic _ | AIgnored _ ->
-      craise __FILE__ __LINE__ span "Unexpected"
+  | AAdt _ | ABottom | AIgnored _ -> internal_error __FILE__ __LINE__ span
   | ABorrow bc -> (
       match bc with
       | AMutBorrow (pm, bid, child) ->
@@ -2409,13 +2409,13 @@ let typed_avalue_split_marker (span : Meta.span) (ctx : eval_ctx)
           let mk_value pm =
             { av with value = ABorrow (AMutBorrow (pm, bid, child)) }
           in
-          mk_split pm mk_value
+          mk_opt_split pm mk_value
       | ASharedBorrow (pm, bid) ->
           let mk_value pm =
             { av with value = ABorrow (ASharedBorrow (pm, bid)) }
           in
-          mk_split pm mk_value
-      | _ -> craise __FILE__ __LINE__ span "Unsupported yet")
+          mk_opt_split pm mk_value
+      | _ -> internal_error __FILE__ __LINE__ span)
   | ALoan lc -> (
       match lc with
       | AMutLoan (pm, bid, child) ->
@@ -2423,7 +2423,7 @@ let typed_avalue_split_marker (span : Meta.span) (ctx : eval_ctx)
           let mk_value pm =
             { av with value = ALoan (AMutLoan (pm, bid, child)) }
           in
-          mk_split pm mk_value
+          mk_opt_split pm mk_value
       | ASharedLoan (pm, bids, sv, child) ->
           sanity_check __FILE__ __LINE__ (is_aignored child.value) span;
           sanity_check __FILE__ __LINE__
@@ -2432,8 +2432,18 @@ let typed_avalue_split_marker (span : Meta.span) (ctx : eval_ctx)
           let mk_value pm =
             { av with value = ALoan (ASharedLoan (pm, bids, sv, child)) }
           in
-          mk_split pm mk_value
-      | _ -> craise __FILE__ __LINE__ span "Unsupported yet")
+          mk_opt_split pm mk_value
+      | _ -> internal_error __FILE__ __LINE__ span)
+  | ASymbolic (pm, proj) -> (
+      if pm <> PNone then [ av ]
+      else
+        match proj with
+        | AProjLoans (_, _, children) | AProjBorrows (_, _, children) ->
+            sanity_check __FILE__ __LINE__ (children = []) span;
+            let mk_value pm = { av with value = ASymbolic (pm, proj) } in
+            mk_split mk_value
+        | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty ->
+            internal_error __FILE__ __LINE__ span)
 
 let abs_split_markers (span : Meta.span) (ctx : eval_ctx) (abs : abs) : abs =
   {
