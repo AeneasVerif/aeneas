@@ -113,8 +113,12 @@ let sanity_check (file : string) (line : int) b span =
 let sanity_check_opt_span (file : string) (line : int) b span =
   cassert_opt_span file line b span "Internal error, please file an issue"
 
-let internal_error (file : string) (line : int) span =
-  craise file line span "Internal error, please file an issue"
+let internal_error_opt_span (file : string) (line : int)
+    (span : Meta.span option) =
+  craise_opt_span file line span "Internal error, please file an issue"
+
+let internal_error (file : string) (line : int) (span : Meta.span) =
+  internal_error_opt_span file line (Some span)
 
 let warn_opt_span (file : string) (line : int) (span : Meta.span option)
     (msg : string) =

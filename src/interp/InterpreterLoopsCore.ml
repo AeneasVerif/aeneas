@@ -4,6 +4,7 @@ open Types
 open Values
 open Contexts
 open InterpreterUtils
+open InterpreterBorrowsCore
 open Errors
 
 type updt_env_kind =
@@ -34,10 +35,14 @@ type ctx_or_update = (eval_ctx, updt_env_kind) result
 *)
 type abs_borrows_loans_maps = {
   abs_ids : AbstractionId.id list;
-  abs_to_borrows : MarkerBorrowId.Set.t AbstractionId.Map.t;
-  abs_to_loans : MarkerBorrowId.Set.t AbstractionId.Map.t;
-  borrow_to_abs : AbstractionId.Set.t MarkerBorrowId.Map.t;
-  loan_to_abs : AbstractionId.Set.t MarkerBorrowId.Map.t;
+  abs_to_borrows : MarkedBorrowId.Set.t AbstractionId.Map.t;
+  abs_to_loans : MarkedBorrowId.Set.t AbstractionId.Map.t;
+  borrow_to_abs : AbstractionId.Set.t MarkedBorrowId.Map.t;
+  loan_to_abs : AbstractionId.Set.t MarkedBorrowId.Map.t;
+  abs_to_borrow_projs : MarkedNormSymbProj.Set.t AbstractionId.Map.t;
+  abs_to_loan_projs : MarkedNormSymbProj.Set.t AbstractionId.Map.t;
+  borrow_proj_to_abs : AbstractionId.Set.t MarkedNormSymbProj.Map.t;
+  loan_proj_to_abs : AbstractionId.Set.t MarkedNormSymbProj.Map.t;
 }
 
 (** See {!module:Aeneas.InterpreterLoopsMatchCtxs.MakeMatcher} and [Matcher].
@@ -446,7 +451,12 @@ let typed_avalue_add_marker (span : Meta.span) (ctx : eval_ctx)
       method! visit_loan_content _ _ =
         craise __FILE__ __LINE__ span "Unexpected loan"
 
+      method! visit_ASymbolic _ pm0 aproj =
+        sanity_check __FILE__ __LINE__ (pm0 = PNone) span;
+        ASymbolic (pm, aproj)
+
       method! visit_symbolic_value _ sv =
+        (* Symbolic values can appera in shared values *)
         sanity_check __FILE__ __LINE__
           (not (symbolic_value_has_borrows (Some span) ctx sv))
           span;
@@ -460,7 +470,7 @@ let typed_avalue_add_marker (span : Meta.span) (ctx : eval_ctx)
         | ASharedLoan (pm0, bids, av, child) ->
             sanity_check __FILE__ __LINE__ (pm0 = PNone) span;
             super#visit_aloan_content env (ASharedLoan (pm, bids, av, child))
-        | _ -> craise __FILE__ __LINE__ span "Unsupported yet"
+        | _ -> internal_error __FILE__ __LINE__ span
 
       method! visit_aborrow_content env bc =
         match bc with
@@ -470,7 +480,7 @@ let typed_avalue_add_marker (span : Meta.span) (ctx : eval_ctx)
         | ASharedBorrow (pm0, bid) ->
             sanity_check __FILE__ __LINE__ (pm0 = PNone) span;
             super#visit_aborrow_content env (ASharedBorrow (pm, bid))
-        | _ -> craise __FILE__ __LINE__ span "Unsupported yet"
+        | _ -> internal_error __FILE__ __LINE__ span
     end
   in
   obj#visit_typed_avalue () av

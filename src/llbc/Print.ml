@@ -208,7 +208,7 @@ module Values = struct
     | ABottom -> "⊥ : " ^ ty_to_string env v.ty
     | ABorrow bc -> aborrow_content_to_string ~span env bc
     | ALoan lc -> aloan_content_to_string ~span env lc
-    | ASymbolic s -> aproj_to_string env s
+    | ASymbolic (pm, proj) -> aproj_to_string env proj |> add_proj_marker pm
     | AIgnored _ -> "_"
 
   and aloan_content_to_string ?(span : Meta.span option = None) (env : fmt_env)

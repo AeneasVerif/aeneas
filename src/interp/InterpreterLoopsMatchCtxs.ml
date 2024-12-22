@@ -25,13 +25,17 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
   let abs_ids = ref [] in
   let abs_to_borrows = ref AbstractionId.Map.empty in
   let abs_to_loans = ref AbstractionId.Map.empty in
-  let borrow_to_abs = ref MarkerBorrowId.Map.empty in
-  let loan_to_abs = ref MarkerBorrowId.Map.empty in
+  let abs_to_borrow_projs = ref AbstractionId.Map.empty in
+  let abs_to_loan_projs = ref AbstractionId.Map.empty in
+  let borrow_to_abs = ref MarkedBorrowId.Map.empty in
+  let loan_to_abs = ref MarkedBorrowId.Map.empty in
+  let borrow_proj_to_abs = ref MarkedNormSymbProj.Map.empty in
+  let loan_proj_to_abs = ref MarkedNormSymbProj.Map.empty in
 
   let module R (M : Collections.Map) (S : Collections.Set) = struct
     (*
        [check_singleton_sets]: check that the mapping maps to a singleton.
-       We need this because to tweak the behavior of the sanity checks because
+       We need to tweak the behavior of the sanity checks because
        of the following cases:
        - when computing the map from borrow ids (with marker) to the region
          abstractions they belong to, the marked borrow ids can map to a single
@@ -58,16 +62,30 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
                 Some (S.add id1 ids))
           !map
   end in
-  let module RAbsBorrow = R (AbstractionId.Map) (MarkerBorrowId.Set) in
-  let module RBorrowAbs = R (MarkerBorrowId.Map) (AbstractionId.Set) in
-  let register_borrow_id abs_id pm bid =
-    RAbsBorrow.register_mapping false abs_to_borrows abs_id (pm, bid);
-    RBorrowAbs.register_mapping true borrow_to_abs (pm, bid) abs_id
+  let module RAbsBorrow = R (AbstractionId.Map) (MarkedBorrowId.Set) in
+  let module RBorrowAbs = R (MarkedBorrowId.Map) (AbstractionId.Set) in
+  let module RAbsSymbProj = R (AbstractionId.Map) (MarkedNormSymbProj.Set) in
+  let module RSymbProjAbs = R (MarkedNormSymbProj.Map) (AbstractionId.Set) in
+  let register_borrow_id abs pm bid =
+    RAbsBorrow.register_mapping false abs_to_borrows abs.abs_id (pm, bid);
+    RBorrowAbs.register_mapping true borrow_to_abs (pm, bid) abs.abs_id
   in
 
-  let register_loan_id abs_id pm bid =
-    RAbsBorrow.register_mapping false abs_to_loans abs_id (pm, bid);
-    RBorrowAbs.register_mapping true loan_to_abs (pm, bid) abs_id
+  let register_loan_id abs pm bid =
+    RAbsBorrow.register_mapping false abs_to_loans abs.abs_id (pm, bid);
+    RBorrowAbs.register_mapping true loan_to_abs (pm, bid) abs.abs_id
+  in
+  let register_borrow_proj abs pm (sv : symbolic_value) (proj_ty : ty) =
+    let norm_proj_ty = normalize_proj_ty abs.regions.owned proj_ty in
+    let proj : marked_norm_symb_proj = { pm; sv_id = sv.sv_id; norm_proj_ty } in
+    RAbsSymbProj.register_mapping false abs_to_borrow_projs abs.abs_id proj;
+    RSymbProjAbs.register_mapping true borrow_proj_to_abs proj abs.abs_id
+  in
+  let register_loan_proj abs pm (sv : symbolic_value) (proj_ty : ty) =
+    let norm_proj_ty = normalize_proj_ty abs.regions.owned proj_ty in
+    let proj : marked_norm_symb_proj = { pm; sv_id = sv.sv_id; norm_proj_ty } in
+    RAbsSymbProj.register_mapping false abs_to_loan_projs abs.abs_id proj;
+    RSymbProjAbs.register_mapping true loan_proj_to_abs proj abs.abs_id
   in
 
   let explore_abs =
@@ -75,73 +93,82 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
       inherit [_] iter_typed_avalue as super
 
       (** Make sure we don't register the ignored ids *)
-      method! visit_aloan_content (abs_id, pm) lc =
+      method! visit_aloan_content (abs, pm) lc =
         sanity_check __FILE__ __LINE__ (pm = PNone) span;
         match lc with
         | AMutLoan (npm, lid, child) ->
             (* Add the current marker when visiting the loan id *)
-            self#visit_loan_id (abs_id, npm) lid;
+            self#visit_loan_id (abs, npm) lid;
             (* Recurse with the old marker *)
-            super#visit_typed_avalue (abs_id, pm) child
+            super#visit_typed_avalue (abs, pm) child
         | ASharedLoan (npm, lids, sv, child) ->
             (* Add the current marker when visiting the loan ids and the shared value *)
-            self#visit_loan_id_set (abs_id, npm) lids;
-            self#visit_typed_value (abs_id, npm) sv;
+            self#visit_loan_id_set (abs, npm) lids;
+            self#visit_typed_value (abs, npm) sv;
             (* Recurse with the old marker *)
-            self#visit_typed_avalue (abs_id, pm) child
+            self#visit_typed_avalue (abs, pm) child
         | AIgnoredMutLoan (_, child)
         | AEndedIgnoredMutLoan { child; given_back = _; given_back_meta = _ }
         | AIgnoredSharedLoan child ->
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
             (* Ignore the id of the loan, if there is *)
-            self#visit_typed_avalue (abs_id, pm) child
+            self#visit_typed_avalue (abs, pm) child
         | AEndedMutLoan _ | AEndedSharedLoan _ ->
             craise __FILE__ __LINE__ span "Unreachable"
 
       (** Make sure we don't register the ignored ids *)
-      method! visit_aborrow_content (abs_id, pm) bc =
+      method! visit_aborrow_content (abs, pm) bc =
         sanity_check __FILE__ __LINE__ (pm = PNone) span;
         match bc with
         | AMutBorrow (npm, bid, child) ->
             (* Add the current marker when visiting the borrow id *)
-            self#visit_borrow_id (abs_id, npm) bid;
+            self#visit_borrow_id (abs, npm) bid;
             (* Recurse with the old marker *)
-            self#visit_typed_avalue (abs_id, pm) child
+            self#visit_typed_avalue (abs, pm) child
         | ASharedBorrow (npm, bid) ->
             (* Add the current marker when visiting the borrow id *)
-            self#visit_borrow_id (abs_id, npm) bid
+            self#visit_borrow_id (abs, npm) bid
         | AProjSharedBorrow _ ->
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
             (* Process those normally *)
-            super#visit_aborrow_content (abs_id, pm) bc
+            super#visit_aborrow_content (abs, pm) bc
         | AIgnoredMutBorrow (_, child)
         | AEndedIgnoredMutBorrow { child; given_back = _; given_back_meta = _ }
           ->
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
             (* Ignore the id of the borrow, if there is *)
-            self#visit_typed_avalue (abs_id, pm) child
+            self#visit_typed_avalue (abs, pm) child
         | AEndedMutBorrow _ | AEndedSharedBorrow ->
             craise __FILE__ __LINE__ span "Unreachable"
 
-      method! visit_borrow_id (abs_id, pm) bid =
-        register_borrow_id abs_id pm bid
+      method! visit_borrow_id (abs, pm) bid = register_borrow_id abs pm bid
+      method! visit_loan_id (abs, pm) lid = register_loan_id abs pm lid
 
-      method! visit_loan_id (abs_id, pm) lid = register_loan_id abs_id pm lid
+      method! visit_ASymbolic (abs, _) pm proj =
+        match proj with
+        | AProjLoans (sv, proj_ty, children) ->
+            sanity_check __FILE__ __LINE__ (children = []) span;
+            register_loan_proj abs pm sv proj_ty
+        | AProjBorrows (sv, proj_ty, children) ->
+            sanity_check __FILE__ __LINE__ (children = []) span;
+            register_borrow_proj abs pm sv proj_ty
+        | AEndedProjLoans (_, children) | AEndedProjBorrows (_, children) ->
+            sanity_check __FILE__ __LINE__ (children = []) span
+        | AEmpty -> ()
     end
   in
 
   env_iter_abs
     (fun abs ->
-      let abs_id = abs.abs_id in
       if explore abs then (
         abs_to_borrows :=
-          AbstractionId.Map.add abs_id MarkerBorrowId.Set.empty !abs_to_borrows;
+          AbstractionId.Map.add abs.abs_id MarkedBorrowId.Set.empty
+            !abs_to_borrows;
         abs_to_loans :=
-          AbstractionId.Map.add abs_id MarkerBorrowId.Set.empty !abs_to_loans;
+          AbstractionId.Map.add abs.abs_id MarkedBorrowId.Set.empty
+            !abs_to_loans;
         abs_ids := abs.abs_id :: !abs_ids;
-        List.iter
-          (explore_abs#visit_typed_avalue (abs.abs_id, PNone))
-          abs.avalues)
+        List.iter (explore_abs#visit_typed_avalue (abs, PNone)) abs.avalues)
       else ())
     env;
 
@@ -153,6 +180,10 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
     abs_to_loans = !abs_to_loans;
     borrow_to_abs = !borrow_to_abs;
     loan_to_abs = !loan_to_abs;
+    abs_to_borrow_projs = !abs_to_borrow_projs;
+    abs_to_loan_projs = !abs_to_loan_projs;
+    borrow_proj_to_abs = !borrow_proj_to_abs;
+    loan_proj_to_abs = !loan_proj_to_abs;
   }
 
 (** Match two types during a join.
@@ -294,18 +325,14 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
         in
         { value = VLoan lc; ty = v1.ty }
     | VSymbolic sv0, VSymbolic sv1 ->
-        (* For now, we force all the symbolic values containing borrows to
-           be eagerly expanded, and we don't support nested borrows *)
         cassert __FILE__ __LINE__
-          (not (value_has_borrows v0.value))
-          M.span
-          "Nested borrows are not supported yet and all the symbolic values \
-           containing borrows are currently forced to be eagerly expanded";
+          (not
+             (ety_has_nested_borrows (Some span) ctx0.type_ctx.type_infos v0.ty))
+          M.span "Nested borrows are not supported yet.";
         cassert __FILE__ __LINE__
-          (not (value_has_borrows v1.value))
-          M.span
-          "Nested borrows are not supported yet and all the symbolic values \
-           containing borrows are currently forced to be eagerly expanded";
+          (not
+             (ety_has_nested_borrows (Some span) ctx1.type_ctx.type_infos v1.ty))
+          M.span "Nested borrows are not supported yet.";
         (* Match *)
         let sv = M.match_symbolic_values ctx0 ctx1 sv0 sv1 in
         { v1 with value = VSymbolic sv }
@@ -775,9 +802,11 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       sv0)
     else (
       (* The caller should have checked that the symbolic values don't contain
-         borrows *)
+         nested borrows, but we can check more *)
       sanity_check __FILE__ __LINE__
-        (not (ty_has_borrows (Some span) ctx0.type_ctx.type_infos sv0.sv_ty))
+        (not
+           (ety_has_nested_borrows (Some span) ctx0.type_ctx.type_infos
+              sv0.sv_ty))
         span;
       (* TODO: the symbolic values may contain bottoms: we're being conservatice,
          and fail (for now) if part of a symbolic value contains a bottom.
@@ -787,7 +816,62 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         ((not (symbolic_value_has_ended_regions ctx0.ended_regions sv0))
         && not (symbolic_value_has_ended_regions ctx1.ended_regions sv1))
         span;
-      mk_fresh_symbolic_value span sv0.sv_ty)
+      (* If the symbolic values contain regions, we need to introduce abstractions *)
+      if ty_has_borrows (Some span) ctx0.type_ctx.type_infos sv0.sv_ty then (
+        (* Let's say we join:
+           {[
+             s0 : S<'0, '1>
+             s1 : S<'2, '3>
+           ]}
+
+           We introduce a fresh symbolic value with fresh regions, as well as
+           one abstraction per region. It looks like so:
+           {[
+             join s0 s1 ~> s2 : S<'a, 'b>,
+               A0('a) {
+                 |proj_borrows (s0 <: S<'a, 'b>)|,
+                 !proj_borrows (s1 <: S<'a, 'b>)!,
+                 proj_loans (s2 : S<'a, 'b>)
+               }
+               A1('b) {
+                 |proj_borrows (s0 <: S<'a, 'b>)|,
+                 !proj_borrows (s1 <: S<'a, 'b>)!,
+                 proj_loans (s2 : S<'a, 'b>)
+               }
+           ]}
+        *)
+        (* Introduce one region abstraction per region appearing in the symbolic value *)
+        let fresh_regions, proj_ty =
+          ty_refresh_regions (Some span) fresh_region_id sv0.sv_ty
+        in
+        let svj = mk_fresh_symbolic_value span proj_ty in
+        let proj_s0 = mk_aproj_borrows PLeft sv0 proj_ty in
+        let proj_s1 = mk_aproj_borrows PRight sv1 proj_ty in
+        let proj_svj = mk_aproj_loans PNone svj proj_ty in
+        let avalues = [ proj_s0; proj_s1; proj_svj ] in
+        List.iter
+          (fun rid ->
+            let abs =
+              {
+                abs_id = fresh_abstraction_id ();
+                kind = Loop (S.loop_id, None, LoopSynthInput);
+                can_end = true;
+                parents = AbstractionId.Set.empty;
+                original_parents = [];
+                regions =
+                  {
+                    owned = RegionId.Set.singleton rid;
+                    ancestors = RegionId.Set.empty;
+                  };
+                avalues;
+              }
+            in
+            push_abs abs)
+          fresh_regions;
+        svj)
+      else
+        (* Otherwise we simply introduce a fresh symbolic value *)
+        mk_fresh_symbolic_value span sv0.sv_ty)
 
   let match_symbolic_with_other (ctx0 : eval_ctx) (ctx1 : eval_ctx)
       (left : bool) (sv : symbolic_value) (v : typed_value) : typed_value =

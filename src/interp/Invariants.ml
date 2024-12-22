@@ -685,7 +685,8 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
                 sanity_check __FILE__ __LINE__
                   (child_av.ty = aloan_get_expected_child_type aty)
                   span)
-        | ASymbolic aproj, ty -> (
+        | ASymbolic (pm, aproj), ty -> (
+            sanity_check __FILE__ __LINE__ (pm = PNone) span;
             let ty1 = Substitute.erase_regions ty in
             match aproj with
             | AProjLoans (sv, proj_ty, _) ->

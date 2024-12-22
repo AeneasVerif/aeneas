@@ -1306,3 +1306,110 @@ let lookup_shared_value_opt (span : Meta.span) (ctx : eval_ctx)
 let lookup_shared_value (span : Meta.span) (ctx : eval_ctx) (bid : BorrowId.id)
     : typed_value =
   Option.get (lookup_shared_value_opt span ctx bid)
+
+(** A marked borrow id *)
+type marked_borrow_id = proj_marker * BorrowId.id [@@deriving show, ord]
+
+module MarkedBorrowIdOrd = struct
+  type t = marked_borrow_id
+
+  let compare = compare_marked_borrow_id
+  let to_string = show_marked_borrow_id
+  let pp_t = pp_marked_borrow_id
+  let show_t = show_marked_borrow_id
+end
+
+module MarkedBorrowIdSet = Collections.MakeSet (MarkedBorrowIdOrd)
+module MarkedBorrowIdMap = Collections.MakeMap (MarkedBorrowIdOrd)
+
+module MarkedBorrowId : sig
+  type t
+
+  val to_string : t -> string
+
+  module Set : Collections.Set with type elt = t
+  module Map : Collections.Map with type key = t
+end
+with type t = marked_borrow_id = struct
+  type t = marked_borrow_id
+
+  let to_string = show_marked_borrow_id
+
+  module Set = MarkedBorrowIdSet
+  module Map = MarkedBorrowIdMap
+end
+
+(** A marked and normalized symbolic value (loan/borrow) projection.
+
+    A normalized symbolic value projection is a projection of a symoblic value for which
+    the projection type has been normalized in the following way: the projected regions
+    have the identifier 0, and the non-projected regions are erased.
+
+    For instance, if we consider the region abstractions below:
+    {[
+      abs0 {'a} { s <: S<'a, 'b> }
+      abs1 {'b} { s <: S<'a, 'b> }
+    ]}
+
+    Then normalizing (the type of) the symbolic value [s] for ['a] gives [S<'0, '_>],
+    while normalizing it for ['b] gives [S<'_, '0>].
+
+    We use normalized types to compare loan/borrow projections of symbolic values,
+    and for lookups (normalized types can easily be used as keys in maps).
+ *)
+type marked_norm_symb_proj = {
+  pm : proj_marker;
+  sv_id : symbolic_value_id;
+  norm_proj_ty : ty;
+}
+[@@deriving show, ord]
+
+module MarkedNormSymbProjOrd = struct
+  type t = marked_norm_symb_proj
+
+  let compare = compare_marked_norm_symb_proj
+  let to_string = show_marked_norm_symb_proj
+  let pp_t = pp_marked_norm_symb_proj
+  let show_t = show_marked_norm_symb_proj
+end
+
+module MarkedNormSymbProjSet = Collections.MakeSet (MarkedNormSymbProjOrd)
+module MarkedNormSymbProjMap = Collections.MakeMap (MarkedNormSymbProjOrd)
+
+module MarkedNormSymbProj : sig
+  type t
+
+  val to_string : t -> string
+
+  module Set : Collections.Set with type elt = t
+  module Map : Collections.Map with type key = t
+end
+with type t = marked_norm_symb_proj = struct
+  type t = marked_norm_symb_proj
+
+  let to_string = show_marked_norm_symb_proj
+
+  module Set = MarkedNormSymbProjSet
+  module Map = MarkedNormSymbProjMap
+end
+
+(** Normalize a projection type by replacing the projected regions with ['0]
+    and the non-projected ones with ['_].
+
+    For instance, when normalizing the projection type [S<'a, 'b>] for the
+    projection region ['a].
+ *)
+let normalize_proj_ty (regions : RegionId.Set.t) (ty : rty) : rty =
+  let visitor =
+    object
+      inherit [_] map_ty
+
+      method! visit_region _ r =
+        match r with
+        | RVar (Free r) ->
+            if RegionId.Set.mem r regions then RVar (Free (RegionId.of_int 0))
+            else RErased
+        | RVar (Bound _) | RStatic | RErased -> r
+    end
+  in
+  visitor#visit_ty () ty

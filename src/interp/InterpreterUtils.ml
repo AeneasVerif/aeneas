@@ -130,7 +130,7 @@ let mk_typed_value_from_symbolic_value (svalue : symbolic_value) : typed_value =
 let mk_aproj_loans_value_from_symbolic_value (proj_regions : RegionId.Set.t)
     (svalue : symbolic_value) (proj_ty : ty) : typed_avalue =
   if ty_has_regions_in_set proj_regions proj_ty then
-    let av = ASymbolic (AProjLoans (svalue, proj_ty, [])) in
+    let av = ASymbolic (PNone, AProjLoans (svalue, proj_ty, [])) in
     let av : typed_avalue = { value = av; ty = svalue.sv_ty } in
     av
   else

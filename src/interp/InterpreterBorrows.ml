@@ -1882,12 +1882,28 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
                we have to end them all and remove the abstraction from the context)
             *)
             craise __FILE__ __LINE__ span "Unreachable")
-    | ASymbolic _ ->
-        (* For now, we fore all symbolic values containing borrows to be eagerly
-           expanded *)
-        sanity_check __FILE__ __LINE__
-          (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty))
-          span
+    | ASymbolic (_, aproj) -> (
+        (* *)
+        match aproj with
+        | AProjLoans (_, _, children) ->
+            (* There can be children in the presence of nested borrows: we
+               don't handle those for now. *)
+            sanity_check __FILE__ __LINE__ (children = []) span;
+            push av
+        | AProjBorrows (_, _, children) ->
+            (* For now, we fore all symbolic values containing borrows to be eagerly
+               expanded *)
+            (* There can be children in the presence of nested borrows: we
+               don't handle those for now. *)
+            sanity_check __FILE__ __LINE__ (children = []) span;
+            push av
+        | AEndedProjLoans (_, children) | AEndedProjBorrows (_, children) ->
+            (* There can be children in the presence of nested borrows: we
+               don't handle those for now. *)
+            sanity_check __FILE__ __LINE__ (children = []) span;
+            (* Just ignore *)
+            ()
+        | AEmpty -> ())
   and list_values (v : typed_value) : typed_avalue list * typed_value =
     let ty = v.ty in
     match v.value with
@@ -2140,7 +2156,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
   (* Return *)
   List.rev !absl
 
-type marker_borrow_or_loan_id =
+type marked_borrow_or_loan_id =
   | BorrowId of proj_marker * borrow_id
   | LoanId of proj_marker * loan_id
 
@@ -2151,12 +2167,12 @@ type g_borrow_content_with_ty =
   (ety * borrow_content, rty * aborrow_content) concrete_or_abs
 
 type merge_abstraction_info = {
-  loans : MarkerBorrowId.Set.t;
-  borrows : MarkerBorrowId.Set.t;
-  borrows_loans : marker_borrow_or_loan_id list;
+  loans : MarkedBorrowId.Set.t;
+  borrows : MarkedBorrowId.Set.t;
+  borrows_loans : marked_borrow_or_loan_id list;
       (** We use a list to preserve the order in which the borrows were found *)
-  loan_to_content : g_loan_content_with_ty MarkerBorrowId.Map.t;
-  borrow_to_content : g_borrow_content_with_ty MarkerBorrowId.Map.t;
+  loan_to_content : g_loan_content_with_ty MarkedBorrowId.Map.t;
+  borrow_to_content : g_borrow_content_with_ty MarkedBorrowId.Map.t;
 }
 
 (** Small utility to help merging abstractions.
@@ -2173,25 +2189,25 @@ type merge_abstraction_info = {
  *)
 let compute_merge_abstraction_info (span : Meta.span) (ctx : eval_ctx)
     (avalues : typed_avalue list) : merge_abstraction_info =
-  let loans : MarkerBorrowId.Set.t ref = ref MarkerBorrowId.Set.empty in
-  let borrows : MarkerBorrowId.Set.t ref = ref MarkerBorrowId.Set.empty in
-  let borrows_loans : marker_borrow_or_loan_id list ref = ref [] in
-  let loan_to_content : g_loan_content_with_ty MarkerBorrowId.Map.t ref =
-    ref MarkerBorrowId.Map.empty
+  let loans : MarkedBorrowId.Set.t ref = ref MarkedBorrowId.Set.empty in
+  let borrows : MarkedBorrowId.Set.t ref = ref MarkedBorrowId.Set.empty in
+  let borrows_loans : marked_borrow_or_loan_id list ref = ref [] in
+  let loan_to_content : g_loan_content_with_ty MarkedBorrowId.Map.t ref =
+    ref MarkedBorrowId.Map.empty
   in
-  let borrow_to_content : g_borrow_content_with_ty MarkerBorrowId.Map.t ref =
-    ref MarkerBorrowId.Map.empty
+  let borrow_to_content : g_borrow_content_with_ty MarkedBorrowId.Map.t ref =
+    ref MarkedBorrowId.Map.empty
   in
 
   let push_loan pm id (lc : g_loan_content_with_ty) : unit =
     sanity_check __FILE__ __LINE__
-      (not (MarkerBorrowId.Set.mem (pm, id) !loans))
+      (not (MarkedBorrowId.Set.mem (pm, id) !loans))
       span;
-    loans := MarkerBorrowId.Set.add (pm, id) !loans;
+    loans := MarkedBorrowId.Set.add (pm, id) !loans;
     sanity_check __FILE__ __LINE__
-      (not (MarkerBorrowId.Map.mem (pm, id) !loan_to_content))
+      (not (MarkedBorrowId.Map.mem (pm, id) !loan_to_content))
       span;
-    loan_to_content := MarkerBorrowId.Map.add (pm, id) lc !loan_to_content;
+    loan_to_content := MarkedBorrowId.Map.add (pm, id) lc !loan_to_content;
     borrows_loans := LoanId (pm, id) :: !borrows_loans
   in
   let push_loans pm ids lc : unit =
@@ -2199,13 +2215,13 @@ let compute_merge_abstraction_info (span : Meta.span) (ctx : eval_ctx)
   in
   let push_borrow pm id (bc : g_borrow_content_with_ty) : unit =
     sanity_check __FILE__ __LINE__
-      (not (MarkerBorrowId.Set.mem (pm, id) !borrows))
+      (not (MarkedBorrowId.Set.mem (pm, id) !borrows))
       span;
-    borrows := MarkerBorrowId.Set.add (pm, id) !borrows;
+    borrows := MarkedBorrowId.Set.add (pm, id) !borrows;
     sanity_check __FILE__ __LINE__
-      (not (MarkerBorrowId.Map.mem (pm, id) !borrow_to_content))
+      (not (MarkedBorrowId.Map.mem (pm, id) !borrow_to_content))
       span;
-    borrow_to_content := MarkerBorrowId.Map.add (pm, id) bc !borrow_to_content;
+    borrow_to_content := MarkedBorrowId.Map.add (pm, id) bc !borrow_to_content;
     borrows_loans := BorrowId (pm, id) :: !borrows_loans
   in
 
@@ -2510,10 +2526,10 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
          borrows_loans1)
       span;
     sanity_check __FILE__ __LINE__
-      (MarkerBorrowId.Set.disjoint borrows0 borrows1)
+      (MarkedBorrowId.Set.disjoint borrows0 borrows1)
       span;
     sanity_check __FILE__ __LINE__
-      (MarkerBorrowId.Set.disjoint loans0 loans1)
+      (MarkedBorrowId.Set.disjoint loans0 loans1)
       span);
 
   (* Merge.
@@ -2536,8 +2552,8 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
      Remark: a way of solving this problem would be to destructure shared loans
      so that they always have exactly one id.
   *)
-  let merged_borrows = ref MarkerBorrowId.Set.empty in
-  let merged_loans = ref MarkerBorrowId.Set.empty in
+  let merged_borrows = ref MarkedBorrowId.Set.empty in
+  let merged_loans = ref MarkedBorrowId.Set.empty in
   let avalues = ref [] in
   let push_avalue av =
     log#ldebug
@@ -2555,7 +2571,7 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
   (* Compute the intersection of:
      - the loans coming from the left abstraction
      - the borrows coming from the right abstraction *)
-  let intersect = MarkerBorrowId.Set.inter loans0 borrows1 in
+  let intersect = MarkedBorrowId.Set.inter loans0 borrows1 in
 
   (* This function is called when handling shared loans: we have to apply a projection
      marker to a set of borrow ids. *)
@@ -2563,23 +2579,23 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
     let bids =
       BorrowId.Set.to_seq bids
       |> Seq.map (fun x -> (pm, x))
-      |> MarkerBorrowId.Set.of_seq
+      |> MarkedBorrowId.Set.of_seq
     in
-    let bids = MarkerBorrowId.Set.diff bids intersect in
-    sanity_check __FILE__ __LINE__ (not (MarkerBorrowId.Set.is_empty bids)) span;
-    MarkerBorrowId.Set.to_seq bids |> Seq.map snd |> BorrowId.Set.of_seq
+    let bids = MarkedBorrowId.Set.diff bids intersect in
+    sanity_check __FILE__ __LINE__ (not (MarkedBorrowId.Set.is_empty bids)) span;
+    MarkedBorrowId.Set.to_seq bids |> Seq.map snd |> BorrowId.Set.of_seq
   in
-  let filter_bid (bid : marker_borrow_id) : marker_borrow_id option =
-    if MarkerBorrowId.Set.mem bid intersect then None else Some bid
+  let filter_bid (bid : marked_borrow_id) : marked_borrow_id option =
+    if MarkedBorrowId.Set.mem bid intersect then None else Some bid
   in
 
-  let borrow_is_merged id = MarkerBorrowId.Set.mem id !merged_borrows in
+  let borrow_is_merged id = MarkedBorrowId.Set.mem id !merged_borrows in
   let set_borrow_as_merged id =
-    merged_borrows := MarkerBorrowId.Set.add id !merged_borrows
+    merged_borrows := MarkedBorrowId.Set.add id !merged_borrows
   in
-  let loan_is_merged id = MarkerBorrowId.Set.mem id !merged_loans in
+  let loan_is_merged id = MarkedBorrowId.Set.mem id !merged_loans in
   let set_loan_as_merged id =
-    merged_loans := MarkerBorrowId.Set.add id !merged_loans
+    merged_loans := MarkedBorrowId.Set.add id !merged_loans
   in
   let set_loans_as_merged pm ids =
     BorrowId.Set.elements ids
@@ -2600,7 +2616,7 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
           log#ldebug
             (lazy
               ("merge_abstractions: merging borrow "
-              ^ MarkerBorrowId.to_string bid));
+              ^ MarkedBorrowId.to_string bid));
 
           (* Check if the borrow has already been merged - this can happen
              because we go through all the borrows/loans in [abs0] *then*
@@ -2614,8 +2630,8 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
             | None -> ()
             | Some bid ->
                 (* Lookup the contents *)
-                let bc0 = MarkerBorrowId.Map.find_opt bid borrow_to_content0 in
-                let bc1 = MarkerBorrowId.Map.find_opt bid borrow_to_content1 in
+                let bc0 = MarkedBorrowId.Map.find_opt bid borrow_to_content0 in
+                let bc1 = MarkedBorrowId.Map.find_opt bid borrow_to_content1 in
                 (* Merge *)
                 let av : typed_avalue =
                   match (bc0, bc1) with
@@ -2651,15 +2667,15 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
             log#ldebug
               (lazy
                 ("merge_abstractions: merging loan "
-                ^ MarkerBorrowId.to_string bid));
+                ^ MarkedBorrowId.to_string bid));
 
             (* Check if we need to filter it *)
             match filter_bid bid with
             | None -> ()
             | Some bid ->
                 (* Lookup the contents *)
-                let lc0 = MarkerBorrowId.Map.find_opt bid loan_to_content0 in
-                let lc1 = MarkerBorrowId.Map.find_opt bid loan_to_content1 in
+                let lc0 = MarkedBorrowId.Map.find_opt bid loan_to_content0 in
+                let lc1 = MarkedBorrowId.Map.find_opt bid loan_to_content1 in
                 (* Merge *)
                 let av : typed_avalue option =
                   match (lc0, lc1) with
@@ -2913,7 +2929,7 @@ let merge_abstractions_merge_markers (span : Meta.span)
           sanity_check __FILE__ __LINE__ (not (borrow_is_merged bid)) span;
           (* This element has no marker. We do not filter it, hence we retrieve the
              contents and inject it into the avalues list *)
-          let bc = MarkerBorrowId.Map.find (PNone, bid) borrow_to_content in
+          let bc = MarkedBorrowId.Map.find (PNone, bid) borrow_to_content in
           push_avalue (avalue_from_bc bc);
           (* Setting the borrow as merged is not really necessary but we do it
              for consistency, and this allows us to do some sanity checks. *)
@@ -2926,10 +2942,10 @@ let merge_abstractions_merge_markers (span : Meta.span)
             (* Not merged: set it as merged *)
             set_borrow_as_merged bid;
             (* Lookup the content of the borrow *)
-            let bc0 = MarkerBorrowId.Map.find (pm, bid) borrow_to_content in
+            let bc0 = MarkedBorrowId.Map.find (pm, bid) borrow_to_content in
             (* Check if there exists the same borrow but with the complementary marker *)
             let obc1 =
-              MarkerBorrowId.Map.find_opt
+              MarkedBorrowId.Map.find_opt
                 (invert_proj_marker pm, bid)
                 borrow_to_content
             in
@@ -2959,7 +2975,7 @@ let merge_abstractions_merge_markers (span : Meta.span)
           *)
           if loan_is_merged bid then ()
           else
-            let lc = MarkerBorrowId.Map.find (PNone, bid) loan_to_content in
+            let lc = MarkedBorrowId.Map.find (PNone, bid) loan_to_content in
             push_avalue (avalue_from_lc lc);
             (* Mark as merged *)
             let ids = loan_content_to_ids lc in
@@ -2970,9 +2986,9 @@ let merge_abstractions_merge_markers (span : Meta.span)
             loan_is_merged bid
           then ()
           else
-            let lc0 = MarkerBorrowId.Map.find (pm, bid) loan_to_content in
+            let lc0 = MarkedBorrowId.Map.find (pm, bid) loan_to_content in
             let olc1 =
-              MarkerBorrowId.Map.find_opt
+              MarkedBorrowId.Map.find_opt
                 (invert_proj_marker pm, bid)
                 loan_to_content
             in
@@ -3130,14 +3146,23 @@ let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
 let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
     (old_abs_ids : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
   let reorder_in_fresh_abs (abs : abs) : abs =
-    (* Split between the loans and borrows *)
+    (* Split between the loans and borrows, and between the concrete
+       and symbolic values. *)
     let is_borrow (av : typed_avalue) : bool =
       match av.value with
-      | ABorrow _ -> true
-      | ALoan _ -> false
+      | ABorrow _ | ASymbolic (_, AProjBorrows _) -> true
+      | ALoan _ | ASymbolic (_, AProjLoans _) -> false
+      | _ -> craise __FILE__ __LINE__ span "Unexpected"
+    in
+    let is_concrete (av : typed_avalue) : bool =
+      match av.value with
+      | ABorrow _ | ALoan _ -> true
+      | ASymbolic (_, (AProjBorrows _ | AProjLoans _)) -> false
       | _ -> craise __FILE__ __LINE__ span "Unexpected"
     in
     let aborrows, aloans = List.partition is_borrow abs.avalues in
+    let aborrows, borrow_projs = List.partition is_concrete aborrows in
+    let aloans, loan_projs = List.partition is_concrete aloans in
 
     (* Reoder the borrows, and the loans.
 
@@ -3147,6 +3172,11 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
 
        This is actually not as arbitrary as it might seem, because the ids give
        us the order in which we introduced those borrows/loans.
+
+       We do the same thing for the symbolic values: we use the symbolic ids.
+       The final order is:
+         borrows, borrow projectors, loans, loan projectors
+       (all sorted by increasing id)
     *)
     let get_borrow_id (av : typed_avalue) : BorrowId.id =
       match av.value with
@@ -3165,16 +3195,49 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
           BorrowId.Set.min_elt lids
       | _ -> craise __FILE__ __LINE__ span "Unexpected"
     in
-    (* We use ordered maps to reorder the borrows and loans *)
-    let reorder (get_bid : typed_avalue -> BorrowId.id)
-        (values : typed_avalue list) : typed_avalue list =
-      List.map snd
-        (BorrowId.Map.bindings
-           (BorrowId.Map.of_list (List.map (fun v -> (get_bid v, v)) values)))
+    let get_symbolic_id (av : typed_avalue) : SymbolicValueId.id =
+      match av.value with
+      | ASymbolic (pm, aproj) -> begin
+          sanity_check __FILE__ __LINE__ (allow_markers || pm = PNone) span;
+          match aproj with
+          | AProjLoans (sv, _, _) | AProjBorrows (sv, _, _) -> sv.sv_id
+          | _ -> craise __FILE__ __LINE__ span "Unexpected"
+        end
+      | _ -> craise __FILE__ __LINE__ span "Unexpected"
     in
-    let aborrows = reorder get_borrow_id aborrows in
-    let aloans = reorder get_loan_id aloans in
-    let avalues = List.append aborrows aloans in
+    let compare_pair :
+          'a. ('a -> 'a -> int) -> 'a * typed_avalue -> 'a * typed_avalue -> int
+        =
+     fun compare_id x y ->
+      let fst = compare_id (fst x) (fst y) in
+      cassert __FILE__ __LINE__ (fst <> 0) span
+        ("Unexpected: can't compare: '"
+        ^ typed_avalue_to_string ctx (snd x)
+        ^ "' with '"
+        ^ typed_avalue_to_string ctx (snd y)
+        ^ "'");
+      fst
+    in
+    (* We use ordered maps to reorder the borrows and loans *)
+    let reorder :
+          'a.
+          (typed_avalue -> 'a) ->
+          ('a -> 'a -> int) ->
+          typed_avalue list ->
+          typed_avalue list =
+     fun get_id compare_id values ->
+      let values = List.map (fun v -> (get_id v, v)) values in
+      List.map snd (List.stable_sort (compare_pair compare_id) values)
+    in
+    let aborrows = reorder get_borrow_id compare_borrow_id aborrows in
+    let borrow_projs =
+      reorder get_symbolic_id compare_symbolic_value_id borrow_projs
+    in
+    let aloans = reorder get_loan_id compare_borrow_id aloans in
+    let loan_projs =
+      reorder get_symbolic_id compare_symbolic_value_id loan_projs
+    in
+    let avalues = List.concat [ aborrows; borrow_projs; aloans; loan_projs ] in
     { abs with avalues }
   in
 

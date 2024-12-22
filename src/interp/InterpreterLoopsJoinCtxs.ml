@@ -5,6 +5,7 @@ open Utils
 open TypesUtils
 open ValuesUtils
 open InterpreterUtils
+open InterpreterBorrowsCore
 open InterpreterBorrows
 open InterpreterLoopsCore
 open InterpreterLoopsMatchCtxs
@@ -33,16 +34,33 @@ let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
   in
   let nabs = ctx_lookup_abs nctx nabs_id in
   (* Update the information *)
+  (* We start by computing the maps for an environment which only contains
+     the new region abstraction *)
   let {
     abs_to_borrows = nabs_to_borrows;
     abs_to_loans = nabs_to_loans;
     borrow_to_abs = borrow_to_nabs;
     loan_to_abs = loan_to_nabs;
+    abs_to_borrow_projs = nabs_to_borrow_projs;
+    abs_to_loan_projs = nabs_to_loan_projs;
+    borrow_proj_to_abs = borrow_proj_to_nabs;
+    loan_proj_to_abs = loan_proj_to_nabs;
     _;
   } =
     compute_abs_borrows_loans_maps span (fun _ -> true) [ EAbs nabs ]
   in
-  let { abs_ids; abs_to_borrows; abs_to_loans; borrow_to_abs; loan_to_abs } =
+  (* Retrieve the previous maps, so that we can update them *)
+  let {
+    abs_ids;
+    abs_to_borrows;
+    abs_to_loans;
+    borrow_to_abs;
+    loan_to_abs;
+    abs_to_borrow_projs;
+    abs_to_loan_projs;
+    borrow_proj_to_abs;
+    loan_proj_to_abs;
+  } =
     ctx.info
   in
   let abs_ids =
@@ -53,40 +71,91 @@ let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
         else Some id)
       abs_ids
   in
-  (* Update the maps from makred borrows/loans to abstractions *)
-  let update_to_abs abs_to to_nabs to_abs =
-    (* Remove the old bindings *)
-    let abs0_elems = AbstractionId.Map.find abs_id0 abs_to in
-    let abs1_elems = AbstractionId.Map.find abs_id1 abs_to in
-    let abs01_elems = MarkerBorrowId.Set.union abs0_elems abs1_elems in
-    let to_abs =
-      MarkerBorrowId.Map.filter
-        (fun id _ -> not (MarkerBorrowId.Set.mem id abs01_elems))
-        to_abs
-    in
-    (* Add the new ones *)
-    let merge _ _ _ =
-      (* We shouldn't have twice the same key *)
-      craise __FILE__ __LINE__ span "Unreachable"
-    in
-    MarkerBorrowId.Map.union merge to_nabs to_abs
+  (* Update the various maps.
+
+     We use a functor for the maps from marked borrows/loans or symbolic value
+     projections to symbolic abstractions, because we have to manipulate maps and
+     sets over different types (borrow/loan ids and symbolic value projections).
+  *)
+  let module UpdateToAbs
+      (M : Collections.Map)
+      (S : Collections.Set with type elt = M.key) =
+  struct
+    (* Update a map from marked borrows/loans or symbolic value projections
+       to region abstractions by using the old map and the information computed
+       from the merged abstraction.
+    *)
+    let update_to_abs (abs_to : S.t AbstractionId.Map.t)
+        (to_nabs : AbstractionId.Set.t M.t) (to_abs : AbstractionId.Set.t M.t) :
+        AbstractionId.Set.t M.t =
+      (* Remove the old bindings from borrow/loan ids to the two region
+         abstractions we just merged (because those two region abstractions
+         do not exist anymore). *)
+      let abs0_elems = AbstractionId.Map.find abs_id0 abs_to in
+      let abs1_elems = AbstractionId.Map.find abs_id1 abs_to in
+      let abs01_elems = S.union abs0_elems abs1_elems in
+      let to_abs = M.filter (fun id _ -> not (S.mem id abs01_elems)) to_abs in
+      (* Add the new bindings from the borrows/loan ids that we find in the
+         merged abstraction to this abstraction's id *)
+      let merge _ _ _ =
+        (* We shouldn't see the same key twice *)
+        craise __FILE__ __LINE__ span "Unreachable"
+      in
+      M.union merge to_nabs to_abs
+  end in
+  let module UpdateMarkedBorrowId =
+    UpdateToAbs (MarkedBorrowId.Map) (MarkedBorrowId.Set)
   in
   let borrow_to_abs =
-    update_to_abs abs_to_borrows borrow_to_nabs borrow_to_abs
+    UpdateMarkedBorrowId.update_to_abs abs_to_borrows borrow_to_nabs
+      borrow_to_abs
   in
-  let loan_to_abs = update_to_abs abs_to_loans loan_to_nabs loan_to_abs in
+  let loan_to_abs =
+    UpdateMarkedBorrowId.update_to_abs abs_to_loans loan_to_nabs loan_to_abs
+  in
+  let module UpdateSymbProj =
+    UpdateToAbs (MarkedNormSymbProj.Map) (MarkedNormSymbProj.Set)
+  in
+  let borrow_proj_to_abs =
+    UpdateSymbProj.update_to_abs abs_to_borrow_projs borrow_proj_to_nabs
+      borrow_proj_to_abs
+  in
+  let loan_proj_to_abs =
+    UpdateSymbProj.update_to_abs abs_to_loan_projs loan_proj_to_nabs
+      loan_proj_to_abs
+  in
 
-  (* Update the maps from abstractions to marked borrows/loans *)
+  (* Update the maps from abstractions to marked borrows/loans or
+     symbolic value projections.
+  *)
   let update_abs_to nabs_to abs_to =
+    (* Remove the two region abstractions we merged *)
+    let m =
+      AbstractionId.Map.remove abs_id0 (AbstractionId.Map.remove abs_id1 abs_to)
+    in
+    (* Add the merged abstraction *)
     AbstractionId.Map.add_strict nabs_id
       (AbstractionId.Map.find nabs_id nabs_to)
-      (AbstractionId.Map.remove abs_id0
-         (AbstractionId.Map.remove abs_id1 abs_to))
+      m
   in
   let abs_to_borrows = update_abs_to nabs_to_borrows abs_to_borrows in
   let abs_to_loans = update_abs_to nabs_to_loans abs_to_loans in
+  let abs_to_borrow_projs =
+    update_abs_to nabs_to_borrow_projs abs_to_borrow_projs
+  in
+  let abs_to_loan_projs = update_abs_to nabs_to_loan_projs abs_to_loan_projs in
   let info =
-    { abs_ids; abs_to_borrows; abs_to_loans; borrow_to_abs; loan_to_abs }
+    {
+      abs_ids;
+      abs_to_borrows;
+      abs_to_loans;
+      borrow_to_abs;
+      loan_to_abs;
+      borrow_proj_to_abs;
+      loan_proj_to_abs;
+      abs_to_borrow_projs;
+      abs_to_loan_projs;
+    }
   in
   { ctx = nctx; info }
 
@@ -134,17 +203,18 @@ let repeat_iter_borrows_merge (span : Meta.span) (old_ids : ids_sets)
 (** Reduce an environment.
 
     We do this to simplify an environment, for the purpose of finding a loop
-    fixed point.
+    fixed point (this is our equivalent of Abstract Interpretation's
+    **widening** operation).
 
     We do the following:
     - we look for all the *new* dummy values (we use sets of old ids to decide
       wether a value is new or not) and convert them into abstractions
-    - whenever there is a new abstraction in the context, and some of its
+    - whenever there is a new abstraction in the context, and some of
       its borrows are associated to loans in another new abstraction, we
       merge them.
     In effect, this allows us to merge newly introduced abstractions/borrows
     with their parent abstractions.
-    
+
     For instance, looking at the [list_nth_mut] example, when evaluating the
     first loop iteration, we start in the following environment:
     {[
@@ -263,11 +333,11 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
      We do this because we want to control the order in which abstractions
      are merged (the ids are iterated in increasing order). Otherwise, we
      could simply iterate over all the borrows in [loan_to_abs]... *)
-  let iterate ctx f =
+  let iterate ctx merge =
     List.iter
       (fun abs_id0 ->
         let lids = AbstractionId.Map.find abs_id0 ctx.info.abs_to_loans in
-        MarkerBorrowId.Set.iter (fun lid -> f (abs_id0, lid)) lids)
+        MarkedBorrowId.Set.iter (fun lid -> merge (abs_id0, lid)) lids)
       ctx.info.abs_ids
   in
   (* Given a loan, check if there is a fresh abstraction with the corresponding borrow *)
@@ -282,7 +352,7 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
     if with_markers && fst lid = PNone then None
     else
       (* Find the borrow corresponding to the loan we want to eliminate *)
-      match MarkerBorrowId.Map.find_opt lid ctx.info.borrow_to_abs with
+      match MarkedBorrowId.Map.find_opt lid ctx.info.borrow_to_abs with
       | None -> (* Nothing to to *) None
       | Some abs_ids1 -> (
           (* We need to merge *)
@@ -381,7 +451,7 @@ let collapse_ctx_collapse (span : Meta.span) (loop_id : LoopId.id)
             if is_borrow then ctx.info.abs_to_borrows else ctx.info.abs_to_loans
           in
           let ids = AbstractionId.Map.find abs_id0 m in
-          MarkerBorrowId.Set.iter (fun id -> f (abs_id0, is_borrow, id)) ids
+          MarkedBorrowId.Set.iter (fun id -> f (abs_id0, is_borrow, id)) ids
         in
         (* Iterate over the borrows *)
         iterate true;
@@ -415,13 +485,13 @@ let collapse_ctx_collapse (span : Meta.span) (loop_id : LoopId.id)
     let abs0_borrows =
       BorrowId.Set.of_list
         (List.map snd
-           (MarkerBorrowId.Set.elements
+           (MarkedBorrowId.Set.elements
               (AbstractionId.Map.find abs_id0 info.abs_to_borrows)))
     in
     let abs1_loans =
       BorrowId.Set.of_list
         (List.map snd
-           (MarkerBorrowId.Set.elements
+           (MarkedBorrowId.Set.elements
               (AbstractionId.Map.find abs_id1 info.abs_to_loans)))
     in
     not (BorrowId.Set.disjoint abs0_borrows abs1_loans)
@@ -433,7 +503,7 @@ let collapse_ctx_collapse (span : Meta.span) (loop_id : LoopId.id)
     else
       (* Look for an element with the dual marker *)
       match
-        MarkerBorrowId.Map.find_opt
+        MarkedBorrowId.Map.find_opt
           (invert_proj_marker pm, bid)
           (if is_borrow then ctx.info.borrow_to_abs else ctx.info.loan_to_abs)
       with
@@ -499,6 +569,7 @@ let eval_ctx_has_markers (ctx : eval_ctx) : bool =
 
     First, we reduce the environment, merging any two pair of fresh abstractions
     which contain a loan (in one) and its corresponding borrow (in the other).
+    This is our version of Abstract Interpretation's **widening** operation.
     For instance, we merge abs@0 and abs@1 below:
     {[
       abs@0 { |ML l0|, ML l1 }
@@ -653,7 +724,7 @@ let collapse_ctx_with_merge (span : Meta.span) (loop_id : LoopId.id)
     (old_ids : ids_sets) (ctx : eval_ctx) : eval_ctx =
   let merge_funs = mk_collapse_ctx_merge_duplicate_funs span loop_id ctx in
   try collapse_ctx span loop_id merge_funs old_ids ctx
-  with ValueMatchFailure _ -> craise __FILE__ __LINE__ span "Unexpected"
+  with ValueMatchFailure _ -> internal_error __FILE__ __LINE__ span
 
 let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
     (ctx0 : eval_ctx) (ctx1 : eval_ctx) : ctx_or_update =

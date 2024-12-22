@@ -216,7 +216,7 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
             sanity_check __FILE__ __LINE__
               (not (projections_intersect span ty1 rset1 ty2 rset2))
               span);
-          ASymbolic (AProjBorrows (s, ty, []))
+          ASymbolic (PNone, AProjBorrows (s, ty, []))
       | _ ->
           log#ltrace
             (lazy

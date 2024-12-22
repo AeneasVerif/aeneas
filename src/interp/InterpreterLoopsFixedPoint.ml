@@ -305,21 +305,6 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
 
           (* Continue the exploration *)
           super#visit_ASharedLoan env pm lids sv av
-
-        (** Check that there are no symbolic values with *borrows* inside the
-            abstraction - shouldn't happen if the symbolic values are greedily
-            expanded.
-            We do this because those values could contain shared borrows:
-            if it is the case, we need to duplicate them too.
-            TODO: implement this more general behavior.
-         *)
-        method! visit_symbolic_value env sv =
-          cassert __FILE__ __LINE__
-            (not (symbolic_value_has_borrows (Some span) ctx sv))
-            span
-            "There should be no symbolic values with borrows inside the \
-             abstraction";
-          super#visit_symbolic_value env sv
       end
     in
     List.iter (visit_avalue#visit_typed_avalue None) abs.avalues

@@ -178,8 +178,6 @@ type abstraction_id_set = AbstractionId.Set.t [@@deriving show, ord]
     For additional explanations see: https://arxiv.org/pdf/2404.02680#section.5 *)
 type proj_marker = PNone | PLeft | PRight [@@deriving show, ord]
 
-type marker_borrow_id = proj_marker * BorrowId.id [@@deriving show, ord]
-
 type ended_proj_borrow_meta = {
   consumed : msymbolic_value;
   given_back : msymbolic_value;
@@ -188,35 +186,6 @@ type ended_proj_borrow_meta = {
 
 type ended_mut_borrow_meta = { bid : borrow_id; given_back : msymbolic_value }
 [@@deriving show, ord]
-
-module MarkerBorrowIdOrd = struct
-  type t = marker_borrow_id
-
-  let compare = compare_marker_borrow_id
-  let to_string = show_marker_borrow_id
-  let pp_t = pp_marker_borrow_id
-  let show_t = show_marker_borrow_id
-end
-
-module MarkerBorrowIdSet = Collections.MakeSet (MarkerBorrowIdOrd)
-module MarkerBorrowIdMap = Collections.MakeMap (MarkerBorrowIdOrd)
-
-module MarkerBorrowId : sig
-  type t
-
-  val to_string : t -> string
-
-  module Set : Collections.Set with type elt = t
-  module Map : Collections.Map with type key = t
-end
-with type t = marker_borrow_id = struct
-  type t = marker_borrow_id
-
-  let to_string = show_marker_borrow_id
-
-  module Set = MarkerBorrowIdSet
-  module Map = MarkerBorrowIdMap
-end
 
 (** Ancestor for {!typed_avalue} iter visitor *)
 class ['self] iter_typed_avalue_base =
@@ -391,7 +360,7 @@ and avalue =
   | ABottom (* TODO: remove once we change the way internal borrows are ended *)
   | ALoan of aloan_content
   | ABorrow of aborrow_content
-  | ASymbolic of aproj
+  | ASymbolic of proj_marker * aproj
   | AIgnored of mvalue option
       (** A value which doesn't contain borrows, or which borrows we
           don't own and thus ignore.
