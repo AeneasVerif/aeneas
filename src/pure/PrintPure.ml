@@ -10,11 +10,7 @@ open Errors
     at every stage we have the original LLBC definitions at hand.
  *)
 type fmt_env = {
-  type_decls : Types.type_decl TypeDeclId.Map.t;
-  fun_decls : LlbcAst.fun_decl FunDeclId.Map.t;
-  global_decls : LlbcAst.global_decl GlobalDeclId.Map.t;
-  trait_decls : LlbcAst.trait_decl TraitDeclId.Map.t;
-  trait_impls : LlbcAst.trait_impl TraitImplId.Map.t;
+  crate : LlbcAst.crate;
   generics : generic_params;
   vars : string VarId.Map.t;
 }
@@ -57,26 +53,10 @@ let var_id_to_string (env : fmt_env) (id : VarId.id) : string =
 let trait_clause_id_to_string = Print.Types.trait_clause_id_to_string
 
 let fmt_env_to_llbc_fmt_env (env : fmt_env) : Print.fmt_env =
-  {
-    type_decls = env.type_decls;
-    fun_decls = env.fun_decls;
-    global_decls = env.global_decls;
-    trait_decls = env.trait_decls;
-    trait_impls = env.trait_impls;
-    generics = [];
-    locals = [];
-  }
+  Charon.PrintLlbcAst.Crate.crate_to_fmt_env env.crate
 
 let decls_ctx_to_fmt_env (ctx : Contexts.decls_ctx) : fmt_env =
-  {
-    type_decls = ctx.type_ctx.type_decls;
-    fun_decls = ctx.fun_ctx.fun_decls;
-    global_decls = ctx.global_ctx.global_decls;
-    trait_decls = ctx.trait_decls_ctx.trait_decls;
-    trait_impls = ctx.trait_impls_ctx.trait_impls;
-    generics = empty_generic_params;
-    vars = VarId.Map.empty;
-  }
+  { crate = ctx.crate; generics = empty_generic_params; vars = VarId.Map.empty }
 
 let name_to_string (env : fmt_env) =
   Print.Types.name_to_string (fmt_env_to_llbc_fmt_env env)

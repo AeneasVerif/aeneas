@@ -1542,9 +1542,7 @@ and eval_builtin_function_call_symbolic (config : config) (span : Meta.span)
        we have to recompute the regions hierarchy. *)
     let fun_name = Print.Expressions.builtin_fun_id_to_string fid in
     let inst_sig =
-      compute_regions_hierarchy_for_fun_call (Some span) ctx.type_ctx.type_decls
-        ctx.fun_ctx.fun_decls ctx.global_ctx.global_decls
-        ctx.trait_decls_ctx.trait_decls ctx.trait_impls_ctx.trait_impls fun_name
+      compute_regions_hierarchy_for_fun_call (Some span) ctx.crate fun_name
         ctx.type_vars ctx.const_generic_vars func.generics sg
     in
     log#ldebug
