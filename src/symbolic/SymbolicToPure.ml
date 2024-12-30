@@ -357,15 +357,13 @@ let bs_ctx_to_fmt_env (ctx : bs_ctx) : Print.fmt_env =
   let global_decls = ctx.global_ctx.llbc_global_decls in
   let trait_decls = ctx.trait_decls_ctx in
   let trait_impls = ctx.trait_impls_ctx in
-  let { regions; _ } : T.generic_params = ctx.fun_decl.signature.generics in
   {
     type_decls;
     fun_decls;
     global_decls;
     trait_decls;
     trait_impls;
-    regions = [ regions ];
-    generics = ctx.fun_decl.signature.generics;
+    generics = [ ctx.fun_decl.signature.generics ];
     locals = [];
   }
 

@@ -63,8 +63,7 @@ let fmt_env_to_llbc_fmt_env (env : fmt_env) : Print.fmt_env =
     global_decls = env.global_decls;
     trait_decls = env.trait_decls;
     trait_impls = env.trait_impls;
-    regions = [];
-    generics = TypesUtils.empty_generic_params;
+    generics = [];
     locals = [];
   }
 

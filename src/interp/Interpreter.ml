@@ -29,8 +29,7 @@ let compute_contexts (m : crate) : decls_ctx =
       global_decls;
       trait_decls;
       trait_impls;
-      regions = [];
-      generics = empty_generic_params;
+      generics = [];
       locals = [];
     }
   in

@@ -322,8 +322,7 @@ let compute_regions_hierarchies (type_decls : type_decl TypeDeclId.Map.t)
       global_decls;
       trait_decls;
       trait_impls;
-      regions = [];
-      generics = empty_generic_params;
+      generics = [];
       locals = [];
     }
   in
