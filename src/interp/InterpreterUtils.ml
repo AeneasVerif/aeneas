@@ -488,11 +488,9 @@ let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
          const_generic_vars)
   in
   {
+    crate = ctx.crate;
     type_ctx = ctx.type_ctx;
     fun_ctx = ctx.fun_ctx;
-    global_ctx = ctx.global_ctx;
-    trait_decls_ctx = ctx.trait_decls_ctx;
-    trait_impls_ctx = ctx.trait_impls_ctx;
     region_groups;
     type_vars;
     const_generic_vars;
@@ -570,13 +568,9 @@ let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
       instance, the region outlives constraints)
   *)
 let compute_regions_hierarchy_for_fun_call (span : Meta.span option)
-    (type_decls : type_decl TypeDeclId.Map.t)
-    (fun_decls : fun_decl FunDeclId.Map.t)
-    (global_decls : global_decl GlobalDeclId.Map.t)
-    (trait_decls : trait_decl TraitDeclId.Map.t)
-    (trait_impls : trait_impl TraitImplId.Map.t) (fun_name : string)
-    (type_vars : type_var list) (const_generic_vars : const_generic_var list)
-    (generic_args : generic_args) (sg : fun_sig) : inst_fun_sig =
+    (crate : crate) (fun_name : string) (type_vars : type_var list)
+    (const_generic_vars : const_generic_var list) (generic_args : generic_args)
+    (sg : fun_sig) : inst_fun_sig =
   (* We simply put everything into a "fake" signature, then call
      [compute_regions_hierarchy_for_sig].
 
@@ -704,8 +698,7 @@ let compute_regions_hierarchy_for_fun_call (span : Meta.span option)
       { is_unsafe; is_closure; closure_info; generics; inputs; output }
     in
     let regions_hierarchy =
-      RegionsHierarchy.compute_regions_hierarchy_for_sig span type_decls
-        fun_decls global_decls trait_decls trait_impls fun_name sg
+      RegionsHierarchy.compute_regions_hierarchy_for_sig span crate fun_name sg
     in
     (generics.trait_type_constraints, regions_hierarchy)
   in

@@ -91,9 +91,6 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
       regions_hierarchies = trans_ctx.fun_ctx.regions_hierarchies;
     }
   in
-  let global_ctx =
-    { SymbolicToPure.llbc_global_decls = trans_ctx.global_ctx.global_decls }
-  in
 
   (* Compute the set of loops, and find better ids for them (starting at 0).
      Note that we only need to explore the forward function: the backward
@@ -146,9 +143,6 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
       fuel;
       type_ctx;
       fun_ctx;
-      global_ctx;
-      trait_decls_ctx = trans_ctx.trait_decls_ctx.trait_decls;
-      trait_impls_ctx = trans_ctx.trait_impls_ctx.trait_impls;
       fun_decl = fdef;
       forward_inputs = [];
       (* Initialized just below *)
@@ -310,7 +304,7 @@ let translate_crate_to_pure (crate : crate) :
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
             );
           None)
-      (TraitDeclId.Map.values trans_ctx.trait_decls_ctx.trait_decls)
+      (TraitDeclId.Map.values trans_ctx.crate.trait_decls)
   in
 
   (* Translate the trait implementations *)
@@ -328,7 +322,7 @@ let translate_crate_to_pure (crate : crate) :
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
             );
           None)
-      (TraitImplId.Map.values trans_ctx.trait_impls_ctx.trait_impls)
+      (TraitImplId.Map.values trans_ctx.crate.trait_impls)
   in
 
   (* Apply the micro-passes *)
@@ -535,7 +529,7 @@ let export_types_group (fmt : Format.formatter) (config : gen_config)
  *)
 let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     (id : GlobalDeclId.id) : unit =
-  let global_decls = ctx.trans_ctx.global_ctx.global_decls in
+  let global_decls = ctx.trans_ctx.crate.global_decls in
   let global = GlobalDeclId.Map.find id global_decls in
   let trans =
     silent_unwrap_opt_span __FILE__ __LINE__ None

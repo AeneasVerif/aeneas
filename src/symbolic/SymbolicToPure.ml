@@ -49,12 +49,6 @@ type fun_ctx = {
 }
 [@@deriving show]
 
-type global_ctx = { llbc_global_decls : A.global_decl A.GlobalDeclId.Map.t }
-[@@deriving show]
-
-type trait_decls_ctx = A.trait_decl A.TraitDeclId.Map.t [@@deriving show]
-type trait_impls_ctx = A.trait_impl A.TraitImplId.Map.t [@@deriving show]
-
 (** Whenever we translate a function call or an ended abstraction, we
     store the related information (this is useful when translating ended
     children abstractions).
@@ -146,9 +140,6 @@ type bs_ctx = {
   decls_ctx : C.decls_ctx;
   type_ctx : type_ctx;
   fun_ctx : fun_ctx;
-  global_ctx : global_ctx;
-  trait_decls_ctx : trait_decls_ctx;
-  trait_impls_ctx : trait_impls_ctx;
   fun_dsigs : decomposed_fun_sig FunDeclId.Map.t;
   fun_decl : A.fun_decl;
   bid : RegionGroupId.id option;
@@ -352,35 +343,16 @@ type bs_ctx = {
 
 (* TODO: move *)
 let bs_ctx_to_fmt_env (ctx : bs_ctx) : Print.fmt_env =
-  let type_decls = ctx.type_ctx.llbc_type_decls in
-  let fun_decls = ctx.fun_ctx.llbc_fun_decls in
-  let global_decls = ctx.global_ctx.llbc_global_decls in
-  let trait_decls = ctx.trait_decls_ctx in
-  let trait_impls = ctx.trait_impls_ctx in
   {
-    type_decls;
-    fun_decls;
-    global_decls;
-    trait_decls;
-    trait_impls;
+    crate = ctx.decls_ctx.crate;
     generics = [ ctx.fun_decl.signature.generics ];
     locals = [];
   }
 
 let bs_ctx_to_pure_fmt_env (ctx : bs_ctx) : PrintPure.fmt_env =
-  let type_decls = ctx.type_ctx.llbc_type_decls in
-  let fun_decls = ctx.fun_ctx.llbc_fun_decls in
-  let global_decls = ctx.global_ctx.llbc_global_decls in
-  let trait_decls = ctx.trait_decls_ctx in
-  let trait_impls = ctx.trait_impls_ctx in
-  let generics = ctx.sg.generics in
   {
-    type_decls;
-    fun_decls;
-    global_decls;
-    trait_decls;
-    trait_impls;
-    generics;
+    crate = ctx.decls_ctx.crate;
+    generics = ctx.sg.generics;
     vars = VarId.Map.empty;
   }
 
@@ -951,7 +923,7 @@ let mk_type_check_ctx (ctx : bs_ctx) : PureTypeCheck.tc_ctx =
   let env = VarId.Map.empty in
   {
     PureTypeCheck.type_decls = ctx.type_ctx.type_decls;
-    global_decls = ctx.global_ctx.llbc_global_decls;
+    global_decls = ctx.decls_ctx.crate.global_decls;
     env;
     const_generics;
   }
@@ -3531,7 +3503,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
 and translate_global_eval (gid : A.GlobalDeclId.id) (generics : T.generic_args)
     (sval : V.symbolic_value) (e : S.expression) (ctx : bs_ctx) : texpression =
   let ctx, var = fresh_var_for_symbolic_value sval ctx in
-  let decl = A.GlobalDeclId.Map.find gid ctx.global_ctx.llbc_global_decls in
+  let decl = A.GlobalDeclId.Map.find gid ctx.decls_ctx.crate.global_decls in
   let generics = ctx_translate_fwd_generic_args ctx generics in
   let global_expr = { id = Global gid; generics } in
   (* We use translate_fwd_ty to translate the global type *)
@@ -4535,10 +4507,8 @@ let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
     Pure.fun_sig =
   (* Compute the regions hierarchy *)
   let regions_hierarchy =
-    RegionsHierarchy.compute_regions_hierarchy_for_sig None
-      decls_ctx.type_ctx.type_decls decls_ctx.fun_ctx.fun_decls
-      decls_ctx.global_ctx.global_decls decls_ctx.trait_decls_ctx.trait_decls
-      decls_ctx.trait_impls_ctx.trait_impls fun_name sg
+    RegionsHierarchy.compute_regions_hierarchy_for_sig None decls_ctx.crate
+      fun_name sg
   in
   (* Compute the decomposed fun signature *)
   let sg =

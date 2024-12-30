@@ -108,22 +108,14 @@ let rec trait_instance_id_is_local_clause (id : trait_instance_id) : bool =
 type norm_ctx = {
   span : Meta.span option;
   norm_trait_types : ty TraitTypeRefMap.t;
-  type_decls : type_decl TypeDeclId.Map.t;
-  fun_decls : fun_decl FunDeclId.Map.t;
-  global_decls : global_decl GlobalDeclId.Map.t;
-  trait_decls : trait_decl TraitDeclId.Map.t;
-  trait_impls : trait_impl TraitImplId.Map.t;
+  crate : crate;
   type_vars : type_var list;
   const_generic_vars : const_generic_var list;
 }
 
 let norm_ctx_to_fmt_env (ctx : norm_ctx) : Print.fmt_env =
   {
-    type_decls = ctx.type_decls;
-    fun_decls = ctx.fun_decls;
-    global_decls = ctx.global_decls;
-    trait_decls = ctx.trait_decls;
-    trait_impls = ctx.trait_impls;
+    crate = ctx.crate;
     generics =
       [
         {
@@ -171,7 +163,7 @@ let generic_params_to_string (ctx : norm_ctx) (x : generic_params) : string =
 let norm_ctx_lookup_trait_impl (ctx : norm_ctx) (impl_id : TraitImplId.id)
     (generics : generic_args) : trait_impl * subst =
   (* Lookup the implementation *)
-  let trait_impl = TraitImplId.Map.find impl_id ctx.trait_impls in
+  let trait_impl = TraitImplId.Map.find impl_id ctx.crate.trait_impls in
   (* The substitution *)
   let tr_self = UnknownTrait __FUNCTION__ in
   let subst = make_subst_from_generics trait_impl.generics generics tr_self in
@@ -424,12 +416,8 @@ let norm_ctx_normalize_trait_type_constraint (ctx : norm_ctx)
 let mk_norm_ctx (span : Meta.span option) (ctx : eval_ctx) : norm_ctx =
   {
     span;
+    crate = ctx.crate;
     norm_trait_types = ctx.norm_trait_types;
-    type_decls = ctx.type_ctx.type_decls;
-    fun_decls = ctx.fun_ctx.fun_decls;
-    global_decls = ctx.global_ctx.global_decls;
-    trait_decls = ctx.trait_decls_ctx.trait_decls;
-    trait_impls = ctx.trait_impls_ctx.trait_impls;
     type_vars = ctx.type_vars;
     const_generic_vars = ctx.const_generic_vars;
   }
