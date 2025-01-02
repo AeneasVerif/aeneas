@@ -634,8 +634,7 @@ let compute_regions_hierarchy_for_fun_call (span : Meta.span option)
         (* Keeping the same trait refs: it shouldn't have an impact *);
       }
     in
-    let tr_self : trait_instance_id = UnknownTrait __FUNCTION__ in
-    Substitute.make_subst_from_generics sg.generics generic_args tr_self
+    Substitute.make_subst_from_generics sg.generics generic_args
   in
 
   (* Substitute the inputs and outputs *)

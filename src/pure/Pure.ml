@@ -47,6 +47,7 @@ type trait_clause_id = T.trait_clause_id [@@deriving show, ord]
 type trait_item_name = T.trait_item_name [@@deriving show, ord]
 type global_decl_id = T.global_decl_id [@@deriving show, ord]
 type fun_decl_id = A.fun_decl_id [@@deriving show, ord]
+type fun_decl_ref = T.fun_decl_ref [@@deriving show, ord]
 type loop_id = LoopId.id [@@deriving show, ord]
 type region_group_id = T.region_group_id [@@deriving show, ord]
 type mutability = Mut | Const [@@deriving show, ord]
@@ -55,6 +56,7 @@ type file_name = Meta.file_name [@@deriving show, ord]
 type raw_span = Meta.raw_span [@@deriving show, ord]
 type span = Meta.span [@@deriving show, ord]
 type ref_kind = Types.ref_kind [@@deriving show, ord]
+type 'a binder = 'a Types.binder [@@deriving show, ord]
 
 (** The builtin types for the pure AST.
 
@@ -1331,8 +1333,8 @@ type trait_decl = {
   llbc_parent_clauses : Types.trait_clause list;
   consts : (trait_item_name * ty) list;
   types : trait_item_name list;
-  required_methods : (trait_item_name * fun_decl_id) list;
-  provided_methods : (trait_item_name * fun_decl_id) list;
+  required_methods : (trait_item_name * fun_decl_ref binder) list;
+  provided_methods : (trait_item_name * fun_decl_ref binder) list;
 }
 [@@deriving show]
 
@@ -1356,7 +1358,7 @@ type trait_impl = {
   parent_trait_refs : trait_ref list;
   consts : (trait_item_name * global_decl_ref) list;
   types : (trait_item_name * ty) list;
-  required_methods : (trait_item_name * fun_decl_id) list;
-  provided_methods : (trait_item_name * fun_decl_id) list;
+  required_methods : (trait_item_name * fun_decl_ref binder) list;
+  provided_methods : (trait_item_name * fun_decl_ref binder) list;
 }
 [@@deriving show]

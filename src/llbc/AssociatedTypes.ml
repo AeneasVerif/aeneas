@@ -164,9 +164,7 @@ let norm_ctx_lookup_trait_impl (ctx : norm_ctx) (impl_id : TraitImplId.id)
     (generics : generic_args) : trait_impl * subst =
   (* Lookup the implementation *)
   let trait_impl = TraitImplId.Map.find impl_id ctx.crate.trait_impls in
-  (* The substitution *)
-  let tr_self = UnknownTrait __FUNCTION__ in
-  let subst = make_subst_from_generics trait_impl.generics generics tr_self in
+  let subst = make_subst_from_generics trait_impl.generics generics in
   (* Return *)
   (trait_impl, subst)
 

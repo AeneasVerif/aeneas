@@ -2153,11 +2153,11 @@ let ctx_compute_fun_name (def : fun_decl) (ctx : extraction_ctx) : string =
                 List.find_opt (fun (name, _) -> name = item_name) methods
               with
               | None -> def.item_meta
-              | Some (_, id) ->
+              | Some (_, bound_fn) ->
                   Option.value
                     (Option.map
                        (fun (def : A.fun_decl) -> def.item_meta)
-                       (FunDeclId.Map.find_opt id
+                       (FunDeclId.Map.find_opt bound_fn.binder_value.fun_id
                           ctx.trans_ctx.fun_ctx.fun_decls))
                     ~default:def.item_meta))
     | _ -> def.item_meta
