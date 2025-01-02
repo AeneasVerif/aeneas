@@ -2361,7 +2361,11 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
           in
           (item_name, name)
         in
-        List.map (fun (name, id) -> compute_item_name name id) required_methods
+        List.map
+          (fun (name, bound_fn) ->
+            let open Charon.Types in
+            compute_item_name name bound_fn.binder_value.fun_id)
+          required_methods
     | Some info ->
         (* This is a builtin *)
         let funs_map = StringMap.of_list info.methods in
@@ -2721,7 +2725,9 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
 
     (* The required methods *)
     List.iter
-      (fun (name, id) -> extract_trait_decl_method_items ctx fmt decl name id)
+      (fun (name, fn) ->
+        let open Charon.Types in
+        extract_trait_decl_method_items ctx fmt decl name fn.binder_value.fun_id)
       decl.required_methods;
 
     (* Close the outer boxes for the definition *)
@@ -2785,13 +2791,16 @@ let extract_trait_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
     decl.parent_clauses;
   (* The required methods *)
   List.iter
-    (fun (item_name, id) ->
+    (fun (item_name, bound_fn) ->
+      let open Charon.Types in
+      let fun_id = bound_fn.binder_value.fun_id in
       (* Lookup the definition to retrieve the information about the explicit/implicit parameters *)
-      let trans = A.FunDeclId.Map.find id ctx.trans_funs in
+      let trans = A.FunDeclId.Map.find fun_id ctx.trans_funs in
       let f = trans.f in
       let explicit_info =
         explicit_info_drop_prefix decl.generics f.signature.explicit_info
       in
+      (* TODO: this is likely incorrect, we should instantiate the binders properly *)
       let params =
         params
         @ List.concat
@@ -3122,7 +3131,9 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
 
     (* The required methods *)
     List.iter
-      (fun (name, id) ->
+      (fun (name, bound_fn) ->
+        let open Charon.Types in
+        let id = bound_fn.binder_value.fun_id in
         extract_trait_impl_method_items ctx fmt impl name id all_generics)
       impl.required_methods;
 

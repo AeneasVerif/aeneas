@@ -208,22 +208,20 @@ let type_decl_get_fields (def : type_decl)
              - def: " ^ show_type_decl def ^ "\n- opt_variant_id: "
           ^ opt_variant_id))
 
-let make_subst_from_generics (params : generic_params) (args : generic_args)
-    (tr_self : trait_instance_id) : subst =
+let make_subst_from_generics (params : generic_params) (args : generic_args) :
+    subst =
   let ty_subst = make_type_subst params.types args.types in
   let cg_subst =
     make_const_generic_subst params.const_generics args.const_generics
   in
   let tr_subst = make_trait_subst params.trait_clauses args.trait_refs in
-  { ty_subst; cg_subst; tr_subst; tr_self }
+  { ty_subst; cg_subst; tr_subst; tr_self = Self }
 
 (** Instantiate the type variables for the chosen variant in an ADT definition,
     and return the list of the types of its fields *)
 let type_decl_get_instantiated_fields_types (def : type_decl)
     (opt_variant_id : VariantId.id option) (generics : generic_args) : ty list =
-  (* There shouldn't be any reference to Self *)
-  let tr_self = UnknownTrait __FUNCTION__ in
-  let subst = make_subst_from_generics def.generics generics tr_self in
+  let subst = make_subst_from_generics def.generics generics in
   let fields = type_decl_get_fields def opt_variant_id in
   List.map (fun f -> ty_substitute subst f.field_ty) fields
 
@@ -782,17 +780,18 @@ type trait_decl_method_decl_id = { is_provided : bool; id : fun_decl_id }
 let trait_decl_get_method (trait_decl : trait_decl) (method_name : string) :
     trait_decl_method_decl_id =
   (* First look in the required methods *)
-  let method_id =
+  let bound_method =
     List.find_opt (fun (s, _) -> s = method_name) trait_decl.required_methods
   in
-  match method_id with
-  | Some (_, id) -> { is_provided = false; id }
+  match bound_method with
+  | Some (_, bound_method) ->
+      { is_provided = false; id = bound_method.binder_value.fun_id }
   | None ->
       (* Must be a provided method *)
-      let _, id =
+      let _, bound_method =
         List.find (fun (s, _) -> s = method_name) trait_decl.provided_methods
       in
-      { is_provided = true; id }
+      { is_provided = true; id = bound_method.binder_value.fun_id }
 
 let trait_decl_is_empty (trait_decl : trait_decl) : bool =
   let {
