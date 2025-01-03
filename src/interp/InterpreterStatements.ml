@@ -738,8 +738,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                   let fn_ref =
                     Option.get
                       (Substitute.lookup_and_subst_trait_decl_provided_method
-                         trait_decl method_name trait_decl_ref.decl_generics
-                         func.generics)
+                         trait_decl method_name trait_ref func.generics)
                   in
                   let method_id = fn_ref.fun_id in
                   let method_def = ctx_lookup_fun_decl ctx method_id in
@@ -772,7 +771,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
               let fn_ref =
                 Option.get
                   (Substitute.lookup_and_subst_trait_decl_method trait_decl
-                     method_name trait_decl_ref.decl_generics func.generics)
+                     method_name trait_ref func.generics)
               in
               let method_id = fn_ref.fun_id in
               let generics = fn_ref.fun_generics in
