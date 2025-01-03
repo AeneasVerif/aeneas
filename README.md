@@ -72,6 +72,9 @@ test`. Alternatively, call `REGEN_LLBC=1 make test-...` to regenerate only the n
 
 If you run `make`, you will generate a documentation accessible from [`doc.html`](./doc.html).
 
+Additionally, a tutorial for using the Aeneas Lean backend is available [here](./tests/lean/Tutorial/); the original Rust file can be found [here](./tests/src/tutorial/src/lib.rs).
+It requires a working installation of Lean.
+
 ## Usage
 
 You should first generate the serialized `.llbc` file by calling Charon from *inside*
@@ -150,5 +153,4 @@ verification by functional
 translation](https://dl.acm.org/doi/abs/10.1145/3547647)
 ([long version](https://arxiv.org/abs/2206.07185)). We also have a proof that
 the symbolic execution performed by Aeneas during its translation correctly
-implements a borrow checker, and published it in a
-[preprint](https://arxiv.org/abs/2404.02680).
+implements a borrow checker, and published it at ICFP 2024: [Sound Borrow-Checking for Rust via Symbolic Semantics](https://dl.acm.org/doi/10.1145/3674640) ([long version](https://arxiv.org/abs/2404.02680)).
