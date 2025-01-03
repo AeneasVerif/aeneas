@@ -125,8 +125,6 @@ support for partial functions and extrinsic proofs of termination (see
 and tactics specialized for monadic programs (see
 `./backends/lean/Base/Progress/Progress.lean` and `./backends/hol4/primitivesLib.sml`).
 
-A (basic) tutorial for the Lean backend is available [here](./tests/lean/BaseTutorial.lean).
-
 ## Quick start for Nix users
 
 Assuming Nix is installed, with a support for Flakes (`*`):
