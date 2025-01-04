@@ -61,11 +61,22 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
                 (* Update *)
                 Some (S.add id1 ids))
           !map
+
+    let register_abs_id (id : AbstractionId.id)
+        (map : S.t AbstractionId.Map.t ref) =
+      if AbstractionId.Map.mem id !map then ()
+      else map := AbstractionId.Map.add id S.empty !map
   end in
   let module RAbsBorrow = R (AbstractionId.Map) (MarkedBorrowId.Set) in
   let module RBorrowAbs = R (MarkedBorrowId.Map) (AbstractionId.Set) in
   let module RAbsSymbProj = R (AbstractionId.Map) (MarkedNormSymbProj.Set) in
   let module RSymbProjAbs = R (MarkedNormSymbProj.Map) (AbstractionId.Set) in
+  let register_abs_id abs_id =
+    RAbsBorrow.register_abs_id abs_id abs_to_borrows;
+    RAbsBorrow.register_abs_id abs_id abs_to_loans;
+    RAbsSymbProj.register_abs_id abs_id abs_to_borrow_projs;
+    RAbsSymbProj.register_abs_id abs_id abs_to_loan_projs
+  in
   let register_borrow_id abs pm bid =
     RAbsBorrow.register_mapping false abs_to_borrows abs.abs_id (pm, bid);
     RBorrowAbs.register_mapping true borrow_to_abs (pm, bid) abs.abs_id
@@ -160,6 +171,7 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
 
   env_iter_abs
     (fun abs ->
+      register_abs_id abs.abs_id;
       if explore abs then (
         abs_to_borrows :=
           AbstractionId.Map.add abs.abs_id MarkedBorrowId.Set.empty

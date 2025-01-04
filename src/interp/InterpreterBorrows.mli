@@ -208,6 +208,54 @@ type merge_duplicates_funcs = {
           - [sv1]
           - [child1]
        *)
+  merge_aborrow_projs :
+    ty ->
+    proj_marker ->
+    symbolic_value ->
+    ty ->
+    (msymbolic_value * aproj) list ->
+    ty ->
+    proj_marker ->
+    symbolic_value ->
+    ty ->
+    (msymbolic_value * aproj) list ->
+    typed_avalue;
+      (** Parameters:
+      - [ty0]
+      - [pm0]
+      - [sv0]
+      - [proj_ty0]
+      - [children0]
+      - [ty1]
+      - [pm1]
+      - [sv1]
+      - [proj_ty1]
+      - [children1]
+    *)
+  merge_aloan_projs :
+    ty ->
+    proj_marker ->
+    symbolic_value ->
+    ty ->
+    (msymbolic_value * aproj) list ->
+    ty ->
+    proj_marker ->
+    symbolic_value ->
+    ty ->
+    (msymbolic_value * aproj) list ->
+    typed_avalue;
+      (** Parameters:
+      - [ty0]
+      - [pm0]
+      - [sv0]
+      - [proj_ty0]
+      - [children0]
+      - [ty1]
+      - [pm1]
+      - [sv1]
+      - [proj_ty1]
+      - [children1]
+    *)
 }
 
 (** Merge an abstraction into another abstraction.

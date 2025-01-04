@@ -1393,6 +1393,42 @@ with type t = marked_norm_symb_proj = struct
   module Map = MarkedNormSymbProjMap
 end
 
+type norm_symb_proj = { sv_id : symbolic_value_id; norm_proj_ty : ty }
+[@@deriving show, ord]
+
+module NormSymbProjOrd = struct
+  type t = norm_symb_proj
+
+  let compare = compare_norm_symb_proj
+  let to_string = show_norm_symb_proj
+  let pp_t = pp_norm_symb_proj
+  let show_t = show_norm_symb_proj
+end
+
+module NormSymbProjSet = Collections.MakeSet (NormSymbProjOrd)
+module NormSymbProjMap = Collections.MakeMap (NormSymbProjOrd)
+
+module NormSymbProj : sig
+  type t
+
+  val to_string : t -> string
+
+  module Set : Collections.Set with type elt = t
+  module Map : Collections.Map with type key = t
+end
+with type t = norm_symb_proj = struct
+  type t = norm_symb_proj
+
+  let to_string = show_norm_symb_proj
+
+  module Set = NormSymbProjSet
+  module Map = NormSymbProjMap
+end
+
+let marked_norm_symb_proj_to_unmarked (m : marked_norm_symb_proj) :
+    norm_symb_proj =
+  { sv_id = m.sv_id; norm_proj_ty = m.norm_proj_ty }
+
 (** Normalize a projection type by replacing the projected regions with ['0]
     and the non-projected ones with ['_].
 
