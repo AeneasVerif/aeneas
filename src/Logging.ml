@@ -58,7 +58,7 @@ let loops_match_ctxs_log = create_logger "Interpreter.LoopsMatchCtxs"
 let loops_join_ctxs_log = create_logger "Interpreter.LoopsJoinCtxs"
 
 (** Logger for InterpreterLoopsFixedPoint *)
-let loops_fixed_point_log = create_logger "Interpreter.FixedPoint"
+let loops_fixed_point_log = create_logger "Interpreter.LoopsFixedPoint"
 
 (** Logger for InterpreterLoops *)
 let loops_log = create_logger "Interpreter.Loops"

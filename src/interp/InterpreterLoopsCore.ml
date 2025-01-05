@@ -159,6 +159,8 @@ module type PrimMatcher = sig
     typed_avalue
 
   (** Parameters:
+      [ctx0]
+      [ctx1]
       [ty0]
       [pm0]
       [bid0]
@@ -180,6 +182,8 @@ module type PrimMatcher = sig
     typed_avalue
 
   (** Parameters:
+      [ctx0]
+      [ctx1]
       [ty0]
       [pm0]
       [bid0]
@@ -207,6 +211,8 @@ module type PrimMatcher = sig
     typed_avalue
 
   (** Parameters:
+      [ctx0]
+      [ctx1]
       [ty0]
       [pm0]
       [ids0]
@@ -240,6 +246,8 @@ module type PrimMatcher = sig
     typed_avalue
 
   (** Parameters:
+      [ctx0]
+      [ctx1]
       [ty0]
       [pm0]
       [id0]
@@ -264,6 +272,72 @@ module type PrimMatcher = sig
     typed_avalue ->
     rty ->
     typed_avalue ->
+    typed_avalue
+
+  (** Parameters:
+      [ctx0]
+      [ctx1]
+      [ty0]
+      [pm0]
+      [sv0]
+      [proj_ty0]
+      [children0]
+      [ty1]
+      [pm1]
+      [sv1]
+      [proj_ty1]
+      [children1]
+      [ty]: result of matching ty0 and ty1
+      [proj_ty]: result of matching proj_ty0 and proj_ty1
+   *)
+  val match_aproj_borrows :
+    eval_ctx ->
+    eval_ctx ->
+    rty ->
+    proj_marker ->
+    symbolic_value ->
+    rty ->
+    (msymbolic_value * aproj) list ->
+    rty ->
+    proj_marker ->
+    symbolic_value ->
+    rty ->
+    (msymbolic_value * aproj) list ->
+    rty ->
+    rty ->
+    typed_avalue
+
+  (** Parameters:
+      [ctx0]
+      [ctx1]
+      [ty0]
+      [pm0]
+      [sv0]
+      [proj_ty0]
+      [children0]
+      [ty1]
+      [pm1]
+      [sv1]
+      [proj_ty1]
+      [children1]
+      [ty]: result of matching ty0 and ty1
+      [proj_ty]: result of matching proj_ty0 and proj_ty1
+   *)
+  val match_aproj_loans :
+    eval_ctx ->
+    eval_ctx ->
+    rty ->
+    proj_marker ->
+    symbolic_value ->
+    rty ->
+    (msymbolic_value * aproj) list ->
+    rty ->
+    proj_marker ->
+    symbolic_value ->
+    rty ->
+    (msymbolic_value * aproj) list ->
+    rty ->
+    rty ->
     typed_avalue
 
   (** Match two arbitrary avalues whose constructors don't match (this function

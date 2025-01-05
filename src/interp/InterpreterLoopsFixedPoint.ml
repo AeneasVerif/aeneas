@@ -605,12 +605,12 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
     let fp = list_loop_abstractions#visit_eval_ctx () fp in
 
     (* For every input region group:
-     * - evaluate until we get to a [return]
-     * - end the input abstraction corresponding to the input region group
-     * - find which loop abstractions end at that moment
-     *
-     * [fp_ended_aids] links region groups to sets of ended abstractions.
-     *)
+       - evaluate until we get to a [return]
+       - end the input abstraction corresponding to the input region group
+       - find which loop abstractions end at that moment
+
+       [fp_ended_aids] links region groups to sets of ended abstractions.
+    *)
     let fp_ended_aids = ref RegionGroupId.Map.empty in
     let add_ended_aids (rg_id : RegionGroupId.id) (aids : AbstractionId.Set.t) :
         unit =
@@ -678,6 +678,12 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
           aids_union := AbstractionId.Set.union ids !aids_union)
         !fp_ended_aids
     in
+    log#ldebug
+      (lazy
+        ("- aids_union: "
+        ^ AbstractionId.Set.to_string None !aids_union
+        ^ "\n" ^ "- fp_aids: "
+        ^ AbstractionId.Set.to_string None !fp_aids));
 
     (* If we generate a translation, we check that all the regions need to end
        - this is not necessary per se, but if it doesn't happen it is bizarre and worth investigating...

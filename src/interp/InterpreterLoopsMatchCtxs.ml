@@ -473,10 +473,20 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
                they are necessary only when there are nested borrows *)
             craise __FILE__ __LINE__ M.span "Unreachable"
         | _ -> craise __FILE__ __LINE__ M.span "Unreachable")
-    | ASymbolic _, ASymbolic _ ->
-        (* For now, we force all the symbolic values containing borrows to
-           be eagerly expanded, and we don't support nested borrows *)
-        craise __FILE__ __LINE__ M.span "Unreachable"
+    | ASymbolic (pm0, proj0), ASymbolic (pm1, proj1) -> begin
+        match (proj0, proj1) with
+        | ( AProjBorrows (sv0, proj_ty0, children0),
+            AProjBorrows (sv1, proj_ty1, children1) ) ->
+            let proj_ty = M.match_rtys ctx0 ctx1 proj_ty0 proj_ty1 in
+            M.match_aproj_borrows ctx0 ctx1 v0.ty pm0 sv0 proj_ty0 children0
+              v1.ty pm1 sv1 proj_ty1 children1 ty proj_ty
+        | ( AProjLoans (sv0, proj_ty0, children0),
+            AProjLoans (sv1, proj_ty1, children1) ) ->
+            let proj_ty = M.match_rtys ctx0 ctx1 proj_ty0 proj_ty1 in
+            M.match_aproj_loans ctx0 ctx1 v0.ty pm0 sv0 proj_ty0 children0 v1.ty
+              pm1 sv1 proj_ty1 children1 ty proj_ty
+        | _ -> craise __FILE__ __LINE__ M.span "Unreachable"
+      end
     | _ -> M.match_avalues ctx0 ctx1 v0 v1
 end
 
@@ -976,6 +986,12 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
   let match_amut_loans _ _ _ _ _ _ _ _ _ _ =
     craise __FILE__ __LINE__ span "Unreachable"
 
+  let match_aproj_borrows _ _ _ _ _ _ _ _ _ _ _ _ _ _ =
+    craise __FILE__ __LINE__ span "Unreachable"
+
+  let match_aproj_loans _ _ _ _ _ _ _ _ _ _ _ _ _ _ =
+    craise __FILE__ __LINE__ span "Unreachable"
+
   let match_avalues _ _ _ _ = craise __FILE__ __LINE__ span "Unreachable"
 end
 
@@ -1116,6 +1132,12 @@ module MakeMoveMatcher (S : MatchMoveState) : PrimMatcher = struct
     craise __FILE__ __LINE__ span "Unreachable"
 
   let match_avalues _ _ _ _ = craise __FILE__ __LINE__ span "Unreachable"
+
+  let match_aproj_borrows _ _ _ _ _ _ _ _ _ _ _ _ _ _ =
+    craise __FILE__ __LINE__ span "Unreachable"
+
+  let match_aproj_loans _ _ _ _ _ _ _ _ _ _ _ _ _ _ =
+    craise __FILE__ __LINE__ span "Unreachable"
 end
 
 module MakeCheckEquivMatcher (S : MatchCheckEquivState) : CheckEquivMatcher =
@@ -1394,6 +1416,20 @@ struct
     let id = match_loan_id id0 id1 in
     let value = ALoan (AMutLoan (PNone, id, av)) in
     { value; ty }
+
+  let match_aproj_borrows (ctx0 : eval_ctx) (ctx1 : eval_ctx) _ty0 pm0 sv0
+      _proj_ty0 children0 _ty1 pm1 sv1 _proj_ty1 children1 ty proj_ty =
+    sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
+    sanity_check __FILE__ __LINE__ (children0 = [] && children1 = []) span;
+    let sv = match_symbolic_values ctx0 ctx1 sv0 sv1 in
+    { value = ASymbolic (PNone, AProjBorrows (sv, proj_ty, [])); ty }
+
+  let match_aproj_loans (ctx0 : eval_ctx) (ctx1 : eval_ctx) _ty0 pm0 sv0
+      _proj_ty0 children0 _ty1 pm1 sv1 _proj_ty1 children1 ty proj_ty =
+    sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
+    sanity_check __FILE__ __LINE__ (children0 = [] && children1 = []) span;
+    let sv = match_symbolic_values ctx0 ctx1 sv0 sv1 in
+    { value = ASymbolic (PNone, AProjLoans (sv, proj_ty, [])); ty }
 
   let match_avalues (ctx0 : eval_ctx) (ctx1 : eval_ctx) v0 v1 =
     log#ldebug
