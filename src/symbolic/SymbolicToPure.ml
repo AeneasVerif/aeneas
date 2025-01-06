@@ -479,6 +479,11 @@ and translate_trait_decl_ref (span : Meta.span option)
   in
   { trait_decl_id = tr.trait_decl_id; decl_generics }
 
+and translate_fun_decl_ref (span : Meta.span option) (translate_ty : T.ty -> ty)
+    (fr : T.fun_decl_ref) : fun_decl_ref =
+  let fun_generics = translate_generic_args span translate_ty fr.fun_generics in
+  { fun_id = fr.fun_id; fun_generics }
+
 and translate_global_decl_ref (span : Meta.span option)
     (translate_ty : T.ty -> ty) (gr : T.global_decl_ref) : global_decl_ref =
   let global_generics =
@@ -4696,6 +4701,22 @@ let translate_type_decls (ctx : Contexts.decls_ctx) : type_decl list =
         None)
     (TypeDeclId.Map.values ctx.type_ctx.type_decls)
 
+let translate_trait_method (span : span option) (translate_ty : T.ty -> ty)
+    (bound_fn : T.fun_decl_ref T.binder) : fun_decl_ref binder =
+  let binder_llbc_generics = bound_fn.T.binder_params in
+  let binder_generics, binder_preds =
+    translate_generic_params span binder_llbc_generics
+  in
+  let binder_explicit_info = compute_explicit_info binder_generics [] in
+  {
+    binder_value =
+      translate_fun_decl_ref span translate_ty bound_fn.T.binder_value;
+    binder_generics;
+    binder_preds;
+    binder_explicit_info;
+    binder_llbc_generics;
+  }
+
 let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     : trait_decl =
   let {
@@ -4710,26 +4731,31 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
   } : A.trait_decl =
     trait_decl
   in
+  let span = Some item_meta.span in
   let type_infos = ctx.type_ctx.type_infos in
+  let translate_ty = translate_fwd_ty span type_infos in
   let name =
     Print.Types.name_to_string
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
       item_meta.name
   in
-  let generics, preds =
-    translate_generic_params (Some trait_decl.item_meta.span) llbc_generics
-  in
+  let generics, preds = translate_generic_params span llbc_generics in
   let explicit_info = compute_explicit_info generics [] in
   let parent_clauses =
-    List.map
-      (translate_trait_clause (Some trait_decl.item_meta.span))
-      llbc_parent_clauses
+    List.map (translate_trait_clause span) llbc_parent_clauses
   in
-  let consts =
+  let consts = List.map (fun (name, ty) -> (name, translate_ty ty)) consts in
+  let required_methods =
     List.map
-      (fun (name, ty) ->
-        (name, translate_fwd_ty (Some trait_decl.item_meta.span) type_infos ty))
-      consts
+      (fun (name, bound_fn) ->
+        (name, translate_trait_method span translate_ty bound_fn))
+      required_methods
+  in
+  let provided_methods =
+    List.map
+      (fun (name, bound_fn) ->
+        (name, translate_trait_method span translate_ty bound_fn))
+      provided_methods
   in
   {
     def_id;
@@ -4762,36 +4788,40 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
   } =
     trait_impl
   in
-  let span = item_meta.span in
+  let span = Some item_meta.span in
   let type_infos = ctx.type_ctx.type_infos in
+  let translate_ty = translate_fwd_ty span type_infos in
   let impl_trait =
-    (translate_trait_decl_ref (Some span)
-       (translate_fwd_ty (Some span) type_infos))
-      llbc_impl_trait
+    (translate_trait_decl_ref span translate_ty) llbc_impl_trait
   in
   let name =
     Print.Types.name_to_string
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
       item_meta.name
   in
-  let generics, preds = translate_generic_params (Some span) llbc_generics in
+  let generics, preds = translate_generic_params span llbc_generics in
   let explicit_info = compute_explicit_info generics [] in
   let parent_trait_refs =
-    List.map (translate_strait_ref (Some span)) parent_trait_refs
+    List.map (translate_strait_ref span) parent_trait_refs
   in
   let consts =
     List.map
       (fun (name, gref) ->
-        ( name,
-          translate_global_decl_ref (Some span)
-            (translate_fwd_ty (Some span) type_infos)
-            gref ))
+        (name, translate_global_decl_ref span translate_ty gref))
       consts
   in
-  let types =
+  let types = List.map (fun (name, ty) -> (name, translate_ty ty)) types in
+  let required_methods =
     List.map
-      (fun (name, ty) -> (name, translate_fwd_ty (Some span) type_infos ty))
-      types
+      (fun (name, bound_fn) ->
+        (name, translate_trait_method span translate_ty bound_fn))
+      required_methods
+  in
+  let provided_methods =
+    List.map
+      (fun (name, bound_fn) ->
+        (name, translate_trait_method span translate_ty bound_fn))
+      provided_methods
   in
   {
     def_id;

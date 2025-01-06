@@ -47,7 +47,6 @@ type trait_clause_id = T.trait_clause_id [@@deriving show, ord]
 type trait_item_name = T.trait_item_name [@@deriving show, ord]
 type global_decl_id = T.global_decl_id [@@deriving show, ord]
 type fun_decl_id = A.fun_decl_id [@@deriving show, ord]
-type fun_decl_ref = T.fun_decl_ref [@@deriving show, ord]
 type loop_id = LoopId.id [@@deriving show, ord]
 type region_group_id = T.region_group_id [@@deriving show, ord]
 type mutability = Mut | Const [@@deriving show, ord]
@@ -56,7 +55,6 @@ type file_name = Meta.file_name [@@deriving show, ord]
 type raw_span = Meta.raw_span [@@deriving show, ord]
 type span = Meta.span [@@deriving show, ord]
 type ref_kind = Types.ref_kind [@@deriving show, ord]
-type 'a binder = 'a Types.binder [@@deriving show, ord]
 type 'a de_bruijn_var = 'a Types.de_bruijn_var [@@deriving show, ord]
 
 (** The builtin types for the pure AST.
@@ -258,6 +256,11 @@ type ty =
 and trait_ref = {
   trait_id : trait_instance_id;
   trait_decl_ref : trait_decl_ref;
+}
+
+and fun_decl_ref = {
+  fun_id : fun_decl_id;
+  fun_generics : generic_args; (* The name: annoying field collisions... *)
 }
 
 and trait_decl_ref = {
@@ -1273,6 +1276,20 @@ type backend_attributes = {
   reducible : bool;  (** Lean "reducible" attribute *)
 }
 [@@deriving show]
+
+(** A value of type `T` bound by generic parameters. Used in any context where
+    we're adding generic parameters that aren't on the top-level item, e.g.
+    trait methods.
+ *)
+type 'a binder = {
+  binder_value : 'a;
+  binder_generics : generic_params;
+  binder_preds : predicates;
+  binder_llbc_generics : Types.generic_params;
+  binder_explicit_info : explicit_info;
+      (** Information about which inputs parameters are explicit/implicit *)
+}
+[@@deriving show, ord]
 
 type fun_decl = {
   def_id : FunDeclId.id;
