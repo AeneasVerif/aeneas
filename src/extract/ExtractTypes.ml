@@ -582,7 +582,9 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
                 Collections.List.iter_link (F.pp_print_space fmt)
                   (extract_trait_ref span ctx fmt no_params_tys true)
                   trait_refs)))
-  | TVar vid -> F.pp_print_string fmt (ctx_get_type_var span vid ctx)
+  | TVar var ->
+      let id = TypesUtils.expect_free_var (Some span) var in
+      F.pp_print_string fmt (ctx_get_type_var span id ctx)
   | TLiteral lty -> extract_literal_type ctx fmt lty
   | TArrow (arg_ty, ret_ty) ->
       if inside then F.pp_print_string fmt "(";
@@ -772,7 +774,8 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
       F.pp_print_string fmt name;
       extract_generic_args span ctx fmt no_params_tys ~explicit generics;
       if use_brackets then F.pp_print_string fmt ")"
-  | Clause id ->
+  | Clause var ->
+      let id = TypesUtils.expect_free_var (Some span) var in
       let name = ctx_get_local_trait_clause span id ctx in
       F.pp_print_string fmt name
   | ParentClause (inst_id, decl_id, clause_id) ->

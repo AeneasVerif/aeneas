@@ -352,7 +352,7 @@ let bs_ctx_to_fmt_env (ctx : bs_ctx) : Print.fmt_env =
 let bs_ctx_to_pure_fmt_env (ctx : bs_ctx) : PrintPure.fmt_env =
   {
     crate = ctx.decls_ctx.crate;
-    generics = ctx.sg.generics;
+    generics = [ ctx.sg.generics ];
     vars = VarId.Map.empty;
   }
 
@@ -441,7 +441,10 @@ let bs_ctx_lookup_llbc_fun_decl (id : A.FunDeclId.id) (ctx : bs_ctx) :
 let bs_ctx_lookup_type_decl (id : TypeDeclId.id) (ctx : bs_ctx) : type_decl =
   TypeDeclId.Map.find id ctx.type_ctx.type_decls
 
-(* We simply ignore the bound regions *)
+(* We simply ignore the bound regions. Note that this messes up the de bruijn
+   ids in variables: variables inside `rb.binder_value` are nested deeper so
+   we should shift them before moving them out of their binder. We ignore this
+   because we don't yet handle complex binding situations in Aeneas. *)
 let translate_region_binder (translate_value : 'a -> 'b)
     (rb : 'a T.region_binder) : 'b =
   translate_value rb.binder_value
@@ -496,7 +499,9 @@ and translate_trait_instance_id (span : Meta.span option)
   | BuiltinOrAuto _ ->
       (* We should have eliminated those in the prepasses *)
       craise_opt_span __FILE__ __LINE__ span "Unreachable"
-  | Clause var -> Clause (TypesUtils.expect_free_var span var)
+  | Clause var ->
+      Clause var
+      (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
   | ParentClause (inst_id, decl_id, clause_id) ->
       let inst_id = translate_trait_instance_id inst_id in
       ParentClause (inst_id, decl_id, clause_id)
@@ -531,7 +536,9 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
           | T.TArray -> TAdt (TBuiltin TArray, generics)
           | T.TSlice -> TAdt (TBuiltin TSlice, generics)
           | T.TStr -> TAdt (TBuiltin TStr, generics)))
-  | TVar var -> TVar (TypesUtils.expect_free_var span var)
+  | TVar var ->
+      TVar var
+      (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
   | TLiteral ty -> TLiteral ty
   | TNever -> craise_opt_span __FILE__ __LINE__ span "Unreachable"
   | TRef (_, rty, _) -> translate span rty
@@ -766,7 +773,7 @@ let rec translate_fwd_ty (span : Meta.span option) (type_infos : type_infos)
               craise_opt_span __FILE__ __LINE__ span
                 "Unreachable: box/vec/option receives exactly one type \
                  parameter"))
-  | TVar var -> TVar (TypesUtils.expect_free_var span var)
+  | TVar var -> TVar var
   | TNever -> craise_opt_span __FILE__ __LINE__ span "Unreachable"
   | TLiteral lty -> TLiteral lty
   | TRef (_, rty, _) -> translate rty
@@ -874,7 +881,7 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
                 (* Note that if there is exactly one type, [mk_simpl_tuple_ty]
                  * is the identity *)
                 Some (mk_simpl_tuple_ty tys_t)))
-  | TVar var -> wrap (TVar (TypesUtils.expect_free_var span var))
+  | TVar var -> wrap (TVar var)
   | TNever -> craise_opt_span __FILE__ __LINE__ span "Unreachable"
   | TLiteral lty -> wrap (TLiteral lty)
   | TRef (r, rty, rkind) -> (
@@ -4287,7 +4294,9 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
        call to the loop forward function) *)
     let generics =
       let { types; const_generics; trait_clauses } = ctx.sg.generics in
-      let types = List.map (fun (ty : T.type_var) -> TVar ty.T.index) types in
+      let types =
+        List.map (fun (ty : T.type_var) -> TVar (Free ty.T.index)) types
+      in
       let const_generics =
         List.map
           (fun (cg : T.const_generic_var) -> T.CgVar (Free cg.T.index))
@@ -4299,7 +4308,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
             let trait_decl_ref =
               { trait_decl_id = c.trait_id; decl_generics = c.generics }
             in
-            { trait_id = Clause c.clause_id; trait_decl_ref })
+            { trait_id = Clause (Free c.clause_id); trait_decl_ref })
           trait_clauses
       in
       { types; const_generics; trait_refs }

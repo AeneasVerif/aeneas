@@ -57,6 +57,7 @@ type raw_span = Meta.raw_span [@@deriving show, ord]
 type span = Meta.span [@@deriving show, ord]
 type ref_kind = Types.ref_kind [@@deriving show, ord]
 type 'a binder = 'a Types.binder [@@deriving show, ord]
+type 'a de_bruijn_var = 'a Types.de_bruijn_var [@@deriving show, ord]
 
 (** The builtin types for the pure AST.
 
@@ -246,7 +247,8 @@ type ty =
           be able to only give back part of the ADT. We need a way to encode
           such "partial" ADTs.
        *)
-  | TVar of type_var_id
+  | TVar of type_var_id de_bruijn_var
+    (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
   | TLiteral of literal_type
   | TArrow of ty * ty
   | TTraitType of trait_ref * string
@@ -277,7 +279,8 @@ and generic_args = {
 and trait_instance_id =
   | Self
   | TraitImpl of trait_impl_id * generic_args
-  | Clause of trait_clause_id
+  | Clause of trait_clause_id de_bruijn_var
+    (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
   | ParentClause of trait_instance_id * trait_decl_id * trait_clause_id
   | UnknownTrait of string
 [@@deriving
