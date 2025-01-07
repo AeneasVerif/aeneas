@@ -2009,6 +2009,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
           avalues;
         }
       in
+      Invariants.opt_type_check_abs span ctx abs;
       (* Add to the list of abstractions *)
       absl := abs :: !absl
   in
@@ -2083,7 +2084,6 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             let value = ABorrow (ASharedBorrow (PNone, bid)) in
             ([ { value; ty } ], v)
         | VMutBorrow (bid, bv) ->
-            let r_id = if group then r_id else fresh_region_id () in
             (* We don't support nested borrows for now *)
             cassert __FILE__ __LINE__
               (not (value_has_borrows (Some span) ctx bv.value))
@@ -3507,6 +3507,7 @@ let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
   let nabs =
     merge_abstractions span abs_kind can_end merge_funs ctx abs0 abs1
   in
+  Invariants.opt_type_check_abs span ctx nabs;
 
   (* Update the environment: replace the abstraction 0 with the result of the merge,
      remove the abstraction 1 *)

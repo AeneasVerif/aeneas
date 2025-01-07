@@ -388,7 +388,8 @@ let eval_loop_symbolic (config : config) (span : span)
       log#ldebug
         (lazy
           ("eval_loop_symbolic: compute_abs_given_back_tys:\n- abs:\n"
-         ^ abs_to_string span ctx abs ^ "\n"));
+          ^ abs_to_string span ~with_ended:true ctx abs
+          ^ "\n"));
 
       let is_borrow (av : typed_avalue) : bool =
         match av.value with

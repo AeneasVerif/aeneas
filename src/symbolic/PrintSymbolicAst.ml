@@ -82,6 +82,8 @@ let rec expression_to_string (env : fmt_env) (indent : string)
       indent ^ "let " ^ sv ^ " = " ^ v ^ "in\n" ^ next
   | ForwardEnd (ret, _, sid_to_value, fwd_end, backs) ->
       let indent1 = indent ^ indent_incr in
+      let indent2 = indent1 ^ indent_incr in
+      let indent3 = indent2 ^ indent_incr in
       let ret =
         match ret with
         | None -> "None"
@@ -98,15 +100,15 @@ let rec expression_to_string (env : fmt_env) (indent : string)
       in
       let sid_to_value = "sid_to_value = " ^ sid_to_value in
 
-      let fwd_end = expression_to_string env indent1 indent_incr fwd_end in
+      let fwd_end = expression_to_string env indent2 indent_incr fwd_end in
       let backs =
-        RegionGroupId.Map.to_string (Some indent1)
-          (fun e -> "\n" ^ expression_to_string env indent1 indent e)
+        RegionGroupId.Map.to_string (Some indent2)
+          (fun e -> "\n" ^ expression_to_string env indent3 indent_incr e)
           backs
       in
       indent ^ "forward_end {\n" ^ indent1 ^ ret ^ "\n" ^ indent1 ^ sid_to_value
-      ^ "\n" ^ indent1 ^ "fwd_end=\n" ^ fwd_end ^ "\n" ^ indent1 ^ "backs=\n"
-      ^ backs ^ "\n" ^ indent ^ "}"
+      ^ "\n" ^ indent1 ^ "fwd_end =\n" ^ fwd_end ^ "\n" ^ indent1 ^ "backs =\n"
+      ^ indent1 ^ backs ^ "\n" ^ indent ^ "}"
   | Loop loop -> loop_to_string env indent indent_incr loop
   | ReturnWithLoop (loop_id, is_continue) ->
       indent ^ "return_with_loop (" ^ LoopId.to_string loop_id

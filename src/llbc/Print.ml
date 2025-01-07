@@ -187,6 +187,13 @@ module Values = struct
     | PLeft -> "|" ^ s ^ "|"
     | PRight -> "︙" ^ s ^ "︙"
 
+  let ended_mut_borrow_meta_to_string (env : fmt_env)
+      (mv : ended_mut_borrow_meta) : string =
+    let { bid; given_back } = mv in
+    "{ bid = " ^ BorrowId.to_string bid ^ "; given_back = "
+    ^ symbolic_value_to_string env given_back
+    ^ " }"
+
   let rec typed_avalue_to_string ?(span : Meta.span option = None)
       ?(with_ended : bool = false) (env : fmt_env) (v : typed_avalue) : string =
     match v.value with
@@ -254,7 +261,12 @@ module Values = struct
         ^ ")"
         |> add_proj_marker pm
     | AEndedMutLoan ml ->
-        "@ended_mut_loan{"
+        let consumed =
+          if with_ended then
+            "consumed = " ^ typed_value_to_string env ml.given_back_meta ^ ", "
+          else ""
+        in
+        "@ended_mut_loan{" ^ consumed
         ^ typed_avalue_to_string ~span ~with_ended env ml.child
         ^ "; "
         ^ typed_avalue_to_string ~span ~with_ended env ml.given_back
@@ -299,10 +311,12 @@ module Values = struct
         ^ ", "
         ^ typed_avalue_to_string ~span ~with_ended env av
         ^ ")"
-    | AEndedMutBorrow (_mv, child) ->
+    | AEndedMutBorrow (mv, child) ->
         "@ended_mut_borrow("
-        ^ typed_avalue_to_string ~span ~with_ended env child
-        ^ ")"
+        ^
+        if with_ended then
+          "given_back= " ^ ended_mut_borrow_meta_to_string env mv
+        else "" ^ typed_avalue_to_string ~span ~with_ended env child ^ ")"
     | AEndedIgnoredMutBorrow { child; given_back; given_back_meta = _ } ->
         "@ended_ignored_mut_borrow{ "
         ^ typed_avalue_to_string ~span ~with_ended env child
@@ -735,7 +749,8 @@ module EvalCtx = struct
     env_elem_to_string ~span env false true indent indent_incr ev
 
   let abs_to_string ?(span : Meta.span option = None) (ctx : eval_ctx)
-      (indent : string) (indent_incr : string) (abs : abs) : string =
+      ?(with_ended : bool = false) (indent : string) (indent_incr : string)
+      (abs : abs) : string =
     let env = eval_ctx_to_fmt_env ctx in
-    abs_to_string ~span env false indent indent_incr abs
+    abs_to_string ~span env ~with_ended false indent indent_incr abs
 end

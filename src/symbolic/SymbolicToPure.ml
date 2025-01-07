@@ -3238,6 +3238,9 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
   let given_back_variables =
     List.map (fun v -> mk_typed_pattern_from_var v None) given_back_variables
   in
+  sanity_check __FILE__ __LINE__
+    (List.length given_back_variables = List.length consumed_values)
+    ctx.span;
   let variables_values = List.combine given_back_variables consumed_values in
 
   (* Sanity check: the two lists match (same types) *)
@@ -4575,7 +4578,6 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
             ^ name_to_string ctx def.item_meta.name
             ^ "\n- body:\n"
             ^ bs_ctx_expression_to_string ctx body));
-        raise (Failure "TODO");
 
         let effect_info =
           get_fun_effect_info ctx (FunId (FRegular def_id)) None None

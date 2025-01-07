@@ -303,12 +303,13 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
            match ee with
            | EAbs _ | EFrame | EBinding (BVar _, _) -> [ ee ]
            | EBinding (BDummy id, v) ->
-               if is_fresh_did id then
+               if is_fresh_did id then (
                  let absl =
                    convert_value_to_abstractions span abs_kind can_end
                      destructure_shared_values ctx0 v
                  in
-                 List.map (fun abs -> EAbs abs) absl
+                 Invariants.opt_type_check_absl span ctx0 absl;
+                 List.map (fun abs -> EAbs abs) absl)
                else [ ee ])
          ctx0.env)
   in
@@ -1171,6 +1172,8 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
       (lazy
         ("loop_join_origin_with_continue_ctxs:join_one: after destructure:\n"
         ^ eval_ctx_to_string ~span:(Some span) ctx));
+    (* Sanity check *)
+    if !Config.sanity_checks then Invariants.check_invariants span ctx;
 
     (* Reduce the context we want to add to the join *)
     let ctx = reduce_ctx span loop_id fixed_ids ctx in
@@ -1178,9 +1181,13 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
       (lazy
         ("loop_join_origin_with_continue_ctxs:join_one: after reduce:\n"
         ^ eval_ctx_to_string ~span:(Some span) ctx));
+    (* Sanity check *)
+    if !Config.sanity_checks then Invariants.check_invariants span ctx;
 
     (* Refresh the fresh abstractions *)
     let ctx = refresh_abs fixed_ids.aids ctx in
+    (* Sanity check *)
+    if !Config.sanity_checks then Invariants.check_invariants span ctx;
 
     (* Join the two contexts  *)
     let ctx1 = join_one_aux ctx in
@@ -1195,6 +1202,8 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
       (lazy
         ("loop_join_origin_with_continue_ctxs:join_one: after join-collapse:\n"
         ^ eval_ctx_to_string ~span:(Some span) !joined_ctx));
+    (* Sanity check *)
+    if !Config.sanity_checks then Invariants.check_invariants span !joined_ctx;
 
     (* Reduce again to reach a fixed point *)
     joined_ctx := reduce_ctx span loop_id fixed_ids !joined_ctx;

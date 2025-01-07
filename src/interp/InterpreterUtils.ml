@@ -64,8 +64,8 @@ let env_elem_to_string span ctx =
 let env_to_string span ctx env =
   eval_ctx_to_string ~span:(Some span) { ctx with env }
 
-let abs_to_string span ctx =
-  Print.EvalCtx.abs_to_string ~span:(Some span) ctx "" "  "
+let abs_to_string span ?(with_ended = false) ctx =
+  Print.EvalCtx.abs_to_string ~span:(Some span) ~with_ended ctx "" "  "
 
 let same_symbolic_id (sv0 : symbolic_value) (sv1 : symbolic_value) : bool =
   sv0.sv_id = sv1.sv_id
@@ -254,6 +254,11 @@ let symbolic_value_has_ended_regions (ended_regions : RegionId.Set.t)
     (s : symbolic_value) : bool =
   let regions = ty_regions s.sv_ty in
   not (RegionId.Set.disjoint regions ended_regions)
+
+let region_is_owned (abs : abs) (r : region) : bool =
+  match r with
+  | RVar (Free rid) -> RegionId.Set.mem rid abs.regions.owned
+  | _ -> false
 
 let bottom_in_value_visitor (ended_regions : RegionId.Set.t) =
   object
