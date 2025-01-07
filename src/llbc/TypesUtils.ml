@@ -159,6 +159,14 @@ let ty_has_mut_borrow_for_region_in_pred (infos : TypesAnalysis.type_infos)
     false
   with Found -> true
 
+let ty_has_mut_borrow_for_region_in_set (infos : TypesAnalysis.type_infos)
+    (regions : RegionId.Set.t) (ty : ty) : bool =
+  ty_has_mut_borrow_for_region_in_pred infos
+    (function
+      | RVar (Free rid) -> RegionId.Set.mem rid regions
+      | _ -> false)
+    ty
+
 (** Small helper *)
 let raise_if_not_rty_visitor =
   object

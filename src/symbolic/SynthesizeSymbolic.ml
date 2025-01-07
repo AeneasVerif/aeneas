@@ -178,20 +178,5 @@ let synthesize_assertion (ctx : Contexts.eval_ctx) (v : typed_value)
     (e : expression) =
   Assertion (ctx, v, e)
 
-let synthesize_loop (loop_id : LoopId.id) (input_svalues : symbolic_value list)
-    (fresh_svalues : SymbolicValueId.Set.t)
-    (rg_to_given_back_tys : ty list RegionGroupId.Map.t) (end_expr : expression)
-    (loop_expr : expression) (span : Meta.span) : expression =
-  Loop
-    {
-      loop_id;
-      input_svalues;
-      fresh_svalues;
-      rg_to_given_back_tys;
-      end_expr;
-      loop_expr;
-      span;
-    }
-
 let save_snapshot (ctx : Contexts.eval_ctx) (e : expression) : expression =
   Meta (Snapshot ctx, e)

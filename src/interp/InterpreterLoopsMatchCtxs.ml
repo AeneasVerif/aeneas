@@ -1877,8 +1877,8 @@ let match_ctx_with_target (config : config) (span : Meta.span)
   (* Match the source and target contexts *)
   log#ldebug
     (lazy
-      ("cf_introduce_loop_fp_abs:\n" ^ "\n- fixed_ids: "
-     ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
+      ("mach_ctx_with_target: about to introduce the identity abstractions (i):\n"
+     ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
      ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: " ^ eval_ctx_to_string tgt_ctx
       ));
 
@@ -1915,11 +1915,21 @@ let match_ctx_with_target (config : config) (span : Meta.span)
          (fun (x, y) -> (y, x))
          (BorrowId.InjSubst.bindings src_to_tgt_maps.borrow_id_map))
   in
+  let tgt_to_src_sid_map =
+    SymbolicValueId.Map.of_list
+      (List.filter_map
+         (fun ((sid, v) : _ * typed_value) ->
+           match v.value with
+           | VSymbolic sv -> Some (sv.sv_id, sid)
+           | _ -> None)
+         (SymbolicValueId.Map.bindings src_to_tgt_maps.sid_to_value_map))
+  in
 
   (* Debug *)
   log#ldebug
     (lazy
-      ("match_ctx_with_target: cf_introduce_loop_fp_abs:" ^ "\n\n- src_ctx: "
+      ("match_ctx_with_target: about to introduce the identity abstractions \
+        (ii):" ^ "\n\n- src_ctx: "
       ^ eval_ctx_to_string ~span:(Some span) src_ctx
       ^ "\n\n- tgt_ctx: "
       ^ eval_ctx_to_string ~span:(Some span) tgt_ctx
@@ -1933,7 +1943,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
       ^ "\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids ^ "\n\n- fp_bl_maps:\n"
       ^ show_borrow_loan_corresp fp_bl_maps
       ^ "\n\n- src_to_tgt_maps: "
-      ^ show_ids_maps src_to_tgt_maps));
+      ^ ids_maps_to_string tgt_ctx src_to_tgt_maps));
 
   (* Update the borrows and symbolic ids in the source context.
 
@@ -1954,8 +1964,8 @@ let match_ctx_with_target (config : config) (span : Meta.span)
      {[
        env_fp = {
          abs@0 { ML l0 }
-         ls -> MB l1 (s3 : loops::List<T>)
-         i -> s4 : u32
+         ls -> MB l1 (s@3 : loops::List<T>)
+         i -> s@4 : u32
          abs@fp {
            MB l0 // this borrow appears in [env0]
            ML l1
@@ -1965,7 +1975,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
 
      Through matching, we detect that in [env_fp], [l1] is matched
      to [l5]. We introduce a fresh borrow [l6] for [l1], and remember
-     in the map [src_fresh_borrows_map] that: [{ l1 -> l6}].
+     in the map [src_fresh_borrows_map] that: [{ l1 -> l6 }].
 
      We get:
      {[
@@ -1982,17 +1992,44 @@ let match_ctx_with_target (config : config) (span : Meta.span)
      {[
        abs@2 { MB l5, ML l6 }
      ]}
+
+     We do something similar for symbolic values.
   *)
-  (* First, compute the set of borrows which appear in the fresh abstractions
-     of the fixed-point: we want to introduce fresh ids only for those. *)
+  (* First, compute the set of borrows and symbolic values appearing in *borrow*
+     projections which appear in the fresh abstractions of the fixed-point: we
+     want to introduce fresh ids only for those. *)
   let new_absl_ids, _ = compute_absl_ids new_absl in
   let src_fresh_borrows_map = ref BorrowId.Map.empty in
+  let src_fresh_sids_map = ref SymbolicValueId.Map.empty in
+  let register_symbolic_value (sv : symbolic_value) : symbolic_value =
+    let id = sv.sv_id in
+    (* Register the symbolic value, if it needs to be mapped *)
+    let id =
+      if
+        (* We map the borrows for which we computed a mapping - TODO: simplify *)
+        SymbolicValueId.Map.mem id tgt_to_src_sid_map
+        (* And which have corresponding loans in the fresh fixed-point abstractions *)
+        && SymbolicValueId.Set.mem
+             (SymbolicValueId.Map.find id tgt_to_src_sid_map)
+             new_absl_ids.sids
+      then (
+        let src_id = SymbolicValueId.Map.find id tgt_to_src_sid_map in
+        let nid = fresh_symbolic_value_id () in
+        src_fresh_sids_map :=
+          SymbolicValueId.Map.add src_id nid !src_fresh_sids_map;
+        nid)
+      else id
+    in
+    { sv with sv_id = id }
+  in
   let visit_tgt =
     object
-      inherit [_] map_eval_ctx
+      inherit [_] map_eval_ctx as super
 
+      (* For *borrows* it is simple: there is a separation between *borrow*
+         ids and *loan* ids, meaning we simply have to update one visitor. *)
       method! visit_borrow_id _ id =
-        (* Map the borrow, if it needs to be mapped *)
+        (* Map the borrow, if it needs to be mapped - TODO: simplify *)
         if
           (* We map the borrows for which we computed a mapping *)
           BorrowId.InjSubst.Set.mem id
@@ -2008,6 +2045,17 @@ let match_ctx_with_target (config : config) (span : Meta.span)
             BorrowId.Map.add src_id nid !src_fresh_borrows_map;
           nid)
         else id
+
+      method! visit_VSymbolic _ sv = VSymbolic (register_symbolic_value sv)
+
+      method! visit_aproj env p =
+        match p with
+        | AProjLoans _ -> super#visit_aproj env p
+        | AProjBorrows (sv, proj_ty, children) ->
+            sanity_check __FILE__ __LINE__ (children = []) span;
+            let sv = register_symbolic_value sv in
+            AProjBorrows (sv, proj_ty, children)
+        | _ -> super#visit_aproj env p
     end
   in
 
@@ -2015,21 +2063,18 @@ let match_ctx_with_target (config : config) (span : Meta.span)
 
   log#ldebug
     (lazy
-      ("match_ctx_with_target: cf_introduce_loop_fp_abs: src_fresh_borrows_map:\n"
+      ("match_ctx_with_target: cf_introduce_loop_fp_abs:"
+     ^ "\n- src_fresh_borrows_map:\n"
       ^ BorrowId.Map.show BorrowId.to_string !src_fresh_borrows_map
+      ^ "\n- src_fresh_sids_map:\n"
+      ^ SymbolicValueId.Map.show SymbolicValueId.to_string !src_fresh_sids_map
       ^ "\n"));
 
-  (* Rem.: we don't update the symbolic values. It is not necessary
-     because there shouldn't be any symbolic value containing borrows.
-
-     Rem.: we will need to do something about the symbolic values in the
-     abstractions and in the *variable bindings* once we allow symbolic
-     values containing borrows to not be eagerly expanded.
-  *)
   sanity_check __FILE__ __LINE__ Config.greedy_expand_symbolics_with_borrows
     span;
 
-  (* Update the borrows and loans in the abstractions of the target context.
+  (* Update the borrows/loans and the borrow/loan projectors in the abstractions
+     of the target context.
 
      Going back to the [list_nth_mut] example and by using [src_fresh_borrows_map],
      we instantiate the fixed-point abstractions that we will insert into the
@@ -2079,7 +2124,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
   let get_abs_id = AbstractionIdGen.get_id in
 
   let visit_src =
-    object
+    object (self)
       inherit [_] map_eval_ctx as super
 
       method! visit_borrow_id _ bid =
@@ -2131,6 +2176,55 @@ let match_ctx_with_target (config : config) (span : Meta.span)
 
       method! visit_symbolic_value_id _ _ = fresh_symbolic_value_id ()
       method! visit_abstraction_id _ id = get_abs_id id
+
+      method! visit_aproj env proj =
+        match proj with
+        | AProjLoans (sv, proj_ty, children) ->
+            (* The logic is similar to the concrete borrows/loans cases above *)
+            let id = sv.sv_id in
+            sanity_check __FILE__ __LINE__ (children = []) span;
+            let sv_id =
+              begin
+                match SymbolicValueId.Map.find_opt id !src_fresh_sids_map with
+                | None ->
+                    sanity_check __FILE__ __LINE__
+                      (SymbolicValueId.InjSubst.find id src_to_tgt_maps.sid_map
+                      = id)
+                      span;
+                    id
+                | Some id -> id
+              end
+            in
+            let proj_ty = self#visit_ty env proj_ty in
+            (* We shouldn't need to update the type of the symbolic value itself *)
+            let sv_ty = sv.sv_ty in
+            AProjLoans ({ sv_id; sv_ty }, proj_ty, children)
+        | AProjBorrows (sv, proj_ty, children) ->
+            sanity_check __FILE__ __LINE__ (children = []) span;
+            (* Lookup the loan corresponding to this borrow *)
+            let src_lid =
+              SymbolicValueId.InjSubst.find sv.sv_id
+                fp_bl_maps.borrow_to_loan_proj_map
+            in
+
+            (* Lookup the value to which this borrow was mapped - note that it
+               is necessary a symbolic value *)
+            let tgt_value =
+              SymbolicValueId.Map.find src_lid src_to_tgt_maps.sid_to_value_map
+            in
+            let sv_id =
+              begin
+                match tgt_value.value with
+                | VSymbolic sv -> sv.sv_id
+                | _ -> internal_error __FILE__ __LINE__ span
+              end
+            in
+            let proj_ty = self#visit_ty env proj_ty in
+            (* We shouldn't need to update the type of the symbolic value itself *)
+            let sv_ty = sv.sv_ty in
+            AProjBorrows ({ sv_id; sv_ty }, proj_ty, children)
+        | AEndedProjBorrows _ | AEndedProjLoans _ | AEmpty ->
+            super#visit_aproj env proj
 
       method! visit_region_id _ _ =
         craise_opt_span __FILE__ __LINE__ None
@@ -2193,6 +2287,15 @@ let match_ctx_with_target (config : config) (span : Meta.span)
   in
 
   (* Compute the loop input values *)
+  log#ldebug
+    (lazy
+      ("match_ctx_with_target: about to compute the input values:"
+     ^ "\n- fp_input_svalues: "
+      ^ String.concat ", " (List.map SymbolicValueId.to_string fp_input_svalues)
+      ^ "\n- src_to_tgt_maps:\n"
+      ^ ids_maps_to_string tgt_ctx src_to_tgt_maps
+      ^ "\n- src_ctx:\n" ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx:\n"
+      ^ eval_ctx_to_string tgt_ctx ^ "\n"));
   let input_values =
     SymbolicValueId.Map.of_list
       (List.map

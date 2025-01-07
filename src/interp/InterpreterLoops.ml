@@ -145,10 +145,15 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
      inside the region abstractions. *)
   let check_abs (abs_id : AbstractionId.id) =
     let abs = ctx_lookup_abs fp_ctx abs_id in
+    log#ldebug
+      (lazy
+        ("eval_loop_symbolic_synthesize_fun_end: checking abs:\n"
+       ^ abs_to_string span ctx abs ^ "\n"));
+
     let is_borrow (av : typed_avalue) : bool =
       match av.value with
-      | ABorrow _ -> true
-      | ALoan _ -> false
+      | ABorrow _ | ASymbolic (_, AProjBorrows _) -> true
+      | ALoan _ | ASymbolic (_, AProjLoans _) -> false
       | _ -> craise __FILE__ __LINE__ span "Unreachable"
     in
     let borrows, loans = List.partition is_borrow abs.avalues in
@@ -164,7 +169,20 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
           | ABorrow (ASharedBorrow (pm, _)) ->
               sanity_check __FILE__ __LINE__ (pm = PNone) span;
               None
+          | ASymbolic (_, (AProjBorrows _ | AProjLoans _)) -> None
           | _ -> craise __FILE__ __LINE__ span "Unreachable")
+        borrows
+    in
+
+    let borrow_projs =
+      List.filter_map
+        (fun (av : typed_avalue) ->
+          match av.value with
+          | ASymbolic (pm, AProjBorrows (sv, _proj_ty, children)) ->
+              sanity_check __FILE__ __LINE__ (pm = PNone) span;
+              sanity_check __FILE__ __LINE__ (children = []) span;
+              Some sv.sv_id
+          | _ -> None)
         borrows
     in
 
@@ -179,12 +197,28 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
           | ALoan (ASharedLoan (pm, _, _, _)) ->
               sanity_check __FILE__ __LINE__ (pm = PNone) span;
               None
+          | ASymbolic (_, (AProjBorrows _ | AProjLoans _)) -> None
           | _ -> craise __FILE__ __LINE__ span "Unreachable")
+        loans
+    in
+
+    let loan_projs =
+      List.filter_map
+        (fun (av : typed_avalue) ->
+          match av.value with
+          | ASymbolic (pm, AProjLoans (sv, _proj_ty, children)) ->
+              sanity_check __FILE__ __LINE__ (pm = PNone) span;
+              sanity_check __FILE__ __LINE__ (children = []) span;
+              Some sv.sv_id
+          | _ -> None)
         loans
     in
 
     sanity_check __FILE__ __LINE__
       (List.length mut_borrows = List.length mut_loans)
+      span;
+    sanity_check __FILE__ __LINE__
+      (List.length borrow_projs = List.length loan_projs)
       span;
 
     let borrows_loans = List.combine mut_borrows mut_loans in
@@ -194,7 +228,17 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
           BorrowId.InjSubst.find bid fp_bl_corresp.borrow_to_loan_id_map
         in
         sanity_check __FILE__ __LINE__ (lid_of_bid = lid) span)
-      borrows_loans
+      borrows_loans;
+
+    let borrow_loan_projs = List.combine borrow_projs loan_projs in
+    List.iter
+      (fun (bid, lid) ->
+        let lid_of_bid =
+          SymbolicValueId.InjSubst.find bid
+            fp_bl_corresp.borrow_to_loan_proj_map
+        in
+        sanity_check __FILE__ __LINE__ (lid_of_bid = lid) span)
+      borrow_loan_projs
   in
   List.iter check_abs (RegionGroupId.Map.values rg_to_abs);
 
@@ -339,7 +383,7 @@ let eval_loop_symbolic (config : config) (span : span)
      return nothing.
   *)
   let rg_to_given_back =
-    let compute_abs_given_back_tys (abs_id : AbstractionId.id) : rty list =
+    let compute_abs_given_back_tys (abs_id : AbstractionId.id) : Pure.ty list =
       let abs = ctx_lookup_abs fp_ctx abs_id in
       log#ldebug
         (lazy
@@ -348,23 +392,19 @@ let eval_loop_symbolic (config : config) (span : span)
 
       let is_borrow (av : typed_avalue) : bool =
         match av.value with
-        | ABorrow _ -> true
-        | ALoan _ -> false
+        | ABorrow _ | ASymbolic (_, AProjBorrows _) -> true
+        | ALoan _ | ASymbolic (_, AProjLoans _) -> false
         | _ -> craise __FILE__ __LINE__ span "Unreachable"
       in
       let borrows, _ = List.partition is_borrow abs.avalues in
 
       List.filter_map
         (fun (av : typed_avalue) ->
-          match av.value with
-          | ABorrow (AMutBorrow (pm, _, child_av)) ->
-              sanity_check __FILE__ __LINE__ (pm = PNone) span;
-              sanity_check __FILE__ __LINE__ (is_aignored child_av.value) span;
-              Some child_av.ty
-          | ABorrow (ASharedBorrow (pm, _)) ->
-              sanity_check __FILE__ __LINE__ (pm = PNone) span;
-              None
-          | _ -> craise __FILE__ __LINE__ span "Unreachable")
+          SymbolicToPure.translate_back_ty (Some span) ctx.type_ctx.type_infos
+            (function
+              | RVar (Free rid) -> RegionId.Set.mem rid abs.regions.owned
+              | _ -> false)
+            false av.ty)
         borrows
     in
     RegionGroupId.Map.map compute_abs_given_back_tys rg_to_abs
@@ -377,8 +417,16 @@ let eval_loop_symbolic (config : config) (span : span)
     | e :: el ->
         let fun_end_expr = cf_fun_end e in
         let loop_expr = cf_loop_body el in
-        S.synthesize_loop loop_id input_svalues fresh_sids rg_to_given_back
-          fun_end_expr loop_expr span
+        SymbolicAst.Loop
+          {
+            loop_id;
+            input_svalues;
+            fresh_svalues = fresh_sids;
+            rg_to_given_back_tys = rg_to_given_back;
+            end_expr = fun_end_expr;
+            loop_expr;
+            span;
+          }
   in
   (res_fun_end :: resl_loop_body, cc)
 

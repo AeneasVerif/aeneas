@@ -7,6 +7,7 @@ open LlbcAstUtils
 open Types
 open TypesUtils
 open Values
+open ValuesUtils
 open LlbcAst
 open Contexts
 open Errors

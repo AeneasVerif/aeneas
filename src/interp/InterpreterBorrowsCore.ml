@@ -1012,8 +1012,7 @@ let update_intersecting_aproj_loans (span : Meta.span)
             super#visit_aproj abs sproj
         | AProjLoans (abs_sv, abs_proj_ty, given_back) ->
             let abs = Option.get abs in
-            if same_symbolic_id sv abs_sv then (
-              sanity_check __FILE__ __LINE__ (sv.sv_ty = abs_sv.sv_ty) span;
+            if same_symbolic_id sv abs_sv then
               let abs_regions = RegionId.Set.empty in
               let abs_regions =
                 if include_ancestors then
@@ -1029,7 +1028,7 @@ let update_intersecting_aproj_loans (span : Meta.span)
                 projections_intersect span proj_ty proj_regions abs_proj_ty
                   abs_regions
               then update abs abs_sv abs_proj_ty given_back
-              else super#visit_aproj (Some abs) sproj)
+              else super#visit_aproj (Some abs) sproj
             else super#visit_aproj (Some abs) sproj
     end
   in

@@ -5,6 +5,7 @@ open Contexts
 open LlbcAst
 open Utils
 open TypesUtils
+open ValuesUtils
 open Errors
 
 (* TODO: we should probably rename the file to ContextsUtils *)
@@ -111,14 +112,6 @@ let mk_fresh_symbolic_typed_value_from_no_regions_ty (span : Meta.span)
     (ty : ty) : typed_value =
   sanity_check __FILE__ __LINE__ (ty_no_regions ty) span;
   mk_fresh_symbolic_typed_value span ty
-
-(** Create a typed value from a symbolic value. *)
-let mk_typed_value_from_symbolic_value (svalue : symbolic_value) : typed_value =
-  let av = VSymbolic svalue in
-  let av : typed_value =
-    { value = av; ty = Substitute.erase_regions svalue.sv_ty }
-  in
-  av
 
 (** Create a loans projector value from a symbolic value.
     

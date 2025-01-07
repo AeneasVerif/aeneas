@@ -889,13 +889,23 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
   log#ldebug
     (lazy
       ("compute_fixed_point_id_correspondance:\n\n- tgt_to_src_maps:\n"
-     ^ show_ids_maps maps ^ "\n\n"));
+      ^ ids_maps_to_string src_ctx maps
+      ^ "\n\n"));
 
   let src_to_tgt_borrow_map =
     BorrowId.Map.of_list
       (List.map
          (fun (x, y) -> (y, x))
          (BorrowId.InjSubst.bindings maps.borrow_id_map))
+  in
+  let src_to_tgt_sid_map =
+    SymbolicValueId.Map.of_list
+      (List.filter_map
+         (fun ((sid, v) : _ * typed_value) ->
+           match v.value with
+           | VSymbolic v -> Some (v.sv_id, sid)
+           | _ -> None)
+         (SymbolicValueId.Map.bindings maps.sid_to_value_map))
   in
 
   (* Sanity check: for every abstraction, the target loans and borrows are mapped
@@ -936,7 +946,7 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
           (fun x -> BorrowId.InjSubst.find x maps.borrow_id_map)
           ids.loan_ids
       in
-      (* Check that the loan and borrows are related *)
+      (* Check that the loans and borrows are related *)
       sanity_check __FILE__ __LINE__
         (BorrowId.Set.equal ids.borrow_ids loan_ids)
         span)
@@ -954,6 +964,7 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
      abstractions to move the shared values out of the source context abstractions.
   *)
   let tgt_borrow_to_loan = ref BorrowId.InjSubst.empty in
+  let tgt_borrow_to_loan_proj = ref SymbolicValueId.InjSubst.empty in
   let visit_tgt =
     object
       inherit [_] iter_abs
@@ -964,6 +975,25 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
         (* Update the map *)
         tgt_borrow_to_loan :=
           BorrowId.InjSubst.add id tgt_borrow_id !tgt_borrow_to_loan
+
+      method! visit_aproj _ proj =
+        match proj with
+        | AProjLoans (_sv, _proj_ty, children) ->
+            sanity_check __FILE__ __LINE__ (children = []) span;
+            ()
+        | AProjBorrows (sv, _proj_ty, children) ->
+            sanity_check __FILE__ __LINE__ (children = []) span;
+            (* Find the target borrow *)
+            let tgt_borrow_id =
+              SymbolicValueId.Map.find sv.sv_id src_to_tgt_sid_map
+            in
+            (* Update the map *)
+            tgt_borrow_to_loan_proj :=
+              SymbolicValueId.InjSubst.add sv.sv_id tgt_borrow_id
+                !tgt_borrow_to_loan_proj
+        | AEndedProjBorrows _ | AEndedProjLoans _ | AEmpty ->
+            (* We shouldn't get there *)
+            internal_error __FILE__ __LINE__ span
     end
   in
   List.iter (visit_tgt#visit_abs ()) new_absl;
@@ -976,10 +1006,19 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
          (BorrowId.InjSubst.bindings !tgt_borrow_to_loan))
   in
 
+  let tgt_loan_to_borrow_proj =
+    SymbolicValueId.InjSubst.of_list
+      (List.map
+         (fun (x, y) -> (y, x))
+         (SymbolicValueId.InjSubst.bindings !tgt_borrow_to_loan_proj))
+  in
+
   (* Return *)
   {
     borrow_to_loan_id_map = !tgt_borrow_to_loan;
     loan_to_borrow_id_map = tgt_loan_to_borrow;
+    borrow_to_loan_proj_map = !tgt_borrow_to_loan_proj;
+    loan_to_borrow_proj_map = tgt_loan_to_borrow_proj;
   }
 
 let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
@@ -988,13 +1027,19 @@ let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
   let fp_ids, fp_ids_maps = compute_ctx_ids fp_ctx in
   let fresh_sids = SymbolicValueId.Set.diff fp_ids.sids old_ids.sids in
 
-  (* Compute the set of symbolic values which appear in shared values inside
-     *fixed* abstractions: because we introduce fresh abstractions and reborrows
-     with {!prepare_ashared_loans}, those values are never accessed directly
-     inside the loop iterations: we can ignore them (and should, because
-     otherwise it leads to a very ugly translation with duplicated, unused
-     values) *)
-  let shared_sids_in_fixed_abs =
+  (* Compute the set of symbolic values which appear inside *fixed* abstractions.
+     There are two kinds of values:
+     - shared symbolic values (appearing in shared loans): because we introduce
+       fresh abstractions and reborrows with {!prepare_ashared_loans}, those
+       values are never accessed directly inside the loop iterations: we can
+       ignore them (and should, because otherwise it leads to a very ugly
+       translation with duplicated, unused values)
+     - projections over symbolic values.
+       TODO: actually it may happen that a projector inside a fixed abstraction
+       gets expanded. We need to update the way we compute joins and check
+       whether two contexts are equivalent to make it more general.
+  *)
+  let sids_in_fixed_abs =
     let fixed_absl =
       List.filter
         (fun (ee : env_elem) ->
@@ -1015,12 +1060,21 @@ let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
       object (self)
         inherit [_] iter_env
 
-        method! visit_ASharedLoan inside_shared _ _ sv child_av =
+        method! visit_ASharedLoan register _ _ sv child_av =
           self#visit_typed_value true sv;
-          self#visit_typed_avalue inside_shared child_av
+          self#visit_typed_avalue register child_av
 
-        method! visit_symbolic_value_id inside_shared sid =
-          if inside_shared then sids := SymbolicValueId.Set.add sid !sids
+        method! visit_AProjLoans register sv proj_ty children =
+          self#visit_symbolic_value true sv;
+          self#visit_ty register proj_ty;
+          self#visit_list
+            (fun register (s, p) ->
+              self#visit_msymbolic_value register s;
+              self#visit_aproj register p)
+            register children
+
+        method! visit_symbolic_value_id register sid =
+          if register then sids := SymbolicValueId.Set.add sid !sids
       end
     in
     visitor#visit_env false fixed_absl;
@@ -1031,17 +1085,20 @@ let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
      see comments for [shared_sids_in_fixed_abs]. *)
   let sids_to_values = fp_ids_maps.sids_to_values in
 
+  (* Also remove the symbolic values which appear inside of projectors in
+     fixed abstractions - those are "fixed" and not modified between iterations
+     of the loop, *)
   log#ldebug
     (lazy
-      ("compute_fp_ctx_symbolic_values:" ^ "\n- shared_sids_in_fixed_abs:"
-      ^ SymbolicValueId.Set.show shared_sids_in_fixed_abs
+      ("compute_fp_ctx_symbolic_values:" ^ "\n- sids_in_fixed_abs:"
+      ^ SymbolicValueId.Set.show sids_in_fixed_abs
       ^ "\n- all_sids_to_values: "
       ^ SymbolicValueId.Map.show (symbolic_value_to_string ctx) sids_to_values
       ^ "\n"));
 
   let sids_to_values =
     SymbolicValueId.Map.filter
-      (fun sid _ -> not (SymbolicValueId.Set.mem sid shared_sids_in_fixed_abs))
+      (fun sid _ -> not (SymbolicValueId.Set.mem sid sids_in_fixed_abs))
       sids_to_values
   in
 

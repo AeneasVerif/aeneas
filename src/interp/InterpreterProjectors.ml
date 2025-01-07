@@ -4,6 +4,7 @@ open Contexts
 module Subst = Substitute
 module Assoc = AssociatedTypes
 open TypesUtils
+open ValuesUtils
 open InterpreterUtils
 open InterpreterBorrowsCore
 open Errors

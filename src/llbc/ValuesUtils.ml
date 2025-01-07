@@ -44,6 +44,14 @@ let value_as_symbolic (span : Meta.span) (v : value) : symbolic_value =
   | VSymbolic v -> v
   | _ -> craise __FILE__ __LINE__ span "Unexpected"
 
+(** Create a typed value from a symbolic value. *)
+let mk_typed_value_from_symbolic_value (svalue : symbolic_value) : typed_value =
+  let av = VSymbolic svalue in
+  let av : typed_value =
+    { value = av; ty = Substitute.erase_regions svalue.sv_ty }
+  in
+  av
+
 (** Box a value *)
 let mk_box_value (span : Meta.span) (v : typed_value) : typed_value =
   let box_ty = mk_box_ty v.ty in

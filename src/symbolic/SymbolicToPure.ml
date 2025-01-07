@@ -5,6 +5,7 @@ open InterpreterUtils
 open FunsAnalysis
 open TypesAnalysis
 open Errors
+open PrintSymbolicAst
 module T = Types
 module V = Values
 module C = Contexts
@@ -441,13 +442,18 @@ let typed_pattern_to_string (ctx : bs_ctx) (p : Pure.typed_pattern) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
   PrintPure.typed_pattern_to_string ~span:(Some ctx.span) env p
 
-let abs_to_string (ctx : bs_ctx) (abs : V.abs) : string =
+let abs_to_string ?(with_ended : bool = false) (ctx : bs_ctx) (abs : V.abs) :
+    string =
   let env = bs_ctx_to_fmt_env ctx in
   let verbose = false in
   let indent = "" in
   let indent_incr = "  " in
-  Print.Values.abs_to_string ~span:(Some ctx.span) env verbose indent
-    indent_incr abs
+  Print.Values.abs_to_string ~span:(Some ctx.span) ~with_ended env verbose
+    indent indent_incr abs
+
+let bs_ctx_expression_to_string (ctx : bs_ctx) (e : S.expression) : string =
+  let env = bs_ctx_to_fmt_env ctx in
+  expression_to_string env "" "  " e
 
 let ctx_get_effect_info_for_bid (ctx : bs_ctx) (bid : RegionGroupId.id option) :
     fun_effect_info =
@@ -2213,7 +2219,9 @@ let typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
      upon ending the borrow we consumed a value).
      Otherwise we ignore it. *)
   log#ldebug
-    (lazy ("typed_avalue_to_consumed: " ^ typed_avalue_to_string ectx av));
+    (lazy
+      ("typed_avalue_to_consumed: "
+      ^ typed_avalue_to_string ~with_ended:true ectx av));
   match
     compute_typed_avalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions
       av
@@ -2240,9 +2248,7 @@ let typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
 let abs_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs) :
     texpression list =
   log#ldebug
-    (lazy
-      ("abs_to_consumed:\n" ^ abs_to_string ctx abs ^ "\n- raw: "
-     ^ V.show_abs abs));
+    (lazy ("abs_to_consumed:\n" ^ abs_to_string ~with_ended:true ctx abs));
   let values =
     List.filter_map
       (typed_avalue_to_consumed ctx ectx abs.regions.owned)
@@ -2250,7 +2256,9 @@ let abs_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs) :
   in
   log#ldebug
     (lazy
-      ("abs_to_consumed:\n- abs: " ^ abs_to_string ctx abs ^ "\n- values: "
+      ("abs_to_consumed:\n- abs: "
+      ^ abs_to_string ~with_ended:true ctx abs
+      ^ "\n- values: "
       ^ Print.list_to_string (texpression_to_string ctx) values));
   values
 
@@ -4197,9 +4205,9 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
             loop.input_svalues
         ^ "\n- filtered svl: "
         ^ (Print.list_to_string (symbolic_value_to_string ctx)) svl
-        ^ "\n- rg_to_abs\n:"
+        ^ "\n- rg_to_abs:\n"
         ^ T.RegionGroupId.Map.show
-            (Print.list_to_string (ty_to_string ctx))
+            (Print.list_to_string (pure_ty_to_string ctx))
             loop.rg_to_given_back_tys
         ^ "\n"));
     let ctx, _ = fresh_vars_for_symbolic_values svl ctx in
@@ -4225,21 +4233,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   in
 
   (* Compute the backward outputs *)
-  let rg_to_given_back_tys =
-    RegionGroupId.Map.map
-      (fun tys ->
-        (* The types shouldn't contain borrows - we can translate them as forward types *)
-        List.map
-          (fun ty ->
-            cassert __FILE__ __LINE__
-              (not
-                 (TypesUtils.ty_has_borrows (Some ctx.span)
-                    ctx.type_ctx.type_infos ty))
-              ctx.span "The types shouldn't contain borrows";
-            ctx_translate_fwd_ty ctx ty)
-          tys)
-      loop.rg_to_given_back_tys
-  in
+  let rg_to_given_back_tys = loop.rg_to_given_back_tys in
 
   (* The output type of the loop function *)
   let fwd_effect_info =
@@ -4575,6 +4569,14 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
     match body with
     | None -> None
     | Some body ->
+        log#ldebug
+          (lazy
+            ("SymbolicToPure.translate_fun_decl: "
+            ^ name_to_string ctx def.item_meta.name
+            ^ "\n- body:\n"
+            ^ bs_ctx_expression_to_string ctx body));
+        raise (Failure "TODO");
+
         let effect_info =
           get_fun_effect_info ctx (FunId (FRegular def_id)) None None
         in

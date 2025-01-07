@@ -429,9 +429,42 @@ type ids_maps = {
 }
 [@@deriving show]
 
+let ids_maps_to_string (ctx : eval_ctx) (m : ids_maps) : string =
+  let {
+    aid_map;
+    blid_map;
+    borrow_id_map;
+    loan_id_map;
+    rid_map;
+    sid_map;
+    sid_to_value_map;
+  } =
+    m
+  in
+  let indent = Some "  " in
+  "{" ^ "\n  aid_map = "
+  ^ AbstractionId.InjSubst.to_string indent aid_map
+  ^ "\n  blid_map = "
+  ^ BorrowId.InjSubst.to_string indent blid_map
+  ^ "\n  borrow_id_map = "
+  ^ BorrowId.InjSubst.to_string indent borrow_id_map
+  ^ "\n  loan_id_map = "
+  ^ BorrowId.InjSubst.to_string indent loan_id_map
+  ^ "\n  rid_map = "
+  ^ RegionId.InjSubst.to_string indent rid_map
+  ^ "\n  sid_map = "
+  ^ SymbolicValueId.InjSubst.to_string indent sid_map
+  ^ "\n  sid_to_value_map = "
+  ^ SymbolicValueId.Map.to_string indent
+      (typed_value_to_string ctx)
+      sid_to_value_map
+  ^ "\n}"
+
 type borrow_loan_corresp = {
   borrow_to_loan_id_map : BorrowId.InjSubst.t;
   loan_to_borrow_id_map : BorrowId.InjSubst.t;
+  borrow_to_loan_proj_map : SymbolicValueId.InjSubst.t;
+  loan_to_borrow_proj_map : SymbolicValueId.InjSubst.t;
 }
 [@@deriving show]
 
