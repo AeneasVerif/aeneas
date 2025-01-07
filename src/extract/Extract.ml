@@ -357,7 +357,7 @@ let rec extract_texpression (span : Meta.span) (ctx : extraction_ctx)
       let var_name = ctx_get_var span var_id ctx in
       F.pp_print_string fmt var_name
   | CVar var_id ->
-      let var_name = ctx_get_const_generic_var span var_id ctx in
+      let var_name = ctx_get_const_generic_var span Item var_id ctx in
       F.pp_print_string fmt var_name
   | Const cv -> extract_literal span fmt is_pattern inside cv
   | App _ ->
@@ -1314,7 +1314,7 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
   (* Add the type parameters - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params def.item_meta.span def.item_meta.name
+    ctx_add_generic_params def.item_meta.span def.item_meta.name Item
       def.signature.llbc_generics def.signature.generics ctx
   in
   (* Print the generics *)
@@ -1323,8 +1323,8 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
   let explicit = def.signature.explicit_info in
   (let space = Some space in
    extract_generic_params def.item_meta.span ctx fmt TypeDeclId.Set.empty ~space
-     ~trait_decl def.signature.generics (Some explicit) type_params cg_params
-     trait_clauses);
+     ~trait_decl Item def.signature.generics (Some explicit) type_params
+     cg_params trait_clauses);
   (* Close the box for the generics *)
   F.pp_close_box fmt ();
   (* The input parameters - note that doing this adds bindings to the context *)
@@ -1892,7 +1892,7 @@ let extract_fun_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add the type/const gen parameters - note that we need those bindings
      only for the generation of the type (they are not top-level) *)
   let ctx, _, _, _ =
-    ctx_add_generic_params def.item_meta.span def.item_meta.name
+    ctx_add_generic_params def.item_meta.span def.item_meta.name Item
       def.signature.llbc_generics def.signature.generics ctx
   in
   (* Add breaks to insert new lines between definitions *)
@@ -1985,7 +1985,7 @@ let extract_global_decl_body_gen (span : Meta.span) (ctx : extraction_ctx)
   (* Extract the generic parameters *)
   let space = ref true in
   extract_generic_params span ctx fmt TypeDeclId.Set.empty ~space:(Some space)
-    generics (Some explicit) type_params cg_params trait_clauses;
+    Item generics (Some explicit) type_params cg_params trait_clauses;
   if not !space then F.pp_print_space fmt ();
 
   (* Open ": TYPE =" box (depth=2) *)
@@ -2122,7 +2122,7 @@ let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
   in
   (* Add the type parameters *)
   let ctx, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params span global.item_meta.name global.llbc_generics
+    ctx_add_generic_params span global.item_meta.name Item global.llbc_generics
       global.generics ctx
   in
   match body.body with
@@ -2568,8 +2568,8 @@ let extract_trait_decl_method_items_aux (ctx : extraction_ctx)
        - we only generate trait clauses for the clauses we find in the
          pure generics *)
     let ctx, type_params, cg_params, trait_clauses =
-      ctx_add_generic_params span trans.f.item_meta.name signature.llbc_generics
-        generics ctx
+      ctx_add_generic_params span trans.f.item_meta.name Item
+        signature.llbc_generics generics ctx
     in
     let backend_uses_forall =
       match backend () with
@@ -2581,8 +2581,8 @@ let extract_trait_decl_method_items_aux (ctx : extraction_ctx)
     let use_arrows = generics_not_empty && not backend_uses_forall in
     let use_forall_use_sep = false in
     extract_generic_params span ctx fmt TypeDeclId.Set.empty ~use_forall
-      ~use_forall_use_sep ~use_arrows generics (Some explicit_info) type_params
-      cg_params trait_clauses;
+      ~use_forall_use_sep ~use_arrows Item generics (Some explicit_info)
+      type_params cg_params trait_clauses;
     if use_forall then F.pp_print_string fmt ",";
     (* Extract the inputs and output *)
     F.pp_print_space fmt ();
@@ -2646,10 +2646,10 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params decl.item_meta.span decl.item_meta.name
+    ctx_add_generic_params decl.item_meta.span decl.item_meta.name Item
       decl.llbc_generics generics ctx
   in
-  extract_generic_params decl.item_meta.span ctx fmt TypeDeclId.Set.empty
+  extract_generic_params decl.item_meta.span ctx fmt TypeDeclId.Set.empty Item
     generics (Some decl.explicit_info) type_params cg_params trait_clauses;
 
   F.pp_print_space fmt ();
@@ -2925,11 +2925,11 @@ let extract_trait_impl_method_items_aux (ctx : extraction_ctx)
        - we only generate trait clauses for the clauses we find in the
          pure generics *)
     let ctx, f_tys, f_cgs, f_tcs =
-      ctx_add_generic_params impl.item_meta.span trans.f.item_meta.name
+      ctx_add_generic_params impl.item_meta.span trans.f.item_meta.name Item
         signature.llbc_generics f_generics ctx
     in
     let use_forall = f_generics <> empty_generic_params in
-    extract_generic_params impl.item_meta.span ctx fmt TypeDeclId.Set.empty
+    extract_generic_params impl.item_meta.span ctx fmt TypeDeclId.Set.empty Item
       ~use_forall f_generics (Some f_explicit) f_tys f_cgs f_tcs;
     if use_forall then F.pp_print_string fmt ",";
     (* Extract the function call *)
@@ -3030,11 +3030,11 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params impl.item_meta.span impl.item_meta.name
+    ctx_add_generic_params impl.item_meta.span impl.item_meta.name Item
       impl.llbc_generics impl.generics ctx
   in
   let all_generics = (type_params, cg_params, trait_clauses) in
-  extract_generic_params impl.item_meta.span ctx fmt TypeDeclId.Set.empty
+  extract_generic_params impl.item_meta.span ctx fmt TypeDeclId.Set.empty Item
     impl.generics (Some impl.explicit_info) type_params cg_params trait_clauses;
 
   (* Print the type *)
