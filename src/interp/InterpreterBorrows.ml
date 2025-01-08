@@ -2632,7 +2632,7 @@ let abs_split_markers (span : Meta.span) (ctx : eval_ctx) (abs : abs) : abs =
 let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
     (merge_funs : merge_duplicates_funcs option) (ctx : eval_ctx) (abs0 : abs)
     (abs1 : abs) : typed_avalue list =
-  log#ltrace (lazy "merge_abstractions_merge_loan_borrow_pairs");
+  log#ltrace (lazy __FUNCTION__);
 
   (* Split the markers inside the abstractions (if we allow using markers).
 
@@ -2744,14 +2744,14 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
   let push_borrow_avalue av =
     log#ltrace
       (lazy
-        ("merge_abstractions_merge_loan_borrow_pairs: push_borrow_avalue: "
+        (__FUNCTION__ ^ ": push_borrow_avalue: "
         ^ typed_avalue_to_string ~span:(Some span) ctx av));
     borrow_avalues := av :: !borrow_avalues
   in
   let push_loan_avalue av =
     log#ltrace
       (lazy
-        ("merge_abstractions_merge_loan_borrow_pairs: push_loan_avalue: "
+        (__FUNCTION__ ^ ": push_loan_avalue: "
         ^ typed_avalue_to_string ~span:(Some span) ctx av));
     loan_avalues := av :: !loan_avalues
   in
@@ -2840,8 +2840,7 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
           | Borrow marked ->
               log#ltrace
                 (lazy
-                  ("merge_abstractions: merging borrow "
-                 ^ Marked.to_string marked));
+                  (__FUNCTION__ ^ ": merging borrow: " ^ Marked.to_string marked));
 
               (* Check if the borrow has already been merged - this can happen
                  because we go through all the borrows/loans in [abs0] *then*
@@ -2883,8 +2882,7 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
                 (* Do not set the loans as merged yet *)
                 log#ltrace
                   (lazy
-                    ("merge_abstractions: merging loan "
-                   ^ Marked.to_string marked));
+                    (__FUNCTION__ ^ ": merging loan: " ^ Marked.to_string marked));
                 (* Check if we need to filter it *)
                 if Marked.filter_marked marked then ()
                 else
@@ -2981,7 +2979,7 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
         type borrow_content = ty * proj_marker * aproj
         type loan_content = ty * proj_marker * aproj
 
-        let to_string = MarkedNormSymbProj.to_string
+        let to_string = marked_norm_symb_proj_to_string ctx
         let borrow_is_merged = borrow_proj_is_merged
         let loan_is_merged = loan_proj_is_merged
         let filter_marked = filter_symbolic
@@ -3021,7 +3019,7 @@ let merge_abstractions_merge_markers (span : Meta.span)
     typed_avalue list =
   log#ltrace
     (lazy
-      ("merge_abstractions_merge_markers:\n- avalues:\n"
+      (__FUNCTION__ ^ ":\n- avalues:\n"
       ^ String.concat ", " (List.map (typed_avalue_to_string ctx) avalues)));
 
   (* We linearly traverse the list of avalues created through the first phase. *)
@@ -3047,7 +3045,7 @@ let merge_abstractions_merge_markers (span : Meta.span)
   let push_avalue av =
     log#ltrace
       (lazy
-        ("merge_abstractions_merge_markers: push_avalue: "
+        (__FUNCTION__ ^ ": push_avalue: "
         ^ typed_avalue_to_string ~span:(Some span) ctx av));
     avalues := av :: !avalues
   in

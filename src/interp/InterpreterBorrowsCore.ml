@@ -1363,6 +1363,14 @@ type marked_norm_symb_proj = {
 }
 [@@deriving show, ord]
 
+let marked_norm_symb_proj_to_string (ctx : eval_ctx) (p : marked_norm_symb_proj)
+    : string =
+  let { pm; sv_id; norm_proj_ty } = p in
+  Print.Values.symbolic_value_id_to_pretty_string sv_id
+  ^ " <: "
+  ^ ty_to_string ctx norm_proj_ty
+  |> Print.Values.add_proj_marker pm
+
 module MarkedNormSymbProjOrd = struct
   type t = marked_norm_symb_proj
 
