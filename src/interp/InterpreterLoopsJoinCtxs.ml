@@ -808,37 +808,31 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     let value = ALoan (ASharedLoan (PNone, ids, sv, child)) in
     { value; ty }
   in
-  let merge_aborrow_projs ty0 _pm0 (sv0 : symbolic_value) proj_ty0 children0
-      _ty1 _pm1 (sv1 : symbolic_value) _proj_ty1 children1 =
+  let merge_aborrow_projs ty0 _pm0 (sv0 : symbolic_value_id) proj_ty0 children0
+      _ty1 _pm1 (sv1 : symbolic_value_id) _proj_ty1 children1 =
     (* Sanity checks *)
     sanity_check __FILE__ __LINE__ (children0 = []) span;
     sanity_check __FILE__ __LINE__ (children1 = []) span;
-    (* Same remarks as for [merge_amut_borrows].
-
-       This time we need to also merge the symbolic values. We rely on the
-       join matcher [JM] to do so.
-    *)
+    (* Same remarks as for [merge_amut_borrows]. *)
     let ty = ty0 in
     let proj_ty = proj_ty0 in
     let children = [] in
-    let sv = JM.match_symbolic_values ctx ctx sv0 sv1 in
+    sanity_check __FILE__ __LINE__ (sv0 = sv1) span;
+    let sv = sv0 in
     let value = ASymbolic (PNone, AProjBorrows (sv, proj_ty, children)) in
     { value; ty }
   in
-  let merge_aloan_projs ty0 _pm0 (sv0 : symbolic_value) proj_ty0 children0 _ty1
-      _pm1 (sv1 : symbolic_value) _proj_ty1 children1 =
+  let merge_aloan_projs ty0 _pm0 (sv0 : symbolic_value_id) proj_ty0 children0
+      _ty1 _pm1 (sv1 : symbolic_value_id) _proj_ty1 children1 =
     (* Sanity checks *)
     sanity_check __FILE__ __LINE__ (children0 = []) span;
     sanity_check __FILE__ __LINE__ (children1 = []) span;
-    (* Same remarks as for [merge_amut_borrows].
-
-       This time we need to also merge the symbolic values. We rely on the
-       join matcher [JM] to do so.
-    *)
+    (* Same remarks as for [merge_amut_borrows]. *)
     let ty = ty0 in
     let proj_ty = proj_ty0 in
     let children = [] in
-    let sv = JM.match_symbolic_values ctx ctx sv0 sv1 in
+    sanity_check __FILE__ __LINE__ (sv0 = sv1) span;
+    let sv = sv0 in
     let value = ASymbolic (PNone, AProjLoans (sv, proj_ty, children)) in
     { value; ty }
   in

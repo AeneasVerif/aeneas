@@ -861,15 +861,15 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
         | AProjLoans (_sv, _proj_ty, children) ->
             sanity_check __FILE__ __LINE__ (children = []) span;
             ()
-        | AProjBorrows (sv, _proj_ty, children) ->
+        | AProjBorrows (sv_id, _proj_ty, children) ->
             sanity_check __FILE__ __LINE__ (children = []) span;
             (* Find the target borrow *)
             let tgt_borrow_id =
-              SymbolicValueId.Map.find sv.sv_id src_to_tgt_sid_map
+              SymbolicValueId.Map.find sv_id src_to_tgt_sid_map
             in
             (* Update the map *)
             tgt_borrow_to_loan_proj :=
-              SymbolicValueId.InjSubst.add sv.sv_id tgt_borrow_id
+              SymbolicValueId.InjSubst.add sv_id tgt_borrow_id
                 !tgt_borrow_to_loan_proj
         | AEndedProjBorrows _ | AEndedProjLoans _ | AEmpty ->
             (* We shouldn't get there *)
@@ -944,12 +944,12 @@ let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
           self#visit_typed_value true sv;
           self#visit_typed_avalue register child_av
 
-        method! visit_AProjLoans register sv proj_ty children =
-          self#visit_symbolic_value true sv;
+        method! visit_AProjLoans register sv_id proj_ty children =
+          self#visit_symbolic_value_id true sv_id;
           self#visit_ty register proj_ty;
           self#visit_list
             (fun register (s, p) ->
-              self#visit_msymbolic_value register s;
+              self#visit_msymbolic_value_id register s;
               self#visit_aproj register p)
             register children
 

@@ -88,9 +88,9 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
     RAbsBorrow.register_mapping false abs_to_loans abs.abs_id (pm, bid);
     RBorrowAbs.register_mapping true loan_to_abs (pm, bid) abs.abs_id
   in
-  let register_borrow_proj abs pm (sv : symbolic_value) (proj_ty : ty) =
+  let register_borrow_proj abs pm (sv_id : symbolic_value_id) (proj_ty : ty) =
     let norm_proj_ty = normalize_proj_ty abs.regions.owned proj_ty in
-    let proj : marked_norm_symb_proj = { pm; sv_id = sv.sv_id; norm_proj_ty } in
+    let proj : marked_norm_symb_proj = { pm; sv_id; norm_proj_ty } in
     RAbsSymbProj.register_mapping false abs_to_borrow_projs abs.abs_id proj;
     (* This mapping is not generally injective as it is possible to copy symbolic values.
        For now we still force it to be injective because we don't handle well the case
@@ -107,9 +107,9 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
     *)
     RSymbProjAbs.register_mapping true borrow_proj_to_abs proj abs.abs_id
   in
-  let register_loan_proj abs pm (sv : symbolic_value) (proj_ty : ty) =
+  let register_loan_proj abs pm (sv_id : symbolic_value_id) (proj_ty : ty) =
     let norm_proj_ty = normalize_proj_ty abs.regions.owned proj_ty in
-    let proj : marked_norm_symb_proj = { pm; sv_id = sv.sv_id; norm_proj_ty } in
+    let proj : marked_norm_symb_proj = { pm; sv_id; norm_proj_ty } in
     RAbsSymbProj.register_mapping false abs_to_loan_projs abs.abs_id proj;
     RSymbProjAbs.register_mapping true loan_proj_to_abs proj abs.abs_id
   in
@@ -882,9 +882,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           ty_refresh_regions (Some span) fresh_region_id sv0.sv_ty
         in
         let svj = mk_fresh_symbolic_value span proj_ty in
-        let proj_s0 = mk_aproj_borrows PLeft sv0 proj_ty in
-        let proj_s1 = mk_aproj_borrows PRight sv1 proj_ty in
-        let proj_svj = mk_aproj_loans PNone svj proj_ty in
+        let proj_s0 = mk_aproj_borrows PLeft sv0.sv_id proj_ty in
+        let proj_s1 = mk_aproj_borrows PRight sv1.sv_id proj_ty in
+        let proj_svj = mk_aproj_loans PNone svj.sv_id proj_ty in
         let avalues = [ proj_s0; proj_s1; proj_svj ] in
         List.iter
           (fun rid ->
@@ -1430,19 +1430,27 @@ struct
     let value = ALoan (AMutLoan (PNone, id, av)) in
     { value; ty }
 
-  let match_aproj_borrows (ctx0 : eval_ctx) (ctx1 : eval_ctx) _ty0 pm0 sv0
-      _proj_ty0 children0 _ty1 pm1 sv1 _proj_ty1 children1 ty proj_ty =
+  let match_aproj_borrows (ctx0 : eval_ctx) (ctx1 : eval_ctx) _ty0 pm0 sv_id0
+      proj_ty0 children0 _ty1 pm1 sv_id1 proj_ty1 children1 ty proj_ty =
     sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
     sanity_check __FILE__ __LINE__ (children0 = [] && children1 = []) span;
+    (* We only want to match the ids of the symbolic values, but in order
+       to call [match_symbolic_values] we need to have types... *)
+    let sv0 = { sv_id = sv_id0; sv_ty = proj_ty0 } in
+    let sv1 = { sv_id = sv_id1; sv_ty = proj_ty1 } in
     let sv = match_symbolic_values ctx0 ctx1 sv0 sv1 in
-    { value = ASymbolic (PNone, AProjBorrows (sv, proj_ty, [])); ty }
+    { value = ASymbolic (PNone, AProjBorrows (sv.sv_id, proj_ty, [])); ty }
 
-  let match_aproj_loans (ctx0 : eval_ctx) (ctx1 : eval_ctx) _ty0 pm0 sv0
-      _proj_ty0 children0 _ty1 pm1 sv1 _proj_ty1 children1 ty proj_ty =
+  let match_aproj_loans (ctx0 : eval_ctx) (ctx1 : eval_ctx) _ty0 pm0 sv_id0
+      proj_ty0 children0 _ty1 pm1 sv_id1 proj_ty1 children1 ty proj_ty =
     sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
     sanity_check __FILE__ __LINE__ (children0 = [] && children1 = []) span;
+    (* We only want to match the ids of the symbolic values, but in order
+       to call [match_symbolic_values] we need to have types... *)
+    let sv0 = { sv_id = sv_id0; sv_ty = proj_ty0 } in
+    let sv1 = { sv_id = sv_id1; sv_ty = proj_ty1 } in
     let sv = match_symbolic_values ctx0 ctx1 sv0 sv1 in
-    { value = ASymbolic (PNone, AProjLoans (sv, proj_ty, [])); ty }
+    { value = ASymbolic (PNone, AProjLoans (sv.sv_id, proj_ty, [])); ty }
 
   let match_avalues (ctx0 : eval_ctx) (ctx1 : eval_ctx) v0 v1 =
     log#ldebug
@@ -2021,26 +2029,25 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
   let new_absl_ids, _ = compute_absl_ids new_absl in
   let src_fresh_borrows_map = ref BorrowId.Map.empty in
   let src_fresh_sids_map = ref SymbolicValueId.Map.empty in
-  let register_symbolic_value (sv : symbolic_value) : symbolic_value =
-    let id = sv.sv_id in
+  let register_symbolic_value_id (id : symbolic_value_id) : symbolic_value_id =
     (* Register the symbolic value, if it needs to be mapped *)
-    let id =
-      if
-        (* We map the borrows for which we computed a mapping - TODO: simplify *)
-        SymbolicValueId.Map.mem id tgt_to_src_sid_map
-        (* And which have corresponding loans in the fresh fixed-point abstractions *)
-        && SymbolicValueId.Set.mem
-             (SymbolicValueId.Map.find id tgt_to_src_sid_map)
-             new_absl_ids.sids
-      then (
-        let src_id = SymbolicValueId.Map.find id tgt_to_src_sid_map in
-        let nid = fresh_symbolic_value_id () in
-        src_fresh_sids_map :=
-          SymbolicValueId.Map.add src_id nid !src_fresh_sids_map;
-        nid)
-      else id
-    in
-    { sv with sv_id = id }
+    if
+      (* We map the borrows for which we computed a mapping - TODO: simplify *)
+      SymbolicValueId.Map.mem id tgt_to_src_sid_map
+      (* And which have corresponding loans in the fresh fixed-point abstractions *)
+      && SymbolicValueId.Set.mem
+           (SymbolicValueId.Map.find id tgt_to_src_sid_map)
+           new_absl_ids.sids
+    then (
+      let src_id = SymbolicValueId.Map.find id tgt_to_src_sid_map in
+      let nid = fresh_symbolic_value_id () in
+      src_fresh_sids_map :=
+        SymbolicValueId.Map.add src_id nid !src_fresh_sids_map;
+      nid)
+    else id
+  in
+  let register_symbolic_value (sv : symbolic_value) : symbolic_value =
+    { sv with sv_id = register_symbolic_value_id sv.sv_id }
   in
   let visit_tgt =
     object
@@ -2071,10 +2078,10 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
       method! visit_aproj env p =
         match p with
         | AProjLoans _ -> super#visit_aproj env p
-        | AProjBorrows (sv, proj_ty, children) ->
+        | AProjBorrows (sv_id, proj_ty, children) ->
             sanity_check __FILE__ __LINE__ (children = []) span;
-            let sv = register_symbolic_value sv in
-            AProjBorrows (sv, proj_ty, children)
+            let sv_id = register_symbolic_value_id sv_id in
+            AProjBorrows (sv_id, proj_ty, children)
         | _ -> super#visit_aproj env p
     end
   in
@@ -2207,31 +2214,31 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
 
       method! visit_aproj env proj =
         match proj with
-        | AProjLoans (sv, proj_ty, children) ->
+        | AProjLoans (sv_id, proj_ty, children) ->
             (* The logic is similar to the concrete borrows/loans cases above *)
-            let id = sv.sv_id in
             sanity_check __FILE__ __LINE__ (children = []) span;
             let sv_id =
               begin
-                match SymbolicValueId.Map.find_opt id !src_fresh_sids_map with
+                match
+                  SymbolicValueId.Map.find_opt sv_id !src_fresh_sids_map
+                with
                 | None ->
                     sanity_check __FILE__ __LINE__
-                      (SymbolicValueId.InjSubst.find id src_to_tgt_maps.sid_map
-                      = id)
+                      (SymbolicValueId.InjSubst.find sv_id
+                         src_to_tgt_maps.sid_map
+                      = sv_id)
                       span;
-                    id
+                    sv_id
                 | Some id -> id
               end
             in
             let proj_ty = self#visit_ty env proj_ty in
-            (* We shouldn't need to update the type of the symbolic value itself *)
-            let sv_ty = sv.sv_ty in
-            AProjLoans ({ sv_id; sv_ty }, proj_ty, children)
-        | AProjBorrows (sv, proj_ty, children) ->
+            AProjLoans (sv_id, proj_ty, children)
+        | AProjBorrows (sv_id, proj_ty, children) ->
             sanity_check __FILE__ __LINE__ (children = []) span;
             (* Lookup the loan corresponding to this borrow *)
             let src_lid =
-              SymbolicValueId.InjSubst.find sv.sv_id
+              SymbolicValueId.InjSubst.find sv_id
                 fp_bl_maps.borrow_to_loan_proj_map
             in
 
@@ -2248,9 +2255,7 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
               end
             in
             let proj_ty = self#visit_ty env proj_ty in
-            (* We shouldn't need to update the type of the symbolic value itself *)
-            let sv_ty = sv.sv_ty in
-            AProjBorrows ({ sv_id; sv_ty }, proj_ty, children)
+            AProjBorrows (sv_id, proj_ty, children)
         | AEndedProjBorrows _ | AEndedProjLoans _ | AEmpty ->
             super#visit_aproj env proj
 

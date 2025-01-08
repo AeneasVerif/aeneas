@@ -2045,7 +2045,7 @@ let rec typed_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
         craise __FILE__ __LINE__ ctx.span "Unreachable"
     | ASymbolic (pm, aproj) ->
         sanity_check __FILE__ __LINE__ (pm = PNone) ctx.span;
-        aproj_to_consumed_aux ctx abs_regions aproj
+        aproj_to_consumed_aux ctx abs_regions aproj av.ty
     | AIgnored mv -> (
         if filter then None
         else
@@ -2187,12 +2187,16 @@ and aloan_content_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
       craise __FILE__ __LINE__ ctx.span "Unimplemented"
 
 and aproj_to_consumed_aux (ctx : bs_ctx) (_abs_regions : T.RegionId.Set.t)
-    (aproj : V.aproj) : texpression option =
+    (aproj : V.aproj) (ty : T.ty) : texpression option =
   match aproj with
   | V.AEndedProjLoans (msv, []) ->
-      (* The symbolic value was left unchanged *)
+      (* The symbolic value was left unchanged.
+
+         We're using the projection type as the type of the symbolic value -
+         it doesn't really matter. *)
+      let msv : V.symbolic_value = { sv_id = msv; sv_ty = ty } in
       Some (symbolic_value_to_texpression ctx msv)
-  | V.AEndedProjLoans (msv, [ (mnv, child_aproj) ]) ->
+  | V.AEndedProjLoans (_msv, [ (mnv, child_aproj) ]) ->
       sanity_check __FILE__ __LINE__ (child_aproj = AEmpty) ctx.span;
       (* TODO: check that the updated symbolic values covers all the cases
          (part of the symbolic value might have been updated, and the rest
@@ -2204,9 +2208,13 @@ and aproj_to_consumed_aux (ctx : bs_ctx) (_abs_regions : T.RegionId.Set.t)
       sanity_check __FILE__ __LINE__
         (not
            (TypesUtils.ty_has_nested_borrows (Some ctx.span)
-              ctx.type_ctx.type_infos msv.sv_ty))
+              ctx.type_ctx.type_infos ty))
         ctx.span;
-      (* The symbolic value was updated *)
+      (* The symbolic value was updated.
+
+         We're using the projection type as the type of the symbolic value -
+         it doesn't really matter. *)
+      let mnv : V.symbolic_value = { sv_id = mnv; sv_ty = ty } in
       Some (symbolic_value_to_texpression ctx mnv)
   | V.AEndedProjLoans (_, _) ->
       (* The symbolic value was updated, and the given back values come from several
@@ -2337,7 +2345,7 @@ let rec typed_avalue_to_given_back_aux ~(filter : bool)
     | ABorrow bc -> aborrow_content_to_given_back_aux ~filter mp bc av.ty ctx
     | ASymbolic (pm, aproj) ->
         sanity_check __FILE__ __LINE__ (pm = PNone) ctx.span;
-        aproj_to_given_back_aux mp aproj ctx
+        aproj_to_given_back_aux mp aproj av.ty ctx
     | AIgnored _ ->
         (* If we do not filter, we have to create a dummy pattern *)
         if filter then (ctx, None)
@@ -2474,7 +2482,7 @@ and aborrow_content_to_given_back_aux ~(filter : bool) (mp : mplace option)
         let ty = translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos ty in
         (ctx, Some (mk_dummy_pattern ty))
 
-and aproj_to_given_back_aux (mp : mplace option) (aproj : V.aproj)
+and aproj_to_given_back_aux (mp : mplace option) (aproj : V.aproj) (ty : T.ty)
     (ctx : bs_ctx) : bs_ctx * typed_pattern option =
   match aproj with
   | V.AEndedProjLoans (_, _) -> craise __FILE__ __LINE__ ctx.span "Unreachable"
@@ -2485,11 +2493,14 @@ and aproj_to_given_back_aux (mp : mplace option) (aproj : V.aproj)
       let pat = mk_typed_pattern_from_var var mp in
       (* Register the default value *)
       let ctx =
+        (* Using the projection type as the type of the symbolic value - it
+           doesn't really matter *)
+        let sv : V.symbolic_value = { sv_id = mv.consumed; sv_ty = ty } in
         {
           ctx with
           var_id_to_default =
             VarId.Map.add var.id
-              (symbolic_value_to_texpression ctx mv.consumed)
+              (symbolic_value_to_texpression ctx sv)
               ctx.var_id_to_default;
         }
       in

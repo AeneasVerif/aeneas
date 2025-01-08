@@ -171,6 +171,7 @@ type mvalue = typed_value [@@deriving show, ord]
  *)
 type msymbolic_value = symbolic_value [@@deriving show, ord]
 
+type msymbolic_value_id = symbolic_value_id [@@deriving show, ord]
 type abstraction_id = AbstractionId.id [@@deriving show, ord]
 type abstraction_id_set = AbstractionId.Set.t [@@deriving show, ord]
 
@@ -179,7 +180,7 @@ type abstraction_id_set = AbstractionId.Set.t [@@deriving show, ord]
 type proj_marker = PNone | PLeft | PRight [@@deriving show, ord]
 
 type ended_proj_borrow_meta = {
-  consumed : msymbolic_value;
+  consumed : msymbolic_value_id;
   given_back : msymbolic_value;
 }
 [@@deriving show, ord]
@@ -194,6 +195,9 @@ class ['self] iter_typed_avalue_base =
     method visit_mvalue : 'env -> mvalue -> unit = fun _ _ -> ()
 
     method visit_msymbolic_value : 'env -> msymbolic_value -> unit =
+      fun _ _ -> ()
+
+    method visit_msymbolic_value_id : 'env -> msymbolic_value_id -> unit =
       fun _ _ -> ()
 
     method visit_region_id_set : 'env -> region_id_set -> unit = fun _ _ -> ()
@@ -219,6 +223,10 @@ class ['self] map_typed_avalue_base =
     method visit_mvalue : 'env -> mvalue -> mvalue = fun _ x -> x
 
     method visit_msymbolic_value : 'env -> msymbolic_value -> msymbolic_value =
+      fun _ m -> m
+
+    method visit_msymbolic_value_id
+        : 'env -> msymbolic_value_id -> msymbolic_value_id =
       fun _ m -> m
 
     method visit_region_id_set : 'env -> region_id_set -> region_id_set =
@@ -258,13 +266,13 @@ class ['self] map_typed_avalue_base =
 *)
 type abstract_shared_borrow =
   | AsbBorrow of borrow_id
-  | AsbProjReborrows of symbolic_value * ty
+  | AsbProjReborrows of symbolic_value_id * ty
 
 (** A set of abstract shared borrows *)
 and abstract_shared_borrows = abstract_shared_borrow list
 
 and aproj =
-  | AProjLoans of symbolic_value * ty * (msymbolic_value * aproj) list
+  | AProjLoans of symbolic_value_id * ty * (msymbolic_value_id * aproj) list
       (** A projector of loans over a symbolic value.
 
           Whenever we call a function, we introduce a symbolic value for
@@ -307,7 +315,7 @@ and aproj =
           TODO: the projection type is redundant with the type of the avalue
           TODO: we shouldn't use a symbolic value but rather a symbolic value id
        *)
-  | AProjBorrows of symbolic_value * ty * (msymbolic_value * aproj) list
+  | AProjBorrows of symbolic_value_id * ty * (msymbolic_value_id * aproj) list
       (** Note that an AProjBorrows only operates on a value which is not below
           a shared loan: under a shared loan, we use {!abstract_shared_borrow}.
           
@@ -333,14 +341,15 @@ and aproj =
           TODO: the projection type is redundant with the type of the avalue
           TODO: we shouldn't use a symbolic value but rather a symbolic value id
        *)
-  | AEndedProjLoans of msymbolic_value * (msymbolic_value * aproj) list
+  | AEndedProjLoans of msymbolic_value_id * (msymbolic_value_id * aproj) list
       (** An ended projector of loans over a symbolic value.
       
           See the explanations for {!AProjLoans}
           
           Note that we keep the original symbolic value as a meta-value.
        *)
-  | AEndedProjBorrows of ended_proj_borrow_meta * (msymbolic_value * aproj) list
+  | AEndedProjBorrows of
+      ended_proj_borrow_meta * (msymbolic_value_id * aproj) list
       (** The only purpose of {!AEndedProjBorrows} is to store, for synthesis
           purposes:
           - the symbolic value which was consumed upon creating the projection

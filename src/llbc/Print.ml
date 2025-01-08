@@ -34,9 +34,9 @@ module Values = struct
     symbolic_value_id_to_pretty_string sv.sv_id
     ^ " : " ^ ty_to_string env sv.sv_ty
 
-  let symbolic_value_proj_to_string (env : fmt_env) (sv : symbolic_value)
+  let symbolic_value_proj_to_string (env : fmt_env) (sv_id : symbolic_value_id)
       (rty : ty) : string =
-    symbolic_value_id_to_pretty_string sv.sv_id ^ " <: " ^ ty_to_string env rty
+    symbolic_value_id_to_pretty_string sv_id ^ " <: " ^ ty_to_string env rty
 
   (* TODO: it may be a good idea to try to factorize this function with
    * typed_avalue_to_string. At some point we had done it, because [typed_value]
@@ -115,8 +115,8 @@ module Values = struct
       (abs : abstract_shared_borrow) : string =
     match abs with
     | AsbBorrow bid -> BorrowId.to_string bid
-    | AsbProjReborrows (sv, rty) ->
-        "{" ^ symbolic_value_proj_to_string env sv rty ^ "}"
+    | AsbProjReborrows (sv_id, rty) ->
+        "{" ^ symbolic_value_proj_to_string env sv_id rty ^ "}"
 
   let abstract_shared_borrows_to_string (env : fmt_env)
       (abs : abstract_shared_borrows) : string =
@@ -152,7 +152,7 @@ module Values = struct
     | AEndedProjLoans (msv, given_back) ->
         let msv =
           if with_ended then
-            "original_loan = " ^ symbolic_value_to_string env msv
+            "original_loan = " ^ symbolic_value_id_to_pretty_string msv
           else "_"
         in
         let given_back = List.map snd given_back in
@@ -166,7 +166,7 @@ module Values = struct
         let meta =
           if with_ended then
             "original_borrow = "
-            ^ symbolic_value_to_string env meta.consumed
+            ^ symbolic_value_id_to_pretty_string meta.consumed
             ^ ", given_back = "
             ^ symbolic_value_to_string env meta.given_back
           else "_"

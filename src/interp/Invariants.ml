@@ -398,6 +398,14 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
     let _, ty, _ = ty_get_ref ty in
     ty
   in
+  (* The types with erased regions of the symbolic values that we find *)
+  let sv_etys = ref SymbolicValueId.Map.empty in
+  let check_symbolic_value_type sv_id ty =
+    let ty = Substitute.erase_regions ty in
+    match SymbolicValueId.Map.find_opt sv_id !sv_etys with
+    | None -> sv_etys := SymbolicValueId.Map.add sv_id ty !sv_etys
+    | Some ty1 -> sanity_check __FILE__ __LINE__ (ty1 = ty) span
+  in
   object
     inherit [_] iter_eval_ctx as super
     method! visit_abs _ abs = super#visit_abs (Some abs) abs
@@ -531,6 +539,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
                       span
                 | _ -> craise __FILE__ __LINE__ span "Inconsistent context"))
       | VSymbolic sv, ty ->
+          check_symbolic_value_type sv.sv_id sv.sv_ty;
           let ty' = Substitute.erase_regions sv.sv_ty in
           sanity_check __FILE__ __LINE__ (ty' = ty) span
       | _ -> craise __FILE__ __LINE__ span "Erroneous typing");
@@ -706,22 +715,15 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
                 (child_av.ty = aloan_get_expected_child_type aty)
                 span)
       | ASymbolic (_, aproj), ty -> (
-          let ty1 = Substitute.erase_regions ty in
           match aproj with
-          | AProjLoans (sv, proj_ty, _) ->
-              let ty2 = Substitute.erase_regions sv.sv_ty in
-              sanity_check __FILE__ __LINE__ (ty1 = ty2) span;
-              (* Also check that the symbolic values contain regions of interest -
-               * otherwise they should have been reduced to [_] *)
+          | AProjLoans (sv_id, proj_ty, _) ->
+              check_symbolic_value_type sv_id ty;
               let abs = Option.get info in
               sanity_check __FILE__ __LINE__
                 (ty_has_regions_in_set abs.regions.owned proj_ty)
                 span
-          | AProjBorrows (sv, proj_ty, _) ->
-              let ty2 = Substitute.erase_regions sv.sv_ty in
-              sanity_check __FILE__ __LINE__ (ty1 = ty2) span;
-              (* Also check that the symbolic values contain regions of interest -
-               * otherwise they should have been reduced to [_] *)
+          | AProjBorrows (sv_id, proj_ty, _) ->
+              check_symbolic_value_type sv_id ty;
               let abs = Option.get info in
               sanity_check __FILE__ __LINE__
                 (ty_has_regions_in_set abs.regions.owned proj_ty)
@@ -771,7 +773,6 @@ type proj_loans_info = {
 [@@deriving show]
 
 type sv_info = {
-  ty : rty;  (** The regions shouldn't be erased *)
   env_count : int;
   aproj_borrows : proj_borrows_info list;
   aproj_loans : proj_loans_info list;
@@ -799,8 +800,8 @@ let proj_loans_info_to_string (ctx : eval_ctx) (info : proj_loans_info) : string
   ^ "; proj_ty = " ^ ty_to_string ctx proj_ty ^ "}"
 
 let sv_info_to_string (ctx : eval_ctx) (info : sv_info) : string =
-  let { ty; env_count = _; aproj_borrows; aproj_loans } = info in
-  "{\n  ty = " ^ ty_to_string ctx ty ^ ";\n  aproj_borrows = ["
+  let { env_count = _; aproj_borrows; aproj_loans } = info in
+  "{\n  aproj_borrows = ["
   ^ String.concat ", "
       (List.map (proj_borrows_info_to_string ctx) aproj_borrows)
   ^ "];\n  aproj_loans = ["
@@ -824,28 +825,27 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
   (* Small utility *)
   let module M = SymbolicValueId.Map in
   let infos : sv_info M.t ref = ref M.empty in
-  let lookup_info (sv : symbolic_value) : sv_info =
-    match M.find_opt sv.sv_id !infos with
+  let lookup_info (sv_id : symbolic_value_id) : sv_info =
+    match M.find_opt sv_id !infos with
     | Some info -> info
-    | None ->
-        { ty = sv.sv_ty; env_count = 0; aproj_borrows = []; aproj_loans = [] }
+    | None -> { env_count = 0; aproj_borrows = []; aproj_loans = [] }
   in
-  let update_info (sv : symbolic_value) (info : sv_info) =
-    infos := M.add sv.sv_id info !infos
+  let update_info (sv_id : symbolic_value_id) (info : sv_info) =
+    infos := M.add sv_id info !infos
   in
-  let add_env_sv (sv : symbolic_value) : unit =
-    let info = lookup_info sv in
+  let add_env_sv (sv_id : symbolic_value_id) : unit =
+    let info = lookup_info sv_id in
     let info = { info with env_count = info.env_count + 1 } in
-    update_info sv info
+    update_info sv_id info
   in
-  let add_aproj_borrows (sv : symbolic_value) abs_id regions proj_ty
+  let add_aproj_borrows (sv : symbolic_value_id) abs_id regions proj_ty
       as_shared_value : unit =
     let info = lookup_info sv in
     let binfo = { abs_id; regions; proj_ty; as_shared_value } in
     let info = { info with aproj_borrows = binfo :: info.aproj_borrows } in
     update_info sv info
   in
-  let add_aproj_loans (sv : symbolic_value) proj_ty abs_id regions : unit =
+  let add_aproj_loans (sv : symbolic_value_id) proj_ty abs_id regions : unit =
     let info = lookup_info sv in
     let linfo = { abs_id; regions; proj_ty } in
     let info = { info with aproj_loans = linfo :: info.aproj_loans } in
@@ -856,7 +856,7 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
     object
       inherit [_] iter_eval_ctx as super
       method! visit_abs _ abs = super#visit_abs (Some abs) abs
-      method! visit_VSymbolic _ sv = add_env_sv sv
+      method! visit_VSymbolic _ sv = add_env_sv sv.sv_id
 
       method! visit_abstract_shared_borrow abs asb =
         let abs = Option.get abs in

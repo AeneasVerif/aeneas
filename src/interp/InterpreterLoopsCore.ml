@@ -295,14 +295,14 @@ module type PrimMatcher = sig
     eval_ctx ->
     rty ->
     proj_marker ->
-    symbolic_value ->
+    symbolic_value_id ->
     rty ->
-    (msymbolic_value * aproj) list ->
+    (msymbolic_value_id * aproj) list ->
     rty ->
     proj_marker ->
-    symbolic_value ->
+    symbolic_value_id ->
     rty ->
-    (msymbolic_value * aproj) list ->
+    (msymbolic_value_id * aproj) list ->
     rty ->
     rty ->
     typed_avalue
@@ -328,14 +328,14 @@ module type PrimMatcher = sig
     eval_ctx ->
     rty ->
     proj_marker ->
-    symbolic_value ->
+    symbolic_value_id ->
     rty ->
-    (msymbolic_value * aproj) list ->
+    (msymbolic_value_id * aproj) list ->
     rty ->
     proj_marker ->
-    symbolic_value ->
+    symbolic_value_id ->
     rty ->
-    (msymbolic_value * aproj) list ->
+    (msymbolic_value_id * aproj) list ->
     rty ->
     rty ->
     typed_avalue
@@ -563,7 +563,7 @@ let typed_avalue_add_marker (span : Meta.span) (ctx : eval_ctx)
         ASymbolic (pm, aproj)
 
       method! visit_symbolic_value _ sv =
-        (* Symbolic values can appera in shared values *)
+        (* Symbolic values can appear in shared values *)
         sanity_check __FILE__ __LINE__
           (not (symbolic_value_has_borrows (Some span) ctx sv))
           span;

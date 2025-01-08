@@ -91,11 +91,13 @@ let is_unit (v : typed_value) : bool =
   | VAdt av -> av.variant_id = None && av.field_values = []
   | _ -> false
 
-let mk_aproj_borrows (pm : proj_marker) (sv : symbolic_value) (proj_ty : ty) =
-  { value = ASymbolic (pm, AProjBorrows (sv, proj_ty, [])); ty = proj_ty }
+let mk_aproj_borrows (pm : proj_marker) (sv_id : symbolic_value_id)
+    (proj_ty : ty) =
+  { value = ASymbolic (pm, AProjBorrows (sv_id, proj_ty, [])); ty = proj_ty }
 
-let mk_aproj_loans (pm : proj_marker) (sv : symbolic_value) (proj_ty : ty) =
-  { value = ASymbolic (pm, AProjLoans (sv, proj_ty, [])); ty = proj_ty }
+let mk_aproj_loans (pm : proj_marker) (sv_id : symbolic_value_id) (proj_ty : ty)
+    =
+  { value = ASymbolic (pm, AProjLoans (sv_id, proj_ty, [])); ty = proj_ty }
 
 (** Check if a value contains a *concrete* borrow (i.e., a [Borrow] value -
     we don't check if there are borrows hidden in symbolic values).

@@ -236,14 +236,14 @@ type merge_duplicates_funcs = {
   merge_aborrow_projs :
     ty ->
     proj_marker ->
-    symbolic_value ->
+    symbolic_value_id ->
     ty ->
-    (msymbolic_value * aproj) list ->
+    (msymbolic_value_id * aproj) list ->
     ty ->
     proj_marker ->
-    symbolic_value ->
+    symbolic_value_id ->
     ty ->
-    (msymbolic_value * aproj) list ->
+    (msymbolic_value_id * aproj) list ->
     typed_avalue;
       (** Parameters:
       - [ty0]
@@ -260,14 +260,14 @@ type merge_duplicates_funcs = {
   merge_aloan_projs :
     ty ->
     proj_marker ->
-    symbolic_value ->
+    symbolic_value_id ->
     ty ->
-    (msymbolic_value * aproj) list ->
+    (msymbolic_value_id * aproj) list ->
     ty ->
     proj_marker ->
-    symbolic_value ->
+    symbolic_value_id ->
     ty ->
-    (msymbolic_value * aproj) list ->
+    (msymbolic_value_id * aproj) list ->
     typed_avalue;
       (** Parameters:
       - [ty0]

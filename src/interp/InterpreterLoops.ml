@@ -181,10 +181,10 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
       List.filter_map
         (fun (av : typed_avalue) ->
           match av.value with
-          | ASymbolic (pm, AProjBorrows (sv, _proj_ty, children)) ->
+          | ASymbolic (pm, AProjBorrows (sv_id, _proj_ty, children)) ->
               sanity_check __FILE__ __LINE__ (pm = PNone) span;
               sanity_check __FILE__ __LINE__ (children = []) span;
-              Some sv.sv_id
+              Some sv_id
           | _ -> None)
         borrows
     in
@@ -209,10 +209,10 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
       List.filter_map
         (fun (av : typed_avalue) ->
           match av.value with
-          | ASymbolic (pm, AProjLoans (sv, _proj_ty, children)) ->
+          | ASymbolic (pm, AProjLoans (sv_id, _proj_ty, children)) ->
               sanity_check __FILE__ __LINE__ (pm = PNone) span;
               sanity_check __FILE__ __LINE__ (children = []) span;
-              Some sv.sv_id
+              Some sv_id
           | _ -> None)
         loans
     in
