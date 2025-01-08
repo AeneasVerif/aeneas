@@ -135,7 +135,7 @@ module Values = struct
             let given_back =
               List.map (aproj_to_string ~with_ended env) given_back
             in
-            " (" ^ String.concat "," given_back ^ ") "
+            " [" ^ String.concat "," given_back ^ "]"
         in
         "⌊" ^ symbolic_value_proj_to_string env sv rty ^ given_back ^ "⌋"
     | AProjBorrows (sv, rty, given_back) ->
@@ -146,7 +146,7 @@ module Values = struct
             let given_back =
               List.map (aproj_to_string ~with_ended env) given_back
             in
-            " (" ^ String.concat "," given_back ^ ") "
+            " [" ^ String.concat "," given_back ^ "]"
         in
         "(" ^ symbolic_value_proj_to_string env sv rty ^ given_back ^ ")"
     | AEndedProjLoans (msv, given_back) ->
@@ -159,9 +159,9 @@ module Values = struct
         let given_back =
           List.map (aproj_to_string ~with_ended env) given_back
         in
-        "ended_aproj_loans (" ^ msv ^ ", ("
+        "ended_aproj_loans (" ^ msv ^ ", ["
         ^ String.concat "," given_back
-        ^ "))"
+        ^ "])"
     | AEndedProjBorrows (meta, given_back) ->
         let meta =
           if with_ended then
@@ -175,9 +175,9 @@ module Values = struct
         let given_back =
           List.map (aproj_to_string ~with_ended env) given_back
         in
-        "ended_aproj_borrows (" ^ meta ^ ", "
+        "ended_aproj_borrows (" ^ meta ^ ", ["
         ^ String.concat "," given_back
-        ^ "))"
+        ^ "])"
     | AEmpty -> "_"
 
   (** Wrap a value inside its marker, if there is one *)
@@ -362,16 +362,16 @@ module Values = struct
     in
     let avs = String.concat ",\n" avs in
     let kind =
-      if verbose then "[kind:" ^ abs_kind_to_string abs.kind ^ "]" else ""
+      if verbose then "kind:" ^ abs_kind_to_string abs.kind ^ "," else ""
     in
-    let can_end = if abs.can_end then "{endable}" else "{frozen}" in
+    let can_end = if abs.can_end then "endable" else "frozen" in
     indent ^ "abs@"
     ^ AbstractionId.to_string abs.abs_id
-    ^ kind ^ "{parents="
+    ^ "{" ^ kind ^ "parents="
     ^ AbstractionId.Set.to_string None abs.parents
-    ^ "}" ^ "{regions="
+    ^ ",regions="
     ^ RegionId.Set.to_string None abs.regions.owned
-    ^ "}" ^ can_end ^ " {\n" ^ avs ^ "\n" ^ indent ^ "}"
+    ^ "," ^ can_end ^ "} {\n" ^ avs ^ "\n" ^ indent ^ "}"
 
   let abs_region_group_to_string (gr : abs_region_group) : string =
     g_region_group_to_string RegionId.to_string AbstractionId.to_string gr

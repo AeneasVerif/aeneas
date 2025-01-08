@@ -1514,7 +1514,11 @@ let translate_fun_sig_from_decl_to_decomposed (decls_ctx : C.decls_ctx)
     (lazy
       ("translate_fun_sig_from_decl_to_decomposed:" ^ "\n- name: "
       ^ T.show_name fdef.item_meta.name
-      ^ "\n- sg:\n" ^ show_decomposed_fun_sig sg ^ "\n"));
+      ^ "\n- sg:\n"
+      ^ PrintPure.decomposed_fun_sig_to_string
+          (PrintPure.decls_ctx_to_fmt_env decls_ctx)
+          sg
+      ^ "\n"));
   sg
 
 let mk_output_ty_from_effect_info (effect_info : fun_effect_info) (ty : ty) : ty
@@ -1770,13 +1774,15 @@ let fresh_back_vars_for_current_fun (ctx : bs_ctx)
   fresh_opt_vars back_vars ctx
 
 (** IMPORTANT: do not use this one directly, but rather {!symbolic_value_to_texpression} *)
-let lookup_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) : var =
+let lookup_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) :
+    var option =
   match V.SymbolicValueId.Map.find_opt sv.sv_id ctx.sv_to_var with
-  | Some v -> v
+  | Some v -> Some v
   | None ->
-      craise __FILE__ __LINE__ ctx.span
+      save_error __FILE__ __LINE__ ctx.span
         ("Could not find var for symbolic value: "
-        ^ V.SymbolicValueId.to_string sv.sv_id)
+        ^ V.SymbolicValueId.to_string sv.sv_id);
+      None
 
 (** Peel boxes as long as the value is of the form [Box<T>] *)
 let rec unbox_typed_value (span : Meta.span) (v : V.typed_value) : V.typed_value
@@ -1802,8 +1808,17 @@ let symbolic_value_to_texpression (ctx : bs_ctx) (sv : V.symbolic_value) :
   if ty_is_unit ty then mk_unit_rvalue
   else
     (* Otherwise lookup the variable *)
-    let var = lookup_var_for_symbolic_value sv ctx in
-    mk_texpression_from_var var
+    match lookup_var_for_symbolic_value sv ctx with
+    | Some var -> mk_texpression_from_var var
+    | None ->
+        {
+          e =
+            EError
+              ( None,
+                "Could not find var for symbolic value: "
+                ^ V.SymbolicValueId.to_string sv.sv_id );
+          ty;
+        }
 
 (** Translate a typed value.
 
@@ -2540,7 +2555,9 @@ let abs_to_given_back (mpl : mplace option list option) (abs : V.abs)
   let values = List.filter_map (fun x -> x) values in
   log#ltrace
     (lazy
-      ("abs_to_given_back:\n- abs: " ^ abs_to_string ctx abs ^ "\n- values: "
+      ("abs_to_given_back:\n- abs: "
+      ^ abs_to_string ~with_ended:true ctx abs
+      ^ "\n- values: "
       ^ Print.list_to_string (typed_pattern_to_string ctx) values));
   (ctx, values)
 
@@ -2596,9 +2613,13 @@ let eval_ctx_to_symbolic_assignments_info (ctx : bs_ctx)
             (* If the type is unit, do nothing *)
             if ty_is_unit ty then ()
             else
-              (* Otherwise lookup the variable *)
-              let var = lookup_var_for_symbolic_value sv ctx in
-              push_info var.id name
+              (* Otherwise lookup the variable - note that the variable may
+                 not be present in the context in case of error: we delegate
+                 to the lookup function the task of raising an error if the user
+                 wants to fail hard. *)
+              Option.iter
+                (fun (var : var) -> push_info var.id name)
+                (lookup_var_for_symbolic_value sv ctx)
         | _ -> ()
     end
   in
