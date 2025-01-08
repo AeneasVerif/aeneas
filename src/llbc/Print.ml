@@ -456,13 +456,14 @@ module Contexts = struct
 
   (** Filters "dummy" bindings from an environment, to gain space and clarity/
       See [env_to_string]. *)
-  let filter_env (env : env) : env_elem option list =
+  let filter_env (ended_regions : RegionId.Set.t) (env : env) :
+      env_elem option list =
     (* We filter:
-     * - non-dummy bindings which point to ⊥
-     * - dummy bindings which don't contain loans nor borrows
-     * Note that the first case can sometimes be confusing: we may try to improve
-     * it...
-     *)
+       - non-dummy bindings which point to ⊥
+       - dummy bindings which don't contain loans nor borrows
+       Note that the first case can sometimes be confusing: we may try to improve
+       it...
+    *)
     let filter_elem (ev : env_elem) : env_elem option =
       match ev with
       | EBinding (BVar _, tv) ->
@@ -470,7 +471,9 @@ module Contexts = struct
           if is_bottom tv.value then None else Some ev
       | EBinding (BDummy _, tv) ->
           (* Dummy binding: check if the value contains borrows or loans *)
-          if borrows_in_value tv || loans_in_value tv then Some ev else None
+          if value_has_non_ended_borrows_or_loans ended_regions tv.value then
+            Some ev
+          else None
       | _ -> Some ev
     in
     let env = List.map filter_elem env in
@@ -490,10 +493,11 @@ module Contexts = struct
       [with_var_types]: if true, print the type of the variables
    *)
   let env_to_string ?(span : Meta.span option = None) (filter : bool)
-      (fmt_env : fmt_env) (verbose : bool) (with_var_types : bool) (env : env) :
-      string =
+      (fmt_env : fmt_env) (verbose : bool) (with_var_types : bool)
+      (ended_regions : RegionId.Set.t) (env : env) : string =
     let env =
-      if filter then filter_env env else List.map (fun ev -> Some ev) env
+      if filter then filter_env ended_regions env
+      else List.map (fun ev -> Some ev) env
     in
     "{\n"
     ^ String.concat "\n"
@@ -577,8 +581,9 @@ module Contexts = struct
     let frames = split_aux [] [] env in
     frames
 
-  let eval_ctx_to_string_gen ?(span : Meta.span option = None) (verbose : bool)
-      (filter : bool) (with_var_types : bool) (ctx : eval_ctx) : string =
+  let eval_ctx_to_string ?(span : Meta.span option = None)
+      ?(verbose : bool = false) ?(filter : bool = true)
+      ?(with_var_types : bool = true) (ctx : eval_ctx) : string =
     let fmt_env = eval_ctx_to_fmt_env ctx in
     let ended_regions = RegionId.Set.to_string None ctx.ended_regions in
     let frames = split_env_according_to_frames ctx.env in
@@ -601,20 +606,13 @@ module Contexts = struct
           ^ string_of_int !num_bindings
           ^ "\n- dummy bindings: " ^ string_of_int !num_dummies
           ^ "\n- abstractions: " ^ string_of_int !num_abs ^ "\n"
-          ^ env_to_string ~span filter fmt_env verbose with_var_types f
+          ^ env_to_string ~span filter fmt_env verbose with_var_types
+              ctx.ended_regions f
           ^ "\n")
         frames
     in
     "# Ended regions: " ^ ended_regions ^ "\n" ^ "# " ^ string_of_int num_frames
     ^ " frame(s)\n" ^ String.concat "" frames
-
-  let eval_ctx_to_string ?(span : Meta.span option = None) (ctx : eval_ctx) :
-      string =
-    eval_ctx_to_string_gen ~span false true true ctx
-
-  let eval_ctx_to_string_no_filter ?(span : Meta.span option = None)
-      (ctx : eval_ctx) : string =
-    eval_ctx_to_string_gen ~span false false true ctx
 end
 
 (** Pretty-printing for LLBC ASTs (functions based on an evaluation context) *)

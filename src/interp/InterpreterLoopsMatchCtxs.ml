@@ -1449,9 +1449,9 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
     (lazy
       ("match_ctxs:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
      ^ "\n\n- ctx0:\n"
-      ^ eval_ctx_to_string_no_filter ~span:(Some span) ctx0
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx0
       ^ "\n\n- ctx1:\n"
-      ^ eval_ctx_to_string_no_filter ~span:(Some span) ctx1
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx1
       ^ "\n\n"));
 
   (* Initialize the maps and instantiate the matcher *)
@@ -1583,10 +1583,10 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
         ^ "\n- aid_map: "
         ^ AbstractionId.InjSubst.show_t !aid_map
         ^ "\n\n- ctx0:\n"
-        ^ eval_ctx_to_string_no_filter ~span:(Some span)
+        ^ eval_ctx_to_string ~span:(Some span) ~filter:false
             { ctx0 with env = List.rev env0 }
         ^ "\n\n- ctx1:\n"
-        ^ eval_ctx_to_string_no_filter ~span:(Some span)
+        ^ eval_ctx_to_string ~span:(Some span) ~filter:false
             { ctx1 with env = List.rev env1 }
         ^ "\n\n"));
 
@@ -1934,9 +1934,9 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
       ^ "\n\n- tgt_ctx: "
       ^ eval_ctx_to_string ~span:(Some span) tgt_ctx
       ^ "\n\n- filt_tgt_ctx: "
-      ^ eval_ctx_to_string_no_filter ~span:(Some span) filt_tgt_ctx
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:false filt_tgt_ctx
       ^ "\n\n- filt_src_ctx: "
-      ^ eval_ctx_to_string_no_filter ~span:(Some span) filt_src_ctx
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:false filt_src_ctx
       ^ "\n\n- new_absl:\n"
       ^ eval_ctx_to_string ~span:(Some span)
           { src_ctx with env = List.map (fun abs -> EAbs abs) new_absl }

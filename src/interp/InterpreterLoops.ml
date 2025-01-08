@@ -361,9 +361,9 @@ let eval_loop_symbolic (config : config) (span : span)
   log#ltrace
     (lazy
       ("eval_loop_symbolic: result:" ^ "\n- src context:\n"
-      ^ eval_ctx_to_string_no_filter ~span:(Some span) ctx
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx
       ^ "\n- fixed point:\n"
-      ^ eval_ctx_to_string_no_filter ~span:(Some span) fp_ctx
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp_ctx
       ^ "\n- fixed_sids: "
       ^ SymbolicValueId.Set.show fixed_ids.sids
       ^ "\n- fresh_sids: "

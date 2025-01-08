@@ -15,7 +15,6 @@ let log = Logging.interpreter_log
 
 (** Some utilities *)
 
-let eval_ctx_to_string_no_filter = Print.Contexts.eval_ctx_to_string_no_filter
 let eval_ctx_to_string = Print.Contexts.eval_ctx_to_string
 let name_to_string = Print.EvalCtx.name_to_string
 let symbolic_value_to_string = Print.EvalCtx.symbolic_value_to_string

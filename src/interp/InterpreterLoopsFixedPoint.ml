@@ -401,9 +401,9 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
     (lazy
       ("compute_loop_entry_fixed_point: after prepare_ashared_loans:"
      ^ "\n\n- ctx0:\n"
-      ^ eval_ctx_to_string_no_filter ~span:(Some span) ctx0
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx0
       ^ "\n\n- ctx1:\n"
-      ^ eval_ctx_to_string_no_filter ~span:(Some span) ctx
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx
       ^ "\n\n"));
 
   (* The fixed ids. They are the ids of the original ctx, after we ended
@@ -538,13 +538,13 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
         (lazy
           ("compute_fixed_point: about to join with continue_ctx"
          ^ "\n\n- ctx0:\n"
-          ^ eval_ctx_to_string_no_filter ~span:(Some span) ctx
+          ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx
           ^ "\n\n"
           ^ String.concat "\n\n"
               (List.map
                  (fun ctx ->
                    "- continue_ctx:\n"
-                   ^ eval_ctx_to_string_no_filter ~span:(Some span) ctx)
+                   ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx)
                  continue_ctxs)
           ^ "\n\n"));
 
@@ -556,9 +556,9 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
       log#ltrace
         (lazy
           ("compute_fixed_point: after joining continue ctxs" ^ "\n\n- ctx0:\n"
-          ^ eval_ctx_to_string_no_filter ~span:(Some span) ctx
+          ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx
           ^ "\n\n- ctx1:\n"
-          ^ eval_ctx_to_string_no_filter ~span:(Some span) ctx1
+          ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx1
           ^ "\n\n"));
 
       (* Check if we reached a fixed point: if not, iterate *)
@@ -571,7 +571,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
     (lazy
       ("compute_fixed_point: fixed point computed before matching with input \
         region groups:" ^ "\n\n- fp:\n"
-      ^ eval_ctx_to_string_no_filter ~span:(Some span) fp
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp
       ^ "\n\n"));
 
   (* Make sure we have exactly one loop abstraction per function region (merge
@@ -828,7 +828,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
         (lazy
           ("compute_fixed_point: fixed point after matching with the function \
             region groups:\n"
-          ^ eval_ctx_to_string_no_filter ~span:(Some span) fp_test));
+          ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp_test));
       compute_fixed_point fp_test 1 1
     in
 
@@ -1146,9 +1146,9 @@ let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
   log#ltrace
     (lazy
       ("compute_fp_ctx_symbolic_values:" ^ "\n- src context:\n"
-      ^ eval_ctx_to_string_no_filter ~span:(Some span) ctx
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx
       ^ "\n- fixed point:\n"
-      ^ eval_ctx_to_string_no_filter ~span:(Some span) fp_ctx
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp_ctx
       ^ "\n- fresh_sids: "
       ^ SymbolicValueId.Set.show fresh_sids
       ^ "\n- input_svalues: "

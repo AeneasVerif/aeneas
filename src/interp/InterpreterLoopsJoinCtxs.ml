@@ -280,7 +280,8 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
   (* Debug *)
   log#ltrace
     (lazy
-      ("reduce_ctx:\n\n- fixed_ids:\n" ^ show_ids_sets old_ids ^ "\n\n- ctx0:\n"
+      (__FUNCTION__ ^ ":\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
+     ^ "\n\n- ctx0:\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx0
       ^ "\n\n"));
 
@@ -316,14 +317,15 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
   let ctx = { ctx0 with env } in
   log#ltrace
     (lazy
-      ("reduce_ctx: after converting values to abstractions:\n"
+      (__FUNCTION__ ^ ": after converting values to abstractions:\n"
      ^ show_ids_sets old_ids ^ "\n\n- ctx:\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx
       ^ "\n\n"));
 
   log#ltrace
     (lazy
-      ("reduce_ctx: after decomposing the shared values in the abstractions:\n"
+      (__FUNCTION__
+     ^ ": after decomposing the shared values in the abstractions:\n"
      ^ show_ids_sets old_ids ^ "\n\n- ctx:\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx
       ^ "\n\n"));
@@ -384,7 +386,7 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
             | abs_id1 :: _ ->
                 log#ltrace
                   (lazy
-                    ("reduce_ctx: merging abstraction "
+                    (__FUNCTION__ ^ ": merging abstraction "
                     ^ AbstractionId.to_string abs_id1
                     ^ " into "
                     ^ AbstractionId.to_string abs_id0
@@ -422,7 +424,7 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
   (* Debugging *)
   log#ltrace
     (lazy
-      ("reduce_ctx:\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
+      (__FUNCTION__ ^ ":\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
      ^ "\n\n- after reduce:\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx
       ^ "\n\n"));
@@ -433,7 +435,7 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
 
   log#ltrace
     (lazy
-      ("reduce_ctx:\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
+      (__FUNCTION__ ^ ":\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
      ^ "\n\n- after reduce and reorder borrows/loans and abstractions:\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx
       ^ "\n\n"));
@@ -468,7 +470,7 @@ let collapse_ctx_collapse (span : Meta.span) (loop_id : LoopId.id)
   (* Debug *)
   log#ltrace
     (lazy
-      ("collapse_ctx:\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
+      (__FUNCTION__ ^ ":\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
      ^ "\n\n- initial ctx:\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx
       ^ "\n\n"));
@@ -632,7 +634,7 @@ let collapse_ctx_collapse (span : Meta.span) (loop_id : LoopId.id)
 
   log#ltrace
     (lazy
-      ("collapse_ctx:\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
+      (__FUNCTION__ ^ ":\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
      ^ "\n\n- after collapse:\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx
       ^ "\n\n"));
@@ -643,7 +645,7 @@ let collapse_ctx_collapse (span : Meta.span) (loop_id : LoopId.id)
 
   log#ltrace
     (lazy
-      ("collapse_ctx:\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
+      (__FUNCTION__ ^ ":\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
      ^ "\n\n- after collapse and reorder borrows/loans:\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx
       ^ "\n\n"));
@@ -875,9 +877,9 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
     (lazy
       ("join_ctxs:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
      ^ "\n\n- ctx0:\n"
-      ^ eval_ctx_to_string_no_filter ~span:(Some span) ctx0
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx0
       ^ "\n\n- ctx1:\n"
-      ^ eval_ctx_to_string_no_filter ~span:(Some span) ctx1
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx1
       ^ "\n\n"));
 
   let env0 = List.rev ctx0.env in
@@ -891,10 +893,10 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
       (lazy
         ("join_suffixes:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
        ^ "\n\n- ctx0:\n"
-        ^ eval_ctx_to_string_no_filter ~span:(Some span)
+        ^ eval_ctx_to_string ~span:(Some span) ~filter:false
             { ctx0 with env = List.rev env0 }
         ^ "\n\n- ctx1:\n"
-        ^ eval_ctx_to_string_no_filter ~span:(Some span)
+        ^ eval_ctx_to_string ~span:(Some span) ~filter:false
             { ctx1 with env = List.rev env1 }
         ^ "\n\n"));
 

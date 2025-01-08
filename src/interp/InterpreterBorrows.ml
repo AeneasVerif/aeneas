@@ -250,7 +250,7 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
     (nv : typed_value) (ctx : eval_ctx) : eval_ctx =
   (* Sanity check *)
   exec_assert __FILE__ __LINE__
-    (not (loans_in_value nv))
+    (not (concrete_loans_in_value nv))
     span "Can not end a borrow because the value to give back contains bottom";
   exec_assert __FILE__ __LINE__
     (not (bottom_in_value ctx.ended_regions nv))
@@ -884,7 +884,7 @@ let give_back (config : config) (span : Meta.span) (l : BorrowId.id)
   | Concrete (VMutBorrow (l', tv)) ->
       (* Sanity check *)
       sanity_check __FILE__ __LINE__ (l' = l) span;
-      sanity_check __FILE__ __LINE__ (not (loans_in_value tv)) span;
+      sanity_check __FILE__ __LINE__ (not (concrete_loans_in_value tv)) span;
       (* Check that the corresponding loan is somewhere - purely a sanity check *)
       sanity_check __FILE__ __LINE__
         (Option.is_some (lookup_loan_opt span sanity_ek l ctx))
@@ -1657,7 +1657,7 @@ let promote_shared_loan_to_mut_loan (span : Meta.span) (l : BorrowId.id)
       (* We need to check that there aren't any loans in the value:
          we should have gotten rid of those already, but it is better
          to do a sanity check. *)
-      sanity_check __FILE__ __LINE__ (not (loans_in_value sv)) span;
+      sanity_check __FILE__ __LINE__ (not (concrete_loans_in_value sv)) span;
       (* Check there isn't {!Bottom} (this is actually an invariant *)
       cassert __FILE__ __LINE__
         (not (bottom_in_value ctx.ended_regions sv))
@@ -1733,7 +1733,7 @@ let rec promote_reserved_mut_borrow (config : config) (span : Meta.span)
             (lazy
               ("activate_reserved_mut_borrow: resulting value:\n"
               ^ typed_value_to_string ~span:(Some span) ctx sv));
-          sanity_check __FILE__ __LINE__ (not (loans_in_value sv)) span;
+          sanity_check __FILE__ __LINE__ (not (concrete_loans_in_value sv)) span;
           sanity_check __FILE__ __LINE__
             (not (bottom_in_value ctx.ended_regions sv))
             span;
@@ -1987,6 +1987,7 @@ let abs_is_destructured (span : Meta.span) (destructure_shared_values : bool)
 let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
     (can_end : bool) (destructure_shared_values : bool) (ctx : eval_ctx)
     (v : typed_value) : abs list =
+  log#ltrace (lazy (__FUNCTION__ ^ ": " ^ typed_value_to_string ctx v));
   (* Convert the value to a list of avalues *)
   let absl = ref [] in
   let push_abs (r_id : RegionId.id) (avalues : typed_avalue list) : unit =
@@ -2139,15 +2140,75 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             let av = ALoan (AMutLoan (PNone, bid, ignored None)) in
             let av = { value = av; ty } in
             ([ av ], v))
-    | VSymbolic _ ->
-        (* For now, we force all the symbolic values containing borrows to
-           be eagerly expanded, and we don't support nested borrows *)
+    | VSymbolic sv ->
+        (* Check that there are no nested borrows in the symbolic value -
+           we don't support this case yet *)
         cassert __FILE__ __LINE__
-          (not (value_has_borrows (Some span) ctx v.value))
+          (not
+             (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos sv.sv_ty))
           span "Nested borrows are not supported yet";
-        (* Return nothing *)
-        ([], v)
+
+        (* If we don't need to group the borrows into one region (because the
+           symbolic value is inside a mutable borrow for instance) check that
+           none of the regions used by the symbolic value have ended. *)
+        sanity_check __FILE__ __LINE__
+          (group || not (symbolic_value_has_ended_regions ctx.ended_regions sv))
+          span;
+
+        (* If we group the borrows: simply introduce a projector.
+           Otherwise, introduce one abstraction per region *)
+        if group then
+          (* Substitute the regions in the type *)
+          let visitor =
+            object
+              inherit [_] map_ty
+
+              method! visit_RVar _ var =
+                match var with
+                | Free _ -> RVar (Free r_id)
+                | Bound _ -> internal_error __FILE__ __LINE__ span
+            end
+          in
+          let ty = visitor#visit_ty () sv.sv_ty in
+          let nv = ASymbolic (PNone, AProjBorrows (sv, ty, [])) in
+          let nv : typed_avalue = { value = nv; ty } in
+          ([ nv ], v)
+        else
+          (* Introduce one abstraction per live region *)
+          let regions = ref RegionId.Map.empty in
+
+          let get_region rid =
+            (* Introduce a fresh region, if the region is alive *)
+            if not (RegionId.Set.mem rid ctx.ended_regions) then (
+              match RegionId.Map.find_opt rid !regions with
+              | Some rid -> rid
+              | None ->
+                  let nrid = fresh_region_id () in
+                  regions := RegionId.Map.add rid nrid !regions;
+                  nrid)
+            else rid
+          in
+          let visitor =
+            object
+              inherit [_] map_ty
+
+              method! visit_RVar _ var =
+                match var with
+                | Free rid -> RVar (Free (get_region rid))
+                | Bound _ -> internal_error __FILE__ __LINE__ span
+            end
+          in
+          let ty = visitor#visit_ty () sv.sv_ty in
+          (* Introduce the abstractions *)
+          RegionId.Map.iter
+            (fun _ rid ->
+              let nv = ASymbolic (PNone, AProjBorrows (sv, ty, [])) in
+              let nv : typed_avalue = { value = nv; ty } in
+              push_abs rid [ nv ])
+            !regions;
+          ([], v)
   in
+
   (* Generate the avalues *)
   let r_id = fresh_region_id () in
   let values, _ = to_avalues true false false r_id v in
