@@ -70,6 +70,9 @@ tests/fstar/misc/obj/
 *.uo
 *Theory.sml
 
+# Lean
+.lake
+
 # Misc
 /fstar-tests
 *~
