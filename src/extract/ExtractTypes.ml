@@ -429,8 +429,8 @@ let extract_const_generic (span : Meta.span) (ctx : extraction_ctx)
       F.pp_print_string fmt s
   | CgValue v -> extract_literal span fmt false inside v
   | CgVar var ->
-      let id = TypesUtils.expect_free_var (Some span) var in
-      let s = ctx_get_const_generic_var span id ctx in
+      let origin, id = origin_from_de_bruijn_var var in
+      let s = ctx_get_const_generic_var span origin id ctx in
       F.pp_print_string fmt s
 
 let extract_literal_type (_ctx : extraction_ctx) (fmt : F.formatter)
@@ -582,7 +582,9 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
                 Collections.List.iter_link (F.pp_print_space fmt)
                   (extract_trait_ref span ctx fmt no_params_tys true)
                   trait_refs)))
-  | TVar vid -> F.pp_print_string fmt (ctx_get_type_var span vid ctx)
+  | TVar var ->
+      let origin, id = origin_from_de_bruijn_var var in
+      F.pp_print_string fmt (ctx_get_type_var span origin id ctx)
   | TLiteral lty -> extract_literal_type ctx fmt lty
   | TArrow (arg_ty, ret_ty) ->
       if inside then F.pp_print_string fmt "(";
@@ -772,8 +774,9 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
       F.pp_print_string fmt name;
       extract_generic_args span ctx fmt no_params_tys ~explicit generics;
       if use_brackets then F.pp_print_string fmt ")"
-  | Clause id ->
-      let name = ctx_get_local_trait_clause span id ctx in
+  | Clause var ->
+      let origin, id = origin_from_de_bruijn_var var in
+      let name = ctx_get_local_trait_clause span origin id ctx in
       F.pp_print_string fmt name
   | ParentClause (inst_id, decl_id, clause_id) ->
       (* Use the trait decl id to lookup the name *)
@@ -1295,9 +1298,10 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) ?(use_forall = false)
     ?(use_forall_use_sep = true) ?(use_arrows = false)
     ?(as_implicits : bool = false) ?(space : bool ref option = None)
-    ?(trait_decl : trait_decl option = None) (generics : generic_params)
-    (explicit : explicit_info option) (type_params : string list)
-    (cg_params : string list) (trait_clauses : string list) : unit =
+    ?(trait_decl : trait_decl option = None) (origin : generic_origin)
+    (generics : generic_params) (explicit : explicit_info option)
+    (type_params : string list) (cg_params : string list)
+    (trait_clauses : string list) : unit =
   let all_params = List.concat [ type_params; cg_params; trait_clauses ] in
   (* HOL4 doesn't support const generics *)
   cassert __FILE__ __LINE__
@@ -1359,7 +1363,7 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
             insert_req_space ();
             (* ( *)
             left_bracket expl;
-            let n = ctx_get_const_generic_var span var.index ctx in
+            let n = ctx_get_const_generic_var span origin var.index ctx in
             print_implicit_symbol expl;
             F.pp_print_string fmt n;
             F.pp_print_space fmt ();
@@ -1378,7 +1382,7 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
           insert_req_space ();
           (* ( *)
           left_bracket expl;
-          let n = ctx_get_local_trait_clause span clause.clause_id ctx in
+          let n = ctx_get_local_trait_clause span origin clause.clause_id ctx in
           print_implicit_symbol expl;
           F.pp_print_string fmt n;
           F.pp_print_space fmt ();
@@ -1445,12 +1449,12 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
               map snd dtype_params;
               map
                 (fun ((_, cg) : _ * const_generic_var) ->
-                  ctx_get_const_generic_var trait_decl.item_meta.span cg.index
-                    ctx)
+                  ctx_get_const_generic_var trait_decl.item_meta.span origin
+                    cg.index ctx)
                 dcgs;
               map
                 (fun (_, c) ->
-                  ctx_get_local_trait_clause trait_decl.item_meta.span
+                  ctx_get_local_trait_clause trait_decl.item_meta.span origin
                     c.clause_id ctx)
                 dtrait_clauses;
             ]
@@ -1507,7 +1511,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx_body, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params def.item_meta.span def.item_meta.name
+    ctx_add_generic_params def.item_meta.span def.item_meta.name Item
       def.llbc_generics def.generics ctx
   in
   (* Add a break before *)
@@ -1553,7 +1557,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     "Constant generics and type definitions with trait clauses are not \
      supported yet when generating code for HOL4";
   (* Print the generic parameters *)
-  extract_generic_params def.item_meta.span ctx_body fmt type_decl_group
+  extract_generic_params def.item_meta.span ctx_body fmt type_decl_group Item
     ~use_forall def.generics (Some def.explicit_info) type_params cg_params
     trait_clauses;
   (* Print the "=" if we extract the body*)
@@ -1795,7 +1799,7 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
       if is_rec then
         (* Add the type params *)
         let ctx, type_params, cg_params, trait_clauses =
-          ctx_add_generic_params decl.item_meta.span decl.item_meta.name
+          ctx_add_generic_params decl.item_meta.span decl.item_meta.name Item
             decl.llbc_generics decl.generics ctx
         in
         (* Record_var will be the ADT argument to the projector *)
@@ -1855,8 +1859,8 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
           (* Print the generics *)
           let as_implicits = true in
           extract_generic_params decl.item_meta.span ctx fmt
-            TypeDeclId.Set.empty ~as_implicits decl.generics None type_params
-            cg_params trait_clauses;
+            TypeDeclId.Set.empty Item ~as_implicits decl.generics None
+            type_params cg_params trait_clauses;
 
           (* Print the record parameter as "(x : ADT)" *)
           F.pp_print_space fmt ();
@@ -1996,8 +2000,8 @@ let extract_type_decl_record_field_projectors_simp_lemmas (ctx : extraction_ctx)
       if is_rec then
         (* Add the type params *)
         let ctx, type_params, cg_params, trait_clauses =
-          ctx_add_generic_params span decl.item_meta.name decl.llbc_generics
-            decl.generics ctx
+          ctx_add_generic_params span decl.item_meta.name Item
+            decl.llbc_generics decl.generics ctx
         in
         (* Name of the ADT *)
         let def_name = ctx_get_local_type span decl.def_id ctx in
@@ -2042,7 +2046,7 @@ let extract_type_decl_record_field_projectors_simp_lemmas (ctx : extraction_ctx)
           (* Print the generics *)
           let as_implicits = true in
           extract_generic_params span ctx fmt TypeDeclId.Set.empty ~as_implicits
-            decl.generics None type_params cg_params trait_clauses;
+            Item decl.generics None type_params cg_params trait_clauses;
 
           (* Print the input parameters (the fields) *)
           let print_field (ctx : extraction_ctx) (field_id : FieldId.id)
