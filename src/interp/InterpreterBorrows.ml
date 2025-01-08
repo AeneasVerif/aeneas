@@ -1985,7 +1985,7 @@ let abs_is_destructured (span : Meta.span) (destructure_shared_values : bool)
   abs = abs'
 
 let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
-    (can_end : bool) (destructure_shared_values : bool) (ctx : eval_ctx)
+    ~(can_end : bool) ~(destructure_shared_values : bool) (ctx : eval_ctx)
     (v : typed_value) : abs list =
   log#ltrace (lazy (__FUNCTION__ ^ ": " ^ typed_value_to_string ctx v));
   (* Convert the value to a list of avalues *)
@@ -2021,8 +2021,8 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
      loan, we need to compute the value which will be shared. If [destructure_shared_values]
      is [true], this shared value will be stripped of its shared loans.
   *)
-  let rec to_avalues (allow_borrows : bool) (inside_borrowed : bool)
-      (group : bool) (r_id : RegionId.id) (v : typed_value) :
+  let rec to_avalues ~(allow_borrows : bool) ~(inside_borrowed : bool)
+      ~(group : bool) (r_id : RegionId.id) (v : typed_value) :
       typed_avalue list * typed_value =
     (* Debug *)
     log#ltrace
@@ -2046,7 +2046,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             let avl, field_values =
               List.split
                 (List.map
-                   (to_avalues allow_borrows inside_borrowed group r_id)
+                   (to_avalues ~allow_borrows ~inside_borrowed ~group r_id)
                    adt.field_values)
             in
             (List.concat avl, field_values)
@@ -2057,7 +2057,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
                 (fun fv ->
                   let r_id = fresh_region_id () in
                   let avl, fv =
-                    to_avalues allow_borrows inside_borrowed group r_id fv
+                    to_avalues ~allow_borrows ~inside_borrowed ~group r_id fv
                   in
                   push_abs r_id avl;
                   fv)
@@ -2096,7 +2096,10 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             let av = { value = av; ty } in
             (* Continue exploring, looking for loans (and forbidding borrows,
                because we don't support nested borrows for now) *)
-            let avl, bv = to_avalues false true true r_id bv in
+            let avl, bv =
+              to_avalues ~allow_borrows:false ~inside_borrowed:true ~group:true
+                r_id bv
+            in
             let value = { v with value = VBorrow (VMutBorrow (bid, bv)) } in
             (av :: avl, value)
         | VReservedMutBorrow _ ->
@@ -2118,7 +2121,10 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             (* For avalues, a loan has the type borrow (see the comments in [avalue]) *)
             let ty = mk_ref_ty (RVar (Free r_id)) ty RShared in
             (* Rem.: the shared value might contain loans *)
-            let avl, sv = to_avalues false true true r_id sv in
+            let avl, sv =
+              to_avalues ~allow_borrows:false ~inside_borrowed:true ~group:true
+                r_id sv
+            in
             let av = ALoan (ASharedLoan (PNone, bids, sv, ignored)) in
             let av = { value = av; ty } in
             (* Continue exploring, looking for loans (and forbidding borrows,
@@ -2211,7 +2217,9 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
 
   (* Generate the avalues *)
   let r_id = fresh_region_id () in
-  let values, _ = to_avalues true false false r_id v in
+  let values, _ =
+    to_avalues ~allow_borrows:true ~inside_borrowed:false ~group:false r_id v
+  in
   (* Introduce an abstraction for the returned values *)
   push_abs r_id values;
   (* Return *)

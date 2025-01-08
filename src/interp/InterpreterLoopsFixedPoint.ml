@@ -399,8 +399,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
   (* Debug *)
   log#ltrace
     (lazy
-      ("compute_loop_entry_fixed_point: after prepare_ashared_loans:"
-     ^ "\n\n- ctx0:\n"
+      (__FUNCTION__ ^ ": after prepare_ashared_loans:" ^ "\n\n- ctx0:\n"
       ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx0
       ^ "\n\n- ctx1:\n"
       ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx
@@ -416,7 +415,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
      context (the context at the loop entry, after we called
      {!prepare_ashared_loans}, if this is the first iteration) *)
   let join_ctxs (ctx1 : eval_ctx) (ctxs : eval_ctx list) : eval_ctx =
-    log#ltrace (lazy "compute_loop_entry_fixed_point: join_ctxs");
+    log#ltrace (lazy (__FUNCTION__ ^ ": join_ctxs"));
     (* If this is the first iteration, end the borrows/loans/abs which
        appear in ctx1 and not in the other contexts, then compute the
        set of fixed ids. This means those borrows/loans have to end
@@ -445,8 +444,9 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
           (* End the borrows/abs in [ctx1] *)
           log#ltrace
             (lazy
-              ("compute_loop_entry_fixed_point: join_ctxs: ending \
-                borrows/abstractions before entering the loop:\n\
+              (__FUNCTION__
+             ^ ": join_ctxs: ending borrows/abstractions before entering the \
+                loop:\n\
                 - ending borrow ids: "
               ^ BorrowId.Set.to_string None blids
               ^ "\n- ending abstraction ids: "
@@ -474,7 +474,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
     in
     ctx2
   in
-  log#ltrace (lazy "compute_loop_entry_fixed_point: after join_ctxs");
+  log#ltrace (lazy (__FUNCTION__ ^ ": after join_ctxs"));
 
   (* Compute the set of fixed ids - for the symbolic ids, we compute the
      intersection of ids between the original environment and the list
@@ -515,8 +515,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
       let ctx_resl, _ = eval_loop_body ctx in
       (* Keep only the contexts which reached a `continue`. *)
       let keep_continue_ctx (ctx, res) =
-        log#ltrace
-          (lazy "compute_loop_entry_fixed_point: register_continue_ctx");
+        log#ltrace (lazy (__FUNCTION__ ^ ": register_continue_ctx"));
         match res with
         | Return | Panic | Break _ -> None
         | Unit ->
@@ -621,7 +620,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
           fp_ended_aids := RegionGroupId.Map.add rg_id aids !fp_ended_aids
     in
     let end_at_return (ctx, res) =
-      log#ltrace (lazy "compute_loop_entry_fixed_point: cf_loop");
+      log#ltrace (lazy (__FUNCTION__ ^ ": cf_loop"));
       match res with
       | Continue _ | Panic -> ()
       | Break _ ->
@@ -633,7 +632,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
           *)
           craise __FILE__ __LINE__ span "Unreachable"
       | Return ->
-          log#ltrace (lazy "compute_loop_entry_fixed_point: cf_loop: Return");
+          log#ltrace (lazy (__FUNCTION__ ^ ": cf_loop: Return"));
           (* Should we consume the return value and pop the frame?
            * If we check in [Interpreter] that the loop abstraction we end is
            * indeed the correct one, I think it is sound to under-approximate here
@@ -755,8 +754,8 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
                   try
                     log#ltrace
                       (lazy
-                        ("compute_loop_entry_fixed_point: merge FP \
-                          abstraction: " ^ AbstractionId.to_string id ^ " into "
+                        (__FUNCTION__ ^ ": merge FP abstraction: "
+                       ^ AbstractionId.to_string id ^ " into "
                         ^ AbstractionId.to_string !id0));
                     (* Note that we merge *into* [id0] *)
                     let fp', id0' =

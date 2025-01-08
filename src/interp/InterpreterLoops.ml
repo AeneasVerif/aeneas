@@ -309,7 +309,7 @@ let eval_loop_symbolic (config : config) (span : span)
   (* Debug *)
   log#ltrace
     (lazy
-      ("eval_loop_symbolic:\nContext:\n"
+      (__FUNCTION__ ^ ":\nContext:\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx
       ^ "\n\n"));
 
@@ -324,7 +324,7 @@ let eval_loop_symbolic (config : config) (span : span)
   (* Debug *)
   log#ltrace
     (lazy
-      ("eval_loop_symbolic:\nInitial context:\n"
+      (__FUNCTION__ ^ ":\nInitial context:\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx
       ^ "\n\nFixed point:\n"
       ^ eval_ctx_to_string ~span:(Some span) fp_ctx));
@@ -349,8 +349,8 @@ let eval_loop_symbolic (config : config) (span : span)
 
   log#ltrace
     (lazy
-      "eval_loop_symbolic: matched the fixed-point context with the original \
-       context.");
+      (__FUNCTION__
+     ^ ": matched the fixed-point context with the original context."));
 
   (* Synthesize the loop body *)
   let resl_loop_body, cf_loop_body =
@@ -360,7 +360,7 @@ let eval_loop_symbolic (config : config) (span : span)
 
   log#ltrace
     (lazy
-      ("eval_loop_symbolic: result:" ^ "\n- src context:\n"
+      (__FUNCTION__ ^ ": result:" ^ "\n- src context:\n"
       ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx
       ^ "\n- fixed point:\n"
       ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp_ctx
@@ -388,7 +388,7 @@ let eval_loop_symbolic (config : config) (span : span)
       let abs = ctx_lookup_abs fp_ctx abs_id in
       log#ltrace
         (lazy
-          ("eval_loop_symbolic: compute_abs_given_back_tys:\n- abs:\n"
+          (__FUNCTION__ ^ ": compute_abs_given_back_tys:\n- abs:\n"
           ^ abs_to_string span ~with_ended:true ctx abs
           ^ "\n"));
 

@@ -43,6 +43,8 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
        - however, when computing the mapping from region abstractions to
          the borrow ids they contain, this time we do map abstraction ids
          to sets which can compute strictly more than one value
+       Also: note that it is possible to copy symbolic values containing borrows
+       (if those borrows are shared borrows for instance).
     *)
     let register_mapping (check_singleton_sets : bool) (map : S.t M.t ref)
         (id0 : M.key) (id1 : S.elt) : unit =
@@ -90,6 +92,19 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
     let norm_proj_ty = normalize_proj_ty abs.regions.owned proj_ty in
     let proj : marked_norm_symb_proj = { pm; sv_id = sv.sv_id; norm_proj_ty } in
     RAbsSymbProj.register_mapping false abs_to_borrow_projs abs.abs_id proj;
+    (* This mapping is not generally injective as it is possible to copy symbolic values.
+       For now we still force it to be injective because we don't handle well the case
+       when we join contexts where symbolic values have been copied.
+       A more general, easy-to-implement solution would be to freshen the copied
+       symbolic values like so (when copying symbolic values containing borrows):
+       {[
+         // x ~> s0
+         y = copy x
+         // x ~> s1
+         // y ~> s2
+         // abs { proj_borrows s0, proj_loans s1, proj_loans s2 }
+       ]}
+    *)
     RSymbProjAbs.register_mapping true borrow_proj_to_abs proj abs.abs_id
   in
   let register_loan_proj abs pm (sv : symbolic_value) (proj_ty : ty) =
@@ -954,12 +969,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     | None ->
         (* Convert the value to an abstraction *)
         let abs_kind : abs_kind = Loop (S.loop_id, None, LoopSynthInput) in
-        let can_end = true in
-        let destructure_shared_values = true in
         let ctx = if value_is_left then ctx0 else ctx1 in
         let absl =
-          convert_value_to_abstractions span abs_kind can_end
-            destructure_shared_values ctx v
+          convert_value_to_abstractions span abs_kind ~can_end:true
+            ~destructure_shared_values:true ctx v
         in
         (* Add a marker to the abstraction indicating the provenance of the value *)
         let pm = if value_is_left then PLeft else PRight in
