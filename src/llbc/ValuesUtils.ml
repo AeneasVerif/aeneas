@@ -44,6 +44,14 @@ let value_as_symbolic (span : Meta.span) (v : value) : symbolic_value =
   | VSymbolic v -> v
   | _ -> craise __FILE__ __LINE__ span "Unexpected"
 
+(** Create a typed value from a symbolic value. *)
+let mk_typed_value_from_symbolic_value (svalue : symbolic_value) : typed_value =
+  let av = VSymbolic svalue in
+  let av : typed_value =
+    { value = av; ty = Substitute.erase_regions svalue.sv_ty }
+  in
+  av
+
 (** Box a value *)
 let mk_box_value (span : Meta.span) (v : typed_value) : typed_value =
   let box_ty = mk_box_ty v.ty in
@@ -83,10 +91,18 @@ let is_unit (v : typed_value) : bool =
   | VAdt av -> av.variant_id = None && av.field_values = []
   | _ -> false
 
+let mk_aproj_borrows (pm : proj_marker) (sv_id : symbolic_value_id)
+    (proj_ty : ty) =
+  { value = ASymbolic (pm, AProjBorrows (sv_id, proj_ty, [])); ty = proj_ty }
+
+let mk_aproj_loans (pm : proj_marker) (sv_id : symbolic_value_id) (proj_ty : ty)
+    =
+  { value = ASymbolic (pm, AProjLoans (sv_id, proj_ty, [])); ty = proj_ty }
+
 (** Check if a value contains a *concrete* borrow (i.e., a [Borrow] value -
     we don't check if there are borrows hidden in symbolic values).
  *)
-let borrows_in_value (v : typed_value) : bool =
+let concrete_borrows_in_value (v : typed_value) : bool =
   let obj =
     object
       inherit [_] iter_typed_value
@@ -118,7 +134,7 @@ let reserved_in_value (v : typed_value) : bool =
 (** Check if a value contains a loan (which is necessarily *concrete*: symbolic
     values can't "hide" loans).
  *)
-let loans_in_value (v : typed_value) : bool =
+let concrete_loans_in_value (v : typed_value) : bool =
   let obj =
     object
       inherit [_] iter_typed_value
@@ -132,7 +148,7 @@ let loans_in_value (v : typed_value) : bool =
   with Found -> true
 
 (** Check if a value contains concrete borrows or loans *)
-let concrete_borrows_loans_in_value (v : typed_value) : bool =
+let concrete_borrows_loans_in_value (v : value) : bool =
   let obj =
     object
       inherit [_] iter_typed_value
@@ -142,7 +158,7 @@ let concrete_borrows_loans_in_value (v : typed_value) : bool =
   in
   (* We use exceptions *)
   try
-    obj#visit_typed_value () v;
+    obj#visit_value () v;
     false
   with Found -> true
 
@@ -242,6 +258,33 @@ let value_has_borrows span (infos : TypesAnalysis.type_infos) (v : value) : bool
   (* We use exceptions *)
   try
     obj#visit_value () v;
+    false
+  with Found -> true
+
+let value_has_non_ended_borrows_or_loans (ended_regions : RegionId.Set.t)
+    (v : value) : bool =
+  let ty_visitor =
+    object
+      inherit [_] iter_ty
+
+      method! visit_RVar _ region =
+        match region with
+        | Free rid ->
+            if not (RegionId.Set.mem rid ended_regions) then raise Found else ()
+        | Bound _ -> ()
+    end
+  in
+  let value_visitor =
+    object
+      inherit [_] iter_typed_value
+      method! visit_borrow_content _ _ = raise Found
+      method! visit_loan_content _ _ = raise Found
+      method! visit_symbolic_value _ sv = ty_visitor#visit_ty () sv.sv_ty
+    end
+  in
+  (* We use exceptions *)
+  try
+    value_visitor#visit_value () v;
     false
   with Found -> true
 

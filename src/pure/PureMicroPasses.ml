@@ -1382,6 +1382,8 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
 
       (* Look for a type constructor applied to arguments *)
       method! visit_texpression env e =
+        (* First simplify the sub-expressions *)
+        let e = super#visit_texpression env e in
         match e.e with
         | App _ -> (
             (* TODO: we should remove this case, which dates from before the
@@ -1649,7 +1651,7 @@ let simplify_aggregates_unchanged_fields (ctx : trans_ctx) (def : fun_decl) :
       inherit [_] map_expression as super
 
       method! visit_Switch env scrut switch =
-        log#ldebug
+        log#ltrace
           (lazy ("Visiting switch: " ^ switch_to_string ctx scrut switch));
         (* Update the scrutinee *)
         let scrut = self#visit_texpression env scrut in
@@ -1693,7 +1695,7 @@ let simplify_aggregates_unchanged_fields (ctx : trans_ctx) (def : fun_decl) :
         let e =
           match e0.e with
           | StructUpdate updt ->
-              log#ldebug
+              log#ltrace
                 (lazy
                   ("Visiting struct update: " ^ struct_update_to_string ctx updt));
               (* Update the fields *)
@@ -1714,12 +1716,12 @@ let simplify_aggregates_unchanged_fields (ctx : trans_ctx) (def : fun_decl) :
                       (* If this value is equal to the value we update the field
                          with, we can simply ignore the update *)
                       if field_value = expand_expression env e.e then (
-                        log#ldebug
+                        log#ltrace
                           (lazy
                             ("Simplifying field: " ^ texpression_to_string ctx e));
                         None)
                       else (
-                        log#ldebug
+                        log#ltrace
                           (lazy
                             ("Not simplifying field: "
                             ^ texpression_to_string ctx e));
@@ -1727,7 +1729,7 @@ let simplify_aggregates_unchanged_fields (ctx : trans_ctx) (def : fun_decl) :
                     in
                     let updates = List.filter_map update_field updt.updates in
                     if updates = [] then (
-                      log#ldebug
+                      log#ltrace
                         (lazy
                           ("StructUpdate: "
                           ^ texpression_to_string ctx e0
@@ -1736,7 +1738,7 @@ let simplify_aggregates_unchanged_fields (ctx : trans_ctx) (def : fun_decl) :
                       init.e)
                     else
                       let updt1 = { updt with updates } in
-                      log#ldebug
+                      log#ltrace
                         (lazy
                           ("StructUpdate: "
                           ^ struct_update_to_string ctx updt
@@ -1745,7 +1747,7 @@ let simplify_aggregates_unchanged_fields (ctx : trans_ctx) (def : fun_decl) :
                       super#visit_StructUpdate env updt1
               end
           | App _ ->
-              log#ldebug
+              log#ltrace
                 (lazy ("Visiting app: " ^ texpression_to_string ctx e0));
               (* It may be an ADT expression (e.g., [Cons x y] or [(x, y)]):
                  check if it is the case, and if it is, compute the expansion
@@ -1765,7 +1767,7 @@ let simplify_aggregates_unchanged_fields (ctx : trans_ctx) (def : fun_decl) :
                 begin
                   match expanded with
                   | [ e2 ] ->
-                      log#ldebug
+                      log#ltrace
                         (lazy
                           ("Simplified: "
                           ^ texpression_to_string ctx e1
@@ -2502,11 +2504,11 @@ let apply_end_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl =
 
       if apply then (
         let def = pass ctx def in
-        log#ldebug
+        log#ltrace
           (lazy (pass_name ^ ":\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
         def)
       else (
-        log#ldebug
+        log#ltrace
           (lazy ("ignoring " ^ pass_name ^ " due to the configuration\n"));
         def))
     def end_passes
@@ -2555,7 +2557,7 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
   in
   let subgroups = ReorderDecls.group_reorder_fun_decls all_decls in
 
-  log#ldebug
+  log#ltrace
     (lazy
       ("filter_loop_inputs: all_decls:\n\n"
       ^ String.concat "\n\n" (List.map (fun_decl_to_string ctx) all_decls)
@@ -2588,7 +2590,7 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
         (fun v -> (var_get_id v, mk_texpression_from_var v))
         inputs_prefix
     in
-    log#ldebug
+    log#ltrace
       (lazy
         ("inputs:\n"
         ^ String.concat ", " (List.map (var_to_string ctx) inputs_prefix)
@@ -2634,7 +2636,7 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
                         let beg_args, end_args =
                           Collections.List.split_at args inputs_prefix_length
                         in
-                        log#ldebug
+                        log#ltrace
                           (lazy
                             ("beg_args:\n"
                             ^ String.concat ", "
@@ -2663,7 +2665,7 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
     in
     visitor#visit_texpression () body.body;
 
-    log#ldebug
+    log#ltrace
       (lazy
         ("\n- used variables: "
         ^ String.concat ", "
@@ -2689,7 +2691,7 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
       | [ f ] ->
           (* Group made of one function: check if it is a loop. If it is the
              case, explore it. *)
-          log#ldebug
+          log#ltrace
             (lazy
               ("filter_loop_inputs: singleton:\n\n" ^ fun_decl_to_string ctx f
              ^ "\n"));
@@ -2905,13 +2907,13 @@ let compute_reducible (_ctx : trans_ctx) (transl : pure_fun_translation list) :
  *)
 let apply_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_and_loops =
   (* Debug *)
-  log#ldebug (lazy ("PureMicroPasses.apply_passes_to_def: " ^ def.name));
+  log#ltrace (lazy ("PureMicroPasses.apply_passes_to_def: " ^ def.name));
 
-  log#ldebug (lazy ("original decl:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
+  log#ltrace (lazy ("original decl:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
   (* First, find names for the variables which are unnamed *)
   let def = compute_pretty_names def in
-  log#ldebug
+  log#ltrace
     (lazy ("compute_pretty_name:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
   (* TODO: we might want to leverage more the assignment span-data, for
@@ -2923,7 +2925,7 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_and_loops =
    * Rk.: some passes below use the fact that we removed the span-data
    * (otherwise we would have to "unspan" expressions before matching) *)
   let def = remove_span def in
-  log#ldebug (lazy ("remove_span:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
+  log#ltrace (lazy ("remove_span:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
   (* Extract the loop definitions by removing the {!Loop} node *)
   let def, loops = decompose_loops ctx def in

@@ -1,5 +1,6 @@
 open Types
 open Utils
+open Errors
 include Charon.TypesUtils
 
 let expect_free_var = Substitute.expect_free_var
@@ -51,6 +52,57 @@ let ty_has_adt_with_borrows span (infos : TypesAnalysis.type_infos) (ty : ty) :
  *)
 let ty_has_nested_borrows (span : Meta.span option)
     (infos : TypesAnalysis.type_infos) (ty : ty) : bool =
+  let info = TypesAnalysis.analyze_ty span infos ty in
+  info.TypesAnalysis.contains_nested_borrows
+
+(* Refresh the regions appearing inside a type, and introduce
+   fresh regions for its erased regions *)
+let ty_refresh_regions (span : Meta.span option)
+    (fresh_region : unit -> region_id) (ty : ty) : region_id list * ty =
+  let fresh_regions = ref [] in
+  let fresh_region () =
+    let rid = fresh_region () in
+    fresh_regions := rid :: !fresh_regions;
+    rid
+  in
+  let regions_map = ref RegionId.Map.empty in
+  let get_region rid =
+    match RegionId.Map.find_opt rid !regions_map with
+    | Some id -> id
+    | None ->
+        let nid = fresh_region () in
+        regions_map := RegionId.Map.add rid nid !regions_map;
+        nid
+  in
+  let visitor =
+    object
+      inherit [_] map_ty
+
+      method! visit_region_id _ _ =
+        (* We shouldn't get there and should rather catch all the call sites *)
+        internal_error_opt_span __FILE__ __LINE__ span
+
+      method! visit_RVar _ var =
+        match var with
+        | Free rid -> RVar (Free (get_region rid))
+        | Bound _ -> RVar var
+
+      method! visit_RErased _ = RVar (Free (fresh_region ()))
+    end
+  in
+  let ty = visitor#visit_ty () ty in
+  (List.rev !fresh_regions, ty)
+
+let ety_has_nested_borrows (span : Meta.span option)
+    (infos : TypesAnalysis.type_infos) (ty : ty) : bool =
+  (* FIXME: The analysis currently only works on types with regions - erased types are
+     not allowed. For now, we update the type to insert fresh regions.
+     In order to avoid collisions (which as of today wouldn't be a problem actually,
+     but it's cleaner if we avoid the problem), we also refresh the existing non-erased
+     regions.
+  *)
+  let _, fresh_region = RegionId.fresh_stateful_generator () in
+  let _, ty = ty_refresh_regions span fresh_region ty in
   let info = TypesAnalysis.analyze_ty span infos ty in
   info.TypesAnalysis.contains_nested_borrows
 
@@ -106,6 +158,14 @@ let ty_has_mut_borrow_for_region_in_pred (infos : TypesAnalysis.type_infos)
     obj#visit_ty () ty;
     false
   with Found -> true
+
+let ty_has_mut_borrow_for_region_in_set (infos : TypesAnalysis.type_infos)
+    (regions : RegionId.Set.t) (ty : ty) : bool =
+  ty_has_mut_borrow_for_region_in_pred infos
+    (function
+      | RVar (Free rid) -> RegionId.Set.mem rid regions
+      | _ -> false)
+    ty
 
 (** Small helper *)
 let raise_if_not_rty_visitor =

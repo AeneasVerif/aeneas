@@ -488,6 +488,76 @@ let typed_pattern_to_string ?(span : Meta.span option = None) (env : fmt_env)
     (v : typed_pattern) : string =
   snd (typed_pattern_to_string_aux span env v)
 
+let back_sg_info_to_string (env : fmt_env) (info : back_sg_info) : string =
+  let { inputs; inputs_no_state; outputs; output_names; effect_info; filter } =
+    info
+  in
+  let input_to_string (n, ty) =
+    (match n with
+    | None -> ""
+    | Some n -> n ^ ":")
+    ^ ty_to_string env false ty
+  in
+  let inputs_to_string inputs =
+    "[" ^ String.concat "," (List.map input_to_string inputs) ^ "]"
+  in
+  "{ inputs = " ^ inputs_to_string inputs ^ "; inputs_no_state = "
+  ^ inputs_to_string inputs_no_state
+  ^ "; outputs = ["
+  ^ String.concat "," (List.map (ty_to_string env false) outputs)
+  ^ "; output_names = ["
+  ^ String.concat ","
+      (List.map
+         (function
+           | None -> "_"
+           | Some n -> n)
+         output_names)
+  ^ "; effect_info = "
+  ^ show_fun_effect_info effect_info
+  ^ "; filter = "
+  ^ Print.bool_to_string filter
+  ^ " }"
+
+let decomposed_fun_type_to_string (env : fmt_env) (sg : decomposed_fun_type) :
+    string =
+  let { fwd_inputs; fwd_output; back_sg; fwd_info } = sg in
+  "{\n  fwd_inputs = "
+  ^ String.concat "," (List.map (ty_to_string env false) fwd_inputs)
+  ^ ";\n  fwd_output = "
+  ^ ty_to_string env false fwd_output
+  ^ ";\n  back_sg = "
+  ^ RegionGroupId.Map.to_string None (back_sg_info_to_string env) back_sg
+  ^ ";\n  fwd_info = " ^ show_fun_sig_info fwd_info ^ "\n}"
+
+let trait_type_constraint_to_string (env : fmt_env) (c : trait_type_constraint)
+    : string =
+  let { trait_ref; type_name; ty } = c in
+  trait_ref_to_string env false trait_ref
+  ^ "." ^ type_name ^ " = " ^ ty_to_string env false ty
+
+let predicates_to_string (env : fmt_env) (preds : predicates) : string =
+  let { trait_type_constraints } = preds in
+  String.concat ","
+    (List.map (trait_type_constraint_to_string env) trait_type_constraints)
+
+let decomposed_fun_sig_to_string (env : fmt_env) (sg : decomposed_fun_sig) :
+    string =
+  let { generics; llbc_generics; preds; fun_ty } = sg in
+  let llbc_generics =
+    let env : _ Charon.PrintUtils.fmt_env =
+      { crate = env.crate; generics = []; locals = [] }
+    in
+    let l0, l1 = Print.generic_params_to_strings env llbc_generics in
+    "[" ^ String.concat "," (l0 @ l1) ^ "]"
+  in
+  "{\n  generics = ["
+  ^ String.concat "," (generic_params_to_strings env generics)
+  ^ "];\n  llbc_generics = ..." ^ llbc_generics ^ ";\n  preds = "
+  ^ predicates_to_string env preds
+  ^ ";\n  fun_ty = "
+  ^ decomposed_fun_type_to_string env fun_ty
+  ^ "\n}"
+
 let fun_sig_to_string (env : fmt_env) (sg : fun_sig) : string =
   let env = { env with generics = [ sg.generics ] } in
   let generics = generic_params_to_strings env sg.generics in

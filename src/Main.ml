@@ -70,6 +70,18 @@ let matches_name_with_generics (c : crate) (name : Types.name)
   let open ExtractBuiltin in
   Option.is_some (NameMatcherMap.find_with_generics_opt mctx name generics m)
 
+let activated_loggers : (EL.level * string) list ref = ref []
+
+let add_activated_loggers level (name_list : string) =
+  let names = String.split_on_char ',' name_list in
+  activated_loggers := List.map (fun n -> (level, n)) names @ !activated_loggers
+
+let marked_ids : string list ref = ref []
+
+let add_marked_ids (ids : string) =
+  let ids = String.split_on_char ',' ids in
+  marked_ids := ids @ !marked_ids
+
 let () =
   (* Measure start time *)
   let start_time = Unix.gettimeofday () in
@@ -150,6 +162,26 @@ let () =
         Arg.Set print_unknown_externals,
         " Print all the external definitions which are not listed in the \
          builtin functions" );
+      ( "-log",
+        Arg.String (add_activated_loggers EL.Trace),
+        " Activate trace log for a given logger designated by its name. It is \
+         possible to specifiy a list of names if they are separated by commas \
+         without spaces; for instance: '-log Interpreter,SymbolicToPure'. The \
+         existing loggers are: {"
+        ^ String.concat ", " (Collections.StringMap.keys !loggers)
+        ^ "}" );
+      ( "-log-debug",
+        Arg.String (add_activated_loggers EL.Debug),
+        " Same as '-log' but sets the level to the more verbose 'debug' rather \
+         than 'trace'" );
+      ( "-mark-ids",
+        Arg.String add_marked_ids,
+        " For developers: mark some identifiers to throw an exception if we \
+         generate them; this is useful to insert breakpoints when debugging by \
+         using the log. For example, one can mark the symbolic value ids 1 and \
+         2 with '-mark-ids s1,s2', or '-mark-ids s@1, s@2. The supported \
+         prefixes are: 's' (symbolic value id), 'b' (borrow id), 'a' \
+         (abstraction id), 'r' (region id)." );
     ]
   in
 
@@ -210,6 +242,58 @@ let () =
   let check_not (cond : bool) (msg : string) =
     if cond then fail_with_error msg
   in
+
+  (* Activate the loggers *)
+  let activated_loggers_set = ref Collections.StringSet.empty in
+  List.iter
+    (fun (level, name) ->
+      match Collections.StringMap.find_opt name !loggers with
+      | None ->
+          log#serror
+            ("The logger '" ^ name
+           ^ "' does not exist. The existing loggers are: {"
+            ^ String.concat ", " (Collections.StringMap.keys !loggers)
+            ^ "}");
+          fail false
+      | Some logger ->
+          (* Check that we haven't activated the logger twice *)
+          if Collections.StringSet.mem name !activated_loggers_set then begin
+            log#serror
+              ("The logger '" ^ name
+             ^ "' is used twice in the '-log' and/or '-log-debug' option(s)");
+            fail false
+          end
+          else begin
+            activated_loggers_set :=
+              Collections.StringSet.add name !activated_loggers_set;
+            logger#set_level level
+          end)
+    !activated_loggers;
+
+  (* Properly register the marked ids *)
+  List.iter
+    (fun id ->
+      let i = if String.length id >= 2 && String.get id 1 = '@' then 2 else 1 in
+      let sub = String.sub id i (String.length id - i) in
+      match int_of_string_opt sub with
+      | None ->
+          log#serror
+            ("Invalid identifier provided to option `-mark-ids`: '" ^ id
+           ^ "': '" ^ sub ^ "' can't be parsed as an int");
+          fail false
+      | Some i -> (
+          let open ContextsBase in
+          match String.get id 0 with
+          | 's' -> marked_symbolic_value_ids_insert_from_int i
+          | 'b' -> marked_borrow_ids_insert_from_int i
+          | 'a' -> marked_abstraction_ids_insert_from_int i
+          | 'r' -> marked_region_ids_insert_from_int i
+          | _ ->
+              log#serror
+                ("Invalid identifier provided to option: '" ^ id
+               ^ "': the first character should be in {'s', 'b', 'a', 'r'}");
+              fail false))
+    !marked_ids;
 
   (* Sanity check (now that the arguments are parsed!) *)
   check_arg_implies

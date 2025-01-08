@@ -196,7 +196,7 @@ let norm_ctx_lookup_trait_impl_parent_clause (ctx : norm_ctx)
     See the comments for {!norm_ctx_normalize_trait_instance_id}.
   *)
 let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
-  log#ldebug (lazy ("norm_ctx_normalize_ty: " ^ ty_to_string ctx ty));
+  log#ltrace (lazy ("norm_ctx_normalize_ty: " ^ ty_to_string ctx ty));
   match ty with
   | TAdt (id, generics) ->
       TAdt (id, norm_ctx_normalize_generic_args ctx generics)
@@ -216,7 +216,7 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
       let output = norm_ctx_normalize_ty ctx output in
       TArrow { binder_regions; binder_value = (inputs, output) }
   | TTraitType (trait_ref, type_name) -> (
-      log#ldebug
+      log#ltrace
         (lazy
           ("norm_ctx_normalize_ty:\n- trait type: " ^ ty_to_string ctx ty
          ^ "\n- trait_ref: "
@@ -227,7 +227,7 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
       let ty : ty =
         match trait_ref.trait_id with
         | TraitImpl (impl_id, generics) ->
-            log#ldebug
+            log#ltrace
               (lazy
                 ("norm_ctx_normalize_ty (trait impl):\n- trait type: "
                ^ ty_to_string ctx ty ^ "\n- trait_ref: "
@@ -246,7 +246,7 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
             (* Normalize *)
             norm_ctx_normalize_ty ctx ty
         | _ ->
-            log#ldebug
+            log#ltrace
               (lazy
                 ("norm_ctx_normalize_ty: trait type: not a trait ref: "
                ^ ty_to_string ctx ty ^ "\n- trait_ref: "
@@ -369,7 +369,7 @@ and norm_ctx_normalize_generic_args (ctx : norm_ctx) (generics : generic_args) :
 
 and norm_ctx_normalize_trait_ref (ctx : norm_ctx) (trait_ref : trait_ref) :
     trait_ref =
-  log#ldebug
+  log#ltrace
     (lazy
       ("norm_ctx_normalize_trait_ref: "
       ^ trait_ref_to_string ctx trait_ref
@@ -382,7 +382,7 @@ and norm_ctx_normalize_trait_ref (ctx : norm_ctx) (trait_ref : trait_ref) :
     norm_ctx_normalize_region_binder norm_ctx_normalize_trait_decl_ref ctx
       trait_decl_ref
   in
-  log#ldebug
+  log#ltrace
     (lazy
       ("norm_ctx_normalize_trait_ref: no norm: "
       ^ trait_instance_id_to_string ctx trait_id));

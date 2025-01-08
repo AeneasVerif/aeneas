@@ -41,7 +41,7 @@ type call = {
           borrows (we need to perform lookups).
        *)
   sg : fun_sig option;
-      (** The un-instantiated function signature, if this is not a unop/binop.
+      (** The non-instantiated function signature, if this is not a unop/binop.
 
           This is useful to retrieve the names of the inputs, to generate pretty
           names in the translation.
@@ -184,22 +184,30 @@ type expression =
   | ForwardEnd of
       ((Contexts.eval_ctx[@opaque]) * typed_value) option
       * (Contexts.eval_ctx[@opaque])
-      * typed_value symbolic_value_id_map option
+      * (typed_value symbolic_value_id_map
+        * symbolic_value_id symbolic_value_id_map)
+        option
       * expression
       * expression region_group_id_map
       (** We use this delimiter to indicate at which point we switch to the
           generation of code specific to the backward function(s).
 
           The fields are:
-          - the evaluation context **after we evaluated the return value**
-          - the value consumed by the return variable
+          - optional: the evaluation context **after we evaluated the return
+            value** with the value consumed by the return variable
           - the evaluation context at the moment we introduce the
             [ForwardEnd]. We use it to translate the input values
             (see the comments for the {!Return} variant).
-          - an optional map from symbolic values to input values.
-            We use this to compute the input values for loops: upon entering a loop,
-            in the translation we call the loop translation function, which takes
-            care of the end of the execution.
+          - optional maps:
+            - from symbolic values to input values.
+              We use this to compute the input values for loops: upon entering a loop,
+              in the translation we call the loop translation function, which takes
+              care of the end of the execution.
+            - from input symbolic values to refreshed input symbolic value
+              TODO: this is a technical detail which shouldn't be here - we need
+              it to introduce intermediate let-bindings in the translation. We
+              should get rid of this once the translation of loops is cleaned up
+              and generalized.
           - the end of the translation for the forward function
           - a map from region group ids to expressions that give the end
             of the translation for the backward functions
@@ -225,7 +233,7 @@ and loop = {
   input_svalues : symbolic_value list;  (** The input symbolic values *)
   fresh_svalues : symbolic_value_id_set;
       (** The symbolic values introduced by the loop fixed-point *)
-  rg_to_given_back_tys : (ty list RegionGroupId.Map.t[@opaque]);
+  rg_to_given_back_tys : (Pure.ty list RegionGroupId.Map.t[@opaque]);
       (** The map from region group ids to the types of the values given back
           by the corresponding loop abstractions.
        *)

@@ -6,7 +6,6 @@ open ValuesUtils
 module S = SynthesizeSymbolic
 open Cps
 open InterpreterUtils
-open InterpreterBorrowsCore
 open InterpreterBorrows
 open InterpreterLoopsCore
 open InterpreterLoopsMatchCtxs
@@ -15,117 +14,6 @@ open Errors
 
 (** The local logger *)
 let log = Logging.loops_fixed_point_log
-
-exception FoundBorrowId of BorrowId.id
-exception FoundAbsId of AbstractionId.id
-
-(* Repeat until we can't simplify the context anymore:
-   - end the borrows which appear in fresh anonymous values and don't contain loans
-   - end the fresh region abstractions which can be ended (no loans)
-*)
-let rec end_useless_fresh_borrows_and_abs (config : config) (span : Meta.span)
-    (fixed_ids : ids_sets) : cm_fun =
- fun ctx ->
-  let rec explore_env (env : env) : unit =
-    match env with
-    | [] -> () (* Done *)
-    | EBinding (BDummy vid, v) :: env
-      when not (DummyVarId.Set.mem vid fixed_ids.dids) ->
-        (* Explore the anonymous value - raises an exception if it finds
-           a borrow to end *)
-        let visitor =
-          object
-            inherit [_] iter_typed_value
-            method! visit_VLoan _ _ = () (* Don't enter inside loans *)
-
-            method! visit_VBorrow _ bc =
-              (* Check if we can end the borrow, do not enter inside if we can't *)
-              match bc with
-              | VSharedBorrow bid | VReservedMutBorrow bid ->
-                  raise (FoundBorrowId bid)
-              | VMutBorrow (bid, v) ->
-                  if not (value_has_loans v.value) then
-                    raise (FoundBorrowId bid)
-                  else (* Stop there *)
-                    ()
-          end
-        in
-        visitor#visit_typed_value () v;
-        (* No exception was raised: continue *)
-        explore_env env
-    | EAbs abs :: env when not (AbstractionId.Set.mem abs.abs_id fixed_ids.aids)
-      -> (
-        (* Check if it is possible to end the abstraction: if yes, raise an exception *)
-        let opt_loan = get_first_non_ignored_aloan_in_abstraction span abs in
-        match opt_loan with
-        | None ->
-            (* No remaining loans: we can end the abstraction *)
-            raise (FoundAbsId abs.abs_id)
-        | Some _ ->
-            (* There are remaining loans: we can't end the abstraction *)
-            explore_env env)
-    | _ :: env -> explore_env env
-  in
-  let rec_call = end_useless_fresh_borrows_and_abs config span fixed_ids in
-  try
-    (* Explore the environment *)
-    explore_env ctx.env;
-    (* No exception raised: simply continue *)
-    (ctx, fun e -> e)
-  with
-  | FoundAbsId abs_id ->
-      let ctx, cc = end_abstraction config span abs_id ctx in
-      comp cc (rec_call ctx)
-  | FoundBorrowId bid ->
-      let ctx, cc = end_borrow config span bid ctx in
-      comp cc (rec_call ctx)
-
-(* Explore the fresh anonymous values and replace all the values which are not
-   borrows/loans with ⊥ *)
-let cleanup_fresh_values (span : Meta.span option) (fixed_ids : ids_sets)
-    (ctx : eval_ctx) : eval_ctx =
-  let rec explore_env (env : env) : env =
-    match env with
-    | [] -> [] (* Done *)
-    | EBinding (BDummy vid, v) :: env
-      when not (DummyVarId.Set.mem vid fixed_ids.dids) ->
-        let env = explore_env env in
-        (* Eliminate the value altogether if it doesn't contain loans/borrows *)
-        if not (value_has_loans_or_borrows span ctx v.value) then env
-        else
-          (* Explore the anonymous value - raises an exception if it finds
-             a borrow to end *)
-          let visitor =
-            object
-              inherit [_] map_typed_value as super
-              method! visit_VLoan _ v = VLoan v (* Don't enter inside loans *)
-
-              method! visit_VBorrow _ v =
-                VBorrow v (* Don't enter inside borrows *)
-
-              method! visit_value _ v =
-                if not (value_has_loans_or_borrows span ctx v) then VBottom
-                else super#visit_value () v
-            end
-          in
-          let v = visitor#visit_typed_value () v in
-          EBinding (BDummy vid, v) :: env
-    | x :: env -> x :: explore_env env
-  in
-  { ctx with env = explore_env ctx.env }
-
-(* Repeat until we can't simplify the context anymore:
-   - explore the fresh anonymous values and replace all the values which are not
-     borrows/loans with ⊥
-   - also end the borrows which appear in fresh anonymous values and don't contain loans
-   - end the fresh region abstractions which can be ended (no loans)
-*)
-let cleanup_fresh_values_and_abs (config : config) (span : Meta.span)
-    (fixed_ids : ids_sets) : cm_fun =
- fun ctx ->
-  let ctx, cc = end_useless_fresh_borrows_and_abs config span fixed_ids ctx in
-  let ctx = cleanup_fresh_values (Some span) fixed_ids ctx in
-  (ctx, cc)
 
 let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
     cm_fun =
@@ -305,21 +193,6 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
 
           (* Continue the exploration *)
           super#visit_ASharedLoan env pm lids sv av
-
-        (** Check that there are no symbolic values with *borrows* inside the
-            abstraction - shouldn't happen if the symbolic values are greedily
-            expanded.
-            We do this because those values could contain shared borrows:
-            if it is the case, we need to duplicate them too.
-            TODO: implement this more general behavior.
-         *)
-        method! visit_symbolic_value env sv =
-          cassert __FILE__ __LINE__
-            (not (symbolic_value_has_borrows (Some span) ctx sv))
-            span
-            "There should be no symbolic values with borrows inside the \
-             abstraction";
-          super#visit_symbolic_value env sv
       end
     in
     List.iter (visit_avalue#visit_typed_avalue None) abs.avalues
@@ -412,13 +285,12 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
   let ctx = prepare_ashared_loans_no_synth span loop_id ctx0 in
 
   (* Debug *)
-  log#ldebug
+  log#ltrace
     (lazy
-      ("compute_loop_entry_fixed_point: after prepare_ashared_loans:"
-     ^ "\n\n- ctx0:\n"
-      ^ eval_ctx_to_string_no_filter ~span:(Some span) ctx0
+      (__FUNCTION__ ^ ": after prepare_ashared_loans:" ^ "\n\n- ctx0:\n"
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx0
       ^ "\n\n- ctx1:\n"
-      ^ eval_ctx_to_string_no_filter ~span:(Some span) ctx
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx
       ^ "\n\n"));
 
   (* The fixed ids. They are the ids of the original ctx, after we ended
@@ -431,7 +303,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
      context (the context at the loop entry, after we called
      {!prepare_ashared_loans}, if this is the first iteration) *)
   let join_ctxs (ctx1 : eval_ctx) (ctxs : eval_ctx list) : eval_ctx =
-    log#ldebug (lazy "compute_loop_entry_fixed_point: join_ctxs");
+    log#ltrace (lazy (__FUNCTION__ ^ ": join_ctxs"));
     (* If this is the first iteration, end the borrows/loans/abs which
        appear in ctx1 and not in the other contexts, then compute the
        set of fixed ids. This means those borrows/loans have to end
@@ -449,19 +321,16 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
           let aids = AbstractionId.Set.diff old_ids.aids new_ids.aids in
           (* End those borrows and abstractions *)
           let end_borrows_abs blids aids ctx =
-            let ctx =
-              InterpreterBorrows.end_borrows_no_synth config span blids ctx
-            in
-            let ctx =
-              InterpreterBorrows.end_abstractions_no_synth config span aids ctx
-            in
+            let ctx = end_borrows_no_synth config span blids ctx in
+            let ctx = end_abstractions_no_synth config span aids ctx in
             ctx
           in
           (* End the borrows/abs in [ctx1] *)
-          log#ldebug
+          log#ltrace
             (lazy
-              ("compute_loop_entry_fixed_point: join_ctxs: ending \
-                borrows/abstractions before entering the loop:\n\
+              (__FUNCTION__
+             ^ ": join_ctxs: ending borrows/abstractions before entering the \
+                loop:\n\
                 - ending borrow ids: "
               ^ BorrowId.Set.to_string None blids
               ^ "\n- ending abstraction ids: "
@@ -489,7 +358,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
     in
     ctx2
   in
-  log#ldebug (lazy "compute_loop_entry_fixed_point: after join_ctxs");
+  log#ltrace (lazy (__FUNCTION__ ^ ": after join_ctxs"));
 
   (* Compute the set of fixed ids - for the symbolic ids, we compute the
      intersection of ids between the original environment and the list
@@ -511,7 +380,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
      existentially quantified borrows/abstractions/symbolic values.
   *)
   let equiv_ctxs (ctx1 : eval_ctx) (ctx2 : eval_ctx) : bool =
-    log#ldebug (lazy "compute_fixed_point: equiv_ctx:");
+    log#ltrace (lazy "compute_fixed_point: equiv_ctx:");
     let fixed_ids = compute_fixed_ids [ ctx1; ctx2 ] in
     let check_equivalent = true in
     let lookup_shared_value _ = craise __FILE__ __LINE__ span "Unreachable" in
@@ -530,8 +399,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
       let ctx_resl, _ = eval_loop_body ctx in
       (* Keep only the contexts which reached a `continue`. *)
       let keep_continue_ctx (ctx, res) =
-        log#ldebug
-          (lazy "compute_loop_entry_fixed_point: register_continue_ctx");
+        log#ltrace (lazy (__FUNCTION__ ^ ": register_continue_ctx"));
         match res with
         | Return | Panic | Break _ -> None
         | Unit ->
@@ -549,17 +417,17 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
       in
       let continue_ctxs = List.filter_map keep_continue_ctx ctx_resl in
 
-      log#ldebug
+      log#ltrace
         (lazy
           ("compute_fixed_point: about to join with continue_ctx"
          ^ "\n\n- ctx0:\n"
-          ^ eval_ctx_to_string_no_filter ~span:(Some span) ctx
+          ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx
           ^ "\n\n"
           ^ String.concat "\n\n"
               (List.map
                  (fun ctx ->
                    "- continue_ctx:\n"
-                   ^ eval_ctx_to_string_no_filter ~span:(Some span) ctx)
+                   ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx)
                  continue_ctxs)
           ^ "\n\n"));
 
@@ -568,12 +436,12 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
       let ctx1 = join_ctxs ctx continue_ctxs in
 
       (* Debug *)
-      log#ldebug
+      log#ltrace
         (lazy
           ("compute_fixed_point: after joining continue ctxs" ^ "\n\n- ctx0:\n"
-          ^ eval_ctx_to_string_no_filter ~span:(Some span) ctx
+          ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx
           ^ "\n\n- ctx1:\n"
-          ^ eval_ctx_to_string_no_filter ~span:(Some span) ctx1
+          ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx1
           ^ "\n\n"));
 
       (* Check if we reached a fixed point: if not, iterate *)
@@ -582,11 +450,11 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
   let fp = compute_fixed_point ctx max_num_iter max_num_iter in
 
   (* Debug *)
-  log#ldebug
+  log#ltrace
     (lazy
       ("compute_fixed_point: fixed point computed before matching with input \
         region groups:" ^ "\n\n- fp:\n"
-      ^ eval_ctx_to_string_no_filter ~span:(Some span) fp
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp
       ^ "\n\n"));
 
   (* Make sure we have exactly one loop abstraction per function region (merge
@@ -620,12 +488,12 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
     let fp = list_loop_abstractions#visit_eval_ctx () fp in
 
     (* For every input region group:
-     * - evaluate until we get to a [return]
-     * - end the input abstraction corresponding to the input region group
-     * - find which loop abstractions end at that moment
-     *
-     * [fp_ended_aids] links region groups to sets of ended abstractions.
-     *)
+       - evaluate until we get to a [return]
+       - end the input abstraction corresponding to the input region group
+       - find which loop abstractions end at that moment
+
+       [fp_ended_aids] links region groups to sets of ended abstractions.
+    *)
     let fp_ended_aids = ref RegionGroupId.Map.empty in
     let add_ended_aids (rg_id : RegionGroupId.id) (aids : AbstractionId.Set.t) :
         unit =
@@ -636,7 +504,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
           fp_ended_aids := RegionGroupId.Map.add rg_id aids !fp_ended_aids
     in
     let end_at_return (ctx, res) =
-      log#ldebug (lazy "compute_loop_entry_fixed_point: cf_loop");
+      log#ltrace (lazy (__FUNCTION__ ^ ": cf_loop"));
       match res with
       | Continue _ | Panic -> ()
       | Break _ ->
@@ -648,7 +516,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
           *)
           craise __FILE__ __LINE__ span "Unreachable"
       | Return ->
-          log#ldebug (lazy "compute_loop_entry_fixed_point: cf_loop: Return");
+          log#ltrace (lazy (__FUNCTION__ ^ ": cf_loop: Return"));
           (* Should we consume the return value and pop the frame?
            * If we check in [Interpreter] that the loop abstraction we end is
            * indeed the correct one, I think it is sound to under-approximate here
@@ -667,10 +535,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
                  abs.kind = SynthInput rg_id)
                 span;
               (* End this abstraction *)
-              let ctx =
-                InterpreterBorrows.end_abstraction_no_synth config span abs_id
-                  ctx
-              in
+              let ctx = end_abstraction_no_synth config span abs_id ctx in
               (* Explore the context, and check which abstractions are not there anymore *)
               let ids, _ = compute_ctx_ids ctx in
               let ended_ids = AbstractionId.Set.diff !fp_aids ids.aids in
@@ -693,6 +558,12 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
           aids_union := AbstractionId.Set.union ids !aids_union)
         !fp_ended_aids
     in
+    log#ltrace
+      (lazy
+        ("- aids_union: "
+        ^ AbstractionId.Set.to_string None !aids_union
+        ^ "\n" ^ "- fp_aids: "
+        ^ AbstractionId.Set.to_string None !fp_aids));
 
     (* If we generate a translation, we check that all the regions need to end
        - this is not necessary per se, but if it doesn't happen it is bizarre and worth investigating...
@@ -743,7 +614,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
                    }
                  ]}
               *)
-              log#ldebug
+              log#ltrace
                 (lazy
                   ("No loop region to end for the region group "
                   ^ RegionGroupId.to_string rg_id));
@@ -762,10 +633,10 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
               List.iter
                 (fun id ->
                   try
-                    log#ldebug
+                    log#ltrace
                       (lazy
-                        ("compute_loop_entry_fixed_point: merge FP \
-                          abstraction: " ^ AbstractionId.to_string id ^ " into "
+                        (__FUNCTION__ ^ ": merge FP abstraction: "
+                       ^ AbstractionId.to_string id ^ " into "
                         ^ AbstractionId.to_string !id0));
                     (* Note that we merge *into* [id0] *)
                     let fp', id0' =
@@ -833,11 +704,11 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
        while allowing exactly one iteration to see if it fails *)
     let _ =
       let fp_test = update_kinds_can_end true fp in
-      log#ldebug
+      log#ltrace
         (lazy
           ("compute_fixed_point: fixed point after matching with the function \
             region groups:\n"
-          ^ eval_ctx_to_string_no_filter ~span:(Some span) fp_test));
+          ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp_test));
       compute_fixed_point fp_test 1 1
     in
 
@@ -852,7 +723,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
 let compute_fixed_point_id_correspondance (span : Meta.span)
     (fixed_ids : ids_sets) (src_ctx : eval_ctx) (tgt_ctx : eval_ctx) :
     borrow_loan_corresp =
-  log#ldebug
+  log#ltrace
     (lazy
       ("compute_fixed_point_id_correspondance:\n\n- fixed_ids:\n"
      ^ show_ids_sets fixed_ids ^ "\n\n- src_ctx:\n"
@@ -866,7 +737,7 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
   let filt_tgt_env, new_absl, _ = ctx_split_fixed_new span fixed_ids tgt_ctx in
   let filt_tgt_ctx = { tgt_ctx with env = filt_tgt_env } in
 
-  log#ldebug
+  log#ltrace
     (lazy
       ("compute_fixed_point_id_correspondance:\n\n- fixed_ids:\n"
      ^ show_ids_sets fixed_ids ^ "\n\n- filt_src_ctx:\n"
@@ -895,16 +766,26 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
          filt_tgt_ctx filt_src_ctx)
   in
 
-  log#ldebug
+  log#ltrace
     (lazy
       ("compute_fixed_point_id_correspondance:\n\n- tgt_to_src_maps:\n"
-     ^ show_ids_maps maps ^ "\n\n"));
+      ^ ids_maps_to_string src_ctx maps
+      ^ "\n\n"));
 
   let src_to_tgt_borrow_map =
     BorrowId.Map.of_list
       (List.map
          (fun (x, y) -> (y, x))
          (BorrowId.InjSubst.bindings maps.borrow_id_map))
+  in
+  let src_to_tgt_sid_map =
+    SymbolicValueId.Map.of_list
+      (List.filter_map
+         (fun ((sid, v) : _ * typed_value) ->
+           match v.value with
+           | VSymbolic v -> Some (v.sv_id, sid)
+           | _ -> None)
+         (SymbolicValueId.Map.bindings maps.sid_to_value_map))
   in
 
   (* Sanity check: for every abstraction, the target loans and borrows are mapped
@@ -945,7 +826,7 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
           (fun x -> BorrowId.InjSubst.find x maps.borrow_id_map)
           ids.loan_ids
       in
-      (* Check that the loan and borrows are related *)
+      (* Check that the loans and borrows are related *)
       sanity_check __FILE__ __LINE__
         (BorrowId.Set.equal ids.borrow_ids loan_ids)
         span)
@@ -963,6 +844,7 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
      abstractions to move the shared values out of the source context abstractions.
   *)
   let tgt_borrow_to_loan = ref BorrowId.InjSubst.empty in
+  let tgt_borrow_to_loan_proj = ref SymbolicValueId.InjSubst.empty in
   let visit_tgt =
     object
       inherit [_] iter_abs
@@ -973,6 +855,25 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
         (* Update the map *)
         tgt_borrow_to_loan :=
           BorrowId.InjSubst.add id tgt_borrow_id !tgt_borrow_to_loan
+
+      method! visit_aproj _ proj =
+        match proj with
+        | AProjLoans (_sv, _proj_ty, children) ->
+            sanity_check __FILE__ __LINE__ (children = []) span;
+            ()
+        | AProjBorrows (sv_id, _proj_ty, children) ->
+            sanity_check __FILE__ __LINE__ (children = []) span;
+            (* Find the target borrow *)
+            let tgt_borrow_id =
+              SymbolicValueId.Map.find sv_id src_to_tgt_sid_map
+            in
+            (* Update the map *)
+            tgt_borrow_to_loan_proj :=
+              SymbolicValueId.InjSubst.add sv_id tgt_borrow_id
+                !tgt_borrow_to_loan_proj
+        | AEndedProjBorrows _ | AEndedProjLoans _ | AEmpty ->
+            (* We shouldn't get there *)
+            internal_error __FILE__ __LINE__ span
     end
   in
   List.iter (visit_tgt#visit_abs ()) new_absl;
@@ -985,10 +886,19 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
          (BorrowId.InjSubst.bindings !tgt_borrow_to_loan))
   in
 
+  let tgt_loan_to_borrow_proj =
+    SymbolicValueId.InjSubst.of_list
+      (List.map
+         (fun (x, y) -> (y, x))
+         (SymbolicValueId.InjSubst.bindings !tgt_borrow_to_loan_proj))
+  in
+
   (* Return *)
   {
     borrow_to_loan_id_map = !tgt_borrow_to_loan;
     loan_to_borrow_id_map = tgt_loan_to_borrow;
+    borrow_to_loan_proj_map = !tgt_borrow_to_loan_proj;
+    loan_to_borrow_proj_map = tgt_loan_to_borrow_proj;
   }
 
 let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
@@ -997,13 +907,19 @@ let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
   let fp_ids, fp_ids_maps = compute_ctx_ids fp_ctx in
   let fresh_sids = SymbolicValueId.Set.diff fp_ids.sids old_ids.sids in
 
-  (* Compute the set of symbolic values which appear in shared values inside
-     *fixed* abstractions: because we introduce fresh abstractions and reborrows
-     with {!prepare_ashared_loans}, those values are never accessed directly
-     inside the loop iterations: we can ignore them (and should, because
-     otherwise it leads to a very ugly translation with duplicated, unused
-     values) *)
-  let shared_sids_in_fixed_abs =
+  (* Compute the set of symbolic values which appear inside *fixed* abstractions.
+     There are two kinds of values:
+     - shared symbolic values (appearing in shared loans): because we introduce
+       fresh abstractions and reborrows with {!prepare_ashared_loans}, those
+       values are never accessed directly inside the loop iterations: we can
+       ignore them (and should, because otherwise it leads to a very ugly
+       translation with duplicated, unused values)
+     - projections over symbolic values.
+       TODO: actually it may happen that a projector inside a fixed abstraction
+       gets expanded. We need to update the way we compute joins and check
+       whether two contexts are equivalent to make it more general.
+  *)
+  let sids_in_fixed_abs =
     let fixed_absl =
       List.filter
         (fun (ee : env_elem) ->
@@ -1024,12 +940,21 @@ let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
       object (self)
         inherit [_] iter_env
 
-        method! visit_ASharedLoan inside_shared _ _ sv child_av =
+        method! visit_ASharedLoan register _ _ sv child_av =
           self#visit_typed_value true sv;
-          self#visit_typed_avalue inside_shared child_av
+          self#visit_typed_avalue register child_av
 
-        method! visit_symbolic_value_id inside_shared sid =
-          if inside_shared then sids := SymbolicValueId.Set.add sid !sids
+        method! visit_AProjLoans register sv_id proj_ty children =
+          self#visit_symbolic_value_id true sv_id;
+          self#visit_ty register proj_ty;
+          self#visit_list
+            (fun register (s, p) ->
+              self#visit_msymbolic_value_id register s;
+              self#visit_aproj register p)
+            register children
+
+        method! visit_symbolic_value_id register sid =
+          if register then sids := SymbolicValueId.Set.add sid !sids
       end
     in
     visitor#visit_env false fixed_absl;
@@ -1040,17 +965,20 @@ let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
      see comments for [shared_sids_in_fixed_abs]. *)
   let sids_to_values = fp_ids_maps.sids_to_values in
 
-  log#ldebug
+  (* Also remove the symbolic values which appear inside of projectors in
+     fixed abstractions - those are "fixed" and not modified between iterations
+     of the loop, *)
+  log#ltrace
     (lazy
-      ("compute_fp_ctx_symbolic_values:" ^ "\n- shared_sids_in_fixed_abs:"
-      ^ SymbolicValueId.Set.show shared_sids_in_fixed_abs
+      ("compute_fp_ctx_symbolic_values:" ^ "\n- sids_in_fixed_abs:"
+      ^ SymbolicValueId.Set.show sids_in_fixed_abs
       ^ "\n- all_sids_to_values: "
       ^ SymbolicValueId.Map.show (symbolic_value_to_string ctx) sids_to_values
       ^ "\n"));
 
   let sids_to_values =
     SymbolicValueId.Map.filter
-      (fun sid _ -> not (SymbolicValueId.Set.mem sid shared_sids_in_fixed_abs))
+      (fun sid _ -> not (SymbolicValueId.Set.mem sid sids_in_fixed_abs))
       sids_to_values
   in
 
@@ -1095,12 +1023,12 @@ let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
       (List.rev !ordered_sids)
   in
 
-  log#ldebug
+  log#ltrace
     (lazy
       ("compute_fp_ctx_symbolic_values:" ^ "\n- src context:\n"
-      ^ eval_ctx_to_string_no_filter ~span:(Some span) ctx
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx
       ^ "\n- fixed point:\n"
-      ^ eval_ctx_to_string_no_filter ~span:(Some span) fp_ctx
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp_ctx
       ^ "\n- fresh_sids: "
       ^ SymbolicValueId.Set.show fresh_sids
       ^ "\n- input_svalues: "

@@ -132,6 +132,12 @@ let mk_let (monadic : bool) (lv : typed_pattern) (re : texpression)
   let ty = next_e.ty in
   { e; ty }
 
+let mk_lets (monadic : bool) (lets : (typed_pattern * texpression) list)
+    (next_e : texpression) : texpression =
+  List.fold_right
+    (fun (pat, value) (e : texpression) -> mk_let monadic pat value e)
+    lets next_e
+
 let mk_tag (msg : string) (next_e : texpression) : texpression =
   let e = Meta (Tag msg, next_e) in
   let ty = next_e.ty in

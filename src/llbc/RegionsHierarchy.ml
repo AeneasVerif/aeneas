@@ -42,7 +42,7 @@ let log = Logging.regions_hierarchy_log
 
 let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
     (fun_name : string) (sg : fun_sig) : region_var_groups =
-  log#ldebug (lazy (__FUNCTION__ ^ ": " ^ fun_name));
+  log#ltrace (lazy (__FUNCTION__ ^ ": " ^ fun_name));
   (* Initialize a normalization context (we may need to normalize some
      associated types) *)
   let norm_ctx : AssociatedTypes.norm_ctx =

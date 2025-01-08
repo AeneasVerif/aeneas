@@ -34,9 +34,9 @@ module Values = struct
     symbolic_value_id_to_pretty_string sv.sv_id
     ^ " : " ^ ty_to_string env sv.sv_ty
 
-  let symbolic_value_proj_to_string (env : fmt_env) (sv : symbolic_value)
+  let symbolic_value_proj_to_string (env : fmt_env) (sv_id : symbolic_value_id)
       (rty : ty) : string =
-    symbolic_value_id_to_pretty_string sv.sv_id ^ " <: " ^ ty_to_string env rty
+    symbolic_value_id_to_pretty_string sv_id ^ " <: " ^ ty_to_string env rty
 
   (* TODO: it may be a good idea to try to factorize this function with
    * typed_avalue_to_string. At some point we had done it, because [typed_value]
@@ -115,8 +115,8 @@ module Values = struct
       (abs : abstract_shared_borrow) : string =
     match abs with
     | AsbBorrow bid -> BorrowId.to_string bid
-    | AsbProjReborrows (sv, rty) ->
-        "{" ^ symbolic_value_proj_to_string env sv rty ^ "}"
+    | AsbProjReborrows (sv_id, rty) ->
+        "{" ^ symbolic_value_proj_to_string env sv_id rty ^ "}"
 
   let abstract_shared_borrows_to_string (env : fmt_env)
       (abs : abstract_shared_borrows) : string =
@@ -124,15 +124,18 @@ module Values = struct
     ^ String.concat "," (List.map (abstract_shared_borrow_to_string env) abs)
     ^ "}"
 
-  let rec aproj_to_string (env : fmt_env) (pv : aproj) : string =
+  let rec aproj_to_string ?(with_ended : bool = false) (env : fmt_env)
+      (pv : aproj) : string =
     match pv with
     | AProjLoans (sv, rty, given_back) ->
         let given_back =
           if given_back = [] then ""
           else
             let given_back = List.map snd given_back in
-            let given_back = List.map (aproj_to_string env) given_back in
-            " (" ^ String.concat "," given_back ^ ") "
+            let given_back =
+              List.map (aproj_to_string ~with_ended env) given_back
+            in
+            " [" ^ String.concat "," given_back ^ "]"
         in
         "⌊" ^ symbolic_value_proj_to_string env sv rty ^ given_back ^ "⌋"
     | AProjBorrows (sv, rty, given_back) ->
@@ -140,22 +143,41 @@ module Values = struct
           if given_back = [] then ""
           else
             let given_back = List.map snd given_back in
-            let given_back = List.map (aproj_to_string env) given_back in
-            " (" ^ String.concat "," given_back ^ ") "
+            let given_back =
+              List.map (aproj_to_string ~with_ended env) given_back
+            in
+            " [" ^ String.concat "," given_back ^ "]"
         in
         "(" ^ symbolic_value_proj_to_string env sv rty ^ given_back ^ ")"
-    | AEndedProjLoans (_, given_back) ->
-        if given_back = [] then "ended_aproj_loans _"
-        else
-          let given_back = List.map snd given_back in
-          let given_back = List.map (aproj_to_string env) given_back in
-          "ended_aproj_loans (" ^ String.concat "," given_back ^ ")"
-    | AEndedProjBorrows (_, given_back) ->
-        if given_back = [] then "ended_aproj_borrows _"
-        else
-          let given_back = List.map snd given_back in
-          let given_back = List.map (aproj_to_string env) given_back in
-          "ended_aproj_borrows (" ^ String.concat "," given_back ^ ")"
+    | AEndedProjLoans (msv, given_back) ->
+        let msv =
+          if with_ended then
+            "original_loan = " ^ symbolic_value_id_to_pretty_string msv
+          else "_"
+        in
+        let given_back = List.map snd given_back in
+        let given_back =
+          List.map (aproj_to_string ~with_ended env) given_back
+        in
+        "ended_aproj_loans (" ^ msv ^ ", ["
+        ^ String.concat "," given_back
+        ^ "])"
+    | AEndedProjBorrows (meta, given_back) ->
+        let meta =
+          if with_ended then
+            "original_borrow = "
+            ^ symbolic_value_id_to_pretty_string meta.consumed
+            ^ ", given_back = "
+            ^ symbolic_value_to_string env meta.given_back
+          else "_"
+        in
+        let given_back = List.map snd given_back in
+        let given_back =
+          List.map (aproj_to_string ~with_ended env) given_back
+        in
+        "ended_aproj_borrows (" ^ meta ^ ", ["
+        ^ String.concat "," given_back
+        ^ "])"
     | AEmpty -> "_"
 
   (** Wrap a value inside its marker, if there is one *)
@@ -165,12 +187,21 @@ module Values = struct
     | PLeft -> "|" ^ s ^ "|"
     | PRight -> "︙" ^ s ^ "︙"
 
+  let ended_mut_borrow_meta_to_string (env : fmt_env)
+      (mv : ended_mut_borrow_meta) : string =
+    let { bid; given_back } = mv in
+    "{ bid = " ^ BorrowId.to_string bid ^ "; given_back = "
+    ^ symbolic_value_to_string env given_back
+    ^ " }"
+
   let rec typed_avalue_to_string ?(span : Meta.span option = None)
-      (env : fmt_env) (v : typed_avalue) : string =
+      ?(with_ended : bool = false) (env : fmt_env) (v : typed_avalue) : string =
     match v.value with
     | AAdt av -> (
         let field_values =
-          List.map (typed_avalue_to_string ~span env) av.field_values
+          List.map
+            (typed_avalue_to_string ~span ~with_ended env)
+            av.field_values
         in
         match v.ty with
         | TAdt (TTuple, _) ->
@@ -206,17 +237,19 @@ module Values = struct
         | _ -> craise_opt_span __FILE__ __LINE__ span "Inconsistent typed value"
         )
     | ABottom -> "⊥ : " ^ ty_to_string env v.ty
-    | ABorrow bc -> aborrow_content_to_string ~span env bc
-    | ALoan lc -> aloan_content_to_string ~span env lc
-    | ASymbolic s -> aproj_to_string env s
+    | ABorrow bc -> aborrow_content_to_string ~span ~with_ended env bc
+    | ALoan lc -> aloan_content_to_string ~span ~with_ended env lc
+    | ASymbolic (pm, proj) ->
+        aproj_to_string ~with_ended env proj |> add_proj_marker pm
     | AIgnored _ -> "_"
 
-  and aloan_content_to_string ?(span : Meta.span option = None) (env : fmt_env)
-      (lc : aloan_content) : string =
+  and aloan_content_to_string ?(span : Meta.span option = None)
+      ?(with_ended : bool = false) (env : fmt_env) (lc : aloan_content) : string
+      =
     match lc with
     | AMutLoan (pm, bid, av) ->
         "@mut_loan(" ^ BorrowId.to_string bid ^ ", "
-        ^ typed_avalue_to_string ~span env av
+        ^ typed_avalue_to_string ~span ~with_ended env av
         ^ ")"
         |> add_proj_marker pm
     | ASharedLoan (pm, loans, v, av) ->
@@ -224,42 +257,50 @@ module Values = struct
         "@shared_loan(" ^ loans ^ ", "
         ^ typed_value_to_string ~span env v
         ^ ", "
-        ^ typed_avalue_to_string ~span env av
+        ^ typed_avalue_to_string ~span ~with_ended env av
         ^ ")"
         |> add_proj_marker pm
     | AEndedMutLoan ml ->
-        "@ended_mut_loan{"
-        ^ typed_avalue_to_string ~span env ml.child
+        let consumed =
+          if with_ended then
+            "consumed = " ^ typed_value_to_string env ml.given_back_meta ^ ", "
+          else ""
+        in
+        "@ended_mut_loan{" ^ consumed
+        ^ typed_avalue_to_string ~span ~with_ended env ml.child
         ^ "; "
-        ^ typed_avalue_to_string ~span env ml.given_back
+        ^ typed_avalue_to_string ~span ~with_ended env ml.given_back
         ^ " }"
     | AEndedSharedLoan (v, av) ->
         "@ended_shared_loan("
         ^ typed_value_to_string ~span env v
         ^ ", "
-        ^ typed_avalue_to_string ~span env av
+        ^ typed_avalue_to_string ~span ~with_ended env av
         ^ ")"
     | AIgnoredMutLoan (opt_bid, av) ->
         "@ignored_mut_loan("
         ^ option_to_string BorrowId.to_string opt_bid
         ^ ", "
-        ^ typed_avalue_to_string ~span env av
+        ^ typed_avalue_to_string ~span ~with_ended env av
         ^ ")"
     | AEndedIgnoredMutLoan ml ->
         "@ended_ignored_mut_loan{ "
-        ^ typed_avalue_to_string ~span env ml.child
+        ^ typed_avalue_to_string ~span ~with_ended env ml.child
         ^ "; "
-        ^ typed_avalue_to_string ~span env ml.given_back
+        ^ typed_avalue_to_string ~span ~with_ended env ml.given_back
         ^ "}"
     | AIgnoredSharedLoan sl ->
-        "@ignored_shared_loan(" ^ typed_avalue_to_string ~span env sl ^ ")"
+        "@ignored_shared_loan("
+        ^ typed_avalue_to_string ~span ~with_ended env sl
+        ^ ")"
 
   and aborrow_content_to_string ?(span : Meta.span option = None)
-      (env : fmt_env) (bc : aborrow_content) : string =
+      ?(with_ended : bool = false) (env : fmt_env) (bc : aborrow_content) :
+      string =
     match bc with
     | AMutBorrow (pm, bid, av) ->
         "mb@" ^ BorrowId.to_string bid ^ " ("
-        ^ typed_avalue_to_string ~span env av
+        ^ typed_avalue_to_string ~span ~with_ended env av
         ^ ")"
         |> add_proj_marker pm
     | ASharedBorrow (pm, bid) ->
@@ -268,15 +309,19 @@ module Values = struct
         "@ignored_mut_borrow("
         ^ option_to_string BorrowId.to_string opt_bid
         ^ ", "
-        ^ typed_avalue_to_string ~span env av
+        ^ typed_avalue_to_string ~span ~with_ended env av
         ^ ")"
-    | AEndedMutBorrow (_mv, child) ->
-        "@ended_mut_borrow(" ^ typed_avalue_to_string ~span env child ^ ")"
+    | AEndedMutBorrow (mv, child) ->
+        "@ended_mut_borrow("
+        ^
+        if with_ended then
+          "given_back= " ^ ended_mut_borrow_meta_to_string env mv
+        else "" ^ typed_avalue_to_string ~span ~with_ended env child ^ ")"
     | AEndedIgnoredMutBorrow { child; given_back; given_back_meta = _ } ->
         "@ended_ignored_mut_borrow{ "
-        ^ typed_avalue_to_string ~span env child
+        ^ typed_avalue_to_string ~span ~with_ended env child
         ^ "; "
-        ^ typed_avalue_to_string ~span env given_back
+        ^ typed_avalue_to_string ~span ~with_ended env given_back
         ^ ")"
     | AEndedSharedBorrow -> "@ended_shared_borrow"
     | AProjSharedBorrow sb ->
@@ -307,26 +352,26 @@ module Values = struct
     | Identity -> "Identity"
 
   let abs_to_string ?(span : Meta.span option = None) (env : fmt_env)
-      (verbose : bool) (indent : string) (indent_incr : string) (abs : abs) :
-      string =
+      ?(with_ended : bool = false) (verbose : bool) (indent : string)
+      (indent_incr : string) (abs : abs) : string =
     let indent2 = indent ^ indent_incr in
     let avs =
       List.map
-        (fun av -> indent2 ^ typed_avalue_to_string ~span env av)
+        (fun av -> indent2 ^ typed_avalue_to_string ~span ~with_ended env av)
         abs.avalues
     in
     let avs = String.concat ",\n" avs in
     let kind =
-      if verbose then "[kind:" ^ abs_kind_to_string abs.kind ^ "]" else ""
+      if verbose then "kind:" ^ abs_kind_to_string abs.kind ^ "," else ""
     in
-    let can_end = if abs.can_end then "{endable}" else "{frozen}" in
+    let can_end = if abs.can_end then "endable" else "frozen" in
     indent ^ "abs@"
     ^ AbstractionId.to_string abs.abs_id
-    ^ kind ^ "{parents="
+    ^ "{" ^ kind ^ "parents="
     ^ AbstractionId.Set.to_string None abs.parents
-    ^ "}" ^ "{regions="
+    ^ ",regions="
     ^ RegionId.Set.to_string None abs.regions.owned
-    ^ "}" ^ can_end ^ " {\n" ^ avs ^ "\n" ^ indent ^ "}"
+    ^ "," ^ can_end ^ "} {\n" ^ avs ^ "\n" ^ indent ^ "}"
 
   let abs_region_group_to_string (gr : abs_region_group) : string =
     g_region_group_to_string RegionId.to_string AbstractionId.to_string gr
@@ -347,6 +392,26 @@ module Values = struct
     ^ region_var_groups_to_string sg.regions_hierarchy
     ^ "\n- abs_regions_hierarchy:\n"
     ^ abs_region_groups_to_string sg.abs_regions_hierarchy
+
+  let symbolic_expansion_to_string (env : fmt_env) (ty : ty)
+      (se : symbolic_expansion) : string =
+    match se with
+    | SeLiteral lit -> literal_to_string lit
+    | SeAdt (variant_id, svl) ->
+        let field_values =
+          List.map ValuesUtils.mk_typed_value_from_symbolic_value svl
+        in
+        let v : typed_value =
+          { value = VAdt { variant_id; field_values }; ty }
+        in
+        typed_value_to_string env v
+    | SeMutRef (bid, sv) ->
+        "MB " ^ BorrowId.to_string bid ^ " " ^ symbolic_value_to_string env sv
+    | SeSharedRef (bid, sv) ->
+        "SB {"
+        ^ BorrowId.Set.to_string None bid
+        ^ "} "
+        ^ symbolic_value_to_string env sv
 end
 
 (** Pretty-printing for contexts *)
@@ -391,13 +456,14 @@ module Contexts = struct
 
   (** Filters "dummy" bindings from an environment, to gain space and clarity/
       See [env_to_string]. *)
-  let filter_env (env : env) : env_elem option list =
+  let filter_env (ended_regions : RegionId.Set.t) (env : env) :
+      env_elem option list =
     (* We filter:
-     * - non-dummy bindings which point to ⊥
-     * - dummy bindings which don't contain loans nor borrows
-     * Note that the first case can sometimes be confusing: we may try to improve
-     * it...
-     *)
+       - non-dummy bindings which point to ⊥
+       - dummy bindings which don't contain loans nor borrows
+       Note that the first case can sometimes be confusing: we may try to improve
+       it...
+    *)
     let filter_elem (ev : env_elem) : env_elem option =
       match ev with
       | EBinding (BVar _, tv) ->
@@ -405,7 +471,9 @@ module Contexts = struct
           if is_bottom tv.value then None else Some ev
       | EBinding (BDummy _, tv) ->
           (* Dummy binding: check if the value contains borrows or loans *)
-          if borrows_in_value tv || loans_in_value tv then Some ev else None
+          if value_has_non_ended_borrows_or_loans ended_regions tv.value then
+            Some ev
+          else None
       | _ -> Some ev
     in
     let env = List.map filter_elem env in
@@ -425,10 +493,11 @@ module Contexts = struct
       [with_var_types]: if true, print the type of the variables
    *)
   let env_to_string ?(span : Meta.span option = None) (filter : bool)
-      (fmt_env : fmt_env) (verbose : bool) (with_var_types : bool) (env : env) :
-      string =
+      (fmt_env : fmt_env) (verbose : bool) (with_var_types : bool)
+      (ended_regions : RegionId.Set.t) (env : env) : string =
     let env =
-      if filter then filter_env env else List.map (fun ev -> Some ev) env
+      if filter then filter_env ended_regions env
+      else List.map (fun ev -> Some ev) env
     in
     "{\n"
     ^ String.concat "\n"
@@ -491,8 +560,9 @@ module Contexts = struct
     let frames = split_aux [] [] env in
     frames
 
-  let eval_ctx_to_string_gen ?(span : Meta.span option = None) (verbose : bool)
-      (filter : bool) (with_var_types : bool) (ctx : eval_ctx) : string =
+  let eval_ctx_to_string ?(span : Meta.span option = None)
+      ?(verbose : bool = false) ?(filter : bool = true)
+      ?(with_var_types : bool = true) (ctx : eval_ctx) : string =
     let fmt_env = eval_ctx_to_fmt_env ctx in
     let ended_regions = RegionId.Set.to_string None ctx.ended_regions in
     let frames = split_env_according_to_frames ctx.env in
@@ -515,20 +585,13 @@ module Contexts = struct
           ^ string_of_int !num_bindings
           ^ "\n- dummy bindings: " ^ string_of_int !num_dummies
           ^ "\n- abstractions: " ^ string_of_int !num_abs ^ "\n"
-          ^ env_to_string ~span filter fmt_env verbose with_var_types f
+          ^ env_to_string ~span filter fmt_env verbose with_var_types
+              ctx.ended_regions f
           ^ "\n")
         frames
     in
     "# Ended regions: " ^ ended_regions ^ "\n" ^ "# " ^ string_of_int num_frames
     ^ " frame(s)\n" ^ String.concat "" frames
-
-  let eval_ctx_to_string ?(span : Meta.span option = None) (ctx : eval_ctx) :
-      string =
-    eval_ctx_to_string_gen ~span false true true ctx
-
-  let eval_ctx_to_string_no_filter ?(span : Meta.span option = None)
-      (ctx : eval_ctx) : string =
-    eval_ctx_to_string_gen ~span false false true ctx
 end
 
 (** Pretty-printing for LLBC ASTs (functions based on an evaluation context) *)
@@ -608,10 +671,11 @@ module EvalCtx = struct
     let env = eval_ctx_to_fmt_env ctx in
     typed_value_to_string ~span env v
 
-  let typed_avalue_to_string ?(span : Meta.span option = None) (ctx : eval_ctx)
-      (v : typed_avalue) : string =
+  let typed_avalue_to_string ?(span : Meta.span option = None)
+      ?(with_ended : bool = false) (ctx : eval_ctx) (v : typed_avalue) : string
+      =
     let env = eval_ctx_to_fmt_env ctx in
-    typed_avalue_to_string ~span env v
+    typed_avalue_to_string ~span ~with_ended env v
 
   let place_to_string (ctx : eval_ctx) (op : place) : string =
     let env = eval_ctx_to_fmt_env ctx in
@@ -662,7 +726,8 @@ module EvalCtx = struct
     env_elem_to_string ~span env false true indent indent_incr ev
 
   let abs_to_string ?(span : Meta.span option = None) (ctx : eval_ctx)
-      (indent : string) (indent_incr : string) (abs : abs) : string =
+      ?(with_ended : bool = false) (indent : string) (indent_incr : string)
+      (abs : abs) : string =
     let env = eval_ctx_to_fmt_env ctx in
-    abs_to_string ~span env false indent indent_incr abs
+    abs_to_string ~span env ~with_ended false indent indent_incr abs
 end

@@ -433,7 +433,7 @@ and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
 and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (inside : bool) (fid : fun_or_op_id)
     (generics : generic_args) (args : texpression list) : unit =
-  log#ldebug
+  log#ltrace
     (lazy
       ("extract_function_call: "
       ^ fun_or_op_id_to_string ctx fid
@@ -2864,7 +2864,7 @@ let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
 (** Extract a trait implementation *)
 let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     (impl : trait_impl) : unit =
-  log#ldebug
+  log#ltrace
     (lazy ("extract_trait_impl: " ^ name_to_string ctx impl.item_meta.name));
   (* Retrieve the impl name *)
   let impl_name = ctx_get_trait_impl impl.item_meta.span impl.def_id ctx in

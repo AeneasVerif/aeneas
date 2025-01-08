@@ -5,6 +5,7 @@ open Contexts
 open LlbcAst
 open Utils
 open TypesUtils
+open ValuesUtils
 open Errors
 
 (* TODO: we should probably rename the file to ContextsUtils *)
@@ -14,10 +15,13 @@ let log = Logging.interpreter_log
 
 (** Some utilities *)
 
-let eval_ctx_to_string_no_filter = Print.Contexts.eval_ctx_to_string_no_filter
 let eval_ctx_to_string = Print.Contexts.eval_ctx_to_string
 let name_to_string = Print.EvalCtx.name_to_string
 let symbolic_value_to_string = Print.EvalCtx.symbolic_value_to_string
+
+let symbolic_value_id_to_pretty_string =
+  Print.Values.symbolic_value_id_to_pretty_string
+
 let borrow_content_to_string = Print.EvalCtx.borrow_content_to_string
 let loan_content_to_string = Print.EvalCtx.loan_content_to_string
 let aborrow_content_to_string = Print.EvalCtx.aborrow_content_to_string
@@ -63,8 +67,8 @@ let env_elem_to_string span ctx =
 let env_to_string span ctx env =
   eval_ctx_to_string ~span:(Some span) { ctx with env }
 
-let abs_to_string span ctx =
-  Print.EvalCtx.abs_to_string ~span:(Some span) ctx "" "  "
+let abs_to_string span ?(with_ended = false) ctx =
+  Print.EvalCtx.abs_to_string ~span:(Some span) ~with_ended ctx "" "  "
 
 let same_symbolic_id (sv0 : symbolic_value) (sv1 : symbolic_value) : bool =
   sv0.sv_id = sv1.sv_id
@@ -112,14 +116,6 @@ let mk_fresh_symbolic_typed_value_from_no_regions_ty (span : Meta.span)
   sanity_check __FILE__ __LINE__ (ty_no_regions ty) span;
   mk_fresh_symbolic_typed_value span ty
 
-(** Create a typed value from a symbolic value. *)
-let mk_typed_value_from_symbolic_value (svalue : symbolic_value) : typed_value =
-  let av = VSymbolic svalue in
-  let av : typed_value =
-    { value = av; ty = Substitute.erase_regions svalue.sv_ty }
-  in
-  av
-
 (** Create a loans projector value from a symbolic value.
     
     Checks if the projector will actually project some regions. If not,
@@ -130,7 +126,7 @@ let mk_typed_value_from_symbolic_value (svalue : symbolic_value) : typed_value =
 let mk_aproj_loans_value_from_symbolic_value (proj_regions : RegionId.Set.t)
     (svalue : symbolic_value) (proj_ty : ty) : typed_avalue =
   if ty_has_regions_in_set proj_regions proj_ty then
-    let av = ASymbolic (AProjLoans (svalue, proj_ty, [])) in
+    let av = ASymbolic (PNone, AProjLoans (svalue.sv_id, proj_ty, [])) in
     let av : typed_avalue = { value = av; ty = svalue.sv_ty } in
     av
   else
@@ -145,7 +141,7 @@ let mk_aproj_borrows_from_symbolic_value (span : Meta.span)
     aproj =
   sanity_check __FILE__ __LINE__ (ty_is_rty proj_ty) span;
   if ty_has_regions_in_set proj_regions proj_ty then
-    AProjBorrows (svalue, proj_ty, [])
+    AProjBorrows (svalue.sv_id, proj_ty, [])
   else AEmpty
 
 (** TODO: move *)
@@ -213,11 +209,14 @@ exception FoundGLoanContent of g_loan_content
 
 (** Utility exception *)
 exception
-  FoundAProjBorrows of symbolic_value * ty * (msymbolic_value * aproj) list
+  FoundAProjBorrows of
+    symbolic_value_id * ty * (msymbolic_value_id * aproj) list
 
 (** Utility exception *)
 exception
-  FoundAProjLoans of symbolic_value * ty * (msymbolic_value * aproj) list
+  FoundAProjLoans of symbolic_value_id * ty * (msymbolic_value_id * aproj) list
+
+exception FoundAbsProj of abstraction_id * symbolic_value_id
 
 let symbolic_value_id_in_ctx (sv_id : SymbolicValueId.id) (ctx : eval_ctx) :
     bool =
@@ -230,8 +229,8 @@ let symbolic_value_id_in_ctx (sv_id : SymbolicValueId.id) (ctx : eval_ctx) :
 
       method! visit_aproj env aproj =
         (match aproj with
-        | AProjLoans (sv, _, _) | AProjBorrows (sv, _, _) ->
-            if sv.sv_id = sv_id then raise Found else ()
+        | AProjLoans (sv_id1, _, _) | AProjBorrows (sv_id1, _, _) ->
+            if sv_id1 = sv_id then raise Found else ()
         | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ());
         super#visit_aproj env aproj
 
@@ -239,8 +238,8 @@ let symbolic_value_id_in_ctx (sv_id : SymbolicValueId.id) (ctx : eval_ctx) :
         let visit (asb : abstract_shared_borrow) : unit =
           match asb with
           | AsbBorrow _ -> ()
-          | AsbProjReborrows (sv, _) ->
-              if sv.sv_id = sv_id then raise Found else ()
+          | AsbProjReborrows (sv_id1, _) ->
+              if sv_id1 = sv_id then raise Found else ()
         in
         List.iter visit asb
     end
@@ -261,6 +260,11 @@ let symbolic_value_has_ended_regions (ended_regions : RegionId.Set.t)
     (s : symbolic_value) : bool =
   let regions = ty_regions s.sv_ty in
   not (RegionId.Set.disjoint regions ended_regions)
+
+let region_is_owned (abs : abs) (r : region) : bool =
+  match r with
+  | RVar (Free rid) -> RegionId.Set.mem rid abs.regions.owned
+  | _ -> false
 
 let bottom_in_value_visitor (ended_regions : RegionId.Set.t) =
   object

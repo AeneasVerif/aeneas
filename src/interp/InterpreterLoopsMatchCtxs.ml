@@ -25,13 +25,17 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
   let abs_ids = ref [] in
   let abs_to_borrows = ref AbstractionId.Map.empty in
   let abs_to_loans = ref AbstractionId.Map.empty in
-  let borrow_to_abs = ref MarkerBorrowId.Map.empty in
-  let loan_to_abs = ref MarkerBorrowId.Map.empty in
+  let abs_to_borrow_projs = ref AbstractionId.Map.empty in
+  let abs_to_loan_projs = ref AbstractionId.Map.empty in
+  let borrow_to_abs = ref MarkedBorrowId.Map.empty in
+  let loan_to_abs = ref MarkedBorrowId.Map.empty in
+  let borrow_proj_to_abs = ref MarkedNormSymbProj.Map.empty in
+  let loan_proj_to_abs = ref MarkedNormSymbProj.Map.empty in
 
   let module R (M : Collections.Map) (S : Collections.Set) = struct
     (*
        [check_singleton_sets]: check that the mapping maps to a singleton.
-       We need this because to tweak the behavior of the sanity checks because
+       We need to tweak the behavior of the sanity checks because
        of the following cases:
        - when computing the map from borrow ids (with marker) to the region
          abstractions they belong to, the marked borrow ids can map to a single
@@ -39,6 +43,8 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
        - however, when computing the mapping from region abstractions to
          the borrow ids they contain, this time we do map abstraction ids
          to sets which can compute strictly more than one value
+       Also: note that it is possible to copy symbolic values containing borrows
+       (if those borrows are shared borrows for instance).
     *)
     let register_mapping (check_singleton_sets : bool) (map : S.t M.t ref)
         (id0 : M.key) (id1 : S.elt) : unit =
@@ -57,17 +63,55 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
                 (* Update *)
                 Some (S.add id1 ids))
           !map
+
+    let register_abs_id (id : AbstractionId.id)
+        (map : S.t AbstractionId.Map.t ref) =
+      if AbstractionId.Map.mem id !map then ()
+      else map := AbstractionId.Map.add id S.empty !map
   end in
-  let module RAbsBorrow = R (AbstractionId.Map) (MarkerBorrowId.Set) in
-  let module RBorrowAbs = R (MarkerBorrowId.Map) (AbstractionId.Set) in
-  let register_borrow_id abs_id pm bid =
-    RAbsBorrow.register_mapping false abs_to_borrows abs_id (pm, bid);
-    RBorrowAbs.register_mapping true borrow_to_abs (pm, bid) abs_id
+  let module RAbsBorrow = R (AbstractionId.Map) (MarkedBorrowId.Set) in
+  let module RBorrowAbs = R (MarkedBorrowId.Map) (AbstractionId.Set) in
+  let module RAbsSymbProj = R (AbstractionId.Map) (MarkedNormSymbProj.Set) in
+  let module RSymbProjAbs = R (MarkedNormSymbProj.Map) (AbstractionId.Set) in
+  let register_abs_id abs_id =
+    RAbsBorrow.register_abs_id abs_id abs_to_borrows;
+    RAbsBorrow.register_abs_id abs_id abs_to_loans;
+    RAbsSymbProj.register_abs_id abs_id abs_to_borrow_projs;
+    RAbsSymbProj.register_abs_id abs_id abs_to_loan_projs
+  in
+  let register_borrow_id abs pm bid =
+    RAbsBorrow.register_mapping false abs_to_borrows abs.abs_id (pm, bid);
+    RBorrowAbs.register_mapping true borrow_to_abs (pm, bid) abs.abs_id
   in
 
-  let register_loan_id abs_id pm bid =
-    RAbsBorrow.register_mapping false abs_to_loans abs_id (pm, bid);
-    RBorrowAbs.register_mapping true loan_to_abs (pm, bid) abs_id
+  let register_loan_id abs pm bid =
+    RAbsBorrow.register_mapping false abs_to_loans abs.abs_id (pm, bid);
+    RBorrowAbs.register_mapping true loan_to_abs (pm, bid) abs.abs_id
+  in
+  let register_borrow_proj abs pm (sv_id : symbolic_value_id) (proj_ty : ty) =
+    let norm_proj_ty = normalize_proj_ty abs.regions.owned proj_ty in
+    let proj : marked_norm_symb_proj = { pm; sv_id; norm_proj_ty } in
+    RAbsSymbProj.register_mapping false abs_to_borrow_projs abs.abs_id proj;
+    (* This mapping is not generally injective as it is possible to copy symbolic values.
+       For now we still force it to be injective because we don't handle well the case
+       when we join contexts where symbolic values have been copied.
+       A more general, easy-to-implement solution would be to freshen the copied
+       symbolic values like so (when copying symbolic values containing borrows):
+       {[
+         // x ~> s0
+         y = copy x
+         // x ~> s1
+         // y ~> s2
+         // abs { proj_borrows s0, proj_loans s1, proj_loans s2 }
+       ]}
+    *)
+    RSymbProjAbs.register_mapping true borrow_proj_to_abs proj abs.abs_id
+  in
+  let register_loan_proj abs pm (sv_id : symbolic_value_id) (proj_ty : ty) =
+    let norm_proj_ty = normalize_proj_ty abs.regions.owned proj_ty in
+    let proj : marked_norm_symb_proj = { pm; sv_id; norm_proj_ty } in
+    RAbsSymbProj.register_mapping false abs_to_loan_projs abs.abs_id proj;
+    RSymbProjAbs.register_mapping true loan_proj_to_abs proj abs.abs_id
   in
 
   let explore_abs =
@@ -75,73 +119,83 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
       inherit [_] iter_typed_avalue as super
 
       (** Make sure we don't register the ignored ids *)
-      method! visit_aloan_content (abs_id, pm) lc =
+      method! visit_aloan_content (abs, pm) lc =
         sanity_check __FILE__ __LINE__ (pm = PNone) span;
         match lc with
         | AMutLoan (npm, lid, child) ->
             (* Add the current marker when visiting the loan id *)
-            self#visit_loan_id (abs_id, npm) lid;
+            self#visit_loan_id (abs, npm) lid;
             (* Recurse with the old marker *)
-            super#visit_typed_avalue (abs_id, pm) child
+            super#visit_typed_avalue (abs, pm) child
         | ASharedLoan (npm, lids, sv, child) ->
             (* Add the current marker when visiting the loan ids and the shared value *)
-            self#visit_loan_id_set (abs_id, npm) lids;
-            self#visit_typed_value (abs_id, npm) sv;
+            self#visit_loan_id_set (abs, npm) lids;
+            self#visit_typed_value (abs, npm) sv;
             (* Recurse with the old marker *)
-            self#visit_typed_avalue (abs_id, pm) child
+            self#visit_typed_avalue (abs, pm) child
         | AIgnoredMutLoan (_, child)
         | AEndedIgnoredMutLoan { child; given_back = _; given_back_meta = _ }
         | AIgnoredSharedLoan child ->
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
             (* Ignore the id of the loan, if there is *)
-            self#visit_typed_avalue (abs_id, pm) child
+            self#visit_typed_avalue (abs, pm) child
         | AEndedMutLoan _ | AEndedSharedLoan _ ->
             craise __FILE__ __LINE__ span "Unreachable"
 
       (** Make sure we don't register the ignored ids *)
-      method! visit_aborrow_content (abs_id, pm) bc =
+      method! visit_aborrow_content (abs, pm) bc =
         sanity_check __FILE__ __LINE__ (pm = PNone) span;
         match bc with
         | AMutBorrow (npm, bid, child) ->
             (* Add the current marker when visiting the borrow id *)
-            self#visit_borrow_id (abs_id, npm) bid;
+            self#visit_borrow_id (abs, npm) bid;
             (* Recurse with the old marker *)
-            self#visit_typed_avalue (abs_id, pm) child
+            self#visit_typed_avalue (abs, pm) child
         | ASharedBorrow (npm, bid) ->
             (* Add the current marker when visiting the borrow id *)
-            self#visit_borrow_id (abs_id, npm) bid
+            self#visit_borrow_id (abs, npm) bid
         | AProjSharedBorrow _ ->
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
             (* Process those normally *)
-            super#visit_aborrow_content (abs_id, pm) bc
+            super#visit_aborrow_content (abs, pm) bc
         | AIgnoredMutBorrow (_, child)
         | AEndedIgnoredMutBorrow { child; given_back = _; given_back_meta = _ }
           ->
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
             (* Ignore the id of the borrow, if there is *)
-            self#visit_typed_avalue (abs_id, pm) child
+            self#visit_typed_avalue (abs, pm) child
         | AEndedMutBorrow _ | AEndedSharedBorrow ->
             craise __FILE__ __LINE__ span "Unreachable"
 
-      method! visit_borrow_id (abs_id, pm) bid =
-        register_borrow_id abs_id pm bid
+      method! visit_borrow_id (abs, pm) bid = register_borrow_id abs pm bid
+      method! visit_loan_id (abs, pm) lid = register_loan_id abs pm lid
 
-      method! visit_loan_id (abs_id, pm) lid = register_loan_id abs_id pm lid
+      method! visit_ASymbolic (abs, _) pm proj =
+        match proj with
+        | AProjLoans (sv, proj_ty, children) ->
+            sanity_check __FILE__ __LINE__ (children = []) span;
+            register_loan_proj abs pm sv proj_ty
+        | AProjBorrows (sv, proj_ty, children) ->
+            sanity_check __FILE__ __LINE__ (children = []) span;
+            register_borrow_proj abs pm sv proj_ty
+        | AEndedProjLoans (_, children) | AEndedProjBorrows (_, children) ->
+            sanity_check __FILE__ __LINE__ (children = []) span
+        | AEmpty -> ()
     end
   in
 
   env_iter_abs
     (fun abs ->
-      let abs_id = abs.abs_id in
+      register_abs_id abs.abs_id;
       if explore abs then (
         abs_to_borrows :=
-          AbstractionId.Map.add abs_id MarkerBorrowId.Set.empty !abs_to_borrows;
+          AbstractionId.Map.add abs.abs_id MarkedBorrowId.Set.empty
+            !abs_to_borrows;
         abs_to_loans :=
-          AbstractionId.Map.add abs_id MarkerBorrowId.Set.empty !abs_to_loans;
+          AbstractionId.Map.add abs.abs_id MarkedBorrowId.Set.empty
+            !abs_to_loans;
         abs_ids := abs.abs_id :: !abs_ids;
-        List.iter
-          (explore_abs#visit_typed_avalue (abs.abs_id, PNone))
-          abs.avalues)
+        List.iter (explore_abs#visit_typed_avalue (abs, PNone)) abs.avalues)
       else ())
     env;
 
@@ -153,6 +207,10 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
     abs_to_loans = !abs_to_loans;
     borrow_to_abs = !borrow_to_abs;
     loan_to_abs = !loan_to_abs;
+    abs_to_borrow_projs = !abs_to_borrow_projs;
+    abs_to_loan_projs = !abs_to_loan_projs;
+    borrow_proj_to_abs = !borrow_proj_to_abs;
+    loan_proj_to_abs = !loan_proj_to_abs;
   }
 
 (** Match two types during a join.
@@ -294,18 +352,14 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
         in
         { value = VLoan lc; ty = v1.ty }
     | VSymbolic sv0, VSymbolic sv1 ->
-        (* For now, we force all the symbolic values containing borrows to
-           be eagerly expanded, and we don't support nested borrows *)
         cassert __FILE__ __LINE__
-          (not (value_has_borrows v0.value))
-          M.span
-          "Nested borrows are not supported yet and all the symbolic values \
-           containing borrows are currently forced to be eagerly expanded";
+          (not
+             (ety_has_nested_borrows (Some span) ctx0.type_ctx.type_infos v0.ty))
+          M.span "Nested borrows are not supported yet.";
         cassert __FILE__ __LINE__
-          (not (value_has_borrows v1.value))
-          M.span
-          "Nested borrows are not supported yet and all the symbolic values \
-           containing borrows are currently forced to be eagerly expanded";
+          (not
+             (ety_has_nested_borrows (Some span) ctx1.type_ctx.type_infos v1.ty))
+          M.span "Nested borrows are not supported yet.";
         (* Match *)
         let sv = M.match_symbolic_values ctx0 ctx1 sv0 sv1 in
         { v1 with value = VSymbolic sv }
@@ -322,17 +376,17 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
     | VBottom, _ -> M.match_bottom_with_other ctx0 ctx1 true v1
     | _, VBottom -> M.match_bottom_with_other ctx0 ctx1 false v0
     | _ ->
-        log#ldebug
+        log#ltrace
           (lazy
             ("Unexpected match case:\n- value0: "
             ^ typed_value_to_string ~span:(Some M.span) ctx0 v0
             ^ "\n- value1: "
             ^ typed_value_to_string ~span:(Some M.span) ctx1 v1));
-        craise __FILE__ __LINE__ M.span "Unexpected match case"
+        internal_error __FILE__ __LINE__ M.span
 
   and match_typed_avalues (ctx0 : eval_ctx) (ctx1 : eval_ctx)
       (v0 : typed_avalue) (v1 : typed_avalue) : typed_avalue =
-    log#ldebug
+    log#ltrace
       (lazy
         ("match_typed_avalues:\n- value0: "
         ^ typed_avalue_to_string ~span:(Some M.span) ctx0 v0
@@ -366,18 +420,18 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
     | ABottom, ABottom -> mk_abottom M.span ty
     | AIgnored _, AIgnored _ -> mk_aignored M.span ty None
     | ABorrow bc0, ABorrow bc1 -> (
-        log#ldebug (lazy "match_typed_avalues: borrows");
+        log#ltrace (lazy "match_typed_avalues: borrows");
         match (bc0, bc1) with
         | ASharedBorrow (pm0, bid0), ASharedBorrow (pm1, bid1) ->
-            log#ldebug (lazy "match_typed_avalues: shared borrows");
+            log#ltrace (lazy "match_typed_avalues: shared borrows");
             M.match_ashared_borrows ctx0 ctx1 v0.ty pm0 bid0 v1.ty pm1 bid1 ty
         | AMutBorrow (pm0, bid0, av0), AMutBorrow (pm1, bid1, av1) ->
-            log#ldebug (lazy "match_typed_avalues: mut borrows");
-            log#ldebug
+            log#ltrace (lazy "match_typed_avalues: mut borrows");
+            log#ltrace
               (lazy
                 "match_typed_avalues: mut borrows: matching children values");
             let av = match_arec av0 av1 in
-            log#ldebug
+            log#ltrace
               (lazy "match_typed_avalues: mut borrows: matched children values");
             M.match_amut_borrows ctx0 ctx1 v0.ty pm0 bid0 av0 v1.ty pm1 bid1 av1
               ty av
@@ -405,13 +459,13 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
             *)
             craise __FILE__ __LINE__ M.span "Unexpected")
     | ALoan lc0, ALoan lc1 -> (
-        log#ldebug (lazy "match_typed_avalues: loans");
+        log#ltrace (lazy "match_typed_avalues: loans");
         (* TODO: maybe we should enforce that the ids are always exactly the same -
            without matching *)
         match (lc0, lc1) with
         | ASharedLoan (pm0, ids0, sv0, av0), ASharedLoan (pm1, ids1, sv1, av1)
           ->
-            log#ldebug (lazy "match_typed_avalues: shared loans");
+            log#ltrace (lazy "match_typed_avalues: shared loans");
             let sv = match_rec sv0 sv1 in
             let av = match_arec av0 av1 in
             sanity_check __FILE__ __LINE__
@@ -420,11 +474,11 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
             M.match_ashared_loans ctx0 ctx1 v0.ty pm0 ids0 sv0 av0 v1.ty pm1
               ids1 sv1 av1 ty sv av
         | AMutLoan (pm0, id0, av0), AMutLoan (pm1, id1, av1) ->
-            log#ldebug (lazy "match_typed_avalues: mut loans");
-            log#ldebug
+            log#ltrace (lazy "match_typed_avalues: mut loans");
+            log#ltrace
               (lazy "match_typed_avalues: mut loans: matching children values");
             let av = match_arec av0 av1 in
-            log#ldebug
+            log#ltrace
               (lazy "match_typed_avalues: mut loans: matched children values");
             M.match_amut_loans ctx0 ctx1 v0.ty pm0 id0 av0 v1.ty pm1 id1 av1 ty
               av
@@ -434,10 +488,20 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
                they are necessary only when there are nested borrows *)
             craise __FILE__ __LINE__ M.span "Unreachable"
         | _ -> craise __FILE__ __LINE__ M.span "Unreachable")
-    | ASymbolic _, ASymbolic _ ->
-        (* For now, we force all the symbolic values containing borrows to
-           be eagerly expanded, and we don't support nested borrows *)
-        craise __FILE__ __LINE__ M.span "Unreachable"
+    | ASymbolic (pm0, proj0), ASymbolic (pm1, proj1) -> begin
+        match (proj0, proj1) with
+        | ( AProjBorrows (sv0, proj_ty0, children0),
+            AProjBorrows (sv1, proj_ty1, children1) ) ->
+            let proj_ty = M.match_rtys ctx0 ctx1 proj_ty0 proj_ty1 in
+            M.match_aproj_borrows ctx0 ctx1 v0.ty pm0 sv0 proj_ty0 children0
+              v1.ty pm1 sv1 proj_ty1 children1 ty proj_ty
+        | ( AProjLoans (sv0, proj_ty0, children0),
+            AProjLoans (sv1, proj_ty1, children1) ) ->
+            let proj_ty = M.match_rtys ctx0 ctx1 proj_ty0 proj_ty1 in
+            M.match_aproj_loans ctx0 ctx1 v0.ty pm0 sv0 proj_ty0 children0 v1.ty
+              pm1 sv1 proj_ty1 children1 ty proj_ty
+        | _ -> craise __FILE__ __LINE__ M.span "Unreachable"
+      end
     | _ -> M.match_avalues ctx0 ctx1 v0 v1
 end
 
@@ -775,9 +839,11 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       sv0)
     else (
       (* The caller should have checked that the symbolic values don't contain
-         borrows *)
+         nested borrows, but we can check more *)
       sanity_check __FILE__ __LINE__
-        (not (ty_has_borrows (Some span) ctx0.type_ctx.type_infos sv0.sv_ty))
+        (not
+           (ety_has_nested_borrows (Some span) ctx0.type_ctx.type_infos
+              sv0.sv_ty))
         span;
       (* TODO: the symbolic values may contain bottoms: we're being conservatice,
          and fail (for now) if part of a symbolic value contains a bottom.
@@ -787,7 +853,62 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         ((not (symbolic_value_has_ended_regions ctx0.ended_regions sv0))
         && not (symbolic_value_has_ended_regions ctx1.ended_regions sv1))
         span;
-      mk_fresh_symbolic_value span sv0.sv_ty)
+      (* If the symbolic values contain regions, we need to introduce abstractions *)
+      if ty_has_borrows (Some span) ctx0.type_ctx.type_infos sv0.sv_ty then (
+        (* Let's say we join:
+           {[
+             s0 : S<'0, '1>
+             s1 : S<'2, '3>
+           ]}
+
+           We introduce a fresh symbolic value with fresh regions, as well as
+           one abstraction per region. It looks like so:
+           {[
+             join s0 s1 ~> s2 : S<'a, 'b>,
+               A0('a) {
+                 |proj_borrows (s0 <: S<'a, 'b>)|,
+                 !proj_borrows (s1 <: S<'a, 'b>)!,
+                 proj_loans (s2 : S<'a, 'b>)
+               }
+               A1('b) {
+                 |proj_borrows (s0 <: S<'a, 'b>)|,
+                 !proj_borrows (s1 <: S<'a, 'b>)!,
+                 proj_loans (s2 : S<'a, 'b>)
+               }
+           ]}
+        *)
+        (* Introduce one region abstraction per region appearing in the symbolic value *)
+        let fresh_regions, proj_ty =
+          ty_refresh_regions (Some span) fresh_region_id sv0.sv_ty
+        in
+        let svj = mk_fresh_symbolic_value span proj_ty in
+        let proj_s0 = mk_aproj_borrows PLeft sv0.sv_id proj_ty in
+        let proj_s1 = mk_aproj_borrows PRight sv1.sv_id proj_ty in
+        let proj_svj = mk_aproj_loans PNone svj.sv_id proj_ty in
+        let avalues = [ proj_s0; proj_s1; proj_svj ] in
+        List.iter
+          (fun rid ->
+            let abs =
+              {
+                abs_id = fresh_abstraction_id ();
+                kind = Loop (S.loop_id, None, LoopSynthInput);
+                can_end = true;
+                parents = AbstractionId.Set.empty;
+                original_parents = [];
+                regions =
+                  {
+                    owned = RegionId.Set.singleton rid;
+                    ancestors = RegionId.Set.empty;
+                  };
+                avalues;
+              }
+            in
+            push_abs abs)
+          fresh_regions;
+        svj)
+      else
+        (* Otherwise we simply introduce a fresh symbolic value *)
+        mk_fresh_symbolic_value span sv0.sv_ty)
 
   let match_symbolic_with_other (ctx0 : eval_ctx) (ctx1 : eval_ctx)
       (left : bool) (sv : symbolic_value) (v : typed_value) : typed_value =
@@ -848,12 +969,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     | None ->
         (* Convert the value to an abstraction *)
         let abs_kind : abs_kind = Loop (S.loop_id, None, LoopSynthInput) in
-        let can_end = true in
-        let destructure_shared_values = true in
         let ctx = if value_is_left then ctx0 else ctx1 in
         let absl =
-          convert_value_to_abstractions span abs_kind can_end
-            destructure_shared_values ctx v
+          convert_value_to_abstractions span abs_kind ~can_end:true
+            ~destructure_shared_values:true ctx v
         in
         (* Add a marker to the abstraction indicating the provenance of the value *)
         let pm = if value_is_left then PLeft else PRight in
@@ -878,6 +997,12 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     craise __FILE__ __LINE__ span "Unreachable"
 
   let match_amut_loans _ _ _ _ _ _ _ _ _ _ =
+    craise __FILE__ __LINE__ span "Unreachable"
+
+  let match_aproj_borrows _ _ _ _ _ _ _ _ _ _ _ _ _ _ =
+    craise __FILE__ __LINE__ span "Unreachable"
+
+  let match_aproj_loans _ _ _ _ _ _ _ _ _ _ _ _ _ _ =
     craise __FILE__ __LINE__ span "Unreachable"
 
   let match_avalues _ _ _ _ = craise __FILE__ __LINE__ span "Unreachable"
@@ -1020,6 +1145,12 @@ module MakeMoveMatcher (S : MatchMoveState) : PrimMatcher = struct
     craise __FILE__ __LINE__ span "Unreachable"
 
   let match_avalues _ _ _ _ = craise __FILE__ __LINE__ span "Unreachable"
+
+  let match_aproj_borrows _ _ _ _ _ _ _ _ _ _ _ _ _ _ =
+    craise __FILE__ __LINE__ span "Unreachable"
+
+  let match_aproj_loans _ _ _ _ _ _ _ _ _ _ _ _ _ _ =
+    craise __FILE__ __LINE__ span "Unreachable"
 end
 
 module MakeCheckEquivMatcher (S : MatchCheckEquivState) : CheckEquivMatcher =
@@ -1299,6 +1430,28 @@ struct
     let value = ALoan (AMutLoan (PNone, id, av)) in
     { value; ty }
 
+  let match_aproj_borrows (ctx0 : eval_ctx) (ctx1 : eval_ctx) _ty0 pm0 sv_id0
+      proj_ty0 children0 _ty1 pm1 sv_id1 proj_ty1 children1 ty proj_ty =
+    sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
+    sanity_check __FILE__ __LINE__ (children0 = [] && children1 = []) span;
+    (* We only want to match the ids of the symbolic values, but in order
+       to call [match_symbolic_values] we need to have types... *)
+    let sv0 = { sv_id = sv_id0; sv_ty = proj_ty0 } in
+    let sv1 = { sv_id = sv_id1; sv_ty = proj_ty1 } in
+    let sv = match_symbolic_values ctx0 ctx1 sv0 sv1 in
+    { value = ASymbolic (PNone, AProjBorrows (sv.sv_id, proj_ty, [])); ty }
+
+  let match_aproj_loans (ctx0 : eval_ctx) (ctx1 : eval_ctx) _ty0 pm0 sv_id0
+      proj_ty0 children0 _ty1 pm1 sv_id1 proj_ty1 children1 ty proj_ty =
+    sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
+    sanity_check __FILE__ __LINE__ (children0 = [] && children1 = []) span;
+    (* We only want to match the ids of the symbolic values, but in order
+       to call [match_symbolic_values] we need to have types... *)
+    let sv0 = { sv_id = sv_id0; sv_ty = proj_ty0 } in
+    let sv1 = { sv_id = sv_id1; sv_ty = proj_ty1 } in
+    let sv = match_symbolic_values ctx0 ctx1 sv0 sv1 in
+    { value = ASymbolic (PNone, AProjLoans (sv.sv_id, proj_ty, [])); ty }
+
   let match_avalues (ctx0 : eval_ctx) (ctx1 : eval_ctx) v0 v1 =
     log#ldebug
       (lazy
@@ -1317,9 +1470,9 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
     (lazy
       ("match_ctxs:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
      ^ "\n\n- ctx0:\n"
-      ^ eval_ctx_to_string_no_filter ~span:(Some span) ctx0
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx0
       ^ "\n\n- ctx1:\n"
-      ^ eval_ctx_to_string_no_filter ~span:(Some span) ctx1
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx1
       ^ "\n\n"));
 
   (* Initialize the maps and instantiate the matcher *)
@@ -1451,10 +1604,10 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
         ^ "\n- aid_map: "
         ^ AbstractionId.InjSubst.show_t !aid_map
         ^ "\n\n- ctx0:\n"
-        ^ eval_ctx_to_string_no_filter ~span:(Some span)
+        ^ eval_ctx_to_string ~span:(Some span) ~filter:false
             { ctx0 with env = List.rev env0 }
         ^ "\n\n- ctx1:\n"
-        ^ eval_ctx_to_string_no_filter ~span:(Some span)
+        ^ eval_ctx_to_string ~span:(Some span) ~filter:false
             { ctx1 with env = List.rev env1 }
         ^ "\n\n"));
 
@@ -1538,10 +1691,10 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
     Some maps
   with
   | Distinct msg ->
-      log#ldebug (lazy ("match_ctxs: distinct: " ^ msg ^ "\n"));
+      log#ltrace (lazy ("match_ctxs: distinct: " ^ msg ^ "\n"));
       None
   | ValueMatchFailure k ->
-      log#ldebug
+      log#ltrace
         (lazy
           ("match_ctxs: distinct: ValueMatchFailure" ^ show_updt_env_kind k
          ^ "\n"));
@@ -1555,14 +1708,14 @@ let ctxs_are_equivalent (span : Meta.span) (fixed_ids : ids_sets)
     (match_ctxs span check_equivalent fixed_ids lookup_shared_value
        lookup_shared_value ctx0 ctx1)
 
-let prepare_match_ctx_with_target (config : config) (span : Meta.span)
+let prepare_loop_match_ctx_with_target (config : config) (span : Meta.span)
     (loop_id : LoopId.id) (fixed_ids : ids_sets) (src_ctx : eval_ctx) : cm_fun =
  fun tgt_ctx ->
   (* Debug *)
   log#ldebug
     (lazy
-      ("prepare_match_ctx_with_target:\n" ^ "\n- fixed_ids: "
-     ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
+      (__FUNCTION__ ^ ":\n" ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n"
+     ^ "\n- src_ctx: "
       ^ eval_ctx_to_string ~span:(Some span) src_ctx
       ^ "\n- tgt_ctx: "
       ^ eval_ctx_to_string ~span:(Some span) tgt_ctx));
@@ -1576,9 +1729,8 @@ let prepare_match_ctx_with_target (config : config) (span : Meta.span)
 
     log#ldebug
       (lazy
-        ("prepare_match_ctx_with_target: reorganize_join_tgt:\n"
-       ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n"
-       ^ "\n- filt_src_ctx: "
+        (__FUNCTION__ ^ ": reorganize_join_tgt:\n" ^ "\n- fixed_ids: "
+       ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- filt_src_ctx: "
         ^ env_to_string span src_ctx filt_src_env
         ^ "\n- filt_tgt_ctx: "
         ^ env_to_string span tgt_ctx filt_tgt_env));
@@ -1621,9 +1773,9 @@ let prepare_match_ctx_with_target (config : config) (span : Meta.span)
       (* No exception was thrown: continue *)
       log#ldebug
         (lazy
-          ("prepare_match_ctx_with_target: reorganize_join_tgt: done with \
-            borrows/loans:\n" ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids
-         ^ "\n" ^ "\n- filt_src_ctx: "
+          (__FUNCTION__ ^ ": reorganize_join_tgt: done with borrows/loans:\n"
+         ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n"
+         ^ "\n- filt_src_ctx: "
           ^ env_to_string span src_ctx filt_src_env
           ^ "\n- filt_tgt_ctx: "
           ^ env_to_string span tgt_ctx filt_tgt_env));
@@ -1679,9 +1831,9 @@ let prepare_match_ctx_with_target (config : config) (span : Meta.span)
 
       log#ldebug
         (lazy
-          ("prepare_match_ctx_with_target: reorganize_join_tgt: done with \
-            borrows/loans and moves:\n" ^ "\n- fixed_ids: "
-         ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
+          (__FUNCTION__
+         ^ ": reorganize_join_tgt: done with borrows/loans and moves:\n"
+         ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
           ^ eval_ctx_to_string ~span:(Some span) src_ctx
           ^ "\n- tgt_ctx: "
           ^ eval_ctx_to_string ~span:(Some span) tgt_ctx));
@@ -1703,18 +1855,24 @@ let prepare_match_ctx_with_target (config : config) (span : Meta.span)
   (* Apply the reorganization *)
   reorganize_join_tgt tgt_ctx
 
-let match_ctx_with_target (config : config) (span : Meta.span)
+let loop_match_ctx_with_target (config : config) (span : Meta.span)
     (loop_id : LoopId.id) (is_loop_entry : bool)
     (fp_bl_maps : borrow_loan_corresp)
     (fp_input_svalues : SymbolicValueId.id list) (fixed_ids : ids_sets)
     (src_ctx : eval_ctx) : st_cm_fun =
  fun tgt_ctx ->
   (* Debug *)
-  log#ldebug
+  log#ltrace
     (lazy
-      ("match_ctx_with_target:\n" ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids
-     ^ "\n" ^ "\n- src_ctx: " ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: "
+      (__FUNCTION__ ^ ":\n" ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n"
+     ^ "\n- src_ctx: " ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: "
      ^ eval_ctx_to_string tgt_ctx));
+
+  (* Simplify the target context *)
+  let tgt_ctx, cc =
+    simplify_dummy_values_useless_abs config span ~simplify_abs:false
+      fixed_ids.aids tgt_ctx
+  in
 
   (* We first reorganize [tgt_ctx] so that we can match [src_ctx] with it (by
      ending loans for instance - remember that the [src_ctx] is the fixed point
@@ -1722,7 +1880,9 @@ let match_ctx_with_target (config : config) (span : Meta.span)
      were introduced during the loop iterations)
   *)
   let tgt_ctx, cc =
-    prepare_match_ctx_with_target config span loop_id fixed_ids src_ctx tgt_ctx
+    comp cc
+      (prepare_loop_match_ctx_with_target config span loop_id fixed_ids src_ctx
+         tgt_ctx)
   in
 
   (* Introduce the "identity" abstractions for the loop re-entry.
@@ -1743,10 +1903,10 @@ let match_ctx_with_target (config : config) (span : Meta.span)
      [add_identity_abs] to add the identity abstractions one by one.
   *)
   (* Match the source and target contexts *)
-  log#ldebug
+  log#ltrace
     (lazy
-      ("cf_introduce_loop_fp_abs:\n" ^ "\n- fixed_ids: "
-     ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
+      ("mach_ctx_with_target: about to introduce the identity abstractions (i):\n"
+     ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
      ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: " ^ eval_ctx_to_string tgt_ctx
       ));
 
@@ -1783,25 +1943,35 @@ let match_ctx_with_target (config : config) (span : Meta.span)
          (fun (x, y) -> (y, x))
          (BorrowId.InjSubst.bindings src_to_tgt_maps.borrow_id_map))
   in
+  let tgt_to_src_sid_map =
+    SymbolicValueId.Map.of_list
+      (List.filter_map
+         (fun ((sid, v) : _ * typed_value) ->
+           match v.value with
+           | VSymbolic sv -> Some (sv.sv_id, sid)
+           | _ -> None)
+         (SymbolicValueId.Map.bindings src_to_tgt_maps.sid_to_value_map))
+  in
 
   (* Debug *)
-  log#ldebug
+  log#ltrace
     (lazy
-      ("match_ctx_with_target: cf_introduce_loop_fp_abs:" ^ "\n\n- src_ctx: "
+      (__FUNCTION__ ^ ": about to introduce the identity abstractions (ii):"
+     ^ "\n\n- src_ctx: "
       ^ eval_ctx_to_string ~span:(Some span) src_ctx
       ^ "\n\n- tgt_ctx: "
       ^ eval_ctx_to_string ~span:(Some span) tgt_ctx
       ^ "\n\n- filt_tgt_ctx: "
-      ^ eval_ctx_to_string_no_filter ~span:(Some span) filt_tgt_ctx
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:false filt_tgt_ctx
       ^ "\n\n- filt_src_ctx: "
-      ^ eval_ctx_to_string_no_filter ~span:(Some span) filt_src_ctx
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:false filt_src_ctx
       ^ "\n\n- new_absl:\n"
       ^ eval_ctx_to_string ~span:(Some span)
           { src_ctx with env = List.map (fun abs -> EAbs abs) new_absl }
       ^ "\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids ^ "\n\n- fp_bl_maps:\n"
       ^ show_borrow_loan_corresp fp_bl_maps
       ^ "\n\n- src_to_tgt_maps: "
-      ^ show_ids_maps src_to_tgt_maps));
+      ^ ids_maps_to_string tgt_ctx src_to_tgt_maps));
 
   (* Update the borrows and symbolic ids in the source context.
 
@@ -1822,8 +1992,8 @@ let match_ctx_with_target (config : config) (span : Meta.span)
      {[
        env_fp = {
          abs@0 { ML l0 }
-         ls -> MB l1 (s3 : loops::List<T>)
-         i -> s4 : u32
+         ls -> MB l1 (s@3 : loops::List<T>)
+         i -> s@4 : u32
          abs@fp {
            MB l0 // this borrow appears in [env0]
            ML l1
@@ -1833,7 +2003,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
 
      Through matching, we detect that in [env_fp], [l1] is matched
      to [l5]. We introduce a fresh borrow [l6] for [l1], and remember
-     in the map [src_fresh_borrows_map] that: [{ l1 -> l6}].
+     in the map [src_fresh_borrows_map] that: [{ l1 -> l6 }].
 
      We get:
      {[
@@ -1850,17 +2020,43 @@ let match_ctx_with_target (config : config) (span : Meta.span)
      {[
        abs@2 { MB l5, ML l6 }
      ]}
+
+     We do something similar for symbolic values.
   *)
-  (* First, compute the set of borrows which appear in the fresh abstractions
-     of the fixed-point: we want to introduce fresh ids only for those. *)
+  (* First, compute the set of borrows and symbolic values appearing in *borrow*
+     projections which appear in the fresh abstractions of the fixed-point: we
+     want to introduce fresh ids only for those. *)
   let new_absl_ids, _ = compute_absl_ids new_absl in
   let src_fresh_borrows_map = ref BorrowId.Map.empty in
+  let src_fresh_sids_map = ref SymbolicValueId.Map.empty in
+  let register_symbolic_value_id (id : symbolic_value_id) : symbolic_value_id =
+    (* Register the symbolic value, if it needs to be mapped *)
+    if
+      (* We map the borrows for which we computed a mapping - TODO: simplify *)
+      SymbolicValueId.Map.mem id tgt_to_src_sid_map
+      (* And which have corresponding loans in the fresh fixed-point abstractions *)
+      && SymbolicValueId.Set.mem
+           (SymbolicValueId.Map.find id tgt_to_src_sid_map)
+           new_absl_ids.sids
+    then (
+      let src_id = SymbolicValueId.Map.find id tgt_to_src_sid_map in
+      let nid = fresh_symbolic_value_id () in
+      src_fresh_sids_map :=
+        SymbolicValueId.Map.add src_id nid !src_fresh_sids_map;
+      nid)
+    else id
+  in
+  let register_symbolic_value (sv : symbolic_value) : symbolic_value =
+    { sv with sv_id = register_symbolic_value_id sv.sv_id }
+  in
   let visit_tgt =
     object
-      inherit [_] map_eval_ctx
+      inherit [_] map_eval_ctx as super
 
+      (* For *borrows* it is simple: there is a separation between *borrow*
+         ids and *loan* ids, meaning we simply have to update one visitor. *)
       method! visit_borrow_id _ id =
-        (* Map the borrow, if it needs to be mapped *)
+        (* Map the borrow, if it needs to be mapped - TODO: simplify *)
         if
           (* We map the borrows for which we computed a mapping *)
           BorrowId.InjSubst.Set.mem id
@@ -1876,28 +2072,44 @@ let match_ctx_with_target (config : config) (span : Meta.span)
             BorrowId.Map.add src_id nid !src_fresh_borrows_map;
           nid)
         else id
+
+      method! visit_VSymbolic _ sv = VSymbolic (register_symbolic_value sv)
+
+      method! visit_aproj env p =
+        match p with
+        | AProjLoans _ -> super#visit_aproj env p
+        | AProjBorrows (sv_id, proj_ty, children) ->
+            sanity_check __FILE__ __LINE__ (children = []) span;
+            let sv_id = register_symbolic_value_id sv_id in
+            AProjBorrows (sv_id, proj_ty, children)
+        | _ -> super#visit_aproj env p
     end
   in
 
   let tgt_ctx = visit_tgt#visit_eval_ctx () tgt_ctx in
 
-  log#ldebug
+  let refreshed_input_sids =
+    SymbolicValueId.Map.filter
+      (fun sid _ -> List.mem sid fp_input_svalues)
+      !src_fresh_sids_map
+  in
+
+  log#ltrace
     (lazy
-      ("match_ctx_with_target: cf_introduce_loop_fp_abs: src_fresh_borrows_map:\n"
+      (__FUNCTION__ ^ ": cf_introduce_loop_fp_abs:"
+     ^ "\n- src_fresh_borrows_map:\n"
       ^ BorrowId.Map.show BorrowId.to_string !src_fresh_borrows_map
+      ^ "\n- src_fresh_sids_map:\n"
+      ^ SymbolicValueId.Map.show SymbolicValueId.to_string !src_fresh_sids_map
+      ^ "\n- refreshed_input_sids:\n"
+      ^ SymbolicValueId.Map.show SymbolicValueId.to_string refreshed_input_sids
       ^ "\n"));
 
-  (* Rem.: we don't update the symbolic values. It is not necessary
-     because there shouldn't be any symbolic value containing borrows.
-
-     Rem.: we will need to do something about the symbolic values in the
-     abstractions and in the *variable bindings* once we allow symbolic
-     values containing borrows to not be eagerly expanded.
-  *)
   sanity_check __FILE__ __LINE__ Config.greedy_expand_symbolics_with_borrows
     span;
 
-  (* Update the borrows and loans in the abstractions of the target context.
+  (* Update the borrows/loans and the borrow/loan projectors in the abstractions
+     of the target context.
 
      Going back to the [list_nth_mut] example and by using [src_fresh_borrows_map],
      we instantiate the fixed-point abstractions that we will insert into the
@@ -1947,41 +2159,41 @@ let match_ctx_with_target (config : config) (span : Meta.span)
   let get_abs_id = AbstractionIdGen.get_id in
 
   let visit_src =
-    object
+    object (self)
       inherit [_] map_eval_ctx as super
 
       method! visit_borrow_id _ bid =
-        log#ldebug
+        log#ltrace
           (lazy
-            ("match_ctx_with_target: cf_introduce_loop_fp_abs: \
-              visit_borrow_id: " ^ BorrowId.to_string bid ^ "\n"));
+            (__FUNCTION__ ^ ": cf_introduce_loop_fp_abs: visit_borrow_id: "
+           ^ BorrowId.to_string bid ^ "\n"));
 
         (* Lookup the id of the loan corresponding to this borrow *)
         let src_lid =
           BorrowId.InjSubst.find bid fp_bl_maps.borrow_to_loan_id_map
         in
 
-        log#ldebug
+        log#ltrace
           (lazy
-            ("match_ctx_with_target: cf_introduce_loop_fp_abs: looked up \
-              src_lid: " ^ BorrowId.to_string src_lid ^ "\n"));
+            (__FUNCTION__ ^ ": cf_introduce_loop_fp_abs: looked up src_lid: "
+           ^ BorrowId.to_string src_lid ^ "\n"));
 
         (* Lookup the tgt borrow id to which this borrow was mapped *)
         let tgt_bid =
           BorrowId.InjSubst.find src_lid src_to_tgt_maps.borrow_id_map
         in
 
-        log#ldebug
+        log#ltrace
           (lazy
-            ("match_ctx_with_target: cf_introduce_loop_fp_abs: looked up \
-              tgt_bid: " ^ BorrowId.to_string tgt_bid ^ "\n"));
+            (__FUNCTION__ ^ ": cf_introduce_loop_fp_abs: looked up tgt_bid: "
+           ^ BorrowId.to_string tgt_bid ^ "\n"));
 
         tgt_bid
 
       method! visit_loan_id _ id =
-        log#ldebug
+        log#ltrace
           (lazy
-            ("match_ctx_with_target: cf_introduce_loop_fp_abs: visit_loan_id: "
+            (__FUNCTION__ ^ ": cf_introduce_loop_fp_abs: visit_loan_id: "
            ^ BorrowId.to_string id ^ "\n"));
         (* Map the borrow - rem.: we mapped the borrows *in the values*,
            meaning we know how to map the *corresponding loans in the
@@ -1999,6 +2211,53 @@ let match_ctx_with_target (config : config) (span : Meta.span)
 
       method! visit_symbolic_value_id _ _ = fresh_symbolic_value_id ()
       method! visit_abstraction_id _ id = get_abs_id id
+
+      method! visit_aproj env proj =
+        match proj with
+        | AProjLoans (sv_id, proj_ty, children) ->
+            (* The logic is similar to the concrete borrows/loans cases above *)
+            sanity_check __FILE__ __LINE__ (children = []) span;
+            let sv_id =
+              begin
+                match
+                  SymbolicValueId.Map.find_opt sv_id !src_fresh_sids_map
+                with
+                | None ->
+                    sanity_check __FILE__ __LINE__
+                      (SymbolicValueId.InjSubst.find sv_id
+                         src_to_tgt_maps.sid_map
+                      = sv_id)
+                      span;
+                    sv_id
+                | Some id -> id
+              end
+            in
+            let proj_ty = self#visit_ty env proj_ty in
+            AProjLoans (sv_id, proj_ty, children)
+        | AProjBorrows (sv_id, proj_ty, children) ->
+            sanity_check __FILE__ __LINE__ (children = []) span;
+            (* Lookup the loan corresponding to this borrow *)
+            let src_lid =
+              SymbolicValueId.InjSubst.find sv_id
+                fp_bl_maps.borrow_to_loan_proj_map
+            in
+
+            (* Lookup the value to which this borrow was mapped - note that it
+               is necessary a symbolic value *)
+            let tgt_value =
+              SymbolicValueId.Map.find src_lid src_to_tgt_maps.sid_to_value_map
+            in
+            let sv_id =
+              begin
+                match tgt_value.value with
+                | VSymbolic sv -> sv.sv_id
+                | _ -> internal_error __FILE__ __LINE__ span
+              end
+            in
+            let proj_ty = self#visit_ty env proj_ty in
+            AProjBorrows (sv_id, proj_ty, children)
+        | AEndedProjBorrows _ | AEndedProjLoans _ | AEmpty ->
+            super#visit_aproj env proj
 
       method! visit_region_id _ _ =
         craise_opt_span __FILE__ __LINE__ None
@@ -2043,9 +2302,9 @@ let match_ctx_with_target (config : config) (span : Meta.span)
   let nenv = List.append new_absl tgt_ctx.env in
   let tgt_ctx = { tgt_ctx with env = nenv } in
 
-  log#ldebug
+  log#ltrace
     (lazy
-      ("match_ctx_with_target: cf_introduce_loop_fp_abs: done:\n- result ctx:\n"
+      (__FUNCTION__ ^ ": cf_introduce_loop_fp_abs: done:\n- result ctx:\n"
       ^ eval_ctx_to_string ~span:(Some span) tgt_ctx));
 
   (* Sanity check *)
@@ -2061,6 +2320,17 @@ let match_ctx_with_target (config : config) (span : Meta.span)
   in
 
   (* Compute the loop input values *)
+  log#ltrace
+    (lazy
+      (__FUNCTION__ ^ ": about to compute the input values:"
+     ^ "\n- fp_input_svalues: "
+      ^ String.concat ", " (List.map SymbolicValueId.to_string fp_input_svalues)
+      ^ "\n- src_to_tgt_maps:\n"
+      ^ ids_maps_to_string tgt_ctx src_to_tgt_maps
+      ^ "\n- refreshed_input_sids:\n"
+      ^ SymbolicValueId.Map.show SymbolicValueId.to_string refreshed_input_sids
+      ^ "\n- src_ctx:\n" ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx:\n"
+      ^ eval_ctx_to_string tgt_ctx ^ "\n"));
   let input_values =
     SymbolicValueId.Map.of_list
       (List.map
@@ -2070,8 +2340,9 @@ let match_ctx_with_target (config : config) (span : Meta.span)
   in
 
   let res =
-    if is_loop_entry then EndEnterLoop (loop_id, input_values)
-    else EndContinue (loop_id, input_values)
+    if is_loop_entry then
+      EndEnterLoop (loop_id, input_values, refreshed_input_sids)
+    else EndContinue (loop_id, input_values, refreshed_input_sids)
   in
 
   ((tgt_ctx, res), cc)

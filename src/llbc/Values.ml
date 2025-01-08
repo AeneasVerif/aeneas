@@ -171,6 +171,7 @@ type mvalue = typed_value [@@deriving show, ord]
  *)
 type msymbolic_value = symbolic_value [@@deriving show, ord]
 
+type msymbolic_value_id = symbolic_value_id [@@deriving show, ord]
 type abstraction_id = AbstractionId.id [@@deriving show, ord]
 type abstraction_id_set = AbstractionId.Set.t [@@deriving show, ord]
 
@@ -178,45 +179,14 @@ type abstraction_id_set = AbstractionId.Set.t [@@deriving show, ord]
     For additional explanations see: https://arxiv.org/pdf/2404.02680#section.5 *)
 type proj_marker = PNone | PLeft | PRight [@@deriving show, ord]
 
-type marker_borrow_id = proj_marker * BorrowId.id [@@deriving show, ord]
-
 type ended_proj_borrow_meta = {
-  consumed : msymbolic_value;
+  consumed : msymbolic_value_id;
   given_back : msymbolic_value;
 }
 [@@deriving show, ord]
 
 type ended_mut_borrow_meta = { bid : borrow_id; given_back : msymbolic_value }
 [@@deriving show, ord]
-
-module MarkerBorrowIdOrd = struct
-  type t = marker_borrow_id
-
-  let compare = compare_marker_borrow_id
-  let to_string = show_marker_borrow_id
-  let pp_t = pp_marker_borrow_id
-  let show_t = show_marker_borrow_id
-end
-
-module MarkerBorrowIdSet = Collections.MakeSet (MarkerBorrowIdOrd)
-module MarkerBorrowIdMap = Collections.MakeMap (MarkerBorrowIdOrd)
-
-module MarkerBorrowId : sig
-  type t
-
-  val to_string : t -> string
-
-  module Set : Collections.Set with type elt = t
-  module Map : Collections.Map with type key = t
-end
-with type t = marker_borrow_id = struct
-  type t = marker_borrow_id
-
-  let to_string = show_marker_borrow_id
-
-  module Set = MarkerBorrowIdSet
-  module Map = MarkerBorrowIdMap
-end
 
 (** Ancestor for {!typed_avalue} iter visitor *)
 class ['self] iter_typed_avalue_base =
@@ -225,6 +195,9 @@ class ['self] iter_typed_avalue_base =
     method visit_mvalue : 'env -> mvalue -> unit = fun _ _ -> ()
 
     method visit_msymbolic_value : 'env -> msymbolic_value -> unit =
+      fun _ _ -> ()
+
+    method visit_msymbolic_value_id : 'env -> msymbolic_value_id -> unit =
       fun _ _ -> ()
 
     method visit_region_id_set : 'env -> region_id_set -> unit = fun _ _ -> ()
@@ -250,6 +223,10 @@ class ['self] map_typed_avalue_base =
     method visit_mvalue : 'env -> mvalue -> mvalue = fun _ x -> x
 
     method visit_msymbolic_value : 'env -> msymbolic_value -> msymbolic_value =
+      fun _ m -> m
+
+    method visit_msymbolic_value_id
+        : 'env -> msymbolic_value_id -> msymbolic_value_id =
       fun _ m -> m
 
     method visit_region_id_set : 'env -> region_id_set -> region_id_set =
@@ -289,13 +266,13 @@ class ['self] map_typed_avalue_base =
 *)
 type abstract_shared_borrow =
   | AsbBorrow of borrow_id
-  | AsbProjReborrows of symbolic_value * ty
+  | AsbProjReborrows of symbolic_value_id * ty
 
 (** A set of abstract shared borrows *)
 and abstract_shared_borrows = abstract_shared_borrow list
 
 and aproj =
-  | AProjLoans of symbolic_value * ty * (msymbolic_value * aproj) list
+  | AProjLoans of symbolic_value_id * ty * (msymbolic_value_id * aproj) list
       (** A projector of loans over a symbolic value.
 
           Whenever we call a function, we introduce a symbolic value for
@@ -338,7 +315,7 @@ and aproj =
           TODO: the projection type is redundant with the type of the avalue
           TODO: we shouldn't use a symbolic value but rather a symbolic value id
        *)
-  | AProjBorrows of symbolic_value * ty * (msymbolic_value * aproj) list
+  | AProjBorrows of symbolic_value_id * ty * (msymbolic_value_id * aproj) list
       (** Note that an AProjBorrows only operates on a value which is not below
           a shared loan: under a shared loan, we use {!abstract_shared_borrow}.
           
@@ -364,14 +341,15 @@ and aproj =
           TODO: the projection type is redundant with the type of the avalue
           TODO: we shouldn't use a symbolic value but rather a symbolic value id
        *)
-  | AEndedProjLoans of msymbolic_value * (msymbolic_value * aproj) list
+  | AEndedProjLoans of msymbolic_value_id * (msymbolic_value_id * aproj) list
       (** An ended projector of loans over a symbolic value.
       
           See the explanations for {!AProjLoans}
           
           Note that we keep the original symbolic value as a meta-value.
        *)
-  | AEndedProjBorrows of ended_proj_borrow_meta * (msymbolic_value * aproj) list
+  | AEndedProjBorrows of
+      ended_proj_borrow_meta * (msymbolic_value_id * aproj) list
       (** The only purpose of {!AEndedProjBorrows} is to store, for synthesis
           purposes:
           - the symbolic value which was consumed upon creating the projection
@@ -391,7 +369,7 @@ and avalue =
   | ABottom (* TODO: remove once we change the way internal borrows are ended *)
   | ALoan of aloan_content
   | ABorrow of aborrow_content
-  | ASymbolic of aproj
+  | ASymbolic of proj_marker * aproj
   | AIgnored of mvalue option
       (** A value which doesn't contain borrows, or which borrows we
           don't own and thus ignore.

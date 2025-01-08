@@ -588,7 +588,7 @@ let mk_builtin_funs_map () =
          (fun (name, filter, info) -> (name, (filter, info)))
          (builtin_funs ()))
   in
-  log#ldebug
+  log#ltrace
     (lazy ("builtin_funs_map:\n" ^ NameMatcherMap.to_string (fun _ -> "...") m));
   m
 
@@ -872,7 +872,7 @@ let builtin_trait_impls_info () : (pattern * (bool list option * string)) list =
 
 let mk_builtin_trait_impls_map () =
   let m = NameMatcherMap.of_list (builtin_trait_impls_info ()) in
-  log#ldebug
+  log#ltrace
     (lazy
       ("builtin_trait_impls_map:\n"
       ^ NameMatcherMap.to_string (fun _ -> "...") m));

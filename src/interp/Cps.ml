@@ -17,7 +17,10 @@ type statement_eval_res =
   | Panic
   | LoopReturn of loop_id
       (** We reached a return statement *while inside a loop* *)
-  | EndEnterLoop of loop_id * typed_value SymbolicValueId.Map.t
+  | EndEnterLoop of
+      loop_id
+      * typed_value SymbolicValueId.Map.t
+      * symbolic_value_id SymbolicValueId.Map.t
       (** When we enter a loop, we delegate the end of the function is
           synthesized with a call to the loop translation. We use this
           evaluation result to transmit the fact that we end evaluation
@@ -25,13 +28,24 @@ type statement_eval_res =
 
           We provide the list of values for the translated loop function call
           (or to be more precise the input values instantiation).
+
+          We also provide the map from the input symbolic values to refresh symbolic
+          values (we need those to introduce intermediate let-bindings in the translation).
+          TODO: not clean; we will get rid of those once we generalize.
        *)
-  | EndContinue of loop_id * typed_value SymbolicValueId.Map.t
+  | EndContinue of
+      loop_id
+      * typed_value SymbolicValueId.Map.t
+      * symbolic_value_id SymbolicValueId.Map.t
       (** For loop translations: we end with a continue (i.e., a recursive call
           to the translation for the loop body).
 
           We provide the list of values for the translated loop function call
           (or to be more precise the input values instantiation).
+
+          We also provide the map from the input symbolic values to refresh symbolic
+          values (we need those to introduce intermediate let-bindings in the translation).
+          TODO: not clean; we will get rid of those once we generalize.
        *)
 [@@deriving show]
 

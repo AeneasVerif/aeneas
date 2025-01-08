@@ -71,15 +71,29 @@ type dummy_var_id = DummyVarId.id [@@deriving show, ord]
   it proved more convenient (and even before updating the code of the
   interpreter to use CPS).
  *)
+let ( symbolic_value_id_counter,
+      marked_symbolic_value_ids,
+      marked_symbolic_value_ids_insert_from_int,
+      fresh_symbolic_value_id ) =
+  SymbolicValueId.fresh_marked_stateful_generator ()
 
-let symbolic_value_id_counter, fresh_symbolic_value_id =
-  SymbolicValueId.fresh_stateful_generator ()
+let ( borrow_id_counter,
+      marked_borrow_ids,
+      marked_borrow_ids_insert_from_int,
+      fresh_borrow_id ) =
+  BorrowId.fresh_marked_stateful_generator ()
 
-let borrow_id_counter, fresh_borrow_id = BorrowId.fresh_stateful_generator ()
-let region_id_counter, fresh_region_id = RegionId.fresh_stateful_generator ()
+let ( region_id_counter,
+      marked_region_ids,
+      marked_region_ids_insert_from_int,
+      fresh_region_id ) =
+  RegionId.fresh_marked_stateful_generator ()
 
-let abstraction_id_counter, fresh_abstraction_id =
-  AbstractionId.fresh_stateful_generator ()
+let ( abstraction_id_counter,
+      marked_abstraction_ids,
+      marked_abstraction_ids_insert_from_int,
+      fresh_abstraction_id ) =
+  AbstractionId.fresh_marked_stateful_generator ()
 
 let loop_id_counter, fresh_loop_id = LoopId.fresh_stateful_generator ()
 

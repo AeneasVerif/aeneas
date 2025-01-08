@@ -99,7 +99,7 @@ let literal_to_typed_value (span : Meta.span) (ty : literal_type) (cv : literal)
     : typed_value =
   (* Check the type while converting - we actually need some information
      * contained in the type *)
-  log#ldebug
+  log#ltrace
     (lazy
       ("literal_to_typed_value:" ^ "\n- cv: "
       ^ Print.Values.literal_to_string cv));
@@ -128,7 +128,7 @@ let literal_to_typed_value (span : Meta.span) (ty : literal_type) (cv : literal)
  *)
 let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
     (ctx : eval_ctx) (v : typed_value) : eval_ctx * typed_value =
-  log#ldebug
+  log#ltrace
     (lazy
       ("copy_value: "
       ^ typed_value_to_string ~span:(Some span) ctx v
@@ -268,7 +268,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
     typed_value * eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression)
     =
   (* Debug *)
-  log#ldebug
+  log#ltrace
     (lazy
       ("eval_operand_no_reorganize: op: " ^ operand_to_string ctx op
      ^ "\n- ctx:\n"
@@ -379,7 +379,7 @@ let eval_operand (config : config) (span : Meta.span) (op : operand)
     typed_value * eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression)
     =
   (* Debug *)
-  log#ldebug
+  log#ltrace
     (lazy
       ("eval_operand: op: " ^ operand_to_string ctx op ^ "\n- ctx:\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx
@@ -876,7 +876,7 @@ let eval_rvalue_not_global (config : config) (span : Meta.span)
     (typed_value, eval_error) result
     * eval_ctx
     * (SymbolicAst.expression -> SymbolicAst.expression) =
-  log#ldebug (lazy "eval_rvalue");
+  log#ltrace (lazy "eval_rvalue");
   (* Small helper *)
   let wrap_in_result (v, ctx, cc) = (Ok v, ctx, cc) in
   (* Delegate to the proper auxiliary function *)

@@ -431,7 +431,7 @@ let expand_bottom_value_from_projection (span : Meta.span)
     (access : access_kind) (p : place) (pe : projection_elem) (ctx : eval_ctx) :
     eval_ctx =
   (* Debugging *)
-  log#ldebug
+  log#ltrace
     (lazy
       ("expand_bottom_value_from_projection:\n" ^ "pe: "
      ^ show_projection_elem pe ^ "\n" ^ "ty: " ^ show_ety p.ty));
@@ -637,7 +637,7 @@ let prepare_lplace (config : config) (span : Meta.span) (p : place)
     (ctx : eval_ctx) :
     typed_value * eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression)
     =
-  log#ldebug
+  log#ltrace
     (lazy
       ("prepare_lplace:" ^ "\n- p: " ^ place_to_string ctx p
      ^ "\n- Initial context:\n"

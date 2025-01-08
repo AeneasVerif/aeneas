@@ -7,6 +7,7 @@ open LlbcAstUtils
 open Types
 open TypesUtils
 open Values
+open ValuesUtils
 open LlbcAst
 open Contexts
 open Errors
@@ -253,7 +254,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
     (loop_id : LoopId.id option) (is_regular_return : bool) (inside_loop : bool)
     (ctx : eval_ctx) : SA.expression =
   let span = fdef.item_meta.span in
-  log#ldebug
+  log#ltrace
     (lazy
       ("evaluate_function_symbolic_synthesize_backward_from_return:"
      ^ "\n- fname: "
@@ -335,7 +336,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
       ctx)
     else ctx
   in
-  log#ldebug
+  log#ltrace
     (lazy
       ("evaluate_function_symbolic_synthesize_backward_from_return: (after \
         putting the return value in the proper abstraction)\n" ^ "\n- ctx:\n"
@@ -424,7 +425,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
           if !Config.borrow_check then (Some fun_abs_id, true) else (None, false)
       | Some abs -> (Some abs.abs_id, false)
   in
-  log#ldebug
+  log#ltrace
     (lazy
       ("evaluate_function_symbolic_synthesize_backward_from_return: ending \
         input abstraction: "
@@ -507,7 +508,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
       fdef.item_meta.name
   in
-  log#ldebug (lazy ("evaluate_function_symbolic: " ^ name_to_string ()));
+  log#ltrace (lazy ("evaluate_function_symbolic: " ^ name_to_string ()));
 
   (* Create the evaluation context *)
   let ctx, input_svs, inst_sg = initialize_symbolic_context_for_fun ctx fdef in
@@ -520,7 +521,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
   let config = mk_config SymbolicMode in
   let finish (res : statement_eval_res) (ctx : eval_ctx) =
     let ctx0 = ctx in
-    log#ldebug
+    log#ltrace
       (lazy
         ("evaluate_function_symbolic: cf_finish: "
         ^ Cps.show_statement_eval_res res));
@@ -572,8 +573,8 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
         let back_el = RegionGroupId.Map.of_list back_el in
         (* Put everything together *)
         SA.ForwardEnd (Some (ctx_return, ret_value), ctx0, None, fwd_e, back_el)
-    | EndEnterLoop (loop_id, loop_input_values)
-    | EndContinue (loop_id, loop_input_values) ->
+    | EndEnterLoop (loop_id, loop_input_values, refreshed_input_sids)
+    | EndContinue (loop_id, loop_input_values, refreshed_input_sids) ->
         (* Similar to [Return]: we have to play different endings *)
         let inside_loop =
           match res with
@@ -608,7 +609,12 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
         in
         let back_el = RegionGroupId.Map.of_list back_el in
         (* Put everything together *)
-        ForwardEnd (None, ctx0, Some loop_input_values, fwd_e, back_el)
+        ForwardEnd
+          ( None,
+            ctx0,
+            Some (loop_input_values, refreshed_input_sids),
+            fwd_e,
+            back_el )
     | Panic ->
         (* Note that as we explore all the execution branches, one of
          * the executions can lead to a panic *)
@@ -645,7 +651,7 @@ module Test = struct
     let span = fdef.item_meta.span in
 
     (* Debug *)
-    log#ldebug
+    log#ltrace
       (lazy
         ("test_unit_function: "
         ^ Print.Types.name_to_string

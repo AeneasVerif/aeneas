@@ -4,6 +4,7 @@ open Contexts
 module Subst = Substitute
 module Assoc = AssociatedTypes
 open TypesUtils
+open ValuesUtils
 open InterpreterUtils
 open InterpreterBorrowsCore
 open Errors
@@ -88,7 +89,7 @@ let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
           (not
              (projections_intersect span s.sv_ty ctx.ended_regions ty regions))
           span;
-        [ AsbProjReborrows (s, ty) ]
+        [ AsbProjReborrows (s.sv_id, ty) ]
     | _ -> craise __FILE__ __LINE__ span "Unreachable"
 
 let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
@@ -205,7 +206,7 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
             let rset1 = ctx.ended_regions in
             let ty2 = ty in
             let rset2 = regions in
-            log#ldebug
+            log#ltrace
               (lazy
                 ("projections_intersect:" ^ "\n- ty1: " ^ ty_to_string ctx ty1
                ^ "\n- rset1: "
@@ -216,7 +217,7 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
             sanity_check __FILE__ __LINE__
               (not (projections_intersect span ty1 rset1 ty2 rset2))
               span);
-          ASymbolic (AProjBorrows (s, ty, []))
+          ASymbolic (PNone, AProjBorrows (s.sv_id, ty, []))
       | _ ->
           log#ltrace
             (lazy

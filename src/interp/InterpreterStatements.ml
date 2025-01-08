@@ -21,7 +21,7 @@ let log = L.statements_log
 (** Drop a value at a given place - TODO: factorize this with [assign_to_place] *)
 let drop_value (config : config) (span : Meta.span) (p : place) : cm_fun =
  fun ctx ->
-  log#ldebug
+  log#ltrace
     (lazy
       ("drop_value: place: " ^ place_to_string ctx p ^ "\n- Initial context:\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx));
@@ -42,7 +42,7 @@ let drop_value (config : config) (span : Meta.span) (p : place) : cm_fun =
     (* Update the destination to ⊥ *)
     let nv = { v with value = VBottom } in
     let ctx = write_place span access p nv ctx in
-    log#ldebug
+    log#ltrace
       (lazy
         ("drop_value: place: " ^ place_to_string ctx p ^ "\n- Final context:\n"
         ^ eval_ctx_to_string ~span:(Some span) ctx));
@@ -92,7 +92,7 @@ let push_vars (span : Meta.span) (vars : (var * typed_value) list)
 let assign_to_place (config : config) (span : Meta.span) (rv : typed_value)
     (p : place) : cm_fun =
  fun ctx ->
-  log#ldebug
+  log#ltrace
     (lazy
       ("assign_to_place:" ^ "\n- rv: "
       ^ typed_value_to_string ~span:(Some span) ctx rv
@@ -118,7 +118,7 @@ let assign_to_place (config : config) (span : Meta.span) (rv : typed_value)
   (* Update the destination *)
   let ctx = write_place span Write p rv ctx in
   (* Debug *)
-  log#ldebug
+  log#ltrace
     (lazy
       ("assign_to_place:" ^ "\n- rv: "
       ^ typed_value_to_string ~span:(Some span) ctx rv
@@ -204,7 +204,7 @@ let eval_assertion (config : config) (span : Meta.span) (assertion : assertion)
 let set_discriminant (config : config) (span : Meta.span) (p : place)
     (variant_id : VariantId.id) : st_cm_fun =
  fun ctx ->
-  log#ldebug
+  log#ltrace
     (lazy
       ("set_discriminant:" ^ "\n- p: " ^ place_to_string ctx p
      ^ "\n- variant id: "
@@ -310,7 +310,7 @@ let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
     * eval_ctx
     * (SymbolicAst.expression -> SymbolicAst.expression) =
   (* Debug *)
-  log#ldebug (lazy ("pop_frame:\n" ^ eval_ctx_to_string ~span:(Some span) ctx));
+  log#ltrace (lazy ("pop_frame:\n" ^ eval_ctx_to_string ~span:(Some span) ctx));
 
   (* List the local variables, but the return variable *)
   let ret_vid = VarId.zero in
@@ -326,7 +326,7 @@ let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
   in
   let locals : VarId.id list = list_locals ctx.env in
   (* Debug *)
-  log#ldebug
+  log#ltrace
     (lazy
       ("pop_frame: locals in which to drop the outer loans: ["
       ^ String.concat "," (List.map VarId.to_string locals)
@@ -344,7 +344,7 @@ let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
       locals ctx
   in
   (* Debug *)
-  log#ldebug
+  log#ltrace
     (lazy
       ("pop_frame: after dropping outer loans in local variables:\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx));
@@ -651,7 +651,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
       match func.func with
       | FunId (FRegular fid) ->
           let def = ctx_lookup_fun_decl ctx fid in
-          log#ldebug
+          log#ltrace
             (lazy
               ("fun call:\n- call: " ^ call_to_string ctx call
              ^ "\n- call.generics:\n"
@@ -673,7 +673,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
           (* Unreachable: must be a transparent function *)
           craise __FILE__ __LINE__ span "Unreachable"
       | TraitMethod (trait_ref, method_name, _) -> (
-          log#ldebug
+          log#ltrace
             (lazy
               ("trait method call:\n- call: " ^ call_to_string ctx call
              ^ "\n- method name: " ^ method_name ^ "\n- call.generics:\n"
@@ -693,7 +693,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
           | TraitImpl (impl_id, impl_generics) -> (
               (* Lookup the trait impl *)
               let trait_impl = ctx_lookup_trait_impl ctx impl_id in
-              log#ldebug
+              log#ltrace
                 (lazy ("trait impl: " ^ trait_impl_to_string ctx trait_impl));
               (* First look in the required methods *)
               let fn_ref =
@@ -776,7 +776,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
               let method_id = fn_ref.fun_id in
               let generics = fn_ref.fun_generics in
               let method_def = ctx_lookup_fun_decl ctx method_id in
-              log#ldebug
+              log#ltrace
                 (lazy ("method:\n" ^ fun_decl_to_string ctx method_def));
               (* Instantiate *)
               (* When instantiating, we need to group the generics for the
@@ -813,7 +813,7 @@ let eval_global_as_fresh_symbolic_value (span : Meta.span)
 let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
  fun ctx ->
   (* Debugging *)
-  log#ldebug
+  log#ltrace
     (lazy
       ("\n**About to evaluate statement**: [\n"
       ^ statement_to_string_with_tab ctx st
@@ -834,7 +834,7 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
 
 and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
  fun ctx ->
-  log#ldebug
+  log#ltrace
     (lazy
       ("\neval_statement_raw: statement:\n"
       ^ statement_to_string_with_tab ctx st
@@ -853,7 +853,7 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
           (* Evaluate the rvalue *)
           let res, ctx, cc = eval_rvalue_not_global config st.span rvalue ctx in
           (* Assign *)
-          log#ldebug
+          log#ltrace
             (lazy
               ("about to assign to place: " ^ place_to_string ctx p
              ^ "\n- Context:\n"
@@ -1344,7 +1344,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
     (trait_method_generics : (generic_args * trait_instance_id) option)
     (args : operand list) (dest : place) : stl_cm_fun =
  fun ctx ->
-  log#ldebug
+  log#ltrace
     (lazy
       ("eval_function_call_symbolic_from_inst_sig:\n- fid: "
       ^ fun_id_or_trait_method_ref_to_string ctx fid
@@ -1516,7 +1516,7 @@ and eval_builtin_function_call_symbolic (config : config) (span : Meta.span)
       compute_regions_hierarchy_for_fun_call (Some span) ctx.crate fun_name
         ctx.type_vars ctx.const_generic_vars func.generics sg
     in
-    log#ldebug
+    log#ltrace
       (lazy
         ("eval_builtin_function_call_symbolic: special case:" ^ "\n- inst_sig:"
         ^ inst_fun_sig_to_string ctx inst_sig));
@@ -1556,17 +1556,21 @@ and eval_builtin_function_call_symbolic (config : config) (span : Meta.span)
 (** Evaluate a statement seen as a function body *)
 and eval_function_body (config : config) (body : statement) : stl_cm_fun =
  fun ctx ->
-  log#ldebug (lazy "eval_function_body:");
+  log#ltrace (lazy "eval_function_body:");
   let ctx_resl, cf_body = eval_statement config body ctx in
   let ctx_res_cfl =
     List.map
       (fun (ctx, res) ->
         (* Note that we *don't* check the result ({!Panic}, {!Return}, etc.): we
            delegate the check to the caller. *)
-        log#ldebug (lazy "eval_function_body: cf_finish");
+        log#ltrace
+          (lazy ("eval_function_body: cf_finish:\n" ^ eval_ctx_to_string ctx));
         (* Expand the symbolic values if necessary - we need to do that before
            checking the invariants *)
         let ctx, cf = greedy_expand_symbolic_values config body.span ctx in
+        log#ltrace
+          (lazy
+            ("eval_function_body: after expansion:\n" ^ eval_ctx_to_string ctx));
         (* Sanity check *)
         Invariants.check_invariants body.span ctx;
         (* Continue *)
