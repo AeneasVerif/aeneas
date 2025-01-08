@@ -40,13 +40,8 @@ module Subst = Substitute
 (** The local logger *)
 let log = Logging.regions_hierarchy_log
 
-let compute_regions_hierarchy_for_sig (span : Meta.span option)
-    (type_decls : type_decl TypeDeclId.Map.t)
-    (fun_decls : fun_decl FunDeclId.Map.t)
-    (global_decls : global_decl GlobalDeclId.Map.t)
-    (trait_decls : trait_decl TraitDeclId.Map.t)
-    (trait_impls : trait_impl TraitImplId.Map.t) (fun_name : string)
-    (sg : fun_sig) : region_var_groups =
+let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
+    (fun_name : string) (sg : fun_sig) : region_var_groups =
   log#ltrace (lazy (__FUNCTION__ ^ ": " ^ fun_name));
   (* Initialize a normalization context (we may need to normalize some
      associated types) *)
@@ -58,11 +53,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
     {
       span;
       norm_trait_types;
-      type_decls;
-      fun_decls;
-      global_decls;
-      trait_decls;
-      trait_impls;
+      crate;
       type_vars = sg.generics.types;
       const_generic_vars = sg.generics.const_generics;
     }
@@ -138,14 +129,9 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
         (match id with
         | TAdtId id ->
             (* Lookup the type declaration *)
-            let decl = TypeDeclId.Map.find id type_decls in
+            let decl = TypeDeclId.Map.find id crate.type_decls in
             (* Instantiate the predicates *)
-            let tr_self =
-              UnknownTrait ("Unexpected, introduced by " ^ __FUNCTION__)
-            in
-            let subst =
-              Subst.make_subst_from_generics decl.generics generics tr_self
-            in
+            let subst = Subst.make_subst_from_generics decl.generics generics in
             let predicates = Subst.predicates_substitute subst decl.generics in
             (* Note that because we also explore the generics below, we may
                explore several times the same type - this is ok *)
@@ -308,25 +294,9 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option)
     Remark: in case we do not abort on error, this function will ignore
     the signatures which trigger errors.
  *)
-let compute_regions_hierarchies (type_decls : type_decl TypeDeclId.Map.t)
-    (fun_decls : fun_decl FunDeclId.Map.t)
-    (global_decls : global_decl GlobalDeclId.Map.t)
-    (trait_decls : trait_decl TraitDeclId.Map.t)
-    (trait_impls : trait_impl TraitImplId.Map.t) : region_var_groups FunIdMap.t
-    =
+let compute_regions_hierarchies (crate : crate) : region_var_groups FunIdMap.t =
   let open Print in
-  let env : fmt_env =
-    {
-      type_decls;
-      fun_decls;
-      global_decls;
-      trait_decls;
-      trait_impls;
-      regions = [];
-      generics = empty_generic_params;
-      locals = [];
-    }
-  in
+  let env : fmt_env = Charon.PrintLlbcAst.Crate.crate_to_fmt_env crate in
   let regular =
     List.map
       (fun ((fid, d) : FunDeclId.id * fun_decl) ->
@@ -334,7 +304,7 @@ let compute_regions_hierarchies (type_decls : type_decl TypeDeclId.Map.t)
           ( Types.name_to_string env d.item_meta.name,
             d.signature,
             Some d.item_meta.span ) ))
-      (FunDeclId.Map.bindings fun_decls)
+      (FunDeclId.Map.bindings crate.fun_decls)
   in
   let builtin =
     List.map
@@ -345,11 +315,7 @@ let compute_regions_hierarchies (type_decls : type_decl TypeDeclId.Map.t)
   FunIdMap.of_list
     (List.filter_map
        (fun (fid, (name, sg, span)) ->
-         try
-           Some
-             ( fid,
-               compute_regions_hierarchy_for_sig span type_decls fun_decls
-                 global_decls trait_decls trait_impls name sg )
+         try Some (fid, compute_regions_hierarchy_for_sig span crate name sg)
          with CFailure error ->
            save_error_opt_span __FILE__ __LINE__ error.span
              ("Could not compute the region hierarchies for function '" ^ name

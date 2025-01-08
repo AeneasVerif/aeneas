@@ -16,28 +16,14 @@ module SA = SymbolicAst
 (** The local logger *)
 let log = Logging.interpreter_log
 
-let compute_contexts (m : crate) : decls_ctx =
-  let type_decls_list, _, _, _, _, _ = split_declarations m.declarations in
-  let type_decls = m.type_decls in
-  let fun_decls = m.fun_decls in
-  let global_decls = m.global_decls in
-  let trait_decls = m.trait_decls in
-  let trait_impls = m.trait_impls in
+let compute_contexts (crate : crate) : decls_ctx =
+  let type_decls_list, _, _, _, _, _ = split_declarations crate.declarations in
   let fmt_env : Print.fmt_env =
-    {
-      type_decls;
-      fun_decls;
-      global_decls;
-      trait_decls;
-      trait_impls;
-      regions = [];
-      generics = empty_generic_params;
-      locals = [];
-    }
+    Charon.PrintLlbcAst.Crate.crate_to_fmt_env crate
   in
   (* Split the declaration groups between the declaration kinds (types, functions, etc.) *)
   let type_decls_groups, _, _, _, _, mixed_groups =
-    split_declarations_to_group_maps m.declarations
+    split_declarations_to_group_maps crate.declarations
   in
   (* Check if there are mixed groups: if there are, we report an error
      and ignore those *)
@@ -45,7 +31,7 @@ let compute_contexts (m : crate) : decls_ctx =
      (* We detected mixed groups: print a nice error message *)
      let any_decl_id_to_string (id : any_decl_id) : string =
        let kind = any_decl_id_to_kind_name id in
-       let meta = LlbcAstUtils.crate_get_item_meta m id in
+       let meta = LlbcAstUtils.crate_get_item_meta crate id in
        let s =
          match meta with
          | None -> show_any_decl_id id
@@ -59,7 +45,7 @@ let compute_contexts (m : crate) : decls_ctx =
        let ids = g_declaration_group_to_list g in
        let decls = List.map any_decl_id_to_string ids in
        let local_requires =
-         LlbcAstUtils.find_local_transitive_dep m (AnyDeclIdSet.of_list ids)
+         LlbcAstUtils.find_local_transitive_dep crate (AnyDeclIdSet.of_list ids)
        in
        let local_requires = List.map span_to_string local_requires in
        let local_requires =
@@ -81,20 +67,22 @@ let compute_contexts (m : crate) : decls_ctx =
          type mutually recursive with a function, or a function mutually \
          recursive with a trait implementation):\n\n" ^ msgs));
 
+  let type_decls = crate.type_decls in
   let type_infos =
     TypesAnalysis.analyze_type_declarations type_decls type_decls_list
   in
   let type_ctx = { type_decls_groups; type_decls; type_infos } in
-  let fun_infos = FunsAnalysis.analyze_module m fun_decls !Config.use_state in
+
+  let fun_decls = crate.fun_decls in
+  let fun_infos =
+    FunsAnalysis.analyze_module crate fun_decls !Config.use_state
+  in
   let regions_hierarchies =
-    RegionsHierarchy.compute_regions_hierarchies type_decls fun_decls
-      global_decls trait_decls trait_impls
+    RegionsHierarchy.compute_regions_hierarchies crate
   in
   let fun_ctx = { fun_decls; fun_infos; regions_hierarchies } in
-  let global_ctx = { global_decls } in
-  let trait_decls_ctx = { trait_decls } in
-  let trait_impls_ctx = { trait_impls } in
-  { type_ctx; fun_ctx; global_ctx; trait_decls_ctx; trait_impls_ctx }
+
+  { crate; type_ctx; fun_ctx }
 
 (** Small helper.
 

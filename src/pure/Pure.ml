@@ -55,6 +55,7 @@ type file_name = Meta.file_name [@@deriving show, ord]
 type raw_span = Meta.raw_span [@@deriving show, ord]
 type span = Meta.span [@@deriving show, ord]
 type ref_kind = Types.ref_kind [@@deriving show, ord]
+type 'a de_bruijn_var = 'a Types.de_bruijn_var [@@deriving show, ord]
 
 (** The builtin types for the pure AST.
 
@@ -244,7 +245,8 @@ type ty =
           be able to only give back part of the ADT. We need a way to encode
           such "partial" ADTs.
        *)
-  | TVar of type_var_id
+  | TVar of type_var_id de_bruijn_var
+    (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
   | TLiteral of literal_type
   | TArrow of ty * ty
   | TTraitType of trait_ref * string
@@ -254,6 +256,11 @@ type ty =
 and trait_ref = {
   trait_id : trait_instance_id;
   trait_decl_ref : trait_decl_ref;
+}
+
+and fun_decl_ref = {
+  fun_id : fun_decl_id;
+  fun_generics : generic_args; (* The name: annoying field collisions... *)
 }
 
 and trait_decl_ref = {
@@ -275,7 +282,8 @@ and generic_args = {
 and trait_instance_id =
   | Self
   | TraitImpl of trait_impl_id * generic_args
-  | Clause of trait_clause_id
+  | Clause of trait_clause_id de_bruijn_var
+    (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
   | ParentClause of trait_instance_id * trait_decl_id * trait_clause_id
   | UnknownTrait of string
 [@@deriving
@@ -1269,6 +1277,20 @@ type backend_attributes = {
 }
 [@@deriving show]
 
+(** A value of type `T` bound by generic parameters. Used in any context where
+    we're adding generic parameters that aren't on the top-level item, e.g.
+    trait methods.
+ *)
+type 'a binder = {
+  binder_value : 'a;
+  binder_generics : generic_params;
+  binder_preds : predicates;
+  binder_llbc_generics : Types.generic_params;
+  binder_explicit_info : explicit_info;
+      (** Information about which inputs parameters are explicit/implicit *)
+}
+[@@deriving show, ord]
+
 type fun_decl = {
   def_id : FunDeclId.id;
   item_meta : T.item_meta;
@@ -1331,8 +1353,8 @@ type trait_decl = {
   llbc_parent_clauses : Types.trait_clause list;
   consts : (trait_item_name * ty) list;
   types : trait_item_name list;
-  required_methods : (trait_item_name * fun_decl_id) list;
-  provided_methods : (trait_item_name * fun_decl_id) list;
+  required_methods : (trait_item_name * fun_decl_ref binder) list;
+  provided_methods : (trait_item_name * fun_decl_ref binder) list;
 }
 [@@deriving show]
 
@@ -1356,7 +1378,7 @@ type trait_impl = {
   parent_trait_refs : trait_ref list;
   consts : (trait_item_name * global_decl_ref) list;
   types : (trait_item_name * ty) list;
-  required_methods : (trait_item_name * fun_decl_id) list;
-  provided_methods : (trait_item_name * fun_decl_id) list;
+  required_methods : (trait_item_name * fun_decl_ref binder) list;
+  provided_methods : (trait_item_name * fun_decl_ref binder) list;
 }
 [@@deriving show]

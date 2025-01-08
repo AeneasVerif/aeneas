@@ -45,7 +45,7 @@ You can then install the dependencies with the following command:
 
 ```
 opam install ppx_deriving visitors easy_logging zarith yojson core_unix odoc \
-  ocamlgraph menhir ocamlformat
+  ocamlgraph menhir ocamlformat unionFind
 ```
 
 Moreover, Aeneas uses the [Charon](https://github.com/AeneasVerif/charon) project and library.
@@ -71,6 +71,9 @@ test`. Alternatively, call `REGEN_LLBC=1 make test-...` to regenerate only the n
 ## Documentation
 
 If you run `make`, you will generate a documentation accessible from [`doc.html`](./doc.html).
+
+Additionally, a tutorial for using the Aeneas Lean backend is available [here](./tests/lean/Tutorial/); the original Rust file can be found [here](./tests/src/tutorial/src/lib.rs).
+It requires a working installation of Lean.
 
 ## Usage
 
@@ -122,8 +125,6 @@ support for partial functions and extrinsic proofs of termination (see
 and tactics specialized for monadic programs (see
 `./backends/lean/Base/Progress/Progress.lean` and `./backends/hol4/primitivesLib.sml`).
 
-A (basic) tutorial for the Lean backend is available [here](./tests/lean/BaseTutorial.lean).
-
 ## Quick start for Nix users
 
 Assuming Nix is installed, with a support for Flakes (`*`):
@@ -150,5 +151,4 @@ verification by functional
 translation](https://dl.acm.org/doi/abs/10.1145/3547647)
 ([long version](https://arxiv.org/abs/2206.07185)). We also have a proof that
 the symbolic execution performed by Aeneas during its translation correctly
-implements a borrow checker, and published it in a
-[preprint](https://arxiv.org/abs/2404.02680).
+implements a borrow checker, and published it at ICFP 2024: [Sound Borrow-Checking for Rust via Symbolic Semantics](https://dl.acm.org/doi/10.1145/3674640) ([long version](https://arxiv.org/abs/2404.02680)).

@@ -225,6 +225,28 @@ def betree.Leaf.split
   let n1 := betree.Node.Leaf { id := id1, size := params.split_size }
   Result.ok (st2, (betree.Internal.mk self.id pivot n n1, node_id_cnt2))
 
+/- [betree::betree::{betree::betree::Node}#5::lookup_in_bindings]: loop 0:
+   Source: 'src/betree.rs', lines 650:8-660:5 -/
+divergent def betree.Node.lookup_in_bindings_loop
+  (key : U64) (bindings : betree.List (U64 × U64)) : Result (Option U64) :=
+  match bindings with
+  | betree.List.Cons hd tl =>
+    let (i, i1) := hd
+    if i = key
+    then Result.ok (some i1)
+    else
+      if i > key
+      then Result.ok none
+      else betree.Node.lookup_in_bindings_loop key tl
+  | betree.List.Nil => Result.ok none
+
+/- [betree::betree::{betree::betree::Node}#5::lookup_in_bindings]:
+   Source: 'src/betree.rs', lines 649:4-660:5 -/
+@[reducible]
+def betree.Node.lookup_in_bindings
+  (key : U64) (bindings : betree.List (U64 × U64)) : Result (Option U64) :=
+  betree.Node.lookup_in_bindings_loop key bindings
+
 /- [betree::betree::{betree::betree::Node}#5::lookup_first_message_for_key]: loop 0:
    Source: 'src/betree.rs', lines 796:8-810:5 -/
 divergent def betree.Node.lookup_first_message_for_key_loop
@@ -294,28 +316,6 @@ def betree.Node.apply_upserts
   :=
   betree.Node.apply_upserts_loop msgs prev key
 
-/- [betree::betree::{betree::betree::Node}#5::lookup_in_bindings]: loop 0:
-   Source: 'src/betree.rs', lines 650:8-660:5 -/
-divergent def betree.Node.lookup_in_bindings_loop
-  (key : U64) (bindings : betree.List (U64 × U64)) : Result (Option U64) :=
-  match bindings with
-  | betree.List.Cons hd tl =>
-    let (i, i1) := hd
-    if i = key
-    then Result.ok (some i1)
-    else
-      if i > key
-      then Result.ok none
-      else betree.Node.lookup_in_bindings_loop key tl
-  | betree.List.Nil => Result.ok none
-
-/- [betree::betree::{betree::betree::Node}#5::lookup_in_bindings]:
-   Source: 'src/betree.rs', lines 649:4-660:5 -/
-@[reducible]
-def betree.Node.lookup_in_bindings
-  (key : U64) (bindings : betree.List (U64 × U64)) : Result (Option U64) :=
-  betree.Node.lookup_in_bindings_loop key bindings
-
 /- [betree::betree::{betree::betree::Internal}#4::lookup_in_children]:
    Source: 'src/betree.rs', lines 414:4-420:5 -/
 mutual divergent def betree.Internal.lookup_in_children
@@ -378,7 +378,7 @@ divergent def betree.Node.lookup
 end
 
 /- [betree::betree::{betree::betree::Node}#5::filter_messages_for_key]: loop 0:
-   Source: 'src/betree.rs', lines 684:8-691:9 -/
+   Source: 'src/betree.rs', lines 684:8-692:5 -/
 divergent def betree.Node.filter_messages_for_key_loop
   (key : U64) (msgs : betree.List (U64 × betree.Message)) :
   Result (betree.List (U64 × betree.Message))

@@ -113,8 +113,18 @@ let decl_is_not_last_from_group (kind : decl_kind) : bool =
 
 type type_decl_kind = Enum | Struct | Tuple [@@deriving show]
 
+(** Generics can be bound in two places: each item has its generics, and
+    additionally within a trait decl or impl each method has its own generics.
+    We distinguish these two cases here. In charon, the distinction is made
+    thanks to `de_bruijn_var`.
+    Note that for the generics of a top-level `fun_decl` we always use `Item`;
+    `Method` only refers to the inner binder found in the list of methods in a
+    trait_decl/trait_impl.
+    *)
+type generic_origin = Item | Method
+
 (** We use identifiers to look for name clashes *)
-type id =
+and id =
   | GlobalId of A.GlobalDeclId.id
   | FunId of fun_id
   | TerminationMeasureId of (A.fun_id * LoopId.id option)
@@ -162,12 +172,12 @@ type id =
           must be unique (it is the case in F* ) which is why we register
           them here.
        *)
-  | TypeVarId of TypeVarId.id
-  | ConstGenericVarId of ConstGenericVarId.id
   | VarId of VarId.id
   | TraitDeclId of TraitDeclId.id
   | TraitImplId of TraitImplId.id
-  | LocalTraitClauseId of TraitClauseId.id
+  | TypeVarId of generic_origin * TypeVarId.id
+  | ConstGenericVarId of generic_origin * ConstGenericVarId.id
+  | LocalTraitClauseId of generic_origin * TraitClauseId.id
   | TraitDeclConstructorId of TraitDeclId.id
   | TraitMethodId of TraitDeclId.id * string
   | TraitItemId of TraitDeclId.id * string
@@ -674,14 +684,19 @@ let id_to_string (span : Meta.span option) (id : id) (ctx : extraction_ctx) :
       let field_name = adt_field_to_string span ctx id field_id in
       "type name: " ^ type_name ^ ", field name: " ^ field_name
   | UnknownId -> "keyword"
-  | TypeVarId id -> "type_var_id: " ^ TypeVarId.to_string id
-  | ConstGenericVarId id ->
-      "const_generic_var_id: " ^ ConstGenericVarId.to_string id
   | VarId id -> "var_id: " ^ VarId.to_string id
   | TraitDeclId id -> "trait_decl_id: " ^ TraitDeclId.to_string id
   | TraitImplId id -> "trait_impl_id: " ^ TraitImplId.to_string id
-  | LocalTraitClauseId id ->
-      "local_trait_clause_id: " ^ TraitClauseId.to_string id
+  | TypeVarId (origin, id) ->
+      "type_var_id: " ^ TypeVarId.to_string id ^ " from "
+      ^ show_generic_origin origin
+  | ConstGenericVarId (origin, id) ->
+      "const_generic_var_id: "
+      ^ ConstGenericVarId.to_string id
+      ^ " from " ^ show_generic_origin origin
+  | LocalTraitClauseId (origin, id) ->
+      "local_trait_clause_id: " ^ TraitClauseId.to_string id ^ " from "
+      ^ show_generic_origin origin
   | TraitDeclConstructorId id ->
       "trait_decl_constructor: " ^ trait_decl_id_to_string id
   | TraitParentClauseId (id, clause_id) ->
@@ -771,17 +786,32 @@ let ctx_get_var (span : Meta.span) (id : VarId.id) (ctx : extraction_ctx) :
     string =
   ctx_get (Some span) (VarId id) ctx
 
-let ctx_get_type_var (span : Meta.span) (id : TypeVarId.id)
-    (ctx : extraction_ctx) : string =
-  ctx_get (Some span) (TypeVarId id) ctx
+(** This warrants explanations. Charon supports several levels of nested
+  binders; however there are currently only two cases where we bind
+  non-lifetime variables: at the top-level of each item, and for each method
+  inside a trait_decl/trait_impl. Moreover, we use `Free` vars to identify
+  item-bound vars. This means that we can identify which binder a variable
+  comes from without rigorously tracking binder levels, which is what this
+  function does.
+  Note that the `de_bruijn_id`s are wrong anyway because we kept charon's
+  binding levels but forgot all the region binders.
+  *)
+let origin_from_de_bruijn_var (var : 'a de_bruijn_var) : generic_origin * 'a =
+  match var with
+  | Bound (_, id) -> (Method, id)
+  | Free id -> (Item, id)
 
-let ctx_get_const_generic_var (span : Meta.span) (id : ConstGenericVarId.id)
-    (ctx : extraction_ctx) : string =
-  ctx_get (Some span) (ConstGenericVarId id) ctx
+let ctx_get_type_var (span : Meta.span) (origin : generic_origin)
+    (id : TypeVarId.id) (ctx : extraction_ctx) : string =
+  ctx_get (Some span) (TypeVarId (origin, id)) ctx
 
-let ctx_get_local_trait_clause (span : Meta.span) (id : TraitClauseId.id)
-    (ctx : extraction_ctx) : string =
-  ctx_get (Some span) (LocalTraitClauseId id) ctx
+let ctx_get_const_generic_var (span : Meta.span) (origin : generic_origin)
+    (id : ConstGenericVarId.id) (ctx : extraction_ctx) : string =
+  ctx_get (Some span) (ConstGenericVarId (origin, id)) ctx
+
+let ctx_get_local_trait_clause (span : Meta.span) (origin : generic_origin)
+    (id : TraitClauseId.id) (ctx : extraction_ctx) : string =
+  ctx_get (Some span) (LocalTraitClauseId (origin, id)) ctx
 
 let ctx_get_field (span : Meta.span) (type_id : type_id) (field_id : FieldId.id)
     (ctx : extraction_ctx) : string =
@@ -1956,27 +1986,29 @@ let basename_to_unique (ctx : extraction_ctx) (name : string) =
   basename_to_unique_aux collision name_append_index name
 
 (** Generate a unique type variable name and add it to the context *)
-let ctx_add_type_var (span : Meta.span) (basename : string) (id : TypeVarId.id)
-    (ctx : extraction_ctx) : extraction_ctx * string =
+let ctx_add_type_var (span : Meta.span) (origin : generic_origin)
+    (basename : string) (id : TypeVarId.id) (ctx : extraction_ctx) :
+    extraction_ctx * string =
   let name = ctx_compute_type_var_basename ctx basename in
   let name = basename_to_unique ctx name in
-  let ctx = ctx_add span (TypeVarId id) name ctx in
+  let ctx = ctx_add span (TypeVarId (origin, id)) name ctx in
   (ctx, name)
 
 (** Generate a unique const generic variable name and add it to the context *)
-let ctx_add_const_generic_var (span : Meta.span) (basename : string)
-    (id : ConstGenericVarId.id) (ctx : extraction_ctx) : extraction_ctx * string
-    =
+let ctx_add_const_generic_var (span : Meta.span) (origin : generic_origin)
+    (basename : string) (id : ConstGenericVarId.id) (ctx : extraction_ctx) :
+    extraction_ctx * string =
   let name = ctx_compute_const_generic_var_basename ctx basename in
   let name = basename_to_unique ctx name in
-  let ctx = ctx_add span (ConstGenericVarId id) name ctx in
+  let ctx = ctx_add span (ConstGenericVarId (origin, id)) name ctx in
   (ctx, name)
 
 (** See {!ctx_add_type_var} *)
-let ctx_add_type_vars (span : Meta.span) (vars : (string * TypeVarId.id) list)
-    (ctx : extraction_ctx) : extraction_ctx * string list =
+let ctx_add_type_vars (span : Meta.span) (origin : generic_origin)
+    (vars : (string * TypeVarId.id) list) (ctx : extraction_ctx) :
+    extraction_ctx * string list =
   List.fold_left_map
-    (fun ctx (name, id) -> ctx_add_type_var span name id ctx)
+    (fun ctx (name, id) -> ctx_add_type_var span origin name id ctx)
     ctx vars
 
 (** Generate a unique variable name and add it to the context *)
@@ -1995,10 +2027,11 @@ let ctx_add_trait_self_clause (span : Meta.span) (ctx : extraction_ctx) :
   (ctx, name)
 
 (** Generate a unique trait clause name and add it to the context *)
-let ctx_add_local_trait_clause (span : Meta.span) (basename : string)
-    (id : TraitClauseId.id) (ctx : extraction_ctx) : extraction_ctx * string =
+let ctx_add_local_trait_clause (span : Meta.span) (origin : generic_origin)
+    (basename : string) (id : TraitClauseId.id) (ctx : extraction_ctx) :
+    extraction_ctx * string =
   let name = basename_to_unique ctx basename in
-  let ctx = ctx_add span (LocalTraitClauseId id) name ctx in
+  let ctx = ctx_add span (LocalTraitClauseId (origin, id)) name ctx in
   (ctx, name)
 
 (** See {!ctx_add_var} *)
@@ -2010,18 +2043,20 @@ let ctx_add_vars (span : Meta.span) (vars : var list) (ctx : extraction_ctx) :
       ctx_add_var span name v.id ctx)
     ctx vars
 
-let ctx_add_type_params (span : Meta.span) (vars : type_var list)
-    (ctx : extraction_ctx) : extraction_ctx * string list =
+let ctx_add_type_params (span : Meta.span) (origin : generic_origin)
+    (vars : type_var list) (ctx : extraction_ctx) : extraction_ctx * string list
+    =
   List.fold_left_map
-    (fun ctx (var : type_var) -> ctx_add_type_var span var.name var.index ctx)
+    (fun ctx (var : type_var) ->
+      ctx_add_type_var span origin var.name var.index ctx)
     ctx vars
 
-let ctx_add_const_generic_params (span : Meta.span)
+let ctx_add_const_generic_params (span : Meta.span) (origin : generic_origin)
     (vars : const_generic_var list) (ctx : extraction_ctx) :
     extraction_ctx * string list =
   List.fold_left_map
     (fun ctx (var : const_generic_var) ->
-      ctx_add_const_generic_var span var.name var.index ctx)
+      ctx_add_const_generic_var span origin var.name var.index ctx)
     ctx vars
 
 (** Returns the lists of names for:
@@ -2034,16 +2069,16 @@ let ctx_add_const_generic_params (span : Meta.span)
     for additional information.
   *)
 let ctx_add_local_trait_clauses (span : Meta.span)
-    (current_def_name : Types.name) (llbc_generics : Types.generic_params)
-    (clauses : trait_clause list) (ctx : extraction_ctx) :
-    extraction_ctx * string list =
+    (current_def_name : Types.name) (origin : generic_origin)
+    (llbc_generics : Types.generic_params) (clauses : trait_clause list)
+    (ctx : extraction_ctx) : extraction_ctx * string list =
   List.fold_left_map
     (fun ctx (c : trait_clause) ->
       let basename =
         ctx_compute_trait_clause_basename ctx current_def_name llbc_generics
           c.clause_id
       in
-      ctx_add_local_trait_clause span basename c.clause_id ctx)
+      ctx_add_local_trait_clause span origin basename c.clause_id ctx)
     ctx clauses
 
 (** Returns the lists of names for:
@@ -2056,14 +2091,14 @@ let ctx_add_local_trait_clauses (span : Meta.span)
     for additional information.
   *)
 let ctx_add_generic_params (span : Meta.span) (current_def_name : Types.name)
-    (llbc_generics : Types.generic_params) (generics : generic_params)
-    (ctx : extraction_ctx) :
+    (origin : generic_origin) (llbc_generics : Types.generic_params)
+    (generics : generic_params) (ctx : extraction_ctx) :
     extraction_ctx * string list * string list * string list =
   let { types; const_generics; trait_clauses } = generics in
-  let ctx, tys = ctx_add_type_params span types ctx in
-  let ctx, cgs = ctx_add_const_generic_params span const_generics ctx in
+  let ctx, tys = ctx_add_type_params span origin types ctx in
+  let ctx, cgs = ctx_add_const_generic_params span origin const_generics ctx in
   let ctx, tcs =
-    ctx_add_local_trait_clauses span current_def_name llbc_generics
+    ctx_add_local_trait_clauses span current_def_name origin llbc_generics
       trait_clauses ctx
   in
   (ctx, tys, cgs, tcs)
@@ -2153,11 +2188,11 @@ let ctx_compute_fun_name (def : fun_decl) (ctx : extraction_ctx) : string =
                 List.find_opt (fun (name, _) -> name = item_name) methods
               with
               | None -> def.item_meta
-              | Some (_, id) ->
+              | Some (_, bound_fn) ->
                   Option.value
                     (Option.map
                        (fun (def : A.fun_decl) -> def.item_meta)
-                       (FunDeclId.Map.find_opt id
+                       (FunDeclId.Map.find_opt bound_fn.binder_value.fun_id
                           ctx.trans_ctx.fun_ctx.fun_decls))
                     ~default:def.item_meta))
     | _ -> def.item_meta

@@ -59,13 +59,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
     let is_rec = ref false in
     let group_has_builtin_info = ref false in
     let name_matcher_ctx : Charon.NameMatcher.ctx =
-      {
-        type_decls = m.type_decls;
-        global_decls = m.global_decls;
-        fun_decls = m.fun_decls;
-        trait_decls = m.trait_decls;
-        trait_impls = m.trait_impls;
-      }
+      Charon.NameMatcher.ctx_from_crate m
     in
 
     (* We have some specialized knowledge of some library functions; we don't

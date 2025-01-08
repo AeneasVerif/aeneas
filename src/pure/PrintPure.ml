@@ -10,12 +10,9 @@ open Errors
     at every stage we have the original LLBC definitions at hand.
  *)
 type fmt_env = {
-  type_decls : Types.type_decl TypeDeclId.Map.t;
-  fun_decls : LlbcAst.fun_decl FunDeclId.Map.t;
-  global_decls : LlbcAst.global_decl GlobalDeclId.Map.t;
-  trait_decls : LlbcAst.trait_decl TraitDeclId.Map.t;
-  trait_impls : LlbcAst.trait_impl TraitImplId.Map.t;
-  generics : generic_params;
+  crate : LlbcAst.crate;
+  (* We need a list of params because we have nested binding levels for trait methods. *)
+  generics : generic_params list;
   vars : string VarId.Map.t;
 }
 
@@ -30,23 +27,46 @@ let fmt_env_push_locals (env : fmt_env) (vars : var list) : fmt_env =
 
 let var_id_to_pretty_string (id : var_id) : string = "^" ^ VarId.to_string id
 
-let type_var_id_to_string (env : fmt_env) (id : type_var_id) : string =
+let lookup_var_in_env (env : fmt_env)
+    (find_in : generic_params -> 'id -> 'b option) (var : 'id de_bruijn_var) :
+    'b option =
+  if List.length env.generics == 0 then None
+  else
+    let dbid, varid =
+      match var with
+      | Bound (dbid, varid) -> (dbid, varid)
+      | Free varid ->
+          let len = List.length env.generics in
+          let dbid = len - 1 in
+          (dbid, varid)
+    in
+    match List.nth_opt env.generics dbid with
+    | None -> None
+    | Some generics -> begin
+        match find_in generics varid with
+        | None -> None
+        | Some r -> Some r
+      end
+
+let type_db_var_to_string (env : fmt_env) (var : type_var_id de_bruijn_var) :
+    string =
   (* Note that the types are not necessarily ordered following their indices *)
-  match
-    List.find_opt (fun (x : type_var) -> x.index = id) env.generics.types
-  with
-  | None -> Print.Types.type_var_id_to_pretty_string id
+  let find (generics : generic_params) varid =
+    List.find_opt (fun (v : type_var) -> v.index = varid) generics.types
+  in
+  match lookup_var_in_env env find var with
+  | None -> Print.Types.type_db_var_to_pretty_string var
   | Some x -> Print.Types.type_var_to_string x
 
-let const_generic_var_id_to_string (env : fmt_env) (id : const_generic_var_id) :
-    string =
-  (* Note that the regions are not necessarily ordered following their indices *)
-  match
+let const_generic_db_var_to_string (env : fmt_env)
+    (var : const_generic_var_id de_bruijn_var) : string =
+  let find (generics : generic_params) varid =
     List.find_opt
-      (fun (x : const_generic_var) -> x.index = id)
-      env.generics.const_generics
-  with
-  | None -> Print.Types.const_generic_var_id_to_pretty_string id
+      (fun (v : const_generic_var) -> v.index = varid)
+      generics.const_generics
+  in
+  match lookup_var_in_env env find var with
+  | None -> Print.Types.const_generic_db_var_to_pretty_string var
   | Some x -> Print.Types.const_generic_var_to_string x
 
 let var_id_to_string (env : fmt_env) (id : VarId.id) : string =
@@ -57,25 +77,12 @@ let var_id_to_string (env : fmt_env) (id : VarId.id) : string =
 let trait_clause_id_to_string = Print.Types.trait_clause_id_to_string
 
 let fmt_env_to_llbc_fmt_env (env : fmt_env) : Print.fmt_env =
-  {
-    type_decls = env.type_decls;
-    fun_decls = env.fun_decls;
-    global_decls = env.global_decls;
-    trait_decls = env.trait_decls;
-    trait_impls = env.trait_impls;
-    regions = [];
-    generics = TypesUtils.empty_generic_params;
-    locals = [];
-  }
+  Charon.PrintLlbcAst.Crate.crate_to_fmt_env env.crate
 
 let decls_ctx_to_fmt_env (ctx : Contexts.decls_ctx) : fmt_env =
   {
-    type_decls = ctx.type_ctx.type_decls;
-    fun_decls = ctx.fun_ctx.fun_decls;
-    global_decls = ctx.global_ctx.global_decls;
-    trait_decls = ctx.trait_decls_ctx.trait_decls;
-    trait_impls = ctx.trait_impls_ctx.trait_impls;
-    generics = empty_generic_params;
+    crate = ctx.crate;
+    generics = [ empty_generic_params ];
     vars = VarId.Map.empty;
   }
 
@@ -135,12 +142,10 @@ let type_id_to_string (env : fmt_env) (id : type_id) : string =
   | TTuple -> ""
   | TBuiltin aty -> builtin_ty_to_string aty
 
-(* TODO: duplicates  Charon.PrintTypes.const_generic_to_string *)
 let const_generic_to_string (env : fmt_env) (cg : const_generic) : string =
   match cg with
   | CgGlobal id -> global_decl_id_to_string env id
-  | CgVar var ->
-      const_generic_var_id_to_string env (Substitute.expect_free_var None var)
+  | CgVar var -> const_generic_db_var_to_string env var
   | CgValue lit -> literal_to_string lit
 
 let rec ty_to_string (env : fmt_env) (inside : bool) (ty : ty) : string =
@@ -157,7 +162,7 @@ let rec ty_to_string (env : fmt_env) (inside : bool) (ty : ty) : string =
           in
           let ty_s = type_id_to_string env id ^ generics_s in
           if generics <> [] && inside then "(" ^ ty_s ^ ")" else ty_s)
-  | TVar tv -> type_var_id_to_string env tv
+  | TVar tv -> type_db_var_to_string env tv
   | TLiteral lty -> literal_type_to_string lty
   | TArrow (arg_ty, ret_ty) ->
       let ty =
@@ -200,7 +205,7 @@ and trait_instance_id_to_string (env : fmt_env) (id : trait_instance_id) :
       let generics = generic_args_to_string env generics in
       let impl_id = trait_impl_id_to_string env impl_id in
       impl_id ^ generics
-  | Clause id -> trait_clause_id_to_string env id
+  | Clause var -> Print.Types.trait_db_var_to_pretty_string var
   | ParentClause (inst_id, _decl_id, clause_id) ->
       let inst_id = trait_instance_id_to_string env inst_id in
       let clause_id = trait_clause_id_to_string env clause_id in
@@ -237,7 +242,7 @@ let variant_to_string env (v : variant) : string =
   ^ ")"
 
 let type_decl_to_string (env : fmt_env) (def : type_decl) : string =
-  let env = { env with generics = def.generics } in
+  let env = { env with generics = [ def.generics ] } in
   let name = def.name in
   let params =
     if def.generics = empty_generic_params then ""
@@ -540,16 +545,7 @@ let decomposed_fun_sig_to_string (env : fmt_env) (sg : decomposed_fun_sig) :
   let { generics; llbc_generics; preds; fun_ty } = sg in
   let llbc_generics =
     let env : _ Charon.PrintUtils.fmt_env =
-      {
-        type_decls = env.type_decls;
-        fun_decls = env.fun_decls;
-        global_decls = env.global_decls;
-        trait_decls = env.trait_decls;
-        trait_impls = env.trait_impls;
-        regions = [];
-        generics = Charon.TypesUtils.empty_generic_params;
-        locals = [];
-      }
+      { crate = env.crate; generics = []; locals = [] }
     in
     let l0, l1 = Print.generic_params_to_strings env llbc_generics in
     "[" ^ String.concat "," (l0 @ l1) ^ "]"
@@ -563,7 +559,7 @@ let decomposed_fun_sig_to_string (env : fmt_env) (sg : decomposed_fun_sig) :
   ^ "\n}"
 
 let fun_sig_to_string (env : fmt_env) (sg : fun_sig) : string =
-  let env = { env with generics = sg.generics } in
+  let env = { env with generics = [ sg.generics ] } in
   let generics = generic_params_to_strings env sg.generics in
   let inputs = List.map (ty_to_string env false) sg.inputs in
   let output = ty_to_string env false sg.output in
@@ -641,7 +637,7 @@ let rec texpression_to_string ?(span : Meta.span option = None) (env : fmt_env)
     string =
   match e.e with
   | Var var_id -> var_id_to_string env var_id
-  | CVar cg_id -> const_generic_var_id_to_string env cg_id
+  | CVar cg_id -> const_generic_db_var_to_string env (Free cg_id)
   | Const cv -> literal_to_string cv
   | App _ ->
       (* Recursively destruct the app, to have a pair (app, arguments list) *)
@@ -873,7 +869,7 @@ and espan_to_string ?(span : Meta.span option = None) (env : fmt_env)
   "@span[" ^ espan ^ "]"
 
 let fun_decl_to_string (env : fmt_env) (def : fun_decl) : string =
-  let env = { env with generics = def.signature.generics } in
+  let env = { env with generics = [ def.signature.generics ] } in
   let name = def.name ^ fun_suffix def.loop_id in
   let signature = fun_sig_to_string env def.signature in
   match def.body with

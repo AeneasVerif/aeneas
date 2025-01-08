@@ -284,10 +284,8 @@ let get_builtin_function_return_type (span : Meta.span) (ctx : eval_ctx)
   (* Retrieve the function's signature *)
   let sg = Builtin.get_builtin_fun_sig fid in
   (* Instantiate the return type  *)
-  (* There shouldn't be any reference to Self *)
-  let tr_self : trait_instance_id = UnknownTrait __FUNCTION__ in
   let generics = Subst.generic_args_erase_regions generics in
-  let subst = Subst.make_subst_from_generics sg.generics generics tr_self in
+  let subst = Subst.make_subst_from_generics sg.generics generics in
   let ty = Subst.erase_regions_substitute_types subst sg.output in
   AssociatedTypes.ctx_normalize_erase_ty span ctx ty
 
@@ -692,27 +690,25 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
              depending on whethere we call a top-level trait method impl or the
              method from a local clause *)
           match trait_ref.trait_id with
-          | TraitImpl (impl_id, generics) -> (
+          | TraitImpl (impl_id, impl_generics) -> (
               (* Lookup the trait impl *)
               let trait_impl = ctx_lookup_trait_impl ctx impl_id in
               log#ltrace
                 (lazy ("trait impl: " ^ trait_impl_to_string ctx trait_impl));
               (* First look in the required methods *)
-              let method_id =
-                List.find_opt
-                  (fun (s, _) -> s = method_name)
-                  trait_impl.required_methods
+              let fn_ref =
+                Substitute.lookup_and_subst_trait_impl_required_method
+                  trait_impl method_name impl_generics func.generics
               in
-              match method_id with
-              | Some (_, id) ->
+              match fn_ref with
+              | Some fn_ref ->
+                  let method_id = fn_ref.fun_id in
+                  let generics = fn_ref.fun_generics in
                   (* This is a required method *)
-                  let method_def = ctx_lookup_fun_decl ctx id in
-                  (* We have to concatenate the generics for the impl
-                     and the generics for the method *)
-                  let generics = merge_generic_args generics func.generics in
+                  let method_def = ctx_lookup_fun_decl ctx method_id in
                   (* Instantiate *)
                   let tr_self = trait_ref.trait_id in
-                  let fid : fun_id = FRegular id in
+                  let fid : fun_id = FRegular method_id in
                   let regions_hierarchy =
                     LlbcAstUtils.FunIdMap.find fid
                       ctx.fun_ctx.regions_hierarchies
@@ -728,6 +724,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                      we also need to update the generics.
                   *)
                   let func = FunId fid in
+                  (* TODO: the `trait_method_generics` look fishy *)
                   (func, generics, Some (generics, tr_self), method_def, inst_sg)
               | None ->
                   (* If not found, lookup the methods provided by the trait *declaration*
@@ -738,34 +735,15 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                   let trait_decl =
                     ctx_lookup_trait_decl ctx trait_decl_ref.trait_decl_id
                   in
-                  let _, method_id =
-                    List.find
-                      (fun (s, _) -> s = method_name)
-                      trait_decl.provided_methods
+                  let fn_ref =
+                    Option.get
+                      (Substitute.lookup_and_subst_trait_decl_provided_method
+                         trait_decl method_name trait_ref func.generics)
                   in
+                  let method_id = fn_ref.fun_id in
                   let method_def = ctx_lookup_fun_decl ctx method_id in
-                  (* For the instantiation we have to do something peculiar
-                     because the method was defined for the trait declaration.
-                     We have to group:
-                     - the parameters given to the trait decl reference
-                     - the parameters given to the method itself
-                     For instance:
-                     {[
-                       trait Foo<T> {
-                         fn f<U>(...) { ... }
-                       }
-
-                       fn g<G>(x : G) where Clause0: Foo<G, bool>
-                       {
-                         x.f::<u32>(...) // The arguments to f are: <G, bool, u32>
-                       }
-                     ]}
-                  *)
-                  let all_generics =
-                    TypesUtils.merge_generic_args trait_decl_ref.decl_generics
-                      func.generics
-                  in
-                  log#ltrace
+                  let all_generics = fn_ref.fun_generics in
+                  log#ldebug
                     (lazy
                       ("provided method call:" ^ "\n- method name: "
                      ^ method_name ^ "\n- all_generics:\n"
@@ -790,22 +768,19 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                 ctx_lookup_trait_decl ctx trait_decl_ref.trait_decl_id
               in
               (* Lookup the method decl in the required *and* the provided methods *)
-              let _, method_id =
-                List.find
-                  (fun (s, _) -> s = method_name)
-                  (List.append trait_decl.required_methods
-                     trait_decl.provided_methods)
+              let fn_ref =
+                Option.get
+                  (Substitute.lookup_and_subst_trait_decl_method trait_decl
+                     method_name trait_ref func.generics)
               in
+              let method_id = fn_ref.fun_id in
+              let generics = fn_ref.fun_generics in
               let method_def = ctx_lookup_fun_decl ctx method_id in
               log#ltrace
                 (lazy ("method:\n" ^ fun_decl_to_string ctx method_def));
               (* Instantiate *)
               (* When instantiating, we need to group the generics for the
                  trait ref and the generics for the method *)
-              let generics =
-                TypesUtils.merge_generic_args trait_decl_ref.decl_generics
-                  func.generics
-              in
               let regions_hierarchy =
                 LlbcAstUtils.FunIdMap.find (FRegular method_id)
                   ctx.fun_ctx.regions_hierarchies
@@ -829,10 +804,8 @@ let eval_global_as_fresh_symbolic_value (span : Meta.span)
   cassert __FILE__ __LINE__ (ty_no_regions global.ty) span
     "Const globals should not contain regions";
   (* Instantiate the type  *)
-  (* There shouldn't be any reference to Self *)
-  let tr_self : trait_instance_id = UnknownTrait __FUNCTION__ in
   let generics = Subst.generic_args_erase_regions generics in
-  let subst = Subst.make_subst_from_generics global.generics generics tr_self in
+  let subst = Subst.make_subst_from_generics global.generics generics in
   let ty = Subst.erase_regions_substitute_types subst global.ty in
   mk_fresh_symbolic_value span ty
 
@@ -1265,10 +1238,8 @@ and eval_transparent_function_call_concrete (config : config) (span : Meta.span)
       (* TODO: we need to normalize the types if we want to correctly support traits *)
       cassert __FILE__ __LINE__ (generics.trait_refs = []) body.span
         "Traits are not supported yet in concrete mode";
-      (* There shouldn't be any reference to Self *)
-      let tr_self = UnknownTrait __FUNCTION__ in
       let subst =
-        Subst.make_subst_from_generics def.signature.generics generics tr_self
+        Subst.make_subst_from_generics def.signature.generics generics
       in
       let locals, body_st = Subst.fun_body_substitute_in_body subst body in
 
@@ -1542,9 +1513,7 @@ and eval_builtin_function_call_symbolic (config : config) (span : Meta.span)
        we have to recompute the regions hierarchy. *)
     let fun_name = Print.Expressions.builtin_fun_id_to_string fid in
     let inst_sig =
-      compute_regions_hierarchy_for_fun_call (Some span) ctx.type_ctx.type_decls
-        ctx.fun_ctx.fun_decls ctx.global_ctx.global_decls
-        ctx.trait_decls_ctx.trait_decls ctx.trait_impls_ctx.trait_impls fun_name
+      compute_regions_hierarchy_for_fun_call (Some span) ctx.crate fun_name
         ctx.type_vars ctx.const_generic_vars func.generics sg
     in
     log#ltrace

@@ -59,33 +59,15 @@ Usage: %s [OPTIONS] FILE
 
 let matches_name (c : crate) (name : Types.name)
     (m : 'a ExtractName.NameMatcherMap.t) : bool =
-  let open Charon.NameMatcher in
+  let mctx = Charon.NameMatcher.ctx_from_crate c in
   let open ExtractBuiltin in
-  let mctx : ctx =
-    {
-      type_decls = c.type_decls;
-      global_decls = c.global_decls;
-      fun_decls = c.fun_decls;
-      trait_decls = c.trait_decls;
-      trait_impls = c.trait_impls;
-    }
-  in
   NameMatcherMap.mem mctx name m
 
 let matches_name_with_generics (c : crate) (name : Types.name)
     (generics : Types.generic_args) (m : 'a ExtractName.NameMatcherMap.t) : bool
     =
-  let open Charon.NameMatcher in
+  let mctx = Charon.NameMatcher.ctx_from_crate c in
   let open ExtractBuiltin in
-  let mctx : ctx =
-    {
-      type_decls = c.type_decls;
-      global_decls = c.global_decls;
-      fun_decls = c.fun_decls;
-      trait_decls = c.trait_decls;
-      trait_impls = c.trait_impls;
-    }
-  in
   Option.is_some (NameMatcherMap.find_with_generics_opt mctx name generics m)
 
 let activated_loggers : (EL.level * string) list ref = ref []

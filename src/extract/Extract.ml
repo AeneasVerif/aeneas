@@ -357,7 +357,7 @@ let rec extract_texpression (span : Meta.span) (ctx : extraction_ctx)
       let var_name = ctx_get_var span var_id ctx in
       F.pp_print_string fmt var_name
   | CVar var_id ->
-      let var_name = ctx_get_const_generic_var span var_id ctx in
+      let var_name = ctx_get_const_generic_var span Item var_id ctx in
       F.pp_print_string fmt var_name
   | Const cv -> extract_literal span fmt is_pattern inside cv
   | App _ ->
@@ -1314,7 +1314,7 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
   (* Add the type parameters - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params def.item_meta.span def.item_meta.name
+    ctx_add_generic_params def.item_meta.span def.item_meta.name Item
       def.signature.llbc_generics def.signature.generics ctx
   in
   (* Print the generics *)
@@ -1323,8 +1323,8 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
   let explicit = def.signature.explicit_info in
   (let space = Some space in
    extract_generic_params def.item_meta.span ctx fmt TypeDeclId.Set.empty ~space
-     ~trait_decl def.signature.generics (Some explicit) type_params cg_params
-     trait_clauses);
+     ~trait_decl Item def.signature.generics (Some explicit) type_params
+     cg_params trait_clauses);
   (* Close the box for the generics *)
   F.pp_close_box fmt ();
   (* The input parameters - note that doing this adds bindings to the context *)
@@ -1363,22 +1363,16 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
 
     This is used for opaque function declarations, in particular.
  *)
-let extract_fun_input_parameters_types (ctx : extraction_ctx)
-    (fmt : F.formatter) (def : fun_decl) : unit =
+let extract_fun_input_parameters_types (span : span) (ctx : extraction_ctx)
+    (fmt : F.formatter) (inputs : ty list) : unit =
   let extract_param (ty : ty) : unit =
     let inside = false in
-    extract_ty def.item_meta.span ctx fmt TypeDeclId.Set.empty inside ty;
+    extract_ty span ctx fmt TypeDeclId.Set.empty inside ty;
     F.pp_print_space fmt ();
     extract_arrow fmt ();
     F.pp_print_space fmt ()
   in
-  List.iter extract_param def.signature.inputs
-
-let extract_fun_inputs_output_parameters_types (ctx : extraction_ctx)
-    (fmt : F.formatter) (def : fun_decl) : unit =
-  extract_fun_input_parameters_types ctx fmt def;
-  extract_ty def.item_meta.span ctx fmt TypeDeclId.Set.empty false
-    def.signature.output
+  List.iter extract_param inputs
 
 let assert_backend_supports_decreases_clauses (span : Meta.span) =
   match backend () with
@@ -1686,7 +1680,9 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     (* For opaque definitions, as we don't have named parameters under the hand,
      * we don't print parameters in the form [(x : a) (y : b) ...] above,
      * but wait until here to print the types: [a -> b -> ...]. *)
-    if is_opaque then extract_fun_input_parameters_types ctx fmt def;
+    if is_opaque then
+      extract_fun_input_parameters_types def.item_meta.span ctx fmt
+        def.signature.inputs;
     (* [Tot] *)
     if has_decreases_clause then (
       assert_backend_supports_decreases_clauses def.item_meta.span;
@@ -1891,7 +1887,7 @@ let extract_fun_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add the type/const gen parameters - note that we need those bindings
      only for the generation of the type (they are not top-level) *)
   let ctx, _, _, _ =
-    ctx_add_generic_params def.item_meta.span def.item_meta.name
+    ctx_add_generic_params def.item_meta.span def.item_meta.name Item
       def.signature.llbc_generics def.signature.generics ctx
   in
   (* Add breaks to insert new lines between definitions *)
@@ -1907,7 +1903,8 @@ let extract_fun_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_open_hovbox fmt 0;
   F.pp_print_string fmt "“:";
   (* Generate the type *)
-  extract_fun_input_parameters_types ctx fmt def;
+  extract_fun_input_parameters_types def.item_meta.span ctx fmt
+    def.signature.inputs;
   extract_ty def.item_meta.span ctx fmt TypeDeclId.Set.empty false
     def.signature.output;
   (* Close the box for the type *)
@@ -1984,7 +1981,7 @@ let extract_global_decl_body_gen (span : Meta.span) (ctx : extraction_ctx)
   (* Extract the generic parameters *)
   let space = ref true in
   extract_generic_params span ctx fmt TypeDeclId.Set.empty ~space:(Some space)
-    generics (Some explicit) type_params cg_params trait_clauses;
+    Item generics (Some explicit) type_params cg_params trait_clauses;
   if not !space then F.pp_print_space fmt ();
 
   (* Open ": TYPE =" box (depth=2) *)
@@ -2121,7 +2118,7 @@ let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
   in
   (* Add the type parameters *)
   let ctx, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params span global.item_meta.name global.llbc_generics
+    ctx_add_generic_params span global.item_meta.name Item global.llbc_generics
       global.generics ctx
   in
   match body.body with
@@ -2361,7 +2358,10 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
           in
           (item_name, name)
         in
-        List.map (fun (name, id) -> compute_item_name name id) required_methods
+        List.map
+          (fun (name, bound_fn) ->
+            compute_item_name name bound_fn.binder_value.fun_id)
+          required_methods
     | Some info ->
         (* This is a builtin *)
         let funs_map = StringMap.of_list info.methods in
@@ -2535,58 +2535,57 @@ let explicit_info_drop_prefix (g1 : generic_params) (g2 : explicit_info) :
  *)
 let extract_trait_decl_method_items_aux (ctx : extraction_ctx)
     (fmt : F.formatter) (decl : trait_decl) (item_name : string)
-    (id : fun_decl_id) : unit =
+    (fn : fun_decl_ref binder) : unit =
   (* Lookup the definition *)
+  let fun_decl_id = fn.binder_value.fun_id in
   let trans =
     silent_unwrap_opt_span __FILE__ __LINE__ None
-      (A.FunDeclId.Map.find_opt id ctx.trans_funs)
+      (A.FunDeclId.Map.find_opt fun_decl_id ctx.trans_funs)
   in
+  let span = trans.f.item_meta.span in
   (* Extract the items *)
-  let f = trans.f in
-  let fun_name =
-    ctx_get_trait_method decl.item_meta.span decl.def_id item_name ctx
-  in
+  let fun_name = ctx_get_trait_method span decl.def_id item_name ctx in
   let ty () =
-    (* Extract the generics *)
-    (* We need to add the generics specific to the method, by removing those
-       which actually apply to the trait decl *)
-    let generics, explicit_info =
-      let drop_trait_clauses = false in
-      ( generic_params_drop_prefix ~drop_trait_clauses decl.generics
-          f.signature.generics,
-        explicit_info_drop_prefix decl.generics f.signature.explicit_info )
-    in
-    (* Note that we do not filter the LLBC generic parameters.
-       This is ok because:
-       - we only use them to find meaningful names for the trait clauses
-       - we only generate trait clauses for the clauses we find in the
-         pure generics *)
+    let method_llbc_generics = fn.binder_llbc_generics in
+    let method_generics = fn.binder_generics in
+    let method_explicit_info = fn.binder_explicit_info in
     let ctx, type_params, cg_params, trait_clauses =
-      ctx_add_generic_params decl.item_meta.span f.item_meta.name
-        f.signature.llbc_generics generics ctx
+      ctx_add_generic_params span trans.f.item_meta.name Method
+        method_llbc_generics method_generics ctx
     in
     let backend_uses_forall =
       match backend () with
       | Coq | Lean -> true
       | FStar | HOL4 -> false
     in
-    let generics_not_empty = generics <> empty_generic_params in
+    let generics_not_empty = method_generics <> empty_generic_params in
     let use_forall = generics_not_empty && backend_uses_forall in
     let use_arrows = generics_not_empty && not backend_uses_forall in
     let use_forall_use_sep = false in
-    extract_generic_params decl.item_meta.span ctx fmt TypeDeclId.Set.empty
-      ~use_forall ~use_forall_use_sep ~use_arrows generics (Some explicit_info)
-      type_params cg_params trait_clauses;
+    extract_generic_params span ctx fmt TypeDeclId.Set.empty ~use_forall
+      ~use_forall_use_sep ~use_arrows Method method_generics
+      (Some method_explicit_info) type_params cg_params trait_clauses;
     if use_forall then F.pp_print_string fmt ",";
+
     (* Extract the inputs and output *)
     F.pp_print_space fmt ();
-    extract_fun_inputs_output_parameters_types ctx fmt f
+    (* We substitute the function item generics in temrs of the trait + method
+       generics. *)
+    let signature = trans.f.signature in
+    let subst =
+      make_subst_from_generics signature.generics fn.binder_value.fun_generics
+    in
+    let ({ inputs; output; _ } : fun_sig) = signature in
+    let inputs = List.map (ty_substitute subst) inputs in
+    let output = ty_substitute subst output in
+    extract_fun_input_parameters_types span ctx fmt inputs;
+    extract_ty span ctx fmt TypeDeclId.Set.empty false output
   in
   extract_trait_decl_item ctx fmt fun_name ty
 
 let extract_trait_decl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
-    (decl : trait_decl) (item_name : string) (id : fun_decl_id) : unit =
-  try extract_trait_decl_method_items_aux ctx fmt decl item_name id
+    (decl : trait_decl) (item_name : string) (fn : fun_decl_ref binder) : unit =
+  try extract_trait_decl_method_items_aux ctx fmt decl item_name fn
   with CFailure _ ->
     F.pp_print_space fmt ();
     extract_admit fmt
@@ -2640,10 +2639,10 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params decl.item_meta.span decl.item_meta.name
+    ctx_add_generic_params decl.item_meta.span decl.item_meta.name Item
       decl.llbc_generics generics ctx
   in
-  extract_generic_params decl.item_meta.span ctx fmt TypeDeclId.Set.empty
+  extract_generic_params decl.item_meta.span ctx fmt TypeDeclId.Set.empty Item
     generics (Some decl.explicit_info) type_params cg_params trait_clauses;
 
   F.pp_print_space fmt ();
@@ -2721,7 +2720,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
 
     (* The required methods *)
     List.iter
-      (fun (name, id) -> extract_trait_decl_method_items ctx fmt decl name id)
+      (fun (name, fn) -> extract_trait_decl_method_items ctx fmt decl name fn)
       decl.required_methods;
 
     (* Close the outer boxes for the definition *)
@@ -2785,13 +2784,9 @@ let extract_trait_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
     decl.parent_clauses;
   (* The required methods *)
   List.iter
-    (fun (item_name, id) ->
-      (* Lookup the definition to retrieve the information about the explicit/implicit parameters *)
-      let trans = A.FunDeclId.Map.find id ctx.trans_funs in
-      let f = trans.f in
-      let explicit_info =
-        explicit_info_drop_prefix decl.generics f.signature.explicit_info
-      in
+    (fun (item_name, bound_fn) ->
+      let explicit_info = bound_fn.binder_explicit_info in
+      (* TODO: this looks incorrect, we should instantiate the binder properly *)
       let params =
         params
         @ List.concat
@@ -2822,139 +2817,46 @@ let extract_trait_decl_extra_info (ctx : extraction_ctx) (fmt : F.formatter)
  *)
 let extract_trait_impl_method_items_aux (ctx : extraction_ctx)
     (fmt : F.formatter) (impl : trait_impl) (item_name : string)
-    (id : fun_decl_id) (impl_generics : string list * string list * string list)
-    : unit =
+    (fn : fun_decl_ref binder) : unit =
+  let span = impl.item_meta.span in
   let trait_decl_id = impl.impl_trait.trait_decl_id in
+  let method_decl_id = fn.binder_value.fun_id in
   (* Lookup the definition *)
   let trans =
     silent_unwrap_opt_span __FILE__ __LINE__ None
-      (A.FunDeclId.Map.find_opt id ctx.trans_funs)
+      (A.FunDeclId.Map.find_opt method_decl_id ctx.trans_funs)
   in
   (* Extract the items *)
-  let f = trans.f in
-  let fun_name =
-    ctx_get_trait_method impl.item_meta.span trait_decl_id item_name ctx
-  in
+  let fun_name = ctx_get_trait_method span trait_decl_id item_name ctx in
   let ty () =
-    (* Filter the generics if the method is a builtin *)
-    let i_tys, i_cgs, _ = impl_generics in
-    let ( impl_types,
-          impl_cgs,
-          i_tys,
-          i_cgs,
-          f_tys,
-          f_cgs,
-          f_all_explicit_tys,
-          f_explicit_tys,
-          f_all_explicit_cgs,
-          f_explicit_cgs ) =
-      match FunDeclId.Map.find_opt f.def_id ctx.funs_filter_type_args_map with
-      | None ->
-          ( impl.generics.types,
-            impl.generics.const_generics,
-            i_tys,
-            i_cgs,
-            f.signature.generics.types,
-            f.signature.generics.const_generics,
-            f.signature.explicit_info.explicit_types,
-            f.signature.explicit_info.explicit_types,
-            f.signature.explicit_info.explicit_const_generics,
-            f.signature.explicit_info.explicit_const_generics )
-      | Some filter ->
-          let filter_list : 'a. bool list -> 'a list -> 'a list =
-           fun filter ls ->
-            let ls = List.combine filter ls in
-            List.filter_map (fun (b, ty) -> if b then Some ty else None) ls
-          in
-          let impl_types = impl.generics.types in
-          let impl_cgs = impl.generics.const_generics in
-          let impl_filter : 'a. 'a list -> bool list =
-           fun l -> Collections.List.prefix (List.length l) filter
-          in
-          let i_tys = i_tys in
-          let i_filter : 'a. 'a list -> bool list =
-           fun l -> Collections.List.prefix (List.length l) filter
-          in
-          ( filter_list (impl_filter impl_types) impl_types,
-            filter_list (impl_filter impl_cgs) impl_cgs,
-            filter_list (i_filter i_tys) i_tys,
-            filter_list (i_filter i_cgs) i_cgs,
-            filter_list filter f.signature.generics.types,
-            filter_list filter f.signature.generics.const_generics,
-            f.signature.explicit_info.explicit_types,
-            filter_list filter f.signature.explicit_info.explicit_types,
-            f.signature.explicit_info.explicit_const_generics,
-            filter_list filter f.signature.explicit_info.explicit_const_generics
-          )
-    in
-    let f_generics =
-      { f.signature.generics with types = f_tys; const_generics = f_cgs }
-    in
-    let f_explicit =
-      {
-        explicit_types = f_explicit_tys;
-        explicit_const_generics = f_explicit_cgs;
-      }
-    in
     (* Extract the generics - we need to quantify over the generics which
        are specific to the method, and call it will all the generics
        (trait impl + method generics) *)
-    let f_generics =
-      let drop_trait_clauses = true in
-      generic_params_drop_prefix ~drop_trait_clauses
-        { impl.generics with types = impl_types; const_generics = impl_cgs }
-        f_generics
+    let method_generics = fn.binder_generics in
+    let method_llbc_generics = fn.binder_llbc_generics in
+    let ctx, method_tys, method_cgs, method_tcs =
+      ctx_add_generic_params span trans.f.item_meta.name Method
+        method_llbc_generics method_generics ctx
     in
-    (* Register and print the quantified generics.
-
-       Note that we do not filter the LLBC generic parameters.
-       This is ok because:
-       - we only use them to find meaningful names for the trait clauses
-       - we only generate trait clauses for the clauses we find in the
-         pure generics *)
-    let ctx, f_tys, f_cgs, f_tcs =
-      ctx_add_generic_params impl.item_meta.span f.item_meta.name
-        f.signature.llbc_generics f_generics ctx
-    in
-    let use_forall = f_generics <> empty_generic_params in
-    extract_generic_params impl.item_meta.span ctx fmt TypeDeclId.Set.empty
-      ~use_forall f_generics (Some f_explicit) f_tys f_cgs f_tcs;
+    let use_forall = method_generics <> empty_generic_params in
+    extract_generic_params span ctx fmt TypeDeclId.Set.empty ~use_forall Method
+      method_generics None method_tys method_cgs method_tcs;
     if use_forall then F.pp_print_string fmt ",";
+
     (* Extract the function call *)
     F.pp_print_space fmt ();
-    let fun_name =
-      ctx_get_local_function impl.item_meta.span f.def_id None ctx
-    in
+    let fun_name = ctx_get_local_function span method_decl_id None ctx in
     F.pp_print_string fmt fun_name;
-    let all_generics =
-      let _, _, i_tcs = impl_generics in
-      (* Filter the implicit arguments *)
-      let filter : 'a. explicit list -> 'a list -> 'a list =
-       fun bl l ->
-        List.filter_map
-          (fun (e, x) -> if e = Explicit then Some x else None)
-          (List.combine bl l)
-      in
-      let tys = filter f_all_explicit_tys (i_tys @ f_tys) in
-      let cgs = filter f_all_explicit_cgs (i_cgs @ f_cgs) in
-
-      (* Put everything together *)
-      List.concat [ tys; cgs; i_tcs; f_tcs ]
-    in
-
-    List.iter
-      (fun p ->
-        F.pp_print_space fmt ();
-        F.pp_print_string fmt p)
-      all_generics
+    extract_generic_args span ctx fmt TypeDeclId.Set.empty
+      ~explicit:(Some trans.f.signature.explicit_info)
+      fn.binder_value.fun_generics
   in
+
   extract_trait_impl_item ctx fmt fun_name ty
 
 let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
-    (impl : trait_impl) (item_name : string) (id : fun_decl_id)
-    (impl_generics : string list * string list * string list) : unit =
-  try
-    extract_trait_impl_method_items_aux ctx fmt impl item_name id impl_generics
+    (impl : trait_impl) (item_name : string) (fn : fun_decl_ref binder) : unit =
+  try extract_trait_impl_method_items_aux ctx fmt impl item_name fn
   with CFailure _ ->
     F.pp_print_space fmt ();
     extract_admit fmt
@@ -3018,11 +2920,10 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params impl.item_meta.span impl.item_meta.name
+    ctx_add_generic_params impl.item_meta.span impl.item_meta.name Item
       impl.llbc_generics impl.generics ctx
   in
-  let all_generics = (type_params, cg_params, trait_clauses) in
-  extract_generic_params impl.item_meta.span ctx fmt TypeDeclId.Set.empty
+  extract_generic_params impl.item_meta.span ctx fmt TypeDeclId.Set.empty Item
     impl.generics (Some impl.explicit_info) type_params cg_params trait_clauses;
 
   (* Print the type *)
@@ -3122,8 +3023,8 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
 
     (* The required methods *)
     List.iter
-      (fun (name, id) ->
-        extract_trait_impl_method_items ctx fmt impl name id all_generics)
+      (fun (name, bound_fn) ->
+        extract_trait_impl_method_items ctx fmt impl name bound_fn)
       impl.required_methods;
 
     (* Close the outer boxes for the definition, as well as the brackets *)

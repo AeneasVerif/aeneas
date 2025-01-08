@@ -31,33 +31,20 @@ let mk_config (mode : interpreter_mode) : config = { mode }
 type type_ctx = {
   type_decls_groups : type_declaration_group TypeDeclId.Map.t;
   type_decls : type_decl TypeDeclId.Map.t;
+      (* Copy of the declarations in the crate *)
   type_infos : TypesAnalysis.type_infos;
 }
 [@@deriving show]
 
 type fun_ctx = {
   fun_decls : fun_decl FunDeclId.Map.t;
+      (* Copy of the declarations in the crate *)
   fun_infos : FunsAnalysis.fun_info FunDeclId.Map.t;
   regions_hierarchies : region_var_groups FunIdMap.t;
 }
 [@@deriving show]
 
-type global_ctx = { global_decls : global_decl GlobalDeclId.Map.t }
-[@@deriving show]
-
-type trait_decls_ctx = { trait_decls : trait_decl TraitDeclId.Map.t }
-[@@deriving show]
-
-type trait_impls_ctx = { trait_impls : trait_impl TraitImplId.Map.t }
-[@@deriving show]
-
-type decls_ctx = {
-  type_ctx : type_ctx;
-  fun_ctx : fun_ctx;
-  global_ctx : global_ctx;
-  trait_decls_ctx : trait_decls_ctx;
-  trait_impls_ctx : trait_impls_ctx;
-}
+type decls_ctx = { crate : crate; type_ctx : type_ctx; fun_ctx : fun_ctx }
 [@@deriving show]
 
 (** A reference to a trait associated type *)
@@ -78,11 +65,9 @@ module TraitTypeRefMap = Collections.MakeMap (TraitTypeRefOrd)
 
 (** Evaluation context *)
 type eval_ctx = {
+  crate : crate;
   type_ctx : type_ctx;
   fun_ctx : fun_ctx;
-  global_ctx : global_ctx;
-  trait_decls_ctx : trait_decls_ctx;
-  trait_impls_ctx : trait_impls_ctx;
   region_groups : RegionGroupId.id list;
   type_vars : type_var list;
   const_generic_vars : const_generic_var list;
@@ -140,20 +125,20 @@ let ctx_lookup_var_binder (span : Meta.span) (ctx : eval_ctx) (vid : VarId.id) :
   fst (env_lookup_var span ctx.env vid)
 
 let ctx_lookup_type_decl (ctx : eval_ctx) (tid : TypeDeclId.id) : type_decl =
-  TypeDeclId.Map.find tid ctx.type_ctx.type_decls
+  TypeDeclId.Map.find tid ctx.crate.type_decls
 
 let ctx_lookup_fun_decl (ctx : eval_ctx) (fid : FunDeclId.id) : fun_decl =
-  FunDeclId.Map.find fid ctx.fun_ctx.fun_decls
+  FunDeclId.Map.find fid ctx.crate.fun_decls
 
 let ctx_lookup_global_decl (ctx : eval_ctx) (gid : GlobalDeclId.id) :
     global_decl =
-  GlobalDeclId.Map.find gid ctx.global_ctx.global_decls
+  GlobalDeclId.Map.find gid ctx.crate.global_decls
 
 let ctx_lookup_trait_decl (ctx : eval_ctx) (id : TraitDeclId.id) : trait_decl =
-  TraitDeclId.Map.find id ctx.trait_decls_ctx.trait_decls
+  TraitDeclId.Map.find id ctx.crate.trait_decls
 
 let ctx_lookup_trait_impl (ctx : eval_ctx) (id : TraitImplId.id) : trait_impl =
-  TraitImplId.Map.find id ctx.trait_impls_ctx.trait_impls
+  TraitImplId.Map.find id ctx.crate.trait_impls
 
 (** Retrieve a variable's value in the current frame *)
 let env_lookup_var_value (span : Meta.span) (env : env) (vid : VarId.id) :

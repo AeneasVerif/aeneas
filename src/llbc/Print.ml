@@ -509,28 +509,9 @@ module Contexts = struct
     ^ "\n}"
 
   let decls_ctx_to_fmt_env (ctx : decls_ctx) : fmt_env =
-    let type_decls = ctx.type_ctx.type_decls in
-    let fun_decls = ctx.fun_ctx.fun_decls in
-    let global_decls = ctx.global_ctx.global_decls in
-    let trait_decls = ctx.trait_decls_ctx.trait_decls in
-    let trait_impls = ctx.trait_impls_ctx.trait_impls in
-    {
-      type_decls;
-      fun_decls;
-      global_decls;
-      trait_decls;
-      trait_impls;
-      regions = [];
-      generics = TypesUtils.empty_generic_params;
-      locals = [];
-    }
+    Crate.crate_to_fmt_env ctx.crate
 
   let eval_ctx_to_fmt_env (ctx : eval_ctx) : fmt_env =
-    let type_decls = ctx.type_ctx.type_decls in
-    let fun_decls = ctx.fun_ctx.fun_decls in
-    let global_decls = ctx.global_ctx.global_decls in
-    let trait_decls = ctx.trait_decls_ctx.trait_decls in
-    let trait_impls = ctx.trait_impls_ctx.trait_impls in
     (* Below: it is always safe to omit fields - if an id can't be found at
        printing time, we print the id (in raw form) instead of the name it
        designates. *)
@@ -546,21 +527,19 @@ module Contexts = struct
     in
     let locals = env_to_locals ctx.env in
     {
-      type_decls;
-      fun_decls;
-      global_decls;
-      trait_decls;
-      trait_impls;
-      (* The regions have been transformed to region groups *)
-      regions = [];
+      crate = ctx.crate;
       generics =
-        {
-          TypesUtils.empty_generic_params with
-          types = ctx.type_vars;
-          const_generics = ctx.const_generic_vars;
-          (* We don't need the trait clauses so we initialize them to empty *)
-          trait_clauses = [];
-        };
+        [
+          {
+            TypesUtils.empty_generic_params with
+            types = ctx.type_vars;
+            const_generics = ctx.const_generic_vars;
+            (* The regions have been transformed to region groups *)
+            regions = [];
+            (* We don't need the trait clauses so we initialize them to empty *)
+            trait_clauses = [];
+          };
+        ];
       locals;
     }
 

@@ -1037,10 +1037,8 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
      * should be the same in the two contexts *)
     let {
       type_ctx;
+      crate;
       fun_ctx;
-      global_ctx;
-      trait_decls_ctx;
-      trait_impls_ctx;
       region_groups;
       type_vars;
       const_generic_vars;
@@ -1053,10 +1051,8 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
     in
     let {
       type_ctx = _;
+      crate = _;
       fun_ctx = _;
-      global_ctx = _;
-      trait_decls_ctx = _;
-      trait_impls_ctx = _;
       region_groups = _;
       type_vars = _;
       const_generic_vars = _;
@@ -1070,11 +1066,9 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
     let ended_regions = RegionId.Set.union ended_regions0 ended_regions1 in
     Ok
       {
+        crate;
         type_ctx;
         fun_ctx;
-        global_ctx;
-        trait_decls_ctx;
-        trait_impls_ctx;
         region_groups;
         type_vars;
         const_generic_vars;
