@@ -1,13 +1,8 @@
 /- This file contains tactics to solve arithmetic goals -/
 
-import Lean
-import Lean.Meta.Tactic.Simp
-import Init.Data.List.Basic
-import Mathlib.Tactic.Ring.RingNF
-import Base.Utils
-import Base.Arith.Base
 import Base.Arith.Init
-import Base.Saturate
+import Base.Saturate.Tactic
+import Mathlib.Util.CountHeartbeats
 
 namespace Arith
 

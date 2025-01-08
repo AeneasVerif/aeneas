@@ -1,5 +1,5 @@
-import Lean
-import Mathlib.Tactic.Linarith -- Introduces a lot of useful lemmas
+import Mathlib.Algebra.Order.Ring.Int
+import Mathlib.Data.Nat.Cast.Order.Ring
 
 namespace Arith
 
