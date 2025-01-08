@@ -1169,8 +1169,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
   log#ltrace
     (lazy
       (let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
-       "translate_inst_fun_sig_with_regions_hierarchy_to_decomposed_fun_type: "
-       ^ "\n- sg.regions_hierarchy: "
+       __FUNCTION__ ^ ": " ^ "\n- sg.regions_hierarchy: "
        ^ Print.Values.abs_region_groups_to_string sg.abs_regions_hierarchy
        ^ "\n- inst_sg (inputs, output): "
        ^ Print.Values.inst_fun_sig_to_string ctx sg
@@ -1774,14 +1773,14 @@ let fresh_back_vars_for_current_fun (ctx : bs_ctx)
   fresh_opt_vars back_vars ctx
 
 (** IMPORTANT: do not use this one directly, but rather {!symbolic_value_to_texpression} *)
-let lookup_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) :
+let lookup_var_for_symbolic_value (id : V.symbolic_value_id) (ctx : bs_ctx) :
     var option =
-  match V.SymbolicValueId.Map.find_opt sv.sv_id ctx.sv_to_var with
+  match V.SymbolicValueId.Map.find_opt id ctx.sv_to_var with
   | Some v -> Some v
   | None ->
       save_error __FILE__ __LINE__ ctx.span
         ("Could not find var for symbolic value: "
-        ^ V.SymbolicValueId.to_string sv.sv_id);
+        ^ V.SymbolicValueId.to_string id);
       None
 
 (** Peel boxes as long as the value is of the form [Box<T>] *)
@@ -1791,7 +1790,7 @@ let rec unbox_typed_value (span : Meta.span) (v : V.typed_value) : V.typed_value
   | V.VAdt av, T.TAdt (T.TBuiltin T.TBox, _) -> (
       match av.field_values with
       | [ bv ] -> unbox_typed_value span bv
-      | _ -> craise __FILE__ __LINE__ span "Unreachable")
+      | _ -> internal_error __FILE__ __LINE__ span)
   | _ -> v
 
 (** Translate a symbolic value.
@@ -1808,7 +1807,7 @@ let symbolic_value_to_texpression (ctx : bs_ctx) (sv : V.symbolic_value) :
   if ty_is_unit ty then mk_unit_rvalue
   else
     (* Otherwise lookup the variable *)
-    match lookup_var_for_symbolic_value sv ctx with
+    match lookup_var_for_symbolic_value sv.sv_id ctx with
     | Some var -> mk_texpression_from_var var
     | None ->
         {
@@ -2619,7 +2618,7 @@ let eval_ctx_to_symbolic_assignments_info (ctx : bs_ctx)
                  wants to fail hard. *)
               Option.iter
                 (fun (var : var) -> push_info var.id name)
-                (lookup_var_for_symbolic_value sv ctx)
+                (lookup_var_for_symbolic_value sv.sv_id ctx)
         | _ -> ()
     end
   in
@@ -2807,12 +2806,12 @@ let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
   | IntroSymbolic (ectx, p, sv, v, e) ->
       translate_intro_symbolic ectx p sv v e ctx
   | Meta (span, e) -> translate_espan span e ctx
-  | ForwardEnd (return_value, ectx, loop_input_values, e, back_e) ->
+  | ForwardEnd (return_value, ectx, loop_sid_maps, e, back_e) ->
       (* Translate the end of a function, or the end of a loop.
 
          The case where we (re-)enter a loop is handled here.
       *)
-      translate_forward_end return_value ectx loop_input_values e back_e ctx
+      translate_forward_end return_value ectx loop_sid_maps e back_e ctx
   | Loop loop -> translate_loop loop ctx
   | Error (span, msg) -> translate_error span msg
 
@@ -3289,9 +3288,7 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
   let next_e = translate_expression e ctx in
   (* Generate the assignemnts *)
   let monadic = false in
-  List.fold_right
-    (fun (var, value) (e : texpression) -> mk_let monadic var value e)
-    variables_values next_e
+  mk_lets monadic variables_values next_e
 
 and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expression) (ctx : bs_ctx) (call_id : V.FunCallId.id)
@@ -3464,9 +3461,7 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
   let next_e = translate_expression e ctx in
   (* Generate the assignments *)
   let monadic = false in
-  List.fold_right
-    (fun (given_back, input_var) e -> mk_let monadic given_back input_var e)
-    given_back_inputs next_e
+  mk_lets monadic given_back_inputs next_e
 
 and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expression) (ctx : bs_ctx) (loop_id : V.LoopId.id)
@@ -3829,9 +3824,11 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
 
 and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
     (ectx : C.eval_ctx)
-    (loop_input_values : V.typed_value S.symbolic_value_id_map option)
-    (fwd_e : S.expression) (back_e : S.expression S.region_group_id_map)
-    (ctx : bs_ctx) : texpression =
+    (loop_sid_maps :
+      (V.typed_value S.symbolic_value_id_map
+      * V.symbolic_value_id S.symbolic_value_id_map)
+      option) (fwd_e : S.expression)
+    (back_e : S.expression S.region_group_id_map) (ctx : bs_ctx) : texpression =
   (* Register the consumed mutable borrows to compute default values *)
   let ctx =
     match return_value with
@@ -4057,11 +4054,11 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
 
   (* If we are (re-)entering a loop, we need to introduce a call to the
      forward translation of the loop. *)
-  match loop_input_values with
+  match loop_sid_maps with
   | None ->
       (* "Regular" case: we reached a return *)
       translate_end ctx
-  | Some loop_input_values ->
+  | Some (loop_input_values_map, refreshed_sids) ->
       (* Loop *)
       let loop_id = Option.get ctx.loop_id in
 
@@ -4070,10 +4067,10 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
 
       log#ltrace
         (lazy
-          ("translate_forward_end:\n- loop_input_values:\n"
+          ("translate_forward_end:\n- loop_input_values_map:\n"
           ^ V.SymbolicValueId.Map.show
               (typed_value_to_string ctx)
-              loop_input_values
+              loop_input_values_map
           ^ "\n- loop_info.input_svl:\n"
           ^ Print.list_to_string
               (symbolic_value_to_string ctx)
@@ -4089,7 +4086,7 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
                 ("translate_forward_end: looking up input_svl: "
                 ^ V.SymbolicValueId.to_string sv.V.sv_id
                 ^ "\n"));
-            V.SymbolicValueId.Map.find sv.V.sv_id loop_input_values)
+            V.SymbolicValueId.Map.find sv.V.sv_id loop_input_values_map)
           loop_info.input_svl
       in
       let args =
@@ -4182,8 +4179,25 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
         { ctx with loops = LoopId.Map.add loop_id loop_info ctx.loops }
       in
 
+      (* Introduce the refreshed input symbolic values *)
+      let ctx, refreshed_inputs =
+        List.fold_left_map
+          (fun ctx (sid, nid) ->
+            let sv_ty =
+              (SymbolicValueId.Map.find sid loop_input_values_map).ty
+            in
+            let sv : V.symbolic_value = { sv_ty; sv_id = sid } in
+            let nsv : V.symbolic_value = { sv_ty; sv_id = nid } in
+            let ctx, nsv = fresh_var_for_symbolic_value nsv ctx in
+            let sv = symbolic_value_to_texpression ctx sv in
+            (ctx, (PureUtils.mk_typed_pattern_from_var nsv None, sv)))
+          ctx
+          (SymbolicValueId.Map.bindings refreshed_sids)
+      in
+
       (* Translate the end of the function *)
       let next_e = translate_end ctx in
+      let next_e = mk_lets false refreshed_inputs next_e in
 
       (* Introduce the call to the loop forward function in the generated AST *)
       let out_pat = mk_simpl_tuple_pattern out_pats in

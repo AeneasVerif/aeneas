@@ -585,8 +585,8 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
         let back_el = RegionGroupId.Map.of_list back_el in
         (* Put everything together *)
         SA.ForwardEnd (Some (ctx_return, ret_value), ctx0, None, fwd_e, back_el)
-    | EndEnterLoop (loop_id, loop_input_values)
-    | EndContinue (loop_id, loop_input_values) ->
+    | EndEnterLoop (loop_id, loop_input_values, refreshed_input_sids)
+    | EndContinue (loop_id, loop_input_values, refreshed_input_sids) ->
         (* Similar to [Return]: we have to play different endings *)
         let inside_loop =
           match res with
@@ -621,7 +621,12 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
         in
         let back_el = RegionGroupId.Map.of_list back_el in
         (* Put everything together *)
-        ForwardEnd (None, ctx0, Some loop_input_values, fwd_e, back_el)
+        ForwardEnd
+          ( None,
+            ctx0,
+            Some (loop_input_values, refreshed_input_sids),
+            fwd_e,
+            back_el )
     | Panic ->
         (* Note that as we explore all the execution branches, one of
          * the executions can lead to a panic *)

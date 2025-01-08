@@ -103,7 +103,8 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
        ^ "\n\n-tgt ctx (original context):\n"
         ^ eval_ctx_to_string init_ctx));
 
-    prepare_match_ctx_with_target config span loop_id fixed_ids fp_ctx init_ctx
+    prepare_loop_match_ctx_with_target config span loop_id fixed_ids fp_ctx
+      init_ctx
   in
 
   (* Actually match *)
@@ -135,7 +136,7 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
      we never get out) *)
   let res_fun_end =
     comp cf_prepare
-      (match_ctx_with_target config span loop_id true fp_bl_corresp
+      (loop_match_ctx_with_target config span loop_id true fp_bl_corresp
          fp_input_svalues fixed_ids fp_ctx ctx)
   in
 
@@ -283,7 +284,7 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
             ^ eval_ctx_to_string ~span:(Some span) fp_ctx
             ^ "\n\n-tgt ctx (ctx at continue):\n"
             ^ eval_ctx_to_string ~span:(Some span) ctx));
-        match_ctx_with_target config span loop_id false fp_bl_corresp
+        loop_match_ctx_with_target config span loop_id false fp_bl_corresp
           fp_input_svalues fixed_ids fp_ctx ctx
     | Unit | LoopReturn _ | EndEnterLoop _ | EndContinue _ ->
         (* For why we can't get [Unit], see the comments inside {!eval_loop_concrete}.
