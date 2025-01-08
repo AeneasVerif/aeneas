@@ -90,8 +90,15 @@ let matches_name_with_generics (c : crate) (name : Types.name)
 
 let activated_loggers : string list ref = ref []
 
-let add_activated_logger (name : string) =
-  activated_loggers := name :: !activated_loggers
+let add_activated_loggers (name_list : string) =
+  let names = String.split_on_char ',' name_list in
+  activated_loggers := names @ !activated_loggers
+
+let marked_ids : string list ref = ref []
+
+let add_marked_ids (ids : string) =
+  let ids = String.split_on_char ',' ids in
+  marked_ids := ids @ !marked_ids
 
 let () =
   (* Measure start time *)
@@ -174,11 +181,21 @@ let () =
         " Print all the external definitions which are not listed in the \
          builtin functions" );
       ( "-log",
-        Arg.String add_activated_logger,
-        " Activate debugging log for a given logger designated by its name. \
-         The existing loggers are: {"
+        Arg.String add_activated_loggers,
+        " Activate debugging log for a given logger designated by its name. It \
+         is possible to specifiy a list of names if they are separated by \
+         commas without spaces; for instance: '-log \
+         Interpreter,SymbolicToPure'. The existing loggers are: {"
         ^ String.concat ", " (Collections.StringMap.keys !loggers)
         ^ "}" );
+      ( "-mark-ids",
+        Arg.String add_marked_ids,
+        " For developers: mark some identifiers to throw an exception if we \
+         generate them; this is useful to insert breakpoints when debugging by \
+         using the log. For example, one can mark the symbolic value ids 1 and \
+         2 with '-mark-ids s1,s2', or '-mark-ids s@1, s@2. The supported \
+         prefixes are: 's' (symbolic value id), 'b' (borrow id), 'a' \
+         (abstraction id), 'r' (region id)." );
     ]
   in
 
@@ -253,6 +270,31 @@ let () =
           fail false
       | Some logger -> logger#set_level EL.Debug)
     !activated_loggers;
+
+  (* Properly register the marked ids *)
+  List.iter
+    (fun id ->
+      let i = if String.length id >= 2 && String.get id 1 = '@' then 2 else 1 in
+      let sub = String.sub id i (String.length id - i) in
+      match int_of_string_opt sub with
+      | None ->
+          log#serror
+            ("Invalid identifier provided to option `-mark-ids`: '" ^ id
+           ^ "': '" ^ sub ^ "' can't be parsed as an int");
+          fail false
+      | Some i -> (
+          let open ContextsBase in
+          match String.get id 0 with
+          | 's' -> marked_symbolic_value_ids_insert_from_int i
+          | 'b' -> marked_borrow_ids_insert_from_int i
+          | 'a' -> marked_abstraction_ids_insert_from_int i
+          | 'r' -> marked_region_ids_insert_from_int i
+          | _ ->
+              log#serror
+                ("Invalid identifier provided to option: '" ^ id
+               ^ "': the first character should be in {'s', 'b', 'a', 'r'}");
+              fail false))
+    !marked_ids;
 
   (* Sanity check (now that the arguments are parsed!) *)
   check_arg_implies

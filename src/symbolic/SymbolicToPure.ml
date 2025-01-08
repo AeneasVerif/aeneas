@@ -2196,8 +2196,20 @@ and aproj_to_consumed_aux (ctx : bs_ctx) (_abs_regions : T.RegionId.Set.t)
   | V.AEndedProjLoans (msv, []) ->
       (* The symbolic value was left unchanged *)
       Some (symbolic_value_to_texpression ctx msv)
-  | V.AEndedProjLoans (_, [ (mnv, child_aproj) ]) ->
+  | V.AEndedProjLoans (msv, [ (mnv, child_aproj) ]) ->
       sanity_check __FILE__ __LINE__ (child_aproj = AEmpty) ctx.span;
+      (* TODO: check that the updated symbolic values covers all the cases
+         (part of the symbolic value might have been updated, and the rest
+         left unchanged) - it might happen with nested borrows (see the documentation
+         of [AProjLoans]). For now we check that there are no nested borrows
+         to make sure we have to update this part of the code once we add support
+         for nested borrows.
+      *)
+      sanity_check __FILE__ __LINE__
+        (not
+           (TypesUtils.ty_has_nested_borrows (Some ctx.span)
+              ctx.type_ctx.type_infos msv.sv_ty))
+        ctx.span;
       (* The symbolic value was updated *)
       Some (symbolic_value_to_texpression ctx mnv)
   | V.AEndedProjLoans (_, _) ->
