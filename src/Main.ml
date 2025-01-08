@@ -244,6 +244,7 @@ let () =
   in
 
   (* Activate the loggers *)
+  let activated_loggers_set = ref Collections.StringSet.empty in
   List.iter
     (fun (level, name) ->
       match Collections.StringMap.find_opt name !loggers with
@@ -254,7 +255,19 @@ let () =
             ^ String.concat ", " (Collections.StringMap.keys !loggers)
             ^ "}");
           fail false
-      | Some logger -> logger#set_level level)
+      | Some logger ->
+          (* Check that we haven't activated the logger twice *)
+          if Collections.StringSet.mem name !activated_loggers_set then begin
+            log#serror
+              ("The logger '" ^ name
+             ^ "' is used twice in the '-log' and/or '-log-debug' option(s)");
+            fail false
+          end
+          else begin
+            activated_loggers_set :=
+              Collections.StringSet.add name !activated_loggers_set;
+            logger#set_level level
+          end)
     !activated_loggers;
 
   (* Properly register the marked ids *)
