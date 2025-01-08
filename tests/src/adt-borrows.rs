@@ -78,6 +78,10 @@ impl<'a, T> MutWrapper<'a, T> {
     fn unwrap(self: Self) -> &'a mut T {
         self.0
     }
+
+    fn id(self) -> Self {
+        self
+    }
 }
 
 fn use_mut_wrapper() {
@@ -86,6 +90,10 @@ fn use_mut_wrapper() {
     let p = w.unwrap();
     *p += 1;
     assert!(x == 1);
+}
+
+fn use_mut_wrapper_id<'a, T>(x: MutWrapper<'a, T>) -> MutWrapper<'a, T> {
+    x.id()
 }
 
 struct MutWrapper1<'a, T> {
@@ -100,6 +108,10 @@ impl<'a, T> MutWrapper1<'a, T> {
     fn unwrap(self: Self) -> &'a mut T {
         self.x
     }
+
+    fn id(self) -> Self {
+        self
+    }
 }
 
 fn use_mut_wrapper1() {
@@ -108,6 +120,10 @@ fn use_mut_wrapper1() {
     let p = w.unwrap();
     *p += 1;
     assert!(x == 1);
+}
+
+fn use_mut_wrapper1_id<'a, T>(x: MutWrapper1<'a, T>) -> MutWrapper1<'a, T> {
+    x.id()
 }
 
 struct MutWrapper2<'a, 'b, T> {
@@ -123,6 +139,10 @@ impl<'a, 'b, T> MutWrapper2<'a, 'b, T> {
     fn unwrap(self: Self) -> (&'a mut T, &'b mut T) {
         (self.x, self.y)
     }
+
+    fn id(self) -> Self {
+        self
+    }
 }
 
 fn use_mut_wrapper2() {
@@ -134,6 +154,10 @@ fn use_mut_wrapper2() {
     *py += 1;
     assert!(x == 1);
     assert!(y == 11);
+}
+
+fn use_mut_wrapper2_id<'a, 'b, T>(x: MutWrapper2<'a, 'b, T>) -> MutWrapper2<'a, 'b, T> {
+    x.id()
 }
 
 //
@@ -151,12 +175,30 @@ fn array_mut_borrow<'a, const N: usize>(x: [&'a mut u32; N]) -> [&'a mut u32; N]
     x
 }
 
+fn use_array_mut_borrow1<'a, const N: usize>(x: [&'a mut u32; N]) -> [&'a mut u32; N] {
+    array_mut_borrow(x)
+}
+
+fn use_array_mut_borrow2<'a, const N: usize>(x: [&'a mut u32; N]) -> [&'a mut u32; N] {
+    let x = array_mut_borrow(x);
+    array_mut_borrow(x)
+}
+
 fn boxed_slice_shared_borrow(x: Box<[&u32]>) -> Box<[&u32]> {
     x
 }
 
 fn boxed_slice_mut_borrow(x: Box<[&mut u32]>) -> Box<[&mut u32]> {
     x
+}
+
+fn use_boxed_slice_mut_borrow1(x: Box<[&mut u32]>) -> Box<[&mut u32]> {
+    boxed_slice_mut_borrow(x)
+}
+
+fn use_boxed_slice_mut_borrow2(x: Box<[&mut u32]>) -> Box<[&mut u32]> {
+    let x = boxed_slice_mut_borrow(x);
+    boxed_slice_mut_borrow(x)
 }
 
 //
@@ -237,4 +279,38 @@ pub fn nth_mut<T>(mut ls: &mut List<T>, mut i: u32) -> Option<&mut T> {
         }
     }
     None
+}
+
+pub fn update_array_mut_borrow(a: [&mut u32; 32]) -> [&mut u32; 32] {
+    a
+}
+
+pub fn array_mut_borrow_loop1(b: bool, mut a: [&mut u32; 32]) {
+    while b {
+        a = update_array_mut_borrow(a)
+    }
+}
+
+pub fn array_mut_borrow_loop2(b: bool, mut a: [&mut u32; 32]) -> [&mut u32; 32] {
+    while b {
+        a = update_array_mut_borrow(a)
+    }
+    a
+}
+
+pub fn copy_shared_array(a: [&u32; 32]) -> [&u32; 32] {
+    a
+}
+
+pub fn array_shared_borrow_loop1(b: bool, mut a: [&u32; 32]) {
+    while b {
+        a = copy_shared_array(a)
+    }
+}
+
+pub fn array_shared_borrow_loop2(b: bool, mut a: [&u32; 32]) -> [&u32; 32] {
+    while b {
+        a = copy_shared_array(a)
+    }
+    a
 }
