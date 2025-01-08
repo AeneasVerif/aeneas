@@ -1456,3 +1456,102 @@ let normalize_proj_ty (regions : RegionId.Set.t) (ty : rty) : rty =
     end
   in
   visitor#visit_ty () ty
+
+(** Compute the union of two normalized projection types *)
+let rec norm_proj_tys_union (span : Meta.span) (ty1 : rty) (ty2 : rty) : rty =
+  match (ty1, ty2) with
+  | TAdt (id1, generics1), TAdt (id2, generics2) ->
+      sanity_check __FILE__ __LINE__ (id1 = id2) span;
+      TAdt (id1, norm_proj_generic_args_union span generics1 generics2)
+  | TVar id1, TVar id2 ->
+      sanity_check __FILE__ __LINE__ (id1 = id2) span;
+      TVar id1
+  | TLiteral lit1, TLiteral lit2 ->
+      sanity_check __FILE__ __LINE__ (lit1 = lit2) span;
+      TLiteral lit1
+  | TNever, TNever -> TNever
+  | TRef (r1, ty1, rk1), TRef (r2, ty2, rk2) ->
+      sanity_check __FILE__ __LINE__ (rk1 = rk2) span;
+      TRef
+        ( norm_proj_regions_union span r1 r2,
+          norm_proj_tys_union span ty1 ty2,
+          rk1 )
+  | TRawPtr (ty1, rk1), TRawPtr (ty2, rk2) ->
+      sanity_check __FILE__ __LINE__ (rk1 = rk2) span;
+      TRawPtr (norm_proj_tys_union span ty1 ty2, rk1)
+  | TTraitType (tr1, item1), TTraitType (tr2, item2) ->
+      sanity_check __FILE__ __LINE__ (item1 = item2) span;
+      TTraitType (norm_proj_trait_refs_union span tr1 tr2, item1)
+  | TDynTrait (), TDynTrait () -> TDynTrait ()
+  | ( TArrow
+        { binder_regions = binder_regions1; binder_value = inputs1, output1 },
+      TArrow
+        { binder_regions = binder_regions2; binder_value = inputs2, output2 } )
+    ->
+      (* TODO: general case *)
+      sanity_check __FILE__ __LINE__ (binder_regions1 = []) span;
+      sanity_check __FILE__ __LINE__ (binder_regions2 = []) span;
+      let binder_value =
+        ( List.map2 (norm_proj_tys_union span) inputs1 inputs2,
+          norm_proj_tys_union span output1 output2 )
+      in
+      TArrow { binder_regions = []; binder_value }
+  | _ -> internal_error __FILE__ __LINE__ span
+
+and norm_proj_generic_args_union span (generics1 : generic_args)
+    (generics2 : generic_args) : generic_args =
+  let {
+    regions = regions1;
+    types = types1;
+    const_generics = const_generics1;
+    trait_refs = trait_refs1;
+  } =
+    generics1
+  in
+  let {
+    regions = regions2;
+    types = types2;
+    const_generics = const_generics2;
+    trait_refs = trait_refs2;
+  } =
+    generics2
+  in
+  {
+    regions = List.map2 (norm_proj_regions_union span) regions1 regions2;
+    types = List.map2 (norm_proj_tys_union span) types1 types2;
+    const_generics =
+      List.map2
+        (norm_proj_const_generics_union span)
+        const_generics1 const_generics2;
+    trait_refs =
+      List.map2 (norm_proj_trait_refs_union span) trait_refs1 trait_refs2;
+  }
+
+and norm_proj_regions_union (span : Meta.span) (r1 : region) (r2 : region) :
+    region =
+  match (r1, r2) with
+  | RVar (Free _), RVar (Free _) ->
+      (* There is an intersection: the regions should be disjoint *)
+      internal_error __FILE__ __LINE__ span
+  | RVar (Free rid), RErased | RErased, RVar (Free rid) ->
+      sanity_check __FILE__ __LINE__ (rid = RegionId.zero) span;
+      RVar (Free rid)
+  | _ -> internal_error __FILE__ __LINE__ span
+
+and norm_proj_trait_refs_union (span : Meta.span) (tr1 : trait_ref)
+    (tr2 : trait_ref) : trait_ref =
+  let { trait_id = trait_id1; trait_decl_ref = decl_ref1 } = tr1 in
+  let { trait_id = trait_id2; trait_decl_ref = decl_ref2 } = tr2 in
+  sanity_check __FILE__ __LINE__ (trait_id1 = trait_id2) span;
+  (* There might be regions but let's ignore this for now... *)
+  sanity_check __FILE__ __LINE__ (decl_ref1 = decl_ref2) span;
+  tr1
+
+and norm_proj_const_generics_union (span : Meta.span) (cg1 : const_generic)
+    (cg2 : const_generic) : const_generic =
+  sanity_check __FILE__ __LINE__ (cg1 = cg2) span;
+  cg1
+
+let norm_proj_ty_contains span (ty1 : rty) (ty2 : rty) : bool =
+  let set = RegionId.Set.singleton RegionId.zero in
+  projection_contains span ty1 set ty2 set

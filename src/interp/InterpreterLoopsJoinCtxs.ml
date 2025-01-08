@@ -293,6 +293,8 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
   let is_fresh_did (id : DummyVarId.id) : bool =
     not (DummyVarId.Set.mem id old_ids.dids)
   in
+
+  let ctx = ctx0 in
   (* Convert the dummy values to abstractions (note that when we convert
      values to abstractions, the resulting abstraction should be destructured) *)
   (* Note that we preserve the order of the dummy values: we replace them with
@@ -306,15 +308,15 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
            | EBinding (BDummy id, v) ->
                if is_fresh_did id then (
                  let absl =
-                   convert_value_to_abstractions span abs_kind can_end
-                     destructure_shared_values ctx0 v
+                   convert_value_to_abstractions span abs_kind ~can_end
+                     ~destructure_shared_values ctx v
                  in
-                 Invariants.opt_type_check_absl span ctx0 absl;
+                 Invariants.opt_type_check_absl span ctx absl;
                  List.map (fun abs -> EAbs abs) absl)
                else [ ee ])
-         ctx0.env)
+         ctx.env)
   in
-  let ctx = { ctx0 with env } in
+  let ctx = { ctx with env } in
   log#ltrace
     (lazy
       (__FUNCTION__ ^ ": after converting values to abstractions:\n"
@@ -950,7 +952,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
     | ( (EBinding (BDummy b0, v0) as var0) :: env0',
         (EBinding (BDummy b1, v1) as var1) :: env1' ) ->
         (* Debug *)
-        log#ltrace
+        log#ldebug
           (lazy
             ("join_prefixes: BDummys:\n\n- fixed_ids:\n" ^ "\n"
            ^ show_ids_sets fixed_ids ^ "\n\n- value0:\n"
@@ -975,7 +977,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
     | ( (EBinding (BVar b0, v0) as var0) :: env0',
         (EBinding (BVar b1, v1) as var1) :: env1' ) ->
         (* Debug *)
-        log#ltrace
+        log#ldebug
           (lazy
             ("join_prefixes: BVars:\n\n- fixed_ids:\n" ^ "\n"
            ^ show_ids_sets fixed_ids ^ "\n\n- value0:\n"
@@ -995,7 +997,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
         var :: join_prefixes env0' env1'
     | (EAbs abs0 as abs) :: env0', EAbs abs1 :: env1' ->
         (* Debug *)
-        log#ltrace
+        log#ldebug
           (lazy
             ("join_prefixes: Abs:\n\n- fixed_ids:\n" ^ "\n"
            ^ show_ids_sets fixed_ids ^ "\n\n- abs0:\n"
@@ -1025,7 +1027,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
       | _ -> craise __FILE__ __LINE__ span "Unreachable"
     in
 
-    log#ltrace
+    log#ldebug
       (lazy
         ("- env0:\n" ^ show_env env0 ^ "\n\n- env1:\n" ^ show_env env1 ^ "\n\n"));
 
@@ -1086,6 +1088,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
 (** Destructure all the new abstractions *)
 let destructure_new_abs (span : Meta.span) (loop_id : LoopId.id)
     (old_abs_ids : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
+  log#ltrace (lazy (__FUNCTION__ ^ ": ctx:\n\n" ^ eval_ctx_to_string ctx));
   let abs_kind : abs_kind = Loop (loop_id, None, LoopSynthInput) in
   let can_end = true in
   let destructure_shared_values = true in
@@ -1105,6 +1108,8 @@ let destructure_new_abs (span : Meta.span) (loop_id : LoopId.id)
       ctx.env
   in
   let ctx = { ctx with env } in
+  log#ltrace
+    (lazy (__FUNCTION__ ^ ": resulting ctx:\n\n" ^ eval_ctx_to_string ctx));
   Invariants.check_invariants span ctx;
   ctx
 
@@ -1165,23 +1170,32 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
   let join_one (ctx : eval_ctx) : eval_ctx =
     log#ltrace
       (lazy
-        ("loop_join_origin_with_continue_ctxs:join_one: initial ctx:\n"
+        (__FUNCTION__ ^ ":join_one: initial ctx:\n"
+        ^ eval_ctx_to_string ~span:(Some span) ctx));
+
+    (* Simplify the dummy values, by removing as many as we can -
+       we ignore the synthesis continuation *)
+    let ctx, _ =
+      simplify_dummy_values_useless_abs config span ~simplify_abs:false
+        fixed_ids.aids ctx
+    in
+    log#ltrace
+      (lazy
+        (__FUNCTION__ ^ ":join_one: after simplify_dummy_values_useless_abs:\n"
         ^ eval_ctx_to_string ~span:(Some span) ctx));
 
     (* Destructure the abstractions introduced in the new context *)
     let ctx = destructure_new_abs span loop_id fixed_ids.aids ctx in
     log#ltrace
       (lazy
-        ("loop_join_origin_with_continue_ctxs:join_one: after destructure:\n"
+        (__FUNCTION__ ^ ":join_one: after destructure:\n"
         ^ eval_ctx_to_string ~span:(Some span) ctx));
-    (* Sanity check *)
-    if !Config.sanity_checks then Invariants.check_invariants span ctx;
 
     (* Reduce the context we want to add to the join *)
     let ctx = reduce_ctx span loop_id fixed_ids ctx in
     log#ltrace
       (lazy
-        ("loop_join_origin_with_continue_ctxs:join_one: after reduce:\n"
+        (__FUNCTION__ ^ ":join_one: after reduce:\n"
         ^ eval_ctx_to_string ~span:(Some span) ctx));
     (* Sanity check *)
     if !Config.sanity_checks then Invariants.check_invariants span ctx;
@@ -1195,14 +1209,14 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
     let ctx1 = join_one_aux ctx in
     log#ltrace
       (lazy
-        ("loop_join_origin_with_continue_ctxs:join_one: after join:\n"
+        (__FUNCTION__ ^ ":join_one: after join:\n"
         ^ eval_ctx_to_string ~span:(Some span) ctx1));
 
     (* Collapse to eliminate the markers *)
     joined_ctx := collapse_ctx_with_merge span loop_id fixed_ids !joined_ctx;
     log#ltrace
       (lazy
-        ("loop_join_origin_with_continue_ctxs:join_one: after join-collapse:\n"
+        (__FUNCTION__ ^ ":join_one: after join-collapse:\n"
         ^ eval_ctx_to_string ~span:(Some span) !joined_ctx));
     (* Sanity check *)
     if !Config.sanity_checks then Invariants.check_invariants span !joined_ctx;
@@ -1211,7 +1225,7 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
     joined_ctx := reduce_ctx span loop_id fixed_ids !joined_ctx;
     log#ltrace
       (lazy
-        ("loop_join_origin_with_continue_ctxs:join_one: after last reduce:\n"
+        (__FUNCTION__ ^ ":join_one: after last reduce:\n"
         ^ eval_ctx_to_string ~span:(Some span) !joined_ctx));
 
     (* Sanity check *)

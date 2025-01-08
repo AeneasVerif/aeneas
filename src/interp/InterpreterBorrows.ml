@@ -1824,9 +1824,24 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
             sanity_check __FILE__ __LINE__ (opt_bid = None) span;
             (* Simply explore the child *)
             list_avalues false push_fail child_av
+        | AEndedSharedLoan (sv, child_av) ->
+            (* We don't support nested borrows for now *)
+            cassert __FILE__ __LINE__
+              (not
+                 (ty_has_borrows (Some span) ctx.type_ctx.type_infos child_av.ty))
+              span "Nested borrows are not supported yet";
+            (* Explore the shared value *)
+            (* Destructure the shared value *)
+            let avl, _ =
+              if destructure_shared_values then list_values sv else ([], sv)
+            in
+            (* Explore the child *)
+            list_avalues false push_fail child_av;
+            (* Push the avalues introduced because we decomposed the inner loans
+               in the shared value - see the ASharedLoan case *)
+            List.iter push avl
         | AEndedMutLoan
             { child = child_av; given_back = _; given_back_meta = _ }
-        | AEndedSharedLoan (_, child_av)
         | AEndedIgnoredMutLoan
             { child = child_av; given_back = _; given_back_meta = _ }
         | AIgnoredSharedLoan child_av ->
@@ -1984,6 +1999,152 @@ let abs_is_destructured (span : Meta.span) (destructure_shared_values : bool)
   in
   abs = abs'
 
+exception FoundBorrowId of BorrowId.id
+exception FoundAbsId of AbstractionId.id
+
+(** Find the first endable loan projector in an abstraction.
+
+    An endable loan projector is a loan projector over a symbolic value
+    which doesn't appear anywhere else in the context.
+ *)
+let find_first_endable_loan_proj_in_abs (span : Meta.span) (ctx : eval_ctx)
+    (abs : abs) : unit =
+  let visitor =
+    object
+      inherit [_] iter_abs as super
+
+      method! visit_aproj env proj =
+        match proj with
+        | AProjLoans (sv, proj_ty, _) ->
+            (* Check if there are borrow projectors in the context *)
+            let explore_shared = false in
+            begin
+              match
+                lookup_intersecting_aproj_borrows_opt span explore_shared
+                  abs.regions.owned sv proj_ty ctx
+              with
+              | None ->
+                  (* No intersecting projections: we can end this loan projector *)
+                  raise (FoundAbsProj (abs.abs_id, sv))
+              | Some _ ->
+                  (* There are intersecting projections: we can't end this loan projector *)
+                  super#visit_aproj env proj
+            end
+        | AProjBorrows _ | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty ->
+            super#visit_aproj env proj
+    end
+  in
+  (* Visit *)
+  visitor#visit_abs () abs
+
+(* Repeat until we can't simplify the context anymore:
+   - end the borrows which appear in anonymous values and don't contain loans
+   - end the region abstractions which can be ended (no loans)
+   - replace the values in anonymous values with bottom whenever possible
+     (the value is not inside a borrow/loan and doesn't itself contain borrows/loans)
+   - end the loan projectors inside region abstractions when the corresponding
+     symbolic value doesn't appear anywhere else in the context
+   However we ignore the "fixed" abstractions.
+*)
+let rec simplify_dummy_values_useless_abs_aux (config : config)
+    (span : Meta.span) ~(simplify_abs : bool)
+    (fixed_abs_ids : AbstractionId.Set.t) : cm_fun =
+ fun ctx ->
+  (* Small utility: check that the loan corresponding to a borrow
+     does not belong to an abstraction in the fixed set.
+  *)
+  let loan_id_not_in_fixed_abs (lid : BorrowId.id) : bool =
+    match fst (lookup_loan span ek_all lid ctx) with
+    | AbsId abs_id -> not (AbstractionId.Set.mem abs_id fixed_abs_ids)
+    | _ -> true
+  in
+  let rec explore_env (ctx : eval_ctx) (env : env) : env =
+    match env with
+    | [] -> [] (* Done *)
+    | EBinding (BDummy vid, v) :: env ->
+        (* If the symbolic value doesn't contain concrete borrows or loans
+           we simply ignore it *)
+        if not (concrete_borrows_loans_in_value v.value) then
+          explore_env ctx env
+        else
+          (* Explore the anonymous value - raises an exception if it finds
+             a borrow to end *)
+          let visitor =
+            object
+              inherit [_] map_typed_value as super
+              method! visit_VLoan _ lc = VLoan lc (* Don't enter inside loans *)
+
+              method! visit_VBorrow _ bc =
+                (* Check if we can end the borrow, do not enter inside if we can't *)
+                match bc with
+                | VSharedBorrow bid | VReservedMutBorrow bid ->
+                    if loan_id_not_in_fixed_abs bid then
+                      raise (FoundBorrowId bid)
+                    else VBorrow bc
+                | VMutBorrow (bid, v) ->
+                    if
+                      (not (concrete_loans_in_value v))
+                      && loan_id_not_in_fixed_abs bid
+                    then raise (FoundBorrowId bid)
+                    else (* Stop there *)
+                      VBorrow bc
+
+              (* If no concrete borrows/loans: replace with bottow *)
+              method! visit_value _ v =
+                if not (concrete_borrows_loans_in_value v) then VBottom
+                else super#visit_value () v
+            end
+          in
+          let v = visitor#visit_typed_value () v in
+          (* No exception was raised: continue *)
+          EBinding (BDummy vid, v) :: explore_env ctx env
+    | EAbs abs :: env
+      when simplify_abs && abs.can_end
+           && not (AbstractionId.Set.mem abs.abs_id fixed_abs_ids) -> (
+        (* Check if it is possible to end the abstraction: if yes, raise an exception *)
+        let opt_loan = get_first_non_ignored_aloan_in_abstraction span abs in
+        match opt_loan with
+        | None ->
+            (* No remaining loans: we can end the abstraction *)
+            raise (FoundAbsId abs.abs_id)
+        | Some _ ->
+            (* There are remaining loans: we can't end the abstraction *)
+            (* Check if we can end some loan projectors *)
+            find_first_endable_loan_proj_in_abs span ctx abs;
+            (* Continue *)
+            EAbs abs :: explore_env ctx env)
+    | b :: env -> b :: explore_env ctx env
+  in
+  let rec_call =
+    simplify_dummy_values_useless_abs_aux config span ~simplify_abs
+      fixed_abs_ids
+  in
+  try
+    (* Explore the environment *)
+    ({ ctx with env = explore_env ctx ctx.env }, fun e -> e)
+  with
+  | FoundAbsId abs_id ->
+      let ctx, cc = end_abstraction config span abs_id ctx in
+      comp cc (rec_call ctx)
+  | FoundBorrowId bid ->
+      let ctx, cc = end_borrow config span bid ctx in
+      comp cc (rec_call ctx)
+  | FoundAbsProj (abs_id, sv) ->
+      (* We can end this loan projector (there are no corresponding borrows
+         projectors in the context): set it as ended and continue *)
+      let ctx = update_aproj_loans_to_ended span abs_id sv ctx in
+      rec_call ctx
+
+let simplify_dummy_values_useless_abs (config : config) (span : Meta.span)
+    ~(simplify_abs : bool) (fixed_abs_ids : AbstractionId.Set.t) : cm_fun =
+ fun ctx ->
+  let ctx, cc =
+    simplify_dummy_values_useless_abs_aux config span ~simplify_abs
+      fixed_abs_ids ctx
+  in
+  Invariants.check_invariants span ctx;
+  (ctx, cc)
+
 let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
     ~(can_end : bool) ~(destructure_shared_values : bool) (ctx : eval_ctx)
     (v : typed_value) : abs list =
@@ -1992,9 +2153,17 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
   let absl = ref [] in
   let push_abs (r_id : RegionId.id) (avalues : typed_avalue list) : unit =
     if avalues = [] then ()
-    else
+    else begin
       (* Create the abs - note that we keep the order of the avalues as it is
          (unlike the environments) *)
+      log#ldebug
+        (lazy
+          (__FUNCTION__ ^ ": push_abs: avalues:\n"
+          ^ String.concat "\n"
+              (List.map
+                 (fun (v : typed_avalue) ->
+                   typed_avalue_to_string ctx v ^ " : " ^ ty_to_string ctx v.ty)
+                 avalues)));
       let abs =
         {
           abs_id = fresh_abstraction_id ();
@@ -2010,9 +2179,13 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
           avalues;
         }
       in
+      log#ldebug
+        (lazy
+          (__FUNCTION__ ^ ": push_abs: abs:\n" ^ abs_to_string span ctx abs));
       Invariants.opt_type_check_abs span ctx abs;
       (* Add to the list of abstractions *)
       absl := abs :: !absl
+    end
   in
 
   (* [group]: group in one abstraction (because we dived into a borrow/loan)
@@ -2025,9 +2198,9 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
       ~(group : bool) (r_id : RegionId.id) (v : typed_value) :
       typed_avalue list * typed_value =
     (* Debug *)
-    log#ltrace
+    log#ldebug
       (lazy
-        ("convert_value_to_abstractions: to_avalues:\n- value: "
+        (__FUNCTION__ ^ ": to_avalues:\n- value: "
         ^ typed_value_to_string ~span:(Some span) ctx v));
 
     let ty = v.ty in
@@ -2164,21 +2337,25 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
         (* If we group the borrows: simply introduce a projector.
            Otherwise, introduce one abstraction per region *)
         if group then
-          (* Substitute the regions in the type *)
-          let visitor =
-            object
-              inherit [_] map_ty
+          (* Check if the type contains regions: if not, simply ignore
+             it (there are no projections to introduce) *)
+          if TypesUtils.ty_no_regions sv.sv_ty then ([], v)
+          else
+            (* Substitute the regions in the type *)
+            let visitor =
+              object
+                inherit [_] map_ty
 
-              method! visit_RVar _ var =
-                match var with
-                | Free _ -> RVar (Free r_id)
-                | Bound _ -> internal_error __FILE__ __LINE__ span
-            end
-          in
-          let ty = visitor#visit_ty () sv.sv_ty in
-          let nv = ASymbolic (PNone, AProjBorrows (sv, ty, [])) in
-          let nv : typed_avalue = { value = nv; ty } in
-          ([ nv ], v)
+                method! visit_RVar _ var =
+                  match var with
+                  | Free _ -> RVar (Free r_id)
+                  | Bound _ -> internal_error __FILE__ __LINE__ span
+              end
+            in
+            let ty = visitor#visit_ty () sv.sv_ty in
+            let nv = ASymbolic (PNone, AProjBorrows (sv, ty, [])) in
+            let nv : typed_avalue = { value = nv; ty } in
+            ([ nv ], v)
         else
           (* Introduce one abstraction per live region *)
           let regions = ref RegionId.Map.empty in

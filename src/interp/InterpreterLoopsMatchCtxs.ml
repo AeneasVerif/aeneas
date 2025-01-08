@@ -1860,14 +1860,21 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
      ^ "\n- src_ctx: " ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: "
      ^ eval_ctx_to_string tgt_ctx));
 
+  (* Simplify the target context *)
+  let tgt_ctx, cc =
+    simplify_dummy_values_useless_abs config span ~simplify_abs:false
+      fixed_ids.aids tgt_ctx
+  in
+
   (* We first reorganize [tgt_ctx] so that we can match [src_ctx] with it (by
      ending loans for instance - remember that the [src_ctx] is the fixed point
      context, which results from joins during which we ended the loans which
      were introduced during the loop iterations)
   *)
   let tgt_ctx, cc =
-    prepare_loop_match_ctx_with_target config span loop_id fixed_ids src_ctx
-      tgt_ctx
+    comp cc
+      (prepare_loop_match_ctx_with_target config span loop_id fixed_ids src_ctx
+         tgt_ctx)
   in
 
   (* Introduce the "identity" abstractions for the loop re-entry.

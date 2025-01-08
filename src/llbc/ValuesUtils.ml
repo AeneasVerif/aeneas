@@ -146,7 +146,7 @@ let concrete_loans_in_value (v : typed_value) : bool =
   with Found -> true
 
 (** Check if a value contains concrete borrows or loans *)
-let concrete_borrows_loans_in_value (v : typed_value) : bool =
+let concrete_borrows_loans_in_value (v : value) : bool =
   let obj =
     object
       inherit [_] iter_typed_value
@@ -156,7 +156,7 @@ let concrete_borrows_loans_in_value (v : typed_value) : bool =
   in
   (* We use exceptions *)
   try
-    obj#visit_typed_value () v;
+    obj#visit_value () v;
     false
   with Found -> true
 

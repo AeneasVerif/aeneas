@@ -1594,10 +1594,14 @@ and eval_function_body (config : config) (body : statement) : stl_cm_fun =
       (fun (ctx, res) ->
         (* Note that we *don't* check the result ({!Panic}, {!Return}, etc.): we
            delegate the check to the caller. *)
-        log#ltrace (lazy "eval_function_body: cf_finish");
+        log#ltrace
+          (lazy ("eval_function_body: cf_finish:\n" ^ eval_ctx_to_string ctx));
         (* Expand the symbolic values if necessary - we need to do that before
            checking the invariants *)
         let ctx, cf = greedy_expand_symbolic_values config body.span ctx in
+        log#ltrace
+          (lazy
+            ("eval_function_body: after expansion:\n" ^ eval_ctx_to_string ctx));
         (* Sanity check *)
         Invariants.check_invariants body.span ctx;
         (* Continue *)

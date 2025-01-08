@@ -92,26 +92,29 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
     ((eval_ctx * statement_eval_res)
     * (SymbolicAst.expression -> SymbolicAst.expression))
     * borrow_loan_corresp =
-  (* First, preemptively end borrows/move values by matching the current
+  log#ltrace
+    (lazy
+      (__FUNCTION__
+     ^ ": about to reorganize the original context to match the fixed-point \
+        ctx with it:\n\
+        - src ctx (fixed-point ctx):\n" ^ eval_ctx_to_string fp_ctx
+     ^ "\n\n-tgt ctx (original context):\n"
+      ^ eval_ctx_to_string init_ctx));
+
+  let ctx = init_ctx in
+
+  (* Preemptively end borrows/move values by matching the current
      context with the target context *)
   let ctx, cf_prepare =
-    log#ltrace
-      (lazy
-        ("eval_loop_symbolic_synthesize_fun_end: about to reorganize the \
-          original context to match the fixed-point ctx with it:\n\
-          - src ctx (fixed-point ctx):\n" ^ eval_ctx_to_string fp_ctx
-       ^ "\n\n-tgt ctx (original context):\n"
-        ^ eval_ctx_to_string init_ctx));
-
-    prepare_loop_match_ctx_with_target config span loop_id fixed_ids fp_ctx
-      init_ctx
+    prepare_loop_match_ctx_with_target config span loop_id fixed_ids fp_ctx ctx
   in
 
   (* Actually match *)
   log#ltrace
     (lazy
-      ("eval_loop_symbolic_synthesize_fun_end: about to compute the id \
-        correspondance between the fixed-point ctx and the original ctx:\n\
+      (__FUNCTION__
+     ^ ": about to compute the id correspondance between the fixed-point ctx \
+        and the original ctx:\n\
         - src ctx (fixed-point ctx)\n" ^ eval_ctx_to_string fp_ctx
      ^ "\n\n-tgt ctx (original context):\n" ^ eval_ctx_to_string ctx));
 
@@ -121,8 +124,8 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
   in
   log#ltrace
     (lazy
-      ("eval_loop_symbolic_synthesize_fun_end: about to match the fixed-point \
-        context with the original context:\n\
+      (__FUNCTION__
+     ^ ": about to match the fixed-point context with the original context:\n\
         - src ctx (fixed-point ctx)"
       ^ eval_ctx_to_string ~span:(Some span) fp_ctx
       ^ "\n\n-tgt ctx (original context):\n"
@@ -148,8 +151,7 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
     let abs = ctx_lookup_abs fp_ctx abs_id in
     log#ltrace
       (lazy
-        ("eval_loop_symbolic_synthesize_fun_end: checking abs:\n"
-       ^ abs_to_string span ctx abs ^ "\n"));
+        (__FUNCTION__ ^ ": checking abs:\n" ^ abs_to_string span ctx abs ^ "\n"));
 
     let is_borrow (av : typed_avalue) : bool =
       match av.value with
@@ -438,10 +440,11 @@ let eval_loop (config : config) (span : span) (eval_loop_body : stl_cm_fun) :
   match config.mode with
   | ConcreteMode -> (eval_loop_concrete span eval_loop_body) ctx
   | SymbolicMode ->
-      (* Simplify the context by ending the unnecessary borrows/loans and getting
+      (* Preemptively simplify the context by ending the unnecessary borrows/loans and getting
          rid of the useless symbolic values (which are in anonymous variables) *)
       let ctx, cc =
-        cleanup_fresh_values_and_abs config span empty_ids_set ctx
+        InterpreterBorrows.simplify_dummy_values_useless_abs config span
+          ~simplify_abs:false AbstractionId.Set.empty ctx
       in
 
       (* We want to make sure the loop will *not* manipulate shared avalues

@@ -105,6 +105,25 @@ val destructure_abs :
  *)
 val abs_is_destructured : Meta.span -> bool -> eval_ctx -> abs -> bool
 
+(** Simplify the dummy values in a context by removing as many as possible
+    and ending as many borrows as possible.
+
+    We remove all the dummy values which:
+    - contain no loans/borrows.
+    - contain symbolic values (including those containing borrows: it is tantamount
+      to ending preemptively the outer borrows)
+
+    We also:
+    - end the borrows which are inside dummy and don't themselves contain loans
+    - end the region abstractions which can be ended because they contain no loans
+    - end the loan projectors which can be ended because the corresponding
+      symbolic value doesn't appear anywhere else in the context
+    We ignore the abstractions which are specified by the set of abstraction
+    ids (we do not end them, nor their loans).
+ *)
+val simplify_dummy_values_useless_abs :
+  config -> Meta.span -> simplify_abs:bool -> AbstractionId.Set.t -> cm_fun
+
 (** Turn a value into a abstractions.
 
     We are conservative, and don't group borrows/loans into the same abstraction
@@ -129,7 +148,13 @@ val abs_is_destructured : Meta.span -> bool -> eval_ctx -> abs -> bool
     - [v]
  *)
 val convert_value_to_abstractions :
-  Meta.span -> abs_kind -> bool -> bool -> eval_ctx -> typed_value -> abs list
+  Meta.span ->
+  abs_kind ->
+  can_end:bool ->
+  destructure_shared_values:bool ->
+  eval_ctx ->
+  typed_value ->
+  abs list
 
 (** See {!merge_into_abstraction}.
 

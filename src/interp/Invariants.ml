@@ -778,6 +778,35 @@ type sv_info = {
 }
 [@@deriving show]
 
+let proj_borrows_info_to_string (ctx : eval_ctx) (info : proj_borrows_info) :
+    string =
+  let { abs_id; regions; proj_ty; as_shared_value } = info in
+  "{ abs_id = "
+  ^ AbstractionId.to_string abs_id
+  ^ "; regions = "
+  ^ RegionId.Set.to_string None regions
+  ^ "; proj_ty = " ^ ty_to_string ctx proj_ty ^ "; as_shared_value = "
+  ^ Print.bool_to_string as_shared_value
+  ^ "}"
+
+let proj_loans_info_to_string (ctx : eval_ctx) (info : proj_loans_info) : string
+    =
+  let { abs_id; regions; proj_ty } = info in
+  "{ abs_id = "
+  ^ AbstractionId.to_string abs_id
+  ^ "; regions = "
+  ^ RegionId.Set.to_string None regions
+  ^ "; proj_ty = " ^ ty_to_string ctx proj_ty ^ "}"
+
+let sv_info_to_string (ctx : eval_ctx) (info : sv_info) : string =
+  let { ty; env_count = _; aproj_borrows; aproj_loans } = info in
+  "{\n  ty = " ^ ty_to_string ctx ty ^ ";\n  aproj_borrows = ["
+  ^ String.concat ", "
+      (List.map (proj_borrows_info_to_string ctx) aproj_borrows)
+  ^ "];\n  aproj_loans = ["
+  ^ String.concat ", " (List.map (proj_loans_info_to_string ctx) aproj_loans)
+  ^ "]\n}"
+
 (** Check the invariants over the symbolic values.
     
     - a symbolic value can't be both in proj_borrows and in the concrete env
@@ -849,52 +878,61 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
   in
   (* Collect the information *)
   obj#visit_eval_ctx None ctx;
-  log#ltrace
-    (lazy
-      ("check_symbolic_values: collected information:\n"
-      ^ SymbolicValueId.Map.to_string (Some "  ") show_sv_info !infos));
+
   (* Check *)
-  let check_info _id info =
-    (* TODO: check that:
-     * - the borrows are mutually disjoint
-     *)
-    (* A symbolic value can't be both in the regular environment and inside
-     * projectors of borrows in abstractions *)
-    sanity_check __FILE__ __LINE__
-      (info.env_count = 0 || info.aproj_borrows = [])
-      span;
-    sanity_check __FILE__ __LINE__
-      (info.aproj_borrows = [] || info.aproj_loans <> [])
-      span;
-    (* At the same time:
-     * - check that the loans don't intersect
-     * - compute the set of regions for which we project loans
-     *)
-    (* Check that the loan projectors contain the region projectors *)
-    let loan_regions =
-      List.fold_left
-        (fun regions linfo ->
-          let regions =
-            RegionId.Set.fold
-              (fun rid regions ->
-                sanity_check __FILE__ __LINE__
-                  (not (RegionId.Set.mem rid regions))
-                  span;
-                RegionId.Set.add rid regions)
-              regions linfo.regions
+  let check_info id info =
+    log#ltrace
+      (lazy
+        (__FUNCTION__ ^ ": checking info (sid: )"
+        ^ SymbolicValueId.to_string id
+        ^ ":\n" ^ sv_info_to_string ctx info));
+    if info.aproj_borrows = [] && info.aproj_loans = [] then ()
+    else (
+      (* TODO: check that:
+       * - the borrows are mutually disjoint
+       *)
+      sanity_check __FILE__ __LINE__
+        (info.aproj_borrows = [] || info.aproj_loans <> [])
+        span;
+      (* Check that the loan projections don't intersect and compute
+         the normalized union of those projections *)
+      let aproj_loans =
+        List.map
+          (fun (linfo : proj_loans_info) ->
+            normalize_proj_ty linfo.regions linfo.proj_ty)
+          info.aproj_loans
+      in
+
+      (* There should be at least one loan proj *)
+      let loan_proj_union =
+        match aproj_loans with
+        | [] -> internal_error __FILE__ __LINE__ span
+        | loan_proj_union :: aproj_loans ->
+            List.fold_left
+              (fun loan_proj_union proj_ty ->
+                norm_proj_tys_union span loan_proj_union proj_ty)
+              loan_proj_union aproj_loans
+      in
+
+      (* Check that the union of the loan projectors contains the borrow projections. *)
+      let aproj_borrows =
+        List.map
+          (fun (linfo : proj_borrows_info) ->
+            normalize_proj_ty linfo.regions linfo.proj_ty)
+          info.aproj_borrows
+      in
+      match aproj_borrows with
+      | [] -> (* Nothing to do *) ()
+      | borrow_proj_union :: aproj_borrows ->
+          let borrow_proj_union =
+            List.fold_left
+              (fun borrow_proj_union proj_ty ->
+                norm_proj_tys_union span borrow_proj_union proj_ty)
+              borrow_proj_union aproj_borrows
           in
-          regions)
-        RegionId.Set.empty info.aproj_loans
-    in
-    (* Check that the union of the loan projectors contains the borrow projections. *)
-    List.iter
-      (fun (binfo : proj_borrows_info) ->
-        sanity_check __FILE__ __LINE__
-          (projection_contains span info.ty loan_regions binfo.proj_ty
-             binfo.regions)
-          span)
-      info.aproj_borrows;
-    ()
+          sanity_check __FILE__ __LINE__
+            (norm_proj_ty_contains span loan_proj_union borrow_proj_union)
+            span)
   in
 
   M.iter check_info !infos

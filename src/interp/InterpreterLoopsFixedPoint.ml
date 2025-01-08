@@ -6,7 +6,6 @@ open ValuesUtils
 module S = SynthesizeSymbolic
 open Cps
 open InterpreterUtils
-open InterpreterBorrowsCore
 open InterpreterBorrows
 open InterpreterLoopsCore
 open InterpreterLoopsMatchCtxs
@@ -15,117 +14,6 @@ open Errors
 
 (** The local logger *)
 let log = Logging.loops_fixed_point_log
-
-exception FoundBorrowId of BorrowId.id
-exception FoundAbsId of AbstractionId.id
-
-(* Repeat until we can't simplify the context anymore:
-   - end the borrows which appear in fresh anonymous values and don't contain loans
-   - end the fresh region abstractions which can be ended (no loans)
-*)
-let rec end_useless_fresh_borrows_and_abs (config : config) (span : Meta.span)
-    (fixed_ids : ids_sets) : cm_fun =
- fun ctx ->
-  let rec explore_env (env : env) : unit =
-    match env with
-    | [] -> () (* Done *)
-    | EBinding (BDummy vid, v) :: env
-      when not (DummyVarId.Set.mem vid fixed_ids.dids) ->
-        (* Explore the anonymous value - raises an exception if it finds
-           a borrow to end *)
-        let visitor =
-          object
-            inherit [_] iter_typed_value
-            method! visit_VLoan _ _ = () (* Don't enter inside loans *)
-
-            method! visit_VBorrow _ bc =
-              (* Check if we can end the borrow, do not enter inside if we can't *)
-              match bc with
-              | VSharedBorrow bid | VReservedMutBorrow bid ->
-                  raise (FoundBorrowId bid)
-              | VMutBorrow (bid, v) ->
-                  if not (value_has_loans v.value) then
-                    raise (FoundBorrowId bid)
-                  else (* Stop there *)
-                    ()
-          end
-        in
-        visitor#visit_typed_value () v;
-        (* No exception was raised: continue *)
-        explore_env env
-    | EAbs abs :: env when not (AbstractionId.Set.mem abs.abs_id fixed_ids.aids)
-      -> (
-        (* Check if it is possible to end the abstraction: if yes, raise an exception *)
-        let opt_loan = get_first_non_ignored_aloan_in_abstraction span abs in
-        match opt_loan with
-        | None ->
-            (* No remaining loans: we can end the abstraction *)
-            raise (FoundAbsId abs.abs_id)
-        | Some _ ->
-            (* There are remaining loans: we can't end the abstraction *)
-            explore_env env)
-    | _ :: env -> explore_env env
-  in
-  let rec_call = end_useless_fresh_borrows_and_abs config span fixed_ids in
-  try
-    (* Explore the environment *)
-    explore_env ctx.env;
-    (* No exception raised: simply continue *)
-    (ctx, fun e -> e)
-  with
-  | FoundAbsId abs_id ->
-      let ctx, cc = end_abstraction config span abs_id ctx in
-      comp cc (rec_call ctx)
-  | FoundBorrowId bid ->
-      let ctx, cc = end_borrow config span bid ctx in
-      comp cc (rec_call ctx)
-
-(* Explore the fresh anonymous values and replace all the values which are not
-   borrows/loans with ⊥ *)
-let cleanup_fresh_values (span : Meta.span option) (fixed_ids : ids_sets)
-    (ctx : eval_ctx) : eval_ctx =
-  let rec explore_env (env : env) : env =
-    match env with
-    | [] -> [] (* Done *)
-    | EBinding (BDummy vid, v) :: env
-      when not (DummyVarId.Set.mem vid fixed_ids.dids) ->
-        let env = explore_env env in
-        (* Eliminate the value altogether if it doesn't contain loans/borrows *)
-        if not (value_has_loans_or_borrows span ctx v.value) then env
-        else
-          (* Explore the anonymous value - raises an exception if it finds
-             a borrow to end *)
-          let visitor =
-            object
-              inherit [_] map_typed_value as super
-              method! visit_VLoan _ v = VLoan v (* Don't enter inside loans *)
-
-              method! visit_VBorrow _ v =
-                VBorrow v (* Don't enter inside borrows *)
-
-              method! visit_value _ v =
-                if not (value_has_loans_or_borrows span ctx v) then VBottom
-                else super#visit_value () v
-            end
-          in
-          let v = visitor#visit_typed_value () v in
-          EBinding (BDummy vid, v) :: env
-    | x :: env -> x :: explore_env env
-  in
-  { ctx with env = explore_env ctx.env }
-
-(* Repeat until we can't simplify the context anymore:
-   - explore the fresh anonymous values and replace all the values which are not
-     borrows/loans with ⊥
-   - also end the borrows which appear in fresh anonymous values and don't contain loans
-   - end the fresh region abstractions which can be ended (no loans)
-*)
-let cleanup_fresh_values_and_abs (config : config) (span : Meta.span)
-    (fixed_ids : ids_sets) : cm_fun =
- fun ctx ->
-  let ctx, cc = end_useless_fresh_borrows_and_abs config span fixed_ids ctx in
-  let ctx = cleanup_fresh_values (Some span) fixed_ids ctx in
-  (ctx, cc)
 
 let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
     cm_fun =
@@ -433,12 +321,8 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
           let aids = AbstractionId.Set.diff old_ids.aids new_ids.aids in
           (* End those borrows and abstractions *)
           let end_borrows_abs blids aids ctx =
-            let ctx =
-              InterpreterBorrows.end_borrows_no_synth config span blids ctx
-            in
-            let ctx =
-              InterpreterBorrows.end_abstractions_no_synth config span aids ctx
-            in
+            let ctx = end_borrows_no_synth config span blids ctx in
+            let ctx = end_abstractions_no_synth config span aids ctx in
             ctx
           in
           (* End the borrows/abs in [ctx1] *)
@@ -651,10 +535,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
                  abs.kind = SynthInput rg_id)
                 span;
               (* End this abstraction *)
-              let ctx =
-                InterpreterBorrows.end_abstraction_no_synth config span abs_id
-                  ctx
-              in
+              let ctx = end_abstraction_no_synth config span abs_id ctx in
               (* Explore the context, and check which abstractions are not there anymore *)
               let ids, _ = compute_ctx_ids ctx in
               let ended_ids = AbstractionId.Set.diff !fp_aids ids.aids in

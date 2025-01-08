@@ -211,6 +211,8 @@ exception
 exception
   FoundAProjLoans of symbolic_value * ty * (msymbolic_value * aproj) list
 
+exception FoundAbsProj of abstraction_id * symbolic_value
+
 let symbolic_value_id_in_ctx (sv_id : SymbolicValueId.id) (ctx : eval_ctx) :
     bool =
   let obj =
