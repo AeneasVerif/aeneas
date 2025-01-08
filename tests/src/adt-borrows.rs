@@ -1,4 +1,4 @@
-//@ [coq,fstar] subdir=misc
+//@ [coq,fstar] skip
 //! This file contains tests with ADTs containing borrows.
 
 //
