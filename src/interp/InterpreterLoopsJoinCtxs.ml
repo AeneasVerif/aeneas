@@ -278,7 +278,7 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
     (span : Meta.span) (loop_id : LoopId.id) (old_ids : ids_sets)
     (ctx0 : eval_ctx) : eval_ctx =
   (* Debug *)
-  log#ldebug
+  log#ltrace
     (lazy
       ("reduce_ctx:\n\n- fixed_ids:\n" ^ show_ids_sets old_ids ^ "\n\n- ctx0:\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx0
@@ -314,14 +314,14 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
          ctx0.env)
   in
   let ctx = { ctx0 with env } in
-  log#ldebug
+  log#ltrace
     (lazy
       ("reduce_ctx: after converting values to abstractions:\n"
      ^ show_ids_sets old_ids ^ "\n\n- ctx:\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx
       ^ "\n\n"));
 
-  log#ldebug
+  log#ltrace
     (lazy
       ("reduce_ctx: after decomposing the shared values in the abstractions:\n"
      ^ show_ids_sets old_ids ^ "\n\n- ctx:\n"
@@ -382,7 +382,7 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
             match AbstractionId.Set.elements abs_ids1 with
             | [] -> None
             | abs_id1 :: _ ->
-                log#ldebug
+                log#ltrace
                   (lazy
                     ("reduce_ctx: merging abstraction "
                     ^ AbstractionId.to_string abs_id1
@@ -420,7 +420,7 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
   let ctx = IterMergeSymbolic.iter_merge ctx in
 
   (* Debugging *)
-  log#ldebug
+  log#ltrace
     (lazy
       ("reduce_ctx:\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
      ^ "\n\n- after reduce:\n"
@@ -431,7 +431,7 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
      all the markers at this point. *)
   let ctx = reorder_fresh_abs span true old_ids.aids ctx in
 
-  log#ldebug
+  log#ltrace
     (lazy
       ("reduce_ctx:\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
      ^ "\n\n- after reduce and reorder borrows/loans and abstractions:\n"
@@ -466,7 +466,7 @@ let collapse_ctx_collapse (span : Meta.span) (loop_id : LoopId.id)
     (merge_funs : merge_duplicates_funcs) (old_ids : ids_sets) (ctx : eval_ctx)
     : eval_ctx =
   (* Debug *)
-  log#ldebug
+  log#ltrace
     (lazy
       ("collapse_ctx:\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
      ^ "\n\n- initial ctx:\n"
@@ -630,7 +630,7 @@ let collapse_ctx_collapse (span : Meta.span) (loop_id : LoopId.id)
   let ctx = IterMergeConcrete.iter_merge ctx in
   let ctx = IterMergeSymbolic.iter_merge ctx in
 
-  log#ldebug
+  log#ltrace
     (lazy
       ("collapse_ctx:\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
      ^ "\n\n- after collapse:\n"
@@ -641,7 +641,7 @@ let collapse_ctx_collapse (span : Meta.span) (loop_id : LoopId.id)
      all the markers yet *)
   let ctx = reorder_fresh_abs span true old_ids.aids ctx in
 
-  log#ldebug
+  log#ltrace
     (lazy
       ("collapse_ctx:\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
      ^ "\n\n- after collapse and reorder borrows/loans:\n"
@@ -871,7 +871,7 @@ let collapse_ctx_with_merge (span : Meta.span) (loop_id : LoopId.id)
 let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
     (ctx0 : eval_ctx) (ctx1 : eval_ctx) : ctx_or_update =
   (* Debug *)
-  log#ldebug
+  log#ltrace
     (lazy
       ("join_ctxs:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
      ^ "\n\n- ctx0:\n"
@@ -887,7 +887,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
   (* Explore the environments. *)
   let join_suffixes (env0 : env) (env1 : env) : env =
     (* Debug *)
-    log#ldebug
+    log#ltrace
       (lazy
         ("join_suffixes:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
        ^ "\n\n- ctx0:\n"
@@ -948,7 +948,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
     | ( (EBinding (BDummy b0, v0) as var0) :: env0',
         (EBinding (BDummy b1, v1) as var1) :: env1' ) ->
         (* Debug *)
-        log#ldebug
+        log#ltrace
           (lazy
             ("join_prefixes: BDummys:\n\n- fixed_ids:\n" ^ "\n"
            ^ show_ids_sets fixed_ids ^ "\n\n- value0:\n"
@@ -973,7 +973,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
     | ( (EBinding (BVar b0, v0) as var0) :: env0',
         (EBinding (BVar b1, v1) as var1) :: env1' ) ->
         (* Debug *)
-        log#ldebug
+        log#ltrace
           (lazy
             ("join_prefixes: BVars:\n\n- fixed_ids:\n" ^ "\n"
            ^ show_ids_sets fixed_ids ^ "\n\n- value0:\n"
@@ -993,7 +993,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
         var :: join_prefixes env0' env1'
     | (EAbs abs0 as abs) :: env0', EAbs abs1 :: env1' ->
         (* Debug *)
-        log#ldebug
+        log#ltrace
           (lazy
             ("join_prefixes: Abs:\n\n- fixed_ids:\n" ^ "\n"
            ^ show_ids_sets fixed_ids ^ "\n\n- abs0:\n"
@@ -1023,7 +1023,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
       | _ -> craise __FILE__ __LINE__ span "Unreachable"
     in
 
-    log#ldebug
+    log#ltrace
       (lazy
         ("- env0:\n" ^ show_env env0 ^ "\n\n- env1:\n" ^ show_env env1 ^ "\n\n"));
 
@@ -1161,14 +1161,14 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
         join_one_aux ctx
   in
   let join_one (ctx : eval_ctx) : eval_ctx =
-    log#ldebug
+    log#ltrace
       (lazy
         ("loop_join_origin_with_continue_ctxs:join_one: initial ctx:\n"
         ^ eval_ctx_to_string ~span:(Some span) ctx));
 
     (* Destructure the abstractions introduced in the new context *)
     let ctx = destructure_new_abs span loop_id fixed_ids.aids ctx in
-    log#ldebug
+    log#ltrace
       (lazy
         ("loop_join_origin_with_continue_ctxs:join_one: after destructure:\n"
         ^ eval_ctx_to_string ~span:(Some span) ctx));
@@ -1177,7 +1177,7 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
 
     (* Reduce the context we want to add to the join *)
     let ctx = reduce_ctx span loop_id fixed_ids ctx in
-    log#ldebug
+    log#ltrace
       (lazy
         ("loop_join_origin_with_continue_ctxs:join_one: after reduce:\n"
         ^ eval_ctx_to_string ~span:(Some span) ctx));
@@ -1191,14 +1191,14 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
 
     (* Join the two contexts  *)
     let ctx1 = join_one_aux ctx in
-    log#ldebug
+    log#ltrace
       (lazy
         ("loop_join_origin_with_continue_ctxs:join_one: after join:\n"
         ^ eval_ctx_to_string ~span:(Some span) ctx1));
 
     (* Collapse to eliminate the markers *)
     joined_ctx := collapse_ctx_with_merge span loop_id fixed_ids !joined_ctx;
-    log#ldebug
+    log#ltrace
       (lazy
         ("loop_join_origin_with_continue_ctxs:join_one: after join-collapse:\n"
         ^ eval_ctx_to_string ~span:(Some span) !joined_ctx));
@@ -1207,7 +1207,7 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
 
     (* Reduce again to reach a fixed point *)
     joined_ctx := reduce_ctx span loop_id fixed_ids !joined_ctx;
-    log#ldebug
+    log#ltrace
       (lazy
         ("loop_join_origin_with_continue_ctxs:join_one: after last reduce:\n"
         ^ eval_ctx_to_string ~span:(Some span) !joined_ctx));

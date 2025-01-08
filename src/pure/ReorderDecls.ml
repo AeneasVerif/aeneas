@@ -72,7 +72,7 @@ let group_reorder_fun_decls (decls : fun_decl list) :
   let idl = List.map get_fun_id decls in
   let ids = FunIdSet.of_list idl in
 
-  log#ldebug
+  log#ltrace
     (lazy
       ("group_reorder_fun_decls: ids:\n"
       ^ (Print.list_to_string FunIdOrderedType.show_t) idl));

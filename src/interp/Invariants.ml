@@ -266,7 +266,7 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
   borrows_visitor#visit_eval_ctx () ctx;
 
   (* Debugging *)
-  log#ldebug
+  log#ltrace
     (lazy ("\nAbout to check context invariant:\n" ^ context_to_string ()));
 
   (* Finally, check that everything is consistant *)
@@ -849,7 +849,7 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
   in
   (* Collect the information *)
   obj#visit_eval_ctx None ctx;
-  log#ldebug
+  log#ltrace
     (lazy
       ("check_symbolic_values: collected information:\n"
       ^ SymbolicValueId.Map.to_string (Some "  ") show_sv_info !infos));
@@ -901,14 +901,14 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
 
 let check_invariants (span : Meta.span) (ctx : eval_ctx) : unit =
   if !Config.sanity_checks then (
-    log#ldebug
+    log#ltrace
       (lazy
         ("Checking invariants:\n" ^ eval_ctx_to_string ~span:(Some span) ctx));
     check_loans_borrows_relation_invariant span ctx;
     check_borrowed_values_invariant span ctx;
     check_typing_invariant span ctx true;
     check_symbolic_values span ctx)
-  else log#ldebug (lazy "Not checking invariants (check is not activated)")
+  else log#ltrace (lazy "Not checking invariants (check is not activated)")
 
 let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
   if !Config.sanity_checks then check_typing_invariant span ctx true

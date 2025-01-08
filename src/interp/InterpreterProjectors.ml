@@ -206,7 +206,7 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
             let rset1 = ctx.ended_regions in
             let ty2 = ty in
             let rset2 = regions in
-            log#ldebug
+            log#ltrace
               (lazy
                 ("projections_intersect:" ^ "\n- ty1: " ^ ty_to_string ctx ty1
                ^ "\n- rset1: "

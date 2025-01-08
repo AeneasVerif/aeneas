@@ -76,7 +76,7 @@ let check_literal (span : Meta.span) (v : literal) (ty : literal_type) : unit =
 
 let rec check_typed_pattern (span : Meta.span) (ctx : tc_ctx)
     (v : typed_pattern) : tc_ctx =
-  log#ldebug (lazy ("check_typed_pattern: " ^ show_typed_pattern v));
+  log#ltrace (lazy ("check_typed_pattern: " ^ show_typed_pattern v));
   match v.value with
   | PatConstant cv ->
       check_literal span cv (ty_as_literal span v.ty);

@@ -223,7 +223,7 @@ let ctx_push_var (span : Meta.span) (ctx : eval_ctx) (var : var)
 *)
 let ctx_push_vars (span : Meta.span) (ctx : eval_ctx)
     (vars : (var * typed_value) list) : eval_ctx =
-  log#ldebug
+  log#ltrace
     (lazy
       ("push_vars:\n"
       ^ String.concat "\n"

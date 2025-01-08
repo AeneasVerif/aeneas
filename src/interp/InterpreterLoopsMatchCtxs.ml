@@ -361,17 +361,17 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
     | VBottom, _ -> M.match_bottom_with_other ctx0 ctx1 true v1
     | _, VBottom -> M.match_bottom_with_other ctx0 ctx1 false v0
     | _ ->
-        log#ldebug
+        log#ltrace
           (lazy
             ("Unexpected match case:\n- value0: "
             ^ typed_value_to_string ~span:(Some M.span) ctx0 v0
             ^ "\n- value1: "
             ^ typed_value_to_string ~span:(Some M.span) ctx1 v1));
-        craise __FILE__ __LINE__ M.span "Unexpected match case"
+        internal_error __FILE__ __LINE__ M.span
 
   and match_typed_avalues (ctx0 : eval_ctx) (ctx1 : eval_ctx)
       (v0 : typed_avalue) (v1 : typed_avalue) : typed_avalue =
-    log#ldebug
+    log#ltrace
       (lazy
         ("match_typed_avalues:\n- value0: "
         ^ typed_avalue_to_string ~span:(Some M.span) ctx0 v0
@@ -405,18 +405,18 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
     | ABottom, ABottom -> mk_abottom M.span ty
     | AIgnored _, AIgnored _ -> mk_aignored M.span ty None
     | ABorrow bc0, ABorrow bc1 -> (
-        log#ldebug (lazy "match_typed_avalues: borrows");
+        log#ltrace (lazy "match_typed_avalues: borrows");
         match (bc0, bc1) with
         | ASharedBorrow (pm0, bid0), ASharedBorrow (pm1, bid1) ->
-            log#ldebug (lazy "match_typed_avalues: shared borrows");
+            log#ltrace (lazy "match_typed_avalues: shared borrows");
             M.match_ashared_borrows ctx0 ctx1 v0.ty pm0 bid0 v1.ty pm1 bid1 ty
         | AMutBorrow (pm0, bid0, av0), AMutBorrow (pm1, bid1, av1) ->
-            log#ldebug (lazy "match_typed_avalues: mut borrows");
-            log#ldebug
+            log#ltrace (lazy "match_typed_avalues: mut borrows");
+            log#ltrace
               (lazy
                 "match_typed_avalues: mut borrows: matching children values");
             let av = match_arec av0 av1 in
-            log#ldebug
+            log#ltrace
               (lazy "match_typed_avalues: mut borrows: matched children values");
             M.match_amut_borrows ctx0 ctx1 v0.ty pm0 bid0 av0 v1.ty pm1 bid1 av1
               ty av
@@ -444,13 +444,13 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
             *)
             craise __FILE__ __LINE__ M.span "Unexpected")
     | ALoan lc0, ALoan lc1 -> (
-        log#ldebug (lazy "match_typed_avalues: loans");
+        log#ltrace (lazy "match_typed_avalues: loans");
         (* TODO: maybe we should enforce that the ids are always exactly the same -
            without matching *)
         match (lc0, lc1) with
         | ASharedLoan (pm0, ids0, sv0, av0), ASharedLoan (pm1, ids1, sv1, av1)
           ->
-            log#ldebug (lazy "match_typed_avalues: shared loans");
+            log#ltrace (lazy "match_typed_avalues: shared loans");
             let sv = match_rec sv0 sv1 in
             let av = match_arec av0 av1 in
             sanity_check __FILE__ __LINE__
@@ -459,11 +459,11 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
             M.match_ashared_loans ctx0 ctx1 v0.ty pm0 ids0 sv0 av0 v1.ty pm1
               ids1 sv1 av1 ty sv av
         | AMutLoan (pm0, id0, av0), AMutLoan (pm1, id1, av1) ->
-            log#ldebug (lazy "match_typed_avalues: mut loans");
-            log#ldebug
+            log#ltrace (lazy "match_typed_avalues: mut loans");
+            log#ltrace
               (lazy "match_typed_avalues: mut loans: matching children values");
             let av = match_arec av0 av1 in
-            log#ldebug
+            log#ltrace
               (lazy "match_typed_avalues: mut loans: matched children values");
             M.match_amut_loans ctx0 ctx1 v0.ty pm0 id0 av0 v1.ty pm1 id1 av1 ty
               av
@@ -1255,7 +1255,7 @@ struct
   let match_shared_borrows (ctx0 : eval_ctx) (ctx1 : eval_ctx)
       (match_typed_values : typed_value -> typed_value -> typed_value)
       (_ty : ety) (bid0 : borrow_id) (bid1 : borrow_id) : borrow_id =
-    log#ldebug
+    log#ltrace
       (lazy
         ("MakeCheckEquivMatcher: match_shared_borrows: " ^ "bid0: "
        ^ BorrowId.to_string bid0 ^ ", bid1: " ^ BorrowId.to_string bid1));
@@ -1269,7 +1269,7 @@ struct
       else
         let v0 = S.lookup_shared_value_in_ctx0 bid0 in
         let v1 = S.lookup_shared_value_in_ctx1 bid1 in
-        log#ldebug
+        log#ltrace
           (lazy
             ("MakeCheckEquivMatcher: match_shared_borrows: looked up values:"
            ^ "sv0: "
@@ -1303,7 +1303,7 @@ struct
     let id0 = sv0.sv_id in
     let id1 = sv1.sv_id in
 
-    log#ldebug
+    log#ltrace
       (lazy
         ("MakeCheckEquivMatcher: match_symbolic_values: " ^ "sv0: "
         ^ SymbolicValueId.to_string id0
@@ -1406,7 +1406,7 @@ struct
     (* We are checking whether that two environments are equivalent:
        there shouldn't be any projection markers *)
     sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
-    log#ldebug
+    log#ltrace
       (lazy
         ("MakeCheckEquivMatcher:match_amut_loans:" ^ "\n- id0: "
        ^ BorrowId.to_string id0 ^ "\n- id1: " ^ BorrowId.to_string id1
@@ -1432,7 +1432,7 @@ struct
     { value = ASymbolic (PNone, AProjLoans (sv, proj_ty, [])); ty }
 
   let match_avalues (ctx0 : eval_ctx) (ctx1 : eval_ctx) v0 v1 =
-    log#ldebug
+    log#ltrace
       (lazy
         ("avalues don't match:\n- v0: "
         ^ typed_avalue_to_string ~span:(Some span) ctx0 v0
@@ -1445,7 +1445,7 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
     (lookup_shared_value_in_ctx0 : BorrowId.id -> typed_value)
     (lookup_shared_value_in_ctx1 : BorrowId.id -> typed_value) (ctx0 : eval_ctx)
     (ctx1 : eval_ctx) : ids_maps option =
-  log#ldebug
+  log#ltrace
     (lazy
       ("match_ctxs:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
      ^ "\n\n- ctx0:\n"
@@ -1555,7 +1555,7 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
     let _ = CEM.match_rids regions0 regions1 in
     let _ = CEM.match_rids ancestors_regions0 ancestors_regions1 in
 
-    log#ldebug (lazy "match_abstractions: matching values");
+    log#ltrace (lazy "match_abstractions: matching values");
     let _ =
       if List.length avalues0 <> List.length avalues1 then
         raise
@@ -1565,13 +1565,13 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
           (fun (v0, v1) -> M.match_typed_avalues ctx0 ctx1 v0 v1)
           (List.combine avalues0 avalues1)
     in
-    log#ldebug (lazy "match_abstractions: values matched OK");
+    log#ltrace (lazy "match_abstractions: values matched OK");
     ()
   in
 
   (* Rem.: this function raises exceptions of type [Distinct] *)
   let rec match_envs (env0 : env) (env1 : env) : unit =
-    log#ldebug
+    log#ltrace
       (lazy
         ("match_ctxs: match_envs:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
        ^ "\n\n- rid_map: "
@@ -1614,10 +1614,10 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
         (* Continue *)
         match_envs env0' env1'
     | EAbs abs0 :: env0', EAbs abs1 :: env1' ->
-        log#ldebug (lazy "match_ctxs: match_envs: matching abs");
+        log#ltrace (lazy "match_ctxs: match_envs: matching abs");
         (* Same as for the dummy values: there are two cases *)
         if AbstractionId.Set.mem abs0.abs_id fixed_ids.aids then (
-          log#ldebug (lazy "match_ctxs: match_envs: matching abs: fixed abs");
+          log#ltrace (lazy "match_ctxs: match_envs: matching abs: fixed abs");
           (* Still in the prefix: the abstractions must be the same *)
           sanity_check __FILE__ __LINE__ (abs0 = abs1) span;
           (* Their ids must be fixed *)
@@ -1628,7 +1628,7 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
           (* Continue *)
           match_envs env0' env1')
         else (
-          log#ldebug
+          log#ltrace
             (lazy "match_ctxs: match_envs: matching abs: not fixed abs");
           (* Match the values *)
           match_abstractions abs0 abs1;
@@ -1670,10 +1670,10 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
     Some maps
   with
   | Distinct msg ->
-      log#ldebug (lazy ("match_ctxs: distinct: " ^ msg ^ "\n"));
+      log#ltrace (lazy ("match_ctxs: distinct: " ^ msg ^ "\n"));
       None
   | ValueMatchFailure k ->
-      log#ldebug
+      log#ltrace
         (lazy
           ("match_ctxs: distinct: ValueMatchFailure" ^ show_updt_env_kind k
          ^ "\n"));
@@ -1691,7 +1691,7 @@ let prepare_match_ctx_with_target (config : config) (span : Meta.span)
     (loop_id : LoopId.id) (fixed_ids : ids_sets) (src_ctx : eval_ctx) : cm_fun =
  fun tgt_ctx ->
   (* Debug *)
-  log#ldebug
+  log#ltrace
     (lazy
       ("prepare_match_ctx_with_target:\n" ^ "\n- fixed_ids: "
      ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
@@ -1706,7 +1706,7 @@ let prepare_match_ctx_with_target (config : config) (span : Meta.span)
     let filt_src_env, _, _ = ctx_split_fixed_new span fixed_ids src_ctx in
     let filt_tgt_env, _, _ = ctx_split_fixed_new span fixed_ids tgt_ctx in
 
-    log#ldebug
+    log#ltrace
       (lazy
         ("prepare_match_ctx_with_target: reorganize_join_tgt:\n"
        ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n"
@@ -1751,7 +1751,7 @@ let prepare_match_ctx_with_target (config : config) (span : Meta.span)
           (List.combine filt_src_env filt_tgt_env)
       in
       (* No exception was thrown: continue *)
-      log#ldebug
+      log#ltrace
         (lazy
           ("prepare_match_ctx_with_target: reorganize_join_tgt: done with \
             borrows/loans:\n" ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids
@@ -1809,7 +1809,7 @@ let prepare_match_ctx_with_target (config : config) (span : Meta.span)
         ctx_push_fresh_dummy_vars tgt_ctx (List.rev !nvalues)
       in
 
-      log#ldebug
+      log#ltrace
         (lazy
           ("prepare_match_ctx_with_target: reorganize_join_tgt: done with \
             borrows/loans and moves:\n" ^ "\n- fixed_ids: "
@@ -1842,7 +1842,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
     (src_ctx : eval_ctx) : st_cm_fun =
  fun tgt_ctx ->
   (* Debug *)
-  log#ldebug
+  log#ltrace
     (lazy
       ("match_ctx_with_target:\n" ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids
      ^ "\n" ^ "\n- src_ctx: " ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: "
@@ -1875,7 +1875,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
      [add_identity_abs] to add the identity abstractions one by one.
   *)
   (* Match the source and target contexts *)
-  log#ldebug
+  log#ltrace
     (lazy
       ("mach_ctx_with_target: about to introduce the identity abstractions (i):\n"
      ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
@@ -1926,7 +1926,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
   in
 
   (* Debug *)
-  log#ldebug
+  log#ltrace
     (lazy
       ("match_ctx_with_target: about to introduce the identity abstractions \
         (ii):" ^ "\n\n- src_ctx: "
@@ -2061,7 +2061,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
 
   let tgt_ctx = visit_tgt#visit_eval_ctx () tgt_ctx in
 
-  log#ldebug
+  log#ltrace
     (lazy
       ("match_ctx_with_target: cf_introduce_loop_fp_abs:"
      ^ "\n- src_fresh_borrows_map:\n"
@@ -2128,7 +2128,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
       inherit [_] map_eval_ctx as super
 
       method! visit_borrow_id _ bid =
-        log#ldebug
+        log#ltrace
           (lazy
             ("match_ctx_with_target: cf_introduce_loop_fp_abs: \
               visit_borrow_id: " ^ BorrowId.to_string bid ^ "\n"));
@@ -2138,7 +2138,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
           BorrowId.InjSubst.find bid fp_bl_maps.borrow_to_loan_id_map
         in
 
-        log#ldebug
+        log#ltrace
           (lazy
             ("match_ctx_with_target: cf_introduce_loop_fp_abs: looked up \
               src_lid: " ^ BorrowId.to_string src_lid ^ "\n"));
@@ -2148,7 +2148,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
           BorrowId.InjSubst.find src_lid src_to_tgt_maps.borrow_id_map
         in
 
-        log#ldebug
+        log#ltrace
           (lazy
             ("match_ctx_with_target: cf_introduce_loop_fp_abs: looked up \
               tgt_bid: " ^ BorrowId.to_string tgt_bid ^ "\n"));
@@ -2156,7 +2156,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
         tgt_bid
 
       method! visit_loan_id _ id =
-        log#ldebug
+        log#ltrace
           (lazy
             ("match_ctx_with_target: cf_introduce_loop_fp_abs: visit_loan_id: "
            ^ BorrowId.to_string id ^ "\n"));
@@ -2269,7 +2269,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
   let nenv = List.append new_absl tgt_ctx.env in
   let tgt_ctx = { tgt_ctx with env = nenv } in
 
-  log#ldebug
+  log#ltrace
     (lazy
       ("match_ctx_with_target: cf_introduce_loop_fp_abs: done:\n- result ctx:\n"
       ^ eval_ctx_to_string ~span:(Some span) tgt_ctx));
@@ -2287,7 +2287,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
   in
 
   (* Compute the loop input values *)
-  log#ldebug
+  log#ltrace
     (lazy
       ("match_ctx_with_target: about to compute the input values:"
      ^ "\n- fp_input_svalues: "

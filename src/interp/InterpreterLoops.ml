@@ -28,7 +28,7 @@ let eval_loop_concrete (span : Meta.span) (eval_loop_body : stl_cm_fun) :
      new context (and repeat this an indefinite number of times).
   *)
   let rec rec_eval_loop_body (ctx : eval_ctx) (res : statement_eval_res) =
-    log#ldebug (lazy "eval_loop_concrete: reeval_loop_body");
+    log#ltrace (lazy "eval_loop_concrete: reeval_loop_body");
     match res with
     | Return -> [ (ctx, LoopReturn loop_id) ]
     | Panic -> [ (ctx, Panic) ]
@@ -95,7 +95,7 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
   (* First, preemptively end borrows/move values by matching the current
      context with the target context *)
   let ctx, cf_prepare =
-    log#ldebug
+    log#ltrace
       (lazy
         ("eval_loop_symbolic_synthesize_fun_end: about to reorganize the \
           original context to match the fixed-point ctx with it:\n\
@@ -107,7 +107,7 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
   in
 
   (* Actually match *)
-  log#ldebug
+  log#ltrace
     (lazy
       ("eval_loop_symbolic_synthesize_fun_end: about to compute the id \
         correspondance between the fixed-point ctx and the original ctx:\n\
@@ -118,7 +118,7 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
   let fp_bl_corresp =
     compute_fixed_point_id_correspondance span fixed_ids ctx fp_ctx
   in
-  log#ldebug
+  log#ltrace
     (lazy
       ("eval_loop_symbolic_synthesize_fun_end: about to match the fixed-point \
         context with the original context:\n\
@@ -145,7 +145,7 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
      inside the region abstractions. *)
   let check_abs (abs_id : AbstractionId.id) =
     let abs = ctx_lookup_abs fp_ctx abs_id in
-    log#ldebug
+    log#ltrace
       (lazy
         ("eval_loop_symbolic_synthesize_fun_end: checking abs:\n"
        ^ abs_to_string span ctx abs ^ "\n"));
@@ -262,7 +262,7 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
      For now, we forbid having breaks in loops (and eliminate breaks
      in the prepasses) *)
   let eval_after_loop_iter (ctx, res) =
-    log#ldebug (lazy "eval_loop_symbolic: eval_after_loop_iter");
+    log#ltrace (lazy "eval_loop_symbolic: eval_after_loop_iter");
     match res with
     | Return ->
         (* We replace the [Return] with a [LoopReturn] *)
@@ -275,7 +275,7 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
         (* We don't support nested loops for now *)
         cassert __FILE__ __LINE__ (i = 0) span
           "Nested loops are not supported yet";
-        log#ldebug
+        log#ltrace
           (lazy
             ("eval_loop_symbolic: about to match the fixed-point context with \
               the context at a continue:\n\
@@ -306,7 +306,7 @@ let eval_loop_symbolic (config : config) (span : span)
     (eval_loop_body : stl_cm_fun) : stl_cm_fun =
  fun ctx ->
   (* Debug *)
-  log#ldebug
+  log#ltrace
     (lazy
       ("eval_loop_symbolic:\nContext:\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx
@@ -321,7 +321,7 @@ let eval_loop_symbolic (config : config) (span : span)
   in
 
   (* Debug *)
-  log#ldebug
+  log#ltrace
     (lazy
       ("eval_loop_symbolic:\nInitial context:\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx
@@ -346,7 +346,7 @@ let eval_loop_symbolic (config : config) (span : span)
       fp_ctx fp_input_svalues rg_to_abs
   in
 
-  log#ldebug
+  log#ltrace
     (lazy
       "eval_loop_symbolic: matched the fixed-point context with the original \
        context.");
@@ -357,7 +357,7 @@ let eval_loop_symbolic (config : config) (span : span)
       fixed_ids fp_ctx fp_input_svalues fp_bl_corresp
   in
 
-  log#ldebug
+  log#ltrace
     (lazy
       ("eval_loop_symbolic: result:" ^ "\n- src context:\n"
       ^ eval_ctx_to_string_no_filter ~span:(Some span) ctx
@@ -385,7 +385,7 @@ let eval_loop_symbolic (config : config) (span : span)
   let rg_to_given_back =
     let compute_abs_given_back_tys (abs_id : AbstractionId.id) : Pure.ty list =
       let abs = ctx_lookup_abs fp_ctx abs_id in
-      log#ldebug
+      log#ltrace
         (lazy
           ("eval_loop_symbolic: compute_abs_given_back_tys:\n- abs:\n"
           ^ abs_to_string span ~with_ended:true ctx abs

@@ -723,7 +723,7 @@ let compute_fun_sig_explicit_info (sg : Pure.fun_sig) : explicit_info =
  *)
 let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
     type_decl =
-  log#ldebug
+  log#ltrace
     (lazy
       (let ctx = Print.Contexts.decls_ctx_to_fmt_env ctx in
        "translate_type_decl:\n\n"
@@ -1166,7 +1166,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
     (decls_ctx : C.decls_ctx) (fun_id : A.fun_id_or_trait_method_ref)
     (sg : A.inst_fun_sig) (input_names : string option list) :
     decomposed_fun_type =
-  log#ldebug
+  log#ltrace
     (lazy
       (let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
        "translate_inst_fun_sig_with_regions_hierarchy_to_decomposed_fun_type: "
@@ -1252,7 +1252,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
     let inputs =
       List.filter_map (translate_back_ty_for_gid gid) [ sg.output ]
     in
-    log#ldebug
+    log#ltrace
       (lazy
         (let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
          let pctx = PrintPure.decls_ctx_to_fmt_env decls_ctx in
@@ -1291,7 +1291,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
       List.map (fun (name, opt_ty) -> (name, Option.get opt_ty)) outputs
     in
     let names, outputs = List.split outputs in
-    log#ldebug
+    log#ltrace
       (lazy
         (let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
          let pctx = PrintPure.decls_ctx_to_fmt_env decls_ctx in
@@ -1510,7 +1510,7 @@ let translate_fun_sig_from_decl_to_decomposed (decls_ctx : C.decls_ctx)
     translate_fun_sig_to_decomposed decls_ctx fdef.def_id fdef.signature
       input_names
   in
-  log#ldebug
+  log#ltrace
     (lazy
       ("translate_fun_sig_from_decl_to_decomposed:" ^ "\n- name: "
       ^ T.show_name fdef.item_meta.name
@@ -1882,7 +1882,7 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
     | VSymbolic sv -> symbolic_value_to_texpression ctx sv
   in
   (* Debugging *)
-  log#ldebug
+  log#ltrace
     (lazy
       ("typed_value_to_texpression: result:" ^ "\n- input value:\n"
       ^ typed_value_to_string ctx v
@@ -2230,7 +2230,7 @@ let typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
      it contains mutable loans, then we generate a consumed value (because
      upon ending the borrow we consumed a value).
      Otherwise we ignore it. *)
-  log#ldebug
+  log#ltrace
     (lazy
       ("typed_avalue_to_consumed: "
       ^ typed_avalue_to_string ~with_ended:true ectx av));
@@ -2239,7 +2239,7 @@ let typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
       av
   with
   | LoanProj BMut ->
-      log#ldebug
+      log#ltrace
         (lazy
           "typed_avalue_to_consumed: the value contains mutable loan projectors");
       typed_avalue_to_consumed_aux ~filter:true ctx ectx abs_regions av
@@ -2247,7 +2247,7 @@ let typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
       (* If it is a borrow proj we ignore it. If it is an unknown projection,
          it means the value doesn't contain loans nor borrows, so nothing
          is consumed upon ending the abstraction: we can ignore it as well. *)
-      log#ldebug
+      log#ltrace
         (lazy
           "typed_avalue_to_consumed: the value doesn't contains mutable loan \
            projectors (ignoring it)");
@@ -2259,14 +2259,14 @@ let typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
  *)
 let abs_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs) :
     texpression list =
-  log#ldebug
+  log#ltrace
     (lazy ("abs_to_consumed:\n" ^ abs_to_string ~with_ended:true ctx abs));
   let values =
     List.filter_map
       (typed_avalue_to_consumed ctx ectx abs.regions.owned)
       abs.avalues
   in
-  log#ldebug
+  log#ltrace
     (lazy
       ("abs_to_consumed:\n- abs: "
       ^ abs_to_string ~with_ended:true ctx abs
@@ -2538,7 +2538,7 @@ let abs_to_given_back (mpl : mplace option list option) (abs : V.abs)
       ctx avalues
   in
   let values = List.filter_map (fun x -> x) values in
-  log#ldebug
+  log#ltrace
     (lazy
       ("abs_to_given_back:\n- abs: " ^ abs_to_string ctx abs ^ "\n- values: "
       ^ Print.list_to_string (typed_pattern_to_string ctx) values));
@@ -2660,7 +2660,7 @@ let register_consumed_mut_borrows (ectx : C.eval_ctx) (ctx : bs_ctx)
 let decompose_let_match (ctx : bs_ctx)
     ((pat, bound) : typed_pattern * texpression) :
     bs_ctx * (typed_pattern * texpression) =
-  log#ldebug
+  log#ltrace
     (lazy
       ("decompose_let_match: " ^ "\n- pat: "
       ^ typed_pattern_to_string ctx pat
@@ -2866,7 +2866,7 @@ and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
 
 and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
     texpression =
-  log#ldebug
+  log#ltrace
     (lazy
       ("translate_function_call:\n" ^ "\n- call.call_id:"
       ^ S.show_call_id call.call_id
@@ -2926,7 +2926,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
               (List.map (fun _ -> None) sg.inputs)
           in
           let back_tys = compute_back_tys_with_info dsg None in
-          log#ldebug
+          log#ltrace
             (lazy
               ("back_tys:\n "
               ^ String.concat "\n"
@@ -3165,7 +3165,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
 
 and translate_end_abstraction (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expression) (ctx : bs_ctx) : texpression =
-  log#ldebug
+  log#ltrace
     (lazy
       ("translate_end_abstraction: abstraction kind: "
      ^ V.show_abs_kind abs.kind));
@@ -3182,7 +3182,7 @@ and translate_end_abstraction (ectx : C.eval_ctx) (abs : V.abs)
 and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expression) (ctx : bs_ctx) (rg_id : T.RegionGroupId.id) : texpression
     =
-  log#ldebug
+  log#ltrace
     (lazy
       ("translate_end_abstraction_synth_input:" ^ "\n- function: "
       ^ name_to_string ctx ctx.fun_decl.item_meta.name
@@ -3232,7 +3232,7 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
   (* Get the list of values consumed by the abstraction upon ending *)
   let consumed_values = abs_to_consumed ctx ectx abs in
 
-  log#ldebug
+  log#ltrace
     (lazy
       ("translate_end_abstraction_synth_input:"
      ^ "\n\n- given back variables types:\n"
@@ -3336,7 +3336,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
   match func with
   | None -> next_e ctx
   | Some func ->
-      log#ldebug
+      log#ltrace
         (lazy
           (let args = List.map (texpression_to_string ctx) args in
            "func: "
@@ -3367,7 +3367,7 @@ and translate_end_abstraction_identity (ectx : C.eval_ctx) (abs : V.abs)
 and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expression) (ctx : bs_ctx) (rg_id : T.RegionGroupId.id) : texpression
     =
-  log#ldebug
+  log#ltrace
     (lazy ("Translating ended synthesis abstraction: " ^ abs_to_string ctx abs));
   (* If we end the abstraction which consumed the return value of the function
      we are synthesizing, we get back the borrows which were inside. Those borrows
@@ -3400,7 +3400,7 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
   (* First, retrieve the list of variables used for the inputs for the
    * backward function *)
   let inputs = T.RegionGroupId.Map.find rg_id ctx.backward_inputs_no_state in
-  log#ldebug
+  log#ltrace
     (lazy
       ("Consumed inputs: "
       ^ Print.list_to_string (pure_var_to_string ctx) inputs));
@@ -3412,9 +3412,9 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
   (* Retrieve the values given back upon ending this abstraction - note that
      we don't provide meta-place information, because those assignments will
      be inlined anyway... *)
-  log#ldebug (lazy ("abs: " ^ abs_to_string ctx abs));
+  log#ltrace (lazy ("abs: " ^ abs_to_string ctx abs));
   let ctx, given_back = abs_to_given_back_no_mp abs ctx in
-  log#ldebug
+  log#ltrace
     (lazy
       ("given back: "
       ^ Print.list_to_string (typed_pattern_to_string ctx) given_back));
@@ -3424,7 +3424,7 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
   (* Sanity check *)
   List.iter
     (fun ((given_back, input) : typed_pattern * var) ->
-      log#ldebug
+      log#ltrace
         (lazy
           ("\n- given_back ty: "
           ^ pure_ty_to_string ctx given_back.ty
@@ -3668,7 +3668,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
             If (true_e, false_e) )
       in
       let ty = true_e.ty in
-      log#ldebug
+      log#ltrace
         (lazy
           ("true_e.ty: "
           ^ pure_ty_to_string ctx true_e.ty
@@ -3761,7 +3761,7 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
 and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
     (sv : V.symbolic_value) (v : S.value_aggregate) (e : S.expression)
     (ctx : bs_ctx) : texpression =
-  log#ldebug
+  log#ltrace
     (lazy
       ("translate_intro_symbolic:" ^ "\n- value aggregate: "
      ^ S.show_value_aggregate v));
@@ -4047,7 +4047,7 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
       (* Lookup the loop information *)
       let loop_info = LoopId.Map.find loop_id ctx.loops in
 
-      log#ldebug
+      log#ltrace
         (lazy
           ("translate_forward_end:\n- loop_input_values:\n"
           ^ V.SymbolicValueId.Map.show
@@ -4063,7 +4063,7 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
       let loop_input_values =
         List.map
           (fun sv ->
-            log#ldebug
+            log#ltrace
               (lazy
                 ("translate_forward_end: looking up input_svl: "
                 ^ V.SymbolicValueId.to_string sv.V.sv_id
@@ -4213,7 +4213,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
           V.SymbolicValueId.Set.mem sv.sv_id loop.fresh_svalues)
         loop.input_svalues
     in
-    log#ldebug
+    log#ltrace
       (lazy
         ("translate_loop:" ^ "\n- input_svalues: "
         ^ (Print.list_to_string (symbolic_value_to_string ctx))
@@ -4257,7 +4257,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   let back_effect_infos, output_ty =
     (* The loop backward functions consume the same additional inputs as the parent
        function, but have custom outputs *)
-    log#ldebug
+    log#ltrace
       (lazy
         (let back_sgs = RegionGroupId.Map.bindings ctx.sg.fun_ty.back_sg in
          "translate_loop:" ^ "\n- back_sgs: "
@@ -4568,7 +4568,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
   (* Translate *)
   let def = ctx.fun_decl in
   assert (ctx.bid = None);
-  log#ldebug
+  log#ltrace
     (lazy
       ("SymbolicToPure.translate_fun_decl: "
       ^ name_to_string ctx def.item_meta.name
@@ -4584,7 +4584,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
     match body with
     | None -> None
     | Some body ->
-        log#ldebug
+        log#ltrace
           (lazy
             ("SymbolicToPure.translate_fun_decl: "
             ^ name_to_string ctx def.item_meta.name
@@ -4672,7 +4672,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
           List.map (fun v -> mk_typed_pattern_from_var v None) inputs
         in
         (* Sanity check *)
-        log#ldebug
+        log#ltrace
           (lazy
             ("SymbolicToPure.translate_fun_decl: "
             ^ name_to_string ctx def.item_meta.name
@@ -4717,7 +4717,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
     }
   in
   (* Debugging *)
-  log#ldebug
+  log#ltrace
     (lazy
       ("SymbolicToPure.translate_fun_decl: translated:\n"
      ^ fun_decl_to_string ctx def));

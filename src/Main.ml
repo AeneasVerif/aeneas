@@ -88,11 +88,11 @@ let matches_name_with_generics (c : crate) (name : Types.name)
   in
   Option.is_some (NameMatcherMap.find_with_generics_opt mctx name generics m)
 
-let activated_loggers : string list ref = ref []
+let activated_loggers : (EL.level * string) list ref = ref []
 
-let add_activated_loggers (name_list : string) =
+let add_activated_loggers level (name_list : string) =
   let names = String.split_on_char ',' name_list in
-  activated_loggers := names @ !activated_loggers
+  activated_loggers := List.map (fun n -> (level, n)) names @ !activated_loggers
 
 let marked_ids : string list ref = ref []
 
@@ -181,13 +181,17 @@ let () =
         " Print all the external definitions which are not listed in the \
          builtin functions" );
       ( "-log",
-        Arg.String add_activated_loggers,
-        " Activate debugging log for a given logger designated by its name. It \
-         is possible to specifiy a list of names if they are separated by \
-         commas without spaces; for instance: '-log \
-         Interpreter,SymbolicToPure'. The existing loggers are: {"
+        Arg.String (add_activated_loggers EL.Trace),
+        " Activate trace log for a given logger designated by its name. It is \
+         possible to specifiy a list of names if they are separated by commas \
+         without spaces; for instance: '-log Interpreter,SymbolicToPure'. The \
+         existing loggers are: {"
         ^ String.concat ", " (Collections.StringMap.keys !loggers)
         ^ "}" );
+      ( "-log-debug",
+        Arg.String (add_activated_loggers EL.Debug),
+        " Same as '-log' but sets the level to the more verbose 'debug' rather \
+         than 'trace'" );
       ( "-mark-ids",
         Arg.String add_marked_ids,
         " For developers: mark some identifiers to throw an exception if we \
@@ -259,7 +263,7 @@ let () =
 
   (* Activate the loggers *)
   List.iter
-    (fun name ->
+    (fun (level, name) ->
       match Collections.StringMap.find_opt name !loggers with
       | None ->
           log#serror
@@ -268,7 +272,7 @@ let () =
             ^ String.concat ", " (Collections.StringMap.keys !loggers)
             ^ "}");
           fail false
-      | Some logger -> logger#set_level EL.Debug)
+      | Some logger -> logger#set_level level)
     !activated_loggers;
 
   (* Properly register the marked ids *)

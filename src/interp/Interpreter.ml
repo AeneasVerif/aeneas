@@ -266,7 +266,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
     (loop_id : LoopId.id option) (is_regular_return : bool) (inside_loop : bool)
     (ctx : eval_ctx) : SA.expression =
   let span = fdef.item_meta.span in
-  log#ldebug
+  log#ltrace
     (lazy
       ("evaluate_function_symbolic_synthesize_backward_from_return:"
      ^ "\n- fname: "
@@ -348,7 +348,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
       ctx)
     else ctx
   in
-  log#ldebug
+  log#ltrace
     (lazy
       ("evaluate_function_symbolic_synthesize_backward_from_return: (after \
         putting the return value in the proper abstraction)\n" ^ "\n- ctx:\n"
@@ -437,7 +437,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
           if !Config.borrow_check then (Some fun_abs_id, true) else (None, false)
       | Some abs -> (Some abs.abs_id, false)
   in
-  log#ldebug
+  log#ltrace
     (lazy
       ("evaluate_function_symbolic_synthesize_backward_from_return: ending \
         input abstraction: "
@@ -520,7 +520,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
       fdef.item_meta.name
   in
-  log#ldebug (lazy ("evaluate_function_symbolic: " ^ name_to_string ()));
+  log#ltrace (lazy ("evaluate_function_symbolic: " ^ name_to_string ()));
 
   (* Create the evaluation context *)
   let ctx, input_svs, inst_sg = initialize_symbolic_context_for_fun ctx fdef in
@@ -533,7 +533,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
   let config = mk_config SymbolicMode in
   let finish (res : statement_eval_res) (ctx : eval_ctx) =
     let ctx0 = ctx in
-    log#ldebug
+    log#ltrace
       (lazy
         ("evaluate_function_symbolic: cf_finish: "
         ^ Cps.show_statement_eval_res res));
@@ -658,7 +658,7 @@ module Test = struct
     let span = fdef.item_meta.span in
 
     (* Debug *)
-    log#ldebug
+    log#ltrace
       (lazy
         ("test_unit_function: "
         ^ Print.Types.name_to_string
