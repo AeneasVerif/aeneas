@@ -204,12 +204,7 @@ Definition use_mut_wrapper1_id
   {T : Type} (x : MutWrapper1_t T) :
   result ((MutWrapper1_t T) * (MutWrapper1_t T -> MutWrapper1_t T))
   :=
-  p <- mutWrapper1_id x;
-  let (mw, id_back) := p in
-  let back :=
-    fun (ret : MutWrapper1_t T) =>
-      id_back {| mutWrapper1_x := ret.(mutWrapper1_x) |} in
-  Ok (mw, back)
+  mutWrapper1_id x
 .
 
 (** [adt_borrows::MutWrapper2]

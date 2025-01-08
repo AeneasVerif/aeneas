@@ -153,9 +153,7 @@ let use_mut_wrapper1_id
   (#t : Type0) (x : mutWrapper1_t t) :
   result ((mutWrapper1_t t) & (mutWrapper1_t t -> mutWrapper1_t t))
   =
-  let* (mw, id_back) = mutWrapper1_id x in
-  let back = fun ret -> id_back { x = ret.x } in
-  Ok (mw, back)
+  mutWrapper1_id x
 
 (** [adt_borrows::MutWrapper2]
     Source: 'tests/src/adt-borrows.rs', lines 129:0-132:1 *)

@@ -1382,6 +1382,8 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
 
       (* Look for a type constructor applied to arguments *)
       method! visit_texpression env e =
+        (* First simplify the sub-expressions *)
+        let e = super#visit_texpression env e in
         match e.e with
         | App _ -> (
             (* TODO: we should remove this case, which dates from before the

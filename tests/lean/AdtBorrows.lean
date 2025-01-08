@@ -171,10 +171,7 @@ def use_mut_wrapper1_id
   {T : Type} (x : MutWrapper1 T) :
   Result ((MutWrapper1 T) × (MutWrapper1 T → MutWrapper1 T))
   :=
-  do
-  let (mw, id_back) ← MutWrapper1.id x
-  let back := fun ret => id_back ret
-  Result.ok (mw, back)
+  MutWrapper1.id x
 
 /- [adt_borrows::MutWrapper2]
    Source: 'tests/src/adt-borrows.rs', lines 129:0-132:1 -/
