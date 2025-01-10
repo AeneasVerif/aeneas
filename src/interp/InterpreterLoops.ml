@@ -444,7 +444,7 @@ let eval_loop (config : config) (span : span) (eval_loop_body : stl_cm_fun) :
          rid of the useless symbolic values (which are in anonymous variables) *)
       let ctx, cc =
         InterpreterBorrows.simplify_dummy_values_useless_abs config span
-          ~simplify_abs:false AbstractionId.Set.empty ctx
+          AbstractionId.Set.empty ctx
       in
 
       (* We want to make sure the loop will *not* manipulate shared avalues

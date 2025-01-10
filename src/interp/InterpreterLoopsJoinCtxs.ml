@@ -871,11 +871,11 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
   (* Debug *)
   log#ltrace
     (lazy
-      ("join_ctxs:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
+      (__FUNCTION__ ^ ":\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
      ^ "\n\n- ctx0:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx0
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:true ctx0
       ^ "\n\n- ctx1:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx1
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:true ctx1
       ^ "\n\n"));
 
   let env0 = List.rev ctx0.env in
@@ -885,10 +885,10 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
   (* Explore the environments. *)
   let join_suffixes (env0 : env) (env1 : env) : env =
     (* Debug *)
-    log#ltrace
+    log#ldebug
       (lazy
-        ("join_suffixes:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
-       ^ "\n\n- ctx0:\n"
+        (__FUNCTION__ ^ ": join_suffixes:\n\n- fixed_ids:\n"
+       ^ show_ids_sets fixed_ids ^ "\n\n- ctx0:\n"
         ^ eval_ctx_to_string ~span:(Some span) ~filter:false
             { ctx0 with env = List.rev env0 }
         ^ "\n\n- ctx1:\n"
@@ -948,7 +948,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
         (* Debug *)
         log#ldebug
           (lazy
-            ("join_prefixes: BDummys:\n\n- fixed_ids:\n" ^ "\n"
+            (__FUNCTION__ ^ ": join_prefixes: BDummys:\n\n- fixed_ids:\n" ^ "\n"
            ^ show_ids_sets fixed_ids ^ "\n\n- value0:\n"
             ^ env_elem_to_string span ctx0 var0
             ^ "\n\n- value1:\n"
@@ -973,7 +973,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
         (* Debug *)
         log#ldebug
           (lazy
-            ("join_prefixes: BVars:\n\n- fixed_ids:\n" ^ "\n"
+            (__FUNCTION__ ^ ": join_prefixes: BVars:\n\n- fixed_ids:\n" ^ "\n"
            ^ show_ids_sets fixed_ids ^ "\n\n- value0:\n"
             ^ env_elem_to_string span ctx0 var0
             ^ "\n\n- value1:\n"
@@ -993,7 +993,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
         (* Debug *)
         log#ldebug
           (lazy
-            ("join_prefixes: Abs:\n\n- fixed_ids:\n" ^ "\n"
+            (__FUNCTION__ ^ ": join_prefixes: Abs:\n\n- fixed_ids:\n" ^ "\n"
            ^ show_ids_sets fixed_ids ^ "\n\n- abs0:\n"
             ^ abs_to_string span ctx0 abs0
             ^ "\n\n- abs1:\n"
@@ -1164,12 +1164,15 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
     (* Simplify the dummy values, by removing as many as we can -
        we ignore the synthesis continuation *)
     let ctx, _ =
-      simplify_dummy_values_useless_abs config span ~simplify_abs:false
-        fixed_ids.aids ctx
+      simplify_dummy_values_useless_abs config span fixed_ids.aids ctx
     in
     log#ltrace
       (lazy
-        (__FUNCTION__ ^ ":join_one: after simplify_dummy_values_useless_abs:\n"
+        (__FUNCTION__
+       ^ ":join_one: after simplify_dummy_values_useless_abs \
+          (fixed_ids.abs_ids = "
+        ^ AbstractionId.Set.to_string None fixed_ids.aids
+        ^ "):\n"
         ^ eval_ctx_to_string ~span:(Some span) ctx));
 
     (* Destructure the abstractions introduced in the new context *)

@@ -122,7 +122,7 @@ val abs_is_destructured : Meta.span -> bool -> eval_ctx -> abs -> bool
     ids (we do not end them, nor their loans).
  *)
 val simplify_dummy_values_useless_abs :
-  config -> Meta.span -> simplify_abs:bool -> AbstractionId.Set.t -> cm_fun
+  config -> Meta.span -> AbstractionId.Set.t -> cm_fun
 
 (** Turn a value into a abstractions.
 

@@ -92,19 +92,8 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
     let norm_proj_ty = normalize_proj_ty abs.regions.owned proj_ty in
     let proj : marked_norm_symb_proj = { pm; sv_id; norm_proj_ty } in
     RAbsSymbProj.register_mapping false abs_to_borrow_projs abs.abs_id proj;
-    (* This mapping is not generally injective as it is possible to copy symbolic values.
-       For now we still force it to be injective because we don't handle well the case
-       when we join contexts where symbolic values have been copied.
-       A more general, easy-to-implement solution would be to freshen the copied
-       symbolic values like so (when copying symbolic values containing borrows):
-       {[
-         // x ~> s0
-         y = copy x
-         // x ~> s1
-         // y ~> s2
-         // abs { proj_borrows s0, proj_loans s1, proj_loans s2 }
-       ]}
-    *)
+    (* This mapping is *actually* injective because we refresh symbolic values
+       with borrows when copying them. See [InterpreterExpressions.copy_value]. *)
     RSymbProjAbs.register_mapping true borrow_proj_to_abs proj abs.abs_id
   in
   let register_loan_proj abs pm (sv_id : symbolic_value_id) (proj_ty : ty) =
@@ -1870,8 +1859,7 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
 
   (* Simplify the target context *)
   let tgt_ctx, cc =
-    simplify_dummy_values_useless_abs config span ~simplify_abs:false
-      fixed_ids.aids tgt_ctx
+    simplify_dummy_values_useless_abs config span fixed_ids.aids tgt_ctx
   in
 
   (* We first reorganize [tgt_ctx] so that we can match [src_ctx] with it (by

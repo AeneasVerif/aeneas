@@ -350,6 +350,7 @@ module Values = struct
         ^ loop_abs_kind_to_string abs_kind
         ^ ")"
     | Identity -> "Identity"
+    | CopySymbolicValue -> "CopySymbolicValue"
 
   let abs_to_string ?(span : Meta.span option = None) (env : fmt_env)
       ?(with_ended : bool = false) (verbose : bool) (indent : string)

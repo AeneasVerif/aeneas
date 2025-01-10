@@ -1455,10 +1455,10 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                            args)
                         def.item_meta.span;
                       { e with e = Var x })
-                    else super#visit_texpression env e
-                  else super#visit_texpression env e
-                else super#visit_texpression env e
-            | _ -> super#visit_texpression env e)
+                    else e
+                  else e
+                else e
+            | _ -> e)
         | StructUpdate { struct_id; init = None; updates } ->
             let adt_ty = e.ty in
             (* Attempt to convert all the field updates to projections
@@ -1484,7 +1484,7 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
             in
             let expr_projs = List.map to_expr_proj updates in
             let filt_expr_projs = List.filter_map (fun x -> x) expr_projs in
-            if filt_expr_projs = [] then super#visit_texpression env e
+            if filt_expr_projs = [] then e
             else
               (* If all the projections are from the same expression [x], we
                  simply replace the whole expression with [x] *)
@@ -1533,9 +1533,9 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                   StructUpdate { struct_id; init = Some !x; updates }
                 in
                 let e = { e with e = supd } in
-                super#visit_texpression env e)
-              else super#visit_texpression env e
-        | _ -> super#visit_texpression env e
+                e)
+              else e
+        | _ -> e
     end
   in
   match def.body with

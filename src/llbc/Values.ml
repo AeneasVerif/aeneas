@@ -825,6 +825,9 @@ type abs_kind =
           We introduce them to abstract the context a bit, for instance
           to compute fixed-points.
         *)
+  | CopySymbolicValue
+      (** See [InterpreterExpressions.copy_value]: a auxiliary region abstraction
+          which we introduced because of a copy of a symbolic value containing borrows. *)
 [@@deriving show, ord]
 
 (** Ancestor for {!abs} iter visitor *)

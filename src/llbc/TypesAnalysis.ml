@@ -3,6 +3,8 @@ open LlbcAst
 open Errors
 open Substitute
 
+let log = Logging.types_analysis_log
+
 type subtype_info = {
   under_borrow : bool;  (** Are we inside a borrow? *)
   under_mut_borrow : bool;  (** Are we inside a mut borrow? *)
@@ -147,7 +149,7 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
     match mut_region with
     | RStatic | RVar (Bound _) ->
         mut_regions (* We can have bound vars because of arrows *)
-    | RErased -> craise_opt_span __FILE__ __LINE__ span "Unreachable"
+    | RErased -> internal_error_opt_span __FILE__ __LINE__ span
     | RVar (Free rid) -> update_mut_regions_with_rid mut_regions rid
   in
 
@@ -463,6 +465,7 @@ let analyze_type_declarations (type_decls : type_decl TypeDeclId.Map.t)
  *)
 let analyze_ty (span : Meta.span option) (infos : type_infos) (ty : ty) :
     ty_info =
+  log#ltrace (lazy (__FUNCTION__ ^ ": ty:\n" ^ show_ty ty));
   (* We don't use [updated] but need to give it as parameter *)
   let updated = ref false in
   (* We don't need to compute whether the type contains 'static or not *)
