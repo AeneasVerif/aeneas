@@ -20,6 +20,9 @@ let pre_passes_log = create_logger "PrePasses"
 (** Logger for RegionsHierarchy *)
 let regions_hierarchy_log = create_logger "RegionsHierarchy"
 
+(** Logger for TypesAnalysis *)
+let types_analysis_log = create_logger "TypesAnalysis"
+
 (** Logger for Translate *)
 let translate_log = create_logger "Translate"
 
