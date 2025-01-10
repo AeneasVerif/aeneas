@@ -1870,8 +1870,7 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
 
   (* Simplify the target context *)
   let tgt_ctx, cc =
-    simplify_dummy_values_useless_abs config span ~simplify_abs:false
-      fixed_ids.aids tgt_ctx
+    simplify_dummy_values_useless_abs config span fixed_ids.aids tgt_ctx
   in
 
   (* We first reorganize [tgt_ctx] so that we can match [src_ctx] with it (by
