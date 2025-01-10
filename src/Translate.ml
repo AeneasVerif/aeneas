@@ -24,10 +24,8 @@ type symbolic_fun_translation = symbolic_value list * SA.expression
 let translate_function_to_symbolics (trans_ctx : trans_ctx) (fdef : fun_decl) :
     symbolic_fun_translation option =
   (* Debug *)
-  log#ldebug
-    (lazy
-      ("translate_function_to_symbolics: "
-      ^ name_to_string trans_ctx fdef.item_meta.name));
+  log#ltrace
+    (lazy (__FUNCTION__ ^ ": " ^ name_to_string trans_ctx fdef.item_meta.name));
 
   match fdef.body with
   | None -> None
@@ -49,10 +47,8 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     (fun_dsigs : Pure.decomposed_fun_sig FunDeclId.Map.t) (fdef : fun_decl) :
     pure_fun_translation_no_loops =
   (* Debug *)
-  log#ldebug
-    (lazy
-      ("translate_function_to_pure: "
-      ^ name_to_string trans_ctx fdef.item_meta.name));
+  log#ltrace
+    (lazy (__FUNCTION__ ^ ": " ^ name_to_string trans_ctx fdef.item_meta.name));
 
   (* Compute the symbolic ASTs, if the function is transparent *)
   let symbolic_trans = translate_function_to_symbolics trans_ctx fdef in
@@ -222,7 +218,7 @@ let translate_crate_to_pure (crate : crate) :
     * Pure.trait_decl list
     * Pure.trait_impl list =
   (* Debug *)
-  log#ldebug (lazy "translate_crate_to_pure");
+  log#ltrace (lazy __FUNCTION__);
 
   (* Compute the translation context *)
   let trans_ctx = compute_contexts crate in
@@ -383,9 +379,9 @@ let crate_has_opaque_non_builtin_decls (ctx : gen_ctx) (filter_builtin : bool) :
   let types, funs =
     LlbcAstUtils.crate_get_opaque_non_builtin_decls ctx.crate filter_builtin
   in
-  log#ldebug
+  log#ltrace
     (lazy
-      ("Opaque decls:" ^ "\n- types:\n"
+      (__FUNCTION__ ^ ": opaque decls:" ^ "\n- types:\n"
       ^ String.concat ",\n" (List.map show_type_decl types)
       ^ "\n- functions:\n"
       ^ String.concat ",\n" (List.map show_fun_decl funs)));
