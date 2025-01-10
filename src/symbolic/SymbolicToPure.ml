@@ -3190,7 +3190,8 @@ and translate_end_abstraction (ectx : C.eval_ctx) (abs : V.abs)
   | V.SynthRet rg_id -> translate_end_abstraction_synth_ret ectx abs e ctx rg_id
   | V.Loop (loop_id, rg_id, abs_kind) ->
       translate_end_abstraction_loop ectx abs e ctx loop_id rg_id abs_kind
-  | V.Identity -> translate_end_abstraction_identity ectx abs e ctx
+  | V.Identity | V.CopySymbolicValue ->
+      translate_end_abstraction_identity ectx abs e ctx
 
 and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expression) (ctx : bs_ctx) (rg_id : T.RegionGroupId.id) : texpression

@@ -2016,19 +2016,35 @@ let find_first_endable_loan_proj_in_abs (span : Meta.span) (ctx : eval_ctx)
       method! visit_aproj env proj =
         match proj with
         | AProjLoans (sv_id, proj_ty, _) ->
-            (* Check if there are borrow projectors in the context *)
+            (* Check if there are borrow projectors in the context
+               or symbolic values with the same id *)
             let explore_shared = false in
+            (* Look for the symbolic values first *)
+            let visitor =
+              object
+                inherit [_] iter_eval_ctx
+
+                method! visit_VSymbolic _ sv' =
+                  if sv'.sv_id = sv_id then raise Found else ()
+              end
+            in
             begin
-              match
-                lookup_intersecting_aproj_borrows_opt span explore_shared
-                  abs.regions.owned sv_id proj_ty ctx
-              with
-              | None ->
-                  (* No intersecting projections: we can end this loan projector *)
-                  raise (FoundAbsProj (abs.abs_id, sv_id))
-              | Some _ ->
-                  (* There are intersecting projections: we can't end this loan projector *)
-                  super#visit_aproj env proj
+              try
+                visitor#visit_eval_ctx () ctx;
+                (* If we got there it means the symbolic value doesn't appear
+                   in a concrete value in the context: check if there are
+                   borrow projectors *)
+                match
+                  lookup_intersecting_aproj_borrows_opt span explore_shared
+                    abs.regions.owned sv_id proj_ty ctx
+                with
+                | None ->
+                    (* No intersecting projections: we can end this loan projector *)
+                    raise (FoundAbsProj (abs.abs_id, sv_id))
+                | Some _ ->
+                    (* There are intersecting projections: we can't end this loan projector *)
+                    super#visit_aproj env proj
+              with Found -> ()
             end
         | AProjBorrows _ | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty ->
             super#visit_aproj env proj
@@ -2221,13 +2237,24 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
       let ctx = update_aproj_loans_to_ended span abs_id sv ctx in
       rec_call ctx
 
-let simplify_dummy_values_useless_abs (config : config) (span : Meta.span)
+let rec simplify_dummy_values_useless_abs (config : config) (span : Meta.span)
     (fixed_abs_ids : AbstractionId.Set.t) : cm_fun =
- fun ctx ->
-  let ctx, cc =
-    simplify_dummy_values_useless_abs_aux config span fixed_abs_ids ctx
+ fun ctx0 ->
+  (* Simplify the context as long as it leads to changes - TODO: make this more efficient *)
+  let rec simplify ctx0 =
+    let ctx, cc =
+      simplify_dummy_values_useless_abs_aux config span fixed_abs_ids ctx0
+    in
+    Invariants.check_invariants span ctx;
+    if ctx = ctx0 then (ctx, cc) else comp cc (simplify ctx)
   in
-  Invariants.check_invariants span ctx;
+  let ctx, cc = simplify ctx0 in
+  log#ltrace
+    (lazy
+      (__FUNCTION__ ^ ":\n- fixed_aids: "
+      ^ AbstractionId.Set.to_string None fixed_abs_ids
+      ^ "\n- ctx0:\n" ^ eval_ctx_to_string ctx0 ^ "\n- ctx1:\n"
+      ^ if ctx = ctx0 then "UNCHANGED" else eval_ctx_to_string ctx ^ "\n"));
   (ctx, cc)
 
 let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
@@ -2443,37 +2470,13 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             ([ nv ], v)
         else
           (* Introduce one abstraction per live region *)
-          let regions = ref RegionId.Map.empty in
-
-          let get_region rid =
-            (* Introduce a fresh region, if the region is alive *)
-            if not (RegionId.Set.mem rid ctx.ended_regions) then (
-              match RegionId.Map.find_opt rid !regions with
-              | Some rid -> rid
-              | None ->
-                  let nrid = fresh_region_id () in
-                  regions := RegionId.Map.add rid nrid !regions;
-                  nrid)
-            else rid
-          in
-          let visitor =
-            object
-              inherit [_] map_ty
-
-              method! visit_RVar _ var =
-                match var with
-                | Free rid -> RVar (Free (get_region rid))
-                | Bound _ -> internal_error __FILE__ __LINE__ span
-            end
-          in
-          let ty = visitor#visit_ty () sv.sv_ty in
-          (* Introduce the abstractions *)
+          let regions, ty = refresh_live_regions_in_ty span ctx sv.sv_ty in
           RegionId.Map.iter
             (fun _ rid ->
               let nv = ASymbolic (PNone, AProjBorrows (sv.sv_id, ty, [])) in
               let nv : typed_avalue = { value = nv; ty } in
               push_abs rid [ nv ])
-            !regions;
+            regions;
           ([], v)
   in
 

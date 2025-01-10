@@ -1556,3 +1556,33 @@ and norm_proj_const_generics_union (span : Meta.span) (cg1 : const_generic)
 let norm_proj_ty_contains span (ty1 : rty) (ty2 : rty) : bool =
   let set = RegionId.Set.singleton RegionId.zero in
   projection_contains span ty1 set ty2 set
+
+(** Refresh the live region ids appearing in a type, and return the new type
+    with the map from old regions to fresh regions. *)
+let refresh_live_regions_in_ty (span : Meta.span) (ctx : eval_ctx) (ty : rty) :
+    RegionId.id RegionId.Map.t * rty =
+  let regions = ref RegionId.Map.empty in
+
+  let get_region rid =
+    (* Introduce a fresh region, if the region is alive *)
+    if not (RegionId.Set.mem rid ctx.ended_regions) then (
+      match RegionId.Map.find_opt rid !regions with
+      | Some rid -> rid
+      | None ->
+          let nrid = fresh_region_id () in
+          regions := RegionId.Map.add rid nrid !regions;
+          nrid)
+    else rid
+  in
+  let visitor =
+    object
+      inherit [_] map_ty
+
+      method! visit_RVar _ var =
+        match var with
+        | Free rid -> RVar (Free (get_region rid))
+        | Bound _ -> internal_error __FILE__ __LINE__ span
+    end
+  in
+  let ty = visitor#visit_ty () ty in
+  (!regions, ty)

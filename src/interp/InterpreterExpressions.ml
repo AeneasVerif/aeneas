@@ -115,7 +115,9 @@ let literal_to_typed_value (span : Meta.span) (ty : literal_type) (cv : literal)
   (* Remaining cases (invalid) *)
   | _, _ -> craise __FILE__ __LINE__ span "Improperly typed constant value"
 
-(** Copy a value, and return the resulting value.
+(** Copy a value, and return the: the original value (we may have need to
+    update it - see the remark about the symbolic values with borrows)
+    and the resulting value.
 
     Note that copying values might update the context. For instance, when
     copying shared borrows, we need to insert new shared borrows in the context.
@@ -125,9 +127,28 @@ let literal_to_typed_value (span : Meta.span) (ty : literal_type) (cv : literal)
     Copy trait (i.e., by calling a dedicated function). This is why we added a
     parameter to control this copy ([allow_adt_copy]). Note that here by ADT we
     mean the user-defined ADTs (not tuples or builtin types).
+
+    **Symbolic values with borrows**:
+    Side note about copying symbolic values with borrows: in order to make the
+    joins easier to compute, especially for the loops, whenever we copy a symbolic
+    value containing borrows we introduce an auxiliary abstraction and freshen
+    the copied value. This enforces the invariant that there can't be several
+    occurrences of the same borrow projector over the same symbolic value.
+    More precisely, we do something like this:
+    {[
+      // x -> s0
+      y = copy x
+      // x -> s1
+      // y -> s2
+      // abs { proj_borrows s0, proj_loans s1, proj_loans s2 }
+    ]}
  *)
 let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
-    (ctx : eval_ctx) (v : typed_value) : eval_ctx * typed_value =
+    (ctx : eval_ctx) (v : typed_value) :
+    typed_value
+    * typed_value
+    * eval_ctx
+    * (SymbolicAst.expression -> SymbolicAst.expression) =
   log#ltrace
     (lazy
       ("copy_value: "
@@ -139,7 +160,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
    * the fact that we have exhaustive matches below makes very obvious the cases
    * in which we need to fail *)
   match v.value with
-  | VLiteral _ -> (ctx, v)
+  | VLiteral _ -> (v, v, ctx, fun e -> e)
   | VAdt av ->
       (* Sanity check *)
       (match v.ty with
@@ -162,12 +183,22 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
           exec_assert __FILE__ __LINE__ (ty_is_copyable ty) span
             "The type is not primitively copyable"
       | _ -> exec_raise __FILE__ __LINE__ span "Unreachable");
-      let ctx, fields =
+      let (ctx, cc), fields =
         List.fold_left_map
-          (copy_value span allow_adt_copy config)
-          ctx av.field_values
+          (fun (ctx, cc) v ->
+            let v, copied, ctx, cc1 =
+              copy_value span allow_adt_copy config ctx v
+            in
+            ((ctx, cc_comp cc cc1), (v, copied)))
+          (ctx, fun e -> e)
+          av.field_values
       in
-      (ctx, { v with value = VAdt { av with field_values = fields } })
+      let fields, copied_fields = List.split fields in
+      let copied =
+        { v with value = VAdt { av with field_values = copied_fields } }
+      in
+      let v = { v with value = VAdt { av with field_values = fields } } in
+      (v, copied, ctx, cc)
   | VBottom -> exec_raise __FILE__ __LINE__ span "Can't copy ⊥"
   | VBorrow bc -> (
       (* We can only copy shared borrows *)
@@ -177,7 +208,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
            * update the context accordingly *)
           let bid' = fresh_borrow_id () in
           let ctx = InterpreterBorrows.reborrow_shared span bid bid' ctx in
-          (ctx, { v with value = VBorrow (VSharedBorrow bid') })
+          (v, { v with value = VBorrow (VSharedBorrow bid') }, ctx, fun e -> e)
       | VMutBorrow (_, _) ->
           exec_raise __FILE__ __LINE__ span "Can't copy a mutable borrow"
       | VReservedMutBorrow _ ->
@@ -187,23 +218,89 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
       match lc with
       | VMutLoan _ ->
           exec_raise __FILE__ __LINE__ span "Can't copy a mutable loan"
-      | VSharedLoan (_, sv) ->
+      | VSharedLoan (sids, sv) ->
           (* We don't copy the shared loan: only the shared value inside *)
-          copy_value span allow_adt_copy config ctx sv)
+          let updt_value, copied_value, ctx, cf =
+            copy_value span allow_adt_copy config ctx sv
+          in
+          ( { v with value = VLoan (VSharedLoan (sids, updt_value)) },
+            copied_value,
+            ctx,
+            cf ))
   | VSymbolic sp ->
       (* We can copy only if the type is "primitively" copyable.
-       * Note that in the general case, copy is a trait: copying values
-       * thus requires calling the proper function. Here, we copy values
-       * for very simple types such as integers, shared borrows, etc. *)
+         Note that in the general case, copy is a trait: copying values
+         thus requires calling the proper function. Here, we copy values
+         for very simple types such as integers, shared borrows, etc. *)
       cassert __FILE__ __LINE__
         (ty_is_copyable (Substitute.erase_regions sp.sv_ty))
         span "Not primitively copyable";
-      (* If the type is copyable, we simply return the current value. Side
-       * remark: what is important to look at when copying symbolic values
-       * is symbolic expansion. The important subcase is the expansion of shared
-       * borrows: when doing so, every occurrence of the same symbolic value
-       * must use a fresh borrow id. *)
-      (ctx, v)
+      (* Check if the symbolic value contains borrows: if it does, we need to
+         introduce au auxiliary region abstraction (see document of the function) *)
+      if not (ty_has_borrows (Some span) ctx.type_ctx.type_infos v.ty) then
+        (* No borrows: do nothing *)
+        (v, v, ctx, fun e -> e)
+      else
+        let ctx0 = ctx in
+        (* There are borrows: we need to introduce one region abstraction per live
+           region present in the type *)
+        let regions, ty =
+          InterpreterBorrowsCore.refresh_live_regions_in_ty span ctx sp.sv_ty
+        in
+        let updated_sv = mk_fresh_symbolic_value span ty in
+        let copied_sv = mk_fresh_symbolic_value span ty in
+        let mk_abs (r_id : RegionId.id) (avalues : typed_avalue list) : abs =
+          let abs =
+            {
+              abs_id = fresh_abstraction_id ();
+              kind = CopySymbolicValue;
+              can_end = true;
+              parents = AbstractionId.Set.empty;
+              original_parents = [];
+              regions =
+                {
+                  owned = RegionId.Set.singleton r_id;
+                  ancestors = RegionId.Set.empty;
+                };
+              avalues;
+            }
+          in
+          Invariants.opt_type_check_abs span ctx abs;
+          (*  *)
+          abs
+        in
+
+        let abs =
+          List.map
+            (fun rid ->
+              let mk_proj (is_borrows : bool) sv_id : typed_avalue =
+                let proj =
+                  if is_borrows then AProjBorrows (sv_id, ty, [])
+                  else AProjLoans (sv_id, ty, [])
+                in
+                let value = ASymbolic (PNone, proj) in
+                { value; ty }
+              in
+              let sv = mk_proj true sp.sv_id in
+              let updated_sv = mk_proj false updated_sv.sv_id in
+              let copied_sv = mk_proj false copied_sv.sv_id in
+              mk_abs rid [ sv; updated_sv; copied_sv ])
+            (RegionId.Map.values regions)
+        in
+        let abs = List.map (fun a -> EAbs a) (List.rev abs) in
+        let ctx = { ctx with env = abs @ ctx.env } in
+        (* Create the continuation: we need to introduce intermediate let-bindings *)
+        let cf e =
+          let mk sv e =
+            SymbolicAst.IntroSymbolic
+              (ctx0, None, sv, SymbolicAst.VaSingleValue v, e)
+          in
+          mk updated_sv (mk copied_sv e)
+        in
+        ( mk_typed_value_from_symbolic_value updated_sv,
+          mk_typed_value_from_symbolic_value copied_sv,
+          ctx,
+          cf )
 
 (** Reorganize the environment in preparation for the evaluation of an operand.
 
@@ -315,17 +412,24 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
              We have nothing to do: the value is copyable, so we can freely
              duplicate it.
           *)
-          let ctx, cv =
+          let ctx, cv, cc =
             let cv = ctx_lookup_const_generic_value ctx vid in
             match config.mode with
             | ConcreteMode ->
-                (* Copy the value - this is more of a sanity check *)
+                (* Copy the value *)
                 let allow_adt_copy = false in
-                copy_value span allow_adt_copy config ctx cv
+                let updated_value, copied_value, ctx, cc =
+                  copy_value span allow_adt_copy config ctx cv
+                in
+                (* As we are copying a const generic, we shouldn't have updated
+                   the original value *)
+                sanity_check __FILE__ __LINE__ (cv = updated_value) span;
+                (* *)
+                (ctx, copied_value, cc)
             | SymbolicMode ->
                 (* We use the looked up value only for its type *)
                 let v = mk_fresh_symbolic_typed_value span cv.ty in
-                (ctx, v)
+                (ctx, v, fun e -> e)
           in
           (* We have to wrap the generated expression *)
           let cf e =
@@ -340,7 +444,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
                 SymbolicAst.VaCgValue vid,
                 e )
           in
-          (cv, ctx, cf)
+          (cv, ctx, cc_comp cc cf)
       | CFnPtr _ ->
           craise __FILE__ __LINE__ span
             "Function pointers are not supported yet")
@@ -359,8 +463,13 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
         span;
       (* Copy the value *)
       let allow_adt_copy = false in
-      let ctx, v = copy_value span allow_adt_copy config ctx v in
-      (v, ctx, fun e -> e)
+      let updated_value, copied_value, ctx, cc =
+        copy_value span allow_adt_copy config ctx v
+      in
+      (* Update the original value *)
+      let ctx = write_place span access p updated_value ctx in
+      (* *)
+      (copied_value, ctx, cc)
   | Move p ->
       (* Access the value *)
       let access = Move in

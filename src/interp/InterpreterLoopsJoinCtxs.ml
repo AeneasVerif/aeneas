@@ -885,7 +885,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
   (* Explore the environments. *)
   let join_suffixes (env0 : env) (env1 : env) : env =
     (* Debug *)
-    log#ltrace
+    log#ldebug
       (lazy
         (__FUNCTION__ ^ ": join_suffixes:\n\n- fixed_ids:\n"
        ^ show_ids_sets fixed_ids ^ "\n\n- ctx0:\n"
@@ -1168,7 +1168,11 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
     in
     log#ltrace
       (lazy
-        (__FUNCTION__ ^ ":join_one: after simplify_dummy_values_useless_abs:\n"
+        (__FUNCTION__
+       ^ ":join_one: after simplify_dummy_values_useless_abs \
+          (fixed_ids.abs_ids = "
+        ^ AbstractionId.Set.to_string None fixed_ids.aids
+        ^ "):\n"
         ^ eval_ctx_to_string ~span:(Some span) ctx));
 
     (* Destructure the abstractions introduced in the new context *)
