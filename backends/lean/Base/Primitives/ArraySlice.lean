@@ -44,10 +44,20 @@ abbrev Array.v {α : Type u} {n : Usize} (v : Array α n) : List α := v.val
 example {α: Type u} {n : Usize} (v : Array α n) : v.length ≤ Scalar.max ScalarTy.Usize := by
   scalar_tac
 
-def Array.make {α : Type u} (n : Usize) (init : List α) (hl : init.length = n.val := by decide) :
+def Array.make {α : Type u} (n : Usize) (init : List α) (hl : init.length = n.val := by rfl) :
   Array α n := ⟨ init, by apply hl ⟩
 
 example : Array Int (Usize.ofInt 2) := Array.make (Usize.ofInt 2) [0, 1]
+
+example : Array Int (Usize.ofInt 2) :=
+  let x := 0
+  let y := 1
+  Array.make (Usize.ofInt 2) [x, y]
+
+example : Result (Array Int (Usize.ofInt 2)) := do
+  let x ← ok 0
+  let y ← ok 1
+  ok (Array.make (Usize.ofInt 2) [x, y])
 
 @[simp]
 abbrev Array.index_s {α : Type u} {n : Usize} [Inhabited α] (v : Array α n) (i : Nat) : α :=
