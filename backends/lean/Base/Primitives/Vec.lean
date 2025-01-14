@@ -204,7 +204,12 @@ def alloc.slice.Slice.to_vec
 def core.slice.Slice.reverse {T : Type} (s : Slice T) : Slice T :=
   ⟨ s.val.reverse, by sorry ⟩
 
-def alloc.vec.Vec.with_capacity {T : Type} (_ : Usize) : alloc.vec.Vec T := Vec.new T
+def alloc.vec.Vec.with_capacity (T : Type) (_ : Usize) : alloc.vec.Vec T := Vec.new T
+
+/- [alloc::vec::{alloc::vec::Vec<T, A>}::extend_from_slice] -/
+def alloc.vec.Vec.extend_from_slice {T : Type} (cloneInst : core.clone.Clone T)
+  (v : alloc.vec.Vec T) (s : Slice T) : Result (alloc.vec.Vec T) :=
+  sorry
 
 /- [alloc::vec::{(core::ops::deref::Deref for alloc::vec::Vec<T, A>)#9}::deref]:
    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/alloc/src/vec/mod.rs', lines 2624:4-2624:27

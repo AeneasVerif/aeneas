@@ -695,9 +695,6 @@ let compute_explicit_info (generics : Pure.generic_params) (input_tys : ty list)
     explicit_const_generics = List.map make_explicit_cg generics.const_generics;
   }
 
-let compute_fun_sig_explicit_info (sg : Pure.fun_sig) : explicit_info =
-  compute_explicit_info sg.generics sg.inputs
-
 (** Translate a type definition from LLBC
 
     Remark: this is not symbolic to pure but LLBC to pure. Still,
