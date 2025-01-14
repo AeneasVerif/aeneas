@@ -1355,4 +1355,84 @@ theorem core.num.Usize.saturating_sub_spec (x y : Usize) :
   simp [saturating_sub, Scalar.saturating_sub, int_saturating_sub]
   split <;> split <;> split <;> scalar_tac
 
+-- Wrapping add
+def Scalar.wrapping_add {ty} (x y : Scalar ty) : Result (Scalar ty) := sorry
+/- [core::num::{u8}::wrapping_add] -/
+def core.num.U8.wrapping_add := @Scalar.wrapping_add ScalarTy.U8
+
+/- [core::num::{u16}::wrapping_add] -/
+def core.num.U16.wrapping_add := @Scalar.wrapping_add ScalarTy.U16
+
+/- [core::num::{u32}::wrapping_add] -/
+def core.num.U32.wrapping_add := @Scalar.wrapping_add ScalarTy.U32
+
+/- [core::num::{u64}::wrapping_add] -/
+def core.num.U64.wrapping_add := @Scalar.wrapping_add ScalarTy.U64
+
+/- [core::num::{u128}::wrapping_add] -/
+def core.num.U128.wrapping_add := @Scalar.wrapping_add ScalarTy.U128
+
+/- [core::num::{usize}::wrapping_add] -/
+def core.num.Usize.wrapping_add := @Scalar.wrapping_add ScalarTy.Usize
+
+/- [core::num::{i8}::wrapping_add] -/
+def core.num.I8.wrapping_add := @Scalar.wrapping_add ScalarTy.I8
+
+/- [core::num::{i16}::wrapping_add] -/
+def core.num.I16.wrapping_add := @Scalar.wrapping_add ScalarTy.I16
+
+/- [core::num::{i32}::wrapping_add] -/
+def core.num.I32.wrapping_add := @Scalar.wrapping_add ScalarTy.I32
+
+/- [core::num::{i64}::wrapping_add] -/
+def core.num.I64.wrapping_add := @Scalar.wrapping_add ScalarTy.I64
+
+/- [core::num::{i128}::wrapping_add] -/
+def core.num.I128.wrapping_add := @Scalar.wrapping_add ScalarTy.I128
+
+/- [core::num::{isize}::wrapping_add] -/
+def core.num.Isize.wrapping_add := @Scalar.wrapping_add ScalarTy.Isize
+
+-- TODO: reasoning lemmas for wrapping add
+
+-- Wrapping sub
+def Scalar.wrapping_sub {ty} (x y : Scalar ty) : Result (Scalar ty) := sorry
+/- [core::num::{u8}::wrapping_sub] -/
+def core.num.U8.wrapping_sub := @Scalar.wrapping_sub ScalarTy.U8
+
+/- [core::num::{u16}::wrapping_sub] -/
+def core.num.U16.wrapping_sub := @Scalar.wrapping_sub ScalarTy.U16
+
+/- [core::num::{u32}::wrapping_sub] -/
+def core.num.U32.wrapping_sub := @Scalar.wrapping_sub ScalarTy.U32
+
+/- [core::num::{u64}::wrapping_sub] -/
+def core.num.U64.wrapping_sub := @Scalar.wrapping_sub ScalarTy.U64
+
+/- [core::num::{u128}::wrapping_sub] -/
+def core.num.U128.wrapping_sub := @Scalar.wrapping_sub ScalarTy.U128
+
+/- [core::num::{usize}::wrapping_sub] -/
+def core.num.Usize.wrapping_sub := @Scalar.wrapping_sub ScalarTy.Usize
+
+/- [core::num::{i8}::wrapping_sub] -/
+def core.num.I8.wrapping_sub := @Scalar.wrapping_sub ScalarTy.I8
+
+/- [core::num::{i16}::wrapping_sub] -/
+def core.num.I16.wrapping_sub := @Scalar.wrapping_sub ScalarTy.I16
+
+/- [core::num::{i32}::wrapping_sub] -/
+def core.num.I32.wrapping_sub := @Scalar.wrapping_sub ScalarTy.I32
+
+/- [core::num::{i64}::wrapping_sub] -/
+def core.num.I64.wrapping_sub := @Scalar.wrapping_sub ScalarTy.I64
+
+/- [core::num::{i128}::wrapping_sub] -/
+def core.num.I128.wrapping_sub := @Scalar.wrapping_sub ScalarTy.I128
+
+/- [core::num::{isize}::wrapping_sub] -/
+def core.num.Isize.wrapping_sub := @Scalar.wrapping_sub ScalarTy.Isize
+
+-- TODO: reasoning lemmas for wrapping sub
+
 end Primitives
