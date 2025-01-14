@@ -564,6 +564,10 @@ let mk_builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
          (* [core::slice::{@Slice<T>}::copy_from_slice] *)
          mk_fun "core::slice::{[@T]}::copy_from_slice" ();
          mk_fun "core::result::{core::result::Result<@T, @E>}::unwrap" ();
+         (* Vec *)
+         mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::extend_from_slice"
+           ~filter:(Some [ true; false ])
+           ();
        ]
       @ List.map
           (fun ty ->
