@@ -2237,7 +2237,7 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
       let ctx = update_aproj_loans_to_ended span abs_id sv ctx in
       rec_call ctx
 
-let rec simplify_dummy_values_useless_abs (config : config) (span : Meta.span)
+let simplify_dummy_values_useless_abs (config : config) (span : Meta.span)
     (fixed_abs_ids : AbstractionId.Set.t) : cm_fun =
  fun ctx0 ->
   (* Simplify the context as long as it leads to changes - TODO: make this more efficient *)
