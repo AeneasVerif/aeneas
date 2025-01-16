@@ -3,15 +3,6 @@ import Mathlib.Tactic.Core
 import Base.UtilsBase
 import Aesop
 
-namespace List
-
-  -- TODO: I could not find this function??
-  @[simp] def flatten {a : Type u} : List (List a) → List a
-  | [] => []
-  | x :: ls => x ++ flatten ls
-
-end List
-
 namespace Lean
 
 namespace LocalContext
@@ -396,14 +387,14 @@ def destEq (e : Expr) : MetaM (Expr × Expr) := do
 
 -- Return the set of FVarIds in the expression
 -- TODO: this collects fvars introduced in the inner bindings
-partial def getFVarIds (e : Expr) (hs : HashSet FVarId := HashSet.empty) : MetaM (HashSet FVarId) := do
-  reduceVisit (fun _ (hs : HashSet FVarId) e =>
+partial def getFVarIds (e : Expr) (hs : Std.HashSet FVarId := Std.HashSet.empty) : MetaM (Std.HashSet FVarId) := do
+  reduceVisit (fun _ (hs : Std.HashSet FVarId) e =>
     if e.isFVar then pure (hs.insert e.fvarId!) else pure hs)
     hs e
 
 -- Return the set of MVarIds in the expression
-partial def getMVarIds (e : Expr) (hs : HashSet MVarId := HashSet.empty) : MetaM (HashSet MVarId) := do
-  reduceVisit (fun _ (hs : HashSet MVarId) e =>
+partial def getMVarIds (e : Expr) (hs : Std.HashSet MVarId := Std.HashSet.empty) : MetaM (Std.HashSet MVarId) := do
+  reduceVisit (fun _ (hs : Std.HashSet MVarId) e =>
     if e.isMVar then pure (hs.insert e.mvarId!) else pure hs)
     hs e
 
@@ -676,7 +667,6 @@ elab "split_existsl" " at " n:ident : tactic => do
   splitAllExistsTac fvar [] (fun _ _ => pure ())
 
 example (h : a ∧ b) : a := by
-  split_existsl at h
   split_conj at h
   assumption
 
@@ -727,7 +717,7 @@ def mkSimpCtx (simpOnly : Bool) (config : Simp.Config) (kind : SimpKind)
   let congrTheorems ← getSimpCongrTheorems
   let defaultSimprocs ← if simpOnly then pure {} else Simp.getSimprocs
   let simprocs ← simprocs.foldlM (fun simprocs name => simprocs.add name true) defaultSimprocs
-  let ctx := { config, simpTheorems := #[simpThms], congrTheorems }
+  let ctx ← Simp.mkContext config (simpTheorems := #[simpThms]) congrTheorems
   pure (ctx, #[simprocs])
 
 inductive Location where
@@ -836,9 +826,9 @@ def rewriteAt (cfg : Rewrite.Config) (rpt : Bool)
       -- Lookup the theorem and introduce fresh meta-variables for the universes
       let th ← mkConstWithFreshMVarLevels thName
       pure (x.fst, th)
-    match ← getEqnsFor? thName (nonRec := true) with
+    match ← getEqnsFor? thName with
     | some eqThms => do
-      eqThms.data.mapM lookupOne
+      eqThms.toList.mapM lookupOne
     | none => do
       pure [← lookupOne thName]
   let thms ← List.mapM lookupThm thms
@@ -991,5 +981,31 @@ example (x y : Int) : True := by
 
 example (x y : Int) : True := by
   dcases h: x = y <;> simp
+
+def extractGoal : TacticM Unit := do
+  withMainContext do
+  let ctx ← Lean.MonadLCtx.getLCtx
+  let decls ← ctx.getDecls
+  let assumptions : List Format ← decls.mapM fun decl => do
+    let ty ← Meta.ppExprWithInfos decl.type
+    let name :=
+      match decl.userName with
+      | .num _ _ => "_"
+      | _ => decl.userName.toString
+    pure ("\n  (" ++ name ++ " : " ++ ty.fmt ++ ")")
+  let assumptions := Format.joinSep assumptions ""
+  let mgoal ← Tactic.getMainGoal
+  let goal ← Meta.ppExprWithInfos (← mgoal.getType)
+  let msg := "example  " ++ assumptions ++ " :\n  " ++ goal.fmt ++ "\n  := sorry"
+  println! msg
+
+elab "extract_goal" : tactic => do
+  withMainContext do
+  extractGoal
+
+example (x : Nat) (y : Nat) (_ : Nat) (h : x ≤ y) : y ≥ x := by
+  set_option linter.unusedTactic false in
+  extract_goal
+  omega
 
 end Utils

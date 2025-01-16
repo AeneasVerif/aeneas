@@ -59,9 +59,7 @@ initialize divspecAttr : DivSpecAttr ← do
         let (_, _, fExpr) ← lambdaMetaTelescope fExpr.consumeMData
         trace[Diverge] "Registering divspec theorem for {fExpr}"
         -- Convert the function expression to a discrimination tree key
-        -- We use the default configuration
-        let config : WhnfCoreConfig := {}
-        DiscrTree.mkPath fExpr config)
+        DiscrTree.mkPath fExpr)
       let env := ext.addEntry env (fKey, thName)
       setEnv env
       trace[Diverge] "Saved the environment"
@@ -71,9 +69,7 @@ initialize divspecAttr : DivSpecAttr ← do
   pure { attr := attrImpl, ext := ext }
 
 def DivSpecAttr.find? (s : DivSpecAttr) (e : Expr) : MetaM (Array Name) := do
-  -- We use the default configuration
-  let config : WhnfCoreConfig := {}
-  (s.ext.getState (← getEnv)).getMatch e config
+  (s.ext.getState (← getEnv)).getMatch e
 
 def DivSpecAttr.getState (s : DivSpecAttr) : MetaM (DiscrTree Name) := do
   pure (s.ext.getState (← getEnv))

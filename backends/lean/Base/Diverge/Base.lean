@@ -581,7 +581,7 @@ namespace FixI
   -- However, by parameterizing Funs with those parameters, we can state
   -- and prove lemmas like Funs.is_valid_p_is_valid_p
   inductive Funs (id : Type u) (a : id → Type v) (b : (i:id) → (x:a i) → Type w) :
-    List in_out_ty.{v, w} → Type (max (u + 1) (max (v + 1) (w + 1))) :=
+    List in_out_ty.{v, w} → Type (max (u + 1) (max (v + 1) (w + 1))) where
     | Nil : Funs id a b []
     | Cons {ity : Type v} {oty : ity → Type w} {tys : List in_out_ty}
            (f : kk_ty id a b → (x:ity) → Result (oty x)) (tl : Funs id a b tys) :
@@ -794,7 +794,7 @@ namespace FixII
   -- and prove lemmas like Funs.is_valid_p_is_valid_p
   inductive Funs (id : Type u) (ty : id → Type v)
     (a : (i:id) → ty i → Type w) (b : (i:id) → ty i → Type x) :
-    List in_out_ty.{v, w, x} → Type (max (u + 1) (max (v + 1) (max (w + 1) (x + 1)))) :=
+    List in_out_ty.{v, w, x} → Type (max (u + 1) (max (v + 1) (max (w + 1) (x + 1)))) where
     | Nil : Funs id ty a b []
     | Cons {it: Type v} {ity : it → Type w} {oty : it → Type x} {tys : List in_out_ty}
            (f : kk_ty id ty a b → (i:it) → (x:ity i) → Result (oty i)) (tl : Funs id ty a b tys) :
@@ -1223,7 +1223,7 @@ namespace Ex5
     apply is_valid_p_bind <;> try simp_all
 
   /- An example which uses map -/
-  inductive Tree (a : Type) :=
+  inductive Tree (a : Type) where
   | leaf (x : a)
   | node (tl : List (Tree a))
 
@@ -1262,7 +1262,7 @@ namespace Ex5
     := by
     have Heq := is_valid_fix_fixed_eq (@id_body_is_valid a)
     simp [id]
-    conv => lhs; rw [Heq]; simp; rw [id_body]
+    conv => lhs; rw [Heq]; simp; unfold id_body
     rfl
 
 end Ex5
@@ -1304,7 +1304,6 @@ namespace Ex6
     intro x; try simp at x
     simp only [list_nth_body]
     -- Prove the validity of the individual bodies
-    intro k x
     split <;> try simp
     split <;> simp
 
@@ -1507,7 +1506,7 @@ namespace Ex9
   /- An example which uses map -/
   open Primitives FixII Ex8
 
-  inductive Tree (a : Type u) :=
+  inductive Tree (a : Type u) where
   | leaf (x : a)
   | node (tl : List (Tree a))
 

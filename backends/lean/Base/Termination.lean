@@ -48,7 +48,7 @@ def removeInvImageAssumptions : TacticM Unit := do
     match d.value? with
     | none => pure hs
     | some e => getFVarIds e hs
-    ) HashSet.empty
+    ) Std.HashSet.empty
   let fvarIds := filtDecls.map fun d => d.fvarId
   let fvarIds := fvarIds.filter (fun id => ¬ allFVarsInTypes.contains id)
   -- Clear them
