@@ -10,7 +10,7 @@ namespace bst
 
 /- [bst::Ordering]
    Source: 'src/bst.rs', lines 5:0-9:1 -/
-inductive Ordering :=
+inductive Ordering where
 | Less : Ordering
 | Equal : Ordering
 | Greater : Ordering
@@ -22,20 +22,14 @@ structure Ord (Self : Type) where
 
 /- [bst::Node]
    Source: 'src/bst.rs', lines 15:0-19:1 -/
-inductive Node (T : Type) :=
+inductive Node (T : Type) where
 | mk : T → Option (Node T) → Option (Node T) → Node T
 
-@[reducible]
-def Node.value {T : Type} (x : Node T) :=
-  match x with | Node.mk x1 _ _ => x1
+def Node.value {T : Type} (x : Node T) := match x with | Node.mk x1 _ _ => x1
 
-@[reducible]
-def Node.left {T : Type} (x : Node T) :=
-  match x with | Node.mk _ x1 _ => x1
+def Node.left {T : Type} (x : Node T) := match x with | Node.mk _ x1 _ => x1
 
-@[reducible]
-def Node.right {T : Type} (x : Node T) :=
-  match x with | Node.mk _ _ x1 => x1
+def Node.right {T : Type} (x : Node T) := match x with | Node.mk _ _ x1 => x1
 
 @[simp]
 theorem Node.value._simpLemma_ {T : Type} (value : T) (left : Option (Node T))

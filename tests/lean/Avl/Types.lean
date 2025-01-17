@@ -10,7 +10,7 @@ namespace avl
 
 /- [avl::Ordering]
    Source: 'src/avl.rs', lines 19:0-23:1 -/
-inductive Ordering :=
+inductive Ordering where
 | Less : Ordering
 | Equal : Ordering
 | Greater : Ordering
@@ -22,17 +22,14 @@ structure Ord (Self : Type) where
 
 /- [avl::Node]
    Source: 'src/avl.rs', lines 29:0-34:1 -/
-inductive Node (T : Type) :=
+inductive Node (T : Type) where
 | mk : T → Option (Node T) → Option (Node T) → I8 → Node T
 
-def Node.value {T : Type} (x : Node T) :=
-  match x with | Node.mk x1 _ _ _ => x1
+def Node.value {T : Type} (x : Node T) := match x with | Node.mk x1 _ _ _ => x1
 
-def Node.left {T : Type} (x : Node T) :=
-  match x with | Node.mk _ x1 _ _ => x1
+def Node.left {T : Type} (x : Node T) := match x with | Node.mk _ x1 _ _ => x1
 
-def Node.right {T : Type} (x : Node T) :=
-  match x with | Node.mk _ _ x1 _ => x1
+def Node.right {T : Type} (x : Node T) := match x with | Node.mk _ _ x1 _ => x1
 
 def Node.balance_factor {T : Type} (x : Node T) :=
   match x with | Node.mk _ _ _ x1 => x1

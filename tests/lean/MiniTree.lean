@@ -10,10 +10,9 @@ namespace mini_tree
 
 /- [mini_tree::Node]
    Source: 'tests/src/mini_tree.rs', lines 3:0-5:1 -/
-inductive Node :=
+inductive Node where
 | mk : Option Node → Node
 
-@[reducible]
 def Node.child (x : Node) := match x with | Node.mk x1 => x1
 
 @[simp]

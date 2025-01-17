@@ -11,7 +11,7 @@ namespace hashmap
 
 /- [hashmap::AList]
    Source: 'tests/src/hashmap.rs', lines 30:0-33:1 -/
-inductive AList (T : Type) :=
+inductive AList (T : Type) where
 | Cons : Usize → T → AList T → AList T
 | Nil : AList T
 

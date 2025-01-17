@@ -11,22 +11,22 @@ namespace scalars
 /- [scalars::u32_use_wrapping_add]:
    Source: 'tests/src/scalars.rs', lines 3:0-5:1 -/
 def u32_use_wrapping_add (x : U32) (y : U32) : Result U32 :=
-  Result.ok (core.num.u32.wrapping_add x y)
+  Result.ok (core.num.U32.wrapping_add x y)
 
 /- [scalars::i32_use_wrapping_add]:
    Source: 'tests/src/scalars.rs', lines 7:0-9:1 -/
 def i32_use_wrapping_add (x : I32) (y : I32) : Result I32 :=
-  Result.ok (core.num.i32.wrapping_add x y)
+  Result.ok (core.num.I32.wrapping_add x y)
 
 /- [scalars::u32_use_wrapping_sub]:
    Source: 'tests/src/scalars.rs', lines 11:0-13:1 -/
 def u32_use_wrapping_sub (x : U32) (y : U32) : Result U32 :=
-  Result.ok (core.num.u32.wrapping_sub x y)
+  Result.ok (core.num.U32.wrapping_sub x y)
 
 /- [scalars::i32_use_wrapping_sub]:
    Source: 'tests/src/scalars.rs', lines 15:0-17:1 -/
 def i32_use_wrapping_sub (x : I32) (y : I32) : Result I32 :=
-  Result.ok (core.num.i32.wrapping_sub x y)
+  Result.ok (core.num.I32.wrapping_sub x y)
 
 /- [scalars::u32_use_shift_right]:
    Source: 'tests/src/scalars.rs', lines 19:0-21:1 -/

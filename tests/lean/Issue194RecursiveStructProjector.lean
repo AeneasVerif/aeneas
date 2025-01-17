@@ -10,18 +10,15 @@ namespace issue_194_recursive_struct_projector
 
 /- [issue_194_recursive_struct_projector::AVLNode]
    Source: 'tests/src/issue-194-recursive-struct-projector.rs', lines 2:0-6:1 -/
-inductive AVLNode (T : Type) :=
+inductive AVLNode (T : Type) where
 | mk : T → Option (AVLNode T) → Option (AVLNode T) → AVLNode T
 
-@[reducible]
 def AVLNode.value {T : Type} (x : AVLNode T) :=
   match x with | AVLNode.mk x1 _ _ => x1
 
-@[reducible]
 def AVLNode.left {T : Type} (x : AVLNode T) :=
   match x with | AVLNode.mk _ x1 _ => x1
 
-@[reducible]
 def AVLNode.right {T : Type} (x : AVLNode T) :=
   match x with | AVLNode.mk _ _ x1 => x1
 

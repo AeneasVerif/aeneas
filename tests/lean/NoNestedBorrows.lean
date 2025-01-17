@@ -16,23 +16,23 @@ structure Pair (T1 : Type) (T2 : Type) where
 
 /- [no_nested_borrows::List]
    Source: 'tests/src/no_nested_borrows.rs', lines 12:0-15:1 -/
-inductive List (T : Type) :=
+inductive List (T : Type) where
 | Cons : T → List T → List T
 | Nil : List T
 
 /- [no_nested_borrows::One]
    Source: 'tests/src/no_nested_borrows.rs', lines 23:0-25:1 -/
-inductive One (T1 : Type) :=
+inductive One (T1 : Type) where
 | One : T1 → One T1
 
 /- [no_nested_borrows::EmptyEnum]
    Source: 'tests/src/no_nested_borrows.rs', lines 29:0-31:1 -/
-inductive EmptyEnum :=
+inductive EmptyEnum where
 | Empty : EmptyEnum
 
 /- [no_nested_borrows::Enum]
    Source: 'tests/src/no_nested_borrows.rs', lines 35:0-38:1 -/
-inductive Enum :=
+inductive Enum where
 | Variant1 : Enum
 | Variant2 : Enum
 
@@ -42,7 +42,7 @@ inductive Enum :=
 
 /- [no_nested_borrows::Sum]
    Source: 'tests/src/no_nested_borrows.rs', lines 44:0-47:1 -/
-inductive Sum (T1 : Type) (T2 : Type) :=
+inductive Sum (T1 : Type) (T2 : Type) where
 | Left : T1 → Sum T1 T2
 | Right : T2 → Sum T1 T2
 
@@ -243,13 +243,13 @@ mutual
 
 /- [no_nested_borrows::Tree]
    Source: 'tests/src/no_nested_borrows.rs', lines 232:0-235:1 -/
-inductive Tree (T : Type) :=
+inductive Tree (T : Type) where
 | Leaf : T → Tree T
 | Node : T → NodeElem T → Tree T → Tree T
 
 /- [no_nested_borrows::NodeElem]
    Source: 'tests/src/no_nested_borrows.rs', lines 237:0-240:1 -/
-inductive NodeElem (T : Type) :=
+inductive NodeElem (T : Type) where
 | Cons : Tree T → NodeElem T → NodeElem T
 | Nil : NodeElem T
 

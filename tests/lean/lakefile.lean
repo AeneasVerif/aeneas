@@ -23,7 +23,6 @@ package «tests» {}
 @[default_target] lean_lib Issue194RecursiveStructProjector
 @[default_target] lean_lib Issue270LoopList
 @[default_target] lean_lib Loops
-@[default_target] lean_lib Matches
 @[default_target] lean_lib MiniTree
 @[default_target] lean_lib MutuallyRecursiveTraits
 @[default_target] lean_lib NoNestedBorrows
@@ -31,6 +30,7 @@ package «tests» {}
 @[default_target] lean_lib PoloniusList
 @[default_target] lean_lib RenameAttribute
 @[default_target] lean_lib Scalars
+@[default_target] lean_lib SwitchTest
 @[default_target] lean_lib Traits
 @[default_target] lean_lib Tutorial
 @[default_target] lean_lib Vec

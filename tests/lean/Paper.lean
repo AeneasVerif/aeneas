@@ -49,7 +49,7 @@ def test_choose : Result Unit :=
 
 /- [paper::List]
    Source: 'tests/src/paper.rs', lines 38:0-41:1 -/
-inductive List (T : Type) :=
+inductive List (T : Type) where
 | Cons : T → List T → List T
 | Nil : List T
 

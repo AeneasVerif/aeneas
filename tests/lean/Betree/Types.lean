@@ -11,19 +11,19 @@ namespace betree
 
 /- [betree::betree::List]
    Source: 'src/betree.rs', lines 17:0-20:1 -/
-inductive betree.List (T : Type) :=
+inductive betree.List (T : Type) where
 | Cons : T → betree.List T → betree.List T
 | Nil : betree.List T
 
 /- [betree::betree::UpsertFunState]
    Source: 'src/betree.rs', lines 63:0-66:1 -/
-inductive betree.UpsertFunState :=
+inductive betree.UpsertFunState where
 | Add : U64 → betree.UpsertFunState
 | Sub : U64 → betree.UpsertFunState
 
 /- [betree::betree::Message]
    Source: 'src/betree.rs', lines 69:0-117:1 -/
-inductive betree.Message :=
+inductive betree.Message where
 | Insert : U64 → betree.Message
 | Delete : betree.Message
 | Upsert : betree.UpsertFunState → betree.Message
@@ -38,30 +38,26 @@ mutual
 
 /- [betree::betree::Internal]
    Source: 'src/betree.rs', lines 156:0-161:1 -/
-inductive betree.Internal :=
+inductive betree.Internal where
 | mk : U64 → U64 → betree.Node → betree.Node → betree.Internal
 
 /- [betree::betree::Node]
    Source: 'src/betree.rs', lines 179:0-184:1 -/
-inductive betree.Node :=
+inductive betree.Node where
 | Internal : betree.Internal → betree.Node
 | Leaf : betree.Leaf → betree.Node
 
 end
 
-@[reducible]
 def betree.Internal.id (x : betree.Internal) :=
   match x with | betree.Internal.mk x1 _ _ _ => x1
 
-@[reducible]
 def betree.Internal.pivot (x : betree.Internal) :=
   match x with | betree.Internal.mk _ x1 _ _ => x1
 
-@[reducible]
 def betree.Internal.left (x : betree.Internal) :=
   match x with | betree.Internal.mk _ _ x1 _ => x1
 
-@[reducible]
 def betree.Internal.right (x : betree.Internal) :=
   match x with | betree.Internal.mk _ _ _ x1 => x1
 

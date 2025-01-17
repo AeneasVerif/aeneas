@@ -48,7 +48,7 @@ def use_incr : Result Unit :=
 
 /- [demo::CList]
    Source: 'tests/src/demo.rs', lines 36:0-39:1 -/
-inductive CList (T : Type) :=
+inductive CList (T : Type) where
 | CCons : T → CList T → CList T
 | CNil : CList T
 
