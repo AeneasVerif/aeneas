@@ -2,7 +2,7 @@ import Lean
 import Lean.Meta.Tactic.Simp
 import Mathlib.Tactic.Linarith
 import Aeneas.Std.Scalar
-import Aeneas.Arith
+import Aeneas.ScalarTac
 
 namespace Aeneas
 

@@ -2,7 +2,7 @@ import Lean
 import Lean.Meta.Tactic.Simp
 import Init.Data.List.Basic
 import Aeneas.Std.Base
-import Aeneas.Arith.Base
+import Aeneas.ScalarTac.Base
 import Aeneas.Diverge.ElabBase
 
 namespace Aeneas
@@ -16,12 +16,12 @@ namespace Lemmas
     if heq: m = n then True
     else
       f ⟨ m, by simp_all [Nat.lt_iff_le_and_ne] ⟩ ∧
-      for_all_fin_aux f (m + 1) (by simp_all [Arith.add_one_le_iff_le_ne])
+      for_all_fin_aux f (m + 1) (by simp_all [ScalarTac.add_one_le_iff_le_ne])
   termination_by n - m
   decreasing_by
     simp_wf
     apply Nat.sub_add_lt_sub <;> try simp
-    simp_all [Arith.add_one_le_iff_le_ne]
+    simp_all [ScalarTac.add_one_le_iff_le_ne]
 
   def for_all_fin {n : Nat} (f : Fin n → Prop) := for_all_fin_aux f 0 (by simp)
 
@@ -67,7 +67,7 @@ namespace Lemmas
         apply hi <;> simp_all
         . unfold for_all_fin_aux at hf
           simp_all
-        . simp_all [Arith.add_one_le_iff_le_ne]
+        . simp_all [ScalarTac.add_one_le_iff_le_ne]
 
   -- TODO: this is not necessary anymore
   theorem for_all_fin_imp_forall (n : Nat) (f : Fin n → Prop) :

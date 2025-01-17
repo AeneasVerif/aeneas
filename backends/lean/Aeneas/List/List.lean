@@ -1,14 +1,14 @@
 /- Complementary list functions and lemmas which operate on integers rather
    than natural numbers. -/
 
-import Aeneas.Arith
+import Aeneas.ScalarTac
 import Aeneas.Utils
 import Aeneas.Core
 
 namespace List
 
 open Aeneas
-open Aeneas.Arith
+open Aeneas.ScalarTac
 open Aeneas.Simp
 
 def indexOpt (ls : List α) (i : Nat) : Option α :=

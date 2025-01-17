@@ -4,7 +4,7 @@ import Lean.Meta.Tactic.Simp
 import Init.Data.List.Basic
 import Aeneas.Std.Scalar
 import Aeneas.Std.ArraySlice
-import Aeneas.Arith
+import Aeneas.ScalarTac
 import Aeneas.Progress.Base
 
 namespace Aeneas

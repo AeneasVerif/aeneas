@@ -1,10 +1,10 @@
-import Aeneas.Arith.Int
+import Aeneas.ScalarTac.IntTac
 import Aeneas.Std.ScalarBase
 
 namespace Aeneas
 
 /- Automation for scalars - TODO: not sure it is worth having two files (Int.lean and Scalar.lean) -/
-namespace Arith
+namespace ScalarTac
 
 open Lean Lean.Elab Lean.Meta
 open Std
@@ -58,7 +58,7 @@ def scalarTacExtraPreprocess : Tactic.TacticM Unit := do
                 scalarTacSimpLemmas
                 -- Hypotheses
                 [] .wildcard
-  trace[Arith] "scalarTacExtraPreprocess: after simp: {(← Tactic.getMainGoal)}"
+  trace[ScalarTac] "scalarTacExtraPreprocess: after simp: {(← Tactic.getMainGoal)}"
 
 elab "scalar_tac_preprocess" : tactic =>
   intTacPreprocess scalarTacExtraPrePreprocess scalarTacExtraPreprocess
@@ -147,6 +147,6 @@ example
   c3.val ≤ 1 := by
   scalar_tac
 
-end Arith
+end ScalarTac
 
 end Aeneas

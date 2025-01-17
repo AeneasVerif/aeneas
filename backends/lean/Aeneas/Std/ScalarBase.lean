@@ -4,7 +4,7 @@ import Aeneas.Std.Base
 import Aeneas.Std.Core
 import Aeneas.Diverge.Base
 import Aeneas.Progress.Base
-import Aeneas.Arith.Int
+import Aeneas.ScalarTac.IntTac
 
 namespace Aeneas
 
@@ -563,7 +563,7 @@ instance (ty : ScalarTy) : DecidableEq (Scalar ty) :=
   simp [eq_equiv]
 
 @[simp]
-theorem Scalar.val_not_eq_imp_not_eq (x y : Scalar ty) (h : Arith.Int.not_eq x.val y.val) :
+theorem Scalar.val_not_eq_imp_not_eq (x y : Scalar ty) (h : ScalarTac.Int.not_eq x.val y.val) :
   ¬ x = y := by
   simp_all; int_tac
 

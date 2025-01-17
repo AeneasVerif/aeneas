@@ -1,5 +1,5 @@
 import Lean
-import Aeneas.Arith
+import Aeneas.ScalarTac
 import Aeneas.Progress.Base
 import Aeneas.Std -- TODO: remove?
 
@@ -396,10 +396,10 @@ def evalProgress (args : TSyntax `Aeneas.Progress.progressArgs) : TacticM Stats 
      arithmetic goal, we skip (note that otherwise, scalarTac would try
      to prove a contradiction) -/
   let scalarTac : TacticM Unit := do
-    if ← Arith.goalIsLinearInt then
+    if ← ScalarTac.goalIsLinearInt then
       -- Also: we don't try to split the goal if it is a conjunction
       -- (it shouldn't be), but we split the disjunctions.
-      Arith.scalarTac true false
+      ScalarTac.scalarTac true false
     else
       throwError "Not a linear arithmetic goal"
   let simpTac : TacticM Unit := do

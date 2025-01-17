@@ -1,8 +1,8 @@
-import Aeneas.Arith.Scalar
+import Aeneas.ScalarTac
 
 namespace Aeneas
 
-namespace Arith
+namespace ScalarTac
 
 syntax "scalar_eq_nf" ("at" ("*" <|> ident))? : tactic
 macro_rules
@@ -28,6 +28,6 @@ macro "scalar_nf" cfg:optConfig loc:(location)? : tactic =>
 
 example : True := by ring_nf
 
-end Arith
+end ScalarTac
 
 end Aeneas

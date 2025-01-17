@@ -5,13 +5,13 @@ import Lean.Meta.Tactic.Simp
 import Init.Data.List.Basic
 import Mathlib.Tactic.Ring.RingNF
 import Aeneas.Utils
-import Aeneas.Arith.Base
-import Aeneas.Arith.Init
+import Aeneas.ScalarTac.Base
+import Aeneas.ScalarTac.Init
 import Aeneas.Saturate
 
 namespace Aeneas
 
-namespace Arith
+namespace ScalarTac
 
 open Utils
 open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic
@@ -171,7 +171,7 @@ def intTac (tacName : String) (splitAllDisjs splitGoalConjs : Bool)
   Tactic.withMainContext do
   Tactic.focus do
   let g ← Tactic.getMainGoal
-  trace[Arith] "Original goal: {g}"
+  trace[ScalarTac] "Original goal: {g}"
   -- Introduce all the universally quantified variables (includes the assumptions)
   let (_, g) ← g.intros
   Tactic.setGoals [g]
@@ -203,18 +203,18 @@ def intTac (tacName : String) (splitAllDisjs splitGoalConjs : Bool)
              ``true_or, ``or_true,``false_or, ``or_false,
              ``Bool.true_eq_false, ``Bool.false_eq_true] [])
         allGoalsNoRecover (do
-          trace[Arith] "Goal after simplification: {← getMainGoal}"
-          trace[Arith] "Calling omega"
+          trace[ScalarTac] "Goal after simplification: {← getMainGoal}"
+          trace[ScalarTac] "Calling omega"
           Tactic.Omega.omegaTactic {}
-          trace[Arith] "Omega solved the goal")
+          trace[ScalarTac] "Omega solved the goal")
       if splitAllDisjs then do
         /- In order to improve performance, we first try to prove the goal without splitting. If it
            fails, we split. -/
         try
-          trace[Arith] "First trying to solve the goal without splitting"
+          trace[ScalarTac] "First trying to solve the goal without splitting"
           simpThenOmega
         catch _ =>
-          trace[Arith] "First attempt failed: splitting the goal and retrying"
+          trace[ScalarTac] "First attempt failed: splitting the goal and retrying"
           splitAll (allGoalsNoRecover simpThenOmega)
       else
         simpThenOmega
@@ -233,8 +233,8 @@ macro_rules
     `(tactic|
       simp_wf;
       -- TODO: don't use a macro (namespace problems)
-      (first | apply Arith.to_int_to_nat_lt
-             | apply Arith.to_int_sub_to_nat_lt) <;>
+      (first | apply ScalarTac.to_int_to_nat_lt
+             | apply ScalarTac.to_int_sub_to_nat_lt) <;>
       simp_all <;> int_tac)
 
 -- Checking that things happen correctly when there are several disjunctions
@@ -269,6 +269,6 @@ example (x y : Int) (h : x + y = 3) :
 example (x : Int) (b : Bool) (h : if b then x ≤ 0 else x ≤ 0) : x ≤ 0 := by
   int_tac
 
-end Arith
+end ScalarTac
 
 end Aeneas

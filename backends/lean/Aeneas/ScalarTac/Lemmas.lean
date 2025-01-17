@@ -1,7 +1,7 @@
-import Aeneas.Arith.Int
-import Aeneas.Arith.Scalar
+import Aeneas.ScalarTac.IntTac
+import Aeneas.ScalarTac.ScalarTac
 
-namespace Aeneas.Arith
+namespace Aeneas.ScalarTac
 
 @[nonlin_scalar_tac n % m]
 theorem Int.emod_of_pos_disj (n m : Int) : m ≤ 0 ∨ (0 ≤ n % m ∧ n % m < m) := by
@@ -32,4 +32,4 @@ section
 
 end
 
-end Aeneas.Arith
+end Aeneas.ScalarTac

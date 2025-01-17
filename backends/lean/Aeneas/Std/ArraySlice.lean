@@ -7,7 +7,7 @@ import Aeneas.List
 import Aeneas.Std.Scalar
 import Aeneas.Std.Range
 import Aeneas.Std.Core
-import Aeneas.Arith
+import Aeneas.ScalarTac
 import Aeneas.Progress.Base
 
 namespace Aeneas

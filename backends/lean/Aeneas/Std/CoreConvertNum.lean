@@ -5,7 +5,7 @@ import Mathlib.Tactic.Linarith
 import Aeneas.Std.Scalar
 import Aeneas.Std.ScalarNotations
 import Aeneas.Std.ArraySlice
-import Aeneas.Arith
+import Aeneas.ScalarTac
 import Aeneas.Progress.Base
 
 namespace Aeneas

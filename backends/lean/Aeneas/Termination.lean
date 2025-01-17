@@ -2,7 +2,7 @@
 import Lean
 import Mathlib.Tactic.Core
 import Aeneas.Utils
-import Aeneas.Arith
+import Aeneas.ScalarTac
 
 namespace Aeneas
 
@@ -74,7 +74,7 @@ def scalarDecrTac_apply_lemmas : TacticM Unit := do
         let th ← mkConstWithFreshMVarLevels name
         goal.apply th
       catch _ => do applyFirst names
-  let ngoals ← applyFirst [``Arith.to_int_to_nat_lt, ``Arith.to_int_sub_to_nat_lt]
+  let ngoals ← applyFirst [``ScalarTac.to_int_to_nat_lt, ``ScalarTac.to_int_sub_to_nat_lt]
   setGoals ngoals
 
 elab "scalar_decr_tac_apply_lemmas" : tactic =>

@@ -12,7 +12,7 @@ they're declared is imported, so we must put this declaration into its own file.
 
 namespace Aeneas
 
-namespace Arith
+namespace ScalarTac
 
 declare_aesop_rule_sets [Aeneas.ScalarTac, Aeneas.ScalarTacNonLin]
 
@@ -39,6 +39,6 @@ def scalarTacRuleSets.set (names : List Name) : MetaM Unit := do
 def scalarTacRuleSets.add (name : Name) : MetaM Unit := do
   let _ := scalarTacRuleSets.modifyState (← getEnv) (fun ls => name :: ls)
 
-end Arith
+end ScalarTac
 
 end Aeneas

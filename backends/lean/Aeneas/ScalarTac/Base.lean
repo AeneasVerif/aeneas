@@ -3,12 +3,12 @@ import Mathlib.Tactic.Linarith -- Introduces a lot of useful lemmas
 
 namespace Aeneas
 
-namespace Arith
+namespace ScalarTac
 
 open Lean Elab Term Meta
 
 -- We can't define and use trace classes in the same file
-initialize registerTraceClass `Arith
+initialize registerTraceClass `ScalarTac
 
 -- TODO: move?
 theorem ne_zero_is_lt_or_gt {x : Int} (hne : x ≠ 0) : x < 0 ∨ x > 0 := by
@@ -109,6 +109,6 @@ example (i : Int) (j : Nat) (h : i ≤ j) (h2 : j ≤ i) :
   i = j := by
   simp_all
 
-end Arith
+end ScalarTac
 
 end Aeneas
