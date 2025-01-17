@@ -1,6 +1,6 @@
 import Lean
 import Aeneas.Utils
-import Aeneas.Std.Base
+import Aeneas.Std.Core
 
 import Lean.Meta.DiscrTree
 import Lean.Meta.Tactic.Simp

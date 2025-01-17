@@ -1,9 +1,9 @@
 import Lean
 import Lean.Meta.Tactic.Simp
-import Aeneas.Std.Base
 import Aeneas.Std.Core
-import Aeneas.Diverge.Base
-import Aeneas.Progress.Base
+import Aeneas.Std.Core
+import Aeneas.Diverge.Core
+import Aeneas.Progress.Core
 import Aeneas.ScalarTac.IntTac
 
 namespace Aeneas

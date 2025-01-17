@@ -1,5 +1,5 @@
 import Lean
-import Aeneas.Std.Base
+import Aeneas.Std.Primitives
 
 namespace Aeneas
 

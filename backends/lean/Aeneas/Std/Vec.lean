@@ -5,7 +5,7 @@ import Init.Data.List.Basic
 import Aeneas.Std.Scalar
 import Aeneas.Std.ArraySlice
 import Aeneas.ScalarTac
-import Aeneas.Progress.Base
+import Aeneas.Progress.Core
 
 namespace Aeneas
 

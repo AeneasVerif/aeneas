@@ -1,6 +1,6 @@
 import Lean
 import Mathlib.Tactic.Core
-import Aeneas.UtilsBase
+import Aeneas.UtilsCore
 import Aesop
 
 namespace Lean

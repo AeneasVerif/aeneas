@@ -1,5 +1,5 @@
 import Aeneas.Tuples
-import Aeneas.Std.Base
+import Aeneas.Std.Core
 import Aeneas.Std.Scalar
 import Aeneas.Std.ScalarNotations
 import Aeneas.Std.ArraySlice

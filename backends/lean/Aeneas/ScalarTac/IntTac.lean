@@ -5,7 +5,7 @@ import Lean.Meta.Tactic.Simp
 import Init.Data.List.Basic
 import Mathlib.Tactic.Ring.RingNF
 import Aeneas.Utils
-import Aeneas.ScalarTac.Base
+import Aeneas.ScalarTac.Core
 import Aeneas.ScalarTac.Init
 import Aeneas.Saturate
 

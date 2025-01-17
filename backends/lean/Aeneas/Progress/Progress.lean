@@ -1,6 +1,6 @@
 import Lean
 import Aeneas.ScalarTac
-import Aeneas.Progress.Base
+import Aeneas.Progress.Core
 import Aeneas.Std -- TODO: remove?
 
 namespace Aeneas

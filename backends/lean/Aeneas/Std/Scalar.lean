@@ -1,4 +1,4 @@
-import Aeneas.Std.ScalarBase
+import Aeneas.Std.ScalarCore
 import Aeneas.ScalarTac
 
 namespace Aeneas
@@ -270,7 +270,7 @@ example (x : Scalar ty) : Scalar ty := ￢ x
 -- core checked arithmetic operations
 
 /- A helper function that converts failure to none and success to some
-   TODO: move up to Base module? -/
+   TODO: move up to Core module? -/
 def Option.ofResult {a : Type u} (x : Result a) :
   Option a :=
   match x with
