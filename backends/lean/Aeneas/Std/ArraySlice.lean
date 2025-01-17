@@ -607,6 +607,57 @@ def core.slice.Slice.copy_from_slice {T : Type} (_ : core.marker.Copy T)
 /- [core::array::TryFromSliceError] -/
 def core.array.TryFromSliceError := ()
 
+/- [core::slice::index::{core::slice::index::SliceIndex<@Slice<T>> for core::ops::range::RangeFrom<usize>}::get] -/
+def core.slice.index.SliceIndexcoreopsrangeRangeFromUsizeSlice.get {T : Type} :
+  core.ops.range.RangeFrom Usize → Slice T → Result (Option (Slice T)) := sorry
+
+/- [core::slice::index::{core::slice::index::SliceIndex<@Slice<T>> for core::ops::range::RangeFrom<usize>}::get_mut] -/
+def core.slice.index.SliceIndexcoreopsrangeRangeFromUsizeSlice.get_mut
+  {T : Type} :
+  core.ops.range.RangeFrom Usize → Slice T → Result ((Option (Slice T)) ×
+    (Option (Slice T) → Slice T)) := sorry
+
+/- [core::slice::index::{core::slice::index::SliceIndex<@Slice<T>> for core::ops::range::RangeFrom<usize>}::get_unchecked] -/
+def core.slice.index.SliceIndexcoreopsrangeRangeFromUsizeSlice.get_unchecked {T : Type} :
+  core.ops.range.RangeFrom Usize → ConstRawPtr (Slice T) → Result
+    (ConstRawPtr (Slice T)) := sorry
+
+/- [core::slice::index::{core::slice::index::SliceIndex<@Slice<T>> for core::ops::range::RangeFrom<usize>}::get_unchecked_mut] -/
+def core.slice.index.SliceIndexcoreopsrangeRangeFromUsizeSlice.get_unchecked_mut {T : Type} :
+  core.ops.range.RangeFrom Usize → MutRawPtr (Slice T) → Result (MutRawPtr (Slice T)) := sorry
+
+/- [core::slice::index::{core::slice::index::SliceIndex<@Slice<T>> for core::ops::range::RangeFrom<usize>}::index] -/
+def core.slice.index.SliceIndexcoreopsrangeRangeFromUsizeSlice.index {T : Type} :
+  core.ops.range.RangeFrom Usize → Slice T → Result (Slice T) := sorry
+
+/- [core::slice::index::{core::slice::index::SliceIndex<@Slice<T>> for core::ops::range::RangeFrom<usize>}::index_mut] -/
+def core.slice.index.SliceIndexcoreopsrangeRangeFromUsizeSlice.index_mut {T : Type} :
+  core.ops.range.RangeFrom Usize → Slice T → Result ((Slice T) × (Slice T → Slice T)) := sorry
+
+/- Trait implementation: [core::slice::index::private_slice_index::{core::slice::index::private_slice_index::Sealed for core::ops::range::RangeFrom<usize>}] -/
+@[reducible]
+def core.slice.index.private_slice_index.SealedcoreopsrangeRangeFromUsize :
+  core.slice.index.private_slice_index.Sealed (core.ops.range.RangeFrom Usize)
+  := {}
+
+/- Trait implementation: [core::slice::index::{core::slice::index::SliceIndex<[T]> for core::ops::range::RangeFrom<usize>}] -/
+@[reducible]
+def core.slice.index.SliceIndexcoreopsrangeRangeFromUsizeSlice (T : Type) :
+  core.slice.index.SliceIndex (core.ops.range.RangeFrom Usize) (Slice T) := {
+  Output := Slice T
+  sealedInst :=
+    core.slice.index.private_slice_index.SealedcoreopsrangeRangeFromUsize
+  get := core.slice.index.SliceIndexcoreopsrangeRangeFromUsizeSlice.get
+  get_mut := core.slice.index.SliceIndexcoreopsrangeRangeFromUsizeSlice.get_mut
+  get_unchecked :=
+    core.slice.index.SliceIndexcoreopsrangeRangeFromUsizeSlice.get_unchecked
+  get_unchecked_mut :=
+    core.slice.index.SliceIndexcoreopsrangeRangeFromUsizeSlice.get_unchecked_mut
+  index := core.slice.index.SliceIndexcoreopsrangeRangeFromUsizeSlice.index
+  index_mut :=
+    core.slice.index.SliceIndexcoreopsrangeRangeFromUsizeSlice.index_mut
+}
+
 end Std
 
 end Aeneas

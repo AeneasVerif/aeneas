@@ -89,7 +89,7 @@ def Scalar.and {ty : ScalarTy} (x : Scalar ty) (y : Scalar ty) : Scalar ty :=
 def Scalar.or {ty : ScalarTy} (x : Scalar ty) (y : Scalar ty) : Scalar ty :=
   sorry
 
-/- ¬ x reverst the bits of x
+/- ¬ x reverses the bits of x
 
    It has the following effect:
    - if x is unsigned, then it evaluates to Scalar.max - x
