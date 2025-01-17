@@ -1,4 +1,4 @@
-import Aeneas.ScalarTac
+import Aeneas.Arith
 import Aeneas.Diverge
 import Aeneas.List
 import Aeneas.Std
