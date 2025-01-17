@@ -1,11 +1,10 @@
-/- Complementary list functions and lemmas which operate on integers rather
-   than natural numbers. -/
+/- Complementary functions and lemmas for the `List` type -/
 
 import Aeneas.ScalarTac
 import Aeneas.Utils
-import Aeneas.Core
+import Aeneas.SimpLemmas
 
-namespace List
+namespace List -- We do not use the `Aeneas` namespace on purpose
 
 open Aeneas
 open Aeneas.ScalarTac
@@ -123,7 +122,7 @@ theorem left_length_eq_append_eq (l1 l2 l1' l2' : List α) (heq : l1.length = l1
   revert l1'
   induction l1
   . intro l1'; cases l1' <;> simp [*]
-  . intro l1'; cases l1' <;> simp_all; tauto
+  . intro l1'; cases l1' <;> simp_all
 
 theorem right_length_eq_append_eq (l1 l2 l1' l2' : List α) (heq : l2.length = l2'.length) :
   l1 ++ l2 = l1' ++ l2' ↔ l1 = l1' ∧ l2 = l2' := by
