@@ -1,6 +1,6 @@
 -- [external]: external types.
-import Base
-open Lean Primitives
+import Aeneas
+open Lean Aeneas.Std
 
 /- [core::num::nonzero::NonZeroU32]
    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/core/src/num/nonzero.rs', lines 50:12-50:33 -/

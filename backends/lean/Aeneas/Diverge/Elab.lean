@@ -1714,7 +1714,7 @@ namespace Tests
   section HigherOrder
     open Ex8
 
-    inductive Tree (a : Type u) :=
+    inductive Tree (a : Type u) where
     | leaf (x : a)
     | node (tl : List (Tree a))
 

@@ -1,6 +1,6 @@
-import Base
+import Aeneas
 import Demo.Demo
-open Primitives
+open Aeneas.Std
 open Result
 
 namespace demo

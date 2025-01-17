@@ -4,7 +4,7 @@ import Avl.OrderSpec
 
 namespace avl
 
-open Primitives Result
+open Aeneas.Std Result
 
 -- This rewriting lemma is problematic below
 attribute [-simp] Bool.exists_bool

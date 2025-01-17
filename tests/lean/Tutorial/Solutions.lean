@@ -1,6 +1,6 @@
-import Base
+import Aeneas
 import Tutorial.Tutorial
-open Primitives Result
+open Aeneas.Std Result
 
 set_option maxHeartbeats 1000000
 
