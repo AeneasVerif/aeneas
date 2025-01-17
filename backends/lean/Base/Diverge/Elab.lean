@@ -666,7 +666,7 @@ partial def proveExprIsValid (k_var kk_var : Expr) (e : Expr) : MetaM Expr := do
       pure e
     else pure e
   match e with
-  | .const _ _ => throwError "Unimplemented" -- Shouldn't get there?
+  | .const _ _ => proveNoKExprIsValid k_var e
   | .bvar _
   | .fvar _
   | .lit _
@@ -1699,8 +1699,11 @@ namespace Tests
 
   #check infinite_loop.unfold
 
-  -- Testing a degenerate case
+  -- Another degenerate case
+  def infinite_loop1_call : Result Unit := Result.ok ()
   divergent def infinite_loop1 : Result Unit :=
+    do
+    infinite_loop1_call
     infinite_loop1
 
   #check infinite_loop1.unfold

@@ -25,19 +25,15 @@ structure Ord (Self : Type) where
 inductive Node (T : Type) :=
 | mk : T → Option (Node T) → Option (Node T) → I8 → Node T
 
-@[reducible]
 def Node.value {T : Type} (x : Node T) :=
   match x with | Node.mk x1 _ _ _ => x1
 
-@[reducible]
 def Node.left {T : Type} (x : Node T) :=
   match x with | Node.mk _ x1 _ _ => x1
 
-@[reducible]
 def Node.right {T : Type} (x : Node T) :=
   match x with | Node.mk _ _ x1 _ => x1
 
-@[reducible]
 def Node.balance_factor {T : Type} (x : Node T) :=
   match x with | Node.mk _ _ _ x1 => x1
 

@@ -1829,9 +1829,10 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
           if backend () = Lean then (
             (* Box for the attributes *)
             F.pp_open_vbox fmt 0;
-            (* Annotate the projectors with both simp and reducible.
-               The first one allows to automatically unfold when calling simp in proofs.
-               The second ensures that projectors will interact well with the unifier *)
+            (* We used to annotate the projectors as reducible but it would
+               cause issues. Today we only mark the simp lemmas as reducible.
+               The consequence is that projectors won't interact well with the unifier.
+            *)
             F.pp_print_string fmt "@[reducible]";
             F.pp_print_break fmt 0 0;
             (* Close box for the attributes *)

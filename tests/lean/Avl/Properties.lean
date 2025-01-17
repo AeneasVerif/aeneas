@@ -6,6 +6,9 @@ namespace avl
 
 open Primitives Result
 
+-- This rewriting lemma is problematic below
+attribute [-simp] Bool.exists_bool
+
 -- TODO: move
 @[simp]
 def Option.allP {α : Type u} (p : α → Prop) (x : Option α) : Prop :=
@@ -18,7 +21,7 @@ abbrev Subtree (T : Type) := Option (Node T)
 mutual
 @[simp]
 def Node.height: Node T -> Nat
-| Node.mk y left right _ => 1 + max (Subtree.height left) (Subtree.height right)
+| Node.mk _ left right _ => 1 + max (Subtree.height left) (Subtree.height right)
 
 @[simp]
 def Subtree.height: Subtree T -> Nat
@@ -29,7 +32,7 @@ end
 mutual
 @[simp]
 def Node.size: Node T -> Nat
-| Node.mk y left right _ => 1 + Subtree.size left + Subtree.size right
+| Node.mk _ left right _ => 1 + Subtree.size left + Subtree.size right
 
 @[simp]
 def Subtree.size: Subtree T -> Nat
@@ -300,7 +303,7 @@ theorem Node.rotate_left_spec
     cases hIn
     . rename _ => hIn
       cases hIn
-      . simp [*]
+      . simp_all (config := {maxDischargeDepth := 1})
       . -- Proving: y ∈ a → y < z
         -- Using: y < x ∧ x < z
         rename _ => hIn
@@ -579,9 +582,9 @@ theorem Node.rotate_left_right_spec
     . -- invAux for y
       split_conjs <;> (try omega) <;> (try tauto)
     . -- invAux for z
-      split_conjs <;> (try scalar_tac) <;> tauto
+      split_conjs <;> (try scalar_tac)
     . -- invAux for x
-      split_conjs <;> (try scalar_tac) <;> tauto
+      split_conjs <;> (try scalar_tac)
     . -- The sets are the same
       apply Set.ext; simp [tree, z_tree, y_tree]; tauto
     . -- Height
@@ -594,9 +597,9 @@ theorem Node.rotate_left_right_spec
       . -- invAux for y
         split_conjs <;> (try omega) <;> (try tauto)
       . -- invAux for z
-        split_conjs <;> (try scalar_tac) <;> tauto
+        split_conjs <;> (try scalar_tac)
       . -- invAux for x
-        split_conjs <;> (try scalar_tac) <;> tauto
+        split_conjs <;> (try scalar_tac)
       . -- The sets are the same
         apply Set.ext; simp [tree, z_tree, y_tree]; tauto
       . -- Height
@@ -607,9 +610,9 @@ theorem Node.rotate_left_right_spec
       . -- invAux for y
         split_conjs <;> (try omega) <;> (try tauto)
       . -- invAux for z
-        split_conjs <;> (try scalar_tac) <;> tauto
+        split_conjs <;> (try scalar_tac)
       . -- invAux for x
-        split_conjs <;> (try scalar_tac) <;> tauto
+        split_conjs <;> (try scalar_tac)
       . -- The sets are the same
         apply Set.ext; simp [tree, z_tree, y_tree]; tauto
       . -- Height
@@ -704,9 +707,9 @@ theorem Node.rotate_right_left_spec
     . -- invAux for y
       split_conjs <;> (try omega) <;> (try tauto)
     . -- invAux for z
-      split_conjs <;> (try scalar_tac) <;> tauto
+      split_conjs <;> (try scalar_tac)
     . -- invAux for x
-      split_conjs <;> (try scalar_tac) <;> tauto
+      split_conjs <;> (try scalar_tac)
     . -- The sets are the same
       apply Set.ext; simp [tree, z_tree, y_tree]; tauto
     . -- Height
@@ -719,9 +722,9 @@ theorem Node.rotate_right_left_spec
       . -- invAux for y
         split_conjs <;> (try omega) <;> (try tauto)
       . -- invAux for z
-        split_conjs <;> (try scalar_tac) <;> tauto
+        split_conjs <;> (try scalar_tac)
       . -- invAux for x
-        split_conjs <;> (try scalar_tac) <;> tauto
+        split_conjs <;> (try scalar_tac)
       . -- The sets are the same
         apply Set.ext; simp [tree, z_tree, y_tree]; tauto
       . -- Height
@@ -732,16 +735,13 @@ theorem Node.rotate_right_left_spec
       . -- invAux for y
         split_conjs <;> (try omega) <;> (try tauto)
       . -- invAux for z
-        split_conjs <;> (try scalar_tac) <;> tauto
+        split_conjs <;> (try scalar_tac)
       . -- invAux for x
-        split_conjs <;> (try scalar_tac) <;> tauto
+        split_conjs <;> (try scalar_tac)
       . -- The sets are the same
         apply Set.ext; simp [tree, z_tree, y_tree]; tauto
       . -- Height
         scalar_tac
-
--- This rewriting lemma is problematic below
-attribute [-simp] Bool.exists_bool
 
 -- For the proofs of termination
 @[simp]
@@ -796,9 +796,7 @@ theorem Tree.insert_in_opt_node_spec
   rw [Tree.insert_in_opt_node]
   cases hNode : tree <;> simp [hNode]
   . -- tree = none
-    split_conjs
-    . simp [Node.invAux, Node.balanceFactor]
-    . simp [Subtree.inv]
+    simp [Node.invAux, Node.balanceFactor]
   . -- tree = some
     rename Node T => node
     have hNodeInv : Node.inv node := by simp_all (config := {maxDischargeDepth := 1})
@@ -847,6 +845,7 @@ theorem Node.insert_in_left_spec
           . simp_all (config := {maxDischargeDepth := 1})
           . simp_all (config := {maxDischargeDepth := 1}) [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]
             scalar_tac
+          . simp_all (config := {maxDischargeDepth := 1}) [Node.invAux, Node.balanceFactor]
           . -- End of the proof
             simp [*]
             split_conjs
@@ -946,6 +945,7 @@ theorem Node.insert_in_right_spec
           . simp_all (config := {maxDischargeDepth := 1})
           . simp_all (config := {maxDischargeDepth := 1})
           . simp_all (config := {maxDischargeDepth := 1}) [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac
+          . simp_all (config := {maxDischargeDepth := 1}) [Node.invAux, Node.balanceFactor]
           . -- End of the proof
             simp [*]
             split_conjs
@@ -953,9 +953,8 @@ theorem Node.insert_in_right_spec
               simp_all (config := {maxDischargeDepth := 1})
             . -- height
               simp_all (config := {maxDischargeDepth := 1}) [Node.invAux, Node.balanceFactor]
-              -- This assertion is not necessary for the proof, but it is important that it holds.
-              -- We can prove it because of the post-conditions `b → node'.balanceFactor ≠ 0` (see above)
-              have : bf_z.val = 1 := by scalar_tac
+              -- Remark: here we have:
+              -- bf_z.val = -1
               scalar_tac
         . -- rotate_right_left
           cases node with | mk x t1 right balance_factor =>

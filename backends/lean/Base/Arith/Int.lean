@@ -194,7 +194,7 @@ def intTac (tacName : String) (splitAllDisjs splitGoalConjs : Bool)
          -/
         Utils.tryTac (
           -- TODO: is there a simproc to simplify propositional logic?
-          Utils.simpAll {failIfUnchanged := false, maxSteps := 75} true [``reduceIte] []
+          Utils.simpAll {failIfUnchanged := false, maxSteps := 1000} true [``reduceIte] []
             [``and_self, ``false_implies, ``true_implies, ``Prod.mk.injEq,
              ``not_false_eq_true, ``not_true_eq_false,
              ``true_and, ``and_true, ``false_and, ``and_false,
