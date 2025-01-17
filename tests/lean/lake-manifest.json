@@ -3,7 +3,7 @@
  "packages":
  [{"type": "path",
    "scope": "",
-   "name": "base",
+   "name": "aeneas",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
    "dir": "./../../backends/lean",

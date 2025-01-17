@@ -1,7 +1,7 @@
 -- [external]: templates for the external functions.
-import Base
+import Aeneas
 import External.Types
-open Primitives
+open Aeneas.Std
 open external
 
 /- [core::cell::{core::cell::Cell<T>#10}::get]: -/

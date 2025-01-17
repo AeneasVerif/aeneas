@@ -1,7 +1,7 @@
 -- [hashmap]: external functions.
-import Base
+import Aeneas
 import Hashmap.Types
-open Primitives
+open Aeneas.Std
 open hashmap
 
 -- TODO: fill those bodies

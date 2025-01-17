@@ -5,7 +5,7 @@ open Lake DSL
 require mathlib from git
   "https://github.com/leanprover-community/mathlib4.git" @ "v4.15.0"
 
-package «base» {}
+package «aeneas» {}
 
 @[default_target]
-lean_lib «Base» {}
+lean_lib «Aeneas» {}

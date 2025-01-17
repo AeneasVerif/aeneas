@@ -1,7 +1,6 @@
 -- [betree]: external types.
-import Base
-open Primitives
+import Aeneas
+open Aeneas.Std
 
 /- The state type used in the state-error monad -/
 axiom State : Type
-
