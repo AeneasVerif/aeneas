@@ -21,7 +21,9 @@ macro_rules
 
 open Lean.Parser.Tactic in
 open Mathlib.Tactic.Ring in
-macro "scalar_nf" cfg:(config)? loc:(location)? : tactic =>
-  `(tactic| ring_nf $(cfg)? $(loc)?)
+macro "scalar_nf" cfg:optConfig loc:(location)? : tactic =>
+  `(tactic| ring_nf $cfg:optConfig $(loc)?)
+
+example : True := by ring_nf
 
 end Arith

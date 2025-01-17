@@ -304,7 +304,7 @@ def use_boxed_slice_mut_borrow2
 
 /- [adt_borrows::SharedList]
    Source: 'tests/src/adt-borrows.rs', lines 207:0-210:1 -/
-inductive SharedList (T : Type) :=
+inductive SharedList (T : Type) where
 | Nil : SharedList T
 | Cons : T → SharedList T → SharedList T
 
@@ -324,7 +324,7 @@ def SharedList.pop
 
 /- [adt_borrows::MutList]
    Source: 'tests/src/adt-borrows.rs', lines 227:0-230:1 -/
-inductive MutList (T : Type) :=
+inductive MutList (T : Type) where
 | Nil : MutList T
 | Cons : T → MutList T → MutList T
 
@@ -372,7 +372,7 @@ def wrap_mut_in_option
 
 /- [adt_borrows::List]
    Source: 'tests/src/adt-borrows.rs', lines 255:0-258:1 -/
-inductive List (T : Type) :=
+inductive List (T : Type) where
 | Cons : T → List T → List T
 | Nil : List T
 

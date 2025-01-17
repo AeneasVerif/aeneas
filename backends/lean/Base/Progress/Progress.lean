@@ -213,7 +213,7 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
     trace[Progress] "new goals: {newGoals}"
     -- Split between the goals which are propositions and the others
     let (newPropGoals, newNonPropGoals) ←
-      newGoals.data.partitionM fun mvar => do isProp (← mvar.getType)
+      newGoals.toList.partitionM fun mvar => do isProp (← mvar.getType)
     trace[Progress] "Prop goals: {newPropGoals}"
     trace[Progress] "Non prop goals: {← newNonPropGoals.mapM fun mvarId => do pure ((← mvarId.getDecl).userName, mvarId)}"
     -- Try to solve the goals which are propositions
@@ -259,7 +259,7 @@ def tryLookupApply (keep : Option Name) (ids : Array (Option Name)) (splitPost :
         try
           let res ← progressWith fExpr th keep ids splitPost asmTac
           pure (some res)
-        catch _ => none
+        catch _ => pure none
   match res with
   | some .Ok => pure true
   | some (.Error msg) => throwError msg

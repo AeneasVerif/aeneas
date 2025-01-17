@@ -448,23 +448,6 @@ let mk_builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
   ]
   @ List.flatten
       (List.map
-         (fun int_name ->
-           List.map
-             (fun op ->
-               mk_fun
-                 ("core::num::" ^ "{" ^ int_name ^ "}::" ^ op)
-                 ~can_fail:false ())
-             [
-               "saturating_add";
-               "saturating_sub";
-               "wrapping_add";
-               "wrapping_sub";
-               "rotate_left";
-               "rotate_right";
-             ])
-         all_int_names)
-  @ List.flatten
-      (List.map
          (fun op ->
            mk_scalar_fun
              (fun ty -> "core::num::{" ^ ty ^ "}::checked_" ^ op)
@@ -569,17 +552,29 @@ let mk_builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
            ~filter:(Some [ true; false ])
            ();
        ]
-      @ List.map
-          (fun ty ->
-            mk_fun
-              ("core::num::{" ^ ty ^ "}::overflowing_add")
-              ~extract_name:
-                (Some
-                   ("core.num."
-                   ^ StringUtils.capitalize_first_letter ty
-                   ^ ".overflowing_add"))
-              ())
-          all_int_names)
+      @ List.flatten
+          (List.map
+             (fun int_name ->
+               List.map
+                 (fun (can_fail, op) ->
+                   mk_fun
+                     ("core::num::" ^ "{" ^ int_name ^ "}::" ^ op)
+                     ~extract_name:
+                       (Some
+                          ("core.num."
+                          ^ StringUtils.capitalize_first_letter int_name
+                          ^ "." ^ op))
+                     ~can_fail ())
+                 [
+                   (false, "saturating_add");
+                   (false, "saturating_sub");
+                   (false, "wrapping_add");
+                   (false, "wrapping_sub");
+                   (true, "overflowing_add");
+                   (false, "rotate_left");
+                   (false, "rotate_right");
+                 ])
+             all_int_names))
 
 let builtin_funs : unit -> (pattern * bool list option * builtin_fun_info) list
     =

@@ -162,7 +162,7 @@ initialize saturateAttr : SaturateAttribute ← do
           let pat ← instantiateMVars (← Elab.Term.elabTerm pat none |>.run')
           trace[Saturate.attribute] "Pattern: {pat}"
           -- Check that the pattern contains all the quantified variables
-          let allFVars ← fvars.foldlM (fun hs arg => getFVarIds arg hs) HashSet.empty
+          let allFVars ← fvars.foldlM (fun hs arg => getFVarIds arg hs) Std.HashSet.empty
           let patFVars ← getFVarIds pat (← getFVarIds (← inferType pat))
           trace[Saturate.attribute] "allFVars: {← allFVars.toList.mapM FVarId.getUserName}"
           trace[Saturate.attribute] "patFVars: {← patFVars.toList.mapM FVarId.getUserName}"
@@ -178,11 +178,10 @@ initialize saturateAttr : SaturateAttribute ← do
           -- Create the pattern
           let patExpr ← mkLambdaFVars fvars pat
           trace[Saturate.attribute] "Pattern expression: {patExpr}"
-          -- Create the discrimination tree key - we use the default configuration
+          -- Create the discrimination tree key
           let (_, _, patWithMetas) ← lambdaMetaTelescope patExpr
           trace[Saturate.attribute] "patWithMetas: {patWithMetas}"
-          let config : WhnfCoreConfig := {}
-          let key ← DiscrTree.mkPath patWithMetas config
+          let key ← DiscrTree.mkPath patWithMetas
           trace[Saturate.attribute] "key: {key}"
           --
           let key : Key := ⟨ setName, key ⟩
@@ -204,9 +203,7 @@ def SaturateAttribute.find? (s : SaturateAttribute) (setName : Name) (e : Expr) 
   match s.rules.find? setName with
   | none => pure #[]
   | some dTree =>
-    -- We use the default configuration
-    let config : WhnfCoreConfig := {}
-    let rules ← dTree.getMatch e config
+    let rules ← dTree.getMatch e
     -- Filter the rules which have been deactivated
     pure (rules.filter fun r => s.nameToRule.contains r.thName)
 

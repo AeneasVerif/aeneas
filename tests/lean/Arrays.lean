@@ -10,7 +10,7 @@ namespace arrays
 
 /- [arrays::AB]
    Source: 'tests/src/arrays.rs', lines 6:0-9:1 -/
-inductive AB :=
+inductive AB where
 | A : AB
 | B : AB
 

@@ -17,13 +17,12 @@ open Attribute
     We return the set of: (theroem name, list of arguments)
  -/
 def matchExpr (nameToRule : NameMap Rule) (dtrees : Array (DiscrTree Rule))
-  (boundVars : HashSet FVarId)
-  (matched : HashSet (Name × List Expr)) (e : Expr) :
-  MetaM (HashSet (Name × List Expr)) := do
+  (boundVars : Std.HashSet FVarId)
+  (matched : Std.HashSet (Name × List Expr)) (e : Expr) :
+  MetaM (Std.HashSet (Name × List Expr)) := do
   trace[Saturate] "Matching: {e}"
   dtrees.foldlM (fun matched dtree => do
-    let config : WhnfCoreConfig := {}
-    let exprs ← dtree.getMatch e config
+    let exprs ← dtree.getMatch e
     trace[Saturate] "Potential matches: {exprs}"
     -- Check each expression
     (exprs.foldlM fun matched rule => do
@@ -43,7 +42,7 @@ def matchExpr (nameToRule : NameMap Rule) (dtrees : Array (DiscrTree Rule))
                 let arg ← instantiateMVars arg
                 let hs ← getFVarIds arg hs
                 pure (arg :: args, hs)
-              ) ([], HashSet.empty)
+              ) ([], Std.HashSet.empty)
             if boundVars.all (fun fvar => ¬ allFVars.contains fvar) then
               -- Ok: save the theorem
               trace[Saturate] "Matched with: {rule.thName} {args}"
@@ -69,17 +68,17 @@ def matchExpr (nameToRule : NameMap Rule) (dtrees : Array (DiscrTree Rule))
 /- Recursively explore a term -/
 private partial def visit (depth : Nat) (nameToRule : NameMap Rule)
   (dtrees : Array (DiscrTree Rule))
-  (boundVars : HashSet FVarId)
-  (matched : HashSet (Name × List Expr))
-  (e : Expr) : MetaM (HashSet (Name × List Expr)) := do
+  (boundVars : Std.HashSet FVarId)
+  (matched : Std.HashSet (Name × List Expr))
+  (e : Expr) : MetaM (Std.HashSet (Name × List Expr)) := do
   trace[Saturate] "Visiting {e}"
   -- Match
   let matched ← matchExpr nameToRule dtrees boundVars matched e
   -- Recurse
   let visitBinders
     (depth : Nat)
-    (boundVars : HashSet FVarId) (matched : HashSet (Name × List Expr)) (xs: Array Expr) :
-    MetaM (HashSet FVarId × (HashSet (Name × List Expr))) := do
+    (boundVars : Std.HashSet FVarId) (matched : Std.HashSet (Name × List Expr)) (xs: Array Expr) :
+    MetaM (Std.HashSet FVarId × (Std.HashSet (Name × List Expr))) := do
     -- Visit the type of the binders, as well as the bodies
     xs.foldlM (fun (boundVars, matched) x => do
       let fvarId := x.fvarId!
@@ -144,14 +143,14 @@ def evalSaturate (sets : List Name) : TacticM Unit := do
   let matched ← decls.foldlM (fun matched (decl : LocalDecl) => do
     trace[Saturate] "Exploring local decl: {decl.userName}"
     /- We explore both the type, the expresion and the body (if there is) -/
-    let matched ← visit 0 s.nameToRule dtrees HashSet.empty matched decl.type
-    let matched ← visit 0 s.nameToRule dtrees HashSet.empty matched decl.toExpr
+    let matched ← visit 0 s.nameToRule dtrees Std.HashSet.empty matched decl.type
+    let matched ← visit 0 s.nameToRule dtrees Std.HashSet.empty matched decl.toExpr
     match decl.value? with
     | none => pure matched
-    | some value => visit 0 s.nameToRule dtrees HashSet.empty matched value) HashSet.empty
+    | some value => visit 0 s.nameToRule dtrees Std.HashSet.empty matched value) Std.HashSet.empty
   -- Explore the goal
   trace[Saturate] "Exploring the goal"
-  let matched ← visit 0 s.nameToRule dtrees HashSet.empty matched (← Tactic.getMainTarget)
+  let matched ← visit 0 s.nameToRule dtrees Std.HashSet.empty matched (← Tactic.getMainTarget)
   -- Introduce the theorems in the context
   for (thName, args) in matched do
     let th ← mkAppOptM thName (args.map some).toArray

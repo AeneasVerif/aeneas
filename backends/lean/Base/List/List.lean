@@ -300,8 +300,8 @@ theorem length_flatten_update_eq {α : Type u} (ls : List (List α)) (i : Nat) (
 theorem length_flatten_update_eq_disj {α : Type u} (ls : List (List α)) (i : Nat) (x : List α) :
   i < 0 ∨ ls.length ≤ i ∨
   (ls.update i x).flatten.length + (ls.index i).length = ls.flatten.length + x.length := by
-  cases h: (i < 0 : Bool) <;> simp_all
-  cases h: (ls.length ≤ i : Bool) <;> simp_all
+  cases h: (i < 0 : Bool) <;> simp_all only [not_lt_zero', decide_false, Bool.false_eq_true, not_false_eq_true, neq_imp]
+  cases h: (ls.length ≤ i : Bool) <;> simp_all only [decide_eq_false_iff_not, not_le, false_or, decide_eq_true_eq, true_or]
   rw [length_flatten_update_eq] <;> simp [*]
 
 theorem length_flatten_update_as_int_eq {α : Type u} (ls : List (List α)) (i : Nat) (x : List α)

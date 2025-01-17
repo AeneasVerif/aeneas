@@ -1571,9 +1571,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
              type (and not a product between, say, integers) we need to help Coq
              a bit *)
           if is_tuple_struct then ": Type :=" else ":="
-      | Lean ->
-          if type_kind = Some Struct && kind = SingleNonRec then "where"
-          else ":="
+      | Lean -> if is_tuple_struct then ":=" else "where"
       | HOL4 -> "="
     in
     F.pp_print_string fmt eq)
@@ -1825,17 +1823,10 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
           (* Inner box for the projector definition *)
           F.pp_open_hvbox fmt ctx.indent_incr;
 
-          (* For Lean: add some attributes *)
-          if backend () = Lean then (
-            (* Box for the attributes *)
-            F.pp_open_vbox fmt 0;
-            (* Annotate the projectors with both simp and reducible.
-               The first one allows to automatically unfold when calling simp in proofs.
-               The second ensures that projectors will interact well with the unifier *)
-            F.pp_print_string fmt "@[reducible]";
-            F.pp_print_break fmt 0 0;
-            (* Close box for the attributes *)
-            F.pp_close_box fmt ());
+          (* For Lean: we used to mark the projectors as reducible but it would
+             cause issues with the simplifier, probably because of the simp
+             lemmas. The consequence is that projectors won't interact well with
+             the unifier, but it shouldn't be an issue in practice. *)
 
           (* Box for the [def ADT.proj ... :=] *)
           F.pp_open_hovbox fmt ctx.indent_incr;

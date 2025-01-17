@@ -20,20 +20,9 @@ def mkListDeclarationExtension [Inhabited α] (name : Name := by exact decl_name
   IO (ListDeclarationExtension α) :=
   registerSimplePersistentEnvExtension {
     name          := name,
-    addImportedFn := fun entries => entries.foldl (fun s l => l.data ++ s) [],
+    addImportedFn := fun entries => entries.foldl (fun s l => l.toList ++ s) [],
     addEntryFn    := fun l x => x :: l,
     toArrayFn     := fun l => l.toArray
-  }
-
--- This is not used anymore but we keep it here.
--- TODO: the original function doesn't define correctly the `addImportedFn`. Do a PR?
-def mkMapDeclarationExtension [Inhabited α] (name : Name := by exact decl_name%) :
-  IO (MapDeclarationExtension α) :=
-  registerSimplePersistentEnvExtension {
-    name          := name,
-    addImportedFn := fun a => a.foldl (fun s a => a.foldl (fun s (k, v) => s.insert k v) s) RBMap.empty,
-    addEntryFn    := fun s n => s.insert n.1 n.2,
-    toArrayFn     := fun es => es.toArray.qsort (fun a b => Name.quickLt a.1 b.1)
   }
 
 def SetDeclarationExtension := SimplePersistentEnvExtension Name NameSet

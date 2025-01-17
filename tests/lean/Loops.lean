@@ -98,7 +98,7 @@ def clear (v : alloc.vec.Vec U32) : Result (alloc.vec.Vec U32) :=
 
 /- [loops::List]
    Source: 'tests/src/loops.rs', lines 74:0-77:1 -/
-inductive List (T : Type) :=
+inductive List (T : Type) where
 | Cons : T → List T → List T
 | Nil : List T
 

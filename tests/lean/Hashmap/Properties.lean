@@ -104,7 +104,7 @@ def lookup (hm : HashMap α) (k : Usize) : Option α :=
 abbrev len_s (hm : HashMap α) : Nat := hm.al_v.length
 
 instance : Membership Usize (HashMap α) where
-  mem k hm := hm.lookup k ≠ none
+  mem (hm : HashMap α) k := hm.lookup k ≠ none
 
 /- Activate the ↑ notation -/
 attribute [coe] HashMap.v
@@ -140,6 +140,9 @@ def frame_load (hm nhm : HashMap α) : Prop :=
 
 -- This rewriting lemma is problematic below
 attribute [-simp] Bool.exists_bool
+
+-- These simp lemmas were introduced by upstream changes and are problematic
+attribute [-simp] List.length_flatten List.flatten_eq_nil_iff List.lookup_eq_none_iff
 
 attribute [local simp] List.lookup
 
@@ -398,7 +401,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
       simp [*]
       have hbounds : hm.num_entries.val + (Usize.ofInt 1).val ≤ Usize.max := by
         simp [lookup] at hnsat
-        simp_all (config := {maxDischargeDepth := 1})
+        simp_all (config := {maxDischargeDepth := 1}) []
         scalar_tac
       progress as ⟨ z, hp ⟩
       simp [hp]
@@ -499,8 +502,6 @@ theorem move_elements_from_list_spec
     have hLookupKey : ntable.lookup key = none := by
       by_contra
       cases h: ntable.lookup key <;> simp_all (config := {maxDischargeDepth := 1})
-      have h := hDisjoint1 _ _ h
-      simp_all (config := {maxDischargeDepth := 1})
     have : ntable.lookup key = none → ntable.len_s < Usize.max := by simp_all (config := {maxDischargeDepth := 1}); scalar_tac
     progress as ⟨ ntable1, _, _, hLookup11, hLookup12, hLength1 ⟩
     simp [hLookupKey] at hLength1
@@ -733,8 +734,8 @@ theorem move_elements_loop_spec
   := by
   rw [move_elements_loop]
   simp
-  if hi: i.val < slots.val.length then
-    -- Continue the proof
+  dcases hi: i.val < slots.val.length
+  . -- Continue the proof
     have hIneq : 0 ≤ i.val ∧ i.val < slots.val.length := by scalar_tac
     simp [hi]
     progress as ⟨ slot, hSlotEq ⟩
@@ -752,8 +753,6 @@ theorem move_elements_loop_spec
         have := slots_inv_lookup_imp_eq slots hSlotsInv i.toNat (by scalar_tac) key
         simp_all (config := {maxDischargeDepth := 1})
       cases h: slot.lookup key <;> simp_all (config := {maxDischargeDepth := 1})
-      have := hDisjoint2 _ _ h
-      simp_all (config := {maxDischargeDepth := 1})
 
     have : ntable.al_v.length + slot.v.length ≤ Usize.max := by
       have := slots_index_len_le_flatten_len slots.val i.toNat (by scalar_tac)
@@ -762,8 +761,6 @@ theorem move_elements_loop_spec
     . intro key v hLookup
       by_contra
       cases h : ntable.lookup key <;> simp_all (config := {maxDischargeDepth := 1})
-      have := ntableLookupImpSlot _ _ h
-      simp_all (config := {maxDischargeDepth := 1})
 
     progress as ⟨ i' ⟩
     have : i' ≤ alloc.vec.Vec.len (alloc.vec.Vec.update slots i Nil) := by
@@ -800,8 +797,6 @@ theorem move_elements_loop_spec
     . intro key v hLookup
       by_contra h
       cases h : ntable1.lookup key <;> simp_all (config := {maxDischargeDepth := 1})
-      have := ntable1LookupImpSlots1 _ _ h
-      simp_all (config := {maxDischargeDepth := 1})
     . have : i.val < (List.map AList.v slots.val).length := by simp; scalar_tac
       simp_all (config := {maxDischargeDepth := 2}) [Slots.al_v, List.length_flatten_update_eq, List.map_update_eq, List.length_flatten_update_as_int_eq]
       scalar_tac
@@ -831,8 +826,7 @@ theorem move_elements_loop_spec
     . apply hLookupPreserve.right
     . intro j h0
       apply hIndexNil j h0
-  else
-    simp [hi, *]
+  . simp [hi, *]
     -- TODO: simp_all (config := {maxDischargeDepth := 1}) removes hEmpty!!
     have hi : i = alloc.vec.Vec.len slots := by scalar_tac
     have hEmpty : ∀ (j : Nat), j < slots.val.length → slots.val.index j = AList.Nil := by
@@ -842,7 +836,12 @@ theorem move_elements_loop_spec
     have hLenNonZero : slots.val.length ≠ 0 := by simp [*]
     have hLookupEmpty := slots_forall_nil_imp_lookup_none slots hLenNonZero hEmpty
     simp [hNil, hLookupEmpty, frame_slots_params]
-    apply hEmpty
+    split_conjs
+    . intros
+      simp [*]
+    . intros
+      simp_all
+    . apply hEmpty
 termination_by (slots.val.length - i.val).toNat
 decreasing_by scalar_decr_tac -- TODO: this is expensive
 
@@ -1082,7 +1081,6 @@ theorem get_mut_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) :
       replace hBackSome := hBackSome v v' (by simp)
       have ⟨ _, _, _, _ ⟩ := hBackSome
       clear hBackSome
-      simp [*]
       intro key' hNotEq
       -- TODO: simplify
       have : 0 ≤ key'.val % hm.slots.val.length ∧ key'.val % hm.slots.val.length < hm.slots.val.length := by scalar_tac

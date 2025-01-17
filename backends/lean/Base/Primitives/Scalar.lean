@@ -1356,7 +1356,7 @@ theorem core.num.Usize.saturating_sub_spec (x y : Usize) :
   split <;> split <;> split <;> scalar_tac
 
 -- Wrapping add
-def Scalar.wrapping_add {ty} (x y : Scalar ty) : Result (Scalar ty) := sorry
+def Scalar.wrapping_add {ty} (x y : Scalar ty) : Scalar ty := sorry
 /- [core::num::{u8}::wrapping_add] -/
 def core.num.U8.wrapping_add := @Scalar.wrapping_add ScalarTy.U8
 
@@ -1396,7 +1396,7 @@ def core.num.Isize.wrapping_add := @Scalar.wrapping_add ScalarTy.Isize
 -- TODO: reasoning lemmas for wrapping add
 
 -- Wrapping sub
-def Scalar.wrapping_sub {ty} (x y : Scalar ty) : Result (Scalar ty) := sorry
+def Scalar.wrapping_sub {ty} (x y : Scalar ty) : Scalar ty := sorry
 /- [core::num::{u8}::wrapping_sub] -/
 def core.num.U8.wrapping_sub := @Scalar.wrapping_sub ScalarTy.U8
 

@@ -108,9 +108,9 @@ section Methods
     -- Check if some existentially quantified variables
     let _ := do
       -- Collect all the free variables in the arguments
-      let allArgsFVars ← args.foldlM (fun hs arg => getFVarIds arg hs) HashSet.empty
+      let allArgsFVars ← args.foldlM (fun hs arg => getFVarIds arg hs) Std.HashSet.empty
       -- Check if they intersect the fvars we introduced for the existentially quantified variables
-      let evarsSet : HashSet FVarId := HashSet.empty.insertMany (evars.map (fun (x : Expr) => x.fvarId!))
+      let evarsSet : Std.HashSet FVarId := Std.HashSet.empty.insertMany (evars.map (fun (x : Expr) => x.fvarId!))
       let filtArgsFVars := allArgsFVars.toArray.filter (fun var => evarsSet.contains var)
       if filtArgsFVars.isEmpty then pure ()
       else
@@ -166,9 +166,7 @@ initialize pspecAttr : PSpecAttr ← do
           let fExpr ← getPSpecFunArgsExpr false ty
           trace[Progress] "Registering spec theorem for expr: {fExpr}"
           -- Convert the function expression to a discrimination tree key
-          -- We use the default configuration
-          let config : WhnfCoreConfig := {}
-          DiscrTree.mkPath fExpr config)
+          DiscrTree.mkPath fExpr)
         let env := ext.addEntry env (fKey, thName)
         setEnv env
         trace[Progress] "Saved the environment"
@@ -178,9 +176,7 @@ initialize pspecAttr : PSpecAttr ← do
   pure { attr := attrImpl, ext := ext }
 
 def PSpecAttr.find? (s : PSpecAttr) (e : Expr) : MetaM (Array Name) := do
-  -- We use the default configuration
-  let config : WhnfCoreConfig := {}
-  (s.ext.getState (← getEnv)).getMatch e config
+  (s.ext.getState (← getEnv)).getMatch e
 
 def PSpecAttr.getState (s : PSpecAttr) : MetaM (DiscrTree Name) := do
   pure (s.ext.getState (← getEnv))

@@ -194,14 +194,17 @@ def intTac (tacName : String) (splitAllDisjs splitGoalConjs : Bool)
          -/
         Utils.tryTac (
           -- TODO: is there a simproc to simplify propositional logic?
-          Utils.simpAll {failIfUnchanged := false, maxSteps := 75} true [``reduceIte] []
+          Utils.simpAll {failIfUnchanged := false, maxSteps := 1000} true [``reduceIte] []
             [``and_self, ``false_implies, ``true_implies, ``Prod.mk.injEq,
              ``not_false_eq_true, ``not_true_eq_false,
              ``true_and, ``and_true, ``false_and, ``and_false,
-             ``true_or, ``or_true,``false_or, ``or_false] [])
+             ``true_or, ``or_true,``false_or, ``or_false,
+             ``Bool.true_eq_false, ``Bool.false_eq_true] [])
         allGoalsNoRecover (do
           trace[Arith] "Goal after simplification: {← getMainGoal}"
-          Tactic.Omega.omegaTactic {})
+          trace[Arith] "Calling omega"
+          Tactic.Omega.omegaTactic {}
+          trace[Arith] "Omega solved the goal")
       if splitAllDisjs then do
         /- In order to improve performance, we first try to prove the goal without splitting. If it
            fails, we split. -/
