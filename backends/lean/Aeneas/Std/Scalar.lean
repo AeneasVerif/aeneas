@@ -1439,6 +1439,7 @@ def core.num.Isize.wrapping_sub := @Scalar.wrapping_sub ScalarTy.Isize
 
 -- Rotate left
 def Scalar.rotate_left {ty} (x y : Scalar ty) : Scalar ty := sorry
+
 /- [core::num::{u8}::rotate_left] -/
 def core.num.U8.rotate_left := @Scalar.rotate_left ScalarTy.U8
 
