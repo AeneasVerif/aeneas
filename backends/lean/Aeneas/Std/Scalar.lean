@@ -1479,7 +1479,7 @@ def core.num.Isize.rotate_left := @Scalar.rotate_left ScalarTy.Isize
 -- TODO: reasoning lemmas for rotate left
 
 -- Rotate right
-def Scalar.rotate_right {ty} (x y : Scalar ty) : Scalar ty := sorry
+def Scalar.rotate_right {ty} (x : Scalar ty) (shift : U32) : Scalar ty := sorry
 
 /- [core::num::{u8}::rotate_right] -/
 def core.num.U8.rotate_right := @Scalar.rotate_right ScalarTy.U8
