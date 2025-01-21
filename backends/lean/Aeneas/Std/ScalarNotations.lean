@@ -49,22 +49,22 @@ def unexpU128ofInt : Unexpander | `($_ $n $_) => `($n#u128) | _ => throw ()
 def unexpUsizeofInt : Unexpander | `($_ $n $_) => `($n#usize) | _ => throw ()
 
 @[app_unexpander I8.ofInt]
-def unexpI8ofInt : Unexpander | `($_ $n $_) => `($n#u8) | _ => throw ()
+def unexpI8ofInt : Unexpander | `($_ $n $_) => `($n#i8) | _ => throw ()
 
 @[app_unexpander I16.ofInt]
-def unexpI16ofInt : Unexpander | `($_ $n $_) => `($n#u16) | _ => throw ()
+def unexpI16ofInt : Unexpander | `($_ $n $_) => `($n#i16) | _ => throw ()
 
 @[app_unexpander I32.ofInt]
-def unexpI32ofInt : Unexpander | `($_ $n $_) => `($n#u32) | _ => throw ()
+def unexpI32ofInt : Unexpander | `($_ $n $_) => `($n#i32) | _ => throw ()
 
 @[app_unexpander I64.ofInt]
-def unexpI64ofInt : Unexpander | `($_ $n $_) => `($n#u64) | _ => throw ()
+def unexpI64ofInt : Unexpander | `($_ $n $_) => `($n#i64) | _ => throw ()
 
 @[app_unexpander I128.ofInt]
-def unexpI128ofInt : Unexpander | `($_ $n $_) => `($n#u128) | _ => throw ()
+def unexpI128ofInt : Unexpander | `($_ $n $_) => `($n#i128) | _ => throw ()
 
 @[app_unexpander Isize.ofInt]
-def unexpIsizeofInt : Unexpander | `($_ $n $_) => `($n#usize) | _ => throw ()
+def unexpIsizeofInt : Unexpander | `($_ $n $_) => `($n#isize) | _ => throw ()
 
 -- Notation for pattern matching
 -- We make the precedence looser than the negation.

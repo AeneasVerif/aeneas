@@ -1427,6 +1427,88 @@ def core.num.Isize.wrapping_sub := @Scalar.wrapping_sub ScalarTy.Isize
 
 -- TODO: reasoning lemmas for wrapping sub
 
+-- Rotate left
+def Scalar.rotate_left {ty} (x  : Scalar ty) (shift : U32) : Scalar ty := sorry
+
+/- [core::num::{u8}::rotate_left] -/
+def core.num.U8.rotate_left := @Scalar.rotate_left ScalarTy.U8
+
+/- [core::num::{u16}::rotate_left] -/
+def core.num.U16.rotate_left := @Scalar.rotate_left ScalarTy.U16
+
+/- [core::num::{u32}::rotate_left] -/
+def core.num.U32.rotate_left := @Scalar.rotate_left ScalarTy.U32
+
+/- [core::num::{u64}::rotate_left] -/
+def core.num.U64.rotate_left := @Scalar.rotate_left ScalarTy.U64
+
+/- [core::num::{u128}::rotate_left] -/
+def core.num.U128.rotate_left := @Scalar.rotate_left ScalarTy.U128
+
+/- [core::num::{usize}::rotate_left] -/
+def core.num.Usize.rotate_left := @Scalar.rotate_left ScalarTy.Usize
+
+/- [core::num::{i8}::rotate_left] -/
+def core.num.I8.rotate_left := @Scalar.rotate_left ScalarTy.I8
+
+/- [core::num::{i16}::rotate_left] -/
+def core.num.I16.rotate_left := @Scalar.rotate_left ScalarTy.I16
+
+/- [core::num::{i32}::rotate_left] -/
+def core.num.I32.rotate_left := @Scalar.rotate_left ScalarTy.I32
+
+/- [core::num::{i64}::rotate_left] -/
+def core.num.I64.rotate_left := @Scalar.rotate_left ScalarTy.I64
+
+/- [core::num::{i128}::rotate_left] -/
+def core.num.I128.rotate_left := @Scalar.rotate_left ScalarTy.I128
+
+/- [core::num::{isize}::rotate_left] -/
+def core.num.Isize.rotate_left := @Scalar.rotate_left ScalarTy.Isize
+
+-- TODO: reasoning lemmas for rotate left
+
+-- Rotate right
+def Scalar.rotate_right {ty} (x : Scalar ty) (shift : U32) : Scalar ty := sorry
+
+/- [core::num::{u8}::rotate_right] -/
+def core.num.U8.rotate_right := @Scalar.rotate_right ScalarTy.U8
+
+/- [core::num::{u16}::rotate_right] -/
+def core.num.U16.rotate_right := @Scalar.rotate_right ScalarTy.U16
+
+/- [core::num::{u32}::rotate_right] -/
+def core.num.U32.rotate_right := @Scalar.rotate_right ScalarTy.U32
+
+/- [core::num::{u64}::rotate_right] -/
+def core.num.U64.rotate_right := @Scalar.rotate_right ScalarTy.U64
+
+/- [core::num::{u128}::rotate_right] -/
+def core.num.U128.rotate_right := @Scalar.rotate_right ScalarTy.U128
+
+/- [core::num::{usize}::rotate_right] -/
+def core.num.Usize.rotate_right := @Scalar.rotate_right ScalarTy.Usize
+
+/- [core::num::{i8}::rotate_right] -/
+def core.num.I8.rotate_right := @Scalar.rotate_right ScalarTy.I8
+
+/- [core::num::{i16}::rotate_right] -/
+def core.num.I16.rotate_right := @Scalar.rotate_right ScalarTy.I16
+
+/- [core::num::{i32}::rotate_right] -/
+def core.num.I32.rotate_right := @Scalar.rotate_right ScalarTy.I32
+
+/- [core::num::{i64}::rotate_right] -/
+def core.num.I64.rotate_right := @Scalar.rotate_right ScalarTy.I64
+
+/- [core::num::{i128}::rotate_right] -/
+def core.num.I128.rotate_right := @Scalar.rotate_right ScalarTy.I128
+
+/- [core::num::{isize}::rotate_right] -/
+def core.num.Isize.rotate_right := @Scalar.rotate_right ScalarTy.Isize
+
+-- TODO: reasoning lemmas for rotate right
+
 end Std
 
 end Aeneas
