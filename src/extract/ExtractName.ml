@@ -6,6 +6,25 @@ open Errors
 let log = Logging.extract_log
 let match_with_trait_decl_refs = true
 
+let all_int_names =
+  [
+    "usize";
+    "u8";
+    "u16";
+    "u32";
+    "u64";
+    "u128";
+    "isize";
+    "i8";
+    "i16";
+    "i32";
+    "i64";
+    "i128";
+  ]
+
+let literal_type_names = "bool" :: "str" :: all_int_names
+let literal_type_nameset = Collections.StringSet.of_list literal_type_names
+
 module NameMatcherMap = struct
   module NMM = NameMatcherMap
 
@@ -44,16 +63,18 @@ let pattern_to_extract_name (span : Meta.span option) (name : pattern) :
     List.for_all check
   in
 
-  (* This is a bit of a hack: we want to simplify the occurrences of
-     tuples of two variables, arrays with only variables, slices with
-     only variables, etc.
+  (* This is a bit of a hack: we want to simplify some names.
      We explore the pattern and replace such occurrences with a specific name.
   *)
-  let replace_option_name (id : pattern) =
+  let simplify_name (id : pattern) =
     match id with
     | [ PIdent ("core", []); PIdent ("option", []); PIdent ("Option", g) ] ->
         (* Option *)
         [ PIdent ("Option", g) ]
+    | [ PIdent (id, []) ] when Collections.StringSet.mem id literal_type_nameset
+      ->
+        (* Literals: we want to capitalize the first letter *)
+        [ PIdent (StringUtils.capitalize_first_letter id, []) ]
     | _ -> id
   in
   let visitor =
@@ -66,7 +87,7 @@ let pattern_to_extract_name (span : Meta.span option) (name : pattern) :
 
       method! visit_EComp _ id =
         (* Simplify if this is [Option] *)
-        super#visit_EComp () (replace_option_name id)
+        super#visit_EComp () (simplify_name id)
 
       method! visit_PImpl _ ty =
         match ty with

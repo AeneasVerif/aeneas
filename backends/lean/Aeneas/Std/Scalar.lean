@@ -89,7 +89,7 @@ def Scalar.and {ty : ScalarTy} (x : Scalar ty) (y : Scalar ty) : Scalar ty :=
 def Scalar.or {ty : ScalarTy} (x : Scalar ty) (y : Scalar ty) : Scalar ty :=
   sorry
 
-/- ¬ x reverst the bits of x
+/- ¬ x reverses the bits of x
 
    It has the following effect:
    - if x is unsigned, then it evaluates to Scalar.max - x
@@ -1154,10 +1154,10 @@ def int_saturating_add_in_bounds {ty} (x y : Scalar ty) :
   simp [int_saturating_add]
   split <;> constructor <;> cases ty <;> scalar_tac
 
-def Scalar.saturating_add {ty} (x y : Scalar ty) : Result (Scalar ty) :=
+def Scalar.saturating_add {ty} (x y : Scalar ty) : Scalar ty :=
   let r := int_saturating_add ty x.val y.val
   have h := int_saturating_add_in_bounds x y
-  ok ⟨ r, h.1, h.2 ⟩
+  ⟨ r, h.1, h.2 ⟩
 
 /- [core::num::{u8}::saturating_add] -/
 def core.num.U8.saturating_add := @Scalar.saturating_add ScalarTy.U8
@@ -1195,54 +1195,48 @@ def core.num.I128.saturating_add := @Scalar.saturating_add ScalarTy.I128
 /- [core::num::{isize}::saturating_add] -/
 def core.num.Isize.saturating_add := @Scalar.saturating_add ScalarTy.Isize
 
-@[pspec]
 theorem core.num.U8.saturating_add_spec (x y : U8) :
-  ∃ z, saturating_add x y = ok z ∧
+  let z := saturating_add x y
   if x.val + y.val > U8.max then z.val = U8.max
   else z.val = x.val + y.val
   := by
   simp [saturating_add, Scalar.saturating_add, int_saturating_add]
   split <;> split <;> split <;> scalar_tac
 
-@[pspec]
 theorem core.num.U16.saturating_add_spec (x y : U16) :
-  ∃ z, saturating_add x y = ok z ∧
+  let z := saturating_add x y
   if x.val + y.val > U16.max then z.val = U16.max
   else z.val = x.val + y.val
   := by
   simp [saturating_add, Scalar.saturating_add, int_saturating_add]
   split <;> split <;> split <;> scalar_tac
 
-@[pspec]
 theorem core.num.U32.saturating_add_spec (x y : U32) :
-  ∃ z, saturating_add x y = ok z ∧
+  let z := saturating_add x y
   if x.val + y.val > U32.max then z.val = U32.max
   else z.val = x.val + y.val
   := by
   simp [saturating_add, Scalar.saturating_add, int_saturating_add]
   split <;> split <;> split <;> scalar_tac
 
-@[pspec]
 theorem core.num.U64.saturating_add_spec (x y : U64) :
-  ∃ z, saturating_add x y = ok z ∧
+  let z := saturating_add x y
   if x.val + y.val > U64.max then z.val = U64.max
   else z.val = x.val + y.val
   := by
   simp [saturating_add, Scalar.saturating_add, int_saturating_add]
   split <;> split <;> split <;> scalar_tac
 
-@[pspec]
 theorem core.num.U128.saturating_add_spec (x y : U128) :
-  ∃ z, saturating_add x y = ok z ∧
+  let z := saturating_add x y
   if x.val + y.val > U128.max then z.val = U128.max
   else z.val = x.val + y.val
   := by
   simp [saturating_add, Scalar.saturating_add, int_saturating_add]
   split <;> split <;> split <;> scalar_tac
 
-@[pspec]
 theorem core.num.Usize.saturating_add_spec (x y : Usize) :
-  ∃ z, saturating_add x y = ok z ∧
+  let z := saturating_add x y
   if x.val + y.val > Usize.max then z.val = Usize.max
   else z.val = x.val + y.val
   := by
@@ -1262,10 +1256,10 @@ def int_saturating_sub_in_bounds {ty} (x y : Scalar ty) :
   simp [int_saturating_sub]
   split <;> constructor <;> cases ty <;> scalar_tac
 
-def Scalar.saturating_sub {ty} (x y : Scalar ty) : Result (Scalar ty) :=
+def Scalar.saturating_sub {ty} (x y : Scalar ty) : Scalar ty :=
   let r := int_saturating_sub ty x.val y.val
   have h := int_saturating_sub_in_bounds x y
-  ok ⟨ r, h.1, h.2 ⟩
+  ⟨ r, h.1, h.2 ⟩
 
 /- [core::num::{u8}::saturating_sub] -/
 def core.num.U8.saturating_sub := @Scalar.saturating_sub ScalarTy.U8
@@ -1303,54 +1297,48 @@ def core.num.I128.saturating_sub := @Scalar.saturating_sub ScalarTy.I128
 /- [core::num::{isize}::saturating_sub] -/
 def core.num.Isize.saturating_sub := @Scalar.saturating_sub ScalarTy.Isize
 
-@[pspec]
 theorem core.num.U8.saturating_sub_spec (x y : U8) :
-  ∃ z, saturating_sub x y = ok z ∧
+  let z := saturating_sub x y
   if x.val - y.val < 0 then z.val = 0
   else z.val = x.val - y.val
   := by
   simp [saturating_sub, Scalar.saturating_sub, int_saturating_sub]
   split <;> split <;> split <;> scalar_tac
 
-@[pspec]
 theorem core.num.U16.saturating_sub_spec (x y : U16) :
-  ∃ z, saturating_sub x y = ok z ∧
+  let z := saturating_sub x y
   if x.val - y.val < 0 then z.val = 0
   else z.val = x.val - y.val
   := by
   simp [saturating_sub, Scalar.saturating_sub, int_saturating_sub]
   split <;> split <;> split <;> scalar_tac
 
-@[pspec]
 theorem core.num.U32.saturating_sub_spec (x y : U32) :
-  ∃ z, saturating_sub x y = ok z ∧
+  let z := saturating_sub x y
   if x.val - y.val < 0 then z.val = 0
   else z.val = x.val - y.val
   := by
   simp [saturating_sub, Scalar.saturating_sub, int_saturating_sub]
   split <;> split <;> split <;> scalar_tac
 
-@[pspec]
 theorem core.num.U64.saturating_sub_spec (x y : U64) :
-  ∃ z, saturating_sub x y = ok z ∧
+  let z := saturating_sub x y
   if x.val - y.val < 0 then z.val = 0
   else z.val = x.val - y.val
   := by
   simp [saturating_sub, Scalar.saturating_sub, int_saturating_sub]
   split <;> split <;> split <;> scalar_tac
 
-@[pspec]
 theorem core.num.U128.saturating_sub_spec (x y : U128) :
-  ∃ z, saturating_sub x y = ok z ∧
+  let z := saturating_sub x y
   if x.val - y.val < 0 then z.val = 0
   else z.val = x.val - y.val
   := by
   simp [saturating_sub, Scalar.saturating_sub, int_saturating_sub]
   split <;> split <;> split <;> scalar_tac
 
-@[pspec]
 theorem core.num.Usize.saturating_sub_spec (x y : Usize) :
-  ∃ z, saturating_sub x y = ok z ∧
+  let z := saturating_sub x y
   if x.val - y.val < 0 then z.val = 0
   else z.val = x.val - y.val
   := by
@@ -1359,6 +1347,7 @@ theorem core.num.Usize.saturating_sub_spec (x y : Usize) :
 
 -- Wrapping add
 def Scalar.wrapping_add {ty} (x y : Scalar ty) : Scalar ty := sorry
+
 /- [core::num::{u8}::wrapping_add] -/
 def core.num.U8.wrapping_add := @Scalar.wrapping_add ScalarTy.U8
 
@@ -1399,6 +1388,7 @@ def core.num.Isize.wrapping_add := @Scalar.wrapping_add ScalarTy.Isize
 
 -- Wrapping sub
 def Scalar.wrapping_sub {ty} (x y : Scalar ty) : Scalar ty := sorry
+
 /- [core::num::{u8}::wrapping_sub] -/
 def core.num.U8.wrapping_sub := @Scalar.wrapping_sub ScalarTy.U8
 

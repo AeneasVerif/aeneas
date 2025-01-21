@@ -16,7 +16,6 @@ namespace ScalarTac
 
 declare_aesop_rule_sets [Aeneas.ScalarTac, Aeneas.ScalarTacNonLin]
 
-#check Lean.Option.register
 register_option scalarTac.nonLin : Bool := {
   defValue := false
   group := ""

@@ -155,6 +155,11 @@ def core.result.Result.unwrap {T E : Type}
   | .Ok x => ok x
   | .Err _ => fail .panic
 
+/- [core::ops::range::RangeFrom] -/
+structure core.ops.range.RangeFrom (Idx : Type) where
+  start : Idx
+
+
 end Std
 
 end Aeneas

@@ -10,22 +10,6 @@ include ExtractName (* TODO: only open? *)
 
 let log = Logging.builtin_log
 
-let all_int_names =
-  [
-    "usize";
-    "u8";
-    "u16";
-    "u32";
-    "u64";
-    "u128";
-    "isize";
-    "i8";
-    "i16";
-    "i32";
-    "i64";
-    "i128";
-  ]
-
 (** Small utility to memoize some computations *)
 let mk_memoized (f : unit -> 'a) : unit -> 'a =
   let r = ref None in
@@ -133,7 +117,8 @@ type builtin_type_info = {
 
 type type_variant_kind =
   | KOpaque
-  | KStruct of (string * string) list
+  | KStruct of (string * string option) list
+      (** Contains the list of (field rust name, field extracted name) *)
   | KEnum of string list
 
 let mk_struct_constructor (type_name : string) : string =
@@ -174,6 +159,11 @@ let builtin_types () : builtin_type_info list =
             List.map
               (fun (rname, name) ->
                 ( rname,
+                  let name =
+                    match name with
+                    | None -> rname
+                    | Some name -> name
+                  in
                   match backend () with
                   | FStar | Lean -> name
                   | Coq | HOL4 -> extract_name ^ "_" ^ name ))
@@ -214,7 +204,7 @@ let builtin_types () : builtin_type_info list =
     mk_type "alloc::vec::Vec" ~keep_params:(Some [ true; false ]) ();
     (* Range *)
     mk_type "core::ops::range::Range"
-      ~kind:(KStruct [ ("start", "start"); ("end", "end_") ])
+      ~kind:(KStruct [ ("start", None); ("end", Some "end_") ])
       ();
     (* Option
 
@@ -259,6 +249,9 @@ let builtin_types () : builtin_type_info list =
         mk_type "core::result::Result" ~kind:(KEnum [ "Ok"; "Err" ]) ();
         mk_type "core::fmt::Error" ();
         mk_type "core::array::TryFromSliceError" ();
+        mk_type "core::ops::range::RangeFrom"
+          ~kind:(KStruct [ ("start", None) ])
+          ();
       ]
 
 let mk_builtin_types_map () =
@@ -551,6 +544,30 @@ let mk_builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
          mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::extend_from_slice"
            ~filter:(Some [ true; false ])
            ();
+         mk_fun
+           "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
+            [@T]>}::get"
+           ();
+         mk_fun
+           "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
+            [@T]>}::get_mut"
+           ();
+         mk_fun
+           "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
+            [@T]>}::get_unchecked"
+           ();
+         mk_fun
+           "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
+            [@T]>}::get_unchecked_mut"
+           ();
+         mk_fun
+           "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
+            [@T]>}::index"
+           ();
+         mk_fun
+           "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
+            [@T]>}::index_mut"
+           ();
        ]
       @ List.flatten
           (List.map
@@ -825,6 +842,13 @@ let builtin_trait_impls_info () : (pattern * (bool list option * string)) list =
         (* TryInto<T, U : TryFrom<T>> *)
         fmt "core::convert::{core::convert::TryInto<@T, @U>}"
           ~extract_name:(Some "core::convert::TryIntoFrom") ();
+        fmt
+          "core::slice::index::private_slice_index::Sealed<core::ops::range::RangeFrom<usize>>"
+          ();
+        fmt
+          "core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
+           [@Self]>"
+          ();
       ]
   (* From<INT, bool> *)
   @ List.map

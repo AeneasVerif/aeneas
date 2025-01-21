@@ -234,11 +234,11 @@ let extract_binop (span : Meta.span)
         | FStar | Lean | HOL4 -> binop
         | Coq -> "s" ^ binop
       in
-      extract_expr false arg0;
+      extract_expr true arg0;
       F.pp_print_space fmt ();
       F.pp_print_string fmt binop;
       F.pp_print_space fmt ();
-      extract_expr false arg1
+      extract_expr true arg1
   | _ ->
       let binop_is_shift =
         match binop with
