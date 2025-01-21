@@ -605,7 +605,7 @@ namespace FixI
           revert iLt
           simp_arith
         let j: Fin tys1.length := ⟨ j, jLt ⟩
-        Eq.mp (by simp) (get_fun tl j)
+        Eq.mp (by norm_cast) (get_fun tl j)
 
   /- Automating the proofs -/
   @[simp] theorem is_valid_p_same
@@ -818,7 +818,7 @@ namespace FixII
           revert iLt
           simp_arith
         let j: Fin tys1.length := ⟨ j, jLt ⟩
-        Eq.mp (by simp) (get_fun tl j)
+        Eq.mp (by norm_cast) (get_fun tl j)
 
   /- Automating the proofs -/
   @[simp] theorem is_valid_p_same
