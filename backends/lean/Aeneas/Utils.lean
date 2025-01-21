@@ -847,8 +847,8 @@ def normCastAtAll : TacticM Unit := do
   withMainContext do
   let ctx ← Lean.MonadLCtx.getLCtx
   let decls ← ctx.getDecls
-  NormCast.normCastTarget
-  decls.forM (fun d => NormCast.normCastHyp d.fvarId)
+  NormCast.normCastTarget {}
+  decls.forM (fun d => NormCast.normCastHyp {} d.fvarId)
 
 @[inline] def tryLiftMetaTactic1 (tactic : MVarId → MetaM (Option MVarId)) (msg : String) : TacticM Unit :=
   withMainContext do

@@ -436,7 +436,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
     -- TODO: canonize addition by default? We need a tactic to simplify arithmetic equalities
     -- with addition and substractions ((ℤ, +) is a group or something - there should exist a tactic
     -- somewhere in mathlib?)
-    simp [List.length_flatten_update_as_int_eq, *]
+    simp [List.length_flatten_update_as_int_eq, nhm, *]
     int_tac
 
   split_conjs
@@ -444,10 +444,10 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
     split_conjs
     . match h: lookup hm key with
       | none =>
-        simp [h, lookup] at *
+        simp [h, lookup, nhm] at *
         simp_all (config := {maxDischargeDepth := 1})
       | some _ =>
-        simp_all (config := {maxDischargeDepth := 1}) [lookup]
+        simp_all (config := {maxDischargeDepth := 1}) [lookup, nhm]
     . simp [slots_t_inv, slot_t_inv] at *
       intro i _
       have _ := hinv.right.left i (by simp_all (config := {maxDischargeDepth := 1}))
@@ -470,7 +470,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
       scalar_tac
     cases h_hm: k_hash_mod == hash_mod.val <;> simp_all (config := {zetaDelta := true, maxDischargeDepth := 2})
 
-  simp_all (config := {maxDischargeDepth := 1})
+  simp_all (config := {maxDischargeDepth := 1}) [nhm]
 
 private theorem slot_allP_not_key_lookup (slot : AList α) (h : slot.v.allP fun (k', _) => ¬k = k') :
   slot.lookup k = none := by

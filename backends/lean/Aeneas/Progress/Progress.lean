@@ -591,7 +591,7 @@ namespace Test
     rw [add]
     intro tot
     progress
-    simp [*]
+    simp [*, tot]
 
   def add1 (x y : U32) : Result U32 := do
     let z ← add x y
