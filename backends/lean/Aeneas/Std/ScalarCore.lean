@@ -39,18 +39,18 @@ def I64.smin   : Int := -(HPow.hPow 2 63)
 def I64.smax   : Int := HPow.hPow 2 63 - 1
 def I128.smin  : Int := -(HPow.hPow 2 127)
 def I128.smax  : Int := HPow.hPow 2 127 - 1
-def Usize.smin : Int := 0
-def Usize.smax : Int := HPow.hPow 2 size_num_bits - 1
-def U8.smin    : Int := 0
-def U8.smax    : Int := HPow.hPow 2 8 - 1
-def U16.smin   : Int := 0
-def U16.smax   : Int := HPow.hPow 2 16 - 1
-def U32.smin   : Int := 0
-def U32.smax   : Int := HPow.hPow 2 32 - 1
-def U64.smin   : Int := 0
-def U64.smax   : Int := HPow.hPow 2 64 - 1
-def U128.smin  : Int := 0
-def U128.smax  : Int := HPow.hPow 2 128 - 1
+def Usize.smin : Nat := 0
+def Usize.smax : Nat := HPow.hPow 2 size_num_bits - 1
+def U8.smin    : Nat := 0
+def U8.smax    : Nat := HPow.hPow 2 8 - 1
+def U16.smin   : Nat := 0
+def U16.smax   : Nat := HPow.hPow 2 16 - 1
+def U32.smin   : Nat := 0
+def U32.smax   : Nat := HPow.hPow 2 32 - 1
+def U64.smin   : Nat := 0
+def U64.smax   : Nat := HPow.hPow 2 64 - 1
+def U128.smin  : Nat := 0
+def U128.smax  : Nat := HPow.hPow 2 128 - 1
 
 -- The "normalized" bounds, that we use in practice
 def I8.min    : Int   := -128
@@ -64,22 +64,22 @@ def I64.max   : Int  := 9223372036854775807
 def I128.min  : Int := -170141183460469231731687303715884105728
 def I128.max  : Int := 170141183460469231731687303715884105727
 @[simp]
-def U8.min    : Int   := 0
-def U8.max    : Int   := 255
+def U8.min    : Nat   := 0
+def U8.max    : Nat   := 255
 @[simp]
-def U16.min   : Int  := 0
-def U16.max   : Int  := 65535
+def U16.min   : Nat  := 0
+def U16.max   : Nat  := 65535
 @[simp]
-def U32.min   : Int  := 0
-def U32.max   : Int  := 4294967295
+def U32.min   : Nat  := 0
+def U32.max   : Nat  := 4294967295
 @[simp]
-def U64.min   : Int  := 0
-def U64.max   : Int  := 18446744073709551615
+def U64.min   : Nat  := 0
+def U64.max   : Nat  := 18446744073709551615
 @[simp]
-def U128.min  : Int := 0
-def U128.max  : Int := 340282366920938463463374607431768211455
+def U128.min  : Nat := 0
+def U128.max  : Nat := 340282366920938463463374607431768211455
 @[simp]
-def Usize.min : Int := 0
+def Usize.min : Nat := 0
 
 def Isize.refined_min : { n:Int // n = I32.min ∨ n = I64.min } :=
   ⟨ Isize.smin, by
@@ -116,7 +116,7 @@ theorem Isize.bounds_eq :
   cases System.Platform.numBits_eq <;>
   unfold System.Platform.numBits at * <;> simp [*] <;> decide
 
-inductive ScalarTy :=
+inductive ScalarTy where
 | Isize
 | I8
 | I16

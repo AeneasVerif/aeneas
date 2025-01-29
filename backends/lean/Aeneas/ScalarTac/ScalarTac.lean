@@ -87,11 +87,11 @@ example (x : U32 × U32) : 0 ≤ x.fst.val := by
   scalar_tac
 
 -- Checking that we properly handle [ofInt]
-example : U32.ofInt 1 ≤ U32.max := by
+example : (U32.ofInt 1).val ≤ U32.max := by
   scalar_tac
 
 example (x : Int) (h0 : 0 ≤ x) (h1 : x ≤ U32.max) :
-  U32.ofIntCore x (by constructor <;> scalar_tac) ≤ U32.max := by
+  (U32.ofIntCore x (by constructor <;> scalar_tac)).val ≤ U32.max := by
   scalar_tac_preprocess
   scalar_tac
 
@@ -119,8 +119,8 @@ example (x y : Nat) (z : Int) (h : Int.subNatNat x y + z = 0) : (x : Int) - (y :
   scalar_tac_preprocess
   omega
 
-example (x : U32) (h : 16 * ↑x ≤ U32.max) :
-  4 * U32.ofInt (4 * x.val) (by scalar_tac) ≤ U32.max := by
+example (x : U32) (h : 16 * x.val ≤ U32.max) :
+  4 * (U32.ofInt (4 * x.val) (by scalar_tac)).val ≤ U32.max := by
   scalar_tac
 
 example (b : Bool) (x y : Int) (h : if b then P ∧ x + y < 3 else x + y < 4) : x + y < 5 := by
@@ -134,10 +134,10 @@ example
   (_ : c0u.val = c0.val)
   (s1 : U32)
   (c1 : Bool)
-  (hConv1 : if ↑xi + ↑c0u > U32.max then ↑s1 = ↑xi + ↑c0u - U32.max - 1 ∧ c1 = true else s1 = xi.val + c0u ∧ c1 = false)
+  (hConv1 : if xi.val + c0u.val > U32.max then s1.val = ↑xi + ↑c0u - U32.max - 1 ∧ c1 = true else s1 = xi.val + c0u ∧ c1 = false)
   (s2 : U32)
   (c2 : Bool)
-  (hConv2 : if ↑s1 + ↑yi > U32.max then ↑s2 = ↑s1 + ↑yi - U32.max - 1 ∧ c2 = true else s2 = s1.val + yi ∧ c2 = false)
+  (hConv2 : if s1.val + yi.val > U32.max then s2.val = ↑s1 + ↑yi - U32.max - 1 ∧ c2 = true else s2 = s1.val + yi ∧ c2 = false)
   (c1u : U8)
   (_ : c1u.val = if c1 = true then 1 else 0)
   (c2u : U8)

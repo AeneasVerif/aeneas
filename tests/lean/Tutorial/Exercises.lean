@@ -20,7 +20,7 @@ def mul2_add1 (x : U32) : Result U32 :=
 
 /-- Theorem about `mul2_add1`: without the `progress` tactic -/
 -- @[pspec]
-theorem mul2_add1_spec (x : U32) (h : 2 * ↑x + 1 ≤ U32.max)
+theorem mul2_add1_spec (x : U32) (h : 2 * x.val + 1 ≤ U32.max)
   : ∃ y, mul2_add1 x = ok y ∧
   ↑y = 2 * ↑x + (1 : Int)
   := by
@@ -33,7 +33,7 @@ theorem mul2_add1_spec (x : U32) (h : 2 * ↑x + 1 ≤ U32.max)
 
 /-- Theorem about `mul2_add1`: with the `progress` tactic -/
 -- @[pspec]
-theorem mul2_add1_spec' (x : U32) (h : 2 * ↑x + 1 ≤ U32.max)
+theorem mul2_add1_spec' (x : U32) (h : 2 * x.val + 1 ≤ U32.max)
   : ∃ y, mul2_add1 x = ok y ∧
   ↑y = 2 * ↑x + (1 : Int)
   := by
@@ -50,7 +50,7 @@ def mul2_add1_add (x : U32) (y : U32) : Result U32 :=
   i + y
 
 /-- Theorem about `mul2_add1_add` -/
-theorem mul2_add1_add_spec (x : U32) (y : U32) (h : 2 * ↑x + 1 + ↑y ≤ U32.max) :
+theorem mul2_add1_add_spec (x : U32) (y : U32) (h : 2 * x.val + 1 + y.val ≤ U32.max) :
   ∃ z, mul2_add1_add x y = ok z ∧
   ↑z = 2 * ↑x + (1 : Int) + ↑y := by
   rw [mul2_add1_add]
