@@ -184,8 +184,8 @@ def array_update1 (a : Slice U32) (i : Usize) (x : U32) : Result (Slice U32) :=
 def array_update2 (a : Slice U32) (i : Usize) (x : U32) : Result (Slice U32) :=
   do
   let i1 ← x + 1#u32
-  let i2 ← i + 1#usize
   let a1 ← Slice.update_usize a i i1
+  let i2 ← i + 1#usize
   let i3 ← x + 1#u32
   Slice.update_usize a1 i2 i3
 

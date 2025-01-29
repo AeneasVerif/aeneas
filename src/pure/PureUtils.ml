@@ -940,3 +940,14 @@ let texpression_get_vars (e : texpression) : VarId.Set.t =
   in
   visitor#visit_texpression () e;
   !vars
+
+let typed_pattern_get_vars (pat : typed_pattern) : VarId.Set.t =
+  let vars = ref VarId.Set.empty in
+  let visitor =
+    object
+      inherit [_] iter_expression
+      method! visit_PatVar _ var _ = vars := VarId.Set.add var.id !vars
+    end
+  in
+  visitor#visit_typed_pattern () pat;
+  !vars

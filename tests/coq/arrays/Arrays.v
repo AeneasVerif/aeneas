@@ -199,8 +199,8 @@ Definition array_update1
 Definition array_update2
   (a : slice u32) (i : usize) (x : u32) : result (slice u32) :=
   i1 <- u32_add x 1%u32;
-  i2 <- usize_add i 1%usize;
   a1 <- slice_update_usize a i i1;
+  i2 <- usize_add i 1%usize;
   i3 <- u32_add x 1%u32;
   slice_update_usize a1 i2 i3
 .

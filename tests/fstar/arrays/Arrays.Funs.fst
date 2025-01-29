@@ -160,8 +160,8 @@ let array_update1 (a : slice u32) (i : usize) (x : u32) : result (slice u32) =
     Source: 'tests/src/arrays.rs', lines 131:0-134:1 *)
 let array_update2 (a : slice u32) (i : usize) (x : u32) : result (slice u32) =
   let* i1 = u32_add x 1 in
-  let* i2 = usize_add i 1 in
   let* a1 = slice_update_usize a i i1 in
+  let* i2 = usize_add i 1 in
   let* i3 = u32_add x 1 in
   slice_update_usize a1 i2 i3
 
