@@ -186,8 +186,7 @@ def array_update2 (a : Slice U32) (i : Usize) (x : U32) : Result (Slice U32) :=
   let i1 ← x + 1#u32
   let a1 ← Slice.update_usize a i i1
   let i2 ← i + 1#usize
-  let i3 ← x + 1#u32
-  Slice.update_usize a1 i2 i3
+  Slice.update_usize a1 i2 i1
 
 /- [arrays::array_update3]:
    Source: 'tests/src/arrays.rs', lines 136:0-140:1 -/
@@ -271,16 +270,15 @@ def index_mut_slice_u32_0 (x : Slice U32) : Result (U32 × (Slice U32)) :=
 def index_all : Result U32 :=
   do
   let i ← index_array (Array.make 2#usize [ 0#u32, 0#u32 ])
-  let i1 ← index_array (Array.make 2#usize [ 0#u32, 0#u32 ])
-  let i2 ← i + i1
-  let i3 ← index_array_borrow (Array.make 2#usize [ 0#u32, 0#u32 ])
-  let i4 ← i2 + i3
+  let i1 ← i + i
+  let i2 ← index_array_borrow (Array.make 2#usize [ 0#u32, 0#u32 ])
+  let i3 ← i1 + i2
   let s ← Array.to_slice (Array.make 2#usize [ 0#u32, 0#u32 ])
-  let i5 ← index_slice_u32_0 s
-  let i6 ← i4 + i5
+  let i4 ← index_slice_u32_0 s
+  let i5 ← i3 + i4
   let (s1, _) ← Array.to_slice_mut (Array.make 2#usize [ 0#u32, 0#u32 ])
-  let (i7, _) ← index_mut_slice_u32_0 s1
-  i6 + i7
+  let (i6, _) ← index_mut_slice_u32_0 s1
+  i5 + i6
 
 /- [arrays::update_array]:
    Source: 'tests/src/arrays.rs', lines 204:0-206:1 -/
@@ -459,8 +457,7 @@ def ite : Result Unit :=
   do
   let (s, _) ← Array.to_slice_mut (Array.make 2#usize [ 0#u32, 0#u32 ])
   let _ ← index_mut_slice_u32_0 s
-  let (s1, _) ← Array.to_slice_mut (Array.make 2#usize [ 0#u32, 0#u32 ])
-  let _ ← index_mut_slice_u32_0 s1
+  let _ ← index_mut_slice_u32_0 s
   Result.ok ()
 
 /- [arrays::zero_slice]: loop 0:

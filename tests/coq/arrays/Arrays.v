@@ -201,8 +201,7 @@ Definition array_update2
   i1 <- u32_add x 1%u32;
   a1 <- slice_update_usize a i i1;
   i2 <- usize_add i 1%usize;
-  i3 <- u32_add x 1%u32;
-  slice_update_usize a1 i2 i3
+  slice_update_usize a1 i2 i1
 .
 
 (** [arrays::array_update3]:
@@ -291,18 +290,17 @@ Definition index_mut_slice_u32_0
     Source: 'tests/src/arrays.rs', lines 190:0-202:1 *)
 Definition index_all : result u32 :=
   i <- index_array (mk_array 2%usize [ 0%u32; 0%u32 ]);
-  i1 <- index_array (mk_array 2%usize [ 0%u32; 0%u32 ]);
-  i2 <- u32_add i i1;
-  i3 <- index_array_borrow (mk_array 2%usize [ 0%u32; 0%u32 ]);
-  i4 <- u32_add i2 i3;
+  i1 <- u32_add i i;
+  i2 <- index_array_borrow (mk_array 2%usize [ 0%u32; 0%u32 ]);
+  i3 <- u32_add i1 i2;
   s <- array_to_slice (mk_array 2%usize [ 0%u32; 0%u32 ]);
-  i5 <- index_slice_u32_0 s;
-  i6 <- u32_add i4 i5;
+  i4 <- index_slice_u32_0 s;
+  i5 <- u32_add i3 i4;
   p <- array_to_slice_mut (mk_array 2%usize [ 0%u32; 0%u32 ]);
   let (s1, _) := p in
   p1 <- index_mut_slice_u32_0 s1;
-  let (i7, _) := p1 in
-  u32_add i6 i7
+  let (i6, _) := p1 in
+  u32_add i5 i6
 .
 
 (** [arrays::update_array]:
@@ -504,9 +502,7 @@ Definition ite : result unit :=
   p <- array_to_slice_mut (mk_array 2%usize [ 0%u32; 0%u32 ]);
   let (s, _) := p in
   _ <- index_mut_slice_u32_0 s;
-  p1 <- array_to_slice_mut (mk_array 2%usize [ 0%u32; 0%u32 ]);
-  let (s1, _) := p1 in
-  _ <- index_mut_slice_u32_0 s1;
+  _ <- index_mut_slice_u32_0 s;
   Ok tt
 .
 
