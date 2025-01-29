@@ -991,6 +991,64 @@ let simplify_let_bindings (ctx : trans_ctx) (def : fun_decl) : fun_decl =
       let body = { body with body = obj#visit_texpression () body.body } in
       { def with body = Some body }
 
+(** Remove the duplicated function calls.
+
+    We naturally write code which contains several times the same expression.
+    For instance:
+    {[
+      a[i + j] = b[i + j] + 1;
+        ^^^^^      ^^^^^
+    ]}
+
+    This is an issue in the generated model, because we then have to reason
+    several times about the same function call. For instance, below, we have
+    to prove *twice* that [i + j] is in bounds, and the proof context grows
+    bigger than necessary.
+    {[
+      let i1 <- i + j (* *)
+      let x1 <- array_index b i1
+      let x2 <- x1 + 1
+      let i2 <- i + j (* duplicates the expression above *)
+      let a1 = array_update a i2 x2
+    ]}
+
+    This micro pass removes those duplicate function calls.
+ *)
+let simplify_duplicate_calls (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
+  let visitor =
+    object (self)
+      inherit [_] map_expression as super
+
+      method! visit_Let env monadic pat bound next =
+        let bound = self#visit_texpression env bound in
+        (* Register the function call if the pattern doesn't contain dummy
+           variables *)
+        let env =
+          match typed_pattern_to_texpression def.item_meta.span pat with
+          | None -> env
+          | Some pat -> TExprMap.add bound pat env
+        in
+        let next = self#visit_texpression env next in
+        Let (monadic, pat, bound, next)
+
+      method! visit_texpression env e =
+        let e =
+          match TExprMap.find_opt e env with
+          | None -> e
+          | Some e -> mk_result_ok_texpression def.item_meta.span e
+        in
+        super#visit_texpression env e
+    end
+  in
+
+  match def.body with
+  | None -> def
+  | Some body ->
+      let body =
+        { body with body = visitor#visit_texpression TExprMap.empty body.body }
+      in
+      { def with body = Some body }
+
 (** Inline the useless variable (re-)assignments:
 
     A lot of intermediate variable assignments are introduced through the
@@ -2618,6 +2676,8 @@ let end_passes :
     (* Eliminate the box functions - note that the "box" types were eliminated
        during the symbolic to pure phase: see the comments for [eliminate_box_functions] *)
     (None, "eliminate_box_functions", eliminate_box_functions);
+    (* Remove the duplicated function calls *)
+    (None, "simplify_duplicate_calls", simplify_duplicate_calls);
     (* Filter the useless variables, assignments, function calls, etc. *)
     (None, "filter_useless", filter_useless);
     (* Simplify the lets immediately followed by a return.
@@ -2654,7 +2714,7 @@ let end_passes :
     (None, "simplify_let_bindings", simplify_let_bindings);
     (* Inline the useless vars again *)
     ( None,
-      "inline_useless_var_assignments",
+      "inline_useless_var_assignments (pass 2)",
       inline_useless_var_assignments ~inline_named:true ~inline_const:true
         ~inline_pure:false ~inline_identity:true );
     (* Filter the useless variables again *)
@@ -2662,7 +2722,7 @@ let end_passes :
     (* Simplify the let-then return again (the lambda simplification may have
        unlocked more simplifications here) *)
     (None, "simplify_let_then_ok (pass 2)", simplify_let_then_ok);
-    (* Simplify the array/slice manipulations by intrdoucing calls to [array_update]
+    (* Simplify the array/slice manipulations by introducing calls to [array_update]
        [slice_update] *)
     (None, "simplify_array_slice_update", simplify_array_slice_update);
     (* Simplify the let-then return again (the array simplification may have
