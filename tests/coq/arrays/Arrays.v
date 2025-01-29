@@ -187,40 +187,69 @@ Definition array_local_deep_copy (x : array u32 32%usize) : result unit :=
   Ok tt
 .
 
+(** [arrays::array_update1]:
+    Source: 'tests/src/arrays.rs', lines 126:0-128:1 *)
+Definition array_update1
+  (a : slice u32) (i : usize) (x : u32) : result (slice u32) :=
+  i1 <- usize_add i 1%usize; i2 <- u32_add x 1%u32; slice_update_usize a i1 i2
+.
+
+(** [arrays::array_update2]:
+    Source: 'tests/src/arrays.rs', lines 131:0-134:1 *)
+Definition array_update2
+  (a : slice u32) (i : usize) (x : u32) : result (slice u32) :=
+  i1 <- u32_add x 1%u32;
+  i2 <- usize_add i 1%usize;
+  a1 <- slice_update_usize a i i1;
+  i3 <- u32_add x 1%u32;
+  slice_update_usize a1 i2 i3
+.
+
+(** [arrays::array_update3]:
+    Source: 'tests/src/arrays.rs', lines 136:0-140:1 *)
+Definition array_update3
+  (a : slice u32) (i : usize) (x : u32) : result (slice u32) :=
+  a1 <- slice_update_usize a i x;
+  i1 <- usize_add i 1%usize;
+  a2 <- slice_update_usize a1 i1 x;
+  i2 <- usize_add i 2%usize;
+  slice_update_usize a2 i2 x
+.
+
 (** [arrays::take_array]:
-    Source: 'tests/src/arrays.rs', lines 125:0-125:33 *)
+    Source: 'tests/src/arrays.rs', lines 142:0-142:33 *)
 Definition take_array (a : array u32 2%usize) : result unit :=
   Ok tt.
 
 (** [arrays::take_array_borrow]:
-    Source: 'tests/src/arrays.rs', lines 126:0-126:41 *)
+    Source: 'tests/src/arrays.rs', lines 143:0-143:41 *)
 Definition take_array_borrow (a : array u32 2%usize) : result unit :=
   Ok tt.
 
 (** [arrays::take_slice]:
-    Source: 'tests/src/arrays.rs', lines 127:0-127:31 *)
+    Source: 'tests/src/arrays.rs', lines 144:0-144:31 *)
 Definition take_slice (s : slice u32) : result unit :=
   Ok tt.
 
 (** [arrays::take_mut_slice]:
-    Source: 'tests/src/arrays.rs', lines 128:0-128:39 *)
+    Source: 'tests/src/arrays.rs', lines 145:0-145:39 *)
 Definition take_mut_slice (s : slice u32) : result (slice u32) :=
   Ok s.
 
 (** [arrays::const_array]:
-    Source: 'tests/src/arrays.rs', lines 130:0-132:1 *)
+    Source: 'tests/src/arrays.rs', lines 147:0-149:1 *)
 Definition const_array : result (array u32 2%usize) :=
   Ok (mk_array 2%usize [ 0%u32; 0%u32 ])
 .
 
 (** [arrays::const_slice]:
-    Source: 'tests/src/arrays.rs', lines 134:0-136:1 *)
+    Source: 'tests/src/arrays.rs', lines 151:0-153:1 *)
 Definition const_slice : result unit :=
   _ <- array_to_slice (mk_array 2%usize [ 0%u32; 0%u32 ]); Ok tt
 .
 
 (** [arrays::take_all]:
-    Source: 'tests/src/arrays.rs', lines 144:0-156:1 *)
+    Source: 'tests/src/arrays.rs', lines 161:0-173:1 *)
 Definition take_all : result unit :=
   _ <- take_array (mk_array 2%usize [ 0%u32; 0%u32 ]);
   _ <- take_array (mk_array 2%usize [ 0%u32; 0%u32 ]);
@@ -234,32 +263,32 @@ Definition take_all : result unit :=
 .
 
 (** [arrays::index_array]:
-    Source: 'tests/src/arrays.rs', lines 158:0-160:1 *)
+    Source: 'tests/src/arrays.rs', lines 175:0-177:1 *)
 Definition index_array (x : array u32 2%usize) : result u32 :=
   array_index_usize x 0%usize
 .
 
 (** [arrays::index_array_borrow]:
-    Source: 'tests/src/arrays.rs', lines 161:0-163:1 *)
+    Source: 'tests/src/arrays.rs', lines 178:0-180:1 *)
 Definition index_array_borrow (x : array u32 2%usize) : result u32 :=
   array_index_usize x 0%usize
 .
 
 (** [arrays::index_slice_u32_0]:
-    Source: 'tests/src/arrays.rs', lines 165:0-167:1 *)
+    Source: 'tests/src/arrays.rs', lines 182:0-184:1 *)
 Definition index_slice_u32_0 (x : slice u32) : result u32 :=
   slice_index_usize x 0%usize
 .
 
 (** [arrays::index_mut_slice_u32_0]:
-    Source: 'tests/src/arrays.rs', lines 169:0-171:1 *)
+    Source: 'tests/src/arrays.rs', lines 186:0-188:1 *)
 Definition index_mut_slice_u32_0
   (x : slice u32) : result (u32 * (slice u32)) :=
   i <- slice_index_usize x 0%usize; Ok (i, x)
 .
 
 (** [arrays::index_all]:
-    Source: 'tests/src/arrays.rs', lines 173:0-185:1 *)
+    Source: 'tests/src/arrays.rs', lines 190:0-202:1 *)
 Definition index_all : result u32 :=
   i <- index_array (mk_array 2%usize [ 0%u32; 0%u32 ]);
   i1 <- index_array (mk_array 2%usize [ 0%u32; 0%u32 ]);
@@ -277,30 +306,26 @@ Definition index_all : result u32 :=
 .
 
 (** [arrays::update_array]:
-    Source: 'tests/src/arrays.rs', lines 187:0-189:1 *)
+    Source: 'tests/src/arrays.rs', lines 204:0-206:1 *)
 Definition update_array (x : array u32 2%usize) : result unit :=
   _ <- array_index_mut_usize x 0%usize; Ok tt
 .
 
 (** [arrays::update_array_mut_borrow]:
-    Source: 'tests/src/arrays.rs', lines 190:0-192:1 *)
+    Source: 'tests/src/arrays.rs', lines 207:0-209:1 *)
 Definition update_array_mut_borrow
   (x : array u32 2%usize) : result (array u32 2%usize) :=
-  p <- array_index_mut_usize x 0%usize;
-  let (_, index_mut_back) := p in
-  Ok (index_mut_back 1%u32)
+  array_update_usize x 0%usize 1%u32
 .
 
 (** [arrays::update_mut_slice]:
-    Source: 'tests/src/arrays.rs', lines 193:0-195:1 *)
+    Source: 'tests/src/arrays.rs', lines 210:0-212:1 *)
 Definition update_mut_slice (x : slice u32) : result (slice u32) :=
-  p <- slice_index_mut_usize x 0%usize;
-  let (_, index_mut_back) := p in
-  Ok (index_mut_back 1%u32)
+  slice_update_usize x 0%usize 1%u32
 .
 
 (** [arrays::update_all]:
-    Source: 'tests/src/arrays.rs', lines 197:0-203:1 *)
+    Source: 'tests/src/arrays.rs', lines 214:0-220:1 *)
 Definition update_all : result unit :=
   _ <- update_array (mk_array 2%usize [ 0%u32; 0%u32 ]);
   _ <- update_array (mk_array 2%usize [ 0%u32; 0%u32 ]);
@@ -312,27 +337,23 @@ Definition update_all : result unit :=
 .
 
 (** [arrays::incr_array]:
-    Source: 'tests/src/arrays.rs', lines 205:0-207:1 *)
+    Source: 'tests/src/arrays.rs', lines 222:0-224:1 *)
 Definition incr_array (x : array u32 2%usize) : result (array u32 2%usize) :=
   i <- array_index_usize x 0%usize;
   i1 <- u32_add i 1%u32;
-  p <- array_index_mut_usize x 0%usize;
-  let (_, index_mut_back) := p in
-  Ok (index_mut_back i1)
+  array_update_usize x 0%usize i1
 .
 
 (** [arrays::incr_slice]:
-    Source: 'tests/src/arrays.rs', lines 209:0-211:1 *)
+    Source: 'tests/src/arrays.rs', lines 226:0-228:1 *)
 Definition incr_slice (x : slice u32) : result (slice u32) :=
   i <- slice_index_usize x 0%usize;
   i1 <- u32_add i 1%u32;
-  p <- slice_index_mut_usize x 0%usize;
-  let (_, index_mut_back) := p in
-  Ok (index_mut_back i1)
+  slice_update_usize x 0%usize i1
 .
 
 (** [arrays::range_all]:
-    Source: 'tests/src/arrays.rs', lines 216:0-220:1 *)
+    Source: 'tests/src/arrays.rs', lines 233:0-237:1 *)
 Definition range_all : result unit :=
   p <-
     core_array_Array_index_mut (core_ops_index_IndexMutSliceTIInst
@@ -348,31 +369,31 @@ Definition range_all : result unit :=
 .
 
 (** [arrays::deref_array_borrow]:
-    Source: 'tests/src/arrays.rs', lines 225:0-228:1 *)
+    Source: 'tests/src/arrays.rs', lines 242:0-245:1 *)
 Definition deref_array_borrow (x : array u32 2%usize) : result u32 :=
   array_index_usize x 0%usize
 .
 
 (** [arrays::deref_array_mut_borrow]:
-    Source: 'tests/src/arrays.rs', lines 230:0-233:1 *)
+    Source: 'tests/src/arrays.rs', lines 247:0-250:1 *)
 Definition deref_array_mut_borrow
   (x : array u32 2%usize) : result (u32 * (array u32 2%usize)) :=
   i <- array_index_usize x 0%usize; Ok (i, x)
 .
 
 (** [arrays::take_array_t]:
-    Source: 'tests/src/arrays.rs', lines 238:0-238:34 *)
+    Source: 'tests/src/arrays.rs', lines 255:0-255:34 *)
 Definition take_array_t (a : array AB_t 2%usize) : result unit :=
   Ok tt.
 
 (** [arrays::non_copyable_array]:
-    Source: 'tests/src/arrays.rs', lines 240:0-248:1 *)
+    Source: 'tests/src/arrays.rs', lines 257:0-265:1 *)
 Definition non_copyable_array : result unit :=
   take_array_t (mk_array 2%usize [ AB_A; AB_B ])
 .
 
 (** [arrays::sum]: loop 0:
-    Source: 'tests/src/arrays.rs', lines 256:4-259:5 *)
+    Source: 'tests/src/arrays.rs', lines 273:4-276:5 *)
 Fixpoint sum_loop
   (n : nat) (s : slice u32) (sum1 : u32) (i : usize) : result u32 :=
   match n with
@@ -390,13 +411,13 @@ Fixpoint sum_loop
 .
 
 (** [arrays::sum]:
-    Source: 'tests/src/arrays.rs', lines 253:0-261:1 *)
+    Source: 'tests/src/arrays.rs', lines 270:0-278:1 *)
 Definition sum (n : nat) (s : slice u32) : result u32 :=
   sum_loop n s 0%u32 0%usize
 .
 
 (** [arrays::sum2]: loop 0:
-    Source: 'tests/src/arrays.rs', lines 267:4-270:5 *)
+    Source: 'tests/src/arrays.rs', lines 284:4-287:5 *)
 Fixpoint sum2_loop
   (n : nat) (s : slice u32) (s2 : slice u32) (sum1 : u32) (i : usize) :
   result u32
@@ -418,7 +439,7 @@ Fixpoint sum2_loop
 .
 
 (** [arrays::sum2]:
-    Source: 'tests/src/arrays.rs', lines 263:0-272:1 *)
+    Source: 'tests/src/arrays.rs', lines 280:0-289:1 *)
 Definition sum2 (n : nat) (s : slice u32) (s2 : slice u32) : result u32 :=
   let i := slice_len s in
   let i1 := slice_len s2 in
@@ -427,7 +448,7 @@ Definition sum2 (n : nat) (s : slice u32) (s2 : slice u32) : result u32 :=
 .
 
 (** [arrays::f0]:
-    Source: 'tests/src/arrays.rs', lines 274:0-277:1 *)
+    Source: 'tests/src/arrays.rs', lines 291:0-294:1 *)
 Definition f0 : result unit :=
   p <- array_to_slice_mut (mk_array 2%usize [ 1%u32; 2%u32 ]);
   let (s, _) := p in
@@ -436,18 +457,18 @@ Definition f0 : result unit :=
 .
 
 (** [arrays::f1]:
-    Source: 'tests/src/arrays.rs', lines 279:0-282:1 *)
+    Source: 'tests/src/arrays.rs', lines 296:0-299:1 *)
 Definition f1 : result unit :=
   _ <- array_index_mut_usize (mk_array 2%usize [ 1%u32; 2%u32 ]) 0%usize; Ok tt
 .
 
 (** [arrays::f2]:
-    Source: 'tests/src/arrays.rs', lines 284:0-284:20 *)
+    Source: 'tests/src/arrays.rs', lines 301:0-301:20 *)
 Definition f2 (i : u32) : result unit :=
   Ok tt.
 
 (** [arrays::f4]:
-    Source: 'tests/src/arrays.rs', lines 293:0-295:1 *)
+    Source: 'tests/src/arrays.rs', lines 310:0-312:1 *)
 Definition f4
   (x : array u32 32%usize) (y : usize) (z : usize) : result (slice u32) :=
   core_array_Array_index (core_ops_index_IndexSliceTIInst
@@ -456,7 +477,7 @@ Definition f4
 .
 
 (** [arrays::f3]:
-    Source: 'tests/src/arrays.rs', lines 286:0-291:1 *)
+    Source: 'tests/src/arrays.rs', lines 303:0-308:1 *)
 Definition f3 (n : nat) : result u32 :=
   i <- array_index_usize (mk_array 2%usize [ 1%u32; 2%u32 ]) 0%usize;
   _ <- f2 i;
@@ -467,18 +488,18 @@ Definition f3 (n : nat) : result u32 :=
 .
 
 (** [arrays::SZ]
-    Source: 'tests/src/arrays.rs', lines 297:0-297:25 *)
+    Source: 'tests/src/arrays.rs', lines 314:0-314:25 *)
 Definition sz_body : result usize := Ok 32%usize.
 Definition sz : usize := sz_body%global.
 
 (** [arrays::f5]:
-    Source: 'tests/src/arrays.rs', lines 300:0-302:1 *)
+    Source: 'tests/src/arrays.rs', lines 317:0-319:1 *)
 Definition f5 (x : array u32 32%usize) : result u32 :=
   array_index_usize x 0%usize
 .
 
 (** [arrays::ite]:
-    Source: 'tests/src/arrays.rs', lines 305:0-312:1 *)
+    Source: 'tests/src/arrays.rs', lines 322:0-329:1 *)
 Definition ite : result unit :=
   p <- array_to_slice_mut (mk_array 2%usize [ 0%u32; 0%u32 ]);
   let (s, _) := p in
@@ -490,7 +511,7 @@ Definition ite : result unit :=
 .
 
 (** [arrays::zero_slice]: loop 0:
-    Source: 'tests/src/arrays.rs', lines 317:4-320:5 *)
+    Source: 'tests/src/arrays.rs', lines 334:4-337:5 *)
 Fixpoint zero_slice_loop
   (n : nat) (a : slice u8) (i : usize) (len : usize) : result (slice u8) :=
   match n with
@@ -498,23 +519,21 @@ Fixpoint zero_slice_loop
   | S n1 =>
     if i s< len
     then (
-      p <- slice_index_mut_usize a i;
-      let (_, index_mut_back) := p in
+      a1 <- slice_update_usize a i 0%u8;
       i1 <- usize_add i 1%usize;
-      let a1 := index_mut_back 0%u8 in
       zero_slice_loop n1 a1 i1 len)
     else Ok a
   end
 .
 
 (** [arrays::zero_slice]:
-    Source: 'tests/src/arrays.rs', lines 314:0-321:1 *)
+    Source: 'tests/src/arrays.rs', lines 331:0-338:1 *)
 Definition zero_slice (n : nat) (a : slice u8) : result (slice u8) :=
   let len := slice_len a in zero_slice_loop n a 0%usize len
 .
 
 (** [arrays::iter_mut_slice]: loop 0:
-    Source: 'tests/src/arrays.rs', lines 326:4-328:5 *)
+    Source: 'tests/src/arrays.rs', lines 343:4-345:5 *)
 Fixpoint iter_mut_slice_loop
   (n : nat) (len : usize) (i : usize) : result unit :=
   match n with
@@ -527,13 +546,13 @@ Fixpoint iter_mut_slice_loop
 .
 
 (** [arrays::iter_mut_slice]:
-    Source: 'tests/src/arrays.rs', lines 323:0-329:1 *)
+    Source: 'tests/src/arrays.rs', lines 340:0-346:1 *)
 Definition iter_mut_slice (n : nat) (a : slice u8) : result (slice u8) :=
   let len := slice_len a in _ <- iter_mut_slice_loop n len 0%usize; Ok a
 .
 
 (** [arrays::sum_mut_slice]: loop 0:
-    Source: 'tests/src/arrays.rs', lines 334:4-337:5 *)
+    Source: 'tests/src/arrays.rs', lines 351:4-354:5 *)
 Fixpoint sum_mut_slice_loop
   (n : nat) (a : slice u32) (i : usize) (s : u32) : result u32 :=
   match n with
@@ -551,7 +570,7 @@ Fixpoint sum_mut_slice_loop
 .
 
 (** [arrays::sum_mut_slice]:
-    Source: 'tests/src/arrays.rs', lines 331:0-339:1 *)
+    Source: 'tests/src/arrays.rs', lines 348:0-356:1 *)
 Definition sum_mut_slice
   (n : nat) (a : slice u32) : result (u32 * (slice u32)) :=
   i <- sum_mut_slice_loop n a 0%usize 0%u32; Ok (i, a)
