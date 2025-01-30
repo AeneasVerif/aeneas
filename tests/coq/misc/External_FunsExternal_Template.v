@@ -28,12 +28,4 @@ Axiom core_cell_Cell_get_mut :
           (state * (core_cell_Cell_t T)))))
 .
 
-(** [core::clone::Clone::clone_from]:
-    Source: '/rustc/library/core/src/clone.rs', lines 174:4-174:43
-    Name pattern: core::clone::Clone::clone_from *)
-Axiom core_clone_Clone_clone_from :
-  forall{Self : Type} (self_clause : core_clone_Clone Self),
-        Self -> Self -> state -> result (state * Self)
-.
-
 End External_FunsExternal_Template.
