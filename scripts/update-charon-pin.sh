@@ -12,9 +12,6 @@ else
     echo 'Pinning the latest commit from Charon `main`'
     nix flake lock --update-input charon
 fi
-# In both cases we also update the rust overlay to make sure we can get the
-# latest rust nightlies.
-nix flake lock --update-input charon/rust-overlay
 
 # Keep the commit revision in `./charon-pin` as well so that non-nix users can know which commit to use.
 echo '# This is the commit from https://github.com/AeneasVerif/charon that should be used with this version of aeneas.' > ./charon-pin
