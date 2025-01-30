@@ -44,7 +44,7 @@ abbrev Vec.v {α : Type u} (v : Vec α) : List α := v.val
 example {a: Type u} (v : Vec a) : v.length ≤ Scalar.max ScalarTy.Usize := by
   scalar_tac
 
-abbrev Vec.new (α : Type u): Vec α := ⟨ [], by apply Scalar.cMax_suffices .Usize; simp ⟩
+abbrev Vec.new (α : Type u): Vec α := ⟨ [], by simp ⟩
 
 instance (α : Type u) : Inhabited (Vec α) := by
   constructor
