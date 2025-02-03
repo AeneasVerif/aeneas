@@ -39,18 +39,18 @@ def I64.smin   : Int := -(HPow.hPow 2 63)
 def I64.smax   : Int := HPow.hPow 2 63 - 1
 def I128.smin  : Int := -(HPow.hPow 2 127)
 def I128.smax  : Int := HPow.hPow 2 127 - 1
-def Usize.smin : Int := 0
-def Usize.smax : Int := HPow.hPow 2 size_num_bits - 1
-def U8.smin    : Int := 0
-def U8.smax    : Int := HPow.hPow 2 8 - 1
-def U16.smin   : Int := 0
-def U16.smax   : Int := HPow.hPow 2 16 - 1
-def U32.smin   : Int := 0
-def U32.smax   : Int := HPow.hPow 2 32 - 1
-def U64.smin   : Int := 0
-def U64.smax   : Int := HPow.hPow 2 64 - 1
-def U128.smin  : Int := 0
-def U128.smax  : Int := HPow.hPow 2 128 - 1
+def Usize.smin : Nat := 0
+def Usize.smax : Nat := HPow.hPow 2 size_num_bits - 1
+def U8.smin    : Nat := 0
+def U8.smax    : Nat := HPow.hPow 2 8 - 1
+def U16.smin   : Nat := 0
+def U16.smax   : Nat := HPow.hPow 2 16 - 1
+def U32.smin   : Nat := 0
+def U32.smax   : Nat := HPow.hPow 2 32 - 1
+def U64.smin   : Nat := 0
+def U64.smax   : Nat := HPow.hPow 2 64 - 1
+def U128.smin  : Nat := 0
+def U128.smax  : Nat := HPow.hPow 2 128 - 1
 
 -- The "normalized" bounds, that we use in practice
 def I8.min    : Int   := -128
@@ -64,22 +64,22 @@ def I64.max   : Int  := 9223372036854775807
 def I128.min  : Int := -170141183460469231731687303715884105728
 def I128.max  : Int := 170141183460469231731687303715884105727
 @[simp]
-def U8.min    : Int   := 0
-def U8.max    : Int   := 255
+def U8.min    : Nat   := 0
+def U8.max    : Nat   := 255
 @[simp]
-def U16.min   : Int  := 0
-def U16.max   : Int  := 65535
+def U16.min   : Nat  := 0
+def U16.max   : Nat  := 65535
 @[simp]
-def U32.min   : Int  := 0
-def U32.max   : Int  := 4294967295
+def U32.min   : Nat  := 0
+def U32.max   : Nat  := 4294967295
 @[simp]
-def U64.min   : Int  := 0
-def U64.max   : Int  := 18446744073709551615
+def U64.min   : Nat  := 0
+def U64.max   : Nat  := 18446744073709551615
 @[simp]
-def U128.min  : Int := 0
-def U128.max  : Int := 340282366920938463463374607431768211455
+def U128.min  : Nat := 0
+def U128.max  : Nat := 340282366920938463463374607431768211455
 @[simp]
-def Usize.min : Int := 0
+def Usize.min : Nat := 0
 
 def Isize.refined_min : { n:Int // n = I32.min ∨ n = I64.min } :=
   ⟨ Isize.smin, by
@@ -93,7 +93,7 @@ def Isize.refined_max : { n:Int // n = I32.max ∨ n = I64.max } :=
     cases System.Platform.numBits_eq <;>
     unfold System.Platform.numBits at * <;> simp [*] <;> decide ⟩
 
-def Usize.refined_max : { n:Int // n = U32.max ∨ n = U64.max } :=
+def Usize.refined_max : { n:Nat // n = U32.max ∨ n = U64.max } :=
   ⟨ Usize.smax, by
     simp [Usize.smax]
     cases System.Platform.numBits_eq <;>
@@ -116,7 +116,7 @@ theorem Isize.bounds_eq :
   cases System.Platform.numBits_eq <;>
   unfold System.Platform.numBits at * <;> simp [*] <;> decide
 
-inductive ScalarTy :=
+inductive ScalarTy where
 | Isize
 | I8
 | I16
@@ -397,6 +397,22 @@ theorem Scalar.tryMk_eq (ty : ScalarTy) (x : Int) :
 @[simp] theorem zero_in_cbounds {ty : ScalarTy} : Scalar.cMin ty ≤ 0 ∧ 0 ≤ Scalar.cMax ty := by
   cases ty <;> simp [Scalar.cMax, Scalar.cMin, Scalar.max, Scalar.min] <;> decide
 
+-- The scalar types
+-- We declare the definitions as reducible so that Lean can unfold them (useful
+-- for type class resolution for instance).
+@[reducible] def Isize := Scalar .Isize
+@[reducible] def I8    := Scalar .I8
+@[reducible] def I16   := Scalar .I16
+@[reducible] def I32   := Scalar .I32
+@[reducible] def I64   := Scalar .I64
+@[reducible] def I128  := Scalar .I128
+@[reducible] def Usize := Scalar .Usize
+@[reducible] def U8    := Scalar .U8
+@[reducible] def U16   := Scalar .U16
+@[reducible] def U32   := Scalar .U32
+@[reducible] def U64   := Scalar .U64
+@[reducible] def U128  := Scalar .U128
+
 -- ofIntCore
 -- TODO: typeclass?
 def Isize.ofIntCore := @Scalar.ofIntCore .Isize
@@ -467,22 +483,6 @@ abbrev U128.ofInt  := @Scalar.ofInt .U128
 @[simp] theorem U128.ofInt_val_eq (h : Scalar.min ScalarTy.U128 ≤ x ∧ x ≤ Scalar.max ScalarTy.U128) : (U128.ofIntCore x h).val = x := by
   apply Scalar.ofInt_val_eq h
 
--- The scalar types
--- We declare the definitions as reducible so that Lean can unfold them (useful
--- for type class resolution for instance).
-@[reducible] def Isize := Scalar .Isize
-@[reducible] def I8    := Scalar .I8
-@[reducible] def I16   := Scalar .I16
-@[reducible] def I32   := Scalar .I32
-@[reducible] def I64   := Scalar .I64
-@[reducible] def I128  := Scalar .I128
-@[reducible] def Usize := Scalar .Usize
-@[reducible] def U8    := Scalar .U8
-@[reducible] def U16   := Scalar .U16
-@[reducible] def U32   := Scalar .U32
-@[reducible] def U64   := Scalar .U64
-@[reducible] def U128  := Scalar .U128
-
 instance (ty : ScalarTy) : Inhabited (Scalar ty) := by
   constructor; cases ty <;> apply (Scalar.ofInt 0)
 
@@ -501,8 +501,8 @@ instance (ty : ScalarTy) : Inhabited (Scalar ty) := by
 @[reducible] def core_i128_max : I128 := Scalar.ofInt I128.max
 
 -- TODO: reducible?
-@[reducible] def core_usize_min : Usize := Scalar.ofIntCore Usize.min (by simp [Scalar.min, Scalar.max]; apply (Scalar.min_le_max .Usize))
-@[reducible] def core_usize_max : Usize := Scalar.ofIntCore Usize.max (by simp [Scalar.min, Scalar.max]; apply (Scalar.min_le_max .Usize))
+@[reducible] def core_usize_min : Usize := Scalar.ofIntCore Usize.min (by simp [Scalar.min, Scalar.max])
+@[reducible] def core_usize_max : Usize := Scalar.ofIntCore Usize.max (by simp [Scalar.min, Scalar.max])
 @[reducible] def core_u8_min : U8 := Scalar.ofInt U8.min
 @[reducible] def core_u8_max : U8 := Scalar.ofInt U8.max
 @[reducible] def core_u16_min : U16 := Scalar.ofInt U16.min

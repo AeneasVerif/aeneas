@@ -70,6 +70,11 @@ let get_body_min_var_counter (body : fun_body) : VarId.generator =
   let id = obj#visit_expression () body.body.e () in
   VarId.generator_from_incr_id id
 
+let get_opt_body_min_var_counter (body : fun_body option) : VarId.generator =
+  match body with
+  | Some body -> get_body_min_var_counter body
+  | None -> VarId.generator_zero
+
 (** "Pretty-Name context": see {!compute_pretty_names} *)
 type pn_ctx = {
   pure_vars : string VarId.Map.t;
@@ -984,6 +989,64 @@ let simplify_let_bindings (ctx : trans_ctx) (def : fun_decl) : fun_decl =
   | None -> def
   | Some body ->
       let body = { body with body = obj#visit_texpression () body.body } in
+      { def with body = Some body }
+
+(** Remove the duplicated function calls.
+
+    We naturally write code which contains several times the same expression.
+    For instance:
+    {[
+      a[i + j] = b[i + j] + 1;
+        ^^^^^      ^^^^^
+    ]}
+
+    This is an issue in the generated model, because we then have to reason
+    several times about the same function call. For instance, below, we have
+    to prove *twice* that [i + j] is in bounds, and the proof context grows
+    bigger than necessary.
+    {[
+      let i1 <- i + j (* *)
+      let x1 <- array_index b i1
+      let x2 <- x1 + 1
+      let i2 <- i + j (* duplicates the expression above *)
+      let a1 = array_update a i2 x2
+    ]}
+
+    This micro pass removes those duplicate function calls.
+ *)
+let simplify_duplicate_calls (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
+  let visitor =
+    object (self)
+      inherit [_] map_expression as super
+
+      method! visit_Let env monadic pat bound next =
+        let bound = self#visit_texpression env bound in
+        (* Register the function call if the pattern doesn't contain dummy
+           variables *)
+        let env =
+          match typed_pattern_to_texpression def.item_meta.span pat with
+          | None -> env
+          | Some pat -> TExprMap.add bound pat env
+        in
+        let next = self#visit_texpression env next in
+        Let (monadic, pat, bound, next)
+
+      method! visit_texpression env e =
+        let e =
+          match TExprMap.find_opt e env with
+          | None -> e
+          | Some e -> mk_result_ok_texpression def.item_meta.span e
+        in
+        super#visit_texpression env e
+    end
+  in
+
+  match def.body with
+  | None -> def
+  | Some body ->
+      let body =
+        { body with body = visitor#visit_texpression TExprMap.empty body.body }
+      in
       { def with body = Some body }
 
 (** Inline the useless variable (re-)assignments:
@@ -2109,7 +2172,9 @@ let apply_beta_reduction (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
 
       let a' = Array.update a i x in
       ...
+    ]}
 
+    {[
       let (_, back) = Array.index_mut_usize a i in
       back x
 
@@ -2118,13 +2183,28 @@ let apply_beta_reduction (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
       Array.update a i x
     ]}
   *)
-let simplify_array_slice_update (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
+let simplify_array_slice_update (ctx : trans_ctx) (def : fun_decl) : fun_decl =
   let span = def.item_meta.span in
+
+  (* The difficulty is that the let-binding which uses the backward function
+     may not appear immediately after the let-binding which introduces it.
+
+     The micro-pass is written in a general way: for instance we do not leverage
+     the fact that a backward function should be used only once.
+  *)
+
+  (* We may need to introduce fresh variables *)
+  let var_cnt = get_opt_body_min_var_counter def.body in
+  let _, fresh_var_id = VarId.mk_stateful_generator var_cnt in
+
   let visitor =
-    object
+    object (self)
       inherit [_] map_expression as super
 
       method! visit_Let env monadic pat e1 e2 =
+        (* Update the first expression *)
+        let e1 = super#visit_texpression env e1 in
+        (* Check if the current let-binding is a call to an index function *)
         let e1_app, e1_args = destruct_apps e1 in
         match (pat.value, e1_app.e, e1_args) with
         | ( (* let (_, back) = ... *)
@@ -2155,11 +2235,14 @@ let simplify_array_slice_update (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
                 generics = index_generics;
               },
             [ a; i ] ) ->
+            (* Some auxiliary functions *)
+            (* Helper to check if an expression is actually the backward function *)
             let is_call_to_back (app : texpression) =
               match app.e with
               | Var id -> id = back_var.id
               | _ -> false
             in
+            (* Helper to introduce a call to the proper update function *)
             let mk_call_to_update (back_v : texpression) =
               let array_or_slice = if is_array then Array else Slice in
               let qualif =
@@ -2174,18 +2257,180 @@ let simplify_array_slice_update (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
               in
               mk_apps span qualif [ a; i; back_v ]
             in
-            begin
-              match e2.e with
-              (* back x *)
-              | App (app, back_v) when is_call_to_back app ->
-                  (super#visit_texpression env (mk_call_to_update back_v)).e
-              (* let a' = back x in ... *)
-              | Let (_, pat', { e = App (app, back_v); _ }, e3)
-                when is_call_to_back app ->
-                  super#visit_expression env
-                    (Let (true, pat', mk_call_to_update back_v, e3))
-              | _ -> super#visit_Let env monadic pat e1 e2
-            end
+            (* Attempt to remove the let-binding.
+
+               We perform two attempts:
+               1. we check if we can actually insert the update in place of the index
+                 function as it leads to a more natural translation. We do so if:
+                 - there is a single call to the backward function
+                 - the inputs to this call only use variables which have been introduced
+                   *before*
+               2. otherwise, we check that we manage to replace all the uses to the
+                 backward function before comitting the changes . *)
+            let count = ref 0 in
+            let back_call = ref None in
+            let back_call_with_fresh = ref None in
+            let fresh_vars = ref VarId.Set.empty in
+            let register_back_call pat arg =
+              count := !count + 1;
+              back_call_with_fresh := Some (pat, arg);
+              (* Check that the argument doesn't use fresh vars *)
+              if
+                VarId.Set.is_empty
+                  (VarId.Set.inter (texpression_get_vars arg) !fresh_vars)
+              then back_call := Some (pat, arg)
+            in
+            let updt_visitor1 =
+              object
+                inherit [_] map_expression as super
+
+                method! visit_PatVar env var mp =
+                  fresh_vars := VarId.Set.add var.id !fresh_vars;
+                  super#visit_PatVar env var mp
+
+                method! visit_Let env monadic' pat' e' e3 =
+                  (* Check if this is a call to the backward function *)
+                  match e'.e with
+                  | App (app, v) when is_result_ty e3.ty && is_call_to_back app
+                    ->
+                      register_back_call pat' v;
+                      (self#visit_texpression env e3).e
+                  | _ -> super#visit_Let env monadic' pat' e' e3
+
+                method! visit_App env app x =
+                  (* Look for: [ok (back x)] *)
+                  match app.e with
+                  | Qualif
+                      {
+                        id =
+                          AdtCons
+                            {
+                              adt_id = TBuiltin TResult;
+                              variant_id = Some variant_id;
+                            };
+                        _;
+                      }
+                    when variant_id = result_ok_id -> begin
+                      match x.e with
+                      | App (app', v) when is_call_to_back app' ->
+                          let id = fresh_var_id () in
+                          let var : var = { id; basename = None; ty = x.ty } in
+                          register_back_call
+                            (mk_typed_pattern_from_var var None)
+                            v;
+                          super#visit_App env app (mk_texpression_from_var var)
+                      | _ -> super#visit_App env app x
+                    end
+                  | _ -> super#visit_App env app x
+              end
+            in
+            let e' = updt_visitor1#visit_texpression () e2 in
+
+            (* Should we keep the change? *)
+            if !count = 1 && Option.is_some !back_call then
+              let pat, arg = Option.get !back_call in
+              let call = mk_call_to_update arg in
+              Let (true, pat, call, e')
+            else
+              (* Sometimes the call to the backward function needs to
+                 use fresh variables which are introduced *after* the
+                 call to the backward function, but the call itself happens
+                 quite late (because we end region abstractions in a lazy manner),
+                 while we could introduce it earlier.
+                 If it is the case, we insert the call to the backward function
+                 as close as possible to the position of the call to the forward
+                 function, that is: as soon as all the variables needed for its
+                 arguments have been introduced.
+              *)
+              let e'' =
+                if !count = 1 then (
+                  let back_pat, back_arg = Option.get !back_call_with_fresh in
+                  let fresh_vars =
+                    VarId.Set.inter !fresh_vars (texpression_get_vars back_arg)
+                  in
+                  let rec insert_call_below (fresh_vars : VarId.Set.t) e =
+                    log#ldebug
+                      (lazy
+                        (__FUNCTION__ ^ ": insert_call_below:"
+                       ^ "\n- fresh_vars:\n"
+                        ^ VarId.Set.to_string None fresh_vars
+                        ^ "\n- e:\n"
+                        ^ texpression_to_string ctx e
+                        ^ "\n"));
+                    match e.e with
+                    | Let (monadic, pat, e1, e2) ->
+                        let fresh_vars =
+                          VarId.Set.diff fresh_vars (typed_pattern_get_vars pat)
+                        in
+                        if VarId.Set.is_empty fresh_vars then
+                          let call = mk_call_to_update back_arg in
+                          let e' = Let (true, back_pat, call, e2) in
+                          let e' = { e = e'; ty = e.ty } in
+                          (true, { e = Let (monadic, pat, e1, e'); ty = e.ty })
+                        else
+                          let ok, e2 = insert_call_below fresh_vars e2 in
+                          (ok, { e = Let (monadic, pat, e1, e2); ty = e.ty })
+                    | _ -> (false, e)
+                  in
+                  log#ldebug
+                    (lazy (__FUNCTION__ ^ ": insert_call_below: START"));
+                  let ok, e'' = insert_call_below fresh_vars e' in
+                  if ok then Some e''.e else None)
+                else None
+              in
+              if Option.is_some e'' then Option.get e''
+              else
+                (* Attempt 1. didn't work: perform attempt 2. (see above) *)
+                let ok = ref true in
+                let updt_visitor2 =
+                  object
+                    inherit [_] map_expression as super
+
+                    method! visit_Var env var_id =
+                      (* If we find a use of the backward function which was not
+                         replaced then we set the [ok] boolean to false, meaning
+                         we should not remove the call to the index function. *)
+                      if var_id = back_var.id then ok := false else ();
+                      super#visit_Var env var_id
+
+                    method! visit_Let env monadic' pat' e' e3 =
+                      (* Check if this is a call to the backward function*)
+                      match e'.e with
+                      | App (app, v)
+                        when is_result_ty e3.ty && is_call_to_back app ->
+                          super#visit_expression env
+                            (Let (true, pat', mk_call_to_update v, e3))
+                      | _ -> super#visit_Let env monadic' pat' e' e3
+
+                    method! visit_App env app x =
+                      (* Look for: [ok (back x)] *)
+                      match app.e with
+                      | Qualif
+                          {
+                            id =
+                              AdtCons
+                                {
+                                  adt_id = TBuiltin TResult;
+                                  variant_id = Some variant_id;
+                                };
+                            _;
+                          }
+                        when variant_id = result_ok_id -> begin
+                          match x.e with
+                          | App (app, back_v) when is_call_to_back app ->
+                              (super#visit_texpression env
+                                 (mk_call_to_update back_v))
+                                .e
+                          | _ -> super#visit_App env app x
+                        end
+                      | _ -> super#visit_App env app x
+                  end
+                in
+                let e' = updt_visitor2#visit_texpression () e2 in
+
+                (* Should we keep the change? *)
+                if !ok then (self#visit_texpression env e').e
+                else super#visit_Let env monadic pat e1 e2
         | _ -> super#visit_Let env monadic pat e1 e2
     end
   in
@@ -2431,6 +2676,8 @@ let end_passes :
     (* Eliminate the box functions - note that the "box" types were eliminated
        during the symbolic to pure phase: see the comments for [eliminate_box_functions] *)
     (None, "eliminate_box_functions", eliminate_box_functions);
+    (* Remove the duplicated function calls *)
+    (None, "simplify_duplicate_calls", simplify_duplicate_calls);
     (* Filter the useless variables, assignments, function calls, etc. *)
     (None, "filter_useless", filter_useless);
     (* Simplify the lets immediately followed by a return.
@@ -2467,7 +2714,7 @@ let end_passes :
     (None, "simplify_let_bindings", simplify_let_bindings);
     (* Inline the useless vars again *)
     ( None,
-      "inline_useless_var_assignments",
+      "inline_useless_var_assignments (pass 2)",
       inline_useless_var_assignments ~inline_named:true ~inline_const:true
         ~inline_pure:false ~inline_identity:true );
     (* Filter the useless variables again *)
@@ -2475,9 +2722,12 @@ let end_passes :
     (* Simplify the let-then return again (the lambda simplification may have
        unlocked more simplifications here) *)
     (None, "simplify_let_then_ok (pass 2)", simplify_let_then_ok);
-    (* Simplify the array/slice manipulations by intrdoucing calls to [array_update]
+    (* Simplify the array/slice manipulations by introducing calls to [array_update]
        [slice_update] *)
     (None, "simplify_array_slice_update", simplify_array_slice_update);
+    (* Simplify the let-then return again (the array simplification may have
+       unlocked more simplifications here) *)
+    (None, "simplify_let_then_ok (pass 3)", simplify_let_then_ok);
     (* Decompose the monadic let-bindings - used by Coq *)
     ( Some Config.decompose_monadic_let_bindings,
       "decompose_monadic_let_bindings",

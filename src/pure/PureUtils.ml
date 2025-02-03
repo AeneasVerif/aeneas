@@ -106,6 +106,15 @@ let opt_dest_arrow_ty (ty : ty) : (ty * ty) option =
 
 let is_arrow_ty (ty : ty) : bool = Option.is_some (opt_dest_arrow_ty ty)
 
+let opt_dest_result_ty (ty : ty) : ty option =
+  match ty with
+  | TAdt
+      ( TBuiltin TResult,
+        { types = [ ty ]; const_generics = []; trait_refs = [] } ) -> Some ty
+  | _ -> None
+
+let is_result_ty (ty : ty) : bool = Option.is_some (opt_dest_result_ty ty)
+
 let dest_arrow_ty (span : Meta.span) (ty : ty) : ty * ty =
   match opt_dest_arrow_ty ty with
   | Some (arg_ty, ret_ty) -> (arg_ty, ret_ty)
@@ -920,3 +929,25 @@ let decompose_mplace (p : mplace) :
     | PlaceProjection (p, pe) -> decompose (pe :: proj) p
   in
   decompose [] p
+
+let texpression_get_vars (e : texpression) : VarId.Set.t =
+  let vars = ref VarId.Set.empty in
+  let visitor =
+    object
+      inherit [_] iter_expression
+      method! visit_Var _ var_id = vars := VarId.Set.add var_id !vars
+    end
+  in
+  visitor#visit_texpression () e;
+  !vars
+
+let typed_pattern_get_vars (pat : typed_pattern) : VarId.Set.t =
+  let vars = ref VarId.Set.empty in
+  let visitor =
+    object
+      inherit [_] iter_expression
+      method! visit_PatVar _ var _ = vars := VarId.Set.add var.id !vars
+    end
+  in
+  visitor#visit_typed_pattern () pat;
+  !vars

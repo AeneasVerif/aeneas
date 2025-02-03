@@ -44,7 +44,7 @@ abbrev Vec.v {α : Type u} (v : Vec α) : List α := v.val
 example {a: Type u} (v : Vec a) : v.length ≤ Scalar.max ScalarTy.Usize := by
   scalar_tac
 
-abbrev Vec.new (α : Type u): Vec α := ⟨ [], by apply Scalar.cMax_suffices .Usize; simp ⟩
+abbrev Vec.new (α : Type u): Vec α := ⟨ [], by simp ⟩
 
 instance (α : Type u) : Inhabited (Vec α) := by
   constructor
@@ -105,6 +105,14 @@ theorem Vec.index_usize_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
   have h := List.indexOpt_eq_index v.val i.toNat (by scalar_tac)
   simp [*]
 
+def Vec.update {α : Type u} (v: Vec α) (i: Usize) (x: α) : Vec α :=
+  ⟨ v.val.update i.toNat x, by have := v.property; simp [*] ⟩
+
+@[simp]
+theorem Vec.update_val_eq {α : Type u} (v: Vec α) (i: Usize) (x: α) :
+  (v.update i x).val = v.val.update i.toNat x := by
+  simp [update]
+
 def Vec.update_usize {α : Type u} (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
   match v.val.indexOpt i.toNat with
   | none => fail .arrayOutOfBounds
@@ -115,21 +123,13 @@ def Vec.update_usize {α : Type u} (v: Vec α) (i: Usize) (x: α) : Result (Vec 
 theorem Vec.update_usize_spec {α : Type u} (v: Vec α) (i: Usize) (x : α)
   (hbound : i.val < v.length) :
   ∃ nv, v.update_usize i x = ok nv ∧
-  nv.val = v.val.update i.toNat x
+  nv = v.update i x
   := by
   simp only [update_usize]
   have h := List.indexOpt_bounds v.val i.toNat
   split
   . simp_all [length]; scalar_tac
-  . simp_all
-
-def Vec.update {α : Type u} (v: Vec α) (i: Usize) (x: α) : Vec α :=
-  ⟨ v.val.update i.toNat x, by have := v.property; simp [*] ⟩
-
-@[simp]
-theorem Vec.update_val_eq {α : Type u} (v: Vec α) (i: Usize) (x: α) :
-  (v.update i x).val = v.val.update i.toNat x := by
-  simp [update]
+  . simp [Vec.update]
 
 @[scalar_tac v.update i x]
 theorem Vec.update_length {α : Type u} (v: Vec α) (i: Usize) (x: α) :

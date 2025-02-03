@@ -392,27 +392,27 @@ theorem Scalar.add_unsigned_spec {ty} (s: ¬ ty.isSigned) {x y : Scalar ty}
   apply add_spec <;> assumption
 
 /- Fine-grained theorems -/
-@[pspec] theorem Usize.add_spec {x y : Usize} (hmax : ↑x + ↑y ≤ Usize.max) :
+@[pspec] theorem Usize.add_spec {x y : Usize} (hmax : x.val + y.val ≤ Usize.max) :
   ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y := by
   apply Scalar.add_unsigned_spec <;> simp [ScalarTy.isSigned, Scalar.max, *]
 
-@[pspec] theorem U8.add_spec {x y : U8} (hmax : ↑x + ↑y ≤ U8.max) :
+@[pspec] theorem U8.add_spec {x y : U8} (hmax : x.val + y.val ≤ U8.max) :
   ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y := by
   apply Scalar.add_unsigned_spec <;> simp [ScalarTy.isSigned, Scalar.max, *]
 
-@[pspec] theorem U16.add_spec {x y : U16} (hmax : ↑x + ↑y ≤ U16.max) :
+@[pspec] theorem U16.add_spec {x y : U16} (hmax : x.val + y.val ≤ U16.max) :
   ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y := by
   apply Scalar.add_unsigned_spec <;> simp [ScalarTy.isSigned, Scalar.max, *]
 
-@[pspec] theorem U32.add_spec {x y : U32} (hmax : ↑x + ↑y ≤ U32.max) :
+@[pspec] theorem U32.add_spec {x y : U32} (hmax : x.val + y.val ≤ U32.max) :
   ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y := by
   apply Scalar.add_unsigned_spec <;> simp [ScalarTy.isSigned, Scalar.max, *]
 
-@[pspec] theorem U64.add_spec {x y : U64} (hmax : ↑x + ↑y ≤ U64.max) :
+@[pspec] theorem U64.add_spec {x y : U64} (hmax : x.val + y.val ≤ U64.max) :
   ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y := by
   apply Scalar.add_unsigned_spec <;> simp [ScalarTy.isSigned, Scalar.max, *]
 
-@[pspec] theorem U128.add_spec {x y : U128} (hmax : ↑x + ↑y ≤ U128.max) :
+@[pspec] theorem U128.add_spec {x y : U128} (hmax : x.val + y.val ≤ U128.max) :
   ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y := by
   apply Scalar.add_unsigned_spec <;> simp [ScalarTy.isSigned, Scalar.max, *]
 
@@ -487,27 +487,27 @@ theorem Scalar.sub_unsigned_spec {ty : ScalarTy} (s : ¬ ty.isSigned)
   apply sub_spec <;> assumption
 
 /- Fine-grained theorems -/
-@[pspec] theorem Usize.sub_spec {x y : Usize} (hmin : Usize.min ≤ ↑x - ↑y) :
+@[pspec] theorem Usize.sub_spec {x y : Usize} (hmin : Usize.min ≤ x.val - y.val) :
+  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y := by
+  apply Scalar.sub_unsigned_spec <;> simp [Scalar.min, ScalarTy.isSigned]; omega
+
+@[pspec] theorem U8.sub_spec {x y : U8} (hmin : U8.min ≤ x.val - y.val) :
   ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y := by
   apply Scalar.sub_unsigned_spec <;> simp_all [Scalar.min, ScalarTy.isSigned]
 
-@[pspec] theorem U8.sub_spec {x y : U8} (hmin : U8.min ≤ ↑x - ↑y) :
+@[pspec] theorem U16.sub_spec {x y : U16} (hmin : U16.min ≤ x.val - y.val) :
   ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y := by
   apply Scalar.sub_unsigned_spec <;> simp_all [Scalar.min, ScalarTy.isSigned]
 
-@[pspec] theorem U16.sub_spec {x y : U16} (hmin : U16.min ≤ ↑x - ↑y) :
+@[pspec] theorem U32.sub_spec {x y : U32} (hmin : U32.min ≤ x.val - y.val) :
   ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y := by
   apply Scalar.sub_unsigned_spec <;> simp_all [Scalar.min, ScalarTy.isSigned]
 
-@[pspec] theorem U32.sub_spec {x y : U32} (hmin : U32.min ≤ ↑x - ↑y) :
+@[pspec] theorem U64.sub_spec {x y : U64} (hmin : U64.min ≤ x.val - y.val) :
   ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y := by
   apply Scalar.sub_unsigned_spec <;> simp_all [Scalar.min, ScalarTy.isSigned]
 
-@[pspec] theorem U64.sub_spec {x y : U64} (hmin : U64.min ≤ ↑x - ↑y) :
-  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y := by
-  apply Scalar.sub_unsigned_spec <;> simp_all [Scalar.min, ScalarTy.isSigned]
-
-@[pspec] theorem U128.sub_spec {x y : U128} (hmin : U128.min ≤ ↑x - ↑y) :
+@[pspec] theorem U128.sub_spec {x y : U128} (hmin : U128.min ≤ x.val - y.val) :
   ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y := by
   apply Scalar.sub_unsigned_spec <;> simp_all [Scalar.min, ScalarTy.isSigned]
 
@@ -583,27 +583,27 @@ theorem Scalar.mul_unsigned_spec {ty} (s: ¬ ty.isSigned) {x y : Scalar ty}
   apply mul_spec <;> assumption
 
 /- Fine-grained theorems -/
-@[pspec] theorem Usize.mul_spec {x y : Usize} (hmax : ↑x * ↑y ≤ Usize.max) :
+@[pspec] theorem Usize.mul_spec {x y : Usize} (hmax : x.val * y.val ≤ Usize.max) :
   ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y := by
   apply Scalar.mul_unsigned_spec <;> simp_all [Scalar.max, ScalarTy.isSigned]
 
-@[pspec] theorem U8.mul_spec {x y : U8} (hmax : ↑x * ↑y ≤ U8.max) :
+@[pspec] theorem U8.mul_spec {x y : U8} (hmax : x.val * y.val ≤ U8.max) :
   ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y := by
   apply Scalar.mul_unsigned_spec <;> simp_all [Scalar.max, ScalarTy.isSigned]
 
-@[pspec] theorem U16.mul_spec {x y : U16} (hmax : ↑x * ↑y ≤ U16.max) :
+@[pspec] theorem U16.mul_spec {x y : U16} (hmax : x.val * y.val ≤ U16.max) :
   ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y := by
   apply Scalar.mul_unsigned_spec <;> simp_all [Scalar.max, ScalarTy.isSigned]
 
-@[pspec] theorem U32.mul_spec {x y : U32} (hmax : ↑x * ↑y ≤ U32.max) :
+@[pspec] theorem U32.mul_spec {x y : U32} (hmax : x.val * y.val ≤ U32.max) :
   ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y := by
   apply Scalar.mul_unsigned_spec <;> simp_all [Scalar.max, ScalarTy.isSigned]
 
-@[pspec] theorem U64.mul_spec {x y : U64} (hmax : ↑x * ↑y ≤ U64.max) :
+@[pspec] theorem U64.mul_spec {x y : U64} (hmax : x.val * y.val ≤ U64.max) :
   ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y := by
   apply Scalar.mul_unsigned_spec <;> simp_all [Scalar.max, ScalarTy.isSigned]
 
-@[pspec] theorem U128.mul_spec {x y : U128} (hmax : ↑x * ↑y ≤ U128.max) :
+@[pspec] theorem U128.mul_spec {x y : U128} (hmax : x.val * y.val ≤ U128.max) :
   ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y := by
   apply Scalar.mul_unsigned_spec <;> simp_all [Scalar.max, ScalarTy.isSigned]
 
@@ -1349,40 +1349,40 @@ theorem core.num.Usize.saturating_sub_spec (x y : Usize) :
 def Scalar.wrapping_add {ty} (x y : Scalar ty) : Scalar ty := sorry
 
 /- [core::num::{u8}::wrapping_add] -/
-def core.num.U8.wrapping_add := @Scalar.wrapping_add ScalarTy.U8
+def core.num.U8.wrapping_add : U8 → U8 → U8 := @Scalar.wrapping_add ScalarTy.U8
 
 /- [core::num::{u16}::wrapping_add] -/
-def core.num.U16.wrapping_add := @Scalar.wrapping_add ScalarTy.U16
+def core.num.U16.wrapping_add : U16 → U16 → U16  := @Scalar.wrapping_add ScalarTy.U16
 
 /- [core::num::{u32}::wrapping_add] -/
-def core.num.U32.wrapping_add := @Scalar.wrapping_add ScalarTy.U32
+def core.num.U32.wrapping_add : U32 → U32 → U32  := @Scalar.wrapping_add ScalarTy.U32
 
 /- [core::num::{u64}::wrapping_add] -/
-def core.num.U64.wrapping_add := @Scalar.wrapping_add ScalarTy.U64
+def core.num.U64.wrapping_add : U64 → U64 → U64  := @Scalar.wrapping_add ScalarTy.U64
 
 /- [core::num::{u128}::wrapping_add] -/
-def core.num.U128.wrapping_add := @Scalar.wrapping_add ScalarTy.U128
+def core.num.U128.wrapping_add : U128 → U128 → U128 := @Scalar.wrapping_add ScalarTy.U128
 
 /- [core::num::{usize}::wrapping_add] -/
-def core.num.Usize.wrapping_add := @Scalar.wrapping_add ScalarTy.Usize
+def core.num.Usize.wrapping_add : Usize → Usize → Usize  := @Scalar.wrapping_add ScalarTy.Usize
 
 /- [core::num::{i8}::wrapping_add] -/
-def core.num.I8.wrapping_add := @Scalar.wrapping_add ScalarTy.I8
+def core.num.I8.wrapping_add : I8 → I8 → I8  := @Scalar.wrapping_add ScalarTy.I8
 
 /- [core::num::{i16}::wrapping_add] -/
-def core.num.I16.wrapping_add := @Scalar.wrapping_add ScalarTy.I16
+def core.num.I16.wrapping_add : I16 → I16 → I16  := @Scalar.wrapping_add ScalarTy.I16
 
 /- [core::num::{i32}::wrapping_add] -/
-def core.num.I32.wrapping_add := @Scalar.wrapping_add ScalarTy.I32
+def core.num.I32.wrapping_add : I32 → I32 → I32  := @Scalar.wrapping_add ScalarTy.I32
 
 /- [core::num::{i64}::wrapping_add] -/
-def core.num.I64.wrapping_add := @Scalar.wrapping_add ScalarTy.I64
+def core.num.I64.wrapping_add : I64 → I64 → I64 := @Scalar.wrapping_add ScalarTy.I64
 
 /- [core::num::{i128}::wrapping_add] -/
-def core.num.I128.wrapping_add := @Scalar.wrapping_add ScalarTy.I128
+def core.num.I128.wrapping_add : I128 → I128 → I128  := @Scalar.wrapping_add ScalarTy.I128
 
 /- [core::num::{isize}::wrapping_add] -/
-def core.num.Isize.wrapping_add := @Scalar.wrapping_add ScalarTy.Isize
+def core.num.Isize.wrapping_add : Isize → Isize → Isize  := @Scalar.wrapping_add ScalarTy.Isize
 
 -- TODO: reasoning lemmas for wrapping add
 
@@ -1390,40 +1390,40 @@ def core.num.Isize.wrapping_add := @Scalar.wrapping_add ScalarTy.Isize
 def Scalar.wrapping_sub {ty} (x y : Scalar ty) : Scalar ty := sorry
 
 /- [core::num::{u8}::wrapping_sub] -/
-def core.num.U8.wrapping_sub := @Scalar.wrapping_sub ScalarTy.U8
+def core.num.U8.wrapping_sub : U8 → U8 → U8 := @Scalar.wrapping_sub ScalarTy.U8
 
 /- [core::num::{u16}::wrapping_sub] -/
-def core.num.U16.wrapping_sub := @Scalar.wrapping_sub ScalarTy.U16
+def core.num.U16.wrapping_sub : U16 → U16 → U16 := @Scalar.wrapping_sub ScalarTy.U16
 
 /- [core::num::{u32}::wrapping_sub] -/
-def core.num.U32.wrapping_sub := @Scalar.wrapping_sub ScalarTy.U32
+def core.num.U32.wrapping_sub : U32 → U32 → U32 := @Scalar.wrapping_sub ScalarTy.U32
 
 /- [core::num::{u64}::wrapping_sub] -/
-def core.num.U64.wrapping_sub := @Scalar.wrapping_sub ScalarTy.U64
+def core.num.U64.wrapping_sub : U64 → U64 → U64 := @Scalar.wrapping_sub ScalarTy.U64
 
 /- [core::num::{u128}::wrapping_sub] -/
-def core.num.U128.wrapping_sub := @Scalar.wrapping_sub ScalarTy.U128
+def core.num.U128.wrapping_sub : U128 → U128 → U128 := @Scalar.wrapping_sub ScalarTy.U128
 
 /- [core::num::{usize}::wrapping_sub] -/
-def core.num.Usize.wrapping_sub := @Scalar.wrapping_sub ScalarTy.Usize
+def core.num.Usize.wrapping_sub : Usize → Usize → Usize := @Scalar.wrapping_sub ScalarTy.Usize
 
 /- [core::num::{i8}::wrapping_sub] -/
-def core.num.I8.wrapping_sub := @Scalar.wrapping_sub ScalarTy.I8
+def core.num.I8.wrapping_sub : I8 → I8 → I8 := @Scalar.wrapping_sub ScalarTy.I8
 
 /- [core::num::{i16}::wrapping_sub] -/
-def core.num.I16.wrapping_sub := @Scalar.wrapping_sub ScalarTy.I16
+def core.num.I16.wrapping_sub : I16 → I16 → I16 := @Scalar.wrapping_sub ScalarTy.I16
 
 /- [core::num::{i32}::wrapping_sub] -/
-def core.num.I32.wrapping_sub := @Scalar.wrapping_sub ScalarTy.I32
+def core.num.I32.wrapping_sub : I32 → I32 → I32 := @Scalar.wrapping_sub ScalarTy.I32
 
 /- [core::num::{i64}::wrapping_sub] -/
-def core.num.I64.wrapping_sub := @Scalar.wrapping_sub ScalarTy.I64
+def core.num.I64.wrapping_sub : I64 → I64 → I64 := @Scalar.wrapping_sub ScalarTy.I64
 
 /- [core::num::{i128}::wrapping_sub] -/
-def core.num.I128.wrapping_sub := @Scalar.wrapping_sub ScalarTy.I128
+def core.num.I128.wrapping_sub : I128 → I128 → I128 := @Scalar.wrapping_sub ScalarTy.I128
 
 /- [core::num::{isize}::wrapping_sub] -/
-def core.num.Isize.wrapping_sub := @Scalar.wrapping_sub ScalarTy.Isize
+def core.num.Isize.wrapping_sub : Isize → Isize → Isize := @Scalar.wrapping_sub ScalarTy.Isize
 
 -- TODO: reasoning lemmas for wrapping sub
 
