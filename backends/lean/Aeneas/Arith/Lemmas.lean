@@ -211,5 +211,43 @@ theorem div_to_ZMod {n : ℕ} {a b : ℤ} [NeZero n] (hDiv : b ∣ a) (hgcd : In
   rw [h1]
   simp
 
+theorem bmod_eq_emod_eq_iff (n: ℕ) (a b: ℤ) :
+  (a % n = b % n) ↔ (Int.bmod a n = Int.bmod b n) := by
+  simp only [Int.bmod]
+  apply Iff.intro <;> intro h
+  . rw [h]
+  . if h_a: a % n < (n + 1) / 2 then
+      if h_b: b % n < (n + 1) / 2 then
+        simp only [h_a, ↓reduceIte, h_b] at h
+        exact h
+      else
+        simp only [h_a, ↓reduceIte, h_b] at h
+        have ha' : 0 ≤ a % n := by apply Int.emod_nonneg; linarith
+        have hb' : b % n - n < 0 := by
+          have h : b % n < n := by apply Int.emod_lt_of_pos; linarith
+          linarith
+        linarith
+    else
+      if h_b: b % n < (n + 1) / 2 then
+        simp only [h_a, ↓reduceIte, h_b] at h
+        have ha' : 0 ≤ b % n := by apply Int.emod_nonneg; linarith
+        have hb' : a % n - n < 0 := by
+          have h : a % n < n := by apply Int.emod_lt_of_pos; linarith
+          linarith
+        linarith
+      else
+        simp only [h_a, ↓reduceIte, h_b, sub_left_inj] at h
+        exact h
+
+theorem ZMod_int_cast_eq_int_cast_bmod_iff (n : ℕ) (a b : ℤ) :
+  ((a : ZMod n) = (b : ZMod n)) ↔ (Int.bmod a n = Int.bmod b n) := by
+  apply Iff.trans
+  apply ZMod_int_cast_eq_int_cast_iff
+  apply bmod_eq_emod_eq_iff
+
+theorem ZMod_eq_imp_bmod_eq {n : ℕ} {a b : ℤ}
+  (h : (a : ZMod n) = (b : ZMod n)) :
+  Int.bmod a n = Int.bmod b n :=
+  (@ZMod_int_cast_eq_int_cast_bmod_iff n a b).mp h
 
 end Aeneas.ScalarTac
