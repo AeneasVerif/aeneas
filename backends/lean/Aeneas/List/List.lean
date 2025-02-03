@@ -51,7 +51,6 @@ theorem indexOpt_eq_index [Inhabited α] (ls : List α) (i : Nat) :
     else by
       have hi := indexOpt_eq_index tl (i - 1)
       simp [*]; intros
-      -- TODO: there seems to be syntax errors if we don't put the parentheses below??
       apply hi; int_tac
 
 -- Remark: the list is unchanged if the index is not in bounds
@@ -313,26 +312,11 @@ theorem length_flatten_update_as_int_eq {α : Type u} (ls : List (List α)) (i :
 @[simp]
 theorem index_map_eq {α : Type u} {β : Type v} [Inhabited α] [Inhabited β]
   (ls : List α) (i : Nat) (f : α → β)
-  (h1 : i < ls.length) :
+  (h1 : i < ls.length) : -- We need the bound because otherwise we have to prove that: `(default : β) = f (default : α)`
   (ls.map f).index i = f (ls.index i) := by
   revert i; induction ls <;> simp_all
   intro i h
   cases i <;> simp_all
-
-@[simp]
-theorem index_nat_map_eq {α : Type u} {β : Type v} [Inhabited α] [Inhabited β]
-  (ls : List α) (i : Nat) (f : α → β)
-  (h1 : i < ls.length) :
-  (ls.map f).index i = f (ls.index i) := by
-  match ls with
-  | [] => simp at h1
-  | hd :: tl =>
-    if h : i = 0 then
-      simp [*]
-    else
-      have hi := index_nat_map_eq tl (i - 1) f (by simp at h1; int_tac)
-      have : (i : Nat) - 1 < tl.length := by simp_all; scalar_tac
-      simp [*]
 
 theorem replace_slice_index [Inhabited α] (start end_ : Nat) (l nl : List α)
   (_ : start < end_) (_ : end_ ≤ l.length) (_ : nl.length = end_ - start) :

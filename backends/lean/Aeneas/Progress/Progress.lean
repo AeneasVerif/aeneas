@@ -585,7 +585,7 @@ namespace Test
   def add (x y : U32) : Result U32 := x + y
 
   @[pspec] -- TODO: give the possibility of using pspec as a local attribute
-  theorem add_spec x y (h : x.val + y.val ≤ U32.max) :
+  theorem add_spec (x y : U32) (h : x.val + y.val ≤ U32.max) :
     let tot := x.val + y.val
     ∃ z, add x y = ok z ∧ z.val = tot := by
     rw [add]

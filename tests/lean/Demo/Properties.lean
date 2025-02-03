@@ -8,7 +8,7 @@ namespace demo
 #check U32.add_spec
 
 -- @[pspec]
-theorem mul2_add1_spec (x : U32) (h : 2 * ↑x + 1 ≤ U32.max)
+theorem mul2_add1_spec (x : U32) (h : 2 * x + 1 ≤ (U32.max : Int))
   : ∃ y, mul2_add1 x = ok y ∧
   ↑y = 2 * ↑x + (1 : Int)
   := by
@@ -17,7 +17,7 @@ theorem mul2_add1_spec (x : U32) (h : 2 * ↑x + 1 ≤ U32.max)
   progress as ⟨ i' ⟩
   scalar_tac
 
-theorem use_mul2_add1_spec (x : U32) (y : U32) (h : 2 * ↑x + 1 + ↑y ≤ U32.max) :
+theorem use_mul2_add1_spec (x : U32) (y : U32) (h : 2 * x + 1 + y ≤ (U32.max : Int)) :
   ∃ z, use_mul2_add1 x y = ok z ∧
   ↑z = 2 * ↑x + (1 : Int) + ↑y := by
   rw [use_mul2_add1]

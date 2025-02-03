@@ -99,11 +99,13 @@ theorem mul2_add1_spec
   /- The precondition (we give it the name "h" to be able to refer to it in the proof).
      We simply state that [2 * x + 1] must not overflow.
 
-     The ↑ notation ("\u") is used to coerce values. Here, we coerce [x], which is
+     The `.val` notation is used to coerce values. Here, we coerce `x`, which is
      a bounded machine integer, to an unbounded mathematical integer, which is
-     easier to work with. Note that writing [↑x] is the same as writing [x.val].
+     easier to work with. Note that it is also possible to use the `↑x` notation
+     to tell Lean to apply a coercion, though Lean may not always be able to figure
+     out which coercion to apply (`x.val` is always more precise).
    -/
-  (h : 2 * ↑x + 1 ≤ U32.max)
+  (h : 2 * x.val + 1 ≤ U32.max)
   /- The postcondition -/
   : ∃ y, mul2_add1 x = ok y ∧  -- The call succeeds
   ↑ y = 2 * ↑x + (1 : Int)   -- The output has the expected value
@@ -153,7 +155,7 @@ theorem mul2_add1_spec
    attributes, meaning we don't need to tell [progress] to use them.
  -/
 @[pspec] -- the [pspec] attribute saves the theorem in a database, for [progress] to use it
-theorem mul2_add1_spec2 (x : U32) (h : 2 * ↑x + 1 ≤ U32.max)
+theorem mul2_add1_spec2 (x : U32) (h : 2 * x.val + 1 ≤ U32.max)
   : ∃ y, mul2_add1 x = ok y ∧
   ↑ y = 2 * ↑x + (1 : Int)
   := by
@@ -171,7 +173,7 @@ def use_mul2_add1 (x : U32) (y : U32) : Result U32 := do
   x1 + y
 
 @[pspec]
-theorem use_mul2_add1_spec (x : U32) (y : U32) (h : 2 * ↑x + 1 + ↑y ≤ U32.max) :
+theorem use_mul2_add1_spec (x : U32) (y : U32) (h : 2 * x.val + 1 + y.val ≤ U32.max) :
   ∃ z, use_mul2_add1 x y = ok z ∧
   ↑z = 2 * ↑x + (1 : Int) + ↑y := by
   rw [use_mul2_add1]

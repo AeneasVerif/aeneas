@@ -122,6 +122,23 @@ pub fn array_local_deep_copy(x: &[u32; 32]) {
     let _y = *x;
 }
 
+/// This test is to exercise the pure micro passes
+pub fn array_update1(a: &mut [u32], i: usize, x: u32) {
+    a[i + 1] = x + 1;
+}
+
+/// This test is to exercise the pure micro passes
+pub fn array_update2(a: &mut [u32], i: usize, x: u32) {
+    a[i] = x + 1;
+    a[i + 1] = x + 1;
+}
+
+pub fn array_update3(a: &mut [u32], i: usize, x: u32) {
+    a[i] = x;
+    a[i + 1] = x;
+    a[i + 2] = x;
+}
+
 pub fn take_array(_: [u32; 2]) {}
 pub fn take_array_borrow(_: &[u32; 2]) {}
 pub fn take_slice(_: &[u32]) {}

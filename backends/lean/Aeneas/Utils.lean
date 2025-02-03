@@ -991,13 +991,14 @@ def extractGoal : TacticM Unit := do
   let decls ← ctx.getDecls
   let assumptions : List Format ← decls.mapM fun decl => do
     let ty ← Meta.ppExprWithInfos decl.type
-    let name :=
-      match decl.userName with
-      | .num _ _ => "_"
-      | _ => decl.userName.toString
-    pure ("\n  (" ++ name ++ " : " ++ ty.fmt ++ ")")
+    /- TODO: we might want to update the names of the local
+       declarations, to use proper names for the variables
+       which are shadowed/have been introduced automatically
+       by the tactics/elaboration -/
+    let name ← Meta.ppExprWithInfos (Expr.fvar decl.fvarId)
+    pure ("\n  (" ++ name.fmt ++ " : " ++ ty.fmt ++ ")")
   let assumptions := Format.joinSep assumptions ""
-  let mgoal ← Tactic.getMainGoal
+  let mgoal ← getMainGoal
   let goal ← Meta.ppExprWithInfos (← mgoal.getType)
   let msg := "example  " ++ assumptions ++ " :\n  " ++ goal.fmt ++ "\n  := sorry"
   println! msg
