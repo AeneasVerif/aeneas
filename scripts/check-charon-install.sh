@@ -7,10 +7,10 @@ if [[ "$1" == "--force" ]]; then
 fi
 
 rebuild() {
-    if which rustup 2> /dev/null 1>&2; then
-        make test
-    elif which nix 2> /dev/null 1>&2; then
+    if which nix 2> /dev/null 1>&2; then
         nix develop --command bash -c "make test"
+    elif which rustup 2> /dev/null 1>&2; then
+        make test
     else
         echo 'Error: Neither `rustup` nor `nix` appears to be installed. Install one or the other in order to build `charon`.'
         exit 1
