@@ -40,7 +40,7 @@ IN_CI ?=
 
 # Build the compiler, after formatting the code
 .PHONY: build
-build: format build-dev
+build: build-dev
 
 # Build the project, test it and verify the generated files
 .PHONY: build-test-verify
