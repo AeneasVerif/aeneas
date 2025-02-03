@@ -119,14 +119,14 @@ theorem Array.update_length {α : Type u} {n : Usize} (v: Array α n) (i: Usize)
 theorem Array.update_usize_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x : α)
   (hbound : i.toNat < v.length) :
   ∃ nv, v.update_usize i x = ok nv ∧
-  nv.val = v.val.update i.toNat x
+  nv = v.update i x
   := by
   simp only [update_usize]
   have h := List.indexOpt_bounds v.val i.toNat
   split
   . simp_all [length]
     scalar_tac
-  . simp_all
+  . simp [Array.update]
 
 def Array.index_mut_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) :
   Result (α × (α -> Array α n)) := do
@@ -230,13 +230,13 @@ theorem Slice.update_length {α : Type u} (v: Slice α) (i: Usize) (x: α) :
 theorem Slice.update_usize_spec {α : Type u} (v: Slice α) (i: Usize) (x : α)
   (hbound : i.toNat < v.length) :
   ∃ nv, v.update_usize i x = ok nv ∧
-  nv.val = v.val.update i.toNat x
+  nv = v.update i x
   := by
   simp only [update_usize]
   have h := List.indexOpt_bounds v.val i.toNat
   split
   . simp_all [length]; scalar_tac
-  . simp_all
+  . simp [Slice.update]
 
 def Slice.index_mut_usize {α : Type u} (v: Slice α) (i: Usize) :
   Result (α × (α → Slice α)) := do
