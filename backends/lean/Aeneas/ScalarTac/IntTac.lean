@@ -89,7 +89,10 @@ def goalIsLinearInt : Tactic.TacticM Bool := do
 example (x y : Int) (h0 : x ≤ y) (h1 : x ≠ y) : x < y := by
   omega
 
-def intTacSimpRocs : List Name := [``Int.reduceNegSucc, ``Int.reduceNeg]
+def intTacSimpRocs : List Name := [
+  ``Nat.reducePow, ``Nat.reduceAdd, ``Nat.reduceSub, ``Nat.reduceMul, ``Nat.reduceDiv, ``Nat.reduceMod,
+  ``Int.reducePow, ``Int.reduceAdd, ``Int.reduceSub, ``Int.reduceMul, ``Int.reduceDiv, ``Int.reduceMod,
+  ``Int.reduceNegSucc, ``Int.reduceNeg,]
 
 /-- Apply the scalar_tac forward rules -/
 def intTacSaturateForward : Tactic.TacticM Unit := do
@@ -161,12 +164,22 @@ def intTacPreprocess (extraPrePreprocess extraPreprocess :  Tactic.TacticM Unit)
 elab "int_tac_preprocess" : tactic =>
   intTacPreprocess (do pure ()) (do pure ())
 
+structure Config where
+  /- If `true`, split all the matches/if then else in the context (note that `omega`
+     splits the *disjunctions*) -/
+  split: Bool := false
+  /- if `true`, split the goal if it is a conjunction so as to introduce one
+     subgoal per conjunction. -/
+  splitGoal : Bool := false
+
+declare_config_elab elabConfig Config
+
 /-- - `splitAllDisjs`: if true, also split all the matches/if then else in the context (note that
       `omega` splits the *disjunctions*)
     - `splitGoalConjs`: if true, split the goal if it is a conjunction so as to introduce one
       subgoal per conjunction.
 -/
-def intTac (tacName : String) (splitAllDisjs splitGoalConjs : Bool)
+def intTac (tacName : String) (config : Config)
   (extraPrePreprocess extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM Unit := do
   Tactic.withMainContext do
   Tactic.focus do
@@ -179,7 +192,7 @@ def intTac (tacName : String) (splitAllDisjs splitGoalConjs : Bool)
   -- the goal. I think before leads to a smaller proof term?
   allGoalsNoRecover (intTacPreprocess extraPrePreprocess extraPreprocess)
   -- Split the conjunctions in the goal
-  if splitGoalConjs then allGoalsNoRecover (Utils.repeatTac Utils.splitConjTarget)
+  if config.splitGoal then allGoalsNoRecover (Utils.repeatTac Utils.splitConjTarget)
   /- If we split the disjunctions, split then use simp_all. Otherwise only use simp_all.
      Note that simp_all is very useful here as a "congruence" procedure. Note however that we
      only activate a very restricted set of simp lemmas (otherwise it can be very expensive,
@@ -207,7 +220,7 @@ def intTac (tacName : String) (splitAllDisjs splitGoalConjs : Bool)
           trace[ScalarTac] "Calling omega"
           Tactic.Omega.omegaTactic {}
           trace[ScalarTac] "Omega solved the goal")
-      if splitAllDisjs then do
+      if config.split then do
         /- In order to improve performance, we first try to prove the goal without splitting. If it
            fails, we split. -/
         try
@@ -222,9 +235,11 @@ def intTac (tacName : String) (splitAllDisjs splitGoalConjs : Bool)
       let g ← Tactic.getMainGoal
       throwError "{tacName} failed to prove the goal below.\n\nNote that {tacName} is almost equivalent to:\n  {tacName}_preprocess; split_all <;> simp_all only <;> omega\n\nGoal: \n{g}"
 
-elab "int_tac" args:(" split_goal"?): tactic =>
-  let splitConjs := args.raw.getArgs.size > 0
-  intTac "int_tac" true splitConjs (do pure ()) (do pure ())
+example : True := by simp
+
+elab "int_tac" config:Parser.Tactic.optConfig : tactic => do
+  let config ← elabConfig config
+  intTac "int_tac" config (do pure ()) (do pure ())
 
 -- For termination proofs
 syntax "int_decr_tac" : tactic
@@ -239,14 +254,11 @@ macro_rules
 
 -- Checking that things happen correctly when there are several disjunctions
 example (x y : Int) (h0: 0 ≤ x) (h1: x ≠ 0) (h2 : 0 ≤ y) (h3 : y ≠ 0) : 0 < x ∧ 0 < y := by
-  int_tac split_goal
-
---example (x y : Int) : x + y ≥ 2 := by
---  int_tac split_goal
+  int_tac +splitGoal
 
 -- Checking that things happen correctly when there are several disjunctions
 example (x y : Int) (h0: 0 ≤ x) (h1: x ≠ 0) (h2 : 0 ≤ y) (h3 : y ≠ 0) : 0 < x ∧ 0 < y ∧ x + y ≥ 2 := by
-  int_tac split_goal
+  int_tac +splitGoal
 
 -- Checking that we can prove exfalso
 example (a : Prop) (x : Int) (h0: 0 < x) (h1: x < 0) : a := by
@@ -267,7 +279,7 @@ example (x y : Int) (h : x + y = 3) :
 
 -- Checking that we manage to split the cases/if then else
 example (x : Int) (b : Bool) (h : if b then x ≤ 0 else x ≤ 0) : x ≤ 0 := by
-  int_tac
+  int_tac +split
 
 end ScalarTac
 

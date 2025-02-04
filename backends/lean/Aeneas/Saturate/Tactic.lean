@@ -29,6 +29,7 @@ def matchExpr (nameToRule : NameMap Rule) (dtrees : Array (DiscrTree Rule))
     trace[Saturate] "Potential matches: {exprs}"
     -- Check each expression
     (exprs.foldlM fun matched rule => do
+      trace[Saturate] "Checking potential match: {rule}"
       -- Check if the theorem is still active
       if let some activeRule := nameToRule.find? rule.thName then do
         -- Check that the patterns are the same
@@ -39,25 +40,48 @@ def matchExpr (nameToRule : NameMap Rule) (dtrees : Array (DiscrTree Rule))
           let pat := rule.pattern.instantiateLevelParams info.levelParams mvarLevels
           -- Strip the binders, introduce meta-variables at the same time, and match
           let (mvars, _, pat) ← lambdaMetaTelescope pat (some rule.numBinders)
-          if ← isDefEq pat e then
-            -- It matched! Check the variables which appear in the arguments
-            let (args, allFVars) ← mvars.foldrM (fun arg (args, hs) => do
-                let arg ← instantiateMVars arg
-                let hs ← getFVarIds arg hs
-                pure (arg :: args, hs)
-              ) ([], Std.HashSet.empty)
-            if boundVars.all (fun fvar => ¬ allFVars.contains fvar) then
-              -- Ok: save the theorem
-              trace[Saturate] "Matched with: {rule.thName} {args}"
-              pure (matched.insert (rule.thName, args))
+          trace[Saturate] "Checking if defEq:\n- pat: {pat}\n- expression: {e}"
+          let pat_ty ← inferType pat
+          let e_ty ← inferType e
+          /- Small issue here: we use big integer constants and we have several patterns which
+             are just a variable (for instance: `UScalar.bounds`). Because `isDefEq` first
+             starts by unifying the expressions themselves (without looking at their type) we
+             often end up attempting to unify every expression in the context with variables
+             of type, e.g., `UScalar _`. The issue is that, if we attempt to unify an expression
+             like `1000` with `?x : UScalar ?ty`, Lean will lanch a "max recursion depth" exception
+             when attempting to reduce `1000` to `succ succ ...`. The current workaround is to
+             first check whether the types are definitionally equal, then compare the expressions
+             themselves. This way, in the case above we would not even compare `1000` with `?x`
+             because `ℕ` wouldn't match `UScalar ?ty`.
+
+             TODO: it would probably be more efficient to have a specific treatment of degenerate
+             patterns, for instance by using the types as the keys in the discrimination trees.
+           -/
+          if ← isDefEq pat_ty e_ty then
+            if ← isDefEq pat e then
+              trace[Saturate] "defEq"
+              -- It matched! Check the variables which appear in the arguments
+              let (args, allFVars) ← mvars.foldrM (fun arg (args, hs) => do
+                  let arg ← instantiateMVars arg
+                  let hs ← getFVarIds arg hs
+                  pure (arg :: args, hs)
+                ) ([], Std.HashSet.empty)
+              if boundVars.all (fun fvar => ¬ allFVars.contains fvar) then
+                -- Ok: save the theorem
+                trace[Saturate] "Matched with: {rule.thName} {args}"
+                pure (matched.insert (rule.thName, args))
+              else
+                -- Ignore
+                trace[Saturate] "Didn't match"
+                pure matched
             else
-              -- Ignore
+              -- Didn't match, leave the set of matches unchanged
               trace[Saturate] "Didn't match"
               pure matched
           else
             -- Didn't match, leave the set of matches unchanged
-            trace[Saturate] "Didn't match"
-            pure matched
+              trace[Saturate] "Types didn't match"
+              pure matched
         else
           -- The rule is not active
           trace[Saturate] "The rule is not active"

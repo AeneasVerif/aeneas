@@ -10,8 +10,14 @@ open Lean Lean.Elab Lean.Meta
 open Std
 
 def scalarTacSimpLemmas :=
-  [``Scalar.ofInt_val_eq, ``Scalar.neq_to_neq_val,
-   ``Scalar.lt_equiv, ``Scalar.le_equiv, ``Scalar.eq_equiv]
+  [``UScalar.ofNat_val_eq, ``UScalar.neq_to_neq_val,
+   ``IScalar.ofInt_val_eq, ``IScalar.neq_to_neq_val,
+   ``UScalar.bv_toNat_eq,
+   ``U8.bv_toNat_eq, ``U16.bv_toNat_eq, ``U32.bv_toNat_eq, ``U64.bv_toNat_eq, ``U128.bv_toNat_eq, ``Usize.bv_toNat_eq,
+   ``IScalar.bv_toInt_eq,
+   ``I8.bv_toInt_eq, ``I16.bv_toInt_eq, ``I32.bv_toInt_eq, ``I64.bv_toInt_eq, ``I128.bv_toInt_eq, ``Isize.bv_toInt_eq,
+   ``UScalar.lt_equiv, ``UScalar.le_equiv, ``UScalar.eq_equiv,
+   ``IScalar.lt_equiv, ``IScalar.le_equiv, ``IScalar.eq_equiv]
 
 def scalarTacExtraPrePreprocess : Tactic.TacticM Unit :=
   Tactic.withMainContext do
@@ -33,26 +39,22 @@ def scalarTacExtraPreprocess : Tactic.TacticM Unit := do
   let add (e : Expr) : Tactic.TacticM Unit := do
     let ty ← inferType e
     let _ ← Utils.addDeclTac (← Utils.mkFreshAnonPropUserName) e ty (asLet := false)
-  add (← mkAppM ``Scalar.cMin_bound #[.const ``ScalarTy.Isize []])
-  add (← mkAppM ``Scalar.cMax_bound #[.const ``ScalarTy.Usize []])
-  add (← mkAppM ``Scalar.cMax_bound #[.const ``ScalarTy.Isize []])
+  add (← mkAppM ``IScalar.cMin_bound #[.const ``IScalarTy.Isize []])
+  add (← mkAppM ``UScalar.cMax_bound #[.const ``UScalarTy.Usize []])
+  add (← mkAppM ``IScalar.cMax_bound #[.const ``IScalarTy.Isize []])
   Utils.simpAt true {failIfUnchanged := false}
                -- Simprocs
                intTacSimpRocs
                -- Unfoldings
-               [``Scalar.min, ``Scalar.max, ``Scalar.cMin, ``Scalar.cMax,
+               [``IScalar.min, ``UScalar.max, ``IScalar.max, ``IScalar.cMin, ``UScalar.cMax, ``IScalar.cMax,
                 ``I8.min, ``I16.min, ``I32.min, ``I64.min, ``I128.min,
                 ``I8.max, ``I16.max, ``I32.max, ``I64.max, ``I128.max,
-                ``U8.min, ``U16.min, ``U32.min, ``U64.min, ``U128.min,
                 ``U8.max, ``U16.max, ``U32.max, ``U64.max, ``U128.max,
-                ``Usize.min,
-                ``Scalar.in_bounds,
-                ``Scalar.toNat, ``Isize.toNat, ``USize.toNat,
-                ``I8.toNat, ``I16.toNat, ``I32.toNat, ``I64.toNat, ``I128.toNat,
-                ``U8.toNat, ``U16.toNat, ``U32.toNat, ``U64.toNat, ``U128.toNat,
-                ``U8.unsigned_ofNat_toNat, ``U16.unsigned_ofNat_toNat,
-                ``U32.unsigned_ofNat_toNat, ``U64.unsigned_ofNat_toNat,
-                ``U128.unsigned_ofNat_toNat, ``Usize.unsigned_ofNat_toNat,
+                ``UScalar.inBounds, ``IScalar.inBounds,
+                ``Isize.toNat, ``I8.toNat, ``I16.toNat, ``I32.toNat, ``I64.toNat, ``I128.toNat,
+                ``U8.ofNat_val_eq, ``U16.ofNat_val_eq,
+                ``U32.ofNat_val_eq, ``U64.ofNat_val_eq,
+                ``U128.ofNat_val_eq, ``Usize.ofNat_val_eq,
                 ]
                 -- Simp lemmas
                 scalarTacSimpLemmas
@@ -64,22 +66,28 @@ elab "scalar_tac_preprocess" : tactic =>
   intTacPreprocess scalarTacExtraPrePreprocess scalarTacExtraPreprocess
 
 -- A tactic to solve linear arithmetic goals in the presence of scalars
-def scalarTac (splitAllDisjs splitGoalConjs : Bool) : Tactic.TacticM Unit := do
-  intTac "scalar_tac" splitAllDisjs splitGoalConjs scalarTacExtraPrePreprocess scalarTacExtraPreprocess
+def scalarTac (config : Config) : Tactic.TacticM Unit := do
+  intTac "scalar_tac" config scalarTacExtraPrePreprocess scalarTacExtraPreprocess
 
-elab "scalar_tac" : tactic =>
-  scalarTac true false
+elab "scalar_tac" config:Parser.Tactic.optConfig : tactic => do
+  let config ← elabConfig config
+  scalarTac config
 
 @[scalar_tac x]
-theorem Scalar.bounds {ty : ScalarTy} (x : Scalar ty) :
-  Scalar.min ty ≤ x.val ∧ x.val ≤ Scalar.max ty :=
-  And.intro x.hmin x.hmax
+theorem UScalar.bounds {ty : UScalarTy} (x : UScalar ty) :
+  x.val ≤ UScalar.max ty :=
+  x.hBounds
 
-example (x _y : U32) : x.val ≤ Scalar.max ScalarTy.U32 := by
+@[scalar_tac x]
+theorem IScalar.bounds {ty : IScalarTy} (x : IScalar ty) :
+  IScalar.min ty ≤ x.val ∧ x.val ≤ IScalar.max ty :=
+  x.hBounds
+
+example (x _y : U32) : x.val ≤ UScalar.max .U32 := by
   scalar_tac_preprocess
   simp [*]
 
-example (x _y : U32) : x.val ≤ Scalar.max ScalarTy.U32 := by
+example (x _y : U32) : x.val ≤ UScalar.max .U32 := by
   scalar_tac
 
 -- Checking that we explore the goal *and* projectors correctly
@@ -87,16 +95,16 @@ example (x : U32 × U32) : 0 ≤ x.fst.val := by
   scalar_tac
 
 -- Checking that we properly handle [ofInt]
-example : (U32.ofInt 1).val ≤ U32.max := by
+example : (U32.ofNat 1).val ≤ U32.max := by
   scalar_tac
 
-example (x : Int) (h0 : 0 ≤ x) (h1 : x ≤ U32.max) :
-  (U32.ofIntCore x (by constructor <;> scalar_tac)).val ≤ U32.max := by
+example (x : Nat) (h1 : x ≤ U32.max) :
+  (U32.ofNatCore x (by scalar_tac)).val ≤ U32.max := by
   scalar_tac_preprocess
   scalar_tac
 
 -- Not equal
-example (x : U32) (h0 : ¬ x = U32.ofInt 0) : 0 < x.val := by
+example (x : U32) (h0 : ¬ x = U32.ofNat 0) : 0 < x.val := by
   scalar_tac
 
 /- See this: https://aeneas-verif.zulipchat.com/#narrow/stream/349819-general/topic/U64.20trouble/near/444049757
@@ -106,13 +114,13 @@ example (x : U32) (h0 : ¬ x = U32.ofInt 0) : 0 < x.val := by
    However, after testing, we noticed we could only apply such a lemma with
    the rewriting tactic (not the simplifier), probably because of the use
    of typeclasses. -/
-example {u: U64} (h1: (u : Int) < 2): (u : Int) = 0 ∨ (u : Int) = 1 := by
+example {u: U64} (h1: (u : Nat) < 2): (u : Nat) = 0 ∨ (u : Nat) = 1 := by
   scalar_tac
 
 example (x : I32) : -100000000000 < x.val := by
   scalar_tac
 
-example : (Usize.ofInt 2).val ≠ 0 := by
+example : (Usize.ofNat 2).val ≠ 0 := by
   scalar_tac
 
 example (x y : Nat) (z : Int) (h : Int.subNatNat x y + z = 0) : (x : Int) - (y : Int) + z = 0 := by
@@ -120,10 +128,19 @@ example (x y : Nat) (z : Int) (h : Int.subNatNat x y + z = 0) : (x : Int) - (y :
   omega
 
 example (x : U32) (h : 16 * x.val ≤ U32.max) :
-  4 * (U32.ofInt (4 * x.val) (by scalar_tac)).val ≤ U32.max := by
+  4 * (U32.ofNat (4 * x.val) (by scalar_tac)).val ≤ U32.max := by
   scalar_tac
 
 example (b : Bool) (x y : Int) (h : if b then P ∧ x + y < 3 else x + y < 4) : x + y < 5 := by
+  scalar_tac +split
+
+open Utils
+
+/- Some tests which introduce big constants (those sometimes cause issues when reducing expressions) -/
+example (x y : Nat) (h : x = y + 2^32) : 0 ≤ x := by
+  scalar_tac
+
+example (x y : Nat) (h : x = y - 2^32) : 0 ≤ x := by
   scalar_tac
 
 example
@@ -145,7 +162,7 @@ example
   (c3 : U8)
   (_ : c3.val = c1u.val + c2u.val):
   c3.val ≤ 1 := by
-  scalar_tac
+  scalar_tac +split
 
 end ScalarTac
 
