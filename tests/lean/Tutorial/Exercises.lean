@@ -188,22 +188,20 @@ end
    Source: 'src/lib.rs', lines 107:0-116:1 -/
 divergent def list_nth_mut1_loop
   {T : Type} (l : CList T) (i : U32) :
-  Result (T × (T → Result (CList T)))
+  Result (T × (T → CList T))
   :=
   match l with
   | CList.CCons x tl =>
     if i = 0#u32
     then
-      let back := fun ret => Result.ok (CList.CCons ret tl)
+      let back := fun ret => CList.CCons ret tl
       Result.ok (x, back)
     else
       do
       let i1 ← i - 1#u32
       let (t, back) ← list_nth_mut1_loop tl i1
       let back1 :=
-        fun ret => do
-                   let tl1 ← back ret
-                   Result.ok (CList.CCons x tl1)
+        fun ret => CList.CCons x (back ret)
       Result.ok (t, back1)
   | CList.CNil => Result.fail .panic
 
@@ -212,7 +210,7 @@ divergent def list_nth_mut1_loop
 @[reducible]
 def list_nth_mut1
   {T : Type} (l : CList T) (i : U32) :
-  Result (T × (T → Result (CList T)))
+  Result (T × (T → CList T))
   :=
   list_nth_mut1_loop l i
 
@@ -456,7 +454,7 @@ theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
   ∃ x back, list_nth_mut1 l i = ok (x, back) ∧
   x = l.toList.index i.toNat ∧
   -- Specification of the backward function
-  ∀ x', ∃ l', back x' = ok l' ∧ l'.toList = l.toList.update i.toNat x' := by
+  ∀ x', (back x').toList = l.toList.update i.toNat x' := by
   rw [list_nth_mut1, list_nth_mut1_loop]
   sorry
 
@@ -464,25 +462,23 @@ theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
    Source: 'src/lib.rs', lines 118:0-123:1 -/
 divergent def list_tail_loop
   {T : Type} (l : CList T) :
-  Result ((CList T) × (CList T → Result (CList T)))
+  Result ((CList T) × (CList T → CList T))
   :=
   match l with
   | CList.CCons t tl =>
     do
     let (c, back) ← list_tail_loop tl
     let back1 :=
-      fun ret => do
-                 let tl1 ← back ret
-                 Result.ok (CList.CCons t tl1)
+      fun ret => CList.CCons t (back ret)
     Result.ok (c, back1)
-  | CList.CNil => Result.ok (CList.CNil, Result.ok)
+  | CList.CNil => Result.ok (CList.CNil, fun ret => ret)
 
 /- [tutorial::list_tail]:
    Source: 'src/lib.rs', lines 118:0-118:68 -/
 @[reducible]
 def list_tail
   {T : Type} (l : CList T) :
-  Result ((CList T) × (CList T → Result (CList T)))
+  Result ((CList T) × (CList T → CList T))
   :=
   list_tail_loop l
 
@@ -492,13 +488,14 @@ def append_in_place
   {T : Type} (l0 : CList T) (l1 : CList T) : Result (CList T) :=
   do
   let (_, list_tail_back) ← list_tail l0
-  list_tail_back l1
+  Result.ok (list_tail_back l1)
+
 
 /-- Theorem about `list_tail`: exercise -/
 @[pspec]
 theorem list_tail_spec {T : Type} (l : CList T) :
   ∃ back, list_tail l = ok (CList.CNil, back) ∧
-  ∀ tl', ∃ l', back tl' = ok l' ∧ l'.toList = l.toList ++ tl'.toList := by
+  ∀ tl', (back tl').toList = l.toList ++ tl'.toList := by
   rw [list_tail, list_tail_loop]
   sorry
 
