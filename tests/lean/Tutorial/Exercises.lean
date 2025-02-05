@@ -188,7 +188,7 @@ end
    Source: 'src/lib.rs', lines 107:0-116:1 -/
 divergent def list_nth_mut1_loop
   {T : Type} (l : CList T) (i : U32) :
-  Result (T × (T → (CList T)))
+  Result (T × (T → CList T))
   :=
   match l with
   | CList.CCons x tl =>
@@ -210,7 +210,7 @@ divergent def list_nth_mut1_loop
 @[reducible]
 def list_nth_mut1
   {T : Type} (l : CList T) (i : U32) :
-  Result (T × (T → (CList T)))
+  Result (T × (T → CList T))
   :=
   list_nth_mut1_loop l i
 
