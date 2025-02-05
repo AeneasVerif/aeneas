@@ -463,16 +463,18 @@ theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
     split
     case isTrue i_zero => simp [(Scalar.eq_equiv i 0#u32).mp i_zero]
     case isFalse i_nzero =>
-      progress as ⟨i1⟩
-      progress as ⟨get, set⟩
-      simp
+      have:= @U32.sub_spec i 1#u32 (by scalar_tac)
+      have⟨i1, i1_st, i1_post⟩ := this
+      simp [i1_st, i1_post]
+      rw[<-list_nth_mut1]
+      have:= list_nth_mut1_spec tl i1 -- Induction
+      have⟨get, set, st, post⟩ := this (by scalar_tac)
+      simp [st, post]
       have: ↑i = ↑i1 + (1 : Int) := by scalar_tac
       split_conjs
       · simp [this]
-        assumption
       · rename_i i1_i_pred prev_get prev_set
         simp [this]
-        assumption
 
 
 /- [tutorial::list_tail]: loop 0:
@@ -515,9 +517,10 @@ theorem list_tail_spec {T : Type} (l : CList T) :
   ∀ tl', (back tl').toList = l.toList ++ tl'.toList := by
   rw [list_tail, list_tail_loop]
   split
-  · progress as ⟨back, back_h⟩
-    simp
-    assumption
+  · rename_i tl
+    rw [<-list_tail]
+    have⟨back, back_st, post⟩:= list_tail_spec tl
+    simp [back_st,post]
   · simp
 
 /-- Theorem about `append_in_place`: exercise -/
@@ -526,9 +529,13 @@ theorem append_in_place_spec {T : Type} (l0 l1 : CList T) :
   ∃ l2, append_in_place l0 l1 = ok l2 ∧
   l2.toList = l0.toList ++ l1.toList := by
   rw [append_in_place]
-  progress as ⟨fst, list_tail_back⟩
-  apply list_tail_back
-  -- TODO: Walk through the proof!
+  have := list_tail_spec l0
+  have⟨back, st, post⟩ := this
+  simp only [st, post]
+  simp
+  apply post
+  /- progress as ⟨back, back_post⟩ -/
+  /- apply back_post -/
 
 /- [tutorial::reverse]: loop 0:
    Source: 'src/lib.rs', lines 147:4-154:1 -/
@@ -541,10 +548,14 @@ divergent def reverse_loop
 @[pspec]
 theorem reverse_loop_spec {T : Type} (l : CList T) (out : CList T) :
   ∃ l', reverse_loop l out = ok l' ∧
-  True -- Leaving the post-condition as an exercise
+  l'.toList = l.toList.reverse ++ out.toList -- Leaving the post-condition as an exercise
   := by
   rw [reverse_loop]
-  sorry
+  split <;> simp
+  apply reverse_loop_spec -- Induction!
+  /- case h_1 hd tl => -/
+  /-   have := reverse_loop_spec tl (CCons hd out) -/
+  /-   assumption -/
 
 /- [tutorial::reverse]:
    Source: 'src/lib.rs', lines 146:0-154:1 -/
@@ -553,10 +564,13 @@ def reverse {T : Type} (l : CList T) : Result (CList T) :=
 
 theorem reverse_spec {T : Type} (l : CList T) :
   ∃ l', reverse l = ok l' ∧
-  True -- Leaving the post-condition as an exercise
-  := by
+  l'.toList = l.toList.reverse -- Leaving the post-condition as an exercise
+  := 
+  by
   rw [reverse]
-  sorry
+  have:= reverse_loop_spec l CNil
+  simp at this
+  assumption
 
 /-
   # BIG NUMBERS
