@@ -471,10 +471,9 @@ theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
       · simp [this]
         assumption
       · rename_i i1_i_pred prev_get prev_set
-        intro
-        progress as ⟨tl1, ih⟩
         simp [this]
         assumption
+
 
 /- [tutorial::list_tail]: loop 0:
    Source: 'src/lib.rs', lines 118:0-123:1 -/
@@ -518,9 +517,7 @@ theorem list_tail_spec {T : Type} (l : CList T) :
   split
   · progress as ⟨back, back_h⟩
     simp
-    intro
-    progress as ⟨tl1⟩
-    simp; assumption
+    assumption
   · simp
 
 /-- Theorem about `append_in_place`: exercise -/
