@@ -276,7 +276,7 @@ example α (n : Nat) (x y : α) (l0 l1 l2 : List α)
   (h1 : l2 = y :: l1)
   (h2 : l0.length = n) :
   l2.length = n + 2 := by
-  sorry
+    simp [h0,h1,h2]
 
 /- The `simp` tactic is quite flexible: -/
 example α (a b c d e : α) (h0 : a = b) (h1 : b = c) (h2 : c = d) (h3 : d = e) : a = e := by
@@ -322,7 +322,8 @@ example (a b c : Prop) (h0 : a → b → c) (h1 : a) (h2 : b) : c := by
 /- Your turn! -/
 example (a b c d : Prop) (h0 : a → b → c) (h1 : c → d → e)
   (ha : a) (hb : b) (hd : d) : e := by
-  sorry
+    apply h1 <;> try assumption
+    apply h0 <;> try assumption
 
 /- You can apply a simplification lemma the other way around: -/
 example α (a b c : α) (h0 : a = b) (h1 : b = c) : a = c := by
@@ -458,7 +459,24 @@ theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
   -- Specification of the backward function
   ∀ x', ∃ l', back x' = ok l' ∧ l'.toList = l.toList.update i.toNat x' := by
   rw [list_nth_mut1, list_nth_mut1_loop]
-  sorry
+  cases l <;> try scalar_tac
+  case CCons hd tl =>
+    simp
+    split
+    case isTrue i_zero => simp [(Scalar.eq_equiv i 0#u32).mp i_zero]
+    case isFalse i_nzero =>
+      progress as ⟨i1⟩
+      progress as ⟨get, set⟩
+      simp
+      have: ↑i = ↑i1 + (1 : Int) := by scalar_tac
+      split_conjs
+      · simp [this]
+        assumption
+      · rename_i i1_i_pred prev_get prev_set
+        intro
+        progress as ⟨tl1, ih⟩
+        simp [this]
+        assumption
 
 /- [tutorial::list_tail]: loop 0:
    Source: 'src/lib.rs', lines 118:0-123:1 -/
@@ -500,7 +518,13 @@ theorem list_tail_spec {T : Type} (l : CList T) :
   ∃ back, list_tail l = ok (CList.CNil, back) ∧
   ∀ tl', ∃ l', back tl' = ok l' ∧ l'.toList = l.toList ++ tl'.toList := by
   rw [list_tail, list_tail_loop]
-  sorry
+  split
+  · progress as ⟨back, back_h⟩
+    simp
+    intro
+    progress as ⟨tl1⟩
+    simp; assumption
+  · simp
 
 /-- Theorem about `append_in_place`: exercise -/
 @[pspec]
@@ -508,7 +532,9 @@ theorem append_in_place_spec {T : Type} (l0 l1 : CList T) :
   ∃ l2, append_in_place l0 l1 = ok l2 ∧
   l2.toList = l0.toList ++ l1.toList := by
   rw [append_in_place]
-  sorry
+  progress as ⟨fst, list_tail_back⟩
+  apply list_tail_back
+  -- TODO: Walk through the proof!
 
 /- [tutorial::reverse]: loop 0:
    Source: 'src/lib.rs', lines 147:4-154:1 -/
