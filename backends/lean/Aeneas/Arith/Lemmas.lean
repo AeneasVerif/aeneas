@@ -5,6 +5,22 @@ import Mathlib.RingTheory.Int.Basic
 
 namespace Aeneas.Arith
 
+theorem Int.self_le_ediv {x y : ℤ} (hx : x ≤ 0) (hy : 0 ≤ y) :
+  x ≤ x / y := by
+  dcases x <;> dcases y
+  . simp_all
+  . simp_all
+  . rename_i x y
+    rw [HDiv.hDiv, instHDiv]
+    simp only [Div.div]
+    rw [Int.ediv.eq_def]
+    dcases y <;> simp only
+    . omega
+    . rename_i y
+      have := @Nat.div_le_self x y.succ
+      omega
+  . simp_all
+
 @[nonlin_scalar_tac n % m]
 theorem Int.emod_of_pos_disj (n m : Int) : m ≤ 0 ∨ (0 ≤ n % m ∧ n % m < m) := by
   if h: 0 < m then
@@ -41,6 +57,29 @@ section
   example (x y : Int) (h : 0 ≤ x ∧ 0 ≤ y) : 0 ≤ x / y := by scalar_tac
 
 end
+
+theorem Int.le_div_eq_bound_imp_eq {x y bound : Int}
+  (hx : 0 < x) (hBound : x ≤ bound) (hy : 0 < y) (hEq : x / y = bound) :
+  x = bound ∧ y = 1 := by
+  have hx : x = bound := by
+    by_contra
+    have : x < bound := by omega
+    have := @Int.ediv_le_self x y (by omega)
+    omega
+  have hy : y = 1 := by
+    by_contra
+    have hLe := @Nat.div_le_div x.toNat bound.toNat y.toNat 2 (by omega) (by omega) (by simp)
+    zify at hLe
+    have : x.toNat = x := by omega
+    rw [this] at hLe
+    have : y.toNat = y := by omega
+    rw [this] at hLe
+    have : bound.toNat = bound := by omega
+    rw [this] at hLe
+    have : bound / 2 < bound := by
+      rw [Int.ediv_lt_iff_lt_mul] <;> omega
+    omega
+  simp [hx, hy]
 
 /-!
 We list here a few arithmetic facts that are not in Mathlib.
