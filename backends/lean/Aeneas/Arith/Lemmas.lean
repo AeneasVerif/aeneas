@@ -3,7 +3,7 @@ import Aeneas.ScalarTac.ScalarTac
 import Mathlib.Algebra.Algebra.ZMod
 import Mathlib.RingTheory.Int.Basic
 
-namespace Aeneas.ScalarTac
+namespace Aeneas.Arith
 
 @[nonlin_scalar_tac n % m]
 theorem Int.emod_of_pos_disj (n m : Int) : m ≤ 0 ∨ (0 ≤ n % m ∧ n % m < m) := by
@@ -150,11 +150,21 @@ theorem ZMod_int_cast_eq_int_cast_iff (n : ℕ) (a b : ℤ) :
   ((a : ZMod n) = (b : ZMod n)) ↔ (a % n = b % n) :=
   ZMod.intCast_eq_intCast_iff a b n
 
+theorem eq_mod_iff_eq_ZMod (n : ℕ) (a b : ℤ) :
+  (a % n = b % n) ↔ ((a : ZMod n) = (b : ZMod n)) := by
+  rw [ZMod.intCast_eq_intCast_iff a b n]
+  tauto
+
 /-- The important theorem to convert a goal about equality modulo into a goal about the equalit of two terms in `ZMod` -/
 theorem ZMod_eq_imp_mod_eq {n : ℕ} {a b : ℤ}
   (h : (a : ZMod n) = (b : ZMod n)) :
   a % n = b % n :=
   (@ZMod_int_cast_eq_int_cast_iff n a b).mp h
+
+-- TODO: restrict the set of theorems used by `simp`, do more things, etc.
+macro "zmodify" : tactic =>
+  `(tactic |
+    (apply ZMod_eq_imp_mod_eq; simp))
 
 theorem mod_eq_imp_ZMod_eq {n : ℕ} {a b : ℤ}
   (h : a % n = b % n) :
@@ -250,4 +260,74 @@ theorem ZMod_eq_imp_bmod_eq {n : ℕ} {a b : ℤ}
   Int.bmod a n = Int.bmod b n :=
   (@ZMod_int_cast_eq_int_cast_bmod_iff n a b).mp h
 
-end Aeneas.ScalarTac
+
+theorem ZMod.castInt_val_sub {n : ℕ} [inst: NeZero n] {a b : ZMod n} :
+  (a - b).val = (a.val - (b.val : Int)) % n := by
+  have : 0 ≤ ((a.val : Int) - (b.val : Int)) % n := by
+    apply Int.emod_nonneg
+    cases inst
+    omega
+  have : ((a.val : Int) - (b.val : Int)) % n < n := by
+    apply Int.emod_lt_of_pos
+    cases inst
+    omega
+  have := ZMod.val_add a (-b)
+  ring_nf at this
+  rw [this]
+  push_cast
+  rw [eq_mod_iff_eq_ZMod]
+  simp
+  ring_nf
+
+theorem ZMod.eq_iff_mod (p : ℕ) [NeZero p] (x y : ZMod p) :
+  x = y ↔ x.val = y.val := by
+  constructor
+  . simp +contextual
+  . apply ZMod_val_injective
+
+theorem BitVec.toNat_neq {n : ℕ} {x y : BitVec n} : x ≠ y ↔ x.toNat ≠ y.toNat := by
+  simp [BitVec.toNat_eq]
+
+/-!
+Below we mark some theorems as `zify_simps` so that `zify` can convert (in-)equalities about
+`BitVec` and `ZMod` to (in-)equalities about ℤ.
+-/
+-- TODO: those theorems should rather be "natify" (introduce a tactic)
+attribute [zify_simps] BitVec.toNat_eq BitVec.toNat_neq BitVec.lt_def BitVec.le_def
+                       BitVec.toNat_umod BitVec.toNat_add BitVec.toNat_sub BitVec.toNat_ofNat
+                       BitVec.toNat_and BitVec.toNat_or BitVec.toNat_xor
+attribute [zify_simps] ZMod.eq_iff_mod ZMod.val_intCast ZMod.val_add ZMod.val_sub ZMod.val_mul
+                       ZMod.castInt_val_sub
+
+theorem Int.bmod_pow2_eq_of_inBounds (n : ℕ) (x : Int)
+  (h0 : - 2 ^ n ≤ x)
+  (h1 : x < 2 ^ n) :
+  Int.bmod x (2 ^ (n + 1)) = x := by
+  rw [Int.bmod]
+  have hPowEq : (2^(n+1) : Int) = 2* (2^n) := by rw [Int.pow_succ']
+  have : (2^(n + 1) + 1) / 2 = (2^n : Int)  := by
+    have := @Int.add_ediv_of_dvd_left (2^(n+1)) 1 2 (by simp [hPowEq])
+    simp [this]
+    rw [hPowEq]
+    simp
+  dcases hpos : 0 ≤ x
+  . have : x % (2^(n + 1) : Int) = x := by
+      apply Int.emod_eq_of_lt <;> omega
+    simp [this]
+    omega
+  . simp at hpos
+    have : x % (2^(n + 1) : Int) = x + 2^(n + 1) := by
+      have : 0 ≤ x + 2^(n+1) := by omega
+      have : x + 2^(n+1) < 2^(n+1) := by omega
+      have := @Int.emod_eq_of_lt (x + 2^(n + 1)) (2^(n+1)) (by omega) (by omega)
+      rw [← this]
+      have := Arith.eq_mod_iff_eq_ZMod (2^(n+1))
+      simp at this
+      rw [this]
+      simp
+      norm_cast
+      simp
+    simp [this]
+    omega
+
+end Aeneas.Arith

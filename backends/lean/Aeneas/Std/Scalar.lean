@@ -1,129 +1,1151 @@
 import Aeneas.Std.ScalarCore
 import Aeneas.ScalarTac
+import Aeneas.Arith.Lemmas
 
 namespace Aeneas
 
 namespace Std
 
 open Result Error
+open Arith
 
-@[simp] theorem Scalar.unsigned_neq_zero_equiv (x : Scalar ty) (h : ¬ ty.isSigned := by decide): x.val ≠ 0 ↔ 0 < x.val := by
-  cases ty <;> simp_all <;> scalar_tac
+/-!
 
-def Scalar.neg {ty : ScalarTy} (x : Scalar ty) : Result (Scalar ty) := Scalar.tryMk ty (- x.val)
+# Primitive Operations
+## Primitive Operations: Definitions
 
--- Our custom remainder operation, which satisfies the semantics of Rust
--- TODO: is there a better way?
-def scalar_rem (x y : Int) : Int :=
-  if 0 ≤ x then x % y
-  else - (|x| % |y|)
-
-@[simp]
-def scalar_rem_nonneg {x y : Int} (hx : 0 ≤ x) : scalar_rem x y = x % y := by
-  simp [*, scalar_rem]
-
--- Our custom division operation, which satisfies the semantics of Rust
--- TODO: is there a better way?
-def scalar_div (x y : Int) : Int :=
-  if 0 ≤ x && 0 ≤ y then x / y
-  else if 0 ≤ x && y < 0 then - (|x| / |y|)
-  else if x < 0 && 0 ≤ y then - (|x| / |y|)
-  else |x| / |y|
-
-@[simp]
-def scalar_div_nonneg {x y : Int} (hx : 0 ≤ x) (hy : 0 ≤ y) : scalar_div x y = x / y := by
-  simp [*, scalar_div]
-
--- Checking that the remainder operation is correct
-#assert scalar_rem 1 2 = 1
-#assert scalar_rem (-1) 2 = -1
-#assert scalar_rem 1 (-2) = 1
-#assert scalar_rem (-1) (-2) = -1
-#assert scalar_rem 7 3 = (1:Int)
-#assert scalar_rem (-7) 3 = -1
-#assert scalar_rem 7 (-3) = 1
-#assert scalar_rem (-7) (-3) = -1
-
--- Checking that the division operation is correct
-#assert scalar_div 3 2 = 1
-#assert scalar_div (-3) 2 = -1
-#assert scalar_div 3 (-2) = -1
-#assert scalar_div (-3) (-2) = 1
-#assert scalar_div 7 3 = 2
-#assert scalar_div (-7) 3 = -2
-#assert scalar_div 7 (-3) = -2
-#assert scalar_div (-7) (-3) = 2
-
-def Scalar.div {ty : ScalarTy} (x : Scalar ty) (y : Scalar ty) : Result (Scalar ty) :=
-  if y.val != 0 then Scalar.tryMk ty (scalar_div x.val y.val) else fail divisionByZero
-
-def Scalar.rem {ty : ScalarTy} (x : Scalar ty) (y : Scalar ty) : Result (Scalar ty) :=
-  if y.val != 0 then Scalar.tryMk ty (scalar_rem x.val y.val) else fail divisionByZero
-
-def Scalar.add {ty : ScalarTy} (x : Scalar ty) (y : Scalar ty) : Result (Scalar ty) :=
-  Scalar.tryMk ty (x.val + y.val)
-
-def Scalar.sub {ty : ScalarTy} (x : Scalar ty) (y : Scalar ty) : Result (Scalar ty) :=
-  Scalar.tryMk ty (x.val - y.val)
-
-def Scalar.mul {ty : ScalarTy} (x : Scalar ty) (y : Scalar ty) : Result (Scalar ty) :=
-  Scalar.tryMk ty (x.val * y.val)
-
--- TODO: shift left
-def Scalar.shiftl {ty0 ty1 : ScalarTy} (x : Scalar ty0) (y : Scalar ty1) : Result (Scalar ty0) :=
-  sorry
-
--- TODO: shift right
-def Scalar.shiftr {ty0 ty1 : ScalarTy} (x : Scalar ty0) (y : Scalar ty1) : Result (Scalar ty0) :=
-  sorry
-
--- TODO: xor
-def Scalar.xor {ty : ScalarTy} (x : Scalar ty) (y : Scalar ty) : Scalar ty :=
-  sorry
-
--- TODO: and
-def Scalar.and {ty : ScalarTy} (x : Scalar ty) (y : Scalar ty) : Scalar ty :=
-  sorry
-
--- TODO: or
-def Scalar.or {ty : ScalarTy} (x : Scalar ty) (y : Scalar ty) : Scalar ty :=
-  sorry
-
-/- ¬ x reverses the bits of x
-
-   It has the following effect:
-   - if x is unsigned, then it evaluates to Scalar.max - x
-   - otherwise, it evalutes to -1 - x
 -/
-def Scalar.not {ty : ScalarTy} (x : Scalar ty) : Scalar ty :=
-  match ty with
-  -- Unsigned cases
-  | .U8 => @Scalar.mk ScalarTy.U8 (U8.max - x.val) (by scalar_tac) (by scalar_tac)
-  | .U16 => @Scalar.mk ScalarTy.U16 (U16.max - x.val) (by scalar_tac) (by scalar_tac)
-  | .U32 => @Scalar.mk ScalarTy.U32 (U32.max - x.val) (by scalar_tac) (by scalar_tac)
-  | .U64 => @Scalar.mk ScalarTy.U64 (U64.max - x.val) (by scalar_tac) (by scalar_tac)
-  | .U128 => @Scalar.mk ScalarTy.U128 (U128.max - x.val) (by scalar_tac) (by scalar_tac)
-  | .Usize => @Scalar.mk ScalarTy.Usize (Usize.max - x.val) (by scalar_tac) (by scalar_tac)
-  -- Signed cases
-  | .I8 => @Scalar.mk ScalarTy.I8 (-1 - x.val) (by scalar_tac) (by scalar_tac)
-  | .I16 => @Scalar.mk ScalarTy.I16 (-1 - x.val) (by scalar_tac) (by scalar_tac)
-  | .I32 => @Scalar.mk ScalarTy.I32 (-1 - x.val) (by scalar_tac) (by scalar_tac)
-  | .I64 => @Scalar.mk ScalarTy.I64 (-1 - x.val) (by scalar_tac) (by scalar_tac)
-  | .I128 => @Scalar.mk ScalarTy.I128 (-1 - x.val) (by scalar_tac) (by scalar_tac)
-  | .Isize => @Scalar.mk ScalarTy.Isize (-1 - x.val)
-      (by have := Isize.bounds_eq; scalar_tac)
-      (by have := Isize.bounds_eq; scalar_tac)
 
--- Cast an integer from a [src_ty] to a [tgt_ty]
+/-!
+The scalar division/modulo on signed machine integers 't'runcates towards 0, meaning it is
+implemented by the `Int.tdiv`, `Int.tmod`, etc. definitions.
+-/
+
+namespace Tests
+  -- Checking that the division over signed integers agrees with Rust
+  #assert Int.tdiv 3 2 = 1
+  #assert Int.tdiv (-3) 2 = -1
+  #assert Int.tdiv 3 (-2) = -1
+  #assert Int.tdiv (-3) (-2) = 1
+  #assert Int.tdiv 7 3 = 2
+  #assert Int.tdiv (-7) 3 = -2
+  #assert Int.tdiv 7 (-3) = -2
+  #assert Int.tdiv (-7) (-3) = 2
+
+  -- Checking that the signed division over bit-vectors agrees with Rust
+  private def bv_sdiv (x y : Int) : Int :=
+    (BitVec.sdiv (BitVec.ofInt 32 x) (BitVec.ofInt 32 y)).toInt
+
+  #assert bv_sdiv 3 2 = 1
+  #assert bv_sdiv (-3) 2 = -1
+  #assert bv_sdiv 3 (-2) = -1
+  #assert bv_sdiv (-3) (-2) = 1
+  #assert bv_sdiv 7 3 = 2
+  #assert bv_sdiv (-7) 3 = -2
+  #assert bv_sdiv 7 (-3) = -2
+  #assert bv_sdiv (-7) (-3) = 2
+
+  -- Checking that the remainder over signed integers agrees with Rust
+  #assert Int.tmod 1 2 = 1
+  #assert Int.tmod (-1) 2 = -1
+  #assert Int.tmod 1 (-2) = 1
+  #assert Int.tmod (-1) (-2) = -1
+  #assert Int.tmod 7 3 = (1:Int)
+  #assert Int.tmod (-7) 3 = -1
+  #assert Int.tmod 7 (-3) = 1
+  #assert Int.tmod (-7) (-3) = -1
+
+  -- Checking that the signed operation over bit-vectors agrees with Rust
+  private def bv_srem (x y : Int) : Int :=
+    (BitVec.srem (BitVec.ofInt 32 x) (BitVec.ofInt 32 y)).toInt
+
+  #assert bv_srem 1 2 = 1
+  #assert bv_srem (-1) 2 = -1
+  #assert bv_srem 1 (-2) = 1
+  #assert bv_srem (-1) (-2) = -1
+  #assert bv_srem 7 3 = (1:Int)
+  #assert bv_srem (-7) 3 = -1
+  #assert bv_srem 7 (-3) = 1
+  #assert bv_srem (-7) (-3) = -1
+end Tests
+
+/-!
+Addition
+-/
+def UScalar.add {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
+  UScalar.tryMk ty (x.val + y.val)
+
+def IScalar.add {ty : IScalarTy} (x y : IScalar ty) : Result (IScalar ty) :=
+  IScalar.tryMk ty (x.val + y.val)
+
+instance {ty} : HAdd (UScalar ty) (UScalar ty) (Result (UScalar ty)) where
+  hAdd x y := UScalar.add x y
+
+instance {ty} : HAdd (IScalar ty) (IScalar ty) (Result (IScalar ty)) where
+  hAdd x y := IScalar.add x y
+
+/-!
+Subtraction
+-/
+def UScalar.sub {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
+  if x.val < y.val then fail .integerOverflow
+  else ok ⟨ BitVec.ofNat _ (x.val - y.val) ⟩
+
+def IScalar.sub {ty : IScalarTy} (x y : IScalar ty) : Result (IScalar ty) :=
+  IScalar.tryMk ty (x.val - y.val)
+
+instance {ty} : HSub (UScalar ty) (UScalar ty) (Result (UScalar ty)) where
+  hSub x y := UScalar.sub x y
+
+instance {ty} : HSub (IScalar ty) (IScalar ty) (Result (IScalar ty)) where
+  hSub x y := IScalar.sub x y
+
+/-!
+Multiplication
+-/
+def UScalar.mul {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
+  UScalar.tryMk ty (x.val * y.val)
+
+def IScalar.mul {ty : IScalarTy} (x y : IScalar ty) : Result (IScalar ty) :=
+  IScalar.tryMk ty (x.val * y.val)
+
+instance {ty} : HMul (UScalar ty) (UScalar ty) (Result (UScalar ty)) where
+  hMul x y := UScalar.mul x y
+
+instance {ty} : HMul (IScalar ty) (IScalar ty) (Result (IScalar ty)) where
+  hMul x y := IScalar.mul x y
+
+/-!
+Division
+-/
+def UScalar.div {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
+  if y.bv != 0 then ok ⟨ BitVec.udiv x.bv y.bv ⟩ else fail divisionByZero
+
+def IScalar.div {ty : IScalarTy} (x y : IScalar ty): Result (IScalar ty) :=
+  if y.val != 0 then ok ⟨ BitVec.sdiv x.bv y.bv ⟩ else fail divisionByZero
+
+instance {ty} : HDiv (UScalar ty) (UScalar ty) (Result (UScalar ty)) where
+  hDiv x y := UScalar.div x y
+
+instance {ty} : HDiv (IScalar ty) (IScalar ty) (Result (IScalar ty)) where
+  hDiv x y := IScalar.div x y
+
+/-!
+Remainder
+-/
+def UScalar.rem {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
+  if y.val != 0 then ok ⟨ BitVec.umod x.bv y.bv ⟩ else fail divisionByZero
+
+def IScalar.rem {ty : IScalarTy} (x y : IScalar ty) : Result (IScalar ty) :=
+  if y.val != 0 then ok ⟨ BitVec.srem x.bv y.bv ⟩ else fail divisionByZero
+
+instance {ty} : HMod (UScalar ty) (UScalar ty) (Result (UScalar ty)) where
+  hMod x y := UScalar.rem x y
+
+instance {ty} : HMod (IScalar ty) (IScalar ty) (Result (IScalar ty)) where
+  hMod x y := IScalar.rem x y
+
+/-!
+Bit shifts
+-/
+def UScalar.shiftLeft {ty : UScalarTy} (x : UScalar ty) (s : Nat) :
+  Result (UScalar ty) :=
+  if s < ty.bitWidth then
+    ok ⟨ x.bv.shiftLeft s ⟩
+  else fail .integerOverflow
+
+def UScalar.shiftRight {ty : UScalarTy} (x : UScalar ty) (s : Nat) :
+  Result (UScalar ty) :=
+  if s < ty.bitWidth then
+    ok ⟨ x.bv.ushiftRight s ⟩
+  else fail .integerOverflow
+
+def UScalar.shiftLeft_UScalar {ty tys} (x : UScalar ty) (s : UScalar tys) :
+  Result (UScalar ty) :=
+  x.shiftLeft s.val
+
+def UScalar.shiftRight_UScalar {ty tys} (x : UScalar ty) (s : UScalar tys) :
+  Result (UScalar ty) :=
+  x.shiftRight s.val
+
+def UScalar.shiftLeft_IScalar {ty tys} (x : UScalar ty) (s : IScalar tys) :
+  Result (UScalar ty) :=
+  x.shiftLeft s.toNat
+
+def UScalar.shiftRight_IScalar {ty tys} (x : UScalar ty) (s : IScalar tys) :
+  Result (UScalar ty) :=
+  x.shiftRight s.toNat
+
+def IScalar.shiftLeft {ty : IScalarTy} (x : IScalar ty) (s : Nat) :
+  Result (IScalar ty) :=
+  if s < ty.bitWidth then
+    ok ⟨ x.bv.shiftLeft s ⟩
+  else fail .integerOverflow
+
+def IScalar.shiftRight {ty : IScalarTy} (x : IScalar ty) (s : Nat) :
+  Result (IScalar ty) :=
+  if s < ty.bitWidth then
+    ok ⟨ x.bv.sshiftRight s ⟩
+  else fail .integerOverflow
+
+def IScalar.shiftLeft_UScalar {ty tys} (x : IScalar ty) (s : UScalar tys) :
+  Result (IScalar ty) :=
+  x.shiftLeft s.val
+
+def IScalar.shiftRight_UScalar {ty tys} (x : IScalar ty) (s : UScalar tys) :
+  Result (IScalar ty) :=
+  x.shiftRight s.val
+
+def IScalar.shiftLeft_IScalar {ty tys} (x : IScalar ty) (s : IScalar tys) :
+  Result (IScalar ty) :=
+  if s.val ≥ 0 then
+    x.shiftLeft s.toNat
+  else fail .integerOverflow
+
+def IScalar.shiftRight_IScalar {ty tys} (x : IScalar ty) (s : IScalar tys) :
+  Result (IScalar ty) :=
+  if s.val ≥ 0 then
+    x.shiftRight s.toNat
+  else fail .integerOverflow
+
+instance {ty0 ty1} : HShiftLeft (UScalar ty0) (UScalar ty1) (Result (UScalar ty0)) where
+  hShiftLeft x y := UScalar.shiftLeft_UScalar x y
+
+instance {ty0 ty1} : HShiftLeft (UScalar ty0) (IScalar ty1) (Result (UScalar ty0)) where
+  hShiftLeft x y := UScalar.shiftLeft_IScalar x y
+
+instance {ty0 ty1} : HShiftLeft (IScalar ty0) (UScalar ty1) (Result (IScalar ty0)) where
+  hShiftLeft x y := IScalar.shiftLeft_UScalar x y
+
+instance {ty0 ty1} : HShiftLeft (IScalar ty0) (IScalar ty1) (Result (IScalar ty0)) where
+  hShiftLeft x y := IScalar.shiftLeft_IScalar x y
+
+instance {ty0 ty1} : HShiftRight (UScalar ty0) (UScalar ty1) (Result (UScalar ty0)) where
+  hShiftRight x y := UScalar.shiftRight_UScalar x y
+
+instance {ty0 ty1} : HShiftRight (UScalar ty0) (IScalar ty1) (Result (UScalar ty0)) where
+  hShiftRight x y := UScalar.shiftRight_IScalar x y
+
+instance {ty0 ty1} : HShiftRight (IScalar ty0) (UScalar ty1) (Result (IScalar ty0)) where
+  hShiftRight x y := IScalar.shiftRight_UScalar x y
+
+instance {ty0 ty1} : HShiftRight (IScalar ty0) (IScalar ty1) (Result (IScalar ty0)) where
+  hShiftRight x y := IScalar.shiftRight_IScalar x y
+
+/-!
+Bitwise and
+-/
+def UScalar.and {ty} (x y : UScalar ty) : UScalar ty := ⟨ x.bv &&& y.bv ⟩
+
+def IScalar.and {ty} (x y : IScalar ty) : IScalar ty := ⟨ x.bv &&& y.bv ⟩
+
+instance {ty} : HAnd (UScalar ty) (UScalar ty) (UScalar ty) where
+  hAnd x y := UScalar.and x y
+
+instance {ty} : HAnd (IScalar ty) (IScalar ty) (IScalar ty) where
+  hAnd x y := IScalar.and x y
+
+/-!
+Bitwise or
+-/
+def UScalar.or {ty} (x y : UScalar ty) : UScalar ty := ⟨ x.bv ||| y.bv ⟩
+
+def IScalar.or {ty} (x y : IScalar ty) : IScalar ty := ⟨ x.bv ||| y.bv ⟩
+
+instance {ty} : HOr (UScalar ty) (UScalar ty) (UScalar ty) where
+  hOr x y := UScalar.or x y
+
+instance {ty} : HOr (IScalar ty) (IScalar ty) (IScalar ty) where
+  hOr x y := IScalar.or x y
+
+/-!
+Xor
+-/
+def UScalar.xor {ty} (x y : UScalar ty) : UScalar ty := ⟨ x.bv ||| y.bv ⟩
+
+def IScalar.xor {ty} (x y : IScalar ty) : IScalar ty := ⟨ x.bv ||| y.bv ⟩
+
+instance {ty} : HXor (UScalar ty) (UScalar ty) (UScalar ty) where
+  hXor x y := UScalar.xor x y
+
+instance {ty} : HXor (IScalar ty) (IScalar ty) (IScalar ty) where
+  hXor x y := IScalar.xor x y
+
+/-!
+Not
+-/
+def UScalar.not {ty} (x : UScalar ty) : UScalar ty := ⟨ ~~~x.bv ⟩
+
+def IScalar.not {ty} (x : IScalar ty) : IScalar ty := ⟨ ~~~x.bv ⟩
+
+instance {ty} : Complement (UScalar ty) where
+  complement x := UScalar.not x
+
+instance {ty} : Complement (IScalar ty) where
+  complement x := IScalar.not x
+
+/-!
+Casts
+-/
 -- TODO: double-check the semantics of casts in Rust
-def Scalar.cast {src_ty : ScalarTy} (tgt_ty : ScalarTy) (x : Scalar src_ty) : Result (Scalar tgt_ty) :=
-  Scalar.tryMk tgt_ty x.val
+def UScalar.cast {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) : Result (UScalar tgt_ty) :=
+  UScalar.tryMk tgt_ty x.val
 
--- This can't fail, but for now we make all casts faillible (easier for the translation)
-def Scalar.cast_bool (tgt_ty : ScalarTy) (x : Bool) : Result (Scalar tgt_ty) :=
-  Scalar.tryMk tgt_ty (if x then 1 else 0)
+/- Heterogeneous cast -/
+def UScalar.hcast {src_ty : UScalarTy} (tgt_ty : IScalarTy) (x : UScalar src_ty) : Result (IScalar tgt_ty) :=
+  IScalar.tryMk tgt_ty x.val
 
-@[pspec]
+def IScalar.cast {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty) : Result (IScalar tgt_ty) :=
+  IScalar.tryMk tgt_ty x.val
+
+/- Heterogeneous cast -/
+def IScalar.hcast {src_ty : IScalarTy} (tgt_ty : UScalarTy) (x : IScalar src_ty) : Result (UScalar tgt_ty) :=
+  if x.val ≥ 0 then
+    UScalar.tryMk tgt_ty x.toNat
+  else fail .integerOverflow
+
+/- This can't fail, but for now we make all casts faillible (easier for the translation).
+   TODO: make it non-fallible.
+ -/
+def UScalar.cast_fromBool (ty : UScalarTy) (x : Bool) : Result (UScalar ty) :=
+  UScalar.tryMk ty (if x then 1 else 0)
+
+def IScalar.cast_fromBool (ty : IScalarTy) (x : Bool) : Result (IScalar ty) :=
+  IScalar.tryMk ty (if x then 1 else 0)
+
+/-!
+Negation
+-/
+def IScalar.neg {ty : IScalarTy} (x : IScalar ty) : Result (IScalar ty) := IScalar.tryMk ty (- x.val)
+
+/--
+The notation typeclass for heterogeneous negation.
+
+There is no heterogenous negation in the Lean prelude: we thus introduce one here.
+-/
+class HNeg (α : Type u) (β : outParam (Type v)) where
+  /-- `- a` computes the negation of `a`.
+  The meaning of this notation is type-dependent. -/
+  hNeg : α → β
+
+/- Notation for heterogeneous negation.
+
+   We initially used the notation "-" but it conflicted with the homogeneous
+   negation too much. In particular, it made terms like `-10` ambiguous,
+   and seemingly caused to backtracking in elaboration, leading to definitions
+   like arrays of constants to take an unreasonable time to get elaborated
+   and type-checked.
+
+   TODO: PR to replace Neg with HNeg in Lean?
+ -/
+prefix:75  "-."   => HNeg.hNeg
+
+/- We need this, otherwise we break pattern matching like in:
+
+   ```
+   def is_minus_one (x : Int) : Bool :=
+     match x with
+     | -1 => true
+     | _ => false
+   ```
+-/
+attribute [match_pattern] HNeg.hNeg
+
+instance {ty} : HNeg (IScalar ty) (Result (IScalar ty)) where hNeg x := IScalar.neg x
+
+/-!
+
+## Primitive Operations: Theorems
+
+-/
+
+/-- Important theorem to reason with `Int.bmod` in the proofs about `IScalar` -/
+private theorem bmod_pow_bitWidth_eq_of_lt (ty : IScalarTy) (x : Int)
+  (h0 : - 2 ^ (ty.bitWidth-1) ≤ x) (h1 : x < 2 ^ (ty.bitWidth -1)) :
+  Int.bmod x (2^ty.bitWidth) = x := by
+  have := ty.bitWidth_nonzero
+  have hEq : ty.bitWidth - 1 + 1 = ty.bitWidth := by omega
+  have := Int.bmod_pow2_eq_of_inBounds (ty.bitWidth-1) x (by omega) (by omega)
+  simp [hEq] at this
+  apply this
+
+/-!
+### Add
+-/
+
+theorem UScalar.add_equiv {ty} {x y : UScalar ty} :
+  match x + y with
+  | ok z =>
+    UScalar.inBounds ty (x.val + y.val) ∧
+    z.val = x.val + y.val ∧
+    z.bv = x.bv + y.bv
+  | fail _ => ¬ (UScalar.inBounds ty (x.val + y.val))
+  | _ => ⊥ := by
+  -- Applying the unfoldings only inside the match
+  conv in _ + _ => unfold HAdd.hAdd instHAddUScalarResult; simp [add]
+  have h := tryMk_eq ty (↑x + ↑y)
+  simp [inBounds] at h
+  split at h <;> simp_all
+  zify; simp
+  zify at h; simp [max_eq_smax, smax] at h
+  have := @Int.emod_eq_of_lt (x.val + y.val) (2^ty.bitWidth) (by omega) (by omega)
+  simp [*]
+
+theorem IScalar.add_equiv {ty} {x y : IScalar ty} :
+  match x + y with
+  | ok z =>
+    IScalar.inBounds ty (x.val + y.val) ∧
+    z.val = x.val + y.val ∧
+    z.bv = x.bv + y.bv
+  | fail _ => ¬ (IScalar.inBounds ty (x.val + y.val))
+  | _ => ⊥ := by
+  -- Applying the unfoldings only inside the match
+  conv in _ + _ => unfold HAdd.hAdd instHAddIScalarResult; simp [add]
+  have h := tryMk_eq ty (↑x + ↑y)
+  simp [inBounds] at h
+  split at h <;> simp_all
+  apply BitVec.eq_of_toInt_eq
+  simp
+  simp [bound_eq_sbound, smin, smax] at h
+  have := bmod_pow_bitWidth_eq_of_lt ty (x.val + y.val) (by omega) (by omega)
+  simp [*]
+
+/-!
+Theorems about the addition, with a specification which uses
+integers and bit-vectors.
+-/
+
+/-- Generic theorem - shouldn't be used much -/
+theorem UScalar.add_bv_spec {ty} {x y : UScalar ty}
+  (hmax : ↑x + ↑y ≤ UScalar.max ty) :
+  ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y ∧ z.bv = x.bv + y.bv := by
+  have h := @add_equiv ty x y
+  split at h <;> simp_all
+
+/-- Generic theorem - shouldn't be used much -/
+theorem IScalar.add_bv_spec {ty} {x y : IScalar ty}
+  (hmin : IScalar.min ty ≤ ↑x + ↑y)
+  (hmax : ↑x + ↑y ≤ IScalar.max ty) :
+  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y ∧ z.bv = x.bv + y.bv := by
+  have h := @add_equiv ty x y
+  split at h <;> simp_all
+
+theorem Usize.add_bv_spec {x y : Usize} (hmax : x.val + y.val ≤ Usize.max) :
+  ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y ∧ z.bv = x.bv + y.bv :=
+  UScalar.add_bv_spec hmax
+
+theorem U8.add_bv_spec {x y : U8} (hmax : x.val + y.val ≤ U8.max) :
+  ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y ∧ z.bv = x.bv + y.bv :=
+  UScalar.add_bv_spec hmax
+
+theorem U16.add_bv_spec {x y : U16} (hmax : x.val + y.val ≤ U16.max) :
+  ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y ∧ z.bv = x.bv + y.bv :=
+  UScalar.add_bv_spec hmax
+
+theorem U32.add_bv_spec {x y : U32} (hmax : x.val + y.val ≤ U32.max) :
+  ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y ∧ z.bv = x.bv + y.bv :=
+  UScalar.add_bv_spec hmax
+
+theorem U64.add_bv_spec {x y : U64} (hmax : x.val + y.val ≤ U64.max) :
+  ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y ∧ z.bv = x.bv + y.bv :=
+  UScalar.add_bv_spec hmax
+
+theorem U128.add_bv_spec {x y : U128} (hmax : x.val + y.val ≤ U128.max) :
+  ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y ∧ z.bv = x.bv + y.bv :=
+  UScalar.add_bv_spec hmax
+
+theorem Isize.add_bv_spec {x y : Isize}
+  (hmin : Isize.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ Isize.max) :
+  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y ∧ z.bv = x.bv + y.bv :=
+  IScalar.add_bv_spec hmin hmax
+
+theorem I8.add_bv_spec {x y : I8}
+  (hmin : I8.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ I8.max) :
+  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y ∧ z.bv = x.bv + y.bv :=
+  IScalar.add_bv_spec hmin hmax
+
+theorem I16.add_bv_spec {x y : I16}
+  (hmin : I16.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ I16.max) :
+  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y ∧ z.bv = x.bv + y.bv :=
+  IScalar.add_bv_spec hmin hmax
+
+theorem I32.add_bv_spec {x y : I32}
+  (hmin : I32.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ I32.max) :
+  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y ∧ z.bv = x.bv + y.bv :=
+  IScalar.add_bv_spec hmin hmax
+
+theorem I64.add_bv_spec {x y : I64}
+  (hmin : I64.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ I64.max) :
+  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y ∧ z.bv = x.bv + y.bv :=
+  IScalar.add_bv_spec hmin hmax
+
+theorem I128.add_bv_spec {x y : I128}
+  (hmin : I128.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ I128.max) :
+  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y ∧ z.bv = x.bv + y.bv :=
+  IScalar.add_bv_spec hmin hmax
+
+/-!
+Theorems about the addition, with a specification which uses
+only integers. Those are the most common to use, so we mark them with the
+`progress` attribute.
+-/
+
+/-- Generic theorem - shouldn't be used much -/
+@[progress]
+theorem UScalar.add_spec {ty} {x y : UScalar ty}
+  (hmax : ↑x + ↑y ≤ UScalar.max ty) :
+  ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y := by
+  have h := @add_equiv ty x y
+  split at h <;> simp_all
+
+/-- Generic theorem - shouldn't be used much -/
+@[progress]
+theorem IScalar.add_spec {ty} {x y : IScalar ty}
+  (hmin : IScalar.min ty ≤ ↑x + ↑y)
+  (hmax : ↑x + ↑y ≤ IScalar.max ty) :
+  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y := by
+  have h := @add_equiv ty x y
+  split at h <;> simp_all
+
+@[progress] theorem Usize.add_spec {x y : Usize} (hmax : x.val + y.val ≤ Usize.max) :
+  ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y :=
+  UScalar.add_spec hmax
+
+@[progress] theorem U8.add_spec {x y : U8} (hmax : x.val + y.val ≤ U8.max) :
+  ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y :=
+  UScalar.add_spec hmax
+
+@[progress] theorem U16.add_spec {x y : U16} (hmax : x.val + y.val ≤ U16.max) :
+  ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y :=
+  UScalar.add_spec hmax
+
+@[progress] theorem U32.add_spec {x y : U32} (hmax : x.val + y.val ≤ U32.max) :
+  ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y :=
+  UScalar.add_spec hmax
+
+@[progress] theorem U64.add_spec {x y : U64} (hmax : x.val + y.val ≤ U64.max) :
+  ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y :=
+  UScalar.add_spec hmax
+
+@[progress] theorem U128.add_spec {x y : U128} (hmax : x.val + y.val ≤ U128.max) :
+  ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y :=
+  UScalar.add_spec hmax
+
+@[progress] theorem Isize.add_spec {x y : Isize}
+  (hmin : Isize.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ Isize.max) :
+  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y :=
+  IScalar.add_spec hmin hmax
+
+@[progress] theorem I8.add_spec {x y : I8}
+  (hmin : I8.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ I8.max) :
+  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y :=
+  IScalar.add_spec hmin hmax
+
+@[progress] theorem I16.add_spec {x y : I16}
+  (hmin : I16.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ I16.max) :
+  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y :=
+  IScalar.add_spec hmin hmax
+
+@[progress] theorem I32.add_spec {x y : I32}
+  (hmin : I32.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ I32.max) :
+  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y :=
+  IScalar.add_spec hmin hmax
+
+@[progress] theorem I64.add_spec {x y : I64}
+  (hmin : I64.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ I64.max) :
+  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y :=
+  IScalar.add_spec hmin hmax
+
+@[progress] theorem I128.add_spec {x y : I128}
+  (hmin : I128.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ I128.max) :
+  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y :=
+  IScalar.add_spec hmin hmax
+
+/-!
+### Sub
+-/
+
+theorem UScalar.sub_equiv {ty} {x y : UScalar ty} :
+  match x - y with
+  | ok z =>
+    y.val ≤ x.val ∧
+    x.val = z.val + y.val ∧
+    z.bv = x.bv - y.bv
+  | fail _ => x.val < y.val
+  | _ => ⊥ := by
+  -- Applying the unfoldings only inside the match
+  conv in _ - _ => unfold HSub.hSub instHSubUScalarResult; simp [sub]
+  dcases h : x.val < y.val <;> simp [h]
+  simp_all
+  simp only [UScalar.val]
+  simp
+  split_conjs
+  . have: (x.val - y.val) % 2^ty.bitWidth = x.val - y.val := by
+      have : 0 < 2^ty.bitWidth := by simp
+      have := x.hBounds; simp [max_eq_smax, smax] at this
+      apply Nat.mod_eq_of_lt; omega
+    simp [this]
+    omega
+  . zify; simp
+    have : (x.val - y.val : Nat) = (x.val : Int) - y.val := by omega
+    rw [this]; clear this
+    ring_nf
+    rw [Int.add_emod]
+    have : ((2^ty.bitWidth - y.val) : Nat) % (2^ty.bitWidth : Int) =
+           (- (y.val : Int)) % (2^ty.bitWidth : Int) := by
+      have : (2^ty.bitWidth - y.val : Nat) = (2^ty.bitWidth : Int) - y.val := by
+        have hBounds := y.hBounds
+        simp [max_eq_smax, smax] at hBounds
+        zify at *; simp at *
+        have : (2^ty.bitWidth : Nat) = (2^ty.bitWidth : Int) := by simp
+        omega
+      rw [this]
+      -- TODO: Int.emod_sub_emod not in this version of mathlib
+      have := Int.emod_add_emod (2^ty.bitWidth) (2^ty.bitWidth) (-y.val)
+      ring_nf at this
+      ring_nf
+      rw [← this]
+      simp
+    rw [this]
+    rw [← Int.add_emod]
+    ring_nf
+
+theorem IScalar.sub_equiv {ty} {x y : IScalar ty} :
+  match x - y with
+  | ok z =>
+    IScalar.inBounds ty (x.val - y.val) ∧
+    z.val = x.val - y.val ∧
+    z.bv = x.bv - y.bv
+  | fail _ => ¬ (IScalar.inBounds ty (x.val - y.val))
+  | _ => ⊥ := by
+  -- Applying the unfoldings only inside the match
+  conv in _ - _ => unfold HSub.hSub instHSubIScalarResult; simp [sub]
+  have h := tryMk_eq ty (↑x - ↑y)
+  simp [inBounds] at h
+  split at h <;> simp_all
+  apply BitVec.eq_of_toInt_eq
+  simp
+  simp [bound_eq_sbound, smin, smax] at h
+  have := bmod_pow_bitWidth_eq_of_lt ty (x.val - y.val) (by omega) (by omega)
+  simp [*]
+
+/-!
+Theorems with a specification which uses integers and bit-vectors
+-/
+
+/- Generic theorem - shouldn't be used much -/
+theorem UScalar.sub_bv_spec {ty} {x y : UScalar ty}
+  (h : y.val ≤ x.val) :
+  ∃ z, x - y = ok z ∧ x.val = z.val + y.val ∧ z.bv = x.bv - y.bv := by
+  have h := @sub_equiv ty x y
+  split at h <;> simp_all
+  omega
+
+/- Generic theorem - shouldn't be used much -/
+theorem IScalar.sub_bv_spec {ty} {x y : IScalar ty}
+  (hmin : IScalar.min ty ≤ ↑x - ↑y)
+  (hmax : ↑x - ↑y ≤ IScalar.max ty) :
+  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y ∧ z.bv = x.bv - y.bv := by
+  have h := @sub_equiv ty x y
+  split at h <;> simp_all
+
+theorem Usize.sub_bv_spec {x y : Usize} (h : y.val ≤ x.val) :
+  ∃ z, x - y = ok z ∧ x.val = z.val + y.val ∧ z.bv = x.bv - y.bv :=
+  UScalar.sub_bv_spec h
+
+theorem U8.sub_bv_spec {x y : U8} (h : y.val ≤ x.val) :
+  ∃ z, x - y = ok z ∧ x.val = z.val + y.val ∧ z.bv = x.bv - y.bv :=
+  UScalar.sub_bv_spec h
+
+theorem U16.sub_bv_spec {x y : U16} (h : y.val ≤ x.val) :
+  ∃ z, x - y = ok z ∧ x.val = z.val + y.val ∧ z.bv = x.bv - y.bv :=
+  UScalar.sub_bv_spec h
+
+theorem U32.sub_bv_spec {x y : U32} (h : y.val ≤ x.val) :
+  ∃ z, x - y = ok z ∧ x.val = z.val + y.val ∧ z.bv = x.bv - y.bv :=
+  UScalar.sub_bv_spec h
+
+theorem U64.sub_bv_spec {x y : U64} (h : y.val ≤ x.val) :
+  ∃ z, x - y = ok z ∧ x.val = z.val + y.val ∧ z.bv = x.bv - y.bv :=
+  UScalar.sub_bv_spec h
+
+theorem U128.sub_bv_spec {x y : U128} (h : y.val ≤ x.val) :
+  ∃ z, x - y = ok z ∧ x.val = z.val + y.val ∧ z.bv = x.bv - y.bv :=
+  UScalar.sub_bv_spec h
+
+theorem Isize.sub_bv_spec {x y : Isize}
+  (hmin : Isize.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ Isize.max) :
+  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y ∧ z.bv = x.bv - y.bv :=
+  IScalar.sub_bv_spec hmin hmax
+
+theorem I8.sub_bv_spec {x y : I8}
+  (hmin : I8.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I8.max) :
+  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y ∧ z.bv = x.bv - y.bv :=
+  IScalar.sub_bv_spec hmin hmax
+
+theorem I16.sub_bv_spec {x y : I16}
+  (hmin : I16.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I16.max) :
+  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y ∧ z.bv = x.bv - y.bv :=
+  IScalar.sub_bv_spec hmin hmax
+
+theorem I32.sub_bv_spec {x y : I32}
+  (hmin : I32.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I32.max) :
+  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y ∧ z.bv = x.bv - y.bv :=
+  IScalar.sub_bv_spec hmin hmax
+
+theorem I64.sub_bv_spec {x y : I64}
+  (hmin : I64.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I64.max) :
+  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y ∧ z.bv = x.bv - y.bv :=
+  IScalar.sub_bv_spec hmin hmax
+
+theorem I128.sub_bv_spec {x y : I128}
+  (hmin : I128.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I128.max) :
+  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y ∧ z.bv = x.bv - y.bv :=
+  IScalar.sub_bv_spec hmin hmax
+
+/-!
+Theorems with a specification which only uses integers
+-/
+
+/- Generic theorem - shouldn't be used much -/
+@[progress]
+theorem UScalar.sub_spec {ty} {x y : UScalar ty}
+  (h : y.val ≤ x.val) :
+  ∃ z, x - y = ok z ∧ x.val = z.val + y.val := by
+  have h := @sub_equiv ty x y
+  split at h <;> simp_all
+  omega
+
+/- Generic theorem - shouldn't be used much -/
+@[progress]
+theorem IScalar.sub_spec {ty} {x y : IScalar ty}
+  (hmin : IScalar.min ty ≤ ↑x - ↑y)
+  (hmax : ↑x - ↑y ≤ IScalar.max ty) :
+  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y := by
+  have h := @sub_equiv ty x y
+  split at h <;> simp_all
+
+@[progress] theorem Usize.sub_spec {x y : Usize} (h : y.val ≤ x.val) :
+  ∃ z, x - y = ok z ∧ x.val = z.val + y.val :=
+  UScalar.sub_spec h
+
+@[progress] theorem U8.sub_spec {x y : U8} (h : y.val ≤ x.val) :
+  ∃ z, x - y = ok z ∧ x.val = z.val + y.val :=
+  UScalar.sub_spec h
+
+@[progress] theorem U16.sub_spec {x y : U16} (h : y.val ≤ x.val) :
+  ∃ z, x - y = ok z ∧ x.val = z.val + y.val :=
+  UScalar.sub_spec h
+
+@[progress] theorem U32.sub_spec {x y : U32} (h : y.val ≤ x.val) :
+  ∃ z, x - y = ok z ∧ x.val = z.val + y.val :=
+  UScalar.sub_spec h
+
+@[progress] theorem U64.sub_spec {x y : U64} (h : y.val ≤ x.val) :
+  ∃ z, x - y = ok z ∧ x.val = z.val + y.val :=
+  UScalar.sub_spec h
+
+@[progress] theorem U128.sub_spec {x y : U128} (h : y.val ≤ x.val) :
+  ∃ z, x - y = ok z ∧ x.val = z.val + y.val :=
+  UScalar.sub_spec h
+
+@[progress] theorem Isize.sub_spec {x y : Isize}
+  (hmin : Isize.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ Isize.max) :
+  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y :=
+  IScalar.sub_spec hmin hmax
+
+@[progress] theorem I8.sub_spec {x y : I8}
+  (hmin : I8.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I8.max) :
+  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y :=
+  IScalar.sub_spec hmin hmax
+
+@[progress] theorem I16.sub_spec {x y : I16}
+  (hmin : I16.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I16.max) :
+  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y :=
+  IScalar.sub_spec hmin hmax
+
+@[progress] theorem I32.sub_spec {x y : I32}
+  (hmin : I32.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I32.max) :
+  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y :=
+  IScalar.sub_spec hmin hmax
+
+@[progress] theorem I64.sub_spec {x y : I64}
+  (hmin : I64.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I64.max) :
+  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y :=
+  IScalar.sub_spec hmin hmax
+
+@[progress] theorem I128.sub_spec {x y : I128}
+  (hmin : I128.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I128.max) :
+  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y :=
+  IScalar.sub_spec hmin hmax
+
+/-!
+### Mul
+-/
+
+/-!
+Theorems with a specification which use integers and bit-vectors
+-/
+
+/-- Generic theorem - shouldn't be used much -/
+theorem UScalar.mul_bv_spec {ty} {x y : UScalar ty}
+  (hmax : ↑x * ↑y ≤ UScalar.max ty) :
+  ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv := by
+  conv => congr; ext; lhs; simp [HMul.hMul]
+  simp [mul, tryMk, tryMkOpt, ofOption, hmax, ofNatCore]
+  simp only [val]
+  simp
+  split_conjs
+  . simp [max_eq_smax, smax] at hmax
+    have : 0 < 2^ty.bitWidth := by simp
+    apply Nat.mod_eq_of_lt; omega
+  . zify; simp
+
+/-- Generic theorem - shouldn't be used much -/
+theorem IScalar.mul_bv_spec {ty} {x y : IScalar ty}
+  (hmin : IScalar.min ty ≤ ↑x * ↑y)
+  (hmax : ↑x * ↑y ≤ IScalar.max ty) :
+  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y ∧ z.bv = x.bv * y.bv := by
+  conv => congr; ext; lhs; simp [HMul.hMul]
+  simp [mul, tryMk, tryMkOpt, ofOption, hmin, hmax, ofIntCore]
+  simp only [val]
+  simp
+  split_conjs
+  . simp [bound_eq_sbound, smin, smax] at *
+    apply bmod_pow_bitWidth_eq_of_lt ty (x.val * y.val) (by omega) (by omega)
+  . rw [BitVec.ofInt_mul]
+    simp only [BitVec.ofInt_mul, val, BitVec.ofInt_toInt]
+
+theorem Usize.mul_bv_spec {x y : Usize} (hmax : x.val * y.val ≤ Usize.max) :
+  ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
+  UScalar.mul_bv_spec hmax
+
+theorem U8.mul_bv_spec {x y : U8} (hmax : x.val * y.val ≤ U8.max) :
+  ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
+  UScalar.mul_bv_spec hmax
+
+theorem U16.mul_bv_spec {x y : U16} (hmax : x.val * y.val ≤ U16.max) :
+  ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
+  UScalar.mul_bv_spec hmax
+
+theorem U32.mul_bv_spec {x y : U32} (hmax : x.val * y.val ≤ U32.max) :
+  ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
+  UScalar.mul_bv_spec hmax
+
+theorem U64.mul_bv_spec {x y : U64} (hmax : x.val * y.val ≤ U64.max) :
+  ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
+  UScalar.mul_bv_spec hmax
+
+theorem U128.mul_bv_spec {x y : U128} (hmax : x.val * y.val ≤ U128.max) :
+  ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
+  UScalar.mul_bv_spec hmax
+
+theorem Isize.mul_bv_spec {x y : Isize}
+  (hmin : Isize.min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ Isize.max) :
+  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
+  IScalar.mul_bv_spec hmin hmax
+
+theorem I8.mul_bv_spec {x y : I8}
+  (hmin : I8.min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ I8.max) :
+  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
+  IScalar.mul_bv_spec hmin hmax
+
+theorem I16.mul_bv_spec {x y : I16}
+  (hmin : I16.min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ I16.max) :
+  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
+  IScalar.mul_bv_spec hmin hmax
+
+theorem I32.mul_bv_spec {x y : I32}
+  (hmin : I32.min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ I32.max) :
+  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
+  IScalar.mul_bv_spec hmin hmax
+
+theorem I64.mul_bv_spec {x y : I64} (hmin : I64.min ≤ ↑x * ↑y)
+  (hmax : ↑x * ↑y ≤ I64.max) :
+  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
+  IScalar.mul_bv_spec hmin hmax
+
+theorem I128.mul_bv_spec {x y : I128} (hmin : I128.min ≤ ↑x * ↑y)
+  (hmax : ↑x * ↑y ≤ I128.max) :
+  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
+  IScalar.mul_bv_spec hmin hmax
+
+
+/-!
+Theorems with a specification which only use integers
+-/
+
+/-- Generic theorem - shouldn't be used much -/
+theorem UScalar.mul_spec {ty} {x y : UScalar ty}
+  (hmax : ↑x * ↑y ≤ UScalar.max ty) :
+  ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y := by
+  have ⟨ z, h⟩ := mul_bv_spec hmax
+  simp [h]
+
+/-- Generic theorem - shouldn't be used much -/
+theorem IScalar.mul_spec {ty} {x y : IScalar ty}
+  (hmin : IScalar.min ty ≤ ↑x * ↑y)
+  (hmax : ↑x * ↑y ≤ IScalar.max ty) :
+  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y := by
+  have ⟨ z, h⟩ := mul_bv_spec hmin hmax
+  simp [h]
+
+@[progress] theorem Usize.mul_spec {x y : Usize} (hmax : x.val * y.val ≤ Usize.max) :
+  ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y :=
+  UScalar.mul_spec hmax
+
+@[progress] theorem U8.mul_spec {x y : U8} (hmax : x.val * y.val ≤ U8.max) :
+  ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y :=
+  UScalar.mul_spec hmax
+
+@[progress] theorem U16.mul_spec {x y : U16} (hmax : x.val * y.val ≤ U16.max) :
+  ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y :=
+  UScalar.mul_spec hmax
+
+@[progress] theorem U32.mul_spec {x y : U32} (hmax : x.val * y.val ≤ U32.max) :
+  ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y :=
+  UScalar.mul_spec hmax
+
+@[progress] theorem U64.mul_spec {x y : U64} (hmax : x.val * y.val ≤ U64.max) :
+  ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y :=
+  UScalar.mul_spec hmax
+
+@[progress] theorem U128.mul_spec {x y : U128} (hmax : x.val * y.val ≤ U128.max) :
+  ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y :=
+  UScalar.mul_spec hmax
+
+@[progress] theorem Isize.mul_spec {x y : Isize}
+  (hmin : Isize.min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ Isize.max) :
+  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y :=
+  IScalar.mul_spec hmin hmax
+
+@[progress] theorem I8.mul_spec {x y : I8}
+  (hmin : I8.min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ I8.max) :
+  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y :=
+  IScalar.mul_spec hmin hmax
+
+@[progress] theorem I16.mul_spec {x y : I16}
+  (hmin : I16.min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ I16.max) :
+  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y :=
+  IScalar.mul_spec hmin hmax
+
+@[progress] theorem I32.mul_spec {x y : I32}
+  (hmin : I32.min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ I32.max) :
+  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y :=
+  IScalar.mul_spec hmin hmax
+
+@[progress] theorem I64.mul_spec {x y : I64} (hmin : I64.min ≤ ↑x * ↑y)
+  (hmax : ↑x * ↑y ≤ I64.max) :
+  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y :=
+  IScalar.mul_spec hmin hmax
+
+@[progress] theorem I128.mul_spec {x y : I128} (hmin : I128.min ≤ ↑x * ↑y)
+  (hmax : ↑x * ↑y ≤ I128.max) :
+  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y :=
+  IScalar.mul_spec hmin hmax
+
+/-!
+### Div
+-/
+
+/-!
+Theorems with a specification which use integers and bit-vectors
+-/
+
+/-- Generic theorem - shouldn't be used much -/
+theorem UScalar.div_bv_spec {ty} {x y : UScalar ty}
+  (hzero : y.val ≠ 0) :
+  ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y ∧ z.bv = x.bv / y.bv := by
+  have hzero' : y.bv ≠ 0#ty.bitWidth := by
+    intro h
+    zify at h
+    simp_all
+  conv => congr; ext; lhs; simp [HDiv.hDiv]
+  simp [hzero', div, tryMk, tryMkOpt, ofOption, hmax, ofNatCore]
+  simp only [val]
+  simp
+
+/-- Generic theorem - shouldn't be used much -/
+theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
+  (hzero : y.val ≠ 0)
+  (hmax : ↑x / ↑y ≤ IScalar.max ty) :
+  ∃ z, x / y = ok z ∧ (↑z : Int) = ↑x / ↑y ∧ z.bv = BitVec.sdiv x.bv y.bv := by
+  simp [max_eq_smax, smax] at hmax
+  conv => congr; ext; lhs; simp [HDiv.hDiv]
+  simp [hzero, div, tryMk, tryMkOpt, ofOption, hmin, hmax, ofIntCore]
+  simp only [val]
+  simp [BitVec.sdiv_eq, BitVec.udiv_def]
+  split
+  . -- 0 ≤ x.bv.toInt
+    -- 0 ≤ y.bv.toInt
+    simp
+    rw [BitVec.toInt_ofNat]
+    simp
+    have hx : x.bv.toNat = x.bv.toInt := by
+      have := @BitVec.toInt_eq_msb_cond _ x.bv
+      simp_all
+    have hy : y.bv.toNat = y.bv.toInt := by
+      have := @BitVec.toInt_eq_msb_cond _ y.bv
+      simp_all
+    simp [hx, hy]
+    simp at hx hy
+    have := @Int.ediv_nonneg x.val y.val (by omega) (by omega)
+    have : -2 ^ (ty.bitWidth - 1) ≤ 0 := by simp
+    apply bmod_pow_bitWidth_eq_of_lt ty (x.val / y.val) (by omega) (by omega)
+
+  . -- 0 ≤ x.bv.toInt
+    -- y.bv.toInt < 0
+    rename_i hxIneq hyIneq
+    have hx := @BitVec.toInt_eq_msb_cond _ x.bv
+    simp [hxIneq] at hx
+    have hy := @BitVec.toInt_eq_msb_cond _ y.bv
+    simp [hyIneq] at hy
+    have hyNeg : y.val < 0 := by
+      have := @BitVec.msb_eq_toInt _ y.bv
+      simp_all
+    have : -2 ^ (ty.bitWidth - 1) ≤ x.val / y.val := by
+      have : x.val / (-y.val) ≤ 2^(ty.bitWidth - 1) := by
+        have := @Int.ediv_le_self x.val (-y.val) (by omega)
+        simp at *
+        have := x.hmax
+        simp [max_eq_smax, smax] at this
+        omega
+      replace this := Int.neg_le_neg this
+      simp at this
+      apply this
+    have hyToNat : 2 ^ ty.bitWidth - y.bv.toNat = (-y.val).toNat := by
+      rw [hy]
+      simp
+      norm_cast
+    have hyValToNatMod : ((-y.val).toNat : Nat) % 2^ty.bitWidth = (-y.val).toNat := by
+      have : ↑(-y.val).toNat < 2 ^ ty.bitWidth := by
+        zify
+        apply Int.lt_of_neg_lt_neg
+        have : - (-y.val).toNat = y.val := by omega
+        rw [this]; clear this
+        have := y.hmin
+        simp [min_eq_smin, smin] at this
+        have pow2Ineq : (2^(ty.bitWidth - 1) : Int) < 2^ty.bitWidth := by
+          have := ty.bitWidth_nonzero
+          have : ty.bitWidth = ty.bitWidth - 1 + 1 := by omega
+          conv => rhs; rw [this]
+          rw [Int.pow_succ']
+          omega
+        omega
+      have := @Nat.mod_eq_of_lt (-y.val).toNat (2^ty.bitWidth) (by omega)
+      apply this
+    rw [BitVec.toInt_neg, BitVec.toInt_ofNat]
+    simp
+    rw [hyToNat]
+    have : ((-y.val).toNat : Int) % 2^ty.bitWidth = -(y.val : Int) := by
+      zify at hyValToNatMod
+      rw [hyValToNatMod]
+      omega
+    rw [this]; clear this
+    simp
+    rw [← hx]
+    have : (- (x.val / y.val)).bmod (2^ty.bitWidth) = - (x.val / y.val) := by
+      have : -(x.val / ↑y) < 2 ^ (ty.bitWidth - 1) := by
+        have : x.val / (-y.val) < 2 ^ (ty.bitWidth - 1) := by
+          have := @Int.ediv_le_self x.val (-y.val) (by omega)
+          have := x.hmax; simp [max_eq_smax, smax] at this
+          omega
+        simp at this
+        apply this
+      have := bmod_pow_bitWidth_eq_of_lt ty (- (x.val / y.val)) (by omega) (by omega)
+      rw [this]
+    rw [this]; clear this
+    simp
+    apply bmod_pow_bitWidth_eq_of_lt ty (x.val / y.val) (by omega) (by omega)
+
+  . -- x.bv.toInt < 0
+    -- 0 ≤ y.bv.toInt
+    rename_i hxIneq hyIneq
+    have hx := @BitVec.toInt_eq_msb_cond _ x.bv
+    simp [hxIneq] at hx
+    have hy := @BitVec.toInt_eq_msb_cond _ y.bv
+    simp [hyIneq] at hy
+    have hyNeg : x.val < 0 := by
+      have := @BitVec.msb_eq_toInt _ x.bv
+      simp_all
+    have : -2 ^ (ty.bitWidth - 1) ≤ x.val / y.val := by
+      have : (-x.val) / y.val ≤ 2^(ty.bitWidth - 1) := by
+        have := @Int.ediv_le_self (-x.val) y.val (by omega)
+        simp at *
+        have := x.hBounds
+        simp [bound_eq_sbound, smin, smax] at this
+        omega
+
+      replace this := Int.neg_le_neg this
+      conv at this => rhs; simp
+      simp at this
+      apply this
+    have hyToNat : 2 ^ ty.bitWidth - y.bv.toNat = (-y.val).toNat := by
+      rw [hy]
+      simp
+      norm_cast
+    have hyValToNatMod : ((-y.val).toNat : Nat) % 2^ty.bitWidth = (-y.val).toNat := by
+      have : ↑(-y.val).toNat < 2 ^ ty.bitWidth := by
+        zify
+        apply Int.lt_of_neg_lt_neg
+        have : - (-y.val).toNat = y.val := by omega
+        rw [this]; clear this
+        have := y.hmin
+        simp [min_eq_smin, smin] at this
+        have pow2Ineq : (2^(ty.bitWidth - 1) : Int) < 2^ty.bitWidth := by
+          have := ty.bitWidth_nonzero
+          have : ty.bitWidth = ty.bitWidth - 1 + 1 := by omega
+          conv => rhs; rw [this]
+          rw [Int.pow_succ']
+          omega
+        omega
+      have := @Nat.mod_eq_of_lt (-y.val).toNat (2^ty.bitWidth) (by omega)
+      apply this
+    rw [BitVec.toInt_neg, BitVec.toInt_ofNat]
+    simp
+    rw [hyToNat]
+    have : ((-y.val).toNat : Int) % 2^ty.bitWidth = -(y.val : Int) := by
+      zify at hyValToNatMod
+      rw [hyValToNatMod]
+      omega
+    rw [this]; clear this
+    simp
+    rw [← hx]
+    have : (- (x.val / y.val)).bmod (2^ty.bitWidth) = - (x.val / y.val) := by
+      have : -(x.val / ↑y) < 2 ^ (ty.bitWidth - 1) := by
+        have : x.val / (-y.val) < 2 ^ (ty.bitWidth - 1) := by
+          have := @Int.ediv_le_self x.val (-y.val) (by omega)
+          have := x.hmax; simp [max_eq_smax, smax] at this
+          omega
+        simp at this
+        apply this
+      have := bmod_pow_bitWidth_eq_of_lt ty (- (x.val / y.val)) (by omega) (by omega)
+      rw [this]
+    rw [this]; clear this
+    simp
+    apply bmod_pow_bitWidth_eq_of_lt ty (x.val / y.val) (by omega) (by omega)
+
+    sorry
+  . -- x.bv.toInt < 0
+    -- y.bv.toInt < 0
+    sorry
+
+
+
+
+
+theorem core.num.checked_add_spec {ty} {x y : Scalar ty} :
+  match core.num.checked_add x y with
+  | some z => Scalar.in_bounds ty (↑x + ↑y) ∧ ↑z = (↑x + ↑y : Int)
+  | none => ¬ (Scalar.in_bounds ty (↑x + ↑y)) := by
+  have h := Scalar.tryMk_eq ty (↑x + ↑y)
+  simp only [checked_add, Option.ofResult]
+  cases heq: x + y <;> simp_all <;> simp [HAdd.hAdd, Scalar.add] at heq
+  <;> simp [Add.add] at heq
+  <;> simp_all
+
+
+@[progress]
 theorem Scalar.cast_in_bounds_eq {src_ty tgt_ty : ScalarTy} (x : Scalar src_ty) (h_bounds: Scalar.in_bounds tgt_ty x): ∃ x', Scalar.cast tgt_ty x = .ok x' ∧ x'.val = x.val := by
   simp at h_bounds
   simp [cast, tryMk, tryMkOpt]
@@ -166,116 +1188,13 @@ theorem Scalar.cast_in_bounds_eq {src_ty tgt_ty : ScalarTy} (x : Scalar src_ty) 
 @[simp] theorem Scalar.exists_eq {a' : Scalar ty} : ∃ (a : Scalar ty), a.val = a'.val := by exists a'
 @[simp] theorem Scalar.exists_eq' {a' : Scalar ty} : ∃ (a : Scalar ty), a'.val = a.val := by exists a'
 
-@[pspec]
+@[progress]
 theorem Scalar.cast_bool_spec ty (b : Bool) :
   ∃ s, Scalar.cast_bool ty b = ok s ∧ s.val = if b then 1 else 0 := by
   simp [Scalar.cast_bool, tryMk, tryMkOpt]
   split <;> split <;> simp_all <;> scalar_tac
 
--- TODO: below: not sure this is the best way.
--- Should we rather overload operations like +, -, etc.?
--- Also, it is possible to automate the generation of those definitions
--- with macros (but would it be a good idea? It would be less easy to
--- read the file, which is not supposed to change a lot)
-
--- Negation
-
-/--
-Remark: there is no heterogeneous negation in the Lean prelude: we thus introduce
-one here.
-
-The notation typeclass for heterogeneous negation.
--/
-class HNeg (α : Type u) (β : outParam (Type v)) where
-  /-- `- a` computes the negation of `a`.
-  The meaning of this notation is type-dependent. -/
-  hNeg : α → β
-
-/- Notation for heterogeneous negation.
-
-   We initially used the notation "-" but it conflicted with the homogeneous
-   negation too much. In particular, it made terms like `-10` ambiguous,
-   and seemingly caused to backtracking in elaboration, leading to definitions
-   like arrays of constants to take an unreasonable time to get elaborated
-   and type-checked.
-
-   TODO: PR to replace Neg with HNeg in Lean?
- -/
-prefix:75  "-."   => HNeg.hNeg
-
-/- We need this, otherwise we break pattern matching like in:
-
-   ```
-   def is_minus_one (x : Int) : Bool :=
-     match x with
-     | -1 => true
-     | _ => false
-   ```
--/
-attribute [match_pattern] HNeg.hNeg
-
-instance : HNeg Isize (Result Isize) where hNeg x := Scalar.neg x
-instance : HNeg I8 (Result I8) where hNeg x := Scalar.neg x
-instance : HNeg I16 (Result I16) where hNeg x := Scalar.neg x
-instance : HNeg I32 (Result I32) where hNeg x := Scalar.neg x
-instance : HNeg I64 (Result I64) where hNeg x := Scalar.neg x
-instance : HNeg I128 (Result I128) where hNeg x := Scalar.neg x
-
--- Addition
-instance {ty} : HAdd (Scalar ty) (Scalar ty) (Result (Scalar ty)) where
-  hAdd x y := Scalar.add x y
-
--- Substraction
-instance {ty} : HSub (Scalar ty) (Scalar ty) (Result (Scalar ty)) where
-  hSub x y := Scalar.sub x y
-
--- Multiplication
-instance {ty} : HMul (Scalar ty) (Scalar ty) (Result (Scalar ty)) where
-  hMul x y := Scalar.mul x y
-
--- Division
-instance {ty} : HDiv (Scalar ty) (Scalar ty) (Result (Scalar ty)) where
-  hDiv x y := Scalar.div x y
-
--- Remainder
-instance {ty} : HMod (Scalar ty) (Scalar ty) (Result (Scalar ty)) where
-  hMod x y := Scalar.rem x y
-
--- Shift left
-instance {ty0 ty1} : HShiftLeft (Scalar ty0) (Scalar ty1) (Result (Scalar ty0)) where
-  hShiftLeft x y := Scalar.shiftl x y
-
--- Shift right
-instance {ty0 ty1} : HShiftRight (Scalar ty0) (Scalar ty1) (Result (Scalar ty0)) where
-  hShiftRight x y := Scalar.shiftr x y
-
--- Xor
-instance {ty} : HXor (Scalar ty) (Scalar ty) (Scalar ty) where
-  hXor x y := Scalar.xor x y
-
--- Or
-instance {ty} : HOr (Scalar ty) (Scalar ty) (Scalar ty) where
-  hOr x y := Scalar.or x y
-
--- And
-instance {ty} : HAnd (Scalar ty) (Scalar ty) (Scalar ty) where
-  hAnd x y := Scalar.and x y
-
--- Not
-instance {ty} : HNot (Scalar ty) where
-  hnot x := Scalar.not x
-
-example (x : Scalar ty) : Scalar ty := ￢ x
-
 -- core checked arithmetic operations
-
-/- A helper function that converts failure to none and success to some
-   TODO: move up to Core module? -/
-def Option.ofResult {a : Type u} (x : Result a) :
-  Option a :=
-  match x with
-  | ok x => some x
-  | _ => none
 
 /- [core::num::{T}::checked_add] -/
 def core.num.checked_add (x y : Scalar ty) : Option (Scalar ty) :=
@@ -362,196 +1281,6 @@ def I64.checked_rem (x y : I64) : Option I64 := core.num.checked_rem x y
 def I128.checked_rem (x y : I128) : Option I128 := core.num.checked_rem x y
 def Isize.checked_rem (x y : Isize) : Option Isize := core.num.checked_rem x y
 
-theorem Scalar.add_equiv {ty} {x y : Scalar ty} :
-  match x + y with
-  | ok z => Scalar.in_bounds ty (↑x + ↑y) ∧ (↑z : Int) = ↑x + ↑y
-  | fail _ => ¬ (Scalar.in_bounds ty (↑x + ↑y))
-  | _ => ⊥ := by
-  -- Applying the unfoldings only inside the match
-  conv in _ + _ => unfold HAdd.hAdd instHAddScalarResult; simp [add]
-  have h := tryMk_eq ty (↑x + ↑y)
-  simp [in_bounds] at h
-  split at h <;> simp_all [check_bounds_eq_in_bounds]
-
--- Generic theorem - shouldn't be used much
-@[pspec]
-theorem Scalar.add_spec {ty} {x y : Scalar ty}
-  (hmin : Scalar.min ty ≤ ↑x + y.val)
-  (hmax : ↑x + ↑y ≤ Scalar.max ty) :
-  (∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y) := by
-  have h := @add_equiv ty x y
-  split at h <;> simp_all
-
-theorem Scalar.add_unsigned_spec {ty} (s: ¬ ty.isSigned) {x y : Scalar ty}
-  (hmax : ↑x + ↑y ≤ Scalar.max ty) :
-  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y := by
-  have hmin : Scalar.min ty ≤ ↑x + ↑y := by
-    have hx := x.hmin
-    have hy := y.hmin
-    cases ty <;> simp [min, ScalarTy.isSigned] at * <;> omega
-  apply add_spec <;> assumption
-
-/- Fine-grained theorems -/
-@[pspec] theorem Usize.add_spec {x y : Usize} (hmax : x.val + y.val ≤ Usize.max) :
-  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y := by
-  apply Scalar.add_unsigned_spec <;> simp [ScalarTy.isSigned, Scalar.max, *]
-
-@[pspec] theorem U8.add_spec {x y : U8} (hmax : x.val + y.val ≤ U8.max) :
-  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y := by
-  apply Scalar.add_unsigned_spec <;> simp [ScalarTy.isSigned, Scalar.max, *]
-
-@[pspec] theorem U16.add_spec {x y : U16} (hmax : x.val + y.val ≤ U16.max) :
-  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y := by
-  apply Scalar.add_unsigned_spec <;> simp [ScalarTy.isSigned, Scalar.max, *]
-
-@[pspec] theorem U32.add_spec {x y : U32} (hmax : x.val + y.val ≤ U32.max) :
-  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y := by
-  apply Scalar.add_unsigned_spec <;> simp [ScalarTy.isSigned, Scalar.max, *]
-
-@[pspec] theorem U64.add_spec {x y : U64} (hmax : x.val + y.val ≤ U64.max) :
-  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y := by
-  apply Scalar.add_unsigned_spec <;> simp [ScalarTy.isSigned, Scalar.max, *]
-
-@[pspec] theorem U128.add_spec {x y : U128} (hmax : x.val + y.val ≤ U128.max) :
-  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y := by
-  apply Scalar.add_unsigned_spec <;> simp [ScalarTy.isSigned, Scalar.max, *]
-
-@[pspec] theorem Isize.add_spec {x y : Isize}
-  (hmin : Isize.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ Isize.max) :
-  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y :=
-  Scalar.add_spec hmin hmax
-
-@[pspec] theorem I8.add_spec {x y : I8}
-  (hmin : I8.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ I8.max) :
-  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y :=
-  Scalar.add_spec hmin hmax
-
-@[pspec] theorem I16.add_spec {x y : I16}
-  (hmin : I16.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ I16.max) :
-  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y :=
-  Scalar.add_spec hmin hmax
-
-@[pspec] theorem I32.add_spec {x y : I32}
-  (hmin : I32.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ I32.max) :
-  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y :=
-  Scalar.add_spec hmin hmax
-
-@[pspec] theorem I64.add_spec {x y : I64}
-  (hmin : I64.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ I64.max) :
-  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y :=
-  Scalar.add_spec hmin hmax
-
-@[pspec] theorem I128.add_spec {x y : I128}
-  (hmin : I128.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ I128.max) :
-  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y :=
-  Scalar.add_spec hmin hmax
-
-theorem core.num.checked_add_spec {ty} {x y : Scalar ty} :
-  match core.num.checked_add x y with
-  | some z => Scalar.in_bounds ty (↑x + ↑y) ∧ ↑z = (↑x + ↑y : Int)
-  | none => ¬ (Scalar.in_bounds ty (↑x + ↑y)) := by
-  have h := Scalar.tryMk_eq ty (↑x + ↑y)
-  simp only [checked_add, Option.ofResult]
-  cases heq: x + y <;> simp_all <;> simp [HAdd.hAdd, Scalar.add] at heq
-  <;> simp [Add.add] at heq
-  <;> simp_all
-
-theorem Scalar.sub_equiv {ty} {x y : Scalar ty} :
-  match x - y with
-  | ok z => Scalar.in_bounds ty (↑x - ↑y) ∧ (↑z : Int) = ↑x - ↑y
-  | fail _ => ¬ (Scalar.in_bounds ty (↑x - ↑y))
-  | _ => ⊥ := by
-  -- Applying the unfoldings only inside the match
-  conv in _ - _ => unfold HSub.hSub instHSubScalarResult; simp [sub]
-  have h := tryMk_eq ty (↑x - ↑y)
-  simp [in_bounds] at h
-  split at h <;> simp_all [check_bounds_eq_in_bounds]
-
--- Generic theorem - shouldn't be used much
-@[pspec]
-theorem Scalar.sub_spec {ty} {x y : Scalar ty}
-  (hmin : Scalar.min ty ≤ ↑x - ↑y)
-  (hmax : ↑x - ↑y ≤ Scalar.max ty) :
-  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y := by
-  have h := @sub_equiv ty x y
-  split at h <;> simp_all
-
-theorem Scalar.sub_unsigned_spec {ty : ScalarTy} (s : ¬ ty.isSigned)
-  {x y : Scalar ty} (hmin : Scalar.min ty ≤ ↑x - ↑y) :
-  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y := by
-  have : ↑x - ↑y ≤ Scalar.max ty := by
-    have hx := x.hmin
-    have hxm := x.hmax
-    have hy := y.hmin
-    cases ty <;> simp [min, max, ScalarTy.isSigned] at * <;> omega
-  apply sub_spec <;> assumption
-
-/- Fine-grained theorems -/
-@[pspec] theorem Usize.sub_spec {x y : Usize} (hmin : Usize.min ≤ x.val - y.val) :
-  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y := by
-  apply Scalar.sub_unsigned_spec <;> simp [Scalar.min, ScalarTy.isSigned]; omega
-
-@[pspec] theorem U8.sub_spec {x y : U8} (hmin : U8.min ≤ x.val - y.val) :
-  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y := by
-  apply Scalar.sub_unsigned_spec <;> simp_all [Scalar.min, ScalarTy.isSigned]
-
-@[pspec] theorem U16.sub_spec {x y : U16} (hmin : U16.min ≤ x.val - y.val) :
-  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y := by
-  apply Scalar.sub_unsigned_spec <;> simp_all [Scalar.min, ScalarTy.isSigned]
-
-@[pspec] theorem U32.sub_spec {x y : U32} (hmin : U32.min ≤ x.val - y.val) :
-  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y := by
-  apply Scalar.sub_unsigned_spec <;> simp_all [Scalar.min, ScalarTy.isSigned]
-
-@[pspec] theorem U64.sub_spec {x y : U64} (hmin : U64.min ≤ x.val - y.val) :
-  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y := by
-  apply Scalar.sub_unsigned_spec <;> simp_all [Scalar.min, ScalarTy.isSigned]
-
-@[pspec] theorem U128.sub_spec {x y : U128} (hmin : U128.min ≤ x.val - y.val) :
-  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y := by
-  apply Scalar.sub_unsigned_spec <;> simp_all [Scalar.min, ScalarTy.isSigned]
-
-@[pspec] theorem Isize.sub_spec {x y : Isize} (hmin : Isize.min ≤ ↑x - ↑y)
-  (hmax : ↑x - ↑y ≤ Isize.max) :
-  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y :=
-  Scalar.sub_spec hmin hmax
-
-@[pspec] theorem I8.sub_spec {x y : I8} (hmin : I8.min ≤ ↑x - ↑y)
-  (hmax : ↑x - ↑y ≤ I8.max) :
-  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y :=
-  Scalar.sub_spec hmin hmax
-
-@[pspec] theorem I16.sub_spec {x y : I16} (hmin : I16.min ≤ ↑x - ↑y)
-  (hmax : ↑x - ↑y ≤ I16.max) :
-  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y :=
-  Scalar.sub_spec hmin hmax
-
-@[pspec] theorem I32.sub_spec {x y : I32} (hmin : I32.min ≤ ↑x - ↑y)
-  (hmax : ↑x - ↑y ≤ I32.max) :
-  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y :=
-  Scalar.sub_spec hmin hmax
-
-@[pspec] theorem I64.sub_spec {x y : I64} (hmin : I64.min ≤ ↑x - ↑y)
-  (hmax : ↑x - ↑y ≤ I64.max) :
-  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y :=
-  Scalar.sub_spec hmin hmax
-
-@[pspec] theorem I128.sub_spec {x y : I128} (hmin : I128.min ≤ ↑x - ↑y)
-  (hmax : ↑x - ↑y ≤ I128.max) :
-  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y :=
-  Scalar.sub_spec hmin hmax
-
--- Generic theorem - shouldn't be used much
-theorem Scalar.mul_spec {ty} {x y : Scalar ty}
-  (hmin : Scalar.min ty ≤ ↑x * ↑y)
-  (hmax : ↑x * ↑y ≤ Scalar.max ty) :
-  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y := by
-  conv => congr; ext; lhs; simp [HMul.hMul]
-  simp [mul, tryMk, tryMkOpt, ofOption]
-  split_ifs
-  . simp [pure]
-  . tauto
-
 theorem core.num.checked_sub_spec {ty} {x y : Scalar ty} :
   match core.num.checked_sub x y with
   | some z => Scalar.in_bounds ty (↑x - ↑y) ∧ ↑z = (↑x - ↑y : Int)
@@ -562,80 +1291,6 @@ theorem core.num.checked_sub_spec {ty} {x y : Scalar ty} :
   cases heq: x - y <;> simp_all <;> simp only [HSub.hSub, Scalar.sub, Sub.sub, Int.sub] at heq
   <;> simp_all
 
-theorem Scalar.mul_equiv {ty} {x y : Scalar ty} :
-  match x * y with
-  | ok z => Scalar.in_bounds ty (↑x * ↑y) ∧ (↑z : Int) = ↑x * ↑y
-  | fail _ => ¬ (Scalar.in_bounds ty (↑x * ↑y))
-  | _ => ⊥ := by
-  -- Applying the unfoldings only inside the match
-  conv in _ * _ => unfold HMul.hMul instHMulScalarResult; simp [mul]
-  have h := tryMk_eq ty (↑x * ↑y)
-  simp [in_bounds] at h
-  split at h <;> simp_all [check_bounds_eq_in_bounds]
-
-theorem Scalar.mul_unsigned_spec {ty} (s: ¬ ty.isSigned) {x y : Scalar ty}
-  (hmax : ↑x * ↑y ≤ Scalar.max ty) :
-  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y := by
-  have : Scalar.min ty ≤ ↑x * ↑y := by
-    have hx := x.hmin
-    have hy := y.hmin
-    cases ty <;> simp [ScalarTy.isSigned] at * <;> apply mul_nonneg hx hy
-  apply mul_spec <;> assumption
-
-/- Fine-grained theorems -/
-@[pspec] theorem Usize.mul_spec {x y : Usize} (hmax : x.val * y.val ≤ Usize.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y := by
-  apply Scalar.mul_unsigned_spec <;> simp_all [Scalar.max, ScalarTy.isSigned]
-
-@[pspec] theorem U8.mul_spec {x y : U8} (hmax : x.val * y.val ≤ U8.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y := by
-  apply Scalar.mul_unsigned_spec <;> simp_all [Scalar.max, ScalarTy.isSigned]
-
-@[pspec] theorem U16.mul_spec {x y : U16} (hmax : x.val * y.val ≤ U16.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y := by
-  apply Scalar.mul_unsigned_spec <;> simp_all [Scalar.max, ScalarTy.isSigned]
-
-@[pspec] theorem U32.mul_spec {x y : U32} (hmax : x.val * y.val ≤ U32.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y := by
-  apply Scalar.mul_unsigned_spec <;> simp_all [Scalar.max, ScalarTy.isSigned]
-
-@[pspec] theorem U64.mul_spec {x y : U64} (hmax : x.val * y.val ≤ U64.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y := by
-  apply Scalar.mul_unsigned_spec <;> simp_all [Scalar.max, ScalarTy.isSigned]
-
-@[pspec] theorem U128.mul_spec {x y : U128} (hmax : x.val * y.val ≤ U128.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y := by
-  apply Scalar.mul_unsigned_spec <;> simp_all [Scalar.max, ScalarTy.isSigned]
-
-@[pspec] theorem Isize.mul_spec {x y : Isize} (hmin : Isize.min ≤ ↑x * ↑y)
-  (hmax : ↑x * ↑y ≤ Isize.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y :=
-  Scalar.mul_spec hmin hmax
-
-@[pspec] theorem I8.mul_spec {x y : I8} (hmin : I8.min ≤ ↑x * ↑y)
-  (hmax : ↑x * ↑y ≤ I8.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y :=
-  Scalar.mul_spec hmin hmax
-
-@[pspec] theorem I16.mul_spec {x y : I16} (hmin : I16.min ≤ ↑x * ↑y)
-  (hmax : ↑x * ↑y ≤ I16.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y :=
-  Scalar.mul_spec hmin hmax
-
-@[pspec] theorem I32.mul_spec {x y : I32} (hmin : I32.min ≤ ↑x * ↑y)
-  (hmax : ↑x * ↑y ≤ I32.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y :=
-  Scalar.mul_spec hmin hmax
-
-@[pspec] theorem I64.mul_spec {x y : I64} (hmin : I64.min ≤ ↑x * ↑y)
-  (hmax : ↑x * ↑y ≤ I64.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y :=
-  Scalar.mul_spec hmin hmax
-
-@[pspec] theorem I128.mul_spec {x y : I128} (hmin : I128.min ≤ ↑x * ↑y)
-  (hmax : ↑x * ↑y ≤ I128.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y :=
-  Scalar.mul_spec hmin hmax
 
 theorem core.num.checked_mul_spec {ty} {x y : Scalar ty} :
   match core.num.checked_mul x y with
@@ -660,7 +1315,7 @@ theorem Scalar.div_equiv {ty} {x y : Scalar ty} :
   split at h <;> simp_all [check_bounds_eq_in_bounds]
 
 -- Generic theorem - shouldn't be used much
-@[pspec]
+@[progress]
 theorem Scalar.div_spec {ty} {x y : Scalar ty}
   (hnz : ↑y ≠ (0 : Int))
   (hmin : Scalar.min ty ≤ scalar_div ↑x ↑y)
@@ -686,66 +1341,66 @@ theorem Scalar.div_unsigned_spec {ty} (s: ¬ ty.isSigned) (x : Scalar ty) {y : S
   apply hs
 
 /- Fine-grained theorems -/
-@[pspec] theorem Usize.div_spec (x : Usize) {y : Usize} (hnz : ↑y ≠ (0 : Int)) :
+@[progress] theorem Usize.div_spec (x : Usize) {y : Usize} (hnz : ↑y ≠ (0 : Int)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = ↑x / ↑y := by
   apply Scalar.div_unsigned_spec <;> simp [ScalarTy.isSigned, *]
 
-@[pspec] theorem U8.div_spec (x : U8) {y : U8} (hnz : ↑y ≠ (0 : Int)) :
+@[progress] theorem U8.div_spec (x : U8) {y : U8} (hnz : ↑y ≠ (0 : Int)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = ↑x / ↑y := by
   apply Scalar.div_unsigned_spec <;> simp [ScalarTy.isSigned, *]
 
-@[pspec] theorem U16.div_spec (x : U16) {y : U16} (hnz : ↑y ≠ (0 : Int)) :
+@[progress] theorem U16.div_spec (x : U16) {y : U16} (hnz : ↑y ≠ (0 : Int)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = ↑x / ↑y := by
   apply Scalar.div_unsigned_spec <;> simp [ScalarTy.isSigned, *]
 
-@[pspec] theorem U32.div_spec (x : U32) {y : U32} (hnz : ↑y ≠ (0 : Int)) :
+@[progress] theorem U32.div_spec (x : U32) {y : U32} (hnz : ↑y ≠ (0 : Int)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = ↑x / ↑y := by
   apply Scalar.div_unsigned_spec <;> simp [ScalarTy.isSigned, *]
 
-@[pspec] theorem U64.div_spec (x : U64) {y : U64} (hnz : ↑y ≠ (0 : Int)) :
+@[progress] theorem U64.div_spec (x : U64) {y : U64} (hnz : ↑y ≠ (0 : Int)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = ↑x / ↑y := by
   apply Scalar.div_unsigned_spec <;> simp [ScalarTy.isSigned, *]
 
-@[pspec] theorem U128.div_spec (x : U128) {y : U128} (hnz : ↑y ≠ (0 : Int)) :
+@[progress] theorem U128.div_spec (x : U128) {y : U128} (hnz : ↑y ≠ (0 : Int)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = ↑x / ↑y := by
   apply Scalar.div_unsigned_spec <;> simp [ScalarTy.isSigned, *]
 
-@[pspec] theorem Isize.div_spec (x : Isize) {y : Isize}
+@[progress] theorem Isize.div_spec (x : Isize) {y : Isize}
   (hnz : ↑y ≠ (0 : Int))
   (hmin : Isize.min ≤ scalar_div ↑x ↑y)
   (hmax : scalar_div ↑x ↑y ≤ Isize.max):
   ∃ z, x / y = ok z ∧ (↑z : Int) = scalar_div ↑x ↑y :=
   Scalar.div_spec hnz hmin hmax
 
-@[pspec] theorem I8.div_spec (x : I8) {y : I8}
+@[progress] theorem I8.div_spec (x : I8) {y : I8}
   (hnz : ↑y ≠ (0 : Int))
   (hmin : I8.min ≤ scalar_div ↑x ↑y)
   (hmax : scalar_div ↑x ↑y ≤ I8.max):
   ∃ z, x / y = ok z ∧ (↑z : Int) = scalar_div ↑x ↑y :=
   Scalar.div_spec hnz hmin hmax
 
-@[pspec] theorem I16.div_spec (x : I16) {y : I16}
+@[progress] theorem I16.div_spec (x : I16) {y : I16}
   (hnz : ↑y ≠ (0 : Int))
   (hmin : I16.min ≤ scalar_div ↑x ↑y)
   (hmax : scalar_div ↑x ↑y ≤ I16.max):
   ∃ z, x / y = ok z ∧ (↑z : Int) = scalar_div ↑x ↑y :=
   Scalar.div_spec hnz hmin hmax
 
-@[pspec] theorem I32.div_spec (x : I32) {y : I32}
+@[progress] theorem I32.div_spec (x : I32) {y : I32}
   (hnz : ↑y ≠ (0 : Int))
   (hmin : I32.min ≤ scalar_div ↑x ↑y)
   (hmax : scalar_div ↑x ↑y ≤ I32.max):
   ∃ z, x / y = ok z ∧ (↑z : Int) = scalar_div ↑x ↑y :=
   Scalar.div_spec hnz hmin hmax
 
-@[pspec] theorem I64.div_spec (x : I64) {y : I64}
+@[progress] theorem I64.div_spec (x : I64) {y : I64}
   (hnz : ↑y ≠ (0 : Int))
   (hmin : I64.min ≤ scalar_div ↑x ↑y)
   (hmax : scalar_div ↑x ↑y ≤ I64.max):
   ∃ z, x / y = ok z ∧ (↑z : Int) = scalar_div ↑x ↑y :=
   Scalar.div_spec hnz hmin hmax
 
-@[pspec] theorem I128.div_spec (x : I128) {y : I128}
+@[progress] theorem I128.div_spec (x : I128) {y : I128}
   (hnz : ↑y ≠ (0 : Int))
   (hmin : I128.min ≤ scalar_div ↑x ↑y)
   (hmax : scalar_div ↑x ↑y ≤ I128.max):
@@ -775,7 +1430,7 @@ theorem Scalar.rem_equiv {ty} {x y : Scalar ty} :
   split at h <;> simp_all [check_bounds_eq_in_bounds]
 
 -- Generic theorem - shouldn't be used much
-@[pspec]
+@[progress]
 theorem Scalar.rem_spec {ty} {x y : Scalar ty}
   (hnz : ↑y ≠ (0 : Int))
   (hmin : Scalar.min ty ≤ scalar_rem ↑x ↑y)
@@ -801,59 +1456,59 @@ theorem Scalar.rem_unsigned_spec {ty} (s: ¬ ty.isSigned) (x : Scalar ty) {y : S
   simp [*] at hs
   simp [*]
 
-@[pspec] theorem Usize.rem_spec (x : Usize) {y : Usize} (hnz : ↑y ≠ (0 : Int)) :
+@[progress] theorem Usize.rem_spec (x : Usize) {y : Usize} (hnz : ↑y ≠ (0 : Int)) :
   ∃ z, x % y = ok z ∧ (↑z : Int) = ↑x % ↑y := by
   apply Scalar.rem_unsigned_spec <;> simp [ScalarTy.isSigned, *]
 
-@[pspec] theorem U8.rem_spec (x : U8) {y : U8} (hnz : ↑y ≠ (0 : Int)) :
+@[progress] theorem U8.rem_spec (x : U8) {y : U8} (hnz : ↑y ≠ (0 : Int)) :
   ∃ z, x % y = ok z ∧ (↑z : Int) = ↑x % ↑y := by
   apply Scalar.rem_unsigned_spec <;> simp [ScalarTy.isSigned, *]
 
-@[pspec] theorem U16.rem_spec (x : U16) {y : U16} (hnz : ↑y ≠ (0 : Int)) :
+@[progress] theorem U16.rem_spec (x : U16) {y : U16} (hnz : ↑y ≠ (0 : Int)) :
   ∃ z, x % y = ok z ∧ (↑z : Int) = ↑x % ↑y := by
   apply Scalar.rem_unsigned_spec <;> simp [ScalarTy.isSigned, *]
 
-@[pspec] theorem U32.rem_spec (x : U32) {y : U32} (hnz : ↑y ≠ (0 : Int)) :
+@[progress] theorem U32.rem_spec (x : U32) {y : U32} (hnz : ↑y ≠ (0 : Int)) :
   ∃ z, x % y = ok z ∧ (↑z : Int) = ↑x % ↑y := by
   apply Scalar.rem_unsigned_spec <;> simp [ScalarTy.isSigned, *]
 
-@[pspec] theorem U64.rem_spec (x : U64) {y : U64} (hnz : ↑y ≠ (0 : Int)) :
+@[progress] theorem U64.rem_spec (x : U64) {y : U64} (hnz : ↑y ≠ (0 : Int)) :
   ∃ z, x % y = ok z ∧ (↑z : Int) = ↑x % ↑y := by
   apply Scalar.rem_unsigned_spec <;> simp [ScalarTy.isSigned, *]
 
-@[pspec] theorem U128.rem_spec (x : U128) {y : U128} (hnz : ↑y ≠ (0 : Int)) :
+@[progress] theorem U128.rem_spec (x : U128) {y : U128} (hnz : ↑y ≠ (0 : Int)) :
   ∃ z, x % y = ok z ∧ (↑z : Int) = ↑x % ↑y := by
   apply Scalar.rem_unsigned_spec <;> simp [ScalarTy.isSigned, *]
 
-@[pspec] theorem I8.rem_spec (x : I8) {y : I8}
+@[progress] theorem I8.rem_spec (x : I8) {y : I8}
   (hnz : ↑y ≠ (0 : Int))
   (hmin : I8.min ≤ scalar_rem ↑x ↑y)
   (hmax : scalar_rem ↑x ↑y ≤ I8.max):
   ∃ z, x % y = ok z ∧ (↑z : Int) = scalar_rem ↑x ↑y :=
   Scalar.rem_spec hnz hmin hmax
 
-@[pspec] theorem I16.rem_spec (x : I16) {y : I16}
+@[progress] theorem I16.rem_spec (x : I16) {y : I16}
   (hnz : ↑y ≠ (0 : Int))
   (hmin : I16.min ≤ scalar_rem ↑x ↑y)
   (hmax : scalar_rem ↑x ↑y ≤ I16.max):
   ∃ z, x % y = ok z ∧ (↑z : Int) = scalar_rem ↑x ↑y :=
   Scalar.rem_spec hnz hmin hmax
 
-@[pspec] theorem I32.rem_spec (x : I32) {y : I32}
+@[progress] theorem I32.rem_spec (x : I32) {y : I32}
   (hnz : ↑y ≠ (0 : Int))
   (hmin : I32.min ≤ scalar_rem ↑x ↑y)
   (hmax : scalar_rem ↑x ↑y ≤ I32.max):
   ∃ z, x % y = ok z ∧ (↑z : Int) = scalar_rem ↑x ↑y :=
   Scalar.rem_spec hnz hmin hmax
 
-@[pspec] theorem I64.rem_spec (x : I64) {y : I64}
+@[progress] theorem I64.rem_spec (x : I64) {y : I64}
   (hnz : ↑y ≠ (0 : Int))
   (hmin : I64.min ≤ scalar_rem ↑x ↑y)
   (hmax : scalar_rem ↑x ↑y ≤ I64.max):
   ∃ z, x % y = ok z ∧ (↑z : Int) = scalar_rem ↑x ↑y :=
   Scalar.rem_spec hnz hmin hmax
 
-@[pspec] theorem I128.rem_spec (x : I128) {y : I128}
+@[progress] theorem I128.rem_spec (x : I128) {y : I128}
   (hnz : ↑y ≠ (0 : Int))
   (hmin : I128.min ≤ scalar_rem ↑x ↑y)
   (hmax : scalar_rem ↑x ↑y ≤ I128.max):
@@ -1087,7 +1742,7 @@ def core.num.I128.overflowing_add := @Scalar.overflowing_add ScalarTy.I128
 /- [core::num::{isize}::overflowing_add] -/
 def core.num.Isize.overflowing_add := @Scalar.overflowing_add ScalarTy.Isize
 
-@[pspec]
+@[progress]
 theorem core.num.U8.overflowing_add_spec (x y : U8) :
   ∃ z b, overflowing_add x y = ok (z, b) ∧
   if x.val + y.val > U8.max then z.val = x.val + y.val - U8.max - 1 ∧ b = true
@@ -1096,7 +1751,7 @@ theorem core.num.U8.overflowing_add_spec (x y : U8) :
   simp [overflowing_add, Scalar.overflowing_add, int_overflowing_add]
   split <;> split <;> simp_all <;> scalar_tac
 
-@[pspec]
+@[progress]
 theorem core.num.U16.overflowing_add_spec (x y : U16) :
   ∃ z b, overflowing_add x y = ok (z, b) ∧
   if x.val + y.val > U16.max then z.val = x.val + y.val - U16.max - 1 ∧ b = true
@@ -1105,7 +1760,7 @@ theorem core.num.U16.overflowing_add_spec (x y : U16) :
   simp [overflowing_add, Scalar.overflowing_add, int_overflowing_add]
   split <;> split <;> simp_all <;> scalar_tac
 
-@[pspec]
+@[progress]
 theorem core.num.U32.overflowing_add_spec (x y : U32) :
   ∃ z b, overflowing_add x y = ok (z, b) ∧
   if x.val + y.val > U32.max then z.val = x.val + y.val - U32.max - 1 ∧ b = true
@@ -1114,7 +1769,7 @@ theorem core.num.U32.overflowing_add_spec (x y : U32) :
   simp [overflowing_add, Scalar.overflowing_add, int_overflowing_add]
   split <;> split <;> simp_all <;> scalar_tac
 
-@[pspec]
+@[progress]
 theorem core.num.U64.overflowing_add_spec (x y : U64) :
   ∃ z b, overflowing_add x y = ok (z, b) ∧
   if x.val + y.val > U64.max then z.val = x.val + y.val - U64.max - 1 ∧ b = true
@@ -1123,7 +1778,7 @@ theorem core.num.U64.overflowing_add_spec (x y : U64) :
   simp [overflowing_add, Scalar.overflowing_add, int_overflowing_add]
   split <;> split <;> simp_all <;> scalar_tac
 
-@[pspec]
+@[progress]
 theorem core.num.U128.overflowing_add_spec (x y : U128) :
   ∃ z b, overflowing_add x y = ok (z, b) ∧
   if x.val + y.val > U128.max then z.val = x.val + y.val - U128.max - 1 ∧ b = true
@@ -1132,7 +1787,7 @@ theorem core.num.U128.overflowing_add_spec (x y : U128) :
   simp [overflowing_add, Scalar.overflowing_add, int_overflowing_add]
   split <;> split <;> simp_all <;> scalar_tac
 
-@[pspec]
+@[progress]
 theorem core.num.Usize.overflowing_add_spec (x y : Usize) :
   ∃ z b, overflowing_add x y = ok (z, b) ∧
   if x.val + y.val > Usize.max then z.val = x.val + y.val - Usize.max - 1 ∧ b = true

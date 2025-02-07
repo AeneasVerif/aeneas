@@ -13,7 +13,7 @@ open Utils
 -- TODO: the scalar types annoyingly often get reduced when we use the progress
 -- tactic. We should find a way of controling reduction. For now we use rewriting
 -- lemmas to make sure the goal remains clean, but this complexifies proof terms.
--- It seems there used to be a `fold` tactic.
+-- It seems there used to be a `fold` tactic. Update: there is a `refold_let` in Mathlib
 theorem scalar_isize_eq : Std.Scalar .Isize = Std.Isize := by rfl
 theorem scalar_i8_eq    : Std.Scalar .I8 = Std.I8 := by rfl
 theorem scalar_i16_eq   : Std.Scalar .I16 = Std.I16 := by rfl

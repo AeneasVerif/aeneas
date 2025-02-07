@@ -95,11 +95,6 @@ open Lean.Elab.Command
     let name := cs.constName!
     explore_decl name
 
-private def test1 : Nat := 0
-private def test2 (x : Nat) : Nat := x
-print_decl test1
-print_decl test2
-
 def printDecls (decls : List LocalDecl) : MetaM Unit := do
   let decls ← decls.foldrM (λ decl msg => do
     pure (m!"\n{decl.toExpr} : {← inferType decl.toExpr}" ++ msg)) m!""
@@ -1007,6 +1002,7 @@ elab "extract_goal" : tactic => do
   withMainContext do
   extractGoal
 
+set_option linter.unusedTactic false in
 example (x : Nat) (y : Nat) (_ : Nat) (h : x ≤ y) : y ≥ x := by
   set_option linter.unusedTactic false in
   extract_goal

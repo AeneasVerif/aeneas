@@ -78,6 +78,14 @@ def IScalarTy.bitWidth (ty : IScalarTy) : Nat :=
 @[simp] theorem IScalarTy.I64_bitWidth_eq   : I64.bitWidth   = 64 := by rfl
 @[simp] theorem IScalarTy.I128_bitWidth_eq  : I128.bitWidth  = 128 := by rfl
 
+theorem UScalarTy.bitWidth_nonzero (ty : UScalarTy) : ty.bitWidth ≠ 0 := by
+  dcases ty <;> simp
+  dcases System.Platform.numBits_eq <;> simp_all
+
+theorem IScalarTy.bitWidth_nonzero (ty : IScalarTy) : ty.bitWidth ≠ 0 := by
+  dcases ty <;> simp
+  dcases System.Platform.numBits_eq <;> simp_all
+
 /-! The "normalized" bounds, that we use in practice -/
 def I8.min   : Int := -128
 def I8.max   : Int := 127
@@ -168,11 +176,17 @@ def UScalar.smax_eq (ty : UScalarTy) : UScalar.max ty = UScalar.smax ty := by ca
 def IScalar.smin_eq (ty : IScalarTy) : IScalar.min ty = IScalar.smin ty := by cases ty <;> rfl
 def IScalar.smax_eq (ty : IScalarTy) : IScalar.max ty = IScalar.smax ty := by cases ty <;> rfl
 
-theorem UScalar.bounds_eq (ty : UScalarTy) : UScalar.max ty = UScalar.smax ty := by
+theorem UScalar.max_eq_smax (ty : UScalarTy) : UScalar.max ty = UScalar.smax ty := by
   dcases ty <;> rfl
 
-theorem IScalar.bounds_eq (ty : IScalarTy) : IScalar.min ty = IScalar.smin ty ∧ IScalar.max ty = IScalar.smax ty := by
+theorem IScalar.bound_eq_sbound (ty : IScalarTy) : IScalar.min ty = IScalar.smin ty ∧ IScalar.max ty = IScalar.smax ty := by
   dcases ty <;> split_conjs <;> rfl
+
+theorem IScalar.min_eq_smin (ty : IScalarTy) : IScalar.min ty = IScalar.smin ty := by
+  dcases ty <;> rfl
+
+theorem IScalar.max_eq_smax (ty : IScalarTy) : IScalar.max ty = IScalar.smax ty := by
+  dcases ty <;> rfl
 
 /-
 "Conservative" bounds
@@ -250,7 +264,7 @@ def UScalar.val {ty} (x : UScalar ty) : ℕ := x.bv.toNat
 
 def UScalar.hBounds {ty} (x : UScalar ty) : x.val ≤ UScalar.max ty := by
   dcases h: x.bv
-  simp [h, val, bounds_eq, smax]
+  simp [h, val, max_eq_smax, smax]
   omega
 
 def UScalar.hmax {ty} (x : UScalar ty) : x.val ≤ UScalar.max ty := x.hBounds
@@ -268,7 +282,7 @@ def IScalar.val {ty} (x : IScalar ty) : ℤ := x.bv.toInt
 def IScalar.hBounds {ty} (x : IScalar ty) : IScalar.min ty ≤ x.val ∧ x.val ≤ IScalar.max ty := by
   match x with
   | ⟨ ⟨ fin ⟩ ⟩ =>
-    simp [val, bounds_eq, smin, smax, BitVec.toInt]
+    simp [val, bound_eq_sbound, smin, smax, BitVec.toInt]
     dcases ty <;> simp at * <;> try omega
     have hFinLt := fin.isLt
     cases h: System.Platform.numBits_eq <;> simp_all only [IScalarTy.Isize_bitWidth_eq,
@@ -762,12 +776,13 @@ theorem UScalar.max_right_zero_eq {ty} (x: UScalar ty):
   Max.max x (UScalar.ofNat 0 (by simp)) = x := max_eq_left (UScalar.zero_le x)
 
 /-! Some conversions -/
-@[simp] abbrev I8.toNat    (x : I8) : Nat := x.val.toNat
-@[simp] abbrev I16.toNat   (x : I16) : Nat := x.val.toNat
-@[simp] abbrev I32.toNat   (x : I32) : Nat := x.val.toNat
-@[simp] abbrev I64.toNat   (x : I64) : Nat := x.val.toNat
-@[simp] abbrev I128.toNat  (x : I128) : Nat := x.val.toNat
-@[simp] abbrev Isize.toNat (x : Isize) : Nat := x.val.toNat
+@[simp] abbrev IScalar.toNat (x : IScalar ty) : Nat := x.val.toNat
+@[simp] abbrev I8.toNat      (x : I8) : Nat := x.val.toNat
+@[simp] abbrev I16.toNat     (x : I16) : Nat := x.val.toNat
+@[simp] abbrev I32.toNat     (x : I32) : Nat := x.val.toNat
+@[simp] abbrev I64.toNat     (x : I64) : Nat := x.val.toNat
+@[simp] abbrev I128.toNat    (x : I128) : Nat := x.val.toNat
+@[simp] abbrev Isize.toNat   (x : Isize) : Nat := x.val.toNat
 
 def U8.bv (x : U8)   : BitVec 8 := UScalar.bv x
 def U16.bv (x : U16) : BitVec 16 := UScalar.bv x
@@ -804,6 +819,16 @@ def Isize.bv (x : Isize) : BitVec size_num_bits := IScalar.bv x
 @[simp] theorem I64.bv_toInt_eq (x : I64) : x.bv.toInt = x.val := by apply IScalar.bv_toInt_eq
 @[simp] theorem I128.bv_toInt_eq (x : I128) : x.bv.toInt = x.val := by apply IScalar.bv_toInt_eq
 @[simp] theorem Isize.bv_toInt_eq (x : Isize) : x.bv.toInt = x.val := by apply IScalar.bv_toInt_eq
+
+/-!
+Adding theorems to the `zify_simps` simplification set.
+-/
+attribute [zify_simps] UScalar.eq_equiv IScalar.eq_equiv
+                       UScalar.lt_equiv IScalar.lt_equiv
+                       UScalar.le_equiv IScalar.le_equiv
+
+attribute [zify_simps] U8.bv_toNat_eq U16.bv_toNat_eq U32.bv_toNat_eq
+                       U64.bv_toNat_eq U128.bv_toNat_eq Usize.bv_toNat_eq
 
 end Std
 

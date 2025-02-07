@@ -147,7 +147,7 @@ structure PSpecAttr where
 initialize pspecAttr : PSpecAttr ← do
   let ext ← mkDiscrTreeExtension `pspecMap
   let attrImpl : AttributeImpl := {
-    name := `pspec
+    name := `progress
     descr := "Marks theorems to use with the `progress` tactic"
     add := fun thName stx attrKind => do
       Attribute.Builtin.ensureNoArgs stx
