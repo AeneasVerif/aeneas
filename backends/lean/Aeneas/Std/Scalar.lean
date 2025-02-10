@@ -604,7 +604,7 @@ theorem IScalar.add_spec {ty} {x y : IScalar ty}
 -/
 
 
-theorem UScalar.sub_equiv {ty} {x y : UScalar ty} :
+theorem UScalar.sub_equiv {ty} (x y : UScalar ty) :
   match x - y with
   | ok z =>
     y.val ≤ x.val ∧
@@ -649,7 +649,7 @@ theorem UScalar.sub_equiv {ty} {x y : UScalar ty} :
     rw [← Int.add_emod]
     ring_nf
 
-theorem IScalar.sub_equiv {ty} {x y : IScalar ty} :
+theorem IScalar.sub_equiv {ty} (x y : IScalar ty) :
   match x - y with
   | ok z =>
     IScalar.inBounds ty (x.val - y.val) ∧
@@ -826,34 +826,47 @@ theorem IScalar.sub_spec {ty} {x y : IScalar ty}
 Theorems with a specification which use integers and bit-vectors
 -/
 
+theorem UScalar.mul_equiv {ty} (x y : UScalar ty) :
+  match mul x y with
+  | ok z => x.val * y.val ≤ UScalar.max ty ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv
+  | fail _ => UScalar.max ty < x.val * y.val
+  | .div => False := by
+  simp [mul]
+  have := tryMk_eq ty (x.val * y.val)
+  split <;> simp_all
+  simp_all [tryMk, tryMkOpt]
+  rename_i hEq; simp only [← hEq, ofNatCore, val]
+  zify; simp
+
 /-- Generic theorem - shouldn't be used much -/
 theorem UScalar.mul_bv_spec {ty} {x y : UScalar ty}
   (hmax : ↑x * ↑y ≤ UScalar.max ty) :
   ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv := by
-  conv => congr; ext; lhs; simp [HMul.hMul]
-  simp [mul, tryMk, tryMkOpt, ofOption, hmax, ofNatCore]
-  simp only [val]
-  simp
-  split_conjs
-  . simp [max_eq_smax, smax] at hmax
-    have : 0 < 2^ty.bitWidth := by simp
-    apply Nat.mod_eq_of_lt; omega
-  . zify; simp
+  have : x * y = mul x y := by rfl
+  have := mul_equiv x y
+  split at this <;> simp_all
+  omega
+
+theorem IScalar.mul_equiv {ty} (x y : IScalar ty) :
+  match mul x y with
+  | ok z => IScalar.min ty ≤ x.val * y.val ∧ x.val * y.val ≤ IScalar.max ty ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
+  | fail _ => ¬(IScalar.min ty ≤ x.val * y.val ∧ x.val * y.val ≤ IScalar.max ty)
+  | .div => False := by
+  simp [mul]
+  have := tryMk_eq ty (x.val * y.val)
+  split <;> simp_all
+  simp_all [tryMk, tryMkOpt]
+  rename_i hEq; simp only [← hEq, ofIntCore, val]
+  simp [← BitVec.toInt_inj]
 
 /-- Generic theorem - shouldn't be used much -/
 theorem IScalar.mul_bv_spec {ty} {x y : IScalar ty}
   (hmin : IScalar.min ty ≤ ↑x * ↑y)
   (hmax : ↑x * ↑y ≤ IScalar.max ty) :
   ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y ∧ z.bv = x.bv * y.bv := by
-  conv => congr; ext; lhs; simp [HMul.hMul]
-  simp [mul, tryMk, tryMkOpt, ofOption, hmin, hmax, ofIntCore]
-  simp only [val]
-  simp
-  split_conjs
-  . simp [bound_eq_sbound, smin, smax] at *
-    apply bmod_pow_bitWidth_eq_of_lt ty (x.val * y.val) (by omega) (by omega)
-  . rw [BitVec.ofInt_mul]
-    simp only [BitVec.ofInt_mul, val, BitVec.ofInt_toInt]
+  have : x * y = mul x y := by rfl
+  have := mul_equiv x y
+  split at this <;> simp_all
 
 theorem Usize.mul_bv_spec {x y : Usize} (hmax : x.val * y.val ≤ Usize.max) :
   ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
@@ -1802,7 +1815,7 @@ theorem IScalar.rem_spec {ty} (x : IScalar ty) {y : IScalar ty} (hzero : y.val �
 -/
 
 /-!
-## Checked Addition
+### Checked Addition
 -/
 
 /- [core::num::{T}::checked_add] -/
@@ -1828,7 +1841,7 @@ def I128.checked_add (x y : I128) : Option I128 := core.num.checked_add_IScalar 
 def Isize.checked_add (x y : Isize) : Option Isize := core.num.checked_add_IScalar x y
 
 /-!
-## Checked Subtraction
+### Checked Subtraction
 -/
 
 /- [core::num::{T}::checked_sub] -/
@@ -1854,12 +1867,12 @@ def I128.checked_sub (x y : I128) : Option I128 := core.num.checked_sub_IScalar 
 def Isize.checked_sub (x y : Isize) : Option Isize := core.num.checked_sub_IScalar x y
 
 /-!
-## Checked Multiplication
+### Checked Multiplication
 -/
 
 /- [core::num::{T}::checked_mul] -/
 def core.num.checked_mul_UScalar {ty} (x y : UScalar ty) : Option (UScalar ty) :=
-  Option.ofResult (x * y)
+  Option.ofResult (UScalar.mul x y)
 
 def U8.checked_mul (x y : U8) : Option U8 := core.num.checked_mul_UScalar x y
 def U16.checked_mul (x y : U16) : Option U16 := core.num.checked_mul_UScalar x y
@@ -1870,7 +1883,7 @@ def Usize.checked_mul (x y : Usize) : Option Usize := core.num.checked_mul_UScal
 
 /- [core::num::{T}::checked_mul] -/
 def core.num.checked_mul_IScalar {ty} (x y : IScalar ty) : Option (IScalar ty) :=
-  Option.ofResult (x * y)
+  Option.ofResult (IScalar.mul x y)
 
 def I8.checked_mul (x y : I8) : Option I8 := core.num.checked_mul_IScalar x y
 def I16.checked_mul (x y : I16) : Option I16 := core.num.checked_mul_IScalar x y
@@ -1880,12 +1893,12 @@ def I128.checked_mul (x y : I128) : Option I128 := core.num.checked_mul_IScalar 
 def Isize.checked_mul (x y : Isize) : Option Isize := core.num.checked_mul_IScalar x y
 
 /-!
-## Checked Division
+### Checked Division
 -/
 
 /- [core::num::{T}::checked_div] -/
 def core.num.checked_div_UScalar {ty} (x y : UScalar ty) : Option (UScalar ty) :=
-  Option.ofResult (x / y)
+  Option.ofResult (UScalar.div x y)
 
 def U8.checked_div (x y : U8) : Option U8 := core.num.checked_div_UScalar x y
 def U16.checked_div (x y : U16) : Option U16 := core.num.checked_div_UScalar x y
@@ -1896,7 +1909,7 @@ def Usize.checked_div (x y : Usize) : Option Usize := core.num.checked_div_UScal
 
 /- [core::num::{T}::checked_div] -/
 def core.num.checked_div_IScalar {ty} (x y : IScalar ty) : Option (IScalar ty) :=
-  Option.ofResult (x / y)
+  Option.ofResult (IScalar.div x y)
 
 def I8.checked_div (x y : I8) : Option I8 := core.num.checked_div_IScalar x y
 def I16.checked_div (x y : I16) : Option I16 := core.num.checked_div_IScalar x y
@@ -1906,12 +1919,12 @@ def I128.checked_div (x y : I128) : Option I128 := core.num.checked_div_IScalar 
 def Isize.checked_div (x y : Isize) : Option Isize := core.num.checked_div_IScalar x y
 
 /-!
-## Checked Remainder
+### Checked Remainder
 -/
 
 /- [core::num::{T}::checked_rem] -/
 def core.num.checked_rem_UScalar {ty} (x y : UScalar ty) : Option (UScalar ty) :=
-  Option.ofResult (x % y)
+  Option.ofResult (UScalar.rem x y)
 
 def U8.checked_rem (x y : U8) : Option U8 := core.num.checked_rem_UScalar x y
 def U16.checked_rem (x y : U16) : Option U16 := core.num.checked_rem_UScalar x y
@@ -1922,7 +1935,7 @@ def Usize.checked_rem (x y : Usize) : Option Usize := core.num.checked_rem_UScal
 
 /- [core::num::{T}::checked_rem] -/
 def core.num.checked_rem_IScalar {ty} (x y : IScalar ty) : Option (IScalar ty) :=
-  Option.ofResult (x % y)
+  Option.ofResult (IScalar.rem x y)
 
 def I8.checked_rem (x y : I8) : Option I8 := core.num.checked_rem_IScalar x y
 def I16.checked_rem (x y : I16) : Option I16 := core.num.checked_rem_IScalar x y
@@ -1935,6 +1948,655 @@ def Isize.checked_rem (x y : Isize) : Option Isize := core.num.checked_rem_IScal
 ## Checked Operations: Theorems
 -/
 
+/-!
+### Checked Add
+-/
+
+/-!
+Unsigned checked add
+-/
+theorem core.num.checked_add_UScalar_bv_spec {ty} (x y : UScalar ty) :
+  match core.num.checked_add_UScalar x y with
+  | some z => x.val + y.val ≤ UScalar.max ty ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
+  | none => UScalar.max ty < x.val + y.val := by
+  have h := UScalar.add_equiv x y
+  have hAdd : x + y = UScalar.add x y := by rfl
+  rw [hAdd] at h
+  dcases hEq : UScalar.add x y <;> simp_all [Option.ofResult, checked_add_UScalar]
+
+theorem U8.checked_add_bv_spec (x y : U8) :
+  match U8.checked_add x y with
+  | some z => x.val + y.val ≤ U8.max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
+  | none => U8.max < x.val + y.val := by
+  have := core.num.checked_add_UScalar_bv_spec x y
+  simp_all [U8.checked_add, UScalar.max, U8.bv]
+  cases h: core.num.checked_add_UScalar x y <;> simp_all
+
+theorem U16.checked_add_bv_spec (x y : U16) :
+  match U16.checked_add x y with
+  | some z => x.val + y.val ≤ U16.max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
+  | none => U16.max < x.val + y.val := by
+  have := core.num.checked_add_UScalar_bv_spec x y
+  simp_all [U16.checked_add, UScalar.max, U16.bv]
+  cases h: core.num.checked_add_UScalar x y <;> simp_all
+
+theorem U32.checked_add_bv_spec (x y : U32) :
+  match U32.checked_add x y with
+  | some z => x.val + y.val ≤ U32.max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
+  | none => U32.max < x.val + y.val := by
+  have := core.num.checked_add_UScalar_bv_spec x y
+  simp_all [U32.checked_add, UScalar.max, U32.bv]
+  cases h: core.num.checked_add_UScalar x y <;> simp_all
+
+theorem U64.checked_add_bv_spec (x y : U64) :
+  match U64.checked_add x y with
+  | some z => x.val + y.val ≤ U64.max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
+  | none => U64.max < x.val + y.val := by
+  have := core.num.checked_add_UScalar_bv_spec x y
+  simp_all [U64.checked_add, UScalar.max, U64.bv]
+  cases h: core.num.checked_add_UScalar x y <;> simp_all
+
+theorem U128.checked_add_bv_spec (x y : U128) :
+  match U128.checked_add x y with
+  | some z => x.val + y.val ≤ U128.max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
+  | none => U128.max < x.val + y.val := by
+  have := core.num.checked_add_UScalar_bv_spec x y
+  simp_all [U128.checked_add, UScalar.max, U128.bv]
+  cases h: core.num.checked_add_UScalar x y <;> simp_all
+
+theorem Usize.checked_add_bv_spec (x y : Usize) :
+  match Usize.checked_add x y with
+  | some z => x.val + y.val ≤ Usize.max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
+  | none => Usize.max < x.val + y.val := by
+  have := core.num.checked_add_UScalar_bv_spec x y
+  simp_all [Usize.checked_add, UScalar.max, Usize.bv]
+  cases h: core.num.checked_add_UScalar x y <;> simp_all
+
+/-!
+Signed checked add
+-/
+theorem core.num.checked_add_IScalar_bv_spec {ty} (x y : IScalar ty) :
+  match core.num.checked_add_IScalar x y with
+  | some z => IScalar.min ty ≤ x.val + y.val ∧ x.val + y.val ≤ IScalar.max ty ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
+  | none => ¬ (IScalar.min ty ≤ x.val + y.val ∧ x.val + y.val ≤ IScalar.max ty) := by
+  have h := IScalar.add_equiv x y
+  have hAdd : x + y = IScalar.add x y := by rfl
+  rw [hAdd] at h
+  dcases hEq : IScalar.add x y <;> simp_all [Option.ofResult, checked_add_IScalar]
+
+theorem I8.checked_add_bv_spec (x y : I8) :
+  match core.num.checked_add_IScalar x y with
+  | some z => I8.min ≤ x.val + y.val ∧ x.val + y.val ≤ I8.max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
+  | none => ¬ (I8.min ≤ x.val + y.val ∧ x.val + y.val ≤ I8.max) := by
+  have := core.num.checked_add_IScalar_bv_spec x y
+  simp_all [I8.checked_add, IScalar.min, IScalar.max, I8.bv]
+  cases h: core.num.checked_add_IScalar x y <;> simp_all
+
+theorem I16.checked_add_bv_spec (x y : I16) :
+  match core.num.checked_add_IScalar x y with
+  | some z => I16.min ≤ x.val + y.val ∧ x.val + y.val ≤ I16.max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
+  | none => ¬ (I16.min ≤ x.val + y.val ∧ x.val + y.val ≤ I16.max) := by
+  have := core.num.checked_add_IScalar_bv_spec x y
+  simp_all [I16.checked_add, IScalar.min, IScalar.max, I16.bv]
+  cases h: core.num.checked_add_IScalar x y <;> simp_all
+
+theorem I32.checked_add_bv_spec (x y : I32) :
+  match core.num.checked_add_IScalar x y with
+  | some z => I32.min ≤ x.val + y.val ∧ x.val + y.val ≤ I32.max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
+  | none => ¬ (I32.min ≤ x.val + y.val ∧ x.val + y.val ≤ I32.max) := by
+  have := core.num.checked_add_IScalar_bv_spec x y
+  simp_all [I32.checked_add, IScalar.min, IScalar.max, I32.bv]
+  cases h: core.num.checked_add_IScalar x y <;> simp_all
+
+theorem I64.checked_add_bv_spec (x y : I64) :
+  match core.num.checked_add_IScalar x y with
+  | some z => I64.min ≤ x.val + y.val ∧ x.val + y.val ≤ I64.max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
+  | none => ¬ (I64.min ≤ x.val + y.val ∧ x.val + y.val ≤ I64.max) := by
+  have := core.num.checked_add_IScalar_bv_spec x y
+  simp_all [I64.checked_add, IScalar.min, IScalar.max, I64.bv]
+  cases h: core.num.checked_add_IScalar x y <;> simp_all
+
+theorem I128.checked_add_bv_spec (x y : I128) :
+  match core.num.checked_add_IScalar x y with
+  | some z => I128.min ≤ x.val + y.val ∧ x.val + y.val ≤ I128.max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
+  | none => ¬ (I128.min ≤ x.val + y.val ∧ x.val + y.val ≤ I128.max) := by
+  have := core.num.checked_add_IScalar_bv_spec x y
+  simp_all [I128.checked_add, IScalar.min, IScalar.max, I128.bv]
+  cases h: core.num.checked_add_IScalar x y <;> simp_all
+
+theorem Isize.checked_add_bv_spec (x y : Isize) :
+  match core.num.checked_add_IScalar x y with
+  | some z => Isize.min ≤ x.val + y.val ∧ x.val + y.val ≤ Isize.max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
+  | none => ¬ (Isize.min ≤ x.val + y.val ∧ x.val + y.val ≤ Isize.max) := by
+  have := core.num.checked_add_IScalar_bv_spec x y
+  simp_all [Isize.checked_add, IScalar.min, IScalar.max, Isize.bv]
+  cases h: core.num.checked_add_IScalar x y <;> simp_all
+
+/-!
+### Checked Sub
+-/
+
+/-!
+Unsigned checked sub
+-/
+theorem core.num.checked_sub_UScalar_bv_spec {ty} (x y : UScalar ty) :
+  match core.num.checked_sub_UScalar x y with
+  | some z => y.val ≤ x.val ∧ z.val = x.val - y.val ∧ z.bv = x.bv - y.bv
+  | none => x.val < y.val := by
+  have h := UScalar.sub_equiv x y
+  have hsub : x - y = UScalar.sub x y := by rfl
+  rw [hsub] at h
+  dcases hEq : UScalar.sub x y <;> simp_all [Option.ofResult, checked_sub_UScalar]
+
+theorem U8.checked_sub_bv_spec (x y : U8) :
+  match U8.checked_sub x y with
+  | some z => y.val ≤ x.val ∧ z.val = x.val - y.val ∧ z.bv = x.bv - y.bv
+  | none => x.val < y.val := by
+  have := core.num.checked_sub_UScalar_bv_spec x y
+  simp_all [U8.checked_sub, UScalar.max, U8.bv]
+  cases h: core.num.checked_sub_UScalar x y <;> simp_all
+
+theorem U16.checked_sub_bv_spec (x y : U16) :
+  match U16.checked_sub x y with
+  | some z => y.val ≤ x.val ∧ z.val = x.val - y.val ∧ z.bv = x.bv - y.bv
+  | none => x.val < y.val := by
+  have := core.num.checked_sub_UScalar_bv_spec x y
+  simp_all [U16.checked_sub, UScalar.max, U16.bv]
+  cases h: core.num.checked_sub_UScalar x y <;> simp_all
+
+theorem U32.checked_sub_bv_spec (x y : U32) :
+  match U32.checked_sub x y with
+  | some z => y.val ≤ x.val ∧ z.val = x.val - y.val ∧ z.bv = x.bv - y.bv
+  | none => x.val < y.val := by
+  have := core.num.checked_sub_UScalar_bv_spec x y
+  simp_all [U32.checked_sub, UScalar.max, U32.bv]
+  cases h: core.num.checked_sub_UScalar x y <;> simp_all
+
+theorem U64.checked_sub_bv_spec (x y : U64) :
+  match U64.checked_sub x y with
+  | some z => y.val ≤ x.val ∧ z.val = x.val - y.val ∧ z.bv = x.bv - y.bv
+  | none => x.val < y.val := by
+  have := core.num.checked_sub_UScalar_bv_spec x y
+  simp_all [U64.checked_sub, UScalar.max, U64.bv]
+  cases h: core.num.checked_sub_UScalar x y <;> simp_all
+
+theorem U128.checked_sub_bv_spec (x y : U128) :
+  match U128.checked_sub x y with
+  | some z => y.val ≤ x.val ∧ z.val = x.val - y.val ∧ z.bv = x.bv - y.bv
+  | none => x.val < y.val := by
+  have := core.num.checked_sub_UScalar_bv_spec x y
+  simp_all [U128.checked_sub, UScalar.max, U128.bv]
+  cases h: core.num.checked_sub_UScalar x y <;> simp_all
+
+theorem Usize.checked_sub_bv_spec (x y : Usize) :
+  match Usize.checked_sub x y with
+  | some z => y.val ≤ x.val ∧ z.val = x.val - y.val ∧ z.bv = x.bv - y.bv
+  | none => x.val < y.val := by
+  have := core.num.checked_sub_UScalar_bv_spec x y
+  simp_all [Usize.checked_sub, UScalar.max, Usize.bv]
+  cases h: core.num.checked_sub_UScalar x y <;> simp_all
+
+/-!
+Signed checked sub
+-/
+theorem core.num.checked_sub_IScalar_bv_spec {ty} (x y : IScalar ty) :
+  match core.num.checked_sub_IScalar x y with
+  | some z => IScalar.min ty ≤ x.val - y.val ∧ x.val - y.val ≤ IScalar.max ty ∧ z.val = x.val - y.val ∧ z.bv = x.bv - y.bv
+  | none => ¬ (IScalar.min ty ≤ x.val - y.val ∧ x.val - y.val ≤ IScalar.max ty) := by
+  have h := IScalar.sub_equiv x y
+  have hsub : x - y = IScalar.sub x y := by rfl
+  rw [hsub] at h
+  dcases hEq : IScalar.sub x y <;> simp_all [Option.ofResult, checked_sub_IScalar]
+
+theorem I8.checked_sub_bv_spec (x y : I8) :
+  match core.num.checked_sub_IScalar x y with
+  | some z => I8.min ≤ x.val - y.val ∧ x.val - y.val ≤ I8.max ∧ z.val = x.val - y.val ∧ z.bv = x.bv - y.bv
+  | none => ¬ (I8.min ≤ x.val - y.val ∧ x.val - y.val ≤ I8.max) := by
+  have := core.num.checked_sub_IScalar_bv_spec x y
+  simp_all [I8.checked_sub, IScalar.min, IScalar.max, I8.bv]
+  cases h: core.num.checked_sub_IScalar x y <;> simp_all
+
+theorem I16.checked_sub_bv_spec (x y : I16) :
+  match core.num.checked_sub_IScalar x y with
+  | some z => I16.min ≤ x.val - y.val ∧ x.val - y.val ≤ I16.max ∧ z.val = x.val - y.val ∧ z.bv = x.bv - y.bv
+  | none => ¬ (I16.min ≤ x.val - y.val ∧ x.val - y.val ≤ I16.max) := by
+  have := core.num.checked_sub_IScalar_bv_spec x y
+  simp_all [I16.checked_sub, IScalar.min, IScalar.max, I16.bv]
+  cases h: core.num.checked_sub_IScalar x y <;> simp_all
+
+theorem I32.checked_sub_bv_spec (x y : I32) :
+  match core.num.checked_sub_IScalar x y with
+  | some z => I32.min ≤ x.val - y.val ∧ x.val - y.val ≤ I32.max ∧ z.val = x.val - y.val ∧ z.bv = x.bv - y.bv
+  | none => ¬ (I32.min ≤ x.val - y.val ∧ x.val - y.val ≤ I32.max) := by
+  have := core.num.checked_sub_IScalar_bv_spec x y
+  simp_all [I32.checked_sub, IScalar.min, IScalar.max, I32.bv]
+  cases h: core.num.checked_sub_IScalar x y <;> simp_all
+
+theorem I64.checked_sub_bv_spec (x y : I64) :
+  match core.num.checked_sub_IScalar x y with
+  | some z => I64.min ≤ x.val - y.val ∧ x.val - y.val ≤ I64.max ∧ z.val = x.val - y.val ∧ z.bv = x.bv - y.bv
+  | none => ¬ (I64.min ≤ x.val - y.val ∧ x.val - y.val ≤ I64.max) := by
+  have := core.num.checked_sub_IScalar_bv_spec x y
+  simp_all [I64.checked_sub, IScalar.min, IScalar.max, I64.bv]
+  cases h: core.num.checked_sub_IScalar x y <;> simp_all
+
+theorem I128.checked_sub_bv_spec (x y : I128) :
+  match core.num.checked_sub_IScalar x y with
+  | some z => I128.min ≤ x.val - y.val ∧ x.val - y.val ≤ I128.max ∧ z.val = x.val - y.val ∧ z.bv = x.bv - y.bv
+  | none => ¬ (I128.min ≤ x.val - y.val ∧ x.val - y.val ≤ I128.max) := by
+  have := core.num.checked_sub_IScalar_bv_spec x y
+  simp_all [I128.checked_sub, IScalar.min, IScalar.max, I128.bv]
+  cases h: core.num.checked_sub_IScalar x y <;> simp_all
+
+theorem Isize.checked_sub_bv_spec (x y : Isize) :
+  match core.num.checked_sub_IScalar x y with
+  | some z => Isize.min ≤ x.val - y.val ∧ x.val - y.val ≤ Isize.max ∧ z.val = x.val - y.val ∧ z.bv = x.bv - y.bv
+  | none => ¬ (Isize.min ≤ x.val - y.val ∧ x.val - y.val ≤ Isize.max) := by
+  have := core.num.checked_sub_IScalar_bv_spec x y
+  simp_all [Isize.checked_sub, IScalar.min, IScalar.max, Isize.bv]
+  cases h: core.num.checked_sub_IScalar x y <;> simp_all
+
+/-!
+### Checked Mul
+-/
+
+/-!
+Unsigned checked mul
+-/
+theorem core.num.checked_mul_UScalar_bv_spec {ty} (x y : UScalar ty) :
+  match core.num.checked_mul_UScalar x y with
+  | some z => x.val * y.val ≤ UScalar.max ty ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
+  | none => UScalar.max ty < x.val * y.val := by
+  have h := UScalar.mul_equiv x y
+  simp [checked_mul_UScalar]
+  dcases hEq : UScalar.mul x y <;> simp_all [Option.ofResult]
+
+theorem U8.checked_mul_bv_spec (x y : U8) :
+  match U8.checked_mul x y with
+  | some z => x.val * y.val ≤ U8.max ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
+  | none => U8.max < x.val * y.val := by
+  have := core.num.checked_mul_UScalar_bv_spec x y
+  simp_all [U8.checked_mul, UScalar.max, U8.bv]
+  cases h: core.num.checked_mul_UScalar x y <;> simp_all
+
+theorem U16.checked_mul_bv_spec (x y : U16) :
+  match U16.checked_mul x y with
+  | some z => x.val * y.val ≤ U16.max ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
+  | none => U16.max < x.val * y.val := by
+  have := core.num.checked_mul_UScalar_bv_spec x y
+  simp_all [U16.checked_mul, UScalar.max, U16.bv]
+  cases h: core.num.checked_mul_UScalar x y <;> simp_all
+
+theorem U32.checked_mul_bv_spec (x y : U32) :
+  match U32.checked_mul x y with
+  | some z => x.val * y.val ≤ U32.max ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
+  | none => U32.max < x.val * y.val := by
+  have := core.num.checked_mul_UScalar_bv_spec x y
+  simp_all [U32.checked_mul, UScalar.max, U32.bv]
+  cases h: core.num.checked_mul_UScalar x y <;> simp_all
+
+theorem U64.checked_mul_bv_spec (x y : U64) :
+  match U64.checked_mul x y with
+  | some z => x.val * y.val ≤ U64.max ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
+  | none => U64.max < x.val * y.val := by
+  have := core.num.checked_mul_UScalar_bv_spec x y
+  simp_all [U64.checked_mul, UScalar.max, U64.bv]
+  cases h: core.num.checked_mul_UScalar x y <;> simp_all
+
+theorem U128.checked_mul_bv_spec (x y : U128) :
+  match U128.checked_mul x y with
+  | some z => x.val * y.val ≤ U128.max ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
+  | none => U128.max < x.val * y.val := by
+  have := core.num.checked_mul_UScalar_bv_spec x y
+  simp_all [U128.checked_mul, UScalar.max, U128.bv]
+  cases h: core.num.checked_mul_UScalar x y <;> simp_all
+
+theorem Usize.checked_mul_bv_spec (x y : Usize) :
+  match Usize.checked_mul x y with
+  | some z => x.val * y.val ≤ Usize.max ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
+  | none => Usize.max < x.val * y.val := by
+  have := core.num.checked_mul_UScalar_bv_spec x y
+  simp_all [Usize.checked_mul, UScalar.max, Usize.bv]
+  cases h: core.num.checked_mul_UScalar x y <;> simp_all
+
+/-!
+Signed checked mul
+-/
+theorem core.num.checked_mul_IScalar_bv_spec {ty} (x y : IScalar ty) :
+  match core.num.checked_mul_IScalar x y with
+  | some z => IScalar.min ty ≤ x.val * y.val ∧ x.val * y.val ≤ IScalar.max ty ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
+  | none => ¬ (IScalar.min ty ≤ x.val * y.val ∧ x.val * y.val ≤ IScalar.max ty) := by
+  have h := IScalar.mul_equiv x y
+  simp [checked_mul_IScalar]
+  dcases hEq : IScalar.mul x y <;> simp_all [Option.ofResult]
+
+theorem I8.checked_mul_bv_spec (x y : I8) :
+  match core.num.checked_mul_IScalar x y with
+  | some z => I8.min ≤ x.val * y.val ∧ x.val * y.val ≤ I8.max ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
+  | none => ¬ (I8.min ≤ x.val * y.val ∧ x.val * y.val ≤ I8.max) := by
+  have := core.num.checked_mul_IScalar_bv_spec x y
+  simp_all [I8.checked_mul, IScalar.min, IScalar.max, I8.bv]
+  cases h: core.num.checked_mul_IScalar x y <;> simp_all
+
+theorem I16.checked_mul_bv_spec (x y : I16) :
+  match core.num.checked_mul_IScalar x y with
+  | some z => I16.min ≤ x.val * y.val ∧ x.val * y.val ≤ I16.max ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
+  | none => ¬ (I16.min ≤ x.val * y.val ∧ x.val * y.val ≤ I16.max) := by
+  have := core.num.checked_mul_IScalar_bv_spec x y
+  simp_all [I16.checked_mul, IScalar.min, IScalar.max, I16.bv]
+  cases h: core.num.checked_mul_IScalar x y <;> simp_all
+
+theorem I32.checked_mul_bv_spec (x y : I32) :
+  match core.num.checked_mul_IScalar x y with
+  | some z => I32.min ≤ x.val * y.val ∧ x.val * y.val ≤ I32.max ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
+  | none => ¬ (I32.min ≤ x.val * y.val ∧ x.val * y.val ≤ I32.max) := by
+  have := core.num.checked_mul_IScalar_bv_spec x y
+  simp_all [I32.checked_mul, IScalar.min, IScalar.max, I32.bv]
+  cases h: core.num.checked_mul_IScalar x y <;> simp_all
+
+theorem I64.checked_mul_bv_spec (x y : I64) :
+  match core.num.checked_mul_IScalar x y with
+  | some z => I64.min ≤ x.val * y.val ∧ x.val * y.val ≤ I64.max ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
+  | none => ¬ (I64.min ≤ x.val * y.val ∧ x.val * y.val ≤ I64.max) := by
+  have := core.num.checked_mul_IScalar_bv_spec x y
+  simp_all [I64.checked_mul, IScalar.min, IScalar.max, I64.bv]
+  cases h: core.num.checked_mul_IScalar x y <;> simp_all
+
+theorem I128.checked_mul_bv_spec (x y : I128) :
+  match core.num.checked_mul_IScalar x y with
+  | some z => I128.min ≤ x.val * y.val ∧ x.val * y.val ≤ I128.max ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
+  | none => ¬ (I128.min ≤ x.val * y.val ∧ x.val * y.val ≤ I128.max) := by
+  have := core.num.checked_mul_IScalar_bv_spec x y
+  simp_all [I128.checked_mul, IScalar.min, IScalar.max, I128.bv]
+  cases h: core.num.checked_mul_IScalar x y <;> simp_all
+
+theorem Isize.checked_mul_bv_spec (x y : Isize) :
+  match core.num.checked_mul_IScalar x y with
+  | some z => Isize.min ≤ x.val * y.val ∧ x.val * y.val ≤ Isize.max ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
+  | none => ¬ (Isize.min ≤ x.val * y.val ∧ x.val * y.val ≤ Isize.max) := by
+  have := core.num.checked_mul_IScalar_bv_spec x y
+  simp_all [Isize.checked_mul, IScalar.min, IScalar.max, Isize.bv]
+  cases h: core.num.checked_mul_IScalar x y <;> simp_all
+
+/-!
+### Checked Division
+-/
+
+/-!
+Unsigned checked div
+-/
+theorem core.num.checked_div_UScalar_bv_spec {ty} (x y : UScalar ty) :
+  match core.num.checked_div_UScalar x y with
+  | some z => y.val ≠ 0 ∧ z.val = x.val / y.val ∧ z.bv = x.bv / y.bv
+  | none => y.val = 0 := by
+  simp [checked_div_UScalar, Option.ofResult, UScalar.div]
+  split_ifs
+  . zify at *
+    simp_all
+  . rename_i hnz
+    simp
+    have hnz' : y.val ≠ 0 := by zify at *; simp_all
+    have ⟨ z, hz ⟩ := UScalar.div_bv_spec x hnz'
+    have : x / y = x.div y := by rfl
+    simp [this, UScalar.div, hnz] at hz
+    simp [hz, hnz']
+
+theorem U8.checked_div_bv_spec (x y : U8) :
+  match U8.checked_div x y with
+  | some z => y.val ≠ 0 ∧ z.val = x.val / y.val ∧ z.bv = x.bv / y.bv
+  | none => y.val = 0 := by
+  have := core.num.checked_div_UScalar_bv_spec x y
+  simp_all [U8.checked_div, UScalar.max, U8.bv]
+  cases h: core.num.checked_div_UScalar x y <;> simp_all
+
+theorem U16.checked_div_bv_spec (x y : U16) :
+  match U16.checked_div x y with
+  | some z => y.val ≠ 0 ∧ z.val = x.val / y.val ∧ z.bv = x.bv / y.bv
+  | none => y.val = 0 := by
+  have := core.num.checked_div_UScalar_bv_spec x y
+  simp_all [U16.checked_div, UScalar.max, U16.bv]
+  cases h: core.num.checked_div_UScalar x y <;> simp_all
+
+theorem U32.checked_div_bv_spec (x y : U32) :
+  match U32.checked_div x y with
+  | some z => y.val ≠ 0 ∧ z.val = x.val / y.val ∧ z.bv = x.bv / y.bv
+  | none => y.val = 0 := by
+  have := core.num.checked_div_UScalar_bv_spec x y
+  simp_all [U32.checked_div, UScalar.max, U32.bv]
+  cases h: core.num.checked_div_UScalar x y <;> simp_all
+
+theorem U64.checked_div_bv_spec (x y : U64) :
+  match U64.checked_div x y with
+  | some z => y.val ≠ 0 ∧ z.val = x.val / y.val ∧ z.bv = x.bv / y.bv
+  | none => y.val = 0 := by
+  have := core.num.checked_div_UScalar_bv_spec x y
+  simp_all [U64.checked_div, UScalar.max, U64.bv]
+  cases h: core.num.checked_div_UScalar x y <;> simp_all
+
+theorem U128.checked_div_bv_spec (x y : U128) :
+  match U128.checked_div x y with
+  | some z => y.val ≠ 0 ∧ z.val = x.val / y.val ∧ z.bv = x.bv / y.bv
+  | none => y.val = 0 := by
+  have := core.num.checked_div_UScalar_bv_spec x y
+  simp_all [U128.checked_div, UScalar.max, U128.bv]
+  cases h: core.num.checked_div_UScalar x y <;> simp_all
+
+theorem Usize.checked_div_bv_spec (x y : Usize) :
+  match Usize.checked_div x y with
+  | some z => y.val ≠ 0 ∧ z.val = x.val / y.val ∧ z.bv = x.bv / y.bv
+  | none => y.val = 0 := by
+  have := core.num.checked_div_UScalar_bv_spec x y
+  simp_all [Usize.checked_div, UScalar.max, Usize.bv]
+  cases h: core.num.checked_div_UScalar x y <;> simp_all
+
+/-!
+Signed checked div
+-/
+theorem core.num.checked_div_IScalar_bv_spec {ty} (x y : IScalar ty) :
+  match core.num.checked_div_IScalar x y with
+  | some z => y.val ≠ 0 ∧ ¬ (x.val = IScalar.min ty ∧ y.val = -1) ∧ z.val = Int.tdiv x.val y.val ∧ z.bv = BitVec.sdiv x.bv y.bv
+  | none => y.val = 0 ∨ (x.val = IScalar.min ty ∧ y.val = -1) := by
+  simp [checked_div_IScalar, Option.ofResult, IScalar.div]
+  split_ifs
+  . zify at *
+    simp_all
+  . rename_i hnz hNoOverflow
+    simp
+    have hnz' : y.val ≠ 0 := by zify at *; simp_all
+    have ⟨ z, hz ⟩ := @IScalar.div_bv_spec _ x y hnz' (by simp; tauto)
+    have : x / y = x.div y := by rfl
+    simp [this, IScalar.div, hnz, hNoOverflow] at hz
+    split_ifs at hz
+    simp at hz
+    simp [hz, hnz']
+    tauto
+  . simp_all
+
+theorem I8.checked_div_bv_spec (x y : I8) :
+  match core.num.checked_div_IScalar x y with
+  | some z => y.val ≠ 0 ∧ ¬ (x.val = I8.min ∧ y.val = -1) ∧ z.val = Int.tdiv x.val y.val ∧ z.bv = BitVec.sdiv x.bv y.bv
+  | none => y.val = 0 ∨ (x.val = I8.min ∧ y.val = -1) := by
+  have := core.num.checked_div_IScalar_bv_spec x y
+  simp_all only [I8.checked_div, I8.bv, IScalar.min]
+  cases h: core.num.checked_div_IScalar x y <;> simp_all
+
+theorem I16.checked_div_bv_spec (x y : I16) :
+  match core.num.checked_div_IScalar x y with
+  | some z => y.val ≠ 0 ∧ ¬ (x.val = I16.min ∧ y.val = -1) ∧ z.val = Int.tdiv x.val y.val ∧ z.bv = BitVec.sdiv x.bv y.bv
+  | none => y.val = 0 ∨ (x.val = I16.min ∧ y.val = -1) := by
+  have := core.num.checked_div_IScalar_bv_spec x y
+  simp_all only [I16.checked_div, I16.bv, IScalar.min]
+  cases h: core.num.checked_div_IScalar x y <;> simp_all
+
+theorem I32.checked_div_bv_spec (x y : I32) :
+  match core.num.checked_div_IScalar x y with
+  | some z => y.val ≠ 0 ∧ ¬ (x.val = I32.min ∧ y.val = -1) ∧ z.val = Int.tdiv x.val y.val ∧ z.bv = BitVec.sdiv x.bv y.bv
+  | none => y.val = 0 ∨ (x.val = I32.min ∧ y.val = -1) := by
+  have := core.num.checked_div_IScalar_bv_spec x y
+  simp_all only [I32.checked_div, I32.bv, IScalar.min]
+  cases h: core.num.checked_div_IScalar x y <;> simp_all
+
+theorem I64.checked_div_bv_spec (x y : I64) :
+  match core.num.checked_div_IScalar x y with
+  | some z => y.val ≠ 0 ∧ ¬ (x.val = I64.min ∧ y.val = -1) ∧ z.val = Int.tdiv x.val y.val ∧ z.bv = BitVec.sdiv x.bv y.bv
+  | none => y.val = 0 ∨ (x.val = I64.min ∧ y.val = -1) := by
+  have := core.num.checked_div_IScalar_bv_spec x y
+  simp_all only [I64.checked_div, I64.bv, IScalar.min]
+  cases h: core.num.checked_div_IScalar x y <;> simp_all
+
+theorem I128.checked_div_bv_spec (x y : I128) :
+  match core.num.checked_div_IScalar x y with
+  | some z => y.val ≠ 0 ∧ ¬ (x.val = I128.min ∧ y.val = -1) ∧ z.val = Int.tdiv x.val y.val ∧ z.bv = BitVec.sdiv x.bv y.bv
+  | none => y.val = 0 ∨ (x.val = I128.min ∧ y.val = -1) := by
+  have := core.num.checked_div_IScalar_bv_spec x y
+  simp_all only [I128.checked_div, I128.bv, IScalar.min]
+  cases h: core.num.checked_div_IScalar x y <;> simp_all
+
+theorem Isize.checked_div_bv_spec (x y : Isize) :
+  match core.num.checked_div_IScalar x y with
+  | some z => y.val ≠ 0 ∧ ¬ (x.val = Isize.min ∧ y.val = -1) ∧ z.val = Int.tdiv x.val y.val ∧ z.bv = BitVec.sdiv x.bv y.bv
+  | none => y.val = 0 ∨ (x.val = Isize.min ∧ y.val = -1) := by
+  have := core.num.checked_div_IScalar_bv_spec x y
+  simp_all only [Isize.checked_div, Isize.bv, IScalar.min]
+  cases h: core.num.checked_div_IScalar x y <;> simp_all
+
+/-!
+### Checked Division
+-/
+
+/-!
+Unsigned checked div
+-/
+theorem core.num.checked_rem_UScalar_bv_spec {ty} (x y : UScalar ty) :
+  match core.num.checked_rem_UScalar x y with
+  | some z => y.val ≠ 0 ∧ z.val = x.val % y.val ∧ z.bv = x.bv % y.bv
+  | none => y.val = 0 := by
+  simp [checked_rem_UScalar, Option.ofResult, UScalar.rem]
+  split_ifs
+  . zify at *
+    simp_all
+  . rename_i hnz
+    simp
+    have hnz' : y.val ≠ 0 := by zify at *; simp_all
+    have ⟨ z, hz ⟩ := UScalar.rem_bv_spec x hnz'
+    have : x % y = x.rem y := by rfl
+    simp [this, UScalar.rem, hnz] at hz
+    simp [hz, hnz']
+
+theorem U8.checked_rem_bv_spec (x y : U8) :
+  match U8.checked_rem x y with
+  | some z => y.val ≠ 0 ∧ z.val = x.val % y.val ∧ z.bv = x.bv % y.bv
+  | none => y.val = 0 := by
+  have := core.num.checked_rem_UScalar_bv_spec x y
+  simp_all [U8.checked_rem, UScalar.max, U8.bv]
+  cases h: core.num.checked_rem_UScalar x y <;> simp_all
+
+theorem U16.checked_rem_bv_spec (x y : U16) :
+  match U16.checked_rem x y with
+  | some z => y.val ≠ 0 ∧ z.val = x.val % y.val ∧ z.bv = x.bv % y.bv
+  | none => y.val = 0 := by
+  have := core.num.checked_rem_UScalar_bv_spec x y
+  simp_all [U16.checked_rem, UScalar.max, U16.bv]
+  cases h: core.num.checked_rem_UScalar x y <;> simp_all
+
+theorem U32.checked_rem_bv_spec (x y : U32) :
+  match U32.checked_rem x y with
+  | some z => y.val ≠ 0 ∧ z.val = x.val % y.val ∧ z.bv = x.bv % y.bv
+  | none => y.val = 0 := by
+  have := core.num.checked_rem_UScalar_bv_spec x y
+  simp_all [U32.checked_rem, UScalar.max, U32.bv]
+  cases h: core.num.checked_rem_UScalar x y <;> simp_all
+
+theorem U64.checked_rem_bv_spec (x y : U64) :
+  match U64.checked_rem x y with
+  | some z => y.val ≠ 0 ∧ z.val = x.val % y.val ∧ z.bv = x.bv % y.bv
+  | none => y.val = 0 := by
+  have := core.num.checked_rem_UScalar_bv_spec x y
+  simp_all [U64.checked_rem, UScalar.max, U64.bv]
+  cases h: core.num.checked_rem_UScalar x y <;> simp_all
+
+theorem U128.checked_rem_bv_spec (x y : U128) :
+  match U128.checked_rem x y with
+  | some z => y.val ≠ 0 ∧ z.val = x.val % y.val ∧ z.bv = x.bv % y.bv
+  | none => y.val = 0 := by
+  have := core.num.checked_rem_UScalar_bv_spec x y
+  simp_all [U128.checked_rem, UScalar.max, U128.bv]
+  cases h: core.num.checked_rem_UScalar x y <;> simp_all
+
+theorem Usize.checked_rem_bv_spec (x y : Usize) :
+  match Usize.checked_rem x y with
+  | some z => y.val ≠ 0 ∧ z.val = x.val % y.val ∧ z.bv = x.bv % y.bv
+  | none => y.val = 0 := by
+  have := core.num.checked_rem_UScalar_bv_spec x y
+  simp_all [Usize.checked_rem, UScalar.max, Usize.bv]
+  cases h: core.num.checked_rem_UScalar x y <;> simp_all
+
+/-!
+Signed checked rem
+-/
+theorem core.num.checked_rem_IScalar_bv_spec {ty} (x y : IScalar ty) :
+  match core.num.checked_rem_IScalar x y with
+  | some z => y.val ≠ 0 ∧ z.val = Int.tmod x.val y.val ∧ z.bv = BitVec.srem x.bv y.bv
+  | none => y.val = 0 := by
+  simp [checked_rem_IScalar, Option.ofResult, IScalar.rem]
+  split_ifs
+  . zify at *
+    simp_all
+  . rename_i hnz
+    simp
+    have hnz' : y.val ≠ 0 := by zify at *; simp_all
+    have ⟨ z, hz ⟩ := @IScalar.rem_bv_spec _ x y hnz'
+    have : x % y = x.rem y := by rfl
+    simp [this, IScalar.rem, hnz] at hz
+    simp [*]
+
+theorem I8.checked_rem_bv_spec (x y : I8) :
+  match core.num.checked_rem_IScalar x y with
+  | some z => y.val ≠ 0 ∧ z.val = Int.tmod x.val y.val ∧ z.bv = BitVec.srem x.bv y.bv
+  | none => y.val = 0 := by
+  have := core.num.checked_rem_IScalar_bv_spec x y
+  simp_all only [I8.checked_rem, I8.bv, IScalar.min]
+  cases h: core.num.checked_rem_IScalar x y <;> simp_all
+
+theorem I16.checked_rem_bv_spec (x y : I16) :
+  match core.num.checked_rem_IScalar x y with
+  | some z => y.val ≠ 0 ∧ z.val = Int.tmod x.val y.val ∧ z.bv = BitVec.srem x.bv y.bv
+  | none => y.val = 0 := by
+  have := core.num.checked_rem_IScalar_bv_spec x y
+  simp_all only [I16.checked_rem, I16.bv, IScalar.min]
+  cases h: core.num.checked_rem_IScalar x y <;> simp_all
+
+theorem I32.checked_rem_bv_spec (x y : I32) :
+  match core.num.checked_rem_IScalar x y with
+  | some z => y.val ≠ 0 ∧ z.val = Int.tmod x.val y.val ∧ z.bv = BitVec.srem x.bv y.bv
+  | none => y.val = 0 := by
+  have := core.num.checked_rem_IScalar_bv_spec x y
+  simp_all only [I32.checked_rem, I32.bv, IScalar.min]
+  cases h: core.num.checked_rem_IScalar x y <;> simp_all
+
+theorem I64.checked_rem_bv_spec (x y : I64) :
+  match core.num.checked_rem_IScalar x y with
+  | some z => y.val ≠ 0 ∧ z.val = Int.tmod x.val y.val ∧ z.bv = BitVec.srem x.bv y.bv
+  | none => y.val = 0 := by
+  have := core.num.checked_rem_IScalar_bv_spec x y
+  simp_all only [I64.checked_rem, I64.bv, IScalar.min]
+  cases h: core.num.checked_rem_IScalar x y <;> simp_all
+
+theorem I128.checked_rem_bv_spec (x y : I128) :
+  match core.num.checked_rem_IScalar x y with
+  | some z => y.val ≠ 0 ∧ z.val = Int.tmod x.val y.val ∧ z.bv = BitVec.srem x.bv y.bv
+  | none => y.val = 0 := by
+  have := core.num.checked_rem_IScalar_bv_spec x y
+  simp_all only [I128.checked_rem, I128.bv, IScalar.min]
+  cases h: core.num.checked_rem_IScalar x y <;> simp_all
+
+theorem Isize.checked_rem_bv_spec (x y : Isize) :
+  match core.num.checked_rem_IScalar x y with
+  | some z => y.val ≠ 0 ∧ z.val = Int.tmod x.val y.val ∧ z.bv = BitVec.srem x.bv y.bv
+  | none => y.val = 0 := by
+  have := core.num.checked_rem_IScalar_bv_spec x y
+  simp_all only [Isize.checked_rem, Isize.bv, IScalar.min]
+  cases h: core.num.checked_rem_IScalar x y <;> simp_all
 
 
 
@@ -1944,15 +2606,6 @@ def Isize.checked_rem (x y : Isize) : Option Isize := core.num.checked_rem_IScal
 
 
 
-theorem core.num.checked_add_spec {ty} {x y : Scalar ty} :
-  match core.num.checked_add x y with
-  | some z => Scalar.in_bounds ty (↑x + ↑y) ∧ ↑z = (↑x + ↑y : Int)
-  | none => ¬ (Scalar.in_bounds ty (↑x + ↑y)) := by
-  have h := Scalar.tryMk_eq ty (↑x + ↑y)
-  simp only [checked_add, Option.ofResult]
-  cases heq: x + y <;> simp_all <;> simp [HAdd.hAdd, Scalar.add] at heq
-  <;> simp [Add.add] at heq
-  <;> simp_all
 
 
 @[progress]
