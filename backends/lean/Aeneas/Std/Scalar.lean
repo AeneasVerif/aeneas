@@ -974,6 +974,107 @@ theorem Int.bmod_pow2_IScalarTy_bitWidth_minus_one (ty : IScalarTy) :
   have := System.Platform.numBits_eq
   cases this <;> simp [*]
 
+theorem IScalar.neg_imp_neg_val_toNat_mod_pow_eq_neg_val {ty} (x : IScalar ty)
+  (hNeg : x.bv.toInt < 0) :
+  ((-x.val).toNat : Int) % 2^ty.bitWidth = -(x.val : Int) := by
+  have hmsb : x.bv.msb = true := by
+    have := @BitVec.msb_eq_toInt _ x.bv
+    simp only [hNeg] at this
+    apply this
+  have hx := @BitVec.toInt_eq_msb_cond _ x.bv
+  simp [hmsb] at hx
+  have hBounds := x.hBounds; simp [bound_eq_sbound, smin, smax] at hBounds
+  have pow2Ineq : (2^(ty.bitWidth - 1) : Int) < 2^ty.bitWidth := by
+    have := ty.bitWidth_nonzero
+    have : (0 : Int) < 2^(ty.bitWidth - 1) := by simp
+    have : ty.bitWidth = ty.bitWidth - 1 + 1 := by omega
+    conv => rhs; rw [this]
+    rw [Int.pow_succ']
+    omega
+  have hyToNat : 2 ^ ty.bitWidth - x.bv.toNat = (-x.val).toNat := by
+    rw [hx]
+    simp
+    norm_cast
+  have hyValToNatMod : ((-x.val).toNat : Nat) % 2^ty.bitWidth = (-x.val).toNat := by
+    have : ↑(-x.val).toNat < 2 ^ ty.bitWidth := by
+      zify
+      apply Int.lt_of_neg_lt_neg
+      have : - (-x.val).toNat = x.val := by omega
+      rw [this]; clear this
+      have := x.hmin
+      simp [min_eq_smin, smin] at this
+      omega
+    have := @Nat.mod_eq_of_lt (-x.val).toNat (2^ty.bitWidth) (by omega)
+    apply this
+  zify at hyValToNatMod
+  rw [hyValToNatMod]
+  omega
+
+theorem IScalar.neg_imp_toNat_neg_eq_neg_toInt {ty} (x : IScalar ty) (hNeg : x.val < 0):
+  (-x.bv).toNat = -x.bv.toInt := by
+  have hmsb : x.bv.msb = true := by
+    have := @BitVec.msb_eq_toInt _ x.bv
+    simp only [val] at hNeg
+    simp only [hNeg] at this
+    apply this
+  have hx := @BitVec.toInt_eq_msb_cond _ x.bv
+  simp [hmsb] at hx
+
+  have hxNeg : x.val < 0 := by
+    have := @BitVec.msb_eq_toInt _ x.bv
+    simp_all
+
+  conv => lhs; simp only [Neg.neg, BitVec.neg]
+  simp only [BitVec.toInt_eq_toNat_bmod, BitVec.toNat_umod]
+
+  have hxToNatMod : (x.bv.toNat : Int) % 2^ty.bitWidth = x.bv.toNat := by
+    apply Int.emod_eq_of_lt <;> omega
+
+  have hPow : (2 ^ ty.bitWidth + 1 : Int) / 2  = 2^(ty.bitWidth - 1) := by
+    have : ty.bitWidth = ty.bitWidth - 1 + 1 := by
+      have := ty.bitWidth_nonzero
+      omega
+    conv => lhs; rw [this]
+    rw [Int.pow_succ']
+    rw [Int.add_ediv_of_dvd_left] <;> simp
+
+  have : ¬ ((x.bv.toNat : Int) % ↑(2 ^ ty.bitWidth : Nat) < (↑(2 ^ ty.bitWidth : Nat) + 1) / 2) := by
+    have hIneq := @BitVec.msb_eq_toNat _ x.bv
+    rw [hmsb] at hIneq
+    simp at hIneq
+    simp
+    rw [hPow]
+
+    rw [hxToNatMod]
+    zify at hIneq
+    omega
+  rw [Int.bmod_def]
+  simp only [this]
+  simp
+  have : (2 ^ ty.bitWidth - x.bv.toNat : Nat) % (2 ^ ty.bitWidth : Int) =
+         (2^ty.bitWidth - x.bv.toNat : Nat) := by
+    apply Int.emod_eq_of_lt
+    . omega
+    . have := x.hBounds; simp [bound_eq_sbound, smin, smax] at this
+      simp only [val] at *
+      have : (2 ^ ty.bitWidth - x.bv.toNat : Nat) = (2 ^ ty.bitWidth - x.bv.toNat : Int) := by
+        have : (2 ^ ty.bitWidth : Nat) = (2 ^ ty.bitWidth : Int) := by simp
+        omega
+      rw [this]
+      have : x.bv.toNat > 0 := by
+        by_contra
+        have hxz : x.bv.toNat = 0 := by omega
+        have : x.bv.toInt = 0 := by
+          simp only [BitVec.toInt_eq_toNat_bmod, BitVec.toNat_umod, Int.bmod_def, hxz]
+          simp [hPow]
+        omega
+      omega
+  rw [this]; clear this
+  rw [hxToNatMod]
+
+  have : (2 ^ ty.bitWidth : Nat) = (2 ^ ty.bitWidth : Int) := by simp
+  omega
+
 /-- Generic theorem - shouldn't be used much -/
 theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
   (hzero : y.val ≠ 0)
@@ -1037,24 +1138,12 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
       rw [hy]
       simp
       norm_cast
-    have hyValToNatMod : ((-y.val).toNat : Nat) % 2^ty.bitWidth = (-y.val).toNat := by
-      have : ↑(-y.val).toNat < 2 ^ ty.bitWidth := by
-        zify
-        apply Int.lt_of_neg_lt_neg
-        have : - (-y.val).toNat = y.val := by omega
-        rw [this]; clear this
-        have := y.hmin
-        simp [min_eq_smin, smin] at this
-        omega
-      have := @Nat.mod_eq_of_lt (-y.val).toNat (2^ty.bitWidth) (by omega)
-      apply this
     rw [BitVec.toInt_neg, BitVec.toInt_ofNat]
     simp
     rw [hyToNat]
     have : ((-y.val).toNat : Int) % 2^ty.bitWidth = -(y.val : Int) := by
-      zify at hyValToNatMod
-      rw [hyValToNatMod]
-      omega
+      apply IScalar.neg_imp_neg_val_toNat_mod_pow_eq_neg_val
+      simp; omega
     rw [this]; clear this
     simp
     rw [← hx]
@@ -1117,25 +1206,13 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
       rw [hx]
       simp
       norm_cast
-    have hxValToNatMod : ((-x.val).toNat : Nat) % 2^ty.bitWidth = (-x.val).toNat := by
-      have : ↑(-x.val).toNat < 2 ^ ty.bitWidth := by
-        zify
-        apply Int.lt_of_neg_lt_neg
-        have : - (-x.val).toNat = x.val := by omega
-        rw [this]; clear this
-        have := x.hmin
-        simp [min_eq_smin, smin] at this
-        omega
-      have := @Nat.mod_eq_of_lt (-x.val).toNat (2^ty.bitWidth) (by omega)
-      apply this
     rw [BitVec.toInt_neg, BitVec.toInt_ofNat]
     simp
 
     rw [hxToNat]
     have : ((-x.val).toNat : Int) % 2^ty.bitWidth = -(x.val : Int) := by
-      zify at hxValToNatMod
-      rw [hxValToNatMod]
-      omega
+      apply IScalar.neg_imp_neg_val_toNat_mod_pow_eq_neg_val
+      simp; omega
     rw [this]; clear this
 
     /- We have to treat separately the degenerate case where `x` touches the lower bound
@@ -1300,11 +1377,217 @@ theorem Isize.div_bv_spec {x y : Isize} (hnz : ↑y ≠ (0 : Int))
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y ∧ z.bv = BitVec.sdiv x.bv y.bv :=
   IScalar.div_bv_spec hnz hmax
 
+/-!
+Theorems with a specification which only use integers
+-/
 
+/-- Generic theorem - shouldn't be used much -/
+theorem UScalar.div_spec {ty} (x : UScalar ty) {y : UScalar ty}
+  (hzero : y.val ≠ 0) :
+  ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y := by
+  have ⟨ z, hz ⟩ := UScalar.div_bv_spec x hzero
+  simp [hz]
 
+/-- Generic theorem - shouldn't be used much -/
+theorem IScalar.div_spec {ty} {x y : IScalar ty}
+  (hzero : y.val ≠ 0)
+  (hmax : Int.tdiv ↑x ↑y ≤ IScalar.max ty) :
+  ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y := by
+  have ⟨ z, hz ⟩ := IScalar.div_bv_spec hzero hmax
+  simp [hz]
 
+theorem U8.div_spec (x : U8) {y : U8} (hnz : ↑y ≠ (0 : Nat)) :
+  ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y :=
+  UScalar.div_spec x hnz
 
+theorem U16.div_spec (x : U16) {y : U16} (hnz : ↑y ≠ (0 : Nat)) :
+  ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y :=
+  UScalar.div_spec x hnz
 
+theorem U32.div_spec (x : U32) {y : U32} (hnz : ↑y ≠ (0 : Nat)) :
+  ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y :=
+  UScalar.div_spec x hnz
+
+theorem U64.div_spec (x : U64) {y : U64} (hnz : ↑y ≠ (0 : Nat)) :
+  ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y :=
+  UScalar.div_spec x hnz
+
+theorem U128.div_spec (x : U128) {y : U128} (hnz : ↑y ≠ (0 : Nat)) :
+  ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y :=
+  UScalar.div_spec x hnz
+
+theorem Usize.div_spec (x : Usize) {y : Usize} (hnz : ↑y ≠ (0 : Nat)) :
+  ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y :=
+  UScalar.div_spec x hnz
+
+theorem I8.div_spec {x y : I8} (hnz : ↑y ≠ (0 : Int))
+  (hmax : Int.tdiv ↑x ↑y ≤ I8.max):
+  ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
+  IScalar.div_spec hnz hmax
+
+theorem I16.div_spec {x y : I16} (hnz : ↑y ≠ (0 : Int))
+  (hmax : Int.tdiv ↑x ↑y ≤ I16.max):
+  ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
+  IScalar.div_spec hnz hmax
+
+theorem I32.div_spec {x y : I32} (hnz : ↑y ≠ (0 : Int))
+  (hmax : Int.tdiv ↑x ↑y ≤ I32.max):
+  ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
+  IScalar.div_spec hnz hmax
+
+theorem I64.div_spec {x y : I64} (hnz : ↑y ≠ (0 : Int))
+  (hmax : Int.tdiv ↑x ↑y ≤ I64.max):
+  ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
+  IScalar.div_spec hnz hmax
+
+theorem I128.div_spec {x y : I128} (hnz : ↑y ≠ (0 : Int))
+  (hmax : Int.tdiv ↑x ↑y ≤ I128.max):
+  ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
+  IScalar.div_spec hnz hmax
+
+theorem Isize.div_spec {x y : Isize} (hnz : ↑y ≠ (0 : Int))
+  (hmax : Int.tdiv ↑x ↑y ≤ Isize.max):
+  ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
+  IScalar.div_spec hnz hmax
+
+/-!
+### Remainder
+-/
+
+/-!
+Theorems with a specification which use integers and bit-vectors
+-/
+
+/-- Generic theorem - shouldn't be used much -/
+theorem UScalar.rem_bv_spec {ty} (x : UScalar ty) {y : UScalar ty} (hzero : y.val ≠ 0) :
+  ∃ z, x % y = ok z ∧ (↑z : Nat) = ↑x % ↑y ∧ z.bv = x.bv % y.bv := by
+  conv => congr; ext; lhs; simp [HMod.hMod]
+  simp [hzero, rem, tryMk, tryMkOpt, ofOption, hmax, ofNatCore]
+  simp only [val]
+  simp
+
+/-- Generic theorem - shouldn't be used much -/
+theorem IScalar.rem_bv_spec {ty} {x y : IScalar ty} (hzero : y.val ≠ 0) :
+  ∃ z, x % y = ok z ∧ (↑z : Int) = Int.tmod ↑x ↑y ∧ z.bv = BitVec.srem x.bv y.bv := by
+  conv => congr; ext; lhs; simp [HMod.hMod]
+  simp [hzero, rem, tryMk, tryMkOpt, ofOption, hmax, ofIntCore]
+  simp only [val]
+  simp
+
+  simp [BitVec.srem_eq]
+  have pow2Ineq : (2^(ty.bitWidth - 1) : Int) < 2^ty.bitWidth := by
+    have := ty.bitWidth_nonzero
+    have : (0 : Int) < 2^(ty.bitWidth - 1) := by simp
+    have : ty.bitWidth = ty.bitWidth - 1 + 1 := by omega
+    conv => rhs; rw [this]
+    rw [Int.pow_succ']
+    omega
+  have hxBounds := x.hBounds; simp [bound_eq_sbound, smin, smax] at hxBounds
+  have hyBounds := y.hBounds; simp [bound_eq_sbound, smin, smax] at hyBounds
+  have := ty.bitWidth_nonzero
+  split
+
+  . -- 0 ≤ x
+    -- 0 ≤ y
+    rename_i hxMsb hyMsb
+    have hx := @BitVec.toInt_eq_msb_cond _ x.bv
+    simp [hxMsb] at hx
+    have hy := @BitVec.toInt_eq_msb_cond _ y.bv
+    simp [hyMsb] at hy
+    rw [Int.tmod_eq_emod] <;> try omega
+    simp only [BitVec.toInt_eq_toNat_bmod, BitVec.toNat_umod]
+    have : ((x.bv.toNat % y.bv.toNat : Nat) : Int) < 2 ^ (ty.bitWidth - 1) := by
+      have := @Nat.mod_lt x.bv.toNat y.bv.toNat (by omega)
+      zify at this
+      omega
+    have : ((x.bv.toNat % y.bv.toNat : Nat) : Int).bmod (2 ^ ty.bitWidth) = x.bv.toNat % y.bv.toNat := by
+      apply bmod_pow_bitWidth_eq_of_lt ty _ (by omega) (by omega)
+    rw [this]; clear this
+    simp only [hx, hy]
+
+  . -- 0 ≤ x
+    -- y < 0
+    rename_i hxMsb hyMsb
+    have hx := @BitVec.toInt_eq_msb_cond _ x.bv
+    simp [hxMsb] at hx
+    have hy := @BitVec.toInt_eq_msb_cond _ y.bv
+    simp [hyMsb] at hy
+
+    have hxNeg : 0 ≤ x.val := by
+      have := @BitVec.msb_eq_toInt _ x.bv
+      simp_all
+    have hyNeg : y.val < 0 := by
+      have := @BitVec.msb_eq_toInt _ y.bv
+      simp_all
+
+    have : x.val.tmod y.val = x.val.tmod (-y.val) := by simp
+    rw [this]; clear this
+
+    rw [Int.tmod_eq_emod] <;> try omega
+    simp only [BitVec.toInt_eq_toNat_bmod, BitVec.toNat_umod]
+
+    have : ((x.bv.toNat % (-y.bv).toNat : Nat) : Int) < 2 ^ (ty.bitWidth - 1) := by
+      have := @Nat.mod_le x.bv.toNat (-y.bv).toNat
+      omega
+    have : ((x.bv.toNat % (-y.bv).toNat : Nat) : Int).bmod (2 ^ ty.bitWidth) = x.bv.toNat % (-y.bv).toNat := by
+      apply bmod_pow_bitWidth_eq_of_lt ty _ (by omega) (by omega)
+    rw [this]; clear this
+    simp only [hx]
+
+    have := IScalar.neg_imp_toNat_neg_eq_neg_toInt y (by omega)
+    simp only [this, val]
+
+  . -- x < 0
+    -- 0 ≤ y
+    rename_i hxMsb hyMsb
+    have hx := @BitVec.toInt_eq_msb_cond _ x.bv
+    simp [hxMsb] at hx
+    have hy := @BitVec.toInt_eq_msb_cond _ y.bv
+    simp [hyMsb] at hy
+
+    have hxNeg : x.val < 0 := by
+      have := @BitVec.msb_eq_toInt _ x.bv
+      simp_all
+    have hyNeg : 0 ≤ y.val := by
+      have := @BitVec.msb_eq_toInt _ y.bv
+      simp_all
+
+    have hModEq : ((-x.bv) % y.bv).toInt = ((-x.bv).toNat % y.bv.toNat : Nat) := by
+      simp only [BitVec.toInt_eq_toNat_bmod, BitVec.toNat_umod]
+
+      have : ((-x.bv).toNat % y.bv.toNat : Nat) < (2 ^ (ty.bitWidth - 1) : Int) := by
+        have := @Nat.mod_lt (-x.bv).toNat y.bv.toNat (by omega)
+        simp only [val] at *
+        -- TODO: this is annoying
+        have : (2 ^ (ty.bitWidth - 1) : Nat) = (2 ^ (ty.bitWidth - 1) : Int) := by simp
+        omega
+
+      have := @bmod_pow_bitWidth_eq_of_lt ty ((-x.bv).toNat % y.bv.toNat : Nat)
+        (by omega) (by omega)
+      rw [this]
+
+    have : 0 ≤ (-x.bv % y.bv).toInt := by omega
+
+    have := BitVec.toInt_neg_of_pos_eq_neg (-x.bv % y.bv) (by omega) (by omega)
+    rw [this]; clear this
+
+    have : (-x.bv % y.bv).toInt = (-x.bv).toNat % y.bv.toNat := by
+      rw [hModEq]; simp
+    rw [this]; clear this
+
+    have : x.val.tmod y.val = - (-x.val).tmod y.val := by simp
+    rw [this]; clear this
+
+    have hx := IScalar.neg_imp_toNat_neg_eq_neg_toInt x (by omega)
+    simp only [hx, ← hy]
+
+    rw [Int.tmod_eq_emod] <;> try omega
+
+    simp only [val]
+
+  . -- x < 0
+    -- y < 0
+    sorry
 
 
 

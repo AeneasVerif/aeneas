@@ -369,4 +369,212 @@ theorem Int.bmod_pow2_eq_of_inBounds (n : ℕ) (x : Int)
     simp [this]
     omega
 
+theorem Int.bmod_pow2_bounds (n : ℕ) (x : Int) :
+  - 2^(n-1) ≤ Int.bmod x (2^n) ∧ Int.bmod x (2^n) < 2^(n-1) := by
+  have h0 : 0 < 2^n := by simp
+
+  have := @Int.le_bmod x (2^n) h0
+  have := @Int.bmod_lt x (2^n) h0
+
+  have : -2^(n-1) ≤ -(((2^n) : Nat) : Int)/2 := by
+    dcases hn : n = 0
+    . simp [hn]
+    . have : n - 1 + 1 = n := by omega
+      conv => rhs; rw [← this]
+      rw [Nat.pow_succ]
+      simp
+
+  have : 2^(n-1) ≤ (2^n + 1) / 2 := by
+    dcases hn : n = 0
+    . simp [hn]
+    . have : n - 1 + 1 = n := by omega
+      conv => rhs; rw [← this]
+      rw [Nat.pow_succ']
+      have := @Nat.add_div_of_dvd_right (2 * 2 ^ (n - 1)) 1 2 (by simp)
+      rw [this]
+      simp
+
+  omega
+
+theorem BitVec.bounds (n : ℕ) (x : BitVec n) :
+  - 2^(n-1) ≤ x.toInt ∧ x.toInt < 2^(n-1) := by
+  rw [BitVec.toInt_eq_toNat_bmod]
+  apply Int.bmod_pow2_bounds
+
+
+theorem BitVec.toInt_neg_of_neg_eq_neg
+  {n} (x : BitVec n) (h : n ≠ 0) (h0 : - 2^(n - 1) < x.toInt) (h1 : x.toInt < 0) :
+  (-x).toInt = - x.toInt := by
+  simp only [BitVec.toInt_eq_toNat_bmod, BitVec.toNat_umod]
+
+  have hmsb := @BitVec.msb_eq_toInt _ x
+  simp [h1] at hmsb
+
+  have hmsb' := @BitVec.msb_eq_toNat _ x
+  simp [hmsb] at hmsb'
+
+  have hx := @BitVec.toInt_eq_msb_cond _ x
+  simp [hmsb] at hx
+
+  simp only [Int.bmod]
+
+  have : x.toNat < 2^n := by cases x; simp
+
+  have hPow : (2 ^ n + 1) / 2 = 2^(n - 1) := by
+    have : n = n - 1 + 1 := by omega
+    conv => lhs; rw [this]
+    rw [Nat.pow_succ']
+    rw [Nat.add_div_of_dvd_right] <;> simp
+
+  have : (2^n : Nat) = (2^n: Int) := by simp -- TODO: this is annoying!
+
+  have hxToNatModPow : (x.toNat : Int) % 2^n = x.toNat := by
+    apply Int.emod_eq_of_lt <;> omega
+
+  have hPowMinusXMod : ↑(2 ^ n - x.toNat : Nat) % (2 ^ n : Int) =
+         (2 ^ n - x.toNat : Nat) := by
+    apply Int.emod_eq_of_lt <;> omega
+
+  have : (((-x).toNat : Int) % (2 ^ n : Nat) < ((2 ^ n : Nat) + 1 : Int) / 2) := by
+    simp
+    zify at hPow
+    simp [hPow]
+    rw [hPowMinusXMod]
+    omega
+  simp only [this]; simp
+
+  have : ¬ ((↑(x.toNat : Nat) % 2 ^ n : Int) < (2 ^ n + 1) / 2) := by
+    simp
+    zify at hPow
+    simp [hPow]
+    omega
+  simp only [this]; simp
+
+  rw [hPowMinusXMod]
+
+  rw [hxToNatModPow]
+
+  omega
+
+theorem BitVec.toInt_neg_of_pos_eq_neg
+  {n} (x : BitVec n) (h : n ≠ 0) (h0 : 0 ≤ x.toInt) :
+  (-x).toInt = - x.toInt := by
+  simp only [BitVec.toInt_eq_toNat_bmod, BitVec.toNat_umod]
+
+  have : -2^(n-1) ≤ x.toInt ∧ x.toInt < 2^(n-1) := by
+    apply BitVec.bounds
+
+  have hNotNeg : ¬ x.toInt < 0 := by omega
+
+  have hmsb := @BitVec.msb_eq_toInt _ x
+  simp [hNotNeg] at hmsb
+
+  have hmsb' := @BitVec.msb_eq_toNat _ x
+  simp [hmsb] at hmsb'
+
+  have hx := @BitVec.toInt_eq_msb_cond _ x
+  simp [hmsb] at hx
+
+  simp
+  have h2n : (2^n: Int) = (2^n:Nat) := by simp -- TODO: this is annoying
+  rw [h2n]
+  rw [Int.emod_bmod]
+
+  have : (2^n - x.toNat : Nat) = (2^n - x.toNat : Int) := by omega
+  rw [this]; clear this
+
+  have hn : n - 1 + 1 = n := by omega
+
+  have : (2^n - x.toNat : Int).bmod (2^n) = (-(x.toNat : Int)).bmod (2^n) := by
+    rw [h2n]
+    have : (2^n : Nat) - (x.toNat : Int) = -(x.toNat : Int) + (2^n : Nat) := by ring_nf
+    rw [this]
+    simp only [Int.bmod_add_cancel]
+  rw [this]; clear this
+
+  have : (-(x.toNat : Int)).bmod (2^n) = -(x.toNat) := by
+    have := Int.bmod_pow2_eq_of_inBounds (n - 1) (-x.toNat) (by omega) (by omega)
+    rw [hn] at this
+    omega
+  rw [this]; clear this
+
+  have : (x.toNat : Int).bmod (2^n) = x.toNat := by
+    have := Int.bmod_pow2_eq_of_inBounds (n - 1) x.toNat (by omega) (by omega)
+    rw [hn] at this
+    omega
+  rw [this]
+
+@[simp]
+theorem Int.neg_tmod (x y : Int) : (- x).tmod y = - x.tmod y := by
+  unfold Int.tmod
+  dcases hx' : (-x) <;> dcases hx : x <;> dcases y <;> rename_i xn xn' yn <;> simp only
+  . dcases xn <;> simp_all
+    omega
+  . dcases xn <;> simp_all
+    omega
+  . simp
+    have : xn = xn' + 1 := by
+      have : x = - Int.ofNat xn := by omega
+      simp at this
+      omega
+    simp [this]
+  . simp
+    have : xn = xn' + 1 := by
+      have : x = - Int.ofNat xn := by omega
+      simp at this
+      omega
+    simp [this]
+  . simp
+    have : (xn + 1 : Int) = xn' := by
+      have : x = - Int.negSucc xn := by omega
+      simp at this
+      have : x = xn + 1 := by omega
+      simp at hx
+      omega
+    simp [this]
+  . simp
+    have : (xn + 1 : Int) = xn' := by
+      have : x = - Int.negSucc xn := by omega
+      simp at this
+      have : x = xn + 1 := by omega
+      simp at hx
+      omega
+    simp [this]
+  . dcases xn <;> simp_all
+    omega
+  . dcases xn <;> simp_all
+    omega
+
+theorem Int.tmod_ge_of_neg (x y : Int) (hx : x < 0) :
+  x ≤ x.tmod y := by
+  have : (-x).tmod y = (-x) % y := by
+    dcases hy : 0 ≤ y
+    . rw [Int.tmod_eq_emod] <;> try omega
+    . have : (-x).tmod y = (-x).tmod (-y) := by simp
+      rw [this]
+      rw [Int.tmod_eq_emod] <;> try omega
+      simp
+  have : x.tmod y = - ((-x) % y) := by
+    have h : x.tmod y = - (-x).tmod y := by simp
+    rw [h, this]
+  have : (-x) % y ≤ (-x) := by
+    dcases hy : 0 ≤ y
+    . have hIneq := Nat.mod_le (-x).toNat y.toNat
+      zify at hIneq
+      have : (-x).toNat = -x := by omega
+      rw [this] at hIneq
+      have : y.toNat = y := by omega
+      rw [this] at hIneq
+      omega
+    . have hIneq := Nat.mod_le (-x).toNat (-y).toNat
+      zify at hIneq
+      have : (-x).toNat = -x := by omega
+      rw [this] at hIneq
+      have : (-y).toNat = -y := by omega
+      rw [this] at hIneq
+      simp at hIneq
+      omega
+  omega
+
+
 end Aeneas.Arith
