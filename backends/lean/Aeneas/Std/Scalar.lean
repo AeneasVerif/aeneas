@@ -2867,157 +2867,38 @@ theorem Isize.checked_rem_bv_spec (x y : Isize) :
   simp_all only [Isize.checked_rem, Isize.bv, IScalar.min]
   cases h: core.num.checked_rem_IScalar x y <;> simp_all
 
+/-!
+# Leading zeros
+-/
 
+/- TODO: move to Mathlib?
+   Also not sure this is the best way of defining this quantity -/
+def BitVec.leadingZerosAux {w : Nat} (x : BitVec w) (i : Nat) : Nat :=
+  if i < w then
+    if ¬ x.getMsbD i then leadingZerosAux x (i + 1)
+    else i
+  else 0
 
+def BitVec.leadingZeros {w : Nat} (x : BitVec w) : Nat :=
+  leadingZerosAux x 0
 
+#assert BitVec.leadingZeros 1#16 = 15
+#assert BitVec.leadingZeros 1#32 = 31
+#assert BitVec.leadingZeros 255#32 = 24
 
+def core.num.Usize.leading_zeros (x : Usize) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
+def core.num.U8.leading_zeros (x : U8) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
+def core.num.U16.leading_zeros (x : U16) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
+def core.num.U32.leading_zeros (x : U32) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
+def core.num.U64.leading_zeros (x : U64) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
+def core.num.U128.leading_zeros (x : U128) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
 
-
-
-
-
-
-
--- core checked arithmetic operations
-
-
-theorem core.num.checked_sub_spec {ty} {x y : Scalar ty} :
-  match core.num.checked_sub x y with
-  | some z => Scalar.in_bounds ty (↑x - ↑y) ∧ ↑z = (↑x - ↑y : Int)
-  | none => ¬ (Scalar.in_bounds ty (↑x - ↑y)) := by
-  have h := Scalar.tryMk_eq ty (↑x - ↑y)
-  simp only [checked_sub, Option.ofResult]
-  have add_neg_eq : x.val + (-y.val) = x.val - y.val := by omega -- TODO: why do we need this??
-  cases heq: x - y <;> simp_all <;> simp only [HSub.hSub, Scalar.sub, Sub.sub, Int.sub] at heq
-  <;> simp_all
-
-
-theorem core.num.checked_mul_spec {ty} {x y : Scalar ty} :
-  match core.num.checked_mul x y with
-  | some z => Scalar.in_bounds ty (↑x * ↑y) ∧ ↑z = (↑x * ↑y : Int)
-  | none => ¬ (Scalar.in_bounds ty (↑x * ↑y)) := by
-  have h := Scalar.tryMk_eq ty (↑x * ↑y)
-  simp only [checked_mul, Option.ofResult]
-  have : Int.mul ↑x ↑y = ↑x * ↑y := by simp -- TODO: why do we need this??
-  cases heq: x * y <;> simp_all <;> simp only [HMul.hMul, Scalar.mul, Mul.mul] at heq
-  <;> simp_all
-
-theorem Scalar.div_equiv {ty} {x y : Scalar ty} :
-  match x / y with
-  | ok z => y.val ≠ 0 ∧ Scalar.in_bounds ty (scalar_div ↑x ↑y) ∧ (↑z : Int) = scalar_div ↑x ↑y
-  | fail _ => ¬ (y.val ≠ 0 ∧ Scalar.in_bounds ty (scalar_div ↑x ↑y))
-  | _ => ⊥ := by
-  -- Applying the unfoldings only inside the match
-  conv in _ / _ => unfold HDiv.hDiv instHDivScalarResult; simp [div]
-  have h := tryMk_eq ty (scalar_div ↑x ↑y)
-  simp [in_bounds] at h
-  split_ifs <;> simp <;>
-  split at h <;> simp_all [check_bounds_eq_in_bounds]
-
--- Generic theorem - shouldn't be used much
-@[progress]
-theorem Scalar.div_spec {ty} {x y : Scalar ty}
-  (hnz : ↑y ≠ (0 : Int))
-  (hmin : Scalar.min ty ≤ scalar_div ↑x ↑y)
-  (hmax : scalar_div ↑x ↑y ≤ Scalar.max ty) :
-  ∃ z, x / y = ok z ∧ (↑z : Int) = scalar_div ↑x ↑y := by
-  simp [HDiv.hDiv, div, Div.div]
-  simp [tryMk, tryMkOpt, ofOption, *]
-
-theorem Scalar.div_unsigned_spec {ty} (s: ¬ ty.isSigned) (x : Scalar ty) {y : Scalar ty}
-  (hnz : ↑y ≠ (0 : Int)) :
-  ∃ z, x / y = ok z ∧ (↑z : Int) = ↑x / ↑y := by
-  have h : Scalar.min ty = 0 := by cases ty <;> simp [ScalarTy.isSigned, min] at *
-  have hx := x.hmin
-  have hy := y.hmin
-  simp [h] at hx hy
-  have hmin : 0 ≤ x.val / y.val := Int.ediv_nonneg hx hy
-  have hmax : ↑x / ↑y ≤ Scalar.max ty := by
-    have := Int.ediv_le_self ↑y hx
-    have := x.hmax
-    omega
-  have hs := @div_spec ty x y hnz
-  simp [*] at hs
-  apply hs
-
-/- Fine-grained theorems -/
-
-
-theorem core.num.checked_div_spec {ty} {x y : Scalar ty} :
-  match core.num.checked_div x y with
-  | some z => y.val ≠ 0 ∧ Scalar.in_bounds ty (scalar_div ↑x ↑y) ∧ ↑z = (scalar_div ↑x ↑y : Int)
-  | none => ¬ (y.val ≠ 0 ∧ Scalar.in_bounds ty (scalar_div ↑x ↑y)) := by
-  have h := Scalar.tryMk_eq ty (scalar_div ↑x ↑y)
-  simp only [checked_div, Option.ofResult]
-  cases heq0: (y.val = 0 : Bool) <;>
-  cases heq1: x / y <;> simp_all <;> simp only [HDiv.hDiv, Scalar.div, Div.div] at heq1
-  <;> simp_all
-
-theorem Scalar.rem_equiv {ty} {x y : Scalar ty} :
-  match x % y with
-  | ok z => y.val ≠ 0 ∧ Scalar.in_bounds ty (scalar_rem ↑x ↑y) ∧ (↑z : Int) = scalar_rem ↑x ↑y
-  | fail _ => ¬ (y.val ≠ 0 ∧ Scalar.in_bounds ty (scalar_rem ↑x ↑y))
-  | _ => ⊥ := by
-  -- Applying the unfoldings only inside the match
-  conv in _ % _ => unfold HMod.hMod instHModScalarResult; simp [rem]
-  have h := tryMk_eq ty (scalar_rem ↑x ↑y)
-  simp [in_bounds] at h
-  split_ifs <;> simp <;>
-  split at h <;> simp_all [check_bounds_eq_in_bounds]
-
--- Generic theorem - shouldn't be used much
-@[progress]
-theorem Scalar.rem_spec {ty} {x y : Scalar ty}
-  (hnz : ↑y ≠ (0 : Int))
-  (hmin : Scalar.min ty ≤ scalar_rem ↑x ↑y)
-  (hmax : scalar_rem ↑x ↑y ≤ Scalar.max ty) :
-  ∃ z, x % y = ok z ∧ (↑z : Int) = scalar_rem ↑x ↑y := by
-  simp [HMod.hMod, rem]
-  simp [tryMk, tryMkOpt, ofOption, *]
-
-theorem Scalar.rem_unsigned_spec {ty} (s: ¬ ty.isSigned) (x : Scalar ty) {y : Scalar ty}
-  (hnz : ↑y ≠ (0 : Int)) :
-  ∃ z, x % y = ok z ∧ (↑z : Int) = ↑x % ↑y := by
-  have h : Scalar.min ty = 0 := by cases ty <;> simp [ScalarTy.isSigned, min] at *
-  have hx := x.hmin
-  have hy := y.hmin
-  simp [h] at hx hy
-  have hmin : (0 : Int) ≤ x % y := Int.emod_nonneg ↑x hnz
-  have hmax : ↑x % ↑y ≤ Scalar.max ty := by
-    have h : (0 : Int) < y := by int_tac
-    have h := Int.emod_lt_of_pos ↑x h
-    have := y.hmax
-    omega
-  have hs := @rem_spec ty x y hnz
-  simp [*] at hs
-  simp [*]
-
-
-
-theorem core.num.checked_rem_spec {ty} {x y : Scalar ty} :
-  match core.num.checked_rem x y with
-  | some z => y.val ≠ 0 ∧ Scalar.in_bounds ty (scalar_rem ↑x ↑y) ∧ ↑z = (scalar_rem ↑x ↑y : Int)
-  | none => ¬ (y.val ≠ 0 ∧ Scalar.in_bounds ty (scalar_rem ↑x ↑y)) := by
-  have h := Scalar.tryMk_eq ty (scalar_rem ↑x ↑y)
-  simp only [checked_rem, Option.ofResult]
-  cases heq0: (y.val = 0 : Bool) <;>
-  cases heq1: x % y <;> simp_all <;> simp only [HMod.hMod, Scalar.rem, Mod.mod] at heq1
-  <;> simp_all
-
--- Leading zeros
-def core.num.Usize.leading_zeros (x : Usize) : U32 := sorry
-def core.num.U8.leading_zeros (x : U8) : U32 := sorry
-def core.num.U16.leading_zeros (x : U16) : U32 := sorry
-def core.num.U32.leading_zeros (x : U32) : U32 := sorry
-def core.num.U64.leading_zeros (x : U64) : U32 := sorry
-def core.num.U128.leading_zeros (x : U128) : U32 := sorry
-
-def core.num.Isize.leading_zeros (x : Isize) : U32 := sorry
-def core.num.I8.leading_zeros (x : I8) : U32 := sorry
-def core.num.I16.leading_zeros (x : I16) : U32 := sorry
-def core.num.I32.leading_zeros (x : I32) : U32 := sorry
-def core.num.I64.leading_zeros (x : I64) : U32 := sorry
-def core.num.I128.leading_zeros (x : I128) : U32 := sorry
+def core.num.Isize.leading_zeros (x : Isize) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
+def core.num.I8.leading_zeros (x : I8) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
+def core.num.I16.leading_zeros (x : I16) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
+def core.num.I32.leading_zeros (x : I32) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
+def core.num.I64.leading_zeros (x : I64) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
+def core.num.I128.leading_zeros (x : I128) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
 
 -- Clone
 @[reducible, simp] def core.clone.impls.CloneUsize.clone (x : Usize) : Usize := x
@@ -3033,6 +2914,10 @@ def core.num.I128.leading_zeros (x : I128) : U32 := sorry
 @[reducible, simp] def core.clone.impls.CloneI32.clone (x : I32) : I32 := x
 @[reducible, simp] def core.clone.impls.CloneI64.clone (x : I64) : I64 := x
 @[reducible, simp] def core.clone.impls.CloneI128.clone (x : I128) : I128 := x
+
+/-!
+# Clone and Copy
+-/
 
 @[reducible]
 def core.clone.CloneUsize : core.clone.Clone Usize := {
