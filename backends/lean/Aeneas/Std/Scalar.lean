@@ -1,6 +1,7 @@
 import Aeneas.Std.ScalarCore
 import Aeneas.ScalarTac
 import Aeneas.Arith.Lemmas
+import MathLib.Data.BitVec
 
 namespace Aeneas
 
@@ -8,6 +9,107 @@ namespace Std
 
 open Result Error
 open Arith
+
+/-!
+# Misc Theorems
+-/
+
+@[simp] theorem UScalar.exists_eq_left {p : UScalar ty → Prop} {a' : UScalar ty} :
+  (∃ (a : UScalar ty), a.val = a'.val ∧ p a) ↔ p a' := by
+  constructor <;> intro h
+  . replace ⟨ a, h, hp ⟩ := h
+    cases a'
+    simp_all only [val]
+    have := @BitVec.toNat_injective ty.bitWidth
+    have := this h
+    simp [← this]
+    apply hp
+  . exists a'
+
+@[simp] theorem IScalar.exists_eq_left {p : IScalar ty → Prop} {a' : IScalar ty} :
+  (∃ (a : IScalar ty), a.val = a'.val ∧ p a) ↔ p a' := by
+  constructor <;> intro h
+  . replace ⟨ a, h, hp ⟩ := h
+    cases a'
+    simp_all only [val, eq_comm]
+    rw [BitVec.toInt_inj] at h
+    simp [h]
+    apply hp
+  . exists a'
+
+@[simp] theorem UScalar.exists_eq_left' {p : UScalar ty → Prop} {a' : UScalar ty} :
+  (∃ (a : UScalar ty), a'.val = a.val ∧ p a) ↔ p a' := by
+  constructor <;> intro h
+  . replace ⟨ a, h, hp ⟩ := h
+    cases a'
+    simp_all only [val]
+    have := @BitVec.toNat_injective ty.bitWidth
+    have := this h
+    simp [this]
+    apply hp
+  . exists a'
+
+@[simp] theorem IScalar.exists_eq_left' {p : IScalar ty → Prop} {a' : IScalar ty} :
+  (∃ (a : IScalar ty), a'.val = a.val ∧ p a) ↔ p a' := by
+  constructor <;> intro h
+  . replace ⟨ a, h, hp ⟩ := h
+    cases a'
+    simp_all only [val]
+    rw [BitVec.toInt_inj] at h
+    simp [h]
+    apply hp
+  . exists a'
+
+@[simp] theorem UScalar.exists_eq_right {p : UScalar ty → Prop} {a' : UScalar ty} :
+  (∃ (a : UScalar ty), p a ∧ a.val = a'.val) ↔ p a' := by
+  constructor <;> intro h
+  . replace ⟨ a, hp, h ⟩ := h
+    cases a'
+    simp_all only [val]
+    have := @BitVec.toNat_injective ty.bitWidth
+    have := this h
+    simp [← this]
+    apply hp
+  . exists a'
+
+@[simp] theorem IScalar.exists_eq_right {p : IScalar ty → Prop} {a' : IScalar ty} :
+  (∃ (a : IScalar ty), p a ∧ a.val = a'.val) ↔ p a' := by
+  constructor <;> intro h
+  . replace ⟨ a, hp, h ⟩ := h
+    cases a'
+    simp_all only [val, eq_comm]
+    rw [BitVec.toInt_inj] at h
+    simp [h]
+    apply hp
+  . exists a'
+
+@[simp] theorem UScalar.exists_eq_right' {p : UScalar ty → Prop} {a' : UScalar ty} :
+  (∃ (a : UScalar ty), p a ∧ a'.val = a.val) ↔ p a' := by
+  constructor <;> intro h
+  . replace ⟨ a, hp, h ⟩ := h
+    cases a'
+    simp_all only [val]
+    have := @BitVec.toNat_injective ty.bitWidth
+    have := this h
+    simp [this]
+    apply hp
+  . exists a'
+
+@[simp] theorem IScalar.exists_eq_right' {p : IScalar ty → Prop} {a' : IScalar ty} :
+  (∃ (a : IScalar ty), p a ∧ a'.val = a.val) ↔ p a' := by
+  constructor <;> intro h
+  . replace ⟨ a, hp, h ⟩ := h
+    cases a'
+    simp_all only [val, eq_comm]
+    rw [BitVec.toInt_inj] at h
+    simp [h]
+    apply hp
+  . exists a'
+
+@[simp] theorem UScalar.exists_eq {a' : UScalar ty} : ∃ (a : UScalar ty), a.val = a'.val := by exists a'
+@[simp] theorem UScalar.exists_eq' {a' : UScalar ty} : ∃ (a : UScalar ty), a'.val = a.val := by exists a'
+@[simp] theorem IScalar.exists_eq {a' : IScalar ty} : ∃ (a : IScalar ty), a.val = a'.val := by exists a'
+@[simp] theorem IScalar.exists_eq' {a' : IScalar ty} : ∃ (a : IScalar ty), a'.val = a.val := by exists a'
 
 /-!
 
@@ -322,32 +424,92 @@ instance {ty} : Complement (IScalar ty) where
 
 /-!
 Casts
+
+The reference semantics are here: https://doc.rust-lang.org/reference/expressions/operator-expr.html#semantics
 -/
--- TODO: double-check the semantics of casts in Rust
-def UScalar.cast {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) : Result (UScalar tgt_ty) :=
-  UScalar.tryMk tgt_ty x.val
 
-/- Heterogeneous cast -/
-def UScalar.hcast {src_ty : UScalarTy} (tgt_ty : IScalarTy) (x : UScalar src_ty) : Result (IScalar tgt_ty) :=
-  IScalar.tryMk tgt_ty x.val
+/-- When casting between unsigned integers, we truncate or **zero**-extend the integer. -/
+def UScalar.cast {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) : UScalar tgt_ty :=
+  -- This truncates the integer if the bitWidth is smaller
+  ⟨ x.bv.zeroExtend tgt_ty.bitWidth ⟩
 
-def IScalar.cast {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty) : Result (IScalar tgt_ty) :=
-  IScalar.tryMk tgt_ty x.val
+/- Heterogeneous cast
 
-/- Heterogeneous cast -/
-def IScalar.hcast {src_ty : IScalarTy} (tgt_ty : UScalarTy) (x : IScalar src_ty) : Result (UScalar tgt_ty) :=
-  if x.val ≥ 0 then
-    UScalar.tryMk tgt_ty x.toNat
-  else fail .integerOverflow
+   When casting from an unsigned integer to a signed integer, we truncate or **zero**-extend.
+-/
+def UScalar.hcast {src_ty : UScalarTy} (tgt_ty : IScalarTy) (x : UScalar src_ty) : IScalar tgt_ty :=
+  -- This truncates the integer if the bitWidth is smaller
+  ⟨ x.bv.zeroExtend tgt_ty.bitWidth ⟩
 
-/- This can't fail, but for now we make all casts faillible (easier for the translation).
-   TODO: make it non-fallible.
- -/
-def UScalar.cast_fromBool (ty : UScalarTy) (x : Bool) : Result (UScalar ty) :=
-  UScalar.tryMk ty (if x then 1 else 0)
+/-- When casting between signed integers, we truncate or **sign**-extend. -/
+def IScalar.cast {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty) : IScalar tgt_ty :=
+  ⟨ x.bv.signExtend tgt_ty.bitWidth ⟩
 
-def IScalar.cast_fromBool (ty : IScalarTy) (x : Bool) : Result (IScalar ty) :=
-  IScalar.tryMk ty (if x then 1 else 0)
+/- Heterogeneous cast
+
+   When casting from a signed integer to a unsigned integer, we truncate or **sign**-extend.
+-/
+def IScalar.hcast {src_ty : IScalarTy} (tgt_ty : UScalarTy) (x : IScalar src_ty) : UScalar tgt_ty :=
+  ⟨ x.bv.signExtend tgt_ty.bitWidth ⟩
+
+section
+    /-! Checking that the semantics of casts are correct by using the examples given by the Rust reference. -/
+
+  private def check_cast_i_to_u (src : Int) (src_ty : IScalarTy) (tgt : Nat) (tgt_ty : UScalarTy)
+    (hSrc : IScalar.cMin src_ty ≤ src ∧ src ≤ IScalar.cMax src_ty := by decide)
+    (hTgt : tgt ≤ UScalar.cMax tgt_ty := by decide): Bool :=
+    IScalar.hcast tgt_ty (@IScalar.ofInt src_ty src hSrc) = @UScalar.ofNat tgt_ty tgt hTgt
+
+  private def check_cast_u_to_i (src : Nat) (src_ty : UScalarTy) (tgt : Int) (tgt_ty : IScalarTy)
+    (hSrc : src ≤ UScalar.cMax src_ty := by decide)
+    (hTgt : IScalar.cMin tgt_ty ≤ tgt ∧ tgt ≤ IScalar.cMax tgt_ty := by decide) : Bool :=
+    UScalar.hcast tgt_ty (@UScalar.ofNat src_ty src hSrc) = @IScalar.ofInt tgt_ty tgt hTgt
+
+  private def check_cast_u_to_u (src : Nat) (src_ty : UScalarTy) (tgt : Nat) (tgt_ty : UScalarTy)
+    (hSrc : src ≤ UScalar.cMax src_ty := by decide)
+    (hTgt : tgt ≤ UScalar.cMax tgt_ty := by decide) : Bool :=
+    UScalar.cast tgt_ty (@UScalar.ofNat src_ty src hSrc) = @UScalar.ofNat tgt_ty tgt hTgt
+
+  private def check_cast_i_to_i (src : Int) (src_ty : IScalarTy) (tgt : Int) (tgt_ty : IScalarTy)
+    (hSrc : IScalar.cMin src_ty ≤ src ∧ src ≤ IScalar.cMax src_ty := by decide)
+    (hTgt : IScalar.cMin tgt_ty ≤ tgt ∧ tgt ≤ IScalar.cMax tgt_ty := by decide) : Bool :=
+    IScalar.cast tgt_ty (@IScalar.ofInt src_ty src hSrc) = @IScalar.ofInt tgt_ty tgt hTgt
+
+  local macro:max x:term:max noWs "i8" : term => `(I8.ofInt $x (by decide))
+  local macro:max x:term:max noWs "i16" : term => `(I16.ofInt $x (by decide))
+  local macro:max x:term:max noWs "i32" : term => `(I32.ofInt $x (by decide))
+  local macro:max x:term:max noWs "u8" : term => `(U8.ofNat $x (by decide))
+  local macro:max x:term:max noWs "u16" : term => `(U16.ofNat $x (by decide))
+
+  /- Cast between integers of same size -/
+  #assert IScalar.hcast _ 42i8    = 42u8       -- assert_eq!(42i8 as u8, 42u8);
+  #assert IScalar.hcast _ (-1)i8  = 255u8      -- assert_eq!(-1i8 as u8, 255u8);
+  #assert UScalar.hcast _ 255u8   = (-1)i8     -- assert_eq!(255u8 as i8, -1i8);
+  #assert IScalar.hcast _ (-1)i16 = 65535u16   -- assert_eq!(-1i16 as u16, 65535u16);
+
+  /- Cast from larger integer to smaller integer -/
+  #assert UScalar.cast _ 42u16 = 42u8         -- assert_eq!(42u16 as u8, 42u8);
+  #assert UScalar.cast _ 1234u16 = 210u8      -- assert_eq!(1234u16 as u8, 210u8);
+  #assert UScalar.cast _ 0xabcdu16 = 0xcdu8   -- assert_eq!(0xabcdu16 as u8, 0xcdu8);
+
+  #assert IScalar.cast _ (-42)i16 = (-42)i8   -- assert_eq!(-42i16 as i8, -42i8);
+  #assert UScalar.hcast _ 1234u16 = (-46)i8   -- assert_eq!(1234u16 as i8, -46i8);
+  #assert IScalar.cast _ 0xabcdi32 = (-51)i8  -- assert_eq!(0xabcdi32 as i8, -51i8);
+
+  /- Cast from a smaller integer to a larger integer -/
+  #assert IScalar.cast _ 42i8 = 42i16 -- assert_eq!(42i8 as i16, 42i16);
+  #assert IScalar.cast _ (-17)i8 = (-17)i16 -- assert_eq!(-17i8 as i16, -17i16);
+  #assert UScalar.cast _ 0b1000_1010u8 = 0b0000_0000_1000_1010u16 -- assert_eq!(0b1000_1010u8 as u16, 0b0000_0000_1000_1010u16, "Zero-extend");
+  #assert IScalar.cast _ 0b0000_1010i8 = 0b0000_0000_0000_1010i16 -- assert_eq!(0b0000_1010i8 as i16, 0b0000_0000_0000_1010i16, "Sign-extend 0");
+  #assert (IScalar.cast .I16 (UScalar.hcast .I8 0b1000_1010u8)) = UScalar.hcast .I16 0b1111_1111_1000_1010u16 -- assert_eq!(0b1000_1010u8 as i8 as i16, 0b1111_1111_1000_1010u16 as i16, "Sign-extend 1");
+
+end
+
+def UScalar.cast_fromBool (ty : UScalarTy) (x : Bool) : UScalar ty :=
+  if x then ⟨ 1#ty.bitWidth ⟩ else ⟨ 0#ty.bitWidth ⟩
+
+def IScalar.cast_fromBool (ty : IScalarTy) (x : Bool) : IScalar ty :=
+  if x then ⟨ 1#ty.bitWidth ⟩ else ⟨ 0#ty.bitWidth ⟩
 
 /-!
 Negation
@@ -1810,6 +1972,113 @@ theorem IScalar.rem_spec {ty} (x : IScalar ty) {y : IScalar ty} (hzero : y.val �
   IScalar.rem_spec x hnz
 
 /-!
+## Casts
+-/
+
+@[simp]
+theorem UScalar.cast_fromBool_val_eq ty (b : Bool) : (UScalar.cast_fromBool ty b).val = b.toNat := by
+  simp [cast_fromBool]
+  split <;> simp only [val, *] <;> simp
+  have := ty.bitWidth_nonzero
+  omega
+
+@[simp]
+theorem IScalar.cast_fromBool_val_eq ty (b : Bool) :(IScalar.cast_fromBool ty b).val = b.toInt := by
+  simp [cast_fromBool]
+  split <;> simp only [val, *] <;> simp
+  dcases ty <;> simp
+  have := System.Platform.numBits_eq
+  cases this <;>
+  rename_i h <;>
+  rw [h] <;> simp
+
+@[simp]
+theorem UScalar.cast_fromBool_bv_eq ty (b : Bool) : (UScalar.cast_fromBool ty b).bv = (BitVec.ofBool b).zeroExtend _ := by
+  simp [cast_fromBool, BitVec.setWidth_eq]
+  dcases b <;> simp
+  apply @BitVec.toNat_injective ty.bitWidth
+  simp
+
+@[simp]
+theorem IScalar.cast_fromBool_bv_eq ty (b : Bool) :(IScalar.cast_fromBool ty b).bv = (BitVec.ofBool b).zeroExtend _ := by
+  simp [cast_fromBool, BitVec.setWidth_eq]
+  dcases b <;> simp
+  apply @BitVec.toNat_injective ty.bitWidth
+  simp
+
+theorem UScalar.cast_val_eq {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) :
+  (cast tgt_ty x).val = x.val % 2^(tgt_ty.bitWidth) := by
+  simp only [cast, val]
+  simp
+
+@[simp]
+theorem UScalar.cast_val_mod_pow_greater_bitWidth_eq {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) (h : src_ty.bitWidth ≤ tgt_ty.bitWidth) :
+  (cast tgt_ty x).val = x.val := by
+  simp [UScalar.cast_val_eq]
+  have hBounds := x.hBounds
+  simp [max_eq_smax, smax] at hBounds
+  apply Nat.mod_eq_of_lt
+  have : 0 < 2^src_ty.bitWidth := by simp
+  have := @Nat.pow_le_pow_of_le_right 2 (by simp) src_ty.bitWidth tgt_ty.bitWidth (by omega)
+  omega
+
+@[simp]
+theorem UScalar.cast_val_mod_pow_of_inBounds_eq {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) (h : x.val < 2^tgt_ty.bitWidth) :
+  (cast tgt_ty x).val = x.val := by
+  simp [UScalar.cast_val_eq]
+  apply Nat.mod_eq_of_lt
+  assumption
+
+@[simp]
+theorem UScalar.cast_bv_eq {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) :
+  (cast tgt_ty x).bv = x.bv.setWidth tgt_ty.bitWidth := by
+  simp [UScalar.cast]
+
+example (x : U16) : (x.cast .U32).val = x.val := by simp
+example : ((U32.ofNat 42).cast .U16).val = 42 := by simp
+
+theorem IScalar.cast_val_eq {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty) :
+  (cast tgt_ty x).val = Int.bmod x.val (2^(Min.min tgt_ty.bitWidth src_ty.bitWidth)) := by
+  simp only [cast, val]
+  simp only [BitVec.toInt_signExtend, val]
+  rw [BitVec.toInt_eq_toNat_bmod]
+  rw [Int.bmod_bmod_of_dvd]
+  apply Nat.pow_dvd_pow
+  simp
+
+@[simp]
+theorem IScalar.val_mod_pow_greater_bitWidth {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty) (h : src_ty.bitWidth ≤ tgt_ty.bitWidth) :
+  (cast tgt_ty x).val = x.val := by
+  simp [IScalar.cast_val_eq]
+  have hBounds := x.hBounds
+  simp [bound_eq_sbound, smin, smax] at hBounds
+  simp [h]
+  have := src_ty.bitWidth_nonzero
+  have : src_ty.bitWidth = src_ty.bitWidth - 1 + 1 := by omega
+  rw [this]
+  apply Int.bmod_pow2_eq_of_inBounds <;> omega
+
+@[simp]
+theorem IScalar.val_mod_pow_inBounds {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty)
+  (hMin : -2^(tgt_ty.bitWidth - 1) ≤ x.val) (hMax : x.val < 2^(tgt_ty.bitWidth - 1)) :
+  (cast tgt_ty x).val = x.val := by
+  simp [IScalar.cast_val_eq]
+  have hBounds := x.hBounds
+  simp [bound_eq_sbound, smin, smax] at hBounds
+  have := src_ty.bitWidth_nonzero
+  have := tgt_ty.bitWidth_nonzero
+  have : tgt_ty.bitWidth ⊓ src_ty.bitWidth = tgt_ty.bitWidth ⊓ src_ty.bitWidth - 1 + 1 := by omega
+  rw [this]
+  have : -2 ^ (tgt_ty.bitWidth ⊓ src_ty.bitWidth - 1) ≤ x.val ∧
+         x.val < 2 ^ (tgt_ty.bitWidth ⊓ src_ty.bitWidth - 1) := by
+    have : tgt_ty.bitWidth ⊓ src_ty.bitWidth = tgt_ty.bitWidth ∨ tgt_ty.bitWidth ⊓ src_ty.bitWidth = src_ty.bitWidth := by
+      rw [Nat.min_def]
+      split <;> simp
+    cases this <;> rename_i hEq <;> simp [hEq] <;> omega
+  apply Int.bmod_pow2_eq_of_inBounds <;> omega
+
+
+/-!
 # Checked Operations
 ## Checked Operations: Definitions
 -/
@@ -2608,54 +2877,6 @@ theorem Isize.checked_rem_bv_spec (x y : Isize) :
 
 
 
-@[progress]
-theorem Scalar.cast_in_bounds_eq {src_ty tgt_ty : ScalarTy} (x : Scalar src_ty) (h_bounds: Scalar.in_bounds tgt_ty x): ∃ x', Scalar.cast tgt_ty x = .ok x' ∧ x'.val = x.val := by
-  simp at h_bounds
-  simp [cast, tryMk, tryMkOpt]
-  split_ifs with h_nbounds
-  . use (Scalar.ofIntCore x h_bounds); simp [ofOption, ofIntCore]
-  . omega
-
-@[simp] theorem Scalar.exists_eq_left {p : Scalar ty → Prop} {a' : Scalar ty} :
-  (∃ (a : Scalar ty), a.val = a'.val ∧ p a) ↔ p a' := by
-  constructor <;> intro h
-  . cases h
-    cases a'
-    simp_all [eq_comm]
-  . exists a'
-
-@[simp] theorem Scalar.exists_eq_left' {p : Scalar ty → Prop} {a' : Scalar ty} :
-  (∃ (a : Scalar ty), a'.val = a.val ∧ p a) ↔ p a' := by
-  constructor <;> intro h
-  . cases h
-    cases a'
-    simp_all [eq_comm]
-  . exists a'
-
-@[simp] theorem Scalar.exists_eq_right {p : Scalar ty → Prop} {a' : Scalar ty} :
-  (∃ (a : Scalar ty), p a ∧ a.val = a'.val) ↔ p a' := by
-  constructor <;> intro h
-  . cases h
-    cases a'
-    simp_all [eq_comm]
-  . exists a'
-
-@[simp] theorem Scalar.exists_eq_right' {p : Scalar ty → Prop} {a' : Scalar ty} :
-  (∃ (a : Scalar ty), p a ∧ a'.val = a.val) ↔ p a' := by
-  constructor <;> intro h
-  . cases h
-    cases a'
-    simp_all [eq_comm]
-  . exists a'
-
-@[simp] theorem Scalar.exists_eq {a' : Scalar ty} : ∃ (a : Scalar ty), a.val = a'.val := by exists a'
-@[simp] theorem Scalar.exists_eq' {a' : Scalar ty} : ∃ (a : Scalar ty), a'.val = a.val := by exists a'
-
-@[progress]
-theorem Scalar.cast_bool_spec ty (b : Bool) :
-  ∃ s, Scalar.cast_bool ty b = ok s ∧ s.val = if b then 1 else 0 := by
-  simp [Scalar.cast_bool, tryMk, tryMkOpt]
-  split <;> split <;> simp_all <;> scalar_tac
 
 -- core checked arithmetic operations
 

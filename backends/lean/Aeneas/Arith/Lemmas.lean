@@ -2,6 +2,7 @@ import Aeneas.ScalarTac.IntTac
 import Aeneas.ScalarTac.ScalarTac
 import Mathlib.Algebra.Algebra.ZMod
 import Mathlib.RingTheory.Int.Basic
+import Init.Data.Int.DivModLemmas
 
 namespace Aeneas.Arith
 
@@ -576,5 +577,22 @@ theorem Int.tmod_ge_of_neg (x y : Int) (hx : x < 0) :
       omega
   omega
 
+-- TODO: move to Mathlib
+theorem Int.bmod_bmod_of_dvd (n : Int) {m k : Nat} (hDiv : m ∣ k) :
+  (n.bmod k).bmod m = n.bmod m := by
+  conv => lhs; arg 1; simp only [Int.bmod]
+  rw [← bmod_eq_emod_eq_iff]
+  have h : n % (k : Int) % (m : Int) = n % (m : Int) := by
+    rw [Int.emod_emod_of_dvd]
+    simp [Int.ofNat_dvd_left]
+    apply hDiv
+  split_ifs
+  . apply h
+  . rw [Int.sub_emod]
+    have : (k : Int) % m = 0 := by
+      apply Int.emod_eq_zero_of_dvd
+      simp [Int.ofNat_dvd_left]
+      apply hDiv
+    simp [this, h]
 
 end Aeneas.Arith
