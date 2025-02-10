@@ -1455,7 +1455,7 @@ theorem Isize.div_spec {x y : Isize} (hnz : ↑y ≠ (0 : Int))
 -/
 
 /-!
-Theorems with a specification which use integers and bit-vectors
+Theorems with a specification which uses integers and bit-vectors
 -/
 
 /-- Generic theorem - shouldn't be used much -/
@@ -1467,7 +1467,7 @@ theorem UScalar.rem_bv_spec {ty} (x : UScalar ty) {y : UScalar ty} (hzero : y.va
   simp
 
 /-- Generic theorem - shouldn't be used much -/
-theorem IScalar.rem_bv_spec {ty} {x y : IScalar ty} (hzero : y.val ≠ 0) :
+theorem IScalar.rem_bv_spec {ty} (x : IScalar ty) {y : IScalar ty} (hzero : y.val ≠ 0) :
   ∃ z, x % y = ok z ∧ (↑z : Int) = Int.tmod ↑x ↑y ∧ z.bv = BitVec.srem x.bv y.bv := by
   conv => congr; ext; lhs; simp [HMod.hMod]
   simp [hzero, rem, tryMk, tryMkOpt, ofOption, hmax, ofIntCore]
@@ -1587,7 +1587,175 @@ theorem IScalar.rem_bv_spec {ty} {x y : IScalar ty} (hzero : y.val ≠ 0) :
 
   . -- x < 0
     -- y < 0
-    sorry
+
+    rename_i hxMsb hyMsb
+    have hx := @BitVec.toInt_eq_msb_cond _ x.bv
+    simp [hxMsb] at hx
+    have hy := @BitVec.toInt_eq_msb_cond _ y.bv
+    simp [hyMsb] at hy
+
+    have hxNeg : x.val < 0 := by
+      have := @BitVec.msb_eq_toInt _ x.bv
+      simp_all
+    have hyNeg : y.val < 0 := by
+      have := @BitVec.msb_eq_toInt _ y.bv
+      simp_all
+
+    have : (x.val).tmod (y.val) = -(-x.val).tmod (-y.val) := by simp
+    rw [this]; clear this
+
+    rw [Int.tmod_eq_emod] <;> try omega
+
+    have hx := IScalar.neg_imp_toNat_neg_eq_neg_toInt x (by omega)
+    have hy := IScalar.neg_imp_toNat_neg_eq_neg_toInt y (by omega)
+
+    have : 0 ≤ -x.bv.toInt % -y.bv.toInt := by
+      have h := Int.emod_of_pos_disj (-x.bv.toInt) (-y.bv.toInt)
+      have : ¬ -y.bv.toInt ≤ 0 := by
+        simp only [val] at *
+        omega
+      simp only [this, false_or] at h
+      omega
+
+    have : -2 ^ (ty.bitWidth - 1) ≤ -x.bv.toInt % -y.bv.toInt := by omega
+
+    have hxmyToInt : (-x.bv % -y.bv).toInt = (-x.bv.toInt) % (-y.bv.toInt) := by
+      conv => lhs; simp only [BitVec.toInt_eq_toNat_bmod, BitVec.toNat_umod]
+      push_cast
+      simp only [hx, hy]
+      apply bmod_pow_bitWidth_eq_of_lt
+      . omega
+      . simp only [val] at *
+        have := @Int.emod_lt_of_pos (-x.bv.toInt) (-y.bv.toInt) (by omega)
+        omega
+
+    have : 0 ≤ (-x.bv % -y.bv).toInt := by
+      simp only [hxmyToInt]
+      omega
+
+    have := BitVec.toInt_neg_of_pos_eq_neg (-x.bv % -y.bv) (by omega) (by omega)
+    rw [this]; clear this
+
+    simp only [hxmyToInt]
+    simp
+
+theorem U8.rem_bv_spec (x : U8) {y : U8} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ok z ∧ (↑z : Nat) = ↑x % ↑y ∧ z.bv = x.bv % y.bv :=
+  UScalar.rem_bv_spec x hnz
+
+theorem U16.rem_bv_spec (x : U16) {y : U16} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ok z ∧ (↑z : Nat) = ↑x % ↑y ∧ z.bv = x.bv % y.bv :=
+  UScalar.rem_bv_spec x hnz
+
+theorem U32.rem_bv_spec (x : U32) {y : U32} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ok z ∧ (↑z : Nat) = ↑x % ↑y ∧ z.bv = x.bv % y.bv :=
+  UScalar.rem_bv_spec x hnz
+
+theorem U64.rem_bv_spec (x : U64) {y : U64} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ok z ∧ (↑z : Nat) = ↑x % ↑y ∧ z.bv = x.bv % y.bv :=
+  UScalar.rem_bv_spec x hnz
+
+theorem U128.rem_bv_spec (x : U128) {y : U128} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ok z ∧ (↑z : Nat) = ↑x % ↑y ∧ z.bv = x.bv % y.bv :=
+  UScalar.rem_bv_spec x hnz
+
+theorem Usize.rem_bv_spec (x : Usize) {y : Usize} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ok z ∧ (↑z : Nat) = ↑x % ↑y ∧ z.bv = x.bv % y.bv :=
+  UScalar.rem_bv_spec x hnz
+
+theorem I8.rem_bv_spec (x : I8) {y : I8} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ok z ∧ (↑z : Int) = Int.tmod ↑x ↑y ∧ z.bv = BitVec.srem x.bv y.bv :=
+  IScalar.rem_bv_spec x hnz
+
+theorem I16.rem_bv_spec (x : I16) {y : I16} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ok z ∧ (↑z : Int) = Int.tmod ↑x ↑y ∧ z.bv = BitVec.srem x.bv y.bv :=
+  IScalar.rem_bv_spec x hnz
+
+theorem I32.rem_bv_spec (x : I32) {y : I32} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ok z ∧ (↑z : Int) = Int.tmod ↑x ↑y ∧ z.bv = BitVec.srem x.bv y.bv :=
+  IScalar.rem_bv_spec x hnz
+
+theorem I64.rem_bv_spec (x : I64) {y : I64} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ok z ∧ (↑z : Int) = Int.tmod ↑x ↑y ∧ z.bv = BitVec.srem x.bv y.bv :=
+  IScalar.rem_bv_spec x hnz
+
+theorem I128.rem_bv_spec (x : I128) {y : I128} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ok z ∧ (↑z : Int) = Int.tmod ↑x ↑y ∧ z.bv = BitVec.srem x.bv y.bv :=
+  IScalar.rem_bv_spec x hnz
+
+theorem Isize.rem_bv_spec (x : I128) {y : I128} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ok z ∧ (↑z : Int) = Int.tmod ↑x ↑y ∧ z.bv = BitVec.srem x.bv y.bv :=
+  IScalar.rem_bv_spec x hnz
+
+/-!
+Theorems with a specification which only uses integers
+-/
+
+/-- Generic theorem - shouldn't be used much -/
+theorem UScalar.rem_spec {ty} (x : UScalar ty) {y : UScalar ty} (hzero : y.val ≠ 0) :
+  ∃ z, x % y = ok z ∧ (↑z : Nat) = ↑x % ↑y := by
+  have ⟨ z, hz ⟩ := rem_bv_spec x hzero
+  simp [hz]
+
+/-- Generic theorem - shouldn't be used much -/
+theorem IScalar.rem_spec {ty} (x : IScalar ty) {y : IScalar ty} (hzero : y.val ≠ 0) :
+  ∃ z, x % y = ok z ∧ (↑z : Int) = Int.tmod ↑x ↑y := by
+  have ⟨ z, hz ⟩ := rem_bv_spec x hzero
+  simp [hz]
+
+@[progress] theorem U8.rem_spec (x : U8) {y : U8} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ok z ∧ (↑z : Nat) = ↑x % ↑y :=
+  UScalar.rem_spec x hnz
+
+@[progress] theorem U16.rem_spec (x : U16) {y : U16} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ok z ∧ (↑z : Nat) = ↑x % ↑y :=
+  UScalar.rem_spec x hnz
+
+@[progress] theorem U32.rem_spec (x : U32) {y : U32} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ok z ∧ (↑z : Nat) = ↑x % ↑y :=
+  UScalar.rem_spec x hnz
+
+@[progress] theorem U64.rem_spec (x : U64) {y : U64} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ok z ∧ (↑z : Nat) = ↑x % ↑y :=
+  UScalar.rem_spec x hnz
+
+@[progress] theorem U128.rem_spec (x : U128) {y : U128} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ok z ∧ (↑z : Nat) = ↑x % ↑y :=
+  UScalar.rem_spec x hnz
+
+@[progress] theorem Usize.rem_spec (x : Usize) {y : Usize} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ok z ∧ (↑z : Nat) = ↑x % ↑y :=
+  UScalar.rem_spec x hnz
+
+@[progress] theorem I8.rem_spec (x : I8) {y : I8} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ok z ∧ (↑z : Int) = Int.tmod ↑x ↑y :=
+  IScalar.rem_spec x hnz
+
+@[progress] theorem I16.rem_spec (x : I16) {y : I16} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ok z ∧ (↑z : Int) = Int.tmod ↑x ↑y :=
+  IScalar.rem_spec x hnz
+
+@[progress] theorem I32.rem_spec (x : I32) {y : I32} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ok z ∧ (↑z : Int) = Int.tmod ↑x ↑y :=
+  IScalar.rem_spec x hnz
+
+@[progress] theorem I64.rem_spec (x : I64) {y : I64} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ok z ∧ (↑z : Int) = Int.tmod ↑x ↑y :=
+  IScalar.rem_spec x hnz
+
+@[progress] theorem I128.rem_spec (x : I128) {y : I128} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ok z ∧ (↑z : Int) = Int.tmod ↑x ↑y :=
+  IScalar.rem_spec x hnz
+
+@[progress] theorem Isize.rem_spec (x : I128) {y : I128} (hnz : y.val ≠ 0) :
+  ∃ z, x % y = ok z ∧ (↑z : Int) = Int.tmod ↑x ↑y :=
+  IScalar.rem_spec x hnz
+
+
+
+
+
+
 
 
 
@@ -1850,64 +2018,7 @@ theorem Scalar.rem_unsigned_spec {ty} (s: ¬ ty.isSigned) (x : Scalar ty) {y : S
   simp [*] at hs
   simp [*]
 
-@[progress] theorem Usize.rem_spec (x : Usize) {y : Usize} (hnz : ↑y ≠ (0 : Int)) :
-  ∃ z, x % y = ok z ∧ (↑z : Int) = ↑x % ↑y := by
-  apply Scalar.rem_unsigned_spec <;> simp [ScalarTy.isSigned, *]
 
-@[progress] theorem U8.rem_spec (x : U8) {y : U8} (hnz : ↑y ≠ (0 : Int)) :
-  ∃ z, x % y = ok z ∧ (↑z : Int) = ↑x % ↑y := by
-  apply Scalar.rem_unsigned_spec <;> simp [ScalarTy.isSigned, *]
-
-@[progress] theorem U16.rem_spec (x : U16) {y : U16} (hnz : ↑y ≠ (0 : Int)) :
-  ∃ z, x % y = ok z ∧ (↑z : Int) = ↑x % ↑y := by
-  apply Scalar.rem_unsigned_spec <;> simp [ScalarTy.isSigned, *]
-
-@[progress] theorem U32.rem_spec (x : U32) {y : U32} (hnz : ↑y ≠ (0 : Int)) :
-  ∃ z, x % y = ok z ∧ (↑z : Int) = ↑x % ↑y := by
-  apply Scalar.rem_unsigned_spec <;> simp [ScalarTy.isSigned, *]
-
-@[progress] theorem U64.rem_spec (x : U64) {y : U64} (hnz : ↑y ≠ (0 : Int)) :
-  ∃ z, x % y = ok z ∧ (↑z : Int) = ↑x % ↑y := by
-  apply Scalar.rem_unsigned_spec <;> simp [ScalarTy.isSigned, *]
-
-@[progress] theorem U128.rem_spec (x : U128) {y : U128} (hnz : ↑y ≠ (0 : Int)) :
-  ∃ z, x % y = ok z ∧ (↑z : Int) = ↑x % ↑y := by
-  apply Scalar.rem_unsigned_spec <;> simp [ScalarTy.isSigned, *]
-
-@[progress] theorem I8.rem_spec (x : I8) {y : I8}
-  (hnz : ↑y ≠ (0 : Int))
-  (hmin : I8.min ≤ scalar_rem ↑x ↑y)
-  (hmax : scalar_rem ↑x ↑y ≤ I8.max):
-  ∃ z, x % y = ok z ∧ (↑z : Int) = scalar_rem ↑x ↑y :=
-  Scalar.rem_spec hnz hmin hmax
-
-@[progress] theorem I16.rem_spec (x : I16) {y : I16}
-  (hnz : ↑y ≠ (0 : Int))
-  (hmin : I16.min ≤ scalar_rem ↑x ↑y)
-  (hmax : scalar_rem ↑x ↑y ≤ I16.max):
-  ∃ z, x % y = ok z ∧ (↑z : Int) = scalar_rem ↑x ↑y :=
-  Scalar.rem_spec hnz hmin hmax
-
-@[progress] theorem I32.rem_spec (x : I32) {y : I32}
-  (hnz : ↑y ≠ (0 : Int))
-  (hmin : I32.min ≤ scalar_rem ↑x ↑y)
-  (hmax : scalar_rem ↑x ↑y ≤ I32.max):
-  ∃ z, x % y = ok z ∧ (↑z : Int) = scalar_rem ↑x ↑y :=
-  Scalar.rem_spec hnz hmin hmax
-
-@[progress] theorem I64.rem_spec (x : I64) {y : I64}
-  (hnz : ↑y ≠ (0 : Int))
-  (hmin : I64.min ≤ scalar_rem ↑x ↑y)
-  (hmax : scalar_rem ↑x ↑y ≤ I64.max):
-  ∃ z, x % y = ok z ∧ (↑z : Int) = scalar_rem ↑x ↑y :=
-  Scalar.rem_spec hnz hmin hmax
-
-@[progress] theorem I128.rem_spec (x : I128) {y : I128}
-  (hnz : ↑y ≠ (0 : Int))
-  (hmin : I128.min ≤ scalar_rem ↑x ↑y)
-  (hmax : scalar_rem ↑x ↑y ≤ I128.max):
-  ∃ z, x % y = ok z ∧ (↑z : Int) = scalar_rem ↑x ↑y :=
-  Scalar.rem_spec hnz hmin hmax
 
 theorem core.num.checked_rem_spec {ty} {x y : Scalar ty} :
   match core.num.checked_rem x y with
