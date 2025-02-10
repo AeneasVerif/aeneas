@@ -412,29 +412,31 @@ def IScalar.tryMkOpt (ty : IScalarTy) (x : Int) : Option (IScalar ty) :=
 def IScalar.tryMk (ty : IScalarTy) (x : Int) : Result (IScalar ty) :=
   Result.ofOption (tryMkOpt ty x) integerOverflow
 
-theorem UScalar.tryMk_eq (ty : UScalarTy) (x : Nat) :
-  match tryMk ty x with
-  | ok y => y.val = x ∧ inBounds ty x
-  | fail _ => ¬ (inBounds ty x)
-  | _ => False := by
-  simp [tryMk, ofOption, tryMkOpt, ofNatCore]
+theorem UScalar.tryMkOpt_eq (ty : UScalarTy) (x : Nat) :
+  match tryMkOpt ty x with
+  | some y => y.val = x ∧ inBounds ty x
+  | none => ¬ (inBounds ty x) := by
+  simp [tryMkOpt, ofNatCore]
   have h := check_bounds_eq_inBounds ty x
   split_ifs <;> simp_all
   simp [UScalar.val, UScalarTy.bitWidth, max] at *
   dcases ty <;> simp_all [U8.max, U16.max, U32.max, U64.max, U128.max, Usize.max, Usize.refined_max, smax] <;> try omega
   cases h: System.Platform.numBits_eq <;> simp_all <;> omega
 
-@[simp] theorem UScalar.tryMk_eq_div (ty : UScalarTy) (x : Nat) :
-  tryMk ty x = div ↔ False := by
-  simp [tryMk, ofOption, tryMkOpt]
-  split_ifs <;> simp
-
-theorem IScalar.tryMk_eq (ty : IScalarTy) (x : Int) :
+theorem UScalar.tryMk_eq (ty : UScalarTy) (x : Nat) :
   match tryMk ty x with
   | ok y => y.val = x ∧ inBounds ty x
   | fail _ => ¬ (inBounds ty x)
   | _ => False := by
-  simp [tryMk, ofOption, tryMkOpt, ofIntCore]
+  have := UScalar.tryMkOpt_eq ty x
+  simp [tryMk, ofOption]
+  dcases h: tryMkOpt ty x <;> simp_all
+
+theorem IScalar.tryMkOpt_eq (ty : IScalarTy) (x : Int) :
+  match tryMkOpt ty x with
+  | some y => y.val = x ∧ inBounds ty x
+  | none => ¬ (inBounds ty x) := by
+  simp [tryMkOpt, ofIntCore]
   have h := check_bounds_eq_inBounds ty x
   split_ifs <;> simp_all
   simp [IScalar.val, IScalarTy.bitWidth, min, max] at *
@@ -445,10 +447,14 @@ theorem IScalar.tryMk_eq (ty : IScalarTy) (x : Int) :
   simp [Int.bmod] <;> split <;> (try omega) <;>
   cases h: System.Platform.numBits_eq <;> simp_all <;> omega
 
-@[simp] theorem IScalar.tryMk_eq_div (ty : IScalarTy) (x : Int) :
-  tryMk ty x = div ↔ False := by
-  simp [tryMk, ofOption, tryMkOpt]
-  split_ifs <;> simp
+theorem IScalar.tryMk_eq (ty : IScalarTy) (x : Int) :
+  match tryMk ty x with
+  | ok y => y.val = x ∧ inBounds ty x
+  | fail _ => ¬ (inBounds ty x)
+  | _ => False := by
+  have := tryMkOpt_eq ty x
+  simp [tryMk, ofIntCore]
+  dcases h : tryMkOpt ty x <;> simp_all
 
 @[simp] theorem UScalar.zero_in_cbounds {ty : UScalarTy} : 0 ≤ UScalar.cMax ty := by
   cases ty <;> simp [UScalar.cMax, UScalar.max]

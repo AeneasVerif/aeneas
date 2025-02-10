@@ -78,6 +78,12 @@ def UScalar.add {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
 def IScalar.add {ty : IScalarTy} (x y : IScalar ty) : Result (IScalar ty) :=
   IScalar.tryMk ty (x.val + y.val)
 
+def UScalar.try_add {ty : UScalarTy} (x y : UScalar ty) : Option (UScalar ty) :=
+  Option.ofResult (add x y)
+
+def IScalar.try_add {ty : IScalarTy} (x y : IScalar ty) : Option (IScalar ty) :=
+  Option.ofResult (add x y)
+
 instance {ty} : HAdd (UScalar ty) (UScalar ty) (Result (UScalar ty)) where
   hAdd x y := UScalar.add x y
 
@@ -94,6 +100,12 @@ def UScalar.sub {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
 def IScalar.sub {ty : IScalarTy} (x y : IScalar ty) : Result (IScalar ty) :=
   IScalar.tryMk ty (x.val - y.val)
 
+def UScalar.try_sub {ty : UScalarTy} (x y : UScalar ty) : Option (UScalar ty) :=
+  Option.ofResult (sub x y)
+
+def IScalar.try_sub {ty : IScalarTy} (x y : IScalar ty) : Option (IScalar ty) :=
+  Option.ofResult (sub x y)
+
 instance {ty} : HSub (UScalar ty) (UScalar ty) (Result (UScalar ty)) where
   hSub x y := UScalar.sub x y
 
@@ -109,6 +121,12 @@ def UScalar.mul {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
 def IScalar.mul {ty : IScalarTy} (x y : IScalar ty) : Result (IScalar ty) :=
   IScalar.tryMk ty (x.val * y.val)
 
+def UScalar.try_mul {ty : UScalarTy} (x y : UScalar ty) : Option (UScalar ty) :=
+  Option.ofResult (mul x y)
+
+def IScalar.try_mul {ty : IScalarTy} (x y : IScalar ty) : Option (IScalar ty) :=
+  Option.ofResult (mul x y)
+
 instance {ty} : HMul (UScalar ty) (UScalar ty) (Result (UScalar ty)) where
   hMul x y := UScalar.mul x y
 
@@ -118,11 +136,22 @@ instance {ty} : HMul (IScalar ty) (IScalar ty) (Result (IScalar ty)) where
 /-!
 Division
 -/
+
 def UScalar.div {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
   if y.bv != 0 then ok ⟨ BitVec.udiv x.bv y.bv ⟩ else fail divisionByZero
 
 def IScalar.div {ty : IScalarTy} (x y : IScalar ty): Result (IScalar ty) :=
-  if y.val != 0 then ok ⟨ BitVec.sdiv x.bv y.bv ⟩ else fail divisionByZero
+  if y.val != 0 then
+    -- There can be an overflow if `x` is equal to the lower bound and `y = -1`
+    if Int.tdiv x y ≤ IScalar.max ty then ok ⟨ BitVec.sdiv x.bv y.bv ⟩
+    else fail integerOverflow
+  else fail divisionByZero
+
+def UScalar.try_div {ty : UScalarTy} (x y : UScalar ty) : Option (UScalar ty) :=
+  Option.ofResult (div x y)
+
+def IScalar.try_div {ty : IScalarTy} (x y : IScalar ty): Option (IScalar ty) :=
+  Option.ofResult (div x y)
 
 instance {ty} : HDiv (UScalar ty) (UScalar ty) (Result (UScalar ty)) where
   hDiv x y := UScalar.div x y
@@ -137,7 +166,14 @@ def UScalar.rem {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
   if y.val != 0 then ok ⟨ BitVec.umod x.bv y.bv ⟩ else fail divisionByZero
 
 def IScalar.rem {ty : IScalarTy} (x y : IScalar ty) : Result (IScalar ty) :=
-  if y.val != 0 then ok ⟨ BitVec.srem x.bv y.bv ⟩ else fail divisionByZero
+  if y.val != 0 then ok ⟨ BitVec.srem x.bv y.bv ⟩
+  else fail divisionByZero
+
+def UScalar.try_rem {ty : UScalarTy} (x y : UScalar ty) : Option (UScalar ty) :=
+  Option.ofResult (rem x y)
+
+def IScalar.try_rem {ty : IScalarTy} (x y : IScalar ty) : Option (IScalar ty) :=
+  Option.ofResult (rem x y)
 
 instance {ty} : HMod (UScalar ty) (UScalar ty) (Result (UScalar ty)) where
   hMod x y := UScalar.rem x y
@@ -373,7 +409,7 @@ private theorem bmod_pow_bitWidth_eq_of_lt (ty : IScalarTy) (x : Int)
 ### Add
 -/
 
-theorem UScalar.add_equiv {ty} {x y : UScalar ty} :
+theorem UScalar.add_equiv {ty} (x y : UScalar ty) :
   match x + y with
   | ok z =>
     UScalar.inBounds ty (x.val + y.val) ∧
@@ -381,8 +417,9 @@ theorem UScalar.add_equiv {ty} {x y : UScalar ty} :
     z.bv = x.bv + y.bv
   | fail _ => ¬ (UScalar.inBounds ty (x.val + y.val))
   | _ => ⊥ := by
-  -- Applying the unfoldings only inside the match
-  conv in _ + _ => unfold HAdd.hAdd instHAddUScalarResult; simp [add]
+  have : x + y = add x y := by rfl
+  rw [this]
+  simp [add]
   have h := tryMk_eq ty (↑x + ↑y)
   simp [inBounds] at h
   split at h <;> simp_all
@@ -391,7 +428,7 @@ theorem UScalar.add_equiv {ty} {x y : UScalar ty} :
   have := @Int.emod_eq_of_lt (x.val + y.val) (2^ty.bitWidth) (by omega) (by omega)
   simp [*]
 
-theorem IScalar.add_equiv {ty} {x y : IScalar ty} :
+theorem IScalar.add_equiv {ty} (x y : IScalar ty) :
   match x + y with
   | ok z =>
     IScalar.inBounds ty (x.val + y.val) ∧
@@ -399,8 +436,9 @@ theorem IScalar.add_equiv {ty} {x y : IScalar ty} :
     z.bv = x.bv + y.bv
   | fail _ => ¬ (IScalar.inBounds ty (x.val + y.val))
   | _ => ⊥ := by
-  -- Applying the unfoldings only inside the match
-  conv in _ + _ => unfold HAdd.hAdd instHAddIScalarResult; simp [add]
+  have : x + y = add x y := by rfl
+  rw [this]
+  simp [add]
   have h := tryMk_eq ty (↑x + ↑y)
   simp [inBounds] at h
   split at h <;> simp_all
@@ -565,6 +603,7 @@ theorem IScalar.add_spec {ty} {x y : IScalar ty}
 ### Sub
 -/
 
+
 theorem UScalar.sub_equiv {ty} {x y : UScalar ty} :
   match x - y with
   | ok z =>
@@ -573,8 +612,8 @@ theorem UScalar.sub_equiv {ty} {x y : UScalar ty} :
     z.bv = x.bv - y.bv
   | fail _ => x.val < y.val
   | _ => ⊥ := by
-  -- Applying the unfoldings only inside the match
-  conv in _ - _ => unfold HSub.hSub instHSubUScalarResult; simp [sub]
+  have : x - y = sub x y := by rfl
+  simp [this, sub]
   dcases h : x.val < y.val <;> simp [h]
   simp_all
   simp only [UScalar.val]
@@ -618,8 +657,8 @@ theorem IScalar.sub_equiv {ty} {x y : IScalar ty} :
     z.bv = x.bv - y.bv
   | fail _ => ¬ (IScalar.inBounds ty (x.val - y.val))
   | _ => ⊥ := by
-  -- Applying the unfoldings only inside the match
-  conv in _ - _ => unfold HSub.hSub instHSubIScalarResult; simp [sub]
+  have : x - y = sub x y := by rfl
+  simp [this, sub]
   have h := tryMk_eq ty (↑x - ↑y)
   simp [inBounds] at h
   split at h <;> simp_all
@@ -1080,9 +1119,9 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
   (hzero : y.val ≠ 0)
   (hmax : Int.tdiv ↑x ↑y ≤ IScalar.max ty) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y ∧ z.bv = BitVec.sdiv x.bv y.bv := by
-  simp [max_eq_smax, smax] at hmax
   conv => congr; ext; lhs; simp [HDiv.hDiv]
   simp [hzero, div, tryMk, tryMkOpt, ofOption, hmin, hmax, ofIntCore]
+  simp [max_eq_smax, smax] at hmax
   simp only [val]
   simp [BitVec.sdiv_eq, BitVec.udiv_def]
   have pow2Ineq : (2^(ty.bitWidth - 1) : Int) < 2^ty.bitWidth := by
@@ -1751,6 +1790,145 @@ theorem IScalar.rem_spec {ty} (x : IScalar ty) {y : IScalar ty} (hzero : y.val �
   ∃ z, x % y = ok z ∧ (↑z : Int) = Int.tmod ↑x ↑y :=
   IScalar.rem_spec x hnz
 
+/-!
+# Checked Operations
+## Checked Operations: Definitions
+-/
+
+/-!
+## Checked Addition
+-/
+
+/- [core::num::{T}::checked_add] -/
+def core.num.checked_add_UScalar {ty} (x y : UScalar ty) : Option (UScalar ty) :=
+  Option.ofResult (x + y)
+
+def U8.checked_add (x y : U8) : Option U8 := core.num.checked_add_UScalar x y
+def U16.checked_add (x y : U16) : Option U16 := core.num.checked_add_UScalar x y
+def U32.checked_add (x y : U32) : Option U32 := core.num.checked_add_UScalar x y
+def U64.checked_add (x y : U64) : Option U64 := core.num.checked_add_UScalar x y
+def U128.checked_add (x y : U128) : Option U128 := core.num.checked_add_UScalar x y
+def Usize.checked_add (x y : Usize) : Option Usize := core.num.checked_add_UScalar x y
+
+/- [core::num::{T}::checked_add] -/
+def core.num.checked_add_IScalar {ty} (x y : IScalar ty) : Option (IScalar ty) :=
+  Option.ofResult (x + y)
+
+def I8.checked_add (x y : I8) : Option I8 := core.num.checked_add_IScalar x y
+def I16.checked_add (x y : I16) : Option I16 := core.num.checked_add_IScalar x y
+def I32.checked_add (x y : I32) : Option I32 := core.num.checked_add_IScalar x y
+def I64.checked_add (x y : I64) : Option I64 := core.num.checked_add_IScalar x y
+def I128.checked_add (x y : I128) : Option I128 := core.num.checked_add_IScalar x y
+def Isize.checked_add (x y : Isize) : Option Isize := core.num.checked_add_IScalar x y
+
+/-!
+## Checked Subtraction
+-/
+
+/- [core::num::{T}::checked_sub] -/
+def core.num.checked_sub_UScalar {ty} (x y : UScalar ty) : Option (UScalar ty) :=
+  Option.ofResult (x - y)
+
+def U8.checked_sub (x y : U8) : Option U8 := core.num.checked_sub_UScalar x y
+def U16.checked_sub (x y : U16) : Option U16 := core.num.checked_sub_UScalar x y
+def U32.checked_sub (x y : U32) : Option U32 := core.num.checked_sub_UScalar x y
+def U64.checked_sub (x y : U64) : Option U64 := core.num.checked_sub_UScalar x y
+def U128.checked_sub (x y : U128) : Option U128 := core.num.checked_sub_UScalar x y
+def Usize.checked_sub (x y : Usize) : Option Usize := core.num.checked_sub_UScalar x y
+
+/- [core::num::{T}::checked_sub] -/
+def core.num.checked_sub_IScalar {ty} (x y : IScalar ty) : Option (IScalar ty) :=
+  Option.ofResult (x - y)
+
+def I8.checked_sub (x y : I8) : Option I8 := core.num.checked_sub_IScalar x y
+def I16.checked_sub (x y : I16) : Option I16 := core.num.checked_sub_IScalar x y
+def I32.checked_sub (x y : I32) : Option I32 := core.num.checked_sub_IScalar x y
+def I64.checked_sub (x y : I64) : Option I64 := core.num.checked_sub_IScalar x y
+def I128.checked_sub (x y : I128) : Option I128 := core.num.checked_sub_IScalar x y
+def Isize.checked_sub (x y : Isize) : Option Isize := core.num.checked_sub_IScalar x y
+
+/-!
+## Checked Multiplication
+-/
+
+/- [core::num::{T}::checked_mul] -/
+def core.num.checked_mul_UScalar {ty} (x y : UScalar ty) : Option (UScalar ty) :=
+  Option.ofResult (x * y)
+
+def U8.checked_mul (x y : U8) : Option U8 := core.num.checked_mul_UScalar x y
+def U16.checked_mul (x y : U16) : Option U16 := core.num.checked_mul_UScalar x y
+def U32.checked_mul (x y : U32) : Option U32 := core.num.checked_mul_UScalar x y
+def U64.checked_mul (x y : U64) : Option U64 := core.num.checked_mul_UScalar x y
+def U128.checked_mul (x y : U128) : Option U128 := core.num.checked_mul_UScalar x y
+def Usize.checked_mul (x y : Usize) : Option Usize := core.num.checked_mul_UScalar x y
+
+/- [core::num::{T}::checked_mul] -/
+def core.num.checked_mul_IScalar {ty} (x y : IScalar ty) : Option (IScalar ty) :=
+  Option.ofResult (x * y)
+
+def I8.checked_mul (x y : I8) : Option I8 := core.num.checked_mul_IScalar x y
+def I16.checked_mul (x y : I16) : Option I16 := core.num.checked_mul_IScalar x y
+def I32.checked_mul (x y : I32) : Option I32 := core.num.checked_mul_IScalar x y
+def I64.checked_mul (x y : I64) : Option I64 := core.num.checked_mul_IScalar x y
+def I128.checked_mul (x y : I128) : Option I128 := core.num.checked_mul_IScalar x y
+def Isize.checked_mul (x y : Isize) : Option Isize := core.num.checked_mul_IScalar x y
+
+/-!
+## Checked Division
+-/
+
+/- [core::num::{T}::checked_div] -/
+def core.num.checked_div_UScalar {ty} (x y : UScalar ty) : Option (UScalar ty) :=
+  Option.ofResult (x / y)
+
+def U8.checked_div (x y : U8) : Option U8 := core.num.checked_div_UScalar x y
+def U16.checked_div (x y : U16) : Option U16 := core.num.checked_div_UScalar x y
+def U32.checked_div (x y : U32) : Option U32 := core.num.checked_div_UScalar x y
+def U64.checked_div (x y : U64) : Option U64 := core.num.checked_div_UScalar x y
+def U128.checked_div (x y : U128) : Option U128 := core.num.checked_div_UScalar x y
+def Usize.checked_div (x y : Usize) : Option Usize := core.num.checked_div_UScalar x y
+
+/- [core::num::{T}::checked_div] -/
+def core.num.checked_div_IScalar {ty} (x y : IScalar ty) : Option (IScalar ty) :=
+  Option.ofResult (x / y)
+
+def I8.checked_div (x y : I8) : Option I8 := core.num.checked_div_IScalar x y
+def I16.checked_div (x y : I16) : Option I16 := core.num.checked_div_IScalar x y
+def I32.checked_div (x y : I32) : Option I32 := core.num.checked_div_IScalar x y
+def I64.checked_div (x y : I64) : Option I64 := core.num.checked_div_IScalar x y
+def I128.checked_div (x y : I128) : Option I128 := core.num.checked_div_IScalar x y
+def Isize.checked_div (x y : Isize) : Option Isize := core.num.checked_div_IScalar x y
+
+/-!
+## Checked Remainder
+-/
+
+/- [core::num::{T}::checked_rem] -/
+def core.num.checked_rem_UScalar {ty} (x y : UScalar ty) : Option (UScalar ty) :=
+  Option.ofResult (x % y)
+
+def U8.checked_rem (x y : U8) : Option U8 := core.num.checked_rem_UScalar x y
+def U16.checked_rem (x y : U16) : Option U16 := core.num.checked_rem_UScalar x y
+def U32.checked_rem (x y : U32) : Option U32 := core.num.checked_rem_UScalar x y
+def U64.checked_rem (x y : U64) : Option U64 := core.num.checked_rem_UScalar x y
+def U128.checked_rem (x y : U128) : Option U128 := core.num.checked_rem_UScalar x y
+def Usize.checked_rem (x y : Usize) : Option Usize := core.num.checked_rem_UScalar x y
+
+/- [core::num::{T}::checked_rem] -/
+def core.num.checked_rem_IScalar {ty} (x y : IScalar ty) : Option (IScalar ty) :=
+  Option.ofResult (x % y)
+
+def I8.checked_rem (x y : I8) : Option I8 := core.num.checked_rem_IScalar x y
+def I16.checked_rem (x y : I16) : Option I16 := core.num.checked_rem_IScalar x y
+def I32.checked_rem (x y : I32) : Option I32 := core.num.checked_rem_IScalar x y
+def I64.checked_rem (x y : I64) : Option I64 := core.num.checked_rem_IScalar x y
+def I128.checked_rem (x y : I128) : Option I128 := core.num.checked_rem_IScalar x y
+def Isize.checked_rem (x y : Isize) : Option Isize := core.num.checked_rem_IScalar x y
+
+/-!
+## Checked Operations: Theorems
+-/
+
 
 
 
@@ -1822,90 +2000,6 @@ theorem Scalar.cast_bool_spec ty (b : Bool) :
 
 -- core checked arithmetic operations
 
-/- [core::num::{T}::checked_add] -/
-def core.num.checked_add (x y : Scalar ty) : Option (Scalar ty) :=
-  Option.ofResult (x + y)
-
-def U8.checked_add (x y : U8) : Option U8 := core.num.checked_add x y
-def U16.checked_add (x y : U16) : Option U16 := core.num.checked_add x y
-def U32.checked_add (x y : U32) : Option U32 := core.num.checked_add x y
-def U64.checked_add (x y : U64) : Option U64 := core.num.checked_add x y
-def U128.checked_add (x y : U128) : Option U128 := core.num.checked_add x y
-def Usize.checked_add (x y : Usize) : Option Usize := core.num.checked_add x y
-def I8.checked_add (x y : I8) : Option I8 := core.num.checked_add x y
-def I16.checked_add (x y : I16) : Option I16 := core.num.checked_add x y
-def I32.checked_add (x y : I32) : Option I32 := core.num.checked_add x y
-def I64.checked_add (x y : I64) : Option I64 := core.num.checked_add x y
-def I128.checked_add (x y : I128) : Option I128 := core.num.checked_add x y
-def Isize.checked_add (x y : Isize) : Option Isize := core.num.checked_add x y
-
-/- [core::num::{T}::checked_sub] -/
-def core.num.checked_sub (x y : Scalar ty) : Option (Scalar ty) :=
-  Option.ofResult (x - y)
-
-def U8.checked_sub (x y : U8) : Option U8 := core.num.checked_sub x y
-def U16.checked_sub (x y : U16) : Option U16 := core.num.checked_sub x y
-def U32.checked_sub (x y : U32) : Option U32 := core.num.checked_sub x y
-def U64.checked_sub (x y : U64) : Option U64 := core.num.checked_sub x y
-def U128.checked_sub (x y : U128) : Option U128 := core.num.checked_sub x y
-def Usize.checked_sub (x y : Usize) : Option Usize := core.num.checked_sub x y
-def I8.checked_sub (x y : I8) : Option I8 := core.num.checked_sub x y
-def I16.checked_sub (x y : I16) : Option I16 := core.num.checked_sub x y
-def I32.checked_sub (x y : I32) : Option I32 := core.num.checked_sub x y
-def I64.checked_sub (x y : I64) : Option I64 := core.num.checked_sub x y
-def I128.checked_sub (x y : I128) : Option I128 := core.num.checked_sub x y
-def Isize.checked_sub (x y : Isize) : Option Isize := core.num.checked_sub x y
-
-/- [core::num::{T}::checked_mul] -/
-def core.num.checked_mul (x y : Scalar ty) : Option (Scalar ty) :=
-  Option.ofResult (x * y)
-
-def U8.checked_mul (x y : U8) : Option U8 := core.num.checked_mul x y
-def U16.checked_mul (x y : U16) : Option U16 := core.num.checked_mul x y
-def U32.checked_mul (x y : U32) : Option U32 := core.num.checked_mul x y
-def U64.checked_mul (x y : U64) : Option U64 := core.num.checked_mul x y
-def U128.checked_mul (x y : U128) : Option U128 := core.num.checked_mul x y
-def Usize.checked_mul (x y : Usize) : Option Usize := core.num.checked_mul x y
-def I8.checked_mul (x y : I8) : Option I8 := core.num.checked_mul x y
-def I16.checked_mul (x y : I16) : Option I16 := core.num.checked_mul x y
-def I32.checked_mul (x y : I32) : Option I32 := core.num.checked_mul x y
-def I64.checked_mul (x y : I64) : Option I64 := core.num.checked_mul x y
-def I128.checked_mul (x y : I128) : Option I128 := core.num.checked_mul x y
-def Isize.checked_mul (x y : Isize) : Option Isize := core.num.checked_mul x y
-
-/- [core::num::{T}::checked_div] -/
-def core.num.checked_div (x y : Scalar ty) : Option (Scalar ty) :=
-  Option.ofResult (x / y)
-
-def U8.checked_div (x y : U8) : Option U8 := core.num.checked_div x y
-def U16.checked_div (x y : U16) : Option U16 := core.num.checked_div x y
-def U32.checked_div (x y : U32) : Option U32 := core.num.checked_div x y
-def U64.checked_div (x y : U64) : Option U64 := core.num.checked_div x y
-def U128.checked_div (x y : U128) : Option U128 := core.num.checked_div x y
-def Usize.checked_div (x y : Usize) : Option Usize := core.num.checked_div x y
-def I8.checked_div (x y : I8) : Option I8 := core.num.checked_div x y
-def I16.checked_div (x y : I16) : Option I16 := core.num.checked_div x y
-def I32.checked_div (x y : I32) : Option I32 := core.num.checked_div x y
-def I64.checked_div (x y : I64) : Option I64 := core.num.checked_div x y
-def I128.checked_div (x y : I128) : Option I128 := core.num.checked_div x y
-def Isize.checked_div (x y : Isize) : Option Isize := core.num.checked_div x y
-
-/- [core::num::{T}::checked_rem] -/
-def core.num.checked_rem (x y : Scalar ty) : Option (Scalar ty) :=
-  Option.ofResult (x % y)
-
-def U8.checked_rem (x y : U8) : Option U8 := core.num.checked_rem x y
-def U16.checked_rem (x y : U16) : Option U16 := core.num.checked_rem x y
-def U32.checked_rem (x y : U32) : Option U32 := core.num.checked_rem x y
-def U64.checked_rem (x y : U64) : Option U64 := core.num.checked_rem x y
-def U128.checked_rem (x y : U128) : Option U128 := core.num.checked_rem x y
-def Usize.checked_rem (x y : Usize) : Option Usize := core.num.checked_rem x y
-def I8.checked_rem (x y : I8) : Option I8 := core.num.checked_rem x y
-def I16.checked_rem (x y : I16) : Option I16 := core.num.checked_rem x y
-def I32.checked_rem (x y : I32) : Option I32 := core.num.checked_rem x y
-def I64.checked_rem (x y : I64) : Option I64 := core.num.checked_rem x y
-def I128.checked_rem (x y : I128) : Option I128 := core.num.checked_rem x y
-def Isize.checked_rem (x y : Isize) : Option Isize := core.num.checked_rem x y
 
 theorem core.num.checked_sub_spec {ty} {x y : Scalar ty} :
   match core.num.checked_sub x y with
