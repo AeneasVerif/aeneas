@@ -142,8 +142,8 @@ def UScalar.div {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
 
 def IScalar.div {ty : IScalarTy} (x y : IScalar ty): Result (IScalar ty) :=
   if y.val != 0 then
-    -- There can be an overflow if `x` is equal to the lower bound and `y = -1`
-    if Int.tdiv x y ≤ IScalar.max ty then ok ⟨ BitVec.sdiv x.bv y.bv ⟩
+    -- There can be an overflow if `x` is equal to the lower bound and `y` to `-1`
+    if ¬ (x.val = IScalar.min ty && y.val = -1) then ok ⟨ BitVec.sdiv x.bv y.bv ⟩
     else fail integerOverflow
   else fail divisionByZero
 
@@ -1116,12 +1116,10 @@ theorem IScalar.neg_imp_toNat_neg_eq_neg_toInt {ty} (x : IScalar ty) (hNeg : x.v
 
 /-- Generic theorem - shouldn't be used much -/
 theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
-  (hzero : y.val ≠ 0)
-  (hmax : Int.tdiv ↑x ↑y ≤ IScalar.max ty) :
+  (hzero : y.val ≠ 0) (hNoOverflow : ¬ (x.val = IScalar.min ty ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y ∧ z.bv = BitVec.sdiv x.bv y.bv := by
   conv => congr; ext; lhs; simp [HDiv.hDiv]
-  simp [hzero, div, tryMk, tryMkOpt, ofOption, hmin, hmax, ofIntCore]
-  simp [max_eq_smax, smax] at hmax
+  simp [div, tryMk, tryMkOpt, ofOption, ofIntCore, hzero, hNoOverflow]
   simp only [val]
   simp [BitVec.sdiv_eq, BitVec.udiv_def]
   have pow2Ineq : (2^(ty.bitWidth - 1) : Int) < 2^ty.bitWidth := by
@@ -1133,6 +1131,7 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
     omega
   have hxBounds := x.hBounds; simp [bound_eq_sbound, smin, smax] at hxBounds
   have hyBounds := y.hBounds; simp [bound_eq_sbound, smin, smax] at hyBounds
+  --have hxyBounds := tdiv_in_bounds x y hnoOverflow
   split
 
   . -- 0 ≤ x.bv.toInt
@@ -1149,6 +1148,11 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
     simp at hx hy
     have := @Int.tdiv_nonneg x.val y.val (by omega) (by omega)
     have : -2 ^ (ty.bitWidth - 1) ≤ 0 := by simp
+    have : (x.val).tdiv y.val < 2 ^ (ty.bitWidth - 1) := by
+      rw [Int.tdiv_eq_ediv] <;> try omega
+      have := @Int.ediv_le_self x.val y.val (by omega)
+      omega
+
     have := bmod_pow_bitWidth_eq_of_lt ty (Int.tdiv x.val y.val) (by omega) (by omega)
     rw [← Int.tdiv_eq_ediv] <;> omega
 
@@ -1254,8 +1258,8 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
       simp; omega
     rw [this]; clear this
 
-    /- We have to treat separately the degenerate case where `x` touches the lower bound
-       and `y = -1`, because then `x / y` actually overflows -/
+    /- We have to treat separately the degenerate case where `x` touches the upper bound
+       and `y = 1` -/
     dcases hxDivY : -x.val / y.val = 2^(ty.bitWidth - 1)
     . rw [← hy]
       rw [hxDivY]
@@ -1288,6 +1292,7 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
       rw [this]; clear this
       rw [← Int.tdiv_eq_ediv] <;> try omega
       simp
+
   . -- x.bv.toInt < 0
     -- y.bv.toInt < 0
     rename_i hxIneq hyIneq
@@ -1324,43 +1329,44 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
 
     /- We have to treat separately the degenerate case where `x` touches the lower bound
        and `y = -1`, because then `x / y` actually overflows -/
-    dcases hxEq : (-x.val) / (-y.val) = 2^(ty.bitWidth - 1)
-    . /- This causes an overflow: we shouldn't get there because of the precondition
-         on the bounds -/
-      have ⟨ hxEq, hyEq ⟩ : x.val = - 2^(ty.bitWidth - 1) ∧ y.val = -1 := by
+    have hxyInBouds : (-x.val) / (-y.val) ≠ 2^(ty.bitWidth - 1) := by
+      -- We do the proof by contradiction
+      intro hEq
+      have hContra : x.val = - 2^(ty.bitWidth - 1) ∧ y.val = -1 := by
         have := @Int.le_div_eq_bound_imp_eq (-x.val) (-y.val) (2^(ty.bitWidth - 1))
           (by omega) (by omega) (by omega) (by omega)
         omega
-      simp [hxEq, hyEq] at hmax
-    . have : -(2 ^ (ty.bitWidth - 1) : Int) ≤ ↑((-x.val).toNat / (-y.val).toNat) := by
-        have := @Int.ediv_nonneg (-x.val).toNat (-y.val).toNat (by omega) (by omega)
-        have : -(2 ^ (ty.bitWidth - 1) : Int) ≤ 0 := by simp
+      simp [hContra, min_eq_smin, smin] at hNoOverflow
+
+    have : -(2 ^ (ty.bitWidth - 1) : Int) ≤ ↑((-x.val).toNat / (-y.val).toNat) := by
+      have := @Int.ediv_nonneg (-x.val).toNat (-y.val).toNat (by omega) (by omega)
+      have : -(2 ^ (ty.bitWidth - 1) : Int) ≤ 0 := by simp
+      omega
+
+    have : ((-x.val).toNat / (-y.val).toNat) < (2 ^ (ty.bitWidth - 1) : Int) := by
+      -- First prove a ≤ bound
+      have hIneq : ((-x.val).toNat / (-y.val).toNat) ≤ (2 ^ (ty.bitWidth - 1) : Int) := by
+        have := @Int.ediv_le_self (-x.val).toNat (-y.val).toNat (by omega)
         omega
+      -- Then use the hypothesis about the fact that we're not equal to the bound
+      zify at hIneq
+      have : (-x.val).toNat = -x.val := by omega
+      rw [this] at hIneq; rw [this]
+      have : (-y.val).toNat = -y.val := by omega
+      rw [this] at hIneq; rw [this]
+      omega
+    have := bmod_pow_bitWidth_eq_of_lt ty ((-x.val).toNat / (-y.val).toNat : Nat) (by omega) (by omega)
+    rw [this]
 
-      have : ((-x.val).toNat / (-y.val).toNat) < (2 ^ (ty.bitWidth - 1) : Int) := by
-        -- First prove a ≤ bound
-        have hIneq : ((-x.val).toNat / (-y.val).toNat) ≤ (2 ^ (ty.bitWidth - 1) : Int) := by
-          have := @Int.ediv_le_self (-x.val).toNat (-y.val).toNat (by omega)
-          omega
-        -- Then use the hypothesis about the fact that we're not equal to the bound
-        zify at hIneq
-        have : (-x.val).toNat = -x.val := by omega
-        rw [this] at hIneq; rw [this]
-        have : (-y.val).toNat = -y.val := by omega
-        rw [this] at hIneq; rw [this]
-        omega
-      have := bmod_pow_bitWidth_eq_of_lt ty ((-x.val).toNat / (-y.val).toNat : Nat) (by omega) (by omega)
-      rw [this]
+    zify; simp
 
-      zify; simp
+    have : (-x.val) ⊔ 0 = -x.val := by omega
+    simp only [this]; clear this
+    have : -↑y ⊔ 0 = -y.val := by omega
+    simp only [this]; clear this
 
-      have : (-x.val) ⊔ 0 = -x.val := by omega
-      rw [this]; clear this
-      have : -↑y ⊔ 0 = -y.val := by omega
-      rw [this]; clear this
-
-      rw [← Int.tdiv_eq_ediv] <;> try omega
-      simp
+    rw [← Int.tdiv_eq_ediv] <;> try omega
+    simp
 
 theorem U8.div_bv_spec (x : U8) {y : U8} (hnz : ↑y ≠ (0 : Nat)) :
   ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y ∧ z.bv = x.bv / y.bv :=
@@ -1387,34 +1393,34 @@ theorem Usize.div_bv_spec (x : Usize) {y : Usize} (hnz : ↑y ≠ (0 : Nat)) :
   UScalar.div_bv_spec x hnz
 
 theorem I8.div_bv_spec {x y : I8} (hnz : ↑y ≠ (0 : Int))
-  (hmax : Int.tdiv ↑x ↑y ≤ I8.max):
+  (hNoOverflow : ¬ (x.val = I8.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y ∧ z.bv = BitVec.sdiv x.bv y.bv :=
-  IScalar.div_bv_spec hnz hmax
+  IScalar.div_bv_spec hnz hNoOverflow
 
 theorem I16.div_bv_spec {x y : I16} (hnz : ↑y ≠ (0 : Int))
-  (hmax : Int.tdiv ↑x ↑y ≤ I16.max):
+  (hNoOverflow : ¬ (x.val = I16.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y ∧ z.bv = BitVec.sdiv x.bv y.bv :=
-  IScalar.div_bv_spec hnz hmax
+  IScalar.div_bv_spec hnz hNoOverflow
 
 theorem I32.div_bv_spec {x y : I32} (hnz : ↑y ≠ (0 : Int))
-  (hmax : Int.tdiv ↑x ↑y ≤ I32.max):
+  (hNoOverflow : ¬ (x.val = I32.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y ∧ z.bv = BitVec.sdiv x.bv y.bv :=
-  IScalar.div_bv_spec hnz hmax
+  IScalar.div_bv_spec hnz hNoOverflow
 
 theorem I64.div_bv_spec {x y : I64} (hnz : ↑y ≠ (0 : Int))
-  (hmax : Int.tdiv ↑x ↑y ≤ I64.max):
+  (hNoOverflow : ¬ (x.val = I64.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y ∧ z.bv = BitVec.sdiv x.bv y.bv :=
-  IScalar.div_bv_spec hnz hmax
+  IScalar.div_bv_spec hnz hNoOverflow
 
 theorem I128.div_bv_spec {x y : I128} (hnz : ↑y ≠ (0 : Int))
-  (hmax : Int.tdiv ↑x ↑y ≤ I128.max):
+  (hNoOverflow : ¬ (x.val = I128.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y ∧ z.bv = BitVec.sdiv x.bv y.bv :=
-  IScalar.div_bv_spec hnz hmax
+  IScalar.div_bv_spec hnz hNoOverflow
 
 theorem Isize.div_bv_spec {x y : Isize} (hnz : ↑y ≠ (0 : Int))
-  (hmax : Int.tdiv ↑x ↑y ≤ Isize.max):
+  (hNoOverflow : ¬ (x.val = Isize.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y ∧ z.bv = BitVec.sdiv x.bv y.bv :=
-  IScalar.div_bv_spec hnz hmax
+  IScalar.div_bv_spec hnz hNoOverflow
 
 /-!
 Theorems with a specification which only use integers
@@ -1430,9 +1436,9 @@ theorem UScalar.div_spec {ty} (x : UScalar ty) {y : UScalar ty}
 /-- Generic theorem - shouldn't be used much -/
 theorem IScalar.div_spec {ty} {x y : IScalar ty}
   (hzero : y.val ≠ 0)
-  (hmax : Int.tdiv ↑x ↑y ≤ IScalar.max ty) :
+  (hNoOverflow : ¬ (x.val = IScalar.min ty ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y := by
-  have ⟨ z, hz ⟩ := IScalar.div_bv_spec hzero hmax
+  have ⟨ z, hz ⟩ := IScalar.div_bv_spec hzero hNoOverflow
   simp [hz]
 
 theorem U8.div_spec (x : U8) {y : U8} (hnz : ↑y ≠ (0 : Nat)) :
@@ -1460,34 +1466,34 @@ theorem Usize.div_spec (x : Usize) {y : Usize} (hnz : ↑y ≠ (0 : Nat)) :
   UScalar.div_spec x hnz
 
 theorem I8.div_spec {x y : I8} (hnz : ↑y ≠ (0 : Int))
-  (hmax : Int.tdiv ↑x ↑y ≤ I8.max):
+  (hNoOverflow : ¬ (x.val = I8.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
-  IScalar.div_spec hnz hmax
+  IScalar.div_spec hnz hNoOverflow
 
 theorem I16.div_spec {x y : I16} (hnz : ↑y ≠ (0 : Int))
-  (hmax : Int.tdiv ↑x ↑y ≤ I16.max):
+  (hNoOverflow : ¬ (x.val = I16.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
-  IScalar.div_spec hnz hmax
+  IScalar.div_spec hnz hNoOverflow
 
 theorem I32.div_spec {x y : I32} (hnz : ↑y ≠ (0 : Int))
-  (hmax : Int.tdiv ↑x ↑y ≤ I32.max):
+  (hNoOverflow : ¬ (x.val = I32.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
-  IScalar.div_spec hnz hmax
+  IScalar.div_spec hnz hNoOverflow
 
 theorem I64.div_spec {x y : I64} (hnz : ↑y ≠ (0 : Int))
-  (hmax : Int.tdiv ↑x ↑y ≤ I64.max):
+  (hNoOverflow : ¬ (x.val = I64.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
-  IScalar.div_spec hnz hmax
+  IScalar.div_spec hnz hNoOverflow
 
 theorem I128.div_spec {x y : I128} (hnz : ↑y ≠ (0 : Int))
-  (hmax : Int.tdiv ↑x ↑y ≤ I128.max):
+  (hNoOverflow : ¬ (x.val = I128.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
-  IScalar.div_spec hnz hmax
+  IScalar.div_spec hnz hNoOverflow
 
 theorem Isize.div_spec {x y : Isize} (hnz : ↑y ≠ (0 : Int))
-  (hmax : Int.tdiv ↑x ↑y ≤ Isize.max):
+  (hNoOverflow : ¬ (x.val = Isize.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
-  IScalar.div_spec hnz hmax
+  IScalar.div_spec hnz hNoOverflow
 
 /-!
 ### Remainder
