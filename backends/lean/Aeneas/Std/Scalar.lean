@@ -3039,494 +3039,642 @@ def core.marker.CopyIsize : core.marker.Copy Isize := {
   cloneInst := core.clone.CloneIsize
 }
 
--- This is easier defined this way than with the modulo operation (because of the
--- unsigned cases).
-def int_overflowing_add (ty : ScalarTy) (x y : Int) : Int × Bool :=
-  let z := x + y
-  let b := false
-  let range := Scalar.max ty - Scalar.min ty + 1
-  let r := (z, b)
-  let r := if r.1 > Scalar.max ty then (r.1 - range, true) else r
-  let r := if r.1 < Scalar.min ty then (r.1 + range, true) else r
-  r
+/-!
+# Overflowing Operations
+-/
 
-def int_overflowing_add_in_bounds {ty} (x y : Scalar ty) :
-  let r := int_overflowing_add ty x.val y.val
-  Scalar.min ty ≤ r.1 ∧ r.1 ≤ Scalar.max ty := by
-  simp [int_overflowing_add]
-  split <;> split <;> cases ty <;> simp at * <;>
-  scalar_tac
+-- TODO: we should redefine this, in particular so that it doesn't live in the `Result` monad
 
-def int_overflowing_add_unsigned_overflow {ty} (h: ¬ ty.isSigned) (x y : Scalar ty) :
-  let r := int_overflowing_add ty x.val y.val
-  x.val + y.val = if r.2 then r.1 + Scalar.max ty + 1 else r.1 := by
-  simp [int_overflowing_add]
-  split <;> split <;> cases ty <;> simp [ScalarTy.isSigned] at * <;>
-  scalar_tac
+def UScalar.overflowing_add {ty} (x y : UScalar ty) : Result (UScalar ty × Bool) :=
+  ok (⟨ BitVec.ofNat _ (x.val + y.val) ⟩, 2^ty.bitWidth ≤ x.val + y.val)
 
-def Scalar.overflowing_add {ty} (x y : Scalar ty) : Result (Scalar ty × Bool) :=
-  let r := int_overflowing_add ty x.val y.val
-  have h := int_overflowing_add_in_bounds x y
-  let z : Scalar ty := ⟨ r.1, h.left, h.right ⟩
-  ok (z, r.2)
+def IScalar.overflowing_add (ty : IScalarTy) (x y : IScalar ty) : Result (IScalar ty × Bool) :=
+  ok (⟨ BitVec.ofInt _ (x.val + y.val) ⟩,
+      ¬ (-2^(ty.bitWidth -1) ≤ x.val + y.val ∧ x.val + y.val < 2^ty.bitWidth))
 
 /- [core::num::{u8}::overflowing_add] -/
-def core.num.U8.overflowing_add := @Scalar.overflowing_add ScalarTy.U8
+def core.num.U8.overflowing_add := @UScalar.overflowing_add .U8
 
 /- [core::num::{u16}::overflowing_add] -/
-def core.num.U16.overflowing_add := @Scalar.overflowing_add ScalarTy.U16
+def core.num.U16.overflowing_add := @UScalar.overflowing_add .U16
 
 /- [core::num::{u32}::overflowing_add] -/
-def core.num.U32.overflowing_add := @Scalar.overflowing_add ScalarTy.U32
+def core.num.U32.overflowing_add := @UScalar.overflowing_add .U32
 
 /- [core::num::{u64}::overflowing_add] -/
-def core.num.U64.overflowing_add := @Scalar.overflowing_add ScalarTy.U64
+def core.num.U64.overflowing_add := @UScalar.overflowing_add .U64
 
 /- [core::num::{u128}::overflowing_add] -/
-def core.num.U128.overflowing_add := @Scalar.overflowing_add ScalarTy.U128
+def core.num.U128.overflowing_add := @UScalar.overflowing_add .U128
 
 /- [core::num::{usize}::overflowing_add] -/
-def core.num.Usize.overflowing_add := @Scalar.overflowing_add ScalarTy.Usize
+def core.num.Usize.overflowing_add := @UScalar.overflowing_add .Usize
 
 /- [core::num::{i8}::overflowing_add] -/
-def core.num.I8.overflowing_add := @Scalar.overflowing_add ScalarTy.I8
+def core.num.I8.overflowing_add := @IScalar.overflowing_add .I8
 
 /- [core::num::{i16}::overflowing_add] -/
-def core.num.I16.overflowing_add := @Scalar.overflowing_add ScalarTy.I16
+def core.num.I16.overflowing_add := @IScalar.overflowing_add .I16
 
 /- [core::num::{i32}::overflowing_add] -/
-def core.num.I32.overflowing_add := @Scalar.overflowing_add ScalarTy.I32
+def core.num.I32.overflowing_add := @IScalar.overflowing_add .I32
 
 /- [core::num::{i64}::overflowing_add] -/
-def core.num.I64.overflowing_add := @Scalar.overflowing_add ScalarTy.I64
+def core.num.I64.overflowing_add := @IScalar.overflowing_add .I64
 
 /- [core::num::{i128}::overflowing_add] -/
-def core.num.I128.overflowing_add := @Scalar.overflowing_add ScalarTy.I128
+def core.num.I128.overflowing_add := @IScalar.overflowing_add .I128
 
 /- [core::num::{isize}::overflowing_add] -/
-def core.num.Isize.overflowing_add := @Scalar.overflowing_add ScalarTy.Isize
+def core.num.Isize.overflowing_add := @IScalar.overflowing_add .Isize
+
+attribute [-simp] Bool.exists_bool
+
+theorem UScalar.overflowing_add_spec {ty} (x y : UScalar ty) :
+  ∃ z b, overflowing_add x y = ok (z, b) ∧
+  if x.val + y.val > UScalar.max ty then z.val = x.val + y.val - UScalar.max ty - 1 ∧ b = true
+  else z.val = x.val + y.val ∧ b = false := by
+  exists ⟨ BitVec.ofNat _ (x.val + y.val) ⟩
+  simp [overflowing_add]
+  simp only [val, BitVec.toNat_ofNat]
+  split <;> rename_i hLt <;> simp only [max_eq_smax, smax, not_lt] at *
+  . split_conjs
+    . have : (x.bv.toNat + y.bv.toNat) % 2^ty.bitWidth =
+             (x.bv.toNat + y.bv.toNat - 2^ty.bitWidth) % 2^ty.bitWidth := by
+        rw [Nat.mod_eq_sub_mod]
+        omega
+      rw [this]; clear this
+
+      have := @Nat.mod_eq_of_lt (x.bv.toNat + y.bv.toNat - 2^ty.bitWidth) (2^ty.bitWidth) (by omega)
+      rw [this]; clear this
+      omega
+    . omega
+  . split_conjs
+    . apply Nat.mod_eq_of_lt
+      omega
+    . omega
 
 @[progress]
 theorem core.num.U8.overflowing_add_spec (x y : U8) :
   ∃ z b, overflowing_add x y = ok (z, b) ∧
   if x.val + y.val > U8.max then z.val = x.val + y.val - U8.max - 1 ∧ b = true
   else z.val = x.val + y.val ∧ b = false
-  := by
-  simp [overflowing_add, Scalar.overflowing_add, int_overflowing_add]
-  split <;> split <;> simp_all <;> scalar_tac
+  := UScalar.overflowing_add_spec x y
 
 @[progress]
 theorem core.num.U16.overflowing_add_spec (x y : U16) :
   ∃ z b, overflowing_add x y = ok (z, b) ∧
   if x.val + y.val > U16.max then z.val = x.val + y.val - U16.max - 1 ∧ b = true
   else z.val = x.val + y.val ∧ b = false
-  := by
-  simp [overflowing_add, Scalar.overflowing_add, int_overflowing_add]
-  split <;> split <;> simp_all <;> scalar_tac
+  := UScalar.overflowing_add_spec x y
 
 @[progress]
 theorem core.num.U32.overflowing_add_spec (x y : U32) :
   ∃ z b, overflowing_add x y = ok (z, b) ∧
   if x.val + y.val > U32.max then z.val = x.val + y.val - U32.max - 1 ∧ b = true
   else z.val = x.val + y.val ∧ b = false
-  := by
-  simp [overflowing_add, Scalar.overflowing_add, int_overflowing_add]
-  split <;> split <;> simp_all <;> scalar_tac
+  := UScalar.overflowing_add_spec x y
 
 @[progress]
 theorem core.num.U64.overflowing_add_spec (x y : U64) :
   ∃ z b, overflowing_add x y = ok (z, b) ∧
   if x.val + y.val > U64.max then z.val = x.val + y.val - U64.max - 1 ∧ b = true
   else z.val = x.val + y.val ∧ b = false
-  := by
-  simp [overflowing_add, Scalar.overflowing_add, int_overflowing_add]
-  split <;> split <;> simp_all <;> scalar_tac
+  := UScalar.overflowing_add_spec x y
 
 @[progress]
 theorem core.num.U128.overflowing_add_spec (x y : U128) :
   ∃ z b, overflowing_add x y = ok (z, b) ∧
   if x.val + y.val > U128.max then z.val = x.val + y.val - U128.max - 1 ∧ b = true
   else z.val = x.val + y.val ∧ b = false
-  := by
-  simp [overflowing_add, Scalar.overflowing_add, int_overflowing_add]
-  split <;> split <;> simp_all <;> scalar_tac
+  := UScalar.overflowing_add_spec x y
 
 @[progress]
 theorem core.num.Usize.overflowing_add_spec (x y : Usize) :
   ∃ z b, overflowing_add x y = ok (z, b) ∧
   if x.val + y.val > Usize.max then z.val = x.val + y.val - Usize.max - 1 ∧ b = true
   else z.val = x.val + y.val ∧ b = false
-  := by
-  simp [overflowing_add, Scalar.overflowing_add, int_overflowing_add]
-  split <;> split <;> simp_all <;> scalar_tac
+  := UScalar.overflowing_add_spec x y
 
--- Saturating add
-def int_saturating_add (ty : ScalarTy) (x y : Int) : Int :=
-  let r := x + y
-  let r := if r > Scalar.max ty then Scalar.max ty else r
-  let r := if r < Scalar.min ty then Scalar.min ty else r
-  r
+/-!
+# Saturating Operations
+-/
 
-def int_saturating_add_in_bounds {ty} (x y : Scalar ty) :
-  let r := int_saturating_add ty x.val y.val
-  Scalar.min ty ≤ r ∧ r ≤ Scalar.max ty := by
-  simp [int_saturating_add]
-  split <;> constructor <;> cases ty <;> scalar_tac
-
-def Scalar.saturating_add {ty} (x y : Scalar ty) : Scalar ty :=
-  let r := int_saturating_add ty x.val y.val
-  have h := int_saturating_add_in_bounds x y
-  ⟨ r, h.1, h.2 ⟩
+/-!
+Saturating add: unsigned
+-/
+def UScalar.saturating_add {ty : UScalarTy} (x y : UScalar ty) : UScalar ty :=
+  ⟨ BitVec.ofNat _ (Min.min (UScalar.max ty) (x.val + y.val)) ⟩
 
 /- [core::num::{u8}::saturating_add] -/
-def core.num.U8.saturating_add := @Scalar.saturating_add ScalarTy.U8
+def core.num.U8.saturating_add := @UScalar.saturating_add UScalarTy.U8
 
 /- [core::num::{u16}::saturating_add] -/
-def core.num.U16.saturating_add := @Scalar.saturating_add ScalarTy.U16
+def core.num.U16.saturating_add := @UScalar.saturating_add UScalarTy.U16
 
 /- [core::num::{u32}::saturating_add] -/
-def core.num.U32.saturating_add := @Scalar.saturating_add ScalarTy.U32
+def core.num.U32.saturating_add := @UScalar.saturating_add UScalarTy.U32
 
 /- [core::num::{u64}::saturating_add] -/
-def core.num.U64.saturating_add := @Scalar.saturating_add ScalarTy.U64
+def core.num.U64.saturating_add := @UScalar.saturating_add UScalarTy.U64
 
 /- [core::num::{u128}::saturating_add] -/
-def core.num.U128.saturating_add := @Scalar.saturating_add ScalarTy.U128
+def core.num.U128.saturating_add := @UScalar.saturating_add UScalarTy.U128
 
 /- [core::num::{usize}::saturating_add] -/
-def core.num.Usize.saturating_add := @Scalar.saturating_add ScalarTy.Usize
+def core.num.Usize.saturating_add := @UScalar.saturating_add UScalarTy.Usize
+
+/-!
+Saturating add: signed
+-/
+def IScalar.saturating_add {ty : IScalarTy} (x y : IScalar ty) : IScalar ty :=
+  ⟨ BitVec.ofInt _ (Max.max (IScalar.min ty) (Min.min (IScalar.max ty) (x.val + y.val))) ⟩
 
 /- [core::num::{i8}::saturating_add] -/
-def core.num.I8.saturating_add := @Scalar.saturating_add ScalarTy.I8
+def core.num.I8.saturating_add := @IScalar.saturating_add IScalarTy.I8
 
 /- [core::num::{i16}::saturating_add] -/
-def core.num.I16.saturating_add := @Scalar.saturating_add ScalarTy.I16
+def core.num.I16.saturating_add := @IScalar.saturating_add IScalarTy.I16
 
 /- [core::num::{i32}::saturating_add] -/
-def core.num.I32.saturating_add := @Scalar.saturating_add ScalarTy.I32
+def core.num.I32.saturating_add := @IScalar.saturating_add IScalarTy.I32
 
 /- [core::num::{i64}::saturating_add] -/
-def core.num.I64.saturating_add := @Scalar.saturating_add ScalarTy.I64
+def core.num.I64.saturating_add := @IScalar.saturating_add IScalarTy.I64
 
 /- [core::num::{i128}::saturating_add] -/
-def core.num.I128.saturating_add := @Scalar.saturating_add ScalarTy.I128
+def core.num.I128.saturating_add := @IScalar.saturating_add IScalarTy.I128
 
 /- [core::num::{isize}::saturating_add] -/
-def core.num.Isize.saturating_add := @Scalar.saturating_add ScalarTy.Isize
+def core.num.Isize.saturating_add := @IScalar.saturating_add IScalarTy.Isize
 
-theorem core.num.U8.saturating_add_spec (x y : U8) :
-  let z := saturating_add x y
-  if x.val + y.val > U8.max then z.val = U8.max
-  else z.val = x.val + y.val
-  := by
-  simp [saturating_add, Scalar.saturating_add, int_saturating_add]
-  split <;> split <;> split <;> scalar_tac
-
-theorem core.num.U16.saturating_add_spec (x y : U16) :
-  let z := saturating_add x y
-  if x.val + y.val > U16.max then z.val = U16.max
-  else z.val = x.val + y.val
-  := by
-  simp [saturating_add, Scalar.saturating_add, int_saturating_add]
-  split <;> split <;> split <;> scalar_tac
-
-theorem core.num.U32.saturating_add_spec (x y : U32) :
-  let z := saturating_add x y
-  if x.val + y.val > U32.max then z.val = U32.max
-  else z.val = x.val + y.val
-  := by
-  simp [saturating_add, Scalar.saturating_add, int_saturating_add]
-  split <;> split <;> split <;> scalar_tac
-
-theorem core.num.U64.saturating_add_spec (x y : U64) :
-  let z := saturating_add x y
-  if x.val + y.val > U64.max then z.val = U64.max
-  else z.val = x.val + y.val
-  := by
-  simp [saturating_add, Scalar.saturating_add, int_saturating_add]
-  split <;> split <;> split <;> scalar_tac
-
-theorem core.num.U128.saturating_add_spec (x y : U128) :
-  let z := saturating_add x y
-  if x.val + y.val > U128.max then z.val = U128.max
-  else z.val = x.val + y.val
-  := by
-  simp [saturating_add, Scalar.saturating_add, int_saturating_add]
-  split <;> split <;> split <;> scalar_tac
-
-theorem core.num.Usize.saturating_add_spec (x y : Usize) :
-  let z := saturating_add x y
-  if x.val + y.val > Usize.max then z.val = Usize.max
-  else z.val = x.val + y.val
-  := by
-  simp [saturating_add, Scalar.saturating_add, int_saturating_add]
-  split <;> split <;> split <;> scalar_tac
-
--- Saturating sub
-def int_saturating_sub (ty : ScalarTy) (x y : Int) : Int :=
-  let r := x - y
-  let r := if r > Scalar.max ty then Scalar.max ty else r
-  let r := if r < Scalar.min ty then Scalar.min ty else r
-  r
-
-def int_saturating_sub_in_bounds {ty} (x y : Scalar ty) :
-  let r := int_saturating_sub ty x.val y.val
-  Scalar.min ty ≤ r ∧ r ≤ Scalar.max ty := by
-  simp [int_saturating_sub]
-  split <;> constructor <;> cases ty <;> scalar_tac
-
-def Scalar.saturating_sub {ty} (x y : Scalar ty) : Scalar ty :=
-  let r := int_saturating_sub ty x.val y.val
-  have h := int_saturating_sub_in_bounds x y
-  ⟨ r, h.1, h.2 ⟩
+/-!
+Saturating sub: unsigned
+-/
+def UScalar.saturating_sub {ty : UScalarTy} (x y : UScalar ty) : UScalar ty :=
+  ⟨ BitVec.ofNat _ (Max.max 0 (x.val - y.val)) ⟩
 
 /- [core::num::{u8}::saturating_sub] -/
-def core.num.U8.saturating_sub := @Scalar.saturating_sub ScalarTy.U8
+def core.num.U8.saturating_sub := @UScalar.saturating_sub UScalarTy.U8
 
 /- [core::num::{u16}::saturating_sub] -/
-def core.num.U16.saturating_sub := @Scalar.saturating_sub ScalarTy.U16
+def core.num.U16.saturating_sub := @UScalar.saturating_sub UScalarTy.U16
 
 /- [core::num::{u32}::saturating_sub] -/
-def core.num.U32.saturating_sub := @Scalar.saturating_sub ScalarTy.U32
+def core.num.U32.saturating_sub := @UScalar.saturating_sub UScalarTy.U32
 
 /- [core::num::{u64}::saturating_sub] -/
-def core.num.U64.saturating_sub := @Scalar.saturating_sub ScalarTy.U64
+def core.num.U64.saturating_sub := @UScalar.saturating_sub UScalarTy.U64
 
 /- [core::num::{u128}::saturating_sub] -/
-def core.num.U128.saturating_sub := @Scalar.saturating_sub ScalarTy.U128
+def core.num.U128.saturating_sub := @UScalar.saturating_sub UScalarTy.U128
 
 /- [core::num::{usize}::saturating_sub] -/
-def core.num.Usize.saturating_sub := @Scalar.saturating_sub ScalarTy.Usize
+def core.num.Usize.saturating_sub := @UScalar.saturating_sub UScalarTy.Usize
+
+/-!
+Saturating sub: signed
+-/
+def IScalar.saturating_sub {ty : IScalarTy} (x y : IScalar ty) : IScalar ty :=
+  ⟨ BitVec.ofInt _ (Max.max (IScalar.min ty) (Min.min (IScalar.max ty) (x.val - y.val))) ⟩
 
 /- [core::num::{i8}::saturating_sub] -/
-def core.num.I8.saturating_sub := @Scalar.saturating_sub ScalarTy.I8
+def core.num.I8.saturating_sub := @IScalar.saturating_sub IScalarTy.I8
 
 /- [core::num::{i16}::saturating_sub] -/
-def core.num.I16.saturating_sub := @Scalar.saturating_sub ScalarTy.I16
+def core.num.I16.saturating_sub := @IScalar.saturating_sub IScalarTy.I16
 
 /- [core::num::{i32}::saturating_sub] -/
-def core.num.I32.saturating_sub := @Scalar.saturating_sub ScalarTy.I32
+def core.num.I32.saturating_sub := @IScalar.saturating_sub IScalarTy.I32
 
 /- [core::num::{i64}::saturating_sub] -/
-def core.num.I64.saturating_sub := @Scalar.saturating_sub ScalarTy.I64
+def core.num.I64.saturating_sub := @IScalar.saturating_sub IScalarTy.I64
 
 /- [core::num::{i128}::saturating_sub] -/
-def core.num.I128.saturating_sub := @Scalar.saturating_sub ScalarTy.I128
+def core.num.I128.saturating_sub := @IScalar.saturating_sub IScalarTy.I128
 
 /- [core::num::{isize}::saturating_sub] -/
-def core.num.Isize.saturating_sub := @Scalar.saturating_sub ScalarTy.Isize
+def core.num.Isize.saturating_sub := @IScalar.saturating_sub IScalarTy.Isize
 
-theorem core.num.U8.saturating_sub_spec (x y : U8) :
-  let z := saturating_sub x y
-  if x.val - y.val < 0 then z.val = 0
-  else z.val = x.val - y.val
-  := by
-  simp [saturating_sub, Scalar.saturating_sub, int_saturating_sub]
-  split <;> split <;> split <;> scalar_tac
+/-!
+# Wrapping Operations
+-/
 
-theorem core.num.U16.saturating_sub_spec (x y : U16) :
-  let z := saturating_sub x y
-  if x.val - y.val < 0 then z.val = 0
-  else z.val = x.val - y.val
-  := by
-  simp [saturating_sub, Scalar.saturating_sub, int_saturating_sub]
-  split <;> split <;> split <;> scalar_tac
+/-!
+## Wrapping Add
+-/
 
-theorem core.num.U32.saturating_sub_spec (x y : U32) :
-  let z := saturating_sub x y
-  if x.val - y.val < 0 then z.val = 0
-  else z.val = x.val - y.val
-  := by
-  simp [saturating_sub, Scalar.saturating_sub, int_saturating_sub]
-  split <;> split <;> split <;> scalar_tac
-
-theorem core.num.U64.saturating_sub_spec (x y : U64) :
-  let z := saturating_sub x y
-  if x.val - y.val < 0 then z.val = 0
-  else z.val = x.val - y.val
-  := by
-  simp [saturating_sub, Scalar.saturating_sub, int_saturating_sub]
-  split <;> split <;> split <;> scalar_tac
-
-theorem core.num.U128.saturating_sub_spec (x y : U128) :
-  let z := saturating_sub x y
-  if x.val - y.val < 0 then z.val = 0
-  else z.val = x.val - y.val
-  := by
-  simp [saturating_sub, Scalar.saturating_sub, int_saturating_sub]
-  split <;> split <;> split <;> scalar_tac
-
-theorem core.num.Usize.saturating_sub_spec (x y : Usize) :
-  let z := saturating_sub x y
-  if x.val - y.val < 0 then z.val = 0
-  else z.val = x.val - y.val
-  := by
-  simp [saturating_sub, Scalar.saturating_sub, int_saturating_sub]
-  split <;> split <;> split <;> scalar_tac
-
--- Wrapping add
-def Scalar.wrapping_add {ty} (x y : Scalar ty) : Scalar ty := sorry
+def UScalar.wrapping_add {ty} (x y : UScalar ty) : UScalar ty := ⟨ x.bv + y.bv ⟩
 
 /- [core::num::{u8}::wrapping_add] -/
-def core.num.U8.wrapping_add : U8 → U8 → U8 := @Scalar.wrapping_add ScalarTy.U8
+def core.num.U8.wrapping_add : U8 → U8 → U8 := @UScalar.wrapping_add UScalarTy.U8
 
 /- [core::num::{u16}::wrapping_add] -/
-def core.num.U16.wrapping_add : U16 → U16 → U16  := @Scalar.wrapping_add ScalarTy.U16
+def core.num.U16.wrapping_add : U16 → U16 → U16  := @UScalar.wrapping_add UScalarTy.U16
 
 /- [core::num::{u32}::wrapping_add] -/
-def core.num.U32.wrapping_add : U32 → U32 → U32  := @Scalar.wrapping_add ScalarTy.U32
+def core.num.U32.wrapping_add : U32 → U32 → U32  := @UScalar.wrapping_add UScalarTy.U32
 
 /- [core::num::{u64}::wrapping_add] -/
-def core.num.U64.wrapping_add : U64 → U64 → U64  := @Scalar.wrapping_add ScalarTy.U64
+def core.num.U64.wrapping_add : U64 → U64 → U64  := @UScalar.wrapping_add UScalarTy.U64
 
 /- [core::num::{u128}::wrapping_add] -/
-def core.num.U128.wrapping_add : U128 → U128 → U128 := @Scalar.wrapping_add ScalarTy.U128
+def core.num.U128.wrapping_add : U128 → U128 → U128 := @UScalar.wrapping_add UScalarTy.U128
 
 /- [core::num::{usize}::wrapping_add] -/
-def core.num.Usize.wrapping_add : Usize → Usize → Usize  := @Scalar.wrapping_add ScalarTy.Usize
+def core.num.Usize.wrapping_add : Usize → Usize → Usize  := @UScalar.wrapping_add UScalarTy.Usize
+
+def IScalar.wrapping_add {ty} (x y : IScalar ty) : IScalar ty := ⟨ x.bv + y.bv ⟩
 
 /- [core::num::{i8}::wrapping_add] -/
-def core.num.I8.wrapping_add : I8 → I8 → I8  := @Scalar.wrapping_add ScalarTy.I8
+def core.num.I8.wrapping_add : I8 → I8 → I8  := @IScalar.wrapping_add IScalarTy.I8
 
 /- [core::num::{i16}::wrapping_add] -/
-def core.num.I16.wrapping_add : I16 → I16 → I16  := @Scalar.wrapping_add ScalarTy.I16
+def core.num.I16.wrapping_add : I16 → I16 → I16  := @IScalar.wrapping_add IScalarTy.I16
 
 /- [core::num::{i32}::wrapping_add] -/
-def core.num.I32.wrapping_add : I32 → I32 → I32  := @Scalar.wrapping_add ScalarTy.I32
+def core.num.I32.wrapping_add : I32 → I32 → I32  := @IScalar.wrapping_add IScalarTy.I32
 
 /- [core::num::{i64}::wrapping_add] -/
-def core.num.I64.wrapping_add : I64 → I64 → I64 := @Scalar.wrapping_add ScalarTy.I64
+def core.num.I64.wrapping_add : I64 → I64 → I64 := @IScalar.wrapping_add IScalarTy.I64
 
 /- [core::num::{i128}::wrapping_add] -/
-def core.num.I128.wrapping_add : I128 → I128 → I128  := @Scalar.wrapping_add ScalarTy.I128
+def core.num.I128.wrapping_add : I128 → I128 → I128  := @IScalar.wrapping_add IScalarTy.I128
 
 /- [core::num::{isize}::wrapping_add] -/
-def core.num.Isize.wrapping_add : Isize → Isize → Isize  := @Scalar.wrapping_add ScalarTy.Isize
+def core.num.Isize.wrapping_add : Isize → Isize → Isize  := @IScalar.wrapping_add IScalarTy.Isize
 
--- TODO: reasoning lemmas for wrapping add
+@[simp] theorem UScalar.wrapping_add_bv_eq {ty} (x y : UScalar ty) :
+  (wrapping_add x y).bv = x.bv + y.bv := by
+  simp [wrapping_add]
 
--- Wrapping sub
-def Scalar.wrapping_sub {ty} (x y : Scalar ty) : Scalar ty := sorry
+@[simp] theorem U8.wrapping_add_bv_eq (x y : U8) :
+  (core.num.U8.wrapping_add x y).bv = x.bv + y.bv := by
+  simp [core.num.U8.wrapping_add, bv]
+
+@[simp] theorem U16.wrapping_add_bv_eq (x y : U16) :
+  (core.num.U16.wrapping_add x y).bv = x.bv + y.bv := by
+  simp [core.num.U16.wrapping_add, bv]
+
+@[simp] theorem U32.wrapping_add_bv_eq (x y : U32) :
+  (core.num.U32.wrapping_add x y).bv = x.bv + y.bv := by
+  simp [core.num.U32.wrapping_add, bv]
+
+@[simp] theorem U64.wrapping_add_bv_eq (x y : U64) :
+  (core.num.U64.wrapping_add x y).bv = x.bv + y.bv := by
+  simp [core.num.U64.wrapping_add, bv]
+
+@[simp] theorem U128.wrapping_add_bv_eq (x y : U128) :
+  (core.num.U128.wrapping_add x y).bv = x.bv + y.bv := by
+  simp [core.num.U128.wrapping_add, bv]
+
+@[simp] theorem Usize.wrapping_add_bv_eq (x y : Usize) :
+  (core.num.Usize.wrapping_add x y).bv = x.bv + y.bv := by
+  simp [core.num.Usize.wrapping_add, bv]
+
+@[simp] theorem IScalar.wrapping_add_bv_eq {ty} (x y : IScalar ty) :
+  (wrapping_add x y).bv = x.bv + y.bv := by
+  simp [wrapping_add]
+
+@[simp] theorem I8.wrapping_add_bv_eq (x y : I8) :
+  (core.num.I8.wrapping_add x y).bv = x.bv + y.bv := by
+  simp [core.num.I8.wrapping_add, bv]
+
+@[simp] theorem I16.wrapping_add_bv_eq (x y : I16) :
+  (core.num.I16.wrapping_add x y).bv = x.bv + y.bv := by
+  simp [core.num.I16.wrapping_add, bv]
+
+@[simp] theorem I32.wrapping_add_bv_eq (x y : I32) :
+  (core.num.I32.wrapping_add x y).bv = x.bv + y.bv := by
+  simp [core.num.I32.wrapping_add, bv]
+
+@[simp] theorem I64.wrapping_add_bv_eq (x y : I64) :
+  (core.num.I64.wrapping_add x y).bv = x.bv + y.bv := by
+  simp [core.num.I64.wrapping_add, bv]
+
+@[simp] theorem I128.wrapping_add_bv_eq (x y : I128) :
+  (core.num.I128.wrapping_add x y).bv = x.bv + y.bv := by
+  simp [core.num.I128.wrapping_add, bv]
+
+@[simp] theorem Isize.wrapping_add_bv_eq (x y : Isize) :
+  (core.num.Isize.wrapping_add x y).bv = x.bv + y.bv := by
+  simp [core.num.Isize.wrapping_add, bv]
+
+@[simp] theorem UScalar.wrapping_add_val_eq {ty} (x y : UScalar ty) :
+  (wrapping_add x y).val = (x.val + y.val) % (UScalar.max ty + 1) := by
+  simp only [wrapping_add, max_eq_smax, smax, val]
+  have : 0 < 2^ty.bitWidth := by simp
+  have : 2 ^ ty.bitWidth - 1 + 1 = 2^ty.bitWidth := by omega
+  simp [this]
+
+@[simp] theorem U8.wrapping_add_val_eq (x y : U8) :
+  (core.num.U8.wrapping_add x y).val = (x.val + y.val) % (U8.max + 1) :=
+  UScalar.wrapping_add_val_eq x y
+
+@[simp] theorem U16.wrapping_add_val_eq (x y : U16) :
+  (core.num.U16.wrapping_add x y).val = (x.val + y.val) % (U16.max + 1) :=
+  UScalar.wrapping_add_val_eq x y
+
+@[simp] theorem U32.wrapping_add_val_eq (x y : U32) :
+  (core.num.U32.wrapping_add x y).val = (x.val + y.val) % (U32.max + 1) :=
+  UScalar.wrapping_add_val_eq x y
+
+@[simp] theorem U64.wrapping_add_val_eq (x y : U64) :
+  (core.num.U64.wrapping_add x y).val = (x.val + y.val) % (U64.max + 1) :=
+  UScalar.wrapping_add_val_eq x y
+
+@[simp] theorem U128.wrapping_add_val_eq (x y : U128) :
+  (core.num.U128.wrapping_add x y).val = (x.val + y.val) % (U128.max + 1) :=
+  UScalar.wrapping_add_val_eq x y
+
+@[simp] theorem Usize.wrapping_add_val_eq (x y : Usize) :
+  (core.num.Usize.wrapping_add x y).val = (x.val + y.val) % (Usize.max + 1) :=
+  UScalar.wrapping_add_val_eq x y
+
+@[simp] theorem IScalar.wrapping_add_val_eq {ty} (x y : IScalar ty) :
+  (wrapping_add x y).val = Int.bmod (x.val + y.val) (2^ty.bitWidth) := by
+  simp only [wrapping_add, val]
+  simp
+
+@[simp] theorem I8.wrapping_add_val_eq (x y : I8) :
+  (core.num.I8.wrapping_add x y).val = Int.bmod (x.val + y.val) (2^8) :=
+  IScalar.wrapping_add_val_eq x y
+
+@[simp] theorem I16.wrapping_add_val_eq (x y : I16) :
+  (core.num.I16.wrapping_add x y).val = Int.bmod (x.val + y.val) (2^16) :=
+  IScalar.wrapping_add_val_eq x y
+
+@[simp] theorem I32.wrapping_add_val_eq (x y : I32) :
+  (core.num.I32.wrapping_add x y).val = Int.bmod (x.val + y.val) (2^32) :=
+  IScalar.wrapping_add_val_eq x y
+
+@[simp] theorem I64.wrapping_add_val_eq (x y : I64) :
+  (core.num.I64.wrapping_add x y).val = Int.bmod (x.val + y.val) (2^64) :=
+  IScalar.wrapping_add_val_eq x y
+
+@[simp] theorem I128.wrapping_add_val_eq (x y : I128) :
+  (core.num.I128.wrapping_add x y).val = Int.bmod (x.val + y.val) (2^128) :=
+  IScalar.wrapping_add_val_eq x y
+
+@[simp] theorem Isize.wrapping_add_val_eq (x y : Isize) :
+  (core.num.Isize.wrapping_add x y).val = Int.bmod (x.val + y.val) (2^size_num_bits) :=
+  IScalar.wrapping_add_val_eq x y
+
+/-!
+### Wrapping Sub
+-/
+
+def UScalar.wrapping_sub {ty} (x y : UScalar ty) : UScalar ty := ⟨ x.bv - y.bv ⟩
 
 /- [core::num::{u8}::wrapping_sub] -/
-def core.num.U8.wrapping_sub : U8 → U8 → U8 := @Scalar.wrapping_sub ScalarTy.U8
+def core.num.U8.wrapping_sub : U8 → U8 → U8 := @UScalar.wrapping_sub UScalarTy.U8
 
 /- [core::num::{u16}::wrapping_sub] -/
-def core.num.U16.wrapping_sub : U16 → U16 → U16 := @Scalar.wrapping_sub ScalarTy.U16
+def core.num.U16.wrapping_sub : U16 → U16 → U16  := @UScalar.wrapping_sub UScalarTy.U16
 
 /- [core::num::{u32}::wrapping_sub] -/
-def core.num.U32.wrapping_sub : U32 → U32 → U32 := @Scalar.wrapping_sub ScalarTy.U32
+def core.num.U32.wrapping_sub : U32 → U32 → U32  := @UScalar.wrapping_sub UScalarTy.U32
 
 /- [core::num::{u64}::wrapping_sub] -/
-def core.num.U64.wrapping_sub : U64 → U64 → U64 := @Scalar.wrapping_sub ScalarTy.U64
+def core.num.U64.wrapping_sub : U64 → U64 → U64  := @UScalar.wrapping_sub UScalarTy.U64
 
 /- [core::num::{u128}::wrapping_sub] -/
-def core.num.U128.wrapping_sub : U128 → U128 → U128 := @Scalar.wrapping_sub ScalarTy.U128
+def core.num.U128.wrapping_sub : U128 → U128 → U128 := @UScalar.wrapping_sub UScalarTy.U128
 
 /- [core::num::{usize}::wrapping_sub] -/
-def core.num.Usize.wrapping_sub : Usize → Usize → Usize := @Scalar.wrapping_sub ScalarTy.Usize
+def core.num.Usize.wrapping_sub : Usize → Usize → Usize  := @UScalar.wrapping_sub UScalarTy.Usize
+
+def IScalar.wrapping_sub {ty} (x y : IScalar ty) : IScalar ty := ⟨ x.bv - y.bv ⟩
 
 /- [core::num::{i8}::wrapping_sub] -/
-def core.num.I8.wrapping_sub : I8 → I8 → I8 := @Scalar.wrapping_sub ScalarTy.I8
+def core.num.I8.wrapping_sub : I8 → I8 → I8  := @IScalar.wrapping_sub IScalarTy.I8
 
 /- [core::num::{i16}::wrapping_sub] -/
-def core.num.I16.wrapping_sub : I16 → I16 → I16 := @Scalar.wrapping_sub ScalarTy.I16
+def core.num.I16.wrapping_sub : I16 → I16 → I16  := @IScalar.wrapping_sub IScalarTy.I16
 
 /- [core::num::{i32}::wrapping_sub] -/
-def core.num.I32.wrapping_sub : I32 → I32 → I32 := @Scalar.wrapping_sub ScalarTy.I32
+def core.num.I32.wrapping_sub : I32 → I32 → I32  := @IScalar.wrapping_sub IScalarTy.I32
 
 /- [core::num::{i64}::wrapping_sub] -/
-def core.num.I64.wrapping_sub : I64 → I64 → I64 := @Scalar.wrapping_sub ScalarTy.I64
+def core.num.I64.wrapping_sub : I64 → I64 → I64 := @IScalar.wrapping_sub IScalarTy.I64
 
 /- [core::num::{i128}::wrapping_sub] -/
-def core.num.I128.wrapping_sub : I128 → I128 → I128 := @Scalar.wrapping_sub ScalarTy.I128
+def core.num.I128.wrapping_sub : I128 → I128 → I128  := @IScalar.wrapping_sub IScalarTy.I128
 
 /- [core::num::{isize}::wrapping_sub] -/
-def core.num.Isize.wrapping_sub : Isize → Isize → Isize := @Scalar.wrapping_sub ScalarTy.Isize
+def core.num.Isize.wrapping_sub : Isize → Isize → Isize  := @IScalar.wrapping_sub IScalarTy.Isize
 
--- TODO: reasoning lemmas for wrapping sub
+@[simp] theorem UScalar.wrapping_sub_bv_eq {ty} (x y : UScalar ty) :
+  (wrapping_sub x y).bv = x.bv - y.bv := by
+  simp [wrapping_sub]
 
--- Rotate left
-def Scalar.rotate_left {ty} (x  : Scalar ty) (shift : U32) : Scalar ty := sorry
+@[simp] theorem U8.wrapping_sub_bv_eq (x y : U8) :
+  (core.num.U8.wrapping_sub x y).bv = x.bv - y.bv := by
+  simp [core.num.U8.wrapping_sub, bv]
+
+@[simp] theorem U16.wrapping_sub_bv_eq (x y : U16) :
+  (core.num.U16.wrapping_sub x y).bv = x.bv - y.bv := by
+  simp [core.num.U16.wrapping_sub, bv]
+
+@[simp] theorem U32.wrapping_sub_bv_eq (x y : U32) :
+  (core.num.U32.wrapping_sub x y).bv = x.bv - y.bv := by
+  simp [core.num.U32.wrapping_sub, bv]
+
+@[simp] theorem U64.wrapping_sub_bv_eq (x y : U64) :
+  (core.num.U64.wrapping_sub x y).bv = x.bv - y.bv := by
+  simp [core.num.U64.wrapping_sub, bv]
+
+@[simp] theorem U128.wrapping_sub_bv_eq (x y : U128) :
+  (core.num.U128.wrapping_sub x y).bv = x.bv - y.bv := by
+  simp [core.num.U128.wrapping_sub, bv]
+
+@[simp] theorem Usize.wrapping_sub_bv_eq (x y : Usize) :
+  (core.num.Usize.wrapping_sub x y).bv = x.bv - y.bv := by
+  simp [core.num.Usize.wrapping_sub, bv]
+
+@[simp] theorem IScalar.wrapping_sub_bv_eq {ty} (x y : IScalar ty) :
+  (wrapping_sub x y).bv = x.bv - y.bv := by
+  simp [wrapping_sub]
+
+@[simp] theorem I8.wrapping_sub_bv_eq (x y : I8) :
+  (core.num.I8.wrapping_sub x y).bv = x.bv - y.bv := by
+  simp [core.num.I8.wrapping_sub, bv]
+
+@[simp] theorem I16.wrapping_sub_bv_eq (x y : I16) :
+  (core.num.I16.wrapping_sub x y).bv = x.bv - y.bv := by
+  simp [core.num.I16.wrapping_sub, bv]
+
+@[simp] theorem I32.wrapping_sub_bv_eq (x y : I32) :
+  (core.num.I32.wrapping_sub x y).bv = x.bv - y.bv := by
+  simp [core.num.I32.wrapping_sub, bv]
+
+@[simp] theorem I64.wrapping_sub_bv_eq (x y : I64) :
+  (core.num.I64.wrapping_sub x y).bv = x.bv - y.bv := by
+  simp [core.num.I64.wrapping_sub, bv]
+
+@[simp] theorem I128.wrapping_sub_bv_eq (x y : I128) :
+  (core.num.I128.wrapping_sub x y).bv = x.bv - y.bv := by
+  simp [core.num.I128.wrapping_sub, bv]
+
+@[simp] theorem Isize.wrapping_sub_bv_eq (x y : Isize) :
+  (core.num.Isize.wrapping_sub x y).bv = x.bv - y.bv := by
+  simp [core.num.Isize.wrapping_sub, bv]
+
+@[simp] theorem UScalar.wrapping_sub_val_eq {ty} (x y : UScalar ty) :
+  (wrapping_sub x y).val = (x.val + (UScalar.max ty + 1 - y.val)) % (UScalar.max ty + 1) := by
+  simp only [wrapping_sub, max_eq_smax, smax, val]
+  have : 0 < 2^ty.bitWidth := by simp
+  have : 2 ^ ty.bitWidth - 1 + 1 = 2^ty.bitWidth := by omega
+  simp [this]
+  ring_nf
+
+@[simp] theorem U8.wrapping_sub_val_eq (x y : U8) :
+  (core.num.U8.wrapping_sub x y).val = (x.val + (U8.max + 1 - y.val)) % (U8.max + 1) :=
+  UScalar.wrapping_sub_val_eq x y
+
+@[simp] theorem U16.wrapping_sub_val_eq (x y : U16) :
+  (core.num.U16.wrapping_sub x y).val = (x.val + (U16.max + 1 - y.val)) % (U16.max + 1) :=
+  UScalar.wrapping_sub_val_eq x y
+
+@[simp] theorem U32.wrapping_sub_val_eq (x y : U32) :
+  (core.num.U32.wrapping_sub x y).val = (x.val + (U32.max + 1 - y.val)) % (U32.max + 1) :=
+  UScalar.wrapping_sub_val_eq x y
+
+@[simp] theorem U64.wrapping_sub_val_eq (x y : U64) :
+  (core.num.U64.wrapping_sub x y).val = (x.val + (U64.max + 1 - y.val)) % (U64.max + 1) :=
+  UScalar.wrapping_sub_val_eq x y
+
+@[simp] theorem U128.wrapping_sub_val_eq (x y : U128) :
+  (core.num.U128.wrapping_sub x y).val = (x.val + (U128.max + 1 - y.val)) % (U128.max + 1) :=
+  UScalar.wrapping_sub_val_eq x y
+
+@[simp] theorem Usize.wrapping_sub_val_eq (x y : Usize) :
+  (core.num.Usize.wrapping_sub x y).val = (x.val + (Usize.max + 1 - y.val)) % (Usize.max + 1) :=
+  UScalar.wrapping_sub_val_eq x y
+
+@[simp] theorem IScalar.wrapping_sub_val_eq {ty} (x y : IScalar ty) :
+  (wrapping_sub x y).val = Int.bmod (x.val - y.val) (2^ty.bitWidth) := by
+  simp only [wrapping_sub, val]
+  simp
+
+@[simp] theorem I8.wrapping_sub_val_eq (x y : I8) :
+  (core.num.I8.wrapping_sub x y).val = Int.bmod (x.val - y.val) (2^8) :=
+  IScalar.wrapping_sub_val_eq x y
+
+@[simp] theorem I16.wrapping_sub_val_eq (x y : I16) :
+  (core.num.I16.wrapping_sub x y).val = Int.bmod (x.val - y.val) (2^16) :=
+  IScalar.wrapping_sub_val_eq x y
+
+@[simp] theorem I32.wrapping_sub_val_eq (x y : I32) :
+  (core.num.I32.wrapping_sub x y).val = Int.bmod (x.val - y.val) (2^32) :=
+  IScalar.wrapping_sub_val_eq x y
+
+@[simp] theorem I64.wrapping_sub_val_eq (x y : I64) :
+  (core.num.I64.wrapping_sub x y).val = Int.bmod (x.val - y.val) (2^64) :=
+  IScalar.wrapping_sub_val_eq x y
+
+@[simp] theorem I128.wrapping_sub_val_eq (x y : I128) :
+  (core.num.I128.wrapping_sub x y).val = Int.bmod (x.val - y.val) (2^128) :=
+  IScalar.wrapping_sub_val_eq x y
+
+@[simp] theorem Isize.wrapping_sub_val_eq (x y : Isize) :
+  (core.num.Isize.wrapping_sub x y).val = Int.bmod (x.val - y.val) (2^size_num_bits) :=
+  IScalar.wrapping_sub_val_eq x y
+
+
+/-!
+# Rotation
+-/
+
+/-!
+## Rotate Left
+-/
+def UScalar.rotate_left {ty} (x : UScalar ty) (shift : U32) : UScalar ty :=
+  ⟨ x.bv.rotateLeft shift.val ⟩
 
 /- [core::num::{u8}::rotate_left] -/
-def core.num.U8.rotate_left := @Scalar.rotate_left ScalarTy.U8
+def core.num.U8.rotate_left : U8 → U32 → U8 := @UScalar.rotate_left .U8
 
 /- [core::num::{u16}::rotate_left] -/
-def core.num.U16.rotate_left := @Scalar.rotate_left ScalarTy.U16
+def core.num.U16.rotate_left : U16 → U32 → U16 := @UScalar.rotate_left .U16
 
 /- [core::num::{u32}::rotate_left] -/
-def core.num.U32.rotate_left := @Scalar.rotate_left ScalarTy.U32
+def core.num.U32.rotate_left : U32 → U32 → U32 := @UScalar.rotate_left .U32
 
 /- [core::num::{u64}::rotate_left] -/
-def core.num.U64.rotate_left := @Scalar.rotate_left ScalarTy.U64
+def core.num.U64.rotate_left : U64 → U32 → U64 := @UScalar.rotate_left .U64
 
 /- [core::num::{u128}::rotate_left] -/
-def core.num.U128.rotate_left := @Scalar.rotate_left ScalarTy.U128
+def core.num.U128.rotate_left : U128 → U32 → U128 := @UScalar.rotate_left .U128
 
 /- [core::num::{usize}::rotate_left] -/
-def core.num.Usize.rotate_left := @Scalar.rotate_left ScalarTy.Usize
+def core.num.Usize.rotate_left : Usize → U32 → Usize := @UScalar.rotate_left .Usize
 
-/- [core::num::{i8}::rotate_left] -/
-def core.num.I8.rotate_left := @Scalar.rotate_left ScalarTy.I8
+def IScalar.rotate_left {ty} (x : IScalar ty) (shift : U32) : IScalar ty :=
+  ⟨ x.bv.rotateLeft shift.val ⟩
 
-/- [core::num::{i16}::rotate_left] -/
-def core.num.I16.rotate_left := @Scalar.rotate_left ScalarTy.I16
+/- [core::num::{u8}::rotate_left] -/
+def core.num.I8.rotate_left : I8 → U32 → I8 := @IScalar.rotate_left .I8
 
-/- [core::num::{i32}::rotate_left] -/
-def core.num.I32.rotate_left := @Scalar.rotate_left ScalarTy.I32
+/- [core::num::{u16}::rotate_left] -/
+def core.num.I16.rotate_left : I16 → U32 → I16 := @IScalar.rotate_left .I16
 
-/- [core::num::{i64}::rotate_left] -/
-def core.num.I64.rotate_left := @Scalar.rotate_left ScalarTy.I64
+/- [core::num::{u32}::rotate_left] -/
+def core.num.I32.rotate_left : I32 → U32 → I32 := @IScalar.rotate_left .I32
 
-/- [core::num::{i128}::rotate_left] -/
-def core.num.I128.rotate_left := @Scalar.rotate_left ScalarTy.I128
+/- [core::num::{u64}::rotate_left] -/
+def core.num.I64.rotate_left : I64 → U32 → I64 := @IScalar.rotate_left .I64
 
-/- [core::num::{isize}::rotate_left] -/
-def core.num.Isize.rotate_left := @Scalar.rotate_left ScalarTy.Isize
+/- [core::num::{u128}::rotate_left] -/
+def core.num.I128.rotate_left : I128 → U32 → I128 := @IScalar.rotate_left .I128
 
--- TODO: reasoning lemmas for rotate left
+/- [core::num::{usize}::rotate_left] -/
+def core.num.Isize.rotate_left : Isize → U32 → Isize := @IScalar.rotate_left .Isize
 
--- Rotate right
-def Scalar.rotate_right {ty} (x : Scalar ty) (shift : U32) : Scalar ty := sorry
+/-!
+## Rotate Left
+-/
+def UScalar.rotate_right {ty} (x : UScalar ty) (shift : U32) : UScalar ty :=
+  ⟨ x.bv.rotateLeft shift.val ⟩
 
 /- [core::num::{u8}::rotate_right] -/
-def core.num.U8.rotate_right := @Scalar.rotate_right ScalarTy.U8
+def core.num.U8.rotate_right : U8 → U32 → U8 := @UScalar.rotate_right .U8
 
 /- [core::num::{u16}::rotate_right] -/
-def core.num.U16.rotate_right := @Scalar.rotate_right ScalarTy.U16
+def core.num.U16.rotate_right : U16 → U32 → U16 := @UScalar.rotate_right .U16
 
 /- [core::num::{u32}::rotate_right] -/
-def core.num.U32.rotate_right := @Scalar.rotate_right ScalarTy.U32
+def core.num.U32.rotate_right : U32 → U32 → U32 := @UScalar.rotate_right .U32
 
 /- [core::num::{u64}::rotate_right] -/
-def core.num.U64.rotate_right := @Scalar.rotate_right ScalarTy.U64
+def core.num.U64.rotate_right : U64 → U32 → U64 := @UScalar.rotate_right .U64
 
 /- [core::num::{u128}::rotate_right] -/
-def core.num.U128.rotate_right := @Scalar.rotate_right ScalarTy.U128
+def core.num.U128.rotate_right : U128 → U32 → U128 := @UScalar.rotate_right .U128
 
 /- [core::num::{usize}::rotate_right] -/
-def core.num.Usize.rotate_right := @Scalar.rotate_right ScalarTy.Usize
+def core.num.Usize.rotate_right : Usize → U32 → Usize := @UScalar.rotate_right .Usize
 
-/- [core::num::{i8}::rotate_right] -/
-def core.num.I8.rotate_right := @Scalar.rotate_right ScalarTy.I8
+def IScalar.rotate_right {ty} (x : IScalar ty) (shift : U32) : IScalar ty :=
+  ⟨ x.bv.rotateLeft shift.val ⟩
 
-/- [core::num::{i16}::rotate_right] -/
-def core.num.I16.rotate_right := @Scalar.rotate_right ScalarTy.I16
+/- [core::num::{u8}::rotate_right] -/
+def core.num.I8.rotate_right : I8 → U32 → I8 := @IScalar.rotate_right .I8
 
-/- [core::num::{i32}::rotate_right] -/
-def core.num.I32.rotate_right := @Scalar.rotate_right ScalarTy.I32
+/- [core::num::{u16}::rotate_right] -/
+def core.num.I16.rotate_right : I16 → U32 → I16 := @IScalar.rotate_right .I16
 
-/- [core::num::{i64}::rotate_right] -/
-def core.num.I64.rotate_right := @Scalar.rotate_right ScalarTy.I64
+/- [core::num::{u32}::rotate_right] -/
+def core.num.I32.rotate_right : I32 → U32 → I32 := @IScalar.rotate_right .I32
 
-/- [core::num::{i128}::rotate_right] -/
-def core.num.I128.rotate_right := @Scalar.rotate_right ScalarTy.I128
+/- [core::num::{u64}::rotate_right] -/
+def core.num.I64.rotate_right : I64 → U32 → I64 := @IScalar.rotate_right .I64
 
-/- [core::num::{isize}::rotate_right] -/
-def core.num.Isize.rotate_right := @Scalar.rotate_right ScalarTy.Isize
+/- [core::num::{u128}::rotate_right] -/
+def core.num.I128.rotate_right : I128 → U32 → I128 := @IScalar.rotate_right .I128
 
--- TODO: reasoning lemmas for rotate right
+/- [core::num::{usize}::rotate_right] -/
+def core.num.Isize.rotate_right : Isize → U32 → Isize := @IScalar.rotate_right .Isize
 
 end Std
 
