@@ -22,24 +22,21 @@ Arguments BoolTest_t_getTest { _ } _.
 Definition boolTraitBool_getTest (self : bool) : result bool :=
   Ok self.
 
+(** [rename_attribute::{rename_attribute::BoolTrait for bool}::ret_true]:
+    Source: 'tests/src/rename_attribute.rs', lines 15:4-17:5 *)
+Definition boolTraitBool_retTest (self : bool) : result bool :=
+  Ok true.
+
 (** Trait implementation: [rename_attribute::{rename_attribute::BoolTrait for bool}]
     Source: 'tests/src/rename_attribute.rs', lines 21:0-25:1 *)
 Definition BoolImpl : BoolTest_t bool := {|
   BoolTest_t_getTest := boolTraitBool_getTest;
 |}.
 
-(** [rename_attribute::BoolTrait::ret_true]:
-    Source: 'tests/src/rename_attribute.rs', lines 15:4-17:5 *)
-Definition boolTrait_retTest
-  {Self : Type} (self_clause : BoolTest_t Self) (self : Self) : result bool :=
-  Ok true
-.
-
 (** [rename_attribute::test_bool_trait]:
     Source: 'tests/src/rename_attribute.rs', lines 28:0-30:1 *)
 Definition boolFn (T : Type) (x : bool) : result bool :=
-  b <- boolTraitBool_getTest x;
-  if b then boolTrait_retTest BoolImpl x else Ok false
+  b <- boolTraitBool_getTest x; if b then boolTraitBool_retTest x else Ok false
 .
 
 (** [rename_attribute::SimpleEnum]
@@ -98,6 +95,13 @@ Fixpoint no_borrows_sum_loop
     Source: 'tests/src/rename_attribute.rs', lines 65:0-75:1 *)
 Definition no_borrows_sum (n : nat) (max : u32) : result u32 :=
   no_borrows_sum_loop n max 0%u32 0%u32
+.
+
+(** [rename_attribute::BoolTrait::ret_true]:
+    Source: 'tests/src/rename_attribute.rs', lines 15:4-17:5 *)
+Definition boolTrait_retTest
+  {Self : Type} (self_clause : BoolTest_t Self) (self : Self) : result bool :=
+  Ok true
 .
 
 End RenameAttribute.

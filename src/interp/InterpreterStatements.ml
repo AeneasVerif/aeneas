@@ -690,78 +690,40 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
              depending on whethere we call a top-level trait method impl or the
              method from a local clause *)
           match trait_ref.trait_id with
-          | TraitImpl (impl_id, impl_generics) -> (
+          | TraitImpl (impl_id, impl_generics) -> begin
               (* Lookup the trait impl *)
               let trait_impl = ctx_lookup_trait_impl ctx impl_id in
               log#ltrace
                 (lazy ("trait impl: " ^ trait_impl_to_string ctx trait_impl));
-              (* First look in the required methods *)
+              (* Lookup the method *)
               let fn_ref =
-                Substitute.lookup_and_subst_trait_impl_required_method
-                  trait_impl method_name impl_generics func.generics
+                Option.get
+                  (Substitute.lookup_and_subst_trait_impl_method trait_impl
+                     method_name impl_generics func.generics)
               in
-              match fn_ref with
-              | Some fn_ref ->
-                  let method_id = fn_ref.fun_id in
-                  let generics = fn_ref.fun_generics in
-                  (* This is a required method *)
-                  let method_def = ctx_lookup_fun_decl ctx method_id in
-                  (* Instantiate *)
-                  let tr_self = trait_ref.trait_id in
-                  let fid : fun_id = FRegular method_id in
-                  let regions_hierarchy =
-                    LlbcAstUtils.FunIdMap.find fid
-                      ctx.fun_ctx.regions_hierarchies
-                  in
-                  let inst_sg =
-                    instantiate_fun_sig span ctx generics tr_self
-                      method_def.signature regions_hierarchy
-                  in
-                  (* Also update the function identifier: we want to forget
-                     the fact that we called a trait method, and treat it as
-                     a regular function call to the top-level function
-                     which implements the method. In order to do this properly,
-                     we also need to update the generics.
-                  *)
-                  let func = FunId fid in
-                  (* TODO: the `trait_method_generics` look fishy *)
-                  (func, generics, Some (generics, tr_self), method_def, inst_sg)
-              | None ->
-                  (* If not found, lookup the methods provided by the trait *declaration*
-                     (remember: for now, we forbid overriding provided methods) *)
-                  cassert __FILE__ __LINE__
-                    (trait_impl.provided_methods = [])
-                    span "Overriding provided methods is currently forbidden";
-                  let trait_decl =
-                    ctx_lookup_trait_decl ctx trait_decl_ref.trait_decl_id
-                  in
-                  let fn_ref =
-                    Option.get
-                      (Substitute.lookup_and_subst_trait_decl_provided_method
-                         trait_decl method_name trait_ref func.generics)
-                  in
-                  let method_id = fn_ref.fun_id in
-                  let method_def = ctx_lookup_fun_decl ctx method_id in
-                  let all_generics = fn_ref.fun_generics in
-                  log#ldebug
-                    (lazy
-                      ("provided method call:" ^ "\n- method name: "
-                     ^ method_name ^ "\n- all_generics:\n"
-                      ^ generic_args_to_string ctx all_generics));
-                  let regions_hierarchy =
-                    LlbcAstUtils.FunIdMap.find (FRegular method_id)
-                      ctx.fun_ctx.regions_hierarchies
-                  in
-                  let tr_self = trait_ref.trait_id in
-                  let inst_sg =
-                    instantiate_fun_sig span ctx all_generics tr_self
-                      method_def.signature regions_hierarchy
-                  in
-                  ( func.func,
-                    func.generics,
-                    Some (all_generics, tr_self),
-                    method_def,
-                    inst_sg ))
+              let method_id = fn_ref.fun_id in
+              let generics = fn_ref.fun_generics in
+              let method_def = ctx_lookup_fun_decl ctx method_id in
+              (* Instantiate *)
+              let tr_self = trait_ref.trait_id in
+              let fid : fun_id = FRegular method_id in
+              let regions_hierarchy =
+                LlbcAstUtils.FunIdMap.find fid ctx.fun_ctx.regions_hierarchies
+              in
+              let inst_sg =
+                instantiate_fun_sig span ctx generics tr_self
+                  method_def.signature regions_hierarchy
+              in
+              (* Also update the function identifier: we want to forget
+                 the fact that we called a trait method, and treat it as
+                 a regular function call to the top-level function
+                 which implements the method. In order to do this properly,
+                 we also need to update the generics.
+              *)
+              let func = FunId fid in
+              (* TODO: the `trait_method_generics` look fishy *)
+              (func, generics, Some (generics, tr_self), method_def, inst_sg)
+            end
           | _ ->
               (* We are using a local clause - we lookup the trait decl *)
               let trait_decl =
