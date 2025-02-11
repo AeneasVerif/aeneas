@@ -2456,16 +2456,6 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
         (ctx, Some info)
   in
 
-  (* For now we do not support overriding provided methods *)
-  cassert __FILE__ __LINE__
-    (trait_impl.provided_methods = [])
-    trait_impl.item_meta.span
-    ("Overriding trait provided methods in trait implementations is not \
-      supported yet (trait impl: "
-    ^ name_to_string ctx trait_impl.item_meta.name
-    ^ ", overriden methods: "
-    ^ String.concat ", " (List.map fst trait_impl.provided_methods)
-    ^ ")");
   (* Everything is taken care of by {!extract_trait_decl_register_names} *but*
      the name of the implementation itself *)
   (* Compute the name *)

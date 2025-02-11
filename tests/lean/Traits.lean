@@ -18,6 +18,11 @@ structure BoolTrait (Self : Type) where
 def BoolTraitBool.get_bool (self : Bool) : Result Bool :=
   Result.ok self
 
+/- [traits::{traits::BoolTrait for bool}::ret_true]:
+   Source: 'tests/src/traits.rs', lines 8:4-10:5 -/
+def BoolTraitBool.ret_true (self : Bool) : Result Bool :=
+  Result.ok true
+
 /- Trait implementation: [traits::{traits::BoolTrait for bool}]
    Source: 'tests/src/traits.rs', lines 13:0-17:1 -/
 @[reducible]
@@ -25,19 +30,13 @@ def BoolTraitBool : BoolTrait Bool := {
   get_bool := BoolTraitBool.get_bool
 }
 
-/- [traits::BoolTrait::ret_true]:
-   Source: 'tests/src/traits.rs', lines 8:4-10:5 -/
-def BoolTrait.ret_true
-  {Self : Type} (self_clause : BoolTrait Self) (self : Self) : Result Bool :=
-  Result.ok true
-
 /- [traits::test_bool_trait_bool]:
    Source: 'tests/src/traits.rs', lines 19:0-21:1 -/
 def test_bool_trait_bool (x : Bool) : Result Bool :=
   do
   let b ← BoolTraitBool.get_bool x
   if b
-  then BoolTrait.ret_true BoolTraitBool x
+  then BoolTraitBool.ret_true x
   else Result.ok false
 
 /- [traits::{traits::BoolTrait for core::option::Option<T>}#1::get_bool]:
@@ -46,6 +45,11 @@ def BoolTraitOption.get_bool {T : Type} (self : Option T) : Result Bool :=
   match self with
   | none => Result.ok false
   | some _ => Result.ok true
+
+/- [traits::{traits::BoolTrait for core::option::Option<T>}#1::ret_true]:
+   Source: 'tests/src/traits.rs', lines 8:4-10:5 -/
+def BoolTraitOption.ret_true {T : Type} (self : Option T) : Result Bool :=
+  Result.ok true
 
 /- Trait implementation: [traits::{traits::BoolTrait for core::option::Option<T>}#1]
    Source: 'tests/src/traits.rs', lines 24:0-31:1 -/
@@ -60,7 +64,7 @@ def test_bool_trait_option {T : Type} (x : Option T) : Result Bool :=
   do
   let b ← BoolTraitOption.get_bool x
   if b
-  then BoolTrait.ret_true (BoolTraitOption T) x
+  then BoolTraitOption.ret_true x
   else Result.ok false
 
 /- [traits::test_bool_trait]:
@@ -542,6 +546,12 @@ def use_foo2
   Result (core.result.Result U I32)
   :=
   Result.ok (Foo.FOO T TraitInst)
+
+/- [traits::BoolTrait::ret_true]:
+   Source: 'tests/src/traits.rs', lines 8:4-10:5 -/
+def BoolTrait.ret_true
+  {Self : Type} (self_clause : BoolTrait Self) (self : Self) : Result Bool :=
+  Result.ok true
 
 /- Trait declaration: [traits::{traits::TestType<T>}#6::test::TestTrait]
    Source: 'tests/src/traits.rs', lines 130:8-132:9 -/
