@@ -794,24 +794,6 @@ let rec typed_pattern_to_texpression (span : Meta.span) (pat : typed_pattern) :
   | None -> None
   | Some e -> Some { e; ty = pat.ty }
 
-type trait_decl_method_decl_id = { is_provided : bool; id : fun_decl_id }
-
-let trait_decl_get_method (trait_decl : trait_decl) (method_name : string) :
-    trait_decl_method_decl_id =
-  (* First look in the required methods *)
-  let bound_method =
-    List.find_opt (fun (s, _) -> s = method_name) trait_decl.required_methods
-  in
-  match bound_method with
-  | Some (_, bound_method) ->
-      { is_provided = false; id = bound_method.binder_value.fun_id }
-  | None ->
-      (* Must be a provided method *)
-      let _, bound_method =
-        List.find (fun (s, _) -> s = method_name) trait_decl.provided_methods
-      in
-      { is_provided = true; id = bound_method.binder_value.fun_id }
-
 let trait_decl_is_empty (trait_decl : trait_decl) : bool =
   let {
     def_id = _;
@@ -825,13 +807,11 @@ let trait_decl_is_empty (trait_decl : trait_decl) : bool =
     llbc_parent_clauses = _;
     consts;
     types;
-    required_methods;
-    provided_methods;
+    methods;
   } =
     trait_decl
   in
-  parent_clauses = [] && consts = [] && types = [] && required_methods = []
-  && provided_methods = []
+  parent_clauses = [] && consts = [] && types = [] && methods = []
 
 let trait_impl_is_empty (trait_impl : trait_impl) : bool =
   let {
@@ -847,13 +827,11 @@ let trait_impl_is_empty (trait_impl : trait_impl) : bool =
     parent_trait_refs;
     consts;
     types;
-    required_methods;
-    provided_methods;
+    methods;
   } =
     trait_impl
   in
-  parent_trait_refs = [] && consts = [] && types = [] && required_methods = []
-  && provided_methods = []
+  parent_trait_refs = [] && consts = [] && types = [] && methods = []
 
 (** Return true if a type declaration should be extracted as a tuple, because
     it is a non-recursive structure with unnamed fields. *)

@@ -12,10 +12,12 @@ Module Traits.
     Source: 'tests/src/traits.rs', lines 3:0-11:1 *)
 Record BoolTrait_t (Self : Type) := mkBoolTrait_t {
   BoolTrait_t_get_bool : Self -> result bool;
+  BoolTrait_t_ret_true : Self -> result bool;
 }.
 
 Arguments mkBoolTrait_t { _ }.
 Arguments BoolTrait_t_get_bool { _ } _.
+Arguments BoolTrait_t_ret_true { _ } _.
 
 (** [traits::{traits::BoolTrait for bool}::get_bool]:
     Source: 'tests/src/traits.rs', lines 14:4-16:5 *)
@@ -31,6 +33,7 @@ Definition boolTraitBool_ret_true (self : bool) : result bool :=
     Source: 'tests/src/traits.rs', lines 13:0-17:1 *)
 Definition BoolTraitBool : BoolTrait_t bool := {|
   BoolTrait_t_get_bool := boolTraitBool_get_bool;
+  BoolTrait_t_ret_true := boolTraitBool_ret_true;
 |}.
 
 (** [traits::test_bool_trait_bool]:
@@ -58,6 +61,7 @@ Definition boolTraitOption_ret_true
     Source: 'tests/src/traits.rs', lines 24:0-31:1 *)
 Definition BoolTraitOption (T : Type) : BoolTrait_t (option T) := {|
   BoolTrait_t_get_bool := boolTraitOption_get_bool;
+  BoolTrait_t_ret_true := boolTraitOption_ret_true;
 |}.
 
 (** [traits::test_bool_trait_option]:

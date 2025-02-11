@@ -7,7 +7,10 @@ open Primitives
 
 (** Trait declaration: [rename_attribute::BoolTrait]
     Source: 'tests/src/rename_attribute.rs', lines 8:0-18:1 *)
-noeq type boolTest_t (self : Type0) = { getTest : self -> result bool; }
+noeq type boolTest_t (self : Type0) = {
+  getTest : self -> result bool;
+  retTest : self -> result bool;
+}
 
 (** [rename_attribute::SimpleEnum]
     Source: 'tests/src/rename_attribute.rs', lines 36:0-41:1 *)

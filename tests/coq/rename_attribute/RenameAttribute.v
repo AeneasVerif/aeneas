@@ -12,10 +12,12 @@ Module RenameAttribute.
     Source: 'tests/src/rename_attribute.rs', lines 8:0-18:1 *)
 Record BoolTest_t (Self : Type) := mkBoolTest_t {
   BoolTest_t_getTest : Self -> result bool;
+  BoolTest_t_retTest : Self -> result bool;
 }.
 
 Arguments mkBoolTest_t { _ }.
 Arguments BoolTest_t_getTest { _ } _.
+Arguments BoolTest_t_retTest { _ } _.
 
 (** [rename_attribute::{rename_attribute::BoolTrait for bool}::get_bool]:
     Source: 'tests/src/rename_attribute.rs', lines 22:4-24:5 *)
@@ -31,6 +33,7 @@ Definition boolTraitBool_retTest (self : bool) : result bool :=
     Source: 'tests/src/rename_attribute.rs', lines 21:0-25:1 *)
 Definition BoolImpl : BoolTest_t bool := {|
   BoolTest_t_getTest := boolTraitBool_getTest;
+  BoolTest_t_retTest := boolTraitBool_retTest;
 |}.
 
 (** [rename_attribute::test_bool_trait]:

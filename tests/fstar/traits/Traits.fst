@@ -7,7 +7,10 @@ open Primitives
 
 (** Trait declaration: [traits::BoolTrait]
     Source: 'tests/src/traits.rs', lines 3:0-11:1 *)
-noeq type boolTrait_t (self : Type0) = { get_bool : self -> result bool; }
+noeq type boolTrait_t (self : Type0) = {
+  get_bool : self -> result bool;
+  ret_true : self -> result bool;
+}
 
 (** [traits::{traits::BoolTrait for bool}::get_bool]:
     Source: 'tests/src/traits.rs', lines 14:4-16:5 *)
@@ -21,7 +24,10 @@ let boolTraitBool_ret_true (self : bool) : result bool =
 
 (** Trait implementation: [traits::{traits::BoolTrait for bool}]
     Source: 'tests/src/traits.rs', lines 13:0-17:1 *)
-let boolTraitBool : boolTrait_t bool = { get_bool = boolTraitBool_get_bool; }
+let boolTraitBool : boolTrait_t bool = {
+  get_bool = boolTraitBool_get_bool;
+  ret_true = boolTraitBool_ret_true;
+}
 
 (** [traits::test_bool_trait_bool]:
     Source: 'tests/src/traits.rs', lines 19:0-21:1 *)
@@ -43,6 +49,7 @@ let boolTraitOption_ret_true (#t : Type0) (self : option t) : result bool =
     Source: 'tests/src/traits.rs', lines 24:0-31:1 *)
 let boolTraitOption (t : Type0) : boolTrait_t (option t) = {
   get_bool = boolTraitOption_get_bool;
+  ret_true = boolTraitOption_ret_true;
 }
 
 (** [traits::test_bool_trait_option]:

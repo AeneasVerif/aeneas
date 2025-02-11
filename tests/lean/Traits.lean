@@ -12,6 +12,7 @@ namespace traits
    Source: 'tests/src/traits.rs', lines 3:0-11:1 -/
 structure BoolTrait (Self : Type) where
   get_bool : Self → Result Bool
+  ret_true : Self → Result Bool
 
 /- [traits::{traits::BoolTrait for bool}::get_bool]:
    Source: 'tests/src/traits.rs', lines 14:4-16:5 -/
@@ -28,6 +29,7 @@ def BoolTraitBool.ret_true (self : Bool) : Result Bool :=
 @[reducible]
 def BoolTraitBool : BoolTrait Bool := {
   get_bool := BoolTraitBool.get_bool
+  ret_true := BoolTraitBool.ret_true
 }
 
 /- [traits::test_bool_trait_bool]:
@@ -56,6 +58,7 @@ def BoolTraitOption.ret_true {T : Type} (self : Option T) : Result Bool :=
 @[reducible]
 def BoolTraitOption (T : Type) : BoolTrait (Option T) := {
   get_bool := BoolTraitOption.get_bool
+  ret_true := BoolTraitOption.ret_true
 }
 
 /- [traits::test_bool_trait_option]:

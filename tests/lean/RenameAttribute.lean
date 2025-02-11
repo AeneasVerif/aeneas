@@ -12,6 +12,7 @@ namespace rename_attribute
    Source: 'tests/src/rename_attribute.rs', lines 8:0-18:1 -/
 structure BoolTest (Self : Type) where
   getTest : Self → Result Bool
+  retTest : Self → Result Bool
 
 /- [rename_attribute::{rename_attribute::BoolTrait for bool}::get_bool]:
    Source: 'tests/src/rename_attribute.rs', lines 22:4-24:5 -/
@@ -28,6 +29,7 @@ def BoolTraitBool.retTest (self : Bool) : Result Bool :=
 @[reducible]
 def BoolImpl : BoolTest Bool := {
   getTest := BoolTraitBool.getTest
+  retTest := BoolTraitBool.retTest
 }
 
 /- [rename_attribute::test_bool_trait]:
