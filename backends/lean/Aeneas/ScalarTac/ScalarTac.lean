@@ -15,6 +15,23 @@ theorem UScalar.max_USize_eq : UScalar.max .Usize = Usize.max := by rfl
 theorem IScalar.min_ISize_eq : IScalar.min .Isize = Isize.min := by rfl
 theorem IScalar.max_ISize_eq : IScalar.max .Isize = Isize.max := by rfl
 
+theorem Usize.max_succ_eq_pow : Usize.max + 1 = 2^System.Platform.numBits := by
+  simp [Usize.max, Usize.numBits]
+  have : 0 < 2^System.Platform.numBits := by simp
+  omega
+
+theorem Isize.min_eq_pow : Isize.min = - 2^(System.Platform.numBits - 1) := by
+  simp [Isize.min, Isize.numBits]
+
+theorem Isize.max_succ_eq_pow : Isize.max + 1 = 2^(System.Platform.numBits - 1) := by
+  simp [Isize.max, Isize.numBits]
+
+theorem Usize_Isize_min_max_eqs :
+  Usize.max + 1 = 2^System.Platform.numBits ∧
+  Isize.min = - 2^(System.Platform.numBits - 1) ∧
+  Isize.max + 1 = 2^(System.Platform.numBits - 1) :=
+  ⟨ Usize.max_succ_eq_pow, Isize.min_eq_pow, Isize.max_succ_eq_pow ⟩
+
 theorem Usize.cMax_bound : UScalar.cMax .Usize ≤ Usize.max := by
   simp [Usize.max, UScalar.cMax, UScalar.rMax, U32.rMax, Usize.numBits]
   have := System.Platform.numBits_eq; cases this <;> simp [*]
@@ -29,12 +46,14 @@ def U16.numBits_eq   : U16.numBits = 16 := by rfl
 def U32.numBits_eq   : U32.numBits = 32 := by rfl
 def U64.numBits_eq   : U64.numBits = 64 := by rfl
 def U128.numBits_eq  : U128.numBits = 128 := by rfl
+def Usize.numBits_eq : Usize.numBits = System.Platform.numBits := by rfl
 
 def I8.numBits_eq    : I8.numBits = 8 := by rfl
 def I16.numBits_eq   : I16.numBits = 16 := by rfl
 def I32.numBits_eq   : I32.numBits = 32 := by rfl
 def I64.numBits_eq   : I64.numBits = 64 := by rfl
 def I128.numBits_eq  : I128.numBits = 128 := by rfl
+def Isize.numBits_eq : Isize.numBits = System.Platform.numBits := by rfl
 
 theorem U8.max_eq    : U8.max = 255 := by rfl
 theorem U16.max_eq   : U16.max = 65535 := by rfl
@@ -124,10 +143,10 @@ def scalarTacSimpLemmas := [
   ``UScalar.lt_equiv, ``UScalar.le_equiv, ``UScalar.eq_equiv,
   ``IScalar.lt_equiv, ``IScalar.le_equiv, ``IScalar.eq_equiv,
   ``U8.ofNat_val_eq, ``U16.ofNat_val_eq, ``U32.ofNat_val_eq, ``U64.ofNat_val_eq, ``U128.ofNat_val_eq, ``Usize.ofNat_val_eq,
-  ``UScalarTy.U8_numBits_eq, ``UScalarTy.U16_numBits_eq, ``UScalarTy.U32_numBits_eq, ``UScalarTy.U64_numBits_eq, ``UScalarTy.U128_numBits_eq,
-  ``IScalarTy.I8_numBits_eq, ``IScalarTy.I16_numBits_eq, ``IScalarTy.I32_numBits_eq, ``IScalarTy.I64_numBits_eq, ``IScalarTy.I128_numBits_eq,
-  ``U8.numBits_eq, ``U16.numBits_eq, ``U32.numBits_eq, ``U64.numBits_eq, ``U128.numBits_eq,
-  ``I8.numBits_eq, ``I16.numBits_eq, ``I32.numBits_eq, ``I64.numBits_eq, ``I128.numBits_eq,
+  ``UScalarTy.U8_numBits_eq, ``UScalarTy.U16_numBits_eq, ``UScalarTy.U32_numBits_eq, ``UScalarTy.U64_numBits_eq, ``UScalarTy.U128_numBits_eq, ``UScalarTy.Usize_numBits_eq,
+  ``IScalarTy.I8_numBits_eq, ``IScalarTy.I16_numBits_eq, ``IScalarTy.I32_numBits_eq, ``IScalarTy.I64_numBits_eq, ``IScalarTy.I128_numBits_eq, ``IScalarTy.Isize_numBits_eq,
+  ``U8.numBits_eq, ``U16.numBits_eq, ``U32.numBits_eq, ``U64.numBits_eq, ``U128.numBits_eq, ``Usize.numBits_eq,
+  ``I8.numBits_eq, ``I16.numBits_eq, ``I32.numBits_eq, ``I64.numBits_eq, ``I128.numBits_eq, ``Isize.numBits_eq,
   ``UScalar.max_USize_eq, ``IScalar.min_ISize_eq, ``IScalar.max_ISize_eq,
   ``UScalar.cMax_U8_eq, ``UScalar.cMax_U16_eq, ``UScalar.cMax_U32_eq, ``UScalar.cMax_U64_eq, ``UScalar.cMax_U128_eq, ``UScalar.cMax_Usize_eq,
   ``IScalar.cMin_I8_eq, ``IScalar.cMin_I16_eq, ``IScalar.cMin_I32_eq, ``IScalar.cMin_I64_eq, ``IScalar.cMin_I128_eq, ``IScalar.cMin_Isize_eq,
@@ -166,6 +185,7 @@ def scalarTacExtraPreprocess : Tactic.TacticM Unit := do
     let _ ← Utils.addDeclTac (← Utils.mkFreshAnonPropUserName) e ty (asLet := false)
   add (← mkAppM ``Usize.cMax_bound #[])
   add (← mkAppM ``Isize.cMin_cMax_bound #[])
+  add (← mkAppM ``Usize_Isize_min_max_eqs #[])
   Utils.simpAt true {failIfUnchanged := false}
                -- Simprocs
                intTacSimpRocs
@@ -285,6 +305,31 @@ example
   (_ : c3.val = c1u.val + c2u.val):
   c3.val ≤ 1 := by
   scalar_tac +split
+
+example (x y : Nat) (h : x = y - 2^32) : 0 ≤ x := by
+  scalar_tac
+
+example (v : { l : List α // l.length ≤ Usize.max }):
+  v.val.length < 2 ^ UScalarTy.Usize.numBits := by
+  scalar_tac
+
+example
+  (α : Type u)
+  (v : { l : List α // l.length ≤ Usize.max })
+  (nlen : ℕ)
+  (h : nlen ≤ U32.max ∨ nlen ≤ 2 ^ Usize.numBits - 1) :
+  nlen ≤ 2 ^ Usize.numBits - 1
+  := by
+  scalar_tac
+
+example
+  (α : Type u)
+  (v : { l : List α // l.length ≤ Usize.max })
+  (nlen : ℕ)
+  (h : (decide (nlen ≤ U32.max) || decide (nlen ≤ Usize.max)) = true) :
+  nlen ≤ Usize.max
+  := by
+  scalar_tac
 
 end ScalarTac
 
