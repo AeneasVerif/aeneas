@@ -1,3 +1,4 @@
+//@ charon-args=--skip-borrowck
 //@ [!borrow-check] skip
 //@ [borrow-check] known-failure
 
