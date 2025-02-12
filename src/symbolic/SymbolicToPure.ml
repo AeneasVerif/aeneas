@@ -4791,8 +4791,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     parent_clauses = llbc_parent_clauses;
     consts;
     types;
-    required_methods;
-    provided_methods;
+    methods;
   } : A.trait_decl =
     trait_decl
   in
@@ -4810,17 +4809,11 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     List.map (translate_trait_clause span) llbc_parent_clauses
   in
   let consts = List.map (fun (name, ty) -> (name, translate_ty ty)) consts in
-  let required_methods =
+  let methods =
     List.map
       (fun (name, bound_fn) ->
         (name, translate_trait_method span translate_ty bound_fn))
-      required_methods
-  in
-  let provided_methods =
-    List.map
-      (fun (name, bound_fn) ->
-        (name, translate_trait_method span translate_ty bound_fn))
-      provided_methods
+      methods
   in
   {
     def_id;
@@ -4834,8 +4827,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     llbc_parent_clauses;
     consts;
     types;
-    required_methods;
-    provided_methods;
+    methods;
   }
 
 let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
@@ -4848,8 +4840,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     parent_trait_refs;
     consts;
     types;
-    required_methods;
-    provided_methods;
+    methods;
   } =
     trait_impl
   in
@@ -4876,17 +4867,11 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
       consts
   in
   let types = List.map (fun (name, ty) -> (name, translate_ty ty)) types in
-  let required_methods =
+  let methods =
     List.map
       (fun (name, bound_fn) ->
         (name, translate_trait_method span translate_ty bound_fn))
-      required_methods
-  in
-  let provided_methods =
-    List.map
-      (fun (name, bound_fn) ->
-        (name, translate_trait_method span translate_ty bound_fn))
-      provided_methods
+      methods
   in
   {
     def_id;
@@ -4901,8 +4886,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     parent_trait_refs;
     consts;
     types;
-    required_methods;
-    provided_methods;
+    methods;
   }
 
 let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :

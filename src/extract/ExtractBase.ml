@@ -2181,11 +2181,10 @@ let ctx_compute_fun_name (def : fun_decl) (ctx : extraction_ctx) : string =
           with
           | None -> def.item_meta
           | Some trait_decl -> (
-              let methods =
-                trait_decl.required_methods @ trait_decl.provided_methods
-              in
               match
-                List.find_opt (fun (name, _) -> name = item_name) methods
+                List.find_opt
+                  (fun (name, _) -> name = item_name)
+                  trait_decl.methods
               with
               | None -> def.item_meta
               | Some (_, bound_fn) ->

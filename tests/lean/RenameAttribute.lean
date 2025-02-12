@@ -12,6 +12,7 @@ namespace rename_attribute
    Source: 'tests/src/rename_attribute.rs', lines 8:0-18:1 -/
 structure BoolTest (Self : Type) where
   getTest : Self → Result Bool
+  retTest : Self → Result Bool
 
 /- [rename_attribute::{rename_attribute::BoolTrait for bool}::get_bool]:
    Source: 'tests/src/rename_attribute.rs', lines 22:4-24:5 -/
@@ -28,6 +29,7 @@ def BoolTraitBool.retTest (self : Bool) : Result Bool :=
 @[reducible]
 def BoolImpl : BoolTest Bool := {
   getTest := BoolTraitBool.getTest
+  retTest := BoolTraitBool.retTest
 }
 
 /- [rename_attribute::test_bool_trait]:
@@ -89,9 +91,9 @@ divergent def No_borrows_sum_loop
 def No_borrows_sum (max : U32) : Result U32 :=
   No_borrows_sum_loop max 0#u32 0#u32
 
-/- [rename_attribute::BoolTrait::ret_true]:
+/- [rename_attribute::BoolTrait::default::ret_true]:
    Source: 'tests/src/rename_attribute.rs', lines 15:4-17:5 -/
-def BoolTrait.retTest
+def BoolTrait.default.retTest
   {Self : Type} (self_clause : BoolTest Self) (self : Self) : Result Bool :=
   Result.ok true
 

@@ -19,7 +19,10 @@ let boolTraitBool_retTest (self : bool) : result bool =
 
 (** Trait implementation: [rename_attribute::{rename_attribute::BoolTrait for bool}]
     Source: 'tests/src/rename_attribute.rs', lines 21:0-25:1 *)
-let boolImpl : boolTest_t bool = { getTest = boolTraitBool_getTest; }
+let boolImpl : boolTest_t bool = {
+  getTest = boolTraitBool_getTest;
+  retTest = boolTraitBool_retTest;
+}
 
 (** [rename_attribute::test_bool_trait]:
     Source: 'tests/src/rename_attribute.rs', lines 28:0-30:1 *)
@@ -62,9 +65,9 @@ let rec no_borrows_sum_loop
 let no_borrows_sum (max : u32) : result u32 =
   no_borrows_sum_loop max 0 0
 
-(** [rename_attribute::BoolTrait::ret_true]:
+(** [rename_attribute::BoolTrait::default::ret_true]:
     Source: 'tests/src/rename_attribute.rs', lines 15:4-17:5 *)
-let boolTrait_retTest
+let boolTrait_default_retTest
   (#self : Type0) (self_clause : boolTest_t self) (self1 : self) :
   result bool
   =
