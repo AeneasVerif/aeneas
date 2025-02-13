@@ -1024,9 +1024,11 @@ let simplify_duplicate_calls (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
         (* Register the function call if the pattern doesn't contain dummy
            variables *)
         let env =
-          match typed_pattern_to_texpression def.item_meta.span pat with
-          | None -> env
-          | Some pat -> TExprMap.add bound pat env
+          if monadic then
+            match typed_pattern_to_texpression def.item_meta.span pat with
+            | None -> env
+            | Some pat_expr -> TExprMap.add bound (monadic, pat_expr) env
+          else env
         in
         let next = self#visit_texpression env next in
         Let (monadic, pat, bound, next)
@@ -1035,7 +1037,9 @@ let simplify_duplicate_calls (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
         let e =
           match TExprMap.find_opt e env with
           | None -> e
-          | Some e -> mk_result_ok_texpression def.item_meta.span e
+          | Some (monadic, e) ->
+              if monadic then mk_result_ok_texpression def.item_meta.span e
+              else e
         in
         super#visit_texpression env e
     end
