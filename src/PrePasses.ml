@@ -669,14 +669,8 @@ let decompose_str_borrows (f : fun_decl) : fun_decl =
 let rename_default_methods (def : fun_decl) : fun_decl =
   match def.kind with
   | TraitDeclItem (_, _, true) ->
-      let name = def.item_meta.name in
-      let rev_name = List.rev name in
-      let method_name = List.hd rev_name in
       let name =
-        List.rev
-          (method_name
-          :: PeIdent ("default", Disambiguator.zero)
-          :: List.tl rev_name)
+        def.item_meta.name @ [ PeIdent ("default", Disambiguator.zero) ]
       in
       { def with item_meta = { def.item_meta with name } }
   | _ -> def

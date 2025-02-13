@@ -550,9 +550,9 @@ def use_foo2
   :=
   Result.ok (Foo.FOO T TraitInst)
 
-/- [traits::BoolTrait::default::ret_true]:
+/- [traits::BoolTrait::ret_true::default]:
    Source: 'tests/src/traits.rs', lines 8:4-10:5 -/
-def BoolTrait.default.ret_true
+def BoolTrait.ret_true.default
   {Self : Type} (self_clause : BoolTrait Self) (self : Self) : Result Bool :=
   Result.ok true
 
