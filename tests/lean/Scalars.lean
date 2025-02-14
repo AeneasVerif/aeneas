@@ -51,7 +51,9 @@ def i32_use_shift_left (x : I32) : Result I32 :=
 /- [scalars::add_and]:
    Source: 'tests/src/scalars.rs', lines 35:0-37:1 -/
 def add_and (a : U32) (b : U32) : Result U32 :=
-  (b &&& a) + (b &&& a)
+  let i := b &&& a
+  let i1 := b &&& a
+  i + i1
 
 /- [scalars::u32_use_rotate_right]:
    Source: 'tests/src/scalars.rs', lines 39:0-41:1 -/

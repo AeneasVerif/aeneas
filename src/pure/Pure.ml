@@ -765,11 +765,13 @@ type fun_id =
       (** A function only used in the pure translation *)
 [@@deriving show, ord]
 
+type binop = E.binop [@@deriving show, ord]
+
 (** A function or an operation id *)
 type fun_or_op_id =
   | Fun of fun_id
   | Unop of unop
-  | Binop of E.binop * integer_type
+  | Binop of binop * integer_type
 [@@deriving show, ord]
 
 (** An identifier for an ADT constructor *)

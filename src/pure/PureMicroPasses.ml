@@ -1053,6 +1053,42 @@ let simplify_duplicate_calls (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
       in
       { def with body = Some body }
 
+(** A helper predicate *)
+let lift_unop (unop : unop) : bool =
+  match unop with
+  | Not None -> false
+  | Not (Some _) | Neg _ | Cast _ -> true
+
+(** A helper predicate *)
+let inline_unop unop = not (lift_unop unop)
+
+(** A helper predicate *)
+let lift_binop (binop : binop) : bool =
+  match binop with
+  | Eq | Lt | Le | Ne | Ge | Gt -> false
+  | BitXor
+  | BitAnd
+  | BitOr
+  | Div
+  | Rem
+  | Add
+  | Sub
+  | Mul
+  | CheckedAdd
+  | CheckedSub
+  | CheckedMul
+  | Shl
+  | Shr -> true
+
+(** A helper predicate *)
+let inline_binop binop = not (lift_binop binop)
+
+(** A helper predicate *)
+let lift_fun (fun_id : fun_id) : bool = true
+
+(** A helper predicate *)
+let inline_fun (fun_id : fun_id) : bool = not (lift_fun fun_id)
+
 (** Inline the useless variable (re-)assignments:
 
     A lot of intermediate variable assignments are introduced through the
@@ -1071,8 +1107,8 @@ let simplify_duplicate_calls (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
     
     [inline_pure]: if [true], inline all the pure assignments where the variable
     on the left is anonymous, but the assignments where the r-expression is
-    a non-primitive function call (i.e.: inline the binops, ADT constructions,
-    etc.).
+    a function call (i.e.: ADT constructions, etc.), except certain cases of
+    function calls.
 
     [inline_identity]: if [true], inline the identity functions (i.e., lambda
     functions of the shape [fun x -> x]).
@@ -1141,9 +1177,9 @@ let inline_useless_var_assignments ~(inline_named : bool) ~(inline_const : bool)
                     match qualif.id with
                     | AdtCons _ -> true (* ADT constructor *)
                     | Proj _ -> true (* Projector *)
-                    | FunOrOp (Unop _ | Binop _) ->
-                        true (* primitive function call *)
-                    | FunOrOp (Fun _) -> false (* non-primitive function call *)
+                    | FunOrOp (Unop unop) -> inline_unop unop
+                    | FunOrOp (Binop (binop, _)) -> inline_binop binop
+                    | FunOrOp (Fun fun_id) -> inline_fun fun_id
                     | _ -> false)
                 | StructUpdate _ -> true (* ADT constructor *)
                 | _ -> false
