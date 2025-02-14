@@ -2122,7 +2122,7 @@ let ctx_add_termination_measure (def : fun_decl) (ctx : extraction_ctx) :
     (TerminationMeasureId (FRegular def.def_id, def.loop_id))
     name ctx
 
-let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
+let ctx_add_global_decl_and_body (def : global_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   (* TODO: update once the body id can be an option *)
   let decl = GlobalId def.def_id in
@@ -2130,18 +2130,16 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
   (* Check if the global corresponds to an builtin global that we should map
      to a custom definition in our standard library (for instance, happens
      with "core::num::usize::MAX") *)
-  match
-    match_name_find_opt ctx.trans_ctx def.item_meta.name builtin_globals_map
-  with
-  | Some name ->
+  match def.builtin_info with
+  | Some info ->
       (* Yes: register the custom binding *)
-      ctx_add def.item_meta.span decl name ctx
+      ctx_add def.item_meta.span decl info.global_name ctx
   | None ->
       (* Not the case: "standard" registration *)
       let name = rename_llbc_name def.item_meta.attr_info def.item_meta.name in
       let name = ctx_compute_global_name def.item_meta.span ctx name in
 
-      let body = FunId (FromLlbc (FunId (FRegular def.body), None)) in
+      let body = FunId (FromLlbc (FunId (FRegular def.body_id), None)) in
       (* If this is a provided constant (i.e., the default value for a constant
          in a trait declaration) we add a suffix. Otherwise there is a clash
          between the name for the default constant and the name for the field

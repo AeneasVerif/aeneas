@@ -808,14 +808,9 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
  *)
 let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
     extraction_ctx =
-  (* Lookup the builtin information, if there is *)
-  let open ExtractBuiltin in
-  let info =
-    match_name_find_opt ctx.trans_ctx def.item_meta.name (builtin_types_map ())
-  in
-  (* Register the filtering information, if there is *)
+  (* Register the filtering information, if the type has builtin information *)
   let ctx =
-    match info with
+    match def.builtin_info with
     | Some { keep_params = Some keep; _ } ->
         {
           ctx with
@@ -826,7 +821,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
   in
   (* Compute and register the type decl name *)
   let def_name =
-    match info with
+    match def.builtin_info with
     | None -> ctx_compute_type_decl_name ctx def
     | Some info -> info.extract_name
   in
@@ -848,7 +843,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
       | Struct fields ->
           (* Compute the names *)
           let field_names, cons_name =
-            match info with
+            match def.builtin_info with
             | None | Some { body_info = None; _ } ->
                 let field_names =
                   FieldId.mapi
@@ -896,7 +891,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
             ctx
       | Enum variants ->
           let variant_names =
-            match info with
+            match def.builtin_info with
             | None ->
                 VariantId.mapi
                   (fun variant_id (variant : variant) ->

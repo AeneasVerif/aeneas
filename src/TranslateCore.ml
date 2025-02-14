@@ -20,21 +20,20 @@ let trans_ctx_to_pure_fmt_env (ctx : trans_ctx) : PrintPure.fmt_env =
 let name_to_string (ctx : trans_ctx) =
   Print.Types.name_to_string (trans_ctx_to_fmt_env ctx)
 
-let match_name_find_opt (ctx : trans_ctx) (name : Types.name)
-    (m : 'a NameMatcherMap.t) : 'a option =
-  let mctx = Charon.NameMatcher.ctx_from_crate ctx.crate in
-  let open ExtractBuiltin in
-  NameMatcherMap.find_opt mctx name m
-
-let match_name_with_generics_find_opt (ctx : trans_ctx) (name : Types.name)
-    (generics : Types.generic_args) (m : 'a NameMatcherMap.t) : 'a option =
-  let mctx = Charon.NameMatcher.ctx_from_crate ctx.crate in
-  let open ExtractBuiltin in
-  NameMatcherMap.find_with_generics_opt mctx name generics m
-
 let name_to_simple_name (ctx : trans_ctx) (n : Types.name) : string list =
   let mctx = Charon.NameMatcher.ctx_from_crate ctx.crate in
   name_to_simple_name mctx n
+
+let match_name_find_opt (ctx : trans_ctx) (name : Types.name)
+    (m : 'a NameMatcher.NameMatcherMap.t) : 'a option =
+  let mctx = NameMatcher.ctx_from_crate ctx.crate in
+  ExtractBuiltin.NameMatcherMap.find_opt mctx name m
+
+let match_name_with_generics_find_opt (ctx : trans_ctx) (name : Types.name)
+    (generics : Types.generic_args) (m : 'a NameMatcher.NameMatcherMap.t) :
+    'a option =
+  let mctx = NameMatcher.ctx_from_crate ctx.crate in
+  ExtractBuiltin.NameMatcherMap.find_with_generics_opt mctx name generics m
 
 let trait_name_with_generics_to_simple_name (ctx : trans_ctx)
     ?(prefix : Types.name option = None) (n : Types.name)

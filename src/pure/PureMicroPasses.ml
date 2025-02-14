@@ -8,32 +8,34 @@ open Errors
 (** The local logger *)
 let log = Logging.pure_micro_passes_log
 
-let fun_decl_to_string (ctx : trans_ctx) (def : Pure.fun_decl) : string =
-  let fmt = trans_ctx_to_pure_fmt_env ctx in
+type ctx = { fun_decls : fun_decl FunDeclId.Map.t; trans_ctx : trans_ctx }
+
+let fun_decl_to_string (ctx : ctx) (def : Pure.fun_decl) : string =
+  let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.fun_decl_to_string fmt def
 
-let fun_sig_to_string (ctx : trans_ctx) (sg : Pure.fun_sig) : string =
-  let fmt = trans_ctx_to_pure_fmt_env ctx in
+let fun_sig_to_string (ctx : ctx) (sg : Pure.fun_sig) : string =
+  let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.fun_sig_to_string fmt sg
 
-let var_to_string (ctx : trans_ctx) (v : var) : string =
-  let fmt = trans_ctx_to_pure_fmt_env ctx in
+let var_to_string (ctx : ctx) (v : var) : string =
+  let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.var_to_string fmt v
 
-let texpression_to_string (ctx : trans_ctx) (x : texpression) : string =
-  let fmt = trans_ctx_to_pure_fmt_env ctx in
+let texpression_to_string (ctx : ctx) (x : texpression) : string =
+  let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.texpression_to_string fmt false "" "  " x
 
-let switch_to_string (ctx : trans_ctx) scrut (x : switch_body) : string =
-  let fmt = trans_ctx_to_pure_fmt_env ctx in
+let switch_to_string (ctx : ctx) scrut (x : switch_body) : string =
+  let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.switch_to_string fmt "" "  " scrut x
 
-let struct_update_to_string (ctx : trans_ctx) supd : string =
-  let fmt = trans_ctx_to_pure_fmt_env ctx in
+let struct_update_to_string (ctx : ctx) supd : string =
+  let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.struct_update_to_string fmt "" "  " supd
 
-let typed_pattern_to_string (ctx : trans_ctx) pat : string =
-  let fmt = trans_ctx_to_pure_fmt_env ctx in
+let typed_pattern_to_string (ctx : ctx) pat : string =
+  let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.typed_pattern_to_string fmt pat
 
 (** Small utility.
@@ -624,7 +626,7 @@ let remove_span (def : fun_decl) : fun_decl =
       e
     ]}
  *)
-let intro_massert (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
+let intro_massert (_ctx : ctx) (def : fun_decl) : fun_decl =
   let span = def.item_meta.span in
   let visitor =
     object
@@ -695,7 +697,7 @@ let intro_massert (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
     The subsequent passes, in particular the ones which inline the useless
     assignments, simplify this further.
   *)
-let simplify_decompose_struct (ctx : trans_ctx) (def : fun_decl) : fun_decl =
+let simplify_decompose_struct (ctx : ctx) (def : fun_decl) : fun_decl =
   let span = def.item_meta.span in
   let visitor =
     object
@@ -706,7 +708,9 @@ let simplify_decompose_struct (ctx : trans_ctx) (def : fun_decl) : fun_decl =
         match (lv.value, lv.ty) with
         | PatAdt adt_pat, TAdt (TAdtId adt_id, generics) ->
             (* Detect if this is an enumeration or not *)
-            let tdef = TypeDeclId.Map.find adt_id ctx.type_ctx.type_decls in
+            let tdef =
+              TypeDeclId.Map.find adt_id ctx.trans_ctx.type_ctx.type_decls
+            in
             let is_enum = TypesUtils.type_decl_is_enum tdef in
             (* We deconstruct the ADT with a single let-binding in two situations:
                - if the ADT is an enumeration (which must have exactly one branch)
@@ -721,7 +725,7 @@ let simplify_decompose_struct (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                  like Coq don't, in which case we have to deconstruct the whole ADT
                  at once (`let (a, b, c) = x in`) *)
               || TypesUtils.type_decl_from_type_id_is_tuple_struct
-                   ctx.type_ctx.type_infos (T.TAdtId adt_id)
+                   ctx.trans_ctx.type_ctx.type_infos (T.TAdtId adt_id)
                  && not !Config.use_tuple_projectors
             in
             if use_let_with_cons then
@@ -779,7 +783,7 @@ let simplify_decompose_struct (ctx : trans_ctx) (def : fun_decl) : fun_decl =
     Note however that we do not apply this transformation if the
     structure is to be extracted as a tuple.
  *)
-let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
+let intro_struct_updates (ctx : ctx) (def : fun_decl) : fun_decl =
   let visitor =
     object (self)
       inherit [_] map_expression as super
@@ -800,11 +804,13 @@ let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                   generics = _;
                 } ->
                 (* Lookup the def *)
-                let decl = TypeDeclId.Map.find adt_id ctx.type_ctx.type_decls in
+                let decl =
+                  TypeDeclId.Map.find adt_id ctx.trans_ctx.type_ctx.type_decls
+                in
                 (* Check if the def will be extracted as a tuple *)
                 if
                   TypesUtils.type_decl_from_decl_id_is_tuple_struct
-                    ctx.type_ctx.type_infos adt_id
+                    ctx.trans_ctx.type_ctx.type_infos adt_id
                 then ignore ()
                 else
                   (* Check that there are as many arguments as there are fields - note
@@ -816,7 +822,7 @@ let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                     let is_rec =
                       match
                         TypeDeclId.Map.find adt_id
-                          ctx.type_ctx.type_decls_groups
+                          ctx.trans_ctx.type_ctx.type_decls_groups
                       with
                       | NonRecGroup _ -> false
                       | RecGroup _ -> true
@@ -898,7 +904,7 @@ let intro_struct_updates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
       ...
     ]}
  *)
-let simplify_let_bindings (ctx : trans_ctx) (def : fun_decl) : fun_decl =
+let simplify_let_bindings (ctx : ctx) (def : fun_decl) : fun_decl =
   let obj =
     object (self)
       inherit [_] map_expression as super
@@ -973,7 +979,7 @@ let simplify_let_bindings (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                     | Qualif { id = AdtCons { adt_id; _ }; _ } ->
                         not
                           (PureUtils.type_decl_from_type_id_is_tuple_struct
-                             ctx.type_ctx.type_infos adt_id)
+                             ctx.trans_ctx.type_ctx.type_infos adt_id)
                     | Qualif { id = Proj _; _ } -> false
                     | _ -> true
                   in
@@ -1014,7 +1020,7 @@ let simplify_let_bindings (ctx : trans_ctx) (def : fun_decl) : fun_decl =
 
     This micro pass removes those duplicate function calls.
  *)
-let simplify_duplicate_calls (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
+let simplify_duplicate_calls (_ctx : ctx) (def : fun_decl) : fun_decl =
   let visitor =
     object (self)
       inherit [_] map_expression as super
@@ -1084,10 +1090,22 @@ let lift_binop (binop : binop) : bool =
 let inline_binop binop = not (lift_binop binop)
 
 (** A helper predicate *)
-let lift_fun (fun_id : fun_id) : bool = true
+let lift_fun (ctx : ctx) (fun_id : fun_id) : bool =
+  (* Lookup if the function is builtin: we only lift builtin functions
+     which were explictly marked to be lifted. *)
+  match fun_id with
+  | FromLlbc (FunId (FRegular fid), _) -> begin
+      match FunDeclId.Map.find_opt fid ctx.fun_decls with
+      | None -> false
+      | Some def -> (
+          match def.builtin_info with
+          | None -> false
+          | Some info -> info.lift)
+    end
+  | _ -> false
 
 (** A helper predicate *)
-let inline_fun (fun_id : fun_id) : bool = not (lift_fun fun_id)
+let inline_fun (_ : fun_id) : bool = false
 
 (** Inline the useless variable (re-)assignments:
 
@@ -1119,8 +1137,8 @@ let inline_fun (fun_id : fun_id) : bool = not (lift_fun fun_id)
     pass (if they are useless).
  *)
 let inline_useless_var_assignments ~(inline_named : bool) ~(inline_const : bool)
-    ~(inline_pure : bool) ~(inline_identity : bool) (ctx : trans_ctx)
-    (def : fun_decl) : fun_decl =
+    ~(inline_pure : bool) ~(inline_identity : bool) (ctx : ctx) (def : fun_decl)
+    : fun_decl =
   let obj =
     object (self)
       inherit [_] map_expression as super
@@ -1222,8 +1240,8 @@ let inline_useless_var_assignments ~(inline_named : bool) ~(inline_const : bool)
             let re = self#visit_texpression env re in
             if
               PureUtils.is_var re
-              && type_decl_from_type_id_is_tuple_struct ctx.type_ctx.type_infos
-                   adt_id
+              && type_decl_from_type_id_is_tuple_struct
+                   ctx.trans_ctx.type_ctx.type_infos adt_id
             then
               (* Update the substitution environment *)
               let env = VarId.Map.add lv_var.id re env in
@@ -1258,7 +1276,7 @@ let inline_useless_var_assignments ~(inline_named : bool) ~(inline_const : bool)
 
 (** Filter the useless assignments (removes the useless variables, filters
     the function calls) *)
-let filter_useless (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
+let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
   (* We first need a transformation on *left-values*, which filters the useless
      variables and tells us whether the value contains any variable which has
      not been replaced by [_] (in which case we need to keep the assignment,
@@ -1478,7 +1496,7 @@ let simplify_let_then_ok _ctx (def : fun_decl) =
       Mkstruct x.f0 x.f1 x.f2 ~~> x
     ]}
  *)
-let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
+let simplify_aggregates (ctx : ctx) (def : fun_decl) : fun_decl =
   let expr_visitor =
     object
       inherit [_] map_expression as super
@@ -1501,7 +1519,7 @@ let simplify_aggregates (ctx : trans_ctx) (def : fun_decl) : fun_decl =
                 (* This is a struct *)
                 (* Retrieve the definiton, to find how many fields there are *)
                 let adt_decl =
-                  TypeDeclId.Map.find adt_id ctx.type_ctx.type_decls
+                  TypeDeclId.Map.find adt_id ctx.trans_ctx.type_ctx.type_decls
                 in
                 let fields =
                   match adt_decl.kind with
@@ -1685,8 +1703,8 @@ type simp_aggr_env = {
       else x
     ]}
  *)
-let simplify_aggregates_unchanged_fields (ctx : trans_ctx) (def : fun_decl) :
-    fun_decl =
+let simplify_aggregates_unchanged_fields (ctx : ctx) (def : fun_decl) : fun_decl
+    =
   let log = Logging.simplify_aggregates_unchanged_fields_log in
   let span = def.item_meta.span in
   (* Some helpers *)
@@ -1897,8 +1915,7 @@ let simplify_aggregates_unchanged_fields (ctx : trans_ctx) (def : fun_decl) :
     those function bodies into independent definitions while removing
     occurrences of the {!Pure.Loop} node.
  *)
-let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
-    fun_decl * fun_decl list =
+let decompose_loops (_ctx : ctx) (def : fun_decl) : fun_decl * fun_decl list =
   match def.body with
   | None -> (def, [])
   | Some body ->
@@ -2043,10 +2060,14 @@ let decompose_loops (_ctx : trans_ctx) (def : fun_decl) :
                *but* replace its span with the span of the loop *)
             let item_meta = { def.item_meta with span = loop.span } in
 
+            sanity_check __FILE__ __LINE__ (def.builtin_info = None)
+              def.item_meta.span;
+
             let loop_def : fun_decl =
               {
                 def_id = def.def_id;
                 item_meta;
+                builtin_info = def.builtin_info;
                 kind = def.kind;
                 backend_attributes = def.backend_attributes;
                 num_loops;
@@ -2112,7 +2133,7 @@ let unit_vars_to_unit (def : fun_decl) : fun_decl =
     function calls, and when translating end abstractions. Here, we can do
     something simpler, in one micro-pass.
  *)
-let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
+let eliminate_box_functions (_ctx : ctx) (def : fun_decl) : fun_decl =
   (* The map visitor *)
   let obj =
     object
@@ -2145,7 +2166,7 @@ let eliminate_box_functions (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
       { def with body }
 
 (** Simplify the lambdas by applying beta-reduction *)
-let apply_beta_reduction (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
+let apply_beta_reduction (_ctx : ctx) (def : fun_decl) : fun_decl =
   (* The map visitor *)
   let visitor =
     object (self)
@@ -2223,7 +2244,7 @@ let apply_beta_reduction (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
       Array.update a i x
     ]}
   *)
-let simplify_array_slice_update (ctx : trans_ctx) (def : fun_decl) : fun_decl =
+let simplify_array_slice_update (ctx : ctx) (def : fun_decl) : fun_decl =
   let span = def.item_meta.span in
 
   (* The difficulty is that the let-binding which uses the backward function
@@ -2488,8 +2509,7 @@ let simplify_array_slice_update (ctx : trans_ctx) (def : fun_decl) : fun_decl =
     [decompose_nested_pats]: decompose the nested patterns
  *)
 let decompose_let_bindings (decompose_monadic : bool)
-    (decompose_nested_pats : bool) (_ctx : trans_ctx) (def : fun_decl) :
-    fun_decl =
+    (decompose_nested_pats : bool) (_ctx : ctx) (def : fun_decl) : fun_decl =
   match def.body with
   | None -> def
   | Some body ->
@@ -2609,20 +2629,18 @@ let decompose_let_bindings (decompose_monadic : bool)
 
     See the explanations in {!val:Config.decompose_monadic_let_bindings}
  *)
-let decompose_monadic_let_bindings (ctx : trans_ctx) (def : fun_decl) : fun_decl
-    =
+let decompose_monadic_let_bindings (ctx : ctx) (def : fun_decl) : fun_decl =
   decompose_let_bindings true false ctx def
 
 (** Decompose the nested let patterns.
 
     See the explanations in {!val:Config.decompose_nested_let_patterns}
  *)
-let decompose_nested_let_patterns (ctx : trans_ctx) (def : fun_decl) : fun_decl
-    =
+let decompose_nested_let_patterns (ctx : ctx) (def : fun_decl) : fun_decl =
   decompose_let_bindings false true ctx def
 
 (** Unfold the monadic let-bindings to explicit matches. *)
-let unfold_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
+let unfold_monadic_let_bindings (_ctx : ctx) (def : fun_decl) : fun_decl =
   match def.body with
   | None -> def
   | Some body ->
@@ -2704,8 +2722,8 @@ let unfold_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
       ...
     ]}
  *)
-let merge_let_app_then_decompose_tuple (_ctx : trans_ctx) (def : fun_decl) :
-    fun_decl =
+let merge_let_app_then_decompose_tuple (_ctx : ctx) (def : fun_decl) : fun_decl
+    =
   let span = def.item_meta.span in
   (* We may need to introduce fresh variables *)
   let var_cnt = get_opt_body_min_var_counter def.body in
@@ -2763,8 +2781,8 @@ let merge_let_app_then_decompose_tuple (_ctx : trans_ctx) (def : fun_decl) :
       in
       { def with body = Some body }
 
-let end_passes :
-    (bool ref option * string * (trans_ctx -> fun_decl -> fun_decl)) list =
+let end_passes : (bool ref option * string * (ctx -> fun_decl -> fun_decl)) list
+    =
   [
     (* Convert the unit variables to [()] if they are used as right-values or
      * [_] if they are used as left values. *)
@@ -2861,7 +2879,7 @@ let end_passes :
   ]
 
 (** Auxiliary function for {!apply_passes_to_def} *)
-let apply_end_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_decl =
+let apply_end_passes_to_def (ctx : ctx) (def : fun_decl) : fun_decl =
   List.fold_left
     (fun def (option, pass_name, pass) ->
       let apply =
@@ -2905,7 +2923,7 @@ end
 module FunLoopIdMap = Collections.MakeMap (FunLoopIdOrderedType)
 
 (** Filter the useless loop input parameters. *)
-let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
+let filter_loop_inputs (ctx : ctx) (transl : pure_fun_translation list) :
     pure_fun_translation list =
   (* We need to explore groups of mutually recursive functions. In order
      to compute which parameters are useless, we need to explore the
@@ -3227,7 +3245,7 @@ let filter_loop_inputs (ctx : trans_ctx) (transl : pure_fun_translation list) :
     the function as reducible, we allow tactics like [simp] or [progress] to
     see through the definition.
  *)
-let compute_reducible (_ctx : trans_ctx) (transl : pure_fun_translation list) :
+let compute_reducible (_ctx : ctx) (transl : pure_fun_translation list) :
     pure_fun_translation list =
   let update_one (trans : pure_fun_translation) : pure_fun_translation =
     match trans.f.body with
@@ -3273,7 +3291,7 @@ let compute_reducible (_ctx : trans_ctx) (transl : pure_fun_translation list) :
 
     [ctx]: used only for printing.
  *)
-let apply_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_and_loops =
+let apply_passes_to_def (ctx : ctx) (def : fun_decl) : fun_and_loops =
   (* Debug *)
   log#ltrace (lazy ("PureMicroPasses.apply_passes_to_def: " ^ def.name));
 
@@ -3316,8 +3334,14 @@ let apply_passes_to_def (ctx : trans_ctx) (def : fun_decl) : fun_and_loops =
     functions. Note that here, keeping the forward function it is not *necessary*
     but convenient.
  *)
-let apply_passes_to_pure_fun_translations (ctx : trans_ctx)
+let apply_passes_to_pure_fun_translations (trans_ctx : trans_ctx)
     (transl : fun_decl list) : pure_fun_translation list =
+  let fun_decls =
+    FunDeclId.Map.of_list
+      (List.map (fun (f : fun_decl) -> (f.def_id, f)) transl)
+  in
+  let ctx = { trans_ctx; fun_decls } in
+
   (* Apply the micro-passes *)
   let transl = List.map (apply_passes_to_def ctx) transl in
 

@@ -93,6 +93,75 @@ type builtin_ty =
        *)
 [@@deriving show, ord]
 
+(*
+ * Builtin declarations coming from external libraries.
+ *)
+
+type builtin_variant_info = { fields : (string * string) list }
+[@@deriving show, ord]
+
+type builtin_enum_variant_info = {
+  rust_variant_name : string;
+  extract_variant_name : string;
+  fields : string list option;
+}
+[@@deriving show, ord]
+
+type builtin_type_body_info =
+  | Struct of string * (string * string) list
+    (* The constructor name and the map for the field names *)
+  | Enum of builtin_enum_variant_info list
+(* For every variant, a map for the field names *)
+[@@deriving show, ord]
+
+type builtin_type_info = {
+  rust_name : NameMatcher.pattern;
+  extract_name : string;
+  keep_params : bool list option;
+      (** We might want to filter some of the type parameters.
+
+          For instance, `Vec` type takes a type parameter for the allocator,
+          which we want to ignore.
+       *)
+  body_info : builtin_type_body_info option;
+}
+[@@deriving show, ord]
+
+type builtin_global_info = { global_name : string } [@@deriving show]
+
+type builtin_fun_info = {
+  filter_params : bool list option;
+  extract_name : string;
+  can_fail : bool;
+  stateful : bool;
+  lift : bool;
+      (** If the function can not fail, should we still lift it to the [Result]
+          monad? This can make reasonings easier, as we can then use [progress]
+          to do proofs in a Hoare-Logic style, rather than doing equational
+          reasonings. *)
+}
+[@@deriving show]
+
+type builtin_trait_decl_info = {
+  rust_name : NameMatcher.pattern;
+  extract_name : string;
+  constructor : string;
+  parent_clauses : string list;
+  consts : (string * string) list;
+  types : (string * string) list;
+      (** Every type has:
+          - a Rust name
+          - an extraction name *)
+  methods : (string * builtin_fun_info) list;
+}
+[@@deriving show]
+
+type builtin_trait_impl_info = {
+  filter_params : bool list option;
+  impl_name : string;
+}
+[@@deriving show]
+
 (* TODO: we should never directly manipulate [Return] and [Fail], but rather
  * the monadic functions [return] and [fail] (makes treatment of error and
  * state-error monads more uniform) *)
@@ -343,6 +412,9 @@ class ['self] iter_type_decl_base =
         self#visit_literal_type e var.ty
 
     method visit_item_meta : 'env -> T.item_meta -> unit = fun _ _ -> ()
+
+    method visit_builtin_type_info : 'env -> builtin_type_info -> unit =
+      fun _ _ -> ()
   end
 
 (** Ancestor for map visitor for [type_decl] *)
@@ -367,6 +439,10 @@ class ['self] map_type_decl_base =
         }
 
     method visit_item_meta : 'env -> T.item_meta -> T.item_meta = fun _ x -> x
+
+    method visit_builtin_type_info
+        : 'env -> builtin_type_info -> builtin_type_info =
+      fun _ x -> x
   end
 
 (** Ancestor for reduce visitor for [type_decl] *)
@@ -388,6 +464,9 @@ class virtual ['self] reduce_type_decl_base =
         self#plus (self#plus x0 x1) x2
 
     method visit_item_meta : 'env -> T.item_meta -> 'a = fun _ _ -> self#zero
+
+    method visit_builtin_type_info : 'env -> builtin_type_info -> 'a =
+      fun _ _ -> self#zero
   end
 
 (** Ancestor for mapreduce visitor for [type_decl] *)
@@ -410,6 +489,10 @@ class virtual ['self] mapreduce_type_decl_base =
         ({ index; name; ty }, self#plus (self#plus x0 x1) x2)
 
     method visit_item_meta : 'env -> T.item_meta -> T.item_meta * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_builtin_type_info
+        : 'env -> builtin_type_info -> builtin_type_info * 'a =
       fun _ x -> (x, self#zero)
   end
 
@@ -510,6 +593,7 @@ and type_decl = {
           to derive them from the original LLBC types from before the
           simplification of types like boxes and references. *)
   kind : type_decl_kind;
+  builtin_info : builtin_type_info option;
   preds : predicates;
 }
 [@@deriving
@@ -1296,6 +1380,7 @@ type 'a binder = {
 type fun_decl = {
   def_id : FunDeclId.id;
   item_meta : T.item_meta;
+  builtin_info : builtin_fun_info option;
   kind : item_kind;
   backend_attributes : backend_attributes;
   num_loops : int;
@@ -1320,6 +1405,7 @@ type global_decl = {
   def_id : GlobalDeclId.id;
   span : span;
   item_meta : T.item_meta;
+  builtin_info : builtin_global_info option;
   name : string;
       (** We use the name only for printing purposes (for debugging):
           the name used at extraction time will be derived from the
@@ -1341,6 +1427,7 @@ type trait_decl = {
   def_id : trait_decl_id;
   name : string;
   item_meta : T.item_meta;
+  builtin_info : builtin_trait_decl_info option;
   generics : generic_params;
   explicit_info : explicit_info;
       (** Information about which inputs parameters are explicit/implicit *)
@@ -1363,6 +1450,7 @@ type trait_impl = {
   def_id : trait_impl_id;
   name : string;
   item_meta : T.item_meta;
+  builtin_info : builtin_trait_impl_info option;
   impl_trait : trait_decl_ref;
   llbc_impl_trait : Types.trait_decl_ref;
       (** Same remark as for {!field:llbc_generics}. *)

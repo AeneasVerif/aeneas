@@ -1206,8 +1206,7 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
             );
           ctx)
-      ctx
-      (GlobalDeclId.Map.values crate.global_decls)
+      ctx trans_globals
   in
 
   let ctx =

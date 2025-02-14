@@ -5,7 +5,7 @@
  *)
 
 open Config
-open Charon.NameMatcher (* TODO: include? *)
+open NameMatcher (* TODO: include? *)
 include ExtractName (* TODO: only open? *)
 
 let log = Logging.builtin_log
@@ -81,39 +81,11 @@ let builtin_globals : (string * string) list =
     ("core::num::{i128}::MAX", "core_i128_max");
   ]
 
-let builtin_globals_map : string NameMatcherMap.t =
+let builtin_globals_map : Pure.builtin_global_info NameMatcherMap.t =
   NameMatcherMap.of_list
-    (List.map (fun (x, y) -> (parse_pattern x, y)) builtin_globals)
-
-type builtin_variant_info = { fields : (string * string) list }
-[@@deriving show]
-
-type builtin_enum_variant_info = {
-  rust_variant_name : string;
-  extract_variant_name : string;
-  fields : string list option;
-}
-[@@deriving show]
-
-type builtin_type_body_info =
-  | Struct of string * (string * string) list
-    (* The constructor name and the map for the field names *)
-  | Enum of builtin_enum_variant_info list
-(* For every variant, a map for the field names *)
-[@@deriving show]
-
-type builtin_type_info = {
-  rust_name : pattern;
-  extract_name : string;
-  keep_params : bool list option;
-      (** We might want to filter some of the type parameters.
-
-          For instance, `Vec` type takes a type parameter for the allocator,
-          which we want to ignore.
-       *)
-  body_info : builtin_type_body_info option;
-}
-[@@deriving show]
+    (List.map
+       (fun (x, y) -> (parse_pattern x, { Pure.global_name = y }))
+       builtin_globals)
 
 type type_variant_kind =
   | KOpaque
@@ -141,17 +113,17 @@ let mk_struct_constructor (type_name : string) : string =
     parameters. For instance, in the case of the `Vec` functions, there is
     a type parameter for the allocator to use, which we want to filter.
  *)
-let builtin_types () : builtin_type_info list =
+let builtin_types () : Pure.builtin_type_info list =
   let mk_type (rust_name : string) ?(custom_name : string option = None)
       ?(keep_params : bool list option = None)
-      ?(kind : type_variant_kind = KOpaque) () : builtin_type_info =
+      ?(kind : type_variant_kind = KOpaque) () : Pure.builtin_type_info =
     let rust_name = parse_pattern rust_name in
     let extract_name =
       match custom_name with
       | None -> flatten_name (pattern_to_type_extract_name rust_name)
       | Some name -> flatten_name (split_on_separator name)
     in
-    let body_info : builtin_type_body_info option =
+    let body_info : Pure.builtin_type_body_info option =
       match kind with
       | KOpaque -> None
       | KStruct fields ->
@@ -181,11 +153,12 @@ let builtin_types () : builtin_type_info list =
                   | Lean -> extract_name ^ "." ^ variant
                   | HOL4 -> extract_name ^ variant
                 in
-                {
-                  rust_variant_name = variant;
-                  extract_variant_name;
-                  fields = None;
-                })
+                ({
+                   rust_variant_name = variant;
+                   extract_variant_name;
+                   fields = None;
+                 }
+                  : Pure.builtin_enum_variant_info))
               variants
           in
           Some (Enum variants)
@@ -256,16 +229,11 @@ let builtin_types () : builtin_type_info list =
 
 let mk_builtin_types_map () =
   NameMatcherMap.of_list
-    (List.map (fun info -> (info.rust_name, info)) (builtin_types ()))
+    (List.map
+       (fun (info : Pure.builtin_type_info) -> (info.rust_name, info))
+       (builtin_types ()))
 
 let builtin_types_map = mk_memoized mk_builtin_types_map
-
-type builtin_fun_info = {
-  extract_name : string;
-  can_fail : bool;
-  stateful : bool;
-}
-[@@deriving show]
 
 let int_and_smaller_list : (string * string) list =
   let uint_names = List.rev [ "u8"; "u16"; "u32"; "u64"; "u128" ] in
@@ -295,12 +263,12 @@ let int_and_smaller_list : (string * string) list =
     parameters. For instance, in the case of the `Vec` functions, there is
     a type parameter for the allocator to use, which we want to filter.
  *)
-let mk_builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
-  (* Small utility *)
+let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
+  (* Small utility. *)
   let mk_fun (rust_name : string) ?(filter : bool list option = None)
-      ?(can_fail = true) ?(stateful = false)
+      ?(can_fail = true) ?(stateful = false) ?(lift = true)
       ?(extract_name : string option = None) () :
-      pattern * bool list option * builtin_fun_info =
+      pattern * Pure.builtin_fun_info =
     let rust_name =
       try parse_pattern rust_name
       with Failure _ ->
@@ -312,12 +280,20 @@ let mk_builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
       | Some name -> split_on_separator name
     in
     let basename = flatten_name extract_name in
-    let f = { extract_name = basename; can_fail; stateful } in
-    (rust_name, filter, f)
+    let f : Pure.builtin_fun_info =
+      {
+        filter_params = filter;
+        extract_name = basename;
+        can_fail;
+        stateful;
+        lift;
+      }
+    in
+    (rust_name, f)
   in
   let mk_scalar_fun (rust_name : string -> string)
       (extract_name : string -> string) ?(can_fail = true) () :
-      (pattern * bool list option * builtin_fun_info) list =
+      (pattern * Pure.builtin_fun_info) list =
     List.map
       (fun ty ->
         mk_fun (rust_name ty)
@@ -326,13 +302,13 @@ let mk_builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
       all_int_names
   in
   [
-    mk_fun "core::mem::replace" ~can_fail:false ();
-    mk_fun "core::mem::take" ~can_fail:false ();
+    mk_fun "core::mem::replace" ~can_fail:false ~lift:false ();
+    mk_fun "core::mem::take" ~can_fail:false ~lift:false ();
     mk_fun "core::slice::{[@T]}::len"
       ~extract_name:(Some (backend_choice "slice::len" "Slice::len"))
-      ~can_fail:false ();
+      ~can_fail:false ~lift:false ();
     mk_fun "alloc::vec::{alloc::vec::Vec<@T, alloc::alloc::Global>}::new"
-      ~extract_name:(Some "alloc::vec::Vec::new") ~can_fail:false ();
+      ~extract_name:(Some "alloc::vec::Vec::new") ~can_fail:false ~lift:false ();
     mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::push"
       ~filter:(Some [ true; false ])
       ();
@@ -341,7 +317,7 @@ let mk_builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
       ();
     mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::len"
       ~filter:(Some [ true; false ])
-      ~can_fail:false ();
+      ~can_fail:false ~lift:false ();
     mk_fun
       "alloc::vec::{core::ops::index::Index<alloc::vec::Vec<@T, @A>, \
        @I>}::index"
@@ -422,14 +398,15 @@ let mk_builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
       ~extract_name:(Some "alloc.slice.Slice.to_vec") ();
     mk_fun
       "alloc::vec::{alloc::vec::Vec<@T, alloc::alloc::Global>}::with_capacity"
-      ~extract_name:(Some "alloc.vec.Vec.with_capacity") ~can_fail:false ();
+      ~extract_name:(Some "alloc.vec.Vec.with_capacity") ~can_fail:false
+      ~lift:false ();
     mk_fun "core::slice::{[@T]}::reverse"
       ~extract_name:(Some "core.slice.Slice.reverse") ~can_fail:false ();
     mk_fun
       "alloc::vec::{core::ops::deref::Deref<alloc::vec::Vec<@T, @A>>}::deref"
       ~extract_name:(Some "alloc.vec.DerefVec.deref")
       ~filter:(Some [ true; false ])
-      ~can_fail:false ();
+      ~can_fail:false ~lift:false ();
     mk_fun
       "alloc::vec::{core::ops::deref::DerefMut<alloc::vec::Vec<@T, \
        @A>>}::deref_mut"
@@ -521,15 +498,15 @@ let mk_builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
          mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::resize"
            ~filter:(Some [ true; false ])
            ();
-         mk_fun "core::mem::swap" ~can_fail:false ();
+         mk_fun "core::mem::swap" ~can_fail:false ~lift:false ();
          mk_fun "core::option::{core::option::Option<@T>}::take"
            ~extract_name:
              (backend_choice None (Some "core::option::Option::take"))
-           ~can_fail:false ();
+           ~can_fail:false ~lift:false ();
          mk_fun "core::option::{core::option::Option<@T>}::is_none"
            ~extract_name:
              (backend_choice None (Some "core::option::Option::is_none"))
-           ~can_fail:false ();
+           ~can_fail:false ~lift:false ();
          mk_fun "core::clone::Clone::clone_from" ();
          (* Into<T, U: From<T>> *)
          mk_fun "core::convert::{core::convert::Into<@T, @U>}::into"
@@ -593,16 +570,13 @@ let mk_builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
                  ])
              all_int_names))
 
-let builtin_funs : unit -> (pattern * bool list option * builtin_fun_info) list
-    =
+let builtin_funs : unit -> (pattern * Pure.builtin_fun_info) list =
   mk_memoized mk_builtin_funs
 
 let mk_builtin_funs_map () =
   let m =
     NameMatcherMap.of_list
-      (List.map
-         (fun (name, filter, info) -> (name, (filter, info)))
-         (builtin_funs ()))
+      (List.map (fun (name, info) -> (name, info)) (builtin_funs ()))
   in
   log#ltrace
     (lazy ("builtin_funs_map:\n" ^ NameMatcherMap.to_string (fun _ -> "...") m));
@@ -613,11 +587,9 @@ let builtin_funs_map = mk_memoized mk_builtin_funs_map
 type effect_info = { can_fail : bool; stateful : bool }
 
 let mk_builtin_fun_effects () : (pattern * effect_info) list =
-  let builtin_funs : (pattern * bool list option * builtin_fun_info) list =
-    builtin_funs ()
-  in
+  let builtin_funs : (pattern * Pure.builtin_fun_info) list = builtin_funs () in
   List.map
-    (fun ((pattern, _, info) : _ * _ * builtin_fun_info) ->
+    (fun ((pattern, info) : _ * Pure.builtin_fun_info) ->
       let info = { can_fail = info.can_fail; stateful = info.stateful } in
       (pattern, info))
     builtin_funs
@@ -627,26 +599,12 @@ let mk_builtin_fun_effects_map () =
 
 let builtin_fun_effects_map = mk_memoized mk_builtin_fun_effects_map
 
-type builtin_trait_decl_info = {
-  rust_name : pattern;
-  extract_name : string;
-  constructor : string;
-  parent_clauses : string list;
-  consts : (string * string) list;
-  types : (string * string) list;
-      (** Every type has:
-          - a Rust name
-          - an extraction name *)
-  methods : (string * builtin_fun_info) list;
-}
-[@@deriving show]
-
 let builtin_trait_decls_info () =
   let mk_trait (rust_name : string) ?(extract_name : string option = None)
       ?(parent_clauses : string list = []) ?(types : string list = [])
       ?(methods : string list = [])
       ?(methods_with_extract : (string * string) list option = None) () :
-      builtin_trait_decl_info =
+      Pure.builtin_trait_decl_info =
     let rust_name = parse_pattern rust_name in
     let extract_name =
       match extract_name with
@@ -681,8 +639,14 @@ let builtin_trait_decls_info () =
               if !record_fields_short_names then item_name
               else extract_name ^ "_" ^ item_name
             in
-            let fwd =
-              { extract_name = basename; can_fail = true; stateful = false }
+            let fwd : Pure.builtin_fun_info =
+              {
+                filter_params = None;
+                extract_name = basename;
+                can_fail = true;
+                stateful = false;
+                lift = true;
+              }
             in
             (item_name, fwd)
           in
@@ -690,7 +654,15 @@ let builtin_trait_decls_info () =
       | Some methods ->
           List.map
             (fun (item_name, extract_name) ->
-              (item_name, { extract_name; can_fail = true; stateful = false }))
+              ( item_name,
+                ({
+                   filter_params = None;
+                   extract_name;
+                   can_fail = true;
+                   stateful = false;
+                   lift = true;
+                 }
+                  : Pure.builtin_fun_info) ))
             methods
     in
     {
@@ -754,15 +726,16 @@ let builtin_trait_decls_info () =
 let mk_builtin_trait_decls_map () =
   NameMatcherMap.of_list
     (List.map
-       (fun info -> (info.rust_name, info))
+       (fun (info : Pure.builtin_trait_decl_info) -> (info.rust_name, info))
        (builtin_trait_decls_info ()))
 
 let builtin_trait_decls_map = mk_memoized mk_builtin_trait_decls_map
 
-let builtin_trait_impls_info () : (pattern * (bool list option * string)) list =
+let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
+    =
   let fmt (rust_name : string) ?(extract_name : string option = None)
       ?(filter : bool list option = None) () :
-      pattern * (bool list option * string) =
+      pattern * Pure.builtin_trait_impl_info =
     let rust_name = parse_pattern rust_name in
     let name =
       let name =
@@ -772,7 +745,7 @@ let builtin_trait_impls_info () : (pattern * (bool list option * string)) list =
       in
       flatten_name name
     in
-    (rust_name, (filter, name))
+    (rust_name, { filter_params = filter; impl_name = name })
   in
   [
     (* core::ops::Deref<alloc::boxed::Box<T>> *)

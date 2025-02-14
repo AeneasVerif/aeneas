@@ -32,18 +32,12 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
          declarations *)
       ctx
   | _ -> (
-      (* Check if the function is builtin *)
-      let builtin =
-        let open ExtractBuiltin in
-        let funs_map = builtin_funs_map () in
-        match_name_find_opt ctx.trans_ctx def.f.item_meta.name funs_map
-      in
       (* Use the builtin names if necessary *)
-      match builtin with
-      | Some (filter_info, fun_info) ->
+      match def.f.builtin_info with
+      | Some info ->
           (* Builtin function: register the filtering information, if there is *)
           let ctx =
-            match filter_info with
+            match info.filter_params with
             | Some keep ->
                 {
                   ctx with
@@ -54,10 +48,9 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
             | _ -> ctx
           in
           let f = def.f in
-          let open ExtractBuiltin in
           let fun_id = (Pure.FunId (FRegular f.def_id), f.loop_id) in
-          ctx_add f.item_meta.span (FunId (FromLlbc fun_id))
-            fun_info.extract_name ctx
+          ctx_add f.item_meta.span (FunId (FromLlbc fun_id)) info.extract_name
+            ctx
       | None ->
           (* Not builtin *)
           (* If this is a trait method implementation, we prefix the name with the
@@ -87,7 +80,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
 
 (** Simply add the global name to the context. *)
 let extract_global_decl_register_names (ctx : extraction_ctx)
-    (def : A.global_decl) : extraction_ctx =
+    (def : global_decl) : extraction_ctx =
   ctx_add_global_decl_and_body def ctx
 
 (** The following function factorizes the extraction of ADT values.
@@ -2184,8 +2177,7 @@ let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
 (** Similar to {!extract_trait_decl_register_names} *)
 let extract_trait_decl_register_parent_clause_names (ctx : extraction_ctx)
     (trait_decl : trait_decl)
-    (builtin_info : ExtractBuiltin.builtin_trait_decl_info option) :
-    extraction_ctx =
+    (builtin_info : Pure.builtin_trait_decl_info option) : extraction_ctx =
   (* Compute the clause names *)
   let clause_names =
     match builtin_info with
@@ -2226,8 +2218,7 @@ let extract_trait_decl_register_parent_clause_names (ctx : extraction_ctx)
 (** Similar to {!extract_trait_decl_register_names} *)
 let extract_trait_decl_register_constant_names (ctx : extraction_ctx)
     (trait_decl : trait_decl)
-    (builtin_info : ExtractBuiltin.builtin_trait_decl_info option) :
-    extraction_ctx =
+    (builtin_info : Pure.builtin_trait_decl_info option) : extraction_ctx =
   let consts = trait_decl.consts in
   (* Compute the names *)
   let constant_names =
@@ -2261,8 +2252,7 @@ let extract_trait_decl_register_constant_names (ctx : extraction_ctx)
 (** Similar to {!extract_trait_decl_register_names} *)
 let extract_trait_decl_type_names (ctx : extraction_ctx)
     (trait_decl : trait_decl)
-    (builtin_info : ExtractBuiltin.builtin_trait_decl_info option) :
-    extraction_ctx =
+    (builtin_info : Pure.builtin_trait_decl_info option) : extraction_ctx =
   let types = trait_decl.types in
   (* Compute the names *)
   let type_names =
@@ -2300,8 +2290,7 @@ let extract_trait_decl_type_names (ctx : extraction_ctx)
 (** Similar to {!extract_trait_decl_register_names} *)
 let extract_trait_decl_method_names (ctx : extraction_ctx)
     (trait_decl : trait_decl)
-    (builtin_info : ExtractBuiltin.builtin_trait_decl_info option) :
-    extraction_ctx =
+    (builtin_info : Pure.builtin_trait_decl_info option) : extraction_ctx =
   let methods = trait_decl.methods in
   (* Compute the names *)
   let method_names =
@@ -2346,7 +2335,6 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
         let funs_map = StringMap.of_list info.methods in
         List.map
           (fun (item_name, _) ->
-            let open ExtractBuiltin in
             let info = StringMap.find item_name funs_map in
             let fun_name = info.extract_name in
             (item_name, fun_name))
@@ -2363,15 +2351,9 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
 (** Similar to {!extract_type_decl_register_names} *)
 let extract_trait_decl_register_names (ctx : extraction_ctx)
     (trait_decl : trait_decl) : extraction_ctx =
-  (* Lookup the information if this is a builtin trait *)
-  let open ExtractBuiltin in
-  let builtin_info =
-    match_name_find_opt ctx.trans_ctx trait_decl.item_meta.name
-      (builtin_trait_decls_map ())
-  in
   let ctx =
     let trait_name, trait_constructor =
-      match builtin_info with
+      match trait_decl.builtin_info with
       | None ->
           ( ctx_compute_trait_decl_name ctx trait_decl,
             ctx_compute_trait_decl_constructor ctx trait_decl )
@@ -2384,6 +2366,7 @@ let extract_trait_decl_register_names (ctx : extraction_ctx)
     ctx_add trait_decl.item_meta.span (TraitDeclConstructorId trait_decl.def_id)
       trait_constructor ctx
   in
+  let builtin_info = trait_decl.builtin_info in
   (* Parent clauses *)
   let ctx =
     extract_trait_decl_register_parent_clause_names ctx trait_decl builtin_info
@@ -2403,26 +2386,13 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
     (trait_impl : trait_impl) : extraction_ctx =
   let decl_id = trait_impl.impl_trait.trait_decl_id in
   let trait_decl = TraitDeclId.Map.find decl_id ctx.trans_trait_decls in
-  (* Check if the trait implementation is builtin *)
-  let builtin_info =
-    let open ExtractBuiltin in
-    (* Lookup the original Rust impl to retrieve the original trait ref (we
-       use it to derive the name)*)
-    let trait_impl =
-      TraitImplId.Map.find trait_impl.def_id ctx.crate.trait_impls
-    in
-    let decl_ref = trait_impl.impl_trait in
-    match_name_with_generics_find_opt ctx.trans_ctx trait_decl.item_meta.name
-      decl_ref.decl_generics
-      (builtin_trait_impls_map ())
-  in
   (* Register some builtin information (if necessary) *)
   let ctx, builtin_info =
-    match builtin_info with
+    match trait_impl.builtin_info with
     | None -> (ctx, None)
-    | Some (filter, info) ->
+    | Some builtin_info ->
         let ctx =
-          match filter with
+          match builtin_info.filter_params with
           | None -> ctx
           | Some filter ->
               {
@@ -2432,7 +2402,7 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
                     ctx.trait_impls_filter_type_args_map;
               }
         in
-        (ctx, Some info)
+        (ctx, Some builtin_info)
   in
 
   (* Everything is taken care of by {!extract_trait_decl_register_names} *but*
@@ -2441,7 +2411,7 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
   let name =
     match builtin_info with
     | None -> ctx_compute_trait_impl_name ctx trait_decl trait_impl
-    | Some name -> name
+    | Some info -> info.impl_name
   in
   ctx_add trait_decl.item_meta.span (TraitImplId trait_impl.def_id) name ctx
 
