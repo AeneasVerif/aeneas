@@ -12,8 +12,8 @@ namespace switch_test
    Source: 'tests/src/switch_test.rs', lines 4:0-10:1 -/
 def match_u32 (x : U32) : Result U32 :=
   match x with
-  | 0#scalar => Result.ok 0#u32
-  | 1#scalar => Result.ok 1#u32
+  | 0#uscalar => Result.ok 0#u32
+  | 1#uscalar => Result.ok 1#u32
   | _ => Result.ok 2#u32
 
 end switch_test

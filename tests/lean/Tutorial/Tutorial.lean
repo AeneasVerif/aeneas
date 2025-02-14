@@ -284,11 +284,11 @@ divergent def add_with_carry_loop
     let i2 ←
       alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceTInst U32) x i
     let i3 ← Scalar.cast .U32 c0
-    let p ← core.num.U32.overflowing_add i2 i3
+    let p := core.num.U32.overflowing_add i2 i3
     let (sum, c1) := p
     let i4 ←
       alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceTInst U32) y i
-    let p1 ← core.num.U32.overflowing_add sum i4
+    let p1 := core.num.U32.overflowing_add sum i4
     let (sum1, c2) := p1
     let i5 ← Scalar.cast_bool .U8 c1
     let i6 ← Scalar.cast_bool .U8 c2
@@ -338,9 +338,9 @@ divergent def add_loop
     let i1 ←
       alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceTInst U32) x i
     let i2 ← Scalar.cast .U32 c0
-    let p ← core.num.U32.overflowing_add i1 i2
+    let p := core.num.U32.overflowing_add i1 i2
     let (sum, c1) := p
-    let p1 ← core.num.U32.overflowing_add sum yi
+    let p1 := core.num.U32.overflowing_add sum yi
     let (sum1, c2) := p1
     let i3 ← Scalar.cast_bool .U8 c1
     let i4 ← Scalar.cast_bool .U8 c2
