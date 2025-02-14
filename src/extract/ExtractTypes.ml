@@ -42,7 +42,10 @@ let extract_literal (span : Meta.span) (fmt : F.formatter) (is_pattern : bool)
               F.pp_print_string fmt ("%" ^ iname)
           | Lean ->
               (* We don't use the same notation for patterns and regular literals *)
-              if is_pattern then F.pp_print_string fmt "#scalar"
+              if is_pattern then
+                if Scalars.integer_type_is_signed sv.int_ty then
+                  F.pp_print_string fmt "#iscalar"
+                else F.pp_print_string fmt "#uscalar"
               else
                 let iname = String.lowercase_ascii (int_name sv.int_ty) in
                 F.pp_print_string fmt ("#" ^ iname)

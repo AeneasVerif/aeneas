@@ -587,7 +587,7 @@ let mk_builtin_funs () : (pattern * bool list option * builtin_fun_info) list =
                    (false, "saturating_sub");
                    (false, "wrapping_add");
                    (false, "wrapping_sub");
-                   (true, "overflowing_add");
+                   (false, "overflowing_add");
                    (false, "rotate_left");
                    (false, "rotate_right");
                  ])
