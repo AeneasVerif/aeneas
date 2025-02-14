@@ -2,7 +2,7 @@
 -- [avl]: function definitions
 import Aeneas
 import Avl.Types
-open Aeneas.Std
+open Aeneas.Std Result Error
 set_option linter.dupNamespace false
 set_option linter.hashCommand false
 set_option linter.unusedVariables false
@@ -13,11 +13,10 @@ namespace avl
    Source: 'src/avl.rs', lines 8:4-16:5 -/
 def OrdI32.cmp (self : I32) (other : I32) : Result Ordering :=
   if self < other
-  then Result.ok Ordering.Less
-  else
-    if self = other
-    then Result.ok Ordering.Equal
-    else Result.ok Ordering.Greater
+  then ok Ordering.Less
+  else if self = other
+       then ok Ordering.Equal
+       else ok Ordering.Greater
 
 /- Trait implementation: [avl::{avl::Ord for i32}]
    Source: 'src/avl.rs', lines 7:0-17:1 -/
@@ -36,10 +35,10 @@ def Node.rotate_left
       (Node.mk z.value o z.right z.balance_factor)
   if root1.balance_factor = 0#i8
   then
-    Result.ok (Node.mk root1.value (some (Node.mk x.value x.left x.right 1#i8))
+    ok (Node.mk root1.value (some (Node.mk x.value x.left x.right 1#i8))
       root1.right (-1)#i8)
   else
-    Result.ok (Node.mk root1.value (some (Node.mk x.value x.left x.right 0#i8))
+    ok (Node.mk root1.value (some (Node.mk x.value x.left x.right 0#i8))
       root1.right 0#i8)
 
 /- [avl::{avl::Node<T>}#1::rotate_right]:
@@ -52,11 +51,11 @@ def Node.rotate_right
       (Node.mk z.value z.left o z.balance_factor)
   if root1.balance_factor = 0#i8
   then
-    Result.ok (Node.mk root1.value root1.left (some (Node.mk x.value 
-      x.left x.right (-1)#i8)) 1#i8)
+    ok (Node.mk root1.value root1.left (some (Node.mk x.value x.left 
+      x.right (-1)#i8)) 1#i8)
   else
-    Result.ok (Node.mk root1.value root1.left (some (Node.mk x.value 
-      x.left x.right 0#i8)) 0#i8)
+    ok (Node.mk root1.value root1.left (some (Node.mk x.value x.left 
+      x.right 0#i8)) 0#i8)
 
 /- [avl::{avl::Node<T>}#1::rotate_left_right]:
    Source: 'src/avl.rs', lines 138:4-186:5 -/
@@ -72,16 +71,16 @@ def Node.rotate_left_right
       (Node.mk y.value o1 o2 y.balance_factor)
   if root1.balance_factor = 0#i8
   then
-    Result.ok (Node.mk root1.value (some (Node.mk z.value z.left a 0#i8)) (some
+    ok (Node.mk root1.value (some (Node.mk z.value z.left a 0#i8)) (some
       (Node.mk x.value x.left x.right 0#i8)) 0#i8)
   else
     if root1.balance_factor < 0#i8
     then
-      Result.ok (Node.mk root1.value (some (Node.mk z.value z.left a 0#i8))
-        (some (Node.mk x.value x.left x.right 1#i8)) 0#i8)
+      ok (Node.mk root1.value (some (Node.mk z.value z.left a 0#i8)) (some
+        (Node.mk x.value x.left x.right 1#i8)) 0#i8)
     else
-      Result.ok (Node.mk root1.value (some (Node.mk z.value z.left a (-1)#i8))
-        (some (Node.mk x.value x.left x.right 0#i8)) 0#i8)
+      ok (Node.mk root1.value (some (Node.mk z.value z.left a (-1)#i8)) (some
+        (Node.mk x.value x.left x.right 0#i8)) 0#i8)
 
 /- [avl::{avl::Node<T>}#1::rotate_right_left]:
    Source: 'src/avl.rs', lines 188:4-236:5 -/
@@ -97,16 +96,16 @@ def Node.rotate_right_left
       (Node.mk y.value o1 o2 y.balance_factor)
   if root1.balance_factor = 0#i8
   then
-    Result.ok (Node.mk root1.value (some (Node.mk x.value x.left x.right 0#i8))
-      (some (Node.mk z.value a z.right 0#i8)) 0#i8)
+    ok (Node.mk root1.value (some (Node.mk x.value x.left x.right 0#i8)) (some
+      (Node.mk z.value a z.right 0#i8)) 0#i8)
   else
     if root1.balance_factor > 0#i8
     then
-      Result.ok (Node.mk root1.value (some (Node.mk x.value x.left x.right
-        (-1)#i8)) (some (Node.mk z.value a z.right 0#i8)) 0#i8)
+      ok (Node.mk root1.value (some (Node.mk x.value x.left x.right (-1)#i8))
+        (some (Node.mk z.value a z.right 0#i8)) 0#i8)
     else
-      Result.ok (Node.mk root1.value (some (Node.mk x.value x.left x.right
-        0#i8)) (some (Node.mk z.value a z.right 1#i8)) 0#i8)
+      ok (Node.mk root1.value (some (Node.mk x.value x.left x.right 0#i8))
+        (some (Node.mk z.value a z.right 1#i8)) 0#i8)
 
 /- [avl::{avl::Node<T>}#2::insert_in_left]:
    Source: 'src/avl.rs', lines 240:4-275:5 -/
@@ -130,14 +129,14 @@ mutual divergent def Node.insert_in_left
         do
         let node1 ←
           Node.rotate_right (Node.mk node.value o2 node.right i) left
-        Result.ok (false, node1)
+        ok (false, node1)
       else
         do
         let node1 ←
           Node.rotate_left_right (Node.mk node.value o2 node.right i) left
-        Result.ok (false, node1)
-    else Result.ok (i != 0#i8, Node.mk node.value o node.right i)
-  else Result.ok (false, Node.mk node.value o node.right node.balance_factor)
+        ok (false, node1)
+    else ok (i != 0#i8, Node.mk node.value o node.right i)
+  else ok (false, Node.mk node.value o node.right node.balance_factor)
 
 /- [avl::{avl::Tree<T>}#3::insert_in_opt_node]:
    Source: 'src/avl.rs', lines 356:4-371:5 -/
@@ -147,11 +146,11 @@ divergent def Tree.insert_in_opt_node
   :=
   match node with
   | none => let n := Node.mk value none none 0#i8
-            Result.ok (true, some n)
+            ok (true, some n)
   | some node1 =>
     do
     let (b, node2) ← Node.insert OrdInst node1 value
-    Result.ok (b, some node2)
+    ok (b, some node2)
 
 /- [avl::{avl::Node<T>}#2::insert_in_right]:
    Source: 'src/avl.rs', lines 277:4-315:5 -/
@@ -175,14 +174,14 @@ divergent def Node.insert_in_right
         do
         let node1 ←
           Node.rotate_left (Node.mk node.value node.left o2 i) right
-        Result.ok (false, node1)
+        ok (false, node1)
       else
         do
         let node1 ←
           Node.rotate_right_left (Node.mk node.value node.left o2 i) right
-        Result.ok (false, node1)
-    else Result.ok (i != 0#i8, Node.mk node.value node.left o i)
-  else Result.ok (false, Node.mk node.value node.left o node.balance_factor)
+        ok (false, node1)
+    else ok (i != 0#i8, Node.mk node.value node.left o i)
+  else ok (false, Node.mk node.value node.left o node.balance_factor)
 
 /- [avl::{avl::Node<T>}#2::insert]:
    Source: 'src/avl.rs', lines 318:4-334:5 -/
@@ -194,7 +193,7 @@ divergent def Node.insert
   let ordering ← OrdInst.cmp value node.value
   match ordering with
   | Ordering.Less => Node.insert_in_left OrdInst node value
-  | Ordering.Equal => Result.ok (false, node)
+  | Ordering.Equal => ok (false, node)
   | Ordering.Greater => Node.insert_in_right OrdInst node value
 
 end
@@ -202,7 +201,7 @@ end
 /- [avl::{avl::Tree<T>}#3::new]:
    Source: 'src/avl.rs', lines 338:4-340:5 -/
 def Tree.new {T : Type} (OrdInst : Ord T) : Result (Tree T) :=
-  Result.ok { root := none }
+  ok { root := none }
 
 /- [avl::{avl::Tree<T>}#3::find]: loop 0:
    Source: 'src/avl.rs', lines 345:8-354:5 -/
@@ -211,13 +210,13 @@ divergent def Tree.find_loop
   Result Bool
   :=
   match current_tree with
-  | none => Result.ok false
+  | none => ok false
   | some current_node =>
     do
     let o ← OrdInst.cmp current_node.value value
     match o with
     | Ordering.Less => Tree.find_loop OrdInst value current_node.right
-    | Ordering.Equal => Result.ok true
+    | Ordering.Equal => ok true
     | Ordering.Greater => Tree.find_loop OrdInst value current_node.left
 
 /- [avl::{avl::Tree<T>}#3::find]:
@@ -234,6 +233,6 @@ def Tree.insert
   :=
   do
   let (b, o) ← Tree.insert_in_opt_node OrdInst self.root value
-  Result.ok (b, { root := o })
+  ok (b, { root := o })
 
 end avl
