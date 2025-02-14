@@ -1353,8 +1353,7 @@ type trait_decl = {
   llbc_parent_clauses : Types.trait_clause list;
   consts : (trait_item_name * ty) list;
   types : trait_item_name list;
-  required_methods : (trait_item_name * fun_decl_ref binder) list;
-  provided_methods : (trait_item_name * fun_decl_ref binder) list;
+  methods : (trait_item_name * fun_decl_ref binder) list;
 }
 [@@deriving show]
 
@@ -1378,7 +1377,6 @@ type trait_impl = {
   parent_trait_refs : trait_ref list;
   consts : (trait_item_name * global_decl_ref) list;
   types : (trait_item_name * ty) list;
-  required_methods : (trait_item_name * fun_decl_ref binder) list;
-  provided_methods : (trait_item_name * fun_decl_ref binder) list;
+  methods : (trait_item_name * fun_decl_ref binder) list;
 }
 [@@deriving show]

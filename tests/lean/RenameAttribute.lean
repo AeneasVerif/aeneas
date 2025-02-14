@@ -12,24 +12,25 @@ namespace rename_attribute
    Source: 'tests/src/rename_attribute.rs', lines 8:0-18:1 -/
 structure BoolTest (Self : Type) where
   getTest : Self → Result Bool
+  retTest : Self → Result Bool
 
 /- [rename_attribute::{rename_attribute::BoolTrait for bool}::get_bool]:
    Source: 'tests/src/rename_attribute.rs', lines 22:4-24:5 -/
 def BoolTraitBool.getTest (self : Bool) : Result Bool :=
   Result.ok self
 
+/- [rename_attribute::{rename_attribute::BoolTrait for bool}::ret_true]:
+   Source: 'tests/src/rename_attribute.rs', lines 15:4-17:5 -/
+def BoolTraitBool.retTest (self : Bool) : Result Bool :=
+  Result.ok true
+
 /- Trait implementation: [rename_attribute::{rename_attribute::BoolTrait for bool}]
    Source: 'tests/src/rename_attribute.rs', lines 21:0-25:1 -/
 @[reducible]
 def BoolImpl : BoolTest Bool := {
   getTest := BoolTraitBool.getTest
+  retTest := BoolTraitBool.retTest
 }
-
-/- [rename_attribute::BoolTrait::ret_true]:
-   Source: 'tests/src/rename_attribute.rs', lines 15:4-17:5 -/
-def BoolTrait.retTest
-  {Self : Type} (self_clause : BoolTest Self) (self : Self) : Result Bool :=
-  Result.ok true
 
 /- [rename_attribute::test_bool_trait]:
    Source: 'tests/src/rename_attribute.rs', lines 28:0-30:1 -/
@@ -37,7 +38,7 @@ def BoolFn (T : Type) (x : Bool) : Result Bool :=
   do
   let b ← BoolTraitBool.getTest x
   if b
-  then BoolTrait.retTest BoolImpl x
+  then BoolTraitBool.retTest x
   else Result.ok false
 
 /- [rename_attribute::SimpleEnum]
@@ -89,5 +90,11 @@ divergent def No_borrows_sum_loop
    Source: 'tests/src/rename_attribute.rs', lines 65:0-75:1 -/
 def No_borrows_sum (max : U32) : Result U32 :=
   No_borrows_sum_loop max 0#u32 0#u32
+
+/- [rename_attribute::BoolTrait::ret_true]:
+   Source: 'tests/src/rename_attribute.rs', lines 15:4-17:5 -/
+def BoolTrait.retTest.default
+  {Self : Type} (self_clause : BoolTest Self) (self : Self) : Result Bool :=
+  Result.ok true
 
 end rename_attribute

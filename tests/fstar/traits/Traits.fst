@@ -7,47 +7,56 @@ open Primitives
 
 (** Trait declaration: [traits::BoolTrait]
     Source: 'tests/src/traits.rs', lines 3:0-11:1 *)
-noeq type boolTrait_t (self : Type0) = { get_bool : self -> result bool; }
+noeq type boolTrait_t (self : Type0) = {
+  get_bool : self -> result bool;
+  ret_true : self -> result bool;
+}
 
 (** [traits::{traits::BoolTrait for bool}::get_bool]:
     Source: 'tests/src/traits.rs', lines 14:4-16:5 *)
 let boolTraitBool_get_bool (self : bool) : result bool =
   Ok self
 
+(** [traits::{traits::BoolTrait for bool}::ret_true]:
+    Source: 'tests/src/traits.rs', lines 8:4-10:5 *)
+let boolTraitBool_ret_true (self : bool) : result bool =
+  Ok true
+
 (** Trait implementation: [traits::{traits::BoolTrait for bool}]
     Source: 'tests/src/traits.rs', lines 13:0-17:1 *)
-let boolTraitBool : boolTrait_t bool = { get_bool = boolTraitBool_get_bool; }
-
-(** [traits::BoolTrait::ret_true]:
-    Source: 'tests/src/traits.rs', lines 8:4-10:5 *)
-let boolTrait_ret_true
-  (#self : Type0) (self_clause : boolTrait_t self) (self1 : self) :
-  result bool
-  =
-  Ok true
+let boolTraitBool : boolTrait_t bool = {
+  get_bool = boolTraitBool_get_bool;
+  ret_true = boolTraitBool_ret_true;
+}
 
 (** [traits::test_bool_trait_bool]:
     Source: 'tests/src/traits.rs', lines 19:0-21:1 *)
 let test_bool_trait_bool (x : bool) : result bool =
   let* b = boolTraitBool_get_bool x in
-  if b then boolTrait_ret_true boolTraitBool x else Ok false
+  if b then boolTraitBool_ret_true x else Ok false
 
 (** [traits::{traits::BoolTrait for core::option::Option<T>}#1::get_bool]:
     Source: 'tests/src/traits.rs', lines 25:4-30:5 *)
 let boolTraitOption_get_bool (#t : Type0) (self : option t) : result bool =
   begin match self with | None -> Ok false | Some _ -> Ok true end
 
+(** [traits::{traits::BoolTrait for core::option::Option<T>}#1::ret_true]:
+    Source: 'tests/src/traits.rs', lines 8:4-10:5 *)
+let boolTraitOption_ret_true (#t : Type0) (self : option t) : result bool =
+  Ok true
+
 (** Trait implementation: [traits::{traits::BoolTrait for core::option::Option<T>}#1]
     Source: 'tests/src/traits.rs', lines 24:0-31:1 *)
 let boolTraitOption (t : Type0) : boolTrait_t (option t) = {
   get_bool = boolTraitOption_get_bool;
+  ret_true = boolTraitOption_ret_true;
 }
 
 (** [traits::test_bool_trait_option]:
     Source: 'tests/src/traits.rs', lines 33:0-35:1 *)
 let test_bool_trait_option (#t : Type0) (x : option t) : result bool =
   let* b = boolTraitOption_get_bool x in
-  if b then boolTrait_ret_true (boolTraitOption t) x else Ok false
+  if b then boolTraitOption_ret_true x else Ok false
 
 (** [traits::test_bool_trait]:
     Source: 'tests/src/traits.rs', lines 37:0-39:1 *)
@@ -521,6 +530,14 @@ let use_foo2
   result (core_result_Result_t u i32)
   =
   Ok (foo_foo t traitInst)
+
+(** [traits::BoolTrait::ret_true]:
+    Source: 'tests/src/traits.rs', lines 8:4-10:5 *)
+let boolTrait_ret_true_default
+  (#self : Type0) (self_clause : boolTrait_t self) (self1 : self) :
+  result bool
+  =
+  Ok true
 
 (** Trait declaration: [traits::{traits::TestType<T>}#6::test::TestTrait]
     Source: 'tests/src/traits.rs', lines 130:8-132:9 *)

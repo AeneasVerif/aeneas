@@ -12,34 +12,35 @@ Module Traits.
     Source: 'tests/src/traits.rs', lines 3:0-11:1 *)
 Record BoolTrait_t (Self : Type) := mkBoolTrait_t {
   BoolTrait_t_get_bool : Self -> result bool;
+  BoolTrait_t_ret_true : Self -> result bool;
 }.
 
 Arguments mkBoolTrait_t { _ }.
 Arguments BoolTrait_t_get_bool { _ } _.
+Arguments BoolTrait_t_ret_true { _ } _.
 
 (** [traits::{traits::BoolTrait for bool}::get_bool]:
     Source: 'tests/src/traits.rs', lines 14:4-16:5 *)
 Definition boolTraitBool_get_bool (self : bool) : result bool :=
   Ok self.
 
+(** [traits::{traits::BoolTrait for bool}::ret_true]:
+    Source: 'tests/src/traits.rs', lines 8:4-10:5 *)
+Definition boolTraitBool_ret_true (self : bool) : result bool :=
+  Ok true.
+
 (** Trait implementation: [traits::{traits::BoolTrait for bool}]
     Source: 'tests/src/traits.rs', lines 13:0-17:1 *)
 Definition BoolTraitBool : BoolTrait_t bool := {|
   BoolTrait_t_get_bool := boolTraitBool_get_bool;
+  BoolTrait_t_ret_true := boolTraitBool_ret_true;
 |}.
-
-(** [traits::BoolTrait::ret_true]:
-    Source: 'tests/src/traits.rs', lines 8:4-10:5 *)
-Definition boolTrait_ret_true
-  {Self : Type} (self_clause : BoolTrait_t Self) (self : Self) : result bool :=
-  Ok true
-.
 
 (** [traits::test_bool_trait_bool]:
     Source: 'tests/src/traits.rs', lines 19:0-21:1 *)
 Definition test_bool_trait_bool (x : bool) : result bool :=
   b <- boolTraitBool_get_bool x;
-  if b then boolTrait_ret_true BoolTraitBool x else Ok false
+  if b then boolTraitBool_ret_true x else Ok false
 .
 
 (** [traits::{traits::BoolTrait for core::option::Option<T>}#1::get_bool]:
@@ -49,17 +50,25 @@ Definition boolTraitOption_get_bool
   match self with | None => Ok false | Some _ => Ok true end
 .
 
+(** [traits::{traits::BoolTrait for core::option::Option<T>}#1::ret_true]:
+    Source: 'tests/src/traits.rs', lines 8:4-10:5 *)
+Definition boolTraitOption_ret_true
+  {T : Type} (self : option T) : result bool :=
+  Ok true
+.
+
 (** Trait implementation: [traits::{traits::BoolTrait for core::option::Option<T>}#1]
     Source: 'tests/src/traits.rs', lines 24:0-31:1 *)
 Definition BoolTraitOption (T : Type) : BoolTrait_t (option T) := {|
   BoolTrait_t_get_bool := boolTraitOption_get_bool;
+  BoolTrait_t_ret_true := boolTraitOption_ret_true;
 |}.
 
 (** [traits::test_bool_trait_option]:
     Source: 'tests/src/traits.rs', lines 33:0-35:1 *)
 Definition test_bool_trait_option {T : Type} (x : option T) : result bool :=
   b <- boolTraitOption_get_bool x;
-  if b then boolTrait_ret_true (BoolTraitOption T) x else Ok false
+  if b then boolTraitOption_ret_true x else Ok false
 .
 
 (** [traits::test_bool_trait]:
@@ -694,6 +703,13 @@ Definition use_foo2
   result (core_result_Result_t U i32)
   :=
   Ok (foo_foo T traitInst)
+.
+
+(** [traits::BoolTrait::ret_true]:
+    Source: 'tests/src/traits.rs', lines 8:4-10:5 *)
+Definition boolTrait_ret_true_default
+  {Self : Type} (self_clause : BoolTrait_t Self) (self : Self) : result bool :=
+  Ok true
 .
 
 (** Trait declaration: [traits::{traits::TestType<T>}#6::test::TestTrait]

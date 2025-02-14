@@ -24,12 +24,13 @@ let texpression_to_string (ctx : extraction_ctx) =
 let extract_fun_decl_register_names (ctx : extraction_ctx)
     (has_decreases_clause : fun_decl -> bool) (def : pure_fun_translation) :
     extraction_ctx =
-  (* Ignore the trait methods **declarations** (rem.: we do not ignore the trait
-     method implementations): we do not need to refer to them directly. We will
-     only use their type for the fields of the records we generate for the trait
-     declarations *)
   match def.f.kind with
-  | TraitDeclItem (_, _, false) -> ctx
+  | TraitDeclItem (_, _, false) ->
+      (* Ignore the trait methods **declarations** (rem.: we do not ignore the trait
+         method implementations): we do not need to refer to them directly. We will
+         only use their type for the fields of the records we generate for the trait
+         declarations *)
+      ctx
   | _ -> (
       (* Check if the function is builtin *)
       let builtin =
@@ -507,46 +508,24 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
       *)
       (match fun_id with
       | FromLlbc (TraitMethod (trait_ref, method_name, _fun_decl_id), lp_id) ->
-          (* We have to check whether the trait method is required or provided *)
           let trait_decl_id = trait_ref.trait_decl_ref.trait_decl_id in
           let trait_decl =
             TraitDeclId.Map.find trait_decl_id ctx.trans_trait_decls
           in
-          let method_id =
-            PureUtils.trait_decl_get_method trait_decl method_name
+
+          (* Required method *)
+          sanity_check __FILE__ __LINE__ (lp_id = None)
+            trait_decl.item_meta.span;
+          extract_trait_ref trait_decl.item_meta.span ctx fmt
+            TypeDeclId.Set.empty true trait_ref;
+          let fun_name =
+            ctx_get_trait_method span trait_ref.trait_decl_ref.trait_decl_id
+              method_name ctx
           in
-
-          if not method_id.is_provided then (
-            (* Required method *)
-            sanity_check __FILE__ __LINE__ (lp_id = None)
-              trait_decl.item_meta.span;
-            extract_trait_ref trait_decl.item_meta.span ctx fmt
-              TypeDeclId.Set.empty true trait_ref;
-            let fun_name =
-              ctx_get_trait_method span trait_ref.trait_decl_ref.trait_decl_id
-                method_name ctx
-            in
-            let add_brackets (s : string) =
-              if backend () = Coq then "(" ^ s ^ ")" else s
-            in
-            F.pp_print_string fmt ("." ^ add_brackets fun_name))
-          else
-            (* Provided method: we see it as a regular function call, and use
-               the function name *)
-            let fun_id = FromLlbc (FunId (FRegular method_id.id), lp_id) in
-            let fun_name =
-              ctx_get_function trait_decl.item_meta.span fun_id ctx
-            in
-            F.pp_print_string fmt fun_name;
-
-            (* Note that we do not need to print the generics for the trait
-               declaration: they are always implicit as they can be deduced
-               from the trait self clause.
-
-               Print the trait ref (to instantate the self clause) *)
-            F.pp_print_space fmt ();
-            extract_trait_ref trait_decl.item_meta.span ctx fmt
-              TypeDeclId.Set.empty true trait_ref
+          let add_brackets (s : string) =
+            if backend () = Coq then "(" ^ s ^ ")" else s
+          in
+          F.pp_print_string fmt ("." ^ add_brackets fun_name)
       | _ ->
           let fun_name = ctx_get_function span fun_id ctx in
           F.pp_print_string fmt fun_name);
@@ -2323,7 +2302,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
     (trait_decl : trait_decl)
     (builtin_info : ExtractBuiltin.builtin_trait_decl_info option) :
     extraction_ctx =
-  let required_methods = trait_decl.required_methods in
+  let methods = trait_decl.methods in
   (* Compute the names *)
   let method_names =
     match builtin_info with
@@ -2350,7 +2329,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
           let f =
             { f with item_meta = { f.item_meta with name = llbc_name } }
           in
-          let name = ctx_compute_fun_name f ctx in
+          let name = ctx_compute_fun_name f true ctx in
           (* Add a prefix if necessary *)
           let name =
             if !record_fields_short_names then name
@@ -2361,7 +2340,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
         List.map
           (fun (name, bound_fn) ->
             compute_item_name name bound_fn.binder_value.fun_id)
-          required_methods
+          methods
     | Some info ->
         (* This is a builtin *)
         let funs_map = StringMap.of_list info.methods in
@@ -2371,7 +2350,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
             let info = StringMap.find item_name funs_map in
             let fun_name = info.extract_name in
             (item_name, fun_name))
-          required_methods
+          methods
   in
   (* Register the names *)
   List.fold_left
@@ -2456,16 +2435,6 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
         (ctx, Some info)
   in
 
-  (* For now we do not support overriding provided methods *)
-  cassert __FILE__ __LINE__
-    (trait_impl.provided_methods = [])
-    trait_impl.item_meta.span
-    ("Overriding trait provided methods in trait implementations is not \
-      supported yet (trait impl: "
-    ^ name_to_string ctx trait_impl.item_meta.name
-    ^ ", overriden methods: "
-    ^ String.concat ", " (List.map fst trait_impl.provided_methods)
-    ^ ")");
   (* Everything is taken care of by {!extract_trait_decl_register_names} *but*
      the name of the implementation itself *)
   (* Compute the name *)
@@ -2625,9 +2594,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
     Option.get
       (type_decl_kind_to_qualif decl.item_meta.span SingleNonRec (Some Struct))
   in
-  (* When checking if the trait declaration is empty: we ignore the provided
-     methods, because for now they are extracted separately *)
-  let is_empty = trait_decl_is_empty { decl with provided_methods = [] } in
+  let is_empty = trait_decl_is_empty decl in
   if backend () = FStar && not is_empty then (
     F.pp_print_string fmt "noeq";
     F.pp_print_space fmt ());
@@ -2721,7 +2688,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (* The required methods *)
     List.iter
       (fun (name, fn) -> extract_trait_decl_method_items ctx fmt decl name fn)
-      decl.required_methods;
+      decl.methods;
 
     (* Close the outer boxes for the definition *)
     if backend () <> Lean then F.pp_close_box fmt ();
@@ -2782,7 +2749,7 @@ let extract_trait_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
       in
       extract_coq_arguments_instruction ctx fmt item_name params)
     decl.parent_clauses;
-  (* The required methods *)
+  (* The  methods *)
   List.iter
     (fun (item_name, bound_fn) ->
       let explicit_info = bound_fn.binder_explicit_info in
@@ -2800,7 +2767,7 @@ let extract_trait_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
         ctx_get_trait_method decl.item_meta.span decl.def_id item_name ctx
       in
       extract_coq_arguments_instruction ctx fmt item_name params)
-    decl.required_methods;
+    decl.methods;
   (* Add a space *)
   F.pp_print_space fmt ()
 
@@ -2933,9 +2900,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   extract_trait_decl_ref impl.item_meta.span ctx fmt TypeDeclId.Set.empty false
     impl.impl_trait;
 
-  (* When checking if the trait impl is empty: we ignore the provided
-     methods, because for now they are extracted separately *)
-  let is_empty = trait_impl_is_empty { impl with provided_methods = [] } in
+  let is_empty = trait_impl_is_empty impl in
 
   F.pp_print_space fmt ();
   if is_empty && backend () = FStar then (
@@ -3021,11 +2986,11 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
         extract_trait_impl_item ctx fmt item_name ty)
       (List.combine trait_decl.parent_clauses impl.parent_trait_refs);
 
-    (* The required methods *)
+    (* The methods *)
     List.iter
       (fun (name, bound_fn) ->
         extract_trait_impl_method_items ctx fmt impl name bound_fn)
-      impl.required_methods;
+      impl.methods;
 
     (* Close the outer boxes for the definition, as well as the brackets *)
     F.pp_close_box fmt ();

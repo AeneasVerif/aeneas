@@ -116,6 +116,9 @@ let run_charon (env : runner_env) (case : Input.t) =
         [
           env.charon_path;
           "--no-cargo";
+          "--rustc-flag=--crate-type=rlib";
+          "--rustc-flag=--allow=unused";
+          "--rustc-flag=--allow=non_snake_case";
           "--hide-marker-traits";
           "--input";
           case.path;
@@ -146,6 +149,7 @@ let run_charon (env : runner_env) (case : Input.t) =
           [
             env.charon_path;
             "--hide-marker-traits";
+            "--rustc-flag=--allow=unused";
             "--dest";
             Filename_unix.realpath env.llbc_dir;
           ]
