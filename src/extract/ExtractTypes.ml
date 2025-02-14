@@ -139,7 +139,13 @@ let extract_unop (span : Meta.span) (extract_expr : bool -> texpression -> unit)
                  let cast_str =
                    match backend () with
                    | Coq | FStar -> "scalar_cast"
-                   | Lean -> "Scalar.cast"
+                   | Lean ->
+                       let signed_src = Scalars.integer_type_is_signed src in
+                       let signed_tgt = Scalars.integer_type_is_signed tgt in
+                       if signed_src = signed_tgt then
+                         if signed_src then "IScalar.cast" else "UScalar.cast"
+                       else if signed_src then "IScalar.hcast"
+                       else "UScalar.hcast"
                    | HOL4 -> admit_string __FILE__ __LINE__ span "Unreachable"
                  in
                  let src =
@@ -152,7 +158,10 @@ let extract_unop (span : Meta.span) (extract_expr : bool -> texpression -> unit)
                  let cast_str =
                    match backend () with
                    | Coq | FStar -> "scalar_cast_bool"
-                   | Lean -> "Scalar.cast_bool"
+                   | Lean ->
+                       if Scalars.integer_type_is_signed tgt then
+                         "IScalar.cast_fromBool"
+                       else "UScalar.cast_fromBool"
                    | HOL4 -> admit_string __FILE__ __LINE__ span "Unreachable"
                  in
                  let tgt = integer_type_to_string tgt in

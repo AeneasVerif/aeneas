@@ -283,22 +283,19 @@ divergent def add_with_carry_loop
     do
     let i2 ←
       alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceTInst U32) x i
-    let i3 ← Scalar.cast .U32 c0
-    let p := core.num.U32.overflowing_add i2 i3
+    let p := core.num.U32.overflowing_add i2 (UScalar.cast .U32 c0)
     let (sum, c1) := p
-    let i4 ←
+    let i3 ←
       alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceTInst U32) y i
-    let p1 := core.num.U32.overflowing_add sum i4
+    let p1 := core.num.U32.overflowing_add sum i3
     let (sum1, c2) := p1
-    let i5 ← Scalar.cast_bool .U8 c1
-    let i6 ← Scalar.cast_bool .U8 c2
-    let c01 ← i5 + i6
+    let c01 ← (UScalar.cast_fromBool .U8 c1) + (UScalar.cast_fromBool .U8 c2)
     let (_, index_mut_back) ←
       alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSliceTInst U32)
         x i
-    let i7 ← i + 1#usize
+    let i4 ← i + 1#usize
     let x1 := index_mut_back sum1
-    add_with_carry_loop x1 y c01 i7
+    add_with_carry_loop x1 y c01 i4
   else Result.ok (c0, x)
 
 /- [tutorial::add_with_carry]:
@@ -337,25 +334,20 @@ divergent def add_loop
     let yi ← get_or_zero y i
     let i1 ←
       alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceTInst U32) x i
-    let i2 ← Scalar.cast .U32 c0
-    let p := core.num.U32.overflowing_add i1 i2
+    let p := core.num.U32.overflowing_add i1 (UScalar.cast .U32 c0)
     let (sum, c1) := p
     let p1 := core.num.U32.overflowing_add sum yi
     let (sum1, c2) := p1
-    let i3 ← Scalar.cast_bool .U8 c1
-    let i4 ← Scalar.cast_bool .U8 c2
-    let c01 ← i3 + i4
+    let c01 ← (UScalar.cast_fromBool .U8 c1) + (UScalar.cast_fromBool .U8 c2)
     let (_, index_mut_back) ←
       alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSliceTInst U32)
         x i
-    let i5 ← i + 1#usize
+    let i2 ← i + 1#usize
     let x1 := index_mut_back sum1
-    add_loop x1 y max1 c01 i5
+    add_loop x1 y max1 c01 i2
   else
     if c0 != 0#u8
-    then do
-         let i1 ← Scalar.cast .U32 c0
-         alloc.vec.Vec.push x i1
+    then alloc.vec.Vec.push x (UScalar.cast .U32 c0)
     else Result.ok x
 
 /- [tutorial::add]:

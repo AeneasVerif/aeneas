@@ -3092,7 +3092,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             (* Note that cast can fail *)
             let effect_info =
               {
-                can_fail = true;
+                can_fail = not (Config.backend () = Lean);
                 stateful_group = false;
                 stateful = false;
                 can_diverge = false;
