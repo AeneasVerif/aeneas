@@ -531,7 +531,7 @@ let use_foo2
   =
   Ok (foo_foo t traitInst)
 
-(** [traits::BoolTrait::ret_true::default]:
+(** [traits::BoolTrait::ret_true]:
     Source: 'tests/src/traits.rs', lines 8:4-10:5 *)
 let boolTrait_ret_true_default
   (#self : Type0) (self_clause : boolTrait_t self) (self1 : self) :

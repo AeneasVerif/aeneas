@@ -661,27 +661,12 @@ let decompose_str_borrows (f : fun_decl) : fun_decl =
   in
   { f with body }
 
-(** When a trait method has a default implementation, this becomes a `fun_decl`
-    that we may want to extract. By default, its name is `Trait::method`, which
-    for lean creates a name clash with the method name as a field in the trait
-    struct. We therefore rename these function items to avoid the name clash.
- *)
-let rename_default_methods (def : fun_decl) : fun_decl =
-  match def.kind with
-  | TraitDeclItem (_, _, true) ->
-      let name =
-        def.item_meta.name @ [ PeIdent ("default", Disambiguator.zero) ]
-      in
-      { def with item_meta = { def.item_meta with name } }
-  | _ -> def
-
 let apply_passes (crate : crate) : crate =
   let function_passes =
     [
       remove_loop_breaks crate;
       remove_shallow_borrows crate;
       decompose_str_borrows;
-      rename_default_methods;
     ]
   in
   (* Attempt to apply a pass: if it fails we replace the body by [None] *)

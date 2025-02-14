@@ -24,12 +24,13 @@ let texpression_to_string (ctx : extraction_ctx) =
 let extract_fun_decl_register_names (ctx : extraction_ctx)
     (has_decreases_clause : fun_decl -> bool) (def : pure_fun_translation) :
     extraction_ctx =
-  (* Ignore the trait methods **declarations** (rem.: we do not ignore the trait
-     method implementations): we do not need to refer to them directly. We will
-     only use their type for the fields of the records we generate for the trait
-     declarations *)
   match def.f.kind with
-  | TraitDeclItem (_, _, false) -> ctx
+  | TraitDeclItem (_, _, false) ->
+      (* Ignore the trait methods **declarations** (rem.: we do not ignore the trait
+         method implementations): we do not need to refer to them directly. We will
+         only use their type for the fields of the records we generate for the trait
+         declarations *)
+      ctx
   | _ -> (
       (* Check if the function is builtin *)
       let builtin =
@@ -2328,7 +2329,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
           let f =
             { f with item_meta = { f.item_meta with name = llbc_name } }
           in
-          let name = ctx_compute_fun_name f ctx in
+          let name = ctx_compute_fun_name f true ctx in
           (* Add a prefix if necessary *)
           let name =
             if !record_fields_short_names then name

@@ -2158,7 +2158,12 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
       let ctx = ctx_add def.item_meta.span body (name ^ suffix ^ "_body") ctx in
       ctx
 
-let ctx_compute_fun_name (def : fun_decl) (ctx : extraction_ctx) : string =
+(** - [is_trait_decl_field]: [true] if we are computing the name of a field
+      in a trait declaration, [false] if we are computing the name of a function
+      declaration.
+ *)
+let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
+    (ctx : extraction_ctx) : string =
   (* Rename the function, if the user added a [rename] attribute.
 
      We have to do something peculiar for the implementation of trait
@@ -2197,6 +2202,20 @@ let ctx_compute_fun_name (def : fun_decl) (ctx : extraction_ctx) : string =
     | _ -> def.item_meta
   in
   let llbc_name = rename_llbc_name item_meta.attr_info def.item_meta.name in
+  (* When a trait method has a default implementation, this becomes a [fun_decl]
+     that we may want to extract. By default, its name is [Trait::method], which
+     for lean creates a name clash with the method name as a field in the trait
+     struct. We therefore rename these function items to avoid the name clash by
+     adding the "default" suffix.
+  *)
+  let llbc_name =
+    if is_trait_decl_field then llbc_name
+    else
+      match def.kind with
+      | TraitDeclItem (_, _, true) ->
+          llbc_name @ [ PeIdent ("default", Disambiguator.zero) ]
+      | _ -> llbc_name
+  in
   ctx_compute_fun_name def.item_meta.span ctx llbc_name def.num_loops
     def.loop_id
 
@@ -2209,7 +2228,7 @@ let ctx_add_fun_decl (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
     def.item_meta.span;
   let def_id = def.def_id in
   (* Add the function name *)
-  let def_name = ctx_compute_fun_name def ctx in
+  let def_name = ctx_compute_fun_name def false ctx in
   let fun_id = (Pure.FunId (FRegular def_id), def.loop_id) in
   ctx_add def.item_meta.span (FunId (FromLlbc fun_id)) def_name ctx
 
