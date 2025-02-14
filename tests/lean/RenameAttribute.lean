@@ -91,9 +91,9 @@ divergent def No_borrows_sum_loop
 def No_borrows_sum (max : U32) : Result U32 :=
   No_borrows_sum_loop max 0#u32 0#u32
 
-/- [rename_attribute::BoolTrait::ret_true::default]:
+/- [rename_attribute::BoolTrait::ret_true]:
    Source: 'tests/src/rename_attribute.rs', lines 15:4-17:5 -/
-def BoolTrait.ret_true.retTest
+def BoolTrait.retTest.default
   {Self : Type} (self_clause : BoolTest Self) (self : Self) : Result Bool :=
   Result.ok true
 

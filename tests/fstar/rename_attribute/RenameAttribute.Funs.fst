@@ -65,9 +65,9 @@ let rec no_borrows_sum_loop
 let no_borrows_sum (max : u32) : result u32 =
   no_borrows_sum_loop max 0 0
 
-(** [rename_attribute::BoolTrait::ret_true::default]:
+(** [rename_attribute::BoolTrait::ret_true]:
     Source: 'tests/src/rename_attribute.rs', lines 15:4-17:5 *)
-let boolTrait_ret_true_retTest
+let boolTrait_retTest_default
   (#self : Type0) (self_clause : boolTest_t self) (self1 : self) :
   result bool
   =
