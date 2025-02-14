@@ -1163,12 +1163,9 @@ let builtin_variants () : (builtin_ty * VariantId.id * string) list =
       ]
   | Lean ->
       [
-        (TResult, result_ok_id, "Result.ok");
-        (TResult, result_fail_id, "Result.fail");
-        (* For panic: we omit the prefix "Error." because the type is always
-           clear from the context. Also, "Error" is often used by user-defined
-           types (when we omit the crate as a prefix). *)
-        (TError, error_failure_id, ".panic");
+        (TResult, result_ok_id, "ok");
+        (TResult, result_fail_id, "fail");
+        (TError, error_failure_id, "panic");
         (* No Fuel::Zero on purpose *)
         (* No Fuel::Succ on purpose *)
       ]

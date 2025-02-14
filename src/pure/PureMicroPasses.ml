@@ -2653,6 +2653,80 @@ let unfold_monadic_let_bindings (_ctx : trans_ctx) (def : fun_decl) : fun_decl =
       (* Return *)
       { def with body = Some body }
 
+(** Perform the following transformation:
+
+    {[
+      let y <-- f x   (* Must be an application, is not necessarily monadic *)
+      let (a, b) := y (* Tuple decomposition *)
+      ...
+    ]}
+
+    becomes:
+
+    {[
+      let (a, b) <-- f x
+      ...
+    ]}
+ *)
+let merge_let_app_then_decompose_tuple (_ctx : trans_ctx) (def : fun_decl) :
+    fun_decl =
+  let span = def.item_meta.span in
+  (* We may need to introduce fresh variables *)
+  let var_cnt = get_opt_body_min_var_counter def.body in
+  let _, fresh_var_id = VarId.mk_stateful_generator var_cnt in
+
+  let visitor =
+    object (self)
+      inherit [_] map_expression
+
+      method! visit_Let env monadic0 pat0 bound0 next0 =
+        let bound0 = self#visit_texpression env bound0 in
+        (* Check if we need to merge two let-bindings *)
+        if is_pat_var pat0 then
+          let var0, _ = as_pat_var span pat0 in
+          match next0.e with
+          | Let (false, pat1, { e = Var var_id; _ }, next1)
+            when var_id = var0.id -> begin
+              (* Check if we are decomposing a tuple *)
+              if is_pat_tuple pat1 then
+                (* Introduce fresh variables for all the dummy variables
+                   to make sure we can turn the pattern into an expression *)
+                let pat1 = typed_pattern_replace_dummy_vars fresh_var_id pat1 in
+                let pat1_expr =
+                  Option.get (typed_pattern_to_texpression span pat1)
+                in
+                (* Register the mapping from the variable we remove to the expression *)
+                let env = VarId.Map.add var0.id pat1_expr env in
+                (* Continue *)
+                let next1 = self#visit_texpression env next1 in
+                Let (monadic0, pat1, bound0, next1)
+              else
+                let next0 = self#visit_texpression env next0 in
+                Let (monadic0, pat0, bound0, next0)
+            end
+          | _ ->
+              let next0 = self#visit_texpression env next0 in
+              Let (monadic0, pat0, bound0, next0)
+        else
+          let next0 = self#visit_texpression env next0 in
+          Let (monadic0, pat0, bound0, next0)
+
+      (* Replace the variables *)
+      method! visit_Var env var_id =
+        match VarId.Map.find_opt var_id env with
+        | None -> Var var_id
+        | Some e -> e.e
+    end
+  in
+
+  match def.body with
+  | None -> def
+  | Some body ->
+      let body =
+        { body with body = visitor#visit_texpression VarId.Map.empty body.body }
+      in
+      { def with body = Some body }
+
 let end_passes :
     (bool ref option * string * (trans_ctx -> fun_decl -> fun_decl)) list =
   [
@@ -2682,6 +2756,10 @@ let end_passes :
     (None, "eliminate_box_functions", eliminate_box_functions);
     (* Remove the duplicated function calls *)
     (None, "simplify_duplicate_calls", simplify_duplicate_calls);
+    (* Merge let bindings which bind an expression then decompose a tuple *)
+    ( Some Config.merge_let_app_decompose_tuple,
+      "merge_let_app_then_decompose_tuple",
+      merge_let_app_then_decompose_tuple );
     (* Filter the useless variables, assignments, function calls, etc. *)
     (None, "filter_useless", filter_useless);
     (* Simplify the lets immediately followed by a return.

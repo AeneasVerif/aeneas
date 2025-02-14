@@ -295,10 +295,45 @@ let is_cvar (e : texpression) : bool =
   | CVar _ -> true
   | _ -> false
 
-let as_pat_var (span : Meta.span) (p : typed_pattern) : var * mplace option =
+let as_opt_pat_var (p : typed_pattern) : (var * mplace option) option =
   match p.value with
-  | PatVar (v, mp) -> (v, mp)
-  | _ -> craise __FILE__ __LINE__ span "Not a var"
+  | PatVar (v, mp) -> Some (v, mp)
+  | _ -> None
+
+let as_pat_var (span : Meta.span) (p : typed_pattern) : var * mplace option =
+  match as_opt_pat_var p with
+  | None -> craise __FILE__ __LINE__ span "Not a var"
+  | Some (v, mp) -> (v, mp)
+
+let is_pat_var (p : typed_pattern) : bool = Option.is_some (as_opt_pat_var p)
+
+let as_opt_pat_tuple (p : typed_pattern) : typed_pattern list option =
+  match p with
+  | {
+   value = PatAdt { variant_id = None; field_values };
+   ty = TAdt (TTuple, _);
+  } -> Some field_values
+  | _ -> None
+
+(** Replace all the dummy variables in a pattern with fresh variables *)
+let typed_pattern_replace_dummy_vars (fresh_var_id : unit -> VarId.id)
+    (p : typed_pattern) : typed_pattern =
+  let visitor =
+    object
+      inherit [_] map_typed_pattern as super
+
+      method! visit_typed_pattern env p =
+        match p.value with
+        | PatDummy ->
+            let id = fresh_var_id () in
+            { p with value = PatVar ({ id; basename = None; ty = p.ty }, None) }
+        | _ -> super#visit_typed_pattern env p
+    end
+  in
+  visitor#visit_typed_pattern () p
+
+let is_pat_tuple (p : typed_pattern) : bool =
+  Option.is_some (as_opt_pat_tuple p)
 
 let is_global (e : texpression) : bool =
   match e.e with

@@ -364,7 +364,8 @@ let () =
             record_fields_short_names := true;
             (* We exploit the fact that the variant name should always be
                prefixed with the type name to prevent collisions *)
-            variant_concatenate_type_name := false
+            variant_concatenate_type_name := false;
+            (* *) merge_let_app_decompose_tuple := true
         | HOL4 ->
             (* We don't support fuel for the HOL4 backend *)
             if !use_fuel then (
