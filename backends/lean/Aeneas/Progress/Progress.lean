@@ -14,21 +14,22 @@ open Utils
 -- tactic. We should find a way of controling reduction. For now we use rewriting
 -- lemmas to make sure the goal remains clean, but this complexifies proof terms.
 -- It seems there used to be a `fold` tactic. Update: there is a `refold_let` in Mathlib
-theorem scalar_isize_eq : Std.Scalar .Isize = Std.Isize := by rfl
-theorem scalar_i8_eq    : Std.Scalar .I8 = Std.I8 := by rfl
-theorem scalar_i16_eq   : Std.Scalar .I16 = Std.I16 := by rfl
-theorem scalar_i32_eq   : Std.Scalar .I32 = Std.I32 := by rfl
-theorem scalar_i64_eq   : Std.Scalar .I64 = Std.I64 := by rfl
-theorem scalar_i128_eq  : Std.Scalar .I128 = Std.I128 := by rfl
-theorem scalar_usize_eq : Std.Scalar .Usize = Std.Usize := by rfl
-theorem scalar_u8_eq    : Std.Scalar .U8 = Std.U8 := by rfl
-theorem scalar_u16_eq   : Std.Scalar .U16 = Std.U16 := by rfl
-theorem scalar_u32_eq   : Std.Scalar .U32 = Std.U32 := by rfl
-theorem scalar_u64_eq   : Std.Scalar .U64 = Std.U64 := by rfl
-theorem scalar_u128_eq  : Std.Scalar .U128 = Std.U128 := by rfl
+theorem uscalar_u8_eq    : Std.UScalar .U8 = Std.U8 := by rfl
+theorem uscalar_u16_eq   : Std.UScalar .U16 = Std.U16 := by rfl
+theorem uscalar_u32_eq   : Std.UScalar .U32 = Std.U32 := by rfl
+theorem uscalar_u64_eq   : Std.UScalar .U64 = Std.U64 := by rfl
+theorem uscalar_u128_eq  : Std.UScalar .U128 = Std.U128 := by rfl
+theorem uscalar_usize_eq : Std.UScalar .Usize = Std.Usize := by rfl
+
+theorem iscalar_i8_eq    : Std.IScalar .I8 = Std.I8 := by rfl
+theorem iscalar_i16_eq   : Std.IScalar .I16 = Std.I16 := by rfl
+theorem iscalar_i32_eq   : Std.IScalar .I32 = Std.I32 := by rfl
+theorem iscalar_i64_eq   : Std.IScalar .I64 = Std.I64 := by rfl
+theorem iscalar_i128_eq  : Std.IScalar .I128 = Std.I128 := by rfl
+theorem iscalar_isize_eq : Std.IScalar .Isize = Std.Isize := by rfl
 def scalar_eqs := [
-  ``scalar_isize_eq, ``scalar_i8_eq, ``scalar_i16_eq, ``scalar_i32_eq, ``scalar_i64_eq, ``scalar_i128_eq,
-  ``scalar_usize_eq, ``scalar_u8_eq, ``scalar_u16_eq, ``scalar_u32_eq, ``scalar_u64_eq, ``scalar_u128_eq
+  ``uscalar_usize_eq, ``uscalar_u8_eq, ``uscalar_u16_eq, ``uscalar_u32_eq, ``uscalar_u64_eq, ``uscalar_u128_eq,
+  ``iscalar_isize_eq, ``iscalar_i8_eq, ``iscalar_i16_eq, ``iscalar_i32_eq, ``iscalar_i64_eq, ``iscalar_i128_eq
 ]
 
 inductive TheoremOrLocal where
@@ -399,7 +400,7 @@ def evalProgress (args : TSyntax `Aeneas.Progress.progressArgs) : TacticM Stats 
     if ← ScalarTac.goalIsLinearInt then
       -- Also: we don't try to split the goal if it is a conjunction
       -- (it shouldn't be), but we split the disjunctions.
-      ScalarTac.scalarTac true false
+      ScalarTac.scalarTac { split := false, splitGoal := false }
     else
       throwError "Not a linear arithmetic goal"
   let simpTac : TacticM Unit := do
@@ -435,42 +436,60 @@ elab tk:"progress?" args:progressArgs : tactic => do
 namespace Test
   open Std Result
 
-  -- Show the traces
+  -- Show the traces:
   -- set_option trace.Progress true
   -- set_option pp.rawOnError true
 
   set_option says.verify true
 
-  -- The following commands display the databases of theorems
+  -- The following command displays the database of theorems:
   -- #eval showStoredPSpec
   open alloc.vec
 
-  example {ty} {x y : Scalar ty}
-    (hmin : Scalar.min ty ≤ x.val + y.val)
-    (hmax : x.val + y.val ≤ Scalar.max ty) :
+  example {ty} {x y : UScalar ty}
+    (hmax : x.val + y.val ≤ UScalar.max ty) :
     ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
     progress keep _ as ⟨ z, h1 ⟩
     simp [*, h1]
 
-  example {ty} {x y : Scalar ty}
-    (hmin : Scalar.min ty ≤ x.val + y.val)
-    (hmax : x.val + y.val ≤ Scalar.max ty) :
+  example {ty} {x y : IScalar ty}
+    (hmin : IScalar.min ty ≤ x.val + y.val)
+    (hmax : x.val + y.val ≤ IScalar.max ty) :
     ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
-    progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with Aeneas.Std.Scalar.add_spec as ⟨ z, h1 ⟩
+    progress keep _ as ⟨ z, h1 ⟩
     simp [*, h1]
 
-  example {ty} {x y : Scalar ty}
-    (hmin : Scalar.min ty ≤ x.val + y.val)
-    (hmax : x.val + y.val ≤ Scalar.max ty) :
+  example {ty} {x y : UScalar ty}
+    (hmax : x.val + y.val ≤ UScalar.max ty) :
     ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
-    progress keep h with Scalar.add_spec as ⟨ z ⟩
+    progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with Aeneas.Std.UScalar.add_spec as ⟨ z, h1 ⟩
+    simp [*, h1]
+
+  example {ty} {x y : IScalar ty}
+    (hmin : IScalar.min ty ≤ x.val + y.val)
+    (hmax : x.val + y.val ≤ IScalar.max ty) :
+    ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
+    progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with Aeneas.Std.IScalar.add_spec as ⟨ z, h1 ⟩
+    simp [*, h1]
+
+  example {ty} {x y : UScalar ty}
+    (hmax : x.val + y.val ≤ UScalar.max ty) :
+    ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
+    progress keep h with UScalar.add_spec as ⟨ z ⟩
+    simp [*, h]
+
+  example {ty} {x y : IScalar ty}
+    (hmin : IScalar.min ty ≤ x.val + y.val)
+    (hmax : x.val + y.val ≤ IScalar.max ty) :
+    ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
+    progress keep h with IScalar.add_spec as ⟨ z ⟩
     simp [*, h]
 
   example {x y : U32}
     (hmax : x.val + y.val ≤ U32.max) :
     ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
     -- This spec theorem is suboptimal, but it is good to check that it works
-    progress with Scalar.add_spec as ⟨ z, h1 ⟩
+    progress with UScalar.add_spec as ⟨ z, h1 ⟩
     simp [*, h1]
 
   example {x y : U32}
@@ -490,14 +509,14 @@ namespace Test
   example {α : Type} (v: Vec α) (i: Usize) (x : α)
     (hbounds : i.val < v.length) :
     ∃ nv, v.update_usize i x = ok nv ∧
-    nv.val = v.val.update i.toNat x := by
+    nv.val = v.val.update i.val x := by
     progress
     simp [*]
 
   example {α : Type} (v: Vec α) (i: Usize) (x : α)
     (hbounds : i.val < v.length) :
     ∃ nv, v.update_usize i x = ok nv ∧
-    nv.val = v.val.update i.toNat x := by
+    nv.val = v.val.update i.val x := by
     progress? says progress with Aeneas.Std.alloc.vec.Vec.update_usize_spec
     simp [*]
 
@@ -531,9 +550,16 @@ namespace Test
 
   /- The use of `right` introduces a meta-variable in the goal, that we
      need to instantiate (otherwise `progress` gets stuck) -/
-  example {ty} {x y : Scalar ty}
-    (hmin : Scalar.min ty ≤ x.val + y.val)
-    (hmax : x.val + y.val ≤ Scalar.max ty) :
+  example {ty} {x y : UScalar ty}
+    (hmax : x.val + y.val ≤ UScalar.max ty) :
+    False ∨ (∃ z, x + y = ok z ∧ z.val = x.val + y.val) := by
+    right
+    progress keep _ as ⟨ z, h1 ⟩
+    simp [*, h1]
+
+  example {ty} {x y : IScalar ty}
+    (hmin : IScalar.min ty ≤ x.val + y.val)
+    (hmax : x.val + y.val ≤ IScalar.max ty) :
     False ∨ (∃ z, x + y = ok z ∧ z.val = x.val + y.val) := by
     right
     progress keep _ as ⟨ z, h1 ⟩
@@ -564,7 +590,7 @@ namespace Test
   end
 
   mutual
-    @[pspec]
+    @[progress]
     theorem Tree.size_spec (t : Tree) :
       ∃ i, t.size = ok i ∧ i ≥ 0 := by
       cases t
@@ -572,7 +598,7 @@ namespace Test
       progress
       omega
 
-    @[pspec]
+    @[progress]
     theorem Trees.size_spec (t : Trees) :
       ∃ i, t.size = ok i ∧ i ≥ 0 := by
       cases t <;> simp [Trees.size]
@@ -584,8 +610,8 @@ namespace Test
   -- Testing progress on theorems containing local let-bindings
   def add (x y : U32) : Result U32 := x + y
 
-  @[pspec] -- TODO: give the possibility of using pspec as a local attribute
-  theorem add_spec (x y : U32) (h : x.val + y.val ≤ U32.max) :
+  -- TODO: give the possibility of using pspec as a local attribute
+  theorem add_spec' (x y : U32) (h : x.val + y.val ≤ U32.max) :
     let tot := x.val + y.val
     ∃ z, add x y = ok z ∧ z.val = tot := by
     rw [add]
@@ -600,8 +626,8 @@ namespace Test
   example (x y : U32) (h : 2 * x.val + 2 * y.val ≤ U32.max) :
     ∃ z, add1 x y = ok z := by
     rw [add1]
-    progress as ⟨ z1, h ⟩
-    progress as ⟨ z2, h ⟩
+    progress with add_spec' as ⟨ z1, h ⟩
+    progress with add_spec' as ⟨ z2, h ⟩
 
   variable (P : ℕ → List α → Prop)
   variable (f : List α → Result Bool)
