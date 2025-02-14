@@ -3055,12 +3055,12 @@ def core.marker.CopyIsize : core.marker.Copy Isize := {
 
 -- TODO: we should redefine this, in particular so that it doesn't live in the `Result` monad
 
-def UScalar.overflowing_add {ty} (x y : UScalar ty) : Result (UScalar ty × Bool) :=
-  ok (⟨ BitVec.ofNat _ (x.val + y.val) ⟩, 2^ty.numBits ≤ x.val + y.val)
+def UScalar.overflowing_add {ty} (x y : UScalar ty) : UScalar ty × Bool :=
+  (⟨ BitVec.ofNat _ (x.val + y.val) ⟩, 2^ty.numBits ≤ x.val + y.val)
 
-def IScalar.overflowing_add (ty : IScalarTy) (x y : IScalar ty) : Result (IScalar ty × Bool) :=
-  ok (⟨ BitVec.ofInt _ (x.val + y.val) ⟩,
-      ¬ (-2^(ty.numBits -1) ≤ x.val + y.val ∧ x.val + y.val < 2^ty.numBits))
+def IScalar.overflowing_add (ty : IScalarTy) (x y : IScalar ty) : IScalar ty × Bool :=
+  (⟨ BitVec.ofInt _ (x.val + y.val) ⟩,
+     ¬ (-2^(ty.numBits -1) ≤ x.val + y.val ∧ x.val + y.val < 2^ty.numBits))
 
 /- [core::num::{u8}::overflowing_add] -/
 def core.num.U8.overflowing_add := @UScalar.overflowing_add .U8
@@ -3100,11 +3100,14 @@ def core.num.Isize.overflowing_add := @IScalar.overflowing_add .Isize
 
 attribute [-simp] Bool.exists_bool
 
-theorem UScalar.overflowing_add_spec {ty} (x y : UScalar ty) :
-  ∃ z b, overflowing_add x y = ok (z, b) ∧
-  if x.val + y.val > UScalar.max ty then z.val = x.val + y.val - UScalar.max ty - 1 ∧ b = true
-  else z.val = x.val + y.val ∧ b = false := by
-  exists ⟨ BitVec.ofNat _ (x.val + y.val) ⟩
+theorem UScalar.overflowing_add_eq {ty} (x y : UScalar ty) :
+  if x.val + y.val > UScalar.max ty then
+    (overflowing_add x y).fst.val = x.val + y.val - UScalar.max ty - 1 ∧
+    (overflowing_add x y).snd = true
+  else
+    (overflowing_add x y).fst.val = x.val + y.val ∧
+    (overflowing_add x y).snd = false
+  := by
   simp [overflowing_add]
   simp only [val, BitVec.toNat_ofNat, max]
   split <;> rename_i hLt
@@ -3123,48 +3126,6 @@ theorem UScalar.overflowing_add_spec {ty} (x y : UScalar ty) :
     . apply Nat.mod_eq_of_lt
       omega
     . omega
-
-@[progress]
-theorem core.num.U8.overflowing_add_spec (x y : U8) :
-  ∃ z b, overflowing_add x y = ok (z, b) ∧
-  if x.val + y.val > U8.max then z.val = x.val + y.val - U8.max - 1 ∧ b = true
-  else z.val = x.val + y.val ∧ b = false
-  := UScalar.overflowing_add_spec x y
-
-@[progress]
-theorem core.num.U16.overflowing_add_spec (x y : U16) :
-  ∃ z b, overflowing_add x y = ok (z, b) ∧
-  if x.val + y.val > U16.max then z.val = x.val + y.val - U16.max - 1 ∧ b = true
-  else z.val = x.val + y.val ∧ b = false
-  := UScalar.overflowing_add_spec x y
-
-@[progress]
-theorem core.num.U32.overflowing_add_spec (x y : U32) :
-  ∃ z b, overflowing_add x y = ok (z, b) ∧
-  if x.val + y.val > U32.max then z.val = x.val + y.val - U32.max - 1 ∧ b = true
-  else z.val = x.val + y.val ∧ b = false
-  := UScalar.overflowing_add_spec x y
-
-@[progress]
-theorem core.num.U64.overflowing_add_spec (x y : U64) :
-  ∃ z b, overflowing_add x y = ok (z, b) ∧
-  if x.val + y.val > U64.max then z.val = x.val + y.val - U64.max - 1 ∧ b = true
-  else z.val = x.val + y.val ∧ b = false
-  := UScalar.overflowing_add_spec x y
-
-@[progress]
-theorem core.num.U128.overflowing_add_spec (x y : U128) :
-  ∃ z b, overflowing_add x y = ok (z, b) ∧
-  if x.val + y.val > U128.max then z.val = x.val + y.val - U128.max - 1 ∧ b = true
-  else z.val = x.val + y.val ∧ b = false
-  := UScalar.overflowing_add_spec x y
-
-@[progress]
-theorem core.num.Usize.overflowing_add_spec (x y : Usize) :
-  ∃ z b, overflowing_add x y = ok (z, b) ∧
-  if x.val + y.val > Usize.max then z.val = x.val + y.val - Usize.max - 1 ∧ b = true
-  else z.val = x.val + y.val ∧ b = false
-  := UScalar.overflowing_add_spec x y
 
 /-!
 # Saturating Operations
