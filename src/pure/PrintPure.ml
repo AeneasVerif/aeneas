@@ -593,6 +593,7 @@ let pure_builtin_fun_id_to_string (fid : pure_builtin_fun_id) : string =
   | Return -> "@return"
   | Fail -> "@fail"
   | Assert -> "@assert"
+  | ToResult -> "@toResult"
   | FuelDecrease -> "@fuel_decrease"
   | FuelEqZero -> "@fuel_eq_zero"
   | UpdateAtIndex array_or_slice -> begin

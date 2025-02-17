@@ -2710,6 +2710,94 @@ let unfold_monadic_let_bindings (_ctx : ctx) (def : fun_decl) : fun_decl =
 (** Perform the following transformation:
 
     {[
+      let y <-- ok e
+
+            ~~>
+
+      let y <-- toResult e
+    ]}
+
+    We only do this on a specific set of pure functions calls - those
+    functions are identified in the "builtin" information about external
+    function calls.
+ *)
+let lift_pure_function_calls (ctx : ctx) (def : fun_decl) : fun_decl =
+  let span = def.item_meta.span in
+
+  let try_lift_expr (super_visit_e : texpression -> texpression)
+      (visit_e : texpression -> texpression) (app : texpression) :
+      bool * texpression =
+    (* Check if the function should be lifted *)
+    let f, args = destruct_apps app in
+    let f = super_visit_e f in
+    let args = List.map visit_e args in
+    (* *)
+    let lift =
+      match f.e with
+      | Qualif { id = FunOrOp (Unop unop); _ } -> lift_unop unop
+      | Qualif { id = FunOrOp (Binop (binop, _)); _ } -> lift_binop binop
+      | Qualif { id = FunOrOp (Fun fun_id); _ } -> lift_fun ctx fun_id
+      | _ -> false
+    in
+    let app = mk_apps span f args in
+    if lift then (true, mk_to_result_texpression span app) else (false, app)
+  in
+
+  (* The map visitor *)
+  let visitor =
+    object (self)
+      inherit [_] map_expression as super
+
+      method! visit_texpression env e0 =
+        (* Check if this is an expression of the shape: [ok (f ...)] where
+           `f` has been identified as a function which should be lifted. *)
+        match destruct_apps e0 with
+        | ( ({ e = Qualif { id = FunOrOp (Fun (Pure ToResult)); _ }; _ } as
+             to_result_expr),
+            [ app ] ) ->
+            (* Attempt to lift the expression *)
+            let lifted, app =
+              try_lift_expr
+                (super#visit_texpression env)
+                (self#visit_texpression env)
+                app
+            in
+
+            if lifted then app else mk_app span to_result_expr app
+        | { e = Let (monadic, pat, bound, next); ty }, [] ->
+            let next = self#visit_texpression env next in
+            (* Attempt to lift only if the let-expression is not already monadic *)
+            let lifted, bound =
+              if monadic then (true, self#visit_texpression env bound)
+              else
+                try_lift_expr
+                  (super#visit_texpression env)
+                  (self#visit_texpression env)
+                  bound
+            in
+            { e = Let (lifted, pat, bound, next); ty }
+        | f, args ->
+            let f = super#visit_texpression env f in
+            let args = List.map (self#visit_texpression env) args in
+            mk_apps span f args
+    end
+  in
+  (* Update the body *)
+  match def.body with
+  | None -> def
+  | Some body ->
+      let body =
+        Some
+          {
+            body with
+            body = visitor#visit_texpression VarId.Map.empty body.body;
+          }
+      in
+      { def with body }
+
+(** Perform the following transformation:
+
+    {[
       let y <-- f x   (* Must be an application, is not necessarily monadic *)
       let (a, b) := y (* Tuple decomposition *)
       ...
@@ -2876,6 +2964,11 @@ let end_passes : (bool ref option * string * (ctx -> fun_decl -> fun_decl)) list
     ( Some Config.unfold_monadic_let_bindings,
       "unfold_monadic_let_bindings",
       unfold_monadic_let_bindings );
+    (* Introduce calls to [toResult] to lift pure function calls to monadic
+       function calls *)
+    ( Some Config.lift_pure_function_calls,
+      "lift_pure_function_calls",
+      lift_pure_function_calls );
   ]
 
 (** Auxiliary function for {!apply_passes_to_def} *)

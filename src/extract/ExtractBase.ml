@@ -1220,6 +1220,7 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (FuelEqZero, "is_zero");
         (UpdateAtIndex Slice, "slice_update_usize");
         (UpdateAtIndex Array, "array_update_usize");
+        (ToResult, "return");
       ]
   | Coq ->
       (* We don't provide [FuelDecrease] and [FuelEqZero] on purpose *)
@@ -1229,6 +1230,7 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (Assert, "massert");
         (UpdateAtIndex Slice, "slice_update_usize");
         (UpdateAtIndex Array, "array_update_usize");
+        (ToResult, "return_");
       ]
   | Lean ->
       (* We don't provide [FuelDecrease] and [FuelEqZero] on purpose *)
@@ -1238,6 +1240,7 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (Assert, "massert");
         (UpdateAtIndex Slice, "Slice.update_usize");
         (UpdateAtIndex Array, "Array.update_usize");
+        (ToResult, "↑");
       ]
   | HOL4 ->
       (* We don't provide [FuelDecrease] and [FuelEqZero] on purpose *)
@@ -1247,6 +1250,7 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (Assert, "massert");
         (UpdateAtIndex Slice, "slice_update_usize");
         (UpdateAtIndex Array, "array_update_usize");
+        (ToResult, "return");
       ]
 
 let names_map_init () : names_map_init =

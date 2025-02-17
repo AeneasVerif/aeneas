@@ -72,8 +72,6 @@ type 'a de_bruijn_var = 'a Types.de_bruijn_var [@@deriving show, ord]
       - [State]: the type of the state, when using state-error monads. Note that
         this state is opaque to Aeneas (the user can define it, or leave it as
         builtin)
-
-    TODO: add a prefix "T"
   *)
 type builtin_ty =
   | TState
@@ -93,9 +91,38 @@ type builtin_ty =
        *)
 [@@deriving show, ord]
 
-(*
- * Builtin declarations coming from external libraries.
- *)
+type array_or_slice = Array | Slice [@@deriving show, ord]
+
+(** Identifiers of builtin functions that we use only in the pure translation *)
+type pure_builtin_fun_id =
+  | Return  (** The monadic return *)
+  | Fail  (** The monadic fail *)
+  | Assert  (** Assertion *)
+  | FuelDecrease
+      (** Decrease fuel, provided it is non zero (used for F* ) - TODO: this is ugly *)
+  | FuelEqZero  (** Test if some fuel is equal to 0 - TODO: ugly *)
+  | UpdateAtIndex of array_or_slice
+      (** Update an array or a slice at a given index.
+
+          Note that in LLBC we only use an index function: if we want to
+          modify an element in an array/slice, we create a mutable borrow
+          to this element, then use the borrow to perform the update. The
+          update functions are introduced in the pure code by a micro-pass.
+       *)
+  | ToResult
+      (** Lifts a pure expression to a monadic expression.
+
+          We use this when using `ok ...` would result in let-bindings getting
+          simplified away (in a backend like Lean). *)
+[@@deriving show, ord]
+
+(* Builtin declarations coming from external libraries.
+
+   Those are not too be understood as the builtin definitions like `U32`:
+   the builtin declarations decribed with, e.g., `builtin_type_info`, are
+   declarations coming from external libraries and which we should thus not
+   extract (for instance: `std::vec::Vec`, `std::option::Option`, etc.).
+*)
 
 type builtin_variant_info = { fields : (string * string) list }
 [@@deriving show, ord]
@@ -802,26 +829,6 @@ type unop =
   | Not of integer_type option
   | Neg of integer_type
   | Cast of literal_type * literal_type
-[@@deriving show, ord]
-
-type array_or_slice = Array | Slice [@@deriving show, ord]
-
-(** Identifiers of builtin functions that we use only in the pure translation *)
-type pure_builtin_fun_id =
-  | Return  (** The monadic return *)
-  | Fail  (** The monadic fail *)
-  | Assert  (** Assertion *)
-  | FuelDecrease
-      (** Decrease fuel, provided it is non zero (used for F* ) - TODO: this is ugly *)
-  | FuelEqZero  (** Test if some fuel is equal to 0 - TODO: ugly *)
-  | UpdateAtIndex of array_or_slice
-      (** Update an array or a slice at a given index.
-
-          Note that in LLBC we only use an index function: if we want to
-          modify an element in an array/slice, we create a mutable borrow
-          to this element, then use the borrow to perform the update. The
-          update functions are introduced in the pure code by a micro-pass.
-       *)
 [@@deriving show, ord]
 
 type fun_id_or_trait_method_ref =

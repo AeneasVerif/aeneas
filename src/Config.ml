@@ -299,6 +299,22 @@ let unfold_monadic_let_bindings = ref false
  *)
 let merge_let_app_decompose_tuple = ref false
 
+(** Perform the following transformation:
+
+    {[
+      let y <-- ok e
+
+            ~~>
+
+      let y <-- toResult e
+    ]}
+
+    We only do this on a specific set of pure functions calls - those
+    functions are identified in the "builtin" information about external
+    function calls.
+ *)
+let lift_pure_function_calls = ref false
+
 (** Introduce calls to [massert] (monadic assertion).
 
     The pattern below is very frequent especially as it is introduced by

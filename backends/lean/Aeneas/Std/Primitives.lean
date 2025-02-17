@@ -123,6 +123,38 @@ instance : Pure Result where
   cases e <;> simp
 
 /-!
+# Lift
+-/
+
+/-- We use this to lift pure function calls to monadic calls.
+    We don't mark this as reducible so that let-bindings don't get simplified away.
+
+    In the generated code if regularly happens that we want to lift pure function calls so
+    that `progress` can reason about them. For instance, `U32.wrapping_add` has type `U32 → U32 → U32`,
+    but we provide a `progress` theorem with an informative post-condition, and which matches the pattern
+    `toResult (wrapping_add x y)`. This theorem can only be looked up and appliced if the code is of the
+    following shape:
+    ```
+    let z ← U32.wrapping_add x y
+    ...
+    ```
+  -/
+def toResult {α : Type u} (x : α) : Result α := Result.ok x
+
+instance {α : Type u} : Coe α (Result α) where
+  coe := toResult
+
+attribute [coe] toResult
+
+example : Result Int := do
+  let x0 ← ↑(0 : Int)
+  let x1 ← ↑(x0 + 1 : Int)
+  x1
+
+/- Testing that our coercion from `α` to `Result α` doesn't break other coercions. -/
+example (n : Nat) (i : Int) (_ : n < i) : True := by simp
+
+/-!
 # Misc
 -/
 

@@ -583,7 +583,18 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
               }
         | Pure (UpdateAtIndex Slice) ->
             Some { explicit_types = [ Implicit ]; explicit_const_generics = [] }
+        | Pure ToResult ->
+            Some { explicit_types = [ Implicit ]; explicit_const_generics = [] }
         | Pure _ -> None
+      in
+      (* Special case for [ToResult]: we don't want to print a space between the
+         coercion symbol and the expression - TODO: this is a bit ad-hoc *)
+      let print_first_space =
+        if Config.backend () = Lean then
+          match fun_id with
+          | Pure ToResult -> false
+          | _ -> true
+        else true
       in
       (* Filter the generics.
 
@@ -609,9 +620,10 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
             "(\"ERROR: ill-formed builtin: invalid number of filtering \
              arguments\")");
       (* Print the arguments *)
+      let print_space = ref print_first_space in
       List.iter
         (fun ve ->
-          F.pp_print_space fmt ();
+          if !print_space then F.pp_print_space fmt () else print_space := true;
           extract_texpression span ctx fmt true ve)
         args;
       (* Close the box for the function call *)
