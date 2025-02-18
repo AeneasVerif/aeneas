@@ -155,7 +155,10 @@ initialize saturateAttr : SaturateAttribute ← do
         -- Analyze the theorem
         let (key, rule) ← MetaM.run' do
           let ty := thDecl.type
-          -- Strip the quantifiers
+          /- Strip the quantifiers.
+             We do this before elaborating the pattern because we need the universally quantified variables
+             to be in the context.
+          -/
           forallTelescope ty.consumeMData fun fvars _ => do
           let numFVars := fvars.size
           -- Elaborate the pattern

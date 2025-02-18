@@ -14,12 +14,12 @@ syntax (name := assert) "#assert" term: command
 
 @[command_elab assert]
 unsafe
-def assertImpl : CommandElab := fun (_stx: Syntax) => do
+def assertImpl : CommandElab := fun (stx: Syntax) => do
   runTermElabM (fun _ => do
-    let r ← evalTerm Bool (mkConst ``Bool) _stx[1]
+    let r ← evalTerm Bool (mkConst ``Bool) stx[1]
     if not r then
-      logInfo ("Assertion failed for:\n" ++ _stx[1])
-      throwError ("Expression reduced to false:\n"  ++ _stx[1])
+      logInfo ("Assertion failed for:\n" ++ stx[1])
+      throwError ("Expression reduced to false:\n"  ++ stx[1])
     pure ())
 
 #eval 2 == 2
@@ -146,6 +146,7 @@ instance {α : Type u} : Coe α (Result α) where
 
 attribute [coe] toResult
 
+/- Testing that our coercion from `α` to `Result α` works. -/
 example : Result Int := do
   let x0 ← ↑(0 : Int)
   let x1 ← ↑(x0 + 1 : Int)
