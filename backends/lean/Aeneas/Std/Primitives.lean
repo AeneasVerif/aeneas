@@ -25,6 +25,18 @@ def assertImpl : CommandElab := fun (stx: Syntax) => do
 #eval 2 == 2
 #assert (2 == 2)
 
+syntax (name := elabSyntax) "#elab" term: command
+
+@[command_elab elabSyntax]
+unsafe
+def elabImpl : CommandElab := fun (stx: Syntax) => do
+  runTermElabM (fun _ => do
+    /- Simply elaborate the syntax to check that it is correct -/
+    let (_, _) ← Elab.Term.elabTerm stx[1] none |>.run
+    pure ())
+
+#elab 3
+
 /-!
 # Results and Monadic Combinators
 -/

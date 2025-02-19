@@ -534,7 +534,7 @@ class HNeg (α : Type u) (β : outParam (Type v)) where
    like arrays of constants to take an unreasonable time to get elaborated
    and type-checked.
 
-   TODO: PR to replace Neg with HNeg in Lean?
+   TODO: PR to introduce HNeg in Lean?
  -/
 prefix:75  "-."   => HNeg.hNeg
 
