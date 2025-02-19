@@ -387,6 +387,29 @@ def destEq (e : Expr) : MetaM (Expr × Expr) := do
   match ← destEqOpt e with
   | none => throwError "Not an equality: {e}"
   | some e => pure e
+
+def destProdTypeOpt (ty : Expr) : Option (Expr × Expr) := do
+  ty.consumeMData.withApp fun fn args =>
+  if fn.isConst ∧ fn.constName == ``Prod ∧ args.size = 2 then
+    some (args[0]!, args[1]!)
+  else none
+
+partial def destProdsType (ty : Expr) : List Expr :=
+  match destProdTypeOpt ty with
+  | none => [ty]
+  | some (ty0, ty1) => ty0 :: destProdsType ty1
+
+def destProdValOpt (x : Expr) : Option (Expr × Expr) := do
+  x.consumeMData.withApp fun f args =>
+  if f.isConst ∧ f.constName = ``Prod.mk ∧ args.size = 4 then
+    some (args[2]!, args[3]!)
+  else none
+
+partial def destProdsVal (x : Expr) : List Expr :=
+  match destProdValOpt x with
+  | none => [x]
+  | some (x0, x1) => x0 :: destProdsVal x1
+
 -- Return the set of FVarIds in the expression
 -- TODO: this collects fvars introduced in the inner bindings
 partial def getFVarIds (e : Expr) (hs : Std.HashSet FVarId := Std.HashSet.empty) : MetaM (Std.HashSet FVarId) := do
@@ -1047,10 +1070,10 @@ def getSigmaTypes (ty : Expr) : MetaM (Expr × Expr) := do
    `x` should be a variable, and `ty` and type which (might) uses `x`
  -/
 def mkSigmaType (x : Expr) (sty : Expr) : MetaM Expr := do
-  trace[Diverge.def.sigmas] "mkSigmaType: {x} {sty}"
+  trace[Utils] "mkSigmaType: {x} {sty}"
   let alpha ← inferType x
   let beta ← mkLambdaFVars #[x] sty
-  trace[Diverge.def.sigmas] "mkSigmaType: ({alpha}) ({beta})"
+  trace[Utils] "mkSigmaType: ({alpha}) ({beta})"
   mkAppOptM ``Sigma #[some alpha, some beta]
 
 /- Generate a Sigma type from a list of *variables* (all the expressions
@@ -1066,14 +1089,14 @@ def mkSigmaType (x : Expr) (sty : Expr) : MetaM Expr := do
 def mkSigmasType (xl : List Expr) : MetaM Expr :=
   match xl with
   | [] => do
-    trace[Diverge.def.sigmas] "mkSigmasType: []"
+    trace[Utils] "mkSigmasType: []"
     pure (Expr.const ``PUnit [Level.succ .zero])
   | [x] => do
-    trace[Diverge.def.sigmas] "mkSigmasType: [{x}]"
+    trace[Utils] "mkSigmasType: [{x}]"
     let ty ← inferType x
     pure ty
   | x :: xl => do
-    trace[Diverge.def.sigmas] "mkSigmasType: [{x}::{xl}]"
+    trace[Utils] "mkSigmasType: [{x}::{xl}]"
     let sty ← mkSigmasType xl
     mkSigmaType x sty
 
@@ -1088,14 +1111,14 @@ def mkSigmasType (xl : List Expr) : MetaM Expr :=
 def mkProdsType (xl : List Expr) : MetaM Expr :=
   match xl with
   | [] => do
-    trace[Diverge.def.prods] "mkProdsType: []"
+    trace[Utils] "mkProdsType: []"
     pure (Expr.const ``PUnit [Level.succ .zero])
   | [x] => do
-    trace[Diverge.def.prods] "mkProdsType: [{x}]"
+    trace[Utils] "mkProdsType: [{x}]"
     let ty ← inferType x
     pure ty
   | x :: xl => do
-    trace[Diverge.def.prods] "mkProdsType: [{x}::{xl}]"
+    trace[Utils] "mkProdsType: [{x}::{xl}]"
     let ty ← inferType x
     let xl_ty ← mkProdsType xl
     mkAppM ``Prod #[ty, xl_ty]
@@ -1168,13 +1191,13 @@ def applyLambdaToArgs (e : Expr) (xs : Array Expr) : MetaM Expr := do
 def mkSigmasVal (ty : Expr) (xl : List Expr) : MetaM Expr :=
   match xl with
   | [] => do
-    trace[Diverge.def.sigmas] "mkSigmasVal: []"
+    trace[Utils] "mkSigmasVal: []"
     pure (Expr.const ``PUnit.unit [Level.succ .zero])
   | [x] => do
-    trace[Diverge.def.sigmas] "mkSigmasVal: [{x}]"
+    trace[Utils] "mkSigmasVal: [{x}]"
     pure x
   | fst :: xl => do
-    trace[Diverge.def.sigmas] "mkSigmasVal: [{fst}::{xl}]"
+    trace[Utils] "mkSigmasVal: [{fst}::{xl}]"
     -- Deconstruct the type
     let (alpha, beta) ← getSigmaTypes ty
     -- Compute the "second" field
@@ -1183,7 +1206,7 @@ def mkSigmasVal (ty : Expr) (xl : List Expr) : MetaM Expr :=
     -- Recursive call
     let snd ← mkSigmasVal nty xl
     -- Put everything together
-    trace[Diverge.def.sigmas] "mkSigmasVal:\n{alpha}\n{beta}\n{fst}\n{snd}"
+    trace[Utils] "mkSigmasVal:\n{alpha}\n{beta}\n{fst}\n{snd}"
     mkAppOptM ``Sigma.mk #[some alpha, some beta, some fst, some snd]
 
 def mkAnonymous (s : String) (i : Nat) : Name :=
@@ -1226,7 +1249,7 @@ partial def mkSigmasMatch (xl : List Expr) (out : Expr) (index : Nat := 0) : Met
     throwError "mkSigmasMatch: empty list of input parameters"
   | [x] => do
     -- In the example given for the explanations: this is the inner match case
-    trace[Diverge.def.sigmas] "mkSigmasMatch: [{x}]"
+    trace[Utils] "mkSigmasMatch: [{x}]"
     mkLambdaFVars #[x] out
   | fst :: xl => do
     /- In the example given for the explanations: this is the outer match case
@@ -1240,7 +1263,7 @@ partial def mkSigmasMatch (xl : List Expr) (out : Expr) (index : Nat := 0) : Met
        match scrut with
        | Sigma.mk x ...  -- the hole is given by a recursive call on the tail
        ``` -/
-    trace[Diverge.def.sigmas] "mkSigmasMatch: [{fst}::{xl}]"
+    trace[Utils] "mkSigmasMatch: [{fst}::{xl}]"
     let alpha ← inferType fst
     let snd_ty ← mkSigmasType xl
     let beta ← mkLambdaFVars #[fst] snd_ty
@@ -1249,7 +1272,7 @@ partial def mkSigmasMatch (xl : List Expr) (out : Expr) (index : Nat := 0) : Met
     -- Introduce the "scrut" variable
     let scrut_ty ← mkSigmaType fst snd_ty
     withLocalDeclD (mkAnonymous "scrut" index) scrut_ty fun scrut => do
-    trace[Diverge.def.sigmas] "mkSigmasMatch: scrut: ({scrut}) : ({← inferType scrut})"
+    trace[Utils] "mkSigmasMatch: scrut: ({scrut}) : ({← inferType scrut})"
     -- TODO: make the computation of the motive more efficient
     let motive ← do
       let out_ty ← inferType out
@@ -1263,11 +1286,11 @@ partial def mkSigmasMatch (xl : List Expr) (out : Expr) (index : Nat := 0) : Met
            mkSigmasMatch -/
         mkSigmasMatch (fst :: xl) out_ty
     -- The final expression: putting everything together
-    trace[Diverge.def.sigmas] "mkSigmasMatch:\n  ({alpha})\n  ({beta})\n  ({motive})\n  ({scrut})\n  ({mk})"
+    trace[Utils] "mkSigmasMatch:\n  ({alpha})\n  ({beta})\n  ({motive})\n  ({scrut})\n  ({mk})"
     let sm ← mkAppOptM ``Sigma.casesOn #[some alpha, some beta, some motive, some scrut, some mk]
     -- Abstracting the "scrut" variable
     let sm ← mkLambdaFVars #[scrut] sm
-    trace[Diverge.def.sigmas] "mkSigmasMatch: sm: {sm}"
+    trace[Utils] "mkSigmasMatch: sm: {sm}"
     pure sm
 
 /- This is similar to `mkSigmasMatch`, but with non-dependent tuples
@@ -1281,10 +1304,10 @@ partial def mkProdsMatch (xl : List Expr) (out : Expr) (index : Nat := 0) : Meta
     throwError "mkProdsMatch: empty list of input parameters"
   | [x] => do
     -- In the example given for the explanations: this is the inner match case
-    trace[Diverge.def.prods] "mkProdsMatch: [{x}]"
+    trace[Utils] "mkProdsMatch: [{x}]"
     mkLambdaFVars #[x] out
   | fst :: xl => do
-    trace[Diverge.def.prods] "mkProdsMatch: [{fst}::{xl}]"
+    trace[Utils] "mkProdsMatch: [{fst}::{xl}]"
     let alpha ← inferType fst
     let beta ← mkProdsType xl
     let snd ← mkProdsMatch xl out (index + 1)
@@ -1292,7 +1315,7 @@ partial def mkProdsMatch (xl : List Expr) (out : Expr) (index : Nat := 0) : Meta
     -- Introduce the "scrut" variable
     let scrut_ty ← mkProdType alpha beta
     withLocalDeclD (mkAnonymous "scrut" index) scrut_ty fun scrut => do
-    trace[Diverge.def.prods] "mkProdsMatch: scrut: ({scrut}) : ({← inferType scrut})"
+    trace[Utils] "mkProdsMatch: scrut: ({scrut}) : ({← inferType scrut})"
     -- TODO: make the computation of the motive more efficient
     let motive ← do
       let out_ty ← inferType out
@@ -1309,11 +1332,11 @@ partial def mkProdsMatch (xl : List Expr) (out : Expr) (index : Nat := 0) : Meta
       let out_ty ← inferType out
       mkLambdaFVars #[scrut] out_ty-/
     -- The final expression: putting everything together
-    trace[Diverge.def.prods] "mkProdsMatch:\n  ({alpha})\n  ({beta})\n  ({motive})\n  ({scrut})\n  ({mk})"
+    trace[Utils] "mkProdsMatch:\n  ({alpha})\n  ({beta})\n  ({motive})\n  ({scrut})\n  ({mk})"
     let sm ← mkAppOptM ``Prod.casesOn #[some alpha, some beta, some motive, some scrut, some mk]
     -- Abstracting the "scrut" variable
     let sm ← mkLambdaFVars #[scrut] sm
-    trace[Diverge.def.prods] "mkProdsMatch: sm: {sm}"
+    trace[Utils] "mkProdsMatch: sm: {sm}"
     pure sm
 
 /- Same as `mkSigmasMatch` but also accepts an empty list of inputs, in which case

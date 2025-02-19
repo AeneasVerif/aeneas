@@ -191,515 +191,158 @@ def showStoredPSpec : MetaM Unit := do
   let s := f!"{st}"
   IO.println s
 
-/-- Convert a list of fvars to a structure. TODO: for now we just create a big tuple, and it may not always work... -/
-private def fvarsToStruct (fvars : Array Expr) : MetaM Expr := do
-  mkProdsVal fvars.toList
-
-private def mkExistsFVars (fvars : Array Expr) (body : Expr) : MetaM Expr := do
-  let rec aux (fvars : List Expr) : MetaM Expr :=
-    match fvars with
-    | [] => pure body
-    | fv :: fvars => do
-      let e ← aux fvars
-      let thm ← mkLambdaFVars #[fv] e
-      mkAppM ``Exists #[thm]
-  aux fvars.toList
-
-/-- Auxiliary helper for `progress_pure` -/
-private def liftThm (thm : Expr) : MetaM Expr := do
-  forallTelescope thm fun fvars thm => do
-  match thm with
-  | .letE (declName : Name) declTy (value : Expr) (post : Expr) _ => do
-    /- Introduce an fvar for the local declaration -/
-    withLocalDeclD declName declTy fun fv => do
-    /- Create the lifted expression -/
-    let bound ← mkAppM ``Std.toResult #[value]
-    let okExpr ← mkAppM ``Std.Result.ok #[fv]
-    let eq ← mkAppM ``Eq #[bound, okExpr]
-    /- Introduce the existential -/
-    let thm ← mkLambdaFVars #[fv] (mkAnd eq post)
-    let thm ← mkAppM ``Exists #[thm]
-    /- Introduce the foralls -/
-    mkLambdaFVars fvars thm
-  | _ => do
-    /- "Complex" let-bindings such as `let (x, y) := ...` are actually desugared to matches -/
-    let me ← matchMatcherApp? thm
-    let error (_ : Unit) : MetaM Expr := do throwError "The theorem does not have the proper shape: the statement after the universally quantified variables should start with a let-binding; found {thm} instead."
-    let .some me := me
-      | error ()
-    if me.alts.size ≠ 1 ∨ me.discrs.size ≠ 1 then error ()
-    else
-    let numParams := me.altNumParams[0]!
-    let branch := me.alts[0]!
-    let discr := me.discrs[0]!
-    /- Destruct the universally quantified variables -/
-    forallTelescope branch.consumeMData fun fvars' post => do
-    let fvars'' := fvars'.extract numParams fvars'.size
-    let fvars' := fvars'.extract 0 numParams
-    let post ← mkLambdaFVars fvars'' post
-    /- Create the lifted expression -/
-    let bound ← mkAppM ``Std.toResult #[discr]
-    let okExpr ← mkAppM ``Std.Result.ok #[← fvarsToStruct fvars']
-    let eq ← mkAppM ``Eq #[bound, okExpr]
-    /- Introduce the existentials -/
-    let thm ← mkExistsFVars fvars' (mkAnd eq post)
-    /- Introduce the foralls -/
-    mkLambdaFVars fvars thm
-
 open Tactic
-
-#check @Eq
 
 namespace Test
   /-!
-  Making some tests here to see how we should generate the proof terms when lifting theorems in `progress_pure`
+  Making some tests here as models to guide the automation generation of proof terms when lifting theorems in `progress_pure`
   -/
   open Std Result
-  def mk_pos_pair : Int × Int := (0, 1)
+  def pos_pair : Int × Int := (0, 1)
 
-  theorem is_pos :
-    let (x, y) := mk_pos_pair
-    x ≥ 0 ∧ y ≥ 0 := by simp [mk_pos_pair]
+  theorem pos_pair_is_pos :
+    let (x, y) := pos_pair
+    x ≥ 0 ∧ y ≥ 0 := by simp [pos_pair]
 
   theorem lifted_is_pos :
-    ∃ x y, toResult mk_pos_pair = ok (x, y) ∧
+    ∃ x y, toResult pos_pair = ok (x, y) ∧
     x ≥ 0 ∧ y ≥ 0 :=
-  (match mk_pos_pair with
+  (match pos_pair with
   | (x, y) =>
     fun (h : match (x, y) with | (x, y) => x ≥ 0 ∧ y ≥ 0) =>
-    Exists.intro x (Exists.intro y (@And.intro (ok (x, y) = ok (x, y)) _ (Eq.refl (ok (x, y))) h))
-  : ∀ (_ : match mk_pos_pair with | (x, y) => x ≥ 0 ∧ y ≥ 0),
-    ∃ x y, toResult mk_pos_pair = ok (x, y) ∧
-    x ≥ 0 ∧ y ≥ 0) is_pos
+    Exists.intro x (Exists.intro y (And.intro (Eq.refl (ok (x, y))) h))
+  : ∀ (_ : match pos_pair with | (x, y) => x ≥ 0 ∧ y ≥ 0),
+    ∃ x y, toResult pos_pair = ok (x, y) ∧
+    x ≥ 0 ∧ y ≥ 0) pos_pair_is_pos
 
+  /- Same as `lifted_is_pos` but making the implicit parameters of the `Exists.intro` explicit:
+     this is the important part. -/
   theorem lifted_is_pos' :
-    ∃ x y, toResult mk_pos_pair = ok (x, y) ∧
+    ∃ x y, toResult pos_pair = ok (x, y) ∧
     x ≥ 0 ∧ y ≥ 0 :=
-  (match mk_pos_pair with
+  (match pos_pair with
   | (x, y) =>
     fun (h : match (x, y) with | (x, y) => x ≥ 0 ∧ y ≥ 0) =>
     @Exists.intro Int (fun x_1 => ∃ y_1, ok (x, y) = ok (x_1, y_1) ∧ x_1 ≥ 0 ∧ y_1 ≥ 0)
       x (@Exists.intro Int (fun y_1 => ok (x, y) = ok (x, y_1) ∧ x ≥ 0 ∧ y_1 ≥ 0)
         y (@And.intro (ok (x, y) = ok (x, y)) _ (Eq.refl (ok (x, y))) h))
-  : ∀ (_ : match mk_pos_pair with | (x, y) => x ≥ 0 ∧ y ≥ 0),
-    ∃ x y, toResult mk_pos_pair = ok (x, y) ∧
-    x ≥ 0 ∧ y ≥ 0) is_pos
+  : ∀ (_ : match pos_pair with | (x, y) => x ≥ 0 ∧ y ≥ 0),
+    ∃ x y, toResult pos_pair = ok (x, y) ∧
+    x ≥ 0 ∧ y ≥ 0) pos_pair_is_pos
 
-  #print lifted_is_pos'
+  def pos_triple : Int × Int × Int := (0, 1, 2)
 
-  #print Prod.casesOn
-  theorem lifted_is_pos'' :
-    ∃ x y, toResult mk_pos_pair = ok (x, y) ∧
-    x ≥ 0 ∧ y ≥ 0 :=
-  @Prod.casesOn Int Int
-    (fun (s : Int × Int) =>
-      (match s with | (x, y) => x ≥ 0 ∧ y ≥ 0) →
-      ∃ x y, toResult s = ok (x, y) ∧
-      match (x, y) with | (x, y) => x ≥ 0 ∧ y ≥ 0)
-    mk_pos_pair
-    (fun x y (h : match (x, y) with | (x, y) => x ≥ 0 ∧ y ≥ 0) =>
-     (Exists.intro x (Exists.intro y (And.intro (Eq.refl (ok (x, y))) h)) :
-     ∃ (x' y' : Int), toResult (x, y) = ok (x', y') ∧
-      match (x', y') with
-      | (x, y) => x ≥ 0 ∧ y ≥ 0))
-      is_pos
-
-  #check Exists.intro
-  --set_option pp.coercions false
-  --set_option pp.all false
-  --set_option pp.explicit true
-  #print lifted_is_pos''
-  #print Prod.rec
-  /-
-  Prod.casesOn (motive := fun s =>
-    (match s with
-    | (x, y) => x ≥ 0 ∧ y ≥ 0) →
-    ∃ x y, ↑s = ok (x, y) ∧ x ≥ 0 ∧ y ≥ 0)
-    mk_pos_pair (fun x y h => Exists.intro x (Exists.intro y ⟨Eq.refl (ok (x, y)), h⟩)) is_pos
-
-  Prod.casesOn (motive := fun s =>
-    (match s with
-     | (x, y) => x ≥ 0 ∧ y ≥ 0) →
-     ∃ x y, ↑s = ok (x, y) ∧ match (x, y) with | (x, y) => x ≥ 0 ∧ y ≥ 0)
-    mk_pos_pair (fun x y pureThm => Exists.intro x (Exists.intro y ⟨Eq.refl (ok (x, y)), pureThm⟩)) is_pos
-  -/
+  theorem pos_triple_is_pos :
+    let (x, y, z) := pos_triple
+    x ≥ 0 ∧ y ≥ 0 ∧ z ≥ 0 := by simp [pos_triple]
 end Test
 
-partial def destProdTy (x : Expr) : List Expr :=
-  x.consumeMData.withApp fun f args =>
-  if f.isConst ∧ f.constName = ``Prod ∧ args.size = 2 then
-    let ty0 := args[0]!
-    let ty1 := args[1]!
-    ty0 :: destProdTy ty1
-  else [x]
+/-- Given a theorem of type `P x` and a pattern of the shape `∃ y₀ ... yₙ, x = (y₀, ..., yₙ)`,
+    introduce a lifted version of the theorem of the shape:
+    ```
+    ∃ y₀ ... yₙ, toResult x = ok (y₀, ..., yₙ) ∧ P (y₀, ..., yₙ)
+    ```
 
-partial def destProdVal (x : Expr) : List Expr :=
-  x.consumeMData.withApp fun f args =>
-  if f.isConst ∧ f.constName = ``Prod.mk ∧ args.size = 4 then
-    let val0 := args[2]!
-    let val1 := args[3]!
-    val0 :: destProdVal val1
-  else [x]
+    The output of the function is the name of the new theorem.
 
-/--
-  Returns the expression and its type
+    Note that if the pattern is simply `x` (not an existentially quantified equality), this function
+    decomposes the type of `x` for as long as it finds a tuple, and introduces one variable per field
+    in the tuple.
+
+    For instance, given pattern `some_pair : Int × Int`, the following theorem:
+    ```
+    P some_pair.fst ∧ Q some_pair.snd
+    ```
+    gets lifted to:
+    ```
+    ∃ x y, toResult some_pair = ok (x, y) ∧ P x ∧ Q y
+    ```
 -/
-partial def mkProdsMatch' (xl : List Expr) (out outTy : Expr) (index : Nat := 0) : MetaM (Expr × Expr) :=
-  match xl with
-  | [] => do
-    -- This would be unexpected
-    throwError "mkProdsMatch: empty list of input parameters"
-  | [x] => do
-    -- In the example given for the explanations: this is the inner match case
-    trace[Utils] "mkProdsMatch: [{x}]"
-    let out ← mkLambdaFVars #[x] out
-    let outTy ← mkArrowN #[x] outTy
-    pure (out, outTy)
-  | fst :: xl => do
-    trace[Utils] "mkProdsMatch: [{fst}::{xl}]"
-    let alpha ← inferType fst
-    let beta ← mkProdsType xl
-    let snd ← mkProdsMatch xl out (index + 1)
-    let mk ← mkLambdaFVars #[fst] snd
-    -- Introduce the "scrut" variable
-    let scrut_ty ← mkProdType alpha beta
-    withLocalDeclD (mkAnonymous "scrut" index) scrut_ty fun scrut => do
-    trace[Utils] "mkProdsMatch: scrut: ({scrut}) : ({← inferType scrut})"
-    -- TODO: make the computation of the motive more efficient
-    let motive ← do
-      match outTy  with
-      | .sort _ | .lit _ | .const .. =>
-        -- The type of the motive doesn't depend on the scrutinee
-        mkLambdaFVars #[scrut] outTy
-      | _ =>
-        /- The type of the motive *may* depend on the scrutinee
-           TODO: make this more efficient (we could change the output type of
-           mkProdsMatch) -/
-        mkProdsMatch (fst :: xl) outTy
-    /-let motive ← do
-      let out_ty ← inferType out
-      mkLambdaFVars #[scrut] out_ty-/
-    -- The final expression: putting everything together
-    trace[Utils] "mkProdsMatch:\n  ({alpha})\n  ({beta})\n  ({motive})\n  ({scrut})\n  ({mk})"
-    let sm ← mkAppOptM ``Prod.casesOn #[some alpha, some beta, some motive, some scrut, some mk]
-    -- Abstracting the "scrut" variable
-    let sm ← mkLambdaFVars #[scrut] sm
-    trace[Utils] "mkProdsMatch: sm: {sm}"
-    pure (sm, motive)
-
-partial def mkProdsMatch'' (xl : List Expr) (out : Expr) (index : Nat := 0) : MetaM Expr :=
-  match xl with
-  | [] => do
-    -- This would be unexpected
-    throwError "mkProdsMatch: empty list of input parameters"
-  | [x] => do
-    -- In the example given for the explanations: this is the inner match case
-    trace[Utils] "mkProdsMatch: [{x}]"
-    mkLambdaFVars #[x] out
-  | fst :: xl => do
-    trace[Utils] "mkProdsMatch: [{fst}::{xl}]"
-    let alpha ← inferType fst
-    let beta ← mkProdsType xl
-    let snd ← mkProdsMatch xl out (index + 1)
-    let mk ← mkLambdaFVars #[fst] snd
-    -- Introduce the "scrut" variable
-    let scrut_ty ← mkProdType alpha beta
-    withLocalDeclD (mkAnonymous "scrut" index) scrut_ty fun scrut => do
-    trace[Utils] "mkProdsMatch: scrut: ({scrut}) : ({← inferType scrut})"
-    -- TODO: make the computation of the motive more efficient
-    let motive ← do
-      let out_ty ← inferType out
-      /- Replace the pair in the type -/
-      match out_ty  with
-      | .sort _ | .lit _ | .const .. =>
-        -- The type of the motive doesn't depend on the scrutinee
-        mkLambdaFVars #[scrut] out_ty
-      | _ =>
-        /- The type of the motive *may* depend on the scrutinee
-           TODO: make this more efficient (we could change the output type of
-           mkProdsMatch) -/
-        -- We need to replace the tuples
-        let tval ← mkProdsVal (fst :: xl)
-        trace[Utils] "mkProdsMatch: replacing tval ({tval}) in out_ty ({out_ty})"
-        let out_ty ←
-          mapVisit (fun _ e => do if e == tval then pure scrut else pure e) out_ty
-        trace[Utils] "mkProdsMatch: after replacing tval: {out_ty}"
-        mkProdsMatch (fst :: xl) out_ty
-    -- The final expression: putting everything together
-    trace[Utils] "mkProdsMatch:\n- alpha: {alpha}\n- beta: {beta}\n- motive: {motive}\n- scrut: {scrut}\n- mk: {mk}"
-    let sm ← mkAppOptM ``Prod.casesOn #[some alpha, some beta, some motive, some scrut, some mk]
-    -- Abstracting the "scrut" variable
-    let sm ← mkLambdaFVars #[scrut] sm
-    trace[Utils] "mkProdsMatch: sm: {sm}"
-    pure sm
-
-/-partial def mkProdsMatchWithType (mkOutTy : List Expr → Expr → MetaM Expr)
-  (accXl : List Expr) (xl : List Expr)
-  (scrut : Expr)
-  (out : Expr) (index : Nat := 0) : MetaM Expr := do
-  match xl with
-  | [] => do
-    -- This would be unexpected
-    throwError "mkProdsMatchWithType: empty list of input parameters"
-  | [x] => do
-    -- In the example given for the explanations: this is the inner match case
-    trace[Utils] "mkProdsMatchWithType: [{x}]"
-    mkLambdaFVars #[x] out
-  | fst :: xl => do
-    trace[Utils] "mkProdsMatchWithType: [{fst}::{xl}]"
-    let alpha ← inferType fst
-    let beta ← mkProdsType xl
-    let snd ← mkProdsMatch xl out (index + 1)
-    let mk ← mkLambdaFVars #[fst] snd
-    -- Introduce the "scrut" variable
-    let scrut_ty ← mkProdType alpha beta
-    withLocalDeclD (mkAnonymous "scrut" index) scrut_ty fun scrut => do
-    trace[Utils] "mkProdsMatchWithType: scrut: ({scrut}) : ({← inferType scrut})"
-    -- TODO: make the computation of the motive more efficient
-    let motive ← do
-      let out_ty ← inferType out
-      /- Replace the pair in the type -/
-      match out_ty  with
-      | .sort _ | .lit _ | .const .. =>
-        -- The type of the motive doesn't depend on the scrutinee
-        mkLambdaFVars #[scrut] out_ty
-      | _ =>
-        /- The type of the motive *may* depend on the scrutinee
-           TODO: make this more efficient (we could change the output type of
-           mkProdsMatch) -/
-        -- We need to replace the tuples
-        let tval ← mkProdsVal (fst :: xl)
-        trace[Utils] "mkProdsMatchWithType: replacing tval ({tval}) in out_ty ({out_ty})"
-        let out_ty ←
-          mapVisit (fun _ e => do if e == tval then pure scrut else pure e) out_ty
-        trace[Utils] "mkProdsMatchWithType: after replacing tval: {out_ty}"
-        mkProdsMatch (fst :: xl) out_ty
-    -- The final expression: putting everything together
-    trace[Utils] "mkProdsMatchWithType:\n- alpha: {alpha}\n- beta: {beta}\n- motive: {motive}\n- scrut: {scrut}\n- mk: {mk}"
-    let sm ← mkAppOptM ``Prod.casesOn #[some alpha, some beta, some motive, some scrut, some mk]
-    -- Abstracting the "scrut" variable
-    let sm ← mkLambdaFVars #[scrut] sm
-    trace[Utils] "mkProdsMatchWithType: sm: {sm}"
-    pure sm-/
-
-def getSortUniverse (x : Expr) : MetaM Level := do
-  trace[Utils] "getSortUniverse: {x}"
-  match ← inferType x with
-  | .sort u => pure u
-  | _ => throwError "Unexpected error: please report an issue"
-
-def getTypeUniverse (x : Expr) : MetaM Level := do
-  trace[Utils] "getTypeUniverse: {x}"
-  match ← getSortUniverse x with
-  | .succ u => pure u
-  | _ => throwError "Unexpected error: please report an issue"
-
-#check Expr
-#check Prod.casesOn
-#check Level
-#check Expr.sort
-partial def mkProdsMatchWithType (mkOutTy : List Expr → Expr → MetaM Expr)
-  (accXl : List Expr) (xl : List Expr)
-  (scrut : Expr)
-  (out : Expr) (index : Nat := 0) : MetaM Expr := do
-  match xl with
-  | [] => do
-    trace[Utils] "mkProdsMatchWithType: []"
-    -- This would be unexpected
-    throwError "mkProdsMatch: empty list of input parameters"
-  | [x] => do
-    -- A single variable: this is a degenerate case
-    let fvId := x.fvarId!
-    pure (mkLet (← fvId.getUserName) (← inferType x) scrut out)
-  | [x, y] => do
-    trace[Utils] "mkProdsMatchWithType: [{x}::{y}]"
-    -- Exactly two variables: we introduce a single match
-    let alpha ← inferType x
-    let beta ← inferType y
-    -- Introduce the motive
-    let motive ← do
-      -- We need to introduce an intermediate variable
-      let scrutTy ← mkProdType alpha beta
-      withLocalDeclD (mkAnonymous "scrut" index) scrutTy fun scrut => do
-      let motive ← mkOutTy accXl.reverse scrut
-      mkLambdaFVars #[scrut] motive
-    trace[Utils] "mkProdsMatchWithType: motive: {motive}"
-    let mk ← mkLambdaFVars #[x, y] out
-    trace[Utils] "mkProdsMatchWithType: mk: {mk}"
-    trace[Utils] "mkProdsMatchWithType: scrut: {scrut}"
-    let m ← mkAppOptM ``Prod.casesOn #[alpha, beta, motive, scrut, mk]
-    trace[Utils] "mkProdsMatchWithType: m: {m}"
-    pure m
-  | x :: xl => do
-    throwError "TODO"
-    /- -- Recursive case: we need stricly more than one match
-    trace[Utils] "mkProdsMatchWithType: [{x}::{xl}]"
-    let alpha ← inferType x
-    let beta ← mkProdsType xl
-    -- We introduce an intermediate scrutinee
-    let scrut_ty ← mkProdType alpha beta
-    withLocalDeclD (mkAnonymous "scrut" index) scrut_ty fun scrut => do
-    let body ← mkProdsMatchWithType mkOutTy (x :: accXl) xl scrut out (index + 1)
-    let mk ← mkLambdaFVars #[x, scrut] body
-    --
-    let accXl := x :: accXl
-    let motive ← mkOutTy accXl.reverse scrut
-    let motive ← mkLambdaFVars #[scrut] motive
-    --
-    let m ← mkAppOptM ``Prod.casesOn #[alpha, beta, motive, scrut, mk]
-    pure m -/
-
-#check mkFreshFVarId
-#check @Exists.intro
-#check Declaration
-#check mkArrowN
-#print Prod.casesOn
-#check Prod.rec
-
-#check Prod.exists
-
-theorem congr_toResult_eq_ok {x y : α} {p : α → Prop} (h0 : p x) :
-  ∃ y, Std.toResult x = Std.Result.ok y ∧ p y := by
-  exists x
-
-
-
-
-#check congrArg
-theorem test (x y : α) (h : x = y) : y = x := by simp [h]
-#print test
-
-/-def mkToResult (x : Expr) : MetaM Expr := do
-  --mkAppM ``Std.toResult #[x]
-  let ty ← inferType x
-  let u ← getTypeUniverse ty
-  pure (mkAppN (.const ``Std.toResult [u]) #[ty, x])
-
-def mkResultOk (x : Expr) : MetaM Expr := do
-  --mkAppM ``Std.Result.ok #[x]
-  let ty ← inferType x
-  let u ← getTypeUniverse ty
-  pure (mkAppN (.const ``Std.Result.ok [u]) #[ty, x])
-
-def mkEqRefl (x : Expr) : MetaM Expr := do
-  let ty ← inferType x
-  let u ← getSortUniverse ty
-  pure (mkAppN (.const ``Eq.refl [u]) #[ty, x])
-
-#check Exists
-def mkExists (ty x : Expr) : MetaM Expr := do
-  let u ← getSortUniverse ty
-  pure (mkAppN (.const ``Exists [u]) #[ty, x])
-
-def mkExistsIntro (ty p w h : Expr) : MetaM Expr := do
-  let u ← getSortUniverse ty
-  pure (mkAppN (.const ``Exists.intro [u]) #[ty, p, w, h])-/
-
-open Std Result
-def tryGeneralize (pat : Syntax) (n : Name) : TermElabM Unit := do
+def liftThm (pat : Syntax) (n : Name) (suffix : String := "progress_spec") : TermElabM Name := do
   trace[Progress] "Name: {n}"
   let env ← getEnv
   let decl := env.constants.find! n
-  -- Strip the quantifiers before elaborating the pattern
+  /- Strip the quantifiers before elaborating the pattern -/
   forallTelescope decl.type.consumeMData fun fvars thm0 => do
   let (pat, _) ← Elab.Term.elabTerm pat none |>.run
   let pat ← instantiateMVars pat
   trace[Progress] "Elaborated pattern: {pat}"
-  --
+  /- -/
   existsTelescope pat.consumeMData fun _ eqMatch => do
   existsTelescope pat.consumeMData fun _ eqExists => do
+  /- Auxiliary helper.
+
+     Given type `α₀ × ... × αₙ`, introduce fresh variables
+     `x₀ : α₀, ..., xₙ : αₙ` and call the continuation with those.
+  -/
+  let withFreshTupleFieldFVars (basename : Name) (ty : Expr) (k : Array Expr → TermElabM Name) : TermElabM Name := do
+    let tys := destProdsType ty
+    let tys := List.map (fun (i, ty) => (Name.num basename i, fun _ => pure ty)) (List.enum tys)
+    withLocalDeclsD ⟨ tys ⟩ k
   /- Destruct the equality. Note that there may not be a tuple, in which case
-     we introduce a single variable -/
-  let tryDestEq (eq : Expr) (k : Expr → Expr → TermElabM Unit) : TermElabM Unit := do
+     we see the type as a tuple and introduce one variable per field of the tuple
+     (and a single variable if it is actually not a tuple). -/
+  let tryDestEq (eq : Expr) (k : Expr → Expr → TermElabM Name) : TermElabM Name := do
     match ← destEqOpt eq with
     | some (x, y) => k x y
     | none =>
-      let pat := eq
-      let ty ← inferType pat
-      let name ← mkFreshUserName (.str .anonymous "x")
-      withLocalDeclD name ty fun decompPat => do
-      k pat decompPat
+      withFreshTupleFieldFVars (.str .anonymous "x") (← inferType pat) fun fvars => do
+      k pat (← mkProdsVal fvars.toList)
+  /- We need to introduce two sets of variables:
+     - one for variables which will be introduced by the outer match
+     - another for variables which will be bound by the ∃ quantifiers -/
   tryDestEq eqMatch fun pat decompPatMatch => do
   tryDestEq eqExists fun _ decompPatExists => do
-  trace[Progress] "Decomposed equality: {pat}, {decompPatMatch}"
-  -- The decomp pattern should be a tuple
-  let fvarsMatch : Array Expr := ⟨ destProdVal decompPatMatch ⟩
-  let fvarsExists : Array Expr := ⟨ destProdVal decompPatExists ⟩
-  /- Prepare the type of the final theorem -/
-  let mkThmType (xl : List Expr) (scrut : Expr) : MetaM Expr := do
-    let npatMatch ← mkProdsVal (xl++[scrut])
-    -- Update the theorem statement to replace the pattern with the decomposed pattern
-    let thmType ←
-      mapVisit (fun _ e => do if e == pat then pure decompPatExists else pure e) thm0
-    trace[Progress] "Theorem type without lifted equality: {thmType}"
-    let pureThmType ←
-      mapVisit (fun _ e => do if e == pat then pure npatMatch else pure e) thm0
-    trace[Progress] "Pure theorem type: {pureThmType}"
-    let toResultPat ← mkAppM ``Std.toResult #[npatMatch]
-    let okDecompPat ← mkAppM ``Std.Result.ok #[decompPatExists]
-    let eqType ← mkEq toResultPat okDecompPat
-    let thmType := mkAnd eqType thmType
-    trace[Progress] "Theorem type after lifting equality: {thmType}"
-    -- Introduce the existentials
-    let thmType ← Array.foldrM (fun fvar thmType => do
-        let p ← mkLambdaFVars #[fvar] thmType
-        mkAppM ``Exists #[p]
-        ) thmType fvarsExists
-    trace[Progress] "Theorem type after adding the existentials: {thmType}"
-    -- Introduce the arrow
-    let thmType ← mkArrow pureThmType thmType
-    trace[Progress] "Theorem type after adding the arrow: {thmType}"
-    pure thmType
-
-  -- Update the theorem statement to replace the pattern with the decomposed pattern
+  trace[Progress] "Decomposed equality: {pat}, {decompPatMatch}, {decompPatExists}"
+  /- The decomposed patterns should be tuple expressions: decompose them further into lists of variables -/
+  let fvarsMatch : Array Expr := ⟨ destProdsVal decompPatMatch ⟩
+  let fvarsExists : Array Expr := ⟨ destProdsVal decompPatExists ⟩
+  trace[Progress] "Fvars: {fvarsMatch}, {fvarsExists}"
+  /- Introduce the binder for the pure theorem - it will be bound outside of the ∃ but we need to use it
+     right now to generate an expression of type:
+     ```
+     toResult ... = ok x ∧
+     P x -- HERE
+     ```
+  -/
   let pureThmType ←
     mapVisit (fun _ e => do if e == pat then pure decompPatMatch else pure e) thm0
   let pureThmName ← mkFreshUserName (.str .anonymous "pureThm")
   withLocalDeclD pureThmName pureThmType fun pureThm => do
-  -- Introduce the equality
-  --let toResultPat ← mkAppM ``Std.toResult #[patMatch]
+  /- Introduce the equality -/
   let okDecompPat ← mkAppM ``Std.Result.ok #[decompPatMatch]
   let eqExpr ← mkEqRefl okDecompPat
   let thm ← mkAppM ``And.intro #[eqExpr, pureThm]
-  trace[Progress] "Theorem after introducing the lifted equality: {thm} : {← inferType thm}"
-  let mkThmType' (toResultArg : Expr) (xl0 : List Expr) (xl1 : List Expr) : MetaM Expr := do
+  trace[Progress] "Theorem after introducing the lifted equality: {thm}\n  :\n{← inferType thm}"
+  /- Auxiliary helper which computes the type of the (intermediate) theorems when adding the existentials.
+
+     Given `toResultArg`, `xl0` and `xl1`, generates:
+     ```
+     ∃ $xl1,
+     toResult $toResultArg = ($xl0 ++ $xl1) ∧
+     P ($xl0 ++ $xl1)
+     ```
+   -/
+  let mkThmType (toResultArg : Expr) (xl0 : List Expr) (xl1 : List Expr) : MetaM Expr := do
+    trace[Progress] "mkThmType:\n- {toResultArg}\n- {xl0}\n- {xl1}"
     let npatExists ← mkProdsVal (xl0 ++ xl1)
-    -- Update the theorem statement to replace the pattern with the decomposed pattern
+    /- Update the theorem statement to replace the pattern with the decomposed pattern -/
     let thmType ←
       mapVisit (fun _ e => do if e == pat then pure npatExists else pure e) thm0
     trace[Progress] "Theorem type without lifted equality: {thmType}"
-    /-let pureThmType ←
-      mapVisit (fun _ e => do if e == pat then pure npatMatch else pure e) thm0-/
-    --trace[Progress] "Pure theorem type: {pureThmType}"
     let toResultPat ← mkAppM ``Std.toResult #[toResultArg]
     let okDecompPat ← mkAppM ``Std.Result.ok #[npatExists]
     let eqType ← mkEq toResultPat okDecompPat
     let thmType := mkAnd eqType thmType
     trace[Progress] "Theorem type after lifting equality: {thmType}"
-    -- Introduce the existentials, only for the suffix of the list of variables
+    /- Introduce the existentials, only for the suffix of the list of variables -/
     let thmType ← List.foldrM (fun fvar thmType => do
         let p ← mkLambdaFVars #[fvar] thmType
         mkAppM ``Exists #[p]
         ) thmType xl1
     trace[Progress] "Theorem type after adding the existentials: {thmType}"
-    -- Introduce the arrow
-    --let thmType ← mkArrow pureThmType thmType
-    --trace[Progress] "Theorem type after adding the arrow: {thmType}"
     pure thmType
-  -- We need to precise the theorem type when introducting the existentials
-  let thmType ← do
-    let thmType ←
-      mapVisit (fun _ e => do if e == pat then pure decompPatExists else pure e) thm0
-    trace[Progress] "Theorem type without lifted equality: {thmType}"
-    let pureThmType ←
-      mapVisit (fun _ e => do if e == pat then pure decompPatMatch else pure e) thm0
-    trace[Progress] "Pure theorem type: {pureThmType}"
-    let toResultPat ← mkAppM ``Std.toResult #[decompPatMatch]
-    let okDecompPat ← mkAppM ``Std.Result.ok #[decompPatExists]
-    let eqType ← mkEq toResultPat okDecompPat
-    pure (mkAnd eqType thmType)
-  trace[Progress] "Theorem type after lifting the equality: {thmType}"
-  -- Introduce the existentials
+  /- Introduce the existentials -/
   let rec introExists (xl0 xl1 : List (Expr × Expr)) : MetaM Expr := do
     match xl1 with
     | [] => pure thm
@@ -707,7 +350,7 @@ def tryGeneralize (pat : Syntax) (n : Name) : TermElabM Unit := do
       let thm ← introExists (fvarPair :: xl0) xl1
       let (fvarMatch, fvarExists) := fvarPair
       let α ← inferType fvarMatch
-      let thmType ← mkThmType' decompPatMatch (fvarExists :: (List.unzip xl0).fst).reverse (List.unzip xl1).snd
+      let thmType ← mkThmType decompPatMatch (fvarExists :: (List.unzip xl0).fst).reverse (List.unzip xl1).snd
       let p ← mkLambdaFVars #[fvarExists] thmType
       let x := fvarMatch
       let h := thm
@@ -717,219 +360,58 @@ def tryGeneralize (pat : Syntax) (n : Name) : TermElabM Unit := do
       pure thm
   let thm ← introExists [] (List.zip fvarsMatch.toList fvarsExists.toList)
   trace[Progress] "Theorem after introducing the existentials: {thm} :\n{← inferType thm}"
-  -- Introduce the λ which binds the pure theorem
+  /- Introduce the λ which binds the pure theorem -/
   let thm ← mkLambdaFVars #[pureThm] thm
   trace[Progress] "Theorem after introducing the lambda: {thm} :\n{← inferType thm}"
-  -- Introduce the matches
+  /- Introduce the matches -/
   let thm ← mkProdsMatch fvarsMatch.toList thm
   trace[Progress] "Theorem after introducing the matches: {thm} :\n{← inferType thm}"
-  -- Add the scrutinee
+  /- Apply to the scrutinee (which is the pattern provided by the user): `mkProdsMatch` generates
+     a lambda expression, where the bound value is the scrutinee we should match over. -/
   let thm := mkApp thm pat
-  --let thm ← mkProdsMatchWithType mkThmType [] fvarsMatch.toList pat thm
   trace[Progress] "Theorem after introducing the scrutinee: {thm} :\n{← inferType thm}"
-  -- Apply the pure theorem
+  /- Apply to the pure theorem (the expression inside the match is a function which expects to receive this theorem) -/
   let thm := mkAppN thm #[.const decl.name (List.map Level.param decl.levelParams)]
   trace[Progress] "Theorem after introducing the matches and the app: {thm} :\n{← inferType thm}"
   let thm ← mkLambdaFVars fvars thm
   /- Prepare the theorem type -/
   let thmType ← do
-    let thmType ← mkThmType' pat [] fvarsExists.toList
+    let thmType ← mkThmType pat [] fvarsExists.toList
     mkForallFVars fvars thmType
-  --let thmType ← inferType thm
   trace[Progress] "Final theorem: {thm}\n  :\n{thmType}"
-  -- Save the auxiliary theorem
+  /- Save the auxiliary theorem -/
+  let name := Name.str decl.name suffix
   let auxDecl : TheoremVal := {
-    name := Name.str decl.name "progress_spec"
+    name
     levelParams := decl.levelParams
     type := thmType
     value := thm
   }
   addDecl (.thmDecl auxDecl)
+  /- -/
+  pure name
 
-#check mkForallFVars
-
-local elab "#try_generalize" "(" pat:term ")" id:ident : command => do
+local elab "#progress_pure_lift_thm" id:ident pat:term : command => do
   Lean.Elab.Command.runTermElabM (fun _ => do
   let some cs ← Term.resolveId? id | throwError m!"Unknown id: {id}"
   let name := cs.constName!
-  tryGeneralize pat name)
+  let _ ← liftThm pat name)
 
-open Test
-set_option trace.Progress true in
-set_option trace.Utils true in
-#try_generalize (∃ x y, Test.mk_pos_pair = (x, y)) Test.is_pos
+open Test in
+#progress_pure_lift_thm pos_pair_is_pos (∃ x y, pos_pair = (x, y))
 
-#check Int × Int
-#check Test.is_pos.progress_spec
+open Test in
+#progress_pure_lift_thm pos_triple_is_pos pos_triple
 
+-- The ident is the name of the saturation set, the term is the pattern.
+syntax (name := progress_pure) "progress_pure" term : attr
 
-/-
-def tryGeneralize (pat : Syntax) (n : Name) : TermElabM Unit := do
-  trace[Progress] "Name: {n}"
-  let env ← getEnv
-  let decl := env.constants.find! n
-  -- Strip the quantifiers before elaborating the pattern
-  forallTelescope decl.type.consumeMData fun fvars thm0 => do
-  let (pat, _) ← Elab.Term.elabTerm pat none |>.run
-  trace[Progress] "Elaborated pattern: {pat}"
-  --
-  existsTelescope pat.consumeMData fun fvarsPat eq => do
-  /- Destruct the equality. Note that there may not be a tuple, in which case
-     we introduce a single variable -/
-  let tryDestEq (k : Expr → Expr → TermElabM Unit) : TermElabM Unit := do
-    match ← destEqOpt eq with
-    | some (x, y) => k x y
-    | none =>
-      let pat := eq
-      let ty ← inferType pat
-      let name ← mkFreshUserName (.str .anonymous "x")
-      withLocalDeclD name ty fun decompPat => do
-      k pat decompPat
-  tryDestEq fun pat decompPat => do
-  trace[Progress] "Decomposed equality: {pat}, {decompPat}"
-  -- The decomp pattern should be a tuple
-  let pats := destProdVal decompPat
-  trace[Progress] "Decomposed pattern: {pats}"
-  -- Update the theorem statement to replace the pattern with the decomposed pattern
-  let thm1 ←
-    mapVisit (fun _ e => do if e == pat then pure decompPat else pure e) thm0
-  trace[Progress] "Updated theorem statement: {thm1}"
-  -- Dive into the λ which binds the pure theorem
-  let pureThmName ← mkFreshUserName (.str .anonymous "pureThm")
-  withLocalDeclD pureThmName thm1 fun pureThm => do
-  -- Introduce the equality
-  let okDecompPat ← mkAppM ``Std.Result.ok #[decompPat]
-  let toResultPat ← mkAppM ``Std.toResult #[pat]
-  let eqExpr ← mkAppM ``Eq.refl #[okDecompPat]
-  --let eqType ← mkAppM ``Eq #[toResultPat, okDecompPat]
-  let thm ← mkAppOptM ``And.intro #[none, none, eqExpr, pureThm]
-  --let thm ← mkAppOptM ``And.intro #[none, none, eqExpr, pureThm]
-  trace[Progress] "Theorem after introducing the lifted equality: {thm} : {← inferType thm}"
-  /- Prepare the type of the final theorem -/
-  let mkThmType (xl : List Expr) (scrut : Expr) : MetaM Expr := do
-    let pat0 := pat
-    let pat ← mkProdsVal (xl++[scrut])
-    -- Update the theorem statement to replace the pattern with the decomposed pattern
-    let thmType ←
-      mapVisit (fun _ e => do if e == pat0 then pure decompPat else pure e) thm0
-    let pureThmType ←
-      mapVisit (fun _ e => do if e == pat0 then pure pat else pure e) thm0
-    trace[Progress] "Theorem type without lifted equality: {thmType}"
-    -- Dive into the λ which binds the pure theorem
-    let pureThmName ← mkFreshUserName (.str .anonymous "pureThm")
-    withLocalDeclD pureThmName pureThmType fun pureThm => do
-    let toResultPat ← mkAppM ``Std.toResult #[pat]
-    let eqType ← mkEq toResultPat okDecompPat
-    let thmType := mkAnd eqType thmType
-    trace[Progress] "Theorem type after lifting equality: {thmType}"
-    -- Introduce the existentials
-    let thmType ← Array.foldrM (fun fvar thmType => do
-        let p ← mkLambdaFVars #[fvar] thmType
-        mkAppOptM ``Exists #[← inferType fvar, p]
-        ) thmType fvarsPat
-    trace[Progress] "Theorem type after adding the existentials: {thmType}"
-    -- Introduce the arrow
-    let thmType ← mkArrow (← inferType pureThm) thmType
-    trace[Progress] "Theorem type after adding the arrow: {thmType}"
-    pure thmType
-  let (thmType, thmAndEqType) ← do
-    let thmType := thm1
-    trace[Progress] "Theorem type without lifted equality: {thmType}"
-    let eqType ← mkEq toResultPat okDecompPat
-    trace[Progress] "Theorem type after lifting equality: {thmType}"
-    let thmType := mkAnd eqType thmType
-    let thmAndEqType := thmType
-    let thmAndEqType ← mkArrow (← inferType pureThm) thmAndEqType
-    -- Introduce the existentials
-    let thmType ← Array.foldrM (fun fvar thmType => do
-        let p ← mkLambdaFVars #[fvar] thmType
-        mkAppOptM ``Exists #[← inferType fvar, p]
-        ) thmType fvarsPat
-    pure (thmType, thmAndEqType)
-  trace[Progress] "Theorem and eq type: {thmAndEqType}"
-  trace[Progress] "Theorem type: {thmType}"
-  -- Introduce the existentials
-  let thm ←
-    Array.foldrM (fun fvar thm => do
-      let p ← mkLambdaFVars #[fvar] (← inferType thm)
-      mkAppOptM ``Exists.intro #[← inferType fvar, p, fvar, thm]
-      ) thm fvarsPat
-  trace[Progress] "Theorem after introducing the existentials: {thm} :\n{← inferType thm}"
-  -- Introduce the λ which binds the pure theorem
-  let thm ← mkLambdaFVars #[pureThm] thm
-  trace[Progress] "Theorem after introducing the lambda: {thm} :\n{← inferType thm}"
-  -- Introduce the matches
-  let thm ← mkProdsMatchWithType mkThmType [] pats pat thm -- TODO: should be mkProdsMatch
-  trace[Progress] "Theorem after introducing the matches: {thm} :\n{← inferType thm}"
-  let thm ← mkAppM' thm #[pat]
-  trace[Progress] "Theorem after introducing the matches and the app: {thm} :\n{← inferType thm}"
-  -- Apply the pure theorem
-  let thm := mkAppN thm #[.const decl.name (List.map Level.param decl.levelParams)]
-  let thm ← mkLambdaFVars fvars thm
-  trace[Progress] "Final theorem: {thm} :\n{← inferType thm}"
-  /- -- Prepare the type of the final theorem
-  let thmType := thm1
-  trace[Progress] "Theorem type without lifted equality: {thmType}"
-  let eqType ← mkEq toResultPat okDecompPat
-  trace[Progress] "Theorem type after lifting equality: {thmType}"
-  let thmType := mkAnd eqType thmType
-  -- Introduce the existentials
-  let thmType ← Array.foldrM (fun fvar thmType => do
-      let p ← mkLambdaFVars #[fvar] thmType
-      mkAppOptM ``Exists #[← inferType fvar, p]
-      ) thmType fvarsPat
-  trace[Progress] "Theorem type: {thmType}" -/
-  --let pureThmType ← mkArrowN fvars (← inferType existsThm)
-  -- Save the auxiliary theorem
-  let auxDecl : TheoremVal := {
-    name := Name.str decl.name "progress_spec"
-    levelParams := decl.levelParams
-    type := thmType
-    value := thm
-  }
-  addDecl (.thmDecl auxDecl)
-  --
-  --let thm ← mkLambdaFVars #[pureThm] pureThm
-  pure ()
-  /--- Introduce matches
-  let rec introMatches (decompPat : Expr) (k : TermElabM Unit) := do
-    match decompPat with
-    | .
-  pure ()-/
--/
-
-/-- Auxiliary helper: prove the auxiliary theorem (generates the proof term) -/
-private def pspecPureProve (pureThm : ConstantInfo) (th : Expr) : TermElabM Expr := do
-  let goal ← mkFreshExprMVar (some th)
-  let prove : TacticM Unit := do
-    let goal ← getMainGoal
-    let (_, goal) ← goal.intros
-    setGoals [goal]
-    let lctx ← getLCtx
-    -- Introduce the lemma
-    let levelParams := List.map Level.param pureThm.levelParams
-    let pureThmExpr := Expr.const pureThm.name levelParams
-    let pureThmExpr := mkAppN pureThmExpr lctx.getFVars
-    let pureThmExprName ← mkFreshUserName (.str .anonymous "auxThm")
-    withLetDecl pureThmExprName (← inferType pureThmExpr) pureThmExpr fun _ => do
-    -- We simply call the simplifier
-    let simpOnly := true
-    let config : Simp.Config := {}
-    let simprocs := []
-    let declsToUnfold := []
-    let thms := []
-    let loc := Utils.Location.targets #[] true
-    let pureThm ← getFVarFromUserName pureThmExprName
-    simpAt simpOnly config simprocs declsToUnfold thms [pureThm.fvarId!] loc
-    let lctx ← getLCtx
-    let hypsToUse := lctx.getFVarIds
-    simpAt simpOnly config simprocs declsToUnfold thms hypsToUse.toList loc
-  let ngoals ← Tactic.run goal.mvarId! prove
-  /- There should be no remaining goals -/
-  if ngoals == [] then
-    pure (← instantiateMVars goal)
-  else
-    throwError "Error while elaborating 'progress_spec': we could not prove the auxiliary theorem"
+def elabProgressPureAttribute (stx : Syntax) : MetaM (TSyntax `term) :=
+  withRef stx do
+    match stx with
+    | `(attr| progress_pure $pat) => do
+      pure pat
+    | _ => throwUnsupportedSyntax
 
 /- Initiliaze the `progress_pure` attribute, which lifts lemmas about pure functions to
    `progress` lemmas.
@@ -965,6 +447,11 @@ initialize pspecPureAttribute : PSpecAttr ← do
       -- Ignore some auxiliary definitions (see the comments for attrIgnoreMutRec)
       attrIgnoreAuxDef thName (pure ()) do
         trace[Progress] "Registering pure `progress` theorem for {thName}"
+        -- Elaborate the pattern
+        trace[Saturate.attribute] "Syntax: {stx}"
+        let pat ← elabProgressPureAttribute stx
+        -- Introduce the lifted theorem
+        let liftedThmName ← liftThm pat thName
         let thDecl := env.constants.find! thName
         -- Lift the theorem statement
         let liftedThm ← MetaM.run' (liftThm thDecl.type.consumeMData)
