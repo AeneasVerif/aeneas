@@ -437,7 +437,7 @@ def elabProgressPureAttribute (stx : Syntax) : AttrM (TSyntax `term) :=
    ```
  -/
 initialize pspecPureAttribute : PSpecAttr ← do
-  let ext ← mkDiscrTreeExtension `pspecMap
+  let ext ← mkDiscrTreeExtension `pspecPureMap
   let attrImpl : AttributeImpl := {
     name := `progress_pure
     descr := "Adds lifted version of pure theorems to the `progress_pure` databse"
