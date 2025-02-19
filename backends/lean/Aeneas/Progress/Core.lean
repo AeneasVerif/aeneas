@@ -53,8 +53,6 @@ section Methods
      - function arguments
      - return
      - postconditions
-
-     TODO: generalize for when we do inductive proofs
   -/
   partial
   def withPSpec [Inhabited (m a)] [Nonempty (m a)]
@@ -134,7 +132,7 @@ end Methods
 def getPSpecFunArgsExpr (isGoal : Bool) (th : Expr) : MetaM Expr :=
   withPSpec isGoal th (fun d => do pure d.fArgsExpr)
 
--- The progress attribute
+/-- The progress attribute -/
 structure PSpecAttr where
   attr : AttributeImpl
   ext  : DiscrTreeExtension Name
@@ -191,8 +189,6 @@ def showStoredPSpec : MetaM Unit := do
   let s := f!"{st}"
   IO.println s
 
-open Tactic
-
 namespace Test
   /-!
   Making some tests here as models to guide the automation generation of proof terms when lifting theorems in `progress_pure`
@@ -235,7 +231,39 @@ namespace Test
   theorem pos_triple_is_pos :
     let (x, y, z) := pos_triple
     x ≥ 0 ∧ y ≥ 0 ∧ z ≥ 0 := by simp [pos_triple]
+
+  structure U8 where
+    val : Nat
+
+  def overflowing_add (x y : U8) : U8 × Bool := (⟨ x.val + y.val ⟩, x.val + y.val > 255)
+
+  theorem overflowing_add_eq (x y : U8) :
+    let z := overflowing_add x y
+    if x.val + y.val > 255 then z.snd = true
+    else z.snd = false
+    :=
+    by simp [overflowing_add]
+
 end Test
+
+def reduceProdProjs (e : Expr) : MetaM Expr := do
+  let pre (e : Expr) : MetaM TransformStep := do
+    trace[Utils] "Attempting to reduce: {e}"
+    match ← reduceProj? e with
+    | none =>
+      e.withApp fun fn args =>
+      if fn.isConst ∧ (fn.constName! = ``Prod.fst ∨ fn.constName! = ``Prod.snd) ∧ args.size = 3 then
+        let pair := args[2]!
+        pair.withApp fun fn' args =>
+          if fn'.isConst ∧ fn'.constName! = ``Prod.mk ∧ args.size = 4 then
+            if fn.constName! = ``Prod.fst then pure (.continue args[2]!)
+            else pure (.continue args[3]!)
+          else pure (.continue e)
+      else pure (.continue e)
+    | some e =>
+      trace[Utils] "reduced: {e}"
+      pure (.continue e)
+  transform e (pre := pre)
 
 /-- Given a theorem of type `P x` and a pattern of the shape `∃ y₀ ... yₙ, x = (y₀, ..., yₙ)`,
     introduce a lifted version of the theorem of the shape:
@@ -282,17 +310,17 @@ def liftThm (pat : Syntax) (n : Name) (suffix : String := "progress_spec") : Met
   /- Destruct the equality. Note that there may not be a tuple, in which case
      we see the type as a tuple and introduce one variable per field of the tuple
      (and a single variable if it is actually not a tuple). -/
-  let tryDestEq (eq : Expr) (k : Expr → Expr → MetaM Name) : MetaM Name := do
+  let tryDestEq basename (eq : Expr) (k : Expr → Expr → MetaM Name) : MetaM Name := do
     match ← destEqOpt eq with
     | some (x, y) => k x y
     | none =>
-      withFreshTupleFieldFVars (.str .anonymous "x") (← inferType pat) fun fvars => do
+      withFreshTupleFieldFVars (.str .anonymous basename) (← inferType pat) fun fvars => do
       k pat (← mkProdsVal fvars.toList)
   /- We need to introduce two sets of variables:
      - one for variables which will be introduced by the outer match
      - another for variables which will be bound by the ∃ quantifiers -/
-  tryDestEq eqMatch fun pat decompPatMatch => do
-  tryDestEq eqExists fun _ decompPatExists => do
+  tryDestEq "x" eqMatch fun pat decompPatMatch => do
+  tryDestEq "y" eqExists fun _ decompPatExists => do
   trace[Progress] "Decomposed equality: {pat}, {decompPatMatch}, {decompPatExists}"
   /- The decomposed patterns should be tuple expressions: decompose them further into lists of variables -/
   let fvarsMatch : Array Expr := ⟨ destProdsVal decompPatMatch ⟩
@@ -301,8 +329,9 @@ def liftThm (pat : Syntax) (n : Name) (suffix : String := "progress_spec") : Met
   /- Small helper that we use to substitute the pattern in the original theorem -/
   let mkPureThmType (npat : Expr) : MetaM Expr := do
     let thm ← mapVisit (fun _ e => do if e == pat then pure npat else pure e) thm0
-    -- Normalize a bit to make the theorem cleaner
-    whnf thm
+    /- Reduce a bit the expression, but in a controlled manner, to make it cleaner -/
+    let thm ← normalizeLetBindings thm
+    reduceProdProjs thm
   /- Introduce the binder for the pure theorem - it will be bound outside of the ∃ but we need to use it
      right now to generate an expression of type:
      ```
@@ -332,18 +361,18 @@ def liftThm (pat : Syntax) (n : Name) (suffix : String := "progress_spec") : Met
     let npatExists ← mkProdsVal (xl0 ++ xl1)
     /- Update the theorem statement to replace the pattern with the decomposed pattern -/
     let thmType ← mkPureThmType npatExists
-    trace[Progress] "Theorem type without lifted equality: {thmType}"
+    trace[Progress] "mkThmType: without lifted equality: {thmType}"
     let toResultPat ← mkAppM ``Std.toResult #[toResultArg]
     let okDecompPat ← mkAppM ``Std.Result.ok #[npatExists]
     let eqType ← mkEq toResultPat okDecompPat
-    let thmType := mkAnd eqType (← whnf thmType)
-    trace[Progress] "Theorem type after lifting equality: {thmType}"
+    let thmType := mkAnd eqType thmType
+    trace[Progress] "mkThmType: after lifting equality: {thmType}"
     /- Introduce the existentials, only for the suffix of the list of variables -/
     let thmType ← List.foldrM (fun fvar thmType => do
         let p ← mkLambdaFVars #[fvar] thmType
         mkAppM ``Exists #[p]
         ) thmType xl1
-    trace[Progress] "Theorem type after adding the existentials: {thmType}"
+    trace[Progress] "mkThmType: after adding the existentials: {thmType}"
     pure thmType
   /- Introduce the existentials -/
   let rec introExists (xl0 xl1 : List (Expr × Expr)) : MetaM Expr := do
@@ -374,7 +403,8 @@ def liftThm (pat : Syntax) (n : Name) (suffix : String := "progress_spec") : Met
   let thm := mkApp thm pat
   trace[Progress] "Theorem after introducing the scrutinee: {thm} :\n{← inferType thm}"
   /- Apply to the pure theorem (the expression inside the match is a function which expects to receive this theorem) -/
-  let thm := mkAppN thm #[.const decl.name (List.map Level.param decl.levelParams)]
+  let pureThm := mkAppN (.const decl.name (List.map Level.param decl.levelParams)) fvars
+  let thm := mkAppN thm #[pureThm]
   trace[Progress] "Theorem after introducing the matches and the app: {thm} :\n{← inferType thm}"
   let thm ← mkLambdaFVars fvars thm
   /- Prepare the theorem type -/
@@ -401,11 +431,14 @@ local elab "#progress_pure_lift_thm" id:ident pat:term : command => do
   let name := cs.constName!
   let _ ← liftThm pat name)
 
-open Test in
-#progress_pure_lift_thm pos_pair_is_pos (∃ x y, pos_pair = (x, y))
+namespace Test
+  #progress_pure_lift_thm pos_pair_is_pos (∃ x y, pos_pair = (x, y))
 
-open Test in
-#progress_pure_lift_thm pos_triple_is_pos pos_triple
+  #progress_pure_lift_thm pos_triple_is_pos pos_triple
+
+  #progress_pure_lift_thm overflowing_add_eq (overflowing_add x y)
+end Test
+
 
 -- The ident is the name of the saturation set, the term is the pattern.
 syntax (name := progress_pure) "progress_pure" term : attr
@@ -416,6 +449,12 @@ def elabProgressPureAttribute (stx : Syntax) : AttrM (TSyntax `term) :=
     | `(attr| progress_pure $pat) => do
       pure pat
     | _ => throwUnsupportedSyntax
+
+/-- The progress pure attribute -/
+structure ProgressPureSpecAttr where
+  attr : AttributeImpl
+  deriving Inhabited
+
 
 /- Initiliaze the `progress_pure` attribute, which lifts lemmas about pure functions to
    `progress` lemmas.
@@ -436,13 +475,11 @@ def elabProgressPureAttribute (stx : Syntax) : AttrM (TSyntax `term) :=
     z.bv = x.bv + y.bv
    ```
  -/
-initialize pspecPureAttribute : PSpecAttr ← do
-  let ext ← mkDiscrTreeExtension `pspecPureMap
+initialize pspecPureAttribute : ProgressPureSpecAttr ← do
   let attrImpl : AttributeImpl := {
     name := `progress_pure
     descr := "Adds lifted version of pure theorems to the `progress_pure` databse"
     add := fun thName stx attrKind => do
-      Attribute.Builtin.ensureNoArgs stx
       -- TODO: use the attribute kind
       unless attrKind == AttributeKind.global do
         throwError "invalid attribute 'progress_pure', must be global"
@@ -460,7 +497,7 @@ initialize pspecPureAttribute : PSpecAttr ← do
         saveProgressSpecFromThm pspecAttr.ext attrKind liftedThmName
   }
   registerBuiltinAttribute attrImpl
-  pure { attr := attrImpl, ext := ext }
+  pure { attr := attrImpl }
 
 end Progress
 

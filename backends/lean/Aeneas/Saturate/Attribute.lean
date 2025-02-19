@@ -127,7 +127,7 @@ structure SaturateAttribute where
   deriving Inhabited
 
 -- The ident is the name of the saturation set, the term is the pattern.
-syntax (name := aeneas_saturate) "aeneas_saturate" " (" &"set" " := " ident ")" " (" &"pattern" " := " term ")" : attr
+syntax (name := aeneas_saturate) "aeneas_saturate" "(" &"set" " := " ident ")" " (" &"pattern" " := " term ")" : attr
 
 def elabSaturateAttribute (stx : Syntax) : MetaM (Name × Syntax) :=
   withRef stx do
