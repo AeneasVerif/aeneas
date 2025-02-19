@@ -429,6 +429,7 @@ The reference semantics are here: https://doc.rust-lang.org/reference/expression
 -/
 
 /-- When casting between unsigned integers, we truncate or **zero**-extend the integer. -/
+@[progress_pure_def]
 def UScalar.cast {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) : UScalar tgt_ty :=
   -- This truncates the integer if the numBits is smaller
   ⟨ x.bv.zeroExtend tgt_ty.numBits ⟩
@@ -437,11 +438,13 @@ def UScalar.cast {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) 
 
    When casting from an unsigned integer to a signed integer, we truncate or **zero**-extend.
 -/
+@[progress_pure_def]
 def UScalar.hcast {src_ty : UScalarTy} (tgt_ty : IScalarTy) (x : UScalar src_ty) : IScalar tgt_ty :=
   -- This truncates the integer if the numBits is smaller
   ⟨ x.bv.zeroExtend tgt_ty.numBits ⟩
 
 /-- When casting between signed integers, we truncate or **sign**-extend. -/
+@[progress_pure_def]
 def IScalar.cast {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty) : IScalar tgt_ty :=
   ⟨ x.bv.signExtend tgt_ty.numBits ⟩
 
@@ -449,6 +452,7 @@ def IScalar.cast {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty) 
 
    When casting from a signed integer to a unsigned integer, we truncate or **sign**-extend.
 -/
+@[progress_pure_def]
 def IScalar.hcast {src_ty : IScalarTy} (tgt_ty : UScalarTy) (x : IScalar src_ty) : UScalar tgt_ty :=
   ⟨ x.bv.signExtend tgt_ty.numBits ⟩
 
@@ -505,15 +509,18 @@ section
 
 end
 
+@[progress_pure_def]
 def UScalar.cast_fromBool (ty : UScalarTy) (x : Bool) : UScalar ty :=
   if x then ⟨ 1#ty.numBits ⟩ else ⟨ 0#ty.numBits ⟩
 
+@[progress_pure_def]
 def IScalar.cast_fromBool (ty : IScalarTy) (x : Bool) : IScalar ty :=
   if x then ⟨ 1#ty.numBits ⟩ else ⟨ 0#ty.numBits ⟩
 
 /-!
 Negation
 -/
+@[progress_pure_def]
 def IScalar.neg {ty : IScalarTy} (x : IScalar ty) : Result (IScalar ty) := IScalar.tryMk ty (- x.val)
 
 /--
@@ -2240,6 +2247,7 @@ theorem core.num.checked_add_UScalar_bv_spec {ty} (x y : UScalar ty) :
   (have : 0 < 2^ty.numBits := by simp) <;>
   omega
 
+@[progress_pure checked_add x y]
 theorem U8.checked_add_bv_spec (x y : U8) :
   match U8.checked_add x y with
   | some z => x.val + y.val ≤ U8.max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
@@ -2248,6 +2256,7 @@ theorem U8.checked_add_bv_spec (x y : U8) :
   simp_all [U8.checked_add, UScalar.max, U8.bv]
   cases h: core.num.checked_add_UScalar x y <;> simp_all [max, numBits]
 
+@[progress_pure checked_add x y]
 theorem U16.checked_add_bv_spec (x y : U16) :
   match U16.checked_add x y with
   | some z => x.val + y.val ≤ U16.max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
@@ -2256,6 +2265,7 @@ theorem U16.checked_add_bv_spec (x y : U16) :
   simp_all [U16.checked_add, UScalar.max, U16.bv]
   cases h: core.num.checked_add_UScalar x y <;> simp_all [max, numBits]
 
+@[progress_pure checked_add x y]
 theorem U32.checked_add_bv_spec (x y : U32) :
   match U32.checked_add x y with
   | some z => x.val + y.val ≤ U32.max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
@@ -2264,6 +2274,7 @@ theorem U32.checked_add_bv_spec (x y : U32) :
   simp_all [U32.checked_add, UScalar.max, U32.bv]
   cases h: core.num.checked_add_UScalar x y <;> simp_all [max, numBits]
 
+@[progress_pure checked_add x y]
 theorem U64.checked_add_bv_spec (x y : U64) :
   match U64.checked_add x y with
   | some z => x.val + y.val ≤ U64.max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
@@ -2272,6 +2283,7 @@ theorem U64.checked_add_bv_spec (x y : U64) :
   simp_all [U64.checked_add, UScalar.max, U64.bv]
   cases h: core.num.checked_add_UScalar x y <;> simp_all [max, numBits]
 
+@[progress_pure checked_add x y]
 theorem U128.checked_add_bv_spec (x y : U128) :
   match U128.checked_add x y with
   | some z => x.val + y.val ≤ U128.max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
@@ -2280,6 +2292,7 @@ theorem U128.checked_add_bv_spec (x y : U128) :
   simp_all [U128.checked_add, UScalar.max, U128.bv]
   cases h: core.num.checked_add_UScalar x y <;> simp_all [max, numBits]
 
+@[progress_pure checked_add x y]
 theorem Usize.checked_add_bv_spec (x y : Usize) :
   match Usize.checked_add x y with
   | some z => x.val + y.val ≤ Usize.max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
@@ -2301,6 +2314,7 @@ theorem core.num.checked_add_IScalar_bv_spec {ty} (x y : IScalar ty) :
   dcases hEq : IScalar.add x y <;> simp_all [Option.ofResult, checked_add_IScalar, IScalar.min, IScalar.max] <;>
   omega
 
+@[progress_pure checked_add x y]
 theorem I8.checked_add_bv_spec (x y : I8) :
   match core.num.checked_add_IScalar x y with
   | some z => I8.min ≤ x.val + y.val ∧ x.val + y.val ≤ I8.max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
@@ -2309,6 +2323,7 @@ theorem I8.checked_add_bv_spec (x y : I8) :
   simp_all only [I8.checked_add, IScalar.min, IScalar.max, I8.bv, min, max, numBits]
   cases h: core.num.checked_add_IScalar x y <;> simp_all only [numBits] <;> simp
 
+@[progress_pure checked_add x y]
 theorem I16.checked_add_bv_spec (x y : I16) :
   match core.num.checked_add_IScalar x y with
   | some z => I16.min ≤ x.val + y.val ∧ x.val + y.val ≤ I16.max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
@@ -2317,6 +2332,7 @@ theorem I16.checked_add_bv_spec (x y : I16) :
   simp_all only [I16.checked_add, IScalar.min, IScalar.max, I16.bv, min, max, numBits]
   cases h: core.num.checked_add_IScalar x y <;> simp_all only [numBits] <;> simp
 
+@[progress_pure checked_add x y]
 theorem I32.checked_add_bv_spec (x y : I32) :
   match core.num.checked_add_IScalar x y with
   | some z => I32.min ≤ x.val + y.val ∧ x.val + y.val ≤ I32.max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
@@ -2325,6 +2341,7 @@ theorem I32.checked_add_bv_spec (x y : I32) :
   simp_all only [I32.checked_add, IScalar.min, IScalar.max, I32.bv, min, max, numBits]
   cases h: core.num.checked_add_IScalar x y <;> simp_all only [numBits] <;> simp
 
+@[progress_pure checked_add x y]
 theorem I64.checked_add_bv_spec (x y : I64) :
   match core.num.checked_add_IScalar x y with
   | some z => I64.min ≤ x.val + y.val ∧ x.val + y.val ≤ I64.max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
@@ -2333,6 +2350,7 @@ theorem I64.checked_add_bv_spec (x y : I64) :
   simp_all only [I64.checked_add, IScalar.min, IScalar.max, I64.bv, min, max, numBits]
   cases h: core.num.checked_add_IScalar x y <;> simp_all only [numBits] <;> simp
 
+@[progress_pure checked_add x y]
 theorem I128.checked_add_bv_spec (x y : I128) :
   match core.num.checked_add_IScalar x y with
   | some z => I128.min ≤ x.val + y.val ∧ x.val + y.val ≤ I128.max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
@@ -2341,6 +2359,7 @@ theorem I128.checked_add_bv_spec (x y : I128) :
   simp_all only [I128.checked_add, IScalar.min, IScalar.max, I128.bv, min, max, numBits]
   cases h: core.num.checked_add_IScalar x y <;> simp_all only [numBits] <;> simp
 
+@[progress_pure checked_add x y]
 theorem Isize.checked_add_bv_spec (x y : Isize) :
   match core.num.checked_add_IScalar x y with
   | some z => Isize.min ≤ x.val + y.val ∧ x.val + y.val ≤ Isize.max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
@@ -2365,6 +2384,7 @@ theorem core.num.checked_sub_UScalar_bv_spec {ty} (x y : UScalar ty) :
   rw [hsub] at h
   dcases hEq : UScalar.sub x y <;> simp_all [Option.ofResult, checked_sub_UScalar]
 
+@[progress_pure checked_sub x y]
 theorem U8.checked_sub_bv_spec (x y : U8) :
   match U8.checked_sub x y with
   | some z => y.val ≤ x.val ∧ z.val = x.val - y.val ∧ z.bv = x.bv - y.bv
@@ -2373,6 +2393,7 @@ theorem U8.checked_sub_bv_spec (x y : U8) :
   simp_all [U8.checked_sub, UScalar.max, U8.bv]
   cases h: core.num.checked_sub_UScalar x y <;> simp_all
 
+@[progress_pure checked_sub x y]
 theorem U16.checked_sub_bv_spec (x y : U16) :
   match U16.checked_sub x y with
   | some z => y.val ≤ x.val ∧ z.val = x.val - y.val ∧ z.bv = x.bv - y.bv
@@ -2381,6 +2402,7 @@ theorem U16.checked_sub_bv_spec (x y : U16) :
   simp_all [U16.checked_sub, UScalar.max, U16.bv]
   cases h: core.num.checked_sub_UScalar x y <;> simp_all
 
+@[progress_pure checked_sub x y]
 theorem U32.checked_sub_bv_spec (x y : U32) :
   match U32.checked_sub x y with
   | some z => y.val ≤ x.val ∧ z.val = x.val - y.val ∧ z.bv = x.bv - y.bv
@@ -2389,6 +2411,7 @@ theorem U32.checked_sub_bv_spec (x y : U32) :
   simp_all [U32.checked_sub, UScalar.max, U32.bv]
   cases h: core.num.checked_sub_UScalar x y <;> simp_all
 
+@[progress_pure checked_sub x y]
 theorem U64.checked_sub_bv_spec (x y : U64) :
   match U64.checked_sub x y with
   | some z => y.val ≤ x.val ∧ z.val = x.val - y.val ∧ z.bv = x.bv - y.bv
@@ -2397,6 +2420,7 @@ theorem U64.checked_sub_bv_spec (x y : U64) :
   simp_all [U64.checked_sub, UScalar.max, U64.bv]
   cases h: core.num.checked_sub_UScalar x y <;> simp_all
 
+@[progress_pure checked_sub x y]
 theorem U128.checked_sub_bv_spec (x y : U128) :
   match U128.checked_sub x y with
   | some z => y.val ≤ x.val ∧ z.val = x.val - y.val ∧ z.bv = x.bv - y.bv
@@ -2427,6 +2451,7 @@ theorem core.num.checked_sub_IScalar_bv_spec {ty} (x y : IScalar ty) :
   (have : 0 < 2^ty.numBits := by simp) <;>
   omega
 
+@[progress_pure checked_sub x y]
 theorem I8.checked_sub_bv_spec (x y : I8) :
   match core.num.checked_sub_IScalar x y with
   | some z => I8.min ≤ x.val - y.val ∧ x.val - y.val ≤ I8.max ∧ z.val = x.val - y.val ∧ z.bv = x.bv - y.bv
@@ -2435,6 +2460,7 @@ theorem I8.checked_sub_bv_spec (x y : I8) :
   simp_all only [I8.checked_sub, IScalar.min, IScalar.max, I8.bv, min, max, numBits]
   cases h: core.num.checked_sub_IScalar x y <;> simp_all only <;> simp
 
+@[progress_pure checked_sub x y]
 theorem I16.checked_sub_bv_spec (x y : I16) :
   match core.num.checked_sub_IScalar x y with
   | some z => I16.min ≤ x.val - y.val ∧ x.val - y.val ≤ I16.max ∧ z.val = x.val - y.val ∧ z.bv = x.bv - y.bv
@@ -2443,6 +2469,7 @@ theorem I16.checked_sub_bv_spec (x y : I16) :
   simp_all only [I16.checked_sub, IScalar.min, IScalar.max, I16.bv, min, max, numBits]
   cases h: core.num.checked_sub_IScalar x y <;> simp_all only <;> simp
 
+@[progress_pure checked_sub x y]
 theorem I32.checked_sub_bv_spec (x y : I32) :
   match core.num.checked_sub_IScalar x y with
   | some z => I32.min ≤ x.val - y.val ∧ x.val - y.val ≤ I32.max ∧ z.val = x.val - y.val ∧ z.bv = x.bv - y.bv
@@ -2451,6 +2478,7 @@ theorem I32.checked_sub_bv_spec (x y : I32) :
   simp_all only [I32.checked_sub, IScalar.min, IScalar.max, I32.bv, min, max, numBits]
   cases h: core.num.checked_sub_IScalar x y <;> simp_all only <;> simp
 
+@[progress_pure checked_sub x y]
 theorem I64.checked_sub_bv_spec (x y : I64) :
   match core.num.checked_sub_IScalar x y with
   | some z => I64.min ≤ x.val - y.val ∧ x.val - y.val ≤ I64.max ∧ z.val = x.val - y.val ∧ z.bv = x.bv - y.bv
@@ -2459,6 +2487,7 @@ theorem I64.checked_sub_bv_spec (x y : I64) :
   simp_all only [I64.checked_sub, IScalar.min, IScalar.max, I64.bv, min, max, numBits]
   cases h: core.num.checked_sub_IScalar x y <;> simp_all only <;> simp
 
+@[progress_pure checked_sub x y]
 theorem I128.checked_sub_bv_spec (x y : I128) :
   match core.num.checked_sub_IScalar x y with
   | some z => I128.min ≤ x.val - y.val ∧ x.val - y.val ≤ I128.max ∧ z.val = x.val - y.val ∧ z.bv = x.bv - y.bv
@@ -2467,6 +2496,7 @@ theorem I128.checked_sub_bv_spec (x y : I128) :
   simp_all only [I128.checked_sub, IScalar.min, IScalar.max, I128.bv, min, max, numBits]
   cases h: core.num.checked_sub_IScalar x y <;> simp_all only <;> simp
 
+@[progress_pure checked_sub x y]
 theorem Isize.checked_sub_bv_spec (x y : Isize) :
   match core.num.checked_sub_IScalar x y with
   | some z => Isize.min ≤ x.val - y.val ∧ x.val - y.val ≤ Isize.max ∧ z.val = x.val - y.val ∧ z.bv = x.bv - y.bv
@@ -2490,6 +2520,7 @@ theorem core.num.checked_mul_UScalar_bv_spec {ty} (x y : UScalar ty) :
   simp [checked_mul_UScalar]
   dcases hEq : UScalar.mul x y <;> simp_all [Option.ofResult]
 
+@[progress_pure checked_mul x y]
 theorem U8.checked_mul_bv_spec (x y : U8) :
   match U8.checked_mul x y with
   | some z => x.val * y.val ≤ U8.max ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
@@ -2498,6 +2529,7 @@ theorem U8.checked_mul_bv_spec (x y : U8) :
   simp_all only [U8.checked_mul, UScalar.max, U8.bv, min, max, numBits]
   cases h: core.num.checked_mul_UScalar x y <;> simp_all only [and_self]
 
+@[progress_pure checked_mul x y]
 theorem U16.checked_mul_bv_spec (x y : U16) :
   match U16.checked_mul x y with
   | some z => x.val * y.val ≤ U16.max ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
@@ -2506,6 +2538,7 @@ theorem U16.checked_mul_bv_spec (x y : U16) :
   simp_all only [U16.checked_mul, UScalar.max, U16.bv, min, max, numBits]
   cases h: core.num.checked_mul_UScalar x y <;> simp_all only [and_self]
 
+@[progress_pure checked_mul x y]
 theorem U32.checked_mul_bv_spec (x y : U32) :
   match U32.checked_mul x y with
   | some z => x.val * y.val ≤ U32.max ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
@@ -2514,6 +2547,7 @@ theorem U32.checked_mul_bv_spec (x y : U32) :
   simp_all only [U32.checked_mul, UScalar.max, U32.bv, min, max, numBits]
   cases h: core.num.checked_mul_UScalar x y <;> simp_all only [and_self]
 
+@[progress_pure checked_mul x y]
 theorem U64.checked_mul_bv_spec (x y : U64) :
   match U64.checked_mul x y with
   | some z => x.val * y.val ≤ U64.max ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
@@ -2522,6 +2556,7 @@ theorem U64.checked_mul_bv_spec (x y : U64) :
   simp_all only [U64.checked_mul, UScalar.max, U64.bv, min, max, numBits]
   cases h: core.num.checked_mul_UScalar x y <;> simp_all only [and_self]
 
+@[progress_pure checked_mul x y]
 theorem U128.checked_mul_bv_spec (x y : U128) :
   match U128.checked_mul x y with
   | some z => x.val * y.val ≤ U128.max ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
@@ -2530,6 +2565,7 @@ theorem U128.checked_mul_bv_spec (x y : U128) :
   simp_all only [U128.checked_mul, UScalar.max, U128.bv, min, max, numBits]
   cases h: core.num.checked_mul_UScalar x y <;> simp_all only [and_self]
 
+@[progress_pure checked_mul x y]
 theorem Usize.checked_mul_bv_spec (x y : Usize) :
   match Usize.checked_mul x y with
   | some z => x.val * y.val ≤ Usize.max ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
@@ -2549,6 +2585,7 @@ theorem core.num.checked_mul_IScalar_bv_spec {ty} (x y : IScalar ty) :
   simp [checked_mul_IScalar]
   dcases hEq : IScalar.mul x y <;> simp_all [Option.ofResult]
 
+@[progress_pure checked_mul x y]
 theorem I8.checked_mul_bv_spec (x y : I8) :
   match core.num.checked_mul_IScalar x y with
   | some z => I8.min ≤ x.val * y.val ∧ x.val * y.val ≤ I8.max ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
@@ -2557,6 +2594,7 @@ theorem I8.checked_mul_bv_spec (x y : I8) :
   simp_all only [I8.checked_mul, IScalar.min, IScalar.max, I8.bv, min, max, numBits]
   cases h: core.num.checked_mul_IScalar x y <;> simp_all only [not_false_eq_true, and_self]
 
+@[progress_pure checked_mul x y]
 theorem I16.checked_mul_bv_spec (x y : I16) :
   match core.num.checked_mul_IScalar x y with
   | some z => I16.min ≤ x.val * y.val ∧ x.val * y.val ≤ I16.max ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
@@ -2565,6 +2603,7 @@ theorem I16.checked_mul_bv_spec (x y : I16) :
   simp_all only [I16.checked_mul, IScalar.min, IScalar.max, I16.bv, min, max, numBits]
   cases h: core.num.checked_mul_IScalar x y <;> simp_all only [not_false_eq_true, and_self]
 
+@[progress_pure checked_mul x y]
 theorem I32.checked_mul_bv_spec (x y : I32) :
   match core.num.checked_mul_IScalar x y with
   | some z => I32.min ≤ x.val * y.val ∧ x.val * y.val ≤ I32.max ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
@@ -2573,6 +2612,7 @@ theorem I32.checked_mul_bv_spec (x y : I32) :
   simp_all only [I32.checked_mul, IScalar.min, IScalar.max, I32.bv, min, max, numBits]
   cases h: core.num.checked_mul_IScalar x y <;> simp_all only [not_false_eq_true, and_self]
 
+@[progress_pure checked_mul x y]
 theorem I64.checked_mul_bv_spec (x y : I64) :
   match core.num.checked_mul_IScalar x y with
   | some z => I64.min ≤ x.val * y.val ∧ x.val * y.val ≤ I64.max ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
@@ -2581,6 +2621,7 @@ theorem I64.checked_mul_bv_spec (x y : I64) :
   simp_all only [I64.checked_mul, IScalar.min, IScalar.max, I64.bv, min, max, numBits]
   cases h: core.num.checked_mul_IScalar x y <;> simp_all only [not_false_eq_true, and_self]
 
+@[progress_pure checked_mul x y]
 theorem I128.checked_mul_bv_spec (x y : I128) :
   match core.num.checked_mul_IScalar x y with
   | some z => I128.min ≤ x.val * y.val ∧ x.val * y.val ≤ I128.max ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
@@ -2589,6 +2630,7 @@ theorem I128.checked_mul_bv_spec (x y : I128) :
   simp_all only [I128.checked_mul, IScalar.min, IScalar.max, I128.bv, min, max, numBits]
   cases h: core.num.checked_mul_IScalar x y <;> simp_all only [not_false_eq_true, and_self]
 
+@[progress_pure checked_mul x y]
 theorem Isize.checked_mul_bv_spec (x y : Isize) :
   match core.num.checked_mul_IScalar x y with
   | some z => Isize.min ≤ x.val * y.val ∧ x.val * y.val ≤ Isize.max ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
@@ -2620,6 +2662,7 @@ theorem core.num.checked_div_UScalar_bv_spec {ty} (x y : UScalar ty) :
     simp [this, UScalar.div, hnz] at hz
     simp [hz, hnz']
 
+@[progress_pure checked_div x y]
 theorem U8.checked_div_bv_spec (x y : U8) :
   match U8.checked_div x y with
   | some z => y.val ≠ 0 ∧ z.val = x.val / y.val ∧ z.bv = x.bv / y.bv
@@ -2628,6 +2671,7 @@ theorem U8.checked_div_bv_spec (x y : U8) :
   simp_all [U8.checked_div, UScalar.max, U8.bv]
   cases h: core.num.checked_div_UScalar x y <;> simp_all
 
+@[progress_pure checked_div x y]
 theorem U16.checked_div_bv_spec (x y : U16) :
   match U16.checked_div x y with
   | some z => y.val ≠ 0 ∧ z.val = x.val / y.val ∧ z.bv = x.bv / y.bv
@@ -2636,6 +2680,7 @@ theorem U16.checked_div_bv_spec (x y : U16) :
   simp_all [U16.checked_div, UScalar.max, U16.bv]
   cases h: core.num.checked_div_UScalar x y <;> simp_all
 
+@[progress_pure checked_div x y]
 theorem U32.checked_div_bv_spec (x y : U32) :
   match U32.checked_div x y with
   | some z => y.val ≠ 0 ∧ z.val = x.val / y.val ∧ z.bv = x.bv / y.bv
@@ -2644,6 +2689,7 @@ theorem U32.checked_div_bv_spec (x y : U32) :
   simp_all [U32.checked_div, UScalar.max, U32.bv]
   cases h: core.num.checked_div_UScalar x y <;> simp_all
 
+@[progress_pure checked_div x y]
 theorem U64.checked_div_bv_spec (x y : U64) :
   match U64.checked_div x y with
   | some z => y.val ≠ 0 ∧ z.val = x.val / y.val ∧ z.bv = x.bv / y.bv
@@ -2652,6 +2698,7 @@ theorem U64.checked_div_bv_spec (x y : U64) :
   simp_all [U64.checked_div, UScalar.max, U64.bv]
   cases h: core.num.checked_div_UScalar x y <;> simp_all
 
+@[progress_pure checked_div x y]
 theorem U128.checked_div_bv_spec (x y : U128) :
   match U128.checked_div x y with
   | some z => y.val ≠ 0 ∧ z.val = x.val / y.val ∧ z.bv = x.bv / y.bv
@@ -2660,6 +2707,7 @@ theorem U128.checked_div_bv_spec (x y : U128) :
   simp_all [U128.checked_div, UScalar.max, U128.bv]
   cases h: core.num.checked_div_UScalar x y <;> simp_all
 
+@[progress_pure checked_div x y]
 theorem Usize.checked_div_bv_spec (x y : Usize) :
   match Usize.checked_div x y with
   | some z => y.val ≠ 0 ∧ z.val = x.val / y.val ∧ z.bv = x.bv / y.bv
@@ -2691,6 +2739,7 @@ theorem core.num.checked_div_IScalar_bv_spec {ty} (x y : IScalar ty) :
     tauto
   . simp_all
 
+@[progress_pure checked_div x y]
 theorem I8.checked_div_bv_spec (x y : I8) :
   match core.num.checked_div_IScalar x y with
   | some z => y.val ≠ 0 ∧ ¬ (x.val = I8.min ∧ y.val = -1) ∧ z.val = Int.tdiv x.val y.val ∧ z.bv = BitVec.sdiv x.bv y.bv
@@ -2699,6 +2748,7 @@ theorem I8.checked_div_bv_spec (x y : I8) :
   simp_all only [I8.checked_div, I8.bv, IScalar.min, min, max, numBits]
   cases h: core.num.checked_div_IScalar x y <;> simp_all only [ne_eq, not_false_eq_true, and_self, this]
 
+@[progress_pure checked_div x y]
 theorem I16.checked_div_bv_spec (x y : I16) :
   match core.num.checked_div_IScalar x y with
   | some z => y.val ≠ 0 ∧ ¬ (x.val = I16.min ∧ y.val = -1) ∧ z.val = Int.tdiv x.val y.val ∧ z.bv = BitVec.sdiv x.bv y.bv
@@ -2707,6 +2757,7 @@ theorem I16.checked_div_bv_spec (x y : I16) :
   simp_all only [I16.checked_div, I16.bv, IScalar.min, min, max, numBits]
   cases h: core.num.checked_div_IScalar x y <;> simp_all only [ne_eq, not_false_eq_true, and_self, this]
 
+@[progress_pure checked_div x y]
 theorem I32.checked_div_bv_spec (x y : I32) :
   match core.num.checked_div_IScalar x y with
   | some z => y.val ≠ 0 ∧ ¬ (x.val = I32.min ∧ y.val = -1) ∧ z.val = Int.tdiv x.val y.val ∧ z.bv = BitVec.sdiv x.bv y.bv
@@ -2715,6 +2766,7 @@ theorem I32.checked_div_bv_spec (x y : I32) :
   simp_all only [I32.checked_div, I32.bv, IScalar.min, min, max, numBits]
   cases h: core.num.checked_div_IScalar x y <;> simp_all only [ne_eq, not_false_eq_true, and_self, this]
 
+@[progress_pure checked_div x y]
 theorem I64.checked_div_bv_spec (x y : I64) :
   match core.num.checked_div_IScalar x y with
   | some z => y.val ≠ 0 ∧ ¬ (x.val = I64.min ∧ y.val = -1) ∧ z.val = Int.tdiv x.val y.val ∧ z.bv = BitVec.sdiv x.bv y.bv
@@ -2723,6 +2775,7 @@ theorem I64.checked_div_bv_spec (x y : I64) :
   simp_all only [I64.checked_div, I64.bv, IScalar.min, min, max, numBits]
   cases h: core.num.checked_div_IScalar x y <;> simp_all only [ne_eq, not_false_eq_true, and_self, this]
 
+@[progress_pure checked_div x y]
 theorem I128.checked_div_bv_spec (x y : I128) :
   match core.num.checked_div_IScalar x y with
   | some z => y.val ≠ 0 ∧ ¬ (x.val = I128.min ∧ y.val = -1) ∧ z.val = Int.tdiv x.val y.val ∧ z.bv = BitVec.sdiv x.bv y.bv
@@ -2731,6 +2784,7 @@ theorem I128.checked_div_bv_spec (x y : I128) :
   simp_all only [I128.checked_div, I128.bv, IScalar.min, min, max, numBits]
   cases h: core.num.checked_div_IScalar x y <;> simp_all only [ne_eq, not_false_eq_true, and_self, this]
 
+@[progress_pure checked_div x y]
 theorem Isize.checked_div_bv_spec (x y : Isize) :
   match core.num.checked_div_IScalar x y with
   | some z => y.val ≠ 0 ∧ ¬ (x.val = Isize.min ∧ y.val = -1) ∧ z.val = Int.tdiv x.val y.val ∧ z.bv = BitVec.sdiv x.bv y.bv
@@ -2740,11 +2794,11 @@ theorem Isize.checked_div_bv_spec (x y : Isize) :
   cases h: core.num.checked_div_IScalar x y <;> simp_all only [ne_eq, not_false_eq_true, and_self, this]
 
 /-!
-### Checked Division
+### Checked Remained
 -/
 
 /-!
-Unsigned checked div
+Unsigned checked remainder
 -/
 theorem core.num.checked_rem_UScalar_bv_spec {ty} (x y : UScalar ty) :
   match core.num.checked_rem_UScalar x y with
@@ -2762,6 +2816,7 @@ theorem core.num.checked_rem_UScalar_bv_spec {ty} (x y : UScalar ty) :
     simp [this, UScalar.rem, hnz] at hz
     simp [hz, hnz']
 
+@[progress_pure checked_rem x y]
 theorem U8.checked_rem_bv_spec (x y : U8) :
   match U8.checked_rem x y with
   | some z => y.val ≠ 0 ∧ z.val = x.val % y.val ∧ z.bv = x.bv % y.bv
@@ -2770,6 +2825,7 @@ theorem U8.checked_rem_bv_spec (x y : U8) :
   simp_all [U8.checked_rem, UScalar.max, U8.bv]
   cases h: core.num.checked_rem_UScalar x y <;> simp_all
 
+@[progress_pure checked_rem x y]
 theorem U16.checked_rem_bv_spec (x y : U16) :
   match U16.checked_rem x y with
   | some z => y.val ≠ 0 ∧ z.val = x.val % y.val ∧ z.bv = x.bv % y.bv
@@ -2778,6 +2834,7 @@ theorem U16.checked_rem_bv_spec (x y : U16) :
   simp_all [U16.checked_rem, UScalar.max, U16.bv]
   cases h: core.num.checked_rem_UScalar x y <;> simp_all
 
+@[progress_pure checked_rem x y]
 theorem U32.checked_rem_bv_spec (x y : U32) :
   match U32.checked_rem x y with
   | some z => y.val ≠ 0 ∧ z.val = x.val % y.val ∧ z.bv = x.bv % y.bv
@@ -2786,6 +2843,7 @@ theorem U32.checked_rem_bv_spec (x y : U32) :
   simp_all [U32.checked_rem, UScalar.max, U32.bv]
   cases h: core.num.checked_rem_UScalar x y <;> simp_all
 
+@[progress_pure checked_rem x y]
 theorem U64.checked_rem_bv_spec (x y : U64) :
   match U64.checked_rem x y with
   | some z => y.val ≠ 0 ∧ z.val = x.val % y.val ∧ z.bv = x.bv % y.bv
@@ -2794,6 +2852,7 @@ theorem U64.checked_rem_bv_spec (x y : U64) :
   simp_all [U64.checked_rem, UScalar.max, U64.bv]
   cases h: core.num.checked_rem_UScalar x y <;> simp_all
 
+@[progress_pure checked_rem x y]
 theorem U128.checked_rem_bv_spec (x y : U128) :
   match U128.checked_rem x y with
   | some z => y.val ≠ 0 ∧ z.val = x.val % y.val ∧ z.bv = x.bv % y.bv
@@ -2802,6 +2861,7 @@ theorem U128.checked_rem_bv_spec (x y : U128) :
   simp_all [U128.checked_rem, UScalar.max, U128.bv]
   cases h: core.num.checked_rem_UScalar x y <;> simp_all
 
+@[progress_pure checked_rem x y]
 theorem Usize.checked_rem_bv_spec (x y : Usize) :
   match Usize.checked_rem x y with
   | some z => y.val ≠ 0 ∧ z.val = x.val % y.val ∧ z.bv = x.bv % y.bv
@@ -2829,6 +2889,7 @@ theorem core.num.checked_rem_IScalar_bv_spec {ty} (x y : IScalar ty) :
     simp [this, IScalar.rem, hnz] at hz
     simp [*]
 
+@[progress_pure checked_rem x y]
 theorem I8.checked_rem_bv_spec (x y : I8) :
   match core.num.checked_rem_IScalar x y with
   | some z => y.val ≠ 0 ∧ z.val = Int.tmod x.val y.val ∧ z.bv = BitVec.srem x.bv y.bv
@@ -2837,6 +2898,7 @@ theorem I8.checked_rem_bv_spec (x y : I8) :
   simp_all only [I8.checked_rem, I8.bv, IScalar.min]
   cases h: core.num.checked_rem_IScalar x y <;> simp_all
 
+@[progress_pure checked_rem x y]
 theorem I16.checked_rem_bv_spec (x y : I16) :
   match core.num.checked_rem_IScalar x y with
   | some z => y.val ≠ 0 ∧ z.val = Int.tmod x.val y.val ∧ z.bv = BitVec.srem x.bv y.bv
@@ -2845,6 +2907,7 @@ theorem I16.checked_rem_bv_spec (x y : I16) :
   simp_all only [I16.checked_rem, I16.bv, IScalar.min]
   cases h: core.num.checked_rem_IScalar x y <;> simp_all
 
+@[progress_pure checked_rem x y]
 theorem I32.checked_rem_bv_spec (x y : I32) :
   match core.num.checked_rem_IScalar x y with
   | some z => y.val ≠ 0 ∧ z.val = Int.tmod x.val y.val ∧ z.bv = BitVec.srem x.bv y.bv
@@ -2853,6 +2916,7 @@ theorem I32.checked_rem_bv_spec (x y : I32) :
   simp_all only [I32.checked_rem, I32.bv, IScalar.min]
   cases h: core.num.checked_rem_IScalar x y <;> simp_all
 
+@[progress_pure checked_rem x y]
 theorem I64.checked_rem_bv_spec (x y : I64) :
   match core.num.checked_rem_IScalar x y with
   | some z => y.val ≠ 0 ∧ z.val = Int.tmod x.val y.val ∧ z.bv = BitVec.srem x.bv y.bv
@@ -2861,6 +2925,7 @@ theorem I64.checked_rem_bv_spec (x y : I64) :
   simp_all only [I64.checked_rem, I64.bv, IScalar.min]
   cases h: core.num.checked_rem_IScalar x y <;> simp_all
 
+@[progress_pure checked_rem x y]
 theorem I128.checked_rem_bv_spec (x y : I128) :
   match core.num.checked_rem_IScalar x y with
   | some z => y.val ≠ 0 ∧ z.val = Int.tmod x.val y.val ∧ z.bv = BitVec.srem x.bv y.bv
@@ -2869,6 +2934,7 @@ theorem I128.checked_rem_bv_spec (x y : I128) :
   simp_all only [I128.checked_rem, I128.bv, IScalar.min]
   cases h: core.num.checked_rem_IScalar x y <;> simp_all
 
+@[progress_pure checked_rem x y]
 theorem Isize.checked_rem_bv_spec (x y : Isize) :
   match core.num.checked_rem_IScalar x y with
   | some z => y.val ≠ 0 ∧ z.val = Int.tmod x.val y.val ∧ z.bv = BitVec.srem x.bv y.bv
@@ -2896,19 +2962,19 @@ def BitVec.leadingZeros {w : Nat} (x : BitVec w) : Nat :=
 #assert BitVec.leadingZeros 1#32 = 31
 #assert BitVec.leadingZeros 255#32 = 24
 
-def core.num.Usize.leading_zeros (x : Usize) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
-def core.num.U8.leading_zeros (x : U8) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
-def core.num.U16.leading_zeros (x : U16) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
-def core.num.U32.leading_zeros (x : U32) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
-def core.num.U64.leading_zeros (x : U64) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
-def core.num.U128.leading_zeros (x : U128) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
+@[progress_pure_def] def core.num.Usize.leading_zeros (x : Usize) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
+@[progress_pure_def] def core.num.U8.leading_zeros (x : U8) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
+@[progress_pure_def] def core.num.U16.leading_zeros (x : U16) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
+@[progress_pure_def] def core.num.U32.leading_zeros (x : U32) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
+@[progress_pure_def] def core.num.U64.leading_zeros (x : U64) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
+@[progress_pure_def] def core.num.U128.leading_zeros (x : U128) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
 
-def core.num.Isize.leading_zeros (x : Isize) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
-def core.num.I8.leading_zeros (x : I8) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
-def core.num.I16.leading_zeros (x : I16) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
-def core.num.I32.leading_zeros (x : I32) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
-def core.num.I64.leading_zeros (x : I64) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
-def core.num.I128.leading_zeros (x : I128) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
+@[progress_pure_def] def core.num.Isize.leading_zeros (x : Isize) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
+@[progress_pure_def] def core.num.I8.leading_zeros (x : I8) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
+@[progress_pure_def] def core.num.I16.leading_zeros (x : I16) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
+@[progress_pure_def] def core.num.I32.leading_zeros (x : I32) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
+@[progress_pure_def] def core.num.I64.leading_zeros (x : I64) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
+@[progress_pure_def] def core.num.I128.leading_zeros (x : I128) : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
 
 -- Clone
 @[reducible, simp] def core.clone.impls.CloneUsize.clone (x : Usize) : Usize := x
@@ -3101,12 +3167,13 @@ def core.num.Isize.overflowing_add := @IScalar.overflowing_add .Isize
 attribute [-simp] Bool.exists_bool
 
 theorem UScalar.overflowing_add_eq {ty} (x y : UScalar ty) :
+  let z := overflowing_add x y
   if x.val + y.val > UScalar.max ty then
-    (overflowing_add x y).fst.val = x.val + y.val - UScalar.max ty - 1 ∧
-    (overflowing_add x y).snd = true
+    z.fst.val = x.val + y.val - UScalar.max ty - 1 ∧
+    z.snd = true
   else
-    (overflowing_add x y).fst.val = x.val + y.val ∧
-    (overflowing_add x y).snd = false
+    z.fst.val = x.val + y.val ∧
+    z.snd = false
   := by
   simp [overflowing_add]
   simp only [val, BitVec.toNat_ofNat, max]
@@ -3126,6 +3193,48 @@ theorem UScalar.overflowing_add_eq {ty} (x y : UScalar ty) :
     . apply Nat.mod_eq_of_lt
       omega
     . omega
+
+@[progress_pure overflowing_add x y]
+theorem core.num.U8.overflowing_add_eq (x y : U8) :
+  let z := overflowing_add x y
+  if x.val + y.val > U8.max then z.fst.val = x.val + y.val - U8.max - 1 ∧ z.snd = true
+  else z.fst.val = x.val + y.val ∧ z.snd = false
+  := UScalar.overflowing_add_eq x y
+
+@[progress_pure overflowing_add x y]
+theorem core.num.U16.overflowing_add_eq (x y : U16) :
+  let z := overflowing_add x y
+  if x.val + y.val > U16.max then z.fst.val = x.val + y.val - U16.max - 1 ∧ z.snd = true
+  else z.fst.val = x.val + y.val ∧ z.snd = false
+  := UScalar.overflowing_add_eq x y
+
+@[progress_pure overflowing_add x y]
+theorem core.num.U32.overflowing_add_eq (x y : U32) :
+  let z := overflowing_add x y
+  if x.val + y.val > U32.max then z.fst.val = x.val + y.val - U32.max - 1 ∧ z.snd = true
+  else z.fst.val = x.val + y.val ∧ z.snd = false
+  := UScalar.overflowing_add_eq x y
+
+@[progress_pure overflowing_add x y]
+theorem core.num.U64.overflowing_add_eq (x y : U64) :
+  let z := overflowing_add x y
+  if x.val + y.val > U64.max then z.fst.val = x.val + y.val - U64.max - 1 ∧ z.snd = true
+  else z.fst.val = x.val + y.val ∧ z.snd = false
+  := UScalar.overflowing_add_eq x y
+
+@[progress_pure overflowing_add x y]
+theorem core.num.U128.overflowing_add_eq (x y : U128) :
+  let z := overflowing_add x y
+  if x.val + y.val > U128.max then z.fst.val = x.val + y.val - U128.max - 1 ∧ z.snd = true
+  else z.fst.val = x.val + y.val ∧ z.snd = false
+  := UScalar.overflowing_add_eq x y
+
+@[progress_pure overflowing_add x y]
+theorem core.num.Usize.overflowing_add_eq (x y : Usize) :
+  let z := overflowing_add x y
+  if x.val + y.val > Usize.max then z.fst.val = x.val + y.val - Usize.max - 1 ∧ z.snd = true
+  else z.fst.val = x.val + y.val ∧ z.snd = false
+  := UScalar.overflowing_add_eq x y
 
 /-!
 # Saturating Operations
@@ -3238,41 +3347,53 @@ def core.num.Isize.saturating_sub := @IScalar.saturating_sub IScalarTy.Isize
 def UScalar.wrapping_add {ty} (x y : UScalar ty) : UScalar ty := ⟨ x.bv + y.bv ⟩
 
 /- [core::num::{u8}::wrapping_add] -/
+@[progress_pure_def]
 def core.num.U8.wrapping_add : U8 → U8 → U8 := @UScalar.wrapping_add UScalarTy.U8
 
 /- [core::num::{u16}::wrapping_add] -/
+@[progress_pure_def]
 def core.num.U16.wrapping_add : U16 → U16 → U16  := @UScalar.wrapping_add UScalarTy.U16
 
 /- [core::num::{u32}::wrapping_add] -/
+@[progress_pure_def]
 def core.num.U32.wrapping_add : U32 → U32 → U32  := @UScalar.wrapping_add UScalarTy.U32
 
 /- [core::num::{u64}::wrapping_add] -/
+@[progress_pure_def]
 def core.num.U64.wrapping_add : U64 → U64 → U64  := @UScalar.wrapping_add UScalarTy.U64
 
 /- [core::num::{u128}::wrapping_add] -/
+@[progress_pure_def]
 def core.num.U128.wrapping_add : U128 → U128 → U128 := @UScalar.wrapping_add UScalarTy.U128
 
 /- [core::num::{usize}::wrapping_add] -/
+@[progress_pure_def]
 def core.num.Usize.wrapping_add : Usize → Usize → Usize  := @UScalar.wrapping_add UScalarTy.Usize
 
 def IScalar.wrapping_add {ty} (x y : IScalar ty) : IScalar ty := ⟨ x.bv + y.bv ⟩
 
 /- [core::num::{i8}::wrapping_add] -/
+@[progress_pure_def]
 def core.num.I8.wrapping_add : I8 → I8 → I8  := @IScalar.wrapping_add IScalarTy.I8
 
 /- [core::num::{i16}::wrapping_add] -/
+@[progress_pure_def]
 def core.num.I16.wrapping_add : I16 → I16 → I16  := @IScalar.wrapping_add IScalarTy.I16
 
 /- [core::num::{i32}::wrapping_add] -/
+@[progress_pure_def]
 def core.num.I32.wrapping_add : I32 → I32 → I32  := @IScalar.wrapping_add IScalarTy.I32
 
 /- [core::num::{i64}::wrapping_add] -/
+@[progress_pure_def]
 def core.num.I64.wrapping_add : I64 → I64 → I64 := @IScalar.wrapping_add IScalarTy.I64
 
 /- [core::num::{i128}::wrapping_add] -/
+@[progress_pure_def]
 def core.num.I128.wrapping_add : I128 → I128 → I128  := @IScalar.wrapping_add IScalarTy.I128
 
 /- [core::num::{isize}::wrapping_add] -/
+@[progress_pure_def]
 def core.num.Isize.wrapping_add : Isize → Isize → Isize  := @IScalar.wrapping_add IScalarTy.Isize
 
 @[simp] theorem UScalar.wrapping_add_bv_eq {ty} (x y : UScalar ty) :
@@ -3398,41 +3519,53 @@ def core.num.Isize.wrapping_add : Isize → Isize → Isize  := @IScalar.wrappin
 def UScalar.wrapping_sub {ty} (x y : UScalar ty) : UScalar ty := ⟨ x.bv - y.bv ⟩
 
 /- [core::num::{u8}::wrapping_sub] -/
+@[progress_pure_def]
 def core.num.U8.wrapping_sub : U8 → U8 → U8 := @UScalar.wrapping_sub UScalarTy.U8
 
 /- [core::num::{u16}::wrapping_sub] -/
+@[progress_pure_def]
 def core.num.U16.wrapping_sub : U16 → U16 → U16  := @UScalar.wrapping_sub UScalarTy.U16
 
 /- [core::num::{u32}::wrapping_sub] -/
+@[progress_pure_def]
 def core.num.U32.wrapping_sub : U32 → U32 → U32  := @UScalar.wrapping_sub UScalarTy.U32
 
 /- [core::num::{u64}::wrapping_sub] -/
+@[progress_pure_def]
 def core.num.U64.wrapping_sub : U64 → U64 → U64  := @UScalar.wrapping_sub UScalarTy.U64
 
 /- [core::num::{u128}::wrapping_sub] -/
+@[progress_pure_def]
 def core.num.U128.wrapping_sub : U128 → U128 → U128 := @UScalar.wrapping_sub UScalarTy.U128
 
 /- [core::num::{usize}::wrapping_sub] -/
+@[progress_pure_def]
 def core.num.Usize.wrapping_sub : Usize → Usize → Usize  := @UScalar.wrapping_sub UScalarTy.Usize
 
 def IScalar.wrapping_sub {ty} (x y : IScalar ty) : IScalar ty := ⟨ x.bv - y.bv ⟩
 
 /- [core::num::{i8}::wrapping_sub] -/
+@[progress_pure_def]
 def core.num.I8.wrapping_sub : I8 → I8 → I8  := @IScalar.wrapping_sub IScalarTy.I8
 
 /- [core::num::{i16}::wrapping_sub] -/
+@[progress_pure_def]
 def core.num.I16.wrapping_sub : I16 → I16 → I16  := @IScalar.wrapping_sub IScalarTy.I16
 
 /- [core::num::{i32}::wrapping_sub] -/
+@[progress_pure_def]
 def core.num.I32.wrapping_sub : I32 → I32 → I32  := @IScalar.wrapping_sub IScalarTy.I32
 
 /- [core::num::{i64}::wrapping_sub] -/
+@[progress_pure_def]
 def core.num.I64.wrapping_sub : I64 → I64 → I64 := @IScalar.wrapping_sub IScalarTy.I64
 
 /- [core::num::{i128}::wrapping_sub] -/
+@[progress_pure_def]
 def core.num.I128.wrapping_sub : I128 → I128 → I128  := @IScalar.wrapping_sub IScalarTy.I128
 
 /- [core::num::{isize}::wrapping_sub] -/
+@[progress_pure_def]
 def core.num.Isize.wrapping_sub : Isize → Isize → Isize  := @IScalar.wrapping_sub IScalarTy.Isize
 
 @[simp] theorem UScalar.wrapping_sub_bv_eq {ty} (x y : UScalar ty) :
@@ -3564,42 +3697,54 @@ def UScalar.rotate_left {ty} (x : UScalar ty) (shift : U32) : UScalar ty :=
   ⟨ x.bv.rotateLeft shift.val ⟩
 
 /- [core::num::{u8}::rotate_left] -/
+@[progress_pure_def]
 def core.num.U8.rotate_left : U8 → U32 → U8 := @UScalar.rotate_left .U8
 
 /- [core::num::{u16}::rotate_left] -/
+@[progress_pure_def]
 def core.num.U16.rotate_left : U16 → U32 → U16 := @UScalar.rotate_left .U16
 
 /- [core::num::{u32}::rotate_left] -/
+@[progress_pure_def]
 def core.num.U32.rotate_left : U32 → U32 → U32 := @UScalar.rotate_left .U32
 
 /- [core::num::{u64}::rotate_left] -/
+@[progress_pure_def]
 def core.num.U64.rotate_left : U64 → U32 → U64 := @UScalar.rotate_left .U64
 
 /- [core::num::{u128}::rotate_left] -/
+@[progress_pure_def]
 def core.num.U128.rotate_left : U128 → U32 → U128 := @UScalar.rotate_left .U128
 
 /- [core::num::{usize}::rotate_left] -/
+@[progress_pure_def]
 def core.num.Usize.rotate_left : Usize → U32 → Usize := @UScalar.rotate_left .Usize
 
 def IScalar.rotate_left {ty} (x : IScalar ty) (shift : U32) : IScalar ty :=
   ⟨ x.bv.rotateLeft shift.val ⟩
 
 /- [core::num::{u8}::rotate_left] -/
+@[progress_pure_def]
 def core.num.I8.rotate_left : I8 → U32 → I8 := @IScalar.rotate_left .I8
 
 /- [core::num::{u16}::rotate_left] -/
+@[progress_pure_def]
 def core.num.I16.rotate_left : I16 → U32 → I16 := @IScalar.rotate_left .I16
 
 /- [core::num::{u32}::rotate_left] -/
+@[progress_pure_def]
 def core.num.I32.rotate_left : I32 → U32 → I32 := @IScalar.rotate_left .I32
 
 /- [core::num::{u64}::rotate_left] -/
+@[progress_pure_def]
 def core.num.I64.rotate_left : I64 → U32 → I64 := @IScalar.rotate_left .I64
 
 /- [core::num::{u128}::rotate_left] -/
+@[progress_pure_def]
 def core.num.I128.rotate_left : I128 → U32 → I128 := @IScalar.rotate_left .I128
 
 /- [core::num::{usize}::rotate_left] -/
+@[progress_pure_def]
 def core.num.Isize.rotate_left : Isize → U32 → Isize := @IScalar.rotate_left .Isize
 
 /-!
@@ -3609,42 +3754,54 @@ def UScalar.rotate_right {ty} (x : UScalar ty) (shift : U32) : UScalar ty :=
   ⟨ x.bv.rotateLeft shift.val ⟩
 
 /- [core::num::{u8}::rotate_right] -/
+@[progress_pure_def]
 def core.num.U8.rotate_right : U8 → U32 → U8 := @UScalar.rotate_right .U8
 
 /- [core::num::{u16}::rotate_right] -/
+@[progress_pure_def]
 def core.num.U16.rotate_right : U16 → U32 → U16 := @UScalar.rotate_right .U16
 
 /- [core::num::{u32}::rotate_right] -/
+@[progress_pure_def]
 def core.num.U32.rotate_right : U32 → U32 → U32 := @UScalar.rotate_right .U32
 
 /- [core::num::{u64}::rotate_right] -/
+@[progress_pure_def]
 def core.num.U64.rotate_right : U64 → U32 → U64 := @UScalar.rotate_right .U64
 
 /- [core::num::{u128}::rotate_right] -/
+@[progress_pure_def]
 def core.num.U128.rotate_right : U128 → U32 → U128 := @UScalar.rotate_right .U128
 
 /- [core::num::{usize}::rotate_right] -/
+@[progress_pure_def]
 def core.num.Usize.rotate_right : Usize → U32 → Usize := @UScalar.rotate_right .Usize
 
 def IScalar.rotate_right {ty} (x : IScalar ty) (shift : U32) : IScalar ty :=
   ⟨ x.bv.rotateLeft shift.val ⟩
 
 /- [core::num::{u8}::rotate_right] -/
+@[progress_pure_def]
 def core.num.I8.rotate_right : I8 → U32 → I8 := @IScalar.rotate_right .I8
 
 /- [core::num::{u16}::rotate_right] -/
+@[progress_pure_def]
 def core.num.I16.rotate_right : I16 → U32 → I16 := @IScalar.rotate_right .I16
 
 /- [core::num::{u32}::rotate_right] -/
+@[progress_pure_def]
 def core.num.I32.rotate_right : I32 → U32 → I32 := @IScalar.rotate_right .I32
 
 /- [core::num::{u64}::rotate_right] -/
+@[progress_pure_def]
 def core.num.I64.rotate_right : I64 → U32 → I64 := @IScalar.rotate_right .I64
 
 /- [core::num::{u128}::rotate_right] -/
+@[progress_pure_def]
 def core.num.I128.rotate_right : I128 → U32 → I128 := @IScalar.rotate_right .I128
 
 /- [core::num::{usize}::rotate_right] -/
+@[progress_pure_def]
 def core.num.Isize.rotate_right : Isize → U32 → Isize := @IScalar.rotate_right .Isize
 
 end Std
