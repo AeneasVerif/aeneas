@@ -258,7 +258,7 @@ end Test
     ∃ x y, toResult some_pair = ok (x, y) ∧ P x ∧ Q y
     ```
 -/
-def liftThm (pat : Syntax) (n : Name) (suffix : String := "progress_spec") : TermElabM Name := do
+def liftThm (pat : Syntax) (n : Name) (suffix : String := "progress_spec") : MetaM Name := do
   trace[Progress] "Name: {n}"
   let env ← getEnv
   let decl := env.constants.find! n
@@ -275,14 +275,14 @@ def liftThm (pat : Syntax) (n : Name) (suffix : String := "progress_spec") : Ter
      Given type `α₀ × ... × αₙ`, introduce fresh variables
      `x₀ : α₀, ..., xₙ : αₙ` and call the continuation with those.
   -/
-  let withFreshTupleFieldFVars (basename : Name) (ty : Expr) (k : Array Expr → TermElabM Name) : TermElabM Name := do
+  let withFreshTupleFieldFVars (basename : Name) (ty : Expr) (k : Array Expr → MetaM Name) : MetaM Name := do
     let tys := destProdsType ty
     let tys := List.map (fun (i, ty) => (Name.num basename i, fun _ => pure ty)) (List.enum tys)
     withLocalDeclsD ⟨ tys ⟩ k
   /- Destruct the equality. Note that there may not be a tuple, in which case
      we see the type as a tuple and introduce one variable per field of the tuple
      (and a single variable if it is actually not a tuple). -/
-  let tryDestEq (eq : Expr) (k : Expr → Expr → TermElabM Name) : TermElabM Name := do
+  let tryDestEq (eq : Expr) (k : Expr → Expr → MetaM Name) : MetaM Name := do
     match ← destEqOpt eq with
     | some (x, y) => k x y
     | none =>
@@ -298,6 +298,11 @@ def liftThm (pat : Syntax) (n : Name) (suffix : String := "progress_spec") : Ter
   let fvarsMatch : Array Expr := ⟨ destProdsVal decompPatMatch ⟩
   let fvarsExists : Array Expr := ⟨ destProdsVal decompPatExists ⟩
   trace[Progress] "Fvars: {fvarsMatch}, {fvarsExists}"
+  /- Small helper that we use to substitute the pattern in the original theorem -/
+  let mkPureThmType (npat : Expr) : MetaM Expr := do
+    let thm ← mapVisit (fun _ e => do if e == pat then pure npat else pure e) thm0
+    -- Normalize a bit to make the theorem cleaner
+    whnf thm
   /- Introduce the binder for the pure theorem - it will be bound outside of the ∃ but we need to use it
      right now to generate an expression of type:
      ```
@@ -305,8 +310,7 @@ def liftThm (pat : Syntax) (n : Name) (suffix : String := "progress_spec") : Ter
      P x -- HERE
      ```
   -/
-  let pureThmType ←
-    mapVisit (fun _ e => do if e == pat then pure decompPatMatch else pure e) thm0
+  let pureThmType ← mkPureThmType decompPatMatch
   let pureThmName ← mkFreshUserName (.str .anonymous "pureThm")
   withLocalDeclD pureThmName pureThmType fun pureThm => do
   /- Introduce the equality -/
@@ -327,13 +331,12 @@ def liftThm (pat : Syntax) (n : Name) (suffix : String := "progress_spec") : Ter
     trace[Progress] "mkThmType:\n- {toResultArg}\n- {xl0}\n- {xl1}"
     let npatExists ← mkProdsVal (xl0 ++ xl1)
     /- Update the theorem statement to replace the pattern with the decomposed pattern -/
-    let thmType ←
-      mapVisit (fun _ e => do if e == pat then pure npatExists else pure e) thm0
+    let thmType ← mkPureThmType npatExists
     trace[Progress] "Theorem type without lifted equality: {thmType}"
     let toResultPat ← mkAppM ``Std.toResult #[toResultArg]
     let okDecompPat ← mkAppM ``Std.Result.ok #[npatExists]
     let eqType ← mkEq toResultPat okDecompPat
-    let thmType := mkAnd eqType thmType
+    let thmType := mkAnd eqType (← whnf thmType)
     trace[Progress] "Theorem type after lifting equality: {thmType}"
     /- Introduce the existentials, only for the suffix of the list of variables -/
     let thmType ← List.foldrM (fun fvar thmType => do
@@ -377,7 +380,8 @@ def liftThm (pat : Syntax) (n : Name) (suffix : String := "progress_spec") : Ter
   /- Prepare the theorem type -/
   let thmType ← do
     let thmType ← mkThmType pat [] fvarsExists.toList
-    mkForallFVars fvars thmType
+    let thmType ← mkForallFVars fvars thmType
+    pure thmType
   trace[Progress] "Final theorem: {thm}\n  :\n{thmType}"
   /- Save the auxiliary theorem -/
   let name := Name.str decl.name suffix
@@ -406,7 +410,7 @@ open Test in
 -- The ident is the name of the saturation set, the term is the pattern.
 syntax (name := progress_pure) "progress_pure" term : attr
 
-def elabProgressPureAttribute (stx : Syntax) : MetaM (TSyntax `term) :=
+def elabProgressPureAttribute (stx : Syntax) : AttrM (TSyntax `term) :=
   withRef stx do
     match stx with
     | `(attr| progress_pure $pat) => do
@@ -451,31 +455,13 @@ initialize pspecPureAttribute : PSpecAttr ← do
         trace[Saturate.attribute] "Syntax: {stx}"
         let pat ← elabProgressPureAttribute stx
         -- Introduce the lifted theorem
-        let liftedThmName ← liftThm pat thName
-        let thDecl := env.constants.find! thName
-        -- Lift the theorem statement
-        let liftedThm ← MetaM.run' (liftThm thDecl.type.consumeMData)
-        -- Prove the lifted statement
-        let value ← liftM (pspecPureProve thDecl liftedThm)
-        -- Save an auxiliary theorem for the lifted statement
-        let liftedThmName := Name.str thName "progress_spec"
-        let liftedThmDecl := Declaration.defnDecl {
-          name := Name.str thName "progress_spec"
-          levelParams := thDecl.levelParams
-          type := liftedThm
-          value := value
-          hints := .opaque
-          safety := .safe
-          all := [liftedThmName]
-        }
-        addDecl liftedThmDecl
-        -- Save the auxiliary theorem to the `progress` database
+        let liftedThmName ← MetaM.run' (liftThm pat thName)
+        -- Save the lifted theorem to the `progress` database
         saveProgressSpecFromThm pspecAttr.ext attrKind liftedThmName
   }
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl, ext := ext }
 
-#check elabTerminationHints
 end Progress
 
 end Aeneas
