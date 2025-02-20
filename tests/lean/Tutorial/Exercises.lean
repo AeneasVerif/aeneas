@@ -566,14 +566,11 @@ divergent def zero_loop
 
 /-- Auxiliary definitions to interpret a vector of u32 as a mathematical integer -/
 @[simp]
-def toInt_aux (l : List U32) : ℤ :=
+def toInt (l : List U32) : ℤ :=
   match l with
   | [] => 0
   | x :: l =>
-    x + 2 ^ 32 * toInt_aux l
-
-@[reducible]
-def toInt (x : alloc.vec.Vec U32) : ℤ := toInt_aux x.val
+    x + 2 ^ 32 * toInt l
 
 /-- The theorem about `zero_loop`: exercise.
 
@@ -609,7 +606,7 @@ def zero (x : alloc.vec.Vec U32) : Result (alloc.vec.Vec U32) :=
 -/
 theorem all_nil_impl_toInt_eq_zero
   (l : List U32) (h : ∀ (j : ℕ), j < l.length → l.index j = 0#u32) :
-  toInt_aux l = 0 := by
+  toInt l = 0 := by
   /- There are two ways of proving this theorem.
 
      Either you use the induction tactic applied to `l` (*advised*):
@@ -673,8 +670,8 @@ divergent def add_no_overflow_loop
     You can try both tactics and see their effect.
  -/
 @[simp]
-theorem toInt_aux_drop (l : List U32) (i : Nat) (h0 : i < l.length) :
-  toInt_aux (l.drop i) = l.index i + 2 ^ 32 * toInt_aux (l.drop (i + 1)) := by
+theorem toInt_drop (l : List U32) (i : Nat) (h0 : i < l.length) :
+  toInt (l.drop i) = l.index i + 2 ^ 32 * toInt (l.drop (i + 1)) := by
   sorry
 
 /-- You will need this lemma for the proof of `add_no_overflow_loop_spec`.
@@ -691,8 +688,8 @@ theorem toInt_aux_drop (l : List U32) (i : Nat) (h0 : i < l.length) :
     - or go see the solution
  -/
 @[simp]
-theorem toInt_aux_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) :
-  toInt_aux (l.update i x) = toInt_aux l + 2 ^ (32 * i) * (x - l.index i) := by
+theorem toInt_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) :
+  toInt (l.update i x) = toInt l + 2 ^ (32 * i) * (x - l.index i) := by
   sorry
 
 /-- The proof about `add_no_overflow_loop`.
@@ -709,7 +706,7 @@ theorem add_no_overflow_loop_spec
   (hi : i.val ≤ x.length) :
   ∃ x', add_no_overflow_loop x y i = ok x' ∧
   x'.length = x.length ∧
-  toInt x' = toInt x + 2 ^ (32 * i.val) * toInt_aux (y.val.drop i.val) := by
+  toInt x' = toInt x + 2 ^ (32 * i.val) * toInt (y.val.drop i.val) := by
   rw [add_no_overflow_loop]
   simp
   sorry
@@ -774,7 +771,7 @@ theorem add_with_carry_loop_spec
   x'.length = x.length ∧
   c1.val ≤ 1 ∧
   toInt x' + c1.val * 2 ^ (32 * x'.length) =
-    toInt x + 2 ^ (32 * i.val) * toInt_aux (y.val.drop i.val) + c0.val * 2 ^ (32 * i.val) := by
+    toInt x + 2 ^ (32 * i.val) * toInt (y.val.drop i.val) + c0.val * 2 ^ (32 * i.val) := by
   rw [add_with_carry_loop]
   simp
   sorry

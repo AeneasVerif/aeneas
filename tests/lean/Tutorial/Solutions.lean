@@ -187,14 +187,11 @@ attribute [-simp] Int.reducePow Nat.reducePow
 
 -- Auxiliary definitions to interpret a vector of u32 as a mathematical integer
 @[simp]
-def toInt_aux (l : List U32) : ℤ :=
+def toInt (l : List U32) : Int :=
   match l with
   | [] => 0
   | x :: l =>
-    x + 2 ^ 32 * toInt_aux l
-
-@[reducible]
-def toInt (x : alloc.vec.Vec U32) : ℤ := toInt_aux x.val
+    x + 2 ^ 32 * toInt l
 
 /-- The theorem about `zero_loop` -/
 @[progress]
@@ -226,7 +223,7 @@ decreasing_by scalar_decr_tac
 
 theorem all_nil_impl_toInt_eq_zero
   (l : List U32) (h : ∀ (j : ℕ), j < l.length → l.index j = 0#u32) :
-  toInt_aux l = 0 := by
+  toInt l = 0 := by
   match l with
   | [] => simp
   | hd :: tl =>
@@ -256,29 +253,29 @@ theorem zero_spec (x : alloc.vec.Vec U32) :
     Advice: do the proof of `add_no_overflow_loop_spec` first, then come back to prove this lemma.
  -/
 @[simp]
-theorem toInt_aux_drop (l : List U32) (i : Nat) (h0 : i < l.length) :
-  toInt_aux (l.drop i) = l.index i + 2 ^ 32 * toInt_aux (l.drop (i + 1)) := by
+theorem toInt_drop (l : List U32) (i : Nat) (h0 : i < l.length) :
+  toInt (l.drop i) = l.index i + 2 ^ 32 * toInt (l.drop (i + 1)) := by
   cases l with
   | nil => simp at *
   | cons hd tl =>
     simp_all
     dcases i = 0 <;> simp_all
-    have := toInt_aux_drop tl (i - 1) (by scalar_tac)
+    have := toInt_drop tl (i - 1) (by scalar_tac)
     simp_all
     scalar_nf at *
     have : 1 + (i - 1) = i := by scalar_tac
     simp [*]
 
 @[simp]
-theorem toInt_aux_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) :
-  toInt_aux (l.update i x) = toInt_aux l + 2 ^ (32 * i) * (x - l.index i) := by
+theorem toInt_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) :
+  toInt (l.update i x) = toInt l + 2 ^ (32 * i) * (x - l.index i) := by
   cases l with
   | nil => simp at *
   | cons hd tl =>
     simp_all
     dcases i = 0 <;> simp_all
     . scalar_eq_nf
-    . have := toInt_aux_update tl (i - 1) x (by scalar_tac)
+    . have := toInt_update tl (i - 1) x (by scalar_tac)
       simp_all
       scalar_nf at *
       scalar_eq_nf
@@ -315,7 +312,7 @@ theorem add_no_overflow_loop_spec
   (hi : i.val ≤ x.length) :
   ∃ x', add_no_overflow_loop x y i = ok x' ∧
   x'.length = x.length ∧
-  toInt x' = toInt x + 2 ^ (32 * i.val) * toInt_aux (y.val.drop i.val) := by
+  toInt x' = toInt x + 2 ^ (32 * i.val) * toInt (y.val.drop i.val) := by
   rw [add_no_overflow_loop]
   simp
   split
@@ -335,15 +332,15 @@ theorem add_no_overflow_loop_spec
       simp [*]
       apply hNoOverflow j (by scalar_tac) (by scalar_tac)
     -- Postcondition
-    /- Note that you don't have to manually call the lemmas `toInt_aux_update`
-        and `toInt_aux_drop` below if you first do:
+    /- Note that you don't have to manually call the lemmas `toInt_update`
+        and `toInt_drop` below if you first do:
         ```
         have : i.val < x.length := by scalar_tac
         ```
         (simp_all will automatically apply the lemmas and prove the
         the precondition sby using the context)
       -/
-    simp_all [toInt]
+    simp_all
     scalar_eq_nf
   . simp_all
 termination_by x.length - i.val
@@ -358,7 +355,7 @@ theorem add_no_overflow_spec (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
   toInt x' = toInt x + toInt y := by
   rw [add_no_overflow]
   progress as ⟨ x' ⟩ <;>
-  simp_all [toInt]
+  simp_all
 
 /-- The proof about `add_with_carry_loop` -/
 @[progress]
@@ -371,7 +368,7 @@ theorem add_with_carry_loop_spec
   x'.length = x.length ∧
   c1.val ≤ 1 ∧
   toInt x' + c1.val * 2 ^ (32 * x'.length) =
-    toInt x + 2 ^ (32 * i.val) * toInt_aux (y.val.drop i.val) + c0.val * 2 ^ (32 * i.val) := by
+    toInt x + 2 ^ (32 * i.val) * toInt (y.val.drop i.val) + c0.val * 2 ^ (32 * i.val) := by
   rw [add_with_carry_loop]
   simp
   split
@@ -399,10 +396,10 @@ theorem add_with_carry_loop_spec
     split_conjs
     . simp [*]
     . simp [*]
-    . simp [hc4, toInt]
-      have hxUpdate := toInt_aux_update x.val i.val s2 (by scalar_tac)
+    . simp [hc4]
+      have hxUpdate := toInt_update x.val i.val s2 (by scalar_tac)
       simp [hxUpdate]; clear hxUpdate
-      have hyDrop := toInt_aux_drop y.val i.val (by scalar_tac)
+      have hyDrop := toInt_drop y.val i.val (by scalar_tac)
       simp [hyDrop]; clear hyDrop
       scalar_eq_nf
       -- The best way is to do a case disjunction and treat each sub-case separately
