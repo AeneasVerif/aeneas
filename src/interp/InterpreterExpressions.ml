@@ -373,7 +373,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
       ^ "\n"));
   (* Evaluate *)
   match op with
-  | Constant cv -> (
+  | Constant cv -> begin
       match cv.value with
       | CLiteral lit -> (
           (* FIXME: the str type is not in [literal_type] *)
@@ -447,7 +447,11 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
           (cv, ctx, cc_comp cc cf)
       | CFnPtr _ ->
           craise __FILE__ __LINE__ span
-            "Function pointers are not supported yet")
+            "Function pointers are not supported yet"
+      | CRawMemory _ ->
+          craise __FILE__ __LINE__ span
+            "Raw memory cannot be interpreted by the interpreter"
+    end
   | Copy p ->
       (* Access the value *)
       let access = Read in
