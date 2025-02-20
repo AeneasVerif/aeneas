@@ -17,26 +17,23 @@ theorem Usize.max_succ_eq_pow : Usize.max + 1 = 2^System.Platform.numBits := by
   have : 0 < 2^System.Platform.numBits := by simp
   omega
 
-theorem Isize.min_eq_pow : Isize.min = - 2^(System.Platform.numBits - 1) := by
-  simp [Isize.min, Isize.numBits]
-
-theorem Isize.max_succ_eq_pow : Isize.max + 1 = 2^(System.Platform.numBits - 1) := by
-  simp [Isize.max, Isize.numBits]
-
-theorem Usize_Isize_min_max_eqs :
-  Usize.max + 1 = 2^System.Platform.numBits ∧
-  Isize.min = - 2^(System.Platform.numBits - 1) ∧
-  Isize.max + 1 = 2^(System.Platform.numBits - 1) :=
-  ⟨ Usize.max_succ_eq_pow, Isize.min_eq_pow, Isize.max_succ_eq_pow ⟩
-
-theorem Usize.cMax_bound : UScalar.cMax .Usize ≤ Usize.max := by
+@[scalar_tac Usize.max]
+theorem Usize.cMax_bound : UScalar.cMax .Usize ≤ Usize.max ∧ Usize.max + 1 = 2^System.Platform.numBits := by
   simp [Usize.max, UScalar.cMax, UScalar.rMax, U32.rMax, Usize.numBits]
   have := System.Platform.numBits_eq; cases this <;> simp [*]
 
-theorem Isize.cMin_cMax_bound : Isize.min ≤ IScalar.cMin .Isize ∧ IScalar.cMax .Isize ≤ Isize.max := by
+@[scalar_tac Isize.min]
+theorem Isize.cMin_bound : Isize.min ≤ IScalar.cMin .Isize ∧ Isize.min = - 2^(System.Platform.numBits - 1) := by
   simp [Isize.min, IScalar.cMin, IScalar.rMin, I32.rMin, Isize.numBits,
         Isize.max, IScalar.cMax, IScalar.rMax, I32.rMax]
   have := System.Platform.numBits_eq; cases this <;> simp [*]
+
+@[scalar_tac Isize.max]
+theorem Isize.cMax_bound : IScalar.cMax .Isize ≤ Isize.max ∧ Isize.max + 1 = 2^(System.Platform.numBits - 1) := by
+  simp [Isize.min, IScalar.cMin, IScalar.rMin, I32.rMin, Isize.numBits,
+        Isize.max, IScalar.cMax, IScalar.rMax, I32.rMax]
+  have := System.Platform.numBits_eq; cases this <;> simp [*]
+
 
 @[scalar_tac_simp] theorem U8.numBits_eq    : U8.numBits = 8 := by rfl
 @[scalar_tac_simp] theorem U16.numBits_eq   : U16.numBits = 16 := by rfl
@@ -159,13 +156,6 @@ def scalarTacExtraPrePreprocess : Tactic.TacticM Unit :=
 
 def scalarTacExtraPreprocess : Tactic.TacticM Unit := do
   Tactic.withMainContext do
-  -- Inroduce the bounds for the isize/usize types
-  let add (e : Expr) : Tactic.TacticM Unit := do
-    let ty ← inferType e
-    let _ ← Utils.addDeclTac (← Utils.mkFreshAnonPropUserName) e ty (asLet := false)
-  add (← mkAppM ``Usize.cMax_bound #[])
-  add (← mkAppM ``Isize.cMin_cMax_bound #[])
-  add (← mkAppM ``Usize_Isize_min_max_eqs #[])
   let simpLemmas ← scalarTacSimpExt.getTheorems
   -- TODO: remove this call to simp?
   Utils.simpAt true {failIfUnchanged := false}
@@ -250,6 +240,10 @@ example (x : I32) : -100000000000 < x.val := by
 
 example : (Usize.ofNat 2).val ≠ 0 := by
   scalar_tac
+
+example (x : U32) : x.val ≤ Usize.max := by scalar_tac
+example (x : I32) : x.val ≤ Isize.max := by scalar_tac
+example (x : I32) : Isize.min ≤ x.val := by scalar_tac
 
 example (x y : Nat) (z : Int) (h : Int.subNatNat x y + z = 0) : (x : Int) - (y : Int) + z = 0 := by
   scalar_tac_preprocess
