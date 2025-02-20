@@ -1013,7 +1013,64 @@ example (x y : Int) : True := by
 example (x y : Int) : True := by
   dcases h: x = y <;> simp
 
-def extractGoal : TacticM Unit := do
+/-- Inspired by the `clear` tactic -/
+def clearFvarIds (fvarIds : Array FVarId) : TacticM Unit := do
+  let fvarIds ← withMainContext <| sortFVarIds fvarIds
+  for fvarId in fvarIds.reverse do
+    withMainContext do
+      let mvarId ← (← getMainGoal).clear fvarId
+      replaceMainGoal [mvarId]
+
+/-- Minimize the goal by removing all the unnecessary variables and assumptions -/
+partial def minimizeGoal : TacticM Unit := do
+  withMainContext do
+  /- Retrieve the goal -/
+  let goal ← getMainGoal
+  let goalFVarIds ← getFVarIds (← goal.getType)
+  /- Explore the local declarations to check which ones are need.
+     We do this recursively until we reach a fixed-point. -/
+  let ctx ← Lean.MonadLCtx.getLCtx
+  let decls ← ctx.getDecls
+  /- -/
+  let mut changed := true
+  let mut neededIds := goalFVarIds
+  let mut exploredIds : Std.HashSet FVarId := Std.HashSet.empty
+  while changed do
+    changed := false
+    for decl in decls do
+      /- Shortcut: do not re-explore the already explored ids -/
+      if decl.fvarId ∉ exploredIds then
+        exploredIds := exploredIds.insert decl.fvarId
+        /- Explore the type and the body: if they contain needed ids, add it -/
+        let mut declIds ← getFVarIds decl.type
+        match decl.value? with
+        | none => pure ()
+        | some value =>
+          declIds := declIds.union (← getFVarIds value)
+        let mut inter := false
+        for x in declIds do
+          if x ∈ neededIds then
+            inter := true
+            break
+        /- Check if there is an intersection betwee -/
+        if inter then
+          neededIds := neededIds.insert decl.fvarId
+          changed := true
+  /- Clear all the fvars which were not listed -/
+  let allIds ← getFVarIdsAt goal
+  let allIds := allIds.filter (fun x => x ∉ neededIds)
+  clearFvarIds allIds
+
+elab "minimize_goal" : tactic => do
+  withMainContext do
+  minimizeGoal
+
+/-- Print the goal as an auxiliary lemma that can be copy-pasted by the user -/
+def extractGoal (ref : Syntax) (fullGoal : Bool) : TacticM Unit := do
+  /- First minimize the goal, if necessary -/
+  if ¬ fullGoal then
+    minimizeGoal
+  /- Extract the goal -/
   withMainContext do
   let ctx ← Lean.MonadLCtx.getLCtx
   let decls ← ctx.getDecls
@@ -1028,17 +1085,51 @@ def extractGoal : TacticM Unit := do
   let assumptions := Format.joinSep assumptions ""
   let mgoal ← getMainGoal
   let goal ← Meta.ppExprWithInfos (← mgoal.getType)
-  let msg := "example  " ++ assumptions ++ " :\n  " ++ goal.fmt ++ "\n  := sorry"
-  println! msg
+  let msg := "example" ++ assumptions ++ " :\n  " ++ goal.fmt ++ "\n  := sorry"
+  logInfoAt ref m!"{msg}"
 
-elab "extract_goal" : tactic => do
+elab ref:"extract_goal" full:"full"? : tactic => do
   withMainContext do
-  extractGoal
+  extractGoal ref full.isSome
 
+/--
+info: example
+  (x : Nat)
+  (y : Nat)
+  (h : x ≤ y) :
+  y ≥ x
+  := sorry
+-/
+#guard_msgs in
+example (x : Nat) (y : Nat) (_ : Nat) (h : x ≤ y) : y ≥ x := by
+  extract_goal
+  omega
+
+/-- Introduce an auxiliary assertion for the goal -/
+def extractAssert (ref : Syntax) : TacticM Unit := do
+  withMainContext do
+  let goal ← (← getMainGoal).getType
+  let goal ← Lean.Meta.Tactic.TryThis.delabToRefinableSyntax goal
+  let tac : TSyntax `tactic ← `(tactic|have : $goal := by sorry)
+  /- Remark: there exists addHaveSuggestion -/
+  Meta.Tactic.TryThis.addSuggestion ref tac (origSpan? := ← getRef)
+
+elab tk:"extract_assert" : tactic => do
+  withMainContext do
+  extractAssert tk
+
+/--
+info: Try this: have : y ≥ x := by sorry
+-/
+#guard_msgs in
 set_option linter.unusedTactic false in
 example (x : Nat) (y : Nat) (_ : Nat) (h : x ≤ y) : y ≥ x := by
-  set_option linter.unusedTactic false in
-  extract_goal
+  extract_assert
+  omega
+
+set_option linter.unusedTactic false in
+example (x : Nat) (y : Nat) (_ : Nat) (h : (x : Int) ≤ (y : Int)) : (y : Int) ≥ (x : Int) := by
+  have : ↑y ≥ ↑x := by sorry
   omega
 
 /- Group a list of expressions into a (non-dependent) tuple -/
