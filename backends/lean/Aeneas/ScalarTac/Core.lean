@@ -7,9 +7,6 @@ namespace ScalarTac
 
 open Lean Elab Term Meta
 
--- We can't define and use trace classes in the same file
-initialize registerTraceClass `ScalarTac
-
 -- TODO: move?
 theorem ne_zero_is_lt_or_gt {x : Int} (hne : x ≠ 0) : x < 0 ∨ x > 0 := by
   cases h: x <;> simp_all

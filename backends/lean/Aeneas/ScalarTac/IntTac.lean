@@ -150,6 +150,8 @@ def intTacPreprocess (config : Config) (extraPrePreprocess extraPreprocess :  Ta
       -- Also, we need `zetaDelta` to inline the let-bindings (otherwise, omega doesn't always manages
       -- to deal with them)
       dsimpAt false {zetaDelta := true} intTacSimpRocs
+        -- Simp theorems
+        []
         -- Declarations to unfold
         []
         -- Theorems
@@ -163,6 +165,8 @@ def intTacPreprocess (config : Config) (extraPrePreprocess extraPreprocess :  Ta
   allGoalsNoRecover do Utils.tryTac (
     Utils.simpAt true {}
                -- Simprocs
+               []
+               -- Simp theorems
                []
                -- Unfoldings
                []
@@ -213,7 +217,7 @@ def intTac (tacName : String) (config : Config)
          -/
         Utils.tryTac (
           -- TODO: is there a simproc to simplify propositional logic?
-          Utils.simpAll {failIfUnchanged := false, maxSteps := 1000} true [``reduceIte] []
+          Utils.simpAll {failIfUnchanged := false, maxSteps := 50} true [``reduceIte] [] []
             [``and_self, ``false_implies, ``true_implies, ``Prod.mk.injEq,
              ``not_false_eq_true, ``not_true_eq_false,
              ``true_and, ``and_true, ``false_and, ``and_false,

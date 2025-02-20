@@ -1,13 +1,26 @@
 import Aeneas.Extensions
 import Aesop
-open Lean
+open Lean Meta
 
 /-!
-# Scalar tac rules sets
+# Tracing
+-/
 
-This module defines several Aesop rule sets and options which are used by the
-`scalar_tac` tactic. Aesop rule sets only become visible once the file in which
-they're declared is imported, so we must put this declaration into its own file.
+-- We can't define and use trace classes in the same file
+initialize registerTraceClass `ScalarTac
+
+/-!
+# Simp Sets
+-/
+
+/-- The `scalar_tac_simp` simp attribute. -/
+initialize scalarTacSimpExt : SimpExtension ←
+  registerSimpAttr `scalar_tac_simp "\
+    The `scalar_tac_simp` attribute registers simp lemmas to be used by `scalar_tac`
+    during its preprocessing phase."
+
+/-!
+# Saturation Rules Sets
 -/
 
 namespace Aeneas

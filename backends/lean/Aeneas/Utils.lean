@@ -713,7 +713,7 @@ example (h : ∃ x y z, x + y + z ≥ 0) : ∃ x, x ≥ 0 := by
    initialize a simp context without doing an elaboration - as a consequence
    we write our own here. -/
 def mkSimpCtx (simpOnly : Bool) (config : Simp.Config) (kind : SimpKind)
-  (simprocs : List Name) (declsToUnfold : List Name)
+  (simprocs : List Name) (addSimpThms : List SimpTheorems) (declsToUnfold : List Name)
   (thms : List Name) (hypsToUse : List FVarId) :
   Tactic.TacticM (Simp.Context × Simp.SimprocsArray) := do
   -- Initialize either with the builtin simp theorems or with all the simp theorems
@@ -748,7 +748,7 @@ def mkSimpCtx (simpOnly : Bool) (config : Simp.Config) (kind : SimpKind)
   let congrTheorems ← getSimpCongrTheorems
   let defaultSimprocs ← if simpOnly then pure {} else Simp.getSimprocs
   let simprocs ← simprocs.foldlM (fun simprocs name => simprocs.add name true) defaultSimprocs
-  let ctx ← Simp.mkContext config (simpTheorems := #[simpThms]) congrTheorems
+  let ctx ← Simp.mkContext config (simpTheorems := ⟨ simpThms :: addSimpThms ⟩) congrTheorems
   pure (ctx, #[simprocs])
 
 inductive Location where
@@ -761,7 +761,8 @@ inductive Location where
   | targets (hypotheses : Array Syntax) (type : Bool)
 
 -- Adapted from Tactic.simpLocation
-def customSimpLocation (ctx : Simp.Context) (simprocs : Simp.SimprocsArray) (discharge? : Option Simp.Discharge := none)
+def customSimpLocation (ctx : Simp.Context) (simprocs : Simp.SimprocsArray)
+  (discharge? : Option Simp.Discharge := none)
   (loc : Location) : TacticM Simp.Stats := do
   match loc with
   | Location.targets hyps simplifyTarget =>
@@ -781,28 +782,29 @@ def customSimpLocation (ctx : Simp.Context) (simprocs : Simp.SimprocsArray) (dis
       simpLocation.go ctx simprocs discharge? tgts (simplifyTarget := true)
 
 /- Call the simp tactic. -/
-def simpAt (simpOnly : Bool) (config : Simp.Config) (simprocs : List Name)
+def simpAt (simpOnly : Bool) (config : Simp.Config) (simprocs : List Name) (simpThms : List SimpTheorems)
   (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId) (loc : Location) :
   Tactic.TacticM Unit := do
   -- Initialize the simp context
-  let (ctx, simprocs) ← mkSimpCtx simpOnly config .simp simprocs declsToUnfold thms hypsToUse
+  let (ctx, simprocs) ← mkSimpCtx simpOnly config .simp simprocs simpThms declsToUnfold thms hypsToUse
   -- Apply the simplifier
   let _ ← customSimpLocation ctx simprocs (discharge? := .none) loc
 
 /- Call the dsimp tactic. -/
-def dsimpAt (simpOnly : Bool) (config : Simp.Config) (simprocs : List Name)
+def dsimpAt (simpOnly : Bool) (config : Simp.Config) (simprocs : List Name) (simpThms : List SimpTheorems)
   (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId) (loc : Tactic.Location) :
   Tactic.TacticM Unit := do
   -- Initialize the simp context
-  let (ctx, simprocs) ← mkSimpCtx simpOnly config .dsimp simprocs declsToUnfold thms hypsToUse
+  let (ctx, simprocs) ← mkSimpCtx simpOnly config .dsimp simprocs simpThms declsToUnfold thms hypsToUse
   -- Apply the simplifier
   dsimpLocation ctx simprocs loc
 
 -- Call the simpAll tactic
-def simpAll (config : Simp.Config) (simpOnly : Bool) (simprocs : List Name) (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId) :
+def simpAll (config : Simp.Config) (simpOnly : Bool) (simprocs : List Name) (simpThms : List SimpTheorems)
+  (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId) :
   Tactic.TacticM Unit := do
   -- Initialize the simp context
-  let (ctx, simprocs) ← mkSimpCtx simpOnly config .simpAll simprocs declsToUnfold thms hypsToUse
+  let (ctx, simprocs) ← mkSimpCtx simpOnly config .simpAll simprocs simpThms declsToUnfold thms hypsToUse
   -- Apply the simplifier
   let (result?, _) ← Lean.Meta.simpAll (← getMainGoal) ctx (simprocs := simprocs)
   match result? with
