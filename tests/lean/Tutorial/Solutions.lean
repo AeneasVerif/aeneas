@@ -408,9 +408,9 @@ theorem add_with_carry_loop_spec
       . have hConv1' : (s1.val : Int) = xi.val + c0u.val - U32.size := by scalar_tac
         have hConv2' : (s2.val : Int) = s1.val + yi.val - U32.size := by scalar_tac
         simp [hConv2', hConv1']
-        /- There is a lemma which allows to simplify `U32.size`. But you can also simply
-           do `simp [U32.size]`, which simplifies `U32.size` to `2^U32.numBits`, then
-           simplify `U32.numBits` -/
+        /- `U32.size_eq` is a lemma which allows to simplify `U32.size`.
+           But you can also simply do `simp [U32.size]`, which simplifies
+           `U32.size` to `2^U32.numBits`, then simplify `U32.numBits`. -/
         simp [*, U32.size_eq]
         scalar_eq_nf
       . have hConv1' : (s1.val : Int) = xi.val + c0u.val - U32.size := by scalar_tac

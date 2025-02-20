@@ -429,13 +429,18 @@ def assumptionTac : TacticM Unit :=
 
 -- List all the local declarations matching the goal
 def getAllMatchingAssumptions (type : Expr) : MetaM (List (LocalDecl × Name)) := do
+  let typeType ← inferType type
   let decls ← (← getLCtx).getAllDecls
   decls.filterMapM fun localDecl => do
     -- Make sure we revert the meta-variables instantiations by saving the state and restoring it
     let s ← saveState
-    let x :=
-        if (← isDefEq type localDecl.type) then (some (localDecl, localDecl.userName))
-        else none
+    let x ← do
+        /- First check if the type can be matched (some assumptions are actually *variables*)-/
+        if (← isDefEq typeType (← inferType localDecl.type)) then
+          if (← isDefEq type localDecl.type) then
+            pure (some (localDecl, localDecl.userName))
+          else pure none
+        else pure none
     restoreState s
     pure x
 
@@ -459,8 +464,8 @@ def singleAssumptionTac : TacticM Unit := do
     -- There are meta-variables that
     match ← (getAllMatchingAssumptions goal) with
     | [(localDecl, _)] =>
-      -- There is a single assumption which matches the goal: use it
-      -- Note that we need to call isDefEq again to properly instantiate the meta-variables
+      /- There is a single assumption which matches the goal: use it
+         Note that we need to call isDefEq again to properly instantiate the meta-variables -/
       let _ ← isDefEq goal localDecl.type
       mvarId.assign (mkFVar localDecl.fvarId)
     | [] =>
