@@ -136,6 +136,7 @@ elab "int_tac_saturate" config:Parser.Tactic.optConfig : tactic => do
  -/
 def intTacPreprocess (config : Config) (extraPrePreprocess extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM Unit := do
   Tactic.withMainContext do
+  let simpLemmas ← scalarTacSimpExt.getTheorems
   -- Pre-preprocessing
   extraPrePreprocess
   -- Apply the forward rules
@@ -167,7 +168,7 @@ def intTacPreprocess (config : Config) (extraPrePreprocess extraPreprocess :  Ta
                -- Simprocs
                []
                -- Simp theorems
-               []
+               [simpLemmas]
                -- Unfoldings
                []
                 -- Simp lemmas

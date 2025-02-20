@@ -167,13 +167,14 @@ def scalarTacExtraPreprocess : Tactic.TacticM Unit := do
   add (← mkAppM ``Isize.cMin_cMax_bound #[])
   add (← mkAppM ``Usize_Isize_min_max_eqs #[])
   let simpLemmas ← scalarTacSimpExt.getTheorems
+  -- TODO: remove this call to simp?
   Utils.simpAt true {failIfUnchanged := false}
                 -- Simprocs
                 intTacSimpRocs
                 -- Simp theorems
                 [simpLemmas]
                 -- Unfoldings
-                [``Isize.toNat, ``I8.toNat, ``I16.toNat, ``I32.toNat, ``I64.toNat, ``I128.toNat]
+                []
                 -- Simp lemmas
                 []
                 -- Hypotheses
@@ -319,6 +320,8 @@ example
   := by
   scalar_tac
 
+example (x : I8) : x.toNat = x.val.toNat := by scalar_tac
+
 /-!
 ## Min, Max
 -/
@@ -340,14 +343,13 @@ example (x y : Int) : min x y ≤ x := by scalar_tac
 ## Abs
 -/
 
-@[scalar_tac |x|]
-theorem Int.abs_equiv (x : Int) :
-  0 ≤ |x| ∧ (x = |x| ∨ x = - |x|) := by
-  have : |x| = x.natAbs := by simp
-  rw [this]
-  omega
+@[scalar_tac_simp]
+theorem Int.natAbs_eq_abs (x : Int) : |x| = ↑x.natAbs := by simp
 
-example (x y : Int) (h : x.natAbs ≤ y.natAbs) : x ≤ y.natAbs := by scalar_tac
+example (x y : Int) (h : x.natAbs ≤ y.natAbs) : x ≤ y.natAbs := by
+  scalar_tac_preprocess
+
+  scalar_tac
 example (x y : Int) (h : |x| ≤ |y|) : x ≤ |y| := by scalar_tac
 example (x y : Int) (h : |x| ≤ |y|) : x ≤ |y| := by scalar_tac
 
