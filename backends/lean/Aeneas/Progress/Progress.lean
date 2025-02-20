@@ -638,6 +638,71 @@ namespace Test
     ∃ b, f l = ok b := by
     progress as ⟨ b ⟩
 
+  namespace Ntt
+    def wfArray (_ : Array U16 256#usize) : Prop := True
+
+    def nttLayer (a : Array U16 256#usize) (_k : Usize) (_len : Usize) : Result (Array U16 256#usize) := ok a
+
+    def toPoly (a : Array U16 256#usize) : List U16 := a.val
+
+    def Spec.nttLayer (a : List U16) (_ : Nat) (len : Nat) (_ : Nat) (_ : 0 < len) : List U16 := a
+
+    @[progress]
+    theorem nttLayer_spec
+      (peSrc : Array U16 256#usize)
+      (k : Usize) (len : Usize)
+      (_ : wfArray peSrc)
+      (_ : k.val = 2^(k.val.log2) ∧ k.val.log2 < 7)
+      (_ : len.val = 128 / k.val)
+      (hLenPos : 0 < len.val) :
+      ∃ peSrc', nttLayer peSrc k len = ok peSrc' ∧
+      toPoly peSrc' = Spec.nttLayer (toPoly peSrc) k.val len.val 0 hLenPos ∧
+      wfArray peSrc' := by
+      simp [wfArray, nttLayer, toPoly, Spec.nttLayer]
+
+    def ntt (x : Array U16 256#usize) : Result (Array U16 256#usize) := do
+      let x ← nttLayer x 1#usize 128#usize
+      let x ← nttLayer x 2#usize 64#usize
+      let x ← nttLayer x 4#usize 32#usize
+      let x ← nttLayer x 8#usize 16#usize
+      let x ← nttLayer x 16#usize 8#usize
+      let x ← nttLayer x 32#usize 4#usize
+      let x ← nttLayer x 64#usize 2#usize
+      let x ← nttLayer x 64#usize 2#usize
+      let x ← nttLayer x 64#usize 2#usize
+      let x ← nttLayer x 64#usize 2#usize
+      let x ← nttLayer x 64#usize 2#usize
+      let x ← nttLayer x 64#usize 2#usize
+      let x ← nttLayer x 64#usize 2#usize
+      ok x
+
+    set_option maxHeartbeats 400000
+
+    set_option profiler true
+    set_option profiler.threshold 10
+    theorem ntt_spec (peSrc : Std.Array U16 256#usize)
+      (hWf : wfArray peSrc) :
+      ∃ peSrc1, ntt peSrc = ok peSrc1 ∧
+      wfArray peSrc1
+      := by
+      unfold ntt
+      progress; simp [Nat.log2]
+      progress; simp [Nat.log2]
+      progress; simp [Nat.log2]
+      progress; simp [Nat.log2]
+      progress; simp [Nat.log2]
+      progress; simp [Nat.log2]
+      progress; simp [Nat.log2]
+      progress; simp [Nat.log2]
+      progress; simp [Nat.log2]
+      progress; simp [Nat.log2]
+      progress; simp [Nat.log2]
+      progress; simp [Nat.log2]
+      progress; simp [Nat.log2]
+      assumption
+
+  end Ntt
+
 end Test
 
 end Progress
