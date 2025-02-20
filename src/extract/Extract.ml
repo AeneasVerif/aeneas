@@ -829,6 +829,17 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       (re : texpression) : extraction_ctx =
     (* Open a box for the let-binding *)
     F.pp_open_hovbox fmt ctx.indent_incr;
+    (* Should we add a type annotation? It is necessary when the bound expression
+       has a coercion. *)
+    let extract_type_annot =
+      monadic
+      && backend () = Lean
+      &&
+      match re.e with
+      | App ({ e = Qualif { id = FunOrOp (Fun (Pure ToResult)); _ }; _ }, _) ->
+          true
+      | _ -> false
+    in
     let ctx =
       (* There are two cases:
          - do we use a notation like [x <-- y;]
@@ -876,7 +887,14 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
             else (
               F.pp_print_string fmt "let";
               F.pp_print_space fmt ());
+            if extract_type_annot then F.pp_print_string fmt "(";
             let ctx = extract_typed_pattern span ctx fmt true true lv in
+            if extract_type_annot then (
+              F.pp_print_space fmt ();
+              F.pp_print_string fmt ":";
+              F.pp_print_space fmt ();
+              extract_ty span ctx fmt TypeDeclId.Set.empty false lv.ty;
+              F.pp_print_string fmt ")");
             F.pp_print_space fmt ();
             let eq =
               match backend () with
