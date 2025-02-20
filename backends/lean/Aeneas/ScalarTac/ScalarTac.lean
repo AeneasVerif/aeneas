@@ -206,6 +206,10 @@ theorem IScalar.bounds {ty : IScalarTy} (x : IScalar ty) :
   have := x.hBounds
   omega
 
+/-!
+# Tests and Additional Simp Theorems
+-/
+
 example (x _y : U32) : x.val ≤ UScalar.max .U32 := by
   scalar_tac_preprocess
   simp [*]
@@ -314,6 +318,38 @@ example
   nlen ≤ Usize.max
   := by
   scalar_tac
+
+/-!
+## Min, Max
+-/
+
+@[scalar_tac_simp] theorem Nat.max_eq_Max_max (x y : Nat) : Nat.max x y = x ⊔ y := by simp
+@[scalar_tac_simp] theorem Nat.min_eq_Min_min (x y : Nat) : Nat.min x y = x ⊓ y := by simp
+
+example (x y : Nat) : x ≤ x ⊔ y := by scalar_tac
+example (x y : Nat) : x ≤ Nat.max x y := by scalar_tac
+example (x y : Nat) : x ⊓ y ≤ x := by scalar_tac
+example (x y : Nat) : Nat.min x y ≤ x := by scalar_tac
+
+example (x y : Int) : x ≤ x ⊔ y := by scalar_tac
+example (x y : Int) : x ≤ max x y := by scalar_tac
+example (x y : Int) : x ⊓ y ≤ x := by scalar_tac
+example (x y : Int) : min x y ≤ x := by scalar_tac
+
+/-!
+## Abs
+-/
+
+@[scalar_tac |x|]
+theorem Int.abs_equiv (x : Int) :
+  0 ≤ |x| ∧ (x = |x| ∨ x = - |x|) := by
+  have : |x| = x.natAbs := by simp
+  rw [this]
+  omega
+
+example (x y : Int) (h : x.natAbs ≤ y.natAbs) : x ≤ y.natAbs := by scalar_tac
+example (x y : Int) (h : |x| ≤ |y|) : x ≤ |y| := by scalar_tac
+example (x y : Int) (h : |x| ≤ |y|) : x ≤ |y| := by scalar_tac
 
 end ScalarTac
 
