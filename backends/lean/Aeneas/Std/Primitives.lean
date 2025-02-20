@@ -158,14 +158,22 @@ instance {α : Type u} : Coe α (Result α) where
 
 attribute [coe] toResult
 
-/- Testing that our coercion from `α` to `Result α` works. -/
-example : Result Int := do
-  let x0 ← ↑(0 : Int)
-  let x1 ← ↑(x0 + 1 : Int)
-  x1
+namespace Test
+  /- Testing that our coercion from `α` to `Result α` works. -/
+  example : Result Int := do
+    let x0 ← ↑(0 : Int)
+    let x1 ← ↑(x0 + 1 : Int)
+    x1
 
-/- Testing that our coercion from `α` to `Result α` doesn't break other coercions. -/
-example (n : Nat) (i : Int) (_ : n < i) : True := by simp
+  /- Testing that our coercion from `α` to `Result α` doesn't break other coercions. -/
+  example (n : Nat) (i : Int) (_ : n < i) : True := by simp
+
+  example : Result (BitVec 32) := do
+    let x : BitVec 32 ← ↑(0#32)
+    let y ← ↑(1#32)
+    let z ← ↑(x + y)
+    ok  z
+end Test
 
 /-!
 # Misc

@@ -3,11 +3,8 @@ import Aeneas.Std.ScalarCore
 
 namespace Aeneas
 
-/- Automation for scalars - TODO: not sure it is worth having two files (Int.lean and Scalar.lean) -/
-namespace ScalarTac
+namespace Std
 
-open Lean Lean.Elab Lean.Meta
-open Std
 
 set_option maxRecDepth 1024
 
@@ -133,6 +130,14 @@ theorem IScalar.cMax_I128_eq   : IScalar.cMax .I128 = 17014118346046923173168730
 theorem IScalar.cMin_Isize_eq  : IScalar.cMin .Isize = -2147483648 := by rfl
 theorem IScalar.cMax_Isize_eq  : IScalar.cMax .Isize = 2147483647 := by rfl
 
+end Std
+
+/- Automation for scalars - TODO: not sure it is worth having two files (Int.lean and Scalar.lean) -/
+namespace ScalarTac
+
+open Lean Lean.Elab Lean.Meta
+open Std
+
 def scalarTacSimpLemmas := [
   ``UScalar.ofNat_val_eq, ``UScalar.neq_to_neq_val,
   ``IScalar.ofInt_val_eq, ``IScalar.neq_to_neq_val,
@@ -161,6 +166,7 @@ def scalarTacSimpLemmas := [
   ``I8.max_eq, ``I16.max_eq, ``I32.max_eq, ``I64.max_eq, ``I128.max_eq,
   ``U8.size_eq, ``U16.size_eq, ``U32.size_eq, ``U64.size_eq, ``U128.size_eq,
   ``I8.size_eq, ``I16.size_eq, ``I32.size_eq, ``I64.size_eq, ``I128.size_eq,
+  ``Bool.toNat_false, ``Bool.toNat_true
   ]
 
 def scalarTacExtraPrePreprocess : Tactic.TacticM Unit :=

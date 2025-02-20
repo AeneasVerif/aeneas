@@ -509,11 +509,9 @@ section
 
 end
 
-@[progress_pure_def]
 def UScalar.cast_fromBool (ty : UScalarTy) (x : Bool) : UScalar ty :=
   if x then ⟨ 1#ty.numBits ⟩ else ⟨ 0#ty.numBits ⟩
 
-@[progress_pure_def]
 def IScalar.cast_fromBool (ty : IScalarTy) (x : Bool) : IScalar ty :=
   if x then ⟨ 1#ty.numBits ⟩ else ⟨ 0#ty.numBits ⟩
 
@@ -1990,14 +1988,14 @@ theorem IScalar.rem_spec {ty} (x : IScalar ty) {y : IScalar ty} (hzero : y.val �
 ## Casts
 -/
 
-@[simp]
+@[simp, progress_pure cast_fromBool ty b]
 theorem UScalar.cast_fromBool_val_eq ty (b : Bool) : (UScalar.cast_fromBool ty b).val = b.toNat := by
   simp [cast_fromBool]
   split <;> simp only [val, *] <;> simp
   have := ty.numBits_nonzero
   omega
 
-@[simp]
+@[simp, progress_pure cast_fromBool ty b]
 theorem IScalar.cast_fromBool_val_eq ty (b : Bool) :(IScalar.cast_fromBool ty b).val = b.toInt := by
   simp [cast_fromBool]
   split <;> simp only [val, *] <;> simp
@@ -2006,6 +2004,13 @@ theorem IScalar.cast_fromBool_val_eq ty (b : Bool) :(IScalar.cast_fromBool ty b)
   cases this <;>
   rename_i h <;>
   rw [h] <;> simp
+
+@[scalar_tac UScalar.cast_fromBool ty b]
+theorem UScalar.cast_fromBool_bound_eq ty (b : Bool) : (UScalar.cast_fromBool ty b).val ≤ 1 := by
+  simp [cast_fromBool]
+  split <;> simp only [val] <;> simp
+  have := @Nat.mod_eq_of_lt 1 (2^ty.numBits) (by simp [ty.numBits_nonzero])
+  rw [this]
 
 @[simp]
 theorem UScalar.cast_fromBool_bv_eq ty (b : Bool) : (UScalar.cast_fromBool ty b).bv = (BitVec.ofBool b).zeroExtend _ := by
@@ -2021,10 +2026,74 @@ theorem IScalar.cast_fromBool_bv_eq ty (b : Bool) :(IScalar.cast_fromBool ty b).
   apply @BitVec.toNat_injective ty.numBits
   simp
 
+@[scalar_tac IScalar.cast_fromBool ty b]
+theorem IScalar.cast_fromBool_bound_eq ty (b : Bool) :
+  0 ≤ (IScalar.cast_fromBool ty b).val ∧ (IScalar.cast_fromBool ty b).val ≤ 1 := by
+  simp [cast_fromBool]
+  split <;> simp only [val]
+  . have : (1#ty.numBits).toInt  = 1 := by
+      simp [BitVec.toInt]
+      dcases ty <;> simp
+      dcases System.Platform.numBits_eq <;> simp [*]
+    simp [this]
+  . simp
+
 theorem UScalar.cast_val_eq {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) :
   (cast tgt_ty x).val = x.val % 2^(tgt_ty.numBits) := by
   simp only [cast, val]
   simp
+
+@[simp, scalar_tac UScalar.cast .U16 x]
+theorem U8.cast_U16_val_eq (x : U8) : (UScalar.cast .U16 x).val = x.val := by
+  simp [UScalar.cast_val_eq]; scalar_tac
+
+@[simp, scalar_tac UScalar.cast .U32 x]
+theorem U8.cast_U32_val_eq (x : U8) : (UScalar.cast .U32 x).val = x.val := by
+  simp [UScalar.cast_val_eq]; scalar_tac
+
+@[simp, scalar_tac UScalar.cast .U64 x]
+theorem U8.cast_U64_val_eq (x : U8) : (UScalar.cast .U64 x).val = x.val := by
+  simp [UScalar.cast_val_eq]; scalar_tac
+
+@[simp, scalar_tac UScalar.cast .U128 x]
+theorem U8.cast_U128_val_eq (x : U8) : (UScalar.cast .U128 x).val = x.val := by
+  simp [UScalar.cast_val_eq]; scalar_tac
+
+@[simp, scalar_tac UScalar.cast .Usize x]
+theorem U8.cast_Usize_val_eq (x : U8) : (UScalar.cast .Usize x).val = x.val := by
+  simp [UScalar.cast_val_eq]; dcases System.Platform.numBits_eq <;> scalar_tac
+
+@[simp, scalar_tac UScalar.cast .U32 x]
+theorem U16.cast_U32_val_eq (x : U16) : (UScalar.cast .U32 x).val = x.val := by
+  simp [UScalar.cast_val_eq]; scalar_tac
+
+@[simp, scalar_tac UScalar.cast .U64 x]
+theorem U16.cast_U64_val_eq (x : U16) : (UScalar.cast .U64 x).val = x.val := by
+  simp [UScalar.cast_val_eq]; scalar_tac
+
+@[simp, scalar_tac UScalar.cast .U128 x]
+theorem U16.cast_U128_val_eq (x : U16) : (UScalar.cast .U128 x).val = x.val := by
+  simp [UScalar.cast_val_eq]; scalar_tac
+
+@[simp, scalar_tac UScalar.cast .Usize x]
+theorem U16.cast_Usize_val_eq (x : U16) : (UScalar.cast .Usize x).val = x.val := by
+  simp [UScalar.cast_val_eq]; dcases System.Platform.numBits_eq <;> scalar_tac
+
+@[simp, scalar_tac UScalar.cast .U64 x]
+theorem U32.cast_U64_val_eq (x : U32) : (UScalar.cast .U64 x).val = x.val := by
+  simp [UScalar.cast_val_eq]; scalar_tac
+
+@[simp, scalar_tac UScalar.cast .U128 x]
+theorem U32.cast_U128_val_eq (x : U32) : (UScalar.cast .U128 x).val = x.val := by
+  simp [UScalar.cast_val_eq]; scalar_tac
+
+@[simp, scalar_tac UScalar.cast .Usize x]
+theorem U32.cast_Usize_val_eq (x : U32) : (UScalar.cast .Usize x).val = x.val := by
+  simp [UScalar.cast_val_eq]; dcases System.Platform.numBits_eq <;> scalar_tac
+
+@[simp, scalar_tac UScalar.cast .U128 x]
+theorem U64.cast_U128_val_eq (x : U64) : (UScalar.cast .U128 x).val = x.val := by
+  simp [UScalar.cast_val_eq]; scalar_tac
 
 @[simp]
 theorem UScalar.cast_val_mod_pow_greater_numBits_eq {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) (h : src_ty.numBits ≤ tgt_ty.numBits) :
@@ -3169,7 +3238,7 @@ attribute [-simp] Bool.exists_bool
 theorem UScalar.overflowing_add_eq {ty} (x y : UScalar ty) :
   let z := overflowing_add x y
   if x.val + y.val > UScalar.max ty then
-    z.fst.val = x.val + y.val - UScalar.max ty - 1 ∧
+    z.fst.val + UScalar.size ty = x.val + y.val ∧
     z.snd = true
   else
     z.fst.val = x.val + y.val ∧
@@ -3187,7 +3256,8 @@ theorem UScalar.overflowing_add_eq {ty} (x y : UScalar ty) :
 
       have := @Nat.mod_eq_of_lt (x.bv.toNat + y.bv.toNat - 2^ty.numBits) (2^ty.numBits) (by omega)
       rw [this]; clear this
-      omega
+      simp [size]
+      scalar_tac
     . omega
   . split_conjs
     . apply Nat.mod_eq_of_lt
@@ -3197,42 +3267,42 @@ theorem UScalar.overflowing_add_eq {ty} (x y : UScalar ty) :
 @[progress_pure overflowing_add x y]
 theorem core.num.U8.overflowing_add_eq (x y : U8) :
   let z := overflowing_add x y
-  if x.val + y.val > U8.max then z.fst.val = x.val + y.val - U8.max - 1 ∧ z.snd = true
+  if x.val + y.val > U8.max then z.fst.val + U8.size = x.val + y.val ∧ z.snd = true
   else z.fst.val = x.val + y.val ∧ z.snd = false
   := UScalar.overflowing_add_eq x y
 
 @[progress_pure overflowing_add x y]
 theorem core.num.U16.overflowing_add_eq (x y : U16) :
   let z := overflowing_add x y
-  if x.val + y.val > U16.max then z.fst.val = x.val + y.val - U16.max - 1 ∧ z.snd = true
+  if x.val + y.val > U16.max then z.fst.val + U16.size = x.val + y.val ∧ z.snd = true
   else z.fst.val = x.val + y.val ∧ z.snd = false
   := UScalar.overflowing_add_eq x y
 
 @[progress_pure overflowing_add x y]
 theorem core.num.U32.overflowing_add_eq (x y : U32) :
   let z := overflowing_add x y
-  if x.val + y.val > U32.max then z.fst.val = x.val + y.val - U32.max - 1 ∧ z.snd = true
+  if x.val + y.val > U32.max then z.fst.val + U32.size = x.val + y.val ∧ z.snd = true
   else z.fst.val = x.val + y.val ∧ z.snd = false
   := UScalar.overflowing_add_eq x y
 
 @[progress_pure overflowing_add x y]
 theorem core.num.U64.overflowing_add_eq (x y : U64) :
   let z := overflowing_add x y
-  if x.val + y.val > U64.max then z.fst.val = x.val + y.val - U64.max - 1 ∧ z.snd = true
+  if x.val + y.val > U64.max then z.fst.val + U64.size = x.val + y.val ∧ z.snd = true
   else z.fst.val = x.val + y.val ∧ z.snd = false
   := UScalar.overflowing_add_eq x y
 
 @[progress_pure overflowing_add x y]
 theorem core.num.U128.overflowing_add_eq (x y : U128) :
   let z := overflowing_add x y
-  if x.val + y.val > U128.max then z.fst.val = x.val + y.val - U128.max - 1 ∧ z.snd = true
+  if x.val + y.val > U128.max then z.fst.val + U128.size = x.val + y.val ∧ z.snd = true
   else z.fst.val = x.val + y.val ∧ z.snd = false
   := UScalar.overflowing_add_eq x y
 
 @[progress_pure overflowing_add x y]
 theorem core.num.Usize.overflowing_add_eq (x y : Usize) :
   let z := overflowing_add x y
-  if x.val + y.val > Usize.max then z.fst.val = x.val + y.val - Usize.max - 1 ∧ z.snd = true
+  if x.val + y.val > Usize.max then z.fst.val + Usize.size = x.val + y.val ∧ z.snd = true
   else z.fst.val = x.val + y.val ∧ z.snd = false
   := UScalar.overflowing_add_eq x y
 

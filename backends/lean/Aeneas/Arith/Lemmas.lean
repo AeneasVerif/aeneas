@@ -48,6 +48,11 @@ theorem Int.pos_mul_pos_is_pos_disj (n m : Int) : m < 0 ∨ n < 0 ∨ 0 ≤ m * 
   cases h: (n < 0 : Bool) <;> simp_all
   right; right; apply pos_mul_pos_is_pos <;> tauto
 
+@[scalar_tac b.toNat]
+theorem Bool.toNat_eq (b : Bool) :
+  (b = true ∧ b.toNat = 1) ∨ (b = false ∧ b.toNat = 0) := by
+  cases b <;> simp
+
 -- Some tests
 section
 
