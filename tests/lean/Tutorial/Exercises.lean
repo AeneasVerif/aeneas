@@ -19,7 +19,7 @@ def mul2_add1 (x : U32) : Result U32 :=
 #check U32.add_spec
 
 /-- Theorem about `mul2_add1`: without the `progress` tactic -/
--- @[pspec]
+-- @[progress]
 theorem mul2_add1_spec (x : U32) (h : 2 * x.val + 1 ≤ U32.max)
   : ∃ y, mul2_add1 x = ok y ∧
   ↑y = 2 * ↑x + (1 : Int)
@@ -32,7 +32,7 @@ theorem mul2_add1_spec (x : U32) (h : 2 * x.val + 1 ≤ U32.max)
   scalar_tac
 
 /-- Theorem about `mul2_add1`: with the `progress` tactic -/
--- @[pspec]
+-- @[progress]
 theorem mul2_add1_spec' (x : U32) (h : 2 * x.val + 1 ≤ U32.max)
   : ∃ y, mul2_add1 x = ok y ∧
   ↑y = 2 * ↑x + (1 : Int)
@@ -92,7 +92,7 @@ divergent def list_nth {T : Type} (l : CList T) (i : U32) : Result T :=
 theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
   ∃ x, list_nth l i = ok x ∧
-  x = l.toList.index i.toNat
+  x = l.toList.index i.val
   := by
   rw [list_nth]
   split
@@ -103,7 +103,6 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
       progress as ⟨ x ⟩
       simp_all
   . simp_all
-    scalar_tac
 
 /- [tutorial::i32_id]:
    Source: 'src/lib.rs', lines 78:0-78:29 -/
@@ -165,8 +164,8 @@ theorem even_spec (n : U32) :
   . progress as ⟨ n' ⟩
     progress as ⟨ b ⟩
     simp [*]
-    simp [Int.odd_sub]
-termination_by n.toNat
+    simp [Nat.even_add_one]
+termination_by n.val
 decreasing_by scalar_decr_tac
 
 /-- The proof about `odd` -/
@@ -178,8 +177,8 @@ theorem odd_spec (n : U32) :
   . progress as ⟨ n' ⟩
     progress as ⟨ b ⟩
     simp [*]
-    simp [Int.even_sub]
-termination_by n.toNat
+    simp [Nat.odd_add_one]
+termination_by n.val
 decreasing_by scalar_decr_tac
 
 end
@@ -386,8 +385,8 @@ set_option pp.coercions true
 /- Example 1: indexing the first element of the list -/
 example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
   (hEq : i = 0#u32) :
-  (hd :: tl.toList).index i.toNat = hd := by
-  have hi : i.toNat = 0 := by scalar_tac
+  (hd :: tl.toList).index i.val = hd := by
+  have hi : i.val = 0 := by scalar_tac
   simp only [hi]
   --
   have hIndex := List.index_zero_cons hd tl.toList
@@ -396,9 +395,9 @@ example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
 /- Example 2: indexing in the tail -/
 example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
   (hEq : i ≠ 0#u32) :
-  (hd :: tl.toList).index i.toNat = tl.toList.index (i.toNat - 1) := by
+  (hd :: tl.toList).index i.val = tl.toList.index (i.val - 1) := by
   -- Note that `scalar_tac` is aware of `Arith.Nat.not_eq`
-  have hIndex := List.index_nzero_cons hd tl.toList i.toNat (by scalar_tac)
+  have hIndex := List.index_nzero_cons hd tl.toList i.val (by scalar_tac)
   simp only [hIndex]
 
 /- Note that `List.index_zero_cons` and `List.index_nzero_cons` have been
@@ -410,14 +409,14 @@ example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
    you expect. -/
 example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
   (hEq : i = 0#u32) :
-  (hd :: tl.toList).index i.toNat = hd := by
+  (hd :: tl.toList).index i.val = hd := by
   simp [hEq]
 
 /- Note that `simp_all` manages to automatically apply `List.index_nzero_cons` below,
    by using the fact that `i ≠ 0#u32`. -/
 example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
   (hEq : i ≠ 0#u32) :
-  (hd :: tl.toList).index i.toNat = tl.toList.index (i.toNat - 1) := by
+  (hd :: tl.toList).index i.val = tl.toList.index (i.val - 1) := by
   simp_all
 
 /- Below, you will need to reason about `List.update`.
@@ -452,9 +451,9 @@ example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
 theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
   ∃ x back, list_nth_mut1 l i = ok (x, back) ∧
-  x = l.toList.index i.toNat ∧
+  x = l.toList.index i.val ∧
   -- Specification of the backward function
-  ∀ x', (back x').toList = l.toList.update i.toNat x' := by
+  ∀ x', (back x').toList = l.toList.update i.val x' := by
   rw [list_nth_mut1, list_nth_mut1_loop]
   sorry
 
@@ -492,7 +491,7 @@ def append_in_place
 
 
 /-- Theorem about `list_tail`: exercise -/
-@[pspec]
+@[progress]
 theorem list_tail_spec {T : Type} (l : CList T) :
   ∃ back, list_tail l = ok (CList.CNil, back) ∧
   ∀ tl', (back tl').toList = l.toList ++ tl'.toList := by
@@ -500,7 +499,7 @@ theorem list_tail_spec {T : Type} (l : CList T) :
   sorry
 
 /-- Theorem about `append_in_place`: exercise -/
-@[pspec]
+@[progress]
 theorem append_in_place_spec {T : Type} (l0 l1 : CList T) :
   ∃ l2, append_in_place l0 l1 = ok l2 ∧
   l2.toList = l0.toList ++ l1.toList := by
@@ -515,7 +514,7 @@ divergent def reverse_loop
   | CList.CCons hd tl => reverse_loop tl (CList.CCons hd out)
   | CList.CNil => Result.ok out
 
-@[pspec]
+@[progress]
 theorem reverse_loop_spec {T : Type} (l : CList T) (out : CList T) :
   ∃ l', reverse_loop l out = ok l' ∧
   True -- Leaving the post-condition as an exercise
@@ -587,14 +586,14 @@ def toInt (x : alloc.vec.Vec U32) : ℤ := toInt_aux x.val
       Ex.: `dcases x = y` will introduce two goals, one with the assumption `x = y` and the
       other with the assumption `x ≠ y`. You can name this assumption by writing: `dcases h : x = y`
  -/
-@[pspec]
+@[progress]
 theorem zero_loop_spec
   (x : alloc.vec.Vec U32) (i : Usize) (h : i.val ≤ x.length) :
   ∃ x',
     zero_loop x i = ok x' ∧
     x'.length = x.length ∧
-    (∀ j, j < i.toNat → x'.val.index j = x.val.index j) ∧
-    (∀ j, i.toNat ≤ j → j < x.length → x'.val.index j = 0#u32) := by
+    (∀ j, j < i.val → x'.val.index j = x.val.index j) ∧
+    (∀ j, i.val ≤ j → j < x.length → x'.val.index j = 0#u32) := by
   rw [zero_loop]
   simp
   sorry
@@ -701,16 +700,16 @@ theorem toInt_aux_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) 
     Hint: you will need to reason about non-linear arithmetic with `scalar_nf` and
     `scalar_eq_nf` (see above).
  -/
-@[pspec]
+@[progress]
 theorem add_no_overflow_loop_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (i : Usize)
   (hLength : x.length = y.length)
   -- No overflow occurs when we add the individual thunks
-  (hNoOverflow : ∀ (j : Nat), i.toNat ≤ j → j < x.length → (x.val.index j).val + (y.val.index j).val ≤ U32.max)
+  (hNoOverflow : ∀ (j : Nat), i.val ≤ j → j < x.length → (x.val.index j).val + (y.val.index j).val ≤ U32.max)
   (hi : i.val ≤ x.length) :
   ∃ x', add_no_overflow_loop x y i = ok x' ∧
   x'.length = x.length ∧
-  toInt x' = toInt x + 2 ^ (32 * i.toNat) * toInt_aux (y.val.drop i.toNat) := by
+  toInt x' = toInt x + 2 ^ (32 * i.val) * toInt_aux (y.val.drop i.val) := by
   rw [add_no_overflow_loop]
   simp
   sorry
@@ -746,15 +745,15 @@ divergent def add_with_carry_loop
     let i2 ←
       alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceTInst
         U32) x i
-    let i3 ← Scalar.cast .U32 c0
-    let p ← core.num.U32.overflowing_add i2 i3
+    let i3 := UScalar.cast .U32 c0
+    let p := core.num.U32.overflowing_add i2 i3
     let (sum, c1) := p
     let i4 ←
       alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceTInst U32) y i
-    let p1 ← core.num.U32.overflowing_add sum i4
+    let p1 := core.num.U32.overflowing_add sum i4
     let (sum1, c2) := p1
-    let i5 ← Scalar.cast_bool .U8 c1
-    let i6 ← Scalar.cast_bool .U8 c2
+    let i5 := UScalar.cast_fromBool .U8 c1
+    let i6 := UScalar.cast_fromBool .U8 c2
     let c01 ← i5 + i6
     let (_, index_mut_back) ←
       alloc.vec.Vec.index_mut
@@ -765,7 +764,7 @@ divergent def add_with_carry_loop
   else Result.ok (c0, x)
 
 /-- The proof about `add_with_carry_loop` -/
-@[pspec]
+@[progress]
 theorem add_with_carry_loop_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (c0 : U8) (i : Usize)
   (hLength : x.length = y.length)
@@ -775,7 +774,7 @@ theorem add_with_carry_loop_spec
   x'.length = x.length ∧
   c1.val ≤ 1 ∧
   toInt x' + c1.val * 2 ^ (32 * x'.length) =
-    toInt x + 2 ^ (32 * i.toNat) * toInt_aux (y.val.drop i.toNat) + c0.val * 2 ^ (32 * i.toNat) := by
+    toInt x + 2 ^ (32 * i.val) * toInt_aux (y.val.drop i.val) + c0.val * 2 ^ (32 * i.val) := by
   rw [add_with_carry_loop]
   simp
   sorry
@@ -789,7 +788,7 @@ def add_with_carry
   add_with_carry_loop x y 0#u8 0#usize
 
 /-- The proof about `add_with_carry` -/
-@[pspec]
+@[progress]
 theorem add_with_carry_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
   (hLength : x.length = y.length) :
@@ -833,13 +832,13 @@ divergent def add_loop
     let yi ← get_or_zero y i
     let i1 ←
       alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceTInst U32) x i
-    let i2 ← Scalar.cast .U32 c0
-    let p ← core.num.U32.overflowing_add i1 i2
+    let i2 := UScalar.cast .U32 c0
+    let p := core.num.U32.overflowing_add i1 i2
     let (sum, c1) := p
-    let p1 ← core.num.U32.overflowing_add sum yi
+    let p1 := core.num.U32.overflowing_add sum yi
     let (sum1, c2) := p1
-    let i3 ← Scalar.cast_bool .U8 c1
-    let i4 ← Scalar.cast_bool .U8 c2
+    let i3 := UScalar.cast_fromBool .U8 c1
+    let i4 := UScalar.cast_fromBool .U8 c2
     let c01 ← i3 + i4
     let (_, index_mut_back) ←
       alloc.vec.Vec.index_mut
@@ -850,7 +849,7 @@ divergent def add_loop
   else
     if c0 != 0#u8
     then do
-         let i1 ← Scalar.cast .U32 c0
+         let i1 := UScalar.cast .U32 c0
          alloc.vec.Vec.push x i1
     else Result.ok x
 

@@ -48,8 +48,8 @@ open CList
 theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
   ∃ x back, list_nth_mut1 l i = ok (x, back) ∧
-  x = l.toList.index i.toNat ∧
-  ∀ x', (back x').toList = l.toList.update i.toNat x' := by
+  x = l.toList.index i.val ∧
+  ∀ x', (back x').toList = l.toList.update i.val x' := by
   rw [list_nth_mut1, list_nth_mut1_loop]
   split
   . rename_i hd tl
@@ -58,13 +58,13 @@ theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
       simp
       split_conjs
       . -- Reasoning about `List.index`:
-        have hi : i.toNat = 0 := by scalar_tac
+        have hi : i.val = 0 := by scalar_tac
         simp only [hi] -- Without the `only`, this actually finished the goal
         have hIndex := List.index_zero_cons hd tl.toList
         simp only [hIndex]
       . intro x
         -- Reasoning about `List.update`:
-        have hi : i.toNat = 0 := by scalar_tac
+        have hi : i.val = 0 := by scalar_tac
         simp only [hi] -- Without the `only`, this actually finished the goal
         have hUpdate := List.update_zero_cons hd tl.toList x
         simp only [hUpdate]
@@ -73,20 +73,19 @@ theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
       progress as ⟨ tl1, back, htl1, hback ⟩
       simp
       split_conjs
-      . have hIndex := List.index_nzero_cons hd tl.toList i.toNat (by scalar_tac)
+      . have hIndex := List.index_nzero_cons hd tl.toList i.val (by scalar_tac)
         simp only [hIndex]
         simp only [htl1]
-        have hiEq : i1.toNat = i.toNat - 1 := by scalar_tac
+        have hiEq : i1.val = i.val - 1 := by scalar_tac
         simp only [hiEq]
       . -- Backward function
         intro x'
         simp [hback]
-        have hUpdate := List.update_nzero_cons hd tl.toList i.toNat x' (by scalar_tac)
+        have hUpdate := List.update_nzero_cons hd tl.toList i.val x' (by scalar_tac)
         simp only [hUpdate]
-        have hiEq : i1.toNat = i.toNat - 1 := by scalar_tac
+        have hiEq : i1.val = i.val - 1 := by scalar_tac
         simp only [hiEq]
   . simp_all
-    scalar_tac
 
 /-- Theorem about `list_nth_mut1`: simple version.
 
@@ -98,8 +97,8 @@ theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
 theorem list_nth_mut1_spec' {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
   ∃ x back, list_nth_mut1 l i = ok (x, back) ∧
-  x = l.toList.index i.toNat ∧
-  ∀ x', (back x').toList = l.toList.update i.toNat x' := by
+  x = l.toList.index i.val ∧
+  ∀ x', (back x').toList = l.toList.update i.val x' := by
   rw [list_nth_mut1, list_nth_mut1_loop]
   split
   . split
@@ -118,10 +117,9 @@ theorem list_nth_mut1_spec' {T: Type} [Inhabited T] (l : CList T) (i : U32)
         intro x'
         simp [*]
   . simp_all
-    scalar_tac
 
 /-- Theorem about `list_tail`: verbose version -/
-@[pspec]
+@[progress]
 theorem list_tail_spec {T : Type} (l : CList T) :
   ∃ back, list_tail l = ok (CList.CNil, back) ∧
   ∀ tl', (back tl').toList = l.toList ++ tl'.toList := by
@@ -140,7 +138,7 @@ theorem list_tail_spec {T : Type} (l : CList T) :
     simp
 
 /-- Theorem about `list_tail: simple version -/
-@[pspec]
+@[progress]
 theorem list_tail_spec' {T : Type} (l : CList T) :
   ∃ back, list_tail l = ok (CList.CNil, back) ∧
   ∀ tl', (back tl').toList = l.toList ++ tl'.toList := by
@@ -154,7 +152,7 @@ theorem list_tail_spec' {T : Type} (l : CList T) :
   . simp
 
 /-- Theorem about `append_in_place` -/
-@[pspec]
+@[progress]
 theorem append_in_place_spec {T : Type} (l0 l1 : CList T) :
   ∃ l2, append_in_place l0 l1 = ok l2 ∧
   l2.toList = l0.toList ++ l1.toList := by
@@ -162,7 +160,7 @@ theorem append_in_place_spec {T : Type} (l0 l1 : CList T) :
   progress as ⟨ tl, back ⟩
   progress as ⟨ l2 ⟩
 
-@[pspec]
+@[progress]
 theorem reverse_loop_spec {T : Type} (l : CList T) (out : CList T) :
   ∃ l', reverse_loop l out = ok l' ∧
   l'.toList = l.toList.reverse ++ out.toList := by
@@ -199,14 +197,14 @@ def toInt_aux (l : List U32) : ℤ :=
 def toInt (x : alloc.vec.Vec U32) : ℤ := toInt_aux x.val
 
 /-- The theorem about `zero_loop` -/
-@[pspec]
+@[progress]
 theorem zero_loop_spec
   (x : alloc.vec.Vec U32) (i : Usize) (h : i.val ≤ x.length) :
   ∃ x',
     zero_loop x i = ok x' ∧
     x'.length = x.length ∧
-    (∀ j, j < i.toNat → x'.val.index j = x.val.index j) ∧
-    (∀ j, i.toNat ≤ j → j < x.length → x'.val.index j = 0#u32) := by
+    (∀ j, j < i.val → x'.val.index j = x.val.index j) ∧
+    (∀ j, i.val ≤ j → j < x.length → x'.val.index j = 0#u32) := by
   rw [zero_loop]
   simp
   split
@@ -219,11 +217,11 @@ theorem zero_loop_spec
       replace hSame := hSame j (by scalar_tac)
       simp_all
     . intro j h0 h1
-      dcases j = i.toNat <;> simp_all
+      dcases j = i.val <;> try simp_all
       have := hZero j (by scalar_tac)
       simp_all
   . simp; scalar_tac
-termination_by (x.length - i.val).toNat
+termination_by x.length - i.val
 decreasing_by scalar_decr_tac
 
 theorem all_nil_impl_toInt_eq_zero
@@ -308,16 +306,16 @@ theorem toInt_aux_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) 
       scalar_eq_nf
 
 /-- The proof about `add_no_overflow_loop` -/
-@[pspec]
+@[progress]
 theorem add_no_overflow_loop_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (i : Usize)
   (hLength : x.length = y.length)
   -- No overflow occurs when we add the individual thunks
-  (hNoOverflow : ∀ (j : Nat), i.toNat ≤ j → j < x.length → (x.val.index j).val + (y.val.index j).val ≤ U32.max)
+  (hNoOverflow : ∀ (j : Nat), i.val ≤ j → j < x.length → (x.val.index j).val + (y.val.index j).val ≤ U32.max)
   (hi : i.val ≤ x.length) :
   ∃ x', add_no_overflow_loop x y i = ok x' ∧
   x'.length = x.length ∧
-  toInt x' = toInt x + 2 ^ (32 * i.toNat) * toInt_aux (y.val.drop i.toNat) := by
+  toInt x' = toInt x + 2 ^ (32 * i.val) * toInt_aux (y.val.drop i.val) := by
   rw [add_no_overflow_loop]
   simp
   split
@@ -325,7 +323,7 @@ theorem add_no_overflow_loop_spec
     progress as ⟨ xv ⟩
     progress as ⟨ sum ⟩
     . -- This precondition is not proven automatically
-      have := hNoOverflow i.toNat (by scalar_tac) (by scalar_tac)
+      have := hNoOverflow i.val (by scalar_tac) (by scalar_tac)
       scalar_tac
     progress as ⟨ i' ⟩
     progress as ⟨ x1 ⟩
@@ -333,28 +331,22 @@ theorem add_no_overflow_loop_spec
       intro j h0 h1
       simp_all
       -- Simplifying (x.update ...).index:
-      have := List.index_update_neq x.val i.toNat j sum (by scalar_tac)
+      have := List.index_update_neq x.val i.val j sum (by scalar_tac)
       simp [*]
       apply hNoOverflow j (by scalar_tac) (by scalar_tac)
     -- Postcondition
     /- Note that you don't have to manually call the lemmas `toInt_aux_update`
         and `toInt_aux_drop` below if you first do:
         ```
-        have : i.toNat < x.length := by scalar_tac
+        have : i.val < x.length := by scalar_tac
         ```
         (simp_all will automatically apply the lemmas and prove the
         the precondition sby using the context)
       -/
     simp_all [toInt]
     scalar_eq_nf
-    -- Simplifying: toInt_aux ((↑x).update (↑i).toNat sum)
-    have := toInt_aux_update x.val i.toNat sum (by scalar_tac)
-    simp [*]; scalar_eq_nf
-    -- Simplifying: toInt_aux (List.drop (1 + (↑i).toNat) ↑y
-    have := toInt_aux_drop y.val i.toNat (by scalar_tac)
-    simp [*]; scalar_eq_nf
   . simp_all
-termination_by (x.length - i.val).toNat
+termination_by x.length - i.val
 decreasing_by scalar_decr_tac
 
 /-- The proof about `add_no_overflow` -/
@@ -369,7 +361,7 @@ theorem add_no_overflow_spec (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
   simp_all [toInt]
 
 /-- The proof about `add_with_carry_loop` -/
-@[pspec]
+@[progress]
 theorem add_with_carry_loop_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (c0 : U8) (i : Usize)
   (hLength : x.length = y.length)
@@ -379,38 +371,67 @@ theorem add_with_carry_loop_spec
   x'.length = x.length ∧
   c1.val ≤ 1 ∧
   toInt x' + c1.val * 2 ^ (32 * x'.length) =
-    toInt x + 2 ^ (32 * i.toNat) * toInt_aux (y.val.drop i.toNat) + c0.val * 2 ^ (32 * i.toNat) := by
+    toInt x + 2 ^ (32 * i.val) * toInt_aux (y.val.drop i.val) + c0.val * 2 ^ (32 * i.val) := by
   rw [add_with_carry_loop]
   simp
   split
   . progress as ⟨ xi ⟩
     progress as ⟨ c0u ⟩
-    . progress as ⟨ s1, c1, hConv1 ⟩
-      progress as ⟨ yi ⟩
-      progress as ⟨ s2, c2, hConv2 ⟩
-      progress as ⟨ c1u ⟩
-      progress as ⟨ c2u ⟩
-      progress as ⟨ c3 ⟩
-      progress as ⟨ _ ⟩
-      progress as ⟨ i1 ⟩
-      progress as ⟨ c4, x1 ⟩
-      -- Proving the post-condition
-      simp_all [toInt]
-      have hxUpdate := toInt_aux_update x.val i.toNat s2 (by scalar_tac)
+    have : c0u.val = c0.val := by scalar_tac
+    progress as ⟨ s1, c1, hConv1 ⟩
+    progress as ⟨ yi ⟩
+    progress as ⟨ s2, c2, hConv2 ⟩
+    progress as ⟨ c1u, hc1u ⟩
+    progress as ⟨ c2u, hc2u ⟩
+    progress as ⟨ c3, hc3 ⟩
+    progress as ⟨ _ ⟩
+    progress as ⟨ i1 ⟩
+    have : c3.val ≤ 1 := by
+      /- We need to make a case disjunction on hConv1 and hConv2.
+         This can be done with `split at hConv1 <;> ...`, but
+         `scalar_tac` can actually do it for us with the `+split``
+        option, which allows it to make a case disjunction over
+        the `if then else` appearing in the context.
+       -/
+      scalar_tac +split
+    progress as ⟨ c4, x1, _, _, hc4 ⟩
+    -- Proving the post-condition
+    split_conjs
+    . simp [*]
+    . simp [*]
+    . simp [hc4, toInt]
+      have hxUpdate := toInt_aux_update x.val i.val s2 (by scalar_tac)
       simp [hxUpdate]; clear hxUpdate
-      have hyDrop := toInt_aux_drop y.val i.toNat (by scalar_tac)
+      have hyDrop := toInt_aux_drop y.val i.val (by scalar_tac)
       simp [hyDrop]; clear hyDrop
       scalar_eq_nf
+      -- The best way is to do a case disjunction and treat each sub-case separately
       split at hConv1 <;>
-      split at hConv2 <;>
-      simp_all <;>
-      scalar_eq_nf <;> simp [U32.max] <;> scalar_eq_nf
+      split at hConv2
+      . have hConv1' : (s1.val : Int) = xi.val + c0u.val - U32.size := by scalar_tac
+        have hConv2' : (s2.val : Int) = s1.val + yi.val - U32.size := by scalar_tac
+        simp [hConv2', hConv1']
+        /- There is a lemma which allows to simplify `U32.size`. But you can also simply
+           do `simp [U32.size]`, which simplifies `U32.size` to `2^U32.numBits`, then
+           simplify `U32.numBits` -/
+        simp [*, U32.size_eq]
+        scalar_eq_nf
+      . have hConv1' : (s1.val : Int) = xi.val + c0u.val - U32.size := by scalar_tac
+        simp [hConv2, hConv1']
+        simp [*, U32.size_eq]
+        scalar_eq_nf
+      . have hConv2' : (s2.val : Int) = s1.val + yi.val - U32.size := by scalar_tac
+        simp [hConv2', hConv1]
+        simp [*, U32.size_eq]
+        scalar_eq_nf
+      . simp [*, U32.size_eq]
+        scalar_eq_nf
   . simp_all
-termination_by (x.length - i.val).toNat
+termination_by x.length - i.val
 decreasing_by scalar_decr_tac
 
 /-- The proof about `add_with_carry` -/
-@[pspec]
+@[progress]
 theorem add_with_carry_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
   (hLength : x.length = y.length) :
