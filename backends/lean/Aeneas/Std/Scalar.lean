@@ -1629,56 +1629,56 @@ theorem IScalar.div_spec {ty} {x y : IScalar ty}
   have ⟨ z, hz ⟩ := IScalar.div_bv_spec hzero hNoOverflow
   simp [hz]
 
-theorem U8.div_spec (x : U8) {y : U8} (hnz : ↑y ≠ (0 : Nat)) :
+@[progress] theorem U8.div_spec (x : U8) {y : U8} (hnz : ↑y ≠ (0 : Nat)) :
   ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y :=
   UScalar.div_spec x hnz
 
-theorem U16.div_spec (x : U16) {y : U16} (hnz : ↑y ≠ (0 : Nat)) :
+@[progress] theorem U16.div_spec (x : U16) {y : U16} (hnz : ↑y ≠ (0 : Nat)) :
   ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y :=
   UScalar.div_spec x hnz
 
-theorem U32.div_spec (x : U32) {y : U32} (hnz : ↑y ≠ (0 : Nat)) :
+@[progress] theorem U32.div_spec (x : U32) {y : U32} (hnz : ↑y ≠ (0 : Nat)) :
   ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y :=
   UScalar.div_spec x hnz
 
-theorem U64.div_spec (x : U64) {y : U64} (hnz : ↑y ≠ (0 : Nat)) :
+@[progress] theorem U64.div_spec (x : U64) {y : U64} (hnz : ↑y ≠ (0 : Nat)) :
   ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y :=
   UScalar.div_spec x hnz
 
-theorem U128.div_spec (x : U128) {y : U128} (hnz : ↑y ≠ (0 : Nat)) :
+@[progress] theorem U128.div_spec (x : U128) {y : U128} (hnz : ↑y ≠ (0 : Nat)) :
   ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y :=
   UScalar.div_spec x hnz
 
-theorem Usize.div_spec (x : Usize) {y : Usize} (hnz : ↑y ≠ (0 : Nat)) :
+@[progress] theorem Usize.div_spec (x : Usize) {y : Usize} (hnz : ↑y ≠ (0 : Nat)) :
   ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y :=
   UScalar.div_spec x hnz
 
-theorem I8.div_spec {x y : I8} (hnz : ↑y ≠ (0 : Int))
+@[progress] theorem I8.div_spec {x y : I8} (hnz : ↑y ≠ (0 : Int))
   (hNoOverflow : ¬ (x.val = I8.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
   IScalar.div_spec hnz hNoOverflow
 
-theorem I16.div_spec {x y : I16} (hnz : ↑y ≠ (0 : Int))
+@[progress] theorem I16.div_spec {x y : I16} (hnz : ↑y ≠ (0 : Int))
   (hNoOverflow : ¬ (x.val = I16.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
   IScalar.div_spec hnz hNoOverflow
 
-theorem I32.div_spec {x y : I32} (hnz : ↑y ≠ (0 : Int))
+@[progress] theorem I32.div_spec {x y : I32} (hnz : ↑y ≠ (0 : Int))
   (hNoOverflow : ¬ (x.val = I32.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
   IScalar.div_spec hnz hNoOverflow
 
-theorem I64.div_spec {x y : I64} (hnz : ↑y ≠ (0 : Int))
+@[progress] theorem I64.div_spec {x y : I64} (hnz : ↑y ≠ (0 : Int))
   (hNoOverflow : ¬ (x.val = I64.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
   IScalar.div_spec hnz hNoOverflow
 
-theorem I128.div_spec {x y : I128} (hnz : ↑y ≠ (0 : Int))
+@[progress] theorem I128.div_spec {x y : I128} (hnz : ↑y ≠ (0 : Int))
   (hNoOverflow : ¬ (x.val = I128.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
   IScalar.div_spec hnz hNoOverflow
 
-theorem Isize.div_spec {x y : Isize} (hnz : ↑y ≠ (0 : Int))
+@[progress] theorem Isize.div_spec {x y : Isize} (hnz : ↑y ≠ (0 : Int))
   (hNoOverflow : ¬ (x.val = Isize.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
   IScalar.div_spec hnz hNoOverflow
