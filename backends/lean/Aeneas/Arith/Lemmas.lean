@@ -1,4 +1,3 @@
-import Aeneas.ScalarTac.IntTac
 import Aeneas.ScalarTac.ScalarTac
 import Mathlib.Algebra.Algebra.ZMod
 import Mathlib.RingTheory.Int.Basic
@@ -148,7 +147,7 @@ theorem cancel_right_div_gcd {m : ℤ} (a b c : Int) (hgcd : Int.gcd c m = 1)
     dcases hc : c = 0 <;> simp_all
   else
     if m ≤ 0 then
-      have hm' : 0 < -m := by int_tac
+      have hm' : 0 < -m := by scalar_tac
       have hgcd' : Int.gcd (-m) c = 1 := by simp [hgcd]
       have hf := @cancel_right_div_gcd_pos (-m) a b c hm' hgcd'
       simp only [Int.emod_neg] at hf

@@ -1,3 +1,3 @@
-import Aeneas.ScalarTac.IntTac
 import Aeneas.ScalarTac.ScalarTac
+import Aeneas.ScalarTac.Lemmas
 import Aeneas.Arith.Lemmas

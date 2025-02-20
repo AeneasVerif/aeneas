@@ -347,13 +347,13 @@ theorem Array.update_subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a :
   clear h
   split_conjs
   . intro i _
-    have := h0 i (by int_tac)
+    have := h0 i (by scalar_tac)
     simp_all
   . intro i _ _
-    have := h1 i (by int_tac) (by int_tac)
+    have := h1 i (by scalar_tac) (by scalar_tac)
     simp [*]
   . intro i _ _
-    have := h2 i (by int_tac) (by int_tac)
+    have := h2 i (by scalar_tac) (by scalar_tac)
     simp [*]
 
 def Slice.subslice {α : Type u} (s : Slice α) (r : Range Usize) : Result (Slice α) :=
@@ -406,13 +406,13 @@ theorem Slice.update_subslice_spec {α : Type u} [Inhabited α] (a : Slice α) (
   clear h
   split_conjs
   . intro i _
-    have := h0 i (by int_tac)
+    have := h0 i (by scalar_tac)
     simp [*]
   . intro i _ _
-    have := h1 i (by int_tac) (by int_tac)
+    have := h1 i (by scalar_tac) (by scalar_tac)
     simp [*]
   . intro i _ _
-    have := h2 i (by int_tac) (by int_tac)
+    have := h2 i (by scalar_tac) (by scalar_tac)
     simp [*]
 
 @[simp]

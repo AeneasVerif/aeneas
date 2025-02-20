@@ -1,150 +1,138 @@
-import Aeneas.ScalarTac.IntTac
-import Aeneas.Std.ScalarCore
+import Lean
+import Lean.Meta.Tactic.Simp
+import Init.Data.List.Basic
+import Mathlib.Tactic.Ring.RingNF
+import Aeneas.Utils
+import Aeneas.ScalarTac.Core
+import Aeneas.ScalarTac.Init
+import Aeneas.Saturate
 
 namespace Aeneas
 
-namespace Std
-
-
-set_option maxRecDepth 1024
-
-@[scalar_tac_simp] theorem UScalar.max_USize_eq : UScalar.max .Usize = Usize.max := by rfl
-@[scalar_tac_simp] theorem IScalar.min_ISize_eq : IScalar.min .Isize = Isize.min := by rfl
-@[scalar_tac_simp] theorem IScalar.max_ISize_eq : IScalar.max .Isize = Isize.max := by rfl
-
-theorem Usize.max_succ_eq_pow : Usize.max + 1 = 2^System.Platform.numBits := by
-  simp [Usize.max, Usize.numBits]
-  have : 0 < 2^System.Platform.numBits := by simp
-  omega
-
-@[scalar_tac Usize.max]
-theorem Usize.cMax_bound : UScalar.cMax .Usize ≤ Usize.max ∧ Usize.max + 1 = 2^System.Platform.numBits := by
-  simp [Usize.max, UScalar.cMax, UScalar.rMax, U32.rMax, Usize.numBits]
-  have := System.Platform.numBits_eq; cases this <;> simp [*]
-
-@[scalar_tac Isize.min]
-theorem Isize.cMin_bound : Isize.min ≤ IScalar.cMin .Isize ∧ Isize.min = - 2^(System.Platform.numBits - 1) := by
-  simp [Isize.min, IScalar.cMin, IScalar.rMin, I32.rMin, Isize.numBits,
-        Isize.max, IScalar.cMax, IScalar.rMax, I32.rMax]
-  have := System.Platform.numBits_eq; cases this <;> simp [*]
-
-@[scalar_tac Isize.max]
-theorem Isize.cMax_bound : IScalar.cMax .Isize ≤ Isize.max ∧ Isize.max + 1 = 2^(System.Platform.numBits - 1) := by
-  simp [Isize.min, IScalar.cMin, IScalar.rMin, I32.rMin, Isize.numBits,
-        Isize.max, IScalar.cMax, IScalar.rMax, I32.rMax]
-  have := System.Platform.numBits_eq; cases this <;> simp [*]
-
-
-@[scalar_tac_simp] theorem U8.numBits_eq    : U8.numBits = 8 := by rfl
-@[scalar_tac_simp] theorem U16.numBits_eq   : U16.numBits = 16 := by rfl
-@[scalar_tac_simp] theorem U32.numBits_eq   : U32.numBits = 32 := by rfl
-@[scalar_tac_simp] theorem U64.numBits_eq   : U64.numBits = 64 := by rfl
-@[scalar_tac_simp] theorem U128.numBits_eq  : U128.numBits = 128 := by rfl
-@[scalar_tac_simp] theorem Usize.numBits_eq : Usize.numBits = System.Platform.numBits := by rfl
-
-@[scalar_tac_simp] theorem I8.numBits_eq    : I8.numBits = 8 := by rfl
-@[scalar_tac_simp] theorem I16.numBits_eq   : I16.numBits = 16 := by rfl
-@[scalar_tac_simp] theorem I32.numBits_eq   : I32.numBits = 32 := by rfl
-@[scalar_tac_simp] theorem I64.numBits_eq   : I64.numBits = 64 := by rfl
-@[scalar_tac_simp] theorem I128.numBits_eq  : I128.numBits = 128 := by rfl
-@[scalar_tac_simp] theorem Isize.numBits_eq : Isize.numBits = System.Platform.numBits := by rfl
-
-@[scalar_tac_simp] theorem U8.max_eq    : U8.max = 255 := by rfl
-@[scalar_tac_simp] theorem U16.max_eq   : U16.max = 65535 := by rfl
-@[scalar_tac_simp] theorem U32.max_eq   : U32.max = 4294967295 := by rfl
-@[scalar_tac_simp] theorem U64.max_eq   : U64.max = 18446744073709551615 := by rfl
-@[scalar_tac_simp] theorem U128.max_eq  : U128.max = 340282366920938463463374607431768211455 := by rfl
-
-@[scalar_tac_simp] theorem UScalar.max_U8_eq    : UScalar.max .U8 = 255 := by rfl
-@[scalar_tac_simp] theorem UScalar.max_U16_eq   : UScalar.max .U16 = 65535 := by rfl
-@[scalar_tac_simp] theorem UScalar.max_U32_eq   : UScalar.max .U32 = 4294967295 := by rfl
-@[scalar_tac_simp] theorem UScalar.max_U64_eq   : UScalar.max .U64 = 18446744073709551615 := by rfl
-@[scalar_tac_simp] theorem UScalar.max_U128_eq  : UScalar.max .U128 = 340282366920938463463374607431768211455 := by rfl
-
-@[scalar_tac_simp] theorem I8.min_eq    : I8.min = -128 := by rfl
-@[scalar_tac_simp] theorem I8.max_eq    : I8.max = 127 := by rfl
-@[scalar_tac_simp] theorem I16.min_eq   : I16.min = -32768 := by rfl
-@[scalar_tac_simp] theorem I16.max_eq   : I16.max = 32767 := by rfl
-@[scalar_tac_simp] theorem I32.min_eq   : I32.min = -2147483648 := by rfl
-@[scalar_tac_simp] theorem I32.max_eq   : I32.max = 2147483647 := by rfl
-@[scalar_tac_simp] theorem I64.min_eq   : I64.min = -9223372036854775808 := by rfl
-@[scalar_tac_simp] theorem I64.max_eq   : I64.max = 9223372036854775807 := by rfl
-@[scalar_tac_simp] theorem I128.min_eq  : I128.min = -170141183460469231731687303715884105728 := by rfl
-@[scalar_tac_simp] theorem I128.max_eq  : I128.max = 170141183460469231731687303715884105727 := by rfl
-
-@[scalar_tac_simp] theorem IScalar.min_I8_eq    : IScalar.min .I8 = -128 := by rfl
-@[scalar_tac_simp] theorem IScalar.max_I8_eq    : IScalar.max .I8 = 127 := by rfl
-@[scalar_tac_simp] theorem IScalar.min_I16_eq   : IScalar.min .I16 = -32768 := by rfl
-@[scalar_tac_simp] theorem IScalar.max_I16_eq   : IScalar.max .I16 = 32767 := by rfl
-@[scalar_tac_simp] theorem IScalar.min_I32_eq   : IScalar.min .I32 = -2147483648 := by rfl
-@[scalar_tac_simp] theorem IScalar.max_I32_eq   : IScalar.max .I32 = 2147483647 := by rfl
-@[scalar_tac_simp] theorem IScalar.min_I64_eq   : IScalar.min .I64 = -9223372036854775808 := by rfl
-@[scalar_tac_simp] theorem IScalar.max_I64_eq   : IScalar.max .I64 = 9223372036854775807 := by rfl
-@[scalar_tac_simp] theorem IScalar.min_I128_eq  : IScalar.min .I128 = -170141183460469231731687303715884105728 := by rfl
-@[scalar_tac_simp] theorem IScalar.max_I128_eq  : IScalar.max .I128 = 170141183460469231731687303715884105727 := by rfl
-
-@[scalar_tac_simp] theorem U8.size_eq    : U8.size = 256 := by rfl
-@[scalar_tac_simp] theorem U16.size_eq   : U16.size = 65536 := by rfl
-@[scalar_tac_simp] theorem U32.size_eq   : U32.size = 4294967296 := by rfl
-@[scalar_tac_simp] theorem U64.size_eq   : U64.size = 18446744073709551616 := by rfl
-@[scalar_tac_simp] theorem U128.size_eq  : U128.size = 340282366920938463463374607431768211456 := by rfl
-
-@[scalar_tac_simp] theorem I8.size_eq    : I8.size = 256 := by rfl
-@[scalar_tac_simp] theorem I16.size_eq   : I16.size = 65536 := by rfl
-@[scalar_tac_simp] theorem I32.size_eq   : I32.size = 4294967296 := by rfl
-@[scalar_tac_simp] theorem I64.size_eq   : I64.size = 18446744073709551616 := by rfl
-@[scalar_tac_simp] theorem I128.size_eq  : I128.size = 340282366920938463463374607431768211456 := by rfl
-
-@[scalar_tac_simp] theorem UScalar.size_U8_eq    : UScalar.size .U8 = 256 := by rfl
-@[scalar_tac_simp] theorem UScalar.size_U16_eq   : U16.size = 65536 := by rfl
-@[scalar_tac_simp] theorem UScalar.size_U32_eq   : UScalar.size .U32 = 4294967296 := by rfl
-@[scalar_tac_simp] theorem UScalar.size_U64_eq   : UScalar.size .U64 = 18446744073709551616 := by rfl
-@[scalar_tac_simp] theorem UScalar.size_U128_eq  : UScalar.size .U128 = 340282366920938463463374607431768211456 := by rfl
-
-@[scalar_tac_simp] theorem IScalar.size_I8_eq    : IScalar.size .I8 = 256 := by rfl
-@[scalar_tac_simp] theorem IScalar.size_I16_eq   : IScalar.size .I16 = 65536 := by rfl
-@[scalar_tac_simp] theorem IScalar.size_I32_eq   : IScalar.size .I32 = 4294967296 := by rfl
-@[scalar_tac_simp] theorem IScalar.size_I64_eq   : IScalar.size .I64 = 18446744073709551616 := by rfl
-@[scalar_tac_simp] theorem IScalar.size_I128_eq  : IScalar.size .I128 = 340282366920938463463374607431768211456 := by rfl
-
-@[scalar_tac_simp] theorem UScalar.cMax_U8_eq     : UScalar.cMax .U8 = 255 := by rfl
-@[scalar_tac_simp] theorem UScalar.cMax_U16_eq    : UScalar.cMax .U16 = 65535 := by rfl
-@[scalar_tac_simp] theorem UScalar.cMax_U32_eq    : UScalar.cMax .U32 = 4294967295 := by rfl
-@[scalar_tac_simp] theorem UScalar.cMax_U64_eq    : UScalar.cMax .U64 = 18446744073709551615 := by rfl
-@[scalar_tac_simp] theorem UScalar.cMax_U128_eq   : UScalar.cMax .U128 = 340282366920938463463374607431768211455 := by rfl
-@[scalar_tac_simp] theorem UScalar.cMax_Usize_eq  : UScalar.cMax .Usize = 4294967295 := by rfl
-
-@[scalar_tac_simp] theorem IScalar.cMin_I8_eq     : IScalar.cMin .I8 = -128 := by rfl
-@[scalar_tac_simp] theorem IScalar.cMax_I8_eq     : IScalar.cMax .I8 = 127 := by rfl
-@[scalar_tac_simp] theorem IScalar.cMin_I16_eq    : IScalar.cMin .I16 = -32768 := by rfl
-@[scalar_tac_simp] theorem IScalar.cMax_I16_eq    : IScalar.cMax .I16 = 32767 := by rfl
-@[scalar_tac_simp] theorem IScalar.cMin_I32_eq    : IScalar.cMin .I32 = -2147483648 := by rfl
-@[scalar_tac_simp] theorem IScalar.cMax_I32_eq    : IScalar.cMax .I32 = 2147483647 := by rfl
-@[scalar_tac_simp] theorem IScalar.cMin_I64_eq    : IScalar.cMin .I64 = -9223372036854775808 := by rfl
-@[scalar_tac_simp] theorem IScalar.cMax_I64_eq    : IScalar.cMax .I64 = 9223372036854775807 := by rfl
-@[scalar_tac_simp] theorem IScalar.cMin_I128_eq   : IScalar.cMin .I128 = -170141183460469231731687303715884105728 := by rfl
-@[scalar_tac_simp] theorem IScalar.cMax_I128_eq   : IScalar.cMax .I128 = 170141183460469231731687303715884105727 := by rfl
-@[scalar_tac_simp] theorem IScalar.cMin_Isize_eq  : IScalar.cMin .Isize = -2147483648 := by rfl
-@[scalar_tac_simp] theorem IScalar.cMax_Isize_eq  : IScalar.cMax .Isize = 2147483647 := by rfl
-
-attribute [scalar_tac_simp] Bool.toNat_false Bool.toNat_true
-
-end Std
-
-/- Automation for scalars - TODO: not sure it is worth having two files (Int.lean and Scalar.lean) -/
 namespace ScalarTac
 
-open Lean Lean.Elab Lean.Meta
-open Std
+open Utils
+open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic
 
-def scalarTacExtraPrePreprocess : Tactic.TacticM Unit :=
+/-
+-- DEPRECATED: `scalar_tac` used to rely on `aesop`. As there are performance issues
+-- with the saturation tactic for now we use our own tactic. We will revert once the performance
+-- is improved.
+
+/- Defining a custom attribute for Aesop - we use the Aesop tactic in the arithmetic tactics -/
+attribute [aesop (rule_sets := [Aeneas.ScalarTac]) unfold norm] Function.comp
+
+/-- The `scalar_tac` attribute used to tag forward theorems for the `scalar_tac` tactic. -/
+macro "scalar_tac" pat:term : attr =>
+  `(attr|aesop safe forward (rule_sets := [$(Lean.mkIdent `Aeneas.ScalarTac):ident]) (pattern := $pat))
+
+/-- The `nonlin_scalar_tac` attribute used to tag forward theorems for the `scalar_tac` tactics. -/
+macro "nonlin_scalar_tac" pat:term : attr =>
+  `(attr|aesop safe forward (rule_sets := [$(Lean.mkIdent `Aeneas.ScalarTacNonLin):ident]) (pattern := $pat))
+-/
+
+/-- The `scalar_tac` attribute used to tag forward theorems for the `scalar_tac` tactics. -/
+macro "scalar_tac" pat:term : attr =>
+  `(attr|aeneas_saturate (set := $(Lean.mkIdent `Aeneas.ScalarTac)) (pattern := $pat))
+
+/-- The `nonlin_scalar_tac` attribute used to tag forward theorems for the `scalar_tac` tactics. -/
+macro "nonlin_scalar_tac" pat:term : attr =>
+  `(attr|aeneas_saturate (set := $(Lean.mkIdent `Aeneas.ScalarTacNonLin)) (pattern := $pat))
+
+-- This is useful especially in the termination proofs
+attribute [scalar_tac a.toNat] Int.toNat_eq_max
+
+/- Check if a proposition is a linear integer proposition.
+   We notably use this to check the goals: this is useful to filter goals that
+   are unlikely to be solvable with arithmetic tactics. -/
+class IsLinearIntProp (x : Prop) where
+
+instance (x y : Int) : IsLinearIntProp (x < y) where
+instance (x y : Int) : IsLinearIntProp (x > y) where
+instance (x y : Int) : IsLinearIntProp (x ≤ y) where
+instance (x y : Int) : IsLinearIntProp (x ≥ y) where
+instance (x y : Int) : IsLinearIntProp (x ≥ y) where
+instance (x y : Int) : IsLinearIntProp (x = y) where
+
+instance (x y : Nat) : IsLinearIntProp (x < y) where
+instance (x y : Nat) : IsLinearIntProp (x > y) where
+instance (x y : Nat) : IsLinearIntProp (x ≤ y) where
+instance (x y : Nat) : IsLinearIntProp (x ≥ y) where
+instance (x y : Nat) : IsLinearIntProp (x ≥ y) where
+instance (x y : Nat) : IsLinearIntProp (x = y) where
+
+instance : IsLinearIntProp False where
+instance (p : Prop) [IsLinearIntProp p] : IsLinearIntProp (¬ p) where
+instance (p q : Prop) [IsLinearIntProp p] [IsLinearIntProp q] : IsLinearIntProp (p ∨ q) where
+instance (p q : Prop) [IsLinearIntProp p] [IsLinearIntProp q] : IsLinearIntProp (p ∧ q) where
+-- We use the one below for goals
+instance (p q : Prop) [IsLinearIntProp p] [IsLinearIntProp q] : IsLinearIntProp (p → q) where
+
+-- Check if the goal is a linear arithmetic goal
+def goalIsLinearInt : Tactic.TacticM Bool := do
   Tactic.withMainContext do
-  -- First get rid of [ofInt] (if there are dependent arguments, we may not
-  -- manage to simplify the context)
+  let gty ← Tactic.getMainTarget
+  match ← trySynthInstance (← mkAppM ``IsLinearIntProp #[gty]) with
+  | .some _ => pure true
+  | _ => pure false
+
+example (x y : Int) (h0 : x ≤ y) (h1 : x ≠ y) : x < y := by
+  omega
+
+def scalarTacSimpRocs : List Name := [
+  ``Nat.reducePow, ``Nat.reduceAdd, ``Nat.reduceSub, ``Nat.reduceMul, ``Nat.reduceDiv, ``Nat.reduceMod,
+  ``Int.reducePow, ``Int.reduceAdd, ``Int.reduceSub, ``Int.reduceMul, ``Int.reduceDiv, ``Int.reduceMod,
+  ``Int.reduceNegSucc, ``Int.reduceNeg,]
+
+structure Config where
+  /- Should we use non-linear arithmetic reasoning? -/
+  nonLin : Bool := false
+  /- If `true`, split all the matches/if then else in the context (note that `omega`
+     splits the *disjunctions*) -/
+  split: Bool := false
+  /- if `true`, split the goal if it is a conjunction so as to introduce one
+     subgoal per conjunction. -/
+  splitGoal : Bool := false
+
+declare_config_elab elabConfig Config
+
+/-- Apply the scalar_tac forward rules -/
+def scalarTacSaturateForward (nonLin : Bool): Tactic.TacticM Unit := do
+  /-
+  let options : Aesop.Options := {}
+  -- Use a forward max depth of 0 to prevent recursively applying forward rules on the assumptions
+  -- introduced by the forward rules themselves.
+  let options ← options.toOptions' (some 0)-/
+  -- We always use the rule set `Aeneas.ScalarTac`, but also need to add other rule sets locally
+  -- activated by the user. The `Aeneas.ScalarTacNonLin` rule set has a special treatment as
+  -- it is activated through an option.
+  let ruleSets :=
+    let ruleSets := `Aeneas.ScalarTac :: (← scalarTacRuleSets.get)
+    if nonLin then `Aeneas.ScalarTacNonLin :: ruleSets
+    else ruleSets
+  -- TODO
+  -- evalAesopSaturate options ruleSets.toArray
+  Saturate.evalSaturate ruleSets
+
+-- For debugging
+elab "scalar_tac_saturate" config:Parser.Tactic.optConfig : tactic => do
+  let config ← elabConfig config
+  scalarTacSaturateForward config.nonLin
+
+/-  Boosting a bit the `omega` tac.
+
+    - `extraPrePreprocess`: extra-preprocessing to be done *before* this preprocessing
+    - `extraPreprocess`: extra-preprocessing to be done *after* this preprocessing
+ -/
+def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
+  Tactic.withMainContext do
   let simpLemmas ← scalarTacSimpExt.getTheorems
+  -- Pre-preprocessing
+  /- First get rid of [ofInt] (if there are dependent arguments, we may not
+     manage to simplify the context) -/
   Utils.simpAt true {dsimp := false, failIfUnchanged := false}
                 -- Simprocs
-                intTacSimpRocs
+                scalarTacSimpRocs
                 -- Simp theorems
                 [simpLemmas]
                 -- Unfoldings
@@ -153,199 +141,155 @@ def scalarTacExtraPrePreprocess : Tactic.TacticM Unit :=
                 []
                 -- Hypotheses
                 [] .wildcard
-
-def scalarTacExtraPreprocess : Tactic.TacticM Unit := do
-  Tactic.withMainContext do
-  let simpLemmas ← scalarTacSimpExt.getTheorems
-  -- TODO: remove this call to simp?
-  Utils.simpAt true {failIfUnchanged := false}
-                -- Simprocs
-                intTacSimpRocs
-                -- Simp theorems
-                [simpLemmas]
-                -- Unfoldings
-                []
+  -- Apply the forward rules
+  allGoalsNoRecover (scalarTacSaturateForward config.nonLin)
+  -- Reduce all the terms in the goal - note that the extra preprocessing step
+  -- might have proven the goal, hence the `allGoals`
+  let dsimp :=
+    allGoalsNoRecover do tryTac (
+      -- We set `simpOnly` at false on purpose.
+      -- Also, we need `zetaDelta` to inline the let-bindings (otherwise, omega doesn't always manages
+      -- to deal with them)
+      dsimpAt false {zetaDelta := true} scalarTacSimpRocs
+        -- Simp theorems
+        []
+        -- Declarations to unfold
+        []
+        -- Theorems
+        []
+        [] Tactic.Location.wildcard)
+  dsimp
+  -- More preprocessing: apply norm_cast to the whole context
+  allGoalsNoRecover (Utils.tryTac (Utils.normCastAtAll))
+  -- norm_cast does weird things with negative numbers so we reapply simp
+  dsimp
+  allGoalsNoRecover do Utils.tryTac (
+    Utils.simpAt true {}
+               -- Simprocs
+               []
+               -- Simp theorems
+               [simpLemmas]
+               -- Unfoldings
+               []
                 -- Simp lemmas
-                []
+                [-- Int.subNatNat is very annoying - TODO: there is probably something more general thing to do
+                 ``Int.subNatNat_eq_coe,
+                 -- We also need this, in case the goal is: ¬ False
+                 ``not_false_eq_true]
                 -- Hypotheses
-                [] .wildcard
-  trace[ScalarTac] "scalarTacExtraPreprocess: after simp: {(← Tactic.getMainGoal)}"
+                [] .wildcard)
 
 elab "scalar_tac_preprocess" config:Parser.Tactic.optConfig : tactic => do
   let config ← elabConfig config
-  intTacPreprocess config scalarTacExtraPrePreprocess scalarTacExtraPreprocess
+  scalarTacPreprocess config
 
--- A tactic to solve linear arithmetic goals in the presence of scalars
+/-- - `splitAllDisjs`: if true, also split all the matches/if then else in the context (note that
+      `omega` splits the *disjunctions*)
+    - `splitGoalConjs`: if true, split the goal if it is a conjunction so as to introduce one
+      subgoal per conjunction.
+-/
 def scalarTac (config : Config) : Tactic.TacticM Unit := do
-  intTac "scalar_tac" config scalarTacExtraPrePreprocess scalarTacExtraPreprocess
+  Tactic.withMainContext do
+  Tactic.focus do
+  let g ← Tactic.getMainGoal
+  trace[ScalarTac] "Original goal: {g}"
+  -- Introduce all the universally quantified variables (includes the assumptions)
+  let (_, g) ← g.intros
+  Tactic.setGoals [g]
+  -- Preprocess - wondering if we should do this before or after splitting
+  -- the goal. I think before leads to a smaller proof term?
+  allGoalsNoRecover (scalarTacPreprocess config)
+  -- Split the conjunctions in the goal
+  if config.splitGoal then allGoalsNoRecover (Utils.repeatTac Utils.splitConjTarget)
+  /- If we split the disjunctions, split then use simp_all. Otherwise only use simp_all.
+     Note that simp_all is very useful here as a "congruence" procedure. Note however that we
+     only activate a very restricted set of simp lemmas (otherwise it can be very expensive,
+     and have surprising behaviors). -/
+  allGoalsNoRecover do
+    try do
+      let simpThenOmega := do
+        /- IMPORTANT: we put a quite low number for `maxSteps`.
+           There are two reasons.
+           First, `simp_all` seems to loop at times, so by controling the maximum number of steps
+           we make sure it doesn't exceed the maximum number of heart beats (or worse, overflows the
+           stack).
+           Second, this makes the tactic very snappy.
+         -/
+        Utils.tryTac (
+          -- TODO: is there a simproc to simplify propositional logic?
+          Utils.simpAll {failIfUnchanged := false, maxSteps := 100} true [``reduceIte] [] []
+            [``and_self, ``false_implies, ``true_implies, ``Prod.mk.injEq,
+             ``not_false_eq_true, ``not_true_eq_false,
+             ``true_and, ``and_true, ``false_and, ``and_false,
+             ``true_or, ``or_true,``false_or, ``or_false,
+             ``Bool.true_eq_false, ``Bool.false_eq_true,
+             -- The following lemmas are used to simplify occurrences of `decide`
+             ``decide_eq_true_eq, ``Bool.or_eq_true, ``Bool.and_eq_true,] [])
+        allGoalsNoRecover (do
+          trace[ScalarTac] "Goal after simplification: {← getMainGoal}"
+          trace[ScalarTac] "Calling omega"
+          Tactic.Omega.omegaTactic {}
+          trace[ScalarTac] "Omega solved the goal")
+      if config.split then do
+        /- In order to improve performance, we first try to prove the goal without splitting. If it
+           fails, we split. -/
+        try
+          trace[ScalarTac] "First trying to solve the goal without splitting"
+          simpThenOmega
+        catch _ =>
+          trace[ScalarTac] "First attempt failed: splitting the goal and retrying"
+          splitAll (allGoalsNoRecover simpThenOmega)
+      else
+        simpThenOmega
+    catch _ =>
+      let g ← Tactic.getMainGoal
+      throwError "scalar_tac failed to prove the goal below.\n\nNote that scalar_tac is almost equivalent to:\n  scalar_tac_preprocess; split_all <;> simp_all only <;> omega\n\nGoal: \n{g}"
+
+example : True := by simp
 
 elab "scalar_tac" config:Parser.Tactic.optConfig : tactic => do
   let config ← elabConfig config
   scalarTac config
 
-@[scalar_tac x]
-theorem UScalar.bounds {ty : UScalarTy} (x : UScalar ty) :
-  x.val ≤ UScalar.max ty := by
-  simp [UScalar.max]
-  have := x.hBounds
+-- For termination proofs
+syntax "int_decr_tac" : tactic
+macro_rules
+  | `(tactic| int_decr_tac) =>
+    `(tactic|
+      simp_wf;
+      -- TODO: don't use a macro (namespace problems)
+      (first | apply ScalarTac.to_int_to_nat_lt
+             | apply ScalarTac.to_int_sub_to_nat_lt) <;>
+      simp_all <;> scalar_tac)
+
+-- Checking that things happen correctly when there are several disjunctions
+example (x y : Int) (h0: 0 ≤ x) (h1: x ≠ 0) (h2 : 0 ≤ y) (h3 : y ≠ 0) : 0 < x ∧ 0 < y := by
+  scalar_tac +splitGoal
+
+-- Checking that things happen correctly when there are several disjunctions
+example (x y : Int) (h0: 0 ≤ x) (h1: x ≠ 0) (h2 : 0 ≤ y) (h3 : y ≠ 0) : 0 < x ∧ 0 < y ∧ x + y ≥ 2 := by
+  scalar_tac +splitGoal
+
+-- Checking that we can prove exfalso
+example (a : Prop) (x : Int) (h0: 0 < x) (h1: x < 0) : a := by
+  scalar_tac
+
+-- Intermediate cast through natural numbers
+example (a : Prop) (x : Int) (h0: (0 : Nat) < x) (h1: x < 0) : a := by
+  scalar_tac
+
+example (x : Int) (h : x ≤ -3) : x ≤ -2 := by
+  scalar_tac
+
+example (x y : Int) (h : x + y = 3) :
+  let z := x + y
+  z = 3 := by
+  intro z
   omega
 
-@[scalar_tac x]
-theorem IScalar.bounds {ty : IScalarTy} (x : IScalar ty) :
-  IScalar.min ty ≤ x.val ∧ x.val ≤ IScalar.max ty := by
-  simp [IScalar.max, IScalar.min]
-  have := x.hBounds
-  omega
-
-/-!
-# Tests and Additional Simp Theorems
--/
-
-example (x _y : U32) : x.val ≤ UScalar.max .U32 := by
-  scalar_tac_preprocess
-  simp [*]
-
-example (x _y : U32) : x.val ≤ UScalar.max .U32 := by
-  scalar_tac
-
--- Checking that we explore the goal *and* projectors correctly
-example (x : U32 × U32) : 0 ≤ x.fst.val := by
-  scalar_tac
-
--- Checking that we properly handle [ofInt]
-example : (U32.ofNat 1).val ≤ U32.max := by
-  scalar_tac
-
-example (x : Nat) (h1 : x ≤ U32.max) :
-  (U32.ofNat x (by scalar_tac)).val ≤ U32.max := by
-  scalar_tac_preprocess
-  scalar_tac
-
--- Not equal
-example (x : U32) (h0 : ¬ x = U32.ofNat 0) : 0 < x.val := by
-  scalar_tac
-
-/- See this: https://aeneas-verif.zulipchat.com/#narrow/stream/349819-general/topic/U64.20trouble/near/444049757
-
-   We solved it by removing the instance `OfNat` for `Scalar`.
-   Note however that we could also solve it with a simplification lemma.
-   However, after testing, we noticed we could only apply such a lemma with
-   the rewriting tactic (not the simplifier), probably because of the use
-   of typeclasses. -/
-example {u: U64} (h1: (u : Nat) < 2): (u : Nat) = 0 ∨ (u : Nat) = 1 := by
-  scalar_tac
-
-example (x : I32) : -100000000000 < x.val := by
-  scalar_tac
-
-example : (Usize.ofNat 2).val ≠ 0 := by
-  scalar_tac
-
-example (x : U32) : x.val ≤ Usize.max := by scalar_tac
-example (x : I32) : x.val ≤ Isize.max := by scalar_tac
-example (x : I32) : Isize.min ≤ x.val := by scalar_tac
-
-example (x y : Nat) (z : Int) (h : Int.subNatNat x y + z = 0) : (x : Int) - (y : Int) + z = 0 := by
-  scalar_tac_preprocess
-  omega
-
-example (x : U32) (h : 16 * x.val ≤ U32.max) :
-  4 * (U32.ofNat (4 * x.val) (by scalar_tac)).val ≤ U32.max := by
-  scalar_tac
-
-example (b : Bool) (x y : Int) (h : if b then P ∧ x + y < 3 else x + y < 4) : x + y < 5 := by
+-- Checking that we manage to split the cases/if then else
+example (x : Int) (b : Bool) (h : if b then x ≤ 0 else x ≤ 0) : x ≤ 0 := by
   scalar_tac +split
-
-open Utils
-
-/- Some tests which introduce big constants (those sometimes cause issues when reducing expressions).
-
-   See for instance: https://github.com/leanprover/lean4/issues/6955
- -/
-example (x y : Nat) (h : x = y + 2^32) : 0 ≤ x := by
-  scalar_tac
-
-example (x y : Nat) (h : x = y - 2^32) : 0 ≤ x := by
-  scalar_tac
-
-example
-  (xi yi : U32)
-  (c0 : U8)
-  (hCarryLe : c0.val ≤ 1)
-  (c0u : U32)
-  (_ : c0u.val = c0.val)
-  (s1 : U32)
-  (c1 : Bool)
-  (hConv1 : if xi.val + c0u.val > U32.max then s1.val = ↑xi + ↑c0u - U32.max - 1 ∧ c1 = true else s1 = xi.val + c0u ∧ c1 = false)
-  (s2 : U32)
-  (c2 : Bool)
-  (hConv2 : if s1.val + yi.val > U32.max then s2.val = ↑s1 + ↑yi - U32.max - 1 ∧ c2 = true else s2 = s1.val + yi ∧ c2 = false)
-  (c1u : U8)
-  (_ : c1u.val = if c1 = true then 1 else 0)
-  (c2u : U8)
-  (_ : c2u.val = if c2 = true then 1 else 0)
-  (c3 : U8)
-  (_ : c3.val = c1u.val + c2u.val):
-  c3.val ≤ 1 := by
-  scalar_tac +split
-
-example (x y : Nat) (h : x = y - 2^32) : 0 ≤ x := by
-  scalar_tac
-
-example (v : { l : List α // l.length ≤ Usize.max }):
-  v.val.length < 2 ^ UScalarTy.Usize.numBits := by
-  scalar_tac
-
-example
-  (α : Type u)
-  (v : { l : List α // l.length ≤ Usize.max })
-  (nlen : ℕ)
-  (h : nlen ≤ U32.max ∨ nlen ≤ 2 ^ Usize.numBits - 1) :
-  nlen ≤ 2 ^ Usize.numBits - 1
-  := by
-  scalar_tac
-
-example
-  (α : Type u)
-  (v : { l : List α // l.length ≤ Usize.max })
-  (nlen : ℕ)
-  (h : (decide (nlen ≤ U32.max) || decide (nlen ≤ Usize.max)) = true) :
-  nlen ≤ Usize.max
-  := by
-  scalar_tac
-
-example (x : I8) : x.toNat = x.val.toNat := by scalar_tac
-
-/-!
-## Min, Max
--/
-
-@[scalar_tac_simp] theorem Nat.max_eq_Max_max (x y : Nat) : Nat.max x y = x ⊔ y := by simp
-@[scalar_tac_simp] theorem Nat.min_eq_Min_min (x y : Nat) : Nat.min x y = x ⊓ y := by simp
-
-example (x y : Nat) : x ≤ x ⊔ y := by scalar_tac
-example (x y : Nat) : x ≤ Nat.max x y := by scalar_tac
-example (x y : Nat) : x ⊓ y ≤ x := by scalar_tac
-example (x y : Nat) : Nat.min x y ≤ x := by scalar_tac
-
-example (x y : Int) : x ≤ x ⊔ y := by scalar_tac
-example (x y : Int) : x ≤ max x y := by scalar_tac
-example (x y : Int) : x ⊓ y ≤ x := by scalar_tac
-example (x y : Int) : min x y ≤ x := by scalar_tac
-
-/-!
-## Abs
--/
-
-@[scalar_tac_simp]
-theorem Int.natAbs_eq_abs (x : Int) : |x| = ↑x.natAbs := by simp
-
-example (x y : Int) (h : x.natAbs ≤ y.natAbs) : x ≤ y.natAbs := by
-  scalar_tac_preprocess
-
-  scalar_tac
-example (x y : Int) (h : |x| ≤ |y|) : x ≤ |y| := by scalar_tac
-example (x y : Int) (h : |x| ≤ |y|) : x ≤ |y| := by scalar_tac
 
 end ScalarTac
 

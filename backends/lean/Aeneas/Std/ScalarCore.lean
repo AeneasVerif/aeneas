@@ -4,7 +4,7 @@ import Aeneas.Std.Core
 import Aeneas.Std.Core
 import Aeneas.Diverge.Core
 import Aeneas.Progress.Core
-import Aeneas.ScalarTac.IntTac
+import Aeneas.ScalarTac.ScalarTac
 
 namespace Aeneas
 
@@ -208,19 +208,19 @@ theorem IScalarTy.numBits_nonzero (ty : IScalarTy) : ty.numBits ≠ 0 := by
   dcases ty <;> simp [numBits]
   dcases System.Platform.numBits_eq <;> simp_all
 
-@[simp] theorem UScalarTy.U8_numBits_eq    : UScalarTy.U8.numBits    = 8 := by rfl
-@[simp] theorem UScalarTy.U16_numBits_eq   : UScalarTy.U16.numBits   = 16 := by rfl
-@[simp] theorem UScalarTy.U32_numBits_eq   : UScalarTy.U32.numBits   = 32 := by rfl
-@[simp] theorem UScalarTy.U64_numBits_eq   : UScalarTy.U64.numBits   = 64 := by rfl
-@[simp] theorem UScalarTy.U128_numBits_eq  : UScalarTy.U128.numBits  = 128 := by rfl
-@[simp] theorem UScalarTy.Usize_numBits_eq : UScalarTy.Usize.numBits = System.Platform.numBits := by rfl
+@[simp, scalar_tac_simp] theorem UScalarTy.U8_numBits_eq    : UScalarTy.U8.numBits    = 8 := by rfl
+@[simp, scalar_tac_simp] theorem UScalarTy.U16_numBits_eq   : UScalarTy.U16.numBits   = 16 := by rfl
+@[simp, scalar_tac_simp] theorem UScalarTy.U32_numBits_eq   : UScalarTy.U32.numBits   = 32 := by rfl
+@[simp, scalar_tac_simp] theorem UScalarTy.U64_numBits_eq   : UScalarTy.U64.numBits   = 64 := by rfl
+@[simp, scalar_tac_simp] theorem UScalarTy.U128_numBits_eq  : UScalarTy.U128.numBits  = 128 := by rfl
+@[simp, scalar_tac_simp] theorem UScalarTy.Usize_numBits_eq : UScalarTy.Usize.numBits = System.Platform.numBits := by rfl
 
-@[simp] theorem IScalarTy.I8_numBits_eq    : IScalarTy.I8.numBits    = 8 := by rfl
-@[simp] theorem IScalarTy.I16_numBits_eq   : IScalarTy.I16.numBits   = 16 := by rfl
-@[simp] theorem IScalarTy.I32_numBits_eq   : IScalarTy.I32.numBits   = 32 := by rfl
-@[simp] theorem IScalarTy.I64_numBits_eq   : IScalarTy.I64.numBits   = 64 := by rfl
-@[simp] theorem IScalarTy.I128_numBits_eq  : IScalarTy.I128.numBits  = 128 := by rfl
-@[simp] theorem IScalarTy.Isize_numBits_eq : IScalarTy.Isize.numBits = System.Platform.numBits := by rfl
+@[simp, scalar_tac_simp] theorem IScalarTy.I8_numBits_eq    : IScalarTy.I8.numBits    = 8 := by rfl
+@[simp, scalar_tac_simp] theorem IScalarTy.I16_numBits_eq   : IScalarTy.I16.numBits   = 16 := by rfl
+@[simp, scalar_tac_simp] theorem IScalarTy.I32_numBits_eq   : IScalarTy.I32.numBits   = 32 := by rfl
+@[simp, scalar_tac_simp] theorem IScalarTy.I64_numBits_eq   : IScalarTy.I64.numBits   = 64 := by rfl
+@[simp, scalar_tac_simp] theorem IScalarTy.I128_numBits_eq  : IScalarTy.I128.numBits  = 128 := by rfl
+@[simp, scalar_tac_simp] theorem IScalarTy.Isize_numBits_eq : IScalarTy.Isize.numBits = System.Platform.numBits := by rfl
 
 @[simp] theorem UScalar.max_UScalarTy_U8_eq    : UScalar.max .U8 = U8.max := by rfl
 @[simp] theorem UScalar.max_UScalarTy_U16_eq   : UScalar.max .U16 = U16.max := by rfl
@@ -679,7 +679,7 @@ theorem IScalar.min_lt_max (ty : IScalarTy) : IScalar.min ty < IScalar.max ty :=
 
 theorem IScalar.min_le_max (ty : IScalarTy) : IScalar.min ty ≤ IScalar.max ty := by
   have := IScalar.min_lt_max ty
-  int_tac
+  scalar_tac
 
 @[reducible] def core_u8_min : U8 := UScalar.ofNat 0
 @[reducible] def core_u8_max : U8 := UScalar.ofNat U8.rMax
@@ -808,12 +808,12 @@ instance (ty : IScalarTy) : DecidableEq (IScalar ty) :=
 @[simp]
 theorem UScalar.val_not_eq_imp_not_eq (x y : UScalar ty) (h : ScalarTac.Nat.not_eq x.val y.val) :
   ¬ x = y := by
-  simp_all; int_tac
+  simp_all; scalar_tac
 
 @[simp]
 theorem IScalar.val_not_eq_imp_not_eq (x y : IScalar ty) (h : ScalarTac.Int.not_eq x.val y.val) :
   ¬ x = y := by
-  simp_all; int_tac
+  simp_all; scalar_tac
 
 instance (ty: UScalarTy) : Preorder (UScalar ty) where
   le_refl := fun a => by simp

@@ -51,7 +51,7 @@ theorem indexOpt_eq_index [Inhabited α] (ls : List α) (i : Nat) :
     else by
       have hi := indexOpt_eq_index tl (i - 1)
       simp [*]; intros
-      apply hi; int_tac
+      apply hi; scalar_tac
 
 -- Remark: the list is unchanged if the index is not in bounds
 def update (ls : List α) (i : Nat) (y : α) : List α :=
@@ -143,7 +143,7 @@ theorem index_append_beg [Inhabited α] (i : Nat) (l0 l1 : List α) (_ : i < l0.
   | hd :: tl =>
     if hi : i = 0 then simp_all
     else
-      have := index_append_beg (i - 1) tl l1 (by simp_all; int_tac)
+      have := index_append_beg (i - 1) tl l1 (by simp_all; scalar_tac)
       simp_all
 
 @[simp]
@@ -153,10 +153,10 @@ theorem index_append_end [Inhabited α] (i : Nat) (l0 l1 : List α)
   match l0 with
   | [] => by simp_all
   | hd :: tl =>
-    have : ¬ i = 0 := by simp_all; int_tac
-    have := index_append_end (i - 1) tl l1 (by simp_all; int_tac)
+    have : ¬ i = 0 := by simp_all; scalar_tac
+    have := index_append_end (i - 1) tl l1 (by simp_all; scalar_tac)
     -- TODO: canonize arith expressions
-    have : i - 1 - length tl = i - (1 + length tl) := by int_tac
+    have : i - 1 - length tl = i - (1 + length tl) := by scalar_tac
     by simp_all; ring_nf
 
 @[scalar_tac ls.drop i]
@@ -184,7 +184,7 @@ attribute [scalar_tac l.take i] length_take
 theorem resize_length (l : List α) (new_len : Nat) (x : α) :
   (l.resize new_len x).length = new_len := by
   induction l <;> simp_all [resize]
-  int_tac
+  scalar_tac
 
 @[simp] theorem slice_zero_j (l : List α) : l.slice 0 j = l.take j := by simp [slice]
 
@@ -192,7 +192,7 @@ theorem slice_length_le (i j : Nat) (ls : List α) : (ls.slice i j).length ≤ l
   simp [slice]
 
 theorem slice_length (i j : Nat) (ls : List α) : (ls.slice i j).length = min (ls.length - i) (j - i) := by
-  simp [slice]; int_tac
+  simp [slice]; scalar_tac
 
 @[simp]
 theorem index_drop [Inhabited α] (i : Nat) (j : Nat) (ls : List α) :
@@ -221,8 +221,8 @@ theorem index_slice [Inhabited α] (i j k : Nat) (ls : List α)
   . intro i j; simp_all
   . intro i j h0 h1
     simp_all [slice]
-    rw [index_take_same] <;> first | simp_all | int_tac
-    int_tac
+    rw [index_take_same] <;> first | simp_all | scalar_tac
+    scalar_tac
 
 @[simp]
 theorem index_take_append_beg [Inhabited α] (i j : Nat) (l0 l1 : List α)
@@ -282,7 +282,7 @@ theorem length_index_le_length_flatten (ls : List (List α)) :
   rename ∀ _, _ => ih
   rename Nat => i
   replace ih := ih i
-  int_tac
+  scalar_tac
 
 theorem length_flatten_update_eq {α : Type u} (ls : List (List α)) (i : Nat) (x : List α)
   (h1 : i < ls.length) :
@@ -290,11 +290,11 @@ theorem length_flatten_update_eq {α : Type u} (ls : List (List α)) (i : Nat) (
   revert i
   induction ls <;> intro i <;> simp_all [default]
   cases i <;> simp_all
-  . int_tac
+  . scalar_tac
   . rename Nat => i
     rename ∀ _, _ => ih
     replace ih := ih i
-    int_tac
+    scalar_tac
 
 @[scalar_tac (ls.update i x).flatten]
 theorem length_flatten_update_eq_disj {α : Type u} (ls : List (List α)) (i : Nat) (x : List α) :
@@ -307,7 +307,7 @@ theorem length_flatten_update_eq_disj {α : Type u} (ls : List (List α)) (i : N
 theorem length_flatten_update_as_int_eq {α : Type u} (ls : List (List α)) (i : Nat) (x : List α)
   (h1 : i < ls.length) :
   ((ls.update i x).flatten.length : Nat) = ls.flatten.length + x.length - (ls.index i).length := by
-  int_tac
+  scalar_tac
 
 @[simp]
 theorem index_map_eq {α : Type u} {β : Type v} [Inhabited α] [Inhabited β]
@@ -326,28 +326,28 @@ theorem replace_slice_index [Inhabited α] (start end_ : Nat) (l nl : List α)
   (∀ i, end_ ≤ i → i < l.length → l1.index i = l.index i)
   := by
   -- We need those assumptions everywhere
-  have : start ≤ l.length := by int_tac
+  have : start ≤ l.length := by scalar_tac
   simp only [replace_slice]
   split_conjs
   . intro i _
     -- Introducing exactly the assumptions we need to make the rewriting work
-    have : i < l.length := by int_tac
+    have : i < l.length := by scalar_tac
     simp_all
   . intro i _ _
     have : (List.take start l).length ≤ i := by simp_all
     have : i < (List.take start l).length + (nl ++ List.drop end_ l).length := by
-      simp_all; int_tac
+      simp_all; scalar_tac
     simp_all
-    have : i - start < nl.length := by int_tac
+    have : i - start < nl.length := by scalar_tac
     simp_all
   . intro i _ _
     have : 0 ≤ end_ := by scalar_tac
-    have : end_ ≤ l.length := by int_tac
-    have : (List.take start l).length ≤ i := by int_tac
-    have := index_append_end i (take start l ++ nl) (drop end_ l) (by simp; int_tac)
+    have : end_ ≤ l.length := by scalar_tac
+    have : (List.take start l).length ≤ i := by scalar_tac
+    have := index_append_end i (take start l ++ nl) (drop end_ l) (by simp; scalar_tac)
     simp_all
     congr
-    int_tac
+    scalar_tac
 
 @[simp]
 theorem allP_nil {α : Type u} (p: α → Prop) : allP [] p :=

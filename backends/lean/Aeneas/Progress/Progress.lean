@@ -150,7 +150,7 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
     Tactic.focus do
     let _ ←
       tryTac
-        (simpAt true {} [] []
+        (simpAt true {} [] [] []
                [``Std.bind_tc_ok, ``Std.bind_tc_fail, ``Std.bind_tc_div,
                 -- Those ones are quite useful to simplify the goal further by eliminating
                 -- existential quantifiers, for instance.
@@ -165,7 +165,7 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
     else
        trace[Progress] "goal after applying the eq and simplifying the binds: {← getMainGoal}"
        -- TODO: remove this (some types get unfolded too much: we "fold" them back)
-       let _ ← tryTac (simpAt true {} [] [] scalar_eqs [] .wildcard_dep)
+       let _ ← tryTac (simpAt true {} [] [] [] scalar_eqs [] .wildcard_dep)
        trace[Progress] "goal after folding back scalar types: {← getMainGoal}"
        -- Clear the equality, unless the user requests not to do so
        let mgoal ← do
@@ -406,7 +406,7 @@ def evalProgress (args : TSyntax `Aeneas.Progress.progressArgs) : TacticM Stats 
       throwError "Not a linear arithmetic goal"
   let simpTac : TacticM Unit := do
       -- Simplify the goal
-      Utils.simpAt false {} [] [] [] [] (.targets #[] true)
+      Utils.simpAt false {} [] [] [] [] [] (.targets #[] true)
       -- Raise an error if the goal is not proved
       allGoalsNoRecover (throwError "Goal not proved")
   -- We use our custom assumption tactic, which instantiates meta-variables only if there is a single
