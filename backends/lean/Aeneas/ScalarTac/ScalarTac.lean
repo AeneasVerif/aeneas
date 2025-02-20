@@ -203,8 +203,9 @@ def scalarTacExtraPreprocess : Tactic.TacticM Unit := do
                 [] .wildcard
   trace[ScalarTac] "scalarTacExtraPreprocess: after simp: {(← Tactic.getMainGoal)}"
 
-elab "scalar_tac_preprocess" : tactic =>
-  intTacPreprocess scalarTacExtraPrePreprocess scalarTacExtraPreprocess
+elab "scalar_tac_preprocess" config:Parser.Tactic.optConfig : tactic => do
+  let config ← elabConfig config
+  intTacPreprocess config scalarTacExtraPrePreprocess scalarTacExtraPreprocess
 
 -- A tactic to solve linear arithmetic goals in the presence of scalars
 def scalarTac (config : Config) : Tactic.TacticM Unit := do

@@ -55,12 +55,8 @@ theorem Bool.toNat_eq (b : Bool) :
 
 -- Some tests
 section
-
-  -- Activate the rule set for non linear arithmetic
-  set_option scalarTac.nonLin true
-
-  example (x y : Int) (h : 0 ≤ x ∧ 0 ≤ y) : 0 ≤ x * y := by scalar_tac
-  example (x y : Int) (h : 0 ≤ x ∧ 0 ≤ y) : 0 ≤ x / y := by scalar_tac
+  example (x y : Int) (h : 0 ≤ x ∧ 0 ≤ y) : 0 ≤ x * y := by scalar_tac +nonLin
+  example (x y : Int) (h : 0 ≤ x ∧ 0 ≤ y) : 0 ≤ x / y := by scalar_tac +nonLin
 
 end
 

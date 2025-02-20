@@ -94,8 +94,20 @@ def intTacSimpRocs : List Name := [
   ``Int.reducePow, ``Int.reduceAdd, ``Int.reduceSub, ``Int.reduceMul, ``Int.reduceDiv, ``Int.reduceMod,
   ``Int.reduceNegSucc, ``Int.reduceNeg,]
 
+structure Config where
+  /- Should we use non-linear arithmetic reasoning? -/
+  nonLin : Bool := false
+  /- If `true`, split all the matches/if then else in the context (note that `omega`
+     splits the *disjunctions*) -/
+  split: Bool := false
+  /- if `true`, split the goal if it is a conjunction so as to introduce one
+     subgoal per conjunction. -/
+  splitGoal : Bool := false
+
+declare_config_elab elabConfig Config
+
 /-- Apply the scalar_tac forward rules -/
-def intTacSaturateForward : Tactic.TacticM Unit := do
+def intTacSaturateForward (nonLin : Bool): Tactic.TacticM Unit := do
   /-
   let options : Aesop.Options := {}
   -- Use a forward max depth of 0 to prevent recursively applying forward rules on the assumptions
@@ -106,27 +118,28 @@ def intTacSaturateForward : Tactic.TacticM Unit := do
   -- it is activated through an option.
   let ruleSets :=
     let ruleSets := `Aeneas.ScalarTac :: (← scalarTacRuleSets.get)
-    if scalarTac.nonLin.get (← getOptions) then `Aeneas.ScalarTacNonLin :: ruleSets
+    if nonLin then `Aeneas.ScalarTacNonLin :: ruleSets
     else ruleSets
   -- TODO
   -- evalAesopSaturate options ruleSets.toArray
   Saturate.evalSaturate ruleSets
 
 -- For debugging
-elab "int_tac_saturate" : tactic =>
-  intTacSaturateForward
+elab "int_tac_saturate" config:Parser.Tactic.optConfig : tactic => do
+  let config ← elabConfig config
+  intTacSaturateForward config.nonLin
 
 /-  Boosting a bit the `omega` tac.
 
     - `extraPrePreprocess`: extra-preprocessing to be done *before* this preprocessing
     - `extraPreprocess`: extra-preprocessing to be done *after* this preprocessing
  -/
-def intTacPreprocess (extraPrePreprocess extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM Unit := do
+def intTacPreprocess (config : Config) (extraPrePreprocess extraPreprocess :  Tactic.TacticM Unit) : Tactic.TacticM Unit := do
   Tactic.withMainContext do
   -- Pre-preprocessing
   extraPrePreprocess
   -- Apply the forward rules
-  allGoalsNoRecover intTacSaturateForward
+  allGoalsNoRecover (intTacSaturateForward config.nonLin)
   -- Extra preprocessing
   allGoalsNoRecover extraPreprocess
   -- Reduce all the terms in the goal - note that the extra preprocessing step
@@ -161,18 +174,9 @@ def intTacPreprocess (extraPrePreprocess extraPreprocess :  Tactic.TacticM Unit)
                 -- Hypotheses
                 [] .wildcard)
 
-elab "int_tac_preprocess" : tactic =>
-  intTacPreprocess (do pure ()) (do pure ())
-
-structure Config where
-  /- If `true`, split all the matches/if then else in the context (note that `omega`
-     splits the *disjunctions*) -/
-  split: Bool := false
-  /- if `true`, split the goal if it is a conjunction so as to introduce one
-     subgoal per conjunction. -/
-  splitGoal : Bool := false
-
-declare_config_elab elabConfig Config
+elab "int_tac_preprocess" config:Parser.Tactic.optConfig : tactic => do
+  let config ← elabConfig config
+  intTacPreprocess config (do pure ()) (do pure ())
 
 /-- - `splitAllDisjs`: if true, also split all the matches/if then else in the context (note that
       `omega` splits the *disjunctions*)
@@ -190,7 +194,7 @@ def intTac (tacName : String) (config : Config)
   Tactic.setGoals [g]
   -- Preprocess - wondering if we should do this before or after splitting
   -- the goal. I think before leads to a smaller proof term?
-  allGoalsNoRecover (intTacPreprocess extraPrePreprocess extraPreprocess)
+  allGoalsNoRecover (intTacPreprocess config extraPrePreprocess extraPreprocess)
   -- Split the conjunctions in the goal
   if config.splitGoal then allGoalsNoRecover (Utils.repeatTac Utils.splitConjTarget)
   /- If we split the disjunctions, split then use simp_all. Otherwise only use simp_all.

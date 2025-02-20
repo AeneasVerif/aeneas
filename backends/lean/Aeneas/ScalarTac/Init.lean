@@ -16,12 +16,6 @@ namespace ScalarTac
 
 declare_aesop_rule_sets [Aeneas.ScalarTac, Aeneas.ScalarTacNonLin]
 
-register_option scalarTac.nonLin : Bool := {
-  defValue := false
-  group := ""
-  descr := "Activate the use of a set of lemmas to reason about non-linear arithmetic by `scalar_tac`"
-}
-
 -- The sets of rules that `scalar_tac` should use
 open Extensions in
 initialize scalarTacRuleSets : ListDeclarationExtension Name ← do
