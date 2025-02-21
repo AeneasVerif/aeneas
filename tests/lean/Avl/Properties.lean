@@ -224,7 +224,7 @@ theorem Node.value_not_in_left [LinearOrder T] (node : Node T) (hInv : node.inv)
   have := ne_of_lt this
   tauto
 
-@[pspec]
+@[progress]
 theorem Tree.find_loop_spec
   {T : Type} (OrdInst : Ord T)
   [DecidableEq T] [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
@@ -267,7 +267,7 @@ theorem Tree.find_spec
 -- TODO: move
 set_option maxHeartbeats 5000000
 
-@[pspec]
+@[progress]
 theorem Node.rotate_left_spec
   {T : Type} [LinearOrder T]
   (x z : T) (a b c : Option (Node T)) (bf_x bf_z : I8)
@@ -381,7 +381,7 @@ theorem Node.rotate_left_spec
       simp_all (config := {maxDischargeDepth := 1})
       scalar_tac
 
-@[pspec]
+@[progress]
 theorem Node.rotate_right_spec
   {T : Type} [LinearOrder T]
   (x z : T) (a b c : Option (Node T)) (bf_x bf_z : I8)
@@ -493,7 +493,7 @@ theorem Node.rotate_right_spec
       simp_all (config := {maxDischargeDepth := 1})
       scalar_tac
 
-@[pspec]
+@[progress]
 theorem Node.rotate_left_right_spec
   {T : Type} [LinearOrder T]
   (x y z : T) (bf_x bf_y bf_z : I8)
@@ -582,9 +582,9 @@ theorem Node.rotate_left_right_spec
     . -- invAux for y
       split_conjs <;> (try omega) <;> (try tauto)
     . -- invAux for z
-      split_conjs <;> (try scalar_tac)
+      split_conjs <;> (try assumption) <;> (try scalar_tac)
     . -- invAux for x
-      split_conjs <;> (try scalar_tac)
+      split_conjs <;> (try assumption) <;> (try scalar_tac)
     . -- The sets are the same
       apply Set.ext; simp [tree, z_tree, y_tree]; tauto
     . -- Height
@@ -597,9 +597,9 @@ theorem Node.rotate_left_right_spec
       . -- invAux for y
         split_conjs <;> (try omega) <;> (try tauto)
       . -- invAux for z
-        split_conjs <;> (try scalar_tac)
+        split_conjs <;> (try assumption) <;> (try scalar_tac)
       . -- invAux for x
-        split_conjs <;> (try scalar_tac)
+        split_conjs <;> (try assumption) <;> (try scalar_tac)
       . -- The sets are the same
         apply Set.ext; simp [tree, z_tree, y_tree]; tauto
       . -- Height
@@ -610,15 +610,15 @@ theorem Node.rotate_left_right_spec
       . -- invAux for y
         split_conjs <;> (try omega) <;> (try tauto)
       . -- invAux for z
-        split_conjs <;> (try scalar_tac)
+        split_conjs <;> (try assumption) <;> (try scalar_tac)
       . -- invAux for x
-        split_conjs <;> (try scalar_tac)
+        split_conjs <;> (try assumption) <;> (try scalar_tac)
       . -- The sets are the same
         apply Set.ext; simp [tree, z_tree, y_tree]; tauto
       . -- Height
         scalar_tac
 
-@[pspec]
+@[progress]
 theorem Node.rotate_right_left_spec
   {T : Type} [LinearOrder T]
   (x y z : T) (bf_x bf_y bf_z : I8)
@@ -707,9 +707,9 @@ theorem Node.rotate_right_left_spec
     . -- invAux for y
       split_conjs <;> (try omega) <;> (try tauto)
     . -- invAux for z
-      split_conjs <;> (try scalar_tac)
+      split_conjs <;> (try assumption) <;> (try scalar_tac)
     . -- invAux for x
-      split_conjs <;> (try scalar_tac)
+      split_conjs <;> (try assumption) <;> (try scalar_tac)
     . -- The sets are the same
       apply Set.ext; simp [tree, z_tree, y_tree]; tauto
     . -- Height
@@ -722,9 +722,9 @@ theorem Node.rotate_right_left_spec
       . -- invAux for y
         split_conjs <;> (try omega) <;> (try tauto)
       . -- invAux for z
-        split_conjs <;> (try scalar_tac)
+        split_conjs <;> (try assumption) <;> (try scalar_tac)
       . -- invAux for x
-        split_conjs <;> (try scalar_tac)
+        split_conjs <;> (try assumption) <;> (try scalar_tac)
       . -- The sets are the same
         apply Set.ext; simp [tree, z_tree, y_tree]; tauto
       . -- Height
@@ -735,9 +735,9 @@ theorem Node.rotate_right_left_spec
       . -- invAux for y
         split_conjs <;> (try omega) <;> (try tauto)
       . -- invAux for z
-        split_conjs <;> (try scalar_tac)
+        split_conjs <;> (try assumption) <;> (try scalar_tac)
       . -- invAux for x
-        split_conjs <;> (try scalar_tac)
+        split_conjs <;> (try assumption) <;> (try scalar_tac)
       . -- The sets are the same
         apply Set.ext; simp [tree, z_tree, y_tree]; tauto
       . -- Height
@@ -756,7 +756,7 @@ theorem Node.right_height_lt_height (n : Node T) :
 
 mutual
 
-@[pspec]
+@[progress]
 theorem Node.insert_spec
   {T : Type} (OrdInst : Ord T) [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
   (node : Node T) (value : T)
@@ -782,7 +782,7 @@ theorem Node.insert_spec
 termination_by (node.height, 1)
 decreasing_by all_goals simp_wf
 
-@[pspec]
+@[progress]
 theorem Tree.insert_in_opt_node_spec
   {T : Type} (OrdInst : Ord T) [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
   (tree : Option (Node T)) (value : T)
@@ -806,7 +806,7 @@ termination_by (Subtree.height tree, 2)
 decreasing_by simp_wf; simp [*]
 
 -- TODO: any modification triggers the replay of the whole proof
-@[pspec]
+@[progress]
 theorem Node.insert_in_left_spec
   {T : Type} (OrdInst : Ord T)
   [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
@@ -907,7 +907,7 @@ theorem Node.insert_in_left_spec
 termination_by (node.height, 0)
 decreasing_by simp_wf
 
-@[pspec]
+@[progress]
 theorem Node.insert_in_right_spec
   {T : Type} (OrdInst : Ord T)
   [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
@@ -1004,7 +1004,7 @@ decreasing_by simp_wf
 
 end
 
-@[pspec]
+@[progress]
 theorem Tree.insert_spec {T : Type}
   (OrdInst : Ord T) [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
   (tree : Tree T) (value : T)
@@ -1017,7 +1017,7 @@ theorem Tree.insert_spec {T : Type}
   progress as ⟨ updt, tree' ⟩
   simp [*]
 
-@[pspec]
+@[progress]
 theorem Tree.new_spec {T : Type} (OrdInst : Ord T) :
   ∃ t, Tree.new OrdInst = ok t ∧ t.v = ∅ ∧ t.height = 0 := by
   simp [new, Tree.v, Tree.height]
