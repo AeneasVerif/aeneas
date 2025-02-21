@@ -1078,22 +1078,36 @@ def extractGoal (ref : Syntax) (fullGoal : Bool) : TacticM Unit := do
   /- First minimize the goal, if necessary -/
   if ¬ fullGoal then
     minimizeGoal
-  /- Extract the goal -/
   withMainContext do
-  let ctx ← Lean.MonadLCtx.getLCtx
+  /- Rename the local declarations to avoid collisions -/
+  let mut ctx ← Lean.MonadLCtx.getLCtx
+  let rec renameDecls (allNames : Std.HashSet Name) (decls : List LocalDecl) : MetaM LocalContext := do
+    match decls with
+    | [] => Lean.MonadLCtx.getLCtx
+    | decl :: decls =>
+      trace[Utils] "declName: {decl.userName.toString}"
+      if decl.userName ∈ allNames then
+        let lctx ← Lean.MonadLCtx.getLCtx
+        let newName := lctx.getUnusedName decl.userName
+        let lctx := lctx.setUserName decl.fvarId newName
+        let allNames := allNames.insert newName
+        withLCtx' lctx do
+        renameDecls allNames decls
+      else
+        let allNames := allNames.insert decl.userName
+        renameDecls allNames decls
+  let lctx ← renameDecls Std.HashSet.empty (← (← Lean.MonadLCtx.getLCtx).getDecls).reverse
+  withLCtx' lctx do
+  /- Extract the goal -/
   let decls ← ctx.getDecls
   let assumptions : List Format ← decls.mapM fun decl => do
     let ty ← Meta.ppExprWithInfos decl.type
-    /- TODO: we might want to update the names of the local
-       declarations, to use proper names for the variables
-       which are shadowed/have been introduced automatically
-       by the tactics/elaboration -/
     let name ← Meta.ppExprWithInfos (Expr.fvar decl.fvarId)
     pure ("\n  (" ++ name.fmt ++ " : " ++ ty.fmt ++ ")")
   let assumptions := Format.joinSep assumptions ""
   let mgoal ← getMainGoal
   let goal ← Meta.ppExprWithInfos (← mgoal.getType)
-  let msg := "example" ++ assumptions ++ " :\n  " ++ goal.fmt ++ "\n  := sorry"
+  let msg := "example" ++ assumptions ++ " :\n  " ++ goal.fmt ++ "\n  := by sorry"
   logInfoAt ref m!"{msg}"
 
 elab ref:"extract_goal0" full:"full"? : tactic => do
@@ -1112,9 +1126,24 @@ macro_rules
 info: example
   (x : Nat)
   (y : Nat)
+  (h_1 : x ≤ y)
+  (h : y ≤ y) :
+  x ≤ y
+  := by sorry
+-/
+#guard_msgs in
+set_option linter.unusedVariables false in
+example (x x y : Nat) (h : x ≤ y) (h : y ≤ y) : x ≤ y := by
+  extract_goal
+  omega
+
+/--
+info: example
+  (x : Nat)
+  (y : Nat)
   (h : x ≤ y) :
   y ≥ x
-  := sorry
+  := by sorry
 -/
 #guard_msgs in
 example (x : Nat) (y : Nat) (_ : Nat) (h : x ≤ y) : y ≥ x := by
@@ -1141,11 +1170,6 @@ info: Try this: have : y ≥ x := by sorry
 set_option linter.unusedTactic false in
 example (x : Nat) (y : Nat) (_ : Nat) (h : x ≤ y) : y ≥ x := by
   extract_assert
-  omega
-
-set_option linter.unusedTactic false in
-example (x : Nat) (y : Nat) (_ : Nat) (h : (x : Int) ≤ (y : Int)) : (y : Int) ≥ (x : Int) := by
-  have : ↑y ≥ ↑x := by sorry
   omega
 
 /- Group a list of expressions into a (non-dependent) tuple -/
