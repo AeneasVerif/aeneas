@@ -521,7 +521,7 @@ def create_id_type {T : Type} (x : T) : Result (IdType T) :=
 /- [no_nested_borrows::not_bool]:
    Source: 'tests/src/no_nested_borrows.rs', lines 520:0-522:1 -/
 def not_bool (x : Bool) : Result Bool :=
-  ok (~~~ x)
+  ok (¬ x)
 
 /- [no_nested_borrows::not_u32]:
    Source: 'tests/src/no_nested_borrows.rs', lines 524:0-526:1 -/
