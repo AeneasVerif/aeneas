@@ -7,7 +7,7 @@ namespace demo
 
 #check U32.add_spec
 
--- @[pspec]
+-- @[progress]
 theorem mul2_add1_spec (x : U32) (h : 2 * x + 1 ≤ (U32.max : Int))
   : ∃ y, mul2_add1 x = ok y ∧
   ↑y = 2 * ↑x + (1 : Int)
@@ -17,9 +17,9 @@ theorem mul2_add1_spec (x : U32) (h : 2 * x + 1 ≤ (U32.max : Int))
   progress as ⟨ i' ⟩
   scalar_tac
 
-theorem use_mul2_add1_spec (x : U32) (y : U32) (h : 2 * x + 1 + y ≤ (U32.max : Int)) :
+theorem use_mul2_add1_spec (x : U32) (y : U32) (h : 2 * x + 1 + y ≤ (U32.max : Nat)) :
   ∃ z, use_mul2_add1 x y = ok z ∧
-  ↑z = 2 * ↑x + (1 : Int) + ↑y := by
+  ↑z = 2 * ↑x + (1 : Nat) + ↑y := by
   rw [use_mul2_add1]
   progress with mul2_add1_spec as ⟨ i ⟩
   progress as ⟨ i' ⟩
@@ -35,12 +35,12 @@ open CList
 theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.to_list.length) :
   ∃ x, list_nth l i = ok x ∧
-  x = l.to_list.index i.toNat
+  x = l.to_list.index i.val
   := by
   rw [list_nth]
   match l with
   | CNil =>
-    simp_all; scalar_tac
+    simp_all
   | CCons hd tl =>
     simp_all
     if hi: i = 0#u32 then

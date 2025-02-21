@@ -638,57 +638,57 @@ theorem IScalar.add_bv_spec {ty} {x y : IScalar ty}
 
 theorem Usize.add_bv_spec {x y : Usize} (hmax : x.val + y.val ≤ Usize.max) :
   ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y ∧ z.bv = x.bv + y.bv :=
-  UScalar.add_bv_spec hmax
+  UScalar.add_bv_spec (by scalar_tac)
 
 theorem U8.add_bv_spec {x y : U8} (hmax : x.val + y.val ≤ U8.max) :
   ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y ∧ z.bv = x.bv + y.bv :=
-  UScalar.add_bv_spec hmax
+  UScalar.add_bv_spec (by scalar_tac)
 
 theorem U16.add_bv_spec {x y : U16} (hmax : x.val + y.val ≤ U16.max) :
   ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y ∧ z.bv = x.bv + y.bv :=
-  UScalar.add_bv_spec hmax
+  UScalar.add_bv_spec (by scalar_tac)
 
 theorem U32.add_bv_spec {x y : U32} (hmax : x.val + y.val ≤ U32.max) :
   ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y ∧ z.bv = x.bv + y.bv :=
-  UScalar.add_bv_spec hmax
+  UScalar.add_bv_spec (by scalar_tac)
 
 theorem U64.add_bv_spec {x y : U64} (hmax : x.val + y.val ≤ U64.max) :
   ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y ∧ z.bv = x.bv + y.bv :=
-  UScalar.add_bv_spec hmax
+  UScalar.add_bv_spec (by scalar_tac)
 
 theorem U128.add_bv_spec {x y : U128} (hmax : x.val + y.val ≤ U128.max) :
   ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y ∧ z.bv = x.bv + y.bv :=
-  UScalar.add_bv_spec hmax
+  UScalar.add_bv_spec (by scalar_tac)
 
 theorem Isize.add_bv_spec {x y : Isize}
   (hmin : Isize.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ Isize.max) :
   ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y ∧ z.bv = x.bv + y.bv :=
-  IScalar.add_bv_spec hmin hmax
+  IScalar.add_bv_spec (by scalar_tac) (by scalar_tac)
 
 theorem I8.add_bv_spec {x y : I8}
   (hmin : I8.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ I8.max) :
   ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y ∧ z.bv = x.bv + y.bv :=
-  IScalar.add_bv_spec hmin hmax
+  IScalar.add_bv_spec (by scalar_tac) (by scalar_tac)
 
 theorem I16.add_bv_spec {x y : I16}
   (hmin : I16.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ I16.max) :
   ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y ∧ z.bv = x.bv + y.bv :=
-  IScalar.add_bv_spec hmin hmax
+  IScalar.add_bv_spec (by scalar_tac) (by scalar_tac)
 
 theorem I32.add_bv_spec {x y : I32}
   (hmin : I32.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ I32.max) :
   ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y ∧ z.bv = x.bv + y.bv :=
-  IScalar.add_bv_spec hmin hmax
+  IScalar.add_bv_spec (by scalar_tac) (by scalar_tac)
 
 theorem I64.add_bv_spec {x y : I64}
   (hmin : I64.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ I64.max) :
   ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y ∧ z.bv = x.bv + y.bv :=
-  IScalar.add_bv_spec hmin hmax
+  IScalar.add_bv_spec (by scalar_tac) (by scalar_tac)
 
 theorem I128.add_bv_spec {x y : I128}
   (hmin : I128.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ I128.max) :
   ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y ∧ z.bv = x.bv + y.bv :=
-  IScalar.add_bv_spec hmin hmax
+  IScalar.add_bv_spec (by scalar_tac) (by scalar_tac)
 
 /-!
 Theorems about the addition, with a specification which uses
@@ -718,57 +718,57 @@ theorem IScalar.add_spec {ty} {x y : IScalar ty}
 
 @[progress] theorem Usize.add_spec {x y : Usize} (hmax : x.val + y.val ≤ Usize.max) :
   ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y :=
-  UScalar.add_spec hmax
+  UScalar.add_spec (by scalar_tac)
 
 @[progress] theorem U8.add_spec {x y : U8} (hmax : x.val + y.val ≤ U8.max) :
   ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y :=
-  UScalar.add_spec hmax
+  UScalar.add_spec (by scalar_tac)
 
 @[progress] theorem U16.add_spec {x y : U16} (hmax : x.val + y.val ≤ U16.max) :
   ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y :=
-  UScalar.add_spec hmax
+  UScalar.add_spec (by scalar_tac)
 
 @[progress] theorem U32.add_spec {x y : U32} (hmax : x.val + y.val ≤ U32.max) :
   ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y :=
-  UScalar.add_spec hmax
+  UScalar.add_spec (by scalar_tac)
 
 @[progress] theorem U64.add_spec {x y : U64} (hmax : x.val + y.val ≤ U64.max) :
   ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y :=
-  UScalar.add_spec hmax
+  UScalar.add_spec (by scalar_tac)
 
 @[progress] theorem U128.add_spec {x y : U128} (hmax : x.val + y.val ≤ U128.max) :
   ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y :=
-  UScalar.add_spec hmax
+  UScalar.add_spec (by scalar_tac)
 
 @[progress] theorem Isize.add_spec {x y : Isize}
   (hmin : Isize.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ Isize.max) :
   ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y :=
-  IScalar.add_spec hmin hmax
+  IScalar.add_spec (by scalar_tac) (by scalar_tac)
 
 @[progress] theorem I8.add_spec {x y : I8}
   (hmin : I8.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ I8.max) :
   ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y :=
-  IScalar.add_spec hmin hmax
+  IScalar.add_spec (by scalar_tac) (by scalar_tac)
 
 @[progress] theorem I16.add_spec {x y : I16}
   (hmin : I16.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ I16.max) :
   ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y :=
-  IScalar.add_spec hmin hmax
+  IScalar.add_spec (by scalar_tac) (by scalar_tac)
 
 @[progress] theorem I32.add_spec {x y : I32}
   (hmin : I32.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ I32.max) :
   ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y :=
-  IScalar.add_spec hmin hmax
+  IScalar.add_spec (by scalar_tac) (by scalar_tac)
 
 @[progress] theorem I64.add_spec {x y : I64}
   (hmin : I64.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ I64.max) :
   ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y :=
-  IScalar.add_spec hmin hmax
+  IScalar.add_spec (by scalar_tac) (by scalar_tac)
 
 @[progress] theorem I128.add_spec {x y : I128}
   (hmin : I128.min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ I128.max) :
   ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y :=
-  IScalar.add_spec hmin hmax
+  IScalar.add_spec (by scalar_tac) (by scalar_tac)
 
 /-!
 ### Sub
@@ -885,32 +885,32 @@ theorem U128.sub_bv_spec {x y : U128} (h : y.val ≤ x.val) :
 theorem Isize.sub_bv_spec {x y : Isize}
   (hmin : Isize.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ Isize.max) :
   ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y ∧ z.bv = x.bv - y.bv :=
-  IScalar.sub_bv_spec hmin hmax
+  IScalar.sub_bv_spec (by scalar_tac) (by scalar_tac)
 
 theorem I8.sub_bv_spec {x y : I8}
   (hmin : I8.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I8.max) :
   ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y ∧ z.bv = x.bv - y.bv :=
-  IScalar.sub_bv_spec hmin hmax
+  IScalar.sub_bv_spec (by scalar_tac) (by scalar_tac)
 
 theorem I16.sub_bv_spec {x y : I16}
   (hmin : I16.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I16.max) :
   ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y ∧ z.bv = x.bv - y.bv :=
-  IScalar.sub_bv_spec hmin hmax
+  IScalar.sub_bv_spec (by scalar_tac) (by scalar_tac)
 
 theorem I32.sub_bv_spec {x y : I32}
   (hmin : I32.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I32.max) :
   ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y ∧ z.bv = x.bv - y.bv :=
-  IScalar.sub_bv_spec hmin hmax
+  IScalar.sub_bv_spec (by scalar_tac) (by scalar_tac)
 
 theorem I64.sub_bv_spec {x y : I64}
   (hmin : I64.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I64.max) :
   ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y ∧ z.bv = x.bv - y.bv :=
-  IScalar.sub_bv_spec hmin hmax
+  IScalar.sub_bv_spec (by scalar_tac) (by scalar_tac)
 
 theorem I128.sub_bv_spec {x y : I128}
   (hmin : I128.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I128.max) :
   ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y ∧ z.bv = x.bv - y.bv :=
-  IScalar.sub_bv_spec hmin hmax
+  IScalar.sub_bv_spec (by scalar_tac) (by scalar_tac)
 
 /-!
 Theorems with a specification which only uses integers
@@ -962,32 +962,32 @@ theorem IScalar.sub_spec {ty} {x y : IScalar ty}
 @[progress] theorem Isize.sub_spec {x y : Isize}
   (hmin : Isize.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ Isize.max) :
   ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y :=
-  IScalar.sub_spec hmin hmax
+  IScalar.sub_spec (by scalar_tac) (by scalar_tac)
 
 @[progress] theorem I8.sub_spec {x y : I8}
   (hmin : I8.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I8.max) :
   ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y :=
-  IScalar.sub_spec hmin hmax
+  IScalar.sub_spec (by scalar_tac) (by scalar_tac)
 
 @[progress] theorem I16.sub_spec {x y : I16}
   (hmin : I16.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I16.max) :
   ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y :=
-  IScalar.sub_spec hmin hmax
+  IScalar.sub_spec (by scalar_tac) (by scalar_tac)
 
 @[progress] theorem I32.sub_spec {x y : I32}
   (hmin : I32.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I32.max) :
   ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y :=
-  IScalar.sub_spec hmin hmax
+  IScalar.sub_spec (by scalar_tac) (by scalar_tac)
 
 @[progress] theorem I64.sub_spec {x y : I64}
   (hmin : I64.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I64.max) :
   ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y :=
-  IScalar.sub_spec hmin hmax
+  IScalar.sub_spec (by scalar_tac) (by scalar_tac)
 
 @[progress] theorem I128.sub_spec {x y : I128}
   (hmin : I128.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I128.max) :
   ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y :=
-  IScalar.sub_spec hmin hmax
+  IScalar.sub_spec (by scalar_tac) (by scalar_tac)
 
 /-!
 ### Mul
@@ -1047,57 +1047,57 @@ theorem IScalar.mul_bv_spec {ty} {x y : IScalar ty}
 
 theorem Usize.mul_bv_spec {x y : Usize} (hmax : x.val * y.val ≤ Usize.max) :
   ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
-  UScalar.mul_bv_spec hmax
+  UScalar.mul_bv_spec (by scalar_tac)
 
 theorem U8.mul_bv_spec {x y : U8} (hmax : x.val * y.val ≤ U8.max) :
   ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
-  UScalar.mul_bv_spec hmax
+  UScalar.mul_bv_spec (by scalar_tac)
 
 theorem U16.mul_bv_spec {x y : U16} (hmax : x.val * y.val ≤ U16.max) :
   ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
-  UScalar.mul_bv_spec hmax
+  UScalar.mul_bv_spec (by scalar_tac)
 
 theorem U32.mul_bv_spec {x y : U32} (hmax : x.val * y.val ≤ U32.max) :
   ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
-  UScalar.mul_bv_spec hmax
+  UScalar.mul_bv_spec (by scalar_tac)
 
 theorem U64.mul_bv_spec {x y : U64} (hmax : x.val * y.val ≤ U64.max) :
   ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
-  UScalar.mul_bv_spec hmax
+  UScalar.mul_bv_spec (by scalar_tac)
 
 theorem U128.mul_bv_spec {x y : U128} (hmax : x.val * y.val ≤ U128.max) :
   ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
-  UScalar.mul_bv_spec hmax
+  UScalar.mul_bv_spec (by scalar_tac)
 
 theorem Isize.mul_bv_spec {x y : Isize}
   (hmin : Isize.min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ Isize.max) :
   ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
-  IScalar.mul_bv_spec hmin hmax
+  IScalar.mul_bv_spec (by scalar_tac) (by scalar_tac)
 
 theorem I8.mul_bv_spec {x y : I8}
   (hmin : I8.min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ I8.max) :
   ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
-  IScalar.mul_bv_spec hmin hmax
+  IScalar.mul_bv_spec (by scalar_tac) (by scalar_tac)
 
 theorem I16.mul_bv_spec {x y : I16}
   (hmin : I16.min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ I16.max) :
   ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
-  IScalar.mul_bv_spec hmin hmax
+  IScalar.mul_bv_spec (by scalar_tac) (by scalar_tac)
 
 theorem I32.mul_bv_spec {x y : I32}
   (hmin : I32.min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ I32.max) :
   ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
-  IScalar.mul_bv_spec hmin hmax
+  IScalar.mul_bv_spec (by scalar_tac) (by scalar_tac)
 
 theorem I64.mul_bv_spec {x y : I64} (hmin : I64.min ≤ ↑x * ↑y)
   (hmax : ↑x * ↑y ≤ I64.max) :
   ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
-  IScalar.mul_bv_spec hmin hmax
+  IScalar.mul_bv_spec (by scalar_tac) (by scalar_tac)
 
 theorem I128.mul_bv_spec {x y : I128} (hmin : I128.min ≤ ↑x * ↑y)
   (hmax : ↑x * ↑y ≤ I128.max) :
   ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
-  IScalar.mul_bv_spec hmin hmax
+  IScalar.mul_bv_spec (by scalar_tac) (by scalar_tac)
 
 
 /-!
@@ -1116,62 +1116,62 @@ theorem IScalar.mul_spec {ty} {x y : IScalar ty}
   (hmin : IScalar.min ty ≤ ↑x * ↑y)
   (hmax : ↑x * ↑y ≤ IScalar.max ty) :
   ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y := by
-  have ⟨ z, h⟩ := mul_bv_spec hmin hmax
+  have ⟨ z, h⟩ := @mul_bv_spec ty x y (by scalar_tac) (by scalar_tac)
   simp [h]
 
 @[progress] theorem Usize.mul_spec {x y : Usize} (hmax : x.val * y.val ≤ Usize.max) :
   ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y :=
-  UScalar.mul_spec hmax
+  UScalar.mul_spec (by scalar_tac)
 
 @[progress] theorem U8.mul_spec {x y : U8} (hmax : x.val * y.val ≤ U8.max) :
   ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y :=
-  UScalar.mul_spec hmax
+  UScalar.mul_spec (by scalar_tac)
 
 @[progress] theorem U16.mul_spec {x y : U16} (hmax : x.val * y.val ≤ U16.max) :
   ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y :=
-  UScalar.mul_spec hmax
+  UScalar.mul_spec (by scalar_tac)
 
 @[progress] theorem U32.mul_spec {x y : U32} (hmax : x.val * y.val ≤ U32.max) :
   ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y :=
-  UScalar.mul_spec hmax
+  UScalar.mul_spec (by scalar_tac)
 
 @[progress] theorem U64.mul_spec {x y : U64} (hmax : x.val * y.val ≤ U64.max) :
   ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y :=
-  UScalar.mul_spec hmax
+  UScalar.mul_spec (by scalar_tac)
 
 @[progress] theorem U128.mul_spec {x y : U128} (hmax : x.val * y.val ≤ U128.max) :
   ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y :=
-  UScalar.mul_spec hmax
+  UScalar.mul_spec (by scalar_tac)
 
 @[progress] theorem Isize.mul_spec {x y : Isize}
   (hmin : Isize.min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ Isize.max) :
   ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y :=
-  IScalar.mul_spec hmin hmax
+  IScalar.mul_spec (by scalar_tac) (by scalar_tac)
 
 @[progress] theorem I8.mul_spec {x y : I8}
   (hmin : I8.min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ I8.max) :
   ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y :=
-  IScalar.mul_spec hmin hmax
+  IScalar.mul_spec (by scalar_tac) (by scalar_tac)
 
 @[progress] theorem I16.mul_spec {x y : I16}
   (hmin : I16.min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ I16.max) :
   ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y :=
-  IScalar.mul_spec hmin hmax
+  IScalar.mul_spec (by scalar_tac) (by scalar_tac)
 
 @[progress] theorem I32.mul_spec {x y : I32}
   (hmin : I32.min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ I32.max) :
   ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y :=
-  IScalar.mul_spec hmin hmax
+  IScalar.mul_spec (by scalar_tac) (by scalar_tac)
 
 @[progress] theorem I64.mul_spec {x y : I64} (hmin : I64.min ≤ ↑x * ↑y)
   (hmax : ↑x * ↑y ≤ I64.max) :
   ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y :=
-  IScalar.mul_spec hmin hmax
+  IScalar.mul_spec (by scalar_tac) (by scalar_tac)
 
 @[progress] theorem I128.mul_spec {x y : I128} (hmin : I128.min ≤ ↑x * ↑y)
   (hmax : ↑x * ↑y ≤ I128.max) :
   ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y :=
-  IScalar.mul_spec hmin hmax
+  IScalar.mul_spec (by scalar_tac) (by scalar_tac)
 
 /-!
 ### Div
@@ -1583,32 +1583,32 @@ theorem Usize.div_bv_spec (x : Usize) {y : Usize} (hnz : ↑y ≠ (0 : Nat)) :
 theorem I8.div_bv_spec {x y : I8} (hnz : ↑y ≠ (0 : Int))
   (hNoOverflow : ¬ (x.val = I8.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y ∧ z.bv = BitVec.sdiv x.bv y.bv :=
-  IScalar.div_bv_spec hnz hNoOverflow
+  IScalar.div_bv_spec hnz (by scalar_tac)
 
 theorem I16.div_bv_spec {x y : I16} (hnz : ↑y ≠ (0 : Int))
   (hNoOverflow : ¬ (x.val = I16.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y ∧ z.bv = BitVec.sdiv x.bv y.bv :=
-  IScalar.div_bv_spec hnz hNoOverflow
+  IScalar.div_bv_spec hnz (by scalar_tac)
 
 theorem I32.div_bv_spec {x y : I32} (hnz : ↑y ≠ (0 : Int))
   (hNoOverflow : ¬ (x.val = I32.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y ∧ z.bv = BitVec.sdiv x.bv y.bv :=
-  IScalar.div_bv_spec hnz hNoOverflow
+  IScalar.div_bv_spec hnz (by scalar_tac)
 
 theorem I64.div_bv_spec {x y : I64} (hnz : ↑y ≠ (0 : Int))
   (hNoOverflow : ¬ (x.val = I64.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y ∧ z.bv = BitVec.sdiv x.bv y.bv :=
-  IScalar.div_bv_spec hnz hNoOverflow
+  IScalar.div_bv_spec hnz (by scalar_tac)
 
 theorem I128.div_bv_spec {x y : I128} (hnz : ↑y ≠ (0 : Int))
   (hNoOverflow : ¬ (x.val = I128.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y ∧ z.bv = BitVec.sdiv x.bv y.bv :=
-  IScalar.div_bv_spec hnz hNoOverflow
+  IScalar.div_bv_spec hnz (by scalar_tac)
 
 theorem Isize.div_bv_spec {x y : Isize} (hnz : ↑y ≠ (0 : Int))
   (hNoOverflow : ¬ (x.val = Isize.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y ∧ z.bv = BitVec.sdiv x.bv y.bv :=
-  IScalar.div_bv_spec hnz hNoOverflow
+  IScalar.div_bv_spec hnz (by scalar_tac)
 
 /-!
 Theorems with a specification which only use integers
@@ -1656,32 +1656,32 @@ theorem IScalar.div_spec {ty} {x y : IScalar ty}
 @[progress] theorem I8.div_spec {x y : I8} (hnz : ↑y ≠ (0 : Int))
   (hNoOverflow : ¬ (x.val = I8.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
-  IScalar.div_spec hnz hNoOverflow
+  IScalar.div_spec hnz (by scalar_tac)
 
 @[progress] theorem I16.div_spec {x y : I16} (hnz : ↑y ≠ (0 : Int))
   (hNoOverflow : ¬ (x.val = I16.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
-  IScalar.div_spec hnz hNoOverflow
+  IScalar.div_spec hnz (by scalar_tac)
 
 @[progress] theorem I32.div_spec {x y : I32} (hnz : ↑y ≠ (0 : Int))
   (hNoOverflow : ¬ (x.val = I32.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
-  IScalar.div_spec hnz hNoOverflow
+  IScalar.div_spec hnz (by scalar_tac)
 
 @[progress] theorem I64.div_spec {x y : I64} (hnz : ↑y ≠ (0 : Int))
   (hNoOverflow : ¬ (x.val = I64.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
-  IScalar.div_spec hnz hNoOverflow
+  IScalar.div_spec hnz (by scalar_tac)
 
 @[progress] theorem I128.div_spec {x y : I128} (hnz : ↑y ≠ (0 : Int))
   (hNoOverflow : ¬ (x.val = I128.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
-  IScalar.div_spec hnz hNoOverflow
+  IScalar.div_spec hnz (by scalar_tac)
 
 @[progress] theorem Isize.div_spec {x y : Isize} (hnz : ↑y ≠ (0 : Int))
   (hNoOverflow : ¬ (x.val = Isize.min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
-  IScalar.div_spec hnz hNoOverflow
+  IScalar.div_spec hnz (by scalar_tac)
 
 /-!
 ### Remainder
@@ -1843,12 +1843,7 @@ theorem IScalar.rem_bv_spec {ty} (x : IScalar ty) {y : IScalar ty} (hzero : y.va
     have hy := IScalar.neg_imp_toNat_neg_eq_neg_toInt y (by omega)
 
     have : 0 ≤ -x.bv.toInt % -y.bv.toInt := by
-      have h := Int.emod_of_pos_disj (-x.bv.toInt) (-y.bv.toInt)
-      have : ¬ -y.bv.toInt ≤ 0 := by
-        simp only [val] at *
-        omega
-      simp only [this, false_or] at h
-      omega
+      scalar_tac +nonLin
 
     have : -2 ^ (ty.numBits - 1) ≤ -x.bv.toInt % -y.bv.toInt := by omega
 
@@ -3267,42 +3262,42 @@ theorem UScalar.overflowing_add_eq {ty} (x y : UScalar ty) :
 @[progress_pure overflowing_add x y]
 theorem core.num.U8.overflowing_add_eq (x y : U8) :
   let z := overflowing_add x y
-  if x.val + y.val > U8.max then z.fst.val + U8.size = x.val + y.val ∧ z.snd = true
+  if x.val + y.val > UScalar.max .U8 then z.fst.val + UScalar.size .U8 = x.val + y.val ∧ z.snd = true
   else z.fst.val = x.val + y.val ∧ z.snd = false
   := UScalar.overflowing_add_eq x y
 
 @[progress_pure overflowing_add x y]
 theorem core.num.U16.overflowing_add_eq (x y : U16) :
   let z := overflowing_add x y
-  if x.val + y.val > U16.max then z.fst.val + U16.size = x.val + y.val ∧ z.snd = true
+  if x.val + y.val > UScalar.max .U16 then z.fst.val + UScalar.size .U16 = x.val + y.val ∧ z.snd = true
   else z.fst.val = x.val + y.val ∧ z.snd = false
   := UScalar.overflowing_add_eq x y
 
 @[progress_pure overflowing_add x y]
 theorem core.num.U32.overflowing_add_eq (x y : U32) :
   let z := overflowing_add x y
-  if x.val + y.val > U32.max then z.fst.val + U32.size = x.val + y.val ∧ z.snd = true
+  if x.val + y.val > UScalar.max .U32 then z.fst.val + UScalar.size .U32 = x.val + y.val ∧ z.snd = true
   else z.fst.val = x.val + y.val ∧ z.snd = false
   := UScalar.overflowing_add_eq x y
 
 @[progress_pure overflowing_add x y]
 theorem core.num.U64.overflowing_add_eq (x y : U64) :
   let z := overflowing_add x y
-  if x.val + y.val > U64.max then z.fst.val + U64.size = x.val + y.val ∧ z.snd = true
+  if x.val + y.val > UScalar.max .U64 then z.fst.val + UScalar.size .U64 = x.val + y.val ∧ z.snd = true
   else z.fst.val = x.val + y.val ∧ z.snd = false
   := UScalar.overflowing_add_eq x y
 
 @[progress_pure overflowing_add x y]
 theorem core.num.U128.overflowing_add_eq (x y : U128) :
   let z := overflowing_add x y
-  if x.val + y.val > U128.max then z.fst.val + U128.size = x.val + y.val ∧ z.snd = true
+  if x.val + y.val > UScalar.max .U128 then z.fst.val + UScalar.size .U128 = x.val + y.val ∧ z.snd = true
   else z.fst.val = x.val + y.val ∧ z.snd = false
   := UScalar.overflowing_add_eq x y
 
 @[progress_pure overflowing_add x y]
 theorem core.num.Usize.overflowing_add_eq (x y : Usize) :
   let z := overflowing_add x y
-  if x.val + y.val > Usize.max then z.fst.val + Usize.size = x.val + y.val ∧ z.snd = true
+  if x.val + y.val > UScalar.max .Usize then z.fst.val + UScalar.size .Usize = x.val + y.val ∧ z.snd = true
   else z.fst.val = x.val + y.val ∧ z.snd = false
   := UScalar.overflowing_add_eq x y
 
@@ -3530,27 +3525,27 @@ def core.num.Isize.wrapping_add : Isize → Isize → Isize  := @IScalar.wrappin
   simp [this]
 
 @[simp] theorem U8.wrapping_add_val_eq (x y : U8) :
-  (core.num.U8.wrapping_add x y).val = (x.val + y.val) % (U8.max + 1) :=
+  (core.num.U8.wrapping_add x y).val = (x.val + y.val) % (UScalar.max .U8 + 1) :=
   UScalar.wrapping_add_val_eq x y
 
 @[simp] theorem U16.wrapping_add_val_eq (x y : U16) :
-  (core.num.U16.wrapping_add x y).val = (x.val + y.val) % (U16.max + 1) :=
+  (core.num.U16.wrapping_add x y).val = (x.val + y.val) % (UScalar.max .U16 + 1) :=
   UScalar.wrapping_add_val_eq x y
 
 @[simp] theorem U32.wrapping_add_val_eq (x y : U32) :
-  (core.num.U32.wrapping_add x y).val = (x.val + y.val) % (U32.max + 1) :=
+  (core.num.U32.wrapping_add x y).val = (x.val + y.val) % (UScalar.max .U32 + 1) :=
   UScalar.wrapping_add_val_eq x y
 
 @[simp] theorem U64.wrapping_add_val_eq (x y : U64) :
-  (core.num.U64.wrapping_add x y).val = (x.val + y.val) % (U64.max + 1) :=
+  (core.num.U64.wrapping_add x y).val = (x.val + y.val) % (UScalar.max .U64 + 1) :=
   UScalar.wrapping_add_val_eq x y
 
 @[simp] theorem U128.wrapping_add_val_eq (x y : U128) :
-  (core.num.U128.wrapping_add x y).val = (x.val + y.val) % (U128.max + 1) :=
+  (core.num.U128.wrapping_add x y).val = (x.val + y.val) % (UScalar.max .U128 + 1) :=
   UScalar.wrapping_add_val_eq x y
 
 @[simp] theorem Usize.wrapping_add_val_eq (x y : Usize) :
-  (core.num.Usize.wrapping_add x y).val = (x.val + y.val) % (Usize.max + 1) :=
+  (core.num.Usize.wrapping_add x y).val = (x.val + y.val) % (UScalar.max .Usize + 1) :=
   UScalar.wrapping_add_val_eq x y
 
 @[simp] theorem IScalar.wrapping_add_val_eq {ty} (x y : IScalar ty) :
@@ -3695,35 +3690,35 @@ def core.num.Isize.wrapping_sub : Isize → Isize → Isize  := @IScalar.wrappin
   simp [core.num.Isize.wrapping_sub, bv]
 
 @[simp] theorem UScalar.wrapping_sub_val_eq {ty} (x y : UScalar ty) :
-  (wrapping_sub x y).val = (x.val + (UScalar.max ty + 1 - y.val)) % (UScalar.max ty + 1) := by
-  simp only [wrapping_sub, val, max]
+  (wrapping_sub x y).val = (x.val + (UScalar.size ty - y.val)) % UScalar.size ty := by
+  simp only [wrapping_sub, val, size]
   have : 0 < 2^ty.numBits := by simp
   have : 2 ^ ty.numBits - 1 + 1 = 2^ty.numBits := by omega
   simp [this]
   ring_nf
 
 @[simp] theorem U8.wrapping_sub_val_eq (x y : U8) :
-  (core.num.U8.wrapping_sub x y).val = (x.val + (U8.max + 1 - y.val)) % (U8.max + 1) :=
+  (core.num.U8.wrapping_sub x y).val = (x.val + (UScalar.size .U8 - y.val)) % UScalar.size .U8 :=
   UScalar.wrapping_sub_val_eq x y
 
 @[simp] theorem U16.wrapping_sub_val_eq (x y : U16) :
-  (core.num.U16.wrapping_sub x y).val = (x.val + (U16.max + 1 - y.val)) % (U16.max + 1) :=
+  (core.num.U16.wrapping_sub x y).val = (x.val + (UScalar.size .U16 - y.val)) % UScalar.size .U16 :=
   UScalar.wrapping_sub_val_eq x y
 
 @[simp] theorem U32.wrapping_sub_val_eq (x y : U32) :
-  (core.num.U32.wrapping_sub x y).val = (x.val + (U32.max + 1 - y.val)) % (U32.max + 1) :=
+  (core.num.U32.wrapping_sub x y).val = (x.val + (UScalar.size .U32 - y.val)) % UScalar.size .U32 :=
   UScalar.wrapping_sub_val_eq x y
 
 @[simp] theorem U64.wrapping_sub_val_eq (x y : U64) :
-  (core.num.U64.wrapping_sub x y).val = (x.val + (U64.max + 1 - y.val)) % (U64.max + 1) :=
+  (core.num.U64.wrapping_sub x y).val = (x.val + (UScalar.size .U64 - y.val)) % UScalar.size .U64 :=
   UScalar.wrapping_sub_val_eq x y
 
 @[simp] theorem U128.wrapping_sub_val_eq (x y : U128) :
-  (core.num.U128.wrapping_sub x y).val = (x.val + (U128.max + 1 - y.val)) % (U128.max + 1) :=
+  (core.num.U128.wrapping_sub x y).val = (x.val + (UScalar.size .U128 - y.val)) % UScalar.size .U128 :=
   UScalar.wrapping_sub_val_eq x y
 
 @[simp] theorem Usize.wrapping_sub_val_eq (x y : Usize) :
-  (core.num.Usize.wrapping_sub x y).val = (x.val + (Usize.max + 1 - y.val)) % (Usize.max + 1) :=
+  (core.num.Usize.wrapping_sub x y).val = (x.val + (UScalar.size .Usize - y.val)) % UScalar.size .Usize :=
   UScalar.wrapping_sub_val_eq x y
 
 @[simp] theorem IScalar.wrapping_sub_val_eq {ty} (x y : IScalar ty) :

@@ -390,7 +390,7 @@ theorem add_with_carry_loop_spec
         option, which allows it to make a case disjunction over
         the `if then else` appearing in the context.
        -/
-      scalar_tac +split
+      scalar_tac +split +simpAll
     progress as ⟨ c4, x1, _, _, hc4 ⟩
     -- Proving the post-condition
     split_conjs

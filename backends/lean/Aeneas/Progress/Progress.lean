@@ -677,7 +677,6 @@ namespace Test
     progress with h1 as ⟨ z1, h ⟩
     progress with add_spec' z1 as ⟨ z2, h ⟩
 
-
   namespace Ntt
     def wfArray (_ : Array U16 256#usize) : Prop := True
 
