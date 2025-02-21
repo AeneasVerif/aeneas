@@ -1062,6 +1062,7 @@ partial def minimizeGoal : TacticM Unit := do
         /- Check if there is an intersection betwee -/
         if inter then
           neededIds := neededIds.insert decl.fvarId
+          neededIds := neededIds.union declIds
           changed := true
   /- Clear all the fvars which were not listed -/
   let allIds ← getFVarIdsAt goal
@@ -1095,9 +1096,17 @@ def extractGoal (ref : Syntax) (fullGoal : Bool) : TacticM Unit := do
   let msg := "example" ++ assumptions ++ " :\n  " ++ goal.fmt ++ "\n  := sorry"
   logInfoAt ref m!"{msg}"
 
-elab ref:"extract_goal" full:"full"? : tactic => do
+elab ref:"extract_goal0" full:"full"? : tactic => do
   withMainContext do
   extractGoal ref full.isSome
+
+syntax "extract_goal" ("full")? : tactic
+
+macro_rules
+| `(tactic|extract_goal) =>
+  `(tactic|set_option pp.coercions.types true in extract_goal0)
+| `(tactic|extract_goal full) =>
+  `(tactic|set_option pp.coercions.types true in extract_goal0 full)
 
 /--
 info: example
