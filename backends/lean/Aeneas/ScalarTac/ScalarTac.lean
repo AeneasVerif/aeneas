@@ -93,6 +93,7 @@ structure Config where
   /- if `true`, split the goal if it is a conjunction so as to introduce one
      subgoal per conjunction. -/
   splitGoal : Bool := false
+  simpAll : Bool := false
 
 declare_config_elab elabConfig Config
 
@@ -215,16 +216,17 @@ def scalarTac (config : Config) : Tactic.TacticM Unit := do
            stack).
            Second, this makes the tactic very snappy.
          -/
-        Utils.tryTac (
-          -- TODO: is there a simproc to simplify propositional logic?
-          Utils.simpAll {failIfUnchanged := false, maxSteps := 100} true [``reduceIte] [] []
-            [``and_self, ``false_implies, ``true_implies, ``Prod.mk.injEq,
-             ``not_false_eq_true, ``not_true_eq_false,
-             ``true_and, ``and_true, ``false_and, ``and_false,
-             ``true_or, ``or_true,``false_or, ``or_false,
-             ``Bool.true_eq_false, ``Bool.false_eq_true,
-             -- The following lemmas are used to simplify occurrences of `decide`
-             ``decide_eq_true_eq, ``Bool.or_eq_true, ``Bool.and_eq_true,] [])
+        if config.simpAll then
+          Utils.tryTac (
+            -- TODO: is there a simproc to simplify propositional logic?
+            Utils.simpAll {failIfUnchanged := false, maxSteps := 100} true [``reduceIte] [] []
+              [``and_self, ``false_implies, ``true_implies, ``Prod.mk.injEq,
+              ``not_false_eq_true, ``not_true_eq_false,
+              ``true_and, ``and_true, ``false_and, ``and_false,
+              ``true_or, ``or_true,``false_or, ``or_false,
+              ``Bool.true_eq_false, ``Bool.false_eq_true,
+              -- The following lemmas are used to simplify occurrences of `decide`
+              ``decide_eq_true_eq, ``Bool.or_eq_true, ``Bool.and_eq_true] [])
         allGoalsNoRecover (do
           trace[ScalarTac] "Goal after simplification: {← getMainGoal}"
           trace[ScalarTac] "Calling omega"

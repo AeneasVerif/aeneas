@@ -7,6 +7,14 @@ namespace Std
 
 set_option maxRecDepth 1024
 
+attribute [scalar_tac_simp]
+  and_self false_implies true_implies Prod.mk.injEq
+  not_false_eq_true not_true_eq_false
+  true_and and_true false_and and_false
+  true_or or_true false_or or_false
+  Bool.true_eq_false Bool.false_eq_true
+  decide_eq_true_eq Bool.or_eq_true Bool.and_eq_true
+
 @[scalar_tac_simp] theorem UScalar.max_USize_eq : UScalar.max .Usize = Usize.max := by rfl
 @[scalar_tac_simp] theorem IScalar.min_ISize_eq : IScalar.min .Isize = Isize.min := by rfl
 @[scalar_tac_simp] theorem IScalar.max_ISize_eq : IScalar.max .Isize = Isize.max := by rfl
@@ -256,7 +264,7 @@ example
   (c3 : U8)
   (_ : c3.val = c1u.val + c2u.val):
   c3.val ≤ 1 := by
-  scalar_tac +split
+  scalar_tac +split +simpAll
 
 example (x y : Nat) (h : x = y - 2^32) : 0 ≤ x := by
   scalar_tac

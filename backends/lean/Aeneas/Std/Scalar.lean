@@ -2061,7 +2061,7 @@ theorem U8.cast_U128_val_eq (x : U8) : (UScalar.cast .U128 x).val = x.val := by
 
 @[simp, scalar_tac UScalar.cast .Usize x]
 theorem U8.cast_Usize_val_eq (x : U8) : (UScalar.cast .Usize x).val = x.val := by
-  simp [UScalar.cast_val_eq]; dcases System.Platform.numBits_eq <;> scalar_tac
+  simp [UScalar.cast_val_eq]; dcases System.Platform.numBits_eq <;> simp [*] <;> scalar_tac
 
 @[simp, scalar_tac UScalar.cast .U32 x]
 theorem U16.cast_U32_val_eq (x : U16) : (UScalar.cast .U32 x).val = x.val := by
@@ -2077,7 +2077,7 @@ theorem U16.cast_U128_val_eq (x : U16) : (UScalar.cast .U128 x).val = x.val := b
 
 @[simp, scalar_tac UScalar.cast .Usize x]
 theorem U16.cast_Usize_val_eq (x : U16) : (UScalar.cast .Usize x).val = x.val := by
-  simp [UScalar.cast_val_eq]; dcases System.Platform.numBits_eq <;> scalar_tac
+  simp [UScalar.cast_val_eq]; dcases System.Platform.numBits_eq <;> simp [*] <;> scalar_tac
 
 @[simp, scalar_tac UScalar.cast .U64 x]
 theorem U32.cast_U64_val_eq (x : U32) : (UScalar.cast .U64 x).val = x.val := by
@@ -2089,7 +2089,7 @@ theorem U32.cast_U128_val_eq (x : U32) : (UScalar.cast .U128 x).val = x.val := b
 
 @[simp, scalar_tac UScalar.cast .Usize x]
 theorem U32.cast_Usize_val_eq (x : U32) : (UScalar.cast .Usize x).val = x.val := by
-  simp [UScalar.cast_val_eq]; dcases System.Platform.numBits_eq <;> scalar_tac
+  simp [UScalar.cast_val_eq]; dcases System.Platform.numBits_eq <;> simp [*] <;> scalar_tac
 
 @[simp, scalar_tac UScalar.cast .U128 x]
 theorem U64.cast_U128_val_eq (x : U64) : (UScalar.cast .U128 x).val = x.val := by
