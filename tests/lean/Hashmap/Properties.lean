@@ -181,7 +181,7 @@ theorem allocate_slots_spec {α : Type} (slots : alloc.vec.Vec (AList α)) (n : 
         have : i - slots.val.length = 0 := by scalar_tac
         simp [*]
     have Hslots1Len : alloc.vec.Vec.len slots1 + n1.val ≤ Usize.max := by
-      scalar_tac +simpAll
+      scalar_tac
     progress as ⟨ slots2 ⟩
     split_conjs
     . intro i h0
@@ -244,7 +244,7 @@ theorem new_with_capacity_spec
   . scalar_tac
   . simp_all (config := {maxDischargeDepth := 1}) [alloc.vec.Vec.len, alloc.vec.Vec.new]
   . simp_all (config := {maxDischargeDepth := 1})
-  . scalar_tac +simpAll
+  . scalar_tac
   . simp_all (config := {maxDischargeDepth := 1}) [alloc.vec.Vec.len, alloc.vec.Vec.new]
   . simp_all (config := {maxDischargeDepth := 1}) [al_v, Slots.al_v, v]
   . simp_all [HashMap.v, length]

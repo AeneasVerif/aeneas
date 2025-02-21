@@ -84,6 +84,17 @@ def scalarTacSimpRocs : List Name := [
   ``Int.reducePow, ``Int.reduceAdd, ``Int.reduceSub, ``Int.reduceMul, ``Int.reduceDiv, ``Int.reduceMod,
   ``Int.reduceNegSucc, ``Int.reduceNeg,]
 
+/- Small trick to prevent `simp_all` from simplifying an assumption `h1 : P v` when we have
+  `h0 : ∀ x, P x` in the context: we replace the forall quantifiers with our own definition
+  of `forall`. -/
+def forall' {α : Type u} (p : α → Prop) : Prop := ∀ (x: α), p x
+
+theorem forall_eq_forall' {α : Type u} (p : α → Prop) : (∀ (x: α), p x) = forall' p := by
+  simp [forall']
+
+@[app_unexpander forall']
+def unexpForall' : Lean.PrettyPrinter.Unexpander | `($_ $_) => `(∀ _, __) | _ => throw ()
+
 structure Config where
   /- Should we use non-linear arithmetic reasoning? -/
   nonLin : Bool := false
@@ -93,7 +104,10 @@ structure Config where
   /- if `true`, split the goal if it is a conjunction so as to introduce one
      subgoal per conjunction. -/
   splitGoal : Bool := false
-  simpAll : Bool := false
+  /- Maximum number of steps to take with `simpAll` during the preprocessing phase.
+     If equal to 0, we do not call `simpAll` at all.
+   -/
+  simpAllMaxSteps : Nat := 200
 
 declare_config_elab elabConfig Config
 
@@ -176,7 +190,11 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
                 [-- Int.subNatNat is very annoying - TODO: there is probably something more general thing to do
                  ``Int.subNatNat_eq_coe,
                  -- We also need this, in case the goal is: ¬ False
-                 ``not_false_eq_true]
+                 ``not_false_eq_true,
+                 -- Remove the forall quantifiers to prepare for the call of `simp_all` (we
+                 -- don't want `simp_all` to use assumptions of the shape `∀ x, P x`))
+                 ``forall_eq_forall'
+                 ]
                 -- Hypotheses
                 [] .wildcard)
 
@@ -209,17 +227,11 @@ def scalarTac (config : Config) : Tactic.TacticM Unit := do
   allGoalsNoRecover do
     try do
       let simpThenOmega := do
-        /- IMPORTANT: we put a quite low number for `maxSteps`.
-           There are two reasons.
-           First, `simp_all` seems to loop at times, so by controling the maximum number of steps
-           we make sure it doesn't exceed the maximum number of heart beats (or worse, overflows the
-           stack).
-           Second, this makes the tactic very snappy.
-         -/
-        if config.simpAll then
+        if config.simpAllMaxSteps ≠ 0 then
           Utils.tryTac (
             -- TODO: is there a simproc to simplify propositional logic?
-            Utils.simpAll {failIfUnchanged := false, maxSteps := 100} true [``reduceIte] [] []
+            Utils.simpAll {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 1} true
+              [``reduceIte] [] []
               [``and_self, ``false_implies, ``true_implies, ``Prod.mk.injEq,
               ``not_false_eq_true, ``not_true_eq_false,
               ``true_and, ``and_true, ``false_and, ``and_false,
@@ -288,6 +300,11 @@ example (x y : Int) (h : x + y = 3) :
   z = 3 := by
   intro z
   omega
+
+example (P : Nat → Prop) (z : Nat) (h : ∀ x, P x → x ≤ z) (y : Nat) (hy : P y) :
+  y + 2 ≤ z + 2 := by
+  have := h y hy
+  scalar_tac
 
 -- Checking that we manage to split the cases/if then else
 example (x : Int) (b : Bool) (h : if b then x ≤ 0 else x ≤ 0) : x ≤ 0 := by

@@ -277,7 +277,7 @@ namespace Tests
     (_ : ∀ i < slots1.length, (↑slots1 : List (List α)).index i = .nil) :
     (↑slots1.len : ℕ) + (↑n1 : ℕ) ≤ Usize.max
     := by
-    scalar_tac +simpAll
+    scalar_tac
 
   example
     (α : Type)
@@ -294,7 +294,7 @@ namespace Tests
     (↑(↑divisor : ℕ) : ℤ) ≤
     (↑(↑slots : List (List α)).length : ℤ) * (↑(↑dividend : ℕ) : ℤ)
     := by
-    scalar_tac +simpAll
+    scalar_tac
 end Tests
 
 end Std

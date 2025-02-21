@@ -290,7 +290,7 @@ example
   (c3 : U8)
   (_ : c3.val = c1u.val + c2u.val):
   c3.val ≤ 1 := by
-  scalar_tac +split +simpAll
+  scalar_tac +split
 
 example (x y : Nat) (h : x = y - 2^32) : 0 ≤ x := by
   scalar_tac
