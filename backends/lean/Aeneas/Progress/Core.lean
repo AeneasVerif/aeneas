@@ -142,17 +142,41 @@ end Methods
 def getPSpecFunArgsExpr (isGoal : Bool) (th : Expr) : MetaM Expr :=
   withPSpec isGoal th (fun d => do pure d.fArgsExpr)
 
+structure Rules where
+  rules : DiscrTree Name
+  /- We can't remove keys from a discrimination tree, so to support
+     local rules we keep a set of deactivated rules (rules which have
+     come out of scope) on the side -/
+  deactivated : Std.HashSet Name
+deriving Inhabited
+
+def Rules.empty : Rules := ⟨ DiscrTree.empty, Std.HashSet.empty ⟩
+
+def Extension := SimpleScopedEnvExtension (DiscrTreeKey × Name) Rules
+deriving Inhabited
+
+def Rules.insert (r : Rules) (kv : Array DiscrTree.Key × Name) : Rules :=
+  { r with rules := r.rules.insertCore kv.fst kv.snd }
+
+def Rules.erase (r : Rules) (k : Name) : Rules :=
+  { r with deactivated := r.deactivated.insert k }
+
+def mkExtension (name : Name := by exact decl_name%) :
+  IO Extension :=
+  registerSimpleScopedEnvExtension {
+    name        := name,
+    initial     := Rules.empty,
+    addEntry    := Rules.insert,
+  }
+
 /-- The progress attribute -/
 structure PSpecAttr where
   attr : AttributeImpl
-  ext  : DiscrTreeExtension Name
+  ext  : Extension
   deriving Inhabited
 
-private def saveProgressSpecFromThm (ext : DiscrTreeExtension Name) (attrKind : AttributeKind) (thName : Name) :
+private def saveProgressSpecFromThm (ext : Extension) (attrKind : AttributeKind) (thName : Name) :
   AttrM Unit := do
-  -- TODO: use the attribute kind
-  unless attrKind == AttributeKind.global do
-    throwError "invalid attribute 'progress', must be global"
   -- Lookup the theorem
   let env ← getEnv
   -- Ignore some auxiliary definitions (see the comments for attrIgnoreMutRec)
@@ -168,35 +192,41 @@ private def saveProgressSpecFromThm (ext : DiscrTreeExtension Name) (attrKind : 
       trace[Progress] "Registering spec theorem for expr: {fExpr}"
       -- Convert the function expression to a discrimination tree key
       DiscrTree.mkPath fExpr)
-    let env := ext.addEntry env (fKey, thName)
-    setEnv env
-    trace[Progress] "Saved the environment"
+    -- Save the entry
+    ScopedEnvExtension.add ext (fKey, thName) attrKind
+    trace[Progress] "Saved the entry"
     pure ()
 
 /- Initiliaze the `progress` attribute. -/
 initialize pspecAttr : PSpecAttr ← do
-  let ext ← mkDiscrTreeExtension `pspecMap
+  let ext ← mkExtension `pspecMap
   let attrImpl : AttributeImpl := {
     name := `progress
     descr := "Adds theorems to the `progress` database"
     add := fun thName stx attrKind => do
       Attribute.Builtin.ensureNoArgs stx
       saveProgressSpecFromThm ext attrKind thName
+    erase := fun thName => do
+      let s := ext.getState (← getEnv)
+      let s := s.erase thName
+      modifyEnv fun env => ext.modifyState env fun _ => s
   }
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl, ext := ext }
 
 def PSpecAttr.find? (s : PSpecAttr) (e : Expr) : MetaM (Array Name) := do
-  (s.ext.getState (← getEnv)).getMatch e
+  let state := s.ext.getState (← getEnv)
+  let rules ← state.rules.getMatch e
+  pure (rules.filter (fun th => th ∉ state.deactivated))
 
-def PSpecAttr.getState (s : PSpecAttr) : MetaM (DiscrTree Name) := do
+def PSpecAttr.getState (s : PSpecAttr) : MetaM Rules := do
   pure (s.ext.getState (← getEnv))
 
 def showStoredPSpec : MetaM Unit := do
   let st ← pspecAttr.getState
   -- TODO: how can we iterate over (at least) the values stored in the tree?
   --let s := st.toList.foldl (fun s (f, th) => f!"{s}\n{f} → {th}") f!""
-  let s := f!"{st}"
+  let s := f!"{st.rules}, {st.deactivated.toArray}"
   IO.println s
 
 /-! # Attribute: `progress_pure` -/
@@ -513,9 +543,6 @@ initialize pspecPureAttribute : ProgressPureSpecAttr ← do
     name := `progress_pure
     descr := "Adds lifted version of pure theorems to the `progress_pure` database"
     add := fun thName stx attrKind => do
-      -- TODO: use the attribute kind
-      unless attrKind == AttributeKind.global do
-        throwError "invalid attribute 'progress_pure', must be global"
       -- Lookup the theorem
       let env ← getEnv
       -- Ignore some auxiliary definitions (see the comments for attrIgnoreMutRec)
@@ -549,7 +576,7 @@ def mkProgressPureDefThm (pat : Option Syntax) (n : Name) (suffix : String := "p
   let env ← getEnv
   let decl := env.constants.find! n
   /- Strip the quantifiers before elaborating the pattern -/
-  forallTelescope decl.type.consumeMData fun fvars thm0 => do
+  forallTelescope decl.type.consumeMData fun fvars _ => do
   let declTerm := mkAppN (.const decl.name (List.map Level.param decl.levelParams)) fvars
   /- Elaborate the pattern, if there is -/
   let elabDecomposePat (basename : String) (k : Expr → Array Expr → MetaM Name) : MetaM Name := do
@@ -575,7 +602,7 @@ def mkProgressPureDefThm (pat : Option Syntax) (n : Name) (suffix : String := "p
      - one for the variables bound in the existential quantifiers
    -/
   elabDecomposePat "x" fun decompPatMatch fvarsMatch => do
-  elabDecomposePat "y" fun decompPatExists fvarsExists => do
+  elabDecomposePat "y" fun _ fvarsExists => do
   /- Introduce the lifted and pure equalities -/
   let liftedEq ← do
     let okDecompPat ← mkAppM ``Std.Result.ok #[decompPatMatch]
@@ -691,9 +718,6 @@ initialize pspecPureDefAttribute : ProgressPureDefSpecAttr ← do
     name := `progress_pure_def
     descr := "Automatically generate `progress` theorems for pure definitions"
     add := fun declName stx attrKind => do
-      -- TODO: use the attribute kind
-      unless attrKind == AttributeKind.global do
-        throwError "invalid attribute 'progress_pure_def', must be global"
       -- Lookup the theorem
       let env ← getEnv
       -- Ignore some auxiliary definitions (see the comments for attrIgnoreMutRec)

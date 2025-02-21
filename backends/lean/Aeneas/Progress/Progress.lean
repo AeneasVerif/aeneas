@@ -602,45 +602,56 @@ namespace Test
         ok (s + s')
   end
 
-  mutual
-    @[progress]
-    theorem Tree.size_spec (t : Tree) :
-      ∃ i, t.size = ok i ∧ i ≥ 0 := by
-      cases t
-      simp [Tree.size]
-      progress
-      omega
+  section
+    mutual
+      @[local progress]
+      theorem Tree.size_spec (t : Tree) :
+        ∃ i, t.size = ok i ∧ i ≥ 0 := by
+        cases t
+        simp [Tree.size]
+        progress
+        omega
 
-    @[progress]
-    theorem Trees.size_spec (t : Trees) :
-      ∃ i, t.size = ok i ∧ i ≥ 0 := by
-      cases t <;> simp [Trees.size]
-      progress
-      progress? says progress with Trees.size_spec
-      omega
+      @[local progress]
+      theorem Trees.size_spec (t : Trees) :
+        ∃ i, t.size = ok i ∧ i ≥ 0 := by
+        cases t <;> simp [Trees.size]
+        progress
+        progress? says progress with Trees.size_spec
+        omega
+    end
   end
 
   -- Testing progress on theorems containing local let-bindings
   def add (x y : U32) : Result U32 := x + y
 
-  -- TODO: give the possibility of using pspec as a local attribute
-  theorem add_spec' (x y : U32) (h : x.val + y.val ≤ U32.max) :
-    let tot := x.val + y.val
-    ∃ z, add x y = ok z ∧ z.val = tot := by
-    rw [add]
-    intro tot
-    progress
-    simp [*, tot]
+  section
+    /- Testing progress on theorems containing local let-bindings as well as
+       the `local` attribute kind -/
+    @[local progress] theorem add_spec' (x y : U32) (h : x.val + y.val ≤ U32.max) :
+      let tot := x.val + y.val
+      ∃ z, x + y = ok z ∧ z.val = tot := by
+      simp
+      progress with U32.add_spec
+      scalar_tac
 
-  def add1 (x y : U32) : Result U32 := do
-    let z ← add x y
-    add z z
+    def add1 (x y : U32) : Result U32 := do
+      let z ← x + y
+      z + z
 
+    example (x y : U32) (h : 2 * x.val + 2 * y.val ≤ U32.max) :
+      ∃ z, add1 x y = ok z := by
+      rw [add1]
+      progress? as ⟨ z1, h ⟩ says progress with Aeneas.Progress.Test.add_spec' as ⟨ z1, h ⟩
+      progress? as ⟨ z2, h ⟩ says progress with Aeneas.Progress.Test.add_spec' as ⟨ z2, h ⟩
+  end
+
+  /- Checking that `add_spec'` went out of scope -/
   example (x y : U32) (h : 2 * x.val + 2 * y.val ≤ U32.max) :
     ∃ z, add1 x y = ok z := by
     rw [add1]
-    progress with add_spec' as ⟨ z1, h ⟩
-    progress with add_spec' as ⟨ z2, h ⟩
+    progress? as ⟨ z1, h ⟩ says progress with Aeneas.Std.U32.add_spec as ⟨ z1, h ⟩
+    progress? as ⟨ z2, h ⟩ says progress with Aeneas.Std.U32.add_spec as ⟨ z2, h ⟩
 
   variable (P : ℕ → List α → Prop)
   variable (f : List α → Result Bool)
@@ -675,7 +686,7 @@ namespace Test
 
     def Spec.nttLayer (a : List U16) (_ : Nat) (len : Nat) (_ : Nat) (_ : 0 < len) : List U16 := a
 
-    @[progress]
+    @[local progress]
     theorem nttLayer_spec
       (peSrc : Array U16 256#usize)
       (k : Usize) (len : Usize)

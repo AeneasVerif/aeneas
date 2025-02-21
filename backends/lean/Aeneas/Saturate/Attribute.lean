@@ -107,6 +107,9 @@ private def Rules.insert (s : Rules) (kv : Key × Rule) : Rules :=
 
 private def Rules.erase (s : Rules) (thName : Name) : Rules :=
   let ⟨ nameToRule, rules ⟩ := s
+  /- Note that we can't remove a key from a discrimination tree, so we
+     remove the rule from the `nameToRule` map instead: when instantiating rules
+     we check that they are still active (i.e., they are still in `nameToRule`) -/
   let nameToRule := nameToRule.erase thName
   ⟨ nameToRule, rules ⟩
 
