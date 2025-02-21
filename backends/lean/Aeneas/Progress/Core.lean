@@ -11,6 +11,16 @@ namespace Progress
 open Lean Elab Term Meta
 open Utils Extensions
 
+/-!
+# Attribute: `progress_simp`
+-/
+
+/-- The `progress_simp` simp attribute. -/
+initialize progressSimpExt : SimpExtension ←
+  registerSimpAttr `progress_simp "\
+    The `progress_simp` attribute registers simp lemmas to be used by `progress`
+    when solving preconditions by means of the simplifier."
+
 /-! # Attribute: `progress` -/
 
 structure PSpecDesc where

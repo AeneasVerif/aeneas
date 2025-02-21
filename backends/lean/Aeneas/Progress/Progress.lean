@@ -416,9 +416,10 @@ def evalProgress (args : TSyntax `Aeneas.Progress.progressArgs) : TacticM Stats 
       ScalarTac.scalarTac { split := false, splitGoal := false }
     else
       throwError "Not a linear arithmetic goal"
+  let simpLemmas ← scalarTacSimpExt.getTheorems
   let simpTac : TacticM Unit := do
       -- Simplify the goal
-      Utils.simpAt false {} [] [] [] [] [] (.targets #[] true)
+      Utils.simpAt false {} [] [simpLemmas] [] [] [] (.targets #[] true)
       -- Raise an error if the goal is not proved
       allGoalsNoRecover (throwError "Goal not proved")
   -- We use our custom assumption tactic, which instantiates meta-variables only if there is a single

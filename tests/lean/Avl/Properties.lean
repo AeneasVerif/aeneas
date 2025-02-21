@@ -976,7 +976,7 @@ theorem Node.insert_in_right_spec
               simp [*]
               split_conjs
               . apply Set.ext; simp_all (config := {maxDischargeDepth := 1})
-              . simp_all (config := {maxDischargeDepth := 1}) [Node.invAux, Node.balanceFactor]
+              . simp (config := {maxDischargeDepth := 1}) [Node.invAux, Node.balanceFactor] at *
                 scalar_tac
     . -- i ≠ -2: the height of the tree did not change
       simp [*]
