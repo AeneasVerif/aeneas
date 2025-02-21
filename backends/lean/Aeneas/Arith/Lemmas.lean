@@ -5,6 +5,18 @@ import Init.Data.Int.DivModLemmas
 
 namespace Aeneas.Arith
 
+@[nonlin_scalar_tac n % m]
+theorem Nat.mod_zero_or_lt (n m : Nat) : m = 0 ∨ (n % m < m) := by
+  dcases h: m = 0
+  . simp [h]
+  . right
+    apply Nat.mod_lt; omega
+
+@[nonlin_scalar_tac n / m]
+theorem Nat.div_zero_or_le (n m : Nat) : m = 0 ∨ (n / m ≤ n) := by
+  dcases h: m = 0 <;> simp [*]
+  apply Nat.div_le_self
+
 theorem Int.self_le_ediv {x y : ℤ} (hx : x ≤ 0) (hy : 0 ≤ y) :
   x ≤ x / y := by
   dcases x <;> dcases y
@@ -22,7 +34,7 @@ theorem Int.self_le_ediv {x y : ℤ} (hx : x ≤ 0) (hy : 0 ≤ y) :
   . simp_all
 
 @[nonlin_scalar_tac n % m]
-theorem Int.emod_of_pos_disj (n m : Int) : m ≤ 0 ∨ (0 ≤ n % m ∧ n % m < m) := by
+theorem Int.emod_neg_or_pos_lt (n m : Int) : m ≤ 0 ∨ (0 ≤ n % m ∧ n % m < m) := by
   if h: 0 < m then
     right; constructor
     . apply Int.emod_nonneg; omega
@@ -30,7 +42,7 @@ theorem Int.emod_of_pos_disj (n m : Int) : m ≤ 0 ∨ (0 ≤ n % m ∧ n % m < 
   else left; omega
 
 @[nonlin_scalar_tac n / m]
-theorem Int.div_of_pos_disj (n m : Int) : n < 0 ∨ m < 0 ∨ (0 ≤ n / m ∧ n / m ≤ n) := by
+theorem Int.div_neg_or_pos_le (n m : Int) : n < 0 ∨ m < 0 ∨ (0 ≤ n / m ∧ n / m ≤ n) := by
   dcases hn: 0 ≤ n <;> dcases hm: 0 ≤ m <;> try simp_all
   right; right; constructor
   . apply Int.ediv_nonneg <;> omega

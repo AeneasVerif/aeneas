@@ -54,7 +54,7 @@ instance (α : Type u) : Inhabited (Vec α) := by
 abbrev Vec.len {α : Type u} (v : Vec α) : Usize :=
   Usize.ofNatCore v.val.length (by scalar_tac)
 
-@[simp]
+@[simp, scalar_tac_simp]
 theorem Vec.len_val {α : Type u} (v : Vec α) : (Vec.len v).val = v.length :=
   by simp
 
@@ -261,6 +261,41 @@ theorem alloc.vec.Vec.resize_spec {T} (cloneInst : core.clone.Clone T)
 theorem alloc.vec.Vec.update_index_eq α [Inhabited α] (x : alloc.vec.Vec α) (i : Usize) :
   x.update i (x.val.index i) = x := by
   simp [Vec, Subtype.eq_iff]
+
+namespace Tests
+  example
+    (α : Type)
+    (slots : alloc.vec.Vec (List α))
+    (n : Usize)
+    (_ : ∀ i < slots.length, (↑slots : List (List α)).index i = .nil)
+    (Hlen : (↑slots.len : ℕ) + (↑n : ℕ) ≤ Usize.max)
+    (_ : 0 < (↑n : ℕ))
+    (slots1 : alloc.vec.Vec (List α))
+    (hEq : (↑slots1 : List (List α)) = (↑slots : List (List α)) ++ [.nil])
+    (n1 : Usize)
+    (_ : (↑n : ℕ) = (↑n1 : ℕ) + 1)
+    (_ : ∀ i < slots1.length, (↑slots1 : List (List α)).index i = .nil) :
+    (↑slots1.len : ℕ) + (↑n1 : ℕ) ≤ Usize.max
+    := by
+    scalar_tac +simpAll
+
+  example
+    (α : Type)
+    (capacity : Usize)
+    (dividend divisor : Usize)
+    (Hfactor : 0 < (↑dividend : ℕ) ∧
+    (↑dividend : ℕ) < (↑divisor : ℕ) ∧
+      (↑capacity : ℕ) * (↑dividend : ℕ) ≤ Usize.max ∧
+        (↑capacity : ℕ) * (↑dividend : ℕ) ≥ (↑divisor : ℕ))
+    (slots : alloc.vec.Vec (List α))
+    (h2 : (↑slots.len : ℕ) = (↑(alloc.vec.Vec.new (List α)).len : ℕ) + (↑capacity : ℕ))
+    (i1 : Usize)
+    (i2 : Usize) :
+    (↑(↑divisor : ℕ) : ℤ) ≤
+    (↑(↑slots : List (List α)).length : ℤ) * (↑(↑dividend : ℕ) : ℤ)
+    := by
+    scalar_tac +simpAll
+end Tests
 
 end Std
 

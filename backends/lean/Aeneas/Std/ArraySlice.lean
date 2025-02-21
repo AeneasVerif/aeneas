@@ -177,7 +177,7 @@ def Slice.new (α : Type u) : Slice α := ⟨ [], by simp ⟩
 abbrev Slice.len {α : Type u} (v : Slice α) : Usize :=
   Usize.ofNatCore v.val.length (by scalar_tac)
 
-@[simp]
+@[simp, scalar_tac_simp]
 theorem Slice.len_val {α : Type u} (v : Slice α) : (Slice.len v).val = v.length :=
   by simp
 

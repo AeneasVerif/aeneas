@@ -10,6 +10,9 @@ open Aeneas
 open Aeneas.ScalarTac
 open Aeneas.Simp
 
+attribute [scalar_tac «as» ++ bs] List.length_append
+attribute [scalar_tac_simp] List.length_nil
+
 def indexOpt (ls : List α) (i : Nat) : Option α :=
   match ls with
   | [] => none

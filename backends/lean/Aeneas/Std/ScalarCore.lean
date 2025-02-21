@@ -692,7 +692,7 @@ theorem IScalar.min_le_max (ty : IScalarTy) : IScalar.min ty ≤ IScalar.max ty 
 @[reducible] def core_u128_min : U128 := UScalar.ofNat 0
 @[reducible] def core_u128_max : U128 := UScalar.ofNat U128.rMax
 @[reducible] def core_usize_min : Usize := UScalar.ofNatCore 0 (by simp)
-@[reducible] def core_usize_max : Usize := UScalar.ofNatCore (2 ^ UScalarTy.Usize.numBits-1) (by simp [UScalar.rMax])
+@[reducible] def core_usize_max : Usize := UScalar.ofNatCore Usize.max (by simp [Usize.max, Usize.numBits, UScalar.rMax])
 
 @[reducible] def core_i8_min : I8 := IScalar.ofInt I8.rMin
 @[reducible] def core_i8_max : I8 := IScalar.ofInt I8.rMax
@@ -704,8 +704,8 @@ theorem IScalar.min_le_max (ty : IScalarTy) : IScalar.min ty ≤ IScalar.max ty 
 @[reducible] def core_i64_max : I64 := IScalar.ofInt I64.rMax
 @[reducible] def core_i128_min : I128 := IScalar.ofInt I128.rMin
 @[reducible] def core_i128_max : I128 := IScalar.ofInt I128.rMax
-@[reducible] def core_isize_min : Isize := IScalar.ofIntCore Isize.rMin (by simp [Isize.rMin])
-@[reducible] def core_isize_max : Isize := IScalar.ofIntCore Isize.rMax (by simp [Isize.rMax]; (have : (0 : Int) < 2 ^ (System.Platform.numBits - 1) := by simp); omega)
+@[reducible] def core_isize_min : Isize := IScalar.ofIntCore Isize.min (by simp [Isize.min, Isize.numBits, Isize.rMin])
+@[reducible] def core_isize_max : Isize := IScalar.ofIntCore Isize.max (by simp [Isize.max, Isize.numBits, Isize.rMax]; (have : (0 : Int) < 2 ^ (System.Platform.numBits - 1) := by simp); omega)
 
 
 /-! # Comparisons -/
