@@ -2,6 +2,7 @@ import Lean
 import Aeneas.ScalarTac
 import Aeneas.Progress.Core
 import Aeneas.Std -- TODO: remove?
+import Aeneas.FSimp
 
 namespace Aeneas
 
@@ -718,65 +719,61 @@ namespace Test
     set_option maxHeartbeats 800000
 
     /-
-    simp took 10.1ms
-    simp took 27.2ms
-    simp took 18.4ms
-    tactic execution of Aeneas.Progress.progress took 42.1ms
-    tactic execution of Aeneas.ScalarTac.tacticScalar_tac_ took 33.1ms
-    typeclass inference of AddLeftMono took 10.6ms
-    simp took 17.8ms
-    simp took 20.8ms
-    dsimp took 12.6ms
+    simp took 24.6ms
+    simp took 18.3ms
+    tactic execution of Aeneas.Progress.progress took 43.1ms
+    simp took 13.8ms
+    simp took 21.1ms
+    simp took 17ms
+    tactic execution of Aeneas.Progress.progress took 115ms
+    simp took 18.2ms
+    simp took 20.7ms
     simp took 17.4ms
-    tactic execution of Aeneas.Progress.progress took 120ms
-    simp took 24.3ms
-    simp took 21.2ms
-    simp took 17.8ms
-    tactic execution of Aeneas.Progress.progress took 194ms
-    simp took 25.5ms
-    simp took 21ms
-    simp took 18.3ms
-    tactic execution of Aeneas.Progress.progress took 270ms
-    simp took 29.7ms
-    simp took 22ms
-    simp took 17.6ms
-    tactic execution of Aeneas.Progress.progress took 353ms
-    simp took 35.4ms
-    simp took 22.1ms
-    simp took 17.2ms
-    tactic execution of Aeneas.Progress.progress took 444ms
-    simp took 39ms
-    simp took 21.9ms
-    simp took 17.9ms
-    tactic execution of Aeneas.Progress.progress took 494ms
-    simp took 45.8ms
-    simp took 21.5ms
-    simp took 18.7ms
-    simp took 10ms
-    tactic execution of Aeneas.Progress.progress took 572ms
-    simp took 47.5ms
-    simp took 20.9ms
-    simp took 18.3ms
-    tactic execution of Aeneas.Progress.progress took 655ms
-    simp took 45.9ms
-    simp took 20.9ms
-    simp took 18.5ms
-    tactic execution of Aeneas.Progress.progress took 724ms
-    simp took 46.8ms
-    simp took 21.5ms
-    simp took 18.6ms
-    tactic execution of Aeneas.Progress.progress took 799ms
-    simp took 46ms
+    tactic execution of Aeneas.Progress.progress took 189ms
+    simp took 22.8ms
+    simp took 21.8ms
+    simp took 17.1ms
+    tactic execution of Aeneas.Progress.progress took 259ms
+    simp took 28.9ms
+    simp took 21.4ms
+    simp took 17.7ms
+    tactic execution of Aeneas.Progress.progress took 324ms
+    simp took 33.9ms
     simp took 21.7ms
-    simp took 18.4ms
-    tactic execution of Aeneas.Progress.progress took 871ms
-    simp took 46ms
+    simp took 17.7ms
+    tactic execution of Aeneas.Progress.progress took 407ms
+    simp took 39.1ms
+    simp took 21.5ms
+    simp took 17.8ms
+    tactic execution of Aeneas.Progress.progress took 483ms
+    simp took 44ms
+    simp took 21ms
+    simp took 17.7ms
+    tactic execution of Aeneas.Progress.progress took 563ms
+    simp took 44.6ms
+    simp took 21.7ms
+    simp took 17.7ms
+    tactic execution of Aeneas.Progress.progress took 631ms
+    simp took 45.1ms
+    simp took 21.7ms
+    simp took 17.5ms
+    tactic execution of Aeneas.Progress.progress took 706ms
+    simp took 44.6ms
     simp took 21.9ms
+    simp took 18.2ms
+    tactic execution of Aeneas.Progress.progress took 789ms
+    simp took 45.5ms
+    simp took 21.1ms
+    simp took 18.7ms
+    tactic execution of Aeneas.Progress.progress took 864ms
+    simp took 45.4ms
+    simp took 22.6ms
+    dsimp took 11.3ms
     simp took 18.5ms
-    tactic execution of Aeneas.Progress.progress took 949ms
-    simp took 46.4ms
-    tactic execution of Lean.Parser.Tactic.tacticSeq1Indented took 20.6ms
-    type checking took 83.8ms
+    tactic execution of Aeneas.Progress.progress took 951ms
+    simp took 46.5ms
+    tactic execution of Lean.Parser.Tactic.tacticSeq1Indented took 19ms
+    type checking took 81.3ms
     -/
 
     set_option profiler true in
@@ -787,19 +784,19 @@ namespace Test
       wfArray peSrc1
       := by
       unfold ntt
-      progress; simp [Nat.log2]
-      progress; simp [Nat.log2]
-      progress; simp [Nat.log2]
-      progress; simp [Nat.log2]
-      progress; simp [Nat.log2]
-      progress; simp [Nat.log2]
-      progress; simp [Nat.log2]
-      progress; simp [Nat.log2]
-      progress; simp [Nat.log2]
-      progress; simp [Nat.log2]
-      progress; simp [Nat.log2]
-      progress; simp [Nat.log2]
-      progress; simp [Nat.log2]
+      progress; fsimp [Nat.log2]
+      progress; fsimp [Nat.log2]
+      progress; fsimp [Nat.log2]
+      progress; fsimp [Nat.log2]
+      progress; fsimp [Nat.log2]
+      progress; fsimp [Nat.log2]
+      progress; fsimp [Nat.log2]
+      progress; fsimp [Nat.log2]
+      progress; fsimp [Nat.log2]
+      progress; fsimp [Nat.log2]
+      progress; fsimp [Nat.log2]
+      progress; fsimp [Nat.log2]
+      progress; fsimp [Nat.log2]
       assumption
 
   end Ntt
