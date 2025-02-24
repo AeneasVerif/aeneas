@@ -714,7 +714,6 @@ theorem move_elements_loop_spec
   (hSlotsInv : slots_t_inv slots)
   (hEmpty : ∀ j, j < i.val → slots.val.index j = AList.Nil)
   (hDisjoint1 : ∀ key v, ntable.lookup key = some v → slots.lookup key = none)
-  (hDisjoint2 : ∀ key v, slots.lookup key = some v → ntable.lookup key = none)
   (hLen : ntable.al_v.length + slots.al_v.length ≤ Usize.max)
   :
   ∃ ntable1 slots1, ntable.move_elements_loop slots i = ok (ntable1, slots1) ∧
@@ -784,9 +783,6 @@ theorem move_elements_loop_spec
       else
         have := hEmpty j (by scalar_tac)
         fsimp_all
-    . intro key v hLookup
-      by_contra h
-      cases h : ntable1.lookup key <;> fsimp_all
     . have : i.val < (List.map AList.v slots.val).length := by simp; scalar_tac
       simp_all [Slots.al_v, List.length_flatten_update_eq, List.map_update_eq, List.length_flatten_update_as_int_eq]
       scalar_tac
@@ -853,15 +849,11 @@ theorem move_elements_spec
   (∀ key v, ntable1.lookup key = some v ↔ slots.lookup key = some v)
   := by
   rw [move_elements]
-  have ⟨ ntable1, slots1, hEq, _, _, _, ntable1Lookup, slotsLookup, _, _ ⟩ :=
-    move_elements_loop_spec ntable slots 0#usize (by scalar_tac) hinv
-    (by scalar_tac)
-    hSlotsInv
-    (by intro j h0; scalar_tac)
-    (by fsimp [*])
-    (by fsimp [*])
-    (by scalar_tac)
-  fsimp [hEq]; clear hEq
+  progress with move_elements_loop_spec as ⟨ ntable1, slots1, _, _, _, ntable1Lookup, slotsLookup ⟩
+  . -- Remaining precondition
+    fsimp [*]
+  -- Postcondition
+  fsimp
   have : frame_slots_params ntable ntable1 := by
     simp_all [frame_slots_params]
   split_conjs <;> try assumption
@@ -907,8 +899,8 @@ theorem try_resize_spec {α : Type} (hm : HashMap α) (hInv : hm.inv):
       fsimp_all [inv, inv_load]
       split_conjs at hInv
       --
-      apply Nat.mul_le_of_le_div at hSmaller <;> try fsimp [*]
-      apply Nat.mul_le_of_le_div at hSmaller <;> try simp
+      apply Nat.mul_le_of_le_div at hSmaller; try fsimp [*]
+      apply Nat.mul_le_of_le_div at hSmaller; try simp
       --
       have : (hm.slots.val.length * hm.2.1.val) * 1 ≤ (hm.slots.val.length * hm.2.1.val) * 2 := by
         apply Nat.mul_le_mul <;> (try fsimp [*])
