@@ -1081,20 +1081,36 @@ def extractGoal (ref : Syntax) (fullGoal : Bool) : TacticM Unit := do
   withMainContext do
   /- Rename the local declarations to avoid collisions -/
   let mut ctx ← Lean.MonadLCtx.getLCtx
+  let rec stripHygieneAux (n : Name) : MetaM (Bool × Name) := do
+    trace[Utils] "stripping: {n.toString}"
+    match n with
+    | .str pre str =>
+      let (strip, pre) ← stripHygieneAux pre
+      if strip ∨ str == "_@" ∨ str == "_hyg" then
+        pure (true, pre)
+      else pure (false, .str pre str)
+    | .anonymous => pure (false, .anonymous)
+    | .num pre i =>
+      let (strip, pre) ← stripHygieneAux pre
+      if strip then pure (true, pre) else pure (false, .num pre i)
+  let stripHygiene n : MetaM Name := do pure (← stripHygieneAux n).snd
+
   let rec renameDecls (allNames : Std.HashSet Name) (decls : List LocalDecl) : MetaM LocalContext := do
     match decls with
     | [] => Lean.MonadLCtx.getLCtx
     | decl :: decls =>
       trace[Utils] "declName: {decl.userName.toString}"
-      if decl.userName ∈ allNames then
+      let userName ← stripHygiene decl.userName
+      trace[Utils] "declName after stripping hygiene parts: {userName.toString}"
+      if userName ∈ allNames then
         let lctx ← Lean.MonadLCtx.getLCtx
-        let newName := lctx.getUnusedName decl.userName
+        let newName := lctx.getUnusedName userName
         let lctx := lctx.setUserName decl.fvarId newName
         let allNames := allNames.insert newName
         withLCtx' lctx do
         renameDecls allNames decls
       else
-        let allNames := allNames.insert decl.userName
+        let allNames := allNames.insert userName
         renameDecls allNames decls
   let lctx ← renameDecls Std.HashSet.empty (← (← Lean.MonadLCtx.getLCtx).getDecls).reverse
   withLCtx' lctx do
@@ -1149,6 +1165,38 @@ info: example
 example (x : Nat) (y : Nat) (_ : Nat) (h : x ≤ y) : y ≥ x := by
   extract_goal
   omega
+
+/--
+info: example
+  (v : List Nat)
+  (i : Nat)
+  (x_3 : Nat)
+  (v1 : List Nat)
+  (h_1 : i ≤ v.length)
+  (h : i < v.length)
+  (x_2 : x_3 = v.get! i)
+  (x_1 : i = i + 1)
+  (x✝ : v1.length = v.length) :
+  v1.length = v.length
+  := by sorry
+-/
+#guard_msgs in
+set_option linter.unusedVariables false in
+example
+  (v : List Nat)
+  (i : Nat)
+  (x : Nat)
+  (i1 : Usize)
+  (v1 : List Nat)
+  (h : i ≤ v.length)
+  (h : i < v.length)
+  (_ : x = v.get! i)
+  (_ : i = i + 1)
+  (_ : v1.length = v.length) :
+  v1.length = v.length
+  := by
+  extract_goal
+  simp [*]
 
 /-- Introduce an auxiliary assertion for the goal -/
 def extractAssert (ref : Syntax) : TacticM Unit := do

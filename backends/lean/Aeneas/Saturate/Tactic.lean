@@ -190,14 +190,17 @@ private partial def fastVisit (depth : Nat) (nameToRule : NameMap Rule)
       --
       let constName := f.constName!
       if constName == ``Eq ∧ args.size == 3 then
+        trace[Saturate] "Found `=`"
         let matched ← visitRec matched args[1]!
         let matched ← visitRec matched args[2]!
         pure matched
       else if constName ∈ binaryConsts ∧ args.size == 2 then
+        trace[Saturate] "Found binary const: {f}"
         let matched ← visitRec matched args[0]!
         let matched ← visitRec matched args[1]!
         pure matched
-      else if constName ∈ binaryConsts ∧ args.size == 4 then
+      else if constName ∈ arithConsts ∧ args.size == 4 then
+        trace[Saturate] "Found arith const: {f}"
         let matched ← visitRec matched args[2]!
         let matched ← visitRec matched args[3]!
         pure matched

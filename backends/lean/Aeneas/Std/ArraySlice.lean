@@ -111,7 +111,7 @@ theorem Array.update_val_eq {α : Type u} {n : Usize} (v: Array α n) (i: Usize)
   (v.update i x).val = v.val.update i.val x := by
   simp [update]
 
-@[scalar_tac v.update i x]
+@[scalar_tac_simp]
 theorem Array.update_length {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) :
   (v.update i x).length = v.length := by simp
 

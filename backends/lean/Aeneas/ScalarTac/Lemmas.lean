@@ -356,6 +356,13 @@ example (x y z : Int) (h0 : x.natAbs ≤ y.natAbs) (h1 : y.natAbs ≤ z.natAbs) 
 example (x y : Int) (h : |x| ≤ |y|) : x ≤ |y| := by scalar_tac
 example (x y : Int) (h : |x| ≤ |y|) : x ≤ |y| := by scalar_tac
 
+/-!
+## Fast Saturate
+-/
+example :
+  128 ≤ Usize.max ∧ 128 ≥ 5 := by
+  scalar_tac +fastSaturate
+
 end ScalarTac
 
 end Aeneas

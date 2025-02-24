@@ -28,7 +28,7 @@ instance [BEq α] : BEq (Vec α) := SubtypeBEq _
 instance [BEq α] [LawfulBEq α] : LawfulBEq (Vec α) := SubtypeLawfulBEq _
 
 @[scalar_tac v]
-theorem Vec.len_ineq {α : Type u} (v : Vec α) : 0 ≤ v.val.length ∧ v.val.length ≤ Usize.max := by
+theorem Vec.len_ineq {α : Type u} (v : Vec α) : v.val.length ≤ Usize.max := by
   cases v; simp[*]
 
 -- TODO: move/remove?
@@ -127,7 +127,7 @@ theorem Vec.update_usize_spec {α : Type u} (v: Vec α) (i: Usize) (x : α)
   . simp_all [length]; scalar_tac
   . simp [Vec.update]
 
-@[scalar_tac v.update i x]
+@[scalar_tac_simp]
 theorem Vec.update_length {α : Type u} (v: Vec α) (i: Usize) (x: α) :
   (v.update i x).length = v.length := by simp
 
@@ -293,6 +293,18 @@ namespace Tests
     (i2 : Usize) :
     (↑(↑divisor : ℕ) : ℤ) ≤
     (↑(↑slots : List (List α)).length : ℤ) * (↑(↑dividend : ℕ) : ℤ)
+    := by
+    scalar_tac
+
+  example
+    (v : alloc.vec.Vec U32)
+    (i : Usize)
+    (x : U32)
+    (i1 : Usize)
+    (h : (↑i : ℕ) < v.val.length)
+    (_ : x = v.val.index (↑i : ℕ))
+    (_ : (↑i1 : ℕ) = (↑i : ℕ) + 1) :
+    (↑i : ℕ) + 1 ≤ v.val.length
     := by
     scalar_tac
 end Tests

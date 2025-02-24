@@ -81,7 +81,10 @@ example (x y : Int) (h0 : x ≤ y) (h1 : x ≠ y) : x < y := by
 
 def scalarTacSimpRocs : List Name := [
   ``reduceIte,
+  ``Nat.reduceLeDiff,
+  ``Nat.reduceLT, ``Nat.reduceGT, ``Nat.reduceBEq, ``Nat.reduceBNe,
   ``Nat.reducePow, ``Nat.reduceAdd, ``Nat.reduceSub, ``Nat.reduceMul, ``Nat.reduceDiv, ``Nat.reduceMod,
+  ``Int.reduceLT, ``Int.reduceLE, ``Int.reduceGT, ``Int.reduceGE, ``Int.reduceEq, ``Int.reduceNe, ``Int.reduceBEq, ``Int.reduceBNe,
   ``Int.reducePow, ``Int.reduceAdd, ``Int.reduceSub, ``Int.reduceMul, ``Int.reduceDiv, ``Int.reduceMod,
   ``Int.reduceNegSucc, ``Int.reduceNeg,]
 
@@ -108,7 +111,7 @@ structure Config where
   /- Maximum number of steps to take with `simpAll` during the preprocessing phase.
      If equal to 0, we do not call `simpAll` at all.
    -/
-  simpAllMaxSteps : Nat := 200
+  simpAllMaxSteps : Nat := 2000
   fastSaturate : Bool := false
 
 declare_config_elab elabConfig Config
@@ -156,6 +159,7 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
   -- Pre-preprocessing
   /- First get rid of [ofInt] (if there are dependent arguments, we may not
      manage to simplify the context) -/
+  trace[ScalarTac] "Original goal before preprocessing: {← getMainGoal}"
   Utils.simpAt true {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 0}
                 -- Simprocs
                 scalarTacSimpRocs
@@ -167,13 +171,16 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
                 []
                 -- Hypotheses
                 [] .wildcard
+  trace[ScalarTac] "Goal after first simplification: {← getMainGoal}"
   -- Apply the forward rules
   allGoalsNoRecover (scalarTacSaturateForward config.fastSaturate config.nonLin)
+  trace[ScalarTac] "Goal after saturation: {← getMainGoal}"
   -- Apply `simpAll`
   if config.simpAllMaxSteps ≠ 0 then
     allGoalsNoRecover
       (Utils.simpAll {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 0} true
         scalarTacSimpRocs [simpLemmas] [] [] [])
+  trace[ScalarTac] "Goal after simpAll: {← getMainGoal}"
   -- Reduce all the terms in the goal - note that the extra preprocessing step
   -- might have proven the goal, hence the `allGoals`
   let dsimp :=
@@ -190,10 +197,13 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
         []
         [] Tactic.Location.wildcard)
   dsimp
+  trace[ScalarTac] "Goal after first dsimp: {← getMainGoal}"
   -- More preprocessing: apply norm_cast to the whole context
   allGoalsNoRecover (Utils.tryTac (Utils.normCastAtAll))
+  trace[ScalarTac] "Goal after first normCast: {← getMainGoal}"
   -- norm_cast does weird things with negative numbers so we reapply simp
   dsimp
+  trace[ScalarTac] "Goal after 2nd dsimp: {← getMainGoal}"
   allGoalsNoRecover do Utils.tryTac (
     Utils.simpAt true {}
                -- Simprocs
@@ -213,6 +223,7 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
                  ]
                 -- Hypotheses
                 [] .wildcard)
+  trace[ScalarTac] "Goal after simpAt following dsimp: {← getMainGoal}"
 
 elab "scalar_tac_preprocess" config:Parser.Tactic.optConfig : tactic => do
   let config ← elabConfig config
