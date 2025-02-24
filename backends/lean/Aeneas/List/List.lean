@@ -10,8 +10,7 @@ open Aeneas
 open Aeneas.ScalarTac
 open Aeneas.Simp
 
-attribute [scalar_tac «as» ++ bs] List.length_append
-attribute [scalar_tac_simp] List.length_nil
+attribute [scalar_tac_simp] List.length_append List.length_nil
 
 def indexOpt (ls : List α) (i : Nat) : Option α :=
   match ls with
@@ -108,12 +107,12 @@ theorem slice_nzero_cons (i j : Nat) (x : α) (tl : List α) (hne : Nat.not_eq i
   apply Nat.not_eq_imp_not_eq at hne
   induction i <;> cases j <;> simp_all [slice]
 
-@[simp, scalar_tac replicate l x]
+@[simp, scalar_tac_simp]
 theorem replicate_length {α : Type u} (l : Nat) (x : α) :
   (replicate l x).length = l := by
   induction l <;> simp_all
 
-@[simp, scalar_tac ls.update i x]
+@[simp, scalar_tac_simp]
 theorem length_update (ls : List α) (i : Nat) (x : α) : (ls.update i x).length = ls.length := by
   revert i
   induction ls <;> simp_all [length, update]
@@ -162,7 +161,7 @@ theorem index_append_end [Inhabited α] (i : Nat) (l0 l1 : List α)
     have : i - 1 - length tl = i - (1 + length tl) := by scalar_tac
     by simp_all; ring_nf
 
-@[scalar_tac ls.drop i]
+@[scalar_tac_simp]
 theorem drop_length_is_le (i : Nat) (ls : List α) : (ls.drop i).length ≤ ls.length :=
   match ls with
   | [] => by simp
@@ -172,18 +171,18 @@ theorem drop_length_is_le (i : Nat) (ls : List α) : (ls.drop i).length ≤ ls.l
       have := drop_length_is_le (i - 1) tl
       by simp [*]; omega
 
-@[simp, scalar_tac ls.drop i]
+@[simp, scalar_tac_simp]
 theorem length_drop_eq (i : Nat) (ls : List α) :
   (ls.drop i).length = ls.length - i := by
   induction ls <;> simp_all
 
-@[scalar_tac ls.take i]
+@[scalar_tac_simp]
 theorem take_length_is_le (i : Nat) (ls : List α) : (ls.take i).length ≤ ls.length := by
   induction ls <;> simp_all
 
-attribute [scalar_tac l.take i] length_take
+attribute [scalar_tac_simp] length_take
 
-@[simp, scalar_tac l.resize new_len x]
+@[simp, scalar_tac_simp]
 theorem resize_length (l : List α) (new_len : Nat) (x : α) :
   (l.resize new_len x).length = new_len := by
   induction l <;> simp_all [resize]

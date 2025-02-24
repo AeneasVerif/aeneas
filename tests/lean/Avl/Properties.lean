@@ -830,9 +830,9 @@ theorem Node.insert_in_left_spec
     split
     . -- i = -2
       simp
-      cases h: left_opt' with
-      | none => simp_all (config := {maxDischargeDepth := 1}) -- absurd
-      | some left' =>
+      cases h: left_opt'
+      . simp_all (config := {maxDischargeDepth := 1}) -- absurd
+      . rename_i left'
         simp [h]
         cases node with | mk x left right balance_factor =>
         split
@@ -845,9 +845,7 @@ theorem Node.insert_in_left_spec
           . simp_all (config := {maxDischargeDepth := 1})
           . simp_all (config := {maxDischargeDepth := 1}) [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]
             scalar_tac
-          . simp_all (config := {maxDischargeDepth := 1}) [Node.invAux, Node.balanceFactor]
-          . -- End of the proof
-            simp [*]
+          . simp [*]
             split_conjs
             . -- set reasoning
               simp_all (config := {maxDischargeDepth := 1})
@@ -861,12 +859,12 @@ theorem Node.insert_in_left_spec
               scalar_tac
         . -- rotate_left_right
           simp
-          cases h:left' with | mk z t0 y bf_z =>
-          cases h: y with
-          | none =>
-            -- Can't get there
+          cases h:left'
+          rename_i z t0 y bf_z
+          cases h: y
+          . -- Can't get there
             simp_all (config := {maxDischargeDepth := 1}) [Node.balanceFactor, Node.invAux]
-          | some y =>
+          . rename_i y
             cases h: y with | mk y a b bf_y =>
             progress as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
             -- TODO: syntax for preconditions
@@ -931,21 +929,22 @@ theorem Node.insert_in_right_spec
     split
     . -- i = 2
       simp
-      cases h: right_opt' with
-      | none => simp_all (config := {maxDischargeDepth := 1}) -- absurd
-      | some right' =>
+      cases h: right_opt'
+      . simp_all (config := {maxDischargeDepth := 1}) -- absurd
+      . rename_i right'
         simp [h]
         split
         . -- rotate_left
-          cases node with | mk x a right balance_factor =>
+          cases node
+          rename_i x a right balance_factor
           -- TODO: fix progress
-          cases h:right' with | mk z b c bf_z =>
+          cases h:right'
+          rename_i z b c bf_z
           progress as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
           -- TODO: syntax for preconditions
           . simp_all (config := {maxDischargeDepth := 1})
           . simp_all (config := {maxDischargeDepth := 1})
           . simp_all (config := {maxDischargeDepth := 1}) [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac
-          . simp_all (config := {maxDischargeDepth := 1}) [Node.invAux, Node.balanceFactor]
           . -- End of the proof
             simp [*]
             split_conjs
@@ -957,15 +956,17 @@ theorem Node.insert_in_right_spec
               -- bf_z.val = -1
               scalar_tac
         . -- rotate_right_left
-          cases node with | mk x t1 right balance_factor =>
+          cases node
+          rename_i x t1 right balance_factor
           simp
-          cases h:right' with | mk z y t0 bf_z =>
-          cases h: y with
-          | none =>
-            -- Can't get there
+          cases h:right'
+          rename_i z y t0 bf_z
+          cases h: y
+          . -- Can't get there
             simp_all (config := {maxDischargeDepth := 1}) [Node.balanceFactor, Node.invAux]
-          | some y =>
-            cases h: y with | mk y b a bf_y =>
+          . rename_i y
+            cases h: y
+            rename_i y b a bf_y
             progress as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
             -- TODO: syntax for preconditions
             . simp_all (config := {maxDischargeDepth := 1}) [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac

@@ -206,7 +206,6 @@ theorem IScalar.bounds {ty : IScalarTy} (x : IScalar ty) :
 
 example (x _y : U32) : x.val ≤ UScalar.max .U32 := by
   scalar_tac_preprocess
-  simp [*]
 
 example (x _y : U32) : x.val ≤ UScalar.max .U32 := by
   scalar_tac
@@ -221,7 +220,6 @@ example : (U32.ofNat 1).val ≤ U32.max := by
 
 example (x : Nat) (h1 : x ≤ U32.max) :
   (U32.ofNat x (by scalar_tac)).val ≤ U32.max := by
-  scalar_tac_preprocess
   scalar_tac
 
 -- Not equal
@@ -353,9 +351,7 @@ example (x y : Int) : min x y ≤ x := by scalar_tac
 @[scalar_tac_simp]
 theorem Int.natAbs_eq_abs (x : Int) : |x| = ↑x.natAbs := by simp
 
-example (x y : Int) (h : x.natAbs ≤ y.natAbs) : x ≤ y.natAbs := by
-  scalar_tac_preprocess
-
+example (x y z : Int) (h0 : x.natAbs ≤ y.natAbs) (h1 : y.natAbs ≤ z.natAbs) : x ≤ z.natAbs := by
   scalar_tac
 example (x y : Int) (h : |x| ≤ |y|) : x ≤ |y| := by scalar_tac
 example (x y : Int) (h : |x| ≤ |y|) : x ≤ |y| := by scalar_tac

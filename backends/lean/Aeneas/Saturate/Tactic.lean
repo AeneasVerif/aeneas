@@ -156,8 +156,71 @@ private partial def visit (depth : Nat) (nameToRule : NameMap Rule)
     trace[Saturate] ".proj"
     visit (depth + 1) nameToRule dtrees boundVars matched b
 
+def binaryConsts : Std.HashSet Name := Std.HashSet.ofList [
+  ``And, ``Or
+]
+
+def arithConsts : Std.HashSet Name := Std.HashSet.ofList [
+  ``LT.lt, ``LE.le, ``GT.gt, ``GE.ge
+]
+
+/- Fast version of `visit`: we do not explore everything. -/
+private partial def fastVisit (depth : Nat) (nameToRule : NameMap Rule)
+  (dtrees : Array (DiscrTree Rule))
+  (matched : Std.HashSet (Name × List Expr))
+  (e : Expr) : MetaM (Std.HashSet (Name × List Expr)) := do
+  trace[Saturate] "Visiting {e}"
+  -- Match
+  let matched ← matchExpr nameToRule dtrees Std.HashSet.empty matched e
+  -- Recurse
+  let e := e.consumeMData
+  match e with
+  | .bvar _
+  | .fvar _
+  | .mvar _
+  | .sort _
+  | .lit _
+  | .const _ _ =>
+    trace[Saturate] "Stop: bvar, fvar, etc."
+    pure matched
+  | .app .. => do e.withApp fun f args => do
+    trace[Saturate] ".app"
+    let visitRec := fastVisit (depth + 1) nameToRule dtrees
+    if f.isConst then
+      --
+      let constName := f.constName!
+      if constName == ``Eq ∧ args.size == 3 then
+        let matched ← visitRec matched args[1]!
+        let matched ← visitRec matched args[2]!
+        pure matched
+      else if constName ∈ binaryConsts ∧ args.size == 2 then
+        let matched ← visitRec matched args[0]!
+        let matched ← visitRec matched args[1]!
+        pure matched
+      else if constName ∈ binaryConsts ∧ args.size == 4 then
+        let matched ← visitRec matched args[2]!
+        let matched ← visitRec matched args[3]!
+        pure matched
+      else
+        -- Stop there
+        pure matched
+    else
+      -- Stop there
+      pure matched
+  | .lam ..
+  | .forallE ..
+  | .letE .. => do
+    -- Do not go inside the foralls, the lambdas and the let expressions
+    pure matched
+  | .mdata _ b => do
+    trace[Saturate] ".mdata"
+    fastVisit (depth + 1) nameToRule dtrees matched b
+  | .proj _ _ _ => do
+    trace[Saturate] ".proj"
+    pure matched
+
 /- The saturation tactic itself -/
-def evalSaturate (sets : List Name) : TacticM Unit := do
+def evalSaturate (fast : Bool) (sets : List Name) : TacticM Unit := do
   Tactic.withMainContext do
   trace[Saturate] "sets: {sets}"
   -- Retrieve the rule sets
@@ -167,17 +230,19 @@ def evalSaturate (sets : List Name) : TacticM Unit := do
   let ctx ← Lean.MonadLCtx.getLCtx
   -- Explore the declarations
   let decls ← ctx.getDecls
+  let visit := if fast then fastVisit 0 s.nameToRule dtrees else visit 0 s.nameToRule dtrees Std.HashSet.empty
+
   let matched ← decls.foldlM (fun matched (decl : LocalDecl) => do
     trace[Saturate] "Exploring local decl: {decl.userName}"
     /- We explore both the type, the expresion and the body (if there is) -/
-    let matched ← visit 0 s.nameToRule dtrees Std.HashSet.empty matched decl.type
-    let matched ← visit 0 s.nameToRule dtrees Std.HashSet.empty matched decl.toExpr
+    let matched ← visit matched decl.type
+    let matched ← visit matched decl.toExpr
     match decl.value? with
     | none => pure matched
-    | some value => visit 0 s.nameToRule dtrees Std.HashSet.empty matched value) Std.HashSet.empty
+    | some value => visit matched value) Std.HashSet.empty
   -- Explore the goal
   trace[Saturate] "Exploring the goal"
-  let matched ← visit 0 s.nameToRule dtrees Std.HashSet.empty matched (← Tactic.getMainTarget)
+  let matched ← visit matched (← Tactic.getMainTarget)
   -- Introduce the theorems in the context
   for (thName, args) in matched do
     let th ← mkAppOptM thName (args.map some).toArray
@@ -185,11 +250,11 @@ def evalSaturate (sets : List Name) : TacticM Unit := do
     let _ ← Utils.addDeclTac (.str .anonymous "_") th thTy (asLet := false)
 
 elab "aeneas_saturate" : tactic =>
-  evalSaturate [`Aeneas.ScalarTac]
+  evalSaturate false [`Aeneas.ScalarTac]
 
 section Test
   local elab "aeneas_saturate_test" : tactic =>
-    evalSaturate [`Aeneas.Test]
+    evalSaturate false [`Aeneas.Test]
 
   set_option trace.Saturate.attribute false
   @[aeneas_saturate (set := Aeneas.Test) (pattern := l.length)]

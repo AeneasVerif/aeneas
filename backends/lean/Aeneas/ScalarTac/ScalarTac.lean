@@ -80,6 +80,7 @@ example (x y : Int) (h0 : x ≤ y) (h1 : x ≠ y) : x < y := by
   omega
 
 def scalarTacSimpRocs : List Name := [
+  ``reduceIte,
   ``Nat.reducePow, ``Nat.reduceAdd, ``Nat.reduceSub, ``Nat.reduceMul, ``Nat.reduceDiv, ``Nat.reduceMod,
   ``Int.reducePow, ``Int.reduceAdd, ``Int.reduceSub, ``Int.reduceMul, ``Int.reduceDiv, ``Int.reduceMod,
   ``Int.reduceNegSucc, ``Int.reduceNeg,]
@@ -108,11 +109,12 @@ structure Config where
      If equal to 0, we do not call `simpAll` at all.
    -/
   simpAllMaxSteps : Nat := 200
+  fastSaturate : Bool := false
 
 declare_config_elab elabConfig Config
 
 /-- Apply the scalar_tac forward rules -/
-def scalarTacSaturateForward (nonLin : Bool): Tactic.TacticM Unit := do
+def scalarTacSaturateForward (fast : Bool) (nonLin : Bool): Tactic.TacticM Unit := do
   /-
   let options : Aesop.Options := {}
   -- Use a forward max depth of 0 to prevent recursively applying forward rules on the assumptions
@@ -127,12 +129,21 @@ def scalarTacSaturateForward (nonLin : Bool): Tactic.TacticM Unit := do
     else ruleSets
   -- TODO
   -- evalAesopSaturate options ruleSets.toArray
-  Saturate.evalSaturate ruleSets
+  Saturate.evalSaturate fast ruleSets
 
 -- For debugging
 elab "scalar_tac_saturate" config:Parser.Tactic.optConfig : tactic => do
   let config ← elabConfig config
-  scalarTacSaturateForward config.nonLin
+  scalarTacSaturateForward config.fastSaturate config.nonLin
+
+/- Propositional logic simp lemmas -/
+attribute [scalar_tac_simp]
+  and_self false_implies true_implies Prod.mk.injEq
+  not_false_eq_true not_true_eq_false
+  true_and and_true false_and and_false
+  true_or or_true false_or or_false
+  Bool.true_eq_false Bool.false_eq_true
+  decide_eq_true_eq Bool.or_eq_true Bool.and_eq_true
 
 /-  Boosting a bit the `omega` tac.
 
@@ -145,7 +156,7 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
   -- Pre-preprocessing
   /- First get rid of [ofInt] (if there are dependent arguments, we may not
      manage to simplify the context) -/
-  Utils.simpAt true {dsimp := false, failIfUnchanged := false}
+  Utils.simpAt true {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 0}
                 -- Simprocs
                 scalarTacSimpRocs
                 -- Simp theorems
@@ -157,7 +168,12 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
                 -- Hypotheses
                 [] .wildcard
   -- Apply the forward rules
-  allGoalsNoRecover (scalarTacSaturateForward config.nonLin)
+  allGoalsNoRecover (scalarTacSaturateForward config.fastSaturate config.nonLin)
+  -- Apply `simpAll`
+  if config.simpAllMaxSteps ≠ 0 then
+    allGoalsNoRecover
+      (Utils.simpAll {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 0} true
+        scalarTacSimpRocs [simpLemmas] [] [] [])
   -- Reduce all the terms in the goal - note that the extra preprocessing step
   -- might have proven the goal, hence the `allGoals`
   let dsimp :=
@@ -210,6 +226,7 @@ elab "scalar_tac_preprocess" config:Parser.Tactic.optConfig : tactic => do
 def scalarTac (config : Config) : Tactic.TacticM Unit := do
   Tactic.withMainContext do
   Tactic.focus do
+  let simpLemmas ← scalarTacSimpExt.getTheorems
   let g ← Tactic.getMainGoal
   trace[ScalarTac] "Original goal: {g}"
   -- Introduce all the universally quantified variables (includes the assumptions)
@@ -226,35 +243,17 @@ def scalarTac (config : Config) : Tactic.TacticM Unit := do
      and have surprising behaviors). -/
   allGoalsNoRecover do
     try do
-      let simpThenOmega := do
-        if config.simpAllMaxSteps ≠ 0 then
-          Utils.tryTac (
-            -- TODO: is there a simproc to simplify propositional logic?
-            Utils.simpAll {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 1} true
-              [``reduceIte] [] []
-              [``and_self, ``false_implies, ``true_implies, ``Prod.mk.injEq,
-              ``not_false_eq_true, ``not_true_eq_false,
-              ``true_and, ``and_true, ``false_and, ``and_false,
-              ``true_or, ``or_true,``false_or, ``or_false,
-              ``Bool.true_eq_false, ``Bool.false_eq_true,
-              -- The following lemmas are used to simplify occurrences of `decide`
-              ``decide_eq_true_eq, ``Bool.or_eq_true, ``Bool.and_eq_true] [])
-        allGoalsNoRecover (do
-          trace[ScalarTac] "Goal after simplification: {← getMainGoal}"
-          trace[ScalarTac] "Calling omega"
-          Tactic.Omega.omegaTactic {}
-          trace[ScalarTac] "Omega solved the goal")
       if config.split then do
-        /- In order to improve performance, we first try to prove the goal without splitting. If it
-           fails, we split. -/
-        try
-          trace[ScalarTac] "First trying to solve the goal without splitting"
-          simpThenOmega
-        catch _ =>
-          trace[ScalarTac] "First attempt failed: splitting the goal and retrying"
-          splitAll (allGoalsNoRecover simpThenOmega)
+        trace[ScalarTac] "Splitting the goal"
+        splitAll do
+          allGoalsNoRecover
+            (Utils.simpAll {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 0} true
+              scalarTacSimpRocs [simpLemmas] [] [] [])
+          trace[ScalarTac] "Calling omega"
+          allGoalsNoRecover (Tactic.Omega.omegaTactic {})
       else
-        simpThenOmega
+        trace[ScalarTac] "Calling omega"
+        Tactic.Omega.omegaTactic {}
     catch _ =>
       let g ← Tactic.getMainGoal
       throwError "scalar_tac failed to prove the goal below.\n\nNote that scalar_tac is almost equivalent to:\n  scalar_tac_preprocess; split_all <;> simp_all only <;> omega\n\nGoal: \n{g}"
