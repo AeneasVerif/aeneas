@@ -775,7 +775,7 @@ namespace Test
     tactic execution of Lean.Parser.Tactic.tacticSeq1Indented took 19ms
     type checking took 81.3ms
 
-    After using saturateFast:
+    After using `saturateFast` in `scalar_tac`:
     simp took 26.2ms
     simp took 20.6ms
     simp took 10ms
@@ -838,9 +838,6 @@ namespace Test
     tactic execution of Lean.Parser.Tactic.tacticSeq1Indented took 17.4ms
     type checking took 86.5ms
     -/
-
-    set_option profiler true in
-    set_option profiler.threshold 10 in
     theorem ntt_spec (peSrc : Std.Array U16 256#usize)
       (hWf : wfArray peSrc) :
       ∃ peSrc1, ntt peSrc = ok peSrc1 ∧
