@@ -774,6 +774,69 @@ namespace Test
     simp took 46.5ms
     tactic execution of Lean.Parser.Tactic.tacticSeq1Indented took 19ms
     type checking took 81.3ms
+
+    After using saturateFast:
+    simp took 26.2ms
+    simp took 20.6ms
+    simp took 10ms
+    tactic execution of Aeneas.Progress.progress took 20.9ms
+    simp took 21.9ms
+    simp took 18.5ms
+    tactic execution of Aeneas.Progress.progress took 23.1ms
+    simp took 18.1ms
+    simp took 21.6ms
+    simp took 18ms
+    tactic execution of Aeneas.Progress.progress took 38.8ms
+    simp took 18ms
+    simp took 23.1ms
+    simp took 17.6ms
+    simp took 10.3ms
+    tactic execution of Aeneas.Progress.progress took 31.8ms
+    simp took 19.8ms
+    simp took 22.1ms
+    simp took 18ms
+    tactic execution of Aeneas.Progress.progress took 34.9ms
+    simp took 22.9ms
+    simp took 22.8ms
+    simp took 17.8ms
+    tactic execution of Aeneas.Progress.progress took 40.9ms
+    simp took 26.5ms
+    simp took 23.1ms
+    simp took 20.1ms
+    simp took 19.4ms
+    simp took 10.1ms
+    tactic execution of Aeneas.Progress.progress took 48.2ms
+    simp took 29ms
+    simp took 22.9ms
+    simp took 18.6ms
+    tactic execution of Aeneas.Progress.progress took 51.1ms
+    simp took 29.1ms
+    simp took 22.5ms
+    simp took 19.2ms
+    tactic execution of Aeneas.Progress.progress took 56.1ms
+    simp took 29.2ms
+    simp took 22.5ms
+    simp took 19.5ms
+    simp took 10.3ms
+    tactic execution of Aeneas.Progress.progress took 60ms
+    simp took 29.7ms
+    simp took 23.4ms
+    simp took 19.6ms
+    simp took 10.5ms
+    tactic execution of Aeneas.Progress.progress took 67.4ms
+    simp took 29.1ms
+    simp took 23.6ms
+    simp took 18.6ms
+    simp took 10.7ms
+    tactic execution of Aeneas.Progress.progress took 70.1ms
+    simp took 30ms
+    simp took 24ms
+    simp took 20.1ms
+    simp took 10.5ms
+    tactic execution of Aeneas.Progress.progress took 76.5ms
+    simp took 28.7ms
+    tactic execution of Lean.Parser.Tactic.tacticSeq1Indented took 17.4ms
+    type checking took 86.5ms
     -/
 
     set_option profiler true in
