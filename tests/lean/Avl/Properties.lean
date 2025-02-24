@@ -75,7 +75,7 @@ def Node.forall (p: Node T -> Prop) (node : Node T) : Prop :=
   p node ∧
   Subtree.forall p node.left ∧ Subtree.forall p node.right
 termination_by Node.size node
-decreasing_by all_goals (simp_wf; fsimp [Node.left, Node.right]; split <;> fsimp <;> scalar_tac)
+decreasing_by all_goals (simp_wf; fsimp [Node.left, Node.right]; split; fsimp <;> scalar_tac)
 end
 
 @[simp]
