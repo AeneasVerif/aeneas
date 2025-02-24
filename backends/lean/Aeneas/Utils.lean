@@ -461,7 +461,13 @@ def singleAssumptionTac : TacticM Unit := do
     assumptionTac
   else
     trace[Utils] "The goal contains meta-variables"
-    -- There are meta-variables that
+    /- There are meta-variables that we need to instantiate
+
+       Remark: at some point I tried using a discrimination tree to filter the assumptions,
+       in particular inside the `progress` tactic as may need to call the `singleAssumptionTac`
+       several times, but discrimination trees don't work if the expression we match over
+       contains meta-variables.
+     -/
     match ← (getAllMatchingAssumptions goal) with
     | [(localDecl, _)] =>
       /- There is a single assumption which matches the goal: use it
