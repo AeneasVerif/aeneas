@@ -1,5 +1,6 @@
 import Aeneas.Arith
 import Aeneas.Bvify
+import Aeneas.BvTac
 import Aeneas.Diverge
 import Aeneas.FSimp
 import Aeneas.List

@@ -15,10 +15,7 @@ This tactic is adapted from `zify`.
 
 namespace Aeneas.Bvify
 
-open Lean
-open Lean.Meta
-open Lean.Parser.Tactic
-open Lean.Elab.Tactic
+open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 open Arith Std
 
 attribute [bvify_simps] ge_iff_le gt_iff_lt UScalar.BitVec_ofNat_val
