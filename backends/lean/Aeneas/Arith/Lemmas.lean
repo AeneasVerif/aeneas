@@ -622,4 +622,16 @@ theorem Int.mod_toNat_val (n m : Int) (h : m ≠ 0) :
   (n % m).toNat = n % m := by
   simp only [Int.ofNat_toNat, ne_eq, h, not_false_eq_true, Int.emod_nonneg, sup_of_le_left]
 
+theorem Nat.lt_iff_BitVec_ofNat_lt (n : Nat) (x y : Nat) (hx : x < 2^n) (hy : y < 2^n) :
+  x < y ↔ BitVec.ofNat n x < BitVec.ofNat n y := by
+  have := Nat.mod_eq_of_lt hx
+  have := Nat.mod_eq_of_lt hy
+  simp [*]
+
+theorem Nat.le_iff_BitVec_ofNat_le (n : Nat) (x y : Nat) (hx : x < 2^n) (hy : y < 2^n) :
+  x ≤ y ↔ BitVec.ofNat n x ≤ BitVec.ofNat n y := by
+  have := Nat.mod_eq_of_lt hx
+  have := Nat.mod_eq_of_lt hy
+  simp [*]
+
 end Aeneas.Arith
