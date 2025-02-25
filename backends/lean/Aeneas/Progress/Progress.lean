@@ -391,7 +391,7 @@ def evalProgress (args : TSyntax `Aeneas.Progress.progressArgs) : TacticM Stats 
           -- Not a local declaration: should be a theorem
           trace[Progress] "With arg: theorem"
           addCompletionInfo <| CompletionInfo.id pspec pspec.getId (danglingDot := false) {} none
-          let some e ← Term.resolveId? pspec | throwError m!"Could not find theorem: {pspec}"
+          let some e ← Term.resolveId? pspec (withInfo := true) | throwError m!"Could not find theorem: {pspec}"
           pure (some e)
       else
         trace[Progress] "With arg: is term"
