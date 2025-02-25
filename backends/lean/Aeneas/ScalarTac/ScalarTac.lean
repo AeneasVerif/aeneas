@@ -105,9 +105,6 @@ structure Config where
   /- If `true`, split all the matches/if then else in the context (note that `omega`
      splits the *disjunctions*) -/
   split: Bool := false
-  /- if `true`, split the goal if it is a conjunction so as to introduce one
-     subgoal per conjunction. -/
-  splitGoal : Bool := false
   /- Maximum number of steps to take with `simpAll` during the preprocessing phase.
      If equal to 0, we do not call `simpAll` at all.
    -/
@@ -246,16 +243,11 @@ def scalarTac (config : Config) : Tactic.TacticM Unit := do
   -- Preprocess - wondering if we should do this before or after splitting
   -- the goal. I think before leads to a smaller proof term?
   allGoalsNoRecover (scalarTacPreprocess config)
-  -- Split the conjunctions in the goal
-  if config.splitGoal then allGoalsNoRecover (Utils.repeatTac Utils.splitConjTarget)
-  /- If we split the disjunctions, split then use simp_all. Otherwise only use simp_all.
-     Note that simp_all is very useful here as a "congruence" procedure. Note however that we
-     only activate a very restricted set of simp lemmas (otherwise it can be very expensive,
-     and have surprising behaviors). -/
   allGoalsNoRecover do
     try do
       if config.split then do
         trace[ScalarTac] "Splitting the goal"
+        /- If we split the `if then else` call `simp_all` again -/
         splitAll do
           allGoalsNoRecover
             (Utils.simpAll {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 0} true
@@ -286,13 +278,13 @@ macro_rules
              | apply ScalarTac.to_int_sub_to_nat_lt) <;>
       simp_all <;> scalar_tac)
 
--- Checking that things happen correctly when there are several disjunctions
+-- Checking that things happen correctly when there are several conjunctions
 example (x y : Int) (h0: 0 ≤ x) (h1: x ≠ 0) (h2 : 0 ≤ y) (h3 : y ≠ 0) : 0 < x ∧ 0 < y := by
-  scalar_tac +splitGoal
+  scalar_tac
 
--- Checking that things happen correctly when there are several disjunctions
+-- Checking that things happen correctly when there are several conjunctions
 example (x y : Int) (h0: 0 ≤ x) (h1: x ≠ 0) (h2 : 0 ≤ y) (h3 : y ≠ 0) : 0 < x ∧ 0 < y ∧ x + y ≥ 2 := by
-  scalar_tac +splitGoal
+  scalar_tac
 
 -- Checking that we can prove exfalso
 example (a : Prop) (x : Int) (h0: 0 < x) (h1: x < 0) : a := by

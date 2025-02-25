@@ -414,7 +414,7 @@ def evalProgress (args : TSyntax `Aeneas.Progress.progressArgs) : TacticM Stats 
     if ← ScalarTac.goalIsLinearInt then
       -- Also: we don't try to split the goal if it is a conjunction
       -- (it shouldn't be), but we split the disjunctions.
-      ScalarTac.scalarTac { split := false, splitGoal := false, fastSaturate := true }
+      ScalarTac.scalarTac { split := false, fastSaturate := true }
     else
       throwError "Not a linear arithmetic goal"
   let simpLemmas ← Aeneas.ScalarTac.scalarTacSimpExt.getTheorems
