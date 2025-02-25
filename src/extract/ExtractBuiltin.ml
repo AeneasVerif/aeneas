@@ -545,6 +545,11 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
            "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
             [@T]>}::index_mut"
            ();
+         (* *)
+         mk_fun "alloc::boxed::{core::convert::AsMut<Box<@T>, @T>}::as_mut"
+           ~can_fail:false
+           ~filter:(Some [ true; false ])
+           ();
        ]
       @ List.flatten
           (List.map
@@ -719,8 +724,10 @@ let builtin_trait_decls_info () =
           ();
         (* Debug *)
         mk_trait "core::fmt::Debug" ~types:[ "T" ] ~methods:[ "fmt" ] ();
+        (* *)
         mk_trait "core::convert::TryFrom" ~methods:[ "try_from" ] ();
         mk_trait "core::convert::TryInto" ~methods:[ "try_into" ] ();
+        mk_trait "core::convert::AsMut" ~methods:[ "as_mut" ] ();
       ]
 
 let mk_builtin_trait_decls_map () =
@@ -821,6 +828,9 @@ let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
         fmt
           "core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
            [@Self]>"
+          ();
+        fmt "core::convert::AsMut<Box<@Self>, @Self>"
+          ~filter:(Some [ true; false ])
           ();
       ]
   (* From<INT, bool> *)
