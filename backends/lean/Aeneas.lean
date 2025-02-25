@@ -6,6 +6,7 @@ import Aeneas.FSimp
 import Aeneas.List
 import Aeneas.Natify
 import Aeneas.Progress
+import Aeneas.Range
 import Aeneas.Saturate
 import Aeneas.ScalarNF
 import Aeneas.ScalarTac
