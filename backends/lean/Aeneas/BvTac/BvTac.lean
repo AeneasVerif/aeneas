@@ -19,7 +19,7 @@ partial def getn : TacticM Expr := do
   let raiseError : TacticM Expr :=
     throwError "The goal doesn't have the proper shape: expected a proposition only involving (in-)equality between bitvectors"
   let fromBitVecTy (ty : Expr) : TacticM Expr :=
-    ty.consumeMData.withApp fun f args => do
+    ty.consumeMData.withApp fun _ args => do
     if args.size == 1 then
       pure args[0]!
     else
