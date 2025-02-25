@@ -382,6 +382,16 @@ theorem Int.bmod_pow2_eq_of_inBounds (n : ℕ) (x : Int)
     simp [this]
     omega
 
+theorem Int.bmod_pow2_eq_of_inBounds' (n : ℕ) (x : Int)
+  (hn : n ≠ 0)
+  (h0 : - 2 ^ (n - 1) ≤ x)
+  (h1 : x < 2 ^ (n - 1)) :
+  Int.bmod x (2 ^ n) = x := by
+  have h := Int.bmod_pow2_eq_of_inBounds (n - 1) x
+  have : n - 1 + 1 = n := by omega
+  simp [this] at h
+  apply h <;> omega
+
 theorem Int.bmod_pow2_bounds (n : ℕ) (x : Int) :
   - 2^(n-1) ≤ Int.bmod x (2^n) ∧ Int.bmod x (2^n) < 2^(n-1) := by
   have h0 : 0 < 2^n := by simp
@@ -606,5 +616,10 @@ theorem Int.bmod_bmod_of_dvd (n : Int) {m k : Nat} (hDiv : m ∣ k) :
       simp [Int.ofNat_dvd_left]
       apply hDiv
     simp [this, h]
+
+@[simp]
+theorem Int.mod_toNat_val (n m : Int) (h : m ≠ 0) :
+  (n % m).toNat = n % m := by
+  simp only [Int.ofNat_toNat, ne_eq, h, not_false_eq_true, Int.emod_nonneg, sup_of_le_left]
 
 end Aeneas.Arith

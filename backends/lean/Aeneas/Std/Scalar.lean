@@ -112,6 +112,109 @@ open Arith
 @[simp] theorem IScalar.exists_eq' {a' : IScalar ty} : ∃ (a : IScalar ty), a'.val = a.val := by exists a'
 
 /-!
+# Equalities and simplification lemmas
+-/
+
+theorem UScalar.ofNatCore_bv_lt_equiv {ty} (x y : Nat) (hx) (hy) :
+  (@UScalar.ofNatCore ty x hx).bv < (@UScalar.ofNatCore ty y hy).bv ↔ x < y := by
+  simp only [ofNatCore, BitVec.ofNat_lt_ofNat]
+  have := Nat.mod_eq_of_lt hx
+  have := Nat.mod_eq_of_lt hy
+  simp only [*]
+
+@[simp, scalar_tac_simp] theorem U8.val_mod_size_eq (x : U8) : x.val % U8.size = x.val := by
+  apply Nat.mod_eq_of_lt; scalar_tac
+
+@[simp, scalar_tac_simp] theorem U8.val_mod_size_eq' (x : U8) : x.val % 256 = x.val := by
+  apply Nat.mod_eq_of_lt; scalar_tac
+
+@[simp, scalar_tac_simp] theorem U16.val_mod_size_eq (x : U16) : x.val % U16.size = x.val := by
+  apply Nat.mod_eq_of_lt; scalar_tac
+
+@[simp, scalar_tac_simp] theorem U16.val_mod_size_eq' (x : U16) : x.val % 65536 = x.val := by
+  apply Nat.mod_eq_of_lt; scalar_tac
+
+@[simp, scalar_tac_simp] theorem U32.val_mod_size_eq (x : U32) : x.val % U32.size = x.val := by
+  apply Nat.mod_eq_of_lt; scalar_tac
+
+@[simp, scalar_tac_simp] theorem U32.val_mod_size_eq' (x : U32) : x.val % 4294967296 = x.val := by
+  apply Nat.mod_eq_of_lt; scalar_tac
+
+@[simp, scalar_tac_simp] theorem U64.val_mod_size_eq (x : U64) : x.val % U64.size = x.val := by
+  apply Nat.mod_eq_of_lt; scalar_tac
+
+@[simp, scalar_tac_simp] theorem U64.val_mod_size_eq' (x : U64) : x.val % 18446744073709551616 = x.val := by
+  apply Nat.mod_eq_of_lt; scalar_tac
+
+@[simp, scalar_tac_simp] theorem U128.val_mod_size_eq (x : U128) : x.val % U128.size = x.val := by
+  apply Nat.mod_eq_of_lt; scalar_tac
+
+@[simp, scalar_tac_simp] theorem U128.val_mod_size_eq' (x : U128) : x.val % 340282366920938463463374607431768211456 = x.val := by
+  apply Nat.mod_eq_of_lt; scalar_tac
+
+@[simp, scalar_tac_simp] theorem Usize.val_mod_size_eq (x : Usize) : x.val % Usize.size = x.val := by
+  apply Nat.mod_eq_of_lt; scalar_tac
+
+@[simp, scalar_tac_simp] theorem U8.val_mod_max_eq (x : U8) : x.val % (U8.max + 1) = x.val := by
+  apply Nat.mod_eq_of_lt; scalar_tac
+
+@[simp, scalar_tac_simp] theorem U16.val_mod_max_eq (x : U16) : x.val % (U16.max + 1) = x.val := by
+  apply Nat.mod_eq_of_lt; scalar_tac
+
+@[simp, scalar_tac_simp] theorem U32.val_mod_max_eq (x : U32) : x.val % (U32.max + 1) = x.val := by
+  apply Nat.mod_eq_of_lt; scalar_tac
+
+@[simp, scalar_tac_simp] theorem U64.val_mod_max_eq (x : U64) : x.val % (U64.max + 1) = x.val := by
+  apply Nat.mod_eq_of_lt; scalar_tac
+
+@[simp, scalar_tac_simp] theorem U128.val_mod_max_eq (x : U128) : x.val % (U128.max + 1) = x.val := by
+  apply Nat.mod_eq_of_lt; scalar_tac
+
+@[simp, scalar_tac_simp] theorem Usize.val_mod_max_eq (x : Usize) : x.val % (Usize.max + 1) = x.val := by
+  apply Nat.mod_eq_of_lt; scalar_tac
+
+@[simp, scalar_tac_simp] theorem I8.val_mod_size_eq (x : I8) : Int.bmod x.val I8.size = x.val := by
+  simp [size]; apply Int.bmod_pow2_eq_of_inBounds' <;> scalar_tac
+
+@[simp, scalar_tac_simp] theorem I8.val_mod_size_eq' (x : I8) : Int.bmod x.val 256 = x.val := by
+  have := val_mod_size_eq x; simp [size, numBits] at this; assumption
+
+@[simp, scalar_tac_simp] theorem I16.val_mod_size_eq (x : I16) : Int.bmod x.val I16.size = x.val := by
+  simp [size]; apply Int.bmod_pow2_eq_of_inBounds' <;> scalar_tac
+
+@[simp, scalar_tac_simp] theorem I16.val_mod_size_eq' (x : I16) : Int.bmod x.val 65536 = x.val := by
+  have := val_mod_size_eq x; simp [size, numBits] at this; assumption
+
+@[simp, scalar_tac_simp] theorem I32.val_mod_size_eq (x : I32) : Int.bmod x.val I32.size = x.val := by
+  simp [size]; apply Int.bmod_pow2_eq_of_inBounds' <;> scalar_tac
+
+@[simp, scalar_tac_simp] theorem I32.val_mod_size_eq' (x : I32) : Int.bmod x.val 4294967296 = x.val := by
+  have := val_mod_size_eq x; simp [size, numBits] at this; assumption
+
+@[simp, scalar_tac_simp] theorem I64.val_mod_size_eq (x : I64) : Int.bmod x.val I64.size = x.val := by
+  simp [size]; apply Int.bmod_pow2_eq_of_inBounds' <;> scalar_tac
+
+@[simp, scalar_tac_simp] theorem I64.val_mod_size_eq' (x : I64) : Int.bmod x.val 18446744073709551616 = x.val := by
+  have := val_mod_size_eq x; simp [size, numBits] at this; assumption
+
+@[simp, scalar_tac_simp] theorem I128.val_mod_size_eq (x : I128) : Int.bmod x.val I128.size = x.val := by
+  simp [size]; apply Int.bmod_pow2_eq_of_inBounds' <;> scalar_tac
+
+@[simp, scalar_tac_simp] theorem I128.val_mod_size_eq' (x : I128) : Int.bmod x.val 340282366920938463463374607431768211456 = x.val := by
+  have := val_mod_size_eq x; simp [size, numBits] at this; assumption
+
+@[simp, scalar_tac_simp] theorem Isize.val_mod_size_eq (x : Isize) : Int.bmod x.val Isize.size = x.val := by
+  simp [size]; apply Int.bmod_pow2_eq_of_inBounds' <;> try scalar_tac
+  simp [numBits]; dcases System.Platform.numBits_eq <;> simp [*]
+
+@[simp] theorem U8.val_max_zero_eq (x : U8) : x.val ⊔ 0 = x.val := by scalar_tac
+@[simp] theorem U16.val_max_zero_eq (x : U16) : x.val ⊔ 0 = x.val := by scalar_tac
+@[simp] theorem U32.val_max_zero_eq (x : U32) : x.val ⊔ 0 = x.val := by scalar_tac
+@[simp] theorem U64.val_max_zero_eq (x : U64) : x.val ⊔ 0 = x.val := by scalar_tac
+@[simp] theorem U128.val_max_zero_eq (x : U128) : x.val ⊔ 0 = x.val := by scalar_tac
+@[simp] theorem Usize.val_max_zero_eq (x : Usize) : x.val ⊔ 0 = x.val := by scalar_tac
+
+/-!
 
 # Primitive Operations
 ## Primitive Operations: Definitions
@@ -1980,6 +2083,90 @@ theorem IScalar.rem_spec {ty} (x : IScalar ty) {y : IScalar ty} (hzero : y.val �
   IScalar.rem_spec x hnz
 
 /-!
+## Bit shifts
+-/
+
+theorem UScalar.ShiftRight_val_eq {ty0 ty1} (x : UScalar ty0) (y : UScalar ty1)
+  (hy : y.val < ty0.numBits) :
+  ∃ z, x >>> y = ok z ∧
+  z.val = x.val >>> y.val
+  := by
+  simp only [HShiftRight.hShiftRight, shiftRight_UScalar, shiftRight, hy, reduceIte]
+  simp only [BitVec.ushiftRight_eq, ok.injEq, _root_.exists_eq_left', val]
+  simp [HShiftRight.hShiftRight, BitVec.ushiftRight]
+
+theorem UScalar.ShiftRight_bv_eq {ty0 ty1} (x : UScalar ty0) (y : UScalar ty1)
+  (hy : y.val < ty0.numBits) :
+  ∃ z, x >>> y = ok z ∧ z.bv = x.bv >>> y.val
+  := by
+  simp only [HShiftRight.hShiftRight, shiftRight_UScalar, shiftRight, hy, reduceIte]
+  simp only [BitVec.ushiftRight_eq, ok.injEq, _root_.exists_eq_left', val]
+
+@[progress] theorem U8.ShiftRight_bv_spec (x : U8) (y : UScalar ty1) (hy : y.val < 8) :
+  ∃ (z : U8), x >>> y = ok z ∧ z.bv = x.bv >>> y.val
+  := by apply UScalar.ShiftRight_bv_eq; simp [*]
+
+@[progress] theorem U16.ShiftRight_bv_spec (x : U16) (y : UScalar ty1) (hy : y.val < 16) :
+  ∃ (z : U16), x >>> y = ok z ∧ z.bv = x.bv >>> y.val
+  := by apply UScalar.ShiftRight_bv_eq; simp [*]
+
+@[progress] theorem U32.ShiftRight_bv_spec (x : U32) (y : UScalar ty1) (hy : y.val < 32) :
+  ∃ (z : U32), x >>> y = ok z ∧ z.bv = x.bv >>> y.val
+  := by apply UScalar.ShiftRight_bv_eq; simp [*]
+
+@[progress] theorem U64.ShiftRight_bv_spec (x : U64) (y : UScalar ty1) (hy : y.val < 64) :
+  ∃ (z : U64), x >>> y = ok z ∧ z.bv = x.bv >>> y.val
+  := by apply UScalar.ShiftRight_bv_eq; simp [*]
+
+@[progress] theorem U128.ShiftRight_bv_spec (x : U128) (y : UScalar ty1) (hy : y.val < 128) :
+  ∃ (z : U128), x >>> y = ok z ∧ z.bv = x.bv >>> y.val
+  := by apply UScalar.ShiftRight_bv_eq; simp [*]
+
+@[progress] theorem Usize.ShiftRight_bv_spec (x : Usize) (y : UScalar ty1) (hy : y.val < UScalarTy.Usize.numBits) :
+  ∃ (z : Usize), x >>> y = ok z ∧ z.bv = x.bv >>> y.val
+  := by apply UScalar.ShiftRight_bv_eq; simp only [*]
+
+theorem UScalar.ShiftLeft_val_eq {ty0 ty1} (x : UScalar ty0) (y : UScalar ty1)
+  (hy : y.val < ty0.numBits) :
+  ∃ z, x <<< y = ok z ∧
+  z.val = (x.val <<< y.val) % 2^ty0.numBits
+  := by
+  simp only [HShiftLeft.hShiftLeft, shiftLeft_UScalar, shiftLeft, hy, reduceIte]
+  simp only [BitVec.shiftLeft_eq, ok.injEq, _root_.exists_eq_left', val]
+  simp [ShiftLeft.shiftLeft]
+
+theorem UScalar.ShiftLeft_bv_eq {ty0 ty1} (x : UScalar ty0) (y : UScalar ty1)
+  (hy : y.val < ty0.numBits) :
+  ∃ z, x <<< y = ok z ∧ z.bv = x.bv <<< y.val
+  := by
+  simp only [HShiftLeft.hShiftLeft, shiftLeft_UScalar, shiftLeft, hy, reduceIte]
+  simp only [BitVec.shiftLeft_eq, ok.injEq, _root_.exists_eq_left', val]
+
+@[progress] theorem U8.ShiftLeft_bv_spec (x : U8) (y : UScalar ty1) (hy : y.val < 8) :
+  ∃ (z : U8), x <<< y = ok z ∧ z.bv = x.bv <<< y.val
+  := by apply UScalar.ShiftLeft_bv_eq; simp [*]
+
+@[progress] theorem U16.ShiftLeft_bv_spec (x : U16) (y : UScalar ty1) (hy : y.val < 16) :
+  ∃ (z : U16), x <<< y = ok z ∧ z.bv = x.bv <<< y.val
+  := by apply UScalar.ShiftLeft_bv_eq; simp [*]
+
+@[progress] theorem U32.ShiftLeft_bv_spec (x : U32) (y : UScalar ty1) (hy : y.val < 32) :
+  ∃ (z : U32), x <<< y = ok z ∧ z.bv = x.bv <<< y.val
+  := by apply UScalar.ShiftLeft_bv_eq; simp [*]
+
+@[progress] theorem U64.ShiftLeft_bv_spec (x : U64) (y : UScalar ty1) (hy : y.val < 64) :
+  ∃ (z : U64), x <<< y = ok z ∧ z.bv = x.bv <<< y.val
+  := by apply UScalar.ShiftLeft_bv_eq; simp [*]
+
+@[progress] theorem U128.ShiftLeft_bv_spec (x : U128) (y : UScalar ty1) (hy : y.val < 128) :
+  ∃ (z : U128), x <<< y = ok z ∧ z.bv = x.bv <<< y.val
+  := by apply UScalar.ShiftLeft_bv_eq; simp [*]
+
+@[progress] theorem Usize.ShiftLeft_bv_spec (x : Usize) (y : UScalar ty1) (hy : y.val < UScalarTy.Usize.numBits) :
+  ∃ (z : Usize), x <<< y = ok z ∧ z.bv = x.bv <<< y.val
+  := by apply UScalar.ShiftLeft_bv_eq; simp only [*]
+
+/-!
 ## Casts
 -/
 
@@ -2084,7 +2271,7 @@ theorem U32.cast_U128_val_eq (x : U32) : (UScalar.cast .U128 x).val = x.val := b
 
 @[simp, scalar_tac UScalar.cast .Usize x]
 theorem U32.cast_Usize_val_eq (x : U32) : (UScalar.cast .Usize x).val = x.val := by
-  simp [UScalar.cast_val_eq]; dcases System.Platform.numBits_eq <;> simp [*] <;> scalar_tac
+  simp [UScalar.cast_val_eq]; dcases System.Platform.numBits_eq <;> simp [*]; scalar_tac
 
 @[simp, scalar_tac UScalar.cast .U128 x]
 theorem U64.cast_U128_val_eq (x : U64) : (UScalar.cast .U128 x).val = x.val := by
