@@ -417,7 +417,7 @@ def evalProgress (args : TSyntax `Aeneas.Progress.progressArgs) : TacticM Stats 
       ScalarTac.scalarTac { split := false, splitGoal := false, fastSaturate := true }
     else
       throwError "Not a linear arithmetic goal"
-  let simpLemmas ← scalarTacSimpExt.getTheorems
+  let simpLemmas ← Aeneas.ScalarTac.scalarTacSimpExt.getTheorems
   let simpTac : TacticM Unit := do
       -- Simplify the goal
       Utils.simpAt false {} [] [simpLemmas] [] [] [] (.targets #[] true)

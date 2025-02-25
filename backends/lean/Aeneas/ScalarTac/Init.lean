@@ -2,6 +2,8 @@ import Aeneas.Extensions
 import Aesop
 open Lean Meta
 
+namespace Aeneas.ScalarTac
+
 /-!
 # Tracing
 -/
@@ -23,10 +25,6 @@ initialize scalarTacSimpExt : SimpExtension ←
 # Saturation Rules Sets
 -/
 
-namespace Aeneas
-
-namespace ScalarTac
-
 declare_aesop_rule_sets [Aeneas.ScalarTac, Aeneas.ScalarTacNonLin]
 
 -- The sets of rules that `scalar_tac` should use
@@ -45,6 +43,4 @@ def scalarTacRuleSets.set (names : List Name) : MetaM Unit := do
 def scalarTacRuleSets.add (name : Name) : MetaM Unit := do
   let _ := scalarTacRuleSets.modifyState (← getEnv) (fun ls => name :: ls)
 
-end ScalarTac
-
-end Aeneas
+end Aeneas.ScalarTac

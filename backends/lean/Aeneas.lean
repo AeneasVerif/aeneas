@@ -2,6 +2,7 @@ import Aeneas.Arith
 import Aeneas.Diverge
 import Aeneas.FSimp
 import Aeneas.List
+import Aeneas.Natify
 import Aeneas.Progress
 import Aeneas.Saturate
 import Aeneas.ScalarNF
@@ -10,3 +11,4 @@ import Aeneas.SimpLemmas
 import Aeneas.Std
 import Aeneas.Utils
 import Aeneas.Termination
+import Aeneas.Zify
