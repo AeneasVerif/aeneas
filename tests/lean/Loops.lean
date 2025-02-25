@@ -20,8 +20,8 @@ divergent def sum_loop (max : U32) (i : U32) (s : U32) : Result U32 :=
 
 /- [loops::sum]:
    Source: 'tests/src/loops.rs', lines 8:0-18:1 -/
-def sum (max : U32) : Result U32 :=
-  sum_loop max 0#u32 0#u32
+@[reducible] def sum (max : U32) : Result U32 :=
+               sum_loop max 0#u32 0#u32
 
 /- [loops::sum_with_mut_borrows]: loop 0:
    Source: 'tests/src/loops.rs', lines 26:4-31:5 -/
@@ -37,6 +37,7 @@ divergent def sum_with_mut_borrows_loop
 
 /- [loops::sum_with_mut_borrows]:
    Source: 'tests/src/loops.rs', lines 23:0-35:1 -/
+@[reducible]
 def sum_with_mut_borrows (max : U32) : Result U32 :=
   sum_with_mut_borrows_loop max 0#u32 0#u32
 
@@ -54,6 +55,7 @@ divergent def sum_with_shared_borrows_loop
 
 /- [loops::sum_with_shared_borrows]:
    Source: 'tests/src/loops.rs', lines 38:0-52:1 -/
+@[reducible]
 def sum_with_shared_borrows (max : U32) : Result U32 :=
   sum_with_shared_borrows_loop max 0#u32 0#u32
 
@@ -72,6 +74,7 @@ divergent def sum_array_loop
 
 /- [loops::sum_array]:
    Source: 'tests/src/loops.rs', lines 54:0-62:1 -/
+@[reducible]
 def sum_array {N : Usize} (a : Array U32 N) : Result U32 :=
   sum_array_loop a 0#usize 0#u32
 
@@ -93,6 +96,7 @@ divergent def clear_loop
 
 /- [loops::clear]:
    Source: 'tests/src/loops.rs', lines 66:0-72:1 -/
+@[reducible]
 def clear (v : alloc.vec.Vec U32) : Result (alloc.vec.Vec U32) :=
   clear_loop v 0#usize
 

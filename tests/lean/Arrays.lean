@@ -375,8 +375,8 @@ divergent def sum_loop (s : Slice U32) (sum1 : U32) (i : Usize) : Result U32 :=
 
 /- [arrays::sum]:
    Source: 'tests/src/arrays.rs', lines 270:0-278:1 -/
-def sum (s : Slice U32) : Result U32 :=
-  sum_loop s 0#u32 0#usize
+@[reducible] def sum (s : Slice U32) : Result U32 :=
+               sum_loop s 0#u32 0#usize
 
 /- [arrays::sum2]: loop 0:
    Source: 'tests/src/arrays.rs', lines 284:4-287:5 -/

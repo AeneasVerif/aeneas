@@ -221,6 +221,7 @@ divergent def Tree.find_loop
 
 /- [avl::{avl::Tree<T>}#3::find]:
    Source: 'src/avl.rs', lines 342:4-354:5 -/
+@[reducible]
 def Tree.find
   {T : Type} (OrdInst : Ord T) (self : Tree T) (value : T) : Result Bool :=
   Tree.find_loop OrdInst value self.root

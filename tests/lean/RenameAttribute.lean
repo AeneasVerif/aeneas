@@ -88,6 +88,7 @@ divergent def No_borrows_sum_loop
 
 /- [rename_attribute::sum]:
    Source: 'tests/src/rename_attribute.rs', lines 65:0-75:1 -/
+@[reducible]
 def No_borrows_sum (max : U32) : Result U32 :=
   No_borrows_sum_loop max 0#u32 0#u32
 

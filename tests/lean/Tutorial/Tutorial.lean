@@ -218,6 +218,7 @@ divergent def reverse_loop
 
 /- [tutorial::reverse]:
    Source: 'src/lib.rs', lines 146:0-154:1 -/
+@[reducible]
 def reverse {T : Type} (l : CList T) : Result (CList T) :=
   reverse_loop l CList.CNil
 
@@ -239,6 +240,7 @@ divergent def zero_loop
 
 /- [tutorial::zero]:
    Source: 'src/lib.rs', lines 162:0-168:1 -/
+@[reducible]
 def zero (x : alloc.vec.Vec U32) : Result (alloc.vec.Vec U32) :=
   zero_loop x 0#usize
 
@@ -265,6 +267,7 @@ divergent def add_no_overflow_loop
 
 /- [tutorial::add_no_overflow]:
    Source: 'src/lib.rs', lines 175:0-181:1 -/
+@[reducible]
 def add_no_overflow
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) :
   Result (alloc.vec.Vec U32)
@@ -302,6 +305,7 @@ divergent def add_with_carry_loop
 
 /- [tutorial::add_with_carry]:
    Source: 'src/lib.rs', lines 186:0-199:1 -/
+@[reducible]
 def add_with_carry
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) :
   Result (U8 × (alloc.vec.Vec U32))

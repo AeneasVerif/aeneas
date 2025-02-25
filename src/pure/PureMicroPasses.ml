@@ -3344,12 +3344,7 @@ let compute_reducible (_ctx : ctx) (transl : pure_fun_translation list) :
     match trans.f.body with
     | None -> trans
     | Some body -> (
-        (* Check if the body is exactly a call to a loop function.
-           Note that we check that the arguments are exactly the input
-           variables - otherwise we may not want the call to be reducible;
-           for instance when using the [progress] tactic we might want to
-           use a more specialized specification theorem. *)
-        let app, args = destruct_apps body.body in
+        let app, _ = destruct_apps body.body in
         match app.e with
         | Qualif
             {
@@ -3357,20 +3352,10 @@ let compute_reducible (_ctx : ctx) (transl : pure_fun_translation list) :
               generics = _;
             }
           when fid = FRegular trans.f.def_id ->
-            if
-              List.length body.inputs = List.length args
-              && List.for_all
-                   (fun ((var, arg) : var * texpression) ->
-                     match arg.e with
-                     | Var var_id -> var_id = var.id
-                     | _ -> false)
-                   (List.combine body.inputs args)
-            then
-              let f =
-                { trans.f with backend_attributes = { reducible = true } }
-              in
-              { trans with f }
-            else trans
+            let f =
+              { trans.f with backend_attributes = { reducible = true } }
+            in
+            { trans with f }
         | _ -> trans)
   in
   List.map update_one transl

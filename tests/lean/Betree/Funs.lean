@@ -94,6 +94,7 @@ divergent def betree.List.len_loop
 
 /- [betree::betree::{betree::betree::List<T>}#1::len]:
    Source: 'src/betree.rs', lines 276:4-284:5 -/
+@[reducible]
 def betree.List.len {T : Type} (self : betree.List T) : Result U64 :=
   betree.List.len_loop self 0#u64
 
@@ -110,6 +111,7 @@ divergent def betree.List.reverse_loop
 
 /- [betree::betree::{betree::betree::List<T>}#1::reverse]:
    Source: 'src/betree.rs', lines 304:4-312:5 -/
+@[reducible]
 def betree.List.reverse
   {T : Type} (self : betree.List T) : Result (betree.List T) :=
   betree.List.reverse_loop self betree.List.Nil
@@ -134,6 +136,7 @@ divergent def betree.List.split_at_loop
 
 /- [betree::betree::{betree::betree::List<T>}#1::split_at]:
    Source: 'src/betree.rs', lines 287:4-302:5 -/
+@[reducible]
 def betree.List.split_at
   {T : Type} (self : betree.List T) (n : U64) :
   Result ((betree.List T) × (betree.List T))
@@ -197,6 +200,7 @@ divergent def betree.ListPairU64T.partition_at_pivot_loop
 
 /- [betree::betree::{betree::betree::List<(u64, T)>}#2::partition_at_pivot]:
    Source: 'src/betree.rs', lines 355:4-370:5 -/
+@[reducible]
 def betree.ListPairU64T.partition_at_pivot
   {T : Type} (self : betree.List (U64 × T)) (pivot : U64) :
   Result ((betree.List (U64 × T)) × (betree.List (U64 × T)))

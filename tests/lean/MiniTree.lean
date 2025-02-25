@@ -33,6 +33,7 @@ divergent def Tree.explore_loop (current_tree : Option Node) : Result Unit :=
 
 /- [mini_tree::{mini_tree::Tree}::explore]:
    Source: 'tests/src/mini_tree.rs', lines 14:4-20:5 -/
+@[reducible]
 def Tree.explore (self : Tree) : Result Unit :=
   Tree.explore_loop self.root
 

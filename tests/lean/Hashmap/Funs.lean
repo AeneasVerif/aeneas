@@ -201,6 +201,7 @@ divergent def HashMap.move_elements_loop
 
 /- [hashmap::{hashmap::HashMap<T>}::move_elements]:
    Source: 'tests/src/hashmap.rs', lines 185:4-195:5 -/
+@[reducible]
 def HashMap.move_elements
   {T : Type} (ntable : HashMap T) (slots : alloc.vec.Vec (AList T)) :
   Result ((HashMap T) × (alloc.vec.Vec (AList T)))

@@ -32,6 +32,7 @@ divergent def TreeSet.find_loop
 
 /- [bst::{bst::TreeSet<T>}::find]:
    Source: 'src/bst.rs', lines 32:4-44:5 -/
+@[reducible]
 def TreeSet.find
   {T : Type} (OrdInst : Ord T) (self : TreeSet T) (value : T) : Result Bool :=
   TreeSet.find_loop OrdInst value self.root
