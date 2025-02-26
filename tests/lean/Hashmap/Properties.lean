@@ -283,37 +283,34 @@ theorem insert_in_list_spec_aux {α : Type} (l : Nat) (key: Usize) (value: α) (
     -- We need this auxiliary property to prove that the keys distinct properties is preserved
     (∀ k, k ≠ key → l0.v.allP (λ (k1, _) => k ≠ k1) → l1.v.allP (λ (k1, _) => k ≠ k1))
   := by
-  cases l0 with
-  | Nil =>
-    exists true -- TODO: why do we need to do this?
-    fsimp [insert_in_list]
+  cases l0; swap
+  . fsimp [insert_in_list]
     rw [insert_in_list_loop]
     fsimp (config := {contextual := true}) [AList.v]
-  | Cons k v tl0 =>
-     if h: k = key then
-       rw [insert_in_list]
-       rw [insert_in_list_loop]
-       fsimp [h]
-       split_conjs <;> fsimp_all [slot_s_inv_hash]
-     else
-       rw [insert_in_list]
-       rw [insert_in_list_loop]
-       fsimp [h]
-       have : slot_s_inv_hash l (hash_mod_key key l) (AList.v tl0) := by
-         fsimp_all [AList.v, slot_s_inv_hash]
-       have : distinct_keys (AList.v tl0) := by
-         fsimp [distinct_keys] at hdk
-         fsimp [hdk, distinct_keys]
-       progress as ⟨ b, tl1 ⟩
-       have : slot_s_inv_hash l (hash_mod_key key l) (AList.v (AList.Cons k v tl1)) := by
-         fsimp [AList.v, slot_s_inv_hash] at *
-         fsimp [*]
-       have : distinct_keys ((k, v) :: AList.v tl1) := by
-         fsimp [distinct_keys] at *
-         fsimp [*]
-       -- TODO: canonize addition by default?
-       exists b
-       simp_all [Int.add_assoc, Int.add_comm, Int.add_left_comm]
+  . rename_i k v tl0
+    if h: k = key then
+      rw [insert_in_list]
+      rw [insert_in_list_loop]
+      fsimp [h]
+      split_conjs <;> fsimp_all [slot_s_inv_hash]
+    else
+      rw [insert_in_list]
+      rw [insert_in_list_loop]
+      fsimp [h]
+      have : slot_s_inv_hash l (hash_mod_key key l) (AList.v tl0) := by
+        fsimp_all [AList.v, slot_s_inv_hash]
+      have : distinct_keys (AList.v tl0) := by
+        fsimp [distinct_keys] at hdk
+        fsimp [hdk, distinct_keys]
+      progress as ⟨ b, tl1 ⟩
+      have : slot_s_inv_hash l (hash_mod_key key l) (AList.v (AList.Cons k v tl1)) := by
+        fsimp [AList.v, slot_s_inv_hash] at *
+        fsimp [*]
+      have : distinct_keys ((k, v) :: AList.v tl1) := by
+        fsimp [distinct_keys] at *
+        fsimp [*]
+      -- TODO: canonize addition by default?
+      simp_all [Int.add_assoc, Int.add_comm, Int.add_left_comm]
 
 @[progress]
 theorem insert_in_list_spec {α : Type} (l : Nat) (key: Usize) (value: α) (l0: AList α)
