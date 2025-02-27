@@ -1044,15 +1044,19 @@ partial def minimizeGoal : TacticM Unit := do
      We do this recursively until we reach a fixed-point. -/
   let ctx ← Lean.MonadLCtx.getLCtx
   let decls ← ctx.getDecls
+  let declsFVarIds := Std.HashSet.ofList (decls.map (fun d => d.fvarId))
   /- -/
   let mut changed := true
   let mut neededIds := goalFVarIds
+  -- We need to filter the variables: some of them might come from quantifiers
+  neededIds := neededIds.filter (fun x => x ∈ declsFVarIds)
   let mut exploredIds : Std.HashSet FVarId := Std.HashSet.empty
   while changed do
     changed := false
     for decl in decls do
       /- Shortcut: do not re-explore the already explored ids -/
       if decl.fvarId ∉ exploredIds then
+        trace[Utils] "Exploring: {decl.userName}"
         exploredIds := exploredIds.insert decl.fvarId
         /- Explore the type and the body: if they contain needed ids, add it -/
         let mut declIds ← getFVarIds decl.type
@@ -1060,17 +1064,21 @@ partial def minimizeGoal : TacticM Unit := do
         | none => pure ()
         | some value =>
           declIds := declIds.union (← getFVarIds value)
+        declIds := declIds.filter (fun x => x ∈ declsFVarIds)
+        trace[Utils] "declIds: {← declIds.toArray.mapM (fun x => x.getUserName)}"
         let mut inter := false
         for x in declIds do
           if x ∈ neededIds then
             inter := true
             break
-        /- Check if there is an intersection betwee -/
+        /- Check if there is an intersection -/
         if inter then
           neededIds := neededIds.insert decl.fvarId
           neededIds := neededIds.union declIds
           changed := true
+  trace[Utils] "Done exploring the context"
   /- Clear all the fvars which were not listed -/
+  trace[Utils] "neededIds: {← neededIds.toArray.mapM (fun x => x.getUserName)}"
   let allIds ← getFVarIdsAt goal
   let allIds := allIds.filter (fun x => x ∉ neededIds)
   clearFvarIds allIds

@@ -240,13 +240,13 @@ divergent def list_nth (T : Type) (l : CList T) (i : U32) : Result T :=
 
 /- Conversion to Lean's standard list type.
 
-   Note that because we use the suffix "CList.", we can use the notation [l.to_list]
+   Note that because we use the suffix "CList.", we can use the notation [l.toList]
    if [l] has type [CList ...].
  -/
-def CList.to_list {α : Type} (x : CList α) : List α :=
+def CList.toList {α : Type} (x : CList α) : List α :=
   match x with
   | CNil => []
-  | CCons hd tl => hd :: tl.to_list
+  | CCons hd tl => hd :: tl.toList
 
 /- Let's prove that [list_nth] indeed accesses the ith element of the list.
 
@@ -263,11 +263,11 @@ def CList.to_list {α : Type} (x : CList α) : List α :=
  -/
 theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   -- Precondition: the index is in bounds
-  (h : i.val < l.to_list.length)
+  (h : i.val < l.toList.length)
   -- Postcondition
   : ∃ x, list_nth T l i = ok x ∧
   -- [x] is the ith element of [l] after conversion to [List]
-  x = l.to_list.index i.val
+  x = l.toList[i.val]
   := by
   -- Here we have to be careful when unfolding the body of [list_nth]: we could
   -- use the [simp] tactic, but it will sometimes loop on recursive definitions.
@@ -276,10 +276,10 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   match l with
   | CNil =>
     -- We can't get there: we can derive a contradiction from the precondition:
-    -- we have that [i < 0] (because [i < CNil.to_list.len]) and at the same
+    -- we have that [i < 0] (because [i < CNil.toList.len]) and at the same
     -- time [0 ≤ i] (because [i] is a [U32] unsigned integer).
-    -- First, let's simplify [to_list CNil] to [0]
-    simp [CList.to_list] at h
+    -- First, let's simplify [toList CNil] to [0]
+    simp [CList.toList] at h
   | CCons hd tl =>
     -- Simplify the match
     simp only []
@@ -294,7 +294,7 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
       -- Simplify the condition and the [if then else]
       simp [hi]
       -- Prove the final equality
-      simp [CList.to_list]
+      simp [CList.toList]
     else
       -- The interesting branch
       -- Simplify the condition and the [if then else]
@@ -302,10 +302,10 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
       -- i0 := i - 1
       progress as ⟨ i1, hi1 ⟩
       -- [progress] can handle recursion
-      simp [CList.to_list] at h -- we need to simplify this inequality to prove the precondition
+      simp [CList.toList] at h -- we need to simplify this inequality to prove the precondition
       progress as ⟨ l1 ⟩
       -- Proving the postcondition
-      -- We need this to trigger the simplification of [index to.to_list i.val]
+      -- We need this to trigger the simplification of [index to.toList i.val]
       --
       -- Among other things, the call to [simp] below will apply the theorem
       -- [List.index_nzero_cons], which has the precondition [i.val ≠ 0]. [simp]
@@ -315,7 +315,7 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
       -- to perform rewritings. In particular, it will use [i.val ≠ 0] to
       -- apply [List.index_nzero_cons].
       have : i.val ≠ 0 := by scalar_tac -- Remark: [simp at hi] also works
-      simp [CList.to_list, *]
+      simp [CList.toList, *]
 
 /-#===========================================================================#
   #

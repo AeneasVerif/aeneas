@@ -60,7 +60,7 @@ theorem mul2_add1_add_spec (x : U32) (y : U32) (h : 2 * x.val + 1 + y.val ≤ U3
 
 /- [tutorial::CList]
    Source: 'src/lib.rs', lines 32:0-32:17 -/
-inductive CList (T : Type) :=
+inductive CList (T : Type) where
 | CCons : T → CList T → CList T
 | CNil : CList T
 
@@ -92,7 +92,7 @@ divergent def list_nth {T : Type} (l : CList T) (i : U32) : Result T :=
 theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
   ∃ x, list_nth l i = ok x ∧
-  x = l.toList.index i.val
+  x = l.toList[i.val]!
   := by
   rw [list_nth]
   split
@@ -375,32 +375,38 @@ set_option pp.coercions true
    Small preparation for theorem `list_nth_mut1`.
  -/
 
+/- The notation `l[i]!` stands for `getElem! l`, and is the `i`th element of list `l`.
+
+   We deactivate the simp lemma below as it replaces terms of the shape `l[i]!` with more
+   complicated terms: in the present case it is more annoying than anything. -/
+attribute [-simp] List.getElem!_eq_getElem?_getD
+
 /- Reasoning about `List.index`.
 
    You can use the following two lemmas.
  -/
-#check List.index_zero_cons
-#check List.index_nzero_cons
+#check List.getElem!_cons_zero
+#check List.getElem!_cons_nzero
 
 /- Example 1: indexing the first element of the list -/
 example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
   (hEq : i = 0#u32) :
-  (hd :: tl.toList).index i.val = hd := by
+  (hd :: tl.toList)[i.val]! = hd := by
   have hi : i.val = 0 := by scalar_tac
   simp only [hi]
   --
-  have hIndex := List.index_zero_cons hd tl.toList
+  have hIndex := @List.getElem!_cons_zero _ hd _ tl.toList
   simp only [hIndex]
 
 /- Example 2: indexing in the tail -/
 example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
   (hEq : i ≠ 0#u32) :
-  (hd :: tl.toList).index i.val = tl.toList.index (i.val - 1) := by
+  (hd :: tl.toList)[i.val]! = tl.toList[i.val - 1]! := by
   -- Note that `scalar_tac` is aware of `Arith.Nat.not_eq`
-  have hIndex := List.index_nzero_cons hd tl.toList i.val (by scalar_tac)
+  have hIndex := List.getElem!_cons_nzero hd tl.toList i.val (by scalar_tac)
   simp only [hIndex]
 
-/- Note that `List.index_zero_cons` and `List.index_nzero_cons` have been
+/- Note that `List.index_zero_cons` and `List.index_cons_nzero` have been
    marked as `@[simp]` and are thus automatically applied. Also note
    that `simp` can automatically prove the premises of rewriting lemmas,
    if it has enough information.
@@ -409,14 +415,14 @@ example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
    you expect. -/
 example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
   (hEq : i = 0#u32) :
-  (hd :: tl.toList).index i.val = hd := by
+  (hd :: tl.toList)[i.val]! = hd := by
   simp [hEq]
 
-/- Note that `simp_all` manages to automatically apply `List.index_nzero_cons` below,
+/- Note that `simp_all` manages to automatically apply `List.index_cons_nzero` below,
    by using the fact that `i ≠ 0#u32`. -/
 example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
   (hEq : i ≠ 0#u32) :
-  (hd :: tl.toList).index i.val = tl.toList.index (i.val - 1) := by
+  (hd :: tl.toList)[i.val]! = tl.toList[i.val - 1]! := by
   simp_all
 
 /- Below, you will need to reason about `List.update`.
@@ -425,8 +431,8 @@ example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
    Those lemmas have been marked as `@[simp]`, meaning that if `simp` is properly used,
    it will manage to apply them automatically.
  -/
-#check List.update_zero_cons
-#check List.update_nzero_cons
+#check List.set_cons_zero
+#check List.set_cons_nzero
 
 /- # Some proofs of programs -/
 
@@ -451,9 +457,9 @@ example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
 theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
   ∃ x back, list_nth_mut1 l i = ok (x, back) ∧
-  x = l.toList.index i.val ∧
+  x = l.toList[i.val]! ∧
   -- Specification of the backward function
-  ∀ x', (back x').toList = l.toList.update i.val x' := by
+  ∀ x', (back x').toList = l.toList.set i.val x' := by
   rw [list_nth_mut1, list_nth_mut1_loop]
   sorry
 
@@ -589,8 +595,8 @@ theorem zero_loop_spec
   ∃ x',
     zero_loop x i = ok x' ∧
     x'.length = x.length ∧
-    (∀ j, j < i.val → x'.val.index j = x.val.index j) ∧
-    (∀ j, i.val ≤ j → j < x.length → x'.val.index j = 0#u32) := by
+    (∀ j, j < i.val → x'[j]! = x[j]!) ∧
+    (∀ j, i.val ≤ j → j < x.length → x'[j]! = 0#u32) := by
   rw [zero_loop]
   simp
   sorry
@@ -605,7 +611,7 @@ def zero (x : alloc.vec.Vec U32) : Result (alloc.vec.Vec U32) :=
     Advice: do the proof of `zero_spec` first, then come back to prove this lemma.
 -/
 theorem all_nil_impl_toInt_eq_zero
-  (l : List U32) (h : ∀ (j : ℕ), j < l.length → l.index j = 0#u32) :
+  (l : List U32) (h : ∀ (j : ℕ), j < l.length → l[j]! = 0#u32) :
   toInt l = 0 := by
   /- There are two ways of proving this theorem.
 
@@ -671,7 +677,7 @@ divergent def add_no_overflow_loop
  -/
 @[simp]
 theorem toInt_drop (l : List U32) (i : Nat) (h0 : i < l.length) :
-  toInt (l.drop i) = l.index i + 2 ^ 32 * toInt (l.drop (i + 1)) := by
+  toInt (l.drop i) = l[i]! + 2 ^ 32 * toInt (l.drop (i + 1)) := by
   sorry
 
 /-- You will need this lemma for the proof of `add_no_overflow_loop_spec`.
@@ -689,7 +695,7 @@ theorem toInt_drop (l : List U32) (i : Nat) (h0 : i < l.length) :
  -/
 @[simp]
 theorem toInt_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) :
-  toInt (l.update i x) = toInt l + 2 ^ (32 * i) * (x - l.index i) := by
+  toInt (l.set i x) = toInt l + 2 ^ (32 * i) * (x - l[i]!) := by
   sorry
 
 /-- The proof about `add_no_overflow_loop`.
@@ -702,7 +708,7 @@ theorem add_no_overflow_loop_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (i : Usize)
   (hLength : x.length = y.length)
   -- No overflow occurs when we add the individual thunks
-  (hNoOverflow : ∀ (j : Nat), i.val ≤ j → j < x.length → (x.val.index j).val + (y.val.index j).val ≤ U32.max)
+  (hNoOverflow : ∀ (j : Nat), i.val ≤ j → j < x.length → x[j]!.val + y[j]!.val ≤ U32.max)
   (hi : i.val ≤ x.length) :
   ∃ x', add_no_overflow_loop x y i = ok x' ∧
   x'.length = x.length ∧
@@ -722,7 +728,7 @@ def add_no_overflow
 /-- The proof about `add_no_overflow` -/
 theorem add_no_overflow_spec (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
   (hLength : x.length = y.length)
-  (hNoOverflow : ∀ (j : Nat), j < x.length → (x.val.index j).val + (y.val.index j).val ≤ U32.max) :
+  (hNoOverflow : ∀ (j : Nat), j < x.length → x[j]!.val + y[j]!.val ≤ U32.max) :
   ∃ x', add_no_overflow x y = ok x' ∧
   x'.length = y.length ∧
   toInt x' = toInt x + toInt y := by

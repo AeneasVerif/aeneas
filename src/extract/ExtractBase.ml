@@ -1242,8 +1242,8 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (Return, "return");
         (Fail, "fail_");
         (Assert, "massert");
-        (UpdateAtIndex Slice, "Slice.update_usize");
-        (UpdateAtIndex Array, "Array.update_usize");
+        (UpdateAtIndex Slice, "Slice.update");
+        (UpdateAtIndex Array, "Array.update");
         (ToResult, "↑");
       ]
   | HOL4 ->

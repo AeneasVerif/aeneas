@@ -523,16 +523,16 @@ namespace Test
      `α : Type u` where u is quantified, while here we use `α : Type 0` -/
   example {α : Type} (v: Vec α) (i: Usize) (x : α)
     (hbounds : i.val < v.length) :
-    ∃ nv, v.update_usize i x = ok nv ∧
-    nv.val = v.val.update i.val x := by
+    ∃ nv, v.update i x = ok nv ∧
+    nv.val = v.val.set i.val x := by
     progress
     simp [*]
 
   example {α : Type} (v: Vec α) (i: Usize) (x : α)
     (hbounds : i.val < v.length) :
-    ∃ nv, v.update_usize i x = ok nv ∧
-    nv.val = v.val.update i.val x := by
-    progress? says progress with Aeneas.Std.alloc.vec.Vec.update_usize_spec
+    ∃ nv, v.update i x = ok nv ∧
+    nv.val = v.val.set i.val x := by
+    progress? says progress with Aeneas.Std.alloc.vec.Vec.update_spec
     simp [*]
 
   /- Checking that progress can handle nested blocks -/
@@ -541,7 +541,7 @@ namespace Test
     ∃ nv,
       (do
          (do
-            let _ ← v.update_usize i x
+            let _ ← v.update i x
             .ok ())
          .ok ()) = ok nv
       := by

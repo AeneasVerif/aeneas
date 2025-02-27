@@ -163,7 +163,7 @@ def update_update_array
   :=
   do
   let (a, index_mut_back) ← Array.index_mut_usize s i
-  let a1 ← Array.update_usize a j 0#u32
+  let a1 ← Array.update a j 0#u32
   ok (index_mut_back a1)
 
 /- [arrays::array_local_deep_copy]:
@@ -177,26 +177,26 @@ def array_update1 (a : Slice U32) (i : Usize) (x : U32) : Result (Slice U32) :=
   do
   let i1 ← i + 1#usize
   let i2 ← x + 1#u32
-  Slice.update_usize a i1 i2
+  Slice.update a i1 i2
 
 /- [arrays::array_update2]:
    Source: 'tests/src/arrays.rs', lines 131:0-134:1 -/
 def array_update2 (a : Slice U32) (i : Usize) (x : U32) : Result (Slice U32) :=
   do
   let i1 ← x + 1#u32
-  let a1 ← Slice.update_usize a i i1
+  let a1 ← Slice.update a i i1
   let i2 ← i + 1#usize
-  Slice.update_usize a1 i2 i1
+  Slice.update a1 i2 i1
 
 /- [arrays::array_update3]:
    Source: 'tests/src/arrays.rs', lines 136:0-140:1 -/
 def array_update3 (a : Slice U32) (i : Usize) (x : U32) : Result (Slice U32) :=
   do
-  let a1 ← Slice.update_usize a i x
+  let a1 ← Slice.update a i x
   let i1 ← i + 1#usize
-  let a2 ← Slice.update_usize a1 i1 x
+  let a2 ← Slice.update a1 i1 x
   let i2 ← i + 2#usize
-  Slice.update_usize a2 i2 x
+  Slice.update a2 i2 x
 
 /- [arrays::take_array]:
    Source: 'tests/src/arrays.rs', lines 142:0-142:33 -/
@@ -291,12 +291,12 @@ def update_array (x : Array U32 2#usize) : Result Unit :=
    Source: 'tests/src/arrays.rs', lines 207:0-209:1 -/
 def update_array_mut_borrow
   (x : Array U32 2#usize) : Result (Array U32 2#usize) :=
-  Array.update_usize x 0#usize 1#u32
+  Array.update x 0#usize 1#u32
 
 /- [arrays::update_mut_slice]:
    Source: 'tests/src/arrays.rs', lines 210:0-212:1 -/
 def update_mut_slice (x : Slice U32) : Result (Slice U32) :=
-  Slice.update_usize x 0#usize 1#u32
+  Slice.update x 0#usize 1#u32
 
 /- [arrays::update_all]:
    Source: 'tests/src/arrays.rs', lines 214:0-220:1 -/
@@ -315,7 +315,7 @@ def incr_array (x : Array U32 2#usize) : Result (Array U32 2#usize) :=
   do
   let i ← Array.index_usize x 0#usize
   let i1 ← i + 1#u32
-  Array.update_usize x 0#usize i1
+  Array.update x 0#usize i1
 
 /- [arrays::incr_slice]:
    Source: 'tests/src/arrays.rs', lines 226:0-228:1 -/
@@ -323,7 +323,7 @@ def incr_slice (x : Slice U32) : Result (Slice U32) :=
   do
   let i ← Slice.index_usize x 0#usize
   let i1 ← i + 1#u32
-  Slice.update_usize x 0#usize i1
+  Slice.update x 0#usize i1
 
 /- [arrays::range_all]:
    Source: 'tests/src/arrays.rs', lines 233:0-237:1 -/
@@ -467,7 +467,7 @@ divergent def zero_slice_loop
   if i < len
   then
     do
-    let a1 ← Slice.update_usize a i 0#u8
+    let a1 ← Slice.update a i 0#u8
     let i1 ← i + 1#usize
     zero_slice_loop a1 i1 len
   else ok a

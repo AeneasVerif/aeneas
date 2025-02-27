@@ -48,6 +48,7 @@ inductive Error where
    | arrayOutOfBounds: Error
    | maximumSizeExceeded: Error
    | panic: Error
+   | undef: Error
 deriving Repr, BEq
 
 open Error

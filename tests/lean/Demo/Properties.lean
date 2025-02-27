@@ -27,15 +27,15 @@ theorem use_mul2_add1_spec (x : U32) (y : U32) (h : 2 * x + 1 + y ≤ (U32.max :
 
 open CList
 
-@[simp] def CList.to_list {α : Type} (x : CList α) : List α :=
+@[simp] def CList.toList {α : Type} (x : CList α) : List α :=
   match x with
   | CNil => []
-  | CCons hd tl => hd :: tl.to_list
+  | CCons hd tl => hd :: tl.toList
 
 theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
-  (h : i.val < l.to_list.length) :
+  (h : i.val < l.toList.length) :
   ∃ x, list_nth l i = ok x ∧
-  x = l.to_list.index i.val
+  x = l.toList[i.val]!
   := by
   rw [list_nth]
   match l with
@@ -65,7 +65,7 @@ decreasing_by simp_wf; scalar_tac
 
 theorem list_tail_spec {T : Type} [Inhabited T] (l : CList T) :
   ∃ back, list_tail l = ok (CList.CNil, back) ∧
-  ∀ tl', ∃ l', back tl' = l' ∧ l'.to_list = l.to_list ++ tl'.to_list := by
+  ∀ tl', ∃ l', back tl' = l' ∧ l'.toList = l.toList ++ tl'.toList := by
   rw [list_tail]
   match l with
   | CNil =>

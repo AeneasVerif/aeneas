@@ -1,5 +1,6 @@
 /- Complementary functions and lemmas for the `List` type -/
 
+import Mathlib.Data.List.GetD
 import Aeneas.ScalarTac
 import Aeneas.Utils
 import Aeneas.SimpLemmas
@@ -10,56 +11,17 @@ open Aeneas
 open Aeneas.ScalarTac
 open Aeneas.Simp
 
-attribute [scalar_tac_simp] List.length_append List.length_nil
+attribute [scalar_tac_simp] List.length_nil List.length_cons List.length_append List.length_reverse
+                            List.get!_eq_getElem! List.get?_eq_getElem?
 
-def indexOpt (ls : List α) (i : Nat) : Option α :=
-  match ls with
-  | [] => none
-  | hd :: tl => if i = 0 then some hd else indexOpt tl (i - 1)
+def set_opt (l : List α) (i : Nat) (x : Option α) : List α :=
+  match l with
+  | [] => l
+  | hd :: tl => if i = 0 then Option.getD x hd :: tl else hd :: set_opt tl (i-1) x
 
-@[simp] theorem indexOpt_nil : indexOpt ([] : List α) i = none := by simp [indexOpt]
-@[simp] theorem indexOpt_zero_cons : indexOpt ((x :: tl) : List α) 0 = some x := by simp [indexOpt]
-@[simp] theorem indexOpt_nzero_cons (hne : Nat.not_eq i 0) : indexOpt ((x :: tl) : List α) i = indexOpt tl (i - 1) := by simp [indexOpt]; intro; simp_all
-
-def index [Inhabited α] (ls : List α) (i : Nat) : α :=
-  match ls with
-  | [] => Inhabited.default
-  | x :: tl =>
-    if i = 0 then x else index tl (i - 1)
-
-@[simp] theorem index_nil [Inhabited α] : @index α _ [] i = Inhabited.default := by simp [index]
-@[simp] theorem index_zero_cons (x : α) (tl : List α) [Inhabited α] : index ((x :: tl) : List α) 0 = x := by simp [index]
-@[simp] theorem index_nzero_cons (x : α) (tl : List α) (i : Nat) [Inhabited α] (hne : Nat.not_eq i 0) : index ((x :: tl) : List α) i = index tl (i - 1) := by simp [index]; intro; simp_all
-
-theorem indexOpt_bounds (ls : List α) (i : Nat) :
-  ls.indexOpt i = none ↔ i < 0 ∨ ls.length ≤ i := by
-  match ls with
-  | [] => simp
-  | _ :: tl =>
-    have := indexOpt_bounds tl (i - 1)
-    if h: i = 0 then simp [*]
-    else
-      simp [*]
-      omega
-
-theorem indexOpt_eq_index [Inhabited α] (ls : List α) (i : Nat) :
-  i < ls.length →
-  ls.indexOpt i = some (ls.index i) :=
-  match ls with
-  | [] => by simp
-  | hd :: tl =>
-    if h: i = 0 then
-      by simp [*]
-    else by
-      have hi := indexOpt_eq_index tl (i - 1)
-      simp [*]; intros
-      apply hi; scalar_tac
-
--- Remark: the list is unchanged if the index is not in bounds
-def update (ls : List α) (i : Nat) (y : α) : List α :=
-  match ls with
-  | [] => []
-  | x :: tl => if i = 0 then y :: tl else x :: update tl (i - 1) y
+attribute [simp] getElem?_cons_zero getElem!_cons_zero
+@[simp] theorem getElem?_cons_nzero (hne : Nat.not_eq i 0) : getElem? ((x :: tl) : List α) i = getElem? tl (i - 1) := by cases i <;> simp_all
+@[simp] theorem getElem!_cons_nzero (x : α) (tl : List α) (i : Nat) [Inhabited α] (hne : Nat.not_eq i 0) : getElem! ((x :: tl) : List α) i = getElem! tl (i - 1) := by cases i <;> simp_all
 
 def slice (start end_ : Nat) (ls : List α) : List α :=
   (ls.drop start).take (end_ - start)
@@ -87,22 +49,24 @@ def resize (l : List α) (new_len : Nat) (x : α) : List α :=
     l.take new_len ++ replicate (new_len - l.length) x
   else []
 
-@[simp] theorem update_nil i y : update ([] : List α) i y = [] := by simp [update]
-@[simp] theorem update_zero_cons x tl y : update ((x :: tl) : List α) 0 y = y :: tl := by simp [update]
-@[simp] theorem update_nzero_cons x tl i y (hne : Nat.not_eq i 0) : update ((x :: tl) : List α) i y = x :: update tl (i - 1) y := by simp [update]; intro; simp_all
+@[simp] theorem set_cons_nzero x tl i (hne : Nat.not_eq i 0) y : set ((x :: tl) : List α) i y = x :: set tl (i - 1) y := by cases i <;> simp_all
 
-@[simp] theorem drop_nzero_cons i x tl (hne : Nat.not_eq i 0) : drop i ((x :: tl) : List α) = drop (i - 1) tl := by cases i <;> simp_all [drop]
+@[simp] theorem drop_cons_nzero i x tl (hne : Nat.not_eq i 0) : drop i ((x :: tl) : List α) = drop (i - 1) tl := by cases i <;> simp_all [drop]
 
-@[simp] theorem take_nzero_cons i x tl (hne : Nat.not_eq i 0) : take i ((x :: tl) : List α) = x :: take (i - 1) tl := by cases i <;> simp_all
+@[simp] theorem take_cons_nzero i x tl (hne : Nat.not_eq i 0) : take i ((x :: tl) : List α) = x :: take (i - 1) tl := by cases i <;> simp_all
 
 @[simp] theorem slice_nil i j : slice i j ([] : List α) = [] := by simp [slice]
 @[simp] theorem slice_zero ls : slice 0 0 (ls : List α) = [] := by cases ls <;> simp [slice]
 
-@[simp] theorem replicate_nzero_cons i (x : List α) (hne : Nat.not_eq i 0) : replicate i x = x :: replicate (i - 1) x := by
+@[simp] theorem replicate_cons_nzero i (x : List α) (hne : Nat.not_eq i 0) : replicate i x = x :: replicate (i - 1) x := by
   cases i <;> simp_all [replicate]
 
+@[simp] theorem set_opt_nil i y : set_opt ([] : List α) i y = [] := by simp [set_opt]
+@[simp] theorem set_opt_zero_cons x tl y : set_opt ((x :: tl) : List α) 0 y = y.getD x :: tl := by simp [set_opt]
+@[simp] theorem set_opt_cons_nzero x tl i y (hne : Nat.not_eq i 0) : set_opt ((x :: tl) : List α) i y = x :: set_opt tl (i - 1) y := by simp [set_opt]; intro; simp_all
+
 @[simp]
-theorem slice_nzero_cons (i j : Nat) (x : α) (tl : List α) (hne : Nat.not_eq i 0) :
+theorem slice_cons_nzero (i j : Nat) (x : α) (tl : List α) (hne : Nat.not_eq i 0) :
   slice i j ((x :: tl) : List α) = slice (i - 1) (j - 1) tl := by
   apply Nat.not_eq_imp_not_eq at hne
   induction i <;> cases j <;> simp_all [slice]
@@ -112,11 +76,24 @@ theorem replicate_length {α : Type u} (l : Nat) (x : α) :
   (replicate l x).length = l := by
   induction l <;> simp_all
 
+@[simp]
+theorem set_getElem! {α} [Inhabited α] (l : List α) (i : Nat) :
+  l.set i l[i]! = l := by
+  revert i; induction l <;> simp_all
+  rename_i hd tail hi
+  intro i
+  cases i <;> simp_all
+
+attribute [scalar_tac_simp] length_set
+
 @[simp, scalar_tac_simp]
-theorem length_update (ls : List α) (i : Nat) (x : α) : (ls.update i x).length = ls.length := by
+theorem length_set_opt {α} (l : List α) (i : Nat) (x : Option α):
+  (l.set_opt i x).length = l.length := by
   revert i
-  induction ls <;> simp_all [length, update]
-  intro; split <;> simp [*]
+  induction l <;> simp_all
+  rename_i hd tl hi
+  intro i
+  cases i <;> simp_all
 
 theorem left_length_eq_append_eq (l1 l2 l1' l2' : List α) (heq : l1.length = l1'.length) :
   l1 ++ l2 = l1' ++ l2' ↔ l1 = l1' ∧ l2 = l2' := by
@@ -133,33 +110,22 @@ theorem right_length_eq_append_eq (l1 l2 l1' l2' : List α) (heq : l2.length = l
     have : (l1 ++ l2).length = (l1' ++ l2').length := by simp [*]
     simp only [length_append] at this
     apply this
-  . simp [heq] at this
+  . simp only [heq, add_left_inj] at this
     tauto
   . tauto
 
 @[simp]
-theorem index_append_beg [Inhabited α] (i : Nat) (l0 l1 : List α) (_ : i < l0.length) :
-  (l0 ++ l1).index i = l0.index i := by
-  match l0 with
-  | [] => simp_all
-  | hd :: tl =>
-    if hi : i = 0 then simp_all
-    else
-      have := index_append_beg (i - 1) tl l1 (by simp_all; scalar_tac)
-      simp_all
+theorem getElem!_append_left [Inhabited α] (l0 l1 : List α) (i : Nat) (h : i < l0.length) :
+  (l0 ++ l1)[i]! = l0[i]! := by
+  have := @getElem?_append_left _ l0 l1 i h
+  simp_all
 
 @[simp]
-theorem index_append_end [Inhabited α] (i : Nat) (l0 l1 : List α)
-  (_ : l0.length ≤ i) :
-  (l0 ++ l1).index i = l1.index (i - l0.length) :=
-  match l0 with
-  | [] => by simp_all
-  | hd :: tl =>
-    have : ¬ i = 0 := by simp_all; scalar_tac
-    have := index_append_end (i - 1) tl l1 (by simp_all; scalar_tac)
-    -- TODO: canonize arith expressions
-    have : i - 1 - length tl = i - (1 + length tl) := by scalar_tac
-    by simp_all; ring_nf
+theorem getElem!_append_right [Inhabited α] (l0 l1 : List α) (i : Nat)
+  (h : l0.length ≤ i) :
+  (l0 ++ l1)[i]! = l1[i - l0.length]! := by
+  have := @getElem?_append_right _ l0 l1 i h
+  simp_all
 
 @[scalar_tac_simp]
 theorem drop_length_is_le (i : Nat) (ls : List α) : (ls.drop i).length ≤ ls.length :=
@@ -169,12 +135,10 @@ theorem drop_length_is_le (i : Nat) (ls : List α) : (ls.drop i).length ≤ ls.l
     if h: i = 0 then by simp [*]
     else
       have := drop_length_is_le (i - 1) tl
-      by simp [*]; omega
+      by simp only [Nat.not_eq, ne_eq, not_false_eq_true, neq_imp, not_lt_zero', false_or, true_or,
+        or_self, drop_cons_nzero, length_drop, length_cons, tsub_le_iff_right, h]; omega
 
-@[simp, scalar_tac_simp]
-theorem length_drop_eq (i : Nat) (ls : List α) :
-  (ls.drop i).length = ls.length - i := by
-  induction ls <;> simp_all
+attribute [scalar_tac_simp] length_drop
 
 @[scalar_tac_simp]
 theorem take_length_is_le (i : Nat) (ls : List α) : (ls.take i).length ≤ ls.length := by
@@ -193,92 +157,95 @@ theorem resize_length (l : List α) (new_len : Nat) (x : α) :
 theorem slice_length_le (i j : Nat) (ls : List α) : (ls.slice i j).length ≤ ls.length := by
   simp [slice]
 
+@[scalar_tac_simp]
 theorem slice_length (i j : Nat) (ls : List α) : (ls.slice i j).length = min (ls.length - i) (j - i) := by
   simp [slice]; scalar_tac
 
 @[simp]
-theorem index_drop [Inhabited α] (i : Nat) (j : Nat) (ls : List α) :
-  (ls.drop i).index j = ls.index (i + j) := by
-  revert i
-  induction ls
-  . intro i; simp_all
-  . intro i; cases i <;> simp_all
-
-@[simp]
-theorem index_take_same [Inhabited α] (i : Nat) (j : Nat) (ls : List α)
-  (_ : j < i) (_ : j < ls.length) :
-  (ls.take i).index j = ls.index j := by
-  revert i j
-  induction ls
-  . intro i j; simp_all
-  . intro i j h0 h1; cases i <;> simp_all
-    cases j <;> simp_all
-
-@[simp]
-theorem index_slice [Inhabited α] (i j k : Nat) (ls : List α)
+theorem getElem?_slice (i j k : Nat) (ls : List α)
   (_ : j ≤ ls.length) (_ : i + k < j) :
-  (ls.slice i j).index k = ls.index (i + k) := by
+  (ls.slice i j)[k]? = ls[i + k]? := by
   revert i j
   induction ls
   . intro i j; simp_all
   . intro i j h0 h1
     simp_all [slice]
-    rw [index_take_same] <;> first | simp_all | scalar_tac
-    scalar_tac
+    have : k < j - i := by scalar_tac
+    simp [*]
 
 @[simp]
-theorem index_take_append_beg [Inhabited α] (i j : Nat) (l0 l1 : List α)
+theorem getElem!_slice [Inhabited α] (i j k : Nat) (ls : List α)
+  (_ : j ≤ ls.length) (_ : i + k < j) :
+  (ls.slice i j)[k]! = ls[i + k]! := by
+  have := getElem?_slice i j k ls
+  simp_all
+
+@[simp]
+theorem getElem?_take_append_beg (i j : Nat) (l0 l1 : List α)
   (_ : j < i) (_ : i ≤ l0.length) :
-  ((l0 ++ l1).take i).index j = l0.index j := by
+  getElem? ((l0 ++ l1).take i) j = getElem? l0 j := by
   revert i j l1
   induction l0 <;> simp_all
   intros i j l1
   cases i <;> simp_all
   cases j <;> simp_all
+  rename_i tail hi n n1
+  intros
+  have : n1 < tail.length := by scalar_tac
+  rw [hi n] <;> simp [*]
 
 @[simp]
-theorem index_update_neq
-  {α : Type u} [Inhabited α] (l: List α) (i: Nat) (j: Nat) (x: α) :
-   Nat.not_eq i j → (l.update i x).index j = l.index j
-  :=
-  λ _ => match l with
-  | [] => by simp at *
-  | hd :: tl =>
-    if h: i = 0 then
-      have : j ≠ 0 := by scalar_tac
-      by simp [*]
-    else if h : j = 0 then
-      have : i ≠ 0 := by scalar_tac
-      by simp [*]
-    else
-      by
-        simp_all
-        apply index_update_neq; scalar_tac
+theorem getElem!_take_append_beg [Inhabited α] (i j : Nat) (l0 l1 : List α)
+  (_ : j < i) (_ : i ≤ l0.length) :
+  getElem! ((l0 ++ l1).take i) j = getElem! l0 j := by
+  have := getElem?_take_append_beg i j l0 l1
+  simp_all
 
 @[simp]
-theorem index_update_eq
-  {α : Type u} [Inhabited α] (l: List α) (i: Nat) (x: α) :
-  i < l.length → (l.update i x).index i = x
+theorem getElem!_drop [Inhabited α] (i : Nat) (j : Nat) (ls : List α) :
+  getElem! (ls.drop i) j = getElem! ls (i + j) := by
+  have := @getElem?_drop _ ls i j
+  simp_all
+
+@[simp]
+theorem getElem?_take_same (i : Nat) (j : Nat) (ls : List α)
+  (_ : j < i) (_ : j < ls.length) :
+  getElem? (ls.take i) j = getElem? ls j := by
+  simp [getElem?_take, *]
+
+@[simp]
+theorem getElem!_take_same [Inhabited α] (i : Nat) (j : Nat) (ls : List α)
+  (_ : j < i) (_ : j < ls.length) :
+  getElem! (ls.take i) j = getElem! ls j := by
+  simp [getElem?_take_same, *]
+
+@[simp]
+theorem getElem?_set_neq
+  {α : Type u} (l: List α) (i: Nat) (j: Nat) (x: α)
+  (h : Nat.not_eq i j) : getElem? (l.set i x) j = getElem? l j
   := by
-  revert i
-  induction l <;> simp_all
-  intro i h
-  cases i <;> simp_all
+  simp [getElem?_set]
+  intro
+  simp_all
 
 @[simp]
-theorem map_update_eq {α : Type u} {β : Type v} (ls : List α) (i : Nat) (x : α) (f : α → β) :
-  (ls.update i x).map f = (ls.map f).update i (f x) :=
-  match ls with
-  | [] => by simp
-  | hd :: tl =>
-    if h : i = 0 then by simp [*]
-    else
-      have hi := map_update_eq tl (i - 1) x f
-      by simp [*]
+theorem getElem!_set_neq
+  {α : Type u} [Inhabited α] (l: List α) (i: Nat) (j: Nat) (x: α)
+  (h : Nat.not_eq i j) : getElem! (l.set i x) j = getElem! l j
+  := by
+  have := getElem?_set_neq l i j x h
+  simp_all
+
+@[simp]
+theorem getElem!_set_self
+  {α : Type u} [Inhabited α] (l: List α) (i: Nat) (x: α)
+  (h : i < l.length) : getElem! (l.set i x) i = x
+  := by
+  simp [*]
 
 -- TODO: we need "composite" patterns for scalar_tac here
-theorem length_index_le_length_flatten (ls : List (List α)) :
-  forall (i : Nat), (ls.index i).length ≤ ls.flatten.length := by
+theorem length_getElem!_le_length_flatten (ls : List (List α)) :
+  forall (i : Nat), (getElem! ls i).length ≤ ls.flatten.length := by
   induction ls <;> intro i <;> simp_all [default]
   cases i <;> simp_all
   rename ∀ _, _ => ih
@@ -286,46 +253,44 @@ theorem length_index_le_length_flatten (ls : List (List α)) :
   replace ih := ih i
   scalar_tac
 
-theorem length_flatten_update_eq {α : Type u} (ls : List (List α)) (i : Nat) (x : List α)
+theorem length_flatten_set_eq {α : Type u} (ls : List (List α)) (i : Nat) (x : List α)
   (h1 : i < ls.length) :
-  (ls.update i x).flatten.length + (ls.index i).length = ls.flatten.length + x.length := by
+  (ls.set i x).flatten.length + (ls[i]!).length = ls.flatten.length + x.length := by
   revert i
   induction ls <;> intro i <;> simp_all [default]
   cases i <;> simp_all
   . scalar_tac
   . rename Nat => i
     rename ∀ _, _ => ih
-    replace ih := ih i
+    intro hi
+    replace ih := ih i hi
     scalar_tac
 
-@[scalar_tac (ls.update i x).flatten]
-theorem length_flatten_update_eq_disj {α : Type u} (ls : List (List α)) (i : Nat) (x : List α) :
-  i < 0 ∨ ls.length ≤ i ∨
-  (ls.update i x).flatten.length + (ls.index i).length = ls.flatten.length + x.length := by
-  cases h: (i < 0 : Bool) <;> simp_all only [not_lt_zero', decide_false, Bool.false_eq_true, not_false_eq_true, neq_imp]
+@[scalar_tac (ls.set i x).flatten]
+theorem length_flatten_set_eq_disj {α : Type u} (ls : List (List α)) (i : Nat) (x : List α) :
+  ls.length ≤ i ∨
+  (ls.set i x).flatten.length + (ls[i]!).length = ls.flatten.length + x.length := by
   cases h: (ls.length ≤ i : Bool) <;> simp_all only [decide_eq_false_iff_not, not_le, false_or, decide_eq_true_eq, true_or]
-  rw [length_flatten_update_eq] <;> simp [*]
+  rw [length_flatten_set_eq] <;> simp [*]
 
-theorem length_flatten_update_as_int_eq {α : Type u} (ls : List (List α)) (i : Nat) (x : List α)
+theorem length_flatten_set_as_int_eq {α : Type u} (ls : List (List α)) (i : Nat) (x : List α)
   (h1 : i < ls.length) :
-  ((ls.update i x).flatten.length : Nat) = ls.flatten.length + x.length - (ls.index i).length := by
+  ((ls.set i x).flatten.length : Nat) = ls.flatten.length + x.length - (ls[i]!).length := by
   scalar_tac
 
 @[simp]
-theorem index_map_eq {α : Type u} {β : Type v} [Inhabited α] [Inhabited β]
+theorem getElem!_map_eq {α : Type u} {β : Type v} [Inhabited α] [Inhabited β]
   (ls : List α) (i : Nat) (f : α → β)
   (h1 : i < ls.length) : -- We need the bound because otherwise we have to prove that: `(default : β) = f (default : α)`
-  (ls.map f).index i = f (ls.index i) := by
-  revert i; induction ls <;> simp_all
-  intro i h
-  cases i <;> simp_all
+  (ls.map f)[i]! = f (ls[i]!) := by
+  simp [*]
 
-theorem replace_slice_index [Inhabited α] (start end_ : Nat) (l nl : List α)
+theorem replace_slice_getElem? (start end_ : Nat) (l nl : List α)
   (_ : start < end_) (_ : end_ ≤ l.length) (_ : nl.length = end_ - start) :
   let l1 := l.replace_slice start end_ nl
-  (∀ i, i < start → l1.index i = l.index i) ∧
-  (∀ i, start ≤ i → i < end_ → l1.index i = nl.index (i - start)) ∧
-  (∀ i, end_ ≤ i → i < l.length → l1.index i = l.index i)
+  (∀ i, i < start → getElem? l1 i = getElem? l i) ∧
+  (∀ i, start ≤ i → i < end_ → getElem? l1 i = getElem? nl (i - start)) ∧
+  (∀ i, end_ ≤ i → i < l.length → getElem? l1 i = getElem? l i)
   := by
   -- We need those assumptions everywhere
   have : start ≤ l.length := by scalar_tac
@@ -334,22 +299,35 @@ theorem replace_slice_index [Inhabited α] (start end_ : Nat) (l nl : List α)
   . intro i _
     -- Introducing exactly the assumptions we need to make the rewriting work
     have : i < l.length := by scalar_tac
-    simp_all
+    simp_all only [append_assoc, length_take, inf_of_le_left, getElem?_append_left]
+    simp [*]
   . intro i _ _
     have : (List.take start l).length ≤ i := by simp_all
     have : i < (List.take start l).length + (nl ++ List.drop end_ l).length := by
       simp_all; scalar_tac
-    simp_all
+    simp_all only [length_take, inf_of_le_left, length_append, length_drop, append_assoc,
+      getElem?_append_right]
     have : i - start < nl.length := by scalar_tac
-    simp_all
+    simp_all only [getElem?_append_left]
   . intro i _ _
     have : 0 ≤ end_ := by scalar_tac
     have : end_ ≤ l.length := by scalar_tac
     have : (List.take start l).length ≤ i := by scalar_tac
-    have := index_append_end i (take start l ++ nl) (drop end_ l) (by simp; scalar_tac)
-    simp_all
+    have := @getElem?_append_right _ (take start l ++ nl) (drop end_ l) i (by simp; scalar_tac)
+    simp_all only [zero_le, length_take, inf_of_le_left, append_assoc, getElem?_append_right,
+      tsub_le_iff_right, Nat.sub_add_cancel, getElem?_drop, length_append]
     congr
     scalar_tac
+
+theorem replace_slice_getElem! [Inhabited α] (start end_ : Nat) (l nl : List α)
+  (_ : start < end_) (_ : end_ ≤ l.length) (_ : nl.length = end_ - start) :
+  let l1 := l.replace_slice start end_ nl
+  (∀ i, i < start → getElem! l1 i = getElem! l i) ∧
+  (∀ i, start ≤ i → i < end_ → getElem! l1 i = getElem! nl (i - start)) ∧
+  (∀ i, end_ ≤ i → i < l.length → getElem! l1 i = getElem! l i)
+  := by
+  have := replace_slice_getElem? start end_ l nl (by assumption) (by assumption) (by assumption)
+  simp_all
 
 @[simp]
 theorem allP_nil {α : Type u} (p: α → Prop) : allP [] p :=
@@ -376,14 +354,5 @@ theorem lookup_not_none_imp_length_pos [BEq α] (l : List (α × β)) (key : α)
   induction l <;> simp_all
 
 end
-
-@[simp]
-theorem list_update_index_eq α [Inhabited α] (x : List α) (i : ℕ) :
-  x.update i (x.index i) = x := by
-  revert i
-  induction x
-  . simp
-  . intro i
-    dcases hi: 0 < i <;> simp_all
 
 end List

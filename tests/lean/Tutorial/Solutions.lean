@@ -6,6 +6,9 @@ set_option maxHeartbeats 1000000
 
 namespace tutorial
 
+/- This simp lemma replaces terms of the shape `l[i]!`: in the present case it is more annoying than anything -/
+attribute [-simp] List.getElem!_eq_getElem?_getD
+
 /- # Basic tactics -/
 
 /- Exercise 1: Version 1: -/
@@ -48,8 +51,8 @@ open CList
 theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
   ∃ x back, list_nth_mut1 l i = ok (x, back) ∧
-  x = l.toList.index i.val ∧
-  ∀ x', (back x').toList = l.toList.update i.val x' := by
+  x = l.toList[i.val]! ∧
+  ∀ x', (back x').toList = l.toList.set i.val x' := by
   rw [list_nth_mut1, list_nth_mut1_loop]
   split
   . rename_i hd tl
@@ -60,20 +63,20 @@ theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
       . -- Reasoning about `List.index`:
         have hi : i.val = 0 := by scalar_tac
         simp only [hi] -- Without the `only`, this actually finished the goal
-        have hIndex := List.index_zero_cons hd tl.toList
+        have hIndex := @List.getElem!_cons_zero _ hd _ tl.toList
         simp only [hIndex]
       . intro x
         -- Reasoning about `List.update`:
         have hi : i.val = 0 := by scalar_tac
         simp only [hi] -- Without the `only`, this actually finished the goal
-        have hUpdate := List.update_zero_cons hd tl.toList x
+        have hUpdate := List.set_cons_zero hd tl.toList x
         simp only [hUpdate]
     . simp at *
       progress as ⟨ i1, hi1 ⟩
       progress as ⟨ tl1, back, htl1, hback ⟩
       simp
       split_conjs
-      . have hIndex := List.index_nzero_cons hd tl.toList i.val (by scalar_tac)
+      . have hIndex := List.getElem!_cons_nzero hd tl.toList i.val (by scalar_tac)
         simp only [hIndex]
         simp only [htl1]
         have hiEq : i1.val = i.val - 1 := by scalar_tac
@@ -81,7 +84,7 @@ theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
       . -- Backward function
         intro x'
         simp [hback]
-        have hUpdate := List.update_nzero_cons hd tl.toList i.val x' (by scalar_tac)
+        have hUpdate := List.set_cons_nzero hd tl.toList i.val (by scalar_tac) x'
         simp only [hUpdate]
         have hiEq : i1.val = i.val - 1 := by scalar_tac
         simp only [hiEq]
@@ -97,8 +100,8 @@ theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
 theorem list_nth_mut1_spec' {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
   ∃ x back, list_nth_mut1 l i = ok (x, back) ∧
-  x = l.toList.index i.val ∧
-  ∀ x', (back x').toList = l.toList.update i.val x' := by
+  x = l.toList[i.val]! ∧
+  ∀ x', (back x').toList = l.toList.set i.val x' := by
   rw [list_nth_mut1, list_nth_mut1_loop]
   split
   . split
@@ -200,8 +203,8 @@ theorem zero_loop_spec
   ∃ x',
     zero_loop x i = ok x' ∧
     x'.length = x.length ∧
-    (∀ j, j < i.val → x'.val.index j = x.val.index j) ∧
-    (∀ j, i.val ≤ j → j < x.length → x'.val.index j = 0#u32) := by
+    (∀ j, j < i.val → x'[j]! = x[j]!) ∧
+    (∀ j, i.val ≤ j → j < x.length → x'[j]! = 0#u32) := by
   rw [zero_loop]
   simp
   split
@@ -214,7 +217,7 @@ theorem zero_loop_spec
       replace hSame := hSame j (by scalar_tac)
       simp_all
     . intro j h0 h1
-      dcases j = i.val <;> try simp_all
+      dcases j = i.val <;> try simp [*]
       have := hZero j (by scalar_tac)
       simp_all
   . simp; scalar_tac
@@ -222,7 +225,7 @@ termination_by x.length - i.val
 decreasing_by scalar_decr_tac
 
 theorem all_nil_impl_toInt_eq_zero
-  (l : List U32) (h : ∀ (j : ℕ), j < l.length → l.index j = 0#u32) :
+  (l : List U32) (h : ∀ (j : ℕ), j < l.length → l[j]! = 0#u32) :
   toInt l = 0 := by
   match l with
   | [] => simp
@@ -254,7 +257,7 @@ theorem zero_spec (x : alloc.vec.Vec U32) :
  -/
 @[simp]
 theorem toInt_drop (l : List U32) (i : Nat) (h0 : i < l.length) :
-  toInt (l.drop i) = l.index i + 2 ^ 32 * toInt (l.drop (i + 1)) := by
+  toInt (l.drop i) = l[i]! + 2 ^ 32 * toInt (l.drop (i + 1)) := by
   cases l with
   | nil => simp at *
   | cons hd tl =>
@@ -268,7 +271,7 @@ theorem toInt_drop (l : List U32) (i : Nat) (h0 : i < l.length) :
 
 @[simp]
 theorem toInt_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) :
-  toInt (l.update i x) = toInt l + 2 ^ (32 * i) * (x - l.index i) := by
+  toInt (l.set i x) = toInt l + 2 ^ (32 * i) * (x - l[i]!) := by
   cases l with
   | nil => simp at *
   | cons hd tl =>
@@ -308,7 +311,7 @@ theorem add_no_overflow_loop_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (i : Usize)
   (hLength : x.length = y.length)
   -- No overflow occurs when we add the individual thunks
-  (hNoOverflow : ∀ (j : Nat), i.val ≤ j → j < x.length → (x.val.index j).val + (y.val.index j).val ≤ U32.max)
+  (hNoOverflow : ∀ (j : Nat), i.val ≤ j → j < x.length → x[j]!.val + y[j]!.val ≤ U32.max)
   (hi : i.val ≤ x.length) :
   ∃ x', add_no_overflow_loop x y i = ok x' ∧
   x'.length = x.length ∧
@@ -328,7 +331,7 @@ theorem add_no_overflow_loop_spec
       intro j h0 h1
       simp_all
       -- Simplifying (x.update ...).index:
-      have := List.index_update_neq x.val i.val j sum (by scalar_tac)
+      have := List.getElem!_set_neq x.val i.val j sum (by scalar_tac)
       simp [*]
       apply hNoOverflow j (by scalar_tac) (by scalar_tac)
     -- Postcondition
@@ -349,7 +352,7 @@ decreasing_by scalar_decr_tac
 /-- The proof about `add_no_overflow` -/
 theorem add_no_overflow_spec (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
   (hLength : x.length = y.length)
-  (hNoOverflow : ∀ (j : Nat), j < x.length → (x.val.index j).val + (y.val.index j).val ≤ U32.max) :
+  (hNoOverflow : ∀ (j : Nat), j < x.length → x[j]!.val + y[j]!.val ≤ U32.max) :
   ∃ x', add_no_overflow x y = ok x' ∧
   x'.length = y.length ∧
   toInt x' = toInt x + toInt y := by
