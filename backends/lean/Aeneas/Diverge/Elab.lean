@@ -1280,6 +1280,18 @@ namespace Tests
 
   --set_option trace.Diverge false
 
+  /--
+  info: Aeneas.Diverge.Tests.list_nth.unfold.{u} {a : Type u} (ls : List a) (i : ℤ) :
+  list_nth ls i =
+    match ls with
+    | [] => Result.fail Error.panic
+    | x :: ls =>
+      if i = 0 then pure x
+      else do
+        let __do_lift ← list_nth ls (i - 1)
+        pure __do_lift
+  -/
+  #guard_msgs in
   #check list_nth.unfold
 
   example {a: Type} (ls : List a) :
@@ -1315,6 +1327,23 @@ namespace Tests
            let ls ← back ret
            return (x :: ls)))
 
+  /--
+  info: Aeneas.Diverge.Tests.list_nth_with_back.unfold {a : Type} (ls : List a) (i : ℤ) :
+  list_nth_with_back ls i =
+    match ls with
+    | [] => Result.fail Error.panic
+    | x :: ls =>
+      if i = 0 then pure (x, fun ret => pure (ret :: ls))
+      else do
+        let __discr ← list_nth_with_back ls (i - 1)
+        match __discr with
+          | (x, back) =>
+            pure
+              (x, fun ret => do
+                let ls ← back ret
+                pure (x :: ls))
+  -/
+  #guard_msgs in
   #check list_nth_with_back.unfold
 
   mutual
@@ -1325,7 +1354,26 @@ namespace Tests
       if i = 0 then return false else return (← is_even (i - 1))
   end
 
+  /--
+  info: Aeneas.Diverge.Tests.is_even.unfold (i : ℤ) :
+  is_even i =
+    if i = 0 then pure true
+    else do
+      let __do_lift ← is_odd (i - 1)
+      pure __do_lift
+  -/
+  #guard_msgs in
   #check is_even.unfold
+
+  /--
+  info: Aeneas.Diverge.Tests.is_odd.unfold (i : ℤ) :
+  is_odd i =
+    if i = 0 then pure false
+    else do
+      let __do_lift ← is_even (i - 1)
+      pure __do_lift
+  -/
+  #guard_msgs in
   #check is_odd.unfold
 
   mutual
@@ -1336,7 +1384,22 @@ namespace Tests
       if i > 20 then foo (i / 20) else .ok 42
   end
 
+  /--
+  info: Aeneas.Diverge.Tests.foo.unfold (i : ℤ) :
+  foo i =
+    if i > 10 then do
+      let __do_lift ← foo (i / 10)
+      let __do_lift_1 ← bar i
+      pure (__do_lift + __do_lift_1)
+    else bar 10
+  -/
+  #guard_msgs in
   #check foo.unfold
+
+  /--
+  info: Aeneas.Diverge.Tests.bar.unfold (i : ℤ) : bar i = if i > 20 then foo (i / 20) else Result.ok 42
+  -/
+  #guard_msgs in
   #check bar.unfold
 
   -- Testing dependent branching and let-bindings
@@ -1346,6 +1409,15 @@ namespace Tests
       let b := true
       return b
 
+  /--
+  info: Aeneas.Diverge.Tests.isNonZero.unfold (i : ℤ) :
+  isNonZero i =
+    if _h : i = 0 then pure false
+    else
+      let b := true;
+      pure b
+  -/
+  #guard_msgs in
   #check isNonZero.unfold
 
   -- Testing let-bindings
@@ -1355,6 +1427,13 @@ namespace Tests
     then Result.ok True
     else Result.ok False
 
+  /--
+  info: Aeneas.Diverge.Tests.iInBounds.unfold {a : Type} (ls : List a) (i : ℤ) :
+  iInBounds ls i =
+    let i0 := ls.length;
+    if i < ↑i0 then Result.ok (decide True) else Result.ok (decide False)
+  -/
+  #guard_msgs in
   #check iInBounds.unfold
 
   divergent def isCons
@@ -1364,6 +1443,15 @@ namespace Tests
     | [] => Result.ok False
     | _ :: _ => Result.ok True
 
+  /--
+  info: Aeneas.Diverge.Tests.isCons.unfold {a : Type} (ls : List a) :
+  isCons ls =
+    let ls1 := ls;
+    match ls1 with
+    | [] => Result.ok (decide False)
+    | head :: tail => Result.ok (decide True)
+  -/
+  #guard_msgs in
   #check isCons.unfold
 
   -- Testing what happens when we use concrete arguments in dependent tuples
@@ -1373,6 +1461,10 @@ namespace Tests
     :=
     test1 Option.none ()
 
+  /--
+  info: Aeneas.Diverge.Tests.test1.unfold (x✝ : Option Bool) (x✝¹ : Unit) : test1 x✝ x✝¹ = test1 none ()
+  -/
+  #guard_msgs in
   #check test1.unfold
 
   -- Testing a degenerate case
@@ -1381,6 +1473,14 @@ namespace Tests
     let _ ← infinite_loop
     Result.ok ()
 
+  /--
+  info: Aeneas.Diverge.Tests.infinite_loop.unfold :
+  infinite_loop = do
+    let __discr ← infinite_loop
+    let x : Unit := __discr
+    Result.ok ()
+  -/
+  #guard_msgs in
   #check infinite_loop.unfold
 
   -- Another degenerate case
@@ -1390,6 +1490,13 @@ namespace Tests
     infinite_loop1_call
     infinite_loop1
 
+  /--
+  info: Aeneas.Diverge.Tests.infinite_loop1.unfold :
+  infinite_loop1 = do
+    infinite_loop1_call
+    infinite_loop1
+  -/
+  #guard_msgs in
   #check infinite_loop1.unfold
 
   /- Tests with higher-order functions -/
@@ -1408,6 +1515,16 @@ namespace Tests
           let tl ← map id tl
           .ok (.node tl)
 
+    /--
+    info: Aeneas.Diverge.Tests.id.unfold.{u} {a : Type u} (t : Tree a) :
+  id t =
+    match t with
+    | Tree.leaf x => Result.ok (Tree.leaf x)
+    | Tree.node tl => do
+      let tl ← map id tl
+      Result.ok (Tree.node tl)
+    -/
+    #guard_msgs in
     #check id.unfold
 
     divergent def id1 {a : Type u} (t : Tree a) : Result (Tree a) :=
@@ -1418,6 +1535,16 @@ namespace Tests
           let tl ← map (fun x => id1 x) tl
           .ok (.node tl)
 
+    /--
+    info: Aeneas.Diverge.Tests.id1.unfold.{u} {a : Type u} (t : Tree a) :
+  id1 t =
+    match t with
+    | Tree.leaf x => Result.ok (Tree.leaf x)
+    | Tree.node tl => do
+      let tl ← map (fun x => id1 x) tl
+      Result.ok (Tree.node tl)
+    -/
+    #guard_msgs in
     #check id1.unfold
 
     divergent def id2 {a : Type u} (t : Tree a) : Result (Tree a) :=
@@ -1428,6 +1555,22 @@ namespace Tests
           let tl ← map (fun x => do let _ ← id2 x; id2 x) tl
           .ok (.node tl)
 
+    /--
+    info: Aeneas.Diverge.Tests.id2.unfold.{u} {a : Type u} (t : Tree a) :
+  id2 t =
+    match t with
+    | Tree.leaf x => Result.ok (Tree.leaf x)
+    | Tree.node tl => do
+      let tl ←
+        map
+            (fun x => do
+              let __discr ← id2 x
+              let x_1 : Tree a := __discr
+              id2 x)
+            tl
+      Result.ok (Tree.node tl)
+    -/
+    #guard_msgs in
     #check id2.unfold
 
     divergent def incr (t : Tree Nat) : Result (Tree Nat) :=
@@ -1448,6 +1591,18 @@ namespace Tests
           let tl ← map f tl
           .ok (.node tl)
 
+    /--
+    info: Aeneas.Diverge.Tests.id3.unfold (t : Tree ℕ) :
+  id3 t =
+    match t with
+    | Tree.leaf x => Result.ok (Tree.leaf (x + 1))
+    | Tree.node tl =>
+      let f := id3;
+      do
+      let tl ← map f tl
+      Result.ok (Tree.node tl)
+    -/
+    #guard_msgs in
     #check id3.unfold
 
     /-
