@@ -6,7 +6,9 @@ require aeneas from "../../backends/lean"
 package «tests» {}
 
 @[default_target] lean_lib Arrays
+@[default_target] lean_lib ArraySliceIndex
 @[default_target] lean_lib AdtBorrows
+@[default_target] lean_lib AsMut
 @[default_target] lean_lib Avl
 @[default_target] lean_lib BaseTutorial
 @[default_target] lean_lib Betree
@@ -14,11 +16,13 @@ package «tests» {}
 @[default_target] lean_lib Builtin
 @[default_target] lean_lib Constants
 @[default_target] lean_lib Demo
+@[default_target] lean_lib Deref
 @[default_target] lean_lib External
 @[default_target] lean_lib Hashmap
 @[default_target] lean_lib InfiniteLoop
 @[default_target] lean_lib Issue194RecursiveStructProjector
 @[default_target] lean_lib Issue270LoopList
+@[default_target] lean_lib Issue440TypeError
 @[default_target] lean_lib Loops
 @[default_target] lean_lib MiniTree
 @[default_target] lean_lib MutuallyRecursiveTraits
@@ -27,6 +31,7 @@ package «tests» {}
 @[default_target] lean_lib PoloniusList
 @[default_target] lean_lib RenameAttribute
 @[default_target] lean_lib Scalars
+@[default_target] lean_lib Slices
 @[default_target] lean_lib SwitchTest
 @[default_target] lean_lib Traits
 @[default_target] lean_lib Tutorial

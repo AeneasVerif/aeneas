@@ -1102,6 +1102,8 @@ let lift_fun (ctx : ctx) (fun_id : fun_id) : bool =
           | None -> false
           | Some info -> info.lift)
     end
+  | FromLlbc (FunId (FBuiltin (ArrayToSliceShared | ArrayToSliceMut)), _) ->
+      true
   | _ -> false
 
 (** A helper predicate *)

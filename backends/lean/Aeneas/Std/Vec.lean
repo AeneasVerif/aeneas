@@ -178,44 +178,43 @@ theorem Vec.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Us
   simp [h]
 
 /- [alloc::vec::Vec::index]: forward function -/
-def Vec.index {T I : Type} (inst : core.slice.index.SliceIndex I (Slice T))
-  (self : Vec T) (i : I) : Result inst.Output :=
+def Vec.index {T I Output : Type} (inst : core.slice.index.SliceIndex I (Slice T) Output)
+  (self : Vec T) (i : I) : Result Output :=
   inst.index i self
 
 /- [alloc::vec::Vec::index_mut]: forward function -/
-def Vec.index_mut {T I : Type} (inst : core.slice.index.SliceIndex I (Slice T))
+def Vec.index_mut {T I Output : Type} (inst : core.slice.index.SliceIndex I (Slice T) Output)
   (self : Vec T) (i : I) :
-  Result (inst.Output × (inst.Output → Vec T)) :=
+  Result (Output × (Output → Vec T)) :=
   inst.index_mut i self
 
 /- Trait implementation: [alloc::vec::Vec] -/
 @[reducible]
-def Vec.coreopsindexIndexInst {T I : Type}
-  (inst : core.slice.index.SliceIndex I (Slice T)) :
-  core.ops.index.Index (alloc.vec.Vec T) I := {
-  Output := inst.Output
+def Vec.IndexInst {T I Output : Type}
+  (inst : core.slice.index.SliceIndex I (Slice T) Output) :
+  core.ops.index.Index (alloc.vec.Vec T) I Output := {
   index := Vec.index inst
 }
 
 /- Trait implementation: [alloc::vec::Vec] -/
 @[reducible]
-def Vec.coreopsindexIndexMutInst {T I : Type}
-  (inst : core.slice.index.SliceIndex I (Slice T)) :
-  core.ops.index.IndexMut (alloc.vec.Vec T) I := {
-  indexInst := Vec.coreopsindexIndexInst inst
+def Vec.IndexMutInst {T I Output : Type}
+  (inst : core.slice.index.SliceIndex I (Slice T) Output) :
+  core.ops.index.IndexMut (alloc.vec.Vec T) I Output := {
+  indexInst := Vec.IndexInst inst
   index_mut := Vec.index_mut inst
 }
 
 @[simp]
 theorem Vec.index_slice_index {α : Type} (v : Vec α) (i : Usize) :
-  Vec.index (core.slice.index.SliceIndexUsizeSliceTInst α) v i =
+  Vec.index (core.slice.index.SliceIndexUsizeSliceInst α) v i =
   Vec.index_usize v i := by
   simp [Vec.index, Vec.index_usize, Slice.index_usize]
   rfl
 
 @[simp]
 theorem Vec.index_mut_slice_index {α : Type} (v : Vec α) (i : Usize) :
-  Vec.index_mut (core.slice.index.SliceIndexUsizeSliceTInst α) v i =
+  Vec.index_mut (core.slice.index.SliceIndexUsizeSliceInst α) v i =
   index_mut_usize v i := by
   simp [Vec.index_mut, Vec.index_mut_usize, Slice.index_mut_usize]
   rfl
@@ -242,30 +241,29 @@ def alloc.vec.Vec.extend_from_slice {T : Type} (cloneInst : core.clone.Clone T)
 /- [alloc::vec::{(core::ops::deref::Deref for alloc::vec::Vec<T, A>)#9}::deref]:
    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/alloc/src/vec/mod.rs', lines 2624:4-2624:27
    Name pattern: alloc::vec::{core::ops::deref::Deref<alloc::vec::Vec<@T, @A>>}::deref -/
-def alloc.vec.DerefVec.deref {T : Type} (v : Vec T) : Slice T :=
+def alloc.vec.Vec.deref {T : Type} (v : alloc.vec.Vec T) : Slice T :=
   ⟨ v.val, v.property ⟩
 
 @[reducible]
-def core.ops.deref.DerefVec {T : Type} : core.ops.deref.Deref (alloc.vec.Vec T) := {
-  Target := Slice T
-  deref := fun v => ok (alloc.vec.DerefVec.deref v)
+def core.ops.deref.DerefVec {T : Type} : core.ops.deref.Deref (alloc.vec.Vec T) (Slice T) := {
+  deref := fun v => ok (alloc.vec.Vec.deref v)
 }
 
 /- [alloc::vec::{(core::ops::deref::DerefMut for alloc::vec::Vec<T, A>)#10}::deref_mut]:
    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/alloc/src/vec/mod.rs', lines 2632:4-2632:39
    Name pattern: alloc::vec::{core::ops::deref::DerefMut<alloc::vec::Vec<@T, @A>>}::deref_mut -/
-def alloc.vec.DerefMutVec.deref_mut {T : Type} (v :  alloc.vec.Vec T) :
-   Result ((Slice T) × (Slice T → alloc.vec.Vec T)) :=
-   ok (⟨ v.val, v.property ⟩, λ s => ⟨ s.val, s.property ⟩)
+def alloc.vec.Vec.deref_mut {T : Type} (v :  alloc.vec.Vec T) :
+   (Slice T) × (Slice T → alloc.vec.Vec T) :=
+   (⟨ v.val, v.property ⟩, λ s => ⟨ s.val, s.property ⟩)
 
 /- Trait implementation: [alloc::vec::{(core::ops::deref::DerefMut for alloc::vec::Vec<T, A>)#10}]
    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/alloc/src/vec/mod.rs', lines 2630:0-2630:49
    Name pattern: core::ops::deref::DerefMut<alloc::vec::Vec<@Self, @>> -/
 @[reducible]
 def core.ops.deref.DerefMutVec {T : Type} :
-  core.ops.deref.DerefMut (alloc.vec.Vec T) := {
+  core.ops.deref.DerefMut (alloc.vec.Vec T) (Slice T):= {
   derefInst := core.ops.deref.DerefVec
-  deref_mut := alloc.vec.DerefMutVec.deref_mut
+  deref_mut v := ok (alloc.vec.Vec.deref_mut v)
 }
 
 def alloc.vec.Vec.resize {T : Type} (cloneInst : core.clone.Clone T)

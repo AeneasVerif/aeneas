@@ -247,47 +247,48 @@ def ToTypetraitsBoolWrapperT {T : Type} (ToTypeBoolTInst : ToType Bool T) :
 
 /- [traits::WithConstTy::LEN2]
    Source: 'tests/src/traits.rs', lines 166:4-166:27 -/
-def WithConstTy.LEN2_default_body (Self : Type) (LEN : Usize) : Result Usize :=
+def WithConstTy.LEN2_default_body (Self : Type) (Self_V : Type) (Self_W : Type)
+  (LEN : Usize) : Result Usize :=
   ok 32#usize
-def WithConstTy.LEN2_default (Self : Type) (LEN : Usize) : Usize :=
-  eval_global (WithConstTy.LEN2_default_body Self LEN)
+def WithConstTy.LEN2_default (Self : Type) (Self_V : Type) (Self_W : Type) (LEN
+  : Usize) : Usize :=
+  eval_global (WithConstTy.LEN2_default_body Self Self_V Self_W LEN)
 
 /- Trait declaration: [traits::WithConstTy]
    Source: 'tests/src/traits.rs', lines 163:0-174:1 -/
-structure WithConstTy (Self : Type) (LEN : Usize) where
+structure WithConstTy (Self : Type) (Self_V : Type) (Self_W : Type) (LEN :
+  Usize) where
   LEN1 : Usize
   LEN2 : Usize
-  V : Type
-  W : Type
-  ToU64traitsWithConstTyWInst : ToU64 W
-  f : W → Array U8 LEN → Result W
+  ToU64Inst : ToU64 Self_W
+  f : Self_W → Array U8 LEN → Result Self_W
 
-/- [traits::{traits::WithConstTy<32: usize> for bool}#8::LEN1]
+/- [traits::{traits::WithConstTy<u8, u64, 32: usize> for bool}#8::LEN1]
    Source: 'tests/src/traits.rs', lines 177:4-177:27 -/
-def WithConstTyBool32.LEN1_body : Result Usize := ok 12#usize
-def WithConstTyBool32.LEN1 : Usize := eval_global WithConstTyBool32.LEN1_body
+def WithConstTyBoolU8U6432.LEN1_body : Result Usize := ok 12#usize
+def WithConstTyBoolU8U6432.LEN1 : Usize :=
+  eval_global WithConstTyBoolU8U6432.LEN1_body
 
-/- [traits::{traits::WithConstTy<32: usize> for bool}#8::f]:
+/- [traits::{traits::WithConstTy<u8, u64, 32: usize> for bool}#8::f]:
    Source: 'tests/src/traits.rs', lines 182:4-182:42 -/
-def WithConstTyBool32.f (i : U64) (a : Array U8 32#usize) : Result U64 :=
+def WithConstTyBoolU8U6432.f (i : U64) (a : Array U8 32#usize) : Result U64 :=
   ok i
 
-/- Trait implementation: [traits::{traits::WithConstTy<32: usize> for bool}#8]
+/- Trait implementation: [traits::{traits::WithConstTy<u8, u64, 32: usize> for bool}#8]
    Source: 'tests/src/traits.rs', lines 176:0-183:1 -/
 @[reducible]
-def WithConstTyBool32 : WithConstTy Bool 32#usize := {
-  LEN1 := WithConstTyBool32.LEN1
-  LEN2 := WithConstTy.LEN2_default Bool 32#usize
-  V := U8
-  W := U64
-  ToU64traitsWithConstTyWInst := ToU64U64
-  f := WithConstTyBool32.f
+def WithConstTyBoolU8U6432 : WithConstTy Bool U8 U64 32#usize := {
+  LEN1 := WithConstTyBoolU8U6432.LEN1
+  LEN2 := WithConstTy.LEN2_default Bool U8 U64 32#usize
+  ToU64Inst := ToU64U64
+  f := WithConstTyBoolU8U6432.f
 }
 
 /- [traits::use_with_const_ty1]:
    Source: 'tests/src/traits.rs', lines 185:0-187:1 -/
 def use_with_const_ty1
-  {H : Type} {LEN : Usize} (WithConstTyInst : WithConstTy H LEN) :
+  {H : Type} {Clause1_V : Type} {Clause1_W : Type} {LEN : Usize}
+  (WithConstTyInst : WithConstTy H Clause1_V Clause1_W LEN) :
   Result Usize
   :=
   ok WithConstTyInst.LEN1
@@ -295,8 +296,8 @@ def use_with_const_ty1
 /- [traits::use_with_const_ty2]:
    Source: 'tests/src/traits.rs', lines 189:0-189:76 -/
 def use_with_const_ty2
-  {H : Type} {LEN : Usize} (WithConstTyInst : WithConstTy H LEN)
-  (w : WithConstTyInst.W) :
+  {H : Type} {Clause1_V : Type} {Clause1_W : Type} {LEN : Usize}
+  (WithConstTyInst : WithConstTy H Clause1_V Clause1_W LEN) (t : Clause1_W) :
   Result Unit
   :=
   ok ()
@@ -304,11 +305,11 @@ def use_with_const_ty2
 /- [traits::use_with_const_ty3]:
    Source: 'tests/src/traits.rs', lines 191:0-193:1 -/
 def use_with_const_ty3
-  {H : Type} {LEN : Usize} (WithConstTyInst : WithConstTy H LEN)
-  (x : WithConstTyInst.W) :
+  {H : Type} {Clause1_V : Type} {Clause1_W : Type} {LEN : Usize}
+  (WithConstTyInst : WithConstTy H Clause1_V Clause1_W LEN) (x : Clause1_W) :
   Result U64
   :=
-  WithConstTyInst.ToU64traitsWithConstTyWInst.to_u64 x
+  WithConstTyInst.ToU64Inst.to_u64 x
 
 /- [traits::test_where1]:
    Source: 'tests/src/traits.rs', lines 195:0-195:43 -/
@@ -318,17 +319,17 @@ def test_where1 {T : Type} (_x : T) : Result Unit :=
 /- [traits::test_where2]:
    Source: 'tests/src/traits.rs', lines 196:0-196:60 -/
 def test_where2
-  {T : Type} (WithConstTyT32Inst : WithConstTy T 32#usize) (_x : U32) :
+  {T : Type} {Clause1_W : Type} (WithConstTyTU32Clause1_W32Inst : WithConstTy T
+  U32 Clause1_W 32#usize) (_x : U32) :
   Result Unit
   :=
   ok ()
 
 /- Trait declaration: [traits::ParentTrait0]
    Source: 'tests/src/traits.rs', lines 202:0-206:1 -/
-structure ParentTrait0 (Self : Type) where
-  W : Type
+structure ParentTrait0 (Self : Type) (Self_W : Type) where
   get_name : Self → Result String
-  get_w : Self → Result W
+  get_w : Self → Result Self_W
 
 /- Trait declaration: [traits::ParentTrait1]
    Source: 'tests/src/traits.rs', lines 207:0-207:25 -/
@@ -336,29 +337,33 @@ structure ParentTrait1 (Self : Type) where
 
 /- Trait declaration: [traits::ChildTrait]
    Source: 'tests/src/traits.rs', lines 208:0-208:52 -/
-structure ChildTrait (Self : Type) where
-  ParentTrait0Inst : ParentTrait0 Self
+structure ChildTrait (Self : Type) (Self_Clause0_W : Type) where
+  ParentTrait0Inst : ParentTrait0 Self Self_Clause0_W
   ParentTrait1Inst : ParentTrait1 Self
 
 /- [traits::test_child_trait1]:
    Source: 'tests/src/traits.rs', lines 211:0-213:1 -/
 def test_child_trait1
-  {T : Type} (ChildTraitInst : ChildTrait T) (x : T) : Result String :=
+  {T : Type} {Clause1_Clause0_W : Type} (ChildTraitInst : ChildTrait T
+  Clause1_Clause0_W) (x : T) :
+  Result String
+  :=
   ChildTraitInst.ParentTrait0Inst.get_name x
 
 /- [traits::test_child_trait2]:
    Source: 'tests/src/traits.rs', lines 215:0-217:1 -/
 def test_child_trait2
-  {T : Type} (ChildTraitInst : ChildTrait T) (x : T) :
-  Result ChildTraitInst.ParentTrait0Inst.W
+  {T : Type} {Clause1_Clause0_W : Type} (ChildTraitInst : ChildTrait T
+  Clause1_Clause0_W) (x : T) :
+  Result Clause1_Clause0_W
   :=
   ChildTraitInst.ParentTrait0Inst.get_w x
 
 /- [traits::order1]:
    Source: 'tests/src/traits.rs', lines 221:0-221:62 -/
 def order1
-  {T : Type} {U : Type} (ParentTrait0Inst : ParentTrait0 T) (ParentTrait0Inst1
-  : ParentTrait0 U) :
+  {T : Type} {U : Type} {Clause3_W : Type} (ParentTrait0Inst : ParentTrait0 T
+  Clause3_W) (ParentTrait0Inst1 : ParentTrait0 U Clause3_W) :
   Result Unit
   :=
   ok ()
@@ -383,16 +388,14 @@ def ChildTrait1Usize : ChildTrait1 Usize := {
 
 /- Trait declaration: [traits::Iterator]
    Source: 'tests/src/traits.rs', lines 231:0-233:1 -/
-structure Iterator (Self : Type) where
-  Item : Type
+structure Iterator (Self : Type) (Self_Item : Type) where
 
 /- Trait declaration: [traits::IntoIterator]
    Source: 'tests/src/traits.rs', lines 235:0-241:1 -/
-structure IntoIterator (Self : Type) where
-  Item : Type
-  IntoIter : Type
-  IteratortraitsIntoIteratorIntoIterInst : Iterator IntoIter
-  into_iter : Self → Result IntoIter
+structure IntoIterator (Self : Type) (Self_Item : Type) (Self_IntoIter : Type)
+  where
+  IteratorInst : Iterator Self_IntoIter Self_Item
+  into_iter : Self → Result Self_IntoIter
 
 /- Trait declaration: [traits::FromResidual]
    Source: 'tests/src/traits.rs', lines 252:0-252:24 -/
@@ -400,84 +403,82 @@ structure FromResidual (Self : Type) (T : Type) where
 
 /- Trait declaration: [traits::Try]
    Source: 'tests/src/traits.rs', lines 248:0-250:1 -/
-structure Try (Self : Type) where
-  Residual : Type
-  FromResidualSelftraitsTryResidualInst : FromResidual Self Residual
+structure Try (Self : Type) (Self_Residual : Type) where
+  FromResidualInst : FromResidual Self Self_Residual
 
 /- Trait declaration: [traits::WithTarget]
    Source: 'tests/src/traits.rs', lines 254:0-256:1 -/
-structure WithTarget (Self : Type) where
-  Target : Type
+structure WithTarget (Self : Type) (Self_Target : Type) where
 
 /- Trait declaration: [traits::ParentTrait2]
    Source: 'tests/src/traits.rs', lines 258:0-260:1 -/
-structure ParentTrait2 (Self : Type) where
-  U : Type
-  WithTargettraitsParentTrait2UInst : WithTarget U
+structure ParentTrait2 (Self : Type) (Self_U : Type) (Self_Clause1_Target :
+  Type) where
+  WithTargetInst : WithTarget Self_U Self_Clause1_Target
 
 /- Trait declaration: [traits::ChildTrait2]
    Source: 'tests/src/traits.rs', lines 262:0-264:1 -/
-structure ChildTrait2 (Self : Type) where
-  ParentTrait2Inst : ParentTrait2 Self
-  convert : ParentTrait2Inst.U → Result
-    ParentTrait2Inst.WithTargettraitsParentTrait2UInst.Target
+structure ChildTrait2 (Self : Type) (Self_Clause0_U : Type)
+  (Self_Clause0_Clause1_Target : Type) where
+  ParentTrait2Inst : ParentTrait2 Self Self_Clause0_U
+    Self_Clause0_Clause1_Target
+  convert : Self_Clause0_U → Result Self_Clause0_Clause1_Target
 
-/- Trait implementation: [traits::{traits::WithTarget for u32}#11]
+/- Trait implementation: [traits::{traits::WithTarget<u32> for u32}#11]
    Source: 'tests/src/traits.rs', lines 266:0-268:1 -/
 @[reducible]
-def WithTargetU32 : WithTarget U32 := {
-  Target := U32
+def WithTargetU32U32 : WithTarget U32 U32 := {
 }
 
-/- Trait implementation: [traits::{traits::ParentTrait2 for u32}#12]
+/- Trait implementation: [traits::{traits::ParentTrait2<u32, u32> for u32}#12]
    Source: 'tests/src/traits.rs', lines 270:0-272:1 -/
 @[reducible]
-def ParentTrait2U32 : ParentTrait2 U32 := {
-  U := U32
-  WithTargettraitsParentTrait2UInst := WithTargetU32
+def ParentTrait2U32U32U32 : ParentTrait2 U32 U32 U32 := {
+  WithTargetInst := WithTargetU32U32
 }
 
-/- [traits::{traits::ChildTrait2 for u32}#13::convert]:
+/- [traits::{traits::ChildTrait2<u32, u32> for u32}#13::convert]:
    Source: 'tests/src/traits.rs', lines 275:4-277:5 -/
-def ChildTrait2U32.convert (x : U32) : Result U32 :=
+def ChildTrait2U32U32U32.convert (x : U32) : Result U32 :=
   ok x
 
-/- Trait implementation: [traits::{traits::ChildTrait2 for u32}#13]
+/- Trait implementation: [traits::{traits::ChildTrait2<u32, u32> for u32}#13]
    Source: 'tests/src/traits.rs', lines 274:0-278:1 -/
 @[reducible]
-def ChildTrait2U32 : ChildTrait2 U32 := {
-  ParentTrait2Inst := ParentTrait2U32
-  convert := ChildTrait2U32.convert
+def ChildTrait2U32U32U32 : ChildTrait2 U32 U32 U32 := {
+  ParentTrait2Inst := ParentTrait2U32U32U32
+  convert := ChildTrait2U32U32U32.convert
 }
 
 /- Trait declaration: [traits::CFnOnce]
    Source: 'tests/src/traits.rs', lines 288:0-292:1 -/
-structure CFnOnce (Self : Type) (Args : Type) where
-  Output : Type
-  call_once : Self → Args → Result Output
+structure CFnOnce (Self : Type) (Args : Type) (Self_Output : Type) where
+  call_once : Self → Args → Result Self_Output
 
 /- Trait declaration: [traits::CFnMut]
    Source: 'tests/src/traits.rs', lines 294:0-296:1 -/
-structure CFnMut (Self : Type) (Args : Type) where
-  CFnOnceInst : CFnOnce Self Args
-  call_mut : Self → Args → Result (CFnOnceInst.Output × Self)
+structure CFnMut (Self : Type) (Args : Type) (Self_Clause0_Output : Type) where
+  CFnOnceInst : CFnOnce Self Args Self_Clause0_Output
+  call_mut : Self → Args → Result (Self_Clause0_Output × Self)
 
 /- Trait declaration: [traits::CFn]
    Source: 'tests/src/traits.rs', lines 298:0-300:1 -/
-structure CFn (Self : Type) (Args : Type) where
-  CFnMutInst : CFnMut Self Args
-  call : Self → Args → Result CFnMutInst.CFnOnceInst.Output
+structure CFn (Self : Type) (Args : Type) (Self_Clause0_Clause0_Output : Type)
+  where
+  CFnMutInst : CFnMut Self Args Self_Clause0_Clause0_Output
+  call : Self → Args → Result Self_Clause0_Clause0_Output
 
 /- Trait declaration: [traits::GetTrait]
    Source: 'tests/src/traits.rs', lines 302:0-305:1 -/
-structure GetTrait (Self : Type) where
-  W : Type
-  get_w : Self → Result W
+structure GetTrait (Self : Type) (Self_W : Type) where
+  get_w : Self → Result Self_W
 
 /- [traits::test_get_trait]:
    Source: 'tests/src/traits.rs', lines 307:0-309:1 -/
 def test_get_trait
-  {T : Type} (GetTraitInst : GetTrait T) (x : T) : Result GetTraitInst.W :=
+  {T : Type} {Clause1_W : Type} (GetTraitInst : GetTrait T Clause1_W) (x : T) :
+  Result Clause1_W
+  :=
   GetTraitInst.get_w x
 
 /- Trait declaration: [traits::Trait]

@@ -242,7 +242,9 @@ let fun_builtin_filter_types (id : FunDeclId.id) (types : 'a list)
           ^ string_of_int (List.length filter)
           ^ " filtering arguments provided for "
           ^ string_of_int (List.length types)
-          ^ " type arguments"
+          ^ " type arguments ("
+          ^ String.concat ", " (List.map (ty_to_string ctx) types)
+          ^ ")"
         in
         save_error_opt_span __FILE__ __LINE__ None err;
         Result.Error (types, err))

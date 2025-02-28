@@ -7,34 +7,21 @@ namespace Std
 
 open Result
 
-namespace alloc
-
-namespace boxed -- alloc.boxed
-
-namespace Box -- alloc.boxed.Box
-
-def deref {T : Type} (x : T) : Result T := ok x
-def deref_mut {T : Type} (x : T) : Result (T × (T → T)) := ok (x, λ x => x)
+def alloc.boxed.Box.deref {T : Type} (x : T) : T := x
+def alloc.boxed.Box.deref_mut {T : Type} (x : T) : (T × (T → T)) := (x, λ x => x)
 
 /-- Trait instance -/
-def coreopsDerefInst (Self : Type) :
-  core.ops.deref.Deref Self := {
-  Target := Self
-  deref := deref
+def core.ops.deref.DerefBoxInst (T : Type) :
+  core.ops.deref.Deref T T := {
+  deref x := ok (alloc.boxed.Box.deref x)
 }
 
 /-- Trait instance -/
-def coreopsDerefMutInst (Self : Type) :
-  core.ops.deref.DerefMut Self := {
-  derefInst := coreopsDerefInst Self
-  deref_mut := deref_mut
+def core.ops.deref.DerefMutBoxInst (T : Type) :
+  core.ops.deref.DerefMut T T := {
+  derefInst := DerefBoxInst T
+  deref_mut x := ok (alloc.boxed.Box.deref_mut x)
 }
-
-end Box -- alloc.boxed.Box
-
-end boxed -- alloc.boxed
-
-end alloc
 
 namespace Std
 
