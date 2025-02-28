@@ -340,6 +340,10 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
       ();
     mk_fun "core::slice::index::{core::ops::index::Index<[@T], @I>}::index"
       ~extract_name:(Some "core.slice.index.Slice.index") ();
+    mk_fun "core::slice::{[@T]}::get"
+      ~extract_name:(Some "core.slice.Slice.get") ();
+    mk_fun "core::slice::{[@T]}::get_mut"
+      ~extract_name:(Some "core.slice.Slice.get_mut") ();
     mk_fun
       "core::slice::index::{core::ops::index::IndexMut<[@T], @I>}::index_mut"
       ~extract_name:(Some "core.slice.index.Slice.index_mut") ();

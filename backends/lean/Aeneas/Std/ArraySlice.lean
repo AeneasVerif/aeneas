@@ -504,11 +504,25 @@ structure core.slice.index.SliceIndex (Self T : Type) where
   index : Self → T → Result Output
   index_mut : Self → T → Result (Output × (Output → T))
 
-/- [core::slice::index::[T]::index]: forward function -/
+/- [core::slice::index::[T]::index] -/
 def core.slice.index.Slice.index
   {T I : Type} (inst : core.slice.index.SliceIndex I (Slice T))
   (slice : Slice T) (i : I) : Result inst.Output :=
   inst.index i slice
+
+/- [core::slice::{@Slice<T>}::get]
+   Name pattern: core::slice::{[@T]}::get -/
+def core.slice.Slice.get
+  {T : Type} {I : Type} (inst : core.slice.index.SliceIndex I (Slice T))
+  (s : Slice T) (i : I) : Result (Option inst.Output) :=
+  inst.get i s
+
+/- [core::slice::{@Slice<T>}::get_mut]
+   Name pattern: core::slice::{[@T]}::get_mut -/
+def core.slice.Slice.get_mut
+  {T : Type} {I : Type} (inst : core.slice.index.SliceIndex I (Slice T))
+  (s : Slice T) (i : I) : Result ((Option inst.Output) × (Option inst.Output → Slice T)) :=
+  inst.get_mut i s
 
 /- [core::slice::index::Range:::get]: forward function -/
 def core.slice.index.RangeUsize.get {T : Type} (r : Range Usize) (s : Slice T) :
