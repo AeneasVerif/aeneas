@@ -5,9 +5,9 @@ require aeneas from "../../backends/lean"
 
 package «tests» {}
 
-@[default_target] lean_lib Arrays
-@[default_target] lean_lib ArraySliceIndex
 @[default_target] lean_lib AdtBorrows
+@[default_target] lean_lib ArraySliceIndex
+@[default_target] lean_lib Arrays
 @[default_target] lean_lib AsMut
 @[default_target] lean_lib Avl
 @[default_target] lean_lib BaseTutorial

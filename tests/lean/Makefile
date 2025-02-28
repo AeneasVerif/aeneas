@@ -16,11 +16,15 @@ COPY_LEAN_TOOLCHAIN = $(addprefix copy-lean-toolchain-,$(ALL_DIRS))
 all: prepare-projects verify
 
 .PHONY: prepare-projects
-prepare-projects: copy-lean-toolchain
+prepare-projects: copy-lean-toolchain lakefile.lean
 
-.PHONY: prepare-projects
+.PHONY: copy-lean-toolchain
 copy-lean-toolchain:
 	cp ../../backends/lean/lean-toolchain .
+
+.PHONY: lakefile.lean
+lakefile.lean:
+	bash script.sh
 
 .PHONY: update
 update:
