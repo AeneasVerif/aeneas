@@ -789,12 +789,12 @@ let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
     fmt "core::ops::deref::DerefMut<Box<@T>, @T>"
       ~extract_name:(Some "core::ops::deref::DerefBoxMutInst") ();
     (* core::ops::Deref<alloc::vec::Vec<T>> *)
-    fmt "core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>"
+    fmt "core::ops::deref::Deref<alloc::vec::Vec<@T, @A>, [@T]>"
       ~extract_name:(Some "core::ops::deref::DerefVecInst")
       ~filter:(Some [ true; false ])
       ();
     (* core::ops::DerefMut<alloc::vec::Vec<T>> *)
-    fmt "core::ops::deref::DerefMut<alloc::vec::Vec<@T>, [@T]>"
+    fmt "core::ops::deref::DerefMut<alloc::vec::Vec<@T, @A>, [@T]>"
       ~extract_name:(Some "core::ops::deref::DerefMutVecInst")
       ~filter:(Some [ true; false ])
       ();
