@@ -620,14 +620,26 @@ type extraction_ctx = {
 let extraction_ctx_to_fmt_env (ctx : extraction_ctx) : PrintPure.fmt_env =
   TranslateCore.trans_ctx_to_pure_fmt_env ctx.trans_ctx
 
+let extraction_ctx_to_llbc_fmt_env (ctx : extraction_ctx) : Print.fmt_env =
+  TranslateCore.trans_ctx_to_fmt_env ctx.trans_ctx
+
 let name_to_string (ctx : extraction_ctx) =
   PrintPure.name_to_string (extraction_ctx_to_fmt_env ctx)
 
 let ty_to_string (ctx : extraction_ctx) =
   PrintPure.ty_to_string (extraction_ctx_to_fmt_env ctx) false
 
+let llbc_generic_params_to_strings (ctx : extraction_ctx) =
+  Print.Types.generic_params_to_strings (extraction_ctx_to_llbc_fmt_env ctx)
+
+let llbc_generic_args_to_strings (ctx : extraction_ctx) =
+  Print.Types.generic_args_to_strings (extraction_ctx_to_llbc_fmt_env ctx)
+
 let trait_decl_id_to_string (ctx : extraction_ctx) =
   PrintPure.trait_decl_id_to_string (extraction_ctx_to_fmt_env ctx)
+
+let trait_decl_ref_to_string (ctx : extraction_ctx) =
+  PrintPure.trait_decl_ref_to_string (extraction_ctx_to_fmt_env ctx) false
 
 let type_id_to_string (ctx : extraction_ctx) =
   PrintPure.type_id_to_string (extraction_ctx_to_fmt_env ctx)

@@ -197,6 +197,15 @@ and trait_ref_to_string (env : fmt_env) (inside : bool) (tr : trait_ref) :
   in
   if generics_are_empty || not inside then trait_id else "(" ^ trait_id ^ ")"
 
+and trait_decl_ref_to_string (env : fmt_env) (inside : bool)
+    (tr : trait_decl_ref) : string =
+  let trait_id = trait_decl_id_to_string env tr.trait_decl_id in
+  let generics = generic_args_to_string env tr.decl_generics in
+  let space = if tr.decl_generics = empty_generic_args then "" else " " in
+  if tr.decl_generics = empty_generic_args || not inside then
+    trait_id ^ space ^ generics
+  else "(" ^ trait_id ^ space ^ generics ^ ")"
+
 and trait_instance_id_to_string (env : fmt_env) (id : trait_instance_id) :
     string =
   match id with
