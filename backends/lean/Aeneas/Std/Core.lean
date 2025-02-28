@@ -22,26 +22,24 @@ namespace ops -- core.ops
 namespace index -- core.ops.index
 
 /- Trait declaration: [core::ops::index::Index] -/
-structure Index (Self Idx : Type) where
-  Output : Type
+structure Index (Self Idx Output : Type) where
   index : Self → Idx → Result Output
 
 /- Trait declaration: [core::ops::index::IndexMut] -/
-structure IndexMut (Self Idx : Type) where
-  indexInst : Index Self Idx
-  index_mut : Self → Idx → Result (indexInst.Output × (indexInst.Output → Self))
+structure IndexMut (Self Idx Output : Type) where
+  indexInst : Index Self Idx Output
+  index_mut : Self → Idx → Result (Output × (Output → Self))
 
 end index -- core.ops.index
 
 namespace deref -- core.ops.deref
 
-structure Deref (Self : Type) where
-  Target : Type
+structure Deref (Self Target : Type) where
   deref : Self → Result Target
 
-structure DerefMut (Self : Type) where
-  derefInst : Deref Self
-  deref_mut : Self → Result (derefInst.Target × (Self → Self))
+structure DerefMut (Self Target : Type) where
+  derefInst : Deref Self Target
+  deref_mut : Self → Result (Target × (Target → Self))
 
 end deref -- core.ops.deref
 

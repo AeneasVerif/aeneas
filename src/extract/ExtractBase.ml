@@ -623,6 +623,9 @@ let extraction_ctx_to_fmt_env (ctx : extraction_ctx) : PrintPure.fmt_env =
 let name_to_string (ctx : extraction_ctx) =
   PrintPure.name_to_string (extraction_ctx_to_fmt_env ctx)
 
+let ty_to_string (ctx : extraction_ctx) =
+  PrintPure.ty_to_string (extraction_ctx_to_fmt_env ctx) false
+
 let trait_decl_id_to_string (ctx : extraction_ctx) =
   PrintPure.trait_decl_id_to_string (extraction_ctx_to_fmt_env ctx)
 

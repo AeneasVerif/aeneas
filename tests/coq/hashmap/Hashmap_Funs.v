@@ -102,7 +102,7 @@ Fixpoint hashMap_clear_loop
     if i s< i1
     then (
       p <-
-        alloc_vec_Vec_index_mut (core_slice_index_SliceIndexUsizeSliceTInst
+        alloc_vec_Vec_index_mut (core_slice_index_SliceIndexUsizeSliceInst
           (AList_t T)) slots i;
       let (_, index_mut_back) := p in
       i2 <- usize_add i 1%usize;
@@ -174,8 +174,8 @@ Definition hashMap_insert_no_resize
   let i := alloc_vec_Vec_len self.(hashMap_slots) in
   hash_mod <- usize_rem hash i;
   p <-
-    alloc_vec_Vec_index_mut (core_slice_index_SliceIndexUsizeSliceTInst
-      (AList_t T)) self.(hashMap_slots) hash_mod;
+    alloc_vec_Vec_index_mut (core_slice_index_SliceIndexUsizeSliceInst (AList_t
+      T)) self.(hashMap_slots) hash_mod;
   let (a, index_mut_back) := p in
   p1 <- hashMap_insert_in_list n key value a;
   let (inserted, a1) := p1 in
@@ -244,7 +244,7 @@ Fixpoint hashMap_move_elements_loop
     if i s< i1
     then (
       p <-
-        alloc_vec_Vec_index_mut (core_slice_index_SliceIndexUsizeSliceTInst
+        alloc_vec_Vec_index_mut (core_slice_index_SliceIndexUsizeSliceInst
           (AList_t T)) slots i;
       let (a, index_mut_back) := p in
       let (ls, a1) := core_mem_replace a AList_Nil in
@@ -362,8 +362,8 @@ Definition hashMap_contains_key
   let i := alloc_vec_Vec_len self.(hashMap_slots) in
   hash_mod <- usize_rem hash i;
   a <-
-    alloc_vec_Vec_index (core_slice_index_SliceIndexUsizeSliceTInst (AList_t
-      T)) self.(hashMap_slots) hash_mod;
+    alloc_vec_Vec_index (core_slice_index_SliceIndexUsizeSliceInst (AList_t T))
+      self.(hashMap_slots) hash_mod;
   hashMap_contains_key_in_list n key a
 .
 
@@ -401,8 +401,8 @@ Definition hashMap_get
   let i := alloc_vec_Vec_len self.(hashMap_slots) in
   hash_mod <- usize_rem hash i;
   a <-
-    alloc_vec_Vec_index (core_slice_index_SliceIndexUsizeSliceTInst (AList_t
-      T)) self.(hashMap_slots) hash_mod;
+    alloc_vec_Vec_index (core_slice_index_SliceIndexUsizeSliceInst (AList_t T))
+      self.(hashMap_slots) hash_mod;
   hashMap_get_in_list n key a
 .
 
@@ -456,8 +456,8 @@ Definition hashMap_get_mut
   let i := alloc_vec_Vec_len self.(hashMap_slots) in
   hash_mod <- usize_rem hash i;
   p <-
-    alloc_vec_Vec_index_mut (core_slice_index_SliceIndexUsizeSliceTInst
-      (AList_t T)) self.(hashMap_slots) hash_mod;
+    alloc_vec_Vec_index_mut (core_slice_index_SliceIndexUsizeSliceInst (AList_t
+      T)) self.(hashMap_slots) hash_mod;
   let (a, index_mut_back) := p in
   p1 <- hashMap_get_mut_in_list n a key;
   let (o, get_mut_in_list_back) := p1 in
@@ -521,8 +521,8 @@ Definition hashMap_remove
   let i := alloc_vec_Vec_len self.(hashMap_slots) in
   hash_mod <- usize_rem hash i;
   p <-
-    alloc_vec_Vec_index_mut (core_slice_index_SliceIndexUsizeSliceTInst
-      (AList_t T)) self.(hashMap_slots) hash_mod;
+    alloc_vec_Vec_index_mut (core_slice_index_SliceIndexUsizeSliceInst (AList_t
+      T)) self.(hashMap_slots) hash_mod;
   let (a, index_mut_back) := p in
   p1 <- hashMap_remove_from_list n key a;
   let (x, a1) := p1 in

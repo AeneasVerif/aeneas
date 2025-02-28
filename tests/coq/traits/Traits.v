@@ -275,64 +275,60 @@ Definition ToTypetraitsBoolWrapperT {T : Type} (toTypeBoolTInst : ToType_t bool
 
 (** [traits::WithConstTy::LEN2]
     Source: 'tests/src/traits.rs', lines 166:4-166:27 *)
-Definition with_const_ty_len2_default_body (Self : Type) (LEN : usize)
-  : result usize :=
+Definition with_const_ty_len2_default_body (Self : Type) (Self_V : Type)
+  (Self_W : Type) (LEN : usize) : result usize :=
   Ok 32%usize
 .
-Definition with_const_ty_len2_default (Self : Type) (LEN : usize) : usize :=
-  (with_const_ty_len2_default_body Self LEN)%global
+Definition with_const_ty_len2_default (Self : Type) (Self_V : Type) (Self_W :
+  Type) (LEN : usize) : usize :=
+  (with_const_ty_len2_default_body Self Self_V Self_W LEN)%global
 .
 
 (** Trait declaration: [traits::WithConstTy]
     Source: 'tests/src/traits.rs', lines 163:0-174:1 *)
-Record WithConstTy_t (Self : Type) (LEN : usize) := mkWithConstTy_t {
+Record WithConstTy_t (Self : Type) (Self_V : Type) (Self_W : Type) (LEN :
+  usize) := mkWithConstTy_t {
   WithConstTy_tWithConstTy_t_LEN1 : usize;
   WithConstTy_tWithConstTy_t_LEN2 : usize;
-  WithConstTy_tWithConstTy_t_V : Type;
-  WithConstTy_tWithConstTy_t_W : Type;
-  WithConstTy_tWithConstTy_t_ToU64traitsWithConstTyWInst : ToU64_t
-    WithConstTy_tWithConstTy_t_W;
-  WithConstTy_t_f : WithConstTy_tWithConstTy_t_W -> array u8 LEN -> result
-    WithConstTy_tWithConstTy_t_W;
+  WithConstTy_tWithConstTy_t_ToU64Inst : ToU64_t Self_W;
+  WithConstTy_t_f : Self_W -> array u8 LEN -> result Self_W;
 }.
 
-Arguments mkWithConstTy_t { _ } { _ }.
-Arguments WithConstTy_tWithConstTy_t_LEN1 { _ } { _ } _.
-Arguments WithConstTy_tWithConstTy_t_LEN2 { _ } { _ } _.
-Arguments WithConstTy_tWithConstTy_t_V { _ } { _ } _.
-Arguments WithConstTy_tWithConstTy_t_W { _ } { _ } _.
-Arguments WithConstTy_tWithConstTy_t_ToU64traitsWithConstTyWInst { _ } { _ } _.
-Arguments WithConstTy_t_f { _ } { _ } _.
+Arguments mkWithConstTy_t { _ } { _ } { _ } { _ }.
+Arguments WithConstTy_tWithConstTy_t_LEN1 { _ } { _ } { _ } { _ } _.
+Arguments WithConstTy_tWithConstTy_t_LEN2 { _ } { _ } { _ } { _ } _.
+Arguments WithConstTy_tWithConstTy_t_ToU64Inst { _ } { _ } { _ } { _ } _.
+Arguments WithConstTy_t_f { _ } { _ } { _ } { _ } _.
 
-(** [traits::{traits::WithConstTy<32: usize> for bool}#8::LEN1]
+(** [traits::{traits::WithConstTy<u8, u64, 32: usize> for bool}#8::LEN1]
     Source: 'tests/src/traits.rs', lines 177:4-177:27 *)
-Definition with_const_ty_bool32_len1_body : result usize := Ok 12%usize.
-Definition with_const_ty_bool32_len1 : usize :=
-  with_const_ty_bool32_len1_body%global
+Definition with_const_ty_bool_u8_u6432_len1_body : result usize := Ok 12%usize.
+Definition with_const_ty_bool_u8_u6432_len1 : usize :=
+  with_const_ty_bool_u8_u6432_len1_body%global
 .
 
-(** [traits::{traits::WithConstTy<32: usize> for bool}#8::f]:
+(** [traits::{traits::WithConstTy<u8, u64, 32: usize> for bool}#8::f]:
     Source: 'tests/src/traits.rs', lines 182:4-182:42 *)
-Definition withConstTyBool32_f
+Definition withConstTyBoolU8U6432_f
   (i : u64) (a : array u8 32%usize) : result u64 :=
   Ok i
 .
 
-(** Trait implementation: [traits::{traits::WithConstTy<32: usize> for bool}#8]
+(** Trait implementation: [traits::{traits::WithConstTy<u8, u64, 32: usize> for bool}#8]
     Source: 'tests/src/traits.rs', lines 176:0-183:1 *)
-Definition WithConstTyBool32 : WithConstTy_t bool 32%usize := {|
-  WithConstTy_tWithConstTy_t_LEN1 := with_const_ty_bool32_len1;
-  WithConstTy_tWithConstTy_t_LEN2 := with_const_ty_len2_default bool 32%usize;
-  WithConstTy_tWithConstTy_t_V := u8;
-  WithConstTy_tWithConstTy_t_W := u64;
-  WithConstTy_tWithConstTy_t_ToU64traitsWithConstTyWInst := ToU64U64;
-  WithConstTy_t_f := withConstTyBool32_f;
+Definition WithConstTyBoolU8U6432 : WithConstTy_t bool u8 u64 32%usize := {|
+  WithConstTy_tWithConstTy_t_LEN1 := with_const_ty_bool_u8_u6432_len1;
+  WithConstTy_tWithConstTy_t_LEN2 := with_const_ty_len2_default bool u8 u64
+    32%usize;
+  WithConstTy_tWithConstTy_t_ToU64Inst := ToU64U64;
+  WithConstTy_t_f := withConstTyBoolU8U6432_f;
 |}.
 
 (** [traits::use_with_const_ty1]:
     Source: 'tests/src/traits.rs', lines 185:0-187:1 *)
 Definition use_with_const_ty1
-  {H : Type} {LEN : usize} (withConstTyInst : WithConstTy_t H LEN) :
+  {H : Type} {Clause1_V : Type} {Clause1_W : Type} {LEN : usize}
+  (withConstTyInst : WithConstTy_t H Clause1_V Clause1_W LEN) :
   result usize
   :=
   Ok withConstTyInst.(WithConstTy_tWithConstTy_t_LEN1)
@@ -341,8 +337,8 @@ Definition use_with_const_ty1
 (** [traits::use_with_const_ty2]:
     Source: 'tests/src/traits.rs', lines 189:0-189:76 *)
 Definition use_with_const_ty2
-  {H : Type} {LEN : usize} (withConstTyInst : WithConstTy_t H LEN)
-  (w : withConstTyInst.(WithConstTy_tWithConstTy_t_W)) :
+  {H : Type} {Clause1_V : Type} {Clause1_W : Type} {LEN : usize}
+  (withConstTyInst : WithConstTy_t H Clause1_V Clause1_W LEN) (t : Clause1_W) :
   result unit
   :=
   Ok tt
@@ -351,12 +347,11 @@ Definition use_with_const_ty2
 (** [traits::use_with_const_ty3]:
     Source: 'tests/src/traits.rs', lines 191:0-193:1 *)
 Definition use_with_const_ty3
-  {H : Type} {LEN : usize} (withConstTyInst : WithConstTy_t H LEN)
-  (x : withConstTyInst.(WithConstTy_tWithConstTy_t_W)) :
+  {H : Type} {Clause1_V : Type} {Clause1_W : Type} {LEN : usize}
+  (withConstTyInst : WithConstTy_t H Clause1_V Clause1_W LEN) (x : Clause1_W) :
   result u64
   :=
-  withConstTyInst.(WithConstTy_tWithConstTy_t_ToU64traitsWithConstTyWInst).(ToU64_t_to_u64)
-    x
+  withConstTyInst.(WithConstTy_tWithConstTy_t_ToU64Inst).(ToU64_t_to_u64) x
 .
 
 (** [traits::test_where1]:
@@ -367,7 +362,8 @@ Definition test_where1 {T : Type} (_x : T) : result unit :=
 (** [traits::test_where2]:
     Source: 'tests/src/traits.rs', lines 196:0-196:60 *)
 Definition test_where2
-  {T : Type} (withConstTyT32Inst : WithConstTy_t T 32%usize) (_x : u32) :
+  {T : Type} {Clause1_W : Type} (withConstTyTU32Clause1_W32Inst : WithConstTy_t
+  T u32 Clause1_W 32%usize) (_x : u32) :
   result unit
   :=
   Ok tt
@@ -375,16 +371,14 @@ Definition test_where2
 
 (** Trait declaration: [traits::ParentTrait0]
     Source: 'tests/src/traits.rs', lines 202:0-206:1 *)
-Record ParentTrait0_t (Self : Type) := mkParentTrait0_t {
-  ParentTrait0_tParentTrait0_t_W : Type;
+Record ParentTrait0_t (Self : Type) (Self_W : Type) := mkParentTrait0_t {
   ParentTrait0_t_get_name : Self -> result string;
-  ParentTrait0_t_get_w : Self -> result ParentTrait0_tParentTrait0_t_W;
+  ParentTrait0_t_get_w : Self -> result Self_W;
 }.
 
-Arguments mkParentTrait0_t { _ }.
-Arguments ParentTrait0_tParentTrait0_t_W { _ } _.
-Arguments ParentTrait0_t_get_name { _ } _.
-Arguments ParentTrait0_t_get_w { _ } _.
+Arguments mkParentTrait0_t { _ } { _ }.
+Arguments ParentTrait0_t_get_name { _ } { _ } _.
+Arguments ParentTrait0_t_get_w { _ } { _ } _.
 
 (** Trait declaration: [traits::ParentTrait1]
     Source: 'tests/src/traits.rs', lines 207:0-207:25 *)
@@ -394,19 +388,23 @@ Arguments mkParentTrait1_t { _ }.
 
 (** Trait declaration: [traits::ChildTrait]
     Source: 'tests/src/traits.rs', lines 208:0-208:52 *)
-Record ChildTrait_t (Self : Type) := mkChildTrait_t {
-  ChildTrait_tChildTrait_t_ParentTrait0Inst : ParentTrait0_t Self;
+Record ChildTrait_t (Self : Type) (Self_Clause0_W : Type) := mkChildTrait_t {
+  ChildTrait_tChildTrait_t_ParentTrait0Inst : ParentTrait0_t Self
+    Self_Clause0_W;
   ChildTrait_tChildTrait_t_ParentTrait1Inst : ParentTrait1_t Self;
 }.
 
-Arguments mkChildTrait_t { _ }.
-Arguments ChildTrait_tChildTrait_t_ParentTrait0Inst { _ } _.
-Arguments ChildTrait_tChildTrait_t_ParentTrait1Inst { _ } _.
+Arguments mkChildTrait_t { _ } { _ }.
+Arguments ChildTrait_tChildTrait_t_ParentTrait0Inst { _ } { _ } _.
+Arguments ChildTrait_tChildTrait_t_ParentTrait1Inst { _ } { _ } _.
 
 (** [traits::test_child_trait1]:
     Source: 'tests/src/traits.rs', lines 211:0-213:1 *)
 Definition test_child_trait1
-  {T : Type} (childTraitInst : ChildTrait_t T) (x : T) : result string :=
+  {T : Type} {Clause1_Clause0_W : Type} (childTraitInst : ChildTrait_t T
+  Clause1_Clause0_W) (x : T) :
+  result string
+  :=
   childTraitInst.(ChildTrait_tChildTrait_t_ParentTrait0Inst).(ParentTrait0_t_get_name)
     x
 .
@@ -414,9 +412,9 @@ Definition test_child_trait1
 (** [traits::test_child_trait2]:
     Source: 'tests/src/traits.rs', lines 215:0-217:1 *)
 Definition test_child_trait2
-  {T : Type} (childTraitInst : ChildTrait_t T) (x : T) :
-  result
-    childTraitInst.(ChildTrait_tChildTrait_t_ParentTrait0Inst).(ParentTrait0_tParentTrait0_t_W)
+  {T : Type} {Clause1_Clause0_W : Type} (childTraitInst : ChildTrait_t T
+  Clause1_Clause0_W) (x : T) :
+  result Clause1_Clause0_W
   :=
   childTraitInst.(ChildTrait_tChildTrait_t_ParentTrait0Inst).(ParentTrait0_t_get_w)
     x
@@ -425,8 +423,8 @@ Definition test_child_trait2
 (** [traits::order1]:
     Source: 'tests/src/traits.rs', lines 221:0-221:62 *)
 Definition order1
-  {T : Type} {U : Type} (parentTrait0Inst : ParentTrait0_t T)
-  (parentTrait0Inst1 : ParentTrait0_t U) :
+  {T : Type} {U : Type} {Clause3_W : Type} (parentTrait0Inst : ParentTrait0_t T
+  Clause3_W) (parentTrait0Inst1 : ParentTrait0_t U Clause3_W) :
   result unit
   :=
   Ok tt
@@ -453,30 +451,22 @@ Definition ChildTrait1Usize : ChildTrait1_t usize := {|
 
 (** Trait declaration: [traits::Iterator]
     Source: 'tests/src/traits.rs', lines 231:0-233:1 *)
-Record Iterator_t (Self : Type) := mkIterator_t {
-  Iterator_tIterator_t_Item : Type;
-}.
+Record Iterator_t (Self : Type) (Self_Item : Type) := mkIterator_t{}.
 
-Arguments mkIterator_t { _ }.
-Arguments Iterator_tIterator_t_Item { _ } _.
+Arguments mkIterator_t { _ } { _ }.
 
 (** Trait declaration: [traits::IntoIterator]
     Source: 'tests/src/traits.rs', lines 235:0-241:1 *)
-Record IntoIterator_t (Self : Type) := mkIntoIterator_t {
-  IntoIterator_tIntoIterator_t_Item : Type;
-  IntoIterator_tIntoIterator_t_IntoIter : Type;
-  IntoIterator_tIntoIterator_t_IteratortraitsIntoIteratorIntoIterInst :
-    Iterator_t IntoIterator_tIntoIterator_t_IntoIter;
-  IntoIterator_t_into_iter : Self -> result
-    IntoIterator_tIntoIterator_t_IntoIter;
+Record IntoIterator_t (Self : Type) (Self_Item : Type) (Self_IntoIter : Type)
+  := mkIntoIterator_t {
+  IntoIterator_tIntoIterator_t_IteratorInst : Iterator_t Self_IntoIter
+    Self_Item;
+  IntoIterator_t_into_iter : Self -> result Self_IntoIter;
 }.
 
-Arguments mkIntoIterator_t { _ }.
-Arguments IntoIterator_tIntoIterator_t_Item { _ } _.
-Arguments IntoIterator_tIntoIterator_t_IntoIter { _ } _.
-Arguments IntoIterator_tIntoIterator_t_IteratortraitsIntoIteratorIntoIterInst
-  { _ } _.
-Arguments IntoIterator_t_into_iter { _ } _.
+Arguments mkIntoIterator_t { _ } { _ } { _ }.
+Arguments IntoIterator_tIntoIterator_t_IteratorInst { _ } { _ } { _ } _.
+Arguments IntoIterator_t_into_iter { _ } { _ } { _ } _.
 
 (** Trait declaration: [traits::FromResidual]
     Source: 'tests/src/traits.rs', lines 252:0-252:24 *)
@@ -486,129 +476,114 @@ Arguments mkFromResidual_t { _ } { _ }.
 
 (** Trait declaration: [traits::Try]
     Source: 'tests/src/traits.rs', lines 248:0-250:1 *)
-Record Try_t (Self : Type) := mkTry_t {
-  Try_tTry_t_Residual : Type;
-  Try_tTry_t_FromResidualSelftraitsTryResidualInst : FromResidual_t Self
-    Try_tTry_t_Residual;
+Record Try_t (Self : Type) (Self_Residual : Type) := mkTry_t {
+  Try_tTry_t_FromResidualInst : FromResidual_t Self Self_Residual;
 }.
 
-Arguments mkTry_t { _ }.
-Arguments Try_tTry_t_Residual { _ } _.
-Arguments Try_tTry_t_FromResidualSelftraitsTryResidualInst { _ } _.
+Arguments mkTry_t { _ } { _ }.
+Arguments Try_tTry_t_FromResidualInst { _ } { _ } _.
 
 (** Trait declaration: [traits::WithTarget]
     Source: 'tests/src/traits.rs', lines 254:0-256:1 *)
-Record WithTarget_t (Self : Type) := mkWithTarget_t {
-  WithTarget_tWithTarget_t_Target : Type;
-}.
+Record WithTarget_t (Self : Type) (Self_Target : Type) := mkWithTarget_t{}.
 
-Arguments mkWithTarget_t { _ }.
-Arguments WithTarget_tWithTarget_t_Target { _ } _.
+Arguments mkWithTarget_t { _ } { _ }.
 
 (** Trait declaration: [traits::ParentTrait2]
     Source: 'tests/src/traits.rs', lines 258:0-260:1 *)
-Record ParentTrait2_t (Self : Type) := mkParentTrait2_t {
-  ParentTrait2_tParentTrait2_t_U : Type;
-  ParentTrait2_tParentTrait2_t_WithTargettraitsParentTrait2UInst : WithTarget_t
-    ParentTrait2_tParentTrait2_t_U;
+Record ParentTrait2_t (Self : Type) (Self_U : Type) (Self_Clause1_Target :
+  Type) := mkParentTrait2_t {
+  ParentTrait2_tParentTrait2_t_WithTargetInst : WithTarget_t Self_U
+    Self_Clause1_Target;
 }.
 
-Arguments mkParentTrait2_t { _ }.
-Arguments ParentTrait2_tParentTrait2_t_U { _ } _.
-Arguments ParentTrait2_tParentTrait2_t_WithTargettraitsParentTrait2UInst { _ }
-  _.
+Arguments mkParentTrait2_t { _ } { _ } { _ }.
+Arguments ParentTrait2_tParentTrait2_t_WithTargetInst { _ } { _ } { _ } _.
 
 (** Trait declaration: [traits::ChildTrait2]
     Source: 'tests/src/traits.rs', lines 262:0-264:1 *)
-Record ChildTrait2_t (Self : Type) := mkChildTrait2_t {
-  ChildTrait2_tChildTrait2_t_ParentTrait2Inst : ParentTrait2_t Self;
-  ChildTrait2_t_convert :
-    (ChildTrait2_tChildTrait2_t_ParentTrait2Inst).(ParentTrait2_tParentTrait2_t_U)
-    -> result
-    (ChildTrait2_tChildTrait2_t_ParentTrait2Inst).(ParentTrait2_tParentTrait2_t_WithTargettraitsParentTrait2UInst).(WithTarget_tWithTarget_t_Target);
+Record ChildTrait2_t (Self : Type) (Self_Clause0_U : Type)
+  (Self_Clause0_Clause1_Target : Type) := mkChildTrait2_t {
+  ChildTrait2_tChildTrait2_t_ParentTrait2Inst : ParentTrait2_t Self
+    Self_Clause0_U Self_Clause0_Clause1_Target;
+  ChildTrait2_t_convert : Self_Clause0_U -> result Self_Clause0_Clause1_Target;
 }.
 
-Arguments mkChildTrait2_t { _ }.
-Arguments ChildTrait2_tChildTrait2_t_ParentTrait2Inst { _ } _.
-Arguments ChildTrait2_t_convert { _ } _.
+Arguments mkChildTrait2_t { _ } { _ } { _ }.
+Arguments ChildTrait2_tChildTrait2_t_ParentTrait2Inst { _ } { _ } { _ } _.
+Arguments ChildTrait2_t_convert { _ } { _ } { _ } _.
 
-(** Trait implementation: [traits::{traits::WithTarget for u32}#11]
+(** Trait implementation: [traits::{traits::WithTarget<u32> for u32}#11]
     Source: 'tests/src/traits.rs', lines 266:0-268:1 *)
-Definition WithTargetU32 : WithTarget_t u32 := {|
-  WithTarget_tWithTarget_t_Target := u32;
-|}.
+Definition WithTargetU32U32 : WithTarget_t u32 u32 := mkWithTarget_t.
 
-(** Trait implementation: [traits::{traits::ParentTrait2 for u32}#12]
+(** Trait implementation: [traits::{traits::ParentTrait2<u32, u32> for u32}#12]
     Source: 'tests/src/traits.rs', lines 270:0-272:1 *)
-Definition ParentTrait2U32 : ParentTrait2_t u32 := {|
-  ParentTrait2_tParentTrait2_t_U := u32;
-  ParentTrait2_tParentTrait2_t_WithTargettraitsParentTrait2UInst :=
-    WithTargetU32;
+Definition ParentTrait2U32U32U32 : ParentTrait2_t u32 u32 u32 := {|
+  ParentTrait2_tParentTrait2_t_WithTargetInst := WithTargetU32U32;
 |}.
 
-(** [traits::{traits::ChildTrait2 for u32}#13::convert]:
+(** [traits::{traits::ChildTrait2<u32, u32> for u32}#13::convert]:
     Source: 'tests/src/traits.rs', lines 275:4-277:5 *)
-Definition childTrait2U32_convert (x : u32) : result u32 :=
+Definition childTrait2U32U32U32_convert (x : u32) : result u32 :=
   Ok x.
 
-(** Trait implementation: [traits::{traits::ChildTrait2 for u32}#13]
+(** Trait implementation: [traits::{traits::ChildTrait2<u32, u32> for u32}#13]
     Source: 'tests/src/traits.rs', lines 274:0-278:1 *)
-Definition ChildTrait2U32 : ChildTrait2_t u32 := {|
-  ChildTrait2_tChildTrait2_t_ParentTrait2Inst := ParentTrait2U32;
-  ChildTrait2_t_convert := childTrait2U32_convert;
+Definition ChildTrait2U32U32U32 : ChildTrait2_t u32 u32 u32 := {|
+  ChildTrait2_tChildTrait2_t_ParentTrait2Inst := ParentTrait2U32U32U32;
+  ChildTrait2_t_convert := childTrait2U32U32U32_convert;
 |}.
 
 (** Trait declaration: [traits::CFnOnce]
     Source: 'tests/src/traits.rs', lines 288:0-292:1 *)
-Record CFnOnce_t (Self : Type) (Args : Type) := mkCFnOnce_t {
-  CFnOnce_tCFnOnce_t_Output : Type;
-  CFnOnce_t_call_once : Self -> Args -> result CFnOnce_tCFnOnce_t_Output;
+Record CFnOnce_t (Self : Type) (Args : Type) (Self_Output : Type)
+  := mkCFnOnce_t {
+  CFnOnce_t_call_once : Self -> Args -> result Self_Output;
 }.
 
-Arguments mkCFnOnce_t { _ } { _ }.
-Arguments CFnOnce_tCFnOnce_t_Output { _ } { _ } _.
-Arguments CFnOnce_t_call_once { _ } { _ } _.
+Arguments mkCFnOnce_t { _ } { _ } { _ }.
+Arguments CFnOnce_t_call_once { _ } { _ } { _ } _.
 
 (** Trait declaration: [traits::CFnMut]
     Source: 'tests/src/traits.rs', lines 294:0-296:1 *)
-Record CFnMut_t (Self : Type) (Args : Type) := mkCFnMut_t {
-  CFnMut_tCFnMut_t_CFnOnceInst : CFnOnce_t Self Args;
-  CFnMut_t_call_mut : Self -> Args -> result
-    ((CFnMut_tCFnMut_t_CFnOnceInst).(CFnOnce_tCFnOnce_t_Output) * Self);
+Record CFnMut_t (Self : Type) (Args : Type) (Self_Clause0_Output : Type)
+  := mkCFnMut_t {
+  CFnMut_tCFnMut_t_CFnOnceInst : CFnOnce_t Self Args Self_Clause0_Output;
+  CFnMut_t_call_mut : Self -> Args -> result (Self_Clause0_Output * Self);
 }.
 
-Arguments mkCFnMut_t { _ } { _ }.
-Arguments CFnMut_tCFnMut_t_CFnOnceInst { _ } { _ } _.
-Arguments CFnMut_t_call_mut { _ } { _ } _.
+Arguments mkCFnMut_t { _ } { _ } { _ }.
+Arguments CFnMut_tCFnMut_t_CFnOnceInst { _ } { _ } { _ } _.
+Arguments CFnMut_t_call_mut { _ } { _ } { _ } _.
 
 (** Trait declaration: [traits::CFn]
     Source: 'tests/src/traits.rs', lines 298:0-300:1 *)
-Record CFn_t (Self : Type) (Args : Type) := mkCFn_t {
-  CFn_tCFn_t_CFnMutInst : CFnMut_t Self Args;
-  CFn_t_call : Self -> Args -> result
-    (CFn_tCFn_t_CFnMutInst).(CFnMut_tCFnMut_t_CFnOnceInst).(CFnOnce_tCFnOnce_t_Output);
+Record CFn_t (Self : Type) (Args : Type) (Self_Clause0_Clause0_Output : Type)
+  := mkCFn_t {
+  CFn_tCFn_t_CFnMutInst : CFnMut_t Self Args Self_Clause0_Clause0_Output;
+  CFn_t_call : Self -> Args -> result Self_Clause0_Clause0_Output;
 }.
 
-Arguments mkCFn_t { _ } { _ }.
-Arguments CFn_tCFn_t_CFnMutInst { _ } { _ } _.
-Arguments CFn_t_call { _ } { _ } _.
+Arguments mkCFn_t { _ } { _ } { _ }.
+Arguments CFn_tCFn_t_CFnMutInst { _ } { _ } { _ } _.
+Arguments CFn_t_call { _ } { _ } { _ } _.
 
 (** Trait declaration: [traits::GetTrait]
     Source: 'tests/src/traits.rs', lines 302:0-305:1 *)
-Record GetTrait_t (Self : Type) := mkGetTrait_t {
-  GetTrait_tGetTrait_t_W : Type;
-  GetTrait_t_get_w : Self -> result GetTrait_tGetTrait_t_W;
+Record GetTrait_t (Self : Type) (Self_W : Type) := mkGetTrait_t {
+  GetTrait_t_get_w : Self -> result Self_W;
 }.
 
-Arguments mkGetTrait_t { _ }.
-Arguments GetTrait_tGetTrait_t_W { _ } _.
-Arguments GetTrait_t_get_w { _ } _.
+Arguments mkGetTrait_t { _ } { _ }.
+Arguments GetTrait_t_get_w { _ } { _ } _.
 
 (** [traits::test_get_trait]:
     Source: 'tests/src/traits.rs', lines 307:0-309:1 *)
 Definition test_get_trait
-  {T : Type} (getTraitInst : GetTrait_t T) (x : T) :
-  result getTraitInst.(GetTrait_tGetTrait_t_W)
+  {T : Type} {Clause1_W : Type} (getTraitInst : GetTrait_t T Clause1_W) 
+  (x : T) :
+  result Clause1_W
   :=
   getTraitInst.(GetTrait_t_get_w) x
 .
