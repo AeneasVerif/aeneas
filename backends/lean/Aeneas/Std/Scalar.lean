@@ -3705,34 +3705,34 @@ def core.num.Isize.wrapping_add : Isize → Isize → Isize  := @IScalar.wrappin
   simp [core.num.Isize.wrapping_add, bv]
 
 @[simp] theorem UScalar.wrapping_add_val_eq {ty} (x y : UScalar ty) :
-  (wrapping_add x y).val = (x.val + y.val) % (UScalar.max ty + 1) := by
-  simp only [wrapping_add, val, max]
+  (wrapping_add x y).val = (x.val + y.val) % (UScalar.size ty) := by
+  simp only [wrapping_add, val, size]
   have : 0 < 2^ty.numBits := by simp
   have : 2 ^ ty.numBits - 1 + 1 = 2^ty.numBits := by omega
   simp [this]
 
 @[simp] theorem U8.wrapping_add_val_eq (x y : U8) :
-  (core.num.U8.wrapping_add x y).val = (x.val + y.val) % (UScalar.max .U8 + 1) :=
+  (core.num.U8.wrapping_add x y).val = (x.val + y.val) % (UScalar.size .U8) :=
   UScalar.wrapping_add_val_eq x y
 
 @[simp] theorem U16.wrapping_add_val_eq (x y : U16) :
-  (core.num.U16.wrapping_add x y).val = (x.val + y.val) % (UScalar.max .U16 + 1) :=
+  (core.num.U16.wrapping_add x y).val = (x.val + y.val) % (UScalar.size .U16) :=
   UScalar.wrapping_add_val_eq x y
 
 @[simp] theorem U32.wrapping_add_val_eq (x y : U32) :
-  (core.num.U32.wrapping_add x y).val = (x.val + y.val) % (UScalar.max .U32 + 1) :=
+  (core.num.U32.wrapping_add x y).val = (x.val + y.val) % (UScalar.size .U32) :=
   UScalar.wrapping_add_val_eq x y
 
 @[simp] theorem U64.wrapping_add_val_eq (x y : U64) :
-  (core.num.U64.wrapping_add x y).val = (x.val + y.val) % (UScalar.max .U64 + 1) :=
+  (core.num.U64.wrapping_add x y).val = (x.val + y.val) % (UScalar.size .U64) :=
   UScalar.wrapping_add_val_eq x y
 
 @[simp] theorem U128.wrapping_add_val_eq (x y : U128) :
-  (core.num.U128.wrapping_add x y).val = (x.val + y.val) % (UScalar.max .U128 + 1) :=
+  (core.num.U128.wrapping_add x y).val = (x.val + y.val) % (UScalar.size .U128) :=
   UScalar.wrapping_add_val_eq x y
 
 @[simp] theorem Usize.wrapping_add_val_eq (x y : Usize) :
-  (core.num.Usize.wrapping_add x y).val = (x.val + y.val) % (UScalar.max .Usize + 1) :=
+  (core.num.Usize.wrapping_add x y).val = (x.val + y.val) % (UScalar.size .Usize) :=
   UScalar.wrapping_add_val_eq x y
 
 @[simp] theorem IScalar.wrapping_add_val_eq {ty} (x y : IScalar ty) :
