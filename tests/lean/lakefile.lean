@@ -27,6 +27,7 @@ package «tests» {}
 @[default_target] lean_lib MiniTree
 @[default_target] lean_lib MutuallyRecursiveTraits
 @[default_target] lean_lib NoNestedBorrows
+@[default_target] lean_lib Order
 @[default_target] lean_lib Paper
 @[default_target] lean_lib PoloniusList
 @[default_target] lean_lib RenameAttribute

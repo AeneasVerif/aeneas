@@ -91,7 +91,7 @@ type type_variant_kind =
   | KOpaque
   | KStruct of (string * string option) list
       (** Contains the list of (field rust name, field extracted name) *)
-  | KEnum of string list
+  | KEnum of (string * string option) list
 
 let mk_struct_constructor (type_name : string) : string =
   let prefix =
@@ -146,12 +146,17 @@ let builtin_types () : Pure.builtin_type_info list =
       | KEnum variants ->
           let variants =
             List.map
-              (fun variant ->
+              (fun (variant, evariant) ->
+                let evariant =
+                  match evariant with
+                  | Some variant -> variant
+                  | None -> variant
+                in
                 let extract_variant_name =
                   match backend () with
-                  | FStar | Coq -> extract_name ^ "_" ^ variant
-                  | Lean -> extract_name ^ "." ^ variant
-                  | HOL4 -> extract_name ^ variant
+                  | FStar | Coq -> extract_name ^ "_" ^ evariant
+                  | Lean -> extract_name ^ "." ^ evariant
+                  | HOL4 -> extract_name ^ evariant
                 in
                 ({
                    rust_variant_name = variant;
@@ -219,11 +224,23 @@ let builtin_types () : Pure.builtin_type_info list =
   @ mk_lean_only
       [
         mk_type "core::fmt::Formatter" ();
-        mk_type "core::result::Result" ~kind:(KEnum [ "Ok"; "Err" ]) ();
+        mk_type "core::result::Result"
+          ~kind:(KEnum [ ("Ok", None); ("Err", None) ])
+          ();
         mk_type "core::fmt::Error" ();
         mk_type "core::array::TryFromSliceError" ();
         mk_type "core::ops::range::RangeFrom"
           ~kind:(KStruct [ ("start", None) ])
+          ();
+        (* We model the Rust ordering with the native Lean ordering *)
+        mk_type "core::cmp::Ordering" ~custom_name:(Some "Ordering")
+          ~kind:
+            (KEnum
+               [
+                 ("Less", Some "lt");
+                 ("Equal", Some "eq");
+                 ("Greater", Some "gt");
+               ])
           ();
       ]
 
@@ -580,6 +597,32 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
            ~filter:(Some [ true; false ])
            ();
        ]
+      (* PartialEq, Eq, PartialOrd, Ord *)
+      @ mk_scalar_fun
+          (fun ty ->
+            "core::cmp::impls::{core::cmp::PartialEq<" ^ ty ^ "," ^ ty
+            ^ ">}::eq")
+          (fun ty ->
+            "core.cmp.impls.PartialEq"
+            ^ StringUtils.capitalize_first_letter ty
+            ^ ".eq")
+          ~can_fail:false ()
+      @ mk_scalar_fun
+          (fun ty ->
+            "core::cmp::impls::{core::cmp::PartialOrd<" ^ ty ^ "," ^ ty
+            ^ ">}::partial_cmp")
+          (fun ty ->
+            "core.cmp.impls.PartialCmp"
+            ^ StringUtils.capitalize_first_letter ty
+            ^ ".partial_cmp")
+          ~can_fail:false ()
+      @ mk_scalar_fun
+          (fun ty -> "core::cmp::impls::{core::cmp::Ord<" ^ ty ^ ">}::cmp")
+          (fun ty ->
+            "core.cmp.impls.Ord"
+            ^ StringUtils.capitalize_first_letter ty
+            ^ ".cmp")
+          ~can_fail:false ()
       @ List.flatten
           (List.map
              (fun int_name ->
@@ -755,6 +798,14 @@ let builtin_trait_decls_info () =
         mk_trait "core::convert::TryFrom" ~methods:[ "try_from" ] ();
         mk_trait "core::convert::TryInto" ~methods:[ "try_into" ] ();
         mk_trait "core::convert::AsMut" ~methods:[ "as_mut" ] ();
+        (* Eq, Ord *)
+        mk_trait "core::cmp::PartialEq" ~methods:[ "eq" ] ();
+        mk_trait "core::cmp::Eq" ~parent_clauses:[ "partialEqInst" ] ();
+        mk_trait "core::cmp::PartialOrd" ~parent_clauses:[ "partialEqInst" ]
+          ~methods:[ "partial_cmp" ] ();
+        mk_trait "core::cmp::Ord"
+          ~parent_clauses:[ "eqInst"; "partialOrdInst" ]
+          ~methods:[ "cmp" ] ();
       ]
 
 let mk_builtin_trait_decls_map () =
@@ -916,6 +967,43 @@ let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
           ("core::marker::Copy<" ^ ty ^ ">")
           ~extract_name:
             (Some ("core.marker.Copy" ^ StringUtils.capitalize_first_letter ty))
+          ())
+      all_int_names
+  (* PartialEq<INT, INT> *)
+  @ List.map
+      (fun ty ->
+        fmt
+          ("core::cmp::PartialEq<" ^ ty ^ "," ^ ty ^ ">")
+          ~extract_name:
+            (Some ("core.cmp.PartialEq" ^ StringUtils.capitalize_first_letter ty))
+          ())
+      all_int_names
+  (* Eq<INT> *)
+  @ List.map
+      (fun ty ->
+        fmt
+          ("core::cmp::Eq<" ^ ty ^ ">")
+          ~extract_name:
+            (Some ("core.cmp.Eq" ^ StringUtils.capitalize_first_letter ty))
+          ())
+      all_int_names
+  (* PartialOrd<INT, INT> *)
+  @ List.map
+      (fun ty ->
+        fmt
+          ("core::cmp::PartialOrd<" ^ ty ^ "," ^ ty ^ ">")
+          ~extract_name:
+            (Some
+               ("core.cmp.PartialOrd" ^ StringUtils.capitalize_first_letter ty))
+          ())
+      all_int_names
+  (* Ord<INT> *)
+  @ List.map
+      (fun ty ->
+        fmt
+          ("core::cmp::Ord<" ^ ty ^ ">")
+          ~extract_name:
+            (Some ("core.cmp.Ord" ^ StringUtils.capitalize_first_letter ty))
           ())
       all_int_names
 
