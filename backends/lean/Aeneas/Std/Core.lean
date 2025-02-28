@@ -170,6 +170,29 @@ def core.result.Result.unwrap {T E : Type}
 structure core.ops.range.RangeFrom (Idx : Type) where
   start : Idx
 
+/- Trait declaration: [core::cmp::PartialEq]
+   Name pattern: core::cmp::PartialEq -/
+structure core.cmp.PartialEq (Self : Type) (Rhs : Type) where
+  eq : Self → Rhs → Result Bool
+
+/- Trait declaration: [core::cmp::Eq]
+   Name pattern: core::cmp::Eq -/
+structure core.cmp.Eq (Self : Type) where
+  partialEqInst : core.cmp.PartialEq Self Self
+
+/- Trait declaration: [core::cmp::PartialOrd]
+   Name pattern: core::cmp::PartialOrd -/
+structure core.cmp.PartialOrd (Self : Type) (Rhs : Type) where
+  partialEqInst : core.cmp.PartialEq Self Rhs
+  partial_cmp : Self → Rhs → Result (Option Ordering)
+
+/- Trait declaration: [core::cmp::Ord]
+   Name pattern: core::cmp::Ord -/
+structure core.cmp.Ord (Self : Type) where
+  eqInst : core.cmp.Eq Self
+  partialOrdInst : core.cmp.PartialOrd Self Self
+  cmp : Self → Self → Result Ordering
+
 end Std
 
 end Aeneas
