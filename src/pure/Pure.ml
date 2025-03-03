@@ -72,8 +72,6 @@ type 'a de_bruijn_var = 'a Types.de_bruijn_var [@@deriving show, ord]
       - [State]: the type of the state, when using state-error monads. Note that
         this state is opaque to Aeneas (the user can define it, or leave it as
         builtin)
-
-    TODO: add a prefix "T"
   *)
 type builtin_ty =
   | TState
@@ -92,6 +90,104 @@ type builtin_ty =
           and make sure that those functions are actually not used in the translation.
        *)
 [@@deriving show, ord]
+
+type array_or_slice = Array | Slice [@@deriving show, ord]
+
+(** Identifiers of builtin functions that we use only in the pure translation *)
+type pure_builtin_fun_id =
+  | Return  (** The monadic return *)
+  | Fail  (** The monadic fail *)
+  | Assert  (** Assertion *)
+  | FuelDecrease
+      (** Decrease fuel, provided it is non zero (used for F* ) - TODO: this is ugly *)
+  | FuelEqZero  (** Test if some fuel is equal to 0 - TODO: ugly *)
+  | UpdateAtIndex of array_or_slice
+      (** Update an array or a slice at a given index.
+
+          Note that in LLBC we only use an index function: if we want to
+          modify an element in an array/slice, we create a mutable borrow
+          to this element, then use the borrow to perform the update. The
+          update functions are introduced in the pure code by a micro-pass.
+       *)
+  | ToResult
+      (** Lifts a pure expression to a monadic expression.
+
+          We use this when using `ok ...` would result in let-bindings getting
+          simplified away (in a backend like Lean). *)
+[@@deriving show, ord]
+
+(* Builtin declarations coming from external libraries.
+
+   Those are not too be understood as the builtin definitions like `U32`:
+   the builtin declarations decribed with, e.g., `builtin_type_info`, are
+   declarations coming from external libraries and which we should thus not
+   extract (for instance: `std::vec::Vec`, `std::option::Option`, etc.).
+*)
+
+type builtin_variant_info = { fields : (string * string) list }
+[@@deriving show, ord]
+
+type builtin_enum_variant_info = {
+  rust_variant_name : string;
+  extract_variant_name : string;
+  fields : string list option;
+}
+[@@deriving show, ord]
+
+type builtin_type_body_info =
+  | Struct of string * (string * string) list
+    (* The constructor name and the map for the field names *)
+  | Enum of builtin_enum_variant_info list
+(* For every variant, a map for the field names *)
+[@@deriving show, ord]
+
+type builtin_type_info = {
+  rust_name : NameMatcher.pattern;
+  extract_name : string;
+  keep_params : bool list option;
+      (** We might want to filter some of the type parameters.
+
+          For instance, `Vec` type takes a type parameter for the allocator,
+          which we want to ignore.
+       *)
+  body_info : builtin_type_body_info option;
+}
+[@@deriving show, ord]
+
+type builtin_global_info = { global_name : string } [@@deriving show]
+
+type builtin_fun_info = {
+  filter_params : bool list option;
+  extract_name : string;
+  can_fail : bool;
+  stateful : bool;
+  lift : bool;
+      (** If the function can not fail, should we still lift it to the [Result]
+          monad? This can make reasonings easier, as we can then use [progress]
+          to do proofs in a Hoare-Logic style, rather than doing equational
+          reasonings. *)
+}
+[@@deriving show]
+
+type builtin_trait_decl_info = {
+  rust_name : NameMatcher.pattern;
+  extract_name : string;
+  constructor : string;
+  parent_clauses : string list;
+  consts : (string * string) list;
+  types : (string * string) list;
+      (** Every type has:
+          - a Rust name
+          - an extraction name *)
+  methods : (string * builtin_fun_info) list;
+}
+[@@deriving show]
+
+type builtin_trait_impl_info = {
+  filter_params : bool list option;
+  impl_name : string;
+}
+[@@deriving show]
 
 (* TODO: we should never directly manipulate [Return] and [Fail], but rather
  * the monadic functions [return] and [fail] (makes treatment of error and
@@ -343,6 +439,9 @@ class ['self] iter_type_decl_base =
         self#visit_literal_type e var.ty
 
     method visit_item_meta : 'env -> T.item_meta -> unit = fun _ _ -> ()
+
+    method visit_builtin_type_info : 'env -> builtin_type_info -> unit =
+      fun _ _ -> ()
   end
 
 (** Ancestor for map visitor for [type_decl] *)
@@ -367,6 +466,10 @@ class ['self] map_type_decl_base =
         }
 
     method visit_item_meta : 'env -> T.item_meta -> T.item_meta = fun _ x -> x
+
+    method visit_builtin_type_info
+        : 'env -> builtin_type_info -> builtin_type_info =
+      fun _ x -> x
   end
 
 (** Ancestor for reduce visitor for [type_decl] *)
@@ -388,6 +491,9 @@ class virtual ['self] reduce_type_decl_base =
         self#plus (self#plus x0 x1) x2
 
     method visit_item_meta : 'env -> T.item_meta -> 'a = fun _ _ -> self#zero
+
+    method visit_builtin_type_info : 'env -> builtin_type_info -> 'a =
+      fun _ _ -> self#zero
   end
 
 (** Ancestor for mapreduce visitor for [type_decl] *)
@@ -410,6 +516,10 @@ class virtual ['self] mapreduce_type_decl_base =
         ({ index; name; ty }, self#plus (self#plus x0 x1) x2)
 
     method visit_item_meta : 'env -> T.item_meta -> T.item_meta * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_builtin_type_info
+        : 'env -> builtin_type_info -> builtin_type_info * 'a =
       fun _ x -> (x, self#zero)
   end
 
@@ -510,6 +620,7 @@ and type_decl = {
           to derive them from the original LLBC types from before the
           simplification of types like boxes and references. *)
   kind : type_decl_kind;
+  builtin_info : builtin_type_info option;
   preds : predicates;
 }
 [@@deriving
@@ -720,26 +831,6 @@ type unop =
   | Cast of literal_type * literal_type
 [@@deriving show, ord]
 
-type array_or_slice = Array | Slice [@@deriving show, ord]
-
-(** Identifiers of builtin functions that we use only in the pure translation *)
-type pure_builtin_fun_id =
-  | Return  (** The monadic return *)
-  | Fail  (** The monadic fail *)
-  | Assert  (** Assertion *)
-  | FuelDecrease
-      (** Decrease fuel, provided it is non zero (used for F* ) - TODO: this is ugly *)
-  | FuelEqZero  (** Test if some fuel is equal to 0 - TODO: ugly *)
-  | UpdateAtIndex of array_or_slice
-      (** Update an array or a slice at a given index.
-
-          Note that in LLBC we only use an index function: if we want to
-          modify an element in an array/slice, we create a mutable borrow
-          to this element, then use the borrow to perform the update. The
-          update functions are introduced in the pure code by a micro-pass.
-       *)
-[@@deriving show, ord]
-
 type fun_id_or_trait_method_ref =
   | FunId of A.fun_id
   | TraitMethod of trait_ref * string * fun_decl_id
@@ -765,11 +856,13 @@ type fun_id =
       (** A function only used in the pure translation *)
 [@@deriving show, ord]
 
+type binop = E.binop [@@deriving show, ord]
+
 (** A function or an operation id *)
 type fun_or_op_id =
   | Fun of fun_id
   | Unop of unop
-  | Binop of E.binop * integer_type
+  | Binop of binop * integer_type
 [@@deriving show, ord]
 
 (** An identifier for an ADT constructor *)
@@ -1294,6 +1387,7 @@ type 'a binder = {
 type fun_decl = {
   def_id : FunDeclId.id;
   item_meta : T.item_meta;
+  builtin_info : builtin_fun_info option;
   kind : item_kind;
   backend_attributes : backend_attributes;
   num_loops : int;
@@ -1318,6 +1412,7 @@ type global_decl = {
   def_id : GlobalDeclId.id;
   span : span;
   item_meta : T.item_meta;
+  builtin_info : builtin_global_info option;
   name : string;
       (** We use the name only for printing purposes (for debugging):
           the name used at extraction time will be derived from the
@@ -1339,6 +1434,7 @@ type trait_decl = {
   def_id : trait_decl_id;
   name : string;
   item_meta : T.item_meta;
+  builtin_info : builtin_trait_decl_info option;
   generics : generic_params;
   explicit_info : explicit_info;
       (** Information about which inputs parameters are explicit/implicit *)
@@ -1361,6 +1457,7 @@ type trait_impl = {
   def_id : trait_impl_id;
   name : string;
   item_meta : T.item_meta;
+  builtin_info : builtin_trait_impl_info option;
   impl_trait : trait_decl_ref;
   llbc_impl_trait : Types.trait_decl_ref;
       (** Same remark as for {!field:llbc_generics}. *)

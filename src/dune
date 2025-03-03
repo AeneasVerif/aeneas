@@ -57,6 +57,7 @@
   LlbcOfJson
   Logging
   Meta
+  NameMatcher
   PrePasses
   Print
   PrintPure

@@ -4,9 +4,9 @@ namespace Aeneas
 
 namespace Std
 
---------------------
--- ASSERT COMMAND --Std.
---------------------
+/-!
+# Assert Command
+-/
 
 open Lean Elab Command Term Meta
 
@@ -14,22 +14,32 @@ syntax (name := assert) "#assert" term: command
 
 @[command_elab assert]
 unsafe
-def assertImpl : CommandElab := fun (_stx: Syntax) => do
+def assertImpl : CommandElab := fun (stx: Syntax) => do
   runTermElabM (fun _ => do
-    let r ← evalTerm Bool (mkConst ``Bool) _stx[1]
+    let r ← evalTerm Bool (mkConst ``Bool) stx[1]
     if not r then
-      logInfo ("Assertion failed for:\n" ++ _stx[1])
-      throwError ("Expression reduced to false:\n"  ++ _stx[1])
+      logInfo ("Assertion failed for:\n" ++ stx[1])
+      throwError ("Expression reduced to false:\n"  ++ stx[1])
     pure ())
 
 #eval 2 == 2
 #assert (2 == 2)
 
--------------
--- PRELUDE --
--------------
+syntax (name := elabSyntax) "#elab" term: command
 
--- Results & monadic combinators
+@[command_elab elabSyntax]
+unsafe
+def elabImpl : CommandElab := fun (stx: Syntax) => do
+  runTermElabM (fun _ => do
+    /- Simply elaborate the syntax to check that it is correct -/
+    let (_, _) ← Elab.Term.elabTerm stx[1] none |>.run
+    pure ())
+
+#elab 3
+
+/-!
+# Results and Monadic Combinators
+-/
 
 inductive Error where
    | assertionFailure: Error
@@ -38,6 +48,7 @@ inductive Error where
    | arrayOutOfBounds: Error
    | maximumSizeExceeded: Error
    | panic: Error
+   | undef: Error
 deriving Repr, BEq
 
 open Error
@@ -56,7 +67,9 @@ instance Result_Inhabited (α : Type u) : Inhabited (Result α) :=
 instance Result_Nonempty (α : Type u) : Nonempty (Result α) :=
   Nonempty.intro div
 
-/- HELPERS -/
+/-!
+# Helpers
+-/
 
 def ok? {α: Type u} (r: Result α): Bool :=
   match r with
@@ -84,7 +97,9 @@ def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
   | some x => ok x
   | none => fail e
 
-/- DO-DSL SUPPORT -/
+/-!
+# Do-DSL Support
+-/
 
 def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Result β :=
   match x with
@@ -104,19 +119,6 @@ instance : Pure Result where
 @[simp] theorem bind_fail (x : Error) (f : α → Result β) : bind (.fail x) f = .fail x := by simp [bind]
 @[simp] theorem bind_div (f : α → Result β) : bind .div f = .div := by simp [bind]
 
-/- CUSTOM-DSL SUPPORT -/
-
--- Let-binding the Result of a monadic operation is oftentimes not sufficient,
--- because we may need a hypothesis for equational reasoning in the scope. We
--- rely on subtype, and a custom let-binding operator, in effect recreating our
--- own variant of the do-dsl
-
-def Result.attach {α: Type} (o : Result α): Result { x : α // o = ok x } :=
-  match o with
-  | ok x => ok ⟨x, rfl⟩
-  | fail e => fail e
-  | div => div
-
 @[simp] theorem bind_tc_ok (x : α) (f : α → Result β) :
   (do let y ← .ok x; f y) = f x := by simp [Bind.bind, bind]
 
@@ -133,9 +135,50 @@ def Result.attach {α: Type} (o : Result α): Result { x : α // o = ok x } :=
   simp [Bind.bind]
   cases e <;> simp
 
-----------
--- MISC --
-----------
+/-!
+# Lift
+-/
+
+/-- We use this to lift pure function calls to monadic calls.
+    We don't mark this as reducible so that let-bindings don't get simplified away.
+
+    In the generated code if regularly happens that we want to lift pure function calls so
+    that `progress` can reason about them. For instance, `U32.wrapping_add` has type `U32 → U32 → U32`,
+    but we provide a `progress` theorem with an informative post-condition, and which matches the pattern
+    `toResult (wrapping_add x y)`. This theorem can only be looked up and appliced if the code is of the
+    following shape:
+    ```
+    let z ← U32.wrapping_add x y
+    ...
+    ```
+  -/
+def toResult {α : Type u} (x : α) : Result α := Result.ok x
+
+instance {α : Type u} : Coe α (Result α) where
+  coe := toResult
+
+attribute [coe] toResult
+
+namespace Test
+  /- Testing that our coercion from `α` to `Result α` works. -/
+  example : Result Int := do
+    let x0 ← ↑(0 : Int)
+    let x1 ← ↑(x0 + 1 : Int)
+    x1
+
+  /- Testing that our coercion from `α` to `Result α` doesn't break other coercions. -/
+  example (n : Nat) (i : Int) (_ : n < i) : True := by simp
+
+  example : Result (BitVec 32) := do
+    let x : BitVec 32 ← ↑(0#32)
+    let y ← ↑(1#32)
+    let z ← ↑(x + y)
+    ok  z
+end Test
+
+/-!
+# Misc
+-/
 
 instance SubtypeBEq [BEq α] (p : α → Prop) : BEq (Subtype p) where
   beq v0 v1 := v0.val == v1.val
@@ -144,9 +187,17 @@ instance SubtypeLawfulBEq [BEq α] (p : α → Prop) [LawfulBEq α] : LawfulBEq 
   eq_of_beq {a b} h := by cases a; cases b; simp_all [BEq.beq]
   rfl := by intro a; cases a; simp [BEq.beq]
 
-------------------------------
----- Misc Primitives Types ---
-------------------------------
+/- A helper function that converts failure to none and success to some
+   TODO: move up to Core module? -/
+def Option.ofResult {a : Type u} (x : Result a) :
+  Option a :=
+  match x with
+  | ok x => some x
+  | _ => none
+
+/-!
+# Misc Primitive Types
+-/
 
 -- We don't really use raw pointers for now
 structure MutRawPtr (T : Type) where

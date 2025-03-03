@@ -842,7 +842,11 @@ let unop_name (unop : unop) : string =
           match ty with
           | None -> "not"
           | Some int_ty -> int_name int_ty ^ "_not")
-      | Lean -> "￢"
+      | Lean -> begin
+          match ty with
+          | None -> "¬"
+          | Some _ -> "~~~"
+        end
       | Coq -> if Option.is_none ty then "negb" else "scalar_not"
       | HOL4 -> "~")
   | Neg (int_ty : integer_type) -> (
@@ -1163,12 +1167,9 @@ let builtin_variants () : (builtin_ty * VariantId.id * string) list =
       ]
   | Lean ->
       [
-        (TResult, result_ok_id, "Result.ok");
-        (TResult, result_fail_id, "Result.fail");
-        (* For panic: we omit the prefix "Error." because the type is always
-           clear from the context. Also, "Error" is often used by user-defined
-           types (when we omit the crate as a prefix). *)
-        (TError, error_failure_id, ".panic");
+        (TResult, result_ok_id, "ok");
+        (TResult, result_fail_id, "fail");
+        (TError, error_failure_id, "panic");
         (* No Fuel::Zero on purpose *)
         (* No Fuel::Succ on purpose *)
       ]
@@ -1223,6 +1224,7 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (FuelEqZero, "is_zero");
         (UpdateAtIndex Slice, "slice_update_usize");
         (UpdateAtIndex Array, "array_update_usize");
+        (ToResult, "return");
       ]
   | Coq ->
       (* We don't provide [FuelDecrease] and [FuelEqZero] on purpose *)
@@ -1232,6 +1234,7 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (Assert, "massert");
         (UpdateAtIndex Slice, "slice_update_usize");
         (UpdateAtIndex Array, "array_update_usize");
+        (ToResult, "return_");
       ]
   | Lean ->
       (* We don't provide [FuelDecrease] and [FuelEqZero] on purpose *)
@@ -1239,8 +1242,9 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (Return, "return");
         (Fail, "fail_");
         (Assert, "massert");
-        (UpdateAtIndex Slice, "Slice.update_usize");
-        (UpdateAtIndex Array, "Array.update_usize");
+        (UpdateAtIndex Slice, "Slice.update");
+        (UpdateAtIndex Array, "Array.update");
+        (ToResult, "↑");
       ]
   | HOL4 ->
       (* We don't provide [FuelDecrease] and [FuelEqZero] on purpose *)
@@ -1250,6 +1254,7 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (Assert, "massert");
         (UpdateAtIndex Slice, "slice_update_usize");
         (UpdateAtIndex Array, "array_update_usize");
+        (ToResult, "return");
       ]
 
 let names_map_init () : names_map_init =
@@ -1447,22 +1452,22 @@ let name_last_elem_as_ident (span : Meta.span) (n : llbc_name) : string =
     we remove it. We ignore disambiguators (there may be collisions, but we
     check if there are).
  *)
-let ctx_prepare_name (span : Meta.span) (ctx : extraction_ctx)
+let ctx_prepare_name (meta : T.item_meta) (ctx : extraction_ctx)
     (name : llbc_name) : llbc_name =
   (* Rmk.: initially we only filtered the disambiguators equal to 0 *)
   match name with
   | (PeIdent (crate, _) as id) :: name ->
       if crate = ctx.crate.name then name else id :: name
   | _ ->
-      craise __FILE__ __LINE__ span
+      craise __FILE__ __LINE__ meta.span
         ("Unexpected name shape: "
         ^ TranslateCore.name_to_string ctx.trans_ctx name)
 
 (** Helper *)
-let ctx_compute_simple_name (span : Meta.span) (ctx : extraction_ctx)
+let ctx_compute_simple_name (meta : T.item_meta) (ctx : extraction_ctx)
     (name : llbc_name) : string list =
   (* Rmk.: initially we only filtered the disambiguators equal to 0 *)
-  let name = ctx_prepare_name span ctx name in
+  let name = if meta.is_local then ctx_prepare_name meta ctx name else name in
   name_to_simple_name ctx.trans_ctx name
 
 (** Helper *)
@@ -1472,7 +1477,7 @@ let ctx_compute_simple_type_name = ctx_compute_simple_name
 let ctx_compute_type_name_no_suffix (ctx : extraction_ctx)
     (item_meta : Types.item_meta) (name : llbc_name) : string =
   let name = rename_llbc_name item_meta.attr_info name in
-  flatten_name (ctx_compute_simple_type_name item_meta.span ctx name)
+  flatten_name (ctx_compute_simple_type_name item_meta ctx name)
 
 (** Provided a basename, compute a type name.
 
@@ -1564,9 +1569,9 @@ let ctx_compute_struct_constructor (def : type_decl) (ctx : extraction_ctx)
   let tname = ctx_compute_type_name def.item_meta ctx basename in
   ExtractBuiltin.mk_struct_constructor tname
 
-let ctx_compute_fun_name_no_suffix (span : Meta.span) (ctx : extraction_ctx)
+let ctx_compute_fun_name_no_suffix (meta : T.item_meta) (ctx : extraction_ctx)
     (fname : llbc_name) : string =
-  let fname = ctx_compute_simple_name span ctx fname in
+  let fname = ctx_compute_simple_name meta ctx fname in
   (* TODO: don't convert to snake case for Coq, HOL4, F* *)
   let fname = flatten_name fname in
   match backend () with
@@ -1574,15 +1579,14 @@ let ctx_compute_fun_name_no_suffix (span : Meta.span) (ctx : extraction_ctx)
   | Lean -> fname
 
 (** Provided a basename, compute the name of a global declaration. *)
-let ctx_compute_global_name (span : Meta.span) (ctx : extraction_ctx)
+let ctx_compute_global_name (meta : T.item_meta) (ctx : extraction_ctx)
     (name : llbc_name) : string =
+  let name = ctx_compute_simple_name meta ctx name in
   match Config.backend () with
   | Coq | FStar | HOL4 ->
-      let parts =
-        List.map to_snake_case (ctx_compute_simple_name span ctx name)
-      in
+      let parts = List.map to_snake_case name in
       String.concat "_" parts
-  | Lean -> flatten_name (ctx_compute_simple_name span ctx name)
+  | Lean -> flatten_name name
 
 (** Helper function: generate a suffix for a function name, i.e., generates
     a suffix like "_loop", "loop1", etc. to append to a function name.
@@ -1613,10 +1617,10 @@ let default_fun_suffix (num_loops : int) (loop_id : LoopId.id option) : string =
     - loop id (if pertinent)
     TODO: use the fun id for the builtin functions.
  *)
-let ctx_compute_fun_name (span : Meta.span) (ctx : extraction_ctx)
+let ctx_compute_fun_name (meta : T.item_meta) (ctx : extraction_ctx)
     (fname : llbc_name) (num_loops : int) (loop_id : LoopId.id option) : string
     =
-  let fname = ctx_compute_fun_name_no_suffix span ctx fname in
+  let fname = ctx_compute_fun_name_no_suffix meta ctx fname in
   (* Compute the suffix *)
   let suffix = default_fun_suffix num_loops loop_id in
   (* Concatenate *)
@@ -1646,8 +1650,7 @@ let ctx_compute_trait_impl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
           let params = trait_impl.llbc_generics in
           let args = trait_impl.llbc_impl_trait.decl_generics in
           let name =
-            ctx_prepare_name trait_impl.item_meta.span ctx
-              trait_decl.item_meta.name
+            ctx_prepare_name trait_impl.item_meta ctx trait_decl.item_meta.name
           in
           let name = rename_llbc_name trait_impl.item_meta.attr_info name in
           trait_name_with_generics_to_simple_name ctx.trans_ctx name params args
@@ -1799,17 +1802,17 @@ let ctx_compute_trait_type_clause_name (ctx : extraction_ctx)
       the same purpose as in [llbc_name].
     - loop identifier, if this is for a loop
  *)
-let ctx_compute_termination_measure_name (span : Meta.span)
+let ctx_compute_termination_measure_name (meta : T.item_meta)
     (ctx : extraction_ctx) (_fid : A.FunDeclId.id) (fname : llbc_name)
     (num_loops : int) (loop_id : LoopId.id option) : string =
-  let fname = ctx_compute_fun_name_no_suffix span ctx fname in
+  let fname = ctx_compute_fun_name_no_suffix meta ctx fname in
   let lp_suffix = default_fun_loop_suffix num_loops loop_id in
   (* Compute the suffix *)
   let suffix =
     match Config.backend () with
     | FStar -> "_decreases"
     | Lean -> "_terminates"
-    | Coq | HOL4 -> craise __FILE__ __LINE__ span "Unexpected"
+    | Coq | HOL4 -> craise __FILE__ __LINE__ meta.span "Unexpected"
   in
   (* Concatenate *)
   fname ^ lp_suffix ^ suffix
@@ -1828,16 +1831,16 @@ let ctx_compute_termination_measure_name (span : Meta.span)
       the same purpose as in [llbc_name].
     - loop identifier, if this is for a loop
  *)
-let ctx_compute_decreases_proof_name (span : Meta.span) (ctx : extraction_ctx)
+let ctx_compute_decreases_proof_name (meta : T.item_meta) (ctx : extraction_ctx)
     (_fid : A.FunDeclId.id) (fname : llbc_name) (num_loops : int)
     (loop_id : LoopId.id option) : string =
-  let fname = ctx_compute_fun_name_no_suffix span ctx fname in
+  let fname = ctx_compute_fun_name_no_suffix meta ctx fname in
   let lp_suffix = default_fun_loop_suffix num_loops loop_id in
   (* Compute the suffix *)
   let suffix =
     match Config.backend () with
     | Lean -> "_decreases"
-    | FStar | Coq | HOL4 -> craise __FILE__ __LINE__ span "Unexpected"
+    | FStar | Coq | HOL4 -> craise __FILE__ __LINE__ meta.span "Unexpected"
   in
   (* Concatenate *)
   fname ^ lp_suffix ^ suffix
@@ -2107,7 +2110,7 @@ let ctx_add_decreases_proof (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   let name = rename_llbc_name def.item_meta.attr_info def.item_meta.name in
   let name =
-    ctx_compute_decreases_proof_name def.item_meta.span ctx def.def_id name
+    ctx_compute_decreases_proof_name def.item_meta ctx def.def_id name
       def.num_loops def.loop_id
   in
   ctx_add def.item_meta.span
@@ -2118,14 +2121,14 @@ let ctx_add_termination_measure (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   let name = rename_llbc_name def.item_meta.attr_info def.item_meta.name in
   let name =
-    ctx_compute_termination_measure_name def.item_meta.span ctx def.def_id name
+    ctx_compute_termination_measure_name def.item_meta ctx def.def_id name
       def.num_loops def.loop_id
   in
   ctx_add def.item_meta.span
     (TerminationMeasureId (FRegular def.def_id, def.loop_id))
     name ctx
 
-let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
+let ctx_add_global_decl_and_body (def : global_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   (* TODO: update once the body id can be an option *)
   let decl = GlobalId def.def_id in
@@ -2133,18 +2136,16 @@ let ctx_add_global_decl_and_body (def : A.global_decl) (ctx : extraction_ctx) :
   (* Check if the global corresponds to an builtin global that we should map
      to a custom definition in our standard library (for instance, happens
      with "core::num::usize::MAX") *)
-  match
-    match_name_find_opt ctx.trans_ctx def.item_meta.name builtin_globals_map
-  with
-  | Some name ->
+  match def.builtin_info with
+  | Some info ->
       (* Yes: register the custom binding *)
-      ctx_add def.item_meta.span decl name ctx
+      ctx_add def.item_meta.span decl info.global_name ctx
   | None ->
       (* Not the case: "standard" registration *)
       let name = rename_llbc_name def.item_meta.attr_info def.item_meta.name in
-      let name = ctx_compute_global_name def.item_meta.span ctx name in
+      let name = ctx_compute_global_name def.item_meta ctx name in
 
-      let body = FunId (FromLlbc (FunId (FRegular def.body), None)) in
+      let body = FunId (FromLlbc (FunId (FRegular def.body_id), None)) in
       (* If this is a provided constant (i.e., the default value for a constant
          in a trait declaration) we add a suffix. Otherwise there is a clash
          between the name for the default constant and the name for the field
@@ -2202,6 +2203,10 @@ let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
     | _ -> def.item_meta
   in
   let llbc_name = rename_llbc_name item_meta.attr_info def.item_meta.name in
+  log#ldebug
+    (lazy
+      (__FUNCTION__ ^ ": llbc_name after renaming: "
+      ^ name_to_string ctx llbc_name));
   (* When a trait method has a default implementation, this becomes a [fun_decl]
      that we may want to extract. By default, its name is [Trait::method], which
      for lean creates a name clash with the method name as a field in the trait
@@ -2216,8 +2221,12 @@ let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
           llbc_name @ [ PeIdent ("default", Disambiguator.zero) ]
       | _ -> llbc_name
   in
-  ctx_compute_fun_name def.item_meta.span ctx llbc_name def.num_loops
-    def.loop_id
+  log#ldebug
+    (lazy
+      (__FUNCTION__
+     ^ ": llbc_name after adding 'default' suffix (for default methods): "
+      ^ name_to_string ctx llbc_name));
+  ctx_compute_fun_name def.item_meta ctx llbc_name def.num_loops def.loop_id
 
 (* TODO: move to Extract *)
 let ctx_add_fun_decl (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =

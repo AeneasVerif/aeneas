@@ -7,6 +7,10 @@ namespace Std
 
 open Result
 
+/- [alloc::boxed::{core::convert::AsMut<T> for alloc::boxed::Box<T>}::as_mut] -/
+def alloc.boxed.AsMutBoxT.as_mut {T : Type} (x : T) : T × (T → T) :=
+  (x, fun x => x)
+
 namespace core
 
 /- Trait declaration: [core::convert::From] -/
@@ -143,6 +147,15 @@ def core.convert.TryIntoFrom {T U : Type} (fromInst : core.convert.TryFrom U T) 
   try_into := core.convert.TryIntoFrom.try_into fromInst
 }
 
+structure core.convert.AsMut (Self : Type) (T : Type) where
+  as_mut : Self → Result (T × (T → Self))
+
+/- [alloc::boxed::{core::convert::AsMut<T> for alloc::boxed::Box<T>}] -/
+@[reducible]
+def core.convert.AsMutBoxT (T : Type) : core.convert.AsMut T T := {
+  as_mut := fun x => ok (alloc.boxed.AsMutBoxT.as_mut x)
+}
+
 /- TODO: -/
 axiom Formatter : Type
 
@@ -158,7 +171,6 @@ def core.result.Result.unwrap {T E : Type}
 /- [core::ops::range::RangeFrom] -/
 structure core.ops.range.RangeFrom (Idx : Type) where
   start : Idx
-
 
 end Std
 

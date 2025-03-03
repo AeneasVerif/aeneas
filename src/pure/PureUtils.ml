@@ -295,10 +295,45 @@ let is_cvar (e : texpression) : bool =
   | CVar _ -> true
   | _ -> false
 
-let as_pat_var (span : Meta.span) (p : typed_pattern) : var * mplace option =
+let as_opt_pat_var (p : typed_pattern) : (var * mplace option) option =
   match p.value with
-  | PatVar (v, mp) -> (v, mp)
-  | _ -> craise __FILE__ __LINE__ span "Not a var"
+  | PatVar (v, mp) -> Some (v, mp)
+  | _ -> None
+
+let as_pat_var (span : Meta.span) (p : typed_pattern) : var * mplace option =
+  match as_opt_pat_var p with
+  | None -> craise __FILE__ __LINE__ span "Not a var"
+  | Some (v, mp) -> (v, mp)
+
+let is_pat_var (p : typed_pattern) : bool = Option.is_some (as_opt_pat_var p)
+
+let as_opt_pat_tuple (p : typed_pattern) : typed_pattern list option =
+  match p with
+  | {
+   value = PatAdt { variant_id = None; field_values };
+   ty = TAdt (TTuple, _);
+  } -> Some field_values
+  | _ -> None
+
+(** Replace all the dummy variables in a pattern with fresh variables *)
+let typed_pattern_replace_dummy_vars (fresh_var_id : unit -> VarId.id)
+    (p : typed_pattern) : typed_pattern =
+  let visitor =
+    object
+      inherit [_] map_typed_pattern as super
+
+      method! visit_typed_pattern env p =
+        match p.value with
+        | PatDummy ->
+            let id = fresh_var_id () in
+            { p with value = PatVar ({ id; basename = None; ty = p.ty }, None) }
+        | _ -> super#visit_typed_pattern env p
+    end
+  in
+  visitor#visit_typed_pattern () p
+
+let is_pat_tuple (p : typed_pattern) : bool =
+  Option.is_some (as_opt_pat_tuple p)
 
 let is_global (e : texpression) : bool =
   match e.e with
@@ -695,11 +730,12 @@ let unwrap_result_ty (span : Meta.span) (ty : ty) : ty =
 let mk_result_fail_texpression (span : Meta.span) (error : texpression)
     (ty : ty) : texpression =
   let type_args = [ ty ] in
-  let ty = TAdt (TBuiltin TResult, mk_generic_args_from_types type_args) in
+  let generics = mk_generic_args_from_types type_args in
+  let ty = TAdt (TBuiltin TResult, generics) in
   let id =
     AdtCons { adt_id = TBuiltin TResult; variant_id = Some result_fail_id }
   in
-  let qualif = { id; generics = mk_generic_args_from_types type_args } in
+  let qualif = { id; generics } in
   let cons_e = Qualif qualif in
   let cons_ty = mk_arrow error.ty ty in
   let cons = { e = cons_e; ty = cons_ty } in
@@ -713,11 +749,12 @@ let mk_result_fail_texpression_with_error_id (span : Meta.span)
 let mk_result_ok_texpression (span : Meta.span) (v : texpression) : texpression
     =
   let type_args = [ v.ty ] in
-  let ty = TAdt (TBuiltin TResult, mk_generic_args_from_types type_args) in
+  let generics = mk_generic_args_from_types type_args in
+  let ty = TAdt (TBuiltin TResult, generics) in
   let id =
     AdtCons { adt_id = TBuiltin TResult; variant_id = Some result_ok_id }
   in
-  let qualif = { id; generics = mk_generic_args_from_types type_args } in
+  let qualif = { id; generics } in
   let cons_e = Qualif qualif in
   let cons_ty = mk_arrow v.ty ty in
   let cons = { e = cons_e; ty = cons_ty } in
@@ -799,6 +836,7 @@ let trait_decl_is_empty (trait_decl : trait_decl) : bool =
     def_id = _;
     name = _;
     item_meta = _;
+    builtin_info = _;
     generics = _;
     explicit_info = _;
     llbc_generics = _;
@@ -818,6 +856,7 @@ let trait_impl_is_empty (trait_impl : trait_impl) : bool =
     def_id = _;
     name = _;
     item_meta = _;
+    builtin_info = _;
     impl_trait = _;
     llbc_impl_trait = _;
     generics = _;
@@ -929,3 +968,15 @@ let typed_pattern_get_vars (pat : typed_pattern) : VarId.Set.t =
   in
   visitor#visit_typed_pattern () pat;
   !vars
+
+let mk_to_result_texpression (span : Meta.span) (e : texpression) : texpression
+    =
+  let type_args = [ e.ty ] in
+  let generics = mk_generic_args_from_types type_args in
+  let ty = TAdt (TBuiltin TResult, generics) in
+  let id = FunOrOp (Fun (Pure ToResult)) in
+  let qualif = { id; generics } in
+  let qualif = Qualif qualif in
+  let qualif_ty = mk_arrow e.ty ty in
+  let qualif = { e = qualif; ty = qualif_ty } in
+  mk_app span qualif e

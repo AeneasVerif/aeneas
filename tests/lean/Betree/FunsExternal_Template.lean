@@ -3,7 +3,7 @@
 -- This is a template file: rename it to "FunsExternal.lean" and fill the holes.
 import Aeneas
 import Betree.Types
-open Aeneas.Std
+open Aeneas.Std Result Error
 set_option linter.dupNamespace false
 set_option linter.hashCommand false
 set_option linter.unusedVariables false

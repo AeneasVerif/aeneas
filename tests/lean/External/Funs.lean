@@ -3,7 +3,7 @@
 import Aeneas
 import External.Types
 import External.FunsExternal
-open Aeneas.Std
+open Aeneas.Std Result Error
 set_option linter.dupNamespace false
 set_option linter.hashCommand false
 set_option linter.unusedVariables false
@@ -25,6 +25,6 @@ def incr
   let (st1, (i, get_mut_back)) ← core.cell.Cell.get_mut rc st
   let i1 ← i + 1#u32
   let (_, rc1) := get_mut_back i1 st1
-  Result.ok (st1, rc1)
+  ok (st1, rc1)
 
 end external

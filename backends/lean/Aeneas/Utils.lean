@@ -95,11 +95,6 @@ open Lean.Elab.Command
     let name := cs.constName!
     explore_decl name
 
-private def test1 : Nat := 0
-private def test2 (x : Nat) : Nat := x
-print_decl test1
-print_decl test2
-
 def printDecls (decls : List LocalDecl) : MetaM Unit := do
   let decls ← decls.foldrM (λ decl msg => do
     pure (m!"\n{decl.toExpr} : {← inferType decl.toExpr}" ++ msg)) m!""
@@ -382,10 +377,38 @@ def splitConjTarget : TacticM Unit := do
     setGoals (lmvar.mvarId! :: rmvar.mvarId! :: goals)
 
 -- Destruct an equaliy and return the two sides
-def destEq (e : Expr) : MetaM (Expr × Expr) := do
+def destEqOpt (e : Expr) : MetaM (Option (Expr × Expr)) := do
   e.consumeMData.withApp fun f args =>
-  if f.isConstOf ``Eq ∧ args.size = 3 then pure (args.get! 1, args.get! 2)
-  else throwError "Not an equality: {e}"
+  if f.isConstOf ``Eq ∧ args.size = 3 then pure (some (args.get! 1, args.get! 2))
+  else pure none
+
+-- Destruct an equaliy and return the two sides
+def destEq (e : Expr) : MetaM (Expr × Expr) := do
+  match ← destEqOpt e with
+  | none => throwError "Not an equality: {e}"
+  | some e => pure e
+
+def destProdTypeOpt (ty : Expr) : Option (Expr × Expr) := do
+  ty.consumeMData.withApp fun fn args =>
+  if fn.isConst ∧ fn.constName == ``Prod ∧ args.size = 2 then
+    some (args[0]!, args[1]!)
+  else none
+
+partial def destProdsType (ty : Expr) : List Expr :=
+  match destProdTypeOpt ty with
+  | none => [ty]
+  | some (ty0, ty1) => ty0 :: destProdsType ty1
+
+def destProdValOpt (x : Expr) : Option (Expr × Expr) := do
+  x.consumeMData.withApp fun f args =>
+  if f.isConst ∧ f.constName = ``Prod.mk ∧ args.size = 4 then
+    some (args[2]!, args[3]!)
+  else none
+
+partial def destProdsVal (x : Expr) : List Expr :=
+  match destProdValOpt x with
+  | none => [x]
+  | some (x0, x1) => x0 :: destProdsVal x1
 
 -- Return the set of FVarIds in the expression
 -- TODO: this collects fvars introduced in the inner bindings
@@ -406,13 +429,18 @@ def assumptionTac : TacticM Unit :=
 
 -- List all the local declarations matching the goal
 def getAllMatchingAssumptions (type : Expr) : MetaM (List (LocalDecl × Name)) := do
+  let typeType ← inferType type
   let decls ← (← getLCtx).getAllDecls
   decls.filterMapM fun localDecl => do
     -- Make sure we revert the meta-variables instantiations by saving the state and restoring it
     let s ← saveState
-    let x :=
-        if (← isDefEq type localDecl.type) then (some (localDecl, localDecl.userName))
-        else none
+    let x ← do
+        /- First check if the type can be matched (some assumptions are actually *variables*)-/
+        if (← isDefEq typeType (← inferType localDecl.type)) then
+          if (← isDefEq type localDecl.type) then
+            pure (some (localDecl, localDecl.userName))
+          else pure none
+        else pure none
     restoreState s
     pure x
 
@@ -433,11 +461,17 @@ def singleAssumptionTac : TacticM Unit := do
     assumptionTac
   else
     trace[Utils] "The goal contains meta-variables"
-    -- There are meta-variables that
+    /- There are meta-variables that we need to instantiate
+
+       Remark: at some point I tried using a discrimination tree to filter the assumptions,
+       in particular inside the `progress` tactic as may need to call the `singleAssumptionTac`
+       several times, but discrimination trees don't work if the expression we match over
+       contains meta-variables.
+     -/
     match ← (getAllMatchingAssumptions goal) with
     | [(localDecl, _)] =>
-      -- There is a single assumption which matches the goal: use it
-      -- Note that we need to call isDefEq again to properly instantiate the meta-variables
+      /- There is a single assumption which matches the goal: use it
+         Note that we need to call isDefEq again to properly instantiate the meta-variables -/
       let _ ← isDefEq goal localDecl.type
       mvarId.assign (mkFVar localDecl.fvarId)
     | [] =>
@@ -685,7 +719,7 @@ example (h : ∃ x y z, x + y + z ≥ 0) : ∃ x, x ≥ 0 := by
    initialize a simp context without doing an elaboration - as a consequence
    we write our own here. -/
 def mkSimpCtx (simpOnly : Bool) (config : Simp.Config) (kind : SimpKind)
-  (simprocs : List Name) (declsToUnfold : List Name)
+  (simprocs : List Name) (addSimpThms : List SimpTheorems) (declsToUnfold : List Name)
   (thms : List Name) (hypsToUse : List FVarId) :
   Tactic.TacticM (Simp.Context × Simp.SimprocsArray) := do
   -- Initialize either with the builtin simp theorems or with all the simp theorems
@@ -720,7 +754,7 @@ def mkSimpCtx (simpOnly : Bool) (config : Simp.Config) (kind : SimpKind)
   let congrTheorems ← getSimpCongrTheorems
   let defaultSimprocs ← if simpOnly then pure {} else Simp.getSimprocs
   let simprocs ← simprocs.foldlM (fun simprocs name => simprocs.add name true) defaultSimprocs
-  let ctx ← Simp.mkContext config (simpTheorems := #[simpThms]) congrTheorems
+  let ctx ← Simp.mkContext config (simpTheorems := ⟨ simpThms :: addSimpThms ⟩) congrTheorems
   pure (ctx, #[simprocs])
 
 inductive Location where
@@ -733,7 +767,8 @@ inductive Location where
   | targets (hypotheses : Array Syntax) (type : Bool)
 
 -- Adapted from Tactic.simpLocation
-def customSimpLocation (ctx : Simp.Context) (simprocs : Simp.SimprocsArray) (discharge? : Option Simp.Discharge := none)
+def customSimpLocation (ctx : Simp.Context) (simprocs : Simp.SimprocsArray)
+  (discharge? : Option Simp.Discharge := none)
   (loc : Location) : TacticM Simp.Stats := do
   match loc with
   | Location.targets hyps simplifyTarget =>
@@ -753,28 +788,29 @@ def customSimpLocation (ctx : Simp.Context) (simprocs : Simp.SimprocsArray) (dis
       simpLocation.go ctx simprocs discharge? tgts (simplifyTarget := true)
 
 /- Call the simp tactic. -/
-def simpAt (simpOnly : Bool) (config : Simp.Config) (simprocs : List Name)
+def simpAt (simpOnly : Bool) (config : Simp.Config) (simprocs : List Name) (simpThms : List SimpTheorems)
   (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId) (loc : Location) :
   Tactic.TacticM Unit := do
   -- Initialize the simp context
-  let (ctx, simprocs) ← mkSimpCtx simpOnly config .simp simprocs declsToUnfold thms hypsToUse
+  let (ctx, simprocs) ← mkSimpCtx simpOnly config .simp simprocs simpThms declsToUnfold thms hypsToUse
   -- Apply the simplifier
   let _ ← customSimpLocation ctx simprocs (discharge? := .none) loc
 
 /- Call the dsimp tactic. -/
-def dsimpAt (simpOnly : Bool) (config : Simp.Config) (simprocs : List Name)
+def dsimpAt (simpOnly : Bool) (config : Simp.Config) (simprocs : List Name) (simpThms : List SimpTheorems)
   (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId) (loc : Tactic.Location) :
   Tactic.TacticM Unit := do
   -- Initialize the simp context
-  let (ctx, simprocs) ← mkSimpCtx simpOnly config .dsimp simprocs declsToUnfold thms hypsToUse
+  let (ctx, simprocs) ← mkSimpCtx simpOnly config .dsimp simprocs simpThms declsToUnfold thms hypsToUse
   -- Apply the simplifier
   dsimpLocation ctx simprocs loc
 
 -- Call the simpAll tactic
-def simpAll (config : Simp.Config) (simpOnly : Bool) (simprocs : List Name) (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId) :
+def simpAll (config : Simp.Config) (simpOnly : Bool) (simprocs : List Name) (simpThms : List SimpTheorems)
+  (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId) :
   Tactic.TacticM Unit := do
   -- Initialize the simp context
-  let (ctx, simprocs) ← mkSimpCtx simpOnly config .simpAll simprocs declsToUnfold thms hypsToUse
+  let (ctx, simprocs) ← mkSimpCtx simpOnly config .simpAll simprocs simpThms declsToUnfold thms hypsToUse
   -- Apply the simplifier
   let (result?, _) ← Lean.Meta.simpAll (← getMainGoal) ctx (simprocs := simprocs)
   match result? with
@@ -868,30 +904,35 @@ def evalAesopSaturate (options : Aesop.Options') (ruleSets : Array Name) : Tacti
 def normalizeLetBindings (e : Expr) : MetaM Expr :=
   zetaReduce e
 
-/-- For the attributes
+section
+  variable [Monad m] [MonadOptions m] [MonadTrace m] [MonadLiftT IO m] [AddMessageContext m] [MonadError m]
+  variable {α : Type}
 
-    If we apply an attribute to a definition in a group of mutually recursive definitions
-    (say, to `foo` in the group [`foo`, `bar`]), the attribute gets applied to `foo` but also to
-    the recursive definition which encodes `foo` and `bar` (Lean encodes mutually recursive
-    definitions in one recursive definition, e.g., `foo._mutual`, before deriving the individual
-    definitions, e.g., `foo` and `bar`, from this one). This definition should be named `foo._mutual`
-    or `bar._mutual`, and we generally want to ignore it.
+  /-- For the attributes
 
-    TODO: same problem happens if we use decreases clauses, etc.
+      If we apply an attribute to a definition in a group of mutually recursive definitions
+      (say, to `foo` in the group [`foo`, `bar`]), the attribute gets applied to `foo` but also to
+      the recursive definition which encodes `foo` and `bar` (Lean encodes mutually recursive
+      definitions in one recursive definition, e.g., `foo._mutual`, before deriving the individual
+      definitions, e.g., `foo` and `bar`, from this one). This definition should be named `foo._mutual`
+      or `bar._mutual`, and we generally want to ignore it.
 
-    Below, we implement a small utility to do so.
-  -/
-def attrIgnoreAuxDef (name : Name) (default : AttrM α) (x : AttrM α) : AttrM α := do
-  -- TODO: this is a hack
-  if let .str _ "_mutual" := name then
-    trace[Utils] "Ignoring a mutually recursive definition: {name}"
-    default
-  else if let .str _ "_unary" := name then
-    trace[Utils] "Ignoring a unary def: {name}"
-    default
-  else
-    -- Normal execution
-    x
+      TODO: same problem happens if we use decreases clauses, etc.
+
+      Below, we implement a small utility to do so.
+    -/
+  def attrIgnoreAuxDef (name : Name) (default : m α) (x : m α) : m α := do
+    -- TODO: this is a hack
+    if let .str _ "_mutual" := name then
+      trace[Utils] "Ignoring a mutually recursive definition: {name}"
+      default
+    else if let .str _ "_unary" := name then
+      trace[Utils] "Ignoring a unary def: {name}"
+      default
+    else
+      -- Normal execution
+      x
+end
 
 /-- Split anything in the context, and return the resulting set of subgoals.
     Raise an exception if we couldn't split.
@@ -985,32 +1026,543 @@ example (x y : Int) : True := by
 example (x y : Int) : True := by
   dcases h: x = y <;> simp
 
-def extractGoal : TacticM Unit := do
+/-- Inspired by the `clear` tactic -/
+def clearFvarIds (fvarIds : Array FVarId) : TacticM Unit := do
+  let fvarIds ← withMainContext <| sortFVarIds fvarIds
+  for fvarId in fvarIds.reverse do
+    withMainContext do
+      let mvarId ← (← getMainGoal).clear fvarId
+      replaceMainGoal [mvarId]
+
+/-- Minimize the goal by removing all the unnecessary variables and assumptions -/
+partial def minimizeGoal : TacticM Unit := do
   withMainContext do
+  /- Retrieve the goal -/
+  let goal ← getMainGoal
+  let goalFVarIds ← getFVarIds (← goal.getType)
+  /- Explore the local declarations to check which ones are need.
+     We do this recursively until we reach a fixed-point. -/
   let ctx ← Lean.MonadLCtx.getLCtx
+  let decls ← ctx.getDecls
+  let declsFVarIds := Std.HashSet.ofList (decls.map (fun d => d.fvarId))
+  /- -/
+  let mut changed := true
+  let mut neededIds := goalFVarIds
+  -- We need to filter the variables: some of them might come from quantifiers
+  neededIds := neededIds.filter (fun x => x ∈ declsFVarIds)
+  let mut exploredIds : Std.HashSet FVarId := Std.HashSet.empty
+  while changed do
+    changed := false
+    for decl in decls do
+      /- Shortcut: do not re-explore the already explored ids -/
+      if decl.fvarId ∉ exploredIds then
+        trace[Utils] "Exploring: {decl.userName}"
+        exploredIds := exploredIds.insert decl.fvarId
+        /- Explore the type and the body: if they contain needed ids, add it -/
+        let mut declIds ← getFVarIds decl.type
+        match decl.value? with
+        | none => pure ()
+        | some value =>
+          declIds := declIds.union (← getFVarIds value)
+        declIds := declIds.filter (fun x => x ∈ declsFVarIds)
+        trace[Utils] "declIds: {← declIds.toArray.mapM (fun x => x.getUserName)}"
+        let mut inter := false
+        for x in declIds do
+          if x ∈ neededIds then
+            inter := true
+            break
+        /- Check if there is an intersection -/
+        if inter then
+          neededIds := neededIds.insert decl.fvarId
+          neededIds := neededIds.union declIds
+          changed := true
+  trace[Utils] "Done exploring the context"
+  /- Clear all the fvars which were not listed -/
+  trace[Utils] "neededIds: {← neededIds.toArray.mapM (fun x => x.getUserName)}"
+  let allIds ← getFVarIdsAt goal
+  let allIds := allIds.filter (fun x => x ∉ neededIds)
+  clearFvarIds allIds
+
+elab "minimize_goal" : tactic => do
+  withMainContext do
+  minimizeGoal
+
+/-- Print the goal as an auxiliary lemma that can be copy-pasted by the user -/
+def extractGoal (ref : Syntax) (fullGoal : Bool) : TacticM Unit := do
+  /- First minimize the goal, if necessary -/
+  if ¬ fullGoal then
+    minimizeGoal
+  withMainContext do
+  /- Rename the local declarations to avoid collisions -/
+  let mut ctx ← Lean.MonadLCtx.getLCtx
+  let rec stripHygieneAux (n : Name) : MetaM (Bool × Name) := do
+    trace[Utils] "stripping: {n.toString}"
+    match n with
+    | .str pre str =>
+      let (strip, pre) ← stripHygieneAux pre
+      if strip ∨ str == "_@" ∨ str == "_hyg" then
+        pure (true, pre)
+      else pure (false, .str pre str)
+    | .anonymous => pure (false, .anonymous)
+    | .num pre i =>
+      let (strip, pre) ← stripHygieneAux pre
+      if strip then pure (true, pre) else pure (false, .num pre i)
+  let stripHygiene n : MetaM Name := do pure (← stripHygieneAux n).snd
+
+  let rec renameDecls (allNames : Std.HashSet Name) (decls : List LocalDecl) : MetaM LocalContext := do
+    match decls with
+    | [] => Lean.MonadLCtx.getLCtx
+    | decl :: decls =>
+      trace[Utils] "declName: {decl.userName.toString}"
+      let userName ← stripHygiene decl.userName
+      trace[Utils] "declName after stripping hygiene parts: {userName.toString}"
+      if userName ∈ allNames then
+        let lctx ← Lean.MonadLCtx.getLCtx
+        let newName := lctx.getUnusedName userName
+        let lctx := lctx.setUserName decl.fvarId newName
+        let allNames := allNames.insert newName
+        withLCtx' lctx do
+        renameDecls allNames decls
+      else
+        let allNames := allNames.insert userName
+        renameDecls allNames decls
+  let lctx ← renameDecls Std.HashSet.empty (← (← Lean.MonadLCtx.getLCtx).getDecls).reverse
+  withLCtx' lctx do
+  /- Extract the goal -/
   let decls ← ctx.getDecls
   let assumptions : List Format ← decls.mapM fun decl => do
     let ty ← Meta.ppExprWithInfos decl.type
-    /- TODO: we might want to update the names of the local
-       declarations, to use proper names for the variables
-       which are shadowed/have been introduced automatically
-       by the tactics/elaboration -/
     let name ← Meta.ppExprWithInfos (Expr.fvar decl.fvarId)
     pure ("\n  (" ++ name.fmt ++ " : " ++ ty.fmt ++ ")")
   let assumptions := Format.joinSep assumptions ""
   let mgoal ← getMainGoal
   let goal ← Meta.ppExprWithInfos (← mgoal.getType)
-  let msg := "example  " ++ assumptions ++ " :\n  " ++ goal.fmt ++ "\n  := sorry"
-  println! msg
+  let msg := "example" ++ assumptions ++ " :\n  " ++ goal.fmt ++ "\n  := by sorry"
+  logInfoAt ref m!"{msg}"
 
-elab "extract_goal" : tactic => do
+elab ref:"extract_goal0" full:"full"? : tactic => do
   withMainContext do
-  extractGoal
+  extractGoal ref full.isSome
 
-example (x : Nat) (y : Nat) (_ : Nat) (h : x ≤ y) : y ≥ x := by
-  set_option linter.unusedTactic false in
+syntax "extract_goal" ("full")? : tactic
+
+macro_rules
+| `(tactic|extract_goal) =>
+  `(tactic|set_option pp.coercions.types true in extract_goal0)
+| `(tactic|extract_goal full) =>
+  `(tactic|set_option pp.coercions.types true in extract_goal0 full)
+
+/--
+info: example
+  (x : Nat)
+  (y : Nat)
+  (h_1 : x ≤ y)
+  (h : y ≤ y) :
+  x ≤ y
+  := by sorry
+-/
+#guard_msgs in
+set_option linter.unusedVariables false in
+example (x x y : Nat) (h : x ≤ y) (h : y ≤ y) : x ≤ y := by
   extract_goal
   omega
+
+/--
+info: example
+  (x : Nat)
+  (y : Nat)
+  (h : x ≤ y) :
+  y ≥ x
+  := by sorry
+-/
+#guard_msgs in
+example (x : Nat) (y : Nat) (_ : Nat) (h : x ≤ y) : y ≥ x := by
+  extract_goal
+  omega
+
+/--
+info: example
+  (v : List Nat)
+  (i : Nat)
+  (x_3 : Nat)
+  (v1 : List Nat)
+  (h_1 : i ≤ v.length)
+  (h : i < v.length)
+  (x_2 : x_3 = v.get! i)
+  (x_1 : i = i + 1)
+  (x✝ : v1.length = v.length) :
+  v1.length = v.length
+  := by sorry
+-/
+#guard_msgs in
+set_option linter.unusedVariables false in
+example
+  (v : List Nat)
+  (i : Nat)
+  (x : Nat)
+  (i1 : Usize)
+  (v1 : List Nat)
+  (h : i ≤ v.length)
+  (h : i < v.length)
+  (_ : x = v.get! i)
+  (_ : i = i + 1)
+  (_ : v1.length = v.length) :
+  v1.length = v.length
+  := by
+  extract_goal
+  simp [*]
+
+/-- Introduce an auxiliary assertion for the goal -/
+def extractAssert (ref : Syntax) : TacticM Unit := do
+  withMainContext do
+  let goal ← (← getMainGoal).getType
+  let goal ← Lean.Meta.Tactic.TryThis.delabToRefinableSyntax goal
+  let tac : TSyntax `tactic ← `(tactic|have : $goal := by sorry)
+  /- Remark: there exists addHaveSuggestion -/
+  Meta.Tactic.TryThis.addSuggestion ref tac (origSpan? := ← getRef)
+
+elab tk:"extract_assert" : tactic => do
+  withMainContext do
+  extractAssert tk
+
+/--
+info: Try this: have : y ≥ x := by sorry
+-/
+#guard_msgs in
+set_option linter.unusedTactic false in
+example (x : Nat) (y : Nat) (_ : Nat) (h : x ≤ y) : y ≥ x := by
+  extract_assert
+  omega
+
+/- Group a list of expressions into a (non-dependent) tuple -/
+def mkProdsVal (xl : List Expr) : MetaM Expr :=
+  match xl with
+  | [] =>
+    pure (Expr.const ``PUnit.unit [Level.succ .zero])
+  | [x] => do
+    pure x
+  | x :: xl => do
+    let xl ← mkProdsVal xl
+    mkAppM ``Prod.mk #[x, xl]
+
+def mkProdType (x y : Expr) : MetaM Expr :=
+  mkAppM ``Prod #[x, y]
+
+def mkProd (x y : Expr) : MetaM Expr :=
+  mkAppM ``Prod.mk #[x, y]
+
+/- Deconstruct a sigma type.
+
+   For instance, deconstructs `(a : Type) × List a` into
+   `Type` and `λ a => List a`.
+ -/
+def getSigmaTypes (ty : Expr) : MetaM (Expr × Expr) := do
+  ty.withApp fun f args => do
+  if ¬ f.isConstOf ``Sigma ∨ args.size ≠ 2 then
+    throwError "Invalid argument to getSigmaTypes: {ty}"
+  else
+    pure (args.get! 0, args.get! 1)
+
+/- Make a sigma type.
+
+   `x` should be a variable, and `ty` and type which (might) uses `x`
+ -/
+def mkSigmaType (x : Expr) (sty : Expr) : MetaM Expr := do
+  trace[Utils] "mkSigmaType: {x} {sty}"
+  let alpha ← inferType x
+  let beta ← mkLambdaFVars #[x] sty
+  trace[Utils] "mkSigmaType: ({alpha}) ({beta})"
+  mkAppOptM ``Sigma #[some alpha, some beta]
+
+/- Generate a Sigma type from a list of *variables* (all the expressions
+   must be variables).
+
+   Example:
+   - xl = [(a:Type), (ls:List a), (i:Int)]
+
+   Generates:
+   `(a:Type) × (ls:List a) × (i:Int)`
+
+ -/
+def mkSigmasType (xl : List Expr) : MetaM Expr :=
+  match xl with
+  | [] => do
+    trace[Utils] "mkSigmasType: []"
+    pure (Expr.const ``PUnit [Level.succ .zero])
+  | [x] => do
+    trace[Utils] "mkSigmasType: [{x}]"
+    let ty ← inferType x
+    pure ty
+  | x :: xl => do
+    trace[Utils] "mkSigmasType: [{x}::{xl}]"
+    let sty ← mkSigmasType xl
+    mkSigmaType x sty
+
+/- Generate a product type from a list of *variables*.
+
+   Example:
+   - xl = [(ls:List a), (i:Int)]
+
+   Generates:
+   `List a × Int`
+ -/
+def mkProdsType (xl : List Expr) : MetaM Expr :=
+  match xl with
+  | [] => do
+    trace[Utils] "mkProdsType: []"
+    pure (Expr.const ``PUnit [Level.succ .zero])
+  | [x] => do
+    trace[Utils] "mkProdsType: [{x}]"
+    let ty ← inferType x
+    pure ty
+  | x :: xl => do
+    trace[Utils] "mkProdsType: [{x}::{xl}]"
+    let ty ← inferType x
+    let xl_ty ← mkProdsType xl
+    mkAppM ``Prod #[ty, xl_ty]
+
+/- Split the input arguments between the types and the "regular" arguments.
+
+   We do something simple: we treat an input argument as an
+   input type iff it appears in the type of the following arguments.
+
+   Note that what really matters is that we find the arguments which appear
+   in the output type.
+
+   Also, we stop at the first input that we treat as an
+   input type.
+ -/
+def splitInputArgs (in_tys : Array Expr) (out_ty : Expr) : MetaM (Array Expr × Array Expr) := do
+  -- Look for the first parameter which appears in the subsequent parameters
+  let rec splitAux (in_tys : List Expr) : MetaM (Std.HashSet FVarId × List Expr × List Expr) :=
+    match in_tys with
+    | [] => do
+      let fvars ← getFVarIds (← inferType out_ty)
+      pure (fvars, [], [])
+    | ty :: in_tys => do
+      let (fvars, in_tys, in_args) ← splitAux in_tys
+      -- Have we already found where to split between type variables/regular
+      -- variables?
+      if ¬ in_tys.isEmpty then
+        -- The fvars set is now useless: no need to update it anymore
+        pure (fvars, ty :: in_tys, in_args)
+      else
+        -- Check if ty appears in the set of free variables:
+        let ty_id := ty.fvarId!
+        if fvars.contains ty_id then
+          -- We must split here. Note that we don't need to update the fvars
+          -- set: it is not useful anymore
+          pure (fvars, [ty], in_args)
+        else
+          -- We must split later: update the fvars set
+          let fvars := fvars.insertMany (← getFVarIds (← inferType ty))
+          pure (fvars, [], ty :: in_args)
+  let (_, in_tys, in_args) ← splitAux in_tys.toList
+  pure (Array.mk in_tys, Array.mk in_args)
+
+/- Apply a lambda expression to some arguments, simplifying the lambdas -/
+def applyLambdaToArgs (e : Expr) (xs : Array Expr) : MetaM Expr := do
+  lambdaTelescopeN e xs.size fun vars body =>
+  -- Create the substitution
+  let s : Std.HashMap FVarId Expr := Std.HashMap.ofList (List.zip (vars.toList.map Expr.fvarId!) xs.toList)
+  -- Substitute in the body
+  pure (body.replace fun e =>
+    match e with
+    | Expr.fvar fvarId => match s.get? fvarId with
+      | none   => e
+      | some v => v
+    | _ => none)
+
+/- Group a list of expressions into a dependent tuple.
+
+   Example:
+   xl = [`a : Type`, `ls : List a`]
+   returns:
+   `⟨ (a:Type), (ls: List a) ⟩`
+
+   We need the type argument because as the elements in the tuple are
+   "concrete", we can't in all generality figure out the type of the tuple.
+
+   Example:
+   `⟨ True, 3 ⟩ : (x : Bool) × (if x then Int else Unit)`
+ -/
+def mkSigmasVal (ty : Expr) (xl : List Expr) : MetaM Expr :=
+  match xl with
+  | [] => do
+    trace[Utils] "mkSigmasVal: []"
+    pure (Expr.const ``PUnit.unit [Level.succ .zero])
+  | [x] => do
+    trace[Utils] "mkSigmasVal: [{x}]"
+    pure x
+  | fst :: xl => do
+    trace[Utils] "mkSigmasVal: [{fst}::{xl}]"
+    -- Deconstruct the type
+    let (alpha, beta) ← getSigmaTypes ty
+    -- Compute the "second" field
+    -- Specialize beta for fst
+    let nty ← applyLambdaToArgs beta #[fst]
+    -- Recursive call
+    let snd ← mkSigmasVal nty xl
+    -- Put everything together
+    trace[Utils] "mkSigmasVal:\n{alpha}\n{beta}\n{fst}\n{snd}"
+    mkAppOptM ``Sigma.mk #[some alpha, some beta, some fst, some snd]
+
+def mkAnonymous (s : String) (i : Nat) : Name :=
+  .num (.str .anonymous s) i
+
+/- Given a list of values `[x0:ty0, ..., xn:ty1]`, where every `xi` might use the previous
+   `xj` (j < i) and a value `out` which uses `x0`, ..., `xn`, generate the following
+   expression:
+   ```
+   fun x:((x0:ty0) × ... × (xn:tyn) => -- **Dependent** tuple
+   match x with
+   | (x0, ..., xn) => out
+   ```
+
+   The `index` parameter is used for naming purposes: we use it to numerotate the
+   bound variables that we introduce.
+
+   We use this function to currify functions (the function bodies given to the
+   fixed-point operator must be unary functions).
+
+   Example:
+   ========
+   - xl = `[a:Type, ls:List a, i:Int]`
+   - out = `a`
+   - index = 0
+
+   generates (getting rid of most of the syntactic sugar):
+   ```
+   λ scrut0 => match scrut0 with
+   | Sigma.mk x scrut1 =>
+     match scrut1 with
+     | Sigma.mk ls i =>
+       a
+   ```
+-/
+partial def mkSigmasMatch (xl : List Expr) (out : Expr) (index : Nat := 0) : MetaM Expr :=
+  match xl with
+  | [] => do
+    -- This would be unexpected
+    throwError "mkSigmasMatch: empty list of input parameters"
+  | [x] => do
+    -- In the example given for the explanations: this is the inner match case
+    trace[Utils] "mkSigmasMatch: [{x}]"
+    mkLambdaFVars #[x] out
+  | fst :: xl => do
+    /- In the example given for the explanations: this is the outer match case
+       Remark: for the naming purposes, we use the same convention as for the
+       fields and parameters in `Sigma.casesOn` and `Sigma.mk` (looking at
+       those definitions might help)
+
+       We want to build the match expression:
+       ```
+       λ scrut =>
+       match scrut with
+       | Sigma.mk x ...  -- the hole is given by a recursive call on the tail
+       ``` -/
+    trace[Utils] "mkSigmasMatch: [{fst}::{xl}]"
+    let alpha ← inferType fst
+    let snd_ty ← mkSigmasType xl
+    let beta ← mkLambdaFVars #[fst] snd_ty
+    let snd ← mkSigmasMatch xl out (index + 1)
+    let mk ← mkLambdaFVars #[fst] snd
+    -- Introduce the "scrut" variable
+    let scrut_ty ← mkSigmaType fst snd_ty
+    withLocalDeclD (mkAnonymous "scrut" index) scrut_ty fun scrut => do
+    trace[Utils] "mkSigmasMatch: scrut: ({scrut}) : ({← inferType scrut})"
+    -- TODO: make the computation of the motive more efficient
+    let motive ← do
+      let out_ty ← inferType out
+      match out_ty  with
+      | .sort _ | .lit _ | .const .. =>
+        -- The type of the motive doesn't depend on the scrutinee
+        mkLambdaFVars #[scrut] out_ty
+      | _ =>
+        /- The type of the motive *may* depend on the scrutinee
+           TODO: make this more efficient (we could change the output type of
+           mkSigmasMatch -/
+        mkSigmasMatch (fst :: xl) out_ty
+    -- The final expression: putting everything together
+    trace[Utils] "mkSigmasMatch:\n  ({alpha})\n  ({beta})\n  ({motive})\n  ({scrut})\n  ({mk})"
+    let sm ← mkAppOptM ``Sigma.casesOn #[some alpha, some beta, some motive, some scrut, some mk]
+    -- Abstracting the "scrut" variable
+    let sm ← mkLambdaFVars #[scrut] sm
+    trace[Utils] "mkSigmasMatch: sm: {sm}"
+    pure sm
+
+/- This is similar to `mkSigmasMatch`, but with non-dependent tuples
+
+   Remark: factor out with `mkSigmasMatch`? This is extremely similar.
+-/
+partial def mkProdsMatch (xl : List Expr) (out : Expr) (index : Nat := 0) : MetaM Expr :=
+  match xl with
+  | [] => do
+    -- This would be unexpected
+    throwError "mkProdsMatch: empty list of input parameters"
+  | [x] => do
+    -- In the example given for the explanations: this is the inner match case
+    trace[Utils] "mkProdsMatch: [{x}]"
+    mkLambdaFVars #[x] out
+  | fst :: xl => do
+    trace[Utils] "mkProdsMatch: [{fst}::{xl}]"
+    let alpha ← inferType fst
+    let beta ← mkProdsType xl
+    let snd ← mkProdsMatch xl out (index + 1)
+    let mk ← mkLambdaFVars #[fst] snd
+    -- Introduce the "scrut" variable
+    let scrut_ty ← mkProdType alpha beta
+    withLocalDeclD (mkAnonymous "scrut" index) scrut_ty fun scrut => do
+    trace[Utils] "mkProdsMatch: scrut: ({scrut}) : ({← inferType scrut})"
+    -- TODO: make the computation of the motive more efficient
+    let motive ← do
+      let out_ty ← inferType out
+      match out_ty  with
+      | .sort _ | .lit _ | .const .. =>
+        -- The type of the motive doesn't depend on the scrutinee
+        mkLambdaFVars #[scrut] out_ty
+      | _ =>
+        /- The type of the motive *may* depend on the scrutinee
+           TODO: make this more efficient (we could change the output type of
+           mkProdsMatch) -/
+        mkProdsMatch (fst :: xl) out_ty
+    /-let motive ← do
+      let out_ty ← inferType out
+      mkLambdaFVars #[scrut] out_ty-/
+    -- The final expression: putting everything together
+    trace[Utils] "mkProdsMatch:\n  ({alpha})\n  ({beta})\n  ({motive})\n  ({scrut})\n  ({mk})"
+    let sm ← mkAppOptM ``Prod.casesOn #[some alpha, some beta, some motive, some scrut, some mk]
+    -- Abstracting the "scrut" variable
+    let sm ← mkLambdaFVars #[scrut] sm
+    trace[Utils] "mkProdsMatch: sm: {sm}"
+    pure sm
+
+/- Same as `mkSigmasMatch` but also accepts an empty list of inputs, in which case
+   it generates the expression:
+   ```
+   λ () => e
+   ``` -/
+def mkSigmasMatchOrUnit (xl : List Expr) (out : Expr) : MetaM Expr :=
+  if xl.isEmpty then do
+    let scrut_ty := Expr.const ``PUnit [Level.succ .zero]
+    withLocalDeclD (mkAnonymous "scrut" 0) scrut_ty fun scrut => do
+    mkLambdaFVars #[scrut] out
+  else
+    mkSigmasMatch xl out
+
+/- Same as `mkProdsMatch` but also accepts an empty list of inputs, in which case
+   it generates the expression:
+   ```
+   λ () => e
+   ``` -/
+def mkProdsMatchOrUnit (xl : List Expr) (out : Expr) : MetaM Expr :=
+  if xl.isEmpty then do
+    let scrut_ty := Expr.const ``PUnit [Level.succ .zero]
+    withLocalDeclD (mkAnonymous "scrut" 0) scrut_ty fun scrut => do
+    mkLambdaFVars #[scrut] out
+  else
+    mkProdsMatch xl out
+
 
 end Utils
 

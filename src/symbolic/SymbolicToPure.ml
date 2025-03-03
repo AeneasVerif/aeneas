@@ -15,6 +15,11 @@ module S = SymbolicAst
 (** The local logger *)
 let log = Logging.symbolic_to_pure_log
 
+let match_name_find_opt = TranslateCore.match_name_find_opt
+
+let match_name_with_generics_find_opt =
+  TranslateCore.match_name_with_generics_find_opt
+
 type type_ctx = {
   llbc_type_decls : T.type_decl TypeDeclId.Map.t;
   type_decls : type_decl TypeDeclId.Map.t;
@@ -722,10 +727,16 @@ let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
   let explicit_info = compute_explicit_info generics [] in
   let kind = translate_type_decl_kind span def.T.kind in
   let item_meta = def.item_meta in
+  (* Lookup the builtin information, if there is *)
+  let builtin_info =
+    match_name_find_opt ctx def.item_meta.name
+      (ExtractBuiltin.builtin_types_map ())
+  in
   {
     def_id;
     name;
     item_meta;
+    builtin_info;
     generics;
     explicit_info;
     llbc_generics = def.generics;
@@ -3092,7 +3103,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
             (* Note that cast can fail *)
             let effect_info =
               {
-                can_fail = true;
+                can_fail = not (Config.backend () = Lean);
                 stateful_group = false;
                 stateful = false;
                 can_diverge = false;
@@ -4728,10 +4739,16 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
 
   (* Assemble the declaration *)
   let backend_attributes = { reducible = false } in
+  (* Check if the function is builtin *)
+  let builtin_info =
+    let funs_map = ExtractBuiltin.builtin_funs_map () in
+    match_name_find_opt ctx.decls_ctx def.item_meta.name funs_map
+  in
   let def : fun_decl =
     {
       def_id;
       item_meta = def.item_meta;
+      builtin_info;
       kind = def.kind;
       backend_attributes;
       num_loops;
@@ -4815,10 +4832,16 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
         (name, translate_trait_method span translate_ty bound_fn))
       methods
   in
+  (* Lookup the builtin information, if there is *)
+  let builtin_info =
+    match_name_find_opt ctx trait_decl.item_meta.name
+      (ExtractBuiltin.builtin_trait_decls_map ())
+  in
   {
     def_id;
     name;
     item_meta;
+    builtin_info;
     generics;
     explicit_info;
     llbc_generics;
@@ -4873,10 +4896,19 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
         (name, translate_trait_method span translate_ty bound_fn))
       methods
   in
+  (* Lookup the builtin information, if there is *)
+  let builtin_info =
+    let decl_id = trait_impl.impl_trait.trait_decl_id in
+    let trait_decl = TraitDeclId.Map.find decl_id ctx.crate.trait_decls in
+    match_name_with_generics_find_opt ctx trait_decl.item_meta.name
+      llbc_impl_trait.decl_generics
+      (ExtractBuiltin.builtin_trait_impls_map ())
+  in
   {
     def_id;
     name;
     item_meta;
+    builtin_info;
     impl_trait;
     llbc_impl_trait;
     generics;
@@ -4913,10 +4945,14 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
   let ty =
     translate_fwd_ty (Some decl.item_meta.span) ctx.type_ctx.type_infos ty
   in
+  let builtin_info =
+    match_name_find_opt ctx item_meta.name ExtractBuiltin.builtin_globals_map
+  in
   {
     span = item_meta.span;
     def_id;
     item_meta;
+    builtin_info;
     name;
     llbc_generics;
     generics;

@@ -10,14 +10,6 @@ namespace Utils
 
 open Lean Lean.Elab Command Term Lean.Meta Tactic
 
--- Inspired by the `clear` tactic
-def clearFvarIds (fvarIds : Array FVarId) : TacticM Unit := do
-  let fvarIds ← withMainContext <| sortFVarIds fvarIds
-  for fvarId in fvarIds.reverse do
-    withMainContext do
-      let mvarId ← (← getMainGoal).clear fvarId
-      replaceMainGoal [mvarId]
-
 /- Utility function for proofs of termination (i.e., inside `decreasing_by`).
 
    Clean up the local context by removing all assumptions containing occurrences
@@ -42,8 +34,8 @@ def removeInvImageAssumptions : TacticM Unit := do
         | .const name _ => name == ``invImage
         | _ => false)) false (← inferType expr)
   let filtDecls ← liftM (decls.filterM containsInvertImage)
-  -- It can happen that other variables depend on the variables we want to clear:
-  -- filter them.
+  /- It can happen that other variables depend on the variables we want to clear:
+     filter them. -/
   let allFVarsInTypes ← decls.foldlM (fun hs d => do
     let hs ← getFVarIds (← inferType d.toExpr) hs
     -- Explore the body if it is not opaque

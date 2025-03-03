@@ -46,7 +46,7 @@ let simplify_aggregates_unchanged_fields_log =
   create_logger "PureMicroPasses.simplify_aggregates_unchanged_fields"
 
 (** Logger for ExtractBase *)
-let extract_log = create_logger "ExtractBase"
+let extract_log = create_logger "Extract"
 
 (** Logger for ExtractBuiltin *)
 let builtin_log = create_logger "Builtin"

@@ -2,6 +2,7 @@ import Lean
 import Aeneas.ScalarTac
 import Aeneas.Progress.Core
 import Aeneas.Std -- TODO: remove?
+import Aeneas.FSimp
 
 namespace Aeneas
 
@@ -13,22 +14,23 @@ open Utils
 -- TODO: the scalar types annoyingly often get reduced when we use the progress
 -- tactic. We should find a way of controling reduction. For now we use rewriting
 -- lemmas to make sure the goal remains clean, but this complexifies proof terms.
--- It seems there used to be a `fold` tactic.
-theorem scalar_isize_eq : Std.Scalar .Isize = Std.Isize := by rfl
-theorem scalar_i8_eq    : Std.Scalar .I8 = Std.I8 := by rfl
-theorem scalar_i16_eq   : Std.Scalar .I16 = Std.I16 := by rfl
-theorem scalar_i32_eq   : Std.Scalar .I32 = Std.I32 := by rfl
-theorem scalar_i64_eq   : Std.Scalar .I64 = Std.I64 := by rfl
-theorem scalar_i128_eq  : Std.Scalar .I128 = Std.I128 := by rfl
-theorem scalar_usize_eq : Std.Scalar .Usize = Std.Usize := by rfl
-theorem scalar_u8_eq    : Std.Scalar .U8 = Std.U8 := by rfl
-theorem scalar_u16_eq   : Std.Scalar .U16 = Std.U16 := by rfl
-theorem scalar_u32_eq   : Std.Scalar .U32 = Std.U32 := by rfl
-theorem scalar_u64_eq   : Std.Scalar .U64 = Std.U64 := by rfl
-theorem scalar_u128_eq  : Std.Scalar .U128 = Std.U128 := by rfl
+-- It seems there used to be a `fold` tactic. Update: there is a `refold_let` in Mathlib
+theorem uscalar_u8_eq    : Std.UScalar .U8 = Std.U8 := by rfl
+theorem uscalar_u16_eq   : Std.UScalar .U16 = Std.U16 := by rfl
+theorem uscalar_u32_eq   : Std.UScalar .U32 = Std.U32 := by rfl
+theorem uscalar_u64_eq   : Std.UScalar .U64 = Std.U64 := by rfl
+theorem uscalar_u128_eq  : Std.UScalar .U128 = Std.U128 := by rfl
+theorem uscalar_usize_eq : Std.UScalar .Usize = Std.Usize := by rfl
+
+theorem iscalar_i8_eq    : Std.IScalar .I8 = Std.I8 := by rfl
+theorem iscalar_i16_eq   : Std.IScalar .I16 = Std.I16 := by rfl
+theorem iscalar_i32_eq   : Std.IScalar .I32 = Std.I32 := by rfl
+theorem iscalar_i64_eq   : Std.IScalar .I64 = Std.I64 := by rfl
+theorem iscalar_i128_eq  : Std.IScalar .I128 = Std.I128 := by rfl
+theorem iscalar_isize_eq : Std.IScalar .Isize = Std.Isize := by rfl
 def scalar_eqs := [
-  ``scalar_isize_eq, ``scalar_i8_eq, ``scalar_i16_eq, ``scalar_i32_eq, ``scalar_i64_eq, ``scalar_i128_eq,
-  ``scalar_usize_eq, ``scalar_u8_eq, ``scalar_u16_eq, ``scalar_u32_eq, ``scalar_u64_eq, ``scalar_u128_eq
+  ``uscalar_usize_eq, ``uscalar_u8_eq, ``uscalar_u16_eq, ``uscalar_u32_eq, ``uscalar_u64_eq, ``uscalar_u128_eq,
+  ``iscalar_isize_eq, ``iscalar_i8_eq, ``iscalar_i16_eq, ``iscalar_i32_eq, ``iscalar_i64_eq, ``iscalar_i128_eq
 ]
 
 inductive TheoremOrLocal where
@@ -36,7 +38,7 @@ inductive TheoremOrLocal where
 | Local (asm : LocalDecl)
 
 structure Stats where
-  usedTheorem : TheoremOrLocal
+  usedTheorem : Syntax
 
 instance : ToMessageData TheoremOrLocal where
   toMessageData := λ x => match x with | .Theorem thName => m!"{thName}" | .Local asm => m!"{asm.userName}"
@@ -53,7 +55,7 @@ inductive ProgressError
 | Error (msg : MessageData)
 deriving Inhabited
 
-def progressWith (fExpr : Expr) (th : TheoremOrLocal)
+def progressWith (fExpr : Expr) (th : Expr)
   (keep : Option Name) (ids : Array (Option Name)) (splitPost : Bool)
   (asmTac : TacticM Unit) : TacticM ProgressError := do
   /- Apply the theorem
@@ -66,21 +68,16 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
      We also make sure that all the meta variables which appear in the
      function arguments have been instantiated
    -/
-  let thTy ← do
-    match th with
-    | .Theorem thName =>
-      -- Lookup the theorem and introduce fresh meta-variables for the universes
-      let th ← mkConstWithFreshMVarLevels thName
-      -- Retrieve the type
-      inferType th
-    | .Local asmDecl => pure asmDecl.type
+  /- There might be meta-variables in the type if the theorem comes from a local declaration,
+     especially if this declaration was introduced by a tactic -/
+  let thTy ← instantiateMVars (← inferType th)
   trace[Progress] "Looked up theorem/assumption type: {thTy}"
   -- Normalize to inline the let-bindings
   let thTy ← normalizeLetBindings thTy
   trace[Progress] "After normalizing the let-bindings: {thTy}"
   -- TODO: the tactic fails if we uncomment withNewMCtxDepth
   -- withNewMCtxDepth do
-  let (mvars, binders, thExBody) ← forallMetaTelescope thTy
+  let (mvars, binders, thExBody) ← forallMetaTelescope thTy.consumeMData
   trace[Progress] "After stripping foralls: {thExBody}"
   -- Introduce the existentially quantified variables and the post-condition
   -- in the context
@@ -103,16 +100,14 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
   let thBody ← instantiateMVars thBody
   trace[Progress] "thBody (after instantiation): {thBody}"
   -- Add the instantiated theorem to the assumptions (we apply it on the metavariables).
-  let th ← do
-    match th with
-    | .Theorem thName => mkAppOptM thName (mvars.map some)
-    | .Local decl => mkAppOptM' (mkFVar decl.fvarId) (mvars.map some)
+  let th ← mkAppOptM' th (mvars.map some)
+  trace[Progress] "Instantiated theorem reusing the metavariables: {th}"
   let asmName ← do match keep with | none => mkFreshAnonPropUserName | some n => do pure n
   let thTy ← inferType th
   trace[Progress] "thTy (after application): {thTy}"
-  -- Normalize the let-bindings (note that we already inlined the let bindings once above when analizing
-  -- the theorem, now we do it again on the instantiated theorem - there is probably a smarter way to do,
-  -- but it doesn't really matter).
+  /- Normalize the let-bindings (note that we already inlined the let bindings once above when analizing
+     the theorem, now we do it again on the instantiated theorem - there is probably a smarter way to do,
+     but it doesn't really matter). -/
   -- TODO: actually we might want to let the user insert them in the context
   let thTy ← normalizeLetBindings thTy
   trace[Progress] "thTy (after normalizing let-bindings): {thTy}"
@@ -149,13 +144,14 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
     Tactic.focus do
     let _ ←
       tryTac
-        (simpAt true {} [] []
+        (simpAt true {} [] [] []
                [``Std.bind_tc_ok, ``Std.bind_tc_fail, ``Std.bind_tc_div,
                 -- Those ones are quite useful to simplify the goal further by eliminating
                 -- existential quantifiers, for instance.
                 ``and_assoc, ``Std.Result.ok.injEq,
                 ``exists_eq_left, ``exists_eq_left', ``exists_eq_right, ``exists_eq_right',
-                ``exists_eq, ``exists_eq', ``true_and, ``and_true]
+                ``exists_eq, ``exists_eq', ``true_and, ``and_true,
+                ``Prod.mk.injEq]
                [hEq.fvarId!] (.targets #[] true))
     -- It may happen that at this point the goal is already solved (though this is rare)
     -- TODO: not sure this is the best way of checking it
@@ -163,7 +159,7 @@ def progressWith (fExpr : Expr) (th : TheoremOrLocal)
     else
        trace[Progress] "goal after applying the eq and simplifying the binds: {← getMainGoal}"
        -- TODO: remove this (some types get unfolded too much: we "fold" them back)
-       let _ ← tryTac (simpAt true {} [] [] scalar_eqs [] .wildcard_dep)
+       let _ ← tryTac (simpAt true {} [] [] [] scalar_eqs [] .wildcard_dep)
        trace[Progress] "goal after folding back scalar types: {← getMainGoal}"
        -- Clear the equality, unless the user requests not to do so
        let mgoal ← do
@@ -244,11 +240,12 @@ def getFirstArg (args : Array Expr) : Option Expr := do
   if args.size = 0 then none
   else some (args.get! 0)
 
-/- Helper: try to lookup a theorem and apply it.
-   Return true if it succeeded. -/
-def tryLookupApply (keep : Option Name) (ids : Array (Option Name)) (splitPost : Bool)
+/-- Helper: try to apply a theorem.
+
+    Return true if it succeeded. -/
+def tryApply (keep : Option Name) (ids : Array (Option Name)) (splitPost : Bool)
   (asmTac : TacticM Unit) (fExpr : Expr)
-  (kind : String) (th : Option TheoremOrLocal) : TacticM Bool := do
+  (kind : String) (th : Option Expr) : TacticM Bool := do
   let res ← do
     match th with
     | none =>
@@ -268,8 +265,8 @@ def tryLookupApply (keep : Option Name) (ids : Array (Option Name)) (splitPost :
   | none => pure false
 
 -- The array of ids are identifiers to use when introducing fresh variables
-def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrLocal)
-  (ids : Array (Option Name)) (splitPost : Bool) (asmTac : TacticM Unit) : TacticM TheoremOrLocal := do
+def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option Expr)
+  (ids : Array (Option Name)) (splitPost : Bool) (asmTac : TacticM Unit) : TacticM Syntax := do
   withMainContext do
   -- Retrieve the goal
   let mgoal ← Tactic.getMainGoal
@@ -297,7 +294,9 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrL
   match withTh with
   | some th => do
     match ← progressWith fExpr th keep ids splitPost asmTac with
-    | .Ok => return th
+    | .Ok =>
+      -- Remark: exprToSyntax doesn't give the expected result
+      return ← Lean.Meta.Tactic.TryThis.delabToRefinableSyntax th
     | .Error msg => throwError msg
   | none =>
     -- Try all the assumptions one by one and if it fails try to lookup a theorem.
@@ -305,9 +304,9 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrL
     let decls ← ctx.getDecls
     for decl in decls.reverse do
       trace[Progress] "Trying assumption: {decl.userName} : {decl.type}"
-      let res ← do try progressWith fExpr (.Local decl) keep ids splitPost asmTac catch _ => continue
+      let res ← do try progressWith fExpr decl.toExpr keep ids splitPost asmTac catch _ => continue
       match res with
-      | .Ok => return (.Local decl)
+      | .Ok => return (mkIdent decl.userName)
       | .Error msg => throwError msg
     -- It failed: lookup the pspec theorems which match the expression *only
     -- if the function is a constant*
@@ -317,7 +316,7 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrL
     if ¬ fIsConst then throwError "Progress failed"
     else do
       trace[Progress] "No assumption succeeded: trying to lookup a pspec theorem"
-      let pspecs : Array TheoremOrLocal ← do
+      let pspecs : Array Name ← do
         let thNames ← pspecAttr.find? fExpr
         -- TODO: because of reduction, there may be several valid theorems (for
         -- instance for the scalars). We need to sort them from most specific to
@@ -325,10 +324,12 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrL
         -- the end.
         let thNames := thNames.reverse
         trace[Progress] "Looked up pspec theorems: {thNames}"
-        pure (thNames.map fun th => TheoremOrLocal.Theorem th)
+        pure thNames
       -- Try the theorems one by one
       for pspec in pspecs do
-        if ← tryLookupApply keep ids splitPost asmTac fExpr "pspec theorem" pspec then return pspec
+        let pspecExpr ← Term.mkConst pspec
+        if ← tryApply keep ids splitPost asmTac fExpr "pspec theorem" pspecExpr
+        then return (mkIdent pspec)
         else pure ()
       -- It failed: try to use the recursive assumptions
       trace[Progress] "Failed using a pspec theorem: trying to use a recursive assumption"
@@ -339,16 +340,17 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option TheoremOrL
         | .default | .implDetail => false | .auxDecl => true)
       for decl in decls.reverse do
         trace[Progress] "Trying recursive assumption: {decl.userName} : {decl.type}"
-        let res ← do try progressWith fExpr (.Local decl) keep ids splitPost asmTac catch _ => continue
+        let res ← do try progressWith fExpr decl.toExpr keep ids splitPost asmTac catch _ => continue
         match res with
-        | .Ok => return (.Local decl)
+        | .Ok => return (mkIdent decl.userName)
         | .Error msg => throwError msg
       -- Nothing worked: failed
       throwError "Progress failed"
 
-syntax progressArgs := ("keep" (ident <|> "_"))? ("with" ident)? ("as" " ⟨ " (ident <|> "_"),* " ⟩")?
+syntax progressArgs := ("keep" (ident <|> "_"))? ("with" term)? ("as" " ⟨ " (ident <|> "_"),* " ⟩")?
 
 def evalProgress (args : TSyntax `Aeneas.Progress.progressArgs) : TacticM Stats := do
+  withMainContext do
   let args := args.raw
   -- Process the arguments to retrieve the identifiers to use
   trace[Progress] "Progress arguments: {args}"
@@ -370,19 +372,32 @@ def evalProgress (args : TSyntax `Aeneas.Progress.progressArgs) : TacticM Stats 
   let withArg ← do
     let withArg := withArg.getArgs
     if withArg.size > 0 then
-      let id := withArg.get! 1
-      trace[Progress] "With arg: {id}"
-      -- Attempt to lookup a local declaration
-      match (← getLCtx).findFromUserName? id.getId with
-      | some decl => do
-        trace[Progress] "With arg: local decl"
-        pure (some (.Local decl))
-      | none => do
-        -- Not a local declaration: should be a theorem
-        trace[Progress] "With arg: theorem"
-        addCompletionInfo <| CompletionInfo.id id id.getId (danglingDot := false) {} none
-        let some (.const name _) ← Term.resolveId? id | throwError m!"Could not find theorem: {id}"
-        pure (some (.Theorem name))
+      let pspec := withArg.get! 1
+      trace[Progress] "With arg: {pspec}"
+      /- The theorem with which to make progress is either:
+         - the identifier of a local declaration or a theroem
+         - a term
+        We have to make a case disjunction, because if we treat identifiers like
+        terms, then Lean will not succeed in infering their implicit parameters
+        (`progress` does that by matching against the goal).
+       -/
+      if pspec.isIdent then
+        -- Attempt to lookup a local declaration
+        match (← getLCtx).findFromUserName? pspec.getId with
+        | some decl => do
+          trace[Progress] "With arg: local decl"
+          pure (some decl.toExpr)
+        | none => do
+          -- Not a local declaration: should be a theorem
+          trace[Progress] "With arg: theorem"
+          addCompletionInfo <| CompletionInfo.id pspec pspec.getId (danglingDot := false) {} none
+          let some e ← Term.resolveId? pspec (withInfo := true) | throwError m!"Could not find theorem: {pspec}"
+          pure (some e)
+      else
+        trace[Progress] "With arg: is term"
+        let pspec ← Tactic.elabTerm pspec none
+        trace[Progress] m!"With arg: elaborated expression {pspec}"
+        pure (some pspec)
     else pure none
   let ids :=
     let args := asArgs.getArgs
@@ -399,12 +414,13 @@ def evalProgress (args : TSyntax `Aeneas.Progress.progressArgs) : TacticM Stats 
     if ← ScalarTac.goalIsLinearInt then
       -- Also: we don't try to split the goal if it is a conjunction
       -- (it shouldn't be), but we split the disjunctions.
-      ScalarTac.scalarTac true false
+      ScalarTac.scalarTac { split := false, fastSaturate := true }
     else
       throwError "Not a linear arithmetic goal"
+  let simpLemmas ← Aeneas.ScalarTac.scalarTacSimpExt.getTheorems
   let simpTac : TacticM Unit := do
       -- Simplify the goal
-      Utils.simpAt false {} [] [] [] [] (.targets #[] true)
+      Utils.simpAt false {} [] [simpLemmas] [] [] [] (.targets #[] true)
       -- Raise an error if the goal is not proved
       allGoalsNoRecover (throwError "Goal not proved")
   -- We use our custom assumption tactic, which instantiates meta-variables only if there is a single
@@ -427,7 +443,7 @@ elab tk:"progress?" args:progressArgs : tactic => do
   let stats ← evalProgress args
   let mut stxArgs := args.raw
   if stxArgs[1].isNone then
-    let withArg := mkNullNode #[mkAtom "with", mkIdent stats.usedTheorem]
+    let withArg := mkNullNode #[mkAtom "with", stats.usedTheorem]
     stxArgs := stxArgs.setArg 1 withArg
   let tac := mkNode `Aeneas.Progress.progress #[mkAtom "progress", stxArgs]
   Meta.Tactic.TryThis.addSuggestion tk tac (origSpan? := ← getRef)
@@ -435,42 +451,60 @@ elab tk:"progress?" args:progressArgs : tactic => do
 namespace Test
   open Std Result
 
-  -- Show the traces
+  -- Show the traces:
   -- set_option trace.Progress true
   -- set_option pp.rawOnError true
 
   set_option says.verify true
 
-  -- The following commands display the databases of theorems
+  -- The following command displays the database of theorems:
   -- #eval showStoredPSpec
   open alloc.vec
 
-  example {ty} {x y : Scalar ty}
-    (hmin : Scalar.min ty ≤ x.val + y.val)
-    (hmax : x.val + y.val ≤ Scalar.max ty) :
+  example {ty} {x y : UScalar ty}
+    (hmax : x.val + y.val ≤ UScalar.max ty) :
     ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
     progress keep _ as ⟨ z, h1 ⟩
     simp [*, h1]
 
-  example {ty} {x y : Scalar ty}
-    (hmin : Scalar.min ty ≤ x.val + y.val)
-    (hmax : x.val + y.val ≤ Scalar.max ty) :
+  example {ty} {x y : IScalar ty}
+    (hmin : IScalar.min ty ≤ x.val + y.val)
+    (hmax : x.val + y.val ≤ IScalar.max ty) :
     ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
-    progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with Aeneas.Std.Scalar.add_spec as ⟨ z, h1 ⟩
+    progress keep _ as ⟨ z, h1 ⟩
     simp [*, h1]
 
-  example {ty} {x y : Scalar ty}
-    (hmin : Scalar.min ty ≤ x.val + y.val)
-    (hmax : x.val + y.val ≤ Scalar.max ty) :
+  example {ty} {x y : UScalar ty}
+    (hmax : x.val + y.val ≤ UScalar.max ty) :
     ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
-    progress keep h with Scalar.add_spec as ⟨ z ⟩
+    progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with Aeneas.Std.UScalar.add_spec as ⟨ z, h1 ⟩
+    simp [*, h1]
+
+  example {ty} {x y : IScalar ty}
+    (hmin : IScalar.min ty ≤ x.val + y.val)
+    (hmax : x.val + y.val ≤ IScalar.max ty) :
+    ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
+    progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with Aeneas.Std.IScalar.add_spec as ⟨ z, h1 ⟩
+    simp [*, h1]
+
+  example {ty} {x y : UScalar ty}
+    (hmax : x.val + y.val ≤ UScalar.max ty) :
+    ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
+    progress keep h with UScalar.add_spec as ⟨ z ⟩
+    simp [*, h]
+
+  example {ty} {x y : IScalar ty}
+    (hmin : IScalar.min ty ≤ x.val + y.val)
+    (hmax : x.val + y.val ≤ IScalar.max ty) :
+    ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
+    progress keep h with IScalar.add_spec as ⟨ z ⟩
     simp [*, h]
 
   example {x y : U32}
     (hmax : x.val + y.val ≤ U32.max) :
     ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
     -- This spec theorem is suboptimal, but it is good to check that it works
-    progress with Scalar.add_spec as ⟨ z, h1 ⟩
+    progress with UScalar.add_spec as ⟨ z, h1 ⟩
     simp [*, h1]
 
   example {x y : U32}
@@ -489,16 +523,16 @@ namespace Test
      `α : Type u` where u is quantified, while here we use `α : Type 0` -/
   example {α : Type} (v: Vec α) (i: Usize) (x : α)
     (hbounds : i.val < v.length) :
-    ∃ nv, v.update_usize i x = ok nv ∧
-    nv.val = v.val.update i.toNat x := by
+    ∃ nv, v.update i x = ok nv ∧
+    nv.val = v.val.set i.val x := by
     progress
     simp [*]
 
   example {α : Type} (v: Vec α) (i: Usize) (x : α)
     (hbounds : i.val < v.length) :
-    ∃ nv, v.update_usize i x = ok nv ∧
-    nv.val = v.val.update i.toNat x := by
-    progress? says progress with Aeneas.Std.alloc.vec.Vec.update_usize_spec
+    ∃ nv, v.update i x = ok nv ∧
+    nv.val = v.val.set i.val x := by
+    progress? says progress with Aeneas.Std.alloc.vec.Vec.update_spec
     simp [*]
 
   /- Checking that progress can handle nested blocks -/
@@ -507,7 +541,7 @@ namespace Test
     ∃ nv,
       (do
          (do
-            let _ ← v.update_usize i x
+            let _ ← v.update i x
             .ok ())
          .ok ()) = ok nv
       := by
@@ -531,12 +565,19 @@ namespace Test
 
   /- The use of `right` introduces a meta-variable in the goal, that we
      need to instantiate (otherwise `progress` gets stuck) -/
-  example {ty} {x y : Scalar ty}
-    (hmin : Scalar.min ty ≤ x.val + y.val)
-    (hmax : x.val + y.val ≤ Scalar.max ty) :
+  example {ty} {x y : UScalar ty}
+    (hmax : x.val + y.val ≤ UScalar.max ty) :
     False ∨ (∃ z, x + y = ok z ∧ z.val = x.val + y.val) := by
     right
     progress keep _ as ⟨ z, h1 ⟩
+    simp [*, h1]
+
+  example {ty} {x y : IScalar ty}
+    (hmin : IScalar.min ty ≤ x.val + y.val)
+    (hmax : x.val + y.val ≤ IScalar.max ty) :
+    False ∨ (∃ z, x + y = ok z ∧ z.val = x.val + y.val) := by
+    right
+    progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with Aeneas.Std.IScalar.add_spec as ⟨ z, h1 ⟩
     simp [*, h1]
 
   -- Testing with mutually recursive definitions
@@ -563,45 +604,56 @@ namespace Test
         ok (s + s')
   end
 
-  mutual
-    @[pspec]
-    theorem Tree.size_spec (t : Tree) :
-      ∃ i, t.size = ok i ∧ i ≥ 0 := by
-      cases t
-      simp [Tree.size]
-      progress
-      omega
+  section
+    mutual
+      @[local progress]
+      theorem Tree.size_spec (t : Tree) :
+        ∃ i, t.size = ok i ∧ i ≥ 0 := by
+        cases t
+        simp [Tree.size]
+        progress
+        omega
 
-    @[pspec]
-    theorem Trees.size_spec (t : Trees) :
-      ∃ i, t.size = ok i ∧ i ≥ 0 := by
-      cases t <;> simp [Trees.size]
-      progress
-      progress
-      omega
+      @[local progress]
+      theorem Trees.size_spec (t : Trees) :
+        ∃ i, t.size = ok i ∧ i ≥ 0 := by
+        cases t <;> simp [Trees.size]
+        progress
+        progress? says progress with Trees.size_spec
+        omega
+    end
   end
 
   -- Testing progress on theorems containing local let-bindings
   def add (x y : U32) : Result U32 := x + y
 
-  @[pspec] -- TODO: give the possibility of using pspec as a local attribute
-  theorem add_spec (x y : U32) (h : x.val + y.val ≤ U32.max) :
-    let tot := x.val + y.val
-    ∃ z, add x y = ok z ∧ z.val = tot := by
-    rw [add]
-    intro tot
-    progress
-    simp [*, tot]
+  section
+    /- Testing progress on theorems containing local let-bindings as well as
+       the `local` attribute kind -/
+    @[local progress] theorem add_spec' (x y : U32) (h : x.val + y.val ≤ U32.max) :
+      let tot := x.val + y.val
+      ∃ z, x + y = ok z ∧ z.val = tot := by
+      simp
+      progress with U32.add_spec
+      scalar_tac
 
-  def add1 (x y : U32) : Result U32 := do
-    let z ← add x y
-    add z z
+    def add1 (x y : U32) : Result U32 := do
+      let z ← x + y
+      z + z
 
+    example (x y : U32) (h : 2 * x.val + 2 * y.val ≤ U32.max) :
+      ∃ z, add1 x y = ok z := by
+      rw [add1]
+      progress? as ⟨ z1, h ⟩ says progress with Aeneas.Progress.Test.add_spec' as ⟨ z1, h ⟩
+      progress? as ⟨ z2, h ⟩ says progress with Aeneas.Progress.Test.add_spec' as ⟨ z2, h ⟩
+  end
+
+  /- Checking that `add_spec'` went out of scope -/
   example (x y : U32) (h : 2 * x.val + 2 * y.val ≤ U32.max) :
     ∃ z, add1 x y = ok z := by
     rw [add1]
-    progress as ⟨ z1, h ⟩
-    progress as ⟨ z2, h ⟩
+    progress? as ⟨ z1, h ⟩ says progress with Aeneas.Std.U32.add_spec as ⟨ z1, h ⟩
+    progress? as ⟨ z2, h ⟩ says progress with Aeneas.Std.U32.add_spec as ⟨ z2, h ⟩
 
   variable (P : ℕ → List α → Prop)
   variable (f : List α → Result Bool)
@@ -609,7 +661,205 @@ namespace Test
 
   example (l : List α) (h : P i l) :
     ∃ b, f l = ok b := by
-    progress as ⟨ b ⟩
+    progress? as ⟨ b ⟩ says progress with f_spec as ⟨ b ⟩
+
+  /- Progress using a term -/
+  example {x: U32}
+    (f : U32 → Result Unit)
+    (h : ∀ x, f x = .ok ()):
+      f x = ok () := by
+      progress? with (show ∀ x, f x = .ok () by exact h) says progress with(show ∀ x, f x = .ok () by exact h)
+
+  /- Progress using a term -/
+  example (x y : U32) (h : 2 * x.val + 2 * y.val ≤ U32.max) :
+    ∃ z, add1 x y = ok z := by
+    rw [add1]
+    have h1 := add_spec'
+    progress with h1 as ⟨ z1, h ⟩
+    progress with add_spec' z1 as ⟨ z2, h ⟩
+
+  namespace Ntt
+    def wfArray (_ : Array U16 256#usize) : Prop := True
+
+    def nttLayer (a : Array U16 256#usize) (_k : Usize) (_len : Usize) : Result (Array U16 256#usize) := ok a
+
+    def toPoly (a : Array U16 256#usize) : List U16 := a.val
+
+    def Spec.nttLayer (a : List U16) (_ : Nat) (len : Nat) (_ : Nat) (_ : 0 < len) : List U16 := a
+
+    @[local progress]
+    theorem nttLayer_spec
+      (peSrc : Array U16 256#usize)
+      (k : Usize) (len : Usize)
+      (_ : wfArray peSrc)
+      (_ : k.val = 2^(k.val.log2) ∧ k.val.log2 < 7)
+      (_ : len.val = 128 / k.val)
+      (hLenPos : 0 < len.val) :
+      ∃ peSrc', nttLayer peSrc k len = ok peSrc' ∧
+      toPoly peSrc' = Spec.nttLayer (toPoly peSrc) k.val len.val 0 hLenPos ∧
+      wfArray peSrc' := by
+      simp [wfArray, nttLayer, toPoly, Spec.nttLayer]
+
+    def ntt (x : Array U16 256#usize) : Result (Array U16 256#usize) := do
+      let x ← nttLayer x 1#usize 128#usize
+      let x ← nttLayer x 2#usize 64#usize
+      let x ← nttLayer x 4#usize 32#usize
+      let x ← nttLayer x 8#usize 16#usize
+      let x ← nttLayer x 16#usize 8#usize
+      let x ← nttLayer x 32#usize 4#usize
+      let x ← nttLayer x 64#usize 2#usize
+      let x ← nttLayer x 64#usize 2#usize
+      let x ← nttLayer x 64#usize 2#usize
+      let x ← nttLayer x 64#usize 2#usize
+      let x ← nttLayer x 64#usize 2#usize
+      let x ← nttLayer x 64#usize 2#usize
+      let x ← nttLayer x 64#usize 2#usize
+      ok x
+
+    set_option maxHeartbeats 800000
+
+    /-
+    simp took 24.6ms
+    simp took 18.3ms
+    tactic execution of Aeneas.Progress.progress took 43.1ms
+    simp took 13.8ms
+    simp took 21.1ms
+    simp took 17ms
+    tactic execution of Aeneas.Progress.progress took 115ms
+    simp took 18.2ms
+    simp took 20.7ms
+    simp took 17.4ms
+    tactic execution of Aeneas.Progress.progress took 189ms
+    simp took 22.8ms
+    simp took 21.8ms
+    simp took 17.1ms
+    tactic execution of Aeneas.Progress.progress took 259ms
+    simp took 28.9ms
+    simp took 21.4ms
+    simp took 17.7ms
+    tactic execution of Aeneas.Progress.progress took 324ms
+    simp took 33.9ms
+    simp took 21.7ms
+    simp took 17.7ms
+    tactic execution of Aeneas.Progress.progress took 407ms
+    simp took 39.1ms
+    simp took 21.5ms
+    simp took 17.8ms
+    tactic execution of Aeneas.Progress.progress took 483ms
+    simp took 44ms
+    simp took 21ms
+    simp took 17.7ms
+    tactic execution of Aeneas.Progress.progress took 563ms
+    simp took 44.6ms
+    simp took 21.7ms
+    simp took 17.7ms
+    tactic execution of Aeneas.Progress.progress took 631ms
+    simp took 45.1ms
+    simp took 21.7ms
+    simp took 17.5ms
+    tactic execution of Aeneas.Progress.progress took 706ms
+    simp took 44.6ms
+    simp took 21.9ms
+    simp took 18.2ms
+    tactic execution of Aeneas.Progress.progress took 789ms
+    simp took 45.5ms
+    simp took 21.1ms
+    simp took 18.7ms
+    tactic execution of Aeneas.Progress.progress took 864ms
+    simp took 45.4ms
+    simp took 22.6ms
+    dsimp took 11.3ms
+    simp took 18.5ms
+    tactic execution of Aeneas.Progress.progress took 951ms
+    simp took 46.5ms
+    tactic execution of Lean.Parser.Tactic.tacticSeq1Indented took 19ms
+    type checking took 81.3ms
+
+    After using `saturateFast` in `scalar_tac`:
+    simp took 26.2ms
+    simp took 20.6ms
+    simp took 10ms
+    tactic execution of Aeneas.Progress.progress took 20.9ms
+    simp took 21.9ms
+    simp took 18.5ms
+    tactic execution of Aeneas.Progress.progress took 23.1ms
+    simp took 18.1ms
+    simp took 21.6ms
+    simp took 18ms
+    tactic execution of Aeneas.Progress.progress took 38.8ms
+    simp took 18ms
+    simp took 23.1ms
+    simp took 17.6ms
+    simp took 10.3ms
+    tactic execution of Aeneas.Progress.progress took 31.8ms
+    simp took 19.8ms
+    simp took 22.1ms
+    simp took 18ms
+    tactic execution of Aeneas.Progress.progress took 34.9ms
+    simp took 22.9ms
+    simp took 22.8ms
+    simp took 17.8ms
+    tactic execution of Aeneas.Progress.progress took 40.9ms
+    simp took 26.5ms
+    simp took 23.1ms
+    simp took 20.1ms
+    simp took 19.4ms
+    simp took 10.1ms
+    tactic execution of Aeneas.Progress.progress took 48.2ms
+    simp took 29ms
+    simp took 22.9ms
+    simp took 18.6ms
+    tactic execution of Aeneas.Progress.progress took 51.1ms
+    simp took 29.1ms
+    simp took 22.5ms
+    simp took 19.2ms
+    tactic execution of Aeneas.Progress.progress took 56.1ms
+    simp took 29.2ms
+    simp took 22.5ms
+    simp took 19.5ms
+    simp took 10.3ms
+    tactic execution of Aeneas.Progress.progress took 60ms
+    simp took 29.7ms
+    simp took 23.4ms
+    simp took 19.6ms
+    simp took 10.5ms
+    tactic execution of Aeneas.Progress.progress took 67.4ms
+    simp took 29.1ms
+    simp took 23.6ms
+    simp took 18.6ms
+    simp took 10.7ms
+    tactic execution of Aeneas.Progress.progress took 70.1ms
+    simp took 30ms
+    simp took 24ms
+    simp took 20.1ms
+    simp took 10.5ms
+    tactic execution of Aeneas.Progress.progress took 76.5ms
+    simp took 28.7ms
+    tactic execution of Lean.Parser.Tactic.tacticSeq1Indented took 17.4ms
+    type checking took 86.5ms
+    -/
+    theorem ntt_spec (peSrc : Std.Array U16 256#usize)
+      (hWf : wfArray peSrc) :
+      ∃ peSrc1, ntt peSrc = ok peSrc1 ∧
+      wfArray peSrc1
+      := by
+      unfold ntt
+      progress; fsimp [Nat.log2]
+      progress; fsimp [Nat.log2]
+      progress; fsimp [Nat.log2]
+      progress; fsimp [Nat.log2]
+      progress; fsimp [Nat.log2]
+      progress; fsimp [Nat.log2]
+      progress; fsimp [Nat.log2]
+      progress; fsimp [Nat.log2]
+      progress; fsimp [Nat.log2]
+      progress; fsimp [Nat.log2]
+      progress; fsimp [Nat.log2]
+      progress; fsimp [Nat.log2]
+      progress; fsimp [Nat.log2]
+      assumption
+
+  end Ntt
 
 end Test
 

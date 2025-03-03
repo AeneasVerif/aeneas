@@ -29,12 +29,6 @@ def appendToName (n : Name) (s : String) : Name :=
 def UnitType := Expr.const ``PUnit [Level.succ .zero]
 def UnitValue := Expr.const ``PUnit.unit [Level.succ .zero]
 
-def mkProdType (x y : Expr) : MetaM Expr :=
-  mkAppM ``Prod #[x, y]
-
-def mkProd (x y : Expr) : MetaM Expr :=
-  mkAppM ``Prod.mk #[x, y]
-
 def mkInOutTy (x y z : Expr) : MetaM Expr := do
   mkAppM ``FixII.mk_in_out_ty #[x, y, z]
 
@@ -45,318 +39,6 @@ def getResultTy (ty : Expr) : MetaM Expr :=
     throwError "Invalid argument to getResultTy: {ty}"
   else
     pure (args.get! 0)
-
-/- Deconstruct a sigma type.
-
-   For instance, deconstructs `(a : Type) × List a` into
-   `Type` and `λ a => List a`.
- -/
-def getSigmaTypes (ty : Expr) : MetaM (Expr × Expr) := do
-  ty.withApp fun f args => do
-  if ¬ f.isConstOf ``Sigma ∨ args.size ≠ 2 then
-    throwError "Invalid argument to getSigmaTypes: {ty}"
-  else
-    pure (args.get! 0, args.get! 1)
-
-/- Make a sigma type.
-
-   `x` should be a variable, and `ty` and type which (might) uses `x`
- -/
-def mkSigmaType (x : Expr) (sty : Expr) : MetaM Expr := do
-  trace[Diverge.def.sigmas] "mkSigmaType: {x} {sty}"
-  let alpha ← inferType x
-  let beta ← mkLambdaFVars #[x] sty
-  trace[Diverge.def.sigmas] "mkSigmaType: ({alpha}) ({beta})"
-  mkAppOptM ``Sigma #[some alpha, some beta]
-
-/- Generate a Sigma type from a list of *variables* (all the expressions
-   must be variables).
-
-   Example:
-   - xl = [(a:Type), (ls:List a), (i:Int)]
-
-   Generates:
-   `(a:Type) × (ls:List a) × (i:Int)`
-
- -/
-def mkSigmasType (xl : List Expr) : MetaM Expr :=
-  match xl with
-  | [] => do
-    trace[Diverge.def.sigmas] "mkSigmasType: []"
-    pure (Expr.const ``PUnit [Level.succ .zero])
-  | [x] => do
-    trace[Diverge.def.sigmas] "mkSigmasType: [{x}]"
-    let ty ← inferType x
-    pure ty
-  | x :: xl => do
-    trace[Diverge.def.sigmas] "mkSigmasType: [{x}::{xl}]"
-    let sty ← mkSigmasType xl
-    mkSigmaType x sty
-
-/- Generate a product type from a list of *variables* (this is similar to `mkSigmas`).
-
-   Example:
-   - xl = [(ls:List a), (i:Int)]
-
-   Generates:
-   `List a × Int`
- -/
-def mkProdsType (xl : List Expr) : MetaM Expr :=
-  match xl with
-  | [] => do
-    trace[Diverge.def.prods] "mkProdsType: []"
-    pure (Expr.const ``PUnit [Level.succ .zero])
-  | [x] => do
-    trace[Diverge.def.prods] "mkProdsType: [{x}]"
-    let ty ← inferType x
-    pure ty
-  | x :: xl => do
-    trace[Diverge.def.prods] "mkProdsType: [{x}::{xl}]"
-    let ty ← inferType x
-    let xl_ty ← mkProdsType xl
-    mkAppM ``Prod #[ty, xl_ty]
-
-/- Split the input arguments between the types and the "regular" arguments.
-
-   We do something simple: we treat an input argument as an
-   input type iff it appears in the type of the following arguments.
-
-   Note that what really matters is that we find the arguments which appear
-   in the output type.
-
-   Also, we stop at the first input that we treat as an
-   input type.
- -/
-def splitInputArgs (in_tys : Array Expr) (out_ty : Expr) : MetaM (Array Expr × Array Expr) := do
-  -- Look for the first parameter which appears in the subsequent parameters
-  let rec splitAux (in_tys : List Expr) : MetaM (Std.HashSet FVarId × List Expr × List Expr) :=
-    match in_tys with
-    | [] => do
-      let fvars ← getFVarIds (← inferType out_ty)
-      pure (fvars, [], [])
-    | ty :: in_tys => do
-      let (fvars, in_tys, in_args) ← splitAux in_tys
-      -- Have we already found where to split between type variables/regular
-      -- variables?
-      if ¬ in_tys.isEmpty then
-        -- The fvars set is now useless: no need to update it anymore
-        pure (fvars, ty :: in_tys, in_args)
-      else
-        -- Check if ty appears in the set of free variables:
-        let ty_id := ty.fvarId!
-        if fvars.contains ty_id then
-          -- We must split here. Note that we don't need to update the fvars
-          -- set: it is not useful anymore
-          pure (fvars, [ty], in_args)
-        else
-          -- We must split later: update the fvars set
-          let fvars := fvars.insertMany (← getFVarIds (← inferType ty))
-          pure (fvars, [], ty :: in_args)
-  let (_, in_tys, in_args) ← splitAux in_tys.toList
-  pure (Array.mk in_tys, Array.mk in_args)
-
-/- Apply a lambda expression to some arguments, simplifying the lambdas -/
-def applyLambdaToArgs (e : Expr) (xs : Array Expr) : MetaM Expr := do
-  lambdaTelescopeN e xs.size fun vars body =>
-  -- Create the substitution
-  let s : Std.HashMap FVarId Expr := Std.HashMap.ofList (List.zip (vars.toList.map Expr.fvarId!) xs.toList)
-  -- Substitute in the body
-  pure (body.replace fun e =>
-    match e with
-    | Expr.fvar fvarId => match s.get? fvarId with
-      | none   => e
-      | some v => v
-    | _ => none)
-
-/- Group a list of expressions into a dependent tuple.
-
-   Example:
-   xl = [`a : Type`, `ls : List a`]
-   returns:
-   `⟨ (a:Type), (ls: List a) ⟩`
-
-   We need the type argument because as the elements in the tuple are
-   "concrete", we can't in all generality figure out the type of the tuple.
-
-   Example:
-   `⟨ True, 3 ⟩ : (x : Bool) × (if x then Int else Unit)`
- -/
-def mkSigmasVal (ty : Expr) (xl : List Expr) : MetaM Expr :=
-  match xl with
-  | [] => do
-    trace[Diverge.def.sigmas] "mkSigmasVal: []"
-    pure (Expr.const ``PUnit.unit [Level.succ .zero])
-  | [x] => do
-    trace[Diverge.def.sigmas] "mkSigmasVal: [{x}]"
-    pure x
-  | fst :: xl => do
-    trace[Diverge.def.sigmas] "mkSigmasVal: [{fst}::{xl}]"
-    -- Deconstruct the type
-    let (alpha, beta) ← getSigmaTypes ty
-    -- Compute the "second" field
-    -- Specialize beta for fst
-    let nty ← applyLambdaToArgs beta #[fst]
-    -- Recursive call
-    let snd ← mkSigmasVal nty xl
-    -- Put everything together
-    trace[Diverge.def.sigmas] "mkSigmasVal:\n{alpha}\n{beta}\n{fst}\n{snd}"
-    mkAppOptM ``Sigma.mk #[some alpha, some beta, some fst, some snd]
-
-/- Group a list of expressions into a (non-dependent) tuple -/
-def mkProdsVal (xl : List Expr) : MetaM Expr :=
-  match xl with
-  | [] =>
-    pure (Expr.const ``PUnit.unit [Level.succ .zero])
-  | [x] => do
-    pure x
-  | x :: xl => do
-    let xl ← mkProdsVal xl
-    mkAppM ``Prod.mk #[x, xl]
-
-def mkAnonymous (s : String) (i : Nat) : Name :=
-  .num (.str .anonymous s) i
-
-/- Given a list of values `[x0:ty0, ..., xn:ty1]`, where every `xi` might use the previous
-   `xj` (j < i) and a value `out` which uses `x0`, ..., `xn`, generate the following
-   expression:
-   ```
-   fun x:((x0:ty0) × ... × (xn:tyn) => -- **Dependent** tuple
-   match x with
-   | (x0, ..., xn) => out
-   ```
-
-   The `index` parameter is used for naming purposes: we use it to numerotate the
-   bound variables that we introduce.
-
-   We use this function to currify functions (the function bodies given to the
-   fixed-point operator must be unary functions).
-
-   Example:
-   ========
-   - xl = `[a:Type, ls:List a, i:Int]`
-   - out = `a`
-   - index = 0
-
-   generates (getting rid of most of the syntactic sugar):
-   ```
-   λ scrut0 => match scrut0 with
-   | Sigma.mk x scrut1 =>
-     match scrut1 with
-     | Sigma.mk ls i =>
-       a
-   ```
--/
-partial def mkSigmasMatch (xl : List Expr) (out : Expr) (index : Nat := 0) : MetaM Expr :=
-  match xl with
-  | [] => do
-    -- This would be unexpected
-    throwError "mkSigmasMatch: empty list of input parameters"
-  | [x] => do
-    -- In the example given for the explanations: this is the inner match case
-    trace[Diverge.def.sigmas] "mkSigmasMatch: [{x}]"
-    mkLambdaFVars #[x] out
-  | fst :: xl => do
-    /- In the example given for the explanations: this is the outer match case
-       Remark: for the naming purposes, we use the same convention as for the
-       fields and parameters in `Sigma.casesOn` and `Sigma.mk` (looking at
-       those definitions might help)
-
-       We want to build the match expression:
-       ```
-       λ scrut =>
-       match scrut with
-       | Sigma.mk x ...  -- the hole is given by a recursive call on the tail
-       ``` -/
-    trace[Diverge.def.sigmas] "mkSigmasMatch: [{fst}::{xl}]"
-    let alpha ← inferType fst
-    let snd_ty ← mkSigmasType xl
-    let beta ← mkLambdaFVars #[fst] snd_ty
-    let snd ← mkSigmasMatch xl out (index + 1)
-    let mk ← mkLambdaFVars #[fst] snd
-    -- Introduce the "scrut" variable
-    let scrut_ty ← mkSigmaType fst snd_ty
-    withLocalDeclD (mkAnonymous "scrut" index) scrut_ty fun scrut => do
-    trace[Diverge.def.sigmas] "mkSigmasMatch: scrut: ({scrut}) : ({← inferType scrut})"
-    -- TODO: make the computation of the motive more efficient
-    let motive ← do
-      let out_ty ← inferType out
-      match out_ty  with
-      | .sort _ | .lit _ | .const .. =>
-        -- The type of the motive doesn't depend on the scrutinee
-        mkLambdaFVars #[scrut] out_ty
-      | _ =>
-        -- The type of the motive *may* depend on the scrutinee
-        -- TODO: make this more efficient (we could change the output type of
-        -- mkSigmasMatch
-        mkSigmasMatch (fst :: xl) out_ty
-    -- The final expression: putting everything together
-    trace[Diverge.def.sigmas] "mkSigmasMatch:\n  ({alpha})\n  ({beta})\n  ({motive})\n  ({scrut})\n  ({mk})"
-    let sm ← mkAppOptM ``Sigma.casesOn #[some alpha, some beta, some motive, some scrut, some mk]
-    -- Abstracting the "scrut" variable
-    let sm ← mkLambdaFVars #[scrut] sm
-    trace[Diverge.def.sigmas] "mkSigmasMatch: sm: {sm}"
-    pure sm
-
-/- This is similar to `mkSigmasMatch`, but with non-dependent tuples
-
-   Remark: factor out with `mkSigmasMatch`? This is extremely similar.
--/
-partial def mkProdsMatch (xl : List Expr) (out : Expr) (index : Nat := 0) : MetaM Expr :=
-  match xl with
-  | [] => do
-    -- This would be unexpected
-    throwError "mkProdsMatch: empty list of input parameters"
-  | [x] => do
-    -- In the example given for the explanations: this is the inner match case
-    trace[Diverge.def.prods] "mkProdsMatch: [{x}]"
-    mkLambdaFVars #[x] out
-  | fst :: xl => do
-    trace[Diverge.def.prods] "mkProdsMatch: [{fst}::{xl}]"
-    let alpha ← inferType fst
-    let beta ← mkProdsType xl
-    let snd ← mkProdsMatch xl out (index + 1)
-    let mk ← mkLambdaFVars #[fst] snd
-    -- Introduce the "scrut" variable
-    let scrut_ty ← mkProdType alpha beta
-    withLocalDeclD (mkAnonymous "scrut" index) scrut_ty fun scrut => do
-    trace[Diverge.def.prods] "mkProdsMatch: scrut: ({scrut}) : ({← inferType scrut})"
-    -- TODO: make the computation of the motive more efficient
-    let motive ← do
-      let out_ty ← inferType out
-      mkLambdaFVars #[scrut] out_ty
-    -- The final expression: putting everything together
-    trace[Diverge.def.prods] "mkProdsMatch:\n  ({alpha})\n  ({beta})\n  ({motive})\n  ({scrut})\n  ({mk})"
-    let sm ← mkAppOptM ``Prod.casesOn #[some alpha, some beta, some motive, some scrut, some mk]
-    -- Abstracting the "scrut" variable
-    let sm ← mkLambdaFVars #[scrut] sm
-    trace[Diverge.def.prods] "mkProdsMatch: sm: {sm}"
-    pure sm
-
-/- Same as `mkSigmasMatch` but also accepts an empty list of inputs, in which case
-   it generates the expression:
-   ```
-   λ () => e
-   ``` -/
-def mkSigmasMatchOrUnit (xl : List Expr) (out : Expr) : MetaM Expr :=
-  if xl.isEmpty then do
-    let scrut_ty := Expr.const ``PUnit [Level.succ .zero]
-    withLocalDeclD (mkAnonymous "scrut" 0) scrut_ty fun scrut => do
-    mkLambdaFVars #[scrut] out
-  else
-    mkSigmasMatch xl out
-
-/- Same as `mkProdsMatch` but also accepts an empty list of inputs, in which case
-   it generates the expression:
-   ```
-   λ () => e
-   ``` -/
-def mkProdsMatchOrUnit (xl : List Expr) (out : Expr) : MetaM Expr :=
-  if xl.isEmpty then do
-    let scrut_ty := Expr.const ``PUnit [Level.succ .zero]
-    withLocalDeclD (mkAnonymous "scrut" 0) scrut_ty fun scrut => do
-    mkLambdaFVars #[scrut] out
-  else
-    mkProdsMatch xl out
 
 /- Small tests for list_nth: give a model of what `mkSigmasMatch` should generate -/
 private def list_nth_out_ty_inner (a :Type) (scrut1: @Sigma (List a) (fun (_ls : List a) => Int)) :=
@@ -1598,6 +1280,18 @@ namespace Tests
 
   --set_option trace.Diverge false
 
+  /--
+  info: Aeneas.Diverge.Tests.list_nth.unfold.{u} {a : Type u} (ls : List a) (i : ℤ) :
+  list_nth ls i =
+    match ls with
+    | [] => Result.fail Error.panic
+    | x :: ls =>
+      if i = 0 then pure x
+      else do
+        let __do_lift ← list_nth ls (i - 1)
+        pure __do_lift
+  -/
+  #guard_msgs in
   #check list_nth.unfold
 
   example {a: Type} (ls : List a) :
@@ -1633,6 +1327,23 @@ namespace Tests
            let ls ← back ret
            return (x :: ls)))
 
+  /--
+  info: Aeneas.Diverge.Tests.list_nth_with_back.unfold {a : Type} (ls : List a) (i : ℤ) :
+  list_nth_with_back ls i =
+    match ls with
+    | [] => Result.fail Error.panic
+    | x :: ls =>
+      if i = 0 then pure (x, fun ret => pure (ret :: ls))
+      else do
+        let __discr ← list_nth_with_back ls (i - 1)
+        match __discr with
+          | (x, back) =>
+            pure
+              (x, fun ret => do
+                let ls ← back ret
+                pure (x :: ls))
+  -/
+  #guard_msgs in
   #check list_nth_with_back.unfold
 
   mutual
@@ -1643,7 +1354,26 @@ namespace Tests
       if i = 0 then return false else return (← is_even (i - 1))
   end
 
+  /--
+  info: Aeneas.Diverge.Tests.is_even.unfold (i : ℤ) :
+  is_even i =
+    if i = 0 then pure true
+    else do
+      let __do_lift ← is_odd (i - 1)
+      pure __do_lift
+  -/
+  #guard_msgs in
   #check is_even.unfold
+
+  /--
+  info: Aeneas.Diverge.Tests.is_odd.unfold (i : ℤ) :
+  is_odd i =
+    if i = 0 then pure false
+    else do
+      let __do_lift ← is_even (i - 1)
+      pure __do_lift
+  -/
+  #guard_msgs in
   #check is_odd.unfold
 
   mutual
@@ -1654,7 +1384,22 @@ namespace Tests
       if i > 20 then foo (i / 20) else .ok 42
   end
 
+  /--
+  info: Aeneas.Diverge.Tests.foo.unfold (i : ℤ) :
+  foo i =
+    if i > 10 then do
+      let __do_lift ← foo (i / 10)
+      let __do_lift_1 ← bar i
+      pure (__do_lift + __do_lift_1)
+    else bar 10
+  -/
+  #guard_msgs in
   #check foo.unfold
+
+  /--
+  info: Aeneas.Diverge.Tests.bar.unfold (i : ℤ) : bar i = if i > 20 then foo (i / 20) else Result.ok 42
+  -/
+  #guard_msgs in
   #check bar.unfold
 
   -- Testing dependent branching and let-bindings
@@ -1664,6 +1409,15 @@ namespace Tests
       let b := true
       return b
 
+  /--
+  info: Aeneas.Diverge.Tests.isNonZero.unfold (i : ℤ) :
+  isNonZero i =
+    if _h : i = 0 then pure false
+    else
+      let b := true;
+      pure b
+  -/
+  #guard_msgs in
   #check isNonZero.unfold
 
   -- Testing let-bindings
@@ -1673,6 +1427,13 @@ namespace Tests
     then Result.ok True
     else Result.ok False
 
+  /--
+  info: Aeneas.Diverge.Tests.iInBounds.unfold {a : Type} (ls : List a) (i : ℤ) :
+  iInBounds ls i =
+    let i0 := ls.length;
+    if i < ↑i0 then Result.ok (decide True) else Result.ok (decide False)
+  -/
+  #guard_msgs in
   #check iInBounds.unfold
 
   divergent def isCons
@@ -1682,6 +1443,15 @@ namespace Tests
     | [] => Result.ok False
     | _ :: _ => Result.ok True
 
+  /--
+  info: Aeneas.Diverge.Tests.isCons.unfold {a : Type} (ls : List a) :
+  isCons ls =
+    let ls1 := ls;
+    match ls1 with
+    | [] => Result.ok (decide False)
+    | head :: tail => Result.ok (decide True)
+  -/
+  #guard_msgs in
   #check isCons.unfold
 
   -- Testing what happens when we use concrete arguments in dependent tuples
@@ -1691,6 +1461,10 @@ namespace Tests
     :=
     test1 Option.none ()
 
+  /--
+  info: Aeneas.Diverge.Tests.test1.unfold (x✝ : Option Bool) (x✝¹ : Unit) : test1 x✝ x✝¹ = test1 none ()
+  -/
+  #guard_msgs in
   #check test1.unfold
 
   -- Testing a degenerate case
@@ -1699,6 +1473,14 @@ namespace Tests
     let _ ← infinite_loop
     Result.ok ()
 
+  /--
+  info: Aeneas.Diverge.Tests.infinite_loop.unfold :
+  infinite_loop = do
+    let __discr ← infinite_loop
+    let x : Unit := __discr
+    Result.ok ()
+  -/
+  #guard_msgs in
   #check infinite_loop.unfold
 
   -- Another degenerate case
@@ -1708,6 +1490,13 @@ namespace Tests
     infinite_loop1_call
     infinite_loop1
 
+  /--
+  info: Aeneas.Diverge.Tests.infinite_loop1.unfold :
+  infinite_loop1 = do
+    infinite_loop1_call
+    infinite_loop1
+  -/
+  #guard_msgs in
   #check infinite_loop1.unfold
 
   /- Tests with higher-order functions -/
@@ -1726,6 +1515,16 @@ namespace Tests
           let tl ← map id tl
           .ok (.node tl)
 
+    /--
+    info: Aeneas.Diverge.Tests.id.unfold.{u} {a : Type u} (t : Tree a) :
+  id t =
+    match t with
+    | Tree.leaf x => Result.ok (Tree.leaf x)
+    | Tree.node tl => do
+      let tl ← map id tl
+      Result.ok (Tree.node tl)
+    -/
+    #guard_msgs in
     #check id.unfold
 
     divergent def id1 {a : Type u} (t : Tree a) : Result (Tree a) :=
@@ -1736,6 +1535,16 @@ namespace Tests
           let tl ← map (fun x => id1 x) tl
           .ok (.node tl)
 
+    /--
+    info: Aeneas.Diverge.Tests.id1.unfold.{u} {a : Type u} (t : Tree a) :
+  id1 t =
+    match t with
+    | Tree.leaf x => Result.ok (Tree.leaf x)
+    | Tree.node tl => do
+      let tl ← map (fun x => id1 x) tl
+      Result.ok (Tree.node tl)
+    -/
+    #guard_msgs in
     #check id1.unfold
 
     divergent def id2 {a : Type u} (t : Tree a) : Result (Tree a) :=
@@ -1746,6 +1555,22 @@ namespace Tests
           let tl ← map (fun x => do let _ ← id2 x; id2 x) tl
           .ok (.node tl)
 
+    /--
+    info: Aeneas.Diverge.Tests.id2.unfold.{u} {a : Type u} (t : Tree a) :
+  id2 t =
+    match t with
+    | Tree.leaf x => Result.ok (Tree.leaf x)
+    | Tree.node tl => do
+      let tl ←
+        map
+            (fun x => do
+              let __discr ← id2 x
+              let x_1 : Tree a := __discr
+              id2 x)
+            tl
+      Result.ok (Tree.node tl)
+    -/
+    #guard_msgs in
     #check id2.unfold
 
     divergent def incr (t : Tree Nat) : Result (Tree Nat) :=
@@ -1766,6 +1591,18 @@ namespace Tests
           let tl ← map f tl
           .ok (.node tl)
 
+    /--
+    info: Aeneas.Diverge.Tests.id3.unfold (t : Tree ℕ) :
+  id3 t =
+    match t with
+    | Tree.leaf x => Result.ok (Tree.leaf (x + 1))
+    | Tree.node tl =>
+      let f := id3;
+      do
+      let tl ← map f tl
+      Result.ok (Tree.node tl)
+    -/
+    #guard_msgs in
     #check id3.unfold
 
     /-

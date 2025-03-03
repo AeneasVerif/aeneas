@@ -42,7 +42,10 @@ let extract_literal (span : Meta.span) (fmt : F.formatter) (is_pattern : bool)
               F.pp_print_string fmt ("%" ^ iname)
           | Lean ->
               (* We don't use the same notation for patterns and regular literals *)
-              if is_pattern then F.pp_print_string fmt "#scalar"
+              if is_pattern then
+                if Scalars.integer_type_is_signed sv.int_ty then
+                  F.pp_print_string fmt "#iscalar"
+                else F.pp_print_string fmt "#uscalar"
               else
                 let iname = String.lowercase_ascii (int_name sv.int_ty) in
                 F.pp_print_string fmt ("#" ^ iname)
@@ -136,7 +139,13 @@ let extract_unop (span : Meta.span) (extract_expr : bool -> texpression -> unit)
                  let cast_str =
                    match backend () with
                    | Coq | FStar -> "scalar_cast"
-                   | Lean -> "Scalar.cast"
+                   | Lean ->
+                       let signed_src = Scalars.integer_type_is_signed src in
+                       let signed_tgt = Scalars.integer_type_is_signed tgt in
+                       if signed_src = signed_tgt then
+                         if signed_src then "IScalar.cast" else "UScalar.cast"
+                       else if signed_src then "IScalar.hcast"
+                       else "UScalar.hcast"
                    | HOL4 -> admit_string __FILE__ __LINE__ span "Unreachable"
                  in
                  let src =
@@ -149,7 +158,10 @@ let extract_unop (span : Meta.span) (extract_expr : bool -> texpression -> unit)
                  let cast_str =
                    match backend () with
                    | Coq | FStar -> "scalar_cast_bool"
-                   | Lean -> "Scalar.cast_bool"
+                   | Lean ->
+                       if Scalars.integer_type_is_signed tgt then
+                         "IScalar.cast_fromBool"
+                       else "UScalar.cast_fromBool"
                    | HOL4 -> admit_string __FILE__ __LINE__ span "Unreachable"
                  in
                  let tgt = integer_type_to_string tgt in
@@ -796,14 +808,9 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
  *)
 let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
     extraction_ctx =
-  (* Lookup the builtin information, if there is *)
-  let open ExtractBuiltin in
-  let info =
-    match_name_find_opt ctx.trans_ctx def.item_meta.name (builtin_types_map ())
-  in
-  (* Register the filtering information, if there is *)
+  (* Register the filtering information, if the type has builtin information *)
   let ctx =
-    match info with
+    match def.builtin_info with
     | Some { keep_params = Some keep; _ } ->
         {
           ctx with
@@ -814,7 +821,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
   in
   (* Compute and register the type decl name *)
   let def_name =
-    match info with
+    match def.builtin_info with
     | None -> ctx_compute_type_decl_name ctx def
     | Some info -> info.extract_name
   in
@@ -836,7 +843,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
       | Struct fields ->
           (* Compute the names *)
           let field_names, cons_name =
-            match info with
+            match def.builtin_info with
             | None | Some { body_info = None; _ } ->
                 let field_names =
                   FieldId.mapi
@@ -884,7 +891,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
             ctx
       | Enum variants ->
           let variant_names =
-            match info with
+            match def.builtin_info with
             | None ->
                 VariantId.mapi
                   (fun variant_id (variant : variant) ->

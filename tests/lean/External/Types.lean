@@ -2,7 +2,7 @@
 -- [external]: type definitions
 import Aeneas
 import External.TypesExternal
-open Aeneas.Std
+open Aeneas.Std Result Error
 set_option linter.dupNamespace false
 set_option linter.hashCommand false
 set_option linter.unusedVariables false

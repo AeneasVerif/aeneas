@@ -107,6 +107,9 @@ private def Rules.insert (s : Rules) (kv : Key × Rule) : Rules :=
 
 private def Rules.erase (s : Rules) (thName : Name) : Rules :=
   let ⟨ nameToRule, rules ⟩ := s
+  /- Note that we can't remove a key from a discrimination tree, so we
+     remove the rule from the `nameToRule` map instead: when instantiating rules
+     we check that they are still active (i.e., they are still in `nameToRule`) -/
   let nameToRule := nameToRule.erase thName
   ⟨ nameToRule, rules ⟩
 
@@ -127,7 +130,7 @@ structure SaturateAttribute where
   deriving Inhabited
 
 -- The ident is the name of the saturation set, the term is the pattern.
-syntax (name := aeneas_saturate) "aeneas_saturate" " (" &"set" " := " ident ")" " (" &"pattern" " := " term ")" : attr
+syntax (name := aeneas_saturate) "aeneas_saturate" "(" &"set" " := " ident ")" " (" &"pattern" " := " term ")" : attr
 
 def elabSaturateAttribute (stx : Syntax) : MetaM (Name × Syntax) :=
   withRef stx do
@@ -155,7 +158,10 @@ initialize saturateAttr : SaturateAttribute ← do
         -- Analyze the theorem
         let (key, rule) ← MetaM.run' do
           let ty := thDecl.type
-          -- Strip the quantifiers
+          /- Strip the quantifiers.
+             We do this before elaborating the pattern because we need the universally quantified variables
+             to be in the context.
+          -/
           forallTelescope ty.consumeMData fun fvars _ => do
           let numFVars := fvars.size
           -- Elaborate the pattern
