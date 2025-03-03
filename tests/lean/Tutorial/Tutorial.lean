@@ -231,8 +231,8 @@ divergent def zero_loop
   then
     do
     let (_, index_mut_back) ←
-      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSliceTInst U32)
-        x i
+      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSliceInst U32) x
+        i
     let i2 ← i + 1#usize
     let x1 := index_mut_back 0#u32
     zero_loop x1 i2
@@ -255,10 +255,10 @@ divergent def add_no_overflow_loop
   then
     do
     let i2 ←
-      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceTInst U32) y i
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceInst U32) y i
     let (i3, index_mut_back) ←
-      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSliceTInst U32)
-        x i
+      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSliceInst U32) x
+        i
     let i4 ← i3 + i2
     let i5 ← i + 1#usize
     let x1 := index_mut_back i4
@@ -285,19 +285,19 @@ divergent def add_with_carry_loop
   then
     do
     let i2 ←
-      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceTInst U32) x i
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceInst U32) x i
     let (i3 : U32) ← ↑(UScalar.cast .U32 c0)
     let ((sum, c1) : (U32 × Bool)) ← ↑(core.num.U32.overflowing_add i2 i3)
     let i4 ←
-      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceTInst U32) y i
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceInst U32) y i
     let ((sum1, c2) : (U32 × Bool)) ←
       ↑(core.num.U32.overflowing_add sum i4)
     let (i5 : U8) ← ↑(UScalar.cast_fromBool .U8 c1)
     let (i6 : U8) ← ↑(UScalar.cast_fromBool .U8 c2)
     let c01 ← i5 + i6
     let (_, index_mut_back) ←
-      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSliceTInst U32)
-        x i
+      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSliceInst U32) x
+        i
     let i7 ← i + 1#usize
     let x1 := index_mut_back sum1
     add_with_carry_loop x1 y c01 i7
@@ -324,7 +324,7 @@ def max (x : Usize) (y : Usize) : Result Usize :=
 def get_or_zero (y : alloc.vec.Vec U32) (i : Usize) : Result U32 :=
   let i1 := alloc.vec.Vec.len y
   if i < i1
-  then alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceTInst U32) y i
+  then alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceInst U32) y i
   else ok 0#u32
 
 /- [tutorial::add]: loop 0:
@@ -339,7 +339,7 @@ divergent def add_loop
     do
     let yi ← get_or_zero y i
     let i1 ←
-      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceTInst U32) x i
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceInst U32) x i
     let (i2 : U32) ← ↑(UScalar.cast .U32 c0)
     let ((sum, c1) : (U32 × Bool)) ← ↑(core.num.U32.overflowing_add i1 i2)
     let ((sum1, c2) : (U32 × Bool)) ←
@@ -348,8 +348,8 @@ divergent def add_loop
     let (i4 : U8) ← ↑(UScalar.cast_fromBool .U8 c2)
     let c01 ← i3 + i4
     let (_, index_mut_back) ←
-      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSliceTInst U32)
-        x i
+      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSliceInst U32) x
+        i
     let i5 ← i + 1#usize
     let x1 := index_mut_back sum1
     add_loop x1 y max1 c01 i5

@@ -242,7 +242,9 @@ let fun_builtin_filter_types (id : FunDeclId.id) (types : 'a list)
           ^ string_of_int (List.length filter)
           ^ " filtering arguments provided for "
           ^ string_of_int (List.length types)
-          ^ " type arguments"
+          ^ " type arguments ("
+          ^ String.concat ", " (List.map (ty_to_string ctx) types)
+          ^ ")"
         in
         save_error_opt_span __FILE__ __LINE__ None err;
         Result.Error (types, err))
@@ -2423,6 +2425,10 @@ let extract_trait_decl_register_names (ctx : extraction_ctx)
 (** Similar to {!extract_type_decl_register_names} *)
 let extract_trait_impl_register_names (ctx : extraction_ctx)
     (trait_impl : trait_impl) : extraction_ctx =
+  log#ltrace
+    (lazy
+      (__FUNCTION__ ^ "trait_impl.impl_trait"
+      ^ trait_decl_ref_to_string ctx trait_impl.impl_trait));
   let decl_id = trait_impl.impl_trait.trait_decl_id in
   let trait_decl = TraitDeclId.Map.find decl_id ctx.trans_trait_decls in
   (* Register some builtin information (if necessary) *)
@@ -2841,19 +2847,31 @@ let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
 let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     (impl : trait_impl) : unit =
   log#ltrace
-    (lazy ("extract_trait_impl: " ^ name_to_string ctx impl.item_meta.name));
+    (lazy (__FUNCTION__ ^ ": " ^ name_to_string ctx impl.item_meta.name));
   (* Retrieve the impl name *)
   let impl_name = ctx_get_trait_impl impl.item_meta.span impl.def_id ctx in
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
   (let name, generics =
-     if !extract_external_name_patterns && not impl.item_meta.is_local then
+     if !extract_external_name_patterns && not impl.item_meta.is_local then (
        let decl_id = impl.impl_trait.trait_decl_id in
        let trait_decl = TraitDeclId.Map.find decl_id ctx.trans_trait_decls in
        let decl_ref = impl.llbc_impl_trait in
+       log#ldebug
+         (lazy
+           (let params0, params1 =
+              llbc_generic_params_to_strings ctx impl.llbc_generics
+            in
+            let params = String.concat ", " (params0 @ params1) in
+            let args0, args1 =
+              llbc_generic_args_to_strings ctx decl_ref.decl_generics
+            in
+            let args = String.concat ", " (args0 @ args1) in
+            __FUNCTION__ ^ ":" ^ "\n- trait_decl.llbc_generics: [" ^ params
+            ^ "]" ^ "\n- decl_ref.decl_generics: [" ^ args ^ "]"));
        ( Some trait_decl.item_meta.name,
-         Some (trait_decl.llbc_generics, decl_ref.decl_generics) )
+         Some (impl.llbc_generics, decl_ref.decl_generics) ))
      else (None, None)
    in
    extract_comment_with_span ctx fmt

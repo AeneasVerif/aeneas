@@ -125,17 +125,6 @@ pub fn test_list1() {
     let l: List<i32> = List::Cons(0, Box::new(List::Nil));
 }
 
-/// Box deref
-pub fn test_box1() {
-    use std::ops::Deref;
-    use std::ops::DerefMut;
-    let mut b: Box<i32> = Box::new(0);
-    let x = b.deref_mut();
-    *x = 1;
-    let x = b.deref();
-    assert!(*x == 1);
-}
-
 pub fn copy_int(x: i32) -> i32 {
     x
 }

@@ -104,8 +104,8 @@ Fixpoint clear_loop
     if i s< i1
     then (
       p <-
-        alloc_vec_Vec_index_mut (core_slice_index_SliceIndexUsizeSliceTInst
-          u32) v i;
+        alloc_vec_Vec_index_mut (core_slice_index_SliceIndexUsizeSliceInst u32)
+          v i;
       let (_, index_mut_back) := p in
       i2 <- usize_add i 1%usize;
       let v1 := index_mut_back 0%u32 in
@@ -238,7 +238,7 @@ Definition get_elem_mut
   result (usize * (usize -> alloc_vec_Vec (List_t usize)))
   :=
   p <-
-    alloc_vec_Vec_index_mut (core_slice_index_SliceIndexUsizeSliceTInst (List_t
+    alloc_vec_Vec_index_mut (core_slice_index_SliceIndexUsizeSliceInst (List_t
       usize)) slots 0%usize;
   let (ls, index_mut_back) := p in
   p1 <- get_elem_mut_loop n x ls;
@@ -268,7 +268,7 @@ Definition get_elem_shared
   result usize
   :=
   ls <-
-    alloc_vec_Vec_index (core_slice_index_SliceIndexUsizeSliceTInst (List_t
+    alloc_vec_Vec_index (core_slice_index_SliceIndexUsizeSliceInst (List_t
       usize)) slots 0%usize;
   get_elem_shared_loop n x ls
 .

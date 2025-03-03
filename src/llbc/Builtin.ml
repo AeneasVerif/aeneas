@@ -231,8 +231,8 @@ let raw_builtin_fun_infos : raw_builtin_fun_info list =
        but it's not important) *)
     (BoxNew, Sig.box_new_sig, false, Some [ true; false ]);
     (* Array to slice*)
-    (ArrayToSliceShared, Sig.array_to_slice_sig false, true, None);
-    (ArrayToSliceMut, Sig.array_to_slice_sig true, true, None);
+    (ArrayToSliceShared, Sig.array_to_slice_sig false, false, None);
+    (ArrayToSliceMut, Sig.array_to_slice_sig true, false, None);
     (* Array Repeat *)
     (ArrayRepeat, Sig.array_repeat_sig, false, None);
     (* Indexing *)

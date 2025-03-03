@@ -148,8 +148,9 @@ pub fn const_array() -> [u32; 2] {
     [0, 0]
 }
 
-pub fn const_slice() {
-    let _: &[u32] = &[0, 0];
+pub fn const_slice() -> u32{
+    let s: &[u32] = &[0, 0];
+    s[0]
 }
 
 /*
