@@ -1,7 +1,7 @@
 import Aeneas.Std.ScalarCore
 import Aeneas.ScalarTac
 import Aeneas.Arith.Lemmas
-import MathLib.Data.BitVec
+import Mathlib.Data.BitVec
 
 namespace Aeneas
 
