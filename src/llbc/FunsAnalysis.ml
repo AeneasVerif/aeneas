@@ -58,7 +58,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
     let can_diverge = ref false in
     let is_rec = ref false in
     let group_has_builtin_info = ref false in
-    let name_matcher_ctx : Charon.NameMatcher.ctx =
+    let name_matcher_ctx : LlbcAst.statement Charon.NameMatcher.ctx =
       Charon.NameMatcher.ctx_from_crate m
     in
 
