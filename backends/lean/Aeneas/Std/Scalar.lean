@@ -2087,7 +2087,7 @@ theorem IScalar.rem_spec {ty} (x : IScalar ty) {y : IScalar ty} (hzero : y.val �
 ## Bit shifts
 -/
 
-theorem UScalar.ShiftRight_val_eq {ty0 ty1} (x : UScalar ty0) (y : UScalar ty1)
+theorem UScalar.ShiftRight_val_spec {ty0 ty1} (x : UScalar ty0) (y : UScalar ty1)
   (hy : y.val < ty0.numBits) :
   ∃ z, x >>> y = ok z ∧
   z.val = x.val >>> y.val
@@ -2096,7 +2096,7 @@ theorem UScalar.ShiftRight_val_eq {ty0 ty1} (x : UScalar ty0) (y : UScalar ty1)
   simp only [BitVec.ushiftRight_eq, ok.injEq, _root_.exists_eq_left', val]
   simp [HShiftRight.hShiftRight, BitVec.ushiftRight]
 
-theorem UScalar.ShiftRight_bv_eq {ty0 ty1} (x : UScalar ty0) (y : UScalar ty1)
+theorem UScalar.ShiftRight_bv_spec {ty0 ty1} (x : UScalar ty0) (y : UScalar ty1)
   (hy : y.val < ty0.numBits) :
   ∃ z, x >>> y = ok z ∧ z.bv = x.bv >>> y.val
   := by
@@ -2105,29 +2105,61 @@ theorem UScalar.ShiftRight_bv_eq {ty0 ty1} (x : UScalar ty0) (y : UScalar ty1)
 
 @[progress] theorem U8.ShiftRight_bv_spec (x : U8) (y : UScalar ty1) (hy : y.val < 8) :
   ∃ (z : U8), x >>> y = ok z ∧ z.bv = x.bv >>> y.val
-  := by apply UScalar.ShiftRight_bv_eq; simp [*]
+  := by apply UScalar.ShiftRight_bv_spec; simp [*]
 
 @[progress] theorem U16.ShiftRight_bv_spec (x : U16) (y : UScalar ty1) (hy : y.val < 16) :
   ∃ (z : U16), x >>> y = ok z ∧ z.bv = x.bv >>> y.val
-  := by apply UScalar.ShiftRight_bv_eq; simp [*]
+  := by apply UScalar.ShiftRight_bv_spec; simp [*]
 
 @[progress] theorem U32.ShiftRight_bv_spec (x : U32) (y : UScalar ty1) (hy : y.val < 32) :
   ∃ (z : U32), x >>> y = ok z ∧ z.bv = x.bv >>> y.val
-  := by apply UScalar.ShiftRight_bv_eq; simp [*]
+  := by apply UScalar.ShiftRight_bv_spec; simp [*]
 
 @[progress] theorem U64.ShiftRight_bv_spec (x : U64) (y : UScalar ty1) (hy : y.val < 64) :
   ∃ (z : U64), x >>> y = ok z ∧ z.bv = x.bv >>> y.val
-  := by apply UScalar.ShiftRight_bv_eq; simp [*]
+  := by apply UScalar.ShiftRight_bv_spec; simp [*]
 
 @[progress] theorem U128.ShiftRight_bv_spec (x : U128) (y : UScalar ty1) (hy : y.val < 128) :
   ∃ (z : U128), x >>> y = ok z ∧ z.bv = x.bv >>> y.val
-  := by apply UScalar.ShiftRight_bv_eq; simp [*]
+  := by apply UScalar.ShiftRight_bv_spec; simp [*]
 
 @[progress] theorem Usize.ShiftRight_bv_spec (x : Usize) (y : UScalar ty1) (hy : y.val < UScalarTy.Usize.numBits) :
   ∃ (z : Usize), x >>> y = ok z ∧ z.bv = x.bv >>> y.val
-  := by apply UScalar.ShiftRight_bv_eq; simp only [*]
+  := by apply UScalar.ShiftRight_bv_spec; simp only [*]
 
-theorem UScalar.ShiftLeft_val_eq {ty0 ty1} (x : UScalar ty0) (y : UScalar ty1)
+theorem UScalar.ShiftRight_IScalar_bv_spec {ty0 ty1} (x : UScalar ty0) (y : IScalar ty1)
+  (hy0 : 0 ≤ y.val) (hy1 : y.val < ty0.numBits) :
+  ∃ z, x >>> y = ok z ∧ z.bv = x.bv >>> y.toNat
+  := by
+  have hy1 : y.toNat < ty0.numBits := by scalar_tac
+  simp only [HShiftRight.hShiftRight, shiftRight_IScalar, shiftRight, hy0, hy1, reduceIte]
+  simp only [BitVec.ushiftRight_eq, ok.injEq, _root_.exists_eq_left', val]
+
+@[progress] theorem U8.ShiftRight_IScalar_bv_spec (x : U8) (y : IScalar ty1) (hy0 : 0 ≤ y.val) (hy : y.val < 8) :
+  ∃ (z : U8), x >>> y = ok z ∧ z.bv = x.bv >>> y.toNat
+  := by apply UScalar.ShiftRight_IScalar_bv_spec <;> simp [*]
+
+@[progress] theorem U16.ShiftRight_IScalar_bv_spec (x : U16) (y : IScalar ty1) (hy0 : 0 ≤ y.val) (hy : y.val < 16) :
+  ∃ (z : U16), x >>> y = ok z ∧ z.bv = x.bv >>> y.toNat
+  := by apply UScalar.ShiftRight_IScalar_bv_spec <;> simp [*]
+
+@[progress] theorem U32.ShiftRight_IScalar_bv_spec (x : U32) (y : IScalar ty1) (hy0 : 0 ≤ y.val) (hy : y.val < 32) :
+  ∃ (z : U32), x >>> y = ok z ∧ z.bv = x.bv >>> y.toNat
+  := by apply UScalar.ShiftRight_IScalar_bv_spec <;> simp [*]
+
+@[progress] theorem U64.ShiftRight_IScalar_bv_spec (x : U64) (y : IScalar ty1) (hy0 : 0 ≤ y.val) (hy : y.val < 64) :
+  ∃ (z : U64), x >>> y = ok z ∧ z.bv = x.bv >>> y.toNat
+  := by apply UScalar.ShiftRight_IScalar_bv_spec <;> simp [*]
+
+@[progress] theorem U128.ShiftRight_IScalar_bv_spec (x : U128) (y : IScalar ty1) (hy0 : 0 ≤ y.val) (hy : y.val < 128) :
+  ∃ (z : U128), x >>> y = ok z ∧ z.bv = x.bv >>> y.toNat
+  := by apply UScalar.ShiftRight_IScalar_bv_spec <;> simp [*]
+
+@[progress] theorem Usize.ShiftRight_IScalar_bv_spec (x : Usize) (y : IScalar ty1) (hy0 : 0 ≤ y.val) (hy : y.val < UScalarTy.Usize.numBits) :
+  ∃ (z : Usize), x >>> y = ok z ∧ z.bv = x.bv >>> y.toNat
+  := by apply UScalar.ShiftRight_IScalar_bv_spec <;> simp only [*]
+
+theorem UScalar.ShiftLeft_val_spec {ty0 ty1} (x : UScalar ty0) (y : UScalar ty1)
   (hy : y.val < ty0.numBits) :
   ∃ z, x <<< y = ok z ∧
   z.val = (x.val <<< y.val) % 2^ty0.numBits
@@ -2166,6 +2198,48 @@ theorem UScalar.ShiftLeft_bv_eq {ty0 ty1} (x : UScalar ty0) (y : UScalar ty1)
 @[progress] theorem Usize.ShiftLeft_bv_spec (x : Usize) (y : UScalar ty1) (hy : y.val < UScalarTy.Usize.numBits) :
   ∃ (z : Usize), x <<< y = ok z ∧ z.bv = x.bv <<< y.val
   := by apply UScalar.ShiftLeft_bv_eq; simp only [*]
+
+theorem UScalar.ShiftLeft_IScalar_val_spec {ty0 ty1} (x : UScalar ty0) (y : IScalar ty1)
+  (hy0 : 0 ≤ y.val) (hy1 : y.val < ty0.numBits) :
+  ∃ z, x <<< y = ok z ∧
+  z.val = (x.val <<< y.toNat) % 2^ty0.numBits
+  := by
+  have hy1 : y.toNat < ty0.numBits := by scalar_tac
+  simp only [HShiftLeft.hShiftLeft, shiftLeft_IScalar, shiftLeft, hy0, hy1, reduceIte]
+  simp only [BitVec.shiftLeft_eq, ok.injEq, _root_.exists_eq_left', val]
+  simp [ShiftLeft.shiftLeft]
+
+theorem UScalar.ShiftLeft_IScalar_bv_spec {ty0 ty1} (x : UScalar ty0) (y : IScalar ty1)
+  (hy0 : 0 ≤ y.val) (hy : y.val < ty0.numBits) :
+  ∃ z, x <<< y = ok z ∧ z.bv = x.bv <<< y.toNat
+  := by
+  have hy1 : y.toNat < ty0.numBits := by scalar_tac
+  simp only [HShiftLeft.hShiftLeft, shiftLeft_IScalar, shiftLeft, hy0, hy1, reduceIte]
+  simp only [BitVec.shiftLeft_eq, ok.injEq, _root_.exists_eq_left', val]
+
+@[progress] theorem U8.ShiftLeft_IScalar_bv_spec (x : U8) (y : IScalar ty1) (hy0 : 0 ≤ y.val) (hy : y.val < 8) :
+  ∃ (z : U8), x <<< y = ok z ∧ z.bv = x.bv <<< y.toNat
+  := by apply UScalar.ShiftLeft_IScalar_bv_spec <;> simp [*]
+
+@[progress] theorem U16.ShiftLeft_IScalar_bv_spec (x : U16) (y : IScalar ty1) (hy0 : 0 ≤ y.val) (hy : y.val < 16) :
+  ∃ (z : U16), x <<< y = ok z ∧ z.bv = x.bv <<< y.toNat
+  := by apply UScalar.ShiftLeft_IScalar_bv_spec <;> simp [*]
+
+@[progress] theorem U32.ShiftLeft_IScalar_bv_spec (x : U32) (y : IScalar ty1) (hy0 : 0 ≤ y.val) (hy : y.val < 32) :
+  ∃ (z : U32), x <<< y = ok z ∧ z.bv = x.bv <<< y.toNat
+  := by apply UScalar.ShiftLeft_IScalar_bv_spec <;> simp [*]
+
+@[progress] theorem U64.ShiftLeft_IScalar_bv_spec (x : U64) (y : IScalar ty1) (hy0 : 0 ≤ y.val) (hy : y.val < 64) :
+  ∃ (z : U64), x <<< y = ok z ∧ z.bv = x.bv <<< y.toNat
+  := by apply UScalar.ShiftLeft_IScalar_bv_spec <;> simp [*]
+
+@[progress] theorem U128.ShiftLeft_IScalar_bv_spec (x : U128) (y : IScalar ty1) (hy0 : 0 ≤ y.val) (hy : y.val < 128) :
+  ∃ (z : U128), x <<< y = ok z ∧ z.bv = x.bv <<< y.toNat
+  := by apply UScalar.ShiftLeft_IScalar_bv_spec <;> simp [*]
+
+@[progress] theorem Usize.ShiftLeft_IScalar_bv_spec (x : Usize) (y : IScalar ty1) (hy0 : 0 ≤ y.val) (hy : y.val < UScalarTy.Usize.numBits) :
+  ∃ (z : Usize), x <<< y = ok z ∧ z.bv = x.bv <<< y.toNat
+  := by apply UScalar.ShiftLeft_IScalar_bv_spec <;> simp only [*]
 
 /-!
 ## Casts

@@ -1,7 +1,7 @@
 import Lean
 import Aeneas.ScalarTac
 import Aeneas.Progress.Core
-import Aeneas.Std -- TODO: remove?
+import Aeneas.Std
 import Aeneas.FSimp
 
 namespace Aeneas

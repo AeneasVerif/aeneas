@@ -254,17 +254,22 @@ theorem ZMod.mul_inv_eq_int_gcd {n : ℕ} (a : ℤ) :
     rw [Int.gcd_mod_same]
 
 /-- A theorem to work with division when converting integers to elements of `ZMod` -/
-theorem div_to_ZMod {n : ℕ} {a b : ℤ} [NeZero n] (hDiv : b ∣ a) (hgcd : Int.gcd b n = 1) :
-  ((a / b) : ZMod n) = (a : ZMod n) * (b : ZMod n)⁻¹ := by
+theorem div_to_ZMod {n : ℕ} {a : ℤ} {b : Nat} [NeZero n]
+  (hDiv : (a : ZMod b) = 0) (hgcd : Int.gcd b n = 1) :
+  ((a / (b : Int)) : ZMod n) = (a : ZMod n) * (b : ZMod n)⁻¹ := by
   have h : (a / b) % (n : Int) = ((a % (n : Int)) * (b : ZMod n)⁻¹.cast) % (n : Int) := by
     apply times_mod_imp_div_mod
-    . rw [← Int.dvd_iff_emod_eq_zero]
-      assumption
+    . have h : (0 : Int) = 0 % b := by simp
+      rw [h]
+      apply ZMod_eq_imp_mod_eq
+      rw [hDiv]
+      simp
     . assumption
     . apply ZMod_eq_imp_mod_eq
       simp only [Int.cast_mul, ZMod.intCast_mod, ZMod.intCast_cast, ZMod.cast_id', id_eq]
       rw [mul_assoc]
       have := @ZMod.mul_inv_eq_int_gcd n b
+      norm_cast at *
       rw [mul_comm] at this
       rw [this]
       rw [hgcd]

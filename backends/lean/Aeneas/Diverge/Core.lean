@@ -1101,9 +1101,6 @@ namespace Ex3
     -- inductives on the fly).
     -- The simplest is to repeatedly split then simplify (we identify
     -- the outer match or monadic let-binding, and split on its scrutinee)
-    split <;> try simp
-    cases H0 : fix is_even_is_odd_body (Sum.inr (i - 1)) <;> simp
-    rename_i v
     split <;> simp
 
   -- The unfolding equation for `is_odd` - diverges if `i < 0`
@@ -1114,9 +1111,6 @@ namespace Ex3
     simp [is_even, is_odd]
     conv => lhs; rw [Heq]; simp; rw [is_even_is_odd_body]; simp
     -- Same remark as for `even`
-    split <;> try simp
-    cases H0 : fix is_even_is_odd_body (Sum.inl (i - 1)) <;> simp
-    rename_i v
     split <;> simp
 
 end Ex3

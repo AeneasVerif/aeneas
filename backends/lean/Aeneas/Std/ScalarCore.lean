@@ -988,19 +988,19 @@ theorem UScalar.max_right_zero_eq {ty} (x: UScalar ty):
 @[simp] abbrev I128.toNat    (x : I128) : Nat := x.val.toNat
 @[simp] abbrev Isize.toNat   (x : Isize) : Nat := x.val.toNat
 
-def U8.bv (x : U8)   : BitVec 8 := UScalar.bv x
-def U16.bv (x : U16) : BitVec 16 := UScalar.bv x
-def U32.bv (x : U32) : BitVec 32 := UScalar.bv x
-def U64.bv (x : U64) : BitVec 64 := UScalar.bv x
-def U128.bv (x : U128) : BitVec 128 := UScalar.bv x
-def Usize.bv (x : Usize) : BitVec System.Platform.numBits := UScalar.bv x
+abbrev U8.bv (x : U8)   : BitVec 8 := UScalar.bv x
+abbrev U16.bv (x : U16) : BitVec 16 := UScalar.bv x
+abbrev U32.bv (x : U32) : BitVec 32 := UScalar.bv x
+abbrev U64.bv (x : U64) : BitVec 64 := UScalar.bv x
+abbrev U128.bv (x : U128) : BitVec 128 := UScalar.bv x
+abbrev Usize.bv (x : Usize) : BitVec System.Platform.numBits := UScalar.bv x
 
-def I8.bv (x : I8) : BitVec 8 := IScalar.bv x
-def I16.bv (x : I16) : BitVec 16 := IScalar.bv x
-def I32.bv (x : I32) : BitVec 32 := IScalar.bv x
-def I64.bv (x : I64) : BitVec 64 := IScalar.bv x
-def I128.bv (x : I128) : BitVec 128 := IScalar.bv x
-def Isize.bv (x : Isize) : BitVec System.Platform.numBits := IScalar.bv x
+abbrev I8.bv (x : I8) : BitVec 8 := IScalar.bv x
+abbrev I16.bv (x : I16) : BitVec 16 := IScalar.bv x
+abbrev I32.bv (x : I32) : BitVec 32 := IScalar.bv x
+abbrev I64.bv (x : I64) : BitVec 64 := IScalar.bv x
+abbrev I128.bv (x : I128) : BitVec 128 := IScalar.bv x
+abbrev Isize.bv (x : Isize) : BitVec System.Platform.numBits := IScalar.bv x
 
 @[simp, scalar_tac_simp] theorem UScalar.bv_toNat_eq {ty : UScalarTy} (x : UScalar ty) :
   (UScalar.bv x).toNat  = x.val := by

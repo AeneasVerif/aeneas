@@ -135,6 +135,12 @@ instance : Pure Result where
   simp [Bind.bind]
   cases e <;> simp
 
+@[simp]
+def bind_eq_iff (x : Result α) (y y' : α → Result β) :
+  ((Bind.bind x y) = (Bind.bind x y')) ↔
+  ∀ v, x = ok v → y v = y' v := by
+  cases x <;> simp_all
+
 /-!
 # Lift
 -/
