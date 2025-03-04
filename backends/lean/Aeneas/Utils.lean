@@ -1038,8 +1038,9 @@ def clearFvarIds (fvarIds : Array FVarId) : TacticM Unit := do
 partial def minimizeGoal : TacticM Unit := do
   withMainContext do
   /- Retrieve the goal -/
-  let goal ← getMainGoal
-  let goalFVarIds ← getFVarIds (← goal.getType)
+  let goalTy ← instantiateMVars (← (← getMainGoal).getType)
+  trace[Utils] "Goal type: {goalTy}"
+  let goalFVarIds ← getFVarIds goalTy
   /- Explore the local declarations to check which ones are need.
      We do this recursively until we reach a fixed-point. -/
   let ctx ← Lean.MonadLCtx.getLCtx
@@ -1050,21 +1051,40 @@ partial def minimizeGoal : TacticM Unit := do
   let mut neededIds := goalFVarIds
   -- We need to filter the variables: some of them might come from quantifiers
   neededIds := neededIds.filter (fun x => x ∈ declsFVarIds)
-  let mut exploredIds : Std.HashSet FVarId := Std.HashSet.empty
+  trace[Utils] "Ids used in the goal: {← neededIds.toArray.mapM (fun x => x.getUserName)}"
+  /- Compute the list of pairs:
+     - declaration id
+     - fvar ids it references in its type and body
+  -/
+  trace[Utils] "Computing the ids used in the local declarations"
+  let declToFVarIds ← decls.mapM fun decl => do
+    trace[Utils] "Computing the fvar ids of: {decl.userName}"
+    /- Explore the type and the body: if they contain needed ids, add it -/
+    trace[Utils] "Type: {decl.type}"
+    let mut declIds ← getFVarIds decl.type
+    declIds := declIds.filter (fun x => x ∈ declsFVarIds)
+    trace[Utils] "Ids in type: {← declIds.toArray.mapM (fun x => x.getUserName)}"
+    match decl.value? with
+    | none =>
+      trace[Utils] "No value"
+      pure ()
+    | some value =>
+      trace[Utils] "Value: {value}"
+      let valueDeclIds ← getFVarIds value
+      let valueDeclIds := valueDeclIds.filter (fun x => x ∈ declsFVarIds)
+      trace[Utils] "Ids in value: {← valueDeclIds.toArray.mapM (fun x => x.getUserName)}"
+      declIds := declIds.union valueDeclIds
+    pure (decl.fvarId, decl.userName, declIds)
+  /- Repeatedly explore the local declarations -/
+  trace[Utils] "Computing the needed ids"
+  /- Remember the set of ids from which we already added dependencies -/
+  let mut addedIds : Std.HashSet FVarId := Std.HashSet.empty
   while changed do
     changed := false
-    for decl in decls do
-      /- Shortcut: do not re-explore the already explored ids -/
-      if decl.fvarId ∉ exploredIds then
-        trace[Utils] "Exploring: {decl.userName}"
-        exploredIds := exploredIds.insert decl.fvarId
-        /- Explore the type and the body: if they contain needed ids, add it -/
-        let mut declIds ← getFVarIds decl.type
-        match decl.value? with
-        | none => pure ()
-        | some value =>
-          declIds := declIds.union (← getFVarIds value)
-        declIds := declIds.filter (fun x => x ∈ declsFVarIds)
+    for (declId, userName, declIds) in declToFVarIds do
+      -- Shortcut: do not re-explore ids
+      if declId ∉ addedIds then
+        trace[Utils] "Exploring: {userName}"
         trace[Utils] "declIds: {← declIds.toArray.mapM (fun x => x.getUserName)}"
         let mut inter := false
         for x in declIds do
@@ -1073,13 +1093,17 @@ partial def minimizeGoal : TacticM Unit := do
             break
         /- Check if there is an intersection -/
         if inter then
-          neededIds := neededIds.insert decl.fvarId
+          addedIds := addedIds.insert declId
+          neededIds := neededIds.insert declId
           neededIds := neededIds.union declIds
           changed := true
+    if changed then
+      trace[Utils] "Re-exploring all the declarations"
   trace[Utils] "Done exploring the context"
   /- Clear all the fvars which were not listed -/
   trace[Utils] "neededIds: {← neededIds.toArray.mapM (fun x => x.getUserName)}"
-  let allIds ← getFVarIdsAt goal
+  let allIds ← getFVarIdsAt (← getMainGoal)
+  trace[Utils] "All context ids: {← allIds.mapM (fun x => x.getUserName)}"
   let allIds := allIds.filter (fun x => x ∉ neededIds)
   clearFvarIds allIds
 
@@ -1117,13 +1141,16 @@ def extractGoal (ref : Syntax) (fullGoal : Bool) : TacticM Unit := do
       let userName ← stripHygiene decl.userName
       trace[Utils] "declName after stripping hygiene parts: {userName.toString}"
       if userName ∈ allNames then
+        trace[Utils] "Name already used"
         let lctx ← Lean.MonadLCtx.getLCtx
         let newName := lctx.getUnusedName userName
+        trace[Utils] "New name: {newName}"
         let lctx := lctx.setUserName decl.fvarId newName
         let allNames := allNames.insert newName
         withLCtx' lctx do
         renameDecls allNames decls
       else
+        trace[Utils] "Name not used"
         let allNames := allNames.insert userName
         renameDecls allNames decls
   let lctx ← renameDecls Std.HashSet.empty (← (← Lean.MonadLCtx.getLCtx).getDecls).reverse
@@ -1180,6 +1207,7 @@ example (x : Nat) (y : Nat) (_ : Nat) (h : x ≤ y) : y ≥ x := by
   extract_goal
   omega
 
+-- TODO: why do we have x✝?
 /--
 info: example
   (v : List Nat)
