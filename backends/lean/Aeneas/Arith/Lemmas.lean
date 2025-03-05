@@ -2,6 +2,7 @@ import Aeneas.ScalarTac.ScalarTac
 import Mathlib.Algebra.Algebra.ZMod
 import Mathlib.RingTheory.Int.Basic
 import Init.Data.Int.DivModLemmas
+import Init.Data.BitVec.Lemmas
 
 namespace Aeneas.Arith
 
@@ -213,6 +214,12 @@ theorem ZMod_eq_imp_mod_eq {n : ℕ} {a b : ℤ}
   a % n = b % n :=
   (@ZMod_int_cast_eq_int_cast_iff n a b).mp h
 
+theorem ZMod_nat_eq_imp_mod_eq {n : ℕ} {a b : Nat} (h : (a : ZMod n) = (b : ZMod n)) :
+  a % n = b % n := by
+  zify
+  apply ZMod_eq_imp_mod_eq
+  simp [*]
+
 -- TODO: restrict the set of theorems used by `simp`, do more things, etc.
 macro "zmodify" : tactic =>
   `(tactic |
@@ -342,6 +349,27 @@ theorem ZMod.eq_iff_mod (p : ℕ) [NeZero p] (x y : ZMod p) :
   . simp +contextual
   . apply ZMod_val_injective
 
+@[simp]
+theorem ZMod.val_sub' {n : ℕ} [NeZero n] (a b : ZMod n) : (a - b).val =
+  (a.val + (n - b.val)) % n := by
+  have : a - b = a + (n - b) := by
+    have : (n : ZMod n) = 0 := by simp
+    rw [this]
+    ring_nf
+  rw [this]
+  simp only [ZMod.val_add]
+  have : ((n : ZMod n) - b).val = (n - b.val) % n := by
+    dcases hb : b = 0
+    . simp only [CharP.cast_eq_zero, sub_self, ZMod.val_zero, tsub_zero, Nat.mod_self, hb]
+    . have : NeZero b := by constructor; simp [*]
+      have h0 : (n - b).val = n - b.val := by simp [ZMod.val_neg_of_ne_zero]
+      have h1 := @ZMod.val_lt n _ (n - b)
+      simp only [h0]
+      rw [eq_comm]
+      apply Nat.mod_eq_of_lt
+      omega
+  rw [this]
+  simp only [Nat.add_mod_mod]
 theorem BitVec.toNat_neq {n : ℕ} {x y : BitVec n} : x ≠ y ↔ x.toNat ≠ y.toNat := by
   simp [BitVec.toNat_eq]
 
@@ -638,5 +666,15 @@ theorem Nat.le_iff_BitVec_ofNat_le (n : Nat) (x y : Nat) (hx : x < 2^n) (hy : y 
   have := Nat.mod_eq_of_lt hx
   have := Nat.mod_eq_of_lt hy
   simp [*]
+
+theorem Nat.eq_iff_BitVec_ofNat_eq (n : Nat) (x y : Nat) (hx : x < 2^n) (hy : y < 2^n) :
+  x = y ↔ BitVec.ofNat n x = BitVec.ofNat n y := by
+  have := Nat.mod_eq_of_lt hx
+  have := Nat.mod_eq_of_lt hy
+  constructor <;> intros
+  . simp_all
+  . have := BitVec.toNat_ofNat x n
+    have := BitVec.toNat_ofNat y n
+    simp_all
 
 end Aeneas.Arith

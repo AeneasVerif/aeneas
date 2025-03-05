@@ -353,6 +353,29 @@ theorem lookup_not_none_imp_length_pos [BEq α] (l : List (α × β)) (key : α)
   0 < l.length := by
   induction l <;> simp_all
 
+@[simp]
+theorem List.getElem?_range' (i start n: ℕ) :
+  (List.range' start n)[i]? = if i < n then some (start + i) else none := by
+  revert start i
+  induction n <;> intro i start
+  . simp
+  . rename_i n hInd
+    unfold List.range'
+    dcases i
+    . simp
+    . rename_i i
+      have := hInd i (start + 1)
+      simp [this]
+      simp_all
+      ring_nf
+
+@[simp]
+theorem List.getElem!_range' (i start n: ℕ) :
+  (List.range' start n)[i]! = if i < n then start + i else 0 := by
+  have := List.getElem?_range' i start n
+  simp_all
+  split <;> simp
+
 end
 
 end List

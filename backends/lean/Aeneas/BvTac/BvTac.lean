@@ -128,4 +128,57 @@ example
   := by
   bv_tac
 
+example
+  (a : U32)
+  (b : U32)
+  (ha : a.val < 3329)
+  (hb : b.val < 3329)
+  (c1 : U32)
+  (_ : c1.bv = a.bv + b.bv)
+  (c2 : U32)
+  (_ : c2 = core.num.U32.wrapping_sub c1 3329#u32)
+  (c3 : U32)
+  (_ : c3.bv = c2.bv >>> 16#i32.toNat) :
+  (c1.bv - 3329#32 + (3329#32 &&& c3.bv)) % 3329#32 = (a.bv + b.bv) % 3329#32
+  := by
+  bv_tac
+
+example
+  (a : U32)
+  (b : U32)
+  (h0 : a.bv < 6658#32)
+  (h1 : b.val = 3329) :
+  (a.bv - b.bv + (3329#32 &&& (a.bv - b.bv) >>> 16)) % 3329#32 = (a.bv + 3329#32 - b.bv) % 3329#32
+  := by
+  bv_tac
+
+example
+  (a : U32)
+  (b : U32)
+  (h : (↑a : ℕ) < 3329 ∧ (↑b : ℕ) < 3329 ∨ (↑a : ℕ) < 6658 ∧ (↑b : ℕ) = 3329)
+  (c1 : U32)
+  (hc1 : c1 = core.num.U32.wrapping_sub a b)
+  (c2 : U32)
+  (hc2 : c2.bv = c1.bv >>> 16#i32.toNat)
+  (c3 : U32)
+  (hc3_1 : c3.bv = 3329#32 &&& c2.bv)
+  (c4 : U32)
+  (hc3 : c4 = core.num.U32.wrapping_add c1 c3) :
+  c4.bv % 3329#32 = (a.bv + 3329#32 - b.bv) % 3329#32
+  := by
+  dcases h <;> bv_tac
+
+example
+  (a : U32)
+  (b : U32)
+  (c1 : U32)
+  (hc1 : c1 = core.num.U32.wrapping_sub a b)
+  (c2 : U32)
+  (hc2 : c2.bv = c1.bv >>> 16#i32.toNat)
+  (h : (↑a : ℕ) < 6658 ∧ (↑b : ℕ) = 3329)
+  (_ : ¬c2 = 0#u32) :
+  c2 = 65535#u32
+  := by
+  bv_tac
+
 end Aeneas.BvTac

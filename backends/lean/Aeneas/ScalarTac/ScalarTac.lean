@@ -86,7 +86,7 @@ def scalarTacSimpRocs : List Name := [
   ``Nat.reducePow, ``Nat.reduceAdd, ``Nat.reduceSub, ``Nat.reduceMul, ``Nat.reduceDiv, ``Nat.reduceMod,
   ``Int.reduceLT, ``Int.reduceLE, ``Int.reduceGT, ``Int.reduceGE, ``Int.reduceEq, ``Int.reduceNe, ``Int.reduceBEq, ``Int.reduceBNe,
   ``Int.reducePow, ``Int.reduceAdd, ``Int.reduceSub, ``Int.reduceMul, ``Int.reduceDiv, ``Int.reduceMod,
-  ``Int.reduceNegSucc, ``Int.reduceNeg,]
+  ``Int.reduceNegSucc, ``Int.reduceNeg, ``Int.reduceToNat]
 
 /- Small trick to prevent `simp_all` from simplifying an assumption `h1 : P v` when we have
   `h0 : ∀ x, P x` in the context: we replace the forall quantifiers with our own definition

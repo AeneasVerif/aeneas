@@ -5,6 +5,7 @@ import Mathlib.Order.Basic
 import Aeneas.Bvify.Init
 import Aeneas.Arith.Lemmas
 import Aeneas.Std.Scalar
+import Aeneas.Std.PrimitivesLemmas
 
 /-!
 # `bvify` tactic
@@ -18,7 +19,7 @@ namespace Aeneas.Bvify
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 open Arith Std
 
-attribute [bvify_simps] ge_iff_le gt_iff_lt
+attribute [bvify_simps] ge_iff_le gt_iff_lt decide_eq_true_eq massert_ok
 
 attribute [bvify_simps]
   UScalar.BitVec_ofNat_val_eq
@@ -60,7 +61,7 @@ macro_rules
   let args := simpArgs.map (·.getElems) |>.getD #[]
   `(tactic|
     simp -decide (maxDischargeDepth := 1) only [
-      Nat.reducePow, Nat.reduceLT,
+      Int.reduceToNat, Nat.reducePow, Nat.reduceLT,
       Nat.lt_iff_BitVec_ofNat_lt $n, Nat.le_iff_BitVec_ofNat_le $n,
       bvify_simps, push_cast, $args,*] $[at $location]?)
 
@@ -77,9 +78,10 @@ def bvifyTac (n : Expr) (loc : Utils.Location) : TacticM Unit := do
     pure thm.fvarId!
   let lt_iff ← addThm ``Nat.lt_iff_BitVec_ofNat_lt
   let le_iff ← addThm ``Nat.le_iff_BitVec_ofNat_le
+  let eq_iff ← addThm ``Nat.eq_iff_BitVec_ofNat_eq
   withMainContext do
-  bvifyTacSimp loc [lt_iff, le_iff]
-  allGoals do Utils.clearFvarIds #[lt_iff, le_iff]
+  bvifyTacSimp loc [lt_iff, le_iff, eq_iff]
+  allGoals do Utils.clearFvarIds #[lt_iff, le_iff, eq_iff]
 
 elab "bvify'" n:term : tactic => do
   bvifyTac (← Elab.Term.elabTerm n (Expr.const ``Nat [])) Utils.Location.wildcard
@@ -124,6 +126,10 @@ example (x : U8) (h : x.val < 32) : x.bv < 32#8 := by
 
 example (x : U8) (h : x.val < 32) : x.bv < 32#8 := by
   bvify' 8
+  apply h
+
+example (a : U32) (h : a.val = 3329) : a.bv = 3329#32 := by
+  bvify' 32
   apply h
 
 end Aeneas.Bvify
