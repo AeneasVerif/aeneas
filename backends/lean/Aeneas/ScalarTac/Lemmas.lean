@@ -1,5 +1,5 @@
 import Aeneas.ScalarTac.ScalarTac
-import Aeneas.Std.ScalarCore
+import Aeneas.Std.Scalar.Core
 
 namespace Aeneas
 
