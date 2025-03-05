@@ -18,12 +18,40 @@ namespace Aeneas.Bvify
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 open Arith Std
 
-attribute [bvify_simps] ge_iff_le gt_iff_lt UScalar.BitVec_ofNat_val
-attribute [bvify_simps] UScalar.BitVec_ofNat_val_eq
-                        U8.BitVec_ofNat_val_eq U16.BitVec_ofNat_val_eq U32.BitVec_ofNat_val_eq
-                        U64.BitVec_ofNat_val_eq U128.BitVec_ofNat_val_eq Usize.BitVec_ofNat_val_eq
-                        U8.lt_succ_max U16.lt_succ_max U32.lt_succ_max U64.lt_succ_max U128.lt_succ_max
-                        U8.le_max U16.le_max U32.le_max U64.le_max U128.le_max
+attribute [bvify_simps] ge_iff_le gt_iff_lt
+
+attribute [bvify_simps]
+  UScalar.BitVec_ofNat_val_eq
+  U8.BitVec_ofNat_val_eq U16.BitVec_ofNat_val_eq U32.BitVec_ofNat_val_eq
+  U64.BitVec_ofNat_val_eq U128.BitVec_ofNat_val_eq Usize.BitVec_ofNat_val_eq
+  U8.lt_succ_max U16.lt_succ_max U32.lt_succ_max U64.lt_succ_max U128.lt_succ_max
+  U8.le_max U16.le_max U32.le_max U64.le_max U128.le_max
+
+attribute [bvify_simps]
+  U8.eq_equiv_bv_eq U16.eq_equiv_bv_eq U32.eq_equiv_bv_eq U64.eq_equiv_bv_eq U128.eq_equiv_bv_eq Usize.eq_equiv_bv_eq
+  I8.eq_equiv_bv_eq I16.eq_equiv_bv_eq I32.eq_equiv_bv_eq I64.eq_equiv_bv_eq I128.eq_equiv_bv_eq Isize.eq_equiv_bv_eq
+  U8.wrapping_add_bv_eq U16.wrapping_add_bv_eq U32.wrapping_add_bv_eq U64.wrapping_add_bv_eq U128.wrapping_add_bv_eq Usize.wrapping_add_bv_eq
+  I8.wrapping_add_bv_eq I16.wrapping_add_bv_eq I32.wrapping_add_bv_eq I64.wrapping_add_bv_eq I128.wrapping_add_bv_eq Isize.wrapping_add_bv_eq
+  U8.wrapping_sub_bv_eq U16.wrapping_sub_bv_eq U32.wrapping_sub_bv_eq U64.wrapping_sub_bv_eq U128.wrapping_sub_bv_eq Usize.wrapping_sub_bv_eq
+  I8.wrapping_sub_bv_eq I16.wrapping_sub_bv_eq I32.wrapping_sub_bv_eq I64.wrapping_sub_bv_eq I128.wrapping_sub_bv_eq Isize.wrapping_sub_bv_eq
+  UScalarTy.U8_numBits_eq UScalarTy.U16_numBits_eq UScalarTy.U32_numBits_eq UScalarTy.U64_numBits_eq UScalarTy.U128_numBits_eq UScalarTy.Usize_numBits_eq
+  IScalarTy.I8_numBits_eq IScalarTy.I16_numBits_eq IScalarTy.I32_numBits_eq IScalarTy.I64_numBits_eq IScalarTy.I128_numBits_eq IScalarTy.Isize_numBits_eq
+  U8.ofNat_bv U16.ofNat_bv U32.ofNat_bv U64.ofNat_bv U128.ofNat_bv Usize.ofNat_bv
+  I8.ofInt_bv I16.ofInt_bv I32.ofInt_bv I64.ofInt_bv I128.ofInt_bv Isize.ofInt_bv
+  UScalar.ofNat_val_eq IScalar.toNat IScalar.ofInt_val_eq
+
+/-!
+Some theorems which automatically lift comparisons between machine scalars, without needing the bitwise to be provided by the user.
+-/
+
+attribute [bvify_simps] UScalar.eq_equiv_bv_eq IScalar.eq_equiv_bv_eq
+                        gt_iff_lt ge_iff_le
+
+@[bvify_simps]
+theorem UScalar.lt_equiv_bv_lt {ty : UScalarTy} (x y : UScalar ty) : x < y ↔ x.bv < y.bv := by rfl
+
+@[bvify_simps]
+theorem UScalar.le_equiv_bv_le {ty : UScalarTy} (x y : UScalar ty) : x ≤ y ↔ x.bv ≤ y.bv := by rfl
 
 syntax (name := bvify) "bvify" num (simpArgs)? (location)? : tactic
 
@@ -36,9 +64,13 @@ macro_rules
       Nat.lt_iff_BitVec_ofNat_lt $n, Nat.le_iff_BitVec_ofNat_le $n,
       bvify_simps, push_cast, $args,*] $[at $location]?)
 
-def bvifyTac (n : Expr) (loc : Utils.Location) : TacticM Unit := do
+def bvifyTacSimp (loc : Utils.Location) (additionalAsms : List FVarId := []): TacticM Unit := do
   let simpTheorems ← bvifySimpExt.getTheorems
   let simprocs := [``Nat.reducePow, ``Nat.reduceLT]
+  Utils.simpAt true {maxDischargeDepth := 1, failIfUnchanged := false} simprocs [simpTheorems] [] [] additionalAsms loc
+
+def bvifyTac (n : Expr) (loc : Utils.Location) : TacticM Unit := do
+  Elab.Tactic.focus do
   let addThm (thName : Name) : TacticM FVarId := do
     let thm ← mkAppM thName #[n]
     let thm ← Utils.addDeclTac (← Utils.mkFreshAnonPropUserName) thm (← inferType thm) (asLet := false)
@@ -46,8 +78,8 @@ def bvifyTac (n : Expr) (loc : Utils.Location) : TacticM Unit := do
   let lt_iff ← addThm ``Nat.lt_iff_BitVec_ofNat_lt
   let le_iff ← addThm ``Nat.le_iff_BitVec_ofNat_le
   withMainContext do
-  Utils.simpAt true {maxDischargeDepth := 1} simprocs [simpTheorems] [] [] [lt_iff, le_iff] loc
-  Utils.clearFvarIds #[lt_iff, le_iff]
+  bvifyTacSimp loc [lt_iff, le_iff]
+  allGoals do Utils.clearFvarIds #[lt_iff, le_iff]
 
 elab "bvify'" n:term : tactic => do
   bvifyTac (← Elab.Term.elabTerm n (Expr.const ``Nat [])) Utils.Location.wildcard

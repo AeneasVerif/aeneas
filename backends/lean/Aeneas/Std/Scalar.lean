@@ -1221,7 +1221,7 @@ theorem IScalar.mul_spec {ty} {x y : IScalar ty}
   (hmax : ↑x * ↑y ≤ IScalar.max ty) :
   ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y := by
   have ⟨ z, h⟩ := @mul_bv_spec ty x y (by scalar_tac) (by scalar_tac)
-  simp [h]
+  simp only [ok.injEq, _root_.exists_eq_left', h]
 
 @[progress] theorem Usize.mul_spec {x y : Usize} (hmax : x.val * y.val ≤ Usize.max) :
   ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y :=
@@ -2240,6 +2240,37 @@ theorem UScalar.ShiftLeft_IScalar_bv_spec {ty0 ty1} (x : UScalar ty0) (y : IScal
 @[progress] theorem Usize.ShiftLeft_IScalar_bv_spec (x : Usize) (y : IScalar ty1) (hy0 : 0 ≤ y.val) (hy : y.val < UScalarTy.Usize.numBits) :
   ∃ (z : Usize), x <<< y = ok z ∧ z.bv = x.bv <<< y.toNat
   := by apply UScalar.ShiftLeft_IScalar_bv_spec <;> simp only [*]
+
+/-!
+## Bitwise And, Or
+-/
+
+@[progress]
+theorem UScalar.and_spec {ty} (x y : UScalar ty) :
+  ∃ z, toResult (x &&& y) = ok z ∧
+  z.val = (x &&& y).val ∧
+  z.bv = x.bv &&& y.bv := by
+  simp [toResult]
+  rfl
+
+@[progress]
+theorem UScalar.or_spec {ty} (x y : UScalar ty) :
+  ∃ z, toResult (x ||| y) = ok z ∧ z.val = (x ||| y).val ∧ z.bv = x.bv||| y.bv := by
+  simp [toResult]
+  rfl
+
+@[progress]
+theorem IScalar.and_spec {ty} (x y : IScalar ty) :
+  ∃ z, toResult (x &&& y) = ok z ∧ z.val = (x &&& y).val ∧ z.bv = x.bv &&& y.bv := by
+  simp [toResult]
+  rfl
+
+@[progress]
+theorem IScalar.or_spec {ty} (x y : IScalar ty) :
+  ∃ z, toResult (x ||| y) = ok z ∧ z.val = (x ||| y).val ∧ z.bv = x.bv||| y.bv := by
+  simp [toResult]
+  rfl
+
 
 /-!
 ## Casts

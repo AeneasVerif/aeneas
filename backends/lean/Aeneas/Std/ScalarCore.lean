@@ -726,8 +726,6 @@ theorem UScalar.ofNatCore_bv {ty : UScalarTy} (x : Nat) h :
 @[simp] theorem U128.ofNat_bv (x : Nat) h : (U128.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
 @[simp] theorem Usize.ofNat_bv (x : Nat) h : (Usize.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
 
-@[simp] theorem UScalar.BitVec_ofNat_val {ty} (x : UScalar ty) : BitVec.ofNat ty.numBits x.val = x := by simp
-
 theorem IScalar.eq_equiv_bv_eq {ty : IScalarTy} (x y : IScalar ty) :
   x = y ↔ x.bv = y.bv := by
   cases x; cases y; simp

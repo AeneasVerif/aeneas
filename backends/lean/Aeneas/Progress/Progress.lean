@@ -411,6 +411,7 @@ def evalProgress (args : TSyntax `Aeneas.Progress.progressArgs) : TacticM Stats 
      arithmetic goal, we skip (note that otherwise, scalarTac would try
      to prove a contradiction) -/
   let scalarTac : TacticM Unit := do
+    trace[Progress] "Attempting to solve with `scalarTac`"
     if ← ScalarTac.goalIsLinearInt then
       -- Also: we don't try to split the goal if it is a conjunction
       -- (it shouldn't be), but we split the disjunctions.
@@ -419,13 +420,18 @@ def evalProgress (args : TSyntax `Aeneas.Progress.progressArgs) : TacticM Stats 
       throwError "Not a linear arithmetic goal"
   let simpLemmas ← Aeneas.ScalarTac.scalarTacSimpExt.getTheorems
   let simpTac : TacticM Unit := do
-      -- Simplify the goal
-      Utils.simpAt false {} [] [simpLemmas] [] [] [] (.targets #[] true)
-      -- Raise an error if the goal is not proved
-      allGoalsNoRecover (throwError "Goal not proved")
+    trace[Progress] "Attempting to solve with `simp`"
+    -- Simplify the goal
+    Utils.simpAt false {} [] [simpLemmas] [] [] [] (.targets #[] true)
+    -- Raise an error if the goal is not proved
+    allGoalsNoRecover (throwError "Goal not proved")
   -- We use our custom assumption tactic, which instantiates meta-variables only if there is a single
   -- assumption matching the goal.
-  let customAssumTac : TacticM Unit := singleAssumptionTac
+  let customAssumTac : TacticM Unit := do
+    trace[Progress] "Attempting to solve with `singleAssumptionTac`"
+    -- TODO: unification sometimes raises a "maximum recursion depth reached" exception
+    -- and I don't know how to catch that
+    singleAssumptionTac
   let usedTheorem ← progressAsmsOrLookupTheorem keep withArg ids splitPost (
     withMainContext do
     trace[Progress] "trying to solve precondition: {← getMainGoal}"
