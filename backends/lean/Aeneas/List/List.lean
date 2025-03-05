@@ -285,6 +285,16 @@ theorem getElem!_map_eq {α : Type u} {β : Type v} [Inhabited α] [Inhabited β
   (ls.map f)[i]! = f (ls[i]!) := by
   simp [*]
 
+@[simp]
+theorem getElem?_length_le {α} [Inhabited α] (l : List α) (i : Nat) (hi : l.length ≤ i) :
+  l[i]? = none := by
+  simp [*]
+
+@[simp]
+theorem getElem!_length_le {α} [Inhabited α] (l : List α) (i : Nat) (hi : l.length ≤ i) :
+  l[i]! = default := by
+  simp only [List.getElem!_eq_getElem?_getD, getElem?_length_le, Option.getD_none, hi]
+
 theorem replace_slice_getElem? (start end_ : Nat) (l nl : List α)
   (_ : start < end_) (_ : end_ ≤ l.length) (_ : nl.length = end_ - start) :
   let l1 := l.replace_slice start end_ nl
@@ -354,7 +364,7 @@ theorem lookup_not_none_imp_length_pos [BEq α] (l : List (α × β)) (key : α)
   induction l <;> simp_all
 
 @[simp]
-theorem List.getElem?_range' (i start n: ℕ) :
+theorem getElem?_range'_if (i start n: ℕ) :
   (List.range' start n)[i]? = if i < n then some (start + i) else none := by
   revert start i
   induction n <;> intro i start
@@ -370,9 +380,9 @@ theorem List.getElem?_range' (i start n: ℕ) :
       ring_nf
 
 @[simp]
-theorem List.getElem!_range' (i start n: ℕ) :
+theorem getElem!_range' (i start n: ℕ) :
   (List.range' start n)[i]! = if i < n then start + i else 0 := by
-  have := List.getElem?_range' i start n
+  have := List.getElem?_range'_if i start n
   simp_all
   split <;> simp
 
