@@ -3,7 +3,7 @@ import Lean
 import Lean.Meta.Tactic.Simp
 import Init.Data.List.Basic
 import Aeneas.Std.Scalar
-import Aeneas.Std.ArraySlice
+import Aeneas.Std.Slice
 import Aeneas.ScalarTac
 import Aeneas.Progress.Core
 

@@ -4,7 +4,7 @@ import Init.Data.List.Basic
 import Mathlib.Tactic.Linarith
 import Aeneas.Std.Scalar
 import Aeneas.Std.ScalarNotations
-import Aeneas.Std.ArraySlice
+import Aeneas.Std.Array.Array
 import Aeneas.ScalarTac
 import Aeneas.Progress.Core
 import Aeneas.Arith.Lemmas
