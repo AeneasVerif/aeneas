@@ -81,6 +81,12 @@ elab "bv_tac_preprocess" : tactic =>
   bvTacPreprocess
 
 open Lean.Elab.Tactic.BVDecide.Frontend Lean.Elab in
+/--
+  `bv_tac` solves goals about bit-vectors.
+
+  Calling `bv_tac` is equivalent to:
+  `bv_tac_preprocess; bv_tac`
+-/
 elab "bv_tac" cfg:Parser.Tactic.optConfig : tactic =>
   withMainContext do
   Tactic.focus do

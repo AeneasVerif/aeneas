@@ -1061,9 +1061,15 @@ partial def minimizeGoal : TacticM Unit := do
     trace[Utils] "Computing the fvar ids of: {decl.userName}"
     /- Explore the type and the body: if they contain needed ids, add it -/
     trace[Utils] "Type: {decl.type}"
-    let mut declIds ← getFVarIds decl.type
-    declIds := declIds.filter (fun x => x ∈ declsFVarIds)
-    trace[Utils] "Ids in type: {← declIds.toArray.mapM (fun x => x.getUserName)}"
+    let mut declIds := Std.HashSet.empty
+    -- Add the id of the declaration itself
+    declIds := declIds.insert decl.fvarId
+    -- Add the ids found in the type
+    let mut typeIds ← getFVarIds decl.type
+    typeIds := typeIds.filter (fun x => x ∈ declsFVarIds)
+    trace[Utils] "Ids in type: {← typeIds.toArray.mapM (fun x => x.getUserName)}"
+    declIds := declIds.union typeIds
+    -- Add the ids found in the body
     match decl.value? with
     | none =>
       trace[Utils] "No value"
@@ -1160,7 +1166,12 @@ def extractGoal (ref : Syntax) (fullGoal : Bool) : TacticM Unit := do
   let assumptions : List Format ← decls.mapM fun decl => do
     let ty ← Meta.ppExprWithInfos decl.type
     let name ← Meta.ppExprWithInfos (Expr.fvar decl.fvarId)
-    pure ("\n  (" ++ name.fmt ++ " : " ++ ty.fmt ++ ")")
+    match decl.value? with
+    | none =>
+      pure ("\n  (" ++ name.fmt ++ " : " ++ ty.fmt ++ ")")
+    | some value =>
+      let value ← Meta.ppExprWithInfos value
+      pure ("\n  (" ++ name.fmt ++ " : " ++ ty.fmt ++ " := " ++ value.fmt ++  ")")
   let assumptions := Format.joinSep assumptions ""
   let mgoal ← getMainGoal
   let goal ← Meta.ppExprWithInfos (← mgoal.getType)
@@ -1239,6 +1250,23 @@ example
   := by
   extract_goal
   simp [*]
+
+/--
+info: example
+  (i : Nat)
+  (h : i ≤ 7)
+  (j : Nat := i) :
+  j ≤ 7
+  := by sorry
+-/
+#guard_msgs in
+set_option linter.unusedTactic false in
+example (i : Nat) (h : i ≤ 7) :
+  let j := i
+  j ≤ 7 := by
+  intro j
+  extract_goal
+  apply h
 
 /-- Introduce an auxiliary assertion for the goal -/
 def extractAssert (ref : Syntax) : TacticM Unit := do

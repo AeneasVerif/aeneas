@@ -259,7 +259,7 @@ def scalarTac (config : Config) : Tactic.TacticM Unit := do
         Tactic.Omega.omegaTactic {}
     catch _ =>
       let g ← Tactic.getMainGoal
-      throwError "scalar_tac failed to prove the goal below.\n\nNote that scalar_tac is almost equivalent to:\n  scalar_tac_preprocess; split_all <;> simp_all only <;> omega\n\nGoal: \n{g}"
+      throwError "scalar_tac failed to prove the goal below.\n\nNote that scalar_tac is almost equivalent to:\n  scalar_tac_preprocess; simp_all (maxDischargeDepth := 1) only; omega\n\nGoal: \n{g}"
 
 example : True := by simp
 
