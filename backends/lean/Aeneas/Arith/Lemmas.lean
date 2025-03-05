@@ -203,6 +203,13 @@ theorem ZMod_int_cast_eq_int_cast_iff (n : ℕ) (a b : ℤ) :
   ((a : ZMod n) = (b : ZMod n)) ↔ (a % n = b % n) :=
   ZMod.intCast_eq_intCast_iff a b n
 
+theorem ZMod_nat_cast_eq_nat_cast_iff (n : ℕ) (a b : ℕ) :
+  ((a : ZMod n) = (b : ZMod n)) ↔ (a % n = b % n) := by
+  zify
+  have := ZMod_int_cast_eq_int_cast_iff n a b
+  simp at this
+  apply this
+
 theorem eq_mod_iff_eq_ZMod (n : ℕ) (a b : ℤ) :
   (a % n = b % n) ↔ ((a : ZMod n) = (b : ZMod n)) := by
   rw [ZMod.intCast_eq_intCast_iff a b n]

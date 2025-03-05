@@ -2271,6 +2271,10 @@ theorem IScalar.or_spec {ty} (x y : IScalar ty) :
   simp [toResult]
   rfl
 
+@[simp] theorem UScalar.bv_and {ty} (x y : UScalar ty) : (x &&& y).bv = x.bv &&& y.bv := by rfl
+@[simp] theorem UScalar.bv_or {ty} (x y : UScalar ty) : (x ||| y).bv = x.bv ||| y.bv := by rfl
+@[simp] theorem IScalar.bv_and {ty} (x y : IScalar ty) : (x &&& y).bv = x.bv &&& y.bv := by rfl
+@[simp] theorem IScalar.bv_or {ty} (x y : IScalar ty) : (x ||| y).bv = x.bv ||| y.bv := by rfl
 
 /-!
 ## Casts
