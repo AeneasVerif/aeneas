@@ -21,9 +21,19 @@ initialize progressSimpExt : SimpExtension ←
     The `progress_simp` attribute registers simp lemmas to be used by `progress`
     when solving preconditions by means of the simplifier."
 
+/-!
+# Attribute: `progress_post_simp`
+-/
+
+/-- The `progress_post_simp` simp attribute. -/
+initialize progressPostSimpExt : SimpExtension ←
+  registerSimpAttr `progress_post_simp "\
+    The `progress_post_simp` attribute registers simp lemmas to be used by `progress`
+    to post-process post-conditions after introducing them in the context."
+
 /-! # Attribute: `progress` -/
 
-structure PSpecDesc where
+structure ProgressSpecDesc where
   -- The universally quantified variables
   -- Can be fvars or mvars
   fvars : Array Expr
@@ -50,7 +60,7 @@ section Methods
 
   /- Analyze a goal or a pspec theorem to decompose its arguments.
 
-     PSpec theorems should be of the following shape:
+     ProgressSpec theorems should be of the following shape:
      ```
      ∀ x1 ... xn, H1 → ... Hn → ∃ y1 ... ym. f x1 ... xn = .ret ... ∧ Post1 ∧ ... ∧ Postk
      ```
@@ -65,8 +75,8 @@ section Methods
      - postconditions
   -/
   partial
-  def withPSpec [Inhabited (m a)] [Nonempty (m a)]
-    (isGoal : Bool) (th : Expr) (k : PSpecDesc → m a) :
+  def withProgressSpec [Inhabited (m a)] [Nonempty (m a)]
+    (isGoal : Bool) (th : Expr) (k : ProgressSpecDesc → m a) :
     m a := do
     trace[Progress] "Proposition: {th}"
     -- Dive into the quantified variables and the assumptions
@@ -91,7 +101,7 @@ section Methods
     let (mExpr, ret) ← destEq th.consumeMData
     trace[Progress] "After splitting the equality:\n- lhs: {mExpr}\n- rhs: {ret}"
     -- Recursively destruct the monadic application to dive into the binds,
-    -- if necessary (this is for when we use `withPSpec` inside of the `progress` tactic),
+    -- if necessary (this is for when we use `withProgressSpec` inside of the `progress` tactic),
     -- and destruct the application to get the function name
     let rec strip_monad mExpr := do
       mExpr.consumeMData.withApp fun mf margs => do
@@ -149,8 +159,8 @@ section Methods
     withLocalDeclsD ⟨ tys ⟩ k
 end Methods
 
-def getPSpecFunArgsExpr (isGoal : Bool) (th : Expr) : MetaM Expr :=
-  withPSpec isGoal th (fun d => do pure d.fArgsExpr)
+def getProgressSpecFunArgsExpr (isGoal : Bool) (th : Expr) : MetaM Expr :=
+  withProgressSpec isGoal th (fun d => do pure d.fArgsExpr)
 
 structure Rules where
   rules : DiscrTree Name
@@ -181,7 +191,7 @@ def mkExtension (name : Name := by exact decl_name%) :
   }
 
 /-- The progress attribute -/
-structure PSpecAttr where
+structure ProgressSpecAttr where
   attr : AttributeImpl
   ext  : Extension
   deriving Inhabited
@@ -199,7 +209,7 @@ private def saveProgressSpecFromThm (ext : Extension) (attrKind : AttributeKind)
       -- Normalize to eliminate the let-bindings
       let ty ← normalizeLetBindings thDecl.type
       trace[Progress] "Theorem after normalization (to eliminate the let bindings): {ty}"
-      let fExpr ← getPSpecFunArgsExpr false ty
+      let fExpr ← getProgressSpecFunArgsExpr false ty
       trace[Progress] "Registering spec theorem for expr: {fExpr}"
       -- Convert the function expression to a discrimination tree key
       DiscrTree.mkPath fExpr)
@@ -209,7 +219,7 @@ private def saveProgressSpecFromThm (ext : Extension) (attrKind : AttributeKind)
     pure ()
 
 /- Initiliaze the `progress` attribute. -/
-initialize pspecAttr : PSpecAttr ← do
+initialize progressAttr : ProgressSpecAttr ← do
   let ext ← mkExtension `pspecMap
   let attrImpl : AttributeImpl := {
     name := `progress
@@ -225,16 +235,16 @@ initialize pspecAttr : PSpecAttr ← do
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl, ext := ext }
 
-def PSpecAttr.find? (s : PSpecAttr) (e : Expr) : MetaM (Array Name) := do
+def ProgressSpecAttr.find? (s : ProgressSpecAttr) (e : Expr) : MetaM (Array Name) := do
   let state := s.ext.getState (← getEnv)
   let rules ← state.rules.getMatch e
   pure (rules.filter (fun th => th ∉ state.deactivated))
 
-def PSpecAttr.getState (s : PSpecAttr) : MetaM Rules := do
+def ProgressSpecAttr.getState (s : ProgressSpecAttr) : MetaM Rules := do
   pure (s.ext.getState (← getEnv))
 
-def showStoredPSpec : MetaM Unit := do
-  let st ← pspecAttr.getState
+def showStoredProgressThms : MetaM Unit := do
+  let st ← progressAttr.getState
   -- TODO: how can we iterate over (at least) the values stored in the tree?
   --let s := st.toList.foldl (fun s (f, th) => f!"{s}\n{f} → {th}") f!""
   let s := f!"{st.rules}, {st.deactivated.toArray}"
@@ -563,7 +573,7 @@ initialize pspecPureAttribute : ProgressPureSpecAttr ← do
         -- Introduce the lifted theorem
         let liftedThmName ← MetaM.run' (liftThm pat thName)
         -- Save the lifted theorem to the `progress` database
-        saveProgressSpecFromThm pspecAttr.ext attrKind liftedThmName
+        saveProgressSpecFromThm progressAttr.ext attrKind liftedThmName
   }
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl }
@@ -739,7 +749,7 @@ initialize pspecPureDefAttribute : ProgressPureDefSpecAttr ← do
         -- Introduce the lifted theorem
         let thmName ← MetaM.run' (mkProgressPureDefThm pat declName)
         -- Save the lifted theorem to the `progress` database
-        saveProgressSpecFromThm pspecAttr.ext attrKind thmName
+        saveProgressSpecFromThm progressAttr.ext attrKind thmName
   }
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl }

@@ -821,7 +821,7 @@ inductive Location where
       assumptions which are not propositions).  --/
   | wildcard_dep
   /-- Same as Tactic.Location -/
-  | targets (hypotheses : Array Syntax) (type : Bool)
+  | targets (hypotheses : Array FVarId) (type : Bool)
 
 -- Adapted from Tactic.simpLocation
 def customSimpLocation (ctx : Simp.Context) (simprocs : Simp.SimprocsArray)
@@ -829,8 +829,9 @@ def customSimpLocation (ctx : Simp.Context) (simprocs : Simp.SimprocsArray)
   (loc : Location) : TacticM Simp.Stats := do
   match loc with
   | Location.targets hyps simplifyTarget =>
-    -- Simply call the regular simpLocation
-    simpLocation ctx simprocs discharge? (Tactic.Location.targets hyps simplifyTarget)
+    -- Custom behavior: we directly provide the fvar ideas of the assumption rather than syntax
+    withMainContext do
+      simpLocation.go ctx simprocs discharge? hyps simplifyTarget
   | Location.wildcard =>
     -- Simply call the regular simpLocation
     simpLocation ctx simprocs discharge? Tactic.Location.wildcard

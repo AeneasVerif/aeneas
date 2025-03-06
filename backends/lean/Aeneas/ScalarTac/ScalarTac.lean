@@ -309,7 +309,6 @@ def scalarTac (config : Config) : TacticM Unit := do
       catch _ => error
     else
       error
-example : True := by simp
 
 elab "scalar_tac" config:Parser.Tactic.optConfig : tactic => do
   let config ← elabConfig config
