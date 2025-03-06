@@ -120,16 +120,16 @@ def progressWith (fExpr : Expr) (th : Expr)
   let ngoal ← getMainGoal
   trace[Progress] "current goal: {ngoal}"
   trace[Progress] "current goal is assigned: {← ngoal.isAssigned}"
-  -- The assumption should be of the shape:
-  -- `∃ x1 ... xn, f args = ... ∧ ...`
-  -- We introduce the existentially quantified variables and split the top-most
-  -- conjunction if there is one. We use the provided `ids` list to name the
-  -- introduced variables.
+  /- The assumption should be of the shape:
+     `∃ x1 ... xn, f args = ... ∧ ...`
+     We introduce the existentially quantified variables and split the top-most
+     conjunction if there is one. We use the provided `ids` list to name the
+     introduced variables. -/
   let res ← splitAllExistsTac thAsm ids.toList fun h ids => do
-    -- Split the conjunctions.
-    -- For the conjunctions, we split according once to separate the equality `f ... = .ret ...`
-    -- from the postcondition, if there is, then continue to split the postcondition if there
-    -- are remaining ids.
+    /- Split the conjunctions.
+       For the conjunctions, we split according once to separate the equality `f ... = .ret ...`
+       from the postcondition, if there is, then continue to split the postcondition if there
+       are remaining ids. -/
     let splitEqAndPost (k : Expr → Option Expr → List (Option Name) → TacticM ProgressError) : TacticM ProgressError := do
       if ← isConj (← inferType h) then do
         let hName := (← h.fvarId!.getDecl).userName
@@ -140,22 +140,22 @@ def progressWith (fExpr : Expr) (th : Expr)
           | some id :: ids => do pure (some (hName, id), ids)
         splitConjTac h optIds (fun hEq hPost => k hEq (some hPost) ids)
       else k h none ids
-    -- Simplify the target by using the equality and some monad simplifications,
-    -- then continue splitting the post-condition
+    /- Simplify the target by using the equality and some monad simplifications,
+       then continue splitting the post-condition -/
     splitEqAndPost fun hEq hPost ids => do
     trace[Progress] "eq and post:\n{hEq} : {← inferType hEq}\n{hPost}"
     trace[Progress] "current goal: {← getMainGoal}"
     simpAt true { maxDischargeDepth := 1, failIfUnchanged := false } [] [] []
             [``Std.bind_tc_ok, ``Std.bind_tc_fail, ``Std.bind_tc_div,
-            -- Those ones are quite useful to simplify the goal further by eliminating
-            -- existential quantifiers, for instance.
+            /- Those ones are quite useful to simplify the goal further by eliminating
+               existential quantifiers, for instance. -/
             ``and_assoc, ``Std.Result.ok.injEq,
             ``exists_eq_left, ``exists_eq_left', ``exists_eq_right, ``exists_eq_right',
             ``exists_eq, ``exists_eq', ``true_and, ``and_true,
             ``Prod.mk.injEq]
             [hEq.fvarId!] (.targets #[] true)
-    -- It may happen that at this point the goal is already solved (though this is rare)
-    -- TODO: not sure this is the best way of checking it
+    /- It may happen that at this point the goal is already solved (though this is rare)
+       TODO: not sure this is the best way of checking it -/
     let goals ← getUnsolvedGoals
     assert! (goals.length ≤ 1) -- We focused on the main goal so there should be at most one goal
     if goals == [] then pure (Ok #[])
@@ -165,13 +165,13 @@ def progressWith (fExpr : Expr) (th : Expr)
       let _ ← tryTac (simpAt true {} [] [] [] scalar_eqs [] .wildcard_dep)
       trace[Progress] "goal after folding back scalar types: {← getMainGoal}"
       -- Clear the equality, unless the user requests not to do so
-      let mgoal ← do
-        if keep.isSome then getMainGoal
-        else do
-          let mgoal ← getMainGoal
-          mgoal.tryClearMany #[hEq.fvarId!]
-      setGoals (mgoal :: (← getUnsolvedGoals)) -- TODO: simplify, the getUnsolvedGoals is useless
-      trace[Progress] "Goal after clearing the equality: {mgoal}"
+      if keep.isSome then pure ()
+      else do
+        let mgoal ← getMainGoal
+        let mgoal ← mgoal.tryClearMany #[hEq.fvarId!]
+        setGoals [mgoal]
+      trace[Progress] "Unsolved goals: {← getUnsolvedGoals}"
+      trace[Progress] "Goal after clearing the equality: {← getMainGoal}"
       -- Continue splitting following the post following the user's instructions
       match hPost with
       | none =>
@@ -185,8 +185,8 @@ def progressWith (fExpr : Expr) (th : Expr)
           match ids0 with
           | [] =>
             /- We used all the user provided ids.
-              Split the remaining conjunctions by using fresh ids if the user
-              instructed to fully split the post-condition, otherwise stop -/
+               Split the remaining conjunctions by using fresh ids if the user
+               instructed to fully split the post-condition, otherwise stop -/
             if splitPost then
               splitFullConjTac true hPost (λ asms => do
                 pure (Ok (hPosts.reverse ++ (asms.map (fun x => x.fvarId!))).toArray))
@@ -225,15 +225,15 @@ def progressWith (fExpr : Expr) (th : Expr)
     let newPropGoals ← getUnsolvedGoals
     /- Simplify the post-conditions in the main goal - note that we waited until now because by solving the preconditions
        we may have instantiated meta-variables -/
-    /- Simplify the post-condition itself -/
     match curGoals with
     | [] => pure ()
-    | _ :: _ =>
+    | [ _ ] =>
       setGoals curGoals
       let simpPostThms ← progressPostSimpExt.getTheorems
       simpAt true { maxDischargeDepth := 0, failIfUnchanged := false }
             ScalarTac.scalarTacSimpRocs [simpPostThms] []
             [] [] (.targets hPosts false)
+    | _ => throwError "Unexpected number of goals"
     let curGoals ← getUnsolvedGoals
     trace[Progress] "Main goal after simplifying the post-conditions: {curGoals}"
     /- Update the list of goals -/
@@ -245,8 +245,8 @@ def progressWith (fExpr : Expr) (th : Expr)
     --
     pure (.Ok hPosts)
 
--- Small utility: if `args` is not empty, return the name of the app in the first
--- arg, if it is a const.
+/-- Small utility: if `args` is not empty, return the name of the app in the first
+    arg, if it is a const. -/
 def getFirstArgAppName (args : Array Expr) : MetaM (Option Name) := do
   if args.size = 0 then pure none
   else
@@ -289,18 +289,18 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option Expr)
   -- Retrieve the goal
   let mgoal ← Tactic.getMainGoal
   let goalTy ← mgoal.getType
-  -- There might be uninstantiated meta-variables in the goal that we need
-  -- to instantiate (otherwise we will get stuck).
+  /- There might be uninstantiated meta-variables in the goal that we need
+     to instantiate (otherwise we will get stuck). -/
   let goalTy ← instantiateMVars goalTy
   trace[Progress] "goal: {goalTy}"
-  -- Dive into the goal to lookup the theorem
-  -- Remark: if we don't isolate the call to `withProgressSpec` to immediately "close"
-  -- the terms immediately, we may end up with the error:
-  -- "(kernel) declaration has free variables"
-  -- I'm not sure I understand why.
-  -- TODO: we should also check that no quantified variable appears in fExpr.
-  -- If such variables appear, we should just fail because the goal doesn't
-  -- have the proper shape.
+  /- Dive into the goal to lookup the theorem
+     Remark: if we don't isolate the call to `withProgressSpec` to immediately "close"
+     the terms immediately, we may end up with the error:
+     "(kernel) declaration has free variables"
+     I'm not sure I understand why.
+     TODO: we should also check that no quantified variable appears in fExpr.
+     If such variables appear, we should just fail because the goal doesn't
+     have the proper shape. -/
   let fExpr ← do
     let isGoal := true
     withProgressSpec isGoal goalTy fun desc => do
@@ -327,8 +327,8 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option Expr)
       match res with
       | .Ok _ => return (mkIdent decl.userName)
       | .Error msg => throwError msg
-    -- It failed: lookup the pspec theorems which match the expression *only
-    -- if the function is a constant*
+    /- It failed: lookup the pspec theorems which match the expression *only
+       if the function is a constant* -/
     let fIsConst ← do
       fExpr.consumeMData.withApp fun mf _ => do
       pure mf.isConst
@@ -337,10 +337,10 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option Expr)
       trace[Progress] "No assumption succeeded: trying to lookup a pspec theorem"
       let pspecs : Array Name ← do
         let thNames ← progressAttr.find? fExpr
-        -- TODO: because of reduction, there may be several valid theorems (for
-        -- instance for the scalars). We need to sort them from most specific to
-        -- least specific. For now, we assume the most specific theorems are at
-        -- the end.
+        /- TODO: because of reduction, there may be several valid theorems (for
+           instance for the scalars). We need to sort them from most specific to
+           least specific. For now, we assume the most specific theorems are at
+           the end. -/
         let thNames := thNames.reverse
         trace[Progress] "Looked up pspec theorems: {thNames}"
         pure thNames
@@ -435,8 +435,8 @@ def evalProgress (args : TSyntax `Aeneas.Progress.progressArgs) : TacticM Stats 
   let scalarTac : TacticM Unit := do
     trace[Progress] "Attempting to solve with `scalarTac`"
     if ← ScalarTac.goalIsLinearInt then
-      -- Also: we don't try to split the goal if it is a conjunction
-      -- (it shouldn't be), but we split the disjunctions.
+      /- Also: we don't try to split the goal if it is a conjunction
+         (it shouldn't be), but we split the disjunctions. -/
       ScalarTac.scalarTac { split := false, fastSaturate := true }
     else
       throwError "Not a linear arithmetic goal"
@@ -451,8 +451,8 @@ def evalProgress (args : TSyntax `Aeneas.Progress.progressArgs) : TacticM Stats 
     Utils.simpAt false { maxDischargeDepth := 1 } [] [simpLemmas] [] [] localAsms (.targets #[] true)
     -- Raise an error if the goal is not proved
     allGoalsNoRecover (throwError "Goal not proved")
-  -- We use our custom assumption tactic, which instantiates meta-variables only if there is a single
-  -- assumption matching the goal.
+  /- We use our custom assumption tactic, which instantiates meta-variables only if there is a single
+     assumption matching the goal. -/
   let customAssumTac : TacticM Unit := do
     trace[Progress] "Attempting to solve with `singleAssumptionTac`"
     singleAssumptionTacCore singleAssumptionTacDtree
