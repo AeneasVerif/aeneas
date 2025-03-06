@@ -347,65 +347,47 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option Expr)
       -- Nothing worked: failed
       throwError "Progress failed"
 
-syntax progressArgs := ("keep" (ident <|> "_"))? ("with" term)? ("as" " ⟨ " (ident <|> "_"),* " ⟩")?
+syntax optIdent := ident <|> "_"
+syntax progressArgs := ("keep" optIdent)? ("with" term)? ("as" " ⟨ " optIdent,* " ⟩")?
 
-def evalProgress (args : TSyntax `Aeneas.Progress.progressArgs) : TacticM Stats := do
-  withMainContext do
-  let args := args.raw
-  -- Process the arguments to retrieve the identifiers to use
-  trace[Progress] "Progress arguments: {args}"
-  let (keepArg, withArg, asArgs) ←
-    match args.getArgs.toList with
-    | [keepArg, withArg, asArgs] => do pure (keepArg, withArg, asArgs)
-    | _ => throwError "Unexpected: invalid arguments"
-  let keep : Option Name ← do
-    trace[Progress] "Keep arg: {keepArg}"
-    let args := keepArg.getArgs
-    if args.size > 0 then do
-      trace[Progress] "Keep args: {args}"
-      let arg := args.get! 1
-      trace[Progress] "Keep arg: {arg}"
-      if arg.isIdent then pure (some arg.getId)
-      else do pure (some (← mkFreshAnonPropUserName))
-    else do pure none
-  trace[Progress] "Keep: {keep}"
-  let withArg ← do
-    let withArg := withArg.getArgs
-    if withArg.size > 0 then
-      let pspec := withArg.get! 1
-      trace[Progress] "With arg: {pspec}"
-      /- The theorem with which to make progress is either:
-         - the identifier of a local declaration or a theroem
-         - a term
-        We have to make a case disjunction, because if we treat identifiers like
-        terms, then Lean will not succeed in infering their implicit parameters
-        (`progress` does that by matching against the goal).
-       -/
-      if pspec.isIdent then
-        -- Attempt to lookup a local declaration
-        match (← getLCtx).findFromUserName? pspec.getId with
-        | some decl => do
-          trace[Progress] "With arg: local decl"
-          pure (some decl.toExpr)
-        | none => do
-          -- Not a local declaration: should be a theorem
-          trace[Progress] "With arg: theorem"
-          addCompletionInfo <| CompletionInfo.id pspec pspec.getId (danglingDot := false) {} none
-          let some e ← Term.resolveId? pspec (withInfo := true) | throwError m!"Could not find theorem: {pspec}"
-          pure (some e)
-      else
-        trace[Progress] "With arg: is term"
-        let pspec ← Tactic.elabTerm pspec none
-        trace[Progress] m!"With arg: elaborated expression {pspec}"
-        pure (some pspec)
-    else pure none
-  let ids :=
-    let args := asArgs.getArgs
-    if args.size > 2 then
-      let args := (args.get! 2).getSepArgs
-      args.map (λ s => if s.isIdent then some s.getId else none)
-    else #[]
+def parseProgressArgs: TSyntax ``Aeneas.Progress.progressArgs -> TacticM (Option Name × Option Expr × Array (Option Name))
+| args@`(progressArgs| $[keep $x]? $[with $pspec:term]? $[as ⟨ $ids,* ⟩]? ) => withMainContext do
+  trace[Progress] "Progress arguments: {args.raw}"
+  let keep?: Option Name <- Option.sequence <| x.map fun
+    | `(optIdent| _) => mkFreshAnonPropUserName
+    | `(optIdent| $name:ident) => pure name.getId
+    | _ => throwUnsupportedSyntax
+  trace[Progress] "Keep: {keep?}"
+  let withTh?: Option Expr <- Option.sequence <| pspec.map fun
+    /- We have to make a case disjunction, because if we treat identifiers like
+       terms, then Lean will not succeed in infering their implicit parameters
+       (`progress` does that by matching against the goal). -/
+    | `($stx:ident) => do
+      match (<- getLCtx).findFromUserName? stx.getId with
+      | .some decl => 
+        trace[Progress] "With arg (local decl): {stx.raw}"
+        return decl.toExpr
+      | .none =>
+        -- Not a local declaration: should be a theorem
+        trace[Progress] "With arg (theorem): {stx.raw}"
+        let some e ← Term.resolveId? stx (withInfo := true) 
+          | throwError m!"Could not find theorem: {pspec}"
+        return e
+    | term => do
+      trace[Progress] "With arg (term): {term}"
+      Tactic.elabTerm term none
+  if let .some pspec := withTh? then trace[Progress] "With arg: elborated expression {pspec}"
+  let ids := ids.getD ∅
+    |>.getElems.map fun
+      | `(optIdent| $name:ident) => some name.getId
+      | _ => none
   trace[Progress] "User-provided ids: {ids}"
+  return (keep?, withTh?, ids)
+| _ => throwUnsupportedSyntax
+
+
+def evalProgress (keep: Option Name) (withArg : Option Expr) (ids : Array (Option Name)) : TacticM Stats := do
+  withMainContext do
   let splitPost := true
   /- For scalarTac we have a fast track: if the goal is not a linear
      arithmetic goal, we skip (note that otherwise, scalarTac would try
@@ -436,11 +418,14 @@ def evalProgress (args : TSyntax `Aeneas.Progress.progressArgs) : TacticM Stats 
     usedTheorem
   }
 
-elab (name := progress) "progress" args:progressArgs : tactic =>
-  evalProgress args *> return ()
+elab (name := progress) "progress" args:progressArgs : tactic => do
+  -- Process the arguments to retrieve the identifiers to use
+  let (keep, withArg, ids) ← parseProgressArgs args
+  evalProgress keep withArg ids *> return ()
 
 elab tk:"progress?" args:progressArgs : tactic => do
-  let stats ← evalProgress args
+  let (keep?, withArg, ids) ← parseProgressArgs args
+  let stats ← evalProgress keep? withArg ids
   let mut stxArgs := args.raw
   if stxArgs[1].isNone then
     let withArg := mkNullNode #[mkAtom "with", stats.usedTheorem]
