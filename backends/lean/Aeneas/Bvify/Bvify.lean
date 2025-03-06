@@ -40,6 +40,7 @@ attribute [bvify_simps]
   U8.ofNat_bv U16.ofNat_bv U32.ofNat_bv U64.ofNat_bv U128.ofNat_bv Usize.ofNat_bv
   I8.ofInt_bv I16.ofInt_bv I32.ofInt_bv I64.ofInt_bv I128.ofInt_bv Isize.ofInt_bv
   UScalar.ofNat_val_eq IScalar.toNat IScalar.ofInt_val_eq
+  UScalar.bv_and UScalar.bv_or IScalar.bv_and IScalar.bv_or
 
 /-!
 Some theorems which automatically lift comparisons between machine scalars, without needing the bitwise to be provided by the user.
