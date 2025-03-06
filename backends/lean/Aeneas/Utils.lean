@@ -427,6 +427,56 @@ partial def getMVarIds (e : Expr) (hs : Std.HashSet MVarId := Std.HashSet.empty)
 def assumptionTac : TacticM Unit :=
   liftMetaTactic fun mvarId => do mvarId.assumption; pure []
 
+def filterAssumptionTacPreprocess : TacticM (DiscrTree FVarId) := do
+  let mut dtree := DiscrTree.empty
+  for decl in (← (← getLCtx).getDecls) do
+    dtree ← dtree.insert decl.type decl.fvarId
+  pure dtree
+
+/-- Return `true` if managed to close goal `mvarId` using an assumption. -/
+def filterAssumptionTacCore (dtree : DiscrTree FVarId) : TacticM Bool := do
+  withMainContext do
+  let g ← getMainGoal
+  let type ← instantiateMVars (← g.getType)
+  let candidates ← dtree.getMatch type
+  let asm : Option FVarId ← candidates.findM? fun fvar => do
+    let localDecl ← fvar.getDecl
+    isDefEq type localDecl.type
+  match asm with
+  | none => return false
+  | some fvarId => g.assign (mkFVar fvarId); return true
+
+/-- Same as `assumptionTac` but we use a discrimination tree to filter the assumptions we try.
+
+    This means that the tactic is less powerful than `assumptionTac`, as we might miss an assumption
+    which actually reduces to the goal, but it allows doing a preprocessing step, which makes it
+    faster when we need to solve several goals while having the same context (this happens when
+    solving preconditions in the tactic `progress`) and also it is safer to use, as unifying terms
+    easily triggers "maximum recursion reached" errors when there are big integer constants in the
+    context.
+-/
+def filterAssumptionTac : TacticM Bool := do
+  let dtree ← filterAssumptionTacPreprocess
+  filterAssumptionTacCore dtree
+
+elab "fassumption " : tactic => do let _ ← filterAssumptionTac
+
+-- `assumption` fails with "maximum recursion depth reached" below because it first attempts to
+-- unify `x * 3000 ≤ 1` with the goal
+/--
+error: maximum recursion depth has been reached
+use `set_option maxRecDepth <num>` to increase limit
+use `set_option diagnostics true` to get diagnostic information
+-/
+#guard_msgs in
+example (x y : Nat) (_ : y * 3000 ≤ 1) (_ : x * 3000 ≤ 1) : y * 3000 ≤ 1 := by
+  assumption
+
+-- Contrary to `assumption`, `fassumption` succeeds because it first filters the
+-- assumptions
+example (x y : Nat) (_ : y * 3000 ≤ 1) (_ : x * 3000 ≤ 1) : y * 3000 ≤ 1 := by
+  fassumption
+
 -- List all the local declarations matching the goal
 def getAllMatchingAssumptions (type : Expr) : MetaM (List (LocalDecl × Name)) := do
   let typeType ← inferType type
@@ -444,12 +494,9 @@ def getAllMatchingAssumptions (type : Expr) : MetaM (List (LocalDecl × Name)) :
     restoreState s
     pure x
 
-/- Like the assumption tactic, but if the goal contains meta-variables it applies an assumption only
-   if there is a single assumption matching the goal. Aborts if several assumptions match the goal.
+def singleAssumptionTacPreprocess := filterAssumptionTacPreprocess
 
-   We implement this behaviour to make sure we do not trigger spurious instantiations of meta-variables.
--/
-def singleAssumptionTac : TacticM Unit := do
+def singleAssumptionTacCore (dtree : DiscrTree FVarId) : TacticM Unit := do
   withMainContext do
   let mvarId ← getMainGoal
   mvarId.checkNotAssigned `sassumption
@@ -458,7 +505,8 @@ def singleAssumptionTac : TacticM Unit := do
   if goalMVars.isEmpty then
     -- No meta-variables: we can safely use the assumption tactic
     trace[Utils] "The goal does not contain meta-variables"
-    assumptionTac
+    unless ← filterAssumptionTacCore dtree do
+      throwTacticEx `assumption mvarId
   else
     trace[Utils] "The goal contains meta-variables"
     /- There are meta-variables that we need to instantiate
@@ -481,6 +529,15 @@ def singleAssumptionTac : TacticM Unit := do
       -- Several assumptions
       let fvars := fvars.map Prod.snd
       throwError "Several assumptions match the goal: {fvars}"
+
+/- Like the assumption tactic, but if the goal contains meta-variables it applies an assumption only
+   if there is a single assumption matching the goal. Aborts if several assumptions match the goal.
+
+   We implement this behaviour to make sure we do not trigger spurious instantiations of meta-variables.
+-/
+def singleAssumptionTac : TacticM Unit := do
+  let dtree ← singleAssumptionTacPreprocess
+  singleAssumptionTacCore dtree
 
 elab "sassumption " : tactic => do singleAssumptionTac
 

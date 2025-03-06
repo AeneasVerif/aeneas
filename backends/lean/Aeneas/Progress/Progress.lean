@@ -407,6 +407,8 @@ def evalProgress (args : TSyntax `Aeneas.Progress.progressArgs) : TacticM Stats 
     else #[]
   trace[Progress] "User-provided ids: {ids}"
   let splitPost := true
+  /- Preprocessing step for `singleAssumptionTac` -/
+  let singleAssumptionTacDtree ← singleAssumptionTacPreprocess
   /- For scalarTac we have a fast track: if the goal is not a linear
      arithmetic goal, we skip (note that otherwise, scalarTac would try
      to prove a contradiction) -/
@@ -429,9 +431,7 @@ def evalProgress (args : TSyntax `Aeneas.Progress.progressArgs) : TacticM Stats 
   -- assumption matching the goal.
   let customAssumTac : TacticM Unit := do
     trace[Progress] "Attempting to solve with `singleAssumptionTac`"
-    -- TODO: unification sometimes raises a "maximum recursion depth reached" exception
-    -- and I don't know how to catch that
-    singleAssumptionTac
+    singleAssumptionTacCore singleAssumptionTacDtree
   let usedTheorem ← progressAsmsOrLookupTheorem keep withArg ids splitPost (
     withMainContext do
     trace[Progress] "trying to solve precondition: {← getMainGoal}"
