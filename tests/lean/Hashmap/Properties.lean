@@ -830,7 +830,7 @@ theorem move_elements_loop_spec
       simp_all
     . apply hEmpty
 termination_by slots.val.length - i.val
-decreasing_by scalar_decr_tac -- TODO: this is expensive
+decreasing_by scalar_decr_tac
 
 @[progress]
 theorem move_elements_spec

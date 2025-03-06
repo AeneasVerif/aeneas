@@ -8,11 +8,11 @@ import Aeneas.Natify
 import Aeneas.Progress
 import Aeneas.Range
 import Aeneas.Saturate
+import Aeneas.ScalarDecrTac
 import Aeneas.ScalarNF
 import Aeneas.ScalarTac
 import Aeneas.SimpLemmas
 import Aeneas.Std
 import Aeneas.Utils
-import Aeneas.Termination
 import Aeneas.Tests
 import Aeneas.Zify
