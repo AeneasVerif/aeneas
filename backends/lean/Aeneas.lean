@@ -14,4 +14,5 @@ import Aeneas.SimpLemmas
 import Aeneas.Std
 import Aeneas.Utils
 import Aeneas.Termination
+import Aeneas.Tests
 import Aeneas.Zify

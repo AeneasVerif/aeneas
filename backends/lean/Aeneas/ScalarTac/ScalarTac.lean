@@ -9,6 +9,27 @@ import Aeneas.Saturate
 
 namespace Aeneas
 
+theorem Nat.le_mul_le (a0 a1 b0 b1 : Nat) (h0 : a0 ≤ a1) (h2 : b0 ≤ b1) : a0 * b0 ≤ a1 * b1 := by
+  have := @Nat.mul_le_mul_left b0 b1 a0 (by assumption)
+  have := @Nat.mul_le_mul_right a0 a1 b1 (by assumption)
+  omega
+
+theorem Nat.lt_mul_lt (a0 a1 b0 b1 : Nat) (h0 : a0 < a1) (h2 : b0 < b1) : a0 * b0 < a1 * b1 := by
+  apply Nat.mul_lt_mul_of_lt_of_lt <;> assumption
+
+theorem Nat.le_mul_lt (a0 a1 b0 b1 : Nat) (h0 : a0 ≤ a1) (h1 : 0 < a1) (h2 : b0 < b1) : a0 * b0 < a1 * b1 := by
+  have := @Nat.mul_le_mul_right a0 a1 b0 (by assumption)
+  have := @Nat.mul_lt_mul_left a1 b0 b1 (by assumption)
+  omega
+
+theorem Nat.lt_mul_le (a0 a1 b0 b1 : Nat) (h0 : a0 < a1) (h1 : b0 ≤ b1) (h2 : 0 < b1) : a0 * b0 < a1 * b1 := by
+  have := @Nat.mul_lt_mul_right b1 a0 a1 (by assumption)
+  have := @Nat.mul_le_mul_left b0 b1 a0 (by assumption)
+  omega
+
+theorem Nat.zero_lt_mul (a0 a1 : Nat) (h0 : 0 < a0) (h1 : 0 < a1) : 0 < a0 * a1 := by simp [*]
+theorem Nat.mul_le_zero (a0 a1 : Nat) (h0 : a0 = 0) (h1 : a1 = 0) : a0 * a1 ≤ 0 := by simp [*]
+
 namespace ScalarTac
 
 open Utils
@@ -226,12 +247,7 @@ elab "scalar_tac_preprocess" config:Parser.Tactic.optConfig : tactic => do
   let config ← elabConfig config
   scalarTacPreprocess config
 
-/-- - `splitAllDisjs`: if true, also split all the matches/if then else in the context (note that
-      `omega` splits the *disjunctions*)
-    - `splitGoalConjs`: if true, split the goal if it is a conjunction so as to introduce one
-      subgoal per conjunction.
--/
-def scalarTac (config : Config) : Tactic.TacticM Unit := do
+def scalarTacCore (config : Config) : Tactic.TacticM Unit := do
   Tactic.withMainContext do
   Tactic.focus do
   let simpLemmas ← scalarTacSimpExt.getTheorems
@@ -244,23 +260,55 @@ def scalarTac (config : Config) : Tactic.TacticM Unit := do
   -- the goal. I think before leads to a smaller proof term?
   allGoalsNoRecover (scalarTacPreprocess config)
   allGoalsNoRecover do
-    try do
-      if config.split then do
-        trace[ScalarTac] "Splitting the goal"
-        /- If we split the `if then else` call `simp_all` again -/
-        splitAll do
-          allGoalsNoRecover
-            (Utils.simpAll {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 0} true
-              scalarTacSimpRocs [simpLemmas] [] [] [])
-          trace[ScalarTac] "Calling omega"
-          allGoalsNoRecover (Tactic.Omega.omegaTactic {})
-      else
+    if config.split then do
+      trace[ScalarTac] "Splitting the goal"
+      /- If we split the `if then else` call `simp_all` again -/
+      splitAll do
+        allGoalsNoRecover
+          (Utils.simpAll {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 0} true
+            scalarTacSimpRocs [simpLemmas] [] [] [])
         trace[ScalarTac] "Calling omega"
-        Tactic.Omega.omegaTactic {}
-    catch _ =>
-      let g ← Tactic.getMainGoal
-      throwError "scalar_tac failed to prove the goal below.\n\nNote that scalar_tac is almost equivalent to:\n  scalar_tac_preprocess; simp_all (maxDischargeDepth := 1) only; omega\n\nGoal: \n{g}"
+        allGoalsNoRecover (Tactic.Omega.omegaTactic {})
+    else
+      trace[ScalarTac] "Calling omega"
+      Tactic.Omega.omegaTactic {}
 
+/-- Tactic to solve arithmetic goals.
+
+    The `scalar_tac` tactic is designed to solve linear arithmetic problems (it calls `omega` under the hood),
+    but it can also solve a range of non-linear arithmetic problems when using the option `nonLin` (`scalar_tac +nonLin`).
+    In particular, if given a goal of the shape:
+    `a * b ≤ c * d`
+
+    where `a`, `b`, `c`, `d` are natural numbers, it will attempt to prove:
+    `a ≤ c ∧ b ≤ d`
+
+    This works also with strict inequalities.
+-/
+def scalarTac (config : Config) : TacticM Unit := do
+  Tactic.withMainContext do
+  let error : TacticM Unit := do
+    let g ← Tactic.getMainGoal
+    throwError "scalar_tac failed to prove the goal below.\n\nNote that scalar_tac is almost equivalent to:\n  scalar_tac_preprocess; simp_all (maxDischargeDepth := 1) only; omega\n\nGoal: \n{g}"
+  try
+    scalarTacCore config
+  catch _ =>
+    trace[ScalarTac] "The first call to `scalarTacCore` failed"
+    /- If the option `nonLin` is activated, attempt to decompose the goal -/
+    if config.nonLin then
+      trace[ScalarTac] "The `nonLin` option is `true`: attempting to decompose the goal"
+      -- Retry
+      try
+        let g ← getMainGoal
+        let trySolve (x : Name) : TacticM Unit := do
+          let goals ← g.apply (.const x [])
+          setGoals goals
+          allGoals (scalarTacCore config)
+        let tacs := List.map trySolve [``Nat.le_mul_le, ``Nat.lt_mul_lt, ``Nat.le_mul_lt, ``Nat.lt_mul_le]
+        firstTac tacs
+      catch _ => error
+    else
+      error
 example : True := by simp
 
 elab "scalar_tac" config:Parser.Tactic.optConfig : tactic => do
@@ -311,6 +359,22 @@ example (P : Nat → Prop) (z : Nat) (h : ∀ x, P x → x ≤ z) (y : Nat) (hy 
 -- Checking that we manage to split the cases/if then else
 example (x : Int) (b : Bool) (h : if b then x ≤ 0 else x ≤ 0) : x ≤ 0 := by
   scalar_tac +split
+
+/-!
+Checking some non-linear problems
+-/
+
+example (x y : Nat) (h0 : x ≤ 4) (h1 : y ≤ 5): x * y ≤ 4 * 5 := by
+  scalar_tac +nonLin
+
+example (x y : Nat) (h0 : x ≤ 4) (h1 : y < 5): x * y < 4 * 5 := by
+  scalar_tac +nonLin
+
+example (x y : Nat) (h0 : x < 4) (h1 : y < 5): x * y < 4 * 5 := by
+  scalar_tac +nonLin
+
+example (x y : Nat) (h0 : x < 4) (h1 : y ≤ 5): x * y < 4 * 5 := by
+  scalar_tac +nonLin
 
 end ScalarTac
 
