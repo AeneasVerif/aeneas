@@ -421,10 +421,14 @@ def evalProgress (args : TSyntax `Aeneas.Progress.progressArgs) : TacticM Stats 
     else
       throwError "Not a linear arithmetic goal"
   let simpLemmas ← Aeneas.ScalarTac.scalarTacSimpExt.getTheorems
+  let localAsms ← (← (← getLCtx).getDecls).filterMapM fun decl => do
+    if ← isProp decl.type then
+      pure (some decl.fvarId)
+    else pure none
   let simpTac : TacticM Unit := do
-    trace[Progress] "Attempting to solve with `simp`"
+    trace[Progress] "Attempting to solve with `simp [*]`"
     -- Simplify the goal
-    Utils.simpAt false {} [] [simpLemmas] [] [] [] (.targets #[] true)
+    Utils.simpAt false { maxDischargeDepth := 1 } [] [simpLemmas] [] [] localAsms (.targets #[] true)
     -- Raise an error if the goal is not proved
     allGoalsNoRecover (throwError "Goal not proved")
   -- We use our custom assumption tactic, which instantiates meta-variables only if there is a single
@@ -435,7 +439,7 @@ def evalProgress (args : TSyntax `Aeneas.Progress.progressArgs) : TacticM Stats 
   let usedTheorem ← progressAsmsOrLookupTheorem keep withArg ids splitPost (
     withMainContext do
     trace[Progress] "trying to solve precondition: {← getMainGoal}"
-    firstTac [customAssumTac, simpTac, scalarTac]
+    firstTac [customAssumTac, simpTac, simpTac, scalarTac]
     trace[Progress] "Precondition solved!")
   trace[Progress] "Progress done"
   return {
