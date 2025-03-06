@@ -1,120 +1,9 @@
 import Lean
-import Aeneas
+import Aeneas.Utils
+import Aeneas.Progress.Progress
 /- import Mathlib.Control.Sequence -/
 open Aeneas
 open Lean Meta Elab Tactic 
-
-namespace ExperimentingWithMatcher/- {{{ -/
-/- open Std.Format in -/ 
-def showMatcherApp(ma: MatcherApp): TacticM String := do
-  let showArray: Array Expr -> TacticM (Array Format) := Array.mapM (liftM ∘ ppExpr)
-  return (
-    s!"matcherName: \n\t{ma.matcherName}\n" ++
-    s!"matcherLevels: \n\t{ma.matcherLevels}\n" ++
-    s!"uElimPos: \n\t{ma.uElimPos?}\n" ++
-    s!"discrInfos: \n\t{<- ma.discrInfos.mapM (pure $ ·.hName?)}\n" ++
-    s!"params: \n\t{<- showArray ma.params}\n" ++
-    s!"motive: \n\t{<- ppExpr ma.motive}\n" ++
-    s!"discrs: \n\t{<- showArray ma.discrs}\n" ++ 
-    s!"alts: \n\t{<- showArray ma.alts}\n" ++ 
-    s!"altNumParams: \n\t{ma.altNumParams}\n" ++ 
-    s!"remaining: \n\t{<- showArray ma.remaining}\n"
-  )
-
-elab tac:"uut" stx:term : tactic => do 
-    let e <- elabTerm stx.raw none
-    if let some ma ← Lean.Meta.matchMatcherApp? e then
-      withRef tac <|
-        logInfo s!"{<- showMatcherApp ma}"
-    if e.isIte || e.isDIte then
-      logInfo s!"{if e.isDIte then "d" else ""}ite!"
-      let #[_ty, cond, _dec, brThen, brElse] := e.getAppArgs
-        | throwError "Expected 5 arguments, got {e.getAppArgs}"
-      logInfo s!"cond: {<- ppExpr <| <- inferType cond} {<- ppExpr cond}"
-      logInfo s!"brThen: {<- ppExpr <| <- inferType brThen} {<- ppExpr brThen}"
-      logInfo s!"brElse: {<- ppExpr <| <- inferType brElse} {<- ppExpr brElse}"
-    pure ()
-
-
-inductive IndTy where
-  | Single : IndTy
-  | Pair   : Nat × Nat -> IndTy
-  | Arr    : (Nat -> Nat) -> IndTy
-  | Sum    : (Option Nat) -> IndTy
-  | Rec    : IndTy -> IndTy
-
-example
-  {α}
-  (x y z: IndTy)
-  (xs ys zs: List IndTy)
-  (αs βs γs: List α)
-: 1 = 0 
-:= by
-  uut match x with 
-    | .Single       => 1
-    | .Pair (a,b)   => 2
-    | .Arr k        => 3
-    | .Sum (some _) => 4
-    | .Sum (none)   => 5
-    | .Rec i        => 6
-
-  uut match x with 
-    | .Single      
-    | .Pair (a,b)   
-    | .Arr k     
-    | .Sum (some _) 
-    | .Sum (none)
-    | .Rec i        => 6
-
-  uut match x with
-    | .Single => true
-    | _ =>  false
-
-  uut match h: x with
-    | .Single => true
-    | _ =>  false
-
-  uut match x, y with 
-    | .Single, _ => true
-    | _, _ =>  false
-
-  uut match x with
-    | .Rec (.Rec (.Rec x))
-    | .Rec (.Rec x)
-    | .Rec x
-    | x => match x with
-      | .Rec (.Rec (.Rec x))
-      | .Rec (.Rec x)
-      | .Rec x => 10
-      | x => 0
-  uut match xs with
-    | x :: xs => 1
-    | _ => 0
-
-  uut match αs with
-    | x :: xs => 0
-    | _ => 1
-
-  uut match αs with
-    | x :: xs => fun y => 0
-    | _ => sorry
-
-  uut if true then
-      10
-    else 30
-
-  uut if h:true then
-      h
-    else rfl
-
-  uut if h: 10 > 0 then
-    sorry
-  else 
-    sorry
-
-  sorry
-end ExperimentingWithMatcher/- }}} -/
-
 
 -- TODO: Merge with Aeneas.Diverge.Elab.isCasesExpr
 def isCasesExpr [Monad m] [MonadEnv m](e : Expr) : m Bool := do
@@ -236,70 +125,56 @@ def Info.ofExpr(e: Expr): MetaM (Option Info) := do
 
 end Bifurcation/- }}} -/
 
-namespace Testing/- {{{ -/
-elab "getBfInfo" stx:term : tactic => do
-  withRef stx do
-    let e <- elabTerm stx.raw none
-    logInfo m!"{<- Bifurcation.Info.ofExpr e}"
 
-example(x y z: ExperimentingWithMatcher.IndTy) 
-  (n m : Nat)
-: 1 = 0 := by
-  getBfInfo (if m > 10 then 0 else 1) -- FAILS
-  getBfInfo (if h: m > 10 then 0 else 1) -- FAILS
-  getBfInfo (if (match x with | .Rec _ => true | _ => false) then 0 else 1)
-  getBfInfo (@Nat.casesOn (λ _ => Nat) 10 (10) (· + 10))
-
-  sorry
-end Testing/- }}} -/
-
-inductive ProofShape where
+inductive ProgramShape where
   | result (curr: Expr)
-  | bifur  (bfInfo: Bifurcation.Info): ProofShape
-  | bind   (curr cont: Expr): ProofShape
+  | bifur  (bfInfo: Bifurcation.Info): ProgramShape
+  | bind   (curr cont: Expr): ProgramShape
 
-def ProofShape.ofExpr (e: Expr)
+namespace ProgramShape /- {{{ -/
+def ofExpr (e: Expr)
 [Monad m] [MonadError m] [MonadLiftT MetaM m]
-: m ProofShape := do
+: m ProgramShape := do
   let e <- (Utils.normalizeLetBindings e)
   if let .const ``Bind.bind .. := e.getAppFn then
     -- Bind.bind {m : Type u → Type v} [self : Bind m] {α β : Type u} : m α → (α → m β) → m β
     let #[_m, _self, _α, _β, value, cont] := e.getAppArgs
       | throwError s!"Expected bind to have 4 arguments, found {<- e.getAppArgs.mapM (liftM ∘ ppExpr)}"
-    return ProofShape.bind value cont
+    return ProgramShape.bind value cont
   else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
     return bifur bfInfo
   else
-    return ProofShape.result e
+    return ProgramShape.result e
 
 partial 
-def ProofShape.fold {α} [Monad m] [MonadError m] [Nonempty (m α)]
+def fold {α} [Monad m] [MonadError m] [Nonempty (m α)]
   [MonadLiftT MetaM m] [MonadControlT MetaM m] 
   (onResult: Expr -> m α)
   (onBind: Expr -> Name -> m α -> m α)
   (onBif: Bifurcation.Info -> Array (Array Name × m α) -> m α)
-: ProofShape -> m α
+: ProgramShape -> m α
 | result expr => onResult expr
 | bind curr cont => do 
   Utils.lambdaOne cont fun x body => do
     let name? ← x.fvarId!.getUserName
     let contVal: m α := do
-      let shape <- ProofShape.ofExpr body
-      ProofShape.fold onResult onBind onBif shape
+      let shape <- ProgramShape.ofExpr body
+      ProgramShape.fold onResult onBind onBif shape
     onBind curr name? contVal
 | bifur bfInfo => do
     let contsTaggedVals <- 
       bfInfo.branches.mapM fun br => do
         Utils.lambdaTelescopeN br.toExpr br.numArgs fun xs body => do
-          let shape ← ProofShape.ofExpr body
+          let shape ← ProgramShape.ofExpr body
           let names ← xs.mapM (·.fvarId!.getUserName)
-          let other := ProofShape.fold onResult onBind onBif shape
+          let other := ProgramShape.fold onResult onBind onBif shape
           return (names, other)
     onBif bfInfo contsTaggedVals
+end ProgramShape/- }}} -/
 
 section Testing/- {{{ -/
 partial
-def ProofShape.show(shape: ProofShape): MetaM Format :=
+def ProgramShape.show(shape: ProgramShape): MetaM Format :=
   shape.fold onResult onBind onBif
 where
   onResult expr := 
@@ -328,7 +203,7 @@ where
       
 elab "uut2" stx:term : tactic => do
   let e <- elabTerm stx none
-  let shape <- ProofShape.ofExpr e
+  let shape <- ProgramShape.ofExpr e
   withRef stx <| logInfo s!"{<- shape.show}"
 
 set_option linter.unusedTactic false in
@@ -376,31 +251,18 @@ example
   sorry
 end Testing/- }}} -/
 
-#check Syntax.node
-
 open Lean.Parser.Tactic in
 partial
-def namingThingsIsHard(program: Expr): TacticM (TSyntax `tactic) := 
+def namingThingsIsHard(program: Expr): TacticM (Array Syntax.Tactic) := 
 withoutModifyingState do
-  let shape ← ProofShape.ofExpr program
+  let shape ← ProgramShape.ofExpr program
   shape.fold onResult onBind onBif
 where
-  endOfProcessing := do 
-    let tacs ← `(tactic| sorry;)
-    match tacs.raw with
-    | Syntax.node ni k #[Syntax.node ni2 `null args] =>
-      return {raw := Syntax.node ni k #[Syntax.node ni2 `null args.pop]}
-    | _ => return {raw:=tacs.raw}
-  pushToTacList (tac tacSeq: TSyntax `tactic) := do
-      match tacSeq.raw with
-      | Syntax.node ni k #[Syntax.node ni2 `null args] =>
-        return {raw := Syntax.node ni k #[Syntax.node ni2 `null ⟨tac :: args.toList⟩]}
-      | _ => 
-        logInfo s!"Didn't expect to get here..."
-        return {raw:=tacSeq.raw}
+  endOfProcessing: TacticM (Array Syntax.Tactic) := do return #[←`(tactic| skip)]
 
-  onResult expr := endOfProcessing
-  onBind curr name? processRest := do
+  onResult _expr := endOfProcessing
+
+  onBind _curr _name? processRest := do
     let canMakeProgress ← do
       try
         Progress.evalProgress none none #[] *> pure true
@@ -408,45 +270,51 @@ where
     if canMakeProgress then
       let tacs ← processRest
       let curr ← `(tactic| progress)
-      pushToTacList curr tacs
-    else 
-      endOfProcessing
-  onBif bfInfo toBeProcessed:= do
-    Tactic.evalSplit mkNullNode
-    let goals ← getUnsolvedGoals
-    if toBeProcessed.size != goals.length then
-      throwError s!"Expected {toBeProcessed.size} got {goals.length}"
-    for ((names?,processBranch), goal) in toBeProcessed.toList.zip goals do
-      setGoals [goal]
-      let tacs ← processBranch
+      return #[curr] ++ tacs -- TODO: Optimize
+    else endOfProcessing
 
+  onBif _bfInfo _toBeProcessed := do
+    -- Split the goal in two according to bfInfo
+    -- Proceed with the processing on each branch.
+    -- We probably need to reset the state after every branch.
+    throwError "Not yet implemented!"
+    /- Tactic.evalSplit mkNullNode -/
+    /- let goals ← getUnsolvedGoals -/
+    /- if toBeProcessed.size != goals.length then -/
+    /-   throwError s!"Expected {toBeProcessed.size} got {goals.length}" -/
+    /- for ((names?,processBranch), goal) in toBeProcessed.toList.zip goals do -/
+    /-   setGoals [goal] -/
+    /-   let tacs ← processBranch -/
+    /-   pure () -/
 
+-- TODO: Move to Utils
+/-- Given ty := ∀ xs.., ∃ zs.., program = res ∧ post?, destruct and run continuation -/
+def progressSpecTelescope(ty: Expr)
+  (k: (xs:Array MVarId) → (zs:Array FVarId) → (program:Expr) → (res:Expr) → (post:Option Expr) → TacticM α)
+: TacticM α := do
+  unless ←isDefEq (←inferType ty) (mkSort 0) do
+    throwError "Expected a proposition, got {←inferType ty}"
+  let ty ← Utils.normalizeLetBindings ty
+  -- ty := ∀ xs, ty₂
+  let (xs, _xs_bi, ty₂) ← forallMetaTelescope ty.consumeMData
+  -- ty₂ := ∃ zs, ty₃ ≃ Exists {α} (fun zs => ty₃)
+  Utils.existsTelescope ty₂ fun zs ty₃ => do
+    -- ty₃ := ty₄ ∧ post?
+    let (ty₄, post?) ← Utils.optSplitConj ty₃
+    -- ty₄ := ty₅ = res
+    let (program, res) ← Utils.destEq ty₄
+    k (xs.map (·.mvarId!)) (zs.map (·.fvarId!)) program res post?
 
-      pure ()
-
-    sorry
 
 def evalProgressStar: TacticM Unit := do
   withMainContext do
-    let goal <- getMainTarget
-    let suggestion ← namingThingsIsHard sorry
-    -- tacticSeq1Indented
-    TryThis.addSuggestion (←getRef) (TryThis.SuggestionText.tsyntax suggestion)
-    pure ()
+    let goalTy <- getMainTarget
+    progressSpecTelescope goalTy fun _xs _zs prog _res _post? => do
+      trace[ProgressStar] s!"{← ppExpr prog}"
+      let tacs ← namingThingsIsHard prog
+      let suggestion ← `(tacticSeq| $(tacs)*)
+      TryThis.addSuggestion (←getRef) (TryThis.SuggestionText.tsyntax suggestion)
+      pure ()
 
 
 elab tk:"progressStar" : tactic => do withRef tk <| evalProgressStar
-
-open Lean.Parser.Tactic in 
-elab rf:"print" tacs:tacticSeq1Indented : tactic => do 
-  withRef rf <| logInfo s!"{repr tacs}"
-  TryThis.addSuggestion (←getRef) (TryThis.SuggestionText.tsyntax tacs)
-
-example : 1 = 0 := by
-  /- progressStar -/
-  print sorry
-  case _ => sorry
-  print
-    · progress
-      progress
-      progress
