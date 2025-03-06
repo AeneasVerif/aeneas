@@ -19,28 +19,7 @@ namespace Aeneas.Bvify
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 open Arith Std
 
-attribute [bvify_simps] ge_iff_le gt_iff_lt decide_eq_true_eq massert_ok
-
-attribute [bvify_simps]
-  UScalar.BitVec_ofNat_val_eq
-  U8.BitVec_ofNat_val_eq U16.BitVec_ofNat_val_eq U32.BitVec_ofNat_val_eq
-  U64.BitVec_ofNat_val_eq U128.BitVec_ofNat_val_eq Usize.BitVec_ofNat_val_eq
-  U8.lt_succ_max U16.lt_succ_max U32.lt_succ_max U64.lt_succ_max U128.lt_succ_max
-  U8.le_max U16.le_max U32.le_max U64.le_max U128.le_max
-
-attribute [bvify_simps]
-  U8.eq_equiv_bv_eq U16.eq_equiv_bv_eq U32.eq_equiv_bv_eq U64.eq_equiv_bv_eq U128.eq_equiv_bv_eq Usize.eq_equiv_bv_eq
-  I8.eq_equiv_bv_eq I16.eq_equiv_bv_eq I32.eq_equiv_bv_eq I64.eq_equiv_bv_eq I128.eq_equiv_bv_eq Isize.eq_equiv_bv_eq
-  U8.wrapping_add_bv_eq U16.wrapping_add_bv_eq U32.wrapping_add_bv_eq U64.wrapping_add_bv_eq U128.wrapping_add_bv_eq Usize.wrapping_add_bv_eq
-  I8.wrapping_add_bv_eq I16.wrapping_add_bv_eq I32.wrapping_add_bv_eq I64.wrapping_add_bv_eq I128.wrapping_add_bv_eq Isize.wrapping_add_bv_eq
-  U8.wrapping_sub_bv_eq U16.wrapping_sub_bv_eq U32.wrapping_sub_bv_eq U64.wrapping_sub_bv_eq U128.wrapping_sub_bv_eq Usize.wrapping_sub_bv_eq
-  I8.wrapping_sub_bv_eq I16.wrapping_sub_bv_eq I32.wrapping_sub_bv_eq I64.wrapping_sub_bv_eq I128.wrapping_sub_bv_eq Isize.wrapping_sub_bv_eq
-  UScalarTy.U8_numBits_eq UScalarTy.U16_numBits_eq UScalarTy.U32_numBits_eq UScalarTy.U64_numBits_eq UScalarTy.U128_numBits_eq UScalarTy.Usize_numBits_eq
-  IScalarTy.I8_numBits_eq IScalarTy.I16_numBits_eq IScalarTy.I32_numBits_eq IScalarTy.I64_numBits_eq IScalarTy.I128_numBits_eq IScalarTy.Isize_numBits_eq
-  U8.ofNat_bv U16.ofNat_bv U32.ofNat_bv U64.ofNat_bv U128.ofNat_bv Usize.ofNat_bv
-  I8.ofInt_bv I16.ofInt_bv I32.ofInt_bv I64.ofInt_bv I128.ofInt_bv Isize.ofInt_bv
-  UScalar.ofNat_val_eq IScalar.toNat IScalar.ofInt_val_eq
-  UScalar.bv_and UScalar.bv_or IScalar.bv_and IScalar.bv_or
+attribute [bvify_simps] ge_iff_le gt_iff_lt decide_eq_true_eq
 
 /-!
 Some theorems which automatically lift comparisons between machine scalars, without needing the bitwise to be provided by the user.
