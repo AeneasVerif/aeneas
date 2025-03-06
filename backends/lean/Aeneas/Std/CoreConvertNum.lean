@@ -2,8 +2,8 @@ import Lean
 import Lean.Meta.Tactic.Simp
 import Init.Data.List.Basic
 import Mathlib.Tactic.Linarith
-import Aeneas.Std.Scalar
-import Aeneas.Std.ScalarNotations
+import Aeneas.Std.Scalar.Core
+import Aeneas.Std.Scalar.Notations
 import Aeneas.Std.Array.Array
 import Aeneas.ScalarTac
 import Aeneas.Progress.Core
