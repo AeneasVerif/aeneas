@@ -42,18 +42,20 @@ inductive Kind where
   | dite
   /-- A matcher or cases bifurcation, of name `name` -/
   | matcher (name: Name)
-instance: ToMessageData Kind where
-  toMessageData 
-  | .ite => m!"ite"
-  | .dite => m!"dite"
-  | .matcher name => m!"matcher {name}"
+  deriving Repr
+instance: ToString Kind where
+  toString
+  | .ite => "ite"
+  | .dite => "dite"
+  | .matcher name => s!"matcher {name}"
+instance: ToMessageData Kind where toMessageData k := toString k
 
 structure Info where
   /-- The kind of bifurcation -/
   kind: Kind
 
   /-- The information on discriminants of the bifurcation -/
-  discr: Array Discr
+  discrs: Array Discr
 
   /-- The information on the branches of the bifurcation -/
   branches: Array Branch
@@ -68,8 +70,8 @@ structure Info where
   /-params: Array Expr -/
 instance: ToMessageData Info where
   toMessageData 
-  | {kind, discr,branches} =>
-    let discr := MessageData.ofArray <| discr.map (ToMessageData.toMessageData)
+  | {kind, discrs,branches} =>
+    let discr := MessageData.ofArray <| discrs.map (ToMessageData.toMessageData)
     let branches := MessageData.ofArray <| branches.map (ToMessageData.toMessageData)
     m!"(info {kind} {discr} {branches})"
 
@@ -80,7 +82,7 @@ def Info.ofExpr(e: Expr): MetaM (Option Info) := do
       | throwError "Wrong number of parameters for {e.getAppFn}: {e.getAppArgs}"
     return some {
       kind := .ite
-      discr := #[ {toExpr := cond} ]
+      discrs := #[ {toExpr := cond} ]
       branches  := #[
         {
           toExpr := brThen,
@@ -97,7 +99,7 @@ def Info.ofExpr(e: Expr): MetaM (Option Info) := do
       | throwError "Wrong number of parameters for {e.getAppFn}: {e.getAppArgs}"
     return some {
       kind := .dite
-      discr := #[ {toExpr := cond, name? := none} ]
+      discrs := #[ {toExpr := cond, name? := none} ]
       -- TODO: I should be able to retrieve the name given to
       --  the condition of a dite.
       branches  := #[
@@ -114,7 +116,7 @@ def Info.ofExpr(e: Expr): MetaM (Option Info) := do
   else if let some ma ← Meta.matchMatcherApp? e (alsoCasesOn := true) then
     return some {
       kind := .matcher ma.matcherName
-      discr := ma.discrs.zip ma.discrInfos 
+      discrs := ma.discrs.zip ma.discrInfos 
         |>.map fun (toExpr, discrInfo) => {toExpr, name? := discrInfo.hName?}
       branches := ma.alts.zip ma.altNumParams 
         |>.map fun (toExpr, numArgs) => {toExpr, numArgs}
@@ -174,7 +176,7 @@ end ProgramShape/- }}} -/
 
 section Testing/- {{{ -/
 partial
-def ProgramShape.show(shape: ProgramShape): MetaM Format :=
+def ProgramShape.format(shape: ProgramShape): MetaM Format :=
   shape.fold onResult onBind onBif
 where
   onResult expr := 
@@ -186,7 +188,7 @@ where
       let name? := match bfInfo.kind with
         |.matcher name => s!"({name}) "
         | _ => ""
-      let ppDiscr: Array Format ← bfInfo.discr
+      let ppDiscr: Array Format ← bfInfo.discrs
         |>.mapM fun d => do
           let ppName? := if let some name := d.name? then name.toString ++ ": " else ""
           let ppDiscr ← ppExpr d.toExpr
@@ -204,7 +206,7 @@ where
 elab "uut2" stx:term : tactic => do
   let e <- elabTerm stx none
   let shape <- ProgramShape.ofExpr e
-  withRef stx <| logInfo s!"{<- shape.show}"
+  withRef stx <| logInfo s!"{<- shape.format}"
 
 set_option linter.unusedTactic false in
 example 
@@ -251,41 +253,50 @@ example
   sorry
 end Testing/- }}} -/
 
+deriving instance Repr for LocalDecl
 open Lean.Parser.Tactic in
 partial
-def namingThingsIsHard(program: Expr): TacticM (Array Syntax.Tactic) := 
+def generateSuggestionScript(program: Expr): TacticM (Array Syntax.Tactic) := 
 withoutModifyingState do
+  trace[ProgressStar] s!"Generating suggestion script for {← ppExpr program}"
   let shape ← ProgramShape.ofExpr program
+  trace[ProgressStar] s!"Shape of the program: {←shape.format}"
   shape.fold onResult onBind onBif
 where
   endOfProcessing: TacticM (Array Syntax.Tactic) := do return #[←`(tactic| skip)]
 
-  onResult _expr := endOfProcessing
+  onResult _expr := do
+    trace[ProgressStar] s!"onResult: encountered {←ppExpr _expr}"
+    endOfProcessing
 
   onBind _curr _name? processRest := do
+    trace[ProgressStar] s!"onBind: encountered {←ppExpr _curr}"
     let canMakeProgress ← do
       try
         Progress.evalProgress none none #[] *> pure true
       catch _ => pure false
     if canMakeProgress then
+      trace[ProgressStar] s!"onBind: Can make progress!"
       let tacs ← processRest
       let curr ← `(tactic| progress)
       return #[curr] ++ tacs -- TODO: Optimize
     else endOfProcessing
 
-  onBif _bfInfo _toBeProcessed := do
-    -- Split the goal in two according to bfInfo
-    -- Proceed with the processing on each branch.
-    -- We probably need to reset the state after every branch.
-    throwError "Not yet implemented!"
-    /- Tactic.evalSplit mkNullNode -/
-    /- let goals ← getUnsolvedGoals -/
-    /- if toBeProcessed.size != goals.length then -/
-    /-   throwError s!"Expected {toBeProcessed.size} got {goals.length}" -/
-    /- for ((names?,processBranch), goal) in toBeProcessed.toList.zip goals do -/
-    /-   setGoals [goal] -/
-    /-   let tacs ← processBranch -/
-    /-   pure () -/
+  onBif bfInfo _toBeProcessed := do
+    trace[ProgressStar] s!"onBif: encountered {bfInfo.kind}"
+    let discrs ← bfInfo.discrs.mapM fun d => do
+      let name := d.name?.getD <| ← mkFreshBinderNameForTactic `_
+      trace[ProgressStar] s!"onBif: discriminant {name}: {←ppExpr d.toExpr}"
+      return (name, .default, λ _ => pure d.toExpr)
+    withLocalDecls discrs fun discrs => do
+      let mut subgoalNames := #[]
+      for discr in discrs do
+        let decl ← discr.fvarId!.getDecl
+        trace[ProgressStar] s!"onBif: {repr decl}"
+        for goal in ←getUnsolvedGoals do
+          subgoalNames :=  subgoalNames ++ (←goal.cases discr.fvarId!)
+          trace[ProgressStar] s!"onBif: subgoals {subgoalNames.map (·.ctorName)}"
+    endOfProcessing
 
 -- TODO: Move to Utils
 /-- Given ty := ∀ xs.., ∃ zs.., program = res ∧ post?, destruct and run continuation -/
@@ -310,8 +321,7 @@ def evalProgressStar: TacticM Unit := do
   withMainContext do
     let goalTy <- getMainTarget
     progressSpecTelescope goalTy fun _xs _zs prog _res _post? => do
-      trace[ProgressStar] s!"{← ppExpr prog}"
-      let tacs ← namingThingsIsHard prog
+      let tacs ← generateSuggestionScript prog
       let suggestion ← `(tacticSeq| $(tacs)*)
       TryThis.addSuggestion (←getRef) (TryThis.SuggestionText.tsyntax suggestion)
       pure ()
