@@ -19,7 +19,7 @@ partial def getn : TacticM Expr := do
   let mgoal ← getMainGoal
   let goalTy ← instantiateMVars (← mgoal.getType)
   let raiseError : TacticM Expr :=
-    throwError "The goal doesn't have the proper shape: expected a proposition only involving (in-)equalities between bitvectors"
+    throwError "Could not infer the bitwidth to use by from the goal, please provide it explicitly with the syntax: `bv_tac n`"
   let fromBitVecTy (ty : Expr) : TacticM Expr :=
     ty.consumeMData.withApp fun f args => do
     trace[BvTac] "fromBitVecTy: {f}, {args}"
@@ -45,7 +45,7 @@ partial def getn : TacticM Expr := do
       raiseError
   aux goalTy
 
-partial def bvTacPreprocess : TacticM Unit := do
+partial def bvTacPreprocess (n : Option Expr): TacticM Unit := do
   Elab.Tactic.focus do
   trace[BvTac] "Original goal: {← getMainGoal}"
   /- First try simplifying the goal - if it is an (in-)equality between scalars, it may get
@@ -56,8 +56,11 @@ partial def bvTacPreprocess : TacticM Unit := do
      into account) -/
   allGoals do
     trace[BvTac] "Goal after `bvifyTacSimp`: {← getMainGoal}"
-    /- Figure out the bitwith -/
-    let n ← getn
+    /- Figure out the bitwidth if the user didn't provide it -/
+    let n ← do
+      match n with
+      | some n => pure n
+      | none => getn
     /- Then apply bvify -/
     bvifyTac n Utils.Location.wildcard
     trace[BvTac] "Goal after `bvifyTac`: {← getMainGoal}"
@@ -77,8 +80,13 @@ partial def bvTacPreprocess : TacticM Unit := do
     allGoals do
     trace[BvTac] "Goal after `simp_all`: {← getMainGoal}"
 
-elab "bv_tac_preprocess" : tactic =>
-  bvTacPreprocess
+def optElabTerm (e : Option (TSyntax `term)) : TacticM (Option Expr) := do
+  match e with
+  | none => pure none
+  | some e => pure (some (← Lean.Elab.Tactic.elabTerm e none))
+
+elab "bv_tac_preprocess" n:(term)? : tactic => do
+  bvTacPreprocess (← optElabTerm n)
 
 open Lean.Elab.Tactic.BVDecide.Frontend Lean.Elab in
 /--
@@ -87,11 +95,11 @@ open Lean.Elab.Tactic.BVDecide.Frontend Lean.Elab in
   Calling `bv_tac` is equivalent to:
   `bv_tac_preprocess; bv_tac`
 -/
-elab "bv_tac" cfg:Parser.Tactic.optConfig : tactic =>
+elab "bv_tac" cfg:Parser.Tactic.optConfig n:(term)? : tactic =>
   withMainContext do
   Tactic.focus do
   -- Preprocess
-  bvTacPreprocess
+  bvTacPreprocess (← optElabTerm n)
   -- The preprocessing step may have proven the goal
   allGoals do
   -- Call bv_decide
@@ -178,6 +186,25 @@ example
   (h : (↑a : ℕ) < 6658 ∧ (↑b : ℕ) = 3329)
   (_ : ¬c2 = 0#u32) :
   c2 = 65535#u32
+  := by
+  bv_tac
+
+example
+  (a : U32)
+  (b : U32)
+  (h0 : (↑a : ℕ) ≤ 6658)
+  (ha : (↑a : ℕ) < (↑b : ℕ) + 3329)
+  (hb : (↑b : ℕ) ≤ 3329)
+  (c1 : U32)
+  (hc1 : c1 = core.num.U32.wrapping_sub a b)
+  (c2 : U32)
+  (hc2 : c2.bv = c1.bv >>> 16)
+  (c3 : U32)
+  (hc3_1 : (↑c3 : ℕ) = (↑(3329#u32 &&& c2) : ℕ))
+  (_ : c3.bv = 3329#32 &&& c2.bv)
+  (c4 : U32)
+  (hc3 : c4 = core.num.U32.wrapping_add c1 c3) :
+  c4.bv % 3329#32 = (a.bv + 3329#32 - b.bv) % 3329#32 ∧ c4.bv < 3329#32
   := by
   bv_tac
 
