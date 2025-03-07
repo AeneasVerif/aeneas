@@ -547,9 +547,11 @@ example (x y z w : Int) (h0 : x < y) (_ : x < w) (h1 : y < z) : x < z := by
   apply h0
   sassumption
 
--- Tactic to split on a disjunction.
--- The expression `h` should be an fvar.
--- TODO: there must be simpler. Use use _root_.Lean.MVarId.cases for instance
+/- Tactic to split on a disjunction.
+   The expression `h` should be an fvar.
+
+   TODO: there must be simpler. Use use _root_.Lean.MVarId.cases for instance.
+   On the other hand this tactic is a good reference for this kind of manipulations. -/
 def splitDisjTac (h : Expr) (kleft kright : TacticM Unit) : TacticM Unit := do
   trace[Utils] "assumption on which to split: {h}"
   -- Retrieve the main goal
@@ -1085,7 +1087,7 @@ example (x y : Int) : True := by
   dcases h: x = y <;> simp
 
 /-- Inspired by the `clear` tactic -/
-def clearFvarIds (fvarIds : Array FVarId) : TacticM Unit := do
+def clearFVarIds (fvarIds : Array FVarId) : TacticM Unit := do
   let fvarIds ← withMainContext <| sortFVarIds fvarIds
   for fvarId in fvarIds.reverse do
     withMainContext do
@@ -1169,7 +1171,7 @@ partial def minimizeGoal : TacticM Unit := do
   let allIds ← getFVarIdsAt (← getMainGoal)
   trace[Utils] "All context ids: {← allIds.mapM (fun x => x.getUserName)}"
   let allIds := allIds.filter (fun x => x ∉ neededIds)
-  clearFvarIds allIds
+  clearFVarIds allIds
 
 elab "minimize_goal" : tactic => do
   withMainContext do
@@ -1240,12 +1242,13 @@ elab ref:"extract_goal0" full:"full"? : tactic => do
   withMainContext do
   extractGoal ref full.isSome
 
-syntax "extract_goal" ("full")? : tactic
+-- TODO: actually there already exists `extract_goal` in the standard library
+syntax "extract_goal1" ("full")? : tactic
 
 macro_rules
-| `(tactic|extract_goal) =>
+| `(tactic|extract_goal1) =>
   `(tactic|set_option pp.coercions.types true in extract_goal0)
-| `(tactic|extract_goal full) =>
+| `(tactic|extract_goal1 full) =>
   `(tactic|set_option pp.coercions.types true in extract_goal0 full)
 
 /--
@@ -1260,7 +1263,7 @@ info: example
 #guard_msgs in
 set_option linter.unusedVariables false in
 example (x x y : Nat) (h : x ≤ y) (h : y ≤ y) : x ≤ y := by
-  extract_goal
+  extract_goal1
   omega
 
 /--
@@ -1273,7 +1276,7 @@ info: example
 -/
 #guard_msgs in
 example (x : Nat) (y : Nat) (_ : Nat) (h : x ≤ y) : y ≥ x := by
-  extract_goal
+  extract_goal1
   omega
 
 -- TODO: why do we have x✝?
@@ -1306,7 +1309,7 @@ example
   (_ : v1.length = v.length) :
   v1.length = v.length
   := by
-  extract_goal
+  extract_goal1
   simp [*]
 
 /--
@@ -1323,7 +1326,7 @@ example (i : Nat) (h : i ≤ 7) :
   let j := i
   j ≤ 7 := by
   intro j
-  extract_goal
+  extract_goal1
   apply h
 
 /-- Introduce an auxiliary assertion for the goal -/
@@ -1677,6 +1680,59 @@ def mkProdsMatchOrUnit (xl : List Expr) (out : Expr) : MetaM Expr :=
   else
     mkProdsMatch xl out
 
+/-- Duplicate the assumptions (of type prop) in the context.
+    This is useful if we want to perform non-destructive simplifications, for instance when
+    converting between different views (i.e., doing something like what `natify` or `zify` does).
+
+    We return the pair: (original assumptions, new assumptions)
+-/
+def duplicateAssumptions (toDuplicate : Option (Array FVarId) := none) :
+  TacticM (Array FVarId × Array FVarId) :=
+  withMainContext do
+  let decls ← do
+    match toDuplicate with
+    | none => pure (← (← getLCtx).getDecls).toArray
+    | some decls => do decls.mapM fun d => d.getDecl
+  let props ← decls.filterM (fun d => do pure (← inferType d.type).isProp)
+  trace[Utils] "Current assumptions: {props.map LocalDecl.type}"
+  let goal ← getMainGoal
+  let goalType ← instantiateMVars (← goal.getType)
+  let goalName ← goal.getTag
+  let newProps ← props.mapM fun d => do
+    withMainContext do
+    withLocalDeclD (.str d.userName "_") d.type fun var => do
+    -- The new goal
+    let mgoal ← mkFreshExprSyntheticOpaqueMVar goalType (tag := goalName)
+    -- Assign the current goal and replace it with the new goal
+    let currentGoal ← getMainGoal
+    let e ← mkLambdaFVars #[var] mgoal
+    let e := mkApp e (.fvar d.fvarId)
+    currentGoal.assign e
+    --currentGoal.assign (.letE d.userName d.type (.fvar d.fvarId) mgoal false)
+    replaceMainGoal [mgoal.mvarId!]
+    pure var.fvarId!
+  pure (props.map LocalDecl.fvarId, newProps)
+
+elab "duplicate_assumptions" : tactic => do
+  let _ ← duplicateAssumptions
+
+/--
+info: example
+  (a : Nat)
+  (b : Nat)
+  (h0 : a < b)
+  (h1 : b ≤ 1024)
+  (h0._ : a < b)
+  (h1._ : b ≤ 1024) :
+  b ≤ 1024
+  := by sorry
+-/
+#guard_msgs in
+set_option linter.unusedTactic false in
+example (a b : Nat) (h0 : a < b) (h1 : b ≤ 1024) : b ≤ 1024 := by
+  duplicate_assumptions
+  extract_goal1 full
+  assumption
 
 end Utils
 

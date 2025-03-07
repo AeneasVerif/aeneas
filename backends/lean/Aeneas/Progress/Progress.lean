@@ -725,7 +725,7 @@ namespace Test
         ok c' ∧ c'.bv = c.bv >>> 16
     := by
     progress as ⟨ c', hc' ⟩ -- we have: `hc' : c'.bv = c.bv >>> 16`
-    extract_goal
+    extract_goal1
     fsimp [hc']
 
 

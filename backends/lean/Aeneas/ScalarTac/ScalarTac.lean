@@ -150,7 +150,7 @@ def scalarTacSaturateForward (fast : Bool) (nonLin : Bool): Tactic.TacticM Unit 
     else ruleSets
   -- TODO
   -- evalAesopSaturate options ruleSets.toArray
-  Saturate.evalSaturate fast ruleSets
+  let _ ← Saturate.evalSaturate fast none ruleSets
 
 -- For debugging
 elab "scalar_tac_saturate" config:Parser.Tactic.optConfig : tactic => do
@@ -178,7 +178,8 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
   /- First get rid of [ofInt] (if there are dependent arguments, we may not
      manage to simplify the context) -/
   trace[ScalarTac] "Original goal before preprocessing: {← getMainGoal}"
-  Utils.simpAt true {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 0}
+  tryTac do
+    Utils.simpAt true {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 0}
                 -- Simprocs
                 scalarTacSimpRocs
                 -- Simp theorems
@@ -196,24 +197,26 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
   -- Apply `simpAll`
   if config.simpAllMaxSteps ≠ 0 then
     allGoalsNoRecover
-      (Utils.simpAll {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 0} true
-        scalarTacSimpRocs [simpLemmas] [] [] [])
+      (tryTac do
+        Utils.simpAll {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 0} true
+          scalarTacSimpRocs [simpLemmas] [] [] [])
   trace[ScalarTac] "Goal after simpAll: {← getMainGoal}"
   -- Reduce all the terms in the goal - note that the extra preprocessing step
   -- might have proven the goal, hence the `allGoals`
   let dsimp :=
-    allGoalsNoRecover do tryTac (
+    allGoalsNoRecover do
+      tryTac do
       -- We set `simpOnly` at false on purpose.
       -- Also, we need `zetaDelta` to inline the let-bindings (otherwise, omega doesn't always manages
       -- to deal with them)
-      dsimpAt false {zetaDelta := true} scalarTacSimpRocs
+      dsimpAt false {zetaDelta := true, failIfUnchanged := false, maxDischargeDepth := 0} scalarTacSimpRocs
         -- Simp theorems
         []
         -- Declarations to unfold
         []
         -- Theorems
         []
-        [] Tactic.Location.wildcard)
+        [] Tactic.Location.wildcard
   dsimp
   trace[ScalarTac] "Goal after first dsimp: {← getMainGoal}"
   -- More preprocessing: apply norm_cast to the whole context
@@ -222,8 +225,9 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
   -- norm_cast does weird things with negative numbers so we reapply simp
   dsimp
   trace[ScalarTac] "Goal after 2nd dsimp: {← getMainGoal}"
-  allGoalsNoRecover do Utils.tryTac (
-    Utils.simpAt true {}
+  allGoalsNoRecover do
+    tryTac do
+    Utils.simpAt true {failIfUnchanged := false, maxDischargeDepth := 1}
                -- Simprocs
                []
                -- Simp theorems
@@ -240,7 +244,7 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
                  ``forall_eq_forall'
                  ]
                 -- Hypotheses
-                [] .wildcard)
+                [] .wildcard
   trace[ScalarTac] "Goal after simpAt following dsimp: {← getMainGoal}"
 
 elab "scalar_tac_preprocess" config:Parser.Tactic.optConfig : tactic => do
@@ -265,8 +269,9 @@ def scalarTacCore (config : Config) : Tactic.TacticM Unit := do
       /- If we split the `if then else` call `simp_all` again -/
       splitAll do
         allGoalsNoRecover
-          (Utils.simpAll {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 0} true
-            scalarTacSimpRocs [simpLemmas] [] [] [])
+          (tryTac do
+            Utils.simpAll {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 0} true
+              scalarTacSimpRocs [simpLemmas] [] [] [])
         trace[ScalarTac] "Calling omega"
         allGoalsNoRecover (Tactic.Omega.omegaTactic {})
     else
