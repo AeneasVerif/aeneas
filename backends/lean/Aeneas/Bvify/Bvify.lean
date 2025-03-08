@@ -31,8 +31,6 @@ theorem BitVec.lt_pow_ofNat_le {n : Nat} (a b : Nat) (h0 : b < 2^n) (h1 : a ≤ 
   have : b % 2^n = b := by apply Nat.mod_eq_of_lt; omega
   simp [*]
 
-/- TODO: we have *two* preconditions, while only one is really needed for the implication
-   in which we're interested - this can be expensive to prove -/
 theorem BitVec.lt_pow_le_iff_ofNat_le {n : Nat} (a b : Nat) (h0 : a < 2^n) (h1 : b < 2^n) :
   a ≤ b ↔ BitVec.ofNat n a ≤ BitVec.ofNat n b := by
   constructor <;> intro h2
@@ -45,7 +43,8 @@ theorem BitVec.lt_pow_le_iff_ofNat_le {n : Nat} (a b : Nat) (h0 : a < 2^n) (h1 :
 @[bvify_forward a ≤ b]
 theorem BitVec.lt_pow_le_guarded_ofNat_le {n : Nat} (a b : Nat) :
   guarded (b < 2^n ∧ a ≤ b) (BitVec.ofNat n a ≤ BitVec.ofNat n b) := by
-  sorry
+  simp only [guarded, and_imp]
+  apply BitVec.lt_pow_ofNat_le
 
 theorem BitVec.lt_pow_ofNat_lt {n : Nat} (a b : Nat) (h0 : b < 2^n) (h0 : a < b) :
   BitVec.ofNat n a < BitVec.ofNat n b := by
@@ -54,8 +53,6 @@ theorem BitVec.lt_pow_ofNat_lt {n : Nat} (a b : Nat) (h0 : b < 2^n) (h0 : a < b)
   have : b % 2^n = b := by apply Nat.mod_eq_of_lt; omega
   simp [*]
 
-/- TODO: we have *two* preconditions, while only one is really needed for the implication
-   in which we're interested - this can be expensive to prove -/
 theorem BitVec.lt_pow_lt_iff_ofNat_lt {n : Nat} (a b : Nat) (h0 : a < 2^n) (h1 : b < 2^n) :
   a < b ↔ BitVec.ofNat n a < BitVec.ofNat n b := by
   constructor <;> intro h2
@@ -65,15 +62,38 @@ theorem BitVec.lt_pow_lt_iff_ofNat_lt {n : Nat} (a b : Nat) (h0 : a < 2^n) (h1 :
     have : b % 2^n = b := by apply Nat.mod_eq_of_lt; assumption
     omega
 
-@[bvify_forward a < b]
+-- We're not using this theorem but rather the one below
 theorem BitVec.lt_pow_lt_guarded_ofNat_lt {n : Nat} (a b : Nat) :
   guarded (b < 2^n ∧ a < b) (BitVec.ofNat n a < BitVec.ofNat n b) := by
-  sorry
+  simp only [guarded, and_imp]
+  apply BitVec.lt_pow_ofNat_lt
+
+theorem BitVec.lt_pow_lt_iff_ofNat_le {n : Nat} (a b : Nat) (h0 : a < b) (h1 : b - 1 < 2^n) :
+  BitVec.ofNat n a ≤ BitVec.ofNat n (b - 1) := by
+  simp
+  have : a % 2^n = a := by apply Nat.mod_eq_of_lt; omega
+  have : (b - 1) % 2^n = b - 1 := by apply Nat.mod_eq_of_lt; assumption
+  omega
+
+@[bvify_forward a < b]
+theorem BitVec.lt_pow_lt_guarded_ofNat_le {n : Nat} (a b : Nat) :
+  guarded (a < b ∧ b - 1 < 2^n) (BitVec.ofNat n a ≤ BitVec.ofNat n (b - 1)) := by
+  simp only [guarded, and_imp]
+  apply BitVec.lt_pow_lt_iff_ofNat_le
 
 @[bvify_csimps]
 theorem guarded_imp (p q : Prop) (h : p) : guarded p q ↔ q := by simp [guarded, *]
 
-attribute [bvify_simps] ge_iff_le gt_iff_lt decide_eq_true_eq BitVec.ofNat_add
+@[bvify_simps]
+theorem Nat.mod_le_imp_mod_le (a b c : Nat) (h : b ≠ 0 ∧ (a < c ∨ b ≤ c)) : a % b < c := by
+  obtain ⟨ h0, h1 ⟩ := h
+  dcases h1
+  . have := @Nat.mod_le a b
+    omega
+  . have := @Nat.mod_lt a b (by omega)
+    omega
+
+attribute [bvify_simps] ge_iff_le gt_iff_lt decide_eq_true_eq BitVec.ofNat_add or_self or_true
 
 syntax (name := bvify_saturate) "bvify_saturate" term : tactic
 
@@ -104,8 +124,8 @@ macro_rules
 def bvifyTacSimp (loc : Utils.Location) (additionalAsms : List FVarId := []): TacticM Unit := do
   withMainContext do
   let simpTheorems ← bvifySimpExt.getTheorems
-  let simprocs := [``Nat.reducePow, ``Nat.reduceLT]
-  Utils.simpAt true {maxDischargeDepth := 1, failIfUnchanged := false} simprocs [simpTheorems] [] [] additionalAsms loc
+  let simprocs := [``Nat.reducePow, ``Nat.reduceLT, ``Nat.reduceLeDiff]
+  Utils.simpAt true {maxDischargeDepth := 2, failIfUnchanged := false} simprocs [simpTheorems] [] [] additionalAsms loc
 
 def bvifyTac (n : Expr) (loc : Utils.Location) : TacticM Unit := do
   Elab.Tactic.focus do
@@ -239,5 +259,48 @@ example (a b c : U32) (h0 : c.val ≤ 3329) (h1 : a.val + b.val ≤ 3329 + c.val
   bvify' 32
   extract_goal
   assumption
+
+example (n a : Nat) (h : a < 2^n) : BitVec.ofNat n a ≤ BitVec.ofNat n (2^n - 1) := by
+  bvify' n
+  assumption
+
+theorem BitVec.ofNat_mod (n : Nat) (a b : Nat) (ha : a < 2^n) (hb : b < 2^n) :
+  BitVec.ofNat n (a % b) = BitVec.ofNat n a % BitVec.ofNat n b := by
+  simp [BitVec.toNat_eq]
+  have : a % 2^n = a := by apply Nat.mod_eq_of_lt; assumption
+  have : b % 2^n = b := by apply Nat.mod_eq_of_lt; assumption
+  dcases b = 0
+  . simp_all only [Nat.ofNat_pos, pow_pos, Nat.zero_mod, Nat.mod_zero]
+  . have := @Nat.mod_lt a b (by omega)
+    have : (a % b) % 2^n  = a % b:= by apply Nat.mod_eq_of_lt; omega
+    simp only [*]
+
+@[bvify_forward a % b]
+theorem BitVec.ofNat_mod' (n : Nat) (a b : Nat) :
+  guarded (a < 2^n ∧ b < 2^n) (BitVec.ofNat n (a % b) = BitVec.ofNat n a % BitVec.ofNat n b) := by
+  simp only [guarded, and_imp]
+  apply BitVec.ofNat_mod
+
+theorem BitVec.iff_ofNat_eq (n : Nat) (a b : Nat) (ha : a < 2^n) (hb : b < 2^n) :
+  a = b ↔ BitVec.ofNat n a = BitVec.ofNat n b := by
+  have : a % 2^n = a := by apply Nat.mod_eq_of_lt; assumption
+  have : b % 2^n = b := by apply Nat.mod_eq_of_lt; assumption
+  simp only [BitVec.toNat_eq, BitVec.toNat_ofNat, *]
+
+@[bvify_forward a = b]
+theorem BitVec.guarded_ofNat_eq (n : Nat) (a b : Nat) :
+  guarded (a < 2^n ∧ b < 2^n) (a = b ↔ BitVec.ofNat n a = BitVec.ofNat n b) := by
+  simp only [guarded, and_imp]
+  apply BitVec.iff_ofNat_eq
+
+attribute [bvify_simps] ZMod.eq_iff_mod ZMod.val_add ZMod.val_sub ZMod.val_mul ZMod.val_sub' ZMod.val_natCast
+attribute [bvify_simps] Nat.add_one_sub_one Nat.add_mod_mod Nat.mod_add_mod
+
+example
+  (a b c : U32) (h : a.val + b.val < 32) (hc : c.val = a.val + b.val) :
+  (c.val : ZMod 32) = (a.val : ZMod 32) + (b.val : ZMod 32) := by
+  bvify' 32
+  have : c.val % 32 = (↑a + ↑b) % 32 ↔ BitVec.ofNat 32 (↑c % 32) = BitVec.ofNat 32 ((↑a + ↑b) % 32) := by assumption
+  simp only [hc]
 
 end Aeneas.Bvify

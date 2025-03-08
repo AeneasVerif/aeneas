@@ -227,7 +227,8 @@ private partial def fastVisit (depth : Nat) (preprocessThm : Option (Array Expr 
 
 /- The saturation tactic itself -/
 def evalSaturate (fast : Bool) (preprocessThm : Option (Array Expr → Expr → MetaM Unit)) (sets : List Name)
-  (declsToExplore : Option (Array FVarId) := none) : TacticM (Array FVarId) := do
+  (declsToExplore : Option (Array FVarId) := none)
+  (exploreGoal : Bool := true) : TacticM (Array FVarId) := do
   Tactic.withMainContext do
   trace[Saturate] "sets: {sets}"
   -- Retrieve the rule sets
@@ -255,7 +256,8 @@ def evalSaturate (fast : Bool) (preprocessThm : Option (Array Expr → Expr → 
     | some value => visit matched value) Std.HashSet.empty
   -- Explore the goal
   trace[Saturate] "Exploring the goal"
-  let matched := (← visit matched (← Tactic.getMainTarget)).toArray
+  let matched ← do
+    if exploreGoal then do pure (← visit matched (← Tactic.getMainTarget)).toArray else do pure matched.toArray
   -- Introduce the theorems in the context
   matched.mapM fun (thName, args) => do
     let th ← mkAppOptM thName (args.map some).toArray
@@ -285,13 +287,13 @@ info: example
   (l4 : List α)
   (l5 : List α)
   (x✝ : ∀ (l : List α), l.length ≤ l3.length)
-  (__6 : l1.length ≥ 0)
-  (__5 : l3.length ≥ 0)
-  (__4 : l4.length ≥ 0)
-  (__3 : l2.length ≥ 0)
-  (__2 : l5.length ≥ 0)
-  (__1 : l0.length ≥ 0)
-  (_ : (l0 ++ l1 ++ l2).length ≥ 0) :
+  (__6 : l0.length ≥ 0)
+  (__5 : l5.length ≥ 0)
+  (__4 : l2.length ≥ 0)
+  (__3 : l3.length ≥ 0)
+  (__2 : l1.length ≥ 0)
+  (__1 : (l0 ++ l1 ++ l2).length ≥ 0)
+  (_ : l4.length ≥ 0) :
   let _k := l4.length;
 let _g := fun l => l.length + l5.length;
 (l0 ++ l1 ++ l2).length = l0.length + l1.length + l2.length
@@ -323,19 +325,19 @@ info: example
   (l4 : List α)
   (l5 : List α)
   (x✝ : ∀ (l : List α), l.length ≤ l3.length)
-  (__13 : l4.length ≥ 0)
-  (__12 : 0 ≤ l2.length)
-  (__11 : l0.length ≥ 0)
-  (__10 : l3.length ≥ 0)
-  (__9 : l5.length ≥ 0)
-  (__8 : 0 ≤ l0.length)
-  (__7 : 0 ≤ l4.length)
-  (__6 : l1.length ≥ 0)
-  (__5 : 0 ≤ l3.length)
-  (__4 : 0 ≤ l5.length)
-  (__3 : (l0 ++ l1 ++ l2).length ≥ 0)
-  (__2 : 0 ≤ l1.length)
-  (__1 : 0 ≤ (l0 ++ l1 ++ l2).length)
+  (__13 : 0 ≤ l0.length)
+  (__12 : 0 ≤ l4.length)
+  (__11 : 0 ≤ l2.length)
+  (__10 : 0 ≤ (l0 ++ l1 ++ l2).length)
+  (__9 : 0 ≤ l1.length)
+  (__8 : l5.length ≥ 0)
+  (__7 : l3.length ≥ 0)
+  (__6 : l4.length ≥ 0)
+  (__5 : (l0 ++ l1 ++ l2).length ≥ 0)
+  (__4 : l1.length ≥ 0)
+  (__3 : 0 ≤ l3.length)
+  (__2 : 0 ≤ l5.length)
+  (__1 : l0.length ≥ 0)
   (_ : l2.length ≥ 0) :
   let _k := l4.length;
 let _g := fun l => l.length + l5.length;
@@ -365,17 +367,18 @@ info: example
   (l4 : List α)
   (l5 : List α)
   (x✝ : ∀ (l : List α), l.length ≤ l3.length)
-  (__6 : l2.length ≥ 0)
-  (__5 : l1.length ≥ 0)
+  (__6 : l3.length ≥ 0)
+  (__5 : l0.length ≥ 0)
   (__4 : l5.length ≥ 0)
-  (__3 : l0.length ≥ 0)
-  (__2 : (l0 ++ l1 ++ l2).length ≥ 0)
+  (__3 : l1.length ≥ 0)
+  (__2 : l2.length ≥ 0)
   (__1 : l4.length ≥ 0)
-  (_ : l3.length ≥ 0) :
+  (_ : (l0 ++ l1 ++ l2).length ≥ 0) :
   let _k := l4.length;
 let _g := fun l => l.length + l5.length;
 (l0 ++ l1 ++ l2).length = l0.length + l1.length + l2.length
   := by sorry
+
   -/
   #guard_msgs in
     set_option linter.unusedTactic false in
@@ -399,13 +402,13 @@ info: example
   (l4 : List α)
   (l5 : List α)
   (x✝ : ∀ (l : List α), l.length ≤ l3.length)
-  (__6 : l2.length ≥ 0)
-  (__5 : l1.length ≥ 0)
-  (__4 : l3.length ≥ 0)
-  (__3 : l5.length ≥ 0)
-  (__2 : l0.length ≥ 0)
-  (__1 : l4.length ≥ 0)
-  (_ : (l0 ++ l1 ++ l2).length ≥ 0) :
+  (__6 : l3.length ≥ 0)
+  (__5 : l2.length ≥ 0)
+  (__4 : (l0 ++ l1 ++ l2).length ≥ 0)
+  (__3 : l4.length ≥ 0)
+  (__2 : l1.length ≥ 0)
+  (__1 : l5.length ≥ 0)
+  (_ : l0.length ≥ 0) :
   let _k := l4.length;
 let _g := fun l => l.length + l5.length;
 (l0 ++ l1 ++ l2).length = l0.length + l1.length + l2.length

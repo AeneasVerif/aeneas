@@ -242,4 +242,25 @@ example
   c3 = 65535#u32
   := by bv_tac
 
+example
+  (a : U32)
+  (b : U32)
+  (ha : (↑a : ℕ) < 3329)
+  (hb : (↑b : ℕ) < 3329)
+  (c1 : U32)
+  (hc1 : (↑c1 : ℕ) = (↑a : ℕ) + (↑b : ℕ))
+  (_ : c1.bv = a.bv + b.bv)
+  (c2 : U32)
+  (hc2 : c2.bv = c1.bv - 3329#32)
+  (c3 : U32)
+  (hc3 : c3.bv = c2.bv >>> 16)
+  (c4 : U32)
+  (hc4 : (↑c4 : ℕ) = (↑(3329#u32 &&& c3) : ℕ))
+  (_ : c4.bv = 3329#32 &&& c3.bv)
+  (c5 : U32)
+  (hc5 : c5.bv = c2.bv + c4.bv) :
+  (↑(↑c5 : ℕ) : ZMod 3329) = (↑(↑a : ℕ) : ZMod 3329) + (↑(↑b : ℕ) : ZMod 3329) ∧ (↑c5 : ℕ) < 3329
+  := by
+  bv_tac 32
+
 end Aeneas.BvTac
