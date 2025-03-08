@@ -366,7 +366,7 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option Expr)
       -- Nothing worked: failed
       throwError "Progress failed"
 
-syntax progressArgs := ("keep" (ident <|> "_"))? ("with" term)? ("as" " ⟨ " (ident <|> "_"),* " ⟩")?
+syntax progressArgs := ("keep" (ident <|> "_"))? ("with" colGt term)? ("as" " ⟨ " (ident <|> "_"),* " ⟩")?
 
 def evalProgress (args : TSyntax `Aeneas.Progress.progressArgs) : TacticM Stats := do
   withMainContext do

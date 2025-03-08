@@ -85,7 +85,7 @@ def optElabTerm (e : Option (TSyntax `term)) : TacticM (Option Expr) := do
   | none => pure none
   | some e => pure (some (← Lean.Elab.Tactic.elabTerm e none))
 
-elab "bv_tac_preprocess" n:(term)? : tactic => do
+elab "bv_tac_preprocess" n:(colGt term)? : tactic => do
   bvTacPreprocess (← optElabTerm n)
 
 open Lean.Elab.Tactic.BVDecide.Frontend Lean.Elab in
@@ -95,10 +95,11 @@ open Lean.Elab.Tactic.BVDecide.Frontend Lean.Elab in
   Calling `bv_tac` is equivalent to:
   `bv_tac_preprocess; bv_tac`
 -/
-elab "bv_tac" cfg:Parser.Tactic.optConfig n:(term)? : tactic =>
+elab "bv_tac" cfg:Parser.Tactic.optConfig n:(colGt term)? : tactic =>
   withMainContext do
   Tactic.focus do
   -- Preprocess
+  trace[BvTac] "Input bitwidth: {n}"
   bvTacPreprocess (← optElabTerm n)
   -- The preprocessing step may have proven the goal
   allGoals do
@@ -119,6 +120,23 @@ example (x y : U8) (h : x.val ≤ y.val) : x.bv ≤ y.bv := by
 
 example (x : U32) (h : x.val < 3329) : x.bv % 3329#32 = x.bv := by
   bv_tac
+
+/- Checking parsing -/
+example (x : U32) (h : x.val < 3329) : x.bv % 3329#32 = x.bv ∧ True := by
+  constructor
+  bv_tac
+  simp
+
+/- Checking parsing -/
+example (x : U32) (h : x.val < 3329) : x.bv % 3329#32 = x.bv ∧ True := by
+  constructor
+  bv_tac 32
+  simp
+
+/- Checking parsing -/
+example (x : U32) (h : x.val < 3329) : x.bv % 3329#32 = x.bv ∧ True := by
+  constructor
+  bv_tac 32; simp
 
 example
   (a : U32)
@@ -207,5 +225,21 @@ example
   c4.bv % 3329#32 = (a.bv + 3329#32 - b.bv) % 3329#32 ∧ c4.bv < 3329#32
   := by
   bv_tac
+
+example
+  (a : U32)
+  (b : U32)
+  (ha : (↑a : ℕ) < 3329)
+  (hb : (↑b : ℕ) < 3329)
+  (c1 : U32)
+  (hc1 : (↑c1 : ℕ) = (↑a : ℕ) + (↑b : ℕ))
+  (_ : c1.bv = a.bv + b.bv)
+  (c2 : U32)
+  (hc2 : c2 = core.num.U32.wrapping_sub c1 3329#u32)
+  (c3 : U32)
+  (hc3 : c3.bv = c2.bv >>> 16)
+  (h : ¬c3 = 0#u32) :
+  c3 = 65535#u32
+  := by bv_tac
 
 end Aeneas.BvTac
