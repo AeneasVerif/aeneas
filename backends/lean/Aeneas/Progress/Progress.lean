@@ -362,16 +362,15 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option Expr)
       -- Nothing worked: failed
       throwError "Progress failed"
 
-syntax optIdent := ident <|> "_"
-syntax progressArgs := ("keep" optIdent)? ("with" term)? ("as" " ⟨ " optIdent,* " ⟩")?
+syntax progressArgs := ("keep" binderIdent)? ("with" term)? ("as" " ⟨ " binderIdent,* " ⟩")?
 
 def parseProgressArgs /- {{{ -/
 : TSyntax ``Aeneas.Progress.progressArgs -> TacticM (Option Name × Option Expr × Array (Option Name))
 | args@`(progressArgs| $[keep $x]? $[with $pspec:term]? $[as ⟨ $ids,* ⟩]? ) =>  withMainContext do
   trace[Progress] "Progress arguments: {args.raw}"
   let keep?: Option Name <- Option.sequence <| x.map fun
-    | `(optIdent| _) => mkFreshAnonPropUserName
-    | `(optIdent| $name:ident) => pure name.getId
+    | `(binderIdent| _) => mkFreshAnonPropUserName
+    | `(binderIdent| $name:ident) => pure name.getId
     | _ => throwUnsupportedSyntax
   trace[Progress] "Keep: {keep?}"
   let withTh?: Option Expr <- Option.sequence <| pspec.map fun
@@ -395,7 +394,7 @@ def parseProgressArgs /- {{{ -/
   if let .some pspec := withTh? then trace[Progress] "With arg: elborated expression {pspec}"
   let ids := ids.getD ∅
     |>.getElems.map fun
-      | `(optIdent| $name:ident) => some name.getId
+      | `(binderIdent| $name:ident) => some name.getId
       | _ => none
   trace[Progress] "User-provided ids: {ids}"
   return (keep?, withTh?, ids)
