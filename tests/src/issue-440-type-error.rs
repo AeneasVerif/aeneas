@@ -10,6 +10,6 @@ fn f(x: &mut PeanoNum, value: isize) {
         PeanoNum::Zero => {
             std::mem::replace(x, PeanoNum::Succ(Box::new(PeanoNum::Zero)));
         }
-        PeanoNum::Succ{..} => { }
+        PeanoNum::Succ { .. } => {}
     }
 }
