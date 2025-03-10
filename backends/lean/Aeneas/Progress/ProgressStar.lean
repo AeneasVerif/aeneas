@@ -179,8 +179,7 @@ def Info.toExpr(info: Info): Expr :=
 
 end Bifurcation/- }}} -/
 
-
-partial 
+private partial 
 def traverseProgram {α} [Monad m] [MonadError m] [Nonempty (m α)] 
   /- [MonadLog m] [AddMessageContext m] [MonadOptions m] -/ 
   [MonadLiftT MetaM m] [MonadControlT MetaM m] 
@@ -207,6 +206,8 @@ def traverseProgram {α} [Monad m] [MonadError m] [Nonempty (m α)]
     onBif bfInfo contsTaggedVals
   else
     onResult e
+
+namespace ProgressStar
 
 partial
 def evalProgressStar: TacticM (Array Syntax.Tactic) := withMainContext do
@@ -263,3 +264,5 @@ elab tk:"progress_all?" : tactic => do
   let tacs ← evalProgressStar
   let suggestion ← `(tacticSeq| $(tacs)*)
   addTryThisTacticSeqSuggestion tk suggestion (origSpan? := ← getRef)
+
+end ProgressStar
