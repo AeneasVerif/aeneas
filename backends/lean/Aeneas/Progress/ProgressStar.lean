@@ -92,7 +92,6 @@ def Info.ofExpr(e: Expr): MetaM (Option Info) := do
     /- let #[_ty, cond, _dec, brThen, brElse] := e.getAppArgs -/
     /- let e ← whnf e -/ 
     let e ← deltaExpand e (fun n => n == ``ite || n == ``dite)
-    logInfo s!"{←ppExpr e}"
     -- Decidable.casesOn.{u} {prop} {motive} dec (isFalse: (h:¬p) → motive (isFalse h)) (isTrue: (h:p) → motive (isTrue h)) : motive t
     let .const ``Decidable.casesOn uLevels := e.getAppFn
       | throwError "Expected ``Decidable.rec, found {←ppExpr e.getAppFn}"
@@ -138,6 +137,25 @@ def Info.toExpr(info: Info): Expr :=
 
 end Bifurcation/- }}} -/
 
+-- TODO: Move to Utils
+/-- Given ty := ∀ xs.., ∃ zs.., program = res ∧ post?, destruct and run continuation -/
+def aeneasProgramTelescope(ty: Expr)
+  (k: (xs:Array MVarId) → (zs:Array FVarId) → (program:Expr) → (res:Expr) → (post:Option Expr) → TacticM α)
+: TacticM α := do
+  unless ←isDefEq (←inferType ty) (mkSort 0) do
+    throwError "Expected a proposition, got {←inferType ty}"
+  let ty ← Utils.normalizeLetBindings ty
+  -- ty := ∀ xs, ty₂
+  let (xs, _xs_bi, ty₂) ← forallMetaTelescope ty.consumeMData
+  -- ty₂ := ∃ zs, ty₃ ≃ Exists {α} (fun zs => ty₃)
+  Utils.existsTelescope ty₂ fun zs ty₃ => do
+    -- ty₃ := ty₄ ∧ post?
+    let (ty₄, post?) ← Utils.optSplitConj ty₃
+    -- ty₄ := ty₅ = res
+    let (program, res) ← Utils.destEq ty₄
+    k (xs.map (·.mvarId!)) (zs.map (·.fvarId!)) program res post?
+
+
 partial 
 def traverseProgram {α} [Monad m] [MonadError m] [Nonempty (m α)] 
   /- [MonadLog m] [AddMessageContext m] [MonadOptions m] -/ 
@@ -166,15 +184,14 @@ def traverseProgram {α} [Monad m] [MonadError m] [Nonempty (m α)]
   else
     onResult e
 
-open Lean.Parser.Tactic in
 partial
-def generateSuggestionScript(program: Expr)(endTac: Option Syntax.Tactic): TacticM (Array Syntax.Tactic) := do
-/- withoutModifyingState do -/
-  trace[ProgressStar] s!"Generating suggestion script for {← ppExpr program}"
-  traverseProgram onResult onBind onBif program
+def evalProgressStar: TacticM (Array Syntax.Tactic) := withMainContext do
+  let goalTy <- getMainTarget
+  aeneasProgramTelescope goalTy fun _xs _zs program _res _post => do
+    trace[ProgressStar] s!"Generating suggestion script for {← ppExpr program}"
+    traverseProgram onResult onBind onBif program
 where
-  endOfProcessing: TacticM (Array Syntax.Tactic) := do 
-    return #[endTac.getD <|  ←`(tactic| skip)]
+  endOfProcessing: TacticM (Array Syntax.Tactic) := pure #[]
 
   onResult _expr := do
     trace[ProgressStar] s!"onResult: encountered {←ppExpr _expr}"
@@ -198,41 +215,22 @@ where
     Tactic.focus do
       let splitStx ← `(tactic| split)
       evalSplit splitStx
-
+      -- 
       let subgoals ← getUnsolvedGoals
       unless subgoals.length == toBeProcessed.size do
         throwError s!"Expected {toBeProcessed.size} cases, found {subgoals.length}"
-
+      -- Gather suggestions from branches
       let mut unsolvedGoals: List (MVarId) := []
       let mut suggestions := #[splitStx]
       for (sg, (_, processBr)) in subgoals.zip toBeProcessed.toList do
         /- let tag ← sg.getTag -/
         setGoals [sg]
         let branchSuggestions ← processBr
-        suggestions := suggestions.push <| ←`(tactic| case _  => $(branchSuggestions)*)
+        suggestions := suggestions.push <| ←`(tactic| case' _  => $(branchSuggestions)*)
         unsolvedGoals := unsolvedGoals ++ (←getUnsolvedGoals)
 
       setGoals unsolvedGoals
       return suggestions
-
-
--- TODO: Move to Utils
-/-- Given ty := ∀ xs.., ∃ zs.., program = res ∧ post?, destruct and run continuation -/
-def aeneasProgramTelescope(ty: Expr)
-  (k: (xs:Array MVarId) → (zs:Array FVarId) → (program:Expr) → (res:Expr) → (post:Option Expr) → TacticM α)
-: TacticM α := do
-  unless ←isDefEq (←inferType ty) (mkSort 0) do
-    throwError "Expected a proposition, got {←inferType ty}"
-  let ty ← Utils.normalizeLetBindings ty
-  -- ty := ∀ xs, ty₂
-  let (xs, _xs_bi, ty₂) ← forallMetaTelescope ty.consumeMData
-  -- ty₂ := ∃ zs, ty₃ ≃ Exists {α} (fun zs => ty₃)
-  Utils.existsTelescope ty₂ fun zs ty₃ => do
-    -- ty₃ := ty₄ ∧ post?
-    let (ty₄, post?) ← Utils.optSplitConj ty₃
-    -- ty₄ := ty₅ = res
-    let (program, res) ← Utils.destEq ty₄
-    k (xs.map (·.mvarId!)) (zs.map (·.fvarId!)) program res post?
 
 -- NOTE: Credit to Aesop
 def addTryThisTacticSeqSuggestion (ref : Syntax)
@@ -257,18 +255,10 @@ where
     |>.map (λ line => line.dropPrefix? "  " |>.map (·.toString) |>.getD line)
     |> String.intercalate "\n"
 
+elab "progress_all" : tactic => do 
+  evalProgressStar *> pure ()
 
-def evalProgressStar(endTac: Option Syntax.Tactic := none): TacticM Unit := do
-  withMainContext do
-    let goalTy <- getMainTarget
-    aeneasProgramTelescope goalTy fun _xs _zs prog _res _post => do
-      let tacs ← generateSuggestionScript prog (endTac := endTac)
-
-      let suggestion ← `(tacticSeq| $(tacs)*)
-      addTryThisTacticSeqSuggestion (←getRef) suggestion
-
-elab tk:"progressStar" : tactic =>
-  do withRef tk <| evalProgressStar none
-/- open Lean.Parser.Tactic in -/
-/- elab tk:"progressStar" endTac:tacticSeq : tactic => -/
-/-   do withRef tk <| evalProgressStar <| ←`(tactic| ($endTac)) -/
+elab tk:"progress_all?" : tactic => do 
+  let tacs ← evalProgressStar
+  let suggestion ← `(tacticSeq| $(tacs)*)
+  addTryThisTacticSeqSuggestion tk suggestion (origSpan? := ← getRef)
