@@ -6,11 +6,53 @@ open Aeneas
 open Lean Meta Elab Tactic 
 
 -- TODO: Merge with Aeneas.Diverge.Elab.isCasesExpr
+private 
 def isCasesExpr [Monad m] [MonadEnv m](e : Expr) : m Bool := do
   let e := e.getAppFn
   if e.isConst then
     return isCasesOnRecursor (← getEnv) e.constName
   else return false
+
+-- TODO: Move to Utils
+/-- Given ty := ∀ xs.., ∃ zs.., program = res ∧ post?, destruct and run continuation -/
+def aeneasProgramTelescope(ty: Expr)
+  (k: (xs:Array MVarId) → (zs:Array FVarId) → (program:Expr) → (res:Expr) → (post:Option Expr) → TacticM α)
+: TacticM α := do
+  unless ←isDefEq (←inferType ty) (mkSort 0) do
+    throwError "Expected a proposition, got {←inferType ty}"
+  let ty ← Utils.normalizeLetBindings ty
+  -- ty := ∀ xs, ty₂
+  let (xs, _xs_bi, ty₂) ← forallMetaTelescope ty.consumeMData
+  -- ty₂ := ∃ zs, ty₃ ≃ Exists {α} (fun zs => ty₃)
+  Utils.existsTelescope ty₂ fun zs ty₃ => do
+    -- ty₃ := ty₄ ∧ post?
+    let (ty₄, post?) ← Utils.optSplitConj ty₃
+    -- ty₄ := ty₅ = res
+    let (program, res) ← Utils.destEq ty₄
+    k (xs.map (·.mvarId!)) (zs.map (·.fvarId!)) program res post?
+
+-- NOTE: Credit to Aesop
+private def addTryThisTacticSeqSuggestion (ref : Syntax)
+    (suggestion : TSyntax ``Lean.Parser.Tactic.tacticSeq)
+    (origSpan? : Option Syntax := none) : MetaM Unit := do
+  let fmt ← PrettyPrinter.ppCategory ``Lean.Parser.Tactic.tacticSeq suggestion
+  let msgText := fmt.pretty (indent := 0) (column := 0)
+  if let some range := (origSpan?.getD ref).getRange? then
+    let map ← getFileMap
+    let (indent, column) := Lean.Meta.Tactic.TryThis.getIndentAndColumn map range
+    let text := fmt.pretty (indent := indent) (column := column)
+    let suggestion := {
+      suggestion := .string $ dedent text
+      messageData? := some msgText
+      preInfo? := "  "
+    }
+    Lean.Meta.Tactic.TryThis.addSuggestion ref suggestion (origSpan? := origSpan?)
+      (header := "Try this:\n")
+where
+  dedent (s : String) : String :=
+    s.splitOn "\n"
+    |>.map (λ line => line.dropPrefix? "  " |>.map (·.toString) |>.getD line)
+    |> String.intercalate "\n"
 
 namespace Bifurcation/- {{{ -/
 /-- Expression on which a branch depends -/
@@ -137,24 +179,6 @@ def Info.toExpr(info: Info): Expr :=
 
 end Bifurcation/- }}} -/
 
--- TODO: Move to Utils
-/-- Given ty := ∀ xs.., ∃ zs.., program = res ∧ post?, destruct and run continuation -/
-def aeneasProgramTelescope(ty: Expr)
-  (k: (xs:Array MVarId) → (zs:Array FVarId) → (program:Expr) → (res:Expr) → (post:Option Expr) → TacticM α)
-: TacticM α := do
-  unless ←isDefEq (←inferType ty) (mkSort 0) do
-    throwError "Expected a proposition, got {←inferType ty}"
-  let ty ← Utils.normalizeLetBindings ty
-  -- ty := ∀ xs, ty₂
-  let (xs, _xs_bi, ty₂) ← forallMetaTelescope ty.consumeMData
-  -- ty₂ := ∃ zs, ty₃ ≃ Exists {α} (fun zs => ty₃)
-  Utils.existsTelescope ty₂ fun zs ty₃ => do
-    -- ty₃ := ty₄ ∧ post?
-    let (ty₄, post?) ← Utils.optSplitConj ty₃
-    -- ty₄ := ty₅ = res
-    let (program, res) ← Utils.destEq ty₄
-    k (xs.map (·.mvarId!)) (zs.map (·.fvarId!)) program res post?
-
 
 partial 
 def traverseProgram {α} [Monad m] [MonadError m] [Nonempty (m α)] 
@@ -231,29 +255,6 @@ where
 
       setGoals unsolvedGoals
       return suggestions
-
--- NOTE: Credit to Aesop
-def addTryThisTacticSeqSuggestion (ref : Syntax)
-    (suggestion : TSyntax ``Lean.Parser.Tactic.tacticSeq)
-    (origSpan? : Option Syntax := none) : MetaM Unit := do
-  let fmt ← PrettyPrinter.ppCategory ``Lean.Parser.Tactic.tacticSeq suggestion
-  let msgText := fmt.pretty (indent := 0) (column := 0)
-  if let some range := (origSpan?.getD ref).getRange? then
-    let map ← getFileMap
-    let (indent, column) := Lean.Meta.Tactic.TryThis.getIndentAndColumn map range
-    let text := fmt.pretty (indent := indent) (column := column)
-    let suggestion := {
-      suggestion := .string $ dedent text
-      messageData? := some msgText
-      preInfo? := "  "
-    }
-    Lean.Meta.Tactic.TryThis.addSuggestion ref suggestion (origSpan? := origSpan?)
-      (header := "Try this:\n")
-where
-  dedent (s : String) : String :=
-    s.splitOn "\n"
-    |>.map (λ line => line.dropPrefix? "  " |>.map (·.toString) |>.getD line)
-    |> String.intercalate "\n"
 
 elab "progress_all" : tactic => do 
   evalProgressStar *> pure ()
