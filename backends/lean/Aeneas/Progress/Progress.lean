@@ -41,6 +41,11 @@ inductive UsedTheorem where
   | givenExpr: Expr → UsedTheorem 
   | localHyp: LocalDecl → UsedTheorem
   | progressThm : Name → UsedTheorem
+instance: ToString UsedTheorem where
+  toString
+  | .givenExpr _e => "given expression"
+  | .localHyp decl => s!"local hypothesis {decl.userName.toString}"
+  | .progressThm name => s!"progress theorem {name}"
 
 structure Stats where
   usedTheorem : UsedTheorem
