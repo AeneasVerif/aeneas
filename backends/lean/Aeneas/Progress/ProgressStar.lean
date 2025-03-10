@@ -54,6 +54,31 @@ where
     |>.map (λ line => line.dropPrefix? "  " |>.map (·.toString) |>.getD line)
     |> String.intercalate "\n"
 
+private
+partial
+def numOfConjuncts(e: Expr): Nat :=
+  e.withApp fun f args =>
+    if let .const ``And _ := f then
+      args.map numOfConjuncts  |>.toList.sum
+    else
+      1
+
+def theoremType: Progress.UsedTheorem -> MetaM (Option Expr)
+| .givenExpr e => do
+  let thm ← inferType e
+  return thm
+| .localHyp decl => do
+  let thm ← inferType decl.toExpr
+  return thm
+| .progressThm name => do
+  if let some cinfo := (←getEnv).find? name then
+    let expr := cinfo.value! (allowOpaque := true)
+    let thm ← inferType expr
+    return thm
+  else 
+    return none
+  
+
 namespace Bifurcation/- {{{ -/
 /-- Expression on which a branch depends -/
 structure Discr where
