@@ -209,14 +209,17 @@ def traverseProgram {α} [Monad m] [MonadError m] [Nonempty (m α)]
 
 namespace ProgressStar
 
+structure Info where
+  script: Array Syntax.Tactic
+
 partial
-def evalProgressStar: TacticM (Array Syntax.Tactic) := withMainContext do
+def evalProgressStar: TacticM Info := withMainContext do
   let goalTy <- getMainTarget
   aeneasProgramTelescope goalTy fun _xs _zs program _res _post => do
     trace[ProgressStar] s!"Generating suggestion script for {← ppExpr program}"
     traverseProgram onResult onBind onBif program
 where
-  endOfProcessing: TacticM (Array Syntax.Tactic) := pure #[]
+  endOfProcessing: TacticM Info := pure {script:=#[]}
 
   onResult _expr := do
     trace[ProgressStar] s!"onResult: encountered {←ppExpr _expr}"
@@ -230,9 +233,11 @@ where
       catch _ => pure false
     if canMakeProgress then
       trace[ProgressStar] s!"onBind: Can make progress!"
-      let tacs ← processRest
+      let restInfo@{script,..} ← processRest
       let curr ← `(tactic| progress)
-      return #[curr] ++ tacs -- TODO: Optimize
+      return {restInfo with 
+        script := #[curr] ++ script -- TODO: Optimize
+      }
     else endOfProcessing
 
   onBif bfInfo toBeProcessed := do
@@ -246,23 +251,29 @@ where
         throwError s!"Expected {toBeProcessed.size} cases, found {subgoals.length}"
       -- Gather suggestions from branches
       let mut unsolvedGoals: List (MVarId) := []
-      let mut suggestions := #[splitStx]
+      let mut info := {script:=#[splitStx]}
       for (sg, (_, processBr)) in subgoals.zip toBeProcessed.toList do
-        /- let tag ← sg.getTag -/
+        /- let tag := Lean.mkNode ``Lean.binderIdent #[mkIdent <| ←sg.getTag] -/
+        /- let caseArgs := Lean.mkNode ``Lean.Parser.Tactic.caseArg #[tag] -/
         setGoals [sg]
-        let branchSuggestions ← processBr
-        suggestions := suggestions.push <| ←`(tactic| case' _  => $(branchSuggestions)*)
+        let branchInfo ← processBr
+        let branchTacs ← if branchInfo.script.isEmpty 
+          then pure #[←`(tactic| skip)]
+          else pure branchInfo.script
+        info := {info with 
+          script:=info.script.push <| ←`(tactic| case' _  => $branchTacs*)
+        }
         unsolvedGoals := unsolvedGoals ++ (←getUnsolvedGoals)
 
       setGoals unsolvedGoals
-      return suggestions
+      return info
 
 elab "progress_all" : tactic => do 
   evalProgressStar *> pure ()
 
 elab tk:"progress_all?" : tactic => do 
-  let tacs ← evalProgressStar
-  let suggestion ← `(tacticSeq| $(tacs)*)
+  let info ← evalProgressStar
+  let suggestion ← `(tacticSeq| $(info.script)*)
   addTryThisTacticSeqSuggestion tk suggestion (origSpan? := ← getRef)
 
 end ProgressStar
