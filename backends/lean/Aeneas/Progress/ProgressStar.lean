@@ -234,39 +234,60 @@ def traverseProgram {α} [Monad m] [MonadError m] [Nonempty (m α)]
 
 namespace ProgressStar
 
+structure Config where
+  preconditionTac: Option Syntax.Tactic := none
+
 structure Info where
-  script: Array Syntax.Tactic
+  script: Array Syntax.Tactic := #[]
+  unsolved: List MVarId := []
+
+instance: Append Info where
+  append inf1 inf2 := {
+    script := inf1.script ++ inf2.script,
+    unsolved := inf1.unsolved ++ inf2.unsolved,
+  }
 
 partial
-def evalProgressStar: TacticM Info := withMainContext do
+def evalProgressStar(cfg: Config): TacticM Info := withMainContext do
+  Utils.simpAt (simpOnly := true) (thms := [``Aeneas.Std.bind_assoc_eq]) 
+    (loc := .targets #[] (type := true) )
+    (config := {}) (simprocs := []) (simpThms := [])
+    (declsToUnfold := []) (hypsToUse := []) 
   let goalTy <- getMainTarget
-  aeneasProgramTelescope goalTy fun _xs _zs program _res _post => do
+  let res ← aeneasProgramTelescope goalTy fun _xs _zs program _res _post => do
     trace[ProgressStar] s!"Generating suggestion script for {← ppExpr program}"
-    traverseProgram onResult onBind onBif program
+    let resultName := .str .anonymous "res"
+    traverseProgram (onResult resultName) onBind onBif program
+  setGoals (res.unsolved ++ (←getGoals))
+  return res
+
 where
-  endOfProcessing: TacticM Info := pure {script:=#[]}
+  onResult name expr := do
+    trace[ProgressStar] s!"onResult: encountered {←ppExpr expr}"
+    -- Since (· >>= pure) = id, we treat a result as a bind on id
+    onBind expr name (pure {})
 
-  onResult _expr := do
-    trace[ProgressStar] s!"onResult: encountered {←ppExpr _expr}"
-    endOfProcessing
-
-  onBind _curr _name? processRest := do
+  onBind _curr name processRest := do
     trace[ProgressStar] s!"onBind: encountered {←ppExpr _curr}"
-    let canMakeProgress ← do
-      try
-        Progress.evalProgress none none #[] *> pure true
-      catch _ => pure false
-    if canMakeProgress then
-      trace[ProgressStar] s!"onBind: Can make progress!"
-      let restInfo@{script,..} ← processRest
-      let curr ← `(tactic| progress)
-      return {restInfo with 
-        script := #[curr] ++ script -- TODO: Optimize
-      }
-    else endOfProcessing
+    if let some {usedTheorem, ..} ← tryProgress then
+      trace[ProgressStar] s!"onBind: Can make progress! Binding {name}"
+      let (preconditionTacs,unsolved) ← trySolvePreconditions
+      let ids ← getIdsFromUsedTheorem name usedTheorem
+      if ¬ ids.isEmpty && ¬ (←getGoals).isEmpty then
+        evalTactic <| ←`(tactic| rename_i $ids*)
+      let currTac ← if ids.isEmpty 
+        then `(tactic| progress)
+        else `(tactic| progress as ⟨$ids,*⟩)
+      let restInfo ← processRest
+      return {
+        script := #[currTac]++ preconditionTacs, -- TODO: Optimize
+        unsolved := unsolved.toList
+      } ++ restInfo
+    else return {script:=#[]}
 
   onBif bfInfo toBeProcessed := do
     trace[ProgressStar] s!"onBif: encountered {bfInfo.kind}"
+    if (←getGoals).isEmpty then return {}
     Tactic.focus do
       let splitStx ← `(tactic| split)
       evalSplit splitStx
@@ -277,27 +298,91 @@ where
       -- Gather suggestions from branches
       let mut unsolvedGoals: List (MVarId) := []
       let mut info := {script:=#[splitStx]}
-      for (sg, (_, processBr)) in subgoals.zip toBeProcessed.toList do
-        /- let tag := Lean.mkNode ``Lean.binderIdent #[mkIdent <| ←sg.getTag] -/
-        /- let caseArgs := Lean.mkNode ``Lean.Parser.Tactic.caseArg #[tag] -/
+      for (sg, (names, processBr)) in subgoals.zip toBeProcessed.toList do
         setGoals [sg]
         let branchInfo ← processBr
+
         let branchTacs ← if branchInfo.script.isEmpty 
           then pure #[←`(tactic| skip)]
           else pure branchInfo.script
-        info := {info with 
-          script:=info.script.push <| ←`(tactic| case' _  => $branchTacs*)
+        let caseArgs := makeCaseArgs (←sg.getTag) names
+        info := {info ++ branchInfo with 
+          script:=info.script.push <| ←`(tactic| case' $caseArgs => $branchTacs*),
         }
         unsolvedGoals := unsolvedGoals ++ (←getUnsolvedGoals)
 
       setGoals unsolvedGoals
       return info
 
-elab "progress_all" : tactic => do 
-  evalProgressStar *> pure ()
+  tryProgress := do
+    try some <$> Progress.evalProgress none none #[]
+    catch _ => pure none
 
-elab tk:"progress_all?" : tactic => do 
-  let info ← evalProgressStar
+  trySolvePreconditions: TacticM (Array Syntax.Tactic × Array MVarId) := do
+    -- NOTE: Do I make the assumption that the preconditions appear before the final lemma, or
+    -- that the names of the preconditions contain the final lemma as a prefix.
+    -- For now, we have ←getUnsolvedGoals = preconditions ++ [final]
+    let rec loop acc unsolved: List MVarId -> TacticM (Array Syntax.Tactic × Array MVarId) := fun
+      | []  => pure (acc, unsolved)
+      | [final] => do
+          setGoals [final]
+          return (acc, unsolved)
+      | curr :: rest => do
+        setGoals [curr]
+        try
+          if let .some tac := cfg.preconditionTac then
+            evalTactic tac
+            return ←loop (acc.push <| ←`(tactic| · $(#[tac])*)) unsolved rest
+        catch _ => pure ()
+        let defaultTac ← `(tactic| · skip)
+        return ←loop (acc.push defaultTac) (unsolved.push curr) rest
+    loop #[] #[] (← getUnsolvedGoals)
+
+  getIdsFromUsedTheorem name usedTheorem: TacticM (Array _) := do
+    let some thm ← theoremType usedTheorem
+      | throwError s!"Could not infer proposition of {usedTheorem}"
+    let (numElem, numPost) ← aeneasProgramTelescope thm 
+      fun _xs zs _program _res post => do
+        let numPost := numOfConjuncts <$> post |>.getD 0
+        trace[ProgressStar] s!"Number of conjuncts for {←liftM (Option.traverse ppExpr post)} is {numPost}"
+        pure (zs.size, numPost)
+    return makeIds (base := name) numElem numPost
+
+  makeIds (base: Name) (numElem numPost : Nat) (defaultId := "x"): Array (TSyntax ``Lean.binderIdent) :=
+    let (root, base?) := match base with
+      | .str root base => (root, some base)
+      | .num root _ => (root, none)
+      | .anonymous => (.anonymous, none)
+    let base := base?.getD defaultId
+    let optionallyEnumerated base num := match num with
+      | 0 => #[]
+      | 1 => #[Name.str root base]
+      | num => Array.ofFn fun (i: Fin num) => Name.str root s!"{base}_{i.val+1}"
+    let elemNames := optionallyEnumerated base numElem
+    let postNames := optionallyEnumerated s!"{base}_post" numPost
+    elemNames ++ postNames |>.map (mkNode ``Lean.binderIdent #[mkIdent ·])
+
+  makeCaseArgs tag names :=
+    let tag := Lean.mkNode ``Lean.binderIdent #[mkIdent tag]
+    let binderIdents := names.map fun n => if n.isInternalDetail 
+      then mkNode ``Lean.binderIdent #[mkHole mkNullNode]
+      else mkNode ``Lean.binderIdent #[mkIdent n]
+    Lean.mkNode ``Lean.Parser.Tactic.caseArg #[tag, mkNullNode (args := binderIdents)]
+
+syntax «progress*_args» := ("using" tactic)?
+
+def parseArgs: TSyntax `ProgressStar.«progress*_args» → CoreM Config 
+| `(«progress*_args»| $[using $preconditionTac:tactic]?) => do
+  return {preconditionTac}
+| _ => throwUnsupportedSyntax
+
+elab "progress" noWs "*" stx:«progress*_args»: tactic => do 
+  let cfg ← parseArgs stx
+  evalProgressStar cfg *> pure ()
+
+elab tk:"progress" noWs "*?" stx:«progress*_args»: tactic => do 
+  let cfg ← parseArgs stx
+  let info ← evalProgressStar cfg
   let suggestion ← `(tacticSeq| $(info.script)*)
   addTryThisTacticSeqSuggestion tk suggestion (origSpan? := ← getRef)
 
