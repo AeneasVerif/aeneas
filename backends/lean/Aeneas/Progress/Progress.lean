@@ -37,8 +37,18 @@ inductive TheoremOrLocal where
 | Theorem (thName : Name)
 | Local (asm : LocalDecl)
 
+inductive UsedTheorem where
+  | givenExpr: Expr → UsedTheorem 
+  | localHyp: LocalDecl → UsedTheorem
+  | progressThm : Name → UsedTheorem
+
 structure Stats where
-  usedTheorem : Syntax
+  usedTheorem : UsedTheorem
+
+def UsedTheorem.toSyntax: UsedTheorem → MetaM Syntax
+| givenExpr e => Lean.Meta.Tactic.TryThis.delabToRefinableSyntax e
+| localHyp decl    => pure <| mkIdent decl.userName
+| progressThm name => pure <| mkIdent name
 
 instance : ToMessageData TheoremOrLocal where
   toMessageData := λ x => match x with | .Theorem thName => m!"{thName}" | .Local asm => m!"{asm.userName}"
@@ -266,7 +276,7 @@ def tryApply (keep : Option Name) (ids : Array (Option Name)) (splitPost : Bool)
 
 -- The array of ids are identifiers to use when introducing fresh variables
 def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option Expr)
-  (ids : Array (Option Name)) (splitPost : Bool) (asmTac : TacticM Unit) : TacticM Syntax := do
+  (ids : Array (Option Name)) (splitPost : Bool) (asmTac : TacticM Unit) : TacticM UsedTheorem := do
   withMainContext do
   -- Retrieve the goal
   let mgoal ← Tactic.getMainGoal
@@ -296,7 +306,7 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option Expr)
     match ← progressWith fExpr th keep ids splitPost asmTac with
     | .Ok =>
       -- Remark: exprToSyntax doesn't give the expected result
-      return ← Lean.Meta.Tactic.TryThis.delabToRefinableSyntax th
+      return .givenExpr th
     | .Error msg => throwError msg
   | none =>
     -- Try all the assumptions one by one and if it fails try to lookup a theorem.
@@ -306,7 +316,7 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option Expr)
       trace[Progress] "Trying assumption: {decl.userName} : {decl.type}"
       let res ← do try progressWith fExpr decl.toExpr keep ids splitPost asmTac catch _ => continue
       match res with
-      | .Ok => return (mkIdent decl.userName)
+      | .Ok => return .localHyp decl
       | .Error msg => throwError msg
     -- It failed: lookup the pspec theorems which match the expression *only
     -- if the function is a constant*
@@ -329,7 +339,7 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option Expr)
       for pspec in pspecs do
         let pspecExpr ← Term.mkConst pspec
         if ← tryApply keep ids splitPost asmTac fExpr "pspec theorem" pspecExpr
-        then return (mkIdent pspec)
+        then return .progressThm pspec
         else pure ()
       -- It failed: try to use the recursive assumptions
       trace[Progress] "Failed using a pspec theorem: trying to use a recursive assumption"
@@ -342,7 +352,7 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option Expr)
         trace[Progress] "Trying recursive assumption: {decl.userName} : {decl.type}"
         let res ← do try progressWith fExpr decl.toExpr keep ids splitPost asmTac catch _ => continue
         match res with
-        | .Ok => return (mkIdent decl.userName)
+        | .Ok => return .localHyp decl
         | .Error msg => throwError msg
       -- Nothing worked: failed
       throwError "Progress failed"
@@ -427,7 +437,7 @@ elab tk:"progress?" args:progressArgs : tactic => do
   let stats ← evalProgress keep? withArg ids
   let mut stxArgs := args.raw
   if stxArgs[1].isNone then
-    let withArg := mkNullNode #[mkAtom "with", stats.usedTheorem]
+    let withArg := mkNullNode #[mkAtom "with", ←stats.usedTheorem.toSyntax]
     stxArgs := stxArgs.setArg 1 withArg
   let tac := mkNode `Aeneas.Progress.progress #[mkAtom "progress", stxArgs]
   Meta.Tactic.TryThis.addSuggestion tk tac (origSpan? := ← getRef)
