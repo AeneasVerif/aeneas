@@ -121,13 +121,56 @@ macro_rules
        Nat.lt_iff_BitVec_ofNat_lt $n, Nat.le_iff_BitVec_ofNat_le $n,
        bvify_simps, push_cast, $args,*] $[at $location]?))
 
+structure Config where
+  /- The maximum number of forward saturation steps.
+
+     Saturation visits the context to instantiate and introduce lemmas in the context.
+     We then recursively explore those lemmas, etc.
+   -/
+  maxSaturateSteps : Nat := 3
+  fastSaturate : Bool := true
+
+declare_config_elab elabConfig Config
+
 def bvifyTacSimp (loc : Utils.Location) (additionalAsms : List FVarId := []): TacticM Unit := do
   withMainContext do
   let simpTheorems ← bvifySimpExt.getTheorems
   let simprocs := [``Nat.reducePow, ``Nat.reduceLT, ``Nat.reduceLeDiff]
   Utils.simpAt true {maxDischargeDepth := 2, failIfUnchanged := false} simprocs [simpTheorems] [] [] additionalAsms loc
 
-def bvifyTac (n : Expr) (loc : Utils.Location) : TacticM Unit := do
+def propConsts : Std.HashSet Name := Std.HashSet.ofList [
+  ``Iff, ``And, ``Or
+]
+
+def arithComparisonConsts : Std.HashSet Name := Std.HashSet.ofList [
+  ``LT.lt, ``LE.le, ``GT.gt, ``GE.ge
+]
+
+def arithBinops : Std.HashSet Name := Std.HashSet.ofList [
+  ``HMod.hMod, ``HDiv.hDiv, ``HAdd.hAdd, ``HSub.hSub, ``HMul.hMul
+]
+
+def exploreSubterms (f : Expr) (args : Array Expr) : MetaM (Array Expr) := do
+  if ¬ f.isConst then return #[]
+  let constName := f.constName!
+  if constName == ``Eq ∧ args.size == 3 then
+    trace[Saturate] "Found `=`"
+    pure #[args[1]!, args[2]!]
+  else if constName ∈ propConsts ∧ args.size == 2 then
+    trace[Saturate] "Found prop const: {f}"
+    pure #[args[0]!, args[1]!]
+  else if constName ∈ arithComparisonConsts ∧ args.size == 4 then
+    trace[Saturate] "Found arith comparison: {f}"
+    pure #[args[2]!, args[3]!]
+  else if constName ∈ arithBinops ∧ args.size == 6 then
+    trace[Saturate] "Found arith binop: {f}"
+    pure #[args[4]!, args[5]!]
+  else if constName == ``BitVec.ofNat ∧ args.size == 2 then
+     pure #[args[1]!]
+  else
+    pure #[]
+
+def bvifyTac (config : Config) (n : Expr) (loc : Utils.Location) : TacticM Unit := do
   Elab.Tactic.focus do
   withMainContext do
   trace[Bvify] "Initial goal: {← getMainGoal}"
@@ -170,39 +213,54 @@ def bvifyTac (n : Expr) (loc : Utils.Location) : TacticM Unit := do
     decls.filterMapM fun d => do if (← inferType d.type).isProp ∧ d.fvarId ∉ ignore then pure (some d.fvarId) else pure none
   /- Saturate the context, by looking only at the new assumptions - we have simplified the old ones.
 
-     In the preprocessing step, we instantiate the value `n` in the theorem -/
+     In the preprocessing step, we instantiate the value `n` in the theorem.
+     We repeteadly explore the introduced assumptions.
+  -/
   let preprocessThm (mvars : Array Expr) (_ : Expr) : MetaM Unit :=
     assert! (mvars.size > 0)
     mvars[0]!.mvarId!.assign n
   let newAsmsSet := Std.HashSet.ofArray newAsms
   let oldAsms ← refreshFVarIds newAsmsSet
   let oldAsmsSet := Std.HashSet.ofArray oldAsms
-  trace[Bvify] "About to saturate by using the assumptions: {oldAsms.map Expr.fvar}"
-  let satAsms ← Saturate.evalSaturate true preprocessThm [`Aeneas.BvifyTac] (some oldAsms)
-  trace[Bvify] "Goal after saturation (added {satAsms.size} assumptions): {← getMainGoal}"
-  /- Finally, simplify the propositions introduced by by using `saturate` -/
-  let (ref, d) ← tacticToDischarge (← `(tactic|scalar_tac))
-  let dischargeWrapper := Lean.Elab.Tactic.Simp.DischargeWrapper.custom ref d
-  let _ ← dischargeWrapper.with fun discharge? => do
-    -- Initialize the simp context
-    let simpThms ← bvifyCSimpExt.getTheorems
-    let (ctx, simprocs) ← Utils.mkSimpCtx true {maxDischargeDepth := 2, failIfUnchanged := false} .simp
-      [] [simpThms] [] [] []
-    -- Apply the simplifier
-    let _ ← Utils.customSimpLocation ctx simprocs discharge? (.targets satAsms false)
-  trace[Bvify] "Goal after simplifying the saturated assumptions (with scalar_tac as a discharger): {← getMainGoal}"
+  trace[Bvify] "About to saturate the context"
+  let rec saturate (steps : Nat) (oldAsmsSet : Std.HashSet FVarId) (tgts : Array FVarId) (exploreGoal : Bool) : TacticM Unit := do
+    if steps = 0 then pure ()
+    else
+      /- Call saturate once -/
+      trace[Bvify] "About to saturate by using the assumptions: {oldAsms.map Expr.fvar}"
+      let satAsms ← Saturate.evalSaturate [`Aeneas.BvifyTac] exploreSubterms preprocessThm (some tgts) exploreGoal
+      trace[Bvify] "Goal after saturation (added {satAsms.size} assumptions): {← getMainGoal}"
+      /- Simplify the propositions introduced by by using `saturate` -/
+      let (ref, d) ← tacticToDischarge (← `(tactic|scalar_tac))
+      let dischargeWrapper := Lean.Elab.Tactic.Simp.DischargeWrapper.custom ref d
+      let _ ← dischargeWrapper.with fun discharge? => do
+        -- Initialize the simp context
+        let simpThms ← bvifyCSimpExt.getTheorems
+        let (ctx, simprocs) ← Utils.mkSimpCtx true {maxDischargeDepth := 2, failIfUnchanged := false} .simp
+          [] [simpThms] [] [] []
+        -- Apply the simplifier
+        let _ ← Utils.customSimpLocation ctx simprocs discharge? (.targets satAsms false)
+      trace[Bvify] "Goal after simplifying the saturated assumptions (with scalar_tac as a discharger): {← getMainGoal}"
+      -- Compute the set of modifies assumptions
+      let satAsms ← refreshFVarIds oldAsmsSet
+      let oldAsms := oldAsmsSet.union (Std.HashSet.ofArray satAsms)
+      saturate (steps - 1) oldAsms satAsms false
+  let oldNewAsmsSet := oldAsmsSet.union newAsmsSet
+  saturate config.maxSaturateSteps newAsmsSet oldAsms true
+  trace[Bvify] "Saturation is done: {← getMainGoal}"
   /- Clear the duplicated assumptions -/
   Utils.clearFVarIds newAsms
   trace[Bvify] "Goal after clearing the duplicated assumptions: {← getMainGoal}"
   /- Simplify again the saturated assumptions, this time by using the `bvify_simps` simpset -/
-  let oldNewAsmsSet := oldAsmsSet.union newAsmsSet
   let satAsms ← refreshFVarIds oldNewAsmsSet
   bvifyTacSimp (.targets satAsms false) []
   if (← getUnsolvedGoals) == [] then return
   trace[Bvify] "Goal after simplifying the saturated assumptions: {← getMainGoal}"
 
-elab "bvify'" n:term : tactic => do
-  bvifyTac (← Elab.Term.elabTerm n (Expr.const ``Nat [])) Utils.Location.wildcard
+elab "bvify'" config:Parser.Tactic.optConfig n:term : tactic => do
+  let config ← elabConfig config
+  let n ← Elab.Term.elabTerm n (Expr.const ``Nat [])
+  bvifyTac config n Utils.Location.wildcard
 
 /-- The `Simp.Context` generated by `bvify`. -/
 def mkBvifyContext (simpArgs : Option (Syntax.TSepArray `Lean.Parser.Tactic.simpStar ",")) :
@@ -293,6 +351,11 @@ theorem BitVec.guarded_ofNat_eq (n : Nat) (a b : Nat) :
   simp only [guarded, and_imp]
   apply BitVec.iff_ofNat_eq
 
+@[bvify_forward a - b]
+theorem BitVec.ofNat_sub_guarded (n a b : Nat) :
+  guarded (b ≤ a) (BitVec.ofNat n (a - b) = BitVec.ofNat n a - BitVec.ofNat n b) := by
+  sorry
+
 attribute [bvify_simps] ZMod.eq_iff_mod ZMod.val_add ZMod.val_sub ZMod.val_mul ZMod.val_sub' ZMod.val_natCast
 attribute [bvify_simps] Nat.add_one_sub_one Nat.add_mod_mod Nat.mod_add_mod
 
@@ -302,5 +365,120 @@ example
   bvify' 32
   have : c.val % 32 = (↑a + ↑b) % 32 ↔ BitVec.ofNat 32 (↑c % 32) = BitVec.ofNat 32 ((↑a + ↑b) % 32) := by assumption
   simp only [hc]
+
+example
+  (a : U32)
+  (b : U32)
+  (ha : (↑a : ℕ) < 3329)
+  (hb : (↑b : ℕ) < 3329)
+  (c1 : U32)
+  (hc1 : (↑c1 : ℕ) = (↑a : ℕ) + (↑b : ℕ))
+  (_ : c1.bv = a.bv + b.bv)
+  (c2 : U32)
+  (hc2 : c2.bv = c1.bv - 3329#32)
+  (c3 : U32)
+  (hc3 : c3.bv = c2.bv >>> 16)
+  (c4 : U32)
+  (hc4 : (↑c4 : ℕ) = (↑(3329#u32 &&& c3) : ℕ))
+  (_ : c4.bv = 3329#32 &&& c3.bv)
+  (c5 : U32)
+  (hc5 : c5.bv = c2.bv + c4.bv) :
+  (↑(↑c5 : ℕ) : ZMod 3329) = (↑(↑a : ℕ) : ZMod 3329) + (↑(↑b : ℕ) : ZMod 3329) ∧ (↑c5 : ℕ) < 3329
+  := by
+  bvify' 32
+  simp_all only
+  bv_decide
+
+/-example
+  (a : U32)
+  (b : U32)
+  (_ : a.val ≤ 6658)
+  (ha : a.val < b.val + 3329)
+  (hb : b.val ≤ 3329)
+  (c1 : U32)
+  (hc1 : c1.bv = a.bv - b.bv)
+  (c2 : U32)
+  (hc2 : c2.bv = c1.bv >>> 16)
+  (c3 : U32)
+  (_ : c3.bv = 3329#32 &&& c2.bv)
+  (c4 : U32)
+  (hc3 : c4 = c1.bv - c3.bv) :
+  (c4.val : ZMod 3329) = (a.val : ZMod 3329) - (b.val : ZMod 3329)
+  := by
+  bvify' (maxSaturateSteps := 1) 32
+  sorry
+
+example
+  (a : U32)
+  (b : U32)
+  (_ : a.val ≤ 6658)
+  (ha : a.val < b.val + 3329)
+  (hb : b.val ≤ 3329)
+  (c1 : U32)
+  (hc1 : c1.bv = a.bv - b.bv)
+  (c2 : U32)
+  (hc2 : c2.bv = c1.bv >>> 16)
+  (c3 : U32)
+  (_ : c3.bv = 3329#32 &&& c2.bv)
+  (c4 : U32)
+  (hc3 : c4 = c1.bv - c3.bv) :
+  (c4.val : ZMod 3329) = (a.val : ZMod 3329) - (b.val : ZMod 3329)
+  := by
+  bvify' (maxSaturateSteps := 2) 32
+  sorry-/
+
+set_option profiler true in
+set_option profiler.threshold 10 in
+example
+  (a : U32)
+  (b : U32)
+  (_ : a.val ≤ 6658)
+  (ha : a.val < b.val + 3329)
+  (hb : b.val ≤ 3329)
+  (c1 : U32)
+  (hc1 : c1.bv = a.bv - b.bv)
+  (c2 : U32)
+  (hc2 : c2.bv = c1.bv >>> 16)
+  (c3 : U32)
+  (_ : c3.bv = 3329#32 &&& c2.bv)
+  (c4 : U32)
+  (hc3 : c4 = c1.bv - c3.bv) :
+  (c4.val : ZMod 3329) = (a.val : ZMod 3329) - (b.val : ZMod 3329)
+  := by
+  set_option trace.Bvify true in
+  bvify' (maxSaturateSteps := 2) 32
+  simp_all only
+  extract_goal1
+  simp_all only
+  simp at *
+  --bv_decide
+
+example
+  (a : U32)
+  (b : U32)
+  (ha : (↑a : ℕ) < (↑b : ℕ) + 3329)
+  (c1 : U32)
+  (hc1 : c1.bv = a.bv - b.bv)
+  (c2 : U32)
+  (c3 : U32)
+  (c4 : U32)
+  (hc2 : c2.bv = (a.bv - b.bv) >>> 16)
+  (x : c3.bv = 3329#32 &&& (a.bv - b.bv) >>> 16)
+  (hc3 : (↑(↑c4 : ℕ) : BitVec 32) = a.bv - b.bv - (3329#32 &&& (a.bv - b.bv) >>> 16))
+  (_ : a.bv ≤ 6658#32)
+  (hb : b.bv ≤ 3329#32)
+  (__6 : (↑c4 : ℕ) % 3329 = ((↑a : ℕ) + (3329 - (↑b : ℕ) % 3329)) % 3329 ↔
+  c4.bv % 3329#32 = (a.bv + (3329#32 - b.bv % 3329#32)) % 3329#32)
+  (__5 : BitVec.ofNat 32 (3329 - (↑b : ℕ) % 3329) = 3329#32 - b.bv % 3329#32)
+  (__4 : a.bv ≤ b.bv + 3329#32 - 1#32)
+  (__3 : b.bv + 3328#32 = b.bv + 3329#32 - 1#32)
+  (__2 : BitVec.ofNat 32 (((↑a : ℕ) + (3329 - (↑b : ℕ) % 3329)) % 3329) = (a.bv + (3329#32 - b.bv % 3329#32)) % 3329#32)
+  (__1 : BitVec.ofNat 32 ((↑b : ℕ) % 3329) = b.bv % 3329#32)
+  (_ : BitVec.ofNat 32 ((↑c4 : ℕ) % 3329) = c4.bv % 3329#32) :
+  c4.bv % 3329#32 = (a.bv + (3329#32 - b.bv % 3329#32)) % 3329#32
+  := by
+
+  bv_decide
+
 
 end Aeneas.Bvify

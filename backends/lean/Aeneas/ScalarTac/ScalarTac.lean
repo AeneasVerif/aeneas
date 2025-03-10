@@ -150,7 +150,7 @@ def scalarTacSaturateForward (fast : Bool) (nonLin : Bool): Tactic.TacticM Unit 
     else ruleSets
   -- TODO
   -- evalAesopSaturate options ruleSets.toArray
-  let _ ← Saturate.evalSaturate fast none ruleSets
+  let _ ← Saturate.evalSaturate ruleSets (if fast then Saturate.exploreArithSubterms else none) none
 
 -- For debugging
 elab "scalar_tac_saturate" config:Parser.Tactic.optConfig : tactic => do
