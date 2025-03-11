@@ -88,11 +88,12 @@ def Info.ofExpr(e: Expr): MetaM (Option Info) := do
       | throwError "Expected ``Decidable.casesOn, found {←ppExpr e.getAppFn}"
     let #[prop, motive, dec, brFalse, brTrue] := e.getAppArgs
       | throwError "Wrong number of parameters for {e.getAppFn}: {e.getAppArgs.size} [{e.getAppArgs}]"
+    let name? ← if e.isDIte 
+      then some <$> Utils.lambdaOne brFalse fun x _ => x.fvarId!.getUserName
+      else pure none
     return some {
       kind,
-      discrs := #[{ toExpr := dec }]
-      -- TODO: I should be able to retrieve the name given to
-      --  the condition of a dite.
+      discrs := #[{ toExpr := dec, name?}]
       branches  := #[
         { toExpr := brTrue,  numArgs := 1, },
         { toExpr := brFalse, numArgs := 1, }
