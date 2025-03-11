@@ -239,12 +239,12 @@ structure Config where
 
 structure Info where
   script: Array Syntax.Tactic := #[]
-  unsolved: List MVarId := []
+  unsolvedPreconditions: List MVarId := []
 
 instance: Append Info where
   append inf1 inf2 := {
     script := inf1.script ++ inf2.script,
-    unsolved := inf1.unsolved ++ inf2.unsolved,
+    unsolvedPreconditions := inf1.unsolvedPreconditions ++ inf2.unsolvedPreconditions,
   }
 
 partial
@@ -260,20 +260,20 @@ def evalProgressStar(cfg: Config): TacticM Info := withMainContext do
     trace[ProgressStar] s!"Traversing {← ppExpr program}"
     let resultName := .str .anonymous "res"
     traverseProgram (onResult resultName) onBind onBif program
-  setGoals (res.unsolved ++ (←getGoals))
+  setGoals (res.unsolvedPreconditions ++ (←getGoals))
   return res
 
 where
-  onResult name expr := do
+  onResult resultName expr := do
     trace[ProgressStar] s!"onResult: Since (· >>= pure) = id, we treat this result as a bind on id"
     -- Since (· >>= pure) = id, we treat a result as a bind on id
-    onBind expr name (pure {})
+    onBind expr resultName (pure {})
 
   onBind _curr name processRest := do
     trace[ProgressStar] s!"onBind: encountered {←ppExpr _curr}"
     if let some {usedTheorem, ..} ← tryProgress then
       trace[ProgressStar] s!"onBind: Can make progress! Binding {name}"
-      let (preconditionTacs,unsolved) ← trySolvePreconditions
+      let (preconditionTacs, unsolved) ← trySolvePreconditions
       if ¬ preconditionTacs.isEmpty then
         trace[ProgressStar] s!"onBind: Found {preconditionTacs.size} preconditions, left {unsolved.size} unsolved"
       let ids ← getIdsFromUsedTheorem name usedTheorem
@@ -285,7 +285,7 @@ where
       let restInfo ← processRest
       return {
         script := #[currTac]++ preconditionTacs, -- TODO: Optimize
-        unsolved := unsolved.toList
+        unsolvedPreconditions := unsolved.toList
       } ++ restInfo
     else return {script:=#[]}
 
