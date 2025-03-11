@@ -14,6 +14,7 @@ structure Discr where
   /-- Name under which to bind the discriminant equation, if provided -/
   name?: Option Name := none
   deriving Repr
+
 instance: ToMessageData Discr where
   toMessageData discr := 
     let nameMD := if let some name := discr.name? then m!"(name {name }) " else ""

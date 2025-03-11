@@ -417,7 +417,7 @@ def parseProgressArgs
   return (keep?, withTh?, ids)
 | _ => throwUnsupportedSyntax
 
-def evalProgress (keep: Option Name)(withArg: Option Expr)(ids: Array (Option Name))
+def evalProgress (keep: Option Name) (withArg: Option Expr) (ids: Array (Option Name))
 : TacticM Stats := do
   withMainContext do
   let splitPost := true
