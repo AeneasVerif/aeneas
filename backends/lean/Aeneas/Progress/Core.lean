@@ -71,7 +71,7 @@ def programTelescope[Inhabited (m α)] [Nonempty (m α)] (ty: Expr)
       -- ty₃ == ty₄ ∧ post?
       let (ty₄, post?) ← Utils.optSplitConj ty₃
       trace[Progress] "After splitting the conjunction:\n- eq: {ty₄}\n- post: {post?}"
-      -- ty₄ == ty₅ = res
+      -- ty₄ == (program = res)
       let (program, res) ← Utils.destEq ty₄
       trace[Progress] "After splitting the equality:\n- lhs: {program}\n- rhs: {res}"
       k xs (zs.map (·.fvarId!)) program res post?
