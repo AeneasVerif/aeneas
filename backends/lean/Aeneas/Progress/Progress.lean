@@ -57,7 +57,9 @@ instance: ToString UsedTheorem where
   | .progressThm name => s!"progress theorem {name}"
 
 def toSyntax: UsedTheorem → MetaM Syntax.Term
-| givenExpr e => Lean.Meta.Tactic.TryThis.delabToRefinableSyntax e
+| givenExpr e => 
+  -- Remark: exprToSyntax doesn't give the expected result
+  Lean.Meta.Tactic.TryThis.delabToRefinableSyntax e
 | localHyp decl    => pure <| mkIdent decl.userName
 | progressThm name => pure <| mkIdent name
 
