@@ -37,29 +37,44 @@ inductive TheoremOrLocal where
 | Theorem (thName : Name)
 | Local (asm : LocalDecl)
 
+instance : ToMessageData TheoremOrLocal where
+  toMessageData := λ x => match x with | .Theorem thName => m!"{thName}" | .Local asm => m!"{asm.userName}"
+
+instance : Coe TheoremOrLocal Name where
+  coe := λ x => match x with | .Theorem thName => thName | .Local asm => asm.userName
+
 inductive UsedTheorem where
   | givenExpr: Expr → UsedTheorem 
   | localHyp: LocalDecl → UsedTheorem
   | progressThm : Name → UsedTheorem
+
+namespace UsedTheorem
+
 instance: ToString UsedTheorem where
   toString
   | .givenExpr _e => "given expression"
   | .localHyp decl => s!"local hypothesis {decl.userName.toString}"
   | .progressThm name => s!"progress theorem {name}"
 
-structure Stats where
-  usedTheorem : UsedTheorem
-
-def UsedTheorem.toSyntax: UsedTheorem → MetaM Syntax.Term
+def toSyntax: UsedTheorem → MetaM Syntax.Term
 | givenExpr e => Lean.Meta.Tactic.TryThis.delabToRefinableSyntax e
 | localHyp decl    => pure <| mkIdent decl.userName
 | progressThm name => pure <| mkIdent name
 
-instance : ToMessageData TheoremOrLocal where
-  toMessageData := λ x => match x with | .Theorem thName => m!"{thName}" | .Local asm => m!"{asm.userName}"
+def getType: UsedTheorem -> MetaM (Option Expr)
+| givenExpr e => inferType e
+| localHyp decl =>inferType decl.toExpr
+| progressThm name => do
+  if let some cinfo := (←getEnv).find? name then
+    let expr := cinfo.value! (allowOpaque := true)
+    inferType expr
+  else 
+    return none
 
-instance : Coe TheoremOrLocal Name where
-  coe := λ x => match x with | .Theorem thName => thName | .Local asm => asm.userName
+end UsedTheorem
+
+structure Stats where
+  usedTheorem : UsedTheorem
 
 /- Type to propagate the errors of `progressWith`.
    We need this because we use the exceptions to backtrack, when trying to
