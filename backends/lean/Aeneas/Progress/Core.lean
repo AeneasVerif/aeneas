@@ -54,7 +54,7 @@ def programTelescope[Inhabited (m α)] [Nonempty (m α)] (ty: Expr)
   (k: (xs:Array Expr) → (zs:Array FVarId) → (program:Expr) → (res:Expr) → (post:Option Expr) → m α)
   (isGoal : Bool := true)
 : m α := do
-  unless ←isDefEq (←inferType ty) (mkSort 0) do
+  unless ←isProp ty do
     throwError "Expected a proposition, got {←inferType ty}"
   let telescope (th: Expr) (k : Array Expr → Expr → m α) : m α :=
     if isGoal then forallTelescope th.consumeMData (fun fvars th => k fvars th)
