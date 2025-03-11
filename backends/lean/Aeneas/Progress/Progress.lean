@@ -50,7 +50,7 @@ instance: ToString UsedTheorem where
 structure Stats where
   usedTheorem : UsedTheorem
 
-def UsedTheorem.toSyntax: UsedTheorem → MetaM Syntax
+def UsedTheorem.toSyntax: UsedTheorem → MetaM Syntax.Term
 | givenExpr e => Lean.Meta.Tactic.TryThis.delabToRefinableSyntax e
 | localHyp decl    => pure <| mkIdent decl.userName
 | progressThm name => pure <| mkIdent name

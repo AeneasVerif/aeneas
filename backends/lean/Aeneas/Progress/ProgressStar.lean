@@ -276,8 +276,8 @@ where
       if ¬ ids.isEmpty && ¬ (←getGoals).isEmpty then
         evalTactic <| ←`(tactic| rename_i $ids*)
       let currTac ← if ids.isEmpty 
-        then `(tactic| progress)
-        else `(tactic| progress as ⟨$ids,*⟩)
+        then `(tactic| progress with $(←usedTheorem.toSyntax))
+        else `(tactic| progress with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩)
       let restInfo ← processRest
       return {
         script := #[currTac]++ preconditionTacs, -- TODO: Optimize
@@ -369,10 +369,10 @@ where
       else mkNode ``Lean.binderIdent #[mkIdent n]
     Lean.mkNode ``Lean.Parser.Tactic.caseArg #[tag, mkNullNode (args := binderIdents)]
 
-syntax «progress*_args» := ("using" tactic)?
+syntax «progress*_args» := ("by" tactic)?
 
 def parseArgs: TSyntax `ProgressStar.«progress*_args» → CoreM Config 
-| `(«progress*_args»| $[using $preconditionTac:tactic]?) => do
+| `(«progress*_args»| $[by $preconditionTac:tactic]?) => do
   return {preconditionTac}
 | _ => throwUnsupportedSyntax
 
