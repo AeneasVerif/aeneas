@@ -141,50 +141,6 @@ theorem BitVec.ofNat_sub' (n a b : Nat) (h : b ≤ a) :
   conv => rhs; rw [Int.sub_emod]
   simp only [dvd_refl, Int.emod_emod_of_dvd]
 
-@[simp, bvify_simps]
-theorem UScalar.BitVec_ofNat_val (x : UScalar ty) : BitVec.ofNat ty.numBits x.val = x.bv := by
-  cases x; simp only [UScalar.val, BitVec.ofNat_toNat, BitVec.setWidth_eq]
-
-@[simp, bvify_simps] theorem U8.BitVec_ofNat_val (x : U8) : BitVec.ofNat 8 x.val = x.bv := UScalar.BitVec_ofNat_val x
-@[simp, bvify_simps] theorem U16.BitVec_ofNat_val (x : U16) : BitVec.ofNat 16 x.val = x.bv := UScalar.BitVec_ofNat_val x
-@[simp, bvify_simps] theorem U32.BitVec_ofNat_val (x : U32) : BitVec.ofNat 32 x.val = x.bv := UScalar.BitVec_ofNat_val x
-@[simp, bvify_simps] theorem U64.BitVec_ofNat_val (x : U64) : BitVec.ofNat 64 x.val = x.bv := UScalar.BitVec_ofNat_val x
-@[simp, bvify_simps] theorem U128.BitVec_ofNat_val (x : U128) : BitVec.ofNat 128 x.val = x.bv := UScalar.BitVec_ofNat_val x
-@[simp, bvify_simps] theorem Usize.BitVec_ofNat_val (x : Usize) : BitVec.ofNat System.Platform.numBits x.val = x.bv := UScalar.BitVec_ofNat_val x
-
-@[simp, bvify_simps]
-theorem IScalar.BitVec_ofInt_val (x : IScalar ty) : BitVec.ofInt ty.numBits x.val = x.bv := by
-  cases x; simp only [IScalar.val, BitVec.ofInt_toInt, BitVec.setWidth_eq]
-
-@[simp, bvify_simps] theorem I8.BitVec_ofInt_val (x : I8) : BitVec.ofInt 8 x.val = x.bv := IScalar.BitVec_ofInt_val x
-@[simp, bvify_simps] theorem I16.BitVec_ofInt_val (x : I16) : BitVec.ofInt 16 x.val = x.bv := IScalar.BitVec_ofInt_val x
-@[simp, bvify_simps] theorem I32.BitVec_ofInt_val (x : I32) : BitVec.ofInt 32 x.val = x.bv := IScalar.BitVec_ofInt_val x
-@[simp, bvify_simps] theorem I64.BitVec_ofInt_val (x : I64) : BitVec.ofInt 64 x.val = x.bv := IScalar.BitVec_ofInt_val x
-@[simp, bvify_simps] theorem I128.BitVec_ofInt_val (x : I128) : BitVec.ofInt 128 x.val = x.bv := IScalar.BitVec_ofInt_val x
-@[simp, bvify_simps] theorem Isize.BitVec_ofInt_val (x : Isize) : BitVec.ofInt System.Platform.numBits x.val = x.bv := IScalar.BitVec_ofInt_val x
-
-@[simp, bvify_simps]
-theorem UScalar.Nat_cast_BitVec_val (x : UScalar ty) : Nat.cast x.val = x.bv := by
-  simp only [BitVec.natCast_eq_ofNat, UScalar.BitVec_ofNat_val_eq]
-
-@[simp, bvify_simps] theorem U8.Nat_cast_BitVec_val (x : U8) : Nat.cast x.val = x.bv := UScalar.Nat_cast_BitVec_val x
-@[simp, bvify_simps] theorem U16.Nat_cast_BitVec_val (x : U16) : Nat.cast x.val = x.bv := UScalar.Nat_cast_BitVec_val x
-@[simp, bvify_simps] theorem U32.Nat_cast_BitVec_val (x : U32) : Nat.cast x.val = x.bv := UScalar.Nat_cast_BitVec_val x
-@[simp, bvify_simps] theorem U64.Nat_cast_BitVec_val (x : U64) : Nat.cast x.val = x.bv := UScalar.Nat_cast_BitVec_val x
-@[simp, bvify_simps] theorem U128.Nat_cast_BitVec_val (x : U128) : Nat.cast x.val = x.bv := UScalar.Nat_cast_BitVec_val x
-@[simp, bvify_simps] theorem Usize.Nat_cast_BitVec_val (x : Usize) : Nat.cast x.val = x.bv := UScalar.Nat_cast_BitVec_val x
-
-@[simp, bvify_simps]
-theorem IScalar.Nat_cast_BitVec_val (x : IScalar ty) : Int.cast x.val = x.bv := by
-  simp only [Int.cast, IntCast.intCast, BitVec_ofInt_val]
-
-@[simp, bvify_simps] theorem I8.Nat_cast_BitVec_val (x : I8) : Int.cast x.val = x.bv := IScalar.Nat_cast_BitVec_val x
-@[simp, bvify_simps] theorem I16.Nat_cast_BitVec_val (x : I16) : Int.cast x.val = x.bv := IScalar.Nat_cast_BitVec_val x
-@[simp, bvify_simps] theorem I32.Nat_cast_BitVec_val (x : I32) : Int.cast x.val = x.bv := IScalar.Nat_cast_BitVec_val x
-@[simp, bvify_simps] theorem I64.Nat_cast_BitVec_val (x : I64) : Int.cast x.val = x.bv := IScalar.Nat_cast_BitVec_val x
-@[simp, bvify_simps] theorem I128.Nat_cast_BitVec_val (x : I128) : Int.cast x.val = x.bv := IScalar.Nat_cast_BitVec_val x
-@[simp, bvify_simps] theorem Isize.Nat_cast_BitVec_val (x : Isize) : Int.cast x.val = x.bv := IScalar.Nat_cast_BitVec_val x
-
 attribute [bvify_simps] ZMod.eq_iff_mod ZMod.val_add ZMod.val_sub ZMod.val_mul ZMod.val_sub' ZMod.val_natCast
 attribute [bvify_simps] Nat.add_one_sub_one Nat.add_mod_mod Nat.mod_add_mod
 

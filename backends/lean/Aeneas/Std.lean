@@ -1,7 +1,6 @@
 import Aeneas.Std.Alloc
 import Aeneas.Std.Array
 import Aeneas.Std.Core
-import Aeneas.Std.CoreConvertNum
 import Aeneas.Std.Primitives
 import Aeneas.Std.PrimitivesLemmas
 import Aeneas.Std.Scalar
