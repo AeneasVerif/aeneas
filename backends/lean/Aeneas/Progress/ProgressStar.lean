@@ -278,7 +278,7 @@ where
   getIdsFromUsedTheorem name usedTheorem: TacticM (Array _) := do
     let some thm ← usedTheorem.getType
       | throwError s!"Could not infer proposition of {usedTheorem}"
-    let (numElem, numPost) ← aeneasProgramTelescope thm 
+    let (numElem, numPost) ← Progress.programTelescope thm 
       fun _xs zs _program _res postconds => do
         let numPost := Utils.numOfConjuncts <$> postconds |>.getD 0
         trace[ProgressStar] s!"Number of conjuncts for {←liftM (Option.traverse ppExpr postconds)} is {numPost}"
