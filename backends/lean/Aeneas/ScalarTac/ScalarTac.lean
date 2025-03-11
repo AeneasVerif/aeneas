@@ -130,12 +130,14 @@ structure Config where
      If equal to 0, we do not call `simpAll` at all.
    -/
   simpAllMaxSteps : Nat := 2000
+  /- Should we saturate the context with theorems marked with the attribute `scalar_tac`? -/
+  saturate : Bool := true
   fastSaturate : Bool := false
 
 declare_config_elab elabConfig Config
 
 /-- Apply the scalar_tac forward rules -/
-def scalarTacSaturateForward (fast : Bool) (nonLin : Bool): Tactic.TacticM Unit := do
+def scalarTacSaturateForward (fast : Bool) (nonLin : Bool): Tactic.TacticM (Array FVarId) := do
   /-
   let options : Aesop.Options := {}
   -- Use a forward max depth of 0 to prevent recursively applying forward rules on the assumptions
@@ -150,12 +152,12 @@ def scalarTacSaturateForward (fast : Bool) (nonLin : Bool): Tactic.TacticM Unit 
     else ruleSets
   -- TODO
   -- evalAesopSaturate options ruleSets.toArray
-  let _ ← Saturate.evalSaturate ruleSets (if fast then Saturate.exploreArithSubterms else none) none
+  Saturate.evalSaturate ruleSets (if fast then Saturate.exploreArithSubterms else none) none
 
 -- For debugging
 elab "scalar_tac_saturate" config:Parser.Tactic.optConfig : tactic => do
   let config ← elabConfig config
-  scalarTacSaturateForward config.fastSaturate config.nonLin
+  let _ ← scalarTacSaturateForward config.fastSaturate config.nonLin
 
 /- Propositional logic simp lemmas -/
 attribute [scalar_tac_simp]
@@ -192,7 +194,8 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
                 [] .wildcard
   trace[ScalarTac] "Goal after first simplification: {← getMainGoal}"
   -- Apply the forward rules
-  allGoalsNoRecover (scalarTacSaturateForward config.fastSaturate config.nonLin)
+  if config.saturate then
+    allGoalsNoRecover (do let _ ← scalarTacSaturateForward config.fastSaturate config.nonLin)
   trace[ScalarTac] "Goal after saturation: {← getMainGoal}"
   -- Apply `simpAll`
   if config.simpAllMaxSteps ≠ 0 then
