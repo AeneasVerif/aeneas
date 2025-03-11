@@ -262,5 +262,16 @@ example
   (↑(↑c5 : ℕ) : ZMod 3329) = (↑(↑a : ℕ) : ZMod 3329) + (↑(↑b : ℕ) : ZMod 3329) ∧ (↑c5 : ℕ) < 3329
   := by
   bv_tac 32
+example
+  (a : U32)
+  (b : U32)
+  (h : a.val < 3329 ∧ b.val < 3329 ∨ a.val < 6658 ∧ b.val = 3329)
+  (c1 : U32)
+  (hc1 : c1 = core.num.U32.wrapping_sub a b)
+  (c2 : U32)
+  (hc2 : c2.bv = c1.bv >>> 16) :
+  (decide (c2 = 0#u32) || decide (c2 = 65535#u32)) = true
+  := by
+  bv_tac
 
 end Aeneas.BvTac
