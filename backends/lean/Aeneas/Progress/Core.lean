@@ -61,17 +61,17 @@ def programTelescope[Inhabited (m α)] [Nonempty (m α)] (ty: Expr)
     else do
       let (mvars, _, th) ← forallMetaTelescope th.consumeMData
       k mvars th
-  -- ty := ∀ xs, ty₂
+  -- ty == ∀ xs, ty₂
   telescope ty.consumeMData fun xs ty₂ => do
     trace[Progress] "Universally quantified arguments and assumptions: {xs}"
-    -- ty₂ := ∃ zs, ty₃ ≃ Exists {α} (fun zs => ty₃)
+    -- ty₂ == ∃ zs, ty₃ ≃ Exists {α} (fun zs => ty₃)
     existsTelescope ty₂ fun zs ty₃ => do
       trace[Progress] "Existentials: {zs}"
       trace[Progress] "Proposition after stripping the quantifiers: {ty₃}"
-      -- ty₃ := ty₄ ∧ post?
+      -- ty₃ == ty₄ ∧ post?
       let (ty₄, post?) ← Utils.optSplitConj ty₃
       trace[Progress] "After splitting the conjunction:\n- eq: {ty₄}\n- post: {post?}"
-      -- ty₄ := ty₅ = res
+      -- ty₄ == ty₅ = res
       let (program, res) ← Utils.destEq ty₄
       trace[Progress] "After splitting the equality:\n- lhs: {program}\n- rhs: {res}"
       k xs (zs.map (·.fvarId!)) program res post?
