@@ -94,7 +94,7 @@ theorem Nat.mod_le_imp_mod_le (a b c : Nat) (h : b ≠ 0 ∧ (a < c ∨ b ≤ c)
 attribute [bvify_simps] ge_iff_le gt_iff_lt decide_eq_true_eq BitVec.ofNat_add or_self or_true
                         Bool.or_eq_true Bool.and_eq_true decide_eq_true_eq
 
-attribute [bvify_csimps] BitVec.ofNat_add
+attribute [bvify_simps] BitVec.ofNat_add
 
 theorem BitVec.iff_ofNat_eq (n a b : Nat) (ha : a < 2^n) (hb : b < 2^n) :
   a = b ↔ BitVec.ofNat n a = BitVec.ofNat n b := by
@@ -117,12 +117,12 @@ theorem BitVec.ofNat_mod (n : Nat) (a b : Nat) (ha : a < 2^n) (hb : b < 2^n) :
     have : (a % b) % 2^n  = a % b:= by apply Nat.mod_eq_of_lt; omega
     simp only [*]
 
-@[bvify_csimps]
+@[bvify_simps]
 theorem BitVec.ofNat_mod' (n a b : Nat) (h : a < 2^n ∧ b < 2^n) :
   BitVec.ofNat n (a % b) = BitVec.ofNat n a % BitVec.ofNat n b := by
   apply BitVec.ofNat_mod <;> simp [*]
 
-@[bvify_csimps]
+@[bvify_simps]
 theorem BitVec.ofNat_sub' (n a b : Nat) (h : b ≤ a) :
   BitVec.ofNat n (a - b) = BitVec.ofNat n a - BitVec.ofNat n b := by
   simp [BitVec.toNat_eq]
@@ -141,49 +141,49 @@ theorem BitVec.ofNat_sub' (n a b : Nat) (h : b ≤ a) :
   conv => rhs; rw [Int.sub_emod]
   simp only [dvd_refl, Int.emod_emod_of_dvd]
 
-@[simp, bvify_simps, bvify_csimps]
+@[simp, bvify_simps]
 theorem UScalar.BitVec_ofNat_val (x : UScalar ty) : BitVec.ofNat ty.numBits x.val = x.bv := by
   cases x; simp only [UScalar.val, BitVec.ofNat_toNat, BitVec.setWidth_eq]
 
-@[simp, bvify_simps, bvify_csimps] theorem U8.BitVec_ofNat_val (x : U8) : BitVec.ofNat 8 x.val = x.bv := UScalar.BitVec_ofNat_val x
-@[simp, bvify_simps, bvify_csimps] theorem U16.BitVec_ofNat_val (x : U16) : BitVec.ofNat 16 x.val = x.bv := UScalar.BitVec_ofNat_val x
-@[simp, bvify_simps, bvify_csimps] theorem U32.BitVec_ofNat_val (x : U32) : BitVec.ofNat 32 x.val = x.bv := UScalar.BitVec_ofNat_val x
-@[simp, bvify_simps, bvify_csimps] theorem U64.BitVec_ofNat_val (x : U64) : BitVec.ofNat 64 x.val = x.bv := UScalar.BitVec_ofNat_val x
-@[simp, bvify_simps, bvify_csimps] theorem U128.BitVec_ofNat_val (x : U128) : BitVec.ofNat 128 x.val = x.bv := UScalar.BitVec_ofNat_val x
-@[simp, bvify_simps, bvify_csimps] theorem Usize.BitVec_ofNat_val (x : Usize) : BitVec.ofNat System.Platform.numBits x.val = x.bv := UScalar.BitVec_ofNat_val x
+@[simp, bvify_simps] theorem U8.BitVec_ofNat_val (x : U8) : BitVec.ofNat 8 x.val = x.bv := UScalar.BitVec_ofNat_val x
+@[simp, bvify_simps] theorem U16.BitVec_ofNat_val (x : U16) : BitVec.ofNat 16 x.val = x.bv := UScalar.BitVec_ofNat_val x
+@[simp, bvify_simps] theorem U32.BitVec_ofNat_val (x : U32) : BitVec.ofNat 32 x.val = x.bv := UScalar.BitVec_ofNat_val x
+@[simp, bvify_simps] theorem U64.BitVec_ofNat_val (x : U64) : BitVec.ofNat 64 x.val = x.bv := UScalar.BitVec_ofNat_val x
+@[simp, bvify_simps] theorem U128.BitVec_ofNat_val (x : U128) : BitVec.ofNat 128 x.val = x.bv := UScalar.BitVec_ofNat_val x
+@[simp, bvify_simps] theorem Usize.BitVec_ofNat_val (x : Usize) : BitVec.ofNat System.Platform.numBits x.val = x.bv := UScalar.BitVec_ofNat_val x
 
-@[simp, bvify_simps, bvify_csimps]
+@[simp, bvify_simps]
 theorem IScalar.BitVec_ofInt_val (x : IScalar ty) : BitVec.ofInt ty.numBits x.val = x.bv := by
   cases x; simp only [IScalar.val, BitVec.ofInt_toInt, BitVec.setWidth_eq]
 
-@[simp, bvify_simps, bvify_csimps] theorem I8.BitVec_ofInt_val (x : I8) : BitVec.ofInt 8 x.val = x.bv := IScalar.BitVec_ofInt_val x
-@[simp, bvify_simps, bvify_csimps] theorem I16.BitVec_ofInt_val (x : I16) : BitVec.ofInt 16 x.val = x.bv := IScalar.BitVec_ofInt_val x
-@[simp, bvify_simps, bvify_csimps] theorem I32.BitVec_ofInt_val (x : I32) : BitVec.ofInt 32 x.val = x.bv := IScalar.BitVec_ofInt_val x
-@[simp, bvify_simps, bvify_csimps] theorem I64.BitVec_ofInt_val (x : I64) : BitVec.ofInt 64 x.val = x.bv := IScalar.BitVec_ofInt_val x
-@[simp, bvify_simps, bvify_csimps] theorem I128.BitVec_ofInt_val (x : I128) : BitVec.ofInt 128 x.val = x.bv := IScalar.BitVec_ofInt_val x
-@[simp, bvify_simps, bvify_csimps] theorem Isize.BitVec_ofInt_val (x : Isize) : BitVec.ofInt System.Platform.numBits x.val = x.bv := IScalar.BitVec_ofInt_val x
+@[simp, bvify_simps] theorem I8.BitVec_ofInt_val (x : I8) : BitVec.ofInt 8 x.val = x.bv := IScalar.BitVec_ofInt_val x
+@[simp, bvify_simps] theorem I16.BitVec_ofInt_val (x : I16) : BitVec.ofInt 16 x.val = x.bv := IScalar.BitVec_ofInt_val x
+@[simp, bvify_simps] theorem I32.BitVec_ofInt_val (x : I32) : BitVec.ofInt 32 x.val = x.bv := IScalar.BitVec_ofInt_val x
+@[simp, bvify_simps] theorem I64.BitVec_ofInt_val (x : I64) : BitVec.ofInt 64 x.val = x.bv := IScalar.BitVec_ofInt_val x
+@[simp, bvify_simps] theorem I128.BitVec_ofInt_val (x : I128) : BitVec.ofInt 128 x.val = x.bv := IScalar.BitVec_ofInt_val x
+@[simp, bvify_simps] theorem Isize.BitVec_ofInt_val (x : Isize) : BitVec.ofInt System.Platform.numBits x.val = x.bv := IScalar.BitVec_ofInt_val x
 
-@[simp, bvify_simps, bvify_csimps]
+@[simp, bvify_simps]
 theorem UScalar.Nat_cast_BitVec_val (x : UScalar ty) : Nat.cast x.val = x.bv := by
   simp only [BitVec.natCast_eq_ofNat, UScalar.BitVec_ofNat_val_eq]
 
-@[simp, bvify_simps, bvify_csimps] theorem U8.Nat_cast_BitVec_val (x : U8) : Nat.cast x.val = x.bv := UScalar.Nat_cast_BitVec_val x
-@[simp, bvify_simps, bvify_csimps] theorem U16.Nat_cast_BitVec_val (x : U16) : Nat.cast x.val = x.bv := UScalar.Nat_cast_BitVec_val x
-@[simp, bvify_simps, bvify_csimps] theorem U32.Nat_cast_BitVec_val (x : U32) : Nat.cast x.val = x.bv := UScalar.Nat_cast_BitVec_val x
-@[simp, bvify_simps, bvify_csimps] theorem U64.Nat_cast_BitVec_val (x : U64) : Nat.cast x.val = x.bv := UScalar.Nat_cast_BitVec_val x
-@[simp, bvify_simps, bvify_csimps] theorem U128.Nat_cast_BitVec_val (x : U128) : Nat.cast x.val = x.bv := UScalar.Nat_cast_BitVec_val x
-@[simp, bvify_simps, bvify_csimps] theorem Usize.Nat_cast_BitVec_val (x : Usize) : Nat.cast x.val = x.bv := UScalar.Nat_cast_BitVec_val x
+@[simp, bvify_simps] theorem U8.Nat_cast_BitVec_val (x : U8) : Nat.cast x.val = x.bv := UScalar.Nat_cast_BitVec_val x
+@[simp, bvify_simps] theorem U16.Nat_cast_BitVec_val (x : U16) : Nat.cast x.val = x.bv := UScalar.Nat_cast_BitVec_val x
+@[simp, bvify_simps] theorem U32.Nat_cast_BitVec_val (x : U32) : Nat.cast x.val = x.bv := UScalar.Nat_cast_BitVec_val x
+@[simp, bvify_simps] theorem U64.Nat_cast_BitVec_val (x : U64) : Nat.cast x.val = x.bv := UScalar.Nat_cast_BitVec_val x
+@[simp, bvify_simps] theorem U128.Nat_cast_BitVec_val (x : U128) : Nat.cast x.val = x.bv := UScalar.Nat_cast_BitVec_val x
+@[simp, bvify_simps] theorem Usize.Nat_cast_BitVec_val (x : Usize) : Nat.cast x.val = x.bv := UScalar.Nat_cast_BitVec_val x
 
-@[simp, bvify_simps, bvify_csimps]
+@[simp, bvify_simps]
 theorem IScalar.Nat_cast_BitVec_val (x : IScalar ty) : Int.cast x.val = x.bv := by
   simp only [Int.cast, IntCast.intCast, BitVec_ofInt_val]
 
-@[simp, bvify_simps, bvify_csimps] theorem I8.Nat_cast_BitVec_val (x : I8) : Int.cast x.val = x.bv := IScalar.Nat_cast_BitVec_val x
-@[simp, bvify_simps, bvify_csimps] theorem I16.Nat_cast_BitVec_val (x : I16) : Int.cast x.val = x.bv := IScalar.Nat_cast_BitVec_val x
-@[simp, bvify_simps, bvify_csimps] theorem I32.Nat_cast_BitVec_val (x : I32) : Int.cast x.val = x.bv := IScalar.Nat_cast_BitVec_val x
-@[simp, bvify_simps, bvify_csimps] theorem I64.Nat_cast_BitVec_val (x : I64) : Int.cast x.val = x.bv := IScalar.Nat_cast_BitVec_val x
-@[simp, bvify_simps, bvify_csimps] theorem I128.Nat_cast_BitVec_val (x : I128) : Int.cast x.val = x.bv := IScalar.Nat_cast_BitVec_val x
-@[simp, bvify_simps, bvify_csimps] theorem Isize.Nat_cast_BitVec_val (x : Isize) : Int.cast x.val = x.bv := IScalar.Nat_cast_BitVec_val x
+@[simp, bvify_simps] theorem I8.Nat_cast_BitVec_val (x : I8) : Int.cast x.val = x.bv := IScalar.Nat_cast_BitVec_val x
+@[simp, bvify_simps] theorem I16.Nat_cast_BitVec_val (x : I16) : Int.cast x.val = x.bv := IScalar.Nat_cast_BitVec_val x
+@[simp, bvify_simps] theorem I32.Nat_cast_BitVec_val (x : I32) : Int.cast x.val = x.bv := IScalar.Nat_cast_BitVec_val x
+@[simp, bvify_simps] theorem I64.Nat_cast_BitVec_val (x : I64) : Int.cast x.val = x.bv := IScalar.Nat_cast_BitVec_val x
+@[simp, bvify_simps] theorem I128.Nat_cast_BitVec_val (x : I128) : Int.cast x.val = x.bv := IScalar.Nat_cast_BitVec_val x
+@[simp, bvify_simps] theorem Isize.Nat_cast_BitVec_val (x : Isize) : Int.cast x.val = x.bv := IScalar.Nat_cast_BitVec_val x
 
 attribute [bvify_simps] ZMod.eq_iff_mod ZMod.val_add ZMod.val_sub ZMod.val_mul ZMod.val_sub' ZMod.val_natCast
 attribute [bvify_simps] Nat.add_one_sub_one Nat.add_mod_mod Nat.mod_add_mod
@@ -214,25 +214,22 @@ macro_rules
        Nat.lt_iff_BitVec_ofNat_lt $n, Nat.le_iff_BitVec_ofNat_le $n,
        bvify_simps, push_cast, $args,*] $[at $location]?))
 
-def bvifyTacSimp (loc : Utils.Location) (additionalAsms : List FVarId := []): TacticM Unit := do
+def bvifyTacSimp (loc : Utils.Location) (additionalAsms : List FVarId := []) (dischWithScalarTac : Bool) : TacticM Unit := do
   withMainContext do
   let simpTheorems ← bvifySimpExt.getTheorems
-  let simprocs := [``Nat.reducePow, ``Nat.reduceLT, ``Nat.reduceLeDiff]
-  Utils.simpAt true {maxDischargeDepth := 2, failIfUnchanged := false} simprocs [simpTheorems] [] [] additionalAsms loc
-
-def bvifyTacCSimp (loc : Utils.Location) (additionalAsms : List FVarId := []): TacticM Unit := do
-  withMainContext do
-  -- TODO: saturate before-hand, then scalar_tac (saturate := false)
-  let (ref, d) ← tacticToDischarge (← `(tactic|scalar_tac))
+  let simprocs := [``Nat.reducePow, ``Nat.reduceLT, ``Nat.reduceLeDiff] -- TODO: update the list?
+  if dischWithScalarTac then
+    -- TODO: saturate before-hand, then scalar_tac (saturate := false)
+    let (ref, d) ← tacticToDischarge (← `(tactic|scalar_tac))
     let dischargeWrapper := Lean.Elab.Tactic.Simp.DischargeWrapper.custom ref d
     let _ ← dischargeWrapper.with fun discharge? => do
       -- Initialize the simp context
-      let simprocs := [``Nat.reducePow, ``Nat.reduceLT, ``Nat.reduceLeDiff] -- TODO: update the list of simprocs?
-      let simpThms ← bvifyCSimpExt.getTheorems
       let (ctx, simprocs) ← Utils.mkSimpCtx true {maxDischargeDepth := 2, failIfUnchanged := false} .simp
-        simprocs [simpThms] [] [] additionalAsms
+        simprocs [simpTheorems] [] [] additionalAsms
       -- Apply the simplifier
       let _ ← Utils.customSimpLocation ctx simprocs discharge? loc
+  else
+    Utils.simpAt true {maxDischargeDepth := 2, failIfUnchanged := false} simprocs [simpTheorems] [] [] additionalAsms loc
 
 def bvifyTac (n : Expr) (loc : Utils.Location) : TacticM Unit := do
   Elab.Tactic.focus do
@@ -277,16 +274,14 @@ def bvifyTac (n : Expr) (loc : Utils.Location) : TacticM Unit := do
   --let lt_iff_csimp ← addThm ``BitVec.lt_pow_lt_iff_ofNat_le
   let eq_iff ← addThm ``BitVec.iff_ofNat_eq'
   trace[Bvify] "Goal after adding the additional simp assumptions: {← getMainGoal}"
-  let additionalThms := [le_iff, lt_iff, lt_max_iff, eq_iff]
   let additionalSimpThms := [le_iff, lt_iff, lt_max_iff, eq_iff]
-  let additionalCSimpThms := [le_iff, lt_max_iff, lt_iff, eq_iff]
   /- Simplify the targets (note that we preserve the new assumptions for `scalar_tac`) -/
   let (loc, notLocAsms) ← do
     match loc with
     | .wildcard => pure (Utils.Location.targets oldAsms true, ← getOtherAsms oldAsmsSet)
     | .wildcard_dep => throwError "Unreachable"
     | .targets hyps type => pure (Utils.Location.targets hyps type, ← getOtherAsms (Std.HashSet.ofArray hyps))
-  bvifyTacSimp loc additionalSimpThms
+  bvifyTacSimp loc additionalSimpThms false
   if (← getUnsolvedGoals) == [] then return
   trace[Bvify] "Goal after simplifying: {← getMainGoal}"
   /- Simplify the targets by using `scalar_tac` as a discharger -/
@@ -296,11 +291,11 @@ def bvifyTac (n : Expr) (loc : Utils.Location) : TacticM Unit := do
     | .wildcard => pure (Utils.Location.targets (← refreshFVarIds oldAsmsSet notLocAsmsSet) true) --, ← refreshFVarIds oldAsmsSet notLocAsmsSet)
     | .wildcard_dep => throwError "Unreachable"
     | .targets hyps type => pure (Utils.Location.targets (← refreshFVarIds (Std.HashSet.ofArray hyps) notLocAsmsSet) type) --, ← refreshFVarIds oldAsmsSet notLocAsmsSet)
-  bvifyTacCSimp nloc additionalCSimpThms
+  bvifyTacSimp nloc additionalSimpThms true
   /- Clear the additional assumptions -/
   Utils.clearFVarIds newAsms
   trace[Bvify] "Goal after clearing the duplicated assumptions: {← getMainGoal}"
-  Utils.clearFVarIds additionalThms.toArray
+  Utils.clearFVarIds additionalSimpThms.toArray
   trace[Bvify] "Goal after clearing the additional theorems: {← getMainGoal}"
 
 elab "bvify'" n:term : tactic => do

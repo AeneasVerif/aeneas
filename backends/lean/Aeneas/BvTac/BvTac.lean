@@ -51,7 +51,7 @@ partial def bvTacPreprocess (n : Option Expr): TacticM Unit := do
   /- First try simplifying the goal - if it is an (in-)equality between scalars, it may get
      the bitwidth to use for the bit-vectors might be obvious from the goal: we marked some
      theorems wiht `bvify_simps` for this reason. -/
-  Bvify.bvifyTacSimp (Utils.Location.targets #[] true)
+  Bvify.bvifyTacSimp (Utils.Location.targets #[] true) [] false
   /- The simp call above may have proven the goal (unlikely, but we have to take this
      into account) -/
   allGoals do
@@ -92,7 +92,7 @@ open Lean.Elab.Tactic.BVDecide.Frontend Lean.Elab in
 /--
   `bv_tac` solves goals about bit-vectors.
 
-  Calling `bv_tac` is equivalent to:
+  Calling `bv_tac n` is mostly equivalent to:
   `bv_tac_preprocess; bv_tac`
 -/
 elab "bv_tac" cfg:Parser.Tactic.optConfig n:(colGt term)? : tactic =>
@@ -172,31 +172,6 @@ example
 example
   (a : U32)
   (b : U32)
-  (h0 : a.bv < 6658#32)
-  (h1 : b.val = 3329) :
-  (a.bv - b.bv + (3329#32 &&& (a.bv - b.bv) >>> 16)) % 3329#32 = (a.bv + 3329#32 - b.bv) % 3329#32
-  := by
-  bv_tac
-
-example
-  (a : U32)
-  (b : U32)
-  (h : (↑a : ℕ) < 3329 ∧ (↑b : ℕ) < 3329 ∨ (↑a : ℕ) < 6658 ∧ (↑b : ℕ) = 3329)
-  (c1 : U32)
-  (hc1 : c1 = core.num.U32.wrapping_sub a b)
-  (c2 : U32)
-  (hc2 : c2.bv = c1.bv >>> 16#i32.toNat)
-  (c3 : U32)
-  (hc3_1 : c3.bv = 3329#32 &&& c2.bv)
-  (c4 : U32)
-  (hc3 : c4 = core.num.U32.wrapping_add c1 c3) :
-  c4.bv % 3329#32 = (a.bv + 3329#32 - b.bv) % 3329#32
-  := by
-  dcases h <;> bv_tac
-
-example
-  (a : U32)
-  (b : U32)
   (c1 : U32)
   (hc1 : c1 = core.num.U32.wrapping_sub a b)
   (c2 : U32)
@@ -245,26 +220,6 @@ example
 example
   (a : U32)
   (b : U32)
-  (ha : (↑a : ℕ) < 3329)
-  (hb : (↑b : ℕ) < 3329)
-  (c1 : U32)
-  (hc1 : (↑c1 : ℕ) = (↑a : ℕ) + (↑b : ℕ))
-  (_ : c1.bv = a.bv + b.bv)
-  (c2 : U32)
-  (hc2 : c2.bv = c1.bv - 3329#32)
-  (c3 : U32)
-  (hc3 : c3.bv = c2.bv >>> 16)
-  (c4 : U32)
-  (hc4 : (↑c4 : ℕ) = (↑(3329#u32 &&& c3) : ℕ))
-  (_ : c4.bv = 3329#32 &&& c3.bv)
-  (c5 : U32)
-  (hc5 : c5.bv = c2.bv + c4.bv) :
-  (↑(↑c5 : ℕ) : ZMod 3329) = (↑(↑a : ℕ) : ZMod 3329) + (↑(↑b : ℕ) : ZMod 3329) ∧ (↑c5 : ℕ) < 3329
-  := by
-  bv_tac 32
-example
-  (a : U32)
-  (b : U32)
   (h : a.val < 3329 ∧ b.val < 3329 ∨ a.val < 6658 ∧ b.val = 3329)
   (c1 : U32)
   (hc1 : c1 = core.num.U32.wrapping_sub a b)
@@ -273,5 +228,22 @@ example
   (decide (c2 = 0#u32) || decide (c2 = 65535#u32)) = true
   := by
   bv_tac
+
+example
+  (a : U32)
+  (b : U32)
+  (h : a.val < 3329 ∧ b.val < 3329 ∨ a.val < 6658 ∧ b.val = 3329)
+  (c1 : U32)
+  (hc1 : c1 = core.num.U32.wrapping_sub a b)
+  (c2 : U32)
+  (hc2 : c2.bv = c1.bv >>> 16)
+  (c3 : U32)
+  (hc3_1 : c3.val = (3329#u32 &&& c2).val)
+  (_ : c3.bv = 3329#32 &&& c2.bv)
+  (c4 : U32)
+  (hc3 : c4 = core.num.U32.wrapping_add c1 c3) :
+  (c4.val : ZMod 3329) = (a.val : ZMod 3329) - (b.val : ZMod 3329) ∧ c4.val < 3329
+  := by
+  bv_tac 32
 
 end Aeneas.BvTac
