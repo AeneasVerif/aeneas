@@ -3,7 +3,6 @@ import Aeneas.Utils
 import Aeneas.Progress.Progress
 import Aeneas.Progress.Core
 import Aesop.Util.Basic
-/- import Mathlib.Control.Sequence -/
 open Aeneas
 open Lean Meta Elab Tactic 
 
@@ -83,10 +82,6 @@ def Info.ofExpr(e: Expr): MetaM (Option Info) := do
   let e := e.consumeMData
   if e.isIte || e.isDIte then
     let kind := if e.isIte then .ite else .dite
-    --   ite.{u} {α : Sort u} (c : Prop) [h : Decidable c] (t           e : α)      : α
-    --  dite.{u} {α : Sort u} (c : Prop) [h : Decidable c] (t : c → α) (e : ¬c → α) : α
-    /- let #[_ty, cond, _dec, brThen, brElse] := e.getAppArgs -/
-    /- let e ← whnf e -/ 
     let e ← deltaExpand e (fun n => n == ``ite || n == ``dite)
     -- Decidable.casesOn.{u} {prop} {motive} dec (isFalse: (h:¬p) → motive (isFalse h)) (isTrue: (h:p) → motive (isTrue h)) : motive t
     let .const ``Decidable.casesOn uLevels := e.getAppFn
@@ -119,9 +114,7 @@ def Info.ofExpr(e: Expr): MetaM (Option Info) := do
       uLevels := ma.matcherLevels.toList,
       params := ma.params
     }
-  else 
-    /- e.withApp fun f args => logWarning s!"{f} {args}" -/
-    return none
+  else return none
 
 def Info.toExpr(info: Info): Expr :=
   let fn := Expr.const info.matcher info.uLevels
