@@ -48,6 +48,8 @@ section Methods
   variable [MonadError m]
   variable {a : Type}
 
+
+/-- Given ty := ∀ xs.., ∃ zs.., program = res ∧ post?, destruct and run continuation -/
 def programTelescope[Inhabited (m α)] [Nonempty (m α)] (ty: Expr) 
   (k: (xs:Array Expr) → (zs:Array FVarId) → (program:Expr) → (res:Expr) → (post:Option Expr) → m α)
   (isGoal : Bool := true)
