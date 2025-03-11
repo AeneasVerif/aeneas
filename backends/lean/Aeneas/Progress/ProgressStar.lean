@@ -6,7 +6,7 @@ import Aesop.Util.Basic
 open Aeneas
 open Lean Meta Elab Tactic 
 
--- TODO: Move to Utils, merge with `PSpec`?
+-- TODO: Move to Utils, merge with `withPSpec`?
 /-- Given ty := ∀ xs.., ∃ zs.., program = res ∧ post?, destruct and run continuation -/
 def aeneasProgramTelescope(ty: Expr)
   (k: (xs:Array MVarId) → (zs:Array FVarId) → (program:Expr) → (res:Expr) → (post:Option Expr) → TacticM α)
