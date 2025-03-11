@@ -175,7 +175,7 @@ def evalProgressStar(cfg: Config): TacticM Info := withMainContext do
   trace[ProgressStar] s!"Normalizing bind application in goal {←(getMainTarget >>= (liftM ∘ ppExpr))}"
   Utils.simpAt (simpOnly := true) (thms := [``Aeneas.Std.bind_assoc_eq]) 
     (loc := .targets #[] (type := true) )
-    (config := {}) (simprocs := []) (simpThms := [])
+    (config := {maxDischargeDepth:= 0}) (simprocs := []) (simpThms := [])
     (declsToUnfold := []) (hypsToUse := [])  
     <|> pure ()
   let goalTy <- getMainTarget
