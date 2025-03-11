@@ -105,6 +105,57 @@ def IScalar.cast_fromBool (ty : IScalarTy) (x : Bool) : IScalar ty :=
 # Casts: Theorems
 -/
 
+/-- This theorem allows us not to use bit-vectors when reasoning about casts, if there are no overflows -/
+theorem UScalar.cast_inBounds_spec {src_ty : UScalarTy}
+  (tgt_ty : UScalarTy) (x : UScalar src_ty) (h : x.val ≤ UScalar.max tgt_ty) :
+  ∃ y, toResult (UScalar.cast tgt_ty x) = ok y ∧
+  y.val = x.val := by
+  simp only [toResult, cast, BitVec.truncate_eq_setWidth, ok.injEq, exists_eq_left', UScalar.val]
+  simp only [max, BitVec.toNat_setWidth, bv_toNat] at *
+  have : 0 < 2^tgt_ty.numBits := by simp
+  apply Nat.mod_eq_of_lt; omega
+
+/-- This theorem allows us not to use bit-vectors when reasoning about casts, if there are no overflows -/
+def UScalar.hcast_inBounds_spec {src_ty : UScalarTy}
+  (tgt_ty : IScalarTy) (x : UScalar src_ty)
+  (h : x.val ≤ IScalar.max tgt_ty) :
+  ∃ y, toResult (UScalar.hcast tgt_ty x) = ok y ∧
+  y.val = x.val := by
+  simp [toResult, hcast]
+  simp only [IScalar.val, UScalar.val]
+  simp [IScalar.max] at *
+  apply Int.bmod_pow2_eq_of_inBounds'
+  . apply IScalarTy.numBits_nonzero
+  . have : -2 ^ (tgt_ty.numBits - 1) ≤ 0 := by simp
+    scalar_tac
+  . scalar_tac
+
+/-- This theorem allows us not to use bit-vectors when reasoning about casts, if there are no overflows -/
+def IScalar.cast_inBounds_spec {src_ty : IScalarTy}
+  (tgt_ty : IScalarTy) (x : IScalar src_ty) (h : IScalar.min tgt_ty ≤ x.val ∧ x.val ≤ IScalar.max tgt_ty) :
+  ∃ y, toResult (IScalar.cast tgt_ty x) = ok y ∧
+  y.val = x.val
+  := by
+  simp only [toResult, cast, BitVec.signExtend, bv_toInt_eq, ok.injEq, exists_eq_left']
+  simp only [IScalar.val]
+  simp only [min, max, bv_toInt_eq, BitVec.toInt_ofInt] at *
+  apply Int.bmod_pow2_eq_of_inBounds'
+  . apply IScalarTy.numBits_nonzero
+  . scalar_tac
+  . scalar_tac
+
+/-- This theorem allows us not to use bit-vectors when reasoning about casts, if there are no overflows -/
+def IScalar.hcast_inBounds_spec {src_ty : IScalarTy}
+  (tgt_ty : UScalarTy) (x : IScalar src_ty) (h : 0 ≤ x.val ∧ x.val ≤ UScalar.max tgt_ty) :
+  ∃ y, toResult (IScalar.hcast tgt_ty x) = ok y ∧
+  y.val = x.val := by
+  simp [toResult, hcast, BitVec.signExtend, bv_toInt_eq, ok.injEq, exists_eq_left']
+  simp only [IScalar.val, UScalar.val]
+  simp [UScalar.max, bv_toInt_eq, BitVec.toInt_ofInt] at *
+  have : 0 < 2^tgt_ty.numBits := by simp
+  have : x.val % 2^tgt_ty.numBits = x.val := by apply Int.emod_eq_of_lt <;> scalar_tac
+  simp [this]
+  scalar_tac
 
 @[simp, progress_pure cast_fromBool ty b]
 theorem UScalar.cast_fromBool_val_eq ty (b : Bool) : (UScalar.cast_fromBool ty b).val = b.toNat := by
