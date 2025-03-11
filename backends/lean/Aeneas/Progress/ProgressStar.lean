@@ -249,13 +249,15 @@ instance: Append Info where
 
 partial
 def evalProgressStar(cfg: Config): TacticM Info := withMainContext do
+  trace[ProgressStar] s!"Normalizing bind application in goal {←(getMainTarget >>= (liftM ∘ ppExpr))}"
   Utils.simpAt (simpOnly := true) (thms := [``Aeneas.Std.bind_assoc_eq]) 
     (loc := .targets #[] (type := true) )
     (config := {}) (simprocs := []) (simpThms := [])
     (declsToUnfold := []) (hypsToUse := [])  <|> pure ()
   let goalTy <- getMainTarget
+  trace[ProgressStar] s!"After bind normalization: {←ppExpr goalTy}"
   let res ← aeneasProgramTelescope goalTy fun _xs _zs program _res _post => do
-    trace[ProgressStar] s!"Generating suggestion script for {← ppExpr program}"
+    trace[ProgressStar] s!"Traversing {← ppExpr program}"
     let resultName := .str .anonymous "res"
     traverseProgram (onResult resultName) onBind onBif program
   setGoals (res.unsolved ++ (←getGoals))
@@ -263,7 +265,7 @@ def evalProgressStar(cfg: Config): TacticM Info := withMainContext do
 
 where
   onResult name expr := do
-    trace[ProgressStar] s!"onResult: encountered {←ppExpr expr}"
+    trace[ProgressStar] s!"onResult: Since (· >>= pure) = id, we treat this result as a bind on id"
     -- Since (· >>= pure) = id, we treat a result as a bind on id
     onBind expr name (pure {})
 
@@ -272,6 +274,8 @@ where
     if let some {usedTheorem, ..} ← tryProgress then
       trace[ProgressStar] s!"onBind: Can make progress! Binding {name}"
       let (preconditionTacs,unsolved) ← trySolvePreconditions
+      if ¬ preconditionTacs.isEmpty then
+        trace[ProgressStar] s!"onBind: Found {preconditionTacs.size} preconditions, left {unsolved.size} unsolved"
       let ids ← getIdsFromUsedTheorem name usedTheorem
       if ¬ ids.isEmpty && ¬ (←getGoals).isEmpty then
         evalTactic <| ←`(tactic| rename_i $ids*)
@@ -287,14 +291,18 @@ where
 
   onBif bfInfo toBeProcessed := do
     trace[ProgressStar] s!"onBif: encountered {bfInfo.kind}"
-    if (←getGoals).isEmpty then return {}
+    if (←getGoals).isEmpty then 
+      trace[ProgressStar] s!"onBif: no goals to be solved!"
+      -- Tactic.focus fails if there are no goals to be solved.
+      return {}
     Tactic.focus do
       let splitStx ← `(tactic| split)
       evalSplit splitStx
       -- 
       let subgoals ← getUnsolvedGoals
+      trace[ProgressStar] s!"onBif: Bifurcation generated {subgoals.length} subgoals"
       unless subgoals.length == toBeProcessed.size do
-        throwError s!"Expected {toBeProcessed.size} cases, found {subgoals.length}"
+        throwError s!"onBif: Expected {toBeProcessed.size} cases, found {subgoals.length}"
       -- Gather suggestions from branches
       let mut unsolvedGoals: List (MVarId) := []
       let mut info := {script:=#[splitStx]}
