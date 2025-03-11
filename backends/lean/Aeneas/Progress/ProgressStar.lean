@@ -1,6 +1,7 @@
 import Lean
 import Aeneas.Utils
 import Aeneas.Progress.Progress
+import Aesop.Util.Basic
 /- import Mathlib.Control.Sequence -/
 open Aeneas
 open Lean Meta Elab Tactic 
@@ -30,29 +31,6 @@ def aeneasProgramTelescope(ty: Expr)
     -- ty₄ := ty₅ = res
     let (program, res) ← Utils.destEq ty₄
     k (xs.map (·.mvarId!)) (zs.map (·.fvarId!)) program res post?
-
--- NOTE: Credit to Aesop
-private def addTryThisTacticSeqSuggestion (ref : Syntax)
-    (suggestion : TSyntax ``Lean.Parser.Tactic.tacticSeq)
-    (origSpan? : Option Syntax := none) : MetaM Unit := do
-  let fmt ← PrettyPrinter.ppCategory ``Lean.Parser.Tactic.tacticSeq suggestion
-  let msgText := fmt.pretty (indent := 0) (column := 0)
-  if let some range := (origSpan?.getD ref).getRange? then
-    let map ← getFileMap
-    let (indent, column) := Lean.Meta.Tactic.TryThis.getIndentAndColumn map range
-    let text := fmt.pretty (indent := indent) (column := column)
-    let suggestion := {
-      suggestion := .string $ dedent text
-      messageData? := some msgText
-      preInfo? := "  "
-    }
-    Lean.Meta.Tactic.TryThis.addSuggestion ref suggestion (origSpan? := origSpan?)
-      (header := "Try this:\n")
-where
-  dedent (s : String) : String :=
-    s.splitOn "\n"
-    |>.map (λ line => line.dropPrefix? "  " |>.map (·.toString) |>.getD line)
-    |> String.intercalate "\n"
 
 private
 partial
@@ -392,6 +370,6 @@ elab tk:"progress" noWs "*?" stx:«progress*_args»: tactic => do
   let cfg ← parseArgs stx
   let info ← evalProgressStar cfg
   let suggestion ← `(tacticSeq| $(info.script)*)
-  addTryThisTacticSeqSuggestion tk suggestion (origSpan? := ← getRef)
+  Aesop.addTryThisTacticSeqSuggestion tk suggestion (origSpan? := ← getRef)
 
 end ProgressStar
