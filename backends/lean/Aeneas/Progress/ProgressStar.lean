@@ -278,7 +278,7 @@ where
         trace[ProgressStar] s!"onBind: Found {preconditionTacs.size} preconditions, left {unsolved.size} unsolved"
       let ids ← getIdsFromUsedTheorem name usedTheorem
       if ¬ ids.isEmpty && ¬ (←getGoals).isEmpty then
-        evalTactic <| ←`(tactic| rename_i $ids*)
+        replaceMainGoal [← renameInaccessibles (← getMainGoal) ids] -- NOTE: Taken from renameI tactic
       let currTac ← if ids.isEmpty 
         then `(tactic| progress with $(←usedTheorem.toSyntax))
         else `(tactic| progress with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩)
