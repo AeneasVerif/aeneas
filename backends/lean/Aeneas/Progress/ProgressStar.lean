@@ -1,28 +1,11 @@
 import Lean
 import Aeneas.Utils
 import Aeneas.Progress.Progress
+import Aeneas.Progress.Core
 import Aesop.Util.Basic
 /- import Mathlib.Control.Sequence -/
 open Aeneas
 open Lean Meta Elab Tactic 
-
--- TODO: Move to Utils, merge with `withPSpec`?
-/-- Given ty := ∀ xs.., ∃ zs.., program = res ∧ post?, destruct and run continuation -/
-def aeneasProgramTelescope(ty: Expr)
-  (k: (xs:Array MVarId) → (zs:Array FVarId) → (program:Expr) → (res:Expr) → (post:Option Expr) → TacticM α)
-: TacticM α := do
-  unless ←isDefEq (←inferType ty) (mkSort 0) do
-    throwError "Expected a proposition, got {←inferType ty}"
-  let ty ← Utils.normalizeLetBindings ty
-  -- ty := ∀ xs, ty₂
-  let (xs, _xs_bi, ty₂) ← forallMetaTelescope ty.consumeMData
-  -- ty₂ := ∃ zs, ty₃ ≃ Exists {α} (fun zs => ty₃)
-  Utils.existsTelescope ty₂ fun zs ty₃ => do
-    -- ty₃ := ty₄ ∧ post?
-    let (ty₄, post?) ← Utils.optSplitConj ty₃
-    -- ty₄ := ty₅ = res
-    let (program, res) ← Utils.destEq ty₄
-    k (xs.map (·.mvarId!)) (zs.map (·.fvarId!)) program res post?
 
 namespace Bifurcation/- {{{ -/
 /-- Expression on which a branch depends -/
@@ -202,7 +185,7 @@ def evalProgressStar(cfg: Config): TacticM Info := withMainContext do
     <|> pure ()
   let goalTy <- getMainTarget
   trace[ProgressStar] s!"After bind normalization: {←ppExpr goalTy}"
-  let res ← aeneasProgramTelescope goalTy fun _xs _zs program _res _post => do
+  let res ← Progress.programTelescope goalTy fun _xs _zs program _res _post => do
     trace[ProgressStar] s!"Traversing {← ppExpr program}"
     let resultName := .str .anonymous "res"
     traverseProgram (onResult resultName) onBind onBif program

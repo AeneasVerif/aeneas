@@ -28,7 +28,7 @@ structure PSpecDesc where
   -- Can be fvars or mvars
   fvars : Array Expr
   -- The existentially quantified variables
-  evars : Array Expr
+  evars : Array FVarId
   -- The function applied to its arguments
   fArgsExpr : Expr
   -- ⊤ if the function is a constant (must be if we are registering a theorem,
@@ -47,6 +47,32 @@ section Methods
   variable [MonadTrace m] [MonadLiftT IO m] [MonadRef m] [AddMessageContext m]
   variable [MonadError m]
   variable {a : Type}
+
+def programTelescope[Inhabited (m α)] [Nonempty (m α)] (ty: Expr) 
+  (isGoal : Bool := true)
+  (k: (xs:Array Expr) → (zs:Array FVarId) → (program:Expr) → (res:Expr) → (post:Option Expr) → m α)
+: m α := do
+  unless ←isDefEq (←inferType ty) (mkSort 0) do
+    throwError "Expected a proposition, got {←inferType ty}"
+  let telescope (th: Expr) (k : Array Expr → Expr → m α) : m α :=
+    if isGoal then forallTelescope th.consumeMData (fun fvars th => k fvars th)
+    else do
+      let (mvars, _, th) ← forallMetaTelescope th.consumeMData
+      k mvars th
+  -- ty := ∀ xs, ty₂
+  telescope ty.consumeMData fun xs ty₂ => do
+    trace[Progress] "Universally quantified arguments and assumptions: {xs}"
+    -- ty₂ := ∃ zs, ty₃ ≃ Exists {α} (fun zs => ty₃)
+    existsTelescope ty₂ fun zs ty₃ => do
+      trace[Progress] "Existentials: {zs}"
+      trace[Progress] "Proposition after stripping the quantifiers: {ty₃}"
+      -- ty₃ := ty₄ ∧ post?
+      let (ty₄, post?) ← Utils.optSplitConj ty₃
+      trace[Progress] "After splitting the conjunction:\n- eq: {ty₄}\n- post: {post?}"
+      -- ty₄ := ty₅ = res
+      let (program, res) ← Utils.destEq ty₄
+      trace[Progress] "After splitting the equality:\n- lhs: {program}\n- rhs: {res}"
+      k xs (zs.map (·.fvarId!)) program res post?
 
   /- Analyze a goal or a pspec theorem to decompose its arguments.
 
@@ -68,28 +94,7 @@ section Methods
   def withPSpec [Inhabited (m a)] [Nonempty (m a)]
     (isGoal : Bool) (th : Expr) (k : PSpecDesc → m a) :
     m a := do
-    trace[Progress] "Proposition: {th}"
-    -- Dive into the quantified variables and the assumptions
-    -- Note that if we analyze a pspec theorem to register it in a database (i.e.
-    -- a discrimination tree), we need to introduce *meta-variables* for the
-    -- quantified variables.
-    let telescope (k : Array Expr → Expr → m a) : m a :=
-      if isGoal then forallTelescope th.consumeMData (fun fvars th => k fvars th)
-      else do
-        let (fvars, _, th) ← forallMetaTelescope th.consumeMData
-        k fvars th
-    telescope fun fvars th => do
-    trace[Progress] "Universally quantified arguments and assumptions: {fvars}"
-    -- Dive into the existentials
-    existsTelescope th.consumeMData fun evars th => do
-    trace[Progress] "Existentials: {evars}"
-    trace[Progress] "Proposition after stripping the quantifiers: {th}"
-    -- Take the first conjunct
-    let (th, post) ← optSplitConj th.consumeMData
-    trace[Progress] "After splitting the conjunction:\n- eq: {th}\n- post: {post}"
-    -- Destruct the equality
-    let (mExpr, ret) ← destEq th.consumeMData
-    trace[Progress] "After splitting the equality:\n- lhs: {mExpr}\n- rhs: {ret}"
+    programTelescope (isGoal := isGoal) th fun fvars evars mExpr ret post => do
     -- Recursively destruct the monadic application to dive into the binds,
     -- if necessary (this is for when we use `withPSpec` inside of the `progress` tactic),
     -- and destruct the application to get the function name
@@ -118,7 +123,7 @@ section Methods
       -- Collect all the free variables in the arguments
       let allArgsFVars ← args.foldlM (fun hs arg => getFVarIds arg hs) Std.HashSet.empty
       -- Check if they intersect the fvars we introduced for the existentially quantified variables
-      let evarsSet : Std.HashSet FVarId := Std.HashSet.empty.insertMany (evars.map (fun (x : Expr) => x.fvarId!))
+      let evarsSet : Std.HashSet FVarId := Std.HashSet.empty.insertMany evars
       let filtArgsFVars := allArgsFVars.toArray.filter (fun var => evarsSet.contains var)
       if filtArgsFVars.isEmpty then pure ()
       else
