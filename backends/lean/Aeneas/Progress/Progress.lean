@@ -408,7 +408,7 @@ def parseProgressArgs
     | term => do
       trace[Progress] "With arg (term): {term}"
       Tactic.elabTerm term none
-  if let .some pspec := withTh? then trace[Progress] "With arg: elborated expression {pspec}"
+  if let .some pspec := withTh? then trace[Progress] "With arg: elaborated expression {pspec}"
   let ids := ids.getD ∅
     |>.getElems.map fun
       | `(binderIdent| $name:ident) => some name.getId
