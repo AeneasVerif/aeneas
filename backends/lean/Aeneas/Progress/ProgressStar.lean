@@ -85,7 +85,7 @@ def Info.ofExpr(e: Expr): MetaM (Option Info) := do
     let e ← deltaExpand e (fun n => n == ``ite || n == ``dite)
     -- Decidable.casesOn.{u} {prop} {motive} dec (isFalse: (h:¬p) → motive (isFalse h)) (isTrue: (h:p) → motive (isTrue h)) : motive t
     let .const ``Decidable.casesOn uLevels := e.getAppFn
-      | throwError "Expected ``Decidable.rec, found {←ppExpr e.getAppFn}"
+      | throwError "Expected ``Decidable.casesOn, found {←ppExpr e.getAppFn}"
     let #[prop, motive, dec, brFalse, brTrue] := e.getAppArgs
       | throwError "Wrong number of parameters for {e.getAppFn}: {e.getAppArgs.size} [{e.getAppArgs}]"
     return some {
