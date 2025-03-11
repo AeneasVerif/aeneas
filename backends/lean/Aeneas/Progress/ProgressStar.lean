@@ -127,6 +127,23 @@ def Info.toExpr(info: Info): Expr :=
 
 end Bifurcation
 
+
+/-- Traverse a do block and execute callbacks at each different point.
+
+The points in a do block we currently distinguish are:
+ · A simple statement (causes a call to onResult)  
+   i.e. `(do f a)`
+ · A bind call from one value to a function (causes a call to onBind)  
+   i.e. `(do let x ← f a; ...)`
+ · A bifurcation of some sort (causes a call to onBif)  
+   i.e. `(do if b then t else e)`
+        `(do match d with | p1 => t1 | p2 => t2)`
+
+Callbacks receive access to the results of processing their children.
+However, **this does not necessarilly mean that the traversal is done in
+postorder**, since the children's results are given in a monad, and are
+not computed until evaluated (i.e. with `←`).
+-/
 private partial 
 def traverseProgram {α} [Monad m] [MonadError m] [Nonempty (m α)] 
   /- [MonadLog m] [AddMessageContext m] [MonadOptions m] -/ 
@@ -190,7 +207,15 @@ def evalProgressStar(cfg: Config): TacticM Info := withMainContext do
 where
   onResult resultName expr := do
     trace[ProgressStar] s!"onResult: Since (· >>= pure) = id, we treat this result as a bind on id"
-    -- Since (· >>= pure) = id, we treat a result as a bind on id
+    -- If we encounter `(do f a)` we process it as if it were `(do let res ← f a; return res)`
+    -- since (id = (· >>= pure)) and when we desugar the do block we have that 
+    -- 
+    --                      (do f a) == f a
+    --                               == (f a) >>= pure
+    --                               == (do let res ← f a; return res)
+    -- 
+    -- We known in advance the result of processing `return res`, which is to do nothing.
+    -- This allows us to prevent code duplication with the `onBind` function.
     onBind expr resultName (pure {})
 
   onBind _curr name processRest := do
@@ -211,7 +236,7 @@ where
         script := #[currTac]++ preconditionTacs, -- TODO: Optimize
         unsolvedPreconditions := unsolved.toList
       } ++ restInfo
-    else return {script:=#[]}
+    else return {}
 
   onBif bfInfo toBeProcessed := do
     trace[ProgressStar] s!"onBif: encountered {bfInfo.kind}"
