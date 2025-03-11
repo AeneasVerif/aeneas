@@ -7,7 +7,7 @@ import Aesop.Util.Basic
 open Aeneas
 open Lean Meta Elab Tactic 
 
-namespace Bifurcation/- {{{ -/
+namespace Bifurcation
 /-- Expression on which a branch depends -/
 structure Discr where
   toExpr: Expr
@@ -130,7 +130,7 @@ def Info.toExpr(info: Info): Expr :=
     info.branches.map (·.toExpr)
   mkAppN fn args
 
-end Bifurcation/- }}} -/
+end Bifurcation
 
 private partial 
 def traverseProgram {α} [Monad m] [MonadError m] [Nonempty (m α)] 

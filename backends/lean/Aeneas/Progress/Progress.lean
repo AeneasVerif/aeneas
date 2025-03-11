@@ -381,7 +381,7 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option Expr)
 
 syntax progressArgs := ("keep" binderIdent)? ("with" term)? ("as" " ⟨ " binderIdent,* " ⟩")?
 
-def parseProgressArgs /- {{{ -/
+def parseProgressArgs
 : TSyntax ``Aeneas.Progress.progressArgs -> TacticM (Option Name × Option Expr × Array (Option Name))
 | args@`(progressArgs| $[keep $x]? $[with $pspec:term]? $[as ⟨ $ids,* ⟩]? ) =>  withMainContext do
   trace[Progress] "Progress arguments: {args.raw}"
@@ -415,7 +415,7 @@ def parseProgressArgs /- {{{ -/
       | _ => none
   trace[Progress] "User-provided ids: {ids}"
   return (keep?, withTh?, ids)
-| _ => throwUnsupportedSyntax/- }}} -/
+| _ => throwUnsupportedSyntax
 
 def evalProgress (keep: Option Name)(withArg: Option Expr)(ids: Array (Option Name))
 : TacticM Stats := do
