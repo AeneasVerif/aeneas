@@ -252,7 +252,7 @@ def evalProgressStar(cfg: Config): TacticM Info := withMainContext do
   Utils.simpAt (simpOnly := true) (thms := [``Aeneas.Std.bind_assoc_eq]) 
     (loc := .targets #[] (type := true) )
     (config := {}) (simprocs := []) (simpThms := [])
-    (declsToUnfold := []) (hypsToUse := []) 
+    (declsToUnfold := []) (hypsToUse := [])  <|> pure ()
   let goalTy <- getMainTarget
   let res ← aeneasProgramTelescope goalTy fun _xs _zs program _res _post => do
     trace[ProgressStar] s!"Generating suggestion script for {← ppExpr program}"
