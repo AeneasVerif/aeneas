@@ -6,6 +6,7 @@ import Aeneas.Bvify.Init
 import Aeneas.Arith.Lemmas
 import Aeneas.Std.Scalar
 import Aeneas.Std.PrimitivesLemmas
+import Aeneas.Std.Scalar.CoreConvertNum -- we need this for the tests
 
 /-!
 # `bvify` tactic
@@ -20,6 +21,45 @@ namespace Aeneas.Bvify
 
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 open Arith Std
+
+@[simp, bvify_simps] theorem U8.UScalar_bv (x : U8) : UScalar.bv x = x.bv := by simp
+@[simp, bvify_simps] theorem U16.UScalar_bv (x : U16) : UScalar.bv x = x.bv := by simp
+@[simp, bvify_simps] theorem U32.UScalar_bv (x : U32) : UScalar.bv x = x.bv := by simp
+@[simp, bvify_simps] theorem U64.UScalar_bv (x : U64) : UScalar.bv x = x.bv := by simp
+@[simp, bvify_simps] theorem U128.UScalar_bv (x : U128) : UScalar.bv x = x.bv := by simp
+@[simp, bvify_simps] theorem Usize.UScalar_bv (x : Usize) : UScalar.bv x = x.bv := by simp
+
+@[simp, bvify_simps] theorem I8.IScalar_bv (x : I8) : IScalar.bv x = x.bv := by simp
+@[simp, bvify_simps] theorem I16.IScalar_bv (x : I16) : IScalar.bv x = x.bv := by simp
+@[simp, bvify_simps] theorem I32.IScalar_bv (x : I32) : IScalar.bv x = x.bv := by simp
+@[simp, bvify_simps] theorem I64.IScalar_bv (x : I64) : IScalar.bv x = x.bv := by simp
+@[simp, bvify_simps] theorem I128.IScalar_bv (x : I128) : IScalar.bv x = x.bv := by simp
+@[simp, bvify_simps] theorem Isize.IScalar_bv (x : Isize) : IScalar.bv x = x.bv := by simp
+
+@[simp, bvify_simps]
+theorem UScalar.bv_setWidth (x : UScalar ty) : x.bv.setWidth ty.numBits = x.bv := by simp only [BitVec.setWidth_eq]
+
+@[simp, bvify_simps] theorem U8.bv_setWidth (x : U8) : x.bv.setWidth 8 = x.bv := UScalar.bv_setWidth x
+@[simp, bvify_simps] theorem U16.bv_setWidth (x : U16) : x.bv.setWidth 16 = x.bv := UScalar.bv_setWidth x
+@[simp, bvify_simps] theorem U32.bv_setWidth (x : U32) : x.bv.setWidth 32 = x.bv := UScalar.bv_setWidth x
+@[simp, bvify_simps] theorem U64.bv_setWidth (x : U64) : x.bv.setWidth 64 = x.bv := UScalar.bv_setWidth x
+@[simp, bvify_simps] theorem U128.bv_setWidth (x : U128) : x.bv.setWidth 128 = x.bv := UScalar.bv_setWidth x
+@[simp, bvify_simps] theorem Usize.bv_setWidth (x : Usize) : x.bv.setWidth System.Platform.numBits = x.bv := UScalar.bv_setWidth x
+
+@[simp, bvify_simps]
+theorem IScalar.bv_signExtend (x : IScalar ty) : x.bv.signExtend ty.numBits = x.bv := by
+  simp only [BitVec.signExtend, IScalar.bv_toInt_eq, IScalar.BitVec_ofInt_val]
+
+@[simp, bvify_simps] theorem I8.bv_signExtend (x : I8) : x.bv.signExtend 8 = x.bv := IScalar.bv_signExtend x
+@[simp, bvify_simps] theorem I16.bv_signExtend (x : I16) : x.bv.signExtend 16 = x.bv := IScalar.bv_signExtend x
+@[simp, bvify_simps] theorem I32.bv_signExtend (x : I32) : x.bv.signExtend 32 = x.bv := IScalar.bv_signExtend x
+@[simp, bvify_simps] theorem I64.bv_signExtend (x : I64) : x.bv.signExtend 64 = x.bv := IScalar.bv_signExtend x
+@[simp, bvify_simps] theorem I128.bv_signExtend (x : I128) : x.bv.signExtend 128 = x.bv := IScalar.bv_signExtend x
+@[simp, bvify_simps] theorem Isize.bv_signExtend (x : Isize) : x.bv.signExtend System.Platform.numBits = x.bv := IScalar.bv_signExtend x
+
+@[simp, bvify_simps]
+theorem UScalar.cast_bv (x : UScalar ty) : (UScalar.cast tgt x).bv = x.bv.setWidth tgt.numBits := by
+  simp [cast]
 
 theorem BitVec.lt_pow_ofNat_le {n : Nat} (a b : Nat) (h0 : b < 2^n) (h1 : a ≤ b) :
   BitVec.ofNat n a ≤ BitVec.ofNat n b := by
@@ -144,6 +184,15 @@ theorem BitVec.ofNat_sub' (n a b : Nat) (h : b ≤ a) :
 attribute [bvify_simps] ZMod.eq_iff_mod ZMod.val_add ZMod.val_sub ZMod.val_mul ZMod.val_sub' ZMod.val_natCast
 attribute [bvify_simps] Nat.add_one_sub_one Nat.add_mod_mod Nat.mod_add_mod
 
+/-!
+Simplification lemmas about `setWidth`
+-/
+attribute [bvify_simps] BitVec.setWidth_eq
+
+@[simp, bvify_simps]
+theorem UScalar.BitVec_ofNat_setWidth (x : UScalar ty) : BitVec.ofNat n x.val = x.bv.setWidth n := by
+  simp only [UScalar.val, BitVec.toNat_eq]; simp
+
 syntax (name := bvify_saturate) "bvify_saturate" term : tactic
 
 /-!
@@ -176,7 +225,7 @@ def bvifyTacSimp (loc : Utils.Location) (additionalAsms : List FVarId := []) (di
   let simprocs := [``Nat.reducePow, ``Nat.reduceLT, ``Nat.reduceLeDiff] -- TODO: update the list?
   if dischWithScalarTac then
     -- TODO: saturate before-hand, then scalar_tac (saturate := false)
-    let (ref, d) ← tacticToDischarge (← `(tactic|scalar_tac))
+    let (ref, d) ← tacticToDischarge (← `(tactic|scalar_tac (saturate := false)))
     let dischargeWrapper := Lean.Elab.Tactic.Simp.DischargeWrapper.custom ref d
     let _ ← dischargeWrapper.with fun discharge? => do
       -- Initialize the simp context
@@ -218,12 +267,16 @@ def bvifyTac (n : Expr) (loc : Utils.Location) : TacticM Unit := do
   let (oldAsms, newAsms) ← Utils.duplicateAssumptions toDuplicate
   let oldAsmsSet := Std.HashSet.ofArray oldAsms
   trace[Bvify] "Goal after duplicating the assumptions: {← getMainGoal}"
+  /- Introduce the scalar_tac assumptions - by doing it beforehand we don't have to redo it every
+     time we call `scalar_tac`: as `saturate` is not compiled it saves a lot of time -/
+  withMainContext do
+  let scalarTacAsms ← ScalarTac.scalarTacSaturateForward true false
   /- Introduce additional simp assumptions -/
   let addThm (thName : Name) : TacticM FVarId := do
     let thm ← mkAppM thName #[n]
     let thm ← Utils.addDeclTac (← Utils.mkFreshAnonPropUserName) thm (← inferType thm) (asLet := false)
     pure thm.fvarId!
-  withMainContext do
+
   let le_iff ← addThm ``BitVec.lt_pow_le_iff_ofNat_le'
   let lt_iff ← addThm ``BitVec.lt_pow_lt_iff_ofNat_lt'
   let lt_max_iff ← addThm ``BitVec.lt_pow_n_iff_ofNat_le
@@ -249,6 +302,8 @@ def bvifyTac (n : Expr) (loc : Utils.Location) : TacticM Unit := do
     | .targets hyps type => pure (Utils.Location.targets (← refreshFVarIds (Std.HashSet.ofArray hyps) notLocAsmsSet) type) --, ← refreshFVarIds oldAsmsSet notLocAsmsSet)
   bvifyTacSimp nloc additionalSimpThms true
   /- Clear the additional assumptions -/
+  Utils.clearFVarIds scalarTacAsms
+  trace[Bvify] "Goal after clearing the scalar_tac assumptions: {← getMainGoal}"
   Utils.clearFVarIds newAsms
   trace[Bvify] "Goal after clearing the duplicated assumptions: {← getMainGoal}"
   Utils.clearFVarIds additionalSimpThms.toArray
@@ -367,8 +422,7 @@ example
   simp_all only
   bv_decide
 
-set_option profiler true in
-set_option profiler.threshold 10 in
+
 example
   (a : U32)
   (b : U32)
@@ -388,6 +442,22 @@ example
   := by
   bvify' 32
   simp_all only
+  bv_decide
+
+example
+  (x : U16) (_ : x.val < 3329)
+  (y : U32) (_ : y = core.convert.num.FromU32U16.from x) :
+  y.val = x.val
+  := by
+  bvify' 32
+  bv_decide
+
+example
+  (x : U32) (_ : x.val < 3329)
+  (y : U16) (_ : y = UScalar.cast UScalarTy.U16 x) :
+  y.val = x.val
+  := by
+  bvify' 16
   bv_decide
 
 end Aeneas.Bvify
