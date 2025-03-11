@@ -32,15 +32,6 @@ def aeneasProgramTelescope(ty: Expr)
     let (program, res) ← Utils.destEq ty₄
     k (xs.map (·.mvarId!)) (zs.map (·.fvarId!)) program res post?
 
-private
-partial
-def numOfConjuncts(e: Expr): Nat :=
-  e.withApp fun f args =>
-    if let .const ``And _ := f then
-      args.map numOfConjuncts  |>.toList.sum
-    else
-      1
-
 def theoremType: Progress.UsedTheorem -> MetaM (Option Expr)
 | .givenExpr e => do
   let thm ← inferType e
@@ -328,9 +319,9 @@ where
     let some thm ← theoremType usedTheorem
       | throwError s!"Could not infer proposition of {usedTheorem}"
     let (numElem, numPost) ← aeneasProgramTelescope thm 
-      fun _xs zs _program _res post => do
-        let numPost := numOfConjuncts <$> post |>.getD 0
-        trace[ProgressStar] s!"Number of conjuncts for {←liftM (Option.traverse ppExpr post)} is {numPost}"
+      fun _xs zs _program _res postconds => do
+        let numPost := Utils.numOfConjuncts <$> postconds |>.getD 0
+        trace[ProgressStar] s!"Number of conjuncts for {←liftM (Option.traverse ppExpr postconds)} is {numPost}"
         pure (zs.size, numPost)
     return makeIds (base := name) numElem numPost
 
