@@ -68,8 +68,8 @@
             zarith
             ocamlgraph
           ]);
-          afterBuild = ''
-            echo charon.packages.${system}.tests
+          postInstall = ''
+            ln -s ${charon.packages.${system}.charon}/bin/charon $out/bin
           '';
         };
 
@@ -116,7 +116,7 @@
           buildInputs = [ charon.packages.${system}.rustToolchain ];
           buildPhase = ''
             export AENEAS_EXE=${aeneas}/bin/aeneas
-            export CHARON_EXE=${charon.packages.${system}.charon}/bin/charon
+            export CHARON_EXE=${aeneas}/bin/charon
             export TEST_RUNNER_EXE=${test_runner}/bin/test_runner
 
             # Copy the tests
