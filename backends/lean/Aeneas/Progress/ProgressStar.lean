@@ -222,7 +222,7 @@ where
     trace[ProgressStar] s!"onBind: encountered {←ppExpr _curr}"
     if let some {usedTheorem, ..} ← tryProgress then
       trace[ProgressStar] s!"onBind: Can make progress! Binding {name}"
-      let (preconditionTacs, unsolved) ← trySolvePreconditions
+      let (preconditionTacs, unsolved) ← handleProgressPreconditions
       if ¬ preconditionTacs.isEmpty then
         trace[ProgressStar] s!"onBind: Found {preconditionTacs.size} preconditions, left {unsolved.size} unsolved"
       let ids ← getIdsFromUsedTheorem name usedTheorem
@@ -275,7 +275,7 @@ where
     try some <$> Progress.evalProgress none none #[]
     catch _ => pure none
 
-  trySolvePreconditions: TacticM (Array Syntax.Tactic × Array MVarId) := do
+  handleProgressPreconditions: TacticM (Array Syntax.Tactic × Array MVarId) := do
     -- NOTE: Do I make the assumption that the preconditions appear before the final lemma, or
     -- that the names of the preconditions contain the final lemma as a prefix.
     -- For now, we have ←getUnsolvedGoals = preconditions ++ [final]
