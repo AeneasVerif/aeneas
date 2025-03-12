@@ -24,9 +24,8 @@ initialize progressSimpExt : SimpExtension ←
 /-! # Attribute: `progress` -/
 
 structure PSpecDesc where
-  -- The universally quantified variables
-  -- Can be fvars or mvars
-  fvars : Array Expr
+  -- The universally quantified variables and preconditions, as mvars
+  preconds : Array MVarId
   -- The existentially quantified variables
   evars : Array FVarId
   -- The function applied to its arguments
@@ -40,7 +39,7 @@ structure PSpecDesc where
   -- The returned value
   ret : Expr
   -- The postcondition (if there is)
-  post : Option Expr
+  postcond? : Option Expr
 
 section Methods
   variable [MonadLiftT MetaM m] [MonadControlT MetaM m] [Monad m] [MonadOptions m]
@@ -51,30 +50,24 @@ section Methods
 
 /-- Given ty := ∀ xs.., ∃ zs.., program = res ∧ post?, destruct and run continuation -/
 def programTelescope[Inhabited (m α)] [Nonempty (m α)] (ty: Expr) 
-  (k: (xs:Array Expr) → (zs:Array FVarId) → (program:Expr) → (res:Expr) → (post:Option Expr) → m α)
-  (isGoal : Bool := true)
+  (k: (xs:Array (MVarId × BinderInfo)) → (zs:Array FVarId) → (program:Expr) → (res:Expr) → (post:Option Expr) → m α)
 : m α := do
   unless ←isProp ty do
     throwError "Expected a proposition, got {←inferType ty}"
-  let telescope (th: Expr) (k : Array Expr → Expr → m α) : m α :=
-    if isGoal then forallTelescope th.consumeMData (fun fvars th => k fvars th)
-    else do
-      let (mvars, _, th) ← forallMetaTelescope th.consumeMData
-      k mvars th
   -- ty == ∀ xs, ty₂
-  telescope ty.consumeMData fun xs ty₂ => do
-    trace[Progress] "Universally quantified arguments and assumptions: {xs}"
-    -- ty₂ == ∃ zs, ty₃ ≃ Exists {α} (fun zs => ty₃)
-    existsTelescope ty₂ fun zs ty₃ => do
-      trace[Progress] "Existentials: {zs}"
-      trace[Progress] "Proposition after stripping the quantifiers: {ty₃}"
-      -- ty₃ == ty₄ ∧ post?
-      let (ty₄, post?) ← Utils.optSplitConj ty₃
-      trace[Progress] "After splitting the conjunction:\n- eq: {ty₄}\n- post: {post?}"
-      -- ty₄ == (program = res)
-      let (program, res) ← Utils.destEq ty₄
-      trace[Progress] "After splitting the equality:\n- lhs: {program}\n- rhs: {res}"
-      k xs (zs.map (·.fvarId!)) program res post?
+  let (xs, xs_bi, ty₂) ← forallMetaTelescope ty.consumeMData
+  trace[Progress] "Universally quantified arguments and assumptions: {xs}"
+  -- ty₂ == ∃ zs, ty₃ ≃ Exists {α} (fun zs => ty₃)
+  existsTelescope ty₂ fun zs ty₃ => do
+    trace[Progress] "Existentials: {zs}"
+    trace[Progress] "Proposition after stripping the quantifiers: {ty₃}"
+    -- ty₃ == ty₄ ∧ post?
+    let (ty₄, post?) ← Utils.optSplitConj ty₃
+    trace[Progress] "After splitting the conjunction:\n- eq: {ty₄}\n- post: {post?}"
+    -- ty₄ == (program = res)
+    let (program, res) ← Utils.destEq ty₄
+    trace[Progress] "After splitting the equality:\n- lhs: {program}\n- rhs: {res}"
+    k (xs.map (·.mvarId!) |>.zip xs_bi) (zs.map (·.fvarId!)) program res post?
 
   /- Analyze a goal or a pspec theorem to decompose its arguments.
 
@@ -96,7 +89,7 @@ def programTelescope[Inhabited (m α)] [Nonempty (m α)] (ty: Expr)
   def withPSpec [Inhabited (m a)] [Nonempty (m a)]
     (isGoal : Bool) (th : Expr) (k : PSpecDesc → m a) :
     m a := do
-    programTelescope (isGoal := isGoal) th fun fvars evars mExpr ret post => do
+    programTelescope th fun xs evars mExpr ret post => do
     -- Recursively destruct the monadic application to dive into the binds,
     -- if necessary (this is for when we use `withPSpec` inside of the `progress` tactic),
     -- and destruct the application to get the function name
@@ -134,14 +127,14 @@ def programTelescope[Inhabited (m α)] [Nonempty (m α)] (ty: Expr)
     -- Return
     trace[Progress] "Function with arguments: {fArgsExpr}";
     let thDesc := {
-      fvars := fvars
+      preconds := xs.map (·.1)
       evars := evars
       fArgsExpr
       fIsConst := f.isConst
       fLevels
       args := args
       ret := ret
-      post := post
+      postcond? := post
     }
     k thDesc
 

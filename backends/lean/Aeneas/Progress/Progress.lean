@@ -107,21 +107,9 @@ def progressWith (fExpr : Expr) (th : Expr)
   -- Normalize to inline the let-bindings
   let thTy ← normalizeLetBindings thTy
   trace[Progress] "After normalizing the let-bindings: {thTy}"
-  -- TODO: the tactic fails if we uncomment withNewMCtxDepth
-  -- withNewMCtxDepth do
-  let (mvars, binders, thExBody) ← forallMetaTelescope thTy.consumeMData
-  trace[Progress] "After stripping foralls: {thExBody}"
-  -- Introduce the existentially quantified variables and the post-condition
-  -- in the context
-  let thBody ←
-    existsTelescope thExBody.consumeMData fun _evars thBody => do
-    trace[Progress] "After stripping existentials: {thBody}"
-    let (thBody, _) ← optSplitConj thBody
-    trace[Progress] "After splitting the conjunction: {thBody}"
-    let (thBody, _) ← destEq thBody
-    trace[Progress] "After splitting equality: {thBody}"
-    -- There shouldn't be any existential variables in thBody
-    pure thBody.consumeMData
+  programTelescope thTy fun xs _zs thBody _ _ => do
+  let (mvars, binders) := xs.unzip
+  let mvars := mvars.map .mvar
   -- Match the body with the target
   trace[Progress] "Matching:\n- body:\n{thBody}\n- target:\n{fExpr}"
   let ok ← isDefEq thBody fExpr
@@ -132,7 +120,7 @@ def progressWith (fExpr : Expr) (th : Expr)
   let thBody ← instantiateMVars thBody
   trace[Progress] "thBody (after instantiation): {thBody}"
   -- Add the instantiated theorem to the assumptions (we apply it on the metavariables).
-  let th ← mkAppOptM' th (mvars.map some)
+  let th := mkAppN th mvars
   trace[Progress] "Instantiated theorem reusing the metavariables: {th}"
   let asmName ← do match keep with | none => mkFreshAnonPropUserName | some n => do pure n
   let thTy ← inferType th
@@ -317,8 +305,7 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option Expr)
   -- have the proper shape.
   let fExpr ← do
     let isGoal := true
-    withPSpec isGoal goalTy fun desc => do
-    let fExpr := desc.fArgsExpr
+    withPSpec isGoal goalTy fun {fArgsExpr := fExpr, ..} => do
     trace[Progress] "Expression to match: {fExpr}"
     pure fExpr
   -- If the user provided a theorem/assumption: use it.
