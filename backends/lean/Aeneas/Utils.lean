@@ -827,7 +827,6 @@ inductive Location where
   | wildcard
   /-- Apply the tactic everywhere, including in the variable types (i.e., in
       assumptions which are not propositions).
-      TODO: remove this (it should be an option of simp).
   --/
   | wildcard_dep
   /-- Same as Tactic.Location -/
