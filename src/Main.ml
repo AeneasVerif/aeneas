@@ -109,8 +109,8 @@ let () =
         Arg.String set_namespace,
         " Set the namespace of the definitions in the pure model" );
       ("-dest", Arg.Set_string dest_dir, " Specify the output directory");
-      ( "-subfolder",
-        Arg.String set_subfolder,
+      ( "-subdir",
+        Arg.String set_subdir,
         " Extract the files in a sub-folder; this option has an impact on the \
          import paths of the generated files" );
       ( "-test-units",
@@ -317,8 +317,7 @@ let () =
   check_arg_implies !generate_lib_entry_point "-gen-lib-entry" !split_files
     "-split-files";
   check_arg_not !generate_lib_entry_point "-gen-lib-entry"
-    (Option.is_some !subfolder)
-    "-subfolder";
+    (Option.is_some !subdir) "-subdir";
   if !lean_gen_lakefile && not (backend () = Lean) then
     fail_with_error
       "The -lean-default-lakefile option is valid only for the Lean backend";
@@ -590,8 +589,7 @@ let () =
 
       (* Translate or borrow-check the crate *)
       if !borrow_check then Aeneas.BorrowCheck.borrow_check_crate m
-      else
-        Aeneas.Translate.translate_crate filename dest_dir !Config.subfolder m;
+      else Aeneas.Translate.translate_crate filename dest_dir !Config.subdir m;
 
       if !Errors.error_list <> [] then (
         List.iter

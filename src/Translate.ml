@@ -1029,12 +1029,12 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
 
 (** Translate a crate and write the synthesized code to an output file. *)
 let translate_crate (filename : string) (dest_dir : string)
-    (subfolder : string option) (crate : crate) : unit =
+    (subdir : string option) (crate : crate) : unit =
   log#ltrace
     (lazy
       (__FUNCTION__ ^ ":" ^ "\n- filename: " ^ filename ^ "\n- dest_dir: "
-     ^ dest_dir ^ "\n- subfolder: "
-      ^ Print.option_to_string (fun x -> x) subfolder));
+     ^ dest_dir ^ "\n- subdir: "
+      ^ Print.option_to_string (fun x -> x) subdir));
 
   (* Translate the module to the pure AST *)
   let ( trans_ctx,
@@ -1285,9 +1285,9 @@ let translate_crate (filename : string) (dest_dir : string)
               | Lean -> crate.name)
         in
         let full_dest_dir =
-          match subfolder with
+          match subdir with
           | None -> dest_dir
-          | Some subfolder -> Filename.concat dest_dir subfolder
+          | Some subdir -> Filename.concat dest_dir subdir
         in
         (*
            If the backend is Lean the module names depends on the path,
@@ -1333,7 +1333,7 @@ let translate_crate (filename : string) (dest_dir : string)
   if Config.backend () = Lean then (
     let ( ^^ ) = Filename.concat in
     let prefix =
-      match !Config.subfolder with
+      match !Config.subdir with
       | None -> full_dest_dir ^^ crate_name
       | Some _ -> full_dest_dir
     in
@@ -1381,10 +1381,10 @@ let translate_crate (filename : string) (dest_dir : string)
 
   (* Extract the file(s) *)
   let import_prefix =
-    match !Config.subfolder with
+    match !Config.subdir with
     | None -> crate_name
-    | Some subfolder ->
-        String.concat module_delimiter (String.split_on_char '/' subfolder)
+    | Some subdir ->
+        String.concat module_delimiter (String.split_on_char '/' subdir)
   in
   let import_prefix = import_prefix ^ module_delimiter in
   log#ltrace (lazy (__FUNCTION__ ^ ": import_prefix: " ^ import_prefix));

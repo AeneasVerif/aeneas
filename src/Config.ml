@@ -35,17 +35,17 @@ let namespace : string option ref = ref None
 
 let set_namespace (s : string) : unit = namespace := Some s
 
-(** Place the files inside a subfolder in the destination.
+(** Place the files inside a subdirectory in the destination.
 
     We use this to properly generate the import paths.
 
     For instance, when generating files for Lean, if the user wants to extract
-    the files in the subfolder [Foo/Code], the imports will have to be prefixed
+    the files in the subdir [Foo/Code], the imports will have to be prefixed
     with [Foo.Code] (e.g., [import Foo.Code.Types]).
 *)
-let subfolder : string option ref = ref None
+let subdir : string option ref = ref None
 
-let set_subfolder (s : string) : unit = subfolder := Some s
+let set_subdir (s : string) : unit = subdir := Some s
 
 (** If [true], we do not generate code and simply borrow-check the program instead.
     This allows us to relax some sanity checks which are present in the symbolic
