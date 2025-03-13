@@ -250,8 +250,9 @@ def ToTypetraitsBoolWrapperT {T : Type} (ToTypeBoolTInst : ToType Bool T) :
 def WithConstTy.LEN2_default_body (Self : Type) (Self_V : Type) (Self_W : Type)
   (LEN : Usize) : Result Usize :=
   ok 32#usize
-def WithConstTy.LEN2_default (Self : Type) (Self_V : Type) (Self_W : Type) (LEN
-  : Usize) : Usize :=
+@[irreducible]
+  def WithConstTy.LEN2_default (Self : Type) (Self_V : Type) (Self_W : Type)
+    (LEN : Usize) : Usize :=
   eval_global (WithConstTy.LEN2_default_body Self Self_V Self_W LEN)
 
 /- Trait declaration: [traits::WithConstTy]
@@ -266,7 +267,8 @@ structure WithConstTy (Self : Type) (Self_V : Type) (Self_W : Type) (LEN :
 /- [traits::{traits::WithConstTy<u8, u64, 32: usize> for bool}#8::LEN1]
    Source: 'tests/src/traits.rs', lines 177:4-177:27 -/
 def WithConstTyBoolU8U6432.LEN1_body : Result Usize := ok 12#usize
-def WithConstTyBoolU8U6432.LEN1 : Usize :=
+@[irreducible]
+  def WithConstTyBoolU8U6432.LEN1 : Usize :=
   eval_global WithConstTyBoolU8U6432.LEN1_body
 
 /- [traits::{traits::WithConstTy<u8, u64, 32: usize> for bool}#8::f]:
@@ -489,7 +491,8 @@ structure Trait (Self : Type) where
 /- [traits::{traits::Trait for @Array<T, N>}#14::LEN]
    Source: 'tests/src/traits.rs', lines 317:4-317:25 -/
 def TraitArray.LEN_body (T : Type) (N : Usize) : Result Usize := ok N
-def TraitArray.LEN (T : Type) (N : Usize) : Usize :=
+@[irreducible]
+  def TraitArray.LEN (T : Type) (N : Usize) : Usize :=
   eval_global (TraitArray.LEN_body T N)
 
 /- Trait implementation: [traits::{traits::Trait for @Array<T, N>}#14]
@@ -504,7 +507,8 @@ def TraitArray (T : Type) (N : Usize) : Trait (Array T N) := {
 def TraittraitsWrapper.LEN_body {T : Type} (TraitInst : Trait T)
   : Result Usize :=
   ok 0#usize
-def TraittraitsWrapper.LEN {T : Type} (TraitInst : Trait T) : Usize :=
+@[irreducible]
+  def TraittraitsWrapper.LEN {T : Type} (TraitInst : Trait T) : Usize :=
   eval_global (TraittraitsWrapper.LEN_body TraitInst)
 
 /- Trait implementation: [traits::{traits::Trait for traits::Wrapper<T>}#15]
@@ -531,8 +535,9 @@ structure Foo (T : Type) (U : Type) where
 def Foo.FOO_body {T : Type} (U : Type) (TraitInst : Trait T)
   : Result (core.result.Result T I32) :=
   ok (core.result.Result.Err 0#i32)
-def Foo.FOO {T : Type} (U : Type) (TraitInst : Trait T)
-  : core.result.Result T I32 :=
+@[irreducible]
+  def Foo.FOO {T : Type} (U : Type) (TraitInst : Trait T)
+    : core.result.Result T I32 :=
   eval_global (Foo.FOO_body U TraitInst)
 
 /- [traits::use_foo1]:
