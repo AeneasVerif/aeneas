@@ -201,7 +201,7 @@ let const_array : result (array u32 2) =
 (** [arrays::const_slice]:
     Source: 'tests/src/arrays.rs', lines 151:0-154:1 *)
 let const_slice : result u32 =
-  let s = array_to_slice (mk_array 2 [ 0; 0 ]) in slice_index_usize s 0
+  let a = array_repeat 2 0 in let s = array_to_slice a in slice_index_usize s 0
 
 (** [arrays::take_all]:
     Source: 'tests/src/arrays.rs', lines 162:0-174:1 *)
