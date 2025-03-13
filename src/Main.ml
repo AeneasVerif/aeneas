@@ -314,6 +314,8 @@ let () =
   (* Sanity check: the use of decrease clauses is not compatible with the use of fuel *)
   check_arg_not !use_fuel "-use-fuel" !extract_decreases_clauses
     "-decreases-clauses";
+  check_arg_implies !generate_lib_entry_point "-gen-lib-entry" !split_files
+    "-split-files";
   check_arg_not !generate_lib_entry_point "-gen-lib-entry"
     (Option.is_some !subfolder)
     "-subfolder";

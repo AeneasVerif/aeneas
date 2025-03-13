@@ -202,11 +202,9 @@ let backward_no_state_update = ref false
  *)
 let split_files = ref false
 
-(** Generate the library entry point, if the crate is split between different files.
-
-    Sometimes we want to skip this: the library entry points just includes all the
-    files in the project, and the user may want to write their own entry point, to
-    add custom includes (to include the files containing the proofs, for instance).
+(** Only for Lean: generate the library entry point, if the crate is split between
+    different files. The entry point is simply a file with the name of the crate
+    and which includes all the other files.
  *)
 let generate_lib_entry_point = ref false
 
