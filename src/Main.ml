@@ -105,6 +105,9 @@ let () =
         Arg.Symbol (backend_names, set_backend),
         " Specify the target backend (" ^ String.concat ", " backend_names ^ ")"
       );
+      ( "-namespace",
+        Arg.String set_namespace,
+        " Set the namespace of the definitions in the pure model" );
       ("-dest", Arg.Set_string dest_dir, " Specify the output directory");
       ( "-test-units",
         Arg.Set test_unit_functions,

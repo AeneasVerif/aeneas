@@ -1263,11 +1263,15 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
             StringUtils.lowercase_first_letter crate_name
           else crate_name
         in
-        (* We use the raw crate name for the namespaces *)
+        (* We use the raw crate name for the namespaces, unless the user
+           has provided one *)
         let namespace =
-          match Config.backend () with
-          | FStar | Coq | HOL4 -> crate.name
-          | Lean -> crate.name
+          match !Config.namespace with
+          | Some namespace -> namespace
+          | None -> (
+              match Config.backend () with
+              | FStar | Coq | HOL4 -> crate.name
+              | Lean -> crate.name)
         in
         (* Concatenate *)
         (namespace, crate_name, Filename.concat dest_dir crate_name)

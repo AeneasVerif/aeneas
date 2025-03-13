@@ -26,6 +26,9 @@ let set_backend (b : string) : unit =
          belonging to the proper set *)
       raise (Failure "Unexpected")
 
+let namespace : string option ref = ref None
+let set_namespace (s : string) : unit = namespace := Some s
+
 (** If [true], we do not generate code and simply borrow-check the program instead.
     This allows us to relax some sanity checks which are present in the symbolic
     execution only to make sure we will be able to generate the pure translation.
