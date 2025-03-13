@@ -15,18 +15,18 @@ initialize registerTraceClass `ScalarTac
 # Simp Sets
 -/
 
-/-- The `scalar_tac_simp` simp attribute. -/
+/-- The `scalar_tac_simps` simp attribute. -/
 initialize scalarTacSimpExt : SimpExtension ←
-  registerSimpAttr `scalar_tac_simp "\
-    The `scalar_tac_simp` attribute registers simp lemmas to be used by `scalar_tac`
+  registerSimpAttr `scalar_tac_simps "\
+    The `scalar_tac_simps` attribute registers simp lemmas to be used by `scalar_tac`
     during its preprocessing phase."
 
 initialize scalarTacSimprocsRef : IO.Ref Simprocs ← IO.mkRef {}
 
-/-- The `scalar_tac_simp_proc` simp attribute for the simp rocs. -/
+/-- The `scalar_tac_simps_proc` simp attribute for the simp rocs. -/
 initialize scalarTacSimprocExt : Simp.SimprocExtension ←
-  Simp.registerSimprocAttr `scalar_tac_simp_proc "\
-    The `scalar_tac_simp_proc` attribute registers simp procedures to be used by `scalar_tac`
+  Simp.registerSimprocAttr `scalar_tac_simps_proc "\
+    The `scalar_tac_simps_proc` attribute registers simp procedures to be used by `scalar_tac`
     during its preprocessing phase." (some scalarTacSimprocsRef)
 
 /-!

@@ -100,7 +100,7 @@ def goalIsLinearInt : Tactic.TacticM Bool := do
 example (x y : Int) (h0 : x ≤ y) (h1 : x ≠ y) : x < y := by
   omega
 
-attribute [scalar_tac_simp]
+attribute [scalar_tac_simps]
   reduceIte
   Nat.reduceLeDiff Nat.reduceLT Nat.reduceGT Nat.reduceBEq Nat.reduceBNe
   Nat.reducePow Nat.reduceAdd Nat.reduceSub Nat.reduceMul Nat.reduceDiv Nat.reduceMod
@@ -159,7 +159,7 @@ elab "scalar_tac_saturate" config:Parser.Tactic.optConfig : tactic => do
   let _ ← scalarTacSaturateForward config.fastSaturate config.nonLin
 
 /- Propositional logic simp lemmas -/
-attribute [scalar_tac_simp]
+attribute [scalar_tac_simps]
   and_self false_implies true_implies Prod.mk.injEq
   not_false_eq_true not_true_eq_false
   true_and and_true false_and and_false

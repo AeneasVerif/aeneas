@@ -7,7 +7,7 @@ namespace Std
 
 set_option maxRecDepth 1024
 
-attribute [scalar_tac_simp]
+attribute [scalar_tac_simps]
   and_self false_implies true_implies Prod.mk.injEq
   not_false_eq_true not_true_eq_false
   true_and and_true false_and and_false
@@ -15,7 +15,7 @@ attribute [scalar_tac_simp]
   Bool.true_eq_false Bool.false_eq_true
   decide_eq_true_eq Bool.or_eq_true Bool.and_eq_true
 
-attribute [scalar_tac_simp] zero_add
+attribute [scalar_tac_simps] zero_add
 
 local syntax "simp_scalar_consts" : tactic
 local macro_rules
@@ -41,9 +41,9 @@ local macro_rules
       UScalar.size, IScalar.size,
       UScalar.cMax, IScalar.cMin, IScalar.cMax])
 
-@[scalar_tac_simp] theorem UScalar.max_USize_eq : UScalar.max .Usize = Usize.max := by simp_scalar_consts
-@[scalar_tac_simp] theorem IScalar.min_ISize_eq : IScalar.min .Isize = Isize.min := by simp_scalar_consts
-@[scalar_tac_simp] theorem IScalar.max_ISize_eq : IScalar.max .Isize = Isize.max := by simp_scalar_consts
+@[scalar_tac_simps] theorem UScalar.max_USize_eq : UScalar.max .Usize = Usize.max := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.min_ISize_eq : IScalar.min .Isize = Isize.min := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.max_ISize_eq : IScalar.max .Isize = Isize.max := by simp_scalar_consts
 
 theorem Usize.max_succ_eq_pow : Usize.max + 1 = 2^System.Platform.numBits := by
   simp [Usize.max, Usize.numBits]
@@ -88,106 +88,106 @@ abbrev Isize.maxAbbrevPow : Int := 2^(System.Platform.numBits-1)
 @[scalar_tac Isize.maxAbbrevPow]
 theorem Isize.cMax_bound' : IScalar.cMax .Isize ≤ Isize.max ∧ Isize.max + 1 = 2^(System.Platform.numBits - 1) := Isize.cMax_bound
 
-@[scalar_tac_simp] theorem U8.numBits_eq    : U8.numBits = 8 := by simp_scalar_consts
-@[scalar_tac_simp] theorem U16.numBits_eq   : U16.numBits = 16 := by simp_scalar_consts
-@[scalar_tac_simp] theorem U32.numBits_eq   : U32.numBits = 32 := by simp_scalar_consts
-@[scalar_tac_simp] theorem U64.numBits_eq   : U64.numBits = 64 := by simp_scalar_consts
-@[scalar_tac_simp] theorem U128.numBits_eq  : U128.numBits = 128 := by simp_scalar_consts
-@[scalar_tac_simp] theorem Usize.numBits_eq : Usize.numBits = System.Platform.numBits := by simp_scalar_consts
+@[scalar_tac_simps] theorem U8.numBits_eq    : U8.numBits = 8 := by simp_scalar_consts
+@[scalar_tac_simps] theorem U16.numBits_eq   : U16.numBits = 16 := by simp_scalar_consts
+@[scalar_tac_simps] theorem U32.numBits_eq   : U32.numBits = 32 := by simp_scalar_consts
+@[scalar_tac_simps] theorem U64.numBits_eq   : U64.numBits = 64 := by simp_scalar_consts
+@[scalar_tac_simps] theorem U128.numBits_eq  : U128.numBits = 128 := by simp_scalar_consts
+@[scalar_tac_simps] theorem Usize.numBits_eq : Usize.numBits = System.Platform.numBits := by simp_scalar_consts
 
-@[scalar_tac_simp] theorem I8.numBits_eq    : I8.numBits = 8 := by simp_scalar_consts
-@[scalar_tac_simp] theorem I16.numBits_eq   : I16.numBits = 16 := by simp_scalar_consts
-@[scalar_tac_simp] theorem I32.numBits_eq   : I32.numBits = 32 := by simp_scalar_consts
-@[scalar_tac_simp] theorem I64.numBits_eq   : I64.numBits = 64 := by simp_scalar_consts
-@[scalar_tac_simp] theorem I128.numBits_eq  : I128.numBits = 128 := by simp_scalar_consts
-@[scalar_tac_simp] theorem Isize.numBits_eq : Isize.numBits = System.Platform.numBits := by simp_scalar_consts
+@[scalar_tac_simps] theorem I8.numBits_eq    : I8.numBits = 8 := by simp_scalar_consts
+@[scalar_tac_simps] theorem I16.numBits_eq   : I16.numBits = 16 := by simp_scalar_consts
+@[scalar_tac_simps] theorem I32.numBits_eq   : I32.numBits = 32 := by simp_scalar_consts
+@[scalar_tac_simps] theorem I64.numBits_eq   : I64.numBits = 64 := by simp_scalar_consts
+@[scalar_tac_simps] theorem I128.numBits_eq  : I128.numBits = 128 := by simp_scalar_consts
+@[scalar_tac_simps] theorem Isize.numBits_eq : Isize.numBits = System.Platform.numBits := by simp_scalar_consts
 
-@[scalar_tac_simp] theorem U8.max_eq    : U8.max = 255 := by simp_scalar_consts
-@[scalar_tac_simp] theorem U16.max_eq   : U16.max = 65535 := by simp_scalar_consts
-@[scalar_tac_simp] theorem U32.max_eq   : U32.max = 4294967295 := by simp_scalar_consts
-@[scalar_tac_simp] theorem U64.max_eq   : U64.max = 18446744073709551615 := by simp_scalar_consts
-@[scalar_tac_simp] theorem U128.max_eq  : U128.max = 340282366920938463463374607431768211455 := by simp_scalar_consts
+@[scalar_tac_simps] theorem U8.max_eq    : U8.max = 255 := by simp_scalar_consts
+@[scalar_tac_simps] theorem U16.max_eq   : U16.max = 65535 := by simp_scalar_consts
+@[scalar_tac_simps] theorem U32.max_eq   : U32.max = 4294967295 := by simp_scalar_consts
+@[scalar_tac_simps] theorem U64.max_eq   : U64.max = 18446744073709551615 := by simp_scalar_consts
+@[scalar_tac_simps] theorem U128.max_eq  : U128.max = 340282366920938463463374607431768211455 := by simp_scalar_consts
 
-@[scalar_tac_simp] theorem UScalar.max_U8_eq    : UScalar.max .U8 = 255 := by simp_scalar_consts
-@[scalar_tac_simp] theorem UScalar.max_U16_eq   : UScalar.max .U16 = 65535 := by simp_scalar_consts
-@[scalar_tac_simp] theorem UScalar.max_U32_eq   : UScalar.max .U32 = 4294967295 := by simp_scalar_consts
-@[scalar_tac_simp] theorem UScalar.max_U64_eq   : UScalar.max .U64 = 18446744073709551615 := by simp_scalar_consts
-@[scalar_tac_simp] theorem UScalar.max_U128_eq  : UScalar.max .U128 = 340282366920938463463374607431768211455 := by simp_scalar_consts
+@[scalar_tac_simps] theorem UScalar.max_U8_eq    : UScalar.max .U8 = 255 := by simp_scalar_consts
+@[scalar_tac_simps] theorem UScalar.max_U16_eq   : UScalar.max .U16 = 65535 := by simp_scalar_consts
+@[scalar_tac_simps] theorem UScalar.max_U32_eq   : UScalar.max .U32 = 4294967295 := by simp_scalar_consts
+@[scalar_tac_simps] theorem UScalar.max_U64_eq   : UScalar.max .U64 = 18446744073709551615 := by simp_scalar_consts
+@[scalar_tac_simps] theorem UScalar.max_U128_eq  : UScalar.max .U128 = 340282366920938463463374607431768211455 := by simp_scalar_consts
 
-@[scalar_tac_simp] theorem I8.min_eq    : I8.min = -128 := by simp_scalar_consts
-@[scalar_tac_simp] theorem I8.max_eq    : I8.max = 127 := by simp_scalar_consts
-@[scalar_tac_simp] theorem I16.min_eq   : I16.min = -32768 := by simp_scalar_consts
-@[scalar_tac_simp] theorem I16.max_eq   : I16.max = 32767 := by simp_scalar_consts
-@[scalar_tac_simp] theorem I32.min_eq   : I32.min = -2147483648 := by simp_scalar_consts
-@[scalar_tac_simp] theorem I32.max_eq   : I32.max = 2147483647 := by simp_scalar_consts
-@[scalar_tac_simp] theorem I64.min_eq   : I64.min = -9223372036854775808 := by simp_scalar_consts
-@[scalar_tac_simp] theorem I64.max_eq   : I64.max = 9223372036854775807 := by simp_scalar_consts
-@[scalar_tac_simp] theorem I128.min_eq  : I128.min = -170141183460469231731687303715884105728 := by simp_scalar_consts
-@[scalar_tac_simp] theorem I128.max_eq  : I128.max = 170141183460469231731687303715884105727 := by simp_scalar_consts
+@[scalar_tac_simps] theorem I8.min_eq    : I8.min = -128 := by simp_scalar_consts
+@[scalar_tac_simps] theorem I8.max_eq    : I8.max = 127 := by simp_scalar_consts
+@[scalar_tac_simps] theorem I16.min_eq   : I16.min = -32768 := by simp_scalar_consts
+@[scalar_tac_simps] theorem I16.max_eq   : I16.max = 32767 := by simp_scalar_consts
+@[scalar_tac_simps] theorem I32.min_eq   : I32.min = -2147483648 := by simp_scalar_consts
+@[scalar_tac_simps] theorem I32.max_eq   : I32.max = 2147483647 := by simp_scalar_consts
+@[scalar_tac_simps] theorem I64.min_eq   : I64.min = -9223372036854775808 := by simp_scalar_consts
+@[scalar_tac_simps] theorem I64.max_eq   : I64.max = 9223372036854775807 := by simp_scalar_consts
+@[scalar_tac_simps] theorem I128.min_eq  : I128.min = -170141183460469231731687303715884105728 := by simp_scalar_consts
+@[scalar_tac_simps] theorem I128.max_eq  : I128.max = 170141183460469231731687303715884105727 := by simp_scalar_consts
 
-@[scalar_tac_simp] theorem IScalar.min_I8_eq    : IScalar.min .I8 = -128 := by simp_scalar_consts
-@[scalar_tac_simp] theorem IScalar.max_I8_eq    : IScalar.max .I8 = 127 := by simp_scalar_consts
-@[scalar_tac_simp] theorem IScalar.min_I16_eq   : IScalar.min .I16 = -32768 := by simp_scalar_consts
-@[scalar_tac_simp] theorem IScalar.max_I16_eq   : IScalar.max .I16 = 32767 := by simp_scalar_consts
-@[scalar_tac_simp] theorem IScalar.min_I32_eq   : IScalar.min .I32 = -2147483648 := by simp_scalar_consts
-@[scalar_tac_simp] theorem IScalar.max_I32_eq   : IScalar.max .I32 = 2147483647 := by simp_scalar_consts
-@[scalar_tac_simp] theorem IScalar.min_I64_eq   : IScalar.min .I64 = -9223372036854775808 := by simp_scalar_consts
-@[scalar_tac_simp] theorem IScalar.max_I64_eq   : IScalar.max .I64 = 9223372036854775807 := by simp_scalar_consts
-@[scalar_tac_simp] theorem IScalar.min_I128_eq  : IScalar.min .I128 = -170141183460469231731687303715884105728 := by simp_scalar_consts
-@[scalar_tac_simp] theorem IScalar.max_I128_eq  : IScalar.max .I128 = 170141183460469231731687303715884105727 := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.min_I8_eq    : IScalar.min .I8 = -128 := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.max_I8_eq    : IScalar.max .I8 = 127 := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.min_I16_eq   : IScalar.min .I16 = -32768 := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.max_I16_eq   : IScalar.max .I16 = 32767 := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.min_I32_eq   : IScalar.min .I32 = -2147483648 := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.max_I32_eq   : IScalar.max .I32 = 2147483647 := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.min_I64_eq   : IScalar.min .I64 = -9223372036854775808 := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.max_I64_eq   : IScalar.max .I64 = 9223372036854775807 := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.min_I128_eq  : IScalar.min .I128 = -170141183460469231731687303715884105728 := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.max_I128_eq  : IScalar.max .I128 = 170141183460469231731687303715884105727 := by simp_scalar_consts
 
-@[scalar_tac_simp] theorem U8.size_eq    : U8.size = 256 := by simp_scalar_consts
-@[scalar_tac_simp] theorem U16.size_eq   : U16.size = 65536 := by simp_scalar_consts
-@[scalar_tac_simp] theorem U32.size_eq   : U32.size = 4294967296 := by simp_scalar_consts
-@[scalar_tac_simp] theorem U64.size_eq   : U64.size = 18446744073709551616 := by simp_scalar_consts
-@[scalar_tac_simp] theorem U128.size_eq  : U128.size = 340282366920938463463374607431768211456 := by simp_scalar_consts
+@[scalar_tac_simps] theorem U8.size_eq    : U8.size = 256 := by simp_scalar_consts
+@[scalar_tac_simps] theorem U16.size_eq   : U16.size = 65536 := by simp_scalar_consts
+@[scalar_tac_simps] theorem U32.size_eq   : U32.size = 4294967296 := by simp_scalar_consts
+@[scalar_tac_simps] theorem U64.size_eq   : U64.size = 18446744073709551616 := by simp_scalar_consts
+@[scalar_tac_simps] theorem U128.size_eq  : U128.size = 340282366920938463463374607431768211456 := by simp_scalar_consts
 
-@[scalar_tac_simp] theorem I8.size_eq    : I8.size = 256 := by simp_scalar_consts
-@[scalar_tac_simp] theorem I16.size_eq   : I16.size = 65536 := by simp_scalar_consts
-@[scalar_tac_simp] theorem I32.size_eq   : I32.size = 4294967296 := by simp_scalar_consts
-@[scalar_tac_simp] theorem I64.size_eq   : I64.size = 18446744073709551616 := by simp_scalar_consts
-@[scalar_tac_simp] theorem I128.size_eq  : I128.size = 340282366920938463463374607431768211456 := by simp_scalar_consts
+@[scalar_tac_simps] theorem I8.size_eq    : I8.size = 256 := by simp_scalar_consts
+@[scalar_tac_simps] theorem I16.size_eq   : I16.size = 65536 := by simp_scalar_consts
+@[scalar_tac_simps] theorem I32.size_eq   : I32.size = 4294967296 := by simp_scalar_consts
+@[scalar_tac_simps] theorem I64.size_eq   : I64.size = 18446744073709551616 := by simp_scalar_consts
+@[scalar_tac_simps] theorem I128.size_eq  : I128.size = 340282366920938463463374607431768211456 := by simp_scalar_consts
 
-@[scalar_tac_simp] theorem UScalar.size_U8_eq    : UScalar.size .U8 = 256 := by simp_scalar_consts
-@[scalar_tac_simp] theorem UScalar.size_U16_eq   : U16.size = 65536 := by simp_scalar_consts
-@[scalar_tac_simp] theorem UScalar.size_U32_eq   : UScalar.size .U32 = 4294967296 := by simp_scalar_consts
-@[scalar_tac_simp] theorem UScalar.size_U64_eq   : UScalar.size .U64 = 18446744073709551616 := by simp_scalar_consts
-@[scalar_tac_simp] theorem UScalar.size_U128_eq  : UScalar.size .U128 = 340282366920938463463374607431768211456 := by simp_scalar_consts
+@[scalar_tac_simps] theorem UScalar.size_U8_eq    : UScalar.size .U8 = 256 := by simp_scalar_consts
+@[scalar_tac_simps] theorem UScalar.size_U16_eq   : U16.size = 65536 := by simp_scalar_consts
+@[scalar_tac_simps] theorem UScalar.size_U32_eq   : UScalar.size .U32 = 4294967296 := by simp_scalar_consts
+@[scalar_tac_simps] theorem UScalar.size_U64_eq   : UScalar.size .U64 = 18446744073709551616 := by simp_scalar_consts
+@[scalar_tac_simps] theorem UScalar.size_U128_eq  : UScalar.size .U128 = 340282366920938463463374607431768211456 := by simp_scalar_consts
 
-@[scalar_tac_simp] theorem IScalar.size_I8_eq    : IScalar.size .I8 = 256 := by simp_scalar_consts
-@[scalar_tac_simp] theorem IScalar.size_I16_eq   : IScalar.size .I16 = 65536 := by simp_scalar_consts
-@[scalar_tac_simp] theorem IScalar.size_I32_eq   : IScalar.size .I32 = 4294967296 := by simp_scalar_consts
-@[scalar_tac_simp] theorem IScalar.size_I64_eq   : IScalar.size .I64 = 18446744073709551616 := by simp_scalar_consts
-@[scalar_tac_simp] theorem IScalar.size_I128_eq  : IScalar.size .I128 = 340282366920938463463374607431768211456 := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.size_I8_eq    : IScalar.size .I8 = 256 := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.size_I16_eq   : IScalar.size .I16 = 65536 := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.size_I32_eq   : IScalar.size .I32 = 4294967296 := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.size_I64_eq   : IScalar.size .I64 = 18446744073709551616 := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.size_I128_eq  : IScalar.size .I128 = 340282366920938463463374607431768211456 := by simp_scalar_consts
 
-@[scalar_tac_simp] theorem UScalar.cMax_U8_eq     : UScalar.cMax .U8 = 255 := by simp_scalar_consts
-@[scalar_tac_simp] theorem UScalar.cMax_U16_eq    : UScalar.cMax .U16 = 65535 := by simp_scalar_consts
-@[scalar_tac_simp] theorem UScalar.cMax_U32_eq    : UScalar.cMax .U32 = 4294967295 := by simp_scalar_consts
-@[scalar_tac_simp] theorem UScalar.cMax_U64_eq    : UScalar.cMax .U64 = 18446744073709551615 := by simp_scalar_consts
-@[scalar_tac_simp] theorem UScalar.cMax_U128_eq   : UScalar.cMax .U128 = 340282366920938463463374607431768211455 := by simp_scalar_consts
-@[scalar_tac_simp] theorem UScalar.cMax_Usize_eq  : UScalar.cMax .Usize = 4294967295 := by simp_scalar_consts
+@[scalar_tac_simps] theorem UScalar.cMax_U8_eq     : UScalar.cMax .U8 = 255 := by simp_scalar_consts
+@[scalar_tac_simps] theorem UScalar.cMax_U16_eq    : UScalar.cMax .U16 = 65535 := by simp_scalar_consts
+@[scalar_tac_simps] theorem UScalar.cMax_U32_eq    : UScalar.cMax .U32 = 4294967295 := by simp_scalar_consts
+@[scalar_tac_simps] theorem UScalar.cMax_U64_eq    : UScalar.cMax .U64 = 18446744073709551615 := by simp_scalar_consts
+@[scalar_tac_simps] theorem UScalar.cMax_U128_eq   : UScalar.cMax .U128 = 340282366920938463463374607431768211455 := by simp_scalar_consts
+@[scalar_tac_simps] theorem UScalar.cMax_Usize_eq  : UScalar.cMax .Usize = 4294967295 := by simp_scalar_consts
 
-@[scalar_tac_simp] theorem IScalar.cMin_I8_eq     : IScalar.cMin .I8 = -128 := by simp_scalar_consts
-@[scalar_tac_simp] theorem IScalar.cMax_I8_eq     : IScalar.cMax .I8 = 127 := by simp_scalar_consts
-@[scalar_tac_simp] theorem IScalar.cMin_I16_eq    : IScalar.cMin .I16 = -32768 := by simp_scalar_consts
-@[scalar_tac_simp] theorem IScalar.cMax_I16_eq    : IScalar.cMax .I16 = 32767 := by simp_scalar_consts
-@[scalar_tac_simp] theorem IScalar.cMin_I32_eq    : IScalar.cMin .I32 = -2147483648 := by simp_scalar_consts
-@[scalar_tac_simp] theorem IScalar.cMax_I32_eq    : IScalar.cMax .I32 = 2147483647 := by simp_scalar_consts
-@[scalar_tac_simp] theorem IScalar.cMin_I64_eq    : IScalar.cMin .I64 = -9223372036854775808 := by simp_scalar_consts
-@[scalar_tac_simp] theorem IScalar.cMax_I64_eq    : IScalar.cMax .I64 = 9223372036854775807 := by simp_scalar_consts
-@[scalar_tac_simp] theorem IScalar.cMin_I128_eq   : IScalar.cMin .I128 = -170141183460469231731687303715884105728 := by simp_scalar_consts
-@[scalar_tac_simp] theorem IScalar.cMax_I128_eq   : IScalar.cMax .I128 = 170141183460469231731687303715884105727 := by simp_scalar_consts
-@[scalar_tac_simp] theorem IScalar.cMin_Isize_eq  : IScalar.cMin .Isize = -2147483648 := by simp_scalar_consts
-@[scalar_tac_simp] theorem IScalar.cMax_Isize_eq  : IScalar.cMax .Isize = 2147483647 := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.cMin_I8_eq     : IScalar.cMin .I8 = -128 := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.cMax_I8_eq     : IScalar.cMax .I8 = 127 := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.cMin_I16_eq    : IScalar.cMin .I16 = -32768 := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.cMax_I16_eq    : IScalar.cMax .I16 = 32767 := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.cMin_I32_eq    : IScalar.cMin .I32 = -2147483648 := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.cMax_I32_eq    : IScalar.cMax .I32 = 2147483647 := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.cMin_I64_eq    : IScalar.cMin .I64 = -9223372036854775808 := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.cMax_I64_eq    : IScalar.cMax .I64 = 9223372036854775807 := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.cMin_I128_eq   : IScalar.cMin .I128 = -170141183460469231731687303715884105728 := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.cMax_I128_eq   : IScalar.cMax .I128 = 170141183460469231731687303715884105727 := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.cMin_Isize_eq  : IScalar.cMin .Isize = -2147483648 := by simp_scalar_consts
+@[scalar_tac_simps] theorem IScalar.cMax_Isize_eq  : IScalar.cMax .Isize = 2147483647 := by simp_scalar_consts
 
 
-@[scalar_tac_simp]
+@[scalar_tac_simps]
 theorem UScalarTy.USize.numBits_eq : UScalarTy.Usize.numBits = System.Platform.numBits := by simp_scalar_consts
 
-@[scalar_tac_simp]
+@[scalar_tac_simps]
 theorem IScalarTy.ISize.numBits_eq : IScalarTy.Isize.numBits = System.Platform.numBits := by simp_scalar_consts
 
-attribute [scalar_tac_simp] Bool.toNat_false Bool.toNat_true
+attribute [scalar_tac_simps] Bool.toNat_false Bool.toNat_true
 
 end Std
 
@@ -213,8 +213,8 @@ theorem IScalar.bounds {ty : IScalarTy} (x : IScalar ty) :
 # Min, Max
 -/
 
-@[scalar_tac_simp] theorem Nat.max_eq_Max_max (x y : Nat) : Nat.max x y = x ⊔ y := by simp
-@[scalar_tac_simp] theorem Nat.min_eq_Min_min (x y : Nat) : Nat.min x y = x ⊓ y := by simp
+@[scalar_tac_simps] theorem Nat.max_eq_Max_max (x y : Nat) : Nat.max x y = x ⊔ y := by simp
+@[scalar_tac_simps] theorem Nat.min_eq_Min_min (x y : Nat) : Nat.min x y = x ⊓ y := by simp
 
 example (x y : Nat) : x ≤ x ⊔ y := by scalar_tac
 example (x y : Nat) : x ≤ Nat.max x y := by scalar_tac
@@ -230,7 +230,7 @@ example (x y : Int) : min x y ≤ x := by scalar_tac
 # Abs
 -/
 
-@[scalar_tac_simp]
+@[scalar_tac_simps]
 theorem Int.natAbs_eq_abs (x : Int) : |x| = ↑x.natAbs := by simp
 
 example (x y z : Int) (h0 : x.natAbs ≤ y.natAbs) (h1 : y.natAbs ≤ z.natAbs) : x ≤ z.natAbs := by

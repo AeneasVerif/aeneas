@@ -46,7 +46,7 @@ def Slice.new (α : Type u) : Slice α := ⟨ [], by simp ⟩
 abbrev Slice.len {α : Type u} (v : Slice α) : Usize :=
   Usize.ofNatCore v.val.length (by scalar_tac)
 
-@[simp, scalar_tac_simp]
+@[simp, scalar_tac_simps]
 theorem Slice.len_val {α : Type u} (v : Slice α) : (Slice.len v).val = v.length :=
   by simp
 
@@ -56,8 +56,8 @@ theorem Slice.len_val {α : Type u} (v : Slice α) : (Slice.len v).val = v.lengt
 @[reducible] instance {α : Type u} : GetElem? (Slice α) Nat α (fun a i => i < a.val.length) where
   getElem? a i := getElem? a.val i
 
-@[simp, scalar_tac_simp] theorem Slice.getElem?_Nat_eq {α : Type u} (v : Slice α) (i : Nat) : v[i]? = v.val[i]? := by rfl
-@[simp, scalar_tac_simp] theorem Slice.getElem!_Nat_eq {α : Type u} [Inhabited α] (v : Slice α) (i : Nat) : v[i]! = v.val[i]! := by rfl
+@[simp, scalar_tac_simps] theorem Slice.getElem?_Nat_eq {α : Type u} (v : Slice α) (i : Nat) : v[i]? = v.val[i]? := by rfl
+@[simp, scalar_tac_simps] theorem Slice.getElem!_Nat_eq {α : Type u} [Inhabited α] (v : Slice α) (i : Nat) : v[i]! = v.val[i]! := by rfl
 
 @[reducible] instance {α : Type u} : GetElem (Slice α) Usize α (fun a i => i.val < a.val.length) where
   getElem a i h := getElem a.val i.val h
@@ -65,11 +65,11 @@ theorem Slice.len_val {α : Type u} (v : Slice α) : (Slice.len v).val = v.lengt
 @[reducible] instance {α : Type u} : GetElem? (Slice α) Usize α (fun a i => i < a.val.length) where
   getElem? a i := getElem? a.val i.val
 
-@[simp, scalar_tac_simp] theorem Slice.getElem?_Usize_eq {α : Type u} (v : Slice α) (i : Usize) : v[i]? = v.val[i.val]? := by rfl
-@[simp, scalar_tac_simp] theorem Slice.getElem!_Usize_eq {α : Type u} [Inhabited α] (v : Slice α) (i : Usize) : v[i]! = v.val[i.val]! := by rfl
+@[simp, scalar_tac_simps] theorem Slice.getElem?_Usize_eq {α : Type u} (v : Slice α) (i : Usize) : v[i]? = v.val[i.val]? := by rfl
+@[simp, scalar_tac_simps] theorem Slice.getElem!_Usize_eq {α : Type u} [Inhabited α] (v : Slice α) (i : Usize) : v[i]! = v.val[i.val]! := by rfl
 
-@[simp, scalar_tac_simp] abbrev Slice.get? {α : Type u} (v : Slice α) (i : Nat) : Option α := getElem? v i
-@[simp, scalar_tac_simp] abbrev Slice.get! {α : Type u} [Inhabited α] (v : Slice α) (i : Nat) : α := getElem! v i
+@[simp, scalar_tac_simps] abbrev Slice.get? {α : Type u} (v : Slice α) (i : Nat) : Option α := getElem? v i
+@[simp, scalar_tac_simps] abbrev Slice.get! {α : Type u} [Inhabited α] (v : Slice α) (i : Nat) : α := getElem! v i
 
 def Slice.set {α : Type u} (v: Slice α) (i: Usize) (x: α) : Slice α :=
   ⟨ v.val.set i.val x, by have := v.property; simp [*] ⟩
@@ -112,7 +112,7 @@ theorem Slice.set_opt_val_eq {α : Type u} (v: Slice α) (i: Usize) (x: Option �
   (v.set_opt i x) = v.val.set_opt i.val x := by
   simp [set_opt]
 
-@[scalar_tac_simp]
+@[scalar_tac_simps]
 theorem Slice.set_length {α : Type u} (v: Slice α) (i: Usize) (x: α) :
   (v.set i x).length = v.length := by simp
 

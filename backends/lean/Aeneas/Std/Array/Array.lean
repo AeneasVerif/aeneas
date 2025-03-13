@@ -61,8 +61,8 @@ example : Result (Array Int (Usize.ofNat 2)) := do
 @[reducible] instance {α : Type u} {n : Usize} : GetElem? (Array α n) Nat α (fun a i => i < a.val.length) where
   getElem? a i := getElem? a.val i
 
-@[simp, scalar_tac_simp] theorem Array.getElem?_Nat_eq {α : Type u} {n : Usize} (v : Array α n) (i : Nat) : v[i]? = v.val[i]? := by rfl
-@[simp, scalar_tac_simp] theorem Array.getElem!_Nat_eq {α : Type u} [Inhabited α] {n : Usize} (v : Array α n) (i : Nat) : v[i]! = v.val[i]! := by rfl
+@[simp, scalar_tac_simps] theorem Array.getElem?_Nat_eq {α : Type u} {n : Usize} (v : Array α n) (i : Nat) : v[i]? = v.val[i]? := by rfl
+@[simp, scalar_tac_simps] theorem Array.getElem!_Nat_eq {α : Type u} [Inhabited α] {n : Usize} (v : Array α n) (i : Nat) : v[i]! = v.val[i]! := by rfl
 
 @[reducible] instance {α : Type u} {n : Usize} : GetElem (Array α n) Usize α (fun a i => i.val < a.val.length) where
   getElem a i h := getElem a.val i.val h
@@ -70,11 +70,11 @@ example : Result (Array Int (Usize.ofNat 2)) := do
 @[reducible] instance {α : Type u} {n : Usize} : GetElem? (Array α n) Usize α (fun a i => i.val < a.val.length) where
   getElem? a i := getElem? a.val i.val
 
-@[simp, scalar_tac_simp] theorem Array.getElem?_Usize_eq {α : Type u} {n : Usize} (v : Array α n) (i : Usize) : v[i]? = v.val[i.val]? := by rfl
-@[simp, scalar_tac_simp] theorem Array.getElem!_Usize_eq {α : Type u} [Inhabited α] {n : Usize} (v : Array α n) (i : Usize) : v[i]! = v.val[i.val]! := by rfl
+@[simp, scalar_tac_simps] theorem Array.getElem?_Usize_eq {α : Type u} {n : Usize} (v : Array α n) (i : Usize) : v[i]? = v.val[i.val]? := by rfl
+@[simp, scalar_tac_simps] theorem Array.getElem!_Usize_eq {α : Type u} [Inhabited α] {n : Usize} (v : Array α n) (i : Usize) : v[i]! = v.val[i.val]! := by rfl
 
-@[simp, scalar_tac_simp] abbrev Array.get? {α : Type u} {n : Usize} (v : Array α n) (i : Nat) : Option α := getElem? v i
-@[simp, scalar_tac_simp] abbrev Array.get! {α : Type u} {n : Usize} [Inhabited α] (v : Array α n) (i : Nat) : α := getElem! v i
+@[simp, scalar_tac_simps] abbrev Array.get? {α : Type u} {n : Usize} (v : Array α n) (i : Nat) : Option α := getElem? v i
+@[simp, scalar_tac_simps] abbrev Array.get! {α : Type u} {n : Usize} [Inhabited α] (v : Array α n) (i : Nat) : α := getElem! v i
 
 @[simp]
 abbrev Array.slice {α : Type u} {n : Usize} [Inhabited α] (v : Array α n) (i j : Nat) : List α :=
@@ -123,7 +123,7 @@ theorem Array.set_opt_val_eq {α : Type u} {n : Usize} (v: Array α n) (i: Usize
   (v.set_opt i x).val = v.val.set_opt i.val x := by
   simp [set_opt]
 
-@[scalar_tac_simp]
+@[scalar_tac_simps]
 theorem Array.set_length {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) :
   (v.set i x).length = v.length := by simp
 

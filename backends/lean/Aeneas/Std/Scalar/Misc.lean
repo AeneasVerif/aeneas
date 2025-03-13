@@ -195,88 +195,88 @@ theorem UScalar.ofNatCore_bv_lt_equiv {ty} (x y : Nat) (hx) (hy) :
   have := Nat.mod_eq_of_lt hy
   simp only [*]
 
-@[simp, scalar_tac_simp] theorem U8.val_mod_size_eq (x : U8) : x.val % U8.size = x.val := by
+@[simp, scalar_tac_simps] theorem U8.val_mod_size_eq (x : U8) : x.val % U8.size = x.val := by
   apply Nat.mod_eq_of_lt; scalar_tac
 
-@[simp, scalar_tac_simp] theorem U8.val_mod_size_eq' (x : U8) : x.val % 256 = x.val := by
+@[simp, scalar_tac_simps] theorem U8.val_mod_size_eq' (x : U8) : x.val % 256 = x.val := by
   apply Nat.mod_eq_of_lt; scalar_tac
 
-@[simp, scalar_tac_simp] theorem U16.val_mod_size_eq (x : U16) : x.val % U16.size = x.val := by
+@[simp, scalar_tac_simps] theorem U16.val_mod_size_eq (x : U16) : x.val % U16.size = x.val := by
   apply Nat.mod_eq_of_lt; scalar_tac
 
-@[simp, scalar_tac_simp] theorem U16.val_mod_size_eq' (x : U16) : x.val % 65536 = x.val := by
+@[simp, scalar_tac_simps] theorem U16.val_mod_size_eq' (x : U16) : x.val % 65536 = x.val := by
   apply Nat.mod_eq_of_lt; scalar_tac
 
-@[simp, scalar_tac_simp] theorem U32.val_mod_size_eq (x : U32) : x.val % U32.size = x.val := by
+@[simp, scalar_tac_simps] theorem U32.val_mod_size_eq (x : U32) : x.val % U32.size = x.val := by
   apply Nat.mod_eq_of_lt; scalar_tac
 
-@[simp, scalar_tac_simp] theorem U32.val_mod_size_eq' (x : U32) : x.val % 4294967296 = x.val := by
+@[simp, scalar_tac_simps] theorem U32.val_mod_size_eq' (x : U32) : x.val % 4294967296 = x.val := by
   apply Nat.mod_eq_of_lt; scalar_tac
 
-@[simp, scalar_tac_simp] theorem U64.val_mod_size_eq (x : U64) : x.val % U64.size = x.val := by
+@[simp, scalar_tac_simps] theorem U64.val_mod_size_eq (x : U64) : x.val % U64.size = x.val := by
   apply Nat.mod_eq_of_lt; scalar_tac
 
-@[simp, scalar_tac_simp] theorem U64.val_mod_size_eq' (x : U64) : x.val % 18446744073709551616 = x.val := by
+@[simp, scalar_tac_simps] theorem U64.val_mod_size_eq' (x : U64) : x.val % 18446744073709551616 = x.val := by
   apply Nat.mod_eq_of_lt; scalar_tac
 
-@[simp, scalar_tac_simp] theorem U128.val_mod_size_eq (x : U128) : x.val % U128.size = x.val := by
+@[simp, scalar_tac_simps] theorem U128.val_mod_size_eq (x : U128) : x.val % U128.size = x.val := by
   apply Nat.mod_eq_of_lt; scalar_tac
 
-@[simp, scalar_tac_simp] theorem U128.val_mod_size_eq' (x : U128) : x.val % 340282366920938463463374607431768211456 = x.val := by
+@[simp, scalar_tac_simps] theorem U128.val_mod_size_eq' (x : U128) : x.val % 340282366920938463463374607431768211456 = x.val := by
   apply Nat.mod_eq_of_lt; scalar_tac
 
-@[simp, scalar_tac_simp] theorem Usize.val_mod_size_eq (x : Usize) : x.val % Usize.size = x.val := by
+@[simp, scalar_tac_simps] theorem Usize.val_mod_size_eq (x : Usize) : x.val % Usize.size = x.val := by
   apply Nat.mod_eq_of_lt; scalar_tac
 
-@[simp, scalar_tac_simp] theorem U8.val_mod_max_eq (x : U8) : x.val % (U8.max + 1) = x.val := by
+@[simp, scalar_tac_simps] theorem U8.val_mod_max_eq (x : U8) : x.val % (U8.max + 1) = x.val := by
   apply Nat.mod_eq_of_lt; scalar_tac
 
-@[simp, scalar_tac_simp] theorem U16.val_mod_max_eq (x : U16) : x.val % (U16.max + 1) = x.val := by
+@[simp, scalar_tac_simps] theorem U16.val_mod_max_eq (x : U16) : x.val % (U16.max + 1) = x.val := by
   apply Nat.mod_eq_of_lt; scalar_tac
 
-@[simp, scalar_tac_simp] theorem U32.val_mod_max_eq (x : U32) : x.val % (U32.max + 1) = x.val := by
+@[simp, scalar_tac_simps] theorem U32.val_mod_max_eq (x : U32) : x.val % (U32.max + 1) = x.val := by
   apply Nat.mod_eq_of_lt; scalar_tac
 
-@[simp, scalar_tac_simp] theorem U64.val_mod_max_eq (x : U64) : x.val % (U64.max + 1) = x.val := by
+@[simp, scalar_tac_simps] theorem U64.val_mod_max_eq (x : U64) : x.val % (U64.max + 1) = x.val := by
   apply Nat.mod_eq_of_lt; scalar_tac
 
-@[simp, scalar_tac_simp] theorem U128.val_mod_max_eq (x : U128) : x.val % (U128.max + 1) = x.val := by
+@[simp, scalar_tac_simps] theorem U128.val_mod_max_eq (x : U128) : x.val % (U128.max + 1) = x.val := by
   apply Nat.mod_eq_of_lt; scalar_tac
 
-@[simp, scalar_tac_simp] theorem Usize.val_mod_max_eq (x : Usize) : x.val % (Usize.max + 1) = x.val := by
+@[simp, scalar_tac_simps] theorem Usize.val_mod_max_eq (x : Usize) : x.val % (Usize.max + 1) = x.val := by
   apply Nat.mod_eq_of_lt; scalar_tac
 
-@[simp, scalar_tac_simp] theorem I8.val_mod_size_eq (x : I8) : Int.bmod x.val I8.size = x.val := by
+@[simp, scalar_tac_simps] theorem I8.val_mod_size_eq (x : I8) : Int.bmod x.val I8.size = x.val := by
   simp [size]; apply Int.bmod_pow2_eq_of_inBounds' <;> scalar_tac
 
-@[simp, scalar_tac_simp] theorem I8.val_mod_size_eq' (x : I8) : Int.bmod x.val 256 = x.val := by
+@[simp, scalar_tac_simps] theorem I8.val_mod_size_eq' (x : I8) : Int.bmod x.val 256 = x.val := by
   have := val_mod_size_eq x; simp [size, numBits] at this; assumption
 
-@[simp, scalar_tac_simp] theorem I16.val_mod_size_eq (x : I16) : Int.bmod x.val I16.size = x.val := by
+@[simp, scalar_tac_simps] theorem I16.val_mod_size_eq (x : I16) : Int.bmod x.val I16.size = x.val := by
   simp [size]; apply Int.bmod_pow2_eq_of_inBounds' <;> scalar_tac
 
-@[simp, scalar_tac_simp] theorem I16.val_mod_size_eq' (x : I16) : Int.bmod x.val 65536 = x.val := by
+@[simp, scalar_tac_simps] theorem I16.val_mod_size_eq' (x : I16) : Int.bmod x.val 65536 = x.val := by
   have := val_mod_size_eq x; simp [size, numBits] at this; assumption
 
-@[simp, scalar_tac_simp] theorem I32.val_mod_size_eq (x : I32) : Int.bmod x.val I32.size = x.val := by
+@[simp, scalar_tac_simps] theorem I32.val_mod_size_eq (x : I32) : Int.bmod x.val I32.size = x.val := by
   simp [size]; apply Int.bmod_pow2_eq_of_inBounds' <;> scalar_tac
 
-@[simp, scalar_tac_simp] theorem I32.val_mod_size_eq' (x : I32) : Int.bmod x.val 4294967296 = x.val := by
+@[simp, scalar_tac_simps] theorem I32.val_mod_size_eq' (x : I32) : Int.bmod x.val 4294967296 = x.val := by
   have := val_mod_size_eq x; simp [size, numBits] at this; assumption
 
-@[simp, scalar_tac_simp] theorem I64.val_mod_size_eq (x : I64) : Int.bmod x.val I64.size = x.val := by
+@[simp, scalar_tac_simps] theorem I64.val_mod_size_eq (x : I64) : Int.bmod x.val I64.size = x.val := by
   simp [size]; apply Int.bmod_pow2_eq_of_inBounds' <;> scalar_tac
 
-@[simp, scalar_tac_simp] theorem I64.val_mod_size_eq' (x : I64) : Int.bmod x.val 18446744073709551616 = x.val := by
+@[simp, scalar_tac_simps] theorem I64.val_mod_size_eq' (x : I64) : Int.bmod x.val 18446744073709551616 = x.val := by
   have := val_mod_size_eq x; simp [size, numBits] at this; assumption
 
-@[simp, scalar_tac_simp] theorem I128.val_mod_size_eq (x : I128) : Int.bmod x.val I128.size = x.val := by
+@[simp, scalar_tac_simps] theorem I128.val_mod_size_eq (x : I128) : Int.bmod x.val I128.size = x.val := by
   simp [size]; apply Int.bmod_pow2_eq_of_inBounds' <;> scalar_tac
 
-@[simp, scalar_tac_simp] theorem I128.val_mod_size_eq' (x : I128) : Int.bmod x.val 340282366920938463463374607431768211456 = x.val := by
+@[simp, scalar_tac_simps] theorem I128.val_mod_size_eq' (x : I128) : Int.bmod x.val 340282366920938463463374607431768211456 = x.val := by
   have := val_mod_size_eq x; simp [size, numBits] at this; assumption
 
-@[simp, scalar_tac_simp] theorem Isize.val_mod_size_eq (x : Isize) : Int.bmod x.val Isize.size = x.val := by
+@[simp, scalar_tac_simps] theorem Isize.val_mod_size_eq (x : Isize) : Int.bmod x.val Isize.size = x.val := by
   simp [size]; apply Int.bmod_pow2_eq_of_inBounds' <;> try scalar_tac
   simp [numBits]; dcases System.Platform.numBits_eq <;> simp [*]
 

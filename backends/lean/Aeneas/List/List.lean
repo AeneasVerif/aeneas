@@ -11,7 +11,7 @@ open Aeneas
 open Aeneas.ScalarTac
 open Aeneas.Simp
 
-attribute [scalar_tac_simp] List.length_nil List.length_cons List.length_append List.length_reverse
+attribute [scalar_tac_simps] List.length_nil List.length_cons List.length_append List.length_reverse
                             List.get!_eq_getElem! List.get?_eq_getElem?
 
 def set_opt (l : List α) (i : Nat) (x : Option α) : List α :=
@@ -71,7 +71,7 @@ theorem slice_cons_nzero (i j : Nat) (x : α) (tl : List α) (hne : Nat.not_eq i
   apply Nat.not_eq_imp_not_eq at hne
   induction i <;> cases j <;> simp_all [slice]
 
-@[simp, scalar_tac_simp]
+@[simp, scalar_tac_simps]
 theorem replicate_length {α : Type u} (l : Nat) (x : α) :
   (replicate l x).length = l := by
   induction l <;> simp_all
@@ -84,9 +84,9 @@ theorem set_getElem! {α} [Inhabited α] (l : List α) (i : Nat) :
   intro i
   cases i <;> simp_all
 
-attribute [scalar_tac_simp] length_set
+attribute [scalar_tac_simps] length_set
 
-@[simp, scalar_tac_simp]
+@[simp, scalar_tac_simps]
 theorem length_set_opt {α} (l : List α) (i : Nat) (x : Option α):
   (l.set_opt i x).length = l.length := by
   revert i
@@ -127,7 +127,7 @@ theorem getElem!_append_right [Inhabited α] (l0 l1 : List α) (i : Nat)
   have := @getElem?_append_right _ l0 l1 i h
   simp_all
 
-@[scalar_tac_simp]
+@[scalar_tac_simps]
 theorem drop_length_is_le (i : Nat) (ls : List α) : (ls.drop i).length ≤ ls.length :=
   match ls with
   | [] => by simp
@@ -138,15 +138,15 @@ theorem drop_length_is_le (i : Nat) (ls : List α) : (ls.drop i).length ≤ ls.l
       by simp only [Nat.not_eq, ne_eq, not_false_eq_true, neq_imp, not_lt_zero', false_or, true_or,
         or_self, drop_cons_nzero, length_drop, length_cons, tsub_le_iff_right, h]; omega
 
-attribute [scalar_tac_simp] length_drop
+attribute [scalar_tac_simps] length_drop
 
-@[scalar_tac_simp]
+@[scalar_tac_simps]
 theorem take_length_is_le (i : Nat) (ls : List α) : (ls.take i).length ≤ ls.length := by
   induction ls <;> simp_all
 
-attribute [scalar_tac_simp] length_take
+attribute [scalar_tac_simps] length_take
 
-@[simp, scalar_tac_simp]
+@[simp, scalar_tac_simps]
 theorem resize_length (l : List α) (new_len : Nat) (x : α) :
   (l.resize new_len x).length = new_len := by
   induction l <;> simp_all [resize]
@@ -157,7 +157,7 @@ theorem resize_length (l : List α) (new_len : Nat) (x : α) :
 theorem slice_length_le (i j : Nat) (ls : List α) : (ls.slice i j).length ≤ ls.length := by
   simp [slice]
 
-@[scalar_tac_simp]
+@[scalar_tac_simps]
 theorem slice_length (i j : Nat) (ls : List α) : (ls.slice i j).length = min (ls.length - i) (j - i) := by
   simp [slice]; scalar_tac
 
