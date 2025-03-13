@@ -1,0 +1,132 @@
+import Aeneas.ScalarTac.Lemmas
+
+namespace Aeneas.Std
+
+/-!
+# Tests
+-/
+
+example (x _y : U32) : x.val ≤ UScalar.max .U32 := by
+  scalar_tac_preprocess
+
+example (x _y : U32) : x.val ≤ UScalar.max .U32 := by
+  scalar_tac
+
+-- Checking that we explore the goal *and* projectors correctly
+example (x : U32 × U32) : 0 ≤ x.fst.val := by
+  scalar_tac
+
+-- Checking that we properly handle [ofInt]
+example : (U32.ofNat 1).val ≤ U32.max := by
+  scalar_tac
+
+example (x : Nat) (h1 : x ≤ U32.max) :
+  (U32.ofNat x (by scalar_tac)).val ≤ U32.max := by
+  scalar_tac
+
+-- Not equal
+example (x : U32) (h0 : ¬ x = U32.ofNat 0) : 0 < x.val := by
+  scalar_tac
+
+/- See this: https://aeneas-verif.zulipchat.com/#narrow/stream/349819-general/topic/U64.20trouble/near/444049757
+
+   We solved it by removing the instance `OfNat` for `Scalar`.
+   Note however that we could also solve it with a simplification lemma.
+   However, after testing, we noticed we could only apply such a lemma with
+   the rewriting tactic (not the simplifier), probably because of the use
+   of typeclasses. -/
+example {u: U64} (h1: (u : Nat) < 2): (u : Nat) = 0 ∨ (u : Nat) = 1 := by
+  scalar_tac
+
+example (x : I32) : -100000000000 < x.val := by
+  scalar_tac
+
+example : (Usize.ofNat 2).val ≠ 0 := by
+  scalar_tac
+
+example (x : U32) : x.val ≤ Usize.max := by scalar_tac
+example (x : I32) : x.val ≤ Isize.max := by scalar_tac
+example (x : I32) : Isize.min ≤ x.val := by scalar_tac
+
+example (x y : Nat) (z : Int) (h : Int.subNatNat x y + z = 0) : (x : Int) - (y : Int) + z = 0 := by
+  scalar_tac_preprocess
+  omega
+
+example (x : U32) (h : 16 * x.val ≤ U32.max) :
+  4 * (U32.ofNat (4 * x.val) (by scalar_tac)).val ≤ U32.max := by
+  scalar_tac
+
+example (b : Bool) (x y : Int) (h : if b then P ∧ x + y < 3 else x + y < 4) : x + y < 5 := by
+  scalar_tac +split
+
+open Utils
+
+/- Some tests which introduce big constants (those sometimes cause issues when reducing expressions).
+
+   See for instance: https://github.com/leanprover/lean4/issues/6955
+ -/
+example (x y : Nat) (h : x = y + 2^32) : 0 ≤ x := by
+  scalar_tac
+
+example (x y : Nat) (h : x = y - 2^32) : 0 ≤ x := by
+  scalar_tac
+
+example
+  (xi yi : U32)
+  (c0 : U8)
+  (hCarryLe : c0.val ≤ 1)
+  (c0u : U32)
+  (_ : c0u.val = c0.val)
+  (s1 : U32)
+  (c1 : Bool)
+  (hConv1 : if xi.val + c0u.val > U32.max then s1.val = ↑xi + ↑c0u - U32.max - 1 ∧ c1 = true else s1 = xi.val + c0u ∧ c1 = false)
+  (s2 : U32)
+  (c2 : Bool)
+  (hConv2 : if s1.val + yi.val > U32.max then s2.val = ↑s1 + ↑yi - U32.max - 1 ∧ c2 = true else s2 = s1.val + yi ∧ c2 = false)
+  (c1u : U8)
+  (_ : c1u.val = if c1 = true then 1 else 0)
+  (c2u : U8)
+  (_ : c2u.val = if c2 = true then 1 else 0)
+  (c3 : U8)
+  (_ : c3.val = c1u.val + c2u.val):
+  c3.val ≤ 1 := by
+  scalar_tac +split
+
+example (x y : Nat) (h : x = y - 2^32) : 0 ≤ x := by
+  scalar_tac
+
+example (v : { l : List α // l.length ≤ Usize.max }) :
+  v.val.length < 2 ^ UScalarTy.Usize.numBits := by
+  scalar_tac
+
+example (i : I8) : - 2^(Isize.numBits - 1) ≤ i.val ∧ i.val ≤ 2^(Isize.numBits - 1) := by scalar_tac
+example (x : I8) : -2 ^ (System.Platform.numBits - 1) ≤ x.val := by scalar_tac
+
+example
+  (α : Type u)
+  (v : { l : List α // l.length ≤ Usize.max })
+  (nlen : ℕ)
+  (h : nlen ≤ U32.max ∨ nlen ≤ 2 ^ Usize.numBits - 1) :
+  nlen ≤ 2 ^ Usize.numBits - 1
+  := by
+  scalar_tac
+
+example
+  (α : Type u)
+  (v : { l : List α // l.length ≤ Usize.max })
+  (nlen : ℕ)
+  (h : (decide (nlen ≤ U32.max) || decide (nlen ≤ Usize.max)) = true) :
+  nlen ≤ Usize.max
+  := by
+  scalar_tac
+
+example (x : I8) : x.toNat = x.val.toNat := by scalar_tac
+
+/- `assumption` triggers a "max recursion depth" error if `U32.max` is reducible -/
+example (x y : U32)
+    (h : 2 * x.val + 1 + y.val ≤ (U32.max : Int)) :
+  2 * x.val + 1 ≤ (U32.max : Int) := by
+  try assumption
+  scalar_tac
+
+end Aeneas.Std

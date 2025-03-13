@@ -2,6 +2,7 @@ import Aeneas.ScalarTac.ScalarTac
 import Mathlib.Algebra.Algebra.ZMod
 import Mathlib.RingTheory.Int.Basic
 import Init.Data.Int.DivModLemmas
+import Init.Data.BitVec.Lemmas
 
 namespace Aeneas.Arith
 
@@ -202,6 +203,13 @@ theorem ZMod_int_cast_eq_int_cast_iff (n : ℕ) (a b : ℤ) :
   ((a : ZMod n) = (b : ZMod n)) ↔ (a % n = b % n) :=
   ZMod.intCast_eq_intCast_iff a b n
 
+theorem ZMod_nat_cast_eq_nat_cast_iff (n : ℕ) (a b : ℕ) :
+  ((a : ZMod n) = (b : ZMod n)) ↔ (a % n = b % n) := by
+  zify
+  have := ZMod_int_cast_eq_int_cast_iff n a b
+  simp at this
+  apply this
+
 theorem eq_mod_iff_eq_ZMod (n : ℕ) (a b : ℤ) :
   (a % n = b % n) ↔ ((a : ZMod n) = (b : ZMod n)) := by
   rw [ZMod.intCast_eq_intCast_iff a b n]
@@ -212,6 +220,12 @@ theorem ZMod_eq_imp_mod_eq {n : ℕ} {a b : ℤ}
   (h : (a : ZMod n) = (b : ZMod n)) :
   a % n = b % n :=
   (@ZMod_int_cast_eq_int_cast_iff n a b).mp h
+
+theorem ZMod_nat_eq_imp_mod_eq {n : ℕ} {a b : Nat} (h : (a : ZMod n) = (b : ZMod n)) :
+  a % n = b % n := by
+  zify
+  apply ZMod_eq_imp_mod_eq
+  simp [*]
 
 -- TODO: restrict the set of theorems used by `simp`, do more things, etc.
 macro "zmodify" : tactic =>
@@ -254,17 +268,22 @@ theorem ZMod.mul_inv_eq_int_gcd {n : ℕ} (a : ℤ) :
     rw [Int.gcd_mod_same]
 
 /-- A theorem to work with division when converting integers to elements of `ZMod` -/
-theorem div_to_ZMod {n : ℕ} {a b : ℤ} [NeZero n] (hDiv : b ∣ a) (hgcd : Int.gcd b n = 1) :
-  ((a / b) : ZMod n) = (a : ZMod n) * (b : ZMod n)⁻¹ := by
+theorem div_to_ZMod {n : ℕ} {a : ℤ} {b : Nat} [NeZero n]
+  (hDiv : (a : ZMod b) = 0) (hgcd : Int.gcd b n = 1) :
+  ((a / (b : Int)) : ZMod n) = (a : ZMod n) * (b : ZMod n)⁻¹ := by
   have h : (a / b) % (n : Int) = ((a % (n : Int)) * (b : ZMod n)⁻¹.cast) % (n : Int) := by
     apply times_mod_imp_div_mod
-    . rw [← Int.dvd_iff_emod_eq_zero]
-      assumption
+    . have h : (0 : Int) = 0 % b := by simp
+      rw [h]
+      apply ZMod_eq_imp_mod_eq
+      rw [hDiv]
+      simp
     . assumption
     . apply ZMod_eq_imp_mod_eq
       simp only [Int.cast_mul, ZMod.intCast_mod, ZMod.intCast_cast, ZMod.cast_id', id_eq]
       rw [mul_assoc]
       have := @ZMod.mul_inv_eq_int_gcd n b
+      norm_cast at *
       rw [mul_comm] at this
       rw [this]
       rw [hgcd]
@@ -337,6 +356,27 @@ theorem ZMod.eq_iff_mod (p : ℕ) [NeZero p] (x y : ZMod p) :
   . simp +contextual
   . apply ZMod_val_injective
 
+@[simp]
+theorem ZMod.val_sub' {n : ℕ} [NeZero n] (a b : ZMod n) : (a - b).val =
+  (a.val + (n - b.val)) % n := by
+  have : a - b = a + (n - b) := by
+    have : (n : ZMod n) = 0 := by simp
+    rw [this]
+    ring_nf
+  rw [this]
+  simp only [ZMod.val_add]
+  have : ((n : ZMod n) - b).val = (n - b.val) % n := by
+    dcases hb : b = 0
+    . simp only [CharP.cast_eq_zero, sub_self, ZMod.val_zero, tsub_zero, Nat.mod_self, hb]
+    . have : NeZero b := by constructor; simp [*]
+      have h0 : (n - b).val = n - b.val := by simp [ZMod.val_neg_of_ne_zero]
+      have h1 := @ZMod.val_lt n _ (n - b)
+      simp only [h0]
+      rw [eq_comm]
+      apply Nat.mod_eq_of_lt
+      omega
+  rw [this]
+  simp only [Nat.add_mod_mod]
 theorem BitVec.toNat_neq {n : ℕ} {x y : BitVec n} : x ≠ y ↔ x.toNat ≠ y.toNat := by
   simp [BitVec.toNat_eq]
 
@@ -633,5 +673,15 @@ theorem Nat.le_iff_BitVec_ofNat_le (n : Nat) (x y : Nat) (hx : x < 2^n) (hy : y 
   have := Nat.mod_eq_of_lt hx
   have := Nat.mod_eq_of_lt hy
   simp [*]
+
+theorem Nat.eq_iff_BitVec_ofNat_eq (n : Nat) (x y : Nat) (hx : x < 2^n) (hy : y < 2^n) :
+  x = y ↔ BitVec.ofNat n x = BitVec.ofNat n y := by
+  have := Nat.mod_eq_of_lt hx
+  have := Nat.mod_eq_of_lt hy
+  constructor <;> intros
+  . simp_all
+  . have := BitVec.toNat_ofNat x n
+    have := BitVec.toNat_ofNat y n
+    simp_all
 
 end Aeneas.Arith

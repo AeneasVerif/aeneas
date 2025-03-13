@@ -427,6 +427,56 @@ partial def getMVarIds (e : Expr) (hs : Std.HashSet MVarId := Std.HashSet.empty)
 def assumptionTac : TacticM Unit :=
   liftMetaTactic fun mvarId => do mvarId.assumption; pure []
 
+def filterAssumptionTacPreprocess : TacticM (DiscrTree FVarId) := do
+  let mut dtree := DiscrTree.empty
+  for decl in (← (← getLCtx).getDecls) do
+    dtree ← dtree.insert decl.type decl.fvarId
+  pure dtree
+
+/-- Return `true` if managed to close goal `mvarId` using an assumption. -/
+def filterAssumptionTacCore (dtree : DiscrTree FVarId) : TacticM Bool := do
+  withMainContext do
+  let g ← getMainGoal
+  let type ← instantiateMVars (← g.getType)
+  let candidates ← dtree.getMatch type
+  let asm : Option FVarId ← candidates.findM? fun fvar => do
+    let localDecl ← fvar.getDecl
+    isDefEq type localDecl.type
+  match asm with
+  | none => return false
+  | some fvarId => g.assign (mkFVar fvarId); return true
+
+/-- Same as `assumptionTac` but we use a discrimination tree to filter the assumptions we try.
+
+    This means that the tactic is less powerful than `assumptionTac`, as we might miss an assumption
+    which actually reduces to the goal, but it allows doing a preprocessing step, which makes it
+    faster when we need to solve several goals while having the same context (this happens when
+    solving preconditions in the tactic `progress`) and also it is safer to use, as unifying terms
+    easily triggers "maximum recursion reached" errors when there are big integer constants in the
+    context.
+-/
+def filterAssumptionTac : TacticM Bool := do
+  let dtree ← filterAssumptionTacPreprocess
+  filterAssumptionTacCore dtree
+
+elab "fassumption " : tactic => do let _ ← filterAssumptionTac
+
+-- `assumption` fails with "maximum recursion depth reached" below because it first attempts to
+-- unify `x * 3000 ≤ 1` with the goal
+/--
+error: maximum recursion depth has been reached
+use `set_option maxRecDepth <num>` to increase limit
+use `set_option diagnostics true` to get diagnostic information
+-/
+#guard_msgs in
+example (x y : Nat) (_ : y * 3000 ≤ 1) (_ : x * 3000 ≤ 1) : y * 3000 ≤ 1 := by
+  assumption
+
+-- Contrary to `assumption`, `fassumption` succeeds because it first filters the
+-- assumptions
+example (x y : Nat) (_ : y * 3000 ≤ 1) (_ : x * 3000 ≤ 1) : y * 3000 ≤ 1 := by
+  fassumption
+
 -- List all the local declarations matching the goal
 def getAllMatchingAssumptions (type : Expr) : MetaM (List (LocalDecl × Name)) := do
   let typeType ← inferType type
@@ -444,12 +494,9 @@ def getAllMatchingAssumptions (type : Expr) : MetaM (List (LocalDecl × Name)) :
     restoreState s
     pure x
 
-/- Like the assumption tactic, but if the goal contains meta-variables it applies an assumption only
-   if there is a single assumption matching the goal. Aborts if several assumptions match the goal.
+def singleAssumptionTacPreprocess := filterAssumptionTacPreprocess
 
-   We implement this behaviour to make sure we do not trigger spurious instantiations of meta-variables.
--/
-def singleAssumptionTac : TacticM Unit := do
+def singleAssumptionTacCore (dtree : DiscrTree FVarId) : TacticM Unit := do
   withMainContext do
   let mvarId ← getMainGoal
   mvarId.checkNotAssigned `sassumption
@@ -458,7 +505,8 @@ def singleAssumptionTac : TacticM Unit := do
   if goalMVars.isEmpty then
     -- No meta-variables: we can safely use the assumption tactic
     trace[Utils] "The goal does not contain meta-variables"
-    assumptionTac
+    unless ← filterAssumptionTacCore dtree do
+      throwTacticEx `assumption mvarId
   else
     trace[Utils] "The goal contains meta-variables"
     /- There are meta-variables that we need to instantiate
@@ -482,6 +530,15 @@ def singleAssumptionTac : TacticM Unit := do
       let fvars := fvars.map Prod.snd
       throwError "Several assumptions match the goal: {fvars}"
 
+/- Like the assumption tactic, but if the goal contains meta-variables it applies an assumption only
+   if there is a single assumption matching the goal. Aborts if several assumptions match the goal.
+
+   We implement this behaviour to make sure we do not trigger spurious instantiations of meta-variables.
+-/
+def singleAssumptionTac : TacticM Unit := do
+  let dtree ← singleAssumptionTacPreprocess
+  singleAssumptionTacCore dtree
+
 elab "sassumption " : tactic => do singleAssumptionTac
 
 example (x y z w : Int) (h0 : x < y) (_ : x < w) (h1 : y < z) : x < z := by
@@ -490,9 +547,11 @@ example (x y z w : Int) (h0 : x < y) (_ : x < w) (h1 : y < z) : x < z := by
   apply h0
   sassumption
 
--- Tactic to split on a disjunction.
--- The expression `h` should be an fvar.
--- TODO: there must be simpler. Use use _root_.Lean.MVarId.cases for instance
+/- Tactic to split on a disjunction.
+   The expression `h` should be an fvar.
+
+   TODO: there must be simpler. Use use _root_.Lean.MVarId.cases for instance.
+   On the other hand this tactic is a good reference for this kind of manipulations. -/
 def splitDisjTac (h : Expr) (kleft kright : TacticM Unit) : TacticM Unit := do
   trace[Utils] "assumption on which to split: {h}"
   -- Retrieve the main goal
@@ -712,15 +771,21 @@ example (h : ∃ x y z, x + y + z ≥ 0) : ∃ x, x ≥ 0 := by
   rename_i x y z
   exists x + y + z
 
+structure SimpArgs where
+  simprocs : Simp.SimprocsArray := #[]
+  simpThms : Array SimpTheorems := #[]
+  addSimprocs : Array Name := #[]
+  declsToUnfold : Array Name := #[]
+  addSimpThms : Array Name := #[]
+  hypsToUse : Array FVarId := #[]
+
 /- Initialize a context for the `simp` function.
 
    The initialization of the context is adapted from `Tactic.elabSimpArgs`.
    Something very annoying is that there is no function which allows to
    initialize a simp context without doing an elaboration - as a consequence
    we write our own here. -/
-def mkSimpCtx (simpOnly : Bool) (config : Simp.Config) (kind : SimpKind)
-  (simprocs : List Name) (addSimpThms : List SimpTheorems) (declsToUnfold : List Name)
-  (thms : List Name) (hypsToUse : List FVarId) :
+def mkSimpCtx (simpOnly : Bool) (config : Simp.Config) (kind : SimpKind) (args : SimpArgs) :
   Tactic.TacticM (Simp.Context × Simp.SimprocsArray) := do
   -- Initialize either with the builtin simp theorems or with all the simp theorems
   let simpThms ←
@@ -731,10 +796,10 @@ def mkSimpCtx (simpOnly : Bool) (config : Simp.Config) (kind : SimpKind)
     if kind == .dsimp then pure (thms.addDeclToUnfoldCore decl)
     else thms.addDeclToUnfold decl
   let simpThms ←
-    declsToUnfold.foldlM addDeclToUnfold simpThms
+    args.declsToUnfold.foldlM addDeclToUnfold simpThms
   -- Add the hypotheses and the rewriting theorems
   let simpThms ←
-    hypsToUse.foldlM (fun thms fvarId =>
+    args.hypsToUse.foldlM (fun thms fvarId =>
       -- post: TODO: don't know what that is. It seems to be true by default.
       -- inv: invert the equality
       thms.add (.fvar fvarId) #[] (mkFVar fvarId) (post := true) (inv := false)
@@ -742,7 +807,7 @@ def mkSimpCtx (simpOnly : Bool) (config : Simp.Config) (kind : SimpKind)
       ) simpThms
   -- Add the rewriting theorems to use
   let simpThms ←
-    thms.foldlM (fun thms thmName => do
+    args.addSimpThms.foldlM (fun thms thmName => do
       let info ← getConstInfo thmName
       if (← isProp info.type) then
         -- post: TODO: don't know what that is
@@ -753,18 +818,19 @@ def mkSimpCtx (simpOnly : Bool) (config : Simp.Config) (kind : SimpKind)
       ) simpThms
   let congrTheorems ← getSimpCongrTheorems
   let defaultSimprocs ← if simpOnly then pure {} else Simp.getSimprocs
-  let simprocs ← simprocs.foldlM (fun simprocs name => simprocs.add name true) defaultSimprocs
-  let ctx ← Simp.mkContext config (simpTheorems := ⟨ simpThms :: addSimpThms ⟩) congrTheorems
-  pure (ctx, #[simprocs])
+  let addSimprocs ← args.addSimprocs.foldlM (fun simprocs name => simprocs.add name true) defaultSimprocs
+  let ctx ← Simp.mkContext config (simpTheorems := #[simpThms] ++ args.simpThms) congrTheorems
+  pure (ctx, #[addSimprocs] ++ args.simprocs)
 
 inductive Location where
   /-- Apply the tactic everywhere. Same as `Tactic.Location.wildcard` -/
   | wildcard
   /-- Apply the tactic everywhere, including in the variable types (i.e., in
-      assumptions which are not propositions).  --/
+      assumptions which are not propositions).
+  --/
   | wildcard_dep
   /-- Same as Tactic.Location -/
-  | targets (hypotheses : Array Syntax) (type : Bool)
+  | targets (hypotheses : Array FVarId) (type : Bool)
 
 -- Adapted from Tactic.simpLocation
 def customSimpLocation (ctx : Simp.Context) (simprocs : Simp.SimprocsArray)
@@ -772,8 +838,9 @@ def customSimpLocation (ctx : Simp.Context) (simprocs : Simp.SimprocsArray)
   (loc : Location) : TacticM Simp.Stats := do
   match loc with
   | Location.targets hyps simplifyTarget =>
-    -- Simply call the regular simpLocation
-    simpLocation ctx simprocs discharge? (Tactic.Location.targets hyps simplifyTarget)
+    -- Custom behavior: we directly provide the fvar ideas of the assumption rather than syntax
+    withMainContext do
+      simpLocation.go ctx simprocs discharge? hyps simplifyTarget
   | Location.wildcard =>
     -- Simply call the regular simpLocation
     simpLocation ctx simprocs discharge? Tactic.Location.wildcard
@@ -788,29 +855,26 @@ def customSimpLocation (ctx : Simp.Context) (simprocs : Simp.SimprocsArray)
       simpLocation.go ctx simprocs discharge? tgts (simplifyTarget := true)
 
 /- Call the simp tactic. -/
-def simpAt (simpOnly : Bool) (config : Simp.Config) (simprocs : List Name) (simpThms : List SimpTheorems)
-  (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId) (loc : Location) :
+def simpAt (simpOnly : Bool) (config : Simp.Config) (args : SimpArgs) (loc : Location) :
   Tactic.TacticM Unit := do
   -- Initialize the simp context
-  let (ctx, simprocs) ← mkSimpCtx simpOnly config .simp simprocs simpThms declsToUnfold thms hypsToUse
+  let (ctx, simprocs) ← mkSimpCtx simpOnly config .simp args
   -- Apply the simplifier
   let _ ← customSimpLocation ctx simprocs (discharge? := .none) loc
 
 /- Call the dsimp tactic. -/
-def dsimpAt (simpOnly : Bool) (config : Simp.Config) (simprocs : List Name) (simpThms : List SimpTheorems)
-  (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId) (loc : Tactic.Location) :
+def dsimpAt (simpOnly : Bool) (config : Simp.Config) (args : SimpArgs) (loc : Tactic.Location) :
   Tactic.TacticM Unit := do
   -- Initialize the simp context
-  let (ctx, simprocs) ← mkSimpCtx simpOnly config .dsimp simprocs simpThms declsToUnfold thms hypsToUse
+  let (ctx, simprocs) ← mkSimpCtx simpOnly config .dsimp args
   -- Apply the simplifier
   dsimpLocation ctx simprocs loc
 
 -- Call the simpAll tactic
-def simpAll (config : Simp.Config) (simpOnly : Bool) (simprocs : List Name) (simpThms : List SimpTheorems)
-  (declsToUnfold : List Name) (thms : List Name) (hypsToUse : List FVarId) :
+def simpAll (config : Simp.Config) (simpOnly : Bool) (args : SimpArgs) :
   Tactic.TacticM Unit := do
   -- Initialize the simp context
-  let (ctx, simprocs) ← mkSimpCtx simpOnly config .simpAll simprocs simpThms declsToUnfold thms hypsToUse
+  let (ctx, simprocs) ← mkSimpCtx simpOnly config .simpAll args
   -- Apply the simplifier
   let (result?, _) ← Lean.Meta.simpAll (← getMainGoal) ctx (simprocs := simprocs)
   match result? with
@@ -1027,7 +1091,7 @@ example (x y : Int) : True := by
   dcases h: x = y <;> simp
 
 /-- Inspired by the `clear` tactic -/
-def clearFvarIds (fvarIds : Array FVarId) : TacticM Unit := do
+def clearFVarIds (fvarIds : Array FVarId) : TacticM Unit := do
   let fvarIds ← withMainContext <| sortFVarIds fvarIds
   for fvarId in fvarIds.reverse do
     withMainContext do
@@ -1038,8 +1102,9 @@ def clearFvarIds (fvarIds : Array FVarId) : TacticM Unit := do
 partial def minimizeGoal : TacticM Unit := do
   withMainContext do
   /- Retrieve the goal -/
-  let goal ← getMainGoal
-  let goalFVarIds ← getFVarIds (← goal.getType)
+  let goalTy ← instantiateMVars (← (← getMainGoal).getType)
+  trace[Utils] "Goal type: {goalTy}"
+  let goalFVarIds ← getFVarIds goalTy
   /- Explore the local declarations to check which ones are need.
      We do this recursively until we reach a fixed-point. -/
   let ctx ← Lean.MonadLCtx.getLCtx
@@ -1050,21 +1115,46 @@ partial def minimizeGoal : TacticM Unit := do
   let mut neededIds := goalFVarIds
   -- We need to filter the variables: some of them might come from quantifiers
   neededIds := neededIds.filter (fun x => x ∈ declsFVarIds)
-  let mut exploredIds : Std.HashSet FVarId := Std.HashSet.empty
+  trace[Utils] "Ids used in the goal: {← neededIds.toArray.mapM (fun x => x.getUserName)}"
+  /- Compute the list of pairs:
+     - declaration id
+     - fvar ids it references in its type and body
+  -/
+  trace[Utils] "Computing the ids used in the local declarations"
+  let declToFVarIds ← decls.mapM fun decl => do
+    trace[Utils] "Computing the fvar ids of: {decl.userName}"
+    /- Explore the type and the body: if they contain needed ids, add it -/
+    trace[Utils] "Type: {decl.type}"
+    let mut declIds := Std.HashSet.empty
+    -- Add the id of the declaration itself
+    declIds := declIds.insert decl.fvarId
+    -- Add the ids found in the type
+    let mut typeIds ← getFVarIds decl.type
+    typeIds := typeIds.filter (fun x => x ∈ declsFVarIds)
+    trace[Utils] "Ids in type: {← typeIds.toArray.mapM (fun x => x.getUserName)}"
+    declIds := declIds.union typeIds
+    -- Add the ids found in the body
+    match decl.value? with
+    | none =>
+      trace[Utils] "No value"
+      pure ()
+    | some value =>
+      trace[Utils] "Value: {value}"
+      let valueDeclIds ← getFVarIds value
+      let valueDeclIds := valueDeclIds.filter (fun x => x ∈ declsFVarIds)
+      trace[Utils] "Ids in value: {← valueDeclIds.toArray.mapM (fun x => x.getUserName)}"
+      declIds := declIds.union valueDeclIds
+    pure (decl.fvarId, decl.userName, declIds)
+  /- Repeatedly explore the local declarations -/
+  trace[Utils] "Computing the needed ids"
+  /- Remember the set of ids from which we already added dependencies -/
+  let mut addedIds : Std.HashSet FVarId := Std.HashSet.empty
   while changed do
     changed := false
-    for decl in decls do
-      /- Shortcut: do not re-explore the already explored ids -/
-      if decl.fvarId ∉ exploredIds then
-        trace[Utils] "Exploring: {decl.userName}"
-        exploredIds := exploredIds.insert decl.fvarId
-        /- Explore the type and the body: if they contain needed ids, add it -/
-        let mut declIds ← getFVarIds decl.type
-        match decl.value? with
-        | none => pure ()
-        | some value =>
-          declIds := declIds.union (← getFVarIds value)
-        declIds := declIds.filter (fun x => x ∈ declsFVarIds)
+    for (declId, userName, declIds) in declToFVarIds do
+      -- Shortcut: do not re-explore ids
+      if declId ∉ addedIds then
+        trace[Utils] "Exploring: {userName}"
         trace[Utils] "declIds: {← declIds.toArray.mapM (fun x => x.getUserName)}"
         let mut inter := false
         for x in declIds do
@@ -1073,15 +1163,19 @@ partial def minimizeGoal : TacticM Unit := do
             break
         /- Check if there is an intersection -/
         if inter then
-          neededIds := neededIds.insert decl.fvarId
+          addedIds := addedIds.insert declId
+          neededIds := neededIds.insert declId
           neededIds := neededIds.union declIds
           changed := true
+    if changed then
+      trace[Utils] "Re-exploring all the declarations"
   trace[Utils] "Done exploring the context"
   /- Clear all the fvars which were not listed -/
   trace[Utils] "neededIds: {← neededIds.toArray.mapM (fun x => x.getUserName)}"
-  let allIds ← getFVarIdsAt goal
+  let allIds ← getFVarIdsAt (← getMainGoal)
+  trace[Utils] "All context ids: {← allIds.mapM (fun x => x.getUserName)}"
   let allIds := allIds.filter (fun x => x ∉ neededIds)
-  clearFvarIds allIds
+  clearFVarIds allIds
 
 elab "minimize_goal" : tactic => do
   withMainContext do
@@ -1117,13 +1211,16 @@ def extractGoal (ref : Syntax) (fullGoal : Bool) : TacticM Unit := do
       let userName ← stripHygiene decl.userName
       trace[Utils] "declName after stripping hygiene parts: {userName.toString}"
       if userName ∈ allNames then
+        trace[Utils] "Name already used"
         let lctx ← Lean.MonadLCtx.getLCtx
         let newName := lctx.getUnusedName userName
+        trace[Utils] "New name: {newName}"
         let lctx := lctx.setUserName decl.fvarId newName
         let allNames := allNames.insert newName
         withLCtx' lctx do
         renameDecls allNames decls
       else
+        trace[Utils] "Name not used"
         let allNames := allNames.insert userName
         renameDecls allNames decls
   let lctx ← renameDecls Std.HashSet.empty (← (← Lean.MonadLCtx.getLCtx).getDecls).reverse
@@ -1133,7 +1230,12 @@ def extractGoal (ref : Syntax) (fullGoal : Bool) : TacticM Unit := do
   let assumptions : List Format ← decls.mapM fun decl => do
     let ty ← Meta.ppExprWithInfos decl.type
     let name ← Meta.ppExprWithInfos (Expr.fvar decl.fvarId)
-    pure ("\n  (" ++ name.fmt ++ " : " ++ ty.fmt ++ ")")
+    match decl.value? with
+    | none =>
+      pure ("\n  (" ++ name.fmt ++ " : " ++ ty.fmt ++ ")")
+    | some value =>
+      let value ← Meta.ppExprWithInfos value
+      pure ("\n  (" ++ name.fmt ++ " : " ++ ty.fmt ++ " := " ++ value.fmt ++  ")")
   let assumptions := Format.joinSep assumptions ""
   let mgoal ← getMainGoal
   let goal ← Meta.ppExprWithInfos (← mgoal.getType)
@@ -1144,12 +1246,13 @@ elab ref:"extract_goal0" full:"full"? : tactic => do
   withMainContext do
   extractGoal ref full.isSome
 
-syntax "extract_goal" ("full")? : tactic
+-- TODO: actually there already exists `extract_goal` in the standard library
+syntax "extract_goal1" ("full")? : tactic
 
 macro_rules
-| `(tactic|extract_goal) =>
+| `(tactic|extract_goal1) =>
   `(tactic|set_option pp.coercions.types true in extract_goal0)
-| `(tactic|extract_goal full) =>
+| `(tactic|extract_goal1 full) =>
   `(tactic|set_option pp.coercions.types true in extract_goal0 full)
 
 /--
@@ -1164,7 +1267,7 @@ info: example
 #guard_msgs in
 set_option linter.unusedVariables false in
 example (x x y : Nat) (h : x ≤ y) (h : y ≤ y) : x ≤ y := by
-  extract_goal
+  extract_goal1
   omega
 
 /--
@@ -1177,9 +1280,10 @@ info: example
 -/
 #guard_msgs in
 example (x : Nat) (y : Nat) (_ : Nat) (h : x ≤ y) : y ≥ x := by
-  extract_goal
+  extract_goal1
   omega
 
+-- TODO: why do we have x✝?
 /--
 info: example
   (v : List Nat)
@@ -1209,8 +1313,25 @@ example
   (_ : v1.length = v.length) :
   v1.length = v.length
   := by
-  extract_goal
+  extract_goal1
   simp [*]
+
+/--
+info: example
+  (i : Nat)
+  (h : i ≤ 7)
+  (j : Nat := i) :
+  j ≤ 7
+  := by sorry
+-/
+#guard_msgs in
+set_option linter.unusedTactic false in
+example (i : Nat) (h : i ≤ 7) :
+  let j := i
+  j ≤ 7 := by
+  intro j
+  extract_goal1
+  apply h
 
 /-- Introduce an auxiliary assertion for the goal -/
 def extractAssert (ref : Syntax) : TacticM Unit := do
@@ -1563,6 +1684,74 @@ def mkProdsMatchOrUnit (xl : List Expr) (out : Expr) : MetaM Expr :=
   else
     mkProdsMatch xl out
 
+/-- Duplicate the assumptions (of type prop) in the context.
+    This is useful if we want to perform non-destructive simplifications, for instance when
+    converting between different views (i.e., doing something like what `natify` or `zify` does).
+
+    We return the pair: (original assumptions, new assumptions)
+-/
+def duplicateAssumptions (toDuplicate : Option (Array FVarId) := none) :
+  TacticM (Array FVarId × Array FVarId) :=
+  withMainContext do
+  let decls ← do
+    match toDuplicate with
+    | none => pure (← (← getLCtx).getDecls).toArray
+    | some decls => do decls.mapM fun d => d.getDecl
+  let props ← decls.filterM (fun d => do pure (← inferType d.type).isProp)
+  trace[Utils] "Current assumptions: {props.map LocalDecl.type}"
+  let goal ← getMainGoal
+  let goalType ← instantiateMVars (← goal.getType)
+  let goalName ← goal.getTag
+  let newProps ← props.mapM fun d => do
+    withMainContext do
+    withLocalDeclD (.str d.userName "_") d.type fun var => do
+    -- The new goal
+    let mgoal ← mkFreshExprSyntheticOpaqueMVar goalType (tag := goalName)
+    -- Assign the current goal and replace it with the new goal
+    let currentGoal ← getMainGoal
+    let e ← mkLambdaFVars #[var] mgoal
+    let e := mkApp e (.fvar d.fvarId)
+    currentGoal.assign e
+    --currentGoal.assign (.letE d.userName d.type (.fvar d.fvarId) mgoal false)
+    replaceMainGoal [mgoal.mvarId!]
+    pure var.fvarId!
+  pure (props.map LocalDecl.fvarId, newProps)
+
+elab "duplicate_assumptions" : tactic => do
+  let _ ← duplicateAssumptions
+
+/--
+info: example
+  (a : Nat)
+  (b : Nat)
+  (h0 : a < b)
+  (h1 : b ≤ 1024)
+  (h0._ : a < b)
+  (h1._ : b ≤ 1024) :
+  b ≤ 1024
+  := by sorry
+-/
+#guard_msgs in
+set_option linter.unusedTactic false in
+example (a b : Nat) (h0 : a < b) (h1 : b ≤ 1024) : b ≤ 1024 := by
+  duplicate_assumptions
+  extract_goal1 full
+  assumption
+
+def parseOptLocation (loc : Option (TSyntax `Lean.Parser.Tactic.location)) :
+  Elab.TermElabM (Utils.Location) :=
+  let loc := Option.map expandLocation loc
+  match loc with
+  | none => pure (Utils.Location.targets #[] true)
+  | some loc =>
+    match loc with
+    | .wildcard => pure .wildcard
+    | .targets ids goal => do
+      let ids ← ids.mapM Lean.Elab.Term.resolveId?
+      if ids.all Option.isSome then
+        pure (.targets (ids.filterMap (Option.map Expr.fvarId!)) goal)
+      else
+        Lean.Elab.throwUnsupportedSyntax
 
 end Utils
 

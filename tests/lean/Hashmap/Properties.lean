@@ -830,7 +830,7 @@ theorem move_elements_loop_spec
       simp_all
     . apply hEmpty
 termination_by slots.val.length - i.val
-decreasing_by scalar_decr_tac -- TODO: this is expensive
+decreasing_by scalar_decr_tac
 
 @[progress]
 theorem move_elements_spec
@@ -851,9 +851,6 @@ theorem move_elements_spec
   := by
   rw [move_elements]
   progress with move_elements_loop_spec as ⟨ ntable1, slots1, _, _, _, ntable1Lookup, slotsLookup ⟩
-  . -- Remaining precondition
-    fsimp [*]
-  -- Postcondition
   fsimp
   have : frame_slots_params ntable ntable1 := by
     simp_all [frame_slots_params]

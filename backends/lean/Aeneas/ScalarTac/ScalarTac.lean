@@ -9,6 +9,27 @@ import Aeneas.Saturate
 
 namespace Aeneas
 
+theorem Nat.le_mul_le (a0 a1 b0 b1 : Nat) (h0 : a0 ≤ a1) (h2 : b0 ≤ b1) : a0 * b0 ≤ a1 * b1 := by
+  have := @Nat.mul_le_mul_left b0 b1 a0 (by assumption)
+  have := @Nat.mul_le_mul_right a0 a1 b1 (by assumption)
+  omega
+
+theorem Nat.lt_mul_lt (a0 a1 b0 b1 : Nat) (h0 : a0 < a1) (h2 : b0 < b1) : a0 * b0 < a1 * b1 := by
+  apply Nat.mul_lt_mul_of_lt_of_lt <;> assumption
+
+theorem Nat.le_mul_lt (a0 a1 b0 b1 : Nat) (h0 : a0 ≤ a1) (h1 : 0 < a1) (h2 : b0 < b1) : a0 * b0 < a1 * b1 := by
+  have := @Nat.mul_le_mul_right a0 a1 b0 (by assumption)
+  have := @Nat.mul_lt_mul_left a1 b0 b1 (by assumption)
+  omega
+
+theorem Nat.lt_mul_le (a0 a1 b0 b1 : Nat) (h0 : a0 < a1) (h1 : b0 ≤ b1) (h2 : 0 < b1) : a0 * b0 < a1 * b1 := by
+  have := @Nat.mul_lt_mul_right b1 a0 a1 (by assumption)
+  have := @Nat.mul_le_mul_left b0 b1 a0 (by assumption)
+  omega
+
+theorem Nat.zero_lt_mul (a0 a1 : Nat) (h0 : 0 < a0) (h1 : 0 < a1) : 0 < a0 * a1 := by simp [*]
+theorem Nat.mul_le_zero (a0 a1 : Nat) (h0 : a0 = 0) (h1 : a1 = 0) : a0 * a1 ≤ 0 := by simp [*]
+
 namespace ScalarTac
 
 open Utils
@@ -79,14 +100,13 @@ def goalIsLinearInt : Tactic.TacticM Bool := do
 example (x y : Int) (h0 : x ≤ y) (h1 : x ≠ y) : x < y := by
   omega
 
-def scalarTacSimpRocs : List Name := [
-  ``reduceIte,
-  ``Nat.reduceLeDiff,
-  ``Nat.reduceLT, ``Nat.reduceGT, ``Nat.reduceBEq, ``Nat.reduceBNe,
-  ``Nat.reducePow, ``Nat.reduceAdd, ``Nat.reduceSub, ``Nat.reduceMul, ``Nat.reduceDiv, ``Nat.reduceMod,
-  ``Int.reduceLT, ``Int.reduceLE, ``Int.reduceGT, ``Int.reduceGE, ``Int.reduceEq, ``Int.reduceNe, ``Int.reduceBEq, ``Int.reduceBNe,
-  ``Int.reducePow, ``Int.reduceAdd, ``Int.reduceSub, ``Int.reduceMul, ``Int.reduceDiv, ``Int.reduceMod,
-  ``Int.reduceNegSucc, ``Int.reduceNeg,]
+attribute [scalar_tac_simps]
+  reduceIte
+  Nat.reduceLeDiff Nat.reduceLT Nat.reduceGT Nat.reduceBEq Nat.reduceBNe
+  Nat.reducePow Nat.reduceAdd Nat.reduceSub Nat.reduceMul Nat.reduceDiv Nat.reduceMod
+  Int.reduceLT Int.reduceLE Int.reduceGT Int.reduceGE Int.reduceEq Int.reduceNe Int.reduceBEq Int.reduceBNe
+  Int.reducePow Int.reduceAdd Int.reduceSub Int.reduceMul Int.reduceDiv Int.reduceMod
+  Int.reduceNegSucc Int.reduceNeg Int.reduceToNat
 
 /- Small trick to prevent `simp_all` from simplifying an assumption `h1 : P v` when we have
   `h0 : ∀ x, P x` in the context: we replace the forall quantifiers with our own definition
@@ -109,12 +129,14 @@ structure Config where
      If equal to 0, we do not call `simpAll` at all.
    -/
   simpAllMaxSteps : Nat := 2000
+  /- Should we saturate the context with theorems marked with the attribute `scalar_tac`? -/
+  saturate : Bool := true
   fastSaturate : Bool := false
 
 declare_config_elab elabConfig Config
 
 /-- Apply the scalar_tac forward rules -/
-def scalarTacSaturateForward (fast : Bool) (nonLin : Bool): Tactic.TacticM Unit := do
+def scalarTacSaturateForward (fast : Bool) (nonLin : Bool): Tactic.TacticM (Array FVarId) := do
   /-
   let options : Aesop.Options := {}
   -- Use a forward max depth of 0 to prevent recursively applying forward rules on the assumptions
@@ -129,15 +151,15 @@ def scalarTacSaturateForward (fast : Bool) (nonLin : Bool): Tactic.TacticM Unit 
     else ruleSets
   -- TODO
   -- evalAesopSaturate options ruleSets.toArray
-  Saturate.evalSaturate fast ruleSets
+  Saturate.evalSaturate ruleSets (if fast then Saturate.exploreArithSubterms else none) none
 
 -- For debugging
 elab "scalar_tac_saturate" config:Parser.Tactic.optConfig : tactic => do
   let config ← elabConfig config
-  scalarTacSaturateForward config.fastSaturate config.nonLin
+  let _ ← scalarTacSaturateForward config.fastSaturate config.nonLin
 
 /- Propositional logic simp lemmas -/
-attribute [scalar_tac_simp]
+attribute [scalar_tac_simps]
   and_self false_implies true_implies Prod.mk.injEq
   not_false_eq_true not_true_eq_false
   true_and and_true false_and and_false
@@ -152,47 +174,39 @@ attribute [scalar_tac_simp]
  -/
 def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
   Tactic.withMainContext do
+  let simprocs ← scalarTacSimprocExt.getSimprocs
   let simpLemmas ← scalarTacSimpExt.getTheorems
+  let simpArgs : SimpArgs := {simprocs := #[simprocs], simpThms := #[simpLemmas]}
   -- Pre-preprocessing
   /- First get rid of [ofInt] (if there are dependent arguments, we may not
      manage to simplify the context) -/
   trace[ScalarTac] "Original goal before preprocessing: {← getMainGoal}"
-  Utils.simpAt true {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 0}
-                -- Simprocs
-                scalarTacSimpRocs
-                -- Simp theorems
-                [simpLemmas]
-                -- Unfoldings
-                []
-                -- Simp lemmas
-                []
-                -- Hypotheses
-                [] .wildcard
+  tryTac do
+    Utils.simpAt true {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 0}
+                simpArgs .wildcard
   trace[ScalarTac] "Goal after first simplification: {← getMainGoal}"
   -- Apply the forward rules
-  allGoalsNoRecover (scalarTacSaturateForward config.fastSaturate config.nonLin)
+  if config.saturate then
+    allGoalsNoRecover (do let _ ← scalarTacSaturateForward config.fastSaturate config.nonLin)
   trace[ScalarTac] "Goal after saturation: {← getMainGoal}"
   -- Apply `simpAll`
   if config.simpAllMaxSteps ≠ 0 then
     allGoalsNoRecover
-      (Utils.simpAll {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 0} true
-        scalarTacSimpRocs [simpLemmas] [] [] [])
+      (tryTac do
+        Utils.simpAll
+          {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 0} true
+          simpArgs)
   trace[ScalarTac] "Goal after simpAll: {← getMainGoal}"
   -- Reduce all the terms in the goal - note that the extra preprocessing step
   -- might have proven the goal, hence the `allGoals`
   let dsimp :=
-    allGoalsNoRecover do tryTac (
+    allGoalsNoRecover do
+      tryTac do
       -- We set `simpOnly` at false on purpose.
       -- Also, we need `zetaDelta` to inline the let-bindings (otherwise, omega doesn't always manages
       -- to deal with them)
-      dsimpAt false {zetaDelta := true} scalarTacSimpRocs
-        -- Simp theorems
-        []
-        -- Declarations to unfold
-        []
-        -- Theorems
-        []
-        [] Tactic.Location.wildcard)
+      dsimpAt false {zetaDelta := true, failIfUnchanged := false, maxDischargeDepth := 0} {simprocs := #[simprocs]}
+        Tactic.Location.wildcard
   dsimp
   trace[ScalarTac] "Goal after first dsimp: {← getMainGoal}"
   -- More preprocessing: apply norm_cast to the whole context
@@ -201,40 +215,31 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
   -- norm_cast does weird things with negative numbers so we reapply simp
   dsimp
   trace[ScalarTac] "Goal after 2nd dsimp: {← getMainGoal}"
-  allGoalsNoRecover do Utils.tryTac (
-    Utils.simpAt true {}
-               -- Simprocs
-               []
-               -- Simp theorems
-               [simpLemmas]
-               -- Unfoldings
-               []
-                -- Simp lemmas
-                [-- Int.subNatNat is very annoying - TODO: there is probably something more general thing to do
-                 ``Int.subNatNat_eq_coe,
-                 -- We also need this, in case the goal is: ¬ False
-                 ``not_false_eq_true,
-                 -- Remove the forall quantifiers to prepare for the call of `simp_all` (we
-                 -- don't want `simp_all` to use assumptions of the shape `∀ x, P x`))
-                 ``forall_eq_forall'
-                 ]
-                -- Hypotheses
-                [] .wildcard)
+  allGoalsNoRecover do
+    tryTac do
+    Utils.simpAt true {failIfUnchanged := false, maxDischargeDepth := 1}
+      {simpThms := #[simpLemmas],
+       addSimpThms :=
+        #[-- Int.subNatNat is very annoying - TODO: there is probably something more general thing to do
+          ``Int.subNatNat_eq_coe,
+          -- We also need this, in case the goal is: ¬ False
+          ``not_false_eq_true,
+          -- Remove the forall quantifiers to prepare for the call of `simp_all` (we
+          -- don't want `simp_all` to use assumptions of the shape `∀ x, P x`))
+          ``forall_eq_forall']}
+        .wildcard
   trace[ScalarTac] "Goal after simpAt following dsimp: {← getMainGoal}"
 
 elab "scalar_tac_preprocess" config:Parser.Tactic.optConfig : tactic => do
   let config ← elabConfig config
   scalarTacPreprocess config
 
-/-- - `splitAllDisjs`: if true, also split all the matches/if then else in the context (note that
-      `omega` splits the *disjunctions*)
-    - `splitGoalConjs`: if true, split the goal if it is a conjunction so as to introduce one
-      subgoal per conjunction.
--/
-def scalarTac (config : Config) : Tactic.TacticM Unit := do
+def scalarTacCore (config : Config) : Tactic.TacticM Unit := do
   Tactic.withMainContext do
   Tactic.focus do
+  let simprocs ← scalarTacSimprocExt.getSimprocs
   let simpLemmas ← scalarTacSimpExt.getTheorems
+  let simpArgs : SimpArgs := {simprocs := #[simprocs], simpThms := #[simpLemmas]}
   let g ← Tactic.getMainGoal
   trace[ScalarTac] "Original goal: {g}"
   -- Introduce all the universally quantified variables (includes the assumptions)
@@ -244,24 +249,56 @@ def scalarTac (config : Config) : Tactic.TacticM Unit := do
   -- the goal. I think before leads to a smaller proof term?
   allGoalsNoRecover (scalarTacPreprocess config)
   allGoalsNoRecover do
-    try do
-      if config.split then do
-        trace[ScalarTac] "Splitting the goal"
-        /- If we split the `if then else` call `simp_all` again -/
-        splitAll do
-          allGoalsNoRecover
-            (Utils.simpAll {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 0} true
-              scalarTacSimpRocs [simpLemmas] [] [] [])
-          trace[ScalarTac] "Calling omega"
-          allGoalsNoRecover (Tactic.Omega.omegaTactic {})
-      else
+    if config.split then do
+      trace[ScalarTac] "Splitting the goal"
+      /- If we split the `if then else` call `simp_all` again -/
+      splitAll do
+        allGoalsNoRecover
+          (tryTac do
+            Utils.simpAll {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 0}
+              true simpArgs)
         trace[ScalarTac] "Calling omega"
-        Tactic.Omega.omegaTactic {}
-    catch _ =>
-      let g ← Tactic.getMainGoal
-      throwError "scalar_tac failed to prove the goal below.\n\nNote that scalar_tac is almost equivalent to:\n  scalar_tac_preprocess; split_all <;> simp_all only <;> omega\n\nGoal: \n{g}"
+        allGoalsNoRecover (Tactic.Omega.omegaTactic {})
+    else
+      trace[ScalarTac] "Calling omega"
+      Tactic.Omega.omegaTactic {}
 
-example : True := by simp
+/-- Tactic to solve arithmetic goals.
+
+    The `scalar_tac` tactic is designed to solve linear arithmetic problems (it calls `omega` under the hood),
+    but it can also solve a range of non-linear arithmetic problems when using the option `nonLin` (`scalar_tac +nonLin`).
+    In particular, if given a goal of the shape:
+    `a * b ≤ c * d`
+
+    where `a`, `b`, `c`, `d` are natural numbers, it will attempt to prove:
+    `a ≤ c ∧ b ≤ d`
+
+    This works also with strict inequalities.
+-/
+def scalarTac (config : Config) : TacticM Unit := do
+  Tactic.withMainContext do
+  let error : TacticM Unit := do
+    let g ← Tactic.getMainGoal
+    throwError "scalar_tac failed to prove the goal below.\n\nNote that scalar_tac is almost equivalent to:\n  scalar_tac_preprocess; simp_all (maxDischargeDepth := 1) only; omega\n\nGoal: \n{g}"
+  try
+    scalarTacCore config
+  catch _ =>
+    trace[ScalarTac] "The first call to `scalarTacCore` failed"
+    /- If the option `nonLin` is activated, attempt to decompose the goal -/
+    if config.nonLin then
+      trace[ScalarTac] "The `nonLin` option is `true`: attempting to decompose the goal"
+      -- Retry
+      try
+        let g ← getMainGoal
+        let trySolve (x : Name) : TacticM Unit := do
+          let goals ← g.apply (.const x [])
+          setGoals goals
+          allGoals (scalarTacCore config)
+        let tacs := List.map trySolve [``Nat.le_mul_le, ``Nat.lt_mul_lt, ``Nat.le_mul_lt, ``Nat.lt_mul_le]
+        firstTac tacs
+      catch _ => error
+    else
+      error
 
 elab "scalar_tac" config:Parser.Tactic.optConfig : tactic => do
   let config ← elabConfig config
@@ -311,6 +348,22 @@ example (P : Nat → Prop) (z : Nat) (h : ∀ x, P x → x ≤ z) (y : Nat) (hy 
 -- Checking that we manage to split the cases/if then else
 example (x : Int) (b : Bool) (h : if b then x ≤ 0 else x ≤ 0) : x ≤ 0 := by
   scalar_tac +split
+
+/-!
+Checking some non-linear problems
+-/
+
+example (x y : Nat) (h0 : x ≤ 4) (h1 : y ≤ 5): x * y ≤ 4 * 5 := by
+  scalar_tac +nonLin
+
+example (x y : Nat) (h0 : x ≤ 4) (h1 : y < 5): x * y < 4 * 5 := by
+  scalar_tac +nonLin
+
+example (x y : Nat) (h0 : x < 4) (h1 : y < 5): x * y < 4 * 5 := by
+  scalar_tac +nonLin
+
+example (x y : Nat) (h0 : x < 4) (h1 : y ≤ 5): x * y < 4 * 5 := by
+  scalar_tac +nonLin
 
 end ScalarTac
 

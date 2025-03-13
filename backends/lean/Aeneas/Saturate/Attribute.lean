@@ -130,13 +130,16 @@ structure SaturateAttribute where
   deriving Inhabited
 
 -- The ident is the name of the saturation set, the term is the pattern.
-syntax (name := aeneas_saturate) "aeneas_saturate" "(" &"set" " := " ident ")" " (" &"pattern" " := " term ")" : attr
+-- If `allow_loose` is specified, we allow not instantiating all the variables.
+syntax (name := aeneas_saturate) "aeneas_saturate" "allow_loose"? "(" &"set" " := " ident ")" " (" &"pattern" " := " term ")" : attr
 
-def elabSaturateAttribute (stx : Syntax) : MetaM (Name × Syntax) :=
+def elabSaturateAttribute (stx : Syntax) : MetaM (Bool × Name × Syntax) :=
   withRef stx do
     match stx with
     | `(attr| aeneas_saturate (set := $set) (pattern := $pat)) => do
-      pure (set.getId, pat)
+      pure (false, set.getId, pat)
+    | `(attr| aeneas_saturate allow_loose (set := $set) (pattern := $pat)) => do
+      pure (true, set.getId, pat)
     | _ => throwUnsupportedSyntax
 
 initialize saturateAttr : SaturateAttribute ← do
@@ -166,17 +169,19 @@ initialize saturateAttr : SaturateAttribute ← do
           let numFVars := fvars.size
           -- Elaborate the pattern
           trace[Saturate.attribute] "Syntax: {stx}"
-          let (setName, pat) ← elabSaturateAttribute stx
+          let (allowLoose, setName, pat) ← elabSaturateAttribute stx
           trace[Saturate.attribute] "Syntax: setName: {setName}, pat: {pat}"
           let pat ← instantiateMVars (← Elab.Term.elabTerm pat none |>.run')
           trace[Saturate.attribute] "Pattern: {pat}"
+          let patTy ← inferType pat
+          let patToExplore := if patTy.isProp then pat else patTy
           -- Check that the pattern contains all the quantified variables
-          let allFVars ← fvars.foldlM (fun hs arg => getFVarIds arg hs) Std.HashSet.empty
-          let patFVars ← getFVarIds pat (← getFVarIds (← inferType pat))
+          let allFVars := fvars.foldl (fun hs arg => hs.insert arg.fvarId!) Std.HashSet.empty
+          let patFVars ← getFVarIds pat (← getFVarIds patToExplore)
           trace[Saturate.attribute] "allFVars: {← allFVars.toList.mapM FVarId.getUserName}"
           trace[Saturate.attribute] "patFVars: {← patFVars.toList.mapM FVarId.getUserName}"
           let remFVars := patFVars.toList.foldl (fun hs fvar => hs.erase fvar) allFVars
-          unless remFVars.isEmpty do
+          unless remFVars.isEmpty ∨ allowLoose do
             let remFVars ← remFVars.toList.mapM fun fv => do pure (← fv.getUserName, ← fv.getType)
             let msg := m!"The pattern does not contain all the variables quantified in the theorem; those are not included in the pattern: {remFVars}."
             let msg :=
