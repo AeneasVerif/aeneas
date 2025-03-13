@@ -161,8 +161,7 @@ structure V (T : Type) (N : Usize) where
    Source: 'tests/src/constants.rs', lines 94:4-94:29 -/
 def V.LEN_body (T : Type) (N : Usize) : Result Usize := ok N
 @[irreducible]
-  def V.LEN (T : Type) (N : Usize) : Usize :=
-  eval_global (V.LEN_body T N)
+def V.LEN (T : Type) (N : Usize) : Usize := eval_global (V.LEN_body T N)
 
 /- [constants::use_v]:
    Source: 'tests/src/constants.rs', lines 97:0-99:1 -/

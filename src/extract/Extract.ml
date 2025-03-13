@@ -1969,7 +1969,6 @@ let extract_global_decl_body_gen (span : Meta.span) (ctx : extraction_ctx)
 
   (* Open the definition boxes (depth=0) *)
   F.pp_open_hvbox fmt 0;
-  F.pp_open_hvbox fmt ctx.indent_incr;
 
   (* For lean: add the irreducible attribute *)
   sanity_check __FILE__ __LINE__
@@ -1978,6 +1977,9 @@ let extract_global_decl_body_gen (span : Meta.span) (ctx : extraction_ctx)
   if irreducible then (
     F.pp_print_string fmt "@[irreducible]";
     F.pp_print_space fmt ());
+
+  (* Second definition box *)
+  F.pp_open_hvbox fmt ctx.indent_incr;
 
   (* Open "QUALIF NAME PARAMS : TYPE =" box (depth=1) *)
   F.pp_open_hovbox fmt ctx.indent_incr;
