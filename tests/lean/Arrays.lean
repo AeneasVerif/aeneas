@@ -227,8 +227,8 @@ def const_array : Result (Array U32 2#usize) :=
    Source: 'tests/src/arrays.rs', lines 151:0-154:1 -/
 def const_slice : Result U32 :=
   do
-  let (s : Slice U32) ←
-    ↑(Array.to_slice (Array.make 2#usize [ 0#u32, 0#u32 ]))
+  let a := Array.repeat 2#usize 0#u32
+  let (s : Slice U32) ← ↑(Array.to_slice a)
   Slice.index_usize s 0#usize
 
 /- [arrays::take_all]:
