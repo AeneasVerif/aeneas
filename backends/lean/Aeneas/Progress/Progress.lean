@@ -1,6 +1,6 @@
 import Lean
 import Aeneas.ScalarTac
-import Aeneas.Progress.Core
+import Aeneas.Progress.Init
 import Aeneas.Std
 import Aeneas.FSimp
 

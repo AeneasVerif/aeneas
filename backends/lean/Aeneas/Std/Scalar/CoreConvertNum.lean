@@ -6,7 +6,7 @@ import Aeneas.Std.Scalar.Core
 import Aeneas.Std.Scalar.Notations
 import Aeneas.Std.Array.Array
 import Aeneas.ScalarTac
-import Aeneas.Progress.Core
+import Aeneas.Progress.Init
 import Aeneas.Arith.Lemmas
 
 namespace Aeneas

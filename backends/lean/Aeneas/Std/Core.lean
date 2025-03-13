@@ -1,6 +1,6 @@
 import Lean
 import Aeneas.Std.Primitives
-import Aeneas.Progress.Core
+import Aeneas.Progress.Init
 
 namespace Aeneas
 

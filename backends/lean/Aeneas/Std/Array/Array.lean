@@ -1,6 +1,6 @@
 /- Arrays/Slices -/
 import Aeneas.List
-import Aeneas.Progress.Core
+import Aeneas.Progress.Init
 
 namespace Aeneas.Std
 

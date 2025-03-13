@@ -1,5 +1,5 @@
 import Aeneas.Std.Primitives
-import Aeneas.Progress.Core
+import Aeneas.Progress.Init
 import Aeneas.Bvify.Init
 
 namespace Aeneas.Std
