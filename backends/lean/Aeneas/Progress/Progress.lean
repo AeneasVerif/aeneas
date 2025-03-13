@@ -33,6 +33,12 @@ def scalar_eqs := #[
   ``iscalar_isize_eq, ``iscalar_i8_eq, ``iscalar_i16_eq, ``iscalar_i32_eq, ``iscalar_i64_eq, ``iscalar_i128_eq
 ]
 
+attribute [progress_simps]
+  Std.bind_tc_ok Std.bind_tc_fail Std.bind_tc_div
+  /- Those are quite useful to simplify the goal further by eliminating existential quantifiers for instance. -/
+  and_assoc Std.Result.ok.injEq Prod.mk.injEq
+  exists_eq_left exists_eq_left' exists_eq_right exists_eq_right' exists_eq exists_eq' true_and and_true
+
 inductive TheoremOrLocal where
 | Theorem (thName : Name)
 | Local (asm : LocalDecl)
@@ -146,15 +152,7 @@ def progressWith (fExpr : Expr) (th : Expr)
     trace[Progress] "eq and post:\n{hEq} : {← inferType hEq}\n{hPost}"
     trace[Progress] "current goal: {← getMainGoal}"
     simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
-            {addSimpThms :=
-              #[``Std.bind_tc_ok, ``Std.bind_tc_fail, ``Std.bind_tc_div,
-                /- Those ones are quite useful to simplify the goal further by eliminating
-                    existential quantifiers, for instance. -/
-                ``and_assoc, ``Std.Result.ok.injEq,
-                ``exists_eq_left, ``exists_eq_left', ``exists_eq_right, ``exists_eq_right',
-                ``exists_eq, ``exists_eq', ``true_and, ``and_true,
-                ``Prod.mk.injEq],
-              hypsToUse := #[hEq.fvarId!]} (.targets #[] true)
+      {simpThms := #[← progressSimpExt.getTheorems], hypsToUse := #[hEq.fvarId!]} (.targets #[] true)
     /- It may happen that at this point the goal is already solved (though this is rare)
        TODO: not sure this is the best way of checking it -/
     let goals ← getUnsolvedGoals
@@ -287,6 +285,9 @@ def tryApply (keep : Option Name) (ids : Array (Option Name)) (splitPost : Bool)
 -- The array of ids are identifiers to use when introducing fresh variables
 def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option Expr)
   (ids : Array (Option Name)) (splitPost : Bool) (asmTac : TacticM Unit) : TacticM Syntax := do
+  -- Simplify the goal -- TODO: this might close it
+  simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
+      {simpThms := #[← progressSimpExt.getTheorems]} (.targets #[] true)
   withMainContext do
   -- Retrieve the goal
   let mgoal ← Tactic.getMainGoal

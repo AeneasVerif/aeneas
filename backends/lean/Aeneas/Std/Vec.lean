@@ -205,14 +205,14 @@ def Vec.IndexMutInst {T I Output : Type}
   index_mut := Vec.index_mut inst
 }
 
-@[simp]
+@[simp, progress_simps]
 theorem Vec.index_slice_index {α : Type} (v : Vec α) (i : Usize) :
   Vec.index (core.slice.index.SliceIndexUsizeSliceInst α) v i =
   Vec.index_usize v i := by
   simp [Vec.index, Vec.index_usize, Slice.index_usize]
   rfl
 
-@[simp]
+@[simp, progress_simps]
 theorem Vec.index_mut_slice_index {α : Type} (v : Vec α) (i : Usize) :
   Vec.index_mut (core.slice.index.SliceIndexUsizeSliceInst α) v i =
   index_mut_usize v i := by

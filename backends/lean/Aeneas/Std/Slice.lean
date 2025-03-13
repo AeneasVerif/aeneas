@@ -333,12 +333,12 @@ def core.ops.index.IndexMutSliceInst {T I Output : Type}
 }
 
 /- [core::slice::index::usize::get]: forward function -/
-@[simp] abbrev core.slice.index.Usize.get
+@[simp, progress_simps] abbrev core.slice.index.Usize.get
   {T : Type} (i : Usize) (s : Slice T) : Result (Option T) :=
   ok s[i]?
 
 /- [core::slice::index::usize::get_mut]: forward function -/
-@[simp] abbrev core.slice.index.Usize.get_mut
+@[simp, progress_simps] abbrev core.slice.index.Usize.get_mut
   {T : Type} (i : Usize) (s : Slice T) : Result (Option T × (Option T → Slice T)) :=
   ok (s[i]?, s.set_opt i)
 
@@ -355,11 +355,11 @@ def core.slice.index.Usize.get_unchecked_mut
   fun _ _ => fail .undef
 
 /- [core::slice::index::usize::index]: forward function -/
-@[simp] abbrev core.slice.index.Usize.index {T : Type} (i : Usize) (s : Slice T) : Result T :=
+@[simp, progress_simps] abbrev core.slice.index.Usize.index {T : Type} (i : Usize) (s : Slice T) : Result T :=
   Slice.index_usize s i
 
 /- [core::slice::index::usize::index_mut]: forward function -/
-@[simp] abbrev core.slice.index.Usize.index_mut {T : Type}
+@[simp, progress_simps] abbrev core.slice.index.Usize.index_mut {T : Type}
   (i : Usize) (s : Slice T) : Result (T × (T → (Slice T))) :=
   Slice.index_mut_usize s i
 

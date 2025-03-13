@@ -1,6 +1,6 @@
 import Lean
 import Aeneas.Utils
-import Aeneas.Std.Core
+import Aeneas.Std.Primitives
 import Aeneas.Extensions
 import Aeneas.Progress.Trace
 
@@ -10,6 +10,19 @@ namespace Progress
 
 open Lean Elab Term Meta
 open Utils Extensions
+
+/-!
+# Attribute: `progress_simps`
+-/
+
+/-- The `progress_simps` simp attribute. -/
+initialize progressSimpExt : SimpExtension ←
+  registerSimpAttr `progress_simps "\
+    The `progress_simps` attribute registers simp lemmas to be used by `progress`
+    to simplify the goal before looking up lemmas. If often happens that some
+    monadic function calls, if given some specific parameters (in particuler,
+    specific trait instances), can be simplified to far simpler functions: this
+    is the main purpose of this attribute."
 
 /-!
 # Attribute: `progress_pre_simps`
