@@ -92,8 +92,10 @@ open Lean.Elab.Tactic.BVDecide.Frontend Lean.Elab in
 /--
   `bv_tac` solves goals about bit-vectors.
 
-  Calling `bv_tac n` is mostly equivalent to:
-  `bv_tac_preprocess; bv_tac`
+  Calling `bv_tac n` is equivalent to:
+  `bv_tac_preprocess n; bv_decide`
+  which is itself mostly equivalent to:
+  `bvify n at *; simp_all only; bv_decide`
 -/
 elab "bv_tac" cfg:Parser.Tactic.optConfig n:(colGt term)? : tactic =>
   withMainContext do

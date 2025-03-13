@@ -820,7 +820,9 @@ inductive Location where
   /-- Apply the tactic everywhere. Same as `Tactic.Location.wildcard` -/
   | wildcard
   /-- Apply the tactic everywhere, including in the variable types (i.e., in
-      assumptions which are not propositions).  --/
+      assumptions which are not propositions).
+      TODO: remove this (it should be an option of simp).
+  --/
   | wildcard_dep
   /-- Same as Tactic.Location -/
   | targets (hypotheses : Array FVarId) (type : Bool)
@@ -1733,6 +1735,21 @@ example (a b : Nat) (h0 : a < b) (h1 : b ≤ 1024) : b ≤ 1024 := by
   duplicate_assumptions
   extract_goal1 full
   assumption
+
+def parseOptLocation (loc : Option (TSyntax `Lean.Parser.Tactic.location)) :
+  Elab.TermElabM (Utils.Location) :=
+  let loc := Option.map expandLocation loc
+  match loc with
+  | none => pure (Utils.Location.targets #[] true)
+  | some loc =>
+    match loc with
+    | .wildcard => pure .wildcard
+    | .targets ids goal => do
+      let ids ← ids.mapM Lean.Elab.Term.resolveId?
+      if ids.all Option.isSome then
+        pure (.targets (ids.filterMap (Option.map Expr.fvarId!)) goal)
+      else
+        Lean.Elab.throwUnsupportedSyntax
 
 end Utils
 
