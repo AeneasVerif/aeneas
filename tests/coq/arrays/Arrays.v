@@ -244,7 +244,8 @@ Definition const_array : result (array u32 2%usize) :=
 (** [arrays::const_slice]:
     Source: 'tests/src/arrays.rs', lines 151:0-154:1 *)
 Definition const_slice : result u32 :=
-  let s := array_to_slice (mk_array 2%usize [ 0%u32; 0%u32 ]) in
+  let a := array_repeat 2%usize 0%u32 in
+  let s := array_to_slice a in
   slice_index_usize s 0%usize
 .
 

@@ -3,6 +3,7 @@
     "charon": {
       "inputs": {
         "crane": "crane",
+        "flake-compat": "flake-compat",
         "flake-utils": "flake-utils",
         "nixpkgs": "nixpkgs_2",
         "nixpkgs-ocaml": [
@@ -12,11 +13,11 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1740066723,
-        "narHash": "sha256-5UApG4QBZWkkITYJ0iwh22ECYeKgYfRq0KeSfdCj8s8=",
+        "lastModified": 1741872281,
+        "narHash": "sha256-yvZvkWdwOfcD96c9N/lNFSnnOXab6Tf+1f0hE2Mlcsg=",
         "owner": "aeneasverif",
         "repo": "charon",
-        "rev": "368d17ccff13e3c09d4438c74a1227a0d6f6577e",
+        "rev": "e169864de4cbad1e41e6ce7145af3a26a50e97cf",
         "type": "github"
       },
       "original": {
@@ -40,6 +41,21 @@
       "original": {
         "owner": "ipetkov",
         "repo": "crane",
+        "type": "github"
+      }
+    },
+    "flake-compat": {
+      "locked": {
+        "lastModified": 1733328505,
+        "narHash": "sha256-NeCCThCEP3eCl2l/+27kNNK7QrwZB1IJCrXfrbv5oqU=",
+        "owner": "edolstra",
+        "repo": "flake-compat",
+        "rev": "ff81ac966bb2cae68946d5ed5fc4994f96d0ffec",
+        "type": "github"
+      },
+      "original": {
+        "owner": "edolstra",
+        "repo": "flake-compat",
         "type": "github"
       }
     },

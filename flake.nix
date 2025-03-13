@@ -29,16 +29,20 @@
           buildInputs = [ ocamlPackages.calendar ];
         };
 
-        aeneas-check-tidiness = pkgs.stdenv.mkDerivation {
+        aeneas-check-tidiness = pkgs.stdenv.mkDerivation rec {
           name = "aeneas-check-tidiness";
-          src = ./src;
+          src = ./.;
           buildInputs = [
             ocamlPackages.dune_3
             ocamlPackages.ocaml
             ocamlPackages.ocamlformat
+            charon.packages.${system}.rustToolchain
           ];
           buildPhase = ''
-            if ! dune build @fmt; then
+            make format
+            rm -rf ./src/_build
+            rm -rf ./tests/test_runner/_build
+            if ! diff --no-dereference -ru . ${src}; then
               echo 'ERROR: Code is not formatted. Run `make format` to format the project files.'
               exit 1
             fi
@@ -64,8 +68,8 @@
             zarith
             ocamlgraph
           ]);
-          afterBuild = ''
-            echo charon.packages.${system}.tests
+          postInstall = ''
+            ln -s ${charon.packages.${system}.charon}/bin/charon $out/bin
           '';
         };
 
@@ -112,7 +116,7 @@
           buildInputs = [ charon.packages.${system}.rustToolchain ];
           buildPhase = ''
             export AENEAS_EXE=${aeneas}/bin/aeneas
-            export CHARON_EXE=${charon.packages.${system}.charon}/bin/charon
+            export CHARON_EXE=${aeneas}/bin/charon
             export TEST_RUNNER_EXE=${test_runner}/bin/test_runner
 
             # Copy the tests

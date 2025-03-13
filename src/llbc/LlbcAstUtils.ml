@@ -31,7 +31,7 @@ let lookup_fun_sig (fun_id : fun_id) (fun_decls : fun_decl FunDeclId.Map.t) :
 let crate_get_opaque_non_builtin_decls (k : crate) (filter_builtin : bool) :
     type_decl list * fun_decl list =
   let open ExtractBuiltin in
-  let ctx : Charon.NameMatcher.ctx = Charon.NameMatcher.ctx_from_crate k in
+  let ctx = Charon.NameMatcher.ctx_from_crate k in
   let is_opaque_fun (d : fun_decl) : bool =
     d.body = None
     (* Something to pay attention to: we must ignore trait method *declarations*
