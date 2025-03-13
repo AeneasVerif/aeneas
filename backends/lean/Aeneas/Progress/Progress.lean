@@ -28,7 +28,7 @@ theorem iscalar_i32_eq   : Std.IScalar .I32 = Std.I32 := by rfl
 theorem iscalar_i64_eq   : Std.IScalar .I64 = Std.I64 := by rfl
 theorem iscalar_i128_eq  : Std.IScalar .I128 = Std.I128 := by rfl
 theorem iscalar_isize_eq : Std.IScalar .Isize = Std.Isize := by rfl
-def scalar_eqs := [
+def scalar_eqs := #[
   ``uscalar_usize_eq, ``uscalar_u8_eq, ``uscalar_u16_eq, ``uscalar_u32_eq, ``uscalar_u64_eq, ``uscalar_u128_eq,
   ``iscalar_isize_eq, ``iscalar_i8_eq, ``iscalar_i16_eq, ``iscalar_i32_eq, ``iscalar_i64_eq, ``iscalar_i128_eq
 ]
@@ -145,15 +145,16 @@ def progressWith (fExpr : Expr) (th : Expr)
     splitEqAndPost fun hEq hPost ids => do
     trace[Progress] "eq and post:\n{hEq} : {← inferType hEq}\n{hPost}"
     trace[Progress] "current goal: {← getMainGoal}"
-    simpAt true { maxDischargeDepth := 1, failIfUnchanged := false } [] [] []
-            [``Std.bind_tc_ok, ``Std.bind_tc_fail, ``Std.bind_tc_div,
-            /- Those ones are quite useful to simplify the goal further by eliminating
-               existential quantifiers, for instance. -/
-            ``and_assoc, ``Std.Result.ok.injEq,
-            ``exists_eq_left, ``exists_eq_left', ``exists_eq_right, ``exists_eq_right',
-            ``exists_eq, ``exists_eq', ``true_and, ``and_true,
-            ``Prod.mk.injEq]
-            [hEq.fvarId!] (.targets #[] true)
+    simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
+            {addSimpThms :=
+              #[``Std.bind_tc_ok, ``Std.bind_tc_fail, ``Std.bind_tc_div,
+                /- Those ones are quite useful to simplify the goal further by eliminating
+                    existential quantifiers, for instance. -/
+                ``and_assoc, ``Std.Result.ok.injEq,
+                ``exists_eq_left, ``exists_eq_left', ``exists_eq_right, ``exists_eq_right',
+                ``exists_eq, ``exists_eq', ``true_and, ``and_true,
+                ``Prod.mk.injEq],
+              hypsToUse := #[hEq.fvarId!]} (.targets #[] true)
     /- It may happen that at this point the goal is already solved (though this is rare)
        TODO: not sure this is the best way of checking it -/
     let goals ← getUnsolvedGoals
@@ -162,7 +163,7 @@ def progressWith (fExpr : Expr) (th : Expr)
     else
       trace[Progress] "goal after applying the eq and simplifying the binds: {← getMainGoal}"
       -- TODO: remove this? (some types get unfolded too much: we "fold" them back)
-      let _ ← tryTac (simpAt true {} [] [] [] scalar_eqs [] .wildcard_dep)
+      let _ ← tryTac (simpAt true {} {addSimpThms := scalar_eqs} .wildcard_dep)
       trace[Progress] "goal after folding back scalar types: {← getMainGoal}"
       -- Clear the equality, unless the user requests not to do so
       if keep.isSome then pure ()
@@ -229,10 +230,11 @@ def progressWith (fExpr : Expr) (th : Expr)
     | [] => pure ()
     | [ _ ] =>
       setGoals curGoals
-      let simpPostThms ← progressPostSimpExt.getTheorems
+      let args : SimpArgs :=
+        {simpThms := #[← progressPostSimpExt.getTheorems],
+         simprocs := #[← ScalarTac.scalarTacSimprocExt.getSimprocs]}
       simpAt true { maxDischargeDepth := 0, failIfUnchanged := false }
-            ScalarTac.scalarTacSimpRocs [simpPostThms] []
-            [] [] (.targets hPosts false)
+            args (.targets hPosts false)
     | _ => throwError "Unexpected number of goals"
     let curGoals ← getUnsolvedGoals
     trace[Progress] "Main goal after simplifying the post-conditions: {curGoals}"
@@ -445,10 +447,11 @@ def evalProgress (args : TSyntax `Aeneas.Progress.progressArgs) : TacticM Stats 
     if ← isProp decl.type then
       pure (some decl.fvarId)
     else pure none
+  let simpArgs : SimpArgs := {simpThms := #[simpLemmas], hypsToUse := localAsms.toArray}
   let simpTac : TacticM Unit := do
     trace[Progress] "Attempting to solve with `simp [*]`"
     -- Simplify the goal
-    Utils.simpAt false { maxDischargeDepth := 1 } [] [simpLemmas] [] [] localAsms (.targets #[] true)
+    Utils.simpAt false { maxDischargeDepth := 1 } simpArgs (.targets #[] true)
     -- Raise an error if the goal is not proved
     allGoalsNoRecover (throwError "Goal not proved")
   /- We use our custom assumption tactic, which instantiates meta-variables only if there is a single

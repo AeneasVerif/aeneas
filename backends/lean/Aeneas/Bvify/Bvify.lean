@@ -22,6 +22,15 @@ namespace Aeneas.Bvify
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 open Arith Std
 
+/- Simp procedures -/
+attribute [bvify_simps]
+  reduceIte
+  Nat.reduceLeDiff Nat.reduceLT Nat.reduceGT Nat.reduceBEq Nat.reduceBNe
+  Nat.reducePow Nat.reduceAdd Nat.reduceSub Nat.reduceMul Nat.reduceDiv Nat.reduceMod
+  Int.reduceLT Int.reduceLE Int.reduceGT Int.reduceGE Int.reduceEq Int.reduceNe Int.reduceBEq Int.reduceBNe
+  Int.reducePow Int.reduceAdd Int.reduceSub Int.reduceMul Int.reduceDiv Int.reduceMod
+  Int.reduceNegSucc Int.reduceNeg Int.reduceToNat
+
 @[simp, bvify_simps] theorem U8.UScalar_bv (x : U8) : UScalar.bv x = x.bv := by simp
 @[simp, bvify_simps] theorem U16.UScalar_bv (x : U16) : UScalar.bv x = x.bv := by simp
 @[simp, bvify_simps] theorem U32.UScalar_bv (x : U32) : UScalar.bv x = x.bv := by simp
@@ -213,22 +222,23 @@ theorem UScalar.lt_equiv_bv_lt {ty : UScalarTy} (x y : UScalar ty) : x < y ↔ x
 @[bvify_simps]
 theorem UScalar.le_equiv_bv_le {ty : UScalarTy} (x y : UScalar ty) : x ≤ y ↔ x.bv ≤ y.bv := by rfl
 
-def bvifyTacSimp (loc : Utils.Location) (additionalAsms : List FVarId := []) (dischWithScalarTac : Bool) : TacticM Unit := do
+def bvifyTacSimp (loc : Utils.Location) (additionalAsms : Array FVarId := #[]) (dischWithScalarTac : Bool) : TacticM Unit := do
   withMainContext do
-  let simpTheorems ← bvifySimpExt.getTheorems
-  let simprocs := [``Nat.reducePow, ``Nat.reduceLT, ``Nat.reduceLeDiff] -- TODO: update the list?
+  let simpArgs : Utils.SimpArgs :=
+    {simpThms := #[← bvifySimpExt.getTheorems],
+     simprocs := #[← bvifySimprocExt.getSimprocs]
+     hypsToUse := additionalAsms}
   if dischWithScalarTac then
-    -- TODO: saturate before-hand, then scalar_tac (saturate := false)
     let (ref, d) ← tacticToDischarge (← `(tactic|scalar_tac (saturate := false)))
     let dischargeWrapper := Lean.Elab.Tactic.Simp.DischargeWrapper.custom ref d
     let _ ← dischargeWrapper.with fun discharge? => do
       -- Initialize the simp context
-      let (ctx, simprocs) ← Utils.mkSimpCtx true {maxDischargeDepth := 2, failIfUnchanged := false} .simp
-        simprocs [simpTheorems] [] [] additionalAsms
+      let (ctx, simprocs) ← Utils.mkSimpCtx true {maxDischargeDepth := 2, failIfUnchanged := false}
+        .simp simpArgs
       -- Apply the simplifier
       let _ ← Utils.customSimpLocation ctx simprocs discharge? loc
   else
-    Utils.simpAt true {maxDischargeDepth := 2, failIfUnchanged := false} simprocs [simpTheorems] [] [] additionalAsms loc
+    Utils.simpAt true {maxDischargeDepth := 2, failIfUnchanged := false} simpArgs loc
 
 def bvifyTac (n : Expr) (loc : Utils.Location) : TacticM Unit := do
   Elab.Tactic.focus do
@@ -275,7 +285,7 @@ def bvifyTac (n : Expr) (loc : Utils.Location) : TacticM Unit := do
   --let lt_iff_csimp ← addThm ``BitVec.lt_pow_lt_iff_ofNat_le
   let eq_iff ← addThm ``BitVec.iff_ofNat_eq'
   trace[Bvify] "Goal after adding the additional simp assumptions: {← getMainGoal}"
-  let additionalSimpThms := [le_iff, lt_iff, lt_max_iff, eq_iff]
+  let additionalSimpThms := #[le_iff, lt_iff, lt_max_iff, eq_iff]
   /- Simplify the targets (note that we preserve the new assumptions for `scalar_tac`) -/
   let (loc, notLocAsms) ← do
     match loc with
@@ -298,7 +308,7 @@ def bvifyTac (n : Expr) (loc : Utils.Location) : TacticM Unit := do
   trace[Bvify] "Goal after clearing the scalar_tac assumptions: {← getMainGoal}"
   Utils.clearFVarIds newAsms
   trace[Bvify] "Goal after clearing the duplicated assumptions: {← getMainGoal}"
-  Utils.clearFVarIds additionalSimpThms.toArray
+  Utils.clearFVarIds additionalSimpThms
   trace[Bvify] "Goal after clearing the additional theorems: {← getMainGoal}"
 
 syntax (name := bvify) "bvify" colGt term (location)? : tactic

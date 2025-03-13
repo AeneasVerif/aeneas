@@ -100,14 +100,13 @@ def goalIsLinearInt : Tactic.TacticM Bool := do
 example (x y : Int) (h0 : x ≤ y) (h1 : x ≠ y) : x < y := by
   omega
 
-def scalarTacSimpRocs : List Name := [
-  ``reduceIte,
-  ``Nat.reduceLeDiff,
-  ``Nat.reduceLT, ``Nat.reduceGT, ``Nat.reduceBEq, ``Nat.reduceBNe,
-  ``Nat.reducePow, ``Nat.reduceAdd, ``Nat.reduceSub, ``Nat.reduceMul, ``Nat.reduceDiv, ``Nat.reduceMod,
-  ``Int.reduceLT, ``Int.reduceLE, ``Int.reduceGT, ``Int.reduceGE, ``Int.reduceEq, ``Int.reduceNe, ``Int.reduceBEq, ``Int.reduceBNe,
-  ``Int.reducePow, ``Int.reduceAdd, ``Int.reduceSub, ``Int.reduceMul, ``Int.reduceDiv, ``Int.reduceMod,
-  ``Int.reduceNegSucc, ``Int.reduceNeg, ``Int.reduceToNat]
+attribute [scalar_tac_simp]
+  reduceIte
+  Nat.reduceLeDiff Nat.reduceLT Nat.reduceGT Nat.reduceBEq Nat.reduceBNe
+  Nat.reducePow Nat.reduceAdd Nat.reduceSub Nat.reduceMul Nat.reduceDiv Nat.reduceMod
+  Int.reduceLT Int.reduceLE Int.reduceGT Int.reduceGE Int.reduceEq Int.reduceNe Int.reduceBEq Int.reduceBNe
+  Int.reducePow Int.reduceAdd Int.reduceSub Int.reduceMul Int.reduceDiv Int.reduceMod
+  Int.reduceNegSucc Int.reduceNeg Int.reduceToNat
 
 /- Small trick to prevent `simp_all` from simplifying an assumption `h1 : P v` when we have
   `h0 : ∀ x, P x` in the context: we replace the forall quantifiers with our own definition
@@ -175,23 +174,16 @@ attribute [scalar_tac_simp]
  -/
 def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
   Tactic.withMainContext do
+  let simprocs ← scalarTacSimprocExt.getSimprocs
   let simpLemmas ← scalarTacSimpExt.getTheorems
+  let simpArgs : SimpArgs := {simprocs := #[simprocs], simpThms := #[simpLemmas]}
   -- Pre-preprocessing
   /- First get rid of [ofInt] (if there are dependent arguments, we may not
      manage to simplify the context) -/
   trace[ScalarTac] "Original goal before preprocessing: {← getMainGoal}"
   tryTac do
     Utils.simpAt true {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 0}
-                -- Simprocs
-                scalarTacSimpRocs
-                -- Simp theorems
-                [simpLemmas]
-                -- Unfoldings
-                []
-                -- Simp lemmas
-                []
-                -- Hypotheses
-                [] .wildcard
+                simpArgs .wildcard
   trace[ScalarTac] "Goal after first simplification: {← getMainGoal}"
   -- Apply the forward rules
   if config.saturate then
@@ -201,8 +193,9 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
   if config.simpAllMaxSteps ≠ 0 then
     allGoalsNoRecover
       (tryTac do
-        Utils.simpAll {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 0} true
-          scalarTacSimpRocs [simpLemmas] [] [] [])
+        Utils.simpAll
+          {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 0} true
+          simpArgs)
   trace[ScalarTac] "Goal after simpAll: {← getMainGoal}"
   -- Reduce all the terms in the goal - note that the extra preprocessing step
   -- might have proven the goal, hence the `allGoals`
@@ -212,14 +205,8 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
       -- We set `simpOnly` at false on purpose.
       -- Also, we need `zetaDelta` to inline the let-bindings (otherwise, omega doesn't always manages
       -- to deal with them)
-      dsimpAt false {zetaDelta := true, failIfUnchanged := false, maxDischargeDepth := 0} scalarTacSimpRocs
-        -- Simp theorems
-        []
-        -- Declarations to unfold
-        []
-        -- Theorems
-        []
-        [] Tactic.Location.wildcard
+      dsimpAt false {zetaDelta := true, failIfUnchanged := false, maxDischargeDepth := 0} {simprocs := #[simprocs]}
+        Tactic.Location.wildcard
   dsimp
   trace[ScalarTac] "Goal after first dsimp: {← getMainGoal}"
   -- More preprocessing: apply norm_cast to the whole context
@@ -231,23 +218,16 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
   allGoalsNoRecover do
     tryTac do
     Utils.simpAt true {failIfUnchanged := false, maxDischargeDepth := 1}
-               -- Simprocs
-               []
-               -- Simp theorems
-               [simpLemmas]
-               -- Unfoldings
-               []
-                -- Simp lemmas
-                [-- Int.subNatNat is very annoying - TODO: there is probably something more general thing to do
-                 ``Int.subNatNat_eq_coe,
-                 -- We also need this, in case the goal is: ¬ False
-                 ``not_false_eq_true,
-                 -- Remove the forall quantifiers to prepare for the call of `simp_all` (we
-                 -- don't want `simp_all` to use assumptions of the shape `∀ x, P x`))
-                 ``forall_eq_forall'
-                 ]
-                -- Hypotheses
-                [] .wildcard
+      {simpThms := #[simpLemmas],
+       addSimpThms :=
+        #[-- Int.subNatNat is very annoying - TODO: there is probably something more general thing to do
+          ``Int.subNatNat_eq_coe,
+          -- We also need this, in case the goal is: ¬ False
+          ``not_false_eq_true,
+          -- Remove the forall quantifiers to prepare for the call of `simp_all` (we
+          -- don't want `simp_all` to use assumptions of the shape `∀ x, P x`))
+          ``forall_eq_forall']}
+        .wildcard
   trace[ScalarTac] "Goal after simpAt following dsimp: {← getMainGoal}"
 
 elab "scalar_tac_preprocess" config:Parser.Tactic.optConfig : tactic => do
@@ -257,7 +237,9 @@ elab "scalar_tac_preprocess" config:Parser.Tactic.optConfig : tactic => do
 def scalarTacCore (config : Config) : Tactic.TacticM Unit := do
   Tactic.withMainContext do
   Tactic.focus do
+  let simprocs ← scalarTacSimprocExt.getSimprocs
   let simpLemmas ← scalarTacSimpExt.getTheorems
+  let simpArgs : SimpArgs := {simprocs := #[simprocs], simpThms := #[simpLemmas]}
   let g ← Tactic.getMainGoal
   trace[ScalarTac] "Original goal: {g}"
   -- Introduce all the universally quantified variables (includes the assumptions)
@@ -273,8 +255,8 @@ def scalarTacCore (config : Config) : Tactic.TacticM Unit := do
       splitAll do
         allGoalsNoRecover
           (tryTac do
-            Utils.simpAll {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 0} true
-              scalarTacSimpRocs [simpLemmas] [] [] [])
+            Utils.simpAll {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 0}
+              true simpArgs)
         trace[ScalarTac] "Calling omega"
         allGoalsNoRecover (Tactic.Omega.omegaTactic {})
     else

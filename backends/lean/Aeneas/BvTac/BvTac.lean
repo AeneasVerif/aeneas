@@ -51,7 +51,7 @@ partial def bvTacPreprocess (n : Option Expr): TacticM Unit := do
   /- First try simplifying the goal - if it is an (in-)equality between scalars, it may get
      the bitwidth to use for the bit-vectors might be obvious from the goal: we marked some
      theorems wiht `bvify_simps` for this reason. -/
-  Bvify.bvifyTacSimp (Utils.Location.targets #[] true) [] false
+  Bvify.bvifyTacSimp (Utils.Location.targets #[] true) #[] false
   /- The simp call above may have proven the goal (unlikely, but we have to take this
      into account) -/
   allGoals do
@@ -66,17 +66,9 @@ partial def bvTacPreprocess (n : Option Expr): TacticM Unit := do
     trace[BvTac] "Goal after `bvifyTac`: {← getMainGoal}"
     /- Call `simp_all ` to normalize the goal a bit -/
     let simpLemmas ← bvifySimpExt.getTheorems
+    let simprocs ← bvifySimprocExt.getSimprocs
     Utils.simpAll {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 0} true
-                  -- Simprocs
-                  ScalarTac.scalarTacSimpRocs
-                  -- Simp theorems
-                  [simpLemmas]
-                  -- Unfoldings
-                  []
-                  -- Simp lemmas
-                  []
-                  -- Hypotheses
-                  []
+                  {simprocs := #[simprocs], simpThms := #[simpLemmas]}
     allGoals do
     trace[BvTac] "Goal after `simp_all`: {← getMainGoal}"
 
