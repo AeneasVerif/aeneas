@@ -16,7 +16,7 @@ theorem massert_decide_spec (b : Prop) [Decidable b] (h : b) :
   massert (decide b) = ok () := by
   simp [massert, *]
 
-@[simp, progress_simp, bvify_simps]
+@[simp, progress_pre_simps, bvify_simps]
 theorem massert_ok (b : Bool) : massert b = ok () ↔ b := by simp [massert]
 
 @[simp] theorem massert_true : massert true = ok () := by simp [massert]

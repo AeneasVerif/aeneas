@@ -55,7 +55,7 @@ inductive ProgressError
 | Error (msg : MessageData)
 deriving Inhabited
 
-attribute [progress_post_simp]
+attribute [progress_post_simps]
   Std.IScalar.toNat Std.UScalar.ofNat_val_eq Std.IScalar.ofInt_val_eq
 
 open ProgressError in

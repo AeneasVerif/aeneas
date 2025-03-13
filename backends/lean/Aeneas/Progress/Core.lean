@@ -12,23 +12,23 @@ open Lean Elab Term Meta
 open Utils Extensions
 
 /-!
-# Attribute: `progress_simp`
+# Attribute: `progress_pre_simps`
 -/
 
-/-- The `progress_simp` simp attribute. -/
-initialize progressSimpExt : SimpExtension ←
-  registerSimpAttr `progress_simp "\
-    The `progress_simp` attribute registers simp lemmas to be used by `progress`
+/-- The `progress_pre_simps` simp attribute. -/
+initialize progressPreSimpExt : SimpExtension ←
+  registerSimpAttr `progress_pre_simps "\
+    The `progress_pre_simps` attribute registers simp lemmas to be used by `progress`
     when solving preconditions by means of the simplifier."
 
 /-!
-# Attribute: `progress_post_simp`
+# Attribute: `progress_post_simps`
 -/
 
-/-- The `progress_post_simp` simp attribute. -/
+/-- The `progress_post_simps` simp attribute. -/
 initialize progressPostSimpExt : SimpExtension ←
-  registerSimpAttr `progress_post_simp "\
-    The `progress_post_simp` attribute registers simp lemmas to be used by `progress`
+  registerSimpAttr `progress_post_simps "\
+    The `progress_post_simps` attribute registers simp lemmas to be used by `progress`
     to post-process post-conditions after introducing them in the context."
 
 /-! # Attribute: `progress` -/
