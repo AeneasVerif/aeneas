@@ -1328,20 +1328,6 @@ let translate_crate (filename : string) (dest_dir : string)
     && not (PureUtils.FunLoopIdSet.is_empty rec_functions)
   in
 
-  (* Lean reflects the module hierarchy within the filesystem, so we need to
-     create more directories *)
-  if Config.backend () = Lean then (
-    let ( ^^ ) = Filename.concat in
-    let prefix =
-      match !Config.subdir with
-      | None -> full_dest_dir ^^ crate_name
-      | Some _ -> full_dest_dir
-    in
-    if !Config.split_files then mkdir_if prefix;
-    if needs_clauses_module then (
-      assert !Config.split_files;
-      mkdir_if (prefix ^^ "Clauses")));
-
   (* Copy the "Primitives" file, if necessary *)
   let _ =
     (* Retrieve the executable's directory *)
