@@ -109,6 +109,10 @@ let () =
         Arg.String set_namespace,
         " Set the namespace of the definitions in the pure model" );
       ("-dest", Arg.Set_string dest_dir, " Specify the output directory");
+      ( "-subfolder",
+        Arg.String set_subfolder,
+        " Extract the files in a sub-folder; this option has an impact on the \
+         import paths of the generated files" );
       ( "-test-units",
         Arg.Set test_unit_functions,
         " Test the unit functions with the concrete (i.e., not symbolic) \
@@ -143,10 +147,10 @@ let () =
         Arg.Set sanity_checks,
         " Activate extensive sanity checks (warning: causes a ~100 times slow \
          down)." );
-      ( "-no-gen-lib-entry",
-        Arg.Clear generate_lib_entry_point,
-        " Do not generate the entry point file for the generated library (only \
-         valid if the crate is split between different files)" );
+      ( "-gen-lib-entry",
+        Arg.Set generate_lib_entry_point,
+        " Add an entry point file to the generated library (only valid if the \
+         crate is split between different files)" );
       ( "-lean-default-lakefile",
         Arg.Clear lean_gen_lakefile,
         " Generate a default lakefile.lean (Lean only)" );
@@ -310,14 +314,12 @@ let () =
   (* Sanity check: the use of decrease clauses is not compatible with the use of fuel *)
   check_arg_not !use_fuel "-use-fuel" !extract_decreases_clauses
     "-decreases-clauses";
-  (* We have: not generate_lib_entry_point ==> split_files *)
-  check_arg_implies
-    (not !generate_lib_entry_point)
-    "-no-gen-lib-entry" !split_files "-split-files";
+  check_arg_not !generate_lib_entry_point "-gen-lib-entry"
+    (Option.is_some !subfolder)
+    "-subfolder";
   if !lean_gen_lakefile && not (backend () = Lean) then
     fail_with_error
       "The -lean-default-lakefile option is valid only for the Lean backend";
-
   if !borrow_check then (
     check (!dest_dir = "") "Options -borrow-check and -dest are not compatible";
     check_not !split_files
@@ -586,7 +588,8 @@ let () =
 
       (* Translate or borrow-check the crate *)
       if !borrow_check then Aeneas.BorrowCheck.borrow_check_crate m
-      else Aeneas.Translate.translate_crate filename dest_dir m;
+      else
+        Aeneas.Translate.translate_crate filename dest_dir !Config.subfolder m;
 
       if !Errors.error_list <> [] then (
         List.iter
