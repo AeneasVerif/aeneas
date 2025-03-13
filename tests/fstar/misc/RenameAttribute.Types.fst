@@ -6,20 +6,20 @@ open Primitives
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** Trait declaration: [rename_attribute::BoolTrait]
-    Source: 'tests/src/rename_attribute.rs', lines 8:0-18:1 *)
+    Source: 'tests/src/rename_attribute.rs', lines 9:0-19:1 *)
 noeq type boolTest_t (self : Type0) = {
   getTest : self -> result bool;
   retTest : self -> result bool;
 }
 
 (** [rename_attribute::SimpleEnum]
-    Source: 'tests/src/rename_attribute.rs', lines 36:0-41:1 *)
+    Source: 'tests/src/rename_attribute.rs', lines 37:0-42:1 *)
 type variantsTest_t =
 | VariantsTest_Variant1 : variantsTest_t
 | VariantsTest_SecondVariant : variantsTest_t
 | VariantsTest_ThirdVariant : variantsTest_t
 
 (** [rename_attribute::Foo]
-    Source: 'tests/src/rename_attribute.rs', lines 44:0-47:1 *)
+    Source: 'tests/src/rename_attribute.rs', lines 45:0-48:1 *)
 type structTest_t = { fieldTest : u32; }
 

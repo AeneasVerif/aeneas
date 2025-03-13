@@ -11,7 +11,7 @@ Include Hashmap_TypesExternal.
 Module Hashmap_Types.
 
 (** [hashmap::AList]
-    Source: 'tests/src/hashmap.rs', lines 30:0-33:1 *)
+    Source: 'tests/src/hashmap.rs', lines 29:0-32:1 *)
 Inductive AList_t (T : Type) :=
 | AList_Cons : usize -> T -> AList_t T -> AList_t T
 | AList_Nil : AList_t T
@@ -21,7 +21,7 @@ Arguments AList_Cons { _ }.
 Arguments AList_Nil { _ }.
 
 (** [hashmap::Fraction]
-    Source: 'tests/src/hashmap.rs', lines 46:0-49:1 *)
+    Source: 'tests/src/hashmap.rs', lines 45:0-48:1 *)
 Record Fraction_t :=
 mkFraction_t {
   fraction_dividend : usize; fraction_divisor : usize;
@@ -29,7 +29,7 @@ mkFraction_t {
 .
 
 (** [hashmap::HashMap]
-    Source: 'tests/src/hashmap.rs', lines 52:0-64:1 *)
+    Source: 'tests/src/hashmap.rs', lines 51:0-63:1 *)
 Record HashMap_t (T : Type) :=
 mkHashMap_t {
   hashMap_num_entries : usize;

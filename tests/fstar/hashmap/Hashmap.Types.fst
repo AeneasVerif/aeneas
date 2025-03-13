@@ -7,17 +7,17 @@ include Hashmap.TypesExternal
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [hashmap::AList]
-    Source: 'tests/src/hashmap.rs', lines 30:0-33:1 *)
+    Source: 'tests/src/hashmap.rs', lines 29:0-32:1 *)
 type aList_t (t : Type0) =
 | AList_Cons : usize -> t -> aList_t t -> aList_t t
 | AList_Nil : aList_t t
 
 (** [hashmap::Fraction]
-    Source: 'tests/src/hashmap.rs', lines 46:0-49:1 *)
+    Source: 'tests/src/hashmap.rs', lines 45:0-48:1 *)
 type fraction_t = { dividend : usize; divisor : usize; }
 
 (** [hashmap::HashMap]
-    Source: 'tests/src/hashmap.rs', lines 52:0-64:1 *)
+    Source: 'tests/src/hashmap.rs', lines 51:0-63:1 *)
 type hashMap_t (t : Type0) =
 {
   num_entries : usize;

@@ -9,7 +9,7 @@ Local Open Scope Primitives_scope.
 Module RenameAttribute.
 
 (** Trait declaration: [rename_attribute::BoolTrait]
-    Source: 'tests/src/rename_attribute.rs', lines 8:0-18:1 *)
+    Source: 'tests/src/rename_attribute.rs', lines 9:0-19:1 *)
 Record BoolTest_t (Self : Type) := mkBoolTest_t {
   BoolTest_t_getTest : Self -> result bool;
   BoolTest_t_retTest : Self -> result bool;
@@ -20,30 +20,30 @@ Arguments BoolTest_t_getTest { _ } _.
 Arguments BoolTest_t_retTest { _ } _.
 
 (** [rename_attribute::{rename_attribute::BoolTrait for bool}::get_bool]:
-    Source: 'tests/src/rename_attribute.rs', lines 22:4-24:5 *)
+    Source: 'tests/src/rename_attribute.rs', lines 23:4-25:5 *)
 Definition boolTraitBool_getTest (self : bool) : result bool :=
   Ok self.
 
 (** [rename_attribute::{rename_attribute::BoolTrait for bool}::ret_true]:
-    Source: 'tests/src/rename_attribute.rs', lines 15:4-17:5 *)
+    Source: 'tests/src/rename_attribute.rs', lines 16:4-18:5 *)
 Definition boolTraitBool_retTest (self : bool) : result bool :=
   Ok true.
 
 (** Trait implementation: [rename_attribute::{rename_attribute::BoolTrait for bool}]
-    Source: 'tests/src/rename_attribute.rs', lines 21:0-25:1 *)
+    Source: 'tests/src/rename_attribute.rs', lines 22:0-26:1 *)
 Definition BoolImpl : BoolTest_t bool := {|
   BoolTest_t_getTest := boolTraitBool_getTest;
   BoolTest_t_retTest := boolTraitBool_retTest;
 |}.
 
 (** [rename_attribute::test_bool_trait]:
-    Source: 'tests/src/rename_attribute.rs', lines 28:0-30:1 *)
+    Source: 'tests/src/rename_attribute.rs', lines 29:0-31:1 *)
 Definition boolFn (T : Type) (x : bool) : result bool :=
   b <- boolTraitBool_getTest x; if b then boolTraitBool_retTest x else Ok false
 .
 
 (** [rename_attribute::SimpleEnum]
-    Source: 'tests/src/rename_attribute.rs', lines 36:0-41:1 *)
+    Source: 'tests/src/rename_attribute.rs', lines 37:0-42:1 *)
 Inductive VariantsTest_t :=
 | VariantsTest_Variant1 : VariantsTest_t
 | VariantsTest_SecondVariant : VariantsTest_t
@@ -51,23 +51,23 @@ Inductive VariantsTest_t :=
 .
 
 (** [rename_attribute::Foo]
-    Source: 'tests/src/rename_attribute.rs', lines 44:0-47:1 *)
+    Source: 'tests/src/rename_attribute.rs', lines 45:0-48:1 *)
 Record StructTest_t := mkStructTest_t { structTest_FieldTest : u32; }.
 
 (** [rename_attribute::C]
-    Source: 'tests/src/rename_attribute.rs', lines 50:0-50:28 *)
+    Source: 'tests/src/rename_attribute.rs', lines 51:0-51:28 *)
 Definition const_test_body : result u32 :=
   i <- u32_add 100%u32 10%u32; u32_add i 1%u32
 .
 Definition const_test : u32 := const_test_body%global.
 
 (** [rename_attribute::CA]
-    Source: 'tests/src/rename_attribute.rs', lines 53:0-53:23 *)
+    Source: 'tests/src/rename_attribute.rs', lines 54:0-54:23 *)
 Definition const_aeneas11_body : result u32 := u32_add 10%u32 1%u32.
 Definition const_aeneas11 : u32 := const_aeneas11_body%global.
 
 (** [rename_attribute::factorial]:
-    Source: 'tests/src/rename_attribute.rs', lines 56:0-62:1 *)
+    Source: 'tests/src/rename_attribute.rs', lines 57:0-63:1 *)
 Fixpoint factfn (n : nat) (n1 : u64) : result u64 :=
   match n with
   | O => Fail_ OutOfFuel
@@ -79,7 +79,7 @@ Fixpoint factfn (n : nat) (n1 : u64) : result u64 :=
 .
 
 (** [rename_attribute::sum]: loop 0:
-    Source: 'tests/src/rename_attribute.rs', lines 68:4-71:5 *)
+    Source: 'tests/src/rename_attribute.rs', lines 69:4-72:5 *)
 Fixpoint no_borrows_sum_loop
   (n : nat) (max : u32) (i : u32) (s : u32) : result u32 :=
   match n with
@@ -95,13 +95,13 @@ Fixpoint no_borrows_sum_loop
 .
 
 (** [rename_attribute::sum]:
-    Source: 'tests/src/rename_attribute.rs', lines 65:0-75:1 *)
+    Source: 'tests/src/rename_attribute.rs', lines 66:0-76:1 *)
 Definition no_borrows_sum (n : nat) (max : u32) : result u32 :=
   no_borrows_sum_loop n max 0%u32 0%u32
 .
 
 (** [rename_attribute::BoolTrait::ret_true]:
-    Source: 'tests/src/rename_attribute.rs', lines 15:4-17:5 *)
+    Source: 'tests/src/rename_attribute.rs', lines 16:4-18:5 *)
 Definition boolTrait_retTest_default
   {Self : Type} (self_clause : BoolTest_t Self) (self : Self) : result bool :=
   Ok true

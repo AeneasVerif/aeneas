@@ -9,7 +9,7 @@ set_option linter.unusedVariables false
 namespace demo
 
 /- [demo::choose]:
-   Source: 'tests/src/demo.rs', lines 7:0-13:1 -/
+   Source: 'tests/src/demo.rs', lines 8:0-14:1 -/
 def choose
   {T : Type} (b : Bool) (x : T) (y : T) : Result (T × (T → (T × T))) :=
   if b
@@ -19,26 +19,26 @@ def choose
        ok (y, back)
 
 /- [demo::mul2_add1]:
-   Source: 'tests/src/demo.rs', lines 15:0-17:1 -/
+   Source: 'tests/src/demo.rs', lines 16:0-18:1 -/
 def mul2_add1 (x : U32) : Result U32 :=
   do
   let i ← x + x
   i + 1#u32
 
 /- [demo::use_mul2_add1]:
-   Source: 'tests/src/demo.rs', lines 19:0-21:1 -/
+   Source: 'tests/src/demo.rs', lines 20:0-22:1 -/
 def use_mul2_add1 (x : U32) (y : U32) : Result U32 :=
   do
   let i ← mul2_add1 x
   i + y
 
 /- [demo::incr]:
-   Source: 'tests/src/demo.rs', lines 23:0-25:1 -/
+   Source: 'tests/src/demo.rs', lines 24:0-26:1 -/
 def incr (x : U32) : Result U32 :=
   x + 1#u32
 
 /- [demo::use_incr]:
-   Source: 'tests/src/demo.rs', lines 27:0-32:1 -/
+   Source: 'tests/src/demo.rs', lines 28:0-33:1 -/
 def use_incr : Result Unit :=
   do
   let x ← incr 0#u32
@@ -47,13 +47,13 @@ def use_incr : Result Unit :=
   ok ()
 
 /- [demo::CList]
-   Source: 'tests/src/demo.rs', lines 36:0-39:1 -/
+   Source: 'tests/src/demo.rs', lines 37:0-40:1 -/
 inductive CList (T : Type) where
 | CCons : T → CList T → CList T
 | CNil : CList T
 
 /- [demo::list_nth]:
-   Source: 'tests/src/demo.rs', lines 41:0-54:1 -/
+   Source: 'tests/src/demo.rs', lines 42:0-55:1 -/
 divergent def list_nth {T : Type} (l : CList T) (i : U32) : Result T :=
   match l with
   | CList.CCons x tl =>
@@ -65,7 +65,7 @@ divergent def list_nth {T : Type} (l : CList T) (i : U32) : Result T :=
   | CList.CNil => fail panic
 
 /- [demo::list_nth1]: loop 0:
-   Source: 'tests/src/demo.rs', lines 57:4-65:1 -/
+   Source: 'tests/src/demo.rs', lines 58:4-66:1 -/
 divergent def list_nth1_loop {T : Type} (l : CList T) (i : U32) : Result T :=
   match l with
   | CList.CCons x tl =>
@@ -77,13 +77,13 @@ divergent def list_nth1_loop {T : Type} (l : CList T) (i : U32) : Result T :=
   | CList.CNil => fail panic
 
 /- [demo::list_nth1]:
-   Source: 'tests/src/demo.rs', lines 56:0-65:1 -/
+   Source: 'tests/src/demo.rs', lines 57:0-66:1 -/
 @[reducible]
 def list_nth1 {T : Type} (l : CList T) (i : U32) : Result T :=
   list_nth1_loop l i
 
 /- [demo::list_nth_mut]:
-   Source: 'tests/src/demo.rs', lines 67:0-80:1 -/
+   Source: 'tests/src/demo.rs', lines 68:0-81:1 -/
 divergent def list_nth_mut
   {T : Type} (l : CList T) (i : U32) : Result (T × (T → CList T)) :=
   match l with
@@ -101,7 +101,7 @@ divergent def list_nth_mut
   | CList.CNil => fail panic
 
 /- [demo::i32_id]:
-   Source: 'tests/src/demo.rs', lines 82:0-88:1 -/
+   Source: 'tests/src/demo.rs', lines 83:0-89:1 -/
 divergent def i32_id (i : I32) : Result I32 :=
   if i = 0#i32
   then ok 0#i32
@@ -111,7 +111,7 @@ divergent def i32_id (i : I32) : Result I32 :=
        i2 + 1#i32
 
 /- [demo::list_tail]:
-   Source: 'tests/src/demo.rs', lines 90:0-95:1 -/
+   Source: 'tests/src/demo.rs', lines 91:0-96:1 -/
 divergent def list_tail
   {T : Type} (l : CList T) : Result ((CList T) × (CList T → CList T)) :=
   match l with
@@ -124,26 +124,26 @@ divergent def list_tail
   | CList.CNil => ok (CList.CNil, fun ret => ret)
 
 /- Trait declaration: [demo::Counter]
-   Source: 'tests/src/demo.rs', lines 99:0-101:1 -/
+   Source: 'tests/src/demo.rs', lines 100:0-102:1 -/
 structure Counter (Self : Type) where
   incr : Self → Result (Usize × Self)
 
 /- [demo::{demo::Counter for usize}::incr]:
-   Source: 'tests/src/demo.rs', lines 104:4-108:5 -/
+   Source: 'tests/src/demo.rs', lines 105:4-109:5 -/
 def CounterUsize.incr (self : Usize) : Result (Usize × Usize) :=
   do
   let self1 ← self + 1#usize
   ok (self, self1)
 
 /- Trait implementation: [demo::{demo::Counter for usize}]
-   Source: 'tests/src/demo.rs', lines 103:0-109:1 -/
+   Source: 'tests/src/demo.rs', lines 104:0-110:1 -/
 @[reducible]
 def CounterUsize : Counter Usize := {
   incr := CounterUsize.incr
 }
 
 /- [demo::use_counter]:
-   Source: 'tests/src/demo.rs', lines 111:0-113:1 -/
+   Source: 'tests/src/demo.rs', lines 112:0-114:1 -/
 def use_counter
   {T : Type} (CounterInst : Counter T) (cnt : T) : Result (Usize × T) :=
   CounterInst.incr cnt

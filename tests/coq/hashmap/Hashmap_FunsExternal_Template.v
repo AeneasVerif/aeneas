@@ -12,11 +12,11 @@ Include Hashmap_Types.
 Module Hashmap_FunsExternal_Template.
 
 (** [hashmap::utils::deserialize]:
-    Source: 'tests/src/hashmap.rs', lines 331:4-333:5 *)
+    Source: 'tests/src/hashmap.rs', lines 330:4-332:5 *)
 Axiom utils_deserialize : state -> result (state * (HashMap_t u64)).
 
 (** [hashmap::utils::serialize]:
-    Source: 'tests/src/hashmap.rs', lines 326:4-328:5 *)
+    Source: 'tests/src/hashmap.rs', lines 325:4-327:5 *)
 Axiom utils_serialize : HashMap_t u64 -> state -> result (state * unit).
 
 End Hashmap_FunsExternal_Template.
