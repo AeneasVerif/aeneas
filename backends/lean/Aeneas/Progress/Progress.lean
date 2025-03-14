@@ -189,7 +189,9 @@ def progressWith (fExpr : Expr) (th : Expr)
        TODO: not sure this is the best way of checking it -/
     let goals ← getUnsolvedGoals
     assert! (goals.length ≤ 1) -- We focused on the main goal so there should be at most one goal
-    if goals == [] then pure (Ok #[])
+    if goals == [] then
+      trace[Progress] "The main goal was solved!"
+      pure (Ok #[])
     else
       trace[Progress] "goal after applying the eq and simplifying the binds: {← getMainGoal}"
       -- TODO: remove this? (some types get unfolded too much: we "fold" them back)
@@ -242,6 +244,7 @@ def progressWith (fExpr : Expr) (th : Expr)
   | Ok hPosts =>
     -- Update the set of goals
     let curGoals ← getUnsolvedGoals
+    trace[Progress] "current goals: {curGoals}"
     let newGoals := mvars.map Expr.mvarId!
     let newGoals ← newGoals.filterM fun mvar => not <$> mvar.isAssigned
     trace[Progress] "new goals: {newGoals}"
@@ -256,10 +259,10 @@ def progressWith (fExpr : Expr) (th : Expr)
     let newPropGoals ← getUnsolvedGoals
     /- Simplify the post-conditions in the main goal - note that we waited until now because by solving the preconditions
        we may have instantiated meta-variables -/
+    setGoals curGoals
     match curGoals with
     | [] => pure ()
     | [ _ ] =>
-      setGoals curGoals
       let args : SimpArgs :=
         {simpThms := #[← progressPostSimpExt.getTheorems],
          simprocs := #[← ScalarTac.scalarTacSimprocExt.getSimprocs]}
@@ -512,6 +515,23 @@ namespace Test
   -- The following command displays the database of theorems:
   -- #eval showStoredProgressThms
   open alloc.vec
+
+  /- This test case checks what happens when `progress`:
+     - manages to solve the current goal
+     - but doesn't solve some preconditions
+     At some point there was a bug with the goal management.
+  -/
+  /--
+  error: unsolved goals
+case hmax
+ty : UScalarTy
+x y : UScalar ty
+⊢ ↑x + ↑y ≤ UScalar.max ty
+  -/
+  #guard_msgs in
+  example {ty} {x y : UScalar ty} :
+    ∃ z, x + y = ok z := by
+    progress keep _ as ⟨ z, h1 ⟩
 
   example {ty} {x y : UScalar ty}
     (hmax : x.val + y.val ≤ UScalar.max ty) :
