@@ -1951,7 +1951,7 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     of those declarations. See {!extract_global_decl} for more explanations.
  *)
 let extract_global_decl_body_gen (span : Meta.span) (ctx : extraction_ctx)
-    (fmt : F.formatter) (kind : decl_kind) (name : string)
+    (fmt : F.formatter) (kind : decl_kind) ~(irreducible : bool) (name : string)
     (generics : generic_params) (explicit : explicit_info)
     (type_params : string list) (cg_params : string list)
     (trait_clauses : string list) (ty : ty)
@@ -1969,6 +1969,15 @@ let extract_global_decl_body_gen (span : Meta.span) (ctx : extraction_ctx)
 
   (* Open the definition boxes (depth=0) *)
   F.pp_open_hvbox fmt 0;
+
+  (* For lean: add the irreducible attribute *)
+  sanity_check __FILE__ __LINE__ (backend () = Lean || not irreducible) span;
+  if backend () = Lean then (
+    if irreducible then F.pp_print_string fmt "@[global_simps, irreducible]"
+    else F.pp_print_string fmt "@[global_simps]";
+    F.pp_print_space fmt ());
+
+  (* Second definition box *)
   F.pp_open_hvbox fmt ctx.indent_incr;
 
   (* Open "QUALIF NAME PARAMS : TYPE =" box (depth=1) *)
@@ -2133,20 +2142,22 @@ let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
         extract_global_decl_hol4_opaque span ctx fmt decl_name global.generics
           decl_ty
       else
-        extract_global_decl_body_gen span ctx fmt kind decl_name global.generics
-          global.explicit_info type_params cg_params trait_clauses decl_ty None
+        extract_global_decl_body_gen span ctx fmt kind ~irreducible:false
+          decl_name global.generics global.explicit_info type_params cg_params
+          trait_clauses decl_ty None
   | Some body ->
       (* There is a body *)
       (* Generate: [let x_body : result u32 = Return 3] *)
-      extract_global_decl_body_gen span ctx fmt SingleNonRec body_name
-        global.generics global.explicit_info type_params cg_params trait_clauses
-        body_ty
+      extract_global_decl_body_gen span ctx fmt SingleNonRec ~irreducible:false
+        body_name global.generics global.explicit_info type_params cg_params
+        trait_clauses body_ty
         (Some (fun fmt -> extract_texpression span ctx fmt false body.body));
       F.pp_print_break fmt 0 0;
       (* Generate: [let x_c : u32 = eval_global x_body] *)
-      extract_global_decl_body_gen span ctx fmt SingleNonRec decl_name
-        global.generics global.explicit_info type_params cg_params trait_clauses
-        decl_ty
+      extract_global_decl_body_gen span ctx fmt SingleNonRec
+        ~irreducible:(backend () = Lean)
+        decl_name global.generics global.explicit_info type_params cg_params
+        trait_clauses decl_ty
         (Some
            (fun fmt ->
              let all_params =
