@@ -1,5 +1,4 @@
 import Aeneas.Extensions
-import Aesop
 open Lean Meta Meta.Simp
 
 namespace Aeneas.ScalarTac

@@ -1971,11 +1971,10 @@ let extract_global_decl_body_gen (span : Meta.span) (ctx : extraction_ctx)
   F.pp_open_hvbox fmt 0;
 
   (* For lean: add the irreducible attribute *)
-  sanity_check __FILE__ __LINE__
-    (Config.backend () = Lean || not irreducible)
-    span;
-  if irreducible then (
-    F.pp_print_string fmt "@[irreducible]";
+  sanity_check __FILE__ __LINE__ (backend () = Lean || not irreducible) span;
+  if backend () = Lean then (
+    if irreducible then F.pp_print_string fmt "@[global_simps, irreducible]"
+    else F.pp_print_string fmt "@[global_simps]";
     F.pp_print_space fmt ());
 
   (* Second definition box *)

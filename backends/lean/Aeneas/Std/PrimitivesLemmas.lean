@@ -19,7 +19,7 @@ theorem massert_decide_spec (b : Prop) [Decidable b] (h : b) :
 @[simp, progress_pre_simps, bvify_simps]
 theorem massert_ok (b : Bool) : massert b = ok () ↔ b := by simp [massert]
 
-@[simp] theorem massert_true : massert true = ok () := by simp [massert]
-@[simp] theorem massert_false : massert false = fail .assertionFailure := by simp [massert]
+@[simp, global_simps] theorem massert_true : massert true = ok () := by simp [massert]
+@[simp, global_simps] theorem massert_false : massert false = fail .assertionFailure := by simp [massert]
 
 end Aeneas.Std
