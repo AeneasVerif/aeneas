@@ -5,7 +5,7 @@ import Init.Data.List.Basic
 import Mathlib.Tactic.Linarith
 import Aeneas.Std.Scalar
 import Aeneas.ScalarTac
-import Aeneas.Progress.Core
+import Aeneas.Progress.Init
 
 namespace Aeneas
 

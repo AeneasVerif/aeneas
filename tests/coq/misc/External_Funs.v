@@ -13,14 +13,14 @@ Include External_FunsExternal.
 Module External_Funs.
 
 (** [external::use_get]:
-    Source: 'tests/src/external.rs', lines 9:0-11:1 *)
+    Source: 'tests/src/external.rs', lines 10:0-12:1 *)
 Definition use_get
   (rc : core_cell_Cell_t u32) (st : state) : result (state * u32) :=
   core_cell_Cell_get core_marker_CopyU32 rc st
 .
 
 (** [external::incr]:
-    Source: 'tests/src/external.rs', lines 13:0-15:1 *)
+    Source: 'tests/src/external.rs', lines 14:0-16:1 *)
 Definition incr
   (rc : core_cell_Cell_t u32) (st : state) :
   result (state * (core_cell_Cell_t u32))

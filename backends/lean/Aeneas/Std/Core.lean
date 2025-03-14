@@ -1,5 +1,6 @@
 import Lean
 import Aeneas.Std.Primitives
+import Aeneas.Progress.Init
 
 namespace Aeneas
 
@@ -50,7 +51,7 @@ structure clone.Clone (Self : Type) where
   clone : Self → Result Self
 
 /- [core::clone::impls::{(core::clone::Clone for bool)#19}::clone] -/
-@[reducible, simp]
+@[reducible, simp, progress_simps]
 def clone.impls.CloneBool.clone (b : Bool) : Bool := b
 
 @[reducible]
@@ -67,27 +68,27 @@ structure marker.Copy (Self : Type) where
    This acts like a swap effectively in a functional pure world.
    We return the old value of `dst`, i.e. `dst` itself.
    The new value of `dst` is `src`. -/
-@[simp] def mem.replace {a : Type} (dst : a) (src : a) : a × a := (dst, src)
+@[simp, progress_simps] def mem.replace {a : Type} (dst : a) (src : a) : a × a := (dst, src)
 
 /- [core::mem::swap] -/
-@[simp] def mem.swap {T : Type} (a b : T): T × T := (b, a)
+@[simp, progress_simps] def mem.swap {T : Type} (a b : T): T × T := (b, a)
 
 end core
 
 /- [core::option::{core::option::Option<T>}::unwrap] -/
-@[simp] def core.option.Option.unwrap {T : Type} (x : Option T) : Result T :=
+@[simp, progress_simps] def core.option.Option.unwrap {T : Type} (x : Option T) : Result T :=
   Result.ofOption x Error.panic
 
 /- [core::option::Option::take] -/
-@[simp] def core.option.Option.take {T: Type} (self: Option T): Option T × Option T := (self, .none)
+@[simp, progress_simps] def core.option.Option.take {T: Type} (self: Option T): Option T × Option T := (self, .none)
 
 /- [core::option::Option::is_none] -/
-@[simp] def core.option.Option.is_none {T: Type} (self: Option T): Bool := self.isNone
+@[simp, progress_simps] def core.option.Option.is_none {T: Type} (self: Option T): Bool := self.isNone
 
 /- [core::clone::Clone::clone_from]:
    Source: '/rustc/library/core/src/clone.rs', lines 175:4-175:43
    Name pattern: core::clone::Clone::clone_from -/
-@[simp] def core.clone.Clone.clone_from
+@[simp, progress_simps] def core.clone.Clone.clone_from
   {Self : Type} (cloneInst : core.clone.Clone Self) (_self : Self) (source : Self) : Result Self :=
   cloneInst.clone source
 
@@ -96,7 +97,7 @@ structure core.convert.Into (Self : Type) (T : Type) where
   into : Self → Result T
 
 /- [core::convert::{core::convert::Into<U> for T}::into] -/
-@[reducible, simp]
+@[reducible, simp, progress_simps]
 def core.convert.IntoFrom.into {T : Type} {U : Type}
   (fromInst : core.convert.From U T) (x : T) : Result U :=
   fromInst.from_ x
@@ -109,7 +110,7 @@ def core.convert.IntoFrom {T : Type} {U : Type} (fromInst : core.convert.From U 
 }
 
 /- [core::convert::{core::convert::From<T> for T}::from] -/
-@[simp] def core.convert.FromSame.from_ {T : Type} (x : T) : T := x
+@[simp, progress_simps] def core.convert.FromSame.from_ {T : Type} (x : T) : T := x
 
 /- [core::convert::{core::convert::From<T> for T}] -/
 @[reducible]

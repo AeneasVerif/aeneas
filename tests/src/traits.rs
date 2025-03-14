@@ -1,5 +1,5 @@
 //@ [fstar] aeneas-args=-decreases-clauses
-//@ aeneas-args=-soft-warnings
+//@ [fstar,coq] subdir=misc
 pub trait BoolTrait {
     // Required method
     fn get_bool(&self) -> bool;

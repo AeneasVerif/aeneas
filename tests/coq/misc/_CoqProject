@@ -3,7 +3,6 @@
 -arg -w
 -arg all
 
-AdtBorrows.v 
 Bitwise.v 
 Constants.v 
 External_Funs.v 
@@ -19,4 +18,6 @@ Loops.v
 NoNestedBorrows.v 
 Paper.v 
 PoloniusList.v 
-Primitives.v
+Primitives.v 
+RenameAttribute.v 
+Traits.v

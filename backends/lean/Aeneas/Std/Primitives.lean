@@ -1,4 +1,5 @@
 import Lean
+import Aeneas.Std.Global
 
 namespace Aeneas
 
@@ -22,6 +23,10 @@ def assertImpl : CommandElab := fun (stx: Syntax) => do
       throwError ("Expression reduced to false:\n"  ++ stx[1])
     pure ())
 
+/--
+info: true
+-/
+#guard_msgs in
 #eval 2 == 2
 #assert (2 == 2)
 
@@ -71,6 +76,7 @@ instance Result_Nonempty (α : Type u) : Nonempty (Result α) :=
 # Helpers
 -/
 
+@[global_simps]
 def ok? {α: Type u} (r: Result α): Bool :=
   match r with
   | ok _ => true
@@ -84,8 +90,9 @@ def div? {α: Type u} (r: Result α): Bool :=
 def massert (b:Bool) : Result Unit :=
   if b then ok () else fail assertionFailure
 
-macro "prove_eval_global" : tactic => `(tactic| first | apply Eq.refl | decide)
+macro "prove_eval_global" : tactic => `(tactic| simp (failIfUnchanged := false) only [global_simps] <;> first | apply Eq.refl | decide)
 
+@[global_simps]
 def eval_global {α: Type u} (x: Result α) (_: ok? x := by prove_eval_global) : α :=
   match x with
   | fail _ | div => by contradiction
@@ -134,6 +141,12 @@ instance : Pure Result where
   (Bind.bind e (λ x => Bind.bind (g x) h)) := by
   simp [Bind.bind]
   cases e <;> simp
+
+@[simp]
+def bind_eq_iff (x : Result α) (y y' : α → Result β) :
+  ((Bind.bind x y) = (Bind.bind x y')) ↔
+  ∀ v, x = ok v → y v = y' v := by
+  cases x <;> simp_all
 
 /-!
 # Lift

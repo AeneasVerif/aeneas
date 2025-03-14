@@ -1,7 +1,8 @@
 import Lean
 import Lean.Meta.Tactic.Simp
 import Mathlib.Tactic.Linarith
-import Aeneas.Std.Scalar
+import Aeneas.Std.Scalar.Core
+import Aeneas.Std.Scalar.Ops.Add -- we need to use addition in some of the tests below
 import Aeneas.ScalarTac
 
 namespace Aeneas

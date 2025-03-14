@@ -137,10 +137,9 @@ theorem mul2_add1_spec
   progress with U32.add_spec as ⟨ x1 ⟩
   /- We can call [progress] a second time for the second addition -/
   progress with U32.add_spec as ⟨ x2 ⟩
-  /- We are now left with the remaining goal. We do this by calling the simplifier
-     then [scalar_tac], a tactic to solve arithmetic problems:
+  /- We are now left with the remaining goal. We do this by calling
+     [scalar_tac], a tactic to solve arithmetic problems:
    -/
-  simp at *
   scalar_tac
 
 /- The proof above works, but it can actually be simplified a bit. In particular,
@@ -162,7 +161,7 @@ theorem mul2_add1_spec2 (x : U32) (h : 2 * x.val + 1 ≤ U32.max)
   rw [mul2_add1]
   progress as ⟨ x1⟩ -- [progress] automatically lookups [U32.add_spec]
   progress as ⟨ x2 ⟩ -- same
-  simp at *; scalar_tac
+  scalar_tac
 
 /- Because we marked [mul2_add1_spec2] theorem with [progress], [progress] can
    now automatically look it up. For instance, below:

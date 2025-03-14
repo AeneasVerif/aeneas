@@ -11,12 +11,12 @@ set_option linter.unusedVariables false
 namespace external
 
 /- [external::use_get]:
-   Source: 'tests/src/external.rs', lines 9:0-11:1 -/
+   Source: 'tests/src/external.rs', lines 10:0-12:1 -/
 def use_get (rc : core.cell.Cell U32) (st : State) : Result (State × U32) :=
   core.cell.Cell.get core.marker.CopyU32 rc st
 
 /- [external::incr]:
-   Source: 'tests/src/external.rs', lines 13:0-15:1 -/
+   Source: 'tests/src/external.rs', lines 14:0-16:1 -/
 def incr
   (rc : core.cell.Cell U32) (st : State) :
   Result (State × (core.cell.Cell U32))

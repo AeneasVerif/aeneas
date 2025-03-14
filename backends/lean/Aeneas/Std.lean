@@ -1,9 +1,9 @@
-import Aeneas.Tuples
-import Aeneas.Std.Core
-import Aeneas.Std.Scalar
-import Aeneas.Std.ScalarNotations
-import Aeneas.Std.ArraySlice
-import Aeneas.Std.Vec
 import Aeneas.Std.Alloc
+import Aeneas.Std.Array
 import Aeneas.Std.Core
-import Aeneas.Std.CoreConvertNum
+import Aeneas.Std.Primitives
+import Aeneas.Std.PrimitivesLemmas
+import Aeneas.Std.Scalar
+import Aeneas.Std.Slice
+import Aeneas.Std.Vec
+import Aeneas.Tuples

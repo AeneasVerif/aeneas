@@ -1,10 +1,9 @@
-import Lean
-import Aeneas.Utils
 import Aeneas.Progress.Progress
-import Aeneas.Progress.Core
 import Aesop.Util.Basic
 open Aeneas
-open Lean Meta Elab Tactic 
+open Lean Meta Elab Tactic
+
+namespace Aeneas
 
 namespace Bifurcation
 /-- Expression on which a branch depends -/
@@ -15,7 +14,7 @@ structure Discr where
   deriving Repr
 
 instance: ToMessageData Discr where
-  toMessageData discr := 
+  toMessageData discr :=
     let nameMD := if let some name := discr.name? then m!"(name {name }) " else ""
     m!"(discr {nameMD}{discr.toExpr})"
 
@@ -24,7 +23,7 @@ structure Branch where
   /-- The branch as a function -/
   toExpr: Expr
 
-  /-- The number of arguments the bifurcation is 
+  /-- The number of arguments the bifurcation is
       expected to provide. -/
   numArgs: Nat
 
@@ -72,7 +71,7 @@ structure Info where
   params: Array Expr
   deriving Repr
 instance: ToMessageData Info where
-  toMessageData 
+  toMessageData
   | {kind, discrs, branches, ..} =>
     let discr := MessageData.ofArray <| discrs.map (ToMessageData.toMessageData)
     let branches := MessageData.ofArray <| branches.map (ToMessageData.toMessageData)
@@ -83,12 +82,11 @@ def Info.ofExpr(e: Expr): MetaM (Option Info) := do
   if e.isIte || e.isDIte then
     let kind := if e.isIte then .ite else .dite
     let e ← deltaExpand e (fun n => n == ``ite || n == ``dite)
-    -- Decidable.casesOn.{u} {prop} {motive} dec (isFalse: (h:¬p) → motive (isFalse h)) (isTrue: (h:p) → motive (isTrue h)) : motive t
     let .const ``Decidable.casesOn uLevels := e.getAppFn
       | throwError "Expected ``Decidable.casesOn, found {←ppExpr e.getAppFn}"
     let #[prop, motive, dec, brFalse, brTrue] := e.getAppArgs
       | throwError "Wrong number of parameters for {e.getAppFn}: {e.getAppArgs.size} [{e.getAppArgs}]"
-    let name? ← if e.isDIte 
+    let name? ← if e.isDIte
       then some <$> Utils.lambdaOne brFalse fun x _ => x.fvarId!.getUserName
       else pure none
     return some {
@@ -106,9 +104,9 @@ def Info.ofExpr(e: Expr): MetaM (Option Info) := do
   else if let some ma ← Meta.matchMatcherApp? e (alsoCasesOn := true) then
     return some {
       kind := .matcher ma.matcherName
-      discrs := ma.discrs.zip ma.discrInfos 
+      discrs := ma.discrs.zip ma.discrInfos
         |>.map fun (toExpr, discrInfo) => {toExpr, name? := discrInfo.hName?}
-      branches := ma.alts.zip ma.altNumParams 
+      branches := ma.alts.zip ma.altNumParams
         |>.map fun (toExpr, numArgs) => {toExpr, numArgs}
       matcher := ma.matcherName,
       motive := ma.motive,
@@ -131,11 +129,11 @@ end Bifurcation
 /-- Traverse a do block and execute callbacks at each different point.
 
 The points in a do block we currently distinguish are:
- · A simple statement (causes a call to onResult)  
+ · A simple statement (causes a call to onResult)
    i.e. `(do f a)`
- · A bind call from one value to a function (causes a call to onBind)  
+ · A bind call from one value to a function (causes a call to onBind)
    i.e. `(do let x ← f a; ...)`
- · A bifurcation of some sort (causes a call to onBif)  
+ · A bifurcation of some sort (causes a call to onBif)
    i.e. `(do if b then t else e)`
         `(do match d with | p1 => t1 | p2 => t2)`
 
@@ -144,10 +142,10 @@ However, **this does not necessarilly mean that the traversal is done in
 postorder**, since the children's results are given in a monad, and are
 not computed until evaluated (i.e. with `←`).
 -/
-private partial 
-def traverseProgram {α} [Monad m] [MonadError m] [Nonempty (m α)] 
-  /- [MonadLog m] [AddMessageContext m] [MonadOptions m] -/ 
-  [MonadLiftT MetaM m] [MonadControlT MetaM m] 
+private partial
+def traverseProgram {α} [Monad m] [MonadError m] [Nonempty (m α)]
+  /- [MonadLog m] [AddMessageContext m] [MonadOptions m] -/
+  [MonadLiftT MetaM m] [MonadControlT MetaM m]
   (onResult: Expr -> m α)
   (onBind: Expr -> Name -> m α -> m α)
   (onBif: Bifurcation.Info -> Array (Array Name × m α) -> m α)
@@ -162,7 +160,7 @@ def traverseProgram {α} [Monad m] [MonadError m] [Nonempty (m α)]
       let contVal: m α := traverseProgram onResult onBind onBif body
       onBind value name contVal
   else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
-    let contsTaggedVals <- 
+    let contsTaggedVals <-
       bfInfo.branches.mapM fun br => do
         Utils.lambdaTelescopeN br.toExpr br.numArgs fun xs body => do
           let names ← xs.mapM (·.fvarId!.getUserName)
@@ -187,13 +185,14 @@ instance: Append Info where
     unsolvedPreconditions := inf1.unsolvedPreconditions ++ inf2.unsolvedPreconditions,
   }
 
-partial
+attribute [progress_simps] Aeneas.Std.bind_assoc_eq
+
 def evalProgressStar(cfg: Config): TacticM Info := withMainContext do
   trace[ProgressStar] s!"Normalizing bind application in goal {←(getMainTarget >>= (liftM ∘ ppExpr))}"
-  Utils.simpAt (simpOnly := true) (thms := [``Aeneas.Std.bind_assoc_eq]) 
-    (loc := .targets #[] (type := true) )
-    (config := {maxDischargeDepth:= 0}) (simprocs := []) (simpThms := [])
-    (declsToUnfold := []) (hypsToUse := [])  
+  Utils.simpAt (simpOnly := true)
+    { maxDischargeDepth := 1, failIfUnchanged := false}
+    {simpThms := #[← Progress.progressSimpExt.getTheorems]}
+    (.targets #[] true)
     <|> pure ()
   let goalTy <- getMainTarget
   trace[ProgressStar] s!"After bind normalization: {←ppExpr goalTy}"
@@ -208,12 +207,12 @@ where
   onResult resultName expr := do
     trace[ProgressStar] s!"onResult: Since (· >>= pure) = id, we treat this result as a bind on id"
     -- If we encounter `(do f a)` we process it as if it were `(do let res ← f a; return res)`
-    -- since (id = (· >>= pure)) and when we desugar the do block we have that 
-    -- 
+    -- since (id = (· >>= pure)) and when we desugar the do block we have that
+    --
     --                      (do f a) == f a
     --                               == (f a) >>= pure
     --                               == (do let res ← f a; return res)
-    -- 
+    --
     -- We known in advance the result of processing `return res`, which is to do nothing.
     -- This allows us to prevent code duplication with the `onBind` function.
     onBind expr resultName (pure {})
@@ -228,7 +227,7 @@ where
       let ids ← getIdsFromUsedTheorem name usedTheorem
       if ¬ ids.isEmpty && ¬ (←getGoals).isEmpty then
         replaceMainGoal [← renameInaccessibles (← getMainGoal) ids] -- NOTE: Taken from renameI tactic
-      let currTac ← if ids.isEmpty 
+      let currTac ← if ids.isEmpty
         then `(tactic| progress with $(←usedTheorem.toSyntax))
         else `(tactic| progress with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩)
       let restInfo ← processRest
@@ -240,14 +239,14 @@ where
 
   onBif bfInfo toBeProcessed := do
     trace[ProgressStar] s!"onBif: encountered {bfInfo.kind}"
-    if (←getGoals).isEmpty then 
+    if (←getGoals).isEmpty then
       trace[ProgressStar] s!"onBif: no goals to be solved!"
       -- Tactic.focus fails if there are no goals to be solved.
       return {}
     Tactic.focus do
       let splitStx ← `(tactic| split)
       evalSplit splitStx
-      -- 
+      --
       let subgoals ← getUnsolvedGoals
       trace[ProgressStar] s!"onBif: Bifurcation generated {subgoals.length} subgoals"
       unless subgoals.length == toBeProcessed.size do
@@ -259,11 +258,11 @@ where
         setGoals [sg]
         let branchInfo ← processBr
 
-        let branchTacs ← if branchInfo.script.isEmpty 
+        let branchTacs ← if branchInfo.script.isEmpty
           then pure #[←`(tactic| skip)]
           else pure branchInfo.script
         let caseArgs := makeCaseArgs (←sg.getTag) names
-        info := {info ++ branchInfo with 
+        info := {info ++ branchInfo with
           script:=info.script.push <| ←`(tactic| case' $caseArgs => $branchTacs*),
         }
         unsolvedGoals := unsolvedGoals ++ (←getUnsolvedGoals)
@@ -298,7 +297,7 @@ where
   getIdsFromUsedTheorem name usedTheorem: TacticM (Array _) := do
     let some thm ← usedTheorem.getType
       | throwError s!"Could not infer proposition of {usedTheorem}"
-    let (numElem, numPost) ← Progress.programTelescope thm 
+    let (numElem, numPost) ← Progress.programTelescope thm
       fun _xs zs _program _res postconds => do
         let numPost := Utils.numOfConjuncts <$> postconds |>.getD 0
         trace[ProgressStar] s!"Number of conjuncts for {←liftM (Option.traverse ppExpr postconds)} is {numPost}"
@@ -321,26 +320,28 @@ where
 
   makeCaseArgs tag names :=
     let tag := Lean.mkNode ``Lean.binderIdent #[mkIdent tag]
-    let binderIdents := names.map fun n => if n.isInternalDetail 
+    let binderIdents := names.map fun n => if n.isInternalDetail
       then mkNode ``Lean.binderIdent #[mkHole mkNullNode]
       else mkNode ``Lean.binderIdent #[mkIdent n]
     Lean.mkNode ``Lean.Parser.Tactic.caseArg #[tag, mkNullNode (args := binderIdents)]
 
 syntax «progress*_args» := ("by" tactic)?
 
-def parseArgs: TSyntax `ProgressStar.«progress*_args» → CoreM Config 
+def parseArgs: TSyntax `Aeneas.ProgressStar.«progress*_args» → CoreM Config
 | `(«progress*_args»| $[by $preconditionTac:tactic]?) => do
   return {preconditionTac}
 | _ => throwUnsupportedSyntax
 
-elab "progress" noWs "*" stx:«progress*_args»: tactic => do 
+elab "progress" noWs "*" stx:«progress*_args»: tactic => do
   let cfg ← parseArgs stx
   evalProgressStar cfg *> pure ()
 
-elab tk:"progress" noWs "*?" stx:«progress*_args»: tactic => do 
+elab tk:"progress" noWs "*?" stx:«progress*_args»: tactic => do
   let cfg ← parseArgs stx
   let info ← evalProgressStar cfg
   let suggestion ← `(tacticSeq| $(info.script)*)
   Aesop.addTryThisTacticSeqSuggestion tk suggestion (origSpan? := ← getRef)
 
 end ProgressStar
+
+end Aeneas

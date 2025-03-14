@@ -22,11 +22,17 @@ type t = {
 }
 
 (* The default subdirectory in which to store the outputs. *)
-let default_subdir backend test_name : string option =
-  match backend with
-  | Backend.Lean -> Some "."
-  | Backend.BorrowCheck -> None
-  | _ -> Some test_name
+let default_subdir (kind : kind) backend test_name : string option =
+  match kind with
+  | SingleFile -> None
+  | Crate -> (
+      match backend with
+      | Backend.Lean ->
+          let elems = String.split_on_char '_' test_name in
+          let elems = List.map String.capitalize_ascii elems in
+          Some (String.concat "" elems)
+      | Backend.BorrowCheck -> None
+      | _ -> Some test_name)
 
 (* Parse lines that start `//@`. Each of them modifies the options we use for the test.
    Supported comments:
@@ -111,7 +117,7 @@ let build (path : string) : t =
     Backend.Map.make (fun backend ->
         {
           action = Normal;
-          subdir = default_subdir backend name;
+          subdir = default_subdir kind backend name;
           aeneas_options = [];
           check_output = true;
         })
