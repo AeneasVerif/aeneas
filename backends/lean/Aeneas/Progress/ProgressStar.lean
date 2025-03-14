@@ -192,13 +192,21 @@ instance: Append Info where
 
 attribute [progress_simps] Aeneas.Std.bind_assoc_eq
 
-def evalProgressStar(cfg: Config): TacticM Info := withMainContext do
-  trace[ProgressStar] s!"Normalizing bind application in goal {←(getMainTarget >>= (liftM ∘ ppExpr))}"
+example : True := by simp?
+
+def evalProgressStar(cfg: Config): TacticM Info :=
+  withMainContext do focus do
+  trace[ProgressStar] s!"Simplifying the goal: {←(getMainTarget >>= (liftM ∘ ppExpr))}"
   Utils.simpAt (simpOnly := true)
     { maxDischargeDepth := 1, failIfUnchanged := false}
     {simpThms := #[← Progress.progressSimpExt.getTheorems]}
     (.targets #[] true)
-    <|> pure ()
+  /- We may have proven the goal already -/
+  let goals ← getUnsolvedGoals
+  if goals == [] then
+    let progress_simps ← `(Parser.Tactic.simpLemma| $(mkIdent `progress_simps):term)
+    return ⟨ #[← `(tactic|simp [$progress_simps])], [] ⟩
+  /- Continue -/
   let goalTy <- getMainTarget
   trace[ProgressStar] s!"After bind normalization: {←ppExpr goalTy}"
   let res ← Progress.programTelescope goalTy fun _xs _zs program _res _post => do
