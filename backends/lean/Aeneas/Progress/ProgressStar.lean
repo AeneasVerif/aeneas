@@ -6,6 +6,7 @@ open Lean Meta Elab Tactic
 namespace Aeneas
 
 namespace Bifurcation
+
 /-- Expression on which a branch depends -/
 structure Discr where
   toExpr: Expr
@@ -28,6 +29,7 @@ structure Branch where
   numArgs: Nat
 
   deriving Repr
+
 instance: ToMessageData Branch where
   toMessageData br := m!"(branch (numArgs {br.numArgs}){br.toExpr}) "
 
@@ -40,11 +42,13 @@ inductive Kind where
   /-- A matcher or cases bifurcation, of name `name` -/
   | matcher (name: Name)
   deriving Repr
+
 instance: ToString Kind where
   toString
   | .ite => "ite"
   | .dite => "dite"
   | .matcher name => s!"matcher {name}"
+
 instance: ToMessageData Kind where toMessageData k := toString k
 
 /-- Rough equivalent of `Lean.Meta.MatcherApp`, but which also includes if-then-else -/
@@ -70,6 +74,7 @@ structure Info where
   /-- -/
   params: Array Expr
   deriving Repr
+
 instance: ToMessageData Info where
   toMessageData
   | {kind, discrs, branches, ..} =>
