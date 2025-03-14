@@ -247,9 +247,11 @@ def ToTypetraitsBoolWrapperT {T : Type} (ToTypeBoolTInst : ToType Bool T) :
 
 /- [traits::WithConstTy::LEN2]
    Source: 'tests/src/traits.rs', lines 166:4-166:27 -/
+@[global_simps]
 def WithConstTy.LEN2_default_body (Self : Type) (Self_V : Type) (Self_W : Type)
   (LEN : Usize) : Result Usize :=
   ok 32#usize
+@[global_simps, irreducible]
 def WithConstTy.LEN2_default (Self : Type) (Self_V : Type) (Self_W : Type) (LEN
   : Usize) : Usize :=
   eval_global (WithConstTy.LEN2_default_body Self Self_V Self_W LEN)
@@ -265,7 +267,9 @@ structure WithConstTy (Self : Type) (Self_V : Type) (Self_W : Type) (LEN :
 
 /- [traits::{traits::WithConstTy<u8, u64, 32: usize> for bool}#8::LEN1]
    Source: 'tests/src/traits.rs', lines 177:4-177:27 -/
+@[global_simps]
 def WithConstTyBoolU8U6432.LEN1_body : Result Usize := ok 12#usize
+@[global_simps, irreducible]
 def WithConstTyBoolU8U6432.LEN1 : Usize :=
   eval_global WithConstTyBoolU8U6432.LEN1_body
 
@@ -488,7 +492,9 @@ structure Trait (Self : Type) where
 
 /- [traits::{traits::Trait for @Array<T, N>}#14::LEN]
    Source: 'tests/src/traits.rs', lines 317:4-317:25 -/
+@[global_simps]
 def TraitArray.LEN_body (T : Type) (N : Usize) : Result Usize := ok N
+@[global_simps, irreducible]
 def TraitArray.LEN (T : Type) (N : Usize) : Usize :=
   eval_global (TraitArray.LEN_body T N)
 
@@ -501,9 +507,11 @@ def TraitArray (T : Type) (N : Usize) : Trait (Array T N) := {
 
 /- [traits::{traits::Trait for traits::Wrapper<T>}#15::LEN]
    Source: 'tests/src/traits.rs', lines 321:4-321:25 -/
+@[global_simps]
 def TraittraitsWrapper.LEN_body {T : Type} (TraitInst : Trait T)
   : Result Usize :=
   ok 0#usize
+@[global_simps, irreducible]
 def TraittraitsWrapper.LEN {T : Type} (TraitInst : Trait T) : Usize :=
   eval_global (TraittraitsWrapper.LEN_body TraitInst)
 
@@ -528,9 +536,11 @@ structure Foo (T : Type) (U : Type) where
 
 /- [traits::{traits::Foo<T, U>}#16::FOO]
    Source: 'tests/src/traits.rs', lines 334:4-334:43 -/
+@[global_simps]
 def Foo.FOO_body {T : Type} (U : Type) (TraitInst : Trait T)
   : Result (core.result.Result T I32) :=
   ok (core.result.Result.Err 0#i32)
+@[global_simps, irreducible]
 def Foo.FOO {T : Type} (U : Type) (TraitInst : Trait T)
   : core.result.Result T I32 :=
   eval_global (Foo.FOO_body U TraitInst)

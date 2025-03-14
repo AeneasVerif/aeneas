@@ -47,11 +47,10 @@ initialize progressPostSimpExt : SimpExtension ←
 /-! # Attribute: `progress` -/
 
 structure ProgressSpecDesc where
-  -- The universally quantified variables
-  -- Can be fvars or mvars
-  fvars : Array Expr
+  -- The universally quantified variables and preconditions, as mvars
+  preconds : Array MVarId
   -- The existentially quantified variables
-  evars : Array Expr
+  evars : Array FVarId
   -- The function applied to its arguments
   fArgsExpr : Expr
   -- ⊤ if the function is a constant (must be if we are registering a theorem,
@@ -63,13 +62,35 @@ structure ProgressSpecDesc where
   -- The returned value
   ret : Expr
   -- The postcondition (if there is)
-  post : Option Expr
+  postcond? : Option Expr
 
 section Methods
   variable [MonadLiftT MetaM m] [MonadControlT MetaM m] [Monad m] [MonadOptions m]
   variable [MonadTrace m] [MonadLiftT IO m] [MonadRef m] [AddMessageContext m]
   variable [MonadError m]
   variable {a : Type}
+
+
+/-- Given ty := ∀ xs.., ∃ zs.., program = res ∧ post?, destruct and run continuation -/
+def programTelescope[Inhabited (m α)] [Nonempty (m α)] (ty: Expr)
+  (k: (xs:Array (MVarId × BinderInfo)) → (zs:Array FVarId) → (program:Expr) → (res:Expr) → (post:Option Expr) → m α)
+: m α := do
+  unless ←isProp ty do
+    throwError "Expected a proposition, got {←inferType ty}"
+  -- ty == ∀ xs, ty₂
+  let (xs, xs_bi, ty₂) ← forallMetaTelescope ty.consumeMData
+  trace[Progress] "Universally quantified arguments and assumptions: {xs}"
+  -- ty₂ == ∃ zs, ty₃ ≃ Exists {α} (fun zs => ty₃)
+  existsTelescope ty₂ fun zs ty₃ => do
+    trace[Progress] "Existentials: {zs}"
+    trace[Progress] "Proposition after stripping the quantifiers: {ty₃}"
+    -- ty₃ == ty₄ ∧ post?
+    let (ty₄, post?) ← Utils.optSplitConj ty₃
+    trace[Progress] "After splitting the conjunction:\n- eq: {ty₄}\n- post: {post?}"
+    -- ty₄ == (program = res)
+    let (program, res) ← Utils.destEq ty₄
+    trace[Progress] "After splitting the equality:\n- lhs: {program}\n- rhs: {res}"
+    k (xs.map (·.mvarId!) |>.zip xs_bi) (zs.map (·.fvarId!)) program res post?
 
   /- Analyze a goal or a pspec theorem to decompose its arguments.
 
@@ -91,28 +112,7 @@ section Methods
   def withProgressSpec [Inhabited (m a)] [Nonempty (m a)]
     (isGoal : Bool) (th : Expr) (k : ProgressSpecDesc → m a) :
     m a := do
-    trace[Progress] "Proposition: {th}"
-    -- Dive into the quantified variables and the assumptions
-    -- Note that if we analyze a pspec theorem to register it in a database (i.e.
-    -- a discrimination tree), we need to introduce *meta-variables* for the
-    -- quantified variables.
-    let telescope (k : Array Expr → Expr → m a) : m a :=
-      if isGoal then forallTelescope th.consumeMData (fun fvars th => k fvars th)
-      else do
-        let (fvars, _, th) ← forallMetaTelescope th.consumeMData
-        k fvars th
-    telescope fun fvars th => do
-    trace[Progress] "Universally quantified arguments and assumptions: {fvars}"
-    -- Dive into the existentials
-    existsTelescope th.consumeMData fun evars th => do
-    trace[Progress] "Existentials: {evars}"
-    trace[Progress] "Proposition after stripping the quantifiers: {th}"
-    -- Take the first conjunct
-    let (th, post) ← optSplitConj th.consumeMData
-    trace[Progress] "After splitting the conjunction:\n- eq: {th}\n- post: {post}"
-    -- Destruct the equality
-    let (mExpr, ret) ← destEq th.consumeMData
-    trace[Progress] "After splitting the equality:\n- lhs: {mExpr}\n- rhs: {ret}"
+    programTelescope th fun xs evars mExpr ret post => do
     -- Recursively destruct the monadic application to dive into the binds,
     -- if necessary (this is for when we use `withProgressSpec` inside of the `progress` tactic),
     -- and destruct the application to get the function name
@@ -141,7 +141,7 @@ section Methods
       -- Collect all the free variables in the arguments
       let allArgsFVars ← args.foldlM (fun hs arg => getFVarIds arg hs) Std.HashSet.empty
       -- Check if they intersect the fvars we introduced for the existentially quantified variables
-      let evarsSet : Std.HashSet FVarId := Std.HashSet.empty.insertMany (evars.map (fun (x : Expr) => x.fvarId!))
+      let evarsSet : Std.HashSet FVarId := Std.HashSet.empty.insertMany evars
       let filtArgsFVars := allArgsFVars.toArray.filter (fun var => evarsSet.contains var)
       if filtArgsFVars.isEmpty then pure ()
       else
@@ -150,14 +150,14 @@ section Methods
     -- Return
     trace[Progress] "Function with arguments: {fArgsExpr}";
     let thDesc := {
-      fvars := fvars
+      preconds := xs.map (·.1)
       evars := evars
       fArgsExpr
       fIsConst := f.isConst
       fLevels
       args := args
       ret := ret
-      post := post
+      postcond? := post
     }
     k thDesc
 

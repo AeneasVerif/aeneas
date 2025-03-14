@@ -1370,7 +1370,8 @@ let translate_crate (filename : string) (dest_dir : string)
     match !Config.subdir with
     | None -> crate_name
     | Some subdir ->
-        String.concat module_delimiter (String.split_on_char '/' subdir)
+        String.concat module_delimiter
+          (List.filter (fun s -> s <> "") (String.split_on_char '/' subdir))
   in
   let import_prefix = import_prefix ^ module_delimiter in
   log#ltrace (lazy (__FUNCTION__ ^ ": import_prefix: " ^ import_prefix));

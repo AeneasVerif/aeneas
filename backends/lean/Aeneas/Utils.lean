@@ -376,6 +376,11 @@ def splitConjTarget : TacticM Unit := do
     let goals ← getUnsolvedGoals
     setGoals (lmvar.mvarId! :: rmvar.mvarId! :: goals)
 
+partial
+def numOfConjuncts(e: Expr): Nat := e.withApp fun
+  | .const ``And _, #[op1, op2] => numOfConjuncts op1 + numOfConjuncts op2
+  | _ , _ => 1
+
 -- Destruct an equaliy and return the two sides
 def destEqOpt (e : Expr) : MetaM (Option (Expr × Expr)) := do
   e.consumeMData.withApp fun f args =>
