@@ -156,16 +156,16 @@ def traverseProgram {α} [Monad m] [MonadError m] [Nonempty (m α)]
   (onBif: Bifurcation.Info -> Array (Array Name × m α) -> m α)
   (e: Expr)
 : m α := do
-  let e <- (Utils.normalizeLetBindings e)
+  let e ← (Utils.normalizeLetBindings e)
   if let .const ``Bind.bind .. := e.getAppFn then
     let #[_m, _self, _α, _β, value, cont] := e.getAppArgs
-      | throwError s!"Expected bind to have 4 arguments, found {<- e.getAppArgs.mapM (liftM ∘ ppExpr)}"
+      | throwError s!"Expected bind to have 4 arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
     Utils.lambdaOne cont fun x body => do
       let name ← x.fvarId!.getUserName
       let contVal: m α := traverseProgram onResult onBind onBif body
       onBind value name contVal
   else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
-    let contsTaggedVals <-
+    let contsTaggedVals ←
       bfInfo.branches.mapM fun br => do
         Utils.lambdaTelescopeN br.toExpr br.numArgs fun xs body => do
           let names ← xs.mapM (·.fvarId!.getUserName)
@@ -192,8 +192,6 @@ instance: Append Info where
 
 attribute [progress_simps] Aeneas.Std.bind_assoc_eq
 
-example : True := by simp?
-
 def evalProgressStar(cfg: Config): TacticM Info :=
   withMainContext do focus do
   trace[ProgressStar] s!"Simplifying the goal: {←(getMainTarget >>= (liftM ∘ ppExpr))}"
@@ -207,8 +205,8 @@ def evalProgressStar(cfg: Config): TacticM Info :=
     let progress_simps ← `(Parser.Tactic.simpLemma| $(mkIdent `progress_simps):term)
     return ⟨ #[← `(tactic|simp [$progress_simps])], [] ⟩
   /- Continue -/
-  let goalTy <- getMainTarget
-  trace[ProgressStar] s!"After bind normalization: {←ppExpr goalTy}"
+  let goalTy ← getMainTarget
+  trace[ProgressStar] s!"After simplifying the goal: {goalTy}"
   let res ← Progress.programTelescope goalTy fun _xs _zs program _res _post => do
     trace[ProgressStar] s!"Traversing {← ppExpr program}"
     let resultName := .str .anonymous "res"
