@@ -26,6 +26,27 @@ let set_backend (b : string) : unit =
          belonging to the proper set *)
       raise (Failure "Unexpected")
 
+(** Specify the namespace of the extract code.
+
+    For instance, if the crate name is [foo] the namespace used for the extracted
+    code will be [foo] but the user might want to use [Foo] instead.
+*)
+let namespace : string option ref = ref None
+
+let set_namespace (s : string) : unit = namespace := Some s
+
+(** Place the files inside a subdirectory in the destination.
+
+    We use this to properly generate the import paths.
+
+    For instance, when generating files for Lean, if the user wants to extract
+    the files in the subdir [Foo/Code], the imports will have to be prefixed
+    with [Foo.Code] (e.g., [import Foo.Code.Types]).
+*)
+let subdir : string option ref = ref None
+
+let set_subdir (s : string) : unit = subdir := Some s
+
 (** If [true], we do not generate code and simply borrow-check the program instead.
     This allows us to relax some sanity checks which are present in the symbolic
     execution only to make sure we will be able to generate the pure translation.
@@ -181,13 +202,11 @@ let backward_no_state_update = ref false
  *)
 let split_files = ref false
 
-(** Generate the library entry point, if the crate is split between different files.
-
-    Sometimes we want to skip this: the library entry points just includes all the
-    files in the project, and the user may want to write their own entry point, to
-    add custom includes (to include the files containing the proofs, for instance).
+(** Only for Lean: generate the library entry point, if the crate is split between
+    different files. The entry point is simply a file with the name of the crate
+    and which includes all the other files.
  *)
-let generate_lib_entry_point = ref true
+let generate_lib_entry_point = ref false
 
 (** For Lean, controls whether we generate a lakefile or not.
 

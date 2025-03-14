@@ -1,2 +1,2 @@
 [!lean] skip
-[lean] aeneas-args=-split-files -no-gen-lib-entry
+[lean] aeneas-args=-split-files

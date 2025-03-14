@@ -24,7 +24,7 @@ type symbolic_fun_translation = symbolic_value list * SA.expression
 let translate_function_to_symbolics (trans_ctx : trans_ctx) (fdef : fun_decl) :
     symbolic_fun_translation option =
   (* Debug *)
-  log#ltrace
+  log#ldebug
     (lazy (__FUNCTION__ ^ ": " ^ name_to_string trans_ctx fdef.item_meta.name));
 
   match fdef.body with
@@ -47,7 +47,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     (fun_dsigs : Pure.decomposed_fun_sig FunDeclId.Map.t) (fdef : fun_decl) :
     pure_fun_translation_no_loops =
   (* Debug *)
-  log#ltrace
+  log#ldebug
     (lazy (__FUNCTION__ ^ ": " ^ name_to_string trans_ctx fdef.item_meta.name));
 
   (* Compute the symbolic ASTs, if the function is transparent *)
@@ -218,7 +218,7 @@ let translate_crate_to_pure (crate : crate) :
     * Pure.trait_decl list
     * Pure.trait_impl list =
   (* Debug *)
-  log#ltrace (lazy __FUNCTION__);
+  log#ldebug (lazy __FUNCTION__);
 
   (* Compute the translation context *)
   let trans_ctx = compute_contexts crate in
@@ -379,12 +379,6 @@ let crate_has_opaque_non_builtin_decls (ctx : gen_ctx) (filter_builtin : bool) :
   let types, funs =
     LlbcAstUtils.crate_get_opaque_non_builtin_decls ctx.crate filter_builtin
   in
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ": opaque decls:" ^ "\n- types:\n"
-      ^ String.concat ",\n" (List.map show_type_decl types)
-      ^ "\n- functions:\n"
-      ^ String.concat ",\n" (List.map show_fun_decl funs)));
   (types <> [], funs <> [])
 
 (** Export a type declaration.
@@ -1034,8 +1028,14 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
   close_out out
 
 (** Translate a crate and write the synthesized code to an output file. *)
-let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
-    unit =
+let translate_crate (filename : string) (dest_dir : string)
+    (subdir : string option) (crate : crate) : unit =
+  log#ltrace
+    (lazy
+      (__FUNCTION__ ^ ":" ^ "\n- filename: " ^ filename ^ "\n- dest_dir: "
+     ^ dest_dir ^ "\n- subdir: "
+      ^ Print.option_to_string (fun x -> x) subdir));
+
   (* Translate the module to the pure AST *)
   let ( trans_ctx,
         trans_types,
@@ -1245,10 +1245,21 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
       ctx trans_trait_impls
   in
 
+  let module_delimiter =
+    match Config.backend () with
+    | FStar -> "."
+    | Coq -> "_"
+    | Lean -> "."
+    | HOL4 -> "_"
+  in
+  let file_delimiter =
+    if Config.backend () = Lean then "/" else module_delimiter
+  in
+
   (* Open the output file *)
   (* First compute the filename by replacing the extension and converting the
    * case (rust module names are snake case) *)
-  let namespace, crate_name, extract_filebasename =
+  let namespace, crate_name, full_dest_dir, extract_filebasename =
     match Filename.chop_suffix_opt ~suffix:".llbc" filename with
     | None ->
         (* Note that we already checked the suffix upon opening the file *)
@@ -1263,15 +1274,44 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
             StringUtils.lowercase_first_letter crate_name
           else crate_name
         in
-        (* We use the raw crate name for the namespaces *)
+        (* We use the raw crate name for the namespaces, unless the user
+           has provided one *)
         let namespace =
-          match Config.backend () with
-          | FStar | Coq | HOL4 -> crate.name
-          | Lean -> crate.name
+          match !Config.namespace with
+          | Some namespace -> namespace
+          | None -> (
+              match Config.backend () with
+              | FStar | Coq | HOL4 -> crate.name
+              | Lean -> crate.name)
         in
+        let full_dest_dir =
+          match subdir with
+          | None -> dest_dir
+          | Some subdir -> Filename.concat dest_dir subdir
+        in
+        (*
+           If the backend is Lean the module names depends on the path,
+           so we generate names of the shape [Types.lean], [Funs.lean], etc.
+           because those files should be placed in the proper sub-folder.
+           
+           Otherwise, we prepend the crate name to generate, e.g.,
+           [Foo_Types.fst], [Foo_Funs.fst], etc.
+         *)
+        let filebasename =
+          if !Config.split_files then
+            if Config.backend () = Lean then full_dest_dir ^ "/"
+            else Filename.concat full_dest_dir crate_name ^ module_delimiter
+          else Filename.concat full_dest_dir crate_name
+        in
+
         (* Concatenate *)
-        (namespace, crate_name, Filename.concat dest_dir crate_name)
+        (namespace, crate_name, full_dest_dir, filebasename)
   in
+  log#ltrace
+    (lazy
+      (__FUNCTION__ ^ ":" ^ "\n- namespace: " ^ namespace ^ "\n- crate_name: "
+     ^ crate_name ^ "\n- full_dest_dir: " ^ full_dest_dir
+     ^ "\n- extract_filebasename: " ^ extract_filebasename));
 
   let mkdir_if dest_dir =
     if not (Sys.file_exists dest_dir) then (
@@ -1281,21 +1321,12 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
   in
 
   (* Create the directory, if necessary *)
-  mkdir_if dest_dir;
+  mkdir_if full_dest_dir;
 
   let needs_clauses_module =
     !Config.extract_decreases_clauses
     && not (PureUtils.FunLoopIdSet.is_empty rec_functions)
   in
-
-  (* Lean reflects the module hierarchy within the filesystem, so we need to
-     create more directories *)
-  if Config.backend () = Lean then (
-    let ( ^^ ) = Filename.concat in
-    if !Config.split_files then mkdir_if (dest_dir ^^ crate_name);
-    if needs_clauses_module then (
-      assert !Config.split_files;
-      mkdir_if (dest_dir ^^ crate_name ^^ "Clauses")));
 
   (* Copy the "Primitives" file, if necessary *)
   let _ =
@@ -1335,16 +1366,15 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
   in
 
   (* Extract the file(s) *)
-  let module_delimiter =
-    match Config.backend () with
-    | FStar -> "."
-    | Coq -> "_"
-    | Lean -> "."
-    | HOL4 -> "_"
+  let import_prefix =
+    match !Config.subdir with
+    | None -> crate_name
+    | Some subdir ->
+        String.concat module_delimiter (String.split_on_char '/' subdir)
   in
-  let file_delimiter =
-    if Config.backend () = Lean then "/" else module_delimiter
-  in
+  let import_prefix = import_prefix ^ module_delimiter in
+  log#ltrace (lazy (__FUNCTION__ ^ ": import_prefix: " ^ import_prefix));
+
   (* File extension for the "regular" modules *)
   let ext =
     match Config.backend () with
@@ -1409,16 +1439,14 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
                     module, and that the user has to provide. *)
                  "TypesExternal",
                  ": external types.\n\
-                  -- This is a template file: rename it to \
-                  \"TypesExternal.lean\" and fill the holes." )
+                  -- This is a template file: rename it to \"TypesExternal"
+                 ^ ext ^ "\" and fill the holes." )
          in
          let opaque_filename =
-           extract_filebasename ^ file_delimiter ^ module_suffix ^ opaque_ext
+           extract_filebasename ^ module_suffix ^ opaque_ext
          in
-         let opaque_module = crate_name ^ module_delimiter ^ module_suffix in
-         let opaque_imported_module =
-           crate_name ^ module_delimiter ^ opaque_imported_suffix
-         in
+         let opaque_module = import_prefix ^ module_suffix in
+         let opaque_imported_module = import_prefix ^ opaque_imported_suffix in
          let opaque_config =
            {
              base_gen_config with
@@ -1458,10 +1486,8 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
        | Lean -> ".lean"
        | HOL4 -> "Script.sml"
      in
-     let types_filename =
-       extract_filebasename ^ file_delimiter ^ "Types" ^ types_filename_ext
-     in
-     let types_module = crate_name ^ module_delimiter ^ "Types" in
+     let types_filename = extract_filebasename ^ "Types" ^ types_filename_ext in
+     let types_module = import_prefix ^ "Types" in
      let types_config =
        {
          base_gen_config with
@@ -1490,12 +1516,10 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
      (* Extract the template clauses *)
      (if needs_clauses_module && !Config.extract_template_decreases_clauses then
         let template_clauses_filename =
-          extract_filebasename ^ file_delimiter ^ "Clauses" ^ file_delimiter
-          ^ "Template" ^ ext
+          extract_filebasename ^ "Clauses" ^ file_delimiter ^ "Template" ^ ext
         in
         let template_clauses_module =
-          crate_name ^ module_delimiter ^ "Clauses" ^ module_delimiter
-          ^ "Template"
+          import_prefix ^ "Clauses" ^ module_delimiter ^ "Template"
         in
         let template_clauses_config =
           { base_gen_config with extract_template_decreases_clauses = true }
@@ -1539,12 +1563,10 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
                   \"FunsExternal.lean\" and fill the holes." )
          in
          let opaque_filename =
-           extract_filebasename ^ file_delimiter ^ module_suffix ^ opaque_ext
+           extract_filebasename ^ module_suffix ^ opaque_ext
          in
-         let opaque_module = crate_name ^ module_delimiter ^ module_suffix in
-         let opaque_imported_module =
-           crate_name ^ module_delimiter ^ opaque_imported_suffix
-         in
+         let opaque_module = import_prefix ^ module_suffix in
+         let opaque_imported_module = import_prefix ^ opaque_imported_suffix in
          let opaque_config =
            {
              base_gen_config with
@@ -1577,8 +1599,8 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
      in
 
      (* Extract the functions *)
-     let fun_filename = extract_filebasename ^ file_delimiter ^ "Funs" ^ ext in
-     let fun_module = crate_name ^ module_delimiter ^ "Funs" in
+     let fun_filename = extract_filebasename ^ "Funs" ^ ext in
+     let fun_module = import_prefix ^ "Funs" in
      let fun_config =
        {
          base_gen_config with
@@ -1591,9 +1613,9 @@ let translate_crate (filename : string) (dest_dir : string) (crate : crate) :
      let clauses_module =
        if needs_clauses_module then
          let clauses_submodule =
-           if Config.backend () = Lean then module_delimiter ^ "Clauses" else ""
+           if Config.backend () = Lean then "Clauses" ^ module_delimiter else ""
          in
-         [ crate_name ^ clauses_submodule ^ module_delimiter ^ "Clauses" ]
+         [ import_prefix ^ clauses_submodule ^ "Clauses" ]
        else []
      in
      let file_info =

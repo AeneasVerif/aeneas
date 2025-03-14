@@ -1,10 +1,9 @@
 //@ charon-args=--opaque=crate::utils
 //@ [!borrow-check] aeneas-args=-state -split-files
 //@ [coq] aeneas-args=-use-fuel
+//@ [coq,fstar] subdir=hashmap
+//@ [lean] subdir=Hashmap
 //@ [fstar] aeneas-args=-decreases-clauses
-//@ [lean] aeneas-args=-no-gen-lib-entry
-// ^ the `-no-gen-lib-entry` is because we add a custom import in the Hashmap.lean file: we do not
-// want to overwrite it.
 // Possible to add `--no-code-duplication` if we use the optimized MIR
 // TODO: reactivate -test-trans-units
 
