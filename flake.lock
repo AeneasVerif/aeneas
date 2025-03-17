@@ -13,11 +13,11 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1741872281,
-        "narHash": "sha256-yvZvkWdwOfcD96c9N/lNFSnnOXab6Tf+1f0hE2Mlcsg=",
+        "lastModified": 1742228798,
+        "narHash": "sha256-tEm8K3YgOdLoH7b/ubtKAHIBG9jn1gtDeXXxaLkozB4=",
         "owner": "aeneasverif",
         "repo": "charon",
-        "rev": "e169864de4cbad1e41e6ce7145af3a26a50e97cf",
+        "rev": "e341486cc6fece9c176a1189e1a75a6c105360ac",
         "type": "github"
       },
       "original": {
