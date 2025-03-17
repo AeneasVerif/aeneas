@@ -504,18 +504,6 @@ def IScalar.ofIntCore {ty : IScalarTy} (x : Int) (_ : -2^(ty.numBits-1) ≤ x �
 @[simp] abbrev IScalar.check_bounds (ty : IScalarTy) (x : Int) : Bool :=
   -2^(ty.numBits - 1) ≤ x ∧ x < 2^(ty.numBits - 1)
 
-/- Discussion:
-   This coercion can be slightly annoying at times, because if we write
-   something like `u = 3` (where `u` is, for instance, a `U32`), then instead of
-   coercing `u` to `Nat`, Lean will lift `3` to `U32`).
-   For now we deactivate it.
-
--- TODO(raitobezarius): the inbounds constraint is a bit ugly as we can pretty trivially
--- discharge the lhs on ≥ 0.
-instance {ty: ScalarTy} [InBounds ty (Int.ofNat n)]: OfNat (Scalar ty) (n: ℕ) where
-  ofNat := Scalar.ofInt n
--/
-
 theorem UScalar.check_bounds_imp_inBounds {ty : UScalarTy} {x : Nat}
   (h: UScalar.check_bounds ty x) :
   UScalar.inBounds ty x := by
