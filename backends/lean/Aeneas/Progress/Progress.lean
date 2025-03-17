@@ -11,6 +11,19 @@ namespace Progress
 open Lean Elab Term Meta Tactic
 open Utils
 
+/-- A special definition that we use to introduce pretty-printed terms in the context -/
+def prettyMonadEq {α : Type u} (x : Std.Result α) (y : α) : Prop := x = .ok y
+
+macro:max "[> " "let" y:term " ← " x:term " <]"   : term => `(prettyMonadEq $x $y)
+
+@[app_unexpander prettyMonadEq]
+def unexpPrettyMonadEqofNat : Lean.PrettyPrinter.Unexpander | `($_ $x $y) => `([> let $y ← $x <]) | _ => throw ()
+
+example (x y z : Std.U32) (_ : [> let z ← (x + y) <]) : True := by simp
+
+theorem eq_imp_prettyMonadEq {α : Type u} {x : Std.Result α} {y : α} (h : x = .ok y) : prettyMonadEq x y := by simp [prettyMonadEq, h]
+
+
 -- TODO: the scalar types annoyingly often get reduced when we use the progress
 -- tactic. We should find a way of controling reduction. For now we use rewriting
 -- lemmas to make sure the goal remains clean, but this complexifies proof terms.
@@ -109,7 +122,7 @@ attribute [progress_post_simps]
 
 open Result in
 def progressWith (fExpr : Expr) (th : Expr)
-  (keep : Option Name) (ids : Array (Option Name)) (splitPost : Bool)
+  (keep keepPretty : Option Name) (ids : Array (Option Name)) (splitPost : Bool)
   (asmTac : TacticM Unit) : TacticM (Result ProgressWithOutput MessageData) := do
   /- Apply the theorem
      We try to match the theorem with the goal
@@ -163,13 +176,34 @@ def progressWith (fExpr : Expr) (th : Expr)
      conjunction if there is one. We use the provided `ids` list to name the
      introduced variables. -/
   let res : Result (Array FVarId) MessageData ← splitAllExistsTac thAsm ids.toList fun h ids => do
+    /- Introduce the pretty equality if the user requests it.
+       We take care of introducing it *before* splitting the post-conditions, so that those appear
+       after it.
+     -/
+    match keepPretty with
+    | none => pure ()
+    | some name =>
+      trace[Progress] "About to introduce the pretty equality"
+      let hTy ← inferType h
+      trace[Progress] "introPrettyEq: h: {hTy}"
+      let h ← do
+        if ← isConj hTy then do
+          mkAppM ``And.left #[h]
+        else do pure h
+      trace[Progress] "h: {← inferType h}"
+      trace[Progress] "Introducing the \"pretty\" let binding"
+      let e ← mkAppM ``eq_imp_prettyMonadEq #[h]
+      let _ ← Utils.addDeclTac name e (← inferType e) (asLet := false)
+      trace[Progress] "Introduced the \"pretty\" let binding: {← getMainGoal}"
+
     /- Split the conjunctions.
        For the conjunctions, we split according once to separate the equality `f ... = .ret ...`
        from the postcondition, if there is, then continue to split the postcondition if there
        are remaining ids. -/
     let splitEqAndPost (k : Expr → Option Expr → List (Option Name) → TacticM (Result (Array FVarId) MessageData)) :
       TacticM (Result (Array FVarId) MessageData) := do
-      if ← isConj (← inferType h) then do
+      let hTy ← inferType h
+      if ← isConj hTy then
         let hName := (← h.fvarId!.getDecl).userName
         let (optIds, ids) ← do
           match ids with
@@ -177,7 +211,8 @@ def progressWith (fExpr : Expr) (th : Expr)
           | none :: ids => do pure (some (hName, ← mkFreshAnonPropUserName), ids)
           | some id :: ids => do pure (some (hName, id), ids)
         splitConjTac h optIds (fun hEq hPost => k hEq (some hPost) ids)
-      else k h none ids
+      else
+        k h none ids
     /- Simplify the target by using the equality and some monad simplifications,
        then continue splitting the post-condition -/
     splitEqAndPost fun hEq hPost ids => do
@@ -301,7 +336,7 @@ def getFirstArg (args : Array Expr) : Option Expr := do
 /-- Helper: try to apply a theorem.
 
     Return the list of post-conditions we introduced if it succeeded. -/
-def tryApply (keep : Option Name) (ids : Array (Option Name)) (splitPost : Bool)
+def tryApply (keep keepPretty : Option Name) (ids : Array (Option Name)) (splitPost : Bool)
   (asmTac : TacticM Unit) (fExpr : Expr)
   (kind : String) (th : Option Expr) : TacticM (Option ProgressWithOutput) := do
   let res ← do
@@ -314,7 +349,7 @@ def tryApply (keep : Option Name) (ids : Array (Option Name)) (splitPost : Bool)
       -- Apply the theorem
       let res ← do
         try
-          let res ← progressWith fExpr th keep ids splitPost asmTac
+          let res ← progressWith fExpr th keep keepPretty ids splitPost asmTac
           pure (some res)
         catch _ => pure none
   match res with
@@ -323,7 +358,7 @@ def tryApply (keep : Option Name) (ids : Array (Option Name)) (splitPost : Bool)
   | none => pure none
 
 -- The array of ids are identifiers to use when introducing fresh variables
-def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option Expr)
+def progressAsmsOrLookupTheorem (keep keepPretty : Option Name) (withTh : Option Expr)
   (ids : Array (Option Name)) (splitPost : Bool) (asmTac : TacticM Unit) :
   TacticM (ProgressGoals × UsedTheorem) := do
   withMainContext do
@@ -351,7 +386,7 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option Expr)
   -- Otherwise, lookup one.
   match withTh with
   | some th => do
-    match ← progressWith fExpr th keep ids splitPost asmTac with
+    match ← progressWith fExpr th keep keepPretty ids splitPost asmTac with
     | .Ok res =>
       -- Remark: exprToSyntax doesn't give the expected result
       return  (res.toProgressGoals, .givenExpr th)
@@ -362,7 +397,7 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option Expr)
     let decls ← ctx.getDecls
     for decl in decls.reverse do
       trace[Progress] "Trying assumption: {decl.userName} : {decl.type}"
-      let res ← do try progressWith fExpr decl.toExpr keep ids splitPost asmTac catch _ => continue
+      let res ← do try progressWith fExpr decl.toExpr keep keepPretty ids splitPost asmTac catch _ => continue
       match res with
       | .Ok res => return (res.toProgressGoals, .localHyp decl)
       | .Error msg => throwError msg
@@ -386,7 +421,7 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option Expr)
       -- Try the theorems one by one
       for pspec in pspecs do
         let pspecExpr ← Term.mkConst pspec
-        match ← tryApply keep ids splitPost asmTac fExpr "pspec theorem" pspecExpr with
+        match ← tryApply keep keepPretty ids splitPost asmTac fExpr "pspec theorem" pspecExpr with
         | some res => return (res.toProgressGoals, .progressThm pspec)
         | none => pure ()
       -- It failed: try to use the recursive assumptions
@@ -398,7 +433,7 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option Expr)
         | .default | .implDetail => false | .auxDecl => true)
       for decl in decls.reverse do
         trace[Progress] "Trying recursive assumption: {decl.userName} : {decl.type}"
-        let res ← do try progressWith fExpr decl.toExpr keep ids splitPost asmTac catch _ => continue
+        let res ← do try progressWith fExpr decl.toExpr keep keepPretty ids splitPost asmTac catch _ => continue
         match res with
         | .Ok res => return (res.toProgressGoals, .localHyp decl)
         | .Error msg => throwError msg
@@ -411,17 +446,17 @@ def parseProgressArgs
 : TSyntax ``Aeneas.Progress.progressArgs -> TacticM (Option Name × Option Expr × Array (Option Name))
 | args@`(progressArgs| $[keep $x]? $[with $pspec:term]? $[as ⟨ $ids,* ⟩]? ) =>  withMainContext do
   trace[Progress] "Progress arguments: {args.raw}"
-  let keep?: Option Name <- Option.sequence <| x.map fun
+  let keep?: Option Name ← Option.sequence <| x.map fun
     | `(binderIdent| _) => mkFreshAnonPropUserName
     | `(binderIdent| $name:ident) => pure name.getId
     | _ => throwUnsupportedSyntax
   trace[Progress] "Keep: {keep?}"
-  let withTh?: Option Expr <- Option.sequence <| pspec.map fun
+  let withTh?: Option Expr ← Option.sequence <| pspec.map fun
     /- We have to make a case disjunction, because if we treat identifiers like
        terms, then Lean will not succeed in infering their implicit parameters
        (`progress` does that by matching against the goal). -/
     | `($stx:ident) => do
-      match (<- getLCtx).findFromUserName? stx.getId with
+      match (← getLCtx).findFromUserName? stx.getId with
       | .some decl =>
         trace[Progress] "With arg (local decl): {stx.raw}"
         return decl.toExpr
@@ -443,7 +478,7 @@ def parseProgressArgs
   return (keep?, withTh?, ids)
 | _ => throwUnsupportedSyntax
 
-def evalProgress (keep: Option Name) (withArg: Option Expr) (ids: Array (Option Name))
+def evalProgress (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Array (Option Name))
 : TacticM Stats := do
   /- Simplify the goal -- TODO: this might close it: we need to check that and abort if necessary,
      and properly track that in the `Stats` -/
@@ -481,7 +516,7 @@ def evalProgress (keep: Option Name) (withArg: Option Expr) (ids: Array (Option 
   let customAssumTac : TacticM Unit := do
     trace[Progress] "Attempting to solve with `singleAssumptionTac`"
     singleAssumptionTacCore singleAssumptionTacDtree
-  let (goals, usedTheorem) ← progressAsmsOrLookupTheorem keep withArg ids splitPost (
+  let (goals, usedTheorem) ← progressAsmsOrLookupTheorem keep keepPretty withArg ids splitPost (
     withMainContext do
     trace[Progress] "trying to solve precondition: {← getMainGoal}"
     firstTac [customAssumTac, simpTac, simpTac, scalarTac]
@@ -491,17 +526,54 @@ def evalProgress (keep: Option Name) (withArg: Option Expr) (ids: Array (Option 
 
 elab (name := progress) "progress" args:progressArgs : tactic => do
   let (keep?, withArg, ids) ← parseProgressArgs args
-  evalProgress keep? withArg ids *> return ()
+  evalProgress keep? none withArg ids *> return ()
 
 elab tk:"progress?" args:progressArgs : tactic => do
-  let (keep?, withArg, ids) <- parseProgressArgs args
-  let stats ← evalProgress keep? withArg ids
+  let (keep?, withArg, ids) ← parseProgressArgs args
+  let stats ← evalProgress keep? none withArg ids
   let mut stxArgs := args.raw
   if stxArgs[1].isNone then
     let withArg := mkNullNode #[mkAtom "with", ←stats.usedTheorem.toSyntax]
     stxArgs := stxArgs.setArg 1 withArg
   let tac := mkNode `Aeneas.Progress.progress #[mkAtom "progress", stxArgs]
   Meta.Tactic.TryThis.addSuggestion tk tac (origSpan? := ← getRef)
+
+syntax (name := letProgress)"let" noWs "*" " ⟨ " binderIdent,* " ⟩" colGe " ← " colGe term: tactic
+
+def parseLetProgress
+: TSyntax ``Aeneas.Progress.letProgress -> TacticM (Expr × Array (Option Name))
+| args@`(tactic| let* ⟨ $ids,* ⟩ ← $pspec:term) =>  withMainContext do
+  trace[Progress] "Progress arguments: {args.raw}"
+  let withThm : Expr ← do
+    /- We have to make a case disjunction, because if we treat identifiers like
+      terms, then Lean will not succeed in infering their implicit parameters
+      (`progress` does that by matching against the goal). -/
+    match pspec with
+    | `($stx:ident) => do
+      match (← getLCtx).findFromUserName? stx.getId with
+      | .some decl =>
+        trace[Progress] "With arg (local decl): {stx.raw}"
+        pure decl.toExpr
+      | .none =>
+        -- Not a local declaration: should be a theorem
+        trace[Progress] "With arg (theorem): {stx.raw}"
+        let some e ← Term.resolveId? stx (withInfo := true)
+          | throwError m!"Could not find theorem: {pspec}"
+        pure e
+    | term => do
+      trace[Progress] "With arg (term): {term}"
+      Tactic.elabTerm term none
+  let ids := ids.getElems.map fun
+      | `(binderIdent| $name:ident) => some name.getId
+      | _ => none
+  trace[Progress] "User-provided ids: {ids}"
+  return (withThm, ids)
+| _ => throwUnsupportedSyntax
+
+elab tk:letProgress : tactic => do
+  withMainContext do
+  let (withArg, ids) ← parseLetProgress tk
+  let _ ← evalProgress none (some (.str .anonymous "_")) withArg ids
 
 namespace Test
   open Std Result
@@ -532,6 +604,60 @@ x y : UScalar ty
   example {ty} {x y : UScalar ty} :
     ∃ z, x + y = ok z := by
     progress keep _ as ⟨ z, h1 ⟩
+
+  /--
+info: example
+  (ty : UScalarTy)
+  (x : UScalar ty)
+  (y : UScalar ty)
+  (h : ↑x + ↑y ≤ UScalar.max ty)
+  (z : UScalar ty)
+  (_ : [> let z ← x + y <])
+  (h1 : ↑z = ↑x + ↑y) :
+  ↑z = ↑x + ↑y
+  := by sorry
+-/
+  #guard_msgs in
+  set_option linter.unusedTactic false in
+  example {ty} {x y : UScalar ty} (h : x.val + y.val ≤ UScalar.max ty) :
+    ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
+    let* ⟨ z, h1 ⟩ ← UScalar.add_spec
+    extract_goal0
+    scalar_tac
+
+  /--
+info: example
+  (ty : UScalarTy)
+  (x : UScalar ty)
+  (y : UScalar ty)
+  (h : 2 * ↑x + ↑y ≤ UScalar.max ty)
+  (z1 : UScalar ty)
+  (__1 : [> let z1 ← x + y <])
+  (h1 : ↑z1 = ↑x + ↑y)
+  (z2 : UScalar ty)
+  (_ : [> let z2 ← z1 + x <])
+  (h2 : ↑z2 = ↑z1 + ↑x) :
+  ↑z2 = 2 * ↑x + ↑y
+  := by sorry
+-/
+  #guard_msgs in
+  set_option linter.unusedTactic false in
+  example {ty} {x y : UScalar ty} (h : 2 * x.val + y.val ≤ UScalar.max ty) :
+    ∃ z, (do
+      let z1 ← x + y
+      z1 + x) = ok z ∧ z.val = 2 * x.val + y.val := by
+    let* ⟨ z1, h1 ⟩ ← UScalar.add_spec
+    let* ⟨ z2, h2 ⟩ ← UScalar.add_spec
+    extract_goal0
+    scalar_tac
+
+  example {ty} {x y : UScalar ty} (h : 2 * x.val + y.val ≤ UScalar.max ty) :
+    ∃ z, (do
+      let z1 ← x + y
+      z1 + x) = ok z ∧ z.val = 2 * x.val + y.val := by
+    progress with UScalar.add_spec as ⟨ z1, h1 ⟩
+    progress with UScalar.add_spec as ⟨ z2, h2 ⟩
+    scalar_tac
 
   example {ty} {x y : UScalar ty}
     (hmax : x.val + y.val ≤ UScalar.max ty) :

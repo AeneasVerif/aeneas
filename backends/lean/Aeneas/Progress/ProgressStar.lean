@@ -1,6 +1,5 @@
 import Aeneas.Progress.Progress
 import Aesop.Util.Basic
-open Aeneas
 open Lean Meta Elab Tactic
 
 namespace Aeneas
@@ -134,6 +133,8 @@ namespace ProgressStar
 
 structure Config where
   preconditionTac: Option Syntax.Tactic := none
+  /-- Should we use the special syntax `let* ⟨ ...⟩ ← ...` or the more standard syntax `progress with ... as ⟨ ... ⟩`? -/
+  prettyPrintedProgress : Bool := true
   useCase' : Bool := false
 
 structure Info where
@@ -177,7 +178,7 @@ where
         | throwError "Expected bind to have 4 arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
       Utils.lambdaOne cont fun x _ => do
         let name ← x.fvarId!.getUserName
-        let (info, mainGoal) ← onBind name
+        let (info, mainGoal) ← onBind cfg name
         trace[ProgressStar] "traverseProgram: after call to `onBind`: main goal is: {mainGoal}"
         /- Continue, if necessary -/
         match mainGoal with
@@ -203,10 +204,10 @@ where
       /- Put everything together -/
       mkStx branchInfos
     else
-      let (info, mainGoal) ← onResult
+      let (info, mainGoal) ← onResult cfg
       pure { info with unsolvedGoals := info.unsolvedGoals ++ mainGoal.toList}
 
-  onResult : TacticM (Info × Option MVarId) := do
+  onResult (cfg : Config) : TacticM (Info × Option MVarId) := do
     trace[ProgressStar] "onResult: Since (· >>= pure) = id, we treat this result as a bind on id"
     -- If we encounter `(do f a)` we process it as if it were `(do let res ← f a; return res)`
     -- since (id = (· >>= pure)) and when we desugar the do block we have that
@@ -217,9 +218,9 @@ where
     --
     -- We known in advance the result of processing `return res`, which is to do nothing.
     -- This allows us to prevent code duplication with the `onBind` function.
-    onBind (.str .anonymous "res")
+    onBind cfg (.str .anonymous "res")
 
-  onBind (name : Name) : TacticM (Info × Option MVarId) := do
+  onBind (cfg : Config) (name : Name) : TacticM (Info × Option MVarId) := do
     trace[ProgressStar] "onBind (name={name})"
     if let some {usedTheorem, preconditions, mainGoal } ← tryProgress then
       trace[ProgressStar] "onBind: Can make progres: the new goal is: {mainGoal}, the unsolved preconditions are: {preconditions}"
@@ -235,9 +236,15 @@ where
         if ¬ ids.isEmpty then renameInaccessibles mainGoal ids -- NOTE: Taken from renameI tactic
         else pure mainGoal
       /- Generate the tactic scripts for the preconditions -/
-      let currTac ← if ids.isEmpty
-        then `(tactic| progress with $(←usedTheorem.toSyntax))
-        else `(tactic| progress with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩)
+      let currTac ←
+        if cfg.prettyPrintedProgress then
+          if ids.isEmpty
+          then `(tactic| let* ⟨⟩ ← $(←usedTheorem.toSyntax))
+          else `(tactic| let* ⟨$ids,*⟩ ← $(←usedTheorem.toSyntax))
+        else
+          if ids.isEmpty
+          then `(tactic| progress with $(←usedTheorem.toSyntax))
+          else `(tactic| progress with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩)
       let info : Info := {
           script := #[currTac]++ preconditionTacs, -- TODO: Optimize
           unsolvedGoals := unsolved.toList,
@@ -289,7 +296,7 @@ where
       return (infos, mkStx)
 
   tryProgress := do
-    try some <$> Progress.evalProgress none none #[]
+    try some <$> Progress.evalProgress none (some (.str .anonymous "_")) none #[]
     catch _ => pure none
 
   handleProgressPreconditions (preconditions : Array MVarId) : TacticM (Array Syntax.Tactic × Array MVarId) := do
@@ -378,9 +385,9 @@ def add1 (x0 x1 : U32) : Std.Result U32 := do
 
 /--
 info: Try this:
-  progress with Aeneas.Std.U32.add_spec as ⟨ x2, x2_post ⟩
-  progress with Aeneas.Std.U32.add_spec as ⟨ x3, x3_post ⟩
-  progress with Aeneas.Std.U32.add_spec as ⟨ res, res_post ⟩
+  let* ⟨ x2, x2_post ⟩ ← Aeneas.Std.U32.add_spec
+  let* ⟨ x3, x3_post ⟩ ← Aeneas.Std.U32.add_spec
+  let* ⟨ res, res_post ⟩ ← Aeneas.Std.U32.add_spec
 -/
 #guard_msgs in
 example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
@@ -400,11 +407,11 @@ def add2 (b : Bool) (x0 x1 : U32) : Std.Result U32 := do
 /--
 info: Try this:
   split
-  . progress with Aeneas.Std.U32.add_spec as ⟨ x2, x2_post ⟩
-    progress with Aeneas.Std.U32.add_spec as ⟨ x3, x3_post ⟩
-    progress with Aeneas.Std.U32.add_spec as ⟨ res, res_post ⟩
-  . progress with Aeneas.Std.U32.add_spec as ⟨ y, y_post ⟩
-    progress with Aeneas.Std.U32.add_spec as ⟨ res, res_post ⟩
+  . let* ⟨ x2, x2_post ⟩ ← Aeneas.Std.U32.add_spec
+    let* ⟨ x3, x3_post ⟩ ← Aeneas.Std.U32.add_spec
+    let* ⟨ res, res_post ⟩ ← Aeneas.Std.U32.add_spec
+  . let* ⟨ y, y_post ⟩ ← Aeneas.Std.U32.add_spec
+    let* ⟨ res, res_post ⟩ ← Aeneas.Std.U32.add_spec
 -/
 #guard_msgs in
 example b (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
@@ -415,15 +422,15 @@ example b (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
 /--
 info: Try this:
   split
-  . progress with Aeneas.Std.U32.add_spec as ⟨ x2, x2_post ⟩
+  . let* ⟨ x2, x2_post ⟩ ← Aeneas.Std.U32.add_spec
     · sorry
-    progress with Aeneas.Std.U32.add_spec as ⟨ x3, x3_post ⟩
+    let* ⟨ x3, x3_post ⟩ ← Aeneas.Std.U32.add_spec
     · sorry
-    progress with Aeneas.Std.U32.add_spec as ⟨ res, res_post ⟩
+    let* ⟨ res, res_post ⟩ ← Aeneas.Std.U32.add_spec
     · sorry
-  . progress with Aeneas.Std.U32.add_spec as ⟨ y, y_post ⟩
+  . let* ⟨ y, y_post ⟩ ← Aeneas.Std.U32.add_spec
     · sorry
-    progress with Aeneas.Std.U32.add_spec as ⟨ res, res_post ⟩
+    let* ⟨ res, res_post ⟩ ← Aeneas.Std.U32.add_spec
     · sorry
 ---
 error: unsolved goals
@@ -433,21 +440,24 @@ x y : U32
 h✝ : b = true
 ⊢ ↑x + ↑y ≤ U32.max
 
-case intro.intro.hmax
+case intro.hmax
 b : Bool
 x y : U32
 h✝ : b = true
 x2 : U32
+_ : [> let x2 ← x + y <]
 x2_post : ↑x2 = ↑x + ↑y
 ⊢ ↑x2 + ↑x2 ≤ U32.max
 
-case intro.intro.hmax
+case intro.hmax
 b : Bool
 x y : U32
 h✝ : b = true
 x2 : U32
+_✝ : [> let x2 ← x + y <]
 x2_post : ↑x2 = ↑x + ↑y
 x3 : U32
+_ : [> let x3 ← x2 + x2 <]
 x3_post : ↑x3 = ↑x2 + ↑x2
 ⊢ ↑x3 + ↑4#u32 ≤ U32.max
 
@@ -457,11 +467,12 @@ x y : U32
 h✝ : ¬b = true
 ⊢ ↑x + ↑y ≤ U32.max
 
-case intro.intro.hmax
+case intro.hmax
 b : Bool
 x y✝ : U32
 h✝ : ¬b = true
 y : U32
+_ : [> let y ← x + y✝ <]
 y_post : ↑y = ↑x + ↑y✝
 ⊢ ↑y + ↑2#u32 ≤ U32.max
 -/
