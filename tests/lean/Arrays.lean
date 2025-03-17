@@ -451,8 +451,8 @@ def f3 : Result U32 :=
 
 /- [arrays::SZ]
    Source: 'tests/src/arrays.rs', lines 316:0-316:25 -/
-def SZ_body : Result Usize := ok 32#usize
-def SZ : Usize := eval_global SZ_body
+@[global_simps] def SZ_body : Result Usize := ok 32#usize
+@[global_simps, irreducible] def SZ : Usize := eval_global SZ_body
 
 /- [arrays::f5]:
    Source: 'tests/src/arrays.rs', lines 319:0-321:1 -/
