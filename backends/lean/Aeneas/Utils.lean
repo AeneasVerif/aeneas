@@ -667,13 +667,13 @@ def listTryPopHead (ls : List α) : Option α × List α :=
    transmit the stripped expression and the remaining ids to the continuation.
  -/
 partial def splitAllExistsTac [Inhabited α] (h : Expr) (ids : List (Option Name)) (k : Expr → List (Option Name) → TacticM α) : TacticM α := do
-  try
+  if isExists (← inferType h) then do
     let (optId, ids) :=
       match ids with
       | [] => (none, [])
       | x :: ids => (x, ids)
     splitExistsTac h optId (fun _ body => splitAllExistsTac body ids k)
-  catch _ => k h ids
+  else k h ids
 
 -- Tactic to split on a conjunction.
 def splitConjTac (h : Expr) (optIds : Option (Name × Name)) (k : Expr → Expr → TacticM α)  : TacticM α := do
