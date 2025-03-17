@@ -238,7 +238,7 @@ Definition take_mut_slice (s : slice u32) : result (slice u32) :=
 (** [arrays::const_array]:
     Source: 'tests/src/arrays.rs', lines 148:0-150:1 *)
 Definition const_array : result (array u32 2%usize) :=
-  Ok (mk_array 2%usize [ 0%u32; 0%u32 ])
+  Ok (array_repeat 2%usize 0%u32)
 .
 
 (** [arrays::const_slice]:
@@ -252,12 +252,13 @@ Definition const_slice : result u32 :=
 (** [arrays::take_all]:
     Source: 'tests/src/arrays.rs', lines 163:0-175:1 *)
 Definition take_all : result unit :=
-  _ <- take_array (mk_array 2%usize [ 0%u32; 0%u32 ]);
-  _ <- take_array (mk_array 2%usize [ 0%u32; 0%u32 ]);
-  _ <- take_array_borrow (mk_array 2%usize [ 0%u32; 0%u32 ]);
-  let s := array_to_slice (mk_array 2%usize [ 0%u32; 0%u32 ]) in
+  let x := array_repeat 2%usize 0%u32 in
+  _ <- take_array x;
+  _ <- take_array x;
+  _ <- take_array_borrow x;
+  let s := array_to_slice x in
   _ <- take_slice s;
-  let (s1, _) := array_to_slice_mut (mk_array 2%usize [ 0%u32; 0%u32 ]) in
+  let (s1, _) := array_to_slice_mut x in
   _ <- take_mut_slice s1;
   Ok tt
 .
@@ -290,14 +291,15 @@ Definition index_mut_slice_u32_0
 (** [arrays::index_all]:
     Source: 'tests/src/arrays.rs', lines 192:0-204:1 *)
 Definition index_all : result u32 :=
-  i <- index_array (mk_array 2%usize [ 0%u32; 0%u32 ]);
+  let x := array_repeat 2%usize 0%u32 in
+  i <- index_array x;
   i1 <- u32_add i i;
-  i2 <- index_array_borrow (mk_array 2%usize [ 0%u32; 0%u32 ]);
+  i2 <- index_array_borrow x;
   i3 <- u32_add i1 i2;
-  let s := array_to_slice (mk_array 2%usize [ 0%u32; 0%u32 ]) in
+  let s := array_to_slice x in
   i4 <- index_slice_u32_0 s;
   i5 <- u32_add i3 i4;
-  let (s1, _) := array_to_slice_mut (mk_array 2%usize [ 0%u32; 0%u32 ]) in
+  let (s1, _) := array_to_slice_mut x in
   p <- index_mut_slice_u32_0 s1;
   let (i6, _) := p in
   u32_add i5 i6
@@ -325,10 +327,11 @@ Definition update_mut_slice (x : slice u32) : result (slice u32) :=
 (** [arrays::update_all]:
     Source: 'tests/src/arrays.rs', lines 216:0-222:1 *)
 Definition update_all : result unit :=
-  _ <- update_array (mk_array 2%usize [ 0%u32; 0%u32 ]);
-  _ <- update_array (mk_array 2%usize [ 0%u32; 0%u32 ]);
-  x <- update_array_mut_borrow (mk_array 2%usize [ 0%u32; 0%u32 ]);
-  let (s, _) := array_to_slice_mut x in
+  let x := array_repeat 2%usize 0%u32 in
+  _ <- update_array x;
+  _ <- update_array x;
+  x1 <- update_array_mut_borrow x;
+  let (s, _) := array_to_slice_mut x1 in
   _ <- update_mut_slice s;
   Ok tt
 .
@@ -352,10 +355,10 @@ Definition incr_slice (x : slice u32) : result (slice u32) :=
 (** [arrays::range_all]:
     Source: 'tests/src/arrays.rs', lines 235:0-239:1 *)
 Definition range_all : result unit :=
+  let x := array_repeat 4%usize 0%u32 in
   p <-
     core_array_Array_index_mut (core_ops_index_IndexMutSliceInst
-      (core_slice_index_SliceIndexRangeUsizeSliceInst u32))
-      (mk_array 4%usize [ 0%u32; 0%u32; 0%u32; 0%u32 ])
+      (core_slice_index_SliceIndexRangeUsizeSliceInst u32)) x
       {|
         core_ops_range_Range_start := 1%usize;
         core_ops_range_Range_end_ := 3%usize
@@ -497,9 +500,11 @@ Definition f5 (x : array u32 32%usize) : result u32 :=
 (** [arrays::ite]:
     Source: 'tests/src/arrays.rs', lines 324:0-331:1 *)
 Definition ite : result unit :=
-  let (s, _) := array_to_slice_mut (mk_array 2%usize [ 0%u32; 0%u32 ]) in
+  let x := array_repeat 2%usize 0%u32 in
+  let y := array_repeat 2%usize 0%u32 in
+  let (s, _) := array_to_slice_mut x in
   _ <- index_mut_slice_u32_0 s;
-  let (s1, _) := array_to_slice_mut (mk_array 2%usize [ 0%u32; 0%u32 ]) in
+  let (s1, _) := array_to_slice_mut y in
   _ <- index_mut_slice_u32_0 s1;
   Ok tt
 .
