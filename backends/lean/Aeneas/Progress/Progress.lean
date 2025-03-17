@@ -43,31 +43,74 @@ inductive TheoremOrLocal where
 | Theorem (thName : Name)
 | Local (asm : LocalDecl)
 
-structure Stats where
-  usedTheorem : Syntax
-
 instance : ToMessageData TheoremOrLocal where
   toMessageData := λ x => match x with | .Theorem thName => m!"{thName}" | .Local asm => m!"{asm.userName}"
 
 instance : Coe TheoremOrLocal Name where
   coe := λ x => match x with | .Theorem thName => thName | .Local asm => asm.userName
 
+inductive UsedTheorem where
+  | givenExpr: Expr → UsedTheorem
+  | localHyp: LocalDecl → UsedTheorem
+  | progressThm : Name → UsedTheorem
+
+namespace UsedTheorem
+
+instance: ToString UsedTheorem where
+  toString
+  | .givenExpr _e => "given expression"
+  | .localHyp decl => s!"local hypothesis {decl.userName.toString}"
+  | .progressThm name => s!"progress theorem {name}"
+
+def toSyntax: UsedTheorem → MetaM Syntax.Term
+| givenExpr e =>
+  -- Remark: exprToSyntax doesn't give the expected result
+  Lean.Meta.Tactic.TryThis.delabToRefinableSyntax e
+| localHyp decl    => pure <| mkIdent decl.userName
+| progressThm name => pure <| mkIdent name
+
+def getType: UsedTheorem -> MetaM (Option Expr)
+| givenExpr e => inferType e
+| localHyp decl =>inferType decl.toExpr
+| progressThm name => do
+  if let some cinfo := (←getEnv).find? name then
+    let expr := cinfo.value! (allowOpaque := true)
+    inferType expr
+  else
+    return none
+
+end UsedTheorem
 /- Type to propagate the errors of `progressWith`.
    We need this because we use the exceptions to backtrack, when trying to
    use the assumptions for instance. When there is actually an error we want
    to propagate to the user, we return it. -/
-inductive ProgressError
-| Ok (posts : Array FVarId) -- the post-conditions introduced in the context
-| Error (msg : MessageData)
+inductive Result (T U : Type) where
+| Ok : T → Result T U
+| Error : U → Result T U
+deriving Inhabited
+
+structure ProgressGoals where
+  /-- The preconditions that are left to prove -/
+  preconditions : Array MVarId
+  /-- the main goal, if it was not proven -/
+  mainGoal : Option MVarId
+deriving Inhabited
+
+structure Stats extends ProgressGoals where
+  usedTheorem : UsedTheorem
+
+structure ProgressWithOutput extends ProgressGoals where
+  /- The post-conditions introduced in the context -/
+  posts : Array FVarId
 deriving Inhabited
 
 attribute [progress_post_simps]
   Std.IScalar.toNat Std.UScalar.ofNat_val_eq Std.IScalar.ofInt_val_eq
 
-open ProgressError in
+open Result in
 def progressWith (fExpr : Expr) (th : Expr)
   (keep : Option Name) (ids : Array (Option Name)) (splitPost : Bool)
-  (asmTac : TacticM Unit) : TacticM ProgressError := do
+  (asmTac : TacticM Unit) : TacticM (Result ProgressWithOutput MessageData) := do
   /- Apply the theorem
      We try to match the theorem with the goal
      In order to do so, we introduce meta-variables for all the parameters
@@ -85,21 +128,9 @@ def progressWith (fExpr : Expr) (th : Expr)
   -- Normalize to inline the let-bindings
   let thTy ← normalizeLetBindings thTy
   trace[Progress] "After normalizing the let-bindings: {thTy}"
-  -- TODO: the tactic fails if we uncomment withNewMCtxDepth
-  -- withNewMCtxDepth do
-  let (mvars, binders, thExBody) ← forallMetaTelescope thTy.consumeMData
-  trace[Progress] "After stripping foralls: {thExBody}"
-  -- Introduce the existentially quantified variables and the post-condition
-  -- in the context
-  let thBody ←
-    existsTelescope thExBody.consumeMData fun _evars thBody => do
-    trace[Progress] "After stripping existentials: {thBody}"
-    let (thBody, _) ← optSplitConj thBody
-    trace[Progress] "After splitting the conjunction: {thBody}"
-    let (thBody, _) ← destEq thBody
-    trace[Progress] "After splitting equality: {thBody}"
-    -- There shouldn't be any existential variables in thBody
-    pure thBody.consumeMData
+  programTelescope thTy fun xs _zs thBody _ _ => do
+  let (mvars, binders) := xs.unzip
+  let mvars := mvars.map .mvar
   -- Match the body with the target
   trace[Progress] "Matching:\n- body:\n{thBody}\n- target:\n{fExpr}"
   let ok ← isDefEq thBody fExpr
@@ -110,7 +141,7 @@ def progressWith (fExpr : Expr) (th : Expr)
   let thBody ← instantiateMVars thBody
   trace[Progress] "thBody (after instantiation): {thBody}"
   -- Add the instantiated theorem to the assumptions (we apply it on the metavariables).
-  let th ← mkAppOptM' th (mvars.map some)
+  let th := mkAppN th mvars
   trace[Progress] "Instantiated theorem reusing the metavariables: {th}"
   let asmName ← do match keep with | none => mkFreshAnonPropUserName | some n => do pure n
   let thTy ← inferType th
@@ -131,12 +162,13 @@ def progressWith (fExpr : Expr) (th : Expr)
      We introduce the existentially quantified variables and split the top-most
      conjunction if there is one. We use the provided `ids` list to name the
      introduced variables. -/
-  let res ← splitAllExistsTac thAsm ids.toList fun h ids => do
+  let res : Result (Array FVarId) MessageData ← splitAllExistsTac thAsm ids.toList fun h ids => do
     /- Split the conjunctions.
        For the conjunctions, we split according once to separate the equality `f ... = .ret ...`
        from the postcondition, if there is, then continue to split the postcondition if there
        are remaining ids. -/
-    let splitEqAndPost (k : Expr → Option Expr → List (Option Name) → TacticM ProgressError) : TacticM ProgressError := do
+    let splitEqAndPost (k : Expr → Option Expr → List (Option Name) → TacticM (Result (Array FVarId) MessageData)) :
+      TacticM (Result (Array FVarId) MessageData) := do
       if ← isConj (← inferType h) then do
         let hName := (← h.fvarId!.getDecl).userName
         let (optIds, ids) ← do
@@ -157,7 +189,9 @@ def progressWith (fExpr : Expr) (th : Expr)
        TODO: not sure this is the best way of checking it -/
     let goals ← getUnsolvedGoals
     assert! (goals.length ≤ 1) -- We focused on the main goal so there should be at most one goal
-    if goals == [] then pure (Ok #[])
+    if goals == [] then
+      trace[Progress] "The main goal was solved!"
+      pure (Ok #[])
     else
       trace[Progress] "goal after applying the eq and simplifying the binds: {← getMainGoal}"
       -- TODO: remove this? (some types get unfolded too much: we "fold" them back)
@@ -180,7 +214,7 @@ def progressWith (fExpr : Expr) (th : Expr)
         return (Ok #[])
       | some hPost => do
         let rec splitPostWithIds (prevId : Name) (hPosts : List FVarId) (hPost : Expr) (ids0 : List (Option Name)) :
-        TacticM ProgressError := do
+        TacticM (Result (Array FVarId) MessageData) := do
           match ids0 with
           | [] =>
             /- We used all the user provided ids.
@@ -206,10 +240,11 @@ def progressWith (fExpr : Expr) (th : Expr)
         let curPostId := (← hPost.fvarId!.getDecl).userName
         splitPostWithIds curPostId [] hPost ids
   match res with
-  | Error _ => return res -- Can we get there? We're using "return"
+  | Error msg => return (Error msg) -- Can we get there? We're using "return"
   | Ok hPosts =>
     -- Update the set of goals
     let curGoals ← getUnsolvedGoals
+    trace[Progress] "current goals: {curGoals}"
     let newGoals := mvars.map Expr.mvarId!
     let newGoals ← newGoals.filterM fun mvar => not <$> mvar.isAssigned
     trace[Progress] "new goals: {newGoals}"
@@ -224,10 +259,10 @@ def progressWith (fExpr : Expr) (th : Expr)
     let newPropGoals ← getUnsolvedGoals
     /- Simplify the post-conditions in the main goal - note that we waited until now because by solving the preconditions
        we may have instantiated meta-variables -/
+    setGoals curGoals
     match curGoals with
     | [] => pure ()
     | [ _ ] =>
-      setGoals curGoals
       let args : SimpArgs :=
         {simpThms := #[← progressPostSimpExt.getTheorems],
          simprocs := #[← ScalarTac.scalarTacSimprocExt.getSimprocs]}
@@ -243,7 +278,12 @@ def progressWith (fExpr : Expr) (th : Expr)
     setGoals (newGoals ++ curGoals)
     trace[Progress] "progress: replaced the goals"
     --
-    pure (.Ok hPosts)
+    let mainGoal ← do
+      match curGoals with
+      | [] => pure none
+      | [ g ] => pure (some g)
+      | _ => throwError "Unexpected number of goals"
+    pure (Ok ⟨ ⟨ newGoals.toArray, mainGoal ⟩, hPosts ⟩)
 
 /-- Small utility: if `args` is not empty, return the name of the app in the first
     arg, if it is a const. -/
@@ -263,7 +303,7 @@ def getFirstArg (args : Array Expr) : Option Expr := do
     Return the list of post-conditions we introduced if it succeeded. -/
 def tryApply (keep : Option Name) (ids : Array (Option Name)) (splitPost : Bool)
   (asmTac : TacticM Unit) (fExpr : Expr)
-  (kind : String) (th : Option Expr) : TacticM Bool := do
+  (kind : String) (th : Option Expr) : TacticM (Option ProgressWithOutput) := do
   let res ← do
     match th with
     | none =>
@@ -278,16 +318,14 @@ def tryApply (keep : Option Name) (ids : Array (Option Name)) (splitPost : Bool)
           pure (some res)
         catch _ => pure none
   match res with
-  | some (.Ok _) => pure true
+  | some (.Ok res) => pure (some res)
   | some (.Error msg) => throwError msg
-  | none => pure false
+  | none => pure none
 
 -- The array of ids are identifiers to use when introducing fresh variables
 def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option Expr)
-  (ids : Array (Option Name)) (splitPost : Bool) (asmTac : TacticM Unit) : TacticM Syntax := do
-  -- Simplify the goal -- TODO: this might close it
-  simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
-      {simpThms := #[← progressSimpExt.getTheorems]} (.targets #[] true)
+  (ids : Array (Option Name)) (splitPost : Bool) (asmTac : TacticM Unit) :
+  TacticM (ProgressGoals × UsedTheorem) := do
   withMainContext do
   -- Retrieve the goal
   let mgoal ← Tactic.getMainGoal
@@ -306,8 +344,7 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option Expr)
      have the proper shape. -/
   let fExpr ← do
     let isGoal := true
-    withProgressSpec isGoal goalTy fun desc => do
-    let fExpr := desc.fArgsExpr
+    withProgressSpec isGoal goalTy fun {fArgsExpr := fExpr, ..} => do
     trace[Progress] "Expression to match: {fExpr}"
     pure fExpr
   -- If the user provided a theorem/assumption: use it.
@@ -315,10 +352,9 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option Expr)
   match withTh with
   | some th => do
     match ← progressWith fExpr th keep ids splitPost asmTac with
-    | .Ok _ =>
+    | .Ok res =>
       -- Remark: exprToSyntax doesn't give the expected result
-      let stx ← Lean.Meta.Tactic.TryThis.delabToRefinableSyntax th
-      return stx
+      return  (res.toProgressGoals, .givenExpr th)
     | .Error msg => throwError msg
   | none =>
     -- Try all the assumptions one by one and if it fails try to lookup a theorem.
@@ -328,7 +364,7 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option Expr)
       trace[Progress] "Trying assumption: {decl.userName} : {decl.type}"
       let res ← do try progressWith fExpr decl.toExpr keep ids splitPost asmTac catch _ => continue
       match res with
-      | .Ok _ => return (mkIdent decl.userName)
+      | .Ok res => return (res.toProgressGoals, .localHyp decl)
       | .Error msg => throwError msg
     /- It failed: lookup the pspec theorems which match the expression *only
        if the function is a constant* -/
@@ -350,9 +386,9 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option Expr)
       -- Try the theorems one by one
       for pspec in pspecs do
         let pspecExpr ← Term.mkConst pspec
-        if ← tryApply keep ids splitPost asmTac fExpr "pspec theorem" pspecExpr
-        then return (mkIdent pspec)
-        else pure ()
+        match ← tryApply keep ids splitPost asmTac fExpr "pspec theorem" pspecExpr with
+        | some res => return (res.toProgressGoals, .progressThm pspec)
+        | none => pure ()
       -- It failed: try to use the recursive assumptions
       trace[Progress] "Failed using a pspec theorem: trying to use a recursive assumption"
       -- We try to apply the assumptions of kind "auxDecl"
@@ -364,71 +400,56 @@ def progressAsmsOrLookupTheorem (keep : Option Name) (withTh : Option Expr)
         trace[Progress] "Trying recursive assumption: {decl.userName} : {decl.type}"
         let res ← do try progressWith fExpr decl.toExpr keep ids splitPost asmTac catch _ => continue
         match res with
-        | .Ok _ => return (mkIdent decl.userName)
+        | .Ok res => return (res.toProgressGoals, .localHyp decl)
         | .Error msg => throwError msg
       -- Nothing worked: failed
-      throwError "Progress failed"
+      throwError "Progress failed: could not find a local assumption or a theorem to apply"
 
-syntax progressArgs := ("keep" (ident <|> "_"))? ("with" colGt term)? ("as" " ⟨ " (ident <|> "_"),* " ⟩")?
+syntax progressArgs := ("keep" binderIdent)? ("with" term)? ("as" " ⟨ " binderIdent,* " ⟩")?
 
-def evalProgress (args : TSyntax `Aeneas.Progress.progressArgs) : TacticM Stats := do
-  withMainContext do
-  focus do
-  let args := args.raw
-  -- Process the arguments to retrieve the identifiers to use
-  trace[Progress] "Progress arguments: {args}"
-  let (keepArg, withArg, asArgs) ←
-    match args.getArgs.toList with
-    | [keepArg, withArg, asArgs] => do pure (keepArg, withArg, asArgs)
-    | _ => throwError "Unexpected: invalid arguments"
-  let keep : Option Name ← do
-    trace[Progress] "Keep arg: {keepArg}"
-    let args := keepArg.getArgs
-    if args.size > 0 then do
-      trace[Progress] "Keep args: {args}"
-      let arg := args.get! 1
-      trace[Progress] "Keep arg: {arg}"
-      if arg.isIdent then pure (some arg.getId)
-      else do pure (some (← mkFreshAnonPropUserName))
-    else do pure none
-  trace[Progress] "Keep: {keep}"
-  let withArg ← do
-    let withArg := withArg.getArgs
-    if withArg.size > 0 then
-      let pspec := withArg.get! 1
-      trace[Progress] "With arg: {pspec}"
-      /- The theorem with which to make progress is either:
-         - the identifier of a local declaration or a theroem
-         - a term
-        We have to make a case disjunction, because if we treat identifiers like
-        terms, then Lean will not succeed in infering their implicit parameters
-        (`progress` does that by matching against the goal).
-       -/
-      if pspec.isIdent then
-        -- Attempt to lookup a local declaration
-        match (← getLCtx).findFromUserName? pspec.getId with
-        | some decl => do
-          trace[Progress] "With arg: local decl"
-          pure (some decl.toExpr)
-        | none => do
-          -- Not a local declaration: should be a theorem
-          trace[Progress] "With arg: theorem"
-          addCompletionInfo <| CompletionInfo.id pspec pspec.getId (danglingDot := false) {} none
-          let some e ← Term.resolveId? pspec (withInfo := true) | throwError m!"Could not find theorem: {pspec}"
-          pure (some e)
-      else
-        trace[Progress] "With arg: is term"
-        let pspec ← Tactic.elabTerm pspec none
-        trace[Progress] m!"With arg: elaborated expression {pspec}"
-        pure (some pspec)
-    else pure none
-  let ids :=
-    let args := asArgs.getArgs
-    if args.size > 2 then
-      let args := (args.get! 2).getSepArgs
-      args.map (λ s => if s.isIdent then some s.getId else none)
-    else #[]
+def parseProgressArgs
+: TSyntax ``Aeneas.Progress.progressArgs -> TacticM (Option Name × Option Expr × Array (Option Name))
+| args@`(progressArgs| $[keep $x]? $[with $pspec:term]? $[as ⟨ $ids,* ⟩]? ) =>  withMainContext do
+  trace[Progress] "Progress arguments: {args.raw}"
+  let keep?: Option Name <- Option.sequence <| x.map fun
+    | `(binderIdent| _) => mkFreshAnonPropUserName
+    | `(binderIdent| $name:ident) => pure name.getId
+    | _ => throwUnsupportedSyntax
+  trace[Progress] "Keep: {keep?}"
+  let withTh?: Option Expr <- Option.sequence <| pspec.map fun
+    /- We have to make a case disjunction, because if we treat identifiers like
+       terms, then Lean will not succeed in infering their implicit parameters
+       (`progress` does that by matching against the goal). -/
+    | `($stx:ident) => do
+      match (<- getLCtx).findFromUserName? stx.getId with
+      | .some decl =>
+        trace[Progress] "With arg (local decl): {stx.raw}"
+        return decl.toExpr
+      | .none =>
+        -- Not a local declaration: should be a theorem
+        trace[Progress] "With arg (theorem): {stx.raw}"
+        let some e ← Term.resolveId? stx (withInfo := true)
+          | throwError m!"Could not find theorem: {pspec}"
+        return e
+    | term => do
+      trace[Progress] "With arg (term): {term}"
+      Tactic.elabTerm term none
+  if let .some pspec := withTh? then trace[Progress] "With arg: elaborated expression {pspec}"
+  let ids := ids.getD ∅
+    |>.getElems.map fun
+      | `(binderIdent| $name:ident) => some name.getId
+      | _ => none
   trace[Progress] "User-provided ids: {ids}"
+  return (keep?, withTh?, ids)
+| _ => throwUnsupportedSyntax
+
+def evalProgress (keep: Option Name) (withArg: Option Expr) (ids: Array (Option Name))
+: TacticM Stats := do
+  /- Simplify the goal -- TODO: this might close it: we need to check that and abort if necessary,
+     and properly track that in the `Stats` -/
+  simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
+      {simpThms := #[← progressSimpExt.getTheorems]} (.targets #[] true)
+  withMainContext do
   let splitPost := true
   /- Preprocessing step for `singleAssumptionTac` -/
   let singleAssumptionTacDtree ← singleAssumptionTacPreprocess
@@ -460,24 +481,24 @@ def evalProgress (args : TSyntax `Aeneas.Progress.progressArgs) : TacticM Stats 
   let customAssumTac : TacticM Unit := do
     trace[Progress] "Attempting to solve with `singleAssumptionTac`"
     singleAssumptionTacCore singleAssumptionTacDtree
-  let usedTheorem ← progressAsmsOrLookupTheorem keep withArg ids splitPost (
+  let (goals, usedTheorem) ← progressAsmsOrLookupTheorem keep withArg ids splitPost (
     withMainContext do
     trace[Progress] "trying to solve precondition: {← getMainGoal}"
     firstTac [customAssumTac, simpTac, simpTac, scalarTac]
     trace[Progress] "Precondition solved!")
   trace[Progress] "Progress done"
-  return {
-    usedTheorem
-  }
+  return ⟨ goals, usedTheorem ⟩
 
-elab (name := progress) "progress" args:progressArgs : tactic =>
-  evalProgress args *> return ()
+elab (name := progress) "progress" args:progressArgs : tactic => do
+  let (keep?, withArg, ids) ← parseProgressArgs args
+  evalProgress keep? withArg ids *> return ()
 
 elab tk:"progress?" args:progressArgs : tactic => do
-  let stats ← evalProgress args
+  let (keep?, withArg, ids) <- parseProgressArgs args
+  let stats ← evalProgress keep? withArg ids
   let mut stxArgs := args.raw
   if stxArgs[1].isNone then
-    let withArg := mkNullNode #[mkAtom "with", stats.usedTheorem]
+    let withArg := mkNullNode #[mkAtom "with", ←stats.usedTheorem.toSyntax]
     stxArgs := stxArgs.setArg 1 withArg
   let tac := mkNode `Aeneas.Progress.progress #[mkAtom "progress", stxArgs]
   Meta.Tactic.TryThis.addSuggestion tk tac (origSpan? := ← getRef)
@@ -494,6 +515,23 @@ namespace Test
   -- The following command displays the database of theorems:
   -- #eval showStoredProgressThms
   open alloc.vec
+
+  /- This test case checks what happens when `progress`:
+     - manages to solve the current goal
+     - but doesn't solve some preconditions
+     At some point there was a bug with the goal management.
+  -/
+  /--
+  error: unsolved goals
+case hmax
+ty : UScalarTy
+x y : UScalar ty
+⊢ ↑x + ↑y ≤ UScalar.max ty
+  -/
+  #guard_msgs in
+  example {ty} {x y : UScalar ty} :
+    ∃ z, x + y = ok z := by
+    progress keep _ as ⟨ z, h1 ⟩
 
   example {ty} {x y : UScalar ty}
     (hmax : x.val + y.val ≤ UScalar.max ty) :
@@ -587,13 +625,13 @@ namespace Test
      not a constant. We also test the case where the function under scrutinee
      is not a constant. -/
   example {x : U32}
-    (f : U32 → Result Unit) (h : ∀ x, f x = .ok ()) :
+    (f : U32 → Std.Result Unit) (h : ∀ x, f x = .ok ()) :
     f x = ok () := by
     progress
 
 
   example {x : U32}
-    (f : U32 → Result Unit) (h : ∀ x, f x = .ok ()) :
+    (f : U32 → Std.Result Unit) (h : ∀ x, f x = .ok ()) :
     f x = ok () := by
     progress? says progress with h
 
@@ -625,11 +663,11 @@ namespace Test
   end
 
   mutual
-    def Tree.size (t : Tree) : Result Int :=
+    def Tree.size (t : Tree) : Std.Result Int :=
       match t with
       | .mk trees => trees.size
 
-    def Trees.size (t : Trees) : Result Int :=
+    def Trees.size (t : Trees) : Std.Result Int :=
       match t with
       | .nil => ok 0
       | .cons t t' => do
@@ -659,7 +697,7 @@ namespace Test
   end
 
   -- Testing progress on theorems containing local let-bindings
-  def add (x y : U32) : Result U32 := x + y
+  def add (x y : U32) : Std.Result U32 := x + y
 
   section
     /- Testing progress on theorems containing local let-bindings as well as
@@ -671,7 +709,7 @@ namespace Test
       progress with U32.add_spec
       scalar_tac
 
-    def add1 (x y : U32) : Result U32 := do
+    def add1 (x y : U32) : Std.Result U32 := do
       let z ← x + y
       z + z
 
@@ -690,7 +728,7 @@ namespace Test
     progress? as ⟨ z2, h ⟩ says progress with Aeneas.Std.U32.add_spec as ⟨ z2, h ⟩
 
   variable (P : ℕ → List α → Prop)
-  variable (f : List α → Result Bool)
+  variable (f : List α → Std.Result Bool)
   variable (f_spec : ∀ l i, P i l → ∃ b, f l = ok b)
 
   example (l : List α) (h : P i l) :
@@ -699,7 +737,7 @@ namespace Test
 
   /- Progress using a term -/
   example {x: U32}
-    (f : U32 → Result Unit)
+    (f : U32 → Std.Result Unit)
     (h : ∀ x, f x = .ok ()):
       f x = ok () := by
       progress? with (show ∀ x, f x = .ok () by exact h) says progress with(show ∀ x, f x = .ok () by exact h)
@@ -736,7 +774,7 @@ namespace Test
   namespace Ntt
     def wfArray (_ : Array U16 256#usize) : Prop := True
 
-    def nttLayer (a : Array U16 256#usize) (_k : Usize) (_len : Usize) : Result (Array U16 256#usize) := ok a
+    def nttLayer (a : Array U16 256#usize) (_k : Usize) (_len : Usize) : Std.Result (Array U16 256#usize) := ok a
 
     def toPoly (a : Array U16 256#usize) : List U16 := a.val
 
@@ -755,7 +793,7 @@ namespace Test
       wfArray peSrc' := by
       simp [wfArray, nttLayer, toPoly, Spec.nttLayer]
 
-    def ntt (x : Array U16 256#usize) : Result (Array U16 256#usize) := do
+    def ntt (x : Array U16 256#usize) : Std.Result (Array U16 256#usize) := do
       let x ← nttLayer x 1#usize 128#usize
       let x ← nttLayer x 2#usize 64#usize
       let x ← nttLayer x 4#usize 32#usize
