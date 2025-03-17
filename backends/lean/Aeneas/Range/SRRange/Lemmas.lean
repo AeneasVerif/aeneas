@@ -145,6 +145,22 @@ theorem foldl_range' (start len step : Nat) (hStep : 0 < step) (f : α → Nat �
     simp only [this, ↓reduceIte]
     ring_nf
 
+theorem eq_foldWhile {α} (max step : Nat) (hStep : 0 < step) (f f_body : α → Nat → α) (i) (x)
+  (heq : ∀ x i, f x i = if i < max then f (f_body x i) (i + step) else x) :
+  f x i = foldWhile max step hStep f_body i x := by
+  dcases hi : i < max
+  . unfold foldWhile
+    simp [hi]
+    have hind := eq_foldWhile max step hStep f f_body (i + step)
+    rw [← hind]
+    . replace heq := heq x i
+      simp [heq, hi]
+    . apply heq
+  . unfold foldWhile
+    simp only [↓reduceIte, heq, hi]
+termination_by max - i
+decreasing_by simp_wf; simp at hi; omega
+
 end SRRange
 
 end Aeneas
