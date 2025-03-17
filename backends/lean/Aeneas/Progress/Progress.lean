@@ -14,12 +14,12 @@ open Utils
 /-- A special definition that we use to introduce pretty-printed terms in the context -/
 def prettyMonadEq {α : Type u} (x : Std.Result α) (y : α) : Prop := x = .ok y
 
-macro:max "[> " "let" y:term " ← " x:term    : term => `(prettyMonadEq $x $y)
+macro:max "[> " "let" y:term " ← " x:term " <]"   : term => `(prettyMonadEq $x $y)
 
 @[app_unexpander prettyMonadEq]
-def unexpPrettyMonadEqofNat : Lean.PrettyPrinter.Unexpander | `($_ $x $y) => `([> let $y ← $x) | _ => throw ()
+def unexpPrettyMonadEqofNat : Lean.PrettyPrinter.Unexpander | `($_ $x $y) => `([> let $y ← $x <]) | _ => throw ()
 
-example (x y z : Std.U32) (_ : [> let z ← (x + y)) : True := by simp
+example (x y z : Std.U32) (_ : [> let z ← (x + y) <]) : True := by simp
 
 theorem eq_imp_prettyMonadEq {α : Type u} {x : Std.Result α} {y : α} (h : x = .ok y) : prettyMonadEq x y := by simp [prettyMonadEq, h]
 
@@ -612,7 +612,7 @@ info: example
   (y : UScalar ty)
   (h : ↑x + ↑y ≤ UScalar.max ty)
   (z : UScalar ty)
-  (_ : [> let z ← x + y)
+  (_ : [> let z ← x + y <])
   (h1 : ↑z = ↑x + ↑y) :
   ↑z = ↑x + ↑y
   := by sorry
@@ -632,10 +632,10 @@ info: example
   (y : UScalar ty)
   (h : 2 * ↑x + ↑y ≤ UScalar.max ty)
   (z1 : UScalar ty)
-  (__1 : [> let z1 ← x + y)
+  (__1 : [> let z1 ← x + y <])
   (h1 : ↑z1 = ↑x + ↑y)
   (z2 : UScalar ty)
-  (_ : [> let z2 ← z1 + x)
+  (_ : [> let z2 ← z1 + x <])
   (h2 : ↑z2 = ↑z1 + ↑x) :
   ↑z2 = 2 * ↑x + ↑y
   := by sorry
