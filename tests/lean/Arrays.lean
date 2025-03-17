@@ -37,14 +37,14 @@ def array_to_mut_slice_
    Source: 'tests/src/arrays.rs', lines 29:0-31:1 -/
 def array_len {T : Type} (s : Array T 32#usize) : Result Usize :=
   do
-  let (s1 : Slice T) ← ↑(Array.to_slice s)
+  let s1 ← (↑(Array.to_slice s) : Result _)
   ok (Slice.len s1)
 
 /- [arrays::shared_array_len]:
    Source: 'tests/src/arrays.rs', lines 33:0-35:1 -/
 def shared_array_len {T : Type} (s : Array T 32#usize) : Result Usize :=
   do
-  let (s1 : Slice T) ← ↑(Array.to_slice s)
+  let s1 ← (↑(Array.to_slice s) : Result _)
   ok (Slice.len s1)
 
 /- [arrays::shared_slice_len]:
@@ -228,7 +228,7 @@ def const_array : Result (Array U32 2#usize) :=
 def const_slice : Result U32 :=
   do
   let a := Array.repeat 2#usize 0#u32
-  let (s : Slice U32) ← ↑(Array.to_slice a)
+  let s ← (↑(Array.to_slice a) : Result _)
   Slice.index_usize s 0#usize
 
 /- [arrays::take_all]:
@@ -238,11 +238,11 @@ def take_all : Result Unit :=
   take_array (Array.make 2#usize [ 0#u32, 0#u32 ])
   take_array (Array.make 2#usize [ 0#u32, 0#u32 ])
   take_array_borrow (Array.make 2#usize [ 0#u32, 0#u32 ])
-  let (s : Slice U32) ←
-    ↑(Array.to_slice (Array.make 2#usize [ 0#u32, 0#u32 ]))
+  let s ←
+    (↑(Array.to_slice (Array.make 2#usize [ 0#u32, 0#u32 ])) : Result _)
   take_slice s
-  let ((s1, _) : ((Slice U32) × (Slice U32 → Array U32 2#usize))) ←
-    ↑(Array.to_slice_mut (Array.make 2#usize [ 0#u32, 0#u32 ]))
+  let (s1, _) ←
+    (↑(Array.to_slice_mut (Array.make 2#usize [ 0#u32, 0#u32 ])) : Result _)
   let _ ← take_mut_slice s1
   ok ()
 
@@ -276,12 +276,12 @@ def index_all : Result U32 :=
   let i1 ← i + i
   let i2 ← index_array_borrow (Array.make 2#usize [ 0#u32, 0#u32 ])
   let i3 ← i1 + i2
-  let (s : Slice U32) ←
-    ↑(Array.to_slice (Array.make 2#usize [ 0#u32, 0#u32 ]))
+  let s ←
+    (↑(Array.to_slice (Array.make 2#usize [ 0#u32, 0#u32 ])) : Result _)
   let i4 ← index_slice_u32_0 s
   let i5 ← i3 + i4
-  let ((s1, _) : ((Slice U32) × (Slice U32 → Array U32 2#usize))) ←
-    ↑(Array.to_slice_mut (Array.make 2#usize [ 0#u32, 0#u32 ]))
+  let (s1, _) ←
+    (↑(Array.to_slice_mut (Array.make 2#usize [ 0#u32, 0#u32 ])) : Result _)
   let (i6, _) ← index_mut_slice_u32_0 s1
   i5 + i6
 
@@ -310,8 +310,7 @@ def update_all : Result Unit :=
   update_array (Array.make 2#usize [ 0#u32, 0#u32 ])
   update_array (Array.make 2#usize [ 0#u32, 0#u32 ])
   let x ← update_array_mut_borrow (Array.make 2#usize [ 0#u32, 0#u32 ])
-  let ((s, _) : ((Slice U32) × (Slice U32 → Array U32 2#usize))) ←
-    ↑(Array.to_slice_mut x)
+  let (s, _) ← (↑(Array.to_slice_mut x) : Result _)
   let _ ← update_mut_slice s
   ok ()
 
@@ -413,8 +412,8 @@ def sum2 (s : Slice U32) (s2 : Slice U32) : Result U32 :=
    Source: 'tests/src/arrays.rs', lines 293:0-296:1 -/
 def f0 : Result Unit :=
   do
-  let ((s, _) : ((Slice U32) × (Slice U32 → Array U32 2#usize))) ←
-    ↑(Array.to_slice_mut (Array.make 2#usize [ 1#u32, 2#u32 ]))
+  let (s, _) ←
+    (↑(Array.to_slice_mut (Array.make 2#usize [ 1#u32, 2#u32 ])) : Result _)
   let _ ← Slice.index_mut_usize s 0#usize
   ok ()
 
@@ -444,8 +443,8 @@ def f3 : Result U32 :=
   let i ← Array.index_usize (Array.make 2#usize [ 1#u32, 2#u32 ]) 0#usize
   f2 i
   let b := Array.repeat 32#usize 0#u32
-  let (s : Slice U32) ←
-    ↑(Array.to_slice (Array.make 2#usize [ 1#u32, 2#u32 ]))
+  let s ←
+    (↑(Array.to_slice (Array.make 2#usize [ 1#u32, 2#u32 ])) : Result _)
   let s1 ← f4 b 16#usize 18#usize
   sum2 s s1
 
@@ -463,11 +462,11 @@ def f5 (x : Array U32 32#usize) : Result U32 :=
    Source: 'tests/src/arrays.rs', lines 324:0-331:1 -/
 def ite : Result Unit :=
   do
-  let ((s, _) : ((Slice U32) × (Slice U32 → Array U32 2#usize))) ←
-    ↑(Array.to_slice_mut (Array.make 2#usize [ 0#u32, 0#u32 ]))
+  let (s, _) ←
+    (↑(Array.to_slice_mut (Array.make 2#usize [ 0#u32, 0#u32 ])) : Result _)
   let _ ← index_mut_slice_u32_0 s
-  let ((s1, _) : ((Slice U32) × (Slice U32 → Array U32 2#usize))) ←
-    ↑(Array.to_slice_mut (Array.make 2#usize [ 0#u32, 0#u32 ]))
+  let (s1, _) ←
+    (↑(Array.to_slice_mut (Array.make 2#usize [ 0#u32, 0#u32 ])) : Result _)
   let _ ← index_mut_slice_u32_0 s1
   ok ()
 
