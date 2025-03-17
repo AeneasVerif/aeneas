@@ -891,7 +891,7 @@ info: example
   info: example
   (y : U32)
   (h1 : ↑y < 100) :
-  massert (decide (y < 100#u32)) = ok ()
+  massert (y < 100#u32) = ok ()
   := by sorry
   -/
   #guard_msgs in
@@ -901,9 +901,9 @@ info: example
       massert (y < 100#u32))
     = ok ()
     := by
-    let* ⟨⟩ ← massert_decide_spec
+    let* ⟨⟩ ← massert_spec
     extract_goal0
-    let* ⟨⟩ ← massert_decide_spec
+    let* ⟨⟩ ← massert_spec
 
   /--
   info: example
