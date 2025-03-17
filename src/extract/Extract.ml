@@ -640,7 +640,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
         let result = ctx_get_builtin_type (Some span) TResult ctx in
         F.pp_print_string fmt result;
         F.pp_print_space fmt ();
-        F.pp_print_string fmt "_");
+        extract_ty span ctx fmt TypeDeclId.Set.empty true (List.hd args).ty);
       (* Close the box for the function call *)
       F.pp_close_box fmt ();
       (* Return *)
