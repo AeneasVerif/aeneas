@@ -78,6 +78,12 @@ theorem replicate_length {α : Type u} (l : Nat) (x : α) :
   induction l <;> simp_all
 
 @[simp]
+theorem getElem!_replicate {α : Type u} [Inhabited α] (a : α) {n i : ℕ} (h : i < n) :
+  (List.replicate n a)[i]! = a := by
+  simp only [getElem!_eq_getElem?_getD, length_replicate, h, getElem?_eq_getElem, getElem_replicate,
+    Option.getD_some]
+
+@[simp]
 theorem set_getElem! {α} [Inhabited α] (l : List α) (i : Nat) :
   l.set i l[i]! = l := by
   revert i; induction l <;> simp_all
