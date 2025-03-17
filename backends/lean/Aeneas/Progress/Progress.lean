@@ -190,11 +190,21 @@ def progressWith (fExpr : Expr) (th : Expr)
         if ← isConj hTy then do
           mkAppM ``And.left #[h]
         else do pure h
-      trace[Progress] "h: {← inferType h}"
-      trace[Progress] "Introducing the \"pretty\" let binding"
-      let e ← mkAppM ``eq_imp_prettyMonadEq #[h]
-      let _ ← Utils.addDeclTac name e (← inferType e) (asLet := false)
-      trace[Progress] "Introduced the \"pretty\" let binding: {← getMainGoal}"
+      /- Do *not* introduce an equality if the return type is `()` -/
+      let hTy ← inferType h
+      hTy.withApp fun _ args => do -- Deconstruct the equality
+      trace[Progress] "Checking if type is (): after deconstructing the equality: {args}"
+      args[0]!.withApp fun _ args => do -- Deconstruct the `Result`
+      trace[Progress] "Checking if type is (): after deconstructing Result: {args}"
+      let arg0 := args[0]!
+      if arg0.isConst ∧ (arg0.constName == ``Unit ∨ arg0.constName == ``PUnit) then
+        trace[Progress] "Not introducing a pretty equality because the output type is `()`"
+      else
+        trace[Progress] "h: {← inferType h}"
+        trace[Progress] "Introducing the \"pretty\" let binding"
+        let e ← mkAppM ``eq_imp_prettyMonadEq #[h]
+        let _ ← Utils.addDeclTac name e (← inferType e) (asLet := false)
+        trace[Progress] "Introduced the \"pretty\" let binding: {← getMainGoal}"
 
     /- Split the conjunctions.
        For the conjunctions, we split according once to separate the equality `f ... = .ret ...`
@@ -875,6 +885,25 @@ info: example
     have h1 := add_spec'
     progress with h1 as ⟨ z1, h ⟩
     progress with add_spec' z1 as ⟨ z2, h ⟩
+
+  /- Pretty equality when the output type is unit -/
+  /--
+  info: example
+  (y : U32)
+  (h1 : ↑y < 100) :
+  massert (decide (y < 100#u32)) = ok ()
+  := by sorry
+  -/
+  #guard_msgs in
+  example (x y : U32) (h0 : x.val < 100) (h1 : y.val < 100) :
+    (do
+      massert (x < 100#u32)
+      massert (y < 100#u32))
+    = ok ()
+    := by
+    let* ⟨⟩ ← massert_decide_spec
+    extract_goal0
+    let* ⟨⟩ ← massert_decide_spec
 
   /--
   info: example
