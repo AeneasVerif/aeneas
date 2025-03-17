@@ -107,6 +107,7 @@ attribute [scalar_tac_simps]
   Int.reduceLT Int.reduceLE Int.reduceGT Int.reduceGE Int.reduceEq Int.reduceNe Int.reduceBEq Int.reduceBNe
   Int.reducePow Int.reduceAdd Int.reduceSub Int.reduceMul Int.reduceDiv Int.reduceMod
   Int.reduceNegSucc Int.reduceNeg Int.reduceToNat
+  not_lt not_le
 
 /- Small trick to prevent `simp_all` from simplifying an assumption `h1 : P v` when we have
   `h0 : ∀ x, P x` in the context: we replace the forall quantifiers with our own definition
@@ -165,7 +166,7 @@ attribute [scalar_tac_simps]
   true_and and_true false_and and_false
   true_or or_true false_or or_false
   Bool.true_eq_false Bool.false_eq_true
-  decide_eq_true_eq Bool.or_eq_true Bool.and_eq_true
+  decide_eq_true_eq decide_eq_false_iff_not Bool.or_eq_true Bool.and_eq_true
 
 /-  Boosting a bit the `omega` tac.
 
