@@ -6,6 +6,8 @@ import Aeneas.Diverge.Core
 import Aeneas.Progress.Init
 import Aeneas.ScalarTac.ScalarTac
 import Aeneas.Bvify.Init
+import Aeneas.Nat
+import Aeneas.Int
 
 namespace Aeneas
 
@@ -885,12 +887,12 @@ instance (ty : IScalarTy) : DecidableEq (IScalar ty) :=
   simp [eq_equiv]
 
 @[simp]
-theorem UScalar.val_not_eq_imp_not_eq (x y : UScalar ty) (h : ScalarTac.Nat.not_eq x.val y.val) :
+theorem UScalar.val_not_eq_imp_not_eq (x y : UScalar ty) (h : Nat.not_eq x.val y.val) :
   ¬ x = y := by
   simp_all; scalar_tac
 
 @[simp]
-theorem IScalar.val_not_eq_imp_not_eq (x y : IScalar ty) (h : ScalarTac.Int.not_eq x.val y.val) :
+theorem IScalar.val_not_eq_imp_not_eq (x y : IScalar ty) (h : Int.not_eq x.val y.val) :
   ¬ x = y := by
   simp_all; scalar_tac
 

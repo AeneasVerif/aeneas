@@ -4,6 +4,7 @@ import Mathlib.Data.List.GetD
 import Aeneas.ScalarTac
 import Aeneas.Utils
 import Aeneas.SimpLemmas
+import Aeneas.Nat
 
 namespace List -- We do not use the `Aeneas` namespace on purpose
 
