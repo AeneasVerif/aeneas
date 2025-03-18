@@ -450,7 +450,17 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
         (extract_texpression span ctx fmt)
         fmt inside binop int_ty arg0 arg1
   | Fun fun_id, _ ->
-      if inside then F.pp_print_string fmt "(";
+      (* Should we add a type annotation? It is necessary when the app is actually
+         a coercion *)
+      let extract_type_annot =
+        backend () = Lean
+        &&
+        match fun_id with
+        | Pure ToResult -> true
+        | _ -> false
+      in
+      let use_brackets = inside || extract_type_annot in
+      if use_brackets then F.pp_print_string fmt "(";
       (* Open a box for the function call *)
       F.pp_open_hovbox fmt ctx.indent_incr;
       (* Print the function name.
@@ -591,13 +601,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
       in
       (* Special case for [ToResult]: we don't want to print a space between the
          coercion symbol and the expression - TODO: this is a bit ad-hoc *)
-      let print_first_space =
-        if Config.backend () = Lean then
-          match fun_id with
-          | Pure ToResult -> false
-          | _ -> true
-        else true
-      in
+      let print_first_space = not extract_type_annot in
       (* Filter the generics.
 
          We might need to filter some of the type arguments, if the type
@@ -628,10 +632,19 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
           if !print_space then F.pp_print_space fmt () else print_space := true;
           extract_texpression span ctx fmt true ve)
         args;
+      (* Add the type annotation *)
+      if extract_type_annot then (
+        F.pp_print_space fmt ();
+        F.pp_print_string fmt ":";
+        F.pp_print_space fmt ();
+        let result = ctx_get_builtin_type (Some span) TResult ctx in
+        F.pp_print_string fmt result;
+        F.pp_print_space fmt ();
+        extract_ty span ctx fmt TypeDeclId.Set.empty true (List.hd args).ty);
       (* Close the box for the function call *)
       F.pp_close_box fmt ();
       (* Return *)
-      if inside then F.pp_print_string fmt ")"
+      if use_brackets then F.pp_print_string fmt ")"
   | (Unop _ | Binop _), _ ->
       admit_raise __FILE__ __LINE__ span
         ("Unreachable:\n" ^ "Function: " ^ show_fun_or_op_id fid
@@ -831,17 +844,6 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       (re : texpression) : extraction_ctx =
     (* Open a box for the let-binding *)
     F.pp_open_hovbox fmt ctx.indent_incr;
-    (* Should we add a type annotation? It is necessary when the bound expression
-       has a coercion. *)
-    let extract_type_annot =
-      monadic
-      && backend () = Lean
-      &&
-      match re.e with
-      | App ({ e = Qualif { id = FunOrOp (Fun (Pure ToResult)); _ }; _ }, _) ->
-          true
-      | _ -> false
-    in
     let ctx =
       (* There are two cases:
          - do we use a notation like [x <-- y;]
@@ -889,14 +891,7 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
             else (
               F.pp_print_string fmt "let";
               F.pp_print_space fmt ());
-            if extract_type_annot then F.pp_print_string fmt "(";
             let ctx = extract_typed_pattern span ctx fmt true true lv in
-            if extract_type_annot then (
-              F.pp_print_space fmt ();
-              F.pp_print_string fmt ":";
-              F.pp_print_space fmt ();
-              extract_ty span ctx fmt TypeDeclId.Set.empty false lv.ty;
-              F.pp_print_string fmt ")");
             F.pp_print_space fmt ();
             let eq =
               match backend () with

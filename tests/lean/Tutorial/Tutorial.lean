@@ -286,14 +286,15 @@ divergent def add_with_carry_loop
     do
     let i2 ←
       alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceInst U32) x i
-    let (i3 : U32) ← ↑(UScalar.cast .U32 c0)
-    let ((sum, c1) : (U32 × Bool)) ← ↑(core.num.U32.overflowing_add i2 i3)
+    let i3 ← (↑(UScalar.cast .U32 c0) : Result U32)
+    let (sum, c1) ←
+      (↑(core.num.U32.overflowing_add i2 i3) : Result (U32 × Bool))
     let i4 ←
       alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceInst U32) y i
-    let ((sum1, c2) : (U32 × Bool)) ←
-      ↑(core.num.U32.overflowing_add sum i4)
-    let (i5 : U8) ← ↑(UScalar.cast_fromBool .U8 c1)
-    let (i6 : U8) ← ↑(UScalar.cast_fromBool .U8 c2)
+    let (sum1, c2) ←
+      (↑(core.num.U32.overflowing_add sum i4) : Result (U32 × Bool))
+    let i5 ← (↑(UScalar.cast_fromBool .U8 c1) : Result U8)
+    let i6 ← (↑(UScalar.cast_fromBool .U8 c2) : Result U8)
     let c01 ← i5 + i6
     let (_, index_mut_back) ←
       alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSliceInst U32) x
@@ -340,12 +341,13 @@ divergent def add_loop
     let yi ← get_or_zero y i
     let i1 ←
       alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceInst U32) x i
-    let (i2 : U32) ← ↑(UScalar.cast .U32 c0)
-    let ((sum, c1) : (U32 × Bool)) ← ↑(core.num.U32.overflowing_add i1 i2)
-    let ((sum1, c2) : (U32 × Bool)) ←
-      ↑(core.num.U32.overflowing_add sum yi)
-    let (i3 : U8) ← ↑(UScalar.cast_fromBool .U8 c1)
-    let (i4 : U8) ← ↑(UScalar.cast_fromBool .U8 c2)
+    let i2 ← (↑(UScalar.cast .U32 c0) : Result U32)
+    let (sum, c1) ←
+      (↑(core.num.U32.overflowing_add i1 i2) : Result (U32 × Bool))
+    let (sum1, c2) ←
+      (↑(core.num.U32.overflowing_add sum yi) : Result (U32 × Bool))
+    let i3 ← (↑(UScalar.cast_fromBool .U8 c1) : Result U8)
+    let i4 ← (↑(UScalar.cast_fromBool .U8 c2) : Result U8)
     let c01 ← i3 + i4
     let (_, index_mut_back) ←
       alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSliceInst U32) x
@@ -357,7 +359,7 @@ divergent def add_loop
     if c0 != 0#u8
     then
       do
-      let (i1 : U32) ← ↑(UScalar.cast .U32 c0)
+      let i1 ← (↑(UScalar.cast .U32 c0) : Result U32)
       alloc.vec.Vec.push x i1
     else ok x
 
