@@ -75,20 +75,21 @@ section Methods
 def programTelescope[Inhabited (m α)] [Nonempty (m α)] (ty: Expr)
   (k: (xs:Array (MVarId × BinderInfo)) → (zs:Array FVarId) → (program:Expr) → (res:Expr) → (post:Option Expr) → m α)
 : m α := do
+  let ty := ty.consumeMData
   unless ←isProp ty do
     throwError "Expected a proposition, got {←inferType ty}"
   -- ty == ∀ xs, ty₂
-  let (xs, xs_bi, ty₂) ← forallMetaTelescope ty.consumeMData
+  let (xs, xs_bi, ty₂) ← forallMetaTelescope ty
   trace[Progress] "Universally quantified arguments and assumptions: {xs}"
   -- ty₂ == ∃ zs, ty₃ ≃ Exists {α} (fun zs => ty₃)
-  existsTelescope ty₂ fun zs ty₃ => do
+  existsTelescope ty₂.consumeMData fun zs ty₃ => do
     trace[Progress] "Existentials: {zs}"
     trace[Progress] "Proposition after stripping the quantifiers: {ty₃}"
     -- ty₃ == ty₄ ∧ post?
-    let (ty₄, post?) ← Utils.optSplitConj ty₃
+    let (ty₄, post?) ← Utils.optSplitConj ty₃.consumeMData
     trace[Progress] "After splitting the conjunction:\n- eq: {ty₄}\n- post: {post?}"
     -- ty₄ == (program = res)
-    let (program, res) ← Utils.destEq ty₄
+    let (program, res) ← Utils.destEq ty₄.consumeMData
     trace[Progress] "After splitting the equality:\n- lhs: {program}\n- rhs: {res}"
     k (xs.map (·.mvarId!) |>.zip xs_bi) (zs.map (·.fvarId!)) program res post?
 
