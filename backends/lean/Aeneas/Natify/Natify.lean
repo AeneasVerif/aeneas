@@ -59,7 +59,9 @@ attribute [natify_simps] BitVec.toNat_eq BitVec.lt_def BitVec.le_def
                          BitVec.toNat_umod BitVec.toNat_add BitVec.toNat_sub BitVec.toNat_ofNat
                          BitVec.toNat_and BitVec.toNat_or BitVec.toNat_xor
 attribute [natify_simps] ZMod.eq_iff_mod ZMod.val_add ZMod.val_sub ZMod.val_mul ZMod.val_sub'
+                         ZMod.val_natCast ZMod.natCast_val
 attribute [natify_simps] U8.bv_toNat U16.bv_toNat U32.bv_toNat U64.bv_toNat U128.bv_toNat Usize.bv_toNat
+attribute [natify_simps] Nat.cast_ofNat
 
 example (x y : BitVec 32) (h : x.toNat = y.toNat) : x = y := by natify [h]
 
