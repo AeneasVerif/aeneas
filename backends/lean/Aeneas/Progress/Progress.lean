@@ -225,6 +225,8 @@ def progressWith (fExpr : Expr) (th : Expr)
         k h none ids
     /- Simplify the target by using the equality and some monad simplifications,
        then continue splitting the post-condition -/
+    -- TODO: this is dangerous if we want to use a local assumption to make progress.
+    -- We shouldn't simplify the goal with the equality, then simplify again.
     splitEqAndPost fun hEq hPost ids => do
     trace[Progress] "eq and post:\n{hEq} : {← inferType hEq}\n{hPost}"
     trace[Progress] "current goal: {← getMainGoal}"
@@ -302,20 +304,26 @@ def progressWith (fExpr : Expr) (th : Expr)
     setGoals newPropGoals
     allGoalsNoRecover asmTac
     let newPropGoals ← getUnsolvedGoals
-    /- Simplify the post-conditions in the main goal - note that we waited until now because by solving the preconditions
-       we may have instantiated meta-variables -/
+    /- Simplify the post-conditions in the main goal - note that we waited until now
+       because by solving the preconditions we may have instantiated meta-variables.
+       We also simplify the goal again (to simplify let-bindings, etc.) -/
     setGoals curGoals
     match curGoals with
     | [] => pure ()
     | [ _ ] =>
+      -- Simplify the post-conditions
       let args : SimpArgs :=
         {simpThms := #[← progressPostSimpExt.getTheorems],
          simprocs := #[← ScalarTac.scalarTacSimprocExt.getSimprocs]}
       simpAt true { maxDischargeDepth := 0, failIfUnchanged := false }
             args (.targets hPosts false)
+      -- Simplify the goal again
+      tryTac do
+      simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
+        {simpThms := #[← progressSimpExt.getTheorems], declsToUnfold := #[``pure]} (.targets #[] true)
     | _ => throwError "Unexpected number of goals"
     let curGoals ← getUnsolvedGoals
-    trace[Progress] "Main goal after simplifying the post-conditions: {curGoals}"
+    trace[Progress] "Main goal after simplifying the post-conditions and the target: {curGoals}"
     /- Update the list of goals -/
     let newNonPropGoals ← newNonPropGoals.filterM fun mvar => not <$> mvar.isAssigned
     let newGoals := newNonPropGoals ++ newPropGoals
