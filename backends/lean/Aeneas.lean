@@ -14,6 +14,7 @@ import Aeneas.ScalarDecrTac
 import Aeneas.ScalarNF
 import Aeneas.ScalarTac
 import Aeneas.SimpLemmas
+import Aeneas.SimpLists
 import Aeneas.Std
 import Aeneas.Utils
 import Aeneas.Tests

@@ -1,20 +1,15 @@
-import Mathlib.Tactic.Basic
-import Mathlib.Tactic.Attr.Register
-import Mathlib.Data.Int.Cast.Basic
-import Mathlib.Order.Basic
 import Aeneas.Bvify.Init
 import Aeneas.Arith.Lemmas
 import Aeneas.Std.Scalar
 import Aeneas.Std.PrimitivesLemmas
 import Aeneas.Std.Scalar.CoreConvertNum -- we need this for the tests
+import Aeneas.ScalarTac.CondSimpTac
 
 /-!
 # `bvify` tactic
 
 The `bvify` tactic is used to shift propositions about, e.g., `Nat`, to `BitVec`.
 This tactic is adapted from `zify`.
-
-TODO: we can probably drop the `bvify_csimps` attribute if we're being careful so that `scalar_tac` doesn't get called too many times.
 -/
 
 namespace Aeneas.Bvify
@@ -222,94 +217,22 @@ theorem UScalar.lt_equiv_bv_lt {ty : UScalarTy} (x y : UScalar ty) : x < y ↔ x
 @[bvify_simps]
 theorem UScalar.le_equiv_bv_le {ty : UScalarTy} (x y : UScalar ty) : x ≤ y ↔ x.bv ≤ y.bv := by rfl
 
-def bvifyTacSimp (loc : Utils.Location) (additionalAsms : Array FVarId := #[]) (dischWithScalarTac : Bool) : TacticM Unit := do
-  withMainContext do
-  let simpArgs : Utils.SimpArgs :=
-    {simpThms := #[← bvifySimpExt.getTheorems],
-     simprocs := #[← bvifySimprocExt.getSimprocs]
-     hypsToUse := additionalAsms}
-  if dischWithScalarTac then
-    let (ref, d) ← tacticToDischarge (← `(tactic|scalar_tac (saturate := false)))
-    let dischargeWrapper := Lean.Elab.Tactic.Simp.DischargeWrapper.custom ref d
-    let _ ← dischargeWrapper.with fun discharge? => do
-      -- Initialize the simp context
-      let (ctx, simprocs) ← Utils.mkSimpCtx true {maxDischargeDepth := 2, failIfUnchanged := false}
-        .simp simpArgs
-      -- Apply the simplifier
-      let _ ← Utils.customSimpLocation ctx simprocs discharge? loc
-  else
-    Utils.simpAt true {maxDischargeDepth := 2, failIfUnchanged := false} simpArgs loc
-
-def bvifyTac (n : Expr) (loc : Utils.Location) : TacticM Unit := do
-  Elab.Tactic.focus do
-  withMainContext do
-  trace[Bvify] "Initial goal: {← getMainGoal}"
-  /- -/
-  let toDuplicate ← do
-    match loc with
-    | .wildcard => pure none
-    | .wildcard_dep => throwError "bvifyTac does not support using location `Utils.Location.wildcard_dep`"
-    | .targets hyps _ => pure (some hyps)
-  /- Small helper.
-
-     We use it to refresh the fvar ids after simplifying some assumptions.
-     Whenever we apply a simplification to some assumptions, the only way to retrieve their new ids is
-     to go through the context and filter the ids which we know do not come from the duplicated
-     assumptions. -/
-  let refreshFVarIds (keep ignore : Std.HashSet FVarId) : TacticM (Array FVarId) := do
-    withMainContext do
-    let decls := (← (← getLCtx).getDecls).toArray
-    decls.filterMapM fun d => do
-      if (← inferType d.type).isProp ∧ (d.fvarId ∈ keep ∨ d.fvarId ∉ ignore)
-      then pure (some d.fvarId) else pure none
-  let getOtherAsms (ignore : Std.HashSet FVarId) : TacticM (Array FVarId) :=
-    refreshFVarIds Std.HashSet.empty ignore
-  /- First duplicate the propositions in the context: we will need the original ones (which mention
-     integers rather than bit-vectors) for `scalar_tac` to succeed when doing the conditional rewritings. -/
-  let (oldAsms, newAsms) ← Utils.duplicateAssumptions toDuplicate
-  let oldAsmsSet := Std.HashSet.ofArray oldAsms
-  trace[Bvify] "Goal after duplicating the assumptions: {← getMainGoal}"
-  /- Introduce the scalar_tac assumptions - by doing it beforehand we don't have to redo it every
-     time we call `scalar_tac`: as `saturate` is not compiled it saves a lot of time -/
-  withMainContext do
-  let scalarTacAsms ← ScalarTac.scalarTacSaturateForward true false
-  /- Introduce additional simp assumptions -/
+def bvifyAddSimpThms (n : Expr) : TacticM (Array FVarId) := do
   let addThm (thName : Name) : TacticM FVarId := do
     let thm ← mkAppM thName #[n]
     let thm ← Utils.addDeclTac (← Utils.mkFreshAnonPropUserName) thm (← inferType thm) (asLet := false)
     pure thm.fvarId!
-
   let le_iff ← addThm ``BitVec.lt_pow_le_iff_ofNat_le'
   let lt_iff ← addThm ``BitVec.lt_pow_lt_iff_ofNat_lt'
   let lt_max_iff ← addThm ``BitVec.lt_pow_n_iff_ofNat_le
-  --let lt_iff_csimp ← addThm ``BitVec.lt_pow_lt_iff_ofNat_le
   let eq_iff ← addThm ``BitVec.iff_ofNat_eq'
-  trace[Bvify] "Goal after adding the additional simp assumptions: {← getMainGoal}"
-  let additionalSimpThms := #[le_iff, lt_iff, lt_max_iff, eq_iff]
-  /- Simplify the targets (note that we preserve the new assumptions for `scalar_tac`) -/
-  let (loc, notLocAsms) ← do
-    match loc with
-    | .wildcard => pure (Utils.Location.targets oldAsms true, ← getOtherAsms oldAsmsSet)
-    | .wildcard_dep => throwError "Unreachable"
-    | .targets hyps type => pure (Utils.Location.targets hyps type, ← getOtherAsms (Std.HashSet.ofArray hyps))
-  bvifyTacSimp loc additionalSimpThms false
-  if (← getUnsolvedGoals) == [] then return
-  trace[Bvify] "Goal after simplifying: {← getMainGoal}"
-  /- Simplify the targets by using `scalar_tac` as a discharger -/
-  let notLocAsmsSet := Std.HashSet.ofArray notLocAsms
-  let nloc ← do
-    match loc with
-    | .wildcard => pure (Utils.Location.targets (← refreshFVarIds oldAsmsSet notLocAsmsSet) true) --, ← refreshFVarIds oldAsmsSet notLocAsmsSet)
-    | .wildcard_dep => throwError "Unreachable"
-    | .targets hyps type => pure (Utils.Location.targets (← refreshFVarIds (Std.HashSet.ofArray hyps) notLocAsmsSet) type) --, ← refreshFVarIds oldAsmsSet notLocAsmsSet)
-  bvifyTacSimp nloc additionalSimpThms true
-  /- Clear the additional assumptions -/
-  Utils.clearFVarIds scalarTacAsms
-  trace[Bvify] "Goal after clearing the scalar_tac assumptions: {← getMainGoal}"
-  Utils.clearFVarIds newAsms
-  trace[Bvify] "Goal after clearing the duplicated assumptions: {← getMainGoal}"
-  Utils.clearFVarIds additionalSimpThms
-  trace[Bvify] "Goal after clearing the additional theorems: {← getMainGoal}"
+  pure #[le_iff, lt_iff, lt_max_iff, eq_iff]
+
+def bvifyTacSimp (loc : Utils.Location) : TacticM Unit := do
+  ScalarTac.condSimpTacSimp #[← bvifySimpExt.getTheorems] #[← bvifySimprocExt.getSimprocs] loc #[] false
+
+def bvifyTac (n : Expr) (loc : Utils.Location) : TacticM Unit := do
+  ScalarTac.condSimpTac "bvify" #[← bvifySimpExt.getTheorems] #[← bvifySimprocExt.getSimprocs] (bvifyAddSimpThms n) true loc
 
 syntax (name := bvify) "bvify" colGt term (location)? : tactic
 
@@ -326,32 +249,6 @@ def parseBvify : TSyntax ``bvify -> TacticM (Expr × Utils.Location)
 elab stx:bvify : tactic => do
   let (n, loc) ← parseBvify stx
   bvifyTac n loc
-
-/-- The `Simp.Context` generated by `bvify`. -/
-def mkBvifyContext (simpArgs : Option (Syntax.TSepArray `Lean.Parser.Tactic.simpStar ",")) :
-    TacticM MkSimpContextResult := do
-  let args := simpArgs.map (·.getElems) |>.getD #[]
-  mkSimpContext
-    (← `(tactic| simp -decide (maxDischargeDepth := 1) only [bvify_simps, push_cast, $args,*])) false
-
-/-- A variant of `applySimpResultToProp` that cannot close the goal, but does not need a meta
-variable and returns a tuple of a proof and the corresponding simplified proposition. -/
-def applySimpResultToProp' (proof : Expr) (prop : Expr) (r : Simp.Result) : MetaM (Expr × Expr) :=
-  do
-  match r.proof? with
-  | some eqProof => return (← mkExpectedTypeHint (← mkEqMP eqProof proof) r.expr, r.expr)
-  | none =>
-    if r.expr != prop then
-      return (← mkExpectedTypeHint proof r.expr, r.expr)
-    else
-      return (proof, r.expr)
-
-/-- Translate a proof and the proposition into a natified form. -/
-def bvifyProof (simpArgs : Option (Syntax.TSepArray `Lean.Parser.Tactic.simpStar ","))
-    (proof : Expr) (prop : Expr) : TacticM (Expr × Expr) := do
-  let ctx_result ← mkBvifyContext simpArgs
-  let (r, _) ← simp prop ctx_result.ctx
-  applySimpResultToProp' proof prop r
 
 example (x y : U8) (h : x.val < y.val) : x.bv < y.bv := by
   bvify 8

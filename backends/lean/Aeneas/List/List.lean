@@ -5,6 +5,7 @@ import Aeneas.ScalarTac
 import Aeneas.Utils
 import Aeneas.SimpLemmas
 import Aeneas.Nat
+import Aeneas.SimpLists.Init
 
 namespace List -- We do not use the `Aeneas` namespace on purpose
 
@@ -235,7 +236,7 @@ theorem getElem?_set_neq
   intro
   simp_all
 
-@[simp]
+@[simp, simp_lists_simps]
 theorem getElem!_set_neq
   {α : Type u} [Inhabited α] (l: List α) (i: Nat) (j: Nat) (x: α)
   (h : Nat.not_eq i j) : getElem! (l.set i x) j = getElem! l j
@@ -243,7 +244,7 @@ theorem getElem!_set_neq
   have := getElem?_set_neq l i j x h
   simp_all
 
-@[simp]
+@[simp, simp_lists_simps]
 theorem getElem!_set_self
   {α : Type u} [Inhabited α] (l: List α) (i: Nat) (x: α)
   (h : i < l.length) : getElem! (l.set i x) i = x

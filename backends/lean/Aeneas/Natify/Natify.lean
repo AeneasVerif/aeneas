@@ -36,25 +36,6 @@ def mkNatifyContext (simpArgs : Option (Syntax.TSepArray `Lean.Parser.Tactic.sim
   mkSimpContext
     (← `(tactic| simp -decide (maxDischargeDepth := 1) only [natify_simps, push_cast, $args,*])) false
 
-/-- A variant of `applySimpResultToProp` that cannot close the goal, but does not need a meta
-variable and returns a tuple of a proof and the corresponding simplified proposition. -/
-def applySimpResultToProp' (proof : Expr) (prop : Expr) (r : Simp.Result) : MetaM (Expr × Expr) :=
-  do
-  match r.proof? with
-  | some eqProof => return (← mkExpectedTypeHint (← mkEqMP eqProof proof) r.expr, r.expr)
-  | none =>
-    if r.expr != prop then
-      return (← mkExpectedTypeHint proof r.expr, r.expr)
-    else
-      return (proof, r.expr)
-
-/-- Translate a proof and the proposition into a natified form. -/
-def natifyProof (simpArgs : Option (Syntax.TSepArray `Lean.Parser.Tactic.simpStar ","))
-    (proof : Expr) (prop : Expr) : TacticM (Expr × Expr) := do
-  let ctx_result ← mkNatifyContext simpArgs
-  let (r, _) ← simp prop ctx_result.ctx
-  applySimpResultToProp' proof prop r
-
 attribute [natify_simps] BitVec.toNat_eq BitVec.lt_def BitVec.le_def
                          BitVec.toNat_umod BitVec.toNat_add BitVec.toNat_sub BitVec.toNat_ofNat
                          BitVec.toNat_and BitVec.toNat_or BitVec.toNat_xor
