@@ -5,7 +5,23 @@ namespace Aeneas
 
 namespace Std
 
+open ScalarTac
+
 set_option maxRecDepth 1024
+
+instance (x y : UScalar ty) : IsLinearIntProp (x < y) where
+instance (x y : UScalar ty) : IsLinearIntProp (x > y) where
+instance (x y : UScalar ty) : IsLinearIntProp (x ≤ y) where
+instance (x y : UScalar ty) : IsLinearIntProp (x ≥ y) where
+instance (x y : UScalar ty) : IsLinearIntProp (x ≥ y) where
+instance (x y : UScalar ty) : IsLinearIntProp (x = y) where
+
+instance (x y : IScalar ty) : IsLinearIntProp (x < y) where
+instance (x y : IScalar ty) : IsLinearIntProp (x > y) where
+instance (x y : IScalar ty) : IsLinearIntProp (x ≤ y) where
+instance (x y : IScalar ty) : IsLinearIntProp (x ≥ y) where
+instance (x y : IScalar ty) : IsLinearIntProp (x ≥ y) where
+instance (x y : IScalar ty) : IsLinearIntProp (x = y) where
 
 attribute [scalar_tac_simps]
   and_self false_implies true_implies Prod.mk.injEq
