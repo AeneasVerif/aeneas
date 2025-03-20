@@ -190,6 +190,17 @@ theorem BitVec.ofNat_mul (n a b : Nat) :
   BitVec.ofNat n (a * b) = BitVec.ofNat n a * BitVec.ofNat n b := by
   simp [BitVec.toNat_eq]
 
+@[bvify_simps]
+theorem BitVec.ofNat_div (n a b : Nat)
+  (h : a < 2^n ∧ b < 2^n) :
+  BitVec.ofNat n (a / b) = BitVec.ofNat n a / BitVec.ofNat n b := by
+  simp only [BitVec.toNat_eq, BitVec.toNat_ofNat, BitVec.toNat_udiv]
+  have : a % 2^n = a := by apply Nat.mod_eq_of_lt; omega
+  have : b % 2^n = b := by apply Nat.mod_eq_of_lt; omega
+  have : a / b ≤ a := by apply Nat.div_le_self
+  have : (a / b) % 2^n = a / b := by apply Nat.mod_eq_of_lt; omega
+  simp only [*]
+
 attribute [bvify_simps] ZMod.eq_iff_mod ZMod.val_add ZMod.val_sub ZMod.val_mul ZMod.val_sub' ZMod.val_natCast
 attribute [bvify_simps] Nat.add_one_sub_one Nat.add_mod_mod Nat.mod_add_mod
 
