@@ -12,23 +12,69 @@ List `get` and `set`.
 namespace Aeneas.SimpLists
 
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
-def simpListsTac (loc : Utils.Location) : TacticM Unit := do
+
+structure Args where
+  declsToUnfold : Array Name := #[]
+  addSimpThms : Array Name := #[]
+  hypsToUse : Array FVarId := #[]
+
+def simpListsTac (args : Args) (loc : Utils.Location) : TacticM Unit := do
   let addSimpThms : TacticM (Array FVarId) := pure #[]
-  ScalarTac.condSimpTac "simp_lists" #[← simpListsSimpExt.getTheorems] #[← simpListsSimprocExt.getSimprocs] addSimpThms false loc
+  let args : ScalarTac.CondSimpArgs := {
+      simpThms := #[← simpListsSimpExt.getTheorems],
+      simprocs := #[← simpListsSimprocExt.getSimprocs],
+      declsToUnfold := args.declsToUnfold,
+      addSimpThms := args.addSimpThms,
+      hypsToUse := args.hypsToUse,
+    }
+  ScalarTac.condSimpTac "simp_lists" args addSimpThms false loc
 
-syntax (name := simp_lists) "simp_lists" (location)? : tactic
+syntax (name := simp_lists) "simp_lists" ("[" term,* "]")? (location)? : tactic
 
-def parseSimpLists : TSyntax ``simp_lists -> TacticM Utils.Location
-| `(tactic| simp_lists) => do
-  pure (Utils.Location.targets #[] true)
-| `(tactic| simp_lists $[$loc:location]?) => do
+def parseArgs (args : Array (TSyntax `term)) : TacticM Args := do
+  let mut declsToUnfold := #[]
+  let mut addSimpThms := #[]
+  let mut hypsToUse := #[]
+  for arg in args do
+    /- We have to make a case disjunction, because if we treat identifiers like
+       terms, then Lean will not succeed in infering their implicit parameters. -/
+    match arg with
+    | `($stx:ident) => do
+      match (← getLCtx).findFromUserName? stx.getId with
+      | .some decl =>
+        trace[Progress] "arg (local decl): {stx.raw}"
+        -- Local declarations should be assumptions
+        hypsToUse := hypsToUse.push decl.fvarId
+      | .none =>
+        -- Not a local declaration: should be a theorem
+        trace[Progress] "arg (theorem): {stx.raw}"
+        let some e ← Lean.Elab.Term.resolveId? stx (withInfo := true)
+          | throwError m!"Could not find theorem: {arg}"
+        if let .const name _ := e then
+          addSimpThms := addSimpThms.push name
+        else throwError m!"Unexpected: {arg}"
+    | term => do
+      -- TODO: we need to make that work
+      trace[Progress] "arg (term): {term}"
+      throwError m!"Unimplemented: arbitrary terms are not supported yet as arguments to `simp_lists` (received: {arg})"
+  pure ⟨ declsToUnfold, addSimpThms, hypsToUse ⟩
+
+def parseSimpLists : TSyntax ``simp_lists -> TacticM (Args × Utils.Location)
+| `(tactic| simp_lists $[[$args,*]]?) => do
+  let args := args.map (·.getElems) |>.getD #[]
+  let args ← parseArgs args
+  pure (args, Utils.Location.targets #[] true)
+| `(tactic| simp_lists $[[$args,*]]? $[$loc:location]?) => do
+  let args := args.map (·.getElems) |>.getD #[]
+  let args ← parseArgs args
   let loc ← Utils.parseOptLocation loc
-  pure loc
+  pure (args, loc)
 | _ => Lean.Elab.throwUnsupportedSyntax
 
-elab stx:simp_lists : tactic => do
-  let loc ← parseSimpLists stx
-  simpListsTac loc
+elab stx:simp_lists : tactic =>
+  withMainContext do
+  let (args, loc) ← parseSimpLists stx
+  simpListsTac args loc
 
 example [Inhabited α] (l : List α) (x : α) (i j : Nat) (hj : i ≠ j) : (l.set j x)[i]! = l[i]! := by
   simp_lists
@@ -45,5 +91,9 @@ theorem List.set_comm_lt (a b : α) (n m : Nat) (l : List α) (h : n < m) :
 
 example [Inhabited α] (l : List α) (x y : α) (i j : Nat) (hj : i < j) : (l.set i x).set j y = (l.set j y).set i x := by
   simp_lists
+
+example (CList : Type) (l : CList) (get : CList → Nat → Bool) (set : CList → Nat → Bool → CList)
+  (h : ∀ i j l x, i ≠ j → get (set l i x) j = get l j) (i j : Nat) (hi : i < j) : get (set l i x) j = get l j := by
+  simp_lists [h]
 
 end Aeneas.SimpLists

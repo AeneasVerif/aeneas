@@ -229,10 +229,18 @@ def bvifyAddSimpThms (n : Expr) : TacticM (Array FVarId) := do
   pure #[le_iff, lt_iff, lt_max_iff, eq_iff]
 
 def bvifyTacSimp (loc : Utils.Location) : TacticM Unit := do
-  ScalarTac.condSimpTacSimp #[← bvifySimpExt.getTheorems] #[← bvifySimprocExt.getSimprocs] loc #[] false
+  let args : ScalarTac.CondSimpArgs := {
+      simpThms := #[← bvifySimpExt.getTheorems]
+      simprocs := #[← bvifySimprocExt.getSimprocs]
+    }
+  ScalarTac.condSimpTacSimp args loc #[] false
 
 def bvifyTac (n : Expr) (loc : Utils.Location) : TacticM Unit := do
-  ScalarTac.condSimpTac "bvify" #[← bvifySimpExt.getTheorems] #[← bvifySimprocExt.getSimprocs] (bvifyAddSimpThms n) true loc
+  let args : ScalarTac.CondSimpArgs := {
+      simpThms := #[← bvifySimpExt.getTheorems]
+      simprocs := #[← bvifySimprocExt.getSimprocs]
+    }
+  ScalarTac.condSimpTac "bvify" args (bvifyAddSimpThms n) true loc
 
 syntax (name := bvify) "bvify" colGt term (location)? : tactic
 
