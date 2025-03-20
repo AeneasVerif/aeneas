@@ -286,12 +286,13 @@ theorem length_flatten_set_as_int_eq {α : Type u} (ls : List (List α)) (i : Na
   ((ls.set i x).flatten.length : Nat) = ls.flatten.length + x.length - (ls[i]!).length := by
   scalar_tac
 
-@[simp]
+@[simp, simp_lists_simps]
 theorem getElem!_map_eq {α : Type u} {β : Type v} [Inhabited α] [Inhabited β]
   (ls : List α) (i : Nat) (f : α → β)
   (h1 : i < ls.length) : -- We need the bound because otherwise we have to prove that: `(default : β) = f (default : α)`
   (ls.map f)[i]! = f (ls[i]!) := by
-  simp [*]
+  simp only [getElem!_eq_getElem?_getD, length_map, getElem?_eq_getElem, getElem_map,
+    Option.getD_some, h1]
 
 @[simp]
 theorem getElem!_map_eq' {α : Type u} {β : Type v} [Inhabited α] [Inhabited β]
@@ -302,6 +303,23 @@ theorem getElem!_map_eq' {α : Type u} {β : Type v} [Inhabited α] [Inhabited �
   . simp only [hi, List.getElem!_map_eq]
   . simp only [not_lt] at hi
     simp only [getElem!_eq_getElem?_getD, getElem?_map, Option.getD_map, hdef]
+
+@[simp, simp_lists_simps]
+theorem getElem!_default [Inhabited α] (ls : List α) (i : ℕ)
+  (h : ls.length ≤ i) : ls[i]! = default := by
+  revert i h
+  induction ls
+  . intros i h
+    simp only [getElem!_eq_getElem?_getD, getElem?_nil, Option.getD_none]
+  . intros i h
+    cases i <;> simp_all [getElem!_eq_getElem?_getD, length_cons, nonpos_iff_eq_zero,
+      AddLeftCancelMonoid.add_eq_zero, length_eq_zero, one_ne_zero, and_false, not_false_eq_true,
+      neq_imp, add_le_add_iff_right, getElem?_cons_succ]
+
+@[simp, simp_lists_simps]
+theorem getElem!_map_default [Inhabited α] [Inhabited β] (ls : List α) (i : ℕ) (f : α → β)
+  (h1 : ls.length ≤ i) : (List.map f ls)[i]! = default := by
+  simp only [length_map, getElem!_default, h1]
 
 @[simp]
 theorem getElem?_length_le {α} [Inhabited α] (l : List α) (i : Nat) (hi : l.length ≤ i) :
