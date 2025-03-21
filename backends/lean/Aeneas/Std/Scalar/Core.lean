@@ -1035,6 +1035,14 @@ abbrev Isize.bv (x : Isize) : BitVec System.Platform.numBits := IScalar.bv x
 @[bvify_simps] theorem U64.le_max (x: U64) : x.val ≤ 18446744073709551615 := by have := x.hBounds; simp at this; omega
 @[bvify_simps] theorem U128.le_max (x: U128) : x.val ≤ 340282366920938463463374607431768211455 := by have := x.hBounds; simp at this; omega
 
+@[simp, scalar_tac_simps]
+theorem UScalar.ofNat_val (x : UScalar ty) (hInBounds : x.val ≤ UScalar.cMax ty) :
+  UScalar.ofNat x hInBounds = x := by scalar_tac
+
+@[simp, scalar_tac_simps]
+theorem IScalar.ofInt_val (x : IScalar ty) (hInBounds : IScalar.cMin ty ≤ x.val ∧ x.val ≤ IScalar.cMax ty) :
+  IScalar.ofInt x hInBounds = x := by scalar_tac
+
 @[simp, bvify_simps] theorem UScalar.BitVec_ofNat_val (x : UScalar ty) : BitVec.ofNat ty.numBits x.val = x.bv := by
   cases x; simp only [val, BitVec.ofNat_toNat, BitVec.setWidth_eq]
 
