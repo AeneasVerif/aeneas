@@ -171,41 +171,44 @@ where
   traverseProgram (cfg : Config): TacticM Info := do
     withMainContext do
     trace[ProgressStar] "traverseProgram: current goal: {← getMainGoal}"
-    Progress.programTelescope (← getMainTarget) fun _xs _zs program _res _post => do
-    let e ← Utils.normalizeLetBindings program
-    if let .const ``Bind.bind .. := e.getAppFn then
-      let #[_m, _self, _α, _β, _value, cont] := e.getAppArgs
-        | throwError "Expected bind to have 4 arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
-      Utils.lambdaOne cont fun x _ => do
-        let name ← x.fvarId!.getUserName
-        let (info, mainGoal) ← onBind cfg name
-        trace[ProgressStar] "traverseProgram: after call to `onBind`: main goal is: {mainGoal}"
-        /- Continue, if necessary -/
-        match mainGoal with
-        | none =>
-          -- Stop
-          return info
-        | some mainGoal =>
+    try -- `programTelescope` can fail
+      Progress.programTelescope (← getMainTarget) fun _xs _zs program _res _post => do
+      let e ← Utils.normalizeLetBindings program
+      if let .const ``Bind.bind .. := e.getAppFn then
+        let #[_m, _self, _α, _β, _value, cont] := e.getAppArgs
+          | throwError "Expected bind to have 4 arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
+        Utils.lambdaOne cont fun x _ => do
+          let name ← x.fvarId!.getUserName
+          let (info, mainGoal) ← onBind cfg name
+          trace[ProgressStar] "traverseProgram: after call to `onBind`: main goal is: {mainGoal}"
+          /- Continue, if necessary -/
+          match mainGoal with
+          | none =>
+            -- Stop
+            return info
+          | some mainGoal =>
+            setGoals [mainGoal]
+            let restInfo ← traverseProgram cfg
+            return info ++ restInfo
+      else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
+        let contsTaggedVals ←
+          bfInfo.branches.mapM fun br => do
+            Utils.lambdaTelescopeN br.toExpr br.numArgs fun xs _ => do
+              let names ← xs.mapM (·.fvarId!.getUserName)
+              return names
+        let (branchGoals, mkStx) ← onBif cfg bfInfo contsTaggedVals
+        /- Continue exploring from the subgoals -/
+        let branchInfos ← branchGoals.mapM fun mainGoal => do
           setGoals [mainGoal]
           let restInfo ← traverseProgram cfg
-          return info ++ restInfo
-    else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
-      let contsTaggedVals ←
-        bfInfo.branches.mapM fun br => do
-          Utils.lambdaTelescopeN br.toExpr br.numArgs fun xs _ => do
-            let names ← xs.mapM (·.fvarId!.getUserName)
-            return names
-      let (branchGoals, mkStx) ← onBif cfg bfInfo contsTaggedVals
-      /- Continue exploring from the subgoals -/
-      let branchInfos ← branchGoals.mapM fun mainGoal => do
-        setGoals [mainGoal]
-        let restInfo ← traverseProgram cfg
-        pure restInfo
-      /- Put everything together -/
-      mkStx branchInfos
-    else
-      let (info, mainGoal) ← onResult cfg
-      pure { info with unsolvedGoals := info.unsolvedGoals ++ mainGoal.toList}
+          pure restInfo
+        /- Put everything together -/
+        mkStx branchInfos
+      else
+        let (info, mainGoal) ← onResult cfg
+        pure { info with unsolvedGoals := info.unsolvedGoals ++ mainGoal.toList}
+    catch _ =>
+      return ({ script := #[←`(tactic| sorry)], unsolvedGoals := ← getUnsolvedGoals})
 
   onResult (cfg : Config) : TacticM (Info × Option MVarId) := do
     trace[ProgressStar] "onResult: Since (· >>= pure) = id, we treat this result as a bind on id"
@@ -250,7 +253,7 @@ where
           unsolvedGoals := unsolved.toList,
         }
       pure (info, mainGoal)
-    else return ({ script := #[←`(tactic| skip)], unsolvedGoals := ← getUnsolvedGoals}, none)
+    else return ({ script := #[←`(tactic| sorry)], unsolvedGoals := ← getUnsolvedGoals}, none)
 
   onBif (cfg : Config) (bfInfo : Bifurcation.Info) (toBeProcessed : Array (Array Name)): TacticM (List MVarId × (List Info → TacticM Info)) := do
     trace[ProgressStar] "onBif: encountered {bfInfo.kind}"

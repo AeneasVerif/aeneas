@@ -36,30 +36,13 @@ def mkNatifyContext (simpArgs : Option (Syntax.TSepArray `Lean.Parser.Tactic.sim
   mkSimpContext
     (← `(tactic| simp -decide (maxDischargeDepth := 1) only [natify_simps, push_cast, $args,*])) false
 
-/-- A variant of `applySimpResultToProp` that cannot close the goal, but does not need a meta
-variable and returns a tuple of a proof and the corresponding simplified proposition. -/
-def applySimpResultToProp' (proof : Expr) (prop : Expr) (r : Simp.Result) : MetaM (Expr × Expr) :=
-  do
-  match r.proof? with
-  | some eqProof => return (← mkExpectedTypeHint (← mkEqMP eqProof proof) r.expr, r.expr)
-  | none =>
-    if r.expr != prop then
-      return (← mkExpectedTypeHint proof r.expr, r.expr)
-    else
-      return (proof, r.expr)
-
-/-- Translate a proof and the proposition into a natified form. -/
-def natifyProof (simpArgs : Option (Syntax.TSepArray `Lean.Parser.Tactic.simpStar ","))
-    (proof : Expr) (prop : Expr) : TacticM (Expr × Expr) := do
-  let ctx_result ← mkNatifyContext simpArgs
-  let (r, _) ← simp prop ctx_result.ctx
-  applySimpResultToProp' proof prop r
-
 attribute [natify_simps] BitVec.toNat_eq BitVec.lt_def BitVec.le_def
-                         BitVec.toNat_umod BitVec.toNat_add BitVec.toNat_sub BitVec.toNat_ofNat
-                         BitVec.toNat_and BitVec.toNat_or BitVec.toNat_xor
+                         BitVec.toNat_umod BitVec.toNat_add BitVec.toNat_sub BitVec.toNat_mul
+                         BitVec.toNat_ofNat BitVec.toNat_and BitVec.toNat_or BitVec.toNat_xor
 attribute [natify_simps] ZMod.eq_iff_mod ZMod.val_add ZMod.val_sub ZMod.val_mul ZMod.val_sub'
-attribute [natify_simps] U8.bv_toNat U16.bv_toNat U32.bv_toNat U64.bv_toNat U128.bv_toNat Usize.bv_toNat
+                         ZMod.val_natCast ZMod.natCast_val
+attribute [natify_simps] U8.bv_toNat U16.bv_toNat U32.bv_toNat U64.bv_toNat U128.bv_toNat Usize.bv_toNat UScalar.bv_toNat
+attribute [natify_simps] Nat.cast_ofNat
 
 example (x y : BitVec 32) (h : x.toNat = y.toNat) : x = y := by natify [h]
 

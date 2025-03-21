@@ -62,7 +62,7 @@ macro_rules
       -- Simplify the context - otherwise simp_all below will blow up
       remove_invImage_assumptions <;>
       -- Finish
-      scalar_tac)
+      scalar_tac +fastSaturate)
 
 -- This simplification lemma it is useful for the proofs of termination
 attribute [scalar_tac_simps, simp] Prod.lex_iff

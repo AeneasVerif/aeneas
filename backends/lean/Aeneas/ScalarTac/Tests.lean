@@ -71,6 +71,7 @@ example (x y : Nat) (h : x = y + 2^32) : 0 ≤ x := by
 example (x y : Nat) (h : x = y - 2^32) : 0 ≤ x := by
   scalar_tac
 
+set_option maxHeartbeats 500000 in
 example
   (xi yi : U32)
   (c0 : U8)
@@ -100,6 +101,7 @@ example (v : { l : List α // l.length ≤ Usize.max }) :
   scalar_tac
 
 example (i : I8) : - 2^(Isize.numBits - 1) ≤ i.val ∧ i.val ≤ 2^(Isize.numBits - 1) := by scalar_tac
+
 example (x : I8) : -2 ^ (System.Platform.numBits - 1) ≤ x.val := by scalar_tac
 
 example

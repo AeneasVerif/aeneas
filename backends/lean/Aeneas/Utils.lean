@@ -444,6 +444,7 @@ def filterAssumptionTacCore (dtree : DiscrTree FVarId) : TacticM Bool := do
   let g ← getMainGoal
   let type ← instantiateMVars (← g.getType)
   let candidates ← dtree.getMatch type
+  trace[Utils] "Candidates: {candidates.map Expr.fvar}"
   let asm : Option FVarId ← candidates.findM? fun fvar => do
     let localDecl ← fvar.getDecl
     isDefEq type localDecl.type
@@ -511,7 +512,7 @@ def singleAssumptionTacCore (dtree : DiscrTree FVarId) : TacticM Unit := do
     -- No meta-variables: we can safely use the assumption tactic
     trace[Utils] "The goal does not contain meta-variables"
     unless ← filterAssumptionTacCore dtree do
-      throwTacticEx `assumption mvarId
+      throwTacticEx `sassumption mvarId
   else
     trace[Utils] "The goal contains meta-variables"
     /- There are meta-variables that we need to instantiate

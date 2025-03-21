@@ -1,5 +1,7 @@
 import Mathlib.Tactic.Ring.RingNF
+import Mathlib.Algebra.Order.Sub.Basic
 import Aeneas.Range.SRRange.Basic
+import Aeneas.List.List
 
 namespace Aeneas
 
@@ -144,6 +146,56 @@ theorem foldl_range' (start len step : Nat) (hStep : 0 < step) (f : α → Nat �
     have : start < start + (len + 1) * step := by simp [*]
     simp only [this, ↓reduceIte]
     ring_nf
+
+theorem eq_foldWhile {α} (max step : Nat) (hStep : 0 < step) (f f_body : α → Nat → α) (i) (x)
+  (heq : ∀ x i, f x i = if i < max then f (f_body x i) (i + step) else x) :
+  f x i = foldWhile max step hStep f_body i x := by
+  dcases hi : i < max
+  . unfold foldWhile
+    simp [hi]
+    have hind := eq_foldWhile max step hStep f f_body (i + step)
+    rw [← hind]
+    . replace heq := heq x i
+      simp [heq, hi]
+    . apply heq
+  . unfold foldWhile
+    simp only [↓reduceIte, heq, hi]
+termination_by max - i
+decreasing_by simp_wf; simp at hi; omega
+
+theorem foldWhile_shift_start {α : Type u} (max step : Nat) (hStep : 0 < step) (f : α → Nat → α) (start : Nat) (init : α) :
+  foldWhile max step hStep f start init = foldWhile (max - start) step hStep (fun x i => f x (i + start)) 0 init := by
+  unfold foldWhile
+  dcases h0 : start < max
+  . have h0' : 0 < max - start := by omega
+    simp only [h0, h0', ↓reduceIte, Nat.zero_add]
+    dcases h1 : start + step < max
+    . have := foldWhile_shift_start max step hStep f (start + step) (f init start)
+      simp only [this]
+      have := foldWhile_shift_start (max - start) step hStep (fun x i => f x (i + start)) step (f init start)
+      simp only [Nat.zero_add, this]
+      have : max - (start + step) = max - start - step := by omega
+      rw [this]; clear this
+      have hi i : i + step + start = i + (start + step) := by omega
+      simp only [hi]
+    . simp [h1, not_false_eq_true, foldWhile_id]
+      have h2 : ¬ step < max - start := by omega
+      simp only [h2, not_false_eq_true, foldWhile_id]
+  . simp [h0]
+termination_by max - step - start
+decreasing_by all_goals (simp_wf; simp at h0 h1; omega)
+
+theorem foldWhile_forall_eq_imp_eq {α : Type u} (max step : Nat) (hStep : 0 < step)
+  (f0 f1 : α → Nat → α) (start : Nat) (init : α)
+  (h : ∀ x i, start ≤ i → i < max → f0 x i = f1 x i) :
+  foldWhile max step hStep f0 start init = foldWhile max step hStep f1 start init := by
+  dcases h0 : start < max <;> unfold foldWhile <;> simp [h0]
+  rw [h] <;> try omega
+  rw [foldWhile_forall_eq_imp_eq]
+  intro x i h0 h1
+  apply h <;> omega
+termination_by max - start
+decreasing_by (simp_wf; simp at h0; omega)
 
 end SRRange
 

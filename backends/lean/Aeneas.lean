@@ -3,7 +3,9 @@ import Aeneas.Bvify
 import Aeneas.BvTac
 import Aeneas.Diverge
 import Aeneas.FSimp
+import Aeneas.Int
 import Aeneas.List
+import Aeneas.Nat
 import Aeneas.Natify
 import Aeneas.Progress
 import Aeneas.Range
@@ -12,6 +14,7 @@ import Aeneas.ScalarDecrTac
 import Aeneas.ScalarNF
 import Aeneas.ScalarTac
 import Aeneas.SimpLemmas
+import Aeneas.SimpLists
 import Aeneas.Std
 import Aeneas.Utils
 import Aeneas.Tests

@@ -23,7 +23,7 @@ instance [BEq α] : BEq (Array α n) := SubtypeBEq _
 instance [BEq α] [LawfulBEq α] : LawfulBEq (Array α n) := SubtypeLawfulBEq _
 
 /- Registering some theorems for `scalar_tac` -/
-@[scalar_tac a]
+@[scalar_tac a, scalar_tac_simps]
 theorem Array.length_eq {α : Type u} {n : Usize} (a : Array α n) : a.val.length = n.val := by
   cases a; simp[*]
 

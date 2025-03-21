@@ -87,7 +87,7 @@ def div? {α: Type u} (r: Result α): Bool :=
   | div => true
   | ok _ | fail _ => false
 
-def massert (b:Bool) : Result Unit :=
+def massert (b : Prop) [Decidable b] : Result Unit :=
   if b then ok () else fail assertionFailure
 
 macro "prove_eval_global" : tactic => `(tactic| simp (failIfUnchanged := false) only [global_simps] <;> first | apply Eq.refl | decide)

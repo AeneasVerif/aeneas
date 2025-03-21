@@ -190,11 +190,21 @@ def progressWith (fExpr : Expr) (th : Expr)
         if ← isConj hTy then do
           mkAppM ``And.left #[h]
         else do pure h
-      trace[Progress] "h: {← inferType h}"
-      trace[Progress] "Introducing the \"pretty\" let binding"
-      let e ← mkAppM ``eq_imp_prettyMonadEq #[h]
-      let _ ← Utils.addDeclTac name e (← inferType e) (asLet := false)
-      trace[Progress] "Introduced the \"pretty\" let binding: {← getMainGoal}"
+      /- Do *not* introduce an equality if the return type is `()` -/
+      let hTy ← inferType h
+      hTy.withApp fun _ args => do -- Deconstruct the equality
+      trace[Progress] "Checking if type is (): after deconstructing the equality: {args}"
+      args[0]!.withApp fun _ args => do -- Deconstruct the `Result`
+      trace[Progress] "Checking if type is (): after deconstructing Result: {args}"
+      let arg0 := args[0]!
+      if arg0.isConst ∧ (arg0.constName == ``Unit ∨ arg0.constName == ``PUnit) then
+        trace[Progress] "Not introducing a pretty equality because the output type is `()`"
+      else
+        trace[Progress] "h: {← inferType h}"
+        trace[Progress] "Introducing the \"pretty\" let binding"
+        let e ← mkAppM ``eq_imp_prettyMonadEq #[h]
+        let _ ← Utils.addDeclTac name e (← inferType e) (asLet := false)
+        trace[Progress] "Introduced the \"pretty\" let binding: {← getMainGoal}"
 
     /- Split the conjunctions.
        For the conjunctions, we split according once to separate the equality `f ... = .ret ...`
@@ -215,6 +225,8 @@ def progressWith (fExpr : Expr) (th : Expr)
         k h none ids
     /- Simplify the target by using the equality and some monad simplifications,
        then continue splitting the post-condition -/
+    -- TODO: this is dangerous if we want to use a local assumption to make progress.
+    -- We shouldn't simplify the goal with the equality, then simplify again.
     splitEqAndPost fun hEq hPost ids => do
     trace[Progress] "eq and post:\n{hEq} : {← inferType hEq}\n{hPost}"
     trace[Progress] "current goal: {← getMainGoal}"
@@ -292,20 +304,26 @@ def progressWith (fExpr : Expr) (th : Expr)
     setGoals newPropGoals
     allGoalsNoRecover asmTac
     let newPropGoals ← getUnsolvedGoals
-    /- Simplify the post-conditions in the main goal - note that we waited until now because by solving the preconditions
-       we may have instantiated meta-variables -/
+    /- Simplify the post-conditions in the main goal - note that we waited until now
+       because by solving the preconditions we may have instantiated meta-variables.
+       We also simplify the goal again (to simplify let-bindings, etc.) -/
     setGoals curGoals
     match curGoals with
     | [] => pure ()
     | [ _ ] =>
+      -- Simplify the post-conditions
       let args : SimpArgs :=
         {simpThms := #[← progressPostSimpExt.getTheorems],
          simprocs := #[← ScalarTac.scalarTacSimprocExt.getSimprocs]}
       simpAt true { maxDischargeDepth := 0, failIfUnchanged := false }
             args (.targets hPosts false)
+      -- Simplify the goal again
+      tryTac do
+      simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
+        {simpThms := #[← progressSimpExt.getTheorems], declsToUnfold := #[``pure]} (.targets #[] true)
     | _ => throwError "Unexpected number of goals"
     let curGoals ← getUnsolvedGoals
-    trace[Progress] "Main goal after simplifying the post-conditions: {curGoals}"
+    trace[Progress] "Main goal after simplifying the post-conditions and the target: {curGoals}"
     /- Update the list of goals -/
     let newNonPropGoals ← newNonPropGoals.filterM fun mvar => not <$> mvar.isAssigned
     let newGoals := newNonPropGoals ++ newPropGoals
@@ -558,7 +576,7 @@ def parseLetProgress
         -- Not a local declaration: should be a theorem
         trace[Progress] "With arg (theorem): {stx.raw}"
         let some e ← Term.resolveId? stx (withInfo := true)
-          | throwError m!"Could not find theorem: {pspec}"
+          | throwError m!"Could not find theorem: {pspec}"      
         pure e
     | term => do
       trace[Progress] "With arg (term): {term}"
@@ -875,6 +893,25 @@ info: example
     have h1 := add_spec'
     progress with h1 as ⟨ z1, h ⟩
     progress with add_spec' z1 as ⟨ z2, h ⟩
+
+  /- Pretty equality when the output type is unit -/
+  /--
+  info: example
+  (y : U32)
+  (h1 : ↑y < 100) :
+  massert (y < 100#u32) = ok ()
+  := by sorry
+  -/
+  #guard_msgs in
+  example (x y : U32) (h0 : x.val < 100) (h1 : y.val < 100) :
+    (do
+      massert (x < 100#u32)
+      massert (y < 100#u32))
+    = ok ()
+    := by
+    let* ⟨⟩ ← massert_spec
+    extract_goal0
+    let* ⟨⟩ ← massert_spec
 
   /--
   info: example
