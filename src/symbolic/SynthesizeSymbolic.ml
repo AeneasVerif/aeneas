@@ -92,7 +92,7 @@ let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
         | _ -> craise __FILE__ __LINE__ span "Ill-formed borrow expansion")
     | TVar _
     | TLiteral TChar
-    | TNever | TTraitType _ | TArrow _ | TRawPtr _ | TDynTrait _ ->
+    | TNever | TTraitType _ | TArrow _ | TRawPtr _ | TDynTrait _ | TError _ ->
         craise __FILE__ __LINE__ span "Ill-formed symbolic expansion"
   in
   Expansion (place, sv, expansion)

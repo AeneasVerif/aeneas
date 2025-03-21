@@ -575,6 +575,9 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
   | TDynTrait _ ->
       craise_opt_span __FILE__ __LINE__ span
         "Dynamic trait types are not supported yet"
+  | TError _ ->
+      craise_opt_span __FILE__ __LINE__ span
+        "Found type error in the output of charon"
 
 and translate_sgeneric_args (span : Meta.span option)
     (generics : T.generic_args) : generic_args =
@@ -652,7 +655,7 @@ let translate_type_decl_kind (span : Meta.span) (kind : T.type_decl_kind) :
   | Alias _ ->
       craise __FILE__ __LINE__ span
         "type aliases should have been removed earlier"
-  | T.Union _ | T.Opaque | T.TError _ -> Opaque
+  | T.Union _ | T.Opaque | T.TDeclError _ -> Opaque
 
 (** Compute which input parameters should be implicit or explicit.
 
@@ -813,6 +816,9 @@ let rec translate_fwd_ty (span : Meta.span option) (type_infos : type_infos)
   | TDynTrait _ ->
       craise_opt_span __FILE__ __LINE__ span
         "Dynamic trait types are not supported yet"
+  | TError _ ->
+      craise_opt_span __FILE__ __LINE__ span
+        "Found type error in the output of charon"
 
 and translate_fwd_generic_args (span : Meta.span option)
     (type_infos : type_infos) (generics : T.generic_args) : generic_args =
@@ -931,6 +937,9 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
   | TDynTrait _ ->
       craise_opt_span __FILE__ __LINE__ span
         "Dynamic trait types are not supported yet"
+  | TError _ ->
+      craise_opt_span __FILE__ __LINE__ span
+        "Found type error in the output of charon"
 
 (** Simply calls [translate_back_ty] *)
 let ctx_translate_back_ty (ctx : bs_ctx) (keep_region : 'r -> bool)

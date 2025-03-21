@@ -195,7 +195,7 @@ let symbolic_value_is_greedily_expandable (span : Meta.span option)
           | Struct _ | Enum ([] | [ _ ]) ->
               (* Structure or enumeration with <= 1 variant *)
               true
-          | Enum (_ :: _) | Alias _ | Opaque | TError _ | Union _ ->
+          | Enum (_ :: _) | Alias _ | Opaque | TDeclError _ | Union _ ->
               (* Enumeration with > 1 variants *)
               false
         end

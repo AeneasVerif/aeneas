@@ -181,6 +181,9 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
     | TDynTrait _ ->
         craise_opt_span __FILE__ __LINE__ span
           "Dynamic trait types are not supported yet"
+    | TError _ ->
+        craise_opt_span __FILE__ __LINE__ span
+          "Found type error in the output of charon"
   and explore_generics (outer : region list) (generics : generic_args) =
     let { regions; types; const_generics = _; trait_refs = _ } = generics in
     List.iter (fun long -> add_edges ~long ~shorts:outer) regions;
