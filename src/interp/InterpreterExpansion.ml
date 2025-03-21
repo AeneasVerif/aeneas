@@ -663,7 +663,7 @@ let greedy_expand_symbolics_with_borrows (config : config) (span : Meta.span) :
                       > 1 variants (option \
                       [greedy_expand_symbolics_with_borrows] of [config]): "
                     ^ name_to_string ctx def.item_meta.name)
-              | Alias _ | Opaque | TError _ ->
+              | Alias _ | Opaque | TDeclError _ ->
                   craise __FILE__ __LINE__ span
                     "Attempted to greedily expand an alias or opaque type"
               | Union _ ->
@@ -689,7 +689,8 @@ let greedy_expand_symbolics_with_borrows (config : config) (span : Meta.span) :
         | TTraitType _
         | TArrow _
         | TRawPtr _
-        | TDynTrait _ -> craise __FILE__ __LINE__ span "Unreachable"
+        | TDynTrait _
+        | TError _ -> craise __FILE__ __LINE__ span "Unreachable"
       in
       (* *)
       log#ltrace
