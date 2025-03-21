@@ -204,6 +204,38 @@ theorem BitVec.ofNat_div (n a b : Nat)
 attribute [bvify_simps] ZMod.eq_iff_mod ZMod.val_add ZMod.val_sub ZMod.val_mul ZMod.val_sub' ZMod.val_natCast
 attribute [bvify_simps] Nat.add_one_sub_one Nat.add_mod_mod Nat.mod_add_mod
 
+@[simp, bvify_simps]
+theorem BitVec.ofNat_shift_UScalar_val (x : UScalar ty) (n : Nat) :
+  BitVec.ofNat ty.numBits (x.val >>> n) = x.bv >>> n := by
+  apply BitVec.eq_of_toNat_eq
+  simp only [BitVec.toNat_ofNat, BitVec.toNat_ushiftRight, UScalar.bv_toNat]
+  have : x.val >>> n ≤ x.val := by
+    simp [Nat.shiftRight_eq_div_pow]
+    apply Nat.div_le_self
+  have : (x.val >>> n) % 2^ty.numBits = x.val >>> n := by
+    apply Nat.mod_eq_of_lt
+    have := x.hBounds
+    scalar_tac
+  rw [this]
+
+@[simp, bvify_simps] theorem BitVec.ofNat_shift_U8_val (x : U8) (n : Nat) :
+  BitVec.ofNat 8 (x.val >>> n) = x.bv >>> n := BitVec.ofNat_shift_UScalar_val x n
+
+@[simp, bvify_simps] theorem BitVec.ofNat_shift_U16_val (x : U16) (n : Nat) :
+  BitVec.ofNat 16 (x.val >>> n) = x.bv >>> n := BitVec.ofNat_shift_UScalar_val x n
+
+@[simp, bvify_simps] theorem BitVec.ofNat_shift_U32_val (x : U32) (n : Nat) :
+  BitVec.ofNat 32 (x.val >>> n) = x.bv >>> n := BitVec.ofNat_shift_UScalar_val x n
+
+@[simp, bvify_simps] theorem BitVec.ofNat_shift_U64_val (x : U64) (n : Nat) :
+  BitVec.ofNat 64 (x.val >>> n) = x.bv >>> n := BitVec.ofNat_shift_UScalar_val x n
+
+@[simp, bvify_simps] theorem BitVec.ofNat_shift_U128_val (x : U128) (n : Nat) :
+  BitVec.ofNat 128 (x.val >>> n) = x.bv >>> n := BitVec.ofNat_shift_UScalar_val x n
+
+@[simp, bvify_simps] theorem BitVec.ofNat_shift_Usize_val (x : Usize) (n : Nat) :
+  BitVec.ofNat System.Platform.numBits (x.val >>> n) = x.bv >>> n := BitVec.ofNat_shift_UScalar_val x n
+
 /-!
 Simplification lemmas about `setWidth`
 -/
@@ -213,7 +245,7 @@ attribute [bvify_simps] BitVec.setWidth_eq
 theorem UScalar.BitVec_ofNat_setWidth (x : UScalar ty) : BitVec.ofNat n x.val = x.bv.setWidth n := by
   simp only [UScalar.val, BitVec.toNat_eq]; simp
 
-syntax (name := bvify_saturate) "bvify_saturate" term : tactic
+syntax (name := bvify_saturate) "bvify_saturate" colGe term : tactic
 
 /-!
 Some theorems which automatically lift comparisons between machine scalars, without needing the number of bits to be provided by the user.
@@ -253,14 +285,14 @@ def bvifyTac (n : Expr) (loc : Utils.Location) : TacticM Unit := do
     }
   ScalarTac.condSimpTac "bvify" args (bvifyAddSimpThms n) true loc
 
-syntax (name := bvify) "bvify" colGt term (location)? : tactic
+syntax (name := bvify) "bvify " colGt term (location)? : tactic
 
 def parseBvify : TSyntax ``bvify -> TacticM (Expr × Utils.Location)
-| `(tactic| bvify $n) => do
-  let n ← Elab.Term.elabTerm n (Expr.const ``Nat [])
-  pure (n, Utils.Location.targets #[] true)
 | `(tactic| bvify $n $[$loc:location]?) => do
+  -- TODO: if we forget the number of bits the error messages are spurious
+  trace[Bvify] "Number of bits: {n}"
   let n ← Elab.Term.elabTerm n (Expr.const ``Nat [])
+  trace[Bvify] "Number of bits after elaboration: {n}"
   let loc ← Utils.parseOptLocation loc
   pure (n, loc)
 | _ => Lean.Elab.throwUnsupportedSyntax
@@ -352,7 +384,6 @@ example
   simp_all only
   bv_decide
 
-
 example
   (a : U32)
   (b : U32)
@@ -388,6 +419,10 @@ example
   y.val = x.val
   := by
   bvify 16 at *
+  bv_decide
+
+example (x : U64) : x.val >>> 31 < 2^33 := by
+  bvify 64
   bv_decide
 
 end Aeneas.Bvify
