@@ -576,7 +576,7 @@ def parseLetProgress
         -- Not a local declaration: should be a theorem
         trace[Progress] "With arg (theorem): {stx.raw}"
         let some e ← Term.resolveId? stx (withInfo := true)
-          | throwError m!"Could not find theorem: {pspec}"
+          | throwError m!"Could not find theorem: {pspec}"      
         pure e
     | term => do
       trace[Progress] "With arg (term): {term}"
