@@ -39,6 +39,10 @@ def mkZModifyContext (simpArgs : Option (Syntax.TSepArray `Lean.Parser.Tactic.si
 attribute [zmodify_simps] Nat.eq_mod_iff_eq_ZMod Int.eq_mod_iff_eq_ZMod div_to_ZMod
 attribute [zmodify_simps] Nat.reduceGcd
 
+attribute [zmodify_simps] ZMod.natCast_val ZMod.cast_id' ZMod.intCast_mod id_eq
+attribute [zmodify_simps] Int.cast_add Int.cast_natCast Int.cast_mul
+attribute [zmodify_simps] Int.reduceNeg
+
 @[zmodify_simps]
 theorem Nat.eq_mod_zero_iff_eq_ZMod (n : ℕ) (a : Nat) : a % n = 0 ↔ (a : ZMod n) = 0 := by
   have : 0 = 0 % n := by simp only [Nat.zero_mod]
