@@ -20,3 +20,4 @@ import Aeneas.Std
 import Aeneas.Utils
 import Aeneas.Tests
 import Aeneas.Zify
+import Aeneas.ZModify
