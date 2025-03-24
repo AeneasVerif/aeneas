@@ -799,13 +799,15 @@ let builtin_trait_decls_info () =
         mk_trait "core::convert::TryInto" ~methods:[ "try_into" ] ();
         mk_trait "core::convert::AsMut" ~methods:[ "as_mut" ] ();
         (* Eq, Ord *)
-        mk_trait "core::cmp::PartialEq" ~methods:[ "eq" ] ();
+        mk_trait "core::cmp::PartialEq" ~methods:[ "eq"; "ne" ] ();
         mk_trait "core::cmp::Eq" ~parent_clauses:[ "partialEqInst" ] ();
         mk_trait "core::cmp::PartialOrd" ~parent_clauses:[ "partialEqInst" ]
-          ~methods:[ "partial_cmp" ] ();
+          ~methods:[ "partial_cmp"; "lt"; "le"; "gt"; "ge" ]
+          ();
         mk_trait "core::cmp::Ord"
           ~parent_clauses:[ "eqInst"; "partialOrdInst" ]
-          ~methods:[ "cmp" ] ();
+          ~methods:[ "cmp"; "max"; "min"; "clamp" ]
+          ();
       ]
 
 let mk_builtin_trait_decls_map () =
