@@ -612,7 +612,9 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
     | Not, (TLiteral (TInteger _) as lty) -> lty
     | Neg, (TLiteral (TInteger _) as lty) -> lty
     | Cast (CastScalar (_, tgt_ty)), _ -> TLiteral tgt_ty
-    | _ -> exec_raise __FILE__ __LINE__ span ("Invalid input for unop " ^ unop_to_string ctx unop)
+    | _ ->
+        exec_raise __FILE__ __LINE__ span
+          ("Invalid input for unop " ^ unop_to_string ctx unop)
   in
   let res_sv = { sv_id = res_sv_id; sv_ty = res_sv_ty } in
   (* Compute the result *)
