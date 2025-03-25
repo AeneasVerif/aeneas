@@ -18,9 +18,9 @@ let log = Logging.expressions_log
 
 (** As long as there are symbolic values at a given place (potentially in subvalues)
     which contain borrows and are expandable, expand them.
-    
+
     We use this function before copying values.
-    
+
     Note that the place should have been prepared so that there are no remaining
     loans.
 *)
@@ -307,7 +307,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
     Evaluating an operand requires reorganizing the environment to get access
     to a given place (by ending borrows, expanding symbolic values...) then
     applying the operand operation (move, copy, etc.).
-    
+
     Sometimes, we want to decouple the two operations.
     Consider the following example:
     {[
@@ -324,7 +324,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
     [l0] upon evaluating [move y], if we have already moved the value of x,
     we won't notice that [shared_borrow l0] has disappeared from the environment
     (it has been moved and not assigned yet, and so is hanging in "thin air").
-    
+
     By first "preparing" the operands evaluation, we make sure no such thing
     happens. To be more precise, we make sure all the updates to borrows triggered
     by access *and* move operations have already been applied.
@@ -333,7 +333,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
     in the rule premises, before the actual operand evaluation, that allows to
     reorganize the environment so that it satisfies the proper conditions. This
     function's role is to do the reorganization.
-    
+
     Rem.: doing this is actually not completely necessary because when
     generating MIR, rustc introduces intermediate assignments for all the function
     parameters. Still, it is better for soundness purposes, and corresponds to
@@ -612,7 +612,7 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
     | Not, (TLiteral (TInteger _) as lty) -> lty
     | Neg, (TLiteral (TInteger _) as lty) -> lty
     | Cast (CastScalar (_, tgt_ty)), _ -> TLiteral tgt_ty
-    | _ -> exec_raise __FILE__ __LINE__ span "Invalid input for unop"
+    | _ -> exec_raise __FILE__ __LINE__ span ("Invalid input for unop " ^ unop_to_string ctx unop)
   in
   let res_sv = { sv_id = res_sv_id; sv_ty = res_sv_ty } in
   (* Compute the result *)

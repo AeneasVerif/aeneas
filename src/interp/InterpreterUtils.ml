@@ -35,6 +35,7 @@ let fun_sig_to_string = Print.EvalCtx.fun_sig_to_string
 let inst_fun_sig_to_string = Print.EvalCtx.inst_fun_sig_to_string
 let ty_to_string = Print.EvalCtx.ty_to_string
 let constant_expr_to_string = Print.EvalCtx.constant_expr_to_string
+let unop_to_string = Print.EvalCtx.unop_to_string
 let generic_args_to_string = Print.EvalCtx.generic_args_to_string
 let trait_ref_to_string = Print.EvalCtx.trait_ref_to_string
 let trait_decl_ref_to_string = Print.EvalCtx.trait_decl_ref_to_string
@@ -117,10 +118,10 @@ let mk_fresh_symbolic_typed_value_from_no_regions_ty (span : Meta.span)
   mk_fresh_symbolic_typed_value span ty
 
 (** Create a loans projector value from a symbolic value.
-    
+
     Checks if the projector will actually project some regions. If not,
     returns {!Values.AIgnored} ([_]).
-    
+
     TODO: update to handle 'static
  *)
 let mk_aproj_loans_value_from_symbolic_value (proj_regions : RegionId.Set.t)
