@@ -682,6 +682,10 @@ module EvalCtx = struct
     let env = eval_ctx_to_fmt_env ctx in
     place_to_string env op
 
+  let unop_to_string (ctx : eval_ctx) (op : unop) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    unop_to_string env op
+
   let operand_to_string (ctx : eval_ctx) (op : operand) : string =
     let env = eval_ctx_to_fmt_env ctx in
     operand_to_string env op
