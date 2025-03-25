@@ -45,7 +45,9 @@ let compute_contexts (crate : crate) : decls_ctx =
        let ids = g_declaration_group_to_list g in
        let decls = List.map any_decl_id_to_string ids in
        let local_requires =
+       try
          LlbcAstUtils.find_local_transitive_dep crate (AnyDeclIdSet.of_list ids)
+         with _ -> []
        in
        let local_requires = List.map span_to_string local_requires in
        let local_requires =
