@@ -754,24 +754,26 @@ let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
 let export_trait_impl (fmt : Format.formatter) (_config : gen_config)
     (ctx : gen_ctx) (trait_impl_id : Pure.trait_impl_id) : unit =
   (* Lookup the definition *)
-  let trait_impl = TraitImplId.Map.find trait_impl_id ctx.trans_trait_impls in
-  let trait_decl =
-    Pure.TraitDeclId.Map.find trait_impl.impl_trait.trait_decl_id
-      ctx.trans_trait_decls
-  in
-  (* Check if the trait implementation is builtin *)
-  let builtin_info =
-    let open ExtractBuiltin in
-    let trait_impl =
-      TraitImplId.Map.find trait_impl.def_id ctx.crate.trait_impls
+  match TraitImplId.Map.find_opt trait_impl_id ctx.trans_trait_impls with
+  | None -> ()
+  | Some trait_impl ->
+    let trait_decl =
+      Pure.TraitDeclId.Map.find trait_impl.impl_trait.trait_decl_id
+        ctx.trans_trait_decls
     in
-    match_name_with_generics_find_opt ctx.trans_ctx trait_decl.item_meta.name
-      trait_impl.impl_trait.decl_generics
-      (builtin_trait_impls_map ())
-  in
-  match builtin_info with
-  | None -> Extract.extract_trait_impl ctx fmt trait_impl
-  | Some _ -> ()
+    (* Check if the trait implementation is builtin *)
+    let builtin_info =
+      let open ExtractBuiltin in
+      let trait_impl =
+        TraitImplId.Map.find trait_impl.def_id ctx.crate.trait_impls
+      in
+      match_name_with_generics_find_opt ctx.trans_ctx trait_decl.item_meta.name
+        trait_impl.impl_trait.decl_generics
+        (builtin_trait_impls_map ())
+    in
+    match builtin_info with
+    | None -> Extract.extract_trait_impl ctx fmt trait_impl
+    | Some _ -> ()
 
 (** A generic utility to generate the extracted definitions: as we may want to
     split the definitions between different files (or not), we can control
