@@ -107,6 +107,7 @@ attribute [scalar_tac_simps]
   Int.reduceLT Int.reduceLE Int.reduceGT Int.reduceGE Int.reduceEq Int.reduceNe Int.reduceBEq Int.reduceBNe
   Int.reducePow Int.reduceAdd Int.reduceSub Int.reduceMul Int.reduceDiv Int.reduceMod
   Int.reduceNegSucc Int.reduceNeg Int.reduceToNat
+  not_lt not_le
 
 /- Small trick to prevent `simp_all` from simplifying an assumption `h1 : P v` when we have
   `h0 : ∀ x, P x` in the context: we replace the forall quantifiers with our own definition
@@ -128,7 +129,7 @@ structure Config where
   /- Maximum number of steps to take with `simpAll` during the preprocessing phase.
      If equal to 0, we do not call `simpAll` at all.
    -/
-  simpAllMaxSteps : Nat := 2000
+  simpAllMaxSteps : Nat := 100000
   /- Should we saturate the context with theorems marked with the attribute `scalar_tac`? -/
   saturate : Bool := true
   fastSaturate : Bool := false
@@ -165,7 +166,7 @@ attribute [scalar_tac_simps]
   true_and and_true false_and and_false
   true_or or_true false_or or_false
   Bool.true_eq_false Bool.false_eq_true
-  decide_eq_true_eq Bool.or_eq_true Bool.and_eq_true
+  decide_eq_true_eq decide_eq_false_iff_not Bool.or_eq_true Bool.and_eq_true
 
 /-  Boosting a bit the `omega` tac.
 
@@ -174,21 +175,27 @@ attribute [scalar_tac_simps]
  -/
 def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
   Tactic.withMainContext do
-  let simprocs ← scalarTacSimprocExt.getSimprocs
-  let simpLemmas ← scalarTacSimpExt.getTheorems
-  let simpArgs : SimpArgs := {simprocs := #[simprocs], simpThms := #[simpLemmas]}
   -- Pre-preprocessing
   /- First get rid of [ofInt] (if there are dependent arguments, we may not
-     manage to simplify the context) -/
+     manage to simplify the context). We only use a small set of lemmas
+     because otherwise we may simplify too much, leading to issues when
+     saturating. -/
   trace[ScalarTac] "Original goal before preprocessing: {← getMainGoal}"
+  let beforeSatSimpArgs : SimpArgs ← do
+    let simprocs ← scalarTacBeforeSatSimprocExt.getSimprocs
+    let simpLemmas ← scalarTacBeforeSatSimpExt.getTheorems
+    pure {simprocs := #[simprocs], simpThms := #[simpLemmas]}
   tryTac do
     Utils.simpAt true {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 0}
-                simpArgs .wildcard
+              beforeSatSimpArgs .wildcard
   trace[ScalarTac] "Goal after first simplification: {← getMainGoal}"
   -- Apply the forward rules
   if config.saturate then
     allGoalsNoRecover (do let _ ← scalarTacSaturateForward config.fastSaturate config.nonLin)
   trace[ScalarTac] "Goal after saturation: {← getMainGoal}"
+  let simprocs ← scalarTacSimprocExt.getSimprocs
+  let simpLemmas ← scalarTacSimpExt.getTheorems
+  let simpArgs : SimpArgs := {simprocs := #[simprocs], simpThms := #[simpLemmas]}
   -- Apply `simpAll`
   if config.simpAllMaxSteps ≠ 0 then
     allGoalsNoRecover

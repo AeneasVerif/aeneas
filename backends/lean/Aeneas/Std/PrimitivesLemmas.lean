@@ -7,19 +7,14 @@ namespace Aeneas.Std
 open Result
 
 @[progress]
-theorem massert_spec (b : Bool) (h : b) :
+theorem massert_spec (b : Prop) [Decidable b] (h : b) :
   massert b = ok () := by
   simp [massert, *]
 
-@[progress]
-theorem massert_decide_spec (b : Prop) [Decidable b] (h : b) :
-  massert (decide b) = ok () := by
-  simp [massert, *]
-
 @[simp, progress_pre_simps, bvify_simps]
-theorem massert_ok (b : Bool) : massert b = ok () ↔ b := by simp [massert]
+theorem massert_ok (b : Prop) [Decidable b] : massert b = ok () ↔ b := by simp [massert]
 
-@[simp, global_simps] theorem massert_true : massert true = ok () := by simp [massert]
-@[simp, global_simps] theorem massert_false : massert false = fail .assertionFailure := by simp [massert]
+@[simp, global_simps] theorem massert_True : massert True = ok () := by simp [massert]
+@[simp, global_simps] theorem massert_False : massert False = fail .assertionFailure := by simp [massert]
 
 end Aeneas.Std
