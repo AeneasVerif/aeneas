@@ -115,20 +115,22 @@ let run_charon (env : runner_env) (case : Input.t) =
       let args =
         [
           env.charon_path;
-          "--no-cargo";
-          "--rustc-flag=--crate-name=" ^ case.name;
-          "--rustc-flag=--crate-type=rlib";
-          "--rustc-flag=--allow=unused";
-          "--rustc-flag=--allow=non_snake_case";
-          "--hide-marker-traits";
-          "--remove-associated-types=*";
-          "--input";
-          case.path;
+          "rustc";
           "--dest";
           env.llbc_dir;
+          "--hide-marker-traits";
+          "--remove-associated-types=*";
         ]
+        @ case.charon_options
+        @ [
+            "--";
+            case.path;
+            "--crate-name=" ^ case.name;
+            "--crate-type=rlib";
+            "--allow=unused";
+            "--allow=non_snake_case";
+          ]
       in
-      let args = List.append args case.charon_options in
       (* Run Charon on the rust file *)
       Command.run_command_expecting_success (Command.make args)
   | Crate ->
@@ -148,6 +150,7 @@ let run_charon (env : runner_env) (case : Input.t) =
         let args =
           [
             env.charon_path;
+            "cargo";
             "--hide-marker-traits";
             "--remove-associated-types=*";
             "--rustc-flag=--allow=unused";
