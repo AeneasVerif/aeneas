@@ -716,8 +716,7 @@ theorem add_no_overflow_loop_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (i : Usize)
   (hLength : x.length = y.length)
   -- No overflow occurs when we add the individual thunks
-  (hNoOverflow : ∀ (j : Nat), i.val ≤ j → j < x.length → x[j]!.val + y[j]!.val ≤ U32.max)
-  (hi : i.val ≤ x.length) :
+  (hNoOverflow : ∀ (j : Nat), i.val ≤ j → j < x.length → x[j]!.val + y[j]!.val ≤ U32.max) :
   ∃ x', add_no_overflow_loop x y i = ok x' ∧
   x'.length = x.length ∧
   toInt x' = toInt x + 2 ^ (32 * i.val) * toInt (y.val.drop i.val) := by

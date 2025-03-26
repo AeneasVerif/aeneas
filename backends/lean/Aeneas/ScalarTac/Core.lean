@@ -51,33 +51,16 @@ theorem int_pos_ind (p : Int → Prop) :
     rename_i m
     cases m <;> simp_all
 
--- This is mostly used in termination proofs
-theorem to_int_to_nat_lt (x y : ℤ) (h0 : 0 ≤ x) (h1 : x < y) :
-  ↑(x.toNat) < y := by
-  simp [*]
-
--- This is mostly used in termination proofs
-theorem to_int_sub_to_nat_lt (x y : ℤ) (x' : ℕ)
-  (h0 : ↑x' ≤ x) (h1 : x - ↑x' < y) :
-  ↑(x.toNat - x') < y := by
-  have : 0 ≤ x := by omega
-  simp [Int.toNat_sub_of_le, *]
-
--- WARNING: do not use this with `simp` as it might loop. The left-hand side indeed reduces to the
--- righ-hand side, meaning the rewriting can be applied to `n` itself.
+/- WARNING: do not use this with `simp` as it might loop. The left-hand side indeed reduces to the
+   righ-hand side, meaning the rewriting can be applied to `n` itself. -/
 theorem ofNat_instOfNatNat_eq (n : Nat) : @OfNat.ofNat Nat n (instOfNatNat n) = n := by rfl
 
-@[simp]
-theorem Nat.le_imp_le_equiv_eq (i j : Nat) (h0 : i ≤ j) : j ≤ i ↔ i = j := by
-  omega
-
-@[simp]
-theorem Int.le_imp_le_equiv_eq (i j : Int) (h0 : i ≤ j) : j ≤ i ↔ i = j := by
-  omega
+theorem Nat.le_imp_le_equiv_eq (i j : Nat) (h0 : i ≤ j) : j ≤ i ↔ i = j := by omega
+theorem Int.le_imp_le_equiv_eq (i j : Int) (h0 : i ≤ j) : j ≤ i ↔ i = j := by omega
 
 example (i : Int) (j : Nat) (h : i ≤ j) (h2 : j ≤ i) :
   i = j := by
-  simp_all
+  simp_all [Int.le_imp_le_equiv_eq]
 
 end ScalarTac
 

@@ -914,9 +914,10 @@ info: example
     let* ⟨⟩ ← massert_spec
 
   /--
-  info: example
+info: example
   (c : U32)
   (c' : U32)
+  (_✝ : (↑c' : ℕ) = (↑c : ℕ) >>> 16)
   (hc' : c'.bv = c.bv >>> 16) :
   c'.bv = c.bv >>> 16
   := by sorry
@@ -929,7 +930,7 @@ info: example
           ok c1) =
         ok c' ∧ c'.bv = c.bv >>> 16
     := by
-    progress as ⟨ c', hc' ⟩ -- we have: `hc' : c'.bv = c.bv >>> 16`
+    progress as ⟨ c', _, hc' ⟩ -- we have: `hc' : c'.bv = c.bv >>> 16`
     extract_goal1
     fsimp [hc']
 

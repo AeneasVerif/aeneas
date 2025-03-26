@@ -146,6 +146,7 @@ theorem drop_length_is_le (i : Nat) (ls : List α) : (ls.drop i).length ≤ ls.l
       by simp only [Nat.not_eq, ne_eq, not_false_eq_true, neq_imp, not_lt_zero', false_or, true_or,
         or_self, drop_cons_nzero, length_drop, length_cons, tsub_le_iff_right, h]; omega
 
+attribute [simp, simp_lists_simps] drop_of_length_le
 attribute [scalar_tac_simps] length_drop
 
 @[scalar_tac_simps]
