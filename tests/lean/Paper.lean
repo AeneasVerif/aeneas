@@ -55,7 +55,7 @@ inductive List (T : Type) where
 
 /- [paper::list_nth_mut]:
    Source: 'tests/src/paper.rs', lines 45:0-58:1 -/
-divergent def list_nth_mut
+def list_nth_mut
   {T : Type} (l : List T) (i : U32) : Result (T × (T → List T)) :=
   match l with
   | List.Cons x tl =>
@@ -70,15 +70,17 @@ divergent def list_nth_mut
                              List.Cons x tl1
       ok (t, back)
   | List.Nil => fail panic
+partial_fixpoint
 
 /- [paper::sum]:
    Source: 'tests/src/paper.rs', lines 60:0-69:1 -/
-divergent def sum (l : List I32) : Result I32 :=
+def sum (l : List I32) : Result I32 :=
   match l with
   | List.Cons x tl => do
                       let i ← sum tl
                       x + i
   | List.Nil => ok 0#i32
+partial_fixpoint
 
 /- [paper::test_nth]:
    Source: 'tests/src/paper.rs', lines 71:0-76:1 -/

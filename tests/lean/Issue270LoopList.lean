@@ -16,10 +16,11 @@ inductive List (T : Type) where
 
 /- [issue_270_loop_list::foo]: loop 0:
    Source: 'tests/src/issue-270-loop-list.rs', lines 10:8-12:9 -/
-divergent def foo_loop (t : List (List U8)) : Result Unit :=
+def foo_loop (t : List (List U8)) : Result Unit :=
   match t with
   | List.Cons _ tt => foo_loop tt
   | List.Nil => ok ()
+partial_fixpoint
 
 /- [issue_270_loop_list::foo]:
    Source: 'tests/src/issue-270-loop-list.rs', lines 7:0-14:1 -/

@@ -70,24 +70,25 @@ def Const_Aeneas11 : U32 := eval_global Const_Aeneas11_body
 
 /- [rename_attribute::factorial]:
    Source: 'tests/src/rename_attribute.rs', lines 57:0-63:1 -/
-divergent def Factfn (n : U64) : Result U64 :=
+def Factfn (n : U64) : Result U64 :=
   if n <= 1#u64
   then ok 1#u64
   else do
        let i ← n - 1#u64
        let i1 ← Factfn i
        n * i1
+partial_fixpoint
 
 /- [rename_attribute::sum]: loop 0:
    Source: 'tests/src/rename_attribute.rs', lines 69:4-72:5 -/
-divergent def No_borrows_sum_loop
-  (max : U32) (i : U32) (s : U32) : Result U32 :=
+def No_borrows_sum_loop (max : U32) (i : U32) (s : U32) : Result U32 :=
   if i < max
   then do
        let s1 ← s + i
        let i1 ← i + 1#u32
        No_borrows_sum_loop max i1 s1
   else s * 2#u32
+partial_fixpoint
 
 /- [rename_attribute::sum]:
    Source: 'tests/src/rename_attribute.rs', lines 66:0-76:1 -/

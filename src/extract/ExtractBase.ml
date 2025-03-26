@@ -1436,13 +1436,23 @@ let fun_decl_kind_to_qualif (kind : decl_kind) : string option =
   | Lean -> (
       match kind with
       | SingleNonRec -> Some "def"
-      | SingleRec -> Some "divergent def"
-      | MutRecFirst -> Some "mutual divergent def"
-      | MutRecInner -> Some "divergent def"
-      | MutRecLast -> Some "divergent def"
+      | SingleRec -> Some "def"
+      | MutRecFirst -> Some "mutual def"
+      | MutRecInner -> Some "def"
+      | MutRecLast -> Some "def"
       | Builtin -> Some "axiom"
       | Declared -> Some "axiom")
   | HOL4 -> None
+
+(** Compute the qualifier to add after the definition. *)
+let fun_decl_kind_to_post_qualif (kind : decl_kind) : string option =
+  match backend () with
+  | FStar | Coq | HOL4 -> None
+  | Lean -> (
+      match kind with
+      | SingleNonRec | Builtin | Declared -> None
+      | SingleRec | MutRecFirst | MutRecInner | MutRecLast ->
+          Some "partial_fixpoint")
 
 (** The type of types.
 

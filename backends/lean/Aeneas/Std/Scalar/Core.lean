@@ -1,8 +1,6 @@
 import Lean
 import Lean.Meta.Tactic.Simp
 import Aeneas.Std.Core
-import Aeneas.Std.Core
-import Aeneas.Diverge.Core
 import Aeneas.Progress.Init
 import Aeneas.ScalarTac.ScalarTac
 import Aeneas.Bvify.Init
@@ -351,7 +349,7 @@ def IScalar.cMax (ty : IScalarTy) : Int :=
 
 def UScalar.hBounds {ty} (x : UScalar ty) : x.val < 2^ty.numBits := by
   dcases h: x.bv
-  simp [h, val]
+  simp only [val, h, BitVec.toNat_ofFin, Fin.is_lt]
 
 def UScalar.hSize {ty} (x : UScalar ty) : x.val < UScalar.size ty := by
   dcases h: x.bv
@@ -808,7 +806,7 @@ instance {ty} : LE (IScalar ty) where le a b := LE.le a.val b.val
   x = y ↔ (↑x : Nat) = ↑y := by
   cases x; cases y; simp_all [UScalar.val, BitVec.toNat_eq]
 
-@[simp] theorem UScalar.eq_imp {ty : UScalarTy} (x y : UScalar ty) :
+theorem UScalar.eq_imp {ty : UScalarTy} (x y : UScalar ty) :
   (↑x : Nat) = ↑y → x = y := (eq_equiv x y).mpr
 
 @[simp, scalar_tac_simps] theorem UScalar.lt_equiv {ty : UScalarTy} (x y : UScalar ty) :
@@ -831,7 +829,7 @@ instance {ty} : LE (IScalar ty) where le a b := LE.le a.val b.val
   constructor <;> intro <;>
   first | simp [*] | apply BitVec.eq_of_toInt_eq; simp [*]
 
-@[simp] theorem IScalar.eq_imp {ty : IScalarTy} (x y : IScalar ty) :
+theorem IScalar.eq_imp {ty : IScalarTy} (x y : IScalar ty) :
   (↑x : Int) = ↑y → x = y := (eq_equiv x y).mpr
 
 @[simp, scalar_tac_simps] theorem IScalar.lt_equiv {ty : IScalarTy} (x y : IScalar ty) :

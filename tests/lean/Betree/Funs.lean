@@ -83,7 +83,7 @@ def betree.upsert_update
 
 /- [betree::betree::{betree::betree::List<T>}#1::len]: loop 0:
    Source: 'src/betree.rs', lines 279:8-282:9 -/
-divergent def betree.List.len_loop
+def betree.List.len_loop
   {T : Type} (self : betree.List T) (len : U64) : Result U64 :=
   match self with
   | betree.List.Cons _ tl =>
@@ -91,6 +91,7 @@ divergent def betree.List.len_loop
     let len1 ← len + 1#u64
     betree.List.len_loop tl len1
   | betree.List.Nil => ok len
+partial_fixpoint
 
 /- [betree::betree::{betree::betree::List<T>}#1::len]:
    Source: 'src/betree.rs', lines 276:4-284:5 -/
@@ -100,7 +101,7 @@ def betree.List.len {T : Type} (self : betree.List T) : Result U64 :=
 
 /- [betree::betree::{betree::betree::List<T>}#1::reverse]: loop 0:
    Source: 'src/betree.rs', lines 306:8-310:9 -/
-divergent def betree.List.reverse_loop
+def betree.List.reverse_loop
   {T : Type} (self : betree.List T) (out : betree.List T) :
   Result (betree.List T)
   :=
@@ -108,6 +109,7 @@ divergent def betree.List.reverse_loop
   | betree.List.Cons hd tl =>
     betree.List.reverse_loop tl (betree.List.Cons hd out)
   | betree.List.Nil => ok out
+partial_fixpoint
 
 /- [betree::betree::{betree::betree::List<T>}#1::reverse]:
    Source: 'src/betree.rs', lines 304:4-312:5 -/
@@ -118,7 +120,7 @@ def betree.List.reverse
 
 /- [betree::betree::{betree::betree::List<T>}#1::split_at]: loop 0:
    Source: 'src/betree.rs', lines 290:8-300:9 -/
-divergent def betree.List.split_at_loop
+def betree.List.split_at_loop
   {T : Type} (n : U64) (beg : betree.List T) (self : betree.List T) :
   Result ((betree.List T) × (betree.List T))
   :=
@@ -133,6 +135,7 @@ divergent def betree.List.split_at_loop
   else do
        let l ← betree.List.reverse beg
        ok (l, self)
+partial_fixpoint
 
 /- [betree::betree::{betree::betree::List<T>}#1::split_at]:
    Source: 'src/betree.rs', lines 287:4-302:5 -/
@@ -177,7 +180,7 @@ def betree.ListPairU64T.head_has_key
 
 /- [betree::betree::{betree::betree::List<(u64, T)>}#2::partition_at_pivot]: loop 0:
    Source: 'src/betree.rs', lines 359:8-368:9 -/
-divergent def betree.ListPairU64T.partition_at_pivot_loop
+def betree.ListPairU64T.partition_at_pivot_loop
   {T : Type} (pivot : U64) (beg : betree.List (U64 × T))
   (end1 : betree.List (U64 × T)) (self : betree.List (U64 × T)) :
   Result ((betree.List (U64 × T)) × (betree.List (U64 × T)))
@@ -197,6 +200,7 @@ divergent def betree.ListPairU64T.partition_at_pivot_loop
     let l ← betree.List.reverse beg
     let l1 ← betree.List.reverse end1
     ok (l, l1)
+partial_fixpoint
 
 /- [betree::betree::{betree::betree::List<(u64, T)>}#2::partition_at_pivot]:
    Source: 'src/betree.rs', lines 355:4-370:5 -/
@@ -228,7 +232,7 @@ def betree.Leaf.split
 
 /- [betree::betree::{betree::betree::Node}#5::lookup_in_bindings]: loop 0:
    Source: 'src/betree.rs', lines 650:8-660:5 -/
-divergent def betree.Node.lookup_in_bindings_loop
+def betree.Node.lookup_in_bindings_loop
   (key : U64) (bindings : betree.List (U64 × U64)) : Result (Option U64) :=
   match bindings with
   | betree.List.Cons hd tl =>
@@ -240,6 +244,7 @@ divergent def betree.Node.lookup_in_bindings_loop
       then ok none
       else betree.Node.lookup_in_bindings_loop key tl
   | betree.List.Nil => ok none
+partial_fixpoint
 
 /- [betree::betree::{betree::betree::Node}#5::lookup_in_bindings]:
    Source: 'src/betree.rs', lines 649:4-660:5 -/
@@ -250,7 +255,7 @@ def betree.Node.lookup_in_bindings
 
 /- [betree::betree::{betree::betree::Node}#5::lookup_first_message_for_key]: loop 0:
    Source: 'src/betree.rs', lines 796:8-810:5 -/
-divergent def betree.Node.lookup_first_message_for_key_loop
+def betree.Node.lookup_first_message_for_key_loop
   (key : U64) (msgs : betree.List (U64 × betree.Message)) :
   Result ((betree.List (U64 × betree.Message)) × (betree.List (U64 ×
     betree.Message) → betree.List (U64 × betree.Message)))
@@ -269,6 +274,7 @@ divergent def betree.Node.lookup_first_message_for_key_loop
                    betree.List.Cons x next_msgs1
       ok (l, back1)
   | betree.List.Nil => ok (betree.List.Nil, fun ret => ret)
+partial_fixpoint
 
 /- [betree::betree::{betree::betree::Node}#5::lookup_first_message_for_key]:
    Source: 'src/betree.rs', lines 792:4-810:5 -/
@@ -282,7 +288,7 @@ def betree.Node.lookup_first_message_for_key
 
 /- [betree::betree::{betree::betree::Node}#5::apply_upserts]: loop 0:
    Source: 'src/betree.rs', lines 821:8-838:9 -/
-divergent def betree.Node.apply_upserts_loop
+def betree.Node.apply_upserts_loop
   (msgs : betree.List (U64 × betree.Message)) (prev : Option U64) (key : U64)
   :
   Result (U64 × (betree.List (U64 × betree.Message)))
@@ -306,6 +312,7 @@ divergent def betree.Node.apply_upserts_loop
     let v ← core.option.Option.unwrap prev
     let msgs1 ← betree.List.push_front msgs (key, betree.Message.Insert v)
     ok (v, msgs1)
+partial_fixpoint
 
 /- [betree::betree::{betree::betree::Node}#5::apply_upserts]:
    Source: 'src/betree.rs', lines 820:4-844:5 -/
@@ -319,7 +326,7 @@ def betree.Node.apply_upserts
 
 /- [betree::betree::{betree::betree::Internal}#4::lookup_in_children]:
    Source: 'src/betree.rs', lines 414:4-420:5 -/
-mutual divergent def betree.Internal.lookup_in_children
+mutual def betree.Internal.lookup_in_children
   (self : betree.Internal) (key : U64) (st : State) :
   Result (State × ((Option U64) × betree.Internal))
   :=
@@ -332,10 +339,11 @@ mutual divergent def betree.Internal.lookup_in_children
     do
     let (st1, (o, n)) ← betree.Node.lookup self.right key st
     ok (st1, (o, betree.Internal.mk self.id self.pivot self.left n))
+partial_fixpoint
 
 /- [betree::betree::{betree::betree::Node}#5::lookup]:
    Source: 'src/betree.rs', lines 712:4-785:5 -/
-divergent def betree.Node.lookup
+def betree.Node.lookup
   (self : betree.Node) (key : U64) (st : State) :
   Result (State × ((Option U64) × betree.Node))
   :=
@@ -375,12 +383,13 @@ divergent def betree.Node.lookup
     let (st1, bindings) ← betree.load_leaf_node node.id st
     let o ← betree.Node.lookup_in_bindings key bindings
     ok (st1, (o, self))
+partial_fixpoint
 
 end
 
 /- [betree::betree::{betree::betree::Node}#5::filter_messages_for_key]: loop 0:
    Source: 'src/betree.rs', lines 684:8-692:5 -/
-divergent def betree.Node.filter_messages_for_key_loop
+def betree.Node.filter_messages_for_key_loop
   (key : U64) (msgs : betree.List (U64 × betree.Message)) :
   Result (betree.List (U64 × betree.Message))
   :=
@@ -394,6 +403,7 @@ divergent def betree.Node.filter_messages_for_key_loop
       betree.Node.filter_messages_for_key_loop key msgs1
     else ok msgs
   | betree.List.Nil => ok betree.List.Nil
+partial_fixpoint
 
 /- [betree::betree::{betree::betree::Node}#5::filter_messages_for_key]:
    Source: 'src/betree.rs', lines 683:4-692:5 -/
@@ -406,7 +416,7 @@ def betree.Node.filter_messages_for_key
 
 /- [betree::betree::{betree::betree::Node}#5::lookup_first_message_after_key]: loop 0:
    Source: 'src/betree.rs', lines 698:8-704:9 -/
-divergent def betree.Node.lookup_first_message_after_key_loop
+def betree.Node.lookup_first_message_after_key_loop
   (key : U64) (msgs : betree.List (U64 × betree.Message)) :
   Result ((betree.List (U64 × betree.Message)) × (betree.List (U64 ×
     betree.Message) → betree.List (U64 × betree.Message)))
@@ -425,6 +435,7 @@ divergent def betree.Node.lookup_first_message_after_key_loop
       ok (l, back1)
     else ok (msgs, fun ret => ret)
   | betree.List.Nil => ok (betree.List.Nil, fun ret => ret)
+partial_fixpoint
 
 /- [betree::betree::{betree::betree::Node}#5::lookup_first_message_after_key]:
    Source: 'src/betree.rs', lines 694:4-706:5 -/
@@ -492,7 +503,7 @@ def betree.Node.apply_to_internal
 
 /- [betree::betree::{betree::betree::Node}#5::apply_messages_to_internal]: loop 0:
    Source: 'src/betree.rs', lines 522:8-525:9 -/
-divergent def betree.Node.apply_messages_to_internal_loop
+def betree.Node.apply_messages_to_internal_loop
   (msgs : betree.List (U64 × betree.Message))
   (new_msgs : betree.List (U64 × betree.Message)) :
   Result (betree.List (U64 × betree.Message))
@@ -504,6 +515,7 @@ divergent def betree.Node.apply_messages_to_internal_loop
     let msgs1 ← betree.Node.apply_to_internal msgs i m
     betree.Node.apply_messages_to_internal_loop msgs1 new_msgs_tl
   | betree.List.Nil => ok msgs
+partial_fixpoint
 
 /- [betree::betree::{betree::betree::Node}#5::apply_messages_to_internal]:
    Source: 'src/betree.rs', lines 518:4-526:5 -/
@@ -517,7 +529,7 @@ def betree.Node.apply_messages_to_internal
 
 /- [betree::betree::{betree::betree::Node}#5::lookup_mut_in_bindings]: loop 0:
    Source: 'src/betree.rs', lines 668:8-675:9 -/
-divergent def betree.Node.lookup_mut_in_bindings_loop
+def betree.Node.lookup_mut_in_bindings_loop
   (key : U64) (bindings : betree.List (U64 × U64)) :
   Result ((betree.List (U64 × U64)) × (betree.List (U64 × U64) →
     betree.List (U64 × U64)))
@@ -534,6 +546,7 @@ divergent def betree.Node.lookup_mut_in_bindings_loop
                               betree.List.Cons hd tl1
       ok (l, back1)
   | betree.List.Nil => ok (betree.List.Nil, fun ret => ret)
+partial_fixpoint
 
 /- [betree::betree::{betree::betree::Node}#5::lookup_mut_in_bindings]:
    Source: 'src/betree.rs', lines 664:4-677:5 -/
@@ -587,7 +600,7 @@ def betree.Node.apply_to_leaf
 
 /- [betree::betree::{betree::betree::Node}#5::apply_messages_to_leaf]: loop 0:
    Source: 'src/betree.rs', lines 467:8-470:9 -/
-divergent def betree.Node.apply_messages_to_leaf_loop
+def betree.Node.apply_messages_to_leaf_loop
   (bindings : betree.List (U64 × U64))
   (new_msgs : betree.List (U64 × betree.Message)) :
   Result (betree.List (U64 × U64))
@@ -599,6 +612,7 @@ divergent def betree.Node.apply_messages_to_leaf_loop
     let bindings1 ← betree.Node.apply_to_leaf bindings i m
     betree.Node.apply_messages_to_leaf_loop bindings1 new_msgs_tl
   | betree.List.Nil => ok bindings
+partial_fixpoint
 
 /- [betree::betree::{betree::betree::Node}#5::apply_messages_to_leaf]:
    Source: 'src/betree.rs', lines 463:4-471:5 -/
@@ -612,7 +626,7 @@ def betree.Node.apply_messages_to_leaf
 
 /- [betree::betree::{betree::betree::Internal}#4::flush]:
    Source: 'src/betree.rs', lines 429:4-458:5 -/
-mutual divergent def betree.Internal.flush
+mutual def betree.Internal.flush
   (self : betree.Internal) (params : betree.Params)
   (node_id_cnt : betree.NodeIdCounter)
   (content : betree.List (U64 × betree.Message)) (st : State) :
@@ -649,10 +663,11 @@ mutual divergent def betree.Internal.flush
     let (n, node_id_cnt1) := p
     ok (st1, (msgs_left, (betree.Internal.mk self.id self.pivot self.left n,
       node_id_cnt1)))
+partial_fixpoint
 
 /- [betree::betree::{betree::betree::Node}#5::apply_messages]:
    Source: 'src/betree.rs', lines 601:4-645:5 -/
-divergent def betree.Node.apply_messages
+def betree.Node.apply_messages
   (self : betree.Node) (params : betree.Params)
   (node_id_cnt : betree.NodeIdCounter)
   (msgs : betree.List (U64 × betree.Message)) (st : State) :
@@ -693,6 +708,7 @@ divergent def betree.Node.apply_messages
       do
       let (st2, _) ← betree.store_leaf_node node.id content1 st1
       ok (st2, (betree.Node.Leaf { node with size := len }, node_id_cnt))
+partial_fixpoint
 
 end
 

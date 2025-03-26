@@ -15,10 +15,10 @@ def bar : Result Unit :=
 
 /- [infinite_loop::foo]: loop 0:
    Source: 'tests/src/infinite-loop.rs', lines 8:8-8:13 -/
-divergent def foo_loop : Result Unit :=
+def foo_loop : Result Unit :=
   do
   bar
-  foo_loop
+  foo_loop partial_fixpoint
 
 /- [infinite_loop::foo]:
    Source: 'tests/src/infinite-loop.rs', lines 6:0-10:1 -/

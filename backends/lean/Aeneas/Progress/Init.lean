@@ -169,7 +169,7 @@ def programTelescope[Inhabited (m α)] [Nonempty (m α)] (ty: Expr)
   -/
   def withFreshTupleFieldFVars [Inhabited a] (basename : Name) (ty : Expr) (k : Array Expr → m a) : m a := do
     let tys := destProdsType ty
-    let tys := List.map (fun (i, ty) => (Name.num basename i, fun _ => pure ty)) (List.enum tys)
+    let tys := List.map (fun (ty, i) => (Name.num basename i, fun _ => pure ty)) (List.zipIdx tys)
     withLocalDeclsD ⟨ tys ⟩ k
 end Methods
 

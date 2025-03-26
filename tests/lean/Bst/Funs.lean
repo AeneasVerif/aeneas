@@ -16,7 +16,7 @@ def TreeSet.new {T : Type} (OrdInst : Ord T) : Result (TreeSet T) :=
 
 /- [bst::{bst::TreeSet<T>}::find]: loop 0:
    Source: 'src/bst.rs', lines 35:8-44:5 -/
-divergent def TreeSet.find_loop
+def TreeSet.find_loop
   {T : Type} (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
   Result Bool
   :=
@@ -29,6 +29,7 @@ divergent def TreeSet.find_loop
     | Ordering.Less => TreeSet.find_loop OrdInst value current_node.right
     | Ordering.Equal => ok true
     | Ordering.Greater => TreeSet.find_loop OrdInst value current_node.left
+partial_fixpoint
 
 /- [bst::{bst::TreeSet<T>}::find]:
    Source: 'src/bst.rs', lines 32:4-44:5 -/
@@ -39,7 +40,7 @@ def TreeSet.find
 
 /- [bst::{bst::TreeSet<T>}::insert]: loop 0:
    Source: 'src/bst.rs', lines 48:8-63:5 -/
-divergent def TreeSet.insert_loop
+def TreeSet.insert_loop
   {T : Type} (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
   Result (Bool × (Option (Node T)))
   :=
@@ -62,6 +63,7 @@ divergent def TreeSet.insert_loop
         TreeSet.insert_loop OrdInst value current_node.left
       ok (b, some (Node.mk current_node.value current_tree1
         current_node.right))
+partial_fixpoint
 
 /- [bst::{bst::TreeSet<T>}::insert]:
    Source: 'src/bst.rs', lines 45:4-63:5 -/

@@ -26,10 +26,11 @@ structure Tree where
 
 /- [mini_tree::{mini_tree::Tree}::explore]: loop 0:
    Source: 'tests/src/mini_tree.rs', lines 17:8-19:9 -/
-divergent def Tree.explore_loop (current_tree : Option Node) : Result Unit :=
+def Tree.explore_loop (current_tree : Option Node) : Result Unit :=
   match current_tree with
   | none => ok ()
   | some current_node => Tree.explore_loop current_node.child
+partial_fixpoint
 
 /- [mini_tree::{mini_tree::Tree}::explore]:
    Source: 'tests/src/mini_tree.rs', lines 14:4-20:5 -/
