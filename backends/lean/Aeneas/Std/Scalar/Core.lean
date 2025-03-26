@@ -351,7 +351,7 @@ def IScalar.cMax (ty : IScalarTy) : Int :=
 
 def UScalar.hBounds {ty} (x : UScalar ty) : x.val < 2^ty.numBits := by
   dcases h: x.bv
-  simp [h, val]
+  simp only [val, h, BitVec.toNat_ofFin, Fin.is_lt]
 
 def UScalar.hSize {ty} (x : UScalar ty) : x.val < UScalar.size ty := by
   dcases h: x.bv

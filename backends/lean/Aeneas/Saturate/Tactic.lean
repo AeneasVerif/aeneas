@@ -288,12 +288,12 @@ info: example
   (l4 : List α)
   (l5 : List α)
   (x✝ : ∀ (l : List α), l.length ≤ l3.length)
-  (_h.0 : l4.length ≥ 0)
-  (_h.1 : l5.length ≥ 0)
+  (_h.0 : l2.length ≥ 0)
+  (_h.1 : l1.length ≥ 0)
   (_h.2 : (l0 ++ l1 ++ l2).length ≥ 0)
-  (_h.3 : l2.length ≥ 0)
-  (_h.4 : l1.length ≥ 0)
-  (_h.5 : l0.length ≥ 0)
+  (_h.3 : l0.length ≥ 0)
+  (_h.4 : l4.length ≥ 0)
+  (_h.5 : l5.length ≥ 0)
   (_h.6 : l3.length ≥ 0) :
   let _k := l4.length;
 let _g := fun l => l.length + l5.length;
@@ -326,20 +326,20 @@ info: example
   (l4 : List α)
   (l5 : List α)
   (x✝ : ∀ (l : List α), l.length ≤ l3.length)
-  (_h.0 : l2.length ≥ 0)
-  (_h.1 : l4.length ≥ 0)
-  (_h.2 : 0 ≤ l3.length)
-  (_h.3 : 0 ≤ (l0 ++ l1 ++ l2).length)
-  (_h.4 : l0.length ≥ 0)
-  (_h.5 : 0 ≤ l0.length)
-  (_h.6 : l1.length ≥ 0)
-  (_h.7 : 0 ≤ l4.length)
-  (_h.8 : (l0 ++ l1 ++ l2).length ≥ 0)
+  (_h.0 : (l0 ++ l1 ++ l2).length ≥ 0)
+  (_h.1 : 0 ≤ l0.length)
+  (_h.2 : l1.length ≥ 0)
+  (_h.3 : 0 ≤ l3.length)
+  (_h.4 : 0 ≤ l4.length)
+  (_h.5 : l4.length ≥ 0)
+  (_h.6 : 0 ≤ l2.length)
+  (_h.7 : l3.length ≥ 0)
+  (_h.8 : 0 ≤ (l0 ++ l1 ++ l2).length)
   (_h.9 : 0 ≤ l1.length)
-  (_h.10 : l5.length ≥ 0)
+  (_h.10 : l2.length ≥ 0)
   (_h.11 : 0 ≤ l5.length)
-  (_h.12 : l3.length ≥ 0)
-  (_h.13 : 0 ≤ l2.length) :
+  (_h.12 : l5.length ≥ 0)
+  (_h.13 : l0.length ≥ 0) :
   let _k := l4.length;
 let _g := fun l => l.length + l5.length;
 (l0 ++ l1 ++ l2).length = l0.length + l1.length + l2.length
@@ -368,18 +368,17 @@ info: example
   (l4 : List α)
   (l5 : List α)
   (x✝ : ∀ (l : List α), l.length ≤ l3.length)
-  (_h.0 : l0.length ≥ 0)
-  (_h.1 : l4.length ≥ 0)
-  (_h.2 : l3.length ≥ 0)
-  (_h.3 : l1.length ≥ 0)
+  (_h.0 : l2.length ≥ 0)
+  (_h.1 : l3.length ≥ 0)
+  (_h.2 : l1.length ≥ 0)
+  (_h.3 : (l0 ++ l1 ++ l2).length ≥ 0)
   (_h.4 : l5.length ≥ 0)
-  (_h.5 : (l0 ++ l1 ++ l2).length ≥ 0)
-  (_h.6 : l2.length ≥ 0) :
+  (_h.5 : l0.length ≥ 0)
+  (_h.6 : l4.length ≥ 0) :
   let _k := l4.length;
 let _g := fun l => l.length + l5.length;
 (l0 ++ l1 ++ l2).length = l0.length + l1.length + l2.length
   := by sorry
-
   -/
   #guard_msgs in
     set_option linter.unusedTactic false in
@@ -403,13 +402,13 @@ info: example
   (l4 : List α)
   (l5 : List α)
   (x✝ : ∀ (l : List α), l.length ≤ l3.length)
-  (_h.0 : l3.length ≥ 0)
-  (_h.1 : l0.length ≥ 0)
-  (_h.2 : l2.length ≥ 0)
-  (_h.3 : (l0 ++ l1 ++ l2).length ≥ 0)
+  (_h.0 : l2.length ≥ 0)
+  (_h.1 : l4.length ≥ 0)
+  (_h.2 : (l0 ++ l1 ++ l2).length ≥ 0)
+  (_h.3 : l0.length ≥ 0)
   (_h.4 : l5.length ≥ 0)
-  (_h.5 : l4.length ≥ 0)
-  (_h.6 : l1.length ≥ 0) :
+  (_h.5 : l1.length ≥ 0)
+  (_h.6 : l3.length ≥ 0) :
   let _k := l4.length;
 let _g := fun l => l.length + l5.length;
 (l0 ++ l1 ++ l2).length = l0.length + l1.length + l2.length
