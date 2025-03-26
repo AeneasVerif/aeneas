@@ -111,8 +111,8 @@ theorem mul2_add1_spec
   ↑ y = 2 * ↑x + (1 : Nat)   -- The output has the expected value
   := by
   /- The proof -/
-  -- Start by a call to the rewriting tactic to reveal the body of [mul2_add1]
-  rw [mul2_add1]
+  -- Start by unfolding [mul2_add1] to reveal its body
+  unfold mul2_add1
   /- Here we use the fact that if [x + x] doesn't overflow, then the addition
      succeeds and returns the value we expect, as given by the theorem [U32.add_spec].
      Doing this properly requires a few manipulations: we need to instantiate
@@ -158,7 +158,7 @@ theorem mul2_add1_spec2 (x : U32) (h : 2 * x.val + 1 ≤ U32.max)
   : ∃ y, mul2_add1 x = ok y ∧
   ↑ y = 2 * ↑x + (1 : Int)
   := by
-  rw [mul2_add1]
+  unfold mul2_add1
   progress as ⟨ x1⟩ -- [progress] automatically lookups [U32.add_spec]
   progress as ⟨ x2 ⟩ -- same
   scalar_tac
@@ -175,7 +175,7 @@ def use_mul2_add1 (x : U32) (y : U32) : Result U32 := do
 theorem use_mul2_add1_spec (x : U32) (y : U32) (h : 2 * x.val + 1 + y.val ≤ U32.max) :
   ∃ z, use_mul2_add1 x y = ok z ∧
   ↑z = 2 * ↑x + (1 : Int) + ↑y := by
-  rw [use_mul2_add1]
+  unfold use_mul2_add1
   -- Here we use [progress] on [mul2_add1]
   progress as ⟨ x1 ⟩
   progress as ⟨ z ⟩
@@ -227,7 +227,7 @@ open CList
    }
    ```
  -/
-divergent def list_nth (T : Type) (l : CList T) (i : U32) : Result T :=
+def list_nth (T : Type) (l : CList T) (i : U32) : Result T :=
   match l with
   | CCons x tl =>
     if i = 0#u32
@@ -236,6 +236,7 @@ divergent def list_nth (T : Type) (l : CList T) (i : U32) : Result T :=
       let i1 ← i - 1#u32
       list_nth T tl i1
   | CNil => fail Error.panic
+partial_fixpoint
 
 /- Conversion to Lean's standard list type.
 
@@ -270,7 +271,7 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   := by
   -- Here we have to be careful when unfolding the body of [list_nth]: we could
   -- use the [simp] tactic, but it will sometimes loop on recursive definitions.
-  rw [list_nth]
+  unfold list_nth
   -- Let's simply follow the structure of the function, by first matching on [l]
   match l with
   | CNil =>
@@ -327,10 +328,10 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
    For instance, the function below only terminates on positive inputs (note
    that we switched to signed integers), in which cases it behaves like the
    identity. When we need to define such a potentially partial function,
-   we use the [divergent] keyword, which means that the function may diverge
+   we use the [partial_fixpoint] keyword, which means that the function may diverge
    (i.e., infinitely loop).
 
-   We will skip the details of how [divergent] precisely handles non-termination.
+   We will skip the details of how [partial_fixpoint] precisely handles non-termination.
    All you need to know is that the [Result] type has actually 3 cases (we saw
    the first 2 cases in the examples above):
    - [ret]: successful computation
@@ -344,19 +345,20 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
    we not only prove that the function doesn't fail, but also that it terminates.
 
    *Remark*: in practice, whenever Aeneas generates a recursive function, it
-   annotates it with the [divergent] keyword.
+   annotates it with the [partial_fixpoint] keyword.
  -/
-divergent def i32_id (x : I32) : Result I32 :=
+def i32_id (x : I32) : Result I32 :=
   if x = 0#i32 then ok 0#i32
   else do
     let x1 ← x - 1#i32
     let x2 ← i32_id x1
     x2 + 1#i32
+partial_fixpoint
 
 /- We can easily prove that [i32_id] behaves like the identity on positive inputs -/
 theorem i32_id_spec (x : I32) (h : 0 ≤ x.val) :
   i32_id x = ok x := by
-  rw [i32_id]
+  unfold i32_id
   if hx : x = 0#i32 then
     simp_all
   else

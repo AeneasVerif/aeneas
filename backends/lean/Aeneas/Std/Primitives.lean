@@ -149,6 +149,29 @@ def bind_eq_iff (x : Result α) (y y' : α → Result β) :
   cases x <;> simp_all
 
 /-!
+# Partial Fixpoint
+-/
+
+section Order
+
+open Lean.Order
+
+instance : PartialOrder (Result α) := inferInstanceAs (PartialOrder (FlatOrder .div))
+  noncomputable instance : CCPO (Result α) := inferInstanceAs (CCPO (FlatOrder .div))
+  noncomputable instance : MonoBind Result where
+    bind_mono_left h := by
+      cases h
+      · exact FlatOrder.rel.bot
+      · exact FlatOrder.rel.refl
+    bind_mono_right h := by
+      cases ‹Result _›
+      · exact h _
+      · exact FlatOrder.rel.refl
+      · exact FlatOrder.rel.refl
+
+end Order
+
+/-!
 # Lift
 -/
 

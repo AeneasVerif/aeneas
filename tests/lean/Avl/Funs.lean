@@ -109,7 +109,7 @@ def Node.rotate_right_left
 
 /- [avl::{avl::Node<T>}#2::insert_in_left]:
    Source: 'src/avl.rs', lines 240:4-275:5 -/
-mutual divergent def Node.insert_in_left
+mutual def Node.insert_in_left
   {T : Type} (OrdInst : Ord T) (node : Node T) (value : T) :
   Result (Bool × (Node T))
   :=
@@ -137,10 +137,11 @@ mutual divergent def Node.insert_in_left
         ok (false, node1)
     else ok (i != 0#i8, Node.mk node.value o node.right i)
   else ok (false, Node.mk node.value o node.right node.balance_factor)
+partial_fixpoint
 
 /- [avl::{avl::Tree<T>}#3::insert_in_opt_node]:
    Source: 'src/avl.rs', lines 356:4-371:5 -/
-divergent def Tree.insert_in_opt_node
+def Tree.insert_in_opt_node
   {T : Type} (OrdInst : Ord T) (node : Option (Node T)) (value : T) :
   Result (Bool × (Option (Node T)))
   :=
@@ -151,10 +152,11 @@ divergent def Tree.insert_in_opt_node
     do
     let (b, node2) ← Node.insert OrdInst node1 value
     ok (b, some node2)
+partial_fixpoint
 
 /- [avl::{avl::Node<T>}#2::insert_in_right]:
    Source: 'src/avl.rs', lines 277:4-315:5 -/
-divergent def Node.insert_in_right
+def Node.insert_in_right
   {T : Type} (OrdInst : Ord T) (node : Node T) (value : T) :
   Result (Bool × (Node T))
   :=
@@ -182,10 +184,11 @@ divergent def Node.insert_in_right
         ok (false, node1)
     else ok (i != 0#i8, Node.mk node.value node.left o i)
   else ok (false, Node.mk node.value node.left o node.balance_factor)
+partial_fixpoint
 
 /- [avl::{avl::Node<T>}#2::insert]:
    Source: 'src/avl.rs', lines 318:4-334:5 -/
-divergent def Node.insert
+def Node.insert
   {T : Type} (OrdInst : Ord T) (node : Node T) (value : T) :
   Result (Bool × (Node T))
   :=
@@ -195,6 +198,7 @@ divergent def Node.insert
   | Ordering.Less => Node.insert_in_left OrdInst node value
   | Ordering.Equal => ok (false, node)
   | Ordering.Greater => Node.insert_in_right OrdInst node value
+partial_fixpoint
 
 end
 
@@ -205,7 +209,7 @@ def Tree.new {T : Type} (OrdInst : Ord T) : Result (Tree T) :=
 
 /- [avl::{avl::Tree<T>}#3::find]: loop 0:
    Source: 'src/avl.rs', lines 345:8-354:5 -/
-divergent def Tree.find_loop
+def Tree.find_loop
   {T : Type} (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
   Result Bool
   :=
@@ -218,6 +222,7 @@ divergent def Tree.find_loop
     | Ordering.Less => Tree.find_loop OrdInst value current_node.right
     | Ordering.Equal => ok true
     | Ordering.Greater => Tree.find_loop OrdInst value current_node.left
+partial_fixpoint
 
 /- [avl::{avl::Tree<T>}#3::find]:
    Source: 'src/avl.rs', lines 342:4-354:5 -/

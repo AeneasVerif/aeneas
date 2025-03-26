@@ -231,7 +231,7 @@ theorem Tree.find_loop_spec
   (value : T) (t : Subtree T) (hInv : Subtree.inv t) :
   ∃ b, Tree.find_loop OrdInst value t = ok b ∧
   (b ↔ value ∈ Subtree.v t) := by
-  rewrite [find_loop]
+  unfold find_loop
   match t with
   | none => simp
   | some (.mk v left right height) =>
@@ -767,7 +767,7 @@ theorem Node.insert_spec
   (if b then node'.height = node.height + 1 else node'.height = node.height) ∧
   -- This is important for some of the proofs
   (b → node'.balanceFactor ≠ 0) := by
-  rw [Node.insert]
+  unfold Node.insert
   have hCmp := Ospec.infallible -- TODO
   progress as ⟨ ordering ⟩
   split <;> rename _ => hEq <;> clear hCmp <;> fsimp at *
@@ -793,7 +793,7 @@ theorem Tree.insert_in_opt_node_spec
   (if b then Subtree.height tree' = Subtree.height tree + 1
    else Subtree.height tree' = Subtree.height tree) ∧
   (b → Subtree.height tree > 0 → Subtree.balanceFactor tree' ≠ 0) := by
-  rw [Tree.insert_in_opt_node]
+  unfold Tree.insert_in_opt_node
   cases hNode : tree <;> fsimp [hNode]
   . -- tree = none
     fsimp [Node.invAux, Node.balanceFactor]
@@ -818,7 +818,7 @@ theorem Node.insert_in_left_spec
   Node.v node' = Node.v node ∪ {value} ∧
   (if b then node'.height = node.height + 1 else node'.height = node.height) ∧
   (b → node'.balanceFactor ≠ 0) := by
-  rw [Node.insert_in_left]
+  unfold Node.insert_in_left
   have hInvLeft : Subtree.inv node.left := by cases node; fsimp_all
   progress as ⟨ updt, left_opt' ⟩
   split
@@ -917,7 +917,7 @@ theorem Node.insert_in_right_spec
   Node.v node' = Node.v node ∪ {value} ∧
   (if b then node'.height = node.height + 1 else node'.height = node.height) ∧
   (b → node'.balanceFactor ≠ 0) := by
-  rw [Node.insert_in_right]
+  unfold Node.insert_in_right
   have hInvLeft : Subtree.inv node.right := by cases node; fsimp_all
   progress as ⟨ updt, right_opt' ⟩
   split
@@ -1014,7 +1014,7 @@ theorem Tree.insert_spec {T : Type}
   tree'.inv ∧
   (if updt then tree'.height = tree.height + 1 else tree'.height = tree.height) ∧
   tree'.v = tree.v ∪ {value} := by
-  rw [Tree.insert]
+  unfold Tree.insert
   progress as ⟨ updt, tree' ⟩
   fsimp [*]
 

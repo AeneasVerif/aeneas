@@ -1862,6 +1862,12 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
        we print it here instead of in {!end_fun_decl_group}. *)
     F.pp_print_cut fmt ();
     F.pp_print_string fmt ".");
+  (* Add the post-qualifier (i.e., the [partial_fixpoint] keyword if necessary) *)
+  Option.iter
+    (fun qualif ->
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt qualif)
+    (fun_decl_kind_to_post_qualif kind);
   (* Close the outer box for the definition *)
   F.pp_close_box fmt ();
   (* Add breaks to insert new lines between definitions *)

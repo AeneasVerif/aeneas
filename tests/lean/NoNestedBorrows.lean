@@ -244,16 +244,17 @@ end
 
 /- [no_nested_borrows::list_length]:
    Source: 'tests/src/no_nested_borrows.rs', lines 261:0-266:1 -/
-divergent def list_length {T : Type} (l : List T) : Result U32 :=
+def list_length {T : Type} (l : List T) : Result U32 :=
   match l with
   | List.Cons _ l1 => do
                       let i ← list_length l1
                       1#u32 + i
   | List.Nil => ok 0#u32
+partial_fixpoint
 
 /- [no_nested_borrows::list_nth_shared]:
    Source: 'tests/src/no_nested_borrows.rs', lines 269:0-282:1 -/
-divergent def list_nth_shared {T : Type} (l : List T) (i : U32) : Result T :=
+def list_nth_shared {T : Type} (l : List T) (i : U32) : Result T :=
   match l with
   | List.Cons x tl =>
     if i = 0#u32
@@ -262,10 +263,11 @@ divergent def list_nth_shared {T : Type} (l : List T) (i : U32) : Result T :=
          let i1 ← i - 1#u32
          list_nth_shared tl i1
   | List.Nil => fail panic
+partial_fixpoint
 
 /- [no_nested_borrows::list_nth_mut]:
    Source: 'tests/src/no_nested_borrows.rs', lines 285:0-298:1 -/
-divergent def list_nth_mut
+def list_nth_mut
   {T : Type} (l : List T) (i : U32) : Result (T × (T → List T)) :=
   match l with
   | List.Cons x tl =>
@@ -280,14 +282,15 @@ divergent def list_nth_mut
                              List.Cons x tl1
       ok (t, back)
   | List.Nil => fail panic
+partial_fixpoint
 
 /- [no_nested_borrows::list_rev_aux]:
    Source: 'tests/src/no_nested_borrows.rs', lines 301:0-311:1 -/
-divergent def list_rev_aux
-  {T : Type} (li : List T) (lo : List T) : Result (List T) :=
+def list_rev_aux {T : Type} (li : List T) (lo : List T) : Result (List T) :=
   match li with
   | List.Cons hd tl => list_rev_aux tl (List.Cons hd lo)
   | List.Nil => ok lo
+partial_fixpoint
 
 /- [no_nested_borrows::list_rev]:
    Source: 'tests/src/no_nested_borrows.rs', lines 315:0-318:1 -/
