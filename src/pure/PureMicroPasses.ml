@@ -1525,7 +1525,7 @@ let simplify_aggregates (ctx : ctx) (def : fun_decl) : fun_decl =
                 in
                 let fields =
                   match adt_decl.kind with
-                  | Enum _ | Alias _ | Opaque | TError _ ->
+                  | Enum _ | Alias _ | Opaque | TDeclError _ ->
                       craise __FILE__ __LINE__ def.item_meta.span "Unreachable"
                   | Union _ ->
                       craise __FILE__ __LINE__ def.item_meta.span

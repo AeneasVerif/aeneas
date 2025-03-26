@@ -365,6 +365,9 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
             ty_info inputs
         in
         analyze span expl_info ty_info output
+    | TError _ ->
+        craise_opt_span __FILE__ __LINE__ span
+          "Found type error in the output of charon"
   in
   (* Explore *)
   analyze span expl_info_init ty_info ty
@@ -394,7 +397,7 @@ let analyze_type_decl (updated : bool ref) (infos : type_infos)
             "type aliases should have been removed earlier"
       | Union _ ->
           craise __FILE__ __LINE__ def.item_meta.span "unions are not supported"
-      | Opaque | TError _ ->
+      | Opaque | TDeclError _ ->
           craise __FILE__ __LINE__ def.item_meta.span "unreachable"
     in
     (* Explore the types and accumulate information *)

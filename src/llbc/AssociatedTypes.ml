@@ -266,6 +266,9 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
   | TDynTrait _ ->
       craise_opt_span __FILE__ __LINE__ ctx.span
         "Dynamic trait types are not supported yet"
+  | TError _ ->
+      craise_opt_span __FILE__ __LINE__ ctx.span
+        "Found type error in the output of charon"
 
 (** This returns the normalized trait instance id together with an optional
     reference to a trait **implementation** (the `trait_ref` we return has

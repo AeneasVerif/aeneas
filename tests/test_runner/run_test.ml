@@ -116,6 +116,7 @@ let run_charon (env : runner_env) (case : Input.t) =
         [
           env.charon_path;
           "--no-cargo";
+          "--rustc-flag=--crate-name=" ^ case.name;
           "--rustc-flag=--crate-type=rlib";
           "--rustc-flag=--allow=unused";
           "--rustc-flag=--allow=non_snake_case";
@@ -123,8 +124,6 @@ let run_charon (env : runner_env) (case : Input.t) =
           "--remove-associated-types=*";
           "--input";
           case.path;
-          "--crate";
-          case.name;
           "--dest";
           env.llbc_dir;
         ]
