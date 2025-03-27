@@ -237,6 +237,8 @@
             pkgs.jq
             pkgs.rustup
             pkgs.rlwrap
+            fstar.packages.${system}.fstar
+            pkgs.coq
           ];
 
           inputsFrom = [
