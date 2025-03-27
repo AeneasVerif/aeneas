@@ -223,15 +223,6 @@ let toTypetraitsBoolWrapperT (#t : Type0) (toTypeBoolTInst : toType_t bool t) :
   to_type = toTypetraitsBoolWrapperT_to_type toTypeBoolTInst;
 }
 
-(** [traits::WithConstTy::LEN2]
-    Source: 'tests/src/traits.rs', lines 166:4-166:27 *)
-let with_const_ty_len2_default_body (self : Type0) (self_v : Type0) (self_w :
-  Type0) (len : usize) : result usize =
-  Ok 32
-let with_const_ty_len2_default (self : Type0) (self_v : Type0) (self_w : Type0)
-  (len : usize) : usize =
-  eval_global (with_const_ty_len2_default_body self self_v self_w len)
-
 (** Trait declaration: [traits::WithConstTy]
     Source: 'tests/src/traits.rs', lines 163:0-174:1 *)
 noeq type withConstTy_t (self : Type0) (self_v : Type0) (self_w : Type0) (len :
@@ -247,6 +238,15 @@ noeq type withConstTy_t (self : Type0) (self_v : Type0) (self_w : Type0) (len :
 let with_const_ty_bool_u8_u6432_len1_body : result usize = Ok 12
 let with_const_ty_bool_u8_u6432_len1 : usize =
   eval_global with_const_ty_bool_u8_u6432_len1_body
+
+(** [traits::WithConstTy::LEN2]
+    Source: 'tests/src/traits.rs', lines 166:4-166:27 *)
+let with_const_ty_len2_default_body (self : Type0) (self_v : Type0) (self_w :
+  Type0) (len : usize) : result usize =
+  Ok 32
+let with_const_ty_len2_default (self : Type0) (self_v : Type0) (self_w : Type0)
+  (len : usize) : usize =
+  eval_global (with_const_ty_len2_default_body self self_v self_w len)
 
 (** [traits::{traits::WithConstTy<u8, u64, 32: usize> for bool}#8::f]:
     Source: 'tests/src/traits.rs', lines 182:4-182:42 *)

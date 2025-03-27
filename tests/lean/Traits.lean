@@ -245,17 +245,6 @@ def ToTypetraitsBoolWrapperT {T : Type} (ToTypeBoolTInst : ToType Bool T) :
   to_type := ToTypetraitsBoolWrapperT.to_type ToTypeBoolTInst
 }
 
-/- [traits::WithConstTy::LEN2]
-   Source: 'tests/src/traits.rs', lines 166:4-166:27 -/
-@[global_simps]
-def WithConstTy.LEN2_default_body (Self : Type) (Self_V : Type) (Self_W : Type)
-  (LEN : Usize) : Result Usize :=
-  ok 32#usize
-@[global_simps, irreducible]
-def WithConstTy.LEN2_default (Self : Type) (Self_V : Type) (Self_W : Type) (LEN
-  : Usize) : Usize :=
-  eval_global (WithConstTy.LEN2_default_body Self Self_V Self_W LEN)
-
 /- Trait declaration: [traits::WithConstTy]
    Source: 'tests/src/traits.rs', lines 163:0-174:1 -/
 structure WithConstTy (Self : Type) (Self_V : Type) (Self_W : Type) (LEN :
@@ -272,6 +261,17 @@ def WithConstTyBoolU8U6432.LEN1_body : Result Usize := ok 12#usize
 @[global_simps, irreducible]
 def WithConstTyBoolU8U6432.LEN1 : Usize :=
   eval_global WithConstTyBoolU8U6432.LEN1_body
+
+/- [traits::WithConstTy::LEN2]
+   Source: 'tests/src/traits.rs', lines 166:4-166:27 -/
+@[global_simps]
+def WithConstTy.LEN2_default_body (Self : Type) (Self_V : Type) (Self_W : Type)
+  (LEN : Usize) : Result Usize :=
+  ok 32#usize
+@[global_simps, irreducible]
+def WithConstTy.LEN2_default (Self : Type) (Self_V : Type) (Self_W : Type) (LEN
+  : Usize) : Usize :=
+  eval_global (WithConstTy.LEN2_default_body Self Self_V Self_W LEN)
 
 /- [traits::{traits::WithConstTy<u8, u64, 32: usize> for bool}#8::f]:
    Source: 'tests/src/traits.rs', lines 182:4-182:42 -/
