@@ -273,17 +273,6 @@ Definition ToTypetraitsBoolWrapperT {T : Type} (toTypeBoolTInst : ToType_t bool
   ToType_t_to_type := toTypetraitsBoolWrapperT_to_type toTypeBoolTInst;
 |}.
 
-(** [traits::WithConstTy::LEN2]
-    Source: 'tests/src/traits.rs', lines 166:4-166:27 *)
-Definition with_const_ty_len2_default_body (Self : Type) (Self_V : Type)
-  (Self_W : Type) (LEN : usize) : result usize :=
-  Ok 32%usize
-.
-Definition with_const_ty_len2_default (Self : Type) (Self_V : Type) (Self_W :
-  Type) (LEN : usize) : usize :=
-  (with_const_ty_len2_default_body Self Self_V Self_W LEN)%global
-.
-
 (** Trait declaration: [traits::WithConstTy]
     Source: 'tests/src/traits.rs', lines 163:0-174:1 *)
 Record WithConstTy_t (Self : Type) (Self_V : Type) (Self_W : Type) (LEN :
@@ -305,6 +294,17 @@ Arguments WithConstTy_t_f { _ } { _ } { _ } { _ } _.
 Definition with_const_ty_bool_u8_u6432_len1_body : result usize := Ok 12%usize.
 Definition with_const_ty_bool_u8_u6432_len1 : usize :=
   with_const_ty_bool_u8_u6432_len1_body%global
+.
+
+(** [traits::WithConstTy::LEN2]
+    Source: 'tests/src/traits.rs', lines 166:4-166:27 *)
+Definition with_const_ty_len2_default_body (Self : Type) (Self_V : Type)
+  (Self_W : Type) (LEN : usize) : result usize :=
+  Ok 32%usize
+.
+Definition with_const_ty_len2_default (Self : Type) (Self_V : Type) (Self_W :
+  Type) (LEN : usize) : usize :=
+  (with_const_ty_len2_default_body Self Self_V Self_W LEN)%global
 .
 
 (** [traits::{traits::WithConstTy<u8, u64, 32: usize> for bool}#8::f]:
