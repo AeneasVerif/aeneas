@@ -10,6 +10,30 @@ namespace Saturate
 
 open Attribute
 
+structure DiagnosticsInfo where
+  hits : Std.HashMap Name (Nat × Nat)
+
+def DiagnosticsInfo.empty : DiagnosticsInfo := ⟨ Std.HashMap.empty ⟩
+
+def DiagnosticsInfo.insertHit (info : DiagnosticsInfo) (name : Name) : DiagnosticsInfo :=
+  match info.hits[name]? with
+  | none => ⟨ info.hits.insert name (1, 0) ⟩
+  | some (hit, used) => ⟨ info.hits.insert name (hit + 1, used) ⟩
+
+def DiagnosticsInfo.insertUsed (info : DiagnosticsInfo) (name : Name) : DiagnosticsInfo :=
+  match info.hits[name]? with
+  | none => ⟨ info.hits.insert name (0, 1) ⟩
+  | some (hit, used) => ⟨ info.hits.insert name (hit, used + 1) ⟩
+
+def DiagnosticsInfo.insertHitRules (info : DiagnosticsInfo) (rules : Array Rule) : DiagnosticsInfo :=
+  rules.foldl (fun info rule => info.insertHit rule.thName) info
+
+def DiagnosticsInfo.toArray (info : DiagnosticsInfo) : Array String :=
+  let hits := info.hits.toList
+  let hits := (hits.mergeSort (fun (_, hit0, used0) (_, hit1, used1) => hit0 + used0 ≤ hit1 + used1)).reverse
+  let hits := hits.toArray
+  hits.map (fun (name, (hit, used)) => s!"{name}: {hit} hits, {used} uses")
+
 /-- Find all the lemmas which match an expression.
 
     - `dtrees`: the discrimination trees (the sets of rules in which to match)
@@ -23,14 +47,16 @@ def matchExpr
   (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
   (nameToRule : NameMap Rule) (dtrees : Array (DiscrTree Rule))
   (boundVars : Std.HashSet FVarId)
+  (dinfo : DiagnosticsInfo)
   (matched : Std.HashSet (Name × List Expr)) (e : Expr) :
-  MetaM (Std.HashSet (Name × List Expr)) := do
+  MetaM (DiagnosticsInfo × Std.HashSet (Name × List Expr)) := do
   trace[Saturate] "Matching: {e}"
-  dtrees.foldlM (fun matched dtree => do
+  dtrees.foldlM (fun (dinfo, matched) dtree => do
     let exprs ← dtree.getMatch e
+    let dinfo := dinfo.insertHitRules exprs
     trace[Saturate] "Potential matches: {exprs}"
     -- Check each expression
-    (exprs.foldlM fun matched rule => do
+    (exprs.foldlM fun (dinfo, matched) rule => do
       trace[Saturate] "Checking potential match: {rule}"
       -- Check if the theorem is still active
       if let some activeRule := nameToRule.find? rule.thName then do
@@ -64,6 +90,7 @@ def matchExpr
             if ← isDefEq pat e then
               trace[Saturate] "defEq"
               -- It matched! Check the variables which appear in the arguments
+              let dinfo := dinfo.insertUsed rule.thName
               let (args, allFVars) ← mvars.foldrM (fun arg (args, hs) => do
                   let arg ← instantiateMVars arg
                   let hs ← getFVarIds arg hs
@@ -72,55 +99,58 @@ def matchExpr
               if boundVars.all (fun fvar => ¬ allFVars.contains fvar) then
                 -- Ok: save the theorem
                 trace[Saturate] "Matched with: {rule.thName} {args}"
-                pure (matched.insert (rule.thName, args))
+                pure (dinfo, matched.insert (rule.thName, args))
               else
                 -- Ignore
                 trace[Saturate] "Didn't match"
-                pure matched
+                pure (dinfo, matched)
             else
               -- Didn't match, leave the set of matches unchanged
               trace[Saturate] "Didn't match"
-              pure matched
+              pure (dinfo, matched)
           else
             -- Didn't match, leave the set of matches unchanged
               trace[Saturate] "Types didn't match"
-              pure matched
+              pure (dinfo, matched)
         else
           -- The rule is not active
           trace[Saturate] "The rule is not active"
-          pure matched
+          pure (dinfo, matched)
       else
         -- The rule is not active
         trace[Saturate] "The rule is not active"
-        pure matched) matched
-  ) matched
+        pure (dinfo, matched)) (dinfo, matched)
+  ) (dinfo, matched)
 
 /- Recursively explore a term -/
 private partial def visit (depth : Nat) (preprocessThm : Option (Array Expr → Expr → MetaM Unit)) (nameToRule : NameMap Rule)
   (dtrees : Array (DiscrTree Rule))
   (boundVars : Std.HashSet FVarId)
+  (dinfo : DiagnosticsInfo)
   (matched : Std.HashSet (Name × List Expr))
-  (e : Expr) : MetaM (Std.HashSet (Name × List Expr)) := do
+  (e : Expr) : MetaM (DiagnosticsInfo × Std.HashSet (Name × List Expr)) := do
   trace[Saturate] "Visiting {e}"
   -- Match
-  let matched ← matchExpr preprocessThm nameToRule dtrees boundVars matched e
+  let (dinfo, matched) ← matchExpr preprocessThm nameToRule dtrees boundVars dinfo matched e
   -- Recurse
   let visitBinders
     (depth : Nat)
-    (boundVars : Std.HashSet FVarId) (matched : Std.HashSet (Name × List Expr)) (xs: Array Expr) :
-    MetaM (Std.HashSet FVarId × (Std.HashSet (Name × List Expr))) := do
+    (boundVars : Std.HashSet FVarId)
+    (dinfo : DiagnosticsInfo)
+    (matched : Std.HashSet (Name × List Expr)) (xs: Array Expr) :
+    MetaM (Std.HashSet FVarId × DiagnosticsInfo × (Std.HashSet (Name × List Expr))) := do
     -- Visit the type of the binders, as well as the bodies
-    xs.foldlM (fun (boundVars, matched) x => do
+    xs.foldlM (fun (boundVars, dinfo, matched) x => do
       let fvarId := x.fvarId!
       let localDecl ← fvarId.getDecl
       let boundVars := boundVars.insert fvarId
-      let matched ← visit (depth + 1) preprocessThm nameToRule dtrees boundVars matched localDecl.type
-      let matched ←
+      let (dinfo, matched) ← visit (depth + 1) preprocessThm nameToRule dtrees boundVars dinfo matched localDecl.type
+      let (dinfo, matched) ←
         match localDecl.value? with
-        | none => pure matched
-        | some v => visit (depth + 1) preprocessThm nameToRule dtrees boundVars matched v
-      pure (boundVars, matched)
-      ) (boundVars, matched)
+        | none => pure (dinfo, matched)
+        | some v => visit (depth + 1) preprocessThm nameToRule dtrees boundVars dinfo matched v
+      pure (boundVars, dinfo, matched)
+      ) (boundVars, dinfo, matched)
   let e := e.consumeMData
   match e with
   | .bvar _
@@ -130,34 +160,35 @@ private partial def visit (depth : Nat) (preprocessThm : Option (Array Expr → 
   | .lit _
   | .const _ _ =>
     trace[Saturate] "Stop: bvar, fvar, etc."
-    pure matched
+    pure (dinfo, matched)
   | .app .. => do e.withApp fun f args => do
     trace[Saturate] ".app"
     -- Visit the args
-    let matched ← args.foldlM (fun matched arg => visit (depth + 1) preprocessThm nameToRule dtrees boundVars matched arg) matched
+    let (dinfo, matched) ← args.foldlM (fun (dinfo, matched) arg =>
+      visit (depth + 1) preprocessThm nameToRule dtrees boundVars dinfo matched arg) (dinfo, matched)
     -- Visit the app
-    visit (depth + 1) preprocessThm nameToRule dtrees boundVars matched f
+    visit (depth + 1) preprocessThm nameToRule dtrees boundVars dinfo matched f
   | .lam .. =>
     trace[Saturate] ".lam"
     lambdaLetTelescope e fun xs b => do
-      let (boundVars, matched) ← visitBinders (depth + 1) boundVars matched xs
-      visit (depth + 1) preprocessThm nameToRule dtrees boundVars matched b
+      let (boundVars, dinfo, matched) ← visitBinders (depth + 1) boundVars dinfo matched xs
+      visit (depth + 1) preprocessThm nameToRule dtrees boundVars dinfo matched b
   | .forallE .. => do
     trace[Saturate] ".forallE"
     forallTelescope e fun xs b => do
-      let (boundVars, matched) ← visitBinders (depth + 1) boundVars matched xs
-      visit (depth + 1) preprocessThm nameToRule dtrees boundVars matched b
+      let (boundVars, dinfo, matched) ← visitBinders (depth + 1) boundVars dinfo matched xs
+      visit (depth + 1) preprocessThm nameToRule dtrees boundVars dinfo matched b
   | .letE .. => do
     trace[Saturate] ".letE"
     lambdaLetTelescope e fun xs b => do
-      let (boundVars, matched) ← visitBinders (depth + 1) boundVars matched xs
-      visit (depth + 1) preprocessThm nameToRule dtrees boundVars matched b
+      let (boundVars, dinfo, matched) ← visitBinders (depth + 1) boundVars dinfo matched xs
+      visit (depth + 1) preprocessThm nameToRule dtrees boundVars dinfo matched b
   | .mdata _ b => do
     trace[Saturate] ".mdata"
-    visit (depth + 1) preprocessThm nameToRule dtrees boundVars matched b
+    visit (depth + 1) preprocessThm nameToRule dtrees boundVars dinfo matched b
   | .proj _ _ b => do
     trace[Saturate] ".proj"
-    visit (depth + 1) preprocessThm nameToRule dtrees boundVars matched b
+    visit (depth + 1) preprocessThm nameToRule dtrees boundVars dinfo matched b
 
 def propConsts : Std.HashSet Name := Std.HashSet.ofList [
   ``Iff, ``And, ``Or
@@ -189,11 +220,12 @@ private partial def fastVisit
   (depth : Nat)
   (nameToRule : NameMap Rule)
   (dtrees : Array (DiscrTree Rule))
+  (dinfo : DiagnosticsInfo)
   (matched : Std.HashSet (Name × List Expr))
-  (e : Expr) : MetaM (Std.HashSet (Name × List Expr)) := do
+  (e : Expr) : MetaM (DiagnosticsInfo × Std.HashSet (Name × List Expr)) := do
   trace[Saturate] "Visiting {e}"
   -- Match
-  let matched ← matchExpr preprocessThm nameToRule dtrees Std.HashSet.empty matched e
+  let (dinfo, matched) ← matchExpr preprocessThm nameToRule dtrees Std.HashSet.empty dinfo matched e
   -- Recurse
   let e := e.consumeMData
   match e with
@@ -204,23 +236,23 @@ private partial def fastVisit
   | .lit _
   | .const _ _ =>
     trace[Saturate] "Stop: bvar, fvar, etc."
-    pure matched
+    pure (dinfo, matched)
   | .app .. => do e.withApp fun f args => do
     trace[Saturate] ".app"
     let visitRec := fastVisit exploreSubterms preprocessThm (depth + 1) nameToRule dtrees
     let subterms ← exploreSubterms f args
-    subterms.foldlM visitRec matched
+    subterms.foldlM (fun (dinfo, matched) => visitRec dinfo matched) (dinfo, matched)
   | .lam ..
   | .forallE ..
   | .letE .. => do
     -- Do not go inside the foralls, the lambdas and the let expressions
-    pure matched
+    pure (dinfo, matched)
   | .mdata _ b => do
     trace[Saturate] ".mdata"
-    fastVisit exploreSubterms preprocessThm (depth + 1) nameToRule dtrees matched b
+    fastVisit exploreSubterms preprocessThm (depth + 1) nameToRule dtrees dinfo matched b
   | .proj _ _ _ => do
     trace[Saturate] ".proj"
-    pure matched
+    pure (dinfo, matched)
 
 /- The saturation tactic itself -/
 def evalSaturate
@@ -247,23 +279,28 @@ def evalSaturate
     | none => do pure (← ctx.getDecls).toArray
     | some decls => decls.mapM fun d => d.getDecl
 
-  let matched ← decls.foldlM (fun matched (decl : LocalDecl) => do
+  let (dinfo, matched) ← decls.foldlM (fun (dinfo, matched) (decl : LocalDecl) => do
     trace[Saturate] "Exploring local decl: {decl.userName}"
     /- We explore both the type, the expresion and the body (if there is) -/
-    let matched ← visit matched decl.type
-    let matched ← visit matched decl.toExpr
+    let (dinfo, matched) ← visit dinfo matched decl.type
+    let (dinfo, matched) ← visit dinfo matched decl.toExpr
     match decl.value? with
-    | none => pure matched
-    | some value => visit matched value) Std.HashSet.empty
+    | none => pure (dinfo, matched)
+    | some value => visit dinfo matched value) (DiagnosticsInfo.empty, Std.HashSet.empty)
   -- Explore the goal
   trace[Saturate] "Exploring the goal"
-  let matched ← do
-    if exploreGoal then do pure (← visit matched (← Tactic.getMainTarget)).toArray else do pure matched.toArray
+  let (dinfo, matched) ← do
+    if exploreGoal then do pure (← visit dinfo matched (← Tactic.getMainTarget)) else do pure (dinfo, matched)
+  let matched := matched.toArray
   -- Introduce the theorems in the context
-  matched.mapIdxM fun i (thName, args) => do
+  let matched ← matched.mapIdxM fun i (thName, args) => do
     let th ← mkAppOptM thName (args.map some).toArray
     let thTy ← inferType th
     pure (← Utils.addDeclTac (.num (.str .anonymous "_h") i) th thTy (asLet := false)).fvarId!
+  -- Display the diagnostics information
+  trace[Saturate.diagnostics] "Saturate diagnostics info: {dinfo.toArray}"
+  -- Return
+  pure matched
 
 elab "aeneas_saturate" : tactic => do
   let _ ← evalSaturate [`Aeneas.ScalarTac] none none
@@ -273,11 +310,12 @@ section Test
     let _ ← evalSaturate [`Aeneas.Test] none none
 
   set_option trace.Saturate.attribute false
-  @[aeneas_saturate (set := Aeneas.Test) (pattern := l.length)]
+  @[local aeneas_saturate (set := Aeneas.Test) (pattern := l.length)]
   theorem rule1 (α : Type u) (l : List α) : l.length ≥ 0 := by simp
 
   set_option trace.Saturate false
 
+/-
   /--
 info: example
   (α : Type v)
@@ -301,7 +339,7 @@ let _g := fun l => l.length + l5.length;
   := by sorry
   -/
   #guard_msgs in
-  set_option linter.unusedTactic false in
+  set_option trace.Saturate.diagnostics true in
   theorem test1 {α : Type v} (l0 l1 l2 l3 l4 l5 : List α)
     (_ : ∀ (l : List α), l.length ≤ l3.length) :
     let _k := l4.length
@@ -428,7 +466,7 @@ let _g := fun l => l.length + l5.length;
   /- Testing patterns which are propositions -/
   @[aeneas_saturate (set := Aeneas.Test) (pattern := x < y)]
   theorem rule2 (x y : Nat) : x < y ↔ y > x := by omega
-
+-/
 end Test
 
 end Saturate
