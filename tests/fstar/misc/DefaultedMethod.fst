@@ -11,9 +11,10 @@ open Primitives
 assume val core_cmp_impls_OrdI32_min : i32 -> i32 -> result i32
 
 (** [defaulted_method::main]:
-    Source: 'tests/src/defaulted_method.rs', lines 2:0-4:1 *)
+    Source: 'tests/src/defaulted_method.rs', lines 2:0-5:1 *)
 let main : result unit =
-  let* _ = core_cmp_impls_OrdI32_min 10 1 in Ok ()
+  let* n = core_cmp_impls_OrdI32_min 10 1 in
+  if n = 1 then Ok () else Fail Failure
 
 (** Trait declaration: [core::cmp::PartialEq]
     Source: '/rustc/library/core/src/cmp.rs', lines 248:0-248:39

@@ -8,23 +8,11 @@ set_option linter.unusedVariables false
 
 namespace defaulted_method
 
-/- [core::cmp::impls::{core::cmp::Ord for i32}#77::min]:
-   Source: '/rustc/library/core/src/cmp.rs', lines 1001:4-1003:20
-   Name pattern: core::cmp::impls::{core::cmp::Ord<i32>}::min -/
-axiom core.cmp.impls.OrdI32.min : I32 → I32 → Result I32
-
 /- [defaulted_method::main]:
-   Source: 'tests/src/defaulted_method.rs', lines 2:0-4:1 -/
+   Source: 'tests/src/defaulted_method.rs', lines 2:0-5:1 -/
 def main : Result Unit :=
   do
-  let _ ← core.cmp.impls.OrdI32.min 10#i32 1#i32
-  ok ()
-
-/- [core::cmp::Ord::min]:
-   Source: '/rustc/library/core/src/cmp.rs', lines 1001:4-1003:20
-   Name pattern: core::cmp::Ord::min -/
-axiom core.cmp.Ord.min.default
-  {Self : Type} (self_clause : core.cmp.Ord Self) :
-  Self → Self → Result Self
+  let n ← (↑(core.cmp.impls.OrdI32.min 10#i32 1#i32) : Result I32)
+  massert (n = 1#i32)
 
 end defaulted_method

@@ -318,6 +318,20 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
           ~can_fail ())
       all_int_names
   in
+  let mk_scalar_funs (rust_name : string -> string -> string)
+      (extract_name : string -> string -> string) (funs : (bool * string) list)
+      : (pattern * Pure.builtin_fun_info) list =
+    List.flatten
+      (List.map
+         (fun ty ->
+           List.map
+             (fun (can_fail, fun_name) ->
+               mk_fun (rust_name ty fun_name)
+                 ~extract_name:(Some (extract_name ty fun_name))
+                 ~can_fail ())
+             funs)
+         all_int_names)
+  in
   [
     mk_fun "core::mem::replace" ~can_fail:false ~lift:false ();
     mk_fun "core::mem::take" ~can_fail:false ~lift:false ();
@@ -598,31 +612,64 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
            ();
        ]
       (* PartialEq, Eq, PartialOrd, Ord *)
-      @ mk_scalar_fun
-          (fun ty ->
-            "core::cmp::impls::{core::cmp::PartialEq<" ^ ty ^ "," ^ ty
-            ^ ">}::eq")
-          (fun ty ->
+      @ mk_scalar_funs
+          (fun ty fun_name ->
+            "core::cmp::impls::{core::cmp::PartialEq<" ^ ty ^ "," ^ ty ^ ">}::"
+            ^ fun_name)
+          (fun ty fun_name ->
             "core.cmp.impls.PartialEq"
             ^ StringUtils.capitalize_first_letter ty
-            ^ ".eq")
-          ~can_fail:false ()
-      @ mk_scalar_fun
-          (fun ty ->
-            "core::cmp::impls::{core::cmp::PartialOrd<" ^ ty ^ "," ^ ty
-            ^ ">}::partial_cmp")
-          (fun ty ->
+            ^ "." ^ fun_name)
+          [ (false, "eq"); (false, "ne") ]
+      (* Eq: no methods *)
+      (* PartialOrd *)
+      @ mk_scalar_funs
+          (fun ty fun_name ->
+            "core::cmp::impls::{core::cmp::PartialOrd<" ^ ty ^ "," ^ ty ^ ">}::"
+            ^ fun_name)
+          (fun ty fun_name ->
             "core.cmp.impls.PartialCmp"
             ^ StringUtils.capitalize_first_letter ty
-            ^ ".partial_cmp")
-          ~can_fail:false ()
-      @ mk_scalar_fun
-          (fun ty -> "core::cmp::impls::{core::cmp::Ord<" ^ ty ^ ">}::cmp")
-          (fun ty ->
+            ^ "." ^ fun_name)
+          [
+            (false, "partial_cmp");
+            (false, "lt");
+            (false, "le");
+            (false, "gt");
+            (false, "ge");
+          ]
+      (* Ord *)
+      @ mk_scalar_funs
+          (fun ty fun_name ->
+            "core::cmp::impls::{core::cmp::Ord<" ^ ty ^ ">}::" ^ fun_name)
+          (fun ty fun_name ->
             "core.cmp.impls.Ord"
             ^ StringUtils.capitalize_first_letter ty
-            ^ ".cmp")
-          ~can_fail:false ()
+            ^ "." ^ fun_name)
+          [ (false, "cmp"); (false, "max"); (false, "min"); (true, "clamp") ]
+      (* Default methods *)
+      @ [
+          (* PartialEq *)
+          mk_fun "core::cmp::PartialEq::ne"
+            ~extract_name:(Some "core::cmp::PartialEq::ne::default") ();
+          (* PartialOrd *)
+          mk_fun "core::cmp::PartialOrd::lt"
+            ~extract_name:(Some "core::cmp::PartialOrd::lt::default") ();
+          mk_fun "core::cmp::PartialOrd::le"
+            ~extract_name:(Some "core::cmp::PartialOrd::le::default") ();
+          mk_fun "core::cmp::PartialOrd::gt"
+            ~extract_name:(Some "core::cmp::PartialOrd::gt::default") ();
+          mk_fun "core::cmp::PartialOrd::ge"
+            ~extract_name:(Some "core::cmp::PartialOrd::ge::default") ();
+          (* Ord *)
+          mk_fun "core::cmp::Ord::max"
+            ~extract_name:(Some "core::cmp::PartialOrd::max::default") ();
+          mk_fun "core::cmp::Ord::min"
+            ~extract_name:(Some "core::cmp::PartialOrd::min::default") ();
+          mk_fun "core::cmp::Ord::clamp"
+            ~extract_name:(Some "core::cmp::PartialOrd::max::clamp") ();
+        ]
+      (* Binops *)
       @ List.flatten
           (List.map
              (fun int_name ->
@@ -641,6 +688,7 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
                    (false, "saturating_sub");
                    (false, "wrapping_add");
                    (false, "wrapping_sub");
+                   (false, "wrapping_mul");
                    (false, "overflowing_add");
                    (false, "rotate_left");
                    (false, "rotate_right");

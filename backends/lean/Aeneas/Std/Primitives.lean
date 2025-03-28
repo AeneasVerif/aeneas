@@ -104,6 +104,11 @@ def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
   | some x => ok x
   | none => fail e
 
+@[simp] abbrev liftFun1 {α β} (f : α → β) : α → Result β := fun x => ok (f x)
+@[simp] abbrev liftFun2 {α β γ : Type} (f : α → β → γ) : α → β → Result γ := fun x y => ok (f x y)
+@[simp] abbrev liftFun3 {α β γ δ} (f : α → β → γ → δ) : α → β → γ → Result δ := fun x y z => ok (f x y z)
+@[simp] abbrev liftFun4 {α β γ δ ε} (f : α → β → γ → δ → ε) : α → β → γ → δ → Result ε := fun x y z a => ok (f x y z a)
+
 /-!
 # Do-DSL Support
 -/

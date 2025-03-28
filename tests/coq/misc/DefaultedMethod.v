@@ -14,9 +14,9 @@ Module DefaultedMethod.
 Axiom core_cmp_impls_OrdI32_min : i32 -> i32 -> result i32.
 
 (** [defaulted_method::main]:
-    Source: 'tests/src/defaulted_method.rs', lines 2:0-4:1 *)
+    Source: 'tests/src/defaulted_method.rs', lines 2:0-5:1 *)
 Definition main : result unit :=
-  _ <- core_cmp_impls_OrdI32_min 10%i32 1%i32; Ok tt
+  n <- core_cmp_impls_OrdI32_min 10%i32 1%i32; massert (n s= 1%i32)
 .
 
 (** Trait declaration: [core::cmp::PartialEq]
