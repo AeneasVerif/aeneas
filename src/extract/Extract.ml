@@ -2388,9 +2388,16 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
         let funs_map = StringMap.of_list info.methods in
         List.map
           (fun (item_name, _) ->
-            let info = StringMap.find item_name funs_map in
-            let fun_name = info.extract_name in
-            (item_name, fun_name))
+            match StringMap.find_opt item_name funs_map with
+            | None ->
+                craise __FILE__ __LINE__ trait_decl.item_meta.span
+                  ("When retrieving the builtin information for trait decl '"
+                 ^ trait_decl.name
+                 ^ "', could not find the information for item '" ^ item_name
+                 ^ "'")
+            | Some info ->
+                let fun_name = info.extract_name in
+                (item_name, fun_name))
           methods
   in
   (* Register the names *)

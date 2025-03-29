@@ -175,17 +175,61 @@ structure core.ops.range.RangeFrom (Idx : Type) where
    Name pattern: core::cmp::PartialEq -/
 structure core.cmp.PartialEq (Self : Type) (Rhs : Type) where
   eq : Self → Rhs → Result Bool
+  ne : Self → Rhs → Result Bool
 
 /- Trait declaration: [core::cmp::Eq]
    Name pattern: core::cmp::Eq -/
 structure core.cmp.Eq (Self : Type) where
   partialEqInst : core.cmp.PartialEq Self Self
 
+/- Default method
+   Name pattern: core::cmp::PartialEq::ne
+-/
+def core.cmp.PartialEq.ne.default {Self Rhs : Type} (eq : Self → Rhs → Result Bool)
+  (self : Self) (other : Rhs) : Result Bool := do
+  ok (¬ (← eq self other))
+
 /- Trait declaration: [core::cmp::PartialOrd]
    Name pattern: core::cmp::PartialOrd -/
 structure core.cmp.PartialOrd (Self : Type) (Rhs : Type) where
   partialEqInst : core.cmp.PartialEq Self Rhs
   partial_cmp : Self → Rhs → Result (Option Ordering)
+  lt : Self → Rhs → Result Bool
+  le : Self → Rhs → Result Bool
+  gt : Self → Rhs → Result Bool
+  ge : Self → Rhs → Result Bool
+
+/- Default method
+   Name pattern: core::cmp::PartialOrd::lt -/
+def core.cmp.PartialOrd.lt.default {Self Rhs : Type}
+  (partial_cmp : Self → Rhs → Result (Option Ordering))
+  (x : Self) (y : Rhs) : Result Bool := do
+  let cmp ← partial_cmp x y
+  ok (cmp = some .lt)
+
+/- Default method
+   Name pattern: core::cmp::PartialOrd::le -/
+def core.cmp.PartialOrd.le.default {Self Rhs : Type}
+  (partial_cmp : Self → Rhs → Result (Option Ordering))
+  (x : Self) (y : Rhs) : Result Bool := do
+  let cmp ← partial_cmp x y
+  ok (cmp = some .lt ∨ cmp = some .eq)
+
+/- Default method
+   Name pattern: core::cmp::PartialOrd::gt -/
+def core.cmp.PartialOrd.gt.default {Self Rhs : Type}
+  (partial_cmp : Self → Rhs → Result (Option Ordering))
+  (x : Self) (y : Rhs) : Result Bool := do
+  let cmp ← partial_cmp x y
+  ok (cmp = some .gt)
+
+/- Default method
+   Name pattern: core::cmp::PartialOrd::ge -/
+def core.cmp.PartialOrd.ge.default {Self Rhs : Type}
+  (partial_cmp : Self → Rhs → Result (Option Ordering))
+  (x : Self) (y : Rhs) : Result Bool := do
+  let cmp ← partial_cmp x y
+  ok (cmp = some .gt ∨ cmp = some .eq)
 
 /- Trait declaration: [core::cmp::Ord]
    Name pattern: core::cmp::Ord -/
@@ -193,6 +237,30 @@ structure core.cmp.Ord (Self : Type) where
   eqInst : core.cmp.Eq Self
   partialOrdInst : core.cmp.PartialOrd Self Self
   cmp : Self → Self → Result Ordering
+  max : Self → Self → Result Self
+  min : Self → Self → Result Self
+  clamp : Self → Self → Self → Result Self
+
+/- Default method for: [core::cmp::Ord::max]:
+   Name pattern: core::cmp::Ord::max -/
+def core.cmp.Ord.max.default {Self : Type} (lt : Self → Self → Result Bool)
+  (x y : Self) : Result Self := do
+  if ← lt x y then ok y else ok x
+
+/- Default method for: [core::cmp::Ord::min]:
+   Name pattern: core::cmp::Ord::min -/
+def core.cmp.Ord.min.default {Self : Type} (lt : Self → Self → Result Bool)
+  (x y : Self) : Result Self := do
+  if ← lt x y then ok x else ok y
+
+/- Default method for: [core::cmp::Ord::clamp]:
+   Name pattern: core::cmp::Ord::clamp -/
+def core.cmp.Ord.min.clamp {Self : Type} (le lt gt : Self → Self → Result Bool)
+  (self min max : Self) : Result Self := do
+  massert (← le min max)
+  if ← lt self min then ok min
+  else if ← gt self max then ok max
+  else ok self
 
 end Std
 

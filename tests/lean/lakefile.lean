@@ -6,8 +6,8 @@ require aeneas from "../../backends/lean"
 package «tests» {}
 
 @[default_target] lean_lib AdtBorrows
-@[default_target] lean_lib ArraySliceIndex
 @[default_target] lean_lib Arrays
+@[default_target] lean_lib ArraySliceIndex
 @[default_target] lean_lib AsMut
 @[default_target] lean_lib Avl
 @[default_target] lean_lib BaseTutorial
@@ -15,6 +15,7 @@ package «tests» {}
 @[default_target] lean_lib Bitwise
 @[default_target] lean_lib Builtin
 @[default_target] lean_lib Constants
+@[default_target] lean_lib DefaultedMethod
 @[default_target] lean_lib Demo
 @[default_target] lean_lib Deref
 @[default_target] lean_lib External
