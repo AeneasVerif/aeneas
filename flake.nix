@@ -17,6 +17,7 @@
       let
         pkgs = import nixpkgs { inherit system; };
         ocamlPackages = pkgs.ocamlPackages;
+        coqPackages = pkgs.coqPackages_8_18;
         easy_logging = ocamlPackages.buildDunePackage rec {
           pname = "easy_logging";
           version = "0.8.2";
@@ -167,7 +168,7 @@
         aeneas-verify-coq = pkgs.stdenv.mkDerivation {
           name = "aeneas_verify_coq";
           src = ./tests/coq;
-          buildInputs = [ pkgs.coq ];
+          buildInputs = [ coqPackages.coq ];
           buildPhase = ''
             make prepare-projects
             make verify -j $NIX_BUILD_CORES
@@ -238,7 +239,7 @@
             pkgs.rustup
             pkgs.rlwrap
             fstar.packages.${system}.fstar
-            pkgs.coq
+            coqPackages.coq
           ];
 
           inputsFrom = [
