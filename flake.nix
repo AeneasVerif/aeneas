@@ -18,6 +18,7 @@
         pkgs = import nixpkgs { inherit system; };
         ocamlPackages = pkgs.ocaml-ng.ocamlPackages_4_14;
         coqPackages = pkgs.coqPackages_8_18;
+        charon-ml = charon.packages.${system}.charon-ml.override { inherit ocamlPackages; };
         easy_logging = ocamlPackages.buildDunePackage rec {
           pname = "easy_logging";
           version = "0.8.2";
@@ -59,7 +60,7 @@
           OCAMLPARAM = "_,warn-error=+A"; # Turn all warnings into errors.
           propagatedBuildInputs = [
             easy_logging
-            charon.packages.${system}.charon-ml
+            charon-ml
           ] ++ (with ocamlPackages; [
             calendar
             core_unix
@@ -221,7 +222,8 @@
       {
         packages = {
           inherit aeneas;
-          inherit (charon.packages.${system}) charon-ml charon;
+          inherit (charon.packages.${system}) charon;
+          inherit charon-ml;
           default = aeneas;
         };
         devShells.default = pkgs.mkShell {
