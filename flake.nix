@@ -16,7 +16,7 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
-        ocamlPackages = pkgs.ocamlPackages;
+        ocamlPackages = pkgs.ocaml-ng.ocamlPackages_4_14;
         coqPackages = pkgs.coqPackages_8_18;
         easy_logging = ocamlPackages.buildDunePackage rec {
           pname = "easy_logging";
@@ -228,13 +228,13 @@
           packages = [
             pkgs.curl
             pkgs.elan
-            pkgs.ocamlPackages.ocaml
-            pkgs.ocamlPackages.ocamlformat
-            pkgs.ocamlPackages.menhir
-            pkgs.ocamlPackages.odoc
+            ocamlPackages.ocaml
+            ocamlPackages.ocamlformat
+            ocamlPackages.menhir
+            ocamlPackages.odoc
             # ocaml-lsp's version must match the ocaml version used. Pinning
             # this here to save everyone a headache.
-            pkgs.ocamlPackages.ocaml-lsp
+            ocamlPackages.ocaml-lsp
             pkgs.jq
             pkgs.rustup
             pkgs.rlwrap
