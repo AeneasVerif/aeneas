@@ -568,13 +568,15 @@ elab tk:"progress?" args:progressArgs : tactic => do
   let tac := mkNode `Aeneas.Progress.progress #[mkAtom "progress", stxArgs]
   Meta.Tactic.TryThis.addSuggestion tk tac (origSpan? := ← getRef)
 
-syntax (name := letProgress)"let" noWs "*" " ⟨ " binderIdent,* " ⟩" colGe " ← " colGe term ("by" tacticSeq)? : tactic
+syntax (name := letProgress) "let" noWs "*" " ⟨ " binderIdent,* " ⟩" colGe
+  " ← " colGe (term <|> "*" <|> "*?") ("by" tacticSeq)? : tactic
 
 def parseLetProgress
-: TSyntax ``Aeneas.Progress.letProgress -> TacticM (Expr × Array (Option Name) × Option Syntax.Tactic)
-| args@`(tactic| let* ⟨ $ids,* ⟩ ← $pspec:term $[by $byTac]?) =>  withMainContext do
+: TSyntax ``Aeneas.Progress.letProgress ->
+  TacticM (Option Expr × Bool × Array (Option Name) × Option Syntax.Tactic)
+| args@`(tactic| let* ⟨ $ids,* ⟩ ← $pspec $[by $byTac]?) =>  withMainContext do
   trace[Progress] "Progress arguments: {args.raw}"
-  let withThm : Expr ← do
+  let ((withThm, suggest) : (Option Expr × Bool)) ← do
     /- We have to make a case disjunction, because if we treat identifiers like
       terms, then Lean will not succeed in infering their implicit parameters
       (`progress` does that by matching against the goal). -/
@@ -583,16 +585,24 @@ def parseLetProgress
       match (← getLCtx).findFromUserName? stx.getId with
       | .some decl =>
         trace[Progress] "With arg (local decl): {stx.raw}"
-        pure decl.toExpr
+        pure (some decl.toExpr, false)
       | .none =>
         -- Not a local declaration: should be a theorem
         trace[Progress] "With arg (theorem): {stx.raw}"
         let some e ← Term.resolveId? stx (withInfo := true)
           | throwError m!"Could not find theorem: {pspec}"
-        pure e
+        pure (some e, false)
     | term => do
-      trace[Progress] "With arg (term): {term}"
-      Tactic.elabTerm term none
+      trace[Progress] "term.raw.getKind: {term.raw.getKind}"
+      if term.raw.getKind = `token.«*» then
+        trace[Progress] "With arg: *"
+        pure (none, false)
+      else if term.raw.getKind = `token.«*?» then
+        trace[Progress] "With arg: ?"
+        pure (none, true)
+      else
+        trace[Progress] "With arg (term): {term}"
+        pure (some (← Tactic.elabTerm term none), false)
   let ids := ids.getElems.map fun
       | `(binderIdent| $name:ident) => some name.getId
       | _ => none
@@ -600,13 +610,21 @@ def parseLetProgress
     | none => none
     | some byTac => some ⟨byTac.raw⟩
   trace[Progress] "User-provided ids: {ids}"
-  return (withThm, ids, byTac)
+  return (withThm, suggest, ids, byTac)
 | _ => throwUnsupportedSyntax
 
 elab tk:letProgress : tactic => do
   withMainContext do
-  let (withArg, ids, byTac) ← parseLetProgress tk
-  let _ ← evalProgress none (some (.str .anonymous "_")) withArg ids byTac
+  let (withArg, suggest, ids, byTac) ← parseLetProgress tk
+  let stats ← evalProgress none (some (.str .anonymous "_")) withArg ids byTac
+  let mut stxArgs := tk.raw
+  if suggest then
+    trace[Progress] "suggest is true"
+    let withArg ← stats.usedTheorem.toSyntax
+    stxArgs := stxArgs.setArg 6 withArg
+    let stxArgs' : TSyntax `Aeneas.Progress.letProgress := ⟨ stxArgs ⟩
+    trace[Progress] "stxArgs': {stxArgs}"
+    Meta.Tactic.TryThis.addSuggestion tk stxArgs' (origSpan? := ← getRef)
 
 namespace Test
   open Std Result
@@ -637,6 +655,18 @@ x y : UScalar ty
   example {ty} {x y : UScalar ty} :
     ∃ z, x + y = ok z := by
     progress keep _ as ⟨ z, h1 ⟩
+
+  example {ty} {x y : UScalar ty} (h : x.val + y.val ≤ UScalar.max ty) :
+    ∃ z, x + y = ok z := by
+    let* ⟨ z, h1 ⟩ ← *
+
+  /--
+  info: Try this: let* ⟨ z, h1 ⟩ ← UScalar.add_spec
+  -/
+  #guard_msgs in
+  example {ty} {x y : UScalar ty} (h : x.val + y.val ≤ UScalar.max ty) :
+    ∃ z, x + y = ok z := by
+    let* ⟨ z, h1 ⟩ ← *?
 
   /--
 info: example
