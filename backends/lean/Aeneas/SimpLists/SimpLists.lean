@@ -29,9 +29,9 @@ def simpListsTac (args : Args) (loc : Utils.Location) : TacticM Unit := do
     }
   ScalarTac.condSimpTac "simp_lists" args addSimpThms false loc
 
-syntax (name := simp_lists) "simp_lists" ("[" term,* "]")? (location)? : tactic
+syntax (name := simp_lists) "simp_lists" ("[" (term<|>"*"),* "]")? (location)? : tactic
 
-def parseArgs (args : Array (TSyntax `term)) : TacticM Args := do
+def parseArgs (args : TSyntaxArray [`term, `token.«*»]) : TacticM Args := do
   let mut declsToUnfold := #[]
   let mut addSimpThms := #[]
   let mut hypsToUse := #[]
@@ -54,9 +54,18 @@ def parseArgs (args : Array (TSyntax `term)) : TacticM Args := do
           addSimpThms := addSimpThms.push name
         else throwError m!"Unexpected: {arg}"
     | term => do
-      -- TODO: we need to make that work
-      trace[SimpLists] "arg (term): {term}"
-      throwError m!"Unimplemented: arbitrary terms are not supported yet as arguments to `simp_lists` (received: {arg})"
+      trace[SimpLists] "term kind: {term.raw.getKind}"
+      if term.raw.getKind == `token.«*» then
+        trace[SimpLists] "found token: *"
+        let decls ← (← getLCtx).getDecls
+        let decls ← decls.filterMapM (
+          fun d => do if (← inferType d.type).isProp then pure (some d.fvarId) else pure none)
+        trace[SimpLists] "filtered decls: {decls.map Expr.fvar}"
+        hypsToUse := hypsToUse.append decls.toArray
+      else
+        -- TODO: we need to make that work
+        trace[SimpLists] "arg (term): {term}"
+        throwError m!"Unimplemented: arbitrary terms are not supported yet as arguments to `simp_lists` (received: {arg})"
   pure ⟨ declsToUnfold, addSimpThms, hypsToUse ⟩
 
 def parseSimpLists : TSyntax ``simp_lists -> TacticM (Args × Utils.Location)
@@ -95,5 +104,9 @@ example [Inhabited α] (l : List α) (x y : α) (i j : Nat) (hj : i < j) : (l.se
 example (CList : Type) (l : CList) (get : CList → Nat → Bool) (set : CList → Nat → Bool → CList)
   (h : ∀ i j l x, i ≠ j → get (set l i x) j = get l j) (i j : Nat) (hi : i < j) : get (set l i x) j = get l j := by
   simp_lists [h]
+
+example (CList : Type) (l : CList) (get : CList → Nat → Bool) (set : CList → Nat → Bool → CList)
+  (h : ∀ i j l x, i ≠ j → get (set l i x) j = get l j) (i j : Nat) (hi : i < j) : get (set l i x) j = get l j := by
+  simp_lists [*]
 
 end Aeneas.SimpLists
