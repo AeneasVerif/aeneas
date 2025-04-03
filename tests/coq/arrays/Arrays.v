@@ -575,4 +575,36 @@ Definition sum_mut_slice
   i <- sum_mut_slice_loop n a 0%usize 0%u32; Ok (i, a)
 .
 
+(** [arrays::add_acc]: loop 0:
+    Source: 'tests/src/arrays.rs', lines 362:4-371:5 *)
+Fixpoint add_acc_loop
+  (n : nat) (pa_src : array u32 256%usize) (pe_dst : array u32 256%usize)
+  (i : usize) :
+  result ((array u32 256%usize) * (array u32 256%usize))
+  :=
+  match n with
+  | O => Fail_ OutOfFuel
+  | S n1 =>
+    if i s< 256%usize
+    then (
+      a <- array_index_usize pa_src i;
+      pa_src1 <- array_update_usize pa_src i 0%u32;
+      c <- array_index_usize pe_dst i;
+      c1 <- u32_add c a;
+      pe_dst1 <- array_update_usize pe_dst i c1;
+      i1 <- usize_add i 1%usize;
+      add_acc_loop n1 pa_src1 pe_dst1 i1)
+    else Ok (pa_src, pe_dst)
+  end
+.
+
+(** [arrays::add_acc]:
+    Source: 'tests/src/arrays.rs', lines 360:0-372:1 *)
+Definition add_acc
+  (n : nat) (pa_src : array u32 256%usize) (pe_dst : array u32 256%usize) :
+  result ((array u32 256%usize) * (array u32 256%usize))
+  :=
+  add_acc_loop n pa_src pe_dst 0%usize
+.
+
 End Arrays.

@@ -36,3 +36,10 @@ unfold
 let sum_mut_slice_loop_decreases (a : slice u32) (i : usize) (s : u32) : nat =
   admit ()
 
+(** [arrays::add_acc]: decreases clause
+    Source: 'tests/src/arrays.rs', lines 362:4-371:5 *)
+unfold
+let add_acc_loop_decreases (pa_src : array u32 256) (pe_dst : array u32 256)
+  (i : usize) : nat =
+  admit ()
+

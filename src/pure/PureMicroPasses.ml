@@ -2298,6 +2298,13 @@ let simplify_array_slice_update (ctx : ctx) (def : fun_decl) : fun_decl =
                 generics = index_generics;
               },
             [ a; i ] ) ->
+            log#ldebug
+              (lazy
+                (__FUNCTION__ ^ ": identified a pattern to simplify:\n"
+                ^ texpression_to_string ctx
+                    { e = Let (monadic, pat, e1, e2); ty = e2.ty }
+                ^ "\n"));
+
             (* Some auxiliary functions *)
             (* Helper to check if an expression is actually the backward function *)
             let is_call_to_back (app : texpression) =
@@ -2388,12 +2395,17 @@ let simplify_array_slice_update (ctx : ctx) (def : fun_decl) : fun_decl =
               end
             in
             let e' = updt_visitor1#visit_texpression () e2 in
+            log#ldebug
+              (lazy
+                (__FUNCTION__ ^ ": e':\n" ^ texpression_to_string ctx e' ^ "\n"));
 
             (* Should we keep the change? *)
-            if !count = 1 && Option.is_some !back_call then
+            if !count = 1 && Option.is_some !back_call then (
+              log#ldebug (lazy (__FUNCTION__ ^ ": keeping the change"));
               let pat, arg = Option.get !back_call in
               let call = mk_call_to_update arg in
-              Let (true, pat, call, e')
+              (* Recurse on the updated expression *)
+              super#visit_expression env (Let (true, pat, call, e')))
             else
               (* Sometimes the call to the backward function needs to
                  use fresh variables which are introduced *after* the
@@ -2405,6 +2417,9 @@ let simplify_array_slice_update (ctx : ctx) (def : fun_decl) : fun_decl =
                  function, that is: as soon as all the variables needed for its
                  arguments have been introduced.
               *)
+              let _ =
+                log#ldebug (lazy (__FUNCTION__ ^ ": not keeping the change"))
+              in
               let e'' =
                 if !count = 1 then (
                   let back_pat, back_arg = Option.get !back_call_with_fresh in

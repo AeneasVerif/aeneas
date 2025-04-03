@@ -541,4 +541,32 @@ def sum_mut_slice (a : Slice U32) : Result (U32 × (Slice U32)) :=
   let i ← sum_mut_slice_loop a 0#usize 0#u32
   ok (i, a)
 
+/- [arrays::add_acc]: loop 0:
+   Source: 'tests/src/arrays.rs', lines 362:4-371:5 -/
+def add_acc_loop
+  (paSrc : Array U32 256#usize) (peDst : Array U32 256#usize) (i : Usize) :
+  Result ((Array U32 256#usize) × (Array U32 256#usize))
+  :=
+  if i < 256#usize
+  then
+    do
+    let a ← Array.index_usize paSrc i
+    let paSrc1 ← Array.update paSrc i 0#u32
+    let c ← Array.index_usize peDst i
+    let c1 ← c + a
+    let peDst1 ← Array.update peDst i c1
+    let i1 ← i + 1#usize
+    add_acc_loop paSrc1 peDst1 i1
+  else ok (paSrc, peDst)
+partial_fixpoint
+
+/- [arrays::add_acc]:
+   Source: 'tests/src/arrays.rs', lines 360:0-372:1 -/
+@[reducible]
+def add_acc
+  (paSrc : Array U32 256#usize) (peDst : Array U32 256#usize) :
+  Result ((Array U32 256#usize) × (Array U32 256#usize))
+  :=
+  add_acc_loop paSrc peDst 0#usize
+
 end arrays
