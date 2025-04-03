@@ -245,12 +245,19 @@ theorem getElem!_set_neq
   have := getElem?_set_neq l i j x h
   simp_all
 
-@[simp, simp_lists_simps]
+@[simp]
 theorem getElem!_set_self
   {α : Type u} [Inhabited α] (l: List α) (i: Nat) (x: α)
   (h : i < l.length) : getElem! (l.set i x) i = x
   := by
   simp [*]
+
+@[simp_lists_simps]
+theorem getElem!_set_self'
+  {α : Type u} [Inhabited α] (l: List α) (i i': Nat) (x: α)
+  (h : i' < l.length ∧ i = i') : getElem! (l.set i x) i' = x
+  := by
+  simp only [getElem!_set_self, *]
 
 -- TODO: we need "composite" patterns for scalar_tac here
 theorem length_getElem!_le_length_flatten (ls : List (List α)) :

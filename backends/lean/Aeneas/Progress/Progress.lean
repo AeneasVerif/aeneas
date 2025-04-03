@@ -80,7 +80,11 @@ def toSyntax: UsedTheorem → MetaM Syntax.Term
   -- Remark: exprToSyntax doesn't give the expected result
   Lean.Meta.Tactic.TryThis.delabToRefinableSyntax e
 | localHyp decl    => pure <| mkIdent decl.userName
-| progressThm name => pure <| mkIdent name
+| progressThm name => do
+  /- Unresolve the name to make sure that the name is valid, and it is
+     as short as possible -/
+  let name ← Lean.unresolveNameGlobalAvoidingLocals name
+  pure <| mkIdent name
 
 def getType: UsedTheorem -> MetaM (Option Expr)
 | givenExpr e => inferType e
@@ -458,11 +462,11 @@ def progressAsmsOrLookupTheorem (keep keepPretty : Option Name) (withTh : Option
       -- Nothing worked: failed
       throwError "Progress failed: could not find a local assumption or a theorem to apply"
 
-syntax progressArgs := ("keep" binderIdent)? ("with" term)? ("as" " ⟨ " binderIdent,* " ⟩")?
+syntax progressArgs := ("keep" binderIdent)? ("with" term)? ("as" " ⟨ " binderIdent,* " ⟩")? ("by" tacticSeq)?
 
 def parseProgressArgs
-: TSyntax ``Aeneas.Progress.progressArgs -> TacticM (Option Name × Option Expr × Array (Option Name))
-| args@`(progressArgs| $[keep $x]? $[with $pspec:term]? $[as ⟨ $ids,* ⟩]? ) =>  withMainContext do
+: TSyntax ``Aeneas.Progress.progressArgs -> TacticM (Option Name × Option Expr × Array (Option Name) × Option Syntax.Tactic)
+| args@`(progressArgs| $[keep $x]? $[with $pspec:term]? $[as ⟨ $ids,* ⟩]? $[by $byTac]? ) =>  withMainContext do
   trace[Progress] "Progress arguments: {args.raw}"
   let keep?: Option Name ← Option.sequence <| x.map fun
     | `(binderIdent| _) => mkFreshAnonPropUserName
@@ -493,11 +497,15 @@ def parseProgressArgs
       | `(binderIdent| $name:ident) => some name.getId
       | _ => none
   trace[Progress] "User-provided ids: {ids}"
-  return (keep?, withTh?, ids)
+  let byTac : Option Syntax.Tactic := match byTac with
+    | none => none
+    | some byTac => some ⟨byTac.raw⟩
+  return (keep?, withTh?, ids, byTac)
 | _ => throwUnsupportedSyntax
 
 def evalProgress (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Array (Option Name))
-: TacticM Stats := do
+  (byTac : Option Syntax.Tactic)
+  : TacticM Stats := do
   /- Simplify the goal -- TODO: this might close it: we need to check that and abort if necessary,
      and properly track that in the `Stats` -/
   simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
@@ -534,21 +542,25 @@ def evalProgress (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Ar
   let customAssumTac : TacticM Unit := do
     trace[Progress] "Attempting to solve with `singleAssumptionTac`"
     singleAssumptionTacCore singleAssumptionTacDtree
+  /- Also use the tactic provided by the user, if there is -/
+  let byTac := match byTac with
+    | none => []
+    | some byTac => [evalTactic byTac]
   let (goals, usedTheorem) ← progressAsmsOrLookupTheorem keep keepPretty withArg ids splitPost (
     withMainContext do
     trace[Progress] "trying to solve precondition: {← getMainGoal}"
-    firstTac [customAssumTac, simpTac, simpTac, scalarTac]
+    firstTac ([customAssumTac, simpTac, simpTac, scalarTac] ++ byTac)
     trace[Progress] "Precondition solved!")
   trace[Progress] "Progress done"
   return ⟨ goals, usedTheorem ⟩
 
 elab (name := progress) "progress" args:progressArgs : tactic => do
-  let (keep?, withArg, ids) ← parseProgressArgs args
-  evalProgress keep? none withArg ids *> return ()
+  let (keep?, withArg, ids, byTac) ← parseProgressArgs args
+  evalProgress keep? none withArg ids byTac *> return ()
 
 elab tk:"progress?" args:progressArgs : tactic => do
-  let (keep?, withArg, ids) ← parseProgressArgs args
-  let stats ← evalProgress keep? none withArg ids
+  let (keep?, withArg, ids, byTac) ← parseProgressArgs args
+  let stats ← evalProgress keep? none withArg ids byTac
   let mut stxArgs := args.raw
   if stxArgs[1].isNone then
     let withArg := mkNullNode #[mkAtom "with", ←stats.usedTheorem.toSyntax]
@@ -556,13 +568,15 @@ elab tk:"progress?" args:progressArgs : tactic => do
   let tac := mkNode `Aeneas.Progress.progress #[mkAtom "progress", stxArgs]
   Meta.Tactic.TryThis.addSuggestion tk tac (origSpan? := ← getRef)
 
-syntax (name := letProgress)"let" noWs "*" " ⟨ " binderIdent,* " ⟩" colGe " ← " colGe term: tactic
+syntax (name := letProgress) "let" noWs "*" " ⟨ " binderIdent,* " ⟩" colGe
+  " ← " colGe (term <|> "*" <|> "*?") ("by" tacticSeq)? : tactic
 
 def parseLetProgress
-: TSyntax ``Aeneas.Progress.letProgress -> TacticM (Expr × Array (Option Name))
-| args@`(tactic| let* ⟨ $ids,* ⟩ ← $pspec:term) =>  withMainContext do
+: TSyntax ``Aeneas.Progress.letProgress ->
+  TacticM (Option Expr × Bool × Array (Option Name) × Option Syntax.Tactic)
+| args@`(tactic| let* ⟨ $ids,* ⟩ ← $pspec $[by $byTac]?) =>  withMainContext do
   trace[Progress] "Progress arguments: {args.raw}"
-  let withThm : Expr ← do
+  let ((withThm, suggest) : (Option Expr × Bool)) ← do
     /- We have to make a case disjunction, because if we treat identifiers like
       terms, then Lean will not succeed in infering their implicit parameters
       (`progress` does that by matching against the goal). -/
@@ -571,27 +585,46 @@ def parseLetProgress
       match (← getLCtx).findFromUserName? stx.getId with
       | .some decl =>
         trace[Progress] "With arg (local decl): {stx.raw}"
-        pure decl.toExpr
+        pure (some decl.toExpr, false)
       | .none =>
         -- Not a local declaration: should be a theorem
         trace[Progress] "With arg (theorem): {stx.raw}"
         let some e ← Term.resolveId? stx (withInfo := true)
-          | throwError m!"Could not find theorem: {pspec}"      
-        pure e
+          | throwError m!"Could not find theorem: {pspec}"
+        pure (some e, false)
     | term => do
-      trace[Progress] "With arg (term): {term}"
-      Tactic.elabTerm term none
+      trace[Progress] "term.raw.getKind: {term.raw.getKind}"
+      if term.raw.getKind = `token.«*» then
+        trace[Progress] "With arg: *"
+        pure (none, false)
+      else if term.raw.getKind = `token.«*?» then
+        trace[Progress] "With arg: ?"
+        pure (none, true)
+      else
+        trace[Progress] "With arg (term): {term}"
+        pure (some (← Tactic.elabTerm term none), false)
   let ids := ids.getElems.map fun
       | `(binderIdent| $name:ident) => some name.getId
       | _ => none
+  let byTac : Option Syntax.Tactic := match byTac with
+    | none => none
+    | some byTac => some ⟨byTac.raw⟩
   trace[Progress] "User-provided ids: {ids}"
-  return (withThm, ids)
+  return (withThm, suggest, ids, byTac)
 | _ => throwUnsupportedSyntax
 
 elab tk:letProgress : tactic => do
   withMainContext do
-  let (withArg, ids) ← parseLetProgress tk
-  let _ ← evalProgress none (some (.str .anonymous "_")) withArg ids
+  let (withArg, suggest, ids, byTac) ← parseLetProgress tk
+  let stats ← evalProgress none (some (.str .anonymous "_")) withArg ids byTac
+  let mut stxArgs := tk.raw
+  if suggest then
+    trace[Progress] "suggest is true"
+    let withArg ← stats.usedTheorem.toSyntax
+    stxArgs := stxArgs.setArg 6 withArg
+    let stxArgs' : TSyntax `Aeneas.Progress.letProgress := ⟨ stxArgs ⟩
+    trace[Progress] "stxArgs': {stxArgs}"
+    Meta.Tactic.TryThis.addSuggestion tk stxArgs' (origSpan? := ← getRef)
 
 namespace Test
   open Std Result
@@ -622,6 +655,18 @@ x y : UScalar ty
   example {ty} {x y : UScalar ty} :
     ∃ z, x + y = ok z := by
     progress keep _ as ⟨ z, h1 ⟩
+
+  example {ty} {x y : UScalar ty} (h : x.val + y.val ≤ UScalar.max ty) :
+    ∃ z, x + y = ok z := by
+    let* ⟨ z, h1 ⟩ ← *
+
+  /--
+  info: Try this: let* ⟨ z, h1 ⟩ ← UScalar.add_spec
+  -/
+  #guard_msgs in
+  example {ty} {x y : UScalar ty} (h : x.val + y.val ≤ UScalar.max ty) :
+    ∃ z, x + y = ok z := by
+    let* ⟨ z, h1 ⟩ ← *?
 
   /--
 info: example
@@ -693,14 +738,14 @@ info: example
   example {ty} {x y : UScalar ty}
     (hmax : x.val + y.val ≤ UScalar.max ty) :
     ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
-    progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with Aeneas.Std.UScalar.add_spec as ⟨ z, h1 ⟩
+    progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with UScalar.add_spec as ⟨ z, h1 ⟩
     simp [*, h1]
 
   example {ty} {x y : IScalar ty}
     (hmin : IScalar.min ty ≤ x.val + y.val)
     (hmax : x.val + y.val ≤ IScalar.max ty) :
     ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
-    progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with Aeneas.Std.IScalar.add_spec as ⟨ z, h1 ⟩
+    progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with IScalar.add_spec as ⟨ z, h1 ⟩
     simp [*, h1]
 
   example {ty} {x y : UScalar ty}
@@ -748,7 +793,7 @@ info: example
     (hbounds : i.val < v.length) :
     ∃ nv, v.update i x = ok nv ∧
     nv.val = v.val.set i.val x := by
-    progress? says progress with Aeneas.Std.alloc.vec.Vec.update_spec
+    progress? says progress with Vec.update_spec
     simp [*]
 
   /- Checking that progress can handle nested blocks -/
@@ -793,7 +838,7 @@ info: example
     (hmax : x.val + y.val ≤ IScalar.max ty) :
     False ∨ (∃ z, x + y = ok z ∧ z.val = x.val + y.val) := by
     right
-    progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with Aeneas.Std.IScalar.add_spec as ⟨ z, h1 ⟩
+    progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with IScalar.add_spec as ⟨ z, h1 ⟩
     simp [*, h1]
 
   -- Testing with mutually recursive definitions
@@ -860,16 +905,16 @@ info: example
     example (x y : U32) (h : 2 * x.val + 2 * y.val ≤ U32.max) :
       ∃ z, add1 x y = ok z := by
       rw [add1]
-      progress? as ⟨ z1, h ⟩ says progress with Aeneas.Progress.Test.add_spec' as ⟨ z1, h ⟩
-      progress? as ⟨ z2, h ⟩ says progress with Aeneas.Progress.Test.add_spec' as ⟨ z2, h ⟩
+      progress? as ⟨ z1, h ⟩ says progress with add_spec' as ⟨ z1, h ⟩
+      progress? as ⟨ z2, h ⟩ says progress with add_spec' as ⟨ z2, h ⟩
   end
 
   /- Checking that `add_spec'` went out of scope -/
   example (x y : U32) (h : 2 * x.val + 2 * y.val ≤ U32.max) :
     ∃ z, add1 x y = ok z := by
     rw [add1]
-    progress? as ⟨ z1, h ⟩ says progress with Aeneas.Std.U32.add_spec as ⟨ z1, h ⟩
-    progress? as ⟨ z2, h ⟩ says progress with Aeneas.Std.U32.add_spec as ⟨ z2, h ⟩
+    progress? as ⟨ z1, h ⟩ says progress with U32.add_spec as ⟨ z1, h ⟩
+    progress? as ⟨ z2, h ⟩ says progress with U32.add_spec as ⟨ z2, h ⟩
 
   variable (P : ℕ → List α → Prop)
   variable (f : List α → Std.Result Bool)
@@ -993,6 +1038,28 @@ info: example
       progress; fsimp [Nat.log2]
       progress; fsimp [Nat.log2]
       progress; fsimp [Nat.log2]
+      assumption
+
+    set_option maxHeartbeats 800000
+    theorem ntt_spec' (peSrc : Std.Array U16 256#usize)
+      (hWf : wfArray peSrc) :
+      ∃ peSrc1, ntt peSrc = ok peSrc1 ∧
+      wfArray peSrc1
+      := by
+      unfold ntt
+      progress by fsimp [Nat.log2]
+      progress by fsimp [Nat.log2]
+      progress by fsimp [Nat.log2]
+      progress by fsimp [Nat.log2]
+      progress by fsimp [Nat.log2]
+      progress by fsimp [Nat.log2]
+      progress by fsimp [Nat.log2]
+      progress by fsimp [Nat.log2]
+      progress by fsimp [Nat.log2]
+      progress by fsimp [Nat.log2]
+      progress by fsimp [Nat.log2]
+      progress by fsimp [Nat.log2]
+      progress by fsimp [Nat.log2]
       assumption
 
   end Ntt

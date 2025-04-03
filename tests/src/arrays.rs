@@ -356,3 +356,17 @@ pub fn sum_mut_slice(a: &mut [u32]) -> u32 {
     }
     s
 }
+
+fn add_acc(paSrc: &mut [u32; 256], peDst: &mut [u32; 256]) {
+    let mut i = 0;
+    while (i < 256) {
+        let mut a = paSrc[i];
+        paSrc[i] = 0;
+
+        let mut c = peDst[i];
+        c += a;
+        peDst[i] = c;
+
+        i += 1;
+    }
+}

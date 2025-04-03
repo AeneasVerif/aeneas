@@ -425,4 +425,20 @@ example (x : U64) : x.val >>> 31 < 2^33 := by
   bvify 64
   bv_decide
 
+/--
+info: example
+  (x : U32)
+  (a : U32)
+  (b : U32)
+  (h : x.bv = a.bv + b.bv) :
+  x.bv % 3329#32 = (a.bv + b.bv) % 3329#32
+  := by sorry
+-/
+#guard_msgs in
+set_option linter.unusedTactic false in
+example (x a b : U32) (h : x.val = a.val + b.val) : (x.val : ZMod 3329) = (a.val : ZMod 3329) + (b.val : ZMod 3329) := by
+  bvify 32 at *
+  extract_goal1
+  simp [h]
+
 end Aeneas.Bvify

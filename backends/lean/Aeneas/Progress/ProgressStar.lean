@@ -299,7 +299,7 @@ where
       return (infos, mkStx)
 
   tryProgress := do
-    try some <$> Progress.evalProgress none (some (.str .anonymous "_")) none #[]
+    try some <$> Progress.evalProgress none (some (.str .anonymous "_")) none #[] none
     catch _ => pure none
 
   handleProgressPreconditions (preconditions : Array MVarId) : TacticM (Array Syntax.Tactic × Array MVarId) := do
@@ -308,8 +308,11 @@ where
         setGoals [sg]
         try
           -- Try evaluating the tactic then chaining it with `fail` to make sure it closes the goal
-          evalTactic (←`(tactic| $tac <;> fail ""))
-          pure (←`(tactic| · $(#[tac])*), none)
+          evalTactic (←`(tactic| $tac))
+          -- Check that there are no remaining goals
+          let gl ← Tactic.getUnsolvedGoals
+          if ¬ gl.isEmpty then throwError "tactic failed"
+          else pure (←`(tactic| · $(#[tac])*), none)
         catch _ =>
           let defaultTac ← `(tactic| · sorry)
           pure (defaultTac, sg)
@@ -351,11 +354,14 @@ where
       else mkNode ``Lean.binderIdent #[mkIdent n]
     Lean.mkNode ``Lean.Parser.Tactic.caseArg #[tag, mkNullNode (args := binderIdents)]
 
-syntax «progress*_args» := ("by" tactic)?
-
+syntax «progress*_args» := ("by" tacticSeq)?
 def parseArgs: TSyntax `Aeneas.ProgressStar.«progress*_args» → CoreM Config
-| `(«progress*_args»| $[by $preconditionTac:tactic]?) => do
-  return {preconditionTac}
+| `(«progress*_args»| $[by $preconditionTac:tacticSeq]?) => do
+  match preconditionTac with
+  | none => return {preconditionTac := none}
+  | some preconditionTac => do
+    let preconditionTac : Syntax.Tactic := ⟨preconditionTac.raw⟩
+    return {preconditionTac}
 | _ => throwUnsupportedSyntax
 
 elab "progress" noWs "*" stx:«progress*_args»: tactic => do
@@ -388,9 +394,9 @@ def add1 (x0 x1 : U32) : Std.Result U32 := do
 
 /--
 info: Try this:
-  let* ⟨ x2, x2_post ⟩ ← Aeneas.Std.U32.add_spec
-  let* ⟨ x3, x3_post ⟩ ← Aeneas.Std.U32.add_spec
-  let* ⟨ res, res_post ⟩ ← Aeneas.Std.U32.add_spec
+  let* ⟨ x2, x2_post ⟩ ← U32.add_spec
+  let* ⟨ x3, x3_post ⟩ ← U32.add_spec
+  let* ⟨ res, res_post ⟩ ← U32.add_spec
 -/
 #guard_msgs in
 example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
@@ -410,11 +416,11 @@ def add2 (b : Bool) (x0 x1 : U32) : Std.Result U32 := do
 /--
 info: Try this:
   split
-  . let* ⟨ x2, x2_post ⟩ ← Aeneas.Std.U32.add_spec
-    let* ⟨ x3, x3_post ⟩ ← Aeneas.Std.U32.add_spec
-    let* ⟨ res, res_post ⟩ ← Aeneas.Std.U32.add_spec
-  . let* ⟨ y, y_post ⟩ ← Aeneas.Std.U32.add_spec
-    let* ⟨ res, res_post ⟩ ← Aeneas.Std.U32.add_spec
+  . let* ⟨ x2, x2_post ⟩ ← U32.add_spec
+    let* ⟨ x3, x3_post ⟩ ← U32.add_spec
+    let* ⟨ res, res_post ⟩ ← U32.add_spec
+  . let* ⟨ y, y_post ⟩ ← U32.add_spec
+    let* ⟨ res, res_post ⟩ ← U32.add_spec
 -/
 #guard_msgs in
 example b (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
@@ -425,15 +431,15 @@ example b (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
 /--
 info: Try this:
   split
-  . let* ⟨ x2, x2_post ⟩ ← Aeneas.Std.U32.add_spec
+  . let* ⟨ x2, x2_post ⟩ ← U32.add_spec
     · sorry
-    let* ⟨ x3, x3_post ⟩ ← Aeneas.Std.U32.add_spec
+    let* ⟨ x3, x3_post ⟩ ← U32.add_spec
     · sorry
-    let* ⟨ res, res_post ⟩ ← Aeneas.Std.U32.add_spec
+    let* ⟨ res, res_post ⟩ ← U32.add_spec
     · sorry
-  . let* ⟨ y, y_post ⟩ ← Aeneas.Std.U32.add_spec
+  . let* ⟨ y, y_post ⟩ ← U32.add_spec
     · sorry
-    let* ⟨ res, res_post ⟩ ← Aeneas.Std.U32.add_spec
+    let* ⟨ res, res_post ⟩ ← U32.add_spec
     · sorry
 ---
 error: unsolved goals

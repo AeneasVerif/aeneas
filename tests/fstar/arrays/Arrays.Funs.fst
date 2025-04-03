@@ -474,3 +474,29 @@ let rec sum_mut_slice_loop
 let sum_mut_slice (a : slice u32) : result (u32 & (slice u32)) =
   let* i = sum_mut_slice_loop a 0 0 in Ok (i, a)
 
+(** [arrays::add_acc]: loop 0:
+    Source: 'tests/src/arrays.rs', lines 362:4-371:5 *)
+let rec add_acc_loop
+  (pa_src : array u32 256) (pe_dst : array u32 256) (i : usize) :
+  Tot (result ((array u32 256) & (array u32 256)))
+  (decreases (add_acc_loop_decreases pa_src pe_dst i))
+  =
+  if i < 256
+  then
+    let* a = array_index_usize pa_src i in
+    let* pa_src1 = array_update_usize pa_src i 0 in
+    let* c = array_index_usize pe_dst i in
+    let* c1 = u32_add c a in
+    let* pe_dst1 = array_update_usize pe_dst i c1 in
+    let* i1 = usize_add i 1 in
+    add_acc_loop pa_src1 pe_dst1 i1
+  else Ok (pa_src, pe_dst)
+
+(** [arrays::add_acc]:
+    Source: 'tests/src/arrays.rs', lines 360:0-372:1 *)
+let add_acc
+  (pa_src : array u32 256) (pe_dst : array u32 256) :
+  result ((array u32 256) & (array u32 256))
+  =
+  add_acc_loop pa_src pe_dst 0
+
