@@ -308,8 +308,11 @@ where
         setGoals [sg]
         try
           -- Try evaluating the tactic then chaining it with `fail` to make sure it closes the goal
-          evalTactic (←`(tactic| $tac <;> fail ""))
-          pure (←`(tactic| · $(#[tac])*), none)
+          evalTactic (←`(tactic| $tac))
+          -- Check that there are no remaining goals
+          let gl ← Tactic.getUnsolvedGoals
+          if ¬ gl.isEmpty then throwError "tactic failed"
+          else pure (←`(tactic| · $(#[tac])*), none)
         catch _ =>
           let defaultTac ← `(tactic| · sorry)
           pure (defaultTac, sg)
