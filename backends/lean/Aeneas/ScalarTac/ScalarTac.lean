@@ -168,11 +168,7 @@ attribute [scalar_tac_simps]
   Bool.true_eq_false Bool.false_eq_true
   decide_eq_true_eq decide_eq_false_iff_not Bool.or_eq_true Bool.and_eq_true
 
-/-  Boosting a bit the `omega` tac.
-
-    - `extraPrePreprocess`: extra-preprocessing to be done *before* this preprocessing
-    - `extraPreprocess`: extra-preprocessing to be done *after* this preprocessing
- -/
+/-  Boosting a bit the `omega` tac. -/
 def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
   Tactic.withMainContext do
   -- Pre-preprocessing

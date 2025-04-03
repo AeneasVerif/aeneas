@@ -69,6 +69,7 @@ def condSimpTac
      time we call `scalar_tac`: as `saturate` is not compiled it saves a lot of time -/
   withMainContext do
   let scalarTacAsms ← ScalarTac.scalarTacSaturateForward true false
+  trace[Utils] "Goal after saturating the context: {← getMainGoal}"
   let additionalSimpThms ← addSimpThms
   trace[Utils] "Goal after adding the additional simp assumptions: {← getMainGoal}"
   /- Simplify the targets (note that we preserve the new assumptions for `scalar_tac`) -/

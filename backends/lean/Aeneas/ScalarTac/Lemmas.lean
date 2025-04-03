@@ -223,14 +223,14 @@ namespace ScalarTac
 
 open Std
 
-@[scalar_tac x]
+@[scalar_tac x.val]
 theorem UScalar.bounds {ty : UScalarTy} (x : UScalar ty) :
   x.val ≤ UScalar.max ty := by
   simp [UScalar.max]
   have := x.hBounds
   omega
 
-@[scalar_tac x]
+@[scalar_tac x.val]
 theorem IScalar.bounds {ty : IScalarTy} (x : IScalar ty) :
   IScalar.min ty ≤ x.val ∧ x.val ≤ IScalar.max ty := by
   simp [IScalar.max, IScalar.min]

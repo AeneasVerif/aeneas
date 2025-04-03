@@ -198,6 +198,10 @@ def arithComparisonConsts : Std.HashSet Name := Std.HashSet.ofList [
   ``LT.lt, ``LE.le, ``GT.gt, ``GE.ge
 ]
 
+def arithOpArity6 : Std.HashSet Name := Std.HashSet.ofList [
+  ``HShiftRight.hShiftRight, ``HShiftLeft.hShiftLeft, ``HPow.hPow
+]
+
 def exploreArithSubterms (f : Expr) (args : Array Expr) : MetaM (Array Expr) := do
   if ¬ f.isConst then return #[]
   let constName := f.constName!
@@ -210,6 +214,9 @@ def exploreArithSubterms (f : Expr) (args : Array Expr) : MetaM (Array Expr) := 
   else if constName ∈ arithComparisonConsts ∧ args.size == 4 then
     trace[Saturate] "Found arith comparison: {f}"
     pure #[args[2]!, args[3]!]
+  else if constName ∈ arithOpArity6 ∧ args.size == 6 then
+    trace[Saturate] "Found arith op of arity 6: {f}"
+    pure #[args[4]!, args[5]!]
   else
     pure #[]
 

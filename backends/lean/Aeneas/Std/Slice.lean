@@ -23,13 +23,13 @@ instance [BEq α] : BEq (Slice α) := SubtypeBEq _
 
 instance [BEq α] [LawfulBEq α] : LawfulBEq (Slice α) := SubtypeLawfulBEq _
 
-@[scalar_tac s]
+@[scalar_tac s.val]
 theorem Slice.length_ineq {α : Type u} (s : Slice α) : s.val.length ≤ Usize.max := by
   cases s; simp[*]
 
--- TODO: move/remove?
-@[scalar_tac s]
-theorem Slice.subtype_property {α : Type u} {p : Slice α → Prop} (s : Subtype p) : p s.val := s.property
+-- TODO: update `scalar_tac` so that we can remove this theorem
+@[scalar_tac s.val.length]
+theorem Slice.length_ineq' {α : Type u} (s : Slice α) : s.val.length ≤ Usize.max := Slice.length_ineq s
 
 @[simp]
 abbrev Slice.length {α : Type u} (v : Slice α) : Nat := v.val.length
