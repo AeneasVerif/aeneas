@@ -354,11 +354,14 @@ where
       else mkNode ``Lean.binderIdent #[mkIdent n]
     Lean.mkNode ``Lean.Parser.Tactic.caseArg #[tag, mkNullNode (args := binderIdents)]
 
-syntax «progress*_args» := ("by" tactic)?
-
+syntax «progress*_args» := ("by" tacticSeq)?
 def parseArgs: TSyntax `Aeneas.ProgressStar.«progress*_args» → CoreM Config
-| `(«progress*_args»| $[by $preconditionTac:tactic]?) => do
-  return {preconditionTac}
+| `(«progress*_args»| $[by $preconditionTac:tacticSeq]?) => do
+  match preconditionTac with
+  | none => return {preconditionTac := none}
+  | some preconditionTac => do
+    let preconditionTac : Syntax.Tactic := ⟨preconditionTac.raw⟩
+    return {preconditionTac}
 | _ => throwUnsupportedSyntax
 
 elab "progress" noWs "*" stx:«progress*_args»: tactic => do
