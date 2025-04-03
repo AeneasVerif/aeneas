@@ -462,11 +462,11 @@ def progressAsmsOrLookupTheorem (keep keepPretty : Option Name) (withTh : Option
       -- Nothing worked: failed
       throwError "Progress failed: could not find a local assumption or a theorem to apply"
 
-syntax progressArgs := ("keep" binderIdent)? ("with" term)? ("as" " ⟨ " binderIdent,* " ⟩")?
+syntax progressArgs := ("keep" binderIdent)? ("with" term)? ("as" " ⟨ " binderIdent,* " ⟩")? ("by" tacticSeq)?
 
 def parseProgressArgs
-: TSyntax ``Aeneas.Progress.progressArgs -> TacticM (Option Name × Option Expr × Array (Option Name))
-| args@`(progressArgs| $[keep $x]? $[with $pspec:term]? $[as ⟨ $ids,* ⟩]? ) =>  withMainContext do
+: TSyntax ``Aeneas.Progress.progressArgs -> TacticM (Option Name × Option Expr × Array (Option Name) × Option Syntax.Tactic)
+| args@`(progressArgs| $[keep $x]? $[with $pspec:term]? $[as ⟨ $ids,* ⟩]? $[by $byTac]? ) =>  withMainContext do
   trace[Progress] "Progress arguments: {args.raw}"
   let keep?: Option Name ← Option.sequence <| x.map fun
     | `(binderIdent| _) => mkFreshAnonPropUserName
@@ -497,11 +497,15 @@ def parseProgressArgs
       | `(binderIdent| $name:ident) => some name.getId
       | _ => none
   trace[Progress] "User-provided ids: {ids}"
-  return (keep?, withTh?, ids)
+  let byTac : Option Syntax.Tactic := match byTac with
+    | none => none
+    | some byTac => some ⟨byTac.raw⟩
+  return (keep?, withTh?, ids, byTac)
 | _ => throwUnsupportedSyntax
 
 def evalProgress (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Array (Option Name))
-: TacticM Stats := do
+  (byTac : Option Syntax.Tactic)
+  : TacticM Stats := do
   /- Simplify the goal -- TODO: this might close it: we need to check that and abort if necessary,
      and properly track that in the `Stats` -/
   simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
@@ -538,21 +542,25 @@ def evalProgress (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Ar
   let customAssumTac : TacticM Unit := do
     trace[Progress] "Attempting to solve with `singleAssumptionTac`"
     singleAssumptionTacCore singleAssumptionTacDtree
+  /- Also use the tactic provided by the user, if there is -/
+  let byTac := match byTac with
+    | none => []
+    | some byTac => [evalTactic byTac]
   let (goals, usedTheorem) ← progressAsmsOrLookupTheorem keep keepPretty withArg ids splitPost (
     withMainContext do
     trace[Progress] "trying to solve precondition: {← getMainGoal}"
-    firstTac [customAssumTac, simpTac, simpTac, scalarTac]
+    firstTac ([customAssumTac, simpTac, simpTac, scalarTac] ++ byTac)
     trace[Progress] "Precondition solved!")
   trace[Progress] "Progress done"
   return ⟨ goals, usedTheorem ⟩
 
 elab (name := progress) "progress" args:progressArgs : tactic => do
-  let (keep?, withArg, ids) ← parseProgressArgs args
-  evalProgress keep? none withArg ids *> return ()
+  let (keep?, withArg, ids, byTac) ← parseProgressArgs args
+  evalProgress keep? none withArg ids byTac *> return ()
 
 elab tk:"progress?" args:progressArgs : tactic => do
-  let (keep?, withArg, ids) ← parseProgressArgs args
-  let stats ← evalProgress keep? none withArg ids
+  let (keep?, withArg, ids, byTac) ← parseProgressArgs args
+  let stats ← evalProgress keep? none withArg ids byTac
   let mut stxArgs := args.raw
   if stxArgs[1].isNone then
     let withArg := mkNullNode #[mkAtom "with", ←stats.usedTheorem.toSyntax]
@@ -560,11 +568,11 @@ elab tk:"progress?" args:progressArgs : tactic => do
   let tac := mkNode `Aeneas.Progress.progress #[mkAtom "progress", stxArgs]
   Meta.Tactic.TryThis.addSuggestion tk tac (origSpan? := ← getRef)
 
-syntax (name := letProgress)"let" noWs "*" " ⟨ " binderIdent,* " ⟩" colGe " ← " colGe term: tactic
+syntax (name := letProgress)"let" noWs "*" " ⟨ " binderIdent,* " ⟩" colGe " ← " colGe term ("by" tacticSeq)? : tactic
 
 def parseLetProgress
-: TSyntax ``Aeneas.Progress.letProgress -> TacticM (Expr × Array (Option Name))
-| args@`(tactic| let* ⟨ $ids,* ⟩ ← $pspec:term) =>  withMainContext do
+: TSyntax ``Aeneas.Progress.letProgress -> TacticM (Expr × Array (Option Name) × Option Syntax.Tactic)
+| args@`(tactic| let* ⟨ $ids,* ⟩ ← $pspec:term $[by $byTac]?) =>  withMainContext do
   trace[Progress] "Progress arguments: {args.raw}"
   let withThm : Expr ← do
     /- We have to make a case disjunction, because if we treat identifiers like
@@ -588,14 +596,17 @@ def parseLetProgress
   let ids := ids.getElems.map fun
       | `(binderIdent| $name:ident) => some name.getId
       | _ => none
+  let byTac : Option Syntax.Tactic := match byTac with
+    | none => none
+    | some byTac => some ⟨byTac.raw⟩
   trace[Progress] "User-provided ids: {ids}"
-  return (withThm, ids)
+  return (withThm, ids, byTac)
 | _ => throwUnsupportedSyntax
 
 elab tk:letProgress : tactic => do
   withMainContext do
-  let (withArg, ids) ← parseLetProgress tk
-  let _ ← evalProgress none (some (.str .anonymous "_")) withArg ids
+  let (withArg, ids, byTac) ← parseLetProgress tk
+  let _ ← evalProgress none (some (.str .anonymous "_")) withArg ids byTac
 
 namespace Test
   open Std Result
@@ -997,6 +1008,28 @@ info: example
       progress; fsimp [Nat.log2]
       progress; fsimp [Nat.log2]
       progress; fsimp [Nat.log2]
+      assumption
+
+    set_option maxHeartbeats 800000
+    theorem ntt_spec' (peSrc : Std.Array U16 256#usize)
+      (hWf : wfArray peSrc) :
+      ∃ peSrc1, ntt peSrc = ok peSrc1 ∧
+      wfArray peSrc1
+      := by
+      unfold ntt
+      progress by fsimp [Nat.log2]
+      progress by fsimp [Nat.log2]
+      progress by fsimp [Nat.log2]
+      progress by fsimp [Nat.log2]
+      progress by fsimp [Nat.log2]
+      progress by fsimp [Nat.log2]
+      progress by fsimp [Nat.log2]
+      progress by fsimp [Nat.log2]
+      progress by fsimp [Nat.log2]
+      progress by fsimp [Nat.log2]
+      progress by fsimp [Nat.log2]
+      progress by fsimp [Nat.log2]
+      progress by fsimp [Nat.log2]
       assumption
 
   end Ntt
