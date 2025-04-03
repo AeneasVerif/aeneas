@@ -190,6 +190,10 @@ private partial def visit (depth : Nat) (preprocessThm : Option (Array Expr → 
     trace[Saturate] ".proj"
     visit (depth + 1) preprocessThm nameToRule dtrees boundVars dinfo matched b
 
+def arithOpArity3 : Std.HashSet Name := Std.HashSet.ofList [
+  ``Nat.cast, ``Int.cast
+]
+
 def propConsts : Std.HashSet Name := Std.HashSet.ofList [
   ``Iff, ``And, ``Or
 ]
@@ -199,7 +203,7 @@ def arithComparisonConsts : Std.HashSet Name := Std.HashSet.ofList [
 ]
 
 def arithOpArity6 : Std.HashSet Name := Std.HashSet.ofList [
-  ``HShiftRight.hShiftRight, ``HShiftLeft.hShiftLeft, ``HPow.hPow
+  ``HShiftRight.hShiftRight, ``HShiftLeft.hShiftLeft, ``HPow.hPow, ``HMod.hMod
 ]
 
 def exploreArithSubterms (f : Expr) (args : Array Expr) : MetaM (Array Expr) := do
@@ -208,6 +212,8 @@ def exploreArithSubterms (f : Expr) (args : Array Expr) : MetaM (Array Expr) := 
   if constName == ``Eq ∧ args.size == 3 then
     trace[Saturate] "Found `=`"
     pure #[args[1]!, args[2]!]
+  else if constName ∈ arithOpArity3 ∧ args.size == 3 then
+    pure #[args[2]!]
   else if constName ∈ propConsts ∧ args.size == 2 then
     trace[Saturate] "Found prop const: {f}"
     pure #[args[0]!, args[1]!]
