@@ -388,9 +388,9 @@ def add1 (x0 x1 : U32) : Std.Result U32 := do
 
 /--
 info: Try this:
-  let* ⟨ x2, x2_post ⟩ ← Aeneas.Std.U32.add_spec
-  let* ⟨ x3, x3_post ⟩ ← Aeneas.Std.U32.add_spec
-  let* ⟨ res, res_post ⟩ ← Aeneas.Std.U32.add_spec
+  let* ⟨ x2, x2_post ⟩ ← U32.add_spec
+  let* ⟨ x3, x3_post ⟩ ← U32.add_spec
+  let* ⟨ res, res_post ⟩ ← U32.add_spec
 -/
 #guard_msgs in
 example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
@@ -410,11 +410,11 @@ def add2 (b : Bool) (x0 x1 : U32) : Std.Result U32 := do
 /--
 info: Try this:
   split
-  . let* ⟨ x2, x2_post ⟩ ← Aeneas.Std.U32.add_spec
-    let* ⟨ x3, x3_post ⟩ ← Aeneas.Std.U32.add_spec
-    let* ⟨ res, res_post ⟩ ← Aeneas.Std.U32.add_spec
-  . let* ⟨ y, y_post ⟩ ← Aeneas.Std.U32.add_spec
-    let* ⟨ res, res_post ⟩ ← Aeneas.Std.U32.add_spec
+  . let* ⟨ x2, x2_post ⟩ ← U32.add_spec
+    let* ⟨ x3, x3_post ⟩ ← U32.add_spec
+    let* ⟨ res, res_post ⟩ ← U32.add_spec
+  . let* ⟨ y, y_post ⟩ ← U32.add_spec
+    let* ⟨ res, res_post ⟩ ← U32.add_spec
 -/
 #guard_msgs in
 example b (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
@@ -425,15 +425,15 @@ example b (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
 /--
 info: Try this:
   split
-  . let* ⟨ x2, x2_post ⟩ ← Aeneas.Std.U32.add_spec
+  . let* ⟨ x2, x2_post ⟩ ← U32.add_spec
     · sorry
-    let* ⟨ x3, x3_post ⟩ ← Aeneas.Std.U32.add_spec
+    let* ⟨ x3, x3_post ⟩ ← U32.add_spec
     · sorry
-    let* ⟨ res, res_post ⟩ ← Aeneas.Std.U32.add_spec
+    let* ⟨ res, res_post ⟩ ← U32.add_spec
     · sorry
-  . let* ⟨ y, y_post ⟩ ← Aeneas.Std.U32.add_spec
+  . let* ⟨ y, y_post ⟩ ← U32.add_spec
     · sorry
-    let* ⟨ res, res_post ⟩ ← Aeneas.Std.U32.add_spec
+    let* ⟨ res, res_post ⟩ ← U32.add_spec
     · sorry
 ---
 error: unsolved goals

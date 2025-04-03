@@ -80,7 +80,11 @@ def toSyntax: UsedTheorem → MetaM Syntax.Term
   -- Remark: exprToSyntax doesn't give the expected result
   Lean.Meta.Tactic.TryThis.delabToRefinableSyntax e
 | localHyp decl    => pure <| mkIdent decl.userName
-| progressThm name => pure <| mkIdent name
+| progressThm name => do
+  /- Unresolve the name to make sure that the name is valid, and it is
+     as short as possible -/
+  let name ← Lean.unresolveNameGlobalAvoidingLocals name
+  pure <| mkIdent name
 
 def getType: UsedTheorem -> MetaM (Option Expr)
 | givenExpr e => inferType e
@@ -576,7 +580,7 @@ def parseLetProgress
         -- Not a local declaration: should be a theorem
         trace[Progress] "With arg (theorem): {stx.raw}"
         let some e ← Term.resolveId? stx (withInfo := true)
-          | throwError m!"Could not find theorem: {pspec}"      
+          | throwError m!"Could not find theorem: {pspec}"
         pure e
     | term => do
       trace[Progress] "With arg (term): {term}"
@@ -693,14 +697,14 @@ info: example
   example {ty} {x y : UScalar ty}
     (hmax : x.val + y.val ≤ UScalar.max ty) :
     ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
-    progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with Aeneas.Std.UScalar.add_spec as ⟨ z, h1 ⟩
+    progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with UScalar.add_spec as ⟨ z, h1 ⟩
     simp [*, h1]
 
   example {ty} {x y : IScalar ty}
     (hmin : IScalar.min ty ≤ x.val + y.val)
     (hmax : x.val + y.val ≤ IScalar.max ty) :
     ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
-    progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with Aeneas.Std.IScalar.add_spec as ⟨ z, h1 ⟩
+    progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with IScalar.add_spec as ⟨ z, h1 ⟩
     simp [*, h1]
 
   example {ty} {x y : UScalar ty}
@@ -748,7 +752,7 @@ info: example
     (hbounds : i.val < v.length) :
     ∃ nv, v.update i x = ok nv ∧
     nv.val = v.val.set i.val x := by
-    progress? says progress with Aeneas.Std.alloc.vec.Vec.update_spec
+    progress? says progress with Vec.update_spec
     simp [*]
 
   /- Checking that progress can handle nested blocks -/
@@ -793,7 +797,7 @@ info: example
     (hmax : x.val + y.val ≤ IScalar.max ty) :
     False ∨ (∃ z, x + y = ok z ∧ z.val = x.val + y.val) := by
     right
-    progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with Aeneas.Std.IScalar.add_spec as ⟨ z, h1 ⟩
+    progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with IScalar.add_spec as ⟨ z, h1 ⟩
     simp [*, h1]
 
   -- Testing with mutually recursive definitions
@@ -860,16 +864,16 @@ info: example
     example (x y : U32) (h : 2 * x.val + 2 * y.val ≤ U32.max) :
       ∃ z, add1 x y = ok z := by
       rw [add1]
-      progress? as ⟨ z1, h ⟩ says progress with Aeneas.Progress.Test.add_spec' as ⟨ z1, h ⟩
-      progress? as ⟨ z2, h ⟩ says progress with Aeneas.Progress.Test.add_spec' as ⟨ z2, h ⟩
+      progress? as ⟨ z1, h ⟩ says progress with add_spec' as ⟨ z1, h ⟩
+      progress? as ⟨ z2, h ⟩ says progress with add_spec' as ⟨ z2, h ⟩
   end
 
   /- Checking that `add_spec'` went out of scope -/
   example (x y : U32) (h : 2 * x.val + 2 * y.val ≤ U32.max) :
     ∃ z, add1 x y = ok z := by
     rw [add1]
-    progress? as ⟨ z1, h ⟩ says progress with Aeneas.Std.U32.add_spec as ⟨ z1, h ⟩
-    progress? as ⟨ z2, h ⟩ says progress with Aeneas.Std.U32.add_spec as ⟨ z2, h ⟩
+    progress? as ⟨ z1, h ⟩ says progress with U32.add_spec as ⟨ z1, h ⟩
+    progress? as ⟨ z2, h ⟩ says progress with U32.add_spec as ⟨ z2, h ⟩
 
   variable (P : ℕ → List α → Prop)
   variable (f : List α → Std.Result Bool)
