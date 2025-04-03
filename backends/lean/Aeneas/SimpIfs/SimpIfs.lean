@@ -1,15 +1,14 @@
-import Aeneas.SimpLists.Init
+import Aeneas.SimpIfs.Init
 import Aeneas.ScalarTac.CondSimpTac
 import Aeneas.List.List
 
 /-!
-# `simp_lists` tactic
+# `simp_ifs` tactic
 
-The `simp_lists` tactic is used to simplify expressions using lists, such as nested
-List `get` and `set`.
+The `simp_ifs` tactic is used to simplify expressions `if then else` expressions
 -/
 
-namespace Aeneas.SimpLists
+namespace Aeneas.SimpIfs
 
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 
@@ -27,9 +26,17 @@ def simpListsTac (args : Args) (loc : Utils.Location) : TacticM Unit := do
       addSimpThms := args.addSimpThms,
       hypsToUse := args.hypsToUse,
     }
-  ScalarTac.condSimpTac "simp_lists" args addSimpThms false loc
+  ScalarTac.condSimpTac "simp_ifs" args addSimpThms false loc
 
-syntax (name := simp_lists) "simp_lists" ("[" term,* "]")? (location)? : tactic
+syntax (name := simp_ifs) "simp_ifs" ("[" term,* "]")? (location)? : tactic
+
+@[simp_ifs_simps]
+theorem if_true {α} (b : Prop) [Decidable b] (x y : α) (hb : b) : (if b then x else y) = x := by
+  simp only [hb, ↓reduceIte]
+
+@[simp_ifs_simps]
+theorem if_false {α} (b : Prop) [Decidable b] (x y : α) (hb : ¬ b) : (if b then x else y) = y := by
+  simp only [hb, Bool.false_eq_true, ↓reduceIte]
 
 def parseArgs (args : Array (TSyntax `term)) : TacticM Args := do
   let mut declsToUnfold := #[]
@@ -42,12 +49,12 @@ def parseArgs (args : Array (TSyntax `term)) : TacticM Args := do
     | `($stx:ident) => do
       match (← getLCtx).findFromUserName? stx.getId with
       | .some decl =>
-        trace[SimpLists] "arg (local decl): {stx.raw}"
+        trace[SimpIfs] "arg (local decl): {stx.raw}"
         -- Local declarations should be assumptions
         hypsToUse := hypsToUse.push decl.fvarId
       | .none =>
         -- Not a local declaration: should be a theorem
-        trace[SimpLists] "arg (theorem): {stx.raw}"
+        trace[SimpIfs] "arg (theorem): {stx.raw}"
         let some e ← Lean.Elab.Term.resolveId? stx (withInfo := true)
           | throwError m!"Could not find theorem: {arg}"
         if let .const name _ := e then
@@ -55,45 +62,28 @@ def parseArgs (args : Array (TSyntax `term)) : TacticM Args := do
         else throwError m!"Unexpected: {arg}"
     | term => do
       -- TODO: we need to make that work
-      trace[SimpLists] "arg (term): {term}"
-      throwError m!"Unimplemented: arbitrary terms are not supported yet as arguments to `simp_lists` (received: {arg})"
+      trace[SimpIfs] "arg (term): {term}"
+      throwError m!"Unimplemented: arbitrary terms are not supported yet as arguments to `simp_ifs` (received: {arg})"
   pure ⟨ declsToUnfold, addSimpThms, hypsToUse ⟩
 
-def parseSimpLists : TSyntax ``simp_lists -> TacticM (Args × Utils.Location)
-| `(tactic| simp_lists $[[$args,*]]?) => do
+def parseSimpIfs : TSyntax ``simp_ifs -> TacticM (Args × Utils.Location)
+| `(tactic| simp_ifs $[[$args,*]]?) => do
   let args := args.map (·.getElems) |>.getD #[]
   let args ← parseArgs args
   pure (args, Utils.Location.targets #[] true)
-| `(tactic| simp_lists $[[$args,*]]? $[$loc:location]?) => do
+| `(tactic| simp_ifs $[[$args,*]]? $[$loc:location]?) => do
   let args := args.map (·.getElems) |>.getD #[]
   let args ← parseArgs args
   let loc ← Utils.parseOptLocation loc
   pure (args, loc)
 | _ => Lean.Elab.throwUnsupportedSyntax
 
-elab stx:simp_lists : tactic =>
+elab stx:simp_ifs : tactic =>
   withMainContext do
-  let (args, loc) ← parseSimpLists stx
+  let (args, loc) ← parseSimpIfs stx
   simpListsTac args loc
 
-example [Inhabited α] (l : List α) (x : α) (i j : Nat) (hj : i ≠ j) : (l.set j x)[i]! = l[i]! := by
-  simp_lists
+example [Inhabited α] (i j : Nat) (h :i ≥ j ∧ i < j + 1) : (if i = j then 0 else 1) = 0 := by
+  simp_ifs
 
-example [Inhabited α] (l : List α) (x : α) (i : Nat) (hi : i < l.length) : (l.set i x)[i]! = x := by
-  simp_lists
-
-/-- We use this lemma to "normalize" successive calls to `List.set` -/
-@[simp_lists_simps]
-theorem List.set_comm_lt (a b : α) (n m : Nat) (l : List α) (h : n < m) :
-  (l.set m a).set n b = (l.set n b).set m a := by
-  rw [List.set_comm]
-  omega
-
-example [Inhabited α] (l : List α) (x y : α) (i j : Nat) (hj : i < j) : (l.set i x).set j y = (l.set j y).set i x := by
-  simp_lists
-
-example (CList : Type) (l : CList) (get : CList → Nat → Bool) (set : CList → Nat → Bool → CList)
-  (h : ∀ i j l x, i ≠ j → get (set l i x) j = get l j) (i j : Nat) (hi : i < j) : get (set l i x) j = get l j := by
-  simp_lists [h]
-
-end Aeneas.SimpLists
+end Aeneas.SimpIfs
