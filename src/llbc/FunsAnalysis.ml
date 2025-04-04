@@ -12,6 +12,8 @@ open ExpressionsUtils
 open Charon.GAstUtils
 open Errors
 
+let log = Logging.funs_analysis_log
+
 (** Various information about a function.
 
     Note that not all this information is used yet to adjust the extraction yet.
@@ -36,6 +38,7 @@ type modules_funs_info = fun_info FunDeclId.Map.t
 
 let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
     (use_state : bool) : modules_funs_info =
+  let fmt_env = Charon.PrintLlbcAst.Crate.crate_to_fmt_env m in
   let infos = ref FunDeclId.Map.empty in
   let register_info (id : FunDeclId.id) (info : fun_info) : unit =
     assert (not (FunDeclId.Map.mem id !infos));
@@ -75,21 +78,28 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
     (* JP: Why not use a reduce visitor here with a tuple of the values to be
        computed? *)
     let visit_fun (f : fun_decl) : unit =
-      let span = f.item_meta.span in
+      log#ltrace
+        (lazy
+          (__FUNCTION__ ^ ": Analyzing fun:\n"
+          ^ Charon.PrintTypes.name_to_string fmt_env f.item_meta.name));
       let obj =
         object (self)
           inherit [_] iter_statement as super
           method may_fail b = can_fail := !can_fail || b
           method maybe_stateful b = stateful := !stateful || b
+          method! visit_statement _ st = super#visit_statement st.span st
 
-          method visit_fid id =
+          method visit_fid span id =
             if FunDeclId.Set.mem id fun_ids then (
               can_diverge := true;
               is_rec := true)
             else
               let info = FunDeclId.Map.find_opt id !infos in
               let info =
-                silent_unwrap_opt_span __FILE__ __LINE__ (Some span) info
+                unwrap_opt_span __FILE__ __LINE__ (Some span) info
+                  "The function called here is missing from the crate \
+                   (probably because of a previous error, or because of the \
+                   use of --exclude"
               in
               self#may_fail info.can_fail;
               stateful := !stateful || info.stateful;
@@ -115,7 +125,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
                 can_fail := binop_can_fail bop || !can_fail
 
           method! visit_AggregatedClosure env id args =
-            self#visit_fid id;
+            self#visit_fid env id;
             super#visit_AggregatedClosure env id args
 
           method! visit_Call env call =
@@ -126,7 +136,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
                 ()
             | FnOpRegular func -> (
                 match func.func with
-                | FunId (FRegular id) -> self#visit_fid id
+                | FunId (FRegular id) -> self#visit_fid env id
                 | FunId (FBuiltin id) ->
                     (* None of the builtin functions can diverge nor are considered stateful *)
                     can_fail := !can_fail || Builtin.builtin_fun_can_fail id
@@ -166,7 +176,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
             (if Option.is_some f.is_global_initializer then false
              else if not use_state then false
              else info_stateful)
-      | Some body -> obj#visit_statement () body.body
+      | Some body -> obj#visit_statement body.body.span body.body
     in
     List.iter visit_fun d;
     (* We need to know if the declaration group contains a global - note that
@@ -238,7 +248,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
            let decls = List.map decl_id_to_string decls in
            let decls = String.concat "\n" decls in
            save_error_opt_span __FILE__ __LINE__ error.span
-             ("Encountered an error when anlyzing the following function \
+             ("Encountered an error when analyzing the following function \
                declaration group:\n" ^ decls));
         analyze_decl_groups decls'
     | MixedGroup ids :: _ ->

@@ -2668,7 +2668,7 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
     | None -> ctx_compute_trait_impl_name ctx trait_decl trait_impl
     | Some info -> info.impl_name
   in
-  ctx_add trait_decl.item_meta.span (TraitImplId trait_impl.def_id) name ctx
+  ctx_add trait_impl.item_meta.span (TraitImplId trait_impl.def_id) name ctx
 
 (** Small helper.
 

@@ -650,7 +650,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
   | FnOpRegular func -> (
       match func.func with
       | FunId (FRegular fid) ->
-          let def = ctx_lookup_fun_decl ctx fid in
+          let def = ctx_lookup_fun_decl span ctx fid in
           log#ltrace
             (lazy
               ("fun call:\n- call: " ^ call_to_string ctx call
@@ -692,7 +692,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
           match trait_ref.trait_id with
           | TraitImpl (impl_id, impl_generics) -> begin
               (* Lookup the trait impl *)
-              let trait_impl = ctx_lookup_trait_impl ctx impl_id in
+              let trait_impl = ctx_lookup_trait_impl span ctx impl_id in
               log#ltrace
                 (lazy ("trait impl: " ^ trait_impl_to_string ctx trait_impl));
               (* Lookup the method *)
@@ -703,7 +703,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
               in
               let method_id = fn_ref.fun_id in
               let generics = fn_ref.fun_generics in
-              let method_def = ctx_lookup_fun_decl ctx method_id in
+              let method_def = ctx_lookup_fun_decl span ctx method_id in
               (* Instantiate *)
               let tr_self = trait_ref.trait_id in
               let fid : fun_id = FRegular method_id in
@@ -727,7 +727,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
           | _ ->
               (* We are using a local clause - we lookup the trait decl *)
               let trait_decl =
-                ctx_lookup_trait_decl ctx trait_decl_ref.trait_decl_id
+                ctx_lookup_trait_decl span ctx trait_decl_ref.trait_decl_id
               in
               (* Lookup the method decl in the required *and* the provided methods *)
               let fn_ref =
@@ -737,7 +737,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
               in
               let method_id = fn_ref.fun_id in
               let generics = fn_ref.fun_generics in
-              let method_def = ctx_lookup_fun_decl ctx method_id in
+              let method_def = ctx_lookup_fun_decl span ctx method_id in
               log#ltrace
                 (lazy ("method:\n" ^ fun_decl_to_string ctx method_def));
               (* Instantiate *)
@@ -762,7 +762,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
 let eval_global_as_fresh_symbolic_value (span : Meta.span)
     (gref : global_decl_ref) (ctx : eval_ctx) : symbolic_value =
   let generics = gref.global_generics in
-  let global = ctx_lookup_global_decl ctx gref.global_id in
+  let global = ctx_lookup_global_decl span ctx gref.global_id in
   cassert __FILE__ __LINE__ (ty_no_regions global.ty) span
     "Const globals should not contain regions";
   (* Instantiate the type  *)
@@ -924,7 +924,7 @@ and eval_global (config : config) (span : Meta.span) (dest : place)
   | ConcreteMode ->
       (* Treat the evaluation of the global as a call to the global body *)
       let generics = gref.global_generics in
-      let global = ctx_lookup_global_decl ctx gref.global_id in
+      let global = ctx_lookup_global_decl span ctx gref.global_id in
       let func = { func = FunId (FRegular global.body); generics } in
       let call = { func = FnOpRegular func; args = []; dest } in
       eval_transparent_function_call_concrete config span global.body call ctx
@@ -1187,7 +1187,7 @@ and eval_transparent_function_call_concrete (config : config) (span : Meta.span)
          in concrete mode yet *)
       sanity_check __FILE__ __LINE__ (generics.const_generics = []) span;
       (* Retrieve the (correctly instantiated) body *)
-      let def = ctx_lookup_fun_decl ctx fid in
+      let def = ctx_lookup_fun_decl span ctx fid in
       (* We can evaluate the function call only if it is not opaque *)
       let body =
         match def.body with
