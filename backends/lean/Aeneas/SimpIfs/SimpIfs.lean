@@ -1,6 +1,5 @@
 import Aeneas.SimpIfs.Init
 import Aeneas.ScalarTac.CondSimpTac
-import Aeneas.List.List
 
 /-!
 # `simp_ifs` tactic
@@ -17,11 +16,11 @@ structure Args where
   addSimpThms : Array Name := #[]
   hypsToUse : Array FVarId := #[]
 
-def simpListsTac (args : Args) (loc : Utils.Location) : TacticM Unit := do
+def simpIfsTac (args : Args) (loc : Utils.Location) : TacticM Unit := do
   let addSimpThms : TacticM (Array FVarId) := pure #[]
   let args : ScalarTac.CondSimpArgs := {
-      simpThms := #[← simpListsSimpExt.getTheorems],
-      simprocs := #[← simpListsSimprocExt.getSimprocs],
+      simpThms := #[← simpIfsSimpExt.getTheorems],
+      simprocs := #[← simpIfsSimprocExt.getSimprocs],
       declsToUnfold := args.declsToUnfold,
       addSimpThms := args.addSimpThms,
       hypsToUse := args.hypsToUse,
@@ -81,7 +80,7 @@ def parseSimpIfs : TSyntax ``simp_ifs -> TacticM (Args × Utils.Location)
 elab stx:simp_ifs : tactic =>
   withMainContext do
   let (args, loc) ← parseSimpIfs stx
-  simpListsTac args loc
+  simpIfsTac args loc
 
 example [Inhabited α] (i j : Nat) (h :i ≥ j ∧ i < j + 1) : (if i = j then 0 else 1) = 0 := by
   simp_ifs
