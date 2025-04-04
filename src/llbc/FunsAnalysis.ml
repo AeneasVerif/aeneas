@@ -47,7 +47,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
    * for all of them (if one of the functions can fail, then all of them
    * can fail, etc.).
    *
-   * We simply check if the functions contains panic statements, loop statements,
+   * We simply check whether the functions contains panic statements, loop statements,
    * recursive calls, etc. We use the previously computed information in case
    * of function calls.
    *)
@@ -75,6 +75,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
     (* JP: Why not use a reduce visitor here with a tuple of the values to be
        computed? *)
     let visit_fun (f : fun_decl) : unit =
+      let span = f.item_meta.span in
       let obj =
         object (self)
           inherit [_] iter_statement as super
@@ -86,7 +87,10 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
               can_diverge := true;
               is_rec := true)
             else
-              let info = FunDeclId.Map.find id !infos in
+              let info = FunDeclId.Map.find_opt id !infos in
+              let info =
+                silent_unwrap_opt_span __FILE__ __LINE__ (Some span) info
+              in
               self#may_fail info.can_fail;
               stateful := !stateful || info.stateful;
               can_diverge := !can_diverge || info.can_diverge
@@ -199,7 +203,13 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
 
   let analyze_fun_decl_group (funs : fun_decl_id list) : unit =
     (* Retrieve the function declarations *)
-    let funs = List.map (fun id -> FunDeclId.Map.find id funs_map) funs in
+    let funs =
+      List.map
+        (fun id ->
+          silent_unwrap_opt_span __FILE__ __LINE__ None
+            (FunDeclId.Map.find_opt id funs_map))
+        funs
+    in
     let fun_ids = List.map (fun (d : fun_decl) -> d.def_id) funs in
     let fun_ids = FunDeclId.Set.of_list fun_ids in
     let info = analyze_fun_decls fun_ids funs in
@@ -212,7 +222,24 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
     | (TypeGroup _ | TraitDeclGroup _ | TraitImplGroup _ | GlobalGroup _)
       :: decls' -> analyze_decl_groups decls'
     | FunGroup decl :: decls' ->
-        analyze_fun_decl_group (g_declaration_group_to_list decl);
+        (try analyze_fun_decl_group (g_declaration_group_to_list decl)
+         with CFailure error ->
+           let fmt_env = Charon.PrintLlbcAst.Crate.crate_to_fmt_env m in
+           let decls = Charon.GAstUtils.g_declaration_group_to_list decl in
+           let decl_id_to_string (id : FunDeclId.id) : string =
+             match FunDeclId.Map.find_opt id m.fun_decls with
+             | None -> show_fun_decl_id id
+             | Some d ->
+                 Charon.PrintTypes.name_to_string fmt_env d.item_meta.name
+                 ^ " ("
+                 ^ span_to_string d.item_meta.span
+                 ^ ")"
+           in
+           let decls = List.map decl_id_to_string decls in
+           let decls = String.concat "\n" decls in
+           save_error_opt_span __FILE__ __LINE__ error.span
+             ("Encountered an error when anlyzing the following function \
+               declaration group:\n" ^ decls));
         analyze_decl_groups decls'
     | MixedGroup ids :: _ ->
         save_error_opt_span __FILE__ __LINE__ None
