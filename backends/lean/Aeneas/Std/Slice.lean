@@ -102,17 +102,17 @@ theorem Slice.index_usize_spec {α : Type u} [Inhabited α] (v: Slice α) (i: Us
   simp at *
   simp [*]
 
-@[simp]
+@[simp, scalar_tac_simps, simp_lists_simps]
 theorem Slice.set_val_eq {α : Type u} (v: Slice α) (i: Usize) (x: α) :
   (v.set i x) = v.val.set i.val x := by
   simp [set]
 
-@[simp]
+@[simp, scalar_tac_simps, simp_lists_simps]
 theorem Slice.set_opt_val_eq {α : Type u} (v: Slice α) (i: Usize) (x: Option α) :
   (v.set_opt i x) = v.val.set_opt i.val x := by
   simp [set_opt]
 
-@[scalar_tac_simps]
+@[simp, scalar_tac_simps, simp_lists_simps]
 theorem Slice.set_length {α : Type u} (v: Slice α) (i: Usize) (x: α) :
   (v.set i x).length = v.length := by simp
 

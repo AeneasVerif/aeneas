@@ -12,7 +12,7 @@ structure CondSimpArgs where
   addSimpThms : Array Name := #[]
   hypsToUse : Array FVarId := #[]
 
-def condSimpTacSimp (args : CondSimpArgs) (loc : Utils.Location)
+def condSimpTacSimp (config : Simp.Config) (args : CondSimpArgs) (loc : Utils.Location)
   (additionalAsms : Array FVarId := #[]) (dischWithScalarTac : Bool) : TacticM Unit := do
   withMainContext do
   let simpArgs : Utils.SimpArgs :=
@@ -26,16 +26,16 @@ def condSimpTacSimp (args : CondSimpArgs) (loc : Utils.Location)
     let dischargeWrapper := Lean.Elab.Tactic.Simp.DischargeWrapper.custom ref d
     let _ ← dischargeWrapper.with fun discharge? => do
       -- Initialize the simp context
-      let (ctx, simprocs) ← Utils.mkSimpCtx true {maxDischargeDepth := 2, failIfUnchanged := false}
+      let (ctx, simprocs) ← Utils.mkSimpCtx true config
         .simp simpArgs
       -- Apply the simplifier
       let _ ← Utils.customSimpLocation ctx simprocs discharge? loc
   else
-    Utils.simpAt true {maxDischargeDepth := 2, failIfUnchanged := false} simpArgs loc
+    Utils.simpAt true config simpArgs loc
 
 /-- A helper to define tactics which perform conditional simplifications with `scalar_tac` as a discharger. -/
 def condSimpTac
-  (tacName : String) (args : CondSimpArgs) (addSimpThms : TacticM (Array FVarId)) (doFirstSimp : Bool)
+  (tacName : String) (simpConfig : Simp.Config) (args : CondSimpArgs) (addSimpThms : TacticM (Array FVarId)) (doFirstSimp : Bool)
   (loc : Utils.Location) : TacticM Unit := do
   Elab.Tactic.focus do
   withMainContext do
@@ -79,7 +79,7 @@ def condSimpTac
     | .wildcard_dep => throwError "Unreachable"
     | .targets hyps type => pure (Utils.Location.targets hyps type, ← getOtherAsms (Std.HashSet.ofArray hyps))
   if doFirstSimp then
-    condSimpTacSimp args loc additionalSimpThms false
+    condSimpTacSimp simpConfig args loc additionalSimpThms false
     if (← getUnsolvedGoals) == [] then return
   trace[Utils] "Goal after simplifying: {← getMainGoal}"
   /- Simplify the targets by using `scalar_tac` as a discharger -/
@@ -89,7 +89,7 @@ def condSimpTac
     | .wildcard => pure (Utils.Location.targets (← refreshFVarIds oldAsmsSet notLocAsmsSet) true) --, ← refreshFVarIds oldAsmsSet notLocAsmsSet)
     | .wildcard_dep => throwError "Unreachable"
     | .targets hyps type => pure (Utils.Location.targets (← refreshFVarIds (Std.HashSet.ofArray hyps) notLocAsmsSet) type) --, ← refreshFVarIds oldAsmsSet notLocAsmsSet)
-  condSimpTacSimp args nloc additionalSimpThms true
+  condSimpTacSimp simpConfig args nloc additionalSimpThms true
   if (← getUnsolvedGoals) == [] then return
   /- Clear the additional assumptions -/
   Utils.clearFVarIds scalarTacAsms

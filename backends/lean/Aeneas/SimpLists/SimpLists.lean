@@ -13,6 +13,8 @@ namespace Aeneas.SimpLists
 
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 
+attribute [simp_lists_simps] add_tsub_cancel_right add_tsub_cancel_left
+
 structure Args where
   declsToUnfold : Array Name := #[]
   addSimpThms : Array Name := #[]
@@ -27,7 +29,7 @@ def simpListsTac (args : Args) (loc : Utils.Location) : TacticM Unit := do
       addSimpThms := args.addSimpThms,
       hypsToUse := args.hypsToUse,
     }
-  ScalarTac.condSimpTac "simp_lists" args addSimpThms false loc
+  ScalarTac.condSimpTac "simp_lists" {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true} args addSimpThms false loc
 
 syntax (name := simp_lists) "simp_lists" ("[" (term<|>"*"),* "]")? (location)? : tactic
 
