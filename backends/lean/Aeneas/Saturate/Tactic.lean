@@ -203,7 +203,8 @@ def arithComparisonConsts : Std.HashSet Name := Std.HashSet.ofList [
 ]
 
 def arithOpArity6 : Std.HashSet Name := Std.HashSet.ofList [
-  ``HShiftRight.hShiftRight, ``HShiftLeft.hShiftLeft, ``HPow.hPow, ``HMod.hMod
+  ``HShiftRight.hShiftRight, ``HShiftLeft.hShiftLeft,
+  ``HPow.hPow, ``HMod.hMod, ``HAdd.hAdd, ``HSub.hSub, ``HMul.hMul, ``HDiv.hDiv
 ]
 
 def exploreArithSubterms (f : Expr) (args : Array Expr) : MetaM (Array Expr) := do

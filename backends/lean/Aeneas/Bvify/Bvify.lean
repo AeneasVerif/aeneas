@@ -271,19 +271,21 @@ def bvifyAddSimpThms (n : Expr) : TacticM (Array FVarId) := do
   let eq_iff ← addThm ``BitVec.iff_ofNat_eq'
   pure #[le_iff, lt_iff, lt_max_iff, eq_iff]
 
+def bvifySimpConfig : Simp.Config := {maxDischargeDepth := 2, failIfUnchanged := false}
+
 def bvifyTacSimp (loc : Utils.Location) : TacticM Unit := do
   let args : ScalarTac.CondSimpArgs := {
       simpThms := #[← bvifySimpExt.getTheorems]
       simprocs := #[← bvifySimprocExt.getSimprocs]
     }
-  ScalarTac.condSimpTacSimp args loc #[] false
+  ScalarTac.condSimpTacSimp bvifySimpConfig args loc #[] false
 
 def bvifyTac (n : Expr) (loc : Utils.Location) : TacticM Unit := do
   let args : ScalarTac.CondSimpArgs := {
       simpThms := #[← bvifySimpExt.getTheorems]
       simprocs := #[← bvifySimprocExt.getSimprocs]
     }
-  ScalarTac.condSimpTac "bvify" args (bvifyAddSimpThms n) true loc
+  ScalarTac.condSimpTac "bvify" bvifySimpConfig args (bvifyAddSimpThms n) true loc
 
 syntax (name := bvify) "bvify " colGt term (location)? : tactic
 
