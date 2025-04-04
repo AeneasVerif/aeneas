@@ -16,6 +16,43 @@ module SA = SymbolicAst
 (** The local logger *)
 let log = Logging.interpreter_log
 
+(** Compute the type information for every *type definition* in a list of
+    declarations. This type definition information is later used to easily
+    compute the information of arbitrary types.
+
+    Rem.: pay attention to the difference between type definitions and types!
+    Rem.: this definition is in Interpreter.ml and not in TypesAnalysis.ml
+    because otherwise we have cyclic dependencies.
+ *)
+let analyze_type_declarations (crate : crate)
+    (type_decls : type_decl TypeDeclId.Map.t)
+    (decls : type_declaration_group list) : TypesAnalysis.type_infos =
+  let open TypesAnalysis in
+  List.fold_left
+    (fun infos decl ->
+      try analyze_type_declaration_group type_decls infos decl
+      with CFailure error ->
+        let fmt_env : Print.fmt_env =
+          Charon.PrintLlbcAst.Crate.crate_to_fmt_env crate
+        in
+        let decls = Charon.GAstUtils.g_declaration_group_to_list decl in
+        let decl_id_to_string (id : TypeDeclId.id) : string =
+          match TypeDeclId.Map.find_opt id crate.type_decls with
+          | None -> show_type_decl_id id
+          | Some d ->
+              Print.name_to_string fmt_env d.item_meta.name
+              ^ " ("
+              ^ span_to_string d.item_meta.span
+              ^ ")"
+        in
+        let decls = List.map decl_id_to_string decls in
+        let decls = String.concat "\n" decls in
+        save_error_opt_span __FILE__ __LINE__ error.span
+          ("Encountered an error when analyzing the following type \
+            declarations group:\n" ^ decls);
+        infos)
+    TypeDeclId.Map.empty decls
+
 let compute_contexts (crate : crate) : decls_ctx =
   let type_decls_list, _, _, _, _, _ = split_declarations crate.declarations in
   let fmt_env : Print.fmt_env =
@@ -68,9 +105,7 @@ let compute_contexts (crate : crate) : decls_ctx =
          recursive with a trait implementation):\n\n" ^ msgs));
 
   let type_decls = crate.type_decls in
-  let type_infos =
-    TypesAnalysis.analyze_type_declarations type_decls type_decls_list
-  in
+  let type_infos = analyze_type_declarations crate type_decls type_decls_list in
   let type_ctx = { type_decls_groups; type_decls; type_infos } in
 
   let fun_decls = crate.fun_decls in

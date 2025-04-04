@@ -129,7 +129,10 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
         (match id with
         | TAdtId id ->
             (* Lookup the type declaration *)
-            let decl = TypeDeclId.Map.find id crate.type_decls in
+            let decl =
+              silent_unwrap_opt_span __FILE__ __LINE__ span
+                (TypeDeclId.Map.find_opt id crate.type_decls)
+            in
             (* Instantiate the predicates *)
             let subst = Subst.make_subst_from_generics decl.generics generics in
             let predicates = Subst.predicates_substitute subst decl.generics in
