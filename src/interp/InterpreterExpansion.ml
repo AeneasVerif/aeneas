@@ -224,7 +224,7 @@ let compute_expanded_symbolic_non_builtin_adt_value (span : Meta.span)
     (generics : generic_args) (ctx : eval_ctx) : symbolic_expansion list =
   (* Lookup the definition and check if it is an enumeration with several
    * variants *)
-  let def = ctx_lookup_type_decl ctx def_id in
+  let def = ctx_lookup_type_decl span ctx def_id in
   sanity_check __FILE__ __LINE__
     (List.length generics.regions = List.length def.generics.regions)
     span;
@@ -653,7 +653,7 @@ let greedy_expand_symbolics_with_borrows (config : config) (span : Meta.span) :
             (* {!expand_symbolic_value_no_branching} checks if there are branchings,
              * but we prefer to also check it here - this leads to cleaner messages
              * and debugging *)
-            let def = ctx_lookup_type_decl ctx def_id in
+            let def = ctx_lookup_type_decl span ctx def_id in
             begin
               match def.kind with
               | Struct _ | Enum ([] | [ _ ]) -> ()

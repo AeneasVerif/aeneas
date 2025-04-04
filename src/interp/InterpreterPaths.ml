@@ -378,7 +378,7 @@ let compute_expanded_bottom_adt_value (span : Meta.span) (ctx : eval_ctx)
      should be an enumeration if and only if the projection element
      is a field projection with *some* variant id. Retrieve the list
      of fields at the same time. *)
-  let def = ctx_lookup_type_decl ctx def_id in
+  let def = ctx_lookup_type_decl span ctx def_id in
   sanity_check __FILE__ __LINE__
     (List.length generics.regions = List.length def.generics.regions)
     span;
