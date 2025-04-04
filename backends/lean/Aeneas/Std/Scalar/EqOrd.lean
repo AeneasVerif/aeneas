@@ -322,32 +322,58 @@ def core.cmp.impls.PartialOrdIsize.ge (x y : Isize) : Bool := x.val ≥ y.val
   ge := liftFun2 core.cmp.impls.PartialOrdIsize.ge }
 
 /- Name pattern: core::cmp::impls::{core::cmp::Ord<SCALAR>}::min -/
-def core.cmp.impls.OrdU8.min (x y : U8) : U8 := if x < y then x else y
-def core.cmp.impls.OrdU16.min (x y : U16) : U16 := if x < y then x else y
-def core.cmp.impls.OrdU32.min (x y : U32) : U32 := if x < y then x else y
-def core.cmp.impls.OrdU64.min (x y : U64) : U64 := if x < y then x else y
-def core.cmp.impls.OrdU128.min (x y : U128) : U128 := if x < y then x else y
-def core.cmp.impls.OrdUsize.min (x y : Usize) : Usize := if x < y then x else y
-def core.cmp.impls.OrdI8.min (x y : I8) : I8 := if x < y then x else y
-def core.cmp.impls.OrdI16.min (x y : I16) : I16 := if x < y then x else y
-def core.cmp.impls.OrdI32.min (x y : I32) : I32 := if x < y then x else y
-def core.cmp.impls.OrdI64.min (x y : I64) : I64 := if x < y then x else y
-def core.cmp.impls.OrdI128.min (x y : I128) : I128 := if x < y then x else y
-def core.cmp.impls.OrdIsize.min (x y : Isize) : Isize := if x < y then x else y
+@[progress_pure_def] def core.cmp.impls.OrdU8.min (x y : U8) : U8 := if x < y then x else y
+@[progress_pure_def] def core.cmp.impls.OrdU16.min (x y : U16) : U16 := if x < y then x else y
+@[progress_pure_def] def core.cmp.impls.OrdU32.min (x y : U32) : U32 := if x < y then x else y
+@[progress_pure_def] def core.cmp.impls.OrdU64.min (x y : U64) : U64 := if x < y then x else y
+@[progress_pure_def] def core.cmp.impls.OrdU128.min (x y : U128) : U128 := if x < y then x else y
+@[progress_pure_def] def core.cmp.impls.OrdUsize.min (x y : Usize) : Usize := if x < y then x else y
+@[progress_pure_def] def core.cmp.impls.OrdI8.min (x y : I8) : I8 := if x < y then x else y
+@[progress_pure_def] def core.cmp.impls.OrdI16.min (x y : I16) : I16 := if x < y then x else y
+@[progress_pure_def] def core.cmp.impls.OrdI32.min (x y : I32) : I32 := if x < y then x else y
+@[progress_pure_def] def core.cmp.impls.OrdI64.min (x y : I64) : I64 := if x < y then x else y
+@[progress_pure_def] def core.cmp.impls.OrdI128.min (x y : I128) : I128 := if x < y then x else y
+@[progress_pure_def] def core.cmp.impls.OrdIsize.min (x y : Isize) : Isize := if x < y then x else y
+
+@[simp, scalar_tac_simps] theorem core.cmp.impls.OrdU8.min_val (x y : U8) : (min x y).val = Nat.min x.val y.val := by simp [min]; split <;> simp <;> omega
+@[simp, scalar_tac_simps] theorem core.cmp.impls.OrdU16.min_val (x y : U16) : (min x y).val = Nat.min x.val y.val := by simp [min]; split <;> simp <;> omega
+@[simp, scalar_tac_simps] theorem core.cmp.impls.OrdU32.min_val (x y : U32) : (min x y).val = Nat.min x.val y.val := by simp [min]; split <;> simp <;> omega
+@[simp, scalar_tac_simps] theorem core.cmp.impls.OrdU64.min_val (x y : U64) : (min x y).val = Nat.min x.val y.val := by simp [min]; split <;> simp <;> omega
+@[simp, scalar_tac_simps] theorem core.cmp.impls.OrdU128.min_val (x y : U128) : (min x y).val = Nat.min x.val y.val := by simp [min]; split <;> simp <;> omega
+@[simp, scalar_tac_simps] theorem core.cmp.impls.OrdUsize.min_val (x y : Usize) : (min x y).val = Nat.min x.val y.val := by simp [min]; split <;> simp <;> omega
+@[simp, scalar_tac_simps] theorem core.cmp.impls.OrdI8.min_val (x y : I8) : (min x y).val = Min.min x.val y.val := by simp [min]; split <;> simp <;> omega
+@[simp, scalar_tac_simps] theorem core.cmp.impls.OrdI16.min_val (x y : I16) : (min x y).val = Min.min x.val y.val := by simp [min]; split <;> simp <;> omega
+@[simp, scalar_tac_simps] theorem core.cmp.impls.OrdI32.min_val (x y : I32) : (min x y).val = Min.min x.val y.val := by simp [min]; split <;> simp <;> omega
+@[simp, scalar_tac_simps] theorem core.cmp.impls.OrdI64.min_val (x y : I64) : (min x y).val = Min.min x.val y.val := by simp [min]; split <;> simp <;> omega
+@[simp, scalar_tac_simps] theorem core.cmp.impls.OrdI128.min_val (x y : I128) : (min x y).val = Min.min x.val y.val := by simp [min]; split <;> simp <;> omega
+@[simp, scalar_tac_simps] theorem core.cmp.impls.OrdIsize.min_val (x y : Isize) : (min x y).val = Min.min x.val y.val := by simp [min]; split <;> simp <;> omega
 
 /- Name pattern: core::cmp::impls::{core::cmp::Ord<SCALAR>}::max -/
-def core.cmp.impls.OrdU8.max (x y : U8) : U8 := if x < y then y else x
-def core.cmp.impls.OrdU16.max (x y : U16) : U16 := if x < y then y else x
-def core.cmp.impls.OrdU32.max (x y : U32) : U32 := if x < y then y else x
-def core.cmp.impls.OrdU64.max (x y : U64) : U64 := if x < y then y else x
-def core.cmp.impls.OrdU128.max (x y : U128) : U128 := if x < y then y else x
-def core.cmp.impls.OrdUsize.max (x y : Usize) : Usize := if x < y then y else x
-def core.cmp.impls.OrdI8.max (x y : I8) : I8 := if x < y then y else x
-def core.cmp.impls.OrdI16.max (x y : I16) : I16 := if x < y then y else x
-def core.cmp.impls.OrdI32.max (x y : I32) : I32 := if x < y then y else x
-def core.cmp.impls.OrdI64.max (x y : I64) : I64 := if x < y then y else x
-def core.cmp.impls.OrdI128.max (x y : I128) : I128 := if x < y then y else x
-def core.cmp.impls.OrdIsize.max (x y : Isize) : Isize := if x < y then y else x
+@[progress_pure_def] def core.cmp.impls.OrdU8.max (x y : U8) : U8 := if x < y then y else x
+@[progress_pure_def] def core.cmp.impls.OrdU16.max (x y : U16) : U16 := if x < y then y else x
+@[progress_pure_def] def core.cmp.impls.OrdU32.max (x y : U32) : U32 := if x < y then y else x
+@[progress_pure_def] def core.cmp.impls.OrdU64.max (x y : U64) : U64 := if x < y then y else x
+@[progress_pure_def] def core.cmp.impls.OrdU128.max (x y : U128) : U128 := if x < y then y else x
+@[progress_pure_def] def core.cmp.impls.OrdUsize.max (x y : Usize) : Usize := if x < y then y else x
+@[progress_pure_def] def core.cmp.impls.OrdI8.max (x y : I8) : I8 := if x < y then y else x
+@[progress_pure_def] def core.cmp.impls.OrdI16.max (x y : I16) : I16 := if x < y then y else x
+@[progress_pure_def] def core.cmp.impls.OrdI32.max (x y : I32) : I32 := if x < y then y else x
+@[progress_pure_def] def core.cmp.impls.OrdI64.max (x y : I64) : I64 := if x < y then y else x
+@[progress_pure_def] def core.cmp.impls.OrdI128.max (x y : I128) : I128 := if x < y then y else x
+@[progress_pure_def] def core.cmp.impls.OrdIsize.max (x y : Isize) : Isize := if x < y then y else x
+
+@[simp, scalar_tac_simps] theorem core.cmp.impls.OrdU8.max_val (x y : U8) : (max x y).val = Nat.max x.val y.val := by simp [max]; split <;> simp <;> omega
+@[simp, scalar_tac_simps] theorem core.cmp.impls.OrdU16.max_val (x y : U16) : (max x y).val = Nat.max x.val y.val := by simp [max]; split <;> simp <;> omega
+@[simp, scalar_tac_simps] theorem core.cmp.impls.OrdU32.max_val (x y : U32) : (max x y).val = Nat.max x.val y.val := by simp [max]; split <;> simp <;> omega
+@[simp, scalar_tac_simps] theorem core.cmp.impls.OrdU64.max_val (x y : U64) : (max x y).val = Nat.max x.val y.val := by simp [max]; split <;> simp <;> omega
+@[simp, scalar_tac_simps] theorem core.cmp.impls.OrdU128.max_val (x y : U128) : (max x y).val = Nat.max x.val y.val := by simp [max]; split <;> simp <;> omega
+@[simp, scalar_tac_simps] theorem core.cmp.impls.OrdUsize.max_val (x y : Usize) : (max x y).val = Nat.max x.val y.val := by simp [max]; split <;> simp <;> omega
+@[simp, scalar_tac_simps] theorem core.cmp.impls.OrdI8.max_val (x y : I8) : (max x y).val = Max.max x.val y.val := by simp [max]; split <;> simp <;> omega
+@[simp, scalar_tac_simps] theorem core.cmp.impls.OrdI16.max_val (x y : I16) : (max x y).val = Max.max x.val y.val := by simp [max]; split <;> simp <;> omega
+@[simp, scalar_tac_simps] theorem core.cmp.impls.OrdI32.max_val (x y : I32) : (max x y).val = Max.max x.val y.val := by simp [max]; split <;> simp <;> omega
+@[simp, scalar_tac_simps] theorem core.cmp.impls.OrdI64.max_val (x y : I64) : (max x y).val = Max.max x.val y.val := by simp [max]; split <;> simp <;> omega
+@[simp, scalar_tac_simps] theorem core.cmp.impls.OrdI128.max_val (x y : I128) : (max x y).val = Max.max x.val y.val := by simp [max]; split <;> simp <;> omega
+@[simp, scalar_tac_simps] theorem core.cmp.impls.OrdIsize.max_val (x y : Isize) : (max x y).val = Max.max x.val y.val := by simp [max]; split <;> simp <;> omega
 
 /- Name pattern: core::cmp::impls::{core::cmp::Ord<SCALAR>}::clamp -/
 def UScalar.clamp {ty} (self min max : UScalar ty) : Result (UScalar ty) := do
