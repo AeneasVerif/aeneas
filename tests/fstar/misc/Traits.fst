@@ -508,7 +508,7 @@ type foo_t (t : Type0) (u : Type0) = { x : t; y : u; }
 
 (** [core::result::Result]
     Source: '/rustc/library/core/src/result.rs', lines 528:0-528:21
-    Name pattern: core::result::Result *)
+    Name pattern: [core::result::Result] *)
 type core_result_Result_t (t : Type0) (e : Type0) =
 | Core_result_Result_Ok : t -> core_result_Result_t t e
 | Core_result_Result_Err : e -> core_result_Result_t t e

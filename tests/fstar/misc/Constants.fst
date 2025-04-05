@@ -12,7 +12,7 @@ let x0 : u32 = eval_global x0_body
 
 (** [constants::X1]
     Source: 'tests/src/constants.rs', lines 10:0-10:29 *)
-let x1_body : result u32 = Ok core_u32_max
+let x1_body : result u32 = Ok core_num_U32_MAX
 let x1 : u32 = eval_global x1_body
 
 (** [constants::X2]

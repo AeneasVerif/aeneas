@@ -293,31 +293,31 @@ type u64   : eqtype = scalar U64
 type u128  : eqtype = scalar U128
 
 
-let core_isize_min : isize = isize_min
-let core_isize_max : isize = isize_max
-let core_i8_min    : i8 = i8_min
-let core_i8_max    : i8 = i8_max
-let core_i16_min   : i16 = i16_min
-let core_i16_max   : i16 = i16_max
-let core_i32_min   : i32 = i32_min
-let core_i32_max   : i32 = i32_max
-let core_i64_min   : i64 = i64_min
-let core_i64_max   : i64 = i64_max
-let core_i128_min  : i128 = i128_min
-let core_i128_max  : i128 = i128_max
+let core_num_Isize_MIN : isize = isize_min
+let core_num_Isize_MAX : isize = isize_max
+let core_num_I8_MIN    : i8 = i8_min
+let core_num_I8_MAX    : i8 = i8_max
+let core_num_I16_MIN   : i16 = i16_min
+let core_num_I16_MAX   : i16 = i16_max
+let core_num_I32_MIN   : i32 = i32_min
+let core_num_I32_MAX   : i32 = i32_max
+let core_num_I64_MIN   : i64 = i64_min
+let core_num_I64_MAX   : i64 = i64_max
+let core_num_I128_MIN  : i128 = i128_min
+let core_num_I128_MAX  : i128 = i128_max
 
-let core_usize_min : usize = usize_min
-let core_usize_max : usize = usize_max
-let core_u8_min    : u8 = u8_min
-let core_u8_max    : u8 = u8_max
-let core_u16_min   : u16 = u16_min
-let core_u16_max   : u16 = u16_max
-let core_u32_min   : u32 = u32_min
-let core_u32_max   : u32 = u32_max
-let core_u64_min   : u64 = u64_min
-let core_u64_max   : u64 = u64_max
-let core_u128_min  : u128 = u128_min
-let core_u128_max  : u128 = u128_max
+let core_num_Usize_MIN : usize = usize_min
+let core_num_Usize_MAX : usize = usize_max
+let core_num_U8_MIN    : u8 = u8_min
+let core_num_U8_MAX    : u8 = u8_max
+let core_num_U16_MIN   : u16 = u16_min
+let core_num_U16_MAX   : u16 = u16_max
+let core_num_U32_MIN   : u32 = u32_min
+let core_num_U32_MAX   : u32 = u32_max
+let core_num_U64_MIN   : u64 = u64_min
+let core_num_U64_MAX   : u64 = u64_max
+let core_num_U128_MIN  : u128 = u128_min
+let core_num_U128_MAX  : u128 = u128_max
 
 /// Negation
 let isize_neg = scalar_neg #Isize

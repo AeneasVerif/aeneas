@@ -6,13 +6,14 @@ require aeneas from "../../backends/lean"
 package «tests» {}
 
 @[default_target] lean_lib AdtBorrows
-@[default_target] lean_lib Arrays
 @[default_target] lean_lib ArraySliceIndex
+@[default_target] lean_lib Arrays
 @[default_target] lean_lib AsMut
 @[default_target] lean_lib Avl
 @[default_target] lean_lib BaseTutorial
 @[default_target] lean_lib Betree
 @[default_target] lean_lib Bitwise
+@[default_target] lean_lib BlanketImpl
 @[default_target] lean_lib Builtin
 @[default_target] lean_lib Constants
 @[default_target] lean_lib DefaultedMethod
@@ -28,6 +29,7 @@ package «tests» {}
 @[default_target] lean_lib MiniTree
 @[default_target] lean_lib MutuallyRecursiveTraits
 @[default_target] lean_lib NoNestedBorrows
+@[default_target] lean_lib Options
 @[default_target] lean_lib Order
 @[default_target] lean_lib Paper
 @[default_target] lean_lib PoloniusList

@@ -490,18 +490,31 @@ Notation "x s>= y" := (scalar_geb x y)  (at level 80) : Primitives_scope.
 Notation "x s> y" := (scalar_gtb x y)  (at level 80) : Primitives_scope.
 
 (** Constants *)
-Definition core_u8_max    := u8_max %u32.
-Definition core_u16_max   := u16_max %u32.
-Definition core_u32_max   := u32_max %u32.
-Definition core_u64_max   := u64_max %u64.
-Definition core_u128_max  := u64_max %u128.
-Axiom core_usize_max : usize. (** TODO *)
-Definition core_i8_max    := i8_max %i32.
-Definition core_i16_max   := i16_max %i32.
-Definition core_i32_max   := i32_max %i32.
-Definition core_i64_max   := i64_max %i64.
-Definition core_i128_max  := i64_max %i128.
-Axiom core_isize_max : isize. (** TODO *)
+Definition core_num_U8_MIN    := u8_min %u32.
+Definition core_num_U16_MIN   := u16_min %u32.
+Definition core_num_U32_MIN   := u32_min %u32.
+Definition core_num_U64_MIN   := u64_min %u64.
+Definition core_num_U128_MIN  := u64_min %u128.
+Axiom core_num_Usize_MIN : usize. (** TODO *)
+Definition core_num_I8_MIN    := i8_min %i32.
+Definition core_num_I16_MIN   := i16_min %i32.
+Definition core_num_I32_MIN   := i32_min %i32.
+Definition core_num_I64_MIN   := i64_min %i64.
+Definition core_num_I128_MIN  := i64_min %i128.
+Axiom core_num_Isize_MIN : isize. (** TODO *)
+
+Definition core_num_U8_MAX    := u8_max %u32.
+Definition core_num_U16_MAX   := u16_max %u32.
+Definition core_num_U32_MAX   := u32_max %u32.
+Definition core_num_U64_MAX   := u64_max %u64.
+Definition core_num_U128_MAX  := u64_max %u128.
+Axiom core_num_Usize_MAX : usize. (** TODO *)
+Definition core_num_I8_MAX    := i8_max %i32.
+Definition core_num_I16_MAX   := i16_max %i32.
+Definition core_num_I32_MAX   := i32_max %i32.
+Definition core_num_I64_MAX   := i64_max %i64.
+Definition core_num_I128_MAX  := i64_max %i128.
+Axiom core_num_Isize_MAX : isize. (** TODO *)
 
 (*** core *)
 

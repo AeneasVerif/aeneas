@@ -51,41 +51,26 @@ let backend_choice (fstar_coq_hol4 : 'a) (lean : 'a) : 'a =
   | Coq | FStar | HOL4 -> fstar_coq_hol4
   | Lean -> lean
 
-let builtin_globals : (string * string) list =
-  [
-    (* Min *)
-    ("core::num::{usize}::MIN", "core_usize_min");
-    ("core::num::{u8}::MIN", "core_u8_min");
-    ("core::num::{u16}::MIN", "core_u16_min");
-    ("core::num::{u32}::MIN", "core_u32_min");
-    ("core::num::{u64}::MIN", "core_u64_min");
-    ("core::num::{u128}::MIN", "core_u128_min");
-    ("core::num::{isize}::MIN", "core_isize_min");
-    ("core::num::{i8}::MIN", "core_i8_min");
-    ("core::num::{i16}::MIN", "core_i16_min");
-    ("core::num::{i32}::MIN", "core_i32_min");
-    ("core::num::{i64}::MIN", "core_i64_min");
-    ("core::num::{i128}::MIN", "core_i128_min");
-    (* Max *)
-    ("core::num::{usize}::MAX", "core_usize_max");
-    ("core::num::{u8}::MAX", "core_u8_max");
-    ("core::num::{u16}::MAX", "core_u16_max");
-    ("core::num::{u32}::MAX", "core_u32_max");
-    ("core::num::{u64}::MAX", "core_u64_max");
-    ("core::num::{u128}::MAX", "core_u128_max");
-    ("core::num::{isize}::MAX", "core_isize_max");
-    ("core::num::{i8}::MAX", "core_i8_max");
-    ("core::num::{i16}::MAX", "core_i16_max");
-    ("core::num::{i32}::MAX", "core_i32_max");
-    ("core::num::{i64}::MAX", "core_i64_max");
-    ("core::num::{i128}::MAX", "core_i128_max");
-  ]
+let builtin_globals () : (string * string) list =
+  let mk_int_global (ty : string) (name : string) : string * string =
+    ( "core::num::{" ^ ty ^ "}::" ^ name,
+      let sep = if backend () = Lean then "." else "_" in
+      "core" ^ sep ^ "num" ^ sep
+      ^ StringUtils.capitalize_first_letter ty
+      ^ sep ^ name )
+  in
+  let mk_ints_globals name =
+    List.map (fun ty -> mk_int_global ty name) all_int_names
+  in
+  List.concat [ mk_ints_globals "MIN"; mk_ints_globals "MAX" ]
 
-let builtin_globals_map : Pure.builtin_global_info NameMatcherMap.t =
+let mk_builtin_globals_map () : Pure.builtin_global_info NameMatcherMap.t =
   NameMatcherMap.of_list
     (List.map
        (fun (x, y) -> (parse_pattern x, { Pure.global_name = y }))
-       builtin_globals)
+       (builtin_globals ()))
+
+let builtin_globals_map = mk_memoized mk_builtin_globals_map
 
 type type_variant_kind =
   | KOpaque
@@ -549,6 +534,9 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
            ~extract_name:
              (backend_choice None (Some "core::option::Option::take"))
            ~can_fail:false ~lift:false ();
+         mk_fun "core::option::{core::option::Option<@T>}::unwrap_or"
+           ~can_fail:false ~extract_name:(Some "core.option.Option.unwrap_or")
+           ();
          mk_fun "core::option::{core::option::Option<@T>}::is_none"
            ~extract_name:
              (backend_choice None (Some "core::option::Option::is_none"))

@@ -1248,11 +1248,12 @@ let extract_comment_with_span (ctx : extraction_ctx) (fmt : F.formatter)
     match (name, generics) with
     | None, _ -> []
     | Some name, None ->
-        [ "Name pattern: " ^ name_to_pattern_string ctx.trans_ctx name ]
+        [ "Name pattern: [" ^ name_to_pattern_string ctx.trans_ctx name ^ "]" ]
     | Some name, Some (params, args) ->
         [
-          "Name pattern: "
-          ^ name_with_generics_to_pattern_string ctx.trans_ctx name params args;
+          "Name pattern: ["
+          ^ name_with_generics_to_pattern_string ctx.trans_ctx name params args
+          ^ "]";
         ]
   in
   extract_comment fmt (sl @ [ span ] @ name)

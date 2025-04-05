@@ -73,10 +73,10 @@ def betree.upsert_update
     match st with
     | betree.UpsertFunState.Add v =>
       do
-      let margin ← core_u64_max - prev1
+      let margin ← core.num.U64.MAX - prev1
       if margin >= v
       then prev1 + v
-      else ok core_u64_max
+      else ok core.num.U64.MAX
     | betree.UpsertFunState.Sub v => if prev1 >= v
                                      then prev1 - v
                                      else ok 0#u64

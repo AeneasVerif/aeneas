@@ -15,7 +15,7 @@ Definition x0 : u32 := x0_body%global.
 
 (** [constants::X1]
     Source: 'tests/src/constants.rs', lines 10:0-10:29 *)
-Definition x1_body : result u32 := Ok core_u32_max.
+Definition x1_body : result u32 := Ok core_num_U32_MAX.
 Definition x1 : u32 := x1_body%global.
 
 (** [constants::X2]

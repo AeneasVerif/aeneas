@@ -1,5 +1,7 @@
 //@ [coq,fstar] subdir=misc
-fn main() {
-    // This uses the Iterator => IntoIterator blanket impl.
-    let _ = (0..1).into_iter();
-}
+
+trait Trait1 {}
+trait Trait2 {}
+
+// Blanket impl for Trait2
+impl<T:Trait1> Trait2 for T {}

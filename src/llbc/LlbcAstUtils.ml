@@ -40,7 +40,8 @@ let crate_get_opaque_non_builtin_decls (k : crate) (filter_builtin : bool) :
        | TraitDeclItem (_, _, false) -> false
        | _ -> true)
     && ((not filter_builtin)
-       || (not (NameMatcherMap.mem ctx d.item_meta.name builtin_globals_map))
+       || (not
+             (NameMatcherMap.mem ctx d.item_meta.name (builtin_globals_map ())))
           && not (NameMatcherMap.mem ctx d.item_meta.name (builtin_funs_map ()))
        )
   in

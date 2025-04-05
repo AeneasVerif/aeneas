@@ -218,7 +218,7 @@ def HashMap.move_elements
 def HashMap.try_resize {T : Type} (self : HashMap T) : Result (HashMap T) :=
   do
   let capacity := alloc.vec.Vec.len self.slots
-  let n1 ← core_usize_max / 2#usize
+  let n1 ← core.num.Usize.MAX / 2#usize
   let i ← n1 / self.max_load_factor.dividend
   if capacity <= i
   then
