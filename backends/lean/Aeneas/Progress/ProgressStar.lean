@@ -171,41 +171,44 @@ where
   traverseProgram (cfg : Config): TacticM Info := do
     withMainContext do
     trace[ProgressStar] "traverseProgram: current goal: {← getMainGoal}"
-    Progress.programTelescope (← getMainTarget) fun _xs _zs program _res _post => do
-    let e ← Utils.normalizeLetBindings program
-    if let .const ``Bind.bind .. := e.getAppFn then
-      let #[_m, _self, _α, _β, _value, cont] := e.getAppArgs
-        | throwError "Expected bind to have 4 arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
-      Utils.lambdaOne cont fun x _ => do
-        let name ← x.fvarId!.getUserName
-        let (info, mainGoal) ← onBind cfg name
-        trace[ProgressStar] "traverseProgram: after call to `onBind`: main goal is: {mainGoal}"
-        /- Continue, if necessary -/
-        match mainGoal with
-        | none =>
-          -- Stop
-          return info
-        | some mainGoal =>
+    try -- `programTelescope` can fail
+      Progress.programTelescope (← getMainTarget) fun _xs _zs program _res _post => do
+      let e ← Utils.normalizeLetBindings program
+      if let .const ``Bind.bind .. := e.getAppFn then
+        let #[_m, _self, _α, _β, _value, cont] := e.getAppArgs
+          | throwError "Expected bind to have 4 arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
+        Utils.lambdaOne cont fun x _ => do
+          let name ← x.fvarId!.getUserName
+          let (info, mainGoal) ← onBind cfg name
+          trace[ProgressStar] "traverseProgram: after call to `onBind`: main goal is: {mainGoal}"
+          /- Continue, if necessary -/
+          match mainGoal with
+          | none =>
+            -- Stop
+            return info
+          | some mainGoal =>
+            setGoals [mainGoal]
+            let restInfo ← traverseProgram cfg
+            return info ++ restInfo
+      else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
+        let contsTaggedVals ←
+          bfInfo.branches.mapM fun br => do
+            Utils.lambdaTelescopeN br.toExpr br.numArgs fun xs _ => do
+              let names ← xs.mapM (·.fvarId!.getUserName)
+              return names
+        let (branchGoals, mkStx) ← onBif cfg bfInfo contsTaggedVals
+        /- Continue exploring from the subgoals -/
+        let branchInfos ← branchGoals.mapM fun mainGoal => do
           setGoals [mainGoal]
           let restInfo ← traverseProgram cfg
-          return info ++ restInfo
-    else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
-      let contsTaggedVals ←
-        bfInfo.branches.mapM fun br => do
-          Utils.lambdaTelescopeN br.toExpr br.numArgs fun xs _ => do
-            let names ← xs.mapM (·.fvarId!.getUserName)
-            return names
-      let (branchGoals, mkStx) ← onBif cfg bfInfo contsTaggedVals
-      /- Continue exploring from the subgoals -/
-      let branchInfos ← branchGoals.mapM fun mainGoal => do
-        setGoals [mainGoal]
-        let restInfo ← traverseProgram cfg
-        pure restInfo
-      /- Put everything together -/
-      mkStx branchInfos
-    else
-      let (info, mainGoal) ← onResult cfg
-      pure { info with unsolvedGoals := info.unsolvedGoals ++ mainGoal.toList}
+          pure restInfo
+        /- Put everything together -/
+        mkStx branchInfos
+      else
+        let (info, mainGoal) ← onResult cfg
+        pure { info with unsolvedGoals := info.unsolvedGoals ++ mainGoal.toList}
+    catch _ =>
+      return ({ script := #[←`(tactic| sorry)], unsolvedGoals := ← getUnsolvedGoals})
 
   onResult (cfg : Config) : TacticM (Info × Option MVarId) := do
     trace[ProgressStar] "onResult: Since (· >>= pure) = id, we treat this result as a bind on id"
@@ -250,7 +253,7 @@ where
           unsolvedGoals := unsolved.toList,
         }
       pure (info, mainGoal)
-    else return ({ script := #[←`(tactic| skip)], unsolvedGoals := ← getUnsolvedGoals}, none)
+    else return ({ script := #[←`(tactic| sorry)], unsolvedGoals := ← getUnsolvedGoals}, none)
 
   onBif (cfg : Config) (bfInfo : Bifurcation.Info) (toBeProcessed : Array (Array Name)): TacticM (List MVarId × (List Info → TacticM Info)) := do
     trace[ProgressStar] "onBif: encountered {bfInfo.kind}"
@@ -296,7 +299,7 @@ where
       return (infos, mkStx)
 
   tryProgress := do
-    try some <$> Progress.evalProgress none (some (.str .anonymous "_")) none #[]
+    try some <$> Progress.evalProgress none (some (.str .anonymous "_")) none #[] none
     catch _ => pure none
 
   handleProgressPreconditions (preconditions : Array MVarId) : TacticM (Array Syntax.Tactic × Array MVarId) := do
@@ -305,8 +308,11 @@ where
         setGoals [sg]
         try
           -- Try evaluating the tactic then chaining it with `fail` to make sure it closes the goal
-          evalTactic (←`(tactic| $tac <;> fail ""))
-          pure (←`(tactic| · $(#[tac])*), none)
+          evalTactic (←`(tactic| $tac))
+          -- Check that there are no remaining goals
+          let gl ← Tactic.getUnsolvedGoals
+          if ¬ gl.isEmpty then throwError "tactic failed"
+          else pure (←`(tactic| · $(#[tac])*), none)
         catch _ =>
           let defaultTac ← `(tactic| · sorry)
           pure (defaultTac, sg)
@@ -348,11 +354,14 @@ where
       else mkNode ``Lean.binderIdent #[mkIdent n]
     Lean.mkNode ``Lean.Parser.Tactic.caseArg #[tag, mkNullNode (args := binderIdents)]
 
-syntax «progress*_args» := ("by" tactic)?
-
+syntax «progress*_args» := ("by" tacticSeq)?
 def parseArgs: TSyntax `Aeneas.ProgressStar.«progress*_args» → CoreM Config
-| `(«progress*_args»| $[by $preconditionTac:tactic]?) => do
-  return {preconditionTac}
+| `(«progress*_args»| $[by $preconditionTac:tacticSeq]?) => do
+  match preconditionTac with
+  | none => return {preconditionTac := none}
+  | some preconditionTac => do
+    let preconditionTac : Syntax.Tactic := ⟨preconditionTac.raw⟩
+    return {preconditionTac}
 | _ => throwUnsupportedSyntax
 
 elab "progress" noWs "*" stx:«progress*_args»: tactic => do
@@ -385,9 +394,9 @@ def add1 (x0 x1 : U32) : Std.Result U32 := do
 
 /--
 info: Try this:
-  let* ⟨ x2, x2_post ⟩ ← Aeneas.Std.U32.add_spec
-  let* ⟨ x3, x3_post ⟩ ← Aeneas.Std.U32.add_spec
-  let* ⟨ res, res_post ⟩ ← Aeneas.Std.U32.add_spec
+  let* ⟨ x2, x2_post ⟩ ← U32.add_spec
+  let* ⟨ x3, x3_post ⟩ ← U32.add_spec
+  let* ⟨ res, res_post ⟩ ← U32.add_spec
 -/
 #guard_msgs in
 example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
@@ -407,11 +416,11 @@ def add2 (b : Bool) (x0 x1 : U32) : Std.Result U32 := do
 /--
 info: Try this:
   split
-  . let* ⟨ x2, x2_post ⟩ ← Aeneas.Std.U32.add_spec
-    let* ⟨ x3, x3_post ⟩ ← Aeneas.Std.U32.add_spec
-    let* ⟨ res, res_post ⟩ ← Aeneas.Std.U32.add_spec
-  . let* ⟨ y, y_post ⟩ ← Aeneas.Std.U32.add_spec
-    let* ⟨ res, res_post ⟩ ← Aeneas.Std.U32.add_spec
+  . let* ⟨ x2, x2_post ⟩ ← U32.add_spec
+    let* ⟨ x3, x3_post ⟩ ← U32.add_spec
+    let* ⟨ res, res_post ⟩ ← U32.add_spec
+  . let* ⟨ y, y_post ⟩ ← U32.add_spec
+    let* ⟨ res, res_post ⟩ ← U32.add_spec
 -/
 #guard_msgs in
 example b (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
@@ -422,15 +431,15 @@ example b (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
 /--
 info: Try this:
   split
-  . let* ⟨ x2, x2_post ⟩ ← Aeneas.Std.U32.add_spec
+  . let* ⟨ x2, x2_post ⟩ ← U32.add_spec
     · sorry
-    let* ⟨ x3, x3_post ⟩ ← Aeneas.Std.U32.add_spec
+    let* ⟨ x3, x3_post ⟩ ← U32.add_spec
     · sorry
-    let* ⟨ res, res_post ⟩ ← Aeneas.Std.U32.add_spec
+    let* ⟨ res, res_post ⟩ ← U32.add_spec
     · sorry
-  . let* ⟨ y, y_post ⟩ ← Aeneas.Std.U32.add_spec
+  . let* ⟨ y, y_post ⟩ ← U32.add_spec
     · sorry
-    let* ⟨ res, res_post ⟩ ← Aeneas.Std.U32.add_spec
+    let* ⟨ res, res_post ⟩ ← U32.add_spec
     · sorry
 ---
 error: unsolved goals

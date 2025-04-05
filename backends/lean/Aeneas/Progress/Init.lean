@@ -75,24 +75,25 @@ section Methods
 def programTelescope[Inhabited (m α)] [Nonempty (m α)] (ty: Expr)
   (k: (xs:Array (MVarId × BinderInfo)) → (zs:Array FVarId) → (program:Expr) → (res:Expr) → (post:Option Expr) → m α)
 : m α := do
+  let ty := ty.consumeMData
   unless ←isProp ty do
     throwError "Expected a proposition, got {←inferType ty}"
   -- ty == ∀ xs, ty₂
-  let (xs, xs_bi, ty₂) ← forallMetaTelescope ty.consumeMData
+  let (xs, xs_bi, ty₂) ← forallMetaTelescope ty
   trace[Progress] "Universally quantified arguments and assumptions: {xs}"
   -- ty₂ == ∃ zs, ty₃ ≃ Exists {α} (fun zs => ty₃)
-  existsTelescope ty₂ fun zs ty₃ => do
+  existsTelescope ty₂.consumeMData fun zs ty₃ => do
     trace[Progress] "Existentials: {zs}"
     trace[Progress] "Proposition after stripping the quantifiers: {ty₃}"
     -- ty₃ == ty₄ ∧ post?
-    let (ty₄, post?) ← Utils.optSplitConj ty₃
+    let (ty₄, post?) ← Utils.optSplitConj ty₃.consumeMData
     trace[Progress] "After splitting the conjunction:\n- eq: {ty₄}\n- post: {post?}"
     -- ty₄ == (program = res)
-    let (program, res) ← Utils.destEq ty₄
+    let (program, res) ← Utils.destEq ty₄.consumeMData
     trace[Progress] "After splitting the equality:\n- lhs: {program}\n- rhs: {res}"
     k (xs.map (·.mvarId!) |>.zip xs_bi) (zs.map (·.fvarId!)) program res post?
 
-  /- Analyze a goal or a pspec theorem to decompose its arguments.
+  /- Analyze a goal or a progress theorem to decompose its arguments.
 
      ProgressSpec theorems should be of the following shape:
      ```
@@ -168,7 +169,7 @@ def programTelescope[Inhabited (m α)] [Nonempty (m α)] (ty: Expr)
   -/
   def withFreshTupleFieldFVars [Inhabited a] (basename : Name) (ty : Expr) (k : Array Expr → m a) : m a := do
     let tys := destProdsType ty
-    let tys := List.map (fun (i, ty) => (Name.num basename i, fun _ => pure ty)) (List.enum tys)
+    let tys := List.map (fun (ty, i) => (Name.num basename i, fun _ => pure ty)) (List.zipIdx tys)
     withLocalDeclsD ⟨ tys ⟩ k
 end Methods
 
@@ -233,7 +234,7 @@ private def saveProgressSpecFromThm (ext : Extension) (attrKind : AttributeKind)
 
 /- Initiliaze the `progress` attribute. -/
 initialize progressAttr : ProgressSpecAttr ← do
-  let ext ← mkExtension `pspecMap
+  let ext ← mkExtension `progressMap
   let attrImpl : AttributeImpl := {
     name := `progress
     descr := "Adds theorems to the `progress` database"
@@ -362,7 +363,7 @@ def reduceProdProjs (e : Expr) : MetaM Expr := do
     ∃ x y, toResult some_pair = ok (x, y) ∧ P x ∧ Q y
     ```
 -/
-def liftThm (pat : Syntax) (n : Name) (suffix : String := "progress_spec") : MetaM Name := do
+def liftThm (stx pat : Syntax) (n : Name) (suffix : String := "progress_spec") : MetaM Name := do
   trace[Progress] "Name: {n}"
   let env ← getEnv
   let decl := env.constants.find! n
@@ -488,6 +489,8 @@ def liftThm (pat : Syntax) (n : Name) (suffix : String := "progress_spec") : Met
     value := thm
   }
   addDecl (.thmDecl auxDecl)
+  /- Save the range -/
+  addDeclarationRangesFromSyntax name stx
   /- -/
   pure name
 
@@ -495,7 +498,7 @@ local elab "#progress_pure_lift_thm" id:ident pat:term : command => do
   Lean.Elab.Command.runTermElabM (fun _ => do
   let some cs ← Term.resolveId? id | throwError m!"Unknown id: {id}"
   let name := cs.constName!
-  let _ ← liftThm pat name)
+  let _ ← liftThm id pat name)
 
 namespace Test
   #progress_pure_lift_thm pos_pair_is_pos (∃ x y, pos_pair = (x, y))
@@ -572,7 +575,7 @@ structure ProgressPureSpecAttr where
    If we don't put an equality in the pattern, `progress_pure` will introduce one variable
    per field in the type of the pattern, if it is a tuple.
  -/
-initialize pspecPureAttribute : ProgressPureSpecAttr ← do
+initialize progressPureAttribute : ProgressPureSpecAttr ← do
   let attrImpl : AttributeImpl := {
     name := `progress_pure
     descr := "Adds lifted version of pure theorems to the `progress_pure` database"
@@ -584,7 +587,7 @@ initialize pspecPureAttribute : ProgressPureSpecAttr ← do
         -- Elaborate the pattern
         let pat ← elabProgressPureAttribute stx
         -- Introduce the lifted theorem
-        let liftedThmName ← MetaM.run' (liftThm pat thName)
+        let liftedThmName ← MetaM.run' (liftThm stx pat thName)
         -- Save the lifted theorem to the `progress` database
         saveProgressSpecFromThm progressAttr.ext attrKind liftedThmName
   }
@@ -605,7 +608,7 @@ structure ProgressPureDefSpecAttr where
   attr : AttributeImpl
   deriving Inhabited
 
-def mkProgressPureDefThm (pat : Option Syntax) (n : Name) (suffix : String := "progress_spec") : MetaM Name := do
+def mkProgressPureDefThm (stx : Syntax) (pat : Option Syntax) (n : Name) (suffix : String := "progress_spec") : MetaM Name := do
   trace[Progress] "Name: {n}"
   let env ← getEnv
   let decl := env.constants.find! n
@@ -709,6 +712,8 @@ def mkProgressPureDefThm (pat : Option Syntax) (n : Name) (suffix : String := "p
     value := thm
   }
   addDecl (.thmDecl auxDecl)
+  /- Save the range -/
+  addDeclarationRangesFromSyntax name stx
   /- -/
   pure name
 
@@ -716,7 +721,7 @@ local elab "#progress_pure_def" id:ident pat:(term)? : command => do
   Lean.Elab.Command.runTermElabM (fun _ => do
   let some cs ← Term.resolveId? id | throwError m!"Unknown id: {id}"
   let name := cs.constName!
-  let _ ← mkProgressPureDefThm pat name)
+  let _ ← mkProgressPureDefThm id pat name)
 
 namespace Test
   def wrapping_add (x y : U8) : U8 := ⟨ x.val + y.val ⟩
@@ -747,7 +752,7 @@ end Test
 
    Note that `progress_pure_def` takes a,n
  -/
-initialize pspecPureDefAttribute : ProgressPureDefSpecAttr ← do
+initialize progressPureDefAttribute : ProgressPureDefSpecAttr ← do
   let attrImpl : AttributeImpl := {
     name := `progress_pure_def
     descr := "Automatically generate `progress` theorems for pure definitions"
@@ -760,7 +765,7 @@ initialize pspecPureDefAttribute : ProgressPureDefSpecAttr ← do
         trace[Saturate.attribute] "Syntax: {stx}"
         let pat ← elabProgressPureDefAttribute stx
         -- Introduce the lifted theorem
-        let thmName ← MetaM.run' (mkProgressPureDefThm pat declName)
+        let thmName ← MetaM.run' (mkProgressPureDefThm stx pat declName)
         -- Save the lifted theorem to the `progress` database
         saveProgressSpecFromThm progressAttr.ext attrKind thmName
   }

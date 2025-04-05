@@ -16,7 +16,9 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
-        ocamlPackages = pkgs.ocamlPackages;
+        ocamlPackages = pkgs.ocaml-ng.ocamlPackages_4_14;
+        coqPackages = pkgs.coqPackages_8_18;
+        charon-ml = charon.packages.${system}.charon-ml.override { inherit ocamlPackages; };
         easy_logging = ocamlPackages.buildDunePackage rec {
           pname = "easy_logging";
           version = "0.8.2";
@@ -58,7 +60,7 @@
           OCAMLPARAM = "_,warn-error=+A"; # Turn all warnings into errors.
           propagatedBuildInputs = [
             easy_logging
-            charon.packages.${system}.charon-ml
+            charon-ml
           ] ++ (with ocamlPackages; [
             calendar
             core_unix
@@ -167,7 +169,7 @@
         aeneas-verify-coq = pkgs.stdenv.mkDerivation {
           name = "aeneas_verify_coq";
           src = ./tests/coq;
-          buildInputs = [ pkgs.coq ];
+          buildInputs = [ coqPackages.coq ];
           buildPhase = ''
             make prepare-projects
             make verify -j $NIX_BUILD_CORES
@@ -220,25 +222,26 @@
       {
         packages = {
           inherit aeneas;
-          inherit (charon.packages.${system}) charon-ml charon;
+          inherit (charon.packages.${system}) charon;
+          inherit charon-ml;
           default = aeneas;
         };
         devShells.default = pkgs.mkShell {
           packages = [
             pkgs.curl
             pkgs.elan
-            pkgs.ocamlPackages.ocaml
-            pkgs.ocamlPackages.ocamlformat
-            pkgs.ocamlPackages.menhir
-            pkgs.ocamlPackages.odoc
+            ocamlPackages.ocaml
+            ocamlPackages.ocamlformat
+            ocamlPackages.menhir
+            ocamlPackages.odoc
             # ocaml-lsp's version must match the ocaml version used. Pinning
             # this here to save everyone a headache.
-            pkgs.ocamlPackages.ocaml-lsp
+            ocamlPackages.ocaml-lsp
             pkgs.jq
             pkgs.rustup
             pkgs.rlwrap
             fstar.packages.${system}.fstar
-            pkgs.coq
+            coqPackages.coq
           ];
 
           inputsFrom = [

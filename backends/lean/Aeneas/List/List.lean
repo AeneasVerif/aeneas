@@ -4,6 +4,8 @@ import Mathlib.Data.List.GetD
 import Aeneas.ScalarTac
 import Aeneas.Utils
 import Aeneas.SimpLemmas
+import Aeneas.Nat
+import Aeneas.SimpLists.Init
 
 namespace List -- We do not use the `Aeneas` namespace on purpose
 
@@ -77,6 +79,12 @@ theorem replicate_length {α : Type u} (l : Nat) (x : α) :
   induction l <;> simp_all
 
 @[simp]
+theorem getElem!_replicate {α : Type u} [Inhabited α] (a : α) {n i : ℕ} (h : i < n) :
+  (List.replicate n a)[i]! = a := by
+  simp only [getElem!_eq_getElem?_getD, length_replicate, h, getElem?_eq_getElem, getElem_replicate,
+    Option.getD_some]
+
+@[simp]
 theorem set_getElem! {α} [Inhabited α] (l : List α) (i : Nat) :
   l.set i l[i]! = l := by
   revert i; induction l <;> simp_all
@@ -138,6 +146,7 @@ theorem drop_length_is_le (i : Nat) (ls : List α) : (ls.drop i).length ≤ ls.l
       by simp only [Nat.not_eq, ne_eq, not_false_eq_true, neq_imp, not_lt_zero', false_or, true_or,
         or_self, drop_cons_nzero, length_drop, length_cons, tsub_le_iff_right, h]; omega
 
+attribute [simp, simp_lists_simps] drop_of_length_le
 attribute [scalar_tac_simps] length_drop
 
 @[scalar_tac_simps]
@@ -228,7 +237,7 @@ theorem getElem?_set_neq
   intro
   simp_all
 
-@[simp]
+@[simp, simp_lists_simps]
 theorem getElem!_set_neq
   {α : Type u} [Inhabited α] (l: List α) (i: Nat) (j: Nat) (x: α)
   (h : Nat.not_eq i j) : getElem! (l.set i x) j = getElem! l j
@@ -242,6 +251,13 @@ theorem getElem!_set_self
   (h : i < l.length) : getElem! (l.set i x) i = x
   := by
   simp [*]
+
+@[simp_lists_simps]
+theorem getElem!_set_self'
+  {α : Type u} [Inhabited α] (l: List α) (i i': Nat) (x: α)
+  (h : i' < l.length ∧ i = i') : getElem! (l.set i x) i' = x
+  := by
+  simp only [getElem!_set_self, *]
 
 -- TODO: we need "composite" patterns for scalar_tac here
 theorem length_getElem!_le_length_flatten (ls : List (List α)) :
@@ -278,12 +294,40 @@ theorem length_flatten_set_as_int_eq {α : Type u} (ls : List (List α)) (i : Na
   ((ls.set i x).flatten.length : Nat) = ls.flatten.length + x.length - (ls[i]!).length := by
   scalar_tac
 
-@[simp]
+@[simp, simp_lists_simps]
 theorem getElem!_map_eq {α : Type u} {β : Type v} [Inhabited α] [Inhabited β]
   (ls : List α) (i : Nat) (f : α → β)
   (h1 : i < ls.length) : -- We need the bound because otherwise we have to prove that: `(default : β) = f (default : α)`
   (ls.map f)[i]! = f (ls[i]!) := by
-  simp [*]
+  simp only [getElem!_eq_getElem?_getD, length_map, getElem?_eq_getElem, getElem_map,
+    Option.getD_some, h1]
+
+@[simp]
+theorem getElem!_map_eq' {α : Type u} {β : Type v} [Inhabited α] [Inhabited β]
+  (ls : List α) (i : Nat) (f : α → β)
+  (hdef : default = f default) :
+  (ls.map f)[i]! = f (ls[i]!) := by
+  dcases hi : i < ls.length
+  . simp only [hi, List.getElem!_map_eq]
+  . simp only [not_lt] at hi
+    simp only [getElem!_eq_getElem?_getD, getElem?_map, Option.getD_map, hdef]
+
+@[simp, simp_lists_simps]
+theorem getElem!_default [Inhabited α] (ls : List α) (i : ℕ)
+  (h : ls.length ≤ i) : ls[i]! = default := by
+  revert i h
+  induction ls
+  . intros i h
+    simp only [getElem!_eq_getElem?_getD, getElem?_nil, Option.getD_none]
+  . intros i h
+    cases i <;> simp_all [getElem!_eq_getElem?_getD, length_cons, nonpos_iff_eq_zero,
+      AddLeftCancelMonoid.add_eq_zero, length_eq_zero, one_ne_zero, and_false, not_false_eq_true,
+      neq_imp, add_le_add_iff_right, getElem?_cons_succ]
+
+@[simp, simp_lists_simps]
+theorem getElem!_map_default [Inhabited α] [Inhabited β] (ls : List α) (i : ℕ) (f : α → β)
+  (h1 : ls.length ≤ i) : (List.map f ls)[i]! = default := by
+  simp only [length_map, getElem!_default, h1]
 
 @[simp]
 theorem getElem?_length_le {α} [Inhabited α] (l : List α) (i : Nat) (hi : l.length ≤ i) :
@@ -379,13 +423,77 @@ theorem getElem?_range'_if (i start n: ℕ) :
       simp_all
       ring_nf
 
-@[simp]
 theorem getElem!_range' (i start n: ℕ) :
   (List.range' start n)[i]! = if i < n then start + i else 0 := by
   have := List.getElem?_range'_if i start n
   simp_all
   split <;> simp
 
+@[simp] theorem getElem!_range'_lt (i start n: ℕ) (h : i < n) :
+  (List.range' start n)[i]! = start + i := by
+  simp [getElem!_range', *]
+
+@[simp] theorem getElem!_range'_not_lt (i start n: ℕ) (h : n ≤ i) :
+  (List.range' start n)[i]! = 0 := by
+  simp [getElem!_range', *]
+
+theorem getElem!_range (i n: ℕ) :
+  (List.range n)[i]! = if i < n then i else 0 := by
+  simp only [List.range_eq_range']
+  rw [getElem!_range']
+  simp only [zero_add]
+
+@[simp] theorem getElem!_range_lt (i n: ℕ) (h : i < n) :
+  (List.range n)[i]! = i := by
+  simp [getElem!_range, *]
+
+@[simp] theorem getElem!_range_not_lt (i n: ℕ) (h : n ≤ i) :
+  (List.range n)[i]! = 0 := by
+  simp [getElem!_range, *]
+
 end
+
+theorem eq_iff_eq_getElem? {α} (l0 l1 : List α) :
+  l0 = l1 ↔ ∀ (i : Nat), l0[i]? = l1[i]? := by
+  revert l1
+  induction l0 <;> intro l1
+  . constructor
+    . simp +contextual
+    . intro hi
+      have := hi 0
+      simp at this
+      rw [this]
+  . rename_i hd l0 hind
+    constructor
+    . simp +contextual
+    . intro hi
+      cases l1
+      . have := hi 0
+        simp at this
+      . rename_i hd' l1
+        replace hind := hind l1
+        simp [hind]
+        have := hi 0
+        simp at this; simp [this]
+        intro i
+        replace hi := hi (i + 1)
+        simp at hi
+        apply hi
+
+theorem eq_iff_eq_getElem! {α} [Inhabited α] (l0 l1 : List α) :
+  l0 = l1 ↔ (l0.length = l1.length ∧ ∀ i < l0.length, l0[i]! = l1[i]!) := by
+  constructor
+  . simp +contextual only [getElem!_eq_getElem?_getD, getElem?_eq_getElem, Option.getD_some,
+    implies_true, and_self]
+  . simp only [getElem!_eq_getElem?_getD, and_imp]
+    intro h0 h1
+    rw [eq_iff_eq_getElem?]
+    intro i
+    dcases hi : i < l0.length
+    . replace h1 := h1 i hi
+      simp_all only [getElem?_eq_getElem, Option.getD_some]
+    . simp only [not_lt] at hi
+      simp only [hi, getElem?_length_le, none_eq_getElem?_iff]
+      simp only [← h0, hi]
 
 end List

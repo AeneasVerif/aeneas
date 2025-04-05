@@ -6,6 +6,7 @@
 Bitwise.v
 BlanketImpl.v
 Constants.v
+DefaultedMethod.v
 External_FunsExternal_Template.v
 External_FunsExternal.v
 External_Funs.v

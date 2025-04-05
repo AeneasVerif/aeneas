@@ -27,13 +27,14 @@ instance [BEq α] : BEq (Vec α) := SubtypeBEq _
 
 instance [BEq α] [LawfulBEq α] : LawfulBEq (Vec α) := SubtypeLawfulBEq _
 
-@[scalar_tac v]
+@[scalar_tac v.val]
 theorem Vec.len_ineq {α : Type u} (v : Vec α) : v.val.length ≤ Usize.max := by
   cases v; simp[*]
 
--- TODO: move/remove?
-@[scalar_tac v]
-theorem Vec.subtype_property {α : Type u} {p : Vec α → Prop} (v : Subtype p) : p v.val := v.property
+-- TODO: update scalar_tac so that we can remove this one
+@[scalar_tac v.val.length]
+theorem Vec.len_ineq' {α : Type u} (v : Vec α) : v.val.length ≤ Usize.max := by
+  cases v; simp[*]
 
 @[simp]
 abbrev Vec.length {α : Type u} (v : Vec α) : Nat := v.val.length
@@ -317,9 +318,7 @@ namespace Tests
       (↑capacity : ℕ) * (↑dividend : ℕ) ≤ Usize.max ∧
         (↑capacity : ℕ) * (↑dividend : ℕ) ≥ (↑divisor : ℕ))
     (slots : alloc.vec.Vec (List α))
-    (h2 : (↑slots.len : ℕ) = (↑(alloc.vec.Vec.new (List α)).len : ℕ) + (↑capacity : ℕ))
-    (i1 : Usize)
-    (i2 : Usize) :
+    (h2 : (↑slots.len : ℕ) = (↑(alloc.vec.Vec.new (List α)).len : ℕ) + (↑capacity : ℕ)) :
     (↑(↑divisor : ℕ) : ℤ) ≤
     (↑(↑slots : List (List α)).length : ℤ) * (↑(↑dividend : ℕ) : ℤ)
     := by

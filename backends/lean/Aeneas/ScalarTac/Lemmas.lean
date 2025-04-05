@@ -5,7 +5,23 @@ namespace Aeneas
 
 namespace Std
 
+open ScalarTac
+
 set_option maxRecDepth 1024
+
+instance (x y : UScalar ty) : IsLinearIntProp (x < y) where
+instance (x y : UScalar ty) : IsLinearIntProp (x > y) where
+instance (x y : UScalar ty) : IsLinearIntProp (x ≤ y) where
+instance (x y : UScalar ty) : IsLinearIntProp (x ≥ y) where
+instance (x y : UScalar ty) : IsLinearIntProp (x ≥ y) where
+instance (x y : UScalar ty) : IsLinearIntProp (x = y) where
+
+instance (x y : IScalar ty) : IsLinearIntProp (x < y) where
+instance (x y : IScalar ty) : IsLinearIntProp (x > y) where
+instance (x y : IScalar ty) : IsLinearIntProp (x ≤ y) where
+instance (x y : IScalar ty) : IsLinearIntProp (x ≥ y) where
+instance (x y : IScalar ty) : IsLinearIntProp (x ≥ y) where
+instance (x y : IScalar ty) : IsLinearIntProp (x = y) where
 
 attribute [scalar_tac_simps]
   and_self false_implies true_implies Prod.mk.injEq
@@ -64,6 +80,10 @@ abbrev Usize.maxAbbrevPow := 2^System.Platform.numBits
 @[scalar_tac Usize.maxAbbrevPow]
 theorem Usize.cMax_bound' : UScalar.cMax .Usize ≤ Usize.max ∧ Usize.max + 1 = 2^System.Platform.numBits := Usize.cMax_bound
 
+abbrev Usize.maxAbbrevPow' := 2^Usize.numBits
+@[scalar_tac Usize.maxAbbrevPow']
+theorem Usize.cMax_bound'' : UScalar.cMax .Usize ≤ Usize.max ∧ Usize.max + 1 = 2^System.Platform.numBits := Usize.cMax_bound
+
 @[scalar_tac Isize.min]
 theorem Isize.cMin_bound : Isize.min ≤ IScalar.cMin .Isize ∧ Isize.min = - 2^(System.Platform.numBits - 1) := by
   simp [Isize.min, IScalar.cMin, IScalar.rMin, I32.rMin, Isize.numBits,
@@ -73,6 +93,10 @@ theorem Isize.cMin_bound : Isize.min ≤ IScalar.cMin .Isize ∧ Isize.min = - 2
 abbrev Isize.minAbbrevPow :Int := -2^(System.Platform.numBits-1)
 @[scalar_tac Isize.minAbbrevPow]
 theorem Isize.cMin_bound' : Isize.min ≤ IScalar.cMin .Isize ∧ Isize.min = - 2^(System.Platform.numBits - 1) := Isize.cMin_bound
+
+abbrev Isize.minAbbrevPow' :Int := -2^(Isize.numBits-1)
+@[scalar_tac Isize.minAbbrevPow']
+theorem Isize.cMin_bound'' : Isize.min ≤ IScalar.cMin .Isize ∧ Isize.min = - 2^(System.Platform.numBits - 1) := Isize.cMin_bound
 
 @[scalar_tac Isize.max]
 theorem Isize.cMax_bound : IScalar.cMax .Isize ≤ Isize.max ∧ Isize.max + 1 = 2^(System.Platform.numBits - 1) := by
@@ -87,6 +111,10 @@ theorem Isize.size_scalarTac_eq : Isize.size = 2^System.Platform.numBits := by
 abbrev Isize.maxAbbrevPow : Int := 2^(System.Platform.numBits-1)
 @[scalar_tac Isize.maxAbbrevPow]
 theorem Isize.cMax_bound' : IScalar.cMax .Isize ≤ Isize.max ∧ Isize.max + 1 = 2^(System.Platform.numBits - 1) := Isize.cMax_bound
+
+abbrev Isize.maxAbbrevPow' : Int := 2^(Isize.numBits-1)
+@[scalar_tac Isize.maxAbbrevPow']
+theorem Isize.cMax_bound'' : IScalar.cMax .Isize ≤ Isize.max ∧ Isize.max + 1 = 2^(System.Platform.numBits - 1) := Isize.cMax_bound
 
 @[scalar_tac_simps] theorem U8.numBits_eq    : U8.numBits = 8 := by simp_scalar_consts
 @[scalar_tac_simps] theorem U16.numBits_eq   : U16.numBits = 16 := by simp_scalar_consts
@@ -195,14 +223,14 @@ namespace ScalarTac
 
 open Std
 
-@[scalar_tac x]
+@[scalar_tac x.val]
 theorem UScalar.bounds {ty : UScalarTy} (x : UScalar ty) :
   x.val ≤ UScalar.max ty := by
   simp [UScalar.max]
   have := x.hBounds
   omega
 
-@[scalar_tac x]
+@[scalar_tac x.val]
 theorem IScalar.bounds {ty : IScalarTy} (x : IScalar ty) :
   IScalar.min ty ≤ x.val ∧ x.val ≤ IScalar.max ty := by
   simp [IScalar.max, IScalar.min]
@@ -244,6 +272,25 @@ example (x y : Int) (h : |x| ≤ |y|) : x ≤ |y| := by scalar_tac
 example :
   128 ≤ Usize.max ∧ 128 ≥ 5 := by
   scalar_tac +fastSaturate
+
+/-!
+# Forward Saturation
+-/
+
+section
+/-!
+The example below fails if the simp which happens *before* the saturation uses `scalar_tac_simps` instead
+of `scalar_tac_before_sat_simps`.
+-/
+
+private def c : Nat := 100
+
+@[local scalar_tac x * c]
+private theorem mul_c (x : Nat) : x * c ≤ 100 * x := by simp [c]; omega
+
+example (x : Nat) : x * c ≤ 100 * x := by scalar_tac
+
+end
 
 end ScalarTac
 

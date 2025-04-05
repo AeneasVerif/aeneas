@@ -372,7 +372,7 @@ def non_copyable_array : Result Unit :=
 
 /- [arrays::sum]: loop 0:
    Source: 'tests/src/arrays.rs', lines 275:4-278:5 -/
-divergent def sum_loop (s : Slice U32) (sum1 : U32) (i : Usize) : Result U32 :=
+def sum_loop (s : Slice U32) (sum1 : U32) (i : Usize) : Result U32 :=
   let i1 := Slice.len s
   if i < i1
   then
@@ -382,6 +382,7 @@ divergent def sum_loop (s : Slice U32) (sum1 : U32) (i : Usize) : Result U32 :=
     let i3 ← i + 1#usize
     sum_loop s sum3 i3
   else ok sum1
+partial_fixpoint
 
 /- [arrays::sum]:
    Source: 'tests/src/arrays.rs', lines 272:0-280:1 -/
@@ -390,7 +391,7 @@ divergent def sum_loop (s : Slice U32) (sum1 : U32) (i : Usize) : Result U32 :=
 
 /- [arrays::sum2]: loop 0:
    Source: 'tests/src/arrays.rs', lines 286:4-289:5 -/
-divergent def sum2_loop
+def sum2_loop
   (s : Slice U32) (s2 : Slice U32) (sum1 : U32) (i : Usize) : Result U32 :=
   let i1 := Slice.len s
   if i < i1
@@ -403,6 +404,7 @@ divergent def sum2_loop
     let i5 ← i + 1#usize
     sum2_loop s s2 sum3 i5
   else ok sum1
+partial_fixpoint
 
 /- [arrays::sum2]:
    Source: 'tests/src/arrays.rs', lines 282:0-291:1 -/
@@ -483,7 +485,7 @@ def ite : Result Unit :=
 
 /- [arrays::zero_slice]: loop 0:
    Source: 'tests/src/arrays.rs', lines 336:4-339:5 -/
-divergent def zero_slice_loop
+def zero_slice_loop
   (a : Slice U8) (i : Usize) (len : Usize) : Result (Slice U8) :=
   if i < len
   then
@@ -492,6 +494,7 @@ divergent def zero_slice_loop
     let i1 ← i + 1#usize
     zero_slice_loop a1 i1 len
   else ok a
+partial_fixpoint
 
 /- [arrays::zero_slice]:
    Source: 'tests/src/arrays.rs', lines 333:0-340:1 -/
@@ -501,12 +504,13 @@ def zero_slice (a : Slice U8) : Result (Slice U8) :=
 
 /- [arrays::iter_mut_slice]: loop 0:
    Source: 'tests/src/arrays.rs', lines 345:4-347:5 -/
-divergent def iter_mut_slice_loop (len : Usize) (i : Usize) : Result Unit :=
+def iter_mut_slice_loop (len : Usize) (i : Usize) : Result Unit :=
   if i < len
   then do
        let i1 ← i + 1#usize
        iter_mut_slice_loop len i1
   else ok ()
+partial_fixpoint
 
 /- [arrays::iter_mut_slice]:
    Source: 'tests/src/arrays.rs', lines 342:0-348:1 -/
@@ -518,8 +522,7 @@ def iter_mut_slice (a : Slice U8) : Result (Slice U8) :=
 
 /- [arrays::sum_mut_slice]: loop 0:
    Source: 'tests/src/arrays.rs', lines 353:4-356:5 -/
-divergent def sum_mut_slice_loop
-  (a : Slice U32) (i : Usize) (s : U32) : Result U32 :=
+def sum_mut_slice_loop (a : Slice U32) (i : Usize) (s : U32) : Result U32 :=
   let i1 := Slice.len a
   if i < i1
   then
@@ -529,6 +532,7 @@ divergent def sum_mut_slice_loop
     let i3 ← i + 1#usize
     sum_mut_slice_loop a i3 s1
   else ok s
+partial_fixpoint
 
 /- [arrays::sum_mut_slice]:
    Source: 'tests/src/arrays.rs', lines 350:0-358:1 -/
@@ -536,5 +540,33 @@ def sum_mut_slice (a : Slice U32) : Result (U32 × (Slice U32)) :=
   do
   let i ← sum_mut_slice_loop a 0#usize 0#u32
   ok (i, a)
+
+/- [arrays::add_acc]: loop 0:
+   Source: 'tests/src/arrays.rs', lines 362:4-371:5 -/
+def add_acc_loop
+  (paSrc : Array U32 256#usize) (peDst : Array U32 256#usize) (i : Usize) :
+  Result ((Array U32 256#usize) × (Array U32 256#usize))
+  :=
+  if i < 256#usize
+  then
+    do
+    let a ← Array.index_usize paSrc i
+    let paSrc1 ← Array.update paSrc i 0#u32
+    let c ← Array.index_usize peDst i
+    let c1 ← c + a
+    let peDst1 ← Array.update peDst i c1
+    let i1 ← i + 1#usize
+    add_acc_loop paSrc1 peDst1 i1
+  else ok (paSrc, peDst)
+partial_fixpoint
+
+/- [arrays::add_acc]:
+   Source: 'tests/src/arrays.rs', lines 360:0-372:1 -/
+@[reducible]
+def add_acc
+  (paSrc : Array U32 256#usize) (peDst : Array U32 256#usize) :
+  Result ((Array U32 256#usize) × (Array U32 256#usize))
+  :=
+  add_acc_loop paSrc peDst 0#usize
 
 end arrays

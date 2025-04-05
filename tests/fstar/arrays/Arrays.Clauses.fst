@@ -35,3 +35,6 @@ unfold
 let sum_mut_slice_loop_decreases (a : slice u32) (i : usize) (s : u32) : nat =
   if i < slice_len a then slice_len a - i else 0
 
+unfold
+let add_acc_loop_decreases (pa_src : array u32 256) (pe_dst : array u32 256) (i : usize) : nat =
+  if i < 256 then 256 - i else 0

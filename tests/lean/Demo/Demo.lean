@@ -54,7 +54,7 @@ inductive CList (T : Type) where
 
 /- [demo::list_nth]:
    Source: 'tests/src/demo.rs', lines 42:0-55:1 -/
-divergent def list_nth {T : Type} (l : CList T) (i : U32) : Result T :=
+def list_nth {T : Type} (l : CList T) (i : U32) : Result T :=
   match l with
   | CList.CCons x tl =>
     if i = 0#u32
@@ -63,10 +63,11 @@ divergent def list_nth {T : Type} (l : CList T) (i : U32) : Result T :=
          let i1 ← i - 1#u32
          list_nth tl i1
   | CList.CNil => fail panic
+partial_fixpoint
 
 /- [demo::list_nth1]: loop 0:
    Source: 'tests/src/demo.rs', lines 58:4-66:1 -/
-divergent def list_nth1_loop {T : Type} (l : CList T) (i : U32) : Result T :=
+def list_nth1_loop {T : Type} (l : CList T) (i : U32) : Result T :=
   match l with
   | CList.CCons x tl =>
     if i = 0#u32
@@ -75,6 +76,7 @@ divergent def list_nth1_loop {T : Type} (l : CList T) (i : U32) : Result T :=
          let i1 ← i - 1#u32
          list_nth1_loop tl i1
   | CList.CNil => fail panic
+partial_fixpoint
 
 /- [demo::list_nth1]:
    Source: 'tests/src/demo.rs', lines 57:0-66:1 -/
@@ -84,7 +86,7 @@ def list_nth1 {T : Type} (l : CList T) (i : U32) : Result T :=
 
 /- [demo::list_nth_mut]:
    Source: 'tests/src/demo.rs', lines 68:0-81:1 -/
-divergent def list_nth_mut
+def list_nth_mut
   {T : Type} (l : CList T) (i : U32) : Result (T × (T → CList T)) :=
   match l with
   | CList.CCons x tl =>
@@ -99,20 +101,22 @@ divergent def list_nth_mut
                              CList.CCons x tl1
       ok (t, back)
   | CList.CNil => fail panic
+partial_fixpoint
 
 /- [demo::i32_id]:
    Source: 'tests/src/demo.rs', lines 83:0-89:1 -/
-divergent def i32_id (i : I32) : Result I32 :=
+def i32_id (i : I32) : Result I32 :=
   if i = 0#i32
   then ok 0#i32
   else do
        let i1 ← i - 1#i32
        let i2 ← i32_id i1
        i2 + 1#i32
+partial_fixpoint
 
 /- [demo::list_tail]:
    Source: 'tests/src/demo.rs', lines 91:0-96:1 -/
-divergent def list_tail
+def list_tail
   {T : Type} (l : CList T) : Result ((CList T) × (CList T → CList T)) :=
   match l with
   | CList.CCons t tl =>
@@ -122,6 +126,7 @@ divergent def list_tail
                            CList.CCons t tl1
     ok (c, back)
   | CList.CNil => ok (CList.CNil, fun ret => ret)
+partial_fixpoint
 
 /- Trait declaration: [demo::Counter]
    Source: 'tests/src/demo.rs', lines 100:0-102:1 -/

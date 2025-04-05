@@ -87,7 +87,7 @@ def div? {α: Type u} (r: Result α): Bool :=
   | div => true
   | ok _ | fail _ => false
 
-def massert (b:Bool) : Result Unit :=
+def massert (b : Prop) [Decidable b] : Result Unit :=
   if b then ok () else fail assertionFailure
 
 macro "prove_eval_global" : tactic => `(tactic| simp (failIfUnchanged := false) only [global_simps] <;> first | apply Eq.refl | decide)
@@ -103,6 +103,11 @@ def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
   match x with
   | some x => ok x
   | none => fail e
+
+@[simp] abbrev liftFun1 {α β} (f : α → β) : α → Result β := fun x => ok (f x)
+@[simp] abbrev liftFun2 {α β γ : Type} (f : α → β → γ) : α → β → Result γ := fun x y => ok (f x y)
+@[simp] abbrev liftFun3 {α β γ δ} (f : α → β → γ → δ) : α → β → γ → Result δ := fun x y z => ok (f x y z)
+@[simp] abbrev liftFun4 {α β γ δ ε} (f : α → β → γ → δ → ε) : α → β → γ → δ → Result ε := fun x y z a => ok (f x y z a)
 
 /-!
 # Do-DSL Support
@@ -147,6 +152,29 @@ def bind_eq_iff (x : Result α) (y y' : α → Result β) :
   ((Bind.bind x y) = (Bind.bind x y')) ↔
   ∀ v, x = ok v → y v = y' v := by
   cases x <;> simp_all
+
+/-!
+# Partial Fixpoint
+-/
+
+section Order
+
+open Lean.Order
+
+instance : PartialOrder (Result α) := inferInstanceAs (PartialOrder (FlatOrder .div))
+  noncomputable instance : CCPO (Result α) := inferInstanceAs (CCPO (FlatOrder .div))
+  noncomputable instance : MonoBind Result where
+    bind_mono_left h := by
+      cases h
+      · exact FlatOrder.rel.bot
+      · exact FlatOrder.rel.refl
+    bind_mono_right h := by
+      cases ‹Result _›
+      · exact h _
+      · exact FlatOrder.rel.refl
+      · exact FlatOrder.rel.refl
+
+end Order
 
 /-!
 # Lift

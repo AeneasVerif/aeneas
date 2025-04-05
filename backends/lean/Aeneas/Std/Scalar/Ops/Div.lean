@@ -136,13 +136,14 @@ theorem IScalar.neg_imp_neg_val_toNat_mod_pow_eq_neg_val {ty} (x : IScalar ty)
 theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
   (hzero : y.val ≠ 0) (hNoOverflow : ¬ (x.val = IScalar.min ty ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y ∧ z.bv = BitVec.sdiv x.bv y.bv := by
-  conv => congr; ext; lhs; simp [HDiv.hDiv]
-  simp [div, tryMk, tryMkOpt, ofOption, ofIntCore, hzero, hNoOverflow]
+  conv => congr; ext; lhs; simp only [HDiv.hDiv]
+  simp only [div, bne_iff_ne, ne_eq, hzero, not_false_eq_true, ↓reduceIte, Int.reduceNeg,
+    Bool.and_eq_true, decide_eq_true_eq, hNoOverflow, ok.injEq, _root_.exists_eq_left', and_true]
   simp only [val]
-  simp [BitVec.sdiv_eq, BitVec.udiv_def]
+  simp only [BitVec.sdiv_eq, BitVec.udiv_eq, BitVec.udiv_def, BitVec.toNat_neg, bv_toInt_eq]
   have pow2Ineq : (2^(ty.numBits - 1) : Int) < 2^ty.numBits := by
     have := ty.numBits_nonzero
-    have : (0 : Int) < 2^(ty.numBits - 1) := by simp
+    have : (0 : Int) < 2^(ty.numBits - 1) := by simp only [Nat.ofNat_pos, pow_pos]
     have : ty.numBits = ty.numBits - 1 + 1 := by omega
     conv => rhs; rw [this]
     rw [Int.pow_succ']
@@ -155,17 +156,18 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
   . -- 0 ≤ x.bv.toInt
     -- 0 ≤ y.bv.toInt
     rw [BitVec.toInt_ofNat]
-    simp
+    simp only [Int.ofNat_ediv]
     have hx : x.bv.toNat = x.bv.toInt := by
       have := @BitVec.toInt_eq_msb_cond _ x.bv
       simp_all
     have hy : y.bv.toNat = y.bv.toInt := by
       have := @BitVec.toInt_eq_msb_cond _ y.bv
       simp_all
-    simp [hx, hy]
-    simp at hx hy
+    simp only [hx, bv_toInt_eq, hy]
+    simp only [bv_toInt_eq] at hx hy
     have := @Int.tdiv_nonneg x.val y.val (by omega) (by omega)
-    have : -2 ^ (ty.numBits - 1) ≤ 0 := by simp
+    have : -2 ^ (ty.numBits - 1) ≤ 0 := by
+      simp only [Left.neg_nonpos_iff, Nat.ofNat_nonneg, pow_nonneg]
     have : (x.val).tdiv y.val < 2 ^ (ty.numBits - 1) := by
       rw [Int.tdiv_eq_ediv] <;> try omega
       have := @Int.ediv_le_self x.val y.val (by omega)
@@ -178,9 +180,9 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
     -- y.bv.toInt < 0
     rename_i hxIneq hyIneq
     have hx := @BitVec.toInt_eq_msb_cond _ x.bv
-    simp [hxIneq] at hx
+    simp only [bv_toInt_eq, hxIneq, Bool.false_eq_true, ↓reduceIte] at hx
     have hy := @BitVec.toInt_eq_msb_cond _ y.bv
-    simp [hyIneq] at hy
+    simp only [bv_toInt_eq, hyIneq, ↓reduceIte, Nat.cast_pow, Nat.cast_ofNat] at hy
     have hyNeg : y.val < 0 := by
       have := @BitVec.msb_eq_toInt _ y.bv
       simp_all
@@ -188,51 +190,34 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
       have : Int.tdiv x.val (-y.val) ≤ 2^(ty.numBits - 1) := by
         rw [Int.tdiv_eq_ediv] <;> try omega
         have := @Int.ediv_le_self x.val (-y.val) (by omega)
-        simp at *
+        simp only [ne_eq, Int.reduceNeg, not_and, Int.ediv_neg, ge_iff_le] at *
         have := x.hmax
         omega
       replace this := Int.neg_le_neg this
-      simp at this
+      simp only [Int.tdiv_neg, neg_neg] at this
       apply this
     have hyToNat : 2 ^ ty.numBits - y.bv.toNat = (-y.val).toNat := by
       rw [hy]
-      simp
+      simp only [neg_sub, Int.toNat_sub']
       norm_cast
     rw [BitVec.toInt_neg, BitVec.toInt_ofNat]
-    simp
+    simp only [Int.ofNat_ediv, Int.ofNat_emod, Nat.cast_pow, Nat.cast_ofNat]
     rw [hyToNat]
     have : ((-y.val).toNat : Int) % 2^ty.numBits = -(y.val : Int) := by
       apply IScalar.neg_imp_neg_val_toNat_mod_pow_eq_neg_val
-      simp; omega
+      simp only [bv_toInt_eq]; omega
     rw [this]; clear this
-    simp
+    simp only [Int.ediv_neg, Int.bmod_neg_bmod, neg_neg]
     rw [← hx]
-    have : (- (x.val / y.val)).bmod (2^ty.numBits) = - (x.val / y.val) := by
-      have : -(x.val / ↑y) < 2 ^ (ty.numBits - 1) := by
-        have : x.val / (-y.val) < 2 ^ (ty.numBits - 1) := by
-          have := @Int.ediv_le_self x.val (-y.val) (by omega)
-          have := x.hmax
-          omega
-        simp at this
-        apply this
-      have : 0 ≤ -(x.val / ↑y) := by
-        have : - (x.val / y.val) = x.val / (-y.val) := by simp
-        rw [this]; clear this
-        apply Int.ediv_nonneg <;> omega
-      have := bmod_pow_numBits_eq_of_lt ty (- (x.val / y.val)) (by omega) (by omega)
-      rw [this]
-    rw [this]; clear this
-    simp
     have : (x.val / y.val).bmod (2^ty.numBits) = x.val / y.val := by
       have : -2 ^ (ty.numBits - 1) ≤ x.val / ↑y := by
         apply Int.le_of_neg_le_neg
-        have : - (x.val / y.val) = x.val / -y.val := by simp
+        have : - (x.val / y.val) = x.val / -y.val := by simp only [Int.ediv_neg]
         rw [this]; clear this
-        conv => rhs; simp
         have := @Int.ediv_le_self x.val (-y.val) (by omega)
         omega
       have : x.val / ↑y < 2 ^ (ty.numBits - 1) := by
-        have : 0 < 2 ^ (ty.numBits - 1) := by simp
+        have : 0 < 2 ^ (ty.numBits - 1) := by simp only [Nat.ofNat_pos, pow_pos]
         have : x.val / y.val ≤ 0 := by apply Int.ediv_nonpos <;> omega
         omega
       have := bmod_pow_numBits_eq_of_lt ty (x.val / y.val) (by omega) (by omega)
@@ -240,18 +225,18 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
 
     rw [this]; clear this
 
-    have : x.val.tdiv y.val = - (x.val.tdiv (-y.val)) := by simp
+    have : x.val.tdiv y.val = - (x.val.tdiv (-y.val)) := by simp only [Int.tdiv_neg, neg_neg]
     rw [this]
     rw [Int.tdiv_eq_ediv] <;> try omega
-    simp
+    simp only [Int.ediv_neg, neg_neg]
 
   . -- x.bv.toInt < 0
     -- 0 ≤ y.bv.toInt
     rename_i hxIneq hyIneq
     have hx := @BitVec.toInt_eq_msb_cond _ x.bv
-    simp [hxIneq] at hx
+    simp only [bv_toInt_eq, hxIneq, ↓reduceIte, Nat.cast_pow, Nat.cast_ofNat] at hx
     have hy := @BitVec.toInt_eq_msb_cond _ y.bv
-    simp [hyIneq] at hy
+    simp only [bv_toInt_eq, hyIneq, Bool.false_eq_true, ↓reduceIte] at hy
     have hxNeg : x.val < 0 := by
       have := @BitVec.msb_eq_toInt _ x.bv
       simp_all
@@ -264,15 +249,15 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
       omega
     have hxToNat : 2 ^ ty.numBits - x.bv.toNat = (-x.val).toNat := by
       rw [hx]
-      simp
+      simp only [neg_sub, Int.toNat_sub']
       norm_cast
     rw [BitVec.toInt_neg, BitVec.toInt_ofNat]
-    simp
+    simp only [Int.ofNat_ediv, Int.ofNat_emod, Nat.cast_pow, Nat.cast_ofNat]
 
     rw [hxToNat]
     have : ((-x.val).toNat : Int) % 2^ty.numBits = -(x.val : Int) := by
       apply IScalar.neg_imp_neg_val_toNat_mod_pow_eq_neg_val
-      simp; omega
+      simp only [bv_toInt_eq]; omega
     rw [this]; clear this
 
     /- We have to treat separately the degenerate case where `x` touches the upper bound
@@ -284,13 +269,13 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
         have := @Int.le_div_eq_bound_imp_eq (-x.val) y.val (2^(ty.numBits - 1))
           (by omega) (by omega) (by omega) (by omega)
         omega
-      simp [hx, hy]
+      simp only [hx, hy, Int.tdiv_one]
 
       have : Int.bmod (2 ^ (ty.numBits - 1)) (2 ^ ty.numBits) =
              - 2 ^ (ty.numBits - 1) :=
         Int.bmod_pow2_IScalarTy_numBits_minus_one ty
       rw [this]
-      simp
+      simp only [neg_neg]
       rw [this]
     . have : 0 ≤ (-x.val) / y.val := by
         apply Int.ediv_nonneg <;> omega
@@ -308,15 +293,15 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
         apply bmod_pow_numBits_eq_of_lt ty _ (by omega) (by omega)
       rw [this]; clear this
       rw [← Int.tdiv_eq_ediv] <;> try omega
-      simp
+      simp only [Int.neg_tdiv, neg_neg]
 
   . -- x.bv.toInt < 0
     -- y.bv.toInt < 0
     rename_i hxIneq hyIneq
     have hx := @BitVec.toInt_eq_msb_cond _ x.bv
-    simp [hxIneq] at hx
+    simp only [bv_toInt_eq, hxIneq, ↓reduceIte, Nat.cast_pow, Nat.cast_ofNat] at hx
     have hy := @BitVec.toInt_eq_msb_cond _ y.bv
-    simp [hyIneq] at hy
+    simp only [bv_toInt_eq, hyIneq, ↓reduceIte, Nat.cast_pow, Nat.cast_ofNat] at hy
     have hxNeg : x.val < 0 := by
       have := @BitVec.msb_eq_toInt _ x.bv
       simp_all
@@ -325,11 +310,11 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
       simp_all
     have hxToNat : 2 ^ ty.numBits - x.bv.toNat = (-x.val).toNat := by
       rw [hx]
-      simp
+      simp only [neg_sub, Int.toNat_sub']
       norm_cast
     have hyToNat : 2 ^ ty.numBits - y.bv.toNat = (-y.val).toNat := by
       rw [hy]
-      simp
+      simp only [neg_sub, Int.toNat_sub']
       norm_cast
     rw [hxToNat, hyToNat]
 
@@ -353,11 +338,12 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
         have := @Int.le_div_eq_bound_imp_eq (-x.val) (-y.val) (2^(ty.numBits - 1))
           (by omega) (by omega) (by omega) (by omega)
         omega
-      simp [hContra, min] at hNoOverflow
+      simp only [hContra, min, Int.reduceNeg, and_self, not_true_eq_false] at hNoOverflow
 
     have : -(2 ^ (ty.numBits - 1) : Int) ≤ ↑((-x.val).toNat / (-y.val).toNat) := by
       have := @Int.ediv_nonneg (-x.val).toNat (-y.val).toNat (by omega) (by omega)
-      have : -(2 ^ (ty.numBits - 1) : Int) ≤ 0 := by simp
+      have : -(2 ^ (ty.numBits - 1) : Int) ≤ 0 := by
+        simp only [Left.neg_nonpos_iff, Nat.ofNat_nonneg, pow_nonneg]
       omega
 
     have : ((-x.val).toNat / (-y.val).toNat) < (2 ^ (ty.numBits - 1) : Int) := by
@@ -375,7 +361,7 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
     have := bmod_pow_numBits_eq_of_lt ty ((-x.val).toNat / (-y.val).toNat : Nat) (by omega) (by omega)
     rw [this]
 
-    zify; simp
+    zify; simp only [Int.ofNat_toNat]
 
     have : (-x.val) ⊔ 0 = -x.val := by omega
     simp only [this]; clear this
@@ -383,7 +369,7 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
     simp only [this]; clear this
 
     rw [← Int.tdiv_eq_ediv] <;> try omega
-    simp
+    simp only [Int.tdiv_neg, Int.neg_tdiv, neg_neg]
 
 theorem U8.div_bv_spec (x : U8) {y : U8} (hnz : ↑y ≠ (0 : Nat)) :
   ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y ∧ z.bv = x.bv / y.bv :=

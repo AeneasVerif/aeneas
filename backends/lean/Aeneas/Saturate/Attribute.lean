@@ -12,6 +12,7 @@ namespace Saturate
 
 initialize registerTraceClass `Saturate
 initialize registerTraceClass `Saturate.attribute
+initialize registerTraceClass `Saturate.diagnostics
 
 namespace Attribute
 

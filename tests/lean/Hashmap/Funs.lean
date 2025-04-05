@@ -36,7 +36,7 @@ def core.marker.CopyhashmapFraction : core.marker.Copy Fraction := {
 
 /- [hashmap::{hashmap::HashMap<T>}::allocate_slots]: loop 0:
    Source: 'tests/src/hashmap.rs', lines 69:8-72:9 -/
-divergent def HashMap.allocate_slots_loop
+def HashMap.allocate_slots_loop
   {T : Type} (slots : alloc.vec.Vec (AList T)) (n : Usize) :
   Result (alloc.vec.Vec (AList T))
   :=
@@ -47,6 +47,7 @@ divergent def HashMap.allocate_slots_loop
     let n1 ← n - 1#usize
     HashMap.allocate_slots_loop slots1 n1
   else ok slots
+partial_fixpoint
 
 /- [hashmap::{hashmap::HashMap<T>}::allocate_slots]:
    Source: 'tests/src/hashmap.rs', lines 68:4-74:5 -/
@@ -84,7 +85,7 @@ def HashMap.new (T : Type) : Result (HashMap T) :=
 
 /- [hashmap::{hashmap::HashMap<T>}::clear]: loop 0:
    Source: 'tests/src/hashmap.rs', lines 105:8-108:9 -/
-divergent def HashMap.clear_loop
+def HashMap.clear_loop
   {T : Type} (slots : alloc.vec.Vec (AList T)) (i : Usize) :
   Result (alloc.vec.Vec (AList T))
   :=
@@ -99,6 +100,7 @@ divergent def HashMap.clear_loop
     let slots1 := index_mut_back AList.Nil
     HashMap.clear_loop slots1 i2
   else ok slots
+partial_fixpoint
 
 /- [hashmap::{hashmap::HashMap<T>}::clear]:
    Source: 'tests/src/hashmap.rs', lines 101:4-109:5 -/
@@ -114,7 +116,7 @@ def HashMap.len {T : Type} (self : HashMap T) : Result Usize :=
 
 /- [hashmap::{hashmap::HashMap<T>}::insert_in_list]: loop 0:
    Source: 'tests/src/hashmap.rs', lines 1:0-134:9 -/
-divergent def HashMap.insert_in_list_loop
+def HashMap.insert_in_list_loop
   {T : Type} (key : Usize) (value : T) (ls : AList T) :
   Result (Bool × (AList T))
   :=
@@ -127,6 +129,7 @@ divergent def HashMap.insert_in_list_loop
       let (b, tl1) ← HashMap.insert_in_list_loop key value tl
       ok (b, AList.Cons ckey cvalue tl1)
   | AList.Nil => ok (true, AList.Cons key value AList.Nil)
+partial_fixpoint
 
 /- [hashmap::{hashmap::HashMap<T>}::insert_in_list]:
    Source: 'tests/src/hashmap.rs', lines 118:4-135:5 -/
@@ -162,7 +165,7 @@ def HashMap.insert_no_resize
 
 /- [hashmap::{hashmap::HashMap<T>}::move_elements_from_list]: loop 0:
    Source: 'tests/src/hashmap.rs', lines 200:12-207:17 -/
-divergent def HashMap.move_elements_from_list_loop
+def HashMap.move_elements_from_list_loop
   {T : Type} (ntable : HashMap T) (ls : AList T) : Result (HashMap T) :=
   match ls with
   | AList.Cons k v tl =>
@@ -170,6 +173,7 @@ divergent def HashMap.move_elements_from_list_loop
     let ntable1 ← HashMap.insert_no_resize ntable k v
     HashMap.move_elements_from_list_loop ntable1 tl
   | AList.Nil => ok ntable
+partial_fixpoint
 
 /- [hashmap::{hashmap::HashMap<T>}::move_elements_from_list]:
    Source: 'tests/src/hashmap.rs', lines 197:4-210:5 -/
@@ -180,7 +184,7 @@ def HashMap.move_elements_from_list
 
 /- [hashmap::{hashmap::HashMap<T>}::move_elements]: loop 0:
    Source: 'tests/src/hashmap.rs', lines 186:8-193:9 -/
-divergent def HashMap.move_elements_loop
+def HashMap.move_elements_loop
   {T : Type} (ntable : HashMap T) (slots : alloc.vec.Vec (AList T)) (i : Usize)
   :
   Result ((HashMap T) × (alloc.vec.Vec (AList T)))
@@ -198,6 +202,7 @@ divergent def HashMap.move_elements_loop
     let slots1 := index_mut_back a1
     HashMap.move_elements_loop ntable1 slots1 i2
   else ok (ntable, slots)
+partial_fixpoint
 
 /- [hashmap::{hashmap::HashMap<T>}::move_elements]:
    Source: 'tests/src/hashmap.rs', lines 184:4-194:5 -/
@@ -241,7 +246,7 @@ def HashMap.insert
 
 /- [hashmap::{hashmap::HashMap<T>}::contains_key_in_list]: loop 0:
    Source: 'tests/src/hashmap.rs', lines 1:0-232:9 -/
-divergent def HashMap.contains_key_in_list_loop
+def HashMap.contains_key_in_list_loop
   {T : Type} (key : Usize) (ls : AList T) : Result Bool :=
   match ls with
   | AList.Cons ckey _ tl =>
@@ -249,6 +254,7 @@ divergent def HashMap.contains_key_in_list_loop
     then ok true
     else HashMap.contains_key_in_list_loop key tl
   | AList.Nil => ok false
+partial_fixpoint
 
 /- [hashmap::{hashmap::HashMap<T>}::contains_key_in_list]:
    Source: 'tests/src/hashmap.rs', lines 220:4-233:5 -/
@@ -272,7 +278,7 @@ def HashMap.contains_key
 
 /- [hashmap::{hashmap::HashMap<T>}::get_in_list]: loop 0:
    Source: 'tests/src/hashmap.rs', lines 239:8-247:5 -/
-divergent def HashMap.get_in_list_loop
+def HashMap.get_in_list_loop
   {T : Type} (key : Usize) (ls : AList T) : Result (Option T) :=
   match ls with
   | AList.Cons ckey cvalue tl =>
@@ -280,6 +286,7 @@ divergent def HashMap.get_in_list_loop
     then ok (some cvalue)
     else HashMap.get_in_list_loop key tl
   | AList.Nil => ok none
+partial_fixpoint
 
 /- [hashmap::{hashmap::HashMap<T>}::get_in_list]:
    Source: 'tests/src/hashmap.rs', lines 238:4-247:5 -/
@@ -303,7 +310,7 @@ def HashMap.get
 
 /- [hashmap::{hashmap::HashMap<T>}::get_mut_in_list]: loop 0:
    Source: 'tests/src/hashmap.rs', lines 256:8-264:5 -/
-divergent def HashMap.get_mut_in_list_loop
+def HashMap.get_mut_in_list_loop
   {T : Type} (ls : AList T) (key : Usize) :
   Result ((Option T) × (Option T → AList T))
   :=
@@ -326,6 +333,7 @@ divergent def HashMap.get_mut_in_list_loop
       ok (o, back1)
   | AList.Nil => let back := fun ret => AList.Nil
                  ok (none, back)
+partial_fixpoint
 
 /- [hashmap::{hashmap::HashMap<T>}::get_mut_in_list]:
    Source: 'tests/src/hashmap.rs', lines 255:4-264:5 -/
@@ -359,7 +367,7 @@ def HashMap.get_mut
 
 /- [hashmap::{hashmap::HashMap<T>}::remove_from_list]: loop 0:
    Source: 'tests/src/hashmap.rs', lines 1:0-298:17 -/
-divergent def HashMap.remove_from_list_loop
+def HashMap.remove_from_list_loop
   {T : Type} (key : Usize) (ls : AList T) : Result ((Option T) × (AList T)) :=
   match ls with
   | AList.Cons ckey t tl =>
@@ -374,6 +382,7 @@ divergent def HashMap.remove_from_list_loop
       let (o, tl1) ← HashMap.remove_from_list_loop key tl
       ok (o, AList.Cons ckey t tl1)
   | AList.Nil => ok (none, AList.Nil)
+partial_fixpoint
 
 /- [hashmap::{hashmap::HashMap<T>}::remove_from_list]:
    Source: 'tests/src/hashmap.rs', lines 275:4-301:5 -/

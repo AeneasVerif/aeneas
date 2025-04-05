@@ -68,22 +68,24 @@ let pattern_to_extract_name (span : Meta.span option) (name : pattern) :
   *)
   let simplify_name (id : pattern) =
     match id with
-    | [ PIdent ("core", []); PIdent ("option", []); PIdent ("Option", g) ] ->
+    | [
+     PIdent ("core", _, []); PIdent ("option", _, []); PIdent ("Option", _, g);
+    ] ->
         (* Option *)
-        [ PIdent ("Option", g) ]
-    | [ PIdent (id, []) ] when Collections.StringSet.mem id literal_type_nameset
-      ->
+        [ PIdent ("Option", 0, g) ]
+    | [ PIdent (id, _, []) ]
+      when Collections.StringSet.mem id literal_type_nameset ->
         (* Literals: we want to capitalize the first letter *)
-        [ PIdent (StringUtils.capitalize_first_letter id, []) ]
+        [ PIdent (StringUtils.capitalize_first_letter id, 0, []) ]
     | _ -> id
   in
   let visitor =
     object
       inherit [_] map_pattern as super
 
-      method! visit_PIdent _ s g =
-        if all_vars g then super#visit_PIdent () s []
-        else super#visit_PIdent () s g
+      method! visit_PIdent _ s d g =
+        if all_vars g then super#visit_PIdent () s d []
+        else super#visit_PIdent () s d g
 
       method! visit_EComp _ id =
         (* Simplify if this is [Option] *)
@@ -95,7 +97,7 @@ let pattern_to_extract_name (span : Meta.span option) (name : pattern) :
             (* Only keep the last ident *)
             let id = Collections.List.last id in
             match id with
-            | PIdent (_, _) -> super#visit_PImpl () (EComp [ id ])
+            | PIdent (_, _, _) -> super#visit_PImpl () (EComp [ id ])
             | PImpl _ -> craise_opt_span __FILE__ __LINE__ span "Unreachable")
         | _ -> super#visit_PImpl () ty
 
@@ -104,12 +106,12 @@ let pattern_to_extract_name (span : Meta.span option) (name : pattern) :
           match adt with
           | TTuple ->
               let l = List.length g in
-              if l = 2 then EComp [ PIdent ("Pair", []) ]
+              if l = 2 then EComp [ PIdent ("Pair", 0, []) ]
               else super#visit_EPrimAdt () adt g
-          | TArray -> EComp [ PIdent ("Array", []) ]
-          | TSlice -> EComp [ PIdent ("Slice", []) ]
+          | TArray -> EComp [ PIdent ("Array", 0, []) ]
+          | TSlice -> EComp [ PIdent ("Slice", 0, []) ]
         else if adt = TTuple && List.length g = 2 then
-          super#visit_EComp () [ PIdent ("Pair", g) ]
+          super#visit_EComp () [ PIdent ("Pair", 0, g) ]
         else super#visit_EPrimAdt () adt g
     end
   in

@@ -24,7 +24,7 @@ theorem mul2_add1_spec (x : U32) (h : 2 * x.val + 1 ≤ U32.max)
   : ∃ y, mul2_add1 x = ok y ∧
   ↑y = 2 * ↑x + (1 : Int)
   := by
-  rw [mul2_add1]
+  unfold mul2_add1
   have ⟨ x1, hEq1, hPost1 ⟩ := @U32.add_spec x x (by scalar_tac)
   simp [hEq1]
   have ⟨ x2, hEq2, hPost2 ⟩ := @U32.add_spec x1 1#u32 (by scalar_tac)
@@ -37,7 +37,7 @@ theorem mul2_add1_spec' (x : U32) (h : 2 * x.val + 1 ≤ U32.max)
   : ∃ y, mul2_add1 x = ok y ∧
   ↑y = 2 * ↑x + (1 : Int)
   := by
-  rw [mul2_add1]
+  unfold mul2_add1
   progress with U32.add_spec as ⟨ x1 ⟩
   progress as ⟨ x2 ⟩
   scalar_tac
@@ -53,7 +53,7 @@ def mul2_add1_add (x : U32) (y : U32) : Result U32 :=
 theorem mul2_add1_add_spec (x : U32) (y : U32) (h : 2 * x.val + 1 + y.val ≤ U32.max) :
   ∃ z, mul2_add1_add x y = ok z ∧
   ↑z = 2 * ↑x + (1 : Int) + ↑y := by
-  rw [mul2_add1_add]
+  unfold mul2_add1_add
   progress with mul2_add1_spec as ⟨ x1 ⟩
   progress as ⟨ x2 ⟩
   scalar_tac
@@ -78,7 +78,7 @@ open CList
 
 /- [tutorial::list_nth]:
    Source: 'src/lib.rs', lines 37:0-37:56 -/
-divergent def list_nth {T : Type} (l : CList T) (i : U32) : Result T :=
+def list_nth {T : Type} (l : CList T) (i : U32) : Result T :=
   match l with
   | CList.CCons x tl =>
     if i = 0#u32
@@ -87,6 +87,7 @@ divergent def list_nth {T : Type} (l : CList T) (i : U32) : Result T :=
          let i1 ← i - 1#u32
          list_nth tl i1
   | CList.CNil => Result.fail .panic
+partial_fixpoint
 
 /-- Theorem about `list_nth` -/
 theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
@@ -94,7 +95,7 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   ∃ x, list_nth l i = ok x ∧
   x = l.toList[i.val]!
   := by
-  rw [list_nth]
+  unfold list_nth
   split
   . split
     . simp_all
@@ -106,18 +107,19 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
 
 /- [tutorial::i32_id]:
    Source: 'src/lib.rs', lines 78:0-78:29 -/
-divergent def i32_id (i : I32) : Result I32 :=
+def i32_id (i : I32) : Result I32 :=
   if i = 0#i32
   then Result.ok 0#i32
   else do
        let i1 ← i - 1#i32
        let i2 ← i32_id i1
        i2 + 1#i32
+partial_fixpoint
 
 /-- Theorem about `i32_id` -/
 theorem i32_id_spec (n : I32) (h : 0 ≤ n.val) :
   i32_id n = ok n := by
-  rw [i32_id]
+  unfold i32_id
   split
   . simp [*]
   . progress as ⟨ n1 ⟩
@@ -135,21 +137,23 @@ decreasing_by
 
 /- [tutorial::even]:
    Source: 'src/lib.rs', lines 87:0-87:28 -/
-mutual divergent def even (i : U32) : Result Bool :=
+mutual def even (i : U32) : Result Bool :=
   if i = 0#u32
   then Result.ok true
   else do
        let i1 ← i - 1#u32
        odd i1
+partial_fixpoint
 
 /- [tutorial::odd]:
    Source: 'src/lib.rs', lines 96:0-96:27 -/
-divergent def odd (i : U32) : Result Bool :=
+def odd (i : U32) : Result Bool :=
   if i = 0#u32
   then Result.ok false
   else do
        let i1 ← i - 1#u32
        even i1
+partial_fixpoint
 
 end
 
@@ -158,7 +162,7 @@ mutual
 /-- The proof about `even` -/
 theorem even_spec (n : U32) :
   ∃ b, even n = ok b ∧ (b ↔ Even n.val) := by
-  rw [even]
+  unfold even
   split
   . simp [*]
   . progress as ⟨ n' ⟩
@@ -171,7 +175,7 @@ decreasing_by scalar_decr_tac
 /-- The proof about `odd` -/
 theorem odd_spec (n : U32) :
   ∃ b, odd n = ok b ∧ (b ↔ Odd n.val) := by
-  rw [odd]
+  unfold odd
   split
   . simp [*]
   . progress as ⟨ n' ⟩
@@ -185,7 +189,7 @@ end
 
 /- [tutorial::list_nth_mut1]: loop 0:
    Source: 'src/lib.rs', lines 107:0-116:1 -/
-divergent def list_nth_mut1_loop
+def list_nth_mut1_loop
   {T : Type} (l : CList T) (i : U32) :
   Result (T × (T → CList T))
   :=
@@ -203,6 +207,7 @@ divergent def list_nth_mut1_loop
         fun ret => CList.CCons x (back ret)
       Result.ok (t, back1)
   | CList.CNil => Result.fail .panic
+partial_fixpoint
 
 /- [tutorial::list_nth_mut1]:
    Source: 'src/lib.rs', lines 107:0-107:77 -/
@@ -460,12 +465,12 @@ theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
   x = l.toList[i.val]! ∧
   -- Specification of the backward function
   ∀ x', (back x').toList = l.toList.set i.val x' := by
-  rw [list_nth_mut1, list_nth_mut1_loop]
+  unfold list_nth_mut1 list_nth_mut1_loop
   sorry
 
 /- [tutorial::list_tail]: loop 0:
    Source: 'src/lib.rs', lines 118:0-123:1 -/
-divergent def list_tail_loop
+def list_tail_loop
   {T : Type} (l : CList T) :
   Result ((CList T) × (CList T → CList T))
   :=
@@ -477,6 +482,7 @@ divergent def list_tail_loop
       fun ret => CList.CCons t (back ret)
     Result.ok (c, back1)
   | CList.CNil => Result.ok (CList.CNil, fun ret => ret)
+partial_fixpoint
 
 /- [tutorial::list_tail]:
    Source: 'src/lib.rs', lines 118:0-118:68 -/
@@ -501,7 +507,7 @@ def append_in_place
 theorem list_tail_spec {T : Type} (l : CList T) :
   ∃ back, list_tail l = ok (CList.CNil, back) ∧
   ∀ tl', (back tl').toList = l.toList ++ tl'.toList := by
-  rw [list_tail, list_tail_loop]
+  unfold list_tail list_tail_loop
   sorry
 
 /-- Theorem about `append_in_place`: exercise -/
@@ -509,23 +515,24 @@ theorem list_tail_spec {T : Type} (l : CList T) :
 theorem append_in_place_spec {T : Type} (l0 l1 : CList T) :
   ∃ l2, append_in_place l0 l1 = ok l2 ∧
   l2.toList = l0.toList ++ l1.toList := by
-  rw [append_in_place]
+  unfold append_in_place
   sorry
 
 /- [tutorial::reverse]: loop 0:
    Source: 'src/lib.rs', lines 147:4-154:1 -/
-divergent def reverse_loop
+def reverse_loop
   {T : Type} (l : CList T) (out : CList T) : Result (CList T) :=
   match l with
   | CList.CCons hd tl => reverse_loop tl (CList.CCons hd out)
   | CList.CNil => Result.ok out
+partial_fixpoint
 
 @[progress]
 theorem reverse_loop_spec {T : Type} (l : CList T) (out : CList T) :
   ∃ l', reverse_loop l out = ok l' ∧
   True -- Leaving the post-condition as an exercise
   := by
-  rw [reverse_loop]
+  unfold reverse_loop
   sorry
 
 /- [tutorial::reverse]:
@@ -537,7 +544,7 @@ theorem reverse_spec {T : Type} (l : CList T) :
   ∃ l', reverse l = ok l' ∧
   True -- Leaving the post-condition as an exercise
   := by
-  rw [reverse]
+  unfold reverse
   sorry
 
 /-
@@ -555,7 +562,7 @@ attribute [-simp] Int.reducePow Nat.reducePow
 
 /- [tutorial::zero]: loop 0:
    Source: 'src/lib.rs', lines 6:4-11:1 -/
-divergent def zero_loop
+def zero_loop
   (x : alloc.vec.Vec U32) (i : Usize) : Result (alloc.vec.Vec U32) :=
   let i1 := alloc.vec.Vec.len x
   if i < i1
@@ -568,7 +575,7 @@ divergent def zero_loop
     let x1 := index_mut_back 0#u32
     zero_loop x1 i2
   else Result.ok x
-
+partial_fixpoint
 
 /-- Auxiliary definitions to interpret a vector of u32 as a mathematical integer -/
 @[simp]
@@ -597,7 +604,7 @@ theorem zero_loop_spec
     x'.length = x.length ∧
     (∀ j, j < i.val → x'[j]! = x[j]!) ∧
     (∀ j, i.val ≤ j → j < x.length → x'[j]! = 0#u32) := by
-  rw [zero_loop]
+  unfold zero_loop
   simp
   sorry
 
@@ -641,12 +648,12 @@ theorem zero_spec (x : alloc.vec.Vec U32) :
     zero x = ok x' ∧
     x'.length = x.length ∧
     toInt x' = 0 := by
-  rw [zero]
+  unfold zero
   sorry
 
 /- [tutorial::add_no_overflow]: loop 0:
    Source: 'src/lib.rs', lines 19:4-24:1 -/
-divergent def add_no_overflow_loop
+def add_no_overflow_loop
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (i : Usize) :
   Result (alloc.vec.Vec U32)
   :=
@@ -664,6 +671,7 @@ divergent def add_no_overflow_loop
     let x1 := index_mut_back i4
     add_no_overflow_loop x1 y i5
   else Result.ok x
+partial_fixpoint
 
 /-- You will need this lemma for the proof of `add_no_overflow_loop_spec`.
 
@@ -708,12 +716,11 @@ theorem add_no_overflow_loop_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (i : Usize)
   (hLength : x.length = y.length)
   -- No overflow occurs when we add the individual thunks
-  (hNoOverflow : ∀ (j : Nat), i.val ≤ j → j < x.length → x[j]!.val + y[j]!.val ≤ U32.max)
-  (hi : i.val ≤ x.length) :
+  (hNoOverflow : ∀ (j : Nat), i.val ≤ j → j < x.length → x[j]!.val + y[j]!.val ≤ U32.max) :
   ∃ x', add_no_overflow_loop x y i = ok x' ∧
   x'.length = x.length ∧
   toInt x' = toInt x + 2 ^ (32 * i.val) * toInt (y.val.drop i.val) := by
-  rw [add_no_overflow_loop]
+  unfold add_no_overflow_loop
   simp
   sorry
 
@@ -732,12 +739,12 @@ theorem add_no_overflow_spec (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
   ∃ x', add_no_overflow x y = ok x' ∧
   x'.length = y.length ∧
   toInt x' = toInt x + toInt y := by
-  rw [add_no_overflow]
+  unfold add_no_overflow
   sorry
 
 /- [tutorial::add_with_carry]: loop 0:
    Source: 'src/lib.rs', lines 39:4-50:1 -/
-divergent def add_with_carry_loop
+def add_with_carry_loop
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (c0 : U8) (i : Usize) :
   Result (U8 × (alloc.vec.Vec U32))
   :=
@@ -765,6 +772,7 @@ divergent def add_with_carry_loop
     let x1 := index_mut_back sum1
     add_with_carry_loop x1 y c01 i7
   else Result.ok (c0, x)
+partial_fixpoint
 
 /-- The proof about `add_with_carry_loop` -/
 @[progress]
@@ -778,7 +786,7 @@ theorem add_with_carry_loop_spec
   c1.val ≤ 1 ∧
   toInt x' + c1.val * 2 ^ (32 * x'.length) =
     toInt x + 2 ^ (32 * i.val) * toInt (y.val.drop i.val) + c0.val * 2 ^ (32 * i.val) := by
-  rw [add_with_carry_loop]
+  unfold add_with_carry_loop
   simp
   sorry
 
@@ -799,7 +807,7 @@ theorem add_with_carry_spec
   x'.length = x.length ∧
   c.val ≤ 1 ∧
   toInt x' + c.val * 2 ^ (32 * x'.length) = toInt x + toInt y := by
-  rw [add_with_carry]
+  unfold add_with_carry
   sorry
 
 /- Bonus exercises -/
@@ -824,7 +832,7 @@ def get_or_zero (y : alloc.vec.Vec U32) (i : Usize) : Result U32 :=
 
 /- [tutorial::add]: loop 0:
    Source: 'src/lib.rs', lines 60:4-76:1 -/
-divergent def add_loop
+def add_loop
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (max1 : Usize) (c0 : U8)
   (i : Usize) :
   Result (alloc.vec.Vec U32)
@@ -855,6 +863,7 @@ divergent def add_loop
          let i1 := UScalar.cast .U32 c0
          alloc.vec.Vec.push x i1
     else Result.ok x
+partial_fixpoint
 
 /- [tutorial::add]:
    Source: 'src/lib.rs', lines 55:0-55:38 -/

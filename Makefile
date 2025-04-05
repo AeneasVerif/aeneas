@@ -175,6 +175,11 @@ test-%: build-dev
 	$(TEST_RUNNER_EXE) $(CHARON_EXE) $(AENEAS_EXE) $(LLBC_DIR) $(INPUTS_DIR)/"$*" $(AENEAS_OPTIONS)
 	echo "# Test $* done"
 
+# Replay the Lean tests and time them
+.PHONY: timed-lean
+timed-lean:
+	cd tests/lean && find . -type f -iname "*.lean" -not -path "./.lake/*" -exec printf "\n{}\n" \; -exec lake env time lean {} \; >& timing.out
+
 # =============================================================================
 # Nix
 # =============================================================================

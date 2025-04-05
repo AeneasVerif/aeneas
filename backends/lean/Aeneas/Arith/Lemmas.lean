@@ -6,6 +6,33 @@ import Init.Data.BitVec.Lemmas
 
 namespace Aeneas.Arith
 
+/-- Small helper
+
+    We used to use this for the list definitions, as some definitions like `index` used to
+    manipulate integers and not natural numbers.
+
+    We cover a set of cases which might imply inequality, to make sure that using
+    this as the precondition of a `simp` lemma will allow the lemma to get correctly
+    triggered.
+    TODO: there should be something more systematic to do, with discharged procedures
+    or simprocs I guess. -/
+@[simp]
+abbrev Int.not_eq (i j : Int) : Prop :=
+  i ≠ j ∨ j ≠ i ∨ i < j ∨ j < i
+
+theorem Int.not_eq_imp_not_eq {i j} : Int.not_eq i j → i ≠ j := by
+  intro h g
+  simp_all
+
+@[simp]
+abbrev Nat.not_eq (i j : Nat) : Prop :=
+  i ≠ j ∨ j ≠ i ∨ i < j ∨ j < i
+
+theorem Nat.not_eq_imp_not_eq {i j} : Nat.not_eq i j → i ≠ j := by
+  intro h g
+  simp_all
+
+
 @[nonlin_scalar_tac n % m]
 theorem Nat.mod_zero_or_lt (n m : Nat) : m = 0 ∨ (n % m < m) := by
   dcases h: m = 0
@@ -210,7 +237,12 @@ theorem ZMod_nat_cast_eq_nat_cast_iff (n : ℕ) (a b : ℕ) :
   simp at this
   apply this
 
-theorem eq_mod_iff_eq_ZMod (n : ℕ) (a b : ℤ) :
+theorem Nat.eq_mod_iff_eq_ZMod (n : ℕ) (a b : Nat) :
+  (a % n = b % n) ↔ ((a : ZMod n) = (b : ZMod n)) := by
+  rw [ZMod.natCast_eq_natCast_iff a b n]
+  tauto
+
+theorem Int.eq_mod_iff_eq_ZMod (n : ℕ) (a b : ℤ) :
   (a % n = b % n) ↔ ((a : ZMod n) = (b : ZMod n)) := by
   rw [ZMod.intCast_eq_intCast_iff a b n]
   tauto
@@ -227,12 +259,7 @@ theorem ZMod_nat_eq_imp_mod_eq {n : ℕ} {a b : Nat} (h : (a : ZMod n) = (b : ZM
   apply ZMod_eq_imp_mod_eq
   simp [*]
 
--- TODO: restrict the set of theorems used by `simp`, do more things, etc.
-macro "zmodify" : tactic =>
-  `(tactic |
-    (apply ZMod_eq_imp_mod_eq; simp))
-
-theorem mod_eq_imp_ZMod_eq {n : ℕ} {a b : ℤ}
+theorem Int.mod_eq_imp_ZMod_eq {n : ℕ} {a b : ℤ}
   (h : a % n = b % n) :
   (a : ZMod n) = (b : ZMod n) :=
   (@ZMod_int_cast_eq_int_cast_iff n a b).mpr h
@@ -288,7 +315,7 @@ theorem div_to_ZMod {n : ℕ} {a : ℤ} {b : Nat} [NeZero n]
       rw [this]
       rw [hgcd]
       simp
-  have h1 := mod_eq_imp_ZMod_eq h
+  have h1 := Int.mod_eq_imp_ZMod_eq h
   rw [h1]
   simp
 
@@ -346,7 +373,7 @@ theorem ZMod.castInt_val_sub {n : ℕ} [inst: NeZero n] {a b : ZMod n} :
   ring_nf at this
   rw [this]
   push_cast
-  rw [eq_mod_iff_eq_ZMod]
+  rw [Int.eq_mod_iff_eq_ZMod]
   simp
   ring_nf
 
@@ -413,7 +440,7 @@ theorem Int.bmod_pow2_eq_of_inBounds (n : ℕ) (x : Int)
       have : x + 2^(n+1) < 2^(n+1) := by omega
       have := @Int.emod_eq_of_lt (x + 2^(n + 1)) (2^(n+1)) (by omega) (by omega)
       rw [← this]
-      have := Arith.eq_mod_iff_eq_ZMod (2^(n+1))
+      have := Int.eq_mod_iff_eq_ZMod (2^(n+1))
       simp at this
       rw [this]
       simp

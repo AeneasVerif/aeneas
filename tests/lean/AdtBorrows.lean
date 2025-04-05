@@ -377,8 +377,7 @@ inductive List (T : Type) where
 
 /- [adt_borrows::nth_shared]: loop 0:
    Source: 'tests/src/adt-borrows.rs', lines 261:4-270:1 -/
-divergent def nth_shared_loop
-  {T : Type} (ls : List T) (i : U32) : Result (Option T) :=
+def nth_shared_loop {T : Type} (ls : List T) (i : U32) : Result (Option T) :=
   match ls with
   | List.Cons x tl =>
     if i = 0#u32
@@ -387,6 +386,7 @@ divergent def nth_shared_loop
          let i1 ← i - 1#u32
          nth_shared_loop tl i1
   | List.Nil => ok none
+partial_fixpoint
 
 /- [adt_borrows::nth_shared]:
    Source: 'tests/src/adt-borrows.rs', lines 260:0-270:1 -/
@@ -396,7 +396,7 @@ def nth_shared {T : Type} (ls : List T) (i : U32) : Result (Option T) :=
 
 /- [adt_borrows::nth_mut]: loop 0:
    Source: 'tests/src/adt-borrows.rs', lines 273:4-282:1 -/
-divergent def nth_mut_loop
+def nth_mut_loop
   {T : Type} (ls : List T) (i : U32) :
   Result ((Option T) × (Option T → List T))
   :=
@@ -420,6 +420,7 @@ divergent def nth_mut_loop
       ok (o, back1)
   | List.Nil => let back := fun ret => List.Nil
                 ok (none, back)
+partial_fixpoint
 
 /- [adt_borrows::nth_mut]:
    Source: 'tests/src/adt-borrows.rs', lines 272:0-282:1 -/
@@ -440,7 +441,7 @@ def update_array_mut_borrow
 
 /- [adt_borrows::array_mut_borrow_loop1]: loop 0:
    Source: 'tests/src/adt-borrows.rs', lines 289:4-291:5 -/
-divergent def array_mut_borrow_loop1_loop
+def array_mut_borrow_loop1_loop
   (b : Bool) (a : Array U32 32#usize) : Result (Array U32 32#usize) :=
   if b
   then
@@ -449,6 +450,7 @@ divergent def array_mut_borrow_loop1_loop
     let a2 ← array_mut_borrow_loop1_loop true a1
     ok (update_array_mut_borrow_back a2)
   else ok a
+partial_fixpoint
 
 /- [adt_borrows::array_mut_borrow_loop1]:
    Source: 'tests/src/adt-borrows.rs', lines 288:0-292:1 -/
@@ -459,7 +461,7 @@ def array_mut_borrow_loop1
 
 /- [adt_borrows::array_mut_borrow_loop2]: loop 0:
    Source: 'tests/src/adt-borrows.rs', lines 295:4-297:5 -/
-divergent def array_mut_borrow_loop2_loop
+def array_mut_borrow_loop2_loop
   (b : Bool) (a : Array U32 32#usize) :
   Result ((Array U32 32#usize) × (Array U32 32#usize → Array U32 32#usize))
   :=
@@ -472,6 +474,7 @@ divergent def array_mut_borrow_loop2_loop
                             update_array_mut_borrow_back a3
     ok (a2, back1)
   else ok (a, fun ret => ret)
+partial_fixpoint
 
 /- [adt_borrows::array_mut_borrow_loop2]:
    Source: 'tests/src/adt-borrows.rs', lines 294:0-299:1 -/
@@ -489,13 +492,14 @@ def copy_shared_array (a : Array U32 32#usize) : Result (Array U32 32#usize) :=
 
 /- [adt_borrows::array_shared_borrow_loop1]: loop 0:
    Source: 'tests/src/adt-borrows.rs', lines 306:4-308:5 -/
-divergent def array_shared_borrow_loop1_loop
+def array_shared_borrow_loop1_loop
   (b : Bool) (a : Array U32 32#usize) : Result Unit :=
   if b
   then do
        let a1 ← copy_shared_array a
        array_shared_borrow_loop1_loop true a1
   else ok ()
+partial_fixpoint
 
 /- [adt_borrows::array_shared_borrow_loop1]:
    Source: 'tests/src/adt-borrows.rs', lines 305:0-309:1 -/
@@ -506,13 +510,14 @@ def array_shared_borrow_loop1
 
 /- [adt_borrows::array_shared_borrow_loop2]: loop 0:
    Source: 'tests/src/adt-borrows.rs', lines 312:4-314:5 -/
-divergent def array_shared_borrow_loop2_loop
+def array_shared_borrow_loop2_loop
   (b : Bool) (a : Array U32 32#usize) : Result (Array U32 32#usize) :=
   if b
   then do
        let a1 ← copy_shared_array a
        array_shared_borrow_loop2_loop true a1
   else ok a
+partial_fixpoint
 
 /- [adt_borrows::array_shared_borrow_loop2]:
    Source: 'tests/src/adt-borrows.rs', lines 311:0-316:1 -/

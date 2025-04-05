@@ -10,13 +10,14 @@ namespace loops
 
 /- [loops::sum]: loop 0:
    Source: 'tests/src/loops.rs', lines 11:4-14:5 -/
-divergent def sum_loop (max : U32) (i : U32) (s : U32) : Result U32 :=
+def sum_loop (max : U32) (i : U32) (s : U32) : Result U32 :=
   if i < max
   then do
        let s1 ← s + i
        let i1 ← i + 1#u32
        sum_loop max i1 s1
   else s * 2#u32
+partial_fixpoint
 
 /- [loops::sum]:
    Source: 'tests/src/loops.rs', lines 8:0-18:1 -/
@@ -25,8 +26,7 @@ divergent def sum_loop (max : U32) (i : U32) (s : U32) : Result U32 :=
 
 /- [loops::sum_with_mut_borrows]: loop 0:
    Source: 'tests/src/loops.rs', lines 26:4-31:5 -/
-divergent def sum_with_mut_borrows_loop
-  (max : U32) (i : U32) (s : U32) : Result U32 :=
+def sum_with_mut_borrows_loop (max : U32) (i : U32) (s : U32) : Result U32 :=
   if i < max
   then
     do
@@ -34,6 +34,7 @@ divergent def sum_with_mut_borrows_loop
     let mi ← i + 1#u32
     sum_with_mut_borrows_loop max mi ms
   else s * 2#u32
+partial_fixpoint
 
 /- [loops::sum_with_mut_borrows]:
    Source: 'tests/src/loops.rs', lines 23:0-35:1 -/
@@ -43,7 +44,7 @@ def sum_with_mut_borrows (max : U32) : Result U32 :=
 
 /- [loops::sum_with_shared_borrows]: loop 0:
    Source: 'tests/src/loops.rs', lines 41:4-48:5 -/
-divergent def sum_with_shared_borrows_loop
+def sum_with_shared_borrows_loop
   (max : U32) (i : U32) (s : U32) : Result U32 :=
   if i < max
   then
@@ -52,6 +53,7 @@ divergent def sum_with_shared_borrows_loop
     let s1 ← s + i1
     sum_with_shared_borrows_loop max i1 s1
   else s * 2#u32
+partial_fixpoint
 
 /- [loops::sum_with_shared_borrows]:
    Source: 'tests/src/loops.rs', lines 38:0-52:1 -/
@@ -61,7 +63,7 @@ def sum_with_shared_borrows (max : U32) : Result U32 :=
 
 /- [loops::sum_array]: loop 0:
    Source: 'tests/src/loops.rs', lines 57:4-60:5 -/
-divergent def sum_array_loop
+def sum_array_loop
   {N : Usize} (a : Array U32 N) (i : Usize) (s : U32) : Result U32 :=
   if i < N
   then
@@ -71,6 +73,7 @@ divergent def sum_array_loop
     let i2 ← i + 1#usize
     sum_array_loop a i2 s1
   else ok s
+partial_fixpoint
 
 /- [loops::sum_array]:
    Source: 'tests/src/loops.rs', lines 54:0-62:1 -/
@@ -80,7 +83,7 @@ def sum_array {N : Usize} (a : Array U32 N) : Result U32 :=
 
 /- [loops::clear]: loop 0:
    Source: 'tests/src/loops.rs', lines 68:4-71:5 -/
-divergent def clear_loop
+def clear_loop
   (v : alloc.vec.Vec U32) (i : Usize) : Result (alloc.vec.Vec U32) :=
   let i1 := alloc.vec.Vec.len v
   if i < i1
@@ -93,6 +96,7 @@ divergent def clear_loop
     let v1 := index_mut_back 0#u32
     clear_loop v1 i2
   else ok v
+partial_fixpoint
 
 /- [loops::clear]:
    Source: 'tests/src/loops.rs', lines 66:0-72:1 -/
@@ -108,12 +112,13 @@ inductive List (T : Type) where
 
 /- [loops::list_mem]: loop 0:
    Source: 'tests/src/loops.rs', lines 81:4-89:1 -/
-divergent def list_mem_loop (x : U32) (ls : List U32) : Result Bool :=
+def list_mem_loop (x : U32) (ls : List U32) : Result Bool :=
   match ls with
   | List.Cons y tl => if y = x
                       then ok true
                       else list_mem_loop x tl
   | List.Nil => ok false
+partial_fixpoint
 
 /- [loops::list_mem]:
    Source: 'tests/src/loops.rs', lines 80:0-89:1 -/
@@ -123,7 +128,7 @@ def list_mem (x : U32) (ls : List U32) : Result Bool :=
 
 /- [loops::list_nth_mut_loop]: loop 0:
    Source: 'tests/src/loops.rs', lines 93:4-102:1 -/
-divergent def list_nth_mut_loop_loop
+def list_nth_mut_loop_loop
   {T : Type} (ls : List T) (i : U32) : Result (T × (T → List T)) :=
   match ls with
   | List.Cons x tl =>
@@ -138,6 +143,7 @@ divergent def list_nth_mut_loop_loop
                               List.Cons x tl1
       ok (t, back1)
   | List.Nil => fail panic
+partial_fixpoint
 
 /- [loops::list_nth_mut_loop]:
    Source: 'tests/src/loops.rs', lines 92:0-102:1 -/
@@ -148,8 +154,7 @@ def list_nth_mut_loop
 
 /- [loops::list_nth_shared_loop]: loop 0:
    Source: 'tests/src/loops.rs', lines 106:4-115:1 -/
-divergent def list_nth_shared_loop_loop
-  {T : Type} (ls : List T) (i : U32) : Result T :=
+def list_nth_shared_loop_loop {T : Type} (ls : List T) (i : U32) : Result T :=
   match ls with
   | List.Cons x tl =>
     if i = 0#u32
@@ -158,6 +163,7 @@ divergent def list_nth_shared_loop_loop
          let i1 ← i - 1#u32
          list_nth_shared_loop_loop tl i1
   | List.Nil => fail panic
+partial_fixpoint
 
 /- [loops::list_nth_shared_loop]:
    Source: 'tests/src/loops.rs', lines 105:0-115:1 -/
@@ -167,7 +173,7 @@ def list_nth_shared_loop {T : Type} (ls : List T) (i : U32) : Result T :=
 
 /- [loops::get_elem_mut]: loop 0:
    Source: 'tests/src/loops.rs', lines 119:4-131:1 -/
-divergent def get_elem_mut_loop
+def get_elem_mut_loop
   (x : Usize) (ls : List Usize) : Result (Usize × (Usize → List Usize)) :=
   match ls with
   | List.Cons y tl =>
@@ -181,6 +187,7 @@ divergent def get_elem_mut_loop
                               List.Cons y tl1
       ok (i, back1)
   | List.Nil => fail panic
+partial_fixpoint
 
 /- [loops::get_elem_mut]:
    Source: 'tests/src/loops.rs', lines 117:0-131:1 -/
@@ -199,13 +206,13 @@ def get_elem_mut
 
 /- [loops::get_elem_shared]: loop 0:
    Source: 'tests/src/loops.rs', lines 135:4-147:1 -/
-divergent def get_elem_shared_loop
-  (x : Usize) (ls : List Usize) : Result Usize :=
+def get_elem_shared_loop (x : Usize) (ls : List Usize) : Result Usize :=
   match ls with
   | List.Cons y tl => if y = x
                       then ok y
                       else get_elem_shared_loop x tl
   | List.Nil => fail panic
+partial_fixpoint
 
 /- [loops::get_elem_shared]:
    Source: 'tests/src/loops.rs', lines 133:0-147:1 -/
@@ -230,7 +237,7 @@ def id_shared {T : Type} (ls : List T) : Result (List T) :=
 
 /- [loops::list_nth_mut_loop_with_id]: loop 0:
    Source: 'tests/src/loops.rs', lines 160:4-169:1 -/
-divergent def list_nth_mut_loop_with_id_loop
+def list_nth_mut_loop_with_id_loop
   {T : Type} (i : U32) (ls : List T) : Result (T × (T → List T)) :=
   match ls with
   | List.Cons x tl =>
@@ -245,6 +252,7 @@ divergent def list_nth_mut_loop_with_id_loop
                               List.Cons x tl1
       ok (t, back1)
   | List.Nil => fail panic
+partial_fixpoint
 
 /- [loops::list_nth_mut_loop_with_id]:
    Source: 'tests/src/loops.rs', lines 158:0-169:1 -/
@@ -259,7 +267,7 @@ def list_nth_mut_loop_with_id
 
 /- [loops::list_nth_shared_loop_with_id]: loop 0:
    Source: 'tests/src/loops.rs', lines 174:4-183:1 -/
-divergent def list_nth_shared_loop_with_id_loop
+def list_nth_shared_loop_with_id_loop
   {T : Type} (i : U32) (ls : List T) : Result T :=
   match ls with
   | List.Cons x tl =>
@@ -269,6 +277,7 @@ divergent def list_nth_shared_loop_with_id_loop
          let i1 ← i - 1#u32
          list_nth_shared_loop_with_id_loop i1 tl
   | List.Nil => fail panic
+partial_fixpoint
 
 /- [loops::list_nth_shared_loop_with_id]:
    Source: 'tests/src/loops.rs', lines 172:0-183:1 -/
@@ -280,7 +289,7 @@ def list_nth_shared_loop_with_id
 
 /- [loops::list_nth_mut_loop_pair]: loop 0:
    Source: 'tests/src/loops.rs', lines 194:8-194:24 -/
-divergent def list_nth_mut_loop_pair_loop
+def list_nth_mut_loop_pair_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → List T) × (T → List T))
   :=
@@ -304,6 +313,7 @@ divergent def list_nth_mut_loop_pair_loop
         ok (p, back'a1, back'b1)
     | List.Nil => fail panic
   | List.Nil => fail panic
+partial_fixpoint
 
 /- [loops::list_nth_mut_loop_pair]:
    Source: 'tests/src/loops.rs', lines 188:0-209:1 -/
@@ -316,7 +326,7 @@ def list_nth_mut_loop_pair
 
 /- [loops::list_nth_shared_loop_pair]: loop 0:
    Source: 'tests/src/loops.rs', lines 218:8-218:24 -/
-divergent def list_nth_shared_loop_pair_loop
+def list_nth_shared_loop_pair_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
   match ls0 with
   | List.Cons x0 tl0 =>
@@ -329,6 +339,7 @@ divergent def list_nth_shared_loop_pair_loop
            list_nth_shared_loop_pair_loop tl0 tl1 i1
     | List.Nil => fail panic
   | List.Nil => fail panic
+partial_fixpoint
 
 /- [loops::list_nth_shared_loop_pair]:
    Source: 'tests/src/loops.rs', lines 212:0-233:1 -/
@@ -339,7 +350,7 @@ def list_nth_shared_loop_pair
 
 /- [loops::list_nth_mut_loop_pair_merge]: loop 0:
    Source: 'tests/src/loops.rs', lines 242:4-252:1 -/
-divergent def list_nth_mut_loop_pair_merge_loop
+def list_nth_mut_loop_pair_merge_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × ((T × T) → ((List T) × (List T))))
   :=
@@ -364,6 +375,7 @@ divergent def list_nth_mut_loop_pair_merge_loop
         ok (p, back1)
     | List.Nil => fail panic
   | List.Nil => fail panic
+partial_fixpoint
 
 /- [loops::list_nth_mut_loop_pair_merge]:
    Source: 'tests/src/loops.rs', lines 237:0-252:1 -/
@@ -376,7 +388,7 @@ def list_nth_mut_loop_pair_merge
 
 /- [loops::list_nth_shared_loop_pair_merge]: loop 0:
    Source: 'tests/src/loops.rs', lines 260:4-270:1 -/
-divergent def list_nth_shared_loop_pair_merge_loop
+def list_nth_shared_loop_pair_merge_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
   match ls0 with
   | List.Cons x0 tl0 =>
@@ -390,6 +402,7 @@ divergent def list_nth_shared_loop_pair_merge_loop
         list_nth_shared_loop_pair_merge_loop tl0 tl1 i1
     | List.Nil => fail panic
   | List.Nil => fail panic
+partial_fixpoint
 
 /- [loops::list_nth_shared_loop_pair_merge]:
    Source: 'tests/src/loops.rs', lines 255:0-270:1 -/
@@ -400,7 +413,7 @@ def list_nth_shared_loop_pair_merge
 
 /- [loops::list_nth_mut_shared_loop_pair]: loop 0:
    Source: 'tests/src/loops.rs', lines 278:4-288:1 -/
-divergent def list_nth_mut_shared_loop_pair_loop
+def list_nth_mut_shared_loop_pair_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → List T))
   :=
@@ -420,6 +433,7 @@ divergent def list_nth_mut_shared_loop_pair_loop
         ok (p, back1)
     | List.Nil => fail panic
   | List.Nil => fail panic
+partial_fixpoint
 
 /- [loops::list_nth_mut_shared_loop_pair]:
    Source: 'tests/src/loops.rs', lines 273:0-288:1 -/
@@ -432,7 +446,7 @@ def list_nth_mut_shared_loop_pair
 
 /- [loops::list_nth_mut_shared_loop_pair_merge]: loop 0:
    Source: 'tests/src/loops.rs', lines 297:4-307:1 -/
-divergent def list_nth_mut_shared_loop_pair_merge_loop
+def list_nth_mut_shared_loop_pair_merge_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → List T))
   :=
@@ -452,6 +466,7 @@ divergent def list_nth_mut_shared_loop_pair_merge_loop
         ok (p, back1)
     | List.Nil => fail panic
   | List.Nil => fail panic
+partial_fixpoint
 
 /- [loops::list_nth_mut_shared_loop_pair_merge]:
    Source: 'tests/src/loops.rs', lines 292:0-307:1 -/
@@ -464,7 +479,7 @@ def list_nth_mut_shared_loop_pair_merge
 
 /- [loops::list_nth_shared_mut_loop_pair]: loop 0:
    Source: 'tests/src/loops.rs', lines 316:4-326:1 -/
-divergent def list_nth_shared_mut_loop_pair_loop
+def list_nth_shared_mut_loop_pair_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → List T))
   :=
@@ -484,6 +499,7 @@ divergent def list_nth_shared_mut_loop_pair_loop
         ok (p, back1)
     | List.Nil => fail panic
   | List.Nil => fail panic
+partial_fixpoint
 
 /- [loops::list_nth_shared_mut_loop_pair]:
    Source: 'tests/src/loops.rs', lines 311:0-326:1 -/
@@ -496,7 +512,7 @@ def list_nth_shared_mut_loop_pair
 
 /- [loops::list_nth_shared_mut_loop_pair_merge]: loop 0:
    Source: 'tests/src/loops.rs', lines 335:4-345:1 -/
-divergent def list_nth_shared_mut_loop_pair_merge_loop
+def list_nth_shared_mut_loop_pair_merge_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → List T))
   :=
@@ -516,6 +532,7 @@ divergent def list_nth_shared_mut_loop_pair_merge_loop
         ok (p, back1)
     | List.Nil => fail panic
   | List.Nil => fail panic
+partial_fixpoint
 
 /- [loops::list_nth_shared_mut_loop_pair_merge]:
    Source: 'tests/src/loops.rs', lines 330:0-345:1 -/
@@ -528,12 +545,13 @@ def list_nth_shared_mut_loop_pair_merge
 
 /- [loops::ignore_input_mut_borrow]: loop 0:
    Source: 'tests/src/loops.rs', lines 350:4-352:5 -/
-divergent def ignore_input_mut_borrow_loop (i : U32) : Result Unit :=
+def ignore_input_mut_borrow_loop (i : U32) : Result Unit :=
   if i > 0#u32
   then do
        let i1 ← i - 1#u32
        ignore_input_mut_borrow_loop i1
   else ok ()
+partial_fixpoint
 
 /- [loops::ignore_input_mut_borrow]:
    Source: 'tests/src/loops.rs', lines 349:0-353:1 -/
@@ -544,12 +562,13 @@ def ignore_input_mut_borrow (_a : U32) (i : U32) : Result U32 :=
 
 /- [loops::incr_ignore_input_mut_borrow]: loop 0:
    Source: 'tests/src/loops.rs', lines 359:4-361:5 -/
-divergent def incr_ignore_input_mut_borrow_loop (i : U32) : Result Unit :=
+def incr_ignore_input_mut_borrow_loop (i : U32) : Result Unit :=
   if i > 0#u32
   then do
        let i1 ← i - 1#u32
        incr_ignore_input_mut_borrow_loop i1
   else ok ()
+partial_fixpoint
 
 /- [loops::incr_ignore_input_mut_borrow]:
    Source: 'tests/src/loops.rs', lines 357:0-362:1 -/
@@ -561,12 +580,13 @@ def incr_ignore_input_mut_borrow (a : U32) (i : U32) : Result U32 :=
 
 /- [loops::ignore_input_shared_borrow]: loop 0:
    Source: 'tests/src/loops.rs', lines 367:4-369:5 -/
-divergent def ignore_input_shared_borrow_loop (i : U32) : Result Unit :=
+def ignore_input_shared_borrow_loop (i : U32) : Result Unit :=
   if i > 0#u32
   then do
        let i1 ← i - 1#u32
        ignore_input_shared_borrow_loop i1
   else ok ()
+partial_fixpoint
 
 /- [loops::ignore_input_shared_borrow]:
    Source: 'tests/src/loops.rs', lines 366:0-370:1 -/
