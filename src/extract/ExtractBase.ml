@@ -1686,7 +1686,7 @@ let ctx_compute_trait_impl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
              clashes. *)
           let name =
             match args.types with
-            | TVar _ :: _ -> name @ [ "blanket" ]
+            | TVar _ :: _ -> name @ [ "Blanket" ]
             | _ -> name
           in
           name

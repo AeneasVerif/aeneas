@@ -17,9 +17,9 @@ structure Trait1 (Self : Type) where
 structure Trait2 (Self : Type) where
 
 /- Trait implementation: [blanket_impl::{blanket_impl::Trait2 for T}]
-   Source: 'tests/src/blanket_impl.rs', lines 7:0-7:30 -/
+   Source: 'tests/src/blanket_impl.rs', lines 7:0-7:31 -/
 @[reducible]
-def Trait2.blanket {T : Type} (Trait1Inst : Trait1 T) : Trait2 T := {
+def Trait2.Blanket {T : Type} (Trait1Inst : Trait1 T) : Trait2 T := {
 }
 
 end blanket_impl
