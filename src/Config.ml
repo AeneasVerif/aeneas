@@ -464,3 +464,6 @@ let use_nested_tuple_projectors = ref false
 
 (** Generate name patterns for the external definitions we encounter *)
 let extract_external_name_patterns = ref true
+
+(** *)
+let match_patterns_with_trait_decl_refs = true

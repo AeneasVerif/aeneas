@@ -206,7 +206,7 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
     let name_pattern = name_to_pattern_string trans_ctx fdef.item_meta.name in
     save_error_opt_span __FILE__ __LINE__ error.span
       ("Could not translate the function '" ^ name
-     ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'");
+     ^ " because of previous error.\nName pattern: '" ^ name_pattern ^ "'");
     None
 
 (* TODO: factor out the return type *)

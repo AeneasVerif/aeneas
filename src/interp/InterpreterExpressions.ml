@@ -593,7 +593,9 @@ let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
         let value = VLiteral (VBool b) in
         let ty = TLiteral TBool in
         Ok { ty; value }
-    | _ -> exec_raise __FILE__ __LINE__ span "Invalid input for unop"
+    | _ ->
+        exec_raise __FILE__ __LINE__ span
+          ("Invalid input for unop: " ^ unop_to_string ctx unop)
   in
   (r, ctx, cc)
 
@@ -614,7 +616,7 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
     | Cast (CastScalar (_, tgt_ty)), _ -> TLiteral tgt_ty
     | _ ->
         exec_raise __FILE__ __LINE__ span
-          ("Invalid input for unop " ^ unop_to_string ctx unop)
+          ("Invalid input for unop: " ^ unop_to_string ctx unop)
   in
   let res_sv = { sv_id = res_sv_id; sv_ty = res_sv_ty } in
   (* Compute the result *)
@@ -732,7 +734,9 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
         | Shl | Shr | CheckedAdd | CheckedSub | CheckedMul ->
             craise __FILE__ __LINE__ span "Unimplemented binary operation"
         | Ne | Eq -> craise __FILE__ __LINE__ span "Unreachable")
-    | _ -> craise __FILE__ __LINE__ span "Invalid inputs for binop"
+    | _ ->
+        craise __FILE__ __LINE__ span
+          ("Invalid inputs for binop: " ^ binop_to_string binop)
 
 let eval_binary_op_concrete (config : config) (span : Meta.span) (binop : binop)
     (op1 : operand) (op2 : operand) (ctx : eval_ctx) :

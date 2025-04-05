@@ -59,3 +59,36 @@ let crate_get_opaque_non_builtin_decls (k : crate) (filter_builtin : bool) :
 let crate_has_opaque_non_builtin_decls (k : crate) (filter_builtin : bool) :
     bool =
   crate_get_opaque_non_builtin_decls k filter_builtin <> ([], [])
+
+let name_with_crate_to_pattern_string (crate : LlbcAst.crate) (n : Types.name) :
+    string =
+  let mctx = Charon.NameMatcher.ctx_from_crate crate in
+  let c : Charon.NameMatcher.to_pat_config =
+    {
+      tgt = TkPattern;
+      use_trait_decl_refs = Config.match_patterns_with_trait_decl_refs;
+    }
+  in
+  let pat = Charon.NameMatcher.name_to_pattern mctx c n in
+  Charon.NameMatcher.pattern_to_string { tgt = TkPattern } pat
+
+let name_with_generics_crate_to_pattern_string (crate : LlbcAst.crate)
+    (n : Types.name) (params : Types.generic_params) (args : Types.generic_args)
+    : string =
+  let mctx = Charon.NameMatcher.ctx_from_crate crate in
+  let c : Charon.NameMatcher.to_pat_config =
+    {
+      tgt = TkPattern;
+      use_trait_decl_refs = Config.match_patterns_with_trait_decl_refs;
+    }
+  in
+  let pat =
+    Charon.NameMatcher.name_with_generics_to_pattern mctx c params n args
+  in
+  Charon.NameMatcher.pattern_to_string { tgt = TkPattern } pat
+
+let trait_impl_with_crate_to_pattern_string (crate : LlbcAst.crate)
+    (trait_decl : LlbcAst.trait_decl) (trait_impl : LlbcAst.trait_impl) : string
+    =
+  name_with_generics_crate_to_pattern_string crate trait_decl.item_meta.name
+    trait_decl.generics trait_impl.impl_trait.decl_generics

@@ -513,7 +513,7 @@ let () =
           List.map
             (fun (d : Types.type_decl) ->
               let pattern =
-                TranslateCore.name_with_crate_to_pattern_string m
+                LlbcAstUtils.name_with_crate_to_pattern_string m
                   d.item_meta.name
               in
               "Type decl (pattern: [" ^ pattern ^ "]]):\n"
@@ -524,7 +524,7 @@ let () =
           List.map
             (fun (d : LlbcAst.fun_decl) ->
               let pattern =
-                TranslateCore.name_with_crate_to_pattern_string m
+                LlbcAstUtils.name_with_crate_to_pattern_string m
                   d.item_meta.name
               in
               let d =
@@ -543,7 +543,7 @@ let () =
           List.map
             (fun (d : LlbcAst.global_decl) ->
               let pattern =
-                TranslateCore.name_with_crate_to_pattern_string m
+                LlbcAstUtils.name_with_crate_to_pattern_string m
                   d.item_meta.name
               in
               "Global decl (pattern: [" ^ pattern ^ "]]):\n"
@@ -554,7 +554,7 @@ let () =
           List.map
             (fun (d : LlbcAst.trait_decl) ->
               let pattern =
-                TranslateCore.name_with_crate_to_pattern_string m
+                LlbcAstUtils.name_with_crate_to_pattern_string m
                   d.item_meta.name
               in
               "Trait decl (pattern: [" ^ pattern ^ "]]):\n"
@@ -565,9 +565,8 @@ let () =
           List.map
             (fun ((d, trait_decl) : LlbcAst.trait_impl * LlbcAst.trait_decl) ->
               let pattern =
-                TranslateCore.name_with_generics_crate_to_pattern_string m
-                  trait_decl.item_meta.name trait_decl.generics
-                  d.impl_trait.decl_generics
+                LlbcAstUtils.trait_impl_with_crate_to_pattern_string m
+                  trait_decl d
               in
               "Trait impl (pattern: [" ^ pattern ^ "]]):\n"
               ^ Print.Ast.trait_impl_to_string fmt_env "" "  " d)
