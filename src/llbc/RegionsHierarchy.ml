@@ -129,7 +129,10 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
         (match id with
         | TAdtId id ->
             (* Lookup the type declaration *)
-            let decl = TypeDeclId.Map.find id crate.type_decls in
+            let decl =
+              silent_unwrap_opt_span __FILE__ __LINE__ span
+                (TypeDeclId.Map.find_opt id crate.type_decls)
+            in
             (* Instantiate the predicates *)
             let subst = Subst.make_subst_from_generics decl.generics generics in
             let predicates = Subst.predicates_substitute subst decl.generics in
@@ -164,9 +167,11 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
     | TRawPtr (ty, _) -> explore_ty outer ty
     | TTraitType (trait_ref, _) ->
         (* The trait should reference a clause, and not an implementation
-           (otherwise it should have been normalized) *)
+           (otherwise it should have been normalized), or a special builtin
+           trait (in particular, [core::marker::DiscriminantKind]) *)
         sanity_check_opt_span __FILE__ __LINE__
-          (AssociatedTypes.trait_instance_id_is_local_clause trait_ref.trait_id)
+          (AssociatedTypes.check_non_normalizable_trait_instance_id
+             trait_ref.trait_id)
           span;
         (* We have nothing to do *)
         ()

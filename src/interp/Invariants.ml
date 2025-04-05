@@ -430,7 +430,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
       | VAdt av, TAdt (TAdtId def_id, generics) ->
           (* Retrieve the definition to check the variant id, the number of
            * parameters, etc. *)
-          let def = ctx_lookup_type_decl ctx def_id in
+          let def = ctx_lookup_type_decl span ctx def_id in
           (* Check the number of parameters *)
           sanity_check __FILE__ __LINE__
             (List.length generics.regions = List.length def.generics.regions)
@@ -563,7 +563,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
       | AAdt av, TAdt (TAdtId def_id, generics) ->
           (* Retrieve the definition to check the variant id, the number of
            * parameters, etc. *)
-          let def = ctx_lookup_type_decl ctx def_id in
+          let def = ctx_lookup_type_decl span ctx def_id in
           (* Check the number of parameters *)
           sanity_check __FILE__ __LINE__
             (List.length generics.regions = List.length def.generics.regions)

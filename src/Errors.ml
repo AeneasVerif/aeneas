@@ -140,13 +140,15 @@ let cassert_warn (file : string) (line : int) (b : bool) (span : Meta.span)
 let exec_raise = craise
 let exec_assert = cassert
 
-let silent_unwrap_opt_span (file : string) (line : int)
-    (span : Meta.span option) (x : 'a option) : 'a =
+let unwrap_opt_span (file : string) (line : int) (span : Meta.span option)
+    (x : 'a option) (msg : string) : 'a =
   match x with
   | Some x -> x
-  | None ->
-      craise_opt_span_silent file line span
-        "Internal error: please file an issue"
+  | None -> craise_opt_span_silent file line span msg
+
+let silent_unwrap_opt_span (file : string) (line : int)
+    (span : Meta.span option) (x : 'a option) : 'a =
+  unwrap_opt_span file line span x "Internal error: please file an issue"
 
 let silent_unwrap (file : string) (line : int) (span : Meta.span)
     (x : 'a option) : 'a =
