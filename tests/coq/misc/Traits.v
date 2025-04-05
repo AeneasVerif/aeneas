@@ -642,7 +642,7 @@ Arguments foo_y { _ } { _ }.
 
 (** [core::result::Result]
     Source: '/rustc/library/core/src/result.rs', lines 528:0-528:21
-    Name pattern: core::result::Result *)
+    Name pattern: [core::result::Result] *)
 Inductive core_result_Result_t (T : Type) (E : Type) :=
 | Core_result_Result_Ok : T -> core_result_Result_t T E
 | Core_result_Result_Err : E -> core_result_Result_t T E

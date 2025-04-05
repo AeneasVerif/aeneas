@@ -79,6 +79,19 @@ end core
 @[simp, progress_simps] def core.option.Option.unwrap {T : Type} (x : Option T) : Result T :=
   Result.ofOption x Error.panic
 
+/- [core::option::{core::option::Option<T>}::unwrap_or] -/
+@[progress_pure_def]
+def core.option.Option.unwrap_or (self : Option T) (default : T) : T :=
+  match self with
+  | none => default
+  | some self => self
+
+@[simp] def core.option.Option.unwrap_or_some (self default : T) :
+  core.option.Option.unwrap_or (some self) default = self := by simp [unwrap_or]
+
+@[simp] def core.option.Option.unwrap_or_none (default : T) :
+  core.option.Option.unwrap_or none default = default := by simp [unwrap_or]
+
 /- [core::option::Option::take] -/
 @[simp, progress_simps] def core.option.Option.take {T: Type} (self: Option T): Option T × Option T := (self, .none)
 

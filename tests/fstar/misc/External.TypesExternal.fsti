@@ -7,7 +7,7 @@ open Primitives
 
 (** [core::cell::Cell]
     Source: '/rustc/library/core/src/cell.rs', lines 311:0-311:26
-    Name pattern: core::cell::Cell *)
+    Name pattern: [core::cell::Cell] *)
 val core_cell_Cell_t (t : Type0) : Type0
 
 (** The state type used in the state-error monad *)

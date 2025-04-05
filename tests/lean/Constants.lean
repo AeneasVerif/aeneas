@@ -15,7 +15,7 @@ namespace constants
 
 /- [constants::X1]
    Source: 'tests/src/constants.rs', lines 10:0-10:29 -/
-@[global_simps] def X1_body : Result U32 := ok core_u32_max
+@[global_simps] def X1_body : Result U32 := ok core.num.U32.MAX
 @[global_simps, irreducible] def X1 : U32 := eval_global X1_body
 
 /- [constants::X2]

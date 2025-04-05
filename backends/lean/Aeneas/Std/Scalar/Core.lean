@@ -762,31 +762,31 @@ theorem IScalar.min_le_max (ty : IScalarTy) : IScalar.min ty ≤ IScalar.max ty 
   have := IScalar.min_lt_max ty
   scalar_tac
 
-@[reducible] def core_u8_min : U8 := UScalar.ofNat 0
-@[reducible] def core_u8_max : U8 := UScalar.ofNat U8.rMax
-@[reducible] def core_u16_min : U16 := UScalar.ofNat 0
-@[reducible] def core_u16_max : U16 := UScalar.ofNat U16.rMax
-@[reducible] def core_u32_min : U32 := UScalar.ofNat 0
-@[reducible] def core_u32_max : U32 := UScalar.ofNat U32.rMax
-@[reducible] def core_u64_min : U64 := UScalar.ofNat 0
-@[reducible] def core_u64_max : U64 := UScalar.ofNat U64.rMax
-@[reducible] def core_u128_min : U128 := UScalar.ofNat 0
-@[reducible] def core_u128_max : U128 := UScalar.ofNat U128.rMax
-@[reducible] def core_usize_min : Usize := UScalar.ofNatCore 0 (by simp)
-@[reducible] def core_usize_max : Usize := UScalar.ofNatCore Usize.max (by simp [Usize.max, Usize.numBits, UScalar.rMax])
+@[reducible] def core.num.U8.MIN : U8 := UScalar.ofNat 0
+@[reducible] def core.num.U8.MAX : U8 := UScalar.ofNat U8.rMax
+@[reducible] def core.num.U16.MIN : U16 := UScalar.ofNat 0
+@[reducible] def core.num.U16.MAX : U16 := UScalar.ofNat U16.rMax
+@[reducible] def core.num.U32.MIN : U32 := UScalar.ofNat 0
+@[reducible] def core.num.U32.MAX : U32 := UScalar.ofNat U32.rMax
+@[reducible] def core.num.U64.MIN : U64 := UScalar.ofNat 0
+@[reducible] def core.num.U64.MAX : U64 := UScalar.ofNat U64.rMax
+@[reducible] def core.num.U128.MIN : U128 := UScalar.ofNat 0
+@[reducible] def core.num.U128.MAX : U128 := UScalar.ofNat U128.rMax
+@[reducible] def core.num.Usize.MIN : Usize := UScalar.ofNatCore 0 (by simp)
+@[reducible] def core.num.Usize.MAX : Usize := UScalar.ofNatCore Usize.max (by simp [Usize.max, Usize.numBits, UScalar.rMax])
 
-@[reducible] def core_i8_min : I8 := IScalar.ofInt I8.rMin
-@[reducible] def core_i8_max : I8 := IScalar.ofInt I8.rMax
-@[reducible] def core_i16_min : I16 := IScalar.ofInt I16.rMin
-@[reducible] def core_i16_max : I16 := IScalar.ofInt I16.rMax
-@[reducible] def core_i32_min : I32 := IScalar.ofInt I32.rMin
-@[reducible] def core_i32_max : I32 := IScalar.ofInt I32.rMax
-@[reducible] def core_i64_min : I64 := IScalar.ofInt I64.rMin
-@[reducible] def core_i64_max : I64 := IScalar.ofInt I64.rMax
-@[reducible] def core_i128_min : I128 := IScalar.ofInt I128.rMin
-@[reducible] def core_i128_max : I128 := IScalar.ofInt I128.rMax
-@[reducible] def core_isize_min : Isize := IScalar.ofIntCore Isize.min (by simp [Isize.min, Isize.numBits, Isize.rMin])
-@[reducible] def core_isize_max : Isize := IScalar.ofIntCore Isize.max (by simp [Isize.max, Isize.numBits, Isize.rMax]; (have : (0 : Int) < 2 ^ (System.Platform.numBits - 1) := by simp); omega)
+@[reducible] def core.num.I8.MIN : I8 := IScalar.ofInt I8.rMin
+@[reducible] def core.num.I8.MAX : I8 := IScalar.ofInt I8.rMax
+@[reducible] def core.num.I16.MIN : I16 := IScalar.ofInt I16.rMin
+@[reducible] def core.num.I16.MAX : I16 := IScalar.ofInt I16.rMax
+@[reducible] def core.num.I32.MIN : I32 := IScalar.ofInt I32.rMin
+@[reducible] def core.num.I32.MAX : I32 := IScalar.ofInt I32.rMax
+@[reducible] def core.num.I64.MIN : I64 := IScalar.ofInt I64.rMin
+@[reducible] def core.num.I64.MAX : I64 := IScalar.ofInt I64.rMax
+@[reducible] def core.num.I128.MIN : I128 := IScalar.ofInt I128.rMin
+@[reducible] def core.num.I128.MAX : I128 := IScalar.ofInt I128.rMax
+@[reducible] def core.num.Isize.MIN : Isize := IScalar.ofIntCore Isize.min (by simp [Isize.min, Isize.numBits, Isize.rMin])
+@[reducible] def core.num.Isize.MAX : Isize := IScalar.ofIntCore Isize.max (by simp [Isize.max, Isize.numBits, Isize.rMax]; (have : (0 : Int) < 2 ^ (System.Platform.numBits - 1) := by simp); omega)
 
 
 /-! # Comparisons -/

@@ -8,14 +8,14 @@ include External.Types
 
 (** [core::cell::{core::cell::Cell<T>}#10::get]:
     Source: '/rustc/library/core/src/cell.rs', lines 541:4-541:32
-    Name pattern: core::cell::{core::cell::Cell<@T>}::get *)
+    Name pattern: [core::cell::{core::cell::Cell<@T>}::get] *)
 val core_cell_Cell_get
   (#t : Type0) (markerCopyInst : core_marker_Copy t) :
   core_cell_Cell_t t -> state -> result (state & t)
 
 (** [core::cell::{core::cell::Cell<T>}#11::get_mut]:
     Source: '/rustc/library/core/src/cell.rs', lines 621:4-621:45
-    Name pattern: core::cell::{core::cell::Cell<@T>}::get_mut *)
+    Name pattern: [core::cell::{core::cell::Cell<@T>}::get_mut] *)
 val core_cell_Cell_get_mut
   (#t : Type0) :
   core_cell_Cell_t t -> state -> result (state & (t & (t -> state -> (state &

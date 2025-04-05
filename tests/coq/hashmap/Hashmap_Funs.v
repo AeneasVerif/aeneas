@@ -271,7 +271,7 @@ Definition hashMap_move_elements
 Definition hashMap_try_resize
   {T : Type} (n : nat) (self : HashMap_t T) : result (HashMap_t T) :=
   let capacity := alloc_vec_Vec_len self.(hashMap_slots) in
-  n1 <- usize_div core_usize_max 2%usize;
+  n1 <- usize_div core_num_Usize_MAX 2%usize;
   i <- usize_div n1 self.(hashMap_max_load_factor).(fraction_dividend);
   if capacity s<= i
   then (

@@ -475,9 +475,9 @@ let () =
         let global_decls =
           LlbcAst.GlobalDeclId.Map.filter
             (fun _ (d : LlbcAst.global_decl) ->
-              let funs_map = ExtractBuiltin.builtin_globals_map in
+              let globals_map = ExtractBuiltin.builtin_globals_map () in
               (not d.item_meta.is_local)
-              && not (matches_name m d.item_meta.name funs_map))
+              && not (matches_name m d.item_meta.name globals_map))
             global_decls
         in
         let trait_decls =

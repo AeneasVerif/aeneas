@@ -541,7 +541,7 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
   let extract =
     extract
     && match_name_find_opt ctx.trans_ctx global.item_meta.name
-         builtin_globals_map
+         (builtin_globals_map ())
        = None
   in
   if extract then

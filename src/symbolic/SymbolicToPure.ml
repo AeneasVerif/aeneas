@@ -4955,7 +4955,8 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
     translate_fwd_ty (Some decl.item_meta.span) ctx.type_ctx.type_infos ty
   in
   let builtin_info =
-    match_name_find_opt ctx item_meta.name ExtractBuiltin.builtin_globals_map
+    match_name_find_opt ctx item_meta.name
+      (ExtractBuiltin.builtin_globals_map ())
   in
   {
     span = item_meta.span;

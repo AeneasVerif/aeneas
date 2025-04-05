@@ -80,8 +80,8 @@ Definition betree_upsert_update
   | Some prev1 =>
     match st with
     | Betree_UpsertFunState_Add v =>
-      margin <- u64_sub core_u64_max prev1;
-      if margin s>= v then u64_add prev1 v else Ok core_u64_max
+      margin <- u64_sub core_num_U64_MAX prev1;
+      if margin s>= v then u64_add prev1 v else Ok core_num_U64_MAX
     | Betree_UpsertFunState_Sub v =>
       if prev1 s>= v then u64_sub prev1 v else Ok 0%u64
     end

@@ -1678,7 +1678,18 @@ let ctx_compute_trait_impl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
             ctx_prepare_name trait_impl.item_meta ctx trait_decl.item_meta.name
           in
           let name = rename_llbc_name trait_impl.item_meta.attr_info name in
-          trait_name_with_generics_to_simple_name ctx.trans_ctx name params args
+          let name =
+            trait_name_with_generics_to_simple_name ctx.trans_ctx name params
+              args
+          in
+          (* We detect blanket impls and add a "blanket" suffix to avoid name
+             clashes. *)
+          let name =
+            match args.types with
+            | TVar _ :: _ -> name @ [ "Blanket" ]
+            | _ -> name
+          in
+          name
         in
         flatten_name name
     | Some name -> name

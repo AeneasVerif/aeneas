@@ -199,7 +199,7 @@ let hashMap_move_elements
 let hashMap_try_resize
   (#t : Type0) (self : hashMap_t t) : result (hashMap_t t) =
   let capacity = alloc_vec_Vec_len self.slots in
-  let* n1 = usize_div core_usize_max 2 in
+  let* n1 = usize_div core_num_Usize_MAX 2 in
   let* i = usize_div n1 self.max_load_factor.dividend in
   if capacity <= i
   then

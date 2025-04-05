@@ -9,7 +9,7 @@ set_option linter.unusedVariables false
 
 /- [core::cell::Cell]
    Source: '/rustc/library/core/src/cell.rs', lines 311:0-311:26
-   Name pattern: core::cell::Cell -/
+   Name pattern: [core::cell::Cell] -/
 axiom core.cell.Cell (T : Type) : Type
 
 /- The state type used in the state-error monad -/
