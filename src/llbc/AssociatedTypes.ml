@@ -447,6 +447,27 @@ let type_decl_get_inst_norm_variants_fields_rtypes (span : Meta.span)
       (variant_id, List.map (ctx_normalize_ty (Some span) ctx) types))
     res
 
+let ctx_type_get_inst_norm_variants_fields_rtypes (span : Meta.span)
+    (ctx : eval_ctx) (def_id : TypeDeclId.id) (generics : generic_args) :
+    (VariantId.id option * ty list) list =
+  let res =
+    ctx_type_get_instantiated_variants_fields_types ctx def_id generics
+  in
+  List.map
+    (fun (variant_id, types) ->
+      (variant_id, List.map (ctx_normalize_ty (Some span) ctx) types))
+    res
+
+let ctx_type_get_inst_norm_variants_fields_etypes (span : Meta.span)
+    (ctx : eval_ctx) (def_id : TypeDeclId.id) (generics : generic_args) :
+    (VariantId.id option * ty list) list =
+  let res =
+    ctx_type_get_inst_norm_variants_fields_rtypes span ctx def_id generics
+  in
+  List.map
+    (fun (variant_id, types) -> (variant_id, List.map erase_regions types))
+    res
+
 (** Same as [type_decl_get_instantiated_field_types] but normalizes the types *)
 let type_decl_get_inst_norm_field_rtypes (span : Meta.span) (ctx : eval_ctx)
     (def : type_decl) (opt_variant_id : VariantId.id option)

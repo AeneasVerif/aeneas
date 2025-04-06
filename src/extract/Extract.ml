@@ -1133,6 +1133,11 @@ and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
     | TAdtId _ ->
         F.pp_open_hvbox fmt 0;
         F.pp_open_hvbox fmt ctx.indent_incr;
+        (* If the expression *creates* a new structure, we may need to precide
+           its type (if the expression updates some fields of a structure, then
+           the final type is already known) *)
+        let need_type_annot = supd.init = None && backend () = Lean in
+        if need_type_annot then F.pp_print_string fmt "(";
         (* Inner/outer brackets: there are several syntaxes for the field updates.
 
            For instance, in F*:
@@ -1224,9 +1229,17 @@ and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
         F.pp_close_box fmt ();
         print_bracket false irb;
         F.pp_close_box fmt ();
-        F.pp_close_box fmt ();
         if need_paren then F.pp_print_string fmt ")";
+        F.pp_close_box fmt ();
         print_bracket false orb;
+        if need_type_annot then (
+          F.pp_open_hovbox fmt ctx.indent_incr;
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt ":";
+          F.pp_print_space fmt ();
+          extract_ty span ctx fmt TypeDeclId.Set.empty false e_ty;
+          F.pp_print_string fmt ")";
+          F.pp_close_box fmt ());
         F.pp_close_box fmt ()
     | TBuiltin TArray ->
         (* Open the boxes *)

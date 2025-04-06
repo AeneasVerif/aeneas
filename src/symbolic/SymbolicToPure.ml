@@ -2905,6 +2905,15 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
       ^ "\n\n- call.inst_sg:\n"
       ^ Print.option_to_string (inst_fun_sig_to_string call.ctx) call.inst_sg
       ^ "\n"));
+  (* We have to treat unsized casts separately *)
+  match call.call_id with
+  | S.Unop (Cast (CastUnsize (ty0, ty1))) ->
+      translate_cast_unsize call e ty0 ty1 ctx
+  | _ -> translate_function_call_aux call e ctx
+
+(** Handle the function call cases which are not unsized casts *)
+and translate_function_call_aux (call : S.call) (e : S.expression)
+    (ctx : bs_ctx) : texpression =
   (* Register the consumed mutable borrows to compute default values *)
   let ctx =
     List.fold_left (register_consumed_mut_borrows call.ctx) ctx call.args
@@ -3125,7 +3134,9 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
         | CastFnPtr _ ->
             craise __FILE__ __LINE__ ctx.span "TODO: function casts"
         | CastUnsize _ ->
-            craise __FILE__ __LINE__ ctx.span "TODO: unsize coercions"
+            (* We shouldn't get there: this case should have been detected before
+               and handled in [translate_cast_unsize] *)
+            internal_error __FILE__ __LINE__ ctx.span
         | CastRawPtr _ ->
             craise __FILE__ __LINE__ ctx.span "Unsupported: raw ptr casts"
         | CastTransmute _ ->
@@ -3192,6 +3203,88 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
   let next_e = translate_expression e ctx in
   (* Put together *)
   mk_let effect_info.can_fail dest_v call_e next_e
+
+and translate_cast_unsize (call : S.call) (e : S.expression) (ty0 : T.ty)
+    (ty1 : T.ty) (ctx : bs_ctx) : texpression =
+  (* Retrieve the information about the cast *)
+  let info =
+    InterpreterExpressions.cast_unsize_to_modified_fields ctx.span call.ctx ty0
+      ty1
+  in
+
+  (* Process the arguments and the destination *)
+  let dest_mplace = translate_opt_mplace call.dest_place in
+  let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
+  let dest = mk_typed_pattern_from_var dest dest_mplace in
+  let arg =
+    match call.args with
+    | [ arg ] -> arg
+    | _ -> internal_error __FILE__ __LINE__ ctx.span
+  in
+  let arg = typed_value_to_texpression ctx call.ctx arg in
+  let arg_mp = translate_opt_mplace (List.hd call.args_places) in
+  let arg = mk_opt_mplace_texpression arg_mp arg in
+
+  (* Small helper to create an [array_to_slice] expression *)
+  let mk_array_to_slice (v : texpression) : texpression =
+    let ty, n = ty_as_array ctx.span v.ty in
+    let generics =
+      { types = [ ty ]; const_generics = [ n ]; trait_refs = [] }
+    in
+    let func = { id = FunOrOp (Unop ArrayToSlice); generics } in
+    let input_ty = v.ty in
+    let ret_ty = TAdt (TBuiltin TSlice, mk_generic_args_from_types [ ty ]) in
+    let func_ty = mk_arrows [ input_ty ] ret_ty in
+    let func = { e = Qualif func; ty = func_ty } in
+    mk_apps ctx.span func [ v ]
+  in
+
+  (* Create the cast expression *)
+  let cast_expr =
+    match info with
+    | None ->
+        (* This is a cast from a boxed array to a boxed slice: we simply insert
+           a call to [array_to_slice] *)
+        mk_array_to_slice arg
+    | Some (adt_id, generics, field_id, ty0, _) ->
+        (* This is cast between structures.
+           We update the last field of the structure by using [array_to_slice] *)
+        let adt_id = TAdtId adt_id in
+        let generics = ctx_translate_fwd_generic_args ctx generics in
+        let adt_ty = TAdt (adt_id, generics) in
+
+        (* Create the field access expression *)
+        let ty0 = ctx_translate_fwd_ty ctx ty0 in
+        let field =
+          let qualif : qualif = { id = Proj { adt_id; field_id }; generics } in
+          let qualif_ty = mk_arrows [ adt_ty ] ty0 in
+          let qualif = { e = Qualif qualif; ty = qualif_ty } in
+          mk_app ctx.span qualif arg
+        in
+
+        (* Create the array to slice expression *)
+        let nfield = mk_array_to_slice field in
+
+        (* Create the field update expression *)
+        let updt =
+          let updt =
+            StructUpdate
+              {
+                struct_id = adt_id;
+                init = Some arg;
+                updates = [ (field_id, nfield) ];
+              }
+          in
+          let ty = arg.ty in
+          { e = updt; ty }
+        in
+        updt
+  in
+
+  (* Create the let-binding *)
+  let next_e = translate_expression e ctx in
+  let monadic = false in
+  mk_let monadic dest cast_expr next_e
 
 and translate_end_abstraction (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expression) (ctx : bs_ctx) : texpression =

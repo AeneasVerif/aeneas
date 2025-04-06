@@ -1063,7 +1063,7 @@ let simplify_duplicate_calls (_ctx : ctx) (def : fun_decl) : fun_decl =
 let lift_unop (unop : unop) : bool =
   match unop with
   | Not None -> false
-  | Not (Some _) | Neg _ | Cast _ -> true
+  | Not (Some _) | Neg _ | Cast _ | ArrayToSlice -> true
 
 (** A helper predicate *)
 let inline_unop unop = not (lift_unop unop)

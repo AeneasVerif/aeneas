@@ -382,6 +382,20 @@ let ty_as_adt (span : Meta.span) (ty : ty) : type_id * generic_args =
   | TAdt (id, generics) -> (id, generics)
   | _ -> craise __FILE__ __LINE__ span "Not an ADT"
 
+let ty_as_array (span : Meta.span) (ty : ty) : ty * const_generic =
+  match ty with
+  | TAdt
+      ( TBuiltin TArray,
+        { types = [ ty ]; const_generics = [ n ]; trait_refs = [] } ) -> (ty, n)
+  | _ -> craise __FILE__ __LINE__ span "Not an ADT"
+
+let ty_as_slice (span : Meta.span) (ty : ty) : ty =
+  match ty with
+  | TAdt
+      (TBuiltin TSlice, { types = [ ty ]; const_generics = []; trait_refs = [] })
+    -> ty
+  | _ -> craise __FILE__ __LINE__ span "Not an ADT"
+
 (** Remove the external occurrences of {!Meta} *)
 let rec unspan (e : texpression) : texpression =
   match e.e with

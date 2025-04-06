@@ -1,4 +1,5 @@
 open Expressions
+open Types
 open Values
 open Contexts
 open Cps
@@ -71,3 +72,34 @@ val eval_rvalue_not_global :
 
 (** Evaluate a fake read (update the context so that we can read a place) *)
 val eval_fake_read : config -> Meta.span -> place -> cm_fun
+
+(** Retrieve information about an unsized casts.
+
+  We handle the following cases:
+  - it is possible to cast a boxed array (e.g., [Box<[T; N]>])
+    to a boxed slice (e.g., [Box<[T]>])
+  - it is possible to cast a boxed structure to another boxed structure
+    when the structures are the same but the last field, which must be an array
+    in one case and a slice in the other. For instance:
+    {[
+      pub struct Wrapper<T: ?Sized> {
+          data: T,
+      }
+
+      fn alloc<const N : usize>() -> Box<Wrapper<[u8]>> {
+          Box::new(Wrapper{data: [0; N]})
+      }
+    ]}
+
+  In the structure case, we return:
+  - the adt id and generics
+  - the id of the last field
+  - the type of the input array
+  - the type of the input slice
+*)
+val cast_unsize_to_modified_fields :
+  Meta.span ->
+  eval_ctx ->
+  ty ->
+  ty ->
+  (type_decl_id * generic_args * FieldId.id * ty * ty) option

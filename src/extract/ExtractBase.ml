@@ -868,6 +868,10 @@ let unop_name (unop : unop) : string =
       match backend () with
       | Lean -> "-."
       | _ -> int_name int_ty ^ "_neg")
+  | ArrayToSlice -> (
+      match backend () with
+      | Lean -> "Array.to_slice"
+      | _ -> "array_to_slice")
   | Cast _ ->
       (* We never directly use the unop name in this case *)
       raise (Failure "Unsupported")

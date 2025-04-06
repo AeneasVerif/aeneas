@@ -97,7 +97,7 @@ let extract_unop (span : Meta.span) (extract_expr : bool -> texpression -> unit)
     (fmt : F.formatter) (inside : bool) (unop : unop) (arg : texpression) : unit
     =
   match unop with
-  | Not _ | Neg _ ->
+  | Not _ | Neg _ | ArrayToSlice ->
       let unop = unop_name unop in
       if inside then F.pp_print_string fmt "(";
       F.pp_print_string fmt unop;
