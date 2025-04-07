@@ -1759,6 +1759,12 @@ def parseOptLocation (loc : Option (TSyntax `Lean.Parser.Tactic.location)) :
       else
         Lean.Elab.throwUnsupportedSyntax
 
+def exprToNat? (e : Expr) : Option Nat :=
+  let e := e.consumeMData
+  if let some n := e.nat? then some n
+  else if let some n := e.rawNatLit? then some n
+  else none
+
 end Utils
 
 end Aeneas

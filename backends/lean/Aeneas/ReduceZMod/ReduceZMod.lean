@@ -1,15 +1,11 @@
 import Aeneas.ReduceZMod.Init
 import Mathlib.Algebra.Algebra.ZMod
+import Aeneas.Utils
 
 namespace Aeneas.ReduceZMod
 
+open Utils
 open Lean Meta
-
-def exprToNat? (e : Expr) : Option Nat :=
-  let e := e.consumeMData
-  if let some n := e.nat? then some n
-  else if let some n := e.rawNatLit? then some n
-  else none
 
 /-- A simproc to reduce ZMod expressions.
 

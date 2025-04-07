@@ -8,6 +8,7 @@ import Aeneas.Nat
 import Aeneas.Natify
 import Aeneas.Progress
 import Aeneas.Range
+import Aeneas.ReduceFin
 import Aeneas.ReduceZMod
 import Aeneas.Saturate
 import Aeneas.ScalarDecrTac
