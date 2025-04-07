@@ -6,6 +6,7 @@ import Aeneas.Utils
 import Aeneas.SimpLemmas
 import Aeneas.Nat
 import Aeneas.SimpLists.Init
+import Aeneas.Std.Primitives
 
 namespace List -- We do not use the `Aeneas` namespace on purpose
 
@@ -495,5 +496,28 @@ theorem eq_iff_eq_getElem! {α} [Inhabited α] (l0 l1 : List α) :
     . simp only [not_lt] at hi
       simp only [hi, getElem?_length_le, none_eq_getElem?_iff]
       simp only [← h0, hi]
+
+theorem mapM_Result_length {α : Type w} {β : Type u} {f : α → Std.Result β} {l : List α} {l' : List β}
+  (h : List.mapM f l = .ok l') :
+  l'.length = l.length := by
+  have hind (l : List α) (l' acc : List β) (h : List.mapM.loop f l acc = .ok l') : l'.length = l.length + acc.length
+    := by
+    revert l' acc
+    induction l <;> intro l' acc h <;> simp_all [pure, mapM.loop]
+    . rw [← h]
+      simp
+    . rename_i hd tl ih
+      cases hf : f hd <;> simp_all
+      replace ih := ih _ _ h
+      simp [ih]
+      omega
+  have := hind l l' [] h
+  simp [this]
+
+theorem splitAt_length {α : Type u}  (n : Nat)  (l : List α) :
+  (l.splitAt n).fst.length = min l.length n ∧ (l.splitAt n).snd.length = l.length - n := by
+  revert n
+  induction l <;> intro n <;> simp_all
+  omega
 
 end List

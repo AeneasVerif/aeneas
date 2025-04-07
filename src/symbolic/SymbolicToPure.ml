@@ -452,6 +452,26 @@ let bs_ctx_lookup_llbc_fun_decl (id : A.FunDeclId.id) (ctx : bs_ctx) :
 let bs_ctx_lookup_type_decl (id : TypeDeclId.id) (ctx : bs_ctx) : type_decl =
   TypeDeclId.Map.find id ctx.type_ctx.type_decls
 
+let mk_checked_let file line span (monadic : bool) (lv : typed_pattern)
+    (re : texpression) (next_e : texpression) : texpression =
+  let re_ty = if monadic then unwrap_result_ty span re.ty else re.ty in
+  if !Config.type_check_pure_code then
+    sanity_check file line (lv.ty = re_ty) span;
+  mk_let monadic lv re next_e
+
+let mk_checked_lets file line span (monadic : bool)
+    (lets : (typed_pattern * texpression) list) (next_e : texpression) :
+    texpression =
+  if !Config.type_check_pure_code then
+    sanity_check file line
+      (List.for_all
+         (fun ((pat, e) : typed_pattern * texpression) ->
+           let e_ty = if monadic then unwrap_result_ty span e.ty else e.ty in
+           pat.ty = e_ty)
+         lets)
+      span;
+  mk_lets monadic lets next_e
+
 (* We simply ignore the bound regions. Note that this messes up the de bruijn
    ids in variables: variables inside `rb.binder_value` are nested deeper so
    we should shift them before moving them out of their binder. We ignore this
@@ -657,6 +677,20 @@ let translate_type_decl_kind (span : Meta.span) (kind : T.type_decl_kind) :
         "type aliases should have been removed earlier"
   | T.Union _ | T.Opaque | T.TDeclError _ -> Opaque
 
+let mk_visited_params_visitor () =
+  let tys = ref Pure.TypeVarId.Set.empty in
+  let cgs = ref Pure.ConstGenericVarId.Set.empty in
+  let visitor =
+    object
+      inherit [_] Pure.iter_type_decl
+      method! visit_type_var_id _ id = tys := Pure.TypeVarId.Set.add id !tys
+
+      method! visit_const_generic_var_id _ id =
+        cgs := Pure.ConstGenericVarId.Set.add id !cgs
+    end
+  in
+  (visitor, tys, cgs)
+
 (** Compute which input parameters should be implicit or explicit.
 
     The way we do it is simple: if a parameter appears in one of the inputs,
@@ -676,19 +710,7 @@ let translate_type_decl_kind (span : Meta.span) (kind : T.type_decl_kind) :
  *)
 let compute_explicit_info (generics : Pure.generic_params) (input_tys : ty list)
     : explicit_info =
-  let implicit_tys = ref Pure.TypeVarId.Set.empty in
-  let implicit_cgs = ref Pure.ConstGenericVarId.Set.empty in
-  let visitor =
-    object
-      inherit [_] Pure.iter_type_decl
-
-      method! visit_type_var_id _ id =
-        implicit_tys := Pure.TypeVarId.Set.add id !implicit_tys
-
-      method! visit_const_generic_var_id _ id =
-        implicit_cgs := Pure.ConstGenericVarId.Set.add id !implicit_cgs
-    end
-  in
+  let visitor, implicit_tys, implicit_cgs = mk_visited_params_visitor () in
   List.iter (visitor#visit_trait_clause ()) generics.trait_clauses;
   List.iter (visitor#visit_ty ()) input_tys;
   let make_explicit_ty (v : Pure.type_var) : Pure.explicit =
@@ -701,6 +723,33 @@ let compute_explicit_info (generics : Pure.generic_params) (input_tys : ty list)
   {
     explicit_types = List.map make_explicit_ty generics.types;
     explicit_const_generics = List.map make_explicit_cg generics.const_generics;
+  }
+
+(** Compute which input parameters can be infered if only the explicit types
+    and the trait refs are provided.
+
+    This is similar to [compute_explicit_info].
+ *)
+let compute_known_info (explicit : explicit_info)
+    (generics : Pure.generic_params) : known_info =
+  let visitor, known_tys, known_cgs = mk_visited_params_visitor () in
+  List.iter (visitor#visit_trait_clause ()) generics.trait_clauses;
+  let make_known_ty ((e, v) : explicit * Pure.type_var) : Pure.known =
+    if e = Explicit || Pure.TypeVarId.Set.mem v.index !known_tys then Known
+    else Unknown
+  in
+  let make_known_cg ((e, v) : explicit * Pure.const_generic_var) : Pure.known =
+    if e = Explicit || Pure.ConstGenericVarId.Set.mem v.index !known_cgs then
+      Known
+    else Unknown
+  in
+  {
+    known_types =
+      List.map make_known_ty
+        (List.combine explicit.explicit_types generics.types);
+    known_const_generics =
+      List.map make_known_cg
+        (List.combine explicit.explicit_const_generics generics.const_generics);
   }
 
 (** Translate a type definition from LLBC
@@ -961,6 +1010,7 @@ let mk_type_check_ctx (ctx : bs_ctx) : PureTypeCheck.tc_ctx =
     global_decls = ctx.decls_ctx.crate.global_decls;
     env;
     const_generics;
+    decls_ctx = ctx.decls_ctx;
   }
 
 let type_check_pattern (ctx : bs_ctx) (v : typed_pattern) : unit =
@@ -1615,10 +1665,12 @@ let translate_fun_sig_from_decomposed (dsg : Pure.decomposed_fun_sig) : fun_sig
   in
   (* Compute which input type parameters are explicit/implicit *)
   let explicit_info = compute_explicit_info generics inputs in
+  let known_from_trait_refs = compute_known_info explicit_info generics in
   (* Put together *)
   {
     generics;
     explicit_info;
+    known_from_trait_refs;
     llbc_generics;
     preds;
     inputs;
@@ -2588,10 +2640,10 @@ let get_abs_ancestors (ctx : bs_ctx) (abs : V.abs) (call_id : V.FunCallId.id) :
   (call_info.forward, abs_ancestors)
 
 (** Add meta-information to an expression *)
-let mk_espan_symbolic_assignments (vars : var list) (values : texpression list)
+let mk_emeta_symbolic_assignments (vars : var list) (values : texpression list)
     (e : texpression) : texpression =
   let var_values = List.combine (List.map var_get_id vars) values in
-  if var_values <> [] then mk_espan (SymbolicAssignments var_values) e else e
+  if var_values <> [] then mk_emeta (SymbolicAssignments var_values) e else e
 
 (** Derive naming information from a context.
 
@@ -2892,7 +2944,7 @@ and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
     if effect_info.can_fail then mk_result_ok_texpression ctx.span output
     else output
   in
-  mk_espan (Tag "return_with_loop") output
+  mk_emeta (Tag "return_with_loop") output
 
 and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
     texpression =
@@ -2905,6 +2957,15 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
       ^ "\n\n- call.inst_sg:\n"
       ^ Print.option_to_string (inst_fun_sig_to_string call.ctx) call.inst_sg
       ^ "\n"));
+  (* We have to treat unsized casts separately *)
+  match call.call_id with
+  | S.Unop (Cast (CastUnsize (ty0, ty1))) ->
+      translate_cast_unsize call e ty0 ty1 ctx
+  | _ -> translate_function_call_aux call e ctx
+
+(** Handle the function call cases which are not unsized casts *)
+and translate_function_call_aux (call : S.call) (e : S.expression)
+    (ctx : bs_ctx) : texpression =
   (* Register the consumed mutable borrows to compute default values *)
   let ctx =
     List.fold_left (register_consumed_mut_borrows call.ctx) ctx call.args
@@ -3125,7 +3186,9 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
         | CastFnPtr _ ->
             craise __FILE__ __LINE__ ctx.span "TODO: function casts"
         | CastUnsize _ ->
-            craise __FILE__ __LINE__ ctx.span "TODO: unsize coercions"
+            (* We shouldn't get there: this case should have been detected before
+               and handled in [translate_cast_unsize] *)
+            internal_error __FILE__ __LINE__ ctx.span
         | CastRawPtr _ ->
             craise __FILE__ __LINE__ ctx.span "Unsupported: raw ptr casts"
         | CastTransmute _ ->
@@ -3182,16 +3245,123 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
               (ctx, mk_lambda pat (mk_texpression_from_var v)))
             ctx back_funs
         in
+        (* We also need to change the type of the function *)
+        let call_e =
+          let call, args = destruct_apps call_e in
+          match args with
+          | [ x ] ->
+              let call = { call with ty = mk_arrows [ x.ty ] x.ty } in
+              mk_app ctx.span call x
+          | _ -> internal_error __FILE__ __LINE__ ctx.span
+        in
         let call_e =
           mk_simpl_tuple_texpression ctx.span (call_e :: back_funs_bodies)
         in
         (ctx, call_e)
     | _ -> (ctx, call_e)
   in
+  log#ldebug
+    (lazy (__FUNCTION__ ^ ": call_e: " ^ texpression_to_string ctx call_e));
+  log#ldebug
+    (lazy
+      (__FUNCTION__ ^ ":\n- dest_v.ty: "
+      ^ pure_ty_to_string ctx dest_v.ty
+      ^ "\n- call_e.ty: "
+      ^ pure_ty_to_string ctx call_e.ty));
+  sanity_check __FILE__ __LINE__
+    (let call_ty =
+       if effect_info.can_fail then unwrap_result_ty ctx.span call_e.ty
+       else call_e.ty
+     in
+     dest_v.ty = call_ty)
+    ctx.span;
   (* Translate the next expression *)
   let next_e = translate_expression e ctx in
   (* Put together *)
-  mk_let effect_info.can_fail dest_v call_e next_e
+  mk_checked_let __FILE__ __LINE__ ctx.span effect_info.can_fail dest_v call_e
+    next_e
+
+and translate_cast_unsize (call : S.call) (e : S.expression) (ty0 : T.ty)
+    (ty1 : T.ty) (ctx : bs_ctx) : texpression =
+  (* Retrieve the information about the cast *)
+  let info =
+    InterpreterExpressions.cast_unsize_to_modified_fields ctx.span call.ctx ty0
+      ty1
+  in
+
+  (* Process the arguments and the destination *)
+  let dest_mplace = translate_opt_mplace call.dest_place in
+  let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
+  let dest = mk_typed_pattern_from_var dest dest_mplace in
+  let arg =
+    match call.args with
+    | [ arg ] -> arg
+    | _ -> internal_error __FILE__ __LINE__ ctx.span
+  in
+  let arg = typed_value_to_texpression ctx call.ctx arg in
+  let arg_mp = translate_opt_mplace (List.hd call.args_places) in
+  let arg = mk_opt_mplace_texpression arg_mp arg in
+
+  (* Small helper to create an [array_to_slice] expression *)
+  let mk_array_to_slice (v : texpression) : texpression =
+    let ty, n = ty_as_array ctx.span v.ty in
+    let generics =
+      { types = [ ty ]; const_generics = [ n ]; trait_refs = [] }
+    in
+    let func = { id = FunOrOp (Unop ArrayToSlice); generics } in
+    let input_ty = v.ty in
+    let ret_ty = TAdt (TBuiltin TSlice, mk_generic_args_from_types [ ty ]) in
+    let func_ty = mk_arrows [ input_ty ] ret_ty in
+    let func = { e = Qualif func; ty = func_ty } in
+    mk_apps ctx.span func [ v ]
+  in
+
+  (* Create the cast expression *)
+  let cast_expr =
+    match info with
+    | None ->
+        (* This is a cast from a boxed array to a boxed slice: we simply insert
+           a call to [array_to_slice] *)
+        mk_array_to_slice arg
+    | Some (adt_id, generics, field_id, ty0, _) ->
+        (* This is cast between structures.
+           We update the last field of the structure by using [array_to_slice] *)
+        let adt_id = TAdtId adt_id in
+        let generics = ctx_translate_fwd_generic_args ctx generics in
+        let adt_ty = TAdt (adt_id, generics) in
+
+        (* Create the field access expression *)
+        let ty0 = ctx_translate_fwd_ty ctx ty0 in
+        let field =
+          let qualif : qualif = { id = Proj { adt_id; field_id }; generics } in
+          let qualif_ty = mk_arrows [ adt_ty ] ty0 in
+          let qualif = { e = Qualif qualif; ty = qualif_ty } in
+          mk_app ctx.span qualif arg
+        in
+
+        (* Create the array to slice expression *)
+        let nfield = mk_array_to_slice field in
+
+        (* Create the field update expression *)
+        let updt =
+          let updt =
+            StructUpdate
+              {
+                struct_id = adt_id;
+                init = Some arg;
+                updates = [ (field_id, nfield) ];
+              }
+          in
+          let ty = arg.ty in
+          { e = updt; ty }
+        in
+        updt
+  in
+
+  (* Create the let-binding *)
+  let next_e = translate_expression e ctx in
+  let monadic = false in
+  mk_checked_let __FILE__ __LINE__ ctx.span monadic dest cast_expr next_e
 
 and translate_end_abstraction (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expression) (ctx : bs_ctx) : texpression =
@@ -3299,7 +3469,7 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
   let next_e = translate_expression e ctx in
   (* Generate the assignemnts *)
   let monadic = false in
-  mk_lets monadic variables_values next_e
+  mk_checked_lets __FILE__ __LINE__ ctx.span monadic variables_values next_e
 
 and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expression) (ctx : bs_ctx) (call_id : V.FunCallId.id)
@@ -3377,7 +3547,8 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
       (* Introduce a match if necessary *)
       let ctx, (output, call) = decompose_let_match ctx (output, call) in
       (* Translate the next expression and construct the let *)
-      mk_let effect_info.can_fail output call (next_e ctx)
+      mk_checked_let __FILE__ __LINE__ ctx.span effect_info.can_fail output call
+        (next_e ctx)
 
 and translate_end_abstraction_identity (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expression) (ctx : bs_ctx) : texpression =
@@ -3472,7 +3643,7 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
   let next_e = translate_expression e ctx in
   (* Generate the assignments *)
   let monadic = false in
-  mk_lets monadic given_back_inputs next_e
+  mk_checked_lets __FILE__ __LINE__ ctx.span monadic given_back_inputs next_e
 
 and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expression) (ctx : bs_ctx) (loop_id : V.LoopId.id)
@@ -3577,13 +3748,14 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
                   var_values
               in
               let vars, values = List.split var_values in
-              mk_espan_symbolic_assignments vars values (next_e ctx)
+              mk_emeta_symbolic_assignments vars values (next_e ctx)
             else next_e ctx
           in
 
           (* Create the let-binding - we may have to introduce a match *)
           let ctx, (output, call) = decompose_let_match ctx (output, call) in
-          mk_let effect_info.can_fail output call (next_e ctx))
+          mk_checked_let __FILE__ __LINE__ ctx.span effect_info.can_fail output
+            call (next_e ctx))
 
 and translate_global_eval (gid : A.GlobalDeclId.id) (generics : T.generic_args)
     (sval : V.symbolic_value) (e : S.expression) (ctx : bs_ctx) : texpression =
@@ -3595,7 +3767,9 @@ and translate_global_eval (gid : A.GlobalDeclId.id) (generics : T.generic_args)
   let ty = ctx_translate_fwd_ty ctx decl.ty in
   let gval = { e = Qualif global_expr; ty } in
   let e = translate_expression e ctx in
-  mk_let false (mk_typed_pattern_from_var var None) gval e
+  mk_checked_let __FILE__ __LINE__ ctx.span false
+    (mk_typed_pattern_from_var var None)
+    gval e
 
 and translate_assertion (ectx : C.eval_ctx) (v : V.typed_value)
     (e : S.expression) (ctx : bs_ctx) : texpression =
@@ -3609,7 +3783,9 @@ and translate_assertion (ectx : C.eval_ctx) (v : V.typed_value)
   let func_ty = mk_arrow (TLiteral TBool) (mk_result_ty mk_unit_ty) in
   let func = { e = Qualif func; ty = func_ty } in
   let assertion = mk_apps ctx.span func args in
-  mk_let monadic (mk_dummy_pattern mk_unit_ty) assertion next_e
+  mk_checked_let __FILE__ __LINE__ ctx.span monadic
+    (mk_dummy_pattern mk_unit_ty)
+    assertion next_e
 
 and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
     (exp : S.expansion) (ctx : bs_ctx) : texpression =
@@ -3630,7 +3806,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
           let ctx, var = fresh_var_for_symbolic_value nsv ctx in
           let next_e = translate_expression e ctx in
           let monadic = false in
-          mk_let monadic
+          mk_checked_let __FILE__ __LINE__ ctx.span monadic
             (mk_typed_pattern_from_var var None)
             (mk_opt_mplace_texpression scrutinee_mplace scrutinee)
             next_e
@@ -3753,13 +3929,13 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
       let lvars = List.map (fun v -> mk_typed_pattern_from_var v None) vars in
       let lv = mk_adt_pattern scrutinee.ty variant_id lvars in
       let monadic = false in
-      mk_let monadic lv
+      mk_checked_let __FILE__ __LINE__ ctx.span monadic lv
         (mk_opt_mplace_texpression scrutinee_mplace scrutinee)
         branch
   | TTuple ->
       let vars = List.map (fun x -> mk_typed_pattern_from_var x None) vars in
       let monadic = false in
-      mk_let monadic
+      mk_checked_let __FILE__ __LINE__ ctx.span monadic
         (mk_simpl_tuple_pattern vars)
         (mk_opt_mplace_texpression scrutinee_mplace scrutinee)
         branch
@@ -3773,7 +3949,7 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
       (* We simply introduce an assignment - the box type is the
        * identity when extracted ([box a = a]) *)
       let monadic = false in
-      mk_let monadic
+      mk_checked_let __FILE__ __LINE__ ctx.span monadic
         (mk_typed_pattern_from_var var None)
         (mk_opt_mplace_texpression scrutinee_mplace scrutinee)
         branch
@@ -3831,7 +4007,7 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
   (* Make the let-binding *)
   let monadic = false in
   let var = mk_typed_pattern_from_var var mplace in
-  mk_let monadic var v next_e
+  mk_checked_let __FILE__ __LINE__ ctx.span monadic var v next_e
 
 and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
     (ectx : C.eval_ctx)
@@ -4054,13 +4230,16 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
     let e =
       List.fold_right
         (fun (var, evaluate, back_e) e ->
-          mk_let evaluate (mk_typed_pattern_from_var var None) back_e e)
+          mk_checked_let __FILE__ __LINE__ ctx.span evaluate
+            (mk_typed_pattern_from_var var None)
+            back_e e)
         back_vars_els ret
     in
     (* Bind the expression for the forward output *)
     let fwd_var = mk_typed_pattern_from_var pure_fwd_var None in
     let pat = mk_simpl_tuple_pattern (state_pat @ [ fwd_var ]) in
-    mk_let fwd_effect_info.can_fail pat fwd_e e
+    mk_checked_let __FILE__ __LINE__ ctx.span fwd_effect_info.can_fail pat fwd_e
+      e
   in
 
   (* If we are (re-)entering a loop, we need to introduce a call to the
@@ -4208,7 +4387,9 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
 
       (* Translate the end of the function *)
       let next_e = translate_end ctx in
-      let next_e = mk_lets false refreshed_inputs next_e in
+      let next_e =
+        mk_checked_lets __FILE__ __LINE__ ctx.span false refreshed_inputs next_e
+      in
 
       (* Introduce the call to the loop forward function in the generated AST *)
       let out_pat = mk_simpl_tuple_pattern out_pats in
@@ -4227,7 +4408,10 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
       in
 
       (* Create the let expression with the loop call *)
-      let e = mk_let effect_info.can_fail out_pat loop_call next_e in
+      let e =
+        mk_checked_let __FILE__ __LINE__ ctx.span effect_info.can_fail out_pat
+          loop_call next_e
+      in
 
       (* Add meta-information linking the loop input parameters and the
          loop input values - we use this to derive proper names.
@@ -4242,7 +4426,7 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
          We then remove all the span information from the body *before* calling
          {!PureMicroPasses.decompose_loops}.
       *)
-      mk_espan_symbolic_assignments loop_info.input_vars org_args e
+      mk_emeta_symbolic_assignments loop_info.input_vars org_args e
 
 and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   let loop_id = V.LoopId.Map.find loop.loop_id ctx.loop_ids_map in
@@ -4502,7 +4686,7 @@ and translate_espan (span : S.espan) (e : S.expression) (ctx : bs_ctx) :
         let infos = eval_ctx_to_symbolic_assignments_info ctx ectx in
         if infos <> [] then
           (* If often happens that the next expression contains exactly the
-             same span information *)
+             same meta information *)
           match next_e.e with
           | Meta (SymbolicPlaces infos1, _) when infos1 = infos -> None
           | _ -> Some (SymbolicPlaces infos)
@@ -4562,7 +4746,10 @@ let wrap_in_match_fuel (span : Meta.span) (fuel0 : VarId.id) (fuel : VarId.id)
 
       (* Create the success branch *)
       let monadic = false in
-      let success_branch = mk_let monadic nfuel_pat decrease_fuel body in
+      let success_branch =
+        mk_checked_let __FILE__ __LINE__ span monadic nfuel_pat decrease_fuel
+          body
+      in
 
       (* Put everything together *)
       let match_e = Switch (check_fuel, If (fail_branch, success_branch)) in

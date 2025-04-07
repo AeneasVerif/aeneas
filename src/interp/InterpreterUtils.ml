@@ -36,6 +36,7 @@ let inst_fun_sig_to_string = Print.EvalCtx.inst_fun_sig_to_string
 let ty_to_string = Print.EvalCtx.ty_to_string
 let constant_expr_to_string = Print.EvalCtx.constant_expr_to_string
 let unop_to_string = Print.EvalCtx.unop_to_string
+let binop_to_string = Print.Expressions.binop_to_string
 let generic_args_to_string = Print.EvalCtx.generic_args_to_string
 let trait_ref_to_string = Print.EvalCtx.trait_ref_to_string
 let trait_decl_ref_to_string = Print.EvalCtx.trait_decl_ref_to_string

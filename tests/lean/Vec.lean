@@ -23,4 +23,12 @@ def use_alloc_with_capacity
   (T : Type) (n : Usize) : Result (alloc.vec.Vec T) :=
   ok (alloc.vec.Vec.with_capacity T n)
 
+/- [vec::from_elem]:
+   Source: 'tests/src/vec.rs', lines 13:0-15:1 -/
+def from_elem
+  {T : Type} (corecloneCloneInst : core.clone.Clone T) (x : T) (n : Usize) :
+  Result (alloc.vec.Vec T)
+  :=
+  alloc.vec.from_elem corecloneCloneInst x n
+
 end vec

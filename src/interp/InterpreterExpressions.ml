@@ -593,9 +593,80 @@ let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
         let value = VLiteral (VBool b) in
         let ty = TLiteral TBool in
         Ok { ty; value }
-    | _ -> exec_raise __FILE__ __LINE__ span "Invalid input for unop"
+    | _ ->
+        exec_raise __FILE__ __LINE__ span
+          ("Invalid input for unop: " ^ unop_to_string ctx unop)
   in
   (r, ctx, cc)
+
+let cast_unsize_to_modified_fields (span : Meta.span) (ctx : eval_ctx)
+    (ty0 : ty) (ty1 : ty) :
+    (type_decl_id * generic_args * FieldId.id * ty * ty) option =
+  let mk_msg () =
+    "Invalid inputs for unsized cast:\n- input ty: " ^ ty_to_string ctx ty0
+    ^ "\n- output ty: " ^ ty_to_string ctx ty1
+  in
+  if (not (ty_is_box ty0)) || not (ty_is_box ty1) then
+    exec_raise __FILE__ __LINE__ span (mk_msg ())
+  else
+    let ty0 = ty_as_box ty0 in
+    let ty1 = ty_as_box ty1 in
+    let compatible_array_slice (ty0, ty1) =
+      if ty_is_array ty0 && ty_is_slice ty1 then
+        let ty0, _ = ty_as_array ty0 in
+        let ty1 = ty_as_slice ty1 in
+        ty0 = ty1
+      else false
+    in
+    (* Case 1: array to slice *)
+    if compatible_array_slice (ty0, ty1) then None
+    else if (* Case 2: ADT to ADT *)
+            ty_is_custom_adt ty0 && ty_is_custom_adt ty1
+    then (
+      let id0, generics0 = ty_as_custom_adt ty0 in
+      let id1, generics1 = ty_as_custom_adt ty1 in
+      cassert __FILE__ __LINE__ (id0 = id1) span (mk_msg ());
+      (* Retrieve the instantiated fields and make sure they are all the same
+         but the last *)
+      let fields_tys0 =
+        AssociatedTypes.ctx_type_get_inst_norm_variants_fields_etypes span ctx
+          id0 generics0
+      in
+      let fields_tys1 =
+        AssociatedTypes.ctx_type_get_inst_norm_variants_fields_etypes span ctx
+          id1 generics1
+      in
+      (* The ADTs should be structures *)
+      let fields_tys0, fields_tys1 =
+        match (fields_tys0, fields_tys1) with
+        | [ (None, tys0) ], [ (None, tys1) ] -> (tys0, tys1)
+        | _ -> exec_raise __FILE__ __LINE__ span (mk_msg ())
+      in
+      cassert __FILE__ __LINE__
+        (List.length fields_tys0 = List.length fields_tys1
+        && List.length fields_tys0 > 0)
+        span (mk_msg ());
+      let fields_tys = List.combine fields_tys0 fields_tys1 in
+      let fields_beg, last_field = Collections.List.pop_last fields_tys in
+      cassert __FILE__ __LINE__
+        (List.for_all (fun (ty0, ty1) -> ty0 = ty1) fields_beg)
+        span (mk_msg ());
+      log#ldebug
+        (lazy
+          (__FUNCTION__ ^ ": structure cast unsized:\n- input field type: "
+          ^ ty_to_string ctx (fst last_field)
+          ^ "\n- output field type: "
+          ^ ty_to_string ctx (snd last_field)));
+      cassert __FILE__ __LINE__
+        (compatible_array_slice last_field)
+        span (mk_msg ());
+      Some
+        ( id0,
+          generics0,
+          FieldId.of_int (List.length fields_beg),
+          fst last_field,
+          snd last_field ))
+    else exec_raise __FILE__ __LINE__ span (mk_msg ())
 
 let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
     (op : operand) (ctx : eval_ctx) :
@@ -612,9 +683,14 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
     | Not, (TLiteral (TInteger _) as lty) -> lty
     | Neg, (TLiteral (TInteger _) as lty) -> lty
     | Cast (CastScalar (_, tgt_ty)), _ -> TLiteral tgt_ty
+    | Cast (CastUnsize (ty0, ty1)), _ ->
+        (* If the following function succeeds, then it means the cast is well-formed
+           (otherwise it throws an exception) *)
+        let _ = cast_unsize_to_modified_fields span ctx ty0 ty1 in
+        ty1
     | _ ->
         exec_raise __FILE__ __LINE__ span
-          ("Invalid input for unop " ^ unop_to_string ctx unop)
+          ("Invalid input for unop: " ^ unop_to_string ctx unop)
   in
   let res_sv = { sv_id = res_sv_id; sv_ty = res_sv_ty } in
   (* Compute the result *)
@@ -732,7 +808,9 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
         | Shl | Shr | CheckedAdd | CheckedSub | CheckedMul ->
             craise __FILE__ __LINE__ span "Unimplemented binary operation"
         | Ne | Eq -> craise __FILE__ __LINE__ span "Unreachable")
-    | _ -> craise __FILE__ __LINE__ span "Invalid inputs for binop"
+    | _ ->
+        craise __FILE__ __LINE__ span
+          ("Invalid inputs for binop: " ^ binop_to_string binop)
 
 let eval_binary_op_concrete (config : config) (span : Meta.span) (binop : binop)
     (op1 : operand) (op2 : operand) (ctx : eval_ctx) :

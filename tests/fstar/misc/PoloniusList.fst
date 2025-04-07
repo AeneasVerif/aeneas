@@ -24,7 +24,8 @@ let rec get_list_at_x
     else
       let* (l, get_list_at_x_back) = get_list_at_x tl x in
       let back =
-        fun ret -> let tl1 = get_list_at_x_back ret in List_Cons hd tl1 in
+        fun ret -> let tl1 = get_list_at_x_back ret in List_Cons hd tl1
+      in
       Ok (l, back)
   | List_Nil -> Ok (List_Nil, (fun ret -> ret))
   end

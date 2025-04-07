@@ -10,11 +10,11 @@ let log = Logging.pure_micro_passes_log
 
 type ctx = { fun_decls : fun_decl FunDeclId.Map.t; trans_ctx : trans_ctx }
 
-let fun_decl_to_string (ctx : ctx) (def : Pure.fun_decl) : string =
+let fun_decl_to_string (ctx : ctx) (def : fun_decl) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.fun_decl_to_string fmt def
 
-let fun_sig_to_string (ctx : ctx) (sg : Pure.fun_sig) : string =
+let fun_sig_to_string (ctx : ctx) (sg : fun_sig) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.fun_sig_to_string fmt sg
 
@@ -86,17 +86,17 @@ type pn_ctx = {
 }
 
 (** This function computes pretty names for the variables in the pure AST. It
-    relies on the "span"-place information in the AST to generate naming
+    relies on the "meta"-place information in the AST to generate naming
     constraints, and then uses those to compute the names.
     
     The way it works is as follows:
     - we only modify the names of the unnamed variables
     - whenever we see an rvalue/pattern which is exactly an unnamed variable,
-      and this value is linked to some span-place information which contains
+      and this value is linked to some meta-place information which contains
       a name and an empty path, we consider we should use this name
     - we try to propagate naming constraints on the pure variables use in the
       synthesized programs, and also on the LLBC variables from the original
-      program (information about the LLBC variables is stored in the span-places)
+      program (information about the LLBC variables is stored in the meta-places)
       
       
     Something important is that, for every variable we find, the name of this
@@ -137,7 +137,7 @@ type pn_ctx = {
         hd -> s2
       ]}
       
-      When generating the symbolic AST, we save as span-information that we
+      When generating the symbolic AST, we save as meta-information that we
       assign [s1] to the place [x] and [s2] to the place [hd]. This way,
       we learn we can use the names [x] and [hd] for the variables which are
       introduced by the match:
@@ -181,10 +181,10 @@ type pn_ctx = {
      so we should use "x" as the basename (hence the resulting name "x1"). However,
      this is non-trivial, because after desugaring the input argument given to [id]
      is not [&mut x] but [move ^0] (i.e., it comes from a temporary, anonymous
-     variable). For this reason, we use the span-place [&mut x] as the span-place
+     variable). For this reason, we use the meta-place [&mut x] as the meta-place
      for the given back value (this is done during the synthesis), and propagate
      naming information *also* on the LLBC variables (which are referenced by the
-     span-places).
+     meta-places).
 
      This way, because of [^0 = &mut x], we can propagate the name "x" to the place
      [^0], then to the given back variable across the function call.
@@ -232,7 +232,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
    * - we explore the expressions
    * - we register the variables introduced by the let-bindings
    * - we use the naming information we find (through the variables and the
-   *   span-places) to update our context (i.e., maps from variable ids to
+   *   meta-places) to update our context (i.e., maps from variable ids to
    *   names)
    * - we use this information to update the names of the variables used in the
    *   expressions
@@ -306,8 +306,8 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     in
     { ctx with llbc_vars }
   in
-  (* Add a constraint: given a variable id and an associated span-place, try to
-   * extract naming information from the span-place and save it *)
+  (* Add a constraint: given a variable id and an associated meta-place, try to
+   * extract naming information from the meta-place and save it *)
   let add_constraint (mp : mplace) (var_id : VarId.id) (ctx : pn_ctx) : pn_ctx =
     (* Register the place *)
     let ctx = register_mplace mp ctx in
@@ -326,14 +326,14 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     (* Register the place *)
     let ctx = register_mplace mp ctx in
     (* Add the constraint *)
-    match (unspan rv).e with
+    match (unmeta rv).e with
     | Var vid -> add_constraint mp vid ctx
     | _ -> ctx
   in
   let add_pure_var_value_constraint (var_id : VarId.id) (rv : texpression)
       (ctx : pn_ctx) : pn_ctx =
     (* Add the constraint *)
-    match (unspan rv).e with
+    match (unmeta rv).e with
     | Var vid -> (
         (* Try to find a name for the vid *)
         match VarId.Map.find_opt vid ctx.pure_vars with
@@ -385,8 +385,8 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
           VarId.Map.mem lvar.id ctx.pure_vars
         then ctx
         else
-          (* We ignore the left span-place information: it should have been taken
-           * care of by [add_left_constraint]. We try to use the right span-place
+          (* We ignore the left meta-place information: it should have been taken
+           * care of by [add_left_constraint]. We try to use the right meta-place
            * information *)
           let add (name : string) (ctx : pn_ctx) : pn_ctx =
             (* Add the constraint for the pure variable *)
@@ -399,7 +399,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
                 add_llbc_var_constraint var_id name ctx
           in
           (* We try to use the right-place information *)
-          let rmp, re = opt_unspan_mplace re in
+          let rmp, re = opt_unmeta_mplace re in
           let ctx =
             match rmp with
             | Some (PlaceBase (var_id, name)) ->
@@ -413,7 +413,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
           in
           (* We try to use the rvalue information, if it is a variable *)
           let ctx =
-            match (unspan re).e with
+            match (unmeta re).e with
             | Var rvar_id -> (
                 match VarId.Map.find_opt rvar_id ctx.pure_vars with
                 | None -> ctx
@@ -442,7 +442,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
       | Loop loop -> update_loop loop ctx
       | StructUpdate supd -> update_struct_update supd ctx
       | Lambda (lb, e) -> update_lambda lb e ctx
-      | Meta (span, e) -> update_espan span e ctx
+      | Meta (meta, e) -> update_emeta meta e ctx
       | EError (span, msg) -> (ctx, EError (span, msg))
     in
     (ctx, { e; ty })
@@ -545,10 +545,10 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     let supd = { struct_id; init; updates } in
     (ctx, StructUpdate supd)
   (* *)
-  and update_espan (span : espan) (e : texpression) (ctx : pn_ctx) :
+  and update_emeta (meta : emeta) (e : texpression) (ctx : pn_ctx) :
       pn_ctx * expression =
     let ctx =
-      match span with
+      match meta with
       | Assignment (mp, rvalue, rmp) ->
           let ctx = add_right_constraint mp rvalue ctx in
           let ctx =
@@ -575,10 +575,10 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
             (fun ctx (var_id, name) -> add_pure_var_constraint var_id name ctx)
             ctx infos
       | MPlace mp -> add_right_constraint mp e ctx
-      | Tag _ -> ctx
+      | Tag _ | TypeAnnot -> ctx
     in
     let ctx, e = update_texpression e ctx in
-    let e = mk_espan span e in
+    let e = mk_emeta meta e in
     (ctx, e.e)
   in
 
@@ -605,12 +605,12 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
   in
   { def with body }
 
-(** Remove the span-information *)
-let remove_span (def : fun_decl) : fun_decl =
+(** Remove the meta-information *)
+let remove_meta (def : fun_decl) : fun_decl =
   match def.body with
   | None -> def
   | Some body ->
-      let body = { body with body = PureUtils.remove_span body.body } in
+      let body = { body with body = PureUtils.remove_meta body.body } in
       { def with body = Some body }
 
 (** Introduce calls to [massert] (monadic assertion).
@@ -1063,7 +1063,7 @@ let simplify_duplicate_calls (_ctx : ctx) (def : fun_decl) : fun_decl =
 let lift_unop (unop : unop) : bool =
   match unop with
   | Not None -> false
-  | Not (Some _) | Neg _ | Cast _ -> true
+  | Not (Some _) | Neg _ | Cast _ | ArrayToSlice -> true
 
 (** A helper predicate *)
 let inline_unop unop = not (lift_unop unop)
@@ -1992,6 +1992,7 @@ let decompose_loops (_ctx : ctx) (def : fun_decl) : fun_decl * fun_decl list =
               {
                 generics = fun_sig.generics;
                 explicit_info = fun_sig.explicit_info;
+                known_from_trait_refs = fun_sig.known_from_trait_refs;
                 llbc_generics = fun_sig.llbc_generics;
                 preds = fun_sig.preds;
                 inputs = inputs_tys;
@@ -3212,6 +3213,7 @@ let filter_loop_inputs (ctx : ctx) (transl : pure_fun_translation list) :
           let {
             generics;
             explicit_info = _;
+            known_from_trait_refs = _;
             llbc_generics;
             preds;
             inputs;
@@ -3250,11 +3252,17 @@ let filter_loop_inputs (ctx : ctx) (transl : pure_fun_translation list) :
           sanity_check __FILE__ __LINE__
             (fun_sig_info_is_wf fwd_info)
             decl.item_meta.span;
+          let explicit_info =
+            SymbolicToPure.compute_explicit_info generics inputs
+          in
+          let known_from_trait_refs =
+            SymbolicToPure.compute_known_info explicit_info generics
+          in
           let signature =
             {
               generics;
-              explicit_info =
-                SymbolicToPure.compute_explicit_info generics inputs;
+              explicit_info;
+              known_from_trait_refs;
               llbc_generics;
               preds;
               inputs;
@@ -3397,16 +3405,16 @@ let apply_passes_to_def (ctx : ctx) (def : fun_decl) : fun_and_loops =
   log#ltrace
     (lazy ("compute_pretty_name:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
-  (* TODO: we might want to leverage more the assignment span-data, for
+  (* TODO: we might want to leverage more the assignment meta-data, for
    * aggregates for instance. *)
 
   (* TODO: reorder the branches of the matches/switches *)
 
-  (* The span-information is now useless: remove it.
-   * Rk.: some passes below use the fact that we removed the span-data
-   * (otherwise we would have to "unspan" expressions before matching) *)
-  let def = remove_span def in
-  log#ltrace (lazy ("remove_span:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
+  (* The meta-information is now useless: remove it.
+   * Rk.: some passes below use the fact that we removed the meta-data
+   * (otherwise we would have to "unmeta" expressions before matching) *)
+  let def = remove_meta def in
+  log#ltrace (lazy ("remove_meta:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
   (* Extract the loop definitions by removing the {!Loop} node *)
   let def, loops = decompose_loops ctx def in
@@ -3415,6 +3423,382 @@ let apply_passes_to_def (ctx : ctx) (def : fun_decl) : fun_and_loops =
   let f = apply_end_passes_to_def ctx def in
   let loops = List.map (apply_end_passes_to_def ctx) loops in
   { f; loops }
+
+(** Introduce type annotations.
+
+    See [add_type_annotations].
+
+    Note that we use the context only for printing.
+ *)
+let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
+    (trans_funs : pure_fun_translation FunDeclId.Map.t)
+    (builtin_sigs : fun_sig Builtin.BuiltinFunIdMap.t)
+    (type_decls : type_decl TypeDeclId.Map.t) (def : fun_decl) : fun_decl =
+  let span = def.item_meta.span in
+  let fmt = trans_ctx_to_pure_fmt_env trans_ctx in
+  let texpression_to_string (x : texpression) : string =
+    PrintPure.texpression_to_string fmt false "" "  " x
+  in
+  let ty_to_string (x : ty) : string = PrintPure.ty_to_string fmt false x in
+  let generic_params_to_string (generics : generic_params) : string =
+    "["
+    ^ String.concat ", " (PrintPure.generic_params_to_strings fmt generics)
+    ^ "]"
+  in
+  let generic_args_to_string (generics : generic_args) : string =
+    "["
+    ^ String.concat ", " (PrintPure.generic_args_to_strings fmt false generics)
+    ^ "]"
+  in
+  let fun_sig_to_string (sg : fun_sig) : string =
+    PrintPure.fun_sig_to_string fmt sg
+  in
+
+  (* The map visitor.
+
+     For every sub-expression we track a "type with holes", where the holes
+     are types which are not explicitly known (either because we can't directly
+     know the type from the context, or because some type variables are implicit).
+
+     If at some point the type is not known and the type of the expression is
+     ambiguous, we introduce a type annotation.
+
+     We encode types with holes in a simple manner: the unknown holes are type
+     variables with id = -1.
+  *)
+  let hole : ty = TVar (T.Free (TypeVarId.of_int (-1))) in
+  (* The const generic holes are not really useful, but while we're at it we
+     can keep track of them *)
+  let cg_hole : const_generic =
+    T.CgVar (T.Free (ConstGenericVarId.of_int (-1)))
+  in
+
+  (* Small helper to add a type annotation *)
+  let mk_type_annot (e : texpression) : texpression =
+    { e = Meta (TypeAnnot, e); ty = e.ty }
+  in
+
+  let rec visit (ty : ty) (e : texpression) : texpression =
+    match e.e with
+    | Var _ | CVar _ | Const _ | EError _ | Qualif _ -> e
+    | App _ -> visit_App ty e
+    | Lambda (pat, e') ->
+        (* Decompose the type *)
+        let ty' =
+          match ty with
+          | TArrow (_, ty) -> ty
+          | _ -> hole
+        in
+        { e with e = Lambda (pat, visit ty' e') }
+    | Let (monadic, pat, bound, next) ->
+        (* The type of the bound expression is considered as unknown *)
+        let bound = visit hole bound in
+        let next = visit ty next in
+        { e with e = Let (monadic, pat, bound, next) }
+    | Switch (discr, body) ->
+        (* We consider that the type of the discriminant is unknown *)
+        let discr = visit hole discr in
+        let body = visit_switch_body ty body in
+        { e with e = Switch (discr, body) }
+    | Loop _ ->
+        (* Loops should have been eliminated *)
+        internal_error __FILE__ __LINE__ span
+    | StructUpdate supd ->
+        log#ldebug
+          (lazy (__FUNCTION__ ^ ": exploring: " ^ texpression_to_string e));
+        (* Some backends need a type annotation here if we create a new structure
+           and if the type is unknown.
+           TODO: actually we may change the type of the structure by changing
+           one of its fields (it happens when we do an unsized cast in Rust).
+           We ignore this case here. *)
+        let ty =
+          match supd.init with
+          | None -> ty
+          | Some _ ->
+              (* We update a structure (we do not create a new one): we consider that the type is known *)
+              e.ty
+        in
+        begin
+          match ty with
+          | TAdt (adt_id, generics) ->
+              (* The type is known: let's compute the type of the fields and recurse *)
+              let field_tys =
+                (* There are two cases: the ADT may be an array (it happens when
+                   initializing an array) *)
+                match adt_id with
+                | TBuiltin TArray ->
+                    sanity_check __FILE__ __LINE__
+                      (List.length generics.types = 1)
+                      span;
+                    Collections.List.repeat (List.length supd.updates)
+                      (List.nth generics.types 0)
+                | _ ->
+                    PureTypeCheck.get_adt_field_types span type_decls adt_id
+                      None generics
+              in
+              (* Update the fields *)
+              let updates =
+                List.map
+                  (fun ((fid, fe) : _ * texpression) ->
+                    let field_ty = FieldId.nth field_tys fid in
+                    (fid, visit field_ty fe))
+                  supd.updates
+              in
+              { e with e = StructUpdate { supd with updates } }
+          | _ ->
+              (* The type of the structure is unknown: we add a type annotation.
+                 From there, the type of the field updates is known *)
+              let updates =
+                List.map
+                  (fun ((fid, fe) : _ * texpression) -> (fid, visit fe.ty fe))
+                  supd.updates
+              in
+              let e = { e with e = StructUpdate { supd with updates } } in
+              (* Add the type annotation, if the backend is Lean *)
+              if Config.backend () = Lean then mk_type_annot e else e
+        end
+    | Meta (meta, e') ->
+        let ty = if meta = TypeAnnot then e'.ty else ty in
+        { e with e = Meta (meta, visit ty e') }
+  and visit_App (ty : ty) (e : texpression) : texpression =
+    log#ldebug
+      (lazy
+        (__FUNCTION__ ^ ": visit_App:\n- ty: " ^ ty_to_string ty ^ "\n- e: "
+       ^ texpression_to_string e));
+    (* Deconstruct the app *)
+    let f, args = destruct_apps e in
+    (* Compute the types of the arguments: it depends on the function *)
+    let mk_holes () = List.map (fun _ -> hole) args in
+    let mk_known () = List.map (fun (e : texpression) -> e.ty) args in
+    let known_f_ty, known_args_tys =
+      let rec compute_known_tys known_ty args =
+        match args with
+        | [] -> (known_ty, [])
+        | _ :: args -> (
+            match known_ty with
+            | TArrow (ty0, ty1) ->
+                let fty, args_tys = compute_known_tys ty1 args in
+                (fty, ty0 :: args_tys)
+            | _ ->
+                let fty, args_tys = compute_known_tys hole args in
+                (fty, hole :: args_tys))
+      in
+      compute_known_tys ty args
+    in
+    let compute_known_tys_from_fun_id (qualif : qualif) (fid : fun_id) :
+        ty * ty list * bool =
+      match fid with
+      | Pure fid -> begin
+          match fid with
+          | Return | ToResult -> begin
+              match known_args_tys with
+              | [ ty ] ->
+                  if ty = hole && Config.backend () = Lean then
+                    (hole, mk_holes (), true)
+                  else (known_f_ty, known_args_tys, false)
+              | _ -> (known_f_ty, known_args_tys, false)
+            end
+          | Fail | Assert | FuelDecrease | FuelEqZero ->
+              (f.ty, mk_known (), false)
+          | UpdateAtIndex _ -> (known_f_ty, known_args_tys, false)
+        end
+      | FromLlbc (fid, lp_id) -> begin
+          (* Lookup the signature *)
+          let sg =
+            match fid with
+            | FunId (FRegular fid) | TraitMethod (_, _, fid) ->
+                let trans_fun =
+                  silent_unwrap __FILE__ __LINE__ span
+                    (LlbcAst.FunDeclId.Map.find_opt fid trans_funs)
+                in
+                let trans_fun =
+                  match lp_id with
+                  | None -> trans_fun.f
+                  | Some lp_id -> Pure.LoopId.nth trans_fun.loops lp_id
+                in
+                log#ldebug
+                  (lazy (__FUNCTION__ ^ ": function name: " ^ trans_fun.name));
+                trans_fun.signature
+            | FunId (FBuiltin aid) ->
+                Builtin.BuiltinFunIdMap.find aid builtin_sigs
+          in
+          log#ldebug
+            (lazy (__FUNCTION__ ^ ": signature: " ^ fun_sig_to_string sg));
+          (* In case this is a trait method, we need to concatenate the generics
+             args of the trait ref with the generics args of the method call itself *)
+          let generics =
+            match fid with
+            | TraitMethod (trait_ref, _, _) ->
+                append_generic_args trait_ref.trait_decl_ref.decl_generics
+                  qualif.generics
+            | _ -> qualif.generics
+          in
+          (* Replace all the unknown implicit type variables with holes.
+             Note that we assume that all the trait refs are there, meaning
+             we can use them to infer some implicit variables.
+          *)
+          let known = sg.known_from_trait_refs in
+          let types =
+            List.map
+              (fun (known, ty) ->
+                match known with
+                | Known -> ty
+                | Unknown -> hole)
+              (List.combine known.known_types generics.types)
+          in
+          let const_generics =
+            List.map
+              (fun (known, cg) ->
+                match known with
+                | Known -> cg
+                | Unknown -> cg_hole)
+              (List.combine known.known_const_generics generics.const_generics)
+          in
+          let generics = { qualif.generics with types; const_generics } in
+          (* Compute the types of the arguments *)
+          log#ldebug
+            (lazy
+              (__FUNCTION__ ^ ":\n- sg.generics: "
+              ^ generic_params_to_string sg.generics
+              ^ "\n- generics: "
+              ^ generic_args_to_string generics));
+          let subst = make_subst_from_generics sg.generics generics in
+          let sg = fun_sig_substitute subst sg in
+          (known_f_ty, sg.inputs, false)
+        end
+    in
+    let f_ty, args_tys, need_annot =
+      match f.e with
+      | Qualif qualif -> begin
+          match qualif.id with
+          | FunOrOp fop -> begin
+              match fop with
+              | Fun fid -> begin compute_known_tys_from_fun_id qualif fid end
+              | Unop unop -> begin
+                  match unop with
+                  | Not _ | Neg _ | Cast _ | ArrayToSlice ->
+                      (known_f_ty, known_args_tys, false)
+                end
+              | Binop _ -> (known_f_ty, known_args_tys, false)
+            end
+          | Global _ -> (f.ty, mk_known (), false)
+          | AdtCons adt_cons_id -> begin
+              (* We extract the type of the arguments from the known type *)
+              match ty with
+              | TAdt (adt_id, generics)
+              (* TODO: there are type-checking errors that we need to take into account (otherwise
+                 [get_adt_field_types] sometimes crashes) *)
+                when adt_id = adt_cons_id.adt_id ->
+                  (* The type is known: let's compute the type of the fields and recurse *)
+                  let field_tys =
+                    PureTypeCheck.get_adt_field_types span type_decls adt_id
+                      adt_cons_id.variant_id generics
+                  in
+                  (* We shouldn't need to know the type of the constructor - just leaving
+                     a hole for now *)
+                  (hole, field_tys, false)
+              | _ ->
+                  (* The type is unknown, but if the constructor is an enumeration
+                     constructor, we can retrieve information from it *)
+                  if Option.is_some adt_cons_id.variant_id then
+                    let args_tys =
+                      match e.ty with
+                      | TAdt (adt_id, generics) ->
+                          (* Replace the generic arguments with holes *)
+                          let generics =
+                            {
+                              generics with
+                              types = List.map (fun _ -> hole) generics.types;
+                              const_generics =
+                                List.map
+                                  (fun _ -> cg_hole)
+                                  generics.const_generics;
+                            }
+                          in
+                          PureTypeCheck.get_adt_field_types span type_decls
+                            adt_id adt_cons_id.variant_id generics
+                      | _ -> mk_holes ()
+                    in
+                    (hole, args_tys, false)
+                  else (hole, mk_holes (), false)
+            end
+          | Proj _ | TraitConst _ ->
+              (* Being conservative here *)
+              (hole, mk_holes (), false)
+        end
+      | Var _ ->
+          (* We consider that the full type of the function should be known,
+             so the type of the arguments should be known *)
+          (f.ty, mk_known (), false)
+      | _ ->
+          (* Being conservative: the type is unknown (we actually shouldn't
+             get here) *)
+          (hole, mk_holes (), false)
+    in
+    (* The application may be partial *)
+    let args_tys = Collections.List.prefix (List.length args) args_tys in
+    let args =
+      List.map (fun (ty, arg) -> visit ty arg) (List.combine args_tys args)
+    in
+    let f = visit f_ty f in
+    let e = mk_apps span f args in
+    if need_annot then mk_type_annot e else e
+  and visit_switch_body (ty : ty) (body : switch_body) : switch_body =
+    match body with
+    | If (e1, e2) -> If (visit ty e1, visit ty e2)
+    | Match branches ->
+        let branches =
+          List.map
+            (fun (b : match_branch) -> { b with branch = visit ty b.branch })
+            branches
+        in
+        Match branches
+  in
+
+  (* Update the body *)
+  match def.body with
+  | None -> def
+  | Some body ->
+      let body =
+        Some
+          {
+            body with
+            (* Note that the type is originally known *)
+            body = visit body.body.ty body.body;
+          }
+      in
+      { def with body }
+
+(** Introduce type annotations.
+
+    See [add_type_annotations]
+
+    We need to do this in some backends in particular for the expressions
+    which create structures, as the target structure may be ambiguous from
+    the context.
+
+    Note that we use the context only for printing.
+ *)
+let add_type_annotations (trans_ctx : trans_ctx)
+    (trans_funs : pure_fun_translation list)
+    (builtin_sigs : fun_sig Builtin.BuiltinFunIdMap.t)
+    (type_decls : type_decl TypeDeclId.Map.t) : pure_fun_translation list =
+  let trans_funs_map =
+    FunDeclId.Map.of_list
+      (List.map
+         (fun (fl : pure_fun_translation) -> (fl.f.def_id, fl))
+         trans_funs)
+  in
+  let add_annot =
+    add_type_annotations_to_fun_decl trans_ctx trans_funs_map builtin_sigs
+      type_decls
+  in
+  List.map
+    (fun (fl : pure_fun_translation) ->
+      let f = add_annot fl.f in
+      let loops = List.map add_annot fl.loops in
+      { f; loops })
+    trans_funs
 
 (** Apply the micro-passes to a list of forward/backward translations.
 
@@ -3430,10 +3814,16 @@ let apply_passes_to_def (ctx : ctx) (def : fun_decl) : fun_and_loops =
     but convenient.
  *)
 let apply_passes_to_pure_fun_translations (trans_ctx : trans_ctx)
-    (transl : fun_decl list) : pure_fun_translation list =
+    (builtin_sigs : fun_sig Builtin.BuiltinFunIdMap.t)
+    (type_decls : type_decl list) (transl : fun_decl list) :
+    pure_fun_translation list =
   let fun_decls =
     FunDeclId.Map.of_list
       (List.map (fun (f : fun_decl) -> (f.def_id, f)) transl)
+  in
+  let type_decls =
+    TypeDeclId.Map.of_list
+      (List.map (fun (d : type_decl) -> (d.def_id, d)) type_decls)
   in
   let ctx = { trans_ctx; fun_decls } in
 
@@ -3444,6 +3834,11 @@ let apply_passes_to_pure_fun_translations (trans_ctx : trans_ctx)
      parameterized by *all* the symbolic values in the context, because
      they may access any of them). *)
   let transl = filter_loop_inputs ctx transl in
+
+  (* Add the type annotations - we add those only now because we need
+     to use the final types of the functions (in particular, we introduce
+     loop functions and modify their types above) *)
+  let transl = add_type_annotations trans_ctx transl builtin_sigs type_decls in
 
   (* Update the "reducible" attribute *)
   compute_reducible ctx transl

@@ -282,7 +282,8 @@ Fixpoint list_nth_mut
       p <- list_nth_mut tl i1;
       let (t, list_nth_mut_back) := p in
       let back :=
-        fun (ret : T) => let tl1 := list_nth_mut_back ret in List_Cons x tl1 in
+        fun (ret : T) => let tl1 := list_nth_mut_back ret in List_Cons x tl1
+      in
       Ok (t, back))
   | List_Nil => Fail_ Failure
   end

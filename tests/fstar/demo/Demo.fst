@@ -89,7 +89,8 @@ let rec list_nth_mut
         let* i1 = u32_sub i 1 in
         let* (x1, list_nth_mut_back) = list_nth_mut n1 tl i1 in
         let back =
-          fun ret -> let tl1 = list_nth_mut_back ret in CList_CCons x tl1 in
+          fun ret -> let tl1 = list_nth_mut_back ret in CList_CCons x tl1
+        in
         Ok (x1, back)
     | CList_CNil -> Fail Failure
     end
@@ -119,7 +120,7 @@ let rec list_tail
     | CList_CCons x tl ->
       let* (c, list_tail_back) = list_tail n1 tl in
       let back = fun ret -> let tl1 = list_tail_back ret in CList_CCons x tl1
-        in
+      in
       Ok (c, back)
     | CList_CNil -> Ok (CList_CNil, (fun ret -> ret))
     end

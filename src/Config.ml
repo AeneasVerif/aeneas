@@ -398,8 +398,7 @@ let parameterize_trait_types = ref false
 (** For sanity check: type check the generated pure code (activates checks in
     several places).
 
-    TODO: deactivated for now because we need to implement the normalization of
-    trait associated types in the pure code.
+    TODO: fix the bugs and reactivate
  *)
 let type_check_pure_code = ref false
 
@@ -464,3 +463,6 @@ let use_nested_tuple_projectors = ref false
 
 (** Generate name patterns for the external definitions we encounter *)
 let extract_external_name_patterns = ref true
+
+(** *)
+let match_patterns_with_trait_decl_refs = true

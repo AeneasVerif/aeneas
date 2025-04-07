@@ -76,4 +76,14 @@ def u32_use_rotate_left (x : U32) : Result U32 :=
 def i32_use_rotate_left (x : I32) : Result I32 :=
   ok (core.num.I32.rotate_left x 2#u32)
 
+/- [scalars::u32_default]:
+   Source: 'tests/src/scalars.rs', lines 55:0-57:1 -/
+def u32_default : Result U32 :=
+  ok (core.default.DefaultU32.default)
+
+/- [scalars::i32_default]:
+   Source: 'tests/src/scalars.rs', lines 59:0-61:1 -/
+def i32_default : Result I32 :=
+  ok (core.default.DefaultI32.default)
+
 end scalars

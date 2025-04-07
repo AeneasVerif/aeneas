@@ -59,7 +59,7 @@ let hashMap_new_with_capacity
   result (hashMap_t t)
   =
   let* slots = hashMap_allocate_slots (alloc_vec_Vec_new (aList_t t)) capacity
-    in
+  in
   let* i = usize_mul capacity max_load_factor.dividend in
   let* i1 = usize_div i max_load_factor.divisor in
   Ok
@@ -83,7 +83,8 @@ let rec hashMap_clear_loop
   then
     let* (_, index_mut_back) =
       alloc_vec_Vec_index_mut (core_slice_index_SliceIndexUsizeSliceInst
-        (aList_t t)) slots i in
+        (aList_t t)) slots i
+    in
     let* i2 = usize_add i 1 in
     let slots1 = index_mut_back AList_Nil in
     hashMap_clear_loop slots1 i2
@@ -136,7 +137,8 @@ let hashMap_insert_no_resize
   let* hash_mod = usize_rem hash i in
   let* (a, index_mut_back) =
     alloc_vec_Vec_index_mut (core_slice_index_SliceIndexUsizeSliceInst (aList_t
-      t)) self.slots hash_mod in
+      t)) self.slots hash_mod
+  in
   let* (inserted, a1) = hashMap_insert_in_list key value a in
   if inserted
   then
@@ -178,7 +180,8 @@ let rec hashMap_move_elements_loop
   then
     let* (a, index_mut_back) =
       alloc_vec_Vec_index_mut (core_slice_index_SliceIndexUsizeSliceInst
-        (aList_t t)) slots i in
+        (aList_t t)) slots i
+    in
     let (ls, a1) = core_mem_replace a AList_Nil in
     let* ntable1 = hashMap_move_elements_from_list ntable ls in
     let* i2 = usize_add i 1 in
@@ -250,7 +253,8 @@ let hashMap_contains_key
   let* hash_mod = usize_rem hash i in
   let* a =
     alloc_vec_Vec_index (core_slice_index_SliceIndexUsizeSliceInst (aList_t t))
-      self.slots hash_mod in
+      self.slots hash_mod
+  in
   hashMap_contains_key_in_list key a
 
 (** [hashmap::{hashmap::HashMap<T>}::get_in_list]: loop 0:
@@ -281,7 +285,8 @@ let hashMap_get
   let* hash_mod = usize_rem hash i in
   let* a =
     alloc_vec_Vec_index (core_slice_index_SliceIndexUsizeSliceInst (aList_t t))
-      self.slots hash_mod in
+      self.slots hash_mod
+  in
   hashMap_get_in_list key a
 
 (** [hashmap::{hashmap::HashMap<T>}::get_mut_in_list]: loop 0:
@@ -298,12 +303,13 @@ let rec hashMap_get_mut_in_list_loop
       let back =
         fun ret ->
           let x = begin match ret with | Some x1 -> x1 | _ -> cvalue end in
-          AList_Cons ckey x tl in
+          AList_Cons ckey x tl
+      in
       Ok ((Some cvalue), back)
     else
       let* (o, back) = hashMap_get_mut_in_list_loop tl key in
       let back1 = fun ret -> let tl1 = back ret in AList_Cons ckey cvalue tl1
-        in
+      in
       Ok (o, back1)
   | AList_Nil -> let back = fun ret -> AList_Nil in Ok (None, back)
   end
@@ -327,13 +333,15 @@ let hashMap_get_mut
   let* hash_mod = usize_rem hash i in
   let* (a, index_mut_back) =
     alloc_vec_Vec_index_mut (core_slice_index_SliceIndexUsizeSliceInst (aList_t
-      t)) self.slots hash_mod in
+      t)) self.slots hash_mod
+  in
   let* (o, get_mut_in_list_back) = hashMap_get_mut_in_list a key in
   let back =
     fun ret ->
       let a1 = get_mut_in_list_back ret in
       let v = index_mut_back a1 in
-      { self with slots = v } in
+      { self with slots = v }
+  in
   Ok (o, back)
 
 (** [hashmap::{hashmap::HashMap<T>}::remove_from_list]: loop 0:
@@ -377,7 +385,8 @@ let hashMap_remove
   let* hash_mod = usize_rem hash i in
   let* (a, index_mut_back) =
     alloc_vec_Vec_index_mut (core_slice_index_SliceIndexUsizeSliceInst (aList_t
-      t)) self.slots hash_mod in
+      t)) self.slots hash_mod
+  in
   let* (x, a1) = hashMap_remove_from_list key a in
   begin match x with
   | None -> let v = index_mut_back a1 in Ok (None, { self with slots = v })

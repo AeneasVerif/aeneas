@@ -88,7 +88,8 @@ let rec clear_loop
   then
     let* (_, index_mut_back) =
       alloc_vec_Vec_index_mut (core_slice_index_SliceIndexUsizeSliceInst u32) v
-        i in
+        i
+    in
     let* i2 = usize_add i 1 in
     let v1 = index_mut_back 0 in
     clear_loop v1 i2
@@ -185,7 +186,8 @@ let get_elem_mut
   =
   let* (ls, index_mut_back) =
     alloc_vec_Vec_index_mut (core_slice_index_SliceIndexUsizeSliceInst (list_t
-      usize)) slots 0 in
+      usize)) slots 0
+  in
   let* (i, back) = get_elem_mut_loop x ls in
   let back1 = fun ret -> let l = back ret in index_mut_back l in
   Ok (i, back1)
@@ -207,7 +209,8 @@ let get_elem_shared
   (slots : alloc_vec_Vec (list_t usize)) (x : usize) : result usize =
   let* ls =
     alloc_vec_Vec_index (core_slice_index_SliceIndexUsizeSliceInst (list_t
-      usize)) slots 0 in
+      usize)) slots 0
+  in
   get_elem_shared_loop x ls
 
 (** [loops::id_mut]:
@@ -344,7 +347,8 @@ let rec list_nth_mut_loop_pair_merge_loop
       then
         let back =
           fun ret ->
-            let (x, x2) = ret in ((List_Cons x tl0), (List_Cons x2 tl1)) in
+            let (x, x2) = ret in ((List_Cons x tl0), (List_Cons x2 tl1))
+        in
         Ok ((x0, x1), back)
       else
         let* i1 = u32_sub i 1 in
@@ -352,7 +356,8 @@ let rec list_nth_mut_loop_pair_merge_loop
         let back1 =
           fun ret ->
             let (tl01, tl11) = back ret in
-            ((List_Cons x0 tl01), (List_Cons x1 tl11)) in
+            ((List_Cons x0 tl01), (List_Cons x1 tl11))
+        in
         Ok (p, back1)
     | List_Nil -> Fail Failure
     end

@@ -1,6 +1,7 @@
-/- Arrays/Slices -/
+/- Arrays -/
 import Aeneas.List
 import Aeneas.Progress.Init
+import Aeneas.Std.Array.Core
 
 namespace Aeneas.Std
 
@@ -170,5 +171,47 @@ theorem Array.set_getElem!_eq α n [Inhabited α] (x : Array α n) (i : Usize) :
   x.set i (x.val[i.val]!) = x := by
   have := @List.set_getElem_self _ x.val i.val
   simp only [Array, Subtype.eq_iff, set_val_eq, List.set_getElem!]
+
+/-- Small helper (this function doesn't model a specific Rust function) -/
+def Array.clone {α : Type u} {n : Usize} (clone : α → Result α) (s : Array α n) : Result (Array α n) := do
+  let s' ← List.clone clone s.val
+  ok ⟨ s', by have:= s'.property; scalar_tac ⟩
+
+theorem Array.clone_length {α : Type u} {n : Usize} (clone : α → Result α) (s s' : Array α n) (h : Array.clone clone s = ok s') :
+  s'.length = s.length := by
+  simp [Array.clone] at h
+  simp [List.clone] at h
+  split at h <;> simp_all
+
+@[progress]
+theorem Array.clone_spec {α : Type u} {n : Usize} {clone : α → Result α} {s : Array α n} (h : ∀ x ∈ s.val, clone x = ok x) :
+  Array.clone clone s = ok s := by
+  simp only [Array.clone]
+  have ⟨ l', h ⟩ := List.clone_spec h
+  simp [h]
+
+/- [core::array::{core::clone::Clone for @Array<T, N>}#20::clone]:
+   Source: '/rustc/library/core/src/array/mod.rs', lines 432:4-432:27
+   Name pattern: [core::array::{core::clone::Clone<[@T; @N]>}::clone] -/
+def core.array.CloneArray.clone
+  {T : Type} {N : Usize} (cloneInst : core.clone.Clone T) (a : Array T N) : Result (Array T N) :=
+  Array.clone cloneInst.clone a
+
+@[progress]
+theorem core.array.CloneArray.clone_spec {T : Type} {N : Usize} (cloneInst : core.clone.Clone T) (a : Array T N)
+  (h : ∀ x ∈ a.val, cloneInst.clone x = ok x) :
+  core.array.CloneArray.clone cloneInst a = ok a := by
+  unfold clone
+  rw [Array.clone_spec h]
+
+/- Trait implementation: [core::array::{core::clone::Clone for @Array<T, N>}#20]
+   Source: '/rustc/library/core/src/array/mod.rs', lines 430:0-430:47
+   Name pattern: [core::clone::Clone<[@T; @N]>] -/
+@[reducible]
+def core.clone.CloneArray {T : Type} (N : Usize) (cloneCloneInst :
+  core.clone.Clone T) : core.clone.Clone (Array T N) := {
+  clone := core.array.CloneArray.clone cloneCloneInst
+}
+
 
 end Aeneas.Std

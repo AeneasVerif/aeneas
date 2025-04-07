@@ -458,4 +458,68 @@ def core.slice.index.SliceIndexRangeFromUsizeSlice (T : Type) :
     core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut
 }
 
+/-- Small helper (this function doesn't model a specific Rust function) -/
+def Slice.clone {T : Type} (clone : T → Result T) (s : Slice T) : Result (Slice T) := do
+  let s' ← List.clone clone s.val
+  ok ⟨ s', by scalar_tac ⟩
+
+theorem Slice.clone_length {T : Type} {clone : T → Result T} {s s' : Slice T} (h : Slice.clone clone s = ok s') :
+  s'.length = s.length := by
+  simp [Slice.clone] at h
+  simp [List.clone] at h
+  split at h <;> simp_all
+  rename_i heq
+  have := List.mapM_Result_length heq
+  cases s'; simp_all
+  cases h; simp_all
+
+@[progress]
+theorem Slice.clone_spec {T : Type} {clone : T → Result T} {s : Slice T} (h : ∀ x ∈ s.val, clone x = ok x) :
+  Slice.clone clone s = ok s := by
+  simp only [Slice.clone]
+  have ⟨ l', h ⟩ := List.clone_spec h
+  simp [h]
+
+/- [core::slice::{@Slice<T>}::split_at]:
+   Source: '/rustc/library/core/src/slice/mod.rs', lines 1908:4-1908:76
+   Name pattern: [core::slice::{[@T]}::split_at] -/
+def core.slice.Slice.split_at {T : Type} (s : Slice T) (n : Usize) :
+  Result ((Slice T) × (Slice T)) :=
+  if h0 : n ≤ s.length then
+    let s0 := (s.val.splitAt n.val).fst
+    let s1 := (s.val.splitAt n.val).snd
+    let s0 : Slice T := ⟨ s0, by have := List.splitAt_length n.val s.val; have := s.property; simp +zetaDelta at *; omega  ⟩
+    let s1 : Slice T := ⟨ s1, by have := List.splitAt_length n.val s.val; have := s.property; simp +zetaDelta at *; omega  ⟩
+    ok (s0, s1)
+  else fail .panic
+
+/- [core::slice::{@Slice<T>}::split_at_mut]:
+   Source: '/rustc/library/core/src/slice/mod.rs', lines 1908:4-1908:76
+   Name pattern: [core::slice::{[@T]}::split_at_mut] -/
+def core.slice.Slice.split_at_mut {T : Type} (s : Slice T) (n : Usize) :
+  Result (((Slice T) × (Slice T)) × (((Slice T) × (Slice T)) → Slice T)) :=
+  if h0 : n ≤ s.length then
+    let s0 := (s.val.splitAt n.val).fst
+    let s1 := (s.val.splitAt n.val).snd
+    let back (s' : Slice T × Slice T) : Slice T :=
+      let s0' := s'.fst
+      let s1' := s'.snd
+      if h1 : s0'.length = s0.length ∧ s1'.length = s1.length then
+        -- TODO: scalar_tac is super slow below
+        ⟨ s0'.val ++ s1'.val, by have := List.splitAt_length n.val s.val; have := s.property; simp +zetaDelta at *; omega ⟩
+      else s
+    let s0 : Slice T := ⟨ s0, by have := List.splitAt_length n.val s.val; have := s.property; simp +zetaDelta at *; omega  ⟩
+    let s1 : Slice T := ⟨ s1, by have := List.splitAt_length n.val s.val; have := s.property; simp +zetaDelta at *; omega  ⟩
+    ok ((s0, s1), back)
+  else fail .panic
+
+/- [core::slice::{@Slice<T>}::swap]:
+   Source: '/rustc/library/core/src/slice/mod.rs', lines 882:4-882:52
+   Name pattern: [core::slice::{[@T]}::swap] -/
+def core.slice.Slice.swap {T : Type} (s : Slice T) (a b : Usize) : Result (Slice T) := do
+  let av ← Slice.index_usize s a
+  let bv ← Slice.index_usize s b
+  let s1 ← Slice.update s a av
+  Slice.update s1 b bv
+
 end Aeneas.Std

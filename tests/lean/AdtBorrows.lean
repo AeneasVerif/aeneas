@@ -143,7 +143,7 @@ def MutWrapper1.create
    Source: 'tests/src/adt-borrows.rs', lines 108:4-110:5 -/
 def MutWrapper1.unwrap
   {T : Type} (self : MutWrapper1 T) : Result (T × (T → MutWrapper1 T)) :=
-  let back := fun ret => { x := ret }
+  let back := fun ret => ({ x := ret } : MutWrapper1 T)
   ok (self.x, back)
 
 /- [adt_borrows::{adt_borrows::MutWrapper1<'a, T>}#4::id]:

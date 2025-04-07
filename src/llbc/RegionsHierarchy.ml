@@ -320,8 +320,20 @@ let compute_regions_hierarchies (crate : crate) : region_var_groups FunIdMap.t =
        (fun (fid, (name, sg, span)) ->
          try Some (fid, compute_regions_hierarchy_for_sig span crate name sg)
          with CFailure error ->
+           let pattern =
+             match fid with
+             | FRegular fid -> (
+                 match FunDeclId.Map.find_opt fid crate.fun_decls with
+                 | None -> ""
+                 | Some decl ->
+                     "\nName pattern: '"
+                     ^ LlbcAstUtils.name_with_crate_to_pattern_string crate
+                         decl.item_meta.name
+                     ^ "'")
+             | _ -> ""
+           in
            save_error_opt_span __FILE__ __LINE__ error.span
              ("Could not compute the region hierarchies for function '" ^ name
-            ^ " because of previous error");
+            ^ " because of previous error." ^ pattern);
            None)
        (regular @ builtin))

@@ -473,6 +473,18 @@ let env_filter_abs (f : abs -> bool) (env : env) : env =
     **IMPORTANT**: this function doesn't normalize the types, you may want to
     use the [AssociatedTypes] equivalent instead.
 *)
+let ctx_type_get_instantiated_variants_fields_types (ctx : eval_ctx)
+    (def_id : TypeDeclId.id) (generics : generic_args) :
+    (VariantId.id option * ty list) list =
+  let def = ctx_lookup_type_decl ctx def_id in
+  Substitute.type_decl_get_instantiated_variants_fields_types def generics
+
+(** Return the types of the properly instantiated ADT's variant, provided a
+    context.
+
+    **IMPORTANT**: this function doesn't normalize the types, you may want to
+    use the [AssociatedTypes] equivalent instead.
+*)
 let ctx_type_get_instantiated_field_types (ctx : eval_ctx)
     (def_id : TypeDeclId.id) (opt_variant_id : VariantId.id option)
     (generics : generic_args) : ty list =

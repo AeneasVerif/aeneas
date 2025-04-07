@@ -4,7 +4,7 @@ open Charon.NameMatcher
 open Errors
 
 let log = Logging.extract_log
-let match_with_trait_decl_refs = true
+let match_with_trait_decl_refs = Config.match_patterns_with_trait_decl_refs
 
 let all_int_names =
   [

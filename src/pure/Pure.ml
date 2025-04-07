@@ -597,10 +597,14 @@ and predicates = { trait_type_constraints : trait_type_constraint list }
 (** Characterize an input parameter as explicit or implicit *)
 type explicit = Explicit | Implicit
 
+and known = Known | Unknown
+
 and explicit_info = {
   explicit_types : explicit list;
   explicit_const_generics : explicit list;
 }
+
+and known_info = { known_types : known list; known_const_generics : known list }
 
 and type_decl = {
   def_id : type_decl_id;
@@ -829,6 +833,7 @@ type unop =
   | Not of integer_type option
   | Neg of integer_type
   | Cast of literal_type * literal_type
+  | ArrayToSlice
 [@@deriving show, ord]
 
 type fun_id_or_trait_method_ref =
@@ -1004,7 +1009,7 @@ type expression =
   | Switch of texpression * switch_body
   | Loop of loop  (** See the comments for {!loop} *)
   | StructUpdate of struct_update  (** See the comments for {!struct_update} *)
-  | Meta of (espan[@opaque]) * texpression  (** Meta-information *)
+  | Meta of (emeta[@opaque]) * texpression  (** Meta-information *)
   | EError of Meta.span option * string
 
 and switch_body = If of texpression * texpression | Match of match_branch list
@@ -1078,7 +1083,7 @@ and texpression = { e : expression; ty : ty }
 and mvalue = (texpression[@opaque])
 
 (** Meta-information stored in the AST *)
-and espan =
+and emeta =
   | Assignment of mplace * mvalue * mplace option
       (** Information about an assignment which occured in LLBC.
           We use this to guide the heuristics which derive pretty names.
@@ -1101,6 +1106,13 @@ and espan =
         *)
   | MPlace of mplace  (** Meta-information about the origin of a value *)
   | Tag of string  (** A tag - typically used for debugging *)
+  | TypeAnnot
+      (** The presence of this marker means that we should insert a type-annotation
+          when extracting the code. This is necessart because, for instance, the
+          constructor to use for an expression [{ v := ... }] may be ambiguous,
+          especially for backends like Lean which allow collisions between field names.
+
+          Those markers are introduced during a micro-pass. *)
 [@@deriving
   show,
     ord,
@@ -1309,6 +1321,8 @@ type fun_sig = {
   generics : generic_params;
   explicit_info : explicit_info;
       (** Information about which inputs parameters are explicit/implicit *)
+  known_from_trait_refs : known_info;
+      (** Information about which (implicit) parameters can be infered from the trait refs only *)
   llbc_generics : Types.generic_params;
       (** We use the LLBC generics to generate "pretty" names, for instance
           for the variables we introduce for the trait clauses: we derive

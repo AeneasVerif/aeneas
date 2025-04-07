@@ -1,15 +1,15 @@
 import Aeneas.ReduceZMod.Init
 import Mathlib.Algebra.Algebra.ZMod
+import Aeneas.Utils
 
 namespace Aeneas.ReduceZMod
 
+open Utils
 open Lean Meta
 
-def exprToNat? (e : Expr) : Option Nat :=
-  let e := e.consumeMData
-  if let some n := e.nat? then some n
-  else if let some n := e.rawNatLit? then some n
-  else none
+/- TODO: it might be possible to remove some of those simp procedures with simp lemmas,
+   by using the notation `ofNat(x)`
+   (https://github.com/leanprover-community/mathlib4/blob/ce412ec13b32cf08820842e2ec234161d6dbd5d2/Mathlib/Tactic/OfNat.lean#L8) -/
 
 /-- A simproc to reduce ZMod expressions.
 
