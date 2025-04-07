@@ -1600,7 +1600,34 @@ let ctx_compute_struct_constructor (def : type_decl) (ctx : extraction_ctx)
 
 let ctx_compute_fun_name_no_suffix (meta : T.item_meta) (ctx : extraction_ctx)
     (fname : llbc_name) : string =
+  (* Check if the function is a method implementation for a blanket impl.
+     If it is the case, add a path element to avoid name collisions *)
+  let rec is_blanket_method (name : llbc_name) : bool =
+    match name with
+    | [] | [ _ ] -> false
+    | [ PeImpl (ImplElemTrait impl_id, _); _ ] ->
+        (* This is a trait impl method: check if the impl is a blanket impl *)
+        let trait_impl =
+          silent_unwrap __FILE__ __LINE__ meta.span
+            (TraitImplId.Map.find_opt impl_id ctx.trans_trait_impls)
+        in
+        let args = trait_impl.llbc_impl_trait.decl_generics in
+        begin
+          match args.types with
+          | TVar _ :: _ -> true
+          | _ -> false
+        end
+    | _ :: name -> is_blanket_method name
+  in
+  let is_blanket = is_blanket_method fname in
   let fname = ctx_compute_simple_name meta ctx fname in
+  (* Add the blanket path elem if the method is a blanket method *)
+  let fname =
+    if is_blanket then
+      let fname, last = Collections.List.pop_last fname in
+      fname @ [ "Blanket"; last ]
+    else fname
+  in
   (* TODO: don't convert to snake case for Coq, HOL4, F* *)
   let fname = flatten_name fname in
   match backend () with
