@@ -4971,7 +4971,11 @@ let translate_type_decls (ctx : Contexts.decls_ctx) : type_decl list =
         let env = PrintPure.decls_ctx_to_fmt_env ctx in
         let name = PrintPure.name_to_string env d.item_meta.name in
         let name_pattern =
-          TranslateCore.name_to_pattern_string ctx d.item_meta.name
+          try
+            TranslateCore.name_to_pattern_string (Some d.item_meta.span) ctx
+              d.item_meta.name
+          with CFailure _ ->
+            "(could not compute the name pattern due to a different error)"
         in
         save_error_opt_span __FILE__ __LINE__ error.span
           ("Could not translate type decl '" ^ name

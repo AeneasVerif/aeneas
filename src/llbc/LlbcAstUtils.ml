@@ -2,6 +2,7 @@ open Types
 open LlbcAst
 include Charon.LlbcAstUtils
 open Collections
+open Errors
 
 module FunIdOrderedType : OrderedType with type t = fun_id = struct
   type t = fun_id
@@ -60,8 +61,18 @@ let crate_has_opaque_non_builtin_decls (k : crate) (filter_builtin : bool) :
     bool =
   crate_get_opaque_non_builtin_decls k filter_builtin <> ([], [])
 
-let name_with_crate_to_pattern_string (crate : LlbcAst.crate) (n : Types.name) :
-    string =
+let name_to_pattern (span : Meta.span option) (ctx : 'a Charon.NameMatcher.ctx)
+    (c : Charon.NameMatcher.to_pat_config) (n : name) =
+  if !Config.fail_hard then Charon.NameMatcher.name_to_pattern ctx c n
+  else
+    try Charon.NameMatcher.name_to_pattern ctx c n
+    with Not_found ->
+      craise_opt_span __FILE__ __LINE__ span
+        "Could not convert the name to a pattern because of missing \
+         definition(s)"
+
+let name_with_crate_to_pattern_string (span : Meta.span option)
+    (crate : LlbcAst.crate) (n : Types.name) : string =
   let mctx = Charon.NameMatcher.ctx_from_crate crate in
   let c : Charon.NameMatcher.to_pat_config =
     {
@@ -69,12 +80,24 @@ let name_with_crate_to_pattern_string (crate : LlbcAst.crate) (n : Types.name) :
       use_trait_decl_refs = Config.match_patterns_with_trait_decl_refs;
     }
   in
-  let pat = Charon.NameMatcher.name_to_pattern mctx c n in
+  let pat = name_to_pattern span mctx c n in
   Charon.NameMatcher.pattern_to_string { tgt = TkPattern } pat
 
-let name_with_generics_crate_to_pattern_string (crate : LlbcAst.crate)
-    (n : Types.name) (params : Types.generic_params) (args : Types.generic_args)
-    : string =
+let name_with_generics_to_pattern (span : Meta.span option)
+    (ctx : 'a Charon.NameMatcher.ctx) (c : Charon.NameMatcher.to_pat_config)
+    (params : generic_params) (n : Charon.Types.name) (args : generic_args) =
+  if !Config.fail_hard then
+    Charon.NameMatcher.name_with_generics_to_pattern ctx c params n args
+  else
+    try Charon.NameMatcher.name_with_generics_to_pattern ctx c params n args
+    with Not_found ->
+      craise_opt_span __FILE__ __LINE__ span
+        "Could not convert the name to a pattern because of missing \
+         definition(s)"
+
+let name_with_generics_crate_to_pattern_string (span : Meta.span option)
+    (crate : LlbcAst.crate) (n : Types.name) (params : Types.generic_params)
+    (args : Types.generic_args) : string =
   let mctx = Charon.NameMatcher.ctx_from_crate crate in
   let c : Charon.NameMatcher.to_pat_config =
     {
@@ -82,13 +105,12 @@ let name_with_generics_crate_to_pattern_string (crate : LlbcAst.crate)
       use_trait_decl_refs = Config.match_patterns_with_trait_decl_refs;
     }
   in
-  let pat =
-    Charon.NameMatcher.name_with_generics_to_pattern mctx c params n args
-  in
+  let pat = name_with_generics_to_pattern span mctx c params n args in
   Charon.NameMatcher.pattern_to_string { tgt = TkPattern } pat
 
-let trait_impl_with_crate_to_pattern_string (crate : LlbcAst.crate)
-    (trait_decl : LlbcAst.trait_decl) (trait_impl : LlbcAst.trait_impl) : string
-    =
-  name_with_generics_crate_to_pattern_string crate trait_decl.item_meta.name
-    trait_decl.generics trait_impl.impl_trait.decl_generics
+let trait_impl_with_crate_to_pattern_string (span : Meta.span option)
+    (crate : LlbcAst.crate) (trait_decl : LlbcAst.trait_decl)
+    (trait_impl : LlbcAst.trait_impl) : string =
+  name_with_generics_crate_to_pattern_string span crate
+    trait_decl.item_meta.name trait_decl.generics
+    trait_impl.impl_trait.decl_generics

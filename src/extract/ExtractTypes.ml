@@ -1052,19 +1052,24 @@ let extract_comment_with_span (ctx : extraction_ctx) (fmt : F.formatter)
     (sl : string list) (name : Types.name option)
     ?(generics : (Types.generic_params * Types.generic_args) option = None)
     (span : Meta.span) : unit =
-  let span = span_to_string span in
   let name =
     match (name, generics) with
     | None, _ -> []
     | Some name, None ->
-        [ "Name pattern: [" ^ name_to_pattern_string ctx.trans_ctx name ^ "]" ]
+        [
+          "Name pattern: ["
+          ^ name_to_pattern_string (Some span) ctx.trans_ctx name
+          ^ "]";
+        ]
     | Some name, Some (params, args) ->
         [
           "Name pattern: ["
-          ^ name_with_generics_to_pattern_string ctx.trans_ctx name params args
+          ^ name_with_generics_to_pattern_string (Some span) ctx.trans_ctx name
+              params args
           ^ "]";
         ]
   in
+  let span = span_to_string span in
   extract_comment fmt (sl @ [ span ] @ name)
 
 let extract_trait_clause_type (span : Meta.span) (ctx : extraction_ctx)

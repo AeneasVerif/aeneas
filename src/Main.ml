@@ -513,8 +513,8 @@ let () =
           List.map
             (fun (d : Types.type_decl) ->
               let pattern =
-                LlbcAstUtils.name_with_crate_to_pattern_string m
-                  d.item_meta.name
+                LlbcAstUtils.name_with_crate_to_pattern_string
+                  (Some d.item_meta.span) m d.item_meta.name
               in
               "Type decl (pattern: [" ^ pattern ^ "]]):\n"
               ^ Print.type_decl_to_string fmt_env d)
@@ -524,8 +524,8 @@ let () =
           List.map
             (fun (d : LlbcAst.fun_decl) ->
               let pattern =
-                LlbcAstUtils.name_with_crate_to_pattern_string m
-                  d.item_meta.name
+                LlbcAstUtils.name_with_crate_to_pattern_string
+                  (Some d.item_meta.span) m d.item_meta.name
               in
               let d =
                 (* FIXME: there is a bug in the formatter when splitting the predicates
@@ -543,8 +543,8 @@ let () =
           List.map
             (fun (d : LlbcAst.global_decl) ->
               let pattern =
-                LlbcAstUtils.name_with_crate_to_pattern_string m
-                  d.item_meta.name
+                LlbcAstUtils.name_with_crate_to_pattern_string
+                  (Some d.item_meta.span) m d.item_meta.name
               in
               "Global decl (pattern: [" ^ pattern ^ "]]):\n"
               ^ Print.Ast.global_decl_to_string fmt_env "" "  " d)
@@ -554,8 +554,8 @@ let () =
           List.map
             (fun (d : LlbcAst.trait_decl) ->
               let pattern =
-                LlbcAstUtils.name_with_crate_to_pattern_string m
-                  d.item_meta.name
+                LlbcAstUtils.name_with_crate_to_pattern_string
+                  (Some d.item_meta.span) m d.item_meta.name
               in
               "Trait decl (pattern: [" ^ pattern ^ "]]):\n"
               ^ Print.Ast.trait_decl_to_string fmt_env "" "  " d)
@@ -565,8 +565,8 @@ let () =
           List.map
             (fun ((d, trait_decl) : LlbcAst.trait_impl * LlbcAst.trait_decl) ->
               let pattern =
-                LlbcAstUtils.trait_impl_with_crate_to_pattern_string m
-                  trait_decl d
+                LlbcAstUtils.trait_impl_with_crate_to_pattern_string
+                  (Some d.item_meta.span) m trait_decl d
               in
               "Trait impl (pattern: [" ^ pattern ^ "]]):\n"
               ^ Print.Ast.trait_impl_to_string fmt_env "" "  " d)
