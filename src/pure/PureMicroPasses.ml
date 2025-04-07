@@ -86,17 +86,17 @@ type pn_ctx = {
 }
 
 (** This function computes pretty names for the variables in the pure AST. It
-    relies on the "span"-place information in the AST to generate naming
+    relies on the "meta"-place information in the AST to generate naming
     constraints, and then uses those to compute the names.
     
     The way it works is as follows:
     - we only modify the names of the unnamed variables
     - whenever we see an rvalue/pattern which is exactly an unnamed variable,
-      and this value is linked to some span-place information which contains
+      and this value is linked to some meta-place information which contains
       a name and an empty path, we consider we should use this name
     - we try to propagate naming constraints on the pure variables use in the
       synthesized programs, and also on the LLBC variables from the original
-      program (information about the LLBC variables is stored in the span-places)
+      program (information about the LLBC variables is stored in the meta-places)
       
       
     Something important is that, for every variable we find, the name of this
@@ -137,7 +137,7 @@ type pn_ctx = {
         hd -> s2
       ]}
       
-      When generating the symbolic AST, we save as span-information that we
+      When generating the symbolic AST, we save as meta-information that we
       assign [s1] to the place [x] and [s2] to the place [hd]. This way,
       we learn we can use the names [x] and [hd] for the variables which are
       introduced by the match:
@@ -181,10 +181,10 @@ type pn_ctx = {
      so we should use "x" as the basename (hence the resulting name "x1"). However,
      this is non-trivial, because after desugaring the input argument given to [id]
      is not [&mut x] but [move ^0] (i.e., it comes from a temporary, anonymous
-     variable). For this reason, we use the span-place [&mut x] as the span-place
+     variable). For this reason, we use the meta-place [&mut x] as the meta-place
      for the given back value (this is done during the synthesis), and propagate
      naming information *also* on the LLBC variables (which are referenced by the
-     span-places).
+     meta-places).
 
      This way, because of [^0 = &mut x], we can propagate the name "x" to the place
      [^0], then to the given back variable across the function call.
@@ -232,7 +232,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
    * - we explore the expressions
    * - we register the variables introduced by the let-bindings
    * - we use the naming information we find (through the variables and the
-   *   span-places) to update our context (i.e., maps from variable ids to
+   *   meta-places) to update our context (i.e., maps from variable ids to
    *   names)
    * - we use this information to update the names of the variables used in the
    *   expressions
@@ -306,8 +306,8 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     in
     { ctx with llbc_vars }
   in
-  (* Add a constraint: given a variable id and an associated span-place, try to
-   * extract naming information from the span-place and save it *)
+  (* Add a constraint: given a variable id and an associated meta-place, try to
+   * extract naming information from the meta-place and save it *)
   let add_constraint (mp : mplace) (var_id : VarId.id) (ctx : pn_ctx) : pn_ctx =
     (* Register the place *)
     let ctx = register_mplace mp ctx in
@@ -326,14 +326,14 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     (* Register the place *)
     let ctx = register_mplace mp ctx in
     (* Add the constraint *)
-    match (unspan rv).e with
+    match (unmeta rv).e with
     | Var vid -> add_constraint mp vid ctx
     | _ -> ctx
   in
   let add_pure_var_value_constraint (var_id : VarId.id) (rv : texpression)
       (ctx : pn_ctx) : pn_ctx =
     (* Add the constraint *)
-    match (unspan rv).e with
+    match (unmeta rv).e with
     | Var vid -> (
         (* Try to find a name for the vid *)
         match VarId.Map.find_opt vid ctx.pure_vars with
@@ -385,8 +385,8 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
           VarId.Map.mem lvar.id ctx.pure_vars
         then ctx
         else
-          (* We ignore the left span-place information: it should have been taken
-           * care of by [add_left_constraint]. We try to use the right span-place
+          (* We ignore the left meta-place information: it should have been taken
+           * care of by [add_left_constraint]. We try to use the right meta-place
            * information *)
           let add (name : string) (ctx : pn_ctx) : pn_ctx =
             (* Add the constraint for the pure variable *)
@@ -399,7 +399,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
                 add_llbc_var_constraint var_id name ctx
           in
           (* We try to use the right-place information *)
-          let rmp, re = opt_unspan_mplace re in
+          let rmp, re = opt_unmeta_mplace re in
           let ctx =
             match rmp with
             | Some (PlaceBase (var_id, name)) ->
@@ -413,7 +413,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
           in
           (* We try to use the rvalue information, if it is a variable *)
           let ctx =
-            match (unspan re).e with
+            match (unmeta re).e with
             | Var rvar_id -> (
                 match VarId.Map.find_opt rvar_id ctx.pure_vars with
                 | None -> ctx
@@ -442,7 +442,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
       | Loop loop -> update_loop loop ctx
       | StructUpdate supd -> update_struct_update supd ctx
       | Lambda (lb, e) -> update_lambda lb e ctx
-      | Meta (span, e) -> update_espan span e ctx
+      | Meta (meta, e) -> update_emeta meta e ctx
       | EError (span, msg) -> (ctx, EError (span, msg))
     in
     (ctx, { e; ty })
@@ -545,10 +545,10 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     let supd = { struct_id; init; updates } in
     (ctx, StructUpdate supd)
   (* *)
-  and update_espan (span : espan) (e : texpression) (ctx : pn_ctx) :
+  and update_emeta (meta : emeta) (e : texpression) (ctx : pn_ctx) :
       pn_ctx * expression =
     let ctx =
-      match span with
+      match meta with
       | Assignment (mp, rvalue, rmp) ->
           let ctx = add_right_constraint mp rvalue ctx in
           let ctx =
@@ -575,10 +575,10 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
             (fun ctx (var_id, name) -> add_pure_var_constraint var_id name ctx)
             ctx infos
       | MPlace mp -> add_right_constraint mp e ctx
-      | Tag _ -> ctx
+      | Tag _ | TypeAnnot -> ctx
     in
     let ctx, e = update_texpression e ctx in
-    let e = mk_espan span e in
+    let e = mk_emeta meta e in
     (ctx, e.e)
   in
 
@@ -605,12 +605,12 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
   in
   { def with body }
 
-(** Remove the span-information *)
-let remove_span (def : fun_decl) : fun_decl =
+(** Remove the meta-information *)
+let remove_meta (def : fun_decl) : fun_decl =
   match def.body with
   | None -> def
   | Some body ->
-      let body = { body with body = PureUtils.remove_span body.body } in
+      let body = { body with body = PureUtils.remove_meta body.body } in
       { def with body = Some body }
 
 (** Introduce calls to [massert] (monadic assertion).
@@ -1062,7 +1062,7 @@ let simplify_duplicate_calls (_ctx : ctx) (def : fun_decl) : fun_decl =
 (** A helper predicate *)
 let lift_unop (unop : unop) : bool =
   match unop with
-  | Not None | TypeAnnot _ -> false
+  | Not None -> false
   | Not (Some _) | Neg _ | Cast _ | ArrayToSlice -> true
 
 (** A helper predicate *)
@@ -3405,16 +3405,16 @@ let apply_passes_to_def (ctx : ctx) (def : fun_decl) : fun_and_loops =
   log#ltrace
     (lazy ("compute_pretty_name:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
-  (* TODO: we might want to leverage more the assignment span-data, for
+  (* TODO: we might want to leverage more the assignment meta-data, for
    * aggregates for instance. *)
 
   (* TODO: reorder the branches of the matches/switches *)
 
-  (* The span-information is now useless: remove it.
-   * Rk.: some passes below use the fact that we removed the span-data
-   * (otherwise we would have to "unspan" expressions before matching) *)
-  let def = remove_span def in
-  log#ltrace (lazy ("remove_span:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
+  (* The meta-information is now useless: remove it.
+   * Rk.: some passes below use the fact that we removed the meta-data
+   * (otherwise we would have to "unmeta" expressions before matching) *)
+  let def = remove_meta def in
+  log#ltrace (lazy ("remove_meta:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
 
   (* Extract the loop definitions by removing the {!Loop} node *)
   let def, loops = decompose_loops ctx def in
@@ -3475,16 +3475,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
 
   (* Small helper to add a type annotation *)
   let mk_type_annot (e : texpression) : texpression =
-    let func =
-      Qualif
-        {
-          id = FunOrOp (Unop (TypeAnnot e.ty));
-          generics = mk_generic_args_from_types [ e.ty ];
-        }
-    in
-    let func_ty = mk_arrows [ e.ty ] e.ty in
-    let func = { e = func; ty = func_ty } in
-    mk_app span func e
+    { e = Meta (TypeAnnot, e); ty = e.ty }
   in
 
   let rec visit (ty : ty) (e : texpression) : texpression =
@@ -3566,7 +3557,9 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
               (* Add the type annotation, if the backend is Lean *)
               if Config.backend () = Lean then mk_type_annot e else e
         end
-    | Meta (meta, e') -> { e with e = Meta (meta, visit ty e') }
+    | Meta (meta, e') ->
+        let ty = if meta = TypeAnnot then e'.ty else ty in
+        { e with e = Meta (meta, visit ty e') }
   and visit_App (ty : ty) (e : texpression) : texpression =
     log#ldebug
       (lazy
@@ -3683,7 +3676,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
               | Fun fid -> begin compute_known_tys_from_fun_id qualif fid end
               | Unop unop -> begin
                   match unop with
-                  | Not _ | Neg _ | Cast _ | ArrayToSlice | TypeAnnot _ ->
+                  | Not _ | Neg _ | Cast _ | ArrayToSlice ->
                       (known_f_ty, known_args_tys, false)
                 end
               | Binop _ -> (known_f_ty, known_args_tys, false)

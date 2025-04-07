@@ -418,13 +418,13 @@ let ty_as_opt_arrow (ty : ty) : (ty * ty) option =
   | _ -> None
 
 (** Remove the external occurrences of {!Meta} *)
-let rec unspan (e : texpression) : texpression =
+let rec unmeta (e : texpression) : texpression =
   match e.e with
-  | Meta (_, e) -> unspan e
+  | Meta (_, e) -> unmeta e
   | _ -> e
 
-(** Remove *all* the span information *)
-let remove_span (e : texpression) : texpression =
+(** Remove *all* the meta information *)
+let remove_meta (e : texpression) : texpression =
   let obj =
     object
       inherit [_] map_expression as super
@@ -662,13 +662,13 @@ let is_dummy_pattern (p : typed_pattern) : bool =
   | PatDummy -> true
   | _ -> false
 
-let mk_espan (m : espan) (e : texpression) : texpression =
+let mk_emeta (m : emeta) (e : texpression) : texpression =
   let ty = e.ty in
   let e = Meta (m, e) in
   { e; ty }
 
 let mk_mplace_texpression (mp : mplace) (e : texpression) : texpression =
-  mk_espan (MPlace mp) e
+  mk_emeta (MPlace mp) e
 
 let mk_opt_mplace_texpression (mp : mplace option) (e : texpression) :
     texpression =
@@ -814,7 +814,7 @@ let mk_result_ok_pattern (v : typed_pattern) : typed_pattern =
   let value = PatAdt { variant_id = Some result_ok_id; field_values = [ v ] } in
   { value; ty }
 
-let opt_unspan_mplace (e : texpression) : mplace option * texpression =
+let opt_unmeta_mplace (e : texpression) : mplace option * texpression =
   match e.e with
   | Meta (MPlace mp, e) -> (Some mp, e)
   | _ -> (None, e)

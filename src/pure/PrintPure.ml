@@ -624,7 +624,7 @@ let regular_fun_id_to_string (env : fmt_env) (fun_id : fun_id) : string =
       f ^ fun_suffix lp_id
   | Pure fid -> pure_builtin_fun_id_to_string fid
 
-let unop_to_string (env : fmt_env) (unop : unop) : string =
+let unop_to_string (unop : unop) : string =
   match unop with
   | Not _ -> "¬"
   | Neg _ -> "-"
@@ -632,14 +632,13 @@ let unop_to_string (env : fmt_env) (unop : unop) : string =
       "cast<" ^ literal_type_to_string src ^ "," ^ literal_type_to_string tgt
       ^ ">"
   | ArrayToSlice -> "array_to_slice"
-  | TypeAnnot ty -> "annot<" ^ ty_to_string env false ty ^ ">"
 
 let binop_to_string = Print.Expressions.binop_to_string
 
 let fun_or_op_id_to_string (env : fmt_env) (fun_id : fun_or_op_id) : string =
   match fun_id with
   | Fun fun_id -> regular_fun_id_to_string env fun_id
-  | Unop unop -> unop_to_string env unop
+  | Unop unop -> unop_to_string unop
   | Binop (binop, int_ty) ->
       binop_to_string binop ^ "<" ^ integer_type_to_string int_ty ^ ">"
 
@@ -675,12 +674,17 @@ let rec texpression_to_string ?(span : Meta.span option = None) (env : fmt_env)
   | StructUpdate supd ->
       struct_update_to_string ~span env indent indent_incr supd
   | Meta (span', e) -> (
-      let span_s = espan_to_string ~span env span' in
+      (* There are two cases depending on whether the meta information is a
+         type-annotation or not *)
+      let inside = if span' = TypeAnnot then false else inside in
+      let span_s = emeta_to_string ~span env span' in
+      let ty = e.ty in
       let e = texpression_to_string ~span env inside indent indent_incr e in
       match span' with
       | Assignment _ | SymbolicAssignments _ | SymbolicPlaces _ | Tag _ ->
           let e = span_s ^ "\n" ^ indent ^ e in
           if inside then "(" ^ e ^ ")" else e
+      | TypeAnnot -> "(" ^ e ^ " : " ^ ty_to_string env false ty ^ ")"
       | MPlace _ -> "(" ^ span_s ^ " " ^ e ^ ")")
   | EError (_, _) -> "@Error"
 
@@ -843,10 +847,10 @@ and loop_to_string ?(span : Meta.span option = None) (env : fmt_env)
   ^ indent1 ^ "loop_body: {\n" ^ indent2 ^ loop_body ^ "\n" ^ indent1 ^ "}\n"
   ^ indent ^ "}"
 
-and espan_to_string ?(span : Meta.span option = None) (env : fmt_env)
-    (espan : espan) : string =
-  let espan =
-    match espan with
+and emeta_to_string ?(span : Meta.span option = None) (env : fmt_env)
+    (emeta : emeta) : string =
+  let emeta =
+    match emeta with
     | Assignment (lp, rv, rp) ->
         let rp =
           match rp with
@@ -877,8 +881,9 @@ and espan_to_string ?(span : Meta.span option = None) (env : fmt_env)
         "@symb_places(" ^ infos ^ ")"
     | MPlace mp -> "@mplace=" ^ mplace_to_string env mp
     | Tag msg -> "@tag \"" ^ msg ^ "\""
+    | TypeAnnot -> "@typeannot"
   in
-  "@span[" ^ espan ^ "]"
+  "@span[" ^ emeta ^ "]"
 
 let fun_decl_to_string (env : fmt_env) (def : fun_decl) : string =
   let env = { env with generics = [ def.signature.generics ] } in

@@ -834,14 +834,6 @@ type unop =
   | Neg of integer_type
   | Cast of literal_type * literal_type
   | ArrayToSlice
-  | TypeAnnot of ty
-      (** Explicit type annotation - we add those during a micro-pass at the very
-          end because, for instance, the type of some structure expressions may
-          not be obvious from the context.
-
-          Note that the type should be known from the context, but it's still convenient
-          to keep it here.
-        *)
 [@@deriving show, ord]
 
 type fun_id_or_trait_method_ref =
@@ -1017,7 +1009,7 @@ type expression =
   | Switch of texpression * switch_body
   | Loop of loop  (** See the comments for {!loop} *)
   | StructUpdate of struct_update  (** See the comments for {!struct_update} *)
-  | Meta of (espan[@opaque]) * texpression  (** Meta-information *)
+  | Meta of (emeta[@opaque]) * texpression  (** Meta-information *)
   | EError of Meta.span option * string
 
 and switch_body = If of texpression * texpression | Match of match_branch list
@@ -1091,7 +1083,7 @@ and texpression = { e : expression; ty : ty }
 and mvalue = (texpression[@opaque])
 
 (** Meta-information stored in the AST *)
-and espan =
+and emeta =
   | Assignment of mplace * mvalue * mplace option
       (** Information about an assignment which occured in LLBC.
           We use this to guide the heuristics which derive pretty names.
@@ -1114,6 +1106,13 @@ and espan =
         *)
   | MPlace of mplace  (** Meta-information about the origin of a value *)
   | Tag of string  (** A tag - typically used for debugging *)
+  | TypeAnnot
+      (** The presence of this marker means that we should insert a type-annotation
+          when extracting the code. This is necessart because, for instance, the
+          constructor to use for an expression [{ v := ... }] may be ambiguous,
+          especially for backends like Lean which allow collisions between field names.
+
+          Those markers are introduced during a micro-pass. *)
 [@@deriving
   show,
     ord,

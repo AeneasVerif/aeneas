@@ -872,7 +872,7 @@ let unop_name (unop : unop) : string =
       match backend () with
       | Lean -> "Array.to_slice"
       | _ -> "array_to_slice")
-  | TypeAnnot _ | Cast _ ->
+  | Cast _ ->
       (* We never directly use the unop name in this case *)
       raise (Failure "Unsupported")
 

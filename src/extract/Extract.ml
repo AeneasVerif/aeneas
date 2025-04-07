@@ -339,9 +339,9 @@ let lets_require_wrap_in_do (span : Meta.span)
     - unop
     - argument
  *)
-let extract_unop (span : Meta.span) (ctx : extraction_ctx)
-    (extract_expr : bool -> texpression -> unit) (fmt : F.formatter)
-    (inside : bool) (unop : unop) (arg : texpression) : unit =
+let extract_unop (span : Meta.span) (extract_expr : bool -> texpression -> unit)
+    (fmt : F.formatter) (inside : bool) (unop : unop) (arg : texpression) : unit
+    =
   match unop with
   | Not _ | Neg _ | ArrayToSlice ->
       let unop = unop_name unop in
@@ -350,14 +350,6 @@ let extract_unop (span : Meta.span) (ctx : extraction_ctx)
       F.pp_print_space fmt ();
       extract_expr true arg;
       if inside then F.pp_print_string fmt ")"
-  | TypeAnnot tgt_ty ->
-      F.pp_print_string fmt "(";
-      extract_expr false arg;
-      F.pp_print_space fmt ();
-      F.pp_print_string fmt ":";
-      F.pp_print_space fmt ();
-      extract_ty span ctx fmt TypeDeclId.Set.empty false tgt_ty;
-      F.pp_print_string fmt ")"
   | Cast (src, tgt) -> (
       (* HOL4 has a special treatment: because it doesn't support dependent
          types, we don't have a specific operator for the cast *)
@@ -566,7 +558,7 @@ let rec extract_texpression (span : Meta.span) (ctx : extraction_ctx)
       extract_App span ctx fmt inside e []
   | Let (_, _, _, _) -> extract_lets span ctx fmt inside e
   | Switch (scrut, body) -> extract_Switch span ctx fmt inside scrut body
-  | Meta (_, e) -> extract_texpression span ctx fmt inside e
+  | Meta (m, e) -> extract_meta span ctx fmt inside m e
   | StructUpdate supd -> extract_StructUpdate span ctx fmt inside e.ty supd
   | Loop _ ->
       (* The loop nodes should have been eliminated in {!PureMicroPasses} *)
@@ -638,9 +630,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
        * Note that the way we generate the translation, we shouldn't get the
        * case where we have no argument (all functions are fully instantiated,
        * and no AST transformation introduces partial calls). *)
-      extract_unop span ctx
-        (extract_texpression span ctx fmt)
-        fmt inside unop arg
+      extract_unop span (extract_texpression span ctx fmt) fmt inside unop arg
   | Binop (binop, int_ty), [ arg0; arg1 ] ->
       (* Number of arguments: similar to unop *)
       extract_binop span
@@ -1287,6 +1277,19 @@ and extract_Switch (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       | HOL4 -> F.pp_print_string fmt ")"));
   (* Close the box for the whole expression *)
   F.pp_close_box fmt ()
+
+and extract_meta (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
+    (inside : bool) (meta : emeta) (e : texpression) : unit =
+  match meta with
+  | TypeAnnot ->
+      F.pp_print_string fmt "(";
+      extract_texpression span ctx fmt false e;
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt ":";
+      F.pp_print_space fmt ();
+      extract_ty span ctx fmt TypeDeclId.Set.empty false e.ty;
+      F.pp_print_string fmt ")"
+  | _ -> extract_texpression span ctx fmt inside e
 
 and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (inside : bool) (e_ty : ty) (supd : struct_update) :

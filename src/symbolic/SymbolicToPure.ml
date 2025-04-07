@@ -2640,10 +2640,10 @@ let get_abs_ancestors (ctx : bs_ctx) (abs : V.abs) (call_id : V.FunCallId.id) :
   (call_info.forward, abs_ancestors)
 
 (** Add meta-information to an expression *)
-let mk_espan_symbolic_assignments (vars : var list) (values : texpression list)
+let mk_emeta_symbolic_assignments (vars : var list) (values : texpression list)
     (e : texpression) : texpression =
   let var_values = List.combine (List.map var_get_id vars) values in
-  if var_values <> [] then mk_espan (SymbolicAssignments var_values) e else e
+  if var_values <> [] then mk_emeta (SymbolicAssignments var_values) e else e
 
 (** Derive naming information from a context.
 
@@ -2944,7 +2944,7 @@ and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
     if effect_info.can_fail then mk_result_ok_texpression ctx.span output
     else output
   in
-  mk_espan (Tag "return_with_loop") output
+  mk_emeta (Tag "return_with_loop") output
 
 and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
     texpression =
@@ -3748,7 +3748,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
                   var_values
               in
               let vars, values = List.split var_values in
-              mk_espan_symbolic_assignments vars values (next_e ctx)
+              mk_emeta_symbolic_assignments vars values (next_e ctx)
             else next_e ctx
           in
 
@@ -4426,7 +4426,7 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
          We then remove all the span information from the body *before* calling
          {!PureMicroPasses.decompose_loops}.
       *)
-      mk_espan_symbolic_assignments loop_info.input_vars org_args e
+      mk_emeta_symbolic_assignments loop_info.input_vars org_args e
 
 and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   let loop_id = V.LoopId.Map.find loop.loop_id ctx.loop_ids_map in
@@ -4686,7 +4686,7 @@ and translate_espan (span : S.espan) (e : S.expression) (ctx : bs_ctx) :
         let infos = eval_ctx_to_symbolic_assignments_info ctx ectx in
         if infos <> [] then
           (* If often happens that the next expression contains exactly the
-             same span information *)
+             same meta information *)
           match next_e.e with
           | Meta (SymbolicPlaces infos1, _) when infos1 = infos -> None
           | _ -> Some (SymbolicPlaces infos)
