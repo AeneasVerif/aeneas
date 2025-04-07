@@ -293,6 +293,14 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
     in
     (rust_name, f)
   in
+  let mk_funs (rust_name : string -> string) (extract_name : string -> string)
+      (funs : (bool * string) list) : (pattern * Pure.builtin_fun_info) list =
+    List.map
+      (fun (can_fail, name) ->
+        let extract_name = Some (extract_name name) in
+        mk_fun (rust_name name) ~can_fail ~extract_name ())
+      funs
+  in
   let mk_scalar_fun (rust_name : string -> string)
       (extract_name : string -> string) ?(can_fail = true) () :
       (pattern * Pure.builtin_fun_info) list =
@@ -510,19 +518,19 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
         "core.num." ^ StringUtils.capitalize_first_letter ty ^ ".from_be_bytes")
       ~can_fail:false ()
   (* Clone<bool> *)
-  @ [
-      mk_fun "core::clone::impls::{core::clone::Clone<bool>}::clone"
-        ~extract_name:(Some "core.clone.impls.CloneBool.clone") ~can_fail:false
-        ();
-    ]
+  @ mk_funs
+      (fun fn -> "core::clone::impls::{core::clone::Clone<bool>}::" ^ fn)
+      (fun fn -> "core.clone.impls.CloneBool." ^ fn)
+      [ (false, "clone"); (false, "clone_from") ]
   (* Clone<INT> *)
-  @ mk_scalar_fun
-      (fun ty -> "core::clone::impls::{core::clone::Clone<" ^ ty ^ ">}::clone")
-      (fun ty ->
+  @ mk_scalar_funs
+      (fun ty fn ->
+        "core::clone::impls::{core::clone::Clone<" ^ ty ^ ">}::" ^ fn)
+      (fun ty fn ->
         "core.clone.impls.Clone"
         ^ StringUtils.capitalize_first_letter ty
-        ^ ".clone")
-      ~can_fail:false ()
+        ^ "." ^ fn)
+      [ (false, "clone"); (false, "clone_from") ]
   (* Lean-only definitions *)
   @ mk_lean_only
       ([
@@ -552,7 +560,6 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
            ~extract_name:
              (backend_choice None (Some "core::option::Option::is_none"))
            ~can_fail:false ~lift:false ();
-         mk_fun "core::clone::Clone::clone_from" ();
          (* Into<T, U: From<T>> *)
          mk_fun "core::convert::{core::convert::Into<@T, @U>}::into"
            ~extract_name:(Some "core.convert.IntoFrom.into") ();
@@ -839,7 +846,7 @@ let builtin_trait_decls_info () =
       ~methods_with_extract:(Some [ ("from", "from_") ])
       ();
     (* Clone *)
-    mk_trait "core::clone::Clone" ~methods:[ "clone" ] ();
+    mk_trait "core::clone::Clone" ~methods:[ "clone"; "clone_from" ] ();
     (* Copy *)
     mk_trait "core::marker::Copy" ~parent_clauses:[ "cloneInst" ] ();
   ]

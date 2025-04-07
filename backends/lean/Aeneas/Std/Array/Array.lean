@@ -211,6 +211,7 @@ theorem core.array.CloneArray.clone_spec {T : Type} {N : Usize} (cloneInst : cor
 def core.clone.CloneArray {T : Type} (N : Usize) (cloneCloneInst :
   core.clone.Clone T) : core.clone.Clone (Array T N) := {
   clone := core.array.CloneArray.clone cloneCloneInst
+  clone_from := fun _ => core.array.CloneArray.clone cloneCloneInst
 }
 
 
