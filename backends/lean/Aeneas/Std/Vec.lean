@@ -224,9 +224,34 @@ end alloc.vec
 
 /-- [alloc::slice::{@Slice<T>}::to_vec] -/
 def alloc.slice.Slice.to_vec
-  {T : Type} (cloneInst : core.clone.Clone T) (s : Slice T) : Result (alloc.vec.Vec T) :=
-  -- TODO: we need a monadic map
-  sorry
+  {T : Type} (cloneInst : core.clone.Clone T) (s : Slice T) : Result (alloc.vec.Vec T) := do
+  Slice.clone cloneInst.clone s
+
+@[progress]
+theorem alloc.slice.Slice.to_vec_spec {T : Type} (cloneInst : core.clone.Clone T) (s : Slice T)
+  (h : ∀ x ∈ s.val, cloneInst.clone x = ok x) :
+  alloc.slice.Slice.to_vec cloneInst s = ok s := by
+  simp only [to_vec]
+  rw [Slice.clone_spec h]
+
+/- [alloc::vec::from_elem]:
+   Source: '/rustc/library/alloc/src/vec/mod.rs', lines 3174:0-3174:55
+   Name pattern: [alloc::vec::from_elem] -/
+def alloc.vec.from_elem
+  {T : Type} (cloneInst : core.clone.Clone T)
+  (x : T) (n : Usize) : Result (alloc.vec.Vec T) := do
+  let l ← List.clone cloneInst.clone (List.replicate n.val x)
+  ok ⟨ l.val, by have := l.property; scalar_tac ⟩
+
+@[progress]
+theorem alloc.vec.from_elem_spec {T : Type} (cloneInst : core.clone.Clone T)
+  (x : T) (n : Usize) (h : cloneInst.clone x = ok x) :
+  ∃ v, alloc.vec.from_elem cloneInst x n = ok v ∧
+  v.val = List.replicate n.val x ∧
+  v.length = n.val := by
+  unfold from_elem
+  have ⟨ l, h ⟩ := @List.clone_spec _ cloneInst.clone (List.replicate n.val x) (by intros; simp_all)
+  simp [h]
 
 /-- [core::slice::{@Slice<T>}::reverse] -/
 def core.slice.Slice.reverse {T : Type} (s : Slice T) : Slice T :=
@@ -237,7 +262,13 @@ def alloc.vec.Vec.with_capacity (T : Type) (_ : Usize) : alloc.vec.Vec T := Vec.
 /- [alloc::vec::{alloc::vec::Vec<T, A>}::extend_from_slice] -/
 def alloc.vec.Vec.extend_from_slice {T : Type} (cloneInst : core.clone.Clone T)
   (v : alloc.vec.Vec T) (s : Slice T) : Result (alloc.vec.Vec T) :=
-  sorry
+  if h : v.length + s.length ≤ Usize.max then do
+    match h' : Slice.clone cloneInst.clone s with
+    | ok s' =>
+      ok ⟨ v.val ++ s'.val , by have := Slice.clone_length h'; scalar_tac ⟩
+    | fail e => fail e
+    | div => div
+  else fail .panic
 
 /- [alloc::vec::{(core::ops::deref::Deref for alloc::vec::Vec<T, A>)#9}::deref]:
    Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/alloc/src/vec/mod.rs', lines 2624:4-2624:27
@@ -291,6 +322,25 @@ theorem alloc.vec.Vec.set_getElem!_eq α [Inhabited α] (x : alloc.vec.Vec α) (
   x.set i x[i]! = x := by
   simp only [getElem!_Usize_eq]
   simp only [Vec, set_val_eq, Subtype.eq_iff, List.set_getElem!]
+
+/- [alloc::vec::{core::convert::From<alloc::vec::Vec<T, A>> for alloc::boxed::Box<@Slice<T>>}::from]:
+   Source: '/rustc/library/alloc/src/vec/mod.rs', lines 3967:4-3967:33
+   Name pattern: [alloc::vec::{core::convert::From<Box<[@T]>, alloc::vec::Vec<@T, @A>>}::from] -/
+def alloc.vec.FromBoxSliceVec.from {T : Type} (v : alloc.vec.Vec T) : Result (Slice T) := ok v
+
+@[progress]
+theorem alloc.vec.FromBoxSliceVec.from_spec {T : Type} (v : alloc.vec.Vec T) :
+  ∃ s, alloc.vec.FromBoxSliceVec.from v = ok s ∧ s.length = v.length ∧ s.val = v.val := by
+  simp [alloc.vec.FromBoxSliceVec.from]
+
+/- Trait implementation: [alloc::vec::{core::convert::From<alloc::vec::Vec<T, A>> for alloc::boxed::Box<@Slice<T>>}#39]
+   Source: '/rustc/library/alloc/src/vec/mod.rs', lines 3945:0-3945:53
+   Name pattern: [core::convert::From<Box<[@T]>, alloc::vec::Vec<@T, @A>>] -/
+@[reducible]
+def core.convert.FromBoxSliceVec (T : Type) :
+  core.convert.From (Slice T) (alloc.vec.Vec T) := {
+  from_ := alloc.vec.FromBoxSliceVec.from
+}
 
 namespace Tests
   example

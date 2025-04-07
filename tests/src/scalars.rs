@@ -1,4 +1,4 @@
-//@ [coq,fstar,borrow-check] skip
+//@ [!lean] skip
 
 fn u32_use_wrapping_add(x: u32, y: u32) -> u32 {
     x.wrapping_add(y)
@@ -50,4 +50,12 @@ fn u32_use_rotate_left(x: u32) -> u32 {
 
 fn i32_use_rotate_left(x: i32) -> i32 {
     x.rotate_left(2)
+}
+
+fn u32_default() -> u32 {
+    Default::default()
+}
+
+fn i32_default() -> i32 {
+    Default::default()
 }

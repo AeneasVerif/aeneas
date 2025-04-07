@@ -4,6 +4,7 @@ import Aeneas.Std.Scalar.CheckedOps
 import Aeneas.Std.Scalar.CloneCopy
 import Aeneas.Std.Scalar.Core
 import Aeneas.Std.Scalar.CoreConvertNum
+import Aeneas.Std.Scalar.Default
 import Aeneas.Std.Scalar.EqOrd
 import Aeneas.Std.Scalar.LeadingZeros
 import Aeneas.Std.Scalar.Misc

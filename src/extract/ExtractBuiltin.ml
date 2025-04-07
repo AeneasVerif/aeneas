@@ -529,7 +529,18 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
          mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::resize"
            ~filter:(Some [ true; false ])
            ();
+         mk_fun "alloc::vec::from_elem" ();
+         mk_fun
+           "alloc::vec::{core::convert::From<Box<[@T]>, alloc::vec::Vec<@T, \
+            @A>>}::from"
+           ~filter:(Some [ true; false ])
+           ~extract_name:(Some "alloc.vec.FromBoxSliceVec.from") ();
+         mk_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone"
+           ~extract_name:(Some "core.array.CloneArray.clone") ();
          mk_fun "core::mem::swap" ~can_fail:false ~lift:false ();
+         mk_fun "core::slice::{[@T]}::split_at" ();
+         mk_fun "core::slice::{[@T]}::split_at_mut" ();
+         mk_fun "core::slice::{[@T]}::swap" ();
          mk_fun "core::option::{core::option::Option<@T>}::take"
            ~extract_name:
              (backend_choice None (Some "core::option::Option::take"))
@@ -627,6 +638,15 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
             (false, "ge");
           ]
       (* Ord *)
+      @ mk_scalar_fun
+          (fun ty ->
+            "core::default::{core::default::Default<" ^ ty ^ ">}::default")
+          (fun ty ->
+            "core.default.Default"
+            ^ StringUtils.capitalize_first_letter ty
+            ^ ".default")
+          ~can_fail:false ()
+      (* Default::default *)
       @ mk_scalar_funs
           (fun ty fun_name ->
             "core::cmp::impls::{core::cmp::Ord<" ^ ty ^ ">}::" ^ fun_name)
@@ -844,6 +864,7 @@ let builtin_trait_decls_info () =
           ~parent_clauses:[ "eqInst"; "partialOrdInst" ]
           ~methods:[ "cmp"; "max"; "min"; "clamp" ]
           ();
+        mk_trait "core::default::Default" ~methods:[ "default" ] ();
       ]
 
 let mk_builtin_trait_decls_map () =
@@ -964,6 +985,11 @@ let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
         fmt "core::convert::AsMut<Box<@T>, @T>"
           ~filter:(Some [ true; false ])
           ();
+        fmt "core::clone::Clone<[@T; @N]>" ();
+        fmt "core::convert::From<Box<[@T]>, alloc::vec::Vec<@T, @A>>"
+          ~extract_name:(Some "core.convert.FromBoxSliceVec")
+          ~filter:(Some [ true; false ])
+          ();
       ]
   (* From<INT, bool> *)
   @ List.map
@@ -1043,6 +1069,10 @@ let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
           ~extract_name:
             (Some ("core.cmp.Ord" ^ StringUtils.capitalize_first_letter ty))
           ())
+      all_int_names
+  (* Default<INT> *)
+  @ List.map
+      (fun ty -> fmt ("core::default::Default<" ^ ty ^ ">") ())
       all_int_names
 
 let mk_builtin_trait_impls_map () =

@@ -153,6 +153,8 @@ def bind_eq_iff (x : Result α) (y y' : α → Result β) :
   ∀ v, x = ok v → y v = y' v := by
   cases x <;> simp_all
 
+instance : Monad Result where
+
 /-!
 # Partial Fixpoint
 -/

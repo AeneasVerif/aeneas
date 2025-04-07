@@ -8,6 +8,7 @@ package «tests» {}
 @[default_target] lean_lib AdtBorrows
 @[default_target] lean_lib ArraySliceIndex
 @[default_target] lean_lib Arrays
+@[default_target] lean_lib ArraysDefs
 @[default_target] lean_lib AsMut
 @[default_target] lean_lib Avl
 @[default_target] lean_lib BaseTutorial
@@ -19,6 +20,7 @@ package «tests» {}
 @[default_target] lean_lib DefaultedMethod
 @[default_target] lean_lib Demo
 @[default_target] lean_lib Deref
+@[default_target] lean_lib DynamicSize
 @[default_target] lean_lib External
 @[default_target] lean_lib Hashmap
 @[default_target] lean_lib InfiniteLoop
