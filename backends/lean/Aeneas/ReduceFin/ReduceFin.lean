@@ -6,6 +6,12 @@ namespace Aeneas.ReduceFin
 open Utils
 open Lean Meta
 
+/-
+TODO: the following lemma might be enough
+theorem Fin.val_ofNat{n: Nat}[NeZero n]{x: Nat}
+: (ofNat(x): Fin n).val = x % n
+-/
+
 /-- A simp proc to reduce expressions of the shape: `Fin.val (6 : Fin 7)` -/
 simproc reduceFinOfNatVal
   -- TODO: for some reason we can't use a more precise pattern, otherwise it doesn't match
