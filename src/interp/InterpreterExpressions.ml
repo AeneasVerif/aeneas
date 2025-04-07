@@ -993,7 +993,7 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
             (aggregated, fun e -> e)
         | TAdtId def_id ->
             (* Sanity checks *)
-            let type_decl = ctx_lookup_type_decl ctx def_id in
+            let type_decl = ctx_lookup_type_decl span ctx def_id in
             sanity_check __FILE__ __LINE__
               (List.length type_decl.generics.regions
               = List.length generics.regions)

@@ -189,6 +189,22 @@ let norm_ctx_lookup_trait_impl_parent_clause (ctx : norm_ctx)
   (* Substitute *)
   trait_ref_substitute subst clause
 
+(** Check that it is ok for a trait instance id not to be normalizable.
+
+    We use this in sanity checks. If we can't normalize a trait instance id
+    (and in particular one of its associated types) there are two possibilities:
+    - either it is a local clause
+    - or it is a builtin trait (in particular, [core::marker::DiscriminantKind] can
+      never be reduced)
+*)
+let check_non_normalizable_trait_instance_id (trait_id : trait_instance_id) :
+    bool =
+  trait_instance_id_is_local_clause trait_id
+  ||
+  match trait_id with
+  | BuiltinOrAuto _ -> true
+  | _ -> false
+
 (** Normalize a type by simplifying the references to trait associated types
     and choosing a representative when there are equalities between types
     enforced by local clauses (i.e., `where Trait1::T = Trait2::U`.
@@ -252,9 +268,10 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
                ^ ty_to_string ctx ty ^ "\n- trait_ref: "
                 ^ trait_ref_to_string ctx trait_ref
                 ^ "\n- raw trait ref:\n" ^ show_trait_ref trait_ref));
-            (* We can't project *)
+            (* We can't project: the trait ref is either a local clause,
+               or a special builtin trait (in particular, [core::marker::DiscriminantKind]) *)
             sanity_check_opt_span __FILE__ __LINE__
-              (trait_instance_id_is_local_clause trait_ref.trait_id)
+              (check_non_normalizable_trait_instance_id trait_ref.trait_id)
               ctx.span;
             TTraitType (trait_ref, type_name)
       in
@@ -451,7 +468,7 @@ let ctx_type_get_inst_norm_variants_fields_rtypes (span : Meta.span)
     (ctx : eval_ctx) (def_id : TypeDeclId.id) (generics : generic_args) :
     (VariantId.id option * ty list) list =
   let res =
-    ctx_type_get_instantiated_variants_fields_types ctx def_id generics
+    ctx_type_get_instantiated_variants_fields_types span ctx def_id generics
   in
   List.map
     (fun (variant_id, types) ->
@@ -502,7 +519,8 @@ let ctx_type_get_inst_norm_field_rtypes (span : Meta.span) (ctx : eval_ctx)
     (def_id : TypeDeclId.id) (opt_variant_id : VariantId.id option)
     (generics : generic_args) : ty list =
   let types =
-    ctx_type_get_instantiated_field_types ctx def_id opt_variant_id generics
+    ctx_type_get_instantiated_field_types span ctx def_id opt_variant_id
+      generics
   in
   List.map (ctx_normalize_ty (Some span) ctx) types
 

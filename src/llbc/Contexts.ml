@@ -124,21 +124,30 @@ let ctx_lookup_var_binder (span : Meta.span) (ctx : eval_ctx) (vid : VarId.id) :
     var_binder =
   fst (env_lookup_var span ctx.env vid)
 
-let ctx_lookup_type_decl (ctx : eval_ctx) (tid : TypeDeclId.id) : type_decl =
-  TypeDeclId.Map.find tid ctx.crate.type_decls
+let ctx_lookup_type_decl (span : Meta.span) (ctx : eval_ctx)
+    (tid : TypeDeclId.id) : type_decl =
+  silent_unwrap_opt_span __FILE__ __LINE__ (Some span)
+    (TypeDeclId.Map.find_opt tid ctx.crate.type_decls)
 
-let ctx_lookup_fun_decl (ctx : eval_ctx) (fid : FunDeclId.id) : fun_decl =
-  FunDeclId.Map.find fid ctx.crate.fun_decls
+let ctx_lookup_fun_decl (span : Meta.span) (ctx : eval_ctx) (fid : FunDeclId.id)
+    : fun_decl =
+  silent_unwrap_opt_span __FILE__ __LINE__ (Some span)
+    (FunDeclId.Map.find_opt fid ctx.crate.fun_decls)
 
-let ctx_lookup_global_decl (ctx : eval_ctx) (gid : GlobalDeclId.id) :
-    global_decl =
-  GlobalDeclId.Map.find gid ctx.crate.global_decls
+let ctx_lookup_global_decl (span : Meta.span) (ctx : eval_ctx)
+    (gid : GlobalDeclId.id) : global_decl =
+  silent_unwrap_opt_span __FILE__ __LINE__ (Some span)
+    (GlobalDeclId.Map.find_opt gid ctx.crate.global_decls)
 
-let ctx_lookup_trait_decl (ctx : eval_ctx) (id : TraitDeclId.id) : trait_decl =
-  TraitDeclId.Map.find id ctx.crate.trait_decls
+let ctx_lookup_trait_decl (span : Meta.span) (ctx : eval_ctx)
+    (id : TraitDeclId.id) : trait_decl =
+  silent_unwrap_opt_span __FILE__ __LINE__ (Some span)
+    (TraitDeclId.Map.find_opt id ctx.crate.trait_decls)
 
-let ctx_lookup_trait_impl (ctx : eval_ctx) (id : TraitImplId.id) : trait_impl =
-  TraitImplId.Map.find id ctx.crate.trait_impls
+let ctx_lookup_trait_impl (span : Meta.span) (ctx : eval_ctx)
+    (id : TraitImplId.id) : trait_impl =
+  silent_unwrap_opt_span __FILE__ __LINE__ (Some span)
+    (TraitImplId.Map.find_opt id ctx.crate.trait_impls)
 
 (** Retrieve a variable's value in the current frame *)
 let env_lookup_var_value (span : Meta.span) (env : env) (vid : VarId.id) :
@@ -473,10 +482,10 @@ let env_filter_abs (f : abs -> bool) (env : env) : env =
     **IMPORTANT**: this function doesn't normalize the types, you may want to
     use the [AssociatedTypes] equivalent instead.
 *)
-let ctx_type_get_instantiated_variants_fields_types (ctx : eval_ctx)
-    (def_id : TypeDeclId.id) (generics : generic_args) :
+let ctx_type_get_instantiated_variants_fields_types (span : Meta.span)
+    (ctx : eval_ctx) (def_id : TypeDeclId.id) (generics : generic_args) :
     (VariantId.id option * ty list) list =
-  let def = ctx_lookup_type_decl ctx def_id in
+  let def = ctx_lookup_type_decl span ctx def_id in
   Substitute.type_decl_get_instantiated_variants_fields_types def generics
 
 (** Return the types of the properly instantiated ADT's variant, provided a
@@ -485,10 +494,10 @@ let ctx_type_get_instantiated_variants_fields_types (ctx : eval_ctx)
     **IMPORTANT**: this function doesn't normalize the types, you may want to
     use the [AssociatedTypes] equivalent instead.
 *)
-let ctx_type_get_instantiated_field_types (ctx : eval_ctx)
+let ctx_type_get_instantiated_field_types (span : Meta.span) (ctx : eval_ctx)
     (def_id : TypeDeclId.id) (opt_variant_id : VariantId.id option)
     (generics : generic_args) : ty list =
-  let def = ctx_lookup_type_decl ctx def_id in
+  let def = ctx_lookup_type_decl span ctx def_id in
   Substitute.type_decl_get_instantiated_field_types def opt_variant_id generics
 
 (** Return the types of the properly instantiated ADT value (note that
@@ -503,7 +512,7 @@ let ctx_adt_get_instantiated_field_types (span : Meta.span) (ctx : eval_ctx)
   match id with
   | TAdtId id ->
       (* Retrieve the types of the fields *)
-      ctx_type_get_instantiated_field_types ctx id variant_id generics
+      ctx_type_get_instantiated_field_types span ctx id variant_id generics
   | TTuple ->
       cassert __FILE__ __LINE__ (variant_id = None) span
         "Tuples don't have variants";

@@ -23,6 +23,9 @@ let regions_hierarchy_log = create_logger "RegionsHierarchy"
 (** Logger for TypesAnalysis *)
 let types_analysis_log = create_logger "TypesAnalysis"
 
+(** Logger for FunsAnalysis *)
+let funs_analysis_log = create_logger "FunsAnalysis"
+
 (** Logger for Translate *)
 let translate_log = create_logger "Translate"
 
