@@ -298,7 +298,8 @@ let range_all : result unit =
   let* (s, _) =
     core_array_Array_index_mut (core_ops_index_IndexMutSliceInst
       (core_slice_index_SliceIndexRangeUsizeSliceInst u32)) x
-      { start = 1; end_ = 3 } in
+      { start = 1; end_ = 3 }
+  in
   let* _ = update_mut_slice s in
   Ok ()
 

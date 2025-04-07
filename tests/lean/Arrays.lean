@@ -243,7 +243,7 @@ def take_all : Result Unit :=
   take_slice s
   let (s1, _) ←
     (↑(Array.to_slice_mut x) : Result ((Slice U32) × (Slice U32 → Array
-       U32 2#usize)))
+      U32 2#usize)))
   let _ ← take_mut_slice s1
   ok ()
 
@@ -283,7 +283,7 @@ def index_all : Result U32 :=
   let i5 ← i3 + i4
   let (s1, _) ←
     (↑(Array.to_slice_mut x) : Result ((Slice U32) × (Slice U32 → Array
-       U32 2#usize)))
+      U32 2#usize)))
   let (i6, _) ← index_mut_slice_u32_0 s1
   i5 + i6
 
@@ -315,7 +315,7 @@ def update_all : Result Unit :=
   let x1 ← update_array_mut_borrow x
   let (s, _) ←
     (↑(Array.to_slice_mut x1) : Result ((Slice U32) × (Slice U32 → Array
-       U32 2#usize)))
+      U32 2#usize)))
   let _ ← update_mut_slice s
   ok ()
 
@@ -421,7 +421,7 @@ def f0 : Result Unit :=
   do
   let (s, _) ←
     (↑(Array.to_slice_mut (Array.make 2#usize [ 1#u32, 2#u32 ])) : Result
-       ((Slice U32) × (Slice U32 → Array U32 2#usize)))
+      ((Slice U32) × (Slice U32 → Array U32 2#usize)))
   let _ ← Slice.index_mut_usize s 0#usize
   ok ()
 
@@ -453,7 +453,7 @@ def f3 : Result U32 :=
   let b := Array.repeat 32#usize 0#u32
   let s ←
     (↑(Array.to_slice (Array.make 2#usize [ 1#u32, 2#u32 ])) : Result (Slice
-       U32))
+      U32))
   let s1 ← f4 b 16#usize 18#usize
   sum2 s s1
 
@@ -475,11 +475,11 @@ def ite : Result Unit :=
   let y := Array.repeat 2#usize 0#u32
   let (s, _) ←
     (↑(Array.to_slice_mut x) : Result ((Slice U32) × (Slice U32 → Array
-       U32 2#usize)))
+      U32 2#usize)))
   let _ ← index_mut_slice_u32_0 s
   let (s1, _) ←
     (↑(Array.to_slice_mut y) : Result ((Slice U32) × (Slice U32 → Array
-       U32 2#usize)))
+      U32 2#usize)))
   let _ ← index_mut_slice_u32_0 s1
   ok ()
 

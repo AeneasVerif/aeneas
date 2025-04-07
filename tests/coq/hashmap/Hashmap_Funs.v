@@ -422,14 +422,16 @@ Fixpoint hashMap_get_mut_in_list_loop
         let back :=
           fun (ret : option T) =>
             let t := match ret with | Some t1 => t1 | _ => cvalue end in
-            AList_Cons ckey t tl in
+            AList_Cons ckey t tl
+        in
         Ok (Some cvalue, back)
       else (
         p <- hashMap_get_mut_in_list_loop n1 tl key;
         let (o, back) := p in
         let back1 :=
           fun (ret : option T) =>
-            let tl1 := back ret in AList_Cons ckey cvalue tl1 in
+            let tl1 := back ret in AList_Cons ckey cvalue tl1
+        in
         Ok (o, back1))
     | AList_Nil =>
       let back := fun (ret : option T) => AList_Nil in Ok (None, back)
@@ -471,7 +473,8 @@ Definition hashMap_get_mut
         hashMap_max_load := self.(hashMap_max_load);
         hashMap_saturated := self.(hashMap_saturated);
         hashMap_slots := v
-      |} in
+      |}
+  in
   Ok (o, back)
 .
 

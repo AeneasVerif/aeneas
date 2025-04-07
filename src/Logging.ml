@@ -35,6 +35,9 @@ let contexts_log = create_logger "Contexts"
 (** Logger for PureUtils *)
 let pure_utils_log = create_logger "PureUtils"
 
+(** Logger for PureTypeCheck *)
+let pure_type_check_log = create_logger "PureTypeCheck"
+
 (** Logger for SymbolicToPure *)
 let symbolic_to_pure_log = create_logger "SymbolicToPure"
 

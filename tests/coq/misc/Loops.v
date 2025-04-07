@@ -224,7 +224,8 @@ Fixpoint get_elem_mut_loop
         p <- get_elem_mut_loop n1 x tl;
         let (i, back) := p in
         let back1 :=
-          fun (ret : usize) => let tl1 := back ret in List_Cons y tl1 in
+          fun (ret : usize) => let tl1 := back ret in List_Cons y tl1
+        in
         Ok (i, back1))
     | List_Nil => Fail_ Failure
     end
@@ -370,9 +371,11 @@ Fixpoint list_nth_mut_loop_pair_loop
           t <- list_nth_mut_loop_pair_loop n1 tl0 tl1 i1;
           let '(p, back'a, back'b) := t in
           let back'a1 :=
-            fun (ret : T) => let tl01 := back'a ret in List_Cons x0 tl01 in
+            fun (ret : T) => let tl01 := back'a ret in List_Cons x0 tl01
+          in
           let back'b1 :=
-            fun (ret : T) => let tl11 := back'b ret in List_Cons x1 tl11 in
+            fun (ret : T) => let tl11 := back'b ret in List_Cons x1 tl11
+          in
           Ok (p, back'a1, back'b1))
       | List_Nil => Fail_ Failure
       end
@@ -440,7 +443,8 @@ Fixpoint list_nth_mut_loop_pair_merge_loop
         then
           let back :=
             fun (ret : (T * T)) =>
-              let (t, t1) := ret in (List_Cons t tl0, List_Cons t1 tl1) in
+              let (t, t1) := ret in (List_Cons t tl0, List_Cons t1 tl1)
+          in
           Ok ((x0, x1), back)
         else (
           i1 <- u32_sub i 1%u32;
@@ -449,7 +453,8 @@ Fixpoint list_nth_mut_loop_pair_merge_loop
           let back1 :=
             fun (ret : (T * T)) =>
               let (tl01, tl11) := back ret in
-              (List_Cons x0 tl01, List_Cons x1 tl11) in
+              (List_Cons x0 tl01, List_Cons x1 tl11)
+          in
           Ok (p1, back1))
       | List_Nil => Fail_ Failure
       end
@@ -522,7 +527,8 @@ Fixpoint list_nth_mut_shared_loop_pair_loop
           p <- list_nth_mut_shared_loop_pair_loop n1 tl0 tl1 i1;
           let (p1, back) := p in
           let back1 :=
-            fun (ret : T) => let tl01 := back ret in List_Cons x0 tl01 in
+            fun (ret : T) => let tl01 := back ret in List_Cons x0 tl01
+          in
           Ok (p1, back1))
       | List_Nil => Fail_ Failure
       end
@@ -561,7 +567,8 @@ Fixpoint list_nth_mut_shared_loop_pair_merge_loop
           p <- list_nth_mut_shared_loop_pair_merge_loop n1 tl0 tl1 i1;
           let (p1, back) := p in
           let back1 :=
-            fun (ret : T) => let tl01 := back ret in List_Cons x0 tl01 in
+            fun (ret : T) => let tl01 := back ret in List_Cons x0 tl01
+          in
           Ok (p1, back1))
       | List_Nil => Fail_ Failure
       end
@@ -600,7 +607,8 @@ Fixpoint list_nth_shared_mut_loop_pair_loop
           p <- list_nth_shared_mut_loop_pair_loop n1 tl0 tl1 i1;
           let (p1, back) := p in
           let back1 :=
-            fun (ret : T) => let tl11 := back ret in List_Cons x1 tl11 in
+            fun (ret : T) => let tl11 := back ret in List_Cons x1 tl11
+          in
           Ok (p1, back1))
       | List_Nil => Fail_ Failure
       end
@@ -639,7 +647,8 @@ Fixpoint list_nth_shared_mut_loop_pair_merge_loop
           p <- list_nth_shared_mut_loop_pair_merge_loop n1 tl0 tl1 i1;
           let (p1, back) := p in
           let back1 :=
-            fun (ret : T) => let tl11 := back ret in List_Cons x1 tl11 in
+            fun (ret : T) => let tl11 := back ret in List_Cons x1 tl11
+          in
           Ok (p1, back1))
       | List_Nil => Fail_ Failure
       end

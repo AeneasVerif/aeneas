@@ -328,6 +328,205 @@ let lets_require_wrap_in_do (span : Meta.span)
       wrap_in_do
   | FStar | Coq -> false
 
+(** Format a unary operation
+
+    Inputs:
+    - a formatter for expressions (called on the argument of the unop)
+    - extraction context (see below)
+    - formatter
+    - expression formatter
+    - [inside]
+    - unop
+    - argument
+ *)
+let extract_unop (span : Meta.span) (ctx : extraction_ctx)
+    (extract_expr : bool -> texpression -> unit) (fmt : F.formatter)
+    (inside : bool) (unop : unop) (arg : texpression) : unit =
+  match unop with
+  | Not _ | Neg _ | ArrayToSlice ->
+      let unop = unop_name unop in
+      if inside then F.pp_print_string fmt "(";
+      F.pp_print_string fmt unop;
+      F.pp_print_space fmt ();
+      extract_expr true arg;
+      if inside then F.pp_print_string fmt ")"
+  | TypeAnnot tgt_ty ->
+      F.pp_print_string fmt "(";
+      extract_expr false arg;
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt ":";
+      F.pp_print_space fmt ();
+      extract_ty span ctx fmt TypeDeclId.Set.empty false tgt_ty;
+      F.pp_print_string fmt ")"
+  | Cast (src, tgt) -> (
+      (* HOL4 has a special treatment: because it doesn't support dependent
+         types, we don't have a specific operator for the cast *)
+      match backend () with
+      | HOL4 ->
+          (* Casting, say, an u32 to an i32 would be done as follows:
+             {[
+               mk_i32 (u32_to_int x)
+             ]}
+          *)
+          if inside then F.pp_print_string fmt "(";
+          F.pp_print_string fmt ("mk_" ^ scalar_name tgt);
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "(";
+          F.pp_print_string fmt (scalar_name src ^ "_to_int");
+          F.pp_print_space fmt ();
+          extract_expr true arg;
+          F.pp_print_string fmt ")";
+          if inside then F.pp_print_string fmt ")"
+      | FStar | Coq | Lean ->
+          if inside then F.pp_print_string fmt "(";
+          (* Rem.: the source type is an implicit parameter *)
+          (* Different cases depending on the conversion *)
+          (let cast_str, src, tgt =
+             let integer_type_to_string (ty : integer_type) : string =
+               if backend () = Lean then "." ^ int_name ty
+               else
+                 StringUtils.capitalize_first_letter
+                   (PrintPure.integer_type_to_string ty)
+             in
+             match (src, tgt) with
+             | TInteger src, TInteger tgt ->
+                 let cast_str =
+                   match backend () with
+                   | Coq | FStar -> "scalar_cast"
+                   | Lean ->
+                       let signed_src = Scalars.integer_type_is_signed src in
+                       let signed_tgt = Scalars.integer_type_is_signed tgt in
+                       if signed_src = signed_tgt then
+                         if signed_src then "IScalar.cast" else "UScalar.cast"
+                       else if signed_src then "IScalar.hcast"
+                       else "UScalar.hcast"
+                   | HOL4 -> admit_string __FILE__ __LINE__ span "Unreachable"
+                 in
+                 let src =
+                   if backend () <> Lean then Some (integer_type_to_string src)
+                   else None
+                 in
+                 let tgt = integer_type_to_string tgt in
+                 (cast_str, src, Some tgt)
+             | TBool, TInteger tgt ->
+                 let cast_str =
+                   match backend () with
+                   | Coq | FStar -> "scalar_cast_bool"
+                   | Lean ->
+                       if Scalars.integer_type_is_signed tgt then
+                         "IScalar.cast_fromBool"
+                       else "UScalar.cast_fromBool"
+                   | HOL4 -> admit_string __FILE__ __LINE__ span "Unreachable"
+                 in
+                 let tgt = integer_type_to_string tgt in
+                 (cast_str, None, Some tgt)
+             | TInteger _, TBool ->
+                 (* This is not allowed by rustc: the way of doing it in Rust is: [x != 0] *)
+                 craise __FILE__ __LINE__ span
+                   "Unexpected cast: integer to bool"
+             | TBool, TBool ->
+                 (* There shouldn't be any cast here. Note that if
+                    one writes [b as bool] in Rust (where [b] is a
+                    boolean), it gets compiled to [b] (i.e., no cast
+                    is introduced). *)
+                 craise __FILE__ __LINE__ span "Unexpected cast: bool to bool"
+             | _ -> craise __FILE__ __LINE__ span "Unreachable"
+           in
+           (* Print the name of the function *)
+           F.pp_print_string fmt cast_str;
+           (* Print the src type argument *)
+           (match src with
+           | None -> ()
+           | Some src ->
+               F.pp_print_space fmt ();
+               F.pp_print_string fmt src);
+           (* Print the tgt type argument *)
+           match tgt with
+           | None -> ()
+           | Some tgt ->
+               F.pp_print_space fmt ();
+               F.pp_print_string fmt tgt);
+          (* Extract the argument *)
+          F.pp_print_space fmt ();
+          extract_expr true arg;
+          if inside then F.pp_print_string fmt ")")
+
+(** Format a binary operation
+
+    Inputs:
+    - a formatter for expressions (called on the arguments of the binop)
+    - extraction context (see below)
+    - formatter
+    - expression formatter
+    - [inside]
+    - binop
+    - argument 0
+    - argument 1
+ *)
+let extract_binop (span : Meta.span)
+    (extract_expr : bool -> texpression -> unit) (fmt : F.formatter)
+    (inside : bool) (binop : E.binop) (int_ty : integer_type)
+    (arg0 : texpression) (arg1 : texpression) : unit =
+  if inside then F.pp_print_string fmt "(";
+  (* Some binary operations have a special notation depending on the backend *)
+  (match (backend (), binop) with
+  | HOL4, (Eq | Ne)
+  | (FStar | Coq | Lean), (Eq | Lt | Le | Ne | Ge | Gt)
+  | Lean, (Div | Rem | Add | Sub | Mul | Shl | Shr | BitXor | BitOr | BitAnd) ->
+      let binop =
+        match binop with
+        | Eq -> "="
+        | Lt -> "<"
+        | Le -> "<="
+        | Ne -> if backend () = Lean then "!=" else "<>"
+        | Ge -> ">="
+        | Gt -> ">"
+        | Div -> "/"
+        | Rem -> "%"
+        | Add -> "+"
+        | Sub -> "-"
+        | Mul -> "*"
+        | CheckedAdd | CheckedSub | CheckedMul ->
+            admit_string __FILE__ __LINE__ span
+              "Checked operations are not implemented"
+        | Shl -> "<<<"
+        | Shr -> ">>>"
+        | BitXor -> "^^^"
+        | BitOr -> "|||"
+        | BitAnd -> "&&&"
+      in
+      let binop =
+        match backend () with
+        | FStar | Lean | HOL4 -> binop
+        | Coq -> "s" ^ binop
+      in
+      extract_expr true arg0;
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt binop;
+      F.pp_print_space fmt ();
+      extract_expr true arg1
+  | _ ->
+      let binop_is_shift =
+        match binop with
+        | Shl | Shr -> true
+        | _ -> false
+      in
+      let binop = named_binop_name binop int_ty in
+      F.pp_print_string fmt binop;
+      (* In the case of F*, for shift operations, because machine integers
+         are simply integers with a refinement, if the second argument is a
+         constant we need to provide the second implicit type argument *)
+      if binop_is_shift && backend () = FStar && is_const arg1 then (
+        F.pp_print_space fmt ();
+        let ty = ty_as_integer span arg1.ty in
+        F.pp_print_string fmt
+          ("#" ^ StringUtils.capitalize_first_letter (int_name ty)));
+      F.pp_print_space fmt ();
+      extract_expr true arg0;
+      F.pp_print_space fmt ();
+      extract_expr true arg1);
+  if inside then F.pp_print_string fmt ")"
+
 (** [inside]: controls the introduction of parentheses. See [extract_ty]
 
     TODO: replace the formatting boolean [inside] with something more general?
@@ -409,8 +608,6 @@ and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       (* "Regular" expression *)
       (* Open parentheses *)
       if inside then F.pp_print_string fmt "(";
-      (* Open a box for the application *)
-      F.pp_open_hovbox fmt ctx.indent_incr;
       (* Print the app expression *)
       let app_inside = (inside && args = []) || args <> [] in
       extract_texpression span ctx fmt app_inside app;
@@ -420,8 +617,6 @@ and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
           F.pp_print_space fmt ();
           extract_texpression span ctx fmt true ve)
         args;
-      (* Close the box for the application *)
-      F.pp_close_box fmt ();
       (* Close parentheses *)
       if inside then F.pp_print_string fmt ")"
 
@@ -443,26 +638,19 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
        * Note that the way we generate the translation, we shouldn't get the
        * case where we have no argument (all functions are fully instantiated,
        * and no AST transformation introduces partial calls). *)
-      extract_unop span (extract_texpression span ctx fmt) fmt inside unop arg
+      extract_unop span ctx
+        (extract_texpression span ctx fmt)
+        fmt inside unop arg
   | Binop (binop, int_ty), [ arg0; arg1 ] ->
       (* Number of arguments: similar to unop *)
       extract_binop span
         (extract_texpression span ctx fmt)
         fmt inside binop int_ty arg0 arg1
   | Fun fun_id, _ ->
-      (* Should we add a type annotation? It is necessary when the app is actually
-         a coercion *)
-      let extract_type_annot =
-        backend () = Lean
-        &&
-        match fun_id with
-        | Pure ToResult -> true
-        | _ -> false
-      in
-      let use_brackets = inside || extract_type_annot in
+      let use_brackets = inside in
       if use_brackets then F.pp_print_string fmt "(";
       (* Open a box for the function call *)
-      F.pp_open_hovbox fmt ctx.indent_incr;
+      (*F.pp_open_hovbox fmt ctx.indent_incr;*)
       (* Print the function name.
 
          For the function name: the id is not the same depending on whether
@@ -543,41 +731,23 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
       let explicit =
         let lookup is_trait_method fun_decl_id lp_id =
           (* Lookup the function to retrieve the signature information *)
-          match A.FunDeclId.Map.find_opt fun_decl_id ctx.trans_funs with
-          | None ->
-              (* Error case *)
-              opt_raise __FILE__ __LINE__ span "Unrechable";
-              None
-          | Some trans_fun ->
-              let trans_fun =
-                match lp_id with
-                | None -> trans_fun.f
-                | Some lp_id -> Pure.LoopId.nth trans_fun.loops lp_id
-              in
-              let explicit = trans_fun.signature.explicit_info in
-              (* If it is a trait method, we need to remove the prefix
-                 which accounts for the generics of the impl. *)
-              let explicit =
-                if is_trait_method then
-                  (* We simply adjust the length of the explicit information to
-                     the number of generic arguments *)
-                  let open Collections.List in
-                  let { explicit_types; explicit_const_generics } = explicit in
-                  {
-                    explicit_types =
-                      drop
-                        (length explicit_types - length generics.types)
-                        explicit_types;
-                    explicit_const_generics =
-                      drop
-                        (length explicit_const_generics
-                        - length generics.const_generics)
-                        explicit_const_generics;
-                  }
-                else explicit
-              in
-              (* *)
-              Some explicit
+          let trans_fun =
+            silent_unwrap __FILE__ __LINE__ span
+              (A.FunDeclId.Map.find_opt fun_decl_id ctx.trans_funs)
+          in
+          let trans_fun =
+            match lp_id with
+            | None -> trans_fun.f
+            | Some lp_id -> Pure.LoopId.nth trans_fun.loops lp_id
+          in
+          let explicit = trans_fun.signature.explicit_info in
+          (* If it is a trait method, we need to remove the prefix
+             which accounts for the generics of the impl. *)
+          let explicit =
+            adjust_explicit_info explicit is_trait_method generics
+          in
+          (* *)
+          Some explicit
         in
         match fun_id with
         | FromLlbc (FunId (FRegular fun_decl_id), lp_id) ->
@@ -601,7 +771,11 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
       in
       (* Special case for [ToResult]: we don't want to print a space between the
          coercion symbol and the expression - TODO: this is a bit ad-hoc *)
-      let print_first_space = not extract_type_annot in
+      let print_first_space =
+        match fun_id with
+        | Pure ToResult -> false
+        | _ -> true
+      in
       (* Filter the generics.
 
          We might need to filter some of the type arguments, if the type
@@ -632,17 +806,8 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
           if !print_space then F.pp_print_space fmt () else print_space := true;
           extract_texpression span ctx fmt true ve)
         args;
-      (* Add the type annotation *)
-      if extract_type_annot then (
-        F.pp_print_space fmt ();
-        F.pp_print_string fmt ":";
-        F.pp_print_space fmt ();
-        let result = ctx_get_builtin_type (Some span) TResult ctx in
-        F.pp_print_string fmt result;
-        F.pp_print_space fmt ();
-        extract_ty span ctx fmt TypeDeclId.Set.empty true (List.hd args).ty);
       (* Close the box for the function call *)
-      F.pp_close_box fmt ();
+      (*F.pp_close_box fmt ();*)
       (* Return *)
       if use_brackets then F.pp_print_string fmt ")"
   | (Unop _ | Binop _), _ ->
@@ -843,8 +1008,9 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
   let extract_let (ctx : extraction_ctx) (monadic : bool) (lv : typed_pattern)
       (re : texpression) : extraction_ctx =
     (* Open a box for the let-binding *)
-    F.pp_open_hovbox fmt ctx.indent_incr;
-    let ctx =
+    F.pp_open_hvbox fmt 0;
+    F.pp_open_hvbox fmt ctx.indent_incr;
+    let ctx, end_let =
       (* There are two cases:
          - do we use a notation like [x <-- y;]
          - do we use notation with let-bindings
@@ -857,6 +1023,8 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
          TODO: cleanup
       *)
       if monadic && (backend () = Coq || backend () = HOL4) then (
+        (* Box for the let .. <- *)
+        F.pp_open_hovbox fmt ctx.indent_incr;
         let ctx = extract_typed_pattern span ctx fmt true true lv in
         F.pp_print_space fmt ();
         let arrow =
@@ -865,10 +1033,14 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
           | FStar | Lean -> internal_error __FILE__ __LINE__ span
         in
         F.pp_print_string fmt arrow;
+        F.pp_close_box fmt ();
         F.pp_print_space fmt ();
+        (* Box for the bound expression *)
+        F.pp_open_hovbox fmt ctx.indent_incr;
         extract_texpression span ctx fmt false re;
         F.pp_print_string fmt ";";
-        ctx)
+        F.pp_close_box fmt ();
+        (ctx, fun _ -> ()))
       else
         (* Check if we can ignore the [let] - it is possible for some backends,
            if the monadic expression evaluates to [()] *)
@@ -877,8 +1049,10 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
           && backend () = Lean
         in
         (* Print the [let] *)
-        let ctx =
+        let ctx, end_let =
           if not ignore_let then (
+            (* Box for the let .. <- *)
+            F.pp_open_hovbox fmt ctx.indent_incr;
             if monadic then
               match backend () with
               | FStar ->
@@ -901,23 +1075,31 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
               | HOL4 -> if monadic then "<-" else "="
             in
             F.pp_print_string fmt eq;
+            F.pp_close_box fmt ();
             F.pp_print_space fmt ();
-            ctx)
-          else ctx
+            (* Continuation to end the let-binding *)
+            let end_let () =
+              match backend () with
+              | Lean ->
+                  (* In Lean, (monadic) let-bindings don't require to end with anything *)
+                  ()
+              | Coq | FStar | HOL4 ->
+                  F.pp_print_space fmt ();
+                  F.pp_print_string fmt "in"
+            in
+            (ctx, end_let))
+          else (ctx, fun _ -> ())
         in
         (* Print the bound expression *)
+        F.pp_open_hovbox fmt ctx.indent_incr;
         extract_texpression span ctx fmt false re;
-        (* End the let-binding *)
-        (match backend () with
-        | Lean ->
-            (* In Lean, (monadic) let-bindings don't require to end with anything *)
-            ()
-        | Coq | FStar | HOL4 ->
-            F.pp_print_space fmt ();
-            F.pp_print_string fmt "in");
-        ctx
+        F.pp_close_box fmt ();
+        (ctx, end_let)
     in
-    (* Close the box for the let-binding *)
+    (* Close the boxes for the let-binding *)
+    F.pp_close_box fmt ();
+    (* End the let-binding *)
+    end_let ();
     F.pp_close_box fmt ();
     F.pp_print_space fmt ();
     (* Return *)
@@ -1133,11 +1315,6 @@ and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
     | TAdtId _ ->
         F.pp_open_hvbox fmt 0;
         F.pp_open_hvbox fmt ctx.indent_incr;
-        (* If the expression *creates* a new structure, we may need to precide
-           its type (if the expression updates some fields of a structure, then
-           the final type is already known) *)
-        let need_type_annot = supd.init = None && backend () = Lean in
-        if need_type_annot then F.pp_print_string fmt "(";
         (* Inner/outer brackets: there are several syntaxes for the field updates.
 
            For instance, in F*:
@@ -1232,14 +1409,6 @@ and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
         if need_paren then F.pp_print_string fmt ")";
         F.pp_close_box fmt ();
         print_bracket false orb;
-        if need_type_annot then (
-          F.pp_open_hovbox fmt ctx.indent_incr;
-          F.pp_print_space fmt ();
-          F.pp_print_string fmt ":";
-          F.pp_print_space fmt ();
-          extract_ty span ctx fmt TypeDeclId.Set.empty false e_ty;
-          F.pp_print_string fmt ")";
-          F.pp_close_box fmt ());
         F.pp_close_box fmt ()
     | TBuiltin TArray ->
         (* Open the boxes *)
@@ -1786,8 +1955,12 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     F.pp_open_hvbox fmt 0;
     (* Extract the body *)
     let _ =
-      extract_texpression def.item_meta.span ctx_body fmt false
-        (Option.get def.body).body
+      F.pp_open_hovbox fmt ctx.indent_incr;
+      let _ =
+        extract_texpression def.item_meta.span ctx_body fmt false
+          (Option.get def.body).body
+      in
+      F.pp_close_box fmt ()
     in
     (* Close the box for the body *)
     F.pp_close_box fmt ());
@@ -2043,7 +2216,9 @@ let extract_global_decl_body_gen (span : Meta.span) (ctx : extraction_ctx)
     (* Open "BODY" box (depth=1) *)
     F.pp_open_hvbox fmt 0;
     (* Print "BODY" *)
+    F.pp_open_hovbox fmt ctx.indent_incr;
     (Option.get extract_body) fmt;
+    F.pp_close_box fmt ();
     (* Close "BODY" box (depth=1) *)
     F.pp_close_box fmt ());
 

@@ -398,8 +398,7 @@ let parameterize_trait_types = ref false
 (** For sanity check: type check the generated pure code (activates checks in
     several places).
 
-    TODO: deactivated for now because we need to implement the normalization of
-    trait associated types in the pure code.
+    TODO: fix the bugs and reactivate
  *)
 let type_check_pure_code = ref false
 

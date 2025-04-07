@@ -33,7 +33,8 @@ Fixpoint get_list_at_x
       let (l, get_list_at_x_back) := p in
       let back :=
         fun (ret : List_t u32) =>
-          let tl1 := get_list_at_x_back ret in List_Cons hd tl1 in
+          let tl1 := get_list_at_x_back ret in List_Cons hd tl1
+      in
       Ok (l, back))
   | List_Nil => Ok (List_Nil, fun (ret : List_t u32) => ret)
   end

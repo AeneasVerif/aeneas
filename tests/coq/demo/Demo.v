@@ -107,7 +107,8 @@ Fixpoint list_nth_mut
         let (t, list_nth_mut_back) := p in
         let back :=
           fun (ret : T) =>
-            let tl1 := list_nth_mut_back ret in CList_CCons x tl1 in
+            let tl1 := list_nth_mut_back ret in CList_CCons x tl1
+        in
         Ok (t, back))
     | CList_CNil => Fail_ Failure
     end
@@ -141,7 +142,8 @@ Fixpoint list_tail
       let (c, list_tail_back) := p in
       let back :=
         fun (ret : CList_t T) =>
-          let tl1 := list_tail_back ret in CList_CCons t tl1 in
+          let tl1 := list_tail_back ret in CList_CCons t tl1
+      in
       Ok (c, back)
     | CList_CNil => Ok (CList_CNil, fun (ret : CList_t T) => ret)
     end

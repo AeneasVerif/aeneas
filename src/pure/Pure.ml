@@ -597,10 +597,14 @@ and predicates = { trait_type_constraints : trait_type_constraint list }
 (** Characterize an input parameter as explicit or implicit *)
 type explicit = Explicit | Implicit
 
+and known = Known | Unknown
+
 and explicit_info = {
   explicit_types : explicit list;
   explicit_const_generics : explicit list;
 }
+
+and known_info = { known_types : known list; known_const_generics : known list }
 
 and type_decl = {
   def_id : type_decl_id;
@@ -830,6 +834,14 @@ type unop =
   | Neg of integer_type
   | Cast of literal_type * literal_type
   | ArrayToSlice
+  | TypeAnnot of ty
+      (** Explicit type annotation - we add those during a micro-pass at the very
+          end because, for instance, the type of some structure expressions may
+          not be obvious from the context.
+
+          Note that the type should be known from the context, but it's still convenient
+          to keep it here.
+        *)
 [@@deriving show, ord]
 
 type fun_id_or_trait_method_ref =
@@ -1310,6 +1322,8 @@ type fun_sig = {
   generics : generic_params;
   explicit_info : explicit_info;
       (** Information about which inputs parameters are explicit/implicit *)
+  known_from_trait_refs : known_info;
+      (** Information about which (implicit) parameters can be infered from the trait refs only *)
   llbc_generics : Types.generic_params;
       (** We use the LLBC generics to generate "pretty" names, for instance
           for the variables we introduce for the trait clauses: we derive

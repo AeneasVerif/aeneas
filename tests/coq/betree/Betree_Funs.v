@@ -261,16 +261,20 @@ Definition betree_Leaf_split
   let (st1, _) := p4 in
   p5 <- betree_store_leaf_node id1 content1 st1;
   let (st2, _) := p5 in
-  let n1 := Betree_Node_Leaf
-    {|
-      betree_Leaf_id := id0;
-      betree_Leaf_size := params.(betree_Params_split_size)
-    |} in
-  let n2 := Betree_Node_Leaf
-    {|
-      betree_Leaf_id := id1;
-      betree_Leaf_size := params.(betree_Params_split_size)
-    |} in
+  let n1 :=
+    Betree_Node_Leaf
+      {|
+        betree_Leaf_id := id0;
+        betree_Leaf_size := params.(betree_Params_split_size)
+      |}
+  in
+  let n2 :=
+    Betree_Node_Leaf
+      {|
+        betree_Leaf_id := id1;
+        betree_Leaf_size := params.(betree_Params_split_size)
+      |}
+  in
   Ok (st2, (mkbetree_Internal_t self.(betree_Leaf_id) pivot n1 n2,
     node_id_cnt2))
 .
@@ -327,7 +331,8 @@ Fixpoint betree_Node_lookup_first_message_for_key_loop
         let (l, back) := p in
         let back1 :=
           fun (ret : betree_List_t (u64 * betree_Message_t)) =>
-            let next_msgs1 := back ret in Betree_List_Cons x next_msgs1 in
+            let next_msgs1 := back ret in Betree_List_Cons x next_msgs1
+        in
         Ok (l, back1))
     | Betree_List_Nil =>
       Ok (Betree_List_Nil,
@@ -516,7 +521,8 @@ Fixpoint betree_Node_lookup_first_message_after_key_loop
         let (l, back) := p1 in
         let back1 :=
           fun (ret : betree_List_t (u64 * betree_Message_t)) =>
-            let next_msgs1 := back ret in Betree_List_Cons p next_msgs1 in
+            let next_msgs1 := back ret in Betree_List_Cons p next_msgs1
+        in
         Ok (l, back1))
       else Ok (msgs, fun (ret : betree_List_t (u64 * betree_Message_t)) => ret)
     | Betree_List_Nil =>
@@ -636,7 +642,8 @@ Fixpoint betree_Node_lookup_mut_in_bindings_loop
         let (l, back) := p in
         let back1 :=
           fun (ret : betree_List_t (u64 * u64)) =>
-            let tl1 := back ret in Betree_List_Cons hd tl1 in
+            let tl1 := back ret in Betree_List_Cons hd tl1
+        in
         Ok (l, back1))
     | Betree_List_Nil =>
       Ok (Betree_List_Nil, fun (ret : betree_List_t (u64 * u64)) => ret)

@@ -216,16 +216,14 @@ let type_decl_get_fields (def : type_decl)
   | Struct fields, None -> fields
   | _ ->
       let opt_variant_id =
-        match opt_variant_id with
-        | None -> "None"
-        | Some _ -> "Some"
+        Print.option_to_string VariantId.to_string opt_variant_id
       in
       raise
         (Invalid_argument
            ("The variant id should be [Some] if and only if the definition is \
              an enumeration:\n\
-             - def: " ^ show_type_decl def ^ "\n- opt_variant_id: "
-          ^ opt_variant_id))
+             - def.name: " ^ def.name ^ "\n- opt_variant_id: " ^ opt_variant_id
+           ))
 
 let make_subst_from_generics (params : generic_params) (args : generic_args) :
     subst =
@@ -382,19 +380,42 @@ let ty_as_adt (span : Meta.span) (ty : ty) : type_id * generic_args =
   | TAdt (id, generics) -> (id, generics)
   | _ -> craise __FILE__ __LINE__ span "Not an ADT"
 
-let ty_as_array (span : Meta.span) (ty : ty) : ty * const_generic =
+let ty_as_opt_result (ty : ty) : ty option =
+  match ty with
+  | TAdt
+      ( TBuiltin TResult,
+        { types = [ ty ]; const_generics = []; trait_refs = [] } ) -> Some ty
+  | _ -> None
+
+let ty_as_opt_array (ty : ty) : (ty * const_generic) option =
   match ty with
   | TAdt
       ( TBuiltin TArray,
-        { types = [ ty ]; const_generics = [ n ]; trait_refs = [] } ) -> (ty, n)
-  | _ -> craise __FILE__ __LINE__ span "Not an ADT"
+        { types = [ ty ]; const_generics = [ n ]; trait_refs = [] } ) ->
+      Some (ty, n)
+  | _ -> None
 
-let ty_as_slice (span : Meta.span) (ty : ty) : ty =
+let ty_as_array (span : Meta.span) (ty : ty) : ty * const_generic =
+  match ty_as_opt_array ty with
+  | Some (ty, n) -> (ty, n)
+  | None -> craise __FILE__ __LINE__ span "Not an ADT"
+
+let ty_as_opt_slice (ty : ty) : ty option =
   match ty with
   | TAdt
       (TBuiltin TSlice, { types = [ ty ]; const_generics = []; trait_refs = [] })
-    -> ty
-  | _ -> craise __FILE__ __LINE__ span "Not an ADT"
+    -> Some ty
+  | _ -> None
+
+let ty_as_slice (span : Meta.span) (ty : ty) : ty =
+  match ty_as_opt_slice ty with
+  | Some ty -> ty
+  | None -> craise __FILE__ __LINE__ span "Not an ADT"
+
+let ty_as_opt_arrow (ty : ty) : (ty * ty) option =
+  match ty with
+  | TArrow (ty0, ty1) -> Some (ty0, ty1)
+  | _ -> None
 
 (** Remove the external occurrences of {!Meta} *)
 let rec unspan (e : texpression) : texpression =
@@ -994,3 +1015,31 @@ let mk_to_result_texpression (span : Meta.span) (e : texpression) : texpression
   let qualif_ty = mk_arrow e.ty ty in
   let qualif = { e = qualif; ty = qualif_ty } in
   mk_app span qualif e
+
+let append_generic_args (g0 : generic_args) (g1 : generic_args) : generic_args =
+  {
+    types = g0.types @ g1.types;
+    const_generics = g0.const_generics @ g1.const_generics;
+    trait_refs = g0.trait_refs @ g1.trait_refs;
+  }
+
+(** Ajust the explicit information coming from a signature.
+
+    If the function called is a trait method, we need to remove the prefix
+    which accounts for the generics of the impl. *)
+let adjust_explicit_info (explicit : explicit_info) (is_trait_method : bool)
+    (generics : generic_args) : explicit_info =
+  if is_trait_method then
+    (* We simply adjust the length of the explicit information to
+       the number of generic arguments *)
+    let open Collections.List in
+    let { Pure.explicit_types; explicit_const_generics } = explicit in
+    {
+      explicit_types =
+        drop (length explicit_types - length generics.types) explicit_types;
+      explicit_const_generics =
+        drop
+          (length explicit_const_generics - length generics.const_generics)
+          explicit_const_generics;
+    }
+  else explicit

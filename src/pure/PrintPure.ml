@@ -153,7 +153,7 @@ let rec ty_to_string (env : fmt_env) (inside : bool) (ty : ty) : string =
   | TAdt (id, generics) -> (
       match id with
       | TTuple ->
-          let generics = generic_args_to_strings env false generics in
+          let generics = generic_args_to_strings env true generics in
           "(" ^ String.concat " * " generics ^ ")"
       | TAdtId _ | TBuiltin _ ->
           let generics = generic_args_to_strings env true generics in
@@ -624,7 +624,7 @@ let regular_fun_id_to_string (env : fmt_env) (fun_id : fun_id) : string =
       f ^ fun_suffix lp_id
   | Pure fid -> pure_builtin_fun_id_to_string fid
 
-let unop_to_string (unop : unop) : string =
+let unop_to_string (env : fmt_env) (unop : unop) : string =
   match unop with
   | Not _ -> "¬"
   | Neg _ -> "-"
@@ -632,13 +632,14 @@ let unop_to_string (unop : unop) : string =
       "cast<" ^ literal_type_to_string src ^ "," ^ literal_type_to_string tgt
       ^ ">"
   | ArrayToSlice -> "array_to_slice"
+  | TypeAnnot ty -> "annot<" ^ ty_to_string env false ty ^ ">"
 
 let binop_to_string = Print.Expressions.binop_to_string
 
 let fun_or_op_id_to_string (env : fmt_env) (fun_id : fun_or_op_id) : string =
   match fun_id with
   | Fun fun_id -> regular_fun_id_to_string env fun_id
-  | Unop unop -> unop_to_string unop
+  | Unop unop -> unop_to_string env unop
   | Binop (binop, int_ty) ->
       binop_to_string binop ^ "<" ^ integer_type_to_string int_ty ^ ">"
 

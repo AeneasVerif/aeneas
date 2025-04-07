@@ -10,11 +10,11 @@ let log = Logging.pure_micro_passes_log
 
 type ctx = { fun_decls : fun_decl FunDeclId.Map.t; trans_ctx : trans_ctx }
 
-let fun_decl_to_string (ctx : ctx) (def : Pure.fun_decl) : string =
+let fun_decl_to_string (ctx : ctx) (def : fun_decl) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.fun_decl_to_string fmt def
 
-let fun_sig_to_string (ctx : ctx) (sg : Pure.fun_sig) : string =
+let fun_sig_to_string (ctx : ctx) (sg : fun_sig) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.fun_sig_to_string fmt sg
 
@@ -1062,7 +1062,7 @@ let simplify_duplicate_calls (_ctx : ctx) (def : fun_decl) : fun_decl =
 (** A helper predicate *)
 let lift_unop (unop : unop) : bool =
   match unop with
-  | Not None -> false
+  | Not None | TypeAnnot _ -> false
   | Not (Some _) | Neg _ | Cast _ | ArrayToSlice -> true
 
 (** A helper predicate *)
@@ -1992,6 +1992,7 @@ let decompose_loops (_ctx : ctx) (def : fun_decl) : fun_decl * fun_decl list =
               {
                 generics = fun_sig.generics;
                 explicit_info = fun_sig.explicit_info;
+                known_from_trait_refs = fun_sig.known_from_trait_refs;
                 llbc_generics = fun_sig.llbc_generics;
                 preds = fun_sig.preds;
                 inputs = inputs_tys;
@@ -3212,6 +3213,7 @@ let filter_loop_inputs (ctx : ctx) (transl : pure_fun_translation list) :
           let {
             generics;
             explicit_info = _;
+            known_from_trait_refs = _;
             llbc_generics;
             preds;
             inputs;
@@ -3250,11 +3252,17 @@ let filter_loop_inputs (ctx : ctx) (transl : pure_fun_translation list) :
           sanity_check __FILE__ __LINE__
             (fun_sig_info_is_wf fwd_info)
             decl.item_meta.span;
+          let explicit_info =
+            SymbolicToPure.compute_explicit_info generics inputs
+          in
+          let known_from_trait_refs =
+            SymbolicToPure.compute_known_info explicit_info generics
+          in
           let signature =
             {
               generics;
-              explicit_info =
-                SymbolicToPure.compute_explicit_info generics inputs;
+              explicit_info;
+              known_from_trait_refs;
               llbc_generics;
               preds;
               inputs;
@@ -3416,6 +3424,389 @@ let apply_passes_to_def (ctx : ctx) (def : fun_decl) : fun_and_loops =
   let loops = List.map (apply_end_passes_to_def ctx) loops in
   { f; loops }
 
+(** Introduce type annotations.
+
+    See [add_type_annotations].
+
+    Note that we use the context only for printing.
+ *)
+let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
+    (trans_funs : pure_fun_translation FunDeclId.Map.t)
+    (builtin_sigs : fun_sig Builtin.BuiltinFunIdMap.t)
+    (type_decls : type_decl TypeDeclId.Map.t) (def : fun_decl) : fun_decl =
+  let span = def.item_meta.span in
+  let fmt = trans_ctx_to_pure_fmt_env trans_ctx in
+  let texpression_to_string (x : texpression) : string =
+    PrintPure.texpression_to_string fmt false "" "  " x
+  in
+  let ty_to_string (x : ty) : string = PrintPure.ty_to_string fmt false x in
+  let generic_params_to_string (generics : generic_params) : string =
+    "["
+    ^ String.concat ", " (PrintPure.generic_params_to_strings fmt generics)
+    ^ "]"
+  in
+  let generic_args_to_string (generics : generic_args) : string =
+    "["
+    ^ String.concat ", " (PrintPure.generic_args_to_strings fmt false generics)
+    ^ "]"
+  in
+  let fun_sig_to_string (sg : fun_sig) : string =
+    PrintPure.fun_sig_to_string fmt sg
+  in
+
+  (* The map visitor.
+
+     For every sub-expression we track a "type with holes", where the holes
+     are types which are not explicitly known (either because we can't directly
+     know the type from the context, or because some type variables are implicit).
+
+     If at some point the type is not known and the type of the expression is
+     ambiguous, we introduce a type annotation.
+
+     We encode types with holes in a simple manner: the unknown holes are type
+     variables with id = -1.
+  *)
+  let hole : ty = TVar (T.Free (TypeVarId.of_int (-1))) in
+  (* The const generic holes are not really useful, but while we're at it we
+     can keep track of them *)
+  let cg_hole : const_generic =
+    T.CgVar (T.Free (ConstGenericVarId.of_int (-1)))
+  in
+
+  (* Small helper to add a type annotation *)
+  let mk_type_annot (e : texpression) : texpression =
+    let func =
+      Qualif
+        {
+          id = FunOrOp (Unop (TypeAnnot e.ty));
+          generics = mk_generic_args_from_types [ e.ty ];
+        }
+    in
+    let func_ty = mk_arrows [ e.ty ] e.ty in
+    let func = { e = func; ty = func_ty } in
+    mk_app span func e
+  in
+
+  let rec visit (ty : ty) (e : texpression) : texpression =
+    match e.e with
+    | Var _ | CVar _ | Const _ | EError _ | Qualif _ -> e
+    | App _ -> visit_App ty e
+    | Lambda (pat, e') ->
+        (* Decompose the type *)
+        let ty' =
+          match ty with
+          | TArrow (_, ty) -> ty
+          | _ -> hole
+        in
+        { e with e = Lambda (pat, visit ty' e') }
+    | Let (monadic, pat, bound, next) ->
+        (* The type of the bound expression is considered as unknown *)
+        let bound = visit hole bound in
+        let next = visit ty next in
+        { e with e = Let (monadic, pat, bound, next) }
+    | Switch (discr, body) ->
+        (* We consider that the type of the discriminant is unknown *)
+        let discr = visit hole discr in
+        let body = visit_switch_body ty body in
+        { e with e = Switch (discr, body) }
+    | Loop _ ->
+        (* Loops should have been eliminated *)
+        internal_error __FILE__ __LINE__ span
+    | StructUpdate supd ->
+        log#ldebug
+          (lazy (__FUNCTION__ ^ ": exploring: " ^ texpression_to_string e));
+        (* Some backends need a type annotation here if we create a new structure
+           and if the type is unknown.
+           TODO: actually we may change the type of the structure by changing
+           one of its fields (it happens when we do an unsized cast in Rust).
+           We ignore this case here. *)
+        let ty =
+          match supd.init with
+          | None -> ty
+          | Some _ ->
+              (* We update a structure (we do not create a new one): we consider that the type is known *)
+              e.ty
+        in
+        begin
+          match ty with
+          | TAdt (adt_id, generics) ->
+              (* The type is known: let's compute the type of the fields and recurse *)
+              let field_tys =
+                (* There are two cases: the ADT may be an array (it happens when
+                   initializing an array) *)
+                match adt_id with
+                | TBuiltin TArray ->
+                    sanity_check __FILE__ __LINE__
+                      (List.length generics.types = 1)
+                      span;
+                    Collections.List.repeat (List.length supd.updates)
+                      (List.nth generics.types 0)
+                | _ ->
+                    PureTypeCheck.get_adt_field_types span type_decls adt_id
+                      None generics
+              in
+              (* Update the fields *)
+              let updates =
+                List.map
+                  (fun ((fid, fe) : _ * texpression) ->
+                    let field_ty = FieldId.nth field_tys fid in
+                    (fid, visit field_ty fe))
+                  supd.updates
+              in
+              { e with e = StructUpdate { supd with updates } }
+          | _ ->
+              (* The type of the structure is unknown: we add a type annotation.
+                 From there, the type of the field updates is known *)
+              let updates =
+                List.map
+                  (fun ((fid, fe) : _ * texpression) -> (fid, visit fe.ty fe))
+                  supd.updates
+              in
+              let e = { e with e = StructUpdate { supd with updates } } in
+              (* Add the type annotation, if the backend is Lean *)
+              if Config.backend () = Lean then mk_type_annot e else e
+        end
+    | Meta (meta, e') -> { e with e = Meta (meta, visit ty e') }
+  and visit_App (ty : ty) (e : texpression) : texpression =
+    log#ldebug
+      (lazy
+        (__FUNCTION__ ^ ": visit_App:\n- ty: " ^ ty_to_string ty ^ "\n- e: "
+       ^ texpression_to_string e));
+    (* Deconstruct the app *)
+    let f, args = destruct_apps e in
+    (* Compute the types of the arguments: it depends on the function *)
+    let mk_holes () = List.map (fun _ -> hole) args in
+    let mk_known () = List.map (fun (e : texpression) -> e.ty) args in
+    let known_f_ty, known_args_tys =
+      let rec compute_known_tys known_ty args =
+        match args with
+        | [] -> (known_ty, [])
+        | _ :: args -> (
+            match known_ty with
+            | TArrow (ty0, ty1) ->
+                let fty, args_tys = compute_known_tys ty1 args in
+                (fty, ty0 :: args_tys)
+            | _ ->
+                let fty, args_tys = compute_known_tys hole args in
+                (fty, hole :: args_tys))
+      in
+      compute_known_tys ty args
+    in
+    let compute_known_tys_from_fun_id (qualif : qualif) (fid : fun_id) :
+        ty * ty list * bool =
+      match fid with
+      | Pure fid -> begin
+          match fid with
+          | Return | ToResult -> begin
+              match known_args_tys with
+              | [ ty ] ->
+                  if ty = hole && Config.backend () = Lean then
+                    (hole, mk_holes (), true)
+                  else (known_f_ty, known_args_tys, false)
+              | _ -> (known_f_ty, known_args_tys, false)
+            end
+          | Fail | Assert | FuelDecrease | FuelEqZero ->
+              (f.ty, mk_known (), false)
+          | UpdateAtIndex _ -> (known_f_ty, known_args_tys, false)
+        end
+      | FromLlbc (fid, lp_id) -> begin
+          (* Lookup the signature *)
+          let sg =
+            match fid with
+            | FunId (FRegular fid) | TraitMethod (_, _, fid) ->
+                let trans_fun =
+                  silent_unwrap __FILE__ __LINE__ span
+                    (LlbcAst.FunDeclId.Map.find_opt fid trans_funs)
+                in
+                let trans_fun =
+                  match lp_id with
+                  | None -> trans_fun.f
+                  | Some lp_id -> Pure.LoopId.nth trans_fun.loops lp_id
+                in
+                log#ldebug
+                  (lazy (__FUNCTION__ ^ ": function name: " ^ trans_fun.name));
+                trans_fun.signature
+            | FunId (FBuiltin aid) ->
+                Builtin.BuiltinFunIdMap.find aid builtin_sigs
+          in
+          log#ldebug
+            (lazy (__FUNCTION__ ^ ": signature: " ^ fun_sig_to_string sg));
+          (* In case this is a trait method, we need to concatenate the generics
+             args of the trait ref with the generics args of the method call itself *)
+          let generics =
+            match fid with
+            | TraitMethod (trait_ref, _, _) ->
+                append_generic_args trait_ref.trait_decl_ref.decl_generics
+                  qualif.generics
+            | _ -> qualif.generics
+          in
+          (* Replace all the unknown implicit type variables with holes.
+             Note that we assume that all the trait refs are there, meaning
+             we can use them to infer some implicit variables.
+          *)
+          let known = sg.known_from_trait_refs in
+          let types =
+            List.map
+              (fun (known, ty) ->
+                match known with
+                | Known -> ty
+                | Unknown -> hole)
+              (List.combine known.known_types generics.types)
+          in
+          let const_generics =
+            List.map
+              (fun (known, cg) ->
+                match known with
+                | Known -> cg
+                | Unknown -> cg_hole)
+              (List.combine known.known_const_generics generics.const_generics)
+          in
+          let generics = { qualif.generics with types; const_generics } in
+          (* Compute the types of the arguments *)
+          log#ldebug
+            (lazy
+              (__FUNCTION__ ^ ":\n- sg.generics: "
+              ^ generic_params_to_string sg.generics
+              ^ "\n- generics: "
+              ^ generic_args_to_string generics));
+          let subst = make_subst_from_generics sg.generics generics in
+          let sg = fun_sig_substitute subst sg in
+          (known_f_ty, sg.inputs, false)
+        end
+    in
+    let f_ty, args_tys, need_annot =
+      match f.e with
+      | Qualif qualif -> begin
+          match qualif.id with
+          | FunOrOp fop -> begin
+              match fop with
+              | Fun fid -> begin compute_known_tys_from_fun_id qualif fid end
+              | Unop unop -> begin
+                  match unop with
+                  | Not _ | Neg _ | Cast _ | ArrayToSlice | TypeAnnot _ ->
+                      (known_f_ty, known_args_tys, false)
+                end
+              | Binop _ -> (known_f_ty, known_args_tys, false)
+            end
+          | Global _ -> (f.ty, mk_known (), false)
+          | AdtCons adt_cons_id -> begin
+              (* We extract the type of the arguments from the known type *)
+              match ty with
+              | TAdt (adt_id, generics)
+              (* TODO: there are type-checking errors that we need to take into account (otherwise
+                 [get_adt_field_types] sometimes crashes) *)
+                when adt_id = adt_cons_id.adt_id ->
+                  (* The type is known: let's compute the type of the fields and recurse *)
+                  let field_tys =
+                    PureTypeCheck.get_adt_field_types span type_decls adt_id
+                      adt_cons_id.variant_id generics
+                  in
+                  (* We shouldn't need to know the type of the constructor - just leaving
+                     a hole for now *)
+                  (hole, field_tys, false)
+              | _ ->
+                  (* The type is unknown, but if the constructor is an enumeration
+                     constructor, we can retrieve information from it *)
+                  if Option.is_some adt_cons_id.variant_id then
+                    let args_tys =
+                      match e.ty with
+                      | TAdt (adt_id, generics) ->
+                          (* Replace the generic arguments with holes *)
+                          let generics =
+                            {
+                              generics with
+                              types = List.map (fun _ -> hole) generics.types;
+                              const_generics =
+                                List.map
+                                  (fun _ -> cg_hole)
+                                  generics.const_generics;
+                            }
+                          in
+                          PureTypeCheck.get_adt_field_types span type_decls
+                            adt_id adt_cons_id.variant_id generics
+                      | _ -> mk_holes ()
+                    in
+                    (hole, args_tys, false)
+                  else (hole, mk_holes (), false)
+            end
+          | Proj _ | TraitConst _ ->
+              (* Being conservative here *)
+              (hole, mk_holes (), false)
+        end
+      | Var _ ->
+          (* We consider that the full type of the function should be known,
+             so the type of the arguments should be known *)
+          (f.ty, mk_known (), false)
+      | _ ->
+          (* Being conservative: the type is unknown (we actually shouldn't
+             get here) *)
+          (hole, mk_holes (), false)
+    in
+    (* The application may be partial *)
+    let args_tys = Collections.List.prefix (List.length args) args_tys in
+    let args =
+      List.map (fun (ty, arg) -> visit ty arg) (List.combine args_tys args)
+    in
+    let f = visit f_ty f in
+    let e = mk_apps span f args in
+    if need_annot then mk_type_annot e else e
+  and visit_switch_body (ty : ty) (body : switch_body) : switch_body =
+    match body with
+    | If (e1, e2) -> If (visit ty e1, visit ty e2)
+    | Match branches ->
+        let branches =
+          List.map
+            (fun (b : match_branch) -> { b with branch = visit ty b.branch })
+            branches
+        in
+        Match branches
+  in
+
+  (* Update the body *)
+  match def.body with
+  | None -> def
+  | Some body ->
+      let body =
+        Some
+          {
+            body with
+            (* Note that the type is originally known *)
+            body = visit body.body.ty body.body;
+          }
+      in
+      { def with body }
+
+(** Introduce type annotations.
+
+    See [add_type_annotations]
+
+    We need to do this in some backends in particular for the expressions
+    which create structures, as the target structure may be ambiguous from
+    the context.
+
+    Note that we use the context only for printing.
+ *)
+let add_type_annotations (trans_ctx : trans_ctx)
+    (trans_funs : pure_fun_translation list)
+    (builtin_sigs : fun_sig Builtin.BuiltinFunIdMap.t)
+    (type_decls : type_decl TypeDeclId.Map.t) : pure_fun_translation list =
+  let trans_funs_map =
+    FunDeclId.Map.of_list
+      (List.map
+         (fun (fl : pure_fun_translation) -> (fl.f.def_id, fl))
+         trans_funs)
+  in
+  let add_annot =
+    add_type_annotations_to_fun_decl trans_ctx trans_funs_map builtin_sigs
+      type_decls
+  in
+  List.map
+    (fun (fl : pure_fun_translation) ->
+      let f = add_annot fl.f in
+      let loops = List.map add_annot fl.loops in
+      { f; loops })
+    trans_funs
+
 (** Apply the micro-passes to a list of forward/backward translations.
 
     This function also extracts the loop definitions from the function body
@@ -3430,10 +3821,16 @@ let apply_passes_to_def (ctx : ctx) (def : fun_decl) : fun_and_loops =
     but convenient.
  *)
 let apply_passes_to_pure_fun_translations (trans_ctx : trans_ctx)
-    (transl : fun_decl list) : pure_fun_translation list =
+    (builtin_sigs : fun_sig Builtin.BuiltinFunIdMap.t)
+    (type_decls : type_decl list) (transl : fun_decl list) :
+    pure_fun_translation list =
   let fun_decls =
     FunDeclId.Map.of_list
       (List.map (fun (f : fun_decl) -> (f.def_id, f)) transl)
+  in
+  let type_decls =
+    TypeDeclId.Map.of_list
+      (List.map (fun (d : type_decl) -> (d.def_id, d)) type_decls)
   in
   let ctx = { trans_ctx; fun_decls } in
 
@@ -3444,6 +3841,11 @@ let apply_passes_to_pure_fun_translations (trans_ctx : trans_ctx)
      parameterized by *all* the symbolic values in the context, because
      they may access any of them). *)
   let transl = filter_loop_inputs ctx transl in
+
+  (* Add the type annotations - we add those only now because we need
+     to use the final types of the functions (in particular, we introduce
+     loop functions and modify their types above) *)
+  let transl = add_type_annotations trans_ctx transl builtin_sigs type_decls in
 
   (* Update the "reducible" attribute *)
   compute_reducible ctx transl

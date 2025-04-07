@@ -213,6 +213,7 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
 let translate_crate_to_pure (crate : crate) :
     trans_ctx
     * Pure.type_decl list
+    * Pure.fun_sig BuiltinFunIdMap.t
     * pure_fun_translation list
     * Pure.global_decl list
     * Pure.trait_decl list
@@ -274,6 +275,16 @@ let translate_crate_to_pure (crate : crate) :
          (FunDeclId.Map.values crate.fun_decls))
   in
 
+  (* Translate the signatures of the builtin functions *)
+  let builtin_sigs =
+    BuiltinFunIdMap.map
+      (fun (info : builtin_fun_info) ->
+        SymbolicToPure.translate_fun_sig trans_ctx (FBuiltin info.fun_id)
+          info.name info.fun_sig
+          (List.map (fun _ -> None) info.fun_sig.inputs))
+      builtin_fun_infos
+  in
+
   (* Translate all the *transparent* functions.
 
      Remark: [translate_function_to_pure] catches errors of type [CFailure]
@@ -323,12 +334,14 @@ let translate_crate_to_pure (crate : crate) :
 
   (* Apply the micro-passes *)
   let pure_translations =
-    Micro.apply_passes_to_pure_fun_translations trans_ctx pure_translations
+    Micro.apply_passes_to_pure_fun_translations trans_ctx builtin_sigs
+      type_decls pure_translations
   in
 
   (* Return *)
   ( trans_ctx,
     type_decls,
+    builtin_sigs,
     pure_translations,
     global_decls,
     trait_decls,
@@ -1039,21 +1052,12 @@ let translate_crate (filename : string) (dest_dir : string)
   (* Translate the module to the pure AST *)
   let ( trans_ctx,
         trans_types,
+        builtin_sigs,
         trans_funs,
         trans_globals,
         trans_trait_decls,
         trans_trait_impls ) =
     translate_crate_to_pure crate
-  in
-
-  (* Translate the signatures of the builtin functions *)
-  let builtin_sigs =
-    BuiltinFunIdMap.map
-      (fun (info : builtin_fun_info) ->
-        SymbolicToPure.translate_fun_sig trans_ctx (FBuiltin info.fun_id)
-          info.name info.fun_sig
-          (List.map (fun _ -> None) info.fun_sig.inputs))
-      builtin_fun_infos
   in
 
   (* Initialize the names map by registering the keywords used in the
