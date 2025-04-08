@@ -485,13 +485,15 @@ let isize_not = scalar_not #Isize
 
 /// Trait declaration: [core::clone::Clone]
 noeq type core_clone_Clone (self : Type0) = {
-  clone : self → result self
+  clone : self → result self;
+  clone_from : self -> self -> result self;
 }
 
 let core_clone_impls_CloneBool_clone (b : bool) : bool = b
 
 let core_clone_CloneBool : core_clone_Clone bool = {
-  clone = fun b -> Ok (core_clone_impls_CloneBool_clone b)
+  clone = (fun b -> Ok b);
+  clone_from = (fun _ x -> Ok x);
 }
 
 let core_clone_impls_CloneUsize_clone (x : usize) : usize = x
@@ -509,51 +511,63 @@ let core_clone_impls_CloneI64_clone (x : i64) : i64 = x
 let core_clone_impls_CloneI128_clone (x : i128) : i128 = x
 
 let core_clone_CloneUsize : core_clone_Clone usize = {
-  clone = fun x -> Ok (core_clone_impls_CloneUsize_clone x)
+  clone = (fun b -> Ok b);
+  clone_from = (fun _ x -> Ok x);
 }
 
 let core_clone_CloneU8 : core_clone_Clone u8 = {
-  clone = fun x -> Ok (core_clone_impls_CloneU8_clone x)
+  clone = (fun b -> Ok b);
+  clone_from = (fun _ x -> Ok x);
 }
 
 let core_clone_CloneU16 : core_clone_Clone u16 = {
-  clone = fun x -> Ok (core_clone_impls_CloneU16_clone x)
+  clone = (fun b -> Ok b);
+  clone_from = (fun _ x -> Ok x);
 }
 
 let core_clone_CloneU32 : core_clone_Clone u32 = {
-  clone = fun x -> Ok (core_clone_impls_CloneU32_clone x)
+  clone = (fun b -> Ok b);
+  clone_from = (fun _ x -> Ok x);
 }
 
 let core_clone_CloneU64 : core_clone_Clone u64 = {
-  clone = fun x -> Ok (core_clone_impls_CloneU64_clone x)
+  clone = (fun b -> Ok b);
+  clone_from = (fun _ x -> Ok x);
 }
 
 let core_clone_CloneU128 : core_clone_Clone u128 = {
-  clone = fun x -> Ok (core_clone_impls_CloneU128_clone x)
+  clone = (fun b -> Ok b);
+  clone_from = (fun _ x -> Ok x);
 }
 
 let core_clone_CloneIsize : core_clone_Clone isize = {
-  clone = fun x -> Ok (core_clone_impls_CloneIsize_clone x)
+  clone = (fun b -> Ok b);
+  clone_from = (fun _ x -> Ok x);
 }
 
 let core_clone_CloneI8 : core_clone_Clone i8 = {
-  clone = fun x -> Ok (core_clone_impls_CloneI8_clone x)
+  clone = (fun b -> Ok b);
+  clone_from = (fun _ x -> Ok x);
 }
 
 let core_clone_CloneI16 : core_clone_Clone i16 = {
-  clone = fun x -> Ok (core_clone_impls_CloneI16_clone x)
+  clone = (fun b -> Ok b);
+  clone_from = (fun _ x -> Ok x);
 }
 
 let core_clone_CloneI32 : core_clone_Clone i32 = {
-  clone = fun x -> Ok (core_clone_impls_CloneI32_clone x)
+  clone = (fun b -> Ok b);
+  clone_from = (fun _ x -> Ok x);
 }
 
 let core_clone_CloneI64 : core_clone_Clone i64 = {
-  clone = fun x -> Ok (core_clone_impls_CloneI64_clone x)
+  clone = (fun b -> Ok b);
+  clone_from = (fun _ x -> Ok x);
 }
 
 let core_clone_CloneI128 : core_clone_Clone i128 = {
-  clone = fun x -> Ok (core_clone_impls_CloneI128_clone x)
+  clone = (fun b -> Ok b);
+  clone_from = (fun _ x -> Ok x);
 }
 
 noeq type core_marker_Copy (self : Type0) = {
