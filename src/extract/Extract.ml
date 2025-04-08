@@ -2524,7 +2524,7 @@ let extract_trait_decl_type_names (ctx : extraction_ctx)
 
 (** Similar to {!extract_trait_decl_register_names} *)
 let extract_trait_decl_method_names (ctx : extraction_ctx)
-    (trait_decl : trait_decl)
+    (trait_decl : trait_decl) (trait_decl_name : string)
     (builtin_info : Pure.builtin_trait_decl_info option) : extraction_ctx =
   log#ltrace (lazy (__FUNCTION__ ^ ": " ^ trait_decl.name));
   let methods = trait_decl.methods in
@@ -2534,7 +2534,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
     | None ->
         (* Not a builtin function *)
         let compute_item_name (item_name : string) (id : fun_decl_id) :
-            string * string =
+            string * FunDeclId.id option * string =
           log#ldebug
             (lazy
               (__FUNCTION__ ^ "(" ^ trait_decl.name ^ "): compute_item_name: "
@@ -2568,7 +2568,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
             if !record_fields_short_names then name
             else ctx_compute_trait_decl_name ctx trait_decl ^ "_" ^ name
           in
-          (item_name, name)
+          (item_name, None, name)
         in
         List.map
           (fun (name, bound_fn) ->
@@ -2578,7 +2578,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
         (* This is a builtin *)
         let funs_map = StringMap.of_list info.methods in
         List.map
-          (fun (item_name, _) ->
+          (fun (item_name, fun_binder) ->
             match StringMap.find_opt item_name funs_map with
             | None ->
                 craise __FILE__ __LINE__ trait_decl.item_meta.span
@@ -2588,21 +2588,36 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
                  ^ "'")
             | Some info ->
                 let fun_name = info.extract_name in
-                (item_name, fun_name))
+                let default_id =
+                  if info.has_default then Some fun_binder.binder_value.fun_id
+                  else None
+                in
+                (item_name, default_id, fun_name))
           methods
   in
   (* Register the names *)
   List.fold_left
-    (fun ctx (item_name, fun_name) ->
-      ctx_add trait_decl.item_meta.span
-        (TraitMethodId (trait_decl.def_id, item_name))
-        fun_name ctx)
+    (fun ctx (item_name, default_id, fun_name) ->
+      (* Register the method name *)
+      let ctx =
+        ctx_add trait_decl.item_meta.span
+          (TraitMethodId (trait_decl.def_id, item_name))
+          fun_name ctx
+      in
+      (* Also register the default implementation if there is *)
+      match default_id with
+      | Some def_id when backend () = Lean ->
+          ctx_add trait_decl.item_meta.span
+            (FunId (FromLlbc (FunId (FRegular def_id), None)))
+            (trait_decl_name ^ fun_name ^ ".default")
+            ctx
+      | _ -> ctx)
     ctx method_names
 
 (** Similar to {!extract_type_decl_register_names} *)
 let extract_trait_decl_register_names (ctx : extraction_ctx)
     (trait_decl : trait_decl) : extraction_ctx =
-  let ctx =
+  let ctx, trait_name =
     let trait_name, trait_constructor =
       match trait_decl.builtin_info with
       | None ->
@@ -2614,8 +2629,11 @@ let extract_trait_decl_register_names (ctx : extraction_ctx)
       ctx_add trait_decl.item_meta.span (TraitDeclId trait_decl.def_id)
         trait_name ctx
     in
-    ctx_add trait_decl.item_meta.span (TraitDeclConstructorId trait_decl.def_id)
-      trait_constructor ctx
+    let ctx =
+      ctx_add trait_decl.item_meta.span
+        (TraitDeclConstructorId trait_decl.def_id) trait_constructor ctx
+    in
+    (ctx, trait_name)
   in
   let builtin_info = trait_decl.builtin_info in
   (* Parent clauses *)
@@ -2629,7 +2647,9 @@ let extract_trait_decl_register_names (ctx : extraction_ctx)
   (* Types *)
   let ctx = extract_trait_decl_type_names ctx trait_decl builtin_info in
   (* Required methods *)
-  let ctx = extract_trait_decl_method_names ctx trait_decl builtin_info in
+  let ctx =
+    extract_trait_decl_method_names ctx trait_decl trait_name builtin_info
+  in
   ctx
 
 (** Similar to {!extract_type_decl_register_names} *)

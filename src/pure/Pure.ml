@@ -166,6 +166,10 @@ type builtin_fun_info = {
           monad? This can make reasonings easier, as we can then use [progress]
           to do proofs in a Hoare-Logic style, rather than doing equational
           reasonings. *)
+  has_default : bool;
+      (** If this is a trait method: does this method have a default implementation?
+          If yes, we might want to register it as well.
+       *)
 }
 [@@deriving show]
 

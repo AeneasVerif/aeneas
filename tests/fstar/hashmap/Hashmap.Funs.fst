@@ -18,10 +18,17 @@ let hash_key (k : usize) : result usize =
 let clonehashmapFraction_clone (self : fraction_t) : result fraction_t =
   Ok self
 
+(** [hashmap::{core::clone::Clone for hashmap::Fraction}#1::clone_from]:
+    Source: '/rustc/library/core/src/clone.rs', lines 174:4-174:43 *)
+let clonehashmapFraction_clone_from
+  (self : fraction_t) (source : fraction_t) : result fraction_t =
+  clonehashmapFraction_clone source
+
 (** Trait implementation: [hashmap::{core::clone::Clone for hashmap::Fraction}#1]
     Source: 'tests/src/hashmap.rs', lines 44:9-44:14 *)
 let core_clone_ClonehashmapFraction : core_clone_Clone fraction_t = {
   clone = clonehashmapFraction_clone;
+  clone_from = clonehashmapFraction_clone_from;
 }
 
 (** Trait implementation: [hashmap::{core::marker::Copy for hashmap::Fraction}#2]

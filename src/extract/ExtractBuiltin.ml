@@ -259,6 +259,367 @@ let int_and_smaller_list : (string * string) list =
   ]
   @ compute_pairs uint_names @ compute_pairs int_names
 
+let builtin_trait_decls_info () =
+  let mk_trait (rust_name : string) ?(extract_name : string option = None)
+      ?(parent_clauses : string list = []) ?(types : string list = [])
+      ?(methods : string list = []) ?(default_methods : string list = [])
+      ?(methods_with_extract : (string * string) list option = None) () :
+      Pure.builtin_trait_decl_info =
+    let rust_name = parse_pattern rust_name in
+    let extract_name =
+      match extract_name with
+      | Some n -> n
+      | None ->
+          let rust_name = pattern_to_fun_extract_name rust_name in
+          flatten_name rust_name
+    in
+    let constructor = mk_struct_constructor extract_name in
+    let consts = [] in
+    let types =
+      let mk_type item_name =
+        let type_name =
+          if !record_fields_short_names then item_name
+          else extract_name ^ "_" ^ item_name
+        in
+        let type_name =
+          match backend () with
+          | FStar | Coq | HOL4 -> StringUtils.lowercase_first_letter type_name
+          | Lean -> type_name
+        in
+        (item_name, type_name)
+      in
+      List.map mk_type types
+    in
+    let methods =
+      List.map (fun x -> (false, x)) methods
+      @ List.map (fun x -> (true, x)) default_methods
+    in
+    let methods =
+      match methods_with_extract with
+      | None ->
+          let mk_method (has_default, item_name) =
+            (* TODO: factor out with builtin_funs_info *)
+            let basename =
+              if !record_fields_short_names then item_name
+              else extract_name ^ "_" ^ item_name
+            in
+            let fwd : Pure.builtin_fun_info =
+              {
+                filter_params = None;
+                extract_name = basename;
+                can_fail = true;
+                stateful = false;
+                lift = true;
+                has_default;
+              }
+            in
+
+            (item_name, fwd)
+          in
+          List.map mk_method methods
+      | Some methods ->
+          List.map
+            (fun (item_name, extract_name) ->
+              ( item_name,
+                ({
+                   filter_params = None;
+                   extract_name;
+                   can_fail = true;
+                   stateful = false;
+                   lift = true;
+                   has_default = false;
+                 }
+                  : Pure.builtin_fun_info) ))
+            methods
+    in
+    {
+      rust_name;
+      extract_name;
+      constructor;
+      parent_clauses;
+      consts;
+      types;
+      methods;
+    }
+  in
+  [
+    (* Deref *)
+    mk_trait "core::ops::deref::Deref" ~types:[] ~methods:[ "deref" ] ();
+    (* DerefMut *)
+    mk_trait "core::ops::deref::DerefMut" ~parent_clauses:[ "derefInst" ]
+      ~methods:[ "deref_mut" ] ();
+    (* Index *)
+    mk_trait "core::ops::index::Index" ~types:[] ~methods:[ "index" ] ();
+    (* IndexMut *)
+    mk_trait "core::ops::index::IndexMut" ~parent_clauses:[ "indexInst" ]
+      ~methods:[ "index_mut" ] ();
+    (* Sealed *)
+    mk_trait "core::slice::index::private_slice_index::Sealed" ();
+    (* SliceIndex *)
+    mk_trait "core::slice::index::SliceIndex" ~parent_clauses:[ "sealedInst" ]
+      ~types:[ "Output" ]
+      ~methods:
+        [
+          "get";
+          "get_mut";
+          "get_unchecked";
+          "get_unchecked_mut";
+          "index";
+          "index_mut";
+        ]
+      ();
+    (* From *)
+    mk_trait "core::convert::From"
+      ~methods_with_extract:(Some [ ("from", "from_") ])
+      ();
+    (* Clone *)
+    mk_trait "core::clone::Clone" ~methods:[ "clone" ]
+      ~default_methods:[ "clone_from" ] ();
+    (* Copy *)
+    mk_trait "core::marker::Copy" ~parent_clauses:[ "cloneInst" ] ();
+  ]
+  @ mk_lean_only
+      [
+        (* Into *)
+        mk_trait "core::convert::Into" ~types:[ "T"; "U" ] ~methods:[ "into" ]
+          ();
+        (* Debug *)
+        mk_trait "core::fmt::Debug" ~types:[ "T" ] ~methods:[ "fmt" ] ();
+        (* *)
+        mk_trait "core::convert::TryFrom" ~methods:[ "try_from" ] ();
+        mk_trait "core::convert::TryInto" ~methods:[ "try_into" ] ();
+        mk_trait "core::convert::AsMut" ~methods:[ "as_mut" ] ();
+        (* Eq, Ord *)
+        mk_trait "core::cmp::PartialEq" ~methods:[ "eq"; "ne" ] ();
+        mk_trait "core::cmp::Eq" ~parent_clauses:[ "partialEqInst" ] ();
+        mk_trait "core::cmp::PartialOrd" ~parent_clauses:[ "partialEqInst" ]
+          ~methods:[ "partial_cmp"; "lt"; "le"; "gt"; "ge" ]
+          ();
+        mk_trait "core::cmp::Ord"
+          ~parent_clauses:[ "eqInst"; "partialOrdInst" ]
+          ~methods:[ "cmp"; "max"; "min"; "clamp" ]
+          ();
+        mk_trait "core::default::Default" ~methods:[ "default" ] ();
+      ]
+
+let mk_builtin_trait_decls_map () =
+  NameMatcherMap.of_list
+    (List.map
+       (fun (info : Pure.builtin_trait_decl_info) -> (info.rust_name, info))
+       (builtin_trait_decls_info ()))
+
+let builtin_trait_decls_map = mk_memoized mk_builtin_trait_decls_map
+
+let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
+    =
+  let fmt (rust_name : string) ?(extract_name : string option = None)
+      ?(filter : bool list option = None) () :
+      pattern * Pure.builtin_trait_impl_info =
+    let rust_name = parse_pattern rust_name in
+    let name =
+      let name =
+        match extract_name with
+        | None -> pattern_to_trait_impl_extract_name rust_name
+        | Some name -> split_on_separator name
+      in
+      flatten_name name
+    in
+    (rust_name, { filter_params = filter; impl_name = name })
+  in
+  [
+    (* core::ops::Deref<alloc::boxed::Box<T>> *)
+    fmt "core::ops::deref::Deref<Box<@T>, @T>"
+      ~extract_name:(Some "core::ops::deref::DerefBoxInst") ();
+    (* core::ops::DerefMut<alloc::boxed::Box<T>> *)
+    fmt "core::ops::deref::DerefMut<Box<@T>, @T>"
+      ~extract_name:(Some "core::ops::deref::DerefBoxMutInst") ();
+    (* core::ops::Deref<alloc::vec::Vec<T>> *)
+    fmt "core::ops::deref::Deref<alloc::vec::Vec<@T, @A>, [@T]>"
+      ~extract_name:(Some "core::ops::deref::DerefVecInst")
+      ~filter:(Some [ true; false ])
+      ();
+    (* core::ops::DerefMut<alloc::vec::Vec<T>> *)
+    fmt "core::ops::deref::DerefMut<alloc::vec::Vec<@T, @A>, [@T]>"
+      ~extract_name:(Some "core::ops::deref::DerefMutVecInst")
+      ~filter:(Some [ true; false ])
+      ();
+    (* core::ops::index::Index<[T], I> *)
+    fmt "core::ops::index::Index<[@T], @I, @O>"
+      ~extract_name:(Some "core::ops::index::IndexSliceInst") ();
+    (* core::ops::index::IndexMut<[T], I> *)
+    fmt "core::ops::index::IndexMut<[@T], @I, @O>"
+      ~extract_name:(Some "core::ops::index::IndexMutSliceInst") ();
+    (* core::slice::index::private_slice_index::Sealed<Range<usize>> *)
+    fmt
+      "core::slice::index::private_slice_index::Sealed<core::ops::range::Range<usize>>"
+      ~extract_name:
+        (Some "core.slice.index.private_slice_index.SealedRangeUsizeInst") ();
+    (* core::slice::index::SliceIndex<Range<usize>, [T]> *)
+    fmt
+      "core::slice::index::SliceIndex<core::ops::range::Range<usize>, [@T], \
+       [@T]>"
+      ~extract_name:(Some "core::slice::index::SliceIndexRangeUsizeSliceInst")
+      ();
+    (* core::ops::index::Index<[T; N], I> *)
+    fmt "core::ops::index::Index<[@T; @N], @I, @O>"
+      ~extract_name:(Some "core::ops::index::IndexArrayInst") ();
+    (* core::ops::index::IndexMut<[T; N], I> *)
+    fmt "core::ops::index::IndexMut<[@T; @N], @I, @O>"
+      ~extract_name:(Some "core::ops::index::IndexMutArrayInst") ();
+    (* core::slice::index::private_slice_index::Sealed<usize> *)
+    fmt "core::slice::index::private_slice_index::Sealed<usize>"
+      ~extract_name:
+        (Some "core::slice::index::private_slice_index::SealedUsizeInst") ();
+    (* core::slice::index::SliceIndex<usize, [T]> *)
+    fmt "core::slice::index::SliceIndex<usize, [@T], @T>"
+      ~extract_name:(Some "core::slice::index::SliceIndexUsizeSliceInst") ();
+    (* core::ops::index::Index<alloc::vec::Vec<T>, T> *)
+    fmt "core::ops::index::Index<alloc::vec::Vec<@T, @A>, @T, @O>"
+      ~extract_name:(Some "alloc::vec::Vec::IndexInst")
+      ~filter:(Some [ true; true; false; true ])
+      ();
+    (* core::ops::index::IndexMut<alloc::vec::Vec<T>, T> *)
+    fmt "core::ops::index::IndexMut<alloc::vec::Vec<@T, @A>, @T, @O>"
+      ~extract_name:(Some "alloc::vec::Vec::IndexMutInst")
+      ~filter:(Some [ true; true; false; true ])
+      ();
+    (* core::clone::impls::{core::clone::Clone for bool} *)
+    fmt "core::clone::Clone<bool>" ~extract_name:(Some "core::clone::CloneBool")
+      ();
+    fmt "core::ops::deref::Deref<alloc::vec::Vec<@Self, @>>"
+      ~extract_name:(Some "alloc.vec.DerefVec")
+      ~filter:(Some [ true; false ])
+      ();
+    fmt "core::ops::deref::DerefMut<alloc::vec::Vec<@Self, @>>"
+      ~extract_name:(Some "alloc.vec.DerefMutVec")
+      ~filter:(Some [ true; false ])
+      ();
+  ]
+  @ mk_lean_only
+      [
+        (* Into<T, U: From<T>> *)
+        fmt "core::convert::Into<@Self, @T>"
+          ~extract_name:(Some "core::convert::IntoFrom") ();
+        (* From<T, T> *)
+        fmt "core::convert::From<@Self, @Self>"
+          ~extract_name:(Some "core::convert::FromSame") ();
+        (* TryInto<T, U : TryFrom<T>> *)
+        fmt "core::convert::{core::convert::TryInto<@T, @U>}"
+          ~extract_name:(Some "core::convert::TryIntoFrom") ();
+        fmt
+          "core::slice::index::private_slice_index::Sealed<core::ops::range::RangeFrom<usize>>"
+          ~extract_name:
+            (Some
+               "core::slice::index::private_slice_index::SealedRangeFromUsize")
+          ();
+        fmt
+          "core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
+           [@T], [@T]>"
+          ~extract_name:
+            (Some "core::slice::index::SliceIndexRangeFromUsizeSlice") ();
+        fmt "core::convert::AsMut<Box<@T>, @T>"
+          ~filter:(Some [ true; false ])
+          ();
+        fmt "core::clone::Clone<[@T; @N]>" ();
+        fmt "core::convert::From<Box<[@T]>, alloc::vec::Vec<@T, @A>>"
+          ~extract_name:(Some "core.convert.FromBoxSliceVec")
+          ~filter:(Some [ true; false ])
+          ();
+      ]
+  (* From<INT, bool> *)
+  @ List.map
+      (fun ty ->
+        fmt
+          ("core::convert::From<" ^ ty ^ ", bool>")
+          ~extract_name:
+            (Some
+               ("core.convert.From"
+               ^ StringUtils.capitalize_first_letter ty
+               ^ "Bool"))
+          ())
+      all_int_names
+  (* From<INT, INT> *)
+  @ List.map
+      (fun (big, small) ->
+        fmt
+          ("core::convert::From<" ^ big ^ ", " ^ small ^ ">")
+          ~extract_name:
+            (Some
+               ("core.convert.From"
+               ^ StringUtils.capitalize_first_letter big
+               ^ StringUtils.capitalize_first_letter small))
+          ())
+      int_and_smaller_list
+  (* Clone<INT> *)
+  @ List.map
+      (fun ty ->
+        fmt
+          ("core::clone::Clone<" ^ ty ^ ">")
+          ~extract_name:
+            (Some ("core.clone.Clone" ^ StringUtils.capitalize_first_letter ty))
+          ())
+      all_int_names
+  (* Copy<INT> *)
+  @ List.map
+      (fun ty ->
+        fmt
+          ("core::marker::Copy<" ^ ty ^ ">")
+          ~extract_name:
+            (Some ("core.marker.Copy" ^ StringUtils.capitalize_first_letter ty))
+          ())
+      all_int_names
+  (* PartialEq<INT, INT> *)
+  @ List.map
+      (fun ty ->
+        fmt
+          ("core::cmp::PartialEq<" ^ ty ^ "," ^ ty ^ ">")
+          ~extract_name:
+            (Some ("core.cmp.PartialEq" ^ StringUtils.capitalize_first_letter ty))
+          ())
+      all_int_names
+  (* Eq<INT> *)
+  @ List.map
+      (fun ty ->
+        fmt
+          ("core::cmp::Eq<" ^ ty ^ ">")
+          ~extract_name:
+            (Some ("core.cmp.Eq" ^ StringUtils.capitalize_first_letter ty))
+          ())
+      all_int_names
+  (* PartialOrd<INT, INT> *)
+  @ List.map
+      (fun ty ->
+        fmt
+          ("core::cmp::PartialOrd<" ^ ty ^ "," ^ ty ^ ">")
+          ~extract_name:
+            (Some
+               ("core.cmp.PartialOrd" ^ StringUtils.capitalize_first_letter ty))
+          ())
+      all_int_names
+  (* Ord<INT> *)
+  @ List.map
+      (fun ty ->
+        fmt
+          ("core::cmp::Ord<" ^ ty ^ ">")
+          ~extract_name:
+            (Some ("core.cmp.Ord" ^ StringUtils.capitalize_first_letter ty))
+          ())
+      all_int_names
+  (* Default<INT> *)
+  @ List.map
+      (fun ty -> fmt ("core::default::Default<" ^ ty ^ ">") ())
+      all_int_names
+
+let mk_builtin_trait_impls_map () =
+  let m = NameMatcherMap.of_list (builtin_trait_impls_info ()) in
+  log#ltrace
+    (lazy
+      ("builtin_trait_impls_map:\n"
+      ^ NameMatcherMap.to_string (fun _ -> "...") m));
+  m
+
+let builtin_trait_impls_map = mk_memoized mk_builtin_trait_impls_map
+
 (** The builtin functions.
 
     The optional list of booleans is filtering information for the type
@@ -289,6 +650,7 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
         can_fail;
         stateful;
         lift;
+        has_default = false;
       }
     in
     (rust_name, f)
@@ -711,7 +1073,37 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
              all_int_names))
 
 let builtin_funs : unit -> (pattern * Pure.builtin_fun_info) list =
-  mk_memoized mk_builtin_funs
+  (* We need to take into account the default trait methods *)
+  let mk () =
+    let funs = mk_builtin_funs () in
+    let trait_decls = builtin_trait_decls_info () in
+    let default_methods =
+      List.map
+        (fun (d : Pure.builtin_trait_decl_info) ->
+          List.filter_map
+            (fun ((fpat, f) : string * Pure.builtin_fun_info) ->
+              if f.has_default then
+                let sep =
+                  match backend () with
+                  | Lean -> "."
+                  | _ -> "_"
+                in
+                let pattern = d.rust_name @ [ PIdent (fpat, 0, []) ] in
+                let info =
+                  {
+                    f with
+                    extract_name =
+                      d.extract_name ^ sep ^ f.extract_name ^ sep ^ "default";
+                  }
+                in
+                Some (pattern, info)
+              else None)
+            d.methods)
+        trait_decls
+    in
+    funs @ List.concat default_methods
+  in
+  mk_memoized mk
 
 let mk_builtin_funs_map () =
   let m =
@@ -738,356 +1130,3 @@ let mk_builtin_fun_effects_map () =
   NameMatcherMap.of_list (if_backend mk_builtin_fun_effects [])
 
 let builtin_fun_effects_map = mk_memoized mk_builtin_fun_effects_map
-
-let builtin_trait_decls_info () =
-  let mk_trait (rust_name : string) ?(extract_name : string option = None)
-      ?(parent_clauses : string list = []) ?(types : string list = [])
-      ?(methods : string list = [])
-      ?(methods_with_extract : (string * string) list option = None) () :
-      Pure.builtin_trait_decl_info =
-    let rust_name = parse_pattern rust_name in
-    let extract_name =
-      match extract_name with
-      | Some n -> n
-      | None ->
-          let rust_name = pattern_to_fun_extract_name rust_name in
-          flatten_name rust_name
-    in
-    let constructor = mk_struct_constructor extract_name in
-    let consts = [] in
-    let types =
-      let mk_type item_name =
-        let type_name =
-          if !record_fields_short_names then item_name
-          else extract_name ^ "_" ^ item_name
-        in
-        let type_name =
-          match backend () with
-          | FStar | Coq | HOL4 -> StringUtils.lowercase_first_letter type_name
-          | Lean -> type_name
-        in
-        (item_name, type_name)
-      in
-      List.map mk_type types
-    in
-    let methods =
-      match methods_with_extract with
-      | None ->
-          let mk_method item_name =
-            (* TODO: factor out with builtin_funs_info *)
-            let basename =
-              if !record_fields_short_names then item_name
-              else extract_name ^ "_" ^ item_name
-            in
-            let fwd : Pure.builtin_fun_info =
-              {
-                filter_params = None;
-                extract_name = basename;
-                can_fail = true;
-                stateful = false;
-                lift = true;
-              }
-            in
-            (item_name, fwd)
-          in
-          List.map mk_method methods
-      | Some methods ->
-          List.map
-            (fun (item_name, extract_name) ->
-              ( item_name,
-                ({
-                   filter_params = None;
-                   extract_name;
-                   can_fail = true;
-                   stateful = false;
-                   lift = true;
-                 }
-                  : Pure.builtin_fun_info) ))
-            methods
-    in
-    {
-      rust_name;
-      extract_name;
-      constructor;
-      parent_clauses;
-      consts;
-      types;
-      methods;
-    }
-  in
-  [
-    (* Deref *)
-    mk_trait "core::ops::deref::Deref" ~types:[] ~methods:[ "deref" ] ();
-    (* DerefMut *)
-    mk_trait "core::ops::deref::DerefMut" ~parent_clauses:[ "derefInst" ]
-      ~methods:[ "deref_mut" ] ();
-    (* Index *)
-    mk_trait "core::ops::index::Index" ~types:[] ~methods:[ "index" ] ();
-    (* IndexMut *)
-    mk_trait "core::ops::index::IndexMut" ~parent_clauses:[ "indexInst" ]
-      ~methods:[ "index_mut" ] ();
-    (* Sealed *)
-    mk_trait "core::slice::index::private_slice_index::Sealed" ();
-    (* SliceIndex *)
-    mk_trait "core::slice::index::SliceIndex" ~parent_clauses:[ "sealedInst" ]
-      ~types:[ "Output" ]
-      ~methods:
-        [
-          "get";
-          "get_mut";
-          "get_unchecked";
-          "get_unchecked_mut";
-          "index";
-          "index_mut";
-        ]
-      ();
-    (* From *)
-    mk_trait "core::convert::From"
-      ~methods_with_extract:(Some [ ("from", "from_") ])
-      ();
-    (* Clone *)
-    mk_trait "core::clone::Clone" ~methods:[ "clone"; "clone_from" ] ();
-    (* Copy *)
-    mk_trait "core::marker::Copy" ~parent_clauses:[ "cloneInst" ] ();
-  ]
-  @ mk_lean_only
-      [
-        (* Into *)
-        mk_trait "core::convert::Into" ~types:[ "T"; "U" ] ~methods:[ "into" ]
-          ();
-        (* Debug *)
-        mk_trait "core::fmt::Debug" ~types:[ "T" ] ~methods:[ "fmt" ] ();
-        (* *)
-        mk_trait "core::convert::TryFrom" ~methods:[ "try_from" ] ();
-        mk_trait "core::convert::TryInto" ~methods:[ "try_into" ] ();
-        mk_trait "core::convert::AsMut" ~methods:[ "as_mut" ] ();
-        (* Eq, Ord *)
-        mk_trait "core::cmp::PartialEq" ~methods:[ "eq"; "ne" ] ();
-        mk_trait "core::cmp::Eq" ~parent_clauses:[ "partialEqInst" ] ();
-        mk_trait "core::cmp::PartialOrd" ~parent_clauses:[ "partialEqInst" ]
-          ~methods:[ "partial_cmp"; "lt"; "le"; "gt"; "ge" ]
-          ();
-        mk_trait "core::cmp::Ord"
-          ~parent_clauses:[ "eqInst"; "partialOrdInst" ]
-          ~methods:[ "cmp"; "max"; "min"; "clamp" ]
-          ();
-        mk_trait "core::default::Default" ~methods:[ "default" ] ();
-      ]
-
-let mk_builtin_trait_decls_map () =
-  NameMatcherMap.of_list
-    (List.map
-       (fun (info : Pure.builtin_trait_decl_info) -> (info.rust_name, info))
-       (builtin_trait_decls_info ()))
-
-let builtin_trait_decls_map = mk_memoized mk_builtin_trait_decls_map
-
-let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
-    =
-  let fmt (rust_name : string) ?(extract_name : string option = None)
-      ?(filter : bool list option = None) () :
-      pattern * Pure.builtin_trait_impl_info =
-    let rust_name = parse_pattern rust_name in
-    let name =
-      let name =
-        match extract_name with
-        | None -> pattern_to_trait_impl_extract_name rust_name
-        | Some name -> split_on_separator name
-      in
-      flatten_name name
-    in
-    (rust_name, { filter_params = filter; impl_name = name })
-  in
-  [
-    (* core::ops::Deref<alloc::boxed::Box<T>> *)
-    fmt "core::ops::deref::Deref<Box<@T>, @T>"
-      ~extract_name:(Some "core::ops::deref::DerefBoxInst") ();
-    (* core::ops::DerefMut<alloc::boxed::Box<T>> *)
-    fmt "core::ops::deref::DerefMut<Box<@T>, @T>"
-      ~extract_name:(Some "core::ops::deref::DerefBoxMutInst") ();
-    (* core::ops::Deref<alloc::vec::Vec<T>> *)
-    fmt "core::ops::deref::Deref<alloc::vec::Vec<@T, @A>, [@T]>"
-      ~extract_name:(Some "core::ops::deref::DerefVecInst")
-      ~filter:(Some [ true; false ])
-      ();
-    (* core::ops::DerefMut<alloc::vec::Vec<T>> *)
-    fmt "core::ops::deref::DerefMut<alloc::vec::Vec<@T, @A>, [@T]>"
-      ~extract_name:(Some "core::ops::deref::DerefMutVecInst")
-      ~filter:(Some [ true; false ])
-      ();
-    (* core::ops::index::Index<[T], I> *)
-    fmt "core::ops::index::Index<[@T], @I, @O>"
-      ~extract_name:(Some "core::ops::index::IndexSliceInst") ();
-    (* core::ops::index::IndexMut<[T], I> *)
-    fmt "core::ops::index::IndexMut<[@T], @I, @O>"
-      ~extract_name:(Some "core::ops::index::IndexMutSliceInst") ();
-    (* core::slice::index::private_slice_index::Sealed<Range<usize>> *)
-    fmt
-      "core::slice::index::private_slice_index::Sealed<core::ops::range::Range<usize>>"
-      ~extract_name:
-        (Some "core.slice.index.private_slice_index.SealedRangeUsizeInst") ();
-    (* core::slice::index::SliceIndex<Range<usize>, [T]> *)
-    fmt
-      "core::slice::index::SliceIndex<core::ops::range::Range<usize>, [@T], \
-       [@T]>"
-      ~extract_name:(Some "core::slice::index::SliceIndexRangeUsizeSliceInst")
-      ();
-    (* core::ops::index::Index<[T; N], I> *)
-    fmt "core::ops::index::Index<[@T; @N], @I, @O>"
-      ~extract_name:(Some "core::ops::index::IndexArrayInst") ();
-    (* core::ops::index::IndexMut<[T; N], I> *)
-    fmt "core::ops::index::IndexMut<[@T; @N], @I, @O>"
-      ~extract_name:(Some "core::ops::index::IndexMutArrayInst") ();
-    (* core::slice::index::private_slice_index::Sealed<usize> *)
-    fmt "core::slice::index::private_slice_index::Sealed<usize>"
-      ~extract_name:
-        (Some "core::slice::index::private_slice_index::SealedUsizeInst") ();
-    (* core::slice::index::SliceIndex<usize, [T]> *)
-    fmt "core::slice::index::SliceIndex<usize, [@T], @T>"
-      ~extract_name:(Some "core::slice::index::SliceIndexUsizeSliceInst") ();
-    (* core::ops::index::Index<alloc::vec::Vec<T>, T> *)
-    fmt "core::ops::index::Index<alloc::vec::Vec<@T, @A>, @T, @O>"
-      ~extract_name:(Some "alloc::vec::Vec::IndexInst")
-      ~filter:(Some [ true; true; false; true ])
-      ();
-    (* core::ops::index::IndexMut<alloc::vec::Vec<T>, T> *)
-    fmt "core::ops::index::IndexMut<alloc::vec::Vec<@T, @A>, @T, @O>"
-      ~extract_name:(Some "alloc::vec::Vec::IndexMutInst")
-      ~filter:(Some [ true; true; false; true ])
-      ();
-    (* core::clone::impls::{core::clone::Clone for bool} *)
-    fmt "core::clone::Clone<bool>" ~extract_name:(Some "core::clone::CloneBool")
-      ();
-    fmt "core::ops::deref::Deref<alloc::vec::Vec<@Self, @>>"
-      ~extract_name:(Some "alloc.vec.DerefVec")
-      ~filter:(Some [ true; false ])
-      ();
-    fmt "core::ops::deref::DerefMut<alloc::vec::Vec<@Self, @>>"
-      ~extract_name:(Some "alloc.vec.DerefMutVec")
-      ~filter:(Some [ true; false ])
-      ();
-  ]
-  @ mk_lean_only
-      [
-        (* Into<T, U: From<T>> *)
-        fmt "core::convert::Into<@Self, @T>"
-          ~extract_name:(Some "core::convert::IntoFrom") ();
-        (* From<T, T> *)
-        fmt "core::convert::From<@Self, @Self>"
-          ~extract_name:(Some "core::convert::FromSame") ();
-        (* TryInto<T, U : TryFrom<T>> *)
-        fmt "core::convert::{core::convert::TryInto<@T, @U>}"
-          ~extract_name:(Some "core::convert::TryIntoFrom") ();
-        fmt
-          "core::slice::index::private_slice_index::Sealed<core::ops::range::RangeFrom<usize>>"
-          ~extract_name:
-            (Some
-               "core::slice::index::private_slice_index::SealedRangeFromUsize")
-          ();
-        fmt
-          "core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
-           [@T], [@T]>"
-          ~extract_name:
-            (Some "core::slice::index::SliceIndexRangeFromUsizeSlice") ();
-        fmt "core::convert::AsMut<Box<@T>, @T>"
-          ~filter:(Some [ true; false ])
-          ();
-        fmt "core::clone::Clone<[@T; @N]>" ();
-        fmt "core::convert::From<Box<[@T]>, alloc::vec::Vec<@T, @A>>"
-          ~extract_name:(Some "core.convert.FromBoxSliceVec")
-          ~filter:(Some [ true; false ])
-          ();
-      ]
-  (* From<INT, bool> *)
-  @ List.map
-      (fun ty ->
-        fmt
-          ("core::convert::From<" ^ ty ^ ", bool>")
-          ~extract_name:
-            (Some
-               ("core.convert.From"
-               ^ StringUtils.capitalize_first_letter ty
-               ^ "Bool"))
-          ())
-      all_int_names
-  (* From<INT, INT> *)
-  @ List.map
-      (fun (big, small) ->
-        fmt
-          ("core::convert::From<" ^ big ^ ", " ^ small ^ ">")
-          ~extract_name:
-            (Some
-               ("core.convert.From"
-               ^ StringUtils.capitalize_first_letter big
-               ^ StringUtils.capitalize_first_letter small))
-          ())
-      int_and_smaller_list
-  (* Clone<INT> *)
-  @ List.map
-      (fun ty ->
-        fmt
-          ("core::clone::Clone<" ^ ty ^ ">")
-          ~extract_name:
-            (Some ("core.clone.Clone" ^ StringUtils.capitalize_first_letter ty))
-          ())
-      all_int_names
-  (* Copy<INT> *)
-  @ List.map
-      (fun ty ->
-        fmt
-          ("core::marker::Copy<" ^ ty ^ ">")
-          ~extract_name:
-            (Some ("core.marker.Copy" ^ StringUtils.capitalize_first_letter ty))
-          ())
-      all_int_names
-  (* PartialEq<INT, INT> *)
-  @ List.map
-      (fun ty ->
-        fmt
-          ("core::cmp::PartialEq<" ^ ty ^ "," ^ ty ^ ">")
-          ~extract_name:
-            (Some ("core.cmp.PartialEq" ^ StringUtils.capitalize_first_letter ty))
-          ())
-      all_int_names
-  (* Eq<INT> *)
-  @ List.map
-      (fun ty ->
-        fmt
-          ("core::cmp::Eq<" ^ ty ^ ">")
-          ~extract_name:
-            (Some ("core.cmp.Eq" ^ StringUtils.capitalize_first_letter ty))
-          ())
-      all_int_names
-  (* PartialOrd<INT, INT> *)
-  @ List.map
-      (fun ty ->
-        fmt
-          ("core::cmp::PartialOrd<" ^ ty ^ "," ^ ty ^ ">")
-          ~extract_name:
-            (Some
-               ("core.cmp.PartialOrd" ^ StringUtils.capitalize_first_letter ty))
-          ())
-      all_int_names
-  (* Ord<INT> *)
-  @ List.map
-      (fun ty ->
-        fmt
-          ("core::cmp::Ord<" ^ ty ^ ">")
-          ~extract_name:
-            (Some ("core.cmp.Ord" ^ StringUtils.capitalize_first_letter ty))
-          ())
-      all_int_names
-  (* Default<INT> *)
-  @ List.map
-      (fun ty -> fmt ("core::default::Default<" ^ ty ^ ">") ())
-      all_int_names
-
-let mk_builtin_trait_impls_map () =
-  let m = NameMatcherMap.of_list (builtin_trait_impls_info ()) in
-  log#ltrace
-    (lazy
-      ("builtin_trait_impls_map:\n"
-      ^ NameMatcherMap.to_string (fun _ -> "...") m));
-  m
-
-let builtin_trait_impls_map = mk_memoized mk_builtin_trait_impls_map
