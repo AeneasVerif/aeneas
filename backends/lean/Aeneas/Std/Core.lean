@@ -49,6 +49,11 @@ end ops -- core.ops
 /- Trait declaration: [core::clone::Clone] -/
 structure clone.Clone (Self : Type) where
   clone : Self → Result Self
+  clone_from : Self → Self → Result Self
+
+def clone.Clone.from_from.default {Self : Type} (clone : Self → Result Self)
+  (_self source : Self) : Result Self :=
+  clone source
 
 /- [core::clone::impls::{(core::clone::Clone for bool)#19}::clone] -/
 @[reducible, simp, progress_simps]
@@ -57,6 +62,7 @@ def clone.impls.CloneBool.clone (b : Bool) : Bool := b
 @[reducible]
 def clone.CloneBool : clone.Clone Bool := {
   clone := fun b => ok (clone.impls.CloneBool.clone b)
+  clone_from := fun _ b => ok (clone.impls.CloneBool.clone b)
 }
 
 /- [core::marker::Copy] -/
@@ -97,13 +103,6 @@ def core.option.Option.unwrap_or (self : Option T) (default : T) : T :=
 
 /- [core::option::Option::is_none] -/
 @[simp, progress_simps] def core.option.Option.is_none {T: Type} (self: Option T): Bool := self.isNone
-
-/- [core::clone::Clone::clone_from]:
-   Source: '/rustc/library/core/src/clone.rs', lines 175:4-175:43
-   Name pattern: core::clone::Clone::clone_from -/
-@[simp, progress_simps] def core.clone.Clone.clone_from
-  {Self : Type} (cloneInst : core.clone.Clone Self) (_self : Self) (source : Self) : Result Self :=
-  cloneInst.clone source
 
 /- [core::convert::Into] -/
 structure core.convert.Into (Self : Type) (T : Type) where

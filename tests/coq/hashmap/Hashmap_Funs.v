@@ -24,10 +24,18 @@ Definition clonehashmapFraction_clone
   Ok self
 .
 
+(** [hashmap::{core::clone::Clone for hashmap::Fraction}#1::clone_from]:
+    Source: '/rustc/library/core/src/clone.rs', lines 174:4-174:43 *)
+Definition clonehashmapFraction_clone_from
+  (self : Fraction_t) (source : Fraction_t) : result Fraction_t :=
+  clonehashmapFraction_clone source
+.
+
 (** Trait implementation: [hashmap::{core::clone::Clone for hashmap::Fraction}#1]
     Source: 'tests/src/hashmap.rs', lines 44:9-44:14 *)
 Definition core_clone_ClonehashmapFraction : core_clone_Clone Fraction_t := {|
   core_clone_Clone_clone := clonehashmapFraction_clone;
+  core_clone_Clone_clone_from := clonehashmapFraction_clone_from;
 |}.
 
 (** Trait implementation: [hashmap::{core::marker::Copy for hashmap::Fraction}#2]

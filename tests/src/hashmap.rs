@@ -1,4 +1,4 @@
-//@ charon-args=--opaque=crate::utils
+//@ charon-args=--opaque=crate::utils --translate-all-methods --include=core::clone::Clone::clone_from
 //@ [!borrow-check] aeneas-args=-state -split-files
 //@ [coq] aeneas-args=-use-fuel
 //@ [coq,fstar] subdir=hashmap

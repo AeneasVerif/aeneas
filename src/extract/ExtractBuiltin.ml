@@ -259,483 +259,10 @@ let int_and_smaller_list : (string * string) list =
   ]
   @ compute_pairs uint_names @ compute_pairs int_names
 
-(** The builtin functions.
-
-    The optional list of booleans is filtering information for the type
-    parameters. For instance, in the case of the `Vec` functions, there is
-    a type parameter for the allocator to use, which we want to filter.
- *)
-let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
-  (* Small utility. *)
-  let mk_fun (rust_name : string) ?(filter : bool list option = None)
-      ?(can_fail = true) ?(stateful = false) ?(lift = true)
-      ?(extract_name : string option = None) () :
-      pattern * Pure.builtin_fun_info =
-    let rust_name =
-      try parse_pattern rust_name
-      with Failure _ ->
-        raise (Failure ("Could not parse pattern: " ^ rust_name))
-    in
-    let extract_name =
-      match extract_name with
-      | None -> pattern_to_fun_extract_name rust_name
-      | Some name -> split_on_separator name
-    in
-    let basename = flatten_name extract_name in
-    let f : Pure.builtin_fun_info =
-      {
-        filter_params = filter;
-        extract_name = basename;
-        can_fail;
-        stateful;
-        lift;
-      }
-    in
-    (rust_name, f)
-  in
-  let mk_scalar_fun (rust_name : string -> string)
-      (extract_name : string -> string) ?(can_fail = true) () :
-      (pattern * Pure.builtin_fun_info) list =
-    List.map
-      (fun ty ->
-        mk_fun (rust_name ty)
-          ~extract_name:(Some (extract_name ty))
-          ~can_fail ())
-      all_int_names
-  in
-  let mk_scalar_funs (rust_name : string -> string -> string)
-      (extract_name : string -> string -> string) (funs : (bool * string) list)
-      : (pattern * Pure.builtin_fun_info) list =
-    List.flatten
-      (List.map
-         (fun ty ->
-           List.map
-             (fun (can_fail, fun_name) ->
-               mk_fun (rust_name ty fun_name)
-                 ~extract_name:(Some (extract_name ty fun_name))
-                 ~can_fail ())
-             funs)
-         all_int_names)
-  in
-  [
-    mk_fun "core::mem::replace" ~can_fail:false ~lift:false ();
-    mk_fun "core::mem::take" ~can_fail:false ~lift:false ();
-    mk_fun "core::slice::{[@T]}::len"
-      ~extract_name:(Some (backend_choice "slice::len" "Slice::len"))
-      ~can_fail:false ~lift:false ();
-    mk_fun "alloc::vec::{alloc::vec::Vec<@T, alloc::alloc::Global>}::new"
-      ~extract_name:(Some "alloc::vec::Vec::new") ~can_fail:false ~lift:false ();
-    mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::push"
-      ~filter:(Some [ true; false ])
-      ();
-    mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::insert"
-      ~filter:(Some [ true; false ])
-      ();
-    mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::len"
-      ~filter:(Some [ true; false ])
-      ~can_fail:false ~lift:false ();
-    mk_fun
-      "alloc::vec::{core::ops::index::Index<alloc::vec::Vec<@T, @A>, @I, \
-       @O>}::index"
-      ~extract_name:(Some "alloc.vec.Vec.index")
-      ~filter:(Some [ true; true; false; true ])
-      ();
-    mk_fun
-      "alloc::vec::{core::ops::index::IndexMut<alloc::vec::Vec<@T, @A>, @I, \
-       @O>}::index_mut"
-      ~extract_name:(Some "alloc.vec.Vec.index_mut")
-      ~filter:(Some [ true; true; false; true ])
-      ();
-    mk_fun "alloc::boxed::{core::ops::deref::Deref<Box<@T>, @T>}::deref"
-      ~can_fail:false ~extract_name:(Some "alloc.boxed.Box.deref")
-      ~filter:(Some [ true; false ])
-      ();
-    mk_fun "alloc::boxed::{core::ops::deref::DerefMut<Box<@T>, @T>}::deref_mut"
-      ~can_fail:false ~extract_name:(Some "alloc.boxed.Box.deref_mut")
-      ~filter:(Some [ true; false ])
-      ();
-    mk_fun "core::slice::index::{core::ops::index::Index<[@T], @I, @O>}::index"
-      ~extract_name:(Some "core.slice.index.Slice.index") ();
-    mk_fun "core::slice::{[@T]}::get"
-      ~extract_name:(Some "core.slice.Slice.get") ();
-    mk_fun "core::slice::{[@T]}::get_mut"
-      ~extract_name:(Some "core.slice.Slice.get_mut") ();
-    mk_fun
-      "core::slice::index::{core::ops::index::IndexMut<[@T], @I, \
-       @O>}::index_mut"
-      ~extract_name:(Some "core.slice.index.Slice.index_mut") ();
-    mk_fun "core::array::{core::ops::index::Index<[@T; @N], @I, @O>}::index"
-      ~extract_name:(Some "core.array.Array.index") ();
-    mk_fun
-      "core::array::{core::ops::index::IndexMut<[@T; @N], @I, @O>}::index_mut"
-      ~extract_name:(Some "core.array.Array.index_mut") ();
-    mk_fun
-      "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
-       [@T], [@T]>}::get"
-      ~extract_name:(Some "core::slice::index::SliceIndexRangeUsizeSlice::get")
-      ();
-    mk_fun
-      "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
-       [@T], [@T]>}::get_mut"
-      ~extract_name:
-        (Some "core::slice::index::SliceIndexRangeUsizeSlice::get_mut") ();
-    mk_fun
-      "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
-       [@T], [@T]>}::index"
-      ~extract_name:
-        (Some "core::slice::index::SliceIndexRangeUsizeSlice::index") ();
-    mk_fun
-      "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
-       [@T], [@T]>}::index_mut"
-      ~extract_name:
-        (Some "core::slice::index::SliceIndexRangeUsizeSlice::index_mut") ();
-    mk_fun
-      "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
-       [@T], [@T]>}::get_unchecked"
-      ~extract_name:
-        (Some "core::slice::index::SliceIndexRangeUsizeSlice::get_unchecked") ();
-    mk_fun
-      "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
-       [@T], [@T]>}::get_unchecked_mut"
-      ~extract_name:
-        (Some "core::slice::index::SliceIndexRangeUsizeSlice::get_unchecked_mut")
-      ();
-    mk_fun
-      "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
-       @T>}::get"
-      ();
-    mk_fun
-      "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
-       @T>}::get_mut"
-      ();
-    mk_fun
-      "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
-       @T>}::get_unchecked"
-      ();
-    mk_fun
-      "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
-       @T>}::get_unchecked_mut"
-      ();
-    mk_fun
-      "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
-       @T>}::index"
-      ~extract_name:(Some "core_slice_index_Slice_index") ();
-    mk_fun
-      "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
-       @T>}::index_mut"
-      ~extract_name:(Some "core_slice_index_Slice_index_mut") ();
-    mk_fun "alloc::slice::{[@T]}::to_vec"
-      ~extract_name:(Some "alloc.slice.Slice.to_vec") ();
-    mk_fun
-      "alloc::vec::{alloc::vec::Vec<@T, alloc::alloc::Global>}::with_capacity"
-      ~extract_name:(Some "alloc.vec.Vec.with_capacity") ~can_fail:false
-      ~lift:false ();
-    mk_fun "core::slice::{[@T]}::reverse"
-      ~extract_name:(Some "core.slice.Slice.reverse") ~can_fail:false ();
-    mk_fun
-      "alloc::vec::{core::ops::deref::Deref<alloc::vec::Vec<@T, @A>, \
-       [@T]>}::deref"
-      ~extract_name:(Some "alloc::vec::Vec::deref")
-      ~filter:(Some [ true; false ])
-      ~can_fail:false ~lift:false ();
-    mk_fun
-      "alloc::vec::{core::ops::deref::DerefMut<alloc::vec::Vec<@T, @A>, \
-       [@T]>}::deref_mut"
-      ~extract_name:(Some "alloc::vec::Vec::deref_mut") ~can_fail:false
-      ~filter:(Some [ true; false ])
-      ();
-    mk_fun "core::option::{core::option::Option<@T>}::unwrap"
-      ~extract_name:(Some "core.option.Option.unwrap") ();
-  ]
-  @ List.flatten
-      (List.map
-         (fun op ->
-           mk_scalar_fun
-             (fun ty -> "core::num::{" ^ ty ^ "}::checked_" ^ op)
-             (fun ty ->
-               StringUtils.capitalize_first_letter ty ^ ".checked_" ^ op)
-             ~can_fail:false ())
-         [ "add"; "sub"; "mul"; "div"; "rem" ])
-  (* From<INT, bool> *)
-  @ mk_scalar_fun
-      (fun ty ->
-        "core::convert::num::{core::convert::From<" ^ ty ^ ", bool>}::from")
-      (fun ty ->
-        "core.convert.num.From"
-        ^ StringUtils.capitalize_first_letter ty
-        ^ "Bool.from")
-      ~can_fail:false ()
-  (* From<INT, INT> *)
-  @ List.map
-      (fun (big, small) ->
-        mk_fun
-          ("core::convert::num::{core::convert::From<" ^ big ^ ", " ^ small
-         ^ ">}::from")
-          ~extract_name:
-            (Some
-               ("core.convert.num.From"
-               ^ StringUtils.capitalize_first_letter big
-               ^ StringUtils.capitalize_first_letter small
-               ^ ".from"))
-          ~can_fail:false ())
-      int_and_smaller_list
-  (* Leading zeros *)
-  @ mk_scalar_fun
-      (fun ty -> "core::num::{" ^ ty ^ "}::leading_zeros")
-      (fun ty ->
-        "core.num." ^ StringUtils.capitalize_first_letter ty ^ ".leading_zeros")
-      ~can_fail:false ()
-  (* to_le_bytes *)
-  @ mk_scalar_fun
-      (fun ty -> "core::num::{" ^ ty ^ "}::to_le_bytes")
-      (fun ty ->
-        "core.num." ^ StringUtils.capitalize_first_letter ty ^ ".to_le_bytes")
-      ~can_fail:false ()
-  (* to_be_bytes *)
-  @ mk_scalar_fun
-      (fun ty -> "core::num::{" ^ ty ^ "}::to_be_bytes")
-      (fun ty ->
-        "core.num." ^ StringUtils.capitalize_first_letter ty ^ ".to_be_bytes")
-      ~can_fail:false ()
-  (* from_le_bytes *)
-  @ mk_scalar_fun
-      (fun ty -> "core::num::{" ^ ty ^ "}::from_le_bytes")
-      (fun ty ->
-        "core.num." ^ StringUtils.capitalize_first_letter ty ^ ".from_le_bytes")
-      ~can_fail:false ()
-  (* from_be_bytes *)
-  @ mk_scalar_fun
-      (fun ty -> "core::num::{" ^ ty ^ "}::from_be_bytes")
-      (fun ty ->
-        "core.num." ^ StringUtils.capitalize_first_letter ty ^ ".from_be_bytes")
-      ~can_fail:false ()
-  (* Clone<bool> *)
-  @ [
-      mk_fun "core::clone::impls::{core::clone::Clone<bool>}::clone"
-        ~extract_name:(Some "core.clone.impls.CloneBool.clone") ~can_fail:false
-        ();
-    ]
-  (* Clone<INT> *)
-  @ mk_scalar_fun
-      (fun ty -> "core::clone::impls::{core::clone::Clone<" ^ ty ^ ">}::clone")
-      (fun ty ->
-        "core.clone.impls.Clone"
-        ^ StringUtils.capitalize_first_letter ty
-        ^ ".clone")
-      ~can_fail:false ()
-  (* Lean-only definitions *)
-  @ mk_lean_only
-      ([
-         mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::resize"
-           ~filter:(Some [ true; false ])
-           ();
-         mk_fun "alloc::vec::from_elem" ();
-         mk_fun
-           "alloc::vec::{core::convert::From<Box<[@T]>, alloc::vec::Vec<@T, \
-            @A>>}::from"
-           ~filter:(Some [ true; false ])
-           ~extract_name:(Some "alloc.vec.FromBoxSliceVec.from") ();
-         mk_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone"
-           ~extract_name:(Some "core.array.CloneArray.clone") ();
-         mk_fun "core::mem::swap" ~can_fail:false ~lift:false ();
-         mk_fun "core::slice::{[@T]}::split_at" ();
-         mk_fun "core::slice::{[@T]}::split_at_mut" ();
-         mk_fun "core::slice::{[@T]}::swap" ();
-         mk_fun "core::option::{core::option::Option<@T>}::take"
-           ~extract_name:
-             (backend_choice None (Some "core::option::Option::take"))
-           ~can_fail:false ~lift:false ();
-         mk_fun "core::option::{core::option::Option<@T>}::unwrap_or"
-           ~can_fail:false ~extract_name:(Some "core.option.Option.unwrap_or")
-           ();
-         mk_fun "core::option::{core::option::Option<@T>}::is_none"
-           ~extract_name:
-             (backend_choice None (Some "core::option::Option::is_none"))
-           ~can_fail:false ~lift:false ();
-         mk_fun "core::clone::Clone::clone_from" ();
-         (* Into<T, U: From<T>> *)
-         mk_fun "core::convert::{core::convert::Into<@T, @U>}::into"
-           ~extract_name:(Some "core.convert.IntoFrom.into") ();
-         (* From<T, T> *)
-         mk_fun "core::convert::{core::convert::From<@T, @T>}::from"
-           ~can_fail:false ~extract_name:(Some "core.convert.FromSame.from_") ();
-         (* [core::slice::{@Slice<T>}::copy_from_slice] *)
-         mk_fun "core::slice::{[@T]}::copy_from_slice" ();
-         mk_fun "core::result::{core::result::Result<@T, @E>}::unwrap" ();
-         (* Vec *)
-         mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::extend_from_slice"
-           ~filter:(Some [ true; false ])
-           ();
-         mk_fun
-           "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
-            [@T], [@T]>}::get"
-           ~extract_name:
-             (Some "core::slice::index::SliceIndexRangeFromUsizeSlize::get") ();
-         mk_fun
-           "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
-            [@T], [@T]>}::get_mut"
-           ~extract_name:
-             (Some "core::slice::index::SliceIndexRangeFromUsizeSlize::get_mut")
-           ();
-         mk_fun
-           "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
-            [@T], [@T]>}::get_unchecked"
-           ~extract_name:
-             (Some
-                "core::slice::index::SliceIndexRangeFromUsizeSlize::get_unchecked")
-           ();
-         mk_fun
-           "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
-            [@T], [@T]>}::get_unchecked_mut"
-           ~extract_name:
-             (Some
-                "core::slice::index::SliceIndexRangeFromUsizeSlize::get_unchecked_mut")
-           ();
-         mk_fun
-           "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
-            [@T], [@T]>}::index"
-           ~extract_name:
-             (Some "core::slice::index::SliceIndexRangeFromUsizeSlize::index")
-           ();
-         mk_fun
-           "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
-            [@T], [@T]>}::index_mut"
-           ~extract_name:
-             (Some
-                "core::slice::index::SliceIndexRangeFromUsizeSlize::index_mut")
-           ();
-         (* *)
-         mk_fun "alloc::boxed::{core::convert::AsMut<Box<@T>, @T>}::as_mut"
-           ~can_fail:false
-           ~filter:(Some [ true; false ])
-           ();
-       ]
-      (* PartialEq, Eq, PartialOrd, Ord *)
-      @ mk_scalar_funs
-          (fun ty fun_name ->
-            "core::cmp::impls::{core::cmp::PartialEq<" ^ ty ^ "," ^ ty ^ ">}::"
-            ^ fun_name)
-          (fun ty fun_name ->
-            "core.cmp.impls.PartialEq"
-            ^ StringUtils.capitalize_first_letter ty
-            ^ "." ^ fun_name)
-          [ (false, "eq"); (false, "ne") ]
-      (* Eq: no methods *)
-      (* PartialOrd *)
-      @ mk_scalar_funs
-          (fun ty fun_name ->
-            "core::cmp::impls::{core::cmp::PartialOrd<" ^ ty ^ "," ^ ty ^ ">}::"
-            ^ fun_name)
-          (fun ty fun_name ->
-            "core.cmp.impls.PartialCmp"
-            ^ StringUtils.capitalize_first_letter ty
-            ^ "." ^ fun_name)
-          [
-            (false, "partial_cmp");
-            (false, "lt");
-            (false, "le");
-            (false, "gt");
-            (false, "ge");
-          ]
-      (* Ord *)
-      @ mk_scalar_fun
-          (fun ty ->
-            "core::default::{core::default::Default<" ^ ty ^ ">}::default")
-          (fun ty ->
-            "core.default.Default"
-            ^ StringUtils.capitalize_first_letter ty
-            ^ ".default")
-          ~can_fail:false ()
-      (* Default::default *)
-      @ mk_scalar_funs
-          (fun ty fun_name ->
-            "core::cmp::impls::{core::cmp::Ord<" ^ ty ^ ">}::" ^ fun_name)
-          (fun ty fun_name ->
-            "core.cmp.impls.Ord"
-            ^ StringUtils.capitalize_first_letter ty
-            ^ "." ^ fun_name)
-          [ (false, "cmp"); (false, "max"); (false, "min"); (true, "clamp") ]
-      (* Default methods *)
-      @ [
-          (* PartialEq *)
-          mk_fun "core::cmp::PartialEq::ne"
-            ~extract_name:(Some "core::cmp::PartialEq::ne::default") ();
-          (* PartialOrd *)
-          mk_fun "core::cmp::PartialOrd::lt"
-            ~extract_name:(Some "core::cmp::PartialOrd::lt::default") ();
-          mk_fun "core::cmp::PartialOrd::le"
-            ~extract_name:(Some "core::cmp::PartialOrd::le::default") ();
-          mk_fun "core::cmp::PartialOrd::gt"
-            ~extract_name:(Some "core::cmp::PartialOrd::gt::default") ();
-          mk_fun "core::cmp::PartialOrd::ge"
-            ~extract_name:(Some "core::cmp::PartialOrd::ge::default") ();
-          (* Ord *)
-          mk_fun "core::cmp::Ord::max"
-            ~extract_name:(Some "core::cmp::PartialOrd::max::default") ();
-          mk_fun "core::cmp::Ord::min"
-            ~extract_name:(Some "core::cmp::PartialOrd::min::default") ();
-          mk_fun "core::cmp::Ord::clamp"
-            ~extract_name:(Some "core::cmp::PartialOrd::max::clamp") ();
-        ]
-      (* Binops *)
-      @ List.flatten
-          (List.map
-             (fun int_name ->
-               List.map
-                 (fun (can_fail, op) ->
-                   mk_fun
-                     ("core::num::" ^ "{" ^ int_name ^ "}::" ^ op)
-                     ~extract_name:
-                       (Some
-                          ("core.num."
-                          ^ StringUtils.capitalize_first_letter int_name
-                          ^ "." ^ op))
-                     ~can_fail ())
-                 [
-                   (false, "saturating_add");
-                   (false, "saturating_sub");
-                   (false, "wrapping_add");
-                   (false, "wrapping_sub");
-                   (false, "wrapping_mul");
-                   (false, "overflowing_add");
-                   (false, "rotate_left");
-                   (false, "rotate_right");
-                 ])
-             all_int_names))
-
-let builtin_funs : unit -> (pattern * Pure.builtin_fun_info) list =
-  mk_memoized mk_builtin_funs
-
-let mk_builtin_funs_map () =
-  let m =
-    NameMatcherMap.of_list
-      (List.map (fun (name, info) -> (name, info)) (builtin_funs ()))
-  in
-  log#ltrace
-    (lazy ("builtin_funs_map:\n" ^ NameMatcherMap.to_string (fun _ -> "...") m));
-  m
-
-let builtin_funs_map = mk_memoized mk_builtin_funs_map
-
-type effect_info = { can_fail : bool; stateful : bool }
-
-let mk_builtin_fun_effects () : (pattern * effect_info) list =
-  let builtin_funs : (pattern * Pure.builtin_fun_info) list = builtin_funs () in
-  List.map
-    (fun ((pattern, info) : _ * Pure.builtin_fun_info) ->
-      let info = { can_fail = info.can_fail; stateful = info.stateful } in
-      (pattern, info))
-    builtin_funs
-
-let mk_builtin_fun_effects_map () =
-  NameMatcherMap.of_list (if_backend mk_builtin_fun_effects [])
-
-let builtin_fun_effects_map = mk_memoized mk_builtin_fun_effects_map
-
 let builtin_trait_decls_info () =
   let mk_trait (rust_name : string) ?(extract_name : string option = None)
       ?(parent_clauses : string list = []) ?(types : string list = [])
-      ?(methods : string list = [])
+      ?(methods : string list = []) ?(default_methods : string list = [])
       ?(methods_with_extract : (string * string) list option = None) () :
       Pure.builtin_trait_decl_info =
     let rust_name = parse_pattern rust_name in
@@ -764,9 +291,13 @@ let builtin_trait_decls_info () =
       List.map mk_type types
     in
     let methods =
+      List.map (fun x -> (false, x)) methods
+      @ List.map (fun x -> (true, x)) default_methods
+    in
+    let methods =
       match methods_with_extract with
       | None ->
-          let mk_method item_name =
+          let mk_method (has_default, item_name) =
             (* TODO: factor out with builtin_funs_info *)
             let basename =
               if !record_fields_short_names then item_name
@@ -779,8 +310,10 @@ let builtin_trait_decls_info () =
                 can_fail = true;
                 stateful = false;
                 lift = true;
+                has_default;
               }
             in
+
             (item_name, fwd)
           in
           List.map mk_method methods
@@ -794,6 +327,7 @@ let builtin_trait_decls_info () =
                    can_fail = true;
                    stateful = false;
                    lift = true;
+                   has_default = false;
                  }
                   : Pure.builtin_fun_info) ))
             methods
@@ -839,7 +373,8 @@ let builtin_trait_decls_info () =
       ~methods_with_extract:(Some [ ("from", "from_") ])
       ();
     (* Clone *)
-    mk_trait "core::clone::Clone" ~methods:[ "clone" ] ();
+    mk_trait "core::clone::Clone" ~methods:[ "clone" ]
+      ~default_methods:[ "clone_from" ] ();
     (* Copy *)
     mk_trait "core::marker::Copy" ~parent_clauses:[ "cloneInst" ] ();
   ]
@@ -1084,3 +619,514 @@ let mk_builtin_trait_impls_map () =
   m
 
 let builtin_trait_impls_map = mk_memoized mk_builtin_trait_impls_map
+
+(** The builtin functions.
+
+    The optional list of booleans is filtering information for the type
+    parameters. For instance, in the case of the `Vec` functions, there is
+    a type parameter for the allocator to use, which we want to filter.
+ *)
+let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
+  (* Small utility. *)
+  let mk_fun (rust_name : string) ?(filter : bool list option = None)
+      ?(can_fail = true) ?(stateful = false) ?(lift = true)
+      ?(extract_name : string option = None) () :
+      pattern * Pure.builtin_fun_info =
+    let rust_name =
+      try parse_pattern rust_name
+      with Failure _ ->
+        raise (Failure ("Could not parse pattern: " ^ rust_name))
+    in
+    let extract_name =
+      match extract_name with
+      | None -> pattern_to_fun_extract_name rust_name
+      | Some name -> split_on_separator name
+    in
+    let basename = flatten_name extract_name in
+    let f : Pure.builtin_fun_info =
+      {
+        filter_params = filter;
+        extract_name = basename;
+        can_fail;
+        stateful;
+        lift;
+        has_default = false;
+      }
+    in
+    (rust_name, f)
+  in
+  let mk_funs (rust_name : string -> string) (extract_name : string -> string)
+      (funs : (bool * string) list) : (pattern * Pure.builtin_fun_info) list =
+    List.map
+      (fun (can_fail, name) ->
+        let extract_name = Some (extract_name name) in
+        mk_fun (rust_name name) ~can_fail ~extract_name ())
+      funs
+  in
+  let mk_scalar_fun (rust_name : string -> string)
+      (extract_name : string -> string) ?(can_fail = true) () :
+      (pattern * Pure.builtin_fun_info) list =
+    List.map
+      (fun ty ->
+        mk_fun (rust_name ty)
+          ~extract_name:(Some (extract_name ty))
+          ~can_fail ())
+      all_int_names
+  in
+  let mk_scalar_funs (rust_name : string -> string -> string)
+      (extract_name : string -> string -> string) (funs : (bool * string) list)
+      : (pattern * Pure.builtin_fun_info) list =
+    List.flatten
+      (List.map
+         (fun ty ->
+           List.map
+             (fun (can_fail, fun_name) ->
+               mk_fun (rust_name ty fun_name)
+                 ~extract_name:(Some (extract_name ty fun_name))
+                 ~can_fail ())
+             funs)
+         all_int_names)
+  in
+  [
+    mk_fun "core::mem::replace" ~can_fail:false ~lift:false ();
+    mk_fun "core::mem::take" ~can_fail:false ~lift:false ();
+    mk_fun "core::slice::{[@T]}::len"
+      ~extract_name:(Some (backend_choice "slice::len" "Slice::len"))
+      ~can_fail:false ~lift:false ();
+    mk_fun "alloc::vec::{alloc::vec::Vec<@T, alloc::alloc::Global>}::new"
+      ~extract_name:(Some "alloc::vec::Vec::new") ~can_fail:false ~lift:false ();
+    mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::push"
+      ~filter:(Some [ true; false ])
+      ();
+    mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::insert"
+      ~filter:(Some [ true; false ])
+      ();
+    mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::len"
+      ~filter:(Some [ true; false ])
+      ~can_fail:false ~lift:false ();
+    mk_fun
+      "alloc::vec::{core::ops::index::Index<alloc::vec::Vec<@T, @A>, @I, \
+       @O>}::index"
+      ~extract_name:(Some "alloc.vec.Vec.index")
+      ~filter:(Some [ true; true; false; true ])
+      ();
+    mk_fun
+      "alloc::vec::{core::ops::index::IndexMut<alloc::vec::Vec<@T, @A>, @I, \
+       @O>}::index_mut"
+      ~extract_name:(Some "alloc.vec.Vec.index_mut")
+      ~filter:(Some [ true; true; false; true ])
+      ();
+    mk_fun "alloc::boxed::{core::ops::deref::Deref<Box<@T>, @T>}::deref"
+      ~can_fail:false ~extract_name:(Some "alloc.boxed.Box.deref")
+      ~filter:(Some [ true; false ])
+      ();
+    mk_fun "alloc::boxed::{core::ops::deref::DerefMut<Box<@T>, @T>}::deref_mut"
+      ~can_fail:false ~extract_name:(Some "alloc.boxed.Box.deref_mut")
+      ~filter:(Some [ true; false ])
+      ();
+    mk_fun "core::slice::index::{core::ops::index::Index<[@T], @I, @O>}::index"
+      ~extract_name:(Some "core.slice.index.Slice.index") ();
+    mk_fun "core::slice::{[@T]}::get"
+      ~extract_name:(Some "core.slice.Slice.get") ();
+    mk_fun "core::slice::{[@T]}::get_mut"
+      ~extract_name:(Some "core.slice.Slice.get_mut") ();
+    mk_fun
+      "core::slice::index::{core::ops::index::IndexMut<[@T], @I, \
+       @O>}::index_mut"
+      ~extract_name:(Some "core.slice.index.Slice.index_mut") ();
+    mk_fun "core::array::{core::ops::index::Index<[@T; @N], @I, @O>}::index"
+      ~extract_name:(Some "core.array.Array.index") ();
+    mk_fun
+      "core::array::{core::ops::index::IndexMut<[@T; @N], @I, @O>}::index_mut"
+      ~extract_name:(Some "core.array.Array.index_mut") ();
+    mk_fun
+      "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
+       [@T], [@T]>}::get"
+      ~extract_name:(Some "core::slice::index::SliceIndexRangeUsizeSlice::get")
+      ();
+    mk_fun
+      "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
+       [@T], [@T]>}::get_mut"
+      ~extract_name:
+        (Some "core::slice::index::SliceIndexRangeUsizeSlice::get_mut") ();
+    mk_fun
+      "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
+       [@T], [@T]>}::index"
+      ~extract_name:
+        (Some "core::slice::index::SliceIndexRangeUsizeSlice::index") ();
+    mk_fun
+      "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
+       [@T], [@T]>}::index_mut"
+      ~extract_name:
+        (Some "core::slice::index::SliceIndexRangeUsizeSlice::index_mut") ();
+    mk_fun
+      "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
+       [@T], [@T]>}::get_unchecked"
+      ~extract_name:
+        (Some "core::slice::index::SliceIndexRangeUsizeSlice::get_unchecked") ();
+    mk_fun
+      "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
+       [@T], [@T]>}::get_unchecked_mut"
+      ~extract_name:
+        (Some "core::slice::index::SliceIndexRangeUsizeSlice::get_unchecked_mut")
+      ();
+    mk_fun
+      "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
+       @T>}::get"
+      ();
+    mk_fun
+      "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
+       @T>}::get_mut"
+      ();
+    mk_fun
+      "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
+       @T>}::get_unchecked"
+      ();
+    mk_fun
+      "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
+       @T>}::get_unchecked_mut"
+      ();
+    mk_fun
+      "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
+       @T>}::index"
+      ~extract_name:(Some "core_slice_index_Slice_index") ();
+    mk_fun
+      "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
+       @T>}::index_mut"
+      ~extract_name:(Some "core_slice_index_Slice_index_mut") ();
+    mk_fun "alloc::slice::{[@T]}::to_vec"
+      ~extract_name:(Some "alloc.slice.Slice.to_vec") ();
+    mk_fun
+      "alloc::vec::{alloc::vec::Vec<@T, alloc::alloc::Global>}::with_capacity"
+      ~extract_name:(Some "alloc.vec.Vec.with_capacity") ~can_fail:false
+      ~lift:false ();
+    mk_fun "core::slice::{[@T]}::reverse"
+      ~extract_name:(Some "core.slice.Slice.reverse") ~can_fail:false ();
+    mk_fun
+      "alloc::vec::{core::ops::deref::Deref<alloc::vec::Vec<@T, @A>, \
+       [@T]>}::deref"
+      ~extract_name:(Some "alloc::vec::Vec::deref")
+      ~filter:(Some [ true; false ])
+      ~can_fail:false ~lift:false ();
+    mk_fun
+      "alloc::vec::{core::ops::deref::DerefMut<alloc::vec::Vec<@T, @A>, \
+       [@T]>}::deref_mut"
+      ~extract_name:(Some "alloc::vec::Vec::deref_mut") ~can_fail:false
+      ~filter:(Some [ true; false ])
+      ();
+    mk_fun "core::option::{core::option::Option<@T>}::unwrap"
+      ~extract_name:(Some "core.option.Option.unwrap") ();
+  ]
+  @ List.flatten
+      (List.map
+         (fun op ->
+           mk_scalar_fun
+             (fun ty -> "core::num::{" ^ ty ^ "}::checked_" ^ op)
+             (fun ty ->
+               StringUtils.capitalize_first_letter ty ^ ".checked_" ^ op)
+             ~can_fail:false ())
+         [ "add"; "sub"; "mul"; "div"; "rem" ])
+  (* From<INT, bool> *)
+  @ mk_scalar_fun
+      (fun ty ->
+        "core::convert::num::{core::convert::From<" ^ ty ^ ", bool>}::from")
+      (fun ty ->
+        "core.convert.num.From"
+        ^ StringUtils.capitalize_first_letter ty
+        ^ "Bool.from")
+      ~can_fail:false ()
+  (* From<INT, INT> *)
+  @ List.map
+      (fun (big, small) ->
+        mk_fun
+          ("core::convert::num::{core::convert::From<" ^ big ^ ", " ^ small
+         ^ ">}::from")
+          ~extract_name:
+            (Some
+               ("core.convert.num.From"
+               ^ StringUtils.capitalize_first_letter big
+               ^ StringUtils.capitalize_first_letter small
+               ^ ".from"))
+          ~can_fail:false ())
+      int_and_smaller_list
+  (* Leading zeros *)
+  @ mk_scalar_fun
+      (fun ty -> "core::num::{" ^ ty ^ "}::leading_zeros")
+      (fun ty ->
+        "core.num." ^ StringUtils.capitalize_first_letter ty ^ ".leading_zeros")
+      ~can_fail:false ()
+  (* to_le_bytes *)
+  @ mk_scalar_fun
+      (fun ty -> "core::num::{" ^ ty ^ "}::to_le_bytes")
+      (fun ty ->
+        "core.num." ^ StringUtils.capitalize_first_letter ty ^ ".to_le_bytes")
+      ~can_fail:false ()
+  (* to_be_bytes *)
+  @ mk_scalar_fun
+      (fun ty -> "core::num::{" ^ ty ^ "}::to_be_bytes")
+      (fun ty ->
+        "core.num." ^ StringUtils.capitalize_first_letter ty ^ ".to_be_bytes")
+      ~can_fail:false ()
+  (* from_le_bytes *)
+  @ mk_scalar_fun
+      (fun ty -> "core::num::{" ^ ty ^ "}::from_le_bytes")
+      (fun ty ->
+        "core.num." ^ StringUtils.capitalize_first_letter ty ^ ".from_le_bytes")
+      ~can_fail:false ()
+  (* from_be_bytes *)
+  @ mk_scalar_fun
+      (fun ty -> "core::num::{" ^ ty ^ "}::from_be_bytes")
+      (fun ty ->
+        "core.num." ^ StringUtils.capitalize_first_letter ty ^ ".from_be_bytes")
+      ~can_fail:false ()
+  (* Clone<bool> *)
+  @ mk_funs
+      (fun fn -> "core::clone::impls::{core::clone::Clone<bool>}::" ^ fn)
+      (fun fn -> "core.clone.impls.CloneBool." ^ fn)
+      [ (false, "clone"); (false, "clone_from") ]
+  (* Clone<INT> *)
+  @ mk_scalar_funs
+      (fun ty fn ->
+        "core::clone::impls::{core::clone::Clone<" ^ ty ^ ">}::" ^ fn)
+      (fun ty fn ->
+        "core.clone.impls.Clone"
+        ^ StringUtils.capitalize_first_letter ty
+        ^ "." ^ fn)
+      [ (false, "clone"); (false, "clone_from") ]
+  (* Lean-only definitions *)
+  @ mk_lean_only
+      ([
+         mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::resize"
+           ~filter:(Some [ true; false ])
+           ();
+         mk_fun "alloc::vec::from_elem" ();
+         mk_fun
+           "alloc::vec::{core::convert::From<Box<[@T]>, alloc::vec::Vec<@T, \
+            @A>>}::from"
+           ~filter:(Some [ true; false ])
+           ~extract_name:(Some "alloc.vec.FromBoxSliceVec.from") ();
+         mk_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone"
+           ~extract_name:(Some "core.array.CloneArray.clone") ();
+         mk_fun "core::mem::swap" ~can_fail:false ~lift:false ();
+         mk_fun "core::slice::{[@T]}::split_at" ();
+         mk_fun "core::slice::{[@T]}::split_at_mut" ();
+         mk_fun "core::slice::{[@T]}::swap" ();
+         mk_fun "core::option::{core::option::Option<@T>}::take"
+           ~extract_name:
+             (backend_choice None (Some "core::option::Option::take"))
+           ~can_fail:false ~lift:false ();
+         mk_fun "core::option::{core::option::Option<@T>}::unwrap_or"
+           ~can_fail:false ~extract_name:(Some "core.option.Option.unwrap_or")
+           ();
+         mk_fun "core::option::{core::option::Option<@T>}::is_none"
+           ~extract_name:
+             (backend_choice None (Some "core::option::Option::is_none"))
+           ~can_fail:false ~lift:false ();
+         (* Into<T, U: From<T>> *)
+         mk_fun "core::convert::{core::convert::Into<@T, @U>}::into"
+           ~extract_name:(Some "core.convert.IntoFrom.into") ();
+         (* From<T, T> *)
+         mk_fun "core::convert::{core::convert::From<@T, @T>}::from"
+           ~can_fail:false ~extract_name:(Some "core.convert.FromSame.from_") ();
+         (* [core::slice::{@Slice<T>}::copy_from_slice] *)
+         mk_fun "core::slice::{[@T]}::copy_from_slice" ();
+         mk_fun "core::result::{core::result::Result<@T, @E>}::unwrap" ();
+         (* Vec *)
+         mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::extend_from_slice"
+           ~filter:(Some [ true; false ])
+           ();
+         mk_fun
+           "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
+            [@T], [@T]>}::get"
+           ~extract_name:
+             (Some "core::slice::index::SliceIndexRangeFromUsizeSlize::get") ();
+         mk_fun
+           "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
+            [@T], [@T]>}::get_mut"
+           ~extract_name:
+             (Some "core::slice::index::SliceIndexRangeFromUsizeSlize::get_mut")
+           ();
+         mk_fun
+           "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
+            [@T], [@T]>}::get_unchecked"
+           ~extract_name:
+             (Some
+                "core::slice::index::SliceIndexRangeFromUsizeSlize::get_unchecked")
+           ();
+         mk_fun
+           "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
+            [@T], [@T]>}::get_unchecked_mut"
+           ~extract_name:
+             (Some
+                "core::slice::index::SliceIndexRangeFromUsizeSlize::get_unchecked_mut")
+           ();
+         mk_fun
+           "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
+            [@T], [@T]>}::index"
+           ~extract_name:
+             (Some "core::slice::index::SliceIndexRangeFromUsizeSlize::index")
+           ();
+         mk_fun
+           "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
+            [@T], [@T]>}::index_mut"
+           ~extract_name:
+             (Some
+                "core::slice::index::SliceIndexRangeFromUsizeSlize::index_mut")
+           ();
+         (* *)
+         mk_fun "alloc::boxed::{core::convert::AsMut<Box<@T>, @T>}::as_mut"
+           ~can_fail:false
+           ~filter:(Some [ true; false ])
+           ();
+       ]
+      (* PartialEq, Eq, PartialOrd, Ord *)
+      @ mk_scalar_funs
+          (fun ty fun_name ->
+            "core::cmp::impls::{core::cmp::PartialEq<" ^ ty ^ "," ^ ty ^ ">}::"
+            ^ fun_name)
+          (fun ty fun_name ->
+            "core.cmp.impls.PartialEq"
+            ^ StringUtils.capitalize_first_letter ty
+            ^ "." ^ fun_name)
+          [ (false, "eq"); (false, "ne") ]
+      (* Eq: no methods *)
+      (* PartialOrd *)
+      @ mk_scalar_funs
+          (fun ty fun_name ->
+            "core::cmp::impls::{core::cmp::PartialOrd<" ^ ty ^ "," ^ ty ^ ">}::"
+            ^ fun_name)
+          (fun ty fun_name ->
+            "core.cmp.impls.PartialCmp"
+            ^ StringUtils.capitalize_first_letter ty
+            ^ "." ^ fun_name)
+          [
+            (false, "partial_cmp");
+            (false, "lt");
+            (false, "le");
+            (false, "gt");
+            (false, "ge");
+          ]
+      (* Ord *)
+      @ mk_scalar_fun
+          (fun ty ->
+            "core::default::{core::default::Default<" ^ ty ^ ">}::default")
+          (fun ty ->
+            "core.default.Default"
+            ^ StringUtils.capitalize_first_letter ty
+            ^ ".default")
+          ~can_fail:false ()
+      (* Default::default *)
+      @ mk_scalar_funs
+          (fun ty fun_name ->
+            "core::cmp::impls::{core::cmp::Ord<" ^ ty ^ ">}::" ^ fun_name)
+          (fun ty fun_name ->
+            "core.cmp.impls.Ord"
+            ^ StringUtils.capitalize_first_letter ty
+            ^ "." ^ fun_name)
+          [ (false, "cmp"); (false, "max"); (false, "min"); (true, "clamp") ]
+      (* Default methods *)
+      @ [
+          (* PartialEq *)
+          mk_fun "core::cmp::PartialEq::ne"
+            ~extract_name:(Some "core::cmp::PartialEq::ne::default") ();
+          (* PartialOrd *)
+          mk_fun "core::cmp::PartialOrd::lt"
+            ~extract_name:(Some "core::cmp::PartialOrd::lt::default") ();
+          mk_fun "core::cmp::PartialOrd::le"
+            ~extract_name:(Some "core::cmp::PartialOrd::le::default") ();
+          mk_fun "core::cmp::PartialOrd::gt"
+            ~extract_name:(Some "core::cmp::PartialOrd::gt::default") ();
+          mk_fun "core::cmp::PartialOrd::ge"
+            ~extract_name:(Some "core::cmp::PartialOrd::ge::default") ();
+          (* Ord *)
+          mk_fun "core::cmp::Ord::max"
+            ~extract_name:(Some "core::cmp::PartialOrd::max::default") ();
+          mk_fun "core::cmp::Ord::min"
+            ~extract_name:(Some "core::cmp::PartialOrd::min::default") ();
+          mk_fun "core::cmp::Ord::clamp"
+            ~extract_name:(Some "core::cmp::PartialOrd::max::clamp") ();
+        ]
+      (* Binops *)
+      @ List.flatten
+          (List.map
+             (fun int_name ->
+               List.map
+                 (fun (can_fail, op) ->
+                   mk_fun
+                     ("core::num::" ^ "{" ^ int_name ^ "}::" ^ op)
+                     ~extract_name:
+                       (Some
+                          ("core.num."
+                          ^ StringUtils.capitalize_first_letter int_name
+                          ^ "." ^ op))
+                     ~can_fail ())
+                 [
+                   (false, "saturating_add");
+                   (false, "saturating_sub");
+                   (false, "wrapping_add");
+                   (false, "wrapping_sub");
+                   (false, "wrapping_mul");
+                   (false, "overflowing_add");
+                   (false, "rotate_left");
+                   (false, "rotate_right");
+                 ])
+             all_int_names))
+
+let builtin_funs : unit -> (pattern * Pure.builtin_fun_info) list =
+  (* We need to take into account the default trait methods *)
+  let mk () =
+    let funs = mk_builtin_funs () in
+    let trait_decls = builtin_trait_decls_info () in
+    let default_methods =
+      List.map
+        (fun (d : Pure.builtin_trait_decl_info) ->
+          List.filter_map
+            (fun ((fpat, f) : string * Pure.builtin_fun_info) ->
+              if f.has_default then
+                let sep =
+                  match backend () with
+                  | Lean -> "."
+                  | _ -> "_"
+                in
+                let pattern = d.rust_name @ [ PIdent (fpat, 0, []) ] in
+                let info =
+                  {
+                    f with
+                    extract_name =
+                      d.extract_name ^ sep ^ f.extract_name ^ sep ^ "default";
+                  }
+                in
+                Some (pattern, info)
+              else None)
+            d.methods)
+        trait_decls
+    in
+    funs @ List.concat default_methods
+  in
+  mk_memoized mk
+
+let mk_builtin_funs_map () =
+  let m =
+    NameMatcherMap.of_list
+      (List.map (fun (name, info) -> (name, info)) (builtin_funs ()))
+  in
+  log#ltrace
+    (lazy ("builtin_funs_map:\n" ^ NameMatcherMap.to_string (fun _ -> "...") m));
+  m
+
+let builtin_funs_map = mk_memoized mk_builtin_funs_map
+
+type effect_info = { can_fail : bool; stateful : bool }
+
+let mk_builtin_fun_effects () : (pattern * effect_info) list =
+  let builtin_funs : (pattern * Pure.builtin_fun_info) list = builtin_funs () in
+  List.map
+    (fun ((pattern, info) : _ * Pure.builtin_fun_info) ->
+      let info = { can_fail = info.can_fail; stateful = info.stateful } in
+      (pattern, info))
+    builtin_funs
+
+let mk_builtin_fun_effects_map () =
+  NameMatcherMap.of_list (if_backend mk_builtin_fun_effects [])
+
+let builtin_fun_effects_map = mk_memoized mk_builtin_fun_effects_map

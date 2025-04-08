@@ -326,16 +326,21 @@ let compute_regions_hierarchies (crate : crate) : region_var_groups FunIdMap.t =
          try Some (fid, compute_regions_hierarchy_for_sig span crate name sg)
          with CFailure error ->
            let pattern =
-             match fid with
-             | FRegular fid -> (
-                 match FunDeclId.Map.find_opt fid crate.fun_decls with
-                 | None -> ""
-                 | Some decl ->
-                     "\nName pattern: '"
-                     ^ LlbcAstUtils.name_with_crate_to_pattern_string crate
-                         decl.item_meta.name
-                     ^ "'")
-             | _ -> ""
+             (* The conversion from name to pattern may fail, hence the [try with] *)
+             try
+               match fid with
+               | FRegular fid -> (
+                   match FunDeclId.Map.find_opt fid crate.fun_decls with
+                   | None -> ""
+                   | Some decl ->
+                       "\nName pattern: '"
+                       ^ LlbcAstUtils.name_with_crate_to_pattern_string
+                           error.span crate decl.item_meta.name
+                       ^ "'")
+               | _ -> ""
+             with CFailure _ ->
+               " (Could not compute the name pattern due to an additional \
+                error)"
            in
            save_error_opt_span __FILE__ __LINE__ error.span
              ("Could not compute the region hierarchies for function '" ^ name

@@ -15,6 +15,13 @@ open Result Error
 @[reducible, simp] def core.clone.impls.CloneU64.clone (x : U64) : U64 := x
 @[reducible, simp] def core.clone.impls.CloneU128.clone (x : U128) : U128 := x
 
+@[reducible, simp] def core.clone.impls.CloneUsize.clone_from (_ x : Usize) : Usize := x
+@[reducible, simp] def core.clone.impls.CloneU8.clone_from (_ x : U8) : U8 := x
+@[reducible, simp] def core.clone.impls.CloneU16.clone_from (_ x : U16) : U16 := x
+@[reducible, simp] def core.clone.impls.CloneU32.clone_from (_ x : U32) : U32 := x
+@[reducible, simp] def core.clone.impls.CloneU64.clone_from (_ x : U64) : U64 := x
+@[reducible, simp] def core.clone.impls.CloneU128.clone_from (_ x : U128) : U128 := x
+
 @[reducible, simp] def core.clone.impls.CloneIsize.clone (x : Isize) : Isize := x
 @[reducible, simp] def core.clone.impls.CloneI8.clone (x : I8) : I8 := x
 @[reducible, simp] def core.clone.impls.CloneI16.clone (x : I16) : I16 := x
@@ -22,65 +29,60 @@ open Result Error
 @[reducible, simp] def core.clone.impls.CloneI64.clone (x : I64) : I64 := x
 @[reducible, simp] def core.clone.impls.CloneI128.clone (x : I128) : I128 := x
 
-@[reducible]
-def core.clone.CloneUsize : core.clone.Clone Usize := {
-  clone := fun x => ok (core.clone.impls.CloneUsize.clone x)
-}
+@[reducible, simp] def core.clone.impls.CloneIsize.clone_from (_ x : Isize) : Isize := x
+@[reducible, simp] def core.clone.impls.CloneI8.clone_from (_ x : I8) : I8 := x
+@[reducible, simp] def core.clone.impls.CloneI16.clone_from (_ x : I16) : I16 := x
+@[reducible, simp] def core.clone.impls.CloneI32.clone_from (_ x : I32) : I32 := x
+@[reducible, simp] def core.clone.impls.CloneI64.clone_from (_ x : I64) : I64 := x
+@[reducible, simp] def core.clone.impls.CloneI128.clone_from (_ x : I128) : I128 := x
 
-@[reducible]
-def core.clone.CloneU8 : core.clone.Clone U8 := {
-  clone := fun x => ok (core.clone.impls.CloneU8.clone x)
-}
+@[reducible] def core.clone.CloneU8 : core.clone.Clone U8 := {
+  clone := liftFun1 core.clone.impls.CloneU8.clone
+  clone_from := liftFun2 core.clone.impls.CloneU8.clone_from }
 
-@[reducible]
-def core.clone.CloneU16 : core.clone.Clone U16 := {
-  clone := fun x => ok (core.clone.impls.CloneU16.clone x)
-}
+@[reducible] def core.clone.CloneU16 : core.clone.Clone U16 := {
+  clone := liftFun1 core.clone.impls.CloneU16.clone
+  clone_from := liftFun2 core.clone.impls.CloneU16.clone_from }
 
-@[reducible]
-def core.clone.CloneU32 : core.clone.Clone U32 := {
-  clone := fun x => ok (core.clone.impls.CloneU32.clone x)
-}
+@[reducible] def core.clone.CloneU32 : core.clone.Clone U32 := {
+  clone := liftFun1 core.clone.impls.CloneU32.clone
+  clone_from := liftFun2 core.clone.impls.CloneU32.clone_from }
 
-@[reducible]
-def core.clone.CloneU64 : core.clone.Clone U64 := {
-  clone := fun x => ok (core.clone.impls.CloneU64.clone x)
-}
+@[reducible] def core.clone.CloneU64 : core.clone.Clone U64 := {
+  clone := liftFun1 core.clone.impls.CloneU64.clone
+  clone_from := liftFun2 core.clone.impls.CloneU64.clone_from }
 
-@[reducible]
-def core.clone.CloneU128 : core.clone.Clone U128 := {
-  clone := fun x => ok (core.clone.impls.CloneU128.clone x)
-}
+@[reducible] def core.clone.CloneU128 : core.clone.Clone U128 := {
+  clone := liftFun1 core.clone.impls.CloneU128.clone
+  clone_from := liftFun2 core.clone.impls.CloneU128.clone_from }
 
-@[reducible]
-def core.clone.CloneIsize : core.clone.Clone Isize := {
-  clone := fun x => ok (core.clone.impls.CloneIsize.clone x)
-}
+@[reducible] def core.clone.CloneUsize : core.clone.Clone Usize := {
+  clone := liftFun1 core.clone.impls.CloneUsize.clone
+  clone_from := liftFun2 core.clone.impls.CloneUsize.clone_from }
 
-@[reducible]
-def core.clone.CloneI8 : core.clone.Clone I8 := {
-  clone := fun x => ok (core.clone.impls.CloneI8.clone x)
-}
+@[reducible] def core.clone.CloneI8 : core.clone.Clone I8 := {
+  clone := liftFun1 core.clone.impls.CloneI8.clone
+  clone_from := liftFun2 core.clone.impls.CloneI8.clone_from }
 
-@[reducible]
-def core.clone.CloneI16 : core.clone.Clone I16 := {
-  clone := fun x => ok (core.clone.impls.CloneI16.clone x)
-}
+@[reducible] def core.clone.CloneI16 : core.clone.Clone I16 := {
+  clone := liftFun1 core.clone.impls.CloneI16.clone
+  clone_from := liftFun2 core.clone.impls.CloneI16.clone_from }
 
-@[reducible]
-def core.clone.CloneI32 : core.clone.Clone I32 := {
-  clone := fun x => ok (core.clone.impls.CloneI32.clone x)
-}
+@[reducible] def core.clone.CloneI32 : core.clone.Clone I32 := {
+  clone := liftFun1 core.clone.impls.CloneI32.clone
+  clone_from := liftFun2 core.clone.impls.CloneI32.clone_from }
 
-@[reducible]
-def core.clone.CloneI64 : core.clone.Clone I64 := {
-  clone := fun x => ok (core.clone.impls.CloneI64.clone x)
-}
+@[reducible] def core.clone.CloneI64 : core.clone.Clone I64 := {
+  clone := liftFun1 core.clone.impls.CloneI64.clone
+  clone_from := liftFun2 core.clone.impls.CloneI64.clone_from }
 
-@[reducible]
-def core.clone.CloneI128 : core.clone.Clone I128 := {
-  clone := fun x => ok (core.clone.impls.CloneI128.clone x)
-}
+@[reducible] def core.clone.CloneI128 : core.clone.Clone I128 := {
+  clone := liftFun1 core.clone.impls.CloneI128.clone
+  clone_from := liftFun2 core.clone.impls.CloneI128.clone_from }
+
+@[reducible] def core.clone.CloneIsize : core.clone.Clone Isize := {
+  clone := liftFun1 core.clone.impls.CloneIsize.clone
+  clone_from := liftFun2 core.clone.impls.CloneIsize.clone_from }
 
 @[reducible]
 def core.marker.CopyU8 : core.marker.Copy U8 := {

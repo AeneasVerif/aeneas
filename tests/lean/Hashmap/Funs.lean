@@ -20,11 +20,18 @@ def hash_key (k : Usize) : Result Usize :=
 def ClonehashmapFraction.clone (self : Fraction) : Result Fraction :=
   ok self
 
+/- [hashmap::{core::clone::Clone for hashmap::Fraction}#1::clone_from]:
+   Source: '/rustc/library/core/src/clone.rs', lines 174:4-174:43 -/
+def ClonehashmapFraction.clone_from
+  (self : Fraction) (source : Fraction) : Result Fraction :=
+  ClonehashmapFraction.clone source
+
 /- Trait implementation: [hashmap::{core::clone::Clone for hashmap::Fraction}#1]
    Source: 'tests/src/hashmap.rs', lines 44:9-44:14 -/
 @[reducible]
 def core.clone.ClonehashmapFraction : core.clone.Clone Fraction := {
   clone := ClonehashmapFraction.clone
+  clone_from := ClonehashmapFraction.clone_from
 }
 
 /- Trait implementation: [hashmap::{core::marker::Copy for hashmap::Fraction}#2]

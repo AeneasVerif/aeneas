@@ -203,7 +203,13 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
       (translate_function_to_pure_aux trans_ctx pure_type_decls fun_dsigs fdef)
   with CFailure error ->
     let name = name_to_string trans_ctx fdef.item_meta.name in
-    let name_pattern = name_to_pattern_string trans_ctx fdef.item_meta.name in
+    let name_pattern =
+      try
+        name_to_pattern_string (Some fdef.item_meta.span) trans_ctx
+          fdef.item_meta.name
+      with CFailure _ ->
+        "(could not compute the name pattern due to a different error)"
+    in
     save_error_opt_span __FILE__ __LINE__ error.span
       ("Could not translate the function '" ^ name
      ^ " because of previous error.\nName pattern: '" ^ name_pattern ^ "'");
@@ -242,7 +248,11 @@ let translate_crate_to_pure (crate : crate) :
         with CFailure error ->
           let name = name_to_string trans_ctx global.item_meta.name in
           let name_pattern =
-            name_to_pattern_string trans_ctx global.item_meta.name
+            try
+              name_to_pattern_string (Some global.item_meta.span) trans_ctx
+                global.item_meta.name
+            with CFailure _ ->
+              "(could not compute the name pattern due to a different error)"
           in
           save_error_opt_span __FILE__ __LINE__ error.span
             ("Could not translate the global declaration '" ^ name
@@ -265,7 +275,11 @@ let translate_crate_to_pure (crate : crate) :
            with CFailure error ->
              let name = name_to_string trans_ctx fdef.item_meta.name in
              let name_pattern =
-               name_to_pattern_string trans_ctx fdef.item_meta.name
+               try
+                 name_to_pattern_string (Some fdef.item_meta.span) trans_ctx
+                   fdef.item_meta.name
+               with CFailure _ ->
+                 "(could not compute the name pattern due to a different error)"
              in
              save_error_opt_span __FILE__ __LINE__ error.span
                ("Could not translate the function signature of '" ^ name
@@ -304,7 +318,11 @@ let translate_crate_to_pure (crate : crate) :
         with CFailure error ->
           let name = name_to_string trans_ctx d.item_meta.name in
           let name_pattern =
-            name_to_pattern_string trans_ctx d.item_meta.name
+            try
+              name_to_pattern_string (Some d.item_meta.span) trans_ctx
+                d.item_meta.name
+            with CFailure _ ->
+              "(could not compute the name pattern due to a different error)"
           in
           save_error_opt_span __FILE__ __LINE__ error.span
             ("Could not translate the trait declaration '" ^ name
@@ -322,7 +340,11 @@ let translate_crate_to_pure (crate : crate) :
         with CFailure error ->
           let name = name_to_string trans_ctx d.item_meta.name in
           let name_pattern =
-            name_to_pattern_string trans_ctx d.item_meta.name
+            try
+              name_to_pattern_string (Some d.item_meta.span) trans_ctx
+                d.item_meta.name
+            with CFailure _ ->
+              "(could not compute the name pattern due to a different error)"
           in
           save_error_opt_span __FILE__ __LINE__ error.span
             ("Could not translate the trait instance '" ^ name
@@ -1152,7 +1174,11 @@ let translate_crate (filename : string) (dest_dir : string)
           (* An exception was raised: ignore it *)
           let name = name_to_string trans_ctx def.item_meta.name in
           let name_pattern =
-            name_to_pattern_string trans_ctx def.item_meta.name
+            try
+              name_to_pattern_string (Some def.item_meta.span) trans_ctx
+                def.item_meta.name
+            with CFailure _ ->
+              "(could not compute the name pattern due to a different error)"
           in
           save_error_opt_span __FILE__ __LINE__ error.span
             ("Could not generate names for the type declaration '" ^ name
@@ -1184,7 +1210,11 @@ let translate_crate (filename : string) (dest_dir : string)
           (* An exception was raised: ignore it *)
           let name = name_to_string trans_ctx trans.f.item_meta.name in
           let name_pattern =
-            name_to_pattern_string trans_ctx trans.f.item_meta.name
+            try
+              name_to_pattern_string (Some trans.f.item_meta.span) trans_ctx
+                trans.f.item_meta.name
+            with CFailure _ ->
+              "(could not compute the name pattern due to a different error)"
           in
           save_error_opt_span __FILE__ __LINE__ error.span
             ("Could not generate names for the function declaration '" ^ name
@@ -1203,7 +1233,11 @@ let translate_crate (filename : string) (dest_dir : string)
           (* An exception was raised: ignore it *)
           let name = name_to_string trans_ctx def.item_meta.name in
           let name_pattern =
-            name_to_pattern_string trans_ctx def.item_meta.name
+            try
+              name_to_pattern_string (Some def.item_meta.span) trans_ctx
+                def.item_meta.name
+            with CFailure _ ->
+              "(could not compute the name pattern due to a different error)"
           in
           save_error_opt_span __FILE__ __LINE__ error.span
             ("Could not generate names for the global declaration '" ^ name
@@ -1221,7 +1255,11 @@ let translate_crate (filename : string) (dest_dir : string)
           (* An exception was raised: ignore it *)
           let name = name_to_string trans_ctx def.item_meta.name in
           let name_pattern =
-            name_to_pattern_string trans_ctx def.item_meta.name
+            try
+              name_to_pattern_string (Some def.item_meta.span) trans_ctx
+                def.item_meta.name
+            with CFailure _ ->
+              "(could not compute the name pattern due to a different error)"
           in
           save_error_opt_span __FILE__ __LINE__ error.span
             ("Could not generate names for the trait declaration '" ^ name
@@ -1239,7 +1277,11 @@ let translate_crate (filename : string) (dest_dir : string)
           (* An exception was raised: ignore it *)
           let name = name_to_string trans_ctx def.item_meta.name in
           let name_pattern =
-            name_to_pattern_string trans_ctx def.item_meta.name
+            try
+              name_to_pattern_string (Some def.item_meta.span) trans_ctx
+                def.item_meta.name
+            with CFailure _ ->
+              "(could not compute the name pattern due to a different error)"
           in
           save_error_opt_span __FILE__ __LINE__ error.span
             ("Could not generate names for the trait implementation '" ^ name
