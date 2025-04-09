@@ -3194,6 +3194,8 @@ and translate_function_call_aux (call : S.call) (e : S.expression)
         | CastTransmute _ ->
             craise __FILE__ __LINE__ ctx.span "Unsupported: transmute"
       end
+    | S.Unop E.PtrMetadata ->
+        craise __FILE__ __LINE__ ctx.span "Unsupported unop: PtrMetadata"
     | S.Binop binop -> (
         match args with
         | [ arg0; arg1 ] ->
