@@ -8,7 +8,7 @@ namespace demo
 -- @[progress]
 theorem mul2_add1_spec (x : U32) (h : 2 * x.val + 1 ≤ U32.max)
   : ∃ y, mul2_add1 x = ok y ∧
-  ↑y = 2 * ↑x + (1 : Int)
+  y.val = 2 * x.val + (1 : Nat)
   := by
   unfold mul2_add1
   progress as ⟨ i ⟩

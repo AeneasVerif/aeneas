@@ -3,7 +3,9 @@ import Aeneas.Utils
 
 namespace Aeneas
 
-/-- A "structural recursion" range type, that we use to implement for
+/-- TODO: this may be not necessary anymore because of: https://github.com/leanprover/lean4/pull/5182
+
+    A "structural recursion" range type, that we use to implement for
     loops with structural induction.
 
     This is the same as `Std.Range`, but with a slighly different implementation

@@ -549,8 +549,11 @@ def evalProgress (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Ar
   let (goals, usedTheorem) ← progressAsmsOrLookupTheorem keep keepPretty withArg ids splitPost (
     withMainContext do
     trace[Progress] "trying to solve precondition: {← getMainGoal}"
-    firstTac ([customAssumTac, simpTac, simpTac, scalarTac] ++ byTac)
-    trace[Progress] "Precondition solved!")
+    try
+      firstTac ([customAssumTac, simpTac, simpTac, scalarTac] ++ byTac)
+      trace[Progress] "Precondition solved!"
+    catch _ =>
+      trace[Progress] "Precondition not solved")
   trace[Progress] "Progress done"
   return ⟨ goals, usedTheorem ⟩
 

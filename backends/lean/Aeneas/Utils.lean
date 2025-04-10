@@ -326,7 +326,7 @@ partial def repeatTac (tac : TacticM Unit) : TacticM Unit := do
 
 def firstTac (tacl : List (TacticM Unit)) : TacticM Unit := do
   match tacl with
-  | [] => pure ()
+  | [] => throwError "no tactic succeeded"
   | tac :: tacl =>
     -- Should use try ... catch or Lean.observing?
     -- Generally speaking we should use Lean.observing? to restore the state,
