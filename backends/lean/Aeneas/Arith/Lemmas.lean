@@ -1,7 +1,6 @@
 import Aeneas.ScalarTac.ScalarTac
 import Mathlib.Algebra.Algebra.ZMod
 import Mathlib.RingTheory.Int.Basic
-import Init.Data.Int.DivModLemmas
 import Init.Data.BitVec.Lemmas
 
 namespace Aeneas.Arith
@@ -47,14 +46,14 @@ theorem Nat.div_zero_or_le (n m : Nat) : m = 0 ∨ (n / m ≤ n) := by
 
 theorem Int.self_le_ediv {x y : ℤ} (hx : x ≤ 0) (hy : 0 ≤ y) :
   x ≤ x / y := by
-  dcases x <;> dcases y
+  cases x <;> cases y
   . simp_all
   . simp_all
   . rename_i x y
     rw [HDiv.hDiv, instHDiv]
     simp only [Div.div]
     rw [Int.ediv.eq_def]
-    dcases y <;> simp only
+    cases y <;> simp only
     . omega
     . rename_i y
       have := @Nat.div_le_self x y.succ
@@ -464,25 +463,24 @@ theorem Int.bmod_pow2_bounds (n : ℕ) (x : Int) :
   have h0 : 0 < 2^n := by simp
 
   have := @Int.le_bmod x (2^n) h0
-  have := @Int.bmod_lt x (2^n) h0
+  have hbmod := @Int.bmod_lt x (2^n) h0
+  simp only [Nat.cast_pow, Nat.cast_ofNat] at hbmod
 
-  have : -2^(n-1) ≤ -(((2^n) : Nat) : Int)/2 := by
+  have : -2^(n-1) ≤ -((((2^n) : Nat) : Int)/2) := by
     dcases hn : n = 0
-    . simp [hn]
+    . simp only [hn, zero_tsub, pow_zero, Int.reduceNeg, Nat.cast_one, Int.reduceDiv, neg_zero,
+      Left.neg_nonpos_iff, zero_le_one]
     . have : n - 1 + 1 = n := by omega
       conv => rhs; rw [← this]
       rw [Nat.pow_succ]
-      simp
+      simp only [Nat.cast_mul, Nat.cast_pow, Nat.cast_ofNat, ne_eq, OfNat.ofNat_ne_zero,
+        not_false_eq_true, mul_div_cancel_right₀, le_refl]
 
-  have : 2^(n-1) ≤ (2^n + 1) / 2 := by
-    dcases hn : n = 0
-    . simp [hn]
-    . have : n - 1 + 1 = n := by omega
-      conv => rhs; rw [← this]
-      rw [Nat.pow_succ']
-      have := @Nat.add_div_of_dvd_right (2 * 2 ^ (n - 1)) 1 2 (by simp)
-      rw [this]
-      simp
+  have : (2^n + 1 : Int) / 2 ≤ 2^(n - 1) := by
+    cases n
+    . simp [*]
+    . rw [Int.pow_succ']
+      rw [Int.add_ediv_of_dvd_left] <;> simp
 
   omega
 
@@ -597,10 +595,10 @@ theorem BitVec.toInt_neg_of_pos_eq_neg
 @[simp]
 theorem Int.neg_tmod (x y : Int) : (- x).tmod y = - x.tmod y := by
   unfold Int.tmod
-  dcases hx' : (-x) <;> dcases hx : x <;> dcases y <;> rename_i xn xn' yn <;> simp only
-  . dcases xn <;> simp_all
+  cases hx' : (-x) <;> cases hx : x <;> cases y <;> rename_i xn xn' yn <;> simp only
+  . cases xn <;> simp_all
     omega
-  . dcases xn <;> simp_all
+  . cases xn <;> simp_all
     omega
   . simp
     have : xn = xn' + 1 := by
@@ -630,25 +628,25 @@ theorem Int.neg_tmod (x y : Int) : (- x).tmod y = - x.tmod y := by
       simp at hx
       omega
     simp [this]
-  . dcases xn <;> simp_all
+  . cases xn <;> simp_all
     omega
-  . dcases xn <;> simp_all
+  . cases xn <;> simp_all
     omega
 
 theorem Int.tmod_ge_of_neg (x y : Int) (hx : x < 0) :
   x ≤ x.tmod y := by
   have : (-x).tmod y = (-x) % y := by
-    dcases hy : 0 ≤ y
-    . rw [Int.tmod_eq_emod] <;> try omega
+    by_cases hy : 0 ≤ y
+    . rw [Int.tmod_eq_emod]; split <;> try omega
     . have : (-x).tmod y = (-x).tmod (-y) := by simp
       rw [this]
-      rw [Int.tmod_eq_emod] <;> try omega
+      rw [Int.tmod_eq_emod]; split <;> try omega
       simp
   have : x.tmod y = - ((-x) % y) := by
     have h : x.tmod y = - (-x).tmod y := by simp
     rw [h, this]
   have : (-x) % y ≤ (-x) := by
-    dcases hy : 0 ≤ y
+    by_cases hy : 0 ≤ y
     . have hIneq := Nat.mod_le (-x).toNat y.toNat
       zify at hIneq
       have : (-x).toNat = -x := by omega

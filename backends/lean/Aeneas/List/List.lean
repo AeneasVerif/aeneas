@@ -322,7 +322,7 @@ theorem getElem!_default [Inhabited α] (ls : List α) (i : ℕ)
     simp only [getElem!_eq_getElem?_getD, getElem?_nil, Option.getD_none]
   . intros i h
     cases i <;> simp_all [getElem!_eq_getElem?_getD, length_cons, nonpos_iff_eq_zero,
-      AddLeftCancelMonoid.add_eq_zero, length_eq_zero, one_ne_zero, and_false, not_false_eq_true,
+      AddLeftCancelMonoid.add_eq_zero, List.length_eq_zero_iff, one_ne_zero, and_false, not_false_eq_true,
       neq_imp, add_le_add_iff_right, getElem?_cons_succ]
 
 @[simp, simp_lists_simps]
@@ -416,7 +416,7 @@ theorem getElem?_range'_if (i start n: ℕ) :
   . simp
   . rename_i n hInd
     unfold List.range'
-    dcases i
+    cases i
     . simp
     . rename_i i
       have := hInd i (start + 1)

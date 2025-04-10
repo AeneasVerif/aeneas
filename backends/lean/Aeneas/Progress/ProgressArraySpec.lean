@@ -82,6 +82,7 @@ theorem Array.index_usize_const_spec {α} [Inhabited α]
               replace hl := hl (j + 1)
               fsimp at hl
               have : i + 1 + j = i + (j + 1) := by omega
+              simp only [List.getElem!_eq_getElem?_getD, getElem!_Nat_eq]
               rw [this]
               apply hl)
           (by fsimp [h]) (j - 1) (by omega) (by omega)

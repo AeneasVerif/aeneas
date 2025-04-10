@@ -168,7 +168,7 @@ theorem UScalar.cast_fromBool_val_eq ty (b : Bool) : (UScalar.cast_fromBool ty b
 theorem IScalar.cast_fromBool_val_eq ty (b : Bool) :(IScalar.cast_fromBool ty b).val = b.toInt := by
   simp [cast_fromBool]
   split <;> simp only [val, *] <;> simp
-  dcases ty <;> simp
+  cases ty <;> simp
   have := System.Platform.numBits_eq
   cases this <;>
   rename_i h <;>
@@ -184,14 +184,14 @@ theorem UScalar.cast_fromBool_bound_eq ty (b : Bool) : (UScalar.cast_fromBool ty
 @[simp]
 theorem UScalar.cast_fromBool_bv_eq ty (b : Bool) : (UScalar.cast_fromBool ty b).bv = (BitVec.ofBool b).zeroExtend _ := by
   simp [cast_fromBool, BitVec.setWidth_eq]
-  dcases b <;> simp
+  cases b <;> simp
   apply @BitVec.toNat_injective ty.numBits
   simp
 
 @[simp]
 theorem IScalar.cast_fromBool_bv_eq ty (b : Bool) :(IScalar.cast_fromBool ty b).bv = (BitVec.ofBool b).zeroExtend _ := by
   simp [cast_fromBool, BitVec.setWidth_eq]
-  dcases b <;> simp
+  cases b <;> simp
   apply @BitVec.toNat_injective ty.numBits
   simp
 
@@ -202,8 +202,8 @@ theorem IScalar.cast_fromBool_bound_eq ty (b : Bool) :
   split <;> simp only [val]
   . have : (1#ty.numBits).toInt  = 1 := by
       simp [BitVec.toInt]
-      dcases ty <;> simp
-      dcases System.Platform.numBits_eq <;> simp [*]
+      cases ty <;> simp
+      cases System.Platform.numBits_eq <;> simp [*]
     simp [this]
   . simp
 
@@ -230,7 +230,7 @@ theorem U8.cast_U128_val_eq (x : U8) : (UScalar.cast .U128 x).val = x.val := by
 
 @[simp, scalar_tac UScalar.cast .Usize x]
 theorem U8.cast_Usize_val_eq (x : U8) : (UScalar.cast .Usize x).val = x.val := by
-  simp [UScalar.cast_val_eq]; dcases System.Platform.numBits_eq <;> simp [*] <;> scalar_tac
+  simp [UScalar.cast_val_eq]; cases System.Platform.numBits_eq <;> simp [*] <;> scalar_tac
 
 @[simp, scalar_tac UScalar.cast .U32 x]
 theorem U16.cast_U32_val_eq (x : U16) : (UScalar.cast .U32 x).val = x.val := by
@@ -246,7 +246,7 @@ theorem U16.cast_U128_val_eq (x : U16) : (UScalar.cast .U128 x).val = x.val := b
 
 @[simp, scalar_tac UScalar.cast .Usize x]
 theorem U16.cast_Usize_val_eq (x : U16) : (UScalar.cast .Usize x).val = x.val := by
-  simp [UScalar.cast_val_eq]; dcases System.Platform.numBits_eq <;> simp [*] <;> scalar_tac
+  simp [UScalar.cast_val_eq]; cases System.Platform.numBits_eq <;> simp [*] <;> scalar_tac
 
 @[simp, scalar_tac UScalar.cast .U64 x]
 theorem U32.cast_U64_val_eq (x : U32) : (UScalar.cast .U64 x).val = x.val := by
@@ -258,7 +258,7 @@ theorem U32.cast_U128_val_eq (x : U32) : (UScalar.cast .U128 x).val = x.val := b
 
 @[simp, scalar_tac UScalar.cast .Usize x]
 theorem U32.cast_Usize_val_eq (x : U32) : (UScalar.cast .Usize x).val = x.val := by
-  simp [UScalar.cast_val_eq]; dcases System.Platform.numBits_eq <;> simp [*] <;> scalar_tac
+  simp [UScalar.cast_val_eq]; cases System.Platform.numBits_eq <;> simp [*] <;> scalar_tac
 
 @[simp, scalar_tac UScalar.cast .U128 x]
 theorem U64.cast_U128_val_eq (x : U64) : (UScalar.cast .U128 x).val = x.val := by
@@ -271,7 +271,7 @@ theorem UScalar.cast_val_mod_pow_greater_numBits_eq {src_ty : UScalarTy} (tgt_ty
   have hBounds := x.hBounds
   apply Nat.mod_eq_of_lt
   have : 0 < 2^src_ty.numBits := by simp
-  have := @Nat.pow_le_pow_of_le_right 2 (by simp) src_ty.numBits tgt_ty.numBits (by omega)
+  have := @Nat.pow_le_pow_right 2 (by simp) src_ty.numBits tgt_ty.numBits (by omega)
   omega
 
 @[simp]
@@ -293,10 +293,6 @@ theorem IScalar.cast_val_eq {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScal
   (cast tgt_ty x).val = Int.bmod x.val (2^(Min.min tgt_ty.numBits src_ty.numBits)) := by
   simp only [cast, val]
   simp only [BitVec.toInt_signExtend, val]
-  rw [BitVec.toInt_eq_toNat_bmod]
-  rw [Int.bmod_bmod_of_dvd]
-  apply Nat.pow_dvd_pow
-  simp
 
 @[simp]
 theorem IScalar.val_mod_pow_greater_numBits {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty) (h : src_ty.numBits ≤ tgt_ty.numBits) :

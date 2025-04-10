@@ -196,7 +196,7 @@ def foldWhile_id {α : Type u} (stop divisor : Nat) (hDiv : 1 < divisor)
 
 private theorem divRange.loop_le_maxSteps_eq (stop div maxSteps start : Nat) (hDiv : 1 < div) (hMaxSteps : start + 1 ≤ maxSteps) :
   divRange.loop stop div maxSteps start = divRange.loop stop div (start + 1) start := by
-  dcases maxSteps
+  cases maxSteps
   . omega
   . rename_i maxSteps
     unfold divRange.loop
@@ -214,7 +214,7 @@ private theorem divRange.loop_le_maxSteps_eq (stop div maxSteps start : Nat) (hD
 private theorem foldl_divRange_loop_foldWhile (start stop div maxSteps : Nat) (hMaxSteps : start + 1 ≤ maxSteps)
   (hDiv : 1 < div) (f : α → Nat → α) (init : α) :
   List.foldl f init (divRange.loop stop div maxSteps start) = foldWhile stop div hDiv f start init := by
-  dcases maxSteps
+  cases maxSteps
   . omega
   . rename_i maxSteps
     unfold divRange.loop foldWhile

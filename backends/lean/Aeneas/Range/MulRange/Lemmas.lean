@@ -51,7 +51,6 @@ private theorem mem_of_mem_MulRange_aux
 termination_by stop - i
 decreasing_by
   have : i < i * mul := by rw [Nat.lt_mul_iff_one_lt_right] <;> omega
-  simp only [not_lt, decide_eq_false_iff_not, not_le] at h
   omega
 
 private theorem mem_of_mem_MulRange (r : MulRange) (a : Nat)
@@ -69,7 +68,7 @@ private theorem i_of_MulRange_start_pos (r : MulRange) (i : Nat) (hi : ∃ k, i 
   simp only [hk]
   apply Nat.mul_pos
   . apply r.start_pos
-  . apply Nat.pos_pow_of_pos
+  . apply Nat.pow_pos
     have := r.mul_pos
     omega
 
@@ -103,7 +102,7 @@ private theorem forIn'_loop_eq_forIn'_MulRange [Monad m] (r : MulRange)
     simp only [forIn'.loop, gt_iff_lt]
     unfold mulRange
     dcases hStop : i < r.stop <;> simp only [hStop, ↓reduceDIte, ↓reduceIte, List.forIn'_cons,
-      id_eq, Int.reduceNeg, Int.Nat.cast_ofNat_Int, Int.reduceAdd, List.not_mem_nil,
+      id_eq, Int.reduceNeg, Int.reduceAdd, List.not_mem_nil,
       IsEmpty.forall_iff, implies_true, List.forIn'_nil]
     apply letFun_val_congr
     apply funext
@@ -203,12 +202,11 @@ theorem foldl_MulRange_foldWhile (stop mul i : Nat) (hMul) (hi)
   (f : α → Nat → α) (init : α) :
   List.foldl f init (mulRange stop mul hMul i hi) = foldWhile stop mul hMul f i hi init := by
   unfold mulRange foldWhile
-  dcases h: i < stop <;> simp only [h, ↓reduceIte, List.foldl_cons, List.foldl_nil]
+  by_cases h: i < stop <;> simp only [h, ↓reduceIte, List.foldl_cons, List.foldl_nil]
   rw [foldl_MulRange_foldWhile]
 termination_by stop - i
 decreasing_by
   have : i < i * mul := by rw [Nat.lt_mul_iff_one_lt_right] <;> assumption
-  simp only [not_lt, decide_eq_false_iff_not, not_le] at h
   omega
 
 end MulRange

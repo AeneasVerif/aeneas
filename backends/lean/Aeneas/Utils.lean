@@ -224,7 +224,7 @@ section Methods
      TODO: is there an equivalent of this function somewhere in the
      standard library? -/
   def lambdaOne (e : Expr) (k : Expr → Expr → m a) : m a :=
-    lambdaTelescopeN e 1 λ xs b => k (xs.get! 0) b
+    lambdaTelescopeN e 1 λ xs b => k (xs[0]!) b
 
   def isExists (e : Expr) : Bool := e.getAppFn.isConstOf ``Exists ∧ e.getAppNumArgs = 2
 
@@ -354,7 +354,7 @@ def isConj (e : Expr) : MetaM Bool :=
 -- conjunction.
 def optSplitConj (e : Expr) : MetaM (Expr × Option Expr) := do
   e.consumeMData.withApp fun f args =>
-  if f.isConstOf ``And ∧ args.size = 2 then pure (args.get! 0, some (args.get! 1))
+  if f.isConstOf ``And ∧ args.size = 2 then pure (args[0]!, some (args[1]!))
   else pure (e, none)
 
 -- Split the goal if it is a conjunction
@@ -384,7 +384,7 @@ def numOfConjuncts(e: Expr): Nat := e.withApp fun
 -- Destruct an equaliy and return the two sides
 def destEqOpt (e : Expr) : MetaM (Option (Expr × Expr)) := do
   e.consumeMData.withApp fun f args =>
-  if f.isConstOf ``Eq ∧ args.size = 3 then pure (some (args.get! 1, args.get! 2))
+  if f.isConstOf ``Eq ∧ args.size = 3 then pure (some (args[1]!, args[2]!))
   else pure none
 
 -- Destruct an equaliy and return the two sides
@@ -417,13 +417,13 @@ partial def destProdsVal (x : Expr) : List Expr :=
 
 -- Return the set of FVarIds in the expression
 -- TODO: this collects fvars introduced in the inner bindings
-partial def getFVarIds (e : Expr) (hs : Std.HashSet FVarId := Std.HashSet.empty) : MetaM (Std.HashSet FVarId) := do
+partial def getFVarIds (e : Expr) (hs : Std.HashSet FVarId := Std.HashSet.emptyWithCapacity) : MetaM (Std.HashSet FVarId) := do
   reduceVisit (fun _ (hs : Std.HashSet FVarId) e =>
     if e.isFVar then pure (hs.insert e.fvarId!) else pure hs)
     hs e
 
 -- Return the set of MVarIds in the expression
-partial def getMVarIds (e : Expr) (hs : Std.HashSet MVarId := Std.HashSet.empty) : MetaM (Std.HashSet MVarId) := do
+partial def getMVarIds (e : Expr) (hs : Std.HashSet MVarId := Std.HashSet.emptyWithCapacity) : MetaM (Std.HashSet MVarId) := do
   reduceVisit (fun _ (hs : Std.HashSet MVarId) e =>
     if e.isMVar then pure (hs.insert e.mvarId!) else pure hs)
     hs e
@@ -571,8 +571,8 @@ def splitDisjTac (h : Expr) (kleft kright : TacticM Unit) : TacticM Unit := do
   trace[Utils] "as app: {f} {xs}"
   -- Sanity check
   if ¬ (f.isConstOf ``Or ∧ xs.size = 2) then throwError "Invalid argument to splitDisjTac"
-  let a := xs.get! 0
-  let b := xs.get! 1
+  let a := xs[0]!
+  let b := xs[1]!
   -- Introduce the new goals
   -- Returns:
   -- - the match branch
@@ -649,7 +649,7 @@ def splitExistsTac (h : Expr) (optId : Option Name) (k : Expr → Expr → Tacti
       -- There should be exactly two fields
       let fields := newGoal.fields
       withMainContext do
-      k (fields.get! 0) (fields.get! 1)
+      k (fields[0]!) (fields[1]!)
     | _ =>
       throwError "Unreachable"
   else
@@ -701,7 +701,7 @@ def splitConjTac (h : Expr) (optIds : Option (Name × Name)) (k : Expr → Expr 
       -- There should be exactly two fields
       let fields := newGoal.fields
       withMainContext do
-      k (fields.get! 0) (fields.get! 1)
+      k (fields[0]!) (fields[1]!)
     | _ =>
       throwError "Unreachable"
   else
@@ -733,9 +733,9 @@ syntax optAtArgs := ("at" ident)?
 
 def elabOptAtArgs (args : TSyntax `Aeneas.Utils.optAtArgs) : TacticM (Option Expr) := do
   withMainContext do
-  let args := (args.raw.getArgs.get! 0).getArgs
+  let args := (args.raw.getArgs[0]!).getArgs
   if args.size > 0 then do
-    let n := (args.get! 1).getId
+    let n := (args[1]!).getId
     let decl ← Lean.Meta.getLocalDeclFromUserName n
     let fvar := mkFVar decl.fvarId
     pure (some fvar)
@@ -1041,20 +1041,9 @@ example (x y z : Int) (b1 b2 : Bool)
 
 syntax (name := checkIsProp) "check_is_prop" term : tactic
 
-/-- Small utility: see below
+/-- TODO: deprecate dcases, as we can now use by_cases
 
-    Check if a term has type `Prop`.
- -/
-@[tactic checkIsProp]
-def checkIfPropEval : Tactic := fun stx =>
-  withMainContext do
-  let x := stx.getArgs.toList.get! 1
-  let x ← Elab.Term.elabTerm x none
-  let ty ← inferType x
-  if ty.isProp then pure ()
-  else throwError "Not a proposition"
-
-/-- "Decidable" cases: it often happens that we want to make a case disjunction over a decidable proposition `P`.
+    "Decidable" cases: it often happens that we want to make a case disjunction over a decidable proposition `P`.
     If we simply call `cases P` we don't get what we expect at all, and we need to do instead: `cases h : (P : Bool)`.
     There are two important things:
     - we need to cast the proposition to `Bool` so that the elaborator understands it should lookup the instance of `Decidable``
@@ -1068,27 +1057,13 @@ def checkIfPropEval : Tactic := fun stx =>
     the proposition first, while we expect the reverse. For this reason we don't do a case disjunction over `P` but
     rather `¬ P`.
   -/
-syntax (name := dcases) "dcases" atomic(ident " : ")? term : tactic
+syntax "dcases " (atomic(ident " : "))? term : tactic
+
 macro_rules
-| `(tactic| dcases $x) =>
-   let h := mkIdent (.str .anonymous "_")
-  `(tactic|
-    first | check_is_prop $x; cases $h : (¬ ($x) : $(Lean.mkIdent ``Bool)) <;>
-            simp only [$(mkIdent ``decide_eq_false_iff_not):ident,
-                       $(mkIdent ``decide_eq_true_eq):ident,
-                       $(mkIdent ``Bool.not_eq_false'):ident,
-                       $(mkIdent ``Bool.not_eq_true'):ident,
-                       $(mkIdent ``Decidable.not_not):ident] at $h:ident
-          | cases ($x))
-| `(tactic| dcases $h : $x) =>
-  `(tactic|
-    first | check_is_prop $x; cases $h : (¬ ($x) : $(Lean.mkIdent ``Bool)) <;>
-            simp only [$(mkIdent ``decide_eq_false_iff_not):ident,
-                       $(mkIdent ``decide_eq_true_eq):ident,
-                       $(mkIdent ``Bool.not_eq_false'):ident,
-                       $(mkIdent ``Bool.not_eq_true'):ident,
-                       $(mkIdent ``Decidable.not_not):ident] at ($h)
-          | cases $h : ($x))
+| `(tactic| dcases $e) => `(tactic| by_cases h : $e)
+macro_rules
+| `(tactic| dcases $h : $e) =>
+  `(tactic| by_cases $h : $e)
 
 example (x y : Int) : True := by
   dcases h: x = y <;> simp
@@ -1131,7 +1106,7 @@ partial def minimizeGoal : TacticM Unit := do
     trace[Utils] "Computing the fvar ids of: {decl.userName}"
     /- Explore the type and the body: if they contain needed ids, add it -/
     trace[Utils] "Type: {decl.type}"
-    let mut declIds := Std.HashSet.empty
+    let mut declIds := Std.HashSet.emptyWithCapacity
     -- Add the id of the declaration itself
     declIds := declIds.insert decl.fvarId
     -- Add the ids found in the type
@@ -1154,7 +1129,7 @@ partial def minimizeGoal : TacticM Unit := do
   /- Repeatedly explore the local declarations -/
   trace[Utils] "Computing the needed ids"
   /- Remember the set of ids from which we already added dependencies -/
-  let mut addedIds : Std.HashSet FVarId := Std.HashSet.empty
+  let mut addedIds : Std.HashSet FVarId := Std.HashSet.emptyWithCapacity
   while changed do
     changed := false
     for (declId, userName, declIds) in declToFVarIds do
@@ -1229,7 +1204,7 @@ def extractGoal (ref : Syntax) (fullGoal : Bool) : TacticM Unit := do
         trace[Utils] "Name not used"
         let allNames := allNames.insert userName
         renameDecls allNames decls
-  let lctx ← renameDecls Std.HashSet.empty (← (← Lean.MonadLCtx.getLCtx).getDecls).reverse
+  let lctx ← renameDecls Std.HashSet.emptyWithCapacity (← (← Lean.MonadLCtx.getLCtx).getDecls).reverse
   withLCtx' lctx do
   /- Extract the goal -/
   let decls ← ctx.getDecls
@@ -1298,7 +1273,7 @@ info: example
   (v1 : List Nat)
   (h_1 : i ≤ v.length)
   (h : i < v.length)
-  (x_2 : x_3 = v.get! i)
+  (x_2 : x_3 = v[i]!)
   (x_1 : i = i + 1)
   (x✝ : v1.length = v.length) :
   v1.length = v.length
@@ -1314,7 +1289,7 @@ example
   (v1 : List Nat)
   (h : i ≤ v.length)
   (h : i < v.length)
-  (_ : x = v.get! i)
+  (_ : x = v[i]!)
   (_ : i = i + 1)
   (_ : v1.length = v.length) :
   v1.length = v.length
@@ -1388,7 +1363,7 @@ def getSigmaTypes (ty : Expr) : MetaM (Expr × Expr) := do
   if ¬ f.isConstOf ``Sigma ∨ args.size ≠ 2 then
     throwError "Invalid argument to getSigmaTypes: {ty}"
   else
-    pure (args.get! 0, args.get! 1)
+    pure (args[0]!, args[1]!)
 
 /- Make a sigma type.
 
