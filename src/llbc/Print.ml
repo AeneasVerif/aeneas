@@ -421,8 +421,8 @@ module Contexts = struct
 
   let var_binder_to_string (env : fmt_env) (bv : var_binder) : string =
     match bv.name with
-    | None -> var_id_to_string env bv.index
-    | Some name -> name ^ "^" ^ VarId.to_string bv.index
+    | None -> local_id_to_string env bv.index
+    | Some name -> name ^ "^" ^ LocalId.to_string bv.index
 
   let dummy_var_id_to_string (bid : DummyVarId.id) : string =
     "_@" ^ DummyVarId.to_string bid
@@ -519,7 +519,7 @@ module Contexts = struct
     (* For the locals: we retrieve the information from the environment.
        Note that the locals don't need to be ordered based on their indices.
     *)
-    let rec env_to_locals (env : env) : (VarId.id * string option) list =
+    let rec env_to_locals (env : env) : (LocalId.id * string option) list =
       match env with
       | [] | EFrame :: _ -> []
       | EAbs _ :: env -> env_to_locals env

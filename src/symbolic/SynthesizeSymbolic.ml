@@ -10,8 +10,8 @@ let mk_mplace (span : Meta.span) (p : place) (ctx : Contexts.eval_ctx) : mplace
     =
   let rec place_to_mplace (place : place) : mplace =
     match place.kind with
-    | PlaceBase var_id ->
-        PlaceBase (Contexts.ctx_lookup_var_binder span ctx var_id)
+    | PlaceLocal var_id ->
+        PlaceLocal (Contexts.ctx_lookup_var_binder span ctx var_id)
     | PlaceProjection (subplace, pe) ->
         PlaceProjection (place_to_mplace subplace, pe)
   in

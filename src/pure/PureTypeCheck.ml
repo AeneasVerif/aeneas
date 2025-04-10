@@ -64,7 +64,7 @@ type tc_ctx = {
   type_decls : type_decl TypeDeclId.Map.t;  (** The type declarations *)
   global_decls : A.global_decl A.GlobalDeclId.Map.t;
       (** The global declarations *)
-  env : ty VarId.Map.t;  (** Environment from variables to types *)
+  env : ty LocalId.Map.t;  (** Environment from variables to types *)
   const_generics : ty T.ConstGenericVarId.Map.t;
       (** The types of the const generics *)
       (* TODO: add trait type constraints *)
@@ -103,7 +103,7 @@ let rec check_typed_pattern (span : Meta.span) (ctx : tc_ctx)
   | PatDummy -> ctx
   | PatVar (var, _) ->
       check __FILE__ __LINE__ (var.ty = v.ty) span;
-      let env = VarId.Map.add var.id var.ty ctx.env in
+      let env = LocalId.Map.add var.id var.ty ctx.env in
       { ctx with env }
   | PatAdt av ->
       (* Compute the field types *)
@@ -135,7 +135,7 @@ let rec check_texpression (span : Meta.span) (ctx : tc_ctx) (e : texpression) :
        * if we type-check a subexpression (i.e.: if the variable is introduced
        * "outside" of the expression) - TODO: this won't happen once
        * we use a locally nameless representation *)
-      match VarId.Map.find_opt var_id ctx.env with
+      match LocalId.Map.find_opt var_id ctx.env with
       | None -> ()
       | Some ty -> check __FILE__ __LINE__ (ty = e.ty) span)
   | CVar cg_id ->

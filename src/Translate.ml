@@ -57,10 +57,10 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
 
   (* Initialize the context *)
   let sv_to_var = SymbolicValueId.Map.empty in
-  let var_counter = Pure.VarId.generator_zero in
-  let state_var, var_counter = Pure.VarId.fresh var_counter in
-  let fuel0, var_counter = Pure.VarId.fresh var_counter in
-  let fuel, var_counter = Pure.VarId.fresh var_counter in
+  let var_counter = Pure.LocalId.generator_zero in
+  let state_var, var_counter = Pure.LocalId.fresh var_counter in
+  let fuel0, var_counter = Pure.LocalId.fresh var_counter in
+  let fuel, var_counter = Pure.LocalId.fresh var_counter in
   let calls = FunCallId.Map.empty in
   let abstractions = AbstractionId.Map.empty in
   let recursive_type_decls =
@@ -156,7 +156,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
       mk_return = None;
       mk_panic = None;
       mut_borrow_to_consumed = BorrowId.Map.empty;
-      var_id_to_default = Pure.VarId.Map.empty;
+      var_id_to_default = Pure.LocalId.Map.empty;
     }
   in
 
@@ -169,7 +169,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     | Some body, Some (input_svs, _) ->
         let forward_input_vars = LlbcAstUtils.fun_body_get_input_vars body in
         let forward_input_varnames =
-          List.map (fun (v : var) -> v.name) forward_input_vars
+          List.map (fun (v : local) -> v.name) forward_input_vars
         in
         let input_svs = List.combine forward_input_varnames input_svs in
         let ctx, forward_inputs =
