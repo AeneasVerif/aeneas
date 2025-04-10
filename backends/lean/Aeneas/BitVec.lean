@@ -59,28 +59,6 @@ theorem BitVec.getElem_set{bv: BitVec n}{b: Bool}{i: Fin n}{j: Nat}
       simp [this, h]
       cases bv[i] <;> cases b <;> simp [n_pos, (by simp; omega: decide (j - i = 0) = false)]
 
-theorem BitVec.getElem_set{bv: BitVec n}{b: Bool}{i: Fin n}{j: Nat}
-:  {j_lt: j < n}
-→ (bv.set i b)[j] = if i = j then b else bv[j]
-:= by 
-  intro j_lt
-  have n_pos: n > 0 := by cases n <;> (first | cases i.isLt | apply Nat.zero_lt_succ )
-
-  rw [set]
-  split
-  case isTrue h => 
-    subst h
-    simp [Nat.testBit, BitVec.getLsbD]
-    cases bv[i] <;> cases b <;> simp [n_pos]
-  case isFalse =>
-    simp
-    if h: j < i then
-      simp [h]
-    else
-      have: j > i := by omega
-      simp [this, h]
-      cases bv[i] <;> cases b <;> simp [n_pos, (by simp; omega: decide (j - i = 0) = false)]
-
 @[simp] theorem BitVec.cast_set(h: n = m)(bv: BitVec n)(i: Nat)(b: Bool)(i_idx: i < n)
 : (bv.set ⟨i, i_idx⟩ b).cast h = (bv.cast h).set ⟨i, h ▸ i_idx⟩ b
 := by subst h; ext; rw [cast_eq, cast_eq]
