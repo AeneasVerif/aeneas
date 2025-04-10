@@ -46,19 +46,19 @@ let typed_pattern_to_string (ctx : ctx) pat : string =
     TODO: things would be simpler if we used a better representation of the
     variables indices...
  *)
-let get_body_min_var_counter (body : fun_body) : VarId.generator =
+let get_body_min_var_counter (body : fun_body) : LocalId.generator =
   (* Find the max id in the input variables - some of them may have been
    * filtered from the body *)
   let min_input_id =
     List.fold_left
-      (fun id (var : var) -> VarId.max id var.id)
-      VarId.zero body.inputs
+      (fun id (var : var) -> LocalId.max id var.id)
+      LocalId.zero body.inputs
   in
   let obj =
     object
       inherit [_] reduce_expression
       method zero _ = min_input_id
-      method plus id0 id1 _ = VarId.max (id0 ()) (id1 ())
+      method plus id0 id1 _ = LocalId.max (id0 ()) (id1 ())
       (* Get the maximum *)
 
       (** For the patterns *)
@@ -70,18 +70,18 @@ let get_body_min_var_counter (body : fun_body) : VarId.generator =
   in
   (* Find the max counter in the body *)
   let id = obj#visit_expression () body.body.e () in
-  VarId.generator_from_incr_id id
+  LocalId.generator_from_incr_id id
 
-let get_opt_body_min_var_counter (body : fun_body option) : VarId.generator =
+let get_opt_body_min_var_counter (body : fun_body option) : LocalId.generator =
   match body with
   | Some body -> get_body_min_var_counter body
-  | None -> VarId.generator_zero
+  | None -> LocalId.generator_zero
 
 (** "Pretty-Name context": see {!compute_pretty_names} *)
 type pn_ctx = {
-  pure_vars : string VarId.Map.t;
+  pure_vars : string LocalId.Map.t;
       (** Information about the pure variables used in the synthesized program *)
-  llbc_vars : string E.VarId.Map.t;
+  llbc_vars : string E.LocalId.Map.t;
       (** Information about the LLBC variables used in the original program *)
 }
 
@@ -209,19 +209,19 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
    *)
   let merge_ctxs (ctx0 : pn_ctx) (ctx1 : pn_ctx) : pn_ctx =
     let pure_vars =
-      VarId.Map.fold
-        (fun id name ctx -> VarId.Map.add id name ctx)
+      LocalId.Map.fold
+        (fun id name ctx -> LocalId.Map.add id name ctx)
         ctx0.pure_vars ctx1.pure_vars
     in
     let llbc_vars =
-      E.VarId.Map.fold
-        (fun id name ctx -> E.VarId.Map.add id name ctx)
+      E.LocalId.Map.fold
+        (fun id name ctx -> E.LocalId.Map.add id name ctx)
         ctx0.llbc_vars ctx1.llbc_vars
     in
     { pure_vars; llbc_vars }
   in
   let empty_ctx =
-    { pure_vars = VarId.Map.empty; llbc_vars = E.VarId.Map.empty }
+    { pure_vars = LocalId.Map.empty; llbc_vars = E.LocalId.Map.empty }
   in
   let merge_ctxs_ls (ctxs : pn_ctx list) : pn_ctx =
     List.fold_left (fun ctx0 ctx1 -> merge_ctxs ctx0 ctx1) empty_ctx ctxs
@@ -242,12 +242,12 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
    * introduced (left-hand side of a left binding) *)
   let register_var (ctx : pn_ctx) (v : var) : pn_ctx =
     sanity_check __FILE__ __LINE__
-      (not (VarId.Map.mem v.id ctx.pure_vars))
+      (not (LocalId.Map.mem v.id ctx.pure_vars))
       def.item_meta.span;
     match v.basename with
     | None -> ctx
     | Some name ->
-        let pure_vars = VarId.Map.add v.id name ctx.pure_vars in
+        let pure_vars = LocalId.Map.add v.id name ctx.pure_vars in
         { ctx with pure_vars }
   in
   (* Update a variable - used to update an expression after we computed constraints *)
@@ -255,14 +255,14 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     match v.basename with
     | Some _ -> v
     | None -> (
-        match VarId.Map.find_opt v.id ctx.pure_vars with
+        match LocalId.Map.find_opt v.id ctx.pure_vars with
         | Some basename -> { v with basename = Some basename }
         | None -> (
             match mp with
             | None -> v
             | Some mp -> (
                 let var_id, _, _ = decompose_mplace mp in
-                match E.VarId.Map.find_opt var_id ctx.llbc_vars with
+                match E.LocalId.Map.find_opt var_id ctx.llbc_vars with
                 | None -> v
                 | Some basename -> { v with basename = Some basename })))
   in
@@ -280,35 +280,36 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
   (* Register an mplace the first time we find one *)
   let register_mplace (mp : mplace) (ctx : pn_ctx) : pn_ctx =
     let var_id, name, _ = decompose_mplace mp in
-    match (E.VarId.Map.find_opt var_id ctx.llbc_vars, name) with
+    match (E.LocalId.Map.find_opt var_id ctx.llbc_vars, name) with
     | None, Some name ->
-        let llbc_vars = E.VarId.Map.add var_id name ctx.llbc_vars in
+        let llbc_vars = E.LocalId.Map.add var_id name ctx.llbc_vars in
         { ctx with llbc_vars }
     | _ -> ctx
   in
 
   (* Register the fact that [name] can be used for the pure variable identified
    * by [var_id] (will add this name in the map if the variable is anonymous) *)
-  let add_pure_var_constraint (var_id : VarId.id) (name : string) (ctx : pn_ctx)
-      : pn_ctx =
+  let add_pure_var_constraint (var_id : LocalId.id) (name : string)
+      (ctx : pn_ctx) : pn_ctx =
     let pure_vars =
-      if VarId.Map.mem var_id ctx.pure_vars then ctx.pure_vars
-      else VarId.Map.add var_id name ctx.pure_vars
+      if LocalId.Map.mem var_id ctx.pure_vars then ctx.pure_vars
+      else LocalId.Map.add var_id name ctx.pure_vars
     in
     { ctx with pure_vars }
   in
   (* Similar to [add_pure_var_constraint], but for LLBC variables *)
-  let add_llbc_var_constraint (var_id : E.VarId.id) (name : string)
+  let add_llbc_var_constraint (var_id : E.LocalId.id) (name : string)
       (ctx : pn_ctx) : pn_ctx =
     let llbc_vars =
-      if E.VarId.Map.mem var_id ctx.llbc_vars then ctx.llbc_vars
-      else E.VarId.Map.add var_id name ctx.llbc_vars
+      if E.LocalId.Map.mem var_id ctx.llbc_vars then ctx.llbc_vars
+      else E.LocalId.Map.add var_id name ctx.llbc_vars
     in
     { ctx with llbc_vars }
   in
   (* Add a constraint: given a variable id and an associated meta-place, try to
    * extract naming information from the meta-place and save it *)
-  let add_constraint (mp : mplace) (var_id : VarId.id) (ctx : pn_ctx) : pn_ctx =
+  let add_constraint (mp : mplace) (var_id : LocalId.id) (ctx : pn_ctx) : pn_ctx
+      =
     (* Register the place *)
     let ctx = register_mplace mp ctx in
     (* Update the variable name *)
@@ -330,13 +331,13 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     | Var vid -> add_constraint mp vid ctx
     | _ -> ctx
   in
-  let add_pure_var_value_constraint (var_id : VarId.id) (rv : texpression)
+  let add_pure_var_value_constraint (var_id : LocalId.id) (rv : texpression)
       (ctx : pn_ctx) : pn_ctx =
     (* Add the constraint *)
     match (unmeta rv).e with
     | Var vid -> (
         (* Try to find a name for the vid *)
-        match VarId.Map.find_opt vid ctx.pure_vars with
+        match LocalId.Map.find_opt vid ctx.pure_vars with
         | None -> ctx
         | Some name -> add_pure_var_constraint var_id name ctx)
     | _ -> ctx
@@ -382,7 +383,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     | PatVar (({ id = _; basename = None; ty = _ } as lvar), lmp) ->
         if
           (* Check that there is not already a name for the variable *)
-          VarId.Map.mem lvar.id ctx.pure_vars
+          LocalId.Map.mem lvar.id ctx.pure_vars
         then ctx
         else
           (* We ignore the left meta-place information: it should have been taken
@@ -402,10 +403,10 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
           let rmp, re = opt_unmeta_mplace re in
           let ctx =
             match rmp with
-            | Some (PlaceBase (var_id, name)) ->
+            | Some (PlaceLocal (var_id, name)) ->
                 if Option.is_some name then add (Option.get name) ctx
                 else begin
-                  match E.VarId.Map.find_opt var_id ctx.llbc_vars with
+                  match E.LocalId.Map.find_opt var_id ctx.llbc_vars with
                   | None -> ctx
                   | Some name -> add name ctx
                 end
@@ -415,7 +416,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
           let ctx =
             match (unmeta re).e with
             | Var rvar_id -> (
-                match VarId.Map.find_opt rvar_id ctx.pure_vars with
+                match LocalId.Map.find_opt rvar_id ctx.pure_vars with
                 | None -> ctx
                 | Some name -> add name ctx)
             | _ -> ctx
@@ -553,11 +554,11 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
           let ctx = add_right_constraint mp rvalue ctx in
           let ctx =
             match (mp, rmp) with
-            | PlaceBase (mp_var_id, _), Some (PlaceBase (var_id, name)) -> (
+            | PlaceLocal (mp_var_id, _), Some (PlaceLocal (var_id, name)) -> (
                 let name =
                   match name with
                   | Some name -> Some name
-                  | None -> E.VarId.Map.find_opt var_id ctx.llbc_vars
+                  | None -> E.LocalId.Map.find_opt var_id ctx.llbc_vars
                 in
                 match name with
                 | None -> ctx
@@ -596,8 +597,8 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
         in
         let ctx =
           {
-            pure_vars = VarId.Map.of_list input_names;
-            llbc_vars = E.VarId.Map.empty;
+            pure_vars = LocalId.Map.of_list input_names;
+            llbc_vars = E.LocalId.Map.empty;
           }
         in
         let _, body_exp = update_texpression body.body ctx in
@@ -1147,7 +1148,7 @@ let inline_useless_var_assignments ~(inline_named : bool) ~(inline_const : bool)
 
       (** Visit the let-bindings to filter the useless ones (and update
           the substitution map while doing so *)
-      method! visit_Let (env : texpression VarId.Map.t) monadic lv re e =
+      method! visit_Let (env : texpression LocalId.Map.t) monadic lv re e =
         (* In order to filter, we need to check first that:
            - the let-binding is not monadic
            - the left-value is a variable
@@ -1223,7 +1224,9 @@ let inline_useless_var_assignments ~(inline_named : bool) ~(inline_const : bool)
              * better to do them *before* we inline it *)
             let re = self#visit_texpression env re in
             (* Update the substitution environment *)
-            let env = if filter then VarId.Map.add lv_var.id re env else env in
+            let env =
+              if filter then LocalId.Map.add lv_var.id re env else env
+            in
             (* Update the next expression *)
             let e = self#visit_texpression env e in
             (* Reconstruct the [let], only if the binding is not filtered *)
@@ -1246,7 +1249,7 @@ let inline_useless_var_assignments ~(inline_named : bool) ~(inline_const : bool)
                    ctx.trans_ctx.type_ctx.type_infos adt_id
             then
               (* Update the substitution environment *)
-              let env = VarId.Map.add lv_var.id re env in
+              let env = LocalId.Map.add lv_var.id re env in
               (* Update the next expression *)
               let e = self#visit_texpression env e in
               (* We filter the [let], and thus do not reconstruct it *)
@@ -1256,8 +1259,8 @@ let inline_useless_var_assignments ~(inline_named : bool) ~(inline_const : bool)
         | _ -> super#visit_Let env monadic lv re e
 
       (** Substitute the variables *)
-      method! visit_Var (env : texpression VarId.Map.t) (vid : VarId.id) =
-        match VarId.Map.find_opt vid env with
+      method! visit_Var (env : texpression LocalId.Map.t) (vid : LocalId.id) =
+        match LocalId.Map.find_opt vid env with
         | None -> (* No substitution *) super#visit_Var env vid
         | Some ne ->
             (* Substitute - note that we need to reexplore, because
@@ -1272,7 +1275,7 @@ let inline_useless_var_assignments ~(inline_named : bool) ~(inline_const : bool)
   | None -> def
   | Some body ->
       let body =
-        { body with body = obj#visit_texpression VarId.Map.empty body.body }
+        { body with body = obj#visit_texpression LocalId.Map.empty body.body }
       in
       { def with body = Some body }
 
@@ -1301,11 +1304,11 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
       method plus b0 b1 _ = b0 () && b1 ()
 
       method! visit_PatVar env v mp =
-        if VarId.Set.mem v.id env then (PatVar (v, mp), fun _ -> false)
+        if LocalId.Set.mem v.id env then (PatVar (v, mp), fun _ -> false)
         else (PatDummy, fun _ -> true)
     end
   in
-  let filter_typed_pattern (used_vars : VarId.Set.t) (lv : typed_pattern) :
+  let filter_typed_pattern (used_vars : LocalId.Set.t) (lv : typed_pattern) :
       typed_pattern * bool =
     let lv, all_dummies = lv_visitor#visit_typed_pattern used_vars lv in
     (lv, all_dummies ())
@@ -1319,11 +1322,11 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
   let expr_visitor =
     object (self)
       inherit [_] mapreduce_expression as super
-      method zero _ = VarId.Set.empty
-      method plus s0 s1 _ = VarId.Set.union (s0 ()) (s1 ())
+      method zero _ = LocalId.Set.empty
+      method plus s0 s1 _ = LocalId.Set.union (s0 ()) (s1 ())
 
       (** Whenever we visit a variable, we need to register the used variable *)
-      method! visit_Var _ vid = (Var vid, fun _ -> VarId.Set.singleton vid)
+      method! visit_Var _ vid = (Var vid, fun _ -> LocalId.Set.singleton vid)
 
       method! visit_expression env e =
         match e with
@@ -1354,7 +1357,7 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
             (* Small utility - called if we can't filter the let-binding *)
             let dont_filter () =
               let re, used_re = self#visit_texpression env re in
-              let used = VarId.Set.union used (used_re ()) in
+              let used = LocalId.Set.union used (used_re ()) in
               (* Simplify the left pattern if it only contains dummy variables *)
               let lv =
                 if all_dummies then
@@ -1542,7 +1545,7 @@ let simplify_aggregates (ctx : ctx) (def : fun_decl) : fun_decl =
                    * [x.field] for some variable [x], and where the projection
                    * is for the proper ADT *)
                   let to_var_proj (i : int) (arg : texpression) :
-                      (generic_args * var_id) option =
+                      (generic_args * local_id) option =
                     match arg.e with
                     | App (proj, x) -> (
                         match (proj.e, x.e) with
@@ -2176,7 +2179,7 @@ let apply_beta_reduction (_ctx : ctx) (def : fun_decl) : fun_decl =
       inherit [_] map_expression as super
 
       method! visit_Var env vid =
-        match VarId.Map.find_opt vid env with
+        match LocalId.Map.find_opt vid env with
         | None -> Var vid
         | Some e -> e.e
 
@@ -2198,7 +2201,7 @@ let apply_beta_reduction (_ctx : ctx) (def : fun_decl) : fun_decl =
             List.map (fun v -> (fst (as_pat_var def.item_meta.span v)).id) pats
           in
           let body =
-            let env = VarId.Map.add_list (List.combine vars args) env in
+            let env = LocalId.Map.add_list (List.combine vars args) env in
             super#visit_texpression env body
           in
           (* Reconstruct the term *)
@@ -2219,7 +2222,7 @@ let apply_beta_reduction (_ctx : ctx) (def : fun_decl) : fun_decl =
         Some
           {
             body with
-            body = visitor#visit_texpression VarId.Map.empty body.body;
+            body = visitor#visit_texpression LocalId.Map.empty body.body;
           }
       in
       { def with body }
@@ -2259,7 +2262,7 @@ let simplify_array_slice_update (ctx : ctx) (def : fun_decl) : fun_decl =
 
   (* We may need to introduce fresh variables *)
   let var_cnt = get_opt_body_min_var_counter def.body in
-  let _, fresh_var_id = VarId.mk_stateful_generator var_cnt in
+  let _, fresh_var_id = LocalId.mk_stateful_generator var_cnt in
 
   let visitor =
     object (self)
@@ -2341,14 +2344,14 @@ let simplify_array_slice_update (ctx : ctx) (def : fun_decl) : fun_decl =
             let count = ref 0 in
             let back_call = ref None in
             let back_call_with_fresh = ref None in
-            let fresh_vars = ref VarId.Set.empty in
+            let fresh_vars = ref LocalId.Set.empty in
             let register_back_call pat arg =
               count := !count + 1;
               back_call_with_fresh := Some (pat, arg);
               (* Check that the argument doesn't use fresh vars *)
               if
-                VarId.Set.is_empty
-                  (VarId.Set.inter (texpression_get_vars arg) !fresh_vars)
+                LocalId.Set.is_empty
+                  (LocalId.Set.inter (texpression_get_vars arg) !fresh_vars)
               then back_call := Some (pat, arg)
             in
             let updt_visitor1 =
@@ -2356,7 +2359,7 @@ let simplify_array_slice_update (ctx : ctx) (def : fun_decl) : fun_decl =
                 inherit [_] map_expression as super
 
                 method! visit_PatVar env var mp =
-                  fresh_vars := VarId.Set.add var.id !fresh_vars;
+                  fresh_vars := LocalId.Set.add var.id !fresh_vars;
                   super#visit_PatVar env var mp
 
                 method! visit_Let env monadic' pat' e' e3 =
@@ -2425,23 +2428,25 @@ let simplify_array_slice_update (ctx : ctx) (def : fun_decl) : fun_decl =
                 if !count = 1 then (
                   let back_pat, back_arg = Option.get !back_call_with_fresh in
                   let fresh_vars =
-                    VarId.Set.inter !fresh_vars (texpression_get_vars back_arg)
+                    LocalId.Set.inter !fresh_vars
+                      (texpression_get_vars back_arg)
                   in
-                  let rec insert_call_below (fresh_vars : VarId.Set.t) e =
+                  let rec insert_call_below (fresh_vars : LocalId.Set.t) e =
                     log#ldebug
                       (lazy
                         (__FUNCTION__ ^ ": insert_call_below:"
                        ^ "\n- fresh_vars:\n"
-                        ^ VarId.Set.to_string None fresh_vars
+                        ^ LocalId.Set.to_string None fresh_vars
                         ^ "\n- e:\n"
                         ^ texpression_to_string ctx e
                         ^ "\n"));
                     match e.e with
                     | Let (monadic, pat, e1, e2) ->
                         let fresh_vars =
-                          VarId.Set.diff fresh_vars (typed_pattern_get_vars pat)
+                          LocalId.Set.diff fresh_vars
+                            (typed_pattern_get_vars pat)
                         in
-                        if VarId.Set.is_empty fresh_vars then
+                        if LocalId.Set.is_empty fresh_vars then
                           let call = mk_call_to_update back_arg in
                           let e' = Let (true, back_pat, call, e2) in
                           let e' = { e = e'; ty = e.ty } in
@@ -2533,7 +2538,7 @@ let decompose_let_bindings (decompose_monadic : bool)
   | Some body ->
       (* Set up the var id generator *)
       let cnt = get_body_min_var_counter body in
-      let _, fresh_id = VarId.mk_stateful_generator cnt in
+      let _, fresh_id = LocalId.mk_stateful_generator cnt in
       let mk_fresh (ty : ty) : typed_pattern * texpression =
         let vid = fresh_id () in
         let tmp : var = { id = vid; basename = None; ty } in
@@ -2663,7 +2668,7 @@ let unfold_monadic_let_bindings (_ctx : ctx) (def : fun_decl) : fun_decl =
   | None -> def
   | Some body ->
       let cnt = get_body_min_var_counter body in
-      let _, fresh_id = VarId.mk_stateful_generator cnt in
+      let _, fresh_id = LocalId.mk_stateful_generator cnt in
 
       (* It is a very simple map *)
       let obj =
@@ -2808,7 +2813,7 @@ let lift_pure_function_calls (ctx : ctx) (def : fun_decl) : fun_decl =
         Some
           {
             body with
-            body = visitor#visit_texpression VarId.Map.empty body.body;
+            body = visitor#visit_texpression LocalId.Map.empty body.body;
           }
       in
       { def with body }
@@ -2833,7 +2838,7 @@ let merge_let_app_then_decompose_tuple (_ctx : ctx) (def : fun_decl) : fun_decl
   let span = def.item_meta.span in
   (* We may need to introduce fresh variables *)
   let var_cnt = get_opt_body_min_var_counter def.body in
-  let _, fresh_var_id = VarId.mk_stateful_generator var_cnt in
+  let _, fresh_var_id = LocalId.mk_stateful_generator var_cnt in
 
   let visitor =
     object (self)
@@ -2856,7 +2861,7 @@ let merge_let_app_then_decompose_tuple (_ctx : ctx) (def : fun_decl) : fun_decl
                   Option.get (typed_pattern_to_texpression span pat1)
                 in
                 (* Register the mapping from the variable we remove to the expression *)
-                let env = VarId.Map.add var0.id pat1_expr env in
+                let env = LocalId.Map.add var0.id pat1_expr env in
                 (* Continue *)
                 let next1 = self#visit_texpression env next1 in
                 Let (monadic0, pat1, bound0, next1)
@@ -2873,7 +2878,7 @@ let merge_let_app_then_decompose_tuple (_ctx : ctx) (def : fun_decl) : fun_decl
 
       (* Replace the variables *)
       method! visit_Var env var_id =
-        match VarId.Map.find_opt var_id env with
+        match LocalId.Map.find_opt var_id env with
         | None -> Var var_id
         | Some e -> e.e
     end
@@ -2883,7 +2888,10 @@ let merge_let_app_then_decompose_tuple (_ctx : ctx) (def : fun_decl) : fun_decl
   | None -> def
   | Some body ->
       let body =
-        { body with body = visitor#visit_texpression VarId.Map.empty body.body }
+        {
+          body with
+          body = visitor#visit_texpression LocalId.Map.empty body.body;
+        }
       in
       { def with body = Some body }
 
@@ -3092,7 +3100,7 @@ let filter_loop_inputs (ctx : ctx) (transl : pure_fun_translation list) :
         ("inputs:\n"
         ^ String.concat ", " (List.map (var_to_string ctx) inputs_prefix)
         ^ "\n"));
-    let inputs_set = VarId.Set.of_list (List.map var_get_id inputs_prefix) in
+    let inputs_set = LocalId.Set.of_list (List.map var_get_id inputs_prefix) in
     sanity_check __FILE__ __LINE__
       (Option.is_some decl.loop_id)
       decl.item_meta.span;
@@ -3156,8 +3164,8 @@ let filter_loop_inputs (ctx : ctx) (transl : pure_fun_translation list) :
             set it as used. Note that we take care of ignoring some of those
             input parameters given in [visit_texpression].
           *)
-        method! visit_var_id _ id =
-          if VarId.Set.mem id inputs_set then set_used id
+        method! visit_local_id _ id =
+          if LocalId.Set.mem id inputs_set then set_used id
       end
     in
     visitor#visit_texpression () body.body;
@@ -3167,7 +3175,7 @@ let filter_loop_inputs (ctx : ctx) (transl : pure_fun_translation list) :
         ("\n- used variables: "
         ^ String.concat ", "
             (List.map
-               (Print.pair_to_string VarId.to_string string_of_bool)
+               (Print.pair_to_string LocalId.to_string string_of_bool)
                !used)
         ^ "\n"));
 

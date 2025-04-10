@@ -207,7 +207,7 @@ let projection_contains (span : Meta.span) (ty1 : rty) (rset1 : RegionId.Set.t)
     The loan is referred to by a borrow id.
 
     Rem.: if the {!InterpreterUtils.g_loan_content} is {!constructor:Aeneas.InterpreterUtils.concrete_or_abs.Concrete},
-    the {!InterpreterUtils.abs_or_var_id} is not necessarily {!constructor:Aeneas.InterpreterUtils.abs_or_var_id.VarId} or
+    the {!InterpreterUtils.abs_or_var_id} is not necessarily {!constructor:Aeneas.InterpreterUtils.abs_or_var_id.LocalId} or
     {!constructor:Aeneas.InterpreterUtils.abs_or_var_id.DummyVarId}: there can be concrete loans in abstractions (in the shared values).
  *)
 let lookup_loan_opt (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
@@ -281,7 +281,7 @@ let lookup_loan_opt (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
         abs_or_var :=
           Some
             (match bv with
-            | BVar b -> VarId b.index
+            | BVar b -> LocalId b.index
             | BDummy id -> DummyVarId id);
         super#visit_EBinding env bv v;
         abs_or_var := None

@@ -129,7 +129,7 @@ let compute_literal_type (cv : literal) : literal_type =
       craise_opt_span __FILE__ __LINE__ None
         "Float, string and byte string literals are unsupported"
 
-let var_get_id (v : var) : VarId.id = v.id
+let var_get_id (v : var) : LocalId.id = v.id
 
 let mk_typed_pattern_from_literal (cv : literal) : typed_pattern =
   let ty = TLiteral (compute_literal_type cv) in
@@ -283,7 +283,7 @@ let is_var (e : texpression) : bool =
   | Var _ -> true
   | _ -> false
 
-let as_var (span : Meta.span) (e : texpression) : VarId.id =
+let as_var (span : Meta.span) (e : texpression) : LocalId.id =
   match e.e with
   | Var v -> v
   | _ -> craise __FILE__ __LINE__ span "Not a var"
@@ -314,7 +314,7 @@ let as_opt_pat_tuple (p : typed_pattern) : typed_pattern list option =
   | _ -> None
 
 (** Replace all the dummy variables in a pattern with fresh variables *)
-let typed_pattern_replace_dummy_vars (fresh_var_id : unit -> VarId.id)
+let typed_pattern_replace_dummy_vars (fresh_var_id : unit -> LocalId.id)
     (p : typed_pattern) : typed_pattern =
   let visitor =
     object
@@ -819,16 +819,16 @@ let opt_unmeta_mplace (e : texpression) : mplace option * texpression =
   | Meta (MPlace mp, e) -> (Some mp, e)
   | _ -> (None, e)
 
-let mk_state_var (id : VarId.id) : var =
+let mk_state_var (id : LocalId.id) : var =
   { id; basename = Some ConstStrings.state_basename; ty = mk_state_ty }
 
-let mk_state_texpression (id : VarId.id) : texpression =
+let mk_state_texpression (id : LocalId.id) : texpression =
   { e = Var id; ty = mk_state_ty }
 
-let mk_fuel_var (id : VarId.id) : var =
+let mk_fuel_var (id : LocalId.id) : var =
   { id; basename = Some ConstStrings.fuel_basename; ty = mk_fuel_ty }
 
-let mk_fuel_texpression (id : VarId.id) : texpression =
+let mk_fuel_texpression (id : LocalId.id) : texpression =
   { e = Var id; ty = mk_fuel_ty }
 
 let rec typed_pattern_to_texpression (span : Meta.span) (pat : typed_pattern) :
@@ -974,31 +974,31 @@ let opt_destruct_ret (e : texpression) : texpression option =
   | _ -> None
 
 let decompose_mplace (p : mplace) :
-    E.VarId.id * string option * mprojection_elem list =
+    E.LocalId.id * string option * mprojection_elem list =
   let rec decompose (proj : mprojection_elem list) (p : mplace) =
     match p with
-    | PlaceBase (id, name) -> (id, name, proj)
+    | PlaceLocal (id, name) -> (id, name, proj)
     | PlaceProjection (p, pe) -> decompose (pe :: proj) p
   in
   decompose [] p
 
-let texpression_get_vars (e : texpression) : VarId.Set.t =
-  let vars = ref VarId.Set.empty in
+let texpression_get_vars (e : texpression) : LocalId.Set.t =
+  let vars = ref LocalId.Set.empty in
   let visitor =
     object
       inherit [_] iter_expression
-      method! visit_Var _ var_id = vars := VarId.Set.add var_id !vars
+      method! visit_Var _ var_id = vars := LocalId.Set.add var_id !vars
     end
   in
   visitor#visit_texpression () e;
   !vars
 
-let typed_pattern_get_vars (pat : typed_pattern) : VarId.Set.t =
-  let vars = ref VarId.Set.empty in
+let typed_pattern_get_vars (pat : typed_pattern) : LocalId.Set.t =
+  let vars = ref LocalId.Set.empty in
   let visitor =
     object
       inherit [_] iter_expression
-      method! visit_PatVar _ var _ = vars := VarId.Set.add var.id !vars
+      method! visit_PatVar _ var _ = vars := LocalId.Set.add var.id !vars
     end
   in
   visitor#visit_typed_pattern () pat;
