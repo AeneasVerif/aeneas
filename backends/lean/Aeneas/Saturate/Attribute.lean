@@ -177,7 +177,7 @@ initialize saturateAttr : SaturateAttribute ← do
           let patTy ← inferType pat
           let patToExplore := if patTy.isProp then pat else patTy
           -- Check that the pattern contains all the quantified variables
-          let allFVars := fvars.foldl (fun hs arg => hs.insert arg.fvarId!) Std.HashSet.empty
+          let allFVars := fvars.foldl (fun hs arg => hs.insert arg.fvarId!) Std.HashSet.emptyWithCapacity
           let patFVars ← getFVarIds pat (← getFVarIds patToExplore)
           trace[Saturate.attribute] "allFVars: {← allFVars.toList.mapM FVarId.getUserName}"
           trace[Saturate.attribute] "patFVars: {← patFVars.toList.mapM FVarId.getUserName}"

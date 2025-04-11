@@ -167,7 +167,7 @@ theorem UScalar.ShiftRight_spec {ty0 ty1} (x : UScalar ty0) (y : UScalar ty1)
   := by
   simp only [HShiftRight.hShiftRight, shiftRight_UScalar, shiftRight, hy, reduceIte]
   simp only [BitVec.ushiftRight_eq, ok.injEq, _root_.exists_eq_left', val]
-  simp only [HShiftRight.hShiftRight, BitVec.ushiftRight, bv_toNat, BitVec.toNat_ofNatLt, and_self]
+  simp only [HShiftRight.hShiftRight, BitVec.ushiftRight, bv_toNat, BitVec.toNat_ofNatLT, and_self]
 
 @[progress] theorem U8.ShiftRight_spec (x : U8) (y : UScalar ty1) (hy : y.val < 8) :
   ∃ (z : U8), x >>> y = ok z ∧ z.val = x.val >>> y.val ∧ z.bv = x.bv >>> y.val

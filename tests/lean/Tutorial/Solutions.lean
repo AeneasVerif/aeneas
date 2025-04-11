@@ -69,7 +69,7 @@ theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
         -- Reasoning about `List.update`:
         have hi : i.val = 0 := by scalar_tac
         simp only [hi] -- Without the `only`, this actually finished the goal
-        have hUpdate := List.set_cons_zero hd tl.toList x
+        have hUpdate := @List.set_cons_zero _ hd tl.toList x
         simp only [hUpdate]
     . simp at *
       progress as ⟨ i1, hi1 ⟩

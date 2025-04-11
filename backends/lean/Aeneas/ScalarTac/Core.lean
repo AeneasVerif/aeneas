@@ -9,10 +9,12 @@ open Lean Elab Term Meta
 
 -- TODO: move?
 theorem ne_zero_is_lt_or_gt {x : Int} (hne : x ≠ 0) : x < 0 ∨ x > 0 := by
-  cases h: x <;> simp_all
-  . rename_i n;
-    cases n <;> simp_all
-  . apply Int.negSucc_lt_zero
+  cases h: x <;>
+  simp_all only [Int.ofNat_eq_coe, Int.natCast_eq_zero, Int.natCast_pos,
+    ne_eq, Int.negSucc_ne_zero, not_false_eq_true, Int.negSucc_lt_zero,
+    gt_iff_lt, Int.negSucc_not_pos, or_false]
+  rename_i n;
+  cases n <;> simp_all
 
 -- TODO: move?
 theorem ne_is_lt_or_gt {x y : Int} (hne : x ≠ y) : x < y ∨ x > y := by
