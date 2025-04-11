@@ -1,4 +1,5 @@
 import Aeneas.Arith
+import Aeneas.BitVec
 import Aeneas.Bvify
 import Aeneas.BvTac
 import Aeneas.FSimp
