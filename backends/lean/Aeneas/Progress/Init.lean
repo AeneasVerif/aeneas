@@ -122,7 +122,7 @@ def programTelescope[Inhabited (m α)] [Nonempty (m α)] (ty: Expr)
       trace[Progress] "After stripping the arguments of the monad expression:\n- mf: {mf}\n- margs: {margs}"
       if mf.isConst ∧ mf.constName = ``Bind.bind then do
         -- Dive into the bind
-        let fExpr := (margs.get! 4).consumeMData
+        let fExpr := margs[4]!.consumeMData
         -- Recursve
         strip_monad fExpr
       else
@@ -140,9 +140,9 @@ def programTelescope[Inhabited (m α)] [Nonempty (m α)] (ty: Expr)
     -- Check if some existentially quantified variables
     let _ := do
       -- Collect all the free variables in the arguments
-      let allArgsFVars ← args.foldlM (fun hs arg => getFVarIds arg hs) Std.HashSet.empty
+      let allArgsFVars ← args.foldlM (fun hs arg => getFVarIds arg hs) Std.HashSet.emptyWithCapacity
       -- Check if they intersect the fvars we introduced for the existentially quantified variables
-      let evarsSet : Std.HashSet FVarId := Std.HashSet.empty.insertMany evars
+      let evarsSet : Std.HashSet FVarId := Std.HashSet.emptyWithCapacity.insertMany evars
       let filtArgsFVars := allArgsFVars.toArray.filter (fun var => evarsSet.contains var)
       if filtArgsFVars.isEmpty then pure ()
       else
@@ -184,7 +184,7 @@ structure Rules where
   deactivated : Std.HashSet Name
 deriving Inhabited
 
-def Rules.empty : Rules := ⟨ DiscrTree.empty, Std.HashSet.empty ⟩
+def Rules.empty : Rules := ⟨ DiscrTree.empty, Std.HashSet.emptyWithCapacity ⟩
 
 def Extension := SimpleScopedEnvExtension (DiscrTreeKey × Name) Rules
 deriving Inhabited

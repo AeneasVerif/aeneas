@@ -59,7 +59,7 @@ def condSimpTac
       if (← inferType d.type).isProp ∧ (d.fvarId ∈ keep ∨ d.fvarId ∉ ignore)
       then pure (some d.fvarId) else pure none
   let getOtherAsms (ignore : Std.HashSet FVarId) : TacticM (Array FVarId) :=
-    refreshFVarIds Std.HashSet.empty ignore
+    refreshFVarIds Std.HashSet.emptyWithCapacity ignore
   /- First duplicate the propositions in the context: we will need the original ones (which mention
      integers rather than bit-vectors) for `scalar_tac` to succeed when doing the conditional rewritings. -/
   let (oldAsms, newAsms) ← Utils.duplicateAssumptions toDuplicate

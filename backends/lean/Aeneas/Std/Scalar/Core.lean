@@ -470,15 +470,17 @@ theorem IScalar.bound_suffices (ty : IScalarTy) (x : Int) :
   have := cMax_le_rMax ty
   omega
 
-/- TODO: remove? Having a check on the bounds is a good sanity check, and it allows to prove
-   nice theorems like `(ofIntCore x ..).val = x`. But on the other hand `BitVec` also has powerful
-   simplification lemmas. -/
-def UScalar.ofNatCore {ty : UScalarTy} (x : Nat) (_ : x < 2^ty.numBits) : UScalar ty :=
-  { bv := BitVec.ofNat _ x }
+def UScalar.ofNatCore {ty : UScalarTy} (x : Nat) (h : x < 2^ty.numBits) : UScalar ty :=
+  { bv := ⟨ x, h ⟩ }
 
--- TODO: remove?
 def IScalar.ofIntCore {ty : IScalarTy} (x : Int) (_ : -2^(ty.numBits-1) ≤ x ∧ x < 2^(ty.numBits - 1)) : IScalar ty :=
-  { bv := BitVec.ofInt _ x }
+  -- TODO: we should leave `x` unchanged if it is positive, so that expressions like `(1#isize).val` can reduce to `1`
+  let x' := (x % 2^ty.numBits).toNat
+  have h : x' < 2^ty.numBits := by
+    zify
+    simp +zetaDelta only [Int.ofNat_toNat, sup_lt_iff, Nat.ofNat_pos, pow_pos, and_true]
+    apply Int.emod_lt_of_pos; simp
+  { bv := ⟨ x', h ⟩ }
 
 @[reducible] def UScalar.ofNat {ty : UScalarTy} (x : Nat)
   (hInBounds : x ≤ UScalar.cMax ty := by decide) : UScalar ty :=
@@ -546,8 +548,6 @@ theorem UScalar.tryMkOpt_eq (ty : UScalarTy) (x : Nat) :
   have h := check_bounds_eq_inBounds ty x
   split_ifs <;> simp_all
   simp [UScalar.val, UScalarTy.numBits, max] at *
-  cases ty <;> simp_all [U8.max, U16.max, U32.max, U64.max, U128.max, Usize.max, max]
-  cases h: System.Platform.numBits_eq <;> simp_all
 
 theorem UScalar.tryMk_eq (ty : UScalarTy) (x : Nat) :
   match tryMk ty x with
@@ -570,7 +570,7 @@ theorem IScalar.tryMkOpt_eq (ty : IScalarTy) (x : Int) :
   simp_all [I8.min, I16.min, I32.min, I64.min, I128.min, Isize.min,
             I8.max, I16.max, I32.max, I64.max, I128.max, Isize.max,
             min, max] <;>
-  simp [Int.bmod] <;> split <;> (try omega) <;>
+  simp [Int.bmod, BitVec.toInt] <;> split <;> (try omega) <;>
   cases h: System.Platform.numBits_eq <;> simp_all <;> omega
 
 theorem IScalar.tryMk_eq (ty : IScalarTy) (x : Int) :
@@ -641,8 +641,6 @@ abbrev I128.ofInt  := @IScalar.ofInt .I128
 theorem UScalar.ofNat_val_eq {ty : UScalarTy} (h : x < 2^ty.numBits) :
   (UScalar.ofNatCore x h).val = x := by
   simp [UScalar.ofNat, UScalar.ofNatCore, UScalar.val, max]
-  cases ty <;> simp_all
-  cases h: System.Platform.numBits_eq <;> simp_all
 
 @[simp, scalar_tac_simps, scalar_tac_before_sat_simps]
 theorem U8.ofNat_val_eq (h : x < 2^UScalarTy.U8.numBits) : (U8.ofNatCore x h).val = x := by
@@ -674,7 +672,7 @@ theorem IScalar.ofInt_val_eq {ty : IScalarTy} (h : - 2^(ty.numBits - 1) ≤ x �
   simp [IScalar.ofInt, IScalar.ofIntCore, IScalar.val]
   cases ty <;>
   simp_all <;>
-  simp [Int.bmod] <;> split <;> (try omega) <;>
+  simp [Int.bmod, BitVec.toInt] <;> split <;> (try omega) <;>
   cases h: System.Platform.numBits_eq <;> simp_all <;> omega
 
 @[simp, scalar_tac_simps, scalar_tac_before_sat_simps]
@@ -714,7 +712,7 @@ theorem UScalar.eq_equiv_bv_eq {ty : UScalarTy} (x y : UScalar ty) :
 
 theorem UScalar.ofNatCore_bv {ty : UScalarTy} (x : Nat) h :
   (@UScalar.ofNatCore ty x h).bv = BitVec.ofNat _ x := by
-  simp only [ofNatCore, bv]
+  simp only [ofNatCore, BitVec.ofNat, Fin.ofNat', Nat.mod_eq_of_lt h]
 
 @[simp, bvify_simps] theorem U8.ofNat_bv (x : Nat) h : (U8.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
 @[simp, bvify_simps] theorem U16.ofNat_bv (x : Nat) h : (U16.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
@@ -736,7 +734,8 @@ theorem IScalar.eq_equiv_bv_eq {ty : IScalarTy} (x y : IScalar ty) :
 
 theorem IScalar.ofIntCore_bv {ty : IScalarTy} (x : Int) h :
   (@IScalar.ofIntCore ty x h).bv = BitVec.ofInt _ x := by
-  simp only [ofIntCore, bv]
+  simp only [ofIntCore, BitVec.ofInt, Int.ofNat_eq_coe, Nat.cast_pow, Nat.cast_ofNat]
+  congr
 
 @[simp, bvify_simps] theorem I8.ofInt_bv (x : Int) h : (I8.ofInt x h).bv = BitVec.ofInt _ x := by apply IScalar.ofIntCore_bv
 @[simp, bvify_simps] theorem I16.ofInt_bv (x : Int) h : (I16.ofInt x h).bv = BitVec.ofInt _ x := by apply IScalar.ofIntCore_bv

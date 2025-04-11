@@ -193,7 +193,7 @@ theorem UScalar.ofNatCore_bv_lt_equiv {ty} (x y : Nat) (hx) (hy) :
   simp only [ofNatCore, BitVec.ofNat_lt_ofNat]
   have := Nat.mod_eq_of_lt hx
   have := Nat.mod_eq_of_lt hy
-  simp only [*]
+  simp only [BitVec.lt_ofFin, Fin.mk_lt_mk]
 
 @[simp, scalar_tac_simps] theorem U8.val_mod_size_eq (x : U8) : x.val % U8.size = x.val := by
   apply Nat.mod_eq_of_lt; scalar_tac

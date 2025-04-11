@@ -3,6 +3,7 @@ import Aeneas.Std.Scalar.Misc
 import Aeneas.ScalarTac
 import Aeneas.Std.Core
 import Mathlib.Data.BitVec
+import Mathlib.Data.Int.Init
 
 namespace Aeneas.Std
 
@@ -50,7 +51,11 @@ theorem UScalar.mul_equiv {ty} (x y : UScalar ty) :
   rename_i hEq; simp only [← hEq, ofNatCore, val]
   split_conjs
   . simp [max]; omega
-  . zify; simp [max]
+  . zify at this; zify; simp only [bv_toNat, BitVec.toNat_ofFin, Nat.cast_mul, BitVec.toNat_mul,
+    Int.ofNat_emod, Nat.cast_pow, Nat.cast_ofNat] at *
+    rw [Int.emod_eq_of_lt]
+    . apply Int.pos_mul_pos_is_pos <;> simp
+    . simp [*]
   . have : 0 < 2^ty.numBits := by simp
     simp [max]
     omega
@@ -74,8 +79,32 @@ theorem IScalar.mul_equiv {ty} (x y : IScalar ty) :
   split <;> simp_all [min, max] <;>
   simp_all [tryMk, tryMkOpt] <;>
   rename_i hEq <;> simp only [← hEq, ofIntCore, val] <;>
-  simp [← BitVec.toInt_inj] <;>
-  omega
+  simp [← BitVec.toInt_inj]
+  . split_conjs
+    . omega
+    . simp [BitVec.toInt, Int.bmod]
+      have this : 2 * (x.val * y.val % 2 ^ ty.numBits).toNat < 2 ^ ty.numBits ↔
+            x.val * y.val % 2 ^ ty.numBits < (2 ^ ty.numBits + 1) / 2 := by
+        have hdiv : (2 : ℤ) ∣ 2 ^ ty.numBits := by
+          have : ty.numBits = (ty.numBits - 1) + 1 := by
+            have := ty.numBits_nonzero
+            scalar_tac
+          rw [this, Int.pow_succ]; simp
+        have : (2^ty.numBits + 1 : Int) / 2 = 2^ty.numBits / 2 := by
+          rw [Int.add_ediv_of_dvd_left]
+          . simp
+          . apply hdiv
+        rw [this]; clear this
+        have heq := @Int.div_lt_div_iff_of_dvd_of_pos (↑x * ↑y % 2 ^ ty.numBits) 1 (2 ^ ty.numBits) 2
+          (by simp) (by simp) (by simp) hdiv
+        simp at heq
+        simp [heq]
+        have : (x.val * y.val % 2 ^ ty.numBits).toNat = x.val * y.val % 2 ^ ty.numBits := by
+          scalar_tac
+        scalar_tac
+      simp [this]
+      split <;> simp_all <;> omega
+  . omega
 
 /-- Generic theorem - shouldn't be used much -/
 theorem IScalar.mul_bv_spec {ty} {x y : IScalar ty}

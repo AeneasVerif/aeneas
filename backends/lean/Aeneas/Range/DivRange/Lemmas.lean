@@ -11,7 +11,7 @@ theorem pow_ineq (start divisor : Nat) (hDiv : 1 < divisor) :
   have h1 : start < divisor ^ (Nat.log divisor start + 1) :=
     Nat.lt_pow_succ_log_self hDiv start
   have h3 : Nat.log divisor start + 1 ≤ start + 1 := by omega
-  have := @Nat.pow_le_pow_of_le_right divisor (by omega) _ _  h3
+  have := @Nat.pow_le_pow_right divisor (by omega) _ _  h3
   omega
 
 namespace DivRange
@@ -69,7 +69,7 @@ private theorem mem_of_mem_divRange (r : DivRange) (a : Nat)
     Nat.lt_pow_succ_log_self hDiv r.start
   have h2 : r.start + 1 ≤ r.divisor ^ (Nat.log r.divisor r.start + 1) := by omega
   have h3 : Nat.log r.divisor r.start + 1 ≤ r.start + 1 := by omega
-  have := @Nat.pow_le_pow_of_le_right r.divisor (by omega) _ _  h3
+  have := @Nat.pow_le_pow_right r.divisor (by omega) _ _  h3
   have hStartLe : r.start ≤ r.divisor ^ (r.start + 1) := by omega
 
   have := mem_of_mem_divRange_loop_aux (r.start + 1) r.start r.stop r.divisor a hDiv

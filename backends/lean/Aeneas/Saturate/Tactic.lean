@@ -13,7 +13,7 @@ open Attribute
 structure DiagnosticsInfo where
   hits : Std.HashMap Name (Nat × Nat)
 
-def DiagnosticsInfo.empty : DiagnosticsInfo := ⟨ Std.HashMap.empty ⟩
+def DiagnosticsInfo.empty : DiagnosticsInfo := ⟨ Std.HashMap.emptyWithCapacity ⟩
 
 def DiagnosticsInfo.insertHit (info : DiagnosticsInfo) (name : Name) : DiagnosticsInfo :=
   match info.hits[name]? with
@@ -95,7 +95,7 @@ def matchExpr
                   let arg ← instantiateMVars arg
                   let hs ← getFVarIds arg hs
                   pure (arg :: args, hs)
-                ) ([], Std.HashSet.empty)
+                ) ([], Std.HashSet.emptyWithCapacity)
               if boundVars.all (fun fvar => ¬ allFVars.contains fvar) then
                 -- Ok: save the theorem
                 trace[Saturate] "Matched with: {rule.thName} {args}"
@@ -239,7 +239,7 @@ private partial def fastVisit
   (e : Expr) : MetaM (DiagnosticsInfo × Std.HashSet (Name × List Expr)) := do
   trace[Saturate] "Visiting {e}"
   -- Match
-  let (dinfo, matched) ← matchExpr preprocessThm nameToRule dtrees Std.HashSet.empty dinfo matched e
+  let (dinfo, matched) ← matchExpr preprocessThm nameToRule dtrees Std.HashSet.emptyWithCapacity dinfo matched e
   -- Recurse
   let e := e.consumeMData
   match e with
@@ -285,7 +285,7 @@ def evalSaturate
   -- Explore the declarations
   let visit :=
     match exploreSubterms with
-    | none => visit 0 preprocessThm s.nameToRule dtrees Std.HashSet.empty
+    | none => visit 0 preprocessThm s.nameToRule dtrees Std.HashSet.emptyWithCapacity
     | some exploreSubterms => fastVisit exploreSubterms preprocessThm 0 s.nameToRule dtrees
 
   let decls ←
@@ -300,7 +300,7 @@ def evalSaturate
     let (dinfo, matched) ← visit dinfo matched decl.toExpr
     match decl.value? with
     | none => pure (dinfo, matched)
-    | some value => visit dinfo matched value) (DiagnosticsInfo.empty, Std.HashSet.empty)
+    | some value => visit dinfo matched value) (DiagnosticsInfo.empty, Std.HashSet.emptyWithCapacity)
   -- Explore the goal
   trace[Saturate] "Exploring the goal"
   let (dinfo, matched) ← do

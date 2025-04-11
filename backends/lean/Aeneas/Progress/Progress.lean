@@ -347,13 +347,13 @@ def progressWith (fExpr : Expr) (th : Expr)
 def getFirstArgAppName (args : Array Expr) : MetaM (Option Name) := do
   if args.size = 0 then pure none
   else
-    (args.get! 0).withApp fun f _ => do
+    args[0]!.withApp fun f _ => do
     if f.isConst then pure (some f.constName)
     else pure none
 
 def getFirstArg (args : Array Expr) : Option Expr := do
   if args.size = 0 then none
-  else some (args.get! 0)
+  else some args[0]!
 
 /-- Helper: try to apply a theorem.
 
