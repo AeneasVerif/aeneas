@@ -11,7 +11,7 @@ theorem pow_ineq (start divisor : Nat) (hDiv : 1 < divisor) :
   have h1 : start < divisor ^ (Nat.log divisor start + 1) :=
     Nat.lt_pow_succ_log_self hDiv start
   have h3 : Nat.log divisor start + 1 ≤ start + 1 := by omega
-  have := @Nat.pow_le_pow_of_le_right divisor (by omega) _ _  h3
+  have := @Nat.pow_le_pow_right divisor (by omega) _ _  h3
   omega
 
 namespace DivRange
@@ -69,7 +69,7 @@ private theorem mem_of_mem_divRange (r : DivRange) (a : Nat)
     Nat.lt_pow_succ_log_self hDiv r.start
   have h2 : r.start + 1 ≤ r.divisor ^ (Nat.log r.divisor r.start + 1) := by omega
   have h3 : Nat.log r.divisor r.start + 1 ≤ r.start + 1 := by omega
-  have := @Nat.pow_le_pow_of_le_right r.divisor (by omega) _ _  h3
+  have := @Nat.pow_le_pow_right r.divisor (by omega) _ _  h3
   have hStartLe : r.start ≤ r.divisor ^ (r.start + 1) := by omega
 
   have := mem_of_mem_divRange_loop_aux (r.start + 1) r.start r.stop r.divisor a hDiv
@@ -196,7 +196,7 @@ def foldWhile_id {α : Type u} (stop divisor : Nat) (hDiv : 1 < divisor)
 
 private theorem divRange.loop_le_maxSteps_eq (stop div maxSteps start : Nat) (hDiv : 1 < div) (hMaxSteps : start + 1 ≤ maxSteps) :
   divRange.loop stop div maxSteps start = divRange.loop stop div (start + 1) start := by
-  dcases maxSteps
+  cases maxSteps
   . omega
   . rename_i maxSteps
     unfold divRange.loop
@@ -214,7 +214,7 @@ private theorem divRange.loop_le_maxSteps_eq (stop div maxSteps start : Nat) (hD
 private theorem foldl_divRange_loop_foldWhile (start stop div maxSteps : Nat) (hMaxSteps : start + 1 ≤ maxSteps)
   (hDiv : 1 < div) (f : α → Nat → α) (init : α) :
   List.foldl f init (divRange.loop stop div maxSteps start) = foldWhile stop div hDiv f start init := by
-  dcases maxSteps
+  cases maxSteps
   . omega
   . rename_i maxSteps
     unfold divRange.loop foldWhile

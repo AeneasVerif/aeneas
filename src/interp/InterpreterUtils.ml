@@ -75,14 +75,14 @@ let abs_to_string span ?(with_ended = false) ctx =
 let same_symbolic_id (sv0 : symbolic_value) (sv1 : symbolic_value) : bool =
   sv0.sv_id = sv1.sv_id
 
-let mk_var (index : VarId.id) (name : string option) (var_ty : ty) : var =
+let mk_var (index : LocalId.id) (name : string option) (var_ty : ty) : local =
   { index; name; var_ty }
 
 (** Small helper - TODO: move *)
-let mk_place_from_var_id (ctx : eval_ctx) (span : Meta.span) (var_id : VarId.id)
-    : place =
+let mk_place_from_var_id (ctx : eval_ctx) (span : Meta.span)
+    (var_id : LocalId.id) : place =
   let _, typed_val = env_lookup_var span ctx.env var_id in
-  { kind = PlaceBase var_id; ty = typed_val.ty }
+  { kind = PlaceLocal var_id; ty = typed_val.ty }
 
 (** Create a fresh symbolic value *)
 let mk_fresh_symbolic_value_opt_span (span : Meta.span option) (ty : ty) :
@@ -191,7 +191,7 @@ type g_borrow_content = (borrow_content, aborrow_content) concrete_or_abs
 
 type abs_or_var_id =
   | AbsId of AbstractionId.id
-  | VarId of VarId.id
+  | LocalId of LocalId.id
   | DummyVarId of DummyVarId.id
 
 (** Utility exception *)

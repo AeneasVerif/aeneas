@@ -93,7 +93,7 @@ theorem Int.bmod_pow2_IScalarTy_numBits_minus_one (ty : IScalarTy) :
   rw [Int.bmod]
   /- Just doing a case disjunction on the number of bits because
      those proofs are annoying -/
-  dcases ty <;> simp
+  cases ty <;> simp
   have := System.Platform.numBits_eq
   cases this <;> simp [*]
 
@@ -140,6 +140,8 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
   simp only [div, bne_iff_ne, ne_eq, hzero, not_false_eq_true, ↓reduceIte, Int.reduceNeg,
     Bool.and_eq_true, decide_eq_true_eq, hNoOverflow, ok.injEq, _root_.exists_eq_left', and_true]
   simp only [val]
+  -- TODO: simplify the proof by using BitVec.toInt_srem
+
   simp only [BitVec.sdiv_eq, BitVec.udiv_eq, BitVec.udiv_def, BitVec.toNat_neg, bv_toInt_eq]
   have pow2Ineq : (2^(ty.numBits - 1) : Int) < 2^ty.numBits := by
     have := ty.numBits_nonzero
@@ -150,7 +152,7 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
     omega
   have hxBounds := x.hBounds
   have hyBounds := y.hBounds
-  --have hxyBounds := tdiv_in_bounds x y hnoOverflow
+
   split
 
   . -- 0 ≤ x.bv.toInt
@@ -169,12 +171,17 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
     have : -2 ^ (ty.numBits - 1) ≤ 0 := by
       simp only [Left.neg_nonpos_iff, Nat.ofNat_nonneg, pow_nonneg]
     have : (x.val).tdiv y.val < 2 ^ (ty.numBits - 1) := by
-      rw [Int.tdiv_eq_ediv] <;> try omega
+      rw [Int.tdiv_eq_ediv]; split <;> try omega
       have := @Int.ediv_le_self x.val y.val (by omega)
       omega
 
-    have := bmod_pow_numBits_eq_of_lt ty (Int.tdiv x.val y.val) (by omega) (by omega)
-    rw [← Int.tdiv_eq_ediv] <;> omega
+    have hEq := bmod_pow_numBits_eq_of_lt ty (Int.tdiv x.val y.val) (by omega) (by omega)
+    rw [← hEq]
+    have htdiv : Int.tdiv x.val y.val = x.val / y.val := by
+      rw [Int.tdiv_eq_ediv]
+      have : 0 ≤ x.val := by omega
+      simp only [this, true_or, ↓reduceIte, add_zero]
+    rw [htdiv]
 
   . -- 0 ≤ x.bv.toInt
     -- y.bv.toInt < 0
@@ -188,7 +195,7 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
       simp_all
     have : -2 ^ (ty.numBits - 1) ≤ Int.tdiv x.val y.val := by
       have : Int.tdiv x.val (-y.val) ≤ 2^(ty.numBits - 1) := by
-        rw [Int.tdiv_eq_ediv] <;> try omega
+        rw [Int.tdiv_eq_ediv]
         have := @Int.ediv_le_self x.val (-y.val) (by omega)
         simp only [ne_eq, Int.reduceNeg, not_and, Int.ediv_neg, ge_iff_le] at *
         have := x.hmax
@@ -218,7 +225,7 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
         omega
       have : x.val / ↑y < 2 ^ (ty.numBits - 1) := by
         have : 0 < 2 ^ (ty.numBits - 1) := by simp only [Nat.ofNat_pos, pow_pos]
-        have : x.val / y.val ≤ 0 := by apply Int.ediv_nonpos <;> omega
+        have : x.val / y.val ≤ 0 := by apply Int.ediv_nonpos_of_nonneg_of_nonpos <;> omega
         omega
       have := bmod_pow_numBits_eq_of_lt ty (x.val / y.val) (by omega) (by omega)
       rw [this]
@@ -227,7 +234,11 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
 
     have : x.val.tdiv y.val = - (x.val.tdiv (-y.val)) := by simp only [Int.tdiv_neg, neg_neg]
     rw [this]
-    rw [Int.tdiv_eq_ediv] <;> try omega
+    have : x.val.tdiv (-y.val) = (x.val) / (-y.val) := by
+      have := @Int.tdiv_eq_ediv x.val (-y.val)
+      rw [this]
+      split <;> omega
+    rw [this]; clear this
     simp only [Int.ediv_neg, neg_neg]
 
   . -- x.bv.toInt < 0
@@ -292,8 +303,11 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
              (-(-x.val / ↑y)) := by
         apply bmod_pow_numBits_eq_of_lt ty _ (by omega) (by omega)
       rw [this]; clear this
-      rw [← Int.tdiv_eq_ediv] <;> try omega
-      simp only [Int.neg_tdiv, neg_neg]
+      have : (-x.val) / y.val = (-x.val).tdiv y.val := by
+        rw [Int.tdiv_eq_ediv]
+        omega
+
+      rw [this]; simp only [Int.neg_tdiv, neg_neg]
 
   . -- x.bv.toInt < 0
     -- y.bv.toInt < 0
@@ -368,7 +382,9 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
     have : -↑y ⊔ 0 = -y.val := by omega
     simp only [this]; clear this
 
-    rw [← Int.tdiv_eq_ediv] <;> try omega
+    have : (-x.val) / (-y.val) = (-x.val).tdiv (-y.val) := by
+      rw [Int.tdiv_eq_ediv]; omega
+    rw [this]
     simp only [Int.tdiv_neg, Int.neg_tdiv, neg_neg]
 
 theorem U8.div_bv_spec (x : U8) {y : U8} (hnz : ↑y ≠ (0 : Nat)) :

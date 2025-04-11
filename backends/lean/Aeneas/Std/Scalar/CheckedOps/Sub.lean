@@ -44,7 +44,7 @@ theorem core.num.checked_sub_UScalar_bv_spec {ty} (x y : UScalar ty) :
   have h := UScalar.sub_equiv x y
   have hsub : x - y = UScalar.sub x y := by rfl
   rw [hsub] at h
-  dcases hEq : UScalar.sub x y <;> simp_all [Option.ofResult, checked_sub_UScalar]
+  cases hEq : UScalar.sub x y <;> simp_all [Option.ofResult, checked_sub_UScalar]
 
 @[progress_pure checked_sub x y]
 theorem U8.checked_sub_bv_spec (x y : U8) :
@@ -109,7 +109,7 @@ theorem core.num.checked_sub_IScalar_bv_spec {ty} (x y : IScalar ty) :
   have h := IScalar.sub_equiv x y
   have hsub : x - y = IScalar.sub x y := by rfl
   rw [hsub] at h
-  dcases hEq : IScalar.sub x y <;> simp_all [Option.ofResult, checked_sub_IScalar, IScalar.min, IScalar.max] <;>
+  cases hEq : IScalar.sub x y <;> simp_all [Option.ofResult, checked_sub_IScalar, IScalar.min, IScalar.max] <;>
   (have : 0 < 2^ty.numBits := by simp) <;>
   omega
 

@@ -129,7 +129,7 @@ theorem BitVec.lt_pow_n_iff_ofNat_le (n a : Nat) (h : a < 2^n) :
 @[bvify_simps]
 theorem Nat.mod_le_imp_mod_le (a b c : Nat) (h : b ≠ 0 ∧ (a < c ∨ b ≤ c)) : a % b < c := by
   obtain ⟨ h0, h1 ⟩ := h
-  dcases h1
+  cases h1
   . have := @Nat.mod_le a b
     omega
   . have := @Nat.mod_lt a b (by omega)

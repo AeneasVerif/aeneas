@@ -129,7 +129,7 @@ let reset_global_counters () =
 class ['self] iter_env_base =
   object (_self : 'self)
     inherit [_] iter_abs
-    method visit_var_id : 'env -> var_id -> unit = fun _ _ -> ()
+    method visit_local_id : 'env -> local_id -> unit = fun _ _ -> ()
     method visit_dummy_var_id : 'env -> dummy_var_id -> unit = fun _ _ -> ()
   end
 
@@ -137,7 +137,7 @@ class ['self] iter_env_base =
 class ['self] map_env_base =
   object (_self : 'self)
     inherit [_] map_abs
-    method visit_var_id : 'env -> var_id -> var_id = fun _ x -> x
+    method visit_local_id : 'env -> local_id -> local_id = fun _ x -> x
 
     method visit_dummy_var_id : 'env -> dummy_var_id -> dummy_var_id =
       fun _ x -> x
@@ -145,7 +145,7 @@ class ['self] map_env_base =
 
 (** A binder used in an environment, to map a variable to a value *)
 type var_binder = {
-  index : var_id;  (** Unique variable identifier *)
+  index : local_id;  (** Unique variable identifier *)
   name : string option;  (** Possible name *)
 }
 

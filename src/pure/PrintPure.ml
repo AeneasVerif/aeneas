@@ -13,19 +13,20 @@ type fmt_env = {
   crate : LlbcAst.crate;
   (* We need a list of params because we have nested binding levels for trait methods. *)
   generics : generic_params list;
-  vars : string VarId.Map.t;
+  vars : string LocalId.Map.t;
 }
 
 let fmt_env_push_var (env : fmt_env) (var : var) : fmt_env =
   (* Only push the binding if the name is not [None] *)
   match var.basename with
   | None -> env
-  | Some name -> { env with vars = VarId.Map.add var.id name env.vars }
+  | Some name -> { env with vars = LocalId.Map.add var.id name env.vars }
 
 let fmt_env_push_locals (env : fmt_env) (vars : var list) : fmt_env =
   List.fold_left fmt_env_push_var env vars
 
-let var_id_to_pretty_string (id : var_id) : string = "^" ^ VarId.to_string id
+let var_id_to_pretty_string (id : local_id) : string =
+  "^" ^ LocalId.to_string id
 
 let lookup_var_in_env (env : fmt_env)
     (find_in : generic_params -> 'id -> 'b option) (var : 'id de_bruijn_var) :
@@ -69,10 +70,10 @@ let const_generic_db_var_to_string (env : fmt_env)
   | None -> Print.Types.const_generic_db_var_to_pretty_string var
   | Some x -> Print.Types.const_generic_var_to_string x
 
-let var_id_to_string (env : fmt_env) (id : VarId.id) : string =
-  match VarId.Map.find_opt id env.vars with
+let var_id_to_string (env : fmt_env) (id : LocalId.id) : string =
+  match LocalId.Map.find_opt id env.vars with
   | None -> var_id_to_pretty_string id
-  | Some name -> name ^ "^" ^ VarId.to_string id
+  | Some name -> name ^ "^" ^ LocalId.to_string id
 
 let trait_clause_id_to_string = Print.Types.trait_clause_id_to_string
 
@@ -83,7 +84,7 @@ let decls_ctx_to_fmt_env (ctx : Contexts.decls_ctx) : fmt_env =
   {
     crate = ctx.crate;
     generics = [ empty_generic_params ];
-    vars = VarId.Map.empty;
+    vars = LocalId.Map.empty;
   }
 
 let name_to_string (env : fmt_env) =
@@ -276,8 +277,8 @@ let type_decl_to_string (env : fmt_env) (def : type_decl) : string =
 
 let var_to_varname (v : var) : string =
   match v.basename with
-  | Some name -> name ^ "^" ^ VarId.to_string v.id
-  | None -> "^" ^ VarId.to_string v.id
+  | Some name -> name ^ "^" ^ LocalId.to_string v.id
+  | None -> "^" ^ LocalId.to_string v.id
 
 let var_to_string (env : fmt_env) (v : var) : string =
   let varname = var_to_varname v in
@@ -303,7 +304,7 @@ let mprojection_elem_to_string (env : fmt_env) (inside : string)
 
 let rec mplace_to_string (env : fmt_env) (p : mplace) : string =
   match p with
-  | PlaceBase (var_id, name) ->
+  | PlaceLocal (var_id, name) ->
       let name =
         match name with
         | None -> ""
@@ -313,7 +314,7 @@ let rec mplace_to_string (env : fmt_env) (p : mplace) : string =
        * use indices of the variables in the original LLBC program, while
        * regular places use indices for the pure variables: we want to make
        * this explicit, otherwise it is confusing. *)
-      name ^ "^" ^ E.VarId.to_string var_id ^ "llbc"
+      name ^ "^" ^ E.LocalId.to_string var_id ^ "llbc"
   | PlaceProjection (p, pe) ->
       let inside = mplace_to_string env p in
       mprojection_elem_to_string env inside pe
@@ -864,7 +865,7 @@ and emeta_to_string ?(span : Meta.span option = None) (env : fmt_env)
         let infos =
           List.map
             (fun (var_id, rv) ->
-              VarId.to_string var_id ^ " == "
+              LocalId.to_string var_id ^ " == "
               ^ texpression_to_string ~span env false "" "" rv)
             info
         in
@@ -874,7 +875,7 @@ and emeta_to_string ?(span : Meta.span option = None) (env : fmt_env)
         let infos =
           List.map
             (fun (var_id, name) ->
-              VarId.to_string var_id ^ " == \"" ^ name ^ "\"")
+              LocalId.to_string var_id ^ " == \"" ^ name ^ "\"")
             info
         in
         let infos = String.concat ", " infos in

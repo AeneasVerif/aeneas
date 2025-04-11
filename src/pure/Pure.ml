@@ -29,8 +29,8 @@ IdGen ()
 module SynthPhaseId =
 IdGen ()
 
-(** Pay attention to the fact that we also define a {!E.VarId} module in Values *)
-module VarId =
+(** Pay attention to the fact that we also define a {!E.LocalId} module in Values *)
+module LocalId =
 IdGen ()
 
 module ConstGenericVarId = T.ConstGenericVarId
@@ -671,7 +671,7 @@ and type_decl = {
 
 type scalar_value = V.scalar_value [@@deriving show, ord]
 type literal = V.literal [@@deriving show, ord]
-type var_id = VarId.id [@@deriving show, ord]
+type local_id = LocalId.id [@@deriving show, ord]
 type field_proj_kind = E.field_proj_kind [@@deriving show, ord]
 type field_id = FieldId.id [@@deriving show, ord]
 
@@ -690,7 +690,7 @@ type mprojection_elem = { pkind : field_proj_kind; field_id : field_id }
     we introduce.
  *)
 type mplace =
-  | PlaceBase of E.VarId.id * string option
+  | PlaceLocal of E.LocalId.id * string option
   | PlaceProjection of mplace * mprojection_elem
 [@@deriving show, ord]
 
@@ -701,7 +701,7 @@ type variant_id = VariantId.id [@@deriving show, ord]
     itself.
  *)
 type var = {
-  id : var_id;
+  id : local_id;
   basename : string option;
       (** The "basename" is used to generate a meaningful name for the variable
           (by potentially adding an index to uniquely identify it).
@@ -714,13 +714,13 @@ type var = {
 class ['self] iter_typed_pattern_base =
   object (self : 'self)
     inherit [_] iter_type_decl
-    method visit_var_id : 'env -> var_id -> unit = fun _ _ -> ()
+    method visit_local_id : 'env -> local_id -> unit = fun _ _ -> ()
     method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
     method visit_variant_id : 'env -> variant_id -> unit = fun _ _ -> ()
 
     method visit_var : 'env -> var -> unit =
       fun e var ->
-        self#visit_var_id e var.id;
+        self#visit_local_id e var.id;
         self#visit_option self#visit_string e var.basename;
         self#visit_ty e var.ty
   end
@@ -729,14 +729,14 @@ class ['self] iter_typed_pattern_base =
 class ['self] map_typed_pattern_base =
   object (self : 'self)
     inherit [_] map_type_decl
-    method visit_var_id : 'env -> var_id -> var_id = fun _ x -> x
+    method visit_local_id : 'env -> local_id -> local_id = fun _ x -> x
     method visit_mplace : 'env -> mplace -> mplace = fun _ x -> x
     method visit_variant_id : 'env -> variant_id -> variant_id = fun _ x -> x
 
     method visit_var : 'env -> var -> var =
       fun e var ->
         {
-          id = self#visit_var_id e var.id;
+          id = self#visit_local_id e var.id;
           basename = self#visit_option self#visit_string e var.basename;
           ty = self#visit_ty e var.ty;
         }
@@ -746,13 +746,13 @@ class ['self] map_typed_pattern_base =
 class virtual ['self] reduce_typed_pattern_base =
   object (self : 'self)
     inherit [_] reduce_type_decl
-    method visit_var_id : 'env -> var_id -> 'a = fun _ _ -> self#zero
+    method visit_local_id : 'env -> local_id -> 'a = fun _ _ -> self#zero
     method visit_mplace : 'env -> mplace -> 'a = fun _ _ -> self#zero
     method visit_variant_id : 'env -> variant_id -> 'a = fun _ _ -> self#zero
 
     method visit_var : 'env -> var -> 'a =
       fun e var ->
-        let x0 = self#visit_var_id e var.id in
+        let x0 = self#visit_local_id e var.id in
         let x1 = self#visit_option self#visit_string e var.basename in
         let x2 = self#visit_ty e var.ty in
         self#plus (self#plus x0 x1) x2
@@ -763,7 +763,7 @@ class virtual ['self] mapreduce_typed_pattern_base =
   object (self : 'self)
     inherit [_] mapreduce_type_decl
 
-    method visit_var_id : 'env -> var_id -> var_id * 'a =
+    method visit_local_id : 'env -> local_id -> local_id * 'a =
       fun _ x -> (x, self#zero)
 
     method visit_mplace : 'env -> mplace -> mplace * 'a =
@@ -774,7 +774,7 @@ class virtual ['self] mapreduce_typed_pattern_base =
 
     method visit_var : 'env -> var -> var * 'a =
       fun e var ->
-        let id, x0 = self#visit_var_id e var.id in
+        let id, x0 = self#visit_local_id e var.id in
         let basename, x1 = self#visit_option self#visit_string e var.basename in
         let ty, x2 = self#visit_ty e var.ty in
         ({ id; basename; ty }, self#plus (self#plus x0 x1) x2)
@@ -957,7 +957,7 @@ class virtual ['self] mapreduce_expression_base =
     more general than the LLBC statements, in a sense.
  *)
 type expression =
-  | Var of var_id  (** a variable *)
+  | Var of local_id  (** a variable *)
   | CVar of const_generic_var_id  (** a const generic var *)
   | Const of literal
   | App of texpression * texpression
@@ -1034,9 +1034,9 @@ and loop = {
   fun_end : texpression;
   loop_id : loop_id;
   span : span; [@opaque]
-  fuel0 : var_id;
-  fuel : var_id;
-  input_state : var_id option;
+  fuel0 : local_id;
+  fuel : local_id;
+  input_state : local_id option;
   inputs : var list;
   inputs_lvs : typed_pattern list;
       (** The inputs seen as patterns. See {!fun_body}. *)
@@ -1096,13 +1096,13 @@ and emeta =
           The mvalue stores the value which is put in the destination
           The second (optional) mplace stores the origin.
         *)
-  | SymbolicAssignments of ((var_id[@opaque]) * mvalue) list
+  | SymbolicAssignments of ((local_id[@opaque]) * mvalue) list
       (** Informationg linking a variable (from the pure AST) to an
           expression.
 
           We use this to guide the heuristics which derive pretty names.
         *)
-  | SymbolicPlaces of ((var_id[@opaque]) * string) list
+  | SymbolicPlaces of ((local_id[@opaque]) * string) list
       (** Informationg linking a variable (from the pure AST) to a name.
 
           We generate this information by exploring the context, and use it

@@ -71,7 +71,9 @@ example : Result (Array Int (Usize.ofNat 2)) := do
   getElem? a i := getElem? a.val i
 
 @[simp, scalar_tac_simps] theorem Array.getElem?_Nat_eq {α : Type u} {n : Usize} (v : Array α n) (i : Nat) : v[i]? = v.val[i]? := by rfl
-@[simp, scalar_tac_simps] theorem Array.getElem!_Nat_eq {α : Type u} [Inhabited α] {n : Usize} (v : Array α n) (i : Nat) : v[i]! = v.val[i]! := by rfl
+@[simp, scalar_tac_simps] theorem Array.getElem!_Nat_eq {α : Type u} [Inhabited α] {n : Usize} (v : Array α n) (i : Nat) : v[i]! = v.val[i]! := by
+  simp only [instGetElem?ArrayNatLtLengthValListEqVal, List.getElem!_eq_getElem?_getD]; split <;> simp_all
+  rfl
 
 @[reducible] instance {α : Type u} {n : Usize} : GetElem (Array α n) Usize α (fun a i => i.val < a.val.length) where
   getElem a i h := getElem a.val i.val h
@@ -80,7 +82,9 @@ example : Result (Array Int (Usize.ofNat 2)) := do
   getElem? a i := getElem? a.val i.val
 
 @[simp, scalar_tac_simps] theorem Array.getElem?_Usize_eq {α : Type u} {n : Usize} (v : Array α n) (i : Usize) : v[i]? = v.val[i.val]? := by rfl
-@[simp, scalar_tac_simps] theorem Array.getElem!_Usize_eq {α : Type u} [Inhabited α] {n : Usize} (v : Array α n) (i : Usize) : v[i]! = v.val[i.val]! := by rfl
+@[simp, scalar_tac_simps] theorem Array.getElem!_Usize_eq {α : Type u} [Inhabited α] {n : Usize} (v : Array α n) (i : Usize) : v[i]! = v.val[i.val]! := by
+  simp [instGetElem?ArrayUsizeLtNatValLengthValListEq]; split <;> simp_all
+  rfl
 
 @[simp, scalar_tac_simps] abbrev Array.get? {α : Type u} {n : Usize} (v : Array α n) (i : Nat) : Option α := getElem? v i
 @[simp, scalar_tac_simps] abbrev Array.get! {α : Type u} {n : Usize} [Inhabited α] (v : Array α n) (i : Nat) : α := getElem! v i
@@ -161,7 +165,7 @@ def Array.index_mut_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) :
 theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} [Inhabited α] (v: Array α n) (i: Usize)
   (hbound : i.val < v.length) :
   ∃ x, v.index_mut_usize i = ok (x, set v i) ∧
-  x = v.val.get! i.val := by
+  x = v.val[i.val]! := by
   simp only [index_mut_usize, Bind.bind, bind]
   have ⟨ x, h ⟩ := index_usize_spec v i hbound
   simp [h]

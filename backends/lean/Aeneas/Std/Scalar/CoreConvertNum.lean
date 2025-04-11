@@ -110,7 +110,7 @@ private theorem BitVec.setWidth_toNat_le (m : Nat) (x : BitVec n) (h : n ≤ m) 
   (x.setWidth m).toNat = x.toNat := by
   have : x.toNat < 2^n := by cases x; simp
   simp only [BitVec.toNat_setWidth]
-  have : 2 ^ n ≤ 2 ^m := by apply Nat.pow_le_pow_of_le_right <;> omega
+  have : 2 ^ n ≤ 2 ^m := by apply Nat.pow_le_pow_right <;> omega
   apply Nat.mod_eq_of_lt
   omega
 
@@ -247,22 +247,22 @@ private theorem bmod_pow2_eq_of_inBounds' (n : ℕ) (x : ℤ) (h : 0 < n ∧ -2 
   apply this
 
 @[simp, scalar_tac_simps] theorem FromIsizeI8.from_val_eq (x : I8) : (FromIsizeI8.from x).val = x.val := by
-  dcases System.Platform.numBits_eq <;>
+  cases System.Platform.numBits_eq <;>
   simp only [FromIsizeI8.from, IScalar.val, BitVec.signExtend] <;> simp <;>
   apply bmod_pow2_eq_of_inBounds' _ x.val (by scalar_tac)
 
 @[simp, scalar_tac_simps] theorem FromIsizeI16.from_val_eq (x : I16) : (FromIsizeI16.from x).val = x.val := by
-  dcases System.Platform.numBits_eq <;>
+  cases System.Platform.numBits_eq <;>
   simp only [FromIsizeI16.from, IScalar.val, BitVec.signExtend] <;> simp <;>
   apply bmod_pow2_eq_of_inBounds' _ x.val (by scalar_tac)
 
 @[simp, scalar_tac_simps] theorem FromIsizeI32.from_val_eq (x : I32) : (FromIsizeI32.from x).val = x.val := by
-  dcases System.Platform.numBits_eq <;>
+  cases System.Platform.numBits_eq <;>
   simp only [FromIsizeI32.from, IScalar.val, BitVec.signExtend] <;> simp <;>
   apply bmod_pow2_eq_of_inBounds' _ x.val (by scalar_tac)
 
 @[simp, scalar_tac_simps] theorem FromIsizeIsize.from_val_eq (x : Isize) : (FromIsizeIsize.from x).val = x.val := by
-  dcases System.Platform.numBits_eq <;>
+  cases System.Platform.numBits_eq <;>
   simp only [FromIsizeIsize.from, IScalar.val, BitVec.signExtend] <;> simp
 
 @[simp, scalar_tac_simps] theorem FromI8I8.from_val_eq (x : I8) : (FromI8I8.from x).val = x.val := by
@@ -321,19 +321,19 @@ private theorem bmod_pow2_eq_of_inBounds' (n : ℕ) (x : ℤ) (h : 0 < n ∧ -2 
   simp only [FromI128I128.from, IScalar.val, BitVec.signExtend]; simp
 
 @[simp, bvify_simps] theorem FromIsizeI8.from_bv_eq (x : I8) : (FromIsizeI8.from x).bv = x.bv.signExtend _ := by
-  dcases System.Platform.numBits_eq <;>
+  cases System.Platform.numBits_eq <;>
   simp only [FromIsizeI8.from, IScalar.val, BitVec.signExtend] <;> simp
 
 @[simp, bvify_simps] theorem FromIsizeI16.from_bv_eq (x : I16) : (FromIsizeI16.from x).bv = x.bv.signExtend _ := by
-  dcases System.Platform.numBits_eq <;>
+  cases System.Platform.numBits_eq <;>
   simp only [FromIsizeI16.from, IScalar.val, BitVec.signExtend] <;> simp
 
 @[simp, bvify_simps] theorem FromIsizeI32.from_bv_eq (x : I32) : (FromIsizeI32.from x).bv = x.bv.signExtend _ := by
-  dcases System.Platform.numBits_eq <;>
+  cases System.Platform.numBits_eq <;>
   simp only [FromIsizeI32.from, IScalar.val, BitVec.signExtend] <;> simp
 
 @[simp, bvify_simps] theorem FromIsizeIsize.from_bv_eq (x : Isize) : (FromIsizeIsize.from x).bv = x.bv.signExtend _ := by
-  dcases System.Platform.numBits_eq <;>
+  cases System.Platform.numBits_eq <;>
   simp only [FromIsizeIsize.from, IScalar.val, BitVec.signExtend] <;> simp
 
 @[simp, bvify_simps] theorem FromI8I8.from_bv_eq (x : I8) : (FromI8I8.from x).bv = x.bv.signExtend _ := by

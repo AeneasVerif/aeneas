@@ -63,22 +63,22 @@ let remove_dummy_var (span : Meta.span) (vid : DummyVarId.id) (ctx : eval_ctx) :
   (v, ctx)
 
 (** Push an uninitialized variable to the environment *)
-let push_uninitialized_var (span : Meta.span) (var : var) (ctx : eval_ctx) :
+let push_uninitialized_var (span : Meta.span) (var : local) (ctx : eval_ctx) :
     eval_ctx =
   ctx_push_uninitialized_var span ctx var
 
 (** Push a list of uninitialized variables to the environment *)
-let push_uninitialized_vars (span : Meta.span) (vars : var list)
+let push_uninitialized_vars (span : Meta.span) (vars : local list)
     (ctx : eval_ctx) : eval_ctx =
   ctx_push_uninitialized_vars span ctx vars
 
 (** Push a variable to the environment *)
-let push_var (span : Meta.span) (var : var) (v : typed_value) (ctx : eval_ctx) :
-    eval_ctx =
+let push_var (span : Meta.span) (var : local) (v : typed_value) (ctx : eval_ctx)
+    : eval_ctx =
   ctx_push_var span ctx var v
 
 (** Push a list of variables to the environment *)
-let push_vars (span : Meta.span) (vars : (var * typed_value) list)
+let push_vars (span : Meta.span) (vars : (local * typed_value) list)
     (ctx : eval_ctx) : eval_ctx =
   ctx_push_vars span ctx vars
 
@@ -295,7 +295,7 @@ let move_return_value (config : config) (span : Meta.span)
     * eval_ctx
     * (SymbolicAst.expression -> SymbolicAst.expression) =
   if pop_return_value then
-    let ret_vid = VarId.zero in
+    let ret_vid = LocalId.zero in
     let v, ctx, cc =
       eval_operand config span
         (Move (mk_place_from_var_id ctx span ret_vid))
@@ -313,7 +313,7 @@ let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
   log#ltrace (lazy ("pop_frame:\n" ^ eval_ctx_to_string ~span:(Some span) ctx));
 
   (* List the local variables, but the return variable *)
-  let ret_vid = VarId.zero in
+  let ret_vid = LocalId.zero in
   let rec list_locals env =
     match env with
     | [] -> craise __FILE__ __LINE__ span "Inconsistent environment"
@@ -324,12 +324,12 @@ let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
         if var.index <> ret_vid then var.index :: locals else locals
     | EFrame :: _ -> []
   in
-  let locals : VarId.id list = list_locals ctx.env in
+  let locals : LocalId.id list = list_locals ctx.env in
   (* Debug *)
   log#ltrace
     (lazy
       ("pop_frame: locals in which to drop the outer loans: ["
-      ^ String.concat "," (List.map VarId.to_string locals)
+      ^ String.concat "," (List.map LocalId.to_string locals)
       ^ "]"));
 
   (* Drop the outer *loans* we find in the local variables *)
@@ -420,7 +420,7 @@ let eval_box_new_concrete (config : config) (span : Meta.span)
       let box_v = mk_typed_value span box_ty box_v in
 
       (* Move this value to the return variable *)
-      let dest = mk_place_from_var_id ctx span VarId.zero in
+      let dest = mk_place_from_var_id ctx span LocalId.zero in
       comp cc (assign_to_place config span box_v dest ctx)
   | _ -> craise __FILE__ __LINE__ span "Inconsistent state"
 
@@ -456,14 +456,14 @@ let eval_builtin_function_call_concrete (config : config) (span : Meta.span)
       let ctx = push_frame ctx in
 
       (* Create and push the return variable *)
-      let ret_vid = VarId.zero in
+      let ret_vid = LocalId.zero in
       let ret_ty = get_builtin_function_return_type span ctx fid generics in
       let ret_var = mk_var ret_vid (Some "@return") ret_ty in
       let ctx = push_uninitialized_var span ret_var ctx in
 
       (* Create and push the input variables *)
       let input_vars =
-        VarId.mapi_from1
+        LocalId.mapi_from1
           (fun id (v : typed_value) -> (mk_var id None v.ty, v))
           args_vl
       in

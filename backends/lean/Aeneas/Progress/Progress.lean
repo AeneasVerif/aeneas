@@ -347,13 +347,13 @@ def progressWith (fExpr : Expr) (th : Expr)
 def getFirstArgAppName (args : Array Expr) : MetaM (Option Name) := do
   if args.size = 0 then pure none
   else
-    (args.get! 0).withApp fun f _ => do
+    args[0]!.withApp fun f _ => do
     if f.isConst then pure (some f.constName)
     else pure none
 
 def getFirstArg (args : Array Expr) : Option Expr := do
   if args.size = 0 then none
-  else some (args.get! 0)
+  else some args[0]!
 
 /-- Helper: try to apply a theorem.
 
@@ -549,8 +549,11 @@ def evalProgress (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Ar
   let (goals, usedTheorem) ← progressAsmsOrLookupTheorem keep keepPretty withArg ids splitPost (
     withMainContext do
     trace[Progress] "trying to solve precondition: {← getMainGoal}"
-    firstTac ([customAssumTac, simpTac, simpTac, scalarTac] ++ byTac)
-    trace[Progress] "Precondition solved!")
+    try
+      firstTac ([customAssumTac, simpTac, simpTac, scalarTac] ++ byTac)
+      trace[Progress] "Precondition solved!"
+    catch _ =>
+      trace[Progress] "Precondition not solved")
   trace[Progress] "Progress done"
   return ⟨ goals, usedTheorem ⟩
 

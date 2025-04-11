@@ -416,7 +416,7 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
 let remove_shallow_borrows (crate : crate) (f : fun_decl) : fun_decl =
   let f0 = f in
   let filter_in_body (body : statement) : statement =
-    let filtered = ref VarId.Set.empty in
+    let filtered = ref LocalId.Set.empty in
 
     let filter_visitor =
       object
@@ -424,9 +424,9 @@ let remove_shallow_borrows (crate : crate) (f : fun_decl) : fun_decl =
 
         method! visit_Assign env p rv =
           match (p.kind, rv) with
-          | PlaceBase var_id, RvRef (_, BShallow) ->
+          | PlaceLocal var_id, RvRef (_, BShallow) ->
               (* Filter *)
-              filtered := VarId.Set.add var_id !filtered;
+              filtered := LocalId.Set.add var_id !filtered;
               Nop
           | _ ->
               (* Don't filter *)
@@ -434,7 +434,7 @@ let remove_shallow_borrows (crate : crate) (f : fun_decl) : fun_decl =
 
         method! visit_FakeRead env p =
           match p.kind with
-          | PlaceBase var_id when VarId.Set.mem var_id !filtered ->
+          | PlaceLocal var_id when LocalId.Set.mem var_id !filtered ->
               (* filter *)
               Nop
           | _ ->
@@ -454,9 +454,9 @@ let remove_shallow_borrows (crate : crate) (f : fun_decl) : fun_decl =
         (* Remember the span of the statement we enter *)
         method! visit_statement _ st = super#visit_statement st.span st
 
-        method! visit_var_id span id =
+        method! visit_local_id span id =
           cassert __FILE__ __LINE__
-            (not (VarId.Set.mem id !filtered))
+            (not (LocalId.Set.mem id !filtered))
             span
             "Filtered variables should have completely disappeared from the \
              body"
@@ -535,8 +535,8 @@ let decompose_str_borrows (f : fun_decl) : fun_decl =
     | Some body ->
         let new_locals = ref [] in
         let _, gen =
-          VarId.mk_stateful_generator_starting_at_id
-            (VarId.of_int (List.length body.locals.vars))
+          LocalId.mk_stateful_generator_starting_at_id
+            (LocalId.of_int (List.length body.locals.locals))
         in
         let fresh_local ty =
           let local = { index = gen (); var_ty = ty; name = None } in
@@ -576,7 +576,7 @@ let decompose_str_borrows (f : fun_decl) : fun_decl =
                           span;
                           content =
                             Assign
-                              ( { kind = PlaceBase local_id; ty = str_ty },
+                              ( { kind = PlaceLocal local_id; ty = str_ty },
                                 Use (Constant new_cv) );
                           comments_before = [];
                         }
@@ -593,9 +593,10 @@ let decompose_str_borrows (f : fun_decl) : fun_decl =
                         | RShared -> BShared
                       in
                       let rv =
-                        RvRef ({ kind = PlaceBase local_id; ty = str_ty }, bkind)
+                        RvRef
+                          ({ kind = PlaceLocal local_id; ty = str_ty }, bkind)
                       in
-                      let lv = { kind = PlaceBase nlocal_id; ty = cv.ty } in
+                      let lv = { kind = PlaceLocal nlocal_id; ty = cv.ty } in
                       let st =
                         {
                           span;
@@ -607,7 +608,7 @@ let decompose_str_borrows (f : fun_decl) : fun_decl =
                       nlocal_id
                     in
                     (* Finally we can move the value *)
-                    Move { kind = PlaceBase local_id; ty = cv.ty }
+                    Move { kind = PlaceLocal local_id; ty = cv.ty }
                 | _ -> super#visit_Constant env cv
             end
           in
@@ -654,7 +655,7 @@ let decompose_str_borrows (f : fun_decl) : fun_decl =
             locals =
               {
                 body.locals with
-                vars = body.locals.vars @ List.rev !new_locals;
+                locals = body.locals.locals @ List.rev !new_locals;
               };
           }
     | None -> None

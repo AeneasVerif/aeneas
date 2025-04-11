@@ -165,14 +165,14 @@ type bs_ctx = {
           a symbolic expansion or upon ending an abstraction, for instance)
           we introduce a new variable (with a let-binding).
        *)
-  var_counter : VarId.generator ref;
+  var_counter : LocalId.generator ref;
       (** Using a ref to make sure all the variables identifiers are unique.
           TODO: this is not very clean, and the code was initially written without
           a reference (and it's shape hasn't changed). We should use DeBruijn indices.
        *)
-  state_var : VarId.id;
+  state_var : LocalId.id;
       (** The current state variable, in case the function is stateful *)
-  back_state_vars : VarId.id RegionGroupId.Map.t;
+  back_state_vars : LocalId.id RegionGroupId.Map.t;
       (** The additional input state variable received by a stateful backward
           function, **in case we are splitting the forward/backward functions**.
 
@@ -192,9 +192,9 @@ type bs_ctx = {
           to make sure we use the same variable in all the branches (because
           this variable is quantified at the definition level).
        *)
-  fuel0 : VarId.id;
+  fuel0 : LocalId.id;
       (** The original fuel taken as input by the function (if we use fuel) *)
-  fuel : VarId.id;
+  fuel : LocalId.id;
       (** The fuel to use for the recursive calls (if we use fuel) *)
   forward_inputs : var list;
       (** The input parameters for the forward function corresponding to the
@@ -338,7 +338,7 @@ type bs_ctx = {
           retrieving those consumed values but in practice it is quite
           straightforward and easy to debug.
       *)
-  var_id_to_default : texpression VarId.Map.t;
+  var_id_to_default : texpression LocalId.Map.t;
       (** Map from the variable identifier of a given back value and introduced
           when deconstructing an ended abstraction, to the default value that
           we can use when introducing the otherwise branch of the deconstructing
@@ -359,7 +359,7 @@ let bs_ctx_to_pure_fmt_env (ctx : bs_ctx) : PrintPure.fmt_env =
   {
     crate = ctx.decls_ctx.crate;
     generics = [ ctx.sg.generics ];
-    vars = VarId.Map.empty;
+    vars = LocalId.Map.empty;
   }
 
 let ctx_generic_args_to_string (ctx : bs_ctx) (args : T.generic_args) : string =
@@ -1004,7 +1004,7 @@ let mk_type_check_ctx (ctx : bs_ctx) : PureTypeCheck.tc_ctx =
            (cg.index, ctx_translate_fwd_ty ctx (T.TLiteral cg.ty)))
          ctx.sg.generics.const_generics)
   in
-  let env = VarId.Map.empty in
+  let env = LocalId.Map.empty in
   {
     PureTypeCheck.type_decls = ctx.type_ctx.type_decls;
     global_decls = ctx.decls_ctx.crate.global_decls;
@@ -1551,7 +1551,7 @@ let translate_fun_sig_from_decl_to_decomposed (decls_ctx : C.decls_ctx)
     | None -> List.map (fun _ -> None) fdef.signature.inputs
     | Some body ->
         List.map
-          (fun (v : LlbcAst.var) -> v.name)
+          (fun (v : LlbcAst.local) -> v.name)
           (LlbcAstUtils.fun_body_get_input_vars body)
   in
   let sg =
@@ -1681,7 +1681,7 @@ let translate_fun_sig_from_decomposed (dsg : Pure.decomposed_fun_sig) : fun_sig
 
 let bs_ctx_fresh_state_var (ctx : bs_ctx) : bs_ctx * var * typed_pattern =
   (* Generate the fresh variable *)
-  let id, var_counter = VarId.fresh !(ctx.var_counter) in
+  let id, var_counter = LocalId.fresh !(ctx.var_counter) in
   let state_var =
     { id; basename = Some ConstStrings.state_basename; ty = mk_state_ty }
   in
@@ -1697,7 +1697,7 @@ let bs_ctx_fresh_state_var (ctx : bs_ctx) : bs_ctx * var * typed_pattern =
 let fresh_var_llbc_ty (basename : string option) (ty : T.ty) (ctx : bs_ctx) :
     bs_ctx * var =
   (* Generate the fresh variable *)
-  let id, var_counter = VarId.fresh !(ctx.var_counter) in
+  let id, var_counter = LocalId.fresh !(ctx.var_counter) in
   let ty = ctx_translate_fwd_ty ctx ty in
   let var = { id; basename; ty } in
   (* Update the context *)
@@ -1735,7 +1735,7 @@ let fresh_named_vars_for_symbolic_values
 let fresh_var (basename : string option) (ty : ty) (ctx : bs_ctx) : bs_ctx * var
     =
   (* Generate the fresh variable *)
-  let id, var_counter = VarId.fresh !(ctx.var_counter) in
+  let id, var_counter = LocalId.fresh !(ctx.var_counter) in
   let var = { id; basename; ty } in
   (* Update the context *)
   ctx.var_counter := var_counter;
@@ -2356,7 +2356,7 @@ let translate_mprojection_elem (pe : E.projection_elem) :
 (** Translate a "span"-place *)
 let rec translate_mplace (p : S.mplace) : mplace =
   match p with
-  | PlaceBase bv -> PlaceBase (bv.index, bv.name)
+  | PlaceLocal bv -> PlaceLocal (bv.index, bv.name)
   | PlaceProjection (p, pe) -> (
       let p = translate_mplace p in
       let pe = translate_mprojection_elem pe in
@@ -2537,7 +2537,7 @@ and aborrow_content_to_given_back_aux ~(filter : bool) (mp : mplace option)
         | Some e ->
             {
               ctx with
-              var_id_to_default = VarId.Map.add var.id e ctx.var_id_to_default;
+              var_id_to_default = LocalId.Map.add var.id e ctx.var_id_to_default;
             }
       in
       (* *)
@@ -2568,7 +2568,7 @@ and aproj_to_given_back_aux (mp : mplace option) (aproj : V.aproj) (ty : T.ty)
         {
           ctx with
           var_id_to_default =
-            VarId.Map.add var.id
+            LocalId.Map.add var.id
               (symbolic_value_to_texpression ctx sv)
               ctx.var_id_to_default;
         }
@@ -2650,8 +2650,8 @@ let mk_emeta_symbolic_assignments (vars : var list) (values : texpression list)
     We explore the context and look in which bindings the symbolic values appear:
     we use this information to derive naming information. *)
 let eval_ctx_to_symbolic_assignments_info (ctx : bs_ctx)
-    (ectx : Contexts.eval_ctx) : (VarId.id * string) list =
-  let info : (VarId.id * string) list ref = ref [] in
+    (ectx : Contexts.eval_ctx) : (LocalId.id * string) list =
+  let info : (LocalId.id * string) list ref = ref [] in
   let push_info name sv = info := (name, sv) :: !info in
   let visitor =
     object (self)
@@ -2797,13 +2797,13 @@ let decompose_let_match (ctx : bs_ctx)
     in
     (* Create the new pattern for the match, with the fresh variables *)
     let subst =
-      VarId.Map.of_list
+      LocalId.Map.of_list
         (List.map2 (fun (v0 : var) (v1 : var) -> (v0.id, v1)) vars fresh_vars)
     in
     let subst_visitor =
       object
         inherit [_] map_expression
-        method! visit_PatVar _ v mp = PatVar (VarId.Map.find v.id subst, mp)
+        method! visit_PatVar _ v mp = PatVar (LocalId.Map.find v.id subst, mp)
       end
     in
     (* Create the correct branch *)
@@ -2817,7 +2817,7 @@ let decompose_let_match (ctx : bs_ctx)
         (fun (v : var) ->
           (* We need to lookup the default values corresponding to
              each given back symbolic value *)
-          match VarId.Map.find_opt v.id ctx.var_id_to_default with
+          match LocalId.Map.find_opt v.id ctx.var_id_to_default with
           | Some e -> e
           | None ->
               (* This is a bug, but we might want to continue generating the model:
@@ -2826,8 +2826,8 @@ let decompose_let_match (ctx : bs_ctx)
               save_error __FILE__ __LINE__ ctx.span
                 ("Internal error: could not find variable. Please report an \
                   issue. Debugging information:" ^ "\n- v.id: "
-               ^ VarId.to_string v.id ^ "\n- ctx.var_id_to_default: "
-                ^ VarId.Map.to_string None
+               ^ LocalId.to_string v.id ^ "\n- ctx.var_id_to_default: "
+                ^ LocalId.Map.to_string None
                     (texpression_to_string ctx)
                     ctx.var_id_to_default
                 ^ "\n");
@@ -3194,6 +3194,8 @@ and translate_function_call_aux (call : S.call) (e : S.expression)
         | CastTransmute _ ->
             craise __FILE__ __LINE__ ctx.span "Unsupported: transmute"
       end
+    | S.Unop E.PtrMetadata ->
+        craise __FILE__ __LINE__ ctx.span "Unsupported unop: PtrMetadata"
     | S.Binop binop -> (
         match args with
         | [ arg0; arg1 ] ->
@@ -4700,8 +4702,8 @@ and translate_espan (span : S.espan) (e : S.expression) (ctx : bs_ctx) :
   | None -> next_e
 
 (** Wrap a function body in a match over the fuel to control termination. *)
-let wrap_in_match_fuel (span : Meta.span) (fuel0 : VarId.id) (fuel : VarId.id)
-    (body : texpression) : texpression =
+let wrap_in_match_fuel (span : Meta.span) (fuel0 : LocalId.id)
+    (fuel : LocalId.id) (body : texpression) : texpression =
   let fuel0_var : var = mk_fuel_var fuel0 in
   let fuel0 = mk_texpression_from_var fuel0_var in
   let nfuel_var : var = mk_fuel_var fuel in

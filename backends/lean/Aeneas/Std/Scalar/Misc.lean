@@ -193,7 +193,7 @@ theorem UScalar.ofNatCore_bv_lt_equiv {ty} (x y : Nat) (hx) (hy) :
   simp only [ofNatCore, BitVec.ofNat_lt_ofNat]
   have := Nat.mod_eq_of_lt hx
   have := Nat.mod_eq_of_lt hy
-  simp only [*]
+  simp only [BitVec.lt_ofFin, Fin.mk_lt_mk]
 
 @[simp, scalar_tac_simps] theorem U8.val_mod_size_eq (x : U8) : x.val % U8.size = x.val := by
   apply Nat.mod_eq_of_lt; scalar_tac
@@ -278,7 +278,7 @@ theorem UScalar.ofNatCore_bv_lt_equiv {ty} (x y : Nat) (hx) (hy) :
 
 @[simp, scalar_tac_simps] theorem Isize.val_mod_size_eq (x : Isize) : Int.bmod x.val Isize.size = x.val := by
   simp [size]; apply Int.bmod_pow2_eq_of_inBounds' <;> try scalar_tac
-  simp [numBits]; dcases System.Platform.numBits_eq <;> simp [*]
+  simp [numBits]; cases System.Platform.numBits_eq <;> simp [*]
 
 @[simp] theorem U8.val_max_zero_eq (x : U8) : x.val ⊔ 0 = x.val := by scalar_tac
 @[simp] theorem U16.val_max_zero_eq (x : U16) : x.val ⊔ 0 = x.val := by scalar_tac
