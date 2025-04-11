@@ -172,7 +172,7 @@ and id =
           must be unique (it is the case in F* ) which is why we register
           them here.
        *)
-  | VarId of VarId.id
+  | LocalId of LocalId.id
   | TraitDeclId of TraitDeclId.id
   | TraitImplId of TraitImplId.id
   | TypeVarId of generic_origin * TypeVarId.id
@@ -699,7 +699,7 @@ let id_to_string (span : Meta.span option) (id : id) (ctx : extraction_ctx) :
       let field_name = adt_field_to_string span ctx id field_id in
       "type name: " ^ type_name ^ ", field name: " ^ field_name
   | UnknownId -> "keyword"
-  | VarId id -> "var_id: " ^ VarId.to_string id
+  | LocalId id -> "var_id: " ^ LocalId.to_string id
   | TraitDeclId id -> "trait_decl_id: " ^ TraitDeclId.to_string id
   | TraitImplId id -> "trait_impl_id: " ^ TraitImplId.to_string id
   | TypeVarId (origin, id) ->
@@ -797,9 +797,9 @@ let ctx_get_trait_parent_clause (span : Meta.span) (id : trait_decl_id)
     (clause : trait_clause_id) (ctx : extraction_ctx) : string =
   ctx_get (Some span) (TraitParentClauseId (id, clause)) ctx
 
-let ctx_get_var (span : Meta.span) (id : VarId.id) (ctx : extraction_ctx) :
+let ctx_get_var (span : Meta.span) (id : LocalId.id) (ctx : extraction_ctx) :
     string =
-  ctx_get (Some span) (VarId id) ctx
+  ctx_get (Some span) (LocalId id) ctx
 
 (** This warrants explanations. Charon supports several levels of nested
   binders; however there are currently only two cases where we bind
@@ -2082,10 +2082,10 @@ let ctx_add_type_vars (span : Meta.span) (origin : generic_origin)
     ctx vars
 
 (** Generate a unique variable name and add it to the context *)
-let ctx_add_var (span : Meta.span) (basename : string) (id : VarId.id)
+let ctx_add_var (span : Meta.span) (basename : string) (id : LocalId.id)
     (ctx : extraction_ctx) : extraction_ctx * string =
   let name = basename_to_unique ctx basename in
-  let ctx = ctx_add span (VarId id) name ctx in
+  let ctx = ctx_add span (LocalId id) name ctx in
   (ctx, name)
 
 (** Generate a unique variable name for the trait self clause and add it to the context *)

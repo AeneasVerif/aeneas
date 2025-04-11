@@ -49,7 +49,8 @@ end ops -- core.ops
 /- Trait declaration: [core::clone::Clone] -/
 structure clone.Clone (Self : Type) where
   clone : Self → Result Self
-  clone_from : Self → Self → Result Self
+  clone_from : Self → Self → Result Self := fun _ => clone
+
 
 def clone.Clone.from_from.default {Self : Type} (clone : Self → Result Self)
   (_self source : Self) : Result Self :=

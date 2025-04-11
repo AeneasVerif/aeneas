@@ -237,7 +237,7 @@ let rec access_place (span : Meta.span) (access : projection_access)
     (typed_value * (eval_ctx * typed_value -> eval_ctx * typed_value))
     path_access_result =
   match p.kind with
-  | PlaceBase var_id ->
+  | PlaceLocal var_id ->
       (* Lookup the variable's value *)
       let v = ctx_lookup_var_value span ctx var_id in
       let backward (ctx, updated) =

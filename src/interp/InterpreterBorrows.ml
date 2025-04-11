@@ -2101,7 +2101,7 @@ let abs_borrows_loans_in_fixed span (ctx : eval_ctx)
               | AbsId abs_id ->
                   if AbstractionId.Set.mem abs_id fixed_abs_ids then raise Found
                   else ()
-              | VarId _ | DummyVarId _ -> ()
+              | LocalId _ | DummyVarId _ -> ()
             end;
             super#visit_aborrow_content env lc
         | AIgnoredMutBorrow _
