@@ -1,10 +1,12 @@
+import Init.Data.List.OfFn
+
 open Lean
 
-def BitVec.toArray(bv: BitVec n): Array Bool := Array.finRange n |>.map (bv[·])
-def BitVec.ofFn(f: Fin n → Bool): BitVec n := (BitVec.ofBoolListLE <| List.ofFn f).cast (List.length_ofFn f)
-def BitVec.set(i: Fin n)(b: Bool)(bv: BitVec n): BitVec n := bv ^^^ (((bv[i] ^^ b).toNat : BitVec n) <<< i.val)
+def BitVec.toArray {n} (bv: BitVec n) : Array Bool := Array.finRange n |>.map (bv[·])
+def BitVec.ofFn {n} (f: Fin n → Bool) : BitVec n := (BitVec.ofBoolListLE <| List.ofFn f).cast (by simp)
+def BitVec.set {n} (i: Fin n) (b: Bool) (bv: BitVec n) : BitVec n := bv ^^^ (((bv[i] ^^ b).toNat : BitVec n) <<< i.val)
 
-def BitVec.toByteArray(bv: BitVec n): ByteArray :=
+def BitVec.toByteArray {n} (bv: BitVec n) : ByteArray :=
   let paddedLen := (n + 7)/8
   let bv' := bv.setWidth (paddedLen*8)
   ByteArray.mk <| Array.finRange paddedLen
@@ -15,7 +17,7 @@ def BitVec.toByteArray(bv: BitVec n): ByteArray :=
       UInt8.ofNat x
 
 @[ext]
-theorem BitVec.ext{bv1 bv2: BitVec n}
+theorem BitVec.ext {n} {bv1 bv2 : BitVec n}
 {point_eq: ∀ i: Nat, (_: i < n) → bv1[i] = bv2[i]}
 : bv1 = bv2
 := by
@@ -37,7 +39,7 @@ theorem BitVec.ext{bv1 bv2: BitVec n}
       _ ≤ 2 ^i := Nat.pow_le_pow_of_le Nat.one_lt_two (Nat.le_of_not_gt h)
     simp [Nat.testBit_lt_two_pow this]
 
-theorem BitVec.getElem_set{bv: BitVec n}{b: Bool}{i: Fin n}{j: Nat}
+theorem BitVec.getElem_set {n} {bv: BitVec n} {b: Bool} {i: Fin n} {j: Nat}
 :  {j_lt: j < n}
 → (bv.set i b)[j] = if i = j then b else bv[j]
 := by
@@ -59,11 +61,11 @@ theorem BitVec.getElem_set{bv: BitVec n}{b: Bool}{i: Fin n}{j: Nat}
       simp [this, h]
       cases bv[i] <;> cases b <;> simp [n_pos, (by simp; omega: decide (j - i = 0) = false)]
 
-@[simp] theorem BitVec.cast_set(h: n = m)(bv: BitVec n)(i: Nat)(b: Bool)(i_idx: i < n)
+@[simp] theorem BitVec.cast_set {n m} (h: n = m) (bv: BitVec n) (i: Nat) (b: Bool) (i_idx: i < n)
 : (bv.set ⟨i, i_idx⟩ b).cast h = (bv.cast h).set ⟨i, h ▸ i_idx⟩ b
 := by subst h; ext; rw [cast_eq, cast_eq]
 
-@[simp] theorem BitVec.getElem_ofBoolListLE{ls: List Bool}{i: Nat}
+@[simp] theorem BitVec.getElem_ofBoolListLE {ls: List Bool} {i: Nat}
 : ∀ (h: i < ls.length), (BitVec.ofBoolListLE ls)[i] = ls[i]
 := by
   let rec odd_div(x: Nat): (2*x + 1) / 2 = x := by
@@ -88,6 +90,6 @@ theorem BitVec.getElem_set{bv: BitVec n}{b: Bool}{i: Fin n}{j: Nat}
       apply BitVec.getElem_ofBoolListLE i_lt
 
 
-@[simp] theorem BitVec.getElem_ofFn(f: Fin n → Bool)(i: Nat){i_idx: i < n}
+@[simp] theorem BitVec.getElem_ofFn {n} (f: Fin n → Bool) (i: Nat) {i_idx: i < n}
 : (BitVec.ofFn f)[i] = f ⟨i, i_idx⟩
 := by simp [ofFn]
