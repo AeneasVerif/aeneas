@@ -475,8 +475,11 @@ let eval_builtin_function_call_concrete (config : config) (span : Meta.span)
       let ctx, cf_eval_body =
         match fid with
         | BoxNew -> eval_box_new_concrete config span generics ctx
-        | Index _ | ArrayToSliceShared | ArrayToSliceMut | ArrayRepeat ->
-            craise __FILE__ __LINE__ span "Unimplemented"
+        | Index _
+        | ArrayToSliceShared
+        | ArrayToSliceMut
+        | ArrayRepeat
+        | PtrFromParts _ -> craise __FILE__ __LINE__ span "Unimplemented"
       in
       let cc = cc_comp cc cf_eval_body in
 
