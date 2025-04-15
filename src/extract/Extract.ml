@@ -478,9 +478,8 @@ let extract_binop (span : Meta.span)
         | Add -> "+"
         | Sub -> "-"
         | Mul -> "*"
-        | CheckedAdd | CheckedSub | CheckedMul ->
-            admit_string __FILE__ __LINE__ span
-              "Checked operations are not implemented"
+        | CheckedAdd | CheckedSub | CheckedMul | Cmp | Offset ->
+            admit_string __FILE__ __LINE__ span "Operations not implemented"
         | Shl -> "<<<"
         | Shr -> ">>>"
         | BitXor -> "^^^"
