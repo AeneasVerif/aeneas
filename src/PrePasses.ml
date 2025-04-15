@@ -11,45 +11,6 @@ open Errors
 
 let log = Logging.pre_passes_log
 
-(** Rustc inserts a lot of drops before the assignments.
-
-    We consider those drops are part of the assignment, and splitting the
-    drop and the assignment is problematic for us because it can introduce
-    [⊥] under borrows. For instance, we encountered situations like the
-    following one:
-    
-    {[
-      drop( *x ); // Illegal! Inserts a ⊥ under a borrow
-      *x = move ...;
-    ]}
-
-    Rem.: we don't use this anymore
- *)
-let filter_drop_assigns (f : fun_decl) : fun_decl =
-  (* The visitor *)
-  let obj =
-    object (self)
-      inherit [_] map_statement as super
-
-      method! visit_Sequence env st1 st2 =
-        match (st1.content, st2.content) with
-        | Drop p1, Assign (p2, _) ->
-            if p1 = p2 then (self#visit_statement env st2).content
-            else super#visit_Sequence env st1 st2
-        | Drop p1, Sequence ({ content = Assign (p2, _); _ }, _) ->
-            if p1 = p2 then (self#visit_statement env st2).content
-            else super#visit_Sequence env st1 st2
-        | _ -> super#visit_Sequence env st1 st2
-    end
-  in
-  (* Map  *)
-  let body =
-    match f.body with
-    | Some body -> Some { body with body = obj#visit_statement () body.body }
-    | None -> None
-  in
-  { f with body }
-
 (** This pass slightly restructures the control-flow to remove the need to
     merge branches during the symbolic execution in some quite common cases
     where doing a merge is actually not necessary and leads to an ugly translation.
