@@ -478,13 +478,15 @@ let extract_binop (span : Meta.span)
         | Add -> "+"
         | Sub -> "-"
         | Mul -> "*"
-        | CheckedAdd | CheckedSub | CheckedMul | Cmp | Offset ->
-            admit_string __FILE__ __LINE__ span "Operations not implemented"
         | Shl -> "<<<"
         | Shr -> ">>>"
         | BitXor -> "^^^"
         | BitOr -> "|||"
         | BitAnd -> "&&&"
+        | _ ->
+            admit_string __FILE__ __LINE__ span
+              ("Unimplemented binary operation: "
+              ^ Charon.PrintExpressions.binop_to_string binop)
       in
       let binop =
         match backend () with
