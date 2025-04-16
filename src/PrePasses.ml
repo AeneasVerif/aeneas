@@ -74,7 +74,8 @@ let remove_useless_cf_merges (crate : crate) (f : fun_decl) : fun_decl =
         | Aggregate (AggregatedAdt (TTuple, _, _, _), []) ->
             not must_end_with_exit
         | _ -> false)
-    | FakeRead _ | Drop _ | Nop -> not must_end_with_exit
+    | StorageDead _ | StorageLive _ | Deinit _ | Drop _ | Nop ->
+        not must_end_with_exit
     | Abort _ | Return -> true
     | Sequence (st1, st2) ->
         can_be_moved_aux false st1 && can_be_moved_aux must_end_with_exit st2
@@ -270,109 +271,29 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
 
 (** Remove the use of shallow borrows from a function.
 
-    In theory, this allows the code to do more things than what Rust allows,
-    and in particular it would allow to modify the variant of an enumeration
-    in a guard, while matching over this enumeration.
+    Shallow borrows are used in early versions of MIR for the sole use of the
+    borrow checker (they have no runtime semantics). They are used to prevent
+    match guards from changing a discriminant that is being matched on.
 
-    In practice, this is not a soundness issue.
-
-    **Soundness**:
-    ==============
     For instance, let's consider the following Rust code:
     {[
-      match ls : &mut List<u32> {
-        Nil => return None,
-        Cons(hd, tl) if *hd > 0 => return Some(hd),
-        Cons(hd, tl) => ...,
+      let mut x = (true, true);
+      match x {
+          (false, _) => 1,
+          (true, _) if { x.0 = false; false } => 0,
+          (_, true) => 2,
+          (true, _) => 3,
       }
     ]}
 
-    The Rust compiler enforces the fact that the guard doesn't modify the
-    variant of [ls]. It does so by compiling to (approximately) the following
-    MIR code:
-    {[
-      let d = discriminant( *ls);
-      switch d {
-        0 => ... // Nil case
-        1 => { // Cons case
-          // Introduce hd and tl
-          hd := &mut ( *ls as Cons).0;
-          tl := &mut ( *ls as Cons).1;
+    If this code was allowed, it would reach an `unreachable_unchecked` code
+    path. Rust disallows this by adding a shallow borrow of each place whose
+    discriminant is read, and a fake (removed before codegen) read of that
+    borrow.
 
-          // Evaluate the guard
-          tmp := &shallow *ls; // Create a shallow borrow of ls
-          b := *hd > 0;
-          fake_read(tmp); // Make sure the shallow borrow lives until the end of the guard
-
-          // We evaluated the guard: go to the proper branch
-          if b then {
-            ... // First Cons branch
-          }
-          else {
-            ... // Second Cons branch
-          }
-        }
-      }
-    ]}
-
-    Shallow borrows are a bit like shared borrows but with the following
-    difference:
-    - they do forbid modifying the value directly below the loan
-    - but they allow modifying a strict subvalue
-    For instance, above, for as long as [tmp] lives:
-    - we can't change the variant of [*ls]
-    - but we can update [hd] and [tl]
-
-    On our side, we have to pay attention to two things:
-    - Removing shallow borrows don't modify the behavior of the program.
-      In practice, adding shallow borrows can lead to a MIR program being
-      rejected, but it doesn't change this program's behavior.
-
-      Regarding this, there is something important. At the top-level AST,
-      if the guard modifies the variant (say, to [Nil]) and evaluates to [false],
-      then we go to the second [Cons] branch, which doesn't really make sense
-      (though it is not a soundness issue - for soundness, see next point).
-
-      At the level of MIR, as the match has been desugared, there is no issue
-      in modifying the variant of the scrutinee.
-
-    - We have to make sure the evaluation in sound. In particular, modifying
-      the variant of [*ls] should invalidate [hd] and [tl]. This is important
-      for the Rust compiler to enforce this on its side. In the case of LLBC,
-      we don't need additional constraints because modifying [*ls] will
-      indeed invalidate [hd] and [tl].
-
-      More specifically, at the beginning of the [Cons] branch and just after
-      we introduced [hd] and [tl] we have the following environment:
-      {[
-        ... // l0 comes from somewhere - we omit the corresponding loan
-        ls -> MB l0 (Cons (ML l1) (ML l2))
-        hd -> MB l1 s1
-        tl -> MB l2 s2
-      ]}
-
-      If we evaluate: [*ls := Nil], we get:
-      {[
-        ... // l0 comes from somewhere - we omit the corresponding loan
-        ls -> MB l0 Nil
-        hd -> ⊥ // invalidated
-        tl -> ⊥ // invalidated
-      ]}
-
-    **Implementation**:
-    ===================
-    The pass is implemented as follows:
-    - we look for all the variables which appear in pattern of the following
-      shape and remove them:
-      {[
-        let x = &shallow ...;
-        ...
-      ]}
-    - whenever we find such a variable [x], we remove all the subsequent
-      occurrences of [fake_read(x)].
-
-    We then check that [x] completely disappeared from the function body (for
-    sanity).
+    We discard these in Aeneas. This does allow more code to pass the
+    borrow-checker, but the UB is still correctly caught by the
+    evaluator/translation hence the translation is still sound.
  *)
 let remove_shallow_borrows (crate : crate) (f : fun_decl) : fun_decl =
   let f0 = f in
@@ -392,22 +313,13 @@ let remove_shallow_borrows (crate : crate) (f : fun_decl) : fun_decl =
           | _ ->
               (* Don't filter *)
               super#visit_Assign env p rv
-
-        method! visit_FakeRead env p =
-          match p.kind with
-          | PlaceLocal var_id when LocalId.Set.mem var_id !filtered ->
-              (* filter *)
-              Nop
-          | _ ->
-              (* Don't filter *)
-              super#visit_FakeRead env p
       end
     in
 
     (* Filter the variables *)
     let body = filter_visitor#visit_statement () body in
 
-    (* Check that the filtered variables completely disappeared from the body *)
+    (* Check that the filtered variables have completely disappeared from the body *)
     let check_visitor =
       object
         inherit [_] iter_statement as super
@@ -443,6 +355,36 @@ let remove_shallow_borrows (crate : crate) (f : fun_decl) : fun_decl =
       ^ Print.Crate.crate_fun_decl_to_string crate f
       ^ "\n"));
   f
+
+(** `StorageDead`, `Deinit` and `Drop` have the same semantics as far as Aeneas
+    is concerned: they store bottom in the place. This maps all three to `Drop`
+    to simplify later work.
+ *)
+let unify_drops (f : fun_decl) : fun_decl =
+  let lookup_local (locals : locals) (var_id : local_id) : local =
+    List.nth locals.locals (LocalId.to_int var_id)
+  in
+
+  let unify_visitor =
+    object
+      inherit [_] map_statement
+      method! visit_Deinit _ p = Drop p
+
+      method! visit_StorageDead locals var_id =
+        let ty = (lookup_local locals var_id).var_ty in
+        let p = { kind = PlaceLocal var_id; ty } in
+        Drop p
+    end
+  in
+
+  let body =
+    match f.body with
+    | None -> None
+    | Some body ->
+        let new_body = unify_visitor#visit_statement body.locals body.body in
+        Some { body with body = new_body }
+  in
+  { f with body }
 
 (* Remove the type aliases from the type declarations and declaration groups *)
 let filter_type_aliases (crate : crate) : crate =
@@ -629,6 +571,7 @@ let apply_passes (crate : crate) : crate =
       remove_loop_breaks crate;
       remove_shallow_borrows crate;
       decompose_str_borrows;
+      unify_drops;
     ]
   in
   (* Attempt to apply a pass: if it fails we replace the body by [None] *)
