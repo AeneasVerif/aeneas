@@ -736,28 +736,29 @@ let extract_if_then_else (crate: crate) (f: fun_decl) : crate =
 (* Retrieve the list of locals associated to the set of local ids [s] *)
 let retrieve_locals locals s =
   (* TODO: This should be doable with a linear traversal of the locals list *)
+  (* TODO: We might be breaking the invariant that the n-th local has localId n *)
   LocalId.Set.fold (fun id acc -> List.nth locals (LocalId.to_int id) :: acc) s []
 
 let create_fun (def_id: FunDeclId.id) (dis: Disambiguator.id) moves reads writes s : fun_decl =
   (* TODO: Fix *)
   let name = [PeIdent ("branches", Disambiguator.zero); PeIdent ("foobar", dis)] in
 
+  (* TODO: Need to build from region_ids initially present in function *)
   let _, gen = RegionId.fresh_stateful_generator () in
-  let region_id = gen () in
-  let replace_region_id = function
-    | TRef (RErased, p, k) -> TRef (RVar (Free region_id), p, k)
+  let replace_region_id rvars l = match l.var_ty with
+    | TRef (RErased, p, k) ->
+        let region_id = gen () in
+        { index = region_id; name = None } :: rvars, TRef (RVar (Free region_id), p, k)
     | _ -> failwith "incorrect tref type"
   in
 
-  let input_tys = List.map (fun l -> l.var_ty) moves @
-               (* TODO: Need to add a shared borrow *)
-               List.map (fun l -> l.var_ty) reads @
-               List.map (fun l -> replace_region_id l.var_ty) writes
-  in
+  let regions, reads_ty = List.fold_left_map replace_region_id [] reads in
+  let regions, writes_ty = List.fold_left_map replace_region_id regions writes in
+
+  let input_tys = List.map (fun l -> l.var_ty) moves @ reads_ty @ writes_ty in
   let inputs = moves @ reads @ writes in
 
-  let region_var = { index = region_id; name = Some "a" } in
-  let generics = {TypesUtils.empty_generic_params with regions = [region_var]} in
+  let generics = {TypesUtils.empty_generic_params with regions} in
   let item_meta = default_meta name in
   let signature = {default_signature with inputs = input_tys; generics} in
   let kind = RegularItem in
@@ -766,7 +767,6 @@ let create_fun (def_id: FunDeclId.id) (dis: Disambiguator.id) moves reads writes
   let return_local = { index = LocalId.zero; name = None; var_ty = unit_ty} in
   let return_place = { kind = PlaceLocal LocalId.zero; ty = unit_ty } in
 
-  (* TODO: HERE: Need to adapt the inputs to match input_tys *)
   let locals = {arg_count = List.length inputs; locals = return_local :: inputs } in
   let unit_rvalue = Aggregate (AggregatedAdt (TTuple, None, None, TypesUtils.empty_generic_args), []) in
   let assign_ret_stmt = create_statement (Assign (return_place, unit_rvalue)) in
