@@ -169,7 +169,7 @@ endif
 
 # Translate the given rust file to available backends. The test runner decides
 # which backends to use and sets test-specific options.
-# Note: the tests have the fulle file name: `test-arrays.rs`, `test-loops.rs`, `test-betree`.
+# Note: the tests have the full file name: `test-arrays.rs`, `test-loops.rs`, `test-betree`.
 .PHONY: test-%
 test-%: build-dev
 	$(TEST_RUNNER_EXE) $(CHARON_EXE) $(AENEAS_EXE) $(LLBC_DIR) $(INPUTS_DIR)/"$*" $(AENEAS_OPTIONS)

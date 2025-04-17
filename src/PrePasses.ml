@@ -17,7 +17,7 @@ let log = Logging.pre_passes_log
     drop and the assignment is problematic for us because it can introduce
     [⊥] under borrows. For instance, we encountered situations like the
     following one:
-    
+
     {[
       drop( *x ); // Illegal! Inserts a ⊥ under a borrow
       *x = move ...;
@@ -662,10 +662,289 @@ let decompose_str_borrows (f : fun_decl) : fun_decl =
   in
   { f with body }
 
+(* Add the functions [new_fs] to the declaration group that [f] belongs to *)
+let add_to_fundecl_group (crate: crate) (f: fun_decl_id) (new_fs: fun_decl_id list) : crate =
+  match new_fs with
+  (* No functions to add, this is a no-op *)
+  | [] -> crate
+  | _ ->
+    let declarations = List.map (function
+        | FunGroup decl -> FunGroup begin
+            match decl with
+            | NonRecGroup id when f = id -> RecGroup (f :: new_fs)
+            | RecGroup l when List.mem f l -> RecGroup (new_fs @ l)
+            | _ -> decl
+        end
+        | x -> x
+      ) crate.declarations in
+    {crate with declarations}
+
+let default_span : Meta.span =
+  let file : Meta.file_id = { name = Local "tmp"; contents = None } in
+  let loc : Meta.loc = {line = 1; col = 0} in
+  let raw_span : Meta.raw_span = {file; beg_loc = loc; end_loc = loc} in
+  { span = raw_span; generated_from_span = None }
+
+let default_meta (name: name) : item_meta =
+  let attr_info : Meta.attr_info = { attributes = []; inline = None; rename = None; public = true } in
+  let span = default_span in
+  let source_text = None in
+  let is_local = true in
+  let lang_item = None in
+  { name; span; source_text; attr_info; is_local; lang_item }
+
+let default_signature : fun_sig =
+  { is_unsafe = false; is_closure = false; closure_info = None; generics = TypesUtils.empty_generic_params; inputs = []; output = TypesUtils.mk_unit_ty}
+
+let create_statement (s: raw_statement) : statement =
+  { span = default_span; content = s; comments_before = [] }
+
+let extract_if_then_else (crate: crate) (f: fun_decl) : crate =
+  (* Format.printf "Function %s\n@." (Print.Crate.crate_fun_decl_to_string crate f); *)
+  let _, gen = FunDeclId.mk_stateful_generator_starting_at_id
+    (FunDeclId.of_int (List.length (FunDeclId.Map.to_list crate.fun_decls))) in
+  let def_id = gen () in
+  let item_meta = {f.item_meta with name = [PeIdent ("branches", Disambiguator.zero); PeIdent ("foobar", Disambiguator.zero)] } in
+  let signature = f.signature in
+  let kind = RegularItem in
+  let is_global_initializer = None in
+  let unit_ty = TypesUtils.mk_unit_ty in
+  let return_local = { index = LocalId.zero; name = None; var_ty = unit_ty} in
+  let return_place = { kind = PlaceLocal LocalId.zero; ty = unit_ty } in
+  let input = { index = LocalId.incr LocalId.zero; name = Some "b"; var_ty = TLiteral TBool } in
+  let locals = {arg_count = 1; locals = [return_local; input] } in
+  let unit_rvalue = Aggregate (AggregatedAdt (TTuple, None, None, TypesUtils.empty_generic_args), []) in
+  let assign_ret_stmt = create_statement (Assign (return_place, unit_rvalue)) in
+  let return_stmt = create_statement Return in
+  let body = create_statement (Sequence (assign_ret_stmt, return_stmt)) in
+  let body = { span = default_span; locals; body} in
+  let body = Some body in
+  let fun_decl = {
+    def_id;
+    item_meta;
+    signature;
+    kind;
+    is_global_initializer;
+    body;
+  } in
+  let fun_decls = FunDeclId.Map.add def_id fun_decl crate.fun_decls in
+  let crate = add_to_fundecl_group {crate with fun_decls} f.def_id [def_id] in
+
+  (* Format.printf "Generated function %s\n@." (Print.Crate.crate_fun_decl_to_string crate fun_decl); *)
+  crate
+
+(* Retrieve the list of locals associated to the set of local ids [s] *)
+let retrieve_locals locals s =
+  (* TODO: This should be doable with a linear traversal of the locals list *)
+  LocalId.Set.fold (fun id acc -> List.nth locals (LocalId.to_int id) :: acc) s []
+
+let create_fun (def_id: FunDeclId.id) (dis: Disambiguator.id) moves reads writes s : fun_decl =
+  (* TODO: Fix *)
+  let name = [PeIdent ("branches", Disambiguator.zero); PeIdent ("foobar", dis)] in
+
+  let _, gen = RegionId.fresh_stateful_generator () in
+  let region_id = gen () in
+  let replace_region_id = function
+    | TRef (RErased, p, k) -> TRef (RVar (Free region_id), p, k)
+    | _ -> failwith "incorrect tref type"
+  in
+
+  let input_tys = List.map (fun l -> l.var_ty) moves @
+               (* TODO: Need to add a shared borrow *)
+               List.map (fun l -> l.var_ty) reads @
+               List.map (fun l -> replace_region_id l.var_ty) writes
+  in
+  let inputs = moves @ reads @ writes in
+
+  let region_var = { index = region_id; name = Some "a" } in
+  let generics = {TypesUtils.empty_generic_params with regions = [region_var]} in
+  let item_meta = default_meta name in
+  let signature = {default_signature with inputs = input_tys; generics} in
+  let kind = RegularItem in
+  let is_global_initializer = None in
+  let unit_ty = TypesUtils.mk_unit_ty in
+  let return_local = { index = LocalId.zero; name = None; var_ty = unit_ty} in
+  let return_place = { kind = PlaceLocal LocalId.zero; ty = unit_ty } in
+
+  (* TODO: HERE: Need to adapt the inputs to match input_tys *)
+  let locals = {arg_count = List.length inputs; locals = return_local :: inputs } in
+  let unit_rvalue = Aggregate (AggregatedAdt (TTuple, None, None, TypesUtils.empty_generic_args), []) in
+  let assign_ret_stmt = create_statement (Assign (return_place, unit_rvalue)) in
+  let return_stmt = create_statement Return in
+  let last_stmt = create_statement (Sequence (assign_ret_stmt, return_stmt)) in
+  let body = create_statement (Sequence (s, last_stmt)) in
+  let body = { span = default_span; locals; body} in
+  let body = Some body in
+  {
+    def_id;
+    item_meta;
+    signature;
+    kind;
+    is_global_initializer;
+    body;
+  }
+
+(* Collect three sets corresponding respectively to
+   - moved-in variables
+   - read variables
+   - written variables
+
+   TODO: This should actually return places, but we need to figure out how to
+   both collect places (e.g., create a PlaceSet), and how to establish a hierarchy
+   between places (e.g., to relate x and *x)
+*)
+let collect_places (s: raw_statement) : LocalId.Set.t * LocalId.Set.t * LocalId.Set.t =
+  let add_place_to_set (p: place) s = match p.kind with
+    | PlaceLocal id -> LocalId.Set.add id s
+    | _ -> failwith "only supporting local places for now"
+  in
+
+  let collect_operand moves reads writes = function
+    | Copy _ -> failwith "copy"
+    | Move p -> add_place_to_set p moves, reads, writes
+    | Constant _ -> moves, reads, writes
+  in
+
+  let collect_rvalue moves reads writes = function
+    | Use o -> collect_operand moves reads writes o
+    | _ -> failwith "TODO: support rvalues beyond operands"
+  in
+
+  let rec collect_stmt moves reads writes s = match s with
+    | Assign (p, v) ->
+        collect_rvalue moves reads (add_place_to_set p writes) v
+    | FakeRead _ -> failwith "fakeread"
+    | SetDiscriminant _ -> failwith "set_discriminant"
+    | Drop _ -> failwith "drop"
+    | Assert _ -> failwith "assert"
+    | Call _ -> failwith "call"
+    | Abort _ -> failwith "abort"
+    | Return -> failwith "return"
+    | Break _ -> failwith "break"
+    | Continue _ -> failwith "continue"
+    | Nop -> failwith "nop"
+    | Sequence _ -> failwith "sequence"
+    | Switch (If (cond, ifb, elseb)) ->
+        let moves, reads, writes = collect_operand moves reads writes cond in
+        let moves, reads, writes = collect_stmt moves reads writes ifb.content in
+        collect_stmt moves reads writes elseb.content
+    | Switch _ -> failwith "switch: Int or Match"
+    | Loop _ -> failwith "loop"
+    | Error _ -> failwith "error"
+
+  in
+  collect_stmt LocalId.Set.empty LocalId.Set.empty LocalId.Set.empty s
+
+let place_of_local (l: local) : place = { kind = PlaceLocal l.index; ty = l.var_ty }
+
+let make_operand (l: local) : operand = Move (place_of_local l)
+
+let extract (crate: crate) (f: fun_decl) =
+  Format.printf "Initial function %s\n@." (Print.Crate.crate_fun_decl_to_string crate f);
+  match f.body with
+  | None -> crate
+  | Some body ->
+    (* Keep track of all the new functions generated while traversing
+       the body of [f] *)
+    let new_funs = ref [] in
+    let new_funs_ids = ref [] in
+    let new_locals = ref [] in
+    let _, gen = FunDeclId.mk_stateful_generator_starting_at_id
+      (FunDeclId.of_int (List.length (FunDeclId.Map.to_list crate.fun_decls))) in
+    let _, dis_gen = Disambiguator.fresh_stateful_generator () in
+    let _, local_gen = LocalId.mk_stateful_generator_starting_at_id
+      (LocalId.of_int (List.length body.locals.locals)) in
+
+    let visitor =
+      object
+        inherit [_] map_statement as super
+
+        method! visit_Switch _ s = match s with
+        | If _ ->
+            let def_id = gen () in
+            let dis = dis_gen () in
+
+            let moves, reads, writes = collect_places (Switch s) in
+            (* TODO: Some filtering to avoid duplications between sets *)
+
+
+            let moves = retrieve_locals body.locals.locals moves in
+            let reads = retrieve_locals body.locals.locals reads in
+            let writes  = retrieve_locals body.locals.locals writes in
+
+            let ret_var_id = local_gen () in
+            let ret_var = { index = ret_var_id; name = None; var_ty = TypesUtils.mk_unit_ty} in
+            new_locals := ret_var :: !new_locals;
+
+            (* TODO: Hack for example, do this generically *)
+            let write = List.hd writes in
+            let write_var_id = local_gen () in
+            let write_var_ty =  TRef (RErased, write.var_ty, RMut) in
+            let write_var = { index = write_var_id; name = write.name; var_ty = write_var_ty } in
+            let write_place = { kind = PlaceLocal write_var_id; ty = write_var_ty } in
+            let write_stmt = create_statement (Assign (write_place, RvRef (place_of_local write, BMut))) in
+
+            let replace = object
+              inherit [_] map_statement
+
+              method! visit_Assign _ p rv = match p with
+                | { kind = PlaceLocal pid; _} when pid = write.index ->
+                    Assign ({ kind = PlaceProjection (write_place, Deref); ty = write.var_ty}, rv)
+                | _ -> Assign (p, rv)
+
+            end
+            in
+            let s = replace#visit_statement () (create_statement (Switch s)) in
+
+            new_locals := write_var :: !new_locals;
+
+            (* let new_f = create_fun def_id dis moves reads writes in *)
+            let new_f = create_fun def_id dis moves reads [write_var] s in
+            new_funs := new_f :: !new_funs;
+            new_funs_ids := def_id :: !new_funs_ids;
+
+            let moves_ops = List.map make_operand moves in
+            let reads_ops = List.map make_operand reads in
+            let writes_ops = [make_operand write_var] in
+            (* let writes_ops = List.map make_operand writes in *)
+            let call = {
+              func = FnOpRegular {
+                func = FunId (FRegular def_id);
+                generics = TypesUtils.empty_generic_args
+              };
+              args = moves_ops @ reads_ops @ writes_ops;
+              dest = { kind = PlaceLocal ret_var_id; ty = TypesUtils.mk_unit_ty}
+            } in
+            Sequence (write_stmt, create_statement (Call call))
+        | _ -> super#visit_Switch () s
+      end
+    in
+
+    let new_body = visitor#visit_statement () body.body in
+    let locals = {
+      arg_count = body.locals.arg_count;
+      locals = body.locals.locals @ List.rev !new_locals
+    } in
+
+    let body = Some {body with body = new_body; locals} in
+
+    let f = {f with body} in
+
+    List.iter (fun f ->
+      Format.printf "Created function %s\n@." (Print.Crate.crate_fun_decl_to_string crate f);
+    ) !new_funs;
+
+    let fun_decls = FunDeclId.Map.add f.def_id f crate.fun_decls in
+    let fun_decls = List.fold_left (fun fun_decls f -> FunDeclId.Map.add f.def_id f fun_decls) fun_decls !new_funs in
+    let crate = add_to_fundecl_group {crate with fun_decls} f.def_id !new_funs_ids in
+
+    Format.printf "Modified function %s\n@." (Print.Crate.crate_fun_decl_to_string crate f);
+    crate
+
 let apply_passes (crate : crate) : crate =
   let function_passes =
     [
-      remove_loop_breaks crate;
+      (* remove_loop_breaks crate; *)
       remove_shallow_borrows crate;
       decompose_str_borrows;
     ]
@@ -689,6 +968,7 @@ let apply_passes (crate : crate) : crate =
       crate.fun_decls function_passes
   in
   let crate = { crate with fun_decls } in
+  let crate = List.fold_left (fun c (_, fdecl) -> extract c fdecl) crate (FunDeclId.Map.to_list (crate.fun_decls)) in
   let crate = filter_type_aliases crate in
   log#ldebug
     (lazy ("After pre-passes:\n" ^ Print.Crate.crate_to_string crate ^ "\n"));
