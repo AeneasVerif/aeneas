@@ -840,7 +840,7 @@ let place_of_local (l: local) : place = { kind = PlaceLocal l.index; ty = l.var_
 let make_operand (l: local) : operand = Move (place_of_local l)
 
 let extract (crate: crate) (f: fun_decl) =
-  Format.printf "Initial function %s\n@." (Print.Crate.crate_fun_decl_to_string crate f);
+  (* Format.printf "Initial function %s\n@." (Print.Crate.crate_fun_decl_to_string crate f); *)
   match f.body with
   | None -> crate
   | Some body ->
@@ -867,7 +867,6 @@ let extract (crate: crate) (f: fun_decl) =
             let moves, reads, writes = collect_places (Switch s) in
             (* TODO: Some filtering to avoid duplications between sets *)
 
-
             let moves = retrieve_locals body.locals.locals moves in
             let reads = retrieve_locals body.locals.locals reads in
             let writes  = retrieve_locals body.locals.locals writes in
@@ -876,36 +875,49 @@ let extract (crate: crate) (f: fun_decl) =
             let ret_var = { index = ret_var_id; name = None; var_ty = TypesUtils.mk_unit_ty} in
             new_locals := ret_var :: !new_locals;
 
-            (* TODO: Hack for example, do this generically *)
-            let write = List.hd writes in
-            let write_var_id = local_gen () in
-            let write_var_ty =  TRef (RErased, write.var_ty, RMut) in
-            let write_var = { index = write_var_id; name = write.name; var_ty = write_var_ty } in
-            let write_place = { kind = PlaceLocal write_var_id; ty = write_var_ty } in
-            let write_stmt = create_statement (Assign (write_place, RvRef (place_of_local write, BMut))) in
 
-            let replace = object
-              inherit [_] map_statement
+            (* A visitor to replace all occurences of [local] by [place].
+               Mostly used to replace an access to a local by a deref of
+               a borrow of the local *)
+            let replace_place local place = object
+              inherit [_] map_statement as super
 
-              method! visit_Assign _ p rv = match p with
-                | { kind = PlaceLocal pid; _} when pid = write.index ->
-                    Assign ({ kind = PlaceProjection (write_place, Deref); ty = write.var_ty}, rv)
-                | _ -> Assign (p, rv)
-
+              method! visit_place _ p = match p with
+                | { kind = PlaceLocal pid; _} ->
+                      if pid = local.index then
+                        { kind = PlaceProjection (place, Deref); ty = local.var_ty}
+                      else p
+                | { kind = PlaceProjection (p', k); ty} ->
+                      let p' = super#visit_place () p' in
+                      { kind = PlaceProjection (p', k); ty }
             end
             in
-            let s = replace#visit_statement () (create_statement (Switch s)) in
 
-            new_locals := write_var :: !new_locals;
+            let take_borrow (is_mut: bool) sseq (local: local) : (raw_statement * statement) * local =
+              let s, seq = sseq in
+              let var_id = local_gen () in
+              let var_ty = TRef (RErased, local.var_ty, if is_mut then RMut else RShared) in
+              let var = { index = var_id; name = local.name; var_ty } in
+              new_locals := var :: !new_locals;
 
-            (* let new_f = create_fun def_id dis moves reads writes in *)
-            let new_f = create_fun def_id dis moves reads [write_var] s in
+              let place = { kind = PlaceLocal var_id; ty = var_ty } in
+              let stmt = create_statement (Assign (place, RvRef (place_of_local local, if is_mut then BMut else BShared))) in
+              let stmt = create_statement (Sequence (stmt, seq)) in
+              (* Replace all occurences of place local by the corresponding deref of [place] *)
+              ((replace_place local place)#visit_raw_statement () s, stmt), var
+            in
+
+
+            let (s, reads_inits), reads = List.fold_left_map (take_borrow false) (Switch s, create_statement Nop) reads in
+            let (s, write_inits), writes = List.fold_left_map (take_borrow true) (s, create_statement Nop) writes in
+
+            let new_f = create_fun def_id dis moves reads writes (create_statement s) in
             new_funs := new_f :: !new_funs;
             new_funs_ids := def_id :: !new_funs_ids;
 
             let moves_ops = List.map make_operand moves in
             let reads_ops = List.map make_operand reads in
-            let writes_ops = [make_operand write_var] in
+            let writes_ops = List.map make_operand writes in
             (* let writes_ops = List.map make_operand writes in *)
             let call = {
               func = FnOpRegular {
@@ -915,7 +927,7 @@ let extract (crate: crate) (f: fun_decl) =
               args = moves_ops @ reads_ops @ writes_ops;
               dest = { kind = PlaceLocal ret_var_id; ty = TypesUtils.mk_unit_ty}
             } in
-            Sequence (write_stmt, create_statement (Call call))
+            Sequence (reads_inits, create_statement (Sequence (write_inits, create_statement (Call call))))
         | _ -> super#visit_Switch () s
       end
     in
@@ -930,15 +942,15 @@ let extract (crate: crate) (f: fun_decl) =
 
     let f = {f with body} in
 
-    List.iter (fun f ->
-      Format.printf "Created function %s\n@." (Print.Crate.crate_fun_decl_to_string crate f);
-    ) !new_funs;
+    (* List.iter (fun f -> *)
+    (*   Format.printf "Created function %s\n@." (Print.Crate.crate_fun_decl_to_string crate f); *)
+    (* ) !new_funs; *)
 
     let fun_decls = FunDeclId.Map.add f.def_id f crate.fun_decls in
     let fun_decls = List.fold_left (fun fun_decls f -> FunDeclId.Map.add f.def_id f fun_decls) fun_decls !new_funs in
     let crate = add_to_fundecl_group {crate with fun_decls} f.def_id !new_funs_ids in
 
-    Format.printf "Modified function %s\n@." (Print.Crate.crate_fun_decl_to_string crate f);
+    (* Format.printf "Modified function %s\n@." (Print.Crate.crate_fun_decl_to_string crate f); *)
     crate
 
 let apply_passes (crate : crate) : crate =
