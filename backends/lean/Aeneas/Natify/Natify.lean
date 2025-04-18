@@ -4,7 +4,7 @@ import Mathlib.Data.Int.Cast.Basic
 import Mathlib.Order.Basic
 import Aeneas.Natify.Init
 import Aeneas.Arith.Lemmas
-import Aeneas.Std.Scalar
+import Aeneas.Std.Scalar.Core
 
 /-!
 # `natify` tactic

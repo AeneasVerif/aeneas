@@ -30,6 +30,7 @@ attribute [scalar_tac_simps]
   true_or or_true false_or or_false
   Bool.true_eq_false Bool.false_eq_true
   decide_eq_true_eq Bool.or_eq_true Bool.and_eq_true
+  Membership.mem
 
 attribute [scalar_tac_simps] zero_add
 

@@ -8,6 +8,7 @@ import Aeneas.Std.Array.Array
 import Aeneas.ScalarTac
 import Aeneas.Progress.Init
 import Aeneas.Arith.Lemmas
+import Aeneas.BitVec
 
 namespace Aeneas
 
@@ -577,32 +578,50 @@ def FromI128I128 : core.convert.From I128 I128 := {
 end core.convert
 
 -- to_le_bytes
-def core.num.U8.to_le_bytes (x : U8) : Array U8 1#usize := ⟨ [x], by simp ⟩
-def core.num.U16.to_le_bytes (x : U16) : Array U8 2#usize := sorry
-def core.num.U32.to_le_bytes (x : U32) : Array U8 4#usize := sorry
-def core.num.U64.to_le_bytes (x : U64) : Array U8 8#usize := sorry
-def core.num.U128.to_le_bytes (x : U128) : Array U8 128#usize := sorry
+def core.num.U8.to_le_bytes (x : U8) : Array U8 1#usize := ⟨ x.bv.toLEBytes.map UScalar.mk, by simp ⟩
+def core.num.U16.to_le_bytes (x : U16) : Array U8 2#usize := ⟨ x.bv.toLEBytes.map UScalar.mk, by simp ⟩
+def core.num.U32.to_le_bytes (x : U32) : Array U8 4#usize := ⟨ x.bv.toLEBytes.map UScalar.mk, by simp ⟩
+def core.num.U64.to_le_bytes (x : U64) : Array U8 8#usize := ⟨ x.bv.toLEBytes.map UScalar.mk, by simp ⟩
+def core.num.U128.to_le_bytes (x : U128) : Array U8 16#usize := ⟨ x.bv.toLEBytes.map UScalar.mk, by simp ⟩
 
 -- to_be_bytes
-def core.num.U8.to_be_bytes (x : U8) : Array U8 1#usize := ⟨ [x], by simp ⟩
-def core.num.U16.to_be_bytes (x : U16) : Array U8 2#usize := sorry
-def core.num.U32.to_be_bytes (x : U32) : Array U8 4#usize := sorry
-def core.num.U64.to_be_bytes (x : U64) : Array U8 8#usize := sorry
-def core.num.U128.to_be_bytes (x : U128) : Array U8 128#usize := sorry
+def core.num.U8.to_be_bytes (x : U8) : Array U8 1#usize := ⟨ x.bv.toBEBytes.map UScalar.mk, by simp ⟩
+def core.num.U16.to_be_bytes (x : U16) : Array U8 2#usize := ⟨ x.bv.toBEBytes.map UScalar.mk, by simp ⟩
+def core.num.U32.to_be_bytes (x : U32) : Array U8 4#usize := ⟨ x.bv.toBEBytes.map UScalar.mk, by simp ⟩
+def core.num.U64.to_be_bytes (x : U64) : Array U8 8#usize := ⟨ x.bv.toBEBytes.map UScalar.mk, by simp ⟩
+def core.num.U128.to_be_bytes (x : U128) : Array U8 16#usize := ⟨ x.bv.toBEBytes.map UScalar.mk, by simp ⟩
 
 -- from_le_bytes
-def core.num.U8.from_le_bytes (a : Array U8 1#usize) : U8 := a.val[0]
-def core.num.U16.from_le_bytes (a : Array U8 2#usize) : U16 := sorry
-def core.num.U32.from_le_bytes (a : Array U8 4#usize) : U32 := sorry
-def core.num.U64.from_le_bytes (a : Array U8 8#usize) : U64 := sorry
-def core.num.U128.from_le_bytes (a : Array U8 128#usize) : U128 := sorry
+def core.num.U8.from_le_bytes (a : Array U8 1#usize) : U8 :=
+  ⟨ (BitVec.fromLEBytes (List.map U8.bv a.val)).cast (by simp) ⟩
+
+def core.num.U16.from_le_bytes (a : Array U8 2#usize) : U16 :=
+  ⟨ (BitVec.fromLEBytes (List.map U8.bv a.val)).cast (by simp) ⟩
+
+def core.num.U32.from_le_bytes (a : Array U8 4#usize) : U32 :=
+  ⟨ (BitVec.fromLEBytes (List.map U8.bv a.val)).cast (by simp) ⟩
+
+def core.num.U64.from_le_bytes (a : Array U8 8#usize) : U64 :=
+  ⟨ (BitVec.fromLEBytes (List.map U8.bv a.val)).cast (by simp) ⟩
+
+def core.num.U128.from_le_bytes (a : Array U8 16#usize) : U128 :=
+  ⟨ (BitVec.fromLEBytes (List.map U8.bv a.val)).cast (by simp) ⟩
 
 -- from_be_bytes
-def core.num.U8.from_be_bytes (a : Array U8 1#usize) : U8 := a.val[0]
-def core.num.U16.from_be_bytes (a : Array U8 2#usize) : U16 := sorry
-def core.num.U32.from_be_bytes (a : Array U8 4#usize) : U32 := sorry
-def core.num.U64.from_be_bytes (a : Array U8 8#usize) : U64 := sorry
-def core.num.U128.from_be_bytes (a : Array U8 128#usize) : U128 := sorry
+def core.num.U8.from_be_bytes (a : Array U8 1#usize) : U8 :=
+  ⟨ (BitVec.fromBEBytes (List.map U8.bv a.val)).cast (by simp) ⟩
+
+def core.num.U16.from_be_bytes (a : Array U8 2#usize) : U16 :=
+  ⟨ (BitVec.fromBEBytes (List.map U8.bv a.val)).cast (by simp) ⟩
+
+def core.num.U32.from_be_bytes (a : Array U8 4#usize) : U32 :=
+  ⟨ (BitVec.fromBEBytes (List.map U8.bv a.val)).cast (by simp) ⟩
+
+def core.num.U64.from_be_bytes (a : Array U8 8#usize) : U64 :=
+  ⟨ (BitVec.fromBEBytes (List.map U8.bv a.val)).cast (by simp) ⟩
+
+def core.num.U128.from_be_bytes (a : Array U8 16#usize) : U128 :=
+  ⟨ (BitVec.fromBEBytes (List.map U8.bv a.val)).cast (by simp) ⟩
 
 end Std
 

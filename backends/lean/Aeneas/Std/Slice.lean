@@ -175,7 +175,7 @@ theorem Slice.subslice_spec {α : Type u} [Inhabited α] (s : Slice α) (r : Ran
   simp_all only [subslice, length, and_self, ite_true, ok.injEq, slice, get!, exists_eq_left',
     true_and]
   intro i _
-  have := List.getElem!_slice r.start.val r.end_.val i s.val (by scalar_tac) (by scalar_tac)
+  have := List.getElem!_slice r.start.val r.end_.val i s.val (by scalar_tac)
   simp only [List.getElem!_eq_getElem?_getD, getElem!_Nat_eq] at *
   apply this
 

@@ -118,7 +118,8 @@ theorem Array.index_usize_spec {α : Type u} {n : Usize} [Inhabited α] (v: Arra
   ∃ x, v.index_usize i = ok x ∧ x = v.val[i.val]! := by
   simp only [index_usize]
   simp at *
-  split <;> simp_all
+  split <;> simp_all only [List.Vector.length_val, List.getElem?_eq_getElem, Option.some.injEq,
+    Option.getD_some, Option.getD_none, reduceCtorEq]
 
 def Array.set {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) : Array α n :=
   ⟨ v.val.set i.val x, by have := v.property; simp [*] ⟩

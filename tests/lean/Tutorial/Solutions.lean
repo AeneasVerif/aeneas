@@ -330,7 +330,7 @@ theorem add_no_overflow_loop_spec
       intro j h0 h1
       simp_all
       -- Simplifying (x.update ...).index:
-      have := List.getElem!_set_neq x.val i.val j sum (by scalar_tac)
+      have := List.getElem!_set_ne x.val i.val j sum (by scalar_tac)
       simp [*]
       apply hNoOverflow j (by scalar_tac) (by scalar_tac)
     -- Postcondition

@@ -48,7 +48,7 @@ theorem Array.subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array 
   := by
   simp only [subslice, true_and, h0, h1, ↓reduceIte, ok.injEq, exists_eq_left', true_and]
   intro i _
-  have := List.getElem!_slice r.start.val r.end_.val i a.val (by scalar_tac) (by scalar_tac)
+  have := List.getElem!_slice r.start.val r.end_.val i a.val (by scalar_tac)
   simp only [this]
 
 

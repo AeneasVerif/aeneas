@@ -3,6 +3,8 @@ import Hashmap.Funs
 open Aeneas.Std
 open Result
 
+#setup_aeneas_simps
+
 namespace hashmap
 
 namespace AList
@@ -134,9 +136,6 @@ def frame_load (hm nhm : HashMap α) : Prop :=
   nhm.max_load_factor = hm.max_load_factor ∧
   nhm.max_load = hm.max_load ∧
   nhm.saturated = hm.saturated
-
--- Those rewriting lemmas are problematic
-attribute [-simp] Bool.exists_bool List.getElem!_eq_getElem?_getD
 
 -- These fsimp lemmas were introduced by upstream changes and are problematic
 attribute [-simp] List.length_flatten List.flatten_eq_nil_iff List.lookup_eq_none_iff

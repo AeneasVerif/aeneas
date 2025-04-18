@@ -1,7 +1,9 @@
 import Aeneas.Arith
+import Aeneas.Array
 import Aeneas.BitVec
 import Aeneas.Bvify
 import Aeneas.BvTac
+import Aeneas.Fin
 import Aeneas.FSimp
 import Aeneas.Int
 import Aeneas.List
@@ -19,7 +21,9 @@ import Aeneas.SimpIfs
 import Aeneas.SimpLemmas
 import Aeneas.SimpLists
 import Aeneas.Std
+import Aeneas.Setup
 import Aeneas.Utils
 import Aeneas.Tests
+import Aeneas.Vector
 import Aeneas.Zify
 import Aeneas.ZModify
