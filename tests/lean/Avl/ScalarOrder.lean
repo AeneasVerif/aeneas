@@ -14,7 +14,7 @@ instance UScalarDecidableLE {ty} : DecidableRel (· ≤ · : UScalar ty -> UScal
 instance {ty} : LinearOrder (UScalar ty) where
   le_antisymm := fun a b Hab Hba => by scalar_tac
   le_total := fun a b => by scalar_tac
-  decidableLE := UScalarDecidableLE
+  toDecidableLE := UScalarDecidableLE
 
 instance : OrdSpecLinearOrderEq OrdI32 where
   infallible := fun a b => by

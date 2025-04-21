@@ -936,14 +936,14 @@ instance (ty: UScalarTy) : LinearOrder (UScalar ty) where
     rcases (Nat.le_total a b) with H | H
     left; exact (UScalar.le_equiv _ _).2 H
     right; exact (UScalar.le_equiv _ _).2 H
-  decidableLE := UScalarDecidableLE ty
+  toDecidableLE := UScalarDecidableLE ty
 
 instance (ty: IScalarTy) : LinearOrder (IScalar ty) where
   le_total := fun a b => by
     rcases (Int.le_total a b) with H | H
     left; exact (IScalar.le_equiv _ _).2 H
     right; exact (IScalar.le_equiv _ _).2 H
-  decidableLE := IScalarDecidableLE ty
+  toDecidableLE := IScalarDecidableLE ty
 
 /-! # Coercion Theorems
 
