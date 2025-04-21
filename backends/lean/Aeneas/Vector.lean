@@ -36,6 +36,10 @@ theorem getElem_eq_toArray_getElem {α} {n} [Inhabited α] (s : Vector α n) (i 
   s[i] = getElem s.toArray i (by have := s.size_toArray; omega) := by
   cases s; simp
 
+theorem getElem_eq_getElem! {α} {n} [Inhabited α] (s : Vector α n) (i : ℕ) (hi : i < n) :
+  s[i] = s[i]! := by
+  cases s; simp
+
 @[simp, simp_lists_simps, scalar_tac_simps]
 theorem setSlice!_length {α} {n} (s : Vector α n) (i : ℕ) (s' : List α) :
   (s.setSlice! i s').size = n := by
@@ -103,11 +107,50 @@ theorem getElem!_replicate {α : Type u} [Inhabited α] {i n : ℕ} {a : α} (h 
  split_ifs
  simp
 
-
 @[simp, simp_lists_simps]
 theorem getElem!_cast {n m : ℕ} {α : Type u_1} [Inhabited α] (h: n = m) (v : Vector α n) (i : ℕ):
   (Vector.cast h v)[i]! = v[i]! := by
   simp only [getElem!_eq_toArray_getElem!, toArray_cast, Array.getElem!_eq_toList_getElem!]
 
+theorem eq_iff_forall_eq_getElem! {α} {n} [Inhabited α] (l0 l1 : Vector α n) :
+  l0 = l1 ↔ (∀ i < n, l0[i]! = l1[i]!) := by
+  cases l0; cases l1; simp only [eq_mk, Array.eq_iff_forall_eq_getElem!,
+    Array.getElem!_eq_toList_getElem!, true_and, getElem!_eq_toArray_getElem!, *]
+
+@[simp_lists_simps]
+theorem getElem!_map_eq {α β} [Inhabited α] [Inhabited β] {n} (f : α → β) (x : Vector α n) (i : ℕ) (hi : i < n) :
+  (x.map f)[i]! = f x[i]! := by
+  have : i < x.size := by scalar_tac
+  simp only [getElem!_eq_toArray_getElem!, toArray_map, Array.getElem!_eq_toList_getElem!,
+    Array.toList_map]
+  simp_lists
+
+@[simp_lists_simps]
+theorem getElem!_map_eq_default {α β} [Inhabited α] [Inhabited β] {n} (f : α → β) (x : Vector α n) (i : ℕ) (hi : n ≤ i) :
+  (x.map f)[i]! = default := by
+  have : x.size ≤ i := by scalar_tac
+  simp only [getElem!_eq_toArray_getElem!, toArray_map, Array.getElem!_eq_toList_getElem!,
+    Array.toList_map]
+  simp_lists
+
+@[simp_lists_simps]
+theorem getElem!_range_of_lt {n i : Nat}  (hi : i < n) : (Vector.range n)[i]! = i := by
+  simp only [getElem!_eq_toArray_getElem!, toArray_range, Array.getElem!_eq_toList_getElem!,
+    Array.toList_range]
+  simp_lists
+
+@[simp_lists_simps]
+theorem set!_comm' {α} {i j : Nat} (h : j < i)
+  (v : Vector α n) (x y : α) :
+  (v.set! i x).set! j y = (v.set! j y).set! i x := by
+  cases v; rename_i a h; cases a; simp
+  rw [List.set_comm']
+  assumption
+
+@[simp_lists_simps]
+theorem getElem!_ofFn {n : ℕ} {α : Type u} [Inhabited α] (f : Fin n → α) (i : ℕ) (hi : i < n) :
+  (Vector.ofFn f)[i]! = f ⟨ i, hi ⟩ := by
+  simp only [ofFn, getElem!_eq_toArray_getElem!, Array.getElem!_eq_toList_getElem!,
+    Array.toList_ofFn, List.getElem!_ofFn, hi]
 
 end Vector

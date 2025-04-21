@@ -88,4 +88,42 @@ theorem getElem!_replicate {α : Type u} [Inhabited α] {i n : ℕ} {a : α} (h 
   simp_ifs
   simp only [Option.getD_some]
 
+theorem eq_iff_forall_eq_getElem! {α} [Inhabited α] (l0 l1 : Array α) :
+  l0 = l1 ↔ (l0.size = l1.size ∧ ∀ i < l0.size, l0[i]! = l1[i]!) := by
+  cases l0; cases l1; simp [List.eq_iff_forall_eq_getElem!]
+
+@[simp_lists_simps]
+theorem getElem!_map_eq {α β} [Inhabited α] [Inhabited β] (f : α → β) (x : Array α) (i : ℕ) (hi : i < x.size) :
+  (x.map f)[i]! = f x[i]! := by
+  simp only [getElem!_eq_toList_getElem!, toList_map]
+  simp_lists
+
+@[simp_lists_simps]
+theorem getElem!_map_default {α β} [Inhabited α] [Inhabited β] (f : α → β) (x : Array α) (i : ℕ) (hi : x.size ≤ i) :
+  (x.map f)[i]! = default := by
+  simp only [getElem!_eq_toList_getElem!, toList_map]
+  simp_lists
+
+@[simp_lists_simps]
+theorem getElem!_range_of_lt {n i : Nat}  (hi : i < n) : (Array.range n)[i]! = i := by
+  simp only [getElem!_eq_toList_getElem!, toList_range]
+  simp_lists
+
+@[simp_lists_simps]
+theorem getElem!_range_zero {n i : Nat}  (hi : n ≤ i) : (Array.range n)[i]! = 0 := by
+  simp only [getElem!_eq_toList_getElem!, toList_range]
+  simp_lists
+
+@[simp_lists_simps]
+theorem set!_comm' {α} {i j : Nat} (h : j < i) (a : Array α) (x y : α) :
+  (a.set! i x).set! j y = (a.set! j y).set! i x := by
+  cases a; simp
+  rw [List.set_comm']
+  assumption
+
+@[simp_lists_simps]
+theorem getElem!_ofFn {n : ℕ} {α : Type u} [Inhabited α] (f : Fin n → α) (i : ℕ) (hi : i < n) :
+  (Array.ofFn f)[i]! = f ⟨ i, hi ⟩ := by
+  simp? [*, List.getElem!_ofFn]
+
 end Array

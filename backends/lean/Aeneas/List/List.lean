@@ -458,17 +458,17 @@ theorem getElem!_range (i n: ℕ) :
   rw [getElem!_range']
   simp only [zero_add]
 
-@[simp] theorem getElem!_range_lt (i n: ℕ) (h : i < n) :
+@[simp, simp_lists_simps] theorem getElem!_range_of_lt (i n: ℕ) (h : i < n) :
   (List.range n)[i]! = i := by
   simp [getElem!_range, *]
 
-@[simp] theorem getElem!_range_not_lt (i n: ℕ) (h : n ≤ i) :
+@[simp, simp_lists_simps] theorem getElem!_range_zero (i n: ℕ) (h : n ≤ i) :
   (List.range n)[i]! = 0 := by
   simp [getElem!_range, *]
 
 end
 
-theorem eq_iff_eq_getElem? {α} (l0 l1 : List α) :
+theorem eq_iff_forall_eq_getElem? {α} (l0 l1 : List α) :
   l0 = l1 ↔ ∀ (i : Nat), l0[i]? = l1[i]? := by
   revert l1
   induction l0 <;> intro l1
@@ -495,14 +495,14 @@ theorem eq_iff_eq_getElem? {α} (l0 l1 : List α) :
         simp at hi
         apply hi
 
-theorem eq_iff_eq_getElem! {α} [Inhabited α] (l0 l1 : List α) :
+theorem eq_iff_forall_eq_getElem! {α} [Inhabited α] (l0 l1 : List α) :
   l0 = l1 ↔ (l0.length = l1.length ∧ ∀ i < l0.length, l0[i]! = l1[i]!) := by
   constructor
   . simp +contextual only [getElem!_eq_getElem?_getD, getElem?_eq_getElem, Option.getD_some,
     implies_true, and_self]
   . simp only [getElem!_eq_getElem?_getD, and_imp]
     intro h0 h1
-    rw [eq_iff_eq_getElem?]
+    rw [eq_iff_forall_eq_getElem?]
     intro i
     dcases hi : i < l0.length
     . replace h1 := h1 i hi
@@ -589,5 +589,28 @@ end -- setSlice!
 def Inhabited_getElem_eq_getElem! {α} [Inhabited α] (l : List α) (i : ℕ) (hi : i < l.length) :
   l[i] = l[i]! := by
   simp only [List.getElem!_eq_getElem?_getD, List.getElem?_eq_getElem, Option.getD_some, hi]
+
+theorem forall_imp_foldl_eq {α β} (l : List β) (s0 s1 : α) (f1 f2 : α → β → α)
+  (h0 : s0 = s1)
+  (h1 : ∀ s, ∀ x ∈ l, f1 s x = f2 s x) :
+  l.foldl f1 s0 = l.foldl f2 s1 := by
+  simp [h0]; clear h0 s0
+  revert s1 h1
+  induction l
+  . simp_all only [not_mem_nil, IsEmpty.forall_iff, implies_true, foldl_nil, imp_self]
+  . simp_all only [mem_cons, forall_eq_or_imp, foldl_cons, implies_true]
+
+/- This one might be expensive -/
+@[simp_lists_simps]
+theorem set_comm' {α} {i j : Nat} (h : j < i) (a : List α) (x y : α) :
+  (a.set i x).set j y = (a.set j y).set i x := by
+  rw [set_comm]
+  omega
+
+@[simp_lists_simps]
+theorem getElem!_ofFn {n : ℕ} {α : Type u} [Inhabited α] (f : Fin n → α) (i : ℕ) (hi : i < n) :
+  (List.ofFn f)[i]! = f ⟨ i, hi ⟩ := by
+  simp only [getElem!_eq_getElem?_getD, length_ofFn, getElem?_eq_getElem, List.getElem_ofFn,
+    Option.getD_some, hi]
 
 end List
