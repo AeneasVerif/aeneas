@@ -124,6 +124,6 @@ theorem set!_comm' {α} {i j : Nat} (h : j < i) (a : Array α) (x y : α) :
 @[simp_lists_simps]
 theorem getElem!_ofFn {n : ℕ} {α : Type u} [Inhabited α] (f : Fin n → α) (i : ℕ) (hi : i < n) :
   (Array.ofFn f)[i]! = f ⟨ i, hi ⟩ := by
-  simp? [*, List.getElem!_ofFn]
+  simp only [getElem!_eq_toList_getElem!, toList_ofFn, List.getElem!_ofFn, hi]
 
 end Array

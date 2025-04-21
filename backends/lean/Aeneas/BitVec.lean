@@ -333,6 +333,31 @@ theorem BitVec.getElem!_mod_pow2_false {w} (x : BitVec w) (i j : ℕ) (h : i ≤
       have : 2^w ≤ 2^j := by apply Nat.pow_le_pow_of_le <;> omega
       omega
 
+@[simp_lists_simps]
+theorem BitVec.getElem!_toNat_eq_false {n} (b : BitVec n) (i : ℕ) (hi : n ≤ i) :
+  b.toNat.testBit i = false := by
+  rw [← BitVec.getElem!_eq_testBit_toNat]
+  simp_lists
+
+theorem BitVec.eq_iff {n} (b0 b1 : BitVec n) : b0 = b1 ↔ ∀ i < n, b0[i]! = b1[i]! := by
+  constructor
+  . simp +contextual
+  . intro h
+    apply BitVec.eq_of_toNat_eq
+    apply Nat.eq_of_testBit_eq
+    intros i
+    simp [BitVec.getElem!_eq_testBit_toNat] at h
+    by_cases hi : i < n
+    . simp_lists [h]
+    . simp_lists
+
+theorem Byte.eq_iff (b0 b1 : Byte) : b0 = b1 ↔ ∀ i < 8, b0.testBit i = b1.testBit i := by
+  constructor
+  . simp +contextual
+  . intro h
+    rw [BitVec.eq_iff]
+    simp_lists [BitVec.getElem!_eq_testBit_toNat, h]
+
 /-!
 # Conversion to a little/big-endian list of bytes
 -/
