@@ -475,8 +475,11 @@ let eval_builtin_function_call_concrete (config : config) (span : Meta.span)
       let ctx, cf_eval_body =
         match fid with
         | BoxNew -> eval_box_new_concrete config span generics ctx
-        | Index _ | ArrayToSliceShared | ArrayToSliceMut | ArrayRepeat ->
-            craise __FILE__ __LINE__ span "Unimplemented"
+        | Index _
+        | ArrayToSliceShared
+        | ArrayToSliceMut
+        | ArrayRepeat
+        | PtrFromParts _ -> craise __FILE__ __LINE__ span "Unimplemented"
       in
       let cc = cc_comp cc cf_eval_body in
 
@@ -863,9 +866,6 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
           let cc = cc_comp cc cf_assign in
           (* Compose and apply *)
           ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc))
-  | FakeRead p ->
-      let ctx, cc = eval_fake_read config st.span p ctx in
-      ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.span cc)
   | SetDiscriminant (p, variant_id) ->
       let (ctx, res), cc = set_discriminant config st.span p variant_id ctx in
       ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc)
@@ -880,7 +880,8 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
   | Return -> ([ (ctx, Return) ], cf_singleton __FILE__ __LINE__ st.span)
   | Break i -> ([ (ctx, Break i) ], cf_singleton __FILE__ __LINE__ st.span)
   | Continue i -> ([ (ctx, Continue i) ], cf_singleton __FILE__ __LINE__ st.span)
-  | Nop -> ([ (ctx, Unit) ], cf_singleton __FILE__ __LINE__ st.span)
+  | StorageLive _ | Nop ->
+      ([ (ctx, Unit) ], cf_singleton __FILE__ __LINE__ st.span)
   | Sequence (st1, st2) ->
       (* Evaluate the first statement *)
       let ctx_resl, cf_st1 = eval_statement config st1 ctx in
@@ -915,6 +916,9 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
       let eval_loop_body = eval_statement config loop_body in
       InterpreterLoops.eval_loop config st.span eval_loop_body ctx
   | Switch switch -> eval_switch config st.span switch ctx
+  | Deinit _ | StorageDead _ ->
+      craise __FILE__ __LINE__ st.span
+        "StorageDead/Deinit should have been removed in a prepass"
   | Error s -> craise __FILE__ __LINE__ st.span s
 
 and eval_global (config : config) (span : Meta.span) (dest : place)

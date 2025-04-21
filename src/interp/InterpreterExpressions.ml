@@ -748,21 +748,7 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
               | Le -> Z.leq sv1.value sv2.value
               | Ge -> Z.geq sv1.value sv2.value
               | Gt -> Z.gt sv1.value sv2.value
-              | Div
-              | Rem
-              | Add
-              | Sub
-              | Mul
-              | BitXor
-              | BitAnd
-              | BitOr
-              | Shl
-              | Shr
-              | Ne
-              | Eq
-              | CheckedAdd
-              | CheckedSub
-              | CheckedMul -> craise __FILE__ __LINE__ span "Unreachable"
+              | _ -> craise __FILE__ __LINE__ span "Unreachable"
             in
             Ok
               ({ value = VLiteral (VBool b); ty = TLiteral TBool }
@@ -785,17 +771,7 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
               | BitXor -> raise Unimplemented
               | BitAnd -> raise Unimplemented
               | BitOr -> raise Unimplemented
-              | Lt
-              | Le
-              | Ge
-              | Gt
-              | Shl
-              | Shr
-              | Ne
-              | Eq
-              | CheckedAdd
-              | CheckedSub
-              | CheckedMul -> craise __FILE__ __LINE__ span "Unreachable"
+              | _ -> craise __FILE__ __LINE__ span "Unreachable"
             in
             match res with
             | Error _ -> Error EPanic
@@ -805,7 +781,7 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
                     value = VLiteral (VScalar sv);
                     ty = TLiteral (TInteger sv1.int_ty);
                   })
-        | Shl | Shr | CheckedAdd | CheckedSub | CheckedMul ->
+        | Shl | Shr | CheckedAdd | CheckedSub | CheckedMul | Offset | Cmp ->
             craise __FILE__ __LINE__ span "Unimplemented binary operation"
         | Ne | Eq -> craise __FILE__ __LINE__ span "Unreachable")
     | _ ->
@@ -852,10 +828,12 @@ let eval_binary_op_symbolic (config : config) (span : Meta.span) (binop : binop)
           | Div | Rem | Add | Sub | Mul | BitXor | BitAnd | BitOr ->
               sanity_check __FILE__ __LINE__ (int_ty1 = int_ty2) span;
               TLiteral (TInteger int_ty1)
-          (* These return `(int, bool)` which isn't a literal type *)
-          | CheckedAdd | CheckedSub | CheckedMul ->
-              craise __FILE__ __LINE__ span
-                "Checked operations are not implemented"
+          | Cmp ->
+              sanity_check __FILE__ __LINE__ (int_ty1 = int_ty2) span;
+              TLiteral (TInteger I8)
+          (* These return `(int, bool)` / a pointer which isn't a literal type *)
+          | CheckedAdd | CheckedSub | CheckedMul | Offset ->
+              craise __FILE__ __LINE__ span "Unimplemented binary operation"
           | Shl | Shr ->
               (* The number of bits can be of a different integer type
                  than the operand *)

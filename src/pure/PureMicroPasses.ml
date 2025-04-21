@@ -1085,7 +1085,9 @@ let lift_binop (binop : binop) : bool =
   | CheckedSub
   | CheckedMul
   | Shl
-  | Shr -> true
+  | Shr
+  | Offset
+  | Cmp -> true
 
 (** A helper predicate *)
 let inline_binop binop = not (lift_binop binop)
@@ -2158,8 +2160,11 @@ let eliminate_box_functions (_ctx : ctx) (def : fun_decl) : fun_decl =
                 | BoxNew ->
                     let arg, args = Collections.List.pop args in
                     mk_apps def.item_meta.span arg args
-                | Index _ | ArrayToSliceShared | ArrayToSliceMut | ArrayRepeat
-                  -> super#visit_texpression env e)
+                | Index _
+                | ArrayToSliceShared
+                | ArrayToSliceMut
+                | ArrayRepeat
+                | PtrFromParts _ -> super#visit_texpression env e)
             | _ -> super#visit_texpression env e)
         | _ -> super#visit_texpression env e
     end
