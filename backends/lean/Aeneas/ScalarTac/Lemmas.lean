@@ -1,3 +1,4 @@
+import Mathlib.Data.ZMod.Basic
 import Aeneas.ScalarTac.ScalarTac
 import Aeneas.Std.Scalar.Core
 
@@ -209,7 +210,6 @@ theorem Isize.cMax_bound'' : IScalar.cMax .Isize ≤ Isize.max ∧ Isize.max + 1
 @[scalar_tac_simps] theorem IScalar.cMin_Isize_eq  : IScalar.cMin .Isize = -2147483648 := by simp_scalar_consts
 @[scalar_tac_simps] theorem IScalar.cMax_Isize_eq  : IScalar.cMax .Isize = 2147483647 := by simp_scalar_consts
 
-
 @[scalar_tac_simps]
 theorem UScalarTy.USize.numBits_eq : UScalarTy.Usize.numBits = System.Platform.numBits := by simp_scalar_consts
 
@@ -292,6 +292,20 @@ private theorem mul_c (x : Nat) : x * c ≤ 100 * x := by simp [c]; omega
 example (x : Nat) : x * c ≤ 100 * x := by scalar_tac
 
 end
+
+/-!
+# ZMod
+-/
+@[scalar_tac x.val]
+theorem ZMod.val_lt_or {n} (x : ZMod n) : x.val < n ∨ n = 0 := by
+  by_cases hn : n = 0
+  . simp [*]
+  . have := @ZMod.val_lt n (by constructor; omega) x
+    omega
+
+@[simp_scalar_simps]
+theorem ZMod.val_lt_iff {n} (x : ZMod n) : x.val < n ↔ n ≠ 0 := by
+ scalar_tac
 
 end ScalarTac
 

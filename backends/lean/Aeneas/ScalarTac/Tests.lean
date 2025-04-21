@@ -131,4 +131,15 @@ example (x y : U32)
   try assumption
   scalar_tac
 
+example (d k : ℕ) (hdn : d < k) :
+  let nBits := d ⊓ k;
+  2 < 2 ^ k → 2 ^ nBits < 2 ^ k := by
+  intros nBits h
+  scalar_tac +nonLin
+
+-- TODO: improve this one
+example (d i : ℕ) (h : i ≤ 256) : d * i / 8 ≤ d * 256 / 8 := by
+  apply Nat.div_le_div_right
+  scalar_tac +nonLin
+
 end Aeneas.Std

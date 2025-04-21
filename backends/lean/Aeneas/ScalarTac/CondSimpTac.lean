@@ -5,6 +5,48 @@ namespace Aeneas.ScalarTac
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 open Utils
 
+structure CondSimpPartialArgs where
+  declsToUnfold : Array Name := #[]
+  addSimpThms : Array Name := #[]
+  hypsToUse : Array FVarId := #[]
+
+def condSimpParseArgs (tacName : String) (args : TSyntaxArray [`term, `token.«*»]) : TacticM CondSimpPartialArgs := do
+  let mut declsToUnfold := #[]
+  let mut addSimpThms := #[]
+  let mut hypsToUse := #[]
+  for arg in args do
+    /- We have to make a case disjunction, because if we treat identifiers like
+       terms, then Lean will not succeed in infering their implicit parameters. -/
+    match arg with
+    | `($stx:ident) => do
+      match (← getLCtx).findFromUserName? stx.getId with
+      | .some decl =>
+        trace[Utils] "arg (local decl): {stx.raw}"
+        -- Local declarations should be assumptions
+        hypsToUse := hypsToUse.push decl.fvarId
+      | .none =>
+        -- Not a local declaration: should be a theorem
+        trace[Utils] "arg (theorem): {stx.raw}"
+        let some e ← Lean.Elab.Term.resolveId? stx (withInfo := true)
+          | throwError m!"Could not find theorem: {arg}"
+        if let .const name _ := e then
+          addSimpThms := addSimpThms.push name
+        else throwError m!"Unexpected: {arg}"
+    | term => do
+      trace[Utils] "term kind: {term.raw.getKind}"
+      if term.raw.getKind == `token.«*» then
+        trace[Utils] "found token: *"
+        let decls ← (← getLCtx).getDecls
+        let decls ← decls.filterMapM (
+          fun d => do if (← inferType d.type).isProp then pure (some d.fvarId) else pure none)
+        trace[Utils] "filtered decls: {decls.map Expr.fvar}"
+        hypsToUse := hypsToUse.append decls.toArray
+      else
+        -- TODO: we need to make that work
+        trace[Utils] "arg (term): {term}"
+        throwError m!"Unimplemented: arbitrary terms are not supported yet as arguments to `{tacName}` (received: {arg})"
+  pure ⟨ declsToUnfold, addSimpThms, hypsToUse ⟩
+
 structure CondSimpArgs where
   simpThms : Array SimpTheorems := #[]
   simprocs: Simp.SimprocsArray := #[]
