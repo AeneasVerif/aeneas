@@ -22,8 +22,10 @@ def condSimpParseArgs (tacName : String) (args : TSyntaxArray [`term, `token.«*
       match (← getLCtx).findFromUserName? stx.getId with
       | .some decl =>
         trace[Utils] "arg (local decl): {stx.raw}"
-        -- Local declarations should be assumptions
-        hypsToUse := hypsToUse.push decl.fvarId
+        if decl.isLet then
+          declsToUnfold := declsToUnfold.push decl.userName
+        else
+          hypsToUse := hypsToUse.push decl.fvarId
       | .none =>
         -- Not a local declaration: should be a theorem
         trace[Utils] "arg (theorem): {stx.raw}"

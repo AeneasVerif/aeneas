@@ -78,16 +78,16 @@ def zmodifyTac (n : Option Expr) (args : ScalarTac.CondSimpPartialArgs) (loc : U
     }
   ScalarTac.condSimpTac "zmodify" true {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true} args addSimpThms false loc
 
-syntax (name := zmodify) "zmodify" (colGt term)? ("[" (term<|>"*"),* "]")? (location)? : tactic
+syntax (name := zmodify) "zmodify" ("to" term)? ("[" (term<|>"*"),* "]")? (location)? : tactic
 
 def parseZModify : TSyntax ``zmodify -> TacticM (Option Expr × ScalarTac.CondSimpPartialArgs × Utils.Location)
-| `(tactic| zmodify $[$n]? $[[$args,*]]?) => do
+| `(tactic| zmodify $[to $n]? $[[$args,*]]?) => do
   -- TODO: do we really need this variant?
   let n ← Utils.optElabTerm n
   let args := args.map (·.getElems) |>.getD #[]
   let args ← ScalarTac.condSimpParseArgs "zmodify" args
   pure (n, args, Utils.Location.targets #[] true)
-| `(tactic| zmodify $[$n]? $[[$args,*]]? $[$loc:location]?) => do
+| `(tactic| zmodify $[to $n]? $[[$args,*]]? $[$loc:location]?) => do
   let n ← Utils.optElabTerm n
   let args := args.map (·.getElems) |>.getD #[]
   let args ← ScalarTac.condSimpParseArgs "zmodify" args
@@ -161,6 +161,6 @@ theorem Nat.lt_imp_lt (a b : ℕ) : a < b → a < b := by simp +contextual
    https://verus-lang.github.io/verus/guide/nonlinear.html#example-1-integer_ring-as-a-helper-lemma-to-provide-facts-on-modular-arithmetic -/
 example (x y d : ℕ) (h0 : d > 0) (h1 : x <= y) (h2 : x % d <= y % d) (h3 : y - x < d) :
   y % d - x % d = y - x := by
-  zmodify d
+  zmodify to d
 
 end Aeneas.ZModify
