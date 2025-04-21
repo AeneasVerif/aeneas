@@ -225,8 +225,6 @@ theorem BitVec.and_two_pow_sub_one_eq_mod {w} (x : BitVec w) (n : Nat) :
         have : (2^w - 1) % 2^w = 2^w - 1 := by apply Nat.mod_eq_of_lt; omega
         rw [← this]
         zmodify
-        simp only [Nat.one_mod_two_pow, Nat.ofNat_pos, pow_pos, Nat.cast_pred, CharP.cast_eq_zero,
-          zero_sub, hw]
       simp only [this, Nat.and_two_pow_sub_one_eq_mod, toNat_mod_cancel]
     . have : x.toNat < 2^w := by omega
       simp_all only [ofNat_eq_ofNat, not_lt, nonpos_iff_eq_zero, pow_zero, Nat.lt_one_iff,
@@ -243,7 +241,6 @@ theorem BitVec.shiftLeft_sub_one_eq_mod {w} (x : BitVec w) (n : Nat) :
     ring_nf
     natify; simp only [toNat_pow, BitVec.toNat_ofNat]
     zmodify
-    simp only [ZMod.natCast_mod, Nat.cast_ofNat]
   rw [this]
   simp only [BitVec.and_two_pow_sub_one_eq_mod]
 

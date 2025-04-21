@@ -77,7 +77,8 @@ def condSimpTacSimp (config : Simp.Config) (args : CondSimpArgs) (loc : Utils.Lo
 
 /-- A helper to define tactics which perform conditional simplifications with `scalar_tac` as a discharger. -/
 def condSimpTac
-  (tacName : String) (simpConfig : Simp.Config) (args : CondSimpArgs) (addSimpThms : TacticM (Array FVarId)) (doFirstSimp : Bool)
+  (tacName : String) (satNonLin : Bool)
+  (simpConfig : Simp.Config) (args : CondSimpArgs) (addSimpThms : TacticM (Array FVarId)) (doFirstSimp : Bool)
   (loc : Utils.Location) : TacticM Unit := do
   Elab.Tactic.focus do
   withMainContext do
@@ -110,7 +111,7 @@ def condSimpTac
   /- Introduce the scalar_tac assumptions - by doing it beforehand we don't have to redo it every
      time we call `scalar_tac`: as `saturate` is not compiled it saves a lot of time -/
   withMainContext do
-  let scalarTacAsms ← ScalarTac.scalarTacSaturateForward true false
+  let scalarTacAsms ← ScalarTac.scalarTacSaturateForward true satNonLin
   trace[Utils] "Goal after saturating the context: {← getMainGoal}"
   let additionalSimpThms ← addSimpThms
   trace[Utils] "Goal after adding the additional simp assumptions: {← getMainGoal}"

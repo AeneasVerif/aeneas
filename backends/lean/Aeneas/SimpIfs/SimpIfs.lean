@@ -20,7 +20,7 @@ def simpIfsTac (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : T
       addSimpThms := args.addSimpThms,
       hypsToUse := args.hypsToUse,
     }
-  ScalarTac.condSimpTac "simp_ifs" {maxDischargeDepth := 2, failIfUnchanged := false} args addSimpThms false loc
+  ScalarTac.condSimpTac "simp_ifs" false {maxDischargeDepth := 2, failIfUnchanged := false} args addSimpThms false loc
 
 syntax (name := simp_ifs) "simp_ifs" ("[" term,* "]")? (location)? : tactic
 

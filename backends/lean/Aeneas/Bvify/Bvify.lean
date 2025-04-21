@@ -286,7 +286,7 @@ def bvifyTac (n : Expr) (loc : Utils.Location) : TacticM Unit := do
       simpThms := #[← bvifySimpExt.getTheorems]
       simprocs := #[← bvifySimprocExt.getSimprocs]
     }
-  ScalarTac.condSimpTac "bvify" bvifySimpConfig args (bvifyAddSimpThms n) true loc
+  ScalarTac.condSimpTac "bvify" true bvifySimpConfig args (bvifyAddSimpThms n) true loc
 
 syntax (name := bvify) "bvify " colGt term (location)? : tactic
 

@@ -26,6 +26,8 @@ attribute [simp_lists_simps]
   Bool.true_or Bool.or_true
   true_or or_true
   true_and and_true
+  false_or or_false
+  false_and and_false
   decide_eq_false_iff_not ne_eq
   false_eq_decide_iff true_eq_decide_iff
   not_false_eq_true Bool.not_true Bool.not_false
@@ -61,7 +63,7 @@ def simpListsTac (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) :
       addSimpThms := args.addSimpThms,
       hypsToUse := args.hypsToUse,
     }
-  ScalarTac.condSimpTac "simp_lists" {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true} args addSimpThms false loc
+  ScalarTac.condSimpTac "simp_lists" false {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true} args addSimpThms false loc
 
 syntax (name := simp_lists) "simp_lists" ("[" (term<|>"*"),* "]")? (location)? : tactic
 

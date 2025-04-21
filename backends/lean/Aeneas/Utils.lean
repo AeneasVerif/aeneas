@@ -1740,6 +1740,11 @@ def exprToNat? (e : Expr) : Option Nat :=
   else if let some n := e.rawNatLit? then some n
   else none
 
+def optElabTerm (e : Option (TSyntax `term)) : TacticM (Option Expr) := do
+  match e with
+  | none => pure none
+  | some e => pure (some (← Lean.Elab.Tactic.elabTerm e none))
+
 end Utils
 
 end Aeneas

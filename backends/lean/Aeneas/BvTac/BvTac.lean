@@ -72,11 +72,6 @@ partial def bvTacPreprocess (n : Option Expr): TacticM Unit := do
     allGoals do
     trace[BvTac] "Goal after `simp_all`: {← getMainGoal}"
 
-def optElabTerm (e : Option (TSyntax `term)) : TacticM (Option Expr) := do
-  match e with
-  | none => pure none
-  | some e => pure (some (← Lean.Elab.Tactic.elabTerm e none))
-
 elab "bv_tac_preprocess" n:(colGt term)? : tactic => do
   bvTacPreprocess (← optElabTerm n)
 
