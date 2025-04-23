@@ -451,6 +451,9 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
       | CRawMemory _ ->
           craise __FILE__ __LINE__ span
             "Raw memory cannot be interpreted by the interpreter"
+      | COpaque reason ->
+          craise __FILE__ __LINE__ span
+            ("Charon failed to compile constant: " ^ reason)
     end
   | Copy p ->
       (* Access the value *)
