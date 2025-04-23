@@ -59,7 +59,8 @@ let extract_literal (span : Meta.span) (fmt : F.formatter) (is_pattern : bool)
         | Coq | FStar | Lean -> if b then "true" else "false"
       in
       F.pp_print_string fmt b
-  | VChar c -> (
+  | VChar c when Uchar.is_char c -> (
+      let c = Uchar.to_char c in
       match backend () with
       | HOL4 ->
           (* [#"a"] is a notation for [CHR 97] (97 is the ASCII code for 'a') *)
@@ -78,9 +79,11 @@ let extract_literal (span : Meta.span) (fmt : F.formatter) (is_pattern : bool)
           in
           F.pp_print_string fmt c;
           if inside then F.pp_print_string fmt ")")
-  | VFloat _ | VStr _ | VByteStr _ ->
+  | VChar _ | VFloat _ | VStr _ | VByteStr _ ->
       admit_raise __FILE__ __LINE__ span
-        "Float, string and byte string literals are unsupported" fmt
+        "Float, string, non-ASCII chars and byte string literals are \
+         unsupported"
+        fmt
 
 let is_single_opaque_fun_decl_group (dg : Pure.fun_decl list) : bool =
   match dg with
