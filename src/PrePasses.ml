@@ -316,8 +316,23 @@ let remove_shallow_borrows (crate : crate) (f : fun_decl) : fun_decl =
       end
     in
 
+    let storage_rem_visitor =
+      object
+        inherit [_] map_statement as super
+
+        method! visit_StorageLive env loc =
+          if LocalId.Set.mem loc !filtered then Nop
+          else super#visit_StorageLive env loc
+
+        method! visit_StorageDead env loc =
+          if LocalId.Set.mem loc !filtered then Nop
+          else super#visit_StorageDead env loc
+      end
+    in
+
     (* Filter the variables *)
     let body = filter_visitor#visit_statement () body in
+    let body = storage_rem_visitor#visit_statement () body in
 
     (* Check that the filtered variables have completely disappeared from the body *)
     let check_visitor =

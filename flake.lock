@@ -6,18 +6,14 @@
         "flake-compat": "flake-compat",
         "flake-utils": "flake-utils",
         "nixpkgs": "nixpkgs_2",
-        "nixpkgs-ocaml": [
-          "charon",
-          "nixpkgs"
-        ],
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1745408019,
-        "narHash": "sha256-iq+pjpWhdtEQiyImEDM1LFtjpot/B7ByU/W06t0nlGs=",
+        "lastModified": 1745415006,
+        "narHash": "sha256-GpppbN7xaWpvc+nenqhYCdCQ+AJlGK2BMdXE3myShdY=",
         "owner": "aeneasverif",
         "repo": "charon",
-        "rev": "6dc07de6e169dfad6beffc4927bf26bfa2b8e295",
+        "rev": "b2d1104568425d10b0e6ce10f02b48e4aab0918a",
         "type": "github"
       },
       "original": {
