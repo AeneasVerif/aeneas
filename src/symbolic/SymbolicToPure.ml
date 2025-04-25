@@ -5134,6 +5134,7 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
     ty;
     kind;
     body = body_id;
+    _;
   } =
     decl
   in
