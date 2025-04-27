@@ -127,7 +127,7 @@ attribute [progress_post_simps]
 open Result in
 def progressWith (fExpr : Expr) (th : Expr)
   (keep keepPretty : Option Name) (ids : Array (Option Name)) (splitPost : Bool)
-  (asmTac : TacticM Unit) : TacticM (Result ProgressWithOutput MessageData) := do
+  (assumTac asmTac : TacticM Unit) : TacticM (Result ProgressWithOutput MessageData) := do
   /- Apply the theorem
      We try to match the theorem with the goal
      In order to do so, we introduce meta-variables for all the parameters
@@ -304,8 +304,14 @@ def progressWith (fExpr : Expr) (th : Expr)
       newGoals.toList.partitionM fun mvar => do isProp (← mvar.getType)
     trace[Progress] "Prop goals: {newPropGoals}"
     trace[Progress] "Non prop goals: {← newNonPropGoals.mapM fun mvarId => do pure ((← mvarId.getDecl).userName, mvarId)}"
-    -- Try to solve the goals which are propositions
+    /- Try to solve the goals which are propositions
+
+       We do this in several phases:
+       - we first use the "assumption" tactic to instantiate as many meta-variables as possible
+       - we then use the other tactic on the preconditions
+     -/
     setGoals newPropGoals
+    allGoalsNoRecover (tryTac assumTac)
     allGoalsNoRecover asmTac
     let newPropGoals ← getUnsolvedGoals
     /- Simplify the post-conditions in the main goal - note that we waited until now
@@ -359,7 +365,7 @@ def getFirstArg (args : Array Expr) : Option Expr := do
 
     Return the list of post-conditions we introduced if it succeeded. -/
 def tryApply (keep keepPretty : Option Name) (ids : Array (Option Name)) (splitPost : Bool)
-  (asmTac : TacticM Unit) (fExpr : Expr)
+  (assumTac asmTac : TacticM Unit) (fExpr : Expr)
   (kind : String) (th : Option Expr) : TacticM (Option ProgressWithOutput) := do
   let res ← do
     match th with
@@ -371,7 +377,7 @@ def tryApply (keep keepPretty : Option Name) (ids : Array (Option Name)) (splitP
       -- Apply the theorem
       let res ← do
         try
-          let res ← progressWith fExpr th keep keepPretty ids splitPost asmTac
+          let res ← progressWith fExpr th keep keepPretty ids splitPost assumTac asmTac
           pure (some res)
         catch _ => pure none
   match res with
@@ -381,7 +387,7 @@ def tryApply (keep keepPretty : Option Name) (ids : Array (Option Name)) (splitP
 
 -- The array of ids are identifiers to use when introducing fresh variables
 def progressAsmsOrLookupTheorem (keep keepPretty : Option Name) (withTh : Option Expr)
-  (ids : Array (Option Name)) (splitPost : Bool) (asmTac : TacticM Unit) :
+  (ids : Array (Option Name)) (splitPost : Bool) (assumTac asmTac : TacticM Unit) :
   TacticM (ProgressGoals × UsedTheorem) := do
   withMainContext do
   -- Retrieve the goal
@@ -408,7 +414,7 @@ def progressAsmsOrLookupTheorem (keep keepPretty : Option Name) (withTh : Option
   -- Otherwise, lookup one.
   match withTh with
   | some th => do
-    match ← progressWith fExpr th keep keepPretty ids splitPost asmTac with
+    match ← progressWith fExpr th keep keepPretty ids splitPost assumTac asmTac with
     | .Ok res =>
       -- Remark: exprToSyntax doesn't give the expected result
       return  (res.toProgressGoals, .givenExpr th)
@@ -419,7 +425,7 @@ def progressAsmsOrLookupTheorem (keep keepPretty : Option Name) (withTh : Option
     let decls ← ctx.getDecls
     for decl in decls.reverse do
       trace[Progress] "Trying assumption: {decl.userName} : {decl.type}"
-      let res ← do try progressWith fExpr decl.toExpr keep keepPretty ids splitPost asmTac catch _ => continue
+      let res ← do try progressWith fExpr decl.toExpr keep keepPretty ids splitPost assumTac asmTac catch _ => continue
       match res with
       | .Ok res => return (res.toProgressGoals, .localHyp decl)
       | .Error msg => throwError msg
@@ -443,7 +449,7 @@ def progressAsmsOrLookupTheorem (keep keepPretty : Option Name) (withTh : Option
       -- Try the theorems one by one
       for pspec in pspecs do
         let pspecExpr ← Term.mkConst pspec
-        match ← tryApply keep keepPretty ids splitPost asmTac fExpr "pspec theorem" pspecExpr with
+        match ← tryApply keep keepPretty ids splitPost assumTac asmTac fExpr "pspec theorem" pspecExpr with
         | some res => return (res.toProgressGoals, .progressThm pspec)
         | none => pure ()
       -- It failed: try to use the recursive assumptions
@@ -455,7 +461,7 @@ def progressAsmsOrLookupTheorem (keep keepPretty : Option Name) (withTh : Option
         | .default | .implDetail => false | .auxDecl => true)
       for decl in decls.reverse do
         trace[Progress] "Trying recursive assumption: {decl.userName} : {decl.type}"
-        let res ← do try progressWith fExpr decl.toExpr keep keepPretty ids splitPost asmTac catch _ => continue
+        let res ← do try progressWith fExpr decl.toExpr keep keepPretty ids splitPost assumTac asmTac catch _ => continue
         match res with
         | .Ok res => return (res.toProgressGoals, .localHyp decl)
         | .Error msg => throwError msg
@@ -546,11 +552,11 @@ def evalProgress (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Ar
   let byTac := match byTac with
     | none => []
     | some byTac => [evalTactic byTac]
-  let (goals, usedTheorem) ← progressAsmsOrLookupTheorem keep keepPretty withArg ids splitPost (
+  let (goals, usedTheorem) ← progressAsmsOrLookupTheorem keep keepPretty withArg ids splitPost customAssumTac (
     withMainContext do
     trace[Progress] "trying to solve precondition: {← getMainGoal}"
     try
-      firstTac ([customAssumTac, simpTac, simpTac, scalarTac] ++ byTac)
+      firstTac ([simpTac, simpTac, scalarTac] ++ byTac)
       trace[Progress] "Precondition solved!"
     catch _ =>
       trace[Progress] "Precondition not solved")
