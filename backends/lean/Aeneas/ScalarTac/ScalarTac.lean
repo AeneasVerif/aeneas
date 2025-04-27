@@ -235,56 +235,40 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
   let simpArgs : SimpArgs ← getSimpArgs
   -- Apply `simpAll`
   if config.simpAllMaxSteps ≠ 0 then
-    allGoalsNoRecover -- TODO: remove?
-      (tryTac do
-        /- By setting the maxDischargeDepth at 0, we make sure that assumptions of the shape `∀ x, P x → ...`
-           will not have any effect. This is important because it often happens that the user instantiates
-           one such assumptions with specific arguments, meaning that if we call `simpAll` naively, those
-           instantiations will get simplified to `True` and thus eliminated. -/
-        Utils.simpAll
-          {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 0} true
-          simpArgs)
+    tryTac do
+      /- By setting the maxDischargeDepth at 0, we make sure that assumptions of the shape `∀ x, P x → ...`
+          will not have any effect. This is important because it often happens that the user instantiates
+          one such assumptions with specific arguments, meaning that if we call `simpAll` naively, those
+          instantiations will get simplified to `True` and thus eliminated. -/
+      Utils.simpAll
+        {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 0} true
+        simpArgs
   -- We might have proven the goal
   if (← getGoals).isEmpty then
     trace[ScalarTac] "Goal proven by preprocessing!"
     return
   trace[ScalarTac] "Goal after simpAll: {← getMainGoal}"
-  let dsimp :=
-    -- We need `zetaDelta` to inline the let-bindings (otherwise, omega doesn't always manage to deal with them)
-    dsimpAt true {zetaDelta := true, failIfUnchanged := false, maxDischargeDepth := 1}
-      -- TODO: why not all simpArgs?
-      {simprocs := simpArgs.simprocs}
-      Tactic.Location.wildcard
-  dsimp
+  -- Call `simp` again, this time to inline the let-bindings (otherwise, omega doesn't always manage to deal with them)
+  Utils.simpAt true {zetaDelta := true, failIfUnchanged := false, maxDischargeDepth := 1} simpArgs .wildcard
   -- We might have proven the goal
   if (← getGoals).isEmpty then
     trace[ScalarTac] "Goal proven by preprocessing!"
     return
-  trace[ScalarTac] "Goal after first dsimp: {← getMainGoal}"
-  -- More preprocessing: apply norm_cast to the whole context
-  -- TODO: remove this one, and provide the proper simp lemmas to scalar_tac_simps
-  Utils.tryTac (Utils.normCastAtAll)
+  trace[ScalarTac] "Goal after 2nd simp (with zetaDelta): {← getMainGoal}"
+  -- Apply normCast
+  Utils.normCastAtAll
   -- We might have proven the goal
   if (← getGoals).isEmpty then
     trace[ScalarTac] "Goal proven by preprocessing!"
     return
-  trace[ScalarTac] "Goal after first normCast: {← getMainGoal}"
-  -- norm_cast does weird things with negative numbers so we reapply simp
-  dsimp
+  trace[ScalarTac] "Goal after normCast: {← getMainGoal}"
+  -- Call `simp` again because `normCast` sometimes does weird things
+  Utils.simpAt true {failIfUnchanged := false, maxDischargeDepth := 1} simpArgs .wildcard
   -- We might have proven the goal
   if (← getGoals).isEmpty then
     trace[ScalarTac] "Goal proven by preprocessing!"
     return
-  trace[ScalarTac] "Goal after 2nd dsimp: {← getMainGoal}"
-  allGoalsNoRecover do
-    tryTac do
-    Utils.simpAt true {failIfUnchanged := false, maxDischargeDepth := 1}
-      simpArgs .wildcard
-  -- We might have proven the goal
-  if (← getGoals).isEmpty then
-    trace[ScalarTac] "Goal proven by preprocessing!"
-    return
-  trace[ScalarTac] "Goal after simpAt following dsimp: {← getMainGoal}"
+  trace[ScalarTac] "Goal after 2nd call to simpAt: {← getMainGoal}"
 
 elab "scalar_tac_preprocess" config:Parser.Tactic.optConfig : tactic => do
   let config ← elabConfig config
