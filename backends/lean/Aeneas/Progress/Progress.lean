@@ -307,13 +307,20 @@ def progressWith (fExpr : Expr) (th : Expr)
     /- Try to solve the goals which are propositions
 
        We do this in several phases:
-       - we first use the "assumption" tactic to instantiate as many meta-variables as possible
+       - we first use the "assumption" tactic to instantiate as many meta-variables as possible, and we do so by starting with the
+         preconditions with the highest number of meta-variables (this is a way of avoiding spurious instantiations)
        - we then use the other tactic on the preconditions
      -/
-    setGoals newPropGoals
+    let ordPropGoals ←
+      newPropGoals.mapM (fun g => do
+        let ty ← g.getType
+        pure ((← Utils.getMVarIds ty).size, g))
+    let ordPropGoals := (ordPropGoals.mergeSort (fun (mvars0, _) (mvars1, _) => mvars0 ≤ mvars1)).reverse
+    setGoals (ordPropGoals.map Prod.snd)
     allGoalsNoRecover (tryTac assumTac)
     allGoalsNoRecover asmTac
-    let newPropGoals ← getUnsolvedGoals
+    -- Make sure we use the original order when presenting the preconditions to the user
+    let newPropGoals ← newPropGoals.filterMapM (fun g => do if ← g.isAssigned then pure none else pure (some g))
     /- Simplify the post-conditions in the main goal - note that we waited until now
        because by solving the preconditions we may have instantiated meta-variables.
        We also simplify the goal again (to simplify let-bindings, etc.) -/
