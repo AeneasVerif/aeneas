@@ -24,16 +24,7 @@ instance (x y : IScalar ty) : IsLinearIntProp (x ≥ y) where
 instance (x y : IScalar ty) : IsLinearIntProp (x ≥ y) where
 instance (x y : IScalar ty) : IsLinearIntProp (x = y) where
 
-attribute [scalar_tac_simps]
-  and_self false_implies true_implies Prod.mk.injEq
-  not_false_eq_true not_true_eq_false
-  true_and and_true false_and and_false
-  true_or or_true false_or or_false
-  Bool.true_eq_false Bool.false_eq_true
-  decide_eq_true_eq Bool.or_eq_true Bool.and_eq_true
-  Membership.mem
-
-attribute [scalar_tac_simps] zero_add
+attribute [scalar_tac_simps] Prod.mk.injEq Membership.mem Int.ofNat_toNat zero_add
 
 local syntax "simp_scalar_consts" : tactic
 local macro_rules

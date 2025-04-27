@@ -250,15 +250,11 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
     return
   trace[ScalarTac] "Goal after simpAll: {← getMainGoal}"
   let dsimp :=
-    tryTac do
-      -- TODO: why is `simpOnly` at false?
-      -- We set `simpOnly` at false on purpose.
-      -- Also, we need `zetaDelta` to inline the let-bindings (otherwise, omega doesn't always manages
-      -- to deal with them)
-      dsimpAt false {zetaDelta := true, failIfUnchanged := false, maxDischargeDepth := 1}
-        -- TODO: why not all simpArgs?
-        {simprocs := simpArgs.simprocs}
-        Tactic.Location.wildcard
+    -- We need `zetaDelta` to inline the let-bindings (otherwise, omega doesn't always manage to deal with them)
+    dsimpAt true {zetaDelta := true, failIfUnchanged := false, maxDischargeDepth := 1}
+      -- TODO: why not all simpArgs?
+      {simprocs := simpArgs.simprocs}
+      Tactic.Location.wildcard
   dsimp
   -- We might have proven the goal
   if (← getGoals).isEmpty then

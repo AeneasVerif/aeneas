@@ -9,7 +9,7 @@ namespace hashmap
 
 namespace AList
 
-@[simp]
+@[simp, scalar_tac_simps]
 def v {α : Type} (ls: AList α) : List (Usize × α) :=
   match ls with
   | Nil => []
@@ -19,7 +19,7 @@ def v {α : Type} (ls: AList α) : List (Usize × α) :=
 abbrev lookup {α : Type} (ls: AList α) (key: Usize) : Option α :=
   ls.v.lookup key
 
-@[simp]
+@[simp, scalar_tac_simps]
 abbrev length {α : Type} (ls : AList α) : Nat := ls.v.length
 
 end AList
@@ -99,7 +99,7 @@ abbrev Slots.al_v (s : Slots α) := (s.val.map AList.v).flatten
 def lookup (hm : HashMap α) (k : Usize) : Option α :=
   slots_s_lookup hm.slots.val k
 
-@[simp]
+@[simp, scalar_tac_simps]
 abbrev len_s (hm : HashMap α) : Nat := hm.al_v.length
 
 instance : Membership Usize (HashMap α) where

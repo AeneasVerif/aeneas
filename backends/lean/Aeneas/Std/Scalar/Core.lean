@@ -974,13 +974,13 @@ theorem UScalar.max_right_zero_eq {ty} (x: UScalar ty):
   Max.max x (UScalar.ofNat 0 (by simp)) = x := max_eq_left (UScalar.zero_le x)
 
 /-! Some conversions -/
-@[simp, bvify_simps] abbrev IScalar.toNat (x : IScalar ty) : Nat := x.val.toNat
-@[simp, bvify_simps] abbrev I8.toNat      (x : I8) : Nat := x.val.toNat
-@[simp, bvify_simps] abbrev I16.toNat     (x : I16) : Nat := x.val.toNat
-@[simp, bvify_simps] abbrev I32.toNat     (x : I32) : Nat := x.val.toNat
-@[simp, bvify_simps] abbrev I64.toNat     (x : I64) : Nat := x.val.toNat
-@[simp, bvify_simps] abbrev I128.toNat    (x : I128) : Nat := x.val.toNat
-@[simp, bvify_simps] abbrev Isize.toNat   (x : Isize) : Nat := x.val.toNat
+@[simp, scalar_tac_simps, bvify_simps] abbrev IScalar.toNat {ty} (x : IScalar ty) : Nat := x.val.toNat
+@[simp, scalar_tac_simps, bvify_simps] abbrev I8.toNat      (x : I8) : Nat := x.val.toNat
+@[simp, scalar_tac_simps, bvify_simps] abbrev I16.toNat     (x : I16) : Nat := x.val.toNat
+@[simp, scalar_tac_simps, bvify_simps] abbrev I32.toNat     (x : I32) : Nat := x.val.toNat
+@[simp, scalar_tac_simps, bvify_simps] abbrev I64.toNat     (x : I64) : Nat := x.val.toNat
+@[simp, scalar_tac_simps, bvify_simps] abbrev I128.toNat    (x : I128) : Nat := x.val.toNat
+@[simp, scalar_tac_simps, bvify_simps] abbrev Isize.toNat   (x : Isize) : Nat := x.val.toNat
 
 abbrev U8.bv (x : U8)   : BitVec 8 := UScalar.bv x
 abbrev U16.bv (x : U16) : BitVec 16 := UScalar.bv x
