@@ -374,12 +374,12 @@ def BitVec.fromLEBytes (l : List Byte) : BitVec (8 * l.length) :=
   match l with
   | [] => BitVec.ofNat _ 0
   | b :: l =>
-    BitVec.setWidth (8 * (b :: l).length) b ||| (BitVec.fromLEBytes l).setWidth (8 * (b :: l).length)
+    BitVec.setWidth (8 * (b :: l).length) b ||| ((BitVec.fromLEBytes l).setWidth (8 * (b :: l).length) <<< 8)
 
 def BitVec.fromBEBytes (l : List Byte) : BitVec (8 * l.length) :=
   (BitVec.fromLEBytes l.reverse).cast (by simp)
 
-@[simp]
+@[simp, simp_lists_simps, simp_scalar_simps]
 theorem BitVec.toLEBytes_length {w} (v : BitVec w) (h : w % 8 = 0) :
   v.toLEBytes.length = w / 8 := by
   if h1: w = 0 then
@@ -395,6 +395,90 @@ theorem BitVec.toLEBytes_length {w} (v : BitVec w) (h : w % 8 = 0) :
       conv => rhs; rw [this]
       simp only [Nat.ofNat_pos, Nat.add_div_right, Nat.add_left_inj]
     . omega
+
+@[simp, simp_lists_simps]
+theorem BitVec.getElem!_cast (x : BitVec n) (h : n = m) (i : ℕ) :
+  (x.cast h)[i]! = x[i]! := by
+  simp only [getElem!_eq_testBit_toNat, toNat_cast]
+
+-- TODO: move
+@[simp_lists_simps]
+theorem List.getElem!_cons_eq_getElem!_sub {α} [Inhabited α] (x : α) (tl : List α) (i : ℕ) (hi : 0 < i) :
+  (x :: tl)[i]! = tl[i - 1]! := by
+  simp only [Nat.not_eq, ne_eq, not_lt_zero', or_true, getElem!_cons_nzero, hi]
+
+@[simp_lists_simps]
+theorem List.getElem!_cons_zero' {α} [Inhabited α] (x : α) (tl : List α) (i : ℕ) (hi : i = 0) :
+  (x :: tl)[i]! = x := by
+  simp only [hi, getElem!_cons_zero]
+
+@[simp, simp_lists_simps]
+theorem BitVec.toLEBytes_getElem!_testBit (v : BitVec w) (i j : ℕ) (hj : j < 8) :
+  (v.toLEBytes[i]!).testBit j = v[8 * i + j]! := by
+  unfold toLEBytes
+  split
+  . by_cases hi: i = 0 <;> simp_lists
+    . simp only [MulZeroClass.mul_zero, zero_add, hi]
+      simp only [Byte.testBit, toNat_setWidth, Nat.reducePow, getElem!_eq_testBit_toNat]
+      have : 256 = 2^8 := by simp only [Nat.reducePow]
+      simp only [this, Nat.testBit_mod_two_pow]
+      simp only [decide_true, Bool.true_and, hj]
+    . have := BitVec.toLEBytes_getElem!_testBit (setWidth (w - 8) (v >>> 8)) (i - 1) j hj
+      simp only [this]
+      simp only [getElem!_eq_testBit_toNat, toNat_setWidth, toNat_ushiftRight,
+        Nat.testBit_mod_two_pow, Nat.testBit_shiftRight]
+      have : 8 + (8 * (i - 1) + j) = 8 * i + j := by omega
+      simp only [this, Bool.and_iff_right_iff_imp, decide_eq_true_eq]
+      by_cases 8 * i + j < w
+      . omega
+      . simp_lists
+  . simp only [gt_iff_lt, not_lt, nonpos_iff_eq_zero, List.length_nil, zero_le,
+    List.getElem!_default, Byte.testBit_default, Bool.false_eq] at *
+    simp_lists
+termination_by i
+
+@[simp, simp_lists_simps]
+theorem BitVec.fromLEBytes_getElem! (v : List Byte) (j : ℕ) :
+  (BitVec.fromLEBytes v)[j]! = v[j / 8]!.testBit (j % 8) := by
+  unfold BitVec.fromLEBytes
+  match hv: v with
+  | [] => simp only [List.length_nil, Nat.mul_zero, zero_le, getElem!_eq_false,
+    List.getElem!_default, Byte.testBit_default]
+  | x :: v' =>
+    simp only [List.length_cons, getElem!_or]
+    by_cases hj: j < 8
+    . have : j < 8 * (v'.length + 1) := by scalar_tac
+      simp_lists
+      simp only [getElem!_eq_testBit_toNat, toNat_setWidth, Nat.testBit_mod_two_pow, decide_true,
+        Bool.true_and, this]
+      have : j % 8 = j := by apply Nat.mod_eq_of_lt; omega
+      simp only [this]
+    . have : 0 < j / 8 := by scalar_tac +nonLin
+      simp_lists
+      simp only [getElem!_eq_testBit_toNat, toNat_setWidth, Nat.testBit_mod_two_pow,
+        toNat_shiftLeft, Nat.ofNat_pos, mul_lt_mul_left, lt_add_iff_pos_right, Nat.lt_one_iff,
+        pos_of_gt, toNat_mod_cancel_of_lt, Nat.testBit_shiftLeft, ge_iff_le]
+      have : 8 ≤ j := by omega
+      simp only [this, decide_true, Bool.true_and]
+      have := BitVec.fromLEBytes_getElem! v' (j - 8)
+      simp only [getElem!_eq_testBit_toNat] at this
+      simp only [this]
+      simp_lists
+      simp only [Bool.and_false, Bool.false_or]
+      by_cases hj': j < 8 * (v'.length + 1)
+      . simp [hj']
+        have h0 : (j - 8) / 8 = (j / 8) - 1 := by omega
+        have h1 : (j - 8) % 8 = j % 8 := by omega
+        simp only [h0, h1]
+      . simp_lists; simp only [Bool.and_false]
+
+@[simp, simp_lists_simps]
+theorem BitVec.fromLEBytes_toLEBytes {w : ℕ} (h : w % 8 = 0) (b : BitVec w) :
+  BitVec.fromLEBytes b.toLEBytes = BitVec.cast (by simp only [toLEBytes_length, Nat.dvd_iff_mod_eq_zero, Nat.mul_div_cancel', h]) b := by
+  simp only [eq_iff, fromLEBytes_getElem!, getElem!_cast]
+  simp_lists
+  simp only [toLEBytes_length, Nat.dvd_iff_mod_eq_zero, Nat.mul_div_cancel', h]
+  simp only [Nat.div_add_mod, implies_true]
 
 @[simp]
 theorem BitVec.toBEBytes_length {w} (v : BitVec w) (h : w % 8 = 0) :
