@@ -27,12 +27,21 @@ def condSimpParseArgs (tacName : String) (args : TSyntaxArray [`term, `token.«*
         else
           hypsToUse := hypsToUse.push decl.fvarId
       | .none =>
-        -- Not a local declaration: should be a theorem
+        -- Not a local declaration
         trace[Utils] "arg (theorem): {stx.raw}"
         let some e ← Lean.Elab.Term.resolveId? stx (withInfo := true)
           | throwError m!"Could not find theorem: {arg}"
         if let .const name _ := e then
-          addSimpThms := addSimpThms.push name
+          -- Lookup the declaration to check whether it is a definition or a theorem
+          match (← getEnv).find? name with
+          | none => throwError m!"Could not find declaration: {name}"
+          | some d =>
+            match d with
+            | .thmInfo _ | .axiomInfo _ =>
+              addSimpThms := addSimpThms.push name
+            | .defnInfo _ =>
+              declsToUnfold := declsToUnfold.push name
+            | _ => throwError m!"{name} is not a theorem, an axiom or a definition"
         else throwError m!"Unexpected: {arg}"
     | term => do
       trace[Utils] "term kind: {term.raw.getKind}"
