@@ -534,6 +534,12 @@ section -- setSlice!
     (s.setSlice! i s')[j]! = s[j]! := by
     cases h <;> simp_lists [setSlice!_getElem!_prefix, setSlice!_getElem!_suffix]
 
+  @[simp, simp_lists_simps]
+  theorem map_setSlice! (s : List α) (i : ℕ) (s' : List α) (f : α → β):
+    (s.setSlice! i s').map f = (s.map f).setSlice! i (s'.map f) := by
+    simp only [List.setSlice!, List.append_assoc, List.map_append, List.map_take, List.map_drop,
+      List.length_map]
+
 end -- setSlice!
 
 @[simp_lists_simps]

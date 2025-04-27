@@ -34,6 +34,8 @@ attribute [simp_lists_simps]
   Nat.testBit_add_one
   Nat.testBit_two_pow_add_eq
 
+attribute [simp_lists_simps] List.map_map List.map_id_fun List.map_id_fun' id_eq
+
 def simpListsTac (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
   let addSimpThms : TacticM (Array FVarId) := pure #[]
   let args : ScalarTac.CondSimpArgs := {

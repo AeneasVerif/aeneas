@@ -170,6 +170,8 @@ theorem BitVec.toNat_lt_two_pow {w} (x : BitVec w) (i : ℕ) (h : w ≤ i) : x.t
   have : 2^w ≤ 2^i := by scalar_tac +nonLin
   omega
 
+attribute [simp_scalar_simps] BitVec.setWidth_eq BitVec.ofNat_eq_ofNat
+
 def simpScalarTac (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
   let addSimpThms : TacticM (Array FVarId) := pure #[]
   let args : ScalarTac.CondSimpArgs := {
