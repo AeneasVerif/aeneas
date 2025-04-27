@@ -184,27 +184,45 @@ elab "scalar_tac_saturate" config:Parser.Tactic.optConfig : tactic => do
 
 attribute [scalar_tac_simps] Prod.mk.injEq
 
-def getSimpArgs : Tactic.TacticM SimpArgs := do
-  let psimprocs ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs
-  let psimpLemmas ← SimpBoolProp.simpBoolPopSimpExt.getTheorems
-  let simprocs ← scalarTacBeforeSatSimprocExt.getSimprocs
-  let simpLemmas ← scalarTacBeforeSatSimpExt.getTheorems
-  pure {simprocs := #[simprocs, psimprocs], simpThms := #[simpLemmas, psimpLemmas]}
+def getSimpArgs : CoreM SimpArgs := do
+  pure {
+    simprocs := #[
+        ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs,
+        ← scalarTacSimprocExt.getSimprocs
+    ],
+    simpThms := #[
+      ← SimpBoolProp.simpBoolPropSimpExt.getTheorems,
+      ← scalarTacSimpExt.getTheorems
+    ]}
 
+def getSimpThmNames : CoreM (Array Name) := do
+  let args ← getSimpArgs
+  let names := args.simpThms.map fun x =>
+    (x.lemmaNames.toList.filterMap fun x =>
+      match x with
+      | .decl declName _ _ => some declName
+      | _ => none).toArray
+  pure names.flatten
+
+attribute [scalar_tac_simps]
+  -- Int.subNatNat is very annoying - TODO: there is probably something more general thing to do
+  Int.subNatNat_eq_coe
 
 /-  Boosting a bit the `omega` tac. -/
 def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
   Tactic.withMainContext do
   -- Pre-preprocessing
-  /- First get rid of [ofInt] (if there are dependent arguments, we may not
-     manage to simplify the context). We only use a small set of lemmas
-     because otherwise we may simplify too much, leading to issues when
-     saturating. -/
+  /- We simplify a first time before saturating the context.
+     This is useful because simplifying often introduces expressions which are useful
+     for the saturation phase, and it also often allows to get rid of some dependently
+     typed expressions such as `UScalar.ofNat`.
+  -/
   trace[ScalarTac] "Original goal before preprocessing: {← getMainGoal}"
-  let beforeSatSimpArgs : SimpArgs ← getSimpArgs
-  tryTac do
-    Utils.simpAt true {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 0}
-              beforeSatSimpArgs .wildcard
+  let simpArgs : SimpArgs ← getSimpArgs
+  Utils.simpAt true {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1}
+    -- Remove the forall quantifiers to prepare for the call of `simp_all` (we
+    -- don't want `simp_all` to use assumptions of the shape `∀ x, P x`))
+    {simpArgs with addSimpThms := #[``forall_eq_forall']} .wildcard
   -- We might have proven the goal
   if (← getGoals).isEmpty then
     trace[ScalarTac] "Goal proven by preprocessing!"
@@ -214,14 +232,15 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
   if config.saturate then
     allGoalsNoRecover (do let _ ← scalarTacSaturateForward config.fastSaturate config.nonLin)
   trace[ScalarTac] "Goal after saturation: {← getMainGoal}"
-  let psimprocs ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs
-  let simprocs ← scalarTacSimprocExt.getSimprocs
-  let simpLemmas ← scalarTacSimpExt.getTheorems
   let simpArgs : SimpArgs ← getSimpArgs
   -- Apply `simpAll`
   if config.simpAllMaxSteps ≠ 0 then
     allGoalsNoRecover -- TODO: remove?
       (tryTac do
+        /- By setting the maxDischargeDepth at 0, we make sure that assumptions of the shape `∀ x, P x → ...`
+           will not have any effect. This is important because it often happens that the user instantiates
+           one such assumptions with specific arguments, meaning that if we call `simpAll` naively, those
+           instantiations will get simplified to `True` and thus eliminated. -/
         Utils.simpAll
           {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 0} true
           simpArgs)
@@ -236,7 +255,9 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
       -- We set `simpOnly` at false on purpose.
       -- Also, we need `zetaDelta` to inline the let-bindings (otherwise, omega doesn't always manages
       -- to deal with them)
-      dsimpAt false {zetaDelta := true, failIfUnchanged := false, maxDischargeDepth := 0} {simprocs := #[psimprocs, simprocs]}
+      dsimpAt false {zetaDelta := true, failIfUnchanged := false, maxDischargeDepth := 1}
+        -- TODO: why not all simpArgs?
+        {simprocs := simpArgs.simprocs}
         Tactic.Location.wildcard
   dsimp
   -- We might have proven the goal
@@ -245,6 +266,7 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
     return
   trace[ScalarTac] "Goal after first dsimp: {← getMainGoal}"
   -- More preprocessing: apply norm_cast to the whole context
+  -- TODO: remove this one, and provide the proper simp lemmas to scalar_tac_simps
   Utils.tryTac (Utils.normCastAtAll)
   -- We might have proven the goal
   if (← getGoals).isEmpty then
@@ -261,16 +283,7 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
   allGoalsNoRecover do
     tryTac do
     Utils.simpAt true {failIfUnchanged := false, maxDischargeDepth := 1}
-      {simpThms := #[simpLemmas],
-       addSimpThms :=
-        #[-- Int.subNatNat is very annoying - TODO: there is probably something more general thing to do
-          ``Int.subNatNat_eq_coe,
-          -- We also need this, in case the goal is: ¬ False
-          ``not_false_eq_true,
-          -- Remove the forall quantifiers to prepare for the call of `simp_all` (we
-          -- don't want `simp_all` to use assumptions of the shape `∀ x, P x`))
-          ``forall_eq_forall']}
-        .wildcard
+      simpArgs .wildcard
   -- We might have proven the goal
   if (← getGoals).isEmpty then
     trace[ScalarTac] "Goal proven by preprocessing!"
@@ -324,7 +337,7 @@ def scalarTac (config : Config) : TacticM Unit := do
   Tactic.withMainContext do
   let error : TacticM Unit := do
     let g ← Tactic.getMainGoal
-    throwError "scalar_tac failed to prove the goal below.\n\nNote that scalar_tac is almost equivalent to:\n  scalar_tac_preprocess; simp_all (maxDischargeDepth := 1) only; omega\n\nGoal: \n{g}"
+    throwError "scalar_tac failed to prove the goal below.\n\nNote that scalar_tac is almost equivalent to:\n  scalar_tac_preprocess; omega\n\nGoal: \n{g}"
   try
     scalarTacCore config
   catch _ =>

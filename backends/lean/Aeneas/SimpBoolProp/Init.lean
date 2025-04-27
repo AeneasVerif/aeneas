@@ -21,7 +21,7 @@ by other specialized tactics (such as `scalar_tac`, `simp_lists`, etc.).
 -/
 
 /-- The `simp_bool_prop_simps` simp attribute. -/
-initialize simpBoolPopSimpExt : SimpExtension ←
+initialize simpBoolPropSimpExt : SimpExtension ←
   registerSimpAttr `simp_bool_prop_simps "\
     The `simp_bool_prop_simps` attribute registers simp lemmas to be used to simplify booleans and propositions.
     Those simp lemmas are used by several tactics such as `scalar_tac`, `simp_scalar`, `simp_ifs`, etc."

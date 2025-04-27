@@ -6,6 +6,8 @@ attribute [-simp] List.getElem!_eq_getElem?_getD
 attribute [local simp] Array.getElem!_eq_toList_getElem! Array.getElem_eq_toList_getElem
 attribute [scalar_tac self.toArray] Vector.size_toArray
 
+attribute [-simp] Array.getElem!_toList
+
 @[scalar_tac xs.toList]
 theorem toList_length {α : Type u} {n : ℕ} (xs : Vector α n) :
   xs.toList.length = n := by
@@ -152,5 +154,15 @@ theorem getElem!_ofFn {n : ℕ} {α : Type u} [Inhabited α] (f : Fin n → α) 
   (Vector.ofFn f)[i]! = f ⟨ i, hi ⟩ := by
   simp only [ofFn, getElem!_eq_toArray_getElem!, Array.getElem!_eq_toList_getElem!,
     Array.toList_ofFn, List.getElem!_ofFn, hi]
+
+@[simp, simp_lists_simps]
+theorem getElem!_toList {α} {n} [Inhabited α] (v : Vector α n) (i : ℕ) :
+  v.toList[i]! = v[i]! := by
+  simp only [Vector.getElem!_eq_toArray_getElem!, Array.getElem!_eq_toList_getElem!]
+
+@[simp, simp_lists_simps]
+theorem getElem!_toArray {α} {n} [Inhabited α] (v : Vector α n) (i : ℕ) :
+  v.toArray[i]! = v[i]! := by
+  simp only [Vector.getElem!_eq_toArray_getElem!, Array.getElem!_eq_toList_getElem!]
 
 end Vector

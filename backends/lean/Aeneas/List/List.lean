@@ -35,11 +35,6 @@ attribute [simp] getElem?_cons_zero getElem!_cons_zero
 def slice (start end_ : Nat) (ls : List α) : List α :=
   (ls.drop start).take (end_ - start)
 
-def replace_slice (start end_ : Nat) (l nl : List α) : List α :=
-  let l_beg := l.take start
-  let l_end := l.drop end_
-  l_beg ++ nl ++ l_end
-
 def allP {α : Type u} (l : List α) (p: α → Prop) : Prop :=
   foldr (fun a r => p a ∧ r) True l
 
@@ -179,7 +174,7 @@ theorem resize_length (l : List α) (new_len : Nat) (x : α) :
 theorem slice_length_le (i j : Nat) (ls : List α) : (ls.slice i j).length ≤ ls.length := by
   simp [slice]
 
-@[scalar_tac_simps]
+@[simp_lists_simps, scalar_tac_simps]
 theorem slice_length (i j : Nat) (ls : List α) : (ls.slice i j).length = min (ls.length - i) (j - i) := by
   simp [slice]; scalar_tac
 
@@ -353,50 +348,6 @@ theorem getElem?_length_le {α} [Inhabited α] (l : List α) (i : Nat) (hi : l.l
 theorem getElem!_length_le {α} [Inhabited α] (l : List α) (i : Nat) (hi : l.length ≤ i) :
   l[i]! = default := by
   simp only [List.getElem!_eq_getElem?_getD, getElem?_length_le, Option.getD_none, hi]
-
-theorem replace_slice_getElem? (start end_ : Nat) (l nl : List α)
-  (_ : start < end_) (_ : end_ ≤ l.length) (_ : nl.length = end_ - start) :
-  let l1 := l.replace_slice start end_ nl
-  (∀ i, i < start → getElem? l1 i = getElem? l i) ∧
-  (∀ i, start ≤ i → i < end_ → getElem? l1 i = getElem? nl (i - start)) ∧
-  (∀ i, end_ ≤ i → i < l.length → getElem? l1 i = getElem? l i)
-  := by
-  -- We need those assumptions everywhere
-  have : start ≤ l.length := by scalar_tac
-  simp only [replace_slice]
-  split_conjs
-  . intro i _
-    -- Introducing exactly the assumptions we need to make the rewriting work
-    have : i < l.length := by scalar_tac
-    simp_all only [append_assoc, length_take, inf_of_le_left, getElem?_append_left]
-    simp [*]
-  . intro i _ _
-    have : (List.take start l).length ≤ i := by simp_all
-    have : i < (List.take start l).length + (nl ++ List.drop end_ l).length := by
-      simp_all; scalar_tac
-    simp_all only [length_take, inf_of_le_left, length_append, length_drop, append_assoc,
-      getElem?_append_right]
-    have : i - start < nl.length := by scalar_tac
-    simp_all only [getElem?_append_left]
-  . intro i _ _
-    have : 0 ≤ end_ := by scalar_tac
-    have : end_ ≤ l.length := by scalar_tac
-    have : (List.take start l).length ≤ i := by scalar_tac
-    have := @getElem?_append_right _ (take start l ++ nl) (drop end_ l) i (by simp; scalar_tac)
-    simp_all only [zero_le, length_take, inf_of_le_left, append_assoc, getElem?_append_right,
-      tsub_le_iff_right, Nat.sub_add_cancel, getElem?_drop, length_append]
-    congr
-    scalar_tac
-
-theorem replace_slice_getElem! [Inhabited α] (start end_ : Nat) (l nl : List α)
-  (_ : start < end_) (_ : end_ ≤ l.length) (_ : nl.length = end_ - start) :
-  let l1 := l.replace_slice start end_ nl
-  (∀ i, i < start → getElem! l1 i = getElem! l i) ∧
-  (∀ i, start ≤ i → i < end_ → getElem! l1 i = getElem! nl (i - start)) ∧
-  (∀ i, end_ ≤ i → i < l.length → getElem! l1 i = getElem! l i)
-  := by
-  have := replace_slice_getElem? start end_ l nl (by assumption) (by assumption) (by assumption)
-  simp_all
 
 @[simp]
 theorem allP_nil {α : Type u} (p: α → Prop) : allP [] p :=

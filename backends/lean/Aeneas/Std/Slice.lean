@@ -2,10 +2,13 @@
 import Aeneas.List
 import Aeneas.Std.Array.Core
 import Aeneas.Std.Range
+import Aeneas.SimpScalar.SimpScalar
 
 namespace Aeneas.Std
 
 open Result Error core.ops.range
+
+attribute [-simp] List.getElem!_eq_getElem?_getD
 
 /-!
 # Slice
@@ -31,10 +34,10 @@ theorem Slice.length_ineq {α : Type u} (s : Slice α) : s.val.length ≤ Usize.
 @[scalar_tac s.val.length]
 theorem Slice.length_ineq' {α : Type u} (s : Slice α) : s.val.length ≤ Usize.max := Slice.length_ineq s
 
-@[simp]
+@[simp, scalar_tac_simps, simp_scalar_simps, simp_lists_simps]
 abbrev Slice.length {α : Type u} (v : Slice α) : Nat := v.val.length
 
-@[simp]
+@[simp, scalar_tac_simps, simp_scalar_simps, simp_lists_simps]
 abbrev Slice.v {α : Type u} (v : Slice α) : List α := v.val
 
 example {a: Type u} (v : Slice a) : v.length ≤ Usize.max := by
@@ -93,6 +96,9 @@ def Slice.index_usize {α : Type u} (v: Slice α) (i: Usize) : Result α :=
   | none => fail .arrayOutOfBounds
   | some x => ok x
 
+theorem Slice.eq_iff {α} (s0 s1 : Slice α) : s0 = s1 ↔ s0.val = s1.val := by
+  simp only [Slice, Subtype.eq_iff]
+
 /- In the theorems below: we don't always need the `∃ ..`, but we use one
    so that `progress` introduces an opaque variable and an equality. This
    helps control the context.
@@ -103,8 +109,8 @@ theorem Slice.index_usize_spec {α : Type u} [Inhabited α] (v: Slice α) (i: Us
   (hbound : i.val < v.length) :
   ∃ x, v.index_usize i = ok x ∧ x = v.val[i.val]! := by
   simp only [index_usize]
-  simp at *
-  simp [*]
+  simp only [length, getElem?_Usize_eq, exists_eq_right] at *
+  simp only [List.getElem?_eq_getElem, List.getElem!_eq_getElem?_getD, Option.getD_some, hbound]
 
 @[simp, scalar_tac_simps, simp_lists_simps]
 theorem Slice.set_val_eq {α : Type u} (v: Slice α) (i: Usize) (x: α) :
@@ -182,13 +188,7 @@ theorem Slice.subslice_spec {α : Type u} [Inhabited α] (s : Slice α) (r : Ran
 def Slice.update_subslice {α : Type u} (s : Slice α) (r : Range Usize) (ss : Slice α) : Result (Slice α) :=
   -- TODO: not completely sure here
   if h: r.start.val < r.end_.val ∧ r.end_.val ≤ s.length ∧ ss.val.length = r.end_.val - r.start.val then
-    let s_beg := s.val.take r.start.val
-    let s_end := s.val.drop r.end_.val
-    have : s_beg.length = r.start.val := by scalar_tac
-    have : s_end.length = s.val.length - r.end_.val := by scalar_tac
-    let ns := s_beg.append (ss.val.append s_end)
-    have : ns.length = s.val.length := by simp [ns, *]; scalar_tac
-    ok ⟨ ns, by simp_all; scalar_tac ⟩
+    ok ⟨ s.val.setSlice! r.start.val ss.val, by scalar_tac ⟩
   else
     fail panic
 
@@ -199,22 +199,9 @@ theorem Slice.update_subslice_spec {α : Type u} [Inhabited α] (a : Slice α) (
   (∀ i, i < r.start.val → na[i]! = a[i]!) ∧
   (∀ i, r.start.val ≤ i → i < r.end_.val → na[i]! = ss[i - r.start.val]!) ∧
   (∀ i, r.end_.val ≤ i → i < a.length → na[i]! = a[i]!) := by
-  simp [update_subslice, *]
-  have h := List.replace_slice_getElem! r.start.val r.end_.val a.val ss.val
-    (by scalar_tac) (by scalar_tac) (by scalar_tac)
-  simp [List.replace_slice, *] at h
-  have ⟨ h0, h1, h2 ⟩ := h
-  clear h
-  split_conjs
-  . intro i _
-    have := h0 i (by scalar_tac)
-    simp [*]
-  . intro i _ _
-    have := h1 i (by scalar_tac) (by scalar_tac)
-    simp [*]
-  . intro i _ _
-    have := h2 i (by scalar_tac) (by scalar_tac)
-    simp [*]
+  simp only [update_subslice, length, and_self, ↓reduceDIte, ok.injEq, getElem!_Nat_eq,
+    exists_eq_left', *]
+  simp_lists
 
 /- Trait declaration: [core::slice::index::private_slice_index::Sealed] -/
 structure core.slice.index.private_slice_index.Sealed (Self : Type) where
@@ -265,8 +252,8 @@ def core.slice.index.SliceIndexRangeUsizeSlice.get_mut
         match s' with
         | none => s
         | some s' =>
-          if h: (List.replace_slice r.start r.end_ s.val s'.val).length ≤ Usize.max then
-            ⟨ List.replace_slice r.start r.end_ s.val s'.val, by scalar_tac ⟩
+          if h: s'.length = r.end_ - r.start then
+            ⟨ List.setSlice! s.val r.start s'.val, by scalar_tac ⟩
           else s )
   else ok (none, fun _ => s)
 
@@ -294,8 +281,8 @@ def core.slice.index.SliceIndexRangeUsizeSlice.index_mut {T : Type} (r : Range U
   if r.start ≤ r.end_ ∧ r.end_ ≤ s.length then
     ok (⟨ s.val.slice r.start r.end_, by scalar_tac⟩,
         fun s' =>
-        if h: (List.replace_slice r.start r.end_ s.val s'.val).length ≤ Usize.max then
-          ⟨ List.replace_slice r.start r.end_ s.val s'.val, by scalar_tac ⟩
+        if h: s'.length = r.end_ - r.start then
+          ⟨ List.setSlice! s.val r.start s', by scalar_tac ⟩
         else s )
   else fail .panic
 
@@ -389,7 +376,6 @@ def core.slice.Slice.copy_from_slice {T : Type} (_ : core.marker.Copy T)
   (s : Slice T) (src: Slice T) : Result (Slice T) :=
   if s.len = src.len then ok src
   else fail panic
-
 
 /- [core::slice::index::{core::slice::index::SliceIndex<@Slice<T>> for core::ops::range::RangeFrom<usize>}::get] -/
 def core.slice.index.SliceIndexRangeFromUsizeSlice.get {T : Type} (r : core.ops.range.RangeFrom Usize) (s : Slice T) : Result (Option (Slice T)) :=
@@ -526,5 +512,67 @@ def core.slice.Slice.swap {T : Type} (s : Slice T) (a b : Usize) : Result (Slice
   let bv ← Slice.index_usize s b
   let s1 ← Slice.update s a av
   Slice.update s1 b bv
+
+@[simp, progress_simps]
+theorem Slice.index_mut_SliceIndexRangeUsizeSliceInst (s : Slice α) (r : core.ops.range.Range Usize) :
+  core.slice.index.Slice.index_mut (core.slice.index.SliceIndexRangeUsizeSliceInst α) s r = core.slice.index.SliceIndexRangeUsizeSlice.index_mut r s := by
+  rfl
+
+def Slice.setSlice! {α : Type u} (s : Slice α) (i : ℕ) (s' : List α) : Slice α :=
+  ⟨s.val.setSlice! i s', by scalar_tac⟩
+
+@[simp_lists_simps]
+theorem Slice.setSlice!_getElem!_prefix {α} [Inhabited α]
+  (s : Slice α) (s' : List α) (i j : ℕ) (h : j < i) :
+  (s.setSlice! i s')[j]! = s[j]! := by
+  simp only [Slice.setSlice!, Slice.getElem!_Nat_eq]
+  simp_lists
+
+@[simp_lists_simps]
+theorem Slice.setSlice!_getElem!_middle {α} [Inhabited α]
+  (s : Slice α) (s' : List α) (i j : ℕ) (h : i ≤ j ∧ j - i < s'.length ∧ j < s.length) :
+  (s.setSlice! i s')[j]! = s'[j - i]! := by
+  simp only [Slice.setSlice!, Slice.getElem!_Nat_eq]
+  simp_lists
+
+theorem Slice.setSlice!_getElem!_suffix {α} [Inhabited α]
+  (s : Slice α) (s' : List α) (i j : ℕ) (h : i + s'.length ≤ j) :
+  (s.setSlice! i s')[j]! = s[j]! := by
+  simp only [Slice.setSlice!, Slice.getElem!_Nat_eq]
+  simp_lists
+
+@[simp, simp_lists_simps]
+theorem Slice.setSlice!_val (s : Slice α) (i : ℕ) (s' : List α) :
+  (s.setSlice! i s').val = s.val.setSlice! i s' := by
+  simp only [setSlice!]
+
+@[progress]
+theorem core.slice.index.SliceIndexRangeUsizeSlice.index_mut.progress_spec (r : core.ops.range.Range Usize) (s : Slice α)
+  (h0 : r.start ≤ r.end_) (h1 : r.end_ ≤ s.length) :
+  ∃ s1 index_mut_back, core.slice.index.SliceIndexRangeUsizeSlice.index_mut r s = ok (s1, index_mut_back) ∧
+  s1.val = s.val.slice r.start r.end_ ∧
+  s1.length = r.end_ - r.start ∧
+  ∀ s2, s2.length = s1.length → index_mut_back s2 = s.setSlice! r.start.val s2 := by
+  simp only [index_mut, UScalar.le_equiv, Slice.length, dite_eq_ite]
+  split
+  . simp only [ok.injEq, Prod.mk.injEq, and_assoc, exists_and_left, exists_eq_left', true_and]
+    simp_lists
+    simp_scalar
+    simp_lists [Slice.eq_iff]
+  . simp only [reduceCtorEq, false_and, exists_false]
+    scalar_tac
+
+@[progress]
+theorem core.slice.Slice.copy_from_slice.progress_spec (copyInst : core.marker.Copy α) (s0 s1 : Slice α)
+  (h : s0.length = s1.length) :
+  core.slice.Slice.copy_from_slice copyInst s0 s1 = ok s1 := by
+  simp only [copy_from_slice, ite_eq_left_iff, UScalar.neq_to_neq_val, Usize.ofNat_val_eq, h,
+    Slice.length, not_true_eq_false, reduceCtorEq, imp_self]
+
+@[simp, scalar_tac_simps, simp_scalar_simps, simp_lists_simps]
+theorem Slice.setSlice!_length {α : Type u} (s : Slice α) (i : ℕ) (s' : List α) :
+  (s.setSlice! i s').length = s.length := by
+  simp only [Slice.length, Slice.setSlice!, List.setSlice!_length]
+
 
 end Aeneas.Std

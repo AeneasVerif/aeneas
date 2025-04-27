@@ -126,4 +126,9 @@ theorem getElem!_ofFn {n : ℕ} {α : Type u} [Inhabited α] (f : Fin n → α) 
   (Array.ofFn f)[i]! = f ⟨ i, hi ⟩ := by
   simp only [getElem!_eq_toList_getElem!, toList_ofFn, List.getElem!_ofFn, hi]
 
+@[simp, simp_lists_simps]
+theorem getElem!_toList {α} [Inhabited α] (a : Array α) (i : ℕ) :
+  a.toList[i]! = a[i]! := by
+  simp only [getElem!_eq_toList_getElem!]
+
 end Array

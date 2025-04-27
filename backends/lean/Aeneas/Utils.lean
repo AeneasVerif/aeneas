@@ -797,7 +797,7 @@ def mkSimpCtx (simpOnly : Bool) (config : Simp.Config) (kind : SimpKind) (args :
   let simpThms ←
     if simpOnly then Tactic.simpOnlyBuiltins.foldlM (·.addConst ·) ({} : SimpTheorems)
     else getSimpTheorems
-  -- Add the equational theorem for the declarations to unfold
+  -- Add the equational theorems for the declarations to unfold
   let addDeclToUnfold (thms : SimpTheorems) (decl : Name) : Tactic.TacticM SimpTheorems :=
     if kind == .dsimp then pure (thms.addDeclToUnfoldCore decl)
     else thms.addDeclToUnfold decl

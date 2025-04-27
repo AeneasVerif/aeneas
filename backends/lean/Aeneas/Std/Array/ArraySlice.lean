@@ -8,6 +8,8 @@ namespace Aeneas.Std
 
 open Result Error core.ops.range
 
+attribute [-simp] List.getElem!_eq_getElem?_getD
+
 /-! Array to slice/subslices -/
 
 @[progress_pure_def]
@@ -55,16 +57,7 @@ theorem Array.subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array 
 def Array.update_subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range Usize) (s : Slice α) : Result (Array α n) :=
   -- TODO: not completely sure here
   if h: r.start.val < r.end_.val ∧ r.end_.val ≤ a.length ∧ s.val.length = r.end_.val - r.start.val then
-    let s_beg := a.val.take r.start.val
-    let s_end := a.val.drop r.end_.val
-    have : s_beg.length = r.start.val := by
-      scalar_tac
-    have : s_end.length = a.val.length - r.end_.val := by
-      scalar_tac
-    let na := s_beg.append (s.val.append s_end)
-    have : na.length = a.val.length:= by
-      simp [na]; scalar_tac
-    ok ⟨ na, by simp_all ⟩
+    ok ⟨ a.val.setSlice! r.start s.val, by scalar_tac ⟩
   else
     fail panic
 
@@ -80,23 +73,10 @@ theorem Array.update_subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a :
   (∀ i, i < r.start.val → na[i]! = a[i]!) ∧
   (∀ i, r.start.val ≤ i → i < r.end_.val → na[i]! = s[i - r.start.val]!) ∧
   (∀ i, r.end_.val ≤ i → i < n.val → na[i]! = a[i]!) := by
-  simp only [update_subslice, length, and_true, true_and, List.append_eq,
-    get!, Slice.get!, ↓reduceDIte, ok.injEq, exists_eq_left', *]
-  have h := List.replace_slice_getElem! r.start.val r.end_.val a.val s.val
-    (by scalar_tac) (by scalar_tac) (by scalar_tac)
-  simp [List.replace_slice] at h
-  have ⟨ h0, h1, h2 ⟩ := h
-  clear h
-  split_conjs
-  . intro i _
-    have := h0 i (by scalar_tac)
-    simp_all (maxDischargeDepth := 1)
-  . intro i _ _
-    have := h1 i (by scalar_tac) (by scalar_tac)
-    simp [*]
-  . intro i _ _
-    have := h2 i (by scalar_tac) (by scalar_tac)
-    simp [*]
+  simp [update_subslice]
+  split <;> simp only [reduceCtorEq, false_and, exists_false, ok.injEq, exists_eq_left']
+  . simp_lists
+  . scalar_tac
 
 /- [core::array::[T; N]::index]: forward function -/
 def core.array.Array.index

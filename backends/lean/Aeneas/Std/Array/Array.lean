@@ -40,10 +40,10 @@ theorem Array.length_eq'' {α : Type u} {n : Usize} (a : Array α n) : a.val.len
   cases a; simp[*]
   scalar_tac
 
-@[simp]
+@[simp, scalar_tac_simps, simp_scalar_simps, simp_lists_simps]
 abbrev Array.length {α : Type u} {n : Usize} (v : Array α n) : Nat := v.val.length
 
-@[simp]
+@[simp, scalar_tac_simps, simp_scalar_simps, simp_lists_simps]
 abbrev Array.v {α : Type u} {n : Usize} (v : Array α n) : List α := v.val
 
 example {α: Type u} {n : Usize} (v : Array α n) : v.length ≤ Usize.max := by
@@ -219,5 +219,27 @@ def core.clone.CloneArray {T : Type} (N : Usize) (cloneCloneInst :
   clone_from := fun _ => core.array.CloneArray.clone cloneCloneInst
 }
 
+def Array.setSlice! {α : Type u} {n} (s : Array α n) (i : ℕ) (s' : List α) : Array α n :=
+  ⟨s.val.setSlice! i s', by scalar_tac⟩
+
+@[simp_lists_simps]
+theorem Array.setSlice!_getElem!_prefix {α} {n} [Inhabited α]
+  (s : Array α n) (s' : List α) (i j : ℕ) (h : j < i) :
+  (s.setSlice! i s')[j]! = s[j]! := by
+  simp only [Array.setSlice!, Array.getElem!_Nat_eq]
+  simp_lists
+
+@[simp_lists_simps]
+theorem Array.setSlice!_getElem!_middle {α} {n} [Inhabited α]
+  (s : Array α n) (s' : List α) (i j : ℕ) (h : i ≤ j ∧ j - i < s'.length ∧ j < s.length) :
+  (s.setSlice! i s')[j]! = s'[j - i]! := by
+  simp only [Array.setSlice!, Array.getElem!_Nat_eq]
+  simp_lists
+
+theorem Array.setSlice!_getElem!_suffix {α} {n} [Inhabited α]
+  (s : Array α n) (s' : List α) (i j : ℕ) (h : i + s'.length ≤ j) :
+  (s.setSlice! i s')[j]! = s[j]! := by
+  simp only [Array.setSlice!, Array.getElem!_Nat_eq]
+  simp_lists
 
 end Aeneas.Std

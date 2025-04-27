@@ -159,6 +159,11 @@ theorem Nat.testBit_one : Nat.testBit 1 i = decide (i = 0) := by
   . simp only [Nat.testBit_zero, Nat.mod_succ, decide_true]
   . simp only [Nat.add_eq_zero, one_ne_zero, and_false, decide_false, Nat.testBit_add_one, Nat.reduceDiv, Nat.zero_testBit]
 
+@[simp, simp_scalar_simps]
+theorem one_le_pow (a n : ℕ) (h : 0 < a) : 1 ≤ a ^ n := by
+  have : 0 < a ^n := by simp [*]
+  omega
+
 -- TODO: use that with scalar_tac +nonLin
 @[simp_scalar_simps]
 theorem BitVec.toNat_lt_two_pow {w} (x : BitVec w) (i : ℕ) (h : w ≤ i) : x.toNat < 2^i := by
@@ -168,7 +173,7 @@ theorem BitVec.toNat_lt_two_pow {w} (x : BitVec w) (i : ℕ) (h : w ≤ i) : x.t
 def simpScalarTac (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
   let addSimpThms : TacticM (Array FVarId) := pure #[]
   let args : ScalarTac.CondSimpArgs := {
-      simpThms := #[← simpScalarSimpExt.getTheorems, ← SimpBoolProp.simpBoolPopSimpExt.getTheorems],
+      simpThms := #[← simpScalarSimpExt.getTheorems, ← SimpBoolProp.simpBoolPropSimpExt.getTheorems],
       simprocs := #[← simpScalarSimprocExt.getSimprocs, ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs],
       declsToUnfold := args.declsToUnfold,
       addSimpThms := args.addSimpThms,

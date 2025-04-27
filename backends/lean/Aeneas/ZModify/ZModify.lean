@@ -48,7 +48,7 @@ def zmodifyTac (n : Option Expr) (args : ScalarTac.CondSimpPartialArgs) (loc : U
       pure #[← addThm ``Nat.lt_imp_eq_iff_eq_ZMod]
   let args : ScalarTac.CondSimpArgs := {
       -- Note that we also add the push_cast theorems
-      simpThms := #[← zmodifySimpExt.getTheorems, ← SimpBoolProp.simpBoolPopSimpExt.getTheorems, ← Lean.Meta.NormCast.pushCastExt.getTheorems],
+      simpThms := #[← zmodifySimpExt.getTheorems, ← SimpBoolProp.simpBoolPropSimpExt.getTheorems, ← Lean.Meta.NormCast.pushCastExt.getTheorems],
       simprocs := #[← zmodifySimprocExt.getSimprocs, ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs],
       declsToUnfold := args.declsToUnfold,
       addSimpThms := args.addSimpThms,

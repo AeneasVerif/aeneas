@@ -637,36 +637,36 @@ abbrev I32.ofInt   := @IScalar.ofInt .I32
 abbrev I64.ofInt   := @IScalar.ofInt .I64
 abbrev I128.ofInt  := @IScalar.ofInt .I128
 
-@[simp, scalar_tac_simps, scalar_tac_before_sat_simps, bvify_simps]
+@[simp, scalar_tac_simps, bvify_simps]
 theorem UScalar.ofNat_val_eq {ty : UScalarTy} (h : x < 2^ty.numBits) :
   (UScalar.ofNatCore x h).val = x := by
   simp [UScalar.ofNat, UScalar.ofNatCore, UScalar.val, max]
 
-@[simp, scalar_tac_simps, scalar_tac_before_sat_simps]
+@[simp, scalar_tac_simps]
 theorem U8.ofNat_val_eq (h : x < 2^UScalarTy.U8.numBits) : (U8.ofNatCore x h).val = x := by
   apply UScalar.ofNat_val_eq h
 
-@[simp, scalar_tac_simps, scalar_tac_before_sat_simps]
+@[simp, scalar_tac_simps]
 theorem U16.ofNat_val_eq (h : x < 2^UScalarTy.U16.numBits) : (U16.ofNatCore x h).val = x := by
   apply UScalar.ofNat_val_eq h
 
-@[simp, scalar_tac_simps, scalar_tac_before_sat_simps]
+@[simp, scalar_tac_simps]
 theorem U32.ofNat_val_eq (h : x < 2^UScalarTy.U32.numBits) : (U32.ofNatCore x h).val = x := by
   apply UScalar.ofNat_val_eq h
 
-@[simp, scalar_tac_simps, scalar_tac_before_sat_simps]
+@[simp, scalar_tac_simps]
 theorem U64.ofNat_val_eq (h : x < 2^UScalarTy.U64.numBits) : (U64.ofNatCore x h).val = x := by
   apply UScalar.ofNat_val_eq h
 
-@[simp, scalar_tac_simps, scalar_tac_before_sat_simps]
+@[simp, scalar_tac_simps]
 theorem U128.ofNat_val_eq (h : x < 2^UScalarTy.U128.numBits) : (U128.ofNatCore x h).val = x := by
   apply UScalar.ofNat_val_eq h
 
-@[simp, scalar_tac_simps, scalar_tac_before_sat_simps]
+@[simp, scalar_tac_simps]
 theorem Usize.ofNat_val_eq (h : x < 2^UScalarTy.Usize.numBits) : (Usize.ofNatCore x h).val = x := by
   apply UScalar.ofNat_val_eq h
 
-@[simp, scalar_tac_simps, scalar_tac_before_sat_simps, bvify_simps]
+@[simp, scalar_tac_simps, bvify_simps]
 theorem IScalar.ofInt_val_eq {ty : IScalarTy} (h : - 2^(ty.numBits - 1) ≤ x ∧ x < 2^(ty.numBits - 1)) :
   (IScalar.ofIntCore x h).val = x := by
   simp [IScalar.ofInt, IScalar.ofIntCore, IScalar.val]
@@ -675,27 +675,27 @@ theorem IScalar.ofInt_val_eq {ty : IScalarTy} (h : - 2^(ty.numBits - 1) ≤ x �
   simp [Int.bmod, BitVec.toInt] <;> split <;> (try omega) <;>
   cases h: System.Platform.numBits_eq <;> simp_all <;> omega
 
-@[simp, scalar_tac_simps, scalar_tac_before_sat_simps]
+@[simp, scalar_tac_simps]
 theorem I8.ofInt_val_eq (h : -2^(IScalarTy.I8.numBits-1) ≤ x ∧ x < 2^(IScalarTy.I8.numBits-1)) : (I8.ofIntCore x h).val = x := by
   apply IScalar.ofInt_val_eq
 
-@[simp, scalar_tac_simps, scalar_tac_before_sat_simps]
+@[simp, scalar_tac_simps]
 theorem I16.ofInt_val_eq (h : -2^(IScalarTy.I16.numBits-1) ≤ x ∧ x < 2^(IScalarTy.I16.numBits-1)) : (I16.ofIntCore x h).val = x := by
   apply IScalar.ofInt_val_eq
 
-@[simp, scalar_tac_simps, scalar_tac_before_sat_simps]
+@[simp, scalar_tac_simps]
 theorem I32.ofInt_val_eq (h : -2^(IScalarTy.I32.numBits-1) ≤ x ∧ x < 2^(IScalarTy.I32.numBits-1)) : (I32.ofIntCore x h).val = x := by
   apply IScalar.ofInt_val_eq
 
-@[simp, scalar_tac_simps, scalar_tac_before_sat_simps]
+@[simp, scalar_tac_simps]
 theorem I64.ofInt_val_eq (h : -2^(IScalarTy.I64.numBits-1) ≤ x ∧ x < 2^(IScalarTy.I64.numBits-1)) : (I64.ofIntCore x h).val = x := by
   apply IScalar.ofInt_val_eq
 
-@[simp, scalar_tac_simps, scalar_tac_before_sat_simps]
+@[simp, scalar_tac_simps]
 theorem I128.ofInt_val_eq (h : -2^(IScalarTy.I128.numBits-1) ≤ x ∧ x < 2^(IScalarTy.I128.numBits-1)) : (I128.ofIntCore x h).val = x := by
   apply IScalar.ofInt_val_eq
 
-@[simp, scalar_tac_simps, scalar_tac_before_sat_simps]
+@[simp, scalar_tac_simps]
 theorem Isize.ofInt_val_eq (h : -2^(IScalarTy.Isize.numBits-1) ≤ x ∧ x < 2^(IScalarTy.Isize.numBits-1)) : (Isize.ofIntCore x h).val = x := by
   apply IScalar.ofInt_val_eq
 

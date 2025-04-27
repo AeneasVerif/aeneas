@@ -28,23 +28,6 @@ initialize scalarTacSimprocExt : Simp.SimprocExtension ←
     The `scalar_tac_simps_proc` attribute registers simp procedures to be used by `scalar_tac`
     during its preprocessing phase." (some scalarTacSimprocsRef)
 
-/-- The `scalar_tac_before_sat_simps` simp attribute. -/
-initialize scalarTacBeforeSatSimpExt : SimpExtension ←
-  registerSimpAttr `scalar_tac_before_sat_simps "\
-    The `scalar_tac_before_sat_simps` attribute registers simp lemmas to be used by `scalar_tac`
-    before the saturation phase. This is for maintainers of `scalar_tac` only: regular users
-    should use the `scalar_tac_simps` set intead."
-
--- TODO: this doesn't compile!?
---initialize scalarTacBeforeSatSimprocsRef : IO.Ref Simprocs ← IO.mkRef {}
-
-/-- The `scalar_tac_before_sat_simps_proc` simp attribute for the simp rocs. -/
-initialize scalarTacBeforeSatSimprocExt : Simp.SimprocExtension ←
-  Simp.registerSimprocAttr `scalar_tac_before_sat_simps_proc "\
-    The `scalar_tac_before_sat_simps_proc` attribute registers simp procedures to be used by `scalar_tac`
-    before the saturation phase. This is for maintainers of `scalar_tac` only: regular users
-    should use the `scalar_tac_simps` set intead." none --(some scalarTacBeforeSatSimprocsRef)
-
 /-!
 # Saturation Rules Sets
 -/

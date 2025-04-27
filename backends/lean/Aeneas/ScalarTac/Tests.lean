@@ -50,7 +50,6 @@ example (x : I32) : Isize.min ≤ x.val := by scalar_tac
 
 example (x y : Nat) (z : Int) (h : Int.subNatNat x y + z = 0) : (x : Int) - (y : Int) + z = 0 := by
   scalar_tac_preprocess
-  omega
 
 example (x : U32) (h : 16 * x.val ≤ U32.max) :
   4 * (U32.ofNat (4 * x.val) (by scalar_tac)).val ≤ U32.max := by

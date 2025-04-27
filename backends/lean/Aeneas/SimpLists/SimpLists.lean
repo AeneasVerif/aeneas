@@ -37,7 +37,7 @@ attribute [simp_lists_simps]
 def simpListsTac (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
   let addSimpThms : TacticM (Array FVarId) := pure #[]
   let args : ScalarTac.CondSimpArgs := {
-      simpThms := #[← simpListsSimpExt.getTheorems, ← SimpBoolProp.simpBoolPopSimpExt.getTheorems],
+      simpThms := #[← simpListsSimpExt.getTheorems, ← SimpBoolProp.simpBoolPropSimpExt.getTheorems],
       simprocs := #[← simpListsSimprocExt.getSimprocs, ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs],
       declsToUnfold := args.declsToUnfold,
       addSimpThms := args.addSimpThms,
