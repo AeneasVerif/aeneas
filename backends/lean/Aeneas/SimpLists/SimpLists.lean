@@ -1,6 +1,7 @@
 import Mathlib.Data.Nat.Bitwise
 import Aeneas.SimpLists.Init
 import Aeneas.ScalarTac.CondSimpTac
+import Aeneas.SimpBoolProp.SimpBoolProp
 
 /-!
 # `simp_lists` tactic
@@ -12,27 +13,6 @@ List `get` and `set`.
 namespace Aeneas.SimpLists
 
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
-
-/- Theorems to simplify booleans.
-
-   This is useful because simplifying operations over lists often introduces
-   those. As they are quite trivial we expect them to get simplified away
-   independently of the simp tactic we're using.
--/
-attribute [simp_lists_simps]
-  implies_true
-  Bool.and_true Bool.true_and
-  Bool.false_or Bool.or_false
-  Bool.true_or Bool.or_true
-  true_or or_true
-  true_and and_true
-  false_or or_false
-  false_and and_false
-  decide_eq_false_iff_not ne_eq
-  false_eq_decide_iff true_eq_decide_iff
-  not_false_eq_true Bool.not_true Bool.not_false
-  Bool.not_eq_eq_eq_not
-  decide_true decide_false Bool.and_self
 
 /- We need some basic arithmetic simplification theorems to simplify the
    indices we use to access the lists. We try to keep these to a minimum -
@@ -57,8 +37,8 @@ attribute [simp_lists_simps]
 def simpListsTac (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
   let addSimpThms : TacticM (Array FVarId) := pure #[]
   let args : ScalarTac.CondSimpArgs := {
-      simpThms := #[← simpListsSimpExt.getTheorems],
-      simprocs := #[← simpListsSimprocExt.getSimprocs],
+      simpThms := #[← simpListsSimpExt.getTheorems, ← SimpBoolProp.simpBoolPopSimpExt.getTheorems],
+      simprocs := #[← simpListsSimprocExt.getSimprocs, ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs],
       declsToUnfold := args.declsToUnfold,
       addSimpThms := args.addSimpThms,
       hypsToUse := args.hypsToUse,

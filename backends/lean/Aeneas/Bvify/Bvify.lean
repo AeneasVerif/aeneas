@@ -4,6 +4,7 @@ import Aeneas.Std.Scalar
 import Aeneas.Std.PrimitivesLemmas
 import Aeneas.Std.Scalar.CoreConvertNum -- we need this for the tests
 import Aeneas.ScalarTac.CondSimpTac
+import Aeneas.SimpBoolProp.SimpBoolProp
 
 /-!
 # `bvify` tactic
@@ -276,15 +277,15 @@ def bvifySimpConfig : Simp.Config := {maxDischargeDepth := 2, failIfUnchanged :=
 
 def bvifyTacSimp (loc : Utils.Location) : TacticM Unit := do
   let args : ScalarTac.CondSimpArgs := {
-      simpThms := #[← bvifySimpExt.getTheorems]
-      simprocs := #[← bvifySimprocExt.getSimprocs]
+      simpThms := #[← bvifySimpExt.getTheorems, ← SimpBoolProp.simpBoolPopSimpExt.getTheorems]
+      simprocs := #[← bvifySimprocExt.getSimprocs, ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs]
     }
   ScalarTac.condSimpTacSimp bvifySimpConfig args loc #[] false
 
 def bvifyTac (n : Expr) (loc : Utils.Location) : TacticM Unit := do
   let args : ScalarTac.CondSimpArgs := {
-      simpThms := #[← bvifySimpExt.getTheorems]
-      simprocs := #[← bvifySimprocExt.getSimprocs]
+      simpThms := #[← bvifySimpExt.getTheorems, ← SimpBoolProp.simpBoolPopSimpExt.getTheorems]
+      simprocs := #[← bvifySimprocExt.getSimprocs, ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs]
     }
   ScalarTac.condSimpTac "bvify" true bvifySimpConfig args (bvifyAddSimpThms n) true loc
 

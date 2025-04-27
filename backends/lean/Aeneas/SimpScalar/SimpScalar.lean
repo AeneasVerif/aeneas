@@ -2,6 +2,7 @@ import Mathlib.Data.Nat.Bitwise
 import Aeneas.SimpScalar.Init
 import Aeneas.ScalarTac.CondSimpTac
 import Aeneas.SimpLists.Init -- We need to mark some lemmas as `simp_lists_simps`
+import Aeneas.SimpBoolProp.SimpBoolProp
 
 /-!
 # `simp_scalar` tactic
@@ -12,29 +13,6 @@ The `simp_scalar` tactic is used to simplify arithmetic expressions.
 namespace Aeneas.SimpScalar
 
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
-
-/- Theorems to simplify booleans.
-
-   This is useful because simplifying arithmetic expressions often introduces
-   those. As they are quite trivial we expect them to get simplified away
-   independently of the simp tactic we're using.
--/
-attribute [simp_scalar_simps]
-  implies_true
-  Bool.and_true Bool.true_and
-  Bool.false_or Bool.or_false
-  Bool.true_or Bool.or_true
-  true_or or_true
-  true_and and_true
-  false_or or_false
-  false_and and_false
-  decide_eq_false_iff_not ne_eq
-  false_eq_decide_iff true_eq_decide_iff
-  not_false_eq_true Bool.not_true Bool.not_false
-  Bool.not_eq_eq_eq_not
-  decide_true decide_false
-  Bool.and_self
-  iff_false iff_true
 
 /- Making sure we always reason in terms of `≤` and `<` -/
 attribute [simp_scalar_simps] ge_iff_le gt_iff_lt
@@ -190,8 +168,8 @@ theorem BitVec.toNat_lt_two_pow {w} (x : BitVec w) (i : ℕ) (h : w ≤ i) : x.t
 def simpScalarTac (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
   let addSimpThms : TacticM (Array FVarId) := pure #[]
   let args : ScalarTac.CondSimpArgs := {
-      simpThms := #[← simpScalarSimpExt.getTheorems],
-      simprocs := #[← simpScalarSimprocExt.getSimprocs],
+      simpThms := #[← simpScalarSimpExt.getTheorems, ← SimpBoolProp.simpBoolPopSimpExt.getTheorems],
+      simprocs := #[← simpScalarSimprocExt.getSimprocs, ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs],
       declsToUnfold := args.declsToUnfold,
       addSimpThms := args.addSimpThms,
       hypsToUse := args.hypsToUse,

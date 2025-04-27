@@ -307,6 +307,12 @@ theorem ZMod.val_lt_or {n} (x : ZMod n) : x.val < n ∨ n = 0 := by
 theorem ZMod.val_lt_iff {n} (x : ZMod n) : x.val < n ↔ n ≠ 0 := by
  scalar_tac
 
+attribute [simp_scalar_simps] ZMod.val_natCast ZMod.val_intCast
+
+@[simp, simp_scalar_simps]
+theorem ZMod.cast_intCast {n : ℕ} (a : ℤ) [NeZero n] : ((a : ZMod n).cast : ℤ) = a % ↑n := by
+  simp only [ZMod.cast_eq_val, ZMod.val_intCast]
+
 end ScalarTac
 
 end Aeneas

@@ -6,6 +6,7 @@ import Aeneas.ZModify.Init
 import Aeneas.Arith.Lemmas
 import Aeneas.Std.Scalar.Core
 import Aeneas.ScalarTac.CondSimpTac
+import Aeneas.SimpBoolProp.SimpBoolProp
 
 /-!
 # `zmodify` tactic
@@ -32,29 +33,6 @@ theorem Nat.lt_imp_eq_iff_eq_ZMod (n a b : ℕ) (h : a < n ∧ b < n) : a = b �
 
 attribute [zmodify_simps] Nat.mod_lt
 
-/- Theorems to simplify booleans.
-
-   This is useful because simplifying arithmetic expressions often introduces
-   those. As they are quite trivial we expect them to get simplified away
-   independently of the simp tactic we're using.
--/
-attribute [zmodify_simps]
-  implies_true
-  Bool.and_true Bool.true_and
-  Bool.false_or Bool.or_false
-  Bool.true_or Bool.or_true
-  true_or or_true
-  true_and and_true
-  false_or or_false
-  false_and and_false
-  decide_eq_false_iff_not ne_eq
-  false_eq_decide_iff true_eq_decide_iff
-  not_false_eq_true Bool.not_true Bool.not_false
-  Bool.not_eq_eq_eq_not
-  decide_true decide_false
-  Bool.and_self
-  iff_false iff_true
-
 /-- `n` is the parameter of `ZMod`, in case it is not obvious from the context.
     In particular, if the user provides `n`, it activates the use of conditional rewritings by means of `scalar_tac`.
  -/
@@ -70,8 +48,8 @@ def zmodifyTac (n : Option Expr) (args : ScalarTac.CondSimpPartialArgs) (loc : U
       pure #[← addThm ``Nat.lt_imp_eq_iff_eq_ZMod]
   let args : ScalarTac.CondSimpArgs := {
       -- Note that we also add the push_cast theorems
-      simpThms := #[← zmodifySimpExt.getTheorems, ← Lean.Meta.NormCast.pushCastExt.getTheorems],
-      simprocs := #[← zmodifySimprocExt.getSimprocs],
+      simpThms := #[← zmodifySimpExt.getTheorems, ← SimpBoolProp.simpBoolPopSimpExt.getTheorems, ← Lean.Meta.NormCast.pushCastExt.getTheorems],
+      simprocs := #[← zmodifySimprocExt.getSimprocs, ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs],
       declsToUnfold := args.declsToUnfold,
       addSimpThms := args.addSimpThms,
       hypsToUse := args.hypsToUse,

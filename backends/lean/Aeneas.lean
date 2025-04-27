@@ -23,6 +23,7 @@ import Aeneas.SimpLists
 import Aeneas.SimpScalar
 import Aeneas.Std
 import Aeneas.Setup
+import Aeneas.SimpBoolProp
 import Aeneas.Utils
 import Aeneas.Tests
 import Aeneas.Vector

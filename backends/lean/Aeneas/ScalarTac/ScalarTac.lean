@@ -7,6 +7,7 @@ import Aeneas.ScalarTac.Core
 import Aeneas.ScalarTac.Init
 import Aeneas.Saturate
 import Aeneas.SimpScalar.Init
+import Aeneas.SimpBoolProp.SimpBoolProp
 
 namespace Aeneas
 
@@ -31,8 +32,6 @@ theorem Nat.lt_mul_le (a0 a1 b0 b1 : Nat) (h0 : a0 < a1 ∧ b0 ≤ b1 ∧ 0 < b1
   have := @Nat.mul_lt_mul_right b1 a0 a1 (by tauto)
   have := @Nat.mul_le_mul_left b0 b1 a0 (by tauto)
   omega
-
-
 
 @[simp_scalar_simps]
 theorem Nat.zero_lt_mul (a0 a1 : Nat) (h : 0 < a0 ∧ 0 < a1) : 0 < a0 * a1 := by simp [*]
@@ -183,18 +182,15 @@ elab "scalar_tac_saturate" config:Parser.Tactic.optConfig : tactic => do
   let config ← elabConfig config
   let _ ← scalarTacSaturateForward config.fastSaturate config.nonLin
 
-/- Propositional logic simp lemmas -/
-attribute [scalar_tac_simps]
-  and_self false_implies true_implies Prod.mk.injEq
-  not_false_eq_true not_true_eq_false
-  true_and and_true false_and and_false
-  true_or or_true false_or or_false
-  Bool.true_eq_false Bool.false_eq_true
-  decide_eq_true_eq decide_eq_false_iff_not Bool.or_eq_true Bool.and_eq_true
-  not_or
+attribute [scalar_tac_simps] Prod.mk.injEq
 
-@[scalar_tac_simps]
-theorem not_and_equiv_or_not (a b : Prop) : ¬ (a ∧ b) ↔ ¬ a ∨ ¬ b := by tauto
+def getSimpArgs : Tactic.TacticM SimpArgs := do
+  let psimprocs ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs
+  let psimpLemmas ← SimpBoolProp.simpBoolPopSimpExt.getTheorems
+  let simprocs ← scalarTacBeforeSatSimprocExt.getSimprocs
+  let simpLemmas ← scalarTacBeforeSatSimpExt.getTheorems
+  pure {simprocs := #[simprocs, psimprocs], simpThms := #[simpLemmas, psimpLemmas]}
+
 
 /-  Boosting a bit the `omega` tac. -/
 def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
@@ -205,10 +201,7 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
      because otherwise we may simplify too much, leading to issues when
      saturating. -/
   trace[ScalarTac] "Original goal before preprocessing: {← getMainGoal}"
-  let beforeSatSimpArgs : SimpArgs ← do
-    let simprocs ← scalarTacBeforeSatSimprocExt.getSimprocs
-    let simpLemmas ← scalarTacBeforeSatSimpExt.getTheorems
-    pure {simprocs := #[simprocs], simpThms := #[simpLemmas]}
+  let beforeSatSimpArgs : SimpArgs ← getSimpArgs
   tryTac do
     Utils.simpAt true {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 0}
               beforeSatSimpArgs .wildcard
@@ -221,9 +214,10 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
   if config.saturate then
     allGoalsNoRecover (do let _ ← scalarTacSaturateForward config.fastSaturate config.nonLin)
   trace[ScalarTac] "Goal after saturation: {← getMainGoal}"
+  let psimprocs ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs
   let simprocs ← scalarTacSimprocExt.getSimprocs
   let simpLemmas ← scalarTacSimpExt.getTheorems
-  let simpArgs : SimpArgs := {simprocs := #[simprocs], simpThms := #[simpLemmas]}
+  let simpArgs : SimpArgs ← getSimpArgs
   -- Apply `simpAll`
   if config.simpAllMaxSteps ≠ 0 then
     allGoalsNoRecover -- TODO: remove?
@@ -238,10 +232,11 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
   trace[ScalarTac] "Goal after simpAll: {← getMainGoal}"
   let dsimp :=
     tryTac do
+      -- TODO: why is `simpOnly` at false?
       -- We set `simpOnly` at false on purpose.
       -- Also, we need `zetaDelta` to inline the let-bindings (otherwise, omega doesn't always manages
       -- to deal with them)
-      dsimpAt false {zetaDelta := true, failIfUnchanged := false, maxDischargeDepth := 0} {simprocs := #[simprocs]}
+      dsimpAt false {zetaDelta := true, failIfUnchanged := false, maxDischargeDepth := 0} {simprocs := #[psimprocs, simprocs]}
         Tactic.Location.wildcard
   dsimp
   -- We might have proven the goal
@@ -289,9 +284,7 @@ elab "scalar_tac_preprocess" config:Parser.Tactic.optConfig : tactic => do
 def scalarTacCore (config : Config) : Tactic.TacticM Unit := do
   Tactic.withMainContext do
   Tactic.focus do
-  let simprocs ← scalarTacSimprocExt.getSimprocs
-  let simpLemmas ← scalarTacSimpExt.getTheorems
-  let simpArgs : SimpArgs := {simprocs := #[simprocs], simpThms := #[simpLemmas]}
+  let simpArgs : SimpArgs ← getSimpArgs
   let g ← Tactic.getMainGoal
   trace[ScalarTac] "Original goal: {g}"
   -- Introduce all the universally quantified variables (includes the assumptions)

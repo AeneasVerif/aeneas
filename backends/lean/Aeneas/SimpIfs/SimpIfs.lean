@@ -1,4 +1,5 @@
 import Aeneas.SimpIfs.Init
+import Aeneas.SimpBoolProp.SimpBoolProp
 import Aeneas.ScalarTac.CondSimpTac
 
 /-!
@@ -14,8 +15,8 @@ open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 def simpIfsTac (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
   let addSimpThms : TacticM (Array FVarId) := pure #[]
   let args : ScalarTac.CondSimpArgs := {
-      simpThms := #[← simpIfsSimpExt.getTheorems],
-      simprocs := #[← simpIfsSimprocExt.getSimprocs],
+      simpThms := #[← simpIfsSimpExt.getTheorems, ← SimpBoolProp.simpBoolPopSimpExt.getTheorems],
+      simprocs := #[← simpIfsSimprocExt.getSimprocs, ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs],
       declsToUnfold := args.declsToUnfold,
       addSimpThms := args.addSimpThms,
       hypsToUse := args.hypsToUse,
