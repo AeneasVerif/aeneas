@@ -8,7 +8,7 @@ open Result
 namespace demo
 
 -- @[progress]
-theorem mul2_add1_spec (x : U32) (h : 2 * x.val + 1 ≤ U32.max)
+theorem mul2_add1.spec (x : U32) (h : 2 * x.val + 1 ≤ U32.max)
   : ∃ y, mul2_add1 x = ok y ∧
   y.val = 2 * x.val + (1 : Nat)
   := by
@@ -17,13 +17,19 @@ theorem mul2_add1_spec (x : U32) (h : 2 * x.val + 1 ≤ U32.max)
   progress as ⟨ i' ⟩
   scalar_tac
 
-theorem use_mul2_add1_spec (x : U32) (y : U32) (h : 2 * x.val + 1 + y.val ≤ U32.max) :
+theorem use_mul2_add.spec (x : U32) (y : U32) (h : 2 * x.val + 1 + y.val ≤ U32.max) :
   ∃ z, use_mul2_add1 x y = ok z ∧
   ↑z = 2 * ↑x + (1 : Nat) + ↑y := by
   unfold use_mul2_add1
-  progress with mul2_add1_spec as ⟨ i ⟩
+  progress with mul2_add1.spec as ⟨ i ⟩
   progress as ⟨ i' ⟩
   scalar_tac
+
+theorem mod_add.spec (x y : U32) (h : x.val < 3329 ∧ y.val < 3329) :
+  mod_add x y = ok (((x.val + y.val) % 3329)#u32) := by
+  unfold mod_add
+  progress*
+  bv_tac 32
 
 open CList
 

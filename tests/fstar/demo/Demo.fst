@@ -144,3 +144,28 @@ let use_counter
   (#t : Type0) (counterInst : counter_t t) (cnt : t) : result (usize & t) =
   counterInst.incr cnt
 
+(** [core::num::{u32}#8::wrapping_sub]:
+    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2066:8-2066:58
+    Name pattern: [core::num::{u32}::wrapping_sub] *)
+assume val core_num_U32_wrapping_sub : u32 -> u32 -> result u32
+
+(** [core::num::{u32}#8::wrapping_add]:
+    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2025:8-2025:58
+    Name pattern: [core::num::{u32}::wrapping_add] *)
+assume val core_num_U32_wrapping_add : u32 -> u32 -> result u32
+
+(** [demo::mod_add]:
+    Source: 'tests/src/demo.rs', lines 117:0-125:1 *)
+let mod_add (a : u32) (b : u32) : result u32 =
+  if a < 3329
+  then
+    if b < 3329
+    then
+      let* sum = u32_add a b in
+      let* res = core_num_U32_wrapping_sub sum 3329 in
+      let* mask = u32_shr #I32 res 16 in
+      let q = u32_and 3329 mask in
+      core_num_U32_wrapping_add res q
+    else Fail Failure
+  else Fail Failure
+
