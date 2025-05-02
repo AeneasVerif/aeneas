@@ -3,6 +3,8 @@ import Demo.Demo
 open Aeneas.Std
 open Result
 
+#setup_aeneas_simps
+
 namespace demo
 
 -- @[progress]
@@ -42,12 +44,12 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   | CCons hd tl =>
     simp_all
     if hi: i = 0#u32 then
-      simp_all
+      simp [*]
     else
-      simp_all
+      simp [*]
       progress as ⟨ i1 ⟩
       progress as ⟨ x ⟩
-      simp_all
+      simp_lists [*]
 
 theorem i32_id_spec (n : I32) (h : 0 ≤ n.val) :
   i32_id n = ok n := by

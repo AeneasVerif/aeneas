@@ -6,8 +6,7 @@ set_option maxHeartbeats 1000000
 
 namespace tutorial
 
-/- This simp lemma replaces terms of the shape `l[i]!`: in the present case it is more annoying than anything -/
-attribute [-simp] List.getElem!_eq_getElem?_getD
+#setup_aeneas_simps
 
 /- # Basic tactics -/
 

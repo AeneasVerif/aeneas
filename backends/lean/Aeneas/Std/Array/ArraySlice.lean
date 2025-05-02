@@ -115,7 +115,7 @@ theorem Array.val_to_slice {α} {n} (a : Array α n) : a.to_slice.val = a.val :=
   simp only [Array.to_slice]
 
 @[simp, simp_lists_simps, simp_scalar_simps, scalar_tac a.to_slice]
-theorem Array.to_slice_length (a : Array α n) :
+theorem Array.length_to_slice (a : Array α n) :
   a.to_slice.length = n := by
   simp only [Slice.length, Array.to_slice, List.Vector.length_val]
 

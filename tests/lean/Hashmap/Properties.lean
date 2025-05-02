@@ -183,7 +183,6 @@ theorem allocate_slots_spec {α : Type} (slots : alloc.vec.Vec (AList α)) (n : 
     . intro i h0
       fsimp_all
     . simp_all
-      scalar_tac
   else
     fsimp [h]
     fsimp_all
