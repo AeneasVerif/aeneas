@@ -21,6 +21,7 @@ import Aeneas.ScalarTac
 import Aeneas.SimpIfs
 import Aeneas.SimpLemmas
 import Aeneas.SimpLists
+import Aeneas.SimpListsScalar
 import Aeneas.SimpScalar
 import Aeneas.Std
 import Aeneas.Setup
