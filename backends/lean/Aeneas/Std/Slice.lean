@@ -435,10 +435,11 @@ def core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut {T : Type}
   (r : core.ops.range.RangeFrom Usize) (s : Slice T) : Result ((Slice T) × (Slice T → Slice T)) :=
   if r.start ≤ s.length then
     ok ( s.drop r.start, fun s' =>
-         if h: s'.length + s.length - r.start.val ≤ Usize.max then
-            ⟨ s'.val ++ s.val.drop r.start.val, by scalar_tac ⟩
+         if h: r.start.val + s'.length ≤ Usize.max then
+            ⟨ s.val.take r.start.val ++ s'.val, by scalar_tac ⟩
           else s )
   else fail .panic
+
 
 /- Trait implementation: [core::slice::index::private_slice_index::{core::slice::index::private_slice_index::Sealed for core::ops::range::RangeFrom<usize>}] -/
 @[reducible]
