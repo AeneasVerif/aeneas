@@ -265,8 +265,7 @@ theorem UScalar.le_equiv_bv_le {ty : UScalarTy} (x y : UScalar ty) : x ≤ y ↔
 def bvifyAddSimpThms (n : Expr) : TacticM (Array FVarId) := do
   let addThm (thName : Name) : TacticM FVarId := do
     let thm ← mkAppM thName #[n]
-    let thm ← Utils.addDeclTac (← Utils.mkFreshAnonPropUserName) thm (← inferType thm) (asLet := false)
-    pure thm.fvarId!
+    Utils.addDeclTac (← Utils.mkFreshAnonPropUserName) thm (← inferType thm) (asLet := false) fun thm => pure thm.fvarId!
   let le_iff ← addThm ``BitVec.lt_pow_le_iff_ofNat_le'
   let lt_iff ← addThm ``BitVec.lt_pow_lt_iff_ofNat_lt'
   let lt_max_iff ← addThm ``BitVec.lt_pow_n_iff_ofNat_le

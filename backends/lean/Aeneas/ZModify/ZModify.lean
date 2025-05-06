@@ -43,8 +43,7 @@ def zmodifyTac (n : Option Expr) (args : ScalarTac.CondSimpPartialArgs) (loc : U
     | some n =>
       let addThm (thName : Name) : TacticM FVarId := do
         let thm ← mkAppM thName #[n]
-        let thm ← Utils.addDeclTac (← Utils.mkFreshAnonPropUserName) thm (← inferType thm) (asLet := false)
-        pure thm.fvarId!
+        Utils.addDeclTac (← Utils.mkFreshAnonPropUserName) thm (← inferType thm) (asLet := false) fun thm => pure thm.fvarId!
       pure #[← addThm ``Nat.lt_imp_eq_iff_eq_ZMod]
   let args : ScalarTac.CondSimpArgs := {
       -- Note that we also add the push_cast theorems

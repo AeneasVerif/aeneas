@@ -169,8 +169,7 @@ def progressWith (fExpr : Expr) (th : Expr)
   -- TODO: actually we might want to let the user insert them in the context
   let thTy ← normalizeLetBindings thTy
   trace[Progress] "thTy (after normalizing let-bindings): {thTy}"
-  let thAsm ← Utils.addDeclTac asmName th thTy (asLet := false)
-  withMainContext do -- The context changed - TODO: remove once addDeclTac is updated
+  Utils.addDeclTac asmName th thTy (asLet := false) fun thAsm => do
   let ngoal ← getMainGoal
   trace[Progress] "current goal: {ngoal}"
   trace[Progress] "current goal is assigned: {← ngoal.isAssigned}"
@@ -207,7 +206,7 @@ def progressWith (fExpr : Expr) (th : Expr)
         trace[Progress] "h: {← inferType h}"
         trace[Progress] "Introducing the \"pretty\" let binding"
         let e ← mkAppM ``eq_imp_prettyMonadEq #[h]
-        let _ ← Utils.addDeclTac name e (← inferType e) (asLet := false)
+        Utils.addDeclTac name e (← inferType e) (asLet := false) fun _ => do
         trace[Progress] "Introduced the \"pretty\" let binding: {← getMainGoal}"
 
     /- Split the conjunctions.

@@ -246,8 +246,8 @@ section Methods
 
 end Methods
 
--- TODO: this should take a continuation
-def addDeclTac (name : Name) (val : Expr) (type : Expr) (asLet : Bool) : TacticM Expr :=
+def addDeclTac {α} (name : Name) (val : Expr) (type : Expr) (asLet : Bool) (m : Expr → TacticM α) :
+  TacticM α :=
   -- I don't think we need that
   withMainContext do
   -- Insert the new declaration
@@ -268,7 +268,7 @@ def addDeclTac (name : Name) (val : Expr) (type : Expr) (asLet : Bool) : TacticM
     setGoals (newMVar.mvarId! :: goals)
     -- Return the new value - note: we are in the *new* context, created
     -- after the declaration was added, so it will persist
-    pure nval
+    m nval
 
 def addDeclTacSyntax (name : Name) (val : Syntax) (asLet : Bool) : TacticM Unit :=
   -- I don't think we need that
@@ -281,7 +281,7 @@ def addDeclTacSyntax (name : Name) (val : Syntax) (asLet : Bool) : TacticM Unit 
   -- not choose): we force the instantiation of the meta-variable
   synthesizeSyntheticMVarsUsingDefault
   --
-  let _ ← addDeclTac name val type asLet
+  addDeclTac name val type asLet (fun _ => pure ())
 
 elab "custom_let " n:ident " := " v:term : tactic => do
   addDeclTacSyntax n.getId v (asLet := true)
