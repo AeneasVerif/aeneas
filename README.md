@@ -79,9 +79,9 @@ It requires a working installation of Lean.
 
 You should first generate the serialized `.llbc` file by calling Charon from *inside*
 (similarly to cargo) the crate you want to translate. **Important:** you should call
-Charon with the following options:
+Charon with the following option:
 ```bash
-charon cargo --hide-marker-traits --remove-associated-types='*'
+charon cargo --preset=aeneas
 ```
 
 The Aeneas binary is in `bin`; you can run: `./bin/aeneas -backend {fstar|coq|lean|hol4} [OPTIONS] LLBC_FILE`,

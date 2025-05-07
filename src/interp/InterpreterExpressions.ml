@@ -451,6 +451,9 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
       | CRawMemory _ ->
           craise __FILE__ __LINE__ span
             "Raw memory cannot be interpreted by the interpreter"
+      | COpaque reason ->
+          craise __FILE__ __LINE__ span
+            ("Charon failed to compile constant: " ^ reason)
     end
   | Copy p ->
       (* Access the value *)
@@ -732,7 +735,7 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
   else
     (* For the non-equality operations, the input values are necessarily scalars *)
     match (v1.value, v2.value) with
-    | VLiteral (VScalar sv1), VLiteral (VScalar sv2) -> (
+    | VLiteral (VScalar sv1), VLiteral (VScalar sv2) -> begin
         (* There are binops which require the two operands to have the same
            type, and binops for which it is not the case.
            There are also binops which return booleans, and binops which
@@ -781,9 +784,11 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
                     value = VLiteral (VScalar sv);
                     ty = TLiteral (TInteger sv1.int_ty);
                   })
-        | Shl | Shr | CheckedAdd | CheckedSub | CheckedMul | Offset | Cmp ->
-            craise __FILE__ __LINE__ span "Unimplemented binary operation"
-        | Ne | Eq -> craise __FILE__ __LINE__ span "Unreachable")
+        | Ne | Eq -> craise __FILE__ __LINE__ span "Unreachable"
+        | _ ->
+            craise __FILE__ __LINE__ span
+              ("Unimplemented binary operation: " ^ binop_to_string binop)
+      end
     | _ ->
         craise __FILE__ __LINE__ span
           ("Invalid inputs for binop: " ^ binop_to_string binop)
@@ -825,7 +830,17 @@ let eval_binary_op_symbolic (config : config) (span : Meta.span) (binop : binop)
           | Lt | Le | Ge | Gt ->
               sanity_check __FILE__ __LINE__ (int_ty1 = int_ty2) span;
               TLiteral TBool
-          | Div | Rem | Add | Sub | Mul | BitXor | BitAnd | BitOr ->
+          | Div
+          | Rem
+          | Add
+          | Sub
+          | Mul
+          | WrappingAdd
+          | WrappingSub
+          | WrappingMul
+          | BitXor
+          | BitAnd
+          | BitOr ->
               sanity_check __FILE__ __LINE__ (int_ty1 = int_ty2) span;
               TLiteral (TInteger int_ty1)
           | Cmp ->

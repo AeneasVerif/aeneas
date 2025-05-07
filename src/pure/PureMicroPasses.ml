@@ -1084,6 +1084,9 @@ let lift_binop (binop : binop) : bool =
   | CheckedAdd
   | CheckedSub
   | CheckedMul
+  | WrappingAdd
+  | WrappingSub
+  | WrappingMul
   | Shl
   | Shr
   | Offset

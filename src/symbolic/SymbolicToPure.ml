@@ -590,7 +590,7 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
   | TTraitType (trait_ref, type_name) ->
       let trait_ref = translate_strait_ref span trait_ref in
       TTraitType (trait_ref, type_name)
-  | TArrow _ ->
+  | TArrow _ | TClosure _ ->
       craise_opt_span __FILE__ __LINE__ span "Arrow types are not supported yet"
   | TDynTrait _ ->
       craise_opt_span __FILE__ __LINE__ span
@@ -860,7 +860,7 @@ let rec translate_fwd_ty (span : Meta.span option) (type_infos : type_infos)
   | TTraitType (trait_ref, type_name) ->
       let trait_ref = translate_fwd_trait_ref span type_infos trait_ref in
       TTraitType (trait_ref, type_name)
-  | TArrow _ ->
+  | TArrow _ | TClosure _ ->
       craise_opt_span __FILE__ __LINE__ span "Arrow types are not supported yet"
   | TDynTrait _ ->
       craise_opt_span __FILE__ __LINE__ span
@@ -981,7 +981,7 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
         let trait_ref = translate_fwd_trait_ref span type_infos trait_ref in
         Some (TTraitType (trait_ref, type_name))
       else None
-  | TArrow _ ->
+  | TArrow _ | TClosure _ ->
       craise_opt_span __FILE__ __LINE__ span "Arrow types are not supported yet"
   | TDynTrait _ ->
       craise_opt_span __FILE__ __LINE__ span
@@ -5134,6 +5134,7 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
     ty;
     kind;
     body = body_id;
+    _;
   } =
     decl
   in

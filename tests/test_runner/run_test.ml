@@ -113,14 +113,7 @@ let run_charon (env : runner_env) (case : Input.t) =
   match case.kind with
   | SingleFile ->
       let args =
-        [
-          env.charon_path;
-          "rustc";
-          "--dest";
-          env.llbc_dir;
-          "--hide-marker-traits";
-          "--remove-associated-types=*";
-        ]
+        [ env.charon_path; "rustc"; "--dest"; env.llbc_dir; "--preset=aeneas" ]
         @ case.charon_options
         @ [
             "--";
@@ -151,8 +144,7 @@ let run_charon (env : runner_env) (case : Input.t) =
           [
             env.charon_path;
             "cargo";
-            "--hide-marker-traits";
-            "--remove-associated-types=*";
+            "--preset=aeneas";
             "--rustc-flag=--allow=unused";
             "--dest";
             Filename_unix.realpath env.llbc_dir;
