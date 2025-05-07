@@ -115,8 +115,8 @@ pub fn use_counter<'a, T: Counter>(cnt: &'a mut T) -> usize {
 
 /* Cryptographic example */
 fn mod_add(a: u32, b: u32) -> u32 {
-    assert!( a < 3329 );
-    assert!( b < 3329 );
+    assert!(a < 3329);
+    assert!(b < 3329);
     let sum = a + b; // 0 <= a + b <= 2 * 3329
     let res = sum.wrapping_sub(3329);
     let mask = res >> 16; // mask = 0xffff if a + b < 3329, mask = 0 otherwise
