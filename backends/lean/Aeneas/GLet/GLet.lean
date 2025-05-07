@@ -23,11 +23,11 @@ def opaque_refold (h x : Name) (e : Expr) : TacticM Unit :=
   Utils.addDeclTac h th (← inferType th) (asLet := false) fun _ => do
   setGoals [← (← getMainGoal).clear eq.fvarId]
 
-elab "glet" h:ident " : " x:ident " := " e:term : tactic =>
+elab "olet" h:ident " : " x:ident " := " e:term : tactic =>
   withMainContext do
   opaque_refold h.getId x.getId (← Tactic.elabTerm e none)
 
-elab "glet" h:ident " : " "(" x:ident " : " ty:term ")" " := " e:term : tactic =>
+elab "olet" h:ident " : " "(" x:ident " : " ty:term ")" " := " e:term : tactic =>
   withMainContext do
   let ty  ← Tactic.elabTerm ty none
   opaque_refold h.getId x.getId (← Tactic.elabTerm e (expectedType? := ty))
@@ -42,18 +42,18 @@ info: example
 #guard_msgs in
 set_option linter.unusedTactic false in
 example : 1 + 1 = 2 := by
-  glet h: x := 1 + 1
+  olet h: x := 1 + 1
   extract_goal1
   omega
 
 example (x y z : Nat) (h0 : x + y = z) (h1 : x + y = 3) (_ : z ≤ 4) : x + y + z = 3 + z := by
-  glet ha: a := x + y
-  glet hb: b := a + z
+  olet ha: a := x + y
+  olet hb: b := a + z
   omega
 
 example (x y z : Nat) (h0 : x + y = z) (h1 : x + y = 3) (_ : z ≤ 4) : x + y + z = 3 + z := by
-  glet ha: (a : Nat) := x + y
-  glet hb: (b : Nat) := a + z
+  olet ha: (a : Nat) := x + y
+  olet hb: (b : Nat) := a + z
   omega
 
 def transparent_refold (x : Name) (e : Expr) : TacticM Unit :=
