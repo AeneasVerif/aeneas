@@ -310,7 +310,7 @@ def evalSaturate
   let matched ← matched.mapIdxM fun i (thName, args) => do
     let th ← mkAppOptM thName (args.map some).toArray
     let thTy ← inferType th
-    pure (← Utils.addDeclTac (.num (.str .anonymous "_h") i) th thTy (asLet := false)).fvarId!
+    Utils.addDeclTac (.num (.str .anonymous "_h") i) th thTy (asLet := false) (fun x => pure x.fvarId!)
   -- Display the diagnostics information
   trace[Saturate.diagnostics] "Saturate diagnostics info: {dinfo.toArray}"
   -- Return

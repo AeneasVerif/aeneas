@@ -5,8 +5,6 @@ namespace Aeneas
 
 namespace Simp
 
-
-
 end Simp
 
 end Aeneas

@@ -6,29 +6,50 @@ import Aeneas.Utils
 import Aeneas.ScalarTac.Core
 import Aeneas.ScalarTac.Init
 import Aeneas.Saturate
+import Aeneas.SimpScalar.Init
+import Aeneas.SimpBoolProp.SimpBoolProp
 
 namespace Aeneas
 
-theorem Nat.le_mul_le (a0 a1 b0 b1 : Nat) (h0 : a0 ≤ a1) (h2 : b0 ≤ b1) : a0 * b0 ≤ a1 * b1 := by
-  have := @Nat.mul_le_mul_left b0 b1 a0 (by assumption)
-  have := @Nat.mul_le_mul_right a0 a1 b1 (by assumption)
+@[simp_scalar_simps]
+theorem Nat.le_mul_le (a0 a1 b0 b1 : Nat) (h : a0 ≤ a1 ∧ b0 ≤ b1) : a0 * b0 ≤ a1 * b1 := by
+  have := @Nat.mul_le_mul_left b0 b1 a0 h.right
+  have := @Nat.mul_le_mul_right a0 a1 b1 h.left
   omega
 
-theorem Nat.lt_mul_lt (a0 a1 b0 b1 : Nat) (h0 : a0 < a1) (h2 : b0 < b1) : a0 * b0 < a1 * b1 := by
-  apply Nat.mul_lt_mul_of_lt_of_lt <;> assumption
+@[simp_scalar_simps]
+theorem Nat.lt_mul_lt (a0 a1 b0 b1 : Nat) (h : a0 < a1 ∧ b0 < b1) : a0 * b0 < a1 * b1 := by
+  apply Nat.mul_lt_mul_of_lt_of_lt <;> tauto
 
-theorem Nat.le_mul_lt (a0 a1 b0 b1 : Nat) (h0 : a0 ≤ a1) (h1 : 0 < a1) (h2 : b0 < b1) : a0 * b0 < a1 * b1 := by
-  have := @Nat.mul_le_mul_right a0 a1 b0 (by assumption)
-  have := @Nat.mul_lt_mul_left a1 b0 b1 (by assumption)
+@[simp_scalar_simps]
+theorem Nat.le_mul_lt (a0 a1 b0 b1 : Nat) (h0 : a0 ≤ a1 ∧ 0 < a1 ∧b0 < b1) : a0 * b0 < a1 * b1 := by
+  have := @Nat.mul_le_mul_right a0 a1 b0 (by tauto)
+  have := @Nat.mul_lt_mul_left a1 b0 b1 (by tauto)
   omega
 
-theorem Nat.lt_mul_le (a0 a1 b0 b1 : Nat) (h0 : a0 < a1) (h1 : b0 ≤ b1) (h2 : 0 < b1) : a0 * b0 < a1 * b1 := by
-  have := @Nat.mul_lt_mul_right b1 a0 a1 (by assumption)
-  have := @Nat.mul_le_mul_left b0 b1 a0 (by assumption)
+@[simp_scalar_simps]
+theorem Nat.lt_mul_le (a0 a1 b0 b1 : Nat) (h0 : a0 < a1 ∧ b0 ≤ b1 ∧ 0 < b1) : a0 * b0 < a1 * b1 := by
+  have := @Nat.mul_lt_mul_right b1 a0 a1 (by tauto)
+  have := @Nat.mul_le_mul_left b0 b1 a0 (by tauto)
   omega
 
-theorem Nat.zero_lt_mul (a0 a1 : Nat) (h0 : 0 < a0) (h1 : 0 < a1) : 0 < a0 * a1 := by simp [*]
-theorem Nat.mul_le_zero (a0 a1 : Nat) (h0 : a0 = 0) (h1 : a1 = 0) : a0 * a1 ≤ 0 := by simp [*]
+@[simp_scalar_simps]
+theorem Nat.zero_lt_mul (a0 a1 : Nat) (h : 0 < a0 ∧ 0 < a1) : 0 < a0 * a1 := by simp [*]
+theorem Nat.mul_le_zero (a0 a1 : Nat) (h : a0 = 0 ∨ a1 = 0) : a0 * a1 ≤ 0 := by simp [*]
+
+@[simp_scalar_simps]
+theorem Int.emod_eq_of_lt' {a b : ℤ} (h : 0 ≤ a ∧ a < b) : a % b = a := by
+  apply Int.emod_eq_of_lt <;> omega
+
+@[simp_scalar_simps]
+theorem Nat.le_pow (a i : ℕ) (h : 0 < a ∧ 0 < i) : a ≤ a ^ i := by
+  have : a ^ 1 ≤ a ^ i := by apply Nat.pow_le_pow_right <;> omega
+  simp_all
+
+@[simp_scalar_simps]
+theorem Nat.lt_pow (a i : ℕ) (h : 1 < a ∧ 1 < i) : a < a ^ i := by
+  have : a ^ 1 < a ^ i := by apply Nat.pow_lt_pow_right <;> omega
+  simp_all
 
 namespace ScalarTac
 
@@ -161,83 +182,93 @@ elab "scalar_tac_saturate" config:Parser.Tactic.optConfig : tactic => do
   let config ← elabConfig config
   let _ ← scalarTacSaturateForward config.fastSaturate config.nonLin
 
-/- Propositional logic simp lemmas -/
-attribute [scalar_tac_simps]
-  and_self false_implies true_implies Prod.mk.injEq
-  not_false_eq_true not_true_eq_false
-  true_and and_true false_and and_false
-  true_or or_true false_or or_false
-  Bool.true_eq_false Bool.false_eq_true
-  decide_eq_true_eq decide_eq_false_iff_not Bool.or_eq_true Bool.and_eq_true
-  not_or
+attribute [scalar_tac_simps] Prod.mk.injEq
 
-@[scalar_tac_simps]
-theorem not_and_equiv_or_not (a b : Prop) : ¬ (a ∧ b) ↔ ¬ a ∨ ¬ b := by tauto
+def getSimpArgs : CoreM SimpArgs := do
+  pure {
+    simprocs := #[
+        ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs,
+        ← scalarTacSimprocExt.getSimprocs
+    ],
+    simpThms := #[
+      ← SimpBoolProp.simpBoolPropSimpExt.getTheorems,
+      ← scalarTacSimpExt.getTheorems
+    ]}
+
+def getSimpThmNames : CoreM (Array Name) := do
+  let args ← getSimpArgs
+  let names := args.simpThms.map fun x =>
+    (x.lemmaNames.toList.filterMap fun x =>
+      match x with
+      | .decl declName _ _ => some declName
+      | _ => none).toArray
+  pure names.flatten
+
+attribute [scalar_tac_simps]
+  -- Int.subNatNat is very annoying - TODO: there is probably something more general thing to do
+  Int.subNatNat_eq_coe
 
 /-  Boosting a bit the `omega` tac. -/
 def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
   Tactic.withMainContext do
   -- Pre-preprocessing
-  /- First get rid of [ofInt] (if there are dependent arguments, we may not
-     manage to simplify the context). We only use a small set of lemmas
-     because otherwise we may simplify too much, leading to issues when
-     saturating. -/
+  /- We simplify a first time before saturating the context.
+     This is useful because simplifying often introduces expressions which are useful
+     for the saturation phase, and it also often allows to get rid of some dependently
+     typed expressions such as `UScalar.ofNat`.
+  -/
   trace[ScalarTac] "Original goal before preprocessing: {← getMainGoal}"
-  let beforeSatSimpArgs : SimpArgs ← do
-    let simprocs ← scalarTacBeforeSatSimprocExt.getSimprocs
-    let simpLemmas ← scalarTacBeforeSatSimpExt.getTheorems
-    pure {simprocs := #[simprocs], simpThms := #[simpLemmas]}
-  tryTac do
-    Utils.simpAt true {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 0}
-              beforeSatSimpArgs .wildcard
+  let simpArgs : SimpArgs ← getSimpArgs
+  Utils.simpAt true {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1}
+    -- Remove the forall quantifiers to prepare for the call of `simp_all` (we
+    -- don't want `simp_all` to use assumptions of the shape `∀ x, P x`))
+    {simpArgs with addSimpThms := #[``forall_eq_forall']} .wildcard
+  -- We might have proven the goal
+  if (← getGoals).isEmpty then
+    trace[ScalarTac] "Goal proven by preprocessing!"
+    return
   trace[ScalarTac] "Goal after first simplification: {← getMainGoal}"
   -- Apply the forward rules
   if config.saturate then
     allGoalsNoRecover (do let _ ← scalarTacSaturateForward config.fastSaturate config.nonLin)
   trace[ScalarTac] "Goal after saturation: {← getMainGoal}"
-  let simprocs ← scalarTacSimprocExt.getSimprocs
-  let simpLemmas ← scalarTacSimpExt.getTheorems
-  let simpArgs : SimpArgs := {simprocs := #[simprocs], simpThms := #[simpLemmas]}
+  let simpArgs : SimpArgs ← getSimpArgs
   -- Apply `simpAll`
   if config.simpAllMaxSteps ≠ 0 then
-    allGoalsNoRecover
-      (tryTac do
-        Utils.simpAll
-          {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 0} true
-          simpArgs)
-  trace[ScalarTac] "Goal after simpAll: {← getMainGoal}"
-  -- Reduce all the terms in the goal - note that the extra preprocessing step
-  -- might have proven the goal, hence the `allGoals`
-  let dsimp :=
-    allGoalsNoRecover do
-      tryTac do
-      -- We set `simpOnly` at false on purpose.
-      -- Also, we need `zetaDelta` to inline the let-bindings (otherwise, omega doesn't always manages
-      -- to deal with them)
-      dsimpAt false {zetaDelta := true, failIfUnchanged := false, maxDischargeDepth := 0} {simprocs := #[simprocs]}
-        Tactic.Location.wildcard
-  dsimp
-  trace[ScalarTac] "Goal after first dsimp: {← getMainGoal}"
-  -- More preprocessing: apply norm_cast to the whole context
-  allGoalsNoRecover (Utils.tryTac (Utils.normCastAtAll))
-  trace[ScalarTac] "Goal after first normCast: {← getMainGoal}"
-  -- norm_cast does weird things with negative numbers so we reapply simp
-  dsimp
-  trace[ScalarTac] "Goal after 2nd dsimp: {← getMainGoal}"
-  allGoalsNoRecover do
     tryTac do
-    Utils.simpAt true {failIfUnchanged := false, maxDischargeDepth := 1}
-      {simpThms := #[simpLemmas],
-       addSimpThms :=
-        #[-- Int.subNatNat is very annoying - TODO: there is probably something more general thing to do
-          ``Int.subNatNat_eq_coe,
-          -- We also need this, in case the goal is: ¬ False
-          ``not_false_eq_true,
-          -- Remove the forall quantifiers to prepare for the call of `simp_all` (we
-          -- don't want `simp_all` to use assumptions of the shape `∀ x, P x`))
-          ``forall_eq_forall']}
-        .wildcard
-  trace[ScalarTac] "Goal after simpAt following dsimp: {← getMainGoal}"
+      /- By setting the maxDischargeDepth at 0, we make sure that assumptions of the shape `∀ x, P x → ...`
+          will not have any effect. This is important because it often happens that the user instantiates
+          one such assumptions with specific arguments, meaning that if we call `simpAll` naively, those
+          instantiations will get simplified to `True` and thus eliminated. -/
+      Utils.simpAll
+        {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 0} true
+        simpArgs
+  -- We might have proven the goal
+  if (← getGoals).isEmpty then
+    trace[ScalarTac] "Goal proven by preprocessing!"
+    return
+  trace[ScalarTac] "Goal after simpAll: {← getMainGoal}"
+  -- Call `simp` again, this time to inline the let-bindings (otherwise, omega doesn't always manage to deal with them)
+  Utils.simpAt true {zetaDelta := true, failIfUnchanged := false, maxDischargeDepth := 1} simpArgs .wildcard
+  -- We might have proven the goal
+  if (← getGoals).isEmpty then
+    trace[ScalarTac] "Goal proven by preprocessing!"
+    return
+  trace[ScalarTac] "Goal after 2nd simp (with zetaDelta): {← getMainGoal}"
+  -- Apply normCast
+  Utils.normCastAtAll
+  -- We might have proven the goal
+  if (← getGoals).isEmpty then
+    trace[ScalarTac] "Goal proven by preprocessing!"
+    return
+  trace[ScalarTac] "Goal after normCast: {← getMainGoal}"
+  -- Call `simp` again because `normCast` sometimes does weird things
+  Utils.simpAt true {failIfUnchanged := false, maxDischargeDepth := 1} simpArgs .wildcard
+  -- We might have proven the goal
+  if (← getGoals).isEmpty then
+    trace[ScalarTac] "Goal proven by preprocessing!"
+    return
+  trace[ScalarTac] "Goal after 2nd call to simpAt: {← getMainGoal}"
 
 elab "scalar_tac_preprocess" config:Parser.Tactic.optConfig : tactic => do
   let config ← elabConfig config
@@ -246,9 +277,7 @@ elab "scalar_tac_preprocess" config:Parser.Tactic.optConfig : tactic => do
 def scalarTacCore (config : Config) : Tactic.TacticM Unit := do
   Tactic.withMainContext do
   Tactic.focus do
-  let simprocs ← scalarTacSimprocExt.getSimprocs
-  let simpLemmas ← scalarTacSimpExt.getTheorems
-  let simpArgs : SimpArgs := {simprocs := #[simprocs], simpThms := #[simpLemmas]}
+  let simpArgs : SimpArgs ← getSimpArgs
   let g ← Tactic.getMainGoal
   trace[ScalarTac] "Original goal: {g}"
   -- Introduce all the universally quantified variables (includes the assumptions)
@@ -288,7 +317,7 @@ def scalarTac (config : Config) : TacticM Unit := do
   Tactic.withMainContext do
   let error : TacticM Unit := do
     let g ← Tactic.getMainGoal
-    throwError "scalar_tac failed to prove the goal below.\n\nNote that scalar_tac is almost equivalent to:\n  scalar_tac_preprocess; simp_all (maxDischargeDepth := 1) only; omega\n\nGoal: \n{g}"
+    throwError "scalar_tac failed to prove the goal below.\n\nNote that scalar_tac is almost equivalent to:\n  scalar_tac_preprocess; omega\n\nGoal: \n{g}"
   try
     scalarTacCore config
   catch _ =>
@@ -303,7 +332,12 @@ def scalarTac (config : Config) : TacticM Unit := do
           let goals ← g.apply (.const x [])
           setGoals goals
           allGoals (scalarTacCore config)
-        let tacs := List.map trySolve [``Nat.le_mul_le, ``Nat.lt_mul_lt, ``Nat.le_mul_lt, ``Nat.lt_mul_le]
+        let tacs := List.map trySolve [
+            -- TODO: make this more general
+            ``Nat.le_mul_le, ``Nat.lt_mul_lt, ``Nat.le_mul_lt, ``Nat.lt_mul_le,
+            ``Nat.mod_eq_of_lt, ``Int.emod_eq_of_lt', ``Nat.pow_le_pow_right, ``Nat.pow_le_pow_left,
+            ``Nat.pow_lt_pow_right, ``Nat.le_pow, ``Nat.lt_pow,
+            ``Nat.div_le_div_right, ``Nat.mul_div_le, ``Nat.div_mul_le_self]
         firstTac tacs
       catch _ => error
     else

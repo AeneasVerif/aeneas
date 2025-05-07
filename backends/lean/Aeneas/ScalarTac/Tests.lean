@@ -50,7 +50,6 @@ example (x : I32) : Isize.min ≤ x.val := by scalar_tac
 
 example (x y : Nat) (z : Int) (h : Int.subNatNat x y + z = 0) : (x : Int) - (y : Int) + z = 0 := by
   scalar_tac_preprocess
-  omega
 
 example (x : U32) (h : 16 * x.val ≤ U32.max) :
   4 * (U32.ofNat (4 * x.val) (by scalar_tac)).val ≤ U32.max := by
@@ -130,5 +129,16 @@ example (x y : U32)
   2 * x.val + 1 ≤ (U32.max : Int) := by
   try assumption
   scalar_tac
+
+example (d k : ℕ) (hdn : d < k) :
+  let nBits := d ⊓ k;
+  2 < 2 ^ k → 2 ^ nBits < 2 ^ k := by
+  intros nBits h
+  scalar_tac +nonLin
+
+-- TODO: improve this one
+example (d i : ℕ) (h : i ≤ 256) : d * i / 8 ≤ d * 256 / 8 := by
+  apply Nat.div_le_div_right
+  scalar_tac +nonLin
 
 end Aeneas.Std

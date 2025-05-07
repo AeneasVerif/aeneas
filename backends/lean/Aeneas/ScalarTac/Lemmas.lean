@@ -1,3 +1,4 @@
+import Mathlib.Data.ZMod.Basic
 import Aeneas.ScalarTac.ScalarTac
 import Aeneas.Std.Scalar.Core
 
@@ -23,15 +24,7 @@ instance (x y : IScalar ty) : IsLinearIntProp (x ≥ y) where
 instance (x y : IScalar ty) : IsLinearIntProp (x ≥ y) where
 instance (x y : IScalar ty) : IsLinearIntProp (x = y) where
 
-attribute [scalar_tac_simps]
-  and_self false_implies true_implies Prod.mk.injEq
-  not_false_eq_true not_true_eq_false
-  true_and and_true false_and and_false
-  true_or or_true false_or or_false
-  Bool.true_eq_false Bool.false_eq_true
-  decide_eq_true_eq Bool.or_eq_true Bool.and_eq_true
-
-attribute [scalar_tac_simps] zero_add
+attribute [scalar_tac_simps] Prod.mk.injEq Membership.mem Int.ofNat_toNat zero_add
 
 local syntax "simp_scalar_consts" : tactic
 local macro_rules
@@ -208,7 +201,6 @@ theorem Isize.cMax_bound'' : IScalar.cMax .Isize ≤ Isize.max ∧ Isize.max + 1
 @[scalar_tac_simps] theorem IScalar.cMin_Isize_eq  : IScalar.cMin .Isize = -2147483648 := by simp_scalar_consts
 @[scalar_tac_simps] theorem IScalar.cMax_Isize_eq  : IScalar.cMax .Isize = 2147483647 := by simp_scalar_consts
 
-
 @[scalar_tac_simps]
 theorem UScalarTy.USize.numBits_eq : UScalarTy.Usize.numBits = System.Platform.numBits := by simp_scalar_consts
 
@@ -291,6 +283,26 @@ private theorem mul_c (x : Nat) : x * c ≤ 100 * x := by simp [c]; omega
 example (x : Nat) : x * c ≤ 100 * x := by scalar_tac
 
 end
+
+/-!
+# ZMod
+-/
+@[scalar_tac x.val]
+theorem ZMod.val_lt_or {n} (x : ZMod n) : x.val < n ∨ n = 0 := by
+  by_cases hn : n = 0
+  . simp [*]
+  . have := @ZMod.val_lt n (by constructor; omega) x
+    omega
+
+@[simp_scalar_simps]
+theorem ZMod.val_lt_iff {n} (x : ZMod n) : x.val < n ↔ n ≠ 0 := by
+ scalar_tac
+
+attribute [simp_scalar_simps] ZMod.val_natCast ZMod.val_intCast
+
+@[simp, simp_scalar_simps]
+theorem ZMod.cast_intCast {n : ℕ} (a : ℤ) [NeZero n] : ((a : ZMod n).cast : ℤ) = a % ↑n := by
+  simp only [ZMod.cast_eq_val, ZMod.val_intCast]
 
 end ScalarTac
 

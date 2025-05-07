@@ -6,8 +6,7 @@ set_option maxHeartbeats 1000000
 
 namespace tutorial
 
-/- This simp lemma replaces terms of the shape `l[i]!`: in the present case it is more annoying than anything -/
-attribute [-simp] List.getElem!_eq_getElem?_getD
+#setup_aeneas_simps
 
 /- # Basic tactics -/
 
@@ -330,7 +329,7 @@ theorem add_no_overflow_loop_spec
       intro j h0 h1
       simp_all
       -- Simplifying (x.update ...).index:
-      have := List.getElem!_set_neq x.val i.val j sum (by scalar_tac)
+      have := List.getElem!_set_ne x.val i.val j sum (by scalar_tac)
       simp [*]
       apply hNoOverflow j (by scalar_tac) (by scalar_tac)
     -- Postcondition

@@ -224,6 +224,16 @@ theorem Node.value_not_in_left [LinearOrder T] (node : Node T) (hInv : node.inv)
   have := ne_of_lt this
   tauto
 
+attribute [scalar_tac_simps]
+  Subtree.height
+  Node.height
+  Subtree.some_balanceFactor
+  Node.value._simpLemma_
+  Node.left._simpLemma_
+  Node.right._simpLemma_
+  Node.balanceFactor
+  Node.balance_factor._simpLemma_
+
 @[progress]
 theorem Tree.find_loop_spec
   {T : Type} (OrdInst : Ord T)

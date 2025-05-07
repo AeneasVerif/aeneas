@@ -178,4 +178,26 @@ Definition use_counter
   counterInst.(Counter_t_incr) cnt
 .
 
+(** [core::num::{u32}#8::wrapping_sub]:
+    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2066:8-2066:58
+    Name pattern: [core::num::{u32}::wrapping_sub] *)
+Axiom core_num_U32_wrapping_sub : u32 -> u32 -> result u32.
+
+(** [core::num::{u32}#8::wrapping_add]:
+    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2025:8-2025:58
+    Name pattern: [core::num::{u32}::wrapping_add] *)
+Axiom core_num_U32_wrapping_add : u32 -> u32 -> result u32.
+
+(** [demo::mod_add]:
+    Source: 'tests/src/demo.rs', lines 117:0-125:1 *)
+Definition mod_add (a : u32) (b : u32) : result u32 :=
+  _ <- massert (a s< 3329%u32);
+  _ <- massert (b s< 3329%u32);
+  sum <- u32_add a b;
+  res <- core_num_U32_wrapping_sub sum 3329%u32;
+  mask <- u32_shr res 16%i32;
+  let q := u32_and 3329%u32 mask in
+  core_num_U32_wrapping_add res q
+.
+
 End Demo.

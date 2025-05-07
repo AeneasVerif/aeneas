@@ -105,7 +105,7 @@ Theorems with a specification which uses integers and bit-vectors
 /- Generic theorem - shouldn't be used much -/
 theorem UScalar.sub_bv_spec {ty} {x y : UScalar ty}
   (h : y.val ≤ x.val) :
-  ∃ z, x - y = ok z ∧ x.val = z.val + y.val ∧ z.bv = x.bv - y.bv := by
+  ∃ z, x - y = ok z ∧ z.val = x.val - y.val ∧ y.val ≤ x.val ∧ z.bv = x.bv - y.bv := by
   have h := @sub_equiv ty x y
   split at h <;> simp_all
   omega
@@ -120,27 +120,27 @@ theorem IScalar.sub_bv_spec {ty} {x y : IScalar ty}
   omega
 
 theorem Usize.sub_bv_spec {x y : Usize} (h : y.val ≤ x.val) :
-  ∃ z, x - y = ok z ∧ x.val = z.val + y.val ∧ z.bv = x.bv - y.bv :=
+  ∃ z, x - y = ok z ∧ z.val = x.val - y.val ∧ y.val ≤ x.val ∧ z.bv = x.bv - y.bv :=
   UScalar.sub_bv_spec h
 
 theorem U8.sub_bv_spec {x y : U8} (h : y.val ≤ x.val) :
-  ∃ z, x - y = ok z ∧ x.val = z.val + y.val ∧ z.bv = x.bv - y.bv :=
+  ∃ z, x - y = ok z ∧ z.val = x.val - y.val ∧ y.val ≤ x.val ∧ z.bv = x.bv - y.bv :=
   UScalar.sub_bv_spec h
 
 theorem U16.sub_bv_spec {x y : U16} (h : y.val ≤ x.val) :
-  ∃ z, x - y = ok z ∧ x.val = z.val + y.val ∧ z.bv = x.bv - y.bv :=
+  ∃ z, x - y = ok z ∧ z.val = x.val - y.val ∧ y.val ≤ x.val ∧ z.bv = x.bv - y.bv :=
   UScalar.sub_bv_spec h
 
 theorem U32.sub_bv_spec {x y : U32} (h : y.val ≤ x.val) :
-  ∃ z, x - y = ok z ∧ x.val = z.val + y.val ∧ z.bv = x.bv - y.bv :=
+  ∃ z, x - y = ok z ∧ z.val = x.val - y.val ∧ y.val ≤ x.val ∧ z.bv = x.bv - y.bv :=
   UScalar.sub_bv_spec h
 
 theorem U64.sub_bv_spec {x y : U64} (h : y.val ≤ x.val) :
-  ∃ z, x - y = ok z ∧ x.val = z.val + y.val ∧ z.bv = x.bv - y.bv :=
+  ∃ z, x - y = ok z ∧ z.val = x.val - y.val ∧ y.val ≤ x.val ∧ z.bv = x.bv - y.bv :=
   UScalar.sub_bv_spec h
 
 theorem U128.sub_bv_spec {x y : U128} (h : y.val ≤ x.val) :
-  ∃ z, x - y = ok z ∧ x.val = z.val + y.val ∧ z.bv = x.bv - y.bv :=
+  ∃ z, x - y = ok z ∧ z.val = x.val - y.val ∧ y.val ≤ x.val ∧ z.bv = x.bv - y.bv :=
   UScalar.sub_bv_spec h
 
 theorem Isize.sub_bv_spec {x y : Isize}
@@ -181,7 +181,7 @@ Theorems with a specification which only uses integers
 @[progress]
 theorem UScalar.sub_spec {ty} {x y : UScalar ty}
   (h : y.val ≤ x.val) :
-  ∃ z, x - y = ok z ∧ x.val = z.val + y.val := by
+  ∃ z, x - y = ok z ∧ z.val = x.val - y.val ∧ y.val ≤ x.val := by
   have h := @sub_equiv ty x y
   split at h <;> simp_all
   omega
@@ -197,27 +197,27 @@ theorem IScalar.sub_spec {ty} {x y : IScalar ty}
   omega
 
 @[progress] theorem Usize.sub_spec {x y : Usize} (h : y.val ≤ x.val) :
-  ∃ z, x - y = ok z ∧ x.val = z.val + y.val :=
+  ∃ z, x - y = ok z ∧ z.val = x.val - y.val ∧ y.val ≤ x.val :=
   UScalar.sub_spec h
 
 @[progress] theorem U8.sub_spec {x y : U8} (h : y.val ≤ x.val) :
-  ∃ z, x - y = ok z ∧ x.val = z.val + y.val :=
+  ∃ z, x - y = ok z ∧ z.val = x.val - y.val ∧ y.val ≤ x.val :=
   UScalar.sub_spec h
 
 @[progress] theorem U16.sub_spec {x y : U16} (h : y.val ≤ x.val) :
-  ∃ z, x - y = ok z ∧ x.val = z.val + y.val :=
+  ∃ z, x - y = ok z ∧ z.val = x.val - y.val ∧ y.val ≤ x.val :=
   UScalar.sub_spec h
 
 @[progress] theorem U32.sub_spec {x y : U32} (h : y.val ≤ x.val) :
-  ∃ z, x - y = ok z ∧ x.val = z.val + y.val :=
+  ∃ z, x - y = ok z ∧ z.val = x.val - y.val ∧ y.val ≤ x.val :=
   UScalar.sub_spec h
 
 @[progress] theorem U64.sub_spec {x y : U64} (h : y.val ≤ x.val) :
-  ∃ z, x - y = ok z ∧ x.val = z.val + y.val :=
+  ∃ z, x - y = ok z ∧ z.val = x.val - y.val ∧ y.val ≤ x.val :=
   UScalar.sub_spec h
 
 @[progress] theorem U128.sub_spec {x y : U128} (h : y.val ≤ x.val) :
-  ∃ z, x - y = ok z ∧ x.val = z.val + y.val :=
+  ∃ z, x - y = ok z ∧ z.val = x.val - y.val ∧ y.val ≤ x.val :=
   UScalar.sub_spec h
 
 @[progress] theorem Isize.sub_spec {x y : Isize}
