@@ -1,7 +1,13 @@
 import Aeneas.Utils
 import Mathlib.Tactic.DefEqTransformations
 
-namespace Aeneas.GLet
+namespace Aeneas.Let
+
+/-!
+# Let Tactics
+
+Tactics to introduce let-bindings while refolding/rewriting the context.
+-/
 
 open Lean Elab Term Meta Tactic
 
@@ -82,27 +88,27 @@ def transparent_refold (x : Name) (e : Expr) : TacticM Unit :=
   setGoals [mvarId]
   pure ()
 
-elab "glet" x:ident " := " e:term : tactic =>
+elab "tlet" x:ident " := " e:term : tactic =>
   withMainContext do
   transparent_refold x.getId (← Tactic.elabTerm e none)
 
-elab "glet" x:ident ":" ty:term " := " e:term : tactic =>
+elab "tlet" x:ident ":" ty:term " := " e:term : tactic =>
   withMainContext do
   let ty ← Tactic.elabTerm ty none
   transparent_refold x.getId (← Tactic.elabTerm e (expectedType? := ty))
 
 example (x y z : Nat) (h0 : x + y = z) (h1 : x + y = 3) (_ : z ≤ 4) : x + y + z = 3 + z := by
-  glet a := x + y
+  tlet a := x + y
   omega
 
 example (x y z : Nat) (h0 : x + y = z) (h1 : x + y = 3) (_ : z ≤ 4) : x + y + z = 3 + z := by
-  glet a := x + y
-  glet b := a + z
+  tlet a := x + y
+  tlet b := a + z
   omega
 
 example (x y z : Nat) (h0 : x + y = z) (h1 : x + y = 3) (_ : z ≤ 4) : x + y + z = 3 + z := by
-  glet a : Nat := x + y
-  glet b : Nat := a + z
+  tlet a : Nat := x + y
+  tlet b : Nat := a + z
   omega
 
-end Aeneas.GLet
+end Aeneas.Let
