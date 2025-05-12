@@ -25,6 +25,16 @@ theorem neq_imp_nbeq [BEq α] [LawfulBEq α] (x y : α) (heq : ¬ x = y) : ¬ x 
    `∃ x, x = y ∧ P x` gets rewritten to `P y` -/
 attribute [simp] and_assoc
 
+@[simp]
+theorem decide_eq_not_decide (a b : Prop) [Decidable a] [Decidable b] :
+  decide a = !decide b ↔ a = ¬ b := by
+  by_cases a <;> simp_all
+
+@[simp]
+theorem not_decide_eq_decide (a b : Prop) [Decidable a] [Decidable b] :
+  !decide a = decide b ↔ ¬ a = b := by
+  by_cases a <;> simp_all
+
 end Simp
 
 end Aeneas

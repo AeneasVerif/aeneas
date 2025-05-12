@@ -264,7 +264,7 @@ theorem U32.cast_Usize_val_eq (x : U32) : (UScalar.cast .Usize x).val = x.val :=
 theorem U64.cast_U128_val_eq (x : U64) : (UScalar.cast .U128 x).val = x.val := by
   simp [UScalar.cast_val_eq]; scalar_tac
 
-@[simp]
+@[simp, scalar_tac_simps]
 theorem UScalar.cast_val_mod_pow_greater_numBits_eq {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) (h : src_ty.numBits ≤ tgt_ty.numBits) :
   (cast tgt_ty x).val = x.val := by
   simp [UScalar.cast_val_eq]

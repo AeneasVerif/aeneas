@@ -8,7 +8,6 @@ initialize zmodifySimpExt : SimpExtension ←
   registerSimpAttr `zmodify_simps "\
     The `zmodify_simps` attribute registers simp lemmas to be used by `zmodify`."
 
--- TODO: initialization fails with this, while the same works for `scalar_tac`??
 initialize zmodifySimprocsRef : IO.Ref Simprocs ← IO.mkRef {}
 
 /-- The `zmodify_simps_proc` simp attribute for the simp rocs. -/

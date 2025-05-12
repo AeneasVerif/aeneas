@@ -153,4 +153,16 @@ def use_counter
   {T : Type} (CounterInst : Counter T) (cnt : T) : Result (Usize × T) :=
   CounterInst.incr cnt
 
+/- [demo::mod_add]:
+   Source: 'tests/src/demo.rs', lines 117:0-125:1 -/
+def mod_add (a : U32) (b : U32) : Result U32 :=
+  do
+  massert (a < 3329#u32)
+  massert (b < 3329#u32)
+  let sum ← a + b
+  let res ← (↑(core.num.U32.wrapping_sub sum 3329#u32) : Result U32)
+  let mask ← res >>> 16#i32
+  let q ← (↑(3329#u32 &&& mask) : Result U32)
+  ok (core.num.U32.wrapping_add res q)
+
 end demo

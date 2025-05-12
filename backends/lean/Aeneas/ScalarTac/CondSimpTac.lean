@@ -5,6 +5,59 @@ namespace Aeneas.ScalarTac
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 open Utils
 
+structure CondSimpPartialArgs where
+  declsToUnfold : Array Name := #[]
+  addSimpThms : Array Name := #[]
+  hypsToUse : Array FVarId := #[]
+
+def condSimpParseArgs (tacName : String) (args : TSyntaxArray [`term, `token.«*»]) : TacticM CondSimpPartialArgs := do
+  let mut declsToUnfold := #[]
+  let mut addSimpThms := #[]
+  let mut hypsToUse := #[]
+  for arg in args do
+    /- We have to make a case disjunction, because if we treat identifiers like
+       terms, then Lean will not succeed in infering their implicit parameters. -/
+    match arg with
+    | `($stx:ident) => do
+      match (← getLCtx).findFromUserName? stx.getId with
+      | .some decl =>
+        trace[Utils] "arg (local decl): {stx.raw}"
+        if decl.isLet then
+          declsToUnfold := declsToUnfold.push decl.userName
+        else
+          hypsToUse := hypsToUse.push decl.fvarId
+      | .none =>
+        -- Not a local declaration
+        trace[Utils] "arg (theorem): {stx.raw}"
+        let some e ← Lean.Elab.Term.resolveId? stx (withInfo := true)
+          | throwError m!"Could not find theorem: {arg}"
+        if let .const name _ := e then
+          -- Lookup the declaration to check whether it is a definition or a theorem
+          match (← getEnv).find? name with
+          | none => throwError m!"Could not find declaration: {name}"
+          | some d =>
+            match d with
+            | .thmInfo _ | .axiomInfo _ =>
+              addSimpThms := addSimpThms.push name
+            | .defnInfo _ =>
+              declsToUnfold := declsToUnfold.push name
+            | _ => throwError m!"{name} is not a theorem, an axiom or a definition"
+        else throwError m!"Unexpected: {arg}"
+    | term => do
+      trace[Utils] "term kind: {term.raw.getKind}"
+      if term.raw.getKind == `token.«*» then
+        trace[Utils] "found token: *"
+        let decls ← (← getLCtx).getDecls
+        let decls ← decls.filterMapM (
+          fun d => do if (← inferType d.type).isProp then pure (some d.fvarId) else pure none)
+        trace[Utils] "filtered decls: {decls.map Expr.fvar}"
+        hypsToUse := hypsToUse.append decls.toArray
+      else
+        -- TODO: we need to make that work
+        trace[Utils] "arg (term): {term}"
+        throwError m!"Unimplemented: arbitrary terms are not supported yet as arguments to `{tacName}` (received: {arg})"
+  pure ⟨ declsToUnfold, addSimpThms, hypsToUse ⟩
+
 structure CondSimpArgs where
   simpThms : Array SimpTheorems := #[]
   simprocs: Simp.SimprocsArray := #[]
@@ -35,7 +88,8 @@ def condSimpTacSimp (config : Simp.Config) (args : CondSimpArgs) (loc : Utils.Lo
 
 /-- A helper to define tactics which perform conditional simplifications with `scalar_tac` as a discharger. -/
 def condSimpTac
-  (tacName : String) (simpConfig : Simp.Config) (args : CondSimpArgs) (addSimpThms : TacticM (Array FVarId)) (doFirstSimp : Bool)
+  (tacName : String) (satNonLin : Bool)
+  (simpConfig : Simp.Config) (args : CondSimpArgs) (addSimpThms : TacticM (Array FVarId)) (doFirstSimp : Bool)
   (loc : Utils.Location) : TacticM Unit := do
   Elab.Tactic.focus do
   withMainContext do
@@ -68,7 +122,7 @@ def condSimpTac
   /- Introduce the scalar_tac assumptions - by doing it beforehand we don't have to redo it every
      time we call `scalar_tac`: as `saturate` is not compiled it saves a lot of time -/
   withMainContext do
-  let scalarTacAsms ← ScalarTac.scalarTacSaturateForward true false
+  let scalarTacAsms ← ScalarTac.scalarTacSaturateForward true satNonLin
   trace[Utils] "Goal after saturating the context: {← getMainGoal}"
   let additionalSimpThms ← addSimpThms
   trace[Utils] "Goal after adding the additional simp assumptions: {← getMainGoal}"

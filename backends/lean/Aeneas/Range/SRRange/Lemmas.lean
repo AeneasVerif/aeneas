@@ -94,7 +94,6 @@ theorem forIn_eq_forIn_range' [Monad m] (r : SRRange)
     forIn r init f = forIn (List.range' r.start r.size r.step) init f := by
   simp only [forIn, forIn'_eq_forIn'_range']
 
-@[simp]
 def foldWhile'_step {α : Type u} (r : SRRange) (f : α → (a : Nat) → a ∈ r → α) (i : Nat) (init : α)
   (hi : r.start ≤ i ∧ (i - r.start) % r.step = 0)
   (h : i < r.stop) :
@@ -119,7 +118,6 @@ def foldWhile'_id {α : Type u} (r : SRRange) (f : α → (a : Nat) → a ∈ r 
   conv => lhs; unfold foldWhile'
   simp [*]
 
-@[simp]
 def foldWhile_step {α : Type u} (max step : Nat) (hStep : 0 < step) (f : α → Nat → α) (i : Nat) (init : α)
   (h : i < max) : foldWhile max step hStep f i init = foldWhile max step hStep f (i + step) (f init i) := by
   conv => lhs; unfold foldWhile
@@ -131,8 +129,7 @@ def foldWhile_id {α : Type u} (max step : Nat) (hStep : 0 < step) (f : α → N
   conv => lhs; unfold foldWhile
   simp [*]
 
-@[simp]
-theorem foldl_range' (start len step : Nat) (hStep : 0 < step) (f : α → Nat → α) (init : α) :
+theorem foldl_range'_eq_foldWhile (start len step : Nat) (hStep : 0 < step) (f : α → Nat → α) (init : α) :
   List.foldl f init (List.range' start len step) = foldWhile (start + len * step) step hStep f start init := by
   cases len
   . simp only [List.range'_zero, List.foldl_nil, Nat.zero_mul, Nat.add_zero]
@@ -140,7 +137,7 @@ theorem foldl_range' (start len step : Nat) (hStep : 0 < step) (f : α → Nat �
     simp
   . rename_i len
     simp only [List.range', List.foldl_cons]
-    have := foldl_range' (start + step) len step hStep f (f init start)
+    have := foldl_range'_eq_foldWhile (start + step) len step hStep f (f init start)
     simp only [this]
     conv => rhs; unfold foldWhile
     have : start < start + (len + 1) * step := by simp [*]

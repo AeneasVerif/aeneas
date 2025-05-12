@@ -243,6 +243,7 @@ partial_fixpoint
    Note that because we use the suffix "CList.", we can use the notation [l.toList]
    if [l] has type [CList ...].
  -/
+@[simp, simp_lists_simps, scalar_tac_simps]
 def CList.toList {α : Type} (x : CList α) : List α :=
   match x with
   | CNil => []
@@ -293,8 +294,6 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
       -- easier to understand what is going on.
       -- Simplify the condition and the [if then else]
       simp [hi]
-      -- Prove the final equality
-      simp [CList.toList]
     else
       -- The interesting branch
       -- Simplify the condition and the [if then else]
@@ -315,7 +314,7 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
       -- to perform rewritings. In particular, it will use [i.val ≠ 0] to
       -- apply [List.index_nzero_cons].
       have : i.val ≠ 0 := by scalar_tac -- Remark: [simp at hi] also works
-      simp [CList.toList, *]
+      simp_lists [*]
 
 /-#===========================================================================#
   #

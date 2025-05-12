@@ -246,8 +246,8 @@ section Methods
 
 end Methods
 
--- TODO: this should take a continuation
-def addDeclTac (name : Name) (val : Expr) (type : Expr) (asLet : Bool) : TacticM Expr :=
+def addDeclTac {α} (name : Name) (val : Expr) (type : Expr) (asLet : Bool) (m : Expr → TacticM α) :
+  TacticM α :=
   -- I don't think we need that
   withMainContext do
   -- Insert the new declaration
@@ -268,7 +268,7 @@ def addDeclTac (name : Name) (val : Expr) (type : Expr) (asLet : Bool) : TacticM
     setGoals (newMVar.mvarId! :: goals)
     -- Return the new value - note: we are in the *new* context, created
     -- after the declaration was added, so it will persist
-    pure nval
+    m nval
 
 def addDeclTacSyntax (name : Name) (val : Syntax) (asLet : Bool) : TacticM Unit :=
   -- I don't think we need that
@@ -281,7 +281,7 @@ def addDeclTacSyntax (name : Name) (val : Syntax) (asLet : Bool) : TacticM Unit 
   -- not choose): we force the instantiation of the meta-variable
   synthesizeSyntheticMVarsUsingDefault
   --
-  let _ ← addDeclTac name val type asLet
+  addDeclTac name val type asLet (fun _ => pure ())
 
 elab "custom_let " n:ident " := " v:term : tactic => do
   addDeclTacSyntax n.getId v (asLet := true)
@@ -797,7 +797,7 @@ def mkSimpCtx (simpOnly : Bool) (config : Simp.Config) (kind : SimpKind) (args :
   let simpThms ←
     if simpOnly then Tactic.simpOnlyBuiltins.foldlM (·.addConst ·) ({} : SimpTheorems)
     else getSimpTheorems
-  -- Add the equational theorem for the declarations to unfold
+  -- Add the equational theorems for the declarations to unfold
   let addDeclToUnfold (thms : SimpTheorems) (decl : Name) : Tactic.TacticM SimpTheorems :=
     if kind == .dsimp then pure (thms.addDeclToUnfoldCore decl)
     else thms.addDeclToUnfold decl
@@ -1739,6 +1739,11 @@ def exprToNat? (e : Expr) : Option Nat :=
   if let some n := e.nat? then some n
   else if let some n := e.rawNatLit? then some n
   else none
+
+def optElabTerm (e : Option (TSyntax `term)) : TacticM (Option Expr) := do
+  match e with
+  | none => pure none
+  | some e => pure (some (← Lean.Elab.Tactic.elabTerm e none))
 
 end Utils
 

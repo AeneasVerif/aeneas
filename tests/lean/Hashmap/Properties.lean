@@ -3,11 +3,13 @@ import Hashmap.Funs
 open Aeneas.Std
 open Result
 
+#setup_aeneas_simps
+
 namespace hashmap
 
 namespace AList
 
-@[simp]
+@[simp, scalar_tac_simps]
 def v {α : Type} (ls: AList α) : List (Usize × α) :=
   match ls with
   | Nil => []
@@ -17,7 +19,7 @@ def v {α : Type} (ls: AList α) : List (Usize × α) :=
 abbrev lookup {α : Type} (ls: AList α) (key: Usize) : Option α :=
   ls.v.lookup key
 
-@[simp]
+@[simp, scalar_tac_simps]
 abbrev length {α : Type} (ls : AList α) : Nat := ls.v.length
 
 end AList
@@ -97,7 +99,7 @@ abbrev Slots.al_v (s : Slots α) := (s.val.map AList.v).flatten
 def lookup (hm : HashMap α) (k : Usize) : Option α :=
   slots_s_lookup hm.slots.val k
 
-@[simp]
+@[simp, scalar_tac_simps]
 abbrev len_s (hm : HashMap α) : Nat := hm.al_v.length
 
 instance : Membership Usize (HashMap α) where
@@ -134,9 +136,6 @@ def frame_load (hm nhm : HashMap α) : Prop :=
   nhm.max_load_factor = hm.max_load_factor ∧
   nhm.max_load = hm.max_load ∧
   nhm.saturated = hm.saturated
-
--- Those rewriting lemmas are problematic
-attribute [-simp] Bool.exists_bool List.getElem!_eq_getElem?_getD
 
 -- These fsimp lemmas were introduced by upstream changes and are problematic
 attribute [-simp] List.length_flatten List.flatten_eq_nil_iff List.lookup_eq_none_iff
@@ -184,7 +183,6 @@ theorem allocate_slots_spec {α : Type} (slots : alloc.vec.Vec (AList α)) (n : 
     . intro i h0
       fsimp_all
     . simp_all
-      scalar_tac
   else
     fsimp [h]
     fsimp_all

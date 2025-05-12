@@ -3,9 +3,7 @@ open Aeneas.Std Result
 
 set_option maxHeartbeats 1000000
 
-namespace Primitives
-
-end Primitives
+#setup_aeneas_simps
 
 namespace Tutorial.Solutions
 
@@ -71,7 +69,7 @@ open CList
     By putting this definition in the namespace `CList`, we give the possibility of using the `.`
     notation: if `x` has type `CList α` we can write `x.toList` instead of `toList x`.
  -/
-@[simp] def CList.toList {α : Type} (x : CList α) : List α :=
+@[simp, scalar_tac_simps, simp_lists_simps] def CList.toList {α : Type} (x : CList α) : List α :=
   match x with
   | CNil => []
   | CCons hd tl => hd :: tl.toList
@@ -99,10 +97,9 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   split
   . split
     . simp_all
-    . simp_all
-      progress as ⟨ i1 ⟩
+    . progress as ⟨ i1 ⟩
       progress as ⟨ x ⟩
-      simp_all
+      simp_lists [*]
   . simp_all
 
 /- [tutorial::i32_id]:
@@ -167,8 +164,7 @@ theorem even_spec (n : U32) :
   . simp [*]
   . progress as ⟨ n' ⟩
     progress as ⟨ b ⟩
-    simp [*]
-    simp [Nat.even_add_one]
+    simp [Nat.odd_sub, *]
 termination_by n.val
 decreasing_by scalar_decr_tac
 
@@ -180,8 +176,7 @@ theorem odd_spec (n : U32) :
   . simp [*]
   . progress as ⟨ n' ⟩
     progress as ⟨ b ⟩
-    simp [*]
-    simp [Nat.odd_add_one]
+    simp [Nat.even_sub, *]
 termination_by n.val
 decreasing_by scalar_decr_tac
 
