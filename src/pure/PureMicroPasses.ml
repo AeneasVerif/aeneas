@@ -88,7 +88,7 @@ type pn_ctx = {
 (** This function computes pretty names for the variables in the pure AST. It
     relies on the "meta"-place information in the AST to generate naming
     constraints, and then uses those to compute the names.
-    
+
     The way it works is as follows:
     - we only modify the names of the unnamed variables
     - whenever we see an rvalue/pattern which is exactly an unnamed variable,
@@ -97,13 +97,13 @@ type pn_ctx = {
     - we try to propagate naming constraints on the pure variables use in the
       synthesized programs, and also on the LLBC variables from the original
       program (information about the LLBC variables is stored in the meta-places)
-      
-      
+
+
     Something important is that, for every variable we find, the name of this
     variable can be influenced by the information we find *below* in the AST.
 
     For instance, the following situations happen:
-    
+
     - let's say we evaluate:
       {[
         match (ls : List<T>) {
@@ -112,7 +112,7 @@ type pn_ctx = {
           }
         }
       ]}
-      
+
       Actually, in MIR, we get:
       {[
         tmp := discriminant(ls);
@@ -136,7 +136,7 @@ type pn_ctx = {
         x -> s1
         hd -> s2
       ]}
-      
+
       When generating the symbolic AST, we save as meta-information that we
       assign [s1] to the place [x] and [s2] to the place [hd]. This way,
       we learn we can use the names [x] and [hd] for the variables which are
@@ -148,11 +148,11 @@ type pn_ctx = {
       ]}
    - Assignments:
      [let x [@mplace=lp] = v [@mplace = rp] in ...]
-     
+
      We propagate naming information across the assignments. This is important
      because many reassignments using temporary, anonymous variables are
      introduced during desugaring.
-   
+
    - Given back values (introduced by backward functions):
      Let's say we have the following Rust code:
      {[
@@ -160,7 +160,7 @@ type pn_ctx = {
        *py = 2;
        assert!(x = 2);
      ]}
-     
+
      After desugaring, we get the following MIR:
      {[
        ^0 = &mut x; // anonymous variable
@@ -168,7 +168,7 @@ type pn_ctx = {
        *py += 2;
        assert!(x = 2);
      ]}
-     
+
      We want this to be translated as:
      {[
        let py = id_fwd x in
@@ -188,11 +188,11 @@ type pn_ctx = {
 
      This way, because of [^0 = &mut x], we can propagate the name "x" to the place
      [^0], then to the given back variable across the function call.
-   
+
  *)
 let compute_pretty_names (def : fun_decl) : fun_decl =
   (* Small helpers *)
-  (* 
+  (*
    * When we do branchings, we need to merge (the constraints saved in) the
    * contexts returned by the different branches.
    *
@@ -1123,14 +1123,14 @@ let inline_fun (_ : fun_id) : bool = false
 
     Note that many of them are just variable "reassignments": [let x = y in ...].
     Some others come from ??
-    
+
     TODO: how do we call that when we introduce intermediate variable assignments
     for the arguments of a function call?
 
     [inline_named]: if [true], inline all the assignments of the form
     [let VAR = VAR in ...], otherwise inline only the ones where the variable
     on the left is anonymous.
-    
+
     [inline_pure]: if [true], inline all the pure assignments where the variable
     on the left is anonymous, but the assignments where the r-expression is
     a function call (i.e.: ADT constructions, etc.), except certain cases of
@@ -2167,7 +2167,8 @@ let eliminate_box_functions (_ctx : ctx) (def : fun_decl) : fun_decl =
                 | ArrayToSliceShared
                 | ArrayToSliceMut
                 | ArrayRepeat
-                | PtrFromParts _ -> super#visit_texpression env e)
+                | PtrFromParts _
+                | CopyNonOverlapping -> super#visit_texpression env e)
             | _ -> super#visit_texpression env e)
         | _ -> super#visit_texpression env e
     end

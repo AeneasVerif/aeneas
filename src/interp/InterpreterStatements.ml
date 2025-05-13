@@ -147,7 +147,7 @@ let eval_assertion_concrete (config : config) (span : Meta.span)
   ((ctx, st), eval_op)
 
 (** Evaluates an assertion.
-    
+
     In the case the boolean under scrutinee is symbolic, we synthesize
     a call to [assert ...] then continue in the success branch (and thus
     expand the boolean to [true]).
@@ -479,7 +479,8 @@ let eval_builtin_function_call_concrete (config : config) (span : Meta.span)
         | ArrayToSliceShared
         | ArrayToSliceMut
         | ArrayRepeat
-        | PtrFromParts _ -> craise __FILE__ __LINE__ span "Unimplemented"
+        | PtrFromParts _
+        | CopyNonOverlapping -> craise __FILE__ __LINE__ span "Unimplemented"
       in
       let cc = cc_comp cc cf_eval_body in
 
@@ -487,10 +488,10 @@ let eval_builtin_function_call_concrete (config : config) (span : Meta.span)
       comp cc (pop_frame_assign config span dest ctx)
 
 (** Helper
- 
+
     Create abstractions (with no avalues, which have to be inserted afterwards)
     from a list of abs region groups.
-    
+
     [region_can_end]: gives the region groups from which we generate functions
     which can end or not.
  *)

@@ -893,9 +893,9 @@ let ctx_translate_fwd_generic_args (ctx : bs_ctx) (generics : T.generic_args) :
   translate_fwd_generic_args (Some ctx.span) type_infos generics
 
 (** Translate a type, when some regions may have ended.
-    
+
     We return an option, because the translated type may be empty.
-    
+
     [inside_mut]: are we inside a mutable borrow?
  *)
 let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
@@ -1877,7 +1877,7 @@ let symbolic_value_to_texpression (ctx : bs_ctx) (sv : V.symbolic_value) :
     **IMPORTANT**: this function makes the assumption that the typed value
     doesn't contain ⊥. This means in particular that symbolic values don't
     contain ended regions.
-    
+
     TODO: we might want to remember in the symbolic AST the set of ended
     regions, at the points where we need it, for sanity checks (though the
     sanity checks in the symbolic interpreter should be enough).
@@ -2385,7 +2385,7 @@ type borrow_or_symbolic_id =
       let (nx, ny) = f_back ... in
           ^^^^^^^^
     ]}
-    
+
     [mp]: it is possible to provide some meta-place information, to guide
     the heuristics which later find pretty names for the variables.
 
@@ -2631,7 +2631,7 @@ let abs_to_given_back_no_mp (abs : V.abs) (ctx : bs_ctx) :
 (** Return the ordered list of the (transitive) parents of a given abstraction.
 
     Is used for instance when collecting the input values given to all the
-    parent functions, in order to properly instantiate an 
+    parent functions, in order to properly instantiate an
  *)
 let get_abs_ancestors (ctx : bs_ctx) (abs : V.abs) (call_id : V.FunCallId.id) :
     S.call * (V.abs * texpression list) list =
@@ -3046,6 +3046,7 @@ and translate_function_call_aux (call : S.call) (e : S.expression)
                       "subslice_shared"
                   | PtrFromParts RMut -> "ptr_from_parts_mut"
                   | PtrFromParts RShared -> "ptr_from_parts_shared"
+                  | CopyNonOverlapping -> "copy_nonoverlapping"
                 end
               | FunId (FRegular fid) | TraitMethod (_, _, fid) -> (
                   let decl =
