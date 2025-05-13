@@ -1052,6 +1052,9 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
             SymbolicAst.IntroSymbolic (ctx, None, sv, VaArray values, e)
           in
           (saggregated, cf)
+    | AggregatedRawPtr _ ->
+        craise __FILE__ __LINE__ span
+          "Aggregated raw pointers are not supported yet"
     | AggregatedClosure _ ->
         craise __FILE__ __LINE__ span "Closures are not supported yet"
   in
