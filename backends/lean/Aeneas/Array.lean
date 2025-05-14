@@ -24,34 +24,34 @@ theorem getElem!_default [Inhabited α] (ls : Array α) (i : ℕ)
   simp only [getElem!_eq_toList_getElem!]; simp_lists
 
 @[simp, simp_lists_simps, scalar_tac_simps]
-theorem setSlice!_length {α} (s : Array α) (i : ℕ) (s' : List α) :
+theorem length_setSlice! {α} (s : Array α) (i : ℕ) (s' : List α) :
   (s.setSlice! i s').size = s.size := by
-  simp only [setSlice!, List.size_toArray, List.setSlice!_length, length_toList]
+  simp only [setSlice!, List.size_toArray, List.length_setSlice!, length_toList]
 
-theorem setSlice!_getElem!_prefix {α} [Inhabited α]
+theorem getElem!_setSlice!_prefix {α} [Inhabited α]
   (s : Array α) (s' : List α) (i j : ℕ) (h : j < i) :
   (s.setSlice! i s')[j]! = s[j]! := by
   simp only [setSlice!, getElem!_eq_toList_getElem!]
   simp_lists
 
 @[simp_lists_simps]
-theorem setSlice!_getElem!_middle {α} [Inhabited α]
+theorem getElem!_setSlice!_middle {α} [Inhabited α]
   (s : Array α) (s' : List α) (i j : ℕ) (h : i ≤ j ∧ j - i < s'.length ∧ j < s.size) :
   (s.setSlice! i s')[j]! = s'[j - i]! := by
   simp only [setSlice!, getElem!_eq_toList_getElem!]
   simp_lists
 
-theorem setSlice!_getElem!_suffix {α} [Inhabited α]
+theorem getElem!_setSlice!_suffix {α} [Inhabited α]
   (s : Array α) (s' : List α) (i j : ℕ) (h : i + s'.length ≤ j) :
   (s.setSlice! i s')[j]! = s[j]! := by
   simp only [setSlice!, getElem!_eq_toList_getElem!]
   simp_lists
 
 @[simp_lists_simps]
-theorem setSlice!_getElem!_same {α} [Inhabited α] (s : Array α) (s' : List α) (i j : ℕ)
+theorem getElem!_setSlice!_same {α} [Inhabited α] (s : Array α) (s' : List α) (i j : ℕ)
   (h : j < i ∨ i + s'.length ≤ j) :
   (s.setSlice! i s')[j]! = s[j]! := by
-  cases h <;> simp_lists [setSlice!_getElem!_prefix, setSlice!_getElem!_suffix]
+  cases h <;> simp_lists [getElem!_setSlice!_prefix, getElem!_setSlice!_suffix]
 
 @[simp_lists_simps]
 def Inhabited_getElem_eq_getElem! {α} [Inhabited α] (l : Array α) (i : ℕ) (hi : i < l.size) :

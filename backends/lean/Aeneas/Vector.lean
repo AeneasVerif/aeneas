@@ -14,7 +14,7 @@ theorem toList_length {α : Type u} {n : ℕ} (xs : Vector α n) :
   simp only [Array.length_toList, size_toArray]
 
 def setSlice! {α} {n} (a : Vector α n) (i : ℕ) (s : List α) : Vector α n :=
-  ⟨ a.toArray.setSlice! i s, by simp only [Array.setSlice!_length, size_toArray] ⟩
+  ⟨ a.toArray.setSlice! i s, by simp only [Array.length_setSlice!, size_toArray] ⟩
 
 attribute [local simp] List.Inhabited_getElem_eq_getElem! Array.Inhabited_getElem_eq_getElem!
 
@@ -43,34 +43,34 @@ theorem getElem_eq_getElem! {α} {n} [Inhabited α] (s : Vector α n) (i : ℕ) 
   cases s; simp
 
 @[simp, simp_lists_simps, scalar_tac_simps]
-theorem setSlice!_length {α} {n} (s : Vector α n) (i : ℕ) (s' : List α) :
+theorem length_setSlice! {α} {n} (s : Vector α n) (i : ℕ) (s' : List α) :
   (s.setSlice! i s').size = n := by
   simp only [size_toArray]
 
-theorem setSlice!_getElem!_prefix {α} {n} [Inhabited α]
+theorem getElem!_setSlice!_prefix {α} {n} [Inhabited α]
   (s : Vector α n) (s' : List α) (i j : ℕ) (h : j < i) :
   (s.setSlice! i s')[j]! = s[j]! := by
   simp only [getElem!_eq_toArray_getElem!, setSlice!]
   simp_lists
 
 @[simp_lists_simps]
-theorem setSlice!_getElem!_middle {α} {n} [Inhabited α]
+theorem getElem!_setSlice!_middle {α} {n} [Inhabited α]
   (s : Vector α n) (s' : List α) (i j : ℕ) (h : i ≤ j ∧ j - i < s'.length ∧ j < s.size) :
   (s.setSlice! i s')[j]! = s'[j - i]! := by
   simp only [setSlice!, getElem!_eq_toArray_getElem!]
   simp_lists
 
-theorem setSlice!_getElem!_suffix {α} {n} [Inhabited α]
+theorem getElem!_setSlice!_suffix {α} {n} [Inhabited α]
   (s : Vector α n) (s' : List α) (i j : ℕ) (h : i + s'.length ≤ j) :
   (s.setSlice! i s')[j]! = s[j]! := by
   simp only [setSlice!, getElem!_eq_toArray_getElem!]
   simp_lists
 
 @[simp_lists_simps]
-theorem setSlice!_getElem!_same {α} {n} [Inhabited α] (s : Vector α n) (s' : List α) (i j : ℕ)
+theorem getElem!_setSlice!_same {α} {n} [Inhabited α] (s : Vector α n) (s' : List α) (i j : ℕ)
   (h : j < i ∨ i + s'.length ≤ j) :
   (s.setSlice! i s')[j]! = s[j]! := by
-  cases h <;> simp_lists [setSlice!_getElem!_prefix, setSlice!_getElem!_suffix]
+  cases h <;> simp_lists [getElem!_setSlice!_prefix, getElem!_setSlice!_suffix]
 
 @[simp_lists_simps]
 def Inhabited_getElem_eq_getElem! {α} {n} [Inhabited α] (l : Vector α n) (i : ℕ) (hi : i < n) :

@@ -497,13 +497,13 @@ section -- setSlice!
     s0 ++ s1 ++ s2
 
   @[simp, simp_lists_simps, scalar_tac_simps]
-  theorem setSlice!_length {α} (s : List α) (i : ℕ) (s' : List α) :
+  theorem length_setSlice! {α} (s : List α) (i : ℕ) (s' : List α) :
     (s.setSlice! i s').length = s.length := by
     simp only [setSlice!, append_assoc, length_append, length_take, inf_le_left, inf_of_le_left,
       length_drop]
     omega
 
-  theorem setSlice!_getElem!_prefix {α} [Inhabited α]
+  theorem getElem!_setSlice!_prefix {α} [Inhabited α]
     (s : List α) (s' : List α) (i j : ℕ) (h : j < i) :
     (s.setSlice! i s')[j]! = s[j]! := by
     simp only [setSlice!, append_assoc]
@@ -512,14 +512,14 @@ section -- setSlice!
     by_cases hj: s.length ≤ j <;> simp_lists
 
   @[simp_lists_simps]
-  theorem setSlice!_getElem!_middle {α} [Inhabited α]
+  theorem getElem!_setSlice!_middle {α} [Inhabited α]
     (s : List α) (s' : List α) (i j : ℕ) (h : i ≤ j ∧ j - i < s'.length ∧ j < s.length) :
     (s.setSlice! i s')[j]! = s'[j - i]! := by
     simp only [setSlice!, append_assoc]
     simp_lists
     by_cases h1: s.length ≤ j + s'.length <;> simp (disch := omega) only [inf_of_le_left]
 
-  theorem setSlice!_getElem!_suffix {α} [Inhabited α]
+  theorem getElem!_setSlice!_suffix {α} [Inhabited α]
     (s : List α) (s' : List α) (i j : ℕ) (h : i + s'.length ≤ j) :
     (s.setSlice! i s')[j]! = s[j]! := by
     simp only [setSlice!, append_assoc]
@@ -529,10 +529,10 @@ section -- setSlice!
       add_tsub_cancel_of_le]
 
   @[simp_lists_simps]
-  theorem setSlice!_getElem!_same {α} [Inhabited α] (s : List α) (s' : List α) (i j : ℕ)
+  theorem getElem!_setSlice!_same {α} [Inhabited α] (s : List α) (s' : List α) (i j : ℕ)
     (h : j < i ∨ i + s'.length ≤ j) :
     (s.setSlice! i s')[j]! = s[j]! := by
-    cases h <;> simp_lists [setSlice!_getElem!_prefix, setSlice!_getElem!_suffix]
+    cases h <;> simp_lists [getElem!_setSlice!_prefix, getElem!_setSlice!_suffix]
 
   @[simp, simp_lists_simps]
   theorem map_setSlice! (s : List α) (i : ℕ) (s' : List α) (f : α → β):
