@@ -61,6 +61,7 @@ let remove_useless_cf_merges (crate : crate) (f : fun_decl) : fun_decl =
   let rec can_be_moved_aux (must_end_with_exit : bool) (st : statement) : bool =
     match st.content with
     | SetDiscriminant _
+    | CopyNonOverlapping _
     | Assert _
     | Call _
     | Break _
