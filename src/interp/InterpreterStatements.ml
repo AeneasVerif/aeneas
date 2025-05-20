@@ -888,6 +888,8 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
   | Continue i -> ([ (ctx, Continue i) ], cf_singleton __FILE__ __LINE__ st.span)
   | StorageLive _ | Nop ->
       ([ (ctx, Unit) ], cf_singleton __FILE__ __LINE__ st.span)
+  | CopyNonOverlapping _ ->
+      craise __FILE__ __LINE__ st.span "CopyNonOverlapping is not supported yet"
   | Sequence (st1, st2) ->
       (* Evaluate the first statement *)
       let ctx_resl, cf_st1 = eval_statement config st1 ctx in
