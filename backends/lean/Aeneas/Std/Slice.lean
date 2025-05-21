@@ -87,6 +87,11 @@ def Slice.set_opt {α : Type u} (v: Slice α) (i: Usize) (x: Option α) : Slice 
 def Slice.drop {α} (s : Slice α) (i : Usize) : Slice α :=
   ⟨ s.val.drop i.val, by scalar_tac ⟩
 
+@[simp, simp_lists_simps]
+theorem Slice.getElem!_val_drop {T} (s : Slice T) (i : Usize) :
+  (s.drop i).val = s.val.drop i := by
+  simp [drop]
+
 @[simp]
 abbrev Slice.slice {α : Type u} [Inhabited α] (s : Slice α) (i j : Nat) : List α :=
   s.val.slice i j
@@ -420,12 +425,21 @@ def core.slice.index.SliceIndexRangeFromUsizeSlice.index {T : Type}
 def core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut {T : Type}
   (r : core.ops.range.RangeFrom Usize) (s : Slice T) : Result ((Slice T) × (Slice T → Slice T)) :=
   if r.start ≤ s.length then
-    ok ( s.drop r.start, fun s' =>
-         if h: r.start.val + s'.length ≤ Usize.max then
-            ⟨ s.val.take r.start.val ++ s'.val, by scalar_tac ⟩
-          else s )
+    let s1 := s.drop r.start
+    ok ( s1,
+         fun s2 =>
+         if s2.length = s1.length then
+            ⟨ s.val.setSlice! r.start s2, by scalar_tac ⟩
+         else s )
   else fail .panic
 
+theorem _SliceIndexRangeFromUsizeSlice.index_mut.test {T} (s : Slice T) (r : core.ops.range.RangeFrom Usize) (h : r.start ≤ s.length) :
+  match core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut r s with
+  | ok (s1, back) =>
+    back s1 = s
+  | _ => False := by
+  unfold core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut
+  simp [h]
 
 /- Trait implementation: [core::slice::index::private_slice_index::{core::slice::index::private_slice_index::Sealed for core::ops::range::RangeFrom<usize>}] -/
 @[reducible]
