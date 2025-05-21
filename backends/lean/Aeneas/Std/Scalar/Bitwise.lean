@@ -127,9 +127,9 @@ instance {ty} : HOr (IScalar ty) (IScalar ty) (IScalar ty) where
 /-!
 Xor
 -/
-def UScalar.xor {ty} (x y : UScalar ty) : UScalar ty := ⟨ x.bv ||| y.bv ⟩
+def UScalar.xor {ty} (x y : UScalar ty) : UScalar ty := ⟨ x.bv ^^^ y.bv ⟩
 
-def IScalar.xor {ty} (x y : IScalar ty) : IScalar ty := ⟨ x.bv ||| y.bv ⟩
+def IScalar.xor {ty} (x y : IScalar ty) : IScalar ty := ⟨ x.bv ^^^ y.bv ⟩
 
 instance {ty} : HXor (UScalar ty) (UScalar ty) (UScalar ty) where
   hXor x y := UScalar.xor x y

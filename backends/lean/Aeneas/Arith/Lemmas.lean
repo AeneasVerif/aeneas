@@ -153,7 +153,7 @@ theorem Int.gcd_add_mul_self (a b k : ℤ) :
         apply dvd_add <;> simp [*]
       simp only [neg_mul, add_neg_cancel_right] at h
       apply h
-    apply Int.dvd_gcd <;> assumption
+    apply Int.dvd_coe_gcd <;> assumption
 
 -- TODO: this should be in mathlib
 theorem Int.gcd_mod_same {a b : ℤ} :

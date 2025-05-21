@@ -8,6 +8,7 @@ import Aeneas.Nat
 import Aeneas.SimpLists.Init
 import Aeneas.Std.Primitives
 import Aeneas.SimpLists.SimpLists
+import Aeneas.SimpScalar.SimpScalar
 
 namespace List -- We do not use the `Aeneas` namespace on purpose
 
@@ -22,6 +23,8 @@ attribute [scalar_tac_simps]
 attribute [simp_lists_simps]
   List.append_nil List.nil_append List.take_of_length_le
   and_true true_and implies_true
+
+attribute [simp_lists_simps] getElem?_eq_none
 
 def set_opt (l : List α) (i : Nat) (x : Option α) : List α :=
   match l with
@@ -148,6 +151,8 @@ theorem getElem!_append_right [Inhabited α] (l0 l1 : List α) (i : Nat)
   have := @getElem?_append_right _ l0 l1 i h
   simp_all
 
+attribute [simp_lists_simps] getElem?_append_left getElem?_append_right
+
 theorem drop_length_is_le (i : Nat) (ls : List α) : (ls.drop i).length ≤ ls.length :=
   match ls with
   | [] => by simp
@@ -224,7 +229,7 @@ theorem getElem!_drop [Inhabited α] (i : Nat) (j : Nat) (ls : List α) :
   have := @getElem?_drop _ ls i j
   simp_all
 
-attribute [scalar_tac_simps] getElem?_take_eq_none getElem?_take_of_lt
+attribute [simp_lists_simps] getElem?_take_eq_none getElem?_take_of_lt getElem?_drop
 
 @[simp, simp_lists_simps]
 theorem getElem!_take_of_lt [Inhabited α] (i : Nat) (j : Nat) (ls : List α)
@@ -540,7 +545,48 @@ section -- setSlice!
     simp only [List.setSlice!, List.append_assoc, List.map_append, List.map_take, List.map_drop,
       List.length_map]
 
+  theorem setSlice!_getElem?_prefix {α}
+    (s : List α) (s' : List α) (i j : ℕ) (h : j < i) :
+    (s.setSlice! i s')[j]? = s[j]? := by
+    simp only [setSlice!, append_assoc]
+    -- TODO: simp_lists +split
+    by_cases hi: i ≤ s.length <;> simp_lists
+    by_cases hj: s.length ≤ j <;> simp_lists
+
+  @[simp_lists_simps]
+  theorem setSlice!_getElem?_middle {α}
+    (s : List α) (s' : List α) (i j : ℕ) (h : i ≤ j ∧ j - i < s'.length ∧ j < s.length) :
+    (s.setSlice! i s')[j]? = s'[j - i]? := by
+    simp only [setSlice!, append_assoc]
+    simp_lists
+    by_cases h1: s.length ≤ j + s'.length <;> simp (disch := omega) only [inf_of_le_left,
+      getElem?_eq_getElem]
+
+  theorem setSlice!_getElem?_suffix {α}
+    (s : List α) (s' : List α) (i j : ℕ) (h : i + s'.length ≤ j) :
+    (s.setSlice! i s')[j]? = s[j]? := by
+    simp only [setSlice!, append_assoc]
+    simp_lists
+    by_cases h1: j < s.length <;> simp_lists
+    simp (disch := omega) only [inf_of_le_left, min_self, add_add_tsub_cancel,
+      add_tsub_cancel_of_le, getElem?_eq_getElem]
+
+  @[simp_lists_simps]
+  theorem setSlice!_getElem?_same {α} (s : List α) (s' : List α) (i j : ℕ)
+    (h : j < i ∨ i + s'.length ≤ j) :
+    (s.setSlice! i s')[j]? = s[j]? := by
+    cases h <;> simp_lists [setSlice!_getElem?_prefix, setSlice!_getElem?_suffix]
+
 end -- setSlice!
+
+@[simp, simp_lists_simps]
+theorem setSlice!_drop {α} (l : List α) (i : ℕ) :
+  l.setSlice! i (List.drop i l) = l := by
+  simp [List.eq_iff_forall_eq_getElem?]
+  intro j
+  by_cases h0: j < i <;> simp_lists
+  by_cases h1: j < l.length <;> simp_lists
+  simp_scalar
 
 @[simp_lists_simps]
 def Inhabited_getElem_eq_getElem! {α} [Inhabited α] (l : List α) (i : ℕ) (hi : i < l.length) :
