@@ -587,7 +587,7 @@ theorem core.slice.Slice.copy_from_slice.progress_spec (copyInst : core.marker.C
 @[simp, scalar_tac_simps, simp_scalar_simps, simp_lists_simps]
 theorem Slice.setSlice!_length {α : Type u} (s : Slice α) (i : ℕ) (s' : List α) :
   (s.setSlice! i s').length = s.length := by
-  simp only [Slice.length, Slice.setSlice!, List.setSlice!_length]
+  simp only [Slice.length, Slice.setSlice!, List.length_setSlice!]
 
 
 end Aeneas.Std
