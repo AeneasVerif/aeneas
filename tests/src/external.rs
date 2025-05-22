@@ -1,4 +1,3 @@
-//@ charon-args=--no-code-duplication
 //@ [!borrow-check] aeneas-args=-state -split-files
 //@ [!borrow-check] aeneas-args=-test-trans-units
 //@ [coq,fstar] subdir=misc

@@ -1,4 +1,3 @@
-//@ charon-args=--no-code-duplication
 //@ [!borrow-check] aeneas-args=-test-trans-units
 //@ [coq,fstar] subdir=misc
 //! The examples from the ICFP 2022 submission, all in one place.
