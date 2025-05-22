@@ -106,22 +106,6 @@ def UScalar.add {ty} (x y : UScalar ty) : ITree (UScalar ty) :=
 instance {ty} : HAdd (UScalar ty) (UScalar ty) (ITree (UScalar ty)) where
   hAdd x y := UScalar.add x y
 
-def mul2_add1 (x : U32) : ITree U32 :=
-  do
-  let i ← UScalar.add x x -- TODO: the + notation doesn't work??
-  UScalar.add i 1#u32
-
-def choose {T : Type} (b : Bool) (x : T) (y : T) : ITree (T × (T → (T × T))) :=
-  if b
-  then let back := fun ret => (ret, y)
-       pure (x, back)
-  else let back := fun ret => (x, ret)
-       pure (y, back)
-
-def loop : ITree Unit := do
-  loop
-partial_fixpoint
-
 structure State where
   -- TODO: want something similar to PulseCore, that is:
   -- - a heap
@@ -265,12 +249,6 @@ axiom read_ptr.spec {α} {x : α} {p : RawPtr} :
 axiom write_ptr.spec {α} {x x' : α} {p : RawPtr} :
   ⦃ p ~> x ⦄ (write_ptr p x') ⦃ fun _ => p ~> x' ⦄ {{ fun () => True }}
 
-noncomputable
-def incr_ptr (p : RawPtr) : ITree Unit := do
-  let x ← read_ptr p
-  let x1 ← UScalar.add x 1#u32
-  write_ptr p x1
-
 axiom ex : (α → HProp) → HProp
 
 -- TODO: notation for this (no idea how to make it work)
@@ -360,13 +338,6 @@ syntax "xor" : tactic
 macro_rules
 | `(tactic| xor) => `(tactic| first | apply or_entail | apply or_post)
 
-theorem mul2_add1.spec (x : U32) (h : 2 * x.val + 1 ≤ U32.max) :
-  pure_post (mul2_add1 x) (fun y => y.val = 2 * x.val + 1) := by
-  unfold mul2_add1
-  xprogress; intros i hi
-  xprogress; intros i' hi'
-  scalar_tac
-
 axiom pure.spec (x : α) : pure_post (pure x) (fun y => y = x)
 
 macro_rules
@@ -377,6 +348,23 @@ macro_rules
           | apply mut_to_raw.spec
           | apply end_mut_to_raw.spec
           | apply pure.spec)
+
+axiom entail_left (h : p ==> p0) : p ==> (p0 ∨ p1)
+axiom entail_right (h : p ==> p1) : p ==> (p0 ∨ p1)
+
+syntax "xleft" : tactic
+macro_rules
+| `(tactic| xleft) => `(tactic| apply entail_left)
+
+syntax "xright" : tactic
+macro_rules
+| `(tactic| xright) => `(tactic| apply entail_right)
+
+axiom entail_post (h0 : p0 ==> p0') (h1 : post p0' x p1 pp) : post p0 x p1 pp
+
+@[simp] axiom entail_refl : p ==> p
+
+axiom star_symm (x y : HProp) : x * y = y * x
 
 axiom ex_post {p0 : β → HProp} {p : α → HProp} {pp : α → Prop}
   (h1 : ∀ y, ⦃ p0 y ⦄ x ⦃ p ⦄ {{ pp }}) :
@@ -399,6 +387,41 @@ macro_rules
 | `(tactic| xsimp) =>
   `(tactic| (repeat (first | xintro | xpure)); simp -failIfUnchanged [*])
 
+/-! # Example of Functions -/
+
+def mul2_add1 (x : U32) : ITree U32 :=
+  do
+  let i ← UScalar.add x x -- TODO: the + notation doesn't work??
+  UScalar.add i 1#u32
+
+def choose {T : Type} (b : Bool) (x : T) (y : T) : ITree (T × (T → (T × T))) :=
+  if b
+  then let back := fun ret => (ret, y)
+       pure (x, back)
+  else let back := fun ret => (x, ret)
+       pure (y, back)
+
+def loop : ITree Unit := do
+  loop
+partial_fixpoint
+
+noncomputable
+def incr_ptr (p : RawPtr) : ITree Unit := do
+  let x ← read_ptr p
+  let x1 ← UScalar.add x 1#u32
+  write_ptr p x1
+
+/-! # Verification of Pure Functions -/
+
+theorem mul2_add1.spec (x : U32) (h : 2 * x.val + 1 ≤ U32.max) :
+  pure_post (mul2_add1 x) (fun y => y.val = 2 * x.val + 1) := by
+  unfold mul2_add1
+  xprogress; intros i hi
+  xprogress; intros i' hi'
+  scalar_tac
+
+/-! # Verification of an unsafe function -/
+
 def incr_ptr.spec (p : RawPtr) (x : U32) (h : x.val < U32.max) :
   ⦃ p ~> x ⦄
   (incr_ptr p)
@@ -410,8 +433,6 @@ def incr_ptr.spec (p : RawPtr) (x : U32) (h : x.val < U32.max) :
   xprogress
   xsimp
   tauto
-
-
 
 /-
 # Conversion from mutable borrow to raw pointer
@@ -468,17 +489,6 @@ fn incr_disj(x : &mut u32, y : &mut u32) {
   incr_eq_or_disj(xp, yp);
 }
 -/
-
-axiom entail_left (h : p ==> p0) : p ==> (p0 ∨ p1)
-axiom entail_right (h : p ==> p1) : p ==> (p0 ∨ p1)
-
-syntax "xleft" : tactic
-macro_rules
-| `(tactic| xleft) => `(tactic| apply entail_left)
-
-syntax "xright" : tactic
-macro_rules
-| `(tactic| xright) => `(tactic| apply entail_right)
 
 def eq_or_disj {α} (xp yp : RawPtr) (v : α)
   (updt : Bool) -- Did we perform an update to yp or not? In the case of slices: we would use an index
@@ -551,10 +561,6 @@ def incr_disj (x y : U32) : ITree (U32 × U32) := do
   let x1 ← end_mut_to_raw xp
   pure (x1, y1)
 
-axiom entail_post (h0 : p0 ==> p0') (h1 : post p0' x p1 pp) : post p0 x p1 pp
-
-@[simp] axiom entail_refl : p ==> p
-
 theorem incr_eq_or_disj.spec (x y : RawPtr) (v : U32) (hv : v.val < U32.max) :
   ⦃ eq_or_disj x y v false ⦄
   (incr_eq_or_disj x y)
@@ -587,8 +593,6 @@ theorem incr_eq.spec (x : U32) (hv : x.val < U32.max) :
   xprogress
   scalar_tac
 
-axiom star_symm (x y : HProp) : x * y = y * x
-
 theorem incr_disj.spec (x y : U32) (hv : x.val < U32.max) :
   (incr_disj x y) {{ fun (_, y') => y'.val = x.val + 1 }} := by
   unfold incr_disj
@@ -610,5 +614,143 @@ theorem incr_disj.spec (x y : U32) (hv : x.val < U32.max) :
   xprogress
   xprogress
   scalar_tac
+
+/-! # Raw pointer to borrow
+
+## Rust
+struct CustomBox<T> {
+  p: *T,
+}
+
+fn CustomBox::new<T>(x : T) -> CustomBox<T> {
+  let b = RawPtr::new_uninitialized();
+  *b = move x;
+}
+
+fn CustomBox::deref_mut<'a>(b : &'a mut CustomBox<T>) -> &'a mut T {
+  &mut *b.p
+}
+
+## Lean
+
+structure CustomBox T where
+  p : RawPtr T
+
+def CustomBox.new (x : T) : ITree (CustomBox T) := do
+  let b ← new_uninitialized T
+  write_ptr b x
+
+def CustomBox.deref_mut (b : CustomBox T) : ITree (CustomBox T) := do
+  /- The symbolic execution of `&mut *x` is subtle.
+
+     We likely have to introduce an abstraction with no input borrows (i.e.,
+     an abstraction which can live as long as we want), and end it eagerly
+     when the borrow becomes unusable (it is moved to an anonymous value).
+
+     When creating the borrow, we probably just want a `read_ptr` but which takes
+     ownership (so a `move_ptr`?), and when ending the borrow we probably just want
+     to use a `write_ptr`.
+  -/
+  -- ⦃ box b x ⦄ ↔ ⦃ ptr b.p ~> x ⦄
+  let p ← move_ptr b.p
+  -- TODO: we probably need a magic wand? Or not?
+  -- Which guarantees are enforced by the translation?
+  -- ⦃ p ~> ∅ ⦄ ∧ p = x
+  pure (p,
+    fun x => do
+    -- ⦃ p ~> ∅ ⦄
+    write_ptr b.p x
+    -- ⦃ p ~> x ⦄
+    )
+
+-/
+
+
+
+/- # Shallow view of a data-type
+
+# In Rust
+
+#[aeneas::type_view(T)] // or: #[aeneas::type_view(ShallowBox<T>)]
+struct CustomBox<T> {
+  p: *T, // fields must be private
+}
+
+fn CustomBox::new<T>(x : T) -> CustomBox<T> {
+  let b = RawPtr::new_uninitialized();
+  *b = move x;
+}
+
+fn CustomBox::deref_mut(b : &mut CustomBox<T>) -> &mut T {
+  &mut *x
+}
+
+# In Lean
+
+## Deep Model:
+
+struct Deep.CustomBox T where
+  p : RawPtr T
+
+## Shallow Model:
+
+abbrev Shallow.CustomBox T := T
+
+## Deep Functions
+
+def CustomBox.new {T} (x : T) : ITree (Shallow.CustomBox T) := do
+  -- ⦃ ∅ ⦄
+  let b ← new_uninitialized T
+  -- ⦃ ptr b ~> ∅ ⦄
+  write_ptr b x
+  -- ⦃ ptr b ~> x ⦄
+  let bv ← CustomBox.get_view b -- the view is user defined
+  -- ⦃ ptr b ~> x * ⌜bv = x⌝⦄
+  close_inv CustomBox.inv b bv -- the inv is user defined
+  -- ⦃ ⌜bv = x⌝ ⦄
+  pure bv
+
+-/
+
+
+/-
+# Self-Ref
+
+use std::ptr::NonNull;
+
+// Invariant:
+// ⦃ alloc ~> ∅ *  ⦄
+struct S {
+    /// Uniqueness of pointer enforced if Box<[u32]>?
+    /// Being debated...
+    alloc : NonNull<[u32]>,
+    /// & *self.alloc mut [u32]
+    x : *mut [u32],
+}
+
+fn alloc() -> S {
+    let b = Box::new([0; 32];
+    // b -> [0; 32]
+    let alloc = Box::into_non_null(move b);
+    // ⦃ alloc ~> b ⦄
+    let x = unsafe { &raw mut *alloc.as_ptr() };
+    // ⦃ alloc ~> ∅ * x ~> b.to_slice ⦄
+    S { alloc, x }
+}
+
+fn free(s : S) {
+    unsafe {
+        Box::from_non_null(s.alloc);
+    }
+}
+
+fn main() {
+    let mut s = alloc();
+    let p = unsafe { s.x.as_mut() };
+
+    println!("Hello, world!");
+}
+
+-/
 
 end Aeneas
