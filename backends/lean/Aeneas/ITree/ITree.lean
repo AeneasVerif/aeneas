@@ -8,14 +8,37 @@ inductive Action : (α : Type) -> Type 2 where
 --| ReadPtr (addr : Nat) (α : Type) : Action α
 --| WritePtr (addr : Nat) {α : Type} (x : α) : Action Unit
 
+/-
+Comes from Coq:
+inductive itree (R : Type) (E : Type -> Type) : Type where
+  | RetF (r : R)
+  | TauF (t : itree R E)
+  | VisF {X : Type} (e : E X) (k : X -> itree R E)
+-/
+
+namespace Test
+  inductive Tree (α : Type) : Type 1 where
+  | Ret (x : α)
+  | Act {β : Type} (f : β → Tree α)
+end Test
+
 inductive Tree (α : Type u) where
 | Ret (x: α)
 | Fail
-| Act {β : Type} (a : Action β) (f : β → Tree α)
+| Act {β : Type} (a : Action β) (f : β → Tree α) -- TODO: the continuation introduces to universe issues
 | Div
 -- Missing: Par (from PulseCore paper)
 -- Missing: Tau (necessary?)
 
+/-namespace test
+  inductive itreeAux (R : Type) (E : Type -> Type) (itree : Type) : Type where
+  | RetF (r : R)
+  | TauF (t : itree)
+  | VisF {X : Type} (e : E X) (k : X -> itree)
+
+end test-/
+
+-- TODO: there are universe issues
 def ITree (α : Type u) := ℕ → Tree α
 
 open Tree
@@ -109,8 +132,25 @@ instance {ty} : HAdd (UScalar ty) (UScalar ty) (ITree (UScalar ty)) where
 structure State where
   -- TODO: want something similar to PulseCore, that is:
   -- - a heap
-  -- - a random tape
 
+/- TODO: we should define the semantics through an inductive, it is more natural
+   to model non-deterministic behavior and for doing proofs. It would be nice to
+   be able to run tests, though.
+
+   TODO: we need to think about a good model for the heap. RustBelt is interesting
+   in that regard. Standard way: map from addresses to blocks, which would probably
+   be arrays of (potentially non-initialized) values in our case.
+
+   Note that unless we use a deep-embedding I don't see how we can reason about `transmute`.
+   Then how do we add the ghost heap on top of that? How does Iris do that?
+
+   About the concurrent accesses: RustBelt does that (it seems standard?) by adding
+   a lock state to the locations, which looks like this (`reading n` means `n` threads
+   are doing a non-atomic read while `writing` means a thread is doing a non-atomic write;
+   the default is `reading 0`; if attempting to write when the state is `reading (succ n)`
+   then we get stuck):
+   `inductive LockState where | reading : ℕ → LockState | writing`
+-/
 def run (s : State) (fuel : ℕ) (x : ITree α) : Result (State × α) :=
   match x fuel with
   | .Ret x => .ok (s, x)
@@ -201,8 +241,8 @@ def unexpMWand : Unexpander | `($_ $x $y) => `($x -* $y) | _ => throw ()
 
 example (x y : HProp) : HProp := x -* y
 
-def RawPtr := ℕ
-axiom ptr {α} : RawPtr → α → HProp
+def RawPtr (_ : Type) := ℕ
+axiom ptr {α} : RawPtr α → α → HProp
 
 macro:max x:term " ~> " y:term : term => `(ptr $x $y)
 
@@ -210,14 +250,14 @@ open Lean.PrettyPrinter in
 @[app_unexpander ptr]
 def unexpPtr : Unexpander | `($_ $x $y) => `($x ~> $y) | _ => throw ()
 
-example (x y : RawPtr) (xv yv : ℕ) : HProp := (x ~> xv) * (y ~> yv)
+example (x y : RawPtr ℕ) (xv yv : ℕ) : HProp := (x ~> xv) * (y ~> yv)
 
 /- fn mut_to_raw<T>(x : &mut T) -> *T -/
-axiom mut_to_raw {α} (x : α) : ITree (RawPtr)
+axiom mut_to_raw {α} (x : α) : ITree (RawPtr α)
 axiom mut_to_raw.spec {α} (x : α) : ⦃ ∅ ⦄ (mut_to_raw x) ⦃ fun p => p ~> x ⦄ {{ fun _ => True }}
 
-axiom end_mut_to_raw {α} (p : RawPtr) : ITree α
-axiom end_mut_to_raw.spec {α : Type} {x : α} (p : RawPtr) :
+axiom end_mut_to_raw {α} (p : RawPtr α) : ITree α
+axiom end_mut_to_raw.spec {α : Type} {x : α} (p : RawPtr α) :
   ⦃ p ~> x ⦄ (end_mut_to_raw p) ⦃ fun _ => ∅ ⦄ {{ fun x' => x' = x }}
 
 theorem post_bind {α β : Type} {F : HProp} {x : ITree α}
@@ -240,13 +280,13 @@ theorem post_ret {x : ITree α} {p0 p0' : HProp} {p1' : α → HProp} {pp : α �
 | `(tactic| xprogress) =>
   `(tactic| (first | apply post_bind | apply post_ret); xdischarge)-/
 
-axiom read_ptr {α : Type} (p : RawPtr) : ITree α
-axiom write_ptr {α : Type} (p : RawPtr) (x : α) : ITree Unit
+axiom read_ptr {α : Type} (p : RawPtr α) : ITree α
+axiom write_ptr {α : Type} (p : RawPtr α) (x : α) : ITree Unit
 
-axiom read_ptr.spec {α} {x : α} {p : RawPtr} :
+axiom read_ptr.spec {α} {x : α} {p : RawPtr α} :
   ⦃ p ~> x ⦄ (read_ptr p) ⦃ fun _ => p ~> x ⦄ {{ fun x' => x' = x }}
 
-axiom write_ptr.spec {α} {x x' : α} {p : RawPtr} :
+axiom write_ptr.spec {α} {x x' : α} {p : RawPtr α} :
   ⦃ p ~> x ⦄ (write_ptr p x') ⦃ fun _ => p ~> x' ⦄ {{ fun () => True }}
 
 axiom ex : (α → HProp) → HProp
@@ -285,7 +325,7 @@ axiom entail_pure_sep (h : pp ∧ entail p0 p1) : entail p0 (⌜pp⌝ * p1)
 @[simp] axiom emp_entail_emp : ∅ ==> ∅
 
 @[simp]
-axiom entail_ptr (p : RawPtr) (x y : α) : entail (p ~> x) (p ~> y) ↔  x = y
+axiom entail_ptr (p : RawPtr α) (x y : α) : entail (p ~> x) (p ~> y) ↔  x = y
 
 syntax "xprogress" : tactic
 syntax "xlookup" : tactic
@@ -406,7 +446,7 @@ def loop : ITree Unit := do
 partial_fixpoint
 
 noncomputable
-def incr_ptr (p : RawPtr) : ITree Unit := do
+def incr_ptr (p : RawPtr U32) : ITree Unit := do
   let x ← read_ptr p
   let x1 ← UScalar.add x 1#u32
   write_ptr p x1
@@ -422,7 +462,7 @@ theorem mul2_add1.spec (x : U32) (h : 2 * x.val + 1 ≤ U32.max) :
 
 /-! # Verification of an unsafe function -/
 
-def incr_ptr.spec (p : RawPtr) (x : U32) (h : x.val < U32.max) :
+def incr_ptr.spec (p : RawPtr U32) (x : U32) (h : x.val < U32.max) :
   ⦃ p ~> x ⦄
   (incr_ptr p)
   ⦃ fun _ => ex (fun (x' : U32) => ⌜x'.val = x.val + 1⌝ * p ~> x') ⦄ {{ fun () => True }}
@@ -490,7 +530,7 @@ fn incr_disj(x : &mut u32, y : &mut u32) {
 }
 -/
 
-def eq_or_disj {α} (xp yp : RawPtr) (v : α)
+def eq_or_disj {α} (xp yp : RawPtr α) (v : α)
   (updt : Bool) -- Did we perform an update to yp or not? In the case of slices: we would use an index
   : HProp :=
   -- TODO: we need better notations for this
@@ -505,7 +545,7 @@ def eq_or_disj {α} (xp yp : RawPtr) (v : α)
     -- Disjoint
     ∨ (ex (fun (yv : α) => (xp ~> v) * (yp ~> yv)))
 
-theorem read_ptr.spec' {α} {v : α} {xp yp : RawPtr} :
+theorem read_ptr.spec' {α} {v : α} {xp yp : RawPtr α} :
   ⦃ eq_or_disj xp yp v false ⦄ (read_ptr xp) ⦃ fun _ => eq_or_disj xp yp v false ⦄ {{ fun x => x = v }} := by
   simp [eq_or_disj]
   xor
@@ -519,7 +559,7 @@ theorem read_ptr.spec' {α} {v : α} {xp yp : RawPtr} :
     xintro
     xframe
 
-theorem write_ptr.spec' {α} {v v' : α} {xp yp : RawPtr} :
+theorem write_ptr.spec' {α} {v v' : α} {xp yp : RawPtr α} :
   ⦃ eq_or_disj xp yp v false ⦄ (write_ptr yp v') ⦃ fun _ => eq_or_disj xp yp v' true ⦄ {{ fun () => True }} := by
   simp [eq_or_disj]
   xor
@@ -537,11 +577,11 @@ theorem eq_entail_eq_or_disj : (p ~> v) ==> eq_or_disj p p v false := by sorry
 theorem disj_entail_eq_or_disj : ((xp ~> xv) * (yp ~> yv)) ==> eq_or_disj xp yp xv false := by sorry
 
 theorem eq_or_disj_entail_eq : (eq_or_disj xp xp xv true) ==> (xp ~> xv) := by sorry
-theorem eq_or_disj_entail_disj {α : Type} {yv : α} (xp yp : RawPtr) :
+theorem eq_or_disj_entail_disj {α : Type} {yv : α} (xp yp : RawPtr α) :
   (eq_or_disj xp yp yv true) ==> (ex fun (xv : α) => (xp ~> xv) * (yp ~> yv)) := by sorry
 
 noncomputable
-def incr_eq_or_disj (x y : RawPtr) : ITree Unit := do
+def incr_eq_or_disj (x y : RawPtr U32) : ITree Unit := do
   let v ← read_ptr x
   let v1 ← UScalar.add v 1#u32
   write_ptr y v1
@@ -561,7 +601,7 @@ def incr_disj (x y : U32) : ITree (U32 × U32) := do
   let x1 ← end_mut_to_raw xp
   pure (x1, y1)
 
-theorem incr_eq_or_disj.spec (x y : RawPtr) (v : U32) (hv : v.val < U32.max) :
+theorem incr_eq_or_disj.spec (x y : RawPtr U32) (v : U32) (hv : v.val < U32.max) :
   ⦃ eq_or_disj x y v false ⦄
   (incr_eq_or_disj x y)
   ⦃ fun _ => ex (fun (v' : U32) => (⌜v'.val = v.val + 1⌝) * (eq_or_disj x y v' true)) ⦄
@@ -633,14 +673,62 @@ fn CustomBox::deref_mut<'a>(b : &'a mut CustomBox<T>) -> &'a mut T {
 
 ## Lean
 
-structure CustomBox T where
-  p : RawPtr T
 
+
+-/
+
+axiom raw_to_mut (x : RawPtr α) : ITree (α × (α → ITree Unit)) -- TODO: the backward function is stateful!
+axiom raw_to_mut_back (x : RawPtr α) (v : α) : ITree Unit
+
+axiom raw_to_mut.spec {x : RawPtr α} :
+  ⦃ x ~> v ⦄
+  (raw_to_mut x)
+  ⦃ fun _ => ∅ ⦄
+  {{ fun (v', b) =>
+     v' = v ∧
+     ∀ v'', ⦃ ∅ ⦄ (b v'') ⦃ fun _ => x ~> v'' ⦄ {{ fun _ => True }} }}
+
+structure CustomBox (α : Type) where
+  p : RawPtr α
+
+axiom non_null : RawPtr α → HProp
+macro:max p:term " ~> " "∅" : term => `(non_null $p)
+
+-- TODO: line break?
+open Lean.PrettyPrinter in
+@[app_unexpander non_null]
+def unexpNonNull : Unexpander | `($_ $x) => `($x ~> ∅) | _ => throw ()
+
+axiom RawPtr.new_uninitialized (α : Type) : ITree (RawPtr α)
+axiom RawPtr.new_uninitialized.spec (α : Type) :
+  ⦃ ∅ ⦄
+  (RawPtr.new_uninitialized α)
+  ⦃ fun p => p ~> ∅ ⦄
+  {{ fun _ => True }}
+
+noncomputable
 def CustomBox.new (x : T) : ITree (CustomBox T) := do
-  let b ← new_uninitialized T
+  let b ← RawPtr.new_uninitialized T
   write_ptr b x
+  pure ⟨ b ⟩
 
-def CustomBox.deref_mut (b : CustomBox T) : ITree (CustomBox T) := do
+-- TODO: is it really what we want?
+axiom move_ptr {α : Type} (p : RawPtr α) : ITree α
+axiom move_ptr.spec {α : Type} {v : α} (p : RawPtr α) :
+  ⦃ p ~> v ⦄
+  (move_ptr p)
+  ⦃ fun _ => ∅ ⦄
+  {{ fun v' => v' = v }}
+
+/- TODO: universe issues with the backward functions
+   The problem is that `T` has type `Type` while `T → ITree (CustomBox T)` has type `Type 2`,
+   and `Bind.bind` only allows manipulating types belonging to the same universe.
+   What should we do? It seems to work if we introduce our own, custom notation for monadic
+   let-bindings (see below). In particular, it should be possible to do something quite simple as we
+   don't need the full power of the monadic notations of Lean.
+ -/
+noncomputable
+def CustomBox.deref_mut' {T : Type} (b : CustomBox T) : ITree (T × (T → ITree (CustomBox T))) := do
   /- The symbolic execution of `&mut *x` is subtle.
 
      We likely have to introduce an abstraction with no input borrows (i.e.,
@@ -652,20 +740,58 @@ def CustomBox.deref_mut (b : CustomBox T) : ITree (CustomBox T) := do
      to use a `write_ptr`.
   -/
   -- ⦃ box b x ⦄ ↔ ⦃ ptr b.p ~> x ⦄
-  let p ← move_ptr b.p
-  -- TODO: we probably need a magic wand? Or not?
-  -- Which guarantees are enforced by the translation?
-  -- ⦃ p ~> ∅ ⦄ ∧ p = x
-  pure (p,
-    fun x => do
+  let (p : T) ← move_ptr b.p
+  let back := fun x => do
     -- ⦃ p ~> ∅ ⦄
     write_ptr b.p x
     -- ⦃ p ~> x ⦄
-    )
+    pure b
+  -- TODO: we probably need a magic wand? Or not?
+  -- Which guarantees are enforced by the translation?
+  -- ⦃ p ~> ∅ ⦄ ∧ p = x
+  pure (p, back)
 
--/
 
+-- We can also use a different arrow, such as: ⇐
+-- If we use ← we may want to use a scoped notation to prevent conflicts.
+macro:max "let " x:ident " ← " e:term "; " f:term : term => `(bind $e (fun $x => $f))
 
+noncomputable
+def test (px py : RawPtr ℕ) : ITree ℕ :=
+  let x ← read_ptr px;
+  let y ← read_ptr py;
+  if x < y then
+    let x' ← pure x;
+    pure x'
+  else
+    pure y
+
+-- TODO: unexpander
+#print test
+
+noncomputable
+def CustomBox.deref_mut {T : Type} (b : CustomBox T) : ITree (T × (T → ITree (CustomBox T))) :=
+  /- The symbolic execution of `&mut *x` is subtle.
+
+     We likely have to introduce an abstraction with no input borrows (i.e.,
+     an abstraction which can live as long as we want), and end it eagerly
+     when the borrow becomes unusable (it is moved to an anonymous value).
+
+     When creating the borrow, we probably just want a `read_ptr` but which takes
+     ownership (so a `move_ptr`?), and when ending the borrow we probably just want
+     to use a `write_ptr`.
+  -/
+  -- ⦃ box b x ⦄ ↔ ⦃ ptr b.p ~> x ⦄
+  let p ← move_ptr b.p;
+  let back := fun x => do
+    -- ⦃ p ~> ∅ ⦄
+    write_ptr b.p x
+    -- ⦃ p ~> x ⦄
+    pure b
+  -- TODO: we probably need a magic wand? Or not?
+  -- Which guarantees are enforced by the translation?
+  -- ⦃ p ~> ∅ ⦄ ∧ p = x
+  pure (p, back)
 
 /- # Shallow view of a data-type
 
@@ -750,6 +876,35 @@ fn main() {
 
     println!("Hello, world!");
 }
+
+-/
+
+/-! # TODO: Interior Mutability (Cell)
+
+-/
+
+/-! # TODO: Higher-Order Predicates (`Rc<RefCell<T>>`)
+
+-/
+
+/-! # TODO: Transmute?
+This is hard because we likely need a deep-embedding of the types, as well as layout information,
+so I'm not sure we can do anything about it. For now, the use-case I have in mind is the custom
+allocator, even though in the case of cryptographic applications we might manage to make it work
+by allocating arrays of u8 then doing safer conversions. So maybe it's not really necessary for
+what we want to do.
+
+Remark: when using deep models and shallow models we might actually want to switch between a deep
+embedding and a shallow embedding, but: 1. reasoning about deep embeddings is really really hard,
+2. this is basically tantamount to redoing (something even bigger than) RustBelt, which is definitely
+not something we want to do.
+-/
+
+/-! # Concurrent semantics
+TODO: memory accesses?
+How to model the fact that we may want to access different *cells* of an array concurrently?
+One issue when reasoning about non-concurrent accesses is that reads and writes are non-atomic
+in many situations (for instance, reading from a structure). We need to model that!
 
 -/
 
