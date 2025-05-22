@@ -233,7 +233,7 @@ where
       else
         trace[ProgressStar] "onBind: all preconditions solved"
       /- Update the main goal, if necessary -/
-      let ids ← getIdsFromUsedTheorem name usedTheorem
+      let ids ← getIdsFromUsedTheorem name.eraseMacroScopes usedTheorem
       trace[ProgressStar] "onBind: ids from used theorem: {ids}"
       let mainGoal ← do mainGoal.mapM fun mainGoal => do
         if ¬ ids.isEmpty then renameInaccessibles mainGoal ids -- NOTE: Taken from renameI tactic
