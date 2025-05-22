@@ -10,19 +10,19 @@ set_option linter.unusedVariables false
 namespace hashmap
 
 /- [hashmap::AList]
-   Source: 'tests/src/hashmap.rs', lines 29:0-32:1 -/
+   Source: 'tests/src/hashmap.rs', lines 28:0-31:1 -/
 inductive AList (T : Type) where
 | Cons : Usize → T → AList T → AList T
 | Nil : AList T
 
 /- [hashmap::Fraction]
-   Source: 'tests/src/hashmap.rs', lines 45:0-48:1 -/
+   Source: 'tests/src/hashmap.rs', lines 44:0-47:1 -/
 structure Fraction where
   dividend : Usize
   divisor : Usize
 
 /- [hashmap::HashMap]
-   Source: 'tests/src/hashmap.rs', lines 51:0-63:1 -/
+   Source: 'tests/src/hashmap.rs', lines 50:0-62:1 -/
 structure HashMap (T : Type) where
   num_entries : Usize
   max_load_factor : Fraction

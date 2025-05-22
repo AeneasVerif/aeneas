@@ -4,7 +4,6 @@
 //@ [coq,fstar] subdir=hashmap
 //@ [lean] subdir=Hashmap
 //@ [fstar] aeneas-args=-decreases-clauses
-// Possible to add `--no-code-duplication` if we use the optimized MIR
 // TODO: reactivate -test-trans-units
 
 //! A hashmap implementation.
