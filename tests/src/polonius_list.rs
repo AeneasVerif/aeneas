@@ -1,4 +1,4 @@
-//@ charon-args=--polonius
+//@ charon-args=--rustc-arg=-Zpolonius
 //@ [!borrow-check] aeneas-args=-test-trans-units
 //@ [coq,fstar] subdir=misc
 #![allow(dead_code)]
