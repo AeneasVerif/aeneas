@@ -1055,8 +1055,6 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
     | AggregatedRawPtr _ ->
         craise __FILE__ __LINE__ span
           "Aggregated raw pointers are not supported yet"
-    | AggregatedClosure _ ->
-        craise __FILE__ __LINE__ span "Closures are not supported yet"
   in
   (v, ctx, cc_comp cc cf_compute)
 

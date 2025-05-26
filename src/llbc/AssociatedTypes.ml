@@ -223,7 +223,7 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
   | TRawPtr (ty, rkind) ->
       let ty = norm_ctx_normalize_ty ctx ty in
       TRawPtr (ty, rkind)
-  | TArrow binder | TClosure (_, _, _, binder) ->
+  | TArrow binder ->
       (* TODO: for now it works because we don't support predicates with
          bound regions. If we do support them, we probably need to do
          something smarter here. *)

@@ -175,7 +175,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
           span;
         (* We have nothing to do *)
         ()
-    | TArrow binder | TClosure (_, _, _, binder) ->
+    | TArrow binder ->
         (* TODO: *)
         cassert_opt_span __FILE__ __LINE__
           (binder.binder_regions = [])

@@ -586,7 +586,7 @@ let compute_regions_hierarchy_for_fun_call (span : Meta.span option)
      the erased regions. When doing so, in order to make sure there are
      no collisions, we also refresh the other regions. *)
   (* Decompose the signature *)
-  let { is_unsafe; is_closure; closure_info; generics; inputs; output } = sg in
+  let { is_unsafe; generics; inputs; output } = sg in
   (* Introduce the fresh regions *)
   let region_map = ref RegionId.Map.empty in
   let fresh_regions = ref RegionId.Set.empty in
@@ -701,9 +701,7 @@ let compute_regions_hierarchy_for_fun_call (span : Meta.span option)
       }
     in
 
-    let sg =
-      { is_unsafe; is_closure; closure_info; generics; inputs; output }
-    in
+    let sg = { is_unsafe; generics; inputs; output } in
     let regions_hierarchy =
       RegionsHierarchy.compute_regions_hierarchy_for_sig span crate fun_name sg
     in
