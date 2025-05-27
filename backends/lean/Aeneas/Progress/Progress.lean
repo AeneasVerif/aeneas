@@ -562,7 +562,7 @@ def evalProgress (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Ar
     withMainContext do
     trace[Progress] "trying to solve precondition: {← getMainGoal}"
     try
-      firstTac ([simpTac, simpTac, scalarTac] ++ byTac)
+      firstTac ([simpTac, scalarTac] ++ byTac)
       trace[Progress] "Precondition solved!"
     catch _ =>
       trace[Progress] "Precondition not solved")
