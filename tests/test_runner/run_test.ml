@@ -110,10 +110,15 @@ let run_aeneas (env : runner_env) (case : Input.t) (backend : Backend.t) =
 
 (* Run Charon on a specific input with the given options *)
 let run_charon (env : runner_env) (case : Input.t) =
+  let llbc_name =
+    Filename_unix.realpath env.llbc_dir ^ "/" ^ case.name ^ ".llbc"
+  in
   match case.kind with
   | SingleFile ->
       let args =
-        [ env.charon_path; "rustc"; "--dest"; env.llbc_dir; "--preset=aeneas" ]
+        [
+          env.charon_path; "rustc"; "--dest-file"; llbc_name; "--preset=aeneas";
+        ]
         @ case.charon_options
         @ [
             "--";
@@ -134,10 +139,8 @@ let run_charon (env : runner_env) (case : Input.t) =
       let generate =
         match Sys.getenv_opt "IN_CI" with
         | None -> true
-        | Some _ ->
-            (* Check if the llbc file already exists *)
-            let llbc_name = env.llbc_dir ^ "/" ^ case.name ^ ".llbc" in
-            not (Sys.file_exists llbc_name)
+        | Some _ -> not (Sys.file_exists llbc_name)
+        (* Check if the llbc file already exists *)
       in
       if generate then (
         let args =
@@ -146,8 +149,8 @@ let run_charon (env : runner_env) (case : Input.t) =
             "cargo";
             "--preset=aeneas";
             "--rustc-flag=--allow=unused";
-            "--dest";
-            Filename_unix.realpath env.llbc_dir;
+            "--dest-file";
+            llbc_name;
           ]
         in
         let args = List.append args case.charon_options in
