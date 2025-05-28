@@ -169,6 +169,10 @@ let builtin_types () : Pure.builtin_type_info list =
     mk_type "core::ops::range::Range"
       ~kind:(KStruct [ ("start", None); ("end", Some "end_") ])
       ();
+    (* RangeTo *)
+    mk_type "core::ops::range::RangeTo"
+      ~kind:(KStruct [ ("end", Some "end_") ])
+      ();
     (* Option
 
        This one is more custom because we use the standard "option" type from
@@ -517,6 +521,14 @@ let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
            [@T], [@T]>"
           ~extract_name:
             (Some "core::slice::index::SliceIndexRangeFromUsizeSlice") ();
+        fmt
+          "core::slice::index::private_slice_index::Sealed<core::ops::range::RangeTo<usize>>"
+          ~extract_name:
+            (Some "core.slice.index.private_slice_index.SealedRangeToUsize") ();
+        fmt
+          "core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, \
+           [@T], [@T]>"
+          ~extract_name:(Some "core.slice.index.SliceIndexRangeToUsizeSlice") ();
         fmt "core::convert::AsMut<Box<@T>, @T>"
           ~filter:(Some [ true; false ])
           ();
@@ -985,6 +997,20 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
          mk_fun "core::array::{core::default::Default<[@T; @]>}::default"
            ~extract_name:(Some "core.default.DefaultArray.default") ();
        ]
+      (* SliceIndex for RangeTo and Slice *)
+      @ mk_funs
+          (fun f ->
+            "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, \
+             [@T], [@T]>}::" ^ f)
+          (fun f -> "core.slice.index.SliceIndexRangeToUsizeSlice." ^ f)
+          [
+            (true, "get");
+            (true, "get_mut");
+            (true, "get_unchecked");
+            (true, "get_unchecked_mut");
+            (true, "index");
+            (true, "index_mut");
+          ]
       (* PartialEq, Eq, PartialOrd, Ord *)
       @ mk_scalar_funs
           (fun ty fun_name ->
