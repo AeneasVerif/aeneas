@@ -100,20 +100,8 @@ def condSimpTac
     | .wildcard => pure none
     | .wildcard_dep => throwError "{tacName} does not support using location `Utils.Location.wildcard_dep`"
     | .targets hyps _ => pure (some hyps)
-  /- Small helper.
-
-     We use it to refresh the fvar ids after simplifying some assumptions.
-     Whenever we apply a simplification to some assumptions, the only way to retrieve their new ids is
-     to go through the context and filter the ids which we know do not come from the duplicated
-     assumptions. -/
-  let refreshFVarIds (keep ignore : Std.HashSet FVarId) : TacticM (Array FVarId) := do
-    withMainContext do
-    let decls := (← (← getLCtx).getDecls).toArray
-    decls.filterMapM fun d => do
-      if (← inferType d.type).isProp ∧ (d.fvarId ∈ keep ∨ d.fvarId ∉ ignore)
-      then pure (some d.fvarId) else pure none
   let getOtherAsms (ignore : Std.HashSet FVarId) : TacticM (Array FVarId) :=
-    refreshFVarIds Std.HashSet.emptyWithCapacity ignore
+    Utils.refreshFVarIds Std.HashSet.emptyWithCapacity ignore
   /- First duplicate the propositions in the context: we will need the original ones (which mention
      integers rather than bit-vectors) for `scalar_tac` to succeed when doing the conditional rewritings. -/
   let (oldAsms, newAsms) ← Utils.duplicateAssumptions toDuplicate
@@ -140,9 +128,9 @@ def condSimpTac
   let notLocAsmsSet := Std.HashSet.ofArray notLocAsms
   let nloc ← do
     match loc with
-    | .wildcard => pure (Utils.Location.targets (← refreshFVarIds oldAsmsSet notLocAsmsSet) true) --, ← refreshFVarIds oldAsmsSet notLocAsmsSet)
+    | .wildcard => pure (Utils.Location.targets (← Utils.refreshFVarIds oldAsmsSet notLocAsmsSet) true)
     | .wildcard_dep => throwError "Unreachable"
-    | .targets hyps type => pure (Utils.Location.targets (← refreshFVarIds (Std.HashSet.ofArray hyps) notLocAsmsSet) type) --, ← refreshFVarIds oldAsmsSet notLocAsmsSet)
+    | .targets hyps type => pure (Utils.Location.targets (← Utils.refreshFVarIds (Std.HashSet.ofArray hyps) notLocAsmsSet) type)
   condSimpTacSimp simpConfig args nloc additionalSimpThms true
   if (← getUnsolvedGoals) == [] then return
   /- Clear the additional assumptions -/

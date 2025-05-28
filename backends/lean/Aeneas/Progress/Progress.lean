@@ -324,20 +324,30 @@ def progressWith (fExpr : Expr) (th : Expr)
        because by solving the preconditions we may have instantiated meta-variables.
        We also simplify the goal again (to simplify let-bindings, etc.) -/
     setGoals curGoals
-    match curGoals with
-    | [] => pure ()
-    | [ _ ] =>
-      -- Simplify the post-conditions
-      let args : SimpArgs :=
-        {simpThms := #[← progressPostSimpExt.getTheorems],
-         simprocs := #[← ScalarTac.scalarTacSimprocExt.getSimprocs]}
-      simpAt true { maxDischargeDepth := 0, failIfUnchanged := false }
-            args (.targets hPosts false)
-      -- Simplify the goal again
-      tryTac do
-      simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
-        {simpThms := #[← progressSimpExt.getTheorems], declsToUnfold := #[``pure]} (.targets #[] true)
-    | _ => throwError "Unexpected number of goals"
+    let hPosts ←
+      match curGoals with
+      | [] => pure hPosts
+      | [ _ ] =>
+        /- Compute the list of assumptions which are not post-conditions (we need this below to re-compute
+           the list of introduced post-conditions after the simplification) -/
+        let hPostsSet := Std.HashSet.ofArray hPosts
+        let nonHPosts ← Utils.refreshFVarIds Std.HashSet.emptyWithCapacity hPostsSet
+        let nonHPosts := Std.HashSet.ofArray nonHPosts
+        -- Simplify the post-conditions
+        let args : SimpArgs :=
+          {simpThms := #[← progressPostSimpExt.getTheorems],
+           simprocs := #[← ScalarTac.scalarTacSimprocExt.getSimprocs]}
+        simpAt true { maxDischargeDepth := 0, failIfUnchanged := false }
+              args (.targets hPosts false)
+        -- The introduced post-conditions may have been modified, so we need to recompute their fvar ids
+        let hPosts ← Utils.refreshFVarIds Std.HashSet.emptyWithCapacity nonHPosts
+        -- Simplify the goal again
+        tryTac do
+          simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
+            {simpThms := #[← progressSimpExt.getTheorems], declsToUnfold := #[``pure]} (.targets #[] true)
+        --
+        pure (hPosts)
+      | _ => throwError "Unexpected number of goals"
     let curGoals ← getUnsolvedGoals
     trace[Progress] "Main goal after simplifying the post-conditions and the target: {curGoals}"
     /- Update the list of goals -/
