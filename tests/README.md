@@ -45,7 +45,7 @@ The test runner supports setting several options for each test.
 - For crates, it will read the `crate_dir/aeneas-test-options` file.
 
 In both cases it supports the same options. Typical options are:
-- `charon-args=--polonius --opaque=crate::betree_utils`: pass these arguments to `charon`;
+- `charon-args=--rustc-arg=-Zpolonius --opaque=crate::betree_utils`: pass these arguments to `charon`;
 - `aeneas-args=-test-trans-units`: pass these arguments to `aeneas` for all backends;
 - `[fstar] aeneas-args=-decreases-clauses -template-clauses`: pass these arguments to `aeneas` for
   the `fstar` backend;

@@ -1466,7 +1466,7 @@ let type_keyword (span : Meta.span) =
 let name_last_elem_as_ident (span : Meta.span) (n : llbc_name) : string =
   match Collections.List.last n with
   | PeIdent (s, _) -> s
-  | PeImpl _ -> craise __FILE__ __LINE__ span "Unexpected"
+  | _ -> craise __FILE__ __LINE__ span "Unexpected"
 
 (** Helper
 

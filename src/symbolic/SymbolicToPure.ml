@@ -3054,7 +3054,7 @@ and translate_function_call_aux (call : S.call) (e : S.expression)
                   in
                   match Collections.List.last decl.item_meta.name with
                   | PeIdent (s, _) -> s
-                  | PeImpl _ ->
+                  | _ ->
                       (* We shouldn't get there *)
                       craise __FILE__ __LINE__ decl.item_meta.span "Unexpected")
             in
