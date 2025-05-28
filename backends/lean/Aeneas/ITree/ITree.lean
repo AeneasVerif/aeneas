@@ -151,7 +151,7 @@ structure State where
    then we get stuck):
    `inductive LockState where | reading : ℕ → LockState | writing`
 -/
-def run (s : State) (fuel : ℕ) (x : ITree α) : Result (State × α) :=
+def run {α} (s : State) (fuel : ℕ) (x : ITree α) : Result (State × α) :=
   match x fuel with
   | .Ret x => .ok (s, x)
   | .Fail => .fail .panic
@@ -190,7 +190,8 @@ def unexpPost : Unexpander | `($_ $p0 $x $p1 $p) => `(⦃ $p0 ⦄ $x ⦃ $p1 ⦄
 
 theorem UScalar.add_spec {ty : UScalarTy} (x y : UScalar ty)
   (h : x.val + y.val ≤ UScalar.max ty) :
-  (UScalar.add x y) {{ fun z => z.val = x.val + y.val }} := by
+  (UScalar.add x y) {{ fun z => z.val = x.val + y.val }} :=
+  by
   simp [add]
   have ⟨ z, h0, h1 ⟩ := Std.UScalar.add_spec h
   simp [HAdd.hAdd] at h0
@@ -252,7 +253,7 @@ def unexpPtr : Unexpander | `($_ $x $y) => `($x ~> $y) | _ => throw ()
 
 example (x y : RawPtr ℕ) (xv yv : ℕ) : HProp := (x ~> xv) * (y ~> yv)
 
-/- fn mut_to_raw<T>(x : &mut T) -> *T -/
+/- fn mut_to_raw<'a, T>(x : &'a mut T) -> *T -/
 axiom mut_to_raw {α} (x : α) : ITree (RawPtr α)
 axiom mut_to_raw.spec {α} (x : α) : ⦃ ∅ ⦄ (mut_to_raw x) ⦃ fun p => p ~> x ⦄ {{ fun _ => True }}
 
@@ -447,8 +448,8 @@ partial_fixpoint
 
 noncomputable
 def incr_ptr (p : RawPtr U32) : ITree Unit := do
-  let x ← read_ptr p
-  let x1 ← UScalar.add x 1#u32
+  let x0 ← read_ptr p
+  let x1 ← UScalar.add x0 1#u32
   write_ptr p x1
 
 /-! # Verification of Pure Functions -/
@@ -480,12 +481,16 @@ TODO: recheck, but I believe it is useful for instance for our allocation patter
 
 fn mut_to_raw<T>(x : &mut T) -> *T
 
-fn incr_borrow(x : &mut u32) {
-  let xp = mut_to_raw(x);
+fn incr_borrow<'a>(x : &'a mut u32) {
+  let xp = mut_to_raw(x); // there is a re-borrow here
   let xv = *xp;
   let xv = xv + 1;
   *xp = xv
-  // borrow expires here (actually, it expires later, but let's skip the details)
+  // re-borrow expires here
+}
+
+fn incr_borrow<'a>(x : &'a mut u32) {
+  *x += 1;
 }
 -/
 
@@ -512,10 +517,10 @@ theorem incr_borrow.spec (x : U32) (hx : x.val < U32.max) :
 # Equal or disjoint
 
 unsafe
-fn incr_eq_or_disj(x : *u32, y: *u32) {
-  let v = *x;
+fn incr_eq_or_disj(src : *u32, dst: *u32) {
+  let v = *src;
   let v1 = v + 1;
-  *y = v1;
+  *dst = v1;
 }
 
 fn incr_eq(x : &mut u32) {
@@ -528,6 +533,31 @@ fn incr_disj(x : &mut u32, y : &mut u32) {
   let yp = mut_to_raw(y);
   incr_eq_or_disj(xp, yp);
 }
+
+fn f(k : &mut Key) { ... }
+
+⦃ inv k ⦄
+f k
+⦃ inv k ⦄ {{ fun k => k = ... }}
+
+fn split(x: &mut [u32; 2]) -> (&mut u32, &mut u32) {
+  let p = as_raw(x);
+  let x0 = p;
+  let x1 = p + 1;
+  // p ~> ...
+  let x0 = as_mut x0;
+  // ∅
+  let x1 = as_mut x1;
+  (x0, x1)
+}
+
+let split (x : [u32; 2]) -> u32 × u32 × ((u32 → u32 → [u32; 2])) {
+  let p = as_raw x
+  let x0 = p
+  let x1 = p + 1
+  ...
+}
+
 -/
 
 def eq_or_disj {α} (xp yp : RawPtr α) (v : α)
@@ -726,7 +756,7 @@ axiom move_ptr.spec {α : Type} {v : α} (p : RawPtr α) :
    What should we do? It seems to work if we introduce our own, custom notation for monadic
    let-bindings (see below). In particular, it should be possible to do something quite simple as we
    don't need the full power of the monadic notations of Lean.
- -/
+
 noncomputable
 def CustomBox.deref_mut' {T : Type} (b : CustomBox T) : ITree (T × (T → ITree (CustomBox T))) := do
   /- The symbolic execution of `&mut *x` is subtle.
@@ -740,7 +770,7 @@ def CustomBox.deref_mut' {T : Type} (b : CustomBox T) : ITree (T × (T → ITree
      to use a `write_ptr`.
   -/
   -- ⦃ box b x ⦄ ↔ ⦃ ptr b.p ~> x ⦄
-  let (p : T) ← move_ptr b.p
+  let (p : T) ← move_ptr b.p -- TYPE MISMATCH: `p` has type `T : Type` but it is expected to have type `?m : Type 2`
   let back := fun x => do
     -- ⦃ p ~> ∅ ⦄
     write_ptr b.p x
@@ -750,7 +780,7 @@ def CustomBox.deref_mut' {T : Type} (b : CustomBox T) : ITree (T × (T → ITree
   -- Which guarantees are enforced by the translation?
   -- ⦃ p ~> ∅ ⦄ ∧ p = x
   pure (p, back)
-
+-/
 
 -- We can also use a different arrow, such as: ⇐
 -- If we use ← we may want to use a scoped notation to prevent conflicts.
@@ -907,5 +937,114 @@ One issue when reasoning about non-concurrent accesses is that reads and writes 
 in many situations (for instance, reading from a structure). We need to model that!
 
 -/
+
+/-! # Mutable Iterator for Doubly Linked List -/
+
+/-
+let p = null;
+if b {
+  p = malloc(...);
+}
+
+if b {
+  // p ~> x
+  free(p);
+}
+-/
+
+/- # Remarks:
+
+In RustBelt it is possible to change the type of a pointer by writing to it,
+provided the types have the same size. Is it really needed in our case?
+RustBelt needs it because it is a type system and needs to perform strong
+updates.
+For instance:
+
+let x = new(1);
+// x : own ∅
+*x = 1;
+// x : own int
+
+RustBelt: the rule `C-Reborrow` allows to reborrow a reference. Is it
+possible to reborrow "deeply"? i.e.: &mut **x
+I also note that *x is not a path in RustBelt.
+Answer: it works through rules `S-Deref-Bor-Mut` and others, which allow
+dereferencing a reference whose inner type is not `Copy`. But I don't fully
+understand this rule: it seems we have to end the reborrow at the same
+time as the outer borrow. I guess we have to reborrow the outer reference first?
+
+`Send` and `Sync`? Do we need to explicitly model and reason about them?
+
+`C-Split-Own` allows splitting a `p ◃ own ∏τ` to `∏ p.m ◃ own τ`
+
+`F-Equalize` is needed to typecheck the problem #3 from Niko Matsakis' blog
+post on non-lexical lifetimes. (this rule is probably very similar to merging
+region abstractions)
+
+What happens if we have a copiable stateful type, which contains a non copyable
+type? Something like `Rc<Box<T>>`? (is `Rc` copyable?)
+
+In RustBelt, ownership is thread relative. A type is `Send` if its predicate
+`OWN` does not depend on the thread id.
+
+**Timeless** propositions.
+
+About atomic vs non-atomic accesses in RustBelt (p134):
+by some protocol that is enforced by an invariant, and it is
+the invariant that owns the memory."
+
+The CAS rule only works for integers and locations, which makes sense.
+
+The product × uses separating conjunction (p135). It seems to imply that
+the cells are not adjacent in memory? But ok if used in conjunction with
+another type like `own`, which enforces that there exists a location `l`
+which maps to a list of values, which must thus be adjacent in memory.
+
+The `own` predicate uses the later modality.
+
+The lifetime logic provides a nice way of handling the shared references:
+shared references use fractional permission, and it can be annoying to keep
+track of the fractions of permissions; reasoning about the lifetime provides
+a more uniform treatment of that. But actually we need to use lifetime tokens
+to prove that a lifetime is still live, and those use fractional permissions
+I think. But yet, useful because we can split borrows into smaller borrows,
+while using the same lifetime for all of them.
+
+`LftL-Borrow`: there is a later on the left. A note says that otherwise there
+are unsoundnesses with impredicativity. (but of course ok if the predicate
+is timeless)
+
+`LftL-bor-split`: split a borrow of `P * Q` into borrows of `P` and `Q`.
+Useful for instance to split a slice.
+
+`LftL-Tok-Inter`: when is that necessary?
+
+`LftL-bor-acc`: the lifetime token is consumed (and lost)? But then it prevents
+us from using the viewshift in `LftL-Begin` to introduce a dead lifetime token?
+There is probably a way of reverting back (hidden in the rules for the α operator).
+
+Full borrows require higher-order ghost state (note 20 p149).
+
+What happens if we put a borrow in a `Mutex` or a `RwLock` (or a `Cell`)?
+
+The definition of atomic borrows (p150) contains an invariant.
+
+Namespaces.
+
+-/
+
+#check Vector.ofFn
+
+def MyArray.ofFn {n} (f : Fin n → α) : Array α := go 0 (Array.emptyWithCapacity n) where
+  /-- Auxiliary for `ofFn`. `ofFn.go f i acc = acc ++ #[f i, ..., f(n - 1)]` -/
+  @[semireducible] -- This is otherwise irreducible because it uses well-founded recursion.
+  go (i : Nat) (acc : Array α) : Array α :=
+    if h : i < n then go (i+1) (acc.push (f ⟨i, h⟩)) else acc
+  decreasing_by simp_wf; decreasing_trivial_pre_omega
+
+/- Testing what happens with recursive types -/
+inductive PtrTree (α : Type) where
+| Leaf (x : α)
+| Node (children : List (RawPtr (PtrTree α)))
 
 end Aeneas
