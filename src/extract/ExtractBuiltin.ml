@@ -525,6 +525,8 @@ let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
           ~extract_name:(Some "core.convert.FromBoxSliceVec")
           ~filter:(Some [ true; false ])
           ();
+        fmt "core::default::Default<[@T; @]>"
+          ~extract_name:(Some "core.default.DefaultArray") ();
       ]
   (* From<INT, bool> *)
   @ List.map
@@ -978,6 +980,8 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
            ~can_fail:false
            ~filter:(Some [ true; false ])
            ();
+         mk_fun "core::array::{core::default::Default<[@T; @]>}::default"
+           ~extract_name:(Some "core.default.DefaultArray.default") ();
        ]
       (* PartialEq, Eq, PartialOrd, Ord *)
       @ mk_scalar_funs

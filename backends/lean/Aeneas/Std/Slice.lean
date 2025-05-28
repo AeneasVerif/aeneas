@@ -589,5 +589,4 @@ theorem Slice.setSlice!_length {α : Type u} (s : Slice α) (i : ℕ) (s' : List
   (s.setSlice! i s').length = s.length := by
   simp only [Slice.length, Slice.setSlice!, List.length_setSlice!]
 
-
 end Aeneas.Std
