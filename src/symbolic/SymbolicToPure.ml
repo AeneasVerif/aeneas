@@ -4809,10 +4809,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
   let def = ctx.fun_decl in
   assert (ctx.bid = None);
   log#ltrace
-    (lazy
-      ("SymbolicToPure.translate_fun_decl: "
-      ^ name_to_string ctx def.item_meta.name
-      ^ "\n"));
+    (lazy (__FUNCTION__ ^ ": " ^ name_to_string ctx def.item_meta.name ^ "\n"));
 
   (* Translate the declaration *)
   let def_id = def.def_id in
@@ -5062,6 +5059,11 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
 
 let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     : trait_impl =
+  log#ltrace
+    (lazy
+      (let ctx = Print.Contexts.decls_ctx_to_fmt_env ctx in
+       __FUNCTION__ ^ ": " ^ "- trait impl: implemented trait: "
+       ^ Print.Types.trait_decl_ref_to_string ctx trait_impl.impl_trait));
   let {
     A.def_id;
     item_meta;
@@ -5106,7 +5108,10 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
   (* Lookup the builtin information, if there is *)
   let builtin_info =
     let decl_id = trait_impl.impl_trait.trait_decl_id in
-    let trait_decl = TraitDeclId.Map.find decl_id ctx.crate.trait_decls in
+    let trait_decl =
+      silent_unwrap_opt_span __FILE__ __LINE__ span
+        (TraitDeclId.Map.find_opt decl_id ctx.crate.trait_decls)
+    in
     match_name_with_generics_find_opt ctx trait_decl.item_meta.name
       llbc_impl_trait.decl_generics
       (ExtractBuiltin.builtin_trait_impls_map ())
