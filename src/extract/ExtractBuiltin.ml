@@ -909,6 +909,8 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
            ~extract_name:(Some "alloc.vec.FromBoxSliceVec.from") ();
          mk_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone"
            ~extract_name:(Some "core.array.CloneArray.clone") ();
+         mk_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone_from"
+           ~extract_name:(Some "core.array.CloneArray.clone_from") ();
          mk_fun "core::mem::swap" ~can_fail:false ~lift:false ();
          mk_fun "core::slice::{[@T]}::split_at" ();
          mk_fun "core::slice::{[@T]}::split_at_mut" ();

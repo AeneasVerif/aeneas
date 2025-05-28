@@ -210,14 +210,28 @@ theorem core.array.CloneArray.clone_spec {T : Type} {N : Usize} (cloneInst : cor
   unfold clone
   rw [Array.clone_spec h]
 
+/- [core::array::{core::clone::Clone for @Array<T, N>}#20::clone_from]:
+   Source: '/rustc/library/core/src/array/mod.rs', lines 424:4-424:42
+   Name pattern: [core::array::{core::clone::Clone<[@T; @N]>}::clone_from] -/
+def core.array.CloneArray.clone_from {T : Type} {N : Usize} (cloneInst : core.clone.Clone T)
+  (_self source : Array T N) : Result (Array T N) :=
+  Array.clone cloneInst.clone source
+
+@[progress]
+theorem core.array.CloneArray.clone_from_spec {T : Type} {N : Usize} (cloneInst : core.clone.Clone T)
+  (self source : Array T N) (h : ∀ x ∈ source.val, cloneInst.clone x = ok x) :
+  core.array.CloneArray.clone_from cloneInst self source = ok source := by
+  unfold clone_from
+  rw [Array.clone_spec h]
+
 /- Trait implementation: [core::array::{core::clone::Clone for @Array<T, N>}#20]
    Source: '/rustc/library/core/src/array/mod.rs', lines 430:0-430:47
    Name pattern: [core::clone::Clone<[@T; @N]>] -/
 @[reducible]
-def core.clone.CloneArray {T : Type} (N : Usize) (cloneCloneInst :
-  core.clone.Clone T) : core.clone.Clone (Array T N) := {
+def core.clone.CloneArray {T : Type} (N : Usize)
+  (cloneCloneInst : core.clone.Clone T) : core.clone.Clone (Array T N) := {
   clone := core.array.CloneArray.clone cloneCloneInst
-  clone_from := fun _ => core.array.CloneArray.clone cloneCloneInst
+  clone_from := core.array.CloneArray.clone_from cloneCloneInst
 }
 
 def Array.setSlice! {α : Type u} {n} (s : Array α n) (i : ℕ) (s' : List α) : Array α n :=
