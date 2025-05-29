@@ -537,11 +537,14 @@ let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
           ~extract_name:(Some "core.convert.FromBoxSliceVec")
           ~filter:(Some [ true; false ])
           ();
-        (* This implementation actually does not exist in Rust: rustc generates
-           an implementation for each choice of const generic @N. On our
-           side, we define a unique model generic in @N. *)
+        (* This function actually does not exist in Rust: rustc generates
+           an implementation for each concrete choice of const generic @N.
+           On our side, we define a unique model generic in @N for the cases
+           where @N != 0. *)
         fmt "core::default::Default<[@T; @N]>"
           ~extract_name:(Some "core.default.DefaultArray") ();
+        fmt "core::default::Default<[@T; 0]>"
+          ~extract_name:(Some "core.default.DefaultArrayEmpty") ();
       ]
   (* From<INT, bool> *)
   @ List.map
@@ -998,10 +1001,13 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
            ~filter:(Some [ true; false ])
            ();
          (* This function actually does not exist in Rust: rustc generates
-            an implementation for each choice of const generic @N. On our
-            side, we define a unique model generic in @N. *)
+            an implementation for each concrete choice of const generic @N.
+            On our side, we define a unique model generic in @N for the cases
+            where @N != 0. *)
          mk_fun "core::array::{core::default::Default<[@T; @N]>}::default"
            ~extract_name:(Some "core.default.DefaultArray.default") ();
+         mk_fun "core::array::{core::default::Default<[@T; 0]>}::default"
+           ~extract_name:(Some "core.default.DefaultArrayEmpty.default") ();
        ]
       (* SliceIndex for RangeTo and Slice *)
       @ mk_funs

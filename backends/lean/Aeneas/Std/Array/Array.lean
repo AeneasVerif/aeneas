@@ -271,14 +271,29 @@ def core.default.DefaultArray.default {T : Type} (N : Usize) (defaultInst : core
    Source: '/rustc/library/core/src/array/mod.rs', lines 454:8-454:52
    Name pattern: [core::default::Default<[@T; @N]>]
 
-   Remark: the `Default` instance actually doesn't exist for *any* const generic `N`,
-   but only for known values. This doesn't change the fact that we can factor the
-   instances out in the Lean model.
+   Remark: the `Default` instance actually doesn't exist for *any* const generic `N`. Rather,
+   there exists one instance per known length different from 0 (and a different instance for
+   the case where the length is equal to 0, because in this case we don't need the type of
+   the elements to have a default value). We factor the cases where `N` is ≠ 0 in the Lean model.
  -/
 @[reducible]
 def core.default.DefaultArray {T : Type} {N : Usize}
   (defaultInst : core.default.Default T) : core.default.Default (Array T N) := {
   default := core.default.DefaultArray.default N defaultInst
+}
+
+/- [core::array::{core::default::Default for @Array<T, 0: usize>}#61::default]:
+   Source: '/rustc/library/core/src/array/mod.rs', lines 464:12-464:35
+   Name pattern: [core::array::{core::default::Default<[@T; 0]>}::default] -/
+def core.array.DefaultArrayEmpty.default (T : Type) : Result (Array T (Usize.ofNat 0)) :=
+  ok ⟨ [], by scalar_tac ⟩
+
+/- Trait implementation: [core::array::{core::default::Default for @Array<T, 0: usize>}#61]
+   Source: '/rustc/library/core/src/array/mod.rs', lines 463:8-463:35
+   Name pattern: [core::default::Default<[@T; 0]>] -/
+@[reducible]
+def core.default.DefaultArrayEmpty (T : Type) : core.default.Default (Array T (Usize.ofNat 0)) := {
+  default := core.array.DefaultArrayEmpty.default T
 }
 
 end Aeneas.Std
