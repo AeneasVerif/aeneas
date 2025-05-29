@@ -270,7 +270,10 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
       ^ "\n"));
   f
 
-(** Remove the use of shallow borrows from a function.
+(** Remove the use of shallow borrows and the storage live/dead instructions.
+
+    Storage live/dead instructions are not used by the symbolic/concrete
+    interpreter, so we can safely remove them.
 
     Shallow borrows are used in early versions of MIR for the sole use of the
     borrow checker (they have no runtime semantics). They are used to prevent
@@ -296,7 +299,8 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
     borrow-checker, but the UB is still correctly caught by the
     evaluator/translation hence the translation is still sound.
  *)
-let remove_shallow_borrows (crate : crate) (f : fun_decl) : fun_decl =
+let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
+    fun_decl =
   let f0 = f in
   let filter_in_body (body : statement) : statement =
     let filtered = ref LocalId.Set.empty in
@@ -585,7 +589,7 @@ let apply_passes (crate : crate) : crate =
   let function_passes =
     [
       remove_loop_breaks crate;
-      remove_shallow_borrows crate;
+      remove_shallow_borrows_storage_live_dead crate;
       decompose_str_borrows;
       unify_drops;
     ]
