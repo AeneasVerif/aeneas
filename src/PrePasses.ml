@@ -11,6 +11,248 @@ open Errors
 
 let log = Logging.pre_passes_log
 
+(** The Rust compiler generates a unique implementation of [Default] for arrays
+    for every choice of length. For instance, if we write:
+    {[
+      let a: [u8; 32] = default ();
+      let b: [u8; 64] = default ();
+      ...
+    ]}
+    then rustc will introduce two different implementations of [Default]: an
+    implementation for [u8; 32] and a different one for [u8; 64].
+
+    For the purpose of the translation, we prefer using a single implementation
+    which is generic in the length of the array. This pass thus replaces all
+    the implementations of [Default<[T; N]>] with a single implementation.
+
+    Concretely, we spot all the instances of [Default<[T; N]>] where [N] is a
+    concrete array. We update the first such implementation so that it becomes
+    generic in the length of the array, and replace all the other ones with this
+    implementation. We also remove the useless implementations.
+ *)
+let update_array_default (crate : crate) : crate =
+  let pctx = Print.Crate.crate_to_fmt_env crate in
+  let impl_pat = NameMatcher.parse_pattern "core::default::Default" in
+  let mctx = NameMatcher.ctx_from_crate crate in
+  let match_name =
+    NameMatcher.match_name mctx
+      {
+        map_vars_to_vars = true;
+        match_with_trait_decl_refs = Config.match_patterns_with_trait_decl_refs;
+      }
+  in
+
+  (* First detect all the instances of [Default<[T; N]>] (and all the
+     implementations of [Default<[T; N]>::default] *)
+  let merged_impl = ref None in
+  let merged_method = ref None in
+  (* Those maps allow us to do two things:
+     - store the set of trait impls and methods that implement an instance
+       of [Default] for arrays
+     - store for each of those the precise length for which the implementation
+       is specialized (useful later when updating the crate)
+  *)
+  let impls = ref TraitImplId.Map.empty in
+  let methods = ref FunDeclId.Map.empty in
+
+  let visit_trait_impl _id (impl : trait_impl) : trait_impl option =
+    (* Check this is an impl of [Default] for arrays *)
+    let trait_decl =
+      silent_unwrap_opt_span __FILE__ __LINE__ (Some impl.item_meta.span)
+        (TraitDeclId.Map.find_opt impl.impl_trait.trait_decl_id
+           crate.trait_decls)
+    in
+    if match_name impl_pat trait_decl.item_meta.name then (
+      log#ldebug
+        (lazy
+          (__FUNCTION__ ^ ": found a matching impl.\n - decl_generics: "
+          ^ Print.generic_args_to_string pctx impl.impl_trait.decl_generics));
+      (* Check the generics. Note that we ignore the case where the length
+         is equal to 0, because in this case rustc uses a different impl
+         which doesn't require that the type of the elements also has a
+         default implementation. *)
+      match impl.impl_trait.decl_generics with
+      | {
+       regions = [];
+       types =
+         [
+           TAdt
+             ( TBuiltin TArray,
+               ({
+                  regions = [];
+                  types = [ TVar (Free _) ];
+                  const_generics =
+                    [ (CgValue (VScalar { value = nv; int_ty = Usize }) as n) ];
+                  trait_refs = _;
+                } as array_generics) );
+         ];
+       const_generics = [];
+       trait_refs = _;
+      }
+        when Z.to_int nv != 0 -> begin
+          (* Save the implementation and the method *)
+          impls := TraitImplId.Map.add impl.def_id n !impls;
+          assert (List.length impl.methods = 1);
+          let meth = snd (List.hd impl.methods) in
+          assert (meth.binder_params = TypesUtils.empty_generic_params);
+          let method_id = meth.binder_value.fun_id in
+          methods := FunDeclId.Map.add method_id n !methods;
+          (* Is it the first implementation we find? *)
+          match !merged_impl with
+          | None ->
+              (* Update the implementation in place *)
+              let cg_id = ConstGenericVarId.zero in
+              let cg = CgVar (Free cg_id) in
+              let decl_generics =
+                {
+                  impl.impl_trait.decl_generics with
+                  types =
+                    [
+                      TAdt
+                        ( TBuiltin TArray,
+                          { array_generics with const_generics = [ cg ] } );
+                    ];
+                }
+              in
+              let generics =
+                {
+                  impl.generics with
+                  const_generics =
+                    [ { index = cg_id; name = "N"; ty = TInteger Usize } ];
+                }
+              in
+              let impl_trait = { impl.impl_trait with decl_generics } in
+              let impl = { impl with impl_trait; generics } in
+              (* Register it *)
+              merged_impl := Some impl;
+              merged_method := Some method_id;
+              (* Continue *)
+              Some impl
+          | Some _ ->
+              (* Filter the implementation *)
+              None
+        end
+      | _ -> Some impl)
+    else Some impl
+  in
+  let crate =
+    {
+      crate with
+      trait_impls =
+        TraitImplId.Map.filter_map visit_trait_impl crate.trait_impls;
+    }
+  in
+
+  (* Check if we found a default implementation for array. If yes, we need
+     to filter the [default] methods and update all the definitions to make
+     sure they refer to the proper implementations and methods.
+  *)
+  match !merged_impl with
+  | None -> crate
+  | Some merged_impl ->
+      let merged_method = Option.get !merged_method in
+      let impls = !impls in
+      let methods = !methods in
+
+      (* Filter the functions *)
+      let visit_fun id (fdecl : fun_decl) =
+        match FunDeclId.Map.find_opt id methods with
+        | None -> Some fdecl
+        | Some _ ->
+            if id = merged_method then (
+              (* Update the method *)
+              let cg_id = ConstGenericVarId.zero in
+              let cg = CgVar (Free cg_id) in
+              let sg = fdecl.signature in
+              assert (sg.inputs = []);
+              match sg.output with
+              | TAdt
+                  ( TBuiltin TArray,
+                    ({
+                       regions = [];
+                       types = [ TVar (Free _) ];
+                       const_generics = [ _ ];
+                       trait_refs = _;
+                     } as array_generics) ) ->
+                  let array_generics =
+                    { array_generics with const_generics = [ cg ] }
+                  in
+                  let generics =
+                    {
+                      sg.generics with
+                      const_generics =
+                        [ { index = cg_id; name = "N"; ty = TInteger Usize } ];
+                    }
+                  in
+                  let sg =
+                    {
+                      sg with
+                      generics;
+                      output = TAdt (TBuiltin TArray, array_generics);
+                    }
+                  in
+                  let fdecl = { fdecl with signature = sg } in
+                  Some fdecl
+              | _ -> internal_error __FILE__ __LINE__ fdecl.item_meta.span)
+            else (* Filter *)
+              None
+      in
+      let filter_ids_visitor =
+        object
+          inherit [_] filter_decl_id
+
+          method! visit_trait_impl_id _ id =
+            match TraitImplId.Map.find_opt id impls with
+            | None -> Some id
+            | Some _ -> if id = merged_impl.def_id then Some id else None
+
+          method! visit_fun_decl_id _ id =
+            match FunDeclId.Map.find_opt id methods with
+            | None -> Some id
+            | Some _ -> if id = merged_method then Some id else None
+        end
+      in
+      let crate =
+        {
+          crate with
+          fun_decls = FunDeclId.Map.filter_map visit_fun crate.fun_decls;
+          declarations =
+            filter_ids_visitor#visit_declaration_groups () crate.declarations;
+        }
+      in
+
+      (* Update all the definitions in the crate *)
+      let visitor =
+        object
+          inherit [_] map_crate_with_span as super
+
+          method! visit_TraitImpl env impl_id args =
+            match TraitImplId.Map.find_opt impl_id impls with
+            | None -> super#visit_TraitImpl env impl_id args
+            | Some n ->
+                super#visit_TraitImpl env merged_impl.def_id
+                  { args with const_generics = [ n ] }
+
+          method! visit_fn_ptr env fn_ptr =
+            match fn_ptr.func with
+            | FunId (FRegular fid) -> begin
+                match FunDeclId.Map.find_opt fid methods with
+                | None -> super#visit_fn_ptr env fn_ptr
+                | Some n ->
+                    let fn_ptr =
+                      {
+                        func = FunId (FRegular merged_method);
+                        generics =
+                          { fn_ptr.generics with const_generics = [ n ] };
+                      }
+                    in
+                    super#visit_fn_ptr env fn_ptr
+              end
+            | _ -> super#visit_fn_ptr env fn_ptr
+        end
+      in
+      visitor#visit_crate None crate
+
 (** This pass slightly restructures the control-flow to remove the need to
     merge branches during the symbolic execution in some quite common cases
     where doing a merge is actually not necessary and leads to an ugly translation.
@@ -586,6 +828,9 @@ let decompose_str_borrows (f : fun_decl) : fun_decl =
   { f with body }
 
 let apply_passes (crate : crate) : crate =
+  (* Passes that apply to the whole crate *)
+  let crate = update_array_default crate in
+  (* Passes that apply to individual function bodies *)
   let function_passes =
     [
       remove_loop_breaks crate;

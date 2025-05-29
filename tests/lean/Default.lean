@@ -8,11 +8,18 @@ set_option linter.unusedVariables false
 
 namespace default
 
-/- [default::f25]:
+/- [default::f1]:
    Source: 'tests/src/default.rs', lines 3:0-5:1 -/
-def f25 : Result Unit :=
+def f1 : Result Unit :=
   do
-  let _ ← core.default.DefaultArray.default core.default.DefaultU32
+  let _ ← core.default.DefaultArray.default 1#usize core.default.DefaultU32
+  ok ()
+
+/- [default::f2]:
+   Source: 'tests/src/default.rs', lines 7:0-9:1 -/
+def f2 : Result Unit :=
+  do
+  let _ ← core.default.DefaultArray.default 2#usize core.default.DefaultU32
   ok ()
 
 end default

@@ -259,14 +259,17 @@ theorem Array.setSlice!_getElem!_suffix {α} {n} [Inhabited α]
 
 /- [core::array::{core::default::Default for @Array<T, N>}#36::default]:
    Source: '/rustc/library/core/src/array/mod.rs', lines 455:12-455:35
-   Name pattern: [core::array::{core::default::Default<[@T; @]>}::default] -/
-def core.default.DefaultArray.default {T : Type} {N : Usize} (defaultInst : core.default.Default T) : Result (Array T N) := do
+   Name pattern: [core::array::{core::default::Default<[@T; @N]>}::default]
+
+   Remark: see the comment for `core.default.DefaultArray`
+-/
+def core.default.DefaultArray.default {T : Type} (N : Usize) (defaultInst : core.default.Default T) : Result (Array T N) := do
   let x ← defaultInst.default
   .ok (Array.repeat N x)
 
 /- Trait implementation: [core::array::{core::default::Default for @Array<T, N>}#36]
    Source: '/rustc/library/core/src/array/mod.rs', lines 454:8-454:52
-   Name pattern: [core::default::Default<[@T; @]>]
+   Name pattern: [core::default::Default<[@T; @N]>]
 
    Remark: the `Default` instance actually doesn't exist for *any* const generic `N`,
    but only for known values. This doesn't change the fact that we can factor the
@@ -275,7 +278,7 @@ def core.default.DefaultArray.default {T : Type} {N : Usize} (defaultInst : core
 @[reducible]
 def core.default.DefaultArray {T : Type} {N : Usize}
   (defaultInst : core.default.Default T) : core.default.Default (Array T N) := {
-  default := core.default.DefaultArray.default defaultInst
+  default := core.default.DefaultArray.default N defaultInst
 }
 
 end Aeneas.Std
