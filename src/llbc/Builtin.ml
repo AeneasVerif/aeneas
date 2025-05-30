@@ -87,14 +87,7 @@ module Sig = struct
     TAdt (TBuiltin TSlice, mk_generic_args [] [ ty ] [])
 
   let mk_sig generics inputs output : fun_sig =
-    {
-      is_unsafe = false;
-      is_closure = false;
-      closure_info = None;
-      generics;
-      inputs;
-      output;
-    }
+    { is_unsafe = false; generics; inputs; output }
 
   (** [fn<T>(T) -> Box<T>] *)
   let box_new_sig : fun_sig =
