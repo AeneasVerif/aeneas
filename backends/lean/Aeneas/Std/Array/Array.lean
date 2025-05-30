@@ -285,7 +285,7 @@ def core.default.DefaultArray {T : Type} {N : Usize}
 /- [core::array::{core::default::Default for @Array<T, 0: usize>}#61::default]:
    Source: '/rustc/library/core/src/array/mod.rs', lines 464:12-464:35
    Name pattern: [core::array::{core::default::Default<[@T; 0]>}::default] -/
-def core.array.DefaultArrayEmpty.default (T : Type) : Result (Array T (Usize.ofNat 0)) :=
+def core.default.DefaultArrayEmpty.default (T : Type) : Result (Array T (Usize.ofNat 0)) :=
   ok ⟨ [], by scalar_tac ⟩
 
 /- Trait implementation: [core::array::{core::default::Default for @Array<T, 0: usize>}#61]
@@ -293,7 +293,7 @@ def core.array.DefaultArrayEmpty.default (T : Type) : Result (Array T (Usize.ofN
    Name pattern: [core::default::Default<[@T; 0]>] -/
 @[reducible]
 def core.default.DefaultArrayEmpty (T : Type) : core.default.Default (Array T (Usize.ofNat 0)) := {
-  default := core.array.DefaultArrayEmpty.default T
+  default := core.default.DefaultArrayEmpty.default T
 }
 
 end Aeneas.Std
