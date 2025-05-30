@@ -11,10 +11,16 @@ namespace Aeneas
 
 namespace Std
 
-structure core.ops.range.Range (α : Type u) where
+/-- [core::ops::range::Range] -/
+structure core.ops.range.Range (Idx : Type u) where
   mk ::
-  start: α
-  end_: α
+  start: Idx
+  end_: Idx
+
+/-- [core::ops::range::RangeTo] -/
+structure core.ops.range.RangeTo (Idx : Type u) where
+  mk ::
+  end_: Idx
 
 end Std
 

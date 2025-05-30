@@ -2,6 +2,7 @@
 import Aeneas.List
 import Aeneas.Progress.Init
 import Aeneas.Std.Array.Core
+import Aeneas.Std.Default
 
 namespace Aeneas.Std
 
@@ -209,14 +210,28 @@ theorem core.array.CloneArray.clone_spec {T : Type} {N : Usize} (cloneInst : cor
   unfold clone
   rw [Array.clone_spec h]
 
+/- [core::array::{core::clone::Clone for @Array<T, N>}#20::clone_from]:
+   Source: '/rustc/library/core/src/array/mod.rs', lines 424:4-424:42
+   Name pattern: [core::array::{core::clone::Clone<[@T; @N]>}::clone_from] -/
+def core.array.CloneArray.clone_from {T : Type} {N : Usize} (cloneInst : core.clone.Clone T)
+  (_self source : Array T N) : Result (Array T N) :=
+  Array.clone cloneInst.clone source
+
+@[progress]
+theorem core.array.CloneArray.clone_from_spec {T : Type} {N : Usize} (cloneInst : core.clone.Clone T)
+  (self source : Array T N) (h : ∀ x ∈ source.val, cloneInst.clone x = ok x) :
+  core.array.CloneArray.clone_from cloneInst self source = ok source := by
+  unfold clone_from
+  rw [Array.clone_spec h]
+
 /- Trait implementation: [core::array::{core::clone::Clone for @Array<T, N>}#20]
    Source: '/rustc/library/core/src/array/mod.rs', lines 430:0-430:47
    Name pattern: [core::clone::Clone<[@T; @N]>] -/
 @[reducible]
-def core.clone.CloneArray {T : Type} (N : Usize) (cloneCloneInst :
-  core.clone.Clone T) : core.clone.Clone (Array T N) := {
+def core.clone.CloneArray {T : Type} (N : Usize)
+  (cloneCloneInst : core.clone.Clone T) : core.clone.Clone (Array T N) := {
   clone := core.array.CloneArray.clone cloneCloneInst
-  clone_from := fun _ => core.array.CloneArray.clone cloneCloneInst
+  clone_from := core.array.CloneArray.clone_from cloneCloneInst
 }
 
 def Array.setSlice! {α : Type u} {n} (s : Array α n) (i : ℕ) (s' : List α) : Array α n :=
@@ -241,5 +256,44 @@ theorem Array.setSlice!_getElem!_suffix {α} {n} [Inhabited α]
   (s.setSlice! i s')[j]! = s[j]! := by
   simp only [Array.setSlice!, Array.getElem!_Nat_eq]
   simp_lists
+
+/- [core::array::{core::default::Default for @Array<T, N>}#36::default]:
+   Source: '/rustc/library/core/src/array/mod.rs', lines 455:12-455:35
+   Name pattern: [core::array::{core::default::Default<[@T; @N]>}::default]
+
+   Remark: see the comment for `core.default.DefaultArray`
+-/
+def core.default.DefaultArray.default {T : Type} (N : Usize) (defaultInst : core.default.Default T) : Result (Array T N) := do
+  let x ← defaultInst.default
+  .ok (Array.repeat N x)
+
+/- Trait implementation: [core::array::{core::default::Default for @Array<T, N>}#36]
+   Source: '/rustc/library/core/src/array/mod.rs', lines 454:8-454:52
+   Name pattern: [core::default::Default<[@T; @N]>]
+
+   Remark: the `Default` instance actually doesn't exist for *any* const generic `N`. Rather,
+   there exists one instance per known length different from 0 (and a different instance for
+   the case where the length is equal to 0, because in this case we don't need the type of
+   the elements to have a default value). We factor the cases where `N` is ≠ 0 in the Lean model.
+ -/
+@[reducible]
+def core.default.DefaultArray {T : Type} {N : Usize}
+  (defaultInst : core.default.Default T) : core.default.Default (Array T N) := {
+  default := core.default.DefaultArray.default N defaultInst
+}
+
+/- [core::array::{core::default::Default for @Array<T, 0: usize>}#61::default]:
+   Source: '/rustc/library/core/src/array/mod.rs', lines 464:12-464:35
+   Name pattern: [core::array::{core::default::Default<[@T; 0]>}::default] -/
+def core.default.DefaultArrayEmpty.default (T : Type) : Result (Array T (Usize.ofNat 0)) :=
+  ok ⟨ [], by scalar_tac ⟩
+
+/- Trait implementation: [core::array::{core::default::Default for @Array<T, 0: usize>}#61]
+   Source: '/rustc/library/core/src/array/mod.rs', lines 463:8-463:35
+   Name pattern: [core::default::Default<[@T; 0]>] -/
+@[reducible]
+def core.default.DefaultArrayEmpty (T : Type) : core.default.Default (Array T (Usize.ofNat 0)) := {
+  default := core.default.DefaultArrayEmpty.default T
+}
 
 end Aeneas.Std

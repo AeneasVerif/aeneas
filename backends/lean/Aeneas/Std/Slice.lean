@@ -314,6 +314,96 @@ def core.slice.index.SliceIndexRangeUsizeSliceInst (T : Type) :
   index_mut := core.slice.index.SliceIndexRangeUsizeSlice.index_mut
 }
 
+/- Trait implementation: [core::slice::index::private_slice_index::{core::slice::index::private_slice_index::Sealed for core::ops::range::RangeTo<usize>}#2]
+   Source: '/rustc/library/core/src/slice/index.rs', lines 133:4-133:39
+   Name pattern: [core::slice::index::private_slice_index::Sealed<core::ops::range::RangeTo<usize>>] -/
+@[reducible]
+def core.slice.index.private_slice_index.SealedRangeToUsize :
+  core.slice.index.private_slice_index.Sealed (core.ops.range.RangeTo Usize)
+  := {}
+
+/- [core::slice::index::{core::slice::index::SliceIndex<@Slice<T>, @Slice<T>> for core::ops::range::RangeTo<usize>}#6::get]:
+   Source: '/rustc/library/core/src/slice/index.rs', lines 499:4-499:45
+   Name pattern: [core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::get] -/
+def core.slice.index.SliceIndexRangeToUsizeSlice.get
+  {T : Type} (r : core.ops.range.RangeTo Usize) (s : Slice T) : Result (Option (Slice T)) :=
+  if r.end_ ≤ s.length then
+    ok (some ⟨ s.val.slice r.end_ s.length, by scalar_tac⟩)
+  else ok none
+
+/- [core::slice::index::{core::slice::index::SliceIndex<@Slice<T>, @Slice<T>> for core::ops::range::RangeTo<usize>}#6::get_mut]:
+   Source: '/rustc/library/core/src/slice/index.rs', lines 504:4-504:57
+   Name pattern: [core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::get_mut] -/
+def core.slice.index.SliceIndexRangeToUsizeSlice.get_mut
+  {T : Type} (r : core.ops.range.RangeTo Usize) (s : Slice T) :
+  Result ((Option (Slice T)) × (Option (Slice T) → Slice T)) :=
+  if r.end_ ≤ s.length then
+    ok (some ⟨ s.val.slice r.end_ s.length, by scalar_tac⟩,
+        fun s' =>
+        match s' with
+        | none => s
+        | some s' =>
+          if h: s'.length = s.length - r.end_ then
+            ⟨ List.setSlice! s.val r.end_ s'.val, by scalar_tac ⟩
+          else s )
+  else ok (none, fun _ => s)
+
+/- [core::slice::index::{core::slice::index::SliceIndex<@Slice<T>, @Slice<T>> for core::ops::range::RangeTo<usize>}#6::get_unchecked]:
+   Source: '/rustc/library/core/src/slice/index.rs', lines 509:4-509:66
+   Name pattern: [core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::get_unchecked] -/
+def core.slice.index.SliceIndexRangeToUsizeSlice.get_unchecked
+  {T : Type} (_ : core.ops.range.RangeTo Usize) (_ : ConstRawPtr (Slice T)) : Result (ConstRawPtr (Slice T)) :=
+  -- Don't know what the model should be - for now we always fail
+  fail .undef
+
+/- [core::slice::index::{core::slice::index::SliceIndex<@Slice<T>, @Slice<T>> for core::ops::range::RangeTo<usize>}#6::get_unchecked_mut]:
+   Source: '/rustc/library/core/src/slice/index.rs', lines 515:4-515:66
+   Name pattern: [core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::get_unchecked_mut] -/
+def core.slice.index.SliceIndexRangeToUsizeSlice.get_unchecked_mut
+  {T : Type} (_ : core.ops.range.RangeTo Usize) (_ : MutRawPtr (Slice T)) :
+  Result (MutRawPtr (Slice T)) :=
+  -- Don't know what the model should be - for now we always fail
+  fail .undef
+
+/- [core::slice::index::{core::slice::index::SliceIndex<@Slice<T>, @Slice<T>> for core::ops::range::RangeTo<usize>}#6::index]:
+   Source: '/rustc/library/core/src/slice/index.rs', lines 521:4-521:39
+   Name pattern: [core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::index] -/
+def core.slice.index.SliceIndexRangeToUsizeSlice.index
+  {T : Type} (r : core.ops.range.RangeTo Usize) (s : Slice T) : Result (Slice T) :=
+  if r.end_ ≤ s.length then
+    ok (⟨ s.val.slice r.end_ s.length, by scalar_tac⟩)
+  else fail .panic
+
+/- [core::slice::index::{core::slice::index::SliceIndex<@Slice<T>, @Slice<T>> for core::ops::range::RangeTo<usize>}#6::index_mut]:
+   Source: '/rustc/library/core/src/slice/index.rs', lines 526:4-526:51
+   Name pattern: [core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::index_mut] -/
+def core.slice.index.SliceIndexRangeToUsizeSlice.index_mut
+  {T : Type} (r : core.ops.range.RangeTo Usize) (s : Slice T) :
+  Result ((Slice T) × (Slice T → Slice T)) :=
+  if r.end_ ≤ s.length then
+    ok (⟨ s.val.slice r.end_ s.length, by scalar_tac⟩,
+        fun s' =>
+        if h: s'.length = s.length - r.end_ then
+          ⟨ List.setSlice! s.val r.end_ s', by scalar_tac ⟩
+        else s )
+  else fail .panic
+
+/- Trait implementation: [core::slice::index::{core::slice::index::SliceIndex<@Slice<T>, @Slice<T>> for core::ops::range::RangeTo<usize>}#6]
+   Source: '/rustc/library/core/src/slice/index.rs', lines 495:0-495:54
+   Name pattern: [core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>] -/
+@[reducible]
+def core.slice.index.SliceIndexRangeToUsizeSlice (T : Type) :
+  core.slice.index.SliceIndex (core.ops.range.RangeTo Usize) (Slice T) (Slice
+  T) := {
+  sealedInst := core.slice.index.private_slice_index.SealedRangeToUsize
+  get := core.slice.index.SliceIndexRangeToUsizeSlice.get
+  get_mut := core.slice.index.SliceIndexRangeToUsizeSlice.get_mut
+  get_unchecked := core.slice.index.SliceIndexRangeToUsizeSlice.get_unchecked
+  get_unchecked_mut := core.slice.index.SliceIndexRangeToUsizeSlice.get_unchecked_mut
+  index := core.slice.index.SliceIndexRangeToUsizeSlice.index
+  index_mut := core.slice.index.SliceIndexRangeToUsizeSlice.index_mut
+}
+
 /- Trait implementation: [core::slice::index::[T]] -/
 def core.ops.index.IndexSliceInst {T I Output : Type}
   (inst : core.slice.index.SliceIndex I (Slice T) Output) :
@@ -588,6 +678,5 @@ theorem core.slice.Slice.copy_from_slice.progress_spec (copyInst : core.marker.C
 theorem Slice.setSlice!_length {α : Type u} (s : Slice α) (i : ℕ) (s' : List α) :
   (s.setSlice! i s').length = s.length := by
   simp only [Slice.length, Slice.setSlice!, List.length_setSlice!]
-
 
 end Aeneas.Std

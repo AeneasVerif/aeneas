@@ -188,7 +188,7 @@ structure core.ops.range.RangeFrom (Idx : Type) where
    Name pattern: core::cmp::PartialEq -/
 structure core.cmp.PartialEq (Self : Type) (Rhs : Type) where
   eq : Self → Rhs → Result Bool
-  ne : Self → Rhs → Result Bool
+  ne : Self → Rhs → Result Bool := fun self other => do not (← eq self other)
 
 /- Trait declaration: [core::cmp::Eq]
    Name pattern: core::cmp::Eq -/

@@ -1745,6 +1745,22 @@ def optElabTerm (e : Option (TSyntax `term)) : TacticM (Option Expr) := do
   | none => pure none
   | some e => pure (some (← Lean.Elab.Tactic.elabTerm e none))
 
+/-- Compute the list of assumptions which:
+    - either belong to `keep`
+    - or do not belong to `ignore`
+
+    This is useful to refresh a list of fvar ids after applying a tactic such as `simp`
+    to them. Indeed, whenever we apply a simplification to some assumptions, the only way
+    to retrieve their new ids is to go through the context and filter the ids which we know
+    do not come from the duplicated assumptions.
+-/
+def refreshFVarIds (keep ignore : Std.HashSet FVarId) : TacticM (Array FVarId) := do
+  withMainContext do
+  let decls := (← (← getLCtx).getDecls).toArray
+  decls.filterMapM fun d => do
+    if (← inferType d.type).isProp ∧ (d.fvarId ∈ keep ∨ d.fvarId ∉ ignore)
+    then pure (some d.fvarId) else pure none
+
 end Utils
 
 end Aeneas

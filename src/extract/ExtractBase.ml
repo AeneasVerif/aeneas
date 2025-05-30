@@ -457,7 +457,7 @@ let names_maps_add (id_to_string : id -> string) (id : id)
 let names_maps_get (span : Meta.span option) (id_to_string : id -> string)
     (id : id) (nm : names_maps) : string =
   (* We do not use the same name map if we allow/disallow collisions *)
-  let map_to_string (m : string IdMap.t) : string =
+  let _map_to_string (m : string IdMap.t) : string =
     "[\n"
     ^ String.concat ","
         (List.map
@@ -470,10 +470,7 @@ let names_maps_get (span : Meta.span option) (id_to_string : id -> string)
     match IdMap.find_opt id m with
     | Some s -> s
     | None ->
-        let err =
-          "Could not find: " ^ id_to_string id ^ "\nNames map:\n"
-          ^ map_to_string m
-        in
+        let err = "Could not find: " ^ id_to_string id in
         save_error_opt_span __FILE__ __LINE__ span err;
         "(%%%ERROR: unknown identifier\": " ^ id_to_string id ^ "\"%%%)")
   else
@@ -481,10 +478,7 @@ let names_maps_get (span : Meta.span option) (id_to_string : id -> string)
     match IdMap.find_opt id m with
     | Some s -> s
     | None ->
-        let err =
-          "Could not find: " ^ id_to_string id ^ "\nNames map:\n"
-          ^ map_to_string m
-        in
+        let err = "Could not find: " ^ id_to_string id in
         save_error_opt_span __FILE__ __LINE__ span err;
         "(ERROR: \"" ^ id_to_string id ^ "\")"
 
