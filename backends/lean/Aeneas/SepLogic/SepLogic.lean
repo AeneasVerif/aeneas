@@ -159,7 +159,7 @@ def run {α} (s : State) (fuel : ℕ) (x : ITree α) : Result (State × α) :=
   | .Act _ _ => sorry
 
 /- For total correctness: -/
-def post (hp0 : State → Prop) (x : ITree α) (hp1 : α → State → Prop) (p : α → Prop) : Prop :=
+def post {α} (hp0 : State → Prop) (x : ITree α) (hp1 : α → State → Prop) (p : α → Prop) : Prop :=
   ∀ s0, hp0 s0 →
   (∃ n s1 res, run s0 n x = .ok (s1, res)) ∧
   (∀ n s1 res, run s0 n x = .ok (s1, res) →
@@ -482,10 +482,10 @@ TODO: recheck, but I believe it is useful for instance for our allocation patter
 fn mut_to_raw<T>(x : &mut T) -> *T
 
 fn incr_borrow<'a>(x : &'a mut u32) {
-  let xp = mut_to_raw(x); // there is a re-borrow here
+  let xp = mut_to_raw(&mut (*x)); // there is a re-borrow here
   let xv = *xp;
   let xv = xv + 1;
-  *xp = xv
+  *xp = xv;
   // re-borrow expires here
 }
 

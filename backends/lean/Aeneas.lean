@@ -19,6 +19,7 @@ import Aeneas.Saturate
 import Aeneas.ScalarDecrTac
 import Aeneas.ScalarNF
 import Aeneas.ScalarTac
+import Aeneas.SepLogic
 import Aeneas.SimpIfs
 import Aeneas.SimpLemmas
 import Aeneas.SimpLists
