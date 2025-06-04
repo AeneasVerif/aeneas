@@ -697,7 +697,6 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
             TraitDeclId.Map.find trait_decl_id ctx.trans_trait_decls
           in
 
-          (* Required method *)
           sanity_check __FILE__ __LINE__ (lp_id = None)
             trait_decl.item_meta.span;
           extract_trait_ref trait_decl.item_meta.span ctx fmt
@@ -1481,21 +1480,7 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
      About the order: we want to make sure the names are reserved for
      those (variable names might collide with them but it is ok, we will add
      suffixes to the variables).
-
-     TODO: micro-pass to update what happens when calling trait provided
-     functions.
   *)
-  let ctx, trait_decl =
-    match def.kind with
-    | TraitDeclItem (trait_ref, _, true) ->
-        let trait_decl =
-          T.TraitDeclId.Map.find trait_ref.trait_decl_id ctx.trans_trait_decls
-        in
-        let ctx, _ = ctx_add_trait_self_clause def.item_meta.span ctx in
-        let ctx = { ctx with is_provided_method = true } in
-        (ctx, Some trait_decl)
-    | _ -> (ctx, None)
-  in
   (* Add the type parameters - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx, type_params, cg_params, trait_clauses =
@@ -1508,8 +1493,8 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
   let explicit = def.signature.explicit_info in
   (let space = Some space in
    extract_generic_params def.item_meta.span ctx fmt TypeDeclId.Set.empty ~space
-     ~trait_decl Item def.signature.generics (Some explicit) type_params
-     cg_params trait_clauses);
+     Item def.signature.generics (Some explicit) type_params cg_params
+     trait_clauses);
   (* Close the box for the generics *)
   F.pp_close_box fmt ();
   (* The input parameters - note that doing this adds bindings to the context *)

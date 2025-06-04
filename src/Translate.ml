@@ -1148,7 +1148,6 @@ let translate_crate (filename : string) (dest_dir : string)
       use_dep_ite =
         Config.backend () = Lean && !Config.extract_decreases_clauses;
       trait_decl_id = None (* None by default *);
-      is_provided_method = false (* false by default *);
       trans_trait_decls;
       trans_trait_impls;
       trans_types;

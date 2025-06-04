@@ -563,8 +563,7 @@ def use_foo2
 
 /- [traits::BoolTrait::ret_true]:
    Source: 'tests/src/traits.rs', lines 8:4-10:5 -/
-def BoolTrait.ret_true.default
-  {Self : Type} (self_clause : BoolTrait Self) (self : Self) : Result Bool :=
+def BoolTrait.ret_true.default {Self : Type} (self : Self) : Result Bool :=
   ok true
 
 /- Trait declaration: [traits::{traits::TestType<T>}#6::test::TestTrait]

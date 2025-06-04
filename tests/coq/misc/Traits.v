@@ -683,7 +683,7 @@ Definition use_foo2
 (** [traits::BoolTrait::ret_true]:
     Source: 'tests/src/traits.rs', lines 8:4-10:5 *)
 Definition boolTrait_ret_true_default
-  {Self : Type} (self_clause : BoolTrait_t Self) (self : Self) : result bool :=
+  {Self : Type} (self : Self) : result bool :=
   Ok true
 .
 

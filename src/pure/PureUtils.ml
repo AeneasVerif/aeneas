@@ -168,25 +168,25 @@ type subst = {
   tr_self : trait_instance_id;
 }
 
+let subst_visitor =
+  object
+    inherit [_] map_ty
+
+    method! visit_TVar subst var =
+      subst.ty_subst (Substitute.expect_free_var None var)
+
+    method! visit_CgVar subst var =
+      subst.cg_subst (Substitute.expect_free_var None var)
+
+    method! visit_Clause subst var =
+      subst.tr_subst (Substitute.expect_free_var None var)
+
+    method! visit_Self subst = subst.tr_self
+  end
+
 (** Type substitution *)
 let ty_substitute (subst : subst) (ty : ty) : ty =
-  let obj =
-    object
-      inherit [_] map_ty
-
-      method! visit_TVar _ var =
-        subst.ty_subst (Substitute.expect_free_var None var)
-
-      method! visit_CgVar _ var =
-        subst.cg_subst (Substitute.expect_free_var None var)
-
-      method! visit_Clause _ var =
-        subst.tr_subst (Substitute.expect_free_var None var)
-
-      method! visit_Self _ = subst.tr_self
-    end
-  in
-  obj#visit_ty () ty
+  subst_visitor#visit_ty subst ty
 
 let make_type_subst (vars : type_var list) (tys : ty list) : TypeVarId.id -> ty
     =
@@ -204,6 +204,21 @@ let make_trait_subst (clauses : trait_clause list) (refs : trait_ref list) :
   let refs = List.map (fun (x : trait_ref) -> x.trait_id) refs in
   let mp = TraitClauseId.Map.of_list (List.combine clauses refs) in
   fun id -> TraitClauseId.Map.find id mp
+
+(** Like [make_subst_from_generics] but also substitute the [Self] clause. Use
+    this when substituting for trait generics. *)
+let make_subst_from_generics_for_trait (params : generic_params)
+    (tr_self : trait_instance_id) (args : generic_args) : subst =
+  let ty_subst = make_type_subst params.types args.types in
+  let cg_subst =
+    make_const_generic_subst params.const_generics args.const_generics
+  in
+  let tr_subst = make_trait_subst params.trait_clauses args.trait_refs in
+  { ty_subst; cg_subst; tr_subst; tr_self }
+
+let make_subst_from_generics (params : generic_params) (args : generic_args) :
+    subst =
+  make_subst_from_generics_for_trait params Self args
 
 (** Retrieve the list of fields for the given variant of a {!type:Aeneas.Pure.type_decl}.
 
@@ -224,15 +239,6 @@ let type_decl_get_fields (def : type_decl)
              an enumeration:\n\
              - def.name: " ^ def.name ^ "\n- opt_variant_id: " ^ opt_variant_id
            ))
-
-let make_subst_from_generics (params : generic_params) (args : generic_args) :
-    subst =
-  let ty_subst = make_type_subst params.types args.types in
-  let cg_subst =
-    make_const_generic_subst params.const_generics args.const_generics
-  in
-  let tr_subst = make_trait_subst params.trait_clauses args.trait_refs in
-  { ty_subst; cg_subst; tr_subst; tr_self = Self }
 
 (** Instantiate the type variables for the chosen variant in an ADT definition,
     and return the list of the types of its fields *)
