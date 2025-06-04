@@ -3622,7 +3622,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
           (* Lookup the signature *)
           let sg =
             match fid with
-            | FunId (FRegular fid) | TraitMethod (_, _, fid) ->
+            | FunId (FRegular fid) ->
                 let trans_fun =
                   silent_unwrap __FILE__ __LINE__ span
                     (LlbcAst.FunDeclId.Map.find_opt fid trans_funs)
@@ -3635,6 +3635,20 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
                 log#ldebug
                   (lazy (__FUNCTION__ ^ ": function name: " ^ trans_fun.name));
                 trans_fun.signature
+            | TraitMethod (tref, method_name, method_decl_id) ->
+                log#ldebug
+                  (lazy (__FUNCTION__ ^ ": method name: " ^ method_name));
+                if Option.is_some lp_id then
+                  craise __FILE__ __LINE__ span
+                    "Trying to get a loop subfunction from a method call";
+                let method_sig =
+                  silent_unwrap __FILE__ __LINE__ span
+                    (Charon.Substitute.lookup_flat_method_sig trans_ctx.crate
+                       tref.trait_decl_ref.trait_decl_id method_name)
+                in
+                SymbolicToPure.translate_fun_sig trans_ctx
+                  (FRegular method_decl_id) method_name method_sig
+                  (List.map (fun _ -> None) method_sig.inputs)
             | FunId (FBuiltin aid) ->
                 Builtin.BuiltinFunIdMap.find aid builtin_sigs
           in
@@ -3648,6 +3662,12 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
                 append_generic_args trait_ref.trait_decl_ref.decl_generics
                   qualif.generics
             | _ -> qualif.generics
+          in
+          let tr_self =
+            match fid with
+            | TraitMethod (trait_ref, _, _) -> trait_ref.trait_id
+            (* Dummy, won't be used since we're not substituting for a trait. *)
+            | _ -> Self
           in
           (* Replace all the unknown implicit type variables with holes.
              Note that we assume that all the trait refs are there, meaning
@@ -3678,7 +3698,9 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
               ^ generic_params_to_string sg.generics
               ^ "\n- generics: "
               ^ generic_args_to_string generics));
-          let subst = make_subst_from_generics sg.generics generics in
+          let subst =
+            make_subst_from_generics_for_trait sg.generics tr_self generics
+          in
           let sg = fun_sig_substitute subst sg in
           (known_f_ty, sg.inputs, false)
         end

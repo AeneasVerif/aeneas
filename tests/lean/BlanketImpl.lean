@@ -31,8 +31,7 @@ def Trait2.Blanket {T : Type} (Trait1Inst : Trait1 T) : Trait2 T := {
 
 /- [blanket_impl::Trait2::foo]:
    Source: 'tests/src/blanket_impl.rs', lines 5:4-5:15 -/
-def Trait2.foo.default
-  {Self : Type} (self_clause : Trait2 Self) : Result Unit :=
+def Trait2.foo.default (Self : Type) : Result Unit :=
   ok ()
 
 end blanket_impl

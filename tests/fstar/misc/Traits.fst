@@ -540,10 +540,7 @@ let use_foo2
 
 (** [traits::BoolTrait::ret_true]:
     Source: 'tests/src/traits.rs', lines 8:4-10:5 *)
-let boolTrait_ret_true_default
-  (#self : Type0) (self_clause : boolTrait_t self) (self1 : self) :
-  result bool
-  =
+let boolTrait_ret_true_default (#self : Type0) (self1 : self) : result bool =
   Ok true
 
 (** Trait declaration: [traits::{traits::TestType<T>}#6::test::TestTrait]

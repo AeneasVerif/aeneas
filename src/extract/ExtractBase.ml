@@ -114,14 +114,14 @@ let decl_is_not_last_from_group (kind : decl_kind) : bool =
 type type_decl_kind = Enum | Struct | Tuple [@@deriving show]
 
 (** Generics can be bound in two places: each item has its generics, and
-    additionally within a trait decl or impl each method has its own generics.
-    We distinguish these two cases here. In charon, the distinction is made
-    thanks to `de_bruijn_var`.
+    additionally within a trait decl or impl each method has its own generics
+    (using `binder` above). We distinguish these two cases here. In charon, the
+    distinction is made thanks to `de_bruijn_var`.
     Note that for the generics of a top-level `fun_decl` we always use `Item`;
     `Method` only refers to the inner binder found in the list of methods in a
     trait_decl/trait_impl.
     *)
-type generic_origin = Item | Method
+type generic_origin = Item | Method [@@deriving show, ord]
 
 (** We use identifiers to look for name clashes *)
 and id =
@@ -183,41 +183,6 @@ and id =
   | TraitItemId of TraitDeclId.id * string
       (** A trait associated item which is not a method *)
   | TraitParentClauseId of TraitDeclId.id * TraitClauseId.id
-  | TraitSelfClauseId
-      (** Specifically for the clause: [Self : Trait].
-
-          For now, we forbid provided methods (methods in trait declarations
-          with a default implementation) from being overriden in trait implementations.
-          We extract trait provided methods such that they take an instance of
-          the trait as input: this instance is given by the trait self clause.
-
-          For instance:
-          {[
-            //
-            // Rust
-            //
-            trait ToU64 {
-              fn to_u64(&self) -> u64;
-
-              // Provided method
-              fn is_pos(&self) -> bool {
-                self.to_u64() > 0
-              }
-            }
-
-            //
-            // Generated code
-            //
-            struct ToU64 (T : Type) {
-              to_u64 : T -> u64;
-            }
-
-            //                    The trait self clause
-            //                    vvvvvvvvvvvvvvvvvvvvvv
-            let is_pos (T : Type) (trait_self : ToU64 T) (self : T) : bool =
-              trait_self.to_u64 self > 0
-          ]}
-       *)
   | UnknownId
       (** Used for stored various strings like keywords, definitions which
           should always be in context, etc. and which can't be linked to one
@@ -586,7 +551,6 @@ type extraction_ctx = {
         *)
   trait_decl_id : trait_decl_id option;
       (** If we are extracting a trait declaration, identifies it *)
-  is_provided_method : bool;
   trans_types : Pure.type_decl Pure.TypeDeclId.Map.t;
   trans_funs : pure_fun_translation A.FunDeclId.Map.t;
   trans_globals : Pure.global_decl Pure.GlobalDeclId.Map.t;
@@ -715,7 +679,6 @@ let id_to_string (span : Meta.span option) (id : id) (ctx : extraction_ctx) :
       "trait_item_id: " ^ trait_decl_id_to_string id ^ ", type name: " ^ name
   | TraitMethodId (trait_decl_id, fun_name) ->
       trait_decl_id_to_string trait_decl_id ^ ", method name: " ^ fun_name
-  | TraitSelfClauseId -> "trait_self_clause"
 
 let ctx_add (span : Meta.span) (id : id) (name : string) (ctx : extraction_ctx)
     : extraction_ctx =
@@ -758,10 +721,6 @@ let ctx_get_builtin_type (span : Meta.span option) (id : builtin_ty)
 let ctx_get_trait_constructor (span : Meta.span) (id : trait_decl_id)
     (ctx : extraction_ctx) : string =
   ctx_get (Some span) (TraitDeclConstructorId id) ctx
-
-let ctx_get_trait_self_clause (span : Meta.span) (ctx : extraction_ctx) : string
-    =
-  ctx_get (Some span) TraitSelfClauseId ctx
 
 let ctx_get_trait_decl (span : Meta.span) (id : trait_decl_id)
     (ctx : extraction_ctx) : string =
@@ -2080,14 +2039,6 @@ let ctx_add_var (span : Meta.span) (basename : string) (id : LocalId.id)
     (ctx : extraction_ctx) : extraction_ctx * string =
   let name = basename_to_unique ctx basename in
   let ctx = ctx_add span (LocalId id) name ctx in
-  (ctx, name)
-
-(** Generate a unique variable name for the trait self clause and add it to the context *)
-let ctx_add_trait_self_clause (span : Meta.span) (ctx : extraction_ctx) :
-    extraction_ctx * string =
-  let basename = trait_self_clause_basename in
-  let name = basename_to_unique ctx basename in
-  let ctx = ctx_add span TraitSelfClauseId name ctx in
   (ctx, name)
 
 (** Generate a unique trait clause name and add it to the context *)

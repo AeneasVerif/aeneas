@@ -103,7 +103,7 @@ Definition no_borrows_sum (n : nat) (max : u32) : result u32 :=
 (** [rename_attribute::BoolTrait::ret_true]:
     Source: 'tests/src/rename_attribute.rs', lines 16:4-18:5 *)
 Definition boolTrait_retTest_default
-  {Self : Type} (self_clause : BoolTest_t Self) (self : Self) : result bool :=
+  {Self : Type} (self : Self) : result bool :=
   Ok true
 .
 

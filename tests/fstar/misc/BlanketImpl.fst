@@ -26,7 +26,6 @@ let trait2_Blanket (#t : Type0) (trait1Inst : trait1_t t) : trait2_t t = {
 
 (** [blanket_impl::Trait2::foo]:
     Source: 'tests/src/blanket_impl.rs', lines 5:4-5:15 *)
-let trait2_foo_default
-  (#self : Type0) (self_clause : trait2_t self) : result unit =
+let trait2_foo_default (self : Type0) : result unit =
   Ok ()
 

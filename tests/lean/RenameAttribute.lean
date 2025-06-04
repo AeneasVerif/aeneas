@@ -98,8 +98,7 @@ def No_borrows_sum (max : U32) : Result U32 :=
 
 /- [rename_attribute::BoolTrait::ret_true]:
    Source: 'tests/src/rename_attribute.rs', lines 16:4-18:5 -/
-def BoolTrait.retTest.default
-  {Self : Type} (self_clause : BoolTest Self) (self : Self) : Result Bool :=
+def BoolTrait.retTest.default {Self : Type} (self : Self) : Result Bool :=
   ok true
 
 end rename_attribute

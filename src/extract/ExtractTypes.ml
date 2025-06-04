@@ -523,26 +523,9 @@ and extract_trait_instance_id_with_dot (span : Meta.span) (ctx : extraction_ctx)
     (id : trait_instance_id) : unit =
   match id with
   | Self ->
-      (* There are two situations:
-         - we are extracting a declared item and need to refer to another
-           item (for instance, we are extracting a method signature and
-           need to refer to an associated type).
-           We directly refer to the other item (we extract trait declarations
-           as structures, so we can refer to their fields)
-         - we are extracting a provided method for a trait declaration. We
-           refer to the item in the self trait clause (see {!SelfTraitClauseId}).
-
-         Remark: we can't get there for trait *implementations* because then the
-         types should have been normalized.
-      *)
-      if ctx.is_provided_method then
-        (* Provided method: use the trait self clause *)
-        let self_clause = ctx_get_trait_self_clause span ctx in
-        F.pp_print_string fmt (self_clause ^ ".")
-      else
-        (* Declaration: nothing to print, we will directly refer to
-           the item. *)
-        ()
+      (* This can only happen inside a trait (not inside its methods) so there
+         is nothing to print, we will directly refer to the item.*)
+      ()
   | _ ->
       (* Other cases *)
       extract_trait_instance_id span ctx fmt no_params_tys inside id;
@@ -1088,34 +1071,7 @@ let extract_trait_clause_type (span : Meta.span) (ctx : extraction_ctx)
 let insert_req_space (fmt : F.formatter) (space : bool ref) : unit =
   if !space then space := false else F.pp_print_space fmt ()
 
-(** Extract the trait self clause.
-
-    We add the trait self clause for provided methods (see {!TraitSelfClauseId}).
- *)
-let extract_trait_self_clause (insert_req_space : unit -> unit)
-    (ctx : extraction_ctx) (fmt : F.formatter) (trait_decl : trait_decl)
-    (params : string list) : unit =
-  insert_req_space ();
-  F.pp_print_string fmt "(";
-  let self_clause = ctx_get_trait_self_clause trait_decl.item_meta.span ctx in
-  F.pp_print_string fmt self_clause;
-  F.pp_print_space fmt ();
-  F.pp_print_string fmt ":";
-  F.pp_print_space fmt ();
-  let trait_id =
-    ctx_get_trait_decl trait_decl.item_meta.span trait_decl.def_id ctx
-  in
-  F.pp_print_string fmt trait_id;
-  List.iter
-    (fun p ->
-      F.pp_print_space fmt ();
-      F.pp_print_string fmt p)
-    params;
-  F.pp_print_string fmt ")"
-
 (**
- - [trait_decl]: if [Some], it means we are extracting the generics for a provided
-   method and need to insert a trait self clause (see {!TraitSelfClauseId}).
  - [as_implicits]: if [explicit] is [None], then we use this parameter to control
    whether the parameters should be extract as explicit or implicit.
  *)
@@ -1123,10 +1079,9 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) ?(use_forall = false)
     ?(use_forall_use_sep = true) ?(use_arrows = false)
     ?(as_implicits : bool = false) ?(space : bool ref option = None)
-    ?(trait_decl : trait_decl option = None) (origin : generic_origin)
-    (generics : generic_params) (explicit : explicit_info option)
-    (type_params : string list) (cg_params : string list)
-    (trait_clauses : string list) : unit =
+    (origin : generic_origin) (generics : generic_params)
+    (explicit : explicit_info option) (type_params : string list)
+    (cg_params : string list) (trait_clauses : string list) : unit =
   let all_params = List.concat [ type_params; cg_params; trait_clauses ] in
   (* HOL4 doesn't support const generics *)
   cassert __FILE__ __LINE__
@@ -1150,7 +1105,7 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
     | Some space -> insert_req_space fmt space
   in
   (* Print the type/const generic parameters *)
-  if all_params <> [] then (
+  if all_params <> [] then begin
     if use_forall then (
       if use_forall_use_sep then (
         insert_req_space ();
@@ -1235,58 +1190,8 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
               generics.const_generics,
             List.map (fun x -> (Explicit, x)) generics.trait_clauses )
     in
-    (* If we extract the generics for a provided method for a trait declaration
-       (indicated by the trait decl given as input), we need to split the generics:
-       - we print the generics for the trait decl
-       - we print the trait self clause
-       - we print the generics for the trait method
-    *)
-    match trait_decl with
-    | None -> print_generics type_params const_generics trait_clauses
-    | Some trait_decl ->
-        (* Split the generics between the generics specific to the trait decl
-           and those specific to the trait method *)
-        let open Collections.List in
-        let dtype_params, mtype_params =
-          split_at type_params (length trait_decl.generics.types)
-        in
-        let dcgs, mcgs =
-          split_at const_generics (length trait_decl.generics.const_generics)
-        in
-        let dtrait_clauses, mtrait_clauses =
-          split_at trait_clauses (length trait_decl.generics.trait_clauses)
-        in
-        (* Extract the trait decl generics - note that we can always deduce
-           those parameters from the trait self clause: for this reason
-           they are always implicit *)
-        let dtype_params =
-          List.map (fun (_, x) -> (Implicit, x)) dtype_params
-        in
-        let dcgs = List.map (fun (_, x) -> (Implicit, x)) dcgs in
-        let dtrait_clauses =
-          List.map (fun (_, x) -> (Implicit, x)) dtrait_clauses
-        in
-        print_generics dtype_params dcgs dtrait_clauses;
-        (* Extract the trait self clause *)
-        let params =
-          concat
-            [
-              map snd dtype_params;
-              map
-                (fun ((_, cg) : _ * const_generic_var) ->
-                  ctx_get_const_generic_var trait_decl.item_meta.span origin
-                    cg.index ctx)
-                dcgs;
-              map
-                (fun (_, c) ->
-                  ctx_get_local_trait_clause trait_decl.item_meta.span origin
-                    c.clause_id ctx)
-                dtrait_clauses;
-            ]
-        in
-        extract_trait_self_clause insert_req_space ctx fmt trait_decl params;
-        (* Extract the method generics *)
-        print_generics mtype_params mcgs mtrait_clauses)
+    print_generics type_params const_generics trait_clauses
+  end
 
 (** Extract a type declaration.
 
