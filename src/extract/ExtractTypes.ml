@@ -438,8 +438,8 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
         *)
         match trait_ref.trait_id with
         | Self ->
-            extract_trait_instance_id_with_dot span ctx fmt no_params_tys false
-              trait_ref.trait_id;
+            extract_trait_instance_id_if_not_self span ctx fmt no_params_tys
+              false trait_ref.trait_id;
             F.pp_print_string fmt type_name
         | _ ->
             (* HOL4 doesn't have 1st class types *)
@@ -515,12 +515,12 @@ and extract_generic_args (span : Meta.span) (ctx : extraction_ctx)
 (** We sometimes need to ignore references to `Self` when generating the
     code, espcially when we project associated items. For this reason we
     have a special function for the cases where we project from an instance
-    id (e.g., `<Self as Foo>::foo` - note that in the extracted code, the
-    projections are often written with a dot '.').
+    id (e.g., `<Self as Foo>::foo`).
  *)
-and extract_trait_instance_id_with_dot (span : Meta.span) (ctx : extraction_ctx)
-    (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) (inside : bool)
-    (id : trait_instance_id) : unit =
+and extract_trait_instance_id_if_not_self (span : Meta.span)
+    (ctx : extraction_ctx) (fmt : F.formatter)
+    (no_params_tys : TypeDeclId.Set.t) (inside : bool) (id : trait_instance_id)
+    : unit =
   match id with
   | Self ->
       (* This can only happen inside a trait (not inside its methods) so there
@@ -588,7 +588,8 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
   | ParentClause (inst_id, decl_id, clause_id) ->
       (* Use the trait decl id to lookup the name *)
       let name = ctx_get_trait_parent_clause span decl_id clause_id ctx in
-      extract_trait_instance_id_with_dot span ctx fmt no_params_tys true inst_id;
+      extract_trait_instance_id_if_not_self span ctx fmt no_params_tys true
+        inst_id;
       F.pp_print_string fmt (add_brackets name)
   | UnknownTrait _ ->
       (* This is an error case *)

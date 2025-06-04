@@ -3646,6 +3646,8 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
                     (Charon.Substitute.lookup_flat_method_sig trans_ctx.crate
                        tref.trait_decl_ref.trait_decl_id method_name)
                 in
+                (* TODO: we shouldn't call `SymbolicToPure` here, there should
+                   be a way to translate these signatures earlier. *)
                 SymbolicToPure.translate_fun_sig trans_ctx
                   (FRegular method_decl_id) method_name method_sig
                   (List.map (fun _ -> None) method_sig.inputs)
