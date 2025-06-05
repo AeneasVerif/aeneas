@@ -8,9 +8,9 @@ fi
 
 rebuild() {
     if which nix 2> /dev/null 1>&2; then
-        nix develop --command bash -c "make test"
+        nix develop --command bash -c "make test && opam install . -y"
     elif which rustup 2> /dev/null 1>&2; then
-        make test
+        make test && opam install . -y
     else
         echo 'Error: Neither `rustup` nor `nix` appears to be installed. Install one or the other in order to build `charon`.'
         exit 1
