@@ -3669,7 +3669,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
             match fid with
             | TraitMethod (trait_ref, _, _) -> trait_ref.trait_id
             (* Dummy, won't be used since we're not substituting for a trait. *)
-            | _ -> Self
+            | _ -> UnknownTrait "add_type_annotations_to_fun_decl"
           in
           (* Replace all the unknown implicit type variables with holes.
              Note that we assume that all the trait refs are there, meaning

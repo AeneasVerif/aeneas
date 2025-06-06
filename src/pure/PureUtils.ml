@@ -218,7 +218,8 @@ let make_subst_from_generics_for_trait (params : generic_params)
 
 let make_subst_from_generics (params : generic_params) (args : generic_args) :
     subst =
-  make_subst_from_generics_for_trait params Self args
+  make_subst_from_generics_for_trait params
+    (UnknownTrait "make_subst_from_generics") args
 
 (** Retrieve the list of fields for the given variant of a {!type:Aeneas.Pure.type_decl}.
 
