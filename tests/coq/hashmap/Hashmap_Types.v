@@ -10,6 +10,14 @@ Require Import Hashmap_TypesExternal.
 Include Hashmap_TypesExternal.
 Module Hashmap_Types.
 
+(** [hashmap::Fraction]
+    Source: 'tests/src/hashmap.rs', lines 44:0-47:1 *)
+Record Fraction_t :=
+mkFraction_t {
+  fraction_dividend : usize; fraction_divisor : usize;
+}
+.
+
 (** [hashmap::AList]
     Source: 'tests/src/hashmap.rs', lines 28:0-31:1 *)
 Inductive AList_t (T : Type) :=
@@ -19,14 +27,6 @@ Inductive AList_t (T : Type) :=
 
 Arguments AList_Cons { _ }.
 Arguments AList_Nil { _ }.
-
-(** [hashmap::Fraction]
-    Source: 'tests/src/hashmap.rs', lines 44:0-47:1 *)
-Record Fraction_t :=
-mkFraction_t {
-  fraction_dividend : usize; fraction_divisor : usize;
-}
-.
 
 (** [hashmap::HashMap]
     Source: 'tests/src/hashmap.rs', lines 50:0-62:1 *)

@@ -8,11 +8,6 @@ include Hashmap.Clauses
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
-(** [hashmap::hash_key]:
-    Source: 'tests/src/hashmap.rs', lines 36:0-41:1 *)
-let hash_key (k : usize) : result usize =
-  Ok k
-
 (** [hashmap::{core::clone::Clone for hashmap::Fraction}#1::clone]:
     Source: 'tests/src/hashmap.rs', lines 43:9-43:14 *)
 let clonehashmapFraction_clone (self : fraction_t) : result fraction_t =
@@ -23,6 +18,11 @@ let clonehashmapFraction_clone (self : fraction_t) : result fraction_t =
 let clonehashmapFraction_clone_from
   (self : fraction_t) (source : fraction_t) : result fraction_t =
   clonehashmapFraction_clone source
+
+(** [hashmap::hash_key]:
+    Source: 'tests/src/hashmap.rs', lines 36:0-41:1 *)
+let hash_key (k : usize) : result usize =
+  Ok k
 
 (** Trait implementation: [hashmap::{core::clone::Clone for hashmap::Fraction}#1]
     Source: 'tests/src/hashmap.rs', lines 43:9-43:14 *)

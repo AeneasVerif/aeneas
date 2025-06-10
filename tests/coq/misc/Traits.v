@@ -8,6 +8,17 @@ Import ListNotations.
 Local Open Scope Primitives_scope.
 Module Traits.
 
+(** [core::result::Result]
+    Source: '/rustc/library/core/src/result.rs', lines 528:0-528:21
+    Name pattern: [core::result::Result] *)
+Inductive core_result_Result_t (T : Type) (E : Type) :=
+| Core_result_Result_Ok : T -> core_result_Result_t T E
+| Core_result_Result_Err : E -> core_result_Result_t T E
+.
+
+Arguments Core_result_Result_Ok { _ } { _ }.
+Arguments Core_result_Result_Err { _ } { _ }.
+
 (** Trait declaration: [traits::BoolTrait]
     Source: 'tests/src/traits.rs', lines 3:0-11:1 *)
 Record BoolTrait_t (Self : Type) := mkBoolTrait_t {
@@ -19,15 +30,29 @@ Arguments mkBoolTrait_t { _ }.
 Arguments BoolTrait_t_get_bool { _ } _.
 Arguments BoolTrait_t_ret_true { _ } _.
 
-(** [traits::{traits::BoolTrait for bool}::get_bool]:
-    Source: 'tests/src/traits.rs', lines 14:4-16:5 *)
-Definition boolTraitBool_get_bool (self : bool) : result bool :=
-  Ok self.
+(** [traits::BoolTrait::ret_true]:
+    Source: 'tests/src/traits.rs', lines 8:4-10:5 *)
+Definition boolTrait_ret_true_default
+  {Self : Type} (self : Self) : result bool :=
+  Ok true
+.
 
 (** [traits::{traits::BoolTrait for bool}::ret_true]:
     Source: 'tests/src/traits.rs', lines 8:4-10:5 *)
 Definition boolTraitBool_ret_true (self : bool) : result bool :=
   Ok true.
+
+(** [traits::{traits::BoolTrait for core::option::Option<T>}#1::ret_true]:
+    Source: 'tests/src/traits.rs', lines 8:4-10:5 *)
+Definition boolTraitOption_ret_true
+  {T : Type} (self : option T) : result bool :=
+  Ok true
+.
+
+(** [traits::{traits::BoolTrait for bool}::get_bool]:
+    Source: 'tests/src/traits.rs', lines 14:4-16:5 *)
+Definition boolTraitBool_get_bool (self : bool) : result bool :=
+  Ok self.
 
 (** Trait implementation: [traits::{traits::BoolTrait for bool}]
     Source: 'tests/src/traits.rs', lines 13:0-17:1 *)
@@ -48,13 +73,6 @@ Definition test_bool_trait_bool (x : bool) : result bool :=
 Definition boolTraitOption_get_bool
   {T : Type} (self : option T) : result bool :=
   match self with | None => Ok false | Some _ => Ok true end
-.
-
-(** [traits::{traits::BoolTrait for core::option::Option<T>}#1::ret_true]:
-    Source: 'tests/src/traits.rs', lines 8:4-10:5 *)
-Definition boolTraitOption_ret_true
-  {T : Type} (self : option T) : result bool :=
-  Ok true
 .
 
 (** Trait implementation: [traits::{traits::BoolTrait for core::option::Option<T>}#1]
@@ -253,6 +271,23 @@ Definition testType_test
   else Ok false
 .
 
+(** Trait declaration: [traits::{traits::TestType<T>}#6::test::TestTrait]
+    Source: 'tests/src/traits.rs', lines 130:8-132:9 *)
+Record TestType_test_TestTrait_t (Self : Type) := mkTestType_test_TestTrait_t {
+  TestType_test_TestTrait_t_test : Self -> result bool;
+}.
+
+Arguments mkTestType_test_TestTrait_t { _ }.
+Arguments TestType_test_TestTrait_t_test { _ } _.
+
+(** Trait implementation: [traits::{traits::TestType<T>}#6::test::{traits::{traits::TestType<T>}#6::test::TestTrait for traits::{traits::TestType<T>}#6::test::TestType1}]
+    Source: 'tests/src/traits.rs', lines 140:8-144:9 *)
+Definition TestType_test_TestTraittraitsTestTypetestTestType1 :
+  TestType_test_TestTrait_t TestType_test_TestType1_t := {|
+  TestType_test_TestTrait_t_test :=
+    testType_test_TestTraittraitsTestTypetestTestType1_test;
+|}.
+
 (** [traits::BoolWrapper]
     Source: 'tests/src/traits.rs', lines 152:0-152:33 *)
 Definition BoolWrapper_t : Type := bool.
@@ -289,13 +324,6 @@ Arguments WithConstTy_tWithConstTy_t_LEN2 { _ } { _ } { _ } { _ } _.
 Arguments WithConstTy_tWithConstTy_t_ToU64Inst { _ } { _ } { _ } { _ } _.
 Arguments WithConstTy_t_f { _ } { _ } { _ } { _ } _.
 
-(** [traits::{traits::WithConstTy<u8, u64, 32: usize> for bool}#8::LEN1]
-    Source: 'tests/src/traits.rs', lines 177:4-177:27 *)
-Definition with_const_ty_bool_u8_u6432_len1_body : result usize := Ok 12%usize.
-Definition with_const_ty_bool_u8_u6432_len1 : usize :=
-  with_const_ty_bool_u8_u6432_len1_body%global
-.
-
 (** [traits::WithConstTy::LEN2]
     Source: 'tests/src/traits.rs', lines 166:4-166:27 *)
 Definition with_const_ty_len2_default_body (Self : Type) (Self_V : Type)
@@ -305,6 +333,13 @@ Definition with_const_ty_len2_default_body (Self : Type) (Self_V : Type)
 Definition with_const_ty_len2_default (Self : Type) (Self_V : Type) (Self_W :
   Type) (LEN : usize) : usize :=
   (with_const_ty_len2_default_body Self Self_V Self_W LEN)%global
+.
+
+(** [traits::{traits::WithConstTy<u8, u64, 32: usize> for bool}#8::LEN1]
+    Source: 'tests/src/traits.rs', lines 177:4-177:27 *)
+Definition with_const_ty_bool_u8_u6432_len1_body : result usize := Ok 12%usize.
+Definition with_const_ty_bool_u8_u6432_len1 : usize :=
+  with_const_ty_bool_u8_u6432_len1_body%global
 .
 
 (** [traits::{traits::WithConstTy<u8, u64, 32: usize> for bool}#8::f]:
@@ -640,17 +675,6 @@ Arguments mkFoo_t { _ } { _ }.
 Arguments foo_x { _ } { _ }.
 Arguments foo_y { _ } { _ }.
 
-(** [core::result::Result]
-    Source: '/rustc/library/core/src/result.rs', lines 528:0-528:21
-    Name pattern: [core::result::Result] *)
-Inductive core_result_Result_t (T : Type) (E : Type) :=
-| Core_result_Result_Ok : T -> core_result_Result_t T E
-| Core_result_Result_Err : E -> core_result_Result_t T E
-.
-
-Arguments Core_result_Result_Ok { _ } { _ }.
-Arguments Core_result_Result_Err { _ } { _ }.
-
 (** [traits::{traits::Foo<T, U>}#16::FOO]
     Source: 'tests/src/traits.rs', lines 334:4-334:43 *)
 Definition foo_foo_body {T : Type} (U : Type) (traitInst : Trait_t T)
@@ -679,29 +703,5 @@ Definition use_foo2
   :=
   Ok (foo_foo T traitInst)
 .
-
-(** [traits::BoolTrait::ret_true]:
-    Source: 'tests/src/traits.rs', lines 8:4-10:5 *)
-Definition boolTrait_ret_true_default
-  {Self : Type} (self : Self) : result bool :=
-  Ok true
-.
-
-(** Trait declaration: [traits::{traits::TestType<T>}#6::test::TestTrait]
-    Source: 'tests/src/traits.rs', lines 130:8-132:9 *)
-Record TestType_test_TestTrait_t (Self : Type) := mkTestType_test_TestTrait_t {
-  TestType_test_TestTrait_t_test : Self -> result bool;
-}.
-
-Arguments mkTestType_test_TestTrait_t { _ }.
-Arguments TestType_test_TestTrait_t_test { _ } _.
-
-(** Trait implementation: [traits::{traits::TestType<T>}#6::test::{traits::{traits::TestType<T>}#6::test::TestTrait for traits::{traits::TestType<T>}#6::test::TestType1}]
-    Source: 'tests/src/traits.rs', lines 140:8-144:9 *)
-Definition TestType_test_TestTraittraitsTestTypetestTestType1 :
-  TestType_test_TestTrait_t TestType_test_TestType1_t := {|
-  TestType_test_TestTrait_t_test :=
-    testType_test_TestTraittraitsTestTypetestTestType1_test;
-|}.
 
 End Traits.
