@@ -8,88 +8,6 @@ Import ListNotations.
 Local Open Scope Primitives_scope.
 Module DefaultedMethod.
 
-(** Trait declaration: [defaulted_method::Trait]
-    Source: 'tests/src/defaulted_method.rs', lines 2:0-7:1 *)
-Record Trait_t (Self : Type) := mkTrait_t {
-  Trait_t_provided_method : Self -> result u32;
-  Trait_t_required_method : Self -> result u32;
-}.
-
-Arguments mkTrait_t { _ }.
-Arguments Trait_t_provided_method { _ } _.
-Arguments Trait_t_required_method { _ } _.
-
-(** [defaulted_method::NoOverride]
-    Source: 'tests/src/defaulted_method.rs', lines 9:0-9:18 *)
-Definition NoOverride_t : Type := unit.
-
-(** [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}::provided_method]:
-    Source: 'tests/src/defaulted_method.rs', lines 11:4-13:5 *)
-Definition traitdefaulted_methodNoOverride_provided_method
-  (self : NoOverride_t) : result u32 :=
-  Ok 73%u32
-.
-
-(** [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}::required_method]:
-    Source: 'tests/src/defaulted_method.rs', lines 14:4-16:5 *)
-Definition traitdefaulted_methodNoOverride_required_method
-  (self : NoOverride_t) : result u32 :=
-  Ok 12%u32
-.
-
-(** Trait implementation: [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}]
-    Source: 'tests/src/defaulted_method.rs', lines 10:0-17:1 *)
-Definition Traitdefaulted_methodNoOverride : Trait_t NoOverride_t := {|
-  Trait_t_provided_method := traitdefaulted_methodNoOverride_provided_method;
-  Trait_t_required_method := traitdefaulted_methodNoOverride_required_method;
-|}.
-
-(** [defaulted_method::YesOverride]
-    Source: 'tests/src/defaulted_method.rs', lines 19:0-19:19 *)
-Definition YesOverride_t : Type := unit.
-
-(** [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}#1::required_method]:
-    Source: 'tests/src/defaulted_method.rs', lines 21:4-23:5 *)
-Definition traitdefaulted_methodYesOverride_required_method
-  (self : YesOverride_t) : result u32 :=
-  Ok 42%u32
-.
-
-(** [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}#1::provided_method]:
-    Source: 'tests/src/defaulted_method.rs', lines 3:4-5:5 *)
-Definition traitdefaulted_methodYesOverride_provided_method
-  (self : YesOverride_t) : result u32 :=
-  traitdefaulted_methodYesOverride_required_method self
-.
-
-(** Trait implementation: [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}#1]
-    Source: 'tests/src/defaulted_method.rs', lines 20:0-24:1 *)
-Definition Traitdefaulted_methodYesOverride : Trait_t YesOverride_t := {|
-  Trait_t_provided_method := traitdefaulted_methodYesOverride_provided_method;
-  Trait_t_required_method := traitdefaulted_methodYesOverride_required_method;
-|}.
-
-(** [core::cmp::impls::{core::cmp::Ord for i32}#77::min]:
-    Source: '/rustc/library/core/src/cmp.rs', lines 1048:4-1050:20
-    Name pattern: [core::cmp::impls::{core::cmp::Ord<i32>}::min] *)
-Axiom core_cmp_impls_OrdI32_min : i32 -> i32 -> result i32.
-
-(** [defaulted_method::main]:
-    Source: 'tests/src/defaulted_method.rs', lines 26:0-33:1 *)
-Definition main : result unit :=
-  _ <- traitdefaulted_methodNoOverride_provided_method tt;
-  _ <- traitdefaulted_methodYesOverride_provided_method tt;
-  n <- core_cmp_impls_OrdI32_min 10%i32 1%i32;
-  massert (n s= 1%i32)
-.
-
-(** [defaulted_method::Trait::provided_method]:
-    Source: 'tests/src/defaulted_method.rs', lines 3:4-5:5 *)
-Definition trait_provided_method_default
-  {Self : Type} (traitInst : Trait_t Self) (self : Self) : result u32 :=
-  traitInst.(Trait_t_required_method) self
-.
-
 (** Trait declaration: [core::cmp::PartialEq]
     Source: '/rustc/library/core/src/cmp.rs', lines 249:0-249:39
     Name pattern: [core::cmp::PartialEq] *)
@@ -177,5 +95,87 @@ Axiom core_cmp_impls_PartialOrdI32I32_partial_cmp
     Source: '/rustc/library/core/src/cmp.rs', lines 1938:16-1938:55
     Name pattern: [core::cmp::impls::{core::cmp::Ord<i32>}::cmp] *)
 Axiom core_cmp_impls_OrdI32_cmp : i32 -> i32 -> result core_cmp_Ordering_t.
+
+(** [core::cmp::impls::{core::cmp::Ord for i32}#77::min]:
+    Source: '/rustc/library/core/src/cmp.rs', lines 1936:12-1936:27
+    Name pattern: [core::cmp::impls::{core::cmp::Ord<i32>}::min] *)
+Axiom core_cmp_impls_OrdI32_min : i32 -> i32 -> result i32.
+
+(** Trait declaration: [defaulted_method::Trait]
+    Source: 'tests/src/defaulted_method.rs', lines 2:0-7:1 *)
+Record Trait_t (Self : Type) := mkTrait_t {
+  Trait_t_provided_method : Self -> result u32;
+  Trait_t_required_method : Self -> result u32;
+}.
+
+Arguments mkTrait_t { _ }.
+Arguments Trait_t_provided_method { _ } _.
+Arguments Trait_t_required_method { _ } _.
+
+(** [defaulted_method::Trait::provided_method]:
+    Source: 'tests/src/defaulted_method.rs', lines 3:4-5:5 *)
+Definition trait_provided_method_default
+  {Self : Type} (traitInst : Trait_t Self) (self : Self) : result u32 :=
+  traitInst.(Trait_t_required_method) self
+.
+
+(** [defaulted_method::NoOverride]
+    Source: 'tests/src/defaulted_method.rs', lines 9:0-9:18 *)
+Definition NoOverride_t : Type := unit.
+
+(** [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}::provided_method]:
+    Source: 'tests/src/defaulted_method.rs', lines 11:4-13:5 *)
+Definition traitdefaulted_methodNoOverride_provided_method
+  (self : NoOverride_t) : result u32 :=
+  Ok 73%u32
+.
+
+(** [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}::required_method]:
+    Source: 'tests/src/defaulted_method.rs', lines 14:4-16:5 *)
+Definition traitdefaulted_methodNoOverride_required_method
+  (self : NoOverride_t) : result u32 :=
+  Ok 12%u32
+.
+
+(** Trait implementation: [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}]
+    Source: 'tests/src/defaulted_method.rs', lines 10:0-17:1 *)
+Definition Traitdefaulted_methodNoOverride : Trait_t NoOverride_t := {|
+  Trait_t_provided_method := traitdefaulted_methodNoOverride_provided_method;
+  Trait_t_required_method := traitdefaulted_methodNoOverride_required_method;
+|}.
+
+(** [defaulted_method::YesOverride]
+    Source: 'tests/src/defaulted_method.rs', lines 19:0-19:19 *)
+Definition YesOverride_t : Type := unit.
+
+(** [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}#1::required_method]:
+    Source: 'tests/src/defaulted_method.rs', lines 21:4-23:5 *)
+Definition traitdefaulted_methodYesOverride_required_method
+  (self : YesOverride_t) : result u32 :=
+  Ok 42%u32
+.
+
+(** [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}#1::provided_method]:
+    Source: 'tests/src/defaulted_method.rs', lines 20:0-24:1 *)
+Definition traitdefaulted_methodYesOverride_provided_method
+  (self : YesOverride_t) : result u32 :=
+  traitdefaulted_methodYesOverride_required_method self
+.
+
+(** Trait implementation: [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}#1]
+    Source: 'tests/src/defaulted_method.rs', lines 20:0-24:1 *)
+Definition Traitdefaulted_methodYesOverride : Trait_t YesOverride_t := {|
+  Trait_t_provided_method := traitdefaulted_methodYesOverride_provided_method;
+  Trait_t_required_method := traitdefaulted_methodYesOverride_required_method;
+|}.
+
+(** [defaulted_method::main]:
+    Source: 'tests/src/defaulted_method.rs', lines 26:0-33:1 *)
+Definition main : result unit :=
+  _ <- traitdefaulted_methodNoOverride_provided_method tt;
+  _ <- traitdefaulted_methodYesOverride_provided_method tt;
+  n <- core_cmp_impls_OrdI32_min 10%i32 1%i32;
+  massert (n s= 1%i32)
+.
 
 End DefaultedMethod.

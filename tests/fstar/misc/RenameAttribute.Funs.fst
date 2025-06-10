@@ -7,13 +7,18 @@ include RenameAttribute.Clauses
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
+(** [rename_attribute::BoolTrait::ret_true]:
+    Source: 'tests/src/rename_attribute.rs', lines 16:4-18:5 *)
+let boolTrait_retTest_default (#self : Type0) (self1 : self) : result bool =
+  Ok true
+
 (** [rename_attribute::{rename_attribute::BoolTrait for bool}::get_bool]:
     Source: 'tests/src/rename_attribute.rs', lines 23:4-25:5 *)
 let boolTraitBool_getTest (self : bool) : result bool =
   Ok self
 
 (** [rename_attribute::{rename_attribute::BoolTrait for bool}::ret_true]:
-    Source: 'tests/src/rename_attribute.rs', lines 16:4-18:5 *)
+    Source: 'tests/src/rename_attribute.rs', lines 22:0-26:1 *)
 let boolTraitBool_retTest (self : bool) : result bool =
   Ok true
 
@@ -64,9 +69,4 @@ let rec no_borrows_sum_loop
     Source: 'tests/src/rename_attribute.rs', lines 66:0-76:1 *)
 let no_borrows_sum (max : u32) : result u32 =
   no_borrows_sum_loop max 0 0
-
-(** [rename_attribute::BoolTrait::ret_true]:
-    Source: 'tests/src/rename_attribute.rs', lines 16:4-18:5 *)
-let boolTrait_retTest_default (#self : Type0) (self1 : self) : result bool =
-  Ok true
 

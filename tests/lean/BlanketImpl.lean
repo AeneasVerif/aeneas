@@ -17,8 +17,13 @@ structure Trait1 (Self : Type) where
 structure Trait2 (Self : Type) where
   foo : Result Unit
 
-/- [blanket_impl::{blanket_impl::Trait2 for T}::foo]:
+/- [blanket_impl::Trait2::foo]:
    Source: 'tests/src/blanket_impl.rs', lines 5:4-5:15 -/
+def Trait2.foo.default (Self : Type) : Result Unit :=
+  ok ()
+
+/- [blanket_impl::{blanket_impl::Trait2 for T}::foo]:
+   Source: 'tests/src/blanket_impl.rs', lines 9:0-9:31 -/
 def Trait2.Blanket.foo {T : Type} (Trait1Inst : Trait1 T) : Result Unit :=
   ok ()
 
@@ -28,10 +33,5 @@ def Trait2.Blanket.foo {T : Type} (Trait1Inst : Trait1 T) : Result Unit :=
 def Trait2.Blanket {T : Type} (Trait1Inst : Trait1 T) : Trait2 T := {
   foo := Trait2.Blanket.foo Trait1Inst
 }
-
-/- [blanket_impl::Trait2::foo]:
-   Source: 'tests/src/blanket_impl.rs', lines 5:4-5:15 -/
-def Trait2.foo.default (Self : Type) : Result Unit :=
-  ok ()
 
 end blanket_impl

@@ -21,7 +21,7 @@ def ClonehashmapFraction.clone (self : Fraction) : Result Fraction :=
   ok self
 
 /- [hashmap::{core::clone::Clone for hashmap::Fraction}#1::clone_from]:
-   Source: '/rustc/library/core/src/clone.rs', lines 174:4-174:43 -/
+   Source: 'tests/src/hashmap.rs', lines 43:9-43:14 -/
 def ClonehashmapFraction.clone_from
   (self : Fraction) (source : Fraction) : Result Fraction :=
   ClonehashmapFraction.clone source
