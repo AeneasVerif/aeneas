@@ -291,8 +291,8 @@ def progressWith (fExpr : Expr) (th : Expr)
             pure (Ok (hPost.fvarId! :: hPosts).reverse.toArray)
         let curPostId := (← hPost.fvarId!.getDecl).userName
         let res ← splitPostWithIds curPostId [] hPost ids
-        --if let Ok hPosts := res then
-        --  trace[Progress] "type of hPosts is {← hPosts.mapM (·.getType >>= (liftM ∘ ppExpr))}"
+        if let Ok hPosts := res then
+          trace[Progress] "type of hPosts is {← hPosts.mapM (·.getType >>= (liftM ∘ ppExpr))}"
         next res
   splitExistsEqAndPost fun res => do
   match res with
