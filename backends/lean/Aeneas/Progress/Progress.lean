@@ -178,7 +178,9 @@ def progressWith (fExpr : Expr) (th : Expr)
      We introduce the existentially quantified variables and split the top-most
      conjunction if there is one. We use the provided `ids` list to name the
      introduced variables. -/
-  let res : Result (Array FVarId) MessageData ← splitAllExistsTac thAsm ids.toList fun h ids => do
+  let splitExistsEqAndPost (next : Result (Array FVarId) MessageData → TacticM (Result ProgressWithOutput MessageData)) :
+    TacticM (Result ProgressWithOutput MessageData) := do
+    splitAllExistsTac thAsm ids.toList fun h ids => do
     /- Introduce the pretty equality if the user requests it.
        We take care of introducing it *before* splitting the post-conditions, so that those appear
        after it.
@@ -213,8 +215,8 @@ def progressWith (fExpr : Expr) (th : Expr)
        For the conjunctions, we split according once to separate the equality `f ... = .ret ...`
        from the postcondition, if there is, then continue to split the postcondition if there
        are remaining ids. -/
-    let splitEqAndPost (k : Expr → Option Expr → List (Option Name) → TacticM (Result (Array FVarId) MessageData)) :
-      TacticM (Result (Array FVarId) MessageData) := do
+    let splitEqAndPost (k : Expr → Option Expr → List (Option Name) → TacticM (Result ProgressWithOutput MessageData)) :
+      TacticM (Result ProgressWithOutput MessageData) := do
       let hTy ← inferType h
       if ← isConj hTy then
         let hName := (← h.fvarId!.getDecl).userName
@@ -241,7 +243,7 @@ def progressWith (fExpr : Expr) (th : Expr)
     assert! (goals.length ≤ 1) -- We focused on the main goal so there should be at most one goal
     if goals == [] then
       trace[Progress] "The main goal was solved!"
-      pure (Ok #[])
+      next (Ok #[])
     else
       trace[Progress] "goal after applying the eq and simplifying the binds: {← getMainGoal}"
       -- TODO: remove this? (some types get unfolded too much: we "fold" them back)
@@ -261,7 +263,7 @@ def progressWith (fExpr : Expr) (th : Expr)
         -- Sanity check
         if ¬ ids.isEmpty then
           logWarning m!"Too many ids provided ({ids}): there is no postcondition to split"
-        return (Ok #[])
+        next (Ok #[])
       | some hPost => do
         let rec splitPostWithIds (prevId : Name) (hPosts : List FVarId) (hPost : Expr) (ids0 : List (Option Name)) :
         TacticM (Result (Array FVarId) MessageData) := do
@@ -288,10 +290,15 @@ def progressWith (fExpr : Expr) (th : Expr)
             logWarning m!"Too many ids provided ({ids0}) not enough conjuncts to split in the postcondition"
             pure (Ok (hPost.fvarId! :: hPosts).reverse.toArray)
         let curPostId := (← hPost.fvarId!.getDecl).userName
-        splitPostWithIds curPostId [] hPost ids
+        let res ← splitPostWithIds curPostId [] hPost ids
+        --if let Ok hPosts := res then
+        --  trace[Progress] "type of hPosts is {← hPosts.mapM (·.getType >>= (liftM ∘ ppExpr))}"
+        next res
+  splitExistsEqAndPost fun res => do
   match res with
-  | Error msg => return (Error msg) -- Can we get there? We're using "return"
+  | Error msg => return (Error msg) -- Can we get there? We're using `return`
   | Ok hPosts =>
+    trace[Progress] "type of hPosts is {← hPosts.mapM (·.getType >>= (liftM ∘ ppExpr))}"
     -- Update the set of goals
     let curGoals ← getUnsolvedGoals
     trace[Progress] "current goals: {curGoals}"
