@@ -12,11 +12,6 @@ Require Import Hashmap_FunsExternal.
 Include Hashmap_FunsExternal.
 Module Hashmap_Funs.
 
-(** [hashmap::hash_key]:
-    Source: 'tests/src/hashmap.rs', lines 36:0-41:1 *)
-Definition hash_key (k : usize) : result usize :=
-  Ok k.
-
 (** [hashmap::{core::clone::Clone for hashmap::Fraction}#1::clone]:
     Source: 'tests/src/hashmap.rs', lines 43:9-43:14 *)
 Definition clonehashmapFraction_clone
@@ -30,6 +25,11 @@ Definition clonehashmapFraction_clone_from
   (self : Fraction_t) (source : Fraction_t) : result Fraction_t :=
   clonehashmapFraction_clone source
 .
+
+(** [hashmap::hash_key]:
+    Source: 'tests/src/hashmap.rs', lines 36:0-41:1 *)
+Definition hash_key (k : usize) : result usize :=
+  Ok k.
 
 (** Trait implementation: [hashmap::{core::clone::Clone for hashmap::Fraction}#1]
     Source: 'tests/src/hashmap.rs', lines 43:9-43:14 *)

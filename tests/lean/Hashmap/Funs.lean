@@ -10,11 +10,6 @@ set_option linter.unusedVariables false
 
 namespace hashmap
 
-/- [hashmap::hash_key]:
-   Source: 'tests/src/hashmap.rs', lines 36:0-41:1 -/
-def hash_key (k : Usize) : Result Usize :=
-  ok k
-
 /- [hashmap::{core::clone::Clone for hashmap::Fraction}#1::clone]:
    Source: 'tests/src/hashmap.rs', lines 43:9-43:14 -/
 def ClonehashmapFraction.clone (self : Fraction) : Result Fraction :=
@@ -25,6 +20,11 @@ def ClonehashmapFraction.clone (self : Fraction) : Result Fraction :=
 def ClonehashmapFraction.clone_from
   (self : Fraction) (source : Fraction) : Result Fraction :=
   ClonehashmapFraction.clone source
+
+/- [hashmap::hash_key]:
+   Source: 'tests/src/hashmap.rs', lines 36:0-41:1 -/
+def hash_key (k : Usize) : Result Usize :=
+  ok k
 
 /- Trait implementation: [hashmap::{core::clone::Clone for hashmap::Fraction}#1]
    Source: 'tests/src/hashmap.rs', lines 43:9-43:14 -/
