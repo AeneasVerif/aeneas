@@ -291,14 +291,12 @@ def progressWith (fExpr : Expr) (th : Expr)
             pure (Ok (hPost.fvarId! :: hPosts).reverse.toArray)
         let curPostId := (← hPost.fvarId!.getDecl).userName
         let res ← splitPostWithIds curPostId [] hPost ids
-        if let Ok hPosts := res then
-          trace[Progress] "type of hPosts is {← hPosts.mapM (·.getType >>= (liftM ∘ ppExpr))}"
         next res
   splitExistsEqAndPost fun res => do
   match res with
   | Error msg => return (Error msg) -- Can we get there? We're using `return`
   | Ok hPosts =>
-    trace[Progress] "type of hPosts is {← hPosts.mapM (·.getType >>= (liftM ∘ ppExpr))}"
+    trace[Progress] "type of hPosts: {← hPosts.mapM (·.getType >>= (liftM ∘ ppExpr))}"
     -- Update the set of goals
     let curGoals ← getUnsolvedGoals
     trace[Progress] "current goals: {curGoals}"
