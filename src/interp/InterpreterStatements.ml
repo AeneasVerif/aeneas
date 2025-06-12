@@ -797,6 +797,45 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
   (* Evaluate the statement *)
   comp cc (eval_statement_raw config st ctx)
 
+and eval_statement_list (config : config) span (stmts : statement list) :
+    stl_cm_fun =
+ fun ctx ->
+  match stmts with
+  | [] -> ([ (ctx, Unit) ], cf_singleton __FILE__ __LINE__ span)
+  | hd :: tl ->
+      (* Evaluate the first statement *)
+      let ctx_resl, cf_st1 = eval_statement config hd ctx in
+      (* Evaluate the sequence (evaluate the following statements if the first
+         statement successfully evaluated, otherwise transmit the control-flow
+         break) *)
+      let ctx_res_cfl =
+        List.map
+          (fun (ctx, res) ->
+            match res with
+            (* Evaluation successful: evaluate the second statement *)
+            | Unit -> eval_statement_list config span tl ctx
+            (* Control-flow break: transmit. We enumerate the cases on purpose *)
+            | Panic
+            | Break _
+            | Continue _
+            | Return
+            | LoopReturn _
+            | EndEnterLoop _
+            | EndContinue _ ->
+                ([ (ctx, res) ], cf_singleton __FILE__ __LINE__ span))
+          ctx_resl
+      in
+      (* Put everything together:
+         - we return the flattened list of contexts and results
+         - we need to build the continuation which will build the whole
+           expression from the continuations for the individual branches
+      *)
+      let ctx_resl, cf_st2 = comp_seqs __FILE__ __LINE__ span ctx_res_cfl in
+      (ctx_resl, cc_comp cf_st1 cf_st2)
+
+and eval_block (config : config) (b : block) : stl_cm_fun =
+  eval_statement_list config b.span b.statements
+
 and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
  fun ctx ->
   log#ltrace
@@ -890,38 +929,8 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
       ([ (ctx, Unit) ], cf_singleton __FILE__ __LINE__ st.span)
   | CopyNonOverlapping _ ->
       craise __FILE__ __LINE__ st.span "CopyNonOverlapping is not supported yet"
-  | Sequence (st1, st2) ->
-      (* Evaluate the first statement *)
-      let ctx_resl, cf_st1 = eval_statement config st1 ctx in
-      (* Evaluate the sequence (evaluate the second statement if the first
-         statement successfully evaluated, otherwise transfmit the control-flow
-         break) *)
-      let ctx_res_cfl =
-        List.map
-          (fun (ctx, res) ->
-            match res with
-            (* Evaluation successful: evaluate the second statement *)
-            | Unit -> eval_statement config st2 ctx
-            (* Control-flow break: transmit. We enumerate the cases on purpose *)
-            | Panic
-            | Break _
-            | Continue _
-            | Return
-            | LoopReturn _
-            | EndEnterLoop _
-            | EndContinue _ ->
-                ([ (ctx, res) ], cf_singleton __FILE__ __LINE__ st.span))
-          ctx_resl
-      in
-      (* Put everything together:
-         - we return the flattened list of contexts and results
-         - we need to build the continuation which will build the whole
-           expression from the continuations for the individual branches
-      *)
-      let ctx_resl, cf_st2 = comp_seqs __FILE__ __LINE__ st.span ctx_res_cfl in
-      (ctx_resl, cc_comp cf_st1 cf_st2)
   | Loop loop_body ->
-      let eval_loop_body = eval_statement config loop_body in
+      let eval_loop_body = eval_block config loop_body in
       InterpreterLoops.eval_loop config st.span eval_loop_body ctx
   | Switch switch -> eval_switch config st.span switch ctx
   | Deinit _ | StorageDead _ ->
@@ -1008,7 +1017,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
    * *)
   (* Match on the targets *)
   match switch with
-  | If (op, st1, st2) ->
+  | If (op, true_block, false_block) ->
       (* Evaluate the operand *)
       let op_v, ctx, cf_eval_op = eval_operand config span op ctx in
       (* Switch on the value *)
@@ -1016,8 +1025,8 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
         match op_v.value with
         | VLiteral (VBool b) ->
             (* Branch *)
-            if b then eval_statement config st1 ctx
-            else eval_statement config st2 ctx
+            if b then eval_block config true_block ctx
+            else eval_block config false_block ctx
         | VSymbolic sv ->
             (* Expand the symbolic boolean, and continue by evaluating
                the branches *)
@@ -1026,8 +1035,8 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
                 (S.mk_opt_place_from_op span op ctx)
                 ctx
             in
-            let resl_true = eval_statement config st1 ctx_true in
-            let resl_false = eval_statement config st2 ctx_false in
+            let resl_true = eval_block config true_block ctx_true in
+            let resl_false = eval_block config false_block ctx_false in
             let ctx_resl, cf_branches =
               comp_seqs __FILE__ __LINE__ span [ resl_true; resl_false ]
             in
@@ -1052,8 +1061,8 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
             sanity_check __FILE__ __LINE__ (sv.int_ty = int_ty) span;
             (* Find the branch *)
             match List.find_opt (fun (svl, _) -> List.mem sv svl) stgts with
-            | None -> eval_statement config otherwise ctx
-            | Some (_, tgt) -> eval_statement config tgt ctx)
+            | None -> eval_block config otherwise ctx
+            | Some (_, tgt) -> eval_block config tgt ctx)
         | VSymbolic sv ->
             (* Several branches may be grouped together: every branch is described
                by a pair (list of values, branch expression).
@@ -1075,13 +1084,11 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
             (* Evaluate the branches: first the "regular" branches *)
             let resl_branches =
               List.map
-                (fun (ctx, branch) -> eval_statement config branch ctx)
+                (fun (ctx, branch) -> eval_block config branch ctx)
                 (List.combine ctx_branches branches)
             in
             (* Then evaluate the "otherwise" branch *)
-            let resl_otherwise =
-              eval_statement config otherwise ctx_otherwise
-            in
+            let resl_otherwise = eval_block config otherwise ctx_otherwise in
             (* Compose the continuations *)
             let resl, cf =
               comp_seqs __FILE__ __LINE__ span
@@ -1119,8 +1126,8 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
             | None -> (
                 match otherwise with
                 | None -> craise __FILE__ __LINE__ span "No otherwise branch"
-                | Some otherwise -> eval_statement config otherwise ctx)
-            | Some (_, tgt) -> eval_statement config tgt ctx)
+                | Some otherwise -> eval_block config otherwise ctx)
+            | Some (_, tgt) -> eval_block config tgt ctx)
         | VSymbolic sv ->
             (* Expand the symbolic value - may lead to branching *)
             let ctxl, cf_expand =
@@ -1528,10 +1535,10 @@ and eval_builtin_function_call_symbolic (config : config) (span : Meta.span)
   end
 
 (** Evaluate a statement seen as a function body *)
-and eval_function_body (config : config) (body : statement) : stl_cm_fun =
+and eval_function_body (config : config) (body : block) : stl_cm_fun =
  fun ctx ->
   log#ltrace (lazy "eval_function_body:");
-  let ctx_resl, cf_body = eval_statement config body ctx in
+  let ctx_resl, cf_body = eval_block config body ctx in
   let ctx_res_cfl =
     List.map
       (fun (ctx, res) ->

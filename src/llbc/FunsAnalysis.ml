@@ -61,7 +61,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
     let can_diverge = ref false in
     let is_rec = ref false in
     let group_has_builtin_info = ref false in
-    let name_matcher_ctx : LlbcAst.statement Charon.NameMatcher.ctx =
+    let name_matcher_ctx : LlbcAst.block Charon.NameMatcher.ctx =
       Charon.NameMatcher.ctx_from_crate m
     in
 
@@ -174,7 +174,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
             (if Option.is_some f.is_global_initializer then false
              else if not use_state then false
              else info_stateful)
-      | Some body -> obj#visit_statement body.body.span body.body
+      | Some body -> obj#visit_block body.body.span body.body
     in
     List.iter visit_fun d;
     (* We need to know if the declaration group contains a global - note that

@@ -51,8 +51,5 @@ val create_push_abstractions_from_abs_region_groups :
   eval_ctx ->
   eval_ctx
 
-(** Evaluate a statement *)
-val eval_statement : config -> statement -> stl_cm_fun
-
-(** Evaluate a statement seen as a function body *)
-val eval_function_body : config -> statement -> stl_cm_fun
+(** Evaluate a function body *)
+val eval_function_body : config -> block -> stl_cm_fun
