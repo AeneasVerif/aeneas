@@ -15,18 +15,18 @@ namespace hashmap
 def hash_key (k : Usize) : Result Usize :=
   ok k
 
-/- [hashmap::{core::clone::Clone for hashmap::Fraction}#1::clone]:
+/- [hashmap::{core::clone::Clone for hashmap::Fraction}::clone]:
    Source: 'tests/src/hashmap.rs', lines 43:9-43:14 -/
 def ClonehashmapFraction.clone (self : Fraction) : Result Fraction :=
   ok self
 
-/- [hashmap::{core::clone::Clone for hashmap::Fraction}#1::clone_from]:
+/- [hashmap::{core::clone::Clone for hashmap::Fraction}::clone_from]:
    Source: 'tests/src/hashmap.rs', lines 43:9-43:14 -/
 def ClonehashmapFraction.clone_from
   (self : Fraction) (source : Fraction) : Result Fraction :=
   ClonehashmapFraction.clone source
 
-/- Trait implementation: [hashmap::{core::clone::Clone for hashmap::Fraction}#1]
+/- Trait implementation: [hashmap::{core::clone::Clone for hashmap::Fraction}]
    Source: 'tests/src/hashmap.rs', lines 43:9-43:14 -/
 @[reducible]
 def core.clone.ClonehashmapFraction : core.clone.Clone Fraction := {
@@ -34,7 +34,7 @@ def core.clone.ClonehashmapFraction : core.clone.Clone Fraction := {
   clone_from := ClonehashmapFraction.clone_from
 }
 
-/- Trait implementation: [hashmap::{core::marker::Copy for hashmap::Fraction}#2]
+/- Trait implementation: [hashmap::{core::marker::Copy for hashmap::Fraction}]
    Source: 'tests/src/hashmap.rs', lines 43:16-43:20 -/
 @[reducible]
 def core.marker.CopyhashmapFraction : core.marker.Copy Fraction := {

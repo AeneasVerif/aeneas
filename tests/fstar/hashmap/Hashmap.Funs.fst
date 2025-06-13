@@ -13,25 +13,25 @@ include Hashmap.Clauses
 let hash_key (k : usize) : result usize =
   Ok k
 
-(** [hashmap::{core::clone::Clone for hashmap::Fraction}#1::clone]:
+(** [hashmap::{core::clone::Clone for hashmap::Fraction}::clone]:
     Source: 'tests/src/hashmap.rs', lines 43:9-43:14 *)
 let clonehashmapFraction_clone (self : fraction_t) : result fraction_t =
   Ok self
 
-(** [hashmap::{core::clone::Clone for hashmap::Fraction}#1::clone_from]:
+(** [hashmap::{core::clone::Clone for hashmap::Fraction}::clone_from]:
     Source: 'tests/src/hashmap.rs', lines 43:9-43:14 *)
 let clonehashmapFraction_clone_from
   (self : fraction_t) (source : fraction_t) : result fraction_t =
   clonehashmapFraction_clone source
 
-(** Trait implementation: [hashmap::{core::clone::Clone for hashmap::Fraction}#1]
+(** Trait implementation: [hashmap::{core::clone::Clone for hashmap::Fraction}]
     Source: 'tests/src/hashmap.rs', lines 43:9-43:14 *)
 let core_clone_ClonehashmapFraction : core_clone_Clone fraction_t = {
   clone = clonehashmapFraction_clone;
   clone_from = clonehashmapFraction_clone_from;
 }
 
-(** Trait implementation: [hashmap::{core::marker::Copy for hashmap::Fraction}#2]
+(** Trait implementation: [hashmap::{core::marker::Copy for hashmap::Fraction}]
     Source: 'tests/src/hashmap.rs', lines 43:16-43:20 *)
 let core_marker_CopyhashmapFraction : core_marker_Copy fraction_t = {
   cloneInst = core_clone_ClonehashmapFraction;

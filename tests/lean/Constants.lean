@@ -158,7 +158,7 @@ def get_z2 : Result I32 :=
 structure V (T : Type) (N : Usize) where
   x : Array T N
 
-/- [constants::{constants::V<T, N>}#1::LEN]
+/- [constants::{constants::V<T, N>}::LEN]
    Source: 'tests/src/constants.rs', lines 93:4-93:29 -/
 @[global_simps] def V.LEN_body (T : Type) (N : Usize) : Result Usize := ok N
 @[global_simps, irreducible]

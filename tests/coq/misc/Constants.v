@@ -168,7 +168,7 @@ Record V_t (T : Type) (N : usize) := mkV_t { v_x : array T N; }.
 Arguments mkV_t { _ } { _ }.
 Arguments v_x { _ } { _ }.
 
-(** [constants::{constants::V<T, N>}#1::LEN]
+(** [constants::{constants::V<T, N>}::LEN]
     Source: 'tests/src/constants.rs', lines 93:4-93:29 *)
 Definition v_len_body (T : Type) (N : usize) : result usize := Ok N.
 Definition v_len (T : Type) (N : usize) : usize := (v_len_body T N)%global.
