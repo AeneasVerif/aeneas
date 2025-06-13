@@ -265,13 +265,11 @@ def WithConstTyBoolU8U6432.LEN1 : Usize :=
 /- [traits::WithConstTy::LEN2]
    Source: 'tests/src/traits.rs', lines 166:4-166:27 -/
 @[global_simps]
-def WithConstTy.LEN2_default_body (Self : Type) (Self_V : Type) (Self_W : Type)
-  (LEN : Usize) : Result Usize :=
+def WithConstTy.LEN2_default_body (Self : Type) (LEN : Usize) : Result Usize :=
   ok 32#usize
 @[global_simps, irreducible]
-def WithConstTy.LEN2_default (Self : Type) (Self_V : Type) (Self_W : Type) (LEN
-  : Usize) : Usize :=
-  eval_global (WithConstTy.LEN2_default_body Self Self_V Self_W LEN)
+def WithConstTy.LEN2_default (Self : Type) (LEN : Usize) : Usize :=
+  eval_global (WithConstTy.LEN2_default_body Self LEN)
 
 /- [traits::{traits::WithConstTy<u8, u64, 32: usize> for bool}#8::f]:
    Source: 'tests/src/traits.rs', lines 182:4-182:42 -/
@@ -283,7 +281,7 @@ def WithConstTyBoolU8U6432.f (i : U64) (a : Array U8 32#usize) : Result U64 :=
 @[reducible]
 def WithConstTyBoolU8U6432 : WithConstTy Bool U8 U64 32#usize := {
   LEN1 := WithConstTyBoolU8U6432.LEN1
-  LEN2 := WithConstTy.LEN2_default Bool U8 U64 32#usize
+  LEN2 := WithConstTy.LEN2_default Bool 32#usize
   ToU64Inst := ToU64U64
   f := WithConstTyBoolU8U6432.f
 }
