@@ -1,12 +1,13 @@
 import Aeneas.Std.Scalar.Core
 import Aeneas.Std.Scalar.Misc
+import Aeneas.Std.Scalar.Elab
 import Aeneas.ScalarTac
 import Aeneas.Std.Core
 import Mathlib.Data.BitVec
 
 namespace Aeneas.Std
 
-open Result Error Arith
+open Result Error Arith ScalarElab
 
 /-!
 # Remainder: Definitions
@@ -89,51 +90,11 @@ theorem IScalar.rem_bv_spec {ty} (x : IScalar ty) {y : IScalar ty} (hzero : y.va
   simp only [val]
   simp only [BitVec.toInt_srem, bv_toInt_eq]
 
-theorem U8.rem_bv_spec (x : U8) {y : U8} (hnz : y.val ≠ 0) :
+uscalar theorem «%S».rem_bv_spec (x : «%S») {y : «%S»} (hnz : y.val ≠ 0) :
   ∃ z, x % y = ok z ∧ (↑z : Nat) = ↑x % ↑y ∧ z.bv = x.bv % y.bv :=
   UScalar.rem_bv_spec x hnz
 
-theorem U16.rem_bv_spec (x : U16) {y : U16} (hnz : y.val ≠ 0) :
-  ∃ z, x % y = ok z ∧ (↑z : Nat) = ↑x % ↑y ∧ z.bv = x.bv % y.bv :=
-  UScalar.rem_bv_spec x hnz
-
-theorem U32.rem_bv_spec (x : U32) {y : U32} (hnz : y.val ≠ 0) :
-  ∃ z, x % y = ok z ∧ (↑z : Nat) = ↑x % ↑y ∧ z.bv = x.bv % y.bv :=
-  UScalar.rem_bv_spec x hnz
-
-theorem U64.rem_bv_spec (x : U64) {y : U64} (hnz : y.val ≠ 0) :
-  ∃ z, x % y = ok z ∧ (↑z : Nat) = ↑x % ↑y ∧ z.bv = x.bv % y.bv :=
-  UScalar.rem_bv_spec x hnz
-
-theorem U128.rem_bv_spec (x : U128) {y : U128} (hnz : y.val ≠ 0) :
-  ∃ z, x % y = ok z ∧ (↑z : Nat) = ↑x % ↑y ∧ z.bv = x.bv % y.bv :=
-  UScalar.rem_bv_spec x hnz
-
-theorem Usize.rem_bv_spec (x : Usize) {y : Usize} (hnz : y.val ≠ 0) :
-  ∃ z, x % y = ok z ∧ (↑z : Nat) = ↑x % ↑y ∧ z.bv = x.bv % y.bv :=
-  UScalar.rem_bv_spec x hnz
-
-theorem I8.rem_bv_spec (x : I8) {y : I8} (hnz : y.val ≠ 0) :
-  ∃ z, x % y = ok z ∧ (↑z : Int) = Int.tmod ↑x ↑y ∧ z.bv = BitVec.srem x.bv y.bv :=
-  IScalar.rem_bv_spec x hnz
-
-theorem I16.rem_bv_spec (x : I16) {y : I16} (hnz : y.val ≠ 0) :
-  ∃ z, x % y = ok z ∧ (↑z : Int) = Int.tmod ↑x ↑y ∧ z.bv = BitVec.srem x.bv y.bv :=
-  IScalar.rem_bv_spec x hnz
-
-theorem I32.rem_bv_spec (x : I32) {y : I32} (hnz : y.val ≠ 0) :
-  ∃ z, x % y = ok z ∧ (↑z : Int) = Int.tmod ↑x ↑y ∧ z.bv = BitVec.srem x.bv y.bv :=
-  IScalar.rem_bv_spec x hnz
-
-theorem I64.rem_bv_spec (x : I64) {y : I64} (hnz : y.val ≠ 0) :
-  ∃ z, x % y = ok z ∧ (↑z : Int) = Int.tmod ↑x ↑y ∧ z.bv = BitVec.srem x.bv y.bv :=
-  IScalar.rem_bv_spec x hnz
-
-theorem I128.rem_bv_spec (x : I128) {y : I128} (hnz : y.val ≠ 0) :
-  ∃ z, x % y = ok z ∧ (↑z : Int) = Int.tmod ↑x ↑y ∧ z.bv = BitVec.srem x.bv y.bv :=
-  IScalar.rem_bv_spec x hnz
-
-theorem Isize.rem_bv_spec (x : I128) {y : I128} (hnz : y.val ≠ 0) :
+iscalar theorem «%S».rem_bv_spec (x : «%S») {y : «%S»} (hnz : y.val ≠ 0) :
   ∃ z, x % y = ok z ∧ (↑z : Int) = Int.tmod ↑x ↑y ∧ z.bv = BitVec.srem x.bv y.bv :=
   IScalar.rem_bv_spec x hnz
 
@@ -153,51 +114,11 @@ theorem IScalar.rem_spec {ty} (x : IScalar ty) {y : IScalar ty} (hzero : y.val �
   have ⟨ z, hz ⟩ := rem_bv_spec x hzero
   simp [hz]
 
-@[progress] theorem U8.rem_spec (x : U8) {y : U8} (hnz : y.val ≠ 0) :
+uscalar @[progress] theorem «%S».rem_spec (x : «%S») {y : «%S»} (hnz : y.val ≠ 0) :
   ∃ z, x % y = ok z ∧ (↑z : Nat) = ↑x % ↑y :=
   UScalar.rem_spec x hnz
 
-@[progress] theorem U16.rem_spec (x : U16) {y : U16} (hnz : y.val ≠ 0) :
-  ∃ z, x % y = ok z ∧ (↑z : Nat) = ↑x % ↑y :=
-  UScalar.rem_spec x hnz
-
-@[progress] theorem U32.rem_spec (x : U32) {y : U32} (hnz : y.val ≠ 0) :
-  ∃ z, x % y = ok z ∧ (↑z : Nat) = ↑x % ↑y :=
-  UScalar.rem_spec x hnz
-
-@[progress] theorem U64.rem_spec (x : U64) {y : U64} (hnz : y.val ≠ 0) :
-  ∃ z, x % y = ok z ∧ (↑z : Nat) = ↑x % ↑y :=
-  UScalar.rem_spec x hnz
-
-@[progress] theorem U128.rem_spec (x : U128) {y : U128} (hnz : y.val ≠ 0) :
-  ∃ z, x % y = ok z ∧ (↑z : Nat) = ↑x % ↑y :=
-  UScalar.rem_spec x hnz
-
-@[progress] theorem Usize.rem_spec (x : Usize) {y : Usize} (hnz : y.val ≠ 0) :
-  ∃ z, x % y = ok z ∧ (↑z : Nat) = ↑x % ↑y :=
-  UScalar.rem_spec x hnz
-
-@[progress] theorem I8.rem_spec (x : I8) {y : I8} (hnz : y.val ≠ 0) :
-  ∃ z, x % y = ok z ∧ (↑z : Int) = Int.tmod ↑x ↑y :=
-  IScalar.rem_spec x hnz
-
-@[progress] theorem I16.rem_spec (x : I16) {y : I16} (hnz : y.val ≠ 0) :
-  ∃ z, x % y = ok z ∧ (↑z : Int) = Int.tmod ↑x ↑y :=
-  IScalar.rem_spec x hnz
-
-@[progress] theorem I32.rem_spec (x : I32) {y : I32} (hnz : y.val ≠ 0) :
-  ∃ z, x % y = ok z ∧ (↑z : Int) = Int.tmod ↑x ↑y :=
-  IScalar.rem_spec x hnz
-
-@[progress] theorem I64.rem_spec (x : I64) {y : I64} (hnz : y.val ≠ 0) :
-  ∃ z, x % y = ok z ∧ (↑z : Int) = Int.tmod ↑x ↑y :=
-  IScalar.rem_spec x hnz
-
-@[progress] theorem I128.rem_spec (x : I128) {y : I128} (hnz : y.val ≠ 0) :
-  ∃ z, x % y = ok z ∧ (↑z : Int) = Int.tmod ↑x ↑y :=
-  IScalar.rem_spec x hnz
-
-@[progress] theorem Isize.rem_spec (x : I128) {y : I128} (hnz : y.val ≠ 0) :
+iscalar @[progress] theorem «%S».rem_spec (x : «%S») {y : «%S»} (hnz : y.val ≠ 0) :
   ∃ z, x % y = ok z ∧ (↑z : Int) = Int.tmod ↑x ↑y :=
   IScalar.rem_spec x hnz
 
