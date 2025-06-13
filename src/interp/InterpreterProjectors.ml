@@ -25,7 +25,7 @@ let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
   else
     match (v.value, ty) with
     | VLiteral _, TLiteral _ -> []
-    | VAdt adt, TAdt (id, generics) ->
+    | VAdt adt, TAdt { id; generics } ->
         (* Retrieve the types of the fields *)
         let field_types =
           Assoc.ctx_adt_get_inst_norm_field_rtypes span ctx id adt.variant_id
@@ -107,7 +107,7 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
     let value : avalue =
       match (v.value, ty) with
       | VLiteral _, TLiteral _ -> AIgnored (Some v)
-      | VAdt adt, TAdt (id, generics) ->
+      | VAdt adt, TAdt { id; generics } ->
           (* Retrieve the types of the fields *)
           let field_types =
             Assoc.ctx_adt_get_inst_norm_field_rtypes span ctx id adt.variant_id
@@ -278,7 +278,7 @@ let apply_proj_loans_on_symbolic_expansion (span : Meta.span)
     | SeLiteral lit, TLiteral _ ->
         ( AIgnored (Some { value = VLiteral lit; ty = original_sv_ty }),
           original_sv_ty )
-    | SeAdt (variant_id, field_values), TAdt (adt_id, generics) ->
+    | SeAdt (variant_id, field_values), TAdt { id = adt_id; generics } ->
         (* Project over the field values *)
         let field_types =
           AssociatedTypes.ctx_adt_get_inst_norm_field_rtypes span ctx adt_id

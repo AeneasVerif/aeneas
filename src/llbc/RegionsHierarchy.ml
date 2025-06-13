@@ -124,7 +124,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
   (* Explore the types in the signature to add the edges *)
   let rec explore_ty (outer : region list) (ty : ty) =
     match ty with
-    | TAdt (id, generics) ->
+    | TAdt { id; generics } ->
         (* Add constraints coming from the type clauses *)
         (match id with
         | TAdtId id ->

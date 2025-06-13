@@ -112,5 +112,4 @@ let trait_impl_with_crate_to_pattern_string (span : Meta.span option)
     (crate : LlbcAst.crate) (trait_decl : LlbcAst.trait_decl)
     (trait_impl : LlbcAst.trait_impl) : string =
   name_with_generics_crate_to_pattern_string span crate
-    trait_decl.item_meta.name trait_decl.generics
-    trait_impl.impl_trait.decl_generics
+    trait_decl.item_meta.name trait_decl.generics trait_impl.impl_trait.generics

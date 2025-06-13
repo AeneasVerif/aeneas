@@ -505,22 +505,18 @@ and translate_trait_ref (span : Meta.span option) (translate_ty : T.ty -> ty)
 
 and translate_trait_decl_ref (span : Meta.span option)
     (translate_ty : T.ty -> ty) (tr : T.trait_decl_ref) : trait_decl_ref =
-  let decl_generics =
-    translate_generic_args span translate_ty tr.decl_generics
-  in
-  { trait_decl_id = tr.trait_decl_id; decl_generics }
+  let decl_generics = translate_generic_args span translate_ty tr.generics in
+  { trait_decl_id = tr.id; decl_generics }
 
 and translate_fun_decl_ref (span : Meta.span option) (translate_ty : T.ty -> ty)
     (fr : T.fun_decl_ref) : fun_decl_ref =
-  let fun_generics = translate_generic_args span translate_ty fr.fun_generics in
-  { fun_id = fr.fun_id; fun_generics }
+  let fun_generics = translate_generic_args span translate_ty fr.generics in
+  { fun_id = fr.id; fun_generics }
 
 and translate_global_decl_ref (span : Meta.span option)
     (translate_ty : T.ty -> ty) (gr : T.global_decl_ref) : global_decl_ref =
-  let global_generics =
-    translate_generic_args span translate_ty gr.global_generics
-  in
-  { global_id = gr.global_id; global_generics }
+  let global_generics = translate_generic_args span translate_ty gr.generics in
+  { global_id = gr.id; global_generics }
 
 and translate_trait_instance_id (span : Meta.span option)
     (translate_ty : T.ty -> ty) (id : T.trait_instance_id) : trait_instance_id =
@@ -529,9 +525,11 @@ and translate_trait_instance_id (span : Meta.span option)
   in
   match id with
   | T.Self -> Self
-  | TraitImpl (id, generics) ->
-      let generics = translate_generic_args span translate_ty generics in
-      TraitImpl (id, generics)
+  | TraitImpl impl_ref ->
+      let generics =
+        translate_generic_args span translate_ty impl_ref.generics
+      in
+      TraitImpl (impl_ref.id, generics)
   | BuiltinOrAuto _ ->
       (* We should have eliminated those in the prepasses *)
       craise_opt_span __FILE__ __LINE__ span "Unreachable"
@@ -551,9 +549,9 @@ and translate_trait_instance_id (span : Meta.span option)
 let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
   let translate = translate_sty in
   match ty with
-  | T.TAdt (type_id, generics) -> (
+  | T.TAdt { id; generics } -> (
       let generics = translate_sgeneric_args span generics in
-      match type_id with
+      match id with
       | T.TAdtId adt_id -> TAdt (TAdtId adt_id, generics)
       | T.TTuple ->
           sanity_check_opt_span __FILE__ __LINE__
@@ -825,13 +823,13 @@ let rec translate_fwd_ty (span : Meta.span option) (type_infos : type_infos)
     (ty : T.ty) : ty =
   let translate = translate_fwd_ty span type_infos in
   match ty with
-  | T.TAdt (type_id, generics) -> (
+  | T.TAdt { id; generics } -> (
       let t_generics = translate_fwd_generic_args span type_infos generics in
       (* Eliminate boxes and simplify tuples *)
-      match type_id with
+      match id with
       | TAdtId _ | TBuiltin (TArray | TSlice | TStr) ->
-          let type_id = translate_type_id span type_id in
-          TAdt (type_id, t_generics)
+          let id = translate_type_id span id in
+          TAdt (id, t_generics)
       | TTuple ->
           (* Note that if there is exactly one type, [mk_simpl_tuple_ty] is the
              identity *)
@@ -905,10 +903,10 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
   (* A small helper for "leave" types *)
   let wrap ty = if inside_mut then Some ty else None in
   match ty with
-  | T.TAdt (type_id, generics) -> (
-      match type_id with
+  | T.TAdt { id; generics } -> (
+      match id with
       | TAdtId _ | TBuiltin (TArray | TSlice | TStr) ->
-          let type_id = translate_type_id span type_id in
+          let type_id = translate_type_id span id in
           if inside_mut then
             (* We do not want to filter anything, so we translate the generics
                as "forward" types *)
@@ -1838,7 +1836,7 @@ let lookup_var_for_symbolic_value (id : V.symbolic_value_id) (ctx : bs_ctx) :
 let rec unbox_typed_value (span : Meta.span) (v : V.typed_value) : V.typed_value
     =
   match (v.value, v.ty) with
-  | V.VAdt av, T.TAdt (T.TBuiltin T.TBox, _) -> (
+  | V.VAdt av, T.TAdt { id = T.TBuiltin T.TBox; _ } -> (
       match av.field_values with
       | [ bv ] -> unbox_typed_value span bv
       | _ -> internal_error __FILE__ __LINE__ span)
@@ -1902,7 +1900,7 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
         let field_values = List.map translate av.field_values in
         (* Eliminate the tuple wrapper if it is a tuple with exactly one field *)
         match v.ty with
-        | TAdt (TTuple, _) ->
+        | TAdt { id = TTuple; _ } ->
             sanity_check __FILE__ __LINE__ (variant_id = None) ctx.span;
             mk_simpl_tuple_texpression ctx.span field_values
         | _ ->
@@ -5107,13 +5105,13 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
   in
   (* Lookup the builtin information, if there is *)
   let builtin_info =
-    let decl_id = trait_impl.impl_trait.trait_decl_id in
+    let decl_id = trait_impl.impl_trait.id in
     let trait_decl =
       silent_unwrap_opt_span __FILE__ __LINE__ span
         (TraitDeclId.Map.find_opt decl_id ctx.crate.trait_decls)
     in
     match_name_with_generics_find_opt ctx trait_decl.item_meta.name
-      llbc_impl_trait.decl_generics
+      llbc_impl_trait.generics
       (ExtractBuiltin.builtin_trait_impls_map ())
   in
   {

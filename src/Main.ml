@@ -490,8 +490,7 @@ let () =
             (fun (d : LlbcAst.trait_impl) ->
               let names_map = ExtractBuiltin.builtin_trait_impls_map () in
               match
-                LlbcAst.TraitDeclId.Map.find_opt d.impl_trait.trait_decl_id
-                  m.trait_decls
+                LlbcAst.TraitDeclId.Map.find_opt d.impl_trait.id m.trait_decls
               with
               | None -> None (* Just ignore it *)
               | Some trait_decl ->
@@ -499,7 +498,7 @@ let () =
                     (not d.item_meta.is_local)
                     && not
                          (matches_name_with_generics m trait_decl.item_meta.name
-                            d.impl_trait.decl_generics names_map)
+                            d.impl_trait.generics names_map)
                   then Some (d, trait_decl)
                   else None)
             (LlbcAst.TraitImplId.Map.values trait_impls)

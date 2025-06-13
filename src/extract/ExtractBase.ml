@@ -1564,7 +1564,7 @@ let ctx_compute_fun_name_no_suffix (meta : T.item_meta) (ctx : extraction_ctx)
           silent_unwrap __FILE__ __LINE__ meta.span
             (TraitImplId.Map.find_opt impl_id ctx.trans_trait_impls)
         in
-        let args = trait_impl.llbc_impl_trait.decl_generics in
+        let args = trait_impl.llbc_impl_trait.generics in
         begin
           match args.types with
           | TVar _ :: _ -> true
@@ -1657,7 +1657,7 @@ let ctx_compute_trait_impl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
     | None ->
         let name =
           let params = trait_impl.llbc_generics in
-          let args = trait_impl.llbc_impl_trait.decl_generics in
+          let args = trait_impl.llbc_impl_trait.generics in
           let name =
             ctx_prepare_name trait_impl.item_meta ctx trait_decl.item_meta.name
           in
@@ -1733,12 +1733,12 @@ let ctx_compute_trait_clause_name (ctx : extraction_ctx)
     (* Note that we ignore the binder *)
     let clause_trait = clause.trait.binder_value in
     (* *)
-    let trait_id = clause_trait.trait_decl_id in
+    let trait_id = clause_trait.id in
     (* The declaration may be missing because of an error *)
     match TraitDeclId.Map.find_opt trait_id ctx.crate.trait_decls with
     | None -> [ "clause" ]
     | Some impl_trait_decl ->
-        let args = clause_trait.decl_generics in
+        let args = clause_trait.generics in
         trait_name_with_generics_to_simple_name ctx.trans_ctx ~prefix
           impl_trait_decl.item_meta.name params args
   in
@@ -2194,8 +2194,7 @@ let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
           (* Lookup the declaration. TODO: the trait item impl info
              should directly give us the id of the method declaration. *)
           match
-            TraitDeclId.Map.find_opt trait_decl_ref.trait_decl_id
-              ctx.trans_trait_decls
+            TraitDeclId.Map.find_opt trait_decl_ref.id ctx.trans_trait_decls
           with
           | None -> def.item_meta
           | Some trait_decl -> (

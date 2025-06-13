@@ -51,10 +51,10 @@ module Values = struct
           List.map (typed_value_to_string ~span env) av.field_values
         in
         match v.ty with
-        | TAdt (TTuple, _) ->
+        | TAdt { id = TTuple; _ } ->
             (* Tuple *)
             "(" ^ String.concat ", " field_values ^ ")"
-        | TAdt (TAdtId def_id, _) ->
+        | TAdt { id = TAdtId def_id; _ } ->
             (* "Regular" ADT *)
             let adt_ident =
               match av.variant_id with
@@ -76,7 +76,7 @@ module Values = struct
                   let field_values = String.concat " " field_values in
                   adt_ident ^ " { " ^ field_values ^ " }"
             else adt_ident
-        | TAdt (TBuiltin aty, _) -> (
+        | TAdt { id = TBuiltin aty; _ } -> (
             (* Builtin type *)
             match (aty, field_values) with
             | TBox, [ bv ] -> "@Box(" ^ bv ^ ")"
@@ -204,10 +204,10 @@ module Values = struct
             av.field_values
         in
         match v.ty with
-        | TAdt (TTuple, _) ->
+        | TAdt { id = TTuple; _ } ->
             (* Tuple *)
             "(" ^ String.concat ", " field_values ^ ")"
-        | TAdt (TAdtId def_id, _) ->
+        | TAdt { id = TAdtId def_id; _ } ->
             (* "Regular" ADT *)
             let adt_ident =
               match av.variant_id with
@@ -229,7 +229,7 @@ module Values = struct
                   let field_values = String.concat " " field_values in
                   adt_ident ^ " { " ^ field_values ^ " }"
             else adt_ident
-        | TAdt (TBuiltin aty, _) -> (
+        | TAdt { id = TBuiltin aty; _ } -> (
             (* Builtin type *)
             match (aty, field_values) with
             | TBox, [ bv ] -> "@Box(" ^ bv ^ ")"

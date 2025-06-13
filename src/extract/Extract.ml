@@ -3081,13 +3081,13 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
             in
             let params = String.concat ", " (params0 @ params1) in
             let args0, args1 =
-              llbc_generic_args_to_strings ctx decl_ref.decl_generics
+              llbc_generic_args_to_strings ctx decl_ref.generics
             in
             let args = String.concat ", " (args0 @ args1) in
             __FUNCTION__ ^ ":" ^ "\n- trait_decl.llbc_generics: [" ^ params
             ^ "]" ^ "\n- decl_ref.decl_generics: [" ^ args ^ "]"));
        ( Some trait_decl.item_meta.name,
-         Some (impl.llbc_generics, decl_ref.decl_generics) ))
+         Some (impl.llbc_generics, decl_ref.generics) ))
      else (None, None)
    in
    extract_comment_with_span ctx fmt

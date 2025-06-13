@@ -427,7 +427,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
       (match (tv.value, tv.ty) with
       | VLiteral cv, TLiteral ty -> check_literal_type span cv ty
       (* ADT case *)
-      | VAdt av, TAdt (TAdtId def_id, generics) ->
+      | VAdt av, TAdt { id = TAdtId def_id; generics } ->
           (* Retrieve the definition to check the variant id, the number of
            * parameters, etc. *)
           let def = ctx_lookup_type_decl span ctx def_id in
@@ -457,7 +457,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
               sanity_check __FILE__ __LINE__ (v.ty = ty) span)
             fields_with_types
       (* Tuple case *)
-      | VAdt av, TAdt (TTuple, generics) ->
+      | VAdt av, TAdt { id = TTuple; generics } ->
           sanity_check __FILE__ __LINE__ (generics.regions = []) span;
           sanity_check __FILE__ __LINE__ (generics.const_generics = []) span;
           sanity_check __FILE__ __LINE__ (av.variant_id = None) span;
@@ -469,7 +469,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
               sanity_check __FILE__ __LINE__ (v.ty = ty) span)
             fields_with_types
       (* Builtin type case *)
-      | VAdt av, TAdt (TBuiltin aty_id, generics) -> (
+      | VAdt av, TAdt { id = TBuiltin aty_id; generics } -> (
           sanity_check __FILE__ __LINE__ (av.variant_id = None) span;
           match
             ( aty_id,
@@ -560,7 +560,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
       (* Check the current pair (value, type) *)
       (match (atv.value, atv.ty) with
       (* ADT case *)
-      | AAdt av, TAdt (TAdtId def_id, generics) ->
+      | AAdt av, TAdt { id = TAdtId def_id; generics } ->
           (* Retrieve the definition to check the variant id, the number of
            * parameters, etc. *)
           let def = ctx_lookup_type_decl span ctx def_id in
@@ -594,7 +594,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
               sanity_check __FILE__ __LINE__ (v.ty = ty) span)
             fields_with_types
       (* Tuple case *)
-      | AAdt av, TAdt (TTuple, generics) ->
+      | AAdt av, TAdt { id = TTuple; generics } ->
           sanity_check __FILE__ __LINE__ (generics.regions = []) span;
           sanity_check __FILE__ __LINE__ (generics.const_generics = []) span;
           sanity_check __FILE__ __LINE__ (av.variant_id = None) span;
@@ -606,7 +606,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
               sanity_check __FILE__ __LINE__ (v.ty = ty) span)
             fields_with_types
       (* Builtin type case *)
-      | AAdt av, TAdt (TBuiltin aty_id, generics) -> (
+      | AAdt av, TAdt { id = TBuiltin aty_id; generics } -> (
           sanity_check __FILE__ __LINE__ (av.variant_id = None) span;
           match
             ( aty_id,

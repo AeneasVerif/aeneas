@@ -82,32 +82,34 @@ let update_array_default (crate : crate) : crate =
     (* Check this is an impl of [Default] for arrays *)
     let trait_decl =
       silent_unwrap_opt_span __FILE__ __LINE__ (Some impl.item_meta.span)
-        (TraitDeclId.Map.find_opt impl.impl_trait.trait_decl_id
-           crate.trait_decls)
+        (TraitDeclId.Map.find_opt impl.impl_trait.id crate.trait_decls)
     in
     if match_name impl_pat trait_decl.item_meta.name then (
       log#ldebug
         (lazy
           (__FUNCTION__ ^ ": found a matching impl.\n - decl_generics: "
-          ^ Print.generic_args_to_string pctx impl.impl_trait.decl_generics));
+          ^ Print.generic_args_to_string pctx impl.impl_trait.generics));
       (* Check the generics. Note that we ignore the case where the length
          is equal to 0, because in this case rustc uses a different impl
          which doesn't require that the type of the elements also has a
          default implementation. *)
-      match impl.impl_trait.decl_generics with
+      match impl.impl_trait.generics with
       | {
        regions = [];
        types =
          [
            TAdt
-             ( TBuiltin TArray,
-               ({
-                  regions = [];
-                  types = [ TVar (Free _) ];
-                  const_generics =
-                    [ (CgValue (VScalar { value = nv; int_ty = Usize }) as n) ];
-                  trait_refs = _;
-                } as array_generics) );
+             {
+               id = TBuiltin TArray;
+               generics =
+                 {
+                   regions = [];
+                   types = [ TVar (Free _) ];
+                   const_generics =
+                     [ (CgValue (VScalar { value = nv; int_ty = Usize }) as n) ];
+                   trait_refs = _;
+                 } as array_generics;
+             };
          ];
        const_generics = [];
        trait_refs = _;
@@ -118,7 +120,7 @@ let update_array_default (crate : crate) : crate =
           assert (List.length impl.methods = 1);
           let meth = snd (List.hd impl.methods) in
           assert (meth.binder_params = TypesUtils.empty_generic_params);
-          let method_id = meth.binder_value.fun_id in
+          let method_id = meth.binder_value.id in
           methods := FunDeclId.Map.add method_id n !methods;
           (* Is it the first implementation we find? *)
           match !merged_impl with
@@ -126,26 +128,29 @@ let update_array_default (crate : crate) : crate =
               (* Update the implementation in place *)
               let cg_id = ConstGenericVarId.zero in
               let cg = CgVar (Free cg_id) in
-              let decl_generics =
+              let generics =
                 {
-                  impl.impl_trait.decl_generics with
+                  impl.impl_trait.generics with
                   types =
                     [
                       TAdt
-                        ( TBuiltin TArray,
-                          { array_generics with const_generics = [ cg ] } );
+                        {
+                          id = TBuiltin TArray;
+                          generics =
+                            { array_generics with const_generics = [ cg ] };
+                        };
                     ];
                 }
               in
-              let generics =
+              let impl_trait = { impl.impl_trait with generics } in
+              let params =
                 {
                   impl.generics with
                   const_generics =
                     [ { index = cg_id; name = "N"; ty = TInteger Usize } ];
                 }
               in
-              let impl_trait = { impl.impl_trait with decl_generics } in
-              let impl = { impl with impl_trait; generics } in
+              let impl = { impl with impl_trait; generics = params } in
               (* Register it *)
               merged_impl := Some impl;
               merged_method := Some method_id;
@@ -190,13 +195,16 @@ let update_array_default (crate : crate) : crate =
               assert (sg.inputs = []);
               match sg.output with
               | TAdt
-                  ( TBuiltin TArray,
-                    ({
-                       regions = [];
-                       types = [ TVar (Free _) ];
-                       const_generics = [ _ ];
-                       trait_refs = _;
-                     } as array_generics) ) ->
+                  {
+                    id = TBuiltin TArray;
+                    generics =
+                      {
+                        regions = [];
+                        types = [ TVar (Free _) ];
+                        const_generics = [ _ ];
+                        trait_refs = _;
+                      } as array_generics;
+                  } ->
                   let array_generics =
                     { array_generics with const_generics = [ cg ] }
                   in
@@ -211,7 +219,8 @@ let update_array_default (crate : crate) : crate =
                     {
                       sg with
                       generics;
-                      output = TAdt (TBuiltin TArray, array_generics);
+                      output =
+                        TAdt { id = TBuiltin TArray; generics = array_generics };
                     }
                   in
                   let fdecl = { fdecl with signature = sg } in
@@ -249,12 +258,15 @@ let update_array_default (crate : crate) : crate =
         object
           inherit [_] map_crate_with_span as super
 
-          method! visit_TraitImpl env impl_id args =
-            match TraitImplId.Map.find_opt impl_id impls with
-            | None -> super#visit_TraitImpl env impl_id args
+          method! visit_TraitImpl env impl_ref =
+            match TraitImplId.Map.find_opt impl_ref.id impls with
+            | None -> super#visit_TraitImpl env impl_ref
             | Some n ->
-                super#visit_TraitImpl env merged_impl.def_id
-                  { args with const_generics = [ n ] }
+                super#visit_TraitImpl env
+                  {
+                    id = merged_impl.def_id;
+                    generics = { impl_ref.generics with const_generics = [ n ] };
+                  }
 
           method! visit_fn_ptr env fn_ptr =
             match fn_ptr.func with
@@ -337,7 +349,7 @@ let remove_useless_cf_merges (crate : crate) (f : fun_decl) : fun_decl =
     | Assign (_, rv) -> (
         match rv with
         | Use _ | RvRef _ -> not must_end_with_exit
-        | Aggregate (AggregatedAdt (TTuple, _, _, _), []) ->
+        | Aggregate (AggregatedAdt ({ id = TTuple; _ }, _, _), []) ->
             not must_end_with_exit
         | _ -> false)
     | StorageDead _ | StorageLive _ | Deinit _ | Drop _ | Nop ->
@@ -749,7 +761,9 @@ let decompose_str_borrows (f : fun_decl) : fun_decl =
               method! visit_Constant env cv =
                 match (cv.value, cv.ty) with
                 | ( CLiteral (VStr str),
-                    TRef (_, (TAdt (TBuiltin TStr, _) as str_ty), ref_kind) ) ->
+                    TRef
+                      (_, (TAdt { id = TBuiltin TStr; _ } as str_ty), ref_kind)
+                  ) ->
                     (* We need to introduce intermediate assignments *)
                     (* First the string initialization *)
                     let local_id =

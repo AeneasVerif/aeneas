@@ -74,7 +74,7 @@ let rec project_value (span : Meta.span) (access : projection_access)
   match (pe, v.value, v.ty) with
   | ( Field (ProjAdt (def_id, opt_variant_id), field_id),
       VAdt adt,
-      TAdt (TAdtId def_id', _) ) -> begin
+      TAdt { id = TAdtId def_id'; _ } ) -> begin
       (* Check consistency *)
       sanity_check __FILE__ __LINE__ (def_id = def_id') span;
       sanity_check __FILE__ __LINE__ (opt_variant_id = adt.variant_id) span;
@@ -89,7 +89,8 @@ let rec project_value (span : Meta.span) (access : projection_access)
       Ok (fv, backward)
     end
   (* Tuples *)
-  | Field (ProjTuple arity, field_id), VAdt adt, TAdt (TTuple, _) -> begin
+  | Field (ProjTuple arity, field_id), VAdt adt, TAdt { id = TTuple; _ } ->
+  begin
       sanity_check __FILE__ __LINE__ (arity = List.length adt.field_values) span;
       let fv = FieldId.nth adt.field_values field_id in
       let backward (ctx, updated) =
@@ -111,7 +112,7 @@ let rec project_value (span : Meta.span) (access : projection_access)
   (* Box dereferencement *)
   | ( Deref,
       VAdt { variant_id = None; field_values = [ fv ] },
-      TAdt (TBuiltin TBox, _) ) -> begin
+      TAdt { id = TBuiltin TBox; _ } ) -> begin
       (* We allow moving outside of boxes. In practice, this kind of
        * manipulations should happen only inside unsafe code, so
        * it shouldn't happen due to user code, and we leverage it
@@ -390,7 +391,7 @@ let compute_expanded_bottom_adt_value (span : Meta.span) (ctx : eval_ctx)
   (* Initialize the expanded value *)
   let fields = List.map (mk_bottom span) field_types in
   let av = VAdt { variant_id = opt_variant_id; field_values = fields } in
-  let ty = TAdt (TAdtId def_id, generics) in
+  let ty = TAdt { id = TAdtId def_id; generics } in
   { value = av; ty }
 
 let compute_expanded_bottom_tuple_value (span : Meta.span)
@@ -399,7 +400,7 @@ let compute_expanded_bottom_tuple_value (span : Meta.span)
   let fields = List.map (mk_bottom span) field_types in
   let v = VAdt { variant_id = None; field_values = fields } in
   let generics = TypesUtils.mk_generic_args [] field_types [] [] in
-  let ty = TAdt (TTuple, generics) in
+  let ty = TAdt { id = TTuple; generics } in
   { value = v; ty }
 
 (** Auxiliary helper to expand {!Bottom} values.
@@ -447,15 +448,18 @@ let expand_bottom_value_from_projection (span : Meta.span)
     match (pe, p.ty) with
     (* "Regular" ADTs *)
     | ( Field (ProjAdt (def_id, opt_variant_id), _),
-        TAdt (TAdtId def_id', generics) ) ->
+        TAdt { id = TAdtId def_id'; generics } ) ->
         sanity_check __FILE__ __LINE__ (def_id = def_id') span;
         compute_expanded_bottom_adt_value span ctx def_id opt_variant_id
           generics
     (* Tuples *)
     | ( Field (ProjTuple arity, _),
         TAdt
-          (TTuple, { regions = []; types; const_generics = []; trait_refs = [] })
-      ) ->
+          {
+            id = TTuple;
+            generics =
+              { regions = []; types; const_generics = []; trait_refs = [] };
+          } ) ->
         sanity_check __FILE__ __LINE__ (arity = List.length types) span;
         (* Generate the field values *)
         compute_expanded_bottom_tuple_value span types

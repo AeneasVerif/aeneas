@@ -214,8 +214,12 @@ let check_non_normalizable_trait_instance_id (trait_id : trait_instance_id) :
 let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
   log#ltrace (lazy ("norm_ctx_normalize_ty: " ^ ty_to_string ctx ty));
   match ty with
-  | TAdt (id, generics) ->
-      TAdt (id, norm_ctx_normalize_generic_args ctx generics)
+  | TAdt tref ->
+      TAdt
+        {
+          id = tref.id;
+          generics = norm_ctx_normalize_generic_args ctx tref.generics;
+        }
   | TVar _ | TLiteral _ | TNever -> ty
   | TRef (r, ty, rkind) ->
       let ty = norm_ctx_normalize_ty ctx ty in
@@ -242,7 +246,7 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
       let trait_ref = norm_ctx_normalize_trait_ref ctx trait_ref in
       let ty : ty =
         match trait_ref.trait_id with
-        | TraitImpl (impl_id, generics) ->
+        | TraitImpl impl_ref ->
             log#ltrace
               (lazy
                 ("norm_ctx_normalize_ty (trait impl):\n- trait type: "
@@ -257,7 +261,8 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
             *)
             (* Lookup the type *)
             let ty =
-              norm_ctx_lookup_trait_impl_ty ctx impl_id generics type_name
+              norm_ctx_lookup_trait_impl_ty ctx impl_ref.id impl_ref.generics
+                type_name
             in
             (* Normalize *)
             norm_ctx_normalize_ty ctx ty
@@ -335,19 +340,19 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
     (id : trait_instance_id) : trait_instance_id =
   match id with
   | Self -> id
-  | TraitImpl (impl_id, generics) ->
+  | TraitImpl impl_ref ->
       (* The [TraitImpl] shouldn't be inside any projection - we check this
          elsewhere by asserting that whenever we return [None] for the impl
          trait ref, then the id actually refers to a local clause. *)
-      let generics = norm_ctx_normalize_generic_args ctx generics in
-      TraitImpl (impl_id, generics)
+      let generics = norm_ctx_normalize_generic_args ctx impl_ref.generics in
+      TraitImpl { impl_ref with generics }
   | Clause _ -> id
   | BuiltinOrAuto _ -> id
   | ParentClause (inst_id, decl_id, clause_id) -> begin
       let inst_id = norm_ctx_normalize_trait_instance_id ctx inst_id in
       (* Check if the inst_id refers to a specific implementation, if yes project *)
       match inst_id with
-      | TraitImpl (impl_id, generics) ->
+      | TraitImpl impl_ref ->
           (* We figure out the parent clause by doing the following:
              {[
                // The implementation we are looking at
@@ -361,8 +366,8 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
           *)
           (* Lookup the clause *)
           let clause =
-            norm_ctx_lookup_trait_impl_parent_clause ctx impl_id generics
-              clause_id
+            norm_ctx_lookup_trait_impl_parent_clause ctx impl_ref.id
+              impl_ref.generics clause_id
           in
           (* Normalize the clause *)
           norm_ctx_normalize_trait_instance_id ctx clause.trait_id
@@ -420,9 +425,8 @@ and norm_ctx_normalize_region_binder :
 (* Not sure this one is really necessary *)
 and norm_ctx_normalize_trait_decl_ref (ctx : norm_ctx)
     (trait_decl_ref : trait_decl_ref) : trait_decl_ref =
-  let { trait_decl_id; decl_generics } = trait_decl_ref in
-  let decl_generics = norm_ctx_normalize_generic_args ctx decl_generics in
-  { trait_decl_id; decl_generics }
+  let generics = norm_ctx_normalize_generic_args ctx trait_decl_ref.generics in
+  { id = trait_decl_ref.id; generics }
 
 let norm_ctx_normalize_trait_type_constraint (ctx : norm_ctx)
     (ttc : trait_type_constraint) : trait_type_constraint =
