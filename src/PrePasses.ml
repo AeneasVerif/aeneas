@@ -11,6 +11,29 @@ open Errors
 
 let log = Logging.pre_passes_log
 
+(* Copy the statement list onto each branch of this switch. *)
+let append_to_switch (switch : switch) (new_stmts : statement list) : switch =
+  let append_to_block (b : block) (stmts : statement list) : block =
+    { b with statements = b.statements @ stmts }
+  in
+  match switch with
+  | If (op, st0, st1) ->
+      If (op, append_to_block st0 new_stmts, append_to_block st1 new_stmts)
+  | SwitchInt (op, int_ty, branches, otherwise) ->
+      let branches =
+        List.map (fun (svl, br) -> (svl, append_to_block br new_stmts)) branches
+      in
+      let otherwise = append_to_block otherwise new_stmts in
+      SwitchInt (op, int_ty, branches, otherwise)
+  | Match (op, branches, otherwise) ->
+      let branches =
+        List.map (fun (svl, br) -> (svl, append_to_block br new_stmts)) branches
+      in
+      let otherwise =
+        Option.map (fun b -> append_to_block b new_stmts) otherwise
+      in
+      Match (op, branches, otherwise)
+
 (** The Rust compiler generates a unique implementation of [Default] for arrays
     for every choice of length. For instance, if we write:
     {[
@@ -320,30 +343,32 @@ let remove_useless_cf_merges (crate : crate) (f : fun_decl) : fun_decl =
     | StorageDead _ | StorageLive _ | Deinit _ | Drop _ | Nop ->
         not must_end_with_exit
     | Abort _ | Return -> true
-    | Sequence (st1, st2) ->
-        can_be_moved_aux false st1 && can_be_moved_aux must_end_with_exit st2
+  and can_be_moved_seq (stmts : statement list) : bool =
+    match stmts with
+    | [] -> true
+    | [ single ] -> can_be_moved_aux true single
+    | hd :: tl -> can_be_moved_aux false hd && can_be_moved_seq tl
   in
-  let can_be_moved = can_be_moved_aux true in
 
   (* The visitor *)
   let obj =
     object
       inherit [_] map_statement as super
 
-      method! visit_Sequence env st1 st2 =
-        match st1.content with
-        | Switch switch ->
-            if can_be_moved st2 then
-              super#visit_Switch env (chain_statements_in_switch switch st2)
-            else super#visit_Sequence env st1 st2
-        | _ -> super#visit_Sequence env st1 st2
+      method! visit_block_suffix env stmts =
+        match stmts with
+        | ({ content = Switch switch; _ } as st) :: tl when can_be_moved_seq tl
+          ->
+            let content = super#visit_Switch env (append_to_switch switch tl) in
+            [ { st with content } ]
+        | _ -> super#visit_block_suffix env stmts
     end
   in
 
   (* Map  *)
   let body =
     match f.body with
-    | Some body -> Some { body with body = obj#visit_statement () body.body }
+    | Some body -> Some { body with body = obj#visit_block () body.body }
     | None -> None
   in
   let f = { f with body } in
@@ -445,52 +470,48 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
   (* Replace a break statement with another statement (we check that the
      break statement breaks exactly one level, and that there are no nested
      loops.
+     TODO: call this on a loop directly to avoid tracking `entered_loop`
   *)
-  let replace_breaks_with (st : statement) (nst : statement) : statement =
+  let replace_breaks_with (st : statement) (new_stmts : statement list) :
+      statement =
     let obj =
-      object
+      object (self : 'self)
         inherit [_] map_statement as super
 
-        method! visit_statement entered_loop st =
-          match st.content with
-          | Loop loop ->
+        method! visit_block_suffix entered_loop stmts =
+          match stmts with
+          | ({ content = Loop loop; _ } as st) :: tl ->
               cassert __FILE__ __LINE__ (not entered_loop) st.span
                 "Nested loops are not supported yet";
               { st with content = super#visit_Loop true loop }
-          | Break i ->
+              :: self#visit_block_suffix entered_loop tl
+          | ({ content = Break i; _ } as st) :: tl ->
               cassert __FILE__ __LINE__ (i = 0) st.span
                 "Breaks to outer loops are not supported yet";
-              {
-                st with
-                content = nst.content;
-                comments_before = st.comments_before @ nst.comments_before;
-              }
-          | _ -> super#visit_statement entered_loop st
+              new_stmts @ self#visit_block_suffix entered_loop tl
+          | _ -> super#visit_block_suffix entered_loop stmts
       end
     in
     obj#visit_statement false st
   in
 
-  (* The visitor *)
   let replace_visitor =
     object
       inherit [_] map_statement as super
 
-      method! visit_statement env st =
-        match st.content with
-        | Sequence (st1, st2) -> begin
-            match st1.content with
-            | Loop _ ->
-                cassert __FILE__ __LINE__
-                  (statement_has_no_loop_break_continue st2)
-                  st2.span "Sequences of loops are not supported yet";
-                super#visit_statement env (replace_breaks_with st st2)
-            | Switch _ ->
-                (* This pushes st2 inside of the switch *)
-                super#visit_statement env (chain_statements st1 st2)
-            | _ -> super#visit_statement env st
-          end
-        | _ -> super#visit_statement env st
+      method! visit_block_suffix env stmts =
+        match stmts with
+        | ({ content = Loop _; _ } as st) :: tl ->
+            cassert __FILE__ __LINE__
+              (List.for_all statement_has_no_loop_break_continue tl)
+              st.span "Sequences of loops are not supported yet";
+            [ super#visit_statement env (replace_breaks_with st tl) ]
+        | ({ content = Switch switch; _ } as st) :: tl ->
+            (* Push the remaining statements inside of the switch *)
+            let content = Switch (append_to_switch switch tl) in
+            let st = { st with content } in
+            [ super#visit_statement env st ]
+        | _ -> super#visit_block_suffix env stmts
     end
   in
 
@@ -498,7 +519,7 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
   let body =
     match f.body with
     | Some body ->
-        Some { body with body = replace_visitor#visit_statement () body.body }
+        Some { body with body = replace_visitor#visit_block () body.body }
     | None -> None
   in
 
@@ -544,7 +565,7 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
 let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
     fun_decl =
   let f0 = f in
-  let filter_in_body (body : statement) : statement =
+  let filter_in_body (body : block) : block =
     let filtered = ref LocalId.Set.empty in
 
     let filter_visitor =
@@ -578,8 +599,8 @@ let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
     in
 
     (* Filter the variables *)
-    let body = filter_visitor#visit_statement () body in
-    let body = storage_rem_visitor#visit_statement () body in
+    let body = filter_visitor#visit_block () body in
+    let body = storage_rem_visitor#visit_block () body in
 
     (* Check that the filtered variables have completely disappeared from the body *)
     let check_visitor =
@@ -597,7 +618,7 @@ let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
              body"
       end
     in
-    check_visitor#visit_statement body.span body;
+    check_visitor#visit_block body.span body;
 
     (* Return the updated body *)
     body
@@ -643,7 +664,7 @@ let unify_drops (f : fun_decl) : fun_decl =
     match f.body with
     | None -> None
     | Some body ->
-        let new_body = unify_visitor#visit_statement body.locals body.body in
+        let new_body = unify_visitor#visit_block body.locals body.body in
         Some { body with body = new_body }
   in
   { f with body }
@@ -710,8 +731,8 @@ let decompose_str_borrows (f : fun_decl) : fun_decl =
         in
 
         (* Function to decompose a constant literal *)
-        let decompose_rvalue (span : Meta.span) (lv : place) (rv : rvalue)
-            (next : statement option) : raw_statement =
+        let decompose_rvalue (span : Meta.span) (lv : place) (rv : rvalue) :
+            statement list =
           let new_statements = ref [] in
 
           (* Visit the rvalue *)
@@ -784,17 +805,9 @@ let decompose_str_borrows (f : fun_decl) : fun_decl =
           let assign =
             { span; content = Assign (lv, rv); comments_before = [] }
           in
-          let statements, last =
-            match next with
-            | None -> (!new_statements, assign)
-            | Some st -> (assign :: !new_statements, st)
-          in
           (* Note that the new statements are in reverse order *)
-          (List.fold_left
-             (fun st nst ->
-               { span; content = Sequence (nst, st); comments_before = [] })
-             last statements)
-            .content
+          let statements = assign :: !new_statements in
+          List.rev statements
         in
 
         (* Visit all the statements and decompose the literals *)
@@ -803,16 +816,21 @@ let decompose_str_borrows (f : fun_decl) : fun_decl =
             inherit [_] map_statement as super
             method! visit_statement _ st = super#visit_statement st.span st
 
-            method! visit_Sequence span st1 st2 =
-              match st1.content with
-              | Assign (lv, rv) -> decompose_rvalue st1.span lv rv (Some st2)
-              | _ -> super#visit_Sequence span st1 st2
-
-            method! visit_Assign span lv rv = decompose_rvalue span lv rv None
+            method! visit_block _ blk =
+              let statements =
+                List.concat_map
+                  (fun (st : statement) ->
+                    let st = super#visit_statement st.span st in
+                    match st.content with
+                    | Assign (lv, rv) -> decompose_rvalue st.span lv rv
+                    | _ -> [ st ])
+                  blk.statements
+              in
+              { blk with statements }
           end
         in
 
-        let body_body = visitor#visit_statement body.body.span body.body in
+        let body_body = visitor#visit_block body.body.span body.body in
         Some
           {
             body with
