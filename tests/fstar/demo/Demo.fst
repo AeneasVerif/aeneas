@@ -144,12 +144,12 @@ let use_counter
   (#t : Type0) (counterInst : counter_t t) (cnt : t) : result (usize & t) =
   counterInst.incr cnt
 
-(** [core::num::{u32}#8::wrapping_sub]:
+(** [core::num::{u32}::wrapping_sub]:
     Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2066:8-2066:58
     Name pattern: [core::num::{u32}::wrapping_sub] *)
 assume val core_num_U32_wrapping_sub : u32 -> u32 -> result u32
 
-(** [core::num::{u32}#8::wrapping_add]:
+(** [core::num::{u32}::wrapping_add]:
     Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2025:8-2025:58
     Name pattern: [core::num::{u32}::wrapping_add] *)
 assume val core_num_U32_wrapping_add : u32 -> u32 -> result u32

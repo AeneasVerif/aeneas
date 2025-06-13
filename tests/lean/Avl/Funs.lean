@@ -25,7 +25,7 @@ def OrdI32 : Ord I32 := {
   cmp := OrdI32.cmp
 }
 
-/- [avl::{avl::Node<T>}#1::rotate_left]:
+/- [avl::{avl::Node<T>}::rotate_left]:
    Source: 'src/avl.rs', lines 41:4-90:5 -/
 def Node.rotate_left
   {T : Type} (root : Node T) (z : Node T) : Result (Node T) :=
@@ -41,7 +41,7 @@ def Node.rotate_left
     ok (Node.mk root1.value (some (Node.mk x.value x.left x.right 0#i8))
       root1.right 0#i8)
 
-/- [avl::{avl::Node<T>}#1::rotate_right]:
+/- [avl::{avl::Node<T>}::rotate_right]:
    Source: 'src/avl.rs', lines 92:4-136:5 -/
 def Node.rotate_right
   {T : Type} (root : Node T) (z : Node T) : Result (Node T) :=
@@ -57,7 +57,7 @@ def Node.rotate_right
     ok (Node.mk root1.value root1.left (some (Node.mk x.value x.left 
       x.right 0#i8)) 0#i8)
 
-/- [avl::{avl::Node<T>}#1::rotate_left_right]:
+/- [avl::{avl::Node<T>}::rotate_left_right]:
    Source: 'src/avl.rs', lines 138:4-186:5 -/
 def Node.rotate_left_right
   {T : Type} (root : Node T) (z : Node T) : Result (Node T) :=
@@ -82,7 +82,7 @@ def Node.rotate_left_right
       ok (Node.mk root1.value (some (Node.mk z.value z.left a (-1)#i8)) (some
         (Node.mk x.value x.left x.right 0#i8)) 0#i8)
 
-/- [avl::{avl::Node<T>}#1::rotate_right_left]:
+/- [avl::{avl::Node<T>}::rotate_right_left]:
    Source: 'src/avl.rs', lines 188:4-236:5 -/
 def Node.rotate_right_left
   {T : Type} (root : Node T) (z : Node T) : Result (Node T) :=
@@ -107,7 +107,7 @@ def Node.rotate_right_left
       ok (Node.mk root1.value (some (Node.mk x.value x.left x.right 0#i8))
         (some (Node.mk z.value a z.right 1#i8)) 0#i8)
 
-/- [avl::{avl::Node<T>}#2::insert_in_left]:
+/- [avl::{avl::Node<T>}::insert_in_left]:
    Source: 'src/avl.rs', lines 240:4-275:5 -/
 mutual def Node.insert_in_left
   {T : Type} (OrdInst : Ord T) (node : Node T) (value : T) :
@@ -139,7 +139,7 @@ mutual def Node.insert_in_left
   else ok (false, Node.mk node.value o node.right node.balance_factor)
 partial_fixpoint
 
-/- [avl::{avl::Tree<T>}#3::insert_in_opt_node]:
+/- [avl::{avl::Tree<T>}::insert_in_opt_node]:
    Source: 'src/avl.rs', lines 356:4-371:5 -/
 def Tree.insert_in_opt_node
   {T : Type} (OrdInst : Ord T) (node : Option (Node T)) (value : T) :
@@ -154,7 +154,7 @@ def Tree.insert_in_opt_node
     ok (b, some node2)
 partial_fixpoint
 
-/- [avl::{avl::Node<T>}#2::insert_in_right]:
+/- [avl::{avl::Node<T>}::insert_in_right]:
    Source: 'src/avl.rs', lines 277:4-315:5 -/
 def Node.insert_in_right
   {T : Type} (OrdInst : Ord T) (node : Node T) (value : T) :
@@ -186,7 +186,7 @@ def Node.insert_in_right
   else ok (false, Node.mk node.value node.left o node.balance_factor)
 partial_fixpoint
 
-/- [avl::{avl::Node<T>}#2::insert]:
+/- [avl::{avl::Node<T>}::insert]:
    Source: 'src/avl.rs', lines 318:4-334:5 -/
 def Node.insert
   {T : Type} (OrdInst : Ord T) (node : Node T) (value : T) :
@@ -202,12 +202,12 @@ partial_fixpoint
 
 end
 
-/- [avl::{avl::Tree<T>}#3::new]:
+/- [avl::{avl::Tree<T>}::new]:
    Source: 'src/avl.rs', lines 338:4-340:5 -/
 def Tree.new {T : Type} (OrdInst : Ord T) : Result (Tree T) :=
   ok { root := none }
 
-/- [avl::{avl::Tree<T>}#3::find]: loop 0:
+/- [avl::{avl::Tree<T>}::find]: loop 0:
    Source: 'src/avl.rs', lines 345:8-354:5 -/
 def Tree.find_loop
   {T : Type} (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
@@ -224,14 +224,14 @@ def Tree.find_loop
     | Ordering.Greater => Tree.find_loop OrdInst value current_node.left
 partial_fixpoint
 
-/- [avl::{avl::Tree<T>}#3::find]:
+/- [avl::{avl::Tree<T>}::find]:
    Source: 'src/avl.rs', lines 342:4-354:5 -/
 @[reducible]
 def Tree.find
   {T : Type} (OrdInst : Ord T) (self : Tree T) (value : T) : Result Bool :=
   Tree.find_loop OrdInst value self.root
 
-/- [avl::{avl::Tree<T>}#3::insert]:
+/- [avl::{avl::Tree<T>}::insert]:
    Source: 'src/avl.rs', lines 374:4-376:5 -/
 def Tree.insert
   {T : Type} (OrdInst : Ord T) (self : Tree T) (value : T) :

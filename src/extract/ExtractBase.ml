@@ -1558,7 +1558,7 @@ let ctx_compute_fun_name_no_suffix (meta : T.item_meta) (ctx : extraction_ctx)
   let rec is_blanket_method (name : llbc_name) : bool =
     match name with
     | [] | [ _ ] -> false
-    | [ PeImpl (ImplElemTrait impl_id, _); _ ] ->
+    | [ PeImpl (ImplElemTrait impl_id); _ ] ->
         (* This is a trait impl method: check if the impl is a blanket impl *)
         let trait_impl =
           silent_unwrap __FILE__ __LINE__ meta.span

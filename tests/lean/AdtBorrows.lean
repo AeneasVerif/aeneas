@@ -35,12 +35,12 @@ def use_shared_wrapper : Result Unit :=
 structure SharedWrapper1 (T : Type) where
   x : T
 
-/- [adt_borrows::{adt_borrows::SharedWrapper1<'a, T>}#1::create]:
+/- [adt_borrows::{adt_borrows::SharedWrapper1<'a, T>}::create]:
    Source: 'tests/src/adt-borrows.rs', lines 31:4-33:5 -/
 def SharedWrapper1.create {T : Type} (x : T) : Result (SharedWrapper1 T) :=
   ok { x }
 
-/- [adt_borrows::{adt_borrows::SharedWrapper1<'a, T>}#1::unwrap]:
+/- [adt_borrows::{adt_borrows::SharedWrapper1<'a, T>}::unwrap]:
    Source: 'tests/src/adt-borrows.rs', lines 35:4-37:5 -/
 def SharedWrapper1.unwrap {T : Type} (self : SharedWrapper1 T) : Result T :=
   ok self.x
@@ -59,13 +59,13 @@ structure SharedWrapper2 (T : Type) where
   x : T
   y : T
 
-/- [adt_borrows::{adt_borrows::SharedWrapper2<'a, 'b, T>}#2::create]:
+/- [adt_borrows::{adt_borrows::SharedWrapper2<'a, 'b, T>}::create]:
    Source: 'tests/src/adt-borrows.rs', lines 53:4-55:5 -/
 def SharedWrapper2.create
   {T : Type} (x : T) (y : T) : Result (SharedWrapper2 T) :=
   ok { x, y }
 
-/- [adt_borrows::{adt_borrows::SharedWrapper2<'a, 'b, T>}#2::unwrap]:
+/- [adt_borrows::{adt_borrows::SharedWrapper2<'a, 'b, T>}::unwrap]:
    Source: 'tests/src/adt-borrows.rs', lines 57:4-59:5 -/
 def SharedWrapper2.unwrap
   {T : Type} (self : SharedWrapper2 T) : Result (T × T) :=
@@ -84,20 +84,20 @@ def use_shared_wrapper2 : Result Unit :=
    Source: 'tests/src/adt-borrows.rs', lines 71:0-71:36 -/
 @[reducible] def MutWrapper (T : Type) := T
 
-/- [adt_borrows::{adt_borrows::MutWrapper<'a, T>}#3::create]:
+/- [adt_borrows::{adt_borrows::MutWrapper<'a, T>}::create]:
    Source: 'tests/src/adt-borrows.rs', lines 74:4-76:5 -/
 def MutWrapper.create
   {T : Type} (x : T) : Result ((MutWrapper T) × (MutWrapper T → T)) :=
   ok (x, fun ret => ret)
 
-/- [adt_borrows::{adt_borrows::MutWrapper<'a, T>}#3::unwrap]:
+/- [adt_borrows::{adt_borrows::MutWrapper<'a, T>}::unwrap]:
    Source: 'tests/src/adt-borrows.rs', lines 78:4-80:5 -/
 def MutWrapper.unwrap
   {T : Type} (self : MutWrapper T) : Result (T × (T → MutWrapper T)) :=
   let back := fun ret => ret
   ok (self, back)
 
-/- [adt_borrows::{adt_borrows::MutWrapper<'a, T>}#3::id]:
+/- [adt_borrows::{adt_borrows::MutWrapper<'a, T>}::id]:
    Source: 'tests/src/adt-borrows.rs', lines 82:4-84:5 -/
 def MutWrapper.id
   {T : Type} (self : MutWrapper T) :
@@ -132,21 +132,21 @@ def use_mut_wrapper_id
 structure MutWrapper1 (T : Type) where
   x : T
 
-/- [adt_borrows::{adt_borrows::MutWrapper1<'a, T>}#4::create]:
+/- [adt_borrows::{adt_borrows::MutWrapper1<'a, T>}::create]:
    Source: 'tests/src/adt-borrows.rs', lines 104:4-106:5 -/
 def MutWrapper1.create
   {T : Type} (x : T) : Result ((MutWrapper1 T) × (MutWrapper1 T → T)) :=
   let back := fun ret => ret.x
   ok ({ x }, back)
 
-/- [adt_borrows::{adt_borrows::MutWrapper1<'a, T>}#4::unwrap]:
+/- [adt_borrows::{adt_borrows::MutWrapper1<'a, T>}::unwrap]:
    Source: 'tests/src/adt-borrows.rs', lines 108:4-110:5 -/
 def MutWrapper1.unwrap
   {T : Type} (self : MutWrapper1 T) : Result (T × (T → MutWrapper1 T)) :=
   let back := fun ret => ({ x := ret } : MutWrapper1 T)
   ok (self.x, back)
 
-/- [adt_borrows::{adt_borrows::MutWrapper1<'a, T>}#4::id]:
+/- [adt_borrows::{adt_borrows::MutWrapper1<'a, T>}::id]:
    Source: 'tests/src/adt-borrows.rs', lines 112:4-114:5 -/
 def MutWrapper1.id
   {T : Type} (self : MutWrapper1 T) :
@@ -178,7 +178,7 @@ structure MutWrapper2 (T : Type) where
   x : T
   y : T
 
-/- [adt_borrows::{adt_borrows::MutWrapper2<'a, 'b, T>}#5::create]:
+/- [adt_borrows::{adt_borrows::MutWrapper2<'a, 'b, T>}::create]:
    Source: 'tests/src/adt-borrows.rs', lines 135:4-137:5 -/
 def MutWrapper2.create
   {T : Type} (x : T) (y : T) :
@@ -188,7 +188,7 @@ def MutWrapper2.create
   let back'b := fun ret => ret.y
   ok ({ x, y }, back'a, back'b)
 
-/- [adt_borrows::{adt_borrows::MutWrapper2<'a, 'b, T>}#5::unwrap]:
+/- [adt_borrows::{adt_borrows::MutWrapper2<'a, 'b, T>}::unwrap]:
    Source: 'tests/src/adt-borrows.rs', lines 139:4-141:5 -/
 def MutWrapper2.unwrap
   {T : Type} (self : MutWrapper2 T) :
@@ -198,7 +198,7 @@ def MutWrapper2.unwrap
   let back'b := fun ret => { self with y := ret }
   ok ((self.x, self.y), back'a, back'b)
 
-/- [adt_borrows::{adt_borrows::MutWrapper2<'a, 'b, T>}#5::id]:
+/- [adt_borrows::{adt_borrows::MutWrapper2<'a, 'b, T>}::id]:
    Source: 'tests/src/adt-borrows.rs', lines 143:4-145:5 -/
 def MutWrapper2.id
   {T : Type} (self : MutWrapper2 T) :
@@ -307,13 +307,13 @@ inductive SharedList (T : Type) where
 | Nil : SharedList T
 | Cons : T → SharedList T → SharedList T
 
-/- [adt_borrows::{adt_borrows::SharedList<'a, T>}#6::push]:
+/- [adt_borrows::{adt_borrows::SharedList<'a, T>}::push]:
    Source: 'tests/src/adt-borrows.rs', lines 214:4-216:5 -/
 def SharedList.push
   {T : Type} (self : SharedList T) (x : T) : Result (SharedList T) :=
   ok (SharedList.Cons x self)
 
-/- [adt_borrows::{adt_borrows::SharedList<'a, T>}#6::pop]:
+/- [adt_borrows::{adt_borrows::SharedList<'a, T>}::pop]:
    Source: 'tests/src/adt-borrows.rs', lines 218:4-224:5 -/
 def SharedList.pop
   {T : Type} (self : SharedList T) : Result (T × (SharedList T)) :=
@@ -327,7 +327,7 @@ inductive MutList (T : Type) where
 | Nil : MutList T
 | Cons : T → MutList T → MutList T
 
-/- [adt_borrows::{adt_borrows::MutList<'a, T>}#7::push]:
+/- [adt_borrows::{adt_borrows::MutList<'a, T>}::push]:
    Source: 'tests/src/adt-borrows.rs', lines 234:4-236:5 -/
 def MutList.push
   {T : Type} (self : MutList T) (x : T) :
@@ -342,7 +342,7 @@ def MutList.push
       (ml, x1)
   ok (MutList.Cons x self, back)
 
-/- [adt_borrows::{adt_borrows::MutList<'a, T>}#7::pop]:
+/- [adt_borrows::{adt_borrows::MutList<'a, T>}::pop]:
    Source: 'tests/src/adt-borrows.rs', lines 238:4-244:5 -/
 def MutList.pop
   {T : Type} (self : MutList T) :
