@@ -212,6 +212,8 @@ theorem UScalar.cast_val_eq {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScal
   simp only [cast, val]
   simp
 
+-- TODO: factor our the casts
+
 @[simp, scalar_tac UScalar.cast .U16 x]
 theorem U8.cast_U16_val_eq (x : U8) : (UScalar.cast .U16 x).val = x.val := by
   simp [UScalar.cast_val_eq]; scalar_tac

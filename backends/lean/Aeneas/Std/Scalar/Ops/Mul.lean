@@ -1,5 +1,6 @@
 import Aeneas.Std.Scalar.Core
 import Aeneas.Std.Scalar.Misc
+import Aeneas.Std.Scalar.Elab
 import Aeneas.ScalarTac
 import Aeneas.Std.Core
 import Mathlib.Data.BitVec
@@ -7,7 +8,7 @@ import Mathlib.Data.Int.Init
 
 namespace Aeneas.Std
 
-open Result Error Arith
+open Result Error Arith ScalarElab
 
 /-!
 # Multiplication: Definitions
@@ -115,60 +116,14 @@ theorem IScalar.mul_bv_spec {ty} {x y : IScalar ty}
   have := mul_equiv x y
   split at this <;> simp_all
 
-theorem Usize.mul_bv_spec {x y : Usize} (hmax : x.val * y.val ≤ Usize.max) :
+uscalar theorem «%S».mul_bv_spec {x y : «%S»} (hmax : x.val * y.val ≤ «%S».max) :
   ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
   UScalar.mul_bv_spec (by scalar_tac)
 
-theorem U8.mul_bv_spec {x y : U8} (hmax : x.val * y.val ≤ U8.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
-  UScalar.mul_bv_spec (by scalar_tac)
-
-theorem U16.mul_bv_spec {x y : U16} (hmax : x.val * y.val ≤ U16.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
-  UScalar.mul_bv_spec (by scalar_tac)
-
-theorem U32.mul_bv_spec {x y : U32} (hmax : x.val * y.val ≤ U32.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
-  UScalar.mul_bv_spec (by scalar_tac)
-
-theorem U64.mul_bv_spec {x y : U64} (hmax : x.val * y.val ≤ U64.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
-  UScalar.mul_bv_spec (by scalar_tac)
-
-theorem U128.mul_bv_spec {x y : U128} (hmax : x.val * y.val ≤ U128.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
-  UScalar.mul_bv_spec (by scalar_tac)
-
-theorem Isize.mul_bv_spec {x y : Isize}
-  (hmin : Isize.min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ Isize.max) :
+iscalar theorem «%S».mul_bv_spec {x y : «%S»}
+  (hmin : «%S».min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ «%S».max) :
   ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
   IScalar.mul_bv_spec (by scalar_tac) (by scalar_tac)
-
-theorem I8.mul_bv_spec {x y : I8}
-  (hmin : I8.min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ I8.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
-  IScalar.mul_bv_spec (by scalar_tac) (by scalar_tac)
-
-theorem I16.mul_bv_spec {x y : I16}
-  (hmin : I16.min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ I16.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
-  IScalar.mul_bv_spec (by scalar_tac) (by scalar_tac)
-
-theorem I32.mul_bv_spec {x y : I32}
-  (hmin : I32.min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ I32.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
-  IScalar.mul_bv_spec (by scalar_tac) (by scalar_tac)
-
-theorem I64.mul_bv_spec {x y : I64} (hmin : I64.min ≤ ↑x * ↑y)
-  (hmax : ↑x * ↑y ≤ I64.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
-  IScalar.mul_bv_spec (by scalar_tac) (by scalar_tac)
-
-theorem I128.mul_bv_spec {x y : I128} (hmin : I128.min ≤ ↑x * ↑y)
-  (hmax : ↑x * ↑y ≤ I128.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
-  IScalar.mul_bv_spec (by scalar_tac) (by scalar_tac)
-
 
 /-!
 Theorems with a specification which only use integers
@@ -189,57 +144,12 @@ theorem IScalar.mul_spec {ty} {x y : IScalar ty}
   have ⟨ z, h⟩ := @mul_bv_spec ty x y (by scalar_tac) (by scalar_tac)
   simp only [ok.injEq, _root_.exists_eq_left', h]
 
-@[progress] theorem Usize.mul_spec {x y : Usize} (hmax : x.val * y.val ≤ Usize.max) :
+uscalar @[progress] theorem «%S».mul_spec {x y : «%S»} (hmax : x.val * y.val ≤ «%S».max) :
   ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y :=
   UScalar.mul_spec (by scalar_tac)
 
-@[progress] theorem U8.mul_spec {x y : U8} (hmax : x.val * y.val ≤ U8.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y :=
-  UScalar.mul_spec (by scalar_tac)
-
-@[progress] theorem U16.mul_spec {x y : U16} (hmax : x.val * y.val ≤ U16.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y :=
-  UScalar.mul_spec (by scalar_tac)
-
-@[progress] theorem U32.mul_spec {x y : U32} (hmax : x.val * y.val ≤ U32.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y :=
-  UScalar.mul_spec (by scalar_tac)
-
-@[progress] theorem U64.mul_spec {x y : U64} (hmax : x.val * y.val ≤ U64.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y :=
-  UScalar.mul_spec (by scalar_tac)
-
-@[progress] theorem U128.mul_spec {x y : U128} (hmax : x.val * y.val ≤ U128.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y :=
-  UScalar.mul_spec (by scalar_tac)
-
-@[progress] theorem Isize.mul_spec {x y : Isize}
-  (hmin : Isize.min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ Isize.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y :=
-  IScalar.mul_spec (by scalar_tac) (by scalar_tac)
-
-@[progress] theorem I8.mul_spec {x y : I8}
-  (hmin : I8.min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ I8.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y :=
-  IScalar.mul_spec (by scalar_tac) (by scalar_tac)
-
-@[progress] theorem I16.mul_spec {x y : I16}
-  (hmin : I16.min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ I16.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y :=
-  IScalar.mul_spec (by scalar_tac) (by scalar_tac)
-
-@[progress] theorem I32.mul_spec {x y : I32}
-  (hmin : I32.min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ I32.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y :=
-  IScalar.mul_spec (by scalar_tac) (by scalar_tac)
-
-@[progress] theorem I64.mul_spec {x y : I64} (hmin : I64.min ≤ ↑x * ↑y)
-  (hmax : ↑x * ↑y ≤ I64.max) :
-  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y :=
-  IScalar.mul_spec (by scalar_tac) (by scalar_tac)
-
-@[progress] theorem I128.mul_spec {x y : I128} (hmin : I128.min ≤ ↑x * ↑y)
-  (hmax : ↑x * ↑y ≤ I128.max) :
+iscalar @[progress] theorem «%S».mul_spec {x y : «%S»}
+  (hmin : «%S».min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ «%S».max) :
   ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y :=
   IScalar.mul_spec (by scalar_tac) (by scalar_tac)
 

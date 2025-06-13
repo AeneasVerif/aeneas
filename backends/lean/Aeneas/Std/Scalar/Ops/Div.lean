@@ -1,12 +1,13 @@
 import Aeneas.Std.Scalar.Core
 import Aeneas.Std.Scalar.Misc
+import Aeneas.Std.Scalar.Elab
 import Aeneas.ScalarTac
 import Aeneas.Std.Core
 import Mathlib.Data.BitVec
 
 namespace Aeneas.Std
 
-open Result Error Arith
+open Result Error Arith ScalarElab
 
 /-!
 # Division: Definitions
@@ -387,57 +388,12 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
     rw [this]
     simp only [Int.tdiv_neg, Int.neg_tdiv, neg_neg]
 
-theorem U8.div_bv_spec (x : U8) {y : U8} (hnz : ↑y ≠ (0 : Nat)) :
+uscalar theorem «%S».div_bv_spec (x : «%S») {y : «%S»} (hnz : ↑y ≠ (0 : Nat)) :
   ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y ∧ z.bv = x.bv / y.bv :=
   UScalar.div_bv_spec x hnz
 
-theorem U16.div_bv_spec (x : U16) {y : U16} (hnz : ↑y ≠ (0 : Nat)) :
-  ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y ∧ z.bv = x.bv / y.bv :=
-  UScalar.div_bv_spec x hnz
-
-theorem U32.div_bv_spec (x : U32) {y : U32} (hnz : ↑y ≠ (0 : Nat)) :
-  ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y ∧ z.bv = x.bv / y.bv :=
-  UScalar.div_bv_spec x hnz
-
-theorem U64.div_bv_spec (x : U64) {y : U64} (hnz : ↑y ≠ (0 : Nat)) :
-  ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y ∧ z.bv = x.bv / y.bv :=
-  UScalar.div_bv_spec x hnz
-
-theorem U128.div_bv_spec (x : U128) {y : U128} (hnz : ↑y ≠ (0 : Nat)) :
-  ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y ∧ z.bv = x.bv / y.bv :=
-  UScalar.div_bv_spec x hnz
-
-theorem Usize.div_bv_spec (x : Usize) {y : Usize} (hnz : ↑y ≠ (0 : Nat)) :
-  ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y ∧ z.bv = x.bv / y.bv :=
-  UScalar.div_bv_spec x hnz
-
-theorem I8.div_bv_spec {x y : I8} (hnz : ↑y ≠ (0 : Int))
-  (hNoOverflow : ¬ (x.val = I8.min ∧ y.val = -1)) :
-  ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y ∧ z.bv = BitVec.sdiv x.bv y.bv :=
-  IScalar.div_bv_spec hnz (by scalar_tac)
-
-theorem I16.div_bv_spec {x y : I16} (hnz : ↑y ≠ (0 : Int))
-  (hNoOverflow : ¬ (x.val = I16.min ∧ y.val = -1)) :
-  ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y ∧ z.bv = BitVec.sdiv x.bv y.bv :=
-  IScalar.div_bv_spec hnz (by scalar_tac)
-
-theorem I32.div_bv_spec {x y : I32} (hnz : ↑y ≠ (0 : Int))
-  (hNoOverflow : ¬ (x.val = I32.min ∧ y.val = -1)) :
-  ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y ∧ z.bv = BitVec.sdiv x.bv y.bv :=
-  IScalar.div_bv_spec hnz (by scalar_tac)
-
-theorem I64.div_bv_spec {x y : I64} (hnz : ↑y ≠ (0 : Int))
-  (hNoOverflow : ¬ (x.val = I64.min ∧ y.val = -1)) :
-  ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y ∧ z.bv = BitVec.sdiv x.bv y.bv :=
-  IScalar.div_bv_spec hnz (by scalar_tac)
-
-theorem I128.div_bv_spec {x y : I128} (hnz : ↑y ≠ (0 : Int))
-  (hNoOverflow : ¬ (x.val = I128.min ∧ y.val = -1)) :
-  ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y ∧ z.bv = BitVec.sdiv x.bv y.bv :=
-  IScalar.div_bv_spec hnz (by scalar_tac)
-
-theorem Isize.div_bv_spec {x y : Isize} (hnz : ↑y ≠ (0 : Int))
-  (hNoOverflow : ¬ (x.val = Isize.min ∧ y.val = -1)) :
+iscalar theorem «%S».div_bv_spec {x y : «%S»} (hnz : ↑y ≠ (0 : Int))
+  (hNoOverflow : ¬ (x.val = «%S».min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y ∧ z.bv = BitVec.sdiv x.bv y.bv :=
   IScalar.div_bv_spec hnz (by scalar_tac)
 
@@ -460,59 +416,13 @@ theorem IScalar.div_spec {ty} {x y : IScalar ty}
   have ⟨ z, hz ⟩ := IScalar.div_bv_spec hzero hNoOverflow
   simp [hz]
 
-@[progress] theorem U8.div_spec (x : U8) {y : U8} (hnz : ↑y ≠ (0 : Nat)) :
+uscalar @[progress] theorem «%S».div_spec (x : «%S») {y : «%S»} (hnz : ↑y ≠ (0 : Nat)) :
   ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y :=
   UScalar.div_spec x hnz
 
-@[progress] theorem U16.div_spec (x : U16) {y : U16} (hnz : ↑y ≠ (0 : Nat)) :
-  ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y :=
-  UScalar.div_spec x hnz
-
-@[progress] theorem U32.div_spec (x : U32) {y : U32} (hnz : ↑y ≠ (0 : Nat)) :
-  ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y :=
-  UScalar.div_spec x hnz
-
-@[progress] theorem U64.div_spec (x : U64) {y : U64} (hnz : ↑y ≠ (0 : Nat)) :
-  ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y :=
-  UScalar.div_spec x hnz
-
-@[progress] theorem U128.div_spec (x : U128) {y : U128} (hnz : ↑y ≠ (0 : Nat)) :
-  ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y :=
-  UScalar.div_spec x hnz
-
-@[progress] theorem Usize.div_spec (x : Usize) {y : Usize} (hnz : ↑y ≠ (0 : Nat)) :
-  ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y :=
-  UScalar.div_spec x hnz
-
-@[progress] theorem I8.div_spec {x y : I8} (hnz : ↑y ≠ (0 : Int))
-  (hNoOverflow : ¬ (x.val = I8.min ∧ y.val = -1)) :
+iscalar @[progress] theorem «%S».div_spec {x y : «%S»} (hnz : ↑y ≠ (0 : Int))
+  (hNoOverflow : ¬ (x.val = «%S».min ∧ y.val = -1)) :
   ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
   IScalar.div_spec hnz (by scalar_tac)
-
-@[progress] theorem I16.div_spec {x y : I16} (hnz : ↑y ≠ (0 : Int))
-  (hNoOverflow : ¬ (x.val = I16.min ∧ y.val = -1)) :
-  ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
-  IScalar.div_spec hnz (by scalar_tac)
-
-@[progress] theorem I32.div_spec {x y : I32} (hnz : ↑y ≠ (0 : Int))
-  (hNoOverflow : ¬ (x.val = I32.min ∧ y.val = -1)) :
-  ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
-  IScalar.div_spec hnz (by scalar_tac)
-
-@[progress] theorem I64.div_spec {x y : I64} (hnz : ↑y ≠ (0 : Int))
-  (hNoOverflow : ¬ (x.val = I64.min ∧ y.val = -1)) :
-  ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
-  IScalar.div_spec hnz (by scalar_tac)
-
-@[progress] theorem I128.div_spec {x y : I128} (hnz : ↑y ≠ (0 : Int))
-  (hNoOverflow : ¬ (x.val = I128.min ∧ y.val = -1)) :
-  ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
-  IScalar.div_spec hnz (by scalar_tac)
-
-@[progress] theorem Isize.div_spec {x y : Isize} (hnz : ↑y ≠ (0 : Int))
-  (hNoOverflow : ¬ (x.val = Isize.min ∧ y.val = -1)) :
-  ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
-  IScalar.div_spec hnz (by scalar_tac)
-
 
 end Aeneas.Std
