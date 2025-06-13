@@ -68,7 +68,7 @@ let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
         ExpandInt (int_ty, branches, otherwise)
     | TLiteral (TFloat _) ->
         craise __FILE__ __LINE__ span "Float are not supported in Aeneas yet"
-    | TAdt (_, _) ->
+    | TAdt _ ->
         (* Branching: it is necessarily an enumeration expansion *)
         let get_variant (see : symbolic_expansion option) :
             VariantId.id option * symbolic_value list =
@@ -133,7 +133,7 @@ let synthesize_function_call (call_id : call_id) (ctx : Contexts.eval_ctx)
 
 let synthesize_global_eval (gref : global_decl_ref) (dest : symbolic_value)
     (e : expression) : expression =
-  EvalGlobal (gref.global_id, gref.global_generics, dest, e)
+  EvalGlobal (gref.id, gref.generics, dest, e)
 
 let synthesize_regular_function_call (fun_id : fun_id_or_trait_method_ref)
     (call_id : FunCallId.id) (ctx : Contexts.eval_ctx) (sg : fun_sig)

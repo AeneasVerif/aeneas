@@ -81,10 +81,10 @@ module Sig = struct
     mk_ref_ty r ty ref_kind
 
   let mk_array_ty (ty : ty) (cg : const_generic) : ty =
-    TAdt (TBuiltin TArray, mk_generic_args [] [ ty ] [ cg ])
+    TAdt { id = TBuiltin TArray; generics = mk_generic_args [] [ ty ] [ cg ] }
 
   let mk_slice_ty (ty : ty) : ty =
-    TAdt (TBuiltin TSlice, mk_generic_args [] [ ty ] [])
+    TAdt { id = TBuiltin TSlice; generics = mk_generic_args [] [ ty ] [] }
 
   let mk_sig generics inputs output : fun_sig =
     { is_unsafe = false; generics; inputs; output }

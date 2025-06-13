@@ -186,8 +186,8 @@ let symbolic_value_is_greedily_expandable (span : Meta.span option)
   if ty_has_borrows span type_infos sv.sv_ty then
     (* Ignore arrays and slices, as we can't expand them *)
     match sv.sv_ty with
-    | TAdt (TBuiltin (TArray | TSlice), _) -> false
-    | TAdt (TAdtId id, _) ->
+    | TAdt { id = TBuiltin (TArray | TSlice); _ } -> false
+    | TAdt { id = TAdtId id; _ } ->
         (* Lookup the type of the ADT to check if we can expand it *)
         let def = TypeDeclId.Map.find id type_decls in
         begin

@@ -801,7 +801,7 @@ let export_trait_impl (fmt : Format.formatter) (_config : gen_config)
       TraitImplId.Map.find trait_impl.def_id ctx.crate.trait_impls
     in
     match_name_with_generics_find_opt ctx.trans_ctx trait_decl.item_meta.name
-      trait_impl.impl_trait.decl_generics
+      trait_impl.impl_trait.generics
       (builtin_trait_impls_map ())
   in
   match builtin_info with

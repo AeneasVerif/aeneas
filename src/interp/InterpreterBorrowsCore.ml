@@ -109,8 +109,10 @@ let rec compare_rtys (span : Meta.span) (default : bool)
   | TLiteral lit1, TLiteral lit2 ->
       sanity_check __FILE__ __LINE__ (lit1 = lit2) span;
       default
-  | TAdt (id1, generics1), TAdt (id2, generics2) ->
-      sanity_check __FILE__ __LINE__ (id1 = id2) span;
+  | TAdt tref1, TAdt tref2 ->
+      let generics1 = tref1.generics in
+      let generics2 = tref2.generics in
+      sanity_check __FILE__ __LINE__ (tref1.id = tref2.id) span;
       (* There are no regions in the const generics, so we ignore them,
          but we still check they are the same, for sanity *)
       sanity_check __FILE__ __LINE__
@@ -1461,9 +1463,14 @@ let normalize_proj_ty (regions : RegionId.Set.t) (ty : rty) : rty =
 (** Compute the union of two normalized projection types *)
 let rec norm_proj_tys_union (span : Meta.span) (ty1 : rty) (ty2 : rty) : rty =
   match (ty1, ty2) with
-  | TAdt (id1, generics1), TAdt (id2, generics2) ->
-      sanity_check __FILE__ __LINE__ (id1 = id2) span;
-      TAdt (id1, norm_proj_generic_args_union span generics1 generics2)
+  | TAdt tref1, TAdt tref2 ->
+      sanity_check __FILE__ __LINE__ (tref1.id = tref2.id) span;
+      TAdt
+        {
+          id = tref1.id;
+          generics =
+            norm_proj_generic_args_union span tref1.generics tref2.generics;
+        }
   | TVar id1, TVar id2 ->
       sanity_check __FILE__ __LINE__ (id1 = id2) span;
       TVar id1
