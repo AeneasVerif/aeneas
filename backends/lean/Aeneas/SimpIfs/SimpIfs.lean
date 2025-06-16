@@ -33,6 +33,14 @@ theorem if_true {α} (b : Prop) [Decidable b] (x y : α) (hb : b) : (if b then x
 theorem if_false {α} (b : Prop) [Decidable b] (x y : α) (hb : ¬ b) : (if b then x else y) = y := by
   simp only [hb, Bool.false_eq_true, ↓reduceIte]
 
+@[simp_ifs_simps]
+theorem dite_true (c : Prop) [Decidable c] (h : c) (t : c → α) (e : ¬c → α) :
+  dite c t e = t h := by simp [h]
+
+@[simp_ifs_simps]
+theorem dite_fase (c : Prop) [Decidable c] (h : ¬ c) (t : c → α) (e : ¬c → α) :
+  dite c t e = e h := by simp [h]
+
 def parseSimpIfs : TSyntax ``simp_ifs -> TacticM (ScalarTac.CondSimpPartialArgs × Utils.Location)
 | `(tactic| simp_ifs $[[$args,*]]?) => do
   let args := args.map (·.getElems) |>.getD #[]
