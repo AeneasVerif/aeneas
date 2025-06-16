@@ -275,7 +275,9 @@ partial def evalSaturate
   (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
   (declsToExplore : Option (Array FVarId) := none)
   (exploreAssumptions : Bool := true)
-  (exploreTarget : Bool := true) : TacticM (Array FVarId)
+  (exploreTarget : Bool := true)
+  (next : Array FVarId → TacticM α)
+  : TacticM α
   := do
   Tactic.withMainContext do
   trace[Saturate] "sets: {sets}"
@@ -320,8 +322,8 @@ partial def evalSaturate
   trace[Saturate] "Finished exploring the goal. Matched:\n{matched.toList}"
   let matched := matched.toArray
   let fvars : Array FVarId := #[]
-  let rec add (i : Nat) (fvars : Array FVarId) (f : Array FVarId → TacticM (Array FVarId)) :
-    TacticM (Array FVarId) := do
+  let rec add (i : Nat) (fvars : Array FVarId) (f : Array FVarId → TacticM α) :
+    TacticM α := do
     if i < matched.size then do
       withMainContext do
       let (thName, args) := matched[i]!
@@ -346,21 +348,28 @@ partial def evalSaturate
         -- Simply ignore the match
         add (i + 1) fvars f
     else f fvars
-  let matched ← add 0 fvars (fun x => pure x)
 
-  trace[Saturate] "Introduced the assumptions in the context"
+  --
+  add 0 fvars fun matched => do
+    trace[Saturate] "Introduced the assumptions in the context"
 
-  -- Display the diagnostics information
-  trace[Saturate.diagnostics] "Saturate diagnostics info: {dinfo.toArray}"
-  -- Return
-  pure matched
+    -- Display the diagnostics information
+    trace[Saturate.diagnostics] "Saturate diagnostics info: {dinfo.toArray}"
+    -- Continue
+    next matched
 
 elab "aeneas_saturate" : tactic => do
   let _ ← evalSaturate [`Aeneas.ScalarTac] none none
+    (declsToExplore := none)
+    (exploreAssumptions := true)
+    (exploreTarget := true) (fun _ => pure ())
 
 section Test
   local elab "aeneas_saturate_test" : tactic => do
     let _ ← evalSaturate [`Aeneas.Test] none none
+      (declsToExplore := none)
+      (exploreAssumptions := true)
+      (exploreTarget := true) (fun _ => pure ())
 
   set_option trace.Saturate.attribute false
   @[local aeneas_saturate (set := Aeneas.Test) (pattern := l.length)]

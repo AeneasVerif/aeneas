@@ -167,7 +167,7 @@ structure Config extends SaturateConfig where
 declare_config_elab elabConfig Config
 
 /-- Apply the scalar_tac forward rules -/
-def scalarTacSaturateForward (config : SaturateConfig) : Tactic.TacticM (Array FVarId) := do
+def scalarTacSaturateForward {α} (config : SaturateConfig) (f : Array FVarId → TacticM α)  : TacticM α := do
   /-
   let options : Aesop.Options := {}
   -- Use a forward max depth of 0 to prevent recursively applying forward rules on the assumptions
@@ -183,13 +183,14 @@ def scalarTacSaturateForward (config : SaturateConfig) : Tactic.TacticM (Array F
   -- TODO
   -- evalAesopSaturate options ruleSets.toArray
   Saturate.evalSaturate ruleSets (if config.fastSaturate then Saturate.exploreArithSubterms else none) none
+    (declsToExplore := none)
     (exploreAssumptions := config.saturateAssumptions)
-    (exploreTarget := config.saturateTarget)
+    (exploreTarget := config.saturateTarget) f
 
 -- For debugging
 elab "scalar_tac_saturate" config:Parser.Tactic.optConfig : tactic => do
   let config ← elabConfig config
-  let _ ← scalarTacSaturateForward config.toSaturateConfig
+  let _ ← scalarTacSaturateForward config.toSaturateConfig (fun _ => pure ())
 
 attribute [scalar_tac_simps] Prod.mk.injEq
 
@@ -249,7 +250,7 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
   trace[ScalarTac] "Goal after first simplification: {← getMainGoal}"
   -- Apply the forward rules
   if config.saturate then
-    allGoalsNoRecover (do let _ ← scalarTacSaturateForward config.toSaturateConfig)
+    allGoalsNoRecover (scalarTacSaturateForward config.toSaturateConfig (fun _ => pure ()))
   trace[ScalarTac] "Goal after saturation: {← getMainGoal}"
   let simpArgs : SimpArgs ← getSimpArgs
   -- Apply `simpAll`
