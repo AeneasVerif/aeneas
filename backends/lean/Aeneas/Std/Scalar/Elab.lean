@@ -49,44 +49,6 @@ with either "U8", or "U16", etc.
 
 -/
 
-/- The following contains private definitions copy-pasted from `Lean.Elab.Command` -/
-namespace Declaration
-  /-- Return `true` if `stx` is a `Command.declaration`, and it is a definition that always has a name. -/
-  private def isNamedDef (stx : Syntax) : Bool :=
-    if !stx.isOfKind ``Lean.Parser.Command.declaration then
-      false
-    else
-      let decl := stx[1]
-      let k := decl.getKind
-      k == ``Lean.Parser.Command.abbrev ||
-      k == ``Lean.Parser.Command.definition ||
-      k == ``Lean.Parser.Command.theorem ||
-      k == ``Lean.Parser.Command.opaque ||
-      k == ``Lean.Parser.Command.axiom ||
-      k == ``Lean.Parser.Command.inductive ||
-      k == ``Lean.Parser.Command.classInductive ||
-      k == ``Lean.Parser.Command.structure
-
-  /-- Return `true` if `stx` is an `instance` declaration command -/
-  private def isInstanceDef (stx : Syntax) : Bool :=
-    stx.isOfKind ``Lean.Parser.Command.declaration &&
-    stx[1].getKind == ``Lean.Parser.Command.instance
-
-  /-- Return `some name` if `stx` is a definition named `name` -/
-  def getDefName? (stx : Syntax) : Option Name := do
-    if isNamedDef stx then
-      let (id, _) := expandDeclIdCore stx[1][1]
-      some id
-    else if isInstanceDef stx then
-      let optDeclId := stx[1][3]
-      if optDeclId.isNone then none
-      else
-        let (id, _) := expandDeclIdCore optDeclId[0]
-        some id
-    else
-      none
-end Declaration
-
 def isSubstring (sub str : List Char) : Option (List Char) :=
   match sub, str with
   | [], _ => some str
@@ -115,12 +77,6 @@ def elabSpecialName (ty : String) (n : Name) : CommandElabM Name := do
     pure (.str (← elabSpecialName ty pre) str)
   | .num pre i => pure (.num (← elabSpecialName ty pre) i)
 
-def elabSource (info : SourceInfo) : SourceInfo := info
-  /-match info with
-  | .original _leading pos _trailing endPos =>
-    .synthetic pos endPos true
-  | _ => info-/
-
 partial def elabSpecial (ty : String) (bw size : Syntax) (stx : Syntax) : CommandElabM Syntax := do
   trace[ScalarElabSubst] "elabSpecial: stx: {stx}"
   match stx with
@@ -132,59 +88,29 @@ partial def elabSpecial (ty : String) (bw size : Syntax) (stx : Syntax) : Comman
     pure size
   | .node info kind args =>
     trace[ScalarElabSubst] "elabSpecial: node: {stx}"
-    let info := elabSource info
     let args ← args.mapM (elabSpecial ty bw size)
     pure (.node info kind args)
   | .atom info val =>
     trace[ScalarElabSubst] "elabSpecial: atom: {val}"
-    let info := elabSource info
     if val == "%BitWidth" then
       trace[ScalarElabSubst] "elabSpecial: replaced `%BitWidth`"
       pure bw
     else pure (.atom info val)
   | .ident info rawVal val preresolved =>
     trace[ScalarElabSubst] "elabSpecial: ident: {stx}"
-    let info := elabSource info
     let val ← elabSpecialName ty val
     pure (.ident info rawVal val preresolved)
 
-def elabCommand (tysBws : List (String × Syntax × Syntax)) (stx : Syntax) (cmd : TSyntax `command) : CommandElabM Unit := do
-  let elabOne (tyBw : String × Syntax × Syntax) : CommandElabM (TSyntax `command) := do
+def elabCommand (tysBws : List (String × Syntax × Syntax)) (cmd : TSyntax `command) : CommandElabM Unit := do
+  let elabOne (tyBw : String × Syntax × Syntax) : CommandElabM Unit := do
     let (ty, bw, size) := tyBw
     ---let cmd0 := cmd
     let cmd ← elabSpecial ty bw size cmd
     trace[ScalarElab] "Final declaration for {ty}:\n{cmd}"
     let cmd ← liftMacroM (expandNamespacedDeclaration cmd)
-    --let cmd : TSyntax `Command := { cmd1 with raw := cmd }
-    pure ⟨ cmd ⟩
-    /-
-    --elabCommandTopLevel cmd
     Command.elabCommand cmd
-    --Lean.Elab.Command.elabDeclaration cmd
-    /- For some reason, the goto definition doesn't work if the command defines a theorem -/
-    trace[ScalarElab] "stx range: {Option.isSome (← Lean.Elab.getDeclarationRange? stx)}"
-    trace[ScalarElab] "cmd range: {Option.isSome (← Lean.Elab.getDeclarationRange? cmd0)}"
-    --let some range ← Lean.Elab.getDeclarationRange? stx
-    -- | throwError "Unreachable"
-    /-trace[ScalarElab] "{range.pos}"
-    if let some name := Declaration.getDefName? cmd1 then do
-      -- Note that the name retrieved from the syntax is not the full name: we still need to resolve it
-      if let some e ← liftTermElabM (Term.resolveId? (← `(ident|$(mkIdent name))) (withInfo := true)) then
-        let name := e.constName!
-        trace[ScalarElab] "Add declaration range for name: {name}"
-        addDeclarationRangesFromSyntax name stx[0]
-      else throwError "Unreachable"
-    else throwError "Unrechable"-/ -/
-  --for ty in tys do
-  --  elabOne ty
-  --
-  let cmdl ← tysBws.mapM elabOne
-  let cmdl := cmdl.reverse
-  match cmdl with
-  | cmd :: cmdl =>
-    let cmd ← List.foldlM (fun cmd0 cmd1 => `($cmd0:command $cmd1:command)) cmd cmdl
-    Command.elabCommand cmd
-  | _ => throwError "Unreachable"
+  for tyBw in tysBws do
+    elabOne tyBw
 
 scoped syntax "%BitWidth" : term
 scoped syntax "%Size" : term
@@ -198,7 +124,7 @@ def uscalarCommandImpl : CommandElab := fun stx => do
   | `(uscalarCommand| uscalar $cmd) =>
     elabCommand [("U8", ←`(8), ←`(1)), ("U16", ←`(16), ←`(2)), ("U32", ←`(32), ←`(4)),
                  ("U64", ←`(64), ←`(8)), ("U128", ←`(128), ←`(16)),
-                 ("Usize", ←`(System.Platform.numBits), ←`(System.Platform.numBits/8))] stx cmd
+                 ("Usize", ←`(System.Platform.numBits), ←`(System.Platform.numBits/8))] cmd
   | _ => throwUnsupportedSyntax
 
 scoped syntax (name := uscalarNoUsizeCommand) "uscalar_no_usize" command : command
@@ -209,7 +135,7 @@ def uscalarNoUsizeCommandImpl : CommandElab := fun stx => do
   match stx with
   | `(uscalarNoUsizeCommand| uscalar_no_usize $cmd) =>
     elabCommand [("U8", ←`(8), ←`(1)), ("U16", ←`(16), ←`(2)), ("U32", ←`(32), ←`(4)),
-                 ("U64", ←`(64), ←`(8)), ("U128", ←`(128), ←`(16))] stx cmd
+                 ("U64", ←`(64), ←`(8)), ("U128", ←`(128), ←`(16))] cmd
   | _ => throwUnsupportedSyntax
 
 scoped syntax (name := iscalarCommand) "iscalar" command : command
@@ -221,7 +147,7 @@ def iscalarCommandImpl : CommandElab := fun stx => do
   | `(iscalarCommand| iscalar $cmd) =>
     elabCommand [("I8", ←`(8), ←`(1)), ("I16", ←`(16), ←`(2)), ("I32", ←`(32), ←`(4)),
                  ("I64", ←`(64), ←`(8)), ("I128", ←`(128), ←`(16)),
-                 ("Isize", ←`(System.Platform.numBits), ←`(System.Platform.numBits/8))] stx cmd
+                 ("Isize", ←`(System.Platform.numBits), ←`(System.Platform.numBits/8))] cmd
   | _ => throwUnsupportedSyntax
 
 scoped syntax (name := iscalarNoIsizeCommand) "iscalar_no_isize" command : command
@@ -232,7 +158,7 @@ def iscalarNoIsizeNoIsizeCommandImpl : CommandElab := fun stx => do
   match stx with
   | `(iscalarNoIsizeCommand| iscalar_no_isize $cmd) =>
     elabCommand [("I8", ←`(8), ←`(1)), ("I16", ←`(16), ←`(2)), ("I32", ←`(32), ←`(4)),
-                 ("I64", ←`(64), ←`(8)), ("I128", ←`(128), ←`(16))] stx cmd
+                 ("I64", ←`(64), ←`(8)), ("I128", ←`(128), ←`(16))] cmd
   | _ => throwUnsupportedSyntax
 
 scoped syntax (name := scalarCommand) "scalar" command : command
@@ -247,7 +173,7 @@ def scalarCommandImpl : CommandElab := fun stx => do
                  ("Usize", ←`(System.Platform.numBits), ←`(System.Platform.numBits/8)),
                  ("I8", ←`(8), ←`(1)), ("I16", ←`(16), ←`(2)), ("I32", ←`(32), ←`(4)),
                  ("I64", ←`(64), ←`(8)), ("I128", ←`(128), ←`(16)),
-                 ("Isize", ←`(System.Platform.numBits), ←`(System.Platform.numBits/8))] stx cmd
+                 ("Isize", ←`(System.Platform.numBits), ←`(System.Platform.numBits/8))] cmd
   | _ => throwUnsupportedSyntax
 
 end Aeneas.Std.ScalarElab
