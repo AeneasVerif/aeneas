@@ -304,6 +304,36 @@ attribute [simp_scalar_simps] ZMod.val_natCast ZMod.val_intCast
 theorem ZMod.cast_intCast {n : ℕ} (a : ℤ) [NeZero n] : ((a : ZMod n).cast : ℤ) = a % ↑n := by
   simp only [ZMod.cast_eq_val, ZMod.val_intCast]
 
+/-!
+# Sets
+-/
+attribute [scalar_tac_simps] Set.Mem
+
+@[scalar_tac_simps] theorem Set.mem_insert_nat s x y :
+  @insert ℕ (Set ℕ) Set.instInsert x s y ↔ y = x ∨ s y := by rfl
+
+@[scalar_tac_simps] theorem Set.mem_singleton_nat x y :
+  @singleton ℕ (Set ℕ) Set.instSingletonSet x y ↔ y = x := by rfl
+
+@[scalar_tac_simps] theorem Set.mem_insert_int s x y :
+  @insert ℤ (Set ℤ) Set.instInsert x s y ↔ y = x ∨ s y := by rfl
+
+@[scalar_tac_simps] theorem Set.mem_singleton_int x y :
+  @singleton ℤ (Set ℤ) Set.instSingletonSet x y ↔ y = x := by rfl
+
+/-!
+# Subtypes
+-/
+@[scalar_tac_simps]
+theorem nat_subset_le_iff (p : ℕ → Prop) (x y : {n : ℕ // p n}) : x ≤ y ↔ x.val ≤ y.val := by rfl
+
+@[scalar_tac_simps]
+theorem nat_subset_lt_iff (p : ℕ → Prop) (x y : {n : ℕ // p n}) : x < y ↔ x.val < y.val := by rfl
+
+@[scalar_tac_simps]
+theorem nat_subset_eq_iff (p : ℕ → Prop) (x y : {n : ℕ // p n}) : x = y ↔ x.val = y.val := by
+  cases x; cases y; simp
+
 end ScalarTac
 
 end Aeneas
