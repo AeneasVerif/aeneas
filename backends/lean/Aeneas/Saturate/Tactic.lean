@@ -57,6 +57,13 @@ def State.insertMatch (s : State) (name : Name) (args : List Expr) : State :=
 
 def State.empty : State := ⟨ DiagnosticsInfo.empty, Std.HashSet.emptyWithCapacity ⟩
 
+inductive LeftOrRight where
+| left | right
+
+inductive AssumPath where
+| asm (asm : FVarId)
+| conj (dir : LeftOrRight) (p : AssumPath)
+
 /-- Find all the lemmas which match an expression.
 
     - `dtrees`: the discrimination trees (the sets of rules in which to match)
@@ -145,7 +152,9 @@ def matchExpr
   ) state
 
 /- Recursively explore a term -/
-private partial def visit (config : Config) (depth : Nat)
+private partial def visit (config : Config)
+  (path : Option AssumPath)
+  (depth : Nat)
   (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
   (nameToRule : NameMap Rule)
   (dtrees : Array (DiscrTree Rule))
@@ -166,11 +175,11 @@ private partial def visit (config : Config) (depth : Nat)
       let fvarId := x.fvarId!
       let localDecl ← fvarId.getDecl
       let boundVars := boundVars.insert fvarId
-      let state ← visit config (depth + 1) preprocessThm nameToRule dtrees boundVars state localDecl.type
+      let state ← visit config none (depth + 1) preprocessThm nameToRule dtrees boundVars state localDecl.type
       let state ←
         match localDecl.value? with
         | none => pure state
-        | some v => visit config (depth + 1) preprocessThm nameToRule dtrees boundVars state v
+        | some v => visit config none (depth + 1) preprocessThm nameToRule dtrees boundVars state v
       pure (boundVars, state)
       ) (boundVars, state)
   let e := e.consumeMData
@@ -185,37 +194,47 @@ private partial def visit (config : Config) (depth : Nat)
     pure state
   | .app .. => do e.withApp fun f args => do
     trace[Saturate.explore] ".app"
-    -- Filter the args to ignore proof terms
-    let args ← args.filterM fun arg => do
-      let ty ← inferType (← inferType arg)
-      if ty.isProp then pure false
-      else pure true
-    -- Visit the args
-    let state ← args.foldlM (fun state arg =>
-      visit config (depth + 1) preprocessThm nameToRule dtrees boundVars state arg) state
-    -- Visit the app
-    visit config (depth + 1) preprocessThm nameToRule dtrees boundVars state f
+    /- Check if this is a conjunction and we know the path to the current sub-expression (because it is a conjunct
+       in an assumption) -/
+    if path.isSome ∧ f.isConst ∧ f.constName! == ``And ∧ args.size == 2 then do
+      -- This is a conjunction
+      let some path := path
+        | throwError "Unreachable"
+      let state ← visit config (some (.conj .left path)) (depth + 1) preprocessThm nameToRule dtrees boundVars state (args[0]!)
+      let state ← visit config (some (.conj .right path)) (depth + 1) preprocessThm nameToRule dtrees boundVars state (args[1]!)
+      pure state
+    else
+      -- Filter the args to ignore proof terms
+      let args ← args.filterM fun arg => do
+        let ty ← inferType (← inferType arg)
+        if ty.isProp then pure false
+        else pure true
+      -- Visit the args
+      let state ← args.foldlM (fun state arg =>
+        visit config none (depth + 1) preprocessThm nameToRule dtrees boundVars state arg) state
+      -- Visit the app
+      visit config none (depth + 1) preprocessThm nameToRule dtrees boundVars state f
   | .lam .. =>
     trace[Saturate.explore] ".lam"
     lambdaLetTelescope e fun xs b => do
       let (boundVars, state) ← visitBinders (depth + 1) boundVars state xs
-      visit config (depth + 1) preprocessThm nameToRule dtrees boundVars state b
+      visit config none (depth + 1) preprocessThm nameToRule dtrees boundVars state b
   | .forallE .. => do
     trace[Saturate.explore] ".forallE"
     forallTelescope e fun xs b => do
       let (boundVars, state) ← visitBinders (depth + 1) boundVars state xs
-      visit config (depth + 1) preprocessThm nameToRule dtrees boundVars state b
+      visit config none (depth + 1) preprocessThm nameToRule dtrees boundVars state b
   | .letE .. => do
     trace[Saturate.explore] ".letE"
     lambdaLetTelescope e fun xs b => do
       let (boundVars, state) ← visitBinders (depth + 1) boundVars state xs
-      visit config (depth + 1) preprocessThm nameToRule dtrees boundVars state b
+      visit config path (depth + 1) preprocessThm nameToRule dtrees boundVars state b
   | .mdata _ b => do
     trace[Saturate.explore] ".mdata"
-    visit config (depth + 1) preprocessThm nameToRule dtrees boundVars state b
+    visit config path (depth + 1) preprocessThm nameToRule dtrees boundVars state b
   | .proj _ _ b => do
     trace[Saturate.explore] ".proj"
-    visit config (depth + 1) preprocessThm nameToRule dtrees boundVars state b
+    visit config none (depth + 1) preprocessThm nameToRule dtrees boundVars state b
 
 def arithOpArity3 : Std.HashSet Name := Std.HashSet.ofList [
   ``Nat.cast, ``Int.cast
@@ -256,6 +275,7 @@ def exploreArithSubterms (f : Expr) (args : Array Expr) : MetaM (Array Expr) := 
 
 /- Fast version of `visit`: we do not explore everything. -/
 private partial def fastVisit
+  (path : Option AssumPath)
   (exploreSubterms : Expr → Array Expr → MetaM (Array Expr))
   (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
   (depth : Nat)
@@ -279,9 +299,19 @@ private partial def fastVisit
     pure state
   | .app .. => do e.withApp fun f args => do
     trace[Saturate.explore] ".app"
-    let visitRec := fastVisit exploreSubterms preprocessThm (depth + 1) nameToRule dtrees
+    let visitRec path := fastVisit path exploreSubterms preprocessThm (depth + 1) nameToRule dtrees
     let subterms ← exploreSubterms f args
-    subterms.foldlM (fun state => visitRec state) state
+    /- Check if this is a conjunction and we know the path to the current sub-expression (because it is a conjunct
+       in an assumption) -/
+    if path.isSome ∧ f.isConst ∧ f.constName! == ``And ∧ subterms.size == 2 then do
+      -- This is a conjunction
+      let some path := path
+        | throwError "Unreachable"
+      let state ← visitRec (some (.conj .left path)) state subterms[0]!
+      let state ← visitRec (some (.conj .right path)) state subterms[1]!
+      pure state
+    else
+      subterms.foldlM (fun state => visitRec none state) state
   | .lam ..
   | .forallE ..
   | .letE .. => do
@@ -289,7 +319,7 @@ private partial def fastVisit
     pure state
   | .mdata _ b => do
     trace[Saturate.explore] ".mdata"
-    fastVisit exploreSubterms preprocessThm (depth + 1) nameToRule dtrees state b
+    fastVisit path exploreSubterms preprocessThm (depth + 1) nameToRule dtrees state b
   | .proj _ _ _ => do
     trace[Saturate.explore] ".proj"
     pure state
@@ -314,10 +344,10 @@ partial def evalSaturate {α}
   -- Get the local context
   let ctx ← Lean.MonadLCtx.getLCtx
   -- Explore
-  let visit :=
+  let visit (path : Option AssumPath) state expr :=
     match exploreSubterms with
-    | none => visit config 0 preprocessThm s.nameToRule dtrees Std.HashSet.emptyWithCapacity
-    | some exploreSubterms => fastVisit exploreSubterms preprocessThm 0 s.nameToRule dtrees
+    | none => visit config path 0 preprocessThm s.nameToRule dtrees Std.HashSet.emptyWithCapacity state expr
+    | some exploreSubterms => fastVisit path exploreSubterms preprocessThm 0 s.nameToRule dtrees state expr
 
   -- Explore the assumptions
   trace[Saturate] "Exploring the assumptions"
@@ -331,17 +361,17 @@ partial def evalSaturate {α}
       decls.foldlM (fun state (decl : LocalDecl) => do
         trace[Saturate] "Exploring local decl: {decl.userName}"
         /- We explore both the type, the expresion and the body (if there is) -/
-        let state ← visit state decl.type
-        let state ← visit state decl.toExpr
+        let state ← visit (some (.asm decl.fvarId)) state decl.type
+        let state ← visit none state decl.toExpr
         match decl.value? with
         | none => pure state
-        | some value => visit state value) state
+        | some value => visit none state value) state
     else pure state
 
   -- Explore the target
   trace[Saturate] "Exploring the target"
   let state ← do
-    if exploreTarget then do pure (← visit state (← Tactic.getMainTarget)) else do pure state
+    if exploreTarget then do pure (← visit none state (← Tactic.getMainTarget)) else do pure state
 
   /- Introduce the theorems in the context. We wrote the function in CPS on purpose (this
      helps prevent bugs where the local context is not the one we expect) -/
