@@ -143,9 +143,16 @@ theorem forall_eq_forall' {α : Type u} (p : α → Prop) : (∀ (x: α), p x) =
 @[app_unexpander forall']
 def unexpForall' : Lean.PrettyPrinter.Unexpander | `($_ $_) => `(∀ _, __) | _ => throw ()
 
-structure Config where
+structure SaturateConfig where
   /- Should we use non-linear arithmetic reasoning? -/
   nonLin : Bool := false
+  fastSaturate : Bool := false
+  /- Should we explore the assumptions when saturating?. -/
+  saturateAssumptions : Bool := true
+  /- Should we explore the target when saturating?. -/
+  saturateTarget : Bool := true
+
+structure Config extends SaturateConfig where
   /- If `true`, split all the matches/if then else in the context (note that `omega`
      splits the *disjunctions*) -/
   split: Bool := false
@@ -155,12 +162,12 @@ structure Config where
   simpAllMaxSteps : Nat := 100000
   /- Should we saturate the context with theorems marked with the attribute `scalar_tac`? -/
   saturate : Bool := true
-  fastSaturate : Bool := false
+  satConfig : SaturateConfig := {}
 
 declare_config_elab elabConfig Config
 
 /-- Apply the scalar_tac forward rules -/
-def scalarTacSaturateForward (fast : Bool) (nonLin : Bool): Tactic.TacticM (Array FVarId) := do
+def scalarTacSaturateForward (config : SaturateConfig) : Tactic.TacticM (Array FVarId) := do
   /-
   let options : Aesop.Options := {}
   -- Use a forward max depth of 0 to prevent recursively applying forward rules on the assumptions
@@ -171,16 +178,18 @@ def scalarTacSaturateForward (fast : Bool) (nonLin : Bool): Tactic.TacticM (Arra
   -- it is activated through an option.
   let ruleSets :=
     let ruleSets := `Aeneas.ScalarTac :: (← scalarTacRuleSets.get)
-    if nonLin then `Aeneas.ScalarTacNonLin :: ruleSets
+    if config.nonLin then `Aeneas.ScalarTacNonLin :: ruleSets
     else ruleSets
   -- TODO
   -- evalAesopSaturate options ruleSets.toArray
-  Saturate.evalSaturate ruleSets (if fast then Saturate.exploreArithSubterms else none) none
+  Saturate.evalSaturate ruleSets (if config.fastSaturate then Saturate.exploreArithSubterms else none) none
+    (exploreAssumptions := config.saturateAssumptions)
+    (exploreTarget := config.saturateTarget)
 
 -- For debugging
 elab "scalar_tac_saturate" config:Parser.Tactic.optConfig : tactic => do
   let config ← elabConfig config
-  let _ ← scalarTacSaturateForward config.fastSaturate config.nonLin
+  let _ ← scalarTacSaturateForward config.toSaturateConfig
 
 attribute [scalar_tac_simps] Prod.mk.injEq
 
@@ -240,7 +249,7 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
   trace[ScalarTac] "Goal after first simplification: {← getMainGoal}"
   -- Apply the forward rules
   if config.saturate then
-    allGoalsNoRecover (do let _ ← scalarTacSaturateForward config.fastSaturate config.nonLin)
+    allGoalsNoRecover (do let _ ← scalarTacSaturateForward config.toSaturateConfig)
   trace[ScalarTac] "Goal after saturation: {← getMainGoal}"
   let simpArgs : SimpArgs ← getSimpArgs
   -- Apply `simpAll`
@@ -307,9 +316,11 @@ def scalarTacCore (config : Config) : Tactic.TacticM Unit := do
               true simpArgs)
         trace[ScalarTac] "Calling omega"
         allGoalsNoRecover (Tactic.Omega.omegaTactic {})
+        trace[ScalarTac] "Goal proved!"
     else
       trace[ScalarTac] "Calling omega"
       Tactic.Omega.omegaTactic {}
+      trace[ScalarTac] "Goal proved!"
 
 /-- Tactic to solve arithmetic goals.
 

@@ -21,14 +21,14 @@ def condSimpParseArgs (tacName : String) (args : TSyntaxArray [`term, `token.«*
     | `($stx:ident) => do
       match (← getLCtx).findFromUserName? stx.getId with
       | .some decl =>
-        trace[Utils] "arg (local decl): {stx.raw}"
+        trace[CondSimpTac] "arg (local decl): {stx.raw}"
         if decl.isLet then
           declsToUnfold := declsToUnfold.push decl.userName
         else
           hypsToUse := hypsToUse.push decl.fvarId
       | .none =>
         -- Not a local declaration
-        trace[Utils] "arg (theorem): {stx.raw}"
+        trace[CondSimpTac] "arg (theorem): {stx.raw}"
         let some e ← Lean.Elab.Term.resolveId? stx (withInfo := true)
           | throwError m!"Could not find theorem: {arg}"
         if let .const name _ := e then
@@ -44,17 +44,17 @@ def condSimpParseArgs (tacName : String) (args : TSyntaxArray [`term, `token.«*
             | _ => throwError m!"{name} is not a theorem, an axiom or a definition"
         else throwError m!"Unexpected: {arg}"
     | term => do
-      trace[Utils] "term kind: {term.raw.getKind}"
+      trace[CondSimpTac] "term kind: {term.raw.getKind}"
       if term.raw.getKind == `token.«*» then
-        trace[Utils] "found token: *"
+        trace[CondSimpTac] "found token: *"
         let decls ← (← getLCtx).getDecls
         let decls ← decls.filterMapM (
           fun d => do if (← inferType d.type).isProp then pure (some d.fvarId) else pure none)
-        trace[Utils] "filtered decls: {decls.map Expr.fvar}"
+        trace[CondSimpTac] "filtered decls: {decls.map Expr.fvar}"
         hypsToUse := hypsToUse.append decls.toArray
       else
         -- TODO: we need to make that work
-        trace[Utils] "arg (term): {term}"
+        trace[CondSimpTac] "arg (term): {term}"
         throwError m!"Unimplemented: arbitrary terms are not supported yet as arguments to `{tacName}` (received: {arg})"
   pure ⟨ declsToUnfold, addSimpThms, hypsToUse ⟩
 
@@ -75,12 +75,13 @@ def condSimpTacSimp (config : Simp.Config) (args : CondSimpArgs) (loc : Utils.Lo
      addSimpThms := args.addSimpThms,
      hypsToUse := args.hypsToUse ++ additionalAsms}
   if dischWithScalarTac then
-    let (ref, d) ← tacticToDischarge (← `(tactic|scalar_tac (saturate := false)))
+    /- Note that when calling `scalar_tac` we saturate only by looking at the target: we have
+       already saturated by looking at the assumptions (we do this once and for all beforehand) -/
+    let (ref, d) ← tacticToDischarge (← `(tactic|scalar_tac -saturateAssumptions))
     let dischargeWrapper := Lean.Elab.Tactic.Simp.DischargeWrapper.custom ref d
     let _ ← dischargeWrapper.with fun discharge? => do
       -- Initialize the simp context
-      let (ctx, simprocs) ← Utils.mkSimpCtx true config
-        .simp simpArgs
+      let (ctx, simprocs) ← Utils.mkSimpCtx true config .simp simpArgs
       -- Apply the simplifier
       let _ ← Utils.customSimpLocation ctx simprocs discharge? loc
   else
@@ -93,7 +94,7 @@ def condSimpTac
   (loc : Utils.Location) : TacticM Unit := do
   Elab.Tactic.focus do
   withMainContext do
-  trace[Utils] "Initial goal: {← getMainGoal}"
+  trace[CondSimpTac] "Initial goal: {← getMainGoal}"
   /- -/
   let toDuplicate ← do
     match loc with
@@ -106,14 +107,14 @@ def condSimpTac
      integers rather than bit-vectors) for `scalar_tac` to succeed when doing the conditional rewritings. -/
   let (oldAsms, newAsms) ← Utils.duplicateAssumptions toDuplicate
   let oldAsmsSet := Std.HashSet.ofArray oldAsms
-  trace[Utils] "Goal after duplicating the assumptions: {← getMainGoal}"
-  /- Introduce the scalar_tac assumptions - by doing it beforehand we don't have to redo it every
-     time we call `scalar_tac`: as `saturate` is not compiled it saves a lot of time -/
+  trace[CondSimpTac] "Goal after duplicating the assumptions: {← getMainGoal}"
+  /- Introduce the scalar_tac assumptions - by doing this beforehand we don't have to
+     redo it every time we call `scalar_tac`. TODO: also do the `simp_all`. -/
   withMainContext do
-  let scalarTacAsms ← ScalarTac.scalarTacSaturateForward true satNonLin
-  trace[Utils] "Goal after saturating the context: {← getMainGoal}"
+  let scalarTacAsms ← ScalarTac.scalarTacSaturateForward { fastSaturate := true, nonLin := satNonLin }
+  trace[CondSimpTac] "Goal after saturating the context: {← getMainGoal}"
   let additionalSimpThms ← addSimpThms
-  trace[Utils] "Goal after adding the additional simp assumptions: {← getMainGoal}"
+  trace[CondSimpTac] "Goal after adding the additional simp assumptions: {← getMainGoal}"
   /- Simplify the targets (note that we preserve the new assumptions for `scalar_tac`) -/
   let (loc, notLocAsms) ← do
     match loc with
@@ -123,7 +124,7 @@ def condSimpTac
   if doFirstSimp then
     condSimpTacSimp simpConfig args loc additionalSimpThms false
     if (← getUnsolvedGoals) == [] then return
-  trace[Utils] "Goal after simplifying: {← getMainGoal}"
+  trace[CondSimpTac] "Goal after simplifying: {← getMainGoal}"
   /- Simplify the targets by using `scalar_tac` as a discharger -/
   let notLocAsmsSet := Std.HashSet.ofArray notLocAsms
   let nloc ← do
@@ -135,10 +136,10 @@ def condSimpTac
   if (← getUnsolvedGoals) == [] then return
   /- Clear the additional assumptions -/
   Utils.clearFVarIds scalarTacAsms
-  trace[Utils] "Goal after clearing the scalar_tac assumptions: {← getMainGoal}"
+  trace[CondSimpTac] "Goal after clearing the scalar_tac assumptions: {← getMainGoal}"
   Utils.clearFVarIds newAsms
-  trace[Utils] "Goal after clearing the duplicated assumptions: {← getMainGoal}"
+  trace[CondSimpTac] "Goal after clearing the duplicated assumptions: {← getMainGoal}"
   Utils.clearFVarIds additionalSimpThms
-  trace[Utils] "Goal after clearing the additional theorems: {← getMainGoal}"
+  trace[CondSimpTac] "Goal after clearing the additional theorems: {← getMainGoal}"
 
 end Aeneas.ScalarTac
