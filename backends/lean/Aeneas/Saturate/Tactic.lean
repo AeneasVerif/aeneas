@@ -42,9 +42,17 @@ def DiagnosticsInfo.toArray (info : DiagnosticsInfo) : Array String :=
   let hits := hits.toArray
   hits.map (fun (name, (hit, used)) => s!"{name}: {hit} hits, {used} uses")
 
+inductive LeftOrRight where
+| left | right
+
+inductive AsmPath where
+| asm (asm : FVarId)
+| conj (dir : LeftOrRight) (p : AsmPath)
+
 structure State where
   dinfo : DiagnosticsInfo
   matched : Std.HashSet (Name × List Expr)
+  assumptions : Std.HashSet Expr
 
 def State.insertHitRules (s : State) (rules : Array Rule) : State :=
   { s with dinfo := s.dinfo.insertHitRules rules }
@@ -55,14 +63,12 @@ def State.insertUsed (s : State) (name : Name) : State :=
 def State.insertMatch (s : State) (name : Name) (args : List Expr) : State :=
   { s with matched := s.matched.insert (name, args) }
 
-def State.empty : State := ⟨ DiagnosticsInfo.empty, Std.HashSet.emptyWithCapacity ⟩
+def State.insertAssumption (s : State) (path : Option Asm) (e : Expr) : State :=
+  match path with
+  | some _ => { s with assumptions := s.assumptions.insert e }
+  | none => s
 
-inductive LeftOrRight where
-| left | right
-
-inductive AssumPath where
-| asm (asm : FVarId)
-| conj (dir : LeftOrRight) (p : AssumPath)
+def State.empty : State := ⟨ DiagnosticsInfo.empty, Std.HashSet.emptyWithCapacity, Std.HashSet.emptyWithCapacity ⟩
 
 /-- Find all the lemmas which match an expression.
 
@@ -153,7 +159,7 @@ def matchExpr
 
 /- Recursively explore a term -/
 private partial def visit (config : Config)
-  (path : Option AssumPath)
+  (path : Option AsmPath)
   (depth : Nat)
   (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
   (nameToRule : NameMap Rule)
@@ -162,6 +168,8 @@ private partial def visit (config : Config)
   (state : State) (e : Expr)
   : MetaM State := do
   trace[Saturate.explore] "Visiting {e}"
+  -- Register the current assumption, if it is a conjunct inside an assumption
+  let state := state.insertAssumption path e
   -- Match
   let state ← matchExpr preprocessThm nameToRule dtrees boundVars state e
   -- Recurse
@@ -275,7 +283,7 @@ def exploreArithSubterms (f : Expr) (args : Array Expr) : MetaM (Array Expr) := 
 
 /- Fast version of `visit`: we do not explore everything. -/
 private partial def fastVisit
-  (path : Option AssumPath)
+  (path : Option AsmPath)
   (exploreSubterms : Expr → Array Expr → MetaM (Array Expr))
   (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
   (depth : Nat)
@@ -344,7 +352,7 @@ partial def evalSaturate {α}
   -- Get the local context
   let ctx ← Lean.MonadLCtx.getLCtx
   -- Explore
-  let visit (path : Option AssumPath) state expr :=
+  let visit (path : Option AsmPath) state expr :=
     match exploreSubterms with
     | none => visit config path 0 preprocessThm s.nameToRule dtrees Std.HashSet.emptyWithCapacity state expr
     | some exploreSubterms => fastVisit path exploreSubterms preprocessThm 0 s.nameToRule dtrees state expr
@@ -378,7 +386,7 @@ partial def evalSaturate {α}
   trace[Saturate] "Finished exploring the goal. Matched:\n{state.matched.toList}"
   let matched := state.matched.toArray
   let fvars : Array FVarId := #[]
-  let rec add (i : Nat) (fvars : Array FVarId) (f : Array FVarId → TacticM α) :
+  let rec add (i : Nat) (assumptions : Std.HashSet Expr) (fvars : Array FVarId) (f : Array FVarId → TacticM α) :
     TacticM α := do
     if i < matched.size then do
       withMainContext do
@@ -395,18 +403,22 @@ partial def evalSaturate {α}
       -- The application worked: introduce the assumption in the context
       if let some th := th then
         let thTy ← inferType th
-        -- TODO: check that we don't add the same assumption twice
-        Utils.addDeclTac (.num (.str .anonymous "_h") i) th thTy (asLet := false)
-          fun x =>
-          let fvars := fvars.push x.fvarId!
-          add (i + 1) fvars f
+        -- Check that we don't add the same assumption twice
+        if assumptions.contains thTy then
+          add (i + 1) assumptions fvars f
+        else
+          let assumptions := assumptions.insert thTy
+          Utils.addDeclTac (.num (.str .anonymous "_h") i) th thTy (asLet := false)
+            fun x =>
+            let fvars := fvars.push x.fvarId!
+            add (i + 1) assumptions fvars f
       else
         -- Simply ignore the match
-        add (i + 1) fvars f
+        add (i + 1) assumptions fvars f
     else f fvars
 
   --
-  add 0 fvars fun matched => do
+  add 0 state.assumptions fvars fun matched => do
     trace[Saturate] "Introduced the assumptions in the context"
 
     -- Display the diagnostics information
