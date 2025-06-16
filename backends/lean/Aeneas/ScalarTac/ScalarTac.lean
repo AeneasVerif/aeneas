@@ -208,6 +208,16 @@ attribute [scalar_tac_simps]
   -- Int.subNatNat is very annoying - TODO: there is probably something more general thing to do
   Int.subNatNat_eq_coe
 
+/- Sometimes `simp at *` doesn't work in the presence of dependent types. However, simplifying
+   the assumptions *does* work, hence this peculiar way of simplifying the context. -/
+def simpAsmsTarget (simpOnly : Bool) (config : Simp.Config) (args : SimpArgs) : TacticM Unit :=
+  withMainContext do
+  let lctx ← getLCtx
+  let decls ← lctx.getDecls
+  let props ← decls.filterM (fun d => do pure (← inferType d.type).isProp)
+  let props := (props.map fun d => d.fvarId).toArray
+  Aeneas.Utils.simpAt simpOnly config args (.targets props true)
+
 /-  Boosting a bit the `omega` tac. -/
 def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
   Tactic.withMainContext do
@@ -219,10 +229,10 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
   -/
   trace[ScalarTac] "Original goal before preprocessing: {← getMainGoal}"
   let simpArgs : SimpArgs ← getSimpArgs
-  Utils.simpAt true {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1}
+  simpAsmsTarget true {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1}
     -- Remove the forall quantifiers to prepare for the call of `simp_all` (we
     -- don't want `simp_all` to use assumptions of the shape `∀ x, P x`))
-    {simpArgs with addSimpThms := #[``forall_eq_forall']} .wildcard
+    {simpArgs with addSimpThms := #[``forall_eq_forall']}
   -- We might have proven the goal
   if (← getGoals).isEmpty then
     trace[ScalarTac] "Goal proven by preprocessing!"
