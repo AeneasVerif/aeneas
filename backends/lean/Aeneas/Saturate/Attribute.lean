@@ -11,6 +11,7 @@ open Utils Extensions
 namespace Saturate
 
 initialize registerTraceClass `Saturate
+initialize registerTraceClass `Saturate.explore
 initialize registerTraceClass `Saturate.attribute
 initialize registerTraceClass `Saturate.diagnostics
 

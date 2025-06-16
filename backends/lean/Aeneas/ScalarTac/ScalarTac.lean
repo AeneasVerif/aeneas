@@ -143,9 +143,16 @@ theorem forall_eq_forall' {α : Type u} (p : α → Prop) : (∀ (x: α), p x) =
 @[app_unexpander forall']
 def unexpForall' : Lean.PrettyPrinter.Unexpander | `($_ $_) => `(∀ _, __) | _ => throw ()
 
-structure Config where
+structure SaturateConfig where
   /- Should we use non-linear arithmetic reasoning? -/
   nonLin : Bool := false
+  fastSaturate : Bool := false
+  /- Should we explore the assumptions when saturating?. -/
+  saturateAssumptions : Bool := true
+  /- Should we explore the target when saturating?. -/
+  saturateTarget : Bool := true
+
+structure Config extends SaturateConfig where
   /- If `true`, split all the matches/if then else in the context (note that `omega`
      splits the *disjunctions*) -/
   split: Bool := false
@@ -155,12 +162,12 @@ structure Config where
   simpAllMaxSteps : Nat := 100000
   /- Should we saturate the context with theorems marked with the attribute `scalar_tac`? -/
   saturate : Bool := true
-  fastSaturate : Bool := false
+  satConfig : SaturateConfig := {}
 
 declare_config_elab elabConfig Config
 
 /-- Apply the scalar_tac forward rules -/
-def scalarTacSaturateForward (fast : Bool) (nonLin : Bool): Tactic.TacticM (Array FVarId) := do
+def scalarTacSaturateForward {α} (config : SaturateConfig) (f : Array FVarId → TacticM α)  : TacticM α := do
   /-
   let options : Aesop.Options := {}
   -- Use a forward max depth of 0 to prevent recursively applying forward rules on the assumptions
@@ -171,16 +178,19 @@ def scalarTacSaturateForward (fast : Bool) (nonLin : Bool): Tactic.TacticM (Arra
   -- it is activated through an option.
   let ruleSets :=
     let ruleSets := `Aeneas.ScalarTac :: (← scalarTacRuleSets.get)
-    if nonLin then `Aeneas.ScalarTacNonLin :: ruleSets
+    if config.nonLin then `Aeneas.ScalarTacNonLin :: ruleSets
     else ruleSets
   -- TODO
   -- evalAesopSaturate options ruleSets.toArray
-  Saturate.evalSaturate ruleSets (if fast then Saturate.exploreArithSubterms else none) none
+  Saturate.evalSaturate { visitProofTerms := false } ruleSets (if config.fastSaturate then Saturate.exploreArithSubterms else none) none
+    (declsToExplore := none)
+    (exploreAssumptions := config.saturateAssumptions)
+    (exploreTarget := config.saturateTarget) f
 
 -- For debugging
 elab "scalar_tac_saturate" config:Parser.Tactic.optConfig : tactic => do
   let config ← elabConfig config
-  let _ ← scalarTacSaturateForward config.fastSaturate config.nonLin
+  let _ ← scalarTacSaturateForward config.toSaturateConfig (fun _ => pure ())
 
 attribute [scalar_tac_simps] Prod.mk.injEq
 
@@ -208,6 +218,16 @@ attribute [scalar_tac_simps]
   -- Int.subNatNat is very annoying - TODO: there is probably something more general thing to do
   Int.subNatNat_eq_coe
 
+/- Sometimes `simp at *` doesn't work in the presence of dependent types. However, simplifying
+   the assumptions *does* work, hence this peculiar way of simplifying the context. -/
+def simpAsmsTarget (simpOnly : Bool) (config : Simp.Config) (args : SimpArgs) : TacticM Unit :=
+  withMainContext do
+  let lctx ← getLCtx
+  let decls ← lctx.getDecls
+  let props ← decls.filterM (fun d => do pure (← inferType d.type).isProp)
+  let props := (props.map fun d => d.fvarId).toArray
+  Aeneas.Utils.simpAt simpOnly config args (.targets props true)
+
 /-  Boosting a bit the `omega` tac. -/
 def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
   Tactic.withMainContext do
@@ -219,10 +239,10 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
   -/
   trace[ScalarTac] "Original goal before preprocessing: {← getMainGoal}"
   let simpArgs : SimpArgs ← getSimpArgs
-  Utils.simpAt true {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1}
+  simpAsmsTarget true {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1}
     -- Remove the forall quantifiers to prepare for the call of `simp_all` (we
     -- don't want `simp_all` to use assumptions of the shape `∀ x, P x`))
-    {simpArgs with addSimpThms := #[``forall_eq_forall']} .wildcard
+    {simpArgs with addSimpThms := #[``forall_eq_forall']}
   -- We might have proven the goal
   if (← getGoals).isEmpty then
     trace[ScalarTac] "Goal proven by preprocessing!"
@@ -230,7 +250,7 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
   trace[ScalarTac] "Goal after first simplification: {← getMainGoal}"
   -- Apply the forward rules
   if config.saturate then
-    allGoalsNoRecover (do let _ ← scalarTacSaturateForward config.fastSaturate config.nonLin)
+    allGoalsNoRecover (scalarTacSaturateForward config.toSaturateConfig (fun _ => pure ()))
   trace[ScalarTac] "Goal after saturation: {← getMainGoal}"
   let simpArgs : SimpArgs ← getSimpArgs
   -- Apply `simpAll`
@@ -297,9 +317,11 @@ def scalarTacCore (config : Config) : Tactic.TacticM Unit := do
               true simpArgs)
         trace[ScalarTac] "Calling omega"
         allGoalsNoRecover (Tactic.Omega.omegaTactic {})
+        trace[ScalarTac] "Goal proved!"
     else
       trace[ScalarTac] "Calling omega"
       Tactic.Omega.omegaTactic {}
+      trace[ScalarTac] "Goal proved!"
 
 /-- Tactic to solve arithmetic goals.
 
