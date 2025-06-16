@@ -1,12 +1,13 @@
 import Aeneas.Std.Scalar.Core
 import Aeneas.Std.Scalar.Misc
+import Aeneas.Std.Scalar.Elab
 import Aeneas.ScalarTac
 import Aeneas.Std.Core
 import Mathlib.Data.BitVec
 
 namespace Aeneas.Std
 
-open Result Error Arith
+open Result Error Arith ScalarElab
 
 /-!
 # Subtraction: Definitions
@@ -119,57 +120,12 @@ theorem IScalar.sub_bv_spec {ty} {x y : IScalar ty}
   split at h <;> simp_all [min, max]
   omega
 
-theorem Usize.sub_bv_spec {x y : Usize} (h : y.val ≤ x.val) :
+uscalar theorem «%S».sub_bv_spec {x y : «%S»} (h : y.val ≤ x.val) :
   ∃ z, x - y = ok z ∧ z.val = x.val - y.val ∧ y.val ≤ x.val ∧ z.bv = x.bv - y.bv :=
   UScalar.sub_bv_spec h
 
-theorem U8.sub_bv_spec {x y : U8} (h : y.val ≤ x.val) :
-  ∃ z, x - y = ok z ∧ z.val = x.val - y.val ∧ y.val ≤ x.val ∧ z.bv = x.bv - y.bv :=
-  UScalar.sub_bv_spec h
-
-theorem U16.sub_bv_spec {x y : U16} (h : y.val ≤ x.val) :
-  ∃ z, x - y = ok z ∧ z.val = x.val - y.val ∧ y.val ≤ x.val ∧ z.bv = x.bv - y.bv :=
-  UScalar.sub_bv_spec h
-
-theorem U32.sub_bv_spec {x y : U32} (h : y.val ≤ x.val) :
-  ∃ z, x - y = ok z ∧ z.val = x.val - y.val ∧ y.val ≤ x.val ∧ z.bv = x.bv - y.bv :=
-  UScalar.sub_bv_spec h
-
-theorem U64.sub_bv_spec {x y : U64} (h : y.val ≤ x.val) :
-  ∃ z, x - y = ok z ∧ z.val = x.val - y.val ∧ y.val ≤ x.val ∧ z.bv = x.bv - y.bv :=
-  UScalar.sub_bv_spec h
-
-theorem U128.sub_bv_spec {x y : U128} (h : y.val ≤ x.val) :
-  ∃ z, x - y = ok z ∧ z.val = x.val - y.val ∧ y.val ≤ x.val ∧ z.bv = x.bv - y.bv :=
-  UScalar.sub_bv_spec h
-
-theorem Isize.sub_bv_spec {x y : Isize}
-  (hmin : Isize.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ Isize.max) :
-  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y ∧ z.bv = x.bv - y.bv :=
-  IScalar.sub_bv_spec (by scalar_tac) (by scalar_tac)
-
-theorem I8.sub_bv_spec {x y : I8}
-  (hmin : I8.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I8.max) :
-  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y ∧ z.bv = x.bv - y.bv :=
-  IScalar.sub_bv_spec (by scalar_tac) (by scalar_tac)
-
-theorem I16.sub_bv_spec {x y : I16}
-  (hmin : I16.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I16.max) :
-  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y ∧ z.bv = x.bv - y.bv :=
-  IScalar.sub_bv_spec (by scalar_tac) (by scalar_tac)
-
-theorem I32.sub_bv_spec {x y : I32}
-  (hmin : I32.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I32.max) :
-  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y ∧ z.bv = x.bv - y.bv :=
-  IScalar.sub_bv_spec (by scalar_tac) (by scalar_tac)
-
-theorem I64.sub_bv_spec {x y : I64}
-  (hmin : I64.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I64.max) :
-  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y ∧ z.bv = x.bv - y.bv :=
-  IScalar.sub_bv_spec (by scalar_tac) (by scalar_tac)
-
-theorem I128.sub_bv_spec {x y : I128}
-  (hmin : I128.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I128.max) :
+iscalar theorem «%S».sub_bv_spec {x y : «%S»}
+  (hmin : «%S».min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ «%S».max) :
   ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y ∧ z.bv = x.bv - y.bv :=
   IScalar.sub_bv_spec (by scalar_tac) (by scalar_tac)
 
@@ -196,57 +152,12 @@ theorem IScalar.sub_spec {ty} {x y : IScalar ty}
   split at h <;> simp_all [min, max]
   omega
 
-@[progress] theorem Usize.sub_spec {x y : Usize} (h : y.val ≤ x.val) :
+uscalar @[progress] theorem «%S».sub_spec {x y : «%S»} (h : y.val ≤ x.val) :
   ∃ z, x - y = ok z ∧ z.val = x.val - y.val ∧ y.val ≤ x.val :=
   UScalar.sub_spec h
 
-@[progress] theorem U8.sub_spec {x y : U8} (h : y.val ≤ x.val) :
-  ∃ z, x - y = ok z ∧ z.val = x.val - y.val ∧ y.val ≤ x.val :=
-  UScalar.sub_spec h
-
-@[progress] theorem U16.sub_spec {x y : U16} (h : y.val ≤ x.val) :
-  ∃ z, x - y = ok z ∧ z.val = x.val - y.val ∧ y.val ≤ x.val :=
-  UScalar.sub_spec h
-
-@[progress] theorem U32.sub_spec {x y : U32} (h : y.val ≤ x.val) :
-  ∃ z, x - y = ok z ∧ z.val = x.val - y.val ∧ y.val ≤ x.val :=
-  UScalar.sub_spec h
-
-@[progress] theorem U64.sub_spec {x y : U64} (h : y.val ≤ x.val) :
-  ∃ z, x - y = ok z ∧ z.val = x.val - y.val ∧ y.val ≤ x.val :=
-  UScalar.sub_spec h
-
-@[progress] theorem U128.sub_spec {x y : U128} (h : y.val ≤ x.val) :
-  ∃ z, x - y = ok z ∧ z.val = x.val - y.val ∧ y.val ≤ x.val :=
-  UScalar.sub_spec h
-
-@[progress] theorem Isize.sub_spec {x y : Isize}
-  (hmin : Isize.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ Isize.max) :
-  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y :=
-  IScalar.sub_spec (by scalar_tac) (by scalar_tac)
-
-@[progress] theorem I8.sub_spec {x y : I8}
-  (hmin : I8.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I8.max) :
-  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y :=
-  IScalar.sub_spec (by scalar_tac) (by scalar_tac)
-
-@[progress] theorem I16.sub_spec {x y : I16}
-  (hmin : I16.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I16.max) :
-  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y :=
-  IScalar.sub_spec (by scalar_tac) (by scalar_tac)
-
-@[progress] theorem I32.sub_spec {x y : I32}
-  (hmin : I32.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I32.max) :
-  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y :=
-  IScalar.sub_spec (by scalar_tac) (by scalar_tac)
-
-@[progress] theorem I64.sub_spec {x y : I64}
-  (hmin : I64.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I64.max) :
-  ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y :=
-  IScalar.sub_spec (by scalar_tac) (by scalar_tac)
-
-@[progress] theorem I128.sub_spec {x y : I128}
-  (hmin : I128.min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ I128.max) :
+iscalar @[progress] theorem «%S».sub_spec {x y : «%S»}
+  (hmin : «%S».min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ «%S».max) :
   ∃ z, x - y = ok z ∧ (↑z : Int) = ↑x - ↑y :=
   IScalar.sub_spec (by scalar_tac) (by scalar_tac)
 
