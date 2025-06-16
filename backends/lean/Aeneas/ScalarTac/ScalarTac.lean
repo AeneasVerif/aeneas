@@ -182,7 +182,7 @@ def scalarTacSaturateForward {Î±} (config : SaturateConfig) (f : Array FVarId â†
     else ruleSets
   -- TODO
   -- evalAesopSaturate options ruleSets.toArray
-  Saturate.evalSaturate ruleSets (if config.fastSaturate then Saturate.exploreArithSubterms else none) none
+  Saturate.evalSaturate { visitProofTerms := false } ruleSets (if config.fastSaturate then Saturate.exploreArithSubterms else none) none
     (declsToExplore := none)
     (exploreAssumptions := config.saturateAssumptions)
     (exploreTarget := config.saturateTarget) f

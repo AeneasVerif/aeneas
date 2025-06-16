@@ -10,6 +10,14 @@ namespace Saturate
 
 open Attribute
 
+structure Config where
+  /- If `true` visit the proof terms.
+
+     We consider as proof terms the expressions whose type's type is `Prop`.
+     Ex.: `... : a + b ≤ 3`
+  -/
+  visitProofTerms : Bool := false
+
 structure DiagnosticsInfo where
   hits : Std.HashMap Name (Nat × Nat)
 
@@ -137,7 +145,7 @@ def matchExpr
   ) state
 
 /- Recursively explore a term -/
-private partial def visit (depth : Nat)
+private partial def visit (config : Config) (depth : Nat)
   (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
   (nameToRule : NameMap Rule)
   (dtrees : Array (DiscrTree Rule))
@@ -158,11 +166,11 @@ private partial def visit (depth : Nat)
       let fvarId := x.fvarId!
       let localDecl ← fvarId.getDecl
       let boundVars := boundVars.insert fvarId
-      let state ← visit (depth + 1) preprocessThm nameToRule dtrees boundVars state localDecl.type
+      let state ← visit config (depth + 1) preprocessThm nameToRule dtrees boundVars state localDecl.type
       let state ←
         match localDecl.value? with
         | none => pure state
-        | some v => visit (depth + 1) preprocessThm nameToRule dtrees boundVars state v
+        | some v => visit config (depth + 1) preprocessThm nameToRule dtrees boundVars state v
       pure (boundVars, state)
       ) (boundVars, state)
   let e := e.consumeMData
@@ -177,32 +185,37 @@ private partial def visit (depth : Nat)
     pure state
   | .app .. => do e.withApp fun f args => do
     trace[Saturate.explore] ".app"
+    -- Filter the args to ignore proof terms
+    let args ← args.filterM fun arg => do
+      let ty ← inferType (← inferType arg)
+      if ty.isProp then pure false
+      else pure true
     -- Visit the args
     let state ← args.foldlM (fun state arg =>
-      visit (depth + 1) preprocessThm nameToRule dtrees boundVars state arg) state
+      visit config (depth + 1) preprocessThm nameToRule dtrees boundVars state arg) state
     -- Visit the app
-    visit (depth + 1) preprocessThm nameToRule dtrees boundVars state f
+    visit config (depth + 1) preprocessThm nameToRule dtrees boundVars state f
   | .lam .. =>
     trace[Saturate.explore] ".lam"
     lambdaLetTelescope e fun xs b => do
       let (boundVars, state) ← visitBinders (depth + 1) boundVars state xs
-      visit (depth + 1) preprocessThm nameToRule dtrees boundVars state b
+      visit config (depth + 1) preprocessThm nameToRule dtrees boundVars state b
   | .forallE .. => do
     trace[Saturate.explore] ".forallE"
     forallTelescope e fun xs b => do
       let (boundVars, state) ← visitBinders (depth + 1) boundVars state xs
-      visit (depth + 1) preprocessThm nameToRule dtrees boundVars state b
+      visit config (depth + 1) preprocessThm nameToRule dtrees boundVars state b
   | .letE .. => do
     trace[Saturate.explore] ".letE"
     lambdaLetTelescope e fun xs b => do
       let (boundVars, state) ← visitBinders (depth + 1) boundVars state xs
-      visit (depth + 1) preprocessThm nameToRule dtrees boundVars state b
+      visit config (depth + 1) preprocessThm nameToRule dtrees boundVars state b
   | .mdata _ b => do
     trace[Saturate.explore] ".mdata"
-    visit (depth + 1) preprocessThm nameToRule dtrees boundVars state b
+    visit config (depth + 1) preprocessThm nameToRule dtrees boundVars state b
   | .proj _ _ b => do
     trace[Saturate.explore] ".proj"
-    visit (depth + 1) preprocessThm nameToRule dtrees boundVars state b
+    visit config (depth + 1) preprocessThm nameToRule dtrees boundVars state b
 
 def arithOpArity3 : Std.HashSet Name := Std.HashSet.ofList [
   ``Nat.cast, ``Int.cast
@@ -282,7 +295,8 @@ private partial def fastVisit
     pure state
 
 /- The saturation tactic itself -/
-partial def evalSaturate
+partial def evalSaturate {α}
+  (config : Config)
   (sets : List Name)
   (exploreSubterms : Option (Expr → Array Expr → MetaM (Array Expr)) := none)
   (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
@@ -302,7 +316,7 @@ partial def evalSaturate
   -- Explore
   let visit :=
     match exploreSubterms with
-    | none => visit 0 preprocessThm s.nameToRule dtrees Std.HashSet.emptyWithCapacity
+    | none => visit config 0 preprocessThm s.nameToRule dtrees Std.HashSet.emptyWithCapacity
     | some exploreSubterms => fastVisit exploreSubterms preprocessThm 0 s.nameToRule dtrees
 
   -- Explore the assumptions
@@ -371,14 +385,14 @@ partial def evalSaturate
     next matched
 
 elab "aeneas_saturate" : tactic => do
-  let _ ← evalSaturate [`Aeneas.ScalarTac] none none
+  let _ ← evalSaturate {} [`Aeneas.ScalarTac] none none
     (declsToExplore := none)
     (exploreAssumptions := true)
     (exploreTarget := true) (fun _ => pure ())
 
 section Test
   local elab "aeneas_saturate_test" : tactic => do
-    let _ ← evalSaturate [`Aeneas.Test] none none
+    let _ ← evalSaturate {} [`Aeneas.Test] none none
       (declsToExplore := none)
       (exploreAssumptions := true)
       (exploreTarget := true) (fun _ => pure ())
