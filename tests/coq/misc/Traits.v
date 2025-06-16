@@ -298,13 +298,12 @@ Definition with_const_ty_bool_u8_u6432_len1 : usize :=
 
 (** [traits::WithConstTy::LEN2]
     Source: 'tests/src/traits.rs', lines 166:4-166:27 *)
-Definition with_const_ty_len2_default_body (Self : Type) (Self_V : Type)
-  (Self_W : Type) (LEN : usize) : result usize :=
+Definition with_const_ty_len2_default_body (Self : Type) (LEN : usize)
+  : result usize :=
   Ok 32%usize
 .
-Definition with_const_ty_len2_default (Self : Type) (Self_V : Type) (Self_W :
-  Type) (LEN : usize) : usize :=
-  (with_const_ty_len2_default_body Self Self_V Self_W LEN)%global
+Definition with_const_ty_len2_default (Self : Type) (LEN : usize) : usize :=
+  (with_const_ty_len2_default_body Self LEN)%global
 .
 
 (** [traits::{traits::WithConstTy<u8, u64, 32: usize> for bool}#8::f]:
@@ -318,8 +317,7 @@ Definition withConstTyBoolU8U6432_f
     Source: 'tests/src/traits.rs', lines 176:0-183:1 *)
 Definition WithConstTyBoolU8U6432 : WithConstTy_t bool u8 u64 32%usize := {|
   WithConstTy_tWithConstTy_t_LEN1 := with_const_ty_bool_u8_u6432_len1;
-  WithConstTy_tWithConstTy_t_LEN2 := with_const_ty_len2_default bool u8 u64
-    32%usize;
+  WithConstTy_tWithConstTy_t_LEN2 := with_const_ty_len2_default bool 32%usize;
   WithConstTy_tWithConstTy_t_ToU64Inst := ToU64U64;
   WithConstTy_t_f := withConstTyBoolU8U6432_f;
 |}.

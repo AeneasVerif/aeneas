@@ -241,12 +241,11 @@ let with_const_ty_bool_u8_u6432_len1 : usize =
 
 (** [traits::WithConstTy::LEN2]
     Source: 'tests/src/traits.rs', lines 166:4-166:27 *)
-let with_const_ty_len2_default_body (self : Type0) (self_v : Type0) (self_w :
-  Type0) (len : usize) : result usize =
+let with_const_ty_len2_default_body (self : Type0) (len : usize)
+  : result usize =
   Ok 32
-let with_const_ty_len2_default (self : Type0) (self_v : Type0) (self_w : Type0)
-  (len : usize) : usize =
-  eval_global (with_const_ty_len2_default_body self self_v self_w len)
+let with_const_ty_len2_default (self : Type0) (len : usize) : usize =
+  eval_global (with_const_ty_len2_default_body self len)
 
 (** [traits::{traits::WithConstTy<u8, u64, 32: usize> for bool}#8::f]:
     Source: 'tests/src/traits.rs', lines 182:4-182:42 *)
@@ -257,7 +256,7 @@ let withConstTyBoolU8U6432_f (i : u64) (a : array u8 32) : result u64 =
     Source: 'tests/src/traits.rs', lines 176:0-183:1 *)
 let withConstTyBoolU8U6432 : withConstTy_t bool u8 u64 32 = {
   cLEN1 = with_const_ty_bool_u8_u6432_len1;
-  cLEN2 = with_const_ty_len2_default bool u8 u64 32;
+  cLEN2 = with_const_ty_len2_default bool 32;
   toU64Inst = toU64U64;
   f = withConstTyBoolU8U6432_f;
 }

@@ -217,7 +217,7 @@ let set_discriminant (config : config) (span : Meta.span) (p : place)
   let v, ctx, cc = comp2 cc (prepare_lplace config span p ctx) in
   (* Update the value *)
   match (v.ty, v.value) with
-  | TAdt ((TAdtId _ as type_id), generics), VAdt av -> (
+  | TAdt { id = TAdtId _ as type_id; generics }, VAdt av -> (
       (* There are two situations:
          - either the discriminant is already the proper one (in which case we
            don't do anything)
@@ -244,7 +244,7 @@ let set_discriminant (config : config) (span : Meta.span) (p : place)
               comp cc (assign_to_place config span bottom_v p ctx)
             in
             ((ctx, Unit), cc))
-  | TAdt ((TAdtId _ as type_id), generics), VBottom ->
+  | TAdt { id = TAdtId _ as type_id; generics }, VBottom ->
       let bottom_v =
         match type_id with
         | TAdtId def_id ->
@@ -415,7 +415,7 @@ let eval_box_new_concrete (config : config) (span : Meta.span)
       (* Create the new box *)
       (* Create the box value *)
       let generics = TypesUtils.mk_generic_args_from_types [ boxed_ty ] in
-      let box_ty = TAdt (TBuiltin TBox, generics) in
+      let box_ty = TAdt { id = TBuiltin TBox; generics } in
       let box_v = VAdt { variant_id = None; field_values = [ v ] } in
       let box_v = mk_typed_value span box_ty box_v in
 
@@ -693,7 +693,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
              depending on whethere we call a top-level trait method impl or the
              method from a local clause *)
           match trait_ref.trait_id with
-          | TraitImpl (impl_id, impl_generics) -> begin
+          | TraitImpl { id = impl_id; generics = impl_generics } -> begin
               (* Lookup the trait impl *)
               let trait_impl = ctx_lookup_trait_impl span ctx impl_id in
               log#ltrace
@@ -704,8 +704,8 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                   (Substitute.lookup_and_subst_trait_impl_method trait_impl
                      method_name impl_generics func.generics)
               in
-              let method_id = fn_ref.fun_id in
-              let generics = fn_ref.fun_generics in
+              let method_id = fn_ref.id in
+              let generics = fn_ref.generics in
               let method_def = ctx_lookup_fun_decl span ctx method_id in
               (* Instantiate *)
               let tr_self = trait_ref.trait_id in
@@ -730,7 +730,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
           | _ ->
               (* We are using a local clause - we lookup the trait decl *)
               let trait_decl =
-                ctx_lookup_trait_decl span ctx trait_decl_ref.trait_decl_id
+                ctx_lookup_trait_decl span ctx trait_decl_ref.id
               in
               (* Lookup the method decl in the required *and* the provided methods *)
               let fn_ref =
@@ -738,8 +738,8 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                   (Substitute.lookup_and_subst_trait_decl_method trait_decl
                      method_name trait_ref func.generics)
               in
-              let method_id = fn_ref.fun_id in
-              let generics = fn_ref.fun_generics in
+              let method_id = fn_ref.id in
+              let generics = fn_ref.generics in
               let method_def = ctx_lookup_fun_decl span ctx method_id in
               log#ltrace
                 (lazy ("method:\n" ^ fun_decl_to_string ctx method_def));
@@ -764,8 +764,8 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
 (** Helper: introduce a fresh symbolic value for a global *)
 let eval_global_as_fresh_symbolic_value (span : Meta.span)
     (gref : global_decl_ref) (ctx : eval_ctx) : symbolic_value =
-  let generics = gref.global_generics in
-  let global = ctx_lookup_global_decl span ctx gref.global_id in
+  let generics = gref.generics in
+  let global = ctx_lookup_global_decl span ctx gref.id in
   cassert __FILE__ __LINE__ (ty_no_regions global.ty) span
     "Const globals should not contain regions";
   (* Instantiate the type  *)
@@ -944,8 +944,8 @@ and eval_global (config : config) (span : Meta.span) (dest : place)
   match config.mode with
   | ConcreteMode ->
       (* Treat the evaluation of the global as a call to the global body *)
-      let generics = gref.global_generics in
-      let global = ctx_lookup_global_decl span ctx gref.global_id in
+      let generics = gref.generics in
+      let global = ctx_lookup_global_decl span ctx gref.id in
       let func = { func = FunId (FRegular global.body); generics } in
       let call = { func = FnOpRegular func; args = []; dest } in
       eval_transparent_function_call_concrete config span global.body call ctx

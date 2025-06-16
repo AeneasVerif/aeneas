@@ -32,7 +32,7 @@ let ty_has_adt_with_borrows span (infos : TypesAnalysis.type_infos) (ty : ty) :
 
       method! visit_ty env ty =
         match ty with
-        | TAdt (type_id, _) when type_id <> TTuple ->
+        | TAdt { id; _ } when id <> TTuple ->
             let info = TypesAnalysis.analyze_ty span infos ty in
             if info.TypesAnalysis.contains_borrow then raise Found
             else super#visit_ty env ty
@@ -112,7 +112,7 @@ let type_decl_has_nested_borrows (span : Meta.span option)
   let generics =
     Substitute.generic_args_of_params_erase_regions span type_decl.generics
   in
-  let ty = TAdt (TAdtId type_decl.def_id, generics) in
+  let ty = TAdt { id = TAdtId type_decl.def_id; generics } in
   ty_has_nested_borrows span infos ty
 
 (** Retuns true if the type contains a borrow under a mutable borrow *)
@@ -137,10 +137,10 @@ let ty_has_mut_borrow_for_region_in_pred (infos : TypesAnalysis.type_infos)
         end;
         super#visit_TRef env r ty rkind
 
-      method! visit_TAdt env type_id generics =
+      method! visit_TAdt env tref =
         (* Lookup the information for this ADT *)
         begin
-          match type_id with
+          match tref.id with
           | TTuple | TBuiltin (TBox | TArray | TSlice | TStr) -> ()
           | TAdtId adt_id ->
               let info = TypeDeclId.Map.find adt_id infos in
@@ -149,9 +149,9 @@ let ty_has_mut_borrow_for_region_in_pred (infos : TypesAnalysis.type_infos)
                   if RegionId.Set.mem adt_rid info.mut_regions && pred r then
                     raise Found
                   else ())
-                generics.regions
+                tref.generics.regions
         end;
-        super#visit_TAdt env type_id generics
+        super#visit_TAdt env tref
     end
   in
   try

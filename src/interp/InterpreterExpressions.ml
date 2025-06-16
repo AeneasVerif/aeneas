@@ -164,22 +164,25 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
   | VAdt av ->
       (* Sanity check *)
       (match v.ty with
-      | TAdt (TBuiltin TBox, _) ->
+      | TAdt { id = TBuiltin TBox; _ } ->
           exec_raise __FILE__ __LINE__ span
             "Can't copy an builtin value other than Option"
-      | TAdt (TAdtId _, _) as ty ->
+      | TAdt { id = TAdtId _; _ } as ty ->
           sanity_check __FILE__ __LINE__
             (allow_adt_copy || ty_is_copyable ty)
             span
-      | TAdt (TTuple, _) -> () (* Ok *)
+      | TAdt { id = TTuple; _ } -> () (* Ok *)
       | TAdt
-          ( TBuiltin (TSlice | TArray),
-            {
-              regions = [];
-              types = [ ty ];
-              const_generics = [];
-              trait_refs = [];
-            } ) ->
+          {
+            id = TBuiltin (TSlice | TArray);
+            generics =
+              {
+                regions = [];
+                types = [ ty ];
+                const_generics = [];
+                trait_refs = [];
+              };
+          } ->
           exec_assert __FILE__ __LINE__ (ty_is_copyable ty) span
             "The type is not primitively copyable"
       | _ -> exec_raise __FILE__ __LINE__ span "Unreachable");
@@ -378,7 +381,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
       | CLiteral lit -> (
           (* FIXME: the str type is not in [literal_type] *)
           match cv.ty with
-          | TAdt (TBuiltin TStr, _) ->
+          | TAdt { id = TBuiltin TStr; _ } ->
               let v : typed_value = { value = VLiteral lit; ty = cv.ty } in
               (v, ctx, fun e -> e)
           | TLiteral lit_ty ->
@@ -973,7 +976,8 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
   let v, cf_compute =
     (* Match on the aggregate kind *)
     match aggregate_kind with
-    | AggregatedAdt (type_id, opt_variant_id, opt_field_id, generics) -> (
+    | AggregatedAdt ({ id = type_id; generics }, opt_variant_id, opt_field_id)
+      -> (
         (* The opt_field_id is Some only for unions, that we don't support *)
         sanity_check __FILE__ __LINE__ (opt_field_id = None) span;
         match type_id with
@@ -981,7 +985,7 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
             let tys = List.map (fun (v : typed_value) -> v.ty) values in
             let v = VAdt { variant_id = None; field_values = values } in
             let generics = mk_generic_args [] tys [] [] in
-            let ty = TAdt (TTuple, generics) in
+            let ty = TAdt { id = TTuple; generics } in
             let aggregated : typed_value = { value = v; ty } in
             (aggregated, fun e -> e)
         | TAdtId def_id ->
@@ -1003,7 +1007,7 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
             let av : adt_value =
               { variant_id = opt_variant_id; field_values = values }
             in
-            let aty = TAdt (TAdtId def_id, generics) in
+            let aty = TAdt { id = TAdtId def_id; generics } in
             let aggregated : typed_value = { value = VAdt av; ty = aty } in
             (* Call the continuation *)
             (aggregated, fun e -> e)
@@ -1028,7 +1032,7 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
           (len = Z.of_int (List.length values))
           span;
         let generics = TypesUtils.mk_generic_args [] [ ety ] [ cg ] [] in
-        let ty = TAdt (TBuiltin TArray, generics) in
+        let ty = TAdt { id = TBuiltin TArray; generics } in
         (* In order to generate a better AST, we introduce a symbolic
            value equal to the array. The reason is that otherwise, the
            array we introduce here might be duplicated in the generated

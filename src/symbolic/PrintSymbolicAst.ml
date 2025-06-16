@@ -63,11 +63,9 @@ let rec expression_to_string (env : fmt_env) (indent : string)
       in
       let next = expression_to_string env indent indent_incr next in
       indent ^ "end\n" ^ abs ^ "\n" ^ next
-  | EvalGlobal (global_id, global_generics, sv, next) ->
+  | EvalGlobal (id, generics, sv, next) ->
       let sv = Values.symbolic_value_to_string env sv in
-      let global =
-        global_decl_ref_to_string env { global_id; global_generics }
-      in
+      let global = global_decl_ref_to_string env { id; generics } in
       let next = expression_to_string env indent indent_incr next in
       indent ^ "let " ^ sv ^ " = " ^ global ^ " in\n" ^ next
   | Assertion (_, b, next) ->

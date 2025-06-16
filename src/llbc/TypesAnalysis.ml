@@ -273,12 +273,13 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
     | TRawPtr (rty, _) ->
         (* TODO: not sure what to do here *)
         analyze span expl_info ty_info rty
-    | TAdt ((TTuple | TBuiltin (TBox | TSlice | TArray | TStr)), generics) ->
+    | TAdt { id = TTuple | TBuiltin (TBox | TSlice | TArray | TStr); generics }
+      ->
         (* Nothing to update: just explore the type parameters *)
         List.fold_left
           (fun ty_info ty -> analyze span expl_info ty_info ty)
           ty_info generics.types
-    | TAdt (TAdtId adt_id, generics) ->
+    | TAdt { id = TAdtId adt_id; generics } ->
         (* Lookup the information for this type definition *)
         let adt_info =
           silent_unwrap_opt_span __FILE__ __LINE__ span

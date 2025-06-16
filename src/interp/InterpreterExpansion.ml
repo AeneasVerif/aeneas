@@ -498,7 +498,7 @@ let expand_symbolic_value_no_branching (config : config) (span : Meta.span)
   let ctx, cc =
     match rty with
     (* ADTs *)
-    | TAdt (adt_id, generics) ->
+    | TAdt { id = adt_id; generics } ->
         (* Compute the expanded value *)
         let allow_branching = false in
         let seel =
@@ -556,7 +556,7 @@ let expand_symbolic_adt (config : config) (span : Meta.span)
   (* Execute *)
   match rty with
   (* ADTs *)
-  | TAdt (adt_id, generics) ->
+  | TAdt { id = adt_id; generics } ->
       let allow_branching = true in
       (* Compute the expanded value *)
       let seel =
@@ -649,7 +649,7 @@ let greedy_expand_symbolics_with_borrows (config : config) (span : Meta.span) :
           ^ symbolic_value_to_string ctx sv));
       let ctx, cc =
         match sv.sv_ty with
-        | TAdt (TAdtId def_id, _) ->
+        | TAdt { id = TAdtId def_id; _ } ->
             (* {!expand_symbolic_value_no_branching} checks if there are branchings,
              * but we prefer to also check it here - this leads to cleaner messages
              * and debugging *)
@@ -676,10 +676,10 @@ let greedy_expand_symbolics_with_borrows (config : config) (span : Meta.span) :
                   [greedy_expand_symbolics_with_borrows] of [config]): "
                 ^ name_to_string ctx def.item_meta.name)
             else expand_symbolic_value_no_branching config span sv None ctx
-        | TAdt ((TTuple | TBuiltin TBox), _) | TRef (_, _, _) ->
+        | TAdt { id = TTuple | TBuiltin TBox; _ } | TRef (_, _, _) ->
             (* Ok *)
             expand_symbolic_value_no_branching config span sv None ctx
-        | TAdt (TBuiltin (TArray | TSlice | TStr), _) ->
+        | TAdt { id = TBuiltin (TArray | TSlice | TStr); _ } ->
             (* We can't expand those *)
             craise __FILE__ __LINE__ span
               "Attempted to greedily expand an ADT which can't be expanded "
