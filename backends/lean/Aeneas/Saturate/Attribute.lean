@@ -11,6 +11,7 @@ open Utils Extensions
 namespace Saturate
 
 initialize registerTraceClass `Saturate
+initialize registerTraceClass `Saturate.insertPartialMatch
 initialize registerTraceClass `Saturate.explore
 initialize registerTraceClass `Saturate.attribute
 initialize registerTraceClass `Saturate.diagnostics
@@ -249,7 +250,9 @@ initialize saturateAttr : SaturateAttribute ← do
             let mut first := first
             let mut patFVars := patFVars
             let mut patterns := patterns
-            for (i, fv) in (fvars.mapIdx (fun i fv => (i, fv))).reverse do
+            let ifvars := (fvars.mapIdx (fun i fv => (i, fv))).reverse
+            trace[Saturate.attribute] "About to explore fvars: {ifvars}"
+            for (i, fv) in ifvars do
               if patFVars.contains fv.fvarId! then continue
               else
                 -- Create a pattern
@@ -257,15 +260,17 @@ initialize saturateAttr : SaturateAttribute ← do
                 unless (← inferType pat).isProp do
                   throwError "Found a free variable not bound in the (optional) user provided pattern or in a precondition: {fv}"
                 let curPatFVars ← getFVarIds pat (Std.HashSet.emptyWithCapacity)
-                patFVars := patFVars.union curPatFVars
+                patFVars := patFVars.union (curPatFVars.insert fv.fvarId!)
                 let boundVars :=
                   if first then Array.range numFVars
                   else
                     curPatFVars.toArray.map fun fvid => Std.HashMap.get! fvarsMap fvid
+                trace[Saturate.attribute] "Adding pattern for var {i}: {pat}"
                 patterns := patterns.push (pat, boundVars, some i)
             -- Sanity check: all the bound variables have been covered
-            let allFVars := fvars.foldl (fun hs arg => hs.insert arg.fvarId!) Std.HashSet.emptyWithCapacity
-            let remFVars := patFVars.toList.foldl (fun hs fvar => hs.erase fvar) allFVars
+            trace[Saturate.attribute] "patFVars: {patFVars.toList.map Expr.fvar}"
+            let remFVars := patFVars.toList.foldl (fun hs fvar => hs.erase fvar) patFVars
+            trace[Saturate.attribute] "remFVars: {remFVars.toList.map Expr.fvar}"
             unless remFVars.isEmpty do
               throwError "Not all the free variables in the theorem are covered by patterns: please report a bug"
             --

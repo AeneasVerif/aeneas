@@ -17,6 +17,12 @@ structure Config where
      Ex.: `... : a + b ≤ 3`
   -/
   visitProofTerms : Bool := false
+  /- The number of addiotional exploration passes we do to instantiate rules
+     with several patterns (i.e., preconditions). Note that this doesn't count
+     the initial pass we do through the whole context, meaning that if this
+     parameter is equal to 0, `saturate` will still successfully instantiate
+     rules which only have one pattern. -/
+  saturationPasses : Nat := 3
 
 structure PartialMatch where
   numBinders : Nat
@@ -28,10 +34,10 @@ structure PartialMatch where
   deriving Inhabited, BEq
 
 instance : ToFormat PartialMatch where
-  format x := f!"({x.numBinders}, {x.patterns}, {x.thName})"
+  format x := f!"({x.numBinders}, {x.patterns}, {x.thName}, {x.subst})"
 
 instance : ToMessageData PartialMatch where
-  toMessageData x := m!"({x.numBinders}, {x.patterns}, {x.thName})"
+  toMessageData x := m!"({x.numBinders}, {x.patterns}, {x.thName}, {x.subst})"
 
 structure DiagnosticsInfo where
   hits: Nat
@@ -106,18 +112,33 @@ def State.new (nameToRule : NameMap Rule) (dtrees : Array (DiscrTree Rule))
   (assumptions : Std.HashMap Expr AsmPath := Std.HashMap.emptyWithCapacity) : State :=
   { nameToRule, dtrees, pmatches, diagnostics, matched, assumptions }
 
-def State.insertPartialMatch (state : State) (boundVars : Std.HashSet FVarId) (pmatch : PartialMatch) : MetaM State := do
+def mkExprFromPath (path : AsmPath) : MetaM Expr := do
+  match path with
+  | .asm asm => pure (Expr.fvar asm)
+  | .conj dir p =>
+    let p ← mkExprFromPath p
+    let dir :=
+      match dir with
+      | .left => ``And.left
+      | .right => ``And.right
+    mkAppOptM dir #[none, none, some p]
+
+def State.insertPartialMatch (state : State)
+  (boundVars : Std.HashSet FVarId)
+  (pmatch : PartialMatch) : MetaM State := do
+  trace[Saturate.insertPartialMatch] "insertPartialMatch: {pmatch}"
   let mut state := state
   /- Check if there remains patterns: if no then the match is total -/
   match pmatch.patterns with
   | [] =>
+    trace[Saturate.insertPartialMatch] "Total match"
     -- This is a total match: retrieve the subst
     let subst ←
       try
         pmatch.subst.mapM fun e =>
           match e with | some e => pure e | none => throwError "Unexpected"
       catch _ =>
-        trace[Saturate.explore] "Internal error: invalid total match"
+        trace[Saturate.insertPartialMatch] "Internal error: invalid total match"
         return state
     -- Check that no bound vars appear within the substitution (otherwise we abort)
     let allFVars ← subst.foldrM (fun arg hs => do
@@ -126,41 +147,72 @@ def State.insertPartialMatch (state : State) (boundVars : Std.HashSet FVarId) (p
     if ¬ boundVars.all (fun fvar => ¬ allFVars.contains fvar) then
       return state
     -- Instantiate the theorem
-    trace[Saturate] "Instantiating: {pmatch.thName}({subst})."
+    trace[Saturate.insertPartialMatch] "Instantiating: {pmatch.thName}({subst})."
     let thm ←
       try
         /- It sometimes happens that the instantiation is invalid, so `mkAppOptM`
           may raise an exception, in which case we simply skip the pattern. -/
         mkAppOptM pmatch.thName (subst.map some)
       catch e =>
-        trace[Saturate] "Error: {e.toMessageData}"
+        trace[Saturate.insertPartialMatch] "Error: {e.toMessageData}"
         return state
     -- Register the theorem
     state := state.insertUsed pmatch.thName
     state := state.insertMatch thm
     pure state
-  | pattern :: patterns =>
-    -- This is a partial match
-    throwError "TODO"
+  | pattern :: _ =>
+    trace[Saturate.insertPartialMatch] "Partial match"
+    -- This is a partial match: register it in the discr tree
+    -- Introduce meta-variables for all the variables bound in the pattern
+    let (mvars, _, patWithMetas) ← lambdaMetaTelescope pattern.pattern (some pattern.boundVars.size)
+    -- Instantiate the meta-variables which are already known
+    for (i, mvar) in mvars.mapIdx fun i mvar => (i, mvar) do
+      let mvar := mvar.mvarId!
+      let vid := pattern.boundVars[i]!
+      match pmatch.subst[vid]! with
+      | none => pure ()
+      | some e => mvar.assign e
+    -- Propagate the instantiation in the pattern
+    let key ← instantiateMVars patWithMetas
+    -- Store the partial match
+    pure { state with pmatches := ← state.pmatches.insert key pmatch }
 
-/-- Find all the lemmas which match an expression.
+def checkIfPatDefEq (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
+  (pat : Expr) (numBinders : Nat) (e : Expr) : MetaM (Option (Array Expr)) := do
+  -- Strip the binders, introduce meta-variables at the same time, and match
+  let (mvars, _, pat) ← lambdaMetaTelescope pat (some numBinders)
+  match preprocessThm with | none => pure () | some preprocessThm => preprocessThm mvars pat
+  trace[Saturate.explore] "Checking if defEq:\n- pat: {pat}\n- expression: {e}"
+  let pat_ty ← inferType pat
+  let e_ty ← inferType e
+  /- Small issue here: we use big integer constants and we have several patterns which
+    are just a variable (for instance: `UScalar.bounds`). Because `isDefEq` first
+    starts by unifying the expressions themselves (without looking at their type) we
+    often end up attempting to unify every expression in the context with variables
+    of type, e.g., `UScalar _`. The issue is that, if we attempt to unify an expression
+    like `1000` with `?x : UScalar ?ty`, Lean will lanch a "max recursion depth" exception
+    when attempting to reduce `1000` to `succ succ ...`. The current workaround is to
+    first check whether the types are definitionally equal, then compare the expressions
+    themselves. This way, in the case above we would not even compare `1000` with `?x`
+    because `ℕ` wouldn't match `UScalar ?ty`.
 
-    - `dtrees`: the discrimination trees (the sets of rules in which to match)
-    - `boundVars`: if an instantiation of a theorem contains a bound variable, we ignore
-      it (because we couldn't introduce the instantiated theorem it in the environment)
-    - `matched`: the theorems to apply (the set of theorem name and list of arguments)
+    TODO: it would probably be more efficient to have a specific treatment of degenerate
+    patterns, for instance by using the types as the keys in the discrimination trees.
+  -/
+  if ¬ (← isDefEq pat_ty e_ty) then
+    trace[Saturate.explore] "Types didn't match"; return none
+  if ¬ (← isDefEq pat e) then
+    trace[Saturate.explore] "Didn't match"
+    return none
+  return (some mvars)
 
-    We return the set of: (theroem name, list of arguments)
- -/
-def matchExpr
-  (path : Option AsmPath)
+def matchExprWithRules
   (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
+  (path : Option AsmPath)
   (boundVars : Std.HashSet FVarId)
   (state : State) (e : Expr) :
   MetaM State := do
-  trace[Saturate.explore] "Matching: {e}"
   let mut state := state
-  /- First match against the rules -/
   for dtree in state.dtrees do
     let exprs ← dtree.getMatch e
     state := state.insertHitRules exprs
@@ -185,32 +237,10 @@ def matchExpr
       -- Introduce meta-variables for the universes
       let info ← getConstInfo rule.thName
       let mvarLevels ← mkFreshLevelMVarsFor info
-      let pat := pat.pattern.instantiateLevelParams info.levelParams mvarLevels
-      -- Strip the binders, introduce meta-variables at the same time, and match
-      let (mvars, _, pat) ← lambdaMetaTelescope pat (some rule.numBinders)
-      match preprocessThm with | none => pure () | some preprocessThm => preprocessThm mvars pat
-      trace[Saturate.explore] "Checking if defEq:\n- pat: {pat}\n- expression: {e}"
-      let pat_ty ← inferType pat
-      let e_ty ← inferType e
-      /- Small issue here: we use big integer constants and we have several patterns which
-        are just a variable (for instance: `UScalar.bounds`). Because `isDefEq` first
-        starts by unifying the expressions themselves (without looking at their type) we
-        often end up attempting to unify every expression in the context with variables
-        of type, e.g., `UScalar _`. The issue is that, if we attempt to unify an expression
-        like `1000` with `?x : UScalar ?ty`, Lean will lanch a "max recursion depth" exception
-        when attempting to reduce `1000` to `succ succ ...`. The current workaround is to
-        first check whether the types are definitionally equal, then compare the expressions
-        themselves. This way, in the case above we would not even compare `1000` with `?x`
-        because `ℕ` wouldn't match `UScalar ?ty`.
-
-        TODO: it would probably be more efficient to have a specific treatment of degenerate
-        patterns, for instance by using the types as the keys in the discrimination trees.
-      -/
-      if ¬ (← isDefEq pat_ty e_ty) then
-        trace[Saturate.explore] "Types didn't match"; continue
-      if ¬ (← isDefEq pat e) then
-        trace[Saturate.explore] "Didn't match"
-        continue
+      let patExpr := pat.pattern.instantiateLevelParams info.levelParams mvarLevels
+      -- Match (doing this also introduces meta-variables for the bound variables)
+      let some mvars ← checkIfPatDefEq preprocessThm patExpr rule.numBinders e
+        | continue
       trace[Saturate.explore] "defEq"
       /- It matched! Compute the substitution from free variables to expressions
         (for the variables which have been instantiated) -/
@@ -218,6 +248,17 @@ def matchExpr
         let arg ← instantiateMVars mvar
         if arg.isMVar then pure none
         else pure (some arg)
+      /- Check if the pattern is for an assumption, and add it to the substitution -/
+      let subst ← do
+        match pat.instVar with
+        | none => pure subst
+        | some v =>
+          if subst[v]!.isSome then
+            logError "Internal error: assumption already instantiated"
+            continue
+          else
+            let some path := path | throwError "Unreachable"
+            pure (subst.set! v (← mkExprFromPath path))
       -- Create the partial match (we check whether it's actually a total match when registering it)
       let pmatch : PartialMatch := {
         numBinders := rule.numBinders,
@@ -227,8 +268,72 @@ def matchExpr
       }
       -- Register the partial match (this may introduce a theorem to instantiate if the match is actually total)
       state ← state.insertPartialMatch boundVars pmatch
+  pure state
+
+def matchExprWithPartialMatches
+  (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
+  (path : Option AsmPath)
+  (boundVars : Std.HashSet FVarId)
+  (state : State) (e : Expr) :
+  MetaM State := do
+  let mut state := state
+  let exprs ← state.pmatches.getMatch e
+  trace[Saturate.explore] "Potential matches: {exprs}"
+  -- Check each expression
+  for pmatch in exprs do
+    trace[Saturate.explore] "Checking potential match: {pmatch}"
+    -- Retrieve the first pattern
+    let (pat, patterns) ← do
+      match pmatch.patterns with
+      | [] => throwError "Unexpected: rules should have at least one pattern"
+      | pat :: patterns => pure (pat, patterns)
+    /- Quick check: if the pattern is for a precondition and the path is unknown, then we can abort:
+        we wouldn't know how to instantiate the pre-condition -/
+    unless pat.instVar.isNone ∨ path.isSome do continue
+    -- Match (doing this also introduces meta-variables for the bound variables)
+    let some mvars ← checkIfPatDefEq preprocessThm pat.pattern pat.boundVars.size e
+      | continue
+    trace[Saturate.explore] "defEq"
+    /- It matched! Update the substitution from free variables to expressions -/
+    let mut subst := pmatch.subst
+    for (i, mvar) in mvars.mapIdx fun i mvar => (i, mvar) do
+      let arg ← instantiateMVars mvar
+      if ¬ arg.isMVar then
+        let vid := pat.boundVars[i]!
+        if ¬ subst[vid]!.isSome then
+          subst := subst.set! vid arg
+    /- Check if the pattern is for an assumption, and add it to the substitution -/
+    subst ← do
+      match pat.instVar with
+      | none => pure subst
+      | some v =>
+        if subst[v]!.isSome then
+          logError "Internal error: assumption already instantiated"
+          continue
+        else
+          let some path := path | throwError "Unreachable"
+          pure (subst.set! v (← mkExprFromPath path))
+    -- Update the partial match (we check whether it's actually a total match when registering it)
+    let pmatch : PartialMatch := { pmatch with patterns, subst }
+    -- Register the partial match (this may introduce a theorem to instantiate if the match is actually total)
+    state ← state.insertPartialMatch boundVars pmatch
+  pure state
+
+/-- Find all the lemmas which match an expression.
+    - `boundVars`: if an instantiation of a theorem contains a bound variable, we ignore
+      it (because we couldn't introduce the instantiated theorem it in the environment)
+ -/
+def matchExpr
+  (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
+  (path : Option AsmPath)
+  (boundVars : Std.HashSet FVarId)
+  (state : State) (e : Expr) :
+  MetaM State := do
+  trace[Saturate.explore] "Matching: {e}"
+  /- First match against the rules -/
+  let state ← matchExprWithRules preprocessThm path boundVars state e
   /- Match again the partial matches -/
-  -- TODO
+  let state ← matchExprWithPartialMatches preprocessThm path boundVars state e
   pure state
 
 /- Recursively explore a term -/
@@ -243,7 +348,7 @@ private partial def visit (config : Config)
   -- Register the current assumption, if it is a conjunct inside an assumption
   let state := state.insertAssumption path e
   -- Match
-  let state ← matchExpr path preprocessThm boundVars state e
+  let state ← matchExpr preprocessThm path boundVars state e
   -- Recurse
   let visitBinders
     (depth : Nat)
@@ -363,7 +468,7 @@ private partial def fastVisit
   (e : Expr) : MetaM State := do
   trace[Saturate.explore] "Visiting {e}"
   -- Match
-  let state ← matchExpr path preprocessThm Std.HashSet.emptyWithCapacity state e
+  let state ← matchExpr preprocessThm path Std.HashSet.emptyWithCapacity state e
   -- Recurse
   let e := e.consumeMData
   match e with
@@ -454,36 +559,70 @@ partial def evalSaturate {α}
   /- Introduce the theorems in the context. We wrote the function in CPS on purpose (this
      helps prevent bugs where the local context is not the one we expect) -/
   trace[Saturate] "Finished exploring the goal. Matched:\n{state.matched.toList}"
-  let matched := state.matched.toArray
-  let fvars : Array FVarId := #[]
-  let rec add (i : Nat) (assumptions : Std.HashMap Expr AsmPath) (fvars : Array FVarId) (f : Array FVarId → TacticM α) :
+  let addAssumptions (state : State) (fvars : Array FVarId)
+    (f : Array FVarId → Std.HashMap Expr AsmPath → Std.HashMap Expr AsmPath → TacticM α) :
     TacticM α := do
-    if i < matched.size then do
-      withMainContext do
-      let th := matched[i]!
-      trace[Saturate] "Adding: {th}"
-      -- The application worked: introduce the assumption in the context
-      let thTy ← inferType th
-      -- Check that we don't add the same assumption twice
-      if assumptions.contains thTy then
-        add (i + 1) assumptions fvars f
+    let matched := state.matched.toArray
+    let rec addAux (i : Nat)
+      (assumptions newAssumptions : Std.HashMap Expr AsmPath)
+      (fvars : Array FVarId) :
+      TacticM α := do
+      if i < matched.size then do
+        withMainContext do
+        let th := matched[i]!
+        trace[Saturate] "Adding: {th}"
+        -- The application worked: introduce the assumption in the context
+        let thTy ← inferType th
+        -- Check that we don't add the same assumption twice
+        if assumptions.contains thTy then
+          addAux (i + 1) assumptions newAssumptions fvars
+        else
+          Utils.addDeclTac (.num (.str .anonymous "_h") i) th thTy (asLet := false)
+            fun x =>
+            let fvars := fvars.push x.fvarId!
+            let path := AsmPath.asm x.fvarId!
+            let assumptions := assumptions.insert thTy path
+            let newAssumptions := newAssumptions.insert thTy path
+            addAux (i + 1) assumptions newAssumptions fvars
+      else f fvars assumptions newAssumptions
+    addAux 0 state.assumptions Std.HashMap.emptyWithCapacity fvars
+
+  -- We do this in several passes: we add the assumptions, then explore the context again to saturate, etc.
+  let rec saturateExtra
+    (state : State)
+    (next : Array FVarId → TacticM α)
+    (fvars : Array FVarId)
+    (assumptions newAssumptions : Std.HashMap Expr AsmPath)
+    := do
+    let rec saturateExtraAux
+      (numPasses : Nat)
+      (state : State)
+      (fvars : Array FVarId)
+      (assumptions newAssumptions : Std.HashMap Expr AsmPath) := do
+      if numPasses == 0 then
+        -- We're done
+        next fvars
       else
-        Utils.addDeclTac (.num (.str .anonymous "_h") i) th thTy (asLet := false)
-          fun x =>
-          let fvars := fvars.push x.fvarId!
-          let path := AsmPath.asm x.fvarId!
-          let assumptions := assumptions.insert thTy path
-          add (i + 1) assumptions fvars f
-    else f fvars
+        let oldAssumptions := state.assumptions
+        let mut state := { state with assumptions, matched := Std.HashSet.emptyWithCapacity }
+        -- Explore the new assumptions
+        for (assum, path) in Std.HashMap.toArray newAssumptions do
+          state ← matchExpr preprocessThm path Std.HashSet.emptyWithCapacity state assum
+        -- Explore the old assumptions, but matching only against the partially matched terms
+        for (assum, path) in Std.HashMap.toArray oldAssumptions do
+          state ← matchExprWithPartialMatches preprocessThm path Std.HashSet.emptyWithCapacity state assum
+        -- Introduce the assumptions in the context and do another pass
+        addAssumptions state fvars (saturateExtraAux (numPasses - 1) state)
+    saturateExtraAux config.saturationPasses state fvars assumptions newAssumptions
 
   --
-  add 0 state.assumptions fvars fun matched => do
+  addAssumptions state #[] (saturateExtra state fun matched => do
     trace[Saturate] "Introduced the assumptions in the context"
 
     -- Display the diagnostics information
     trace[Saturate.diagnostics] "Saturate diagnostics info: {state.diagnostics.toArray}"
     -- Continue
-    next matched
+    next matched)
 
 elab "aeneas_saturate" : tactic => do
   let _ ← evalSaturate {} [`Aeneas.ScalarTac] none none
@@ -491,18 +630,16 @@ elab "aeneas_saturate" : tactic => do
     (exploreAssumptions := true)
     (exploreTarget := true) (fun _ => pure ())
 
-section Test
+namespace Test
   local elab "aeneas_saturate_test" : tactic => do
     let _ ← evalSaturate {} [`Aeneas.Test] none none
       (declsToExplore := none)
       (exploreAssumptions := true)
       (exploreTarget := true) (fun _ => pure ())
 
-  set_option trace.Saturate.attribute false
+  set_option trace.Saturate.attribute false in
   @[local aeneas_saturate (set := Aeneas.Test) (pattern := l.length)]
   theorem rule1 (α : Type u) (l : List α) : l.length ≥ 0 := by simp
-
-  set_option trace.Saturate false
 
 /-
   /--
@@ -655,6 +792,35 @@ let _g := fun l => l.length + l5.length;
   /- Testing patterns which are propositions -/
   @[aeneas_saturate (set := Aeneas.Test) (pattern := x < y)]
   theorem rule2 (x y : Nat) : x < y ↔ y > x := by omega
+
+  set_option trace.Saturate.attribute true in
+  @[aeneas_saturate (set := Aeneas.Test)] -- TODO: why does adding `local` make the saturation below fail?
+  theorem rule2 (x : Nat) (h : 1 ≤ x) : 2 ≤ x + x := by omega
+
+  example (x : Nat) (_h : 1 ≤ x) : 2 ≤ x + x := by
+    aeneas_saturate_test
+    assumption
+
+  example (x : Nat) (_h : True ∧ 1 ≤ x ∧ True) : 2 ≤ x + x := by
+    aeneas_saturate_test
+    assumption
+
+  set_option trace.Saturate.attribute true in
+  @[aeneas_saturate (set := Aeneas.Test) (pattern := x * y)] -- TODO: why does adding `local` make the saturation below fail?
+  theorem rule3 (x y a b : Nat) (h0 : a ≤ x) (h1 : b ≤ y) : a * b ≤ x * y := by
+    exact Nat.mul_le_mul h0 h1
+
+  /- Remark: this theorem is carefully written so that `rule3` gets instantiated
+     *after one exploration pass* (in particular, the assumption `0 ≤ x * y`is useless). -/
+  set_option trace.Saturate.insertPartialMatch true in
+  example (x y : Nat) (_ : 0 ≤ x * y) (h : 3 ≤ y ∧ 2 ≤ x) : 6 ≤ x * y := by
+    aeneas_saturate_test
+    omega
+
+  set_option trace.Saturate.insertPartialMatch true in
+  example (x y z : Nat) (h : 2 ≤ x ∧ 3 ≤ y) (h1 : 8 ≤ z) : 32 ≤ x * y * z := by
+    aeneas_saturate_test
+    omega
 -/
 end Test
 
