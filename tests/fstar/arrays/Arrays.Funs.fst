@@ -152,9 +152,9 @@ let array_local_deep_copy (x : array u32 32) : result unit =
 (** [arrays::array_update1]:
     Source: 'tests/src/arrays.rs', lines 127:0-129:1 *)
 let array_update1 (a : slice u32) (i : usize) (x : u32) : result (slice u32) =
-  let* i1 = usize_add i 1 in
-  let* i2 = u32_add x 1 in
-  slice_update_usize a i1 i2
+  let* i1 = u32_add x 1 in
+  let* i2 = usize_add i 1 in
+  slice_update_usize a i2 i1
 
 (** [arrays::array_update2]:
     Source: 'tests/src/arrays.rs', lines 132:0-135:1 *)
