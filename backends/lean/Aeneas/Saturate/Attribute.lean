@@ -28,17 +28,36 @@ instance : ToFormat Key where
 instance : ToMessageData Key where
   toMessageData k := m!"({k.setName}, {k.discrTreeKey})"
 
-structure Rule where
-  numBinders : Nat
+structure Pattern where
   pattern : Expr
+  /- The variables bound in the theorem and that are used in the pattern -/
+  boundVars : Array Nat
+  /- If the pattern is for the type of a precondition, this contains the identifier
+     of the free variable identifying this precondition (e.g., the pattern is
+     `inBounds l q` while there is an assumption `h : inBounds l q`) -/
+  instVar : Option Nat
+deriving Inhabited, BEq
+
+structure Rule where
+  -- The source info allows to uniquely identify where the rule was introduced
+  src : SourceInfo
+  numBinders : Nat
+  /- There can be several patterns. -/
+  patterns : Array Pattern
   thName : Name
   deriving Inhabited, BEq
 
+instance : ToFormat Pattern where
+  format x := f!"{x.pattern}"
+
+instance : ToMessageData Pattern where
+  toMessageData x := m!"{x.pattern}"
+
 instance : ToFormat Rule where
-  format x := f!"({x.numBinders}, {x.pattern}, {x.thName})"
+  format x := f!"({x.numBinders}, {x.patterns}, {x.thName})"
 
 instance : ToMessageData Rule where
-  toMessageData x := m!"({x.numBinders}, {x.pattern}, {x.thName})"
+  toMessageData x := m!"({x.numBinders}, {x.patterns}, {x.thName})"
 
 /-- The saturation attribute is a map from rule set name to set of rules.
 
@@ -75,13 +94,16 @@ instance : ToMessageData Rule where
     pattern anymore under our hand, which is what we need to remove the rule form the set
     above. A second issue is also that we can't remove keys from discrimination trees.
 
-    Our solution is to save a map from the names of the theorems to the rule which is
-    currently registered for it.
+    Our solution is to save a map from the names of the theorems to the rules which are
+    currently registered for them.
 
     Whenever we do a forward saturation and a rule matches, we check if the rule is still
-    applicable for this rule (by checking if the name of the theorem still maps to this rule).
+    applicable for this name (by checking if the name of the theorem still maps to this rule).
 
-    Remark: those design choices constrain us to have at most one rule per theorem (which should be fine).
+    Remark: those design choices constrain us to have at most one rule per theorem (which is overall
+    fine: if we need more than one it is always possible to introduce an alias for the theorem).
+
+    TODO: I think there is simpler.
 -/
 structure Rules where
   nameToRule : NameMap Rule
@@ -133,15 +155,13 @@ structure SaturateAttribute where
 
 -- The ident is the name of the saturation set, the term is the pattern.
 -- If `allow_loose` is specified, we allow not instantiating all the variables.
-syntax (name := aeneas_saturate) "aeneas_saturate" "allow_loose"? "(" &"set" " := " ident ")" " (" &"pattern" " := " term ")" : attr
+syntax (name := aeneas_saturate) "aeneas_saturate" "(" &"set" " := " ident ")" (" (" &"pattern" " := " term ")")? : attr
 
-def elabSaturateAttribute (stx : Syntax) : MetaM (Bool × Name × Syntax) :=
+def elabSaturateAttribute (stx : Syntax) : MetaM (Name × Option Syntax) :=
   withRef stx do
     match stx with
-    | `(attr| aeneas_saturate (set := $set) (pattern := $pat)) => do
-      pure (false, set.getId, pat)
-    | `(attr| aeneas_saturate allow_loose (set := $set) (pattern := $pat)) => do
-      pure (true, set.getId, pat)
+    | `(attr| aeneas_saturate (set := $set) $[(pattern := $pat)]?) => do
+      pure (set.getId, pat)
     | _ => throwUnsupportedSyntax
 
 initialize saturateAttr : SaturateAttribute ← do
@@ -154,7 +174,14 @@ initialize saturateAttr : SaturateAttribute ← do
       -- Check that the rule is not already registered
       let s := ext.getState (← getEnv)
       if let some rule := s.nameToRule.find? thName then
-        throwError "A rule is already registered for {thName} with pattern {rule.pattern}: we can only register one rule per pattern"
+        throwError "A rule is already registered for {thName} with pattern {rule.patterns}: we can only register one rule per pattern"
+      -- Retrieve the source information
+      let src ← do
+        match stx with
+        | .missing => throwError "Unexpected error: missing source information in the syntax tree"
+        | .node info _ _
+        | .atom info _
+        | .ident info _ _ _ => pure info
       -- Ignore some auxiliary definitions (see the comments for attrIgnoreMutRec)
       attrIgnoreAuxDef thName (pure ()) do
         -- Lookup the theorem
@@ -164,45 +191,108 @@ initialize saturateAttr : SaturateAttribute ← do
         let (key, rule) ← MetaM.run' do
           let ty := thDecl.type
           /- Strip the quantifiers.
+
              We do this before elaborating the pattern because we need the universally quantified variables
              to be in the context.
           -/
           forallTelescope ty.consumeMData fun fvars _ => do
+          let fvarsMap : Std.HashMap FVarId Nat := Std.HashMap.ofList (fvars.mapIdx (fun i fv => (fv.fvarId!, i))).toList
+          let idToFVarMap : Std.HashMap Nat Expr := Std.HashMap.ofList (fvars.mapIdx (fun i fv => (i, fv))).toList
           let numFVars := fvars.size
           -- Elaborate the pattern
           trace[Saturate.attribute] "Syntax: {stx}"
-          let (allowLoose, setName, pat) ← elabSaturateAttribute stx
+          let (setName, pat) ← elabSaturateAttribute stx
           trace[Saturate.attribute] "Syntax: setName: {setName}, pat: {pat}"
-          let pat ← instantiateMVars (← Elab.Term.elabTerm pat none |>.run')
-          trace[Saturate.attribute] "Pattern: {pat}"
-          let patTy ← inferType pat
-          let patToExplore := if patTy.isProp then pat else patTy
-          -- Check that the pattern contains all the quantified variables
-          let allFVars := fvars.foldl (fun hs arg => hs.insert arg.fvarId!) Std.HashSet.emptyWithCapacity
-          let patFVars ← getFVarIds pat (← getFVarIds patToExplore)
-          trace[Saturate.attribute] "allFVars: {← allFVars.toList.mapM FVarId.getUserName}"
-          trace[Saturate.attribute] "patFVars: {← patFVars.toList.mapM FVarId.getUserName}"
-          let remFVars := patFVars.toList.foldl (fun hs fvar => hs.erase fvar) allFVars
-          unless remFVars.isEmpty ∨ allowLoose do
-            let remFVars ← remFVars.toList.mapM fun fv => do pure (← fv.getUserName, ← fv.getType)
-            let msg := m!"The pattern does not contain all the variables quantified in the theorem; those are not included in the pattern: {remFVars}."
-            let msg :=
-              if (← inferType pat).isProp then
-                msg ++ " Also note that your pattern has type Prop, which is spurious and may be the reason why it is not valid."
-              else msg
-            throwError msg
-          -- Create the pattern
-          let patExpr ← mkLambdaFVars fvars pat
-          trace[Saturate.attribute] "Pattern expression: {patExpr}"
-          -- Create the discrimination tree key
-          let (_, _, patWithMetas) ← lambdaMetaTelescope patExpr
-          trace[Saturate.attribute] "patWithMetas: {patWithMetas}"
-          let key ← DiscrTree.mkPath patWithMetas
-          trace[Saturate.attribute] "key: {key}"
-          --
-          let key : Key := ⟨ setName, key ⟩
-          let rule : Rule := ⟨ numFVars, patExpr, thName ⟩
-          pure (key, rule)
+          /- Elaborate the user-provided pattern, if there is one.
+             We also collect the set of free variables covered by this pattern.
+             We then go through the remaining free variables in reverse order (the reason
+             being that the type of some later variables often refers to some earlier
+             variables) and use the free variables which have not been covered yet and
+             which are assumptions (the type of their type is `Prop`) to introduce more
+             patterns.
+
+             Also note that we compute a list of pairs: (pattern, Option (free variable id)).
+             We need the free variable id to know which variable to instantiate when we
+             match a pattern corresponding to a precondition.
+
+             # Ex.:
+             ```
+             @[aeneas_saturate (pattern := l[i]!)]
+             theorem th {q} (h0 : inBounds l q) (h1 : i < l.length) : l[i]! < q`
+             ```
+             The pattern is `l[i]!` which covers variables `l` and `i` (but not `q`, `h0`, `h1`).
+             We then look at the last variable which has not been covered so far (that is `h1`)
+             and add the pattern `i < l.length`. When doing so we need to remember that the
+             pattern `i < l.length` is for `h1`, so that we can instantiate the theorem when matching
+             (i.e., if we find an assumption `h : i < l.length`, we need to instantiate `th` with it).
+             We then look at the next one (`h0`) and add the pattern `in Bounds l q`. All the variables
+             are now covered.
+           -/
+          let (first, patterns, patFVars) ← do
+            match pat with
+            | none =>
+              trace[Saturate.attribute] "No pattern provided"
+              pure (true, #[], Std.HashSet.emptyWithCapacity)
+            | some pat =>
+              let pat ← instantiateMVars (← Elab.Term.elabTerm pat none |>.run')
+              trace[Saturate.attribute] "Pattern: {pat}"
+              let patTy ← inferType pat
+              let patFVars ← getFVarIds pat (← getFVarIds patTy)
+              trace[Saturate.attribute] "patFVars: {← patFVars.toList.mapM FVarId.getUserName}"
+              let boundVars := Array.range numFVars
+              pure (false, #[(pat, boundVars, none)], patFVars)
+
+          /- Go through the free variables from the last to the first to introduce additional patterns.
+             Note that we only add patterns for variables whose type type is `Prop`. For instance, we
+             would add a pattern for `h : x < y` but not for `x : ℕ` (in which case we throw an exception). -/
+          let patterns ← do
+            let mut first := first
+            let mut patFVars := patFVars
+            let mut patterns := patterns
+            for (i, fv) in (fvars.mapIdx (fun i fv => (i, fv))).reverse do
+              if patFVars.contains fv.fvarId! then continue
+              else
+                -- Create a pattern
+                let pat ← inferType fv
+                unless (← inferType pat).isProp do
+                  throwError "Found a free variable not bound in the (optional) user provided pattern or in a precondition: {fv}"
+                let curPatFVars ← getFVarIds pat (Std.HashSet.emptyWithCapacity)
+                patFVars := patFVars.union curPatFVars
+                let boundVars :=
+                  if first then Array.range numFVars
+                  else
+                    curPatFVars.toArray.map fun fvid => Std.HashMap.get! fvarsMap fvid
+                patterns := patterns.push (pat, boundVars, some i)
+            -- Sanity check: all the bound variables have been covered
+            let allFVars := fvars.foldl (fun hs arg => hs.insert arg.fvarId!) Std.HashSet.emptyWithCapacity
+            let remFVars := patFVars.toList.foldl (fun hs fvar => hs.erase fvar) allFVars
+            unless remFVars.isEmpty do
+              throwError "Not all the free variables in the theorem are covered by patterns: please report a bug"
+            --
+            pure patterns
+
+          /- Process the patterns.
+             We need to introduce lambdas to bind the variables present in the patterns, to create closed terms.
+             This later allows us to introduce meta-variables when generating keys for the discrimination tree.
+           -/
+          let patterns : Array Pattern ← patterns.mapM fun (pat, boundVars, patVar) => do
+            let fvars := boundVars.map fun i => idToFVarMap.get! i
+            let patExpr ← mkLambdaFVars fvars pat
+            pure { pattern := patExpr, boundVars, instVar := patVar }
+
+          -- Create the rule and the key
+          if patterns.size > 0 then
+            let pattern := patterns[0]!
+            let (_, _, patWithMetas) ← lambdaMetaTelescope pattern.pattern (some numFVars)
+            trace[Saturate.attribute] "patWithMetas: {patWithMetas}"
+            let key ← DiscrTree.mkPath patWithMetas
+            trace[Saturate.attribute] "key: {key}"
+            --
+            let key : Key := ⟨ setName, key ⟩
+            let rule : Rule := ⟨ src, numFVars, patterns, thName ⟩
+            pure (key, rule)
+          else throwError "Unreachable: there should be at least one pattern"
+
         -- Store
         ScopedEnvExtension.add ext (key, rule) attrKind
     erase := fun thName => do
@@ -220,7 +310,8 @@ def SaturateAttribute.find? (s : SaturateAttribute) (setName : Name) (e : Expr) 
   | none => pure #[]
   | some dTree =>
     let rules ← dTree.getMatch e
-    -- Filter the rules which have been deactivated
+    /- Only keep the rules (remove the partial matches - note that there shouldn't be any actually)
+       and filter the rules which have been deactivated -/
     pure (rules.filter fun r => s.nameToRule.contains r.thName)
 
 def SaturateAttribute.getState (s : SaturateAttribute) : MetaM Rules := do

@@ -18,29 +18,48 @@ structure Config where
   -/
   visitProofTerms : Bool := false
 
+structure PartialMatch where
+  numBinders : Nat
+  -- The remaining patterns to match, including the current one
+  patterns : List Pattern
+  -- The substitution from free variable to expression
+  subst : Array (Option Expr)
+  thName : Name
+  deriving Inhabited, BEq
+
+instance : ToFormat PartialMatch where
+  format x := f!"({x.numBinders}, {x.patterns}, {x.thName})"
+
+instance : ToMessageData PartialMatch where
+  toMessageData x := m!"({x.numBinders}, {x.patterns}, {x.thName})"
+
 structure DiagnosticsInfo where
-  hits : Std.HashMap Name (Nat × Nat)
+  hits: Nat
+  used : Nat
 
-def DiagnosticsInfo.empty : DiagnosticsInfo := ⟨ Std.HashMap.emptyWithCapacity ⟩
+structure Diagnostics where
+  hits : Std.HashMap Name DiagnosticsInfo
 
-def DiagnosticsInfo.insertHit (info : DiagnosticsInfo) (name : Name) : DiagnosticsInfo :=
-  match info.hits[name]? with
-  | none => ⟨ info.hits.insert name (1, 0) ⟩
-  | some (hit, used) => ⟨ info.hits.insert name (hit + 1, used) ⟩
+def Diagnostics.empty : Diagnostics := ⟨ Std.HashMap.emptyWithCapacity ⟩
 
-def DiagnosticsInfo.insertUsed (info : DiagnosticsInfo) (name : Name) : DiagnosticsInfo :=
-  match info.hits[name]? with
-  | none => ⟨ info.hits.insert name (0, 1) ⟩
-  | some (hit, used) => ⟨ info.hits.insert name (hit, used + 1) ⟩
+def Diagnostics.insertHit (diagnostics : Diagnostics) (name : Name) : Diagnostics :=
+  match diagnostics.hits[name]? with
+  | none => ⟨ diagnostics.hits.insert name { hits:= 1, used := 0 } ⟩
+  | some info => ⟨ diagnostics.hits.insert name { info with hits := info.hits + 1 } ⟩
 
-def DiagnosticsInfo.insertHitRules (info : DiagnosticsInfo) (rules : Array Rule) : DiagnosticsInfo :=
+def Diagnostics.insertUsed (diagnostics : Diagnostics) (name : Name) : Diagnostics :=
+  match diagnostics.hits[name]? with
+  | none => ⟨ diagnostics.hits.insert name { hits:= 1, used := 0 } ⟩ -- This shouldn't happen
+  | some info => ⟨ diagnostics.hits.insert name { info with used := info.used + 1} ⟩
+
+def Diagnostics.insertHitRules (info : Diagnostics) (rules : Array Rule) : Diagnostics :=
   rules.foldl (fun info rule => info.insertHit rule.thName) info
 
-def DiagnosticsInfo.toArray (info : DiagnosticsInfo) : Array String :=
+def Diagnostics.toArray (info : Diagnostics) : Array String :=
   let hits := info.hits.toList
-  let hits := (hits.mergeSort (fun (_, hit0, used0) (_, hit1, used1) => hit0 + used0 ≤ hit1 + used1)).reverse
+  let hits := (hits.mergeSort (fun (_, info0) (_, info1) => info0.hits + info0.used ≤ info1.hits + info1.used)).reverse
   let hits := hits.toArray
-  hits.map (fun (name, (hit, used)) => s!"{name}: {hit} hits, {used} uses")
+  hits.map (fun (name, info) => s!"{name}: {info.hits} hits, {info.used} uses")
 
 inductive LeftOrRight where
 | left | right
@@ -50,25 +69,79 @@ inductive AsmPath where
 | conj (dir : LeftOrRight) (p : AsmPath)
 
 structure State where
-  dinfo : DiagnosticsInfo
-  matched : Std.HashSet (Name × List Expr)
-  assumptions : Std.HashSet Expr
+  /- The map registering which rules are still active -/
+  nameToRule : NameMap Rule
+  /- The registered rules -/
+  dtrees : Array (DiscrTree Rule)
+  /- The partial matches -/
+  pmatches : DiscrTree PartialMatch
+  /- Diagnostic information for debugging -/
+  diagnostics : Diagnostics
+  /- The fully matched rules: we directly store the instantiated theorems -/
+  matched : Std.HashSet Expr
+  /- The set of encountered assumptions.
+     We store a map from expression to path because we may need to use those
+     assumptions to instantiate some other theorems.
+   -/
+  assumptions : Std.HashMap Expr AsmPath
 
 def State.insertHitRules (s : State) (rules : Array Rule) : State :=
-  { s with dinfo := s.dinfo.insertHitRules rules }
+  { s with diagnostics := s.diagnostics.insertHitRules rules }
 
 def State.insertUsed (s : State) (name : Name) : State :=
-  { s with dinfo := s.dinfo.insertUsed name }
+  { s with diagnostics := s.diagnostics.insertUsed name }
 
-def State.insertMatch (s : State) (name : Name) (args : List Expr) : State :=
-  { s with matched := s.matched.insert (name, args) }
+def State.insertMatch (s : State) (e : Expr) : State :=
+  { s with matched := s.matched.insert e }
 
-def State.insertAssumption (s : State) (path : Option Asm) (e : Expr) : State :=
+def State.insertAssumption (s : State) (path : Option AsmPath) (e : Expr) : State :=
   match path with
-  | some _ => { s with assumptions := s.assumptions.insert e }
+  | some path => { s with assumptions := s.assumptions.insert e path }
   | none => s
 
-def State.empty : State := ⟨ DiagnosticsInfo.empty, Std.HashSet.emptyWithCapacity, Std.HashSet.emptyWithCapacity ⟩
+def State.new (nameToRule : NameMap Rule) (dtrees : Array (DiscrTree Rule))
+  (pmatches : DiscrTree PartialMatch := DiscrTree.empty)
+  (diagnostics : Diagnostics := Diagnostics.empty)
+  (matched : Std.HashSet Expr := Std.HashSet.emptyWithCapacity)
+  (assumptions : Std.HashMap Expr AsmPath := Std.HashMap.emptyWithCapacity) : State :=
+  { nameToRule, dtrees, pmatches, diagnostics, matched, assumptions }
+
+def State.insertPartialMatch (state : State) (boundVars : Std.HashSet FVarId) (pmatch : PartialMatch) : MetaM State := do
+  let mut state := state
+  /- Check if there remains patterns: if no then the match is total -/
+  match pmatch.patterns with
+  | [] =>
+    -- This is a total match: retrieve the subst
+    let subst ←
+      try
+        pmatch.subst.mapM fun e =>
+          match e with | some e => pure e | none => throwError "Unexpected"
+      catch _ =>
+        trace[Saturate.explore] "Internal error: invalid total match"
+        return state
+    -- Check that no bound vars appear within the substitution (otherwise we abort)
+    let allFVars ← subst.foldrM (fun arg hs => do
+        getFVarIds arg hs
+      ) Std.HashSet.emptyWithCapacity
+    if ¬ boundVars.all (fun fvar => ¬ allFVars.contains fvar) then
+      return state
+    -- Instantiate the theorem
+    trace[Saturate] "Instantiating: {pmatch.thName}({subst})."
+    let thm ←
+      try
+        /- It sometimes happens that the instantiation is invalid, so `mkAppOptM`
+          may raise an exception, in which case we simply skip the pattern. -/
+        mkAppOptM pmatch.thName (subst.map some)
+      catch e =>
+        trace[Saturate] "Error: {e.toMessageData}"
+        return state
+    -- Register the theorem
+    state := state.insertUsed pmatch.thName
+    state := state.insertMatch thm
+    pure state
+  | pattern :: patterns =>
+    -- This is a partial match
+    throwError "TODO"
 
 /-- Find all the lemmas which match an expression.
 
@@ -80,90 +153,89 @@ def State.empty : State := ⟨ DiagnosticsInfo.empty, Std.HashSet.emptyWithCapac
     We return the set of: (theroem name, list of arguments)
  -/
 def matchExpr
+  (path : Option AsmPath)
   (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
-  (nameToRule : NameMap Rule) (dtrees : Array (DiscrTree Rule))
   (boundVars : Std.HashSet FVarId)
   (state : State) (e : Expr) :
   MetaM State := do
   trace[Saturate.explore] "Matching: {e}"
-  dtrees.foldlM (fun state dtree => do
+  let mut state := state
+  /- First match against the rules -/
+  for dtree in state.dtrees do
     let exprs ← dtree.getMatch e
-    let state := state.insertHitRules exprs
+    state := state.insertHitRules exprs
     trace[Saturate.explore] "Potential matches: {exprs}"
     -- Check each expression
-    (exprs.foldlM fun state rule => do
+    for rule in exprs do
       trace[Saturate.explore] "Checking potential match: {rule}"
       -- Check if the theorem is still active
-      if let some activeRule := nameToRule.find? rule.thName then do
-        -- Check that the patterns are the same
-        if activeRule.numBinders = rule.numBinders ∧ (← isDefEq activeRule.pattern rule.pattern) then
-          -- Introduce meta-variables for the universes
-          let info ← getConstInfo rule.thName
-          let mvarLevels ← mkFreshLevelMVarsFor info
-          let pat := rule.pattern.instantiateLevelParams info.levelParams mvarLevels
-          -- Strip the binders, introduce meta-variables at the same time, and match
-          let (mvars, _, pat) ← lambdaMetaTelescope pat (some rule.numBinders)
-          match preprocessThm with | none => pure () | some preprocessThm => preprocessThm mvars pat
-          trace[Saturate.explore] "Checking if defEq:\n- pat: {pat}\n- expression: {e}"
-          let pat_ty ← inferType pat
-          let e_ty ← inferType e
-          /- Small issue here: we use big integer constants and we have several patterns which
-             are just a variable (for instance: `UScalar.bounds`). Because `isDefEq` first
-             starts by unifying the expressions themselves (without looking at their type) we
-             often end up attempting to unify every expression in the context with variables
-             of type, e.g., `UScalar _`. The issue is that, if we attempt to unify an expression
-             like `1000` with `?x : UScalar ?ty`, Lean will lanch a "max recursion depth" exception
-             when attempting to reduce `1000` to `succ succ ...`. The current workaround is to
-             first check whether the types are definitionally equal, then compare the expressions
-             themselves. This way, in the case above we would not even compare `1000` with `?x`
-             because `ℕ` wouldn't match `UScalar ?ty`.
+      let some activeRule := state.nameToRule.find? rule.thName
+        | trace[Saturate.explore] "The rule is not active"; continue
+      -- Check that the patterns are the same - we uniquely identify them with their source information
+      unless activeRule.src == rule.src do
+         continue
+      -- Retrieve the first pattern
+      let (pat, patterns) ← do
+        match rule.patterns.toList with
+        | [] => throwError "Unexpected: rules should have at least one pattern"
+        | pat :: patterns => pure (pat, patterns)
+      /- Quick check: if the pattern is for a precondition and the path is unknown, then we can abort:
+          we wouldn't know how to instantiate the pre-condition -/
+      unless pat.instVar.isNone ∨ path.isSome do continue
+      -- Introduce meta-variables for the universes
+      let info ← getConstInfo rule.thName
+      let mvarLevels ← mkFreshLevelMVarsFor info
+      let pat := pat.pattern.instantiateLevelParams info.levelParams mvarLevels
+      -- Strip the binders, introduce meta-variables at the same time, and match
+      let (mvars, _, pat) ← lambdaMetaTelescope pat (some rule.numBinders)
+      match preprocessThm with | none => pure () | some preprocessThm => preprocessThm mvars pat
+      trace[Saturate.explore] "Checking if defEq:\n- pat: {pat}\n- expression: {e}"
+      let pat_ty ← inferType pat
+      let e_ty ← inferType e
+      /- Small issue here: we use big integer constants and we have several patterns which
+        are just a variable (for instance: `UScalar.bounds`). Because `isDefEq` first
+        starts by unifying the expressions themselves (without looking at their type) we
+        often end up attempting to unify every expression in the context with variables
+        of type, e.g., `UScalar _`. The issue is that, if we attempt to unify an expression
+        like `1000` with `?x : UScalar ?ty`, Lean will lanch a "max recursion depth" exception
+        when attempting to reduce `1000` to `succ succ ...`. The current workaround is to
+        first check whether the types are definitionally equal, then compare the expressions
+        themselves. This way, in the case above we would not even compare `1000` with `?x`
+        because `ℕ` wouldn't match `UScalar ?ty`.
 
-             TODO: it would probably be more efficient to have a specific treatment of degenerate
-             patterns, for instance by using the types as the keys in the discrimination trees.
-           -/
-          if ← isDefEq pat_ty e_ty then
-            if ← isDefEq pat e then
-              trace[Saturate.explore] "defEq"
-              -- It matched! Check the variables which appear in the arguments
-              let state := state.insertUsed rule.thName
-              let (args, allFVars) ← mvars.foldrM (fun arg (args, hs) => do
-                  let arg ← instantiateMVars arg
-                  let hs ← getFVarIds arg hs
-                  pure (arg :: args, hs)
-                ) ([], Std.HashSet.emptyWithCapacity)
-              if boundVars.all (fun fvar => ¬ allFVars.contains fvar) then
-                -- Ok: save the theorem
-                trace[Saturate.explore] "Matched with: {rule.thName} {args}"
-                pure (state.insertMatch rule.thName args)
-              else
-                -- Ignore
-                trace[Saturate.explore] "Didn't match"
-                pure state
-            else
-              -- Didn't match, leave the set of matches unchanged
-              trace[Saturate.explore] "Didn't match"
-              pure state
-          else
-            -- Didn't match, leave the set of matches unchanged
-              trace[Saturate.explore] "Types didn't match"
-              pure state
-        else
-          -- The rule is not active
-          trace[Saturate.explore] "The rule is not active"
-          pure state
-      else
-        -- The rule is not active
-        trace[Saturate.explore] "The rule is not active"
-        pure state) state
-  ) state
+        TODO: it would probably be more efficient to have a specific treatment of degenerate
+        patterns, for instance by using the types as the keys in the discrimination trees.
+      -/
+      if ¬ (← isDefEq pat_ty e_ty) then
+        trace[Saturate.explore] "Types didn't match"; continue
+      if ¬ (← isDefEq pat e) then
+        trace[Saturate.explore] "Didn't match"
+        continue
+      trace[Saturate.explore] "defEq"
+      /- It matched! Compute the substitution from free variables to expressions
+        (for the variables which have been instantiated) -/
+      let subst ← mvars.mapM fun mvar => do
+        let arg ← instantiateMVars mvar
+        if arg.isMVar then pure none
+        else pure (some arg)
+      -- Create the partial match (we check whether it's actually a total match when registering it)
+      let pmatch : PartialMatch := {
+        numBinders := rule.numBinders,
+        patterns,
+        subst,
+        thName := rule.thName
+      }
+      -- Register the partial match (this may introduce a theorem to instantiate if the match is actually total)
+      state ← state.insertPartialMatch boundVars pmatch
+  /- Match again the partial matches -/
+  -- TODO
+  pure state
 
 /- Recursively explore a term -/
 private partial def visit (config : Config)
   (path : Option AsmPath)
   (depth : Nat)
   (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
-  (nameToRule : NameMap Rule)
-  (dtrees : Array (DiscrTree Rule))
   (boundVars : Std.HashSet FVarId)
   (state : State) (e : Expr)
   : MetaM State := do
@@ -171,7 +243,7 @@ private partial def visit (config : Config)
   -- Register the current assumption, if it is a conjunct inside an assumption
   let state := state.insertAssumption path e
   -- Match
-  let state ← matchExpr preprocessThm nameToRule dtrees boundVars state e
+  let state ← matchExpr path preprocessThm boundVars state e
   -- Recurse
   let visitBinders
     (depth : Nat)
@@ -183,11 +255,11 @@ private partial def visit (config : Config)
       let fvarId := x.fvarId!
       let localDecl ← fvarId.getDecl
       let boundVars := boundVars.insert fvarId
-      let state ← visit config none (depth + 1) preprocessThm nameToRule dtrees boundVars state localDecl.type
+      let state ← visit config none (depth + 1) preprocessThm boundVars state localDecl.type
       let state ←
         match localDecl.value? with
         | none => pure state
-        | some v => visit config none (depth + 1) preprocessThm nameToRule dtrees boundVars state v
+        | some v => visit config none (depth + 1) preprocessThm boundVars state v
       pure (boundVars, state)
       ) (boundVars, state)
   let e := e.consumeMData
@@ -208,8 +280,8 @@ private partial def visit (config : Config)
       -- This is a conjunction
       let some path := path
         | throwError "Unreachable"
-      let state ← visit config (some (.conj .left path)) (depth + 1) preprocessThm nameToRule dtrees boundVars state (args[0]!)
-      let state ← visit config (some (.conj .right path)) (depth + 1) preprocessThm nameToRule dtrees boundVars state (args[1]!)
+      let state ← visit config (some (.conj .left path)) (depth + 1) preprocessThm boundVars state (args[0]!)
+      let state ← visit config (some (.conj .right path)) (depth + 1) preprocessThm boundVars state (args[1]!)
       pure state
     else
       -- Filter the args to ignore proof terms
@@ -219,30 +291,30 @@ private partial def visit (config : Config)
         else pure true
       -- Visit the args
       let state ← args.foldlM (fun state arg =>
-        visit config none (depth + 1) preprocessThm nameToRule dtrees boundVars state arg) state
+        visit config none (depth + 1) preprocessThm boundVars state arg) state
       -- Visit the app
-      visit config none (depth + 1) preprocessThm nameToRule dtrees boundVars state f
+      visit config none (depth + 1) preprocessThm boundVars state f
   | .lam .. =>
     trace[Saturate.explore] ".lam"
     lambdaLetTelescope e fun xs b => do
       let (boundVars, state) ← visitBinders (depth + 1) boundVars state xs
-      visit config none (depth + 1) preprocessThm nameToRule dtrees boundVars state b
+      visit config none (depth + 1) preprocessThm boundVars state b
   | .forallE .. => do
     trace[Saturate.explore] ".forallE"
     forallTelescope e fun xs b => do
       let (boundVars, state) ← visitBinders (depth + 1) boundVars state xs
-      visit config none (depth + 1) preprocessThm nameToRule dtrees boundVars state b
+      visit config none (depth + 1) preprocessThm boundVars state b
   | .letE .. => do
     trace[Saturate.explore] ".letE"
     lambdaLetTelescope e fun xs b => do
       let (boundVars, state) ← visitBinders (depth + 1) boundVars state xs
-      visit config path (depth + 1) preprocessThm nameToRule dtrees boundVars state b
+      visit config path (depth + 1) preprocessThm boundVars state b
   | .mdata _ b => do
     trace[Saturate.explore] ".mdata"
-    visit config path (depth + 1) preprocessThm nameToRule dtrees boundVars state b
+    visit config path (depth + 1) preprocessThm boundVars state b
   | .proj _ _ b => do
     trace[Saturate.explore] ".proj"
-    visit config none (depth + 1) preprocessThm nameToRule dtrees boundVars state b
+    visit config none (depth + 1) preprocessThm boundVars state b
 
 def arithOpArity3 : Std.HashSet Name := Std.HashSet.ofList [
   ``Nat.cast, ``Int.cast
@@ -287,13 +359,11 @@ private partial def fastVisit
   (exploreSubterms : Expr → Array Expr → MetaM (Array Expr))
   (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
   (depth : Nat)
-  (nameToRule : NameMap Rule)
-  (dtrees : Array (DiscrTree Rule))
   (state : State)
   (e : Expr) : MetaM State := do
   trace[Saturate.explore] "Visiting {e}"
   -- Match
-  let state ← matchExpr preprocessThm nameToRule dtrees Std.HashSet.emptyWithCapacity state e
+  let state ← matchExpr path preprocessThm Std.HashSet.emptyWithCapacity state e
   -- Recurse
   let e := e.consumeMData
   match e with
@@ -307,7 +377,7 @@ private partial def fastVisit
     pure state
   | .app .. => do e.withApp fun f args => do
     trace[Saturate.explore] ".app"
-    let visitRec path := fastVisit path exploreSubterms preprocessThm (depth + 1) nameToRule dtrees
+    let visitRec path := fastVisit path exploreSubterms preprocessThm (depth + 1)
     let subterms ← exploreSubterms f args
     /- Check if this is a conjunction and we know the path to the current sub-expression (because it is a conjunct
        in an assumption) -/
@@ -327,7 +397,7 @@ private partial def fastVisit
     pure state
   | .mdata _ b => do
     trace[Saturate.explore] ".mdata"
-    fastVisit path exploreSubterms preprocessThm (depth + 1) nameToRule dtrees state b
+    fastVisit path exploreSubterms preprocessThm (depth + 1) state b
   | .proj _ _ _ => do
     trace[Saturate.explore] ".proj"
     pure state
@@ -354,12 +424,12 @@ partial def evalSaturate {α}
   -- Explore
   let visit (path : Option AsmPath) state expr :=
     match exploreSubterms with
-    | none => visit config path 0 preprocessThm s.nameToRule dtrees Std.HashSet.emptyWithCapacity state expr
-    | some exploreSubterms => fastVisit path exploreSubterms preprocessThm 0 s.nameToRule dtrees state expr
+    | none => visit config path 0 preprocessThm Std.HashSet.emptyWithCapacity state expr
+    | some exploreSubterms => fastVisit path exploreSubterms preprocessThm 0 state expr
 
   -- Explore the assumptions
   trace[Saturate] "Exploring the assumptions"
-  let state := State.empty
+  let state := State.new s.nameToRule dtrees
   let state ← do
     if exploreAssumptions then do
       let decls ←
@@ -386,35 +456,24 @@ partial def evalSaturate {α}
   trace[Saturate] "Finished exploring the goal. Matched:\n{state.matched.toList}"
   let matched := state.matched.toArray
   let fvars : Array FVarId := #[]
-  let rec add (i : Nat) (assumptions : Std.HashSet Expr) (fvars : Array FVarId) (f : Array FVarId → TacticM α) :
+  let rec add (i : Nat) (assumptions : Std.HashMap Expr AsmPath) (fvars : Array FVarId) (f : Array FVarId → TacticM α) :
     TacticM α := do
     if i < matched.size then do
       withMainContext do
-      let (thName, args) := matched[i]!
-      trace[Saturate] "Adding: {thName}({args}).\nGoal: {← getMainGoal}"
-      let th : Option Expr ← do
-        try
-          /- It sometimes happens that the instantiation is invalid, so `mkAppOptM`
-            may raise an exception, in which case we simply skip the pattern. -/
-          pure (some (← mkAppOptM thName (args.map some).toArray))
-        catch e =>
-          trace[Saturate] "Error: {e.toMessageData}"
-          pure none
+      let th := matched[i]!
+      trace[Saturate] "Adding: {th}"
       -- The application worked: introduce the assumption in the context
-      if let some th := th then
-        let thTy ← inferType th
-        -- Check that we don't add the same assumption twice
-        if assumptions.contains thTy then
-          add (i + 1) assumptions fvars f
-        else
-          let assumptions := assumptions.insert thTy
-          Utils.addDeclTac (.num (.str .anonymous "_h") i) th thTy (asLet := false)
-            fun x =>
-            let fvars := fvars.push x.fvarId!
-            add (i + 1) assumptions fvars f
-      else
-        -- Simply ignore the match
+      let thTy ← inferType th
+      -- Check that we don't add the same assumption twice
+      if assumptions.contains thTy then
         add (i + 1) assumptions fvars f
+      else
+        Utils.addDeclTac (.num (.str .anonymous "_h") i) th thTy (asLet := false)
+          fun x =>
+          let fvars := fvars.push x.fvarId!
+          let path := AsmPath.asm x.fvarId!
+          let assumptions := assumptions.insert thTy path
+          add (i + 1) assumptions fvars f
     else f fvars
 
   --
@@ -422,7 +481,7 @@ partial def evalSaturate {α}
     trace[Saturate] "Introduced the assumptions in the context"
 
     -- Display the diagnostics information
-    trace[Saturate.diagnostics] "Saturate diagnostics info: {state.dinfo.toArray}"
+    trace[Saturate.diagnostics] "Saturate diagnostics info: {state.diagnostics.toArray}"
     -- Continue
     next matched
 
