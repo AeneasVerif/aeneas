@@ -175,9 +175,9 @@ def array_local_deep_copy (x : Array U32 32#usize) : Result Unit :=
    Source: 'tests/src/arrays.rs', lines 127:0-129:1 -/
 def array_update1 (a : Slice U32) (i : Usize) (x : U32) : Result (Slice U32) :=
   do
-  let i1 ← i + 1#usize
-  let i2 ← x + 1#u32
-  Slice.update a i1 i2
+  let i1 ← x + 1#u32
+  let i2 ← i + 1#usize
+  Slice.update a i2 i1
 
 /- [arrays::array_update2]:
    Source: 'tests/src/arrays.rs', lines 132:0-135:1 -/

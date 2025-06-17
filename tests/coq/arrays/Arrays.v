@@ -191,7 +191,7 @@ Definition array_local_deep_copy (x : array u32 32%usize) : result unit :=
     Source: 'tests/src/arrays.rs', lines 127:0-129:1 *)
 Definition array_update1
   (a : slice u32) (i : usize) (x : u32) : result (slice u32) :=
-  i1 <- usize_add i 1%usize; i2 <- u32_add x 1%u32; slice_update_usize a i1 i2
+  i1 <- u32_add x 1%u32; i2 <- usize_add i 1%usize; slice_update_usize a i2 i1
 .
 
 (** [arrays::array_update2]:
