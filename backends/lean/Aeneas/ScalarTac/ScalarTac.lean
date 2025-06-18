@@ -152,11 +152,12 @@ def unexpForall' : Lean.PrettyPrinter.Unexpander | `($_ $_) => `(∀ _, __) | _ 
 structure SaturateConfig where
   /- Should we use non-linear arithmetic reasoning? -/
   nonLin : Bool := false
-  fastSaturate : Bool := false
   /- Should we explore the assumptions when saturating?. -/
   saturateAssumptions : Bool := true
   /- Should we explore the target when saturating?. -/
   saturateTarget : Bool := true
+  /- Should we dive into binders? -/
+  saturateVisitBoundExpressions := false
 
 structure Config extends SaturateConfig where
   /- If `true`, split all the matches/if then else in the context (note that `omega`
@@ -188,7 +189,7 @@ def scalarTacSaturateForward {α} (config : SaturateConfig) (f : Array FVarId �
     else ruleSets
   -- TODO
   -- evalAesopSaturate options ruleSets.toArray
-  Saturate.evalSaturate { visitProofTerms := false } ruleSets (if config.fastSaturate then Saturate.exploreArithSubterms else none) none
+  Saturate.evalSaturate { visitProofTerms := false, visitBoundExpressions := config.saturateVisitBoundExpressions } ruleSets none none
     (declsToExplore := none)
     (exploreAssumptions := config.saturateAssumptions)
     (exploreTarget := config.saturateTarget) f

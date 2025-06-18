@@ -11,18 +11,20 @@ namespace Saturate
 open Attribute
 
 structure Config where
-  /- If `true` visit the proof terms.
-
-     We consider as proof terms the expressions whose type's type is `Prop`.
-     Ex.: `... : a + b ≤ 3`
-  -/
-  visitProofTerms : Bool := false
   /- The number of addiotional exploration passes we do to instantiate rules
      with several patterns (i.e., preconditions). Note that this doesn't count
      the initial pass we do through the whole context, meaning that if this
      parameter is equal to 0, `saturate` will still successfully instantiate
      rules which only have one pattern. -/
   saturationPasses : Nat := 3
+  /- If `true` visit the proof terms.
+
+    We consider as proof terms the expressions whose type's type is `Prop`.
+    Ex.: `... : a + b ≤ 3`
+  -/
+  visitProofTerms : Bool := false
+  /- If `true`, we dive into the binders (ex.: `∀ x, ...`)-/
+  visitBoundExpressions : Bool := false
 
 structure PartialMatch where
   numBinders : Nat
@@ -359,6 +361,14 @@ def matchExpr
   let state ← matchExprWithPartialMatches preprocessThm path boundVars state e
   pure state
 
+def filterProofTerms (config : Config) (exprs : Array Expr) : MetaM (Array Expr) :=
+  if ¬ config.visitProofTerms then
+    exprs.filterM fun arg => do
+        let ty ← inferType (← inferType arg)
+        if ty.isProp then pure false
+        else pure true
+  else pure exprs
+
 /- Recursively explore a term -/
 private partial def visit (config : Config)
   (path : Option AsmPath)
@@ -415,17 +425,23 @@ private partial def visit (config : Config)
     else
       -- Explore the subterms
       let subterms ← exploreSubterms f args
+      -- Optionally ignore the proof terms
+      let subterms ← filterProofTerms config subterms
       subterms.foldlM (fun state => visit config none (depth + 1) exploreSubterms preprocessThm boundVars state) state
   | .lam .. =>
     trace[Saturate.explore] ".lam"
-    lambdaLetTelescope e fun xs b => do
-      let (boundVars, state) ← visitBinders (depth + 1) boundVars state xs
-      visit config none (depth + 1) exploreSubterms preprocessThm boundVars state b
+    if config.visitBoundExpressions then
+      lambdaLetTelescope e fun xs b => do
+        let (boundVars, state) ← visitBinders (depth + 1) boundVars state xs
+        visit config none (depth + 1) exploreSubterms preprocessThm boundVars state b
+    else pure state
   | .forallE .. => do
     trace[Saturate.explore] ".forallE"
-    forallTelescope e fun xs b => do
-      let (boundVars, state) ← visitBinders (depth + 1) boundVars state xs
-      visit config none (depth + 1) exploreSubterms preprocessThm boundVars state b
+    if config.visitBoundExpressions then
+      forallTelescope e fun xs b => do
+        let (boundVars, state) ← visitBinders (depth + 1) boundVars state xs
+        visit config none (depth + 1) exploreSubterms preprocessThm boundVars state b
+    else pure state
   | .letE .. => do
     trace[Saturate.explore] ".letE"
     lambdaLetTelescope e fun xs b => do
@@ -454,15 +470,6 @@ def arithOpArity6 : Std.HashSet Name := Std.HashSet.ofList [
   ``HShiftRight.hShiftRight, ``HShiftLeft.hShiftLeft,
   ``HPow.hPow, ``HMod.hMod, ``HAdd.hAdd, ``HSub.hSub, ``HMul.hMul, ``HDiv.hDiv
 ]
-
-/- Exploration strategy: explore all the sub-terms *but* the proof terms. -/
-def exploreIgnoreProofTerms (f : Expr) (args : Array Expr) : MetaM (Array Expr) := do
-  -- Filter the args to ignore proof terms
-  let args ← args.filterM fun arg => do
-    let ty ← inferType (← inferType arg)
-    if ty.isProp then pure false
-    else pure true
-  pure (#[f] ++ args)
 
 /- Exploration strategy: focus on the arithmetic expressions -/
 def exploreArithSubterms (f : Expr) (args : Array Expr) : MetaM (Array Expr) := do
@@ -508,7 +515,7 @@ partial def evalSaturate {α}
   -- Explore
   let exploreSubterms :=
     match exploreSubterms with
-    | none => exploreIgnoreProofTerms
+    | none => fun f args => pure (#[f] ++ args)
     | some explore => explore
   let visit path state expr :=
     visit config path 0 exploreSubterms preprocessThm Std.HashSet.emptyWithCapacity state expr

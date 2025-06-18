@@ -259,13 +259,6 @@ example (x y : Int) (h : |x| ≤ |y|) : x ≤ |y| := by scalar_tac
 example (x y : Int) (h : |x| ≤ |y|) : x ≤ |y| := by scalar_tac
 
 /-!
-# Fast Saturate
--/
-example :
-  128 ≤ Usize.max ∧ 128 ≥ 5 := by
-  scalar_tac +fastSaturate
-
-/-!
 # Forward Saturation
 -/
 
@@ -352,6 +345,12 @@ theorem lt_mul_le_le (x y a b : ℕ) (h0 : x < a) (h1 : y ≤ b) :
 @[scalar_tac x * y]
 theorem le_mul_le_le (x y a b : ℕ) (h0 : x ≤ a) (h1 : y ≤ b) :
   x * y ≤ a * b := by apply Nat.le_mul_le; omega
+
+/-!
+# Modulo
+-/
+@[scalar_tac x % y]
+theorem mod_lt (x y : ℕ) (h : 0 < y) : x % y < y := by exact Nat.mod_lt x h
 
 end ScalarTac
 

@@ -141,15 +141,6 @@ example (d i : ℕ) (h : i ≤ 256) : d * i / 8 ≤ d * 256 / 8 := by
   apply Nat.div_le_div_right
   scalar_tac +nonLin
 
-/- A bug used to make this fail -/
-example
-  (i1 i2 : U16)
-  (i1_post_2 : (↑i1 : ℕ) < 3329)
-  (i2_post_2 : (↑i2 : ℕ) < 3329) :
-  i1.val * i2.val ≤ U32.max
-  := by
-  scalar_tac +fastSaturate
-
 /- This example exhibited an "unknown free variable" bug because expressions
    containing free variables were not properly ignored. -/
 example
