@@ -26,6 +26,10 @@ structure Config where
   /- If `true`, we dive into the binders (ex.: `∀ x, ...`)-/
   visitBoundExpressions : Bool := false
 
+structure VisitConfig extends Config where
+  matchWithRules : Bool
+  matchWithPartialMatches : Bool
+
 structure PartialMatch where
   numBinders : Nat
   -- The remaining patterns to match, including the current one
@@ -370,7 +374,8 @@ def filterProofTerms (config : Config) (exprs : Array Expr) : MetaM (Array Expr)
   else pure exprs
 
 /- Recursively explore a term -/
-private partial def visit (config : Config)
+private partial def visit
+  (config : VisitConfig)
   (path : Option AsmPath)
   (depth : Nat)
   (exploreSubterms : Expr → Array Expr → MetaM (Array Expr))
@@ -426,7 +431,7 @@ private partial def visit (config : Config)
       -- Explore the subterms
       let subterms ← exploreSubterms f args
       -- Optionally ignore the proof terms
-      let subterms ← filterProofTerms config subterms
+      let subterms ← filterProofTerms config.toConfig subterms
       subterms.foldlM (fun state => visit config none (depth + 1) exploreSubterms preprocessThm boundVars state) state
   | .lam .. =>
     trace[Saturate.explore] ".lam"
@@ -517,7 +522,12 @@ partial def evalSaturate {α}
     match exploreSubterms with
     | none => fun f args => pure (#[f] ++ args)
     | some explore => explore
-  let visit path state expr :=
+  let config : VisitConfig := {
+    toConfig := config,
+    matchWithRules := true,
+    matchWithPartialMatches := true,
+  }
+  let visit config path state expr :=
     visit config path 0 exploreSubterms preprocessThm Std.HashSet.emptyWithCapacity state expr
 
   -- Explore the assumptions
@@ -536,17 +546,17 @@ partial def evalSaturate {α}
         let path ←
           if (← inferType decl.type).isProp then pure (some (.asm decl.fvarId))
           else pure none
-        let state ← visit path state decl.type
-        let state ← visit none state decl.toExpr
+        let state ← visit config path state decl.type
+        let state ← visit config none state decl.toExpr
         match decl.value? with
         | none => pure state
-        | some value => visit none state value) state
+        | some value => visit config none state value) state
     else pure state
 
   -- Explore the target
   trace[Saturate] "Exploring the target"
   let state ← do
-    if exploreTarget then do pure (← visit none state (← Tactic.getMainTarget)) else do pure state
+    if exploreTarget then do pure (← visit config none state (← Tactic.getMainTarget)) else do pure state
 
   /- Introduce the theorems in the context. We wrote the function in CPS on purpose (this
      helps prevent bugs where the local context is not the one we expect) -/
@@ -599,12 +609,13 @@ partial def evalSaturate {α}
         trace[Saturate] "state.assumptions: {state.assumptions.toArray}"
         let oldAssumptions := state.assumptions
         let mut state := { state with assumptions, matched := Std.HashSet.emptyWithCapacity }
-        -- Explore the new assumptions
+        /- Explore the new assumptions by matching them against the rules and the partial matches.
+           Note that we have to explore them recursively -/
         for (assum, path) in Std.HashMap.toArray newAssumptions do
-          state ← matchExpr preprocessThm path Std.HashSet.emptyWithCapacity state assum
+          state ← visit config path state assum
         -- Explore the old assumptions, but matching only against the partially matched terms
         for (assum, path) in Std.HashMap.toArray oldAssumptions do
-          state ← matchExprWithPartialMatches preprocessThm path Std.HashSet.emptyWithCapacity state assum
+          state ← visit { config with matchWithRules := false } path state assum
         -- Introduce the assumptions in the context and do another pass
         addAssumptions state fvars (saturateExtraAux (numPasses - 1) state)
     saturateExtraAux config.saturationPasses state fvars assumptions newAssumptions
