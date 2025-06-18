@@ -141,4 +141,17 @@ example (d i : ℕ) (h : i ≤ 256) : d * i / 8 ≤ d * 256 / 8 := by
   apply Nat.div_le_div_right
   scalar_tac +nonLin
 
+@[local scalar_tac a.val * b.val]
+private theorem U16_Zq_mul_in_bounds (a b : U16) (h0 : a.val < 3329) (h1 : b.val < 3329) :
+  a.val * b.val ≤ 3328 * 3328 := by
+  scalar_tac +nonLin
+
+example
+  (i1 i2 : U16)
+  (i1_post_2 : (↑i1 : ℕ) < 3329)
+  (i2_post_2 : (↑i2 : ℕ) < 3329) :
+  i1.val * i2.val ≤ U32.max
+  := by
+  scalar_tac +fastSaturate
+
 end Aeneas.Std

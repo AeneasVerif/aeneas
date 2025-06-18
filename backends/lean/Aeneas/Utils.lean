@@ -324,7 +324,7 @@ partial def repeatTac (tac : TacticM Unit) : TacticM Unit := do
   -- TODO: does this restore the state?
   catch _ => pure ()
 
-def firstTac (tacl : List (TacticM Unit)) : TacticM Unit := do
+def firstTacSolve (tacl : List (TacticM Unit)) : TacticM Unit := do
   match tacl with
   | [] => throwError "no tactic succeeded"
   | tac :: tacl =>
@@ -336,15 +336,7 @@ def firstTac (tacl : List (TacticM Unit)) : TacticM Unit := do
       -- Check that there are no remaining goals
       let gl ← Tactic.getUnsolvedGoals
       if ¬ gl.isEmpty then throwError "tactic failed"
-    catch _ => firstTac tacl
-/-    let res ← Lean.observing? do
-      tac
-      -- Check that there are no remaining goals
-      let gl ← Tactic.getUnsolvedGoals
-      if ¬ gl.isEmpty then throwError "tactic failed"
-    match res with
-    | some _ => pure ()
-    | none => firstTac tacl -/
+    catch _ => firstTacSolve tacl
 
 def isConj (e : Expr) : MetaM Bool :=
   e.consumeMData.withApp fun f args => pure (f.isConstOf ``And ∧ args.size = 2)

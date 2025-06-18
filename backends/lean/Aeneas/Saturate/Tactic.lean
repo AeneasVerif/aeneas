@@ -74,6 +74,18 @@ inductive AsmPath where
 | asm (asm : FVarId)
 | conj (dir : LeftOrRight) (p : AsmPath)
 
+def AsmPath.format (p : AsmPath) : Format :=
+  match p with
+  | .asm fvarId => f!"{Expr.fvar fvarId}"
+  | .conj .left p => f!"{p.format}.left"
+  | .conj .right p => f!"{p.format}.right"
+
+instance : ToFormat AsmPath where
+  format x := AsmPath.format x
+
+instance : ToMessageData AsmPath where
+  toMessageData x := m!"({AsmPath.format x})"
+
 structure State where
   /- The map registering which rules are still active -/
   nameToRule : NameMap Rule
@@ -458,7 +470,9 @@ def exploreArithSubterms (f : Expr) (args : Array Expr) : MetaM (Array Expr) := 
   else
     pure #[]
 
-/- Fast version of `visit`: we do not explore everything. -/
+/- Fast version of `visit`: we do not explore everything.
+   TODO: we should merge this with `visit`.
+-/
 private partial def fastVisit
   (path : Option AsmPath)
   (exploreSubterms : Expr → Array Expr → MetaM (Array Expr))
@@ -467,6 +481,8 @@ private partial def fastVisit
   (state : State)
   (e : Expr) : MetaM State := do
   trace[Saturate.explore] "Visiting {e}"
+  -- Register the current assumption, if it is a conjunct inside an assumption
+  let state := state.insertAssumption path e
   -- Match
   let state ← matchExpr preprocessThm path Std.HashSet.emptyWithCapacity state e
   -- Recurse
@@ -520,6 +536,7 @@ partial def evalSaturate {α}
   : TacticM α
   := do
   Tactic.withMainContext do
+  trace[Saturate] "Exploring goal: {← getMainGoal}"
   trace[Saturate] "sets: {sets}"
   -- Retrieve the rule sets
   let s := Saturate.Attribute.saturateAttr.ext.getState (← getEnv)
@@ -603,6 +620,8 @@ partial def evalSaturate {α}
         -- We're done
         next fvars
       else
+        trace[Saturate] "state.pmatches: {state.pmatches.toArray.map Prod.snd}"
+        trace[Saturate] "state.assumptions: {state.assumptions.toArray}"
         let oldAssumptions := state.assumptions
         let mut state := { state with assumptions, matched := Std.HashSet.emptyWithCapacity }
         -- Explore the new assumptions

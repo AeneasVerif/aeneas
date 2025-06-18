@@ -77,9 +77,15 @@ macro "nonlin_scalar_tac" pat:term : attr =>
 macro "scalar_tac" pat:term : attr =>
   `(attr|aeneas_saturate (set := $(Lean.mkIdent `Aeneas.ScalarTac)) (pattern := $pat))
 
+macro "scalar_tac" : attr =>
+  `(attr|aeneas_saturate (set := $(Lean.mkIdent `Aeneas.ScalarTac)))
+
 /-- The `nonlin_scalar_tac` attribute used to tag forward theorems for the `scalar_tac` tactics. -/
 macro "nonlin_scalar_tac" pat:term : attr =>
   `(attr|aeneas_saturate (set := $(Lean.mkIdent `Aeneas.ScalarTacNonLin)) (pattern := $pat))
+
+macro "nonlin_scalar_tac" : attr =>
+  `(attr|aeneas_saturate (set := $(Lean.mkIdent `Aeneas.ScalarTacNonLin)))
 
 -- This is useful especially in the termination proofs
 attribute [scalar_tac a.toNat] Int.toNat_eq_max
@@ -360,7 +366,7 @@ def scalarTac (config : Config) : TacticM Unit := do
             ``Nat.mod_eq_of_lt, ``Int.emod_eq_of_lt', ``Nat.pow_le_pow_right, ``Nat.pow_le_pow_left,
             ``Nat.pow_lt_pow_right, ``Nat.le_pow, ``Nat.lt_pow,
             ``Nat.div_le_div_right, ``Nat.mul_div_le, ``Nat.div_mul_le_self]
-        firstTac tacs
+        firstTacSolve tacs
       catch _ => error
     else
       error
