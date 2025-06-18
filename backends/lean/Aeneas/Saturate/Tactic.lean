@@ -112,9 +112,14 @@ def State.insertUsed (s : State) (name : Name) : State :=
 def State.insertMatch (s : State) (e : Expr) : State :=
   { s with matched := s.matched.insert e }
 
+/- Note that we shouldn't insert assumptions which contain bound variables. This should
+   be prevented by the fact that when diving into expressions containing binders, we
+   set the path to `none`. -/
 def State.insertAssumption (s : State) (path : Option AsmPath) (e : Expr) : State :=
   match path with
-  | some path => { s with assumptions := s.assumptions.insert e path }
+  | some path =>
+    -- We insert assumptions only if they do not contain bound vars
+    { s with assumptions := s.assumptions.insert e path }
   | none => s
 
 def State.new (nameToRule : NameMap Rule) (dtrees : Array (DiscrTree Rule))
@@ -342,6 +347,12 @@ def matchExpr
   (state : State) (e : Expr) :
   MetaM State := do
   trace[Saturate.explore] "Matching: {e}"
+  /- First check if the expression contains bound vars: if it does, then we don't match it -/
+  if ¬ boundVars.isEmpty then
+    let allFVars ← getFVarIds e Std.HashSet.emptyWithCapacity
+    if boundVars.any allFVars.contains then
+      trace[Saturate.explore] "Not matching the expression because it contains bound variables"
+      return state
   /- First match against the rules -/
   let state ← matchExprWithRules preprocessThm path boundVars state e
   /- Match again the partial matches -/
@@ -514,7 +525,11 @@ partial def evalSaturate {α}
       decls.foldlM (fun state (decl : LocalDecl) => do
         trace[Saturate] "Exploring local decl: {decl.userName}"
         /- We explore both the type, the expresion and the body (if there is) -/
-        let state ← visit (some (.asm decl.fvarId)) state decl.type
+        /- Note that the path is used only when exploring the type of assumptions -/
+        let path ←
+          if (← inferType decl.type).isProp then pure (some (.asm decl.fvarId))
+          else pure none
+        let state ← visit path state decl.type
         let state ← visit none state decl.toExpr
         match decl.value? with
         | none => pure state

@@ -141,11 +141,7 @@ example (d i : ℕ) (h : i ≤ 256) : d * i / 8 ≤ d * 256 / 8 := by
   apply Nat.div_le_div_right
   scalar_tac +nonLin
 
-@[local scalar_tac a.val * b.val]
-private theorem U16_Zq_mul_in_bounds (a b : U16) (h0 : a.val < 3329) (h1 : b.val < 3329) :
-  a.val * b.val ≤ 3328 * 3328 := by
-  scalar_tac +nonLin
-
+/- A bug used to make this fail -/
 example
   (i1 i2 : U16)
   (i1_post_2 : (↑i1 : ℕ) < 3329)
@@ -153,5 +149,15 @@ example
   i1.val * i2.val ≤ U32.max
   := by
   scalar_tac +fastSaturate
+
+/- This example exhibited an "unknown free variable" bug because expressions
+   containing free variables were not properly ignored. -/
+example
+  (layer : ℕ)
+  (_ : layer < 7)
+  (_ : ∀ (a b : Nat), b = a * (a + 1) → True) :
+  True
+  := by
+  scalar_tac
 
 end Aeneas.Std

@@ -334,6 +334,25 @@ theorem nat_subset_lt_iff (p : ℕ → Prop) (x y : {n : ℕ // p n}) : x < y �
 theorem nat_subset_eq_iff (p : ℕ → Prop) (x y : {n : ℕ // p n}) : x = y ↔ x.val = y.val := by
   cases x; cases y; simp
 
+/-!
+# Multiplication
+-/
+@[scalar_tac x * y]
+theorem lt_mul_lt_le (x y a b : ℕ) (h0 : x < a) (h1 : y < b) :
+  x * y ≤ (a - 1) * (b - 1) := by apply Nat.le_mul_le; omega
+
+@[scalar_tac x * y]
+theorem le_mul_lt_le (x y a b : ℕ) (h0 : x ≤ a) (h1 : y < b) :
+  x * y ≤ a * (b - 1) := by apply Nat.le_mul_le; omega
+
+@[scalar_tac x * y]
+theorem lt_mul_le_le (x y a b : ℕ) (h0 : x < a) (h1 : y ≤ b) :
+  x * y ≤ (a - 1) * b := by apply Nat.le_mul_le; omega
+
+@[scalar_tac x * y]
+theorem le_mul_le_le (x y a b : ℕ) (h0 : x ≤ a) (h1 : y ≤ b) :
+  x * y ≤ a * b := by apply Nat.le_mul_le; omega
+
 end ScalarTac
 
 end Aeneas
