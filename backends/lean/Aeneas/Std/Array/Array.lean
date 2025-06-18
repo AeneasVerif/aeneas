@@ -29,12 +29,6 @@ instance [BEq α] [LawfulBEq α] : LawfulBEq (Array α n) := SubtypeLawfulBEq _
 theorem Array.length_eq {α : Type u} {n : Usize} (a : Array α n) : a.val.length = n.val := by
   cases a; simp[*]
 
--- TODO: remove
-@[scalar_tac a.val]
-theorem Array.length_eq' {α : Type u} {n : Usize} (a : Array α n) : a.val.length = n.val ∧ n.val ≤ Usize.max := by
-  cases a; simp[*]
-  scalar_tac
-
 @[simp, scalar_tac_simps, simp_scalar_simps, simp_lists_simps]
 abbrev Array.length {α : Type u} {n : Usize} (v : Array α n) : Nat := v.val.length
 
@@ -65,8 +59,11 @@ example : Result (Array Int (Usize.ofNat 2)) := do
 @[reducible] instance {α : Type u} {n : Usize} : GetElem? (Array α n) Nat α (fun a i => i < a.val.length) where
   getElem? a i := getElem? a.val i
 
-@[simp, scalar_tac_simps] theorem Array.getElem?_Nat_eq {α : Type u} {n : Usize} (v : Array α n) (i : Nat) : v[i]? = v.val[i]? := by rfl
-@[simp, scalar_tac_simps] theorem Array.getElem!_Nat_eq {α : Type u} [Inhabited α] {n : Usize} (v : Array α n) (i : Nat) : v[i]! = v.val[i]! := by
+@[simp, scalar_tac_simps, simp_lists_simps]
+theorem Array.getElem?_Nat_eq {α : Type u} {n : Usize} (v : Array α n) (i : Nat) : v[i]? = v.val[i]? := by rfl
+
+@[simp, scalar_tac_simps, simp_lists_simps]
+theorem Array.getElem!_Nat_eq {α : Type u} [Inhabited α] {n : Usize} (v : Array α n) (i : Nat) : v[i]! = v.val[i]! := by
   simp only [instGetElem?ArrayNatLtLengthValListEqVal, List.getElem!_eq_getElem?_getD]; split <;> simp_all
   rfl
 

@@ -317,6 +317,10 @@ attribute [scalar_tac_simps] Set.Mem
 /-!
 # Subtypes
 -/
+@[scalar_tac x.val]
+theorem subtype_property {α : Sort u} (p : α → Prop) (x : Subtype p) : p x.val := by
+  cases x; trivial
+
 @[scalar_tac_simps]
 theorem nat_subset_le_iff (p : ℕ → Prop) (x y : {n : ℕ // p n}) : x ≤ y ↔ x.val ≤ y.val := by rfl
 
