@@ -230,6 +230,14 @@ theorem IScalar.bounds {ty : IScalarTy} (x : IScalar ty) :
   omega
 
 /-!
+# Neq
+-/
+
+/- We use this because several scalar_tac patterns are triggered by a precondition of the shape `a < b`. -/
+@[scalar_tac_simps]
+theorem Nat_neq_zero_iff (x : ℕ) : x ≠ 0 ↔ 0 < x := by omega
+
+/-!
 # Min, Max
 -/
 
