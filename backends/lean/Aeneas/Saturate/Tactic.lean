@@ -533,6 +533,20 @@ partial def evalSaturate {α}
   -- Explore the assumptions
   trace[Saturate] "Exploring the assumptions"
   let state := State.new s.nameToRule dtrees
+
+  let visitLocalDecl (state : State) (decl : LocalDecl) : TacticM State := do
+    trace[Saturate] "Exploring local decl: {decl.userName}"
+    /- We explore both the type, the expresion and the body (if there is) -/
+    /- Note that the path is used only when exploring the type of assumptions -/
+    let path ←
+      if (← inferType decl.type).isProp then pure (some (.asm decl.fvarId))
+      else pure none
+    let state ← visit config path state decl.type
+    let state ← visit config none state decl.toExpr
+    match decl.value? with
+    | none => pure state
+    | some value => visit config none state value
+
   let state ← do
     if exploreAssumptions then do
       let decls ←
@@ -561,13 +575,13 @@ partial def evalSaturate {α}
   /- Introduce the theorems in the context. We wrote the function in CPS on purpose (this
      helps prevent bugs where the local context is not the one we expect) -/
   trace[Saturate] "Finished exploring the goal. Matched:\n{state.matched.toList}"
-  let addAssumptions (state : State) (fvars : Array FVarId)
-    (f : Array FVarId → Std.HashMap Expr AsmPath → Std.HashMap Expr AsmPath → TacticM α) :
+  let addAssumptions (state : State) (allFVars : Array FVarId)
+    (f : Array FVarId → Array FVarId → Std.HashMap Expr AsmPath → TacticM α) :
     TacticM α := do
     let matched := state.matched.toArray
     let rec addAux (i : Nat)
-      (assumptions newAssumptions : Std.HashMap Expr AsmPath)
-      (fvars : Array FVarId) :
+      (assumptions : Std.HashMap Expr AsmPath)
+      (allFVars newFVars : Array FVarId) :
       TacticM α := do
       if i < matched.size then do
         withMainContext do
@@ -577,33 +591,34 @@ partial def evalSaturate {α}
         let thTy ← inferType th
         -- Check that we don't add the same assumption twice
         if assumptions.contains thTy then
-          addAux (i + 1) assumptions newAssumptions fvars
+          addAux (i + 1) assumptions allFVars newFVars
         else
           Utils.addDeclTac (.num (.str .anonymous "_h") i) th thTy (asLet := false)
             fun x =>
-            let fvars := fvars.push x.fvarId!
+            let allFVars := allFVars.push x.fvarId!
+            let newFVars := newFVars.push x.fvarId!
             let path := AsmPath.asm x.fvarId!
             let assumptions := assumptions.insert thTy path
-            let newAssumptions := newAssumptions.insert thTy path
-            addAux (i + 1) assumptions newAssumptions fvars
-      else f fvars assumptions newAssumptions
-    addAux 0 state.assumptions Std.HashMap.emptyWithCapacity fvars
+            addAux (i + 1) assumptions allFVars newFVars
+      else f allFVars newFVars assumptions
+    addAux 0 state.assumptions allFVars #[]
 
   -- We do this in several passes: we add the assumptions, then explore the context again to saturate, etc.
   let rec saturateExtra
     (state : State)
     (next : Array FVarId → TacticM α)
-    (fvars : Array FVarId)
-    (assumptions newAssumptions : Std.HashMap Expr AsmPath)
+    (allFVars newFVars : Array FVarId)
+    (assumptions : Std.HashMap Expr AsmPath)
     := do
     let rec saturateExtraAux
       (numPasses : Nat)
       (state : State)
-      (fvars : Array FVarId)
-      (assumptions newAssumptions : Std.HashMap Expr AsmPath) := do
+      (allFVars newFVars : Array FVarId)
+      (assumptions : Std.HashMap Expr AsmPath) := do
+      withMainContext do
       if numPasses == 0 then
         -- We're done
-        next fvars
+        next allFVars
       else
         trace[Saturate] "state.pmatches: {state.pmatches.toArray.map Prod.snd}"
         trace[Saturate] "state.assumptions: {state.assumptions.toArray}"
@@ -611,14 +626,20 @@ partial def evalSaturate {α}
         let mut state := { state with assumptions, matched := Std.HashSet.emptyWithCapacity }
         /- Explore the new assumptions by matching them against the rules and the partial matches.
            Note that we have to explore them recursively -/
-        for (assum, path) in Std.HashMap.toArray newAssumptions do
-          state ← visit config path state assum
-        -- Explore the old assumptions, but matching only against the partially matched terms
+        for fvarId in newFVars do
+          let some ldecl ← fvarId.findDecl?
+            | throwError "Internal error: could not find local declaration for an fvarId"
+          state ← visitLocalDecl state ldecl
+        /- Match the old assumptions, but only against the partially matched terms.
+           As the patterns of the partial matches are not arbitrary patterns, but only
+           patterns for preconditions, we do not need to explore them recursively.
+         -/
+        let empty := Std.HashSet.emptyWithCapacity 0
         for (assum, path) in Std.HashMap.toArray oldAssumptions do
-          state ← visit { config with matchWithRules := false } path state assum
+          state ← matchExprWithPartialMatches preprocessThm path empty state assum
         -- Introduce the assumptions in the context and do another pass
-        addAssumptions state fvars (saturateExtraAux (numPasses - 1) state)
-    saturateExtraAux config.saturationPasses state fvars assumptions newAssumptions
+        addAssumptions state allFVars (saturateExtraAux (numPasses - 1) state)
+    saturateExtraAux config.saturationPasses state allFVars newFVars assumptions
 
   --
   addAssumptions state #[] (saturateExtra state fun matched => do
