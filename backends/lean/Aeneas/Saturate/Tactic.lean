@@ -352,6 +352,7 @@ def matchExpr
 private partial def visit (config : Config)
   (path : Option AsmPath)
   (depth : Nat)
+  (exploreSubterms : Expr → Array Expr → MetaM (Array Expr))
   (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
   (boundVars : Std.HashSet FVarId)
   (state : State) (e : Expr)
@@ -372,11 +373,11 @@ private partial def visit (config : Config)
       let fvarId := x.fvarId!
       let localDecl ← fvarId.getDecl
       let boundVars := boundVars.insert fvarId
-      let state ← visit config none (depth + 1) preprocessThm boundVars state localDecl.type
+      let state ← visit config none (depth + 1) exploreSubterms preprocessThm boundVars state localDecl.type
       let state ←
         match localDecl.value? with
         | none => pure state
-        | some v => visit config none (depth + 1) preprocessThm boundVars state v
+        | some v => visit config none (depth + 1) exploreSubterms preprocessThm boundVars state v
       pure (boundVars, state)
       ) (boundVars, state)
   let e := e.consumeMData
@@ -397,41 +398,34 @@ private partial def visit (config : Config)
       -- This is a conjunction
       let some path := path
         | throwError "Unreachable"
-      let state ← visit config (some (.conj .left path)) (depth + 1) preprocessThm boundVars state (args[0]!)
-      let state ← visit config (some (.conj .right path)) (depth + 1) preprocessThm boundVars state (args[1]!)
+      let state ← visit config (some (.conj .left path)) (depth + 1) exploreSubterms preprocessThm boundVars state (args[0]!)
+      let state ← visit config (some (.conj .right path)) (depth + 1) exploreSubterms preprocessThm boundVars state (args[1]!)
       pure state
     else
-      -- Filter the args to ignore proof terms
-      let args ← args.filterM fun arg => do
-        let ty ← inferType (← inferType arg)
-        if ty.isProp then pure false
-        else pure true
-      -- Visit the args
-      let state ← args.foldlM (fun state arg =>
-        visit config none (depth + 1) preprocessThm boundVars state arg) state
-      -- Visit the app
-      visit config none (depth + 1) preprocessThm boundVars state f
+      -- Explore the subterms
+      let subterms ← exploreSubterms f args
+      subterms.foldlM (fun state => visit config none (depth + 1) exploreSubterms preprocessThm boundVars state) state
   | .lam .. =>
     trace[Saturate.explore] ".lam"
     lambdaLetTelescope e fun xs b => do
       let (boundVars, state) ← visitBinders (depth + 1) boundVars state xs
-      visit config none (depth + 1) preprocessThm boundVars state b
+      visit config none (depth + 1) exploreSubterms preprocessThm boundVars state b
   | .forallE .. => do
     trace[Saturate.explore] ".forallE"
     forallTelescope e fun xs b => do
       let (boundVars, state) ← visitBinders (depth + 1) boundVars state xs
-      visit config none (depth + 1) preprocessThm boundVars state b
+      visit config none (depth + 1) exploreSubterms preprocessThm boundVars state b
   | .letE .. => do
     trace[Saturate.explore] ".letE"
     lambdaLetTelescope e fun xs b => do
       let (boundVars, state) ← visitBinders (depth + 1) boundVars state xs
-      visit config path (depth + 1) preprocessThm boundVars state b
+      visit config path (depth + 1) exploreSubterms preprocessThm boundVars state b
   | .mdata _ b => do
     trace[Saturate.explore] ".mdata"
-    visit config path (depth + 1) preprocessThm boundVars state b
+    visit config path (depth + 1) exploreSubterms preprocessThm boundVars state b
   | .proj _ _ b => do
     trace[Saturate.explore] ".proj"
-    visit config none (depth + 1) preprocessThm boundVars state b
+    visit config none (depth + 1) exploreSubterms preprocessThm boundVars state b
 
 def arithOpArity3 : Std.HashSet Name := Std.HashSet.ofList [
   ``Nat.cast, ``Int.cast
@@ -450,6 +444,16 @@ def arithOpArity6 : Std.HashSet Name := Std.HashSet.ofList [
   ``HPow.hPow, ``HMod.hMod, ``HAdd.hAdd, ``HSub.hSub, ``HMul.hMul, ``HDiv.hDiv
 ]
 
+/- Exploration strategy: explore all the sub-terms *but* the proof terms. -/
+def exploreIgnoreProofTerms (f : Expr) (args : Array Expr) : MetaM (Array Expr) := do
+  -- Filter the args to ignore proof terms
+  let args ← args.filterM fun arg => do
+    let ty ← inferType (← inferType arg)
+    if ty.isProp then pure false
+    else pure true
+  pure (#[f] ++ args)
+
+/- Exploration strategy: focus on the arithmetic expressions -/
 def exploreArithSubterms (f : Expr) (args : Array Expr) : MetaM (Array Expr) := do
   if ¬ f.isConst then return #[]
   let constName := f.constName!
@@ -469,59 +473,6 @@ def exploreArithSubterms (f : Expr) (args : Array Expr) : MetaM (Array Expr) := 
     pure #[args[4]!, args[5]!]
   else
     pure #[]
-
-/- Fast version of `visit`: we do not explore everything.
-   TODO: we should merge this with `visit`.
--/
-private partial def fastVisit
-  (path : Option AsmPath)
-  (exploreSubterms : Expr → Array Expr → MetaM (Array Expr))
-  (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
-  (depth : Nat)
-  (state : State)
-  (e : Expr) : MetaM State := do
-  trace[Saturate.explore] "Visiting {e}"
-  -- Register the current assumption, if it is a conjunct inside an assumption
-  let state := state.insertAssumption path e
-  -- Match
-  let state ← matchExpr preprocessThm path Std.HashSet.emptyWithCapacity state e
-  -- Recurse
-  let e := e.consumeMData
-  match e with
-  | .bvar _
-  | .fvar _
-  | .mvar _
-  | .sort _
-  | .lit _
-  | .const _ _ =>
-    trace[Saturate.explore] "Stop: bvar, fvar, etc."
-    pure state
-  | .app .. => do e.withApp fun f args => do
-    trace[Saturate.explore] ".app"
-    let visitRec path := fastVisit path exploreSubterms preprocessThm (depth + 1)
-    let subterms ← exploreSubterms f args
-    /- Check if this is a conjunction and we know the path to the current sub-expression (because it is a conjunct
-       in an assumption) -/
-    if path.isSome ∧ f.isConst ∧ f.constName! == ``And ∧ subterms.size == 2 then do
-      -- This is a conjunction
-      let some path := path
-        | throwError "Unreachable"
-      let state ← visitRec (some (.conj .left path)) state subterms[0]!
-      let state ← visitRec (some (.conj .right path)) state subterms[1]!
-      pure state
-    else
-      subterms.foldlM (fun state => visitRec none state) state
-  | .lam ..
-  | .forallE ..
-  | .letE .. => do
-    -- Do not go inside the foralls, the lambdas and the let expressions
-    pure state
-  | .mdata _ b => do
-    trace[Saturate.explore] ".mdata"
-    fastVisit path exploreSubterms preprocessThm (depth + 1) state b
-  | .proj _ _ _ => do
-    trace[Saturate.explore] ".proj"
-    pure state
 
 /- The saturation tactic itself -/
 partial def evalSaturate {α}
@@ -544,10 +495,12 @@ partial def evalSaturate {α}
   -- Get the local context
   let ctx ← Lean.MonadLCtx.getLCtx
   -- Explore
-  let visit (path : Option AsmPath) state expr :=
+  let exploreSubterms :=
     match exploreSubterms with
-    | none => visit config path 0 preprocessThm Std.HashSet.emptyWithCapacity state expr
-    | some exploreSubterms => fastVisit path exploreSubterms preprocessThm 0 state expr
+    | none => exploreIgnoreProofTerms
+    | some explore => explore
+  let visit path state expr :=
+    visit config path 0 exploreSubterms preprocessThm Std.HashSet.emptyWithCapacity state expr
 
   -- Explore the assumptions
   trace[Saturate] "Exploring the assumptions"
