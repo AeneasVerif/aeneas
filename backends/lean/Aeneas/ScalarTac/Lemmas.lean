@@ -333,6 +333,9 @@ theorem nat_subset_eq_iff (p : ℕ → Prop) (x y : {n : ℕ // p n}) : x = y �
 
 /-!
 # Multiplication
+
+TODO: that's a lot of lemmas, which is probably not super efficient.
+Also, some of them are pretty ad-hoc.
 -/
 @[scalar_tac x * y]
 theorem lt_mul_lt_le (x y a b : ℕ) (h0 : x < a) (h1 : y < b) :
@@ -349,6 +352,66 @@ theorem lt_mul_le_le (x y a b : ℕ) (h0 : x < a) (h1 : y ≤ b) :
 @[scalar_tac x * y]
 theorem le_mul_le_le (x y a b : ℕ) (h0 : x ≤ a) (h1 : y ≤ b) :
   x * y ≤ a * b := by apply Nat.le_mul_le; omega
+
+@[nonlin_scalar_tac a * b]
+theorem lt_mul_lt_le' (x y a b : ℕ) (h0 : x < a) (h1 : y < b) :
+  (x + 1) * (y + 1) ≤ a * b := by apply Nat.le_mul_le; omega
+
+@[nonlin_scalar_tac a * b]
+theorem le_mul_lt_le' (x y a b : ℕ) (h0 : x ≤ a) (h1 : y < b) :
+  x * (y + 1) ≤ a * b := by apply Nat.le_mul_le; omega
+
+@[nonlin_scalar_tac a * b]
+theorem lt_mul_le_le' (x y a b : ℕ) (h0 : x < a) (h1 : y ≤ b) :
+  (x + 1) * y ≤ a * b := by apply Nat.le_mul_le; omega
+
+@[nonlin_scalar_tac a * b]
+theorem le_mul_le_le' (x y a b : ℕ) (h0 : x ≤ a) (h1 : y ≤ b) :
+  x * y ≤ a * b := by apply Nat.le_mul_le; omega
+
+@[nonlin_scalar_tac x * y]
+theorem lt_mul_le_left (x y a : ℕ) (h0 : x < a) :
+  x * y ≤ (a - 1) * y := by apply Nat.le_mul_le; omega
+
+@[nonlin_scalar_tac x * b]
+theorem lt_mul_lt_left (x a b : ℕ) (h0 : x < a) :
+  x * b + b ≤ a * b := by
+  calc
+    x * b + b = (x + 1) * b := by ring_nf
+    _ ≤ a * b := by apply Nat.le_mul_le; omega
+
+@[nonlin_scalar_tac x * y]
+theorem lt_mul_le_right (x y a : ℕ) (h0 : y < a) :
+  x * y ≤ x * (a - 1) := by apply Nat.le_mul_le; omega
+
+@[nonlin_scalar_tac a * y]
+theorem lt_mul_lt_right (y a b : ℕ) (h0 : y < b) :
+  a * y + a ≤ a * b := by
+  calc
+    a * y + a = a * (y + 1) := by ring_nf
+    _ ≤ a * b := by apply Nat.le_mul_le; omega
+
+@[nonlin_scalar_tac x * y]
+theorem le_mul_le_left (x y a : ℕ) (h0 : x ≤ a) :
+  x * y ≤ a * y := by apply Nat.le_mul_le; omega
+
+@[nonlin_scalar_tac x * y]
+theorem le_mul_le_right (x y a : ℕ) (h0 : y ≤ a) :
+  x * y ≤ x * a := by apply Nat.le_mul_le; omega
+
+example (i j n1 n2 : ℕ)
+  (hi : i < n1)
+  (hj : j < n2) :
+  i * n2 + j < n1 * n2
+  := by
+  scalar_tac +nonLin
+
+example (i j n1 n2 : ℕ)
+  (hi : i < n1)
+  (hj : j < n2) :
+  n1 * j + i < n1 * n2
+  := by
+  scalar_tac +nonLin
 
 /-!
 # Modulo
