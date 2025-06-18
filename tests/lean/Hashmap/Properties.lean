@@ -169,13 +169,7 @@ theorem allocate_slots_spec {α : Type} (slots : alloc.vec.Vec (AList α)) (n : 
     have Hslots1Nil :
       ∀ (i : Nat), i < slots1.length → slots1[i]! = Nil := by
       intro i h0
-      fsimp [*]
-      if hi : i < slots.length then
-        fsimp [*]
-      else
-        fsimp_all
-        have : i - slots.val.length = 0 := by scalar_tac
-        fsimp [*]
+      by_cases hi: i < slots.length <;> simp_lists [*]
     have Hslots1Len : alloc.vec.Vec.len slots1 + n1.val ≤ Usize.max := by
       scalar_tac
     progress as ⟨ slots2 ⟩
@@ -245,11 +239,9 @@ theorem new_with_capacity_spec
   . simp_all [HashMap.v, length]
   . fsimp [lookup]
     intro k
-    have : k.val % slots.val.length < slots.val.length := by
-      scalar_tac +nonLin
-    simp at Hnil
-    have := Hnil _ this
-    fsimp [this]
+    simp at Hnil -- TODO: this is annoying
+    simp_lists [Hnil]
+    simp -- TODO: remove
 
 @[progress]
 theorem new_spec (α : Type) :
@@ -371,7 +363,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
   progress as ⟨ hash_mod, hhm ⟩
   fsimp at hhm
   have _ : hash_mod.val < alloc.vec.Vec.length hm.slots := by
-    scalar_tac +nonLin
+    scalar_tac
   progress as ⟨ l, h_leq ⟩
   have h_slot :
     slot_s_inv_hash hm.slots.length (hash_mod_key key hm.slots.length) l.v := by
