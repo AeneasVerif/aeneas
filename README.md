@@ -105,6 +105,15 @@ to display a detailed documentation.
 >     name = "aeneas"
 >     path = "PATH_TO_AENEAS_REPO/backends/lean"
 >     ```
+>     If you don't have Aeneas cloned locally, you can specify the dependency using
+>     the GitHub repository. If you opt for this method, consider adding a specific
+>     commit hash to ensure that future updates do not break your project.
+>     ```toml
+>     [[require]]
+>     name = "aeneas"
+>     git = { url = "https://github.com/AeneasVerif/aeneas", subDir = "backends/lean" }
+>     rev = "COMMIT_HASH_HERE"
+>     ```
 
 ## Targeted Subset And Current Limitations
 
