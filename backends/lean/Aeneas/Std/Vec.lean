@@ -31,11 +31,6 @@ instance [BEq α] [LawfulBEq α] : LawfulBEq (Vec α) := SubtypeLawfulBEq _
 theorem Vec.len_ineq {α : Type u} (v : Vec α) : v.val.length ≤ Usize.max := by
   cases v; simp[*]
 
--- TODO: update scalar_tac so that we can remove this one
-@[scalar_tac v.val.length]
-theorem Vec.len_ineq' {α : Type u} (v : Vec α) : v.val.length ≤ Usize.max := by
-  cases v; simp[*]
-
 @[simp, scalar_tac_simps, simp_scalar_simps, simp_lists_simps]
 abbrev Vec.length {α : Type u} (v : Vec α) : Nat := v.val.length
 

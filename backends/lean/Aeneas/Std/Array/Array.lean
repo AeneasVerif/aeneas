@@ -35,12 +35,6 @@ theorem Array.length_eq' {α : Type u} {n : Usize} (a : Array α n) : a.val.leng
   cases a; simp[*]
   scalar_tac
 
--- TODO: remove
-@[scalar_tac a.val.length]
-theorem Array.length_eq'' {α : Type u} {n : Usize} (a : Array α n) : a.val.length = n.val ∧ n.val ≤ Usize.max := by
-  cases a; simp[*]
-  scalar_tac
-
 @[simp, scalar_tac_simps, simp_scalar_simps, simp_lists_simps]
 abbrev Array.length {α : Type u} {n : Usize} (v : Array α n) : Nat := v.val.length
 
