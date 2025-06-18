@@ -449,8 +449,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
     -- are the same, in which case we have to reason about what happens
     -- in one slot
     let k_hash_mod := k.val % hm.slots.length
-    have _ : k_hash_mod < alloc.vec.Vec.length hm.slots := by
-      scalar_tac +nonLin
+    have _ : k_hash_mod < alloc.vec.Vec.length hm.slots := by scalar_tac
     cases h_hm: k_hash_mod == hash_mod.val <;> simp_all (config := {zetaDelta := true})
 
   fsimp_all [nhm]
@@ -558,8 +557,7 @@ private theorem slots_forall_nil_imp_lookup_none (slots : Slots T) (hLen : slots
   intro key
   fsimp [Slots.lookup]
   -- TODO: simplify
-  have : key.val % slots.val.length < slots.val.length := by
-    scalar_tac +nonLin
+  have : key.val % slots.val.length < slots.val.length := by scalar_tac
   have := hEmpty (key.val % slots.val.length) (by fsimp [*])
   fsimp at *
   fsimp [*]
@@ -958,7 +956,7 @@ theorem get_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) :
   fsimp [hash_key, alloc.vec.Vec.len]
   progress as ⟨ hash_mod ⟩ -- TODO: decompose post by default
   fsimp at *
-  have : hash_mod.val < hm.slots.length := by scalar_tac +nonLin
+  have : hash_mod.val < hm.slots.length := by scalar_tac
   progress as ⟨ slot ⟩
   progress as ⟨ v ⟩
   fsimp_all [lookup]
@@ -1026,7 +1024,7 @@ theorem get_mut_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) :
   fsimp [hash_key, alloc.vec.Vec.len]
   progress as ⟨ hash_mod ⟩
   fsimp at *
-  have : hash_mod.val < hm.slots.val.length ∧ hash_mod.val < hm.slots.val.length := by scalar_tac +nonLin
+  have : hash_mod.val < hm.slots.val.length ∧ hash_mod.val < hm.slots.val.length := by scalar_tac
   progress as ⟨ slot, index_back ⟩
   have : slot_t_inv hm.slots.val.length hash_mod slot := by
     fsimp_all [inv, slots_t_inv]
@@ -1053,7 +1051,7 @@ theorem get_mut_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) :
       clear hBackSome
       intro key' hNotEq
       -- TODO: simplify
-      have : key'.val % hm.slots.val.length < hm.slots.val.length := by scalar_tac +nonLin
+      have : key'.val % hm.slots.val.length < hm.slots.val.length := by scalar_tac
       -- We need to do a case disjunction
       cases h: (key.val % hm.slots.val.length == key'.val % hm.slots.val.length) <;>
       simp_all
@@ -1091,7 +1089,7 @@ private theorem lookup_not_none_imp_len_s_pos (hm : HashMap α) (key : Usize) (h
   (hNotEmpty : 0 < hm.slots.val.length) :
   0 < hm.len_s := by
   -- TODO: simplify
-  have : key.val % hm.slots.val.length < hm.slots.val.length := by scalar_tac +nonLin
+  have : key.val % hm.slots.val.length < hm.slots.val.length := by scalar_tac
   have := List.length_getElem!_le_length_flatten hm.v (key.val % hm.slots.val.length)
   have := List.lookup_not_none_imp_length_pos (hm.slots.val[key.val % hm.slots.val.length]!).v key
   simp_all [lookup, len_s, al_v, v]
@@ -1111,8 +1109,7 @@ theorem remove_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) :
   progress as ⟨ hash_mod ⟩ -- TODO: decompose post by default
   fsimp at *
   -- TODO: simplify
-  have : hash_mod.val < hm.slots.val.length := by
-    scalar_tac +nonLin
+  have : hash_mod.val < hm.slots.val.length := by scalar_tac
   progress as ⟨ slot, index_back ⟩
   have : slot_t_inv hm.slots.val.length hash_mod slot := by
     fsimp_all [inv, slots_t_inv]
@@ -1124,7 +1121,7 @@ theorem remove_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) :
     split_conjs
     . intro key' hNotEq
       -- We need to make a case disjunction
-      have : key' % hm.slots.val.length < hm.slots.val.length := by scalar_tac +nonLin
+      have : key' % hm.slots.val.length < hm.slots.val.length := by scalar_tac
       cases h: key.val % hm.slots.val.length == key'.val % hm.slots.val.length <;>
       fsimp_all
     . -- TODO
@@ -1140,7 +1137,7 @@ theorem remove_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) :
     simp_all [lookup, al_v, HashMap.v]
     constructor
     . intro key' hNotEq
-      have : key' % hm.slots.val.length < hm.slots.val.length := by scalar_tac +nonLin
+      have : key' % hm.slots.val.length < hm.slots.val.length := by scalar_tac
       cases h: key.val % hm.slots.val.length == key'.val % hm.slots.val.length <;>
       fsimp_all
     . simp_all [List.length_flatten_set_as_int_eq]
