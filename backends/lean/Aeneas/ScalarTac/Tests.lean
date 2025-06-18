@@ -1,6 +1,6 @@
 import Aeneas.ScalarTac.Lemmas
 
-namespace Aeneas.Std
+namespace Aeneas.Std.ScalarTac.Tests
 
 /-!
 # Tests
@@ -151,4 +151,13 @@ example
   := by
   scalar_tac
 
-end Aeneas.Std
+
+def inv (x : Nat) : Prop := 0 < x ∧ x % 2 = 0
+@[scalar_tac inv x]
+theorem inv_imp (x : Nat) (h : inv x) : 0 < x ∧ x % 2 = 0 := by simp [inv] at h; assumption
+
+--example (x y : Nat) (h : inv x) : y % x < x := by
+--  scalar_tac
+
+
+end Aeneas.Std.ScalarTac.Tests
