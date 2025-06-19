@@ -859,13 +859,197 @@ let decompose_str_borrows (f : fun_decl) : fun_decl =
   in
   { f with body }
 
+(** Captures the state of a variable. It is either local to the scope,
+    or a free variable that is either used immutably, mutably, or
+    moved into the scope *)
+type captured =
+  | Local
+  | Immut
+  | Mut
+  | Move
+
+(* The captured type forms a lattice Immut < Mut < Move < Local *)
+let join_captured (x: captured) (y: captured) = match x, y with
+  | Local, _ | _, Local -> Local
+  | Move, _ | _, Move -> Move
+  | Mut, _ | _, Mut -> Mut
+  | _, _ -> Immut
+
+(* Lifting join_captured to a map from local ids to their captured
+   state *)
+let map_join_captured (m1: captured LocalId.Map.t) (m2: captured LocalId.Map.t) =
+  LocalId.Map.union (fun _ x y -> Some (join_captured x y)) m1 m2
+
+(* Update the state of place [p] in the captured map [m] *)
+let add_place (p: place) (c: captured) (m: captured LocalId.Map.t) =
+  match p.kind with
+  | PlaceLocal id -> LocalId.Map.update id (Option.map (join_captured c)) m
+  | PlaceProjection _ -> failwith "place projection not supported"
+
+(* Traverse a statement, and compute the free variables, as well
+   as how they are used. To do this, we also capture which
+   variables are local to the scope of the statement (e.g.,
+   if it is an if/then/else *)
+let compute_captured_stmt (m: captured LocalId.Map.t) (s: statement) : captured LocalId.Map.t =
+  match s.content with
+  | Assign (p, _rv) -> add_place p Mut m
+  | SetDiscriminant _ -> failwith "set_discriminant"
+  | Drop p ->
+      (* To perform a drop, we need exclusive ownership *)
+      add_place p Move m
+  | Assert _ -> failwith "assert"
+  | Call _ -> failwith "call"
+  | Abort _ -> failwith "abort"
+  | Return -> failwith "return"
+  | Break _ -> failwith "break"
+  | Continue _ -> failwith "continue"
+  | Nop -> failwith "nop"
+  | Switch _ -> failwith "switch"
+  | Loop _ -> failwith "loop"
+  | Error _ -> failwith "error"
+  | CopyNonOverlapping _ -> failwith "copy non overlapping"
+  | StorageLive _ -> failwith "storage live"
+  | StorageDead _ -> failwith "storage dead"
+  | Deinit _ -> failwith "deinit"
+
+let computed_captured_block (m: captured LocalId.Map.t) (b: block) : captured LocalId.Map.t =
+  List.fold_left (fun m s -> compute_captured_stmt m s) m b.statements
+
+(** Create a new function for statement [s], according to the state of
+    variables computed in [m] *)
+let create_captured_fun (def_id: FunDeclId.id) (dis: Disambiguator.id) (m: captured LocalId.Map.t) (_s: raw_statement) : fun_decl =
+  let default_span : Meta.span =
+    let file : Meta.file_id = { name = Local "tmp"; contents = None } in
+    let loc : Meta.loc = {line = 1; col = 0} in
+    let raw_span : Meta.raw_span = {file; beg_loc = loc; end_loc = loc} in
+    { span = raw_span; generated_from_span = None }
+  in
+
+  let default_meta (name: name) : item_meta =
+    let attr_info : Meta.attr_info = { attributes = []; inline = None; rename = None; public = true } in
+    let span = default_span in
+    let source_text = None in
+    let is_local = true in
+    let lang_item = None in
+    { name; span; source_text; attr_info; is_local; lang_item }
+  in
+
+  let default_signature : fun_sig =
+    { is_unsafe = false; generics = TypesUtils.empty_generic_params; inputs = []; output = TypesUtils.mk_unit_ty}
+  in
+
+  let create_statement (s: raw_statement) : statement =
+    { span = default_span; content = s; comments_before = [] }
+  in
+
+  (* TODO: Fix name *)
+  let name = [PeIdent ("branches", Disambiguator.zero); PeIdent ("foobar", dis)] in
+  let _m_args, _m_locals = LocalId.Map.partition (fun _ c -> c <> Local) m in
+
+  (* TODO: Handle args *)
+  let input_tys = [] in
+
+  (* TODO: Add regions *)
+  let generics = TypesUtils.empty_generic_params in
+  let item_meta = default_meta name in
+  let signature = {default_signature with inputs = input_tys; generics} in
+  let kind = TopLevelItem in
+  let is_global_initializer = None in
+  let unit_ty = TypesUtils.mk_unit_ty in
+  let unit_rvalue = Aggregate (AggregatedAdt ({ id = TTuple; generics = TypesUtils.empty_generic_args}, None, None), []) in
+  let return_local = { index = LocalId.zero; name = None; var_ty = unit_ty} in
+  let return_place = { kind = PlaceLocal LocalId.zero; ty = unit_ty } in
+
+  (* Add inputs and locals *)
+  let locals = { arg_count = 0; locals = [return_local] } in
+  let statements = [
+    create_statement (Assign (return_place, unit_rvalue));
+    create_statement Return
+  ] in
+
+  let block = { span = default_span; statements } in
+  let body : block gexpr_body = { span = default_span; locals; body = block } in
+  let body = Some body in
+  {
+    def_id;
+    item_meta;
+    signature;
+    kind;
+    is_global_initializer;
+    body;
+  }
+
+(* Add the functions [new_fs] to the declaration group that [f] belongs to *)
+let add_to_fundecl_group (crate: crate) (f: fun_decl_id) (new_fs: fun_decl_id list) : crate =
+  match new_fs with
+  (* No functions to add, this is a no-op *)
+  | [] -> crate
+  | _ ->
+    let declarations = List.map (function
+        | FunGroup decl -> FunGroup begin
+            match decl with
+            | NonRecGroup id when f = id -> RecGroup (f :: new_fs)
+            | RecGroup l when List.mem f l -> RecGroup (new_fs @ l)
+            | _ -> decl
+        end
+        | x -> x
+      ) crate.declarations in
+    {crate with declarations}
+
+
+let extract (crate: crate) (f: fun_decl) =
+  Format.printf "Initial function %s\n@." (Print.Crate.crate_fun_decl_to_string crate f);
+  match f.body with
+  | None -> crate
+  | Some body ->
+
+    let new_funs = ref [] in
+    let new_funs_ids = ref [] in
+    let new_locals = ref [] in
+    let _, gen = FunDeclId.mk_stateful_generator_starting_at_id
+      (FunDeclId.of_int (List.length (FunDeclId.Map.to_list crate.fun_decls))) in
+    let _, dis_gen = Disambiguator.fresh_stateful_generator () in
+
+    let visitor =
+      object
+        inherit [_] map_statement as super
+
+      method! visit_Switch _ s = match s with
+      | If (_o, sthen, selse) ->
+          let m1 = computed_captured_block LocalId.Map.empty sthen in
+          let m = computed_captured_block m1 selse in
+
+          let def_id = gen () in
+          let dis = dis_gen () in
+          let new_f = create_captured_fun def_id dis m (Switch s) in
+          new_funs := new_f :: !new_funs;
+          new_funs_ids := def_id :: !new_funs_ids;
+          (* TODO: Replace by Call *)
+          Switch s
+      | _ -> super#visit_Switch () s
+    end
+    in
+
+    let new_body = { body.body with statements = List.map (visitor#visit_statement ()) body.body.statements } in
+    let locals = {
+      arg_count = body.locals.arg_count;
+      locals = body.locals.locals @ List.rev !new_locals
+    } in
+    let body = Some { body with body = new_body; locals } in
+
+    let f = {f with body} in
+    let fun_decls = FunDeclId.Map.add f.def_id f crate.fun_decls in
+    let fun_decls = List.fold_left (fun fun_decls f -> FunDeclId.Map.add f.def_id f fun_decls) fun_decls !new_funs in
+    let crate = add_to_fundecl_group {crate with fun_decls} f.def_id !new_funs_ids in
+    crate
+
 let apply_passes (crate : crate) : crate =
   (* Passes that apply to the whole crate *)
   let crate = update_array_default crate in
   (* Passes that apply to individual function bodies *)
   let function_passes =
     [
-      remove_loop_breaks crate;
+      (* remove_loop_breaks crate; *)
       remove_shallow_borrows_storage_live_dead crate;
       decompose_str_borrows;
       unify_drops;
@@ -890,6 +1074,7 @@ let apply_passes (crate : crate) : crate =
       crate.fun_decls function_passes
   in
   let crate = { crate with fun_decls } in
+  let crate = List.fold_left (fun c (_, fdecl) -> extract c fdecl) crate (FunDeclId.Map.to_list (crate.fun_decls)) in
   let crate = filter_type_aliases crate in
   log#ldebug
     (lazy ("After pre-passes:\n" ^ Print.Crate.crate_to_string crate ^ "\n"));
