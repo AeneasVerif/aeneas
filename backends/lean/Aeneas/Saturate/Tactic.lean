@@ -598,7 +598,9 @@ partial def evalSaturate {α}
             let path := AsmPath.asm x.fvarId!
             let assumptions := assumptions.insert thTy path
             addAux (i + 1) assumptions allFVars newFVars
-      else f allFVars newFVars assumptions
+      else
+        trace[Saturate] "Goal after introducing the assumptions: {← getMainGoal}"
+        f allFVars newFVars assumptions
     addAux 0 state.assumptions allFVars #[]
 
   -- We do this in several passes: we add the assumptions, then explore the context again to saturate, etc.
@@ -618,7 +620,7 @@ partial def evalSaturate {α}
         -- We're done
         next allFVars
       else
-        trace[Saturate] "state.pmatches: {state.pmatches.toArray.map Prod.snd}"
+        trace[Saturate] "state.pmatches (num of partial matches: {state.pmatches.size}):\n{state.pmatches.toArray.map Prod.snd}"
         trace[Saturate] "state.assumptions: {state.assumptions.toArray}"
         let oldAssumptions := state.assumptions
         let mut state := { state with assumptions, matched := Std.HashSet.emptyWithCapacity }
