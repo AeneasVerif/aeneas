@@ -23,7 +23,7 @@ CHARON_EXE ?= $(PWD)/charon/bin/charon
 AENEAS_OPTIONS ?=
 CHARON_OPTIONS ?=
 
-# The directory thta contains the rust source files for tests.
+# The directory that contains the rust source files for tests.
 INPUTS_DIR ?= tests/src
 # The directory where to look for the .llbc files.
 LLBC_DIR ?= tests/llbc
@@ -169,7 +169,7 @@ endif
 
 # Translate the given rust file to available backends. The test runner decides
 # which backends to use and sets test-specific options.
-# Note: the tests have the fulle file name: `test-arrays.rs`, `test-loops.rs`, `test-betree`.
+# Note: the tests have the full file name: `test-arrays.rs`, `test-loops.rs`, `test-betree`.
 .PHONY: test-%
 test-%: build-dev
 	$(TEST_RUNNER_EXE) $(CHARON_EXE) $(AENEAS_EXE) $(LLBC_DIR) $(INPUTS_DIR)/"$*" $(AENEAS_OPTIONS)
