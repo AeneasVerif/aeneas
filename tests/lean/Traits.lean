@@ -14,13 +14,18 @@ structure BoolTrait (Self : Type) where
   get_bool : Self → Result Bool
   ret_true : Self → Result Bool
 
+/- [traits::BoolTrait::ret_true]:
+   Source: 'tests/src/traits.rs', lines 8:4-10:5 -/
+def BoolTrait.ret_true.default {Self : Type} (self : Self) : Result Bool :=
+  ok true
+
 /- [traits::{traits::BoolTrait for bool}::get_bool]:
    Source: 'tests/src/traits.rs', lines 14:4-16:5 -/
 def BoolTraitBool.get_bool (self : Bool) : Result Bool :=
   ok self
 
 /- [traits::{traits::BoolTrait for bool}::ret_true]:
-   Source: 'tests/src/traits.rs', lines 8:4-10:5 -/
+   Source: 'tests/src/traits.rs', lines 13:0-17:1 -/
 def BoolTraitBool.ret_true (self : Bool) : Result Bool :=
   ok true
 
@@ -49,7 +54,7 @@ def BoolTraitOption.get_bool {T : Type} (self : Option T) : Result Bool :=
   | some _ => ok true
 
 /- [traits::{traits::BoolTrait for core::option::Option<T>}#1::ret_true]:
-   Source: 'tests/src/traits.rs', lines 8:4-10:5 -/
+   Source: 'tests/src/traits.rs', lines 24:0-31:1 -/
 def BoolTraitOption.ret_true {T : Type} (self : Option T) : Result Bool :=
   ok true
 
@@ -225,6 +230,19 @@ def TestType.test
   then TestType.test.TestTraittraitsTestTypetestTestType1.test 0#u64
   else ok false
 
+/- Trait declaration: [traits::{traits::TestType<T>}#6::test::TestTrait]
+   Source: 'tests/src/traits.rs', lines 130:8-132:9 -/
+structure TestType.test.TestTrait (Self : Type) where
+  test : Self → Result Bool
+
+/- Trait implementation: [traits::{traits::TestType<T>}#6::test::{traits::{traits::TestType<T>}#6::test::TestTrait for traits::{traits::TestType<T>}#6::test::TestType1}]
+   Source: 'tests/src/traits.rs', lines 140:8-144:9 -/
+@[reducible]
+def TestType.test.TestTraittraitsTestTypetestTestType1 :
+  TestType.test.TestTrait TestType.test.TestType1 := {
+  test := TestType.test.TestTraittraitsTestTypetestTestType1.test
+}
+
 /- [traits::BoolWrapper]
    Source: 'tests/src/traits.rs', lines 152:0-152:33 -/
 @[reducible] def BoolWrapper := Bool
@@ -254,14 +272,6 @@ structure WithConstTy (Self : Type) (Self_V : Type) (Self_W : Type) (LEN :
   ToU64Inst : ToU64 Self_W
   f : Self_W → Array U8 LEN → Result Self_W
 
-/- [traits::{traits::WithConstTy<u8, u64, 32: usize> for bool}#8::LEN1]
-   Source: 'tests/src/traits.rs', lines 177:4-177:27 -/
-@[global_simps]
-def WithConstTyBoolU8U6432.LEN1_body : Result Usize := ok 12#usize
-@[global_simps, irreducible]
-def WithConstTyBoolU8U6432.LEN1 : Usize :=
-  eval_global WithConstTyBoolU8U6432.LEN1_body
-
 /- [traits::WithConstTy::LEN2]
    Source: 'tests/src/traits.rs', lines 166:4-166:27 -/
 @[global_simps]
@@ -270,6 +280,14 @@ def WithConstTy.LEN2_default_body (Self : Type) (LEN : Usize) : Result Usize :=
 @[global_simps, irreducible]
 def WithConstTy.LEN2_default (Self : Type) (LEN : Usize) : Usize :=
   eval_global (WithConstTy.LEN2_default_body Self LEN)
+
+/- [traits::{traits::WithConstTy<u8, u64, 32: usize> for bool}#8::LEN1]
+   Source: 'tests/src/traits.rs', lines 177:4-177:27 -/
+@[global_simps]
+def WithConstTyBoolU8U6432.LEN1_body : Result Usize := ok 12#usize
+@[global_simps, irreducible]
+def WithConstTyBoolU8U6432.LEN1 : Usize :=
+  eval_global WithConstTyBoolU8U6432.LEN1_body
 
 /- [traits::{traits::WithConstTy<u8, u64, 32: usize> for bool}#8::f]:
    Source: 'tests/src/traits.rs', lines 182:4-182:42 -/
@@ -558,23 +576,5 @@ def use_foo2
   Result (core.result.Result U I32)
   :=
   ok (Foo.FOO T TraitInst)
-
-/- [traits::BoolTrait::ret_true]:
-   Source: 'tests/src/traits.rs', lines 8:4-10:5 -/
-def BoolTrait.ret_true.default {Self : Type} (self : Self) : Result Bool :=
-  ok true
-
-/- Trait declaration: [traits::{traits::TestType<T>}#6::test::TestTrait]
-   Source: 'tests/src/traits.rs', lines 130:8-132:9 -/
-structure TestType.test.TestTrait (Self : Type) where
-  test : Self → Result Bool
-
-/- Trait implementation: [traits::{traits::TestType<T>}#6::test::{traits::{traits::TestType<T>}#6::test::TestTrait for traits::{traits::TestType<T>}#6::test::TestType1}]
-   Source: 'tests/src/traits.rs', lines 140:8-144:9 -/
-@[reducible]
-def TestType.test.TestTraittraitsTestTypetestTestType1 :
-  TestType.test.TestTrait TestType.test.TestType1 := {
-  test := TestType.test.TestTraittraitsTestTypetestTestType1.test
-}
 
 end traits

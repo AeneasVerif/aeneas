@@ -25,7 +25,7 @@ Definition clonehashmapFraction_clone
 .
 
 (** [hashmap::{core::clone::Clone for hashmap::Fraction}#1::clone_from]:
-    Source: '/rustc/library/core/src/clone.rs', lines 174:4-174:43 *)
+    Source: 'tests/src/hashmap.rs', lines 43:9-43:14 *)
 Definition clonehashmapFraction_clone_from
   (self : Fraction_t) (source : Fraction_t) : result Fraction_t :=
   clonehashmapFraction_clone source

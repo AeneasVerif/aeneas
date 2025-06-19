@@ -5,6 +5,13 @@ open Primitives
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
+(** [core::result::Result]
+    Source: '/rustc/library/core/src/result.rs', lines 528:0-528:21
+    Name pattern: [core::result::Result] *)
+type core_result_Result_t (t : Type0) (e : Type0) =
+| Core_result_Result_Ok : t -> core_result_Result_t t e
+| Core_result_Result_Err : e -> core_result_Result_t t e
+
 (** Trait declaration: [traits::BoolTrait]
     Source: 'tests/src/traits.rs', lines 3:0-11:1 *)
 noeq type boolTrait_t (self : Type0) = {
@@ -12,13 +19,18 @@ noeq type boolTrait_t (self : Type0) = {
   ret_true : self -> result bool;
 }
 
+(** [traits::BoolTrait::ret_true]:
+    Source: 'tests/src/traits.rs', lines 8:4-10:5 *)
+let boolTrait_ret_true_default (#self : Type0) (self1 : self) : result bool =
+  Ok true
+
 (** [traits::{traits::BoolTrait for bool}::get_bool]:
     Source: 'tests/src/traits.rs', lines 14:4-16:5 *)
 let boolTraitBool_get_bool (self : bool) : result bool =
   Ok self
 
 (** [traits::{traits::BoolTrait for bool}::ret_true]:
-    Source: 'tests/src/traits.rs', lines 8:4-10:5 *)
+    Source: 'tests/src/traits.rs', lines 13:0-17:1 *)
 let boolTraitBool_ret_true (self : bool) : result bool =
   Ok true
 
@@ -41,7 +53,7 @@ let boolTraitOption_get_bool (#t : Type0) (self : option t) : result bool =
   begin match self with | None -> Ok false | Some _ -> Ok true end
 
 (** [traits::{traits::BoolTrait for core::option::Option<T>}#1::ret_true]:
-    Source: 'tests/src/traits.rs', lines 8:4-10:5 *)
+    Source: 'tests/src/traits.rs', lines 24:0-31:1 *)
 let boolTraitOption_ret_true (#t : Type0) (self : option t) : result bool =
   Ok true
 
@@ -204,6 +216,19 @@ let testType_test
   then testType_test_TestTraittraitsTestTypetestTestType1_test 0
   else Ok false
 
+(** Trait declaration: [traits::{traits::TestType<T>}#6::test::TestTrait]
+    Source: 'tests/src/traits.rs', lines 130:8-132:9 *)
+noeq type testType_test_TestTrait_t (self : Type0) = {
+  test : self -> result bool;
+}
+
+(** Trait implementation: [traits::{traits::TestType<T>}#6::test::{traits::{traits::TestType<T>}#6::test::TestTrait for traits::{traits::TestType<T>}#6::test::TestType1}]
+    Source: 'tests/src/traits.rs', lines 140:8-144:9 *)
+let testType_test_TestTraittraitsTestTypetestTestType1 :
+  testType_test_TestTrait_t testType_test_TestType1_t = {
+  test = testType_test_TestTraittraitsTestTypetestTestType1_test;
+}
+
 (** [traits::BoolWrapper]
     Source: 'tests/src/traits.rs', lines 152:0-152:33 *)
 type boolWrapper_t = bool
@@ -233,12 +258,6 @@ noeq type withConstTy_t (self : Type0) (self_v : Type0) (self_w : Type0) (len :
   f : self_w -> array u8 len -> result self_w;
 }
 
-(** [traits::{traits::WithConstTy<u8, u64, 32: usize> for bool}#8::LEN1]
-    Source: 'tests/src/traits.rs', lines 177:4-177:27 *)
-let with_const_ty_bool_u8_u6432_len1_body : result usize = Ok 12
-let with_const_ty_bool_u8_u6432_len1 : usize =
-  eval_global with_const_ty_bool_u8_u6432_len1_body
-
 (** [traits::WithConstTy::LEN2]
     Source: 'tests/src/traits.rs', lines 166:4-166:27 *)
 let with_const_ty_len2_default_body (self : Type0) (len : usize)
@@ -246,6 +265,12 @@ let with_const_ty_len2_default_body (self : Type0) (len : usize)
   Ok 32
 let with_const_ty_len2_default (self : Type0) (len : usize) : usize =
   eval_global (with_const_ty_len2_default_body self len)
+
+(** [traits::{traits::WithConstTy<u8, u64, 32: usize> for bool}#8::LEN1]
+    Source: 'tests/src/traits.rs', lines 177:4-177:27 *)
+let with_const_ty_bool_u8_u6432_len1_body : result usize = Ok 12
+let with_const_ty_bool_u8_u6432_len1 : usize =
+  eval_global with_const_ty_bool_u8_u6432_len1_body
 
 (** [traits::{traits::WithConstTy<u8, u64, 32: usize> for bool}#8::f]:
     Source: 'tests/src/traits.rs', lines 182:4-182:42 *)
@@ -505,13 +530,6 @@ let use_wrapper_len (#t : Type0) (traitInst : trait_t t) : result usize =
     Source: 'tests/src/traits.rs', lines 328:0-331:1 *)
 type foo_t (t : Type0) (u : Type0) = { x : t; y : u; }
 
-(** [core::result::Result]
-    Source: '/rustc/library/core/src/result.rs', lines 528:0-528:21
-    Name pattern: [core::result::Result] *)
-type core_result_Result_t (t : Type0) (e : Type0) =
-| Core_result_Result_Ok : t -> core_result_Result_t t e
-| Core_result_Result_Err : e -> core_result_Result_t t e
-
 (** [traits::{traits::Foo<T, U>}#16::FOO]
     Source: 'tests/src/traits.rs', lines 334:4-334:43 *)
 let foo_foo_body (#t : Type0) (u : Type0) (traitInst : trait_t t)
@@ -536,22 +554,4 @@ let use_foo2
   result (core_result_Result_t u i32)
   =
   Ok (foo_foo t traitInst)
-
-(** [traits::BoolTrait::ret_true]:
-    Source: 'tests/src/traits.rs', lines 8:4-10:5 *)
-let boolTrait_ret_true_default (#self : Type0) (self1 : self) : result bool =
-  Ok true
-
-(** Trait declaration: [traits::{traits::TestType<T>}#6::test::TestTrait]
-    Source: 'tests/src/traits.rs', lines 130:8-132:9 *)
-noeq type testType_test_TestTrait_t (self : Type0) = {
-  test : self -> result bool;
-}
-
-(** Trait implementation: [traits::{traits::TestType<T>}#6::test::{traits::{traits::TestType<T>}#6::test::TestTrait for traits::{traits::TestType<T>}#6::test::TestType1}]
-    Source: 'tests/src/traits.rs', lines 140:8-144:9 *)
-let testType_test_TestTraittraitsTestTypetestTestType1 :
-  testType_test_TestTrait_t testType_test_TestType1_t = {
-  test = testType_test_TestTraittraitsTestTypetestTestType1_test;
-}
 
