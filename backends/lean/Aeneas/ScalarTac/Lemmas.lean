@@ -215,6 +215,12 @@ namespace ScalarTac
 
 open Std
 
+attribute [scalar_tac_simps] Prod.mk.injEq
+
+attribute [scalar_tac_simps]
+  -- Int.subNatNat is very annoying - TODO: there is probably something more general thing to do
+  Int.subNatNat_eq_coe
+
 @[scalar_tac x.val]
 theorem UScalar.bounds {ty : UScalarTy} (x : UScalar ty) :
   x.val ≤ UScalar.max ty := by
@@ -228,6 +234,8 @@ theorem IScalar.bounds {ty : IScalarTy} (x : IScalar ty) :
   simp [IScalar.max, IScalar.min]
   have := x.hBounds
   omega
+
+attribute [scalar_tac a.toNat] Int.toNat_eq_max
 
 /-!
 # Neq

@@ -1,4 +1,4 @@
-import Aeneas.Extensions
+import Aeneas.Saturate.Attribute
 open Lean Meta Meta.Simp
 
 namespace Aeneas.ScalarTac
@@ -34,22 +34,20 @@ initialize scalarTacSimprocExt : Simp.SimprocExtension ←
 # Saturation Rules Sets
 -/
 
-declare_aesop_rule_sets [Aeneas.ScalarTac, Aeneas.ScalarTacNonLin]
+syntax (name := scalar_tac) "scalar_tac" (term)? : attr
+syntax (name := scalar_tac_nonlin) "scalar_tac_nonlin" (term)? : attr
 
--- The sets of rules that `scalar_tac` should use
-open Extensions in
-initialize scalarTacRuleSets : ListDeclarationExtension Name ← do
-  mkListDeclarationExtension `scalarTacRuleSetsList
+def elabAttribute (stx : Syntax) : MetaM (Option Syntax) :=
+  withRef stx do
+    match stx with
+    | `(attr| scalar_tac $[$pat]?)
+    | `(attr| scalar_tac_nonlin $[$pat]?) => pure pat
+    | _ => Lean.Elab.throwUnsupportedSyntax
 
-def scalarTacRuleSets.get : MetaM (List Name) := do
-  pure (scalarTacRuleSets.getState (← getEnv))
+initialize scalarTacAttribute : Saturate.Attribute.SaturateAttribute ←
+  Saturate.Attribute.makeAttribute `scalar_tac_map `scalar_tac elabAttribute
 
--- Note that the changes are not persistent
-def scalarTacRuleSets.set (names : List Name) : MetaM Unit := do
-  let _ := scalarTacRuleSets.setState (← getEnv) names
-
--- Note that the changes are not persistent
-def scalarTacRuleSets.add (name : Name) : MetaM Unit := do
-  let _ := scalarTacRuleSets.modifyState (← getEnv) (fun ls => name :: ls)
+initialize scalarTacNonLinAttribute : Saturate.Attribute.SaturateAttribute ←
+  Saturate.Attribute.makeAttribute `scalar_tac_nonlin_map `scalar_tac_nonlin elabAttribute
 
 end Aeneas.ScalarTac
