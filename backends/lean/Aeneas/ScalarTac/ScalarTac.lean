@@ -56,40 +56,6 @@ namespace ScalarTac
 open Utils
 open Lean Lean.Elab Lean.Meta Lean.Elab.Tactic
 
-/-
--- DEPRECATED: `scalar_tac` used to rely on `aesop`. As there are performance issues
--- with the saturation tactic for now we use our own tactic. We will revert once the performance
--- is improved.
-
-/- Defining a custom attribute for Aesop - we use the Aesop tactic in the arithmetic tactics -/
-attribute [aesop (rule_sets := [Aeneas.ScalarTac]) unfold norm] Function.comp
-
-/-- The `scalar_tac` attribute used to tag forward theorems for the `scalar_tac` tactic. -/
-macro "scalar_tac" pat:term : attr =>
-  `(attr|aesop safe forward (rule_sets := [$(Lean.mkIdent `Aeneas.ScalarTac):ident]) (pattern := $pat))
-
-/-- The `nonlin_scalar_tac` attribute used to tag forward theorems for the `scalar_tac` tactics. -/
-macro "nonlin_scalar_tac" pat:term : attr =>
-  `(attr|aesop safe forward (rule_sets := [$(Lean.mkIdent `Aeneas.ScalarTacNonLin):ident]) (pattern := $pat))
--/
-
-/-- The `scalar_tac` attribute used to tag forward theorems for the `scalar_tac` tactics. -/
-macro "scalar_tac" pat:term : attr =>
-  `(attr|aeneas_saturate (set := $(Lean.mkIdent `Aeneas.ScalarTac)) (pattern := $pat))
-
-macro "scalar_tac" : attr =>
-  `(attr|aeneas_saturate (set := $(Lean.mkIdent `Aeneas.ScalarTac)))
-
-/-- The `nonlin_scalar_tac` attribute used to tag forward theorems for the `scalar_tac` tactics. -/
-macro "nonlin_scalar_tac" pat:term : attr =>
-  `(attr|aeneas_saturate (set := $(Lean.mkIdent `Aeneas.ScalarTacNonLin)) (pattern := $pat))
-
-macro "nonlin_scalar_tac" : attr =>
-  `(attr|aeneas_saturate (set := $(Lean.mkIdent `Aeneas.ScalarTacNonLin)))
-
--- This is useful especially in the termination proofs
-attribute [scalar_tac a.toNat] Int.toNat_eq_max
-
 /- Check if a proposition is a linear integer proposition.
    We notably use this to check the goals: this is useful to filter goals that
    are unlikely to be solvable with arithmetic tactics. -/
@@ -183,23 +149,21 @@ def scalarTacSaturateForward {α} (config : SaturateConfig) (f : Array FVarId �
   -- We always use the rule set `Aeneas.ScalarTac`, but also need to add other rule sets locally
   -- activated by the user. The `Aeneas.ScalarTacNonLin` rule set has a special treatment as
   -- it is activated through an option.
-  let ruleSets :=
-    let ruleSets := `Aeneas.ScalarTac :: (← scalarTacRuleSets.get)
-    if config.nonLin then `Aeneas.ScalarTacNonLin :: ruleSets
-    else ruleSets
-  -- TODO
-  -- evalAesopSaturate options ruleSets.toArray
-  Saturate.evalSaturate { visitProofTerms := false, visitBoundExpressions := config.saturateVisitBoundExpressions } ruleSets none none
+  let rules :=
+    if config.nonLin then #[scalarTacAttribute, scalarTacNonLinAttribute]
+    else #[scalarTacAttribute]
+  Saturate.evalSaturate
+    { visitProofTerms := false, visitBoundExpressions := config.saturateVisitBoundExpressions }
+    rules none none
     (declsToExplore := none)
     (exploreAssumptions := config.saturateAssumptions)
     (exploreTarget := config.saturateTarget) f
+
 
 -- For debugging
 elab "scalar_tac_saturate" config:Parser.Tactic.optConfig : tactic => do
   let config ← elabConfig config
   let _ ← scalarTacSaturateForward config.toSaturateConfig (fun _ => pure ())
-
-attribute [scalar_tac_simps] Prod.mk.injEq
 
 def getSimpArgs : CoreM SimpArgs := do
   pure {
@@ -220,10 +184,6 @@ def getSimpThmNames : CoreM (Array Name) := do
       | .decl declName _ _ => some declName
       | _ => none).toArray
   pure names.flatten
-
-attribute [scalar_tac_simps]
-  -- Int.subNatNat is very annoying - TODO: there is probably something more general thing to do
-  Int.subNatNat_eq_coe
 
 /- Sometimes `simp at *` doesn't work in the presence of dependent types. However, simplifying
    the assumptions *does* work, hence this peculiar way of simplifying the context. -/

@@ -215,6 +215,12 @@ namespace ScalarTac
 
 open Std
 
+attribute [scalar_tac_simps] Prod.mk.injEq
+
+attribute [scalar_tac_simps]
+  -- Int.subNatNat is very annoying - TODO: there is probably something more general thing to do
+  Int.subNatNat_eq_coe
+
 @[scalar_tac x.val]
 theorem UScalar.bounds {ty : UScalarTy} (x : UScalar ty) :
   x.val ≤ UScalar.max ty := by
@@ -228,6 +234,8 @@ theorem IScalar.bounds {ty : IScalarTy} (x : IScalar ty) :
   simp [IScalar.max, IScalar.min]
   have := x.hBounds
   omega
+
+attribute [scalar_tac a.toNat] Int.toNat_eq_max
 
 /-!
 # Neq
@@ -361,49 +369,49 @@ theorem lt_mul_le_le (x y a b : ℕ) (h0 : x < a) (h1 : y ≤ b) :
 theorem le_mul_le_le (x y a b : ℕ) (h0 : x ≤ a) (h1 : y ≤ b) :
   x * y ≤ a * b := by apply Nat.le_mul_le; omega
 
-@[nonlin_scalar_tac a * b]
+@[scalar_tac_nonlin a * b]
 theorem lt_mul_lt_le' (x y a b : ℕ) (h0 : x < a) (h1 : y < b) :
   (x + 1) * (y + 1) ≤ a * b := by apply Nat.le_mul_le; omega
 
-@[nonlin_scalar_tac a * b]
+@[scalar_tac_nonlin a * b]
 theorem le_mul_lt_le' (x y a b : ℕ) (h0 : x ≤ a) (h1 : y < b) :
   x * (y + 1) ≤ a * b := by apply Nat.le_mul_le; omega
 
-@[nonlin_scalar_tac a * b]
+@[scalar_tac_nonlin a * b]
 theorem lt_mul_le_le' (x y a b : ℕ) (h0 : x < a) (h1 : y ≤ b) :
   (x + 1) * y ≤ a * b := by apply Nat.le_mul_le; omega
 
-@[nonlin_scalar_tac a * b]
+@[scalar_tac_nonlin a * b]
 theorem le_mul_le_le' (x y a b : ℕ) (h0 : x ≤ a) (h1 : y ≤ b) :
   x * y ≤ a * b := by apply Nat.le_mul_le; omega
 
-@[nonlin_scalar_tac x * y]
+@[scalar_tac_nonlin x * y]
 theorem lt_mul_le_left (x y a : ℕ) (h0 : x < a) :
   x * y ≤ (a - 1) * y := by apply Nat.le_mul_le; omega
 
-@[nonlin_scalar_tac x * b]
+@[scalar_tac_nonlin x * b]
 theorem lt_mul_lt_left (x a b : ℕ) (h0 : x < a) :
   x * b + b ≤ a * b := by
   calc
     x * b + b = (x + 1) * b := by ring_nf
     _ ≤ a * b := by apply Nat.le_mul_le; omega
 
-@[nonlin_scalar_tac x * y]
+@[scalar_tac_nonlin x * y]
 theorem lt_mul_le_right (x y a : ℕ) (h0 : y < a) :
   x * y ≤ x * (a - 1) := by apply Nat.le_mul_le; omega
 
-@[nonlin_scalar_tac a * y]
+@[scalar_tac_nonlin a * y]
 theorem lt_mul_lt_right (y a b : ℕ) (h0 : y < b) :
   a * y + a ≤ a * b := by
   calc
     a * y + a = a * (y + 1) := by ring_nf
     _ ≤ a * b := by apply Nat.le_mul_le; omega
 
-@[nonlin_scalar_tac x * y]
+@[scalar_tac_nonlin x * y]
 theorem le_mul_le_left (x y a : ℕ) (h0 : x ≤ a) :
   x * y ≤ a * y := by apply Nat.le_mul_le; omega
 
-@[nonlin_scalar_tac x * y]
+@[scalar_tac_nonlin x * y]
 theorem le_mul_le_right (x y a : ℕ) (h0 : y ≤ a) :
   x * y ≤ x * a := by apply Nat.le_mul_le; omega
 

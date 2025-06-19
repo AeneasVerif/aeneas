@@ -93,10 +93,8 @@ instance : ToMessageData AsmPath where
   toMessageData x := m!"({AsmPath.format x})"
 
 structure State where
-  /- The map registering which rules are still active -/
-  nameToRule : NameMap Rule
-  /- The registered rules -/
-  dtrees : Array (DiscrTree Rule)
+  /- The sets of rules -/
+  rules : Array Rules
   /- The partial matches -/
   pmatches : DiscrTree PartialMatch
   /- Diagnostic information for debugging -/
@@ -128,12 +126,13 @@ def State.insertAssumption (s : State) (path : Option AsmPath) (e : Expr) : Stat
     { s with assumptions := s.assumptions.insert e path }
   | none => s
 
-def State.new (nameToRule : NameMap Rule) (dtrees : Array (DiscrTree Rule))
+def State.new
+  (rules : Array Rules)
   (pmatches : DiscrTree PartialMatch := DiscrTree.empty)
   (diagnostics : Diagnostics := Diagnostics.empty)
   (matched : Std.HashSet Expr := Std.HashSet.emptyWithCapacity)
   (assumptions : Std.HashMap Expr AsmPath := Std.HashMap.emptyWithCapacity) : State :=
-  { nameToRule, dtrees, pmatches, diagnostics, matched, assumptions }
+  { rules, pmatches, diagnostics, matched, assumptions }
 
 def mkExprFromPath (path : AsmPath) : MetaM Expr := do
   match path with
@@ -236,15 +235,15 @@ def matchExprWithRules
   (state : State) (e : Expr) :
   MetaM State := do
   let mut state := state
-  for dtree in state.dtrees do
-    let exprs ← dtree.getMatch e
+  for rules in state.rules do
+    let exprs ← rules.rules.getMatch e
     state := state.insertHitRules exprs
     trace[Saturate.explore] "Potential matches: {exprs}"
     -- Check each expression
     for rule in exprs do
       trace[Saturate.explore] "Checking potential match: {rule}"
       -- Check if the theorem is still active
-      let some activeRule := state.nameToRule.find? rule.thName
+      let some activeRule := rules.nameToRule.find? rule.thName
         | trace[Saturate.explore] "The rule is not active"; continue
       -- Check that the patterns are the same - we uniquely identify them with their source information
       unless activeRule.src == rule.src do
@@ -500,7 +499,7 @@ def exploreArithSubterms (f : Expr) (args : Array Expr) : MetaM (Array Expr) := 
 /- The saturation tactic itself -/
 partial def evalSaturate {α}
   (config : Config)
-  (sets : List Name)
+  (satAttr : Array SaturateAttribute)
   (exploreSubterms : Option (Expr → Array Expr → MetaM (Array Expr)) := none)
   (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
   (declsToExplore : Option (Array FVarId) := none)
@@ -511,10 +510,9 @@ partial def evalSaturate {α}
   := do
   Tactic.withMainContext do
   trace[Saturate] "Exploring goal: {← getMainGoal}"
-  trace[Saturate] "sets: {sets}"
   -- Retrieve the rule sets
-  let s := Saturate.Attribute.saturateAttr.ext.getState (← getEnv)
-  let dtrees := Array.mk (sets.filterMap (fun set => s.rules.find? set))
+  let env ← getEnv
+  let s := satAttr.map fun s => s.ext.getState env
   -- Get the local context
   let ctx ← Lean.MonadLCtx.getLCtx
   -- Explore
@@ -532,7 +530,7 @@ partial def evalSaturate {α}
 
   -- Explore the assumptions
   trace[Saturate] "Exploring the assumptions"
-  let state := State.new s.nameToRule dtrees
+  let state := State.new s
 
   let visitLocalDecl (state : State) (decl : LocalDecl) : TacticM State := do
     trace[Saturate] "Exploring local decl: {decl.userName}"
@@ -651,20 +649,20 @@ partial def evalSaturate {α}
     next matched)
 
 elab "aeneas_saturate" : tactic => do
-  let _ ← evalSaturate {} [`Aeneas.ScalarTac] none none
+  let _ ← evalSaturate {} #[saturateAttr] none none
     (declsToExplore := none)
     (exploreAssumptions := true)
     (exploreTarget := true) (fun _ => pure ())
 
 namespace Test
   local elab "aeneas_saturate_test" : tactic => do
-    let _ ← evalSaturate {} [`Aeneas.Test] none none
+    let _ ← evalSaturate {} #[saturateAttr] none none
       (declsToExplore := none)
       (exploreAssumptions := true)
       (exploreTarget := true) (fun _ => pure ())
 
   set_option trace.Saturate.attribute false in
-  @[local aeneas_saturate (set := Aeneas.Test) (pattern := l.length)]
+  @[aeneas_saturate l.length] -- TODO: local doesn't work here
   theorem rule1 (α : Type u) (l : List α) : l.length ≥ 0 := by simp
 
 /-
@@ -703,7 +701,7 @@ let _g := fun l => l.length + l5.length;
 
   namespace Test
     set_option trace.Saturate.attribute false
-    @[local aeneas_saturate (set := Aeneas.Test) (pattern := l.length)]
+    @[local aeneas_saturate l.length]
     theorem rule2 (α : Type u) (l : List α) : 0 ≤ l.length := by simp
 
     /--
@@ -816,7 +814,7 @@ let _g := fun l => l.length + l5.length;
     simp [Nat.add_assoc]
 
   /- Testing patterns which are propositions -/
-  @[aeneas_saturate (set := Aeneas.Test) (pattern := x < y)]
+  @[aeneas_saturate x < y]
   theorem rule2 (x y : Nat) : x < y ↔ y > x := by omega
 
   set_option trace.Saturate.attribute true in
@@ -832,7 +830,7 @@ let _g := fun l => l.length + l5.length;
     assumption
 
   set_option trace.Saturate.attribute true in
-  @[aeneas_saturate (set := Aeneas.Test) (pattern := x * y)] -- TODO: why does adding `local` make the saturation below fail?
+  @[aeneas_saturate x * y] -- TODO: why does adding `local` make the saturation below fail?
   theorem rule3 (x y a b : Nat) (h0 : a ≤ x) (h1 : b ≤ y) : a * b ≤ x * y := by
     exact Nat.mul_le_mul h0 h1
 

@@ -19,15 +19,14 @@ initialize registerTraceClass `Saturate.diagnostics
 namespace Attribute
 
 structure Key where
-  setName : Name
   discrTreeKey : DiscrTreeKey
   deriving Inhabited
 
 instance : ToFormat Key where
-  format k := f!"({k.setName}, {k.discrTreeKey})"
+  format k := f!"({k.discrTreeKey})"
 
 instance : ToMessageData Key where
-  toMessageData k := m!"({k.setName}, {k.discrTreeKey})"
+  toMessageData k := m!"({k.discrTreeKey})"
 
 structure Pattern where
   pattern : Expr
@@ -108,10 +107,10 @@ instance : ToMessageData Rule where
 -/
 structure Rules where
   nameToRule : NameMap Rule
-  rules : NameMap (DiscrTree Rule)
+  rules : DiscrTree Rule
   deriving Inhabited
 
-def Rules.empty : Rules := ⟨ RBMap.empty, RBMap.empty ⟩
+def Rules.empty : Rules := ⟨ RBMap.empty, DiscrTree.empty ⟩
 
 abbrev Extension :=
   SimpleScopedEnvExtension (Key × Rule) Rules
@@ -121,12 +120,7 @@ private def Rules.insert (s : Rules) (kv : Key × Rule) : Rules :=
   let ⟨ k, v ⟩ := kv
   let nameToRule := nameToRule.insert v.thName v
   -- Update the discrimination tree
-  let dtree :=
-    match rules.find? k.setName with
-    | none => DiscrTree.empty
-    | some dtree => dtree
-  let dtree := dtree.insertCore k.discrTreeKey v
-  let rules := rules.insert k.setName dtree
+  let rules := rules.insertCore k.discrTreeKey v
   --
   { nameToRule, rules }
 
@@ -154,21 +148,11 @@ structure SaturateAttribute where
   ext : Extension
   deriving Inhabited
 
--- The ident is the name of the saturation set, the term is the pattern.
--- If `allow_loose` is specified, we allow not instantiating all the variables.
-syntax (name := aeneas_saturate) "aeneas_saturate" "(" &"set" " := " ident ")" (" (" &"pattern" " := " term ")")? : attr
-
-def elabSaturateAttribute (stx : Syntax) : MetaM (Name × Option Syntax) :=
-  withRef stx do
-    match stx with
-    | `(attr| aeneas_saturate (set := $set) $[(pattern := $pat)]?) => do
-      pure (set.getId, pat)
-    | _ => throwUnsupportedSyntax
-
-initialize saturateAttr : SaturateAttribute ← do
-  let ext ← mkExtension `aeneas_saturate_map
+def makeAttribute (mapName attributeName : Name) (elabAttribute : Syntax → MetaM (Option Syntax)) :
+  IO SaturateAttribute := do
+  let ext ← mkExtension mapName
   let attrImpl : AttributeImpl := {
-    name := `aeneas_saturate
+    name := attributeName
     descr := "Saturation attribute to automatically introduce lemmas in the context"
     add := fun thName stx attrKind => do
       trace[Saturate.attribute] "Theorem: {thName}"
@@ -202,8 +186,8 @@ initialize saturateAttr : SaturateAttribute ← do
           let numFVars := fvars.size
           -- Elaborate the pattern
           trace[Saturate.attribute] "Syntax: {stx}"
-          let (setName, pat) ← elabSaturateAttribute stx
-          trace[Saturate.attribute] "Syntax: setName: {setName}, pat: {pat}"
+          let pat ← elabAttribute stx
+          trace[Saturate.attribute] "Syntpat: {pat}"
           /- Elaborate the user-provided pattern, if there is one.
              We also collect the set of free variables covered by this pattern.
              We then go through the remaining free variables in reverse order (the reason
@@ -293,7 +277,7 @@ initialize saturateAttr : SaturateAttribute ← do
             let key ← DiscrTree.mkPath patWithMetas
             trace[Saturate.attribute] "key: {key}"
             --
-            let key : Key := ⟨ setName, key ⟩
+            let key : Key := ⟨ key ⟩
             let rule : Rule := ⟨ src, numFVars, patterns, thName ⟩
             pure (key, rule)
           else throwError "Unreachable: there should be at least one pattern"
@@ -308,25 +292,36 @@ initialize saturateAttr : SaturateAttribute ← do
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl, ext := ext }
 
-def SaturateAttribute.find? (s : SaturateAttribute) (setName : Name) (e : Expr) :
+
+-- The ident is the name of the saturation set, the term is the pattern.
+-- If `allow_loose` is specified, we allow not instantiating all the variables.
+syntax (name := aeneas_saturate) "aeneas_saturate" (term)? : attr
+
+def elabSaturateAttribute (stx : Syntax) : MetaM (Option Syntax) :=
+  withRef stx do
+    match stx with
+    | `(attr| aeneas_saturate $[$pat]?) => do pure pat
+    | _ => throwUnsupportedSyntax
+
+initialize saturateAttr : SaturateAttribute ← do
+  makeAttribute `aeneas_saturate_map `aeneas_saturate elabSaturateAttribute
+
+def SaturateAttribute.find? (s : SaturateAttribute) (e : Expr) :
   MetaM (Array Rule) := do
   let s := s.ext.getState (← getEnv)
-  match s.rules.find? setName with
-  | none => pure #[]
-  | some dTree =>
-    let rules ← dTree.getMatch e
-    /- Only keep the rules (remove the partial matches - note that there shouldn't be any actually)
-       and filter the rules which have been deactivated -/
-    pure (rules.filter fun r => s.nameToRule.contains r.thName)
+  let rules ← s.rules.getMatch e
+  /- Only keep the rules (remove the partial matches - note that there shouldn't be any actually)
+      and filter the rules which have been deactivated -/
+  pure (rules.filter fun r => s.nameToRule.contains r.thName)
 
 def SaturateAttribute.getState (s : SaturateAttribute) : MetaM Rules := do
   pure (s.ext.getState (← getEnv))
 
-def showStoredSaturateAttribute : MetaM Unit := do
-  let st ← saturateAttr.getState
+def SaturateAttribute.showStored (s : SaturateAttribute) : MetaM Unit := do
+  let st ← s.getState
   IO.println f!"nameToRule: {st.nameToRule.toList}"
   IO.println f!""
-  IO.println f!"rules: {st.rules.toList}"
+  IO.println f!"rules: {st.rules}"
 
 end Attribute
 
