@@ -72,7 +72,7 @@ structure CondSimpArgs where
   hypsToUse : Array FVarId := #[]
 
 def condSimpTacSimp (config : Simp.Config) (args : CondSimpArgs) (loc : Utils.Location)
-  (additionalAsms : Array FVarId := #[]) (dischWithScalarTac : Bool) : TacticM Unit := do
+  (additionalAsms : Array FVarId := #[]) (dischWithScalarTac : Bool) : TacticM (Option (Array FVarId)) := do
   withMainContext do
   let simpArgs : Simp.SimpArgs :=
     {simpThms := args.simpThms,
@@ -85,11 +85,11 @@ def condSimpTacSimp (config : Simp.Config) (args : CondSimpArgs) (loc : Utils.Lo
        already saturated by looking at the assumptions (we do this once and for all beforehand) -/
     let (ref, d) ← tacticToDischarge (← `(tactic|scalar_tac -saturateAssumptions))
     let dischargeWrapper := Lean.Elab.Tactic.Simp.DischargeWrapper.custom ref d
-    let _ ← dischargeWrapper.with fun discharge? => do
+    dischargeWrapper.with fun discharge? => do
       -- Initialize the simp context
       let (ctx, simprocs) ← Simp.mkSimpCtx true config .simp simpArgs
       -- Apply the simplifier
-      let _ ← Simp.customSimpLocation ctx simprocs discharge? loc
+      pure ((← Simp.customSimpLocation ctx simprocs discharge? loc).fst)
   else
     Simp.simpAt true config simpArgs loc
 
@@ -108,12 +108,9 @@ def condSimpTac
     | .wildcard => pure none
     | .wildcard_dep => throwError "{tacName} does not support using location `Utils.Location.wildcard_dep`"
     | .targets hyps _ => pure (some hyps)
-  let getOtherAsms (ignore : Std.HashSet FVarId) : TacticM (Array FVarId) :=
-    Utils.refreshFVarIds Std.HashSet.emptyWithCapacity ignore
   /- First duplicate the propositions in the context: we will need the original ones (which mention
      integers rather than bit-vectors) for `scalar_tac` to succeed when doing the conditional rewritings. -/
   let (oldAsms, newAsms) ← Utils.duplicateAssumptions toDuplicate
-  let oldAsmsSet := Std.HashSet.ofArray oldAsms
   trace[CondSimpTac] "Goal after duplicating the assumptions: {← getMainGoal}"
   /- Introduce the scalar_tac assumptions - by doing this beforehand we don't have to
      redo it every time we call `scalar_tac`. TODO: also do the `simp_all`. -/
@@ -124,23 +121,27 @@ def condSimpTac
   let additionalSimpThms ← addSimpThms
   trace[CondSimpTac] "Goal after adding the additional simp assumptions: {← getMainGoal}"
   /- Simplify the targets (note that we preserve the new assumptions for `scalar_tac`) -/
-  let (loc, notLocAsms) ← do
+  let loc ← do
     match loc with
-    | .wildcard => pure (Utils.Location.targets oldAsms true, ← getOtherAsms oldAsmsSet)
+    | .wildcard => pure (Utils.Location.targets oldAsms true)
     | .wildcard_dep => throwError "Unreachable"
-    | .targets hyps type => pure (Utils.Location.targets hyps type, ← getOtherAsms (Std.HashSet.ofArray hyps))
-  if doFirstSimp then
-    condSimpTacSimp simpConfig args loc additionalSimpThms false
-    if (← getUnsolvedGoals) == [] then return
+    | .targets hyps type => pure (Utils.Location.targets hyps type)
+  let nloc ←
+    if doFirstSimp then
+      match ← condSimpTacSimp simpConfig args loc additionalSimpThms false with
+      | none => return
+      | some freshFvarIds =>
+        match loc with
+        | .wildcard => pure (Utils.Location.targets freshFvarIds true)
+        | .wildcard_dep => throwError "Unreachable"
+        | .targets _ type => pure (Utils.Location.targets freshFvarIds type)
+    else pure loc
   trace[CondSimpTac] "Goal after simplifying: {← getMainGoal}"
-  /- Simplify the targets by using `scalar_tac` as a discharger -/
-  let notLocAsmsSet := Std.HashSet.ofArray notLocAsms
-  let nloc ← do
-    match loc with
-    | .wildcard => pure (Utils.Location.targets (← Utils.refreshFVarIds oldAsmsSet notLocAsmsSet) true)
-    | .wildcard_dep => throwError "Unreachable"
-    | .targets hyps type => pure (Utils.Location.targets (← Utils.refreshFVarIds (Std.HashSet.ofArray hyps) notLocAsmsSet) type)
-  condSimpTacSimp simpConfig args nloc additionalSimpThms true
+  /- Simplify the targets by using `scalar_tac` as a discharger.
+     TODO: scalar_tac should only be allowed to preprocess `scalarTacAsms`.
+     TODO: we should preprocess those.
+   -/
+  let _ ← condSimpTacSimp simpConfig args nloc additionalSimpThms true
   if (← getUnsolvedGoals) == [] then return
   /- Clear the additional assumptions -/
   Utils.clearFVarIds scalarTacAsms

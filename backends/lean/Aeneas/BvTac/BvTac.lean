@@ -55,26 +55,26 @@ partial def bvTacPreprocess (config : Config) (n : Option Expr): TacticM Unit :=
   /- First try simplifying the goal - if it is an (in-)equality between scalars, it may get
      the bitwidth to use for the bit-vectors might be obvious from the goal: we marked some
      theorems wiht `bvify_simps` for this reason. -/
-  Bvify.bvifyTacSimp (Utils.Location.targets #[] true)
+  let r ← Bvify.bvifyTacSimp (Utils.Location.targets #[] true)
+  if r.isNone then return
   /- The simp call above may have proven the goal (unlikely, but we have to take this
      into account) -/
-  allGoals do
-    trace[BvTac] "Goal after `bvifyTacSimp`: {← getMainGoal}"
-    /- Figure out the bitwidth if the user didn't provide it -/
-    let n ← do
-      match n with
-      | some n => pure n
-      | none => getn
-    /- Then apply bvify -/
-    bvifyTac config.toConfig n Utils.Location.wildcard
-    trace[BvTac] "Goal after `bvifyTac`: {← getMainGoal}"
-    /- Call `simp_all ` to normalize the goal a bit -/
-    let simpLemmas ← bvifySimpExt.getTheorems
-    let simprocs ← bvifySimprocExt.getSimprocs
-    Simp.simpAll {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 0} true
-                  {simprocs := #[simprocs], simpThms := #[simpLemmas]}
-    allGoals do
-    trace[BvTac] "Goal after `simp_all`: {← getMainGoal}"
+  trace[BvTac] "Goal after `bvifyTacSimp`: {← getMainGoal}"
+  /- Figure out the bitwidth if the user didn't provide it -/
+  let n ← do
+    match n with
+    | some n => pure n
+    | none => getn
+  /- Then apply bvify -/
+  bvifyTac config.toConfig n Utils.Location.wildcard
+  trace[BvTac] "Goal after `bvifyTac`: {← getMainGoal}"
+  /- Call `simp_all ` to normalize the goal a bit -/
+  let simpLemmas ← bvifySimpExt.getTheorems
+  let simprocs ← bvifySimprocExt.getSimprocs
+  Simp.simpAll {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 0} true
+                {simprocs := #[simprocs], simpThms := #[simpLemmas]}
+  -- The simpAll may have solved the goal, so we need to be careful
+  allGoals do trace[BvTac] "Goal after `simp_all`: {← getMainGoal}"
 
 elab "bv_tac_preprocess" config:Parser.Tactic.optConfig n:(colGt term)? : tactic => do
   bvTacPreprocess (← elabConfig config) (← optElabTerm n)

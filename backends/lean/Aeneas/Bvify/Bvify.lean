@@ -280,7 +280,7 @@ def bvifyAddSimpThms (n : Expr) : TacticM (Array FVarId) := do
 
 def bvifySimpConfig : Simp.Config := {maxDischargeDepth := 2, failIfUnchanged := false}
 
-def bvifyTacSimp (loc : Utils.Location) : TacticM Unit := do
+def bvifyTacSimp (loc : Utils.Location) : TacticM (Option (Array FVarId)) := do
   let args : ScalarTac.CondSimpArgs := {
       simpThms := #[← bvifySimpExt.getTheorems, ← SimpBoolProp.simpBoolPropSimpExt.getTheorems]
       simprocs := #[← bvifySimprocExt.getSimprocs, ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs]

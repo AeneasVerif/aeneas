@@ -198,7 +198,7 @@ def simpAsmsTarget (simpOnly : Bool) (config : Simp.Config) (args : Simp.SimpArg
   let decls ← lctx.getDecls
   let props ← decls.filterM (fun d => do pure (← inferType d.type).isProp)
   let props := (props.map fun d => d.fvarId).toArray
-  Aeneas.Simp.simpAt simpOnly config args (.targets props true)
+  let _ ← Aeneas.Simp.simpAt simpOnly config args (.targets props true)
 
 /-  Boosting a bit the `omega` tac. -/
 def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
@@ -241,7 +241,7 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
     return
   trace[ScalarTac] "Goal after simpAll: {← getMainGoal}"
   -- Call `simp` again, this time to inline the let-bindings (otherwise, omega doesn't always manage to deal with them)
-  Simp.simpAt true {zetaDelta := true, failIfUnchanged := false, maxDischargeDepth := 1} simpArgs .wildcard
+  let _ ← Simp.simpAt true {zetaDelta := true, failIfUnchanged := false, maxDischargeDepth := 1} simpArgs .wildcard
   -- We might have proven the goal
   if (← getGoals).isEmpty then
     trace[ScalarTac] "Goal proven by preprocessing!"
@@ -255,7 +255,7 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
     return
   trace[ScalarTac] "Goal after normCast: {← getMainGoal}"
   -- Call `simp` again because `normCast` sometimes does weird things
-  Simp.simpAt true {failIfUnchanged := false, maxDischargeDepth := 1} simpArgs .wildcard
+  let _ ← Simp.simpAt true {failIfUnchanged := false, maxDischargeDepth := 1} simpArgs .wildcard
   -- We might have proven the goal
   if (← getGoals).isEmpty then
     trace[ScalarTac] "Goal proven by preprocessing!"

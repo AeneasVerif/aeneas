@@ -152,13 +152,12 @@ attribute [progress_simps] Aeneas.Std.bind_assoc_eq
 partial def evalProgressStar(cfg: Config): TacticM Info :=
   withMainContext do focus do
   trace[ProgressStar] "Simplifying the goal: {←(getMainTarget >>= (liftM ∘ ppExpr))}"
-  Simp.simpAt (simpOnly := true)
+  let r ← Simp.simpAt (simpOnly := true)
     { maxDischargeDepth := 1, failIfUnchanged := false}
     {simpThms := #[← Progress.progressSimpExt.getTheorems]}
     (.targets #[] true)
   /- We may have proven the goal already -/
-  let goals ← getUnsolvedGoals
-  if goals == [] then
+  if r.isNone then
     let progress_simps ← `(Parser.Tactic.simpLemma| $(mkIdent `progress_simps):term)
     return ⟨ #[← `(tactic|simp [$progress_simps])], [] ⟩
   /- Continue -/

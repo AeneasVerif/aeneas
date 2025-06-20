@@ -235,19 +235,17 @@ def progressWith (fExpr : Expr) (th : Expr)
     splitEqAndPost fun hEq hPost ids => do
     trace[Progress] "eq and post:\n{hEq} : {← inferType hEq}\n{hPost}"
     trace[Progress] "current goal: {← getMainGoal}"
-    Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
+    let r ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
       {simpThms := #[← progressSimpExt.getTheorems], hypsToUse := #[hEq.fvarId!]} (.targets #[] true)
     /- It may happen that at this point the goal is already solved (though this is rare)
        TODO: not sure this is the best way of checking it -/
-    let goals ← getUnsolvedGoals
-    assert! (goals.length ≤ 1) -- We focused on the main goal so there should be at most one goal
-    if goals == [] then
+    if r.isNone then
       trace[Progress] "The main goal was solved!"
       next (Ok #[])
     else
       trace[Progress] "goal after applying the eq and simplifying the binds: {← getMainGoal}"
       -- TODO: remove this? (some types get unfolded too much: we "fold" them back)
-      let _ ← tryTac (Simp.simpAt true {} {addSimpThms := scalar_eqs} .wildcard_dep)
+      tryTac (do let _ ← Simp.simpAt true {} {addSimpThms := scalar_eqs} .wildcard_dep)
       trace[Progress] "goal after folding back scalar types: {← getMainGoal}"
       -- Clear the equality, unless the user requests not to do so
       if keep.isSome then pure ()
@@ -331,27 +329,26 @@ def progressWith (fExpr : Expr) (th : Expr)
     setGoals curGoals
     let hPosts ←
       match curGoals with
-      | [] => pure hPosts
+      | [] => pure (hPosts)
       | [ _ ] =>
-        /- Compute the list of assumptions which are not post-conditions (we need this below to re-compute
-           the list of introduced post-conditions after the simplification) -/
-        let hPostsSet := Std.HashSet.ofArray hPosts
-        let nonHPosts ← Utils.refreshFVarIds Std.HashSet.emptyWithCapacity hPostsSet
-        let nonHPosts := Std.HashSet.ofArray nonHPosts
         -- Simplify the post-conditions
         let args : Simp.SimpArgs :=
           {simpThms := #[← progressPostSimpExt.getTheorems],
            simprocs := #[← ScalarTac.scalarTacSimprocExt.getSimprocs]}
-        Simp.simpAt true { maxDischargeDepth := 0, failIfUnchanged := false }
+        let hPosts ← Simp.simpAt true { maxDischargeDepth := 0, failIfUnchanged := false }
               args (.targets hPosts false)
-        -- The introduced post-conditions may have been modified, so we need to recompute their fvar ids
-        let hPosts ← Utils.refreshFVarIds Std.HashSet.emptyWithCapacity nonHPosts
-        -- Simplify the goal again
-        tryTac do
-          Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
-            {simpThms := #[← progressSimpExt.getTheorems], declsToUnfold := #[``pure]} (.targets #[] true)
-        --
-        pure (hPosts)
+        match hPosts with
+        | none =>
+          -- We actually closed the goal: we shouldn't get there
+          -- TODO: make this more robust
+          throwError "Unexpected: goal closed by simplifying the introduced post-conditions"
+        | some hPosts =>
+          -- Simplify the goal again
+          tryTac do
+            let _ ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
+              {simpThms := #[← progressSimpExt.getTheorems], declsToUnfold := #[``pure]} (.targets #[] true)
+          --
+          pure (hPosts)
       | _ => throwError "Unexpected number of goals"
     let curGoals ← getUnsolvedGoals
     trace[Progress] "Main goal after simplifying the post-conditions and the target: {curGoals}"
@@ -535,7 +532,7 @@ def evalProgress (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Ar
   : TacticM Stats := do
   /- Simplify the goal -- TODO: this might close it: we need to check that and abort if necessary,
      and properly track that in the `Stats` -/
-  Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
+  let _ ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
       {simpThms := #[← progressSimpExt.getTheorems]} (.targets #[] true)
   withMainContext do
   let splitPost := true
@@ -561,9 +558,9 @@ def evalProgress (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Ar
   let simpTac : TacticM Unit := do
     trace[Progress] "Attempting to solve with `simp [*]`"
     -- Simplify the goal
-    Simp.simpAt false { maxDischargeDepth := 1 } simpArgs (.targets #[] true)
+    let r ← Simp.simpAt false { maxDischargeDepth := 1 } simpArgs (.targets #[] true)
     -- Raise an error if the goal is not proved
-    allGoalsNoRecover (throwError "Goal not proved")
+    if r.isSome then throwError "Goal not proved"
   /- We use our custom assumption tactic, which instantiates meta-variables only if there is a single
      assumption matching the goal. -/
   let customAssumTac : TacticM Unit := do
