@@ -215,6 +215,12 @@ namespace ScalarTac
 
 open Std
 
+attribute [scalar_tac_simps] Prod.mk.injEq gt_iff_lt
+
+attribute [scalar_tac_simps]
+  -- Int.subNatNat is very annoying - TODO: there is probably something more general thing to do
+  Int.subNatNat_eq_coe
+
 @[scalar_tac x.val]
 theorem UScalar.bounds {ty : UScalarTy} (x : UScalar ty) :
   x.val ≤ UScalar.max ty := by
@@ -228,6 +234,16 @@ theorem IScalar.bounds {ty : IScalarTy} (x : IScalar ty) :
   simp [IScalar.max, IScalar.min]
   have := x.hBounds
   omega
+
+attribute [scalar_tac a.toNat] Int.toNat_eq_max
+
+/-!
+# Neq
+-/
+
+/- We use this because several scalar_tac patterns are triggered by a precondition of the shape `a < b`. -/
+@[scalar_tac_simps]
+theorem Nat_neq_zero_iff (x : ℕ) : x ≠ 0 ↔ 0 < x := by omega
 
 /-!
 # Min, Max
@@ -259,13 +275,6 @@ example (x y : Int) (h : |x| ≤ |y|) : x ≤ |y| := by scalar_tac
 example (x y : Int) (h : |x| ≤ |y|) : x ≤ |y| := by scalar_tac
 
 /-!
-# Fast Saturate
--/
-example :
-  128 ≤ Usize.max ∧ 128 ≥ 5 := by
-  scalar_tac +fastSaturate
-
-/-!
 # Forward Saturation
 -/
 
@@ -280,7 +289,7 @@ private def c : Nat := 100
 @[local scalar_tac x * c]
 private theorem mul_c (x : Nat) : x * c ≤ 100 * x := by simp [c]; omega
 
-example (x : Nat) : x * c ≤ 100 * x := by scalar_tac
+example (x : Nat) : x * c ≤ 100 * x := by scalar_tac_preprocess
 
 end
 
@@ -324,6 +333,10 @@ attribute [scalar_tac_simps] Set.Mem
 /-!
 # Subtypes
 -/
+@[scalar_tac x.val]
+theorem subtype_property {α : Sort u} (p : α → Prop) (x : Subtype p) : p x.val := by
+  cases x; trivial
+
 @[scalar_tac_simps]
 theorem nat_subset_le_iff (p : ℕ → Prop) (x y : {n : ℕ // p n}) : x ≤ y ↔ x.val ≤ y.val := by rfl
 
@@ -333,6 +346,99 @@ theorem nat_subset_lt_iff (p : ℕ → Prop) (x y : {n : ℕ // p n}) : x < y �
 @[scalar_tac_simps]
 theorem nat_subset_eq_iff (p : ℕ → Prop) (x y : {n : ℕ // p n}) : x = y ↔ x.val = y.val := by
   cases x; cases y; simp
+
+/-!
+# Multiplication
+-/
+@[scalar_tac x * y]
+theorem lt_mul_lt_le (x y a b : ℕ) (h0 : x < a) (h1 : y < b) :
+  x * y ≤ (a - 1) * (b - 1) := by apply Nat.le_mul_le; omega
+
+@[scalar_tac x * y]
+theorem le_mul_lt_le (x y a b : ℕ) (h0 : x ≤ a) (h1 : y < b) :
+  x * y ≤ a * (b - 1) := by apply Nat.le_mul_le; omega
+
+@[scalar_tac x * y]
+theorem lt_mul_le_le (x y a b : ℕ) (h0 : x < a) (h1 : y ≤ b) :
+  x * y ≤ (a - 1) * b := by apply Nat.le_mul_le; omega
+
+@[scalar_tac x * y]
+theorem le_mul_le_le (x y a b : ℕ) (h0 : x ≤ a) (h1 : y ≤ b) :
+  x * y ≤ a * b := by apply Nat.le_mul_le; omega
+
+/-!
+Not activating those lemmas for now, because there are a lot of them
+and it leads to performance issues.
+TODO: experiment with lemmas for non linear goals.
+-/
+
+--@[scalar_tac_nonlin a * b]
+theorem lt_mul_lt_le' (x y a b : ℕ) (h0 : x < a) (h1 : y < b) :
+  (x + 1) * (y + 1) ≤ a * b := by apply Nat.le_mul_le; omega
+
+--@[scalar_tac_nonlin a * b]
+theorem le_mul_lt_le' (x y a b : ℕ) (h0 : x ≤ a) (h1 : y < b) :
+  x * (y + 1) ≤ a * b := by apply Nat.le_mul_le; omega
+
+--@[scalar_tac_nonlin a * b]
+theorem lt_mul_le_le' (x y a b : ℕ) (h0 : x < a) (h1 : y ≤ b) :
+  (x + 1) * y ≤ a * b := by apply Nat.le_mul_le; omega
+
+--@[scalar_tac_nonlin a * b]
+theorem le_mul_le_le' (x y a b : ℕ) (h0 : x ≤ a) (h1 : y ≤ b) :
+  x * y ≤ a * b := by apply Nat.le_mul_le; omega
+
+--@[scalar_tac_nonlin x * y]
+theorem lt_mul_le_left (x y a : ℕ) (h0 : x < a) :
+  x * y ≤ (a - 1) * y := by apply Nat.le_mul_le; omega
+
+--@[scalar_tac_nonlin x * b]
+theorem lt_mul_lt_left (x a b : ℕ) (h0 : x < a) :
+  x * b + b ≤ a * b := by
+  calc
+    x * b + b = (x + 1) * b := by ring_nf
+    _ ≤ a * b := by apply Nat.le_mul_le; omega
+
+--@[scalar_tac_nonlin x * y]
+theorem lt_mul_le_right (x y a : ℕ) (h0 : y < a) :
+  x * y ≤ x * (a - 1) := by apply Nat.le_mul_le; omega
+
+--@[scalar_tac_nonlin a * y]
+theorem lt_mul_lt_right (y a b : ℕ) (h0 : y < b) :
+  a * y + a ≤ a * b := by
+  calc
+    a * y + a = a * (y + 1) := by ring_nf
+    _ ≤ a * b := by apply Nat.le_mul_le; omega
+
+--@[scalar_tac_nonlin x * y]
+theorem le_mul_le_left (x y a : ℕ) (h0 : x ≤ a) :
+  x * y ≤ a * y := by apply Nat.le_mul_le; omega
+
+--@[scalar_tac_nonlin x * y]
+theorem le_mul_le_right (x y a : ℕ) (h0 : y ≤ a) :
+  x * y ≤ x * a := by apply Nat.le_mul_le; omega
+
+/-
+example (i j n1 n2 : ℕ)
+  (hi : i < n1)
+  (hj : j < n2) :
+  i * n2 + j < n1 * n2
+  := by
+  scalar_tac +nonLin
+
+example (i j n1 n2 : ℕ)
+  (hi : i < n1)
+  (hj : j < n2) :
+  n1 * j + i < n1 * n2
+  := by
+  scalar_tac +nonLin
+-/
+
+/-!
+# Modulo
+-/
+@[scalar_tac x % y]
+theorem mod_lt (x y : ℕ) (h : 0 < y) : x % y < y := by exact Nat.mod_lt x h
 
 end ScalarTac
 

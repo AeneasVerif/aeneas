@@ -5,6 +5,12 @@ namespace Aeneas.ScalarTac
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 open Utils
 
+structure CondSimpTacConfig where
+  nonLin : Bool := false
+  saturationPasses := 3
+
+declare_config_elab elabCondSimpTacConfig CondSimpTacConfig
+
 structure CondSimpPartialArgs where
   declsToUnfold : Array Name := #[]
   addSimpThms : Array Name := #[]
@@ -89,8 +95,9 @@ def condSimpTacSimp (config : Simp.Config) (args : CondSimpArgs) (loc : Utils.Lo
 
 /-- A helper to define tactics which perform conditional simplifications with `scalar_tac` as a discharger. -/
 def condSimpTac
-  (tacName : String) (satNonLin : Bool)
-  (simpConfig : Simp.Config) (args : CondSimpArgs) (addSimpThms : TacticM (Array FVarId)) (doFirstSimp : Bool)
+  (tacName : String) (config : CondSimpTacConfig)
+  (simpConfig : Simp.Config) (args : CondSimpArgs)
+  (addSimpThms : TacticM (Array FVarId)) (doFirstSimp : Bool)
   (loc : Utils.Location) : TacticM Unit := do
   Elab.Tactic.focus do
   withMainContext do
@@ -111,7 +118,8 @@ def condSimpTac
   /- Introduce the scalar_tac assumptions - by doing this beforehand we don't have to
      redo it every time we call `scalar_tac`. TODO: also do the `simp_all`. -/
   withMainContext do
-  ScalarTac.scalarTacSaturateForward { fastSaturate := true, nonLin := satNonLin } fun scalarTacAsms => do
+  ScalarTac.scalarTacSaturateForward { nonLin := config.nonLin, saturationPasses := config.saturationPasses }
+    fun scalarTacAsms => do
   trace[CondSimpTac] "Goal after saturating the context: {← getMainGoal}"
   let additionalSimpThms ← addSimpThms
   trace[CondSimpTac] "Goal after adding the additional simp assumptions: {← getMainGoal}"

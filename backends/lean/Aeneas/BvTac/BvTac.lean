@@ -7,6 +7,10 @@ namespace Aeneas.BvTac
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 open Bvify Utils
 
+structure Config extends Lean.Elab.Tactic.BVDecide.Frontend.BVDecideConfig, Bvify.Config where
+
+declare_config_elab elabConfig Config
+
 def disjConj : Std.HashSet Name := Std.HashSet.ofList [
   ``And, ``Or
 ]
@@ -45,7 +49,7 @@ partial def getn : TacticM Expr := do
       raiseError
   aux goalTy
 
-partial def bvTacPreprocess (n : Option Expr): TacticM Unit := do
+partial def bvTacPreprocess (config : Config) (n : Option Expr): TacticM Unit := do
   Elab.Tactic.focus do
   trace[BvTac] "Original goal: {← getMainGoal}"
   /- First try simplifying the goal - if it is an (in-)equality between scalars, it may get
@@ -62,7 +66,7 @@ partial def bvTacPreprocess (n : Option Expr): TacticM Unit := do
       | some n => pure n
       | none => getn
     /- Then apply bvify -/
-    bvifyTac n Utils.Location.wildcard
+    bvifyTac config.toConfig n Utils.Location.wildcard
     trace[BvTac] "Goal after `bvifyTac`: {← getMainGoal}"
     /- Call `simp_all ` to normalize the goal a bit -/
     let simpLemmas ← bvifySimpExt.getTheorems
@@ -72,8 +76,8 @@ partial def bvTacPreprocess (n : Option Expr): TacticM Unit := do
     allGoals do
     trace[BvTac] "Goal after `simp_all`: {← getMainGoal}"
 
-elab "bv_tac_preprocess" n:(colGt term)? : tactic => do
-  bvTacPreprocess (← optElabTerm n)
+elab "bv_tac_preprocess" config:Parser.Tactic.optConfig n:(colGt term)? : tactic => do
+  bvTacPreprocess (← elabConfig config) (← optElabTerm n)
 
 open Lean.Elab.Tactic.BVDecide.Frontend Lean.Elab in
 /--
@@ -84,18 +88,19 @@ open Lean.Elab.Tactic.BVDecide.Frontend Lean.Elab in
   which is itself mostly equivalent to:
   `bvify n at *; simp_all only; bv_decide`
 -/
-elab "bv_tac" cfg:Parser.Tactic.optConfig n:(colGt term)? : tactic =>
+elab "bv_tac" config:Parser.Tactic.optConfig n:(colGt term)? : tactic =>
   withMainContext do
   Tactic.focus do
   -- Preprocess
+  let config ← elabConfig config
   trace[BvTac] "Input bitwidth: {n}"
-  bvTacPreprocess (← optElabTerm n)
+  bvTacPreprocess config (← optElabTerm n)
   -- The preprocessing step may have proven the goal
   allGoals do
   -- Call bv_decide
-  let cfg ← elabBVDecideConfig cfg
   IO.FS.withTempFile fun _ lratFile => do
-    let cfg ← BVDecide.Frontend.TacticContext.new lratFile cfg
+    let config := config.toBVDecideConfig
+    let cfg ← BVDecide.Frontend.TacticContext.new lratFile config
     liftMetaFinishingTactic fun g => do
       discard <| bvDecide g cfg
 

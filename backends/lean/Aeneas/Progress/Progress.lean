@@ -549,7 +549,7 @@ def evalProgress (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Ar
     if ← ScalarTac.goalIsLinearInt then
       /- Also: we don't try to split the goal if it is a conjunction
          (it shouldn't be), but we split the disjunctions. -/
-      ScalarTac.scalarTac { split := false, fastSaturate := true }
+      ScalarTac.scalarTac { split := false }
     else
       throwError "Not a linear arithmetic goal"
   let simpLemmas ← Aeneas.ScalarTac.scalarTacSimpExt.getTheorems
@@ -577,7 +577,7 @@ def evalProgress (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Ar
     withMainContext do
     trace[Progress] "trying to solve precondition: {← getMainGoal}"
     try
-      firstTac ([simpTac, scalarTac] ++ byTac)
+      firstTacSolve ([simpTac, scalarTac] ++ byTac)
       trace[Progress] "Precondition solved!"
     catch _ =>
       trace[Progress] "Precondition not solved")

@@ -172,7 +172,8 @@ theorem BitVec.toNat_lt_two_pow {w} (x : BitVec w) (i : ℕ) (h : w ≤ i) : x.t
 
 attribute [simp_scalar_simps] BitVec.setWidth_eq BitVec.ofNat_eq_ofNat
 
-def simpScalarTac (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
+def simpScalarTac (config : ScalarTac.CondSimpTacConfig)
+  (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
   let addSimpThms : TacticM (Array FVarId) := pure #[]
   let args : ScalarTac.CondSimpArgs := {
       simpThms := #[← simpScalarSimpExt.getTheorems, ← SimpBoolProp.simpBoolPropSimpExt.getTheorems],
@@ -181,25 +182,25 @@ def simpScalarTac (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) 
       addSimpThms := args.addSimpThms,
       hypsToUse := args.hypsToUse,
     }
-  ScalarTac.condSimpTac "simp_scalar" true {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true} args addSimpThms false loc
+  ScalarTac.condSimpTac "simp_scalar" config
+    {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true}
+    args addSimpThms false loc
 
-syntax (name := simp_scalar) "simp_scalar" ("[" (term<|>"*"),* "]")? (location)? : tactic
+syntax (name := simp_scalar) "simp_scalar" Parser.Tactic.optConfig ("[" (term<|>"*"),* "]")? (location)? : tactic
 
-def parseSimpScalar : TSyntax ``simp_scalar -> TacticM (ScalarTac.CondSimpPartialArgs × Utils.Location)
-| `(tactic| simp_scalar $[[$args,*]]?) => do
-  let args := args.map (·.getElems) |>.getD #[]
-  let args ← ScalarTac.condSimpParseArgs "simp_scalar" args
-  pure (args, Utils.Location.targets #[] true)
-| `(tactic| simp_scalar $[[$args,*]]? $[$loc:location]?) => do
+def parseSimpScalar :
+TSyntax ``simp_scalar -> TacticM (ScalarTac.CondSimpTacConfig × ScalarTac.CondSimpPartialArgs × Utils.Location)
+| `(tactic| simp_scalar $config $[[$args,*]]? $[$loc:location]?) => do
+  let config ← ScalarTac.elabCondSimpTacConfig config
   let args := args.map (·.getElems) |>.getD #[]
   let args ← ScalarTac.condSimpParseArgs "simp_scalar" args
   let loc ← Utils.parseOptLocation loc
-  pure (args, loc)
+  pure (config, args, loc)
 | _ => Lean.Elab.throwUnsupportedSyntax
 
 elab stx:simp_scalar : tactic =>
   withMainContext do
-  let (args, loc) ← parseSimpScalar stx
-  simpScalarTac args loc
+  let (config, args, loc) ← parseSimpScalar stx
+  simpScalarTac config args loc
 
 end Aeneas.SimpScalar

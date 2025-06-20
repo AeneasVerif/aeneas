@@ -18,6 +18,12 @@ namespace Aeneas.Bvify
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 open Arith Std
 
+structure Config where
+  nonLin : Bool := true -- We use the non linear lemmas by default
+  saturationPasses := 3
+
+declare_config_elab elabConfig Config
+
 /- Simp procedures -/
 attribute [bvify_simps]
   reduceIte
@@ -281,28 +287,30 @@ def bvifyTacSimp (loc : Utils.Location) : TacticM Unit := do
     }
   ScalarTac.condSimpTacSimp bvifySimpConfig args loc #[] false
 
-def bvifyTac (n : Expr) (loc : Utils.Location) : TacticM Unit := do
+def bvifyTac (config : Config) (n : Expr) (loc : Utils.Location) : TacticM Unit := do
   let args : ScalarTac.CondSimpArgs := {
       simpThms := #[← bvifySimpExt.getTheorems, ← SimpBoolProp.simpBoolPropSimpExt.getTheorems]
       simprocs := #[← bvifySimprocExt.getSimprocs, ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs]
     }
-  ScalarTac.condSimpTac "bvify" true bvifySimpConfig args (bvifyAddSimpThms n) true loc
+  let config := { nonLin := config.nonLin, saturationPasses := config.saturationPasses }
+  ScalarTac.condSimpTac "bvify" config bvifySimpConfig args (bvifyAddSimpThms n) true loc
 
-syntax (name := bvify) "bvify " colGt term (location)? : tactic
+syntax (name := bvify) "bvify " colGt Parser.Tactic.optConfig term (location)? : tactic
 
-def parseBvify : TSyntax ``bvify -> TacticM (Expr × Utils.Location)
-| `(tactic| bvify $n $[$loc:location]?) => do
+def parseBvify : TSyntax ``bvify -> TacticM (Config × Expr × Utils.Location)
+| `(tactic| bvify $config $n:term $[$loc:location]?) => do
+  let config ← elabConfig config
   -- TODO: if we forget the number of bits the error messages are spurious
   trace[Bvify] "Number of bits: {n}"
   let n ← Elab.Term.elabTerm n (Expr.const ``Nat [])
   trace[Bvify] "Number of bits after elaboration: {n}"
   let loc ← Utils.parseOptLocation loc
-  pure (n, loc)
+  pure (config, n, loc)
 | _ => Lean.Elab.throwUnsupportedSyntax
 
 elab stx:bvify : tactic => do
-  let (n, loc) ← parseBvify stx
-  bvifyTac n loc
+  let (config, n, loc) ← parseBvify stx
+  bvifyTac config n loc
 
 example (x y : U8) (h : x.val < y.val) : x.bv < y.bv := by
   bvify 8

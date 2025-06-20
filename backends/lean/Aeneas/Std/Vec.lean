@@ -27,13 +27,7 @@ instance [BEq α] : BEq (Vec α) := SubtypeBEq _
 
 instance [BEq α] [LawfulBEq α] : LawfulBEq (Vec α) := SubtypeLawfulBEq _
 
-@[scalar_tac v.val]
 theorem Vec.len_ineq {α : Type u} (v : Vec α) : v.val.length ≤ Usize.max := by
-  cases v; simp[*]
-
--- TODO: update scalar_tac so that we can remove this one
-@[scalar_tac v.val.length]
-theorem Vec.len_ineq' {α : Type u} (v : Vec α) : v.val.length ≤ Usize.max := by
   cases v; simp[*]
 
 @[simp, scalar_tac_simps, simp_scalar_simps, simp_lists_simps]
@@ -66,8 +60,11 @@ theorem Vec.len_val {α : Type u} (v : Vec α) : (Vec.len v).val = v.length :=
   getElem? a i := getElem? a.val i
   getElem! a i := getElem! a.val i
 
-@[simp, scalar_tac_simps] theorem Vec.getElem?_Nat_eq {α : Type u} (v : Vec α) (i : Nat) : v[i]? = v.val[i]? := by rfl
-@[simp, scalar_tac_simps] theorem Vec.getElem!_Nat_eq {α : Type u} [Inhabited α] (v : Vec α) (i : Nat) : v[i]! = v.val[i]! := by rfl
+@[simp, scalar_tac_simps, simp_lists_simps]
+theorem Vec.getElem?_Nat_eq {α : Type u} (v : Vec α) (i : Nat) : v[i]? = v.val[i]? := by rfl
+
+@[simp, scalar_tac_simps, simp_lists_simps]
+theorem Vec.getElem!_Nat_eq {α : Type u} [Inhabited α] (v : Vec α) (i : Nat) : v[i]! = v.val[i]! := by rfl
 
 @[reducible] instance {α : Type u} : GetElem (Vec α) Usize α (fun a i => i < a.val.length) where
   getElem a i h := getElem a.val i.val h

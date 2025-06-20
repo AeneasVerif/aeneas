@@ -32,14 +32,14 @@ theorem Nat.not_eq_imp_not_eq {i j} : Nat.not_eq i j → i ≠ j := by
   simp_all
 
 
-@[nonlin_scalar_tac n % m]
+@[scalar_tac_nonlin n % m]
 theorem Nat.mod_zero_or_lt (n m : Nat) : m = 0 ∨ (n % m < m) := by
   dcases h: m = 0
   . simp [h]
   . right
     apply Nat.mod_lt; omega
 
-@[nonlin_scalar_tac n / m]
+@[scalar_tac_nonlin n / m]
 theorem Nat.div_zero_or_le (n m : Nat) : m = 0 ∨ (n / m ≤ n) := by
   dcases h: m = 0 <;> simp [*]
   apply Nat.div_le_self
@@ -60,7 +60,7 @@ theorem Int.self_le_ediv {x y : ℤ} (hx : x ≤ 0) (hy : 0 ≤ y) :
       omega
   . simp_all
 
-@[nonlin_scalar_tac n % m]
+@[scalar_tac_nonlin n % m]
 theorem Int.emod_neg_or_pos_lt (n m : Int) : m ≤ 0 ∨ (0 ≤ n % m ∧ n % m < m) := by
   if h: 0 < m then
     right; constructor
@@ -68,7 +68,7 @@ theorem Int.emod_neg_or_pos_lt (n m : Int) : m ≤ 0 ∨ (0 ≤ n % m ∧ n % m 
     . apply Int.emod_lt_of_pos; omega
   else left; omega
 
-@[nonlin_scalar_tac n / m]
+@[scalar_tac_nonlin n / m]
 theorem Int.div_neg_or_pos_le (n m : Int) : n < 0 ∨ m < 0 ∨ (0 ≤ n / m ∧ n / m ≤ n) := by
   dcases hn: 0 ≤ n <;> dcases hm: 0 ≤ m <;> try simp_all
   right; right; constructor
@@ -80,7 +80,7 @@ theorem Int.pos_mul_pos_is_pos (n m : Int) (hm : 0 ≤ m) (hn : 0 ≤ n): 0 ≤ 
   rw [h]
   apply mul_le_mul <;> norm_cast
 
-@[nonlin_scalar_tac m * n]
+@[scalar_tac_nonlin m * n]
 theorem Int.pos_mul_pos_is_pos_disj (n m : Int) : m < 0 ∨ n < 0 ∨ 0 ≤ m * n := by
   cases h: (m < 0 : Bool) <;> simp_all
   cases h: (n < 0 : Bool) <;> simp_all
