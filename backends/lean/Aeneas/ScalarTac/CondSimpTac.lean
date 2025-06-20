@@ -74,7 +74,7 @@ structure CondSimpArgs where
 def condSimpTacSimp (config : Simp.Config) (args : CondSimpArgs) (loc : Utils.Location)
   (additionalAsms : Array FVarId := #[]) (dischWithScalarTac : Bool) : TacticM Unit := do
   withMainContext do
-  let simpArgs : Utils.SimpArgs :=
+  let simpArgs : Simp.SimpArgs :=
     {simpThms := args.simpThms,
      simprocs := args.simprocs,
      declsToUnfold := args.declsToUnfold,
@@ -87,11 +87,11 @@ def condSimpTacSimp (config : Simp.Config) (args : CondSimpArgs) (loc : Utils.Lo
     let dischargeWrapper := Lean.Elab.Tactic.Simp.DischargeWrapper.custom ref d
     let _ ← dischargeWrapper.with fun discharge? => do
       -- Initialize the simp context
-      let (ctx, simprocs) ← Utils.mkSimpCtx true config .simp simpArgs
+      let (ctx, simprocs) ← Simp.mkSimpCtx true config .simp simpArgs
       -- Apply the simplifier
-      let _ ← Utils.customSimpLocation ctx simprocs discharge? loc
+      let _ ← Simp.customSimpLocation ctx simprocs discharge? loc
   else
-    Utils.simpAt true config simpArgs loc
+    Simp.simpAt true config simpArgs loc
 
 /-- A helper to define tactics which perform conditional simplifications with `scalar_tac` as a discharger. -/
 def condSimpTac

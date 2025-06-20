@@ -769,116 +769,6 @@ example (h : ∃ x y z, x + y + z ≥ 0) : ∃ x, x ≥ 0 := by
   rename_i x y z
   exists x + y + z
 
-structure SimpArgs where
-  simprocs : Simp.SimprocsArray := #[]
-  simpThms : Array SimpTheorems := #[]
-  addSimprocs : Array Name := #[]
-  declsToUnfold : Array Name := #[]
-  addSimpThms : Array Name := #[]
-  hypsToUse : Array FVarId := #[]
-
-/- Initialize a context for the `simp` function.
-
-   The initialization of the context is adapted from `Tactic.elabSimpArgs`.
-   Something very annoying is that there is no function which allows to
-   initialize a simp context without doing an elaboration - as a consequence
-   we write our own here. -/
-def mkSimpCtx (simpOnly : Bool) (config : Simp.Config) (kind : SimpKind) (args : SimpArgs) :
-  Tactic.TacticM (Simp.Context × Simp.SimprocsArray) := do
-  -- Initialize either with the builtin simp theorems or with all the simp theorems
-  let simpThms ←
-    if simpOnly then Tactic.simpOnlyBuiltins.foldlM (·.addConst ·) ({} : SimpTheorems)
-    else getSimpTheorems
-  -- Add the equational theorems for the declarations to unfold
-  let addDeclToUnfold (thms : SimpTheorems) (decl : Name) : Tactic.TacticM SimpTheorems :=
-    if kind == .dsimp then pure (thms.addDeclToUnfoldCore decl)
-    else thms.addDeclToUnfold decl
-  let simpThms ←
-    args.declsToUnfold.foldlM addDeclToUnfold simpThms
-  -- Add the hypotheses and the rewriting theorems
-  let simpThms ←
-    args.hypsToUse.foldlM (fun thms fvarId =>
-      -- post: TODO: don't know what that is. It seems to be true by default.
-      -- inv: invert the equality
-      thms.add (.fvar fvarId) #[] (mkFVar fvarId) (post := true) (inv := false)
-      -- thms.eraseCore (.fvar fvar)
-      ) simpThms
-  -- Add the rewriting theorems to use
-  let simpThms ←
-    args.addSimpThms.foldlM (fun thms thmName => do
-      let info ← getConstInfo thmName
-      if (← isProp info.type) then
-        -- post: TODO: don't know what that is
-        -- inv: invert the equality
-        thms.addConst thmName (post := false) (inv := false)
-      else
-        throwError "Not a proposition: {thmName}"
-      ) simpThms
-  let congrTheorems ← getSimpCongrTheorems
-  let defaultSimprocs ← if simpOnly then pure {} else Simp.getSimprocs
-  let addSimprocs ← args.addSimprocs.foldlM (fun simprocs name => simprocs.add name true) defaultSimprocs
-  let ctx ← Simp.mkContext config (simpTheorems := #[simpThms] ++ args.simpThms) congrTheorems
-  pure (ctx, #[addSimprocs] ++ args.simprocs)
-
-inductive Location where
-  /-- Apply the tactic everywhere. Same as `Tactic.Location.wildcard` -/
-  | wildcard
-  /-- Apply the tactic everywhere, including in the variable types (i.e., in
-      assumptions which are not propositions).
-  --/
-  | wildcard_dep
-  /-- Same as Tactic.Location -/
-  | targets (hypotheses : Array FVarId) (type : Bool)
-
--- Adapted from Tactic.simpLocation
-def customSimpLocation (ctx : Simp.Context) (simprocs : Simp.SimprocsArray)
-  (discharge? : Option Simp.Discharge := none)
-  (loc : Location) : TacticM Simp.Stats := do
-  match loc with
-  | Location.targets hyps simplifyTarget =>
-    -- Custom behavior: we directly provide the fvar ideas of the assumption rather than syntax
-    withMainContext do
-      simpLocation.go ctx simprocs discharge? hyps simplifyTarget
-  | Location.wildcard =>
-    -- Simply call the regular simpLocation
-    simpLocation ctx simprocs discharge? Tactic.Location.wildcard
-  | Location.wildcard_dep =>
-    -- Custom behavior
-    withMainContext do
-      -- Lookup *all* the declarations
-      let lctx ← Lean.MonadLCtx.getLCtx
-      let decls ← lctx.getDecls
-      let tgts := (decls.map (fun d => d.fvarId)).toArray
-      -- Call the regular simpLocation.go
-      simpLocation.go ctx simprocs discharge? tgts (simplifyTarget := true)
-
-/- Call the simp tactic. -/
-def simpAt (simpOnly : Bool) (config : Simp.Config) (args : SimpArgs) (loc : Location) :
-  Tactic.TacticM Unit := do
-  -- Initialize the simp context
-  let (ctx, simprocs) ← mkSimpCtx simpOnly config .simp args
-  -- Apply the simplifier
-  let _ ← customSimpLocation ctx simprocs (discharge? := .none) loc
-
-/- Call the dsimp tactic. -/
-def dsimpAt (simpOnly : Bool) (config : Simp.Config) (args : SimpArgs) (loc : Tactic.Location) :
-  Tactic.TacticM Unit := do
-  -- Initialize the simp context
-  let (ctx, simprocs) ← mkSimpCtx simpOnly config .dsimp args
-  -- Apply the simplifier
-  dsimpLocation ctx simprocs loc
-
--- Call the simpAll tactic
-def simpAll (config : Simp.Config) (simpOnly : Bool) (args : SimpArgs) :
-  Tactic.TacticM Unit := do
-  -- Initialize the simp context
-  let (ctx, simprocs) ← mkSimpCtx simpOnly config .simpAll args
-  -- Apply the simplifier
-  let (result?, _) ← Lean.Meta.simpAll (← getMainGoal) ctx (simprocs := simprocs)
-  match result? with
-  | none => replaceMainGoal []
-  | some mvarId => replaceMainGoal [mvarId]
-
 /- Adapted from Elab.Tactic.Rewrite -/
 def rewriteTarget (eqThm : Expr) (symm : Bool) (config : Rewrite.Config := {}) : TacticM Unit := do
   Term.withSynthesize <| withMainContext do
@@ -1692,6 +1582,16 @@ def duplicateAssumptions (toDuplicate : Option (Array FVarId) := none) :
 
 elab "duplicate_assumptions" : tactic => do
   let _ ← duplicateAssumptions
+
+inductive Location where
+  /-- Apply the tactic everywhere. Same as `Location.wildcard` -/
+  | wildcard
+  /-- Apply the tactic everywhere, including in the variable types (i.e., in
+      assumptions which are not propositions).
+  --/
+  | wildcard_dep
+  /-- Same as Location -/
+  | targets (hypotheses : Array FVarId) (type : Bool)
 
 /--
 info: example

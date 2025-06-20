@@ -71,7 +71,7 @@ partial def bvTacPreprocess (config : Config) (n : Option Expr): TacticM Unit :=
     /- Call `simp_all ` to normalize the goal a bit -/
     let simpLemmas ← bvifySimpExt.getTheorems
     let simprocs ← bvifySimprocExt.getSimprocs
-    Utils.simpAll {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 0} true
+    Simp.simpAll {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 0} true
                   {simprocs := #[simprocs], simpThms := #[simpLemmas]}
     allGoals do
     trace[BvTac] "Goal after `simp_all`: {← getMainGoal}"
