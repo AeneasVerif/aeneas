@@ -86,51 +86,55 @@ instance : ToMessageData Rule where
     Also note that we store the number of binders.
 
     # Erasing attributes (`attribute [- ...] foo`)
-    We also need to store a map from the names of the theorems we registered as rules to matching
-    patterns.
-
     When erasing attributes, Lean instructs us to remove the attribute from a declaration
     by giving us the *name* of the declaration (and that's it). In particular, we don't have the
     pattern anymore under our hand, which is what we need to remove the rule form the set
     above. A second issue is also that we can't remove keys from discrimination trees.
+    Our solution is to save a set of the names of the deactivated theorems. We also
+    save the set of all rules which were created, to make sure we do not create
+    two rules for the same theorem (otherwise deactivating the theorem would deactivate
+    the two rules, which may cause an unexpected behavior for the user).
 
-    Our solution is to save a map from the names of the theorems to the rules which are
-    currently registered for them.
-
-    Whenever we do a forward saturation and a rule matches, we check if the rule is still
-    applicable for this name (by checking if the name of the theorem still maps to this rule).
-
-    Remark: those design choices constrain us to have at most one rule per theorem (which is overall
-    fine: if we need more than one it is always possible to introduce an alias for the theorem).
-
-    TODO: I think there is simpler.
+    TODO: allow using several patterns.
 -/
 structure Rules where
-  nameToRule : NameMap Rule
-  rules : DiscrTree Rule
-  deriving Inhabited
+  /- The set of rules.
 
-def Rules.empty : Rules := ⟨ RBMap.empty, DiscrTree.empty ⟩
+     We actually save a *map* rather than a set: it is convenient useful
+     to print error messages (if we detect that the user is trying to
+     add the same theorem again, we can display the already existing rule).
+   -/
+  nameToRules : Std.HashMap Name Rule
+  deactivatedRules : Std.HashSet Name
+  rules : DiscrTree Rule
+deriving Inhabited
+
+def Rules.empty : Rules := {
+  nameToRules := Std.HashMap.emptyWithCapacity,
+  deactivatedRules := Std.HashSet.emptyWithCapacity
+  rules := DiscrTree.empty
+}
 
 abbrev Extension :=
   SimpleScopedEnvExtension (Key × Rule) Rules
 
 private def Rules.insert (s : Rules) (kv : Key × Rule) : Rules :=
-  let ⟨ nameToRule, rules ⟩ := s
+  let { nameToRules, deactivatedRules, rules } := s
   let ⟨ k, v ⟩ := kv
-  let nameToRule := nameToRule.insert v.thName v
+  let nameToRules := nameToRules.insert v.thName v
   -- Update the discrimination tree
   let rules := rules.insertCore k.discrTreeKey v
   --
-  { nameToRule, rules }
+  { nameToRules, deactivatedRules, rules }
 
 private def Rules.erase (s : Rules) (thName : Name) : Rules :=
-  let ⟨ nameToRule, rules ⟩ := s
+  let { nameToRules, deactivatedRules, rules } := s
   /- Note that we can't remove a key from a discrimination tree, so we
-     remove the rule from the `nameToRule` map instead: when instantiating rules
-     we check that they are still active (i.e., they are still in `nameToRule`) -/
-  let nameToRule := nameToRule.erase thName
-  ⟨ nameToRule, rules ⟩
+     add the theorem name to the `deactivatedRules` set instead: when instantiating rules
+     we check that their corresponding theorems are still active (i.e., they are still in
+     `deactivatedRules`) -/
+  let deactivatedRules := deactivatedRules.insert thName
+  { nameToRules, deactivatedRules, rules }
 
 def mkExtension (name : Name := by exact decl_name%) :
   IO Extension :=
@@ -158,7 +162,7 @@ def makeAttribute (mapName attributeName : Name) (elabAttribute : Syntax → Met
       trace[Saturate.attribute] "Theorem: {thName}"
       -- Check that the rule is not already registered
       let s := ext.getState (← getEnv)
-      if let some rule := s.nameToRule.find? thName then
+      if let some rule := s.nameToRules.get? thName then
         throwError "A rule is already registered for {thName} with pattern {rule.patterns}: we can only register one rule per pattern"
       -- Retrieve the source information
       let src ← do
@@ -312,16 +316,15 @@ def SaturateAttribute.find? (s : SaturateAttribute) (e : Expr) :
   let rules ← s.rules.getMatch e
   /- Only keep the rules (remove the partial matches - note that there shouldn't be any actually)
       and filter the rules which have been deactivated -/
-  pure (rules.filter fun r => s.nameToRule.contains r.thName)
+  pure (rules.filter fun r => ¬ s.deactivatedRules.contains r.thName)
 
 def SaturateAttribute.getState (s : SaturateAttribute) : MetaM Rules := do
   pure (s.ext.getState (← getEnv))
 
 def SaturateAttribute.showStored (s : SaturateAttribute) : MetaM Unit := do
   let st ← s.getState
-  IO.println f!"nameToRule: {st.nameToRule.toList}"
-  IO.println f!""
-  IO.println f!"rules: {st.rules}"
+  IO.println f!"rules:\n{st.rules}"
+  IO.println f!"deactivated rules:\n{st.deactivatedRules.toArray}"
 
 end Attribute
 

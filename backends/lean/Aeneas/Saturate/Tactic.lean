@@ -243,11 +243,8 @@ def matchExprWithRules
     for rule in exprs do
       trace[Saturate.explore] "Checking potential match: {rule}"
       -- Check if the theorem is still active
-      let some activeRule := rules.nameToRule.find? rule.thName
-        | trace[Saturate.explore] "The rule is not active"; continue
-      -- Check that the patterns are the same - we uniquely identify them with their source information
-      unless activeRule.src == rule.src do
-         continue
+      if rules.deactivatedRules.contains rule.thName then
+        trace[Saturate.explore] "The rule is not active"; continue
       -- Retrieve the first pattern
       let (pat, patterns) ← do
         match rule.patterns.toList with
