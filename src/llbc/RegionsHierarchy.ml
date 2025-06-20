@@ -175,7 +175,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
           span;
         (* We have nothing to do *)
         ()
-    | TArrow binder ->
+    | TFnPtr binder ->
         (* TODO: *)
         cassert_opt_span __FILE__ __LINE__
           (binder.binder_regions = [])
@@ -183,6 +183,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
         (* We can ignore the outer regions *)
         let inputs, output = binder.binder_value in
         List.iter (explore_ty []) (output :: inputs)
+    | TFnDef _ -> craise_opt_span __FILE__ __LINE__ span "unsupported: FnDef"
     | TDynTrait _ ->
         craise_opt_span __FILE__ __LINE__ span
           "Dynamic trait types are not supported yet"
