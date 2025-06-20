@@ -1491,9 +1491,9 @@ let rec norm_proj_tys_union (span : Meta.span) (ty1 : rty) (ty2 : rty) : rty =
       sanity_check __FILE__ __LINE__ (item1 = item2) span;
       TTraitType (norm_proj_trait_refs_union span tr1 tr2, item1)
   | TDynTrait (), TDynTrait () -> TDynTrait ()
-  | ( TArrow
+  | ( TFnPtr
         { binder_regions = binder_regions1; binder_value = inputs1, output1 },
-      TArrow
+      TFnPtr
         { binder_regions = binder_regions2; binder_value = inputs2, output2 } )
     ->
       (* TODO: general case *)
@@ -1503,7 +1503,7 @@ let rec norm_proj_tys_union (span : Meta.span) (ty1 : rty) (ty2 : rty) : rty =
         ( List.map2 (norm_proj_tys_union span) inputs1 inputs2,
           norm_proj_tys_union span output1 output2 )
       in
-      TArrow { binder_regions = []; binder_value }
+      TFnPtr { binder_regions = []; binder_value }
   | _ -> internal_error __FILE__ __LINE__ span
 
 and norm_proj_generic_args_union span (generics1 : generic_args)

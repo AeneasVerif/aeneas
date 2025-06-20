@@ -357,8 +357,8 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
         in
         (* Return *)
         { ty_info with mut_regions }
-    | TArrow binder ->
-        let inputs, output = binder.binder_value in
+    | TFnPtr fn_sig ->
+        let inputs, output = fn_sig.binder_value in
         (* Just dive into the arrow *)
         let ty_info =
           List.fold_left
@@ -366,6 +366,7 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
             ty_info inputs
         in
         analyze span expl_info ty_info output
+    | TFnDef _ -> craise_opt_span __FILE__ __LINE__ span "unsupported: FnDef"
     | TError _ ->
         craise_opt_span __FILE__ __LINE__ span
           "Found type error in the output of charon"
