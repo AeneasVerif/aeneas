@@ -5,9 +5,9 @@ import Mathlib.Tactic.Ring.RingNF
 import Aeneas.Utils
 import Aeneas.ScalarTac.Core
 import Aeneas.ScalarTac.Init
-import Aeneas.Saturate
 import Aeneas.SimpScalar.Init
 import Aeneas.SimpBoolProp.SimpBoolProp
+import AeneasMeta.Saturate
 
 namespace Aeneas
 

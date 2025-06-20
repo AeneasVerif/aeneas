@@ -1,4 +1,4 @@
-import Aeneas.Extensions
+import Lean
 open Lean Meta
 
 namespace Aeneas.ZModify

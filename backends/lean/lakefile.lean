@@ -8,4 +8,10 @@ require mathlib from git
 package «aeneas» {}
 
 @[default_target]
-lean_lib «Aeneas» {}
+lean_lib «Aeneas» where
+  roots := #[`Aeneas]
+
+@[default_target]
+lean_lib «AeneasMeta» where
+  roots := #[`AeneasMeta]
+  precompileModules := true
