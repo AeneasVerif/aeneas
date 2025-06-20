@@ -36,7 +36,8 @@ attribute [simp_lists_simps]
 
 attribute [simp_lists_simps] List.map_map List.map_id_fun List.map_id_fun' id_eq
 
-def simpListsTac (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
+def simpListsTac (config : ScalarTac.CondSimpTacConfig)
+  (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
   let addSimpThms : TacticM (Array FVarId) := pure #[]
   let args : ScalarTac.CondSimpArgs := {
       simpThms := #[← simpListsSimpExt.getTheorems, ← SimpBoolProp.simpBoolPropSimpExt.getTheorems],
@@ -45,25 +46,23 @@ def simpListsTac (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) :
       addSimpThms := args.addSimpThms,
       hypsToUse := args.hypsToUse,
     }
-  ScalarTac.condSimpTac "simp_lists" false {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true} args addSimpThms false loc
+  ScalarTac.condSimpTac "simp_lists" config {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true} args addSimpThms false loc
 
-syntax (name := simp_lists) "simp_lists" ("[" (term<|>"*"),* "]")? (location)? : tactic
+syntax (name := simp_lists) "simp_lists" Parser.Tactic.optConfig ("[" (term<|>"*"),* "]")? (location)? : tactic
 
-def parseSimpLists : TSyntax ``simp_lists -> TacticM (ScalarTac.CondSimpPartialArgs × Utils.Location)
-| `(tactic| simp_lists $[[$args,*]]?) => do
-  let args := args.map (·.getElems) |>.getD #[]
-  let args ← ScalarTac.condSimpParseArgs "simp_lists" args
-  pure (args, Utils.Location.targets #[] true)
-| `(tactic| simp_lists $[[$args,*]]? $[$loc:location]?) => do
+def parseSimpLists :
+TSyntax ``simp_lists -> TacticM (ScalarTac.CondSimpTacConfig × ScalarTac.CondSimpPartialArgs × Utils.Location)
+| `(tactic| simp_lists $config $[[$args,*]]? $[$loc:location]?) => do
+  let config ← ScalarTac.elabCondSimpTacConfig config
   let args := args.map (·.getElems) |>.getD #[]
   let args ← ScalarTac.condSimpParseArgs "simp_lists" args
   let loc ← Utils.parseOptLocation loc
-  pure (args, loc)
+  pure (config, args, loc)
 | _ => Lean.Elab.throwUnsupportedSyntax
 
 elab stx:simp_lists : tactic =>
   withMainContext do
-  let (args, loc) ← parseSimpLists stx
-  simpListsTac args loc
+  let (config, args, loc) ← parseSimpLists stx
+  simpListsTac config args loc
 
 end Aeneas.SimpLists

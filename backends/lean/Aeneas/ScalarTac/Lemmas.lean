@@ -215,7 +215,7 @@ namespace ScalarTac
 
 open Std
 
-attribute [scalar_tac_simps] Prod.mk.injEq
+attribute [scalar_tac_simps] Prod.mk.injEq gt_iff_lt
 
 attribute [scalar_tac_simps]
   -- Int.subNatNat is very annoying - TODO: there is probably something more general thing to do

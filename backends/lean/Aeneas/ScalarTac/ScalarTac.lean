@@ -124,6 +124,8 @@ structure SaturateConfig where
   saturateTarget : Bool := true
   /- Should we dive into binders? -/
   saturateVisitBoundExpressions := false
+  /- -/
+  saturationPasses := 3
 
 structure Config extends SaturateConfig where
   /- If `true`, split all the matches/if then else in the context (note that `omega`
@@ -153,7 +155,9 @@ def scalarTacSaturateForward {Î±} (config : SaturateConfig) (f : Array FVarId â†
     if config.nonLin then #[scalarTacAttribute, scalarTacNonLinAttribute]
     else #[scalarTacAttribute]
   Saturate.evalSaturate
-    { visitProofTerms := false, visitBoundExpressions := config.saturateVisitBoundExpressions }
+    { visitProofTerms := false,
+      visitBoundExpressions := config.saturateVisitBoundExpressions,
+      saturationPasses := config.saturationPasses }
     rules none none
     (declsToExplore := none)
     (exploreAssumptions := config.saturateAssumptions)

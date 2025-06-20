@@ -11,7 +11,8 @@ The `simp_lists_scalar` tactic is a combination of `simp_lists` and `simp_scalar
 
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 
-def simpListsScalarTac (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
+def simpListsScalarTac (config : ScalarTac.CondSimpTacConfig)
+  (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
   let addSimpThms : TacticM (Array FVarId) := pure #[]
   let args : ScalarTac.CondSimpArgs := {
       simpThms := #[
@@ -27,25 +28,23 @@ def simpListsScalarTac (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Locat
       addSimpThms := args.addSimpThms,
       hypsToUse := args.hypsToUse,
     }
-  ScalarTac.condSimpTac "simp_lists_scalar" false {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true} args addSimpThms false loc
+  ScalarTac.condSimpTac "simp_lists_scalar" config {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true} args addSimpThms false loc
 
-syntax (name := simp_lists) "simp_lists_scalar" ("[" (term<|>"*"),* "]")? (location)? : tactic
+syntax (name := simp_lists) "simp_lists_scalar" Parser.Tactic.optConfig ("[" (term<|>"*"),* "]")? (location)? : tactic
 
-def parseSimpListsScalar : TSyntax ``simp_lists -> TacticM (ScalarTac.CondSimpPartialArgs × Utils.Location)
-| `(tactic| simp_lists_scalar $[[$args,*]]?) => do
-  let args := args.map (·.getElems) |>.getD #[]
-  let args ← ScalarTac.condSimpParseArgs "simp_lists_scalar" args
-  pure (args, Utils.Location.targets #[] true)
-| `(tactic| simp_lists_scalar $[[$args,*]]? $[$loc:location]?) => do
+def parseSimpListsScalar :
+TSyntax ``simp_lists -> TacticM (ScalarTac.CondSimpTacConfig × ScalarTac.CondSimpPartialArgs × Utils.Location)
+| `(tactic| simp_lists_scalar $config $[[$args,*]]? $[$loc:location]?) => do
+  let config ← ScalarTac.elabCondSimpTacConfig config
   let args := args.map (·.getElems) |>.getD #[]
   let args ← ScalarTac.condSimpParseArgs "simp_lists_scalar" args
   let loc ← Utils.parseOptLocation loc
-  pure (args, loc)
+  pure (config, args, loc)
 | _ => Lean.Elab.throwUnsupportedSyntax
 
 elab stx:simp_lists : tactic =>
   withMainContext do
-  let (args, loc) ← parseSimpListsScalar stx
-  simpListsScalarTac args loc
+  let (config, args, loc) ← parseSimpListsScalar stx
+  simpListsScalarTac config args loc
 
 end Aeneas.SimpListsScalar

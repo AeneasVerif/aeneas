@@ -23,6 +23,12 @@ open Lean.Parser.Tactic
 open Lean.Elab.Tactic
 open Arith Std
 
+structure Config where
+  nonLin : Bool := true -- We use the non linear lemmas by default
+  saturationPasses := 3
+
+declare_config_elab elabConfig Config
+
 attribute [zmodify_simps] ge_iff_le gt_iff_lt Nat.mod_lt_of_lt
 
 theorem Nat.lt_imp_eq_iff_eq_ZMod (n a b : ℕ) (h : a < n ∧ b < n) : a = b ↔ (a : ZMod n) = (b : ZMod n) := by
@@ -36,7 +42,8 @@ attribute [zmodify_simps] Nat.mod_lt
 /-- `n` is the parameter of `ZMod`, in case it is not obvious from the context.
     In particular, if the user provides `n`, it activates the use of conditional rewritings by means of `scalar_tac`.
  -/
-def zmodifyTac (n : Option Expr) (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
+def zmodifyTac (config : Config)
+  (n : Option Expr) (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
   let addSimpThms : TacticM (Array FVarId) := do
     match n with
     | none => pure #[]
@@ -53,29 +60,26 @@ def zmodifyTac (n : Option Expr) (args : ScalarTac.CondSimpPartialArgs) (loc : U
       addSimpThms := args.addSimpThms,
       hypsToUse := args.hypsToUse,
     }
-  ScalarTac.condSimpTac "zmodify" true {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true} args addSimpThms false loc
+  let config := { nonLin := config.nonLin, saturationPasses := config.saturationPasses }
+  ScalarTac.condSimpTac "zmodify" config {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true} args addSimpThms false loc
 
-syntax (name := zmodify) "zmodify" ("to" term)? ("[" (term<|>"*"),* "]")? (location)? : tactic
+syntax (name := zmodify) "zmodify" Parser.Tactic.optConfig ("to" term)? ("[" (term<|>"*"),* "]")? (location)? : tactic
 
-def parseZModify : TSyntax ``zmodify -> TacticM (Option Expr × ScalarTac.CondSimpPartialArgs × Utils.Location)
-| `(tactic| zmodify $[to $n]? $[[$args,*]]?) => do
-  -- TODO: do we really need this variant?
-  let n ← Utils.optElabTerm n
-  let args := args.map (·.getElems) |>.getD #[]
-  let args ← ScalarTac.condSimpParseArgs "zmodify" args
-  pure (n, args, Utils.Location.targets #[] true)
-| `(tactic| zmodify $[to $n]? $[[$args,*]]? $[$loc:location]?) => do
+def parseZModify :
+TSyntax ``zmodify -> TacticM (Config × Option Expr × ScalarTac.CondSimpPartialArgs × Utils.Location)
+| `(tactic| zmodify $config $[to $n]? $[[$args,*]]? $[$loc:location]?) => do
+  let config ← elabConfig config
   let n ← Utils.optElabTerm n
   let args := args.map (·.getElems) |>.getD #[]
   let args ← ScalarTac.condSimpParseArgs "zmodify" args
   let loc ← Utils.parseOptLocation loc
-  pure (n, args, loc)
+  pure (config, n, args, loc)
 | _ => Lean.Elab.throwUnsupportedSyntax
 
 elab stx:zmodify : tactic =>
   withMainContext do
-  let (n, args, loc) ← parseZModify stx
-  zmodifyTac n args loc
+  let (config, n, args, loc) ← parseZModify stx
+  zmodifyTac config n args loc
 
 attribute [zmodify_simps] Nat.eq_mod_iff_eq_ZMod Int.eq_mod_iff_eq_ZMod div_to_ZMod
 attribute [zmodify_simps] Nat.reduceGcd

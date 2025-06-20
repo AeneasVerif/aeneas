@@ -14,11 +14,6 @@ namespace Aeneas.SimpScalar
 
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 
-structure Config where
-  nonLin : Bool := false
-
-declare_config_elab elabConfig Config
-
 /- Making sure we always reason in terms of `≤` and `<` -/
 attribute [simp_scalar_simps] ge_iff_le gt_iff_lt
 
@@ -177,7 +172,8 @@ theorem BitVec.toNat_lt_two_pow {w} (x : BitVec w) (i : ℕ) (h : w ≤ i) : x.t
 
 attribute [simp_scalar_simps] BitVec.setWidth_eq BitVec.ofNat_eq_ofNat
 
-def simpScalarTac (config : Config) (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
+def simpScalarTac (config : ScalarTac.CondSimpTacConfig)
+  (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
   let addSimpThms : TacticM (Array FVarId) := pure #[]
   let args : ScalarTac.CondSimpArgs := {
       simpThms := #[← simpScalarSimpExt.getTheorems, ← SimpBoolProp.simpBoolPropSimpExt.getTheorems],
@@ -186,15 +182,16 @@ def simpScalarTac (config : Config) (args : ScalarTac.CondSimpPartialArgs) (loc 
       addSimpThms := args.addSimpThms,
       hypsToUse := args.hypsToUse,
     }
-  ScalarTac.condSimpTac "simp_scalar" config.nonLin
+  ScalarTac.condSimpTac "simp_scalar" config
     {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true}
     args addSimpThms false loc
 
 syntax (name := simp_scalar) "simp_scalar" Parser.Tactic.optConfig ("[" (term<|>"*"),* "]")? (location)? : tactic
 
-def parseSimpScalar : TSyntax ``simp_scalar -> TacticM (Config × ScalarTac.CondSimpPartialArgs × Utils.Location)
+def parseSimpScalar :
+TSyntax ``simp_scalar -> TacticM (ScalarTac.CondSimpTacConfig × ScalarTac.CondSimpPartialArgs × Utils.Location)
 | `(tactic| simp_scalar $config $[[$args,*]]? $[$loc:location]?) => do
-  let config ← elabConfig config
+  let config ← ScalarTac.elabCondSimpTacConfig config
   let args := args.map (·.getElems) |>.getD #[]
   let args ← ScalarTac.condSimpParseArgs "simp_scalar" args
   let loc ← Utils.parseOptLocation loc
