@@ -51,23 +51,23 @@ noeq type core_cmp_Ord_t (self : Type0) = {
 assume val core_cmp_Ord_min_default
   (#self : Type0) (ordInst : core_cmp_Ord_t self) : self -> self -> result self
 
-(** [core::cmp::impls::{core::cmp::PartialEq<i32> for i32}#30::eq]:
+(** [core::cmp::impls::{core::cmp::PartialEq<i32> for i32}::eq]:
     Source: '/rustc/library/core/src/cmp.rs', lines 1813:16-1813:50
     Name pattern: [core::cmp::impls::{core::cmp::PartialEq<i32, i32>}::eq] *)
 assume val core_cmp_impls_PartialEqI32I32_eq : i32 -> i32 -> result bool
 
-(** [core::cmp::impls::{core::cmp::PartialOrd<i32> for i32}#76::partial_cmp]:
+(** [core::cmp::impls::{core::cmp::PartialOrd<i32> for i32}::partial_cmp]:
     Source: '/rustc/library/core/src/cmp.rs', lines 1928:16-1928:71
     Name pattern: [core::cmp::impls::{core::cmp::PartialOrd<i32, i32>}::partial_cmp] *)
 assume val core_cmp_impls_PartialOrdI32I32_partial_cmp
   : i32 -> i32 -> result (option core_cmp_Ordering_t)
 
-(** [core::cmp::impls::{core::cmp::Ord for i32}#77::cmp]:
+(** [core::cmp::impls::{core::cmp::Ord for i32}::cmp]:
     Source: '/rustc/library/core/src/cmp.rs', lines 1938:16-1938:55
     Name pattern: [core::cmp::impls::{core::cmp::Ord<i32>}::cmp] *)
 assume val core_cmp_impls_OrdI32_cmp : i32 -> i32 -> result core_cmp_Ordering_t
 
-(** [core::cmp::impls::{core::cmp::Ord for i32}#77::min]:
+(** [core::cmp::impls::{core::cmp::Ord for i32}::min]:
     Source: '/rustc/library/core/src/cmp.rs', lines 1936:12-1936:27
     Name pattern: [core::cmp::impls::{core::cmp::Ord<i32>}::min] *)
 assume val core_cmp_impls_OrdI32_min : i32 -> i32 -> result i32
@@ -112,19 +112,19 @@ let traitdefaulted_methodNoOverride : trait_t noOverride_t = {
     Source: 'tests/src/defaulted_method.rs', lines 19:0-19:19 *)
 type yesOverride_t = unit
 
-(** [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}#1::required_method]:
+(** [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}::required_method]:
     Source: 'tests/src/defaulted_method.rs', lines 21:4-23:5 *)
 let traitdefaulted_methodYesOverride_required_method
   (self : yesOverride_t) : result u32 =
   Ok 42
 
-(** [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}#1::provided_method]:
+(** [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}::provided_method]:
     Source: 'tests/src/defaulted_method.rs', lines 20:0-24:1 *)
 let traitdefaulted_methodYesOverride_provided_method
   (self : yesOverride_t) : result u32 =
   traitdefaulted_methodYesOverride_required_method self
 
-(** Trait implementation: [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}#1]
+(** Trait implementation: [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}]
     Source: 'tests/src/defaulted_method.rs', lines 20:0-24:1 *)
 let traitdefaulted_methodYesOverride : trait_t yesOverride_t = {
   provided_method = traitdefaulted_methodYesOverride_provided_method;

@@ -48,19 +48,19 @@ def Traitdefaulted_methodNoOverride : Trait NoOverride := {
    Source: 'tests/src/defaulted_method.rs', lines 19:0-19:19 -/
 @[reducible] def YesOverride := Unit
 
-/- [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}#1::required_method]:
+/- [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}::required_method]:
    Source: 'tests/src/defaulted_method.rs', lines 21:4-23:5 -/
 def Traitdefaulted_methodYesOverride.required_method
   (self : YesOverride) : Result U32 :=
   ok 42#u32
 
-/- [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}#1::provided_method]:
+/- [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}::provided_method]:
    Source: 'tests/src/defaulted_method.rs', lines 20:0-24:1 -/
 def Traitdefaulted_methodYesOverride.provided_method
   (self : YesOverride) : Result U32 :=
   Traitdefaulted_methodYesOverride.required_method self
 
-/- Trait implementation: [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}#1]
+/- Trait implementation: [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}]
    Source: 'tests/src/defaulted_method.rs', lines 20:0-24:1 -/
 @[reducible]
 def Traitdefaulted_methodYesOverride : Trait YesOverride := {
