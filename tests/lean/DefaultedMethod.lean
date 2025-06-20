@@ -14,6 +14,12 @@ structure Trait (Self : Type) where
   provided_method : Self → Result U32
   required_method : Self → Result U32
 
+/- [defaulted_method::Trait::provided_method]:
+   Source: 'tests/src/defaulted_method.rs', lines 3:4-5:5 -/
+def Trait.provided_method.default
+  {Self : Type} (TraitInst : Trait Self) (self : Self) : Result U32 :=
+  TraitInst.required_method self
+
 /- [defaulted_method::NoOverride]
    Source: 'tests/src/defaulted_method.rs', lines 9:0-9:18 -/
 @[reducible] def NoOverride := Unit
@@ -42,19 +48,19 @@ def Traitdefaulted_methodNoOverride : Trait NoOverride := {
    Source: 'tests/src/defaulted_method.rs', lines 19:0-19:19 -/
 @[reducible] def YesOverride := Unit
 
-/- [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}#1::required_method]:
+/- [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}::required_method]:
    Source: 'tests/src/defaulted_method.rs', lines 21:4-23:5 -/
 def Traitdefaulted_methodYesOverride.required_method
   (self : YesOverride) : Result U32 :=
   ok 42#u32
 
-/- [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}#1::provided_method]:
-   Source: 'tests/src/defaulted_method.rs', lines 3:4-5:5 -/
+/- [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}::provided_method]:
+   Source: 'tests/src/defaulted_method.rs', lines 20:0-24:1 -/
 def Traitdefaulted_methodYesOverride.provided_method
   (self : YesOverride) : Result U32 :=
   Traitdefaulted_methodYesOverride.required_method self
 
-/- Trait implementation: [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}#1]
+/- Trait implementation: [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}]
    Source: 'tests/src/defaulted_method.rs', lines 20:0-24:1 -/
 @[reducible]
 def Traitdefaulted_methodYesOverride : Trait YesOverride := {
@@ -70,11 +76,5 @@ def main : Result Unit :=
   let _ ← Traitdefaulted_methodYesOverride.provided_method ()
   let n ← (↑(core.cmp.impls.OrdI32.min 10#i32 1#i32) : Result I32)
   massert (n = 1#i32)
-
-/- [defaulted_method::Trait::provided_method]:
-   Source: 'tests/src/defaulted_method.rs', lines 3:4-5:5 -/
-def Trait.provided_method.default
-  {Self : Type} (TraitInst : Trait Self) (self : Self) : Result U32 :=
-  TraitInst.required_method self
 
 end defaulted_method

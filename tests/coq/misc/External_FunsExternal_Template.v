@@ -11,7 +11,7 @@ Require Import External_Types.
 Include External_Types.
 Module External_FunsExternal_Template.
 
-(** [core::cell::{core::cell::Cell<T>}#10::get]:
+(** [core::cell::{core::cell::Cell<T>}::get]:
     Source: '/rustc/library/core/src/cell.rs', lines 541:4-541:32
     Name pattern: [core::cell::{core::cell::Cell<@T>}::get] *)
 Axiom core_cell_Cell_get :
@@ -19,8 +19,8 @@ Axiom core_cell_Cell_get :
         core_cell_Cell_t T -> state -> result (state * T)
 .
 
-(** [core::cell::{core::cell::Cell<T>}#11::get_mut]:
-    Source: '/rustc/library/core/src/cell.rs', lines 621:4-621:45
+(** [core::cell::{core::cell::Cell<T>}::get_mut]:
+    Source: '/rustc/library/core/src/cell.rs', lines 612:4-612:45
     Name pattern: [core::cell::{core::cell::Cell<@T>}::get_mut] *)
 Axiom core_cell_Cell_get_mut :
   forall{T : Type},

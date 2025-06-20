@@ -8,6 +8,16 @@ Import ListNotations.
 Local Open Scope Primitives_scope.
 Module Demo.
 
+(** [core::num::{u32}::wrapping_add]:
+    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2025:8-2025:58
+    Name pattern: [core::num::{u32}::wrapping_add] *)
+Axiom core_num_U32_wrapping_add : u32 -> u32 -> result u32.
+
+(** [core::num::{u32}::wrapping_sub]:
+    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2066:8-2066:58
+    Name pattern: [core::num::{u32}::wrapping_sub] *)
+Axiom core_num_U32_wrapping_sub : u32 -> u32 -> result u32.
+
 (** [demo::choose]:
     Source: 'tests/src/demo.rs', lines 8:0-14:1 *)
 Definition choose
@@ -177,16 +187,6 @@ Definition use_counter
   {T : Type} (counterInst : Counter_t T) (cnt : T) : result (usize * T) :=
   counterInst.(Counter_t_incr) cnt
 .
-
-(** [core::num::{u32}#8::wrapping_sub]:
-    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2066:8-2066:58
-    Name pattern: [core::num::{u32}::wrapping_sub] *)
-Axiom core_num_U32_wrapping_sub : u32 -> u32 -> result u32.
-
-(** [core::num::{u32}#8::wrapping_add]:
-    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2025:8-2025:58
-    Name pattern: [core::num::{u32}::wrapping_add] *)
-Axiom core_num_U32_wrapping_add : u32 -> u32 -> result u32.
 
 (** [demo::mod_add]:
     Source: 'tests/src/demo.rs', lines 117:0-125:1 *)

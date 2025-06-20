@@ -19,13 +19,20 @@ Arguments mkBoolTest_t { _ }.
 Arguments BoolTest_t_getTest { _ } _.
 Arguments BoolTest_t_retTest { _ } _.
 
+(** [rename_attribute::BoolTrait::ret_true]:
+    Source: 'tests/src/rename_attribute.rs', lines 16:4-18:5 *)
+Definition boolTrait_retTest_default
+  {Self : Type} (self : Self) : result bool :=
+  Ok true
+.
+
 (** [rename_attribute::{rename_attribute::BoolTrait for bool}::get_bool]:
     Source: 'tests/src/rename_attribute.rs', lines 23:4-25:5 *)
 Definition boolTraitBool_getTest (self : bool) : result bool :=
   Ok self.
 
 (** [rename_attribute::{rename_attribute::BoolTrait for bool}::ret_true]:
-    Source: 'tests/src/rename_attribute.rs', lines 16:4-18:5 *)
+    Source: 'tests/src/rename_attribute.rs', lines 22:0-26:1 *)
 Definition boolTraitBool_retTest (self : bool) : result bool :=
   Ok true.
 
@@ -98,13 +105,6 @@ Fixpoint no_borrows_sum_loop
     Source: 'tests/src/rename_attribute.rs', lines 66:0-76:1 *)
 Definition no_borrows_sum (n : nat) (max : u32) : result u32 :=
   no_borrows_sum_loop n max 0%u32 0%u32
-.
-
-(** [rename_attribute::BoolTrait::ret_true]:
-    Source: 'tests/src/rename_attribute.rs', lines 16:4-18:5 *)
-Definition boolTrait_retTest_default
-  {Self : Type} (self : Self) : result bool :=
-  Ok true
 .
 
 End RenameAttribute.

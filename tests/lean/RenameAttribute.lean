@@ -14,13 +14,18 @@ structure BoolTest (Self : Type) where
   getTest : Self → Result Bool
   retTest : Self → Result Bool
 
+/- [rename_attribute::BoolTrait::ret_true]:
+   Source: 'tests/src/rename_attribute.rs', lines 16:4-18:5 -/
+def BoolTrait.retTest.default {Self : Type} (self : Self) : Result Bool :=
+  ok true
+
 /- [rename_attribute::{rename_attribute::BoolTrait for bool}::get_bool]:
    Source: 'tests/src/rename_attribute.rs', lines 23:4-25:5 -/
 def BoolTraitBool.getTest (self : Bool) : Result Bool :=
   ok self
 
 /- [rename_attribute::{rename_attribute::BoolTrait for bool}::ret_true]:
-   Source: 'tests/src/rename_attribute.rs', lines 16:4-18:5 -/
+   Source: 'tests/src/rename_attribute.rs', lines 22:0-26:1 -/
 def BoolTraitBool.retTest (self : Bool) : Result Bool :=
   ok true
 
@@ -95,10 +100,5 @@ partial_fixpoint
 @[reducible]
 def No_borrows_sum (max : U32) : Result U32 :=
   No_borrows_sum_loop max 0#u32 0#u32
-
-/- [rename_attribute::BoolTrait::ret_true]:
-   Source: 'tests/src/rename_attribute.rs', lines 16:4-18:5 -/
-def BoolTrait.retTest.default {Self : Type} (self : Self) : Result Bool :=
-  ok true
 
 end rename_attribute
