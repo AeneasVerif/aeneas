@@ -20,7 +20,7 @@ Axiom core_cell_Cell_get :
 .
 
 (** [core::cell::{core::cell::Cell<T>}::get_mut]:
-    Source: '/rustc/library/core/src/cell.rs', lines 621:4-621:45
+    Source: '/rustc/library/core/src/cell.rs', lines 612:4-612:45
     Name pattern: [core::cell::{core::cell::Cell<@T>}::get_mut] *)
 Axiom core_cell_Cell_get_mut :
   forall{T : Type},
