@@ -20,6 +20,10 @@ namespace LocalContext
     let ls ← lctx.getAllDecls
     pure (ls.filter (fun d => not d.isImplementationDetail))
 
+  def getAssumptions (lctx : Lean.LocalContext) : MetaM (List Lean.LocalDecl) := do
+    let ls ← lctx.getAllDecls
+    ls.filterM (fun d => do pure (¬ d.isImplementationDetail && (← isProp d.type)))
+
 end LocalContext
 
 end Lean
@@ -245,6 +249,16 @@ section Methods
     existsTelescopeProcess #[] e k
 
 end Methods
+
+inductive Location where
+  /-- Apply the tactic everywhere. Same as `Location.wildcard` -/
+  | wildcard
+  /-- Apply the tactic everywhere, including in the variable types (i.e., in
+      assumptions which are not propositions).
+  --/
+  | wildcard_dep
+  /-- Same as Location -/
+  | targets (hypotheses : Array FVarId) (type : Bool)
 
 def addDeclTac {α} (name : Name) (val : Expr) (type : Expr) (asLet : Bool) (m : Expr → TacticM α) :
   TacticM α :=
@@ -830,13 +844,46 @@ def rewriteAt (cfg : Rewrite.Config) (rpt : Bool)
   else
     evalRewriteSeqAux cfg thms loc
 
-/-- Apply norm_cast to the whole context -/
-def normCastAtAll : TacticM Unit := do
+@[inline] def liftMetaTactic2 (tactic : MVarId → MetaM (Option (α × MVarId))) : TacticM (Option α) :=
   withMainContext do
-  let ctx ← Lean.MonadLCtx.getLCtx
-  let decls ← ctx.getDecls
-  NormCast.normCastTarget {}
-  decls.forM (fun d => NormCast.normCastHyp {} d.fvarId)
+    if let some (res, mvarId) ← tactic (← getMainGoal) then
+      replaceMainGoal [mvarId]
+      pure (some res)
+    else
+      replaceMainGoal []
+      pure none
+
+/-- Copy/paster from `norm_cast`: we need to retrieve the new fvar id -/
+def normCastHyp (cfg : Simp.NormCastConfig) (fvarId : FVarId) : TacticM (Option FVarId) :=
+  liftMetaTactic2 fun goal => do
+    let hyp ← instantiateMVars (← fvarId.getDecl).type
+    let prf ← NormCast.derive hyp cfg
+    return (← applySimpResultToLocalDecl goal fvarId prf false)
+
+/- Return `none` if the goal was closed, otherwise return the modified fvar ids -/
+def normCastAt (loc : Location) : TacticM (Option (Array (FVarId))) := do
+  withMainContext do
+  match loc with
+  | .targets asms tgt =>
+    let mut fvarIds := #[]
+    if tgt then
+      NormCast.normCastTarget {}
+    for fvarId in asms do
+      match ← normCastHyp {} fvarId with
+      | some id => fvarIds := fvarIds.push id
+      | none => return none
+    return some fvarIds
+  | .wildcard =>
+    NormCast.normCastTarget {}
+    let ctx ← Lean.MonadLCtx.getLCtx
+    let decls ← ctx.getDecls
+    let mut fvarIds := #[]
+    for d in decls do
+      match ← normCastHyp {} d.fvarId with
+      | some id => fvarIds := fvarIds.push id
+      | none => return none
+    return some fvarIds
+  | .wildcard_dep => throwError "Unimplemented: normCastAt wildcarp_dep"
 
 @[inline] def tryLiftMetaTactic1 (tactic : MVarId → MetaM (Option MVarId)) (msg : String) : TacticM Unit :=
   withMainContext do
@@ -1560,7 +1607,7 @@ def duplicateAssumptions (toDuplicate : Option (Array FVarId) := none) :
     match toDuplicate with
     | none => pure (← (← getLCtx).getDecls).toArray
     | some decls => do decls.mapM fun d => d.getDecl
-  let props ← decls.filterM (fun d => do pure (← inferType d.type).isProp)
+  let props ← decls.filterM (fun d => isProp d.type)
   trace[Utils] "Current assumptions: {props.map LocalDecl.type}"
   let goal ← getMainGoal
   let goalType ← instantiateMVars (← goal.getType)
@@ -1582,16 +1629,6 @@ def duplicateAssumptions (toDuplicate : Option (Array FVarId) := none) :
 
 elab "duplicate_assumptions" : tactic => do
   let _ ← duplicateAssumptions
-
-inductive Location where
-  /-- Apply the tactic everywhere. Same as `Location.wildcard` -/
-  | wildcard
-  /-- Apply the tactic everywhere, including in the variable types (i.e., in
-      assumptions which are not propositions).
-  --/
-  | wildcard_dep
-  /-- Same as Location -/
-  | targets (hypotheses : Array FVarId) (type : Bool)
 
 /--
 info: example

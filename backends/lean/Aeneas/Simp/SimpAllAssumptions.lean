@@ -56,7 +56,7 @@ private def initEntries (fvars : Array FVarId) : M Unit := do
 private abbrev getSimpTheorems : M SimpTheoremsArray :=
   return (← get).ctx.simpTheorems
 
-private partial def loop : M Bool := do
+private partial def loop (target : Bool) : M Bool := do
   modify fun s => { s with modified := false }
   let simprocs := (← get).simprocs
   -- simplify entries
@@ -105,14 +105,30 @@ private partial def loop : M Bool := do
           ctx              := ctx.setSimpTheorems simpThmsNew
           entries[i]       := { entry with type := typeNew, proof := proofNew, id := .other idNew }
         }
-  if (← get).modified then
-    loop
-  else
-    return false
 
-def main (fvars : Array FVarId) : M (Option (Array FVarId × MVarId)) := do
+  if (← get).modified then
+    loop target
+  else
+    -- We're done with the loop: simplify the target
+    if target then
+      let mvarId := (← get).mvarId
+      let (r, stats) ← simpTarget mvarId (← get).ctx simprocs (stats := { (← get) with })
+      modify fun s => { s with usedTheorems := stats.usedTheorems, diag := stats.diag }
+      match r with
+      | none => return true
+      | some mvarIdNew =>
+        unless mvarId == mvarIdNew do
+          modify fun s => { s with
+            modified := true
+            mvarId   := mvarIdNew
+          }
+        return false
+    else
+      return false
+
+def main (fvars : Array FVarId) (target : Bool) : M (Option (Array FVarId × MVarId)) := do
   initEntries fvars
-  if (← loop) then
+  if (← loop target) then
     return none -- close the goal
   else
     let mvarId := (← get).mvarId
@@ -140,28 +156,31 @@ def main (fvars : Array FVarId) : M (Option (Array FVarId × MVarId)) := do
 
 end SimpAll
 
-def simpAllAssumptionsAux (mvarId : MVarId) (ctx : Simp.Context) (fvars : Array FVarId) (simprocs : SimprocsArray := #[]) (stats : Stats := {}) :
+def simpAllAssumptionsAux (mvarId : MVarId) (ctx : Simp.Context) (fvars : Array FVarId) (target : Bool)
+  (simprocs : SimprocsArray := #[]) (stats : Stats := {}) :
   MetaM (Option (Array FVarId × MVarId) × Stats) := do
   mvarId.withContext do
-    let (r, s) ← (SimpAll.main fvars).run { stats with mvarId, ctx, simprocs }
+    let (r, s) ← (SimpAll.main fvars target).run { stats with mvarId, ctx, simprocs }
     if let .some (_, mvarIdNew) := r then
       if ctx.config.failIfUnchanged && mvarId == mvarIdNew then
         throwError "simp_all made no progress"
     return (r, { s with })
 
 open Utils Simp Elab Tactic in
-def simpAllAssumptions (config : Simp.Config) (simpOnly : Bool) (args : SimpArgs) (mvarId : MVarId) (fvars : Array FVarId) :
+def simpAllAssumptions (config : Simp.Config) (simpOnly : Bool) (args : SimpArgs)
+  (mvarId : MVarId) (fvars : Array FVarId) (target : Bool) :
   MetaM (Option (Array FVarId × MVarId)) := do
   -- Initialize the simp context
   let (ctx, simprocs) ← mkSimpCtx simpOnly config .simpAll args
   -- Apply the simplifier
-  let (result?, _) ← simpAllAssumptionsAux mvarId ctx fvars (simprocs := simprocs)
+  let (result?, _) ← simpAllAssumptionsAux mvarId ctx fvars target (simprocs := simprocs)
   pure result?
 
 open Utils Simp Elab Tactic in
-def evalSimpAllAssumptions (config : Simp.Config) (simpOnly : Bool) (args : SimpArgs) (mvarId : MVarId) (fvars : Array FVarId) :
+def evalSimpAllAssumptions (config : Simp.Config) (simpOnly : Bool) (args : SimpArgs)
+  (mvarId : MVarId) (fvars : Array FVarId) (target : Bool) :
   TacticM (Option (Array FVarId)) := do
-  match ← simpAllAssumptions config simpOnly args mvarId fvars with
+  match ← simpAllAssumptions config simpOnly args mvarId fvars target with
   | none => replaceMainGoal []; pure none
   | some (fvarIds, mvarId) => replaceMainGoal [mvarId]; pure (some fvarIds)
 

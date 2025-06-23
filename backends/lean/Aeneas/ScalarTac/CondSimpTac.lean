@@ -115,8 +115,8 @@ def condSimpTac
   /- Introduce the scalar_tac assumptions - by doing this beforehand we don't have to
      redo it every time we call `scalar_tac`. TODO: also do the `simp_all`. -/
   withMainContext do
-  ScalarTac.scalarTacSaturateForward { nonLin := config.nonLin, saturationPasses := config.saturationPasses }
-    fun scalarTacAsms => do
+  ScalarTac.scalarTacSaturateForward { nonLin := config.nonLin, saturationPasses := config.saturationPasses } none none
+    fun _ scalarTacAsms => do
   trace[CondSimpTac] "Goal after saturating the context: {← getMainGoal}"
   let additionalSimpThms ← addSimpThms
   trace[CondSimpTac] "Goal after adding the additional simp assumptions: {← getMainGoal}"
