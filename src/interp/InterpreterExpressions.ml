@@ -852,7 +852,7 @@ let eval_binary_op_symbolic (config : config) (span : Meta.span) (binop : binop)
           (* These return `(int, bool)` / a pointer which isn't a literal type *)
           | CheckedAdd | CheckedSub | CheckedMul | Offset ->
               craise __FILE__ __LINE__ span "Unimplemented binary operation"
-          | Shl | Shr ->
+          | Shl | Shr | WrappingShl | WrappingShr ->
               (* The number of bits can be of a different integer type
                  than the operand *)
               TLiteral (TInteger int_ty1)
