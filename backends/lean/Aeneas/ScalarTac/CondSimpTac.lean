@@ -83,8 +83,7 @@ def condSimpTacSimp (config : Simp.Config) (args : CondSimpArgs) (loc : Utils.Lo
   if dischWithScalarTac then
     /- Note that when calling `scalar_tac` we saturate only by looking at the target: we have
        already saturated by looking at the assumptions (we do this once and for all beforehand) -/
-    let (ref, d) ← tacticToDischarge (← `(tactic|scalar_tac -saturateAssumptions))
-    let dischargeWrapper := Lean.Elab.Tactic.Simp.DischargeWrapper.custom ref d
+    let dischargeWrapper ← Simp.tacticToDischarge (scalarTac {saturateAssumptions := false})
     dischargeWrapper.with fun discharge? => do
       -- Initialize the simp context
       let (ctx, simprocs) ← Simp.mkSimpCtx true config .simp simpArgs

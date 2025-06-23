@@ -12,6 +12,38 @@ structure SimpArgs where
   addSimpThms : Array Name := #[]
   hypsToUse : Array FVarId := #[]
 
+/- This is adapted from `Lean.Elab.Tactic.tacticToDischarge` -/
+def tacticToDischargeAux (tactic : TacticM Unit) : TacticM (IO.Ref Term.State × Simp.Discharge) := do
+  let ref ← IO.mkRef (← getThe Term.State)
+  let ctx ← readThe Term.Context
+  let disch : Simp.Discharge := fun e => do
+    let mvar ← mkFreshExprSyntheticOpaqueMVar e `simp.discharger
+    let s ← ref.get
+    let runTac? : TermElabM (Option Expr) :=
+      try
+        /- SH: I don't understand why we need this even though we do not do any elaboration
+           (removing those wrappers leads to failures in proofs). -/
+        Term.withoutModifyingElabMetaStateWithInfo do
+          let ngoals ← Term.withSynthesize (postpone := .no) do
+            Tactic.run mvar.mvarId! tactic
+          if ngoals.isEmpty then
+            let result ← instantiateMVars mvar
+            if result.hasExprMVar then
+              return none
+            else
+              return some result
+          else return none
+      catch _ =>
+        return none
+    let (result?, s) ← liftM (m := MetaM) <| Term.TermElabM.run runTac? ctx s
+    ref.set s
+    return result?
+  return (ref, disch)
+
+def tacticToDischarge (tactic : TacticM Unit) : TacticM Simp.DischargeWrapper := do
+  let (ref, d) ← tacticToDischargeAux tactic
+  pure (Lean.Elab.Tactic.Simp.DischargeWrapper.custom ref d)
+
 /- Initialize a context for the `simp` function.
 
    The initialization of the context is adapted from `elabSimpArgs`.
