@@ -245,7 +245,7 @@ def makeAttribute (mapName attributeName : Name) (elabAttribute : Syntax → Met
               else
                 -- Create a pattern
                 let pat ← inferType fv
-                unless (← inferType pat).isProp do
+                unless ← isProp pat do
                   throwError "Found a free variable not bound in the (optional) user provided pattern or in a precondition: {fv}"
                 let curPatFVars ← getFVarIds pat (Std.HashSet.emptyWithCapacity)
                 patFVars := patFVars.union (curPatFVars.insert fv.fvarId!)

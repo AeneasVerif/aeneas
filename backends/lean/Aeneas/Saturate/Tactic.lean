@@ -367,8 +367,8 @@ def matchExpr
 def filterProofTerms (config : Config) (exprs : Array Expr) : MetaM (Array Expr) :=
   if ¬ config.visitProofTerms then
     exprs.filterM fun arg => do
-        let ty ← inferType (← inferType arg)
-        if ty.isProp then pure false
+        let ty ← inferType arg
+        if ← isProp ty then pure false
         else pure true
   else pure exprs
 
@@ -574,7 +574,7 @@ partial def evalSaturateCore
     /- We explore both the type, the expression and the body (if there is) -/
     /- Note that the path is used only when exploring the type of assumptions -/
     let path ←
-      if (← inferType decl.type).isProp then pure (some (.asm decl.fvarId))
+      if ← isProp decl.type then pure (some (.asm decl.fvarId))
       else pure none
     let state ← visit config path state decl.type
     let state ← visit config none state decl.toExpr
@@ -688,7 +688,7 @@ def recomputeAssumptions
   let decls ← declsToExplore.mapM fun d => d.getDecl
   decls.foldlM (fun (state : State) (decl : LocalDecl) => do
     trace[Saturate] "Exploring local decl: {decl.userName}"
-    if (← inferType decl.type).isProp then
+    if ← isProp decl.type then
       let path := some (.asm decl.fvarId)
       visit path state decl.type
     else pure state) state

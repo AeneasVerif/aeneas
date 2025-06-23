@@ -55,7 +55,7 @@ def condSimpParseArgs (tacName : String) (args : TSyntaxArray [`term, `token.«*
         trace[CondSimpTac] "found token: *"
         let decls ← (← getLCtx).getDecls
         let decls ← decls.filterMapM (
-          fun d => do if (← inferType d.type).isProp then pure (some d.fvarId) else pure none)
+          fun d => do if ← isProp d.type then pure (some d.fvarId) else pure none)
         trace[CondSimpTac] "filtered decls: {decls.map Expr.fvar}"
         hypsToUse := hypsToUse.append decls.toArray
       else

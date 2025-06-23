@@ -208,9 +208,7 @@ def getSimpThmNames : CoreM (Array Name) := do
    the assumptions *does* work, hence this peculiar way of simplifying the context. -/
 def simpAsmsTarget (simpOnly : Bool) (config : Simp.Config) (args : Simp.SimpArgs) : TacticM (Option (Array FVarId)) :=
   withMainContext do
-  let lctx ← getLCtx
-  let decls ← lctx.getDecls
-  let props ← decls.filterM (fun d => do pure (← inferType d.type).isProp)
+  let props ← (← getLCtx).getAssumptions
   let props := (props.map fun d => d.fvarId).toArray
   Aeneas.Simp.simpAt simpOnly config args (.targets props true)
 
