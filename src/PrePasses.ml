@@ -883,7 +883,7 @@ let map_join_captured (m1: captured LocalId.Map.t) (m2: captured LocalId.Map.t) 
 (* Update the state of place [p] in the captured map [m] *)
 let add_place (p: place) (c: captured) (m: captured LocalId.Map.t) =
   match p.kind with
-  | PlaceLocal id -> LocalId.Map.update id (Option.map (join_captured c)) m
+  | PlaceLocal id -> LocalId.Map.update id (function | None -> Some c | Some c' -> Some (join_captured c c')) m
   | PlaceProjection _ -> failwith "place projection not supported"
 
 (* Traverse a statement, and compute the free variables, as well
@@ -912,12 +912,18 @@ let compute_captured_stmt (m: captured LocalId.Map.t) (s: statement) : captured 
   | StorageDead _ -> failwith "storage dead"
   | Deinit _ -> failwith "deinit"
 
+let compute_captured_operand (m: captured LocalId.Map.t) (o: operand) : captured LocalId.Map.t =
+  match o with
+  | Copy p -> add_place p Immut m
+  | Move p -> add_place p Move m
+  | Constant _ -> m
+
 let computed_captured_block (m: captured LocalId.Map.t) (b: block) : captured LocalId.Map.t =
   List.fold_left (fun m s -> compute_captured_stmt m s) m b.statements
 
 (** Create a new function for statement [s], according to the state of
     variables computed in [m] *)
-let create_captured_fun (def_id: FunDeclId.id) (dis: Disambiguator.id) (m: captured LocalId.Map.t) (_s: raw_statement) : fun_decl =
+let create_captured_fun (def_id: FunDeclId.id) (dis: Disambiguator.id) locals (m: captured LocalId.Map.t) (s: raw_statement) : fun_decl =
   let default_span : Meta.span =
     let file : Meta.file_id = { name = Local "tmp"; contents = None } in
     let loc : Meta.loc = {line = 1; col = 0} in
@@ -944,10 +950,45 @@ let create_captured_fun (def_id: FunDeclId.id) (dis: Disambiguator.id) (m: captu
 
   (* TODO: Fix name *)
   let name = [PeIdent ("branches", Disambiguator.zero); PeIdent ("foobar", dis)] in
-  let _m_args, _m_locals = LocalId.Map.partition (fun _ c -> c <> Local) m in
+  let m_args, m_locals = LocalId.Map.partition (fun _ c -> c <> Local) m in
 
-  (* TODO: Handle args *)
-  let input_tys = [] in
+  (* LLBC expects as a list of locals:
+     - the return value
+     - the list of arguments
+     - the additional locals
+    We will add the return value later, but we first compute the arguments, and append at the head the
+    remaining locals, before calling List.rev to satisfy the expected ordering
+  *)
+  let inputs = LocalId.Map.fold (fun id _ acc -> List.nth locals (LocalId.to_int id) :: acc) m_args [] in
+  let input_tys = List.map (fun var -> var.var_ty) inputs |> List.rev in
+
+  let locals = LocalId.Map.fold (fun id _ acc -> List.nth locals (LocalId.to_int id) :: acc) m_locals inputs in
+  let locals = List.rev locals in
+
+  (* Compute a map from the index of locals in the original function to their corresponding
+     local index in the new function. *)
+  let _, new_locals_map = List.fold_left (fun (i, m) var ->
+    i + 1, LocalId.Map.add var.index (LocalId.of_int i) m) (1, LocalId.Map.empty) locals in
+  let replace_locals = object
+    inherit [_] map_statement as super
+
+    method! visit_place _ p = match p with
+      | { kind = PlaceLocal pid; _} ->
+          (* All variables should have been captured by the analysis, hence find
+             should not be able to fail *)
+          let new_pid = LocalId.Map.find pid new_locals_map in
+          {p with kind = PlaceLocal new_pid}
+      | { kind = PlaceProjection (p', k); ty} ->
+        let p' = super#visit_place () p' in
+        { kind = PlaceProjection (p', k); ty }
+  end in
+
+  (* Now that we created the mapping from the old local indices to the new ones, we can
+     renumber the new locals to satisfy the LLBC shape: local `i` is in i-th position *)
+  let locals = List.mapi (fun i l -> { l with index = LocalId.of_int (i + 1) }) locals in
+  (* We finally substitute variable occurences by their new index *)
+  let s = replace_locals#visit_raw_statement () s in
+
 
   (* TODO: Add regions *)
   let generics = TypesUtils.empty_generic_params in
@@ -961,8 +1002,9 @@ let create_captured_fun (def_id: FunDeclId.id) (dis: Disambiguator.id) (m: captu
   let return_place = { kind = PlaceLocal LocalId.zero; ty = unit_ty } in
 
   (* Add inputs and locals *)
-  let locals = { arg_count = 0; locals = [return_local] } in
+  let locals = { arg_count = List.length inputs; locals = return_local :: locals } in
   let statements = [
+    create_statement s;
     create_statement (Assign (return_place, unit_rvalue));
     create_statement Return
   ] in
@@ -998,7 +1040,6 @@ let add_to_fundecl_group (crate: crate) (f: fun_decl_id) (new_fs: fun_decl_id li
 
 
 let extract (crate: crate) (f: fun_decl) =
-  Format.printf "Initial function %s\n@." (Print.Crate.crate_fun_decl_to_string crate f);
   match f.body with
   | None -> crate
   | Some body ->
@@ -1015,13 +1056,14 @@ let extract (crate: crate) (f: fun_decl) =
         inherit [_] map_statement as super
 
       method! visit_Switch _ s = match s with
-      | If (_o, sthen, selse) ->
-          let m1 = computed_captured_block LocalId.Map.empty sthen in
-          let m = computed_captured_block m1 selse in
+      | If (o, sthen, selse) ->
+          let m = compute_captured_operand LocalId.Map.empty o in
+          let m = computed_captured_block m sthen in
+          let m = computed_captured_block m selse in
 
           let def_id = gen () in
           let dis = dis_gen () in
-          let new_f = create_captured_fun def_id dis m (Switch s) in
+          let new_f = create_captured_fun def_id dis body.locals.locals m (Switch s) in
           new_funs := new_f :: !new_funs;
           new_funs_ids := def_id :: !new_funs_ids;
           (* TODO: Replace by Call *)
