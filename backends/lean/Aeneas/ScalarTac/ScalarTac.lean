@@ -347,8 +347,13 @@ def scalarTacPartialPreprocess (config : Config) (state : State)
           | trace[ScalarTac] "Goal proven by preprocessing!"; return none
         /- We apply `simpAll` to all the assumptions -/
         applySimpAll (hypsToUseForSimp ++ assumptions ++ nassumptions) simpTarget
+      else if hypsToUseForSimp.size > 0 && simpTarget then
+        /- Even though there is nothing to preprocess, we want to simplify the goal by using the hypotheses to use,
+           to make sure we propagate equalities for instance -/
         let some _ ← Simp.simpAt true {failIfUnchanged := false, maxDischargeDepth := 0}
           { hypsToUse := hypsToUseForSimp } (.targets #[] simpTarget)
+          | trace[ScalarTac] "Goal proven by preprocessing!"; return none
+        pure (some assumptions)
       else
         pure (some assumptions)
     let some assumptions := r
