@@ -285,7 +285,7 @@ def bvifyTacSimp (loc : Utils.Location) : TacticM (Option (Array FVarId)) := do
       simpThms := #[← bvifySimpExt.getTheorems, ← SimpBoolProp.simpBoolPropSimpExt.getTheorems]
       simprocs := #[← bvifySimprocExt.getSimprocs, ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs]
     }
-  ScalarTac.condSimpTacSimp bvifySimpConfig args loc #[] false
+  ScalarTac.condSimpTacSimp bvifySimpConfig args loc #[] #[] none
 
 def bvifyTac (config : Config) (n : Expr) (loc : Utils.Location) : TacticM Unit := do
   let args : ScalarTac.CondSimpArgs := {

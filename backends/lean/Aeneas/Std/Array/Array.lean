@@ -119,12 +119,12 @@ def Array.set {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) : Arr
 def Array.set_opt {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: Option α) : Array α n :=
   ⟨ v.val.set_opt i.val x, by have := v.property; simp [*] ⟩
 
-@[simp]
+@[simp, simp_lists_simps]
 theorem Array.set_val_eq {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) :
   (v.set i x).val = v.val.set i.val x := by
   simp [set]
 
-@[simp]
+@[simp, simp_lists_simps]
 theorem Array.set_opt_val_eq {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: Option α) :
   (v.set_opt i x).val = v.val.set_opt i.val x := by
   simp [set_opt]

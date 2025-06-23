@@ -278,8 +278,17 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
 structure State where
   saturateState : Saturate.State
 
+def State.new (config : Config) : MetaM State := do
+  let env ← getEnv
+  let rules :=
+    if config.nonLin then #[scalarTacAttribute, scalarTacNonLinAttribute]
+    else #[scalarTacAttribute]
+  let rules := rules.map fun s => s.ext.getState env
+  let saturateState := Saturate.State.new rules
+  pure { saturateState }
+
 def scalarTacPartialPreprocess (config : Config) (state : State)
-  (oldAssumptions assumptions : Array FVarId) (simpTarget : Bool) :
+  (hypsToUseForSimp assumptionsToPreprocess : Array FVarId) (simpTarget : Bool) :
   Tactic.TacticM (Option (State × Array FVarId)) := do
   Tactic.focus do
   Tactic.withMainContext do
@@ -296,7 +305,7 @@ def scalarTacPartialPreprocess (config : Config) (state : State)
        don't want `simp_all` to use assumptions of the shape `∀ x, P x`)) -/
     {simpArgs with addSimpThms := #[``forall_eq_forall']}
     -- TODO: it would be good to always simplify the target before exploring it to saturate
-    (.targets assumptions simpTarget)
+    (.targets assumptionsToPreprocess simpTarget)
   -- We might have proven the goal
   let some assumptions := r
     | trace[ScalarTac] "Goal proven by preprocessing!"; return none
@@ -309,41 +318,41 @@ def scalarTacPartialPreprocess (config : Config) (state : State)
   }
   scalarTacSaturateForward satConfig state.saturateState (some assumptions) fun saturateState nassumptions => do
   let state := { state with saturateState }
-  let assumptions := assumptions ++ nassumptions
 
   let finish : Tactic.TacticM (Option (State × Array FVarId)) := do
     trace[ScalarTac] "Goal after saturation: {← getMainGoal}"
     -- Apply `simpAll` to the *new assumptions*
     let applySimpAll assumptions simpTarget := do
-      match
-        ← tryTactic? do
+      let r ← tryTactic? do
           /- By setting the maxDischargeDepth at 0, we make sure that assumptions of the shape `∀ x, P x → ...`
               will not have any effect. This is important because it often happens that the user instantiates
               one such assumptions with specific arguments, meaning that if we call `simpAll` naively, those
               instantiations will get simplified to `True` and thus eliminated. -/
-          Simp.simpAllAssumptions
+          Simp.evalSimpAllAssumptions
             {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 0} true
-            simpArgs (← getMainGoal) assumptions simpTarget
-      with
-      | some r => pure r
-      | none => pure (some (assumptions, ← getMainGoal))
+            simpArgs assumptions simpTarget
+      if r.isSome then trace[ScalarTac] "applySimpAll succeeded"
+      else trace[ScalarTac] "applySimpAll failed"
+      match r with
+      | some (some (fvars, _)) => pure (some fvars)
+      | some none | none => pure (some assumptions)
     let r ← do
-      if config.simpAllMaxSteps ≠ 0 then
+      if config.simpAllMaxSteps ≠ 0 ∧ assumptionsToPreprocess.size + nassumptions.size > 0 then
         /- Simplify the new assumptions with the old assumptions (it's often enough to go in that direction) -/
-        let some assumptions ← Simp.simpAt true {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1}
-          {simpArgs with hypsToUse := oldAssumptions} (.targets assumptions false)
+        let some nassumptions ← Simp.simpAt true {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1}
+          {simpArgs with hypsToUse := hypsToUseForSimp ++ assumptions} (.targets nassumptions false)
           | trace[ScalarTac] "Goal proven by preprocessing!"; return none
         /- Apply `simpAll` on the new assumptions -/
-        let some (assumptions, mvarId) ← applySimpAll assumptions false
+        let some nassumptions ← applySimpAll nassumptions false
           | trace[ScalarTac] "Goal proven by preprocessing!"; return none
-        /- We apply `simpAll` on the old and new assumptions -/
-        setGoals [mvarId]
-        applySimpAll (oldAssumptions ++ assumptions) simpTarget
+        /- We apply `simpAll` to all the assumptions -/
+        applySimpAll (hypsToUseForSimp ++ assumptions ++ nassumptions) simpTarget
+        let some _ ← Simp.simpAt true {failIfUnchanged := false, maxDischargeDepth := 0}
+          { hypsToUse := hypsToUseForSimp } (.targets #[] simpTarget)
       else
-        pure (some (assumptions, ← getMainGoal))
-    let some (assumptions, mvarId) := r
+        pure (some assumptions)
+    let some assumptions := r
       | trace[ScalarTac] "Goal proven by preprocessing!"; return none
-    setGoals [mvarId]
     trace[ScalarTac] "Goal after simpAll: {← getMainGoal}"
 
     -- Call `simp` again, this time to inline the let-bindings (otherwise, omega doesn't always manage to deal with them)
@@ -357,9 +366,16 @@ def scalarTacPartialPreprocess (config : Config) (state : State)
       | trace[ScalarTac] "Goal proven by preprocessing!"; return none
     trace[ScalarTac] "Goal after normCast: {← getMainGoal}"
     -- Call `simp` again because `normCast` sometimes does weird things
-    let some assumptions ← Simp.simpAt true {failIfUnchanged := false, maxDischargeDepth := 1} simpArgs (.targets assumptions simpTarget)
+    let some assumptions ← Simp.simpAt true {failIfUnchanged := false, maxDischargeDepth := 1} simpArgs
+      (.targets assumptions simpTarget)
       | trace[ScalarTac] "Goal proven by preprocessing!"; return none
     trace[ScalarTac] "Goal after 2nd call to simpAt: {← getMainGoal}"
+    /- Remove the occurrences of `forall'` in the target -/
+    if simpTarget then
+      let some _ ← Simp.simpAt true {failIfUnchanged := false, maxDischargeDepth := 0}
+        { declsToUnfold := #[``forall'] } (.targets #[] simpTarget)
+        | trace[ScalarTac] "Goal proven by preprocessing!"; return none
+    trace[ScalarTac] "Goal after eliminating `forall'` in the target: {← getMainGoal}"
     -- We modified the assumptions in the context so we need to update the state accordingly
     let saturateState ← Saturate.recomputeAssumptions state.saturateState none assumptions
     let state := { state with saturateState }
@@ -445,6 +461,25 @@ def scalarTac (config : Config) : TacticM Unit := do
 elab "scalar_tac" config:Parser.Tactic.optConfig : tactic => do
   let config ← elabConfig config
   scalarTac config
+
+/-- Incremental version of `scalar_tac`, where we call preprocessing several times to incrementally
+    saturate the context.
+    TODO: do we really need the config?
+ -/
+def incrScalarTac (config : Config) (state : State) (toClear : Array FVarId) (assumptions : Array FVarId) : TacticM Unit := do
+  Tactic.focus do
+  Tactic.withMainContext do
+  /- Clear the useless assumptions -/
+  let mvarId ← (← getMainGoal).tryClearMany toClear
+  setGoals [mvarId]
+  /- Saturate by exploring only the goal -/
+  let some (_, _) ← scalarTacPartialPreprocess config state assumptions #[] true
+    | trace[ScalarTac] "incrScalarTac: goal proven by preprocessing"
+  trace[ScalarTac] "Goal after final preprocessing: {← getMainGoal}"
+  /- Call omega -/
+  trace[ScalarTac] "Calling omega"
+  Tactic.Omega.omegaTactic {}
+  trace[ScalarTac] "Goal proved!"
 
 -- For termination proofs
 syntax "int_decr_tac" : tactic

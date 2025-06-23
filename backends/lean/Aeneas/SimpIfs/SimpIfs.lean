@@ -57,7 +57,7 @@ elab stx:simp_ifs : tactic =>
   let (config, args, loc) ← parseSimpIfs stx
   simpIfsTac config args loc
 
-example [Inhabited α] (i j : Nat) (h :i ≥ j ∧ i < j + 1) : (if i = j then 0 else 1) = 0 := by
+example {α} [Inhabited α] (i j : Nat) (h :i ≥ j ∧ i < j + 1) : (if i = j then 0 else 1) = 0 := by
   simp_ifs
 
 end Aeneas.SimpIfs

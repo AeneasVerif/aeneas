@@ -71,25 +71,31 @@ structure CondSimpArgs where
   addSimpThms : Array Name := #[]
   hypsToUse : Array FVarId := #[]
 
+def CondSimpArgs.toSimpArgs (args : CondSimpArgs) : Simp.SimpArgs := {
+    simpThms := args.simpThms,
+    simprocs := args.simprocs,
+    declsToUnfold := args.declsToUnfold,
+    addSimpThms := args.addSimpThms,
+    hypsToUse := args.hypsToUse }
+
 def condSimpTacSimp (config : Simp.Config) (args : CondSimpArgs) (loc : Utils.Location)
-  (additionalAsms : Array FVarId := #[]) (dischWithScalarTac : Bool) : TacticM (Option (Array FVarId)) := do
+  (toClear : Array FVarId := #[])
+  (additionalAsms : Array FVarId := #[]) (state : Option (ScalarTac.State × Array FVarId)) :
+  TacticM (Option (Array FVarId)) := do
   withMainContext do
-  let simpArgs : Simp.SimpArgs :=
-    {simpThms := args.simpThms,
-     simprocs := args.simprocs,
-     declsToUnfold := args.declsToUnfold,
-     addSimpThms := args.addSimpThms,
-     hypsToUse := args.hypsToUse ++ additionalAsms}
-  if dischWithScalarTac then
+  let simpArgs := args.toSimpArgs
+  let simpArgs := { simpArgs with hypsToUse := simpArgs.hypsToUse ++ additionalAsms }
+  match state with
+  | some (state, asms) =>
     /- Note that when calling `scalar_tac` we saturate only by looking at the target: we have
        already saturated by looking at the assumptions (we do this once and for all beforehand) -/
-    let dischargeWrapper ← Simp.tacticToDischarge (scalarTac {saturateAssumptions := false})
+    let dischargeWrapper ← Simp.tacticToDischarge (incrScalarTac {saturateAssumptions := false} state toClear asms)
     dischargeWrapper.with fun discharge? => do
       -- Initialize the simp context
       let (ctx, simprocs) ← Simp.mkSimpCtx true config .simp simpArgs
       -- Apply the simplifier
       pure ((← Simp.customSimpLocation ctx simprocs discharge? loc).fst)
-  else
+  | none =>
     Simp.simpAt true config simpArgs loc
 
 /-- A helper to define tactics which perform conditional simplifications with `scalar_tac` as a discharger. -/
@@ -101,22 +107,45 @@ def condSimpTac
   Elab.Tactic.focus do
   withMainContext do
   trace[CondSimpTac] "Initial goal: {← getMainGoal}"
-  /- -/
-  let toDuplicate ← do
-    match loc with
-    | .wildcard => pure none
-    | .wildcard_dep => throwError "{tacName} does not support using location `Utils.Location.wildcard_dep`"
-    | .targets hyps _ => pure (some hyps)
-  /- First duplicate the propositions in the context: we will need the original ones (which mention
-     integers rather than bit-vectors) for `scalar_tac` to succeed when doing the conditional rewritings. -/
-  let (oldAsms, newAsms) ← Utils.duplicateAssumptions toDuplicate
-  trace[CondSimpTac] "Goal after duplicating the assumptions: {← getMainGoal}"
-  /- Introduce the scalar_tac assumptions - by doing this beforehand we don't have to
-     redo it every time we call `scalar_tac`. TODO: also do the `simp_all`. -/
+  /- First duplicate the propositions in the context: we need the preprocessing of `scalar_tac` to modify
+     the assumptions, but we need to preserve a copy so that we can present a clean state to the user later
+     (and pretend nothing happened). Note that we do this in two times: we want to treat the simp
+     theorems provided by the user in `args` separately from the other assumptions. -/
+  let allAssumptions ← pure (← (← getLCtx).getAssumptions).toArray
+  trace[CondSimpTac] "allAssumptions: {allAssumptions.map fun d => Expr.fvar d.fvarId}"
+  let (_, hypsToUse) ← Utils.duplicateAssumptions (some args.hypsToUse)
   withMainContext do
-  ScalarTac.scalarTacSaturateForward { nonLin := config.nonLin, saturationPasses := config.saturationPasses } none none
-    fun _ scalarTacAsms => do
-  trace[CondSimpTac] "Goal after saturating the context: {← getMainGoal}"
+  trace[CondSimpTac] "Goal after duplicating the hyps to use: {← getMainGoal}"
+  trace[CondSimpTac] "hypsToUse: {hypsToUse.map Expr.fvar}"
+  /- -/
+  let (oldAsms, newAsms) ← Utils.duplicateAssumptions (some (allAssumptions.map LocalDecl.fvarId))
+  let toClear := oldAsms
+  withMainContext do
+  trace[CondSimpTac] "Goal after duplicating the assumptions: {← getMainGoal}"
+  trace[CondSimpTac] "newAsms: {newAsms.map Expr.fvar}"
+  /- Preprocess the assumptions -/
+  let scalarConfig : ScalarTac.Config := { nonLin := config.nonLin, saturationPasses := config.saturationPasses }
+  let state ← State.new scalarConfig
+  /- First the hyps to use -/
+  let some (_, hypsToUse) ← scalarTacPartialPreprocess scalarConfig state #[] hypsToUse false
+    | trace[CondSimpTac] "Goal proven through preprocessing!"; return
+  withMainContext do
+  trace[CondSimpTac] "Goal after preprocessing the hyps to use ({hypsToUse.map Expr.fvar}): {← getMainGoal}"
+  /- Remove the `forall'` and simplify the hyps to use -/
+  let simpHypsToUseArgs := { args.toSimpArgs with hypsToUse := #[], declsToUnfold := #[``forall'] }
+  let some hypsToUse ← Simp.simpAt true {failIfUnchanged := false, maxDischargeDepth := 0}
+        simpHypsToUseArgs (.targets hypsToUse false)
+    | trace[ScalarTac] "Goal proven by preprocessing!"; return
+  let args := { args with hypsToUse }
+  withMainContext do
+  trace[CondSimpTac] "Goal after simplifying the preprocessed hyps to use ({hypsToUse.map Expr.fvar}): {← getMainGoal}"
+  /- Preprocess the "regular" assumptions -/
+  let some (state, newAsms) ← scalarTacPartialPreprocess scalarConfig state #[] newAsms false
+    | trace[CondSimpTac] "Goal proven through preprocessing!"; return
+  withMainContext do
+  trace[CondSimpTac] "Goal after the initial preprocessing: {← getMainGoal}"
+  trace[CondSimpTac] "newAsms: {newAsms.map Expr.fvar}"
+  /- Introduce the additional simp theorems -/
   let additionalSimpThms ← addSimpThms
   trace[CondSimpTac] "Goal after adding the additional simp assumptions: {← getMainGoal}"
   /- Simplify the targets (note that we preserve the new assumptions for `scalar_tac`) -/
@@ -127,12 +156,12 @@ def condSimpTac
     | .targets hyps type => pure (Utils.Location.targets hyps type)
   let nloc ←
     if doFirstSimp then
-      match ← condSimpTacSimp simpConfig args loc additionalSimpThms false with
+      match ← condSimpTacSimp simpConfig args loc toClear additionalSimpThms none with
       | none => return
       | some freshFvarIds =>
         match loc with
         | .wildcard => pure (Utils.Location.targets freshFvarIds true)
-        | .wildcard_dep => throwError "Unreachable"
+        | .wildcard_dep => throwError "{tacName} does not support using location `Utils.Location.wildcard_dep`"
         | .targets _ type => pure (Utils.Location.targets freshFvarIds type)
     else pure loc
   trace[CondSimpTac] "Goal after simplifying: {← getMainGoal}"
@@ -140,14 +169,14 @@ def condSimpTac
      TODO: scalar_tac should only be allowed to preprocess `scalarTacAsms`.
      TODO: we should preprocess those.
    -/
-  let _ ← condSimpTacSimp simpConfig args nloc additionalSimpThms true
+  let _ ← condSimpTacSimp simpConfig args nloc toClear additionalSimpThms (some (state, newAsms))
   if (← getUnsolvedGoals) == [] then return
   /- Clear the additional assumptions -/
-  Utils.clearFVarIds scalarTacAsms
-  trace[CondSimpTac] "Goal after clearing the scalar_tac assumptions: {← getMainGoal}"
-  Utils.clearFVarIds newAsms
+  setGoals [← (← getMainGoal).tryClearMany hypsToUse]
+  trace[CondSimpTac] "Goal after clearing the duplicated hypotheses to use: {← getMainGoal}"
+  setGoals [← (← getMainGoal).tryClearMany newAsms]
   trace[CondSimpTac] "Goal after clearing the duplicated assumptions: {← getMainGoal}"
-  Utils.clearFVarIds additionalSimpThms
+  setGoals [← (← getMainGoal).tryClearMany additionalSimpThms]
   trace[CondSimpTac] "Goal after clearing the additional theorems: {← getMainGoal}"
 
 end Aeneas.ScalarTac

@@ -21,8 +21,8 @@ namespace LocalContext
     pure (ls.filter (fun d => not d.isImplementationDetail))
 
   def getAssumptions (lctx : Lean.LocalContext) : MetaM (List Lean.LocalDecl) := do
-    let ls ← lctx.getAllDecls
-    ls.filterM (fun d => do pure (¬ d.isImplementationDetail && (← isProp d.type)))
+    let ls ← lctx.getDecls
+    ls.filterM (fun d => isProp d.type)
 
 end LocalContext
 
@@ -1606,8 +1606,9 @@ def duplicateAssumptions (toDuplicate : Option (Array FVarId) := none) :
   let decls ← do
     match toDuplicate with
     | none => pure (← (← getLCtx).getDecls).toArray
-    | some decls => do decls.mapM fun d => d.getDecl
-  let props ← decls.filterM (fun d => isProp d.type)
+    | some decls => decls.mapM fun d => d.getDecl
+  trace[Utils] "All declarations: {decls.map fun d => Expr.fvar d.fvarId}"
+  let props ← decls.filterM (fun d => do isProp d.type)
   trace[Utils] "Current assumptions: {props.map LocalDecl.type}"
   let goal ← getMainGoal
   let goalType ← instantiateMVars (← goal.getType)
@@ -1622,7 +1623,6 @@ def duplicateAssumptions (toDuplicate : Option (Array FVarId) := none) :
     let e ← mkLambdaFVars #[var] mgoal
     let e := mkApp e (.fvar d.fvarId)
     currentGoal.assign e
-    --currentGoal.assign (.letE d.userName d.type (.fvar d.fvarId) mgoal false)
     replaceMainGoal [mgoal.mvarId!]
     pure var.fvarId!
   pure (props.map LocalDecl.fvarId, newProps)

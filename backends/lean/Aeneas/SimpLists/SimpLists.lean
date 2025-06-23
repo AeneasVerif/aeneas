@@ -35,6 +35,7 @@ attribute [simp_lists_simps]
   Nat.testBit_two_pow_add_eq
 
 attribute [simp_lists_simps] List.map_map List.map_id_fun List.map_id_fun' id_eq
+attribute [simp_lists_simps] Fin.getElem!_fin
 
 def simpListsTac (config : ScalarTac.CondSimpTacConfig)
   (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do

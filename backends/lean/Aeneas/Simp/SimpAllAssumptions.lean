@@ -12,6 +12,8 @@ namespace Aeneas.Simp
 
 open Lean Meta
 
+initialize registerTraceClass `Aeneas.Meta.Tactic.simp.all
+
 open Simp (Stats SimprocsArray)
 
 namespace SimpAll
@@ -126,7 +128,8 @@ private partial def loop (target : Bool) : M Bool := do
     else
       return false
 
-def main (fvars : Array FVarId) (target : Bool) : M (Option (Array FVarId × MVarId)) := do
+def main (fvars : Array FVarId) (target : Bool) :
+  M (Option (Array FVarId × Std.HashMap FVarId FVarId × MVarId)) := do
   initEntries fvars
   if (← loop target) then
     return none -- close the goal
@@ -140,6 +143,9 @@ def main (fvars : Array FVarId) (target : Bool) : M (Option (Array FVarId × MVa
     let mut toClear := #[]
     let mut preserved := #[]
     let mut modified := false
+    let mut fvarIdMap := Std.HashMap.emptyWithCapacity
+    let mut toRemap := #[]
+    let mut i := 0
     for e in (← get).entries do
       if e.type.isTrue then
         -- Do not assert `True` hypotheses
@@ -148,20 +154,33 @@ def main (fvars : Array FVarId) (target : Bool) : M (Option (Array FVarId × MVa
         toClear := toClear.push e.fvarId
         toAssert := toAssert.push { userName := e.userName, type := e.type, value := e.proof }
         modified := true
+        toRemap := toRemap.push (e.fvarId, i)
+        i := i + 1
       else
         preserved := preserved.push e.fvarId
+        fvarIdMap := fvarIdMap.insert e.fvarId e.fvarId
+    let _ ← mvarId.withContext do trace[Aeneas.Meta.Tactic.simp.all] "preserved: {preserved.map Expr.fvar}"
+    let _ ← mvarId.withContext do
+      trace[Aeneas.Meta.Tactic.simp.all] "toClear: {← toClear.mapM fun fid => do pure (Expr.fvar fid, ← inferType (Expr.fvar fid))}"
+    let _ ← mvarId.withContext do trace[Aeneas.Meta.Tactic.simp.all] "toRemap: {toRemap.map (Expr.fvar ∘ Prod.fst)}"
     let (freshIds, mvarId) ← mvarId.assertHypotheses toAssert
+    let _ ← mvarId.withContext do trace[Aeneas.Meta.Tactic.simp.all] "freshIds: {freshIds.map Expr.fvar}"
+    trace[Aeneas.Meta.Tactic.simp.all] "Before clearing: {mvarId}"
     let mvarId ← mvarId.tryClearMany toClear
-    pure (some (preserved ++ freshIds, mvarId))
+    trace[Aeneas.Meta.Tactic.simp.all] "After clearing: {mvarId}"
+    for (fvarId, id) in toRemap do
+      fvarIdMap := fvarIdMap.insert fvarId freshIds[id]!
+    pure (some (preserved ++ freshIds, fvarIdMap, mvarId))
 
 end SimpAll
 
 def simpAllAssumptionsAux (mvarId : MVarId) (ctx : Simp.Context) (fvars : Array FVarId) (target : Bool)
   (simprocs : SimprocsArray := #[]) (stats : Stats := {}) :
-  MetaM (Option (Array FVarId × MVarId) × Stats) := do
+  MetaM (Option (Array FVarId × Std.HashMap FVarId FVarId × MVarId) × Stats) := do
   mvarId.withContext do
+    trace[Aeneas.Meta.Tactic.simp.all] "Initial mvar: {mvarId}"
     let (r, s) ← (SimpAll.main fvars target).run { stats with mvarId, ctx, simprocs }
-    if let .some (_, mvarIdNew) := r then
+    if let .some (_, _, mvarIdNew) := r then
       if ctx.config.failIfUnchanged && mvarId == mvarIdNew then
         throwError "simp_all made no progress"
     return (r, { s with })
@@ -169,7 +188,7 @@ def simpAllAssumptionsAux (mvarId : MVarId) (ctx : Simp.Context) (fvars : Array 
 open Utils Simp Elab Tactic in
 def simpAllAssumptions (config : Simp.Config) (simpOnly : Bool) (args : SimpArgs)
   (mvarId : MVarId) (fvars : Array FVarId) (target : Bool) :
-  MetaM (Option (Array FVarId × MVarId)) := do
+  MetaM (Option (Array FVarId × Std.HashMap FVarId FVarId × MVarId)) := do
   -- Initialize the simp context
   let (ctx, simprocs) ← mkSimpCtx simpOnly config .simpAll args
   -- Apply the simplifier
@@ -178,13 +197,10 @@ def simpAllAssumptions (config : Simp.Config) (simpOnly : Bool) (args : SimpArgs
 
 open Utils Simp Elab Tactic in
 def evalSimpAllAssumptions (config : Simp.Config) (simpOnly : Bool) (args : SimpArgs)
-  (mvarId : MVarId) (fvars : Array FVarId) (target : Bool) :
-  TacticM (Option (Array FVarId)) := do
-  match ← simpAllAssumptions config simpOnly args mvarId fvars target with
+  (fvars : Array FVarId) (target : Bool) :
+  TacticM (Option (Array FVarId × Std.HashMap FVarId FVarId)) := do
+  match ← simpAllAssumptions config simpOnly args (← getMainGoal) fvars target with
   | none => replaceMainGoal []; pure none
-  | some (fvarIds, mvarId) => replaceMainGoal [mvarId]; pure (some fvarIds)
-
-initialize
-  registerTraceClass `Aeneas.Meta.Tactic.simp.all
+  | some (fvarIds, idsMap, mvarId) => replaceMainGoal [mvarId]; pure (some (fvarIds, idsMap))
 
 end Aeneas.Simp

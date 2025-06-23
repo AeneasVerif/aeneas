@@ -751,6 +751,14 @@ instance (ty : UScalarTy) : Inhabited (UScalar ty) := by
 instance (ty : IScalarTy) : Inhabited (IScalar ty) := by
   constructor; cases ty <;> apply (IScalar.ofInt 0 (by simp [IScalar.cMin, IScalar.cMax, IScalar.rMin, IScalar.rMax]; simp_bounds))
 
+@[simp, simp_scalar_simps]
+theorem UScalar.default_val {ty} : (default : UScalar ty).val = 0 := by
+  simp only [default]; cases ty <;> simp
+
+@[simp, simp_scalar_simps]
+theorem UScalar.default_bv {ty} : (default : UScalar ty).bv = 0 := by
+  simp only [default]; cases ty <;> simp
+
 theorem IScalar.min_lt_max (ty : IScalarTy) : IScalar.min ty < IScalar.max ty := by
   cases ty <;> simp [IScalar.min, IScalar.max] <;> (try simp_bounds)
   have : (0 : Int) < 2 ^ (System.Platform.numBits - 1) := by simp
