@@ -286,7 +286,7 @@ def State.new (config : Config) : MetaM State := do
   pure { saturateState }
 
 def scalarTacPartialPreprocess (config : Config) (state : State)
-  (hypsToUseForSimp assumptionsToPreprocess : Array FVarId) (simpTarget : Bool) :
+  (zetaDelta : Bool) (hypsToUseForSimp assumptionsToPreprocess : Array FVarId) (simpTarget : Bool) :
   Tactic.TacticM (Option (State × Array FVarId)) := do
   Tactic.focus do
   Tactic.withMainContext do
@@ -359,7 +359,10 @@ def scalarTacPartialPreprocess (config : Config) (state : State)
     trace[ScalarTac] "Goal after simpAll: {← getMainGoal}"
 
     -- Call `simp` again, this time to inline the let-bindings (otherwise, omega doesn't always manage to deal with them)
-    let r ← Simp.simpAt true {zetaDelta := true, failIfUnchanged := false, maxDischargeDepth := 1} simpArgs (.targets assumptions simpTarget)
+    let r ← do
+      if zetaDelta then
+        Simp.simpAt true {zetaDelta := true, failIfUnchanged := false, maxDischargeDepth := 1} simpArgs (.targets assumptions simpTarget)
+      else pure assumptions
     -- We might have proven the goal
     let some assumptions := r
       | trace[ScalarTac] "Goal proven by preprocessing!"; return none
@@ -476,7 +479,7 @@ def incrScalarTac (config : Config) (state : State) (toClear : Array FVarId) (as
   let mvarId ← (← getMainGoal).tryClearMany toClear
   setGoals [mvarId]
   /- Saturate by exploring only the goal -/
-  let some (_, _) ← scalarTacPartialPreprocess config state assumptions #[] true
+  let some (_, _) ← scalarTacPartialPreprocess config state (zetaDelta := true) assumptions #[] true
     | trace[ScalarTac] "incrScalarTac: goal proven by preprocessing"
   trace[ScalarTac] "Goal after final preprocessing: {← getMainGoal}"
   /- Call omega -/

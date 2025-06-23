@@ -126,8 +126,10 @@ def condSimpTac
   /- Preprocess the assumptions -/
   let scalarConfig : ScalarTac.Config := { nonLin := config.nonLin, saturationPasses := config.saturationPasses }
   let state ← State.new scalarConfig
-  /- First the hyps to use -/
-  let some (_, hypsToUse) ← scalarTacPartialPreprocess scalarConfig state #[] hypsToUse false
+  /- First the hyps to use.
+     Note that we do not inline the local let-declarations: we will do this only for the "regular" assumptions
+     and the target. -/
+  let some (_, hypsToUse) ← scalarTacPartialPreprocess scalarConfig state (zetaDelta := false) #[] hypsToUse false
     | trace[CondSimpTac] "Goal proven through preprocessing!"; return
   withMainContext do
   trace[CondSimpTac] "Goal after preprocessing the hyps to use ({hypsToUse.map Expr.fvar}): {← getMainGoal}"
@@ -140,7 +142,7 @@ def condSimpTac
   withMainContext do
   trace[CondSimpTac] "Goal after simplifying the preprocessed hyps to use ({hypsToUse.map Expr.fvar}): {← getMainGoal}"
   /- Preprocess the "regular" assumptions -/
-  let some (state, newAsms) ← scalarTacPartialPreprocess scalarConfig state #[] newAsms false
+  let some (state, newAsms) ← scalarTacPartialPreprocess scalarConfig state (zetaDelta := true) #[] newAsms false
     | trace[CondSimpTac] "Goal proven through preprocessing!"; return
   withMainContext do
   trace[CondSimpTac] "Goal after the initial preprocessing: {← getMainGoal}"
