@@ -328,11 +328,16 @@ def scalarTacPartialPreprocess (config : Config) (simpArgs : Simp.SimpArgs) (sta
           Simp.evalSimpAllAssumptions
             {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 0} true
             simpArgs assumptions simpTarget
-      if r.isSome then trace[ScalarTac] "applySimpAll succeeded"
-      else trace[ScalarTac] "applySimpAll failed"
       match r with
-      | some (some (fvars, _)) => pure (some fvars)
-      | some none | none => pure (some assumptions)
+      | some r =>
+        trace[ScalarTac] "applySimpAll succeeded"
+        match r with
+        | some (fvars, _) => pure (some fvars)
+        | none => pure none -- Goal proven through `simpAll`
+      | none =>
+        trace[ScalarTac] "applySimpAll failed"
+        -- `simpAll` failed: let's just continue with the same state as before
+        pure (some assumptions)
     let r ← do
       if config.simpAllMaxSteps ≠ 0 ∧ assumptionsToPreprocess.size + nassumptions.size > 0 then
         /- Simplify the new assumptions with the old assumptions (it's often enough to go in that direction) -/
