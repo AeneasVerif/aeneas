@@ -1,5 +1,6 @@
 import Aeneas.SimpLists.SimpLists
 import Aeneas.List.List
+import Aeneas.Std.Slice
 
 example [Inhabited α] (l : List α) (x : α) (i j : Nat) (hj : i ≠ j) : (l.set j x)[i]! = l[i]! := by
   simp_lists
@@ -23,4 +24,20 @@ example (CList : Type) (l : CList) (get : CList → Nat → Bool) (set : CList �
 
 example (CList : Type) (l : CList) (get : CList → Nat → Bool) (set : CList → Nat → Bool → CList)
   (h : ∀ i j l x, i ≠ j → get (set l i x) j = get l j) (i j : Nat) (hi : i < j) : get (set l i x) j = get l j := by
+  simp_lists [*]
+
+example
+  (T : Type)
+  [Inhabited T]
+  (i : ℕ)
+  (tl : List T)
+  (h : i < tl.length + 1)
+  (hi : ¬i = 0)
+  (i1 : ℕ)
+  (_ : i1 = i - 1)
+  (_ : 1 ≤ i)
+  (x : T)
+  (_ : x = tl[i1]!) :
+  x = tl[i - 1]!
+  := by
   simp_lists [*]
