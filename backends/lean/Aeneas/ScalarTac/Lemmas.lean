@@ -253,6 +253,7 @@ attribute [scalar_tac_simps] Nat.not_eq Int.not_eq
 -/
 
 attribute [scalar_tac_simps, simp_scalar_simps] Nat.cast_add Nat.cast_mul Nat.cast_ofNat
+attribute [scalar_tac_simps, simp_lists_hyps_simps, simp_scalar_hyps_simps] Int.cast_subNatNat
 
 /-!
 # Min, Max

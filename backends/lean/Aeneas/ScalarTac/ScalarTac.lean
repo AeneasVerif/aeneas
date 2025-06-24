@@ -265,7 +265,7 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
     trace[ScalarTac] "Goal proven by preprocessing!"
     return
   trace[ScalarTac] "Goal after normCast: {← getMainGoal}"
-  -- Call `simp` again because `normCast` sometimes does weird things
+  -- Call `simp` again because `normCast` sometimes introduces strange terms
   let _ ← Simp.simpAt true {failIfUnchanged := false, maxDischargeDepth := 1} simpArgs .wildcard
   -- We might have proven the goal
   if (← getGoals).isEmpty then

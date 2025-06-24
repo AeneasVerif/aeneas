@@ -41,3 +41,14 @@ example
   x = tl[i - 1]!
   := by
   simp_lists [*]
+
+abbrev Zq := ZMod 3329
+
+example
+  (x y : ℕ)
+  (l : List ℕ)
+  (h : ∀ (j : ℕ), (↑l[j]! : Zq) = (↑x : Zq) - (↑y : Zq))
+  (j : ℕ) :
+  (↑l[j]! : Zq) = (↑x : Zq) - (↑y : Zq)
+  := by
+  simp_lists [h]
