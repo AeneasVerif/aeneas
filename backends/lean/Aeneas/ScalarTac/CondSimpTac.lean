@@ -71,6 +71,12 @@ structure CondSimpArgs where
   addSimpThms : Array Name := #[]
   hypsToUse : Array FVarId := #[]
 
+instance : HAppend CondSimpArgs CondSimpArgs CondSimpArgs where
+  hAppend c0 c1 :=
+    let ⟨ a0, b0, c0, d0, e0 ⟩ := c0
+    let ⟨ a1, b1, c1, d1, e1 ⟩ := c1
+    ⟨ a0 ++ a1, b0 ++ b1, c0 ++ c1, d0 ++ d1, e0 ++ e1 ⟩
+
 def CondSimpArgs.toSimpArgs (args : CondSimpArgs) : Simp.SimpArgs := {
     simpThms := args.simpThms,
     simprocs := args.simprocs,
@@ -101,11 +107,15 @@ def condSimpTacSimp (config : Simp.Config) (args : CondSimpArgs) (loc : Utils.Lo
 /-- A helper to define tactics which perform conditional simplifications with `scalar_tac` as a discharger. -/
 def condSimpTac
   (tacName : String) (config : CondSimpTacConfig)
-  (simpConfig : Simp.Config) (args : CondSimpArgs)
+  (simpConfig : Simp.Config) (hypsArgs args : CondSimpArgs)
   (addSimpThms : TacticM (Array FVarId)) (doFirstSimp : Bool)
   (loc : Utils.Location) : TacticM Unit := do
   Elab.Tactic.focus do
   withMainContext do
+  /- Concatenate the arguments for the conditional rewritings: we only want to restrict the simplifications
+     performed on the higher-order hypotheses, but we need all the simplifications performed to those to
+     be applied to the rest of the context as well. -/
+  let args := args ++ hypsArgs
   trace[CondSimpTac] "Initial goal: {← getMainGoal}"
   /- First duplicate the propositions in the context: we need the preprocessing of `scalar_tac` to modify
      the assumptions, but we need to preserve a copy so that we can present a clean state to the user later
@@ -129,12 +139,12 @@ def condSimpTac
   /- First the hyps to use.
      Note that we do not inline the local let-declarations: we will do this only for the "regular" assumptions
      and the target. -/
-  let some (_, hypsToUse) ← scalarTacPartialPreprocess scalarConfig state (zetaDelta := false) #[] hypsToUse false
+  let some (_, hypsToUse) ← scalarTacPartialPreprocess scalarConfig hypsArgs.toSimpArgs state (zetaDelta := false) #[] hypsToUse false
     | trace[CondSimpTac] "Goal proven through preprocessing!"; return
   withMainContext do
   trace[CondSimpTac] "Goal after preprocessing the hyps to use ({hypsToUse.map Expr.fvar}): {← getMainGoal}"
   /- Remove the `forall'` and simplify the hyps to use -/
-  let simpHypsToUseArgs := { args.toSimpArgs with hypsToUse := #[], declsToUnfold := #[``forall'] }
+  let simpHypsToUseArgs := { hypsArgs with hypsToUse := #[], declsToUnfold := #[``forall'] }
   let some hypsToUse ← Simp.simpAt true {failIfUnchanged := false, maxDischargeDepth := 0}
         simpHypsToUseArgs (.targets hypsToUse false)
     | trace[ScalarTac] "Goal proven by preprocessing!"; return
@@ -142,7 +152,7 @@ def condSimpTac
   withMainContext do
   trace[CondSimpTac] "Goal after simplifying the preprocessed hyps to use ({hypsToUse.map Expr.fvar}): {← getMainGoal}"
   /- Preprocess the "regular" assumptions -/
-  let some (state, newAsms) ← scalarTacPartialPreprocess scalarConfig state (zetaDelta := true) #[] newAsms false
+  let some (state, newAsms) ← scalarTacPartialPreprocess scalarConfig (← ScalarTac.getSimpArgs) state (zetaDelta := true) #[] newAsms false
     | trace[CondSimpTac] "Goal proven through preprocessing!"; return
   withMainContext do
   trace[CondSimpTac] "Goal after the initial preprocessing: {← getMainGoal}"
