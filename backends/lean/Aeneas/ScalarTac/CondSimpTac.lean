@@ -86,13 +86,14 @@ def CondSimpArgs.toSimpArgs (args : CondSimpArgs) : Simp.SimpArgs := {
 
 def condSimpTacSimp (config : Simp.Config) (args : CondSimpArgs) (loc : Utils.Location)
   (toClear : Array FVarId := #[])
-  (additionalAsms : Array FVarId := #[]) (state : Option (ScalarTac.State × Array FVarId)) :
+  (additionalHypsToUse : Array FVarId := #[]) (state : Option (ScalarTac.State × Array FVarId)) :
   TacticM (Option (Array FVarId)) := do
   withMainContext do
   let simpArgs := args.toSimpArgs
-  let simpArgs := { simpArgs with hypsToUse := simpArgs.hypsToUse ++ additionalAsms }
+  let simpArgs := { simpArgs with hypsToUse := simpArgs.hypsToUse ++ additionalHypsToUse }
   match state with
   | some (state, asms) =>
+    trace[CondSimpTac] "condSimpTacSimp: scalarTac assumptions: {asms.map Expr.fvar}"
     /- Note that when calling `scalar_tac` we saturate only by looking at the target: we have
        already saturated by looking at the assumptions (we do this once and for all beforehand) -/
     let dischargeWrapper ← Simp.tacticToDischarge (incrScalarTac {saturateAssumptions := false} state toClear asms)
@@ -168,7 +169,7 @@ def condSimpTac
     | .targets hyps type => pure (Utils.Location.targets hyps type)
   let nloc ←
     if doFirstSimp then
-      match ← condSimpTacSimp simpConfig args loc toClear additionalSimpThms none with
+      match ← condSimpTacSimp simpConfig args loc (toClear := toClear) (additionalHypsToUse := additionalSimpThms) none with
       | none => return
       | some freshFvarIds =>
         match loc with
@@ -181,7 +182,7 @@ def condSimpTac
      TODO: scalar_tac should only be allowed to preprocess `scalarTacAsms`.
      TODO: we should preprocess those.
    -/
-  let _ ← condSimpTacSimp simpConfig args nloc toClear additionalSimpThms (some (state, newAsms))
+  let _ ← condSimpTacSimp simpConfig args nloc (toClear := toClear) (additionalHypsToUse := additionalSimpThms) (some (state, newAsms))
   if (← getUnsolvedGoals) == [] then return
   /- Clear the additional assumptions -/
   setGoals [← (← getMainGoal).tryClearMany hypsToUse]

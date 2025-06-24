@@ -382,6 +382,8 @@ private partial def visit
   (boundVars : Std.HashSet FVarId)
   (state : State) (e : Expr)
   : MetaM State := do
+  let e := e.consumeMData
+  --
   trace[Saturate.explore] "Visiting {e}"
   -- Register the current assumption, if it is a conjunct inside an assumption
   let state := state.insertAssumption path e
@@ -405,7 +407,6 @@ private partial def visit
         | some v => visit config none (depth + 1) exploreSubterms preprocessThm boundVars state v
       pure (boundVars, state)
       ) (boundVars, state)
-  let e := e.consumeMData
   match e with
   | .bvar _
   | .fvar _
@@ -470,9 +471,9 @@ private partial def visitRecomputeAssumptions
   (state : State) (e : Expr)
   : MetaM State := do
   trace[Saturate.explore] "Visiting {e}"
+  let e := e.consumeMData
   -- Register the current assumption, if it is a conjunct inside an assumption
   let state := state.insertAssumption path e
-  let e := e.consumeMData
   match e with
   | .bvar _
   | .fvar _
