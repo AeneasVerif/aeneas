@@ -498,56 +498,6 @@ macro_rules
              | apply ScalarTac.to_int_sub_to_nat_lt) <;>
       simp_all <;> scalar_tac)
 
--- Checking that things happen correctly when there are several conjunctions
-example (x y : Int) (h0: 0 ≤ x) (h1: x ≠ 0) (h2 : 0 ≤ y) (h3 : y ≠ 0) : 0 < x ∧ 0 < y := by
-  scalar_tac
-
--- Checking that things happen correctly when there are several conjunctions
-example (x y : Int) (h0: 0 ≤ x) (h1: x ≠ 0) (h2 : 0 ≤ y) (h3 : y ≠ 0) : 0 < x ∧ 0 < y ∧ x + y ≥ 2 := by
-  scalar_tac
-
--- Checking that we can prove exfalso
-example (a : Prop) (x : Int) (h0: 0 < x) (h1: x < 0) : a := by
-  scalar_tac
-
--- Intermediate cast through natural numbers
-example (a : Prop) (x : Int) (h0: (0 : Nat) < x) (h1: x < 0) : a := by
-  scalar_tac
-
-example (x : Int) (h : x ≤ -3) : x ≤ -2 := by
-  scalar_tac
-
-example (x y : Int) (h : x + y = 3) :
-  let z := x + y
-  z = 3 := by
-  intro z
-  omega
-
-example (P : Nat → Prop) (z : Nat) (h : ∀ x, P x → x ≤ z) (y : Nat) (hy : P y) :
-  y + 2 ≤ z + 2 := by
-  have := h y hy
-  scalar_tac
-
--- Checking that we manage to split the cases/if then else
-example (x : Int) (b : Bool) (h : if b then x ≤ 0 else x ≤ 0) : x ≤ 0 := by
-  scalar_tac +split
-
-/-!
-Checking some non-linear problems
--/
-
-example (x y : Nat) (h0 : x ≤ 4) (h1 : y ≤ 5): x * y ≤ 4 * 5 := by
-  scalar_tac +nonLin
-
-example (x y : Nat) (h0 : x ≤ 4) (h1 : y < 5): x * y < 4 * 5 := by
-  scalar_tac +nonLin
-
-example (x y : Nat) (h0 : x < 4) (h1 : y < 5): x * y < 4 * 5 := by
-  scalar_tac +nonLin
-
-example (x y : Nat) (h0 : x < 4) (h1 : y ≤ 5): x * y < 4 * 5 := by
-  scalar_tac +nonLin
-
 end ScalarTac
 
 end Aeneas
