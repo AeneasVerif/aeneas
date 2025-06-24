@@ -1,6 +1,7 @@
 import Mathlib.Data.ZMod.Basic
 import Aeneas.ScalarTac.ScalarTac
 import Aeneas.Std.Scalar.Core
+import Aeneas.ReduceZMod.ReduceZMod
 
 namespace Aeneas
 
@@ -245,6 +246,14 @@ attribute [scalar_tac a.toNat] Int.toNat_eq_max
 @[scalar_tac_simps]
 theorem Nat_neq_zero_iff (x : ℕ) : x ≠ 0 ↔ 0 < x := by omega
 
+attribute [scalar_tac_simps] Nat.not_eq Int.not_eq
+
+/-!
+# Casts
+-/
+
+attribute [scalar_tac_simps, simp_scalar_simps] Nat.cast_add Nat.cast_mul Nat.cast_ofNat
+
 /-!
 # Min, Max
 -/
@@ -312,6 +321,8 @@ attribute [simp_scalar_simps] ZMod.val_natCast ZMod.val_intCast
 @[simp, simp_scalar_simps]
 theorem ZMod.cast_intCast {n : ℕ} (a : ℤ) [NeZero n] : ((a : ZMod n).cast : ℤ) = a % ↑n := by
   simp only [ZMod.cast_eq_val, ZMod.val_intCast]
+
+attribute [scalar_tac_simps, simp_scalar_simps] ReduceZMod.reduceZMod
 
 /-!
 # Sets
