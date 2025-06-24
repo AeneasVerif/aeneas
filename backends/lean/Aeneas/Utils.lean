@@ -342,9 +342,6 @@ def firstTacSolve (tacl : List (TacticM Unit)) : TacticM Unit := do
   match tacl with
   | [] => throwError "no tactic succeeded"
   | tac :: tacl =>
-    -- Should use try ... catch or Lean.observing?
-    -- Generally speaking we should use Lean.observing? to restore the state,
-    -- but with tactics the try ... catch variant seems to work
     try do
       tac
       -- Check that there are no remaining goals
