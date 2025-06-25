@@ -99,14 +99,6 @@ def getType: UsedTheorem -> MetaM (Option Expr)
     return none
 
 end UsedTheorem
-/- Type to propagate the errors of `progressWith`.
-   We need this because we use the exceptions to backtrack, when trying to
-   use the assumptions for instance. When there is actually an error we want
-   to propagate to the user, we return it. -/
-inductive Result (T U : Type) where
-| Ok : T → Result T U
-| Error : U → Result T U
-deriving Inhabited
 
 structure MainGoal where
   goal : MVarId
@@ -147,19 +139,20 @@ structure Args where
   /- Tactic to use to solve the preconditions -/
   solvePreconditionTac : TacticM Unit
 
-open Result in
-def progressWith (args : Args) (fExpr : Expr) (th : Expr) :
-  TacticM Goals := do
-  withTraceNode `Progress (fun _ => pure m!"progressWith") do
+/-- Attempt to match a given theorem with the monadic call in the goal,
+    and introduce the instantiated theorem in the context if it succeeds.
+
+    If the instantiation succeeds, we return the introduced meta-variables as
+    well as the new assumption corresponding to the instantiated theorem (the
+    expression is an fvar). We raise an exception otherwise.
+ -/
+def tryMatch (args : Args) (fExpr : Expr) (th : Expr) :
+  TacticM (Array MVarId × Expr) := do
+  withTraceNode `Progress (fun _ => pure m!"tryMatch") do
   /- Apply the theorem
      We try to match the theorem with the goal
-     In order to do so, we introduce meta-variables for all the parameters
-     (i.e., quantified variables and assumpions), and unify those with the goal.
-     Remark: we do not introduce meta-variables for the quantified variables
-     which don't appear in the function arguments (we want to let them
-     quantified).
-     We also make sure that all the meta variables which appear in the
-     function arguments have been instantiated
+     In order to match the theorem with the goal, we introduce meta-variables for all
+     the parameters (i.e., quantified variables and assumpions), and unify those with the goal.
    -/
   /- There might be meta-variables in the type if the theorem comes from a local declaration,
      especially if this declaration was introduced by a tactic -/
@@ -194,154 +187,142 @@ def progressWith (args : Args) (fExpr : Expr) (th : Expr) :
   -- TODO: actually we might want to let the user insert them in the context
   let thTy ← normalizeLetBindings thTy
   trace[Progress] "thTy (after normalizing let-bindings): {thTy}"
-  Utils.addDeclTac asmName th thTy (asLet := false) fun thAsm => do
-  let ngoal ← getMainGoal
-  traceGoalWithNode "current goal"
-  trace[Progress] "current goal is assigned: {← ngoal.isAssigned}"
-  /- The assumption should be of the shape:
-     `∃ x1 ... xn, f args = ... ∧ ...`
-     We introduce the existentially quantified variables and split the top-most
-     conjunction if there is one. We use the provided `ids` list to name the
-     introduced variables. -/
-  let splitExistsEqAndPost (next : Option MainGoal → TacticM Goals) :
-    TacticM Goals := do
-    splitAllExistsTac thAsm args.ids.toList fun h ids => do
-    /- Introduce the pretty equality if the user requests it.
-       We take care of introducing it *before* splitting the post-conditions, so that those appear
-       after it.
-     -/
-    match args.keepPretty with
-    | none => pure ()
-    | some name =>
-      trace[Progress] "About to introduce the pretty equality"
-      let hTy ← inferType h
-      trace[Progress] "introPrettyEq: h: {hTy}"
-      let h ← do
-        if ← isConj hTy then do
-          mkAppM ``And.left #[h]
-        else do pure h
-      /- Do *not* introduce an equality if the return type is `()` -/
-      let hTy ← inferType h
-      hTy.withApp fun _ args => do -- Deconstruct the equality
-      trace[Progress] "Checking if type is (): after deconstructing the equality: {args}"
-      args[0]!.withApp fun _ args => do -- Deconstruct the `Result`
-      trace[Progress] "Checking if type is (): after deconstructing Result: {args}"
-      let arg0 := args[0]!
-      if arg0.isConst ∧ (arg0.constName == ``Unit ∨ arg0.constName == ``PUnit) then
-        trace[Progress] "Not introducing a pretty equality because the output type is `()`"
-      else
-        trace[Progress] "h: {← inferType h}"
-        trace[Progress] "Introducing the \"pretty\" let binding"
-        let e ← mkAppM ``eq_imp_prettyMonadEq #[h]
-        Utils.addDeclTac name e (← inferType e) (asLet := false) fun _ => do
-        traceGoalWithNode "Introduced the \"pretty\" let binding"
+  Utils.addDeclTac asmName th thTy (asLet := false) fun thAsm => pure (mvars.map Expr.mvarId!, thAsm)
 
-    /- Split the conjunctions.
-       For the conjunctions, we split according once to separate the equality `f ... = .ret ...`
-       from the postcondition, if there is, then continue to split the postcondition if there
-       are remaining ids. -/
-    let splitEqAndPost (k : Expr → Option Expr → List (Option Name) → TacticM Goals) :
-      TacticM Goals := do
-      let hTy ← inferType h
-      if ← isConj hTy then
-        let hName := (← h.fvarId!.getDecl).userName
-        let (optIds, ids) ← do
-          match ids with
-          | [] => do pure (some (hName, ← mkFreshAnonPropUserName), [])
-          | none :: ids => do pure (some (hName, ← mkFreshAnonPropUserName), ids)
-          | some id :: ids => do pure (some (hName, id), ids)
-        splitConjTac h optIds (fun hEq hPost => k hEq (some hPost) ids)
-      else
-        k h none ids
-    /- Simplify the target by using the equality and some monad simplifications,
-       then continue splitting the post-condition -/
-    -- TODO: this is dangerous if we want to use a local assumption to make progress.
-    -- We shouldn't simplify the goal with the equality, then simplify again.
-    splitEqAndPost fun hEq hPost ids => do
-    trace[Progress] "eq and post:\n{hEq} : {← inferType hEq}\n{hPost}"
-    traceGoalWithNode "current goal"
-    let r ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
-      {simpThms := #[← progressSimpExt.getTheorems], hypsToUse := #[hEq.fvarId!]} (.targets #[] true)
-    /- It may happen that at this point the goal is already solved (though this is rare)
-       TODO: not sure this is the best way of checking it -/
-    if r.isNone then
-      trace[Progress] "The main goal was solved!"
-      next none
+/-- Under the condition that `thAsm` is of the shape:
+   `∃ x1 ... xn, f args = ... ∧ ...`
+
+  introduce the existentially quantified variables and split the top-most
+  conjunction if there is one. We use the provided `ids` list to name the
+  introduced variables.
+-/
+def splitExistsEqAndPost (args : Args) (thAsm : Expr) :
+  TacticM (Option MainGoal) := do
+  withTraceNode `Progress (fun _ => pure m!"splitExistsEqAndPost") do
+  splitAllExistsTac thAsm args.ids.toList fun h ids => do
+  /- Introduce the pretty equality if the user requests it.
+      We take care of introducing it *before* splitting the post-conditions, so that those appear
+      after it.
+    -/
+  match args.keepPretty with
+  | none => pure ()
+  | some name =>
+    trace[Progress] "About to introduce the pretty equality"
+    let hTy ← inferType h
+    trace[Progress] "introPrettyEq: h: {hTy}"
+    let h ← do
+      if ← isConj hTy then do
+        mkAppM ``And.left #[h]
+      else do pure h
+    /- Do *not* introduce an equality if the return type is `()` -/
+    let hTy ← inferType h
+    hTy.withApp fun _ args => do -- Deconstruct the equality
+    trace[Progress] "Checking if type is (): after deconstructing the equality: {args}"
+    args[0]!.withApp fun _ args => do -- Deconstruct the `Result`
+    trace[Progress] "Checking if type is (): after deconstructing Result: {args}"
+    let arg0 := args[0]!
+    if arg0.isConst ∧ (arg0.constName == ``Unit ∨ arg0.constName == ``PUnit) then
+      trace[Progress] "Not introducing a pretty equality because the output type is `()`"
     else
-      traceGoalWithNode "goal after applying the eq and simplifying the binds"
-      -- TODO: remove this? (some types get unfolded too much: we "fold" them back)
-      tryTac (do let _ ← Simp.simpAt true {} {addSimpThms := scalar_eqs} .wildcard_dep)
-      traceGoalWithNode "goal after folding back scalar types"
-      -- Clear the equality, unless the user requests not to do so
-      if args.keep.isSome then pure ()
-      else do
-        let mgoal ← getMainGoal
-        let mgoal ← mgoal.tryClear hEq.fvarId!
-        setGoals [mgoal]
-      withMainContext do
-      withTraceNode `Progress (fun _ => pure m!"Unsolved goals") do trace[Progress] "Unsolved goals: {← getUnsolvedGoals}"
-      traceGoalWithNode "Goal after clearing the equality"
-      -- Continue splitting following the post following the user's instructions
-      match hPost with
-      | none =>
-        -- Sanity check
-        if ¬ ids.isEmpty then
-          logWarning m!"Too many ids provided ({ids}): there is no postcondition to split"
-        trace[Progress] "No post to split"
-        next (some { goal := ← getMainGoal, posts := #[]})
-      | some hPost => do
-        trace[Progress] "Post to split: {hPost}"
-        let rec splitPostWithIds (prevId : Name) (hPosts : List FVarId) (hPost : Expr) (ids0 : List (Option Name)) :
-          TacticM (Array FVarId) := do
-          match ids0 with
-          | [] =>
-            /- We used all the user provided ids.
-               Split the remaining conjunctions by using fresh ids if the user
-               instructed to fully split the post-condition, otherwise stop -/
-            if args.splitPost then
-              splitFullConjTac true hPost (λ asms => do
-                pure (hPosts.reverse ++ (asms.map (fun x => x.fvarId!))).toArray)
-            else pure (hPost.fvarId! :: hPosts).reverse.toArray
-          | nid :: ids => do
-            trace[Progress] "Splitting post: {← inferType hPost}"
-            -- Split
-            let nid ← do
-              match nid with
-              | none => mkFreshAnonPropUserName
-              | some nid => pure nid
-            trace[Progress] "\n- prevId: {prevId}\n- nid: {nid}\n- remaining ids: {ids}"
-            if ← isConj (← inferType hPost) then
-              splitConjTac hPost (some (prevId, nid)) (λ nhAsm nhPost => splitPostWithIds nid (nhAsm.fvarId! :: hPosts) nhPost ids)
-            else
-            logWarning m!"Too many ids provided ({ids0}) not enough conjuncts to split in the postcondition"
-            pure (hPost.fvarId! :: hPosts).reverse.toArray
-        let curPostId := (← hPost.fvarId!.getDecl).userName
-        let posts ← splitPostWithIds curPostId [] hPost ids
-        next (some ⟨ ← getMainGoal, posts⟩)
-  splitExistsEqAndPost fun mainGoal => do
-  trace[Progress] "Finished splitting the post"
-  /- Warning: the main goal may have been solved here, meaning it is unsafe to,
-      for instance, call `withMainContext`, or to print the `hPosts`
-      TODO: fix this.
-    -/
-  -- Update the set of goals
-  let curGoals ← getUnsolvedGoals
-  trace[Progress] "current goals: {curGoals}"
-  let newGoals := mvars.map Expr.mvarId!
-  let newGoals ← newGoals.filterM fun mvar => not <$> mvar.isAssigned
-  trace[Progress] "new goals: {newGoals}"
-  -- Split between the goals which are propositions and the others
-  let (newPropGoals, newNonPropGoals) ←
-    newGoals.toList.partitionM fun mvar => do isProp (← mvar.getType)
-  trace[Progress] "Prop goals: {newPropGoals}"
-  trace[Progress] "Non prop goals: {← newNonPropGoals.mapM fun mvarId => do pure ((← mvarId.getDecl).userName, mvarId)}"
-  /- Try to solve the goals which are propositions
+      trace[Progress] "h: {← inferType h}"
+      trace[Progress] "Introducing the \"pretty\" let binding"
+      let e ← mkAppM ``eq_imp_prettyMonadEq #[h]
+      Utils.addDeclTac name e (← inferType e) (asLet := false) fun _ => do
+      traceGoalWithNode "Introduced the \"pretty\" let binding"
 
-      We do this in several phases:
-      - we first use the "assumption" tactic to instantiate as many meta-variables as possible, and we do so by starting with the
-        preconditions with the highest number of meta-variables (this is a way of avoiding spurious instantiations)
-      - we then use the other tactic on the preconditions
-    -/
+  /- Split the conjunctions.
+      For the conjunctions, we split according once to separate the equality `f ... = .ret ...`
+      from the postcondition, if there is, then continue to split the postcondition if there
+      are remaining ids. -/
+  let splitEqAndPost (k : Expr → Option Expr → List (Option Name) → TacticM (Option MainGoal)) :
+    TacticM (Option MainGoal) := do
+    let hTy ← inferType h
+    if ← isConj hTy then
+      let hName := (← h.fvarId!.getDecl).userName
+      let (optIds, ids) ← do
+        match ids with
+        | [] => do pure (some (hName, ← mkFreshAnonPropUserName), [])
+        | none :: ids => do pure (some (hName, ← mkFreshAnonPropUserName), ids)
+        | some id :: ids => do pure (some (hName, id), ids)
+      splitConjTac h optIds (fun hEq hPost => k hEq (some hPost) ids)
+    else
+      k h none ids
+  /- Simplify the target by using the equality and some monad simplifications,
+      then continue splitting the post-condition -/
+  -- TODO: this is dangerous if we want to use a local assumption to make progress.
+  -- We shouldn't simplify the goal with the equality, then simplify again.
+  splitEqAndPost fun hEq hPost ids => do
+  trace[Progress] "eq and post:\n{hEq} : {← inferType hEq}\n{hPost}"
+  traceGoalWithNode "current goal"
+  let r ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
+    {simpThms := #[← progressSimpExt.getTheorems], hypsToUse := #[hEq.fvarId!]} (.targets #[] true)
+  /- It may happen that at this point the goal is already solved (though this is rare)
+      TODO: not sure this is the best way of checking it -/
+  if r.isNone then
+    trace[Progress] "The main goal was solved!"
+    pure none
+  else
+    traceGoalWithNode "goal after applying the eq and simplifying the binds"
+    -- TODO: remove this? (some types get unfolded too much: we "fold" them back)
+    tryTac (do let _ ← Simp.simpAt true {} {addSimpThms := scalar_eqs} .wildcard_dep)
+    traceGoalWithNode "goal after folding back scalar types"
+    -- Clear the equality, unless the user requests not to do so
+    if args.keep.isSome then pure ()
+    else do
+      let mgoal ← getMainGoal
+      let mgoal ← mgoal.tryClear hEq.fvarId!
+      setGoals [mgoal]
+    withMainContext do
+    withTraceNode `Progress (fun _ => pure m!"Unsolved goals") do trace[Progress] "Unsolved goals: {← getUnsolvedGoals}"
+    traceGoalWithNode "Goal after clearing the equality"
+    -- Continue splitting following the post following the user's instructions
+    match hPost with
+    | none =>
+      -- Sanity check
+      if ¬ ids.isEmpty then
+        logWarning m!"Too many ids provided ({ids}): there is no postcondition to split"
+      trace[Progress] "No post to split"
+      pure (some { goal := ← getMainGoal, posts := #[]})
+    | some hPost => do
+      trace[Progress] "Post to split: {hPost}"
+      let rec splitPostWithIds (prevId : Name) (hPosts : List FVarId) (hPost : Expr) (ids0 : List (Option Name)) :
+        TacticM (Array FVarId) := do
+        match ids0 with
+        | [] =>
+          /- We used all the user provided ids.
+              Split the remaining conjunctions by using fresh ids if the user
+              instructed to fully split the post-condition, otherwise stop -/
+          if args.splitPost then
+            splitFullConjTac true hPost (λ asms => do
+              pure (hPosts.reverse ++ (asms.map (fun x => x.fvarId!))).toArray)
+          else pure (hPost.fvarId! :: hPosts).reverse.toArray
+        | nid :: ids => do
+          trace[Progress] "Splitting post: {← inferType hPost}"
+          -- Split
+          let nid ← do
+            match nid with
+            | none => mkFreshAnonPropUserName
+            | some nid => pure nid
+          trace[Progress] "\n- prevId: {prevId}\n- nid: {nid}\n- remaining ids: {ids}"
+          if ← isConj (← inferType hPost) then
+            splitConjTac hPost (some (prevId, nid)) (λ nhAsm nhPost => splitPostWithIds nid (nhAsm.fvarId! :: hPosts) nhPost ids)
+          else
+          logWarning m!"Too many ids provided ({ids0}) not enough conjuncts to split in the postcondition"
+          pure (hPost.fvarId! :: hPosts).reverse.toArray
+      let curPostId := (← hPost.fvarId!.getDecl).userName
+      let posts ← splitPostWithIds curPostId [] hPost ids
+      pure (some ⟨ ← getMainGoal, posts⟩)
+
+/-- Attempt to solve the preconditions.
+
+    We do this in several phases:
+    - we first use the "assumption" tactic to instantiate as many meta-variables as possible,
+      and we do so by starting with the preconditions with the highest number of meta-variables
+      (this is a way of avoiding spurious instantiations). This helps with the second phase.
+    - we then use the other tactic on the preconditions
+ -/
+def trySolvePreconditions (args : Args) (newPropGoals : List MVarId) : TacticM (List MVarId) := do
+  withTraceNode `Progress (fun _ => pure m!"trySolvePreconditions") do
   let ordPropGoals ←
     newPropGoals.mapM (fun g => do
       let ty ← g.getType
@@ -350,39 +331,69 @@ def progressWith (args : Args) (fExpr : Expr) (th : Expr) :
   setGoals (ordPropGoals.map Prod.snd)
   allGoalsNoRecover (tryTac args.assumTac)
   allGoalsNoRecover args.solvePreconditionTac
-  -- Make sure we use the original order when presenting the preconditions to the user
-  let newPropGoals ← newPropGoals.filterMapM (fun g => do if ← g.isAssigned then pure none else pure (some g))
+  -- Make sure we preserve the order when presenting the preconditions to the user
+  newPropGoals.filterMapM (fun g => do if ← g.isAssigned then pure none else pure (some g))
+
+/-- Post-process the main goal.
+
+  The main thing we do is simplify the post-conditions. -/
+def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal) := do
+  withTraceNode `Progress (fun _ => pure m!"postprocessMainGoal") do
+  match mainGoal with
+  | none => pure none
+  | some mainGoal =>
+    setGoals [mainGoal.goal]
+    -- Simplify the post-conditions
+    let args : Simp.SimpArgs :=
+      {simpThms := #[← progressPostSimpExt.getTheorems],
+        simprocs := #[← ScalarTac.scalarTacSimprocExt.getSimprocs]}
+    let posts ← Simp.simpAt true { maxDischargeDepth := 0, failIfUnchanged := false }
+          args (.targets mainGoal.posts false)
+    match posts with
+    | none =>
+      -- We actually closed the goal: we shouldn't get there
+      -- TODO: make this more robust
+      trace[Progress] "Goal closed by simplifying the introduced post-conditions"
+      pure none
+    | some posts =>
+      -- Simplify the goal again
+      let r ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
+        {simpThms := #[← progressSimpExt.getTheorems], declsToUnfold := #[``pure]} (.targets #[] true)
+      if r.isSome then
+        pure (some ({ goal := ← getMainGoal, posts} : MainGoal))
+      else pure none
+
+def progressWith (args : Args) (fExpr : Expr) (th : Expr) :
+  TacticM Goals := do
+  withTraceNode `Progress (fun _ => pure m!"progressWith") do
+  -- Attempt to instantiate the theorem and introduce it in the context
+  let (newGoals, thAsm) ← tryMatch args fExpr th
+  withMainContext do
+  traceGoalWithNode "current goal"
+  -- Destruct the existential quantifiers and split the conjunctions
+  let mainGoal ← splitExistsEqAndPost args thAsm
+  -- Split between the goals which are propositions and the others
+  let newGoals ← newGoals.filterM fun mvar => not <$> mvar.isAssigned
+  withTraceNode `Progress (fun _ => pure m!"new goals") do trace[Progress] "{newGoals}"
+  let (newPropGoals, newNonPropGoals) ←
+    newGoals.toList.partitionM fun mvar => do isProp (← mvar.getType)
+  withTraceNode `Progress (fun _ => pure m!"prop goals") do trace[Progress] "{newPropGoals}"
+  withTraceNode `Progress (fun _ => pure m!"non prop goals") do
+    trace[Progress] "{← newNonPropGoals.mapM fun mvarId => do pure ((← mvarId.getDecl).userName, mvarId)}"
+  -- Attempt to solve the goals which are propositions
+  let newPropGoals ← trySolvePreconditions args newPropGoals
   /- Simplify the post-conditions in the main goal - note that we waited until now
       because by solving the preconditions we may have instantiated meta-variables.
       We also simplify the goal again (to simplify let-bindings, etc.) -/
-  let mainGoal : Option MainGoal ← do
-    match mainGoal with
-    | none => pure none
-    | some mainGoal =>
-      setGoals [mainGoal.goal]
-      -- Simplify the post-conditions
-      let args : Simp.SimpArgs :=
-        {simpThms := #[← progressPostSimpExt.getTheorems],
-          simprocs := #[← ScalarTac.scalarTacSimprocExt.getSimprocs]}
-      let posts ← Simp.simpAt true { maxDischargeDepth := 0, failIfUnchanged := false }
-            args (.targets mainGoal.posts false)
-      match posts with
-      | none =>
-        -- We actually closed the goal: we shouldn't get there
-        -- TODO: make this more robust
-        trace[Progress] "Goal closed by simplifying the introduced post-conditions"
-        pure none
-      | some posts =>
-        -- Simplify the goal again
-        let r ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
-          {simpThms := #[← progressSimpExt.getTheorems], declsToUnfold := #[``pure]} (.targets #[] true)
-        if r.isSome then
-          pure (some ({ goal := ← getMainGoal, posts} : MainGoal))
-        else pure none
-  trace[Progress] "Main goal after simplifying the post-conditions and the target: {curGoals}"
+  let mainGoal ← postprocessMainGoal mainGoal
+  if let some mainGoal := mainGoal then
+    withTraceNode `Progress
+      (fun _ => pure m!"Main goal after simplifying the post-conditions and the target") do
+      trace[Progress] "{mainGoal.goal}"
   /- Update the list of goals - TODO: move this elsewhere -/
   let newGoals ← (newNonPropGoals ++ newPropGoals).filterM fun mvar => not <$> mvar.isAssigned
-  trace[Progress] "Final remaining preconditions: {newGoals}"
+  withTraceNode `Progress (fun _ => pure m!"Final remaining preconditions") do
+    trace[Progress] "{newGoals}"
   let curGoal :=
     match mainGoal with
     | none => []
