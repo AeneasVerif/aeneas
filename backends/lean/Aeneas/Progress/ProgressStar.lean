@@ -324,7 +324,11 @@ where
     withTraceNode `Progress (fun _ => pure m!"onBind ({varName})") do
     if let some {usedTheorem, preconditions, mainGoal } ← tryProgress then
       withTraceNode `Progress (fun _ => pure m!"progress succeeded") do
-      trace[Progress] "New goal: {mainGoal}"
+      match mainGoal with
+      | none => trace[Progress] "Main goal solved"
+      | some goal =>
+        withTraceNode `Progress (fun _ => pure m!"New main goal:") do
+        trace[Progress] "{goal.goal}"
       trace[Progress] "Unsolved preconditions: {preconditions}"
       let (preconditionTacs, unsolved) ← handleProgressPreconditions preconditions
       if ¬ preconditionTacs.isEmpty then
@@ -335,8 +339,9 @@ where
       let ids ← getIdsFromUsedTheorem varName.eraseMacroScopes usedTheorem
       trace[Progress] "ids from used theorem: {ids}"
       let mainGoal ← do mainGoal.mapM fun mainGoal => do
-        if ¬ ids.isEmpty then renameInaccessibles mainGoal ids -- NOTE: Taken from renameI tactic
-        else pure mainGoal
+        if ¬ ids.isEmpty then
+          renameInaccessibles mainGoal.goal ids -- NOTE: Taken from renameI tactic
+        else pure mainGoal.goal
       /- Generate the tactic scripts for the preconditions -/
       let currTac ←
         if cfg.prettyPrintedProgress then
