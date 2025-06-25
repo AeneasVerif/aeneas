@@ -293,13 +293,8 @@ where
         else `(tactic|simp [*])
       -- `scalar_tac`
       let scalarTac : TacticM Syntax.Tactic := do
-        if ← ScalarTac.goalIsLinearInt then
-          /- Also: we don't try to split the goal if it is a conjunction
-            (it shouldn't be), but we split the disjunctions. -/
-          ScalarTac.scalarTac { split := false }
-          `(tactic|scalar_tac)
-        else
-          throwError "Not a linear arithmetic goal"
+        ScalarTac.scalarTac {}
+        `(tactic|scalar_tac)
       -- TODO: add the tactic given by the user
       let rec tryFinish (tacl : List (String × TacticM Syntax.Tactic)) : TacticM Syntax.Tactic := do
         match tacl with
