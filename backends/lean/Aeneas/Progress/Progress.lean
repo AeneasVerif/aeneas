@@ -12,7 +12,7 @@ open Lean Elab Term Meta Tactic
 open Utils
 
 /-- A special definition that we use to introduce pretty-printed terms in the context -/
-def prettyMonadEq {α : Type u} (x : Std.Result α) (y : α) : Prop := x = .ok y
+@[irreducible] def prettyMonadEq {α : Type u} (_ : Std.Result α) (_ : α) : Type := Unit
 
 macro:max "[> " "let" y:term " ← " x:term " <]"   : term => `(prettyMonadEq $x $y)
 
@@ -21,7 +21,9 @@ def unexpPrettyMonadEqofNat : Lean.PrettyPrinter.Unexpander | `($_ $x $y) => `([
 
 example (x y z : Std.U32) (_ : [> let z ← (x + y) <]) : True := by simp
 
-theorem eq_imp_prettyMonadEq {α : Type u} {x : Std.Result α} {y : α} (h : x = .ok y) : prettyMonadEq x y := by simp [prettyMonadEq, h]
+def eq_imp_prettyMonadEq {α : Type u} {x : Std.Result α} {y : α} (_ : x = .ok y) : prettyMonadEq x y := by
+  unfold prettyMonadEq
+  constructor
 
 def traceGoalWithNode (msg : String) : TacticM Unit := Utils.traceGoalWithNode `Progress msg
 
