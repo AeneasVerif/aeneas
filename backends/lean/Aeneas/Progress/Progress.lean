@@ -23,8 +23,7 @@ example (x y z : Std.U32) (_ : [> let z ← (x + y) <]) : True := by simp
 
 theorem eq_imp_prettyMonadEq {α : Type u} {x : Std.Result α} {y : α} (h : x = .ok y) : prettyMonadEq x y := by simp [prettyMonadEq, h]
 
-def traceGoalWithNode (msg : String) : TacticM Unit := do
-  withTraceNode `Progress (fun _ => do pure msg) do trace[Progress] "{← getMainGoal}"
+def traceGoalWithNode (msg : String) : TacticM Unit := Utils.traceGoalWithNode `Progress msg
 
 -- TODO: the scalar types annoyingly often get reduced when we use the progress
 -- tactic. We should find a way of controling reduction. For now we use rewriting

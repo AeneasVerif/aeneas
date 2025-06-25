@@ -1671,6 +1671,12 @@ def optElabTerm (e : Option (TSyntax `term)) : TacticM (Option Expr) := do
   | none => pure none
   | some e => pure (some (← Lean.Elab.Tactic.elabTerm e none))
 
+def traceGoalWithNode (cls : Name) (msg : String) : TacticM Unit := do
+  withTraceNode cls (fun _ => do pure msg) do
+    if ← isTracingEnabledFor cls then do
+        addTrace cls m!"{← getMainGoal}"
+    else pure ()
+
 end Utils
 
 end Aeneas

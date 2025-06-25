@@ -148,6 +148,7 @@ def scalarTacSaturateForward {α}
   (satState : Option Saturate.State)
   (declsToExplore : Option (Array FVarId))
   (f : Saturate.State → Array FVarId → TacticM α) : TacticM α := do
+  withTraceNode `ScalarTac (fun _ => pure m!"scalarTacSaturateForward") do
   withMainContext do
   /- We always use the rule set `Aeneas.ScalarTac`, but also need to add other rule sets locally
      activated by the user. The `Aeneas.ScalarTacNonLin` rule set has a special treatment as
@@ -214,6 +215,7 @@ def simpAsmsTarget (simpOnly : Bool) (config : Simp.Config) (args : Simp.SimpArg
 
 /-  Boosting a bit the `omega` tac. -/
 def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
+  withTraceNode `ScalarTac (fun _ => pure m!"scalarTacPreprocess") do
   Tactic.withMainContext do
   -- Pre-preprocessing
   /- We simplify a first time before saturating the context.
@@ -221,7 +223,7 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
      for the saturation phase, and it also often allows to get rid of some dependently
      typed expressions such as `UScalar.ofNat`.
   -/
-  trace[ScalarTac] "Original goal before preprocessing: {← getMainGoal}"
+  traceGoalWithNode `ScalarTac "Original goal"
   let simpArgs : Simp.SimpArgs ← getSimpArgs
   let r ← simpAsmsTarget true {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1}
     -- Remove the forall quantifiers to prepare for the call of `simp_all` (we
@@ -231,11 +233,11 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
   if r.isNone then
     trace[ScalarTac] "Goal proven by preprocessing!"
     return
-  trace[ScalarTac] "Goal after first simplification: {← getMainGoal}"
+  traceGoalWithNode `ScalarTac "Goal after first simplification"
   -- Apply the forward rules
   if config.saturate then
     scalarTacSaturateForward config.toSaturateConfig none none (fun _ _ => pure ())
-  trace[ScalarTac] "Goal after saturation: {← getMainGoal}"
+  traceGoalWithNode `ScalarTac "Goal after saturation"
   -- Apply `simpAll`
   if config.simpAllMaxSteps ≠ 0 then
     tryTac do
@@ -250,28 +252,28 @@ def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
   if (← getGoals).isEmpty then
     trace[ScalarTac] "Goal proven by preprocessing!"
     return
-  trace[ScalarTac] "Goal after simpAll: {← getMainGoal}"
+  traceGoalWithNode `ScalarTac "Goal after simpAll"
   -- Call `simp` again, this time to inline the let-bindings (otherwise, omega doesn't always manage to deal with them)
   let _ ← Simp.simpAt true {zetaDelta := true, failIfUnchanged := false, maxDischargeDepth := 1} simpArgs .wildcard
   -- We might have proven the goal
   if (← getGoals).isEmpty then
     trace[ScalarTac] "Goal proven by preprocessing!"
     return
-  trace[ScalarTac] "Goal after 2nd simp (with zetaDelta): {← getMainGoal}"
+  traceGoalWithNode `ScalarTac "Goal after 2nd simp (with zetaDelta)"
   -- Apply normCast
   let _ ← Utils.normCastAt .wildcard
   -- We might have proven the goal
   if (← getGoals).isEmpty then
     trace[ScalarTac] "Goal proven by preprocessing!"
     return
-  trace[ScalarTac] "Goal after normCast: {← getMainGoal}"
+  traceGoalWithNode `ScalarTac "Goal after normCast"
   -- Call `simp` again because `normCast` sometimes introduces strange terms
   let _ ← Simp.simpAt true {failIfUnchanged := false, maxDischargeDepth := 1} simpArgs .wildcard
   -- We might have proven the goal
   if (← getGoals).isEmpty then
     trace[ScalarTac] "Goal proven by preprocessing!"
     return
-  trace[ScalarTac] "Goal after 2nd call to simpAt: {← getMainGoal}"
+  traceGoalWithNode `ScalarTac "Goal after 2nd call to simpAt"
 
 structure State where
   saturateState : Saturate.State
@@ -288,6 +290,7 @@ def State.new (config : Config) : MetaM State := do
 def scalarTacPartialPreprocess (config : Config) (simpArgs : Simp.SimpArgs) (state : State)
   (zetaDelta : Bool) (hypsToUseForSimp assumptionsToPreprocess : Array FVarId) (simpTarget : Bool) :
   Tactic.TacticM (Option (State × Array FVarId)) := do
+  withTraceNode `ScalarTac (fun _ => pure m!"scalarTacPartialPreprocess") do
   Tactic.focus do
   Tactic.withMainContext do
   -- Pre-preprocessing
@@ -296,7 +299,7 @@ def scalarTacPartialPreprocess (config : Config) (simpArgs : Simp.SimpArgs) (sta
      for the saturation phase, and it also often allows to get rid of some dependently
      typed expressions such as `UScalar.ofNat`.
   -/
-  trace[ScalarTac] "Original goal before preprocessing: {← getMainGoal}"
+  traceGoalWithNode `ScalarTac "Original goal before preprocessing"
   let r ← Simp.simpAt true {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1}
     /- Remove the forall quantifiers to prepare for the call of `simp_all` (we
        don't want `simp_all` to use assumptions of the shape `∀ x, P x`)) -/
@@ -398,6 +401,7 @@ elab "scalar_tac_preprocess" config:Parser.Tactic.optConfig : tactic => do
   scalarTacPreprocess config
 
 def scalarTacCore (config : Config) : Tactic.TacticM Unit := do
+  withTraceNode `ScalarTac (fun _ => pure m!"scalarTacCore") do
   Tactic.withMainContext do
   Tactic.focus do
   let simpArgs : Simp.SimpArgs ← getSimpArgs
@@ -439,6 +443,7 @@ def scalarTacCore (config : Config) : Tactic.TacticM Unit := do
     This works also with strict inequalities.
 -/
 def scalarTac (config : Config) : TacticM Unit := do
+  withTraceNode `ScalarTac (fun _ => pure m!"scalarTac") do
   Tactic.withMainContext do
   let error : TacticM Unit := do
     let g ← Tactic.getMainGoal
@@ -477,6 +482,7 @@ elab "scalar_tac" config:Parser.Tactic.optConfig : tactic => do
     TODO: do we really need the config?
  -/
 def incrScalarTac (config : Config) (state : State) (toClear : Array FVarId) (assumptions : Array FVarId) : TacticM Unit := do
+  withTraceNode `ScalarTac (fun _ => pure m!"incrScalarTac") do
   Tactic.focus do
   Tactic.withMainContext do
   /- Clear the useless assumptions -/
@@ -485,7 +491,7 @@ def incrScalarTac (config : Config) (state : State) (toClear : Array FVarId) (as
   /- Saturate by exploring only the goal -/
   let some (_, _) ← scalarTacPartialPreprocess config (← ScalarTac.getSimpArgs) state (zetaDelta := true) assumptions #[] true
     | trace[ScalarTac] "incrScalarTac: goal proven by preprocessing"
-  trace[ScalarTac] "Goal after final preprocessing: {← getMainGoal}"
+  trace[ScalarTac] "Goal after preprocessing: {← getMainGoal}"
   /- Call omega -/
   trace[ScalarTac] "Calling omega"
   Tactic.Omega.omegaTactic {}

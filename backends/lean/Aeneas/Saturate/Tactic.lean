@@ -151,6 +151,7 @@ def mkExprFromPath (path : AsmPath) : MetaM Expr := do
 def State.insertPartialMatch (state : State)
   (boundVars : Std.HashSet FVarId)
   (pmatch : PartialMatch) : MetaM State := do
+  withTraceNode `Saturate (fun _ => pure m!"insertPartialMatch") do
   trace[Saturate.insertPartialMatch] "insertPartialMatch: {pmatch}"
   let mut state := state
   /- Check if there remains patterns: if no then the match is total -/
@@ -204,6 +205,7 @@ def State.insertPartialMatch (state : State)
 
 def checkIfPatDefEq (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
   (pat : Expr) (numBinders : Nat) (e : Expr) : MetaM (Option (Array Expr)) := do
+  withTraceNode `Saturate (fun _ => pure m!"checkIfPatDefEq") do
   -- Strip the binders, introduce meta-variables at the same time, and match
   let (mvars, _, pat) ← lambdaMetaTelescope pat (some numBinders)
   match preprocessThm with | none => pure () | some preprocessThm => preprocessThm mvars pat
@@ -237,6 +239,7 @@ def matchExprWithRules
   (boundVars : Std.HashSet FVarId)
   (state : State) (e : Expr) :
   MetaM State := do
+  withTraceNode `Saturate (fun _ => pure m!"matchExprWithRules") do
   let mut state := state
   for rules in state.rules do
     let exprs ← rules.rules.getMatch e
@@ -298,6 +301,7 @@ def matchExprWithPartialMatches
   (boundVars : Std.HashSet FVarId)
   (state : State) (e : Expr) :
   MetaM State := do
+  withTraceNode `Saturate (fun _ => pure m!"matchExprWithPartialMatches") do
   let mut state := state
   let exprs ← state.pmatches.getMatch e
   trace[Saturate.explore] "Potential matches: {exprs}"
@@ -351,6 +355,7 @@ def matchExpr
   (boundVars : Std.HashSet FVarId)
   (state : State) (e : Expr) :
   MetaM State := do
+  withTraceNode `Saturate (fun _ => pure m!"matchExpr") do
   trace[Saturate.explore] "Matching: {e}"
   /- First check if the expression contains bound vars: if it does, then we don't match it -/
   if ¬ boundVars.isEmpty then
@@ -382,6 +387,7 @@ private partial def visit
   (boundVars : Std.HashSet FVarId)
   (state : State) (e : Expr)
   : MetaM State := do
+  withTraceNode `Saturate (fun _ => pure m!"visit") do
   let e := e.consumeMData
   --
   trace[Saturate.explore] "Visiting {e}"
@@ -552,6 +558,7 @@ partial def evalSaturateCore
   (exploreTarget : Bool := true)
   : TacticM (State × Array FVarId)
   := do
+  withTraceNode `Saturate (fun _ => pure m!"evalSaturateCore") do
   withMainContext do
   trace[Saturate] "Exploring goal: {← getMainGoal}"
   -- Explore
@@ -598,6 +605,7 @@ partial def evalSaturateCore
   trace[Saturate] "Finished exploring the goal. Matched:\n{state.matched.toList}"
   let addAssumptions (state : State) (allFVars : Array FVarId) :
     TacticM (Array FVarId × Array FVarId × Std.HashMap Expr AsmPath) := do
+    withTraceNode `Saturate (fun _ => pure m!"addAssumptions") do
     withMainContext do
     let matched := state.matched.toArray
     let mut assumptions : Std.HashMap Expr AsmPath := state.assumptions
@@ -627,6 +635,7 @@ partial def evalSaturateCore
     (assumptions : Std.HashMap Expr AsmPath) :
     TacticM (State × Array FVarId × Array FVarId × Std.HashMap Expr AsmPath)
     := do
+    withTraceNode `Saturate (fun _ => pure m!"saturateExtra") do
     withMainContext do
     trace[Saturate] "state.pmatches (num of partial matches: {state.pmatches.size}):\n{state.pmatches.toArray.map Prod.snd}"
     trace[Saturate] "state.assumptions: {state.assumptions.toArray}"
@@ -657,7 +666,7 @@ partial def evalSaturateCore
     (state, allFVars, newFVars, assumptions) ← saturateExtra state allFVars newFVars assumptions
 
   withMainContext do
-  trace[Saturate] "Introduced the assumptions in the context"
+  trace[Saturate] "Finished saturating"
 
   -- Display the diagnostics information
   trace[Saturate.diagnostics] "Saturate diagnostics info: {state.diagnostics.toArray}"
@@ -671,6 +680,7 @@ def recomputeAssumptions
   (declsToExplore : Array FVarId)
   : TacticM State
   := do
+  withTraceNode `Saturate (fun _ => pure m!"recomputeAssumptions") do
   withMainContext do
   trace[Saturate] "Exploring goal: {← getMainGoal}"
   let ignore := state.assumptions.fold (fun ignore asm _ => ignore.insert asm) state.ignore
@@ -704,6 +714,7 @@ partial def evalSaturate {α}
   (next : Array FVarId → TacticM α)
   : TacticM α
   := do
+  withTraceNode `Saturate (fun _ => pure m!"evalSaturate") do
   -- Retrieve the rule sets
   let env ← getEnv
   let s := satAttr.map fun s => s.ext.getState env
