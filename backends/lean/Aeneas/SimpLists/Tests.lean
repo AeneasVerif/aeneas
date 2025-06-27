@@ -2,6 +2,8 @@ import Aeneas.SimpLists.SimpLists
 import Aeneas.List.List
 import Aeneas.Std.Slice
 
+open Aeneas Std
+
 example {α} [Inhabited α] (l : List α) (x : α) (i j : Nat) (hj : i ≠ j) : (l.set j x)[i]! = l[i]! := by
   simp_lists
 
@@ -43,3 +45,39 @@ example
   (↑l[j]! : ZMod 3329) = (↑x : ZMod 3329) - (↑y : ZMod 3329)
   := by
   simp_lists [h]
+
+/- This example comes from SymCrypt -/
+set_option trace.profiler true in
+example
+    (f : Std.Array U16 256#usize)
+    (g : Std.Array U16 256#usize)
+    (B0 : ℕ)
+    (B1 : ℕ)
+    (i0 : ℕ)
+    (i : Usize)
+    (c0 : U32)
+    (c1 : U32)
+    (paDst0 : Std.Array U32 256#usize)
+    (paDst : Std.Array U32 256#usize)
+    (hi0 : i0 < 128)
+    (hc0bound : (↑c0 : ℕ) ≤ B0 + B1)
+    (hc1bound : (↑c1 : ℕ) ≤ B0 + B1)
+    (hc1 : (↑c1 : ℕ) =
+    (↑paDst0[(↑i : ℕ) + 1]! : ℕ) + (↑f[(↑i : ℕ)]! : ℕ) * (↑g[(↑i : ℕ) + 1]! : ℕ) +
+      (↑f[(↑i : ℕ) + 1]! : ℕ) * (↑g[(↑i : ℕ)]! : ℕ))
+    (hi : (↑i : ℕ) = 2 * i0)
+    (paDst1 : Std.Array U32 256#usize)
+    (paDst1_post : paDst1 = paDst.set i c0)
+    (i' : Usize)
+    (i'_post : (↑i' : ℕ) = (↑i : ℕ) + 1)
+    (paDst2 : Std.Array U32 256#usize)
+    (paDst2_post : paDst2 = paDst1.set i' c1)
+    (h0 : ∀ j < i0, (↑paDst[2 * j]! : ℕ) ≤ B0 + B1 ∧ (↑paDst[2 * j + 1]! : ℕ) ≤ B0 + B1)
+    (h1 : ∀ (j : ℕ), i0 ≤ j → j < 128 → (↑paDst0[2 * j]! : ℕ) ≤ B0 ∧ (↑paDst0[2 * j + 1]! : ℕ) ≤ B0)
+    (h3 : ∀ (j : ℕ), i0 ≤ j → j < 128 → paDst[2 * j]! = paDst0[2 * j]! ∧ paDst[2 * j + 1]! = paDst0[2 * j + 1]!)
+    (j : ℕ)
+    (hj : j < i0 + 1)
+    (hjeq : j = i0) :
+    (↑paDst2[2 * j]! : ℕ) ≤ B0 + B1 ∧ (↑paDst2[2 * j + 1]! : ℕ) ≤ B0 + B1
+    := by
+    simp_lists [*]

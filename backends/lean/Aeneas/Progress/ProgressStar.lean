@@ -265,6 +265,7 @@ where
       onResult cfg state
     | .unknown => do
       trace[Progress] "don't know what to do: inserting a sorry"
+      state.progressState.clean
       return ({ script := #[←`(tactic| sorry)], unsolvedGoals := (← getUnsolvedGoals).toArray})
 
   onResult (cfg : Config) (state : State) : TacticM Info := do
@@ -340,7 +341,8 @@ where
   onBind (cfg : Config) (state : State) (varName : Name) : TacticM (Info × Option MainGoal) := do
     withTraceNode `Progress (fun _ => pure m!"onBind ({varName})") do
     if let some {usedTheorem, preconditions, mainGoal } ← tryProgress state then
-      withTraceNode `Progress (fun _ => pure m!"progress succeeded") do
+      trace[Progress] "progressSucceeded with {preconditions.size} unsolved preconditions"
+      withTraceNode `Progress (fun _ => pure m!"post-processing") do
       match mainGoal with
       | none => trace[Progress] "Main goal solved"
       | some goal =>

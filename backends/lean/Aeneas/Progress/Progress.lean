@@ -352,7 +352,13 @@ def trySolvePreconditions (args : Args) (newPropGoals : List MVarId) : TacticM (
       pure ((← Utils.getMVarIds ty).size, g))
   let ordPropGoals := (ordPropGoals.mergeSort (fun (mvars0, _) (mvars1, _) => mvars0 ≤ mvars1)).reverse
   setGoals (ordPropGoals.map Prod.snd)
-  allGoalsNoRecover (tryTac args.assumTac)
+  allGoalsNoRecover (do
+    traceGoalWithNode "Attempting to solve with `singleAssumptionTac`"
+    try
+      args.assumTac
+      trace[Progress] "Goal solved!"
+    catch _ => trace[Progress] "Goal not solved"
+    )
   allGoalsNoRecover args.solvePreconditionTac
   -- Make sure we preserve the order when presenting the preconditions to the user
   newPropGoals.filterMapM (fun g => do if ← g.isAssigned then pure none else pure (some g))
@@ -407,7 +413,7 @@ def State.update (state : State) (asms : Array FVarId) : TacticM (Option (State 
   /- Preprocess -/
   let some (scalarTacState, newPosts) ←
     ScalarTac.partialPreprocess scalarTacConfig (← ScalarTac.getSimpArgs)
-      scalarTacState (zetaDelta := true)
+      scalarTacState (zetaDelta := true) (simpAllAssumptions := false)
       (hypsToUseForSimp := state.scalarTacAsms)
       (assumptionsToPreprocess := newPosts)
       (simpTarget := false)
@@ -567,7 +573,7 @@ def progressAsmsOrLookupTheorem (args : Args) (state : Option State) (withTh : O
   /- There might be uninstantiated meta-variables in the goal that we need
      to instantiate (otherwise we will get stuck). -/
   let goalTy ← instantiateMVars goalTy
-  trace[Progress] "progressAsmsOrLookupTheorem: target: {goalTy}"
+  withTraceNode `Progress (fun _ => pure m!"target") do trace[Progress] "{goalTy}"
   /- Dive into the goal to lookup the theorem
      Remark: if we don't isolate the call to `withProgressSpec` to immediately "close"
      the terms immediately, we may end up with the error:
@@ -671,7 +677,7 @@ def State.init : TacticM (Option State) := do
   let scalarTacState ← ScalarTac.State.new scalarTacConfig
   let some (scalarTacState, newAsms) ←
     ScalarTac.partialPreprocess scalarTacConfig (← ScalarTac.getSimpArgs)
-      scalarTacState (zetaDelta := true)
+      scalarTacState (zetaDelta := true) (simpAllAssumptions := false)
       (hypsToUseForSimp := #[])
       (assumptionsToPreprocess := newAsms)
       (simpTarget := false)
@@ -710,11 +716,14 @@ def evalProgress
   withMainContext do
   let splitPost := true
   /- Preprocessing step for `singleAssumptionTac` -/
-  let singleAssumptionTacDtree ← do
-    let decls :=
+  let singleAssumptionTacDtree ←
+    withTraceNode `Progress (fun _ => pure m!"preprocess singleAssumptionTac") do
+    let decls ←
       match state with
-      | none => none
-      | some state => some state.userAsms
+      | none => pure none
+      | some state =>
+        trace[Progress] "Using state decls: {state.userAsms.map Expr.fvar}"
+        pure (some state.userAsms)
     singleAssumptionTacPreprocess decls
   /- For scalarTac we have a fast track: if the goal is not a linear
      arithmetic goal, we skip (note that otherwise, scalarTac would try
@@ -730,7 +739,7 @@ def evalProgress
         ScalarTac.scalarTac scalarTacConfig
       | some state =>
         ScalarTac.incrScalarTac scalarTacConfig state.scalarTacState (toClear := state.userAsms)
-          (assumptions := state.scalarTacAsms)
+          (assumptions := state.scalarTacAsms) (simpAllAssumptions := false)
     else
       throwError "Not a linear arithmetic goal"
   let simpLemmas ← Aeneas.ScalarTac.scalarTacSimpExt.getTheorems
@@ -747,8 +756,8 @@ def evalProgress
   /- We use our custom assumption tactic, which instantiates meta-variables only if there is a single
      assumption matching the goal. -/
   let customAssumTac : TacticM Unit := do
-    withTraceNode `Progress (fun _ => pure m!"Attempting to solve with `singleAssumptionTac`") do
-    singleAssumptionTacCore singleAssumptionTacDtree
+    let asms := state.map State.userAsms
+    singleAssumptionTacCore singleAssumptionTacDtree asms
   /- Also use the tactic provided by the user, if there is -/
   let byTac := match byTac with
     | none => []
@@ -761,7 +770,7 @@ def evalProgress
   let solvePreconditionTac :=
     withMainContext do
     withTraceNode `Progress (fun _ => pure m!"Trying to solve a precondition") do
-    trace[Progress] "Precondition: {← getMainGoal}"
+    traceGoalWithNode "Precondition"
     try
       firstTacSolve ([simpTac, scalarTac] ++ byTac)
       trace[Progress] "Precondition solved!"

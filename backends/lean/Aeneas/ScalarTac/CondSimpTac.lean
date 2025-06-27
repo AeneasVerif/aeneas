@@ -99,7 +99,9 @@ def condSimpTacSimp (config : Simp.Config) (args : CondSimpArgs) (loc : Utils.Lo
     trace[ScalarTac] "scalarTac assumptions: {asms.map Expr.fvar}"
     /- Note that when calling `scalar_tac` we saturate only by looking at the target: we have
        already saturated by looking at the assumptions (we do this once and for all beforehand) -/
-    let dischargeWrapper ← Simp.tacticToDischarge (incrScalarTac {saturateAssumptions := false} state toClear asms)
+    let dischargeWrapper ←
+      Simp.tacticToDischarge (incrScalarTac {saturateAssumptions := false} state
+        toClear (simpAllAssumptions := false) asms)
     dischargeWrapper.with fun discharge? => do
       -- Initialize the simp context
       let (ctx, simprocs) ← Simp.mkSimpCtx true config .simp simpArgs
@@ -151,7 +153,9 @@ def condSimpTacPreprocess (config : CondSimpTacConfig) (hypsArgs args : CondSimp
   /- First the hyps to use.
      Note that we do not inline the local let-declarations: we will do this only for the "regular" assumptions
      and the target. -/
-  let some (_, hypsToUse) ← partialPreprocess scalarConfig hypsArgs.toSimpArgs state (zetaDelta := false) #[] hypsToUse false
+  let some (_, hypsToUse) ←
+    partialPreprocess scalarConfig hypsArgs.toSimpArgs state (zetaDelta := false)
+      (simpAllAssumptions := false) #[] hypsToUse false
     | trace[ScalarTac] "Goal proved through preprocessing!"; return none
   withMainContext do
   withTraceNode `ScalarTac (fun _ => pure m!"Goal after preprocessing the hyps to use ({hypsToUse.map Expr.fvar})") do
@@ -166,7 +170,9 @@ def condSimpTacPreprocess (config : CondSimpTacConfig) (hypsArgs args : CondSimp
   withTraceNode `ScalarTac (fun _ => pure m!"Goal after simplifying the preprocessed hyps to use ({hypsToUse.map Expr.fvar})") do
     trace[ScalarTac] "{← getMainGoal}"
   /- Preprocess the "regular" assumptions -/
-  let some (state, newAsms) ← partialPreprocess scalarConfig (← ScalarTac.getSimpArgs) state (zetaDelta := true) #[] newAsms false
+  let some (state, newAsms) ←
+    partialPreprocess scalarConfig (← ScalarTac.getSimpArgs) state (zetaDelta := true)
+      (simpAllAssumptions := false) #[] newAsms false
     | trace[ScalarTac] "Goal proved through preprocessing!"; return none
   withMainContext do
   traceGoalWithNode `ScalarTac "Goal after the initial preprocessing"

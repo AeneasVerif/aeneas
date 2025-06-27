@@ -446,6 +446,7 @@ def filterAssumptionTacPreprocess (decls : Option (Array FVarId) := none) : Tact
 
 /-- Return `true` if managed to close goal `mvarId` using an assumption. -/
 def filterAssumptionTacCore (dtree : DiscrTree FVarId) : TacticM Bool := do
+  withTraceNode `Utils (fun _ => pure m!"filterAssumptionTacCore") do
   withMainContext do
   let g ← getMainGoal
   let type ← instantiateMVars (← g.getType)
@@ -490,9 +491,11 @@ example (x y : Nat) (_ : y * 3000 ≤ 1) (_ : x * 3000 ≤ 1) : y * 3000 ≤ 1 :
   fassumption
 
 -- List all the local declarations matching the goal
-def getAllMatchingAssumptions (type : Expr) : MetaM (List (LocalDecl × Name)) := do
+def getAllMatchingAssumptions (type : Expr) (candidates : Option (Array FVarId)) : MetaM (List (LocalDecl × Name)) := do
   let typeType ← inferType type
-  let decls ← (← getLCtx).getAllDecls
+  let decls ← match candidates with
+   | some candidates => pure (← candidates.mapM FVarId.getDecl).toList
+   | none => (← getLCtx).getDecls
   decls.filterMapM fun localDecl => do
     -- Make sure we revert the meta-variables instantiations by saving the state and restoring it
     let s ← saveState
@@ -508,7 +511,8 @@ def getAllMatchingAssumptions (type : Expr) : MetaM (List (LocalDecl × Name)) :
 
 def singleAssumptionTacPreprocess (decls := none) := filterAssumptionTacPreprocess decls
 
-def singleAssumptionTacCore (dtree : DiscrTree FVarId) : TacticM Unit := do
+def singleAssumptionTacCore (dtree : DiscrTree FVarId)
+  (candidates : Option (Array FVarId)) : TacticM Unit := do
   withMainContext do
   let mvarId ← getMainGoal
   mvarId.checkNotAssigned `sassumption
@@ -528,7 +532,7 @@ def singleAssumptionTacCore (dtree : DiscrTree FVarId) : TacticM Unit := do
        several times, but discrimination trees don't work if the expression we match over
        contains meta-variables.
      -/
-    match ← (getAllMatchingAssumptions goal) with
+    match ← (getAllMatchingAssumptions goal candidates) with
     | [(localDecl, _)] =>
       /- There is a single assumption which matches the goal: use it
          Note that we need to call isDefEq again to properly instantiate the meta-variables -/
@@ -549,7 +553,7 @@ def singleAssumptionTacCore (dtree : DiscrTree FVarId) : TacticM Unit := do
 -/
 def singleAssumptionTac : TacticM Unit := do
   let dtree ← singleAssumptionTacPreprocess
-  singleAssumptionTacCore dtree
+  singleAssumptionTacCore dtree none
 
 elab "sassumption " : tactic => do singleAssumptionTac
 
