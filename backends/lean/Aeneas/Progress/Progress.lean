@@ -393,23 +393,17 @@ def checkAssumptionIsUsableWithProgress (fvarId : FVarId) : TacticM Bool := do
     withProgressSpec (isGoal := false) (.fvar fvarId) fun _ => pure true
   catch _ => pure false
 
-/-- We assume that if there is a `mainGoal`, it is the current goal -/
-def updateState (mainGoal : Option MainGoal) (state : Option State) : TacticM (Option MainGoalWithState) := do
-  withTraceNode `Progress (fun _ => pure m!"updateState") do
-  /- We update the state only if there is still a main goal -/
-  let some mainGoal := mainGoal
-    | trace[Progress] "No main goal"; return none
-  let some state := state
-    | trace[Progress] "No state"; return (some { toMainGoal := mainGoal, state := none })
+def State.update (state : State) (asms : Array FVarId) : TacticM (Option (State × MVarId)) := do
+  withTraceNode `Progress (fun _ => pure m!"State.update") do
   /- Add the post-conditions to the set of user declarations -/
   let { scalarTacState, scalarTacAsms, userAsms, progressAsms, recDecls } := state
-  let userAsms := userAsms ++ mainGoal.posts
+  let userAsms := userAsms ++ asms
   /- Filter the post-conditions which could be used as candidates for `progress` -/
-  let progressAsms' ← mainGoal.posts.filterM checkAssumptionIsUsableWithProgress
+  let progressAsms' ← asms.filterM checkAssumptionIsUsableWithProgress
   let progressAsms' ← liftM (progressAsms'.mapM FVarId.getDecl)
   let progressAsms := progressAsms ++ progressAsms'
   /- Duplicate the post-conditions -/
-  let (_, newPosts) ← duplicateAssumptions mainGoal.posts
+  let (_, newPosts) ← duplicateAssumptions asms
   /- Preprocess -/
   let some (scalarTacState, newPosts) ←
     ScalarTac.partialPreprocess scalarTacConfig (← ScalarTac.getSimpArgs)
@@ -419,12 +413,21 @@ def updateState (mainGoal : Option MainGoal) (state : Option State) : TacticM (O
       (simpTarget := false)
     | trace[Progress] "Goal proven by preprocessing!"; return none
   let scalarTacAsms := scalarTacAsms ++ newPosts
-  let mainGoal := { mainGoal with goal := ← getMainGoal }
-  let mainGoal : MainGoalWithState := {
-    toMainGoal := mainGoal,
-    state := some { scalarTacState, scalarTacAsms, userAsms, progressAsms, recDecls },
-  }
-  pure (some mainGoal)
+  let mainGoal ← getMainGoal
+  let state := { scalarTacState, scalarTacAsms, userAsms, progressAsms, recDecls }
+  pure (some (state, mainGoal))
+
+def updateState (mainGoal : Option MainGoal) (state : Option State) : TacticM (Option MainGoalWithState) := do
+  withTraceNode `Progress (fun _ => pure m!"updateState") do
+  /- We update the state only if there is still a main goal -/
+  let some mainGoal := mainGoal
+    | trace[Progress] "No main goal"; return none
+  let some state := state
+    | trace[Progress] "No state"; return (some { toMainGoal := mainGoal, state := none })
+  /- Update -/
+  let some (state, goal) ← state.update mainGoal.posts
+    | return none
+  pure (some { mainGoal with state, goal })
 
 def progressWith (args : Args) (state : Option State) (fExpr : Expr) (th : Expr) :
   TacticM Goals := do
@@ -731,12 +734,12 @@ def evalProgress
     else
       throwError "Not a linear arithmetic goal"
   let simpLemmas ← Aeneas.ScalarTac.scalarTacSimpExt.getTheorems
-  let localAsms ← pure ((← (← getLCtx).getAssumptions).map LocalDecl.fvarId)
-  let simpArgs : Simp.SimpArgs := {simpThms := #[simpLemmas], hypsToUse := localAsms.toArray}
+  let localAsms ← match state with
+    | none => pure ((← (← getLCtx).getAssumptions).map LocalDecl.fvarId).toArray
+    | some state => pure state.userAsms
+  let simpArgs : Simp.SimpArgs := {simpThms := #[simpLemmas], hypsToUse := localAsms}
   let simpTac : TacticM Unit := do
     withTraceNode `Progress (fun _ => pure m!"Attempting to solve with `simp [*]`") do
-    -- Cleanup the context
-    cleanState state
     -- Simplify the goal
     let r ← Simp.simpAt false { maxDischargeDepth := 1 } simpArgs (.targets #[] true)
     -- Raise an error if the goal is not proved

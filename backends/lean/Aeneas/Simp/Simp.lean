@@ -136,6 +136,7 @@ where
 /- Call the simp tactic. -/
 def simpAt (simpOnly : Bool) (config : Simp.Config) (args : SimpArgs) (loc : Utils.Location) :
   TacticM (Option (Array FVarId)) := do
+  withTraceNode `Simp (fun _ => pure m!"simpAt") do
   -- Initialize the simp context
   let (ctx, simprocs) ← mkSimpCtx simpOnly config .simp args
   -- Apply the simplifier
@@ -146,6 +147,7 @@ def simpAt (simpOnly : Bool) (config : Simp.Config) (args : SimpArgs) (loc : Uti
 -/
 def dsimpAt (simpOnly : Bool) (config : Simp.Config) (args : SimpArgs) (loc : Location) :
   TacticM Unit := do
+  withTraceNode `Simp (fun _ => pure m!"dsimpAt") do
   -- Initialize the simp context
   let (ctx, simprocs) ← mkSimpCtx simpOnly config .dsimp args
   -- Apply the simplifier
@@ -154,6 +156,7 @@ def dsimpAt (simpOnly : Bool) (config : Simp.Config) (args : SimpArgs) (loc : Lo
 -- Call the simpAll tactic
 def simpAll (config : Simp.Config) (simpOnly : Bool) (args : SimpArgs) :
   TacticM Unit := do
+  withTraceNode `Simp (fun _ => pure m!"simpAll") do
   -- Initialize the simp context
   let (ctx, simprocs) ← mkSimpCtx simpOnly config .simpAll args
   -- Apply the simplifier

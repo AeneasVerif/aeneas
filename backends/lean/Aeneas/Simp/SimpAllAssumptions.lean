@@ -189,6 +189,7 @@ open Utils Simp Elab Tactic in
 def simpAllAssumptions (config : Simp.Config) (simpOnly : Bool) (args : SimpArgs)
   (mvarId : MVarId) (fvars : Array FVarId) (target : Bool) :
   MetaM (Option (Array FVarId × Std.HashMap FVarId FVarId × MVarId)) := do
+  withTraceNode `Simp (fun _ => pure m!"simpAllAssumptions") do
   -- Initialize the simp context
   let (ctx, simprocs) ← mkSimpCtx simpOnly config .simpAll args
   -- Apply the simplifier

@@ -1680,6 +1680,23 @@ def traceGoalWithNode (cls : Name) (msg : String) : TacticM Unit := do
         addTrace cls m!"{← getMainGoal}"
     else pure ()
 
+def splitTarget? (mvarId : MVarId) (splitIte := true) : MetaM (Option (List (MVarId × Array FVarId))) := do
+  mvarId.withContext do
+  -- Split
+  let some mvars ← Lean.Meta.splitTarget? mvarId splitIte
+    | return none
+  -- Compute the set of fvar ids
+  let decl ← mvarId.getDecl
+  let decls ← pure ((← decl.lctx.getDecls).map LocalDecl.fvarId)
+  let declsSet := Std.HashSet.ofList decls
+  -- Check which fvars are new
+  let mvars ← mvars.mapM fun mvarId => do
+    let decl ← mvarId.getDecl
+    let decls ← pure ((← decl.lctx.getDecls).map LocalDecl.fvarId)
+    let decls := decls.filter fun d => ¬ (declsSet.contains d)
+    pure (mvarId, decls.toArray)
+  pure (some mvars)
+
 end Utils
 
 end Aeneas
