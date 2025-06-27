@@ -684,6 +684,29 @@ example b (x y : U32) :
   unfold add2
   progress*?
 
+def add16 (x : U32) := do
+  let y ← x + x
+  let y ← y + x
+  let y ← y + x
+  let y ← y + x
+  let y ← y + x
+  let y ← y + x
+  let y ← y + x
+  let y ← y + x
+  let y ← y + x
+  let y ← y + x
+  let y ← y + x
+  let y ← y + x
+  let y ← y + x
+  let y ← y + x
+  let y ← y + x
+  pure y
+
+example (x : U32) (h : 16 * x ≤ U32.max) :
+  ∃ y, add16 x = ok y := by
+  unfold add16
+  progress*
+
 end Examples
 
 end Aeneas

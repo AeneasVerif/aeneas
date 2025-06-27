@@ -47,7 +47,6 @@ example
   simp_lists [h]
 
 /- This example comes from SymCrypt -/
-set_option trace.profiler true in
 example
     (f : Std.Array U16 256#usize)
     (g : Std.Array U16 256#usize)

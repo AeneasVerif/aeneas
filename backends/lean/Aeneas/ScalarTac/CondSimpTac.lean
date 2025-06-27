@@ -100,8 +100,7 @@ def condSimpTacSimp (config : Simp.Config) (args : CondSimpArgs) (loc : Utils.Lo
     /- Note that when calling `scalar_tac` we saturate only by looking at the target: we have
        already saturated by looking at the assumptions (we do this once and for all beforehand) -/
     let dischargeWrapper ←
-      Simp.tacticToDischarge (incrScalarTac {saturateAssumptions := false} state
-        toClear (simpAllAssumptions := false) asms)
+      Simp.tacticToDischarge (incrScalarTac {saturateAssumptions := false} state toClear asms)
     dischargeWrapper.with fun discharge? => do
       -- Initialize the simp context
       let (ctx, simprocs) ← Simp.mkSimpCtx true config .simp simpArgs
@@ -117,6 +116,7 @@ structure PreprocessResult where
   state : State
   oldAsms : Array FVarId
   newAsms : Array FVarId
+  asmsForPres : Array FVarId
   additionalSimpThms : Array FVarId
 
 /-- Preprocess the goal.
@@ -143,7 +143,6 @@ def condSimpTacPreprocess (config : CondSimpTacConfig) (hypsArgs args : CondSimp
   trace[ScalarTac] "hypsToUse: {hypsToUse.map Expr.fvar}"
   /- -/
   let (oldAsms, newAsms) ← Utils.duplicateAssumptions (some (allAssumptions.map LocalDecl.fvarId))
-  let toClear := oldAsms
   withMainContext do
   traceGoalWithNode `ScalarTac "Goal after duplicating the assumptions"
   trace[ScalarTac] "newAsms: {newAsms.map Expr.fvar}"
@@ -153,9 +152,9 @@ def condSimpTacPreprocess (config : CondSimpTacConfig) (hypsArgs args : CondSimp
   /- First the hyps to use.
      Note that we do not inline the local let-declarations: we will do this only for the "regular" assumptions
      and the target. -/
-  let some (_, hypsToUse) ←
+  let some (_, assumptionsForPres, hypsToUse) ←
     partialPreprocess scalarConfig hypsArgs.toSimpArgs state (zetaDelta := false)
-      (simpAllAssumptions := false) #[] hypsToUse false
+      #[] hypsToUse false
     | trace[ScalarTac] "Goal proved through preprocessing!"; return none
   withMainContext do
   withTraceNode `ScalarTac (fun _ => pure m!"Goal after preprocessing the hyps to use ({hypsToUse.map Expr.fvar})") do
@@ -170,9 +169,9 @@ def condSimpTacPreprocess (config : CondSimpTacConfig) (hypsArgs args : CondSimp
   withTraceNode `ScalarTac (fun _ => pure m!"Goal after simplifying the preprocessed hyps to use ({hypsToUse.map Expr.fvar})") do
     trace[ScalarTac] "{← getMainGoal}"
   /- Preprocess the "regular" assumptions -/
-  let some (state, newAsms) ←
+  let some (state, assumptionsForPres', newAsms) ←
     partialPreprocess scalarConfig (← ScalarTac.getSimpArgs) state (zetaDelta := true)
-      (simpAllAssumptions := false) #[] newAsms false
+      #[] newAsms false
     | trace[ScalarTac] "Goal proved through preprocessing!"; return none
   withMainContext do
   traceGoalWithNode `ScalarTac "Goal after the initial preprocessing"
@@ -180,7 +179,9 @@ def condSimpTacPreprocess (config : CondSimpTacConfig) (hypsArgs args : CondSimp
   /- Introduce the additional simp theorems -/
   let additionalSimpThms ← addSimpThms
   traceGoalWithNode `ScalarTac "Goal after adding the additional simp assumptions"
-  pure (some { args, toClear, hypsToUse, state, oldAsms, newAsms, additionalSimpThms })
+  let toClear := oldAsms
+  let asmsForPres := assumptionsForPres ++ assumptionsForPres'
+  pure (some { args, toClear, hypsToUse, state, oldAsms, newAsms, asmsForPres, additionalSimpThms })
 
 def condSimpTacCore
   (tacName : String)
@@ -189,7 +190,7 @@ def condSimpTacCore
   (loc : Utils.Location)
   (res : PreprocessResult) : TacticM (Option MVarId) := do
   withTraceNode `ScalarTac (fun _ => pure m!"CondSimpTacCore") do
-  let { args, toClear, hypsToUse := _, state, oldAsms, newAsms, additionalSimpThms } := res
+  let { args, toClear, hypsToUse := _, state, oldAsms, newAsms, asmsForPres, additionalSimpThms } := res
   /- Simplify the targets (note that we preserve the new assumptions for `scalar_tac`) -/
   withMainContext do
   let loc ← do
@@ -212,7 +213,8 @@ def condSimpTacCore
      TODO: scalar_tac should only be allowed to preprocess `scalarTacAsms`.
      TODO: we should preprocess those.
    -/
-  let _ ← condSimpTacSimp simpConfig args nloc (toClear := toClear) (additionalHypsToUse := additionalSimpThms) (some (state, newAsms))
+  let _ ← condSimpTacSimp simpConfig args nloc (toClear := toClear ++ asmsForPres)
+    (additionalHypsToUse := additionalSimpThms) (some (state, newAsms))
   if (← getUnsolvedGoals) == [] then pure none
   else pure (some (← getMainGoal))
 
@@ -220,6 +222,8 @@ def condSimpTacClear (res : PreprocessResult) : TacticM Unit := do
   withTraceNode `ScalarTac (fun _ => pure m!"CondSimpTacClear") do
   setGoals [← (← getMainGoal).tryClearMany res.hypsToUse]
   traceGoalWithNode `ScalarTac "Goal after clearing the duplicated hypotheses to use"
+  setGoals [← (← getMainGoal).tryClearMany res.asmsForPres]
+  traceGoalWithNode `ScalarTac "Goal after clearing the asmsForPres"
   setGoals [← (← getMainGoal).tryClearMany res.newAsms]
   traceGoalWithNode `ScalarTac "Goal after clearing the duplicated assumptions"
   setGoals [← (← getMainGoal).tryClearMany res.additionalSimpThms]

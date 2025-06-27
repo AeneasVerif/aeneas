@@ -109,6 +109,7 @@ structure State where
   scalarTacState : ScalarTac.State
   /-- Assumptions in the context which are only used by `scalar_tac` -/
   scalarTacAsms : Array FVarId
+  scalarTacHypsForPres : Array FVarId
   /-- Assumptions which should be visible to the user (those are the declarations
       which were not introduced by `scalar_tac`) -/
   userAsms : Array FVarId
@@ -402,7 +403,7 @@ def checkAssumptionIsUsableWithProgress (fvarId : FVarId) : TacticM Bool := do
 def State.update (state : State) (asms : Array FVarId) : TacticM (Option (State × MVarId)) := do
   withTraceNode `Progress (fun _ => pure m!"State.update") do
   /- Add the post-conditions to the set of user declarations -/
-  let { scalarTacState, scalarTacAsms, userAsms, progressAsms, recDecls } := state
+  let { scalarTacState, scalarTacAsms, scalarTacHypsForPres, userAsms, progressAsms, recDecls } := state
   let userAsms := userAsms ++ asms
   /- Filter the post-conditions which could be used as candidates for `progress` -/
   let progressAsms' ← asms.filterM checkAssumptionIsUsableWithProgress
@@ -411,16 +412,17 @@ def State.update (state : State) (asms : Array FVarId) : TacticM (Option (State 
   /- Duplicate the post-conditions -/
   let (_, newPosts) ← duplicateAssumptions asms
   /- Preprocess -/
-  let some (scalarTacState, newPosts) ←
+  let some (scalarTacState, postsForPres, newPosts) ←
     ScalarTac.partialPreprocess scalarTacConfig (← ScalarTac.getSimpArgs)
-      scalarTacState (zetaDelta := true) (simpAllAssumptions := false)
+      scalarTacState (zetaDelta := true)
       (hypsToUseForSimp := state.scalarTacAsms)
       (assumptionsToPreprocess := newPosts)
       (simpTarget := false)
     | trace[Progress] "Goal proven by preprocessing!"; return none
   let scalarTacAsms := scalarTacAsms ++ newPosts
+  let scalarTacHypsForPres := scalarTacHypsForPres ++ postsForPres
   let mainGoal ← getMainGoal
-  let state := { scalarTacState, scalarTacAsms, userAsms, progressAsms, recDecls }
+  let state := { scalarTacState, scalarTacAsms, scalarTacHypsForPres, userAsms, progressAsms, recDecls }
   pure (some (state, mainGoal))
 
 def updateState (mainGoal : Option MainGoal) (state : Option State) : TacticM (Option MainGoalWithState) := do
@@ -675,9 +677,9 @@ def State.init : TacticM (Option State) := do
   /- Duplicate and preprocess the assumptions -/
   let (oldAsms, newAsms) ← duplicateAssumptions
   let scalarTacState ← ScalarTac.State.new scalarTacConfig
-  let some (scalarTacState, newAsms) ←
+  let some (scalarTacState, asmsForPres, newAsms) ←
     ScalarTac.partialPreprocess scalarTacConfig (← ScalarTac.getSimpArgs)
-      scalarTacState (zetaDelta := true) (simpAllAssumptions := false)
+      scalarTacState (zetaDelta := true)
       (hypsToUseForSimp := #[])
       (assumptionsToPreprocess := newAsms)
       (simpTarget := false)
@@ -688,6 +690,7 @@ def State.init : TacticM (Option State) := do
   pure (some {
     scalarTacState,
     scalarTacAsms := newAsms,
+    scalarTacHypsForPres := asmsForPres,
     userAsms := oldAsms,
     progressAsms,
     recDecls,
@@ -696,7 +699,7 @@ def State.init : TacticM (Option State) := do
 /-- Cleanup the context to remove all the auxiliary assumptions introduced for the progress state
     and which should not be shown to the user -/
 def State.clean (state : State) : TacticM Unit := do
-  setGoals [← (← getMainGoal).tryClearMany state.scalarTacAsms]
+  setGoals [← (← getMainGoal).tryClearMany (state.scalarTacAsms ++ state.scalarTacHypsForPres)]
 
 def cleanState (state : Option State) : TacticM Unit := do
   match state with
@@ -739,7 +742,7 @@ def evalProgress
         ScalarTac.scalarTac scalarTacConfig
       | some state =>
         ScalarTac.incrScalarTac scalarTacConfig state.scalarTacState (toClear := state.userAsms)
-          (assumptions := state.scalarTacAsms) (simpAllAssumptions := false)
+          (assumptions := state.scalarTacAsms)
     else
       throwError "Not a linear arithmetic goal"
   let simpLemmas ← Aeneas.ScalarTac.scalarTacSimpExt.getTheorems
