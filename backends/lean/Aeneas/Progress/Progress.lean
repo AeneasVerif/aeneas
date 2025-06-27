@@ -101,16 +101,38 @@ def getType: UsedTheorem -> MetaM (Option Expr)
 
 end UsedTheorem
 
+/-- The `progress` state, which is optionally used by `progress`, allows to
+    factor out computations between several calls to `progress`. It is useful
+    for instance for `progress*`.
+-/
+structure State where
+  scalarTacState : ScalarTac.State
+  /-- Assumptions in the context which are only used by `scalar_tac` -/
+  scalarTacAsms : Array FVarId
+  /-- Assumptions which should be visible to the user (those are the declarations
+      which were not introduced by `scalar_tac`) -/
+  userAsms : Array FVarId
+  /-- Assumptions that we could try to use with `progress` -/
+  progressAsms : Array LocalDecl
+  /-- The declarations introduced for the recursive calls -/
+  recDecls : Array LocalDecl
+
+/-- The configuration to use for `scalar_tac` -/
+def scalarTacConfig : ScalarTac.Config := { split := false }
+
 structure MainGoal where
   goal : MVarId
   /-- The post-conditions introduced in the context -/
   posts : Array FVarId
 
+structure MainGoalWithState extends MainGoal where
+  state : Option State
+
 structure Goals where
   /-- The preconditions that are left to prove -/
   preconditions : Array MVarId
   /-- The main goal, if it was not proven -/
-  mainGoal : Option MainGoal
+  mainGoal : Option MainGoalWithState
 deriving Inhabited
 
 structure Stats extends Goals where
@@ -338,7 +360,8 @@ def trySolvePreconditions (args : Args) (newPropGoals : List MVarId) : TacticM (
 /-- Post-process the main goal.
 
   The main thing we do is simplify the post-conditions. -/
-def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal) := do
+def postprocessMainGoal (mainGoal : Option MainGoal) :
+  TacticM (Option MainGoal) := do
   withTraceNode `Progress (fun _ => pure m!"postprocessMainGoal") do
   match mainGoal with
   | none => pure none
@@ -364,7 +387,46 @@ def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal)
         pure (some ({ goal := ← getMainGoal, posts} : MainGoal))
       else pure none
 
-def progressWith (args : Args) (fExpr : Expr) (th : Expr) :
+/-- Check if an assumption could be used as the theorem given to `progress` -/
+def checkAssumptionIsUsableWithProgress (fvarId : FVarId) : TacticM Bool := do
+  try
+    withProgressSpec (isGoal := false) (.fvar fvarId) fun _ => pure true
+  catch _ => pure false
+
+/-- We assume that if there is a `mainGoal`, it is the current goal -/
+def updateState (mainGoal : Option MainGoal) (state : Option State) : TacticM (Option MainGoalWithState) := do
+  withTraceNode `Progress (fun _ => pure m!"updateState") do
+  /- We update the state only if there is still a main goal -/
+  let some mainGoal := mainGoal
+    | trace[Progress] "No main goal"; return none
+  let some state := state
+    | trace[Progress] "No state"; return (some { toMainGoal := mainGoal, state := none })
+  /- Add the post-conditions to the set of user declarations -/
+  let { scalarTacState, scalarTacAsms, userAsms, progressAsms, recDecls } := state
+  let userAsms := userAsms ++ mainGoal.posts
+  /- Filter the post-conditions which could be used as candidates for `progress` -/
+  let progressAsms' ← mainGoal.posts.filterM checkAssumptionIsUsableWithProgress
+  let progressAsms' ← liftM (progressAsms'.mapM FVarId.getDecl)
+  let progressAsms := progressAsms ++ progressAsms'
+  /- Duplicate the post-conditions -/
+  let (_, newPosts) ← duplicateAssumptions mainGoal.posts
+  /- Preprocess -/
+  let some (scalarTacState, newPosts) ←
+    ScalarTac.partialPreprocess scalarTacConfig (← ScalarTac.getSimpArgs)
+      scalarTacState (zetaDelta := true)
+      (hypsToUseForSimp := state.scalarTacAsms)
+      (assumptionsToPreprocess := newPosts)
+      (simpTarget := false)
+    | trace[Progress] "Goal proven by preprocessing!"; return none
+  let scalarTacAsms := scalarTacAsms ++ newPosts
+  let mainGoal := { mainGoal with goal := ← getMainGoal }
+  let mainGoal : MainGoalWithState := {
+    toMainGoal := mainGoal,
+    state := some { scalarTacState, scalarTacAsms, userAsms, progressAsms, recDecls },
+  }
+  pure (some mainGoal)
+
+def progressWith (args : Args) (state : Option State) (fExpr : Expr) (th : Expr) :
   TacticM Goals := do
   withTraceNode `Progress (fun _ => pure m!"progressWith") do
   -- Attempt to instantiate the theorem and introduce it in the context
@@ -391,6 +453,8 @@ def progressWith (args : Args) (fExpr : Expr) (th : Expr) :
     withTraceNode `Progress
       (fun _ => pure m!"Main goal after simplifying the post-conditions and the target") do
       trace[Progress] "{mainGoal.goal}"
+  /- Update the state with the new assumptions -/
+  let mainGoal ← updateState mainGoal state
   /- Update the list of goals - TODO: move this elsewhere -/
   let newGoals ← (newNonPropGoals ++ newPropGoals).filterM fun mvar => not <$> mvar.isAssigned
   withTraceNode `Progress (fun _ => pure m!"Final remaining preconditions") do
@@ -401,7 +465,7 @@ def progressWith (args : Args) (fExpr : Expr) (th : Expr) :
     | some goal => [goal.goal]
   setGoals (newGoals ++ curGoal)
   trace[Progress] "replaced the goals"
-  pure ({ preconditions := newGoals.toArray, mainGoal })
+  pure { preconditions := newGoals.toArray, mainGoal }
 
 /-- Small utility: if `args` is not empty, return the name of the app in the first
     arg, if it is a const. -/
@@ -419,7 +483,7 @@ def getFirstArg (args : Array Expr) : Option Expr := do
 /-- Helper: try to apply a theorem.
 
     Return the list of post-conditions we introduced if it succeeded. -/
-def tryApply (args : Args) (fExpr : Expr) (kind : String) (th : Option Expr) :
+def tryApply (args : Args) (state : Option State) (fExpr : Expr) (kind : String) (th : Option Expr) :
   TacticM (Option Goals) := do
   let res ← do
     match th with
@@ -431,7 +495,7 @@ def tryApply (args : Args) (fExpr : Expr) (kind : String) (th : Option Expr) :
       -- Apply the theorem
       let res ← do
         try
-          let res ← progressWith args fExpr th
+          let res ← progressWith args state fExpr th
           pure (some res)
         catch _ => pure none
   match res with
@@ -441,23 +505,57 @@ def tryApply (args : Args) (fExpr : Expr) (kind : String) (th : Option Expr) :
 /-- Try to progress with an assumption.
     Return `some` if we succeed, `none` otherwise.
 -/
-def tryAssumptions (args : Args) (fExpr : Expr) :
+def tryAssumptions (args : Args) (state : Option State) (fExpr : Expr) :
   TacticM (Option (Goals × UsedTheorem)) := do
   withTraceNode `Progress (fun _ => pure m!"tryAssumptions") do run
 where
   run :=
   withMainContext do
-  let ctx ← Lean.MonadLCtx.getLCtx
-  let decls ← ctx.getAssumptions
+  /- If there is a state: try the assumptions in the state, otherwise try all the assumptions
+     (in case there is a state, it means there are a lot of additional assumptions introduced
+     for `scalar_tac`, so we definitely do not want to try all of those).
+  -/
+  let decls ← do match state with
+    | none =>
+      let ctx ← Lean.MonadLCtx.getLCtx
+      pure (← ctx.getAssumptions).toArray
+    | some state => pure state.progressAsms
   for decl in decls.reverse do
     trace[Progress] "Trying assumption: {decl.userName} : {decl.type}"
     try
-      let goal ← progressWith args fExpr decl.toExpr
+      let goal ← progressWith args state fExpr decl.toExpr
       return (some (goal, .localHyp decl))
     catch _ => continue
   pure none
 
-def progressAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
+def getRecDecls : TacticM (Array LocalDecl) := do
+  let ctx ← Lean.MonadLCtx.getLCtx
+  let decls ← ctx.getAllDecls
+  pure (decls.filter (λ decl => match decl.kind with
+    | .default | .implDetail => false | .auxDecl => true)).toArray
+
+/-- Attempt to use a recursive assumption -/
+def progressWithRecDecl (args : Args) (state : Option State) (fExpr : Expr) :
+  TacticM (Goals × UsedTheorem) := do
+  withTraceNode `Progress (fun _ => pure m!"progressWithRecDecl") do
+  -- We try to apply the assumptions of kind "auxDecl"
+  let decls ← do
+    match state with
+    | none => getRecDecls
+    | some state => pure state.recDecls
+  -- TODO: introduce a helper for this
+  for decl in decls.reverse do
+    trace[Progress] "Trying recursive assumption: {decl.userName} : {decl.type}"
+    try
+      let goals ← progressWith args state fExpr decl.toExpr
+      return (goals, .localHyp decl)
+    catch _ => continue
+  -- Nothing worked: failed
+  let msg := "Progress failed: could not find a local assumption or a theorem to apply"
+  trace[Progress] msg
+  throwError msg
+
+def progressAsmsOrLookupTheorem (args : Args) (state : Option State) (withTh : Option Expr) :
   TacticM (Goals × UsedTheorem) := do
   withMainContext do
   -- Retrieve the goal
@@ -485,11 +583,11 @@ def progressAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
   -- Otherwise, lookup one.
   match withTh with
   | some th => do
-    let goals ← progressWith args fExpr th
+    let goals ← progressWith args state fExpr th
     return (goals, .givenExpr th)
   | none =>
     -- Try all the assumptions one by one and if it fails try to lookup a theorem.
-    if let some res ← tryAssumptions args fExpr then return res
+    if let some res ← tryAssumptions args state fExpr then return res
     /- It failed: lookup the pspec theorems which match the expression *only
        if the function is a constant* -/
     let fIsConst ← do
@@ -512,27 +610,12 @@ def progressAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
       -- Try the theorems one by one
       for pspec in pspecs do
         let pspecExpr ← Term.mkConst pspec
-        match ← tryApply args fExpr "pspec theorem" pspecExpr with
+        match ← tryApply args state fExpr "pspec theorem" pspecExpr with
         | some goals => return (goals, .progressThm pspec)
         | none => pure ()
       -- It failed: try to use the recursive assumptions
       trace[Progress] "Failed using a pspec theorem: trying to use a recursive assumption"
-      -- We try to apply the assumptions of kind "auxDecl"
-      let ctx ← Lean.MonadLCtx.getLCtx
-      let decls ← ctx.getAllDecls
-      let decls := decls.filter (λ decl => match decl.kind with
-        | .default | .implDetail => false | .auxDecl => true)
-      -- TODO: introduce a helper for this
-      for decl in decls.reverse do
-        trace[Progress] "Trying recursive assumption: {decl.userName} : {decl.type}"
-        try
-          let goals ← progressWith args fExpr decl.toExpr
-          return (goals, .localHyp decl)
-        catch _ => continue
-      -- Nothing worked: failed
-      let msg := "Progress failed: could not find a local assumption or a theorem to apply"
-      trace[Progress] msg
-      throwError msg
+      progressWithRecDecl args state fExpr
 
 syntax progressArgs := ("keep" binderIdent)? ("with" term)? ("as" " ⟨ " binderIdent,* " ⟩")? ("by" tacticSeq)?
 
@@ -575,7 +658,45 @@ def parseProgressArgs
   return (keep?, withTh?, ids, byTac)
 | _ => throwUnsupportedSyntax
 
-def evalProgress (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Array (Option Name))
+/-- Initialize the `progress` state -/
+def State.init : TacticM (Option State) := do
+  withTraceNode `Progress (fun _ => pure m!"State.init") do
+  /- Retrieve the recursive declarations -/
+  let recDecls ← getRecDecls
+  /- Duplicate and preprocess the assumptions -/
+  let (oldAsms, newAsms) ← duplicateAssumptions
+  let scalarTacState ← ScalarTac.State.new scalarTacConfig
+  let some (scalarTacState, newAsms) ←
+    ScalarTac.partialPreprocess scalarTacConfig (← ScalarTac.getSimpArgs)
+      scalarTacState (zetaDelta := true)
+      (hypsToUseForSimp := #[])
+      (assumptionsToPreprocess := newAsms)
+      (simpTarget := false)
+    | trace[Progress] "Goal proven through preprocessing!"; return none
+  /- Compute the list of assumptions which can be used as progress theorems -/
+  let progressAsms ← liftM ((← oldAsms.filterM checkAssumptionIsUsableWithProgress).mapM FVarId.getDecl)
+  /- -/
+  pure (some {
+    scalarTacState,
+    scalarTacAsms := newAsms,
+    userAsms := oldAsms,
+    progressAsms,
+    recDecls,
+  })
+
+/-- Cleanup the context to remove all the auxiliary assumptions introduced for the progress state
+    and which should not be shown to the user -/
+def State.clean (state : State) : TacticM Unit := do
+  setGoals [← (← getMainGoal).tryClearMany state.scalarTacAsms]
+
+def cleanState (state : Option State) : TacticM Unit := do
+  match state with
+  | none => pure ()
+  | some state => state.clean
+
+def evalProgress
+  (state : Option State)
+  (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Array (Option Name))
   (byTac : Option Syntax.Tactic)
   : TacticM Stats := do
   withTraceNode `Progress (fun _ => pure m!"evalProgress") do
@@ -586,16 +707,27 @@ def evalProgress (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Ar
   withMainContext do
   let splitPost := true
   /- Preprocessing step for `singleAssumptionTac` -/
-  let singleAssumptionTacDtree ← singleAssumptionTacPreprocess
+  let singleAssumptionTacDtree ← do
+    let decls :=
+      match state with
+      | none => none
+      | some state => some state.userAsms
+    singleAssumptionTacPreprocess decls
   /- For scalarTac we have a fast track: if the goal is not a linear
      arithmetic goal, we skip (note that otherwise, scalarTac would try
      to prove a contradiction) -/
   let scalarTac : TacticM Unit := do
     withTraceNode `Progress (fun _ => pure m!"Attempting to solve with `scalarTac`") do
     if ← ScalarTac.goalIsLinearInt then
-      /- Also: we don't try to split the goal if it is a conjunction
-         (it shouldn't be), but we split the disjunctions. -/
-      ScalarTac.scalarTac { split := false }
+      /- Use the precomputed state, if there is -/
+      match state with
+      | none =>
+        /- Also: we don't try to split the goal if it is a conjunction
+          (it shouldn't be), but we split the disjunctions. -/
+        ScalarTac.scalarTac scalarTacConfig
+      | some state =>
+        ScalarTac.incrScalarTac scalarTacConfig state.scalarTacState (toClear := state.userAsms)
+          (assumptions := state.scalarTacAsms)
     else
       throwError "Not a linear arithmetic goal"
   let simpLemmas ← Aeneas.ScalarTac.scalarTacSimpExt.getTheorems
@@ -603,6 +735,8 @@ def evalProgress (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Ar
   let simpArgs : Simp.SimpArgs := {simpThms := #[simpLemmas], hypsToUse := localAsms.toArray}
   let simpTac : TacticM Unit := do
     withTraceNode `Progress (fun _ => pure m!"Attempting to solve with `simp [*]`") do
+    -- Cleanup the context
+    cleanState state
     -- Simplify the goal
     let r ← Simp.simpAt false { maxDischargeDepth := 1 } simpArgs (.targets #[] true)
     -- Raise an error if the goal is not proved
@@ -617,6 +751,9 @@ def evalProgress (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Ar
     | none => []
     | some byTac => [
       withTraceNode `Progress (fun _ => pure m!"Attempting to solve with the user tactic: `{byTac}`") do
+      -- Cleanup the context
+      cleanState state
+      -- Call the tactic
       evalTactic byTac]
   let solvePreconditionTac :=
     withMainContext do
@@ -630,17 +767,17 @@ def evalProgress (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Ar
   let args : Args := {
     keep, keepPretty, ids, splitPost, assumTac := customAssumTac, solvePreconditionTac
   }
-  let (goals, usedTheorem) ← progressAsmsOrLookupTheorem args withArg
+  let (goals, usedTheorem) ← progressAsmsOrLookupTheorem args state withArg
   trace[Progress] "Progress done"
   return ⟨ goals, usedTheorem ⟩
 
 elab (name := progress) "progress" args:progressArgs : tactic => do
   let (keep?, withArg, ids, byTac) ← parseProgressArgs args
-  evalProgress keep? none withArg ids byTac *> return ()
+  evalProgress none keep? none withArg ids byTac *> return ()
 
 elab tk:"progress?" args:progressArgs : tactic => do
   let (keep?, withArg, ids, byTac) ← parseProgressArgs args
-  let stats ← evalProgress keep? none withArg ids byTac
+  let stats ← evalProgress none keep? none withArg ids byTac
   let mut stxArgs := args.raw
   if stxArgs[1].isNone then
     let withArg := mkNullNode #[mkAtom "with", ←stats.usedTheorem.toSyntax]
@@ -696,7 +833,7 @@ def parseLetProgress
 elab tk:letProgress : tactic => do
   withMainContext do
   let (withArg, suggest, ids, byTac) ← parseLetProgress tk
-  let stats ← evalProgress none (some (.str .anonymous "_")) withArg ids byTac
+  let stats ← evalProgress none none (some (.str .anonymous "_")) withArg ids byTac
   let mut stxArgs := tk.raw
   if suggest then
     trace[Progress] "suggest is true"

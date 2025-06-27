@@ -435,10 +435,13 @@ partial def getMVarIds (e : Expr) (hs : Std.HashSet MVarId := Std.HashSet.emptyW
 def assumptionTac : TacticM Unit :=
   liftMetaTactic fun mvarId => do mvarId.assumption; pure []
 
-def filterAssumptionTacPreprocess : TacticM (DiscrTree FVarId) := do
+def filterAssumptionTacPreprocess (decls : Option (Array FVarId) := none) : TacticM (DiscrTree FVarId) := do
   let mut dtree := DiscrTree.empty
-  for decl in (← (← getLCtx).getDecls) do
-    dtree ← dtree.insert decl.type decl.fvarId
+  let decls ← match decls with
+    | none => pure ((← (← getLCtx).getDecls).toArray.map LocalDecl.fvarId)
+    | some decls => pure decls
+  for decl in decls do
+    dtree ← dtree.insert (← decl.getType) decl
   pure dtree
 
 /-- Return `true` if managed to close goal `mvarId` using an assumption. -/
@@ -503,7 +506,7 @@ def getAllMatchingAssumptions (type : Expr) : MetaM (List (LocalDecl × Name)) :
     restoreState s
     pure x
 
-def singleAssumptionTacPreprocess := filterAssumptionTacPreprocess
+def singleAssumptionTacPreprocess (decls := none) := filterAssumptionTacPreprocess decls
 
 def singleAssumptionTacCore (dtree : DiscrTree FVarId) : TacticM Unit := do
   withMainContext do

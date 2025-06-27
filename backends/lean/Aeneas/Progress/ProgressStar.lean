@@ -405,7 +405,8 @@ where
       return (infos, mkStx)
 
   tryProgress := do
-    try some <$> Progress.evalProgress none (some (.str .anonymous "_")) none #[] none
+    let state := none
+    try some <$> Progress.evalProgress state none (some (.str .anonymous "_")) none #[] none
     catch _ => pure none
 
   handleProgressPreconditions (preconditions : Array MVarId) : TacticM (Array Syntax.Tactic × Array MVarId) := do

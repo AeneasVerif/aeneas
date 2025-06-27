@@ -214,7 +214,7 @@ def simpAsmsTarget (simpOnly : Bool) (config : Simp.Config) (args : Simp.SimpArg
   Aeneas.Simp.simpAt simpOnly config args (.targets props true)
 
 /-  Boosting a bit the `omega` tac. -/
-def scalarTacPreprocess (config : Config) : Tactic.TacticM Unit := do
+def preprocess (config : Config) : Tactic.TacticM Unit := do
   withTraceNode `ScalarTac (fun _ => pure m!"scalarTacPreprocess") do
   Tactic.withMainContext do
   -- Pre-preprocessing
@@ -287,7 +287,7 @@ def State.new (config : Config) : MetaM State := do
   let saturateState := Saturate.State.new rules
   pure { saturateState }
 
-def scalarTacPartialPreprocess (config : Config) (simpArgs : Simp.SimpArgs) (state : State)
+def partialPreprocess (config : Config) (simpArgs : Simp.SimpArgs) (state : State)
   (zetaDelta : Bool) (hypsToUseForSimp assumptionsToPreprocess : Array FVarId) (simpTarget : Bool) :
   Tactic.TacticM (Option (State × Array FVarId)) := do
   withTraceNode `ScalarTac (fun _ => pure m!"scalarTacPartialPreprocess") do
@@ -398,7 +398,7 @@ def scalarTacPartialPreprocess (config : Config) (simpArgs : Simp.SimpArgs) (sta
 
 elab "scalar_tac_preprocess" config:Parser.Tactic.optConfig : tactic => do
   let config ← elabConfig config
-  scalarTacPreprocess config
+  preprocess config
 
 def scalarTacCore (config : Config) : Tactic.TacticM Unit := do
   withTraceNode `ScalarTac (fun _ => pure m!"scalarTacCore") do
@@ -412,7 +412,7 @@ def scalarTacCore (config : Config) : Tactic.TacticM Unit := do
   Tactic.setGoals [g]
   -- Preprocess - wondering if we should do this before or after splitting
   -- the goal. I think before leads to a smaller proof term?
-  allGoalsNoRecover (scalarTacPreprocess config)
+  allGoalsNoRecover (preprocess config)
   allGoalsNoRecover do
     if config.split then do
       trace[ScalarTac] "Splitting the goal"
@@ -489,7 +489,7 @@ def incrScalarTac (config : Config) (state : State) (toClear : Array FVarId) (as
   let mvarId ← (← getMainGoal).tryClearMany toClear
   setGoals [mvarId]
   /- Saturate by exploring only the goal -/
-  let some (_, _) ← scalarTacPartialPreprocess config (← ScalarTac.getSimpArgs) state (zetaDelta := true) assumptions #[] true
+  let some (_, _) ← partialPreprocess config (← ScalarTac.getSimpArgs) state (zetaDelta := true) assumptions #[] true
     | trace[ScalarTac] "incrScalarTac: goal proven by preprocessing"
   trace[ScalarTac] "Goal after preprocessing: {← getMainGoal}"
   /- Call omega -/
