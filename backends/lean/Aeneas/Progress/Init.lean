@@ -86,7 +86,7 @@ section Methods
       trace[Progress] "Existentials: {zs}"
       trace[Progress] "Proposition after stripping the quantifiers: {ty₃}"
       -- ty₃ == ty₄ ∧ post?
-      let (ty₄, post?) ← Utils.optSplitConj ty₃.consumeMData
+      let (ty₄, post?) := Utils.optSplitConj ty₃.consumeMData
       trace[Progress] "After splitting the conjunction:\n- eq: {ty₄}\n- post: {post?}"
       -- ty₄ == (program = res)
       let (program, res) ← Utils.destEq ty₄.consumeMData

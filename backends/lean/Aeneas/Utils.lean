@@ -355,10 +355,18 @@ def isConj (e : Expr) : MetaM Bool :=
 -- Return the first conjunct if the expression is a conjunction, or the
 -- expression itself otherwise. Also return the second conjunct if it is a
 -- conjunction.
-def optSplitConj (e : Expr) : MetaM (Expr × Option Expr) := do
+def optSplitConj (e : Expr) : Expr × Option Expr :=
   e.consumeMData.withApp fun f args =>
-  if f.isConstOf ``And ∧ args.size = 2 then pure (args[0]!, some (args[1]!))
-  else pure (e, none)
+  if f.isConstOf ``And ∧ args.size = 2 then (args[0]!, some (args[1]!))
+  else (e, none)
+
+-- Tactic to split on a conjunction.
+partial def splitConjs (e : Expr) : List Expr :=
+  let (e, optE) := optSplitConj e.consumeMData
+  match optE with
+  | none => [e]
+  | some e' =>
+    e :: splitConjs e'
 
 -- Split the goal if it is a conjunction
 def splitConjTarget : TacticM Unit := do
@@ -367,7 +375,7 @@ def splitConjTarget : TacticM Unit := do
   trace[Utils] "splitConjTarget: goal: {g}"
   -- The tactic was initially implemened with `_root_.Lean.MVarId.apply`
   -- but it tended to mess the goal by unfolding terms, even when it failed
-  let (l, r) ← optSplitConj g
+  let (l, r) := optSplitConj g
   match r with
   | none => do throwError "The goal is not a conjunction"
   | some r => do
