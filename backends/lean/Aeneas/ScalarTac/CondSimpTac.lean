@@ -151,7 +151,7 @@ def condSimpTacPreprocess (config : CondSimpTacConfig) (hypsArgs args : CondSimp
   /- First the hyps to use.
      Note that we do not inline the local let-declarations: we will do this only for the "regular" assumptions
      and the target. -/
-  let some (_, hypsToUse) ← scalarTacPartialPreprocess scalarConfig hypsArgs.toSimpArgs state (zetaDelta := false) #[] hypsToUse false
+  let some (_, hypsToUse) ← partialPreprocess scalarConfig hypsArgs.toSimpArgs state (zetaDelta := false) #[] hypsToUse false
     | trace[ScalarTac] "Goal proved through preprocessing!"; return none
   withMainContext do
   withTraceNode `ScalarTac (fun _ => pure m!"Goal after preprocessing the hyps to use ({hypsToUse.map Expr.fvar})") do
@@ -166,7 +166,7 @@ def condSimpTacPreprocess (config : CondSimpTacConfig) (hypsArgs args : CondSimp
   withTraceNode `ScalarTac (fun _ => pure m!"Goal after simplifying the preprocessed hyps to use ({hypsToUse.map Expr.fvar})") do
     trace[ScalarTac] "{← getMainGoal}"
   /- Preprocess the "regular" assumptions -/
-  let some (state, newAsms) ← scalarTacPartialPreprocess scalarConfig (← ScalarTac.getSimpArgs) state (zetaDelta := true) #[] newAsms false
+  let some (state, newAsms) ← partialPreprocess scalarConfig (← ScalarTac.getSimpArgs) state (zetaDelta := true) #[] newAsms false
     | trace[ScalarTac] "Goal proved through preprocessing!"; return none
   withMainContext do
   traceGoalWithNode `ScalarTac "Goal after the initial preprocessing"
