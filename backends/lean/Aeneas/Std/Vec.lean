@@ -60,10 +60,10 @@ theorem Vec.len_val {α : Type u} (v : Vec α) : (Vec.len v).val = v.length :=
   getElem? a i := getElem? a.val i
   getElem! a i := getElem! a.val i
 
-@[simp, scalar_tac_simps, simp_lists_simps]
+@[simp, scalar_tac_simps, simp_lists_hyps_simps]
 theorem Vec.getElem?_Nat_eq {α : Type u} (v : Vec α) (i : Nat) : v[i]? = v.val[i]? := by rfl
 
-@[simp, scalar_tac_simps, simp_lists_simps]
+@[simp, scalar_tac_simps, simp_lists_hyps_simps]
 theorem Vec.getElem!_Nat_eq {α : Type u} [Inhabited α] (v : Vec α) (i : Nat) : v[i]! = v.val[i]! := by rfl
 
 @[reducible] instance {α : Type u} : GetElem (Vec α) Usize α (fun a i => i < a.val.length) where
@@ -73,11 +73,11 @@ theorem Vec.getElem!_Nat_eq {α : Type u} [Inhabited α] (v : Vec α) (i : Nat) 
   getElem? a i := getElem? a.val i.val
   getElem! a i := getElem! a.val i.val
 
-@[simp, scalar_tac_simps] theorem Vec.getElem?_Usize_eq {α : Type u} (v : Vec α) (i : Usize) : v[i]? = v.val[i.val]? := by rfl
-@[simp, scalar_tac_simps] theorem Vec.getElem!_Usize_eq {α : Type u} [Inhabited α] (v : Vec α) (i : Usize) : v[i]! = v.val[i.val]! := by rfl
+@[simp, scalar_tac_simps, simp_lists_hyps_simps] theorem Vec.getElem?_Usize_eq {α : Type u} (v : Vec α) (i : Usize) : v[i]? = v.val[i.val]? := by rfl
+@[simp, scalar_tac_simps, simp_lists_hyps_simps] theorem Vec.getElem!_Usize_eq {α : Type u} [Inhabited α] (v : Vec α) (i : Usize) : v[i]! = v.val[i.val]! := by rfl
 
-@[simp, scalar_tac_simps] abbrev Vec.get? {α : Type u} (v : Vec α) (i : Nat) : Option α := getElem? v i
-@[simp, scalar_tac_simps] abbrev Vec.get! {α : Type u} [Inhabited α] (v : Vec α) (i : Nat) : α := getElem! v i
+@[simp, scalar_tac_simps, simp_lists_hyps_simps] abbrev Vec.get? {α : Type u} (v : Vec α) (i : Nat) : Option α := getElem? v i
+@[simp, scalar_tac_simps, simp_lists_hyps_simps] abbrev Vec.get! {α : Type u} [Inhabited α] (v : Vec α) (i : Nat) : α := getElem! v i
 
 def Vec.set {α : Type u} (v: Vec α) (i: Usize) (x: α) : Vec α :=
   ⟨ v.val.set i.val x, by have := v.property; simp [*] ⟩
@@ -85,12 +85,12 @@ def Vec.set {α : Type u} (v: Vec α) (i: Usize) (x: α) : Vec α :=
 def Vec.set_opt {α : Type u} (v: Vec α) (i: Usize) (x: Option α) : Vec α :=
   ⟨ v.val.set_opt i.val x, by have := v.property; simp [*] ⟩
 
-@[simp]
+@[simp, scalar_tac_simps, simp_lists_hyps_simps]
 theorem Vec.set_val_eq {α : Type u} (v: Vec α) (i: Usize) (x: α) :
   (v.set i x) = v.val.set i.val x := by
   simp [set]
 
-@[simp]
+@[simp, scalar_tac_simps, simp_lists_hyps_simps]
 theorem Vec.set_opt_val_eq {α : Type u} (v: Vec α) (i: Usize) (x: Option α) :
   (v.set_opt i x) = v.val.set_opt i.val x := by
   simp [set_opt]

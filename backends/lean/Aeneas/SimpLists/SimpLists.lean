@@ -35,10 +35,18 @@ attribute [simp_lists_simps]
   Nat.testBit_two_pow_add_eq
 
 attribute [simp_lists_simps] List.map_map List.map_id_fun List.map_id_fun' id_eq
+attribute [simp_lists_simps] Fin.getElem!_fin
 
 def simpListsTac (config : ScalarTac.CondSimpTacConfig)
   (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
   let addSimpThms : TacticM (Array FVarId) := pure #[]
+  let hypsArgs : ScalarTac.CondSimpArgs := {
+      simpThms := #[← simpListsHypsSimpExt.getTheorems, ← SimpBoolProp.simpBoolPropHypsSimpExt.getTheorems],
+      simprocs := #[← simpListsHypsSimprocExt.getSimprocs, ← SimpBoolProp.simpBoolPropHypsSimprocExt.getSimprocs],
+      declsToUnfold := #[],
+      addSimpThms := #[],
+      hypsToUse := #[],
+    }
   let args : ScalarTac.CondSimpArgs := {
       simpThms := #[← simpListsSimpExt.getTheorems, ← SimpBoolProp.simpBoolPropSimpExt.getTheorems],
       simprocs := #[← simpListsSimprocExt.getSimprocs, ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs],
@@ -46,7 +54,7 @@ def simpListsTac (config : ScalarTac.CondSimpTacConfig)
       addSimpThms := args.addSimpThms,
       hypsToUse := args.hypsToUse,
     }
-  ScalarTac.condSimpTac "simp_lists" config {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true} args addSimpThms false loc
+  ScalarTac.condSimpTac "simp_lists" config {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true} hypsArgs args addSimpThms false loc
 
 syntax (name := simp_lists) "simp_lists" Parser.Tactic.optConfig ("[" (term<|>"*"),* "]")? (location)? : tactic
 

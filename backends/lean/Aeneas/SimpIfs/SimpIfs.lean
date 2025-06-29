@@ -15,6 +15,13 @@ open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 def simpIfsTac (config : ScalarTac.CondSimpTacConfig)
   (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
   let addSimpThms : TacticM (Array FVarId) := pure #[]
+  let hypsArgs : ScalarTac.CondSimpArgs := {
+      simpThms := #[← simpIfsHypsSimpExt.getTheorems, ← SimpBoolProp.simpBoolPropHypsSimpExt.getTheorems],
+      simprocs := #[← simpIfsHypsSimprocExt.getSimprocs, ← SimpBoolProp.simpBoolPropHypsSimprocExt.getSimprocs],
+      declsToUnfold := #[],
+      addSimpThms := #[],
+      hypsToUse := #[],
+    }
   let args : ScalarTac.CondSimpArgs := {
       simpThms := #[← simpIfsSimpExt.getTheorems, ← SimpBoolProp.simpBoolPropSimpExt.getTheorems],
       simprocs := #[← simpIfsSimprocExt.getSimprocs, ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs],
@@ -22,7 +29,7 @@ def simpIfsTac (config : ScalarTac.CondSimpTacConfig)
       addSimpThms := args.addSimpThms,
       hypsToUse := args.hypsToUse,
     }
-  ScalarTac.condSimpTac "simp_ifs" config {maxDischargeDepth := 2, failIfUnchanged := false} args addSimpThms false loc
+  ScalarTac.condSimpTac "simp_ifs" config {maxDischargeDepth := 2, failIfUnchanged := false} hypsArgs args addSimpThms false loc
 
 syntax (name := simp_ifs) "simp_ifs" Parser.Tactic.optConfig ("[" term,* "]")? (location)? : tactic
 
@@ -35,11 +42,11 @@ theorem if_false {α} (b : Prop) [Decidable b] (x y : α) (hb : ¬ b) : (if b th
   simp only [hb, Bool.false_eq_true, ↓reduceIte]
 
 @[simp_ifs_simps]
-theorem dite_true (c : Prop) [Decidable c] (h : c) (t : c → α) (e : ¬c → α) :
+theorem dite_true {α} (c : Prop) [Decidable c] (h : c) (t : c → α) (e : ¬c → α) :
   dite c t e = t h := by simp [h]
 
 @[simp_ifs_simps]
-theorem dite_fase (c : Prop) [Decidable c] (h : ¬ c) (t : c → α) (e : ¬c → α) :
+theorem dite_fase {α} (c : Prop) [Decidable c] (h : ¬ c) (t : c → α) (e : ¬c → α) :
   dite c t e = e h := by simp [h]
 
 def parseSimpIfs :
@@ -57,7 +64,7 @@ elab stx:simp_ifs : tactic =>
   let (config, args, loc) ← parseSimpIfs stx
   simpIfsTac config args loc
 
-example [Inhabited α] (i j : Nat) (h :i ≥ j ∧ i < j + 1) : (if i = j then 0 else 1) = 0 := by
+example {α} [Inhabited α] (i j : Nat) (h :i ≥ j ∧ i < j + 1) : (if i = j then 0 else 1) = 0 := by
   simp_ifs
 
 end Aeneas.SimpIfs

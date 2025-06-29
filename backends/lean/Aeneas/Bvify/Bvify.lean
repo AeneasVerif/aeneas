@@ -280,20 +280,24 @@ def bvifyAddSimpThms (n : Expr) : TacticM (Array FVarId) := do
 
 def bvifySimpConfig : Simp.Config := {maxDischargeDepth := 2, failIfUnchanged := false}
 
-def bvifyTacSimp (loc : Utils.Location) : TacticM Unit := do
+def bvifyTacSimp (loc : Utils.Location) : TacticM (Option (Array FVarId)) := do
   let args : ScalarTac.CondSimpArgs := {
       simpThms := #[← bvifySimpExt.getTheorems, ← SimpBoolProp.simpBoolPropSimpExt.getTheorems]
       simprocs := #[← bvifySimprocExt.getSimprocs, ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs]
     }
-  ScalarTac.condSimpTacSimp bvifySimpConfig args loc #[] false
+  ScalarTac.condSimpTacSimp bvifySimpConfig args loc #[] #[] none
 
 def bvifyTac (config : Config) (n : Expr) (loc : Utils.Location) : TacticM Unit := do
+  let hypsArgs : ScalarTac.CondSimpArgs := {
+      simpThms := #[← bvifyHypsSimpExt.getTheorems]
+      simprocs := #[← bvifyHypsSimprocExt.getSimprocs]
+    }
   let args : ScalarTac.CondSimpArgs := {
       simpThms := #[← bvifySimpExt.getTheorems, ← SimpBoolProp.simpBoolPropSimpExt.getTheorems]
       simprocs := #[← bvifySimprocExt.getSimprocs, ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs]
     }
   let config := { nonLin := config.nonLin, saturationPasses := config.saturationPasses }
-  ScalarTac.condSimpTac "bvify" config bvifySimpConfig args (bvifyAddSimpThms n) true loc
+  ScalarTac.condSimpTac "bvify" config bvifySimpConfig hypsArgs args (bvifyAddSimpThms n) true loc
 
 syntax (name := bvify) "bvify " colGt Parser.Tactic.optConfig term (location)? : tactic
 

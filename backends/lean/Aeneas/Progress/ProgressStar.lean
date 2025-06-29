@@ -131,6 +131,8 @@ end Bifurcation
 
 namespace ProgressStar
 
+abbrev traceGoalWithNode := Progress.traceGoalWithNode
+
 structure Config where
   preconditionTac: Option Syntax.Tactic := none
   /-- Should we use the special syntax `let* ⟨ ...⟩ ← ...` or the more standard syntax `progress with ... as ⟨ ... ⟩`? -/
@@ -138,8 +140,15 @@ structure Config where
   useCase' : Bool := false
 
 structure Info where
-  script: Array Syntax.Tactic := #[]
-  unsolvedGoals: List MVarId := []
+  script: Array Syntax.Tactic := #[] -- TODO: update so that we get a tree
+  unsolvedGoals: Array MVarId := #[]
+
+structure State where
+  progressState : Progress.State
+
+structure MainGoal where
+  state : State
+  goal : MVarId
 
 instance: Append Info where
   append inf1 inf2 := {
@@ -149,94 +158,208 @@ instance: Append Info where
 
 attribute [progress_simps] Aeneas.Std.bind_assoc_eq
 
-partial def evalProgressStar(cfg: Config): TacticM Info :=
+inductive TargetKind where
+| bind (fn : Name)
+| switch (info : Bifurcation.Info)
+| result
+| unknown
+
+def State.init : TacticM (Option State) := do
+  pure (Option.map State.mk (← Progress.State.init))
+
+/- Smaller helper which we use to check in which situation we are -/
+def analyzeTarget : TacticM TargetKind := do
+  withTraceNode `Progress (fun _ => do pure m!"analyzeTarget") do
+  try
+    Progress.monadTelescope (← getMainTarget) fun _xs _zs program _res _post => do
+    let e ← Utils.normalizeLetBindings program
+    if let .const ``Bind.bind .. := e.getAppFn then
+      let #[_m, _self, _α, _β, _value, cont] := e.getAppArgs
+        | throwError "Expected bind to have 4 arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
+      Utils.lambdaOne cont fun x _ => do
+        let name ← x.fvarId!.getUserName
+        pure (.bind name)
+    else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
+      pure (.switch bfInfo)
+    else
+      pure .result
+  catch _ => pure .unknown
+
+partial def evalProgressStar (cfg: Config) : TacticM Info :=
   withMainContext do focus do
-  trace[ProgressStar] "Simplifying the goal: {←(getMainTarget >>= (liftM ∘ ppExpr))}"
-  Utils.simpAt (simpOnly := true)
-    { maxDischargeDepth := 1, failIfUnchanged := false}
-    {simpThms := #[← Progress.progressSimpExt.getTheorems]}
-    (.targets #[] true)
-  /- We may have proven the goal already -/
-  let goals ← getUnsolvedGoals
-  if goals == [] then
-    let progress_simps ← `(Parser.Tactic.simpLemma| $(mkIdent `progress_simps):term)
-    return ⟨ #[← `(tactic|simp [$progress_simps])], [] ⟩
-  /- Continue -/
-  trace[ProgressStar] "After simplifying the goal: {← getMainTarget}"
-  let res ← traverseProgram cfg
-  setGoals res.unsolvedGoals
-  return res
+  withTraceNode `Progress (fun _ => do pure m!"evalProgressStar") do
+  /- Initialize the state -/
+  let some state ← State.init
+    | trace[Progress] "Goal proven while initializing the progress state"
+      return ⟨ #[ ← `(tactic|scalar_tac)], #[] ⟩
+  /- Simplify the target -/
+  let (info, mvarId) ← simplifyTarget
+  match mvarId with
+  | some _ =>
+    /- Go as far as possible with `progress` -/
+    let info' ← traverseProgram cfg state
+    let info := info ++ info'
+    setGoals info.unsolvedGoals.toList
+    pure info
+  | none => pure info
 
 where
-  traverseProgram (cfg : Config): TacticM Info := do
+  simplifyTarget : TacticM (Info × Option MVarId) := do
+    withTraceNode `Progress (fun _ => do pure m!"simplifyTarget") do
+    traceGoalWithNode "about to simplify goal"
+    let mvarId0 ← getMainGoal
+    let r ← Simp.simpAt (simpOnly := true)
+      { maxDischargeDepth := 1, failIfUnchanged := false}
+      {simpThms := #[← Progress.progressSimpExt.getTheorems]}
+      (.targets #[] true)
+    /- We may have proven the goal already -/
+    let tac : Array Syntax.Tactic ← do
+      let genSimp : Bool ← do
+        if r.isNone then pure true
+        else do
+          pure ((← getMainGoal) != mvarId0)
+      if genSimp then
+        let progress_simps ← `(Parser.Tactic.simpLemma| $(mkIdent `progress_simps):term)
+        pure #[← `(tactic|simp only [$progress_simps])]
+      else pure #[]
+    let info : Info := ⟨ tac, #[] ⟩
+    if r.isSome then traceGoalWithNode "after simplification"
+    else trace[Progress] "goal proved"
+    let goal ← do if r.isSome then pure (some (← getMainGoal)) else pure none
+    pure (info, goal)
+
+  traverseProgram (cfg : Config) (state : State) : TacticM Info := do
     withMainContext do
-    trace[ProgressStar] "traverseProgram: current goal: {← getMainGoal}"
-    try -- `programTelescope` can fail
-      Progress.programTelescope (← getMainTarget) fun _xs _zs program _res _post => do
-      let e ← Utils.normalizeLetBindings program
-      if let .const ``Bind.bind .. := e.getAppFn then
-        let #[_m, _self, _α, _β, _value, cont] := e.getAppArgs
-          | throwError "Expected bind to have 4 arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
-        Utils.lambdaOne cont fun x _ => do
-          let name ← x.fvarId!.getUserName
-          let (info, mainGoal) ← onBind cfg name
-          trace[ProgressStar] "traverseProgram: after call to `onBind`: main goal is: {mainGoal}"
-          /- Continue, if necessary -/
-          match mainGoal with
-          | none =>
-            -- Stop
-            return info
-          | some mainGoal =>
-            setGoals [mainGoal]
-            let restInfo ← traverseProgram cfg
-            return info ++ restInfo
-      else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
-        let contsTaggedVals ←
-          bfInfo.branches.mapM fun br => do
-            Utils.lambdaTelescopeN br.toExpr br.numArgs fun xs _ => do
-              let names ← xs.mapM (·.fvarId!.getUserName)
-              return names
-        let (branchGoals, mkStx) ← onBif cfg bfInfo contsTaggedVals
-        /- Continue exploring from the subgoals -/
-        let branchInfos ← branchGoals.mapM fun mainGoal => do
-          setGoals [mainGoal]
-          let restInfo ← traverseProgram cfg
-          pure restInfo
-        /- Put everything together -/
-        mkStx branchInfos
-      else
-        let (info, mainGoal) ← onResult cfg
-        pure { info with unsolvedGoals := info.unsolvedGoals ++ mainGoal.toList}
-    catch _ =>
-      return ({ script := #[←`(tactic| sorry)], unsolvedGoals := ← getUnsolvedGoals})
+    withTraceNode `Progress (fun _ => do pure m!"traverseProgram") do
+    traceGoalWithNode "current goal"
+    let targetKind ← analyzeTarget
+    match targetKind with
+    | .bind varName => do
+      let (info, mainGoal) ← onBind cfg state varName
+      /- Continue, if necessary -/
+      match mainGoal with
+      | none =>
+        -- Stop
+        trace[Progress] "stop"
+        return info
+      | some state =>
+        setGoals [state.goal]
+        let restInfo ← traverseProgram cfg state.state
+        return info ++ restInfo
+    | .switch bfInfo => do
+      let contsTaggedVals ←
+        bfInfo.branches.mapM fun br => do
+          Utils.lambdaTelescopeN br.toExpr br.numArgs fun xs _ => do
+            let names ← xs.mapM (·.fvarId!.getUserName)
+            return names
+      let (branchGoals, mkStx) ← onBif cfg state bfInfo contsTaggedVals
+      withTraceNode `Progress (fun _ => do pure m!"exploring branches") do
+      /- Continue exploring from the subgoals -/
+      let branchInfos ← branchGoals.mapM fun state => do
+        setGoals [state.goal]
+        let restInfo ← traverseProgram cfg state.state
+        pure restInfo
+      /- Put everything together -/
+      mkStx branchInfos
+    | .result => do
+      onResult cfg state
+    | .unknown => do
+      trace[Progress] "don't know what to do: inserting a sorry"
+      state.progressState.clean
+      return ({ script := #[←`(tactic| sorry)], unsolvedGoals := (← getUnsolvedGoals).toArray})
 
-  onResult (cfg : Config) : TacticM (Info × Option MVarId) := do
-    trace[ProgressStar] "onResult: Since (· >>= pure) = id, we treat this result as a bind on id"
-    -- If we encounter `(do f a)` we process it as if it were `(do let res ← f a; return res)`
-    -- since (id = (· >>= pure)) and when we desugar the do block we have that
-    --
-    --                      (do f a) == f a
-    --                               == (f a) >>= pure
-    --                               == (do let res ← f a; return res)
-    --
-    -- We known in advance the result of processing `return res`, which is to do nothing.
-    -- This allows us to prevent code duplication with the `onBind` function.
-    onBind cfg (.str .anonymous "res")
+  onResult (cfg : Config) (state : State) : TacticM Info := do
+    withTraceNode `Progress (fun _ => pure m!"onResult") do
+    /- If we encounter `(do f a)` we process it as if it were `(do let res ← f a; return res)`
+       since (id = (· >>= pure)) and when we desugar the do block we have that
 
-  onBind (cfg : Config) (name : Name) : TacticM (Info × Option MVarId) := do
-    trace[ProgressStar] "onBind (name={name})"
-    if let some {usedTheorem, preconditions, mainGoal } ← tryProgress then
-      trace[ProgressStar] "onBind: Can make progres: the new goal is: {mainGoal}, the unsolved preconditions are: {preconditions}"
-      let (preconditionTacs, unsolved) ← handleProgressPreconditions preconditions
+                            (do f a) == f a
+                                     == (f a) >>= pure
+                                     == (do let res ← f a; return res)
+
+       We known in advance the result of processing `return res`, which is to do nothing.
+       This allows us to prevent code duplication with the `onBind` function. -/
+    let res ← onBind cfg state (.str .anonymous "res")
+    match res.snd with
+    | none =>
+      trace[Progress] "done"
+      pure res.fst
+    | some goal =>
+      let info' ← onFinish goal
+      pure (res.fst ++ info')
+
+  onFinish (goal : MainGoal) : TacticM Info := do
+    withTraceNode `Progress (fun _ => pure m!"onFinish") do
+    setGoals [goal.goal]
+    traceGoalWithNode "goal"
+    /- Simplify a bit -/
+    let (info, mvarId) ← simplifyTarget
+    match mvarId with
+    | none => pure info
+    | some mvarId =>
+      setGoals [mvarId]
+      /- Clean the goal to remove the assumptions introduced for `scalar_tac` -/
+      goal.state.progressState.clean
+      /- Attempt to finish with a tactic -/
+      -- `simp [*]`
+      let simpTac : TacticM Syntax.Tactic := do
+        let localAsms ← pure ((← (← getLCtx).getAssumptions).map LocalDecl.fvarId)
+        let simpArgs : Simp.SimpArgs := {hypsToUse := localAsms.toArray}
+        let r ← Simp.simpAt false { maxDischargeDepth := 1 } simpArgs (.targets #[] true)
+        -- Raise an error if the goal is not proved
+        if r.isSome then throwError "Goal not proved"
+        else `(tactic|simp [*])
+      -- `scalar_tac`
+      let scalarTac : TacticM Syntax.Tactic := do
+        ScalarTac.scalarTac {}
+        `(tactic|scalar_tac)
+      -- TODO: add the tactic given by the user
+      let rec tryFinish (tacl : List (String × TacticM Syntax.Tactic)) : TacticM Syntax.Tactic := do
+        match tacl with
+        | [] =>
+          trace[Progress] "could not prove the goal: inserting a sorry"
+          `(tactic| sorry)
+        | (name, tac) :: tacl =>
+          let stx : Option Syntax.Tactic ←
+            withTraceNode `Progress (fun _ => pure m!"Attempting to solve with `{name}`") do
+            try
+              let stx ← tac
+              -- Check that there are no remaining goals
+              let gl ← Tactic.getUnsolvedGoals
+              if ¬ gl.isEmpty then throwError "tactic failed"
+              else pure (some stx)
+            catch _ => pure none
+          match stx with
+          | some stx =>
+            trace[Progress] "goal solved"
+            pure stx
+          | none => tryFinish tacl
+      let tac ← tryFinish [("simp [*]", simpTac), ("scalar_tac", scalarTac)]
+      let info' : Info ← pure { script := #[tac], unsolvedGoals := (← getUnsolvedGoals).toArray}
+      pure (info ++ info')
+
+  onBind (cfg : Config) (state : State) (varName : Name) : TacticM (Info × Option MainGoal) := do
+    withTraceNode `Progress (fun _ => pure m!"onBind ({varName})") do
+    if let some {usedTheorem, preconditions, mainGoal } ← tryProgress state then
+      trace[Progress] "progressSucceeded with {preconditions.size} unsolved preconditions"
+      withTraceNode `Progress (fun _ => pure m!"post-processing") do
+      match mainGoal with
+      | none => trace[Progress] "Main goal solved"
+      | some goal =>
+        withTraceNode `Progress (fun _ => pure m!"New main goal:") do
+        trace[Progress] "{goal.goal}"
+      trace[Progress] "Unsolved preconditions: {preconditions}"
+      let (preconditionTacs, unsolved) ← handleProgressPreconditions state preconditions
       if ¬ preconditionTacs.isEmpty then
-        trace[ProgressStar] "onBind: Found {preconditionTacs.size} preconditions, left {unsolved.size} unsolved"
+        trace[Progress] "Found {preconditionTacs.size} preconditions, left {unsolved.size} unsolved"
       else
-        trace[ProgressStar] "onBind: all preconditions solved"
+        trace[Progress] "all preconditions solved"
       /- Update the main goal, if necessary -/
-      let ids ← getIdsFromUsedTheorem name.eraseMacroScopes usedTheorem
-      trace[ProgressStar] "onBind: ids from used theorem: {ids}"
+      let ids ← getIdsFromUsedTheorem varName.eraseMacroScopes usedTheorem
+      trace[Progress] "ids from used theorem: {ids}"
       let mainGoal ← do mainGoal.mapM fun mainGoal => do
-        if ¬ ids.isEmpty then renameInaccessibles mainGoal ids -- NOTE: Taken from renameI tactic
+        if ¬ ids.isEmpty then
+          pure { mainGoal with goal := ← renameInaccessibles mainGoal.goal ids } -- NOTE: Taken from renameI tactic
         else pure mainGoal
       /- Generate the tactic scripts for the preconditions -/
       let currTac ←
@@ -250,26 +373,69 @@ where
           else `(tactic| progress with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩)
       let info : Info := {
           script := #[currTac]++ preconditionTacs, -- TODO: Optimize
-          unsolvedGoals := unsolved.toList,
+          unsolvedGoals := unsolved,
         }
+      let mainGoal ←
+        match mainGoal with
+        | none => pure none
+        | some goal =>
+          let progressState ← do
+            match goal.state with
+            | some state => pure state | none => throwError "Unreachable"
+          pure (some {
+              state := { state with progressState },
+              goal := goal.goal,
+            })
       pure (info, mainGoal)
-    else return ({ script := #[←`(tactic| sorry)], unsolvedGoals := ← getUnsolvedGoals}, none)
+    else
+      let info ← onFinish { goal := ← getMainGoal, state }
+      pure (info, none)
 
-  onBif (cfg : Config) (bfInfo : Bifurcation.Info) (toBeProcessed : Array (Array Name)): TacticM (List MVarId × (List Info → TacticM Info)) := do
-    trace[ProgressStar] "onBif: encountered {bfInfo.kind}"
+  onBif (cfg : Config) (state : State) (bfInfo : Bifurcation.Info) (toBeProcessed : Array (Array Name)) :
+    TacticM (List MainGoal × (List Info → TacticM Info)) := do
+    withTraceNode `Progress (fun _ => pure m!"onBif") do
+    trace[Progress] "onBif: encountered {bfInfo.kind}"
     if (←getGoals).isEmpty then
-      trace[ProgressStar] "onBif: no goals to be solved!"
+      -- TODO: we shouldn't get there
+      trace[Progress] "onBif: no goals to be solved!"
       -- Tactic.focus fails if there are no goals to be solved.
       return ({}, fun infos => assert! (infos.length == 0); pure {})
     Tactic.focus do
-      let splitStx ← `(tactic| split)
-      evalSplit splitStx
-      --
-      let subgoals ← getUnsolvedGoals
-      trace[ProgressStar] "onBif: Bifurcation generated {subgoals.length} subgoals"
+      /- Split, then update the state with the new assumptions-/
+      let some subgoals ← Utils.splitTarget? (← getMainGoal)
+        | trace[Progress] "Could not split"
+          -- TODO: make more robust
+          throwError "Could not split the goal"
+      let subgoals : List (Option (State × MVarId)) ← subgoals.mapM fun (mvarId, fvars) => do
+        setGoals [mvarId]
+        let { progressState } := state
+        match ← progressState.update fvars with
+        | none => pure none
+        | some (progressState, mvarId) => pure (some ({ progressState }, mvarId))
+      trace[Progress] "onBif: Bifurcation generated {subgoals.length} subgoals"
       unless subgoals.length == toBeProcessed.size do
         throwError "onBif: Expected {toBeProcessed.size} cases, found {subgoals.length}"
-      let infos_mkBranchesStx ← (subgoals.zip toBeProcessed.toList).mapM fun (sg, names) => do
+
+      let (solved, nonSolved) := (subgoals.zip toBeProcessed.toList).partition (Option.isSome ∘ Prod.fst)
+      let solvedStx : Info ← pure ⟨ #[← `(tactic|scalar_tac)], #[] ⟩
+      let rec split (subgoals : List (Option (State × MVarId) × Array Name)) :
+        TacticM (List (State × MVarId × Array Name) × (List Info → TacticM (List Info))) := do
+        match subgoals with
+        | [] => pure ([], fun _ => pure [])
+        | (sg, names) :: subgoals =>
+          let (nonSolved, mkStx) ← split subgoals
+          match sg with
+          | none => pure (nonSolved, fun infos => do pure (solvedStx :: (← mkStx infos)))
+          | some (state, sg) =>
+            pure ((state, sg, names) :: nonSolved,
+                  fun infos =>
+                  match infos with
+                  | [] => throwError "Unexpected"
+                  | info :: infos => do
+                    pure (info :: (← mkStx infos)))
+      let (subgoals, groupSolvedUnsolvedStx) ← split (subgoals.zip toBeProcessed.toList)
+
+      let infos_mkBranchesStx ← subgoals.mapM fun (state, sg, names) => do
         setGoals [sg]
         -- TODO: rename the variables
         let mkStx (branchTacs : Array Syntax.Tactic) : TacticM (TSyntax `tactic) := do
@@ -282,10 +448,11 @@ where
           let caseArgs := makeCaseArgs (←sg.getTag) names
           if cfg.useCase' then `(tactic| case' $caseArgs => $branchTacs*)
           else `(tactic|. $branchTacs*)
-        pure (sg,  mkStx)
+        pure (({goal := sg, state} : MainGoal),  mkStx)
       let (infos, mkBranchesStx) := infos_mkBranchesStx.unzip
 
       let mkStx (infos : List Info) : TacticM Info := do
+        -- Process the branches that were left to be solved
         unless infos.length == mkBranchesStx.length do
           throwError "onBif: Expected {mkBranchesStx.length} infos, found {infos.length}"
         let infos := infos.zip mkBranchesStx
@@ -293,16 +460,26 @@ where
           let stx ← mkBranchStx info.script
           pure ({ unsolvedGoals := info.unsolvedGoals,
                   script := #[stx] } : Info)
+        -- Add the branches which were already solved
+        let infos ← groupSolvedUnsolvedStx infos
+        -- Put everything together
         let infos := infos.foldr (fun info acc => info ++ acc) {}
-        pure (({script:=#[splitStx]} : Info) ++ infos)
+        pure (({script:=#[← `(tactic|split)]} : Info) ++ infos)
 
       return (infos, mkStx)
 
-  tryProgress := do
-    try some <$> Progress.evalProgress none (some (.str .anonymous "_")) none #[] none
+  tryProgress (state : State) := do
+    try some <$> Progress.evalProgress state.progressState none (some (.str .anonymous "_")) none #[] none
     catch _ => pure none
 
-  handleProgressPreconditions (preconditions : Array MVarId) : TacticM (Array Syntax.Tactic × Array MVarId) := do
+  handleProgressPreconditions (state : State) (preconditions : Array MVarId) :
+    TacticM (Array Syntax.Tactic × Array MVarId) := do
+    -- Cleanup the state
+    let preconditions ← preconditions.mapM fun g => do
+      setGoals [g]
+      state.progressState.clean
+      getMainGoal
+    --
     if let .some tac := cfg.preconditionTac then
       let trySolve (sg : MVarId) : TacticM (Syntax.Tactic × Option MVarId) := do
         setGoals [sg]
@@ -324,12 +501,13 @@ where
       pure (← preconditions.mapM (fun _ => `(tactic| · sorry)), preconditions)
 
   getIdsFromUsedTheorem name usedTheorem: TacticM (Array _) := do
+    withTraceNode `Progress (fun _ => do pure m!"getIdsFromUsedTheorem") do
     let some thm ← usedTheorem.getType
       | throwError "Could not infer proposition of {usedTheorem}"
-    let (numElem, numPost) ← Progress.programTelescope thm
+    let (numElem, numPost) ← Progress.monadTelescope thm
       fun _xs zs _program _res postconds => do
         let numPost := Utils.numOfConjuncts <$> postconds |>.getD 0
-        trace[ProgressStar] "Number of conjuncts for `{←liftM (Option.traverse ppExpr postconds)}` is {numPost}"
+        trace[Progress] "Number of conjuncts for `{←liftM (Option.traverse ppExpr postconds)}` is {numPost}"
         pure (zs.size, numPost)
     return makeIds (base := name) numElem numPost
 
@@ -380,7 +558,7 @@ section Examples
 
 /--
 info: Try this:
-simp [progress_simps]
+simp only [progress_simps]
 -/
 #guard_msgs in
 example : True := by progress*?
@@ -400,7 +578,22 @@ info: Try this:
 -/
 #guard_msgs in
 example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
-      ∃ z, add1 x y = ok z := by
+  ∃ z, add1 x y = ok z := by
+  unfold add1
+  progress*?
+
+/--
+info: Try this:
+  simp only [progress_simps]
+  let* ⟨ x2, x2_post ⟩ ← U32.add_spec
+  let* ⟨ x3, x3_post ⟩ ← U32.add_spec
+  let* ⟨ res, res_post ⟩ ← U32.add_spec
+  scalar_tac
+-/
+#guard_msgs in
+example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
+  let v := 2 * x.val + 2 * y.val + 4
+  ∃ z, add1 x y = ok z ∧ z.val = v:= by
   unfold add1
   progress*?
 
@@ -449,7 +642,7 @@ x y : U32
 h✝ : b = true
 ⊢ ↑x + ↑y ≤ U32.max
 
-case intro.hmax
+case hmax
 b : Bool
 x y : U32
 h✝ : b = true
@@ -458,7 +651,7 @@ _ : [> let x2 ← x + y <]
 x2_post : ↑x2 = ↑x + ↑y
 ⊢ ↑x2 + ↑x2 ≤ U32.max
 
-case intro.hmax
+case hmax
 b : Bool
 x y : U32
 h✝ : b = true
@@ -476,7 +669,7 @@ x y : U32
 h✝ : ¬b = true
 ⊢ ↑x + ↑y ≤ U32.max
 
-case intro.hmax
+case hmax
 b : Bool
 x y✝ : U32
 h✝ : ¬b = true
@@ -490,6 +683,29 @@ example b (x y : U32) :
       ∃ z, add2 b x y = ok z := by
   unfold add2
   progress*?
+
+def add16 (x : U32) := do
+  let y ← x + x
+  let y ← y + x
+  let y ← y + x
+  let y ← y + x
+  let y ← y + x
+  let y ← y + x
+  let y ← y + x
+  let y ← y + x
+  let y ← y + x
+  let y ← y + x
+  let y ← y + x
+  let y ← y + x
+  let y ← y + x
+  let y ← y + x
+  let y ← y + x
+  pure y
+
+example (x : U32) (h : 16 * x ≤ U32.max) :
+  ∃ y, add16 x = ok y := by
+  unfold add16
+  progress*
 
 end Examples
 

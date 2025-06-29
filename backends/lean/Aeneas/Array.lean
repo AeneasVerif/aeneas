@@ -5,6 +5,8 @@ namespace Array
 
 attribute [-simp] List.getElem!_eq_getElem?_getD
 
+attribute [scalar_tac_simps, simp_lists_simps] Array.size
+
 def setSlice! {α} (a : Array α) (i : ℕ) (s : List α) : Array α :=
   ⟨ a.toList.setSlice! i s⟩
 

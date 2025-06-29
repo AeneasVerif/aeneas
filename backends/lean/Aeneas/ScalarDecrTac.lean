@@ -46,9 +46,10 @@ def removeInvImageAssumptions : TacticM Unit := do
   let filtDecls ← liftM (decls.filterM fun decl => do
     if ← isProp decl.type then containsInvertImage decl
     else pure false)
+  let filtDecls := filtDecls.toArray.map LocalDecl.fvarId
   /- Attempt to clear those assumptions - note that it may not always succeed as
      some other assumptions might depend on them -/
-  tryClearFVarIds ⟨ filtDecls.map fun d => d.fvarId ⟩
+  setGoals [← (← getMainGoal).tryClearMany filtDecls]
 
 elab "remove_invImage_assumptions" : tactic =>
   removeInvImageAssumptions

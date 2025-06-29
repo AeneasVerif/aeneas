@@ -15,7 +15,7 @@ def opaque_refold (h x : Name) (e : Expr) : TacticM Unit :=
   withMainContext do
   /- Retrieve the list of propositions in the context -/
   let ctx ← getLCtx
-  let props ← (← ctx.getDecls).filterM fun x => do pure (← inferType x.type).isProp
+  let props ← (← ctx.getDecls).filterM fun x => isProp x.type
   /- Generalize -/
   let goal ← getMainGoal
   let (_, _, ngoal) ← goal.generalizeHyp #[{expr := e, xName? := x, hName? := h}] (props.map LocalDecl.fvarId).toArray
@@ -66,7 +66,7 @@ def transparent_refold (x : Name) (e : Expr) : TacticM Unit :=
   withMainContext do
   /- Retrieve the list of propositions in the context -/
   let ctx ← getLCtx
-  let props ← (← ctx.getDecls).filterM fun x => do pure (← inferType x.type).isProp
+  let props ← (← ctx.getDecls).filterM fun x => isProp x.type
   /- List the assumptions which contain the declaration that we want to refold -/
   let mut toRevert := #[]
   for decl in props.reverse do

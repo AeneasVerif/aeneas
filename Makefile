@@ -178,7 +178,7 @@ test-%: build-dev
 # Replay the Lean tests and time them
 .PHONY: timed-lean
 timed-lean:
-	cd tests/lean && find . -type f -iname "*.lean" -not -path "./.lake/*" -exec printf "\n{}\n" \; -exec lake env time lean {} \; >& timing.out
+	cd tests/lean && find . -type f -iname "*.lean" -not -path "./.lake/*" -exec printf "\n{}\n" \; -exec lake env time lean {} \;
 
 # =============================================================================
 # Nix
