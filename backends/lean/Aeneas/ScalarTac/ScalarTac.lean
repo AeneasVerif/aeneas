@@ -147,6 +147,7 @@ def scalarTacSaturateForward {α}
   (config : SaturateConfig)
   (satState : Option Saturate.State)
   (declsToExplore : Option (Array FVarId))
+  (postprocessThm : Option (Expr → MetaM Simp.Result))
   (f : Saturate.State → Array FVarId → TacticM α) : TacticM α := do
   withTraceNode `ScalarTac (fun _ => pure m!"scalarTacSaturateForward") do
   withMainContext do
@@ -175,7 +176,7 @@ def scalarTacSaturateForward {α}
       { visitProofTerms := false,
         visitBoundExpressions := config.saturateVisitBoundExpressions,
         saturationPasses := config.saturationPasses }
-      state none none
+      state none none postprocessThm
       declsToExplore
       (exploreTarget := config.saturateTarget)
   withMainContext do f state fvarIds
@@ -183,7 +184,7 @@ def scalarTacSaturateForward {α}
 -- For debugging
 elab "scalar_tac_saturate" config:Parser.Tactic.optConfig : tactic => do
   let config ← elabConfig config
-  let _ ← scalarTacSaturateForward config.toSaturateConfig none none (fun _ _ => pure ())
+  let _ ← scalarTacSaturateForward config.toSaturateConfig none none (postprocessThm := none) (fun _ _ => pure ())
 
 def getSimpArgs : CoreM Simp.SimpArgs := do
   pure {
@@ -233,7 +234,7 @@ def preprocess (config : Config) : Tactic.TacticM Unit := do
   traceGoalWithNode `ScalarTac "Goal after first simplification"
   -- Apply the forward rules
   if config.saturate then
-    scalarTacSaturateForward config.toSaturateConfig none none (fun _ _ => pure ())
+    scalarTacSaturateForward config.toSaturateConfig none none (postprocessThm := none) (fun _ _ => pure ())
   traceGoalWithNode `ScalarTac "Goal after saturation"
   -- Apply `simpAll`
   if config.simpAllMaxSteps ≠ 0 then
@@ -295,13 +296,19 @@ def partialPreprocess (config : Config) (simpArgs : Simp.SimpArgs) (state : Stat
     | trace[ScalarTac] "Goal proven by preprocessing!"; return none
   trace[ScalarTac] "Goal after first simplification: {← getMainGoal}"
   -- Apply the forward rules
+  let postprocessThm  : Expr → MetaM Simp.Result ← do
+    let (ctx, simprocs) ← Simp.mkSimpCtx true
+      {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1} .simp
+      {simpArgs with hypsToUse := #[] }
+    pure (fun (thTy : Expr) => do
+          pure (Prod.fst (← simp thTy ctx simprocs (discharge? := none) {})))
   let satConfig := config.toSaturateConfig
   let satConfig := { satConfig with
     saturateAssumptions := satConfig.saturateAssumptions && config.saturate,
     saturateTarget := satConfig.saturateTarget && config.saturate,
   }
   let (saturateState, satAssumptions) ←
-    scalarTacSaturateForward satConfig state.saturateState (some assumptions)
+    scalarTacSaturateForward satConfig state.saturateState (some assumptions) (some postprocessThm)
       fun saturateState satAssumptions => pure (saturateState, satAssumptions)
   withMainContext do
   let state := { state with saturateState }

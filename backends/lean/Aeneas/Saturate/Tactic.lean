@@ -554,6 +554,7 @@ partial def evalSaturateCore
   (state : State)
   (exploreSubterms : Option (Expr → Array Expr → MetaM (Array Expr)) := none)
   (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
+  (postprocessThm : Option (Expr → MetaM Simp.Result))
   (declsToExplore : Array FVarId)
   (exploreTarget : Bool := true)
   : TacticM (State × Array FVarId)
@@ -604,13 +605,14 @@ partial def evalSaturateCore
      helps prevent bugs where the local context is not the one we expect) -/
   trace[Saturate] "Finished exploring the goal. Matched:\n{state.matched.toList}"
   let addAssumptions (state : State) (allFVars : Array FVarId) :
-    TacticM (Array FVarId × Array FVarId × Std.HashMap Expr AsmPath) := do
+    TacticM (Array FVarId × Array FVarId × Std.HashMap Expr AsmPath × Std.HashSet Expr) := do
     withTraceNode `Saturate (fun _ => pure m!"addAssumptions") do
     withMainContext do
     let matched := state.matched.toArray
     let mut assumptions : Std.HashMap Expr AsmPath := state.assumptions
     let mut allFVars := allFVars
     let mut newFVars : Array FVarId := #[]
+    let mut ignore := state.ignore
     for i in [0:matched.size] do
       let th := matched[i]!
       trace[Saturate] "Adding: {th}"
@@ -619,14 +621,26 @@ partial def evalSaturateCore
       -- Check that we don't add the same assumption twice
       if assumptions.contains thTy || state.ignore.contains thTy then
         continue
-      else
-        let x ← Utils.addDeclTac (.num (.str .anonymous "_h") i) th thTy (asLet := false) fun x => pure x
-        allFVars := allFVars.push x.fvarId!
-        newFVars := newFVars.push x.fvarId!
-        let path := AsmPath.asm x.fvarId!
-        assumptions := assumptions.insert thTy path
+      -- Post-process
+      let (th, thTy) ← match postprocessThm with
+        | none => pure (th, thTy)
+        | some postprocess =>
+          let r ← postprocess thTy
+          if r.expr != thTy ∧ (assumptions.contains thTy || state.ignore.contains thTy) then
+            continue
+          else
+            let some (th', thTy') ← Lean.Meta.applySimpResult (← getMainGoal) th thTy r (mayCloseGoal := false)
+              | throwError "Goal was closed in an unexpected manner"
+            ignore := ignore.insert thTy
+            pure (th', thTy')
+      -- Add the declaration
+      let x ← Utils.addDeclTac (.num (.str .anonymous "_h") i) th thTy (asLet := false) fun x => pure x
+      allFVars := allFVars.push x.fvarId!
+      newFVars := newFVars.push x.fvarId!
+      let path := AsmPath.asm x.fvarId!
+      assumptions := assumptions.insert thTy path
     trace[Saturate] "Goal after introducing the assumptions: {← getMainGoal}"
-    pure (allFVars, newFVars, assumptions)
+    pure (allFVars, newFVars, assumptions, ignore)
 
   -- We do this in several passes: we add the assumptions, then explore the context again to saturate, etc.
   let saturateExtra
@@ -655,12 +669,13 @@ partial def evalSaturateCore
     for (assum, path) in Std.HashMap.toArray oldAssumptions do
       state ← matchExprWithPartialMatches preprocessThm path empty state assum
     -- Introduce the assumptions in the context and do another pass
-    let (allFVars, newFVars, assumptions) ← addAssumptions state allFVars
+    let (allFVars, newFVars, assumptions, ignore) ← addAssumptions state allFVars
+    state := { state with ignore }
     pure (state, allFVars, newFVars, assumptions)
 
   --
-  let mut (allFVars, newFVars, assumptions) ← addAssumptions state #[]
-  let mut state := state
+  let mut (allFVars, newFVars, assumptions, ignore) ← addAssumptions state #[]
+  let mut state := { state with ignore }
   -- Repeatedly explore the context
   for _ in [0:config.saturationPasses] do
     (state, allFVars, newFVars, assumptions) ← saturateExtra state allFVars newFVars assumptions
@@ -709,6 +724,7 @@ partial def evalSaturate {α}
   (satAttr : Array SaturateAttribute)
   (exploreSubterms : Option (Expr → Array Expr → MetaM (Array Expr)) := none)
   (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
+  (postprocessThm : Option (Expr → MetaM Simp.Result))
   (declsToExplore : Array FVarId)
   (exploreTarget : Bool := true)
   (next : Array FVarId → TacticM α)
@@ -719,13 +735,14 @@ partial def evalSaturate {α}
   let env ← getEnv
   let s := satAttr.map fun s => s.ext.getState env
   let state := State.new s
-  let (_, fvarIds) ← evalSaturateCore config state exploreSubterms preprocessThm declsToExplore exploreTarget
+  let (_, fvarIds) ← evalSaturateCore config state exploreSubterms preprocessThm postprocessThm declsToExplore exploreTarget
   withMainContext do next fvarIds
 
 elab "aeneas_saturate" : tactic => do
   let _ ← evalSaturate {} #[saturateAttr] none none
     (declsToExplore := ((← (← getLCtx).getDecls).map fun d => d.fvarId).toArray)
     (exploreTarget := true) (fun _ => pure ())
+    (postprocessThm := none)
 
 namespace Test
   set_option trace.Saturate.attribute false in

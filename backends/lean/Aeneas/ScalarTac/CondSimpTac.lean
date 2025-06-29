@@ -202,10 +202,7 @@ def condSimpTacCore
         | .targets _ type => pure (Utils.Location.targets freshFvarIds type)
     else pure loc
   traceGoalWithNode `ScalarTac "Goal after simplifying"
-  /- Simplify the targets by using `scalar_tac` as a discharger.
-     TODO: scalar_tac should only be allowed to preprocess `scalarTacAsms`.
-     TODO: we should preprocess those.
-   -/
+  /- Simplify the targets by using `scalar_tac` as a discharger. -/
   let _ ← condSimpTacSimp simpConfig args nloc (toClear := toClear) (additionalHypsToUse := additionalSimpThms) (some (state, newAsms))
   if (← getUnsolvedGoals) == [] then pure none
   else pure (some (← getMainGoal))
