@@ -487,9 +487,9 @@ example (x y : Nat) (_ : y * 3000 ≤ 1) (_ : x * 3000 ≤ 1) : y * 3000 ≤ 1 :
   fassumption
 
 -- List all the local declarations matching the goal
-def getAllMatchingAssumptions (type : Expr) : MetaM (List (LocalDecl × Name)) := do
+def getMatchingAssumptions (type : Expr) : MetaM (List (LocalDecl × Name)) := do
   let typeType ← inferType type
-  let decls ← (← getLCtx).getAllDecls
+  let decls ← (← getLCtx).getDecls
   decls.filterMapM fun localDecl => do
     -- Make sure we revert the meta-variables instantiations by saving the state and restoring it
     let s ← saveState
@@ -525,7 +525,7 @@ def singleAssumptionTacCore (dtree : DiscrTree FVarId) : TacticM Unit := do
        several times, but discrimination trees don't work if the expression we match over
        contains meta-variables.
      -/
-    match ← (getAllMatchingAssumptions goal) with
+    match ← (getMatchingAssumptions goal) with
     | [(localDecl, _)] =>
       /- There is a single assumption which matches the goal: use it
          Note that we need to call isDefEq again to properly instantiate the meta-variables -/
