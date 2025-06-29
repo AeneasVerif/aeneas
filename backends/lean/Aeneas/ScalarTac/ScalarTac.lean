@@ -309,24 +309,16 @@ def partialPreprocess (config : Config) (simpArgs : Simp.SimpArgs) (state : Stat
   trace[ScalarTac] "Goal after saturation: {← getMainGoal}"
   -- Apply `simpAll` to the *new assumptions*
   let applySimpAll assumptions simpTarget := do
-    let r ← tryTactic? do
-        /- By setting the maxDischargeDepth at 0, we make sure that assumptions of the shape `∀ x, P x → ...`
-            will not have any effect. This is important because it often happens that the user instantiates
-            one such assumptions with specific arguments, meaning that if we call `simpAll` naively, those
-            instantiations will get simplified to `True` and thus eliminated. -/
-        Simp.evalSimpAllAssumptions
-          {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 0} true
-          simpArgs assumptions simpTarget
-    match r with
-    | some r =>
-      trace[ScalarTac] "applySimpAll succeeded"
-      match r with
-      | some (fvars, _) => pure (some fvars)
-      | none => pure none -- Goal proven through `simpAll`
-    | none =>
-      trace[ScalarTac] "applySimpAll failed"
-      -- `simpAll` failed: let's just continue with the same state as before
-      pure (some assumptions)
+    /- By setting the maxDischargeDepth at 0, we make sure that assumptions of the shape `∀ x, P x → ...`
+        will not have any effect. This is important because it often happens that the user instantiates
+        one such assumptions with specific arguments, meaning that if we call `simpAll` naively, those
+        instantiations will get simplified to `True` and thus eliminated. -/
+    pure
+      ((← Simp.evalSimpAllAssumptions
+          {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 0}
+          true simpArgs assumptions simpTarget).map Prod.fst)
+
+  /- Simplify the new assumptions with the old assumptions -/
   let some assumptions ← do
     if config.simpAllMaxSteps ≠ 0 ∧ assumptionsToPreprocess.size + satAssumptions.size > 0 then
       /- Simplify the new assumptions with the old assumptions (it's often enough to go in that direction) -/
