@@ -275,7 +275,8 @@ def State.new (config : Config) : MetaM State := do
   pure { saturateState }
 
 def partialPreprocess (config : Config) (simpArgs : Simp.SimpArgs) (state : State)
-  (zetaDelta : Bool) (hypsToUseForSimp assumptionsToPreprocess : Array FVarId) (simpTarget : Bool) :
+  (zetaDelta : Bool) (hypsToUseForSimp assumptionsToPreprocess : Array FVarId) (simpTarget : Bool)
+  (postProcessSat : Bool := false ):
   Tactic.TacticM (Option (State × Array FVarId)) := do
   withTraceNode `ScalarTac (fun _ => pure m!"partialPreprocess") do
   Tactic.focus do
@@ -296,19 +297,21 @@ def partialPreprocess (config : Config) (simpArgs : Simp.SimpArgs) (state : Stat
     | trace[ScalarTac] "Goal proven by preprocessing!"; return none
   trace[ScalarTac] "Goal after first simplification: {← getMainGoal}"
   -- Apply the forward rules
-  let postprocessThm  : Expr → MetaM Simp.Result ← do
-    let (ctx, simprocs) ← Simp.mkSimpCtx true
-      {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1} .simp
-      {simpArgs with hypsToUse := #[] }
-    pure (fun (thTy : Expr) => do
-          pure (Prod.fst (← simp thTy ctx simprocs (discharge? := none) {})))
+  let postprocessThm : Option (Expr → MetaM Simp.Result) ← do
+    if postProcessSat then
+      let (ctx, simprocs) ← Simp.mkSimpCtx true
+        {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1} .simp
+        {simpArgs with hypsToUse := #[] }
+      pure (some (fun (thTy : Expr) => do
+            pure (Prod.fst (← simp thTy ctx simprocs (discharge? := none) {}))))
+    else pure none
   let satConfig := config.toSaturateConfig
   let satConfig := { satConfig with
     saturateAssumptions := satConfig.saturateAssumptions && config.saturate,
     saturateTarget := satConfig.saturateTarget && config.saturate,
   }
   let (saturateState, satAssumptions) ←
-    scalarTacSaturateForward satConfig state.saturateState (some assumptions) (some postprocessThm)
+    scalarTacSaturateForward satConfig state.saturateState (some assumptions) postprocessThm
       fun saturateState satAssumptions => pure (saturateState, satAssumptions)
   withMainContext do
   let state := { state with saturateState }
