@@ -286,14 +286,12 @@ def partialPreprocess (config : Config) (simpArgs : Simp.SimpArgs) (state : Stat
      typed expressions such as `UScalar.ofNat`.
   -/
   traceGoalWithNode `ScalarTac "Original goal before preprocessing"
-  let r ← Simp.simpAt true {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1}
+  let some assumptions ← Simp.simpAt true {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1}
     /- Remove the forall quantifiers to prepare for the call of `simp_all` (we
        don't want `simp_all` to use assumptions of the shape `∀ x, P x`)) -/
     {simpArgs with addSimpThms := #[``forall_eq_forall']}
     -- TODO: it would be good to always simplify the target before exploring it to saturate
     (.targets assumptionsToPreprocess simpTarget)
-  -- We might have proven the goal
-  let some assumptions := r
     | trace[ScalarTac] "Goal proven by preprocessing!"; return none
   trace[ScalarTac] "Goal after first simplification: {← getMainGoal}"
   -- Apply the forward rules
@@ -302,9 +300,9 @@ def partialPreprocess (config : Config) (simpArgs : Simp.SimpArgs) (state : Stat
     saturateAssumptions := satConfig.saturateAssumptions && config.saturate,
     saturateTarget := satConfig.saturateTarget && config.saturate,
   }
-  let (saturateState, nassumptions) ←
+  let (saturateState, satAssumptions) ←
     scalarTacSaturateForward satConfig state.saturateState (some assumptions)
-      fun saturateState nassumptions => pure (saturateState, nassumptions)
+      fun saturateState satAssumptions => pure (saturateState, satAssumptions)
   withMainContext do
   let state := { state with saturateState }
 
@@ -329,17 +327,17 @@ def partialPreprocess (config : Config) (simpArgs : Simp.SimpArgs) (state : Stat
       trace[ScalarTac] "applySimpAll failed"
       -- `simpAll` failed: let's just continue with the same state as before
       pure (some assumptions)
-  let r ← do
-    if config.simpAllMaxSteps ≠ 0 ∧ assumptionsToPreprocess.size + nassumptions.size > 0 then
+  let some assumptions ← do
+    if config.simpAllMaxSteps ≠ 0 ∧ assumptionsToPreprocess.size + satAssumptions.size > 0 then
       /- Simplify the new assumptions with the old assumptions (it's often enough to go in that direction) -/
-      let some nassumptions ← Simp.simpAt true {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1}
-        {simpArgs with hypsToUse := hypsToUseForSimp ++ assumptions} (.targets nassumptions false)
+      let some satAssumptions ← Simp.simpAt true {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1}
+        {simpArgs with hypsToUse := hypsToUseForSimp ++ assumptions} (.targets satAssumptions false)
         | trace[ScalarTac] "Goal proven by preprocessing!"; return none
       /- Apply `simpAll` on the new assumptions -/
-      let some nassumptions ← applySimpAll nassumptions false
+      let some satAssumptions ← applySimpAll satAssumptions false
         | trace[ScalarTac] "Goal proven by preprocessing!"; return none
       /- We apply `simpAll` to all the assumptions -/
-      applySimpAll (hypsToUseForSimp ++ assumptions ++ nassumptions) simpTarget
+      applySimpAll (hypsToUseForSimp ++ assumptions ++ satAssumptions) simpTarget
     else if hypsToUseForSimp.size > 0 && simpTarget then
       /- Even though there is nothing to preprocess, we want to simplify the goal by using the hypotheses to use,
           to make sure we propagate equalities for instance -/
@@ -349,17 +347,14 @@ def partialPreprocess (config : Config) (simpArgs : Simp.SimpArgs) (state : Stat
       pure (some assumptions)
     else
       pure (some assumptions)
-  let some assumptions := r
     | trace[ScalarTac] "Goal proven by preprocessing!"; return none
   trace[ScalarTac] "Goal after simpAll: {← getMainGoal}"
 
   -- Call `simp` again, this time to inline the let-bindings (otherwise, omega doesn't always manage to deal with them)
-  let r ← do
+  let some assumptions ← do
     if zetaDelta then
       Simp.simpAt true {zetaDelta := true, failIfUnchanged := false, maxDischargeDepth := 1} simpArgs (.targets assumptions simpTarget)
     else pure assumptions
-  -- We might have proven the goal
-  let some assumptions := r
     | trace[ScalarTac] "Goal proven by preprocessing!"; return none
   trace[ScalarTac] "Goal after 2nd simp (with zetaDelta): {← getMainGoal}"
   -- Apply normCast
