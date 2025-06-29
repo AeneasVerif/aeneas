@@ -101,9 +101,9 @@ example (x y : Nat) (_ : x < 3 ∧ y < 4) (_ : x < 3) (_ : y < 4) : True := by
   simp only
 
 -- For termination proofs
-syntax "scalar_decr_tac" : tactic
+syntax "scalar_decr_tac_preprocess" : tactic
 macro_rules
-  | `(tactic| scalar_decr_tac) =>
+  | `(tactic| scalar_decr_tac_preprocess) =>
     `(tactic|
       simp_wf <;>
       -- Simplify the context - otherwise simp_all below will blow up
@@ -111,9 +111,13 @@ macro_rules
       --
       clear_unused_decls_one_pass <;>
       --
-      clear_redundant_hyps <;>
-      -- Finish
-      scalar_tac)
+      clear_redundant_hyps)
+
+-- For termination proofs
+syntax "scalar_decr_tac" : tactic
+macro_rules
+  | `(tactic| scalar_decr_tac) =>
+    `(tactic| scalar_decr_tac_preprocess <;> scalar_tac)
 
 -- This simplification lemma it is useful for the proofs of termination
 attribute [scalar_tac_simps, simp] Prod.lex_iff
