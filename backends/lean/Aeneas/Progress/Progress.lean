@@ -262,8 +262,9 @@ def splitExistsEqAndPost (args : Args) (thAsm : Expr) :
   splitEqAndPost fun hEq hPost ids => do
   trace[Progress] "eq and post:\n{hEq} : {← inferType hEq}\n{hPost}"
   traceGoalWithNode "current goal"
-  let r ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
-    {simpThms := #[← progressSimpExt.getTheorems], hypsToUse := #[hEq.fvarId!]} (.targets #[] true)
+  let r ← withTraceNode `Progress (fun _ => pure m!"simpAt target") do
+    Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
+      {simpThms := #[← progressSimpExt.getTheorems], hypsToUse := #[hEq.fvarId!]} (.targets #[] true)
   /- It may happen that at this point the goal is already solved (though this is rare)
       TODO: not sure this is the best way of checking it -/
   if r.isNone then
@@ -272,7 +273,9 @@ def splitExistsEqAndPost (args : Args) (thAsm : Expr) :
   else
     traceGoalWithNode "goal after applying the eq and simplifying the binds"
     -- TODO: remove this? (some types get unfolded too much: we "fold" them back)
-    tryTac (do let _ ← Simp.simpAt true {} {addSimpThms := scalar_eqs} .wildcard_dep)
+    tryTac (do
+      withTraceNode `Progress (fun _ => pure m!"simpAt: folding back scalar types") do
+      let _ ← Simp.simpAt true {} {addSimpThms := scalar_eqs} .wildcard_dep)
     traceGoalWithNode "goal after folding back scalar types"
     -- Clear the equality, unless the user requests not to do so
     if args.keep.isSome then pure ()
