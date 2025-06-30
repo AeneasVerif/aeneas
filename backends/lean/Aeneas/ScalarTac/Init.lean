@@ -7,8 +7,6 @@ namespace Aeneas.ScalarTac
 # Tracing
 -/
 
-initialize registerTraceClass `CondSimpTac
-
 -- We can't define and use trace classes in the same file
 initialize registerTraceClass `ScalarTac
 

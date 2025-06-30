@@ -17,6 +17,9 @@ open Lean
 
 attribute [-simp] List.getElem!_eq_getElem?_getD
 
+attribute [bvify_simps, simp_scalar_simps] BitVec.zero_eq
+attribute [bvify_simps, simp_scalar_simps] BitVec.instInhabited
+
 def BitVec.toArray {n} (bv: BitVec n) : Array Bool := Array.finRange n |>.map (bv[·])
 def BitVec.ofFn {n} (f: Fin n → Bool) : BitVec n := (BitVec.ofBoolListLE <| List.ofFn f).cast (by simp)
 def BitVec.set {n} (i: Fin n) (b: Bool) (bv: BitVec n) : BitVec n := bv ^^^ (((bv[i] ^^ b).toNat : BitVec n) <<< i.val)

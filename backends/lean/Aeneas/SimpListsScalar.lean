@@ -14,6 +14,20 @@ open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 def simpListsScalarTac (config : ScalarTac.CondSimpTacConfig)
   (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
   let addSimpThms : TacticM (Array FVarId) := pure #[]
+  let hypsArgs : ScalarTac.CondSimpArgs := {
+      simpThms := #[
+        ← SimpBoolProp.simpBoolPropHypsSimpExt.getTheorems,
+        ← SimpLists.simpListsHypsSimpExt.getTheorems,
+        ← SimpScalar.simpScalarHypsSimpExt.getTheorems],
+      simprocs := #[
+        ← SimpBoolProp.simpBoolPropHypsSimprocExt.getSimprocs,
+        ← SimpLists.simpListsHypsSimprocExt.getSimprocs,
+        ← SimpScalar.simpScalarHypsSimprocExt.getSimprocs
+        ],
+      declsToUnfold := #[],
+      addSimpThms := #[],
+      hypsToUse := #[],
+    }
   let args : ScalarTac.CondSimpArgs := {
       simpThms := #[
         ← SimpBoolProp.simpBoolPropSimpExt.getTheorems,
@@ -28,7 +42,7 @@ def simpListsScalarTac (config : ScalarTac.CondSimpTacConfig)
       addSimpThms := args.addSimpThms,
       hypsToUse := args.hypsToUse,
     }
-  ScalarTac.condSimpTac "simp_lists_scalar" config {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true} args addSimpThms false loc
+  ScalarTac.condSimpTac "simp_lists_scalar" config {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true} hypsArgs args addSimpThms false loc
 
 syntax (name := simp_lists) "simp_lists_scalar" Parser.Tactic.optConfig ("[" (term<|>"*"),* "]")? (location)? : tactic
 

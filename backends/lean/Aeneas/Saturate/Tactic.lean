@@ -106,6 +106,8 @@ structure State where
      assumptions to instantiate some other theorems.
    -/
   assumptions : Std.HashMap Expr AsmPath
+  /- Do not introduce a theorem if its conclusion is already in the set -/
+  ignore : Std.HashSet Expr
 
 def State.insertHitRules (s : State) (rules : Array Rule) : State :=
   { s with diagnostics := s.diagnostics.insertHitRules rules }
@@ -131,8 +133,9 @@ def State.new
   (pmatches : DiscrTree PartialMatch := DiscrTree.empty)
   (diagnostics : Diagnostics := Diagnostics.empty)
   (matched : Std.HashSet Expr := Std.HashSet.emptyWithCapacity)
-  (assumptions : Std.HashMap Expr AsmPath := Std.HashMap.emptyWithCapacity) : State :=
-  { rules, pmatches, diagnostics, matched, assumptions }
+  (assumptions : Std.HashMap Expr AsmPath := Std.HashMap.emptyWithCapacity)
+  (ignore : Std.HashSet Expr := Std.HashSet.emptyWithCapacity) : State :=
+  { rules, pmatches, diagnostics, matched, assumptions, ignore }
 
 def mkExprFromPath (path : AsmPath) : MetaM Expr := do
   match path with
@@ -148,6 +151,7 @@ def mkExprFromPath (path : AsmPath) : MetaM Expr := do
 def State.insertPartialMatch (state : State)
   (boundVars : Std.HashSet FVarId)
   (pmatch : PartialMatch) : MetaM State := do
+  withTraceNode `Saturate (fun _ => pure m!"insertPartialMatch") do
   trace[Saturate.insertPartialMatch] "insertPartialMatch: {pmatch}"
   let mut state := state
   /- Check if there remains patterns: if no then the match is total -/
@@ -201,6 +205,7 @@ def State.insertPartialMatch (state : State)
 
 def checkIfPatDefEq (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
   (pat : Expr) (numBinders : Nat) (e : Expr) : MetaM (Option (Array Expr)) := do
+  withTraceNode `Saturate (fun _ => pure m!"checkIfPatDefEq") do
   -- Strip the binders, introduce meta-variables at the same time, and match
   let (mvars, _, pat) ← lambdaMetaTelescope pat (some numBinders)
   match preprocessThm with | none => pure () | some preprocessThm => preprocessThm mvars pat
@@ -234,6 +239,7 @@ def matchExprWithRules
   (boundVars : Std.HashSet FVarId)
   (state : State) (e : Expr) :
   MetaM State := do
+  withTraceNode `Saturate (fun _ => pure m!"matchExprWithRules") do
   let mut state := state
   for rules in state.rules do
     let exprs ← rules.rules.getMatch e
@@ -295,6 +301,7 @@ def matchExprWithPartialMatches
   (boundVars : Std.HashSet FVarId)
   (state : State) (e : Expr) :
   MetaM State := do
+  withTraceNode `Saturate (fun _ => pure m!"matchExprWithPartialMatches") do
   let mut state := state
   let exprs ← state.pmatches.getMatch e
   trace[Saturate.explore] "Potential matches: {exprs}"
@@ -348,6 +355,7 @@ def matchExpr
   (boundVars : Std.HashSet FVarId)
   (state : State) (e : Expr) :
   MetaM State := do
+  withTraceNode `Saturate (fun _ => pure m!"matchExpr") do
   trace[Saturate.explore] "Matching: {e}"
   /- First check if the expression contains bound vars: if it does, then we don't match it -/
   if ¬ boundVars.isEmpty then
@@ -364,8 +372,8 @@ def matchExpr
 def filterProofTerms (config : Config) (exprs : Array Expr) : MetaM (Array Expr) :=
   if ¬ config.visitProofTerms then
     exprs.filterM fun arg => do
-        let ty ← inferType (← inferType arg)
-        if ty.isProp then pure false
+        let ty ← inferType arg
+        if ← isProp ty then pure false
         else pure true
   else pure exprs
 
@@ -379,6 +387,9 @@ private partial def visit
   (boundVars : Std.HashSet FVarId)
   (state : State) (e : Expr)
   : MetaM State := do
+  withTraceNode `Saturate (fun _ => pure m!"visit") do
+  let e := e.consumeMData
+  --
   trace[Saturate.explore] "Visiting {e}"
   -- Register the current assumption, if it is a conjunct inside an assumption
   let state := state.insertAssumption path e
@@ -402,7 +413,6 @@ private partial def visit
         | some v => visit config none (depth + 1) exploreSubterms preprocessThm boundVars state v
       pure (boundVars, state)
       ) (boundVars, state)
-  let e := e.consumeMData
   match e with
   | .bvar _
   | .fvar _
@@ -455,6 +465,51 @@ private partial def visit
     trace[Saturate.explore] ".proj"
     visit config none (depth + 1) exploreSubterms preprocessThm boundVars state b
 
+/-- Recompute the set of assumptions.
+
+    This is necessary if we want to saturate the goal in several steps and modify
+    the assumptions in between (with a call to simp for example).
+-/
+private partial def visitRecomputeAssumptions
+  (path : Option AsmPath)
+  (depth : Nat)
+  (exploreSubterms : Expr → Array Expr → MetaM (Array Expr))
+  (state : State) (e : Expr)
+  : MetaM State := do
+  trace[Saturate.explore] "Visiting {e}"
+  let e := e.consumeMData
+  -- Register the current assumption, if it is a conjunct inside an assumption
+  let state := state.insertAssumption path e
+  match e with
+  | .bvar _
+  | .fvar _
+  | .mvar _
+  | .sort _
+  | .lit _
+  | .const _ _ =>
+    trace[Saturate.explore] "Stop: bvar, fvar, etc."
+    pure state
+  | .app .. => do e.withApp fun f args => do
+    trace[Saturate.explore] ".app"
+    /- Check if this is a conjunction and we know the path to the current sub-expression (because it is a conjunct
+       in an assumption) -/
+    if path.isSome ∧ f.isConst ∧ f.constName! == ``And ∧ args.size == 2 then do
+      -- This is a conjunction
+      let some path := path
+        | throwError "Unreachable"
+      let state ← visitRecomputeAssumptions (some (.conj .left path)) (depth + 1) exploreSubterms state (args[0]!)
+      let state ← visitRecomputeAssumptions (some (.conj .right path)) (depth + 1) exploreSubterms state (args[1]!)
+      pure state
+    else
+      pure state
+  | .lam ..
+  | .forallE ..
+  | .letE .. => do pure state
+  | .mdata _ b => do
+    trace[Saturate.explore] ".mdata"
+    visitRecomputeAssumptions path (depth + 1) exploreSubterms state b
+  | .proj _ _ _ => do pure state
+
 def arithOpArity3 : Std.HashSet Name := Std.HashSet.ofList [
   ``Nat.cast, ``Int.cast
 ]
@@ -494,24 +549,19 @@ def exploreArithSubterms (f : Expr) (args : Array Expr) : MetaM (Array Expr) := 
     pure #[]
 
 /- The saturation tactic itself -/
-partial def evalSaturate {α}
+partial def evalSaturateCore
   (config : Config)
-  (satAttr : Array SaturateAttribute)
+  (state : State)
   (exploreSubterms : Option (Expr → Array Expr → MetaM (Array Expr)) := none)
   (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
-  (declsToExplore : Option (Array FVarId) := none)
-  (exploreAssumptions : Bool := true)
+  (postprocessThm : Option (Expr → MetaM Simp.Result))
+  (declsToExplore : Array FVarId)
   (exploreTarget : Bool := true)
-  (next : Array FVarId → TacticM α)
-  : TacticM α
+  : TacticM (State × Array FVarId)
   := do
+  withTraceNode `Saturate (fun _ => pure m!"evalSaturateCore") do
   withMainContext do
   trace[Saturate] "Exploring goal: {← getMainGoal}"
-  -- Retrieve the rule sets
-  let env ← getEnv
-  let s := satAttr.map fun s => s.ext.getState env
-  -- Get the local context
-  let ctx ← Lean.MonadLCtx.getLCtx
   -- Explore
   let exploreSubterms :=
     match exploreSubterms with
@@ -527,14 +577,13 @@ partial def evalSaturate {α}
 
   -- Explore the assumptions
   trace[Saturate] "Exploring the assumptions"
-  let state := State.new s
 
   let visitLocalDecl (state : State) (decl : LocalDecl) : TacticM State := do
     trace[Saturate] "Exploring local decl: {decl.userName}"
-    /- We explore both the type, the expresion and the body (if there is) -/
+    /- We explore both the type, the expression and the body (if there is) -/
     /- Note that the path is used only when exploring the type of assumptions -/
     let path ←
-      if (← inferType decl.type).isProp then pure (some (.asm decl.fvarId))
+      if ← isProp decl.type then pure (some (.asm decl.fvarId))
       else pure none
     let state ← visit config path state decl.type
     let state ← visit config none state decl.toExpr
@@ -543,24 +592,9 @@ partial def evalSaturate {α}
     | some value => visit config none state value
 
   let state ← do
-    if exploreAssumptions then do
-      let decls ←
-        match declsToExplore with
-        | none => do pure (← ctx.getDecls).toArray
-        | some decls => decls.mapM fun d => d.getDecl
-      decls.foldlM (fun state (decl : LocalDecl) => do
-        trace[Saturate] "Exploring local decl: {decl.userName}"
-        /- We explore both the type, the expresion and the body (if there is) -/
-        /- Note that the path is used only when exploring the type of assumptions -/
-        let path ←
-          if (← inferType decl.type).isProp then pure (some (.asm decl.fvarId))
-          else pure none
-        let state ← visit config path state decl.type
-        let state ← visit config none state decl.toExpr
-        match decl.value? with
-        | none => pure state
-        | some value => visit config none state value) state
-    else pure state
+    trace[Saturate] "declsToExplore: {declsToExplore.map Expr.fvar}"
+    let decls ← declsToExplore.mapM fun d => d.getDecl
+    decls.foldlM visitLocalDecl state
 
   -- Explore the target
   trace[Saturate] "Exploring the target"
@@ -571,28 +605,42 @@ partial def evalSaturate {α}
      helps prevent bugs where the local context is not the one we expect) -/
   trace[Saturate] "Finished exploring the goal. Matched:\n{state.matched.toList}"
   let addAssumptions (state : State) (allFVars : Array FVarId) :
-    TacticM (Array FVarId × Array FVarId × Std.HashMap Expr AsmPath) := do
+    TacticM (Array FVarId × Array FVarId × Std.HashMap Expr AsmPath × Std.HashSet Expr) := do
+    withTraceNode `Saturate (fun _ => pure m!"addAssumptions") do
     withMainContext do
     let matched := state.matched.toArray
     let mut assumptions : Std.HashMap Expr AsmPath := state.assumptions
     let mut allFVars := allFVars
     let mut newFVars : Array FVarId := #[]
+    let mut ignore := state.ignore
     for i in [0:matched.size] do
       let th := matched[i]!
       trace[Saturate] "Adding: {th}"
       -- The application worked: introduce the assumption in the context
       let thTy ← withMainContext do inferType th
       -- Check that we don't add the same assumption twice
-      if assumptions.contains thTy then
+      if assumptions.contains thTy || state.ignore.contains thTy then
         continue
-      else
-        let x ← Utils.addDeclTac (.num (.str .anonymous "_h") i) th thTy (asLet := false) fun x => pure x
-        allFVars := allFVars.push x.fvarId!
-        newFVars := newFVars.push x.fvarId!
-        let path := AsmPath.asm x.fvarId!
-        assumptions := assumptions.insert thTy path
+      -- Post-process
+      let (th, thTy) ← match postprocessThm with
+        | none => pure (th, thTy)
+        | some postprocess =>
+          let r ← postprocess thTy
+          if r.expr != thTy ∧ (assumptions.contains thTy || state.ignore.contains thTy) then
+            continue
+          else
+            let some (th', thTy') ← Lean.Meta.applySimpResult (← getMainGoal) th thTy r (mayCloseGoal := false)
+              | throwError "Goal was closed in an unexpected manner"
+            ignore := ignore.insert thTy
+            pure (th', thTy')
+      -- Add the declaration
+      let x ← Utils.addDeclTac (.num (.str .anonymous "_h") i) th thTy (asLet := false) fun x => pure x
+      allFVars := allFVars.push x.fvarId!
+      newFVars := newFVars.push x.fvarId!
+      let path := AsmPath.asm x.fvarId!
+      assumptions := assumptions.insert thTy path
     trace[Saturate] "Goal after introducing the assumptions: {← getMainGoal}"
-    pure (allFVars, newFVars, assumptions)
+    pure (allFVars, newFVars, assumptions, ignore)
 
   -- We do this in several passes: we add the assumptions, then explore the context again to saturate, etc.
   let saturateExtra
@@ -601,6 +649,7 @@ partial def evalSaturate {α}
     (assumptions : Std.HashMap Expr AsmPath) :
     TacticM (State × Array FVarId × Array FVarId × Std.HashMap Expr AsmPath)
     := do
+    withTraceNode `Saturate (fun _ => pure m!"saturateExtra") do
     withMainContext do
     trace[Saturate] "state.pmatches (num of partial matches: {state.pmatches.size}):\n{state.pmatches.toArray.map Prod.snd}"
     trace[Saturate] "state.assumptions: {state.assumptions.toArray}"
@@ -620,37 +669,82 @@ partial def evalSaturate {α}
     for (assum, path) in Std.HashMap.toArray oldAssumptions do
       state ← matchExprWithPartialMatches preprocessThm path empty state assum
     -- Introduce the assumptions in the context and do another pass
-    let (allFVars, newFVars, assumptions) ← addAssumptions state allFVars
+    let (allFVars, newFVars, assumptions, ignore) ← addAssumptions state allFVars
+    state := { state with ignore }
     pure (state, allFVars, newFVars, assumptions)
 
   --
-  let mut (allFVars, newFVars, assumptions) ← addAssumptions state #[]
-  let mut state := state
+  let mut (allFVars, newFVars, assumptions, ignore) ← addAssumptions state #[]
+  let mut state := { state with ignore }
   -- Repeatedly explore the context
   for _ in [0:config.saturationPasses] do
     (state, allFVars, newFVars, assumptions) ← saturateExtra state allFVars newFVars assumptions
 
   withMainContext do
-  trace[Saturate] "Introduced the assumptions in the context"
+  trace[Saturate] "Finished saturating"
 
   -- Display the diagnostics information
   trace[Saturate.diagnostics] "Saturate diagnostics info: {state.diagnostics.toArray}"
   -- Continue
-  next allFVars
+  pure (state, allFVars)
+
+/- Reexplore the context to recompute the set of assumptions -/
+def recomputeAssumptions
+  (state : State)
+  (exploreSubterms : Option (Expr → Array Expr → MetaM (Array Expr)) := none)
+  (declsToExplore : Array FVarId)
+  : TacticM State
+  := do
+  withTraceNode `Saturate (fun _ => pure m!"recomputeAssumptions") do
+  withMainContext do
+  trace[Saturate] "Exploring goal: {← getMainGoal}"
+  let ignore := state.assumptions.fold (fun ignore asm _ => ignore.insert asm) state.ignore
+  let state : State := { state with ignore, assumptions := Std.HashMap.emptyWithCapacity }
+  -- Explore
+  let exploreSubterms :=
+    match exploreSubterms with
+    | none => fun f args => pure (#[f] ++ args)
+    | some explore => explore
+  let visit path (state : State) expr : MetaM State :=
+    visitRecomputeAssumptions path 0 exploreSubterms state expr
+
+  -- Explore the assumptions
+  trace[Saturate] "Exploring the assumptions"
+
+  let decls ← declsToExplore.mapM fun d => d.getDecl
+  decls.foldlM (fun (state : State) (decl : LocalDecl) => do
+    trace[Saturate] "Exploring local decl: {decl.userName}"
+    if ← isProp decl.type then
+      let path := some (.asm decl.fvarId)
+      visit path state decl.type
+    else pure state) state
+
+partial def evalSaturate {α}
+  (config : Config)
+  (satAttr : Array SaturateAttribute)
+  (exploreSubterms : Option (Expr → Array Expr → MetaM (Array Expr)) := none)
+  (preprocessThm : Option (Array Expr → Expr → MetaM Unit))
+  (postprocessThm : Option (Expr → MetaM Simp.Result))
+  (declsToExplore : Array FVarId)
+  (exploreTarget : Bool := true)
+  (next : Array FVarId → TacticM α)
+  : TacticM α
+  := do
+  withTraceNode `Saturate (fun _ => pure m!"evalSaturate") do
+  -- Retrieve the rule sets
+  let env ← getEnv
+  let s := satAttr.map fun s => s.ext.getState env
+  let state := State.new s
+  let (_, fvarIds) ← evalSaturateCore config state exploreSubterms preprocessThm postprocessThm declsToExplore exploreTarget
+  withMainContext do next fvarIds
 
 elab "aeneas_saturate" : tactic => do
   let _ ← evalSaturate {} #[saturateAttr] none none
-    (declsToExplore := none)
-    (exploreAssumptions := true)
+    (declsToExplore := ((← (← getLCtx).getDecls).map fun d => d.fvarId).toArray)
     (exploreTarget := true) (fun _ => pure ())
+    (postprocessThm := none)
 
 namespace Test
-  local elab "aeneas_saturate_test" : tactic => do
-    let _ ← evalSaturate {} #[saturateAttr] none none
-      (declsToExplore := none)
-      (exploreAssumptions := true)
-      (exploreTarget := true) (fun _ => pure ())
-
   set_option trace.Saturate.attribute false in
   @[aeneas_saturate l.length] -- TODO: local doesn't work here
   theorem rule1 (α : Type u) (l : List α) : l.length ≥ 0 := by simp
@@ -685,7 +779,7 @@ let _g := fun l => l.length + l5.length;
     let _k := l4.length
     let _g := fun (l : List α) => l.length + l5.length
     (l0 ++ l1 ++ l2).length = l0.length + l1.length + l2.length := by
-    aeneas_saturate_test
+    aeneas_saturate
     extract_goal1
     simp [Nat.add_assoc]
 
@@ -730,7 +824,7 @@ let _g := fun l => l.length + l5.length;
       let _k := l4.length
       let _g := fun (l : List α) => l.length + l5.length
       (l0 ++ l1 ++ l2).length = l0.length + l1.length + l2.length := by
-      aeneas_saturate_test
+      aeneas_saturate
       extract_goal1
       simp [Nat.add_assoc]
 
@@ -765,7 +859,7 @@ let _g := fun l => l.length + l5.length;
       let _k := l4.length
       let _g := fun (l : List α) => l.length + l5.length
       (l0 ++ l1 ++ l2).length = l0.length + l1.length + l2.length := by
-      aeneas_saturate_test
+      aeneas_saturate
       extract_goal1
       simp [Nat.add_assoc]
   end Test
@@ -799,7 +893,7 @@ let _g := fun l => l.length + l5.length;
     let _k := l4.length
     let _g := fun (l : List α) => l.length + l5.length
     (l0 ++ l1 ++ l2).length = l0.length + l1.length + l2.length := by
-    aeneas_saturate_test
+    aeneas_saturate
     extract_goal1
     simp [Nat.add_assoc]
 
@@ -812,11 +906,11 @@ let _g := fun l => l.length + l5.length;
   theorem rule2 (x : Nat) (h : 1 ≤ x) : 2 ≤ x + x := by omega
 
   example (x : Nat) (_h : 1 ≤ x) : 2 ≤ x + x := by
-    aeneas_saturate_test
+    aeneas_saturate
     assumption
 
   example (x : Nat) (_h : True ∧ 1 ≤ x ∧ True) : 2 ≤ x + x := by
-    aeneas_saturate_test
+    aeneas_saturate
     assumption
 
   set_option trace.Saturate.attribute true in
@@ -828,12 +922,12 @@ let _g := fun l => l.length + l5.length;
      *after one exploration pass* (in particular, the assumption `0 ≤ x * y`is useless). -/
   set_option trace.Saturate.insertPartialMatch true in
   example (x y : Nat) (_ : 0 ≤ x * y) (h : 3 ≤ y ∧ 2 ≤ x) : 6 ≤ x * y := by
-    aeneas_saturate_test
+    aeneas_saturate
     omega
 
   set_option trace.Saturate.insertPartialMatch true in
   example (x y z : Nat) (h : 2 ≤ x ∧ 3 ≤ y) (h1 : 8 ≤ z) : 32 ≤ x * y * z := by
-    aeneas_saturate_test
+    aeneas_saturate
     omega
 -/
 end Test

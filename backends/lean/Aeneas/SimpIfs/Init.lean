@@ -29,4 +29,19 @@ initialize simpIfsSimprocExt : Simp.SimprocExtension ←
     The `simp_ifs_simps_proc` attribute registers simp procedures to be used by `simp_ifs`
     during its preprocessing phase." none --(some simpIfsSimprocsRef)
 
+/-- The `simp_ifs_hyps_simps` simp attribute. -/
+initialize simpIfsHypsSimpExt : SimpExtension ←
+  registerSimpAttr `simp_ifs_hyps_simps "\
+    The `simp_ifs_hyps_simps` attribute registers simp lemmas to be used by `simp_ifs` when preprocessing hypotheses."
+
+-- TODO: initialization fails with this, while the same works for `scalar_tac`??
+--initialize simpIfsSimprocsRef : IO.Ref Simprocs ← IO.mkRef {}
+
+/-- The `simp_ifs_hyps_simps_proc` simp attribute for the simp rocs. -/
+initialize simpIfsHypsSimprocExt : Simp.SimprocExtension ←
+  Simp.registerSimprocAttr `simp_ifs_hyps_simps_proc "\
+    The `simp_ifs_hyps_simps_proc` attribute registers simp procedures to be used by `simp_ifs`
+    during its preprocessing phase." none --(some simpIfsSimprocsRef)
+
+
 end Aeneas.SimpIfs

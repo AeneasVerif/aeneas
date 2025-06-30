@@ -9,7 +9,7 @@ import Aeneas.ScalarTac.CondSimpTac
 import Aeneas.SimpBoolProp.SimpBoolProp
 
 /-!
-# `zmodify` tactic
+# ZMod-ify tactic
 
 The `zmodify` tactic is used to shift propositions about, e.g., `Nat`, to `ZMod`.
 This tactic is adapted from `zify`.
@@ -52,6 +52,13 @@ def zmodifyTac (config : Config)
         let thm ← mkAppM thName #[n]
         Utils.addDeclTac (← Utils.mkFreshAnonPropUserName) thm (← inferType thm) (asLet := false) fun thm => pure thm.fvarId!
       pure #[← addThm ``Nat.lt_imp_eq_iff_eq_ZMod]
+  let hypsArgs : ScalarTac.CondSimpArgs := {
+      simpThms := #[← zmodifyHypsSimpExt.getTheorems, ← SimpBoolProp.simpBoolPropHypsSimpExt.getTheorems],
+      simprocs := #[← zmodifyHypsSimprocExt.getSimprocs, ← SimpBoolProp.simpBoolPropHypsSimprocExt.getSimprocs],
+      declsToUnfold := #[],
+      addSimpThms := #[],
+      hypsToUse := #[],
+    }
   let args : ScalarTac.CondSimpArgs := {
       -- Note that we also add the push_cast theorems
       simpThms := #[← zmodifySimpExt.getTheorems, ← SimpBoolProp.simpBoolPropSimpExt.getTheorems, ← Lean.Meta.NormCast.pushCastExt.getTheorems],
@@ -61,7 +68,7 @@ def zmodifyTac (config : Config)
       hypsToUse := args.hypsToUse,
     }
   let config := { nonLin := config.nonLin, saturationPasses := config.saturationPasses }
-  ScalarTac.condSimpTac "zmodify" config {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true} args addSimpThms false loc
+  ScalarTac.condSimpTac "zmodify" config {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true} hypsArgs args addSimpThms false loc
 
 syntax (name := zmodify) "zmodify" Parser.Tactic.optConfig ("to" term)? ("[" (term<|>"*"),* "]")? (location)? : tactic
 

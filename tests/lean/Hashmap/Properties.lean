@@ -239,9 +239,8 @@ theorem new_with_capacity_spec
   . simp_all [HashMap.v, length]
   . fsimp [lookup]
     intro k
-    simp at Hnil -- TODO: this is annoying
     simp_lists [Hnil]
-    simp -- TODO: remove
+    simp
 
 @[progress]
 theorem new_spec (α : Type) :

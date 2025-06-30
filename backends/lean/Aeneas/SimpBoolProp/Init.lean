@@ -36,4 +36,20 @@ initialize simpBoolPropSimprocExt : Simp.SimprocExtension ←
     Those simp procedures are used by several tactics such as `scalar_tac`, `simp_scalar`, `simp_ifs`, etc."
     none --(some simpListsSimprocsRef)
 
+/-- The `simp_bool_prop_hyps_simps` simp attribute. -/
+initialize simpBoolPropHypsSimpExt : SimpExtension ←
+  registerSimpAttr `simp_bool_prop_hyps_simps "\
+    The `simp_bool_prop_hyps_simps` attribute registers simp lemmas to be used to simplify booleans and propositions.
+    Those simp lemmas are used by several tactics such as `scalar_tac`, `simp_scalar`, `simp_ifs`, etc."
+
+-- TODO: initialization fails with this, while the same works for `scalar_tac`??
+--initialize simpListsSimprocsRef : IO.Ref Simprocs ← IO.mkRef {}
+
+/-- The `simp_bool_prop_hyps_simps_proc` simp attribute for the simp rocs. -/
+initialize simpBoolPropHypsSimprocExt : Simp.SimprocExtension ←
+  Simp.registerSimprocAttr `simp_bool_prop_hyps_simps_proc "\
+    The `simp_bool_prop_hyps_simps` attribute registers simp procedures to be used to simplify booleans and propositions.
+    Those simp procedures are used by several tactics such as `scalar_tac`, `simp_scalar`, `simp_ifs`, etc."
+    none --(some simpListsSimprocsRef)
+
 end Aeneas.SimpBoolProp

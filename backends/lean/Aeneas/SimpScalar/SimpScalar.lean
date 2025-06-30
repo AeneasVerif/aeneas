@@ -175,6 +175,13 @@ attribute [simp_scalar_simps] BitVec.setWidth_eq BitVec.ofNat_eq_ofNat
 def simpScalarTac (config : ScalarTac.CondSimpTacConfig)
   (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
   let addSimpThms : TacticM (Array FVarId) := pure #[]
+  let hypsArgs : ScalarTac.CondSimpArgs := {
+      simpThms := #[← simpScalarHypsSimpExt.getTheorems, ← SimpBoolProp.simpBoolPropHypsSimpExt.getTheorems],
+      simprocs := #[← simpScalarHypsSimprocExt.getSimprocs, ← SimpBoolProp.simpBoolPropHypsSimprocExt.getSimprocs],
+      declsToUnfold := #[],
+      addSimpThms := #[],
+      hypsToUse := #[],
+    }
   let args : ScalarTac.CondSimpArgs := {
       simpThms := #[← simpScalarSimpExt.getTheorems, ← SimpBoolProp.simpBoolPropSimpExt.getTheorems],
       simprocs := #[← simpScalarSimprocExt.getSimprocs, ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs],
@@ -184,7 +191,7 @@ def simpScalarTac (config : ScalarTac.CondSimpTacConfig)
     }
   ScalarTac.condSimpTac "simp_scalar" config
     {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true}
-    args addSimpThms false loc
+    hypsArgs args addSimpThms false loc
 
 syntax (name := simp_scalar) "simp_scalar" Parser.Tactic.optConfig ("[" (term<|>"*"),* "]")? (location)? : tactic
 
