@@ -227,14 +227,14 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
   | TRawPtr (ty, rkind) ->
       let ty = norm_ctx_normalize_ty ctx ty in
       TRawPtr (ty, rkind)
-  | TArrow binder ->
+  | TFnPtr binder ->
       (* TODO: for now it works because we don't support predicates with
          bound regions. If we do support them, we probably need to do
          something smarter here. *)
       let { binder_regions; binder_value = inputs, output } = binder in
       let inputs = List.map (norm_ctx_normalize_ty ctx) inputs in
       let output = norm_ctx_normalize_ty ctx output in
-      TArrow { binder_regions; binder_value = (inputs, output) }
+      TFnPtr { binder_regions; binder_value = (inputs, output) }
   | TTraitType (trait_ref, type_name) -> (
       log#ltrace
         (lazy
@@ -285,6 +285,7 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
       match norm_ctx_get_ty_repr ctx tr with
       | None -> ty
       | Some ty -> ty)
+  | TFnDef _ -> craise_opt_span __FILE__ __LINE__ ctx.span "unsupported: FnDef"
   | TDynTrait _ ->
       craise_opt_span __FILE__ __LINE__ ctx.span
         "Dynamic trait types are not supported yet"
