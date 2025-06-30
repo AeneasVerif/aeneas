@@ -952,6 +952,10 @@ let create_captured_fun (def_id: FunDeclId.id) (dis: Disambiguator.id) locals (m
   let name = [PeIdent ("branches", Disambiguator.zero); PeIdent ("foobar", dis)] in
   let m_args, m_locals = LocalId.Map.partition (fun _ c -> c <> Local) m in
 
+
+  (* TODO: Need to build from region_ids initially present in function *)
+  let _, region_gen = RegionId.fresh_stateful_generator () in
+
   (* LLBC expects as a list of locals:
      - the return value
      - the list of arguments
@@ -959,39 +963,74 @@ let create_captured_fun (def_id: FunDeclId.id) (dis: Disambiguator.id) locals (m
     We will add the return value later, but we first compute the arguments, and append at the head the
     remaining locals, before calling List.rev to satisfy the expected ordering
   *)
-  let inputs = LocalId.Map.fold (fun id _ acc -> List.nth locals (LocalId.to_int id) :: acc) m_args [] in
+  let inputs, regions = LocalId.Map.fold (fun id c (inp_acc, reg_acc) ->
+    let l = List.nth locals (LocalId.to_int id) in
+    match c with
+    (* For variables that only need to be borrowed, we add a reference with a fresh region id.
+       We keep the list of generated region ids to be added to the function signature. *)
+    | Immut ->
+        let region_id = region_gen () in
+        { l with var_ty = TRef (RVar (Free region_id), l.var_ty, RShared) } :: inp_acc, { index = region_id; name = None } :: reg_acc
+    | Mut ->
+        let region_id = region_gen () in
+        { l with var_ty = TRef (RVar (Free region_id), l.var_ty, RMut) } :: inp_acc, { index = region_id; name = None } :: reg_acc
+    | Move -> l :: inp_acc, reg_acc
+    | Local -> internal_error __FILE__ __LINE__ default_span
+    )
+    m_args ([], []) in
   let input_tys = List.map (fun var -> var.var_ty) inputs |> List.rev in
 
   let locals = LocalId.Map.fold (fun id _ acc -> List.nth locals (LocalId.to_int id) :: acc) m_locals inputs in
   let locals = List.rev locals in
 
   (* Compute a map from the index of locals in the original function to their corresponding
-     local index in the new function. *)
+     local index in the new function.
+     We also keep the type of the variable, in case it was modified to insert a borrow.
+  *)
   let _, new_locals_map = List.fold_left (fun (i, m) var ->
-    i + 1, LocalId.Map.add var.index (LocalId.of_int i) m) (1, LocalId.Map.empty) locals in
+    i + 1, LocalId.Map.add var.index (LocalId.of_int i, var.var_ty) m) (1, LocalId.Map.empty) locals in
   let replace_locals = object
     inherit [_] map_statement as super
 
     method! visit_place _ p = match p with
-      | { kind = PlaceLocal pid; _} ->
+      | { kind = PlaceLocal pid; ty} ->
           (* All variables should have been captured by the analysis, hence find
              should not be able to fail *)
-          let new_pid = LocalId.Map.find pid new_locals_map in
-          {p with kind = PlaceLocal new_pid}
+          let new_pid, var_ty = LocalId.Map.find pid new_locals_map in
+          begin match var_ty with
+          | TRef (RVar (Free region_id), b_ty, k) ->
+              if List.exists (fun (x: (region_id, 'a option) indexed_var) -> region_id = x.index) regions then (
+                (* Sanity-check: If we added a borrow, then the borrowed type
+                   should be the type of the old local, i.e., the type of the
+                   place *)
+                assert (ty = b_ty);
+                (* This is a newly generated region, we need to insert a deref.
+                   Additionally, as this is an internal occurence of a variable,
+                   we need to erase its region id.
+                 *)
+                let local = { kind = PlaceLocal new_pid; ty = TRef (RErased, b_ty, k) } in
+                { kind = PlaceProjection (local, Deref); ty }
+              ) else
+                { p with kind = PlaceLocal new_pid }
+          | _ -> { p with kind = PlaceLocal new_pid}
+        end
       | { kind = PlaceProjection (p', k); ty} ->
         let p' = super#visit_place () p' in
         { kind = PlaceProjection (p', k); ty }
   end in
 
+  (* Auxiliary function to erase the region id in locals types. As we only insert one
+     borrow, we do not need to recurse *)
+  let erase_region_id = function | TRef (_, ty, k) -> TRef (RErased, ty, k) | t -> t in
+
   (* Now that we created the mapping from the old local indices to the new ones, we can
      renumber the new locals to satisfy the LLBC shape: local `i` is in i-th position *)
-  let locals = List.mapi (fun i l -> { l with index = LocalId.of_int (i + 1) }) locals in
+  let locals = List.mapi (fun i l -> { l with index = LocalId.of_int (i + 1); var_ty = erase_region_id l.var_ty }) locals in
   (* We finally substitute variable occurences by their new index *)
   let s = replace_locals#visit_raw_statement () s in
 
 
-  (* TODO: Add regions *)
-  let generics = TypesUtils.empty_generic_params in
+  let generics = { TypesUtils.empty_generic_params with regions } in
   let item_meta = default_meta name in
   let signature = {default_signature with inputs = input_tys; generics} in
   let kind = TopLevelItem in
@@ -1040,6 +1079,7 @@ let add_to_fundecl_group (crate: crate) (f: fun_decl_id) (new_fs: fun_decl_id li
 
 
 let extract (crate: crate) (f: fun_decl) =
+  Format.printf "Initial function %s\n@." (Print.Crate.crate_fun_decl_to_string crate f);
   match f.body with
   | None -> crate
   | Some body ->
@@ -1064,6 +1104,7 @@ let extract (crate: crate) (f: fun_decl) =
           let def_id = gen () in
           let dis = dis_gen () in
           let new_f = create_captured_fun def_id dis body.locals.locals m (Switch s) in
+          Format.printf "New function %s\n@." (Print.Crate.crate_fun_decl_to_string crate new_f);
           new_funs := new_f :: !new_funs;
           new_funs_ids := def_id :: !new_funs_ids;
           (* TODO: Replace by Call *)
