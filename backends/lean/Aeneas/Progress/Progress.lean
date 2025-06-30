@@ -3,6 +3,7 @@ import Aeneas.ScalarTac
 import Aeneas.Progress.Init
 import Aeneas.Std
 import Aeneas.FSimp
+import Aeneas.Async
 
 namespace Aeneas
 
@@ -107,8 +108,14 @@ structure MainGoal where
   posts : Array FVarId
 
 structure Goals where
-  /-- The preconditions that are left to prove -/
-  preconditions : Array MVarId
+  /-- The variables for which we could not infer an instantiation -/
+  unassignedVars : Array MVarId
+  /-- The preconditions that are left to prove.
+      We may run tactics asynchronously, which is why we pair the meta variables with promises:
+      if the tactic succeeds, the promise gets field with the proof that the meta-variable should get
+      assigned to.
+   -/
+  preconditions : Array (MVarId × IO.Promise (Option Expr))
   /-- The main goal, if it was not proven -/
   mainGoal : Option MainGoal
 deriving Inhabited
@@ -322,7 +329,7 @@ def splitExistsEqAndPost (args : Args) (thAsm : Expr) :
       (this is a way of avoiding spurious instantiations). This helps with the second phase.
     - we then use the other tactic on the preconditions
  -/
-def trySolvePreconditions (args : Args) (newPropGoals : List MVarId) : TacticM (List MVarId) := do
+def trySolvePreconditions (args : Args) (newPropGoals : List MVarId) : TacticM (List (MVarId × IO.Promise (Option Expr))) := do
   withTraceNode `Progress (fun _ => pure m!"trySolvePreconditions") do
   let ordPropGoals ←
     newPropGoals.mapM (fun g => do
@@ -330,10 +337,14 @@ def trySolvePreconditions (args : Args) (newPropGoals : List MVarId) : TacticM (
       pure ((← Utils.getMVarIds ty).size, g))
   let ordPropGoals := (ordPropGoals.mergeSort (fun (mvars0, _) (mvars1, _) => mvars0 ≤ mvars1)).reverse
   setGoals (ordPropGoals.map Prod.snd)
+  /- First attempt to solve the preconditions in a *synchronous* manner by using the `singleAssumptionTac`.
+     We do this to instantiate meta-variables -/
   allGoalsNoRecover (tryTac args.assumTac)
-  allGoalsNoRecover args.solvePreconditionTac
-  -- Make sure we preserve the order when presenting the preconditions to the user
-  newPropGoals.filterMapM (fun g => do if ← g.isAssigned then pure none else pure (some g))
+  /- Then attempt to solve the remaining preconditions *asynchronously* -/
+  let goals ← getUnsolvedGoals
+  let promises ← Async.asyncRunTacticOnGoals args.solvePreconditionTac goals
+  /- Group the promises with their corresponding meta-variables -/
+  pure (List.zip goals promises.toList)
 
 /-- Post-process the main goal.
 
@@ -391,17 +402,10 @@ def progressWith (args : Args) (fExpr : Expr) (th : Expr) :
     withTraceNode `Progress
       (fun _ => pure m!"Main goal after simplifying the post-conditions and the target") do
       trace[Progress] "{mainGoal.goal}"
-  /- Update the list of goals - TODO: move this elsewhere -/
-  let newGoals ← (newNonPropGoals ++ newPropGoals).filterM fun mvar => not <$> mvar.isAssigned
+  /- Put everything together -/
+  let newNonPropGoals ← newNonPropGoals.filterM fun mvar => not <$> mvar.isAssigned
   withTraceNode `Progress (fun _ => pure m!"Final remaining preconditions") do
-    trace[Progress] "{newGoals}"
-  let curGoal :=
-    match mainGoal with
-    | none => []
-    | some goal => [goal.goal]
-  setGoals (newGoals ++ curGoal)
-  trace[Progress] "replaced the goals"
-  pure ({ preconditions := newGoals.toArray, mainGoal })
+  pure ({ unassignedVars := newNonPropGoals.toArray, preconditions := newPropGoals.toArray, mainGoal })
 
 /-- Small utility: if `args` is not empty, return the name of the app in the first
     arg, if it is a const. -/
@@ -575,7 +579,7 @@ def parseProgressArgs
   return (keep?, withTh?, ids, byTac)
 | _ => throwUnsupportedSyntax
 
-def evalProgress (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Array (Option Name))
+def evalProgressCore (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Array (Option Name))
   (byTac : Option Syntax.Tactic)
   : TacticM Stats := do
   withTraceNode `Progress (fun _ => pure m!"evalProgress") do
@@ -634,6 +638,22 @@ def evalProgress (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Ar
   trace[Progress] "Progress done"
   return ⟨ goals, usedTheorem ⟩
 
+def evalProgress (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Array (Option Name))
+  (byTac : Option Syntax.Tactic)
+  : TacticM UsedTheorem := do
+  let ⟨goals, usedTheorem⟩ ← evalProgressCore keep keepPretty withArg ids byTac
+  -- Wait for all the proof attempts to finish
+  let mut sgs := #[]
+  for (mvarId, proof) in goals.preconditions do
+    match proof.result?.get with
+    | none | some none => sgs := sgs.push mvarId
+    | some (some proof) => mvarId.withContext do mvarId.assign proof
+  let mainGoal := match goals.mainGoal with
+    | none => []
+    | some goal => [goal.goal]
+  setGoals (goals.unassignedVars.toList ++ sgs.toList ++ mainGoal)
+  pure usedTheorem
+
 elab (name := progress) "progress" args:progressArgs : tactic => do
   let (keep?, withArg, ids, byTac) ← parseProgressArgs args
   evalProgress keep? none withArg ids byTac *> return ()
@@ -643,7 +663,7 @@ elab tk:"progress?" args:progressArgs : tactic => do
   let stats ← evalProgress keep? none withArg ids byTac
   let mut stxArgs := args.raw
   if stxArgs[1].isNone then
-    let withArg := mkNullNode #[mkAtom "with", ←stats.usedTheorem.toSyntax]
+    let withArg := mkNullNode #[mkAtom "with", ← stats.toSyntax]
     stxArgs := stxArgs.setArg 1 withArg
   let tac := mkNode `Aeneas.Progress.progress #[mkAtom "progress", stxArgs]
   Meta.Tactic.TryThis.addSuggestion tk tac (origSpan? := ← getRef)
@@ -700,7 +720,7 @@ elab tk:letProgress : tactic => do
   let mut stxArgs := tk.raw
   if suggest then
     trace[Progress] "suggest is true"
-    let withArg ← stats.usedTheorem.toSyntax
+    let withArg ← stats.toSyntax
     stxArgs := stxArgs.setArg 6 withArg
     let stxArgs' : TSyntax `Aeneas.Progress.letProgress := ⟨ stxArgs ⟩
     trace[Progress] "stxArgs': {stxArgs}"
