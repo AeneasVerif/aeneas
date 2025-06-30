@@ -340,8 +340,9 @@ def trySolvePreconditions (args : Args) (newPropGoals : List MVarId) : TacticM (
   /- First attempt to solve the preconditions in a *synchronous* manner by using the `singleAssumptionTac`.
      We do this to instantiate meta-variables -/
   allGoalsNoRecover (tryTac args.assumTac)
+  /- Retrieve the unsolved preconditions - make sure we recover them in the original order -/
+  let goals ← newPropGoals.filterMapM (fun g => do if ← g.isAssigned then pure none else pure (some g))
   /- Then attempt to solve the remaining preconditions *asynchronously* -/
-  let goals ← getUnsolvedGoals
   let promises ← Async.asyncRunTacticOnGoals args.solvePreconditionTac goals
   /- Group the promises with their corresponding meta-variables -/
   pure (List.zip goals promises.toList)
@@ -918,7 +919,6 @@ info: example
     f x = ok () := by
     progress
 
-
   example {x : U32}
     (f : U32 → Std.Result Unit) (h : ∀ x, f x = .ok ()) :
     f x = ok () := by
@@ -940,6 +940,24 @@ info: example
     right
     progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with IScalar.add_spec as ⟨ z, h1 ⟩
     simp [*, h1]
+
+  /--
+error: unsolved goals
+case a
+x y : U32
+f : U32 → U32 → Result U32
+hf : ∀ (x y : U32), ↑x < 10 → ↑y < 10 → ∃ z, f x y = ok z
+⊢ ↑x < 10
+
+case a
+x y : U32
+f : U32 → U32 → Result U32
+hf : ∀ (x y : U32), ↑x < 10 → ↑y < 10 → ∃ z, f x y = ok z
+⊢ ↑y < 10
+  -/
+  #guard_msgs in
+  example {x y} (f : U32 → U32 → Result U32) (hf : ∀ x y, x.val < 10 → y.val < 10 → ∃ z, f x y = ok z) : ∃ z, f x y = ok z := by
+    progress
 
   -- Testing with mutually recursive definitions
   mutual
