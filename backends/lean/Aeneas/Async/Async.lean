@@ -31,6 +31,8 @@ def inlineFreshProofs (env0 : Environment) (e : Expr) : MetaM Expr := do
         let levels := const.levelParams
         let levels := Std.HashMap.ofList (List.zip (List.map Level.param levels) us)
         let body := body.replaceLevel (Std.HashMap.get? levels)
+        /- Note that we don't re-explore the body: we don't expect tactics to
+           introduce nested theorems -/
         pure body
     | .app fn arg => pure (.app (← inline fn) (← inline arg))
     | .lam name ty body info =>
@@ -103,11 +105,11 @@ def allGoalsAsync (tac : TacticM Unit) : TacticM Unit := do
   for mvarId in mvarIds do
     unless (← mvarId.isAssigned) do
       setGoals [mvarId]
-      results := results.push (← asyncRunTactic tac)
+      results := results.push (← asyncRunTactic tac).result?
   -- Wait for the tasks
   let mut unsolved := #[]
   for (i, (mvarId, result)) in (List.zip mvarIds results.toList).mapIdx (fun id x => (id, x)) do
-    match result.result?.get with
+    match result.get with
     | none =>
       trace[Progress] "Promise got dropped"
       throwError "Promise got dropped"
@@ -167,29 +169,5 @@ def splitConjTarget : TacticM Unit := do
     g.assign and_intro
     let goals ← getUnsolvedGoals
     setGoals (lmvar.mvarId! :: rmvar.mvarId! :: goals)
-
-/-!
-## The test
--/
-
-/- Solve the goal by splitting the conjunctions.
-Note that `scalarTac` does quite a few things, so it tends to be expensive (in the example below,
-looking at the trace for the synchronous case, it requires ~0.016s for every subgoal).
--/
-def trySync : TacticM Unit := do
-  withTraceNode `ScalarTac (fun _ => pure "repeatTac") (repeatTac splitConjTarget)
-  allGoals (do
-    ScalarTac.scalarTac {})
-
-syntax "sync_solve" : tactic
-elab "sync_solve" : tactic => do trySync
-
-def tryAsync : TacticM Unit := do
-  withTraceNode `ScalarTac (fun _ => pure "repeatTac") (repeatTac splitConjTarget)
-  allGoalsAsync (do
-    ScalarTac.scalarTac {})
-
-syntax "async_solve" : tactic
-elab "async_solve" : tactic => do tryAsync
 
 end Aeneas

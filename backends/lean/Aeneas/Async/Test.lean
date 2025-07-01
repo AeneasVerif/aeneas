@@ -1,4 +1,28 @@
-import Aeneas.Progress.Async
+import Aeneas.Async.Async
+
+namespace Aeneas.Async.Test
+
+open Lean Elab Tactic
+
+/- Solve the goal by splitting the conjunctions.
+Note that `scalarTac` does quite a few things, so it tends to be expensive (in the example below,
+looking at the trace for the synchronous case, it requires ~0.016s for every subgoal).
+-/
+def trySync : TacticM Unit := do
+  withTraceNode `ScalarTac (fun _ => pure "repeatTac") (repeatTac splitConjTarget)
+  allGoals (do
+    ScalarTac.scalarTac {})
+
+local syntax "sync_solve" : tactic
+local elab "sync_solve" : tactic => do trySync
+
+def tryAsync : TacticM Unit := do
+  withTraceNode `ScalarTac (fun _ => pure "repeatTac") (repeatTac splitConjTarget)
+  allGoalsAsync (do
+    ScalarTac.scalarTac {})
+
+local syntax "async_solve" : tactic
+local elab "async_solve" : tactic => do tryAsync
 
 -- This is: `x * y < bound ∧ x * y < bound + 1 ∧ ...` (there are `count` conjuncts)
 def goal (x y bound count : Nat) : Prop :=
@@ -11,5 +35,8 @@ set_option maxRecDepth 2048 in
 def test (x y : Nat) (h : x < 10) (h : y < 20) : goal x y 200 200
   := by
   simp [goal]
-  sync_solve -- 3.072428s
-  --async_solve -- 1.720408s
+  --sync_solve -- 3.072428s
+  async_solve -- 1.18s
+
+
+namespace Aeneas.Async.Test
