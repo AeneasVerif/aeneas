@@ -9,6 +9,7 @@ import AeneasMeta.Saturate
 import Aeneas.SimpScalar.Init
 import Aeneas.SimpBoolProp.SimpBoolProp
 import AeneasMeta.Simp
+import AeneasMeta.COmega
 
 namespace Aeneas
 
@@ -409,11 +410,11 @@ def scalarTacCore (config : Config) : Tactic.TacticM Unit := do
             Simp.simpAll {failIfUnchanged := false, maxSteps := config.simpAllMaxSteps, maxDischargeDepth := 0}
               true simpArgs)
         trace[ScalarTac] "Calling omega"
-        allGoalsNoRecover (Tactic.Omega.omegaTactic {})
+        allGoalsNoRecover (Aeneas.omegaTactic {})
         trace[ScalarTac] "Goal proved!"
     else
       trace[ScalarTac] "Calling omega"
-      Tactic.Omega.omegaTactic {}
+      Aeneas.omegaTactic {}
       trace[ScalarTac] "Goal proved!"
 
 /-- Tactic to solve arithmetic goals.
@@ -480,7 +481,8 @@ def incrScalarTac (config : Config) (state : State) (toClear : Array FVarId) (as
   trace[ScalarTac] "Goal after preprocessing: {← getMainGoal}"
   /- Call omega -/
   trace[ScalarTac] "Calling omega"
-  Tactic.Omega.omegaTactic {}
+  --Tactic.Omega.omegaTactic {}
+  Aeneas.omegaTactic {}
   trace[ScalarTac] "Goal proved!"
 
 -- For termination proofs

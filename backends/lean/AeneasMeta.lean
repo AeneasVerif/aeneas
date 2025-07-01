@@ -3,3 +3,4 @@ import AeneasMeta.Extensions
 import AeneasMeta.Saturate
 import AeneasMeta.Simp
 import AeneasMeta.Utils
+import AeneasMeta.COmega

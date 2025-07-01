@@ -30,7 +30,7 @@ def inlineFreshProofs (env0 : Environment) (e : Expr) : MetaM Expr := do
         -- Replace the levels in the body
         let levels := const.levelParams
         let levels := Std.HashMap.ofList (List.zip (List.map Level.param levels) us)
-        let body := body.replaceLevel (Std.HashMap.get? levels)
+        --let body := body.replaceLevel (Std.HashMap.get? levels)
         /- Note that we don't re-explore the body: we don't expect tactics to
            introduce nested theorems -/
         pure body
@@ -77,7 +77,7 @@ def wrapTactic {α : Type} (tactic : α → TacticM Unit) (cancelTk? : Option IO
                and should not have an impact on the time it takes to refresh
                the goals displayed to the user (correct?).
              -/
-            let result ← inlineFreshProofs env0 result
+            --let result ← inlineFreshProofs env0 result
             promise.resolve (some result)
         else promise.resolve none
     catch e => promise.resolve none
@@ -109,5 +109,24 @@ def asyncRunTacticOnGoals (tac : TacticM Unit) (mvarIds : List MVarId)
       setGoals [mvarId]
       results := results.push (← asyncRunTactic tac cancelTk? prio)
   pure results
+
+/- Run `tac` on the current goals in parallel -/
+def allGoalsAsync (tac : TacticM Unit) : TacticM Unit := do
+  let mvarIds ← getGoals
+  let promises ← asyncRunTacticOnGoals tac mvarIds
+  -- Wait for the tasks
+  let mut unsolved := #[]
+  for (mvarId, promise) in List.zip mvarIds promises.toList do
+    match promise.result?.get with
+    | none =>
+      unsolved := unsolved.push mvarId
+    | some x =>
+      match x with
+      | .none =>
+        unsolved := unsolved.push mvarId
+      | .some x =>
+        /- Successfully generated a proof! Assign the meta-variable -/
+        mvarId.assign x
+  setGoals unsolved.toList
 
 end Aeneas.Async
