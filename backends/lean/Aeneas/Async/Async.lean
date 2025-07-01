@@ -1,8 +1,8 @@
-import Aeneas.ScalarTac
+import Aeneas.Utils
+
+namespace Aeneas.Async
 
 open Lean Elab Term Meta Tactic
-namespace Aeneas
-
 open Utils
 
 /-!
@@ -51,7 +51,7 @@ I noticed a bit too late that I could have used `Lean.Elab.Term.wrapAsyncAsSnaps
 `Lean.Core.wrapAsyncAsSnapshot` but I guess it shouldn't make much difference.
 -/
 def wrapTactic {α : Type} (tactic : α → TacticM Unit) (cancelTk? : Option IO.CancelToken)  :
-  TacticM (IO.Promise (Except Exception (Option Expr)) × (α → BaseIO Language.SnapshotTree)) := do
+  TacticM (IO.Promise (Option Expr) × (α → BaseIO Language.SnapshotTree)) := do
   let env0 ← getEnv
   withMainContext do
   -- The code below is adapted from `Lean.Elab.Tactic.tacticToDischarge` --
@@ -59,7 +59,7 @@ def wrapTactic {α : Type} (tactic : α → TacticM Unit) (cancelTk? : Option IO
   let ctx ← readThe Term.Context
   let mvar ← mkFreshExprSyntheticOpaqueMVar (← getMainTarget) `simp.discharger
   let s ← ref.get
-  let promise : IO.Promise (Except Exception (Option Expr)) ← IO.Promise.new
+  let promise : IO.Promise (Option Expr) ← IO.Promise.new
   let runTac? (x : α) : TermElabM Unit :=
     try
       --Term.withoutModifyingElabMetaStateWithInfo do
@@ -68,7 +68,7 @@ def wrapTactic {α : Type} (tactic : α → TacticM Unit) (cancelTk? : Option IO
         if ngoals.isEmpty then
           let result ← instantiateMVars mvar
           if result.hasExprMVar then
-            promise.resolve (.ok none)
+            promise.resolve none
           else
             /- Inline the theorems introduced by `omega`. Note that doing this
                has an impact on the performance, but I would expect it to be
@@ -78,9 +78,9 @@ def wrapTactic {α : Type} (tactic : α → TacticM Unit) (cancelTk? : Option IO
                the goals displayed to the user (correct?).
              -/
             let result ← inlineFreshProofs env0 result
-            promise.resolve (.ok (some result))
-        else promise.resolve (.ok none)
-    catch e => promise.resolve (.error e)
+            promise.resolve (some result)
+        else promise.resolve none
+    catch e => promise.resolve none
   --------------------------------------------------------------------------
   let metaCtx ← readThe Meta.Context
   let metaState ← getThe Meta.State
@@ -90,84 +90,24 @@ def wrapTactic {α : Type} (tactic : α → TacticM Unit) (cancelTk? : Option IO
   let tac ← Lean.Core.wrapAsyncAsSnapshot tac cancelTk?
   pure (promise, tac)
 
-def asyncRunTactic (tactic : TacticM Unit) (cancelTk? : Option IO.CancelToken := none) :
-  TacticM (IO.Promise (Except Exception (Option Expr))) := do
+def asyncRunTactic (tactic : TacticM Unit) (cancelTk? : Option IO.CancelToken := none)
+  (prio : Task.Priority := Task.Priority.default) :
+  TacticM (IO.Promise (Option Expr)) := do
   let (promise, tactic) ← wrapTactic (fun () => tactic) cancelTk?
-  let task ← BaseIO.asTask (tactic ())
+  let task ← BaseIO.asTask (tactic ()) prio
   Core.logSnapshotTask { stx? := none, task := task, cancelTk? := cancelTk? }
   pure promise
 
 /- Run `tac` on the current goals in parallel -/
-def allGoalsAsync (tac : TacticM Unit) : TacticM Unit := do
-  let mvarIds ← getGoals
+def asyncRunTacticOnGoals (tac : TacticM Unit) (mvarIds : List MVarId)
+  (cancelTk? : Option IO.CancelToken := none) (prio : Task.Priority := Task.Priority.default) :
+  TacticM (Array (IO.Promise (Option Expr))) := do
   let mut results := #[]
   -- Create tasks
   for mvarId in mvarIds do
     unless (← mvarId.isAssigned) do
       setGoals [mvarId]
-      results := results.push (← asyncRunTactic tac).result?
-  -- Wait for the tasks
-  let mut unsolved := #[]
-  for (i, (mvarId, result)) in (List.zip mvarIds results.toList).mapIdx (fun id x => (id, x)) do
-    match result.get with
-    | none =>
-      trace[Progress] "Promise got dropped"
-      throwError "Promise got dropped"
-    | some (.error e) =>
-      trace[Progress] "Task {i}: exception: {e.toMessageData}"
-      unsolved := unsolved.push mvarId
-    | some (.ok x) =>
-      -- TODO: how to propagate the information from the `Core.State`? (in particular, I
-      -- want to preserve the log)
-      match x with
-      | .none =>
-        trace[Progress] "Task {i}: tactic failed"
-        unsolved := unsolved.push mvarId
-      | .some x =>
-        /- Successfully generated a proof! Assign the meta-variable -/
-        --logInfo m!"Task {i}: solved!"
-        /- TODO: would it be interesting to introduce theorems for all the proofs
-           of the subgoals, so that they get type-checked in parallel? -/
-        mvarId.assign x
-  setGoals unsolved.toList
+      results := results.push (← asyncRunTactic tac cancelTk? prio)
+  pure results
 
-/-!
-# Test
--/
-
-/-!
-## Small helpers, unrelated to asynchronous executions
--/
-
--- Repeatedly apply a tactic
-partial def repeatTac (tac : TacticM Unit) : TacticM Unit := do
-  try
-    tac
-    allGoals (focus (repeatTac tac))
-  -- TODO: does this restore the state?
-  catch _ => pure ()
-
-def optSplitConj (e : Expr) : Expr × Option Expr :=
-  e.consumeMData.withApp fun f args =>
-  if f.isConstOf ``And ∧ args.size = 2 then (args[0]!, some (args[1]!))
-  else (e, none)
-
--- Split the goal if it is a conjunction
-def splitConjTarget : TacticM Unit := do
-  withMainContext do
-  let g ← getMainTarget
-  -- The tactic was initially implemened with `_root_.Lean.MVarId.apply`
-  -- but it tended to mess the goal by unfolding terms, even when it failed
-  let (l, r) := optSplitConj g
-  match r with
-  | none => do throwError "The goal is not a conjunction"
-  | some r => do
-    let lmvar ← mkFreshExprSyntheticOpaqueMVar l
-    let rmvar ← mkFreshExprSyntheticOpaqueMVar r
-    let and_intro ← mkAppM ``And.intro #[lmvar, rmvar]
-    let g ← getMainGoal
-    g.assign and_intro
-    let goals ← getUnsolvedGoals
-    setGoals (lmvar.mvarId! :: rmvar.mvarId! :: goals)
-
-end Aeneas
+end Aeneas.Async

@@ -1,8 +1,29 @@
 import Aeneas.Async.Async
+import Aeneas.ScalarTac
 
 namespace Aeneas.Async.Test
 
-open Lean Elab Tactic
+open Lean Elab Tactic Utils
+
+/- Run `tac` on the current goals in parallel -/
+def allGoalsAsync (tac : TacticM Unit) : TacticM Unit := do
+  let mvarIds ← getGoals
+  let promises ← asyncRunTacticOnGoals tac mvarIds
+  -- Wait for the tasks
+  let mut unsolved := #[]
+  for (mvarId, promise) in List.zip mvarIds promises.toList do
+    match promise.result?.get with
+    | none =>
+      unsolved := unsolved.push mvarId
+    | some x =>
+      match x with
+      | .none =>
+        unsolved := unsolved.push mvarId
+      | .some x =>
+        /- Successfully generated a proof! Assign the meta-variable -/
+        mvarId.assign x
+  setGoals unsolved.toList
+
 
 /- Solve the goal by splitting the conjunctions.
 Note that `scalarTac` does quite a few things, so it tends to be expensive (in the example below,
