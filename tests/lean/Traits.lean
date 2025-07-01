@@ -357,15 +357,15 @@ structure ParentTrait1 (Self : Type) where
 
 /- Trait declaration: [traits::ChildTrait]
    Source: 'tests/src/traits.rs', lines 208:0-208:52 -/
-structure ChildTrait (Self : Type) (Self_Clause0_W : Type) where
-  ParentTrait0Inst : ParentTrait0 Self Self_Clause0_W
+structure ChildTrait (Self : Type) (Self_Clause1_W : Type) where
+  ParentTrait0Inst : ParentTrait0 Self Self_Clause1_W
   ParentTrait1Inst : ParentTrait1 Self
 
 /- [traits::test_child_trait1]:
    Source: 'tests/src/traits.rs', lines 211:0-213:1 -/
 def test_child_trait1
-  {T : Type} {Clause1_Clause0_W : Type} (ChildTraitInst : ChildTrait T
-  Clause1_Clause0_W) (x : T) :
+  {T : Type} {Clause1_Clause1_W : Type} (ChildTraitInst : ChildTrait T
+  Clause1_Clause1_W) (x : T) :
   Result String
   :=
   ChildTraitInst.ParentTrait0Inst.get_name x
@@ -373,9 +373,9 @@ def test_child_trait1
 /- [traits::test_child_trait2]:
    Source: 'tests/src/traits.rs', lines 215:0-217:1 -/
 def test_child_trait2
-  {T : Type} {Clause1_Clause0_W : Type} (ChildTraitInst : ChildTrait T
-  Clause1_Clause0_W) (x : T) :
-  Result Clause1_Clause0_W
+  {T : Type} {Clause1_Clause1_W : Type} (ChildTraitInst : ChildTrait T
+  Clause1_Clause1_W) (x : T) :
+  Result Clause1_Clause1_W
   :=
   ChildTraitInst.ParentTrait0Inst.get_w x
 
@@ -432,17 +432,17 @@ structure WithTarget (Self : Type) (Self_Target : Type) where
 
 /- Trait declaration: [traits::ParentTrait2]
    Source: 'tests/src/traits.rs', lines 258:0-260:1 -/
-structure ParentTrait2 (Self : Type) (Self_U : Type) (Self_Clause1_Target :
+structure ParentTrait2 (Self : Type) (Self_U : Type) (Self_Clause2_Target :
   Type) where
-  WithTargetInst : WithTarget Self_U Self_Clause1_Target
+  WithTargetInst : WithTarget Self_U Self_Clause2_Target
 
 /- Trait declaration: [traits::ChildTrait2]
    Source: 'tests/src/traits.rs', lines 262:0-264:1 -/
-structure ChildTrait2 (Self : Type) (Self_Clause0_U : Type)
-  (Self_Clause0_Clause1_Target : Type) where
-  ParentTrait2Inst : ParentTrait2 Self Self_Clause0_U
-    Self_Clause0_Clause1_Target
-  convert : Self_Clause0_U → Result Self_Clause0_Clause1_Target
+structure ChildTrait2 (Self : Type) (Self_Clause1_U : Type)
+  (Self_Clause1_Clause2_Target : Type) where
+  ParentTrait2Inst : ParentTrait2 Self Self_Clause1_U
+    Self_Clause1_Clause2_Target
+  convert : Self_Clause1_U → Result Self_Clause1_Clause2_Target
 
 /- Trait implementation: [traits::{traits::WithTarget<u32> for u32}]
    Source: 'tests/src/traits.rs', lines 266:0-268:1 -/
@@ -477,16 +477,16 @@ structure CFnOnce (Self : Type) (Args : Type) (Self_Output : Type) where
 
 /- Trait declaration: [traits::CFnMut]
    Source: 'tests/src/traits.rs', lines 294:0-296:1 -/
-structure CFnMut (Self : Type) (Args : Type) (Self_Clause0_Output : Type) where
-  CFnOnceInst : CFnOnce Self Args Self_Clause0_Output
-  call_mut : Self → Args → Result (Self_Clause0_Output × Self)
+structure CFnMut (Self : Type) (Args : Type) (Self_Clause1_Output : Type) where
+  CFnOnceInst : CFnOnce Self Args Self_Clause1_Output
+  call_mut : Self → Args → Result (Self_Clause1_Output × Self)
 
 /- Trait declaration: [traits::CFn]
    Source: 'tests/src/traits.rs', lines 298:0-300:1 -/
-structure CFn (Self : Type) (Args : Type) (Self_Clause0_Clause0_Output : Type)
+structure CFn (Self : Type) (Args : Type) (Self_Clause1_Clause1_Output : Type)
   where
-  CFnMutInst : CFnMut Self Args Self_Clause0_Clause0_Output
-  call : Self → Args → Result Self_Clause0_Clause0_Output
+  CFnMutInst : CFnMut Self Args Self_Clause1_Clause1_Output
+  call : Self → Args → Result Self_Clause1_Clause1_Output
 
 /- Trait declaration: [traits::GetTrait]
    Source: 'tests/src/traits.rs', lines 302:0-305:1 -/

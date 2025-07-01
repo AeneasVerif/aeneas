@@ -340,16 +340,16 @@ type parentTrait1_t (self : Type0) = unit
 
 (** Trait declaration: [traits::ChildTrait]
     Source: 'tests/src/traits.rs', lines 208:0-208:52 *)
-noeq type childTrait_t (self : Type0) (self_clause0_w : Type0) = {
-  parentTrait0Inst : parentTrait0_t self self_clause0_w;
+noeq type childTrait_t (self : Type0) (self_clause1_w : Type0) = {
+  parentTrait0Inst : parentTrait0_t self self_clause1_w;
   parentTrait1Inst : parentTrait1_t self;
 }
 
 (** [traits::test_child_trait1]:
     Source: 'tests/src/traits.rs', lines 211:0-213:1 *)
 let test_child_trait1
-  (#t : Type0) (#clause1_clause0_w : Type0) (childTraitInst : childTrait_t t
-  clause1_clause0_w) (x : t) :
+  (#t : Type0) (#clause1_clause1_w : Type0) (childTraitInst : childTrait_t t
+  clause1_clause1_w) (x : t) :
   result string
   =
   childTraitInst.parentTrait0Inst.get_name x
@@ -357,9 +357,9 @@ let test_child_trait1
 (** [traits::test_child_trait2]:
     Source: 'tests/src/traits.rs', lines 215:0-217:1 *)
 let test_child_trait2
-  (#t : Type0) (#clause1_clause0_w : Type0) (childTraitInst : childTrait_t t
-  clause1_clause0_w) (x : t) :
-  result clause1_clause0_w
+  (#t : Type0) (#clause1_clause1_w : Type0) (childTraitInst : childTrait_t t
+  clause1_clause1_w) (x : t) :
+  result clause1_clause1_w
   =
   childTraitInst.parentTrait0Inst.get_w x
 
@@ -417,18 +417,18 @@ type withTarget_t (self : Type0) (self_target : Type0) = unit
 
 (** Trait declaration: [traits::ParentTrait2]
     Source: 'tests/src/traits.rs', lines 258:0-260:1 *)
-noeq type parentTrait2_t (self : Type0) (self_u : Type0) (self_clause1_target :
+noeq type parentTrait2_t (self : Type0) (self_u : Type0) (self_clause2_target :
   Type0) = {
-  withTargetInst : withTarget_t self_u self_clause1_target;
+  withTargetInst : withTarget_t self_u self_clause2_target;
 }
 
 (** Trait declaration: [traits::ChildTrait2]
     Source: 'tests/src/traits.rs', lines 262:0-264:1 *)
-noeq type childTrait2_t (self : Type0) (self_clause0_u : Type0)
-  (self_clause0_clause1_target : Type0) = {
-  parentTrait2Inst : parentTrait2_t self self_clause0_u
-    self_clause0_clause1_target;
-  convert : self_clause0_u -> result self_clause0_clause1_target;
+noeq type childTrait2_t (self : Type0) (self_clause1_u : Type0)
+  (self_clause1_clause2_target : Type0) = {
+  parentTrait2Inst : parentTrait2_t self self_clause1_u
+    self_clause1_clause2_target;
+  convert : self_clause1_u -> result self_clause1_clause2_target;
 }
 
 (** Trait implementation: [traits::{traits::WithTarget<u32> for u32}]
@@ -461,18 +461,18 @@ noeq type cFnOnce_t (self : Type0) (args : Type0) (self_output : Type0) = {
 
 (** Trait declaration: [traits::CFnMut]
     Source: 'tests/src/traits.rs', lines 294:0-296:1 *)
-noeq type cFnMut_t (self : Type0) (args : Type0) (self_clause0_output : Type0)
+noeq type cFnMut_t (self : Type0) (args : Type0) (self_clause1_output : Type0)
   = {
-  cFnOnceInst : cFnOnce_t self args self_clause0_output;
-  call_mut : self -> args -> result (self_clause0_output & self);
+  cFnOnceInst : cFnOnce_t self args self_clause1_output;
+  call_mut : self -> args -> result (self_clause1_output & self);
 }
 
 (** Trait declaration: [traits::CFn]
     Source: 'tests/src/traits.rs', lines 298:0-300:1 *)
-noeq type cFn_t (self : Type0) (args : Type0) (self_clause0_clause0_output :
+noeq type cFn_t (self : Type0) (args : Type0) (self_clause1_clause1_output :
   Type0) = {
-  cFnMutInst : cFnMut_t self args self_clause0_clause0_output;
-  call : self -> args -> result self_clause0_clause0_output;
+  cFnMutInst : cFnMut_t self args self_clause1_clause1_output;
+  call : self -> args -> result self_clause1_clause1_output;
 }
 
 (** Trait declaration: [traits::GetTrait]
