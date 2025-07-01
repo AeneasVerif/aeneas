@@ -1,4 +1,4 @@
-import Aeneas.Async.Async
+import AeneasMeta.Async.Async
 import Aeneas.ScalarTac
 
 namespace Aeneas.Async.Test
@@ -51,7 +51,7 @@ def goal (x y bound count : Nat) : Prop :=
   else x * y < bound ∧ goal x y (bound + 1) (count - 1)
 
 /- Note that when measuring time the variance is quite big -/
---set_option trace.profiler true in
+set_option trace.profiler true in
 set_option maxRecDepth 2048 in
 def test (x y : Nat) (h : x < 10) (h : y < 20) : goal x y 200 200
   := by

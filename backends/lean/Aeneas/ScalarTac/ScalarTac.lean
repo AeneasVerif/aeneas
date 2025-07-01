@@ -2,13 +2,13 @@ import Lean
 import Lean.Meta.Tactic.Simp
 import Init.Data.List.Basic
 import Mathlib.Tactic.Ring.RingNF
-import Aeneas.Utils
+import AeneasMeta.Utils
 import Aeneas.ScalarTac.Core
 import Aeneas.ScalarTac.Init
-import Aeneas.Saturate
+import AeneasMeta.Saturate
 import Aeneas.SimpScalar.Init
 import Aeneas.SimpBoolProp.SimpBoolProp
-import Aeneas.Simp
+import AeneasMeta.Simp
 
 namespace Aeneas
 

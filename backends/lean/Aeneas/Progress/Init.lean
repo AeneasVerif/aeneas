@@ -1,7 +1,7 @@
 import Lean
-import Aeneas.Utils
+import AeneasMeta.Utils
 import Aeneas.Std.Primitives
-import Aeneas.Extensions
+import AeneasMeta.Extensions
 import Aeneas.Progress.Trace
 
 namespace Aeneas

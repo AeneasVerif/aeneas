@@ -1,2 +1,2 @@
 import Aeneas.ScalarTac.Tests
-import Aeneas.Async.Test
+import Aeneas.AsyncTest

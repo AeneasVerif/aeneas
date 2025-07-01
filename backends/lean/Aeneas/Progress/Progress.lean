@@ -3,7 +3,7 @@ import Aeneas.ScalarTac
 import Aeneas.Progress.Init
 import Aeneas.Std
 import Aeneas.FSimp
-import Aeneas.Async
+import AeneasMeta.Async
 
 namespace Aeneas
 
