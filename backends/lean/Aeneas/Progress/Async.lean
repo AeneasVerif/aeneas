@@ -21,10 +21,10 @@ def inlineFreshProofs (env0 : Environment) (e : Expr) : MetaM Expr := do
     match e with
     | .bvar _ | .fvar _ | .mvar _ | .sort _ | .lit _ => pure e
     | .const declName us =>
-      if env0.constants.contains declName then pure e
+      if env0.contains declName then pure e
       else
         -- We need to inline this constant
-        let const ← pure ((← getEnv).constants.find! declName)
+        let some const ← pure ((← getEnv).find? declName) | unreachable!
         let some body := const.value? (allowOpaque := true)
           | throwError "Could not inline constant: {e}"
         -- Replace the levels in the body
@@ -91,7 +91,7 @@ def wrapTactic {α : Type} (tactic : α → TacticM Unit) (cancelTk? : Option IO
 def asyncRunTactic (tactic : TacticM Unit) (cancelTk? : Option IO.CancelToken := none) :
   TacticM (IO.Promise (Except Exception (Option Expr))) := do
   let (promise, tactic) ← wrapTactic (fun () => tactic) cancelTk?
-  let task ← BaseIO.asTask (tactic ()) (prio := .max)
+  let task ← BaseIO.asTask (tactic ())
   Core.logSnapshotTask { stx? := none, task := task, cancelTk? := cancelTk? }
   pure promise
 
@@ -191,19 +191,5 @@ def tryAsync : TacticM Unit := do
 
 syntax "async_solve" : tactic
 elab "async_solve" : tactic => do tryAsync
-
--- This is: `x * y < bound ∧ x * y < bound + 1 ∧ ...` (there are `count` conjuncts)
-def goal (x y bound count : Nat) : Prop :=
-  if count = 0 then True
-  else x * y < bound ∧ goal x y (bound + 1) (count - 1)
-
-/- Note that when measuring time the variance is quite big -/
-set_option trace.profiler true in
-set_option maxRecDepth 2048 in
-def test (x y : Nat) (h : x < 10) (h : y < 20) : goal x y 200 200
-  := by
-  simp [goal]
-  sync_solve -- 3.072428s
-  --async_solve -- 1.720408s
 
 end Aeneas
