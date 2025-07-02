@@ -309,10 +309,29 @@ example (x : Bool) : Nat := by
 def tryTac (tac : TacticM Unit) : TacticM Unit := do
   let _ ← tryTactic tac
 
-/-- Adapted from allGoals
+/-- Copy/pasted from Mathlib because we do not want to add it as a dependency for this module
+    as it gets compiled. -/
+def allGoals (tac : TacticM Unit) : TacticM Unit := do
+  let mvarIds ← getGoals
+  let mut mvarIdsNew := #[]
+  for mvarId in mvarIds do
+    unless (← mvarId.isAssigned) do
+      setGoals [mvarId]
+      try
+        tac
+        mvarIdsNew := mvarIdsNew ++ (← getUnsolvedGoals)
+      catch ex =>
+        if (← read).recover then
+          logException ex
+          mvarIdsNew := mvarIdsNew.push mvarId
+        else
+          throw ex
+  setGoals mvarIdsNew.toList
 
-    We use this instead of allGoals, because when the tactic throws an exception that we attempt
-    to catch outside, the behavior can be quite surprising.
+/-- Adapted from `Lean.Elab.Tactic.allGoals`
+
+    We sometimes use this rather than `allGoals`, because when the tactic throws
+    an exception that we attempt to catch outside, the behavior can be quite surprising.
  -/
 def allGoalsNoRecover (tac : TacticM Unit) : TacticM Unit := do
   let mvarIds ← getGoals

@@ -448,7 +448,7 @@ def scalarTac (config : Config) : TacticM Unit := do
         let trySolve (x : Name) : TacticM Unit := do
           let goals ← g.apply (.const x [])
           setGoals goals
-          allGoals (scalarTacCore config)
+          Utils.allGoals (scalarTacCore config)
         let tacs := List.map trySolve [
             -- TODO: make this more general
             ``Nat.le_mul_le, ``Nat.lt_mul_lt, ``Nat.le_mul_lt, ``Nat.lt_mul_le,
