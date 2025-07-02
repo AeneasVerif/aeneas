@@ -1,5 +1,4 @@
 import Aeneas.Progress.Progress
-import Aesop.Util.Basic
 open Lean Meta Elab Tactic
 
 namespace Aeneas
