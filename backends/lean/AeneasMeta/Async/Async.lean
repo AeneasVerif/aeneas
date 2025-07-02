@@ -16,7 +16,7 @@ Side question: how to properly handle this? I had a look at what is done
 in `MutualDef.lean` but couldn't figure how to adapt what is being done there
 (for instance with `env.addConstAsync`) to my setting.
 -/
-def inlineFreshProofs (env0 : Environment) (e : Expr) : MetaM Expr := do
+partial def inlineFreshProofs (env0 : Environment) (e : Expr) (rec := false) : MetaM Expr := do
   let rec inline (e : Expr) : MetaM Expr := do
     match e with
     | .bvar _ | .fvar _ | .mvar _ | .sort _ | .lit _ => pure e
@@ -29,11 +29,16 @@ def inlineFreshProofs (env0 : Environment) (e : Expr) : MetaM Expr := do
           | throwError "Could not inline constant: {e}"
         -- Replace the levels in the body
         let levels := const.levelParams
-        let levels := Std.HashMap.ofList (List.zip (List.map Level.param levels) us)
-        --let body := body.replaceLevel (Std.HashMap.get? levels)
         /- Note that we don't re-explore the body: we don't expect tactics to
            introduce nested theorems -/
-        pure body
+        let body :=
+          if levels.isEmpty then body
+          else
+            let levels := Std.HashMap.ofList (List.zip (List.map Level.param levels) us)
+            let body := body.replaceLevel (Std.HashMap.get? levels)
+            body
+        /- Re-explore the body -/
+        if rec then inline body else pure body
     | .app fn arg => pure (.app (← inline fn) (← inline arg))
     | .lam name ty body info =>
       pure (.lam name (← inline ty) (← inline body) info)
@@ -50,7 +55,8 @@ def inlineFreshProofs (env0 : Environment) (e : Expr) : MetaM Expr := do
 I noticed a bit too late that I could have used `Lean.Elab.Term.wrapAsyncAsSnapshot` instead of
 `Lean.Core.wrapAsyncAsSnapshot` but I guess it shouldn't make much difference.
 -/
-def wrapTactic {α : Type} (tactic : α → TacticM Unit) (cancelTk? : Option IO.CancelToken)  :
+def wrapTactic {α : Type} (tactic : α → TacticM Unit) (cancelTk? : Option IO.CancelToken)
+  (inlineProofs : Bool) :
   TacticM (IO.Promise (Option Expr) × (α → BaseIO Language.SnapshotTree)) := do
   let env0 ← getEnv
   withMainContext do
@@ -77,7 +83,7 @@ def wrapTactic {α : Type} (tactic : α → TacticM Unit) (cancelTk? : Option IO
                and should not have an impact on the time it takes to refresh
                the goals displayed to the user (correct?).
              -/
-            --let result ← inlineFreshProofs env0 result
+            let result ← if inlineProofs then inlineFreshProofs env0 result else pure result
             promise.resolve (some result)
         else promise.resolve none
     catch e => promise.resolve none
@@ -91,29 +97,34 @@ def wrapTactic {α : Type} (tactic : α → TacticM Unit) (cancelTk? : Option IO
   pure (promise, tac)
 
 def asyncRunTactic (tactic : TacticM Unit) (cancelTk? : Option IO.CancelToken := none)
-  (prio : Task.Priority := Task.Priority.default) :
+  (prio : Task.Priority := Task.Priority.default) (inlineFreshProofs := true) :
   TacticM (IO.Promise (Option Expr)) := do
-  let (promise, tactic) ← wrapTactic (fun () => tactic) cancelTk?
+  let (promise, tactic) ← wrapTactic (fun () => tactic) cancelTk? inlineFreshProofs
   let task ← BaseIO.asTask (tactic ()) prio
   Core.logSnapshotTask { stx? := none, task := task, cancelTk? := cancelTk? }
   pure promise
 
 /- Run `tac` on the current goals in parallel -/
 def asyncRunTacticOnGoals (tac : TacticM Unit) (mvarIds : List MVarId)
-  (cancelTk? : Option IO.CancelToken := none) (prio : Task.Priority := Task.Priority.default) :
+  (cancelTk? : Option IO.CancelToken := none) (prio : Task.Priority := Task.Priority.default)
+  (inlineFreshProofs : Bool := true) :
   TacticM (Array (IO.Promise (Option Expr))) := do
   let mut results := #[]
   -- Create tasks
   for mvarId in mvarIds do
     unless (← mvarId.isAssigned) do
       setGoals [mvarId]
-      results := results.push (← asyncRunTactic tac cancelTk? prio)
+      results := results.push (← asyncRunTactic tac cancelTk? prio inlineFreshProofs)
   pure results
 
 /- Run `tac` on the current goals in parallel -/
-def allGoalsAsync (tac : TacticM Unit) : TacticM Unit := do
+def allGoalsAsync (tac : TacticM Unit)
+  (cancelTk? : Option IO.CancelToken := none)
+  (prio : Task.Priority := Task.Priority.default)
+  (inlineFreshProofs : Bool := true) :
+  TacticM Unit := do
   let mvarIds ← getGoals
-  let promises ← asyncRunTacticOnGoals tac mvarIds
+  let promises ← asyncRunTacticOnGoals tac mvarIds cancelTk? prio inlineFreshProofs
   -- Wait for the tasks
   let mut unsolved := #[]
   for (mvarId, promise) in List.zip mvarIds promises.toList do
