@@ -251,10 +251,6 @@ end Methods
 inductive Location where
   /-- Apply the tactic everywhere. Same as `Location.wildcard` -/
   | wildcard
-  /-- Apply the tactic everywhere, including in the variable types (i.e., in
-      assumptions which are not propositions).
-  --/
-  | wildcard_dep
   /-- Same as Location -/
   | targets (hypotheses : Array FVarId) (type : Bool)
 
@@ -676,14 +672,17 @@ def listTryPopHead (ls : List α) : Option α × List α :=
    If `ids` is not empty, we use it to name the introduced variables. We
    transmit the stripped expression and the remaining ids to the continuation.
  -/
-partial def splitAllExistsTac [Inhabited α] (h : Expr) (ids : List (Option Name)) (k : Expr → List (Option Name) → TacticM α) : TacticM α := do
-  if isExists (← inferType h) then do
-    let (optId, ids) :=
-      match ids with
-      | [] => (none, [])
-      | x :: ids => (x, ids)
-    splitExistsTac h optId (fun _ body => splitAllExistsTac body ids k)
-  else k h ids
+partial def splitAllExistsTac [Inhabited α] (h : Expr) (ids : List (Option Name))
+  (k : Array Expr → Expr → List (Option Name) → TacticM α) : TacticM α := do
+  let rec run (fvars : Array Expr) h ids := do
+    if isExists (← inferType h) then do
+      let (optId, ids) :=
+        match ids with
+        | [] => (none, [])
+        | x :: ids => (x, ids)
+      splitExistsTac h optId (fun fvar body => run (fvars.push fvar) body ids)
+    else k fvars h ids
+  run #[] h ids
 
 -- Tactic to split on a conjunction.
 def splitConjTac (h : Expr) (optIds : Option (Name × Name)) (k : Expr → Expr → TacticM α)  : TacticM α := do
@@ -775,7 +774,7 @@ elab "split_existsl" " at " n:ident : tactic => do
   withMainContext do
   let decl ← Lean.Meta.getLocalDeclFromUserName n.getId
   let fvar := mkFVar decl.fvarId
-  splitAllExistsTac fvar [] (fun _ _ => pure ())
+  splitAllExistsTac fvar [] (fun _ _ _ => do pure ())
 
 example (h : a ∧ b) : a := by
   split_conj at h
@@ -886,7 +885,6 @@ def normCastAt (loc : Location) : TacticM (Option (Array (FVarId))) := do
       | some id => fvarIds := fvarIds.push id
       | none => return none
     return some fvarIds
-  | .wildcard_dep => throwError "Unimplemented: normCastAt wildcarp_dep"
 
 @[inline] def tryLiftMetaTactic1 (tactic : MVarId → MetaM (Option MVarId)) (msg : String) : TacticM Unit :=
   withMainContext do

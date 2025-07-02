@@ -177,7 +177,6 @@ def condSimpTacPreprocess (config : CondSimpTacConfig) (hypsArgs args : CondSimp
   pure (some { args, toClear, hypsToUse, state, oldAsms, newAsms, additionalSimpThms })
 
 def condSimpTacCore
-  (tacName : String)
   (simpConfig : Simp.Config)
   (doFirstSimp : Bool)
   (loc : Utils.Location)
@@ -189,7 +188,6 @@ def condSimpTacCore
   let loc ← do
     match loc with
     | .wildcard => pure (Utils.Location.targets oldAsms true)
-    | .wildcard_dep => throwError "Unreachable"
     | .targets hyps type => pure (Utils.Location.targets hyps type)
   let nloc ←
     if doFirstSimp then
@@ -198,7 +196,6 @@ def condSimpTacCore
       | some freshFvarIds =>
         match loc with
         | .wildcard => pure (Utils.Location.targets freshFvarIds true)
-        | .wildcard_dep => throwError "{tacName} does not support using location `Utils.Location.wildcard_dep`"
         | .targets _ type => pure (Utils.Location.targets freshFvarIds type)
     else pure loc
   traceGoalWithNode `ScalarTac "Goal after simplifying"
@@ -218,7 +215,7 @@ def condSimpTacClear (res : PreprocessResult) : TacticM Unit := do
 
 /-- A helper to define tactics which perform conditional simplifications with `scalar_tac` as a discharger. -/
 def condSimpTac
-  (tacName : String) (config : CondSimpTacConfig)
+  (config : CondSimpTacConfig)
   (simpConfig : Simp.Config) (hypsArgs args : CondSimpArgs)
   (addSimpThms : TacticM (Array FVarId)) (doFirstSimp : Bool)
   (loc : Utils.Location) : TacticM Unit := do
@@ -229,7 +226,7 @@ def condSimpTac
     condSimpTacPreprocess config hypsArgs args addSimpThms
     | trace[ScalarTac] "Goal proved through preprocessing!"; return -- goal proved
   /- Simplify the targets (note that we preserve the new assumptions for `scalar_tac`) -/
-  let some _ ← condSimpTacCore tacName simpConfig doFirstSimp loc res
+  let some _ ← condSimpTacCore simpConfig doFirstSimp loc res
     | trace[ScalarTac] "Goal proved!"; return -- goal proved
   /- Clear the additional assumptions -/
   condSimpTacClear res

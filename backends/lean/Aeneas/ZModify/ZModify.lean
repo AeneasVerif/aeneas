@@ -68,7 +68,7 @@ def zmodifyTac (config : Config)
       hypsToUse := args.hypsToUse,
     }
   let config := { nonLin := config.nonLin, saturationPasses := config.saturationPasses }
-  ScalarTac.condSimpTac "zmodify" config {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true} hypsArgs args addSimpThms false loc
+  ScalarTac.condSimpTac config {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true} hypsArgs args addSimpThms false loc
 
 syntax (name := zmodify) "zmodify" Parser.Tactic.optConfig ("to" term)? ("[" (term<|>"*"),* "]")? (location)? : tactic
 

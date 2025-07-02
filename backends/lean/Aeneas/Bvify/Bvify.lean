@@ -297,7 +297,7 @@ def bvifyTac (config : Config) (n : Expr) (loc : Utils.Location) : TacticM Unit 
       simprocs := #[← bvifySimprocExt.getSimprocs, ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs]
     }
   let config := { nonLin := config.nonLin, saturationPasses := config.saturationPasses }
-  ScalarTac.condSimpTac "bvify" config bvifySimpConfig hypsArgs args (bvifyAddSimpThms n) true loc
+  ScalarTac.condSimpTac config bvifySimpConfig hypsArgs args (bvifyAddSimpThms n) true loc
 
 syntax (name := bvify) "bvify " colGt Parser.Tactic.optConfig term (location)? : tactic
 

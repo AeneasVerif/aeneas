@@ -29,7 +29,7 @@ def simpIfsTac (config : ScalarTac.CondSimpTacConfig)
       addSimpThms := args.addSimpThms,
       hypsToUse := args.hypsToUse,
     }
-  ScalarTac.condSimpTac "simp_ifs" config {maxDischargeDepth := 2, failIfUnchanged := false} hypsArgs args addSimpThms false loc
+  ScalarTac.condSimpTac config {maxDischargeDepth := 2, failIfUnchanged := false} hypsArgs args addSimpThms false loc
 
 syntax (name := simp_ifs) "simp_ifs" Parser.Tactic.optConfig ("[" term,* "]")? (location)? : tactic
 

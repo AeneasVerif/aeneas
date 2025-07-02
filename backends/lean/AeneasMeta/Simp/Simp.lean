@@ -105,15 +105,6 @@ def customSimpLocation (ctx : Simp.Context) (simprocs : Simp.SimprocsArray)
     -- Simply call the regular simpLocation
     withMainContext do
       go (← (← getMainGoal).getNondepPropHyps) (simplifyTarget := true)
-  | .wildcard_dep =>
-    -- Custom behavior
-    withMainContext do
-      -- Lookup *all* the declarations
-      let lctx ← Lean.MonadLCtx.getLCtx
-      let decls ← lctx.getDecls
-      let tgts := (decls.map (fun d => d.fvarId)).toArray
-      -- Call the regular simpLocation.go
-      go tgts (simplifyTarget := true)
 where
   go (fvarIdsToSimp : Array FVarId) (simplifyTarget : Bool) : TacticM (Option (Array FVarId) × Simp.Stats) := do
     let mvarId ← getMainGoal
@@ -143,10 +134,32 @@ def simpAt (simpOnly : Bool) (config : Simp.Config) (args : SimpArgs) (loc : Uti
   -- Apply the simplifier
   pure ((← customSimpLocation ctx simprocs (discharge? := .none) loc).fst)
 
+/- Adapted from `Lean.Elab.Tactic.dsimpLocation` so that:
+   - we can use our own `Location`
+-/
+def dsimpLocation (ctx : Simp.Context) (simprocs : Simp.SimprocsArray) (loc : Utils.Location) : TacticM Unit := do
+  match loc with
+  | .targets fvarIds simplifyTarget =>
+    withMainContext do
+    go fvarIds simplifyTarget
+  | .wildcard =>
+    withMainContext do
+      go (← (← getMainGoal).getNondepPropHyps) (simplifyTarget := true)
+where
+  go (fvarIdsToSimp : Array FVarId) (simplifyTarget : Bool) : TacticM Unit := withSimpDiagnostics do
+    let mvarId ← getMainGoal
+    let (result?, stats) ← dsimpGoal mvarId ctx simprocs (simplifyTarget := simplifyTarget) (fvarIdsToSimp := fvarIdsToSimp)
+    match result? with
+    | none => replaceMainGoal []
+    | some mvarId => replaceMainGoal [mvarId]
+    if tactic.simp.trace.get (← getOptions) then
+      mvarId.withContext <| traceSimpCall (← getRef) stats.usedTheorems
+    return stats.diag
+
 /- Call the dsimp tactic.
    TODO: update to return the fresh fvar ids.
 -/
-def dsimpAt (simpOnly : Bool) (config : Simp.Config) (args : SimpArgs) (loc : Location) :
+def dsimpAt (simpOnly : Bool) (config : Simp.Config) (args : SimpArgs) (loc : Utils.Location) :
   TacticM Unit := do
   withMainContext do
   withTraceNode `Simp (fun _ => pure m!"dsimpAt") do

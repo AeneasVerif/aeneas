@@ -207,7 +207,7 @@ def tryMatch (args : Args) (fExpr : Expr) (th : Expr) :
 def splitExistsEqAndPost (args : Args) (thAsm : Expr) :
   TacticM (Option MainGoal) := do
   withTraceNode `Progress (fun _ => pure m!"splitExistsEqAndPost") do
-  splitAllExistsTac thAsm args.ids.toList fun h ids => do
+  splitAllExistsTac thAsm args.ids.toList fun fvarIds h ids => do
   /- Introduce the pretty equality if the user requests it.
       We take care of introducing it *before* splitting the post-conditions, so that those appear
       after it.
@@ -267,62 +267,60 @@ def splitExistsEqAndPost (args : Args) (thAsm : Expr) :
       {simpThms := #[← progressSimpExt.getTheorems], hypsToUse := #[hEq.fvarId!]} (.targets #[] true)
   /- It may happen that at this point the goal is already solved (though this is rare)
       TODO: not sure this is the best way of checking it -/
-  if r.isNone then
-    trace[Progress] "The main goal was solved!"
-    pure none
-  else
-    traceGoalWithNode "goal after applying the eq and simplifying the binds"
-    -- TODO: remove this? (some types get unfolded too much: we "fold" them back)
-    tryTac (do
-      withTraceNode `Progress (fun _ => pure m!"simpAt: folding back scalar types") do
-      let _ ← Simp.simpAt true {} {addSimpThms := scalar_eqs} .wildcard_dep)
-    traceGoalWithNode "goal after folding back scalar types"
-    -- Clear the equality, unless the user requests not to do so
-    if args.keep.isSome then pure ()
-    else do
-      let mgoal ← getMainGoal
-      let mgoal ← mgoal.tryClear hEq.fvarId!
-      setGoals [mgoal]
-    withMainContext do
-    withTraceNode `Progress (fun _ => pure m!"Unsolved goals") do trace[Progress] "Unsolved goals: {← getUnsolvedGoals}"
-    traceGoalWithNode "Goal after clearing the equality"
-    -- Continue splitting following the post following the user's instructions
-    match hPost with
-    | none =>
-      -- Sanity check
-      if ¬ ids.isEmpty then
-        logWarning m!"Too many ids provided ({ids}): there is no postcondition to split"
-      trace[Progress] "No post to split"
-      pure (some { goal := ← getMainGoal, posts := #[]})
-    | some hPost => do
-      trace[Progress] "Post to split: {hPost}"
-      let rec splitPostWithIds (prevId : Name) (hPosts : List FVarId) (hPost : Expr) (ids0 : List (Option Name)) :
-        TacticM (Array FVarId) := do
-        match ids0 with
-        | [] =>
-          /- We used all the user provided ids.
-              Split the remaining conjunctions by using fresh ids if the user
-              instructed to fully split the post-condition, otherwise stop -/
-          if args.splitPost then
-            splitFullConjTac true hPost (λ asms => do
-              pure (hPosts.reverse ++ (asms.map (fun x => x.fvarId!))).toArray)
-          else pure (hPost.fvarId! :: hPosts).reverse.toArray
-        | nid :: ids => do
-          trace[Progress] "Splitting post: {← inferType hPost}"
-          -- Split
-          let nid ← do
-            match nid with
-            | none => mkFreshAnonPropUserName
-            | some nid => pure nid
-          trace[Progress] "\n- prevId: {prevId}\n- nid: {nid}\n- remaining ids: {ids}"
-          if ← isConj (← inferType hPost) then
-            splitConjTac hPost (some (prevId, nid)) (λ nhAsm nhPost => splitPostWithIds nid (nhAsm.fvarId! :: hPosts) nhPost ids)
-          else
-          logWarning m!"Too many ids provided ({ids0}) not enough conjuncts to split in the postcondition"
-          pure (hPost.fvarId! :: hPosts).reverse.toArray
-      let curPostId := (← hPost.fvarId!.getDecl).userName
-      let posts ← splitPostWithIds curPostId [] hPost ids
-      pure (some ⟨ ← getMainGoal, posts⟩)
+  if r.isNone then trace[Progress] "The main goal was solved!"; return none
+  traceGoalWithNode "goal after applying the eq and simplifying the binds"
+  -- TODO: remove this? (some types get unfolded too much: we "fold" them back)
+  withTraceNode `Progress (fun _ => pure m!"simpAt: folding back scalar types") do
+    Simp.dsimpAt true {implicitDefEqProofs := true, failIfUnchanged := false} {addSimpThms := scalar_eqs} (.targets (fvarIds.map Expr.fvarId!) false)
+  if (← getUnsolvedGoals).isEmpty then trace[Progress] "The main goal was solved!"; return none
+  traceGoalWithNode "goal after folding back scalar types"
+  -- Clear the equality, unless the user requests not to do so
+  if args.keep.isSome then pure ()
+  else do
+    let mgoal ← getMainGoal
+    let mgoal ← mgoal.tryClear hEq.fvarId!
+    setGoals [mgoal]
+  withMainContext do
+  withTraceNode `Progress (fun _ => pure m!"Unsolved goals") do trace[Progress] "Unsolved goals: {← getUnsolvedGoals}"
+  traceGoalWithNode "Goal after clearing the equality"
+  -- Continue splitting following the post following the user's instructions
+  match hPost with
+  | none =>
+    -- Sanity check
+    if ¬ ids.isEmpty then
+      logWarning m!"Too many ids provided ({ids}): there is no postcondition to split"
+    trace[Progress] "No post to split"
+    pure (some { goal := ← getMainGoal, posts := #[]})
+  | some hPost => do
+    trace[Progress] "Post to split: {hPost}"
+    let rec splitPostWithIds (prevId : Name) (hPosts : List FVarId) (hPost : Expr) (ids0 : List (Option Name)) :
+      TacticM (Array FVarId) := do
+      match ids0 with
+      | [] =>
+        /- We used all the user provided ids.
+            Split the remaining conjunctions by using fresh ids if the user
+            instructed to fully split the post-condition, otherwise stop -/
+        if args.splitPost then
+          splitFullConjTac true hPost (λ asms => do
+            pure (hPosts.reverse ++ (asms.map (fun x => x.fvarId!))).toArray)
+        else pure (hPost.fvarId! :: hPosts).reverse.toArray
+      | nid :: ids => do
+        trace[Progress] "Splitting post: {← inferType hPost}"
+        -- Split
+        let nid ← do
+          match nid with
+          | none => mkFreshAnonPropUserName
+          | some nid => pure nid
+        trace[Progress] "\n- prevId: {prevId}\n- nid: {nid}\n- remaining ids: {ids}"
+        if ← isConj (← inferType hPost) then
+          splitConjTac hPost (some (prevId, nid)) (λ nhAsm nhPost => splitPostWithIds nid (nhAsm.fvarId! :: hPosts) nhPost ids)
+        else
+        logWarning m!"Too many ids provided ({ids0}) not enough conjuncts to split in the postcondition"
+        pure (hPost.fvarId! :: hPosts).reverse.toArray
+    let curPostId := (← hPost.fvarId!.getDecl).userName
+    let posts ← splitPostWithIds curPostId [] hPost ids
+    pure (some ⟨ ← getMainGoal, posts⟩)
+
 
 /-- Attempt to solve the preconditions.
 
