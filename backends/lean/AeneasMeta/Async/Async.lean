@@ -76,13 +76,7 @@ def wrapTactic {α : Type} (tactic : α → TacticM Unit) (cancelTk? : Option IO
           if result.hasExprMVar then
             promise.resolve none
           else
-            /- Inline the theorems introduced by `omega`. Note that doing this
-               has an impact on the performance, but I would expect it to be
-               compensated by the fact that: 1. we do this in parallel,
-               2. checking the final proof term is also done asynchronously
-               and should not have an impact on the time it takes to refresh
-               the goals displayed to the user (correct?).
-             -/
+            /- Inline the proof of auxiliary theorems introduced by tactics like `omega`. -/
             let result ← if inlineProofs then inlineFreshProofs env0 result else pure result
             promise.resolve (some result)
         else promise.resolve none
@@ -90,41 +84,39 @@ def wrapTactic {α : Type} (tactic : α → TacticM Unit) (cancelTk? : Option IO
   --------------------------------------------------------------------------
   let metaCtx ← readThe Meta.Context
   let metaState ← getThe Meta.State
-  let tac (x : α) := do
-    MetaM.run' (ctx := metaCtx) (s := metaState)
-    <| Term.TermElabM.run' (runTac? x) ctx s
-  let tac ← Lean.Core.wrapAsyncAsSnapshot tac cancelTk?
+  let tac ← Lean.Elab.Term.wrapAsyncAsSnapshot runTac? cancelTk?
   pure (promise, tac)
 
 def asyncRunTactic (tactic : TacticM Unit) (cancelTk? : Option IO.CancelToken := none)
-  (prio : Task.Priority := Task.Priority.default) (inlineFreshProofs := true) :
+  (prio : Task.Priority := Task.Priority.default) (inlineFreshProofs := true)
+  (stx? : Option Syntax := none) :
   TacticM (IO.Promise (Option Expr)) := do
   let (promise, tactic) ← wrapTactic (fun () => tactic) cancelTk? inlineFreshProofs
   let task ← BaseIO.asTask (tactic ()) prio
-  Core.logSnapshotTask { stx? := none, task := task, cancelTk? := cancelTk? }
+  Core.logSnapshotTask { stx?, task := task, cancelTk? := cancelTk? }
   pure promise
 
 /- Run `tac` on the current goals in parallel -/
 def asyncRunTacticOnGoals (tac : TacticM Unit) (mvarIds : List MVarId)
   (cancelTk? : Option IO.CancelToken := none) (prio : Task.Priority := Task.Priority.default)
-  (inlineFreshProofs : Bool := true) :
+  (inlineFreshProofs : Bool := true) (stx? : Option Syntax := none) :
   TacticM (Array (IO.Promise (Option Expr))) := do
   let mut results := #[]
   -- Create tasks
   for mvarId in mvarIds do
     unless (← mvarId.isAssigned) do
       setGoals [mvarId]
-      results := results.push (← asyncRunTactic tac cancelTk? prio inlineFreshProofs)
+      results := results.push (← asyncRunTactic tac cancelTk? prio inlineFreshProofs stx?)
   pure results
 
 /- Run `tac` on the current goals in parallel -/
 def allGoalsAsync (tac : TacticM Unit)
   (cancelTk? : Option IO.CancelToken := none)
   (prio : Task.Priority := Task.Priority.default)
-  (inlineFreshProofs : Bool := true) :
+  (inlineFreshProofs : Bool := true) (stx? : Option Syntax := none) :
   TacticM Unit := do
   let mvarIds ← getGoals
-  let promises ← asyncRunTacticOnGoals tac mvarIds cancelTk? prio inlineFreshProofs
+  let promises ← asyncRunTacticOnGoals tac mvarIds cancelTk? prio inlineFreshProofs stx?
   -- Wait for the tasks
   let mut unsolved := #[]
   for (mvarId, promise) in List.zip mvarIds promises.toList do

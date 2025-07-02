@@ -146,6 +146,8 @@ structure Args where
   assumTac : TacticM Unit
   /- Tactic to use to solve the preconditions -/
   solvePreconditionTac : TacticM Unit
+  /- Syntax of the tactic provided by the user to solve the remaining proof obligations -/
+  byTacSyntax : Option Syntax
 
 /-- Attempt to match a given theorem with the monadic call in the goal,
     and introduce the instantiated theorem in the context if it succeeds.
@@ -587,7 +589,7 @@ def parseProgressArgs
 | _ => throwUnsupportedSyntax
 
 def evalProgressCore (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Array (Option Name))
-  (byTac : Option Syntax.Tactic)
+  (byTacStx : Option Syntax.Tactic)
   : TacticM Stats := do
   withTraceNode `Progress (fun _ => pure m!"evalProgress") do
   /- Simplify the goal -- TODO: this might close it: we need to check that and abort if necessary,
@@ -624,11 +626,12 @@ def evalProgressCore (keep keepPretty : Option Name) (withArg: Option Expr) (ids
     withTraceNode `Progress (fun _ => pure m!"Attempting to solve with `singleAssumptionTac`") do
     singleAssumptionTacCore singleAssumptionTacDtree
   /- Also use the tactic provided by the user, if there is -/
-  let byTac := match byTac with
+  let byTac := match byTacStx with
     | none => []
-    | some byTac => [
-      withTraceNode `Progress (fun _ => pure m!"Attempting to solve with the user tactic: `{byTac}`") do
-      evalTactic byTac]
+    | some tacticCode => [
+      withTraceNode `Progress (fun _ => pure m!"Attempting to solve with the user tactic: `{byTacStx}`") do
+      evalTactic tacticCode
+      ]
   let solvePreconditionTac :=
     withMainContext do
     withTraceNode `Progress (fun _ => pure m!"Trying to solve a precondition") do
@@ -639,7 +642,7 @@ def evalProgressCore (keep keepPretty : Option Name) (withArg: Option Expr) (ids
     catch _ =>
       trace[Progress] "Precondition not solved"
   let args : Args := {
-    keep, keepPretty, ids, splitPost, assumTac := customAssumTac, solvePreconditionTac
+    keep, keepPretty, ids, splitPost, assumTac := customAssumTac, solvePreconditionTac, byTacSyntax := byTacStx
   }
   let (goals, usedTheorem) ← progressAsmsOrLookupTheorem args withArg
   trace[Progress] "Progress done"

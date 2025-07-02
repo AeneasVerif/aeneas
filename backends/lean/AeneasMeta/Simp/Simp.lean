@@ -4,6 +4,8 @@ namespace Aeneas.Simp
 
 open Lean Meta Elab Tactic
 
+initialize registerTraceClass `Simp
+
 structure SimpArgs where
   simprocs : Simp.SimprocsArray := #[]
   simpThms : Array SimpTheorems := #[]
