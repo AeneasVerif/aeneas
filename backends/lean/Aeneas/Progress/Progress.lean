@@ -386,9 +386,10 @@ def progressWith (args : Args) (fExpr : Expr) (th : Expr) :
   let (newGoals, thAsm) ← tryMatch args fExpr th
   withMainContext do
   traceGoalWithNode "current goal"
-  -- Destruct the existential quantifiers and split the conjunctions
-  let mainGoal ← splitExistsEqAndPost args thAsm
-  -- Split between the goals which are propositions and the others
+  let mainGoal ← getMainGoal
+  /- Process the pre-conditions as soon as possible (we want to start processing them
+     in parallel) -/
+  -- Split between the sub-goals which are propositions and the others
   let newGoals ← newGoals.filterM fun mvar => not <$> mvar.isAssigned
   withTraceNode `Progress (fun _ => pure m!"new goals") do trace[Progress] "{newGoals}"
   let (newPropGoals, newNonPropGoals) ←
@@ -398,6 +399,10 @@ def progressWith (args : Args) (fExpr : Expr) (th : Expr) :
     trace[Progress] "{← newNonPropGoals.mapM fun mvarId => do pure ((← mvarId.getDecl).userName, mvarId)}"
   -- Attempt to solve the goals which are propositions
   let newPropGoals ← trySolvePreconditions args newPropGoals
+  /- Process the main goal -/
+  -- Destruct the existential quantifiers and split the conjunctions
+  setGoals [mainGoal]
+  let mainGoal ← splitExistsEqAndPost args thAsm
   /- Simplify the post-conditions in the main goal - note that we waited until now
       because by solving the preconditions we may have instantiated meta-variables.
       We also simplify the goal again (to simplify let-bindings, etc.) -/
