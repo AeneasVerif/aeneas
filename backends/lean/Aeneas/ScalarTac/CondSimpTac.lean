@@ -98,8 +98,10 @@ def condSimpTacSimp (config : Simp.Config) (args : CondSimpArgs) (loc : Utils.Lo
   | some (state, asms) =>
     trace[ScalarTac] "scalarTac assumptions: {asms.map Expr.fvar}"
     /- Note that when calling `scalar_tac` we saturate only by looking at the target: we have
-       already saturated by looking at the assumptions (we do this once and for all beforehand) -/
-    let dischargeWrapper ← Simp.tacticToDischarge (incrScalarTac {saturateAssumptions := false} state toClear asms)
+       already saturated by looking at the assumptions (we do this once and for all beforehand)
+       TODO: introducing an auxiliary theorem leads to failures.
+     -/
+    let dischargeWrapper ← Simp.tacticToDischarge (incrScalarTac {saturateAssumptions := false, auxTheorem := false} state toClear asms)
     dischargeWrapper.with fun discharge? => do
       -- Initialize the simp context
       let (ctx, simprocs) ← Simp.mkSimpCtx true config .simp simpArgs

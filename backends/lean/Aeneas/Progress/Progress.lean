@@ -345,7 +345,7 @@ def trySolvePreconditions (args : Args) (newPropGoals : List MVarId) : TacticM (
   /- Retrieve the unsolved preconditions - make sure we recover them in the original order -/
   let goals ← newPropGoals.filterMapM (fun g => do if ← g.isAssigned then pure none else pure (some g))
   /- Then attempt to solve the remaining preconditions *asynchronously* -/
-  let promises ← Async.asyncRunTacticOnGoals args.solvePreconditionTac goals (cancelTk? := ← IO.CancelToken.new)
+  let promises ← Async.asyncRunTacticOnGoals args.solvePreconditionTac goals (cancelTk? := ← IO.CancelToken.new) (inlineFreshProofs := false)
   /- Group the promises with their corresponding meta-variables -/
   pure (List.zip goals promises.toList)
 
@@ -611,7 +611,7 @@ def evalProgressCore (keep keepPretty : Option Name) (withArg: Option Expr) (ids
     if ← ScalarTac.goalIsLinearInt then
       /- Also: we don't try to split the goal if it is a conjunction
          (it shouldn't be), but we split the disjunctions. -/
-      ScalarTac.scalarTac { split := false }
+      ScalarTac.scalarTac { split := false, auxTheorem := false }
     else
       throwError "Not a linear arithmetic goal"
   let simpLemmas ← Aeneas.ScalarTac.scalarTacSimpExt.getTheorems
@@ -628,13 +628,22 @@ def evalProgressCore (keep keepPretty : Option Name) (withArg: Option Expr) (ids
   let customAssumTac : TacticM Unit := do
     withTraceNode `Progress (fun _ => pure m!"Attempting to solve with `singleAssumptionTac`") do
     singleAssumptionTacCore singleAssumptionTacDtree
+  let env ← getEnv -- We need the original environment below
   /- Also use the tactic provided by the user, if there is -/
   let byTac := match byTacStx with
     | none => []
     | some tacticCode => [
       withTraceNode `Progress (fun _ => pure m!"Attempting to solve with the user tactic: `{byTacStx}`") do
+      /- It may happen that the tactic introduces auxiliary theorems to hide some proofs details: because
+         the environment containing those proofs will get discarded, we need to inline them -/
+      let g ← getMainGoal
+      g.withContext do
+      let type ← g.getType
+      let g' ← mkFreshExprSyntheticOpaqueMVar type
+      setGoals [g'.mvarId!]
       evalTactic tacticCode
-      ]
+      g.assign (← Async.inlineFreshProofs env (← instantiateMVarsProfiling g') (rec := true))
+    ]
   let solvePreconditionTac :=
     withMainContext do
     withTraceNode `Progress (fun _ => pure m!"Trying to solve a precondition") do
