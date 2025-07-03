@@ -660,7 +660,12 @@ def evalProgress (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Ar
   for (mvarId, proof) in goals.preconditions do
     match proof.get with
     | none => sgs := sgs.push mvarId
-    | some proof => mvarId.withContext do mvarId.assign proof
+    | some proof => mvarId.withContext do
+      -- Introduce an auxiliary theorem
+      let declName? ← Term.getDeclName?
+      mvarId.withContext do
+      let e ← mkAuxTheorem (prefix? := declName?) (← mvarId.getType) proof (zetaDelta := true)
+      mvarId.assign e
   let mainGoal := match goals.mainGoal with
     | none => []
     | some goal => [goal.goal]
