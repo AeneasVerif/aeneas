@@ -421,9 +421,9 @@ Arguments mkParentTrait1_t { _ }.
 
 (** Trait declaration: [traits::ChildTrait]
     Source: 'tests/src/traits.rs', lines 208:0-208:52 *)
-Record ChildTrait_t (Self : Type) (Self_Clause0_W : Type) := mkChildTrait_t {
+Record ChildTrait_t (Self : Type) (Self_Clause1_W : Type) := mkChildTrait_t {
   ChildTrait_tChildTrait_t_ParentTrait0Inst : ParentTrait0_t Self
-    Self_Clause0_W;
+    Self_Clause1_W;
   ChildTrait_tChildTrait_t_ParentTrait1Inst : ParentTrait1_t Self;
 }.
 
@@ -434,8 +434,8 @@ Arguments ChildTrait_tChildTrait_t_ParentTrait1Inst { _ } { _ } _.
 (** [traits::test_child_trait1]:
     Source: 'tests/src/traits.rs', lines 211:0-213:1 *)
 Definition test_child_trait1
-  {T : Type} {Clause1_Clause0_W : Type} (childTraitInst : ChildTrait_t T
-  Clause1_Clause0_W) (x : T) :
+  {T : Type} {Clause1_Clause1_W : Type} (childTraitInst : ChildTrait_t T
+  Clause1_Clause1_W) (x : T) :
   result string
   :=
   childTraitInst.(ChildTrait_tChildTrait_t_ParentTrait0Inst).(ParentTrait0_t_get_name)
@@ -445,9 +445,9 @@ Definition test_child_trait1
 (** [traits::test_child_trait2]:
     Source: 'tests/src/traits.rs', lines 215:0-217:1 *)
 Definition test_child_trait2
-  {T : Type} {Clause1_Clause0_W : Type} (childTraitInst : ChildTrait_t T
-  Clause1_Clause0_W) (x : T) :
-  result Clause1_Clause0_W
+  {T : Type} {Clause1_Clause1_W : Type} (childTraitInst : ChildTrait_t T
+  Clause1_Clause1_W) (x : T) :
+  result Clause1_Clause1_W
   :=
   childTraitInst.(ChildTrait_tChildTrait_t_ParentTrait0Inst).(ParentTrait0_t_get_w)
     x
@@ -524,10 +524,10 @@ Arguments mkWithTarget_t { _ } { _ }.
 
 (** Trait declaration: [traits::ParentTrait2]
     Source: 'tests/src/traits.rs', lines 258:0-260:1 *)
-Record ParentTrait2_t (Self : Type) (Self_U : Type) (Self_Clause1_Target :
+Record ParentTrait2_t (Self : Type) (Self_U : Type) (Self_Clause2_Target :
   Type) := mkParentTrait2_t {
   ParentTrait2_tParentTrait2_t_WithTargetInst : WithTarget_t Self_U
-    Self_Clause1_Target;
+    Self_Clause2_Target;
 }.
 
 Arguments mkParentTrait2_t { _ } { _ } { _ }.
@@ -535,11 +535,11 @@ Arguments ParentTrait2_tParentTrait2_t_WithTargetInst { _ } { _ } { _ } _.
 
 (** Trait declaration: [traits::ChildTrait2]
     Source: 'tests/src/traits.rs', lines 262:0-264:1 *)
-Record ChildTrait2_t (Self : Type) (Self_Clause0_U : Type)
-  (Self_Clause0_Clause1_Target : Type) := mkChildTrait2_t {
+Record ChildTrait2_t (Self : Type) (Self_Clause1_U : Type)
+  (Self_Clause1_Clause2_Target : Type) := mkChildTrait2_t {
   ChildTrait2_tChildTrait2_t_ParentTrait2Inst : ParentTrait2_t Self
-    Self_Clause0_U Self_Clause0_Clause1_Target;
-  ChildTrait2_t_convert : Self_Clause0_U -> result Self_Clause0_Clause1_Target;
+    Self_Clause1_U Self_Clause1_Clause2_Target;
+  ChildTrait2_t_convert : Self_Clause1_U -> result Self_Clause1_Clause2_Target;
 }.
 
 Arguments mkChildTrait2_t { _ } { _ } { _ }.
@@ -580,10 +580,10 @@ Arguments CFnOnce_t_call_once { _ } { _ } { _ } _.
 
 (** Trait declaration: [traits::CFnMut]
     Source: 'tests/src/traits.rs', lines 294:0-296:1 *)
-Record CFnMut_t (Self : Type) (Args : Type) (Self_Clause0_Output : Type)
+Record CFnMut_t (Self : Type) (Args : Type) (Self_Clause1_Output : Type)
   := mkCFnMut_t {
-  CFnMut_tCFnMut_t_CFnOnceInst : CFnOnce_t Self Args Self_Clause0_Output;
-  CFnMut_t_call_mut : Self -> Args -> result (Self_Clause0_Output * Self);
+  CFnMut_tCFnMut_t_CFnOnceInst : CFnOnce_t Self Args Self_Clause1_Output;
+  CFnMut_t_call_mut : Self -> Args -> result (Self_Clause1_Output * Self);
 }.
 
 Arguments mkCFnMut_t { _ } { _ } { _ }.
@@ -592,10 +592,10 @@ Arguments CFnMut_t_call_mut { _ } { _ } { _ } _.
 
 (** Trait declaration: [traits::CFn]
     Source: 'tests/src/traits.rs', lines 298:0-300:1 *)
-Record CFn_t (Self : Type) (Args : Type) (Self_Clause0_Clause0_Output : Type)
+Record CFn_t (Self : Type) (Args : Type) (Self_Clause1_Clause1_Output : Type)
   := mkCFn_t {
-  CFn_tCFn_t_CFnMutInst : CFnMut_t Self Args Self_Clause0_Clause0_Output;
-  CFn_t_call : Self -> Args -> result Self_Clause0_Clause0_Output;
+  CFn_tCFn_t_CFnMutInst : CFnMut_t Self Args Self_Clause1_Clause1_Output;
+  CFn_t_call : Self -> Args -> result Self_Clause1_Clause1_Output;
 }.
 
 Arguments mkCFn_t { _ } { _ } { _ }.

@@ -175,10 +175,12 @@ def makeAttribute (mapName attributeName : Name) (elabAttribute : Syntax → Met
       attrIgnoreAuxDef thName (pure ()) do
         -- Lookup the theorem
         let env ← getEnv
-        let thDecl := env.constants.find! thName
+        let some thDecl := env.findAsync? thName
+          | throwError "Could not find theorem {thName}"
         -- Analyze the theorem
         let (key, rule) ← MetaM.run' do
-          let ty := thDecl.type
+          let sig := thDecl.sig.get
+          let ty := sig.type
           /- Strip the quantifiers.
 
              We do this before elaborating the pattern because we need the universally quantified variables

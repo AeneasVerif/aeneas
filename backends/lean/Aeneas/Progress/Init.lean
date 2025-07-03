@@ -217,11 +217,13 @@ private def saveProgressSpecFromThm (ext : Extension) (attrKind : AttributeKind)
   -- Ignore some auxiliary definitions (see the comments for attrIgnoreMutRec)
   attrIgnoreAuxDef thName (pure ()) do
     trace[Progress] "Registering `progress` theorem for {thName}"
-    let thDecl := env.constants.find! thName
+    let some thDecl := env.findAsync? thName
+      | throwError "Could not find theorem {thName}"
+    let type := thDecl.sig.get.type
     let fKey ← MetaM.run' (do
-      trace[Progress] "Theorem: {thDecl.type}"
+      trace[Progress] "Theorem: {type}"
       -- Normalize to eliminate the let-bindings
-      let ty ← normalizeLetBindings thDecl.type
+      let ty ← normalizeLetBindings type
       trace[Progress] "Theorem after normalization (to eliminate the let bindings): {ty}"
       let fExpr ← getProgressSpecFunArgsExpr false ty
       trace[Progress] "Registering spec theorem for expr: {fExpr}"
@@ -366,9 +368,11 @@ def reduceProdProjs (e : Expr) : MetaM Expr := do
 def liftThm (stx pat : Syntax) (n : Name) (suffix : String := "progress_spec") : MetaM Name := do
   trace[Progress] "Name: {n}"
   let env ← getEnv
-  let decl := env.constants.find! n
+  let some decl := env.findAsync? n
+    | throwError "Could not find theorem {n}"
+  let sig := decl.sig.get
   /- Strip the quantifiers before elaborating the pattern -/
-  forallTelescope decl.type.consumeMData fun fvars thm0 => do
+  forallTelescope sig.type.consumeMData fun fvars thm0 => do
   let (pat, _) ← Elab.Term.elabTerm pat none |>.run
   trace[Progress] "Elaborated pattern: {pat}"
   /- -/
@@ -470,7 +474,7 @@ def liftThm (stx pat : Syntax) (n : Name) (suffix : String := "progress_spec") :
   let thm := mkApp thm pat
   trace[Progress] "Theorem after introducing the scrutinee: {thm} :\n{← inferType thm}"
   /- Apply to the pure theorem (the expression inside the match is a function which expects to receive this theorem) -/
-  let pureThm := mkAppN (.const decl.name (List.map Level.param decl.levelParams)) fvars
+  let pureThm := mkAppN (.const decl.name (List.map Level.param sig.levelParams)) fvars
   let thm := mkAppN thm #[pureThm]
   trace[Progress] "Theorem after introducing the matches and the app: {thm} :\n{← inferType thm}"
   let thm ← mkLambdaFVars fvars thm
@@ -484,7 +488,7 @@ def liftThm (stx pat : Syntax) (n : Name) (suffix : String := "progress_spec") :
   let name := Name.str decl.name suffix
   let auxDecl : TheoremVal := {
     name
-    levelParams := decl.levelParams
+    levelParams := sig.levelParams
     type := thmType
     value := thm
   }
@@ -611,10 +615,12 @@ structure ProgressPureDefSpecAttr where
 def mkProgressPureDefThm (stx : Syntax) (pat : Option Syntax) (n : Name) (suffix : String := "progress_spec") : MetaM Name := do
   trace[Progress] "Name: {n}"
   let env ← getEnv
-  let decl := env.constants.find! n
+  let some decl := env.findAsync? n
+    | throwError "Could not find theorem {n}"
+  let sig := decl.sig.get
   /- Strip the quantifiers before elaborating the pattern -/
-  forallTelescope decl.type.consumeMData fun fvars _ => do
-  let declTerm := mkAppN (.const decl.name (List.map Level.param decl.levelParams)) fvars
+  forallTelescope sig.type.consumeMData fun fvars _ => do
+  let declTerm := mkAppN (.const decl.name (List.map Level.param sig.levelParams)) fvars
   /- Elaborate the pattern, if there is -/
   let elabDecomposePat (basename : String) (k : Expr → Array Expr → MetaM Name) : MetaM Name := do
     match pat with
@@ -707,7 +713,7 @@ def mkProgressPureDefThm (stx : Syntax) (pat : Option Syntax) (n : Name) (suffix
   let name := Name.str decl.name suffix
   let auxDecl : TheoremVal := {
     name
-    levelParams := decl.levelParams
+    levelParams := sig.levelParams
     type := thmType
     value := thm
   }

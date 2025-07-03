@@ -562,7 +562,7 @@ let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
         in
         let value = Z.sub x i.value in
         Ok { v with value = VLiteral (VScalar { value; int_ty }) }
-    | Neg, VLiteral (VScalar sv) -> (
+    | Neg OPanic, VLiteral (VScalar sv) -> (
         let i = Z.neg sv.value in
         match mk_scalar sv.int_ty i with
         | Error _ -> Error EPanic
@@ -687,7 +687,7 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
     match (unop, v.ty) with
     | Not, (TLiteral TBool as lty) -> lty
     | Not, (TLiteral (TInteger _) as lty) -> lty
-    | Neg, (TLiteral (TInteger _) as lty) -> lty
+    | Neg OPanic, (TLiteral (TInteger _) as lty) -> lty
     | Cast (CastScalar (_, tgt_ty)), _ -> TLiteral tgt_ty
     | Cast (CastUnsize (ty0, ty1)), _ ->
         (* If the following function succeeds, then it means the cast is well-formed
@@ -759,21 +759,26 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
             Ok
               ({ value = VLiteral (VBool b); ty = TLiteral TBool }
                 : typed_value)
-        | Div | Rem | Add | Sub | Mul | BitXor | BitAnd | BitOr -> (
+        | Div OPanic
+        | Rem OPanic
+        | Add OPanic
+        | Sub OPanic
+        | Mul OPanic
+        | BitXor | BitAnd | BitOr -> (
             (* The two operands must have the same type and the result is an integer *)
             sanity_check __FILE__ __LINE__ (sv1.int_ty = sv2.int_ty) span;
             let res : _ result =
               match binop with
-              | Div ->
+              | Div OPanic ->
                   if sv2.value = Z.zero then Error ()
                   else mk_scalar sv1.int_ty (Z.div sv1.value sv2.value)
-              | Rem ->
+              | Rem OPanic ->
                   (* See [https://github.com/ocaml/Zarith/blob/master/z.mli] *)
                   if sv2.value = Z.zero then Error ()
                   else mk_scalar sv1.int_ty (Z.rem sv1.value sv2.value)
-              | Add -> mk_scalar sv1.int_ty (Z.add sv1.value sv2.value)
-              | Sub -> mk_scalar sv1.int_ty (Z.sub sv1.value sv2.value)
-              | Mul -> mk_scalar sv1.int_ty (Z.mul sv1.value sv2.value)
+              | Add OPanic -> mk_scalar sv1.int_ty (Z.add sv1.value sv2.value)
+              | Sub OPanic -> mk_scalar sv1.int_ty (Z.sub sv1.value sv2.value)
+              | Mul OPanic -> mk_scalar sv1.int_ty (Z.mul sv1.value sv2.value)
               | BitXor -> raise Unimplemented
               | BitAnd -> raise Unimplemented
               | BitOr -> raise Unimplemented
@@ -833,26 +838,16 @@ let eval_binary_op_symbolic (config : config) (span : Meta.span) (binop : binop)
           | Lt | Le | Ge | Gt ->
               sanity_check __FILE__ __LINE__ (int_ty1 = int_ty2) span;
               TLiteral TBool
-          | Div
-          | Rem
-          | Add
-          | Sub
-          | Mul
-          | WrappingAdd
-          | WrappingSub
-          | WrappingMul
-          | BitXor
-          | BitAnd
-          | BitOr ->
+          | Div _ | Rem _ | Add _ | Sub _ | Mul _ | BitXor | BitAnd | BitOr ->
               sanity_check __FILE__ __LINE__ (int_ty1 = int_ty2) span;
               TLiteral (TInteger int_ty1)
           | Cmp ->
               sanity_check __FILE__ __LINE__ (int_ty1 = int_ty2) span;
               TLiteral (TInteger I8)
           (* These return `(int, bool)` / a pointer which isn't a literal type *)
-          | CheckedAdd | CheckedSub | CheckedMul | Offset ->
+          | AddChecked | SubChecked | MulChecked | Offset ->
               craise __FILE__ __LINE__ span "Unimplemented binary operation"
-          | Shl | Shr ->
+          | Shl _ | Shr _ ->
               (* The number of bits can be of a different integer type
                  than the operand *)
               TLiteral (TInteger int_ty1)
