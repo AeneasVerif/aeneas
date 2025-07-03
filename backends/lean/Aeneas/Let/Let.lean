@@ -63,7 +63,7 @@ example (x y z : Nat) (h0 : x + y = z) (h1 : x + y = 3) (_ : z ≤ 4) : x + y + 
   omega
 
 def transparent_refold (x : Name) (e : Expr) : TacticM Unit :=
-  withMainContext do
+  withMainContext do withTransparency .reducible do
   /- Retrieve the list of propositions in the context -/
   let ctx ← getLCtx
   let props ← (← ctx.getDecls).filterM fun x => isProp x.type
