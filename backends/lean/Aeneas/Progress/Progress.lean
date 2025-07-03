@@ -107,6 +107,25 @@ structure MainGoal where
   /-- The post-conditions introduced in the context -/
   posts : Array FVarId
 
+inductive OptTask α where
+| task (t : Task α)
+| none
+
+def OptTask.get (x : OptTask α) : Option α :=
+  match x with
+  | .task t => some t.get
+  | .none => .none
+
+def OptTask.map (f : α → β) (x : OptTask α) (prio : Task.Priority := Task.Priority.default) (sync : Bool := false) : OptTask β :=
+  match x with
+  | .task t => .task (t.map f prio sync)
+  | .none => .none
+
+def OptTask.bind (x : OptTask α) (f : α → Task β) (prio : Task.Priority := Task.Priority.default) (sync : Bool := false) : OptTask β :=
+  match x with
+  | .task t => .task (t.bind f prio sync)
+  | .none => .none
+
 structure Goals where
   /-- The variables for which we could not infer an instantiation -/
   unassignedVars : Array MVarId
@@ -115,7 +134,7 @@ structure Goals where
       if the tactic succeeds, the promise gets field with the proof that the meta-variable should get
       assigned to.
    -/
-  preconditions : Array (MVarId × Task (Option Expr))
+  preconditions : Array (MVarId × OptTask (Option Expr))
   /-- The main goal, if it was not proven -/
   mainGoal : Option MainGoal
 deriving Inhabited
@@ -127,6 +146,8 @@ attribute [progress_post_simps]
   Std.IScalar.toNat Std.UScalar.ofNat_val_eq Std.IScalar.ofInt_val_eq
 
 structure Args where
+  /-- Asynchronously solve the preconditions? -/
+  async : Bool
   /-- Should we preserve the monadic equality in the context?
 
      For instance, if making progress on: `let z ← x + y; ...`
@@ -331,7 +352,7 @@ def splitExistsEqAndPost (args : Args) (thAsm : Expr) :
       (this is a way of avoiding spurious instantiations). This helps with the second phase.
     - we then use the other tactic on the preconditions
  -/
-def trySolvePreconditions (args : Args) (newPropGoals : List MVarId) : TacticM (List (MVarId × IO.Promise (Option Expr))) := do
+def trySolvePreconditions (args : Args) (newPropGoals : List MVarId) : TacticM (List (MVarId × OptTask (Option Expr))) := do
   withTraceNode `Progress (fun _ => pure m!"trySolvePreconditions") do
   let ordPropGoals ←
     newPropGoals.mapM (fun g => do
@@ -345,9 +366,16 @@ def trySolvePreconditions (args : Args) (newPropGoals : List MVarId) : TacticM (
   /- Retrieve the unsolved preconditions - make sure we recover them in the original order -/
   let goals ← newPropGoals.filterMapM (fun g => do if ← g.isAssigned then pure none else pure (some g))
   /- Then attempt to solve the remaining preconditions *asynchronously* -/
-  let promises ← Async.asyncRunTacticOnGoals args.solvePreconditionTac goals (cancelTk? := ← IO.CancelToken.new) (inlineFreshProofs := false)
-  /- Group the promises with their corresponding meta-variables -/
-  pure (List.zip goals promises.toList)
+  if args.async then
+    let promises ← Async.asyncRunTacticOnGoals args.solvePreconditionTac goals (cancelTk? := ← IO.CancelToken.new) (inlineFreshProofs := false)
+    let promises : Array (Task _) := promises.map IO.Promise.result?
+    let promises : Array (Task _) := promises.map (
+        fun o => o.map (sync := true) (fun o => match o with | none | some none => none | some (some o) => some o))
+    pure (List.zip goals (promises.toList.map OptTask.task))
+  else
+    setGoals goals
+    allGoalsNoRecover args.solvePreconditionTac
+    pure ((← getUnsolvedGoals).map fun g => (g, OptTask.none))
 
 /-- Post-process the main goal.
 
@@ -412,12 +440,7 @@ def progressWith (args : Args) (fExpr : Expr) (th : Expr) :
       trace[Progress] "{mainGoal.goal}"
   /- Put everything together -/
   let newNonPropGoals ← newNonPropGoals.filterM fun mvar => not <$> mvar.isAssigned
-  withTraceNode `Progress (fun _ => pure m!"Final remaining preconditions") do
-  let newPropGoals : Array (MVarId × Task _) := newPropGoals.toArray.map (fun (mvarId, p) => (mvarId, p.result?))
-  let newPropGoals : Array (MVarId × Task _) := newPropGoals.map (
-      fun (m, o) =>
-      (m, Task.map (sync := true) (fun o => match o with | none | some none => none | some (some o) => some o) o))
-  pure ({ unassignedVars := newNonPropGoals.toArray, preconditions := newPropGoals, mainGoal })
+  pure ({ unassignedVars := newNonPropGoals.toArray, preconditions := newPropGoals.toArray, mainGoal })
 
 /-- Small utility: if `args` is not empty, return the name of the app in the first
     arg, if it is a const. -/
@@ -591,7 +614,7 @@ def parseProgressArgs
   return (keep?, withTh?, ids, byTac)
 | _ => throwUnsupportedSyntax
 
-def evalProgressCore (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Array (Option Name))
+def evalProgressCore (async : Bool) (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Array (Option Name))
   (byTacStx : Option Syntax.Tactic)
   : TacticM Stats := do
   withTraceNode `Progress (fun _ => pure m!"evalProgress") do
@@ -654,22 +677,26 @@ def evalProgressCore (keep keepPretty : Option Name) (withArg: Option Expr) (ids
     catch _ =>
       trace[Progress] "Precondition not solved"
   let args : Args := {
-    keep, keepPretty, ids, splitPost, assumTac := customAssumTac, solvePreconditionTac, byTacSyntax := byTacStx
+    async, keep, keepPretty, ids, splitPost, assumTac := customAssumTac, solvePreconditionTac, byTacSyntax := byTacStx
   }
   let (goals, usedTheorem) ← progressAsmsOrLookupTheorem args withArg
   trace[Progress] "Progress done"
   return ⟨ goals, usedTheorem ⟩
 
-def evalProgress (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Array (Option Name))
+def asyncOption : Bool := false
+
+def evalProgress
+  (async : Bool)
+  (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Array (Option Name))
   (byTac : Option Syntax.Tactic)
   : TacticM UsedTheorem := do
-  let ⟨goals, usedTheorem⟩ ← evalProgressCore keep keepPretty withArg ids byTac
+  let ⟨goals, usedTheorem⟩ ← evalProgressCore async keep keepPretty withArg ids byTac
   -- Wait for all the proof attempts to finish
   let mut sgs := #[]
   for (mvarId, proof) in goals.preconditions do
     match proof.get with
-    | none => sgs := sgs.push mvarId
-    | some proof => mvarId.withContext do
+    | none | some none => sgs := sgs.push mvarId
+    | some (some proof) => mvarId.withContext do
       -- Introduce an auxiliary theorem
       let declName? ← Term.getDeclName?
       mvarId.withContext do
@@ -683,11 +710,11 @@ def evalProgress (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Ar
 
 elab (name := progress) "progress" args:progressArgs : tactic => do
   let (keep?, withArg, ids, byTac) ← parseProgressArgs args
-  evalProgress keep? none withArg ids byTac *> return ()
+  evalProgress asyncOption keep? none withArg ids byTac *> return ()
 
 elab tk:"progress?" args:progressArgs : tactic => do
   let (keep?, withArg, ids, byTac) ← parseProgressArgs args
-  let stats ← evalProgress keep? none withArg ids byTac
+  let stats ← evalProgress asyncOption keep? none withArg ids byTac
   let mut stxArgs := args.raw
   if stxArgs[1].isNone then
     let withArg := mkNullNode #[mkAtom "with", ← stats.toSyntax]
@@ -743,7 +770,7 @@ def parseLetProgress
 elab tk:letProgress : tactic => do
   withMainContext do
   let (withArg, suggest, ids, byTac) ← parseLetProgress tk
-  let stats ← evalProgress none (some (.str .anonymous "_")) withArg ids byTac
+  let stats ← evalProgress asyncOption none (some (.str .anonymous "_")) withArg ids byTac
   let mut stxArgs := tk.raw
   if suggest then
     trace[Progress] "suggest is true"

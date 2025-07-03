@@ -133,19 +133,32 @@ namespace ProgressStar
 abbrev traceGoalWithNode := Progress.traceGoalWithNode
 
 structure Config where
+  async : Bool := false
   preconditionTac: Option Syntax.Tactic := none
   /-- Should we use the special syntax `let* ⟨ ...⟩ ← ...` or the more standard syntax `progress with ... as ⟨ ... ⟩`? -/
   prettyPrintedProgress : Bool := true
   useCase' : Bool := false
 
+inductive TaskOrDone α where
+| task (x : Task α)
+| done (x : α)
+
+def TaskOrDone.get (x : TaskOrDone α) : α :=
+  match x with
+  | .task x => x.get
+  | .done x => x
+
+def TaskOrDone.mk (x : α) : TaskOrDone α := .done x
+
 inductive Script where
 | split (splitStx : Syntax.Tactic) (branches : Array (Option (TSyntax `Lean.Parser.Tactic.caseArg) × Script))
-| tacs (tacs : Array (Task (Option Syntax.Tactic)))
+| tacs (tacs : Array (TaskOrDone (Option Syntax.Tactic)))
 | seq (s0 s1 : Script)
 
 structure Info where
   script: Script := (.tacs #[])
-  subgoals: Array (MVarId × Option (Task (Option Expr))) := #[]
+  -- TODO: this type is overly complex
+  subgoals: Array (MVarId × Option (TaskOrDone (Option Expr))) := #[]
 
 structure Result where
   script: Script
@@ -172,7 +185,7 @@ partial def Script.toSyntax (script : Script) : MetaM Syntax.Tactic := do
     let stx ← `(tacticSeq| $(#[splitStx] ++ branches)*)
     pure ⟨ stx.raw ⟩
   | .tacs tactics =>
-    let tactics : Array Syntax.Tactic := tactics.filterMap Task.get
+    let tactics : Array Syntax.Tactic := tactics.filterMap TaskOrDone.get
     let stx ← `(tacticSeq| $(tactics)*)
     pure ⟨ stx.raw ⟩
   | .seq s0 s1 =>
@@ -254,7 +267,7 @@ where
       if genSimp then
         let progress_simps ← `(Parser.Tactic.simpLemma| $(mkIdent `progress_simps):term)
         let tac ← `(tactic|simp only [$progress_simps])
-        pure #[Task.spawn (fun _ => some tac)]
+        pure #[TaskOrDone.mk (some tac)]
       else pure #[]
     let info : Info := ⟨ .tacs tac, #[] ⟩
     if r.isSome then traceGoalWithNode "after simplification"
@@ -305,7 +318,7 @@ where
       trace[Progress] "don't know what to do: inserting a sorry"
       let subgoals ← pure ((← getUnsolvedGoals).toArray.map fun g => (g, none))
       let tac ←`(tactic| sorry)
-      return ({ script := .tacs #[Task.spawn (fun _ => some tac)], subgoals })
+      return ({ script := .tacs #[TaskOrDone.mk (some tac)], subgoals })
 
   onResult (cfg : Config) : TacticM (Info × Option MVarId) := do
     withTraceNode `Progress (fun _ => pure m!"onResult") do
@@ -373,7 +386,7 @@ where
           | none => tryFinish tacl
       let proof ← Async.asyncRunTactic (tryFinish [("simp [*]", simpTac), ("scalar_tac", scalarTac)])
       let proof := proof.result?.map (fun x => match x with | none | some none => none | some (some x) => some x)
-      let info' : Info ← pure { script := .tacs #[tacStx.result?], subgoals := #[(mvarId, some proof)] }
+      let info' : Info ← pure { script := .tacs #[.task tacStx.result?], subgoals := #[(mvarId, some (TaskOrDone.task proof))] }
       pure (info ++ info', none)
 
   onBind (cfg : Config) (varName : Name) : TacticM (Info × Option MVarId) := do
@@ -411,10 +424,12 @@ where
             match cfg.preconditionTac with
             | none => `(tactic| progress with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩)
             | some tac => `(tactic| progress with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩ by $(#[tac])*)
-      let preconditions ← preconditions.mapM fun (x, y) => do pure (x, some y)
+      let preconditions ← preconditions.mapM fun (x, y) => do
+        let y := match y with | .none => TaskOrDone.done .none | .task y => TaskOrDone.task y
+        pure (x, some y)
       let sorryStx ← `(tactic|sorry)
       let info : Info := {
-          script := .tacs #[Task.spawn (fun _ => currTac)], -- TODO: Optimize
+          script := .tacs #[TaskOrDone.mk (currTac)], -- TODO: Optimize
           subgoals := preconditions,
         }
       pure (info, mainGoal)
@@ -464,7 +479,7 @@ where
       return (infos, mkStx)
 
   tryProgress (cfg : Config) := do
-    try some <$> Progress.evalProgressCore none (some (.str .anonymous "_")) none #[] cfg.preconditionTac
+    try some <$> Progress.evalProgressCore cfg.async none (some (.str .anonymous "_")) none #[] cfg.preconditionTac
     catch _ => pure none
 
   getIdsFromUsedTheorem name usedTheorem: TacticM (Array _) := do
@@ -658,7 +673,6 @@ example b (x y : U32) :
 
 
 open Std Result
-set_option trace.Progress true in
 example (x y : U32) (h : x.val * y.val ≤ U32.max):
   (do
     let z0 ← x * y
