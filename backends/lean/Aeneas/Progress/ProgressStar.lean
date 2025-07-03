@@ -225,9 +225,7 @@ partial def evalProgressStar (cfg: Config) : TacticM Result :=
       | none => sgs := sgs.push mvarId
       | some proof =>
         match proof.get with
-        | none =>
-          trace[Progress] "unexpected: proof dropped while elaborating a script"
-          sgs := sgs.push mvarId
+        | none => sgs := sgs.push mvarId
         | some proof => mvarId.assign proof
     setGoals sgs.toList
     pure { script := info.script, subgoals := sgs }
@@ -375,7 +373,7 @@ where
 
   onBind (cfg : Config) (varName : Name) : TacticM (Info × Option MVarId) := do
     withTraceNode `Progress (fun _ => pure m!"onBind ({varName})") do
-    if let some {usedTheorem, unassignedVars, preconditions, mainGoal } ← tryProgress then
+    if let some {usedTheorem, unassignedVars, preconditions, mainGoal } ← tryProgress cfg then
       withTraceNode `Progress (fun _ => pure m!"progress succeeded") do
       match mainGoal with
       | none => trace[Progress] "Main goal solved"
@@ -408,8 +406,7 @@ where
             match cfg.preconditionTac with
             | none => `(tactic| progress with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩)
             | some tac => `(tactic| progress with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩ by $(#[tac])*)
-      let preconditions ← preconditions.mapM fun (x, y) => do
-        pure (x, Task.map (fun y => match y with | none | some none => none | some (some y) => pure y) y.result?)
+      let preconditions ← preconditions.mapM fun (x, y) => do pure (x, some y)
       let sorryStx ← `(tactic|sorry)
       let info : Info := {
           script := .tacs #[Task.spawn (fun _ => currTac)], -- TODO: Optimize
@@ -461,8 +458,8 @@ where
 
       return (infos, mkStx)
 
-  tryProgress := do
-    try some <$> Progress.evalProgressCore none (some (.str .anonymous "_")) none #[] none
+  tryProgress (cfg : Config) := do
+    try some <$> Progress.evalProgressCore none (some (.str .anonymous "_")) none #[] cfg.preconditionTac
     catch _ => pure none
 
   getIdsFromUsedTheorem name usedTheorem: TacticM (Array _) := do
@@ -500,10 +497,12 @@ where
 syntax «progress*_args» := ("by" tacticSeq)?
 def parseArgs: TSyntax `Aeneas.ProgressStar.«progress*_args» → CoreM Config
 | `(«progress*_args»| $[by $preconditionTac:tacticSeq]?) => do
+  withTraceNode `Progress (fun _ => pure m!"parseArgs") do
   match preconditionTac with
   | none => return {preconditionTac := none}
   | some preconditionTac => do
     let preconditionTac : Syntax.Tactic := ⟨preconditionTac.raw⟩
+    trace[Progress] "preconditionTac: {preconditionTac}"
     return {preconditionTac}
 | _ => throwUnsupportedSyntax
 
@@ -651,6 +650,16 @@ example b (x y : U32) :
   unfold add2
   progress*?
 -/
+
+
+open Std Result
+set_option trace.Progress true in
+example (x y : U32) (h : x.val * y.val ≤ U32.max):
+  (do
+    let z0 ← x * y
+    let z1 ← y * x
+    massert (z1 == z0)) = ok () := by
+    progress* by (ring_nf at *; simp [*] <;> scalar_tac)
 
 end Examples
 

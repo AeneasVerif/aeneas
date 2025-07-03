@@ -80,7 +80,7 @@ def wrapTactic {α : Type} (tactic : α → TacticM Unit) (cancelTk? : Option IO
             let result ← if inlineProofs then inlineFreshProofs env0 result else pure result
             promise.resolve (some result)
         else promise.resolve none
-    catch e => promise.resolve none
+    catch _ => promise.resolve none
   --------------------------------------------------------------------------
   let metaCtx ← readThe Meta.Context
   let metaState ← getThe Meta.State

@@ -115,7 +115,7 @@ structure Goals where
       if the tactic succeeds, the promise gets field with the proof that the meta-variable should get
       assigned to.
    -/
-  preconditions : Array (MVarId × IO.Promise (Option Expr))
+  preconditions : Array (MVarId × Task (Option Expr))
   /-- The main goal, if it was not proven -/
   mainGoal : Option MainGoal
 deriving Inhabited
@@ -323,7 +323,6 @@ def splitExistsEqAndPost (args : Args) (thAsm : Expr) :
     let posts ← splitPostWithIds curPostId [] hPost ids
     pure (some ⟨ ← getMainGoal, posts⟩)
 
-
 /-- Attempt to solve the preconditions.
 
     We do this in several phases:
@@ -346,7 +345,7 @@ def trySolvePreconditions (args : Args) (newPropGoals : List MVarId) : TacticM (
   /- Retrieve the unsolved preconditions - make sure we recover them in the original order -/
   let goals ← newPropGoals.filterMapM (fun g => do if ← g.isAssigned then pure none else pure (some g))
   /- Then attempt to solve the remaining preconditions *asynchronously* -/
-  let promises ← Async.asyncRunTacticOnGoals args.solvePreconditionTac goals
+  let promises ← Async.asyncRunTacticOnGoals args.solvePreconditionTac goals (cancelTk? := ← IO.CancelToken.new)
   /- Group the promises with their corresponding meta-variables -/
   pure (List.zip goals promises.toList)
 
@@ -414,7 +413,11 @@ def progressWith (args : Args) (fExpr : Expr) (th : Expr) :
   /- Put everything together -/
   let newNonPropGoals ← newNonPropGoals.filterM fun mvar => not <$> mvar.isAssigned
   withTraceNode `Progress (fun _ => pure m!"Final remaining preconditions") do
-  pure ({ unassignedVars := newNonPropGoals.toArray, preconditions := newPropGoals.toArray, mainGoal })
+  let newPropGoals : Array (MVarId × Task _) := newPropGoals.toArray.map (fun (mvarId, p) => (mvarId, p.result?))
+  let newPropGoals : Array (MVarId × Task _) := newPropGoals.map (
+      fun (m, o) =>
+      (m, Task.map (sync := true) (fun o => match o with | none | some none => none | some (some o) => some o) o))
+  pure ({ unassignedVars := newNonPropGoals.toArray, preconditions := newPropGoals, mainGoal })
 
 /-- Small utility: if `args` is not empty, return the name of the app in the first
     arg, if it is a const. -/
@@ -655,9 +658,9 @@ def evalProgress (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Ar
   -- Wait for all the proof attempts to finish
   let mut sgs := #[]
   for (mvarId, proof) in goals.preconditions do
-    match proof.result?.get with
-    | none | some none => sgs := sgs.push mvarId
-    | some (some proof) => mvarId.withContext do mvarId.assign proof
+    match proof.get with
+    | none => sgs := sgs.push mvarId
+    | some proof => mvarId.withContext do mvarId.assign proof
   let mainGoal := match goals.mainGoal with
     | none => []
     | some goal => [goal.goal]
