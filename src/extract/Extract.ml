@@ -464,7 +464,15 @@ let extract_binop (span : Meta.span)
   (match (backend (), binop) with
   | HOL4, (Eq | Ne)
   | (FStar | Coq | Lean), (Eq | Lt | Le | Ne | Ge | Gt)
-  | Lean, (Div | Rem | Add | Sub | Mul | Shl | Shr | BitXor | BitOr | BitAnd) ->
+  | ( Lean,
+      ( Div OPanic
+      | Rem OPanic
+      | Add OPanic
+      | Sub OPanic
+      | Mul OPanic
+      | Shl OPanic
+      | Shr OPanic
+      | BitXor | BitOr | BitAnd ) ) ->
       let binop =
         match binop with
         | Eq -> "="
@@ -473,13 +481,13 @@ let extract_binop (span : Meta.span)
         | Ne -> if backend () = Lean then "!=" else "<>"
         | Ge -> ">="
         | Gt -> ">"
-        | Div -> "/"
-        | Rem -> "%"
-        | Add -> "+"
-        | Sub -> "-"
-        | Mul -> "*"
-        | Shl -> "<<<"
-        | Shr -> ">>>"
+        | Div OPanic -> "/"
+        | Rem OPanic -> "%"
+        | Add OPanic -> "+"
+        | Sub OPanic -> "-"
+        | Mul OPanic -> "*"
+        | Shl OPanic -> "<<<"
+        | Shr OPanic -> ">>>"
         | BitXor -> "^^^"
         | BitOr -> "|||"
         | BitAnd -> "&&&"
@@ -501,7 +509,7 @@ let extract_binop (span : Meta.span)
   | _ ->
       let binop_is_shift =
         match binop with
-        | Shl | Shr -> true
+        | Shl _ | Shr _ -> true
         | _ -> false
       in
       let binop = named_binop_name binop int_ty in

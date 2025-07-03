@@ -3149,7 +3149,7 @@ and translate_function_call_aux (call : S.call) (e : S.expression)
             let dest = mk_typed_pattern_from_var dest dest_mplace in
             (ctx, Unop (Not ty), effect_info, args, [], dest)
         | _ -> craise __FILE__ __LINE__ ctx.span "Unreachable")
-    | S.Unop E.Neg -> (
+    | S.Unop (E.Neg overflow) -> (
         match args with
         | [ arg ] ->
             let int_ty = ty_as_integer ctx.span arg.ty in
@@ -3157,7 +3157,7 @@ and translate_function_call_aux (call : S.call) (e : S.expression)
              * is thus monadic) *)
             let effect_info =
               {
-                can_fail = true;
+                can_fail = overflow <> OWrap;
                 stateful_group = false;
                 stateful = false;
                 can_diverge = false;
@@ -3206,7 +3206,7 @@ and translate_function_call_aux (call : S.call) (e : S.expression)
             let int_ty1 = ty_as_integer ctx.span arg1.ty in
             (match binop with
             (* The Rust compiler accepts bitshifts for any integer type combination for ty0, ty1 *)
-            | E.Shl | E.Shr -> ()
+            | E.Shl _ | E.Shr _ -> ()
             | _ -> sanity_check __FILE__ __LINE__ (int_ty0 = int_ty1) ctx.span);
             let effect_info =
               {

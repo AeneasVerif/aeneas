@@ -836,11 +836,11 @@ let unop_name (unop : unop) : string =
 let named_binop_name (binop : E.binop) (int_ty : integer_type) : string =
   let binop_s =
     match binop with
-    | Div -> "div"
-    | Rem -> "rem"
-    | Add -> "add"
-    | Sub -> "sub"
-    | Mul -> "mul"
+    | Div _ -> "div"
+    | Rem _ -> "rem"
+    | Add _ -> "add"
+    | Sub _ -> "sub"
+    | Mul _ -> "mul"
     | Lt -> "lt"
     | Le -> "le"
     | Ge -> "ge"
@@ -848,8 +848,8 @@ let named_binop_name (binop : E.binop) (int_ty : integer_type) : string =
     | BitXor -> "xor"
     | BitAnd -> "and"
     | BitOr -> "or"
-    | Shl -> "shl"
-    | Shr -> "shr"
+    | Shl _ -> "shl"
+    | Shr _ -> "shr"
     | _ -> raise (Failure "Unreachable")
   in
   (* Remark: the Lean case is actually not used *)
@@ -869,7 +869,9 @@ let keywords () =
     :: List.map (fun it -> unop_name (Not (Some it))) T.all_signed_int_types
     @ List.map (fun it -> unop_name (Neg it)) T.all_signed_int_types
   in
-  let named_binops = [ E.Div; Rem; Add; Sub; Mul ] in
+  let named_binops =
+    [ E.Div OPanic; Rem OPanic; Add OPanic; Sub OPanic; Mul OPanic ]
+  in
   let named_binops =
     List.concat_map
       (fun bn -> List.map (fun it -> named_binop_name bn it) T.all_int_types)
