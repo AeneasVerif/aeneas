@@ -63,6 +63,7 @@ theorem Nat.lt_pow (a i : ℕ) (h : 1 < a ∧ 1 < i) : a < a ^ i := by
 
 attribute [simp_scalar_simps]
   zero_add add_zero
+  mul_one one_mul
   inf_of_le_left inf_of_le_right
   Nat.pow_le_pow_right Nat.pow_le_pow_left
   Nat.pow_lt_pow_right Nat.pow_lt_pow_left
