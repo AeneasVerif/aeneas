@@ -173,26 +173,20 @@ instance: Append Info where
 /-- Convert the script into syntax.
     This is a blocking operation: it waits for all the sub-components of the script to be generated.
 -/
-partial def Script.toSyntax (script : Script) : MetaM Syntax.Tactic := do
+partial def Script.toSyntax (script : Script) : MetaM (Array Syntax.Tactic) := do
   match script with
   | .split splitStx branches =>
     let branches ← branches.mapM fun (caseArgs, branch) => do
       let branch ← branch.toSyntax
-      let branch := #[branch]
       match caseArgs with
       | some caseArgs => `(tactic| case' $caseArgs => $branch*)
       | none => `(tactic|. $branch*)
-    let stx ← `(tacticSeq| $(#[splitStx] ++ branches)*)
-    pure ⟨ stx.raw ⟩
-  | .tacs tactics =>
-    let tactics : Array Syntax.Tactic := tactics.filterMap TaskOrDone.get
-    let stx ← `(tacticSeq| $(tactics)*)
-    pure ⟨ stx.raw ⟩
+    pure (#[splitStx] ++ branches)
+  | .tacs tactics => pure (tactics.filterMap TaskOrDone.get)
   | .seq s0 s1 =>
     let s0 ← toSyntax s0
     let s1 ← toSyntax s1
-    let stx ← `(tacticSeq| $(#[s0, s1])*)
-    pure ⟨ stx.raw ⟩
+    pure (s0 ++ s1)
 
 attribute [progress_simps] Aeneas.Std.bind_assoc_eq
 
@@ -411,9 +405,8 @@ where
         -- TODO: how to factor this out?
         if cfg.prettyPrintedProgress then
           match cfg.preconditionTac with
-          | none => `(tactic| let* ⟨⟩ ← $(←usedTheorem.toSyntax))
-          | some tac =>
-            `(tactic| let* ⟨$ids,*⟩ ← $(←usedTheorem.toSyntax) by $(#[tac])*)
+          | none => `(tactic| let* ⟨$ids,*⟩ ← $(←usedTheorem.toSyntax))
+          | some tac => `(tactic| let* ⟨$ids,*⟩ ← $(←usedTheorem.toSyntax) by $(#[tac])*)
         else
           if ids.isEmpty
           then
@@ -424,12 +417,17 @@ where
             match cfg.preconditionTac with
             | none => `(tactic| progress with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩)
             | some tac => `(tactic| progress with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩ by $(#[tac])*)
+      let sorryStx ← `(tactic|· sorry)
+      let preconditionsScript : Array (TaskOrDone (Option Syntax.Tactic)) := preconditions.map fun (_, p) =>
+        match p with
+        | .none => TaskOrDone.mk (some sorryStx)
+        | .task y => TaskOrDone.task (y.map fun (e : Option _) => if e.isNone then some sorryStx else none)
       let preconditions ← preconditions.mapM fun (x, y) => do
         let y := match y with | .none => TaskOrDone.done .none | .task y => TaskOrDone.task y
         pure (x, some y)
-      let sorryStx ← `(tactic|sorry)
+
       let info : Info := {
-          script := .tacs #[TaskOrDone.mk (currTac)], -- TODO: Optimize
+          script := .tacs (#[TaskOrDone.mk (some currTac)] ++ preconditionsScript),
           subgoals := preconditions,
         }
       pure (info, mainGoal)
@@ -534,14 +532,13 @@ elab tk:"progress" noWs "*?" stx:«progress*_args»: tactic => do
   let cfg ← parseArgs stx
   let info ← evalProgressStar cfg
   let suggestion ← info.script.toSyntax
-  let suggestion ← `(tacticSeq|$(#[suggestion])*)
+  let suggestion ← `(tacticSeq|$(suggestion)*)
   Aesop.addTryThisTacticSeqSuggestion tk suggestion (origSpan? := ← getRef)
 
 end ProgressStar
 
 section Examples
 
-/-
 /--
 info: Try this:
 simp only [progress_simps]
@@ -669,10 +666,7 @@ example b (x y : U32) :
       ∃ z, add2 b x y = ok z := by
   unfold add2
   progress*?
--/
 
-
-open Std Result
 example (x y : U32) (h : x.val * y.val ≤ U32.max):
   (do
     let z0 ← x * y
