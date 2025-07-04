@@ -18,7 +18,8 @@ module S = SynthesizeSymbolic
 (** The local logger *)
 let log = L.statements_log
 
-(** Drop a value at a given place - TODO: factorize this with [assign_to_place] *)
+(** Drop a value at a given place - TODO: factorize this with [assign_to_place]
+*)
 let drop_value (config : config) (span : Meta.span) (p : place) : cm_fun =
  fun ctx ->
   log#ltrace
@@ -84,11 +85,10 @@ let push_vars (span : Meta.span) (vars : (local * typed_value) list)
 
 (** Assign a value to a given place.
 
-    Note that this function first pushes the value to assign in a dummy variable,
-    then prepares the destination (by ending borrows, etc.) before popping the
-    dummy variable and putting in its destination (after having checked that
-    preparing the destination didn't introduce ⊥).
- *)
+    Note that this function first pushes the value to assign in a dummy
+    variable, then prepares the destination (by ending borrows, etc.) before
+    popping the dummy variable and putting in its destination (after having
+    checked that preparing the destination didn't introduce ⊥). *)
 let assign_to_place (config : config) (span : Meta.span) (rv : typed_value)
     (p : place) : cm_fun =
  fun ctx ->
@@ -148,10 +148,9 @@ let eval_assertion_concrete (config : config) (span : Meta.span)
 
 (** Evaluates an assertion.
 
-    In the case the boolean under scrutinee is symbolic, we synthesize
-    a call to [assert ...] then continue in the success branch (and thus
-    expand the boolean to [true]).
- *)
+    In the case the boolean under scrutinee is symbolic, we synthesize a call to
+    [assert ...] then continue in the success branch (and thus expand the
+    boolean to [true]). *)
 let eval_assertion (config : config) (span : Meta.span) (assertion : assertion)
     : st_cm_fun =
  fun ctx ->
@@ -193,14 +192,13 @@ let eval_assertion (config : config) (span : Meta.span) (assertion : assertion)
 (** Updates the discriminant of a value at a given place.
 
     There are two situations:
-    - either the discriminant is already the proper one (in which case we
-      don't do anything)
-    - or it is not the proper one (because the variant is not the proper
-      one, or the value is actually {!Bottom} - this happens when
-      initializing ADT values), in which case we replace the value with
-      a variant with all its fields set to {!Bottom}.
-      For instance, something like: [Cons Bottom Bottom].
- *)
+    - either the discriminant is already the proper one (in which case we don't
+      do anything)
+    - or it is not the proper one (because the variant is not the proper one, or
+      the value is actually {!Bottom} - this happens when initializing ADT
+      values), in which case we replace the value with a variant with all its
+      fields set to {!Bottom}. For instance, something like:
+      [Cons Bottom Bottom]. *)
 let set_discriminant (config : config) (span : Meta.span) (p : place)
     (variant_id : VariantId.id) : st_cm_fun =
  fun ctx ->
@@ -276,8 +274,7 @@ let ctx_push_frame (ctx : eval_ctx) : eval_ctx =
 let push_frame (ctx : eval_ctx) : eval_ctx = ctx_push_frame ctx
 
 (** Small helper: compute the type of the return value for a specific
-    instantiation of an builtin function.
- *)
+    instantiation of an builtin function. *)
 let get_builtin_function_return_type (span : Meta.span) (ctx : eval_ctx)
     (fid : builtin_fun_id) (generics : generic_args) : ety =
   sanity_check __FILE__ __LINE__ (generics.trait_refs = []) span;
@@ -492,8 +489,7 @@ let eval_builtin_function_call_concrete (config : config) (span : Meta.span)
     from a list of abs region groups.
 
     [region_can_end]: gives the region groups from which we generate functions
-    which can end or not.
- *)
+    which can end or not. *)
 let create_empty_abstractions_from_abs_region_groups
     (kind : RegionGroupId.id -> abs_kind) (rgl : abs_region_group list)
     (region_can_end : RegionGroupId.id -> bool) : abs list =
@@ -571,15 +567,14 @@ let create_push_abstractions_from_abs_region_groups
   in
   List.fold_left insert_abs ctx empty_absl
 
-(** Auxiliary helper for [eval_transparent_function_call_symbolic]
-    Instantiate the signature and introduce fresh abstractions and region ids while doing so.
+(** Auxiliary helper for [eval_transparent_function_call_symbolic] Instantiate
+    the signature and introduce fresh abstractions and region ids while doing
+    so.
 
     We perform some manipulations when instantiating the signature.
 
-    # Trait impl calls
-    ==================
-    In particular, we have a special treatment of trait method calls when
-    the trait ref is a known impl.
+    # Trait impl calls ================== In particular, we have a special
+    treatment of trait method calls when the trait ref is a known impl.
 
     For instance:
     {[
@@ -617,10 +612,10 @@ let create_push_abstractions_from_abs_region_groups
       }
     ]}
 
-    In [option_has_value], we don't want to refer to the [has_value] method
-    of the instance of [HasValue] for [Option<T>]. We want to refer directly
-    to the function which implements [has_value] for [Option<T>].
-    That is, instead of generating this:
+    In [option_has_value], we don't want to refer to the [has_value] method of
+    the instance of [HasValue] for [Option<T>]. We want to refer directly to the
+    function which implements [has_value] for [Option<T>]. That is, instead of
+    generating this:
     {[
       let option_has_value (T : Type) (x : Option T) : result bool =
         (OptionHasValueInstance T).has_value x
@@ -632,13 +627,11 @@ let create_push_abstractions_from_abs_region_groups
         OptionHasValueImpl.has_value T x
     ]}
 
-    # Provided trait methods
-    ========================
-    Calls to provided trait methods also have a special treatment because
-    for now we forbid overriding provided trait methods in the trait implementations,
-    which means that whenever we call a provided trait method, we do not refer
-    to a trait clause but directly to the method provided in the trait declaration.
- *)
+    # Provided trait methods ======================== Calls to provided trait
+    methods also have a special treatment because for now we forbid overriding
+    provided trait methods in the trait implementations, which means that
+    whenever we call a provided trait method, we do not refer to a trait clause
+    but directly to the method provided in the trait declaration. *)
 let eval_transparent_function_call_symbolic_inst (span : Meta.span)
     (call : call) (ctx : eval_ctx) :
     fun_id_or_trait_method_ref
@@ -1313,12 +1306,11 @@ and eval_transparent_function_call_symbolic (config : config) (span : Meta.span)
     This allows us to factorize the evaluation of local and non-local function
     calls in symbolic mode: only their signatures matter.
 
-    The [self_trait_ref] trait ref refers to [Self]. We use it when calling
-    a provided trait method, because those methods have a special treatment:
-    we dot not group them with the required trait methods, and forbid (for now)
+    The [self_trait_ref] trait ref refers to [Self]. We use it when calling a
+    provided trait method, because those methods have a special treatment: we
+    dot not group them with the required trait methods, and forbid (for now)
     overriding them. We treat them as regular method, which take an additional
-    trait ref as input.
- *)
+    trait ref as input. *)
 and eval_function_call_symbolic_from_inst_sig (config : config)
     (span : Meta.span) (fid : fun_id_or_trait_method_ref) (sg : fun_sig)
     (inst_sg : inst_fun_sig) (generics : generic_args)

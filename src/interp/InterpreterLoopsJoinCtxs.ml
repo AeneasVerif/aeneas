@@ -16,11 +16,10 @@ let log = Logging.loops_join_ctxs_log
 
 (** Utility.
 
-    An environment augmented with information about its borrows/loans/abstractions
-    for the purpose of merging abstractions together.
-    We provide functions to update this information when merging two abstractions
-    together. We use it in {!reduce_ctx} and {!collapse_ctx}.
-*)
+    An environment augmented with information about its
+    borrows/loans/abstractions for the purpose of merging abstractions together.
+    We provide functions to update this information when merging two
+    abstractions together. We use it in {!reduce_ctx} and {!collapse_ctx}. *)
 type ctx_with_info = { ctx : eval_ctx; info : abs_borrows_loans_maps }
 
 let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
@@ -209,12 +208,11 @@ let repeat_iter_borrows_merge (span : Meta.span) (old_ids : ids_sets)
     We do the following:
     - we look for all the *new* dummy values (we use sets of old ids to decide
       wether a value is new or not) and convert them into abstractions
-    - whenever there is a new abstraction in the context, and some of
-      its borrows are associated to loans in another new abstraction, we
-      merge them. We also do this with loan/borrow projectors over symbolic
-      values.
-    In effect, this allows us to merge newly introduced abstractions/borrows
-    with their parent abstractions.
+    - whenever there is a new abstraction in the context, and some of its
+      borrows are associated to loans in another new abstraction, we merge them.
+      We also do this with loan/borrow projectors over symbolic values. In
+      effect, this allows us to merge newly introduced abstractions/borrows with
+      their parent abstractions.
 
     For instance, looking at the [list_nth_mut] example, when evaluating the
     first loop iteration, we start in the following environment:
@@ -223,7 +221,7 @@ let repeat_iter_borrows_merge (span : Meta.span) (old_ids : ids_sets)
       ls -> MB l0 (s2 : loops::List<T>)
       i -> s1 : u32
     ]}
-    
+
     and get the following environment upon reaching the [Continue] statement:
     {[
       abs@0 { ML l0 }
@@ -233,10 +231,10 @@ let repeat_iter_borrows_merge (span : Meta.span) (old_ids : ids_sets)
       _@2 -> MB l2 (@Box (ML l4))                      // tail
       _@3 -> MB l1 (s@3 : T)                           // hd
     ]}
-    
+
     In this new environment, the dummy variables [_@1], [_@2] and [_@3] are
     considered as new.
-    
+
     We first convert the new dummy values to abstractions. It gives:
     {[
       abs@0 { ML l0 }
@@ -247,8 +245,8 @@ let repeat_iter_borrows_merge (span : Meta.span) (old_ids : ids_sets)
       abs@3 { MB l1 }
     ]}
 
-    We finally merge the new abstractions together (abs@1 and abs@2 because
-    of l2, and abs@1 and abs@3 because of l1). It gives:
+    We finally merge the new abstractions together (abs@1 and abs@2 because of
+    l2, and abs@1 and abs@3 because of l1). It gives:
     {[
       abs@0 { ML l0 }
       ls -> MB l4 (s@6 : loops::List<T>)
@@ -256,24 +254,24 @@ let repeat_iter_borrows_merge (span : Meta.span) (old_ids : ids_sets)
       abs@4 { MB l0, ML l4 }
     ]}
 
-    - If [merge_funs] is [None], we check that there are no markers in the environments.
-      This is the "reduce" operation.
-    - If [merge_funs] is [Some _], when merging abstractions together, we merge the pairs
-      of borrows and the pairs of loans with the same markers **if this marker is not**
-      [PNone]. This is useful to reuse the reduce operation to implement the collapse.
-      Note that we ignore borrows/loans with the [PNone] marker: the goal of the collapse
-      operation is to *eliminate* markers, not to simplify the environment.
+    - If [merge_funs] is [None], we check that there are no markers in the
+      environments. This is the "reduce" operation.
+    - If [merge_funs] is [Some _], when merging abstractions together, we merge
+      the pairs of borrows and the pairs of loans with the same markers **if
+      this marker is not** [PNone]. This is useful to reuse the reduce operation
+      to implement the collapse. Note that we ignore borrows/loans with the
+      [PNone] marker: the goal of the collapse operation is to *eliminate*
+      markers, not to simplify the environment.
 
-      For instance, when merging:
-      {[
-        abs@0 { ML l0, |MB l1| }
-        abs@1 { MB l0, ︙MB l1︙ }
-      ]}
-      We get:
-      {[
-        abs@2 { MB l1 }
-      ]}
- *)
+    For instance, when merging:
+    {[
+      abs@0 { ML l0, |MB l1| }
+      abs@1 { MB l0, ︙MB l1︙ }
+    ]}
+    We get:
+    {[
+      abs@2 { MB l1 }
+    ]} *)
 let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
     (span : Meta.span) (loop_id : LoopId.id) (old_ids : ids_sets)
     (ctx0 : eval_ctx) : eval_ctx =
@@ -450,22 +448,21 @@ let reduce_ctx = reduce_ctx_with_markers None
 
 (** Auxiliary function for collapse (see below).
 
-   We traverse all abstractions, and merge abstractions when they contain the same element,
-   but with dual markers (i.e., [PLeft] and [PRight]).
+    We traverse all abstractions, and merge abstractions when they contain the
+    same element, but with dual markers (i.e., [PLeft] and [PRight]).
 
-   For instance, if we have the abstractions
+    For instance, if we have the abstractions
 
-   {[
-     abs@0 { | MB l0 _ |, ML l1 }
-     abs@1 { ︙MB l0 _ ︙, ML l2 }
-   ]}
+    {[
+      abs@0 { | MB l0 _ |, ML l1 }
+      abs@1 { ︙MB l0 _ ︙, ML l2 }
+    ]}
 
-   We merge abs@0 and abs@1 into a new abstraction abs@2. This allows us to
-   eliminate the markers used for [MB l0]:
-   {[
-     abs@2 { MB l0 _, ML l1, ML l2 }
-   ]}
-*)
+    We merge abs@0 and abs@1 into a new abstraction abs@2. This allows us to
+    eliminate the markers used for [MB l0]:
+    {[
+      abs@2 { MB l0 _, ML l1, ML l2 }
+    ]} *)
 let collapse_ctx_collapse (span : Meta.span) (loop_id : LoopId.id)
     (merge_funs : merge_duplicates_funcs) (old_ids : ids_sets) (ctx : eval_ctx)
     : eval_ctx =
@@ -672,23 +669,23 @@ let eval_ctx_has_markers (ctx : eval_ctx) : bool =
     false
   with Found -> true
 
-(** Collapse two environments containing projection markers; this function is called after
-    joining environments.
+(** Collapse two environments containing projection markers; this function is
+    called after joining environments.
 
     The collapse is done in two steps.
 
     First, we reduce the environment, merging any two pair of fresh abstractions
     which contain a loan (in one) and its corresponding borrow (in the other).
-    This is our version of Abstract Interpretation's **widening** operation.
-    For instance, we merge abs@0 and abs@1 below:
+    This is our version of Abstract Interpretation's **widening** operation. For
+    instance, we merge abs@0 and abs@1 below:
     {[
       abs@0 { |ML l0|, ML l1 }
       abs@1 { |MB l0 _|, ML l2 }
                 ~~>
       abs@2 { ML l1, ML l2 }
     ]}
-    Note that we also merge abstractions when the loan/borrow don't have the same
-    markers. For instance, below:
+    Note that we also merge abstractions when the loan/borrow don't have the
+    same markers. For instance, below:
     {[
       abs@0 { ML l0, ML l1 } // ML l0 doesn't have markers
       abs@1 { |MB l0 _|, ML l2 }
@@ -696,8 +693,8 @@ let eval_ctx_has_markers (ctx : eval_ctx) : bool =
       abs@2 { ︙ML l0︙, ML l1, ML l2 }
     ]}
 
-    Second, we merge abstractions containing the same element with left and right markers
-    respectively. For instance:
+    Second, we merge abstractions containing the same element with left and
+    right markers respectively. For instance:
     {[
       abs@0 { | MB l0 _ |, ML l1 }
       abs@1 { ︙MB l0 _ ︙, ML l2 }
@@ -705,9 +702,8 @@ let eval_ctx_has_markers (ctx : eval_ctx) : bool =
       abs@2 { MB l0 _, ML l1, ML l2 }
     ]}
 
-    At the end of the second step, all markers should have been removed from the resulting
-    environment.
-*)
+    At the end of the second step, all markers should have been removed from the
+    resulting environment. *)
 let collapse_ctx (span : Meta.span) (loop_id : LoopId.id)
     (merge_funs : merge_duplicates_funcs) (old_ids : ids_sets) (ctx0 : eval_ctx)
     : eval_ctx =
@@ -855,11 +851,11 @@ let merge_into_first_abstraction (span : Meta.span) (loop_id : LoopId.id)
 
 (** Collapse an environment, merging the duplicated borrows/loans.
 
-    This function simply calls {!collapse_ctx} with the proper merging functions.
+    This function simply calls {!collapse_ctx} with the proper merging
+    functions.
 
     We do this because when we join environments, we may introduce duplicated
-    loans and borrows. See the explanations for {!join_ctxs}.
- *)
+    loans and borrows. See the explanations for {!join_ctxs}. *)
 let collapse_ctx_with_merge (span : Meta.span) (loop_id : LoopId.id)
     (old_ids : ids_sets) (ctx : eval_ctx) : eval_ctx =
   let merge_funs = mk_collapse_ctx_merge_duplicate_funs span loop_id ctx in
@@ -1105,8 +1101,7 @@ let destructure_new_abs (span : Meta.span) (loop_id : LoopId.id)
 
     We do this because {!prepare_ashared_loans} introduces some non-fixed
     abstractions in contexts which are later joined: we have to make sure two
-    contexts we join don't have non-fixed abstractions with the same ids.
-  *)
+    contexts we join don't have non-fixed abstractions with the same ids. *)
 let refresh_abs (old_abs : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
   let ids, _ = compute_ctx_ids ctx in
   let abs_to_refresh = AbstractionId.Set.diff ids.aids old_abs in

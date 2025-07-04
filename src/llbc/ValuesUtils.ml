@@ -99,9 +99,8 @@ let mk_aproj_loans (pm : proj_marker) (sv_id : symbolic_value_id) (proj_ty : ty)
     =
   { value = ASymbolic (pm, AProjLoans (sv_id, proj_ty, [])); ty = proj_ty }
 
-(** Check if a value contains a *concrete* borrow (i.e., a [Borrow] value -
-    we don't check if there are borrows hidden in symbolic values).
- *)
+(** Check if a value contains a *concrete* borrow (i.e., a [Borrow] value - we
+    don't check if there are borrows hidden in symbolic values). *)
 let concrete_borrows_in_value (v : typed_value) : bool =
   let obj =
     object
@@ -116,8 +115,7 @@ let concrete_borrows_in_value (v : typed_value) : bool =
   with Found -> true
 
 (** Check if a value contains reserved mutable borrows (which are necessarily
-    *concrete*: a symbolic value can't "hide" reserved borrows).
- *)
+    *concrete*: a symbolic value can't "hide" reserved borrows). *)
 let reserved_in_value (v : typed_value) : bool =
   let obj =
     object
@@ -132,8 +130,7 @@ let reserved_in_value (v : typed_value) : bool =
   with Found -> true
 
 (** Check if a value contains a loan (which is necessarily *concrete*: symbolic
-    values can't "hide" loans).
- *)
+    values can't "hide" loans). *)
 let concrete_loans_in_value (v : typed_value) : bool =
   let obj =
     object
@@ -223,11 +220,9 @@ let find_first_expandable_sv_with_borrows (span : Meta.span option)
     None
   with FoundSymbolicValue sv -> Some sv
 
-(** Strip the outer shared loans in a value.
-    Ex.:
+(** Strip the outer shared loans in a value. Ex.:
     [shared_loan {l0, l1} (3 : u32, shared_loan {l2} (4 : u32))] ~~>
-    [(3 : u32, shared_loan {l2} (4 : u32))]
- *)
+    [(3 : u32, shared_loan {l2} (4 : u32))] *)
 let rec value_strip_shared_loans (v : typed_value) : typed_value =
   match v.value with
   | VLoan (VSharedLoan (_, v')) -> value_strip_shared_loans v'
@@ -242,8 +237,7 @@ let symbolic_value_has_borrows span (infos : TypesAnalysis.type_infos)
 
     It checks if:
     - there are concrete borrows
-    - there are symbolic values which may contain borrows
- *)
+    - there are symbolic values which may contain borrows *)
 let value_has_borrows span (infos : TypesAnalysis.type_infos) (v : value) : bool
     =
   let obj =
@@ -290,9 +284,8 @@ let value_has_non_ended_borrows_or_loans (ended_regions : RegionId.Set.t)
 
 (** Check if a value has loans.
 
-    Note that loans are necessarily concrete (there can't be loans hidden
-    inside symbolic values).
- *)
+    Note that loans are necessarily concrete (there can't be loans hidden inside
+    symbolic values). *)
 let value_has_loans (v : value) : bool =
   let obj =
     object
@@ -310,9 +303,8 @@ let value_has_loans (v : value) : bool =
 
     It checks if:
     - there are concrete loans or concrete borrows
-    - there are symbolic values which may contain borrows (symbolic values
-      can't contain loans).
- *)
+    - there are symbolic values which may contain borrows (symbolic values can't
+      contain loans). *)
 let value_has_loans_or_borrows span (infos : TypesAnalysis.type_infos)
     (v : value) : bool =
   let obj =

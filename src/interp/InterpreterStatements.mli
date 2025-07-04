@@ -10,12 +10,11 @@ open Cps
     dummy variables, after ending the proper borrows of course) but the return
     variable, move the return value out of the return variable, remove all the
     local variables (but preserve the abstractions!), remove the
-    {!constructor:Contexts.env_elem.EFrame} indicator delimiting the current frame and
-    handle the return value to the continuation.
+    {!constructor:Contexts.env_elem.EFrame} indicator delimiting the current
+    frame and handle the return value to the continuation.
 
     If the boolean is false, we don't move the return value, and call the
-    continuation with [None].
- *)
+    continuation with [None]. *)
 val pop_frame :
   config ->
   Meta.span ->
@@ -27,8 +26,8 @@ val pop_frame :
 
 (** Helper.
 
-    Create a list of abstractions from a list of regions groups, and insert
-    them in the context.
+    Create a list of abstractions from a list of regions groups, and insert them
+    in the context.
 
     Parameters:
     - [call_id]
@@ -41,8 +40,7 @@ val pop_frame :
       should be inserted in this abstraction before we insert it in the context.
       Note that this function may update the context: it is necessary when
       computing borrow projections, for instance.
-    - [ctx]
-*)
+    - [ctx] *)
 val create_push_abstractions_from_abs_region_groups :
   (RegionGroupId.id -> abs_kind) ->
   abs_region_group list ->

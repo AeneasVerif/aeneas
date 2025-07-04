@@ -41,11 +41,9 @@ let typed_pattern_to_string (ctx : ctx) pat : string =
 (** Small utility.
 
     We sometimes have to insert new fresh variables in a function body, in which
-    case we need to make their indices greater than the indices of all the variables
-    in the body.
-    TODO: things would be simpler if we used a better representation of the
-    variables indices...
- *)
+    case we need to make their indices greater than the indices of all the
+    variables in the body. TODO: things would be simpler if we used a better
+    representation of the variables indices... *)
 let get_body_min_var_counter (body : fun_body) : LocalId.generator =
   (* Find the max id in the input variables - some of them may have been
    * filtered from the body *)
@@ -80,7 +78,8 @@ let get_opt_body_min_var_counter (body : fun_body option) : LocalId.generator =
 (** "Pretty-Name context": see {!compute_pretty_names} *)
 type pn_ctx = {
   pure_vars : string LocalId.Map.t;
-      (** Information about the pure variables used in the synthesized program *)
+      (** Information about the pure variables used in the synthesized program
+      *)
   llbc_vars : string E.LocalId.Map.t;
       (** Information about the LLBC variables used in the original program *)
 }
@@ -92,104 +91,107 @@ type pn_ctx = {
     The way it works is as follows:
     - we only modify the names of the unnamed variables
     - whenever we see an rvalue/pattern which is exactly an unnamed variable,
-      and this value is linked to some meta-place information which contains
-      a name and an empty path, we consider we should use this name
+      and this value is linked to some meta-place information which contains a
+      name and an empty path, we consider we should use this name
     - we try to propagate naming constraints on the pure variables use in the
       synthesized programs, and also on the LLBC variables from the original
-      program (information about the LLBC variables is stored in the meta-places)
-
+      program (information about the LLBC variables is stored in the
+      meta-places)
 
     Something important is that, for every variable we find, the name of this
     variable can be influenced by the information we find *below* in the AST.
 
     For instance, the following situations happen:
 
-    - let's say we evaluate:
-      {[
-        match (ls : List<T>) {
-          List::Cons(x, hd) => {
-            ...
+    {ul
+     {- let's say we evaluate:
+        {[
+          match (ls : List<T>) {
+            List::Cons(x, hd) => {
+              ...
+            }
           }
+        ]}
+     }
+    }
+
+    Actually, in MIR, we get:
+    {[
+      tmp := discriminant(ls);
+      switch tmp {
+        0 => {
+          x := (ls as Cons).0; // (i)
+          hd := (ls as Cons).1; // (ii)
+          ...
         }
-      ]}
+      }
+    ]}
+    If [ls] maps to a symbolic value [s0] upon evaluating the match in symbolic
+    mode, we expand this value upon evaluating [tmp = discriminant(ls)].
+    However, at this point, we don't know which should be the names of the
+    symbolic values we introduce for the fields of [Cons]!
 
-      Actually, in MIR, we get:
-      {[
-        tmp := discriminant(ls);
-        switch tmp {
-          0 => {
-            x := (ls as Cons).0; // (i)
-            hd := (ls as Cons).1; // (ii)
-            ...
-          }
-        }
-      ]}
-      If [ls] maps to a symbolic value [s0] upon evaluating the match in symbolic
-      mode, we expand this value upon evaluating [tmp = discriminant(ls)].
-      However, at this point, we don't know which should be the names of
-      the symbolic values we introduce for the fields of [Cons]!
+    Let's imagine we have (for the [Cons] branch): [s0 ~~> Cons s1 s2]. The
+    assigments at (i) and (ii) lead to the following binding in the evaluation
+    context:
+    {[
+      x -> s1
+      hd -> s2
+    ]}
 
-      Let's imagine we have (for the [Cons] branch): [s0 ~~> Cons s1 s2].
-      The assigments at (i) and (ii) lead to the following binding in the
-      evaluation context:
-      {[
-        x -> s1
-        hd -> s2
-      ]}
+    When generating the symbolic AST, we save as meta-information that we assign
+    [s1] to the place [x] and [s2] to the place [hd]. This way, we learn we can
+    use the names [x] and [hd] for the variables which are introduced by the
+    match:
+    {[
+      match ls with
+      | Cons x hd -> ...
+      | ...
+    ]}
+    - Assignments: [let x [@mplace=lp] = v [@mplace = rp] in ...]
 
-      When generating the symbolic AST, we save as meta-information that we
-      assign [s1] to the place [x] and [s2] to the place [hd]. This way,
-      we learn we can use the names [x] and [hd] for the variables which are
-      introduced by the match:
-      {[
-        match ls with
-        | Cons x hd -> ...
-        | ...
-      ]}
-   - Assignments:
-     [let x [@mplace=lp] = v [@mplace = rp] in ...]
+    We propagate naming information across the assignments. This is important
+    because many reassignments using temporary, anonymous variables are
+    introduced during desugaring.
 
-     We propagate naming information across the assignments. This is important
-     because many reassignments using temporary, anonymous variables are
-     introduced during desugaring.
+    {ul
+     {- Given back values (introduced by backward functions): Let's say we have
+        the following Rust code:
+        {[
+          let py = id(&mut x);
+          *py = 2;
+          assert!(x = 2);
+        ]}
+     }
+    }
 
-   - Given back values (introduced by backward functions):
-     Let's say we have the following Rust code:
-     {[
-       let py = id(&mut x);
-       *py = 2;
-       assert!(x = 2);
-     ]}
+    After desugaring, we get the following MIR:
+    {[
+      ^0 = &mut x; // anonymous variable
+      py = id(move ^0);
+      *py += 2;
+      assert!(x = 2);
+    ]}
 
-     After desugaring, we get the following MIR:
-     {[
-       ^0 = &mut x; // anonymous variable
-       py = id(move ^0);
-       *py += 2;
-       assert!(x = 2);
-     ]}
+    We want this to be translated as:
+    {[
+      let py = id_fwd x in
+      let py1 = py + 2 in
+      let x1 = id_back x py1 in // <-- x1 is "given back": doesn't appear in the original MIR
+      assert(x1 = 2);
+    ]}
 
-     We want this to be translated as:
-     {[
-       let py = id_fwd x in
-       let py1 = py + 2 in
-       let x1 = id_back x py1 in // <-- x1 is "given back": doesn't appear in the original MIR
-       assert(x1 = 2);
-     ]}
+    We want to notice that the value given back by [id_back] is given back for
+    "x", so we should use "x" as the basename (hence the resulting name "x1").
+    However, this is non-trivial, because after desugaring the input argument
+    given to [id] is not [&mut x] but [move ^0] (i.e., it comes from a
+    temporary, anonymous variable). For this reason, we use the meta-place
+    [&mut x] as the meta-place for the given back value (this is done during the
+    synthesis), and propagate naming information *also* on the LLBC variables
+    (which are referenced by the meta-places).
 
-     We want to notice that the value given back by [id_back] is given back for "x",
-     so we should use "x" as the basename (hence the resulting name "x1"). However,
-     this is non-trivial, because after desugaring the input argument given to [id]
-     is not [&mut x] but [move ^0] (i.e., it comes from a temporary, anonymous
-     variable). For this reason, we use the meta-place [&mut x] as the meta-place
-     for the given back value (this is done during the synthesis), and propagate
-     naming information *also* on the LLBC variables (which are referenced by the
-     meta-places).
-
-     This way, because of [^0 = &mut x], we can propagate the name "x" to the place
-     [^0], then to the given back variable across the function call.
-
- *)
+    This way, because of [^0 = &mut x], we can propagate the name "x" to the
+    place [^0], then to the given back variable across the function call. *)
 let compute_pretty_names (def : fun_decl) : fun_decl =
   (* Small helpers *)
   (*
@@ -616,17 +618,12 @@ let remove_meta (def : fun_decl) : fun_decl =
 
 (** Introduce calls to [massert] (monadic assertion).
 
-    The pattern below is very frequent especially as it is introduced by
-    the [assert!] macro. We perform the following simplification:
+    The pattern below is very frequent especially as it is introduced by the
+    [assert!] macro. We perform the following simplification:
     {[
-      if b then e
-      else fail
-
-         ~~>
-      massert b;
+      if b then e else fail ~~>massert b;
       e
-    ]}
- *)
+    ]} *)
 let intro_massert (_ctx : ctx) (def : fun_decl) : fun_decl =
   let span = def.item_meta.span in
   let visitor =
@@ -689,15 +686,14 @@ let intro_massert (_ctx : ctx) (def : fun_decl) : fun_decl =
       ...
     ]}
 
-    Of course, this is not always possible depending on the backend.
-    Also, recursive structures, and more specifically structures mutually recursive
-    with inductives, are usually not supported. We define such recursive structures
-    as inductives, in which case it is not always possible to use a notation
-    for the field projections.
+    Of course, this is not always possible depending on the backend. Also,
+    recursive structures, and more specifically structures mutually recursive
+    with inductives, are usually not supported. We define such recursive
+    structures as inductives, in which case it is not always possible to use a
+    notation for the field projections.
 
     The subsequent passes, in particular the ones which inline the useless
-    assignments, simplify this further.
-  *)
+    assignments, simplify this further. *)
 let simplify_decompose_struct (ctx : ctx) (def : fun_decl) : fun_decl =
   let span = def.item_meta.span in
   let visitor =
@@ -768,8 +764,8 @@ let simplify_decompose_struct (ctx : ctx) (def : fun_decl) : fun_decl =
 
 (** Introduce the special structure create/update expressions.
 
-    Upon generating the pure code, we introduce structure values by using
-    the structure constructors:
+    Upon generating the pure code, we introduce structure values by using the
+    structure constructors:
     {[
       Cons x0 ... xn
     ]}
@@ -781,9 +777,8 @@ let simplify_decompose_struct (ctx : ctx) (def : fun_decl) : fun_decl =
       Mkstruct x.f0 x.f1 y ~~> { x with f2 = y }
     ]}
 
-    Note however that we do not apply this transformation if the
-    structure is to be extracted as a tuple.
- *)
+    Note however that we do not apply this transformation if the structure is to
+    be extracted as a tuple. *)
 let intro_struct_updates (ctx : ctx) (def : fun_decl) : fun_decl =
   let visitor =
     object (self)
@@ -858,9 +853,9 @@ let intro_struct_updates (ctx : ctx) (def : fun_decl) : fun_decl =
 
 (** Simplify the let-bindings by performing the following rewritings:
 
-    Move inner let-bindings outside. This is especially useful to simplify
-    the backward expressions, when we merge the forward/backward functions.
-    Note that the rule is also applied with monadic let-bindings.
+    Move inner let-bindings outside. This is especially useful to simplify the
+    backward expressions, when we merge the forward/backward functions. Note
+    that the rule is also applied with monadic let-bindings.
     {[
       let x :=
         let y := ... in
@@ -903,8 +898,7 @@ let intro_struct_updates (ctx : ctx) (def : fun_decl) : fun_decl =
         ~~>
       let f := g in
       ...
-    ]}
- *)
+    ]} *)
 let simplify_let_bindings (ctx : ctx) (def : fun_decl) : fun_decl =
   let obj =
     object (self)
@@ -1008,9 +1002,9 @@ let simplify_let_bindings (ctx : ctx) (def : fun_decl) : fun_decl =
     ]}
 
     This is an issue in the generated model, because we then have to reason
-    several times about the same function call. For instance, below, we have
-    to prove *twice* that [i + j] is in bounds, and the proof context grows
-    bigger than necessary.
+    several times about the same function call. For instance, below, we have to
+    prove *twice* that [i + j] is in bounds, and the proof context grows bigger
+    than necessary.
     {[
       let i1 <- i + j (* *)
       let x1 <- array_index b i1
@@ -1019,8 +1013,7 @@ let simplify_let_bindings (ctx : ctx) (def : fun_decl) : fun_decl =
       let a1 = array_update a i2 x2
     ]}
 
-    This micro pass removes those duplicate function calls.
- *)
+    This micro pass removes those duplicate function calls. *)
 let simplify_duplicate_calls (_ctx : ctx) (def : fun_decl) : fun_decl =
   let visitor =
     object (self)
@@ -1115,22 +1108,22 @@ let inline_fun (_ : fun_id) : bool = false
 (** Inline the useless variable (re-)assignments:
 
     A lot of intermediate variable assignments are introduced through the
-    compilation to MIR and by the translation itself (and the variable used
-    on the left is often unnamed).
+    compilation to MIR and by the translation itself (and the variable used on
+    the left is often unnamed).
 
-    Note that many of them are just variable "reassignments": [let x = y in ...].
-    Some others come from ??
+    Note that many of them are just variable "reassignments":
+    [let x = y in ...]. Some others come from ??
 
-    TODO: how do we call that when we introduce intermediate variable assignments
-    for the arguments of a function call?
+    TODO: how do we call that when we introduce intermediate variable
+    assignments for the arguments of a function call?
 
     [inline_named]: if [true], inline all the assignments of the form
-    [let VAR = VAR in ...], otherwise inline only the ones where the variable
-    on the left is anonymous.
+    [let VAR = VAR in ...], otherwise inline only the ones where the variable on
+    the left is anonymous.
 
     [inline_pure]: if [true], inline all the pure assignments where the variable
-    on the left is anonymous, but the assignments where the r-expression is
-    a function call (i.e.: ADT constructions, etc.), except certain cases of
+    on the left is anonymous, but the assignments where the r-expression is a
+    function call (i.e.: ADT constructions, etc.), except certain cases of
     function calls.
 
     [inline_identity]: if [true], inline the identity functions (i.e., lambda
@@ -1139,8 +1132,7 @@ let inline_fun (_ : fun_id) : bool = false
     TODO: we have a smallish issue which is that rvalues should be merged with
     expressions... For now, this forces us to substitute whenever we can, but
     leave the let-bindings where they are, and eliminated them in a subsequent
-    pass (if they are useless).
- *)
+    pass (if they are useless). *)
 let inline_useless_var_assignments ~(inline_named : bool) ~(inline_const : bool)
     ~(inline_pure : bool) ~(inline_identity : bool) (ctx : ctx) (def : fun_decl)
     : fun_decl =
@@ -1148,8 +1140,8 @@ let inline_useless_var_assignments ~(inline_named : bool) ~(inline_const : bool)
     object (self)
       inherit [_] map_expression as super
 
-      (** Visit the let-bindings to filter the useless ones (and update
-          the substitution map while doing so *)
+      (** Visit the let-bindings to filter the useless ones (and update the
+          substitution map while doing so *)
       method! visit_Let (env : texpression LocalId.Map.t) monadic lv re e =
         (* In order to filter, we need to check first that:
            - the let-binding is not monadic
@@ -1281,8 +1273,8 @@ let inline_useless_var_assignments ~(inline_named : bool) ~(inline_const : bool)
       in
       { def with body = Some body }
 
-(** Filter the useless assignments (removes the useless variables, filters
-    the function calls) *)
+(** Filter the useless assignments (removes the useless variables, filters the
+    function calls) *)
 let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
   (* We first need a transformation on *left-values*, which filters the useless
      variables and tells us whether the value contains any variable which has
@@ -1420,8 +1412,7 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
         ~~>
 
       f y
-    ]}
- *)
+    ]} *)
 let simplify_let_then_ok _ctx (def : fun_decl) =
   (* Match a pattern and an expression: evaluates to [true] if the expression
      is actually exactly the pattern *)
@@ -1465,8 +1456,10 @@ let simplify_let_then_ok _ctx (def : fun_decl) =
             (* Small shortcut to avoid doing the check on every let-binding *)
             not_simpl_e
         | _ -> (
-            if (* Do the check *)
-               monadic then
+            if
+              (* Do the check *)
+              monadic
+            then
               (* The first let-binding is monadic *)
               match opt_destruct_ret next_e with
               | Some e ->
@@ -1495,14 +1488,12 @@ let simplify_let_then_ok _ctx (def : fun_decl) =
       let body = { body with body = body_exp } in
       { def with body = Some body }
 
-(** Simplify the aggregated ADTs.
-    Ex.:
+(** Simplify the aggregated ADTs. Ex.:
     {[
       type struct = { f0 : nat; f1 : nat; f2 : nat }
 
       Mkstruct x.f0 x.f1 x.f2 ~~> x
-    ]}
- *)
+    ]} *)
 let simplify_aggregates (ctx : ctx) (def : fun_decl) : fun_decl =
   let expr_visitor =
     object
@@ -1701,15 +1692,12 @@ type simp_aggr_env = {
     Because of the way the symbolic execution works, we often see the following
     pattern:
     {[
-      if x.field then { x with field = true }
-      else { x with field = false }
+      if x.field then { x with field = true } else { x with field = false }
     ]}
     This micro-pass simplifies it to:
     {[
-      if x.field then x
-      else x
-    ]}
- *)
+      if x.field then x else x
+    ]} *)
 let simplify_aggregates_unchanged_fields (ctx : ctx) (def : fun_decl) : fun_decl
     =
   let log = Logging.simplify_aggregates_unchanged_fields_log in
@@ -1917,11 +1905,10 @@ let simplify_aggregates_unchanged_fields (ctx : ctx) (def : fun_decl) : fun_decl
 
 (** Retrieve the loop definitions from the function definition.
 
-    {!SymbolicToPure} generates an AST in which the loop bodies are part of
-    the function body (see the {!Pure.Loop} node). This function extracts
-    those function bodies into independent definitions while removing
-    occurrences of the {!Pure.Loop} node.
- *)
+    {!SymbolicToPure} generates an AST in which the loop bodies are part of the
+    function body (see the {!Pure.Loop} node). This function extracts those
+    function bodies into independent definitions while removing occurrences of
+    the {!Pure.Loop} node. *)
 let decompose_loops (_ctx : ctx) (def : fun_decl) : fun_decl * fun_decl list =
   match def.body with
   | None -> (def, [])
@@ -2065,7 +2052,7 @@ let decompose_loops (_ctx : ctx) (def : fun_decl) : fun_decl * fun_decl list =
 
             let loop_body = { inputs; inputs_lvs; body = loop_body } in
             (* We retrieve the meta information from the parent function
-               *but* replace its span with the span of the loop *)
+             *but* replace its span with the span of the loop *)
             let item_meta = { def.item_meta with span = loop.span } in
 
             sanity_check __FILE__ __LINE__ (def.builtin_info = None)
@@ -2100,8 +2087,8 @@ let decompose_loops (_ctx : ctx) (def : fun_decl) : fun_decl * fun_decl list =
       let loops = List.map snd (LoopId.Map.bindings !loops) in
       (def, loops)
 
-(** Convert the unit variables to [()] if they are used as right-values or
-    [_] if they are used as left values in patterns. *)
+(** Convert the unit variables to [()] if they are used as right-values or [_]
+    if they are used as left values in patterns. *)
 let unit_vars_to_unit (def : fun_decl) : fun_decl =
   (* The map visitor *)
   let obj =
@@ -2113,8 +2100,7 @@ let unit_vars_to_unit (def : fun_decl) : fun_decl =
         if v.ty = mk_unit_ty then PatDummy else PatVar (v, mp)
 
       (** Replace in "regular" expressions - note that we could limit ourselves
-          to variables, but this is more powerful
-       *)
+          to variables, but this is more powerful *)
       method! visit_texpression env e =
         if e.ty = mk_unit_ty then mk_unit_rvalue
         else super#visit_texpression env e
@@ -2135,12 +2121,10 @@ let unit_vars_to_unit (def : fun_decl) : fun_decl =
     identity) and [Box::free] (which is translated to [()]).
 
     Note that the box types have already been eliminated during the translation
-    from symbolic to pure.
-    The reason why we don't eliminate the box functions at the same time is
-    that we would need to eliminate them in two different places: when translating
-    function calls, and when translating end abstractions. Here, we can do
-    something simpler, in one micro-pass.
- *)
+    from symbolic to pure. The reason why we don't eliminate the box functions
+    at the same time is that we would need to eliminate them in two different
+    places: when translating function calls, and when translating end
+    abstractions. Here, we can do something simpler, in one micro-pass. *)
 let eliminate_box_functions (_ctx : ctx) (def : fun_decl) : fun_decl =
   (* The map visitor *)
   let obj =
@@ -2153,7 +2137,7 @@ let eliminate_box_functions (_ctx : ctx) (def : fun_decl) : fun_decl =
             (* Below, when dealing with the arguments: we consider the very
              * general case, where functions could be boxed (meaning we
              * could have: [box_new f x])
-             * *)
+             *)
             match fun_id with
             | Fun (FromLlbc (FunId (FBuiltin aid), _lp_id)) -> (
                 match aid with
@@ -2247,14 +2231,9 @@ let apply_beta_reduction (_ctx : ctx) (def : fun_decl) : fun_decl =
     ]}
 
     {[
-      let (_, back) = Array.index_mut_usize a i in
-      back x
-
-       ~~>
-
-      Array.update a i x
-    ]}
-  *)
+      let _, back = Array.index_mut_usize a i in
+      back x ~~>Array.update a i x
+    ]} *)
 let simplify_array_slice_update (ctx : ctx) (def : fun_decl) : fun_decl =
   let span = def.item_meta.span in
 
@@ -2294,16 +2273,16 @@ let simplify_array_slice_update (ctx : ctx) (def : fun_decl) : fun_decl =
                 id =
                   FunOrOp
                     (Fun
-                      (FromLlbc
-                        ( FunId
-                            (FBuiltin
-                              (Index
-                                {
-                                  is_array;
-                                  mutability = RMut;
-                                  is_range = false;
-                                })),
-                          None )));
+                       (FromLlbc
+                          ( FunId
+                              (FBuiltin
+                                 (Index
+                                    {
+                                      is_array;
+                                      mutability = RMut;
+                                      is_range = false;
+                                    })),
+                            None )));
                 generics = index_generics;
               },
             [ a; i ] ) ->
@@ -2534,8 +2513,7 @@ let simplify_array_slice_update (ctx : ctx) (def : fun_decl) : fun_decl =
     {!decompose_nested_let_patterns}.
 
     [decompose_monadic]: always decompose a monadic let-binding
-    [decompose_nested_pats]: decompose the nested patterns
- *)
+    [decompose_nested_pats]: decompose the nested patterns *)
 let decompose_let_bindings (decompose_monadic : bool)
     (decompose_nested_pats : bool) (_ctx : ctx) (def : fun_decl) : fun_decl =
   match def.body with
@@ -2582,8 +2560,8 @@ let decompose_let_bindings (decompose_monadic : bool)
           object
             inherit [_] map_typed_pattern as super
 
-            method! visit_typed_pattern (inside : bool) (pat : typed_pattern)
-                : typed_pattern =
+            method! visit_typed_pattern (inside : bool) (pat : typed_pattern) :
+                typed_pattern =
               match pat.value with
               | PatConstant _ | PatVar _ | PatDummy -> pat
               | PatAdt _ ->
@@ -2655,15 +2633,13 @@ let decompose_let_bindings (decompose_monadic : bool)
 
 (** Decompose monadic let-bindings.
 
-    See the explanations in {!val:Config.decompose_monadic_let_bindings}
- *)
+    See the explanations in {!val:Config.decompose_monadic_let_bindings} *)
 let decompose_monadic_let_bindings (ctx : ctx) (def : fun_decl) : fun_decl =
   decompose_let_bindings true false ctx def
 
 (** Decompose the nested let patterns.
 
-    See the explanations in {!val:Config.decompose_nested_let_patterns}
- *)
+    See the explanations in {!val:Config.decompose_nested_let_patterns} *)
 let decompose_nested_let_patterns (ctx : ctx) (def : fun_decl) : fun_decl =
   decompose_let_bindings false true ctx def
 
@@ -2745,10 +2721,9 @@ let unfold_monadic_let_bindings (_ctx : ctx) (def : fun_decl) : fun_decl =
       let y <-- toResult e
     ]}
 
-    We only do this on a specific set of pure functions calls - those
-    functions are identified in the "builtin" information about external
-    function calls.
- *)
+    We only do this on a specific set of pure functions calls - those functions
+    are identified in the "builtin" information about external function calls.
+*)
 let lift_pure_function_calls (ctx : ctx) (def : fun_decl) : fun_decl =
   let span = def.item_meta.span in
 
@@ -2836,8 +2811,7 @@ let lift_pure_function_calls (ctx : ctx) (def : fun_decl) : fun_decl =
     {[
       let (a, b) <-- f x
       ...
-    ]}
- *)
+    ]} *)
 let merge_let_app_then_decompose_tuple (_ctx : ctx) (def : fun_decl) : fun_decl
     =
   let span = def.item_meta.span in
@@ -3165,10 +3139,9 @@ let filter_loop_inputs (ctx : ctx) (transl : pure_fun_translation list) :
               | _ -> super#visit_texpression env e)
           | _ -> super#visit_texpression env e
 
-        (** If we visit a variable which is actually an input parameter, we
-            set it as used. Note that we take care of ignoring some of those
-            input parameters given in [visit_texpression].
-          *)
+        (** If we visit a variable which is actually an input parameter, we set
+            it as used. Note that we take care of ignoring some of those input
+            parameters given in [visit_texpression]. *)
         method! visit_local_id _ id =
           if LocalId.Set.mem id inputs_set then set_used id
       end
@@ -3369,13 +3342,12 @@ let filter_loop_inputs (ctx : ctx) (transl : pure_fun_translation list) :
 
 (** Update the [reducible] attribute.
 
-    For now we mark a function as reducible when its body is only a call to a loop
-    function. This situation often happens for simple functions whose body contains
-    a loop: we introduce an intermediate function for the loop body, and the
-    translation of the function itself simply calls the loop body. By marking
-    the function as reducible, we allow tactics like [simp] or [progress] to
-    see through the definition.
- *)
+    For now we mark a function as reducible when its body is only a call to a
+    loop function. This situation often happens for simple functions whose body
+    contains a loop: we introduce an intermediate function for the loop body,
+    and the translation of the function itself simply calls the loop body. By
+    marking the function as reducible, we allow tactics like [simp] or
+    [progress] to see through the definition. *)
 let compute_reducible (_ctx : ctx) (transl : pure_fun_translation list) :
     pure_fun_translation list =
   let update_one (trans : pure_fun_translation) : pure_fun_translation =
@@ -3401,12 +3373,11 @@ let compute_reducible (_ctx : ctx) (transl : pure_fun_translation list) :
 (** Apply all the micro-passes to a function.
 
     As loops are initially directly integrated into the function definition,
-    {!apply_passes_to_def} extracts those loops definitions from the body;
-    it thus returns the pair: (function def, loop defs). See {!decompose_loops}
-    for more information.
+    {!apply_passes_to_def} extracts those loops definitions from the body; it
+    thus returns the pair: (function def, loop defs). See {!decompose_loops} for
+    more information.
 
-    [ctx]: used only for printing.
- *)
+    [ctx]: used only for printing. *)
 let apply_passes_to_def (ctx : ctx) (def : fun_decl) : fun_and_loops =
   (* Debug *)
   log#ltrace (lazy ("PureMicroPasses.apply_passes_to_def: " ^ def.name));
@@ -3441,8 +3412,7 @@ let apply_passes_to_def (ctx : ctx) (def : fun_decl) : fun_and_loops =
 
     See [add_type_annotations].
 
-    Note that we use the context only for printing.
- *)
+    Note that we use the context only for printing. *)
 let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
     (trans_funs : pure_fun_translation FunDeclId.Map.t)
     (builtin_sigs : fun_sig Builtin.BuiltinFunIdMap.t)
@@ -3810,12 +3780,11 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
 
     See [add_type_annotations]
 
-    We need to do this in some backends in particular for the expressions
-    which create structures, as the target structure may be ambiguous from
-    the context.
+    We need to do this in some backends in particular for the expressions which
+    create structures, as the target structure may be ambiguous from the
+    context.
 
-    Note that we use the context only for printing.
- *)
+    Note that we use the context only for printing. *)
 let add_type_annotations (trans_ctx : trans_ctx)
     (trans_funs : pure_fun_translation list)
     (builtin_sigs : fun_sig Builtin.BuiltinFunIdMap.t)
@@ -3839,17 +3808,17 @@ let add_type_annotations (trans_ctx : trans_ctx)
 
 (** Apply the micro-passes to a list of forward/backward translations.
 
-    This function also extracts the loop definitions from the function body
-    (see {!decompose_loops}).
+    This function also extracts the loop definitions from the function body (see
+    {!decompose_loops}).
 
-    It also returns a boolean indicating whether the forward function should be kept
-    or not at extraction time ([true] means we need to keep the forward function).
+    It also returns a boolean indicating whether the forward function should be
+    kept or not at extraction time ([true] means we need to keep the forward
+    function).
 
-    Note that we don't "filter" the forward function and return a boolean instead,
-    because this function contains useful information to extract the backward
-    functions. Note that here, keeping the forward function it is not *necessary*
-    but convenient.
- *)
+    Note that we don't "filter" the forward function and return a boolean
+    instead, because this function contains useful information to extract the
+    backward functions. Note that here, keeping the forward function it is not
+    *necessary* but convenient. *)
 let apply_passes_to_pure_fun_translations (trans_ctx : trans_ctx)
     (builtin_sigs : fun_sig Builtin.BuiltinFunIdMap.t)
     (type_decls : type_decl list) (transl : fun_decl list) :

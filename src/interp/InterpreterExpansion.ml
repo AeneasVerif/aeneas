@@ -22,32 +22,29 @@ let log = Logging.expansion_log
 (** Projector kind *)
 type proj_kind = LoanProj | BorrowProj
 
-(** Auxiliary function.
-    Apply a symbolic expansion to avalues in a context, targetting a specific
-    kind of projectors.
-    
-    [proj_kind] controls whether we apply the expansion to projectors
-    on loans or projectors on borrows.
-    
+(** Auxiliary function. Apply a symbolic expansion to avalues in a context,
+    targetting a specific kind of projectors.
+
+    [proj_kind] controls whether we apply the expansion to projectors on loans
+    or projectors on borrows.
+
     When dealing with reference expansion, it is necessary to first apply the
-    expansion on loan projectors, then on borrow projectors. The reason is
-    that reducing the borrow projectors might require to perform some reborrows,
-    in which case we need to lookup the corresponding loans in the context.
-    
+    expansion on loan projectors, then on borrow projectors. The reason is that
+    reducing the borrow projectors might require to perform some reborrows, in
+    which case we need to lookup the corresponding loans in the context.
+
     [allow_reborrows] controls whether we allow reborrows or not. It is useful
     only if we target borrow projectors.
-    
+
     Also, if this function is called on an expansion for *shared references*,
     the proj borrows should already have been expanded.
-    
+
     TODO: the way this function is used is a bit complex, especially because of
-    the above condition. Maybe we should have:
-    1. a generic function to expand the loan projectors
-    2. a function to expand the borrow projectors for non-borrows
-    3. specialized functions for mut borrows and shared borrows
-    Note that 2. and 3. may have a little bit of duplicated code, but hopefully
-    it would make things clearer.
-*)
+    the above condition. Maybe we should have: 1. a generic function to expand
+    the loan projectors 2. a function to expand the borrow projectors for
+    non-borrows 3. specialized functions for mut borrows and shared borrows Note
+    that 2. and 3. may have a little bit of duplicated code, but hopefully it
+    would make things clearer. *)
 let apply_symbolic_expansion_to_target_avalues (config : config)
     (span : Meta.span) (allow_reborrows : bool) (proj_kind : proj_kind)
     (original_sv : symbolic_value) (expansion : symbolic_expansion)
@@ -70,11 +67,11 @@ let apply_symbolic_expansion_to_target_avalues (config : config)
         let current_abs = Some abs in
         super#visit_abs current_abs abs
 
-      (** We carefully updated {!visit_ASymbolic} so that {!visit_aproj} is called
-          only on child projections (i.e., projections which appear in {!AEndedProjLoans}).
-          The role of visit_aproj is then to check we don't have to expand symbolic
-          values in child projections, because it should never happen
-        *)
+      (** We carefully updated {!visit_ASymbolic} so that {!visit_aproj} is
+          called only on child projections (i.e., projections which appear in
+          {!AEndedProjLoans}). The role of visit_aproj is then to check we don't
+          have to expand symbolic values in child projections, because it should
+          never happen *)
       method! visit_aproj current_abs aproj =
         (match aproj with
         | AProjLoans (sv_id, _, _) | AProjBorrows (sv_id, _, _) ->
@@ -151,9 +148,7 @@ let apply_symbolic_expansion_to_target_avalues (config : config)
   (* Apply the reborrows *)
   apply_registered_reborrows ctx
 
-(** Auxiliary function.
-    Apply a symbolic expansion to avalues in a context.
-*)
+(** Auxiliary function. Apply a symbolic expansion to avalues in a context. *)
 let apply_symbolic_expansion_to_avalues (config : config) (span : Meta.span)
     (allow_reborrows : bool) (original_sv : symbolic_value)
     (expansion : symbolic_expansion) (ctx : eval_ctx) : eval_ctx =
@@ -168,9 +163,8 @@ let apply_symbolic_expansion_to_avalues (config : config) (span : Meta.span)
 
 (** Auxiliary function.
 
-    Simply replace the symbolic values (*not avalues*) in the context with
-    a given value. Will break invariants if not used properly.
-*)
+    Simply replace the symbolic values (*not avalues*) in the context with a
+    given value. Will break invariants if not used properly. *)
 let replace_symbolic_values (span : Meta.span) (at_most_once : bool)
     (original_sv : symbolic_value) (nv : value) (ctx : eval_ctx) : eval_ctx =
   (* Count *)
@@ -209,16 +203,14 @@ let apply_symbolic_expansion_non_borrow (config : config) (span : Meta.span)
   apply_symbolic_expansion_to_avalues config span allow_reborrows original_sv
     expansion ctx
 
-(** Compute the expansion of a non-builtin (e.g.: not [Box], etc.)
-    adt value.
+(** Compute the expansion of a non-builtin (e.g.: not [Box], etc.) adt value.
 
     The function might return a list of values if the symbolic value to expand
     is an enumeration.
-    
-    [generics]: mustn't contain erased regions.
-    [expand_enumerations] controls the expansion of enumerations: if false, it
-    doesn't allow the expansion of enumerations *containing several variants*.
- *)
+
+    [generics]: mustn't contain erased regions. [expand_enumerations] controls
+    the expansion of enumerations: if false, it doesn't allow the expansion of
+    enumerations *containing several variants*. *)
 let compute_expanded_symbolic_non_builtin_adt_value (span : Meta.span)
     (expand_enumerations : bool) (def_id : TypeDeclId.id)
     (generics : generic_args) (ctx : eval_ctx) : symbolic_expansion list =
@@ -271,10 +263,9 @@ let compute_expanded_symbolic_box_value (span : Meta.span) (boxed_ty : rty) :
     The function might return a list of values if the symbolic value to expand
     is an enumeration.
 
-    [generics]: the regions shouldn't have been erased.
-    [expand_enumerations] controls the expansion of enumerations: if [false], it
-    doesn't allow the expansion of enumerations *containing several variants*.
- *)
+    [generics]: the regions shouldn't have been erased. [expand_enumerations]
+    controls the expansion of enumerations: if [false], it doesn't allow the
+    expansion of enumerations *containing several variants*. *)
 let compute_expanded_symbolic_adt_value (span : Meta.span)
     (expand_enumerations : bool) (adt_id : type_id) (generics : generic_args)
     (ctx : eval_ctx) : symbolic_expansion list =
@@ -359,11 +350,11 @@ let expand_symbolic_value_shared_borrow (config : config) (span : Meta.span)
         let asb = List.concat (List.map expand_asb asb) in
         AProjSharedBorrow asb
 
-      (** We carefully updated {!visit_ASymbolic} so that {!visit_aproj} is called
-          only on child projections (i.e., projections which appear in {!AEndedProjLoans}).
-          The role of visit_aproj is then to check we don't have to expand symbolic
-          values in child projections, because it should never happen
-        *)
+      (** We carefully updated {!visit_ASymbolic} so that {!visit_aproj} is
+          called only on child projections (i.e., projections which appear in
+          {!AEndedProjLoans}). The role of visit_aproj is then to check we don't
+          have to expand symbolic values in child projections, because it should
+          never happen *)
       method! visit_aproj proj_regions aproj =
         (match aproj with
         | AProjLoans (sv_id, _, _) | AProjBorrows (sv_id, _, _) ->
@@ -603,14 +594,12 @@ let expand_symbolic_int (config : config) (span : Meta.span)
   in
   ((ctx_branches, ctx_otherwise), cf)
 
-(** Expand all the symbolic values which contain borrows.
-    Allows us to restrict ourselves to a simpler model for the projectors over
-    symbolic values.
-    
-    Fails if doing this requires to do a branching (because we need to expand
-    an enumeration with strictly more than one variant, a slice, etc.) or if
-    we need to expand a recursive type (because this leads to looping).
- *)
+(** Expand all the symbolic values which contain borrows. Allows us to restrict
+    ourselves to a simpler model for the projectors over symbolic values.
+
+    Fails if doing this requires to do a branching (because we need to expand an
+    enumeration with strictly more than one variant, a slice, etc.) or if we
+    need to expand a recursive type (because this leads to looping). *)
 let greedy_expand_symbolics_with_borrows (config : config) (span : Meta.span) :
     cm_fun =
  fun ctx ->

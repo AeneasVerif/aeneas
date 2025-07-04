@@ -6,15 +6,14 @@ open InterpreterLoopsCore
 (** Merge an abstraction into another abstraction in a context.
 
     This function is similar to {!InterpreterBorrows.merge_into_abstraction}.
-    
+
     Parameters:
     - [loop_id]
     - [abs_kind]
     - [can_end]
     - [ctx]
     - [aid0]
-    - [aid1]
- *)
+    - [aid1] *)
 val merge_into_first_abstraction :
   Meta.span ->
   loop_id ->
@@ -41,9 +40,9 @@ val merge_into_first_abstraction :
 
     Note that when joining the values mapped to by the non-dummy variables, we
     may introduce duplicated borrows. Also, we don't match the abstractions
-    which are not in the prefix, and this can also lead to borrow
-    duplications. For this reason, the environment needs to be collapsed
-    afterwards to get rid of those duplicated loans/borrows.
+    which are not in the prefix, and this can also lead to borrow duplications.
+    For this reason, the environment needs to be collapsed afterwards to get rid
+    of those duplicated loans/borrows.
 
     For instance, if we have:
     {[
@@ -71,20 +70,19 @@ val merge_into_first_abstraction :
       }
     ]}
 
-    Rem.: in practice, this join works because we take care of pushing new values
-    and abstractions *at the end* of the environments, meaning the environment
-    prefixes keep the same structure.
+    Rem.: in practice, this join works because we take care of pushing new
+    values and abstractions *at the end* of the environments, meaning the
+    environment prefixes keep the same structure.
 
     Rem.: assuming that the environment has some structure poses *no soundness
-    issue*. It can only make the join fail if the environments actually don't have
-    this structure: this is a *completeness issue*.
-    
+    issue*. It can only make the join fail if the environments actually don't
+    have this structure: this is a *completeness issue*.
+
     Parameters:
     - [loop_id]
     - [fixed_ids]
     - [ctx0]
-    - [ctx1]
-  *)
+    - [ctx1] *)
 val join_ctxs :
   Meta.span -> loop_id -> ids_sets -> eval_ctx -> eval_ctx -> ctx_or_update
 
@@ -92,18 +90,17 @@ val join_ctxs :
     (upon reaching the [Continue] statement - the goal is to compute a fixed
     point for the loop entry).
 
-    As we may have to end loans in the environments before doing the join,
-    we return those updated environments, and the joined environment.
-    
+    As we may have to end loans in the environments before doing the join, we
+    return those updated environments, and the joined environment.
+
     This function is mostly built on top of {!join_ctxs}.
-    
+
     Parameters:
     - [config]
     - [loop_id]
     - [fixed_ids]
     - [old_ctx]
-    - [ctxl]
- *)
+    - [ctxl] *)
 val loop_join_origin_with_continue_ctxs :
   config ->
   Meta.span ->

@@ -1,8 +1,7 @@
 (** This module implements support to match contexts for loops.
 
-    The matching functions are used for instance to compute joins, or
-    to check if two contexts are equivalent (modulo conversion).
- *)
+    The matching functions are used for instance to compute joins, or to check
+    if two contexts are equivalent (modulo conversion). *)
 
 open Types
 open Values
@@ -204,8 +203,7 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
 
 (** Match two types during a join.
 
-    TODO: probably don't need to take [match_regions] as input anymore.
- *)
+    TODO: probably don't need to take [match_regions] as input anymore. *)
 let rec match_types (span : Meta.span) (ctx0 : eval_ctx) (ctx1 : eval_ctx)
     (match_distinct_types : ty -> ty -> ty)
     (match_regions : region -> region -> region) (ty0 : ty) (ty1 : ty) : ty =
@@ -1179,10 +1177,9 @@ struct
       List.map (fun (k0, k1) -> match_e msg m k0 k1) (List.combine kl0 kl1)
 
     (** Figuring out mappings between sets of ids is hard in all generality...
-        We use the fact that the fresh ids should have been generated
-        the same way (i.e., in the same order) and match the ids two by
-        two in increasing order.
-     *)
+        We use the fact that the fresh ids should have been generated the same
+        way (i.e., in the same order) and match the ids two by two in increasing
+        order. *)
     let match_es (msg : string) (m : Inj.t ref) (ks0 : Id.Set.t)
         (ks1 : Id.Set.t) : Id.Set.t =
       Id.Set.of_list
