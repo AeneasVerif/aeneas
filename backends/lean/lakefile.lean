@@ -7,5 +7,9 @@ require mathlib from git
 
 package «aeneas» {}
 
-@[default_target]
-lean_lib «Aeneas» {}
+@[default_target] lean_lib «Aeneas» {}
+
+@[default_target] lean_lib «AeneasMeta» {
+  -- TODO: activating this makes the Nix CI fail
+  --precompileModules := true
+}

@@ -1,7 +1,7 @@
 import Lean.Meta.Tactic.Clear
 import Lean.Meta.Tactic.Util
 import Lean.Meta.Tactic.Simp.Main
-import Aeneas.Simp.Simp
+import AeneasMeta.Simp.Simp
 
 /-!
 This file is adapted from Lean.Meta.Tactic.Simp.SimpAll.lean

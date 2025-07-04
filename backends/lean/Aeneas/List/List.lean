@@ -2,7 +2,7 @@
 
 import Mathlib.Data.List.GetD
 import Aeneas.ScalarTac
-import Aeneas.Utils
+import AeneasMeta.Utils
 import Aeneas.SimpLemmas
 import Aeneas.Nat
 import Aeneas.SimpLists.Init

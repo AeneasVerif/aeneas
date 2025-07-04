@@ -1,7 +1,5 @@
 import Lean
-import Mathlib.Tactic.Core
-import Aeneas.UtilsCore
-import Aesop
+import AeneasMeta.UtilsCore
 
 namespace Lean
 
@@ -253,10 +251,6 @@ end Methods
 inductive Location where
   /-- Apply the tactic everywhere. Same as `Location.wildcard` -/
   | wildcard
-  /-- Apply the tactic everywhere, including in the variable types (i.e., in
-      assumptions which are not propositions).
-  --/
-  | wildcard_dep
   /-- Same as Location -/
   | targets (hypotheses : Array FVarId) (type : Bool)
 
@@ -315,10 +309,29 @@ example (x : Bool) : Nat := by
 def tryTac (tac : TacticM Unit) : TacticM Unit := do
   let _ ← tryTactic tac
 
-/-- Adapted from allGoals
+/-- Copy/pasted from Mathlib because we do not want to add it as a dependency for this module
+    as it gets compiled. -/
+def allGoals (tac : TacticM Unit) : TacticM Unit := do
+  let mvarIds ← getGoals
+  let mut mvarIdsNew := #[]
+  for mvarId in mvarIds do
+    unless (← mvarId.isAssigned) do
+      setGoals [mvarId]
+      try
+        tac
+        mvarIdsNew := mvarIdsNew ++ (← getUnsolvedGoals)
+      catch ex =>
+        if (← read).recover then
+          logException ex
+          mvarIdsNew := mvarIdsNew.push mvarId
+        else
+          throw ex
+  setGoals mvarIdsNew.toList
 
-    We use this instead of allGoals, because when the tactic throws an exception that we attempt
-    to catch outside, the behavior can be quite surprising.
+/-- Adapted from `Lean.Elab.Tactic.allGoals`
+
+    We sometimes use this rather than `allGoals`, because when the tactic throws
+    an exception that we attempt to catch outside, the behavior can be quite surprising.
  -/
 def allGoalsNoRecover (tac : TacticM Unit) : TacticM Unit := do
   let mvarIds ← getGoals
@@ -678,14 +691,17 @@ def listTryPopHead (ls : List α) : Option α × List α :=
    If `ids` is not empty, we use it to name the introduced variables. We
    transmit the stripped expression and the remaining ids to the continuation.
  -/
-partial def splitAllExistsTac [Inhabited α] (h : Expr) (ids : List (Option Name)) (k : Expr → List (Option Name) → TacticM α) : TacticM α := do
-  if isExists (← inferType h) then do
-    let (optId, ids) :=
-      match ids with
-      | [] => (none, [])
-      | x :: ids => (x, ids)
-    splitExistsTac h optId (fun _ body => splitAllExistsTac body ids k)
-  else k h ids
+partial def splitAllExistsTac [Inhabited α] (h : Expr) (ids : List (Option Name))
+  (k : Array Expr → Expr → List (Option Name) → TacticM α) : TacticM α := do
+  let rec run (fvars : Array Expr) h ids := do
+    if isExists (← inferType h) then do
+      let (optId, ids) :=
+        match ids with
+        | [] => (none, [])
+        | x :: ids => (x, ids)
+      splitExistsTac h optId (fun fvar body => run (fvars.push fvar) body ids)
+    else k fvars h ids
+  run #[] h ids
 
 -- Tactic to split on a conjunction.
 def splitConjTac (h : Expr) (optIds : Option (Name × Name)) (k : Expr → Expr → TacticM α)  : TacticM α := do
@@ -777,7 +793,7 @@ elab "split_existsl" " at " n:ident : tactic => do
   withMainContext do
   let decl ← Lean.Meta.getLocalDeclFromUserName n.getId
   let fvar := mkFVar decl.fvarId
-  splitAllExistsTac fvar [] (fun _ _ => pure ())
+  splitAllExistsTac fvar [] (fun _ _ _ => do pure ())
 
 example (h : a ∧ b) : a := by
   split_conj at h
@@ -888,7 +904,6 @@ def normCastAt (loc : Location) : TacticM (Option (Array (FVarId))) := do
       | some id => fvarIds := fvarIds.push id
       | none => return none
     return some fvarIds
-  | .wildcard_dep => throwError "Unimplemented: normCastAt wildcarp_dep"
 
 @[inline] def tryLiftMetaTactic1 (tactic : MVarId → MetaM (Option MVarId)) (msg : String) : TacticM Unit :=
   withMainContext do
@@ -896,13 +911,6 @@ def normCastAt (loc : Location) : TacticM (Option (Array (FVarId))) := do
       replaceMainGoal [mvarId]
     else
       throwError msg
-
-/-- Call the saturate function from aesop -/
-def evalAesopSaturate (options : Aesop.Options') (ruleSets : Array Name) : TacticM Unit := do
-  let rss ← Aesop.Frontend.getGlobalRuleSets ruleSets
-  let rs ← Aesop.mkLocalRuleSet rss options
-    |> Aesop.ElabM.runForwardElab (← getMainGoal)
-  tryLiftMetaTactic1 (Aesop.saturate rs · options) "Aesop.saturate failed"
 
 /-- Normalize the let-bindings by inlining them -/
 def normalizeLetBindings (e : Expr) : MetaM Expr :=
@@ -1013,6 +1021,42 @@ def clearFVarIds (fvarIds : Array FVarId) : TacticM Unit := do
       let mvarId ← (← getMainGoal).clear fvarId
       replaceMainGoal [mvarId]
 
+/- Copy/pasted from Mathlib to avoid having to compile this dependency -/
+namespace MathlibDuplicate
+  /-- Given a local context and an array of `FVarIds` assumed to be in that local context, remove all
+    implementation details. -/
+    def filterOutImplementationDetails (lctx : LocalContext) (fvarIds : Array FVarId) : Array FVarId :=
+      fvarIds.filter (fun fvar => ! (lctx.fvarIdToDecl.find! fvar).isImplementationDetail)
+
+    /-- Elaborate syntax for an `FVarId` in the local context of the given goal. -/
+    def getFVarIdAt (goal : MVarId) (id : Syntax) : TacticM FVarId := withRef id do
+      -- use apply-like elaboration to suppress insertion of implicit arguments
+      let e ← goal.withContext do
+        elabTermForApply id (mayPostpone := false)
+      match e with
+      | Expr.fvar fvarId => return fvarId
+      | _                => throwError "unexpected term '{e}'; expected single reference to variable"
+
+    /-- Get the array of `FVarId`s in the local context of the given `goal`.
+
+    If `ids` is specified, elaborate them in the local context of the given goal to obtain the array of
+    `FVarId`s.
+
+    If `includeImplementationDetails` is `false` (the default), we filter out implementation details
+    (`implDecl`s and `auxDecl`s) from the resulting list of `FVarId`s. -/
+    def getFVarIdsAt (goal : MVarId) (ids : Option (Array Syntax) := none)
+        (includeImplementationDetails : Bool := false) : TacticM (Array FVarId) :=
+      goal.withContext do
+        let lctx := (← goal.getDecl).lctx
+        let fvarIds ← match ids with
+        | none => pure lctx.getFVarIds
+        | some ids => ids.mapM <| getFVarIdAt goal
+        if includeImplementationDetails then
+          return fvarIds
+        else
+          return filterOutImplementationDetails lctx fvarIds
+end MathlibDuplicate
+
 /-- Minimize the goal by removing all the unnecessary variables and assumptions -/
 partial def minimizeGoal : TacticM Unit := do
   withMainContext do
@@ -1087,7 +1131,7 @@ partial def minimizeGoal : TacticM Unit := do
   trace[Utils] "Done exploring the context"
   /- Clear all the fvars which were not listed -/
   trace[Utils] "neededIds: {← neededIds.toArray.mapM (fun x => x.getUserName)}"
-  let allIds ← getFVarIdsAt (← getMainGoal)
+  let allIds ← MathlibDuplicate.getFVarIdsAt (← getMainGoal)
   trace[Utils] "All context ids: {← allIds.mapM (fun x => x.getUserName)}"
   let allIds := allIds.filter (fun x => x ∉ neededIds)
   clearFVarIds allIds
@@ -1219,7 +1263,7 @@ example
   (v : List Nat)
   (i : Nat)
   (x : Nat)
-  (i1 : Usize)
+  (i1 : Nat)
   (v1 : List Nat)
   (h : i ≤ v.length)
   (h : i < v.length)
@@ -1240,7 +1284,6 @@ info: example
   := by sorry
 -/
 #guard_msgs in
-set_option linter.unusedTactic false in
 example (i : Nat) (h : i ≤ 7) :
   let j := i
   j ≤ 7 := by
@@ -1265,7 +1308,6 @@ elab tk:"extract_assert" : tactic => do
 info: Try this: have : y ≥ x := by sorry
 -/
 #guard_msgs in
-set_option linter.unusedTactic false in
 example (x : Nat) (y : Nat) (_ : Nat) (h : x ≤ y) : y ≥ x := by
   extract_assert
   omega
@@ -1647,7 +1689,6 @@ info: example
   := by sorry
 -/
 #guard_msgs in
-set_option linter.unusedTactic false in
 example (a b : Nat) (h0 : a < b) (h1 : b ≤ 1024) : b ≤ 1024 := by
   duplicate_assumptions
   extract_goal1 full

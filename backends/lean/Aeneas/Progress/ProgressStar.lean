@@ -1,5 +1,4 @@
 import Aeneas.Progress.Progress
-import Aesop.Util.Basic
 open Lean Meta Elab Tactic
 
 namespace Aeneas
@@ -134,20 +133,60 @@ namespace ProgressStar
 abbrev traceGoalWithNode := Progress.traceGoalWithNode
 
 structure Config where
+  async : Bool := false
   preconditionTac: Option Syntax.Tactic := none
   /-- Should we use the special syntax `let* ⟨ ...⟩ ← ...` or the more standard syntax `progress with ... as ⟨ ... ⟩`? -/
   prettyPrintedProgress : Bool := true
   useCase' : Bool := false
 
+inductive TaskOrDone α where
+| task (x : Task α)
+| done (x : α)
+
+def TaskOrDone.get (x : TaskOrDone α) : α :=
+  match x with
+  | .task x => x.get
+  | .done x => x
+
+def TaskOrDone.mk (x : α) : TaskOrDone α := .done x
+
+inductive Script where
+| split (splitStx : Syntax.Tactic) (branches : Array (Option (TSyntax `Lean.Parser.Tactic.caseArg) × Script))
+| tacs (tacs : Array (TaskOrDone (Option Syntax.Tactic)))
+| seq (s0 s1 : Script)
+
 structure Info where
-  script: Array Syntax.Tactic := #[] -- TODO: update so that we get a tree
-  unsolvedGoals: Array MVarId := #[]
+  script: Script := (.tacs #[])
+  -- TODO: this type is overly complex
+  subgoals: Array (MVarId × Option (TaskOrDone (Option Expr))) := #[]
+
+structure Result where
+  script: Script
+  subgoals: Array MVarId
 
 instance: Append Info where
   append inf1 inf2 := {
-    script := inf1.script ++ inf2.script,
-    unsolvedGoals := inf1.unsolvedGoals ++ inf2.unsolvedGoals,
+    script := .seq inf1.script inf2.script,
+    subgoals := inf1.subgoals ++ inf2.subgoals,
   }
+
+/-- Convert the script into syntax.
+    This is a blocking operation: it waits for all the sub-components of the script to be generated.
+-/
+partial def Script.toSyntax (script : Script) : MetaM (Array Syntax.Tactic) := do
+  match script with
+  | .split splitStx branches =>
+    let branches ← branches.mapM fun (caseArgs, branch) => do
+      let branch ← branch.toSyntax
+      match caseArgs with
+      | some caseArgs => `(tactic| case' $caseArgs => $branch*)
+      | none => `(tactic|. $branch*)
+    pure (#[splitStx] ++ branches)
+  | .tacs tactics => pure (tactics.filterMap TaskOrDone.get)
+  | .seq s0 s1 =>
+    let s0 ← toSyntax s0
+    let s1 ← toSyntax s1
+    pure (s0 ++ s1)
 
 attribute [progress_simps] Aeneas.Std.bind_assoc_eq
 
@@ -175,18 +214,34 @@ def analyzeTarget : TacticM TargetKind := do
       pure .result
   catch _ => pure .unknown
 
-partial def evalProgressStar (cfg: Config) : TacticM Info :=
+partial def evalProgressStar (cfg: Config) : TacticM Result :=
   withMainContext do focus do
   withTraceNode `Progress (fun _ => do pure m!"evalProgressStar") do
-  /- Continue -/
+  -- Simplify the target
   let (info, mvarId) ← simplifyTarget
+  -- Continue
   match mvarId with
   | some _ =>
     let info' ← traverseProgram cfg
     let info := info ++ info'
-    setGoals info.unsolvedGoals.toList
-    pure info
-  | none => pure info
+    -- Wait for the asynchronous execution to finish
+    withTraceNode `Progress (fun _ => do pure m!"filtering subgoals") do
+    let mut sgs := #[]
+    for (mvarId, proof) in info.subgoals do
+      match proof with
+      | none => sgs := sgs.push mvarId
+      | some proof =>
+        match proof.get with
+        | none => sgs := sgs.push mvarId
+        | some proof =>
+          -- Introduce an auxiliary theorem
+          let declName? ← Term.getDeclName?
+          mvarId.withContext do
+          let e ← mkAuxTheorem (prefix? := declName?) (← mvarId.getType) proof (zetaDelta := true)
+          mvarId.assign proof
+    setGoals sgs.toList
+    pure { script := info.script, subgoals := sgs }
+  | none => pure { script := info.script, subgoals := #[] }
 
 where
   simplifyTarget : TacticM (Info × Option MVarId) := do
@@ -205,9 +260,10 @@ where
           pure ((← getMainGoal) != mvarId0)
       if genSimp then
         let progress_simps ← `(Parser.Tactic.simpLemma| $(mkIdent `progress_simps):term)
-        pure #[← `(tactic|simp only [$progress_simps])]
+        let tac ← `(tactic|simp only [$progress_simps])
+        pure #[TaskOrDone.mk (some tac)]
       else pure #[]
-    let info : Info := ⟨ tac, #[] ⟩
+    let info : Info := ⟨ .tacs tac, #[] ⟩
     if r.isSome then traceGoalWithNode "after simplification"
     else trace[Progress] "goal proved"
     let goal ← do if r.isSome then pure (some (← getMainGoal)) else pure none
@@ -248,10 +304,15 @@ where
       mkStx branchInfos
     | .result => do
       let (info, mainGoal) ← onResult cfg
-      pure { info with unsolvedGoals := info.unsolvedGoals ++ mainGoal.toList}
+      let mainGoal ← match mainGoal with
+        | none => pure #[]
+        | some mainGoal => pure #[(mainGoal, none)]
+      pure { info with subgoals := info.subgoals ++ mainGoal }
     | .unknown => do
       trace[Progress] "don't know what to do: inserting a sorry"
-      return ({ script := #[←`(tactic| sorry)], unsolvedGoals := (← getUnsolvedGoals).toArray})
+      let subgoals ← pure ((← getUnsolvedGoals).toArray.map fun g => (g, none))
+      let tac ←`(tactic| sorry)
+      return ({ script := .tacs #[TaskOrDone.mk (some tac)], subgoals })
 
   onResult (cfg : Config) : TacticM (Info × Option MVarId) := do
     withTraceNode `Progress (fun _ => pure m!"onResult") do
@@ -296,11 +357,12 @@ where
         ScalarTac.scalarTac {}
         `(tactic|scalar_tac)
       -- TODO: add the tactic given by the user
-      let rec tryFinish (tacl : List (String × TacticM Syntax.Tactic)) : TacticM Syntax.Tactic := do
+      let tacStx : IO.Promise Syntax.Tactic ← IO.Promise.new
+      let rec tryFinish (tacl : List (String × TacticM Syntax.Tactic)) : TacticM Unit := do
         match tacl with
         | [] =>
           trace[Progress] "could not prove the goal: inserting a sorry"
-          `(tactic| sorry)
+          tacStx.resolve (← `(tactic| sorry))
         | (name, tac) :: tacl =>
           let stx : Option Syntax.Tactic ←
             withTraceNode `Progress (fun _ => pure m!"Attempting to solve with `{name}`") do
@@ -309,32 +371,28 @@ where
               -- Check that there are no remaining goals
               let gl ← Tactic.getUnsolvedGoals
               if ¬ gl.isEmpty then throwError "tactic failed"
-              else pure (some stx)
+              else pure stx
             catch _ => pure none
           match stx with
           | some stx =>
             trace[Progress] "goal solved"
-            pure stx
+            tacStx.resolve stx
           | none => tryFinish tacl
-      let tac ← tryFinish [("simp [*]", simpTac), ("scalar_tac", scalarTac)]
-      let info' : Info ← pure { script := #[tac], unsolvedGoals := (← getUnsolvedGoals).toArray}
+      let proof ← Async.asyncRunTactic (tryFinish [("simp [*]", simpTac), ("scalar_tac", scalarTac)])
+      let proof := proof.result?.map (fun x => match x with | none | some none => none | some (some x) => some x)
+      let info' : Info ← pure { script := .tacs #[.task tacStx.result?], subgoals := #[(mvarId, some (TaskOrDone.task proof))] }
       pure (info ++ info', none)
 
   onBind (cfg : Config) (varName : Name) : TacticM (Info × Option MVarId) := do
     withTraceNode `Progress (fun _ => pure m!"onBind ({varName})") do
-    if let some {usedTheorem, preconditions, mainGoal } ← tryProgress then
+    if let some {usedTheorem, unassignedVars, preconditions, mainGoal } ← tryProgress cfg then
       withTraceNode `Progress (fun _ => pure m!"progress succeeded") do
       match mainGoal with
       | none => trace[Progress] "Main goal solved"
       | some goal =>
         withTraceNode `Progress (fun _ => pure m!"New main goal:") do
         trace[Progress] "{goal.goal}"
-      trace[Progress] "Unsolved preconditions: {preconditions}"
-      let (preconditionTacs, unsolved) ← handleProgressPreconditions preconditions
-      if ¬ preconditionTacs.isEmpty then
-        trace[Progress] "Found {preconditionTacs.size} preconditions, left {unsolved.size} unsolved"
-      else
-        trace[Progress] "all preconditions solved"
+      withTraceNode `Progress (fun _ => pure m!"all preconditions") do trace[Progress] "All preconditions:\n{preconditions.map Prod.fst}"
       /- Update the main goal, if necessary -/
       let ids ← getIdsFromUsedTheorem varName.eraseMacroScopes usedTheorem
       trace[Progress] "ids from used theorem: {ids}"
@@ -344,17 +402,33 @@ where
         else pure mainGoal.goal
       /- Generate the tactic scripts for the preconditions -/
       let currTac ←
+        -- TODO: how to factor this out?
         if cfg.prettyPrintedProgress then
-          if ids.isEmpty
-          then `(tactic| let* ⟨⟩ ← $(←usedTheorem.toSyntax))
-          else `(tactic| let* ⟨$ids,*⟩ ← $(←usedTheorem.toSyntax))
+          match cfg.preconditionTac with
+          | none => `(tactic| let* ⟨$ids,*⟩ ← $(←usedTheorem.toSyntax))
+          | some tac => `(tactic| let* ⟨$ids,*⟩ ← $(←usedTheorem.toSyntax) by $(#[tac])*)
         else
           if ids.isEmpty
-          then `(tactic| progress with $(←usedTheorem.toSyntax))
-          else `(tactic| progress with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩)
+          then
+            match cfg.preconditionTac with
+            | none => `(tactic| progress with $(←usedTheorem.toSyntax))
+            | some tac => `(tactic| progress with $(←usedTheorem.toSyntax) by $(#[tac])*)
+          else
+            match cfg.preconditionTac with
+            | none => `(tactic| progress with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩)
+            | some tac => `(tactic| progress with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩ by $(#[tac])*)
+      let sorryStx ← `(tactic|· sorry)
+      let preconditionsScript : Array (TaskOrDone (Option Syntax.Tactic)) := preconditions.map fun (_, p) =>
+        match p with
+        | .none => TaskOrDone.mk (some sorryStx)
+        | .task y => TaskOrDone.task (y.map fun (e : Option _) => if e.isNone then some sorryStx else none)
+      let preconditions ← preconditions.mapM fun (x, y) => do
+        let y := match y with | .none => TaskOrDone.done .none | .task y => TaskOrDone.task y
+        pure (x, some y)
+
       let info : Info := {
-          script := #[currTac]++ preconditionTacs, -- TODO: Optimize
-          unsolvedGoals := unsolved,
+          script := .tacs (#[TaskOrDone.mk (some currTac)] ++ preconditionsScript),
+          subgoals := preconditions,
         }
       pure (info, mainGoal)
     else
@@ -375,19 +449,16 @@ where
       trace[Progress] "onBif: Bifurcation generated {subgoals.length} subgoals"
       unless subgoals.length == toBeProcessed.size do
         throwError "onBif: Expected {toBeProcessed.size} cases, found {subgoals.length}"
+
       let infos_mkBranchesStx ← (subgoals.zip toBeProcessed.toList).mapM fun (sg, names) => do
         setGoals [sg]
         -- TODO: rename the variables
-        let mkStx (branchTacs : Array Syntax.Tactic) : TacticM (TSyntax `tactic) := do
-          let branchTacs ←
-            if branchTacs.isEmpty
-            then
-              if cfg.useCase' then pure #[←`(tactic| skip)]
-              else pure #[←`(tactic| sorry)]
-            else pure branchTacs
-          let caseArgs := makeCaseArgs (←sg.getTag) names
-          if cfg.useCase' then `(tactic| case' $caseArgs => $branchTacs*)
-          else `(tactic|. $branchTacs*)
+        let mkStx (branchScript : Script) : TacticM (Option (TSyntax `Lean.Parser.Tactic.caseArg) × Script) := do
+          let caseArgs ←
+            if cfg.useCase' then
+              pure (some (makeCaseArgs (← sg.getTag) names))
+            else pure none
+          pure (caseArgs, branchScript)
         pure (sg,  mkStx)
       let (infos, mkBranchesStx) := infos_mkBranchesStx.unzip
 
@@ -397,37 +468,17 @@ where
         let infos := infos.zip mkBranchesStx
         let infos ← do infos.mapM fun (info, mkBranchStx) => do
           let stx ← mkBranchStx info.script
-          pure ({ unsolvedGoals := info.unsolvedGoals,
-                  script := #[stx] } : Info)
-        let infos := infos.foldr (fun info acc => info ++ acc) {}
-        pure (({script:=#[splitStx]} : Info) ++ infos)
+          pure (info.subgoals.toList, stx)
+        let subgoals := (List.flatten (infos.map Prod.fst)).toArray
+        let branchesStx := infos.map Prod.snd
+        let script := Script.split splitStx branchesStx.toArray
+        pure ({ script, subgoals } : Info)
 
       return (infos, mkStx)
 
-  tryProgress := do
-    try some <$> Progress.evalProgress none (some (.str .anonymous "_")) none #[] none
+  tryProgress (cfg : Config) := do
+    try some <$> Progress.evalProgressCore cfg.async none (some (.str .anonymous "_")) none #[] cfg.preconditionTac
     catch _ => pure none
-
-  handleProgressPreconditions (preconditions : Array MVarId) : TacticM (Array Syntax.Tactic × Array MVarId) := do
-    if let .some tac := cfg.preconditionTac then
-      let trySolve (sg : MVarId) : TacticM (Syntax.Tactic × Option MVarId) := do
-        setGoals [sg]
-        try
-          -- Try evaluating the tactic then chaining it with `fail` to make sure it closes the goal
-          evalTactic (←`(tactic| $tac))
-          -- Check that there are no remaining goals
-          let gl ← Tactic.getUnsolvedGoals
-          if ¬ gl.isEmpty then throwError "tactic failed"
-          else pure (←`(tactic| · $(#[tac])*), none)
-        catch _ =>
-          let defaultTac ← `(tactic| · sorry)
-          pure (defaultTac, sg)
-      let preconditions ← preconditions.mapM trySolve
-      let (stx, preconditions) := preconditions.unzip
-      let preconditions := preconditions.filterMap (fun x => x)
-      pure (stx, preconditions)
-    else
-      pure (← preconditions.mapM (fun _ => `(tactic| · sorry)), preconditions)
 
   getIdsFromUsedTheorem name usedTheorem: TacticM (Array _) := do
     withTraceNode `Progress (fun _ => do pure m!"getIdsFromUsedTheorem") do
@@ -464,10 +515,12 @@ where
 syntax «progress*_args» := ("by" tacticSeq)?
 def parseArgs: TSyntax `Aeneas.ProgressStar.«progress*_args» → CoreM Config
 | `(«progress*_args»| $[by $preconditionTac:tacticSeq]?) => do
+  withTraceNode `Progress (fun _ => pure m!"parseArgs") do
   match preconditionTac with
   | none => return {preconditionTac := none}
   | some preconditionTac => do
     let preconditionTac : Syntax.Tactic := ⟨preconditionTac.raw⟩
+    trace[Progress] "preconditionTac: {preconditionTac}"
     return {preconditionTac}
 | _ => throwUnsupportedSyntax
 
@@ -478,7 +531,8 @@ elab "progress" noWs "*" stx:«progress*_args»: tactic => do
 elab tk:"progress" noWs "*?" stx:«progress*_args»: tactic => do
   let cfg ← parseArgs stx
   let info ← evalProgressStar cfg
-  let suggestion ← `(tacticSeq| $(info.script)*)
+  let suggestion ← info.script.toSyntax
+  let suggestion ← `(tacticSeq|$(suggestion)*)
   Aesop.addTryThisTacticSeqSuggestion tk suggestion (origSpan? := ← getRef)
 
 end ProgressStar
@@ -612,6 +666,13 @@ example b (x y : U32) :
       ∃ z, add2 b x y = ok z := by
   unfold add2
   progress*?
+
+example (x y : U32) (h : x.val * y.val ≤ U32.max):
+  (do
+    let z0 ← x * y
+    let z1 ← y * x
+    massert (z1 == z0)) = ok () := by
+    progress* by (ring_nf at *; simp [*] <;> scalar_tac)
 
 end Examples
 

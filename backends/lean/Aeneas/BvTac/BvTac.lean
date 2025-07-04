@@ -74,7 +74,7 @@ partial def bvTacPreprocess (config : Config) (n : Option Expr): TacticM Unit :=
   Simp.simpAll {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 0} true
                 {simprocs := #[simprocs], simpThms := #[simpLemmas]}
   -- The simpAll may have solved the goal, so we need to be careful
-  allGoals do trace[BvTac] "Goal after `simp_all`: {← getMainGoal}"
+  Utils.allGoals do trace[BvTac] "Goal after `simp_all`: {← getMainGoal}"
 
 elab "bv_tac_preprocess" config:Parser.Tactic.optConfig n:(colGt term)? : tactic => do
   bvTacPreprocess (← elabConfig config) (← optElabTerm n)
@@ -96,7 +96,7 @@ elab "bv_tac" config:Parser.Tactic.optConfig n:(colGt term)? : tactic =>
   trace[BvTac] "Input bitwidth: {n}"
   bvTacPreprocess config (← optElabTerm n)
   -- The preprocessing step may have proven the goal
-  allGoals do
+  Utils.allGoals do
   -- Call bv_decide
   IO.FS.withTempFile fun _ lratFile => do
     let config := config.toBVDecideConfig
