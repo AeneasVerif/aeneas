@@ -13,10 +13,9 @@ module T = Types
     Inputs:
     - formatter
     - [is_pattern]: if [true], it means we are generating a (match) pattern
-    - [inside]: if [true], the value should be wrapped in parentheses
-      if it is made of an application (ex.: [U32 3])
-    - the constant value
- *)
+    - [inside]: if [true], the value should be wrapped in parentheses if it is
+      made of an application (ex.: [U32 3])
+    - the constant value *)
 let extract_literal (span : Meta.span) (fmt : F.formatter) (is_pattern : bool)
     (inside : bool) (cv : literal) : unit =
   match cv with
@@ -106,14 +105,15 @@ let is_empty_record_type_decl_group (dg : Pure.type_decl list) : bool =
 
     - in Coq, *every* group (including singletons) must end with "."
     - in Lean, groups of mutually recursive definitions must end with "end"
-    - in HOL4 (in most situations) the whole group must be within a `Define` command
+    - in HOL4 (in most situations) the whole group must be within a `Define`
+      command
 
     Calls to {!Extract.extract_fun_decl} should be inserted between calls to
     {!start_fun_decl_group} and {!end_fun_decl_group}.
 
-    TODO: maybe those [{start/end}_decl_group] functions are not that much a good
-    idea and we should merge them with the corresponding [extract_decl] functions.
- *)
+    TODO: maybe those [{start/end}_decl_group] functions are not that much a
+    good idea and we should merge them with the corresponding [extract_decl]
+    functions. *)
 let start_fun_decl_group (ctx : extraction_ctx) (fmt : F.formatter)
     (is_rec : bool) (dg : Pure.fun_decl list) =
   match backend () with
@@ -174,7 +174,8 @@ let end_fun_decl_group (fmt : F.formatter) (is_rec : bool)
         (* Add breaks to insert new lines between definitions *)
         F.pp_print_break fmt 0 0)
 
-(** See {!start_fun_decl_group}: similar usage, but for the type declarations. *)
+(** See {!start_fun_decl_group}: similar usage, but for the type declarations.
+*)
 let start_type_decl_group (ctx : extraction_ctx) (fmt : F.formatter)
     (is_rec : bool) (dg : Pure.type_decl list) =
   match backend () with
@@ -268,10 +269,10 @@ let extract_literal_type (_ctx : extraction_ctx) (fmt : F.formatter)
 (** [inside] constrols whether we should add parentheses or not around type
     applications (if [true] we add parentheses).
 
-    [no_params_tys]: for all the types inside this set, do not print the type parameters.
-    This is used for HOL4. As polymorphism is uniform in HOL4, printing the
-    type parameters in the recursive definitions is useless (and actually
-    forbidden).
+    [no_params_tys]: for all the types inside this set, do not print the type
+    parameters. This is used for HOL4. As polymorphism is uniform in HOL4,
+    printing the type parameters in the recursive definitions is useless (and
+    actually forbidden).
 
     For instance, where in F* we would write:
     {[
@@ -283,8 +284,7 @@ let extract_literal_type (_ctx : extraction_ctx) (fmt : F.formatter)
       Datatype:
         list = Nil 'a | Cons 'a list
       End
-    ]}
- *)
+    ]} *)
 
 let extract_ty_errors (fmt : F.formatter) : unit =
   match Config.backend () with
@@ -512,11 +512,10 @@ and extract_generic_args (span : Meta.span) (ctx : extraction_ctx)
       (extract_trait_ref span ctx fmt no_params_tys true)
       trait_refs)
 
-(** We sometimes need to ignore references to `Self` when generating the
-    code, espcially when we project associated items. For this reason we
-    have a special function for the cases where we project from an instance
-    id (e.g., `<Self as Foo>::foo`).
- *)
+(** We sometimes need to ignore references to `Self` when generating the code,
+    espcially when we project associated items. For this reason we have a
+    special function for the cases where we project from an instance id (e.g.,
+    `<Self as Foo>::foo`). *)
 and extract_trait_instance_id_if_not_self (span : Meta.span)
     (ctx : extraction_ctx) (fmt : F.formatter)
     (no_params_tys : TypeDeclId.Set.t) (inside : bool) (id : trait_instance_id)
@@ -599,9 +598,8 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
     definition (type name, variant names, field names, etc. but not type
     parameters).
 
-    We need to do this preemptively, beforce extracting any definition,
-    because of recursive definitions.
- *)
+    We need to do this preemptively, beforce extracting any definition, because
+    of recursive definitions. *)
 let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
     extraction_ctx =
   (* Register the filtering information, if the type has builtin information *)
@@ -1072,10 +1070,9 @@ let extract_trait_clause_type (span : Meta.span) (ctx : extraction_ctx)
 let insert_req_space (fmt : F.formatter) (space : bool ref) : unit =
   if !space then space := false else F.pp_print_space fmt ()
 
-(**
- - [as_implicits]: if [explicit] is [None], then we use this parameter to control
-   whether the parameters should be extract as explicit or implicit.
- *)
+(** - [as_implicits]: if [explicit] is [None], then we use this parameter to
+      control whether the parameters should be extract as explicit or implicit.
+*)
 let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) ?(use_forall = false)
     ?(use_forall_use_sep = true) ?(use_arrows = false)
@@ -1196,11 +1193,10 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
 
 (** Extract a type declaration.
 
-    This function is for all type declarations and all backends **at the exception**
-    of opaque (builtin/declared) types format4 HOL4.
+    This function is for all type declarations and all backends **at the
+    exception** of opaque (builtin/declared) types format4 HOL4.
 
-    See {!extract_type_decl}.
- *)
+    See {!extract_type_decl}. *)
 let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     (type_decl_group : TypeDeclId.Set.t) (kind : decl_kind) (def : type_decl)
     (extract_body : bool) : unit =
@@ -1348,8 +1344,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
 (** Extract an opaque type declaration to HOL4.
 
     Remark (SH): having to treat this specific case separately is very annoying,
-    but I could not find a better way.
- *)
+    but I could not find a better way. *)
 let extract_type_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
     (def : type_decl) : unit =
   (* Retrieve the definition name *)
@@ -1380,8 +1375,7 @@ let extract_type_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
     abbreviations to the unit type.
 
     Remark (SH): having to treat this specific case separately is very annoying,
-    but I could not find a better way.
- *)
+    but I could not find a better way. *)
 let extract_type_decl_hol4_empty_record (ctx : extraction_ctx)
     (fmt : F.formatter) (def : type_decl) : unit =
   (* Retrieve the definition name *)
@@ -1401,8 +1395,7 @@ let extract_type_decl_hol4_empty_record (ctx : extraction_ctx)
     registered.
 
     This function should be inserted between calls to {!start_type_decl_group}
-    and {!end_type_decl_group}.
- *)
+    and {!end_type_decl_group}. *)
 let extract_type_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (type_decl_group : TypeDeclId.Set.t) (kind : decl_kind) (def : type_decl) :
     unit =
@@ -1435,8 +1428,7 @@ let extract_type_decl (ctx : extraction_ctx) (fmt : F.formatter)
     {[
       Arguments Return {_} a.
       Arguments Fail_ {_}.
-    ]}
- *)
+    ]} *)
 let extract_coq_arguments_instruction (ctx : extraction_ctx) (fmt : F.formatter)
     (cons_name : string) (params : explicit list) : unit =
   (* Add a break before *)
@@ -1461,8 +1453,7 @@ let extract_coq_arguments_instruction (ctx : extraction_ctx) (fmt : F.formatter)
 
 (** Auxiliary function.
 
-    Generate [Arguments] instructions in Coq for type definitions.
- *)
+    Generate [Arguments] instructions in Coq for type definitions. *)
 let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
     (kind : decl_kind) (decl : type_decl) : unit =
   sanity_check __FILE__ __LINE__ (backend () = Coq) decl.item_meta.span;
@@ -1511,10 +1502,8 @@ let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
 
     Generate field projectors for Lean and Coq.
 
-    Recursive structs are defined as inductives in Lean and Coq.
-    Field projectors allow to retrieve the facilities provided by
-    Lean structures.
- *)
+    Recursive structs are defined as inductives in Lean and Coq. Field
+    projectors allow to retrieve the facilities provided by Lean structures. *)
 let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
     (fmt : F.formatter) (kind : decl_kind) (decl : type_decl) : unit =
   sanity_check __FILE__ __LINE__
@@ -1708,8 +1697,7 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
 
     Generate field projectors simp lemmas for Lean.
 
-    See {!extract_type_decl_record_field_projectors}.
- *)
+    See {!extract_type_decl_record_field_projectors}. *)
 let extract_type_decl_record_field_projectors_simp_lemmas (ctx : extraction_ctx)
     (fmt : F.formatter) (kind : decl_kind) (decl : type_decl) : unit =
   let span = decl.item_meta.span in
@@ -1840,11 +1828,11 @@ let extract_type_decl_record_field_projectors_simp_lemmas (ctx : extraction_ctx)
 
         FieldId.iteri extract_field_proj_simp_lemma fields
 
-(** Extract extra information for a type (e.g., [Arguments] instructions in Coq).
+(** Extract extra information for a type (e.g., [Arguments] instructions in
+    Coq).
 
     Note that all the names used for extraction should already have been
-    registered.
- *)
+    registered. *)
 let extract_type_decl_extra_info (ctx : extraction_ctx) (fmt : F.formatter)
     (kind : decl_kind) (decl : type_decl) : unit =
   match backend () with

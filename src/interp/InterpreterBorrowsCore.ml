@@ -1,7 +1,6 @@
 (** This file defines the basic blocks to implement the semantics of borrows.
-    Note that those functions are not only used in InterpreterBorrows, but
-    also in Invariants or InterpreterProjectors
- *)
+    Note that those functions are not only used in InterpreterBorrows, but also
+    in Invariants or InterpreterProjectors *)
 
 open Types
 open Values
@@ -14,20 +13,18 @@ open Errors
 (** The local logger *)
 let log = Logging.borrows_log
 
-(** TODO: cleanup this a bit, once we have a better understanding about
-    what we need.
-    TODO: I'm not sure in which file this should be moved... *)
+(** TODO: cleanup this a bit, once we have a better understanding about what we
+    need. TODO: I'm not sure in which file this should be moved... *)
 type exploration_kind = {
   enter_shared_loans : bool;
   enter_mut_borrows : bool;
   enter_abs : bool;
       (** Note that if we allow to enter abs, we don't check whether we enter
-          mutable/shared loans or borrows: there are no use cases requiring
-          a finer control. *)
+          mutable/shared loans or borrows: there are no use cases requiring a
+          finer control. *)
 }
-(** This record controls how some generic helper lookup/update
-    functions behave, by restraining the kind of therms they can enter.
-*)
+(** This record controls how some generic helper lookup/update functions behave,
+    by restraining the kind of therms they can enter. *)
 
 let ek_all : exploration_kind =
   { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
@@ -74,7 +71,8 @@ let borrow_or_abs_ids_chain_to_string (ids : borrow_or_abs_ids) : string =
   let ids = List.map borrow_or_abs_id_to_string ids in
   String.concat " -> " ids
 
-(** Add a borrow or abs id to a chain of ids, while checking that we don't loop *)
+(** Add a borrow or abs id to a chain of ids, while checking that we don't loop
+*)
 let add_borrow_or_abs_id_to_chain (span : Meta.span) (msg : string)
     (id : borrow_or_abs_id) (ids : borrow_or_abs_ids) : borrow_or_abs_ids =
   if List.mem id ids then
@@ -84,19 +82,16 @@ let add_borrow_or_abs_id_to_chain (span : Meta.span) (msg : string)
   else id :: ids
 
 (** Helper function.
-  
-    This function allows to define in a generic way a comparison of **region types**.
-    See [projections_intersect] for instance.
+
+    This function allows to define in a generic way a comparison of **region
+    types**. See [projections_intersect] for instance.
 
     Important: the regions in the types mustn't be erased.
 
     [default]: default boolean to return, when comparing types with no regions
-    [combine]: how to combine booleans
-    [compare_regions]: how to compare regions
+    [combine]: how to combine booleans [compare_regions]: how to compare regions
 
-    TODO: is there a way of deriving such a comparison?
-    TODO: rename
- *)
+    TODO: is there a way of deriving such a comparison? TODO: rename *)
 let rec compare_rtys (span : Meta.span) (default : bool)
     (combine : bool -> bool -> bool)
     (compare_regions : region -> region -> bool) (ty1 : rty) (ty2 : rty) : bool
@@ -173,13 +168,12 @@ let rec compare_rtys (span : Meta.span) (default : bool)
          ^ "\n- ty2: " ^ show_ty ty2));
       internal_error __FILE__ __LINE__ span
 
-(** Check if two different projections intersect. This is necessary when
-    giving a symbolic value to an abstraction: we need to check that
-    the regions which are already ended inside the abstraction don't
-    intersect the regions over which we project in the new abstraction.
-    Note that the two abstractions have different views (in terms of regions)
-    of the symbolic value (hence the two region types).
-*)
+(** Check if two different projections intersect. This is necessary when giving
+    a symbolic value to an abstraction: we need to check that the regions which
+    are already ended inside the abstraction don't intersect the regions over
+    which we project in the new abstraction. Note that the two abstractions have
+    different views (in terms of regions) of the symbolic value (hence the two
+    region types). *)
 let projections_intersect (span : Meta.span) (ty1 : rty)
     (rset1 : RegionId.Set.t) (ty2 : rty) (rset2 : RegionId.Set.t) : bool =
   let default = false in
@@ -189,12 +183,11 @@ let projections_intersect (span : Meta.span) (ty1 : rty)
   in
   compare_rtys span default combine compare_regions ty1 ty2
 
-(** Check if the first projection contains the second projection.
-    We use this function when checking invariants.
+(** Check if the first projection contains the second projection. We use this
+    function when checking invariants.
 
-    The regions in the types shouldn't be erased (this function will raise an exception
-    otherwise).
-*)
+    The regions in the types shouldn't be erased (this function will raise an
+    exception otherwise). *)
 let projection_contains (span : Meta.span) (ty1 : rty) (rset1 : RegionId.Set.t)
     (ty2 : rty) (rset2 : RegionId.Set.t) : bool =
   let default = true in
@@ -208,10 +201,12 @@ let projection_contains (span : Meta.span) (ty1 : rty) (rset1 : RegionId.Set.t)
 
     The loan is referred to by a borrow id.
 
-    Rem.: if the {!InterpreterUtils.g_loan_content} is {!constructor:Aeneas.InterpreterUtils.concrete_or_abs.Concrete},
-    the {!InterpreterUtils.abs_or_var_id} is not necessarily {!constructor:Aeneas.InterpreterUtils.abs_or_var_id.LocalId} or
-    {!constructor:Aeneas.InterpreterUtils.abs_or_var_id.DummyVarId}: there can be concrete loans in abstractions (in the shared values).
- *)
+    Rem.: if the {!InterpreterUtils.g_loan_content} is
+    {!constructor:Aeneas.InterpreterUtils.concrete_or_abs.Concrete}, the
+    {!InterpreterUtils.abs_or_var_id} is not necessarily
+    {!constructor:Aeneas.InterpreterUtils.abs_or_var_id.LocalId} or
+    {!constructor:Aeneas.InterpreterUtils.abs_or_var_id.DummyVarId}: there can
+    be concrete loans in abstractions (in the shared values). *)
 let lookup_loan_opt (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
     (ctx : eval_ctx) : (abs_or_var_id * g_loan_content) option =
   (* We store here whether we are inside an abstraction or a value - note that we
@@ -238,9 +233,8 @@ let lookup_loan_opt (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
 
       (** We reimplement {!visit_Loan} (rather than the more precise functions
           {!visit_SharedLoan}, etc.) on purpose: as we have an exhaustive match
-          below, we are more resilient to definition updates (the compiler
-          is our friend).
-      *)
+          below, we are more resilient to definition updates (the compiler is
+          our friend). *)
       method! visit_loan_content env lc =
         match lc with
         | VSharedLoan (bids, sv) ->
@@ -255,9 +249,9 @@ let lookup_loan_opt (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
             if bid = l then raise (FoundGLoanContent (Concrete lc))
             else super#visit_VMutLoan env bid
 
-      (** Note that we don't control diving inside the abstractions: if we
-          allow to dive inside abstractions, we allow to go anywhere
-          (because there are no use cases requiring finer control) *)
+      (** Note that we don't control diving inside the abstractions: if we allow
+          to dive inside abstractions, we allow to go anywhere (because there
+          are no use cases requiring finer control) *)
       method! visit_aloan_content env lc =
         match lc with
         | AMutLoan (pm, bid, av) ->
@@ -308,9 +302,8 @@ let lookup_loan_opt (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
 
 (** Lookup a loan content.
 
-    The loan is referred to by a borrow id.
-    Raises an exception if no loan was found.
- *)
+    The loan is referred to by a borrow id. Raises an exception if no loan was
+    found. *)
 let lookup_loan (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
     (ctx : eval_ctx) : abs_or_var_id * g_loan_content =
   match lookup_loan_opt span ek l ctx with
@@ -321,8 +314,7 @@ let lookup_loan (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
 
     The loan is referred to by a borrow id.
 
-    This is a helper function: it might break invariants.
- *)
+    This is a helper function: it might break invariants. *)
 let update_loan (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
     (nlc : loan_content) (ctx : eval_ctx) : eval_ctx =
   (* We use a reference to check that we update exactly one loan: when updating
@@ -364,12 +356,12 @@ let update_loan (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
             (* Mut loan: checks if this is the loan we are looking for *)
             if bid = l then update () else super#visit_VMutLoan env bid
 
-      (** Note that once inside the abstractions, we don't control diving
-          (there are no use cases requiring finer control).
-          Also, as we give back a {!loan_content} (and not an {!aloan_content})
-          we don't need to do reimplement the visit functions for the values
-          inside the abstractions (rk.: there may be "concrete" values inside
-          abstractions, so there is a utility in diving inside). *)
+      (** Note that once inside the abstractions, we don't control diving (there
+          are no use cases requiring finer control). Also, as we give back a
+          {!loan_content} (and not an {!aloan_content}) we don't need to do
+          reimplement the visit functions for the values inside the abstractions
+          (rk.: there may be "concrete" values inside abstractions, so there is
+          a utility in diving inside). *)
       method! visit_abs env abs =
         if ek.enter_abs then super#visit_abs env abs else abs
     end
@@ -384,8 +376,7 @@ let update_loan (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
 
     The loan is referred to by a borrow id.
 
-    This is a helper function: it might break invariants.
- *)
+    This is a helper function: it might break invariants. *)
 let update_aloan (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
     (nlc : aloan_content) (ctx : eval_ctx) : eval_ctx =
   (* We use a reference to check that we update exactly one loan: when updating
@@ -420,8 +411,8 @@ let update_aloan (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
             { given_back = _; child = _; given_back_meta = _ }
         | AIgnoredSharedLoan _ -> super#visit_aloan_content env lc
 
-      (** Note that once inside the abstractions, we don't control diving
-          (there are no use cases requiring finer control). *)
+      (** Note that once inside the abstractions, we don't control diving (there
+          are no use cases requiring finer control). *)
       method! visit_abs env abs =
         if ek.enter_abs then super#visit_abs env abs else abs
     end
@@ -496,8 +487,7 @@ let lookup_borrow_opt (span : Meta.span) (ek : exploration_kind)
 
 (** Lookup a borrow content from a borrow id.
 
-    Raise an exception if no loan was found
-*)
+    Raise an exception if no loan was found *)
 let lookup_borrow (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
     (ctx : eval_ctx) : g_borrow_content =
   match lookup_borrow_opt span ek l ctx with
@@ -508,8 +498,7 @@ let lookup_borrow (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
 
     The borrow is referred to by a borrow id.
 
-    This is a helper function: it might break invariants.   
- *)
+    This is a helper function: it might break invariants. *)
 let update_borrow (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
     (nbc : borrow_content) (ctx : eval_ctx) : eval_ctx =
   (* We use a reference to check that we update exactly one borrow: when updating
@@ -565,8 +554,7 @@ let update_borrow (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
 
     The borrow is referred to by a borrow id.
 
-    This is a helper function: **it might break invariants**.
- *)
+    This is a helper function: **it might break invariants**. *)
 let update_aborrow (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
     (nv : avalue) (ctx : eval_ctx) : eval_ctx =
   (* We use a reference to check that we update exactly one borrow: when updating
@@ -663,11 +651,11 @@ let get_first_borrow_in_value (v : typed_value) : borrow_content option =
 
 (** Return the first loan or borrow content we find in a value (starting with
     the outer ones).
-    
+
     [with_borrows]:
     - if [true]: return the first loan or borrow we find
-    - if [false]: return the first loan we find, do not dive into borrowed values
- *)
+    - if [false]: return the first loan we find, do not dive into borrowed
+      values *)
 let get_first_outer_loan_or_borrow_in_value (with_borrows : bool)
     (v : typed_value) : loan_or_borrow_content option =
   let obj =
@@ -701,27 +689,26 @@ let proj_borrows_intersects_proj_loans (span : Meta.span)
     the context.
 
     Note that because we we force the expansion of primitively copyable values
-    before giving them to abstractions, we only have the following possibilities:
-    - no aproj_borrows, in which case the symbolic value was either dropped
-      or is in the context
+    before giving them to abstractions, we only have the following
+    possibilities:
+    - no aproj_borrows, in which case the symbolic value was either dropped or
+      is in the context
     - exactly one aproj_borrows over a non-shared value
     - potentially several aproj_borrows over shared values
-    
+
     The result contains the ids of the abstractions in which the projectors were
-    found, as well as the projection types used in those abstractions.
-*)
+    found, as well as the projection types used in those abstractions. *)
 type looked_up_aproj_borrows =
   | NonSharedProj of AbstractionId.id * rty
   | SharedProjs of (AbstractionId.id * rty) list
 
-(** Lookup the aproj_borrows (including aproj_shared_borrows) over a
-    symbolic value which intersect a given set of regions.
-        
+(** Lookup the aproj_borrows (including aproj_shared_borrows) over a symbolic
+    value which intersect a given set of regions.
+
     [lookup_shared]: if [true] also explore projectors over shared values,
     otherwise ignore.
-    
-    This is a helper function.
-*)
+
+    This is a helper function. *)
 let lookup_intersecting_aproj_borrows_opt (span : Meta.span)
     (lookup_shared : bool) (regions : RegionId.Set.t)
     (sv_id : symbolic_value_id) (proj_ty : rty) (ctx : eval_ctx) :
@@ -783,16 +770,15 @@ let lookup_intersecting_aproj_borrows_opt (span : Meta.span)
   (* Return *)
   !found
 
-(** Lookup the aproj_borrows (not aproj_borrows_shared!) over a symbolic
-    value which intersects a given set of regions.
-    
-    Note that there should be **at most one** (one reason is that we force
-    the expansion of primitively copyable values before giving them to
+(** Lookup the aproj_borrows (not aproj_borrows_shared!) over a symbolic value
+    which intersects a given set of regions.
+
+    Note that there should be **at most one** (one reason is that we force the
+    expansion of primitively copyable values before giving them to
     abstractions).
-    
+
     Returns the id of the owning abstraction, and the projection type used in
-    this abstraction.
-*)
+    this abstraction. *)
 let lookup_intersecting_aproj_borrows_not_shared_opt (span : Meta.span)
     (regions : RegionId.Set.t) (sv_id : symbolic_value_id) (proj_ty : rty)
     (ctx : eval_ctx) : (AbstractionId.id * rty) option =
@@ -805,16 +791,14 @@ let lookup_intersecting_aproj_borrows_not_shared_opt (span : Meta.span)
   | Some (NonSharedProj (abs_id, rty)) -> Some (abs_id, rty)
   | _ -> craise __FILE__ __LINE__ span "Unexpected"
 
-(** Similar to {!lookup_intersecting_aproj_borrows_opt}, but updates the
-    values.
+(** Similar to {!lookup_intersecting_aproj_borrows_opt}, but updates the values.
 
     This is a helper function: **it might break invariants**.
 
     [include_ancestors]: when exploring an abstraction and computing projection
-    intersections, use the ancestor regions.
-    [include_owned]: when exploring an abstraction and computing projection
-    intersections, use the owned regions.
- *)
+    intersections, use the ancestor regions. [include_owned]: when exploring an
+    abstraction and computing projection intersections, use the owned regions.
+*)
 let update_intersecting_aproj_borrows (span : Meta.span)
     ~(fail_if_unchanged : bool) ~(include_ancestors : bool)
     ~(include_owned : bool)
@@ -908,13 +892,12 @@ let update_intersecting_aproj_borrows (span : Meta.span)
   (* Return *)
   ctx
 
-(** Simply calls {!update_intersecting_aproj_borrows} to update a
-    proj_borrows over a non-shared value.
-    
+(** Simply calls {!update_intersecting_aproj_borrows} to update a proj_borrows
+    over a non-shared value.
+
     We check that we update *at least* one proj_borrows.
 
-    This is a helper function: it might break invariants.
- *)
+    This is a helper function: it might break invariants. *)
 let update_intersecting_aproj_borrows_mut (span : Meta.span)
     ~(include_ancestors : bool) ~(include_owned : bool)
     (proj_regions : RegionId.Set.t) (sv_id : symbolic_value_id) (proj_ty : rty)
@@ -937,11 +920,10 @@ let update_intersecting_aproj_borrows_mut (span : Meta.span)
   (* Return *)
   ctx
 
-(** Simply calls {!update_intersecting_aproj_borrows} to remove the
-    proj_borrows over shared values.
+(** Simply calls {!update_intersecting_aproj_borrows} to remove the proj_borrows
+    over shared values.
 
-    This is a helper function: it might break invariants.
- *)
+    This is a helper function: it might break invariants. *)
 let remove_intersecting_aproj_borrows_shared (span : Meta.span)
     ~(include_ancestors : bool) ~(include_owned : bool)
     (regions : RegionId.Set.t) (sv_id : symbolic_value_id) (proj_ty : rty)
@@ -957,7 +939,7 @@ let remove_intersecting_aproj_borrows_shared (span : Meta.span)
 (** Updates the proj_loans intersecting some projection.
 
     This is a helper function: it might break invariants.
-    
+
     Note that we can update more than one projector of loans! Consider the
     following example:
     {[
@@ -973,23 +955,22 @@ let remove_intersecting_aproj_borrows_shared (span : Meta.span)
       //
       // abs'c {'c} { (s@0 <: (&'c mut u32, &'c mut u32)) }
     ]}
-    
+
     Note that for sanity, this function checks that we update *at least* one
     projector of loans.
 
     [proj_ty]: shouldn't contain erased regions.
-        
+
     [subst]: takes as parameters the abstraction in which we perform the
-    substitution and the list of given back values at the projector of
-    loans where we perform the substitution (see the fields in {!Values.AProjLoans}).
+    substitution and the list of given back values at the projector of loans
+    where we perform the substitution (see the fields in {!Values.AProjLoans}).
     Note that the symbolic value at this place is necessarily equal to [sv],
     which is why we don't give it as parameters.
 
     [include_ancestors]: when exploring an abstraction and computing projection
-    intersections, use the ancestor regions.
-    [include_owned]: when exploring an abstraction and computing projection
-    intersections, use the owned regions.
- *)
+    intersections, use the ancestor regions. [include_owned]: when exploring an
+    abstraction and computing projection intersections, use the owned regions.
+*)
 let update_intersecting_aproj_loans (span : Meta.span)
     ~(fail_if_unchanged : bool) ~(include_ancestors : bool)
     ~(include_owned : bool) (proj_regions : RegionId.Set.t) (proj_ty : rty)
@@ -1048,16 +1029,15 @@ let update_intersecting_aproj_loans (span : Meta.span)
   (* Return *)
   ctx
 
-(** Helper function: lookup an {!constructor:Values.aproj.AProjLoans} by using an abstraction id and a
-    symbolic value.
+(** Helper function: lookup an {!constructor:Values.aproj.AProjLoans} by using
+    an abstraction id and a symbolic value.
 
     We return the information from the looked up projector of loans. See the
-    fields in {!constructor:Values.aproj.AProjLoans} (we don't return the symbolic value, because it
-    is equal to [sv]).
+    fields in {!constructor:Values.aproj.AProjLoans} (we don't return the
+    symbolic value, because it is equal to [sv]).
 
-    Sanity check: we check that there is not more than one projector which corresponds
-    to the couple (abstraction id, symbolic value).
- *)
+    Sanity check: we check that there is not more than one projector which
+    corresponds to the couple (abstraction id, symbolic value). *)
 let lookup_aproj_loans_opt (span : Meta.span) (abs_id : AbstractionId.id)
     (sv_id : symbolic_value_id) (ctx : eval_ctx) :
     (msymbolic_value_id * aproj) list option =
@@ -1103,8 +1083,7 @@ let lookup_aproj_loans (span : Meta.span) (abs_id : AbstractionId.id)
     value and an abstraction id.
 
     Sanity check: we check that there is exactly one projector which corresponds
-    to the couple (abstraction id, symbolic value).
- *)
+    to the couple (abstraction id, symbolic value). *)
 let update_aproj_loans (span : Meta.span) (abs_id : AbstractionId.id)
     (sv_id : symbolic_value_id) (nproj : aproj) (ctx : eval_ctx) : eval_ctx =
   (* Small helpers for sanity checks *)
@@ -1148,9 +1127,8 @@ let update_aproj_loans (span : Meta.span) (abs_id : AbstractionId.id)
 
     Sanity check: we check that there is exactly one projector which corresponds
     to the couple (abstraction id, symbolic value).
-    
-    TODO: factorize with {!update_aproj_loans}?
- *)
+
+    TODO: factorize with {!update_aproj_loans}? *)
 let update_aproj_borrows (span : Meta.span) (abs_id : AbstractionId.id)
     (sv : symbolic_value) (nproj : aproj) (ctx : eval_ctx) : eval_ctx =
   (* Small helpers for sanity checks *)
@@ -1189,12 +1167,12 @@ let update_aproj_borrows (span : Meta.span) (abs_id : AbstractionId.id)
 
 (** Helper function: might break invariants.
 
-    Converts an {!Values.aproj.AProjLoans} to an {!Values.aproj.AEndedProjLoans}. The
-    projector is identified by a symbolic value and an abstraction id.
+    Converts an {!Values.aproj.AProjLoans} to an
+    {!Values.aproj.AEndedProjLoans}. The projector is identified by a symbolic
+    value and an abstraction id.
 
-    **Remark:** the loan projector is allowed not to exist in the context anymore,
-    in which case this function does nothing.
- *)
+    **Remark:** the loan projector is allowed not to exist in the context
+    anymore, in which case this function does nothing. *)
 let update_aproj_loans_to_ended (span : Meta.span) (abs_id : AbstractionId.id)
     (sv_id : symbolic_value_id) (ctx : eval_ctx) : eval_ctx =
   (* Lookup the projector of loans *)
@@ -1232,11 +1210,10 @@ let no_aproj_over_symbolic_in_context (span : Meta.span)
 
 (** Helper function
 
-    Return the loan (aloan, loan, proj_loans over a symbolic value) we find
-    in an abstraction, if there is.
-    
-    **Remark:** we don't take the *ignored* mut/shared loans into account.
- *)
+    Return the loan (aloan, loan, proj_loans over a symbolic value) we find in
+    an abstraction, if there is.
+
+    **Remark:** we don't take the *ignored* mut/shared loans into account. *)
 let get_first_non_ignored_aloan_in_abstraction (span : Meta.span) (abs : abs) :
     borrow_ids_or_proj_symbolic_value option =
   (* Explore to find a loan *)
@@ -1343,9 +1320,10 @@ end
 
 (** A marked and normalized symbolic value (loan/borrow) projection.
 
-    A normalized symbolic value projection is a projection of a symoblic value for which
-    the projection type has been normalized in the following way: the projected regions
-    have the identifier 0, and the non-projected regions are erased.
+    A normalized symbolic value projection is a projection of a symoblic value
+    for which the projection type has been normalized in the following way: the
+    projected regions have the identifier 0, and the non-projected regions are
+    erased.
 
     For instance, if we consider the region abstractions below:
     {[
@@ -1353,12 +1331,12 @@ end
       abs1 {'b} { s <: S<'a, 'b> }
     ]}
 
-    Then normalizing (the type of) the symbolic value [s] for ['a] gives [S<'0, '_>],
-    while normalizing it for ['b] gives [S<'_, '0>].
+    Then normalizing (the type of) the symbolic value [s] for ['a] gives
+    [S<'0, '_>], while normalizing it for ['b] gives [S<'_, '0>].
 
-    We use normalized types to compare loan/borrow projections of symbolic values,
-    and for lookups (normalized types can easily be used as keys in maps).
- *)
+    We use normalized types to compare loan/borrow projections of symbolic
+    values, and for lookups (normalized types can easily be used as keys in
+    maps). *)
 type marked_norm_symb_proj = {
   pm : proj_marker;
   sv_id : symbolic_value_id;
@@ -1439,12 +1417,11 @@ let marked_norm_symb_proj_to_unmarked (m : marked_norm_symb_proj) :
     norm_symb_proj =
   { sv_id = m.sv_id; norm_proj_ty = m.norm_proj_ty }
 
-(** Normalize a projection type by replacing the projected regions with ['0]
-    and the non-projected ones with ['_].
+(** Normalize a projection type by replacing the projected regions with ['0] and
+    the non-projected ones with ['_].
 
     For instance, when normalizing the projection type [S<'a, 'b>] for the
-    projection region ['a].
- *)
+    projection region ['a]. *)
 let normalize_proj_ty (regions : RegionId.Set.t) (ty : rty) : rty =
   let visitor =
     object

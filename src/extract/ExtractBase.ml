@@ -15,14 +15,11 @@ let log = Logging.extract_log
 
 type region_group_info = {
   id : RegionGroupId.id;
-      (** The id of the region group.
-          Note that a simple way of generating unique names for backward
-          functions is to use the region group ids.
-       *)
+      (** The id of the region group. Note that a simple way of generating
+          unique names for backward functions is to use the region group ids. *)
   region_names : string option list;
-      (** The names of the region variables included in this group.
-          Note that names are not always available...
-       *)
+      (** The names of the region variables included in this group. Note that
+          names are not always available... *)
 }
 
 module StringSet = Collections.StringSet
@@ -31,27 +28,21 @@ module StringMap = Collections.StringMap
 (** Characterizes a declaration.
 
     Is in particular useful to derive the proper keywords to introduce the
-    declarations/definitions.
- *)
+    declarations/definitions. *)
 type decl_kind =
   | SingleNonRec
       (** A single, non-recursive definition.
 
-          F*:  [let x = ...]
-          Coq: [Definition x := ...]
-       *)
+          F*: [let x = ...] Coq: [Definition x := ...] *)
   | SingleRec
       (** A single, recursive definition.
 
-          F*:  [let rec x = ...]
-          Coq: [Fixpoint x := ...]
-       *)
+          F*: [let rec x = ...] Coq: [Fixpoint x := ...] *)
   | MutRecFirst
       (** The first definition of a group of mutually-recursive definitions.
 
-          F*:  [type x0 = ... and x1 = ...]
-          Coq: [Fixpoint x0 := ... with x1 := ...]
-       *)
+          F*: [type x0 = ... and x1 = ...] Coq:
+          [Fixpoint x0 := ... with x1 := ...] *)
   | MutRecInner
       (** An inner definition in a group of mutually-recursive definitions. *)
   | MutRecLast
@@ -59,30 +50,24 @@ type decl_kind =
 
           We need this because in some theorem provers like Coq, we need to
           delimit group of mutually recursive definitions (in particular, we
-          need to insert an end delimiter).
-       *)
+          need to insert an end delimiter). *)
   | Builtin
       (** An builtin definition.
 
-         F*:  [assume val x]
-         Coq: [Axiom x : Type.]
-      *)
+          F*: [assume val x] Coq: [Axiom x : Type.] *)
   | Declared
       (** Declare a type in an interface or a module signature.
 
-          Rem.: for now, in Coq, we don't declare module signatures: we
-          thus assume the corresponding declarations.
+          Rem.: for now, in Coq, we don't declare module signatures: we thus
+          assume the corresponding declarations.
 
-          F*:  [val x : Type0]
-          Coq: [Axiom x : Type.]
-       *)
+          F*: [val x : Type0] Coq: [Axiom x : Type.] *)
 [@@deriving show]
 
 (** Return [true] if the declaration is the last from its group of declarations.
 
-    We need this because in some provers (e.g., Coq), we need to delimit the
-    end of a (group of) definition(s) (in Coq: with a ".").
- *)
+    We need this because in some provers (e.g., Coq), we need to delimit the end
+    of a (group of) definition(s) (in Coq: with a "."). *)
 let decl_is_last_from_group (kind : decl_kind) : bool =
   match kind with
   | SingleNonRec | SingleRec | MutRecLast | Builtin | Declared -> true
@@ -103,11 +88,11 @@ let decl_is_first_from_group (kind : decl_kind) : bool =
   | SingleNonRec | SingleRec | MutRecFirst | Builtin | Declared -> true
   | MutRecLast | MutRecInner -> false
 
-(** Return [true] if the declaration is not the last from its group of declarations.
+(** Return [true] if the declaration is not the last from its group of
+    declarations.
 
-    We need this because in some provers (e.g., HOL4), we need to delimit
-    the inner declarations (with `/\` for instance).
- *)
+    We need this because in some provers (e.g., HOL4), we need to delimit the
+    inner declarations (with `/\` for instance). *)
 let decl_is_not_last_from_group (kind : decl_kind) : bool =
   not (decl_is_last_from_group kind)
 
@@ -116,11 +101,9 @@ type type_decl_kind = Enum | Struct | Tuple [@@deriving show]
 (** Generics can be bound in two places: each item has its generics, and
     additionally within a trait decl or impl each method has its own generics
     (using `binder` above). We distinguish these two cases here. In charon, the
-    distinction is made thanks to `de_bruijn_var`.
-    Note that for the generics of a top-level `fun_decl` we always use `Item`;
-    `Method` only refers to the inner binder found in the list of methods in a
-    trait_decl/trait_impl.
-    *)
+    distinction is made thanks to `de_bruijn_var`. Note that for the generics of
+    a top-level `fun_decl` we always use `Item`; `Method` only refers to the
+    inner binder found in the list of methods in a trait_decl/trait_impl. *)
 type generic_origin = Item | Method [@@deriving show, ord]
 
 (** We use identifiers to look for name clashes *)
@@ -128,30 +111,31 @@ and id =
   | GlobalId of A.GlobalDeclId.id
   | FunId of fun_id
   | TerminationMeasureId of (A.fun_id * LoopId.id option)
-      (** The definition which provides the decreases/termination measure.
-          We insert calls to this clause to prove/reason about termination:
-          the body of those clauses must be defined by the user, in the
-          proper files.
+      (** The definition which provides the decreases/termination measure. We
+          insert calls to this clause to prove/reason about termination: the
+          body of those clauses must be defined by the user, in the proper
+          files.
 
           More specifically:
-          - in F*, this is the content of the [decreases] clause.
-            Example:
-            ========
-            {[
-              let rec sum (ls : list nat) : Tot nat (decreases ls) = ...
-            ]}
-          - in Lean, this is the content of the [termination_by] clause.
-       *)
+          {ul
+           {- in F*, this is the content of the [decreases] clause. Example:
+              ========
+              {[
+                let rec sum (ls : list nat) : Tot nat (decreases ls) = ...
+              ]}
+           }
+           {- in Lean, this is the content of the [termination_by] clause. }
+          } *)
   | DecreasesProofId of (A.fun_id * LoopId.id option)
-      (** The definition which provides the decreases/termination proof.
-          We insert calls to this clause to prove/reason about termination:
-          the body of those clauses must be defined by the user, in the
-          proper files.
+      (** The definition which provides the decreases/termination proof. We
+          insert calls to this clause to prove/reason about termination: the
+          body of those clauses must be defined by the user, in the proper
+          files.
 
           More specifically:
           - F* doesn't use this.
           - in Lean, this is the tactic used by the [decreases_by] annotations.
-       *)
+      *)
   | TypeId of type_id
   | StructId of type_id
       (** We use this when we manipulate the names of the structure
@@ -161,17 +145,14 @@ and id =
           {[
             type pair = { x: nat; y : nat }
             let p : pair = Mkpair 0 1
-          ]}
-       *)
+          ]} *)
   | VariantId of type_id * VariantId.id
       (** If often happens that variant names must be unique (it is the case in
-          F* ) which is why we register them here.
-       *)
+          F* ) which is why we register them here. *)
   | FieldId of type_id * FieldId.id
-      (** If often happens that in the case of structures, the field names
-          must be unique (it is the case in F* ) which is why we register
-          them here.
-       *)
+      (** If often happens that in the case of structures, the field names must
+          be unique (it is the case in F* ) which is why we register them here.
+      *)
   | LocalId of LocalId.id
   | TraitDeclId of TraitDeclId.id
   | TraitImplId of TraitImplId.id
@@ -185,11 +166,10 @@ and id =
   | TraitParentClauseId of TraitDeclId.id * TraitClauseId.id
   | UnknownId
       (** Used for stored various strings like keywords, definitions which
-          should always be in context, etc. and which can't be linked to one
-          of the above.
+          should always be in context, etc. and which can't be linked to one of
+          the above.
 
-          TODO: rename to "keyword"
-       *)
+          TODO: rename to "keyword" *)
 [@@deriving show, ord]
 
 module IdOrderedType = struct
@@ -206,17 +186,16 @@ module IdSet = Collections.MakeSet (IdOrderedType)
 
 (** The names map stores the mappings from names to identifiers and vice-versa.
 
-    We use it for lookups (during the translation) and to check for name clashes.
+    We use it for lookups (during the translation) and to check for name
+    clashes.
 
-    [id_to_name] is for debugging.
-  *)
+    [id_to_name] is for debugging. *)
 type names_map = {
   id_to_name : string IdMap.t;
   name_to_id : (id * Meta.span option) StringMap.t;
       (** The name to id map is used to look for name clashes, and generate nice
           debugging messages: if there is a name clash, it is useful to know
-          precisely which identifiers are mapped to the same name...
-       *)
+          precisely which identifiers are mapped to the same name... *)
   names_set : StringSet.t;
 }
 
@@ -301,8 +280,7 @@ let names_map_add (id_to_string : id -> string) ((id, span) : id * span option)
     the same name because Lean uses the typing information to resolve the
     ambiguities.
 
-    This map complements the {!type:names_map}, which checks for collisions.
-  *)
+    This map complements the {!type:names_map}, which checks for collisions. *)
 type unsafe_names_map = { id_to_name : string IdMap.t }
 
 let empty_unsafe_names_map = { id_to_name = IdMap.empty }
@@ -313,8 +291,8 @@ let unsafe_names_map_add (id : id) (name : string) (nm : unsafe_names_map) :
 
 (** Make a (variable) basename unique (by adding an index).
 
-    We do this in an inefficient manner (by testing all indices starting from
-    0) but it shouldn't be a bottleneck.
+    We do this in an inefficient manner (by testing all indices starting from 0)
+    but it shouldn't be a bottleneck.
 
     Also note that at some point, we thought about trying to reuse names of
     variables which are not used anymore, like here:
@@ -327,14 +305,12 @@ let unsafe_names_map_add (id : id) (name : string) (nm : unsafe_names_map) :
 
     However it is a good idea to keep things as they are for F*: as F* is
     designed for extrinsic proofs, a proof about a function follows this
-    function's structure. The consequence is that we often end up
-    copy-pasting function bodies. As in the proofs (in assertions and
-    when calling lemmas) we often need to talk about the "past" (i.e.,
-    previous values), it is very useful to generate code where all variable
-    names are assigned at most once.
+    function's structure. The consequence is that we often end up copy-pasting
+    function bodies. As in the proofs (in assertions and when calling lemmas) we
+    often need to talk about the "past" (i.e., previous values), it is very
+    useful to generate code where all variable names are assigned at most once.
 
-    [append]: function to append an index to a string
- *)
+    [append]: function to append an index to a string *)
 let basename_to_unique_aux (collision : string -> bool)
     (append : string -> int -> string) (basename : string) : string =
   let rec gen (i : int) : string =
@@ -345,20 +321,19 @@ let basename_to_unique_aux (collision : string -> bool)
 
 type names_maps = {
   names_map : names_map;
-      (** The map for id to names, where we forbid name collisions
-          (ex.: we always forbid function name collisions). *)
+      (** The map for id to names, where we forbid name collisions (ex.: we
+          always forbid function name collisions). *)
   unsafe_names_map : unsafe_names_map;
-      (** The map for id to names, where we allow name collisions
-          (ex.: we might allow record field name collisions). *)
+      (** The map for id to names, where we allow name collisions (ex.: we might
+          allow record field name collisions). *)
   strict_names_map : names_map;
       (** This map is a sub-map of [names_map]. For the ids in this map we also
           forbid collisions with names in the [unsafe_names_map].
 
-          We do so for keywords for instance, but also for types (in a dependently
-          typed language, we might have an issue if the field of a record has, say,
-          the name "u32", and another field of the same record refers to "u32"
-          (for instance in its type).
-       *)
+          We do so for keywords for instance, but also for types (in a
+          dependently typed language, we might have an issue if the field of a
+          record has, say, the name "u32", and another field of the same record
+          refers to "u32" (for instance in its type). *)
 }
 
 (** Return [true] if we are strict on collisions for this id (i.e., we forbid
@@ -368,7 +343,8 @@ let strict_collisions (id : id) : bool =
   | UnknownId | TypeId _ -> true
   | _ -> false
 
-(** We might not check for collisions for some specific ids (ex.: field names) *)
+(** We might not check for collisions for some specific ids (ex.: field names)
+*)
 let allow_collisions (id : id) : bool =
   match id with
   | FieldId _ | TraitParentClauseId _ | TraitItemId _ | TraitMethodId _ ->
@@ -527,11 +503,10 @@ let scalar_name (ty : literal_type) : string =
 
 (** Extraction context.
 
-    Note that the extraction context contains information coming from the
-    LLBC AST (not only the pure AST). This is useful for naming, for instance:
-    we use the region information to generate the names of the backward
-    functions, etc.
- *)
+    Note that the extraction context contains information coming from the LLBC
+    AST (not only the pure AST). This is useful for naming, for instance: we use
+    the region information to generate the names of the backward functions, etc.
+*)
 type extraction_ctx = {
   (* mutable _span : Meta.span; *)
   crate : A.crate;
@@ -547,8 +522,7 @@ type extraction_ctx = {
             if h: b then ... else ...
             -- ^^
             -- makes the if then else dependent
-          ]}
-        *)
+          ]} *)
   trait_decl_id : trait_decl_id option;
       (** If we are extracting a trait declaration, identifies it *)
   trans_types : Pure.type_decl Pure.TypeDeclId.Map.t;
@@ -559,20 +533,19 @@ type extraction_ctx = {
   trans_trait_decls : Pure.trait_decl Pure.TraitDeclId.Map.t;
   trans_trait_impls : Pure.trait_impl Pure.TraitImplId.Map.t;
   types_filter_type_args_map : bool list TypeDeclId.Map.t;
-      (** The map to filter the type arguments for the builtin type
-          definitions.
+      (** The map to filter the type arguments for the builtin type definitions.
 
-          We need this for type `Vec`, for instance, which takes a useless
-          (in the context of the type translation) type argument for the
-          allocator which is used, and which we want to remove.
+          We need this for type `Vec`, for instance, which takes a useless (in
+          the context of the type translation) type argument for the allocator
+          which is used, and which we want to remove.
 
           TODO: it would be cleaner to filter those types in a micro-pass,
-          rather than at code generation time.
-        *)
+          rather than at code generation time. *)
   funs_filter_type_args_map : bool list FunDeclId.Map.t;
       (** Same as {!types_filter_type_args_map}, but for functions *)
   trait_impls_filter_type_args_map : bool list TraitImplId.Map.t;
-      (** Same as {!types_filter_type_args_map}, but for trait implementations *)
+      (** Same as {!types_filter_type_args_map}, but for trait implementations
+      *)
 }
 
 let extraction_ctx_to_fmt_env (ctx : extraction_ctx) : PrintPure.fmt_env =
@@ -617,10 +590,9 @@ let adt_variant_to_string (span : Meta.span option) (ctx : extraction_ctx) =
 let adt_field_to_string (span : Meta.span option) (ctx : extraction_ctx) =
   PrintPure.adt_field_to_string ~span (extraction_ctx_to_fmt_env ctx)
 
-(** Debugging function, used when communicating name collisions to the user,
-    and also to print ids for internal debugging (in case of lookup miss for
-    instance).
- *)
+(** Debugging function, used when communicating name collisions to the user, and
+    also to print ids for internal debugging (in case of lookup miss for
+    instance). *)
 let id_to_string (span : Meta.span option) (id : id) (ctx : extraction_ctx) :
     string =
   let trait_decl_id_to_string (id : A.TraitDeclId.id) : string =
@@ -755,15 +727,13 @@ let ctx_get_var (span : Meta.span) (id : LocalId.id) (ctx : extraction_ctx) :
   ctx_get (Some span) (LocalId id) ctx
 
 (** This warrants explanations. Charon supports several levels of nested
-  binders; however there are currently only two cases where we bind
-  non-lifetime variables: at the top-level of each item, and for each method
-  inside a trait_decl/trait_impl. Moreover, we use `Free` vars to identify
-  item-bound vars. This means that we can identify which binder a variable
-  comes from without rigorously tracking binder levels, which is what this
-  function does.
-  Note that the `de_bruijn_id`s are wrong anyway because we kept charon's
-  binding levels but forgot all the region binders.
-  *)
+    binders; however there are currently only two cases where we bind
+    non-lifetime variables: at the top-level of each item, and for each method
+    inside a trait_decl/trait_impl. Moreover, we use `Free` vars to identify
+    item-bound vars. This means that we can identify which binder a variable
+    comes from without rigorously tracking binder levels, which is what this
+    function does. Note that the `de_bruijn_id`s are wrong anyway because we
+    kept charon's binding levels but forgot all the region binders. *)
 let origin_from_de_bruijn_var (var : 'a de_bruijn_var) : generic_origin * 'a =
   match var with
   | Bound (_, id) -> (Method, id)
@@ -831,8 +801,7 @@ let unop_name (unop : unop) : string =
 
 (** Small helper to compute the name of a binary operation (note that many
     binary operations like "less than" are extracted to primitive operations,
-    like [<]).
- *)
+    like [<]). *)
 let named_binop_name (binop : E.binop) (int_ty : integer_type) : string =
   let binop_s =
     match binop with
@@ -857,12 +826,11 @@ let named_binop_name (binop : E.binop) (int_ty : integer_type) : string =
   | Lean -> int_name int_ty ^ "." ^ binop_s
   | FStar | Coq | HOL4 -> int_name int_ty ^ "_" ^ binop_s
 
-(** A list of keywords/identifiers used by the backend and with which we
-    want to check collision.
+(** A list of keywords/identifiers used by the backend and with which we want to
+    check collision.
 
-    Remark: this is useful mostly to look for collisions when generating
-    names for *variables*.
- *)
+    Remark: this is useful mostly to look for collisions when generating names
+    for *variables*. *)
 let keywords () =
   let named_unops =
     unop_name (Not None)
@@ -1320,8 +1288,7 @@ let initialize_names_maps () : names_maps =
 
     For instance: "type", "and", etc.
 
-    Remark: can return [None] for some backends like HOL4.
- *)
+    Remark: can return [None] for some backends like HOL4. *)
 let type_decl_kind_to_qualif (span : Meta.span) (kind : decl_kind)
     (type_kind : type_decl_kind option) : string option =
   match backend () with
@@ -1370,8 +1337,7 @@ let type_decl_kind_to_qualif (span : Meta.span) (kind : decl_kind)
 
     For instance: "let", "let rec", "and", etc.
 
-    Remark: can return [None] for some backends like HOL4.
- *)
+    Remark: can return [None] for some backends like HOL4. *)
 let fun_decl_kind_to_qualif (kind : decl_kind) : string option =
   match backend () with
   | FStar -> (
@@ -1415,8 +1381,7 @@ let fun_decl_kind_to_post_qualif (kind : decl_kind) : string option =
 
 (** The type of types.
 
-    TODO: move inside the formatter?
- *)
+    TODO: move inside the formatter? *)
 let type_keyword (span : Meta.span) =
   match backend () with
   | FStar -> "Type0"
@@ -1431,11 +1396,9 @@ let name_last_elem_as_ident (span : Meta.span) (n : llbc_name) : string =
 
 (** Helper
 
-    Prepare a name.
-    The first id elem is always the crate: if it is the local crate,
-    we remove it. We ignore disambiguators (there may be collisions, but we
-    check if there are).
- *)
+    Prepare a name. The first id elem is always the crate: if it is the local
+    crate, we remove it. We ignore disambiguators (there may be collisions, but
+    we check if there are). *)
 let ctx_prepare_name (meta : T.item_meta) (ctx : extraction_ctx)
     (name : llbc_name) : llbc_name =
   (* Rmk.: initially we only filtered the disambiguators equal to 0 *)
@@ -1465,10 +1428,9 @@ let ctx_compute_type_name_no_suffix (ctx : extraction_ctx)
 
 (** Provided a basename, compute a type name.
 
-    This is an auxiliary helper that we use to compute type declaration names, but also
-    for instance field and variant names when we need to add the name of the type as a
-    prefix.
- *)
+    This is an auxiliary helper that we use to compute type declaration names,
+    but also for instance field and variant names when we need to add the name
+    of the type as a prefix. *)
 let ctx_compute_type_name (item_meta : Types.item_meta) (ctx : extraction_ctx)
     (name : llbc_name) =
   let name = ctx_compute_type_name_no_suffix ctx item_meta name in
@@ -1482,14 +1444,13 @@ let ctx_compute_type_name (item_meta : Types.item_meta) (ctx : extraction_ctx)
     - field id
     - field name
 
-    Note that fields don't always have names, but we still need to
-    generate some names if we want to extract the structures to records.
-    For nameless fields, we generate a name based on the index.
+    Note that fields don't always have names, but we still need to generate some
+    names if we want to extract the structures to records. For nameless fields,
+    we generate a name based on the index.
 
-    Note that in most situations we extract structures with nameless fields
-    to tuples, meaning generating names by using indices shouldn't be too
-    much of a problem.
- *)
+    Note that in most situations we extract structures with nameless fields to
+    tuples, meaning generating names by using indices shouldn't be too much of a
+    problem. *)
 let ctx_compute_field_name (def : type_decl) (field_meta : Meta.attr_info)
     (ctx : extraction_ctx) (def_name : llbc_name) (field_id : FieldId.id)
     (field_name : string option) : string =
@@ -1517,8 +1478,7 @@ let ctx_compute_field_name (def : type_decl) (field_meta : Meta.attr_info)
 
 (** Inputs:
     - type name
-    - variant name
- *)
+    - variant name *)
 let ctx_compute_variant_name (ctx : extraction_ctx) (def : type_decl)
     (variant : variant) : string =
   (* Replace the name of the variant if the user annotated it with the [rename] attribute. *)
@@ -1546,8 +1506,7 @@ let ctx_compute_variant_name (ctx : extraction_ctx) (def : type_decl)
     ]}
 
     Inputs:
-    - type name
-*)
+    - type name *)
 let ctx_compute_struct_constructor (def : type_decl) (ctx : extraction_ctx)
     (basename : llbc_name) : string =
   let tname = ctx_compute_type_name def.item_meta ctx basename in
@@ -1599,9 +1558,8 @@ let ctx_compute_global_name (meta : T.item_meta) (ctx : extraction_ctx)
       String.concat "_" parts
   | Lean -> flatten_name name
 
-(** Helper function: generate a suffix for a function name, i.e., generates
-    a suffix like "_loop", "loop1", etc. to append to a function name.
- *)
+(** Helper function: generate a suffix for a function name, i.e., generates a
+    suffix like "_loop", "loop1", etc. to append to a function name. *)
 let default_fun_loop_suffix (num_loops : int) (loop_id : LoopId.id option) :
     string =
   match loop_id with
@@ -1611,9 +1569,8 @@ let default_fun_loop_suffix (num_loops : int) (loop_id : LoopId.id option) :
          If this function admits only one loop, we omit it. *)
       if num_loops = 1 then "_loop" else "_loop" ^ LoopId.to_string loop_id
 
-(** A helper function: generates a function suffix.
-    TODO: move all those helpers.
-*)
+(** A helper function: generates a function suffix. TODO: move all those
+    helpers. *)
 let default_fun_suffix (num_loops : int) (loop_id : LoopId.id option) : string =
   (* We only generate a suffix for the functions we generate from the loops *)
   default_fun_loop_suffix num_loops loop_id
@@ -1622,12 +1579,10 @@ let default_fun_suffix (num_loops : int) (loop_id : LoopId.id option) : string =
 
     Inputs:
     - function basename (TODO: shouldn't appear for builtin functions?...)
-    - number of loops in the function (useful to check if we need to use
-      indices to derive unique names for the loops for instance - if there is
-      exactly one loop, we don't need to use indices)
-    - loop id (if pertinent)
-    TODO: use the fun id for the builtin functions.
- *)
+    - number of loops in the function (useful to check if we need to use indices
+      to derive unique names for the loops for instance - if there is exactly
+      one loop, we don't need to use indices)
+    - loop id (if pertinent) TODO: use the fun id for the builtin functions. *)
 let ctx_compute_fun_name (meta : T.item_meta) (ctx : extraction_ctx)
     (fname : llbc_name) (num_loops : int) (loop_id : LoopId.id option) : string
     =
@@ -1690,20 +1645,18 @@ let ctx_compute_trait_decl_constructor (ctx : extraction_ctx)
   let name = ctx_compute_trait_decl_name ctx trait_decl in
   ExtractBuiltin.mk_struct_constructor name
 
-(** Helper to derive names for parent trait clauses and for variables
-    for trait instances.
+(** Helper to derive names for parent trait clauses and for variables for trait
+    instances.
 
-    We derive the name from the type of the clause (i.e., the trait ref
-    the clause implements).
-    For instance, if a trait clause is for the trait ref "Trait<Box<usize>",
-    we generate a name like "traitBoxUsizeInst". This is more meaningful
-    that giving it a generic name with an index (such as "parent_clause_1"
-    or "inst3").
+    We derive the name from the type of the clause (i.e., the trait ref the
+    clause implements). For instance, if a trait clause is for the trait ref
+    "Trait<Box<usize>", we generate a name like "traitBoxUsizeInst". This is
+    more meaningful that giving it a generic name with an index (such as
+    "parent_clause_1" or "inst3").
 
-    Because we want to be precise when deriving the name, we use the
-    original LLBC types, that is the types from before the translation
-    to pure, which simplifies types like boxes and references.
- *)
+    Because we want to be precise when deriving the name, we use the original
+    LLBC types, that is the types from before the translation to pure, which
+    simplifies types like boxes and references. *)
 let ctx_compute_trait_clause_name (ctx : extraction_ctx)
     (current_def_name : Types.name) (params : Types.generic_params)
     (clauses : Types.trait_clause list) (clause_id : trait_clause_id) : string =
@@ -1811,19 +1764,18 @@ let ctx_compute_trait_type_clause_name (ctx : extraction_ctx)
   ^ TraitClauseId.to_string clause.clause_id
 
 (** Generates the name of the termination measure used to prove/reason about
-    termination. The generated code uses this clause where needed,
-    but its body must be defined by the user.
+    termination. The generated code uses this clause where needed, but its body
+    must be defined by the user.
 
     F* and Lean only.
 
     Inputs:
-    - function id: this is especially useful to identify whether the
-      function is an builtin function or a local function
+    - function id: this is especially useful to identify whether the function is
+      an builtin function or a local function
     - function basename
-    - the number of loops in the parent function. This is used for
-      the same purpose as in [llbc_name].
-    - loop identifier, if this is for a loop
- *)
+    - the number of loops in the parent function. This is used for the same
+      purpose as in [llbc_name].
+    - loop identifier, if this is for a loop *)
 let ctx_compute_termination_measure_name (meta : T.item_meta)
     (ctx : extraction_ctx) (_fid : A.FunDeclId.id) (fname : llbc_name)
     (num_loops : int) (loop_id : LoopId.id option) : string =
@@ -1839,20 +1791,19 @@ let ctx_compute_termination_measure_name (meta : T.item_meta)
   (* Concatenate *)
   fname ^ lp_suffix ^ suffix
 
-(** Generates the name of the proof used to prove/reason about
-    termination. The generated code uses this clause where needed,
-    but its body must be defined by the user.
+(** Generates the name of the proof used to prove/reason about termination. The
+    generated code uses this clause where needed, but its body must be defined
+    by the user.
 
     Lean only.
 
     Inputs:
-    - function id: this is especially useful to identify whether the
-      function is an builtin function or a local function
+    - function id: this is especially useful to identify whether the function is
+      an builtin function or a local function
     - function basename
-    - the number of loops in the parent function. This is used for
-      the same purpose as in [llbc_name].
-    - loop identifier, if this is for a loop
- *)
+    - the number of loops in the parent function. This is used for the same
+      purpose as in [llbc_name].
+    - loop identifier, if this is for a loop *)
 let ctx_compute_decreases_proof_name (meta : T.item_meta) (ctx : extraction_ctx)
     (_fid : A.FunDeclId.id) (fname : llbc_name) (num_loops : int)
     (loop_id : LoopId.id option) : string =
@@ -1872,14 +1823,12 @@ let ctx_compute_decreases_proof_name (meta : T.item_meta) (ctx : extraction_ctx)
     Inputs:
     - the set of names used in the context so far
     - the basename we got from the symbolic execution, if we have one
-    - the type of the variable (can be useful for heuristics, in order
-      not to always use "x" for instance, whenever naming anonymous
-      variables)
+    - the type of the variable (can be useful for heuristics, in order not to
+      always use "x" for instance, whenever naming anonymous variables)
 
-    Note that once the formatter generated a basename, we add an index
-    if necessary to prevent name clashes: the burden of name clashes checks
-    is thus on the caller's side.
- *)
+    Note that once the formatter generated a basename, we add an index if
+    necessary to prevent name clashes: the burden of name clashes checks is thus
+    on the caller's side. *)
 let ctx_compute_var_basename (span : Meta.span) (ctx : extraction_ctx)
     (basename : string option) (ty : ty) : string =
   (* Small helper to derive var names from ADT type names.
@@ -1972,9 +1921,8 @@ let ctx_compute_const_generic_var_basename (_ctx : extraction_ctx)
 (** Return a base name for a trait clause. We might add a suffix to prevent
     collisions.
 
-    In the traduction we explicitely manipulate the trait clause instances,
-    that is we introduce one input variable for each trait clause.
- *)
+    In the traduction we explicitely manipulate the trait clause instances, that
+    is we introduce one input variable for each trait clause. *)
 let ctx_compute_trait_clause_basename (ctx : extraction_ctx)
     (current_def_name : Types.name) (params : Types.generic_params)
     (clause_id : trait_clause_id) : string =
@@ -1991,11 +1939,10 @@ let ctx_compute_trait_clause_basename (ctx : extraction_ctx)
 
 let trait_self_clause_basename = "self_clause"
 
-(** Appends an index to a name - we use this to generate unique
-    names: when doing so, the role of the formatter is just to concatenate
-    indices to names, the responsability of finding a proper index is
-    delegated to helper functions.
- *)
+(** Appends an index to a name - we use this to generate unique names: when
+    doing so, the role of the formatter is just to concatenate indices to names,
+    the responsability of finding a proper index is delegated to helper
+    functions. *)
 let name_append_index (basename : string) (i : int) : string =
   basename ^ string_of_int i
 
@@ -2082,9 +2029,8 @@ let ctx_add_const_generic_params (span : Meta.span) (origin : generic_origin)
     - the trait clauses
 
     For the [current_name_def] and the [llbc_generics]: we use them to derive
-    pretty names for the trait clauses. See {!ctx_compute_trait_clause_name}
-    for additional information.
-  *)
+    pretty names for the trait clauses. See {!ctx_compute_trait_clause_name} for
+    additional information. *)
 let ctx_add_local_trait_clauses (span : Meta.span)
     (current_def_name : Types.name) (origin : generic_origin)
     (llbc_generics : Types.generic_params) (clauses : trait_clause list)
@@ -2104,9 +2050,8 @@ let ctx_add_local_trait_clauses (span : Meta.span)
     - the trait clauses
 
     For the [current_name_def] and the [llbc_generics]: we use them to derive
-    pretty names for the trait clauses. See {!ctx_compute_trait_clause_name}
-    for additional information.
-  *)
+    pretty names for the trait clauses. See {!ctx_compute_trait_clause_name} for
+    additional information. *)
 let ctx_add_generic_params (span : Meta.span) (current_def_name : Types.name)
     (origin : generic_origin) (llbc_generics : Types.generic_params)
     (generics : generic_params) (ctx : extraction_ctx) :
@@ -2173,10 +2118,9 @@ let ctx_add_global_decl_and_body (def : global_decl) (ctx : extraction_ctx) :
       let ctx = ctx_add def.item_meta.span body (name ^ suffix ^ "_body") ctx in
       ctx
 
-(** - [is_trait_decl_field]: [true] if we are computing the name of a field
-      in a trait declaration, [false] if we are computing the name of a function
-      declaration.
- *)
+(** - [is_trait_decl_field]: [true] if we are computing the name of a field in a
+      trait declaration, [false] if we are computing the name of a function
+      declaration. *)
 let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
     (ctx : extraction_ctx) : string =
   (* Rename the function, if the user added a [rename] attribute.

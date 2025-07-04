@@ -1,4 +1,5 @@
-(** Module to perform type checking on the pure AST - we use this for sanity checks only *)
+(** Module to perform type checking on the pure AST - we use this for sanity
+    checks only *)
 
 open Pure
 open PureUtils
@@ -8,9 +9,8 @@ let log = Logging.pure_type_check_log
 
 (** Utility function, used for type checking.
 
-    This function should only be used for "regular" ADTs, where the number
-    of fields is fixed: it shouldn't be used for arrays, slices, etc.
- *)
+    This function should only be used for "regular" ADTs, where the number of
+    fields is fixed: it shouldn't be used for arrays, slices, etc. *)
 let get_adt_field_types (span : Meta.span)
     (type_decls : type_decl TypeDeclId.Map.t) (type_id : type_id)
     (variant_id : VariantId.id option) (generics : generic_args) : ty list =

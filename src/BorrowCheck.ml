@@ -6,9 +6,8 @@ let log = Logging.borrow_check_log
 
 (** Borrow-check a crate.
 
-    Note that we don't return anything: if we find borrow-checking errors,
-    we register them and print them later.
- *)
+    Note that we don't return anything: if we find borrow-checking errors, we
+    register them and print them later. *)
 let borrow_check_crate (crate : crate) : unit =
   (* Debug *)
   log#ldebug (lazy "translate_crate_to_pure");

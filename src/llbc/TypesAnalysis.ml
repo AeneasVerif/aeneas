@@ -34,9 +34,8 @@ type 'p g_type_info = {
       (** Various informations about the borrows *)
   param_infos : 'p;  (** Gives information about the type parameters *)
   is_tuple_struct : bool;
-      (** If true, it means the type is a record that we should extract as a tuple.
-          This field is only valid for type declarations.
-      *)
+      (** If true, it means the type is a record that we should extract as a
+          tuple. This field is only valid for type declarations. *)
   mut_regions : RegionId.Set.t;
       (** The set of regions used in mutable borrows *)
 }
@@ -50,8 +49,8 @@ type ty_info = type_borrows_info [@@deriving show]
 
 (** Helper definition.
 
-    Allows us to factorize code: {!analyze_full_ty} is used both to analyze
-    type definitions and types. *)
+    Allows us to factorize code: {!analyze_full_ty} is used both to analyze type
+    definitions and types. *)
 type partial_type_info = type_param_info list option g_type_info
 [@@deriving show]
 
@@ -72,8 +71,7 @@ let type_borrows_info_init : type_borrows_info =
 
     Note that there are two possibilities:
     - either all the fields are named
-    - or none of the fields are named
- *)
+    - or none of the fields are named *)
 let type_decl_is_tuple_struct (x : type_decl) : bool =
   match x.kind with
   | Struct fields -> List.for_all (fun f -> f.field_name = None) fields
@@ -453,9 +451,8 @@ let analyze_type_declaration_group (type_decls : type_decl TypeDeclId.Map.t)
   in
   analyze infos
 
-(** Analyze a type to check whether it contains borrows, etc., provided
-    we have already analyzed the type definitions in the context.
- *)
+(** Analyze a type to check whether it contains borrows, etc., provided we have
+    already analyzed the type definitions in the context. *)
 let analyze_ty (span : Meta.span option) (infos : type_infos) (ty : ty) :
     ty_info =
   log#ltrace (lazy (__FUNCTION__ ^ ": ty:\n" ^ show_ty ty));

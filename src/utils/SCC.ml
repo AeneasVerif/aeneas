@@ -1,4 +1,5 @@
-(** Utilities for strongly connected components - this is similar to the [graphs.rs] file in Charon *)
+(** Utilities for strongly connected components - this is similar to the
+    [graphs.rs] file in Charon *)
 
 open Collections
 module SccId = Identifiers.IdGen ()
@@ -6,14 +7,16 @@ module SccId = Identifiers.IdGen ()
 (** The local logger *)
 let log = Logging.scc_log
 
-(** A structure containing information about SCCs (strongly connected components) *)
+(** A structure containing information about SCCs (strongly connected
+    components) *)
 type 'id sccs = {
   sccs : 'id list SccId.Map.t;
   scc_deps : SccId.Set.t SccId.Map.t;  (** The dependencies between sccs *)
 }
 [@@deriving show]
 
-(** A functor which provides functions to work on strongly connected components *)
+(** A functor which provides functions to work on strongly connected components
+*)
 module MakeReorder (Id : OrderedType) = struct
   module IdMap = MakeMap (Id)
   module IdSet = MakeSet (Id)
@@ -23,14 +26,14 @@ module MakeReorder (Id : OrderedType) = struct
   let pp_id = Id.pp_t
 
   (** The order in which Tarjan's algorithm generates the SCCs is arbitrary,
-      while we want to keep as much as possible the original order (the order
-      in which the user generated the ids). For this, we iterate through
-      the ordered ids and try to add the SCC containing the id to a new list of SCCs
-      Of course, this SCC might have dependencies, so we need to add the dependencies
-      first (in which case we have reordering to do). This is what this function
-      does: we add an SCC and its dependencies to the list of reordered SCCs by
-      doing a depth-first search.
-      We also compute the SCC dependencies while performing this exploration.
+      while we want to keep as much as possible the original order (the order in
+      which the user generated the ids). For this, we iterate through the
+      ordered ids and try to add the SCC containing the id to a new list of SCCs
+      Of course, this SCC might have dependencies, so we need to add the
+      dependencies first (in which case we have reordering to do). This is what
+      this function does: we add an SCC and its dependencies to the list of
+      reordered SCCs by doing a depth-first search. We also compute the SCC
+      dependencies while performing this exploration.
 
       Rem.: we push SCCs to the *front* of [reordered_sccs] (which should then
       be reversed before being used).
@@ -38,8 +41,7 @@ module MakeReorder (Id : OrderedType) = struct
       Rem.: [scc_deps]: we use the fact that the elements inside [SccId.Set.t]
       are ordered.
 
-      TODO: change the type of [reordered_sccs] (not efficient...)
-   *)
+      TODO: change the type of [reordered_sccs] (not efficient...) *)
   let rec insert_scc_with_deps (id_deps : Id.t list IdMap.t)
       (reordered_sccs : SccId.id list ref)
       (scc_deps : SccId.Set.t SccId.Map.t ref) (sccs : Id.t list SccId.Map.t)
@@ -74,24 +76,23 @@ module MakeReorder (Id : OrderedType) = struct
       reordered_sccs := scc_id :: !reordered_sccs
 
   (** Provided we computed the SCCs (Strongly Connected Components) of a set of
-      identifier, and those identifiers are ordered, compute the set of SCCs where
-      the order of the SCCs and the order of the identifiers inside the SCCs attempt
-      to respect as much as possible the original order between the identifiers.
-      The [ids] vector gives the ordered set of identifiers.
+      identifier, and those identifiers are ordered, compute the set of SCCs
+      where the order of the SCCs and the order of the identifiers inside the
+      SCCs attempt to respect as much as possible the original order between the
+      identifiers. The [ids] vector gives the ordered set of identifiers.
 
       This is used to generate the translated definitions in a consistent and
-      stable manner. For instance, if some Rust functions are mutually recursive,
-      it is possible that we can extract the forward functions in one group, and
-      extract the backward functions in one group (after filtering the useless
-      calls in {!module:PureMicroPasses}), but is is also possible that all the functions
-      (forward and backward) are mutually recursive). For this reason, we compute
-      the dependency graph and the strongly connected components of that graph.
-      Similar problems when functions contain loops (especially mutually recursive
-      functions which contain loops (!)).
+      stable manner. For instance, if some Rust functions are mutually
+      recursive, it is possible that we can extract the forward functions in one
+      group, and extract the backward functions in one group (after filtering
+      the useless calls in {!module:PureMicroPasses}), but is is also possible
+      that all the functions (forward and backward) are mutually recursive). For
+      this reason, we compute the dependency graph and the strongly connected
+      components of that graph. Similar problems when functions contain loops
+      (especially mutually recursive functions which contain loops (!)).
 
       Also see the comments for the equivalent function in [graph.rs] in the
-      Charon project.
-  *)
+      Charon project. *)
   let reorder_sccs (id_deps : Id.t list IdMap.t) (ids : Id.t list)
       (sccs : Id.t list list) : id sccs =
     (* Map the identifiers to the SCC indices *)
@@ -172,10 +173,9 @@ module Make (Id : OrderedType) = struct
   module M = MakeMap (Id)
   module S = MakeSet (Id)
 
-  (** Compute the ordered SCC components for a graph, which is a map
-      from identifier to set of identifiers (which represent the set
-      of edges starting from an identifier).
-   *)
+  (** Compute the ordered SCC components for a graph, which is a map from
+      identifier to set of identifiers (which represent the set of edges
+      starting from an identifier). *)
   let compute (m : (Id.t * S.t) list) : Id.t sccs =
     (*
      * Create the dependency graph

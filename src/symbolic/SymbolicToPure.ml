@@ -24,10 +24,9 @@ type type_ctx = {
   llbc_type_decls : T.type_decl TypeDeclId.Map.t;
   type_decls : type_decl TypeDeclId.Map.t;
       (** We use this for type-checking (for sanity checks) when translating
-          values and functions.
-          This map is empty when we translate the types, then contains all
-          the translated types when we translate the functions.
-       *)
+          values and functions. This map is empty when we translate the types,
+          then contains all the translated types when we translate the
+          functions. *)
   type_infos : type_infos;
   recursive_decls : T.TypeDeclId.Set.t;
 }
@@ -36,15 +35,15 @@ type type_ctx = {
 type fun_sig_named_outputs = {
   sg : fun_sig;  (** A function signature *)
   output_names : string option list;
-      (** In case the signature is for a backward function, we may provides names
-          for the outputs. The reason is that the outputs of backward functions
-          come from (in case there are no nested borrows) borrows present in the
-          inputs of the original rust function. In this situation, we can use the
-          names of those inputs to name the outputs. Those names are very useful
-          to generate beautiful codes (we may need to introduce temporary variables
-          in the bodies of the backward functions to store the returned values, in
-          which case we use those names).
-       *)
+      (** In case the signature is for a backward function, we may provides
+          names for the outputs. The reason is that the outputs of backward
+          functions come from (in case there are no nested borrows) borrows
+          present in the inputs of the original rust function. In this
+          situation, we can use the names of those inputs to name the outputs.
+          Those names are very useful to generate beautiful codes (we may need
+          to introduce temporary variables in the bodies of the backward
+          functions to store the returned values, in which case we use those
+          names). *)
 }
 [@@deriving show]
 
@@ -55,17 +54,15 @@ type fun_ctx = {
 }
 [@@deriving show]
 
-(** Whenever we translate a function call or an ended abstraction, we
-    store the related information (this is useful when translating ended
-    children abstractions).
- *)
+(** Whenever we translate a function call or an ended abstraction, we store the
+    related information (this is useful when translating ended children
+    abstractions). *)
 type call_info = {
   forward : S.call;
   forward_inputs : texpression list;
       (** Remember the list of inputs given to the forward function.
 
-          Those inputs include the fuel and the state, if pertinent.
-       *)
+          Those inputs include the fuel and the state, if pertinent. *)
   back_funs : texpression option RegionGroupId.Map.t option;
       (** If we do not split between the forward/backward functions: the
           variables we introduced for the backward functions.
@@ -78,10 +75,9 @@ type call_info = {
             ...
           ]}
 
-          The expression might be [None] in case the backward function
-          has to be filtered (because it does nothing - the backward
-          functions for shared borrows for instance).
-       *)
+          The expression might be [None] in case the backward function has to be
+          filtered (because it does nothing - the backward functions for shared
+          borrows for instance). *)
 }
 [@@deriving show]
 
@@ -112,9 +108,8 @@ type call_info = {
         get_fwd_loop ...
     ]}
 
-    The various input and output fields are for this unique loop call, if
-    there is one.
- *)
+    The various input and output fields are for this unique loop call, if there
+    is one. *)
 type loop_info = {
   loop_id : LoopId.id;
   input_vars : var list;
@@ -125,15 +120,11 @@ type loop_info = {
   forward_output_no_state_no_result : texpression option;
       (** The forward outputs are initialized at [None] *)
   back_outputs : ty list RegionGroupId.Map.t;
-      (** The map from region group ids to the types of the values given back
-          by the corresponding loop abstractions.
-          This map is partial.
-       *)
+      (** The map from region group ids to the types of the values given back by
+          the corresponding loop abstractions. This map is partial. *)
   back_funs : texpression option RegionGroupId.Map.t option;
-      (** Same as {!call_info.back_funs}.
-          Initialized with [None], gets updated to [Some] only if we merge
-          the fwd/back functions.
-       *)
+      (** Same as {!call_info.back_funs}. Initialized with [None], gets updated
+          to [Some] only if we merge the fwd/back functions. *)
   fwd_effect_info : fun_effect_info;
   back_effect_infos : fun_effect_info RegionGroupId.Map.t;
 }
@@ -151,25 +142,23 @@ type bs_ctx = {
   bid : RegionGroupId.id option;
       (** TODO: rename
 
-        The id of the group region we are currently translating.
-        If we split the forward/backward functions, we set this id at the
-        very beginning of the translation.
-        If we don't split, we set it to `None`, then update it when we enter
-        an expression which is specific to a backward function.
-     *)
+          The id of the group region we are currently translating. If we split
+          the forward/backward functions, we set this id at the very beginning
+          of the translation. If we don't split, we set it to `None`, then
+          update it when we enter an expression which is specific to a backward
+          function. *)
   sg : decomposed_fun_sig;
       (** Information about the function signature - useful in particular to
           translate [Panic] *)
   sv_to_var : var V.SymbolicValueId.Map.t;
-      (** Whenever we encounter a new symbolic value (introduced because of
-          a symbolic expansion or upon ending an abstraction, for instance)
-          we introduce a new variable (with a let-binding).
-       *)
+      (** Whenever we encounter a new symbolic value (introduced because of a
+          symbolic expansion or upon ending an abstraction, for instance) we
+          introduce a new variable (with a let-binding). *)
   var_counter : LocalId.generator ref;
       (** Using a ref to make sure all the variables identifiers are unique.
-          TODO: this is not very clean, and the code was initially written without
-          a reference (and it's shape hasn't changed). We should use DeBruijn indices.
-       *)
+          TODO: this is not very clean, and the code was initially written
+          without a reference (and it's shape hasn't changed). We should use
+          DeBruijn indices. *)
   state_var : LocalId.id;
       (** The current state variable, in case the function is stateful *)
   back_state_vars : LocalId.id RegionGroupId.Map.t;
@@ -190,101 +179,98 @@ type bs_ctx = {
           state may have been updated by the caller between the call to the
           forward function and the call to the backward function. We also need
           to make sure we use the same variable in all the branches (because
-          this variable is quantified at the definition level).
-       *)
+          this variable is quantified at the definition level). *)
   fuel0 : LocalId.id;
       (** The original fuel taken as input by the function (if we use fuel) *)
   fuel : LocalId.id;
       (** The fuel to use for the recursive calls (if we use fuel) *)
   forward_inputs : var list;
       (** The input parameters for the forward function corresponding to the
-          translated Rust inputs (no fuel, no state).
-       *)
+          translated Rust inputs (no fuel, no state). *)
   backward_inputs_no_state : var list RegionGroupId.Map.t;
-      (** The additional input parameters for the backward functions coming
-          from the borrows consumed upon ending the lifetime (as a consequence
-          those don't include the backward state, if there is one).
+      (** The additional input parameters for the backward functions coming from
+          the borrows consumed upon ending the lifetime (as a consequence those
+          don't include the backward state, if there is one).
 
           If we split the forward/backward functions: we initialize this map
           when initializing the bs_ctx, because those variables are quantified
-          at the definition level. Otherwise, we initialize it upon diving
-          into the expressions which are specific to the backward functions.
-       *)
+          at the definition level. Otherwise, we initialize it upon diving into
+          the expressions which are specific to the backward functions. *)
   backward_inputs_with_state : var list RegionGroupId.Map.t;
       (** All the additional input parameters for the backward functions.
 
-          Same remarks as for {!backward_inputs_no_state}.
-       *)
+          Same remarks as for {!backward_inputs_no_state}. *)
   backward_outputs : var list option;
       (** The variables that the backward functions will output, corresponding
           to the borrows they give back (don't include the backward state).
 
           The translation is done as follows:
-          - when we detect the ended input abstraction which corresponds
-            to the backward function of the LLBC function we are translating,
-            and which consumed the values [consumed_i] (that we need to give
-            back to the caller), we introduce:
-            {[
+          {ul
+           {- when we detect the ended input abstraction which corresponds to
+              the backward function of the LLBC function we are translating, and
+              which consumed the values [consumed_i] (that we need to give back
+              to the caller), we introduce:
+              {[
                 let v_i = consumed_i in
                 ...
-            ]}
-            where the [v_i] are fresh, and are stored in the [backward_output].
-          - Then, upon reaching the [Return] node, we introduce:
-            {[
-                return (v_i)
-            ]}
+              ]}
+              where the [v_i] are fresh, and are stored in the
+              [backward_output].
+           }
+           {- Then, upon reaching the [Return] node, we introduce:
+              {[
+                return v_i
+              ]}
+           }
+          }
 
-          The option is [None] before we detect the ended input abstraction,
-          and [Some] afterwards.
-       *)
+          The option is [None] before we detect the ended input abstraction, and
+          [Some] afterwards. *)
   calls : call_info V.FunCallId.Map.t;
       (** The function calls we encountered so far *)
   abstractions : (V.abs * texpression list) V.AbstractionId.Map.t;
       (** The ended abstractions we encountered so far, with their additional
-          input arguments. We store it here and not in {!call_info} because
-          we need a map from abstraction id to abstraction (and not
-          from call id + region group id to abstraction). *)
+          input arguments. We store it here and not in {!call_info} because we
+          need a map from abstraction id to abstraction (and not from call id +
+          region group id to abstraction). *)
   loop_ids_map : LoopId.id V.LoopId.Map.t;  (** Ids to use for the loops *)
   loops : loop_info LoopId.Map.t;
       (** The loops we encountered so far.
 
-          We are using a map to be general - in practice we will fail if we encounter
-          more than one loop on a single path.
-       *)
+          We are using a map to be general - in practice we will fail if we
+          encounter more than one loop on a single path. *)
   loop_id : LoopId.id option;
-      (** [Some] if we reached a loop (we are synthesizing a function, and reached a loop, or are
-          synthesizing the loop body itself)
-       *)
+      (** [Some] if we reached a loop (we are synthesizing a function, and
+          reached a loop, or are synthesizing the loop body itself) *)
   inside_loop : bool;
       (** In case {!loop_id} is [Some]:
           - if [true]: we are synthesizing a loop body
-          - if [false]: we reached a loop and are synthesizing the end of the function (after the loop body)
+          - if [false]: we reached a loop and are synthesizing the end of the
+            function (after the loop body)
 
-          Note that when a function contains a loop, we group the function symbolic AST and the loop symbolic
-          AST in a single function.
-       *)
+          Note that when a function contains a loop, we group the function
+          symbolic AST and the loop symbolic AST in a single function. *)
   mk_return : (bs_ctx -> texpression option -> texpression) option;
-      (** Small helper: translate a [return] expression, given a value to "return".
-          The translation of [return] depends on the context, and in particular depends on
-          whether we are inside a subexpression like a loop or not.
+      (** Small helper: translate a [return] expression, given a value to
+          "return". The translation of [return] depends on the context, and in
+          particular depends on whether we are inside a subexpression like a
+          loop or not.
 
           Note that the function consumes an optional expression, which is:
           - [Some] for a forward computation
           - [None] for a backward computation
 
-          We initialize this at [None].
-      *)
+          We initialize this at [None]. *)
   mk_panic : texpression option;
       (** Small helper: translate a [fail] expression.
 
-           We initialize this at [None].
-       *)
+          We initialize this at [None]. *)
   mut_borrow_to_consumed : texpression V.BorrowId.Map.t;
-      (** A map from mutable borrows consumed by region abstractions to
-          consumed values.
+      (** A map from mutable borrows consumed by region abstractions to consumed
+          values.
 
-          We use this to compute default values during the translation.
-          We need them because of the following case:
+          We use this to compute default values during the translation. We need
+          them because of the following case:
           {[
             fn wrap_in_option(x: &'a mut T) -> Option<&'a mut T> {
                 Some(x)
@@ -297,14 +283,14 @@ type bs_ctx = {
               (x, fun x' => let Some x' = x' in x')
           ]}
 
-          The problem is that the backward function requires unwrapping the value
-          from the option, which should have the variant [Some]. This is however
-          not something we can easily enforce in the type system at the backend
-          side, which means we actually have to generate a match which might fail.
-          In particular, for the (unreachable) [None] branch we have to produce
-          some value for [x']: we use the original value of [x], like so (note
-          that we simplify the [let x' = match ... in ...] expression later in
-          a micro-pass):
+          The problem is that the backward function requires unwrapping the
+          value from the option, which should have the variant [Some]. This is
+          however not something we can easily enforce in the type system at the
+          backend side, which means we actually have to generate a match which
+          might fail. In particular, for the (unreachable) [None] branch we have
+          to produce some value for [x']: we use the original value of [x], like
+          so (note that we simplify the [let x' = match ... in ...] expression
+          later in a micro-pass):
           {[
             let wrap_in_option (x : T) : T & (Option T -> T) =
               let back x' =
@@ -317,33 +303,30 @@ type bs_ctx = {
                   (x, back)
           ]}
 
-          **Remarks:**
-          We attempted to do store the consumed values directly when doing
-          the symbolic execution. It proved cumbersome for the following reasons:
+          **Remarks:** We attempted to do store the consumed values directly
+          when doing the symbolic execution. It proved cumbersome for the
+          following reasons:
           - the symbolic execution is already quite complex, and keeping track
-            of those consumed values is actually non trivial especially
-            in the context of the join operation (for instance: when we join
-            two mutable borrows, which default value should we use?).
-            Generally speaking, we want to keep the symbolic execution as
-            tight as possible because this is the core of the engine.
-          - when we store a value (as a meta-value for instance), we need
-            to store the evaluation context at the same time, otherwise we
-            cannot translate it to a pure expression in the presence of shared
-            borrows (we need the evaluation context to follow the borrow
-            indirections). Making this possible would have required an important
-            refactoring of the code, as the values would have been mutually
-            recursive with the evaluation contexts.
-          On the contrary, computing this information when transforming the
-          symbolic trace to a pure model may not be the most obvious way of
-          retrieving those consumed values but in practice it is quite
-          straightforward and easy to debug.
-      *)
+            of those consumed values is actually non trivial especially in the
+            context of the join operation (for instance: when we join two
+            mutable borrows, which default value should we use?). Generally
+            speaking, we want to keep the symbolic execution as tight as
+            possible because this is the core of the engine.
+          - when we store a value (as a meta-value for instance), we need to
+            store the evaluation context at the same time, otherwise we cannot
+            translate it to a pure expression in the presence of shared borrows
+            (we need the evaluation context to follow the borrow indirections).
+            Making this possible would have required an important refactoring of
+            the code, as the values would have been mutually recursive with the
+            evaluation contexts. On the contrary, computing this information
+            when transforming the symbolic trace to a pure model may not be the
+            most obvious way of retrieving those consumed values but in practice
+            it is quite straightforward and easy to debug. *)
   var_id_to_default : texpression LocalId.Map.t;
       (** Map from the variable identifier of a given back value and introduced
-          when deconstructing an ended abstraction, to the default value that
-          we can use when introducing the otherwise branch of the deconstructing
-          match (see [mut_borrow_to_consumed]).
-       *)
+          when deconstructing an ended abstraction, to the default value that we
+          can use when introducing the otherwise branch of the deconstructing
+          match (see [mut_borrow_to_consumed]). *)
 }
 [@@deriving show]
 
@@ -545,7 +528,8 @@ and translate_trait_instance_id (span : Meta.span option)
   | UnknownTrait s ->
       craise_opt_span __FILE__ __LINE__ span ("Unknown trait found: " ^ s)
 
-(** Translate a signature type - TODO: factor out the different translation functions *)
+(** Translate a signature type - TODO: factor out the different translation
+    functions *)
 let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
   let translate = translate_sty in
   match ty with
@@ -693,19 +677,18 @@ let mk_visited_params_visitor () =
 
     The way we do it is simple: if a parameter appears in one of the inputs,
     then it should be implicit. For instance, the type parameter of [Vec::get]
-    should be implicit, while the type parameter of [Vec::new] should be explicit
-    (it only appears in the output).
-    Also note that here we consider the trait obligations as inputs from which
-    we can deduce an implicit parameter. For instance:
+    should be implicit, while the type parameter of [Vec::new] should be
+    explicit (it only appears in the output). Also note that here we consider
+    the trait obligations as inputs from which we can deduce an implicit
+    parameter. For instance:
     {[
       let f {a : Type} (clause0 : Foo a) : ...
              ^^^^^^^^
           implied by clause0
     ]}
 
-    The [input_tys] are the types of the input arguments, in case we are translating
-    a function.
- *)
+    The [input_tys] are the types of the input arguments, in case we are
+    translating a function. *)
 let compute_explicit_info (generics : Pure.generic_params) (input_tys : ty list)
     : explicit_info =
   let visitor, implicit_tys, implicit_cgs = mk_visited_params_visitor () in
@@ -723,11 +706,10 @@ let compute_explicit_info (generics : Pure.generic_params) (input_tys : ty list)
     explicit_const_generics = List.map make_explicit_cg generics.const_generics;
   }
 
-(** Compute which input parameters can be infered if only the explicit types
-    and the trait refs are provided.
+(** Compute which input parameters can be infered if only the explicit types and
+    the trait refs are provided.
 
-    This is similar to [compute_explicit_info].
- *)
+    This is similar to [compute_explicit_info]. *)
 let compute_known_info (explicit : explicit_info)
     (generics : Pure.generic_params) : known_info =
   let visitor, known_tys, known_cgs = mk_visited_params_visitor () in
@@ -752,9 +734,8 @@ let compute_known_info (explicit : explicit_info)
 
 (** Translate a type definition from LLBC
 
-    Remark: this is not symbolic to pure but LLBC to pure. Still,
-    I don't see the point of moving this definition for now.
- *)
+    Remark: this is not symbolic to pure but LLBC to pure. Still, I don't see
+    the point of moving this definition for now. *)
 let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
     type_decl =
   log#ltrace
@@ -811,14 +792,13 @@ let translate_type_id (span : Meta.span option) (id : T.type_id) : type_id =
       TBuiltin aty
   | TTuple -> TTuple
 
-(** Translate a type, seen as an input/output of a forward function
-    (preserve all borrows, etc.).
+(** Translate a type, seen as an input/output of a forward function (preserve
+    all borrows, etc.).
 
     Remark: it doesn't matter whether the types has regions or erased regions
     (both cases happen, actually).
 
-    TODO: factor out the various translation functions.
-*)
+    TODO: factor out the various translation functions. *)
 let rec translate_fwd_ty (span : Meta.span option) (type_infos : type_infos)
     (ty : T.ty) : ty =
   let translate = translate_fwd_ty span type_infos in
@@ -894,8 +874,7 @@ let ctx_translate_fwd_generic_args (ctx : bs_ctx) (generics : T.generic_args) :
 
     We return an option, because the translated type may be empty.
 
-    [inside_mut]: are we inside a mutable borrow?
- *)
+    [inside_mut]: are we inside a mutable borrow? *)
 let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
     (keep_region : T.region -> bool) (inside_mut : bool) (ty : T.ty) : ty option
     =
@@ -1047,14 +1026,13 @@ let bs_ctx_register_forward_call (call_id : V.FunCallId.id) (forward : S.call)
   { ctx with calls }
 
 (** [inherit_args]: the list of inputs inherited from the forward function and
-    the ancestors backward functions, if pertinent.
-    [back_args]: the *additional* list of inputs received by the backward function,
-    including the state.
+    the ancestors backward functions, if pertinent. [back_args]: the
+    *additional* list of inputs received by the backward function, including the
+    state.
 
     Returns the updated context and the expression corresponding to the function
     that we need to call. This function may be [None] if it has to be ignored
-    (because it does nothing).
- *)
+    (because it does nothing). *)
 let bs_ctx_register_backward_call (abs : V.abs) (call_id : V.FunCallId.id)
     (back_id : T.RegionGroupId.id) (back_args : texpression list) (ctx : bs_ctx)
     : bs_ctx * texpression option =
@@ -1096,8 +1074,8 @@ let list_ancestor_abstractions_ids (ctx : bs_ctx) (abs : V.abs)
     (fun id -> V.AbstractionId.Set.mem id ids)
     call_info.forward.abstractions
 
-(** List the ancestor abstractions of an abstraction introduced because of
-    a function call *)
+(** List the ancestor abstractions of an abstraction introduced because of a
+    function call *)
 let list_ancestor_abstractions (ctx : bs_ctx) (abs : V.abs)
     (call_id : V.FunCallId.id) : (V.abs * texpression list) list =
   let abs_ids = list_ancestor_abstractions_ids ctx abs call_id in
@@ -1105,15 +1083,13 @@ let list_ancestor_abstractions (ctx : bs_ctx) (abs : V.abs)
 
 (** Small utility.
 
-    Does the function *decrease* the fuel? [true] if recursive.
- *)
+    Does the function *decrease* the fuel? [true] if recursive. *)
 let function_decreases_fuel (info : fun_effect_info) : bool =
   !Config.use_fuel && info.is_rec
 
 (** Small utility.
 
-    Does the function *use* the fuel? [true] if can diverge.
- *)
+    Does the function *use* the fuel? [true] if can diverge. *)
 let function_uses_fuel (info : fun_effect_info) : bool =
   !Config.use_fuel && info.can_diverge
 
@@ -1195,20 +1171,20 @@ let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fun_id_or_trait_method_ref)
           | Some gid -> RegionGroupId.Map.find gid loop_info.back_effect_infos)
       | _ -> craise __FILE__ __LINE__ ctx.span "Unreachable")
 
-(** Translate an instantiated function signature to a decomposed function signature.
+(** Translate an instantiated function signature to a decomposed function
+    signature.
 
     Note that the function also takes a list of names for the inputs, and
-    computes, for every output for the backward functions, a corresponding
-    name (outputs for backward functions come from borrows in the inputs
-    of the forward function) which we use as hints to generate pretty names
-    in the extracted code.
+    computes, for every output for the backward functions, a corresponding name
+    (outputs for backward functions come from borrows in the inputs of the
+    forward function) which we use as hints to generate pretty names in the
+    extracted code.
 
     Remark: as we take as input an instantiated function signature, we assume
     the types have already been normalized.
 
     - [generic_args]: the generic arguments with which the uninstantiated
-      signature was instantiated, leading to the current [sg]
- *)
+      signature was instantiated, leading to the current [sg] *)
 let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
     (decls_ctx : C.decls_ctx) (fun_id : A.fun_id_or_trait_method_ref)
     (sg : A.inst_fun_sig) (input_names : string option list) :
@@ -1585,11 +1561,9 @@ let mk_back_output_ty_from_effect_info (effect_info : fun_effect_info)
 
     If a backward function has no inputs/outputs we filter it.
 
-    We may also filter the region group ids (param [keep_rg_ids]).
-    This is useful for the loops: not all the
-    parent function region groups can be linked to a region abstraction
-    introduced by the loop.
- *)
+    We may also filter the region group ids (param [keep_rg_ids]). This is
+    useful for the loops: not all the parent function region groups can be
+    linked to a region abstraction introduced by the loop. *)
 let compute_back_tys_with_info (dsg : Pure.decomposed_fun_type)
     (keep_rg_ids : RegionGroupId.Set.t option) : (back_sg_info * ty) option list
     =
@@ -1623,9 +1597,9 @@ let compute_back_tys (dsg : Pure.decomposed_fun_type)
     (keep_rg_ids : RegionGroupId.Set.t option) : ty option list =
   List.map (Option.map snd) (compute_back_tys_with_info dsg keep_rg_ids)
 
-(** Compute the output type of a function, from a decomposed signature
-    (the output type contains the type of the value returned by the forward
-    function as well as the types of the returned backward functions). *)
+(** Compute the output type of a function, from a decomposed signature (the
+    output type contains the type of the value returned by the forward function
+    as well as the types of the returned backward functions). *)
 let compute_output_ty_from_decomposed (dsg : Pure.decomposed_fun_type) : ty =
   (* Compute the arrow types for all the backward functions *)
   let back_tys = List.filter_map (fun x -> x) (compute_back_tys dsg None) in
@@ -1690,8 +1664,8 @@ let bs_ctx_fresh_state_var (ctx : bs_ctx) : bs_ctx * var * typed_pattern =
   (* Return *)
   (ctx, state_var, state_pat)
 
-(** WARNING: do not call this function directly.
-    Call [fresh_named_var_for_symbolic_value] instead. *)
+(** WARNING: do not call this function directly. Call
+    [fresh_named_var_for_symbolic_value] instead. *)
 let fresh_var_llbc_ty (basename : string option) (ty : T.ty) (ctx : bs_ctx) :
     bs_ctx * var =
   (* Generate the fresh variable *)
@@ -1729,7 +1703,8 @@ let fresh_named_vars_for_symbolic_values
     (fun ctx (name, sv) -> fresh_named_var_for_symbolic_value name sv ctx)
     ctx svl
 
-(** This generates a fresh variable **which is not to be linked to any symbolic value** *)
+(** This generates a fresh variable **which is not to be linked to any symbolic
+    value** *)
 let fresh_var (basename : string option) (ty : ty) (ctx : bs_ctx) : bs_ctx * var
     =
   (* Generate the fresh variable *)
@@ -1821,7 +1796,8 @@ let fresh_back_vars_for_current_fun (ctx : bs_ctx)
   in
   fresh_opt_vars back_vars ctx
 
-(** IMPORTANT: do not use this one directly, but rather {!symbolic_value_to_texpression} *)
+(** IMPORTANT: do not use this one directly, but rather
+    {!symbolic_value_to_texpression} *)
 let lookup_var_for_symbolic_value (id : V.symbolic_value_id) (ctx : bs_ctx) :
     var option =
   match V.SymbolicValueId.Map.find_opt id ctx.sv_to_var with
@@ -1844,10 +1820,9 @@ let rec unbox_typed_value (span : Meta.span) (v : V.typed_value) : V.typed_value
 
 (** Translate a symbolic value.
 
-    Because we do not necessarily introduce variables for the symbolic values
-    of (translated) type unit, it is important that we do not lookup variables
-    in case the symbolic value has type unit.
- *)
+    Because we do not necessarily introduce variables for the symbolic values of
+    (translated) type unit, it is important that we do not lookup variables in
+    case the symbolic value has type unit. *)
 let symbolic_value_to_texpression (ctx : bs_ctx) (sv : V.symbolic_value) :
     texpression =
   (* Translate the type *)
@@ -1878,12 +1853,11 @@ let symbolic_value_to_texpression (ctx : bs_ctx) (sv : V.symbolic_value) :
 
     TODO: we might want to remember in the symbolic AST the set of ended
     regions, at the points where we need it, for sanity checks (though the
-    sanity checks in the symbolic interpreter should be enough).
-    The points where we need this set so far:
+    sanity checks in the symbolic interpreter should be enough). The points
+    where we need this set so far:
     - function call
     - end abstraction
-    - return
- *)
+    - return *)
 let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
     (v : V.typed_value) : texpression =
   (* We need to ignore boxes *)
@@ -1958,35 +1932,33 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
 
 type borrow_kind = BMut | BShared
 
-(** An avalue is either produced from a borrow projector (if it is an input
-    to a function) or from a loan projector (if it is an ouptput).
-    This means that an avalue has either:
+(** An avalue is either produced from a borrow projector (if it is an input to a
+    function) or from a loan projector (if it is an ouptput). This means that an
+    avalue has either:
     - only borrows and borrow projections over symbolic values
     - only loans and loan projections over symbolic values
     - none of those
 
-    **REMARK:** this will not be valid anymore once we have nested borrows,
-    as an ended proj loan can contain borrows in one of its children.
-    In this situation, we will need to first project the avalues at the proper
-    level, before translating them.
- *)
+    **REMARK:** this will not be valid anymore once we have nested borrows, as
+    an ended proj loan can contain borrows in one of its children. In this
+    situation, we will need to first project the avalues at the proper level,
+    before translating them. *)
 type typed_avalue_kind =
   | BorrowProj of borrow_kind
-      (** The value was produced by a borrow projector (it contains borrows
-          or borrow projections).
+      (** The value was produced by a borrow projector (it contains borrows or
+          borrow projections).
 
           The kind is [BMut] if we found at least one (non-ignored) mutable
-          borrow, [BShared] otherwise.
-      *)
+          borrow, [BShared] otherwise. *)
   | LoanProj of borrow_kind
-      (** The value was produced by a loan projector (it contains loans or
-          loan projections).
+      (** The value was produced by a loan projector (it contains loans or loan
+          projections).
 
-          The kind is [BMut] if we found at least one (non-ignored) mutable loan,
-          [BShared] otherwise.
-      *)
+          The kind is [BMut] if we found at least one (non-ignored) mutable
+          loan, [BShared] otherwise. *)
   | UnknownProj
-      (** No borrows, loans or projections inside the value so we can't know for sure *)
+      (** No borrows, loans or projections inside the value so we can't know for
+          sure *)
 
 let compute_typed_avalue_proj_kind span type_infos
     (abs_regions : T.RegionId.Set.t) (av : V.typed_avalue) : typed_avalue_kind =
@@ -2080,13 +2052,13 @@ let compute_typed_avalue_proj_kind span type_infos
   else if !has_loans then LoanProj (to_borrow_kind !has_mut_loans)
   else UnknownProj
 
-(** Explore an abstraction value and convert it to a consumed value
-    by collecting all the meta-values from the ended *loans*.
-    We assume the avalue was generated by a loan projector.
+(** Explore an abstraction value and convert it to a consumed value by
+    collecting all the meta-values from the ended *loans*. We assume the avalue
+    was generated by a loan projector.
 
-    Consumed values are rvalues because when an abstraction ends we
-    introduce a call to a backward function in the synthesized program,
-    which takes as inputs those consumed values:
+    Consumed values are rvalues because when an abstraction ends we introduce a
+    call to a backward function in the synthesized program, which takes as
+    inputs those consumed values:
     {[
       // Rust:
       fn choose<'a>(b: bool, x : &'a mut u32, y : &'a mut u32) -> &'a mut u32;
@@ -2094,8 +2066,7 @@ let compute_typed_avalue_proj_kind span type_infos
       // Synthesis:
       let ... = choose_back b x y nz in
                                   ^^
-    ]}
- *)
+    ]} *)
 let rec typed_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
     (ectx : C.eval_ctx) (abs_regions : T.RegionId.Set.t) (av : V.typed_avalue) :
     texpression option =
@@ -2326,8 +2297,7 @@ let typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
 
 (** Convert the abstraction values in an abstraction to consumed values.
 
-    See [typed_avalue_to_consumed_aux].
- *)
+    See [typed_avalue_to_consumed_aux]. *)
 let abs_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs) :
     texpression list =
   log#ltrace
@@ -2373,32 +2343,32 @@ type borrow_or_symbolic_id =
   | Symbolic of V.SymbolicValueId.id
 [@@deriving show, ord]
 
-(** Explore an abstraction value which we know **was generated by a borrow projection**
-    (this means we won't find loans or loan projectors inside it) and convert it to a
-    given back value by collecting all the meta-values from the ended *borrows*.
+(** Explore an abstraction value which we know **was generated by a borrow
+    projection** (this means we won't find loans or loan projectors inside it)
+    and convert it to a given back value by collecting all the meta-values from
+    the ended *borrows*.
 
-    Note that given back values are patterns, because when an abstraction ends we
-    introduce a call to a backward function in the synthesized program, which introduces
-    new values:
+    Note that given back values are patterns, because when an abstraction ends
+    we introduce a call to a backward function in the synthesized program, which
+    introduces new values:
     {[
       let (nx, ny) = f_back ... in
           ^^^^^^^^
     ]}
 
-    [mp]: it is possible to provide some meta-place information, to guide
-    the heuristics which later find pretty names for the variables.
+    [mp]: it is possible to provide some meta-place information, to guide the
+    heuristics which later find pretty names for the variables.
 
-    - [under_mut]: if [true] it means we are below a mutable borrow.
-      This influences whether we filter values or not.
+    - [under_mut]: if [true] it means we are below a mutable borrow. This
+      influences whether we filter values or not.
 
     Note that we return:
     - an updated context (because the patterns introduce fresh variables)
-    - a map from variable ids (introduced in the returned pattern) to either
-      the mutable borrow which gave back this value, or the projected symbolic
-      value which gave it back. We need this to compute default values (see
+    - a map from variable ids (introduced in the returned pattern) to either the
+      mutable borrow which gave back this value, or the projected symbolic value
+      which gave it back. We need this to compute default values (see
       [bs_ctx.mut_borrow_to_consumed]).
-    - the pattern
- *)
+    - the pattern *)
 let rec typed_avalue_to_given_back_aux ~(filter : bool)
     (abs_regions : T.RegionId.Set.t) (mp : mplace option) (av : V.typed_avalue)
     (ctx : bs_ctx) : bs_ctx * typed_pattern option =
@@ -2597,8 +2567,7 @@ let typed_avalue_to_given_back (abs_regions : T.RegionId.Set.t)
 
 (** Convert the abstraction values in an abstraction to given back values.
 
-    See [typed_avalue_to_given_back].
- *)
+    See [typed_avalue_to_given_back]. *)
 let abs_to_given_back (mpl : mplace option list option) (abs : V.abs)
     (ctx : bs_ctx) : bs_ctx * typed_pattern list =
   let avalues =
@@ -2630,8 +2599,7 @@ let abs_to_given_back_no_mp (abs : V.abs) (ctx : bs_ctx) :
 (** Return the ordered list of the (transitive) parents of a given abstraction.
 
     Is used for instance when collecting the input values given to all the
-    parent functions, in order to properly instantiate an
- *)
+    parent functions, in order to properly instantiate an *)
 let get_abs_ancestors (ctx : bs_ctx) (abs : V.abs) (call_id : V.FunCallId.id) :
     S.call * (V.abs * texpression list) list =
   let call_info = V.FunCallId.Map.find call_id ctx.calls in
@@ -2646,8 +2614,8 @@ let mk_emeta_symbolic_assignments (vars : var list) (values : texpression list)
 
 (** Derive naming information from a context.
 
-    We explore the context and look in which bindings the symbolic values appear:
-    we use this information to derive naming information. *)
+    We explore the context and look in which bindings the symbolic values
+    appear: we use this information to derive naming information. *)
 let eval_ctx_to_symbolic_assignments_info (ctx : bs_ctx)
     (ectx : Contexts.eval_ctx) : (LocalId.id * string) list =
   let info : (LocalId.id * string) list ref = ref [] in
@@ -2691,11 +2659,11 @@ let eval_ctx_to_symbolic_assignments_info (ctx : bs_ctx)
 let translate_error (span : Meta.span option) (msg : string) : texpression =
   { e = EError (span, msg); ty = Error }
 
-(** Register the values consumed by a region abstraction through mutable borrows.
+(** Register the values consumed by a region abstraction through mutable
+    borrows.
 
     We need this to compute default values for given back values - see the
-    explanations about [bs_ctx.mut_borrow_to_consumed].
-*)
+    explanations about [bs_ctx.mut_borrow_to_consumed]. *)
 let register_consumed_mut_borrows (ectx : C.eval_ctx) (ctx : bs_ctx)
     (v : V.typed_value) : bs_ctx =
   let ctx = ref ctx in
@@ -2720,10 +2688,11 @@ let register_consumed_mut_borrows (ectx : C.eval_ctx) (ctx : bs_ctx)
 (** Small helper.
 
     We use this to properly deconstruct the values given back by backward
-    functions in the presence of enumerations. See [bs_ctx.mut_borrow_to_consumed].
+    functions in the presence of enumerations. See
+    [bs_ctx.mut_borrow_to_consumed].
 
-    This helper transforms a let-bound pattern and a bound expression
-    to properly introduce matches if necessary.
+    This helper transforms a let-bound pattern and a bound expression to
+    properly introduce matches if necessary.
 
     For instance, we use it to transform this:
     {[
@@ -2733,11 +2702,10 @@ let register_consumed_mut_borrows (ectx : C.eval_ctx) (ctx : bs_ctx)
     ]}
     into:
     {[
-      let x = match e with | Some x -> x | _ -> default_value in
-          ^   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-     new pat     new let-bound expression
-    ]}
- *)
+       let x = match e with | Some x -> x | _ -> default_value in
+           ^   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      new pat     new let-bound expression
+    ]} *)
 let decompose_let_match (ctx : bs_ctx)
     ((pat, bound) : typed_pattern * texpression) :
     bs_ctx * (typed_pattern * texpression) =
@@ -2880,12 +2848,11 @@ and translate_panic (ctx : bs_ctx) : texpression = Option.get ctx.mk_panic
 
 (** [opt_v]: the value to return, in case we translate a forward body.
 
-    Remark: for now, we can't get there if we are inside a loop.
-    If inside a loop, we use {!translate_return_with_loop}.
+    Remark: for now, we can't get there if we are inside a loop. If inside a
+    loop, we use {!translate_return_with_loop}.
 
-    Remark: in case we merge the forward/backward functions, we introduce
-    those in [translate_forward_end].
-*)
+    Remark: in case we merge the forward/backward functions, we introduce those
+    in [translate_forward_end]. *)
 and translate_return (ectx : C.eval_ctx) (opt_v : V.typed_value option)
     (ctx : bs_ctx) : texpression =
   let opt_v = Option.map (typed_value_to_texpression ctx ectx) opt_v in
@@ -2930,7 +2897,7 @@ and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
    * Note that the loop function and the parent function live in the same
    * effect - in particular, one manipulates a state iff the other does
    * the same.
-   * *)
+   *)
   let effect_info = ctx_get_effect_info ctx in
   let output =
     if effect_info.stateful then

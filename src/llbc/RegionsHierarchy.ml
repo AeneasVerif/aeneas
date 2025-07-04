@@ -1,5 +1,5 @@
-(** This module analyzes function signatures to compute the
-    hierarchy between regions.
+(** This module analyzes function signatures to compute the hierarchy between
+    regions.
 
     Note that we don't need to analyze the types: when there is a non-trivial
     relation between lifetimes in a type definition, the Rust compiler will
@@ -11,7 +11,7 @@
         x : &'a mut &'b mut T,
       }
     ]}
-    
+
     the Rust compiler will introduce the where clauses:
     {[
       'b : 'a
@@ -21,11 +21,10 @@
     However, it doesn't do so for the function signatures, which means we have
     to compute the constraints between the lifetimes ourselves, then that we
     have to compute the SCCs of the lifetimes (two lifetimes 'a and 'b may
-    satisfy 'a : 'b and 'b : 'a, meaning they are actually equal and should
-    be grouped together).
+    satisfy 'a : 'b and 'b : 'a, meaning they are actually equal and should be
+    grouped together).
 
-    TODO: we don't handle locally bound regions yet.
- *)
+    TODO: we don't handle locally bound regions yet. *)
 
 open Types
 open TypesUtils
@@ -101,7 +100,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
   in
 
   let add_edges_from_region_binder :
-        'a. ('a -> unit) -> 'a region_binder -> unit =
+      'a. ('a -> unit) -> 'a region_binder -> unit =
    fun visit c ->
     sanity_check_opt_span __FILE__ __LINE__ (c.binder_regions = []) span;
     visit c.binder_value
@@ -300,9 +299,8 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
 
 (** Compute the region hierarchies for a set of function declarations.Aeneas
 
-    Remark: in case we do not abort on error, this function will ignore
-    the signatures which trigger errors.
- *)
+    Remark: in case we do not abort on error, this function will ignore the
+    signatures which trigger errors. *)
 let compute_regions_hierarchies (crate : crate) : region_var_groups FunIdMap.t =
   let open Print in
   let env : fmt_env = Charon.PrintLlbcAst.Crate.crate_to_fmt_env crate in

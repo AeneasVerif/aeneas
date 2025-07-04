@@ -26,13 +26,12 @@ type ctx_or_update = (eval_ctx, updt_env_kind) result
 
 (** A small utility.
 
-    Remark: we use projection markers, meaning we compute maps from/to
-    pairs of (projection marker, borrow/loan id). This allows us to use
-    this utility during a reduce phase (when we simplify the environment
-    and all markers should be [PNone]) as well as during a collapse (where
-    we actually have markers because we performed a join and are progressively
-    transforming the environment to get rid of those markers).
-*)
+    Remark: we use projection markers, meaning we compute maps from/to pairs of
+    (projection marker, borrow/loan id). This allows us to use this utility
+    during a reduce phase (when we simplify the environment and all markers
+    should be [PNone]) as well as during a collapse (where we actually have
+    markers because we performed a join and are progressively transforming the
+    environment to get rid of those markers). *)
 type abs_borrows_loans_maps = {
   abs_ids : AbstractionId.id list;
   abs_to_borrows : MarkedBorrowId.Set.t AbstractionId.Map.t;
@@ -50,10 +49,9 @@ type abs_borrows_loans_maps = {
     This module contains primitive match functions to instantiate the generic
     {!module:Aeneas.InterpreterLoopsMatchCtxs.MakeMatcher} functor.
 
-    Remark: all the functions receive as input the left context and the right context.
-    This is useful for printing, lookups, and also in order to check the ended
-    regions.
- *)
+    Remark: all the functions receive as input the left context and the right
+    context. This is useful for printing, lookups, and also in order to check
+    the ended regions. *)
 module type PrimMatcher = sig
   val span : Meta.span
   val match_etys : eval_ctx -> eval_ctx -> ety -> ety -> ety
@@ -70,13 +68,12 @@ module type PrimMatcher = sig
   (** The meta-value is the result of a match.
 
       We take an additional function as input, which acts as a matcher over
-      typed values, to be able to lookup the shared values and match them.
-      We do this for shared borrows (and not, e.g., mutable borrows) because
-      shared borrows introduce indirections, while mutable borrows carry the
-      borrowed values with them: we might want to explore and match those
-      borrowed values, in which case we have to manually look them up before
-      calling the match function.
-   *)
+      typed values, to be able to lookup the shared values and match them. We do
+      this for shared borrows (and not, e.g., mutable borrows) because shared
+      borrows introduce indirections, while mutable borrows carry the borrowed
+      values with them: we might want to explore and match those borrowed
+      values, in which case we have to manually look them up before calling the
+      match function. *)
   val match_shared_borrows :
     eval_ctx ->
     eval_ctx ->
@@ -92,8 +89,7 @@ module type PrimMatcher = sig
       - [bv0]: first borrowed value
       - [bid1]
       - [bv1]
-      - [bv]: the result of matching [bv0] with [bv1]
-  *)
+      - [bv]: the result of matching [bv0] with [bv1] *)
   val match_mut_borrows :
     eval_ctx ->
     eval_ctx ->
@@ -105,12 +101,8 @@ module type PrimMatcher = sig
     typed_value ->
     borrow_id * typed_value
 
-  (** Parameters:
-      [ty]
-      [ids0]
-      [ids1]
-      [v]: the result of matching the shared values coming from the two loans
-   *)
+  (** Parameters: [ty] [ids0] [ids1] [v]: the result of matching the shared
+      values coming from the two loans *)
   val match_shared_loans :
     eval_ctx ->
     eval_ctx ->
@@ -130,20 +122,18 @@ module type PrimMatcher = sig
   (** Match a symbolic value with a value which is not symbolic.
 
       If the boolean is [true], it means the symbolic value comes from the
-      *left* environment. Otherwise it comes from the right environment (it
-      is important when throwing exceptions, for instance when we need to
-      end loans in one of the two environments).
-   *)
+      *left* environment. Otherwise it comes from the right environment (it is
+      important when throwing exceptions, for instance when we need to end loans
+      in one of the two environments). *)
   val match_symbolic_with_other :
     eval_ctx -> eval_ctx -> bool -> symbolic_value -> typed_value -> typed_value
 
   (** Match a bottom value with a value which is not bottom.
 
-      If the boolean is [true], it means the bottom value comes from the
-      *left* environment. Otherwise it comes from the right environment (it
-      is important when throwing exceptions, for instance when we need to
-      end loans in one of the two environments).
-   *)
+      If the boolean is [true], it means the bottom value comes from the *left*
+      environment. Otherwise it comes from the right environment (it is
+      important when throwing exceptions, for instance when we need to end loans
+      in one of the two environments). *)
   val match_bottom_with_other :
     eval_ctx -> eval_ctx -> bool -> typed_value -> typed_value
 
@@ -158,17 +148,8 @@ module type PrimMatcher = sig
     rty ->
     typed_avalue
 
-  (** Parameters:
-      [ctx0]
-      [ctx1]
-      [ty0]
-      [pm0]
-      [bid0]
-      [ty1]
-      [pm1]
-      [bid1]
-      [ty]: result of matching ty0 and ty1
-   *)
+  (** Parameters: [ctx0] [ctx1] [ty0] [pm0] [bid0] [ty1] [pm1] [bid1] [ty]:
+      result of matching ty0 and ty1 *)
   val match_ashared_borrows :
     eval_ctx ->
     eval_ctx ->
@@ -181,20 +162,9 @@ module type PrimMatcher = sig
     rty ->
     typed_avalue
 
-  (** Parameters:
-      [ctx0]
-      [ctx1]
-      [ty0]
-      [pm0]
-      [bid0]
-      [av0]
-      [ty1]
-      [pm1]
-      [bid1]
-      [av1]
-      [ty]: result of matching ty0 and ty1
-      [av]: result of matching av0 and av1
-   *)
+  (** Parameters: [ctx0] [ctx1] [ty0] [pm0] [bid0] [av0] [ty1] [pm1] [bid1]
+      [av1] [ty]: result of matching ty0 and ty1 [av]: result of matching av0
+      and av1 *)
   val match_amut_borrows :
     eval_ctx ->
     eval_ctx ->
@@ -210,23 +180,9 @@ module type PrimMatcher = sig
     typed_avalue ->
     typed_avalue
 
-  (** Parameters:
-      [ctx0]
-      [ctx1]
-      [ty0]
-      [pm0]
-      [ids0]
-      [v0]
-      [av0]
-      [ty1]
-      [pm1]
-      [ids1]
-      [v1]
-      [av1]
-      [ty]: result of matching ty0 and ty1
-      [v]:  result of matching v0 and v1
-      [av]: result of matching av0 and av1
-   *)
+  (** Parameters: [ctx0] [ctx1] [ty0] [pm0] [ids0] [v0] [av0] [ty1] [pm1] [ids1]
+      [v1] [av1] [ty]: result of matching ty0 and ty1 [v]: result of matching v0
+      and v1 [av]: result of matching av0 and av1 *)
   val match_ashared_loans :
     eval_ctx ->
     eval_ctx ->
@@ -245,20 +201,9 @@ module type PrimMatcher = sig
     typed_avalue ->
     typed_avalue
 
-  (** Parameters:
-      [ctx0]
-      [ctx1]
-      [ty0]
-      [pm0]
-      [id0]
-      [av0]
-      [ty1]
-      [pm1]
-      [id1]
-      [av1]
-      [ty]: result of matching ty0 and ty1
-      [av]: result of matching av0 and av1
-   *)
+  (** Parameters: [ctx0] [ctx1] [ty0] [pm0] [id0] [av0] [ty1] [pm1] [id1] [av1]
+      [ty]: result of matching ty0 and ty1 [av]: result of matching av0 and av1
+  *)
   val match_amut_loans :
     eval_ctx ->
     eval_ctx ->
@@ -274,22 +219,9 @@ module type PrimMatcher = sig
     typed_avalue ->
     typed_avalue
 
-  (** Parameters:
-      [ctx0]
-      [ctx1]
-      [ty0]
-      [pm0]
-      [sv0]
-      [proj_ty0]
-      [children0]
-      [ty1]
-      [pm1]
-      [sv1]
-      [proj_ty1]
-      [children1]
-      [ty]: result of matching ty0 and ty1
-      [proj_ty]: result of matching proj_ty0 and proj_ty1
-   *)
+  (** Parameters: [ctx0] [ctx1] [ty0] [pm0] [sv0] [proj_ty0] [children0] [ty1]
+      [pm1] [sv1] [proj_ty1] [children1] [ty]: result of matching ty0 and ty1
+      [proj_ty]: result of matching proj_ty0 and proj_ty1 *)
   val match_aproj_borrows :
     eval_ctx ->
     eval_ctx ->
@@ -307,22 +239,9 @@ module type PrimMatcher = sig
     rty ->
     typed_avalue
 
-  (** Parameters:
-      [ctx0]
-      [ctx1]
-      [ty0]
-      [pm0]
-      [sv0]
-      [proj_ty0]
-      [children0]
-      [ty1]
-      [pm1]
-      [sv1]
-      [proj_ty1]
-      [children1]
-      [ty]: result of matching ty0 and ty1
-      [proj_ty]: result of matching proj_ty0 and proj_ty1
-   *)
+  (** Parameters: [ctx0] [ctx1] [ty0] [pm0] [sv0] [proj_ty0] [children0] [ty1]
+      [pm1] [sv1] [proj_ty1] [children1] [ty]: result of matching ty0 and ty1
+      [proj_ty]: result of matching proj_ty0 and proj_ty1 *)
   val match_aproj_loans :
     eval_ctx ->
     eval_ctx ->
@@ -341,8 +260,7 @@ module type PrimMatcher = sig
     typed_avalue
 
   (** Match two arbitrary avalues whose constructors don't match (this function
-      is typically used to raise the proper exception).
-   *)
+      is typically used to raise the proper exception). *)
   val match_avalues :
     eval_ctx -> eval_ctx -> typed_avalue -> typed_avalue -> typed_avalue
 end
@@ -352,15 +270,15 @@ module type Matcher = sig
 
   (** Match two values.
 
-      Rem.: this function raises exceptions of type {!Aeneas.InterpreterLoopsCore.ValueMatchFailure}.
-   *)
+      Rem.: this function raises exceptions of type
+      {!Aeneas.InterpreterLoopsCore.ValueMatchFailure}. *)
   val match_typed_values :
     eval_ctx -> eval_ctx -> typed_value -> typed_value -> typed_value
 
   (** Match two avalues.
 
-      Rem.: this function raises exceptions of type {!Aeneas.InterpreterLoopsCore.ValueMatchFailure}.
-   *)
+      Rem.: this function raises exceptions of type
+      {!Aeneas.InterpreterLoopsCore.ValueMatchFailure}. *)
   val match_typed_avalues :
     eval_ctx -> eval_ctx -> typed_avalue -> typed_avalue -> typed_avalue
 end
@@ -368,18 +286,18 @@ end
 (** See {!module:InterpreterLoopsMatchCtxs.MakeCheckEquivMatcher} and
     {!module-type:InterpreterLoopsCore.CheckEquivMatcher}.
 
-    Very annoying: functors only take modules as inputs...
- *)
+    Very annoying: functors only take modules as inputs... *)
 module type MatchCheckEquivState = sig
   val span : Meta.span
 
-  (** [true] if we check equivalence between contexts, [false] if we match
-      a source context with a target context. *)
+  (** [true] if we check equivalence between contexts, [false] if we match a
+      source context with a target context. *)
   val check_equiv : bool
 
   val rid_map : RegionId.InjSubst.t ref
 
-  (** Substitution for the loan and borrow ids - used only if [check_equiv] is true *)
+  (** Substitution for the loan and borrow ids - used only if [check_equiv] is
+      true *)
   val blid_map : BorrowId.InjSubst.t ref
 
   (** Substitution for the borrow ids - used only if [check_equiv] is false *)
@@ -479,11 +397,10 @@ module type MatchJoinState = sig
   val span : Meta.span
 end
 
-(** Split an environment between the fixed abstractions, values, etc. and
-    the new abstractions, values, etc.
+(** Split an environment between the fixed abstractions, values, etc. and the
+    new abstractions, values, etc.
 
-    Returns: (fixed, new abs, new dummies)
- *)
+    Returns: (fixed, new abs, new dummies) *)
 let ctx_split_fixed_new (span : Meta.span) (fixed_ids : ids_sets)
     (ctx : eval_ctx) : env * abs list * typed_value list =
   let is_fresh_did (id : DummyVarId.id) : bool =
@@ -543,9 +460,8 @@ let ids_sets_empty_borrows_loans (ids : ids_sets) : ids_sets =
   in
   ids
 
-(** Small utility: add a projection marker to a typed avalue.
-    This can be used in combination with List.map to add markers to an entire abstraction
- *)
+(** Small utility: add a projection marker to a typed avalue. This can be used
+    in combination with List.map to add markers to an entire abstraction *)
 let typed_avalue_add_marker (span : Meta.span) (ctx : eval_ctx)
     (pm : proj_marker) (av : typed_avalue) : typed_avalue =
   let obj =
@@ -592,9 +508,8 @@ let typed_avalue_add_marker (span : Meta.span) (ctx : eval_ctx)
   in
   obj#visit_typed_avalue () av
 
-(** Small utility: add a projection marker to an abstraction.
-    This can be used in combination with List.map to add markers to an entire abstraction
- *)
+(** Small utility: add a projection marker to an abstraction. This can be used
+    in combination with List.map to add markers to an entire abstraction *)
 let abs_add_marker (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
     (abs : abs) : abs =
   {

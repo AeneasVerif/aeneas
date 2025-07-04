@@ -261,8 +261,7 @@ let symbolic_expansion_non_shared_borrow_to_value (span : Meta.span)
 
     Remark: we need the evaluation context only to access the type declarations.
 
-    TODO: detailed comments. See [apply_proj_borrows]
-*)
+    TODO: detailed comments. See [apply_proj_borrows] *)
 let apply_proj_loans_on_symbolic_expansion (span : Meta.span)
     (regions : RegionId.Set.t) (ancestors_regions : RegionId.Set.t)
     (see : symbolic_expansion) (original_sv_ty : rty) (proj_ty : rty)
@@ -334,24 +333,22 @@ let apply_proj_loans_on_symbolic_expansion (span : Meta.span)
 
     Apply reborrows to a context.
 
-    The [reborrows] input is a list of pairs (shared loan id, id to insert
-    in the shared loan).
-    This function is used when applying projectors on shared borrows: when
-    doing so, we might need to reborrow subvalues from the shared value.
-    For instance:
+    The [reborrows] input is a list of pairs (shared loan id, id to insert in
+    the shared loan). This function is used when applying projectors on shared
+    borrows: when doing so, we might need to reborrow subvalues from the shared
+    value. For instance:
     {[
       fn f<'a,'b,'c>(x : &'a 'b 'c u32)
     ]}
-    When introducing the abstractions for 'a, 'b and 'c, we apply a projector
-    on some value [shared_borrow l : &'a &'b &'c u32].
-    In the 'a abstraction, this shared borrow gets projected. However, when
-    reducing the projectors for the 'b and 'c abstractions, we need to make
-    sure that the borrows living in regions 'b and 'c live as long as those
-    regions. This is done by looking up the shared value and applying reborrows
-    on the borrows we find there (note that those reborrows apply on shared
-    borrows - easy - and mutable borrows - in this case, we reborrow the whole
-    borrow: [mut_borrow ... ~~> shared_loan {...} (mut_borrow ...)]).
-*)
+    When introducing the abstractions for 'a, 'b and 'c, we apply a projector on
+    some value [shared_borrow l : &'a &'b &'c u32]. In the 'a abstraction, this
+    shared borrow gets projected. However, when reducing the projectors for the
+    'b and 'c abstractions, we need to make sure that the borrows living in
+    regions 'b and 'c live as long as those regions. This is done by looking up
+    the shared value and applying reborrows on the borrows we find there (note
+    that those reborrows apply on shared borrows - easy - and mutable borrows -
+    in this case, we reborrow the whole borrow:
+    [mut_borrow ... ~~> shared_loan {...} (mut_borrow ...)]). *)
 let apply_reborrows (span : Meta.span)
     (reborrows : (BorrowId.id * BorrowId.id) list) (ctx : eval_ctx) : eval_ctx =
   (* This is a bit brutal, but whenever we insert a reborrow, we remove
@@ -411,8 +408,8 @@ let apply_reborrows (span : Meta.span)
     object
       inherit [_] map_eval_ctx as super
 
-      (** We may need to reborrow mutable borrows. Note that this doesn't
-          happen for aborrows *)
+      (** We may need to reborrow mutable borrows. Note that this doesn't happen
+          for aborrows *)
       method! visit_typed_value env v =
         match v.value with
         | VBorrow (VMutBorrow (bid, bv)) ->

@@ -14,13 +14,11 @@ let log = TranslateCore.log
 
 (** The result of running the symbolic interpreter on a function:
     - the list of symbolic values used for the input values
-    - the generated symbolic AST
-*)
+    - the generated symbolic AST *)
 type symbolic_fun_translation = symbolic_value list * SA.expression
 
-(** Execute the symbolic interpreter on a function to generate a list of symbolic ASTs,
-    for the forward function and the backward functions.
-*)
+(** Execute the symbolic interpreter on a function to generate a list of
+    symbolic ASTs, for the forward function and the backward functions. *)
 let translate_function_to_symbolics (trans_ctx : trans_ctx) (fdef : fun_decl) :
     symbolic_fun_translation option =
   (* Debug *)
@@ -39,9 +37,8 @@ let translate_function_to_symbolics (trans_ctx : trans_ctx) (fdef : fun_decl) :
 (** Translate a function, by generating its forward and backward translations.
 
     [fun_sigs]: maps the forward/backward functions to their signatures. In case
-    of backward functions, we also provide names for the outputs.
-    TODO: maybe we should introduce a record for this.
-*)
+    of backward functions, we also provide names for the outputs. TODO: maybe we
+    should introduce a record for this. *)
 let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t)
     (fun_dsigs : Pure.decomposed_fun_sig FunDeclId.Map.t) (fdef : fun_decl) :
@@ -384,31 +381,27 @@ type gen_config = {
       (** If [true], extract the opaque declarations, otherwise ignore.
 
           For now, this controls only the opaque *functions*, not the opaque
-          globals or types.
-          TODO: update this. This is not trivial if we want to extract the opaque
-          types in an opaque module, because some non-opaque types may refer
-          to opaque types and vice-versa.
-       *)
+          globals or types. TODO: update this. This is not trivial if we want to
+          extract the opaque types in an opaque module, because some non-opaque
+          types may refer to opaque types and vice-versa. *)
   extract_state_type : bool;
       (** If [true], generate a definition/declaration for the state type *)
   extract_globals : bool;
       (** If [true], generate a definition/declaration for top-level (global)
           declarations *)
   interface : bool;
-      (** [true] if we generate an interface file, [false] otherwise.
-          For now, this only impacts whether we use [val] or [assume val] for the
-          opaque definitions. In the future, we might want to extract all the
-          declarations in an interface file, together with an implementation file
-          if needed.
-       *)
+      (** [true] if we generate an interface file, [false] otherwise. For now,
+          this only impacts whether we use [val] or [assume val] for the opaque
+          definitions. In the future, we might want to extract all the
+          declarations in an interface file, together with an implementation
+          file if needed. *)
   test_trans_unit_functions : bool;
 }
 
 (** Returns the pair: (has opaque type decls, has opaque fun decls).
 
-    [filter_builtin]: if [true], do not consider as opaque the external definitions
-    that we will map to definitions from the standard library.
- *)
+    [filter_builtin]: if [true], do not consider as opaque the external
+    definitions that we will map to definitions from the standard library. *)
 let crate_has_opaque_non_builtin_decls (ctx : gen_ctx) (filter_builtin : bool) :
     bool * bool =
   let types, funs =
@@ -418,13 +411,12 @@ let crate_has_opaque_non_builtin_decls (ctx : gen_ctx) (filter_builtin : bool) :
 
 (** Export a type declaration.
 
-    It may happen that we have to extract extra information/instructions.
-    For instance, we might need to define some projector notations. This is
-    why we have the two booleans [extract_decl] and [extract_extra_info].
-    If [extract_decl] is [true], then we extract the type declaration. If
-    [extract_extra_info] is [true], we extract this extra information (after
-    the declaration, if both booleans are [true]).
- *)
+    It may happen that we have to extract extra information/instructions. For
+    instance, we might need to define some projector notations. This is why we
+    have the two booleans [extract_decl] and [extract_extra_info]. If
+    [extract_decl] is [true], then we extract the type declaration. If
+    [extract_extra_info] is [true], we extract this extra information (after the
+    declaration, if both booleans are [true]). *)
 let export_type (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     (type_decl_group : Pure.TypeDeclId.Set.t) (kind : ExtractBase.decl_kind)
     (def : Pure.type_decl) (extract_decl : bool) (extract_extra_info : bool) :
@@ -457,8 +449,7 @@ let export_type (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
 (** Export a group of types.
 
     [is_rec]: [true] if the types are recursive. Necessarily [true] if there is
-    > 1 type to extract.
- *)
+    > 1 type to extract. *)
 let export_types_group (fmt : Format.formatter) (config : gen_config)
     (ctx : gen_ctx) (is_rec : bool) (ids : Pure.TypeDeclId.id list) : unit =
   assert (ids <> []);
@@ -550,8 +541,7 @@ let export_types_group (fmt : Format.formatter) (config : gen_config)
 
 (** Export a global declaration.
 
-    TODO: check correct behavior with opaque globals.
- *)
+    TODO: check correct behavior with opaque globals. *)
 let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     (id : GlobalDeclId.id) : unit =
   let global_decls = ctx.trans_ctx.crate.global_decls in
@@ -592,21 +582,20 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
 
     Export a group of functions, used by {!export_functions_group}.
 
-    We need this because for every function in Rust we may generate several functions
-    in the translation (a forward function, several backward functions, loop
-    functions, etc.). Those functions might call each other in different
-    ways. In particular, they may be mutually recursive, in which case we might
-    be able to group them into several groups of mutually recursive definitions,
-    etc. For this reason, {!export_functions_group} computes the dependency
-    graph of the functions as well as their strongly connected components, and
-    gives each SCC at a time to {!export_functions_group_scc}.
+    We need this because for every function in Rust we may generate several
+    functions in the translation (a forward function, several backward
+    functions, loop functions, etc.). Those functions might call each other in
+    different ways. In particular, they may be mutually recursive, in which case
+    we might be able to group them into several groups of mutually recursive
+    definitions, etc. For this reason, {!export_functions_group} computes the
+    dependency graph of the functions as well as their strongly connected
+    components, and gives each SCC at a time to {!export_functions_group_scc}.
 
     Rem.: this function only extracts the function *declarations*. It doesn't
     extract the decrease clauses, nor does it extract the unit tests.
 
     Rem.: this function doesn't check [config.extract_fun_decls]: it should have
-    been checked by the caller.
- *)
+    been checked by the caller. *)
 let export_functions_group_scc (fmt : Format.formatter) (config : gen_config)
     (ctx : gen_ctx) (is_rec : bool) (decls : Pure.fun_decl list) : unit =
   (* Utility to check a function has a decrease clause *)
@@ -680,8 +669,7 @@ let export_functions_group_scc (fmt : Format.formatter) (config : gen_config)
 (** Export a group of function declarations.
 
     In case of (non-mutually) recursive functions, we use a simple procedure to
-    check if the forward and backward functions are mutually recursive.
- *)
+    check if the forward and backward functions are mutually recursive. *)
 let export_functions_group (fmt : Format.formatter) (config : gen_config)
     (ctx : gen_ctx) (pure_ls : pure_fun_translation list) : unit =
   (* Check if the definition are builtin - if yes they must be ignored.
@@ -809,9 +797,8 @@ let export_trait_impl (fmt : Format.formatter) (_config : gen_config)
   | Some _ -> ()
 
 (** A generic utility to generate the extracted definitions: as we may want to
-    split the definitions between different files (or not), we can control
-    what is precisely extracted.
- *)
+    split the definitions between different files (or not), we can control what
+    is precisely extracted. *)
 let extract_definitions (fmt : Format.formatter) (config : gen_config)
     (ctx : gen_ctx) : unit =
   (* Export the definition groups to the file, in the proper order.
@@ -911,8 +898,9 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
   List.iter
     (fun g ->
       try export_decl_group g
-      with CFailure _ -> (* An exception was raised: ignore it *)
-                         ())
+      with CFailure _ ->
+        (* An exception was raised: ignore it *)
+        ())
     ctx.crate.declarations;
 
   if config.extract_state_type && not config.extract_fun_decls then

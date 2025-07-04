@@ -6,8 +6,8 @@ type t =
   | FStar
   | HOL4
   | BorrowCheck
-      (** Borrow check: no backend.
-          We use this when we only want to borrow-check the program *)
+      (** Borrow check: no backend. We use this when we only want to
+          borrow-check the program *)
 [@@deriving ord, sexp]
 
 (* TODO: reactivate HOL4 once traits are parameterized by their associated types *)

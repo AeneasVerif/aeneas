@@ -23,16 +23,16 @@ type statement_eval_res =
       * symbolic_value_id SymbolicValueId.Map.t
       (** When we enter a loop, we delegate the end of the function is
           synthesized with a call to the loop translation. We use this
-          evaluation result to transmit the fact that we end evaluation
-          because we entered a loop.
+          evaluation result to transmit the fact that we end evaluation because
+          we entered a loop.
 
           We provide the list of values for the translated loop function call
           (or to be more precise the input values instantiation).
 
-          We also provide the map from the input symbolic values to refresh symbolic
-          values (we need those to introduce intermediate let-bindings in the translation).
-          TODO: not clean; we will get rid of those once we generalize.
-       *)
+          We also provide the map from the input symbolic values to refresh
+          symbolic values (we need those to introduce intermediate let-bindings
+          in the translation). TODO: not clean; we will get rid of those once we
+          generalize. *)
   | EndContinue of
       loop_id
       * typed_value SymbolicValueId.Map.t
@@ -43,17 +43,16 @@ type statement_eval_res =
           We provide the list of values for the translated loop function call
           (or to be more precise the input values instantiation).
 
-          We also provide the map from the input symbolic values to refresh symbolic
-          values (we need those to introduce intermediate let-bindings in the translation).
-          TODO: not clean; we will get rid of those once we generalize.
-       *)
+          We also provide the map from the input symbolic values to refresh
+          symbolic values (we need those to introduce intermediate let-bindings
+          in the translation). TODO: not clean; we will get rid of those once we
+          generalize. *)
 [@@deriving show]
 
 (** Function which takes a context as input, and evaluates to:
     - a new context
-    - a continuation with which to build the execution trace, provided the
-      trace for the end of the execution.
-  *)
+    - a continuation with which to build the execution trace, provided the trace
+      for the end of the execution. *)
 type cm_fun =
   eval_ctx -> eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression)
 
@@ -79,7 +78,8 @@ let comp2 (f : 'b -> 'c) (g : 'x * 'y * ('a -> 'b)) : 'x * 'y * ('a -> 'c) =
   let x, y, g = g in
   (x, y, cc_comp f g)
 
-(** [fold] operation for functions which thread a context and return a continuation *)
+(** [fold] operation for functions which thread a context and return a
+    continuation *)
 let fold_left_apply_continuation (f : 'a -> 'c -> 'c * ('e -> 'e))
     (inputs : 'a list) (ctx : 'c) : 'c * ('e -> 'e) =
   let rec eval_list (inputs : 'a list) : 'c -> 'b =
@@ -92,7 +92,8 @@ let fold_left_apply_continuation (f : 'a -> 'c -> 'c * ('e -> 'e))
   in
   eval_list inputs ctx
 
-(** [map] operation for functions which thread a context and return a continuation *)
+(** [map] operation for functions which thread a context and return a
+    continuation *)
 let map_apply_continuation (f : 'a -> 'c -> 'b * 'c * ('e -> 'e))
     (inputs : 'a list) (ctx : 'c) : 'b list * 'c * ('e -> 'e) =
   let rec eval_list (inputs : 'a list) (ctx : 'c) : 'b list * 'c * ('e -> 'e) =
@@ -115,12 +116,10 @@ let cf_singleton file line span el =
   | [ e ] -> e
   | _ -> internal_error file line span
 
-(** It happens that we need to concatenate lists of results, for
-    instance when evaluating the branches of a match. When applying
-    the continuations to build the symbolic expressions, we need
-    to decompose the list of expressions we get to give it to the
-    individual continuations for the branches.
- *)
+(** It happens that we need to concatenate lists of results, for instance when
+    evaluating the branches of a match. When applying the continuations to build
+    the symbolic expressions, we need to decompose the list of expressions we
+    get to give it to the individual continuations for the branches. *)
 let comp_seqs (file : string) (line : int) (span : Meta.span)
     (ls :
       ('a list * (SymbolicAst.expression list -> SymbolicAst.expression)) list)
