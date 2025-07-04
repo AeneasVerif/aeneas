@@ -23,7 +23,6 @@ signed integers, and another for unsigned integers. Inside of each class, we fac
 -/
 
 open Result Error
-open System.Platform.getNumBits
 
 /-- Kinds of unsigned integers -/
 inductive UScalarTy where
@@ -713,7 +712,7 @@ theorem UScalar.eq_equiv_bv_eq {ty : UScalarTy} (x y : UScalar ty) :
 
 theorem UScalar.ofNatCore_bv {ty : UScalarTy} (x : Nat) h :
   (@UScalar.ofNatCore ty x h).bv = BitVec.ofNat _ x := by
-  simp only [ofNatCore, BitVec.ofNat, Fin.ofNat', Nat.mod_eq_of_lt h]
+  simp only [ofNatCore, BitVec.ofNat, Fin.ofNat, Nat.mod_eq_of_lt h]
 
 @[simp, simp_scalar_simps, bvify_simps] theorem U8.ofNat_bv (x : Nat) h : (U8.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
 @[simp, simp_scalar_simps, bvify_simps] theorem U16.ofNat_bv (x : Nat) h : (U16.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
@@ -907,9 +906,9 @@ instance (ty: UScalarTy) : Preorder (UScalar ty) where
   le_trans := fun a b c => by
     intro Hab Hbc
     exact (le_trans ((UScalar.le_equiv _ _).1 Hab) ((UScalar.le_equiv _ _).1 Hbc))
-  lt_iff_le_not_le := fun a b => by
+  lt_iff_le_not_ge := fun a b => by
     trans (a: Nat) < (b: Nat); exact (UScalar.lt_equiv _ _)
-    trans (a: Nat) ≤ (b: Nat) ∧ ¬ (b: Nat) ≤ (a: Nat); exact lt_iff_le_not_le
+    trans (a: Nat) ≤ (b: Nat) ∧ ¬ (b: Nat) ≤ (a: Nat); exact lt_iff_le_not_ge
     repeat rewrite [← UScalar.le_equiv]; rfl
 
 instance (ty: IScalarTy) : Preorder (IScalar ty) where
@@ -917,9 +916,9 @@ instance (ty: IScalarTy) : Preorder (IScalar ty) where
   le_trans := fun a b c => by
     intro Hab Hbc
     exact (le_trans ((IScalar.le_equiv _ _).1 Hab) ((IScalar.le_equiv _ _).1 Hbc))
-  lt_iff_le_not_le := fun a b => by
+  lt_iff_le_not_ge := fun a b => by
     trans (a: Int) < (b: Int); exact (IScalar.lt_equiv _ _)
-    trans (a: Int) ≤ (b: Int) ∧ ¬ (b: Int) ≤ (a: Int); exact lt_iff_le_not_le
+    trans (a: Int) ≤ (b: Int) ∧ ¬ (b: Int) ≤ (a: Int); exact lt_iff_le_not_ge
     repeat rewrite [← IScalar.le_equiv]; rfl
 
 instance (ty: UScalarTy) : PartialOrder (UScalar ty) where

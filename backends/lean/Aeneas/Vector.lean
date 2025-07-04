@@ -2,7 +2,7 @@ import Aeneas.Array
 
 namespace Vector
 
-attribute [-simp] List.getElem!_eq_getElem?_getD
+attribute [-simp] List.getElem!_eq_getElem?_getD getElem!_pos
 attribute [local simp] Array.getElem!_eq_toList_getElem! Array.getElem_eq_toList_getElem
 attribute [scalar_tac self.toArray] Vector.size_toArray
 
@@ -11,7 +11,7 @@ attribute [-simp] Array.getElem!_toList
 @[scalar_tac xs.toList]
 theorem toList_length {α : Type u} {n : ℕ} (xs : Vector α n) :
   xs.toList.length = n := by
-  simp only [Array.length_toList, size_toArray]
+  simp only [length_toList]
 
 def setSlice! {α} {n} (a : Vector α n) (i : ℕ) (s : List α) : Vector α n :=
   ⟨ a.toArray.setSlice! i s, by simp only [Array.length_setSlice!, size_toArray] ⟩
@@ -23,15 +23,17 @@ theorem getElem!_eq_toArray_getElem! {α} {n} [Inhabited α] (s : Vector α n) (
   s[i]! = s.toArray[i]! := by
   cases s; simp
   unfold instGetElem?OfGetElemOfDecidable decidableGetElem?
-  simp; split <;> simp_all only [Option.ite_none_right_eq_some, Option.some.injEq, ite_eq_right_iff]
-  simp_all
-  rfl
+  simp only [getElem_mk, Array.getElem_eq_toList_getElem, List.Inhabited_getElem_eq_getElem!,
+    dite_eq_ite]; split <;> simp_all only [Option.ite_none_right_eq_some, Option.some.injEq, ite_eq_right_iff]
+  simp only [reduceCtorEq, imp_false, not_lt] at *
+  simp only [outOfBounds, Std.DHashMap.Internal.AssocList.panicWithPosWithDecl_eq,
+    Array.length_toList, not_lt, getElem!_neg, *]
 
 @[simp, simp_lists_simps]
 theorem getElem!_default [Inhabited α] (ls : Vector α n) (i : ℕ)
   (h : n ≤ i) : ls[i]! = default := by
   have : ls.toArray.size ≤ i := by scalar_tac
-  simp only [getElem!_eq_toArray_getElem!]; simp_lists
+  simp only [getElem!_eq_toArray_getElem!, Array.getElem!_eq_toList_getElem!]; simp_lists
 
 @[local simp]
 theorem getElem_eq_toArray_getElem {α} {n} [Inhabited α] (s : Vector α n) (i : ℕ) (hi : i < n) :
@@ -42,29 +44,26 @@ theorem getElem_eq_getElem! {α} {n} [Inhabited α] (s : Vector α n) (i : ℕ) 
   s[i] = s[i]! := by
   cases s; simp
 
-@[simp, simp_lists_simps, scalar_tac_simps]
-theorem length_setSlice! {α} {n} (s : Vector α n) (i : ℕ) (s' : List α) :
-  (s.setSlice! i s').size = n := by
-  simp only [size_toArray]
+attribute [simp_lists_simps, scalar_tac_simps] Vector.size_toArray
 
 theorem getElem!_setSlice!_prefix {α} {n} [Inhabited α]
   (s : Vector α n) (s' : List α) (i j : ℕ) (h : j < i) :
   (s.setSlice! i s')[j]! = s[j]! := by
   simp only [getElem!_eq_toArray_getElem!, setSlice!]
-  simp_lists
+  simp_lists [Array.getElem!_setSlice!_prefix] -- TODO: we shouldn't have to provide the theorem
 
 @[simp_lists_simps]
 theorem getElem!_setSlice!_middle {α} {n} [Inhabited α]
   (s : Vector α n) (s' : List α) (i j : ℕ) (h : i ≤ j ∧ j - i < s'.length ∧ j < s.size) :
   (s.setSlice! i s')[j]! = s'[j - i]! := by
   simp only [setSlice!, getElem!_eq_toArray_getElem!]
-  simp_lists
+  simp_lists [Array.getElem!_setSlice!_middle] -- TODO: we shouldn't have to provide the theorem
 
 theorem getElem!_setSlice!_suffix {α} {n} [Inhabited α]
   (s : Vector α n) (s' : List α) (i j : ℕ) (h : i + s'.length ≤ j) :
   (s.setSlice! i s')[j]! = s[j]! := by
   simp only [setSlice!, getElem!_eq_toArray_getElem!]
-  simp_lists
+  simp_lists [Array.getElem!_setSlice!_suffix] -- TODO: we shouldn't have to provide the theorem
 
 @[simp_lists_simps]
 theorem getElem!_setSlice!_same {α} {n} [Inhabited α] (s : Vector α n) (s' : List α) (i j : ℕ)
@@ -158,7 +157,7 @@ theorem getElem!_ofFn {n : ℕ} {α : Type u} [Inhabited α] (f : Fin n → α) 
 @[simp, simp_lists_simps]
 theorem getElem!_toList {α} {n} [Inhabited α] (v : Vector α n) (i : ℕ) :
   v.toList[i]! = v[i]! := by
-  simp only [Vector.getElem!_eq_toArray_getElem!, Array.getElem!_eq_toList_getElem!]
+  simp only [toList, getElem!_eq_toArray_getElem!, Array.getElem!_eq_toList_getElem!]
 
 @[simp, simp_lists_simps]
 theorem getElem!_toArray {α} {n} [Inhabited α] (v : Vector α n) (i : ℕ) :

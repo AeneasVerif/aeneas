@@ -418,8 +418,7 @@ namespace Tests
     (hi : i < slots.length) :
     (↑slots : List (List α))[i]! = []
     := by
-    simp at * -- TODO: being forced to do this is annoying
-    simp [*]
+    simp_lists [*]
 
 end Tests
 
