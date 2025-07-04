@@ -2,7 +2,7 @@ import Aeneas.Array
 
 namespace Vector
 
-attribute [-simp] List.getElem!_eq_getElem?_getD
+attribute [-simp] List.getElem!_eq_getElem?_getD getElem!_pos
 attribute [local simp] Array.getElem!_eq_toList_getElem! Array.getElem_eq_toList_getElem
 attribute [scalar_tac self.toArray] Vector.size_toArray
 
