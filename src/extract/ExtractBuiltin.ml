@@ -1,8 +1,7 @@
 (** This file declares external identifiers that we catch to map them to
     definitions coming from the standard libraries in our backends.
 
-    TODO: there misses trait **implementations**
- *)
+    TODO: there misses trait **implementations** *)
 
 open Config
 open NameMatcher (* TODO: include? *)
@@ -43,9 +42,8 @@ let () =
 
 (** Switch between two values depending on the target backend.
 
-    We often compute the same value (typically: a name) if the target
-    is F*, Coq or HOL4, and a different value if the target is Lean.
- *)
+    We often compute the same value (typically: a name) if the target is F*, Coq
+    or HOL4, and a different value if the target is Lean. *)
 let backend_choice (fstar_coq_hol4 : 'a) (lean : 'a) : 'a =
   match backend () with
   | Coq | FStar | HOL4 -> fstar_coq_hol4
@@ -95,9 +93,8 @@ let mk_struct_constructor (type_name : string) : string =
 (** The assumed types.
 
     The optional list of booleans is filtering information for the type
-    parameters. For instance, in the case of the `Vec` functions, there is
-    a type parameter for the allocator to use, which we want to filter.
- *)
+    parameters. For instance, in the case of the `Vec` functions, there is a
+    type parameter for the allocator to use, which we want to filter. *)
 let builtin_types () : Pure.builtin_type_info list =
   let mk_type (rust_name : string) ?(custom_name : string option = None)
       ?(keep_params : bool list option = None)
@@ -643,9 +640,8 @@ let builtin_trait_impls_map = mk_memoized mk_builtin_trait_impls_map
 (** The builtin functions.
 
     The optional list of booleans is filtering information for the type
-    parameters. For instance, in the case of the `Vec` functions, there is
-    a type parameter for the allocator to use, which we want to filter.
- *)
+    parameters. For instance, in the case of the `Vec` functions, there is a
+    type parameter for the allocator to use, which we want to filter. *)
 let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
   (* Small utility. *)
   let mk_fun (rust_name : string) ?(filter : bool list option = None)

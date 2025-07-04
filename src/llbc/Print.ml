@@ -489,10 +489,9 @@ module Contexts = struct
     group_filtered env
 
   (** Environments can have a lot of dummy or uninitialized values: [filter]
-      allows to filter them when printing, replacing groups of such bindings with
-      "..." to gain space and clarity.
-      [with_var_types]: if true, print the type of the variables
-   *)
+      allows to filter them when printing, replacing groups of such bindings
+      with "..." to gain space and clarity. [with_var_types]: if true, print the
+      type of the variables *)
   let env_to_string ?(span : Meta.span option = None) (filter : bool)
       (fmt_env : fmt_env) (verbose : bool) (with_var_types : bool)
       (ended_regions : RegionId.Set.t) (env : env) : string =
@@ -545,11 +544,10 @@ module Contexts = struct
     }
 
   (** Split an [env] at every occurrence of [Frame], eliminating those elements.
-          Also reorders the frames and the values in the frames according to the
-          following order:
-          * frames: from the current frame to the first pushed (oldest frame)
-          * values: from the first pushed (oldest) to the last pushed
-       *)
+      Also reorders the frames and the values in the frames according to the
+      following order: * frames: from the current frame to the first pushed
+      (oldest frame) * values: from the first pushed (oldest) to the last pushed
+  *)
   let split_env_according_to_frames (env : env) : env list =
     let rec split_aux (frames : env list) (curr_frame : env) (env : env) =
       match env with

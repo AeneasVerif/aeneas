@@ -72,17 +72,16 @@ type eval_ctx = {
   type_vars : type_var list;
   const_generic_vars : const_generic_var list;
   const_generic_vars_map : typed_value Types.ConstGenericVarId.Map.t;
-      (** The map from const generic vars to their values. Those values
-          can be symbolic values or concrete values (in the latter case:
-          if we run in interpreter mode).
+      (** The map from const generic vars to their values. Those values can be
+          symbolic values or concrete values (in the latter case: if we run in
+          interpreter mode).
 
-          TODO: this is actually not used in symbolic mode, where we
-          directly introduce fresh symbolic values.
-       *)
+          TODO: this is actually not used in symbolic mode, where we directly
+          introduce fresh symbolic values. *)
   norm_trait_types : ty TraitTypeRefMap.t;
-      (** The normalized trait types (a map from trait types to their representatives).
-          Note that this doesn't take into account higher-order type constraints
-          (of the shape `for<'a> ...`). *)
+      (** The normalized trait types (a map from trait types to their
+          representatives). Note that this doesn't take into account
+          higher-order type constraints (of the shape `for<'a> ...`). *)
   env : env;
   ended_regions : RegionId.Set.t;
 }
@@ -166,9 +165,8 @@ let ctx_lookup_const_generic_value (ctx : eval_ctx) (vid : ConstGenericVarId.id)
 
 (** Update a variable's value in the current frame.
 
-    This is a helper function: it can break invariants and doesn't perform
-    any check.
-*)
+    This is a helper function: it can break invariants and doesn't perform any
+    check. *)
 let env_update_var_value (span : Meta.span) (env : env) (vid : LocalId.id)
     (nv : typed_value) : env =
   (* We take care to stop at the end of current frame: different variables
@@ -190,18 +188,16 @@ let var_to_binder (var : local) : var_binder =
 
 (** Update a variable's value in an evaluation context.
 
-    This is a helper function: it can break invariants and doesn't perform
-    any check.
-*)
+    This is a helper function: it can break invariants and doesn't perform any
+    check. *)
 let ctx_update_var_value (span : Meta.span) (ctx : eval_ctx) (vid : LocalId.id)
     (nv : typed_value) : eval_ctx =
   { ctx with env = env_update_var_value span ctx.env vid nv }
 
 (** Push a variable in the context's environment.
 
-    Checks that the pushed variable and its value have the same type (this
-    is important).
-*)
+    Checks that the pushed variable and its value have the same type (this is
+    important). *)
 let ctx_push_var (span : Meta.span) (ctx : eval_ctx) (var : local)
     (v : typed_value) : eval_ctx =
   cassert __FILE__ __LINE__
@@ -213,8 +209,7 @@ let ctx_push_var (span : Meta.span) (ctx : eval_ctx) (var : local)
 (** Push a list of variables.
 
     Checks that the pushed variables and their values have the same type (this
-    is important).
-*)
+    is important). *)
 let ctx_push_vars (span : Meta.span) (ctx : eval_ctx)
     (vars : (local * typed_value) list) : eval_ctx =
   log#ltrace
@@ -286,12 +281,14 @@ let erase_regions (ty : ty) : ty =
   in
   v#visit_ty () ty
 
-(** Push an uninitialized variable (which thus maps to {!constructor:Values.value.VBottom}) *)
+(** Push an uninitialized variable (which thus maps to
+    {!constructor:Values.value.VBottom}) *)
 let ctx_push_uninitialized_var (span : Meta.span) (ctx : eval_ctx) (var : local)
     : eval_ctx =
   ctx_push_var span ctx var (mk_bottom span (erase_regions var.var_ty))
 
-(** Push a list of uninitialized variables (which thus map to {!constructor:Values.value.VBottom}) *)
+(** Push a list of uninitialized variables (which thus map to
+    {!constructor:Values.value.VBottom}) *)
 let ctx_push_uninitialized_vars (span : Meta.span) (ctx : eval_ctx)
     (vars : local list) : eval_ctx =
   let vars =
@@ -314,8 +311,7 @@ let env_lookup_abs_opt (env : env) (abs_id : AbstractionId.id) : abs option =
 
 (** Remove an abstraction from the context, as well as all the references to
     this abstraction (for instance, remove the abs id from all the parent sets
-    of all the other abstractions).
- *)
+    of all the other abstractions). *)
 let env_remove_abs (span : Meta.span) (env : env) (abs_id : AbstractionId.id) :
     env * abs option =
   let rec remove (env : env) : env * abs option =
@@ -337,11 +333,10 @@ let env_remove_abs (span : Meta.span) (env : env) (abs_id : AbstractionId.id) :
 
 (** Substitue an abstraction in an environment.
 
-    Note that we substitute an abstraction (identified by its id) with a different
-    abstraction which **doesn't necessarily have the same id**. Because of this,
-    we also substitute the abstraction id wherever it is used (i.e., in the
-    parent sets of the other abstractions).
- *)
+    Note that we substitute an abstraction (identified by its id) with a
+    different abstraction which **doesn't necessarily have the same id**.
+    Because of this, we also substitute the abstraction id wherever it is used
+    (i.e., in the parent sets of the other abstractions). *)
 let env_subst_abs (span : Meta.span) (env : env) (abs_id : AbstractionId.id)
     (nabs : abs) : env * abs option =
   let rec update (env : env) : env * abs option =
@@ -480,8 +475,7 @@ let env_filter_abs (f : abs -> bool) (env : env) : env =
     context.
 
     **IMPORTANT**: this function doesn't normalize the types, you may want to
-    use the [AssociatedTypes] equivalent instead.
-*)
+    use the [AssociatedTypes] equivalent instead. *)
 let ctx_type_get_instantiated_variants_fields_types (span : Meta.span)
     (ctx : eval_ctx) (def_id : TypeDeclId.id) (generics : generic_args) :
     (VariantId.id option * ty list) list =
@@ -492,20 +486,18 @@ let ctx_type_get_instantiated_variants_fields_types (span : Meta.span)
     context.
 
     **IMPORTANT**: this function doesn't normalize the types, you may want to
-    use the [AssociatedTypes] equivalent instead.
-*)
+    use the [AssociatedTypes] equivalent instead. *)
 let ctx_type_get_instantiated_field_types (span : Meta.span) (ctx : eval_ctx)
     (def_id : TypeDeclId.id) (opt_variant_id : VariantId.id option)
     (generics : generic_args) : ty list =
   let def = ctx_lookup_type_decl span ctx def_id in
   Substitute.type_decl_get_instantiated_field_types def opt_variant_id generics
 
-(** Return the types of the properly instantiated ADT value (note that
-    here, ADT is understood in its broad meaning: ADT, builtin value or tuple).
+(** Return the types of the properly instantiated ADT value (note that here, ADT
+    is understood in its broad meaning: ADT, builtin value or tuple).
 
     **IMPORTANT**: this function doesn't normalize the types, you may want to
-    use the [AssociatedTypes] equivalent instead.
- *)
+    use the [AssociatedTypes] equivalent instead. *)
 let ctx_adt_get_instantiated_field_types (span : Meta.span) (ctx : eval_ctx)
     (id : type_id) (variant_id : variant_id option) (generics : generic_args) :
     ty list =

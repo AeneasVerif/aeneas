@@ -7,9 +7,9 @@ open InterpreterPaths
 
 (** Auxiliary function.
 
-    Prepare the access to a place in a right-value (typically an operand) by reorganizing
-    the environment to end outer loans, then read the value and check that this value
-    *doesn't contain any bottom nor reserved borrows*.
+    Prepare the access to a place in a right-value (typically an operand) by
+    reorganizing the environment to end outer loans, then read the value and
+    check that this value *doesn't contain any bottom nor reserved borrows*.
 
     We reorganize the environment so that:
     - we can access the place (we prepare *along* the path)
@@ -17,8 +17,7 @@ open InterpreterPaths
       controls whether we only end mutable loans, or also shared loans).
 
     [expand_prim_copy]: if [true], expand the symbolic values which are
-    primitively copyable and contain borrows.
- *)
+    primitively copyable and contain borrows. *)
 val access_rplace_reorganize_and_read :
   config ->
   Meta.span ->
@@ -32,11 +31,10 @@ val access_rplace_reorganize_and_read :
 
     Reorganize the context, then evaluate the operand.
 
-    **Warning**: this function shouldn't be used to evaluate a list of
-    operands (for a function call, for instance): we must do *one* reorganization
-    of the environment, before evaluating all the operands at once.
-    Use {!eval_operands} instead.
- *)
+    **Warning**: this function shouldn't be used to evaluate a list of operands
+    (for a function call, for instance): we must do *one* reorganization of the
+    environment, before evaluating all the operands at once. Use
+    {!eval_operands} instead. *)
 val eval_operand :
   config ->
   Meta.span ->
@@ -58,9 +56,8 @@ val eval_operands :
 
     Transmits the computed rvalue to the received continuation.
 
-    Note that this function fails on {!Aeneas.Expressions.rvalue.Discriminant}: discriminant
-    reads should have been eliminated from the AST.
- *)
+    Note that this function fails on {!Aeneas.Expressions.rvalue.Discriminant}:
+    discriminant reads should have been eliminated from the AST. *)
 val eval_rvalue_not_global :
   config ->
   Meta.span ->

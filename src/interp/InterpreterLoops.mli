@@ -31,8 +31,8 @@
       i -> s1 : u32
     ]}
 
-    Upon reaching the [continue] at the end of the first iteration, the environment
-    is as follows:
+    Upon reaching the [continue] at the end of the first iteration, the
+    environment is as follows:
     {[
       abs@0 { ML l0 }
       ls -> MB l4 (s@6 : loops::List<T>)
@@ -54,7 +54,7 @@
     ]}
 
     From here, we deduce that [abs@fp { MB l0, ML l1}] is the loop abstraction.
-  *)
+*)
 
 open Contexts
 open Cps
@@ -62,7 +62,6 @@ open Meta
 
 (** Evaluate a loop.
 
-    The `stl_cm_fun` required as input must be the function to evaluate the
-    loop body (i.e., `eval_statement` applied to the loop body).
- *)
+    The `stl_cm_fun` required as input must be the function to evaluate the loop
+    body (i.e., `eval_statement` applied to the loop body). *)
 val eval_loop : config -> span -> stl_cm_fun -> stl_cm_fun

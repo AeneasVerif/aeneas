@@ -45,8 +45,7 @@ type borrow_kind = BMut | BShared | BReserved
 
 (** Check that:
     - loans and borrows are correctly related
-    - a two-phase borrow can't point to a value inside an abstraction
- *)
+    - a two-phase borrow can't point to a value inside an abstraction *)
 let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
     unit =
   (* Link all the borrow ids to a representant - necessary because of shared
@@ -296,8 +295,7 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
 
 (** Check that:
     - borrows/loans can't contain ⊥ or reserved mut borrows
-    - shared loans can't contain mutable loans
- *)
+    - shared loans can't contain mutable loans *)
 let check_borrowed_values_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
   let visitor =
     object
@@ -384,8 +382,9 @@ let check_literal_type (span : Meta.span) (cv : literal) (ty : literal_type) :
   | VBool _, TBool | VChar _, TChar -> ()
   | _ -> craise __FILE__ __LINE__ span "Erroneous typing"
 
-(** If [lookups] is [true] whenever we encounter a loan/borrow we lookup the corresponding
-    borrow/loan to check its type. This only works when checking non-partial environments. *)
+(** If [lookups] is [true] whenever we encounter a loan/borrow we lookup the
+    corresponding borrow/loan to check its type. This only works when checking
+    non-partial environments. *)
 let check_typing_invariant_visitor span ctx (lookups : bool) =
   (* TODO: the type of aloans doens't make sense: they have a type
    * of the shape [& (mut) T] where they should have type [T]...
@@ -393,7 +392,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
    * children. In order to isolate the problem (for future modifications)
    * we introduce this function, so that we can easily spot all the involved
    * places.
-   * *)
+   *)
   let aloan_get_expected_child_type (ty : ty) : ty =
     let _, ty, _ = ty_get_ref ty in
     ty
@@ -553,7 +552,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
      * report that). Still, it is actually not that problematic
      * because this code shouldn't change a lot in the future,
      * so the cost of maintenance should be pretty low.
-     * *)
+     *)
     method! visit_typed_avalue info atv =
       (* Check that the types have regions *)
       sanity_check __FILE__ __LINE__ (ty_is_rty atv.ty) span;
@@ -809,18 +808,17 @@ let sv_info_to_string (ctx : eval_ctx) (info : sv_info) : string =
   ^ "]\n}"
 
 (** Check the invariants over the symbolic values.
-    
+
     - a symbolic value can't be both in proj_borrows and in the concrete env
       (this is why we preemptively expand copyable symbolic values)
-    - if a symbolic value contains regions: there is at most one occurrence
-      of this value in the concrete env
+    - if a symbolic value contains regions: there is at most one occurrence of
+      this value in the concrete env
     - if there is an aproj_borrows in the environment, there must also be a
       corresponding aproj_loans
     - aproj_loans are mutually disjoint
     - TODO: aproj_borrows are mutually disjoint
     - the union of the aproj_loans contains the aproj_borrows applied on the
-      same symbolic values
- *)
+      same symbolic values *)
 let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
   (* Small utility *)
   let module M = SymbolicValueId.Map in

@@ -15,21 +15,20 @@ let log = Logging.borrows_log
 
 (** Auxiliary function to end borrows: lookup a borrow in the environment,
     update it (by returning an updated environment where the borrow has been
-    replaced by {!Bottom})) if we can end the borrow (for instance, it is not
-    an outer borrow...) or return the reason why we couldn't update the borrow.
+    replaced by {!Bottom})) if we can end the borrow (for instance, it is not an
+    outer borrow...) or return the reason why we couldn't update the borrow.
 
-    [end_borrow_aux] then simply performs a loop: as long as we need to end (outer)
-    borrows, we end them, before finally ending the borrow we wanted to end in the
-    first place.
+    [end_borrow_aux] then simply performs a loop: as long as we need to end
+    (outer) borrows, we end them, before finally ending the borrow we wanted to
+    end in the first place.
 
     - [allowed_abs]: if not [None], allows to get a borrow in the given
       abstraction without ending the whole abstraction first. This parameter
       allows us to use {!end_borrow_aux} as an auxiliary function for
-      {!end_abstraction_aux} (we end all the borrows in the abstraction one by one
-      before removing the abstraction from the context).
-      We use this to end shared borrows and mutable borrows inside of **shared values**;
-      the other borrows are taken care of differently.
-*)
+      {!end_abstraction_aux} (we end all the borrows in the abstraction one by
+      one before removing the abstraction from the context). We use this to end
+      shared borrows and mutable borrows inside of **shared values**; the other
+      borrows are taken care of differently. *)
 let end_borrow_get_borrow (span : Meta.span)
     (allowed_abs : AbstractionId.id option) (l : BorrowId.id) (ctx : eval_ctx) :
     ( eval_ctx * (AbstractionId.id option * g_borrow_content) option,
@@ -86,8 +85,8 @@ let end_borrow_get_borrow (span : Meta.span)
     object
       inherit [_] map_eval_ctx as super
 
-      (** We reimplement {!visit_Loan} because we may have to update the
-          outer borrows *)
+      (** We reimplement {!visit_Loan} because we may have to update the outer
+          borrows *)
       method! visit_VLoan (outer : AbstractionId.id option * borrow_ids option)
           lc =
         match lc with
@@ -123,8 +122,8 @@ let end_borrow_get_borrow (span : Meta.span)
               let outer = update_outer_borrows outer (Borrow l') in
               VBorrow (super#visit_VMutBorrow outer l' bv)
 
-      (** We reimplement {!visit_ALoan} because we may have to update the
-          outer borrows *)
+      (** We reimplement {!visit_ALoan} because we may have to update the outer
+          borrows *)
       method! visit_ALoan outer lc =
         (* Note that the children avalues are just other, independent loans,
          * so we don't need to update the outer borrows when diving in.
@@ -239,14 +238,13 @@ let end_borrow_get_borrow (span : Meta.span)
   with FoundPriority outers -> Error outers
 
 (** Auxiliary function to end borrows. See {!give_back}.
-    
+
     When we end a mutable borrow, we need to "give back" the value it contained
     to its original owner by reinserting it at the proper position.
 
     Note that this function checks that there is exactly one loan to which we
-    give the value back.
-    TODO: this was not the case before, so some sanity checks are not useful anymore.
- *)
+    give the value back. TODO: this was not the case before, so some sanity
+    checks are not useful anymore. *)
 let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
     (nv : typed_value) (ctx : eval_ctx) : eval_ctx =
   (* Sanity check *)
@@ -282,10 +280,9 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
     object (self)
       inherit [_] map_eval_ctx as super
 
-      (** This is a bit annoying, but as we need the type of the value we
-          are exploring, for sanity checks, we need to implement
-          {!visit_typed_avalue} instead of
-          overriding {!visit_ALoan} *)
+      (** This is a bit annoying, but as we need the type of the value we are
+          exploring, for sanity checks, we need to implement
+          {!visit_typed_avalue} instead of overriding {!visit_ALoan} *)
       method! visit_typed_value opt_abs (v : typed_value) : typed_value =
         match v.value with
         | VLoan lc ->
@@ -314,10 +311,9 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
               nv.value)
             else VLoan (super#visit_VMutLoan opt_abs bid')
 
-      (** This is a bit annoying, but as we need the type of the avalue we
-          are exploring, in order to be able to project the value we give
-          back, we need to reimplement {!visit_typed_avalue} instead of
-          {!visit_ALoan} *)
+      (** This is a bit annoying, but as we need the type of the avalue we are
+          exploring, in order to be able to project the value we give back, we
+          need to reimplement {!visit_typed_avalue} instead of {!visit_ALoan} *)
       method! visit_typed_avalue opt_abs (av : typed_avalue) : typed_avalue =
         match av.value with
         | ALoan lc ->
@@ -329,8 +325,7 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
         | _ -> super#visit_typed_avalue opt_abs av
 
       (** We need to inspect ignored mutable borrows, to insert loan projectors
-          if necessary.
-       *)
+          if necessary. *)
       method visit_typed_ABorrow (opt_abs : abs option) (ty : rty)
           (bc : aborrow_content) : avalue =
         match bc with
@@ -366,8 +361,8 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
             (* Continue exploring *)
             super#visit_ABorrow opt_abs bc
 
-      (** We are not specializing an already existing method, but adding a
-          new method (for projections, we need type information) *)
+      (** We are not specializing an already existing method, but adding a new
+          method (for projections, we need type information) *)
       method visit_typed_ALoan (opt_abs : abs option) (ty : rty)
           (lc : aloan_content) : avalue =
         (* Preparing a bit *)
@@ -457,8 +452,7 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
 
     Because doing this introduces a fresh symbolic value which may contain
     borrows, we may need to update the proj_borrows to introduce loan projectors
-    over those borrows.
- *)
+    over those borrows. *)
 let end_aproj_borrows (span : Meta.span) (ended_regions : RegionId.Set.t)
     (proj_ty : rty) (sv_id : symbolic_value_id) (nsv : symbolic_value)
     (ctx : eval_ctx) : eval_ctx =
@@ -588,14 +582,14 @@ let give_back_symbolic_value (_config : config) (span : Meta.span)
     This function is similar to {!give_back_value} but gives back an {!avalue}
     (coming from an abstraction).
 
-    It is used when ending a borrow inside an abstraction, when the corresponding
-    loan is inside the same abstraction (in which case we don't need to end the whole
-    abstraction).
-    
-    REMARK: this function can't be used to give back the values borrowed by
-    end abstraction when ending this abstraction. When doing this, we need
-    to convert the {!avalue} to a {!type:value} by introducing the proper symbolic values.
- *)
+    It is used when ending a borrow inside an abstraction, when the
+    corresponding loan is inside the same abstraction (in which case we don't
+    need to end the whole abstraction).
+
+    REMARK: this function can't be used to give back the values borrowed by end
+    abstraction when ending this abstraction. When doing this, we need to
+    convert the {!avalue} to a {!type:value} by introducing the proper symbolic
+    values. *)
 let give_back_avalue_to_same_abstraction (_config : config) (span : Meta.span)
     (bid : BorrowId.id) (nv : typed_avalue) (nsv : typed_value) (ctx : eval_ctx)
     : eval_ctx =
@@ -610,14 +604,12 @@ let give_back_avalue_to_same_abstraction (_config : config) (span : Meta.span)
     object (self)
       inherit [_] map_eval_ctx as super
 
-      (** This is a bit annoying, but as we need the type of the avalue we
-          are exploring, in order to be able to project the value we give
-          back, we need to reimplement {!visit_typed_avalue} instead of
-          {!visit_ALoan}.
+      (** This is a bit annoying, but as we need the type of the avalue we are
+          exploring, in order to be able to project the value we give back, we
+          need to reimplement {!visit_typed_avalue} instead of {!visit_ALoan}.
 
           TODO: it is possible to do this by remembering the type of the last
-          typed avalue we entered.
-       *)
+          typed avalue we entered. *)
       method! visit_typed_avalue opt_abs (av : typed_avalue) : typed_avalue =
         match av.value with
         | ALoan lc ->
@@ -625,12 +617,11 @@ let give_back_avalue_to_same_abstraction (_config : config) (span : Meta.span)
             ({ av with value } : typed_avalue)
         | _ -> super#visit_typed_avalue opt_abs av
 
-      (** We are not specializing an already existing method, but adding a
-          new method (for projections, we need type information).
+      (** We are not specializing an already existing method, but adding a new
+          method (for projections, we need type information).
 
           TODO: it is possible to do this by remembering the type of the last
-          typed avalue we entered.
-        *)
+          typed avalue we entered. *)
       method visit_typed_ALoan (opt_abs : abs option) (ty : rty)
           (lc : aloan_content) : avalue =
         match lc with
@@ -695,15 +686,14 @@ let give_back_avalue_to_same_abstraction (_config : config) (span : Meta.span)
   (* Return *)
   ctx
 
-(** Auxiliary function to end borrows. See  {!give_back}.
-    
+(** Auxiliary function to end borrows. See {!give_back}.
+
     When we end a shared borrow, we need to remove the borrow id from the list
     of borrows to the shared value.
 
-    Note that this function checks that there is exactly one shared loan that
-    we update.
-    TODO: this was not the case before, so some sanity checks are not useful anymore.
- *)
+    Note that this function checks that there is exactly one shared loan that we
+    update. TODO: this was not the case before, so some sanity checks are not
+    useful anymore. *)
 let give_back_shared _config (span : Meta.span) (bid : BorrowId.id)
     (ctx : eval_ctx) : eval_ctx =
   (* We use a reference to check that we updated exactly one loan *)
@@ -781,11 +771,10 @@ let give_back_shared _config (span : Meta.span) (bid : BorrowId.id)
   (* Return *)
   ctx
 
-(** When copying values, we duplicate the shared borrows. This is tantamount
-    to reborrowing the shared value. The following function applies this change
-    to an environment by inserting a new borrow id in the set of borrows tracked
-    by a shared value, referenced by the [original_bid] argument.
- *)
+(** When copying values, we duplicate the shared borrows. This is tantamount to
+    reborrowing the shared value. The following function applies this change to
+    an environment by inserting a new borrow id in the set of borrows tracked by
+    a shared value, referenced by the [original_bid] argument. *)
 let reborrow_shared (span : Meta.span) (original_bid : BorrowId.id)
     (new_bid : BorrowId.id) (ctx : eval_ctx) : eval_ctx =
   (* Keep track of changes *)
@@ -827,20 +816,19 @@ let reborrow_shared (span : Meta.span) (original_bid : BorrowId.id)
 
 (** Convert an {!type:avalue} to a {!type:value}.
 
-    This function is used when ending abstractions: whenever we end a borrow
-    in an abstraction, we convert the borrowed {!avalue} to a fresh symbolic
+    This function is used when ending abstractions: whenever we end a borrow in
+    an abstraction, we convert the borrowed {!avalue} to a fresh symbolic
     {!type:value}, then give back this {!type:value} to the context.
 
-    Note that some regions may have ended in the symbolic value we generate.
-    For instance, consider the following function signature:
+    Note that some regions may have ended in the symbolic value we generate. For
+    instance, consider the following function signature:
     {[
       fn f<'a>(x : &'a mut &'a mut u32);
     ]}
     When ending the abstraction, the value given back for the outer borrow
-    should be ⊥. In practice, we will give back a symbolic value which can't
-    be expanded (because expanding this symbolic value would require expanding
-    a reference whose region has already ended).
- *)
+    should be ⊥. In practice, we will give back a symbolic value which can't be
+    expanded (because expanding this symbolic value would require expanding a
+    reference whose region has already ended). *)
 let convert_avalue_to_given_back_value (span : Meta.span) (av : typed_avalue) :
     symbolic_value =
   mk_fresh_symbolic_value span av.ty
@@ -850,17 +838,15 @@ let convert_avalue_to_given_back_value (span : Meta.span) (av : typed_avalue) :
     When we end a mutable borrow, we need to "give back" the value it contained
     to its original owner by reinserting it at the proper position.
 
-    Rem.: this function is used when we end *one single* borrow (we don't
-    end this borrow as member of the group of borrows belonging to an
-    abstraction).
+    Rem.: this function is used when we end *one single* borrow (we don't end
+    this borrow as member of the group of borrows belonging to an abstraction).
     If the borrow is an "abstract" borrow, it means we are ending a borrow
-    inside an abstraction (we end a borrow whose corresponding loan is in
-    the same abstraction - we are allowed to do so without ending the whole
-    abstraction).
-    TODO: we should not treat this case here, and should only consider internal
-    borrows. This kind of internal reshuffling. should be similar to ending
-    abstractions (it is tantamount to ending *sub*-abstractions).
- *)
+    inside an abstraction (we end a borrow whose corresponding loan is in the
+    same abstraction - we are allowed to do so without ending the whole
+    abstraction). TODO: we should not treat this case here, and should only
+    consider internal borrows. This kind of internal reshuffling. should be
+    similar to ending abstractions (it is tantamount to ending
+    *sub*-abstractions). *)
 let give_back (config : config) (span : Meta.span) (l : BorrowId.id)
     (bc : g_borrow_content) (ctx : eval_ctx) : eval_ctx =
   (* Debug *)
@@ -965,25 +951,25 @@ let check_borrow_disappeared (span : Meta.span) (fun_name : string)
 
 (** End a borrow identified by its borrow id in a context.
 
-    This function **preserves invariants** provided [allowed_abs] is [None]: if the
-    borrow is inside another borrow/an abstraction, we end the outer borrow/abstraction
-    first, etc.
+    This function **preserves invariants** provided [allowed_abs] is [None]: if
+    the borrow is inside another borrow/an abstraction, we end the outer
+    borrow/abstraction first, etc.
 
     [allowed_abs]: see the comment for {!end_borrow_get_borrow}.
 
-    [chain]: contains the list of borrows/abstraction ids on which {!end_borrow_aux}
-    and {!end_abstraction_aux} were called, to remember the chain of calls. This is
-    useful for debugging purposes, and also for sanity checks to detect cycles
-    (which shouldn't happen if the environment is well-formed).
+    [chain]: contains the list of borrows/abstraction ids on which
+    {!end_borrow_aux} and {!end_abstraction_aux} were called, to remember the
+    chain of calls. This is useful for debugging purposes, and also for sanity
+    checks to detect cycles (which shouldn't happen if the environment is
+    well-formed).
 
-    Rk.: from now onwards, the functions are written in continuation passing style.
-    The reason is that when ending borrows we may end abstractions, which requires
-    generating code for the translation (and we do this in CPS).
-    
+    Rk.: from now onwards, the functions are written in continuation passing
+    style. The reason is that when ending borrows we may end abstractions, which
+    requires generating code for the translation (and we do this in CPS).
+
     TODO: we should split this function in two: one function which doesn't
     perform anything smart and is trusted, and another function for the
-    book-keeping.
- *)
+    book-keeping. *)
 let rec end_borrow_aux (config : config) (span : Meta.span)
     (chain : borrow_or_abs_ids) (allowed_abs : AbstractionId.id option)
     (l : BorrowId.id) : cm_fun =
@@ -1308,7 +1294,8 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
         | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ());
         super#visit_aproj env sproj
 
-      (** We may need to end borrows in "regular" values, because of shared values *)
+      (** We may need to end borrows in "regular" values, because of shared
+          values *)
       method! visit_borrow_content _ bc =
         match bc with
         | VSharedBorrow _ | VMutBorrow (_, _) -> raise (FoundBorrowContent bc)
@@ -1436,26 +1423,25 @@ and end_abstraction_remove_from_context (_config : config) (span : Meta.span)
 
 (** End a proj_loan over a symbolic value by ending the proj_borrows which
     intersect this proj_loan.
-    
+
     Rk.:
     - if this symbolic value is primitively copiable, then:
-      - either proj_borrows are only present in the concrete context
-      - or there is only one intersecting proj_borrow present in an
-        abstraction
+    - either proj_borrows are only present in the concrete context
+    - or there is only one intersecting proj_borrow present in an abstraction
     - otherwise, this symbolic value is not primitively copiable:
-      - there may be proj_borrows_shared over this value
-      - if we put aside the proj_borrows_shared, there should be exactly one
-        intersecting proj_borrows, either in the concrete context or in an
-        abstraction
+    - there may be proj_borrows_shared over this value
+    - if we put aside the proj_borrows_shared, there should be exactly one
+      intersecting proj_borrows, either in the concrete context or in an
+      abstraction
 
     Note that we may get recursively get here after a sequence of updates which
     look like this:
     - attempt ending a loan projector
-    - end a borrow projector before, and by doing this actually end the loan projector
-    - retry ending the loan projector
-    We thus have to be careful about the fact that maybe the loan projector actually
-    doesn't exist anymore when we get here.
-*)
+    - end a borrow projector before, and by doing this actually end the loan
+      projector
+    - retry ending the loan projector We thus have to be careful about the fact
+      that maybe the loan projector actually doesn't exist anymore when we get
+      here. *)
 and end_proj_loans_symbolic (config : config) (span : Meta.span)
     (chain : borrow_or_abs_ids) (abs_id : AbstractionId.id)
     (regions : RegionId.Set.t) (sv_id : symbolic_value_id) (proj_ty : rty) :
@@ -1616,20 +1602,18 @@ let end_abstractions_no_synth config span ids ctx =
 
 (** Helper function: see {!activate_reserved_mut_borrow}.
 
-    This function updates the shared loan to a mutable loan (we then update
-    the borrow with another helper). Of course, the shared loan must contain
-    exactly one borrow id (the one we give as parameter), otherwise we can't
-    promote it. Also, the shared value mustn't contain any loan.
+    This function updates the shared loan to a mutable loan (we then update the
+    borrow with another helper). Of course, the shared loan must contain exactly
+    one borrow id (the one we give as parameter), otherwise we can't promote it.
+    Also, the shared value mustn't contain any loan.
 
     The returned value (previously shared) is checked:
     - it mustn't contain loans
     - it mustn't contain {!Bottom}
-    - it mustn't contain reserved borrows
-    TODO: this kind of checks should be put in an auxiliary helper, because
-    they are redundant.
+    - it mustn't contain reserved borrows TODO: this kind of checks should be
+      put in an auxiliary helper, because they are redundant.
 
-    The loan to update mustn't be a borrowed value.
- *)
+    The loan to update mustn't be a borrowed value. *)
 let promote_shared_loan_to_mut_loan (span : Meta.span) (l : BorrowId.id)
     (ctx : eval_ctx) : typed_value * eval_ctx =
   (* Debug *)
@@ -1679,9 +1663,8 @@ let promote_shared_loan_to_mut_loan (span : Meta.span) (l : BorrowId.id)
 
 (** Helper function: see {!activate_reserved_mut_borrow}.
 
-    This function updates a shared borrow to a mutable borrow (and that is
-    all: it doesn't touch the corresponding loan).
- *)
+    This function updates a shared borrow to a mutable borrow (and that is all:
+    it doesn't touch the corresponding loan). *)
 let replace_reserved_borrow_with_mut_borrow (span : Meta.span) (l : BorrowId.id)
     (borrowed_value : typed_value) (ctx : eval_ctx) : eval_ctx =
   (* Lookup the reserved borrow - note that we don't go inside borrows/loans:
@@ -2004,9 +1987,8 @@ exception FoundAbsId of AbstractionId.id
 
 (** Find the first endable loan projector in an abstraction.
 
-    An endable loan projector is a loan projector over a symbolic value
-    which doesn't appear anywhere else in the context.
- *)
+    An endable loan projector is a loan projector over a symbolic value which
+    doesn't appear anywhere else in the context. *)
 let find_first_endable_loan_proj_in_abs (span : Meta.span) (ctx : eval_ctx)
     (abs : abs) : unit =
   let visitor =
@@ -2057,8 +2039,7 @@ let find_first_endable_loan_proj_in_abs (span : Meta.span) (ctx : eval_ctx)
 
     Iterate over all the *concrete* borrows in the abstraction and find their
     corresponding loans: return [true] if one of those loans is inside an
-    abstraction identified by the set [fixed_abs_ids].
- *)
+    abstraction identified by the set [fixed_abs_ids]. *)
 let abs_borrows_loans_in_fixed span (ctx : eval_ctx)
     (fixed_abs_ids : AbstractionId.Set.t) (abs : abs) : bool =
   (* Iterate through the loan projectors which intersect a given borrow projector *)
@@ -2514,16 +2495,15 @@ type merge_abstraction_info = {
 
 (** Small utility to help merging abstractions.
 
-    We compute the list of loan/borrow contents, maps from borrow/loan ids
-    to borrow/loan contents, etc.
+    We compute the list of loan/borrow contents, maps from borrow/loan ids to
+    borrow/loan contents, etc.
 
-    Note that this function is very specific to [merge_into_first_abstraction]: we
-    have strong assumptions about the shape of the abstraction, and in
+    Note that this function is very specific to [merge_into_first_abstraction]:
+    we have strong assumptions about the shape of the abstraction, and in
     particular that:
     - its values don't contain nested borrows
-    - all the borrows are destructured (for instance, shared loans can't
-      contain shared loans).
- *)
+    - all the borrows are destructured (for instance, shared loans can't contain
+      shared loans). *)
 let compute_merge_abstraction_info (span : Meta.span) (ctx : eval_ctx)
     (owned_regions : RegionId.Set.t) (avalues : typed_avalue list) :
     merge_abstraction_info =
@@ -2713,8 +2693,7 @@ type merge_duplicates_funcs = {
           - [pm1]
           - [child1]
 
-          The children should be [AIgnored].
-       *)
+          The children should be [AIgnored]. *)
   merge_ashared_borrows :
     borrow_id -> rty -> proj_marker -> rty -> proj_marker -> typed_avalue;
       (** Parameters:
@@ -2722,8 +2701,7 @@ type merge_duplicates_funcs = {
           - [ty0]
           - [pm0]
           - [ty1]
-          - [pm1]
-       *)
+          - [pm1] *)
   merge_amut_loans :
     loan_id ->
     rty ->
@@ -2742,8 +2720,7 @@ type merge_duplicates_funcs = {
           - [pm1]
           - [child1]
 
-          The children should be [AIgnored].
-       *)
+          The children should be [AIgnored]. *)
   merge_ashared_loans :
     loan_id_set ->
     rty ->
@@ -2764,8 +2741,7 @@ type merge_duplicates_funcs = {
           - [ty1]
           - [pm1]
           - [sv1]
-          - [child1]
-       *)
+          - [child1] *)
   merge_aborrow_projs :
     ty ->
     proj_marker ->
@@ -2779,17 +2755,16 @@ type merge_duplicates_funcs = {
     (msymbolic_value_id * aproj) list ->
     typed_avalue;
       (** Parameters:
-      - [ty0]
-      - [pm0]
-      - [sv0]
-      - [proj_ty0]
-      - [children0]
-      - [ty1]
-      - [pm1]
-      - [sv1]
-      - [proj_ty1]
-      - [children1]
-    *)
+          - [ty0]
+          - [pm0]
+          - [sv0]
+          - [proj_ty0]
+          - [children0]
+          - [ty1]
+          - [pm1]
+          - [sv1]
+          - [proj_ty1]
+          - [children1] *)
   merge_aloan_projs :
     ty ->
     proj_marker ->
@@ -2803,25 +2778,23 @@ type merge_duplicates_funcs = {
     (msymbolic_value_id * aproj) list ->
     typed_avalue;
       (** Parameters:
-      - [ty0]
-      - [pm0]
-      - [sv0]
-      - [proj_ty0]
-      - [children0]
-      - [ty1]
-      - [pm1]
-      - [sv1]
-      - [proj_ty1]
-      - [children1]
-    *)
+          - [ty0]
+          - [pm0]
+          - [sv0]
+          - [proj_ty0]
+          - [children0]
+          - [ty1]
+          - [pm1]
+          - [sv1]
+          - [proj_ty1]
+          - [children1] *)
 }
 
 (** Small utility: if a value doesn't have any marker, split it into two values
     with complementary markers. We use this for {!merge_abstractions}.
 
-    We assume the value has been destructured (there are no nested loans,
-    adts, the children are ignored, etc.).
- *)
+    We assume the value has been destructured (there are no nested loans, adts,
+    the children are ignored, etc.). *)
 let typed_avalue_split_marker (span : Meta.span) (ctx : eval_ctx)
     (av : typed_avalue) : typed_avalue list =
   let mk_split mk_value = [ mk_value PLeft; mk_value PRight ] in
@@ -2882,9 +2855,8 @@ let abs_split_markers (span : Meta.span) (ctx : eval_ctx) (abs : abs) : abs =
 
 (** Auxiliary function for {!merge_abstractions}.
 
-    Phase 1 of the merge: we simplify all loan/borrow pairs, if a loan is
-    in the left abstraction and its corresponding borrow is in the right
-    abstraction.
+    Phase 1 of the merge: we simplify all loan/borrow pairs, if a loan is in the
+    left abstraction and its corresponding borrow is in the right abstraction.
 
     Important: this is asymmetric (the loan must be in the left abstraction).
 
@@ -2900,8 +2872,7 @@ let abs_split_markers (span : Meta.span) (ctx : eval_ctx) (abs : abs) : abs =
           ~~> abs1 { MB l0, ML l0, MB l1 }
     ]}
 
-    We return the list of merged values.
- *)
+    We return the list of merged values. *)
 let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
     (merge_funs : merge_duplicates_funcs option) (ctx : eval_ctx) (abs0 : abs)
     (abs1 : abs) : typed_avalue list =
@@ -3095,9 +3066,10 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
         val set_loan_as_merged : Set.elt -> unit
         val make_borrow_value : Set.elt -> borrow_content -> typed_avalue
 
-        (** Return the list of marked values to mark as merged - this is important
-            for shared loans: the loan itself is identified by a single loan id,
-            but we need to mark *all* the loan ids contained in the set as merged. *)
+        (** Return the list of marked values to mark as merged - this is
+            important for shared loans: the loan itself is identified by a
+            single loan id, but we need to mark *all* the loan ids contained in
+            the set as merged. *)
         val make_loan_value :
           Set.elt -> loan_content -> Set.elt list * typed_avalue
       end) =
@@ -3284,8 +3256,7 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
       |MB l0|, MB l1, ︙MB l0︙
            ~~>
       MB l0, MB l1
-    ]}
- *)
+    ]} *)
 let merge_abstractions_merge_markers (span : Meta.span)
     (merge_funs : merge_duplicates_funcs option) (ctx : eval_ctx)
     (owned_regions : RegionId.Set.t) (avalues : typed_avalue list) :
@@ -3742,8 +3713,7 @@ let merge_abstractions_merge_markers (span : Meta.span)
 
 (** Auxiliary function.
 
-    Merge two abstractions into one, without updating the context.
- *)
+    Merge two abstractions into one, without updating the context. *)
 let merge_abstractions (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
     (merge_funs : merge_duplicates_funcs option) (ctx : eval_ctx) (abs0 : abs)
     (abs1 : abs) : abs =
@@ -3868,8 +3838,7 @@ let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
 
 (** Reorder the loans and borrows inside the fresh abstractions.
 
-    See {!reorder_fresh_abs}.
- *)
+    See {!reorder_fresh_abs}. *)
 let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
     (old_abs_ids : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
   let reorder_in_fresh_abs (abs : abs) : abs =
@@ -3933,8 +3902,7 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
       | _ -> craise __FILE__ __LINE__ span "Unexpected"
     in
     let compare_pair :
-          'a. ('a -> 'a -> int) -> 'a * typed_avalue -> 'a * typed_avalue -> int
-        =
+        'a. ('a -> 'a -> int) -> 'a * typed_avalue -> 'a * typed_avalue -> int =
      fun compare_id x y ->
       let fst = compare_id (fst x) (fst y) in
       cassert __FILE__ __LINE__ (fst <> 0) span
@@ -3947,11 +3915,11 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
     in
     (* We use ordered maps to reorder the borrows and loans *)
     let reorder :
-          'a.
-          (typed_avalue -> 'a) ->
-          ('a -> 'a -> int) ->
-          typed_avalue list ->
-          typed_avalue list =
+        'a.
+        (typed_avalue -> 'a) ->
+        ('a -> 'a -> int) ->
+        typed_avalue list ->
+        typed_avalue list =
      fun get_id compare_id values ->
       let values = List.map (fun v -> (get_id v, v)) values in
       List.map snd (List.stable_sort (compare_pair compare_id) values)
