@@ -159,7 +159,7 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
   . -- 0 ≤ x.bv.toInt
     -- 0 ≤ y.bv.toInt
     rw [BitVec.toInt_ofNat]
-    simp only [Int.ofNat_ediv]
+    simp only [Int.natCast_ediv]
     have hx : x.bv.toNat = x.bv.toInt := by
       have := @BitVec.toInt_eq_msb_cond _ x.bv
       simp_all
@@ -209,7 +209,7 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
       simp only [neg_sub, Int.toNat_sub']
       norm_cast
     rw [BitVec.toInt_neg, BitVec.toInt_ofNat]
-    simp only [Int.ofNat_ediv, Int.ofNat_emod, Nat.cast_pow, Nat.cast_ofNat]
+    simp only [Int.natCast_ediv, Int.natCast_emod, Nat.cast_pow, Nat.cast_ofNat]
     rw [hyToNat]
     have : ((-y.val).toNat : Int) % 2^ty.numBits = -(y.val : Int) := by
       apply IScalar.neg_imp_neg_val_toNat_mod_pow_eq_neg_val
@@ -264,7 +264,7 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
       simp only [neg_sub, Int.toNat_sub']
       norm_cast
     rw [BitVec.toInt_neg, BitVec.toInt_ofNat]
-    simp only [Int.ofNat_ediv, Int.ofNat_emod, Nat.cast_pow, Nat.cast_ofNat]
+    simp only [Int.natCast_ediv, Int.natCast_emod, Nat.cast_pow, Nat.cast_ofNat]
 
     rw [hxToNat]
     have : ((-x.val).toNat : Int) % 2^ty.numBits = -(x.val : Int) := by

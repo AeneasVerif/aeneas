@@ -475,7 +475,6 @@ def scalarTacAux (config : Config) : TacticM Unit := do
 
 def scalarTac (config : Config) : TacticM Unit := do
   if config.auxTheorem then
-    let declName? ← Term.getDeclName?
     let g ← getMainGoal
     g.withContext do
       let type ← g.getType
@@ -483,7 +482,7 @@ def scalarTac (config : Config) : TacticM Unit := do
       setGoals [g'.mvarId!]
       scalarTacAux config
       -- Introduce an auxiliary theorem for the proof
-      let e ← mkAuxTheorem (prefix? := declName?) type (← instantiateMVarsProfiling g') (zetaDelta := true)
+      let e ← mkAuxTheorem type (← instantiateMVarsProfiling g') (zetaDelta := true)
       g.assign e
   else scalarTacAux config
 
@@ -513,7 +512,6 @@ def incrScalarTacCore (config : Config) (state : State) (toClear : Array FVarId)
 def incrScalarTac (config : Config) (state : State) (toClear : Array FVarId) (assumptions : Array FVarId) : TacticM Unit := do
   withTraceNode `ScalarTac (fun _ => pure m!"incrScalarTac") do
   if config.auxTheorem then
-    let declName? ← Term.getDeclName?
     let g ← getMainGoal
     g.withContext do
       let type ← g.getType
@@ -521,7 +519,7 @@ def incrScalarTac (config : Config) (state : State) (toClear : Array FVarId) (as
       setGoals [g'.mvarId!]
       incrScalarTacCore config state toClear assumptions
       -- Introduce an auxiliary theorem for the proof
-      let e ← mkAuxTheorem (prefix? := declName?) type (← instantiateMVarsProfiling g') (zetaDelta := true)
+      let e ← mkAuxTheorem type (← instantiateMVarsProfiling g') (zetaDelta := true)
       g.assign e
   else incrScalarTacCore config state toClear assumptions
 
