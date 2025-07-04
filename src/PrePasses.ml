@@ -652,8 +652,10 @@ let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
   f
 
 (** `StorageDead`, `Deinit` and `Drop` have the same semantics as far as Aeneas
-    is concerned: they store bottom in the place. This maps all three to `Drop`
+    is concerned: they store bottom in the place. This maps all three to `Deinit`
     to simplify later work.
+    Note: `Drop` actually also calls code to deallocate the value; we decide to
+    ignore this for now.
  *)
 let unify_drops (f : fun_decl) : fun_decl =
   let lookup_local (locals : locals) (var_id : local_id) : local =
@@ -663,12 +665,12 @@ let unify_drops (f : fun_decl) : fun_decl =
   let unify_visitor =
     object
       inherit [_] map_statement
-      method! visit_Deinit _ p = Drop p
+      method! visit_Drop _ p _ = Deinit p
 
       method! visit_StorageDead locals var_id =
         let ty = (lookup_local locals var_id).var_ty in
         let p = { kind = PlaceLocal var_id; ty } in
-        Drop p
+        Deinit p
     end
   in
 

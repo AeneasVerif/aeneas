@@ -914,7 +914,7 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
   | SetDiscriminant (p, variant_id) ->
       let (ctx, res), cc = set_discriminant config st.span p variant_id ctx in
       ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc)
-  | Drop p ->
+  | Deinit p ->
       let ctx, cc = drop_value config st.span p ctx in
       ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.span cc)
   | Assert assertion ->
@@ -933,9 +933,9 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
       let eval_loop_body = eval_block config loop_body in
       InterpreterLoops.eval_loop config st.span eval_loop_body ctx
   | Switch switch -> eval_switch config st.span switch ctx
-  | Deinit _ | StorageDead _ ->
+  | Drop _ | StorageDead _ ->
       craise __FILE__ __LINE__ st.span
-        "StorageDead/Deinit should have been removed in a prepass"
+        "StorageDead/Drop should have been removed in a prepass"
   | Error s -> craise __FILE__ __LINE__ st.span s
 
 and eval_global (config : config) (span : Meta.span) (dest : place)
