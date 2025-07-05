@@ -720,14 +720,14 @@ let filter_type_aliases (crate : crate) : crate =
         crate.declarations;
   }
 
-(** Whenever we write a string literal in Rust, rustc actually
-    introduces a constant of type [&str].
-    Generally speaking, because [str] is unsized, it doesn't
-    make sense to manipulate values of type [str] directly.
-    But in the context of Aeneas, it is reasonable to decompose
-    those literals into: a string stored in a local variable,
-    then a borrow of this variable.
- *)
+(** Whenever we write a string literal in Rust, rustc actually introduces a
+    constant of type [&str]. Generally speaking, because [str] is unsized, it
+    doesn't make sense to manipulate values of type [str] directly. But in the
+    context of Aeneas, it is reasonable to decompose those literals into: a
+    string stored in a local variable, then a borrow of this variable.
+
+    Remark: the new statements all have the id 0: this pass requires to refresh
+    the ids later. *)
 let decompose_str_borrows (f : fun_decl) : fun_decl =
   (* Map  *)
   let body =
@@ -776,6 +776,7 @@ let decompose_str_borrows (f : fun_decl) : fun_decl =
                       let st =
                         {
                           span;
+                          statement_id = StatementId.zero;
                           content =
                             Assign
                               ( { kind = PlaceLocal local_id; ty = str_ty },
@@ -802,6 +803,7 @@ let decompose_str_borrows (f : fun_decl) : fun_decl =
                       let st =
                         {
                           span;
+                          statement_id = StatementId.zero;
                           content = Assign (lv, rv);
                           comments_before = [];
                         }
@@ -819,7 +821,12 @@ let decompose_str_borrows (f : fun_decl) : fun_decl =
 
           (* Construct the sequence *)
           let assign =
-            { span; content = Assign (lv, rv); comments_before = [] }
+            {
+              span;
+              statement_id = StatementId.zero;
+              content = Assign (lv, rv);
+              comments_before = [];
+            }
           in
           (* Note that the new statements are in reverse order *)
           let statements = assign :: !new_statements in
@@ -861,6 +868,27 @@ let decompose_str_borrows (f : fun_decl) : fun_decl =
   in
   { f with body }
 
+(** Refresh the statement ids to make sure they are unique *)
+let refresh_statement_ids (f : fun_decl) : fun_decl =
+  (* Map  *)
+  let body =
+    match f.body with
+    | Some body ->
+        let _, gen_id = StatementId.fresh_stateful_generator () in
+
+        (* Visit the rvalue *)
+        let visitor =
+          object
+            inherit [_] map_statement
+            method! visit_statement_id _ _ = gen_id ()
+          end
+        in
+
+        Some { body with body = visitor#visit_block () body.body }
+    | None -> None
+  in
+  { f with body }
+
 let apply_passes (crate : crate) : crate =
   (* Passes that apply to the whole crate *)
   let crate = update_array_default crate in
@@ -871,6 +899,7 @@ let apply_passes (crate : crate) : crate =
       remove_shallow_borrows_storage_live_dead crate;
       decompose_str_borrows;
       unify_drops;
+      refresh_statement_ids;
     ]
   in
   (* Attempt to apply a pass: if it fails we replace the body by [None] *)
