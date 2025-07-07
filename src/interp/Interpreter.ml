@@ -360,7 +360,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
       sanity_check __FILE__ __LINE__ (region_can_end back_id) span;
       let ctx =
         create_push_abstractions_from_abs_region_groups
-          (fun rg_id -> SynthRet rg_id)
+          (fun rg_id -> SynthOutput rg_id)
           ret_inst_sg.abs_regions_hierarchy region_can_end compute_abs_avalues
           ctx
       in

@@ -342,7 +342,8 @@ module Values = struct
         ^ ")"
     | SynthInput rg_id ->
         "SynthInput(rg_id:" ^ RegionGroupId.to_string rg_id ^ ")"
-    | SynthRet rg_id -> "SynthRet(rg_id:" ^ RegionGroupId.to_string rg_id ^ ")"
+    | SynthOutput rg_id ->
+        "SynthOutput(rg_id:" ^ RegionGroupId.to_string rg_id ^ ")"
     | Loop (lp_id, rg_id, abs_kind) ->
         "Loop(loop_id:" ^ LoopId.to_string lp_id ^ ", rg_id:"
         ^ option_to_string RegionGroupId.to_string rg_id

@@ -3346,7 +3346,8 @@ and translate_end_abstraction (ectx : C.eval_ctx) (abs : V.abs)
       translate_end_abstraction_synth_input ectx abs e ctx rg_id
   | V.FunCall (call_id, rg_id) ->
       translate_end_abstraction_fun_call ectx abs e ctx call_id rg_id
-  | V.SynthRet rg_id -> translate_end_abstraction_synth_ret ectx abs e ctx rg_id
+  | V.SynthOutput rg_id ->
+      translate_end_abstraction_synth_ret ectx abs e ctx rg_id
   | V.Loop (loop_id, rg_id, abs_kind) ->
       translate_end_abstraction_loop ectx abs e ctx loop_id rg_id abs_kind
   | V.Identity | V.CopySymbolicValue ->

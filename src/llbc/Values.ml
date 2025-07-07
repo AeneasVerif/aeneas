@@ -766,7 +766,7 @@ type abs_kind =
           We introduce one abstraction per (group of) region(s) in the function
           signature, the region group id identifies this group. Similarly to the
           [FunCall] case, this is not used by the symbolic execution. *)
-  | SynthRet of RegionGroupId.id
+  | SynthOutput of RegionGroupId.id
       (** The abstraction "absorbed" the value returned by the function we are
           currently synthesizing
 
