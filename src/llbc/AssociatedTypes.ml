@@ -3,8 +3,8 @@
 
     When normalizing a type, we simplify the references to the trait associated
     types, and choose a representative when there are equalities between types
-    enforced by local clauses (i.e., clauses of the shape [where Trait1::T = Trait2::U]).
- *)
+    enforced by local clauses (i.e., clauses of the shape
+    [where Trait1::T = Trait2::U]). *)
 
 open Types
 open TypesUtils
@@ -102,9 +102,8 @@ let rec trait_instance_id_is_local_clause (id : trait_instance_id) : bool =
   | ParentClause (id, _, _) -> trait_instance_id_is_local_clause id
   | TraitImpl _ | BuiltinOrAuto _ | UnknownTrait _ | Dyn _ -> false
 
-(** About the conversion functions: for now we need them (TODO: merge ety, rty, etc.),
-    but they should be applied to types without regions.
- *)
+(** About the conversion functions: for now we need them (TODO: merge ety, rty,
+    etc.), but they should be applied to types without regions. *)
 type norm_ctx = {
   span : Meta.span option;
   norm_trait_types : ty TraitTypeRefMap.t;
@@ -191,12 +190,11 @@ let norm_ctx_lookup_trait_impl_parent_clause (ctx : norm_ctx)
 
 (** Check that it is ok for a trait instance id not to be normalizable.
 
-    We use this in sanity checks. If we can't normalize a trait instance id
-    (and in particular one of its associated types) there are two possibilities:
+    We use this in sanity checks. If we can't normalize a trait instance id (and
+    in particular one of its associated types) there are two possibilities:
     - either it is a local clause
-    - or it is a builtin trait (in particular, [core::marker::DiscriminantKind] can
-      never be reduced)
-*)
+    - or it is a builtin trait (in particular, [core::marker::DiscriminantKind]
+      can never be reduced) *)
 let check_non_normalizable_trait_instance_id (trait_id : trait_instance_id) :
     bool =
   trait_instance_id_is_local_clause trait_id
@@ -205,12 +203,11 @@ let check_non_normalizable_trait_instance_id (trait_id : trait_instance_id) :
   | BuiltinOrAuto _ -> true
   | _ -> false
 
-(** Normalize a type by simplifying the references to trait associated types
-    and choosing a representative when there are equalities between types
-    enforced by local clauses (i.e., `where Trait1::T = Trait2::U`.
+(** Normalize a type by simplifying the references to trait associated types and
+    choosing a representative when there are equalities between types enforced
+    by local clauses (i.e., `where Trait1::T = Trait2::U`.
 
-    See the comments for {!norm_ctx_normalize_trait_instance_id}.
-  *)
+    See the comments for {!norm_ctx_normalize_trait_instance_id}. *)
 let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
   log#ltrace (lazy ("norm_ctx_normalize_ty: " ^ ty_to_string ctx ty));
   match ty with
@@ -300,8 +297,7 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
     We need this in particular to simplify the trait instance ids after we
     performed a substitution.
 
-    Example:
-    ========
+    Example: ========
     {[
       trait Trait {
         type S
@@ -323,20 +319,19 @@ let rec norm_ctx_normalize_ty (ctx : norm_ctx) (ty : ty) : ty =
     Several remarks:
     - as we do not allow higher-order types (yet) then local clauses (and
       sub-clauses) can't have generic arguments
-    - the [TraitRef] case only happens because of substitution, the role of
-      the normalization is in particular to eliminate it. Inside a [TraitRef]
-      there is necessarily:
-      - an id referencing a local (sub-)clause, that is an id using the variants
-        [Self], [Clause], and [ParentClause] exclusively. We can't
-        simplify those cases: all we can do is remove the [TraitRef] wrapper
-        by leveraging the fact that the generic arguments must be empty.
-      - a [TraitImpl]. Note that the [TraitImpl] is necessarily just a [TraitImpl],
-        it can't be for instance a [ParentClause(TraitImpl ...)] because the
-        trait resolution would then directly reference the implementation
-        designated by [ParentClause(TraitImpl ...)] (and same for the other cases).
-        In this case we can lookup the trait implementation and recursively project
-        over it.
- *)
+    - the [TraitRef] case only happens because of substitution, the role of the
+      normalization is in particular to eliminate it. Inside a [TraitRef] there
+      is necessarily:
+    - an id referencing a local (sub-)clause, that is an id using the variants
+      [Self], [Clause], and [ParentClause] exclusively. We can't simplify those
+      cases: all we can do is remove the [TraitRef] wrapper by leveraging the
+      fact that the generic arguments must be empty.
+    - a [TraitImpl]. Note that the [TraitImpl] is necessarily just a
+      [TraitImpl], it can't be for instance a [ParentClause(TraitImpl ...)]
+      because the trait resolution would then directly reference the
+      implementation designated by [ParentClause(TraitImpl ...)] (and same for
+      the other cases). In this case we can lookup the trait implementation and
+      recursively project over it. *)
 and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
     (id : trait_instance_id) : trait_instance_id =
   match id with
@@ -415,9 +410,8 @@ and norm_ctx_normalize_trait_ref (ctx : norm_ctx) (trait_ref : trait_ref) :
   { trait_id; trait_decl_ref }
 
 and norm_ctx_normalize_region_binder :
-      'a.
-      (norm_ctx -> 'a -> 'a) -> norm_ctx -> 'a region_binder -> 'a region_binder
-    =
+    'a.
+    (norm_ctx -> 'a -> 'a) -> norm_ctx -> 'a region_binder -> 'a region_binder =
  fun norm_value ctx rb ->
   let { binder_regions; binder_value } = rb in
   let binder_value = norm_value ctx binder_value in
@@ -459,7 +453,8 @@ let ctx_normalize_trait_type_constraint_region_binder (span : Meta.span option)
   norm_ctx_normalize_region_binder norm_ctx_normalize_trait_type_constraint
     (mk_norm_ctx span ctx) ttc
 
-(** Same as [type_decl_get_instantiated_variants_fields_types] but normalizes the types *)
+(** Same as [type_decl_get_instantiated_variants_fields_types] but normalizes
+    the types *)
 let type_decl_get_inst_norm_variants_fields_rtypes (span : Meta.span)
     (ctx : eval_ctx) (def : type_decl) (generics : generic_args) :
     (VariantId.id option * ty list) list =
@@ -499,7 +494,8 @@ let type_decl_get_inst_norm_field_rtypes (span : Meta.span) (ctx : eval_ctx)
   in
   List.map (ctx_normalize_ty (Some span) ctx) types
 
-(** Same as [ctx_adt_value_get_instantiated_field_rtypes] but normalizes the types *)
+(** Same as [ctx_adt_value_get_instantiated_field_rtypes] but normalizes the
+    types *)
 let ctx_adt_get_inst_norm_field_rtypes (span : Meta.span) (ctx : eval_ctx)
     (id : type_id) (variant_id : variant_id option) (generics : generic_args) :
     ty list =
@@ -508,8 +504,8 @@ let ctx_adt_get_inst_norm_field_rtypes (span : Meta.span) (ctx : eval_ctx)
   in
   List.map (ctx_normalize_ty (Some span) ctx) types
 
-(** Same as [ctx_adt_value_get_instantiated_field_types] but normalizes the types
-    and erases the regions. *)
+(** Same as [ctx_adt_value_get_instantiated_field_types] but normalizes the
+    types and erases the regions. *)
 let type_decl_get_inst_norm_field_etypes (span : Meta.span) (ctx : eval_ctx)
     (def : type_decl) (opt_variant_id : VariantId.id option)
     (generics : generic_args) : ty list =

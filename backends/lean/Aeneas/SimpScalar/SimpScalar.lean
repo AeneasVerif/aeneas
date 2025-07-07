@@ -190,7 +190,7 @@ def simpScalarTac (config : ScalarTac.CondSimpTacConfig)
       addSimpThms := args.addSimpThms,
       hypsToUse := args.hypsToUse,
     }
-  ScalarTac.condSimpTac "simp_scalar" config
+  ScalarTac.condSimpTac config
     {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true}
     hypsArgs args addSimpThms false loc
 

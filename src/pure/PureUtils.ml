@@ -221,10 +221,10 @@ let make_subst_from_generics (params : generic_params) (args : generic_args) :
   make_subst_from_generics_for_trait params
     (UnknownTrait "make_subst_from_generics") args
 
-(** Retrieve the list of fields for the given variant of a {!type:Aeneas.Pure.type_decl}.
+(** Retrieve the list of fields for the given variant of a
+    {!type:Aeneas.Pure.type_decl}.
 
-    Raises [Invalid_argument] if the arguments are incorrect.
- *)
+    Raises [Invalid_argument] if the arguments are incorrect. *)
 let type_decl_get_fields (def : type_decl)
     (opt_variant_id : VariantId.id option) : field list =
   match (def.kind, opt_variant_id) with
@@ -256,12 +256,11 @@ let fun_sig_substitute (subst : subst) (sg : fun_sig) : inst_fun_sig =
   { inputs; output }
 
 (** We use this to check whether we need to add parentheses around expressions.
-    We only look for outer monadic let-bindings.
-    This is used when printing the branches of [if ... then ... else ...].
+    We only look for outer monadic let-bindings. This is used when printing the
+    branches of [if ... then ... else ...].
 
-    Rem.: this function will *fail* if there are {!Pure.Loop}
-    nodes (you should call it on an expression where those nodes have been eliminated).
- *)
+    Rem.: this function will *fail* if there are {!Pure.Loop} nodes (you should
+    call it on an expression where those nodes have been eliminated). *)
 let rec let_group_requires_parentheses (span : Meta.span) (e : texpression) :
     bool =
   match e.e with
@@ -442,7 +441,7 @@ let remove_meta (e : texpression) : texpression =
 
 let mk_arrow (ty0 : ty) (ty1 : ty) : ty = TArrow (ty0, ty1)
 
-(** Construct a type as a list of arrows: ty1 -> ... tyn  *)
+(** Construct a type as a list of arrows: ty1 -> ... tyn *)
 let mk_arrows (inputs : ty list) (output : ty) =
   let rec aux (tys : ty list) : ty =
     match tys with
@@ -460,9 +459,8 @@ let rec destruct_lets (e : texpression) :
       ((monadic, lv, re) :: lets, last_e)
   | _ -> ([], e)
 
-(** Destruct an expression into a list of nested lets, where there
-    is no interleaving between monadic and non-monadic lets.
- *)
+(** Destruct an expression into a list of nested lets, where there is no
+    interleaving between monadic and non-monadic lets. *)
 let destruct_lets_no_interleave (span : Meta.span) (e : texpression) :
     (bool * typed_pattern * texpression) list * texpression =
   (* Find the "kind" of the first let (monadic or non-monadic) *)
@@ -487,7 +485,7 @@ let destruct_lets_no_interleave (span : Meta.span) (e : texpression) :
 (** Destruct an [App] expression into an expression and a list of arguments.
 
     We simply destruct the expression as long as it is of the form [App (f, x)].
- *)
+*)
 let destruct_apps (e : texpression) : texpression * texpression list =
   let rec aux (args : texpression list) (e : texpression) :
       texpression * texpression list =
@@ -526,8 +524,8 @@ let mk_apps (span : Meta.span) (app : texpression) (args : texpression list) :
     texpression =
   List.fold_left (fun app arg -> mk_app span app arg) app args
 
-(** Destruct an expression into a qualif identifier and a list of arguments,
- *  if possible *)
+(** Destruct an expression into a qualif identifier and a list of arguments, *
+    if possible *)
 let opt_destruct_qualif_app (e : texpression) :
     (qualif * texpression list) option =
   let app, args = destruct_apps e in
@@ -626,8 +624,7 @@ let mk_switch (span : Meta.span) (scrut : texpression) (sb : switch_body) :
 
 (** Make a "simplified" tuple type from a list of types:
     - if there is exactly one type, just return it
-    - if there is > one type: wrap them in a tuple
- *)
+    - if there is > one type: wrap them in a tuple *)
 let mk_simpl_tuple_ty (tys : ty list) : ty =
   match tys with
   | [ ty ] -> ty
@@ -685,8 +682,7 @@ let mk_opt_mplace_texpression (mp : mplace option) (e : texpression) :
 
 (** Make a "simplified" tuple value from a list of values:
     - if there is exactly one value, just return it
-    - if there is > one value: wrap them in a tuple
- *)
+    - if there is > one value: wrap them in a tuple *)
 let mk_simpl_tuple_pattern (vl : typed_pattern list) : typed_pattern =
   match vl with
   | [ v ] -> v
@@ -914,8 +910,8 @@ let trait_impl_is_empty (trait_impl : trait_impl) : bool =
   in
   parent_trait_refs = [] && consts = [] && types = [] && methods = []
 
-(** Return true if a type declaration should be extracted as a tuple, because
-    it is a non-recursive structure with unnamed fields. *)
+(** Return true if a type declaration should be extracted as a tuple, because it
+    is a non-recursive structure with unnamed fields. *)
 let type_decl_from_type_id_is_tuple_struct (ctx : TypesAnalysis.type_infos)
     (id : type_id) : bool =
   match id with
@@ -1032,8 +1028,8 @@ let append_generic_args (g0 : generic_args) (g1 : generic_args) : generic_args =
 
 (** Ajust the explicit information coming from a signature.
 
-    If the function called is a trait method, we need to remove the prefix
-    which accounts for the generics of the impl. *)
+    If the function called is a trait method, we need to remove the prefix which
+    accounts for the generics of the impl. *)
 let adjust_explicit_info (explicit : explicit_info) (is_trait_method : bool)
     (generics : generic_args) : explicit_info =
   if is_trait_method then

@@ -1,6 +1,5 @@
 (** This files contains passes we apply on the AST *before* calling the
-    (concrete/symbolic) interpreter on it
- *)
+    (concrete/symbolic) interpreter on it *)
 
 open Types
 open Expressions
@@ -45,14 +44,13 @@ let append_to_switch (switch : switch) (new_stmts : statement list) : switch =
     implementation for [u8; 32] and a different one for [u8; 64].
 
     For the purpose of the translation, we prefer using a single implementation
-    which is generic in the length of the array. This pass thus replaces all
-    the implementations of [Default<[T; N]>] with a single implementation.
+    which is generic in the length of the array. This pass thus replaces all the
+    implementations of [Default<[T; N]>] with a single implementation.
 
     Concretely, we spot all the instances of [Default<[T; N]>] where [N] is a
     concrete array. We update the first such implementation so that it becomes
     generic in the length of the array, and replace all the other ones with this
-    implementation. We also remove the useless implementations.
- *)
+    implementation. We also remove the useless implementations. *)
 let update_array_default (crate : crate) : crate =
   let pctx = Print.Crate.crate_to_fmt_env crate in
   let impl_pat = NameMatcher.parse_pattern "core::default::Default" in
@@ -288,9 +286,9 @@ let update_array_default (crate : crate) : crate =
       in
       visitor#visit_crate None crate
 
-(** This pass slightly restructures the control-flow to remove the need to
-    merge branches during the symbolic execution in some quite common cases
-    where doing a merge is actually not necessary and leads to an ugly translation.
+(** This pass slightly restructures the control-flow to remove the need to merge
+    branches during the symbolic execution in some quite common cases where
+    doing a merge is actually not necessary and leads to an ugly translation.
 
     TODO: this is useless
 
@@ -316,17 +314,16 @@ let update_array_default (crate : crate) : crate =
       }
     ]}
 
-    This way, the translated body doesn't have an intermediate assignment,
-    for the `if ... then ... else ...` expression (together with a backward
+    This way, the translated body doesn't have an intermediate assignment, for
+    the `if ... then ... else ...` expression (together with a backward
     function).
 
-    More precisly, we move (and duplicate) a statement happening after a branching
-    inside the branches if:
+    More precisly, we move (and duplicate) a statement happening after a
+    branching inside the branches if:
     - this statement ends with [return] or [panic]
     - this statement is only made of a sequence of nops, assignments (with some
       restrictions on the rvalue), fake reads, drops (usually, returns will be
-      followed by such statements)
- *)
+      followed by such statements) *)
 let remove_useless_cf_merges (crate : crate) (f : fun_decl) : fun_decl =
   let f0 = f in
   (* Return [true] if the statement can be moved inside the branches of a switch.
@@ -334,7 +331,7 @@ let remove_useless_cf_merges (crate : crate) (f : fun_decl) : fun_decl =
    * [must_end_with_exit]: we need this boolean because the inner statements
    * (inside the encountered sequences) don't need to end with [return] or [panic],
    * but all the paths inside the whole statement have to.
-   * *)
+   *)
   let rec can_be_moved_aux (must_end_with_exit : bool) (st : statement) : bool =
     match st.content with
     | SetDiscriminant _
@@ -394,15 +391,15 @@ let remove_useless_cf_merges (crate : crate) (f : fun_decl) : fun_decl =
   f
 
 (** This pass restructures the control-flow by inserting all the statements
-    which occur after loops *inside* the loops, thus removing the need to
-    have breaks (we later check that we removed all the breaks).
+    which occur after loops *inside* the loops, thus removing the need to have
+    breaks (we later check that we removed all the breaks).
 
-    This is needed because of the way we perform the symbolic execution
-    on the loops for now.
+    This is needed because of the way we perform the symbolic execution on the
+    loops for now.
 
-    Rem.: we check that there are no nested loops (all the breaks must break
-    to the first outer loop, and the statements we insert inside the loops
-    mustn't contain breaks themselves).
+    Rem.: we check that there are no nested loops (all the breaks must break to
+    the first outer loop, and the statements we insert inside the loops mustn't
+    contain breaks themselves).
 
     For instance, it performs the following transformation:
     {[
@@ -434,8 +431,8 @@ let remove_useless_cf_merges (crate : crate) (f : fun_decl) : fun_decl =
       };
     ]}
 
-    We also insert the statements occurring after branchings (matches or
-    if then else) inside the branches. For instance:
+    We also insert the statements occurring after branchings (matches or if then
+    else) inside the branches. For instance:
     {[
       if b {
         s0;
@@ -458,8 +455,8 @@ let remove_useless_cf_merges (crate : crate) (f : fun_decl) : fun_decl =
     ]}
 
     This is necessary because loops might appear inside branchings: if we don't
-    do this some paths inside the loop might not end with a break/continue/return.Aeneas
-  *)
+    do this some paths inside the loop might not end with a
+    break/continue/return.Aeneas *)
 let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
   let f0 = f in
 
@@ -572,8 +569,7 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
 
     We discard these in Aeneas. This does allow more code to pass the
     borrow-checker, but the UB is still correctly caught by the
-    evaluator/translation hence the translation is still sound.
- *)
+    evaluator/translation hence the translation is still sound. *)
 let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
     fun_decl =
   let f0 = f in
@@ -652,9 +648,9 @@ let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
   f
 
 (** `StorageDead`, `Deinit` and `Drop` have the same semantics as far as Aeneas
-    is concerned: they store bottom in the place. This maps all three to `Drop`
-    to simplify later work.
- *)
+    is concerned: they store bottom in the place. This maps all three to
+    `Deinit` to simplify later work. Note: `Drop` actually also calls code to
+    deallocate the value; we decide to ignore this for now. *)
 let unify_drops (f : fun_decl) : fun_decl =
   let lookup_local (locals : locals) (var_id : local_id) : local =
     List.nth locals.locals (LocalId.to_int var_id)
@@ -663,12 +659,12 @@ let unify_drops (f : fun_decl) : fun_decl =
   let unify_visitor =
     object
       inherit [_] map_statement
-      method! visit_Deinit _ p = Drop p
+      method! visit_Drop _ p _ = Deinit p
 
       method! visit_StorageDead locals var_id =
         let ty = (lookup_local locals var_id).var_ty in
         let p = { kind = PlaceLocal var_id; ty } in
-        Drop p
+        Deinit p
     end
   in
 
@@ -718,14 +714,14 @@ let filter_type_aliases (crate : crate) : crate =
         crate.declarations;
   }
 
-(** Whenever we write a string literal in Rust, rustc actually
-    introduces a constant of type [&str].
-    Generally speaking, because [str] is unsized, it doesn't
-    make sense to manipulate values of type [str] directly.
-    But in the context of Aeneas, it is reasonable to decompose
-    those literals into: a string stored in a local variable,
-    then a borrow of this variable.
- *)
+(** Whenever we write a string literal in Rust, rustc actually introduces a
+    constant of type [&str]. Generally speaking, because [str] is unsized, it
+    doesn't make sense to manipulate values of type [str] directly. But in the
+    context of Aeneas, it is reasonable to decompose those literals into: a
+    string stored in a local variable, then a borrow of this variable.
+
+    Remark: the new statements all have the id 0: this pass requires to refresh
+    the ids later. *)
 let decompose_str_borrows (f : fun_decl) : fun_decl =
   (* Map  *)
   let body =
@@ -774,6 +770,7 @@ let decompose_str_borrows (f : fun_decl) : fun_decl =
                       let st =
                         {
                           span;
+                          statement_id = StatementId.zero;
                           content =
                             Assign
                               ( { kind = PlaceLocal local_id; ty = str_ty },
@@ -800,6 +797,7 @@ let decompose_str_borrows (f : fun_decl) : fun_decl =
                       let st =
                         {
                           span;
+                          statement_id = StatementId.zero;
                           content = Assign (lv, rv);
                           comments_before = [];
                         }
@@ -817,7 +815,12 @@ let decompose_str_borrows (f : fun_decl) : fun_decl =
 
           (* Construct the sequence *)
           let assign =
-            { span; content = Assign (lv, rv); comments_before = [] }
+            {
+              span;
+              statement_id = StatementId.zero;
+              content = Assign (lv, rv);
+              comments_before = [];
+            }
           in
           (* Note that the new statements are in reverse order *)
           let statements = assign :: !new_statements in
@@ -859,6 +862,27 @@ let decompose_str_borrows (f : fun_decl) : fun_decl =
   in
   { f with body }
 
+(** Refresh the statement ids to make sure they are unique *)
+let refresh_statement_ids (f : fun_decl) : fun_decl =
+  (* Map  *)
+  let body =
+    match f.body with
+    | Some body ->
+        let _, gen_id = StatementId.fresh_stateful_generator () in
+
+        (* Visit the rvalue *)
+        let visitor =
+          object
+            inherit [_] map_statement
+            method! visit_statement_id _ _ = gen_id ()
+          end
+        in
+
+        Some { body with body = visitor#visit_block () body.body }
+    | None -> None
+  in
+  { f with body }
+
 let apply_passes (crate : crate) : crate =
   (* Passes that apply to the whole crate *)
   let crate = update_array_default crate in
@@ -869,6 +893,7 @@ let apply_passes (crate : crate) : crate =
       remove_shallow_borrows_storage_live_dead crate;
       decompose_str_borrows;
       unify_drops;
+      refresh_statement_ids;
     ]
   in
   (* Attempt to apply a pass: if it fails we replace the body by [None] *)

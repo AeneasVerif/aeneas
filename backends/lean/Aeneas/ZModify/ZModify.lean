@@ -68,7 +68,7 @@ def zmodifyTac (config : Config)
       hypsToUse := args.hypsToUse,
     }
   let config := { nonLin := config.nonLin, saturationPasses := config.saturationPasses }
-  ScalarTac.condSimpTac "zmodify" config {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true} hypsArgs args addSimpThms false loc
+  ScalarTac.condSimpTac config {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true} hypsArgs args addSimpThms false loc
 
 syntax (name := zmodify) "zmodify" Parser.Tactic.optConfig ("to" term)? ("[" (term<|>"*"),* "]")? (location)? : tactic
 
@@ -150,5 +150,12 @@ theorem Nat.lt_imp_lt (a b : ℕ) : a < b → a < b := by simp +contextual
 example (x y d : ℕ) (h0 : d > 0) (h1 : x <= y) (h2 : x % d <= y % d) (h3 : y - x < d) :
   y % d - x % d = y - x := by
   zmodify to d
+
+/-- Checking that unfolding of local declarations works properly -/
+example (x y : U32) (hx : x.val < 8) (hy : y.val < 8) :
+  let z := x.val + y.val
+  z < 16 := by
+  intro z
+  zmodify [z]
 
 end Aeneas.ZModify

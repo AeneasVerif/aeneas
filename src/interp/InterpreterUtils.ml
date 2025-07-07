@@ -43,7 +43,7 @@ let trait_decl_ref_to_string = Print.EvalCtx.trait_decl_ref_to_string
 
 let fn_ptr_to_string (ctx : eval_ctx) (fn_ptr : fn_ptr) : string =
   let env = Print.Contexts.eval_ctx_to_fmt_env ctx in
-  Print.Expressions.fn_ptr_to_string env fn_ptr
+  Print.Types.fn_ptr_to_string env fn_ptr
 
 let trait_decl_ref_region_binder_to_string =
   Print.EvalCtx.trait_decl_ref_region_binder_to_string
@@ -120,11 +120,10 @@ let mk_fresh_symbolic_typed_value_from_no_regions_ty (span : Meta.span)
 
 (** Create a loans projector value from a symbolic value.
 
-    Checks if the projector will actually project some regions. If not,
-    returns {!Values.AIgnored} ([_]).
+    Checks if the projector will actually project some regions. If not, returns
+    {!Values.AIgnored} ([_]).
 
-    TODO: update to handle 'static
- *)
+    TODO: update to handle 'static *)
 let mk_aproj_loans_value_from_symbolic_value (proj_regions : RegionId.Set.t)
     (svalue : symbolic_value) (proj_ty : ty) : typed_avalue =
   if ty_has_regions_in_set proj_regions proj_ty then
@@ -172,12 +171,11 @@ let remove_borrow_from_asb (span : Meta.span) (bid : BorrowId.id)
   sanity_check __FILE__ __LINE__ (!removed = 1) span;
   asb
 
-(** We sometimes need to return a value whose type may vary depending on
-    whether we find it in a "concrete" value or an abstraction (ex.: loan
-    contents when we perform environment lookups by using borrow ids)
+(** We sometimes need to return a value whose type may vary depending on whether
+    we find it in a "concrete" value or an abstraction (ex.: loan contents when
+    we perform environment lookups by using borrow ids)
 
-    TODO: change the name "abstract"
- *)
+    TODO: change the name "abstract" *)
 type ('a, 'b) concrete_or_abs = Concrete of 'a | Abstract of 'b
 [@@deriving show]
 
@@ -254,10 +252,9 @@ let symbolic_value_id_in_ctx (sv_id : SymbolicValueId.id) (ctx : eval_ctx) :
 
 (** Check that a symbolic value doesn't contain ended regions.
 
-    Note that we don't check that the set of ended regions is empty: we
-    check that the set of ended regions doesn't intersect the set of
-    regions used in the type (this is more general).
-*)
+    Note that we don't check that the set of ended regions is empty: we check
+    that the set of ended regions doesn't intersect the set of regions used in
+    the type (this is more general). *)
 let symbolic_value_has_ended_regions (ended_regions : RegionId.Set.t)
     (s : symbolic_value) : bool =
   let regions = ty_regions s.sv_ty in
@@ -280,9 +277,8 @@ let bottom_in_value_visitor (ended_regions : RegionId.Set.t) =
 
 (** Check if a {!type:Values.value} contains [⊥].
 
-    Note that this function is very general: it also checks wether
-    symbolic values contain already ended regions.
- *)
+    Note that this function is very general: it also checks wether symbolic
+    values contain already ended regions. *)
 let bottom_in_value (ended_regions : RegionId.Set.t) (v : typed_value) : bool =
   let obj = bottom_in_value_visitor ended_regions in
   (* We use exceptions *)
@@ -318,9 +314,8 @@ let value_has_ret_symbolic_value_with_borrow_under_mut span (ctx : eval_ctx)
     false
   with Found -> true
 
-(** Return the place used in an rvalue, if that makes sense.
-    This is used to compute span-data, to find pretty names.
- *)
+(** Return the place used in an rvalue, if that makes sense. This is used to
+    compute span-data, to find pretty names. *)
 let rvalue_get_place (rv : rvalue) : place option =
   match rv with
   | Use (Copy p | Move p) -> Some p
@@ -369,8 +364,7 @@ type ids_sets = {
 
 (** See {!compute_typed_value_ids}, {!compute_context_ids}, etc.
 
-    TODO: there misses information.
- *)
+    TODO: there misses information. *)
 type ids_to_values = { sids_to_values : symbolic_value SymbolicValueId.Map.t }
 
 let compute_ids () =
@@ -479,9 +473,8 @@ let compute_ctx_ids (ctx : eval_ctx) : ids_sets * ids_to_values =
 
 let empty_ids_set = fst (compute_ctxs_ids [])
 
-(** **WARNING**: this function doesn't compute the normalized types
-    (for the trait type aliases). This should be computed afterwards.
- *)
+(** **WARNING**: this function doesn't compute the normalized types (for the
+    trait type aliases). This should be computed afterwards. *)
 let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
     (region_groups : RegionGroupId.id list) (type_vars : type_var list)
     (const_generic_vars : const_generic_var list) : eval_ctx =
@@ -510,8 +503,7 @@ let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
 
 (** Instantiate a function signature, introducing **fresh** abstraction ids and
     region ids. This is mostly used in preparation of function calls (when
-    evaluating in symbolic mode).
- *)
+    evaluating in symbolic mode). *)
 let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
     (generics : generic_args) (tr_self : trait_instance_id) (sg : fun_sig)
     (regions_hierarchy : region_var_groups) : inst_fun_sig =
@@ -562,19 +554,17 @@ let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
   (* Return *)
   inst_sig
 
-(** Compute the regions hierarchy of an instantiated function call -
-    i.e., a function call instantiated with type parameters which might
-    contain borrows.
-    We do so by computing a "fake" function signature and by computing the regions
-    hierarchy for this signature. We return both the fake signature and the
-    regions hierarchy.
+(** Compute the regions hierarchy of an instantiated function call - i.e., a
+    function call instantiated with type parameters which might contain borrows.
+    We do so by computing a "fake" function signature and by computing the
+    regions hierarchy for this signature. We return both the fake signature and
+    the regions hierarchy.
 
     - [type_vars]: the type variables currently in the context
     - [const_generic_vars]: the const generics currently in the context
     - [generic_args]: the generic arguments given to the function
     - [sg]: the original, uninstantiated signature (we need to retrieve, for
-      instance, the region outlives constraints)
-  *)
+      instance, the region outlives constraints) *)
 let compute_regions_hierarchy_for_fun_call (span : Meta.span option)
     (crate : crate) (fun_name : string) (type_vars : type_var list)
     (const_generic_vars : const_generic_var list) (generic_args : generic_args)

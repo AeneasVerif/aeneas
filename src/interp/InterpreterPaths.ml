@@ -16,20 +16,19 @@ let log = Logging.paths_log
 
 (** Paths *)
 
-(** When we fail reading from or writing to a path, it might be because we
-    need to update the environment by ending borrows, expanding symbolic
-    values, etc. The following type is used to convey this information.
-    
-    TODO: compare with borrow_lres?
-*)
+(** When we fail reading from or writing to a path, it might be because we need
+    to update the environment by ending borrows, expanding symbolic values, etc.
+    The following type is used to convey this information.
+
+    TODO: compare with borrow_lres? *)
 type path_fail_kind =
   | FailSharedLoan of BorrowId.Set.t
       (** Failure because we couldn't go inside a shared loan *)
   | FailMutLoan of BorrowId.id
       (** Failure because we couldn't go inside a mutable loan *)
   | FailReservedMutBorrow of BorrowId.id
-      (** Failure because we couldn't go inside a reserved mutable borrow
-          (which should get activated) *)
+      (** Failure because we couldn't go inside a reserved mutable borrow (which
+          should get activated) *)
   | FailSymbolic of place * symbolic_value
       (** Failure because we need to enter a symbolic value (and thus need to
           expand it).
@@ -41,19 +40,17 @@ type path_fail_kind =
           values if they are left values.
 
           We store the place at which the bottom value appears (we need it to
-          properly update the Bottom if we need to expand it, for instance
-          if we want to expand a bottom pair to a pair of bottoms), together
-          with the projection element that could not be evaluated.
-       *)
+          properly update the Bottom if we need to expand it, for instance if we
+          want to expand a bottom pair to a pair of bottoms), together with the
+          projection element that could not be evaluated. *)
   | FailBorrow of borrow_content
       (** We got stuck because we couldn't enter a borrow *)
 [@@deriving show]
 
 (** Result of evaluating a path (reading from a path/writing to a path)
-    
+
     Note that when we fail, we return information used to update the
-    environment, as well as the 
-*)
+    environment, as well as the *)
 type 'a path_access_result = ('a, path_fail_kind) result
 (** The result of reading from/writing to a place *)
 
@@ -230,9 +227,8 @@ let rec project_value (span : Meta.span) (access : projection_access)
 
 (** Generic function to access (read/write) the value inside a place.
 
-    We return the read value and a backward function that propagates any
-    changes to the projected value back to the original local.
- *)
+    We return the read value and a backward function that propagates any changes
+    to the projected value back to the original local. *)
 let rec access_place (span : Meta.span) (access : projection_access)
     (ek : exploration_kind) (ctx : eval_ctx) (p : place) :
     (typed_value * (eval_ctx * typed_value -> eval_ctx * typed_value))
@@ -271,9 +267,8 @@ let rec access_place (span : Meta.span) (access : projection_access)
 (** Generic function to access (read/write) the value at a given place.
 
     We return the value we read at the place and the (eventually) updated
-    environment, if we managed to access the place, or the precise reason
-    why we failed.
- *)
+    environment, if we managed to access the place, or the precise reason why we
+    failed. *)
 let access_update_place (span : Meta.span) (access : projection_access)
     (* Function to (eventually) update the value we find *)
       (update : typed_value -> typed_value) (p : place) (ctx : eval_ctx) :
@@ -320,9 +315,8 @@ let access_kind_to_projection_access (access : access_kind) : projection_access
 
 (** Attempt to read the value at a given place.
 
-    Note that we only access the value at the place, and do not check that
-    the value is "well-formed" (for instance that it doesn't contain bottoms).
- *)
+    Note that we only access the value at the place, and do not check that the
+    value is "well-formed" (for instance that it doesn't contain bottoms). *)
 let try_read_place (span : Meta.span) (access : access_kind) (p : place)
     (ctx : eval_ctx) : typed_value path_access_result =
   let access = access_kind_to_projection_access access in
@@ -420,14 +414,13 @@ let compute_expanded_bottom_tuple_value (span : Meta.span)
 
     The consequence is that we may sometimes need to write fields to values
     which are currently {!Bottom}. When doing this, we first expand the value
-    to, say, [Cons Bottom Bottom] (note that field projection contains information
-    about which variant we should project to, which is why we *can* set the
-    variant index when writing one of its fields).
+    to, say, [Cons Bottom Bottom] (note that field projection contains
+    information about which variant we should project to, which is why we *can*
+    set the variant index when writing one of its fields).
 
     Parameters:
     - [p]: the place where the {!Bottom} value appears
-    - [pe]: the projection element we wish to evaluate
-*)
+    - [pe]: the projection element we wish to evaluate *)
 let expand_bottom_value_from_projection (span : Meta.span)
     (access : access_kind) (p : place) (pe : projection_elem) (ctx : eval_ctx) :
     eval_ctx =
@@ -541,7 +534,7 @@ let rec end_loans_at_place (config : config) (span : Meta.span)
    * loans.
    * We use exceptions to make it handy: whenever we update the
    * context, we raise an exception wrapping the updated context.
-   * *)
+   *)
   let obj =
     object
       inherit [_] iter_typed_value as super

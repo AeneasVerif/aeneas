@@ -577,7 +577,7 @@ theorem BitVec.toInt_neg_of_pos_eq_neg
     rw [h2n]
     have : (2^n : Nat) - (x.toNat : Int) = -(x.toNat : Int) + (2^n : Nat) := by ring_nf
     rw [this]
-    simp only [Int.bmod_add_cancel]
+    simp only [Int.add_bmod_right]
   rw [this]; clear this
 
   have : (-(x.toNat : Int)).bmod (2^n) = -(x.toNat) := by

@@ -1,33 +1,32 @@
 (** This module contains various utilities for the builtin functions.
 
     Note that [Box::free] is peculiar: we don't really handle it as a function,
-    because it is legal to free a box whose boxed value is [⊥] (it often
-    happens that we move a value out of a box before freeing this box).
-    Semantically speaking, we thus handle [Box::free] as a value drop and
-    not as a function call, and thus never need its signature.
-    
-    TODO: implementing the concrete evaluation functions for the
-    builtin functions is really annoying (see
-    [InterpreterStatements.eval_non_local_function_call_concrete]),
-    I think it should be possible, in most situations, to write bodies which
-    model the behavior of those functions. For instance, [Box::deref_mut]
-    should simply be:
+    because it is legal to free a box whose boxed value is [⊥] (it often happens
+    that we move a value out of a box before freeing this box). Semantically
+    speaking, we thus handle [Box::free] as a value drop and not as a function
+    call, and thus never need its signature.
+
+    TODO: implementing the concrete evaluation functions for the builtin
+    functions is really annoying (see
+    [InterpreterStatements.eval_non_local_function_call_concrete]), I think it
+    should be possible, in most situations, to write bodies which model the
+    behavior of those functions. For instance, [Box::deref_mut] should simply
+    be:
     {[
       fn deref_mut<'a, T>(x : &'a mut Box<T>) -> &'a mut T {
         &mut ( *x ) // box dereferencement is a primitive operation
       }
     ]}
-    
+
     For vectors, we could "cheat" by using the index as a field index (vectors
     would be encoded as ADTs with a variable number of fields). Of course, it
-    would require a bit of engineering, but it would probably be quite lightweight
-    in the end.
+    would require a bit of engineering, but it would probably be quite
+    lightweight in the end.
     {[
       Vec::get_mut<'a,T>(v : &'a mut Vec<T>, i : usize) -> &'a mut T {
         &mut ( ( *x ).i )
       }
-    ]}
- *)
+    ]} *)
 
 open Types
 open TypesUtils
@@ -91,16 +90,28 @@ module Sig = struct
 
   (** [fn<T>(T) -> Box<T>] *)
   let box_new_sig : fun_sig =
-    let generics = mk_generic_params [] [ type_param_0 ] [] (* <T> *) in
+    let generics =
+      mk_generic_params [] [ type_param_0 ] []
+      (* <T> *)
+    in
     let inputs = [ tvar_0 (* T *) ] in
-    let output = mk_box_ty tvar_0 (* Box<T> *) in
+    let output =
+      mk_box_ty tvar_0
+      (* Box<T> *)
+    in
     mk_sig generics inputs output
 
   (** [fn<T>(Box<T>) -> ()] *)
   let box_free_sig : fun_sig =
-    let generics = mk_generic_params [] [ type_param_0 ] [] (* <T> *) in
+    let generics =
+      mk_generic_params [] [ type_param_0 ] []
+      (* <T> *)
+    in
     let inputs = [ mk_box_ty tvar_0 (* Box<T> *) ] in
-    let output = mk_unit_ty (* () *) in
+    let output =
+      mk_unit_ty
+      (* () *)
+    in
     mk_sig generics inputs output
 
   (** Array/slice functions *)
@@ -112,11 +123,9 @@ module Sig = struct
         fn<'a, T>(&'a input_ty, index_ty) -> &'a output_ty
       ]}
 
-      Remarks:
-      The [input_ty] and [output_ty] are parameterized by a type variable id.
-      The [mut_borrow] boolean controls whether we use a shared or a mutable
-      borrow.
-   *)
+      Remarks: The [input_ty] and [output_ty] are parameterized by a type
+      variable id. The [mut_borrow] boolean controls whether we use a shared or
+      a mutable borrow. *)
   let mk_array_slice_borrow_sig (cgs : const_generic_var list)
       (input_ty : ty -> ty) (index_ty : ty option) (output_ty : ty -> ty)
       (is_mut : bool) : fun_sig =
@@ -172,9 +181,7 @@ module Sig = struct
     in
     mk_sig generics inputs output
 
-  (** Helper:
-      [fn<T>(&'a [T]) -> usize]
-   *)
+  (** Helper: [fn<T>(&'a [T]) -> usize] *)
   let slice_len_sig : fun_sig =
     let generics =
       mk_generic_params [ region_param_0 ] [ type_param_0 ] [] (* <'a, T> *)
@@ -182,7 +189,10 @@ module Sig = struct
     let inputs =
       [ mk_ref_ty rvar_0 (mk_slice_ty tvar_0) false (* &'a [T] *) ]
     in
-    let output = mk_usize_ty (* usize *) in
+    let output =
+      mk_usize_ty
+      (* usize *)
+    in
     mk_sig generics inputs output
 end
 
@@ -197,27 +207,26 @@ type builtin_fun_info = {
       (** We may want to filter some type arguments.
 
           For instance, all the `Vec` functions (and the `Vec` type itself) take
-          an `Allocator` type as argument, that we ignore.
-       *)
+          an `Allocator` type as argument, that we ignore. *)
 }
 
 let mk_builtin_fun_info (raw : raw_builtin_fun_info) :
     builtin_fun_id * builtin_fun_info =
   let fun_id, fun_sig, can_fail, keep_types = raw in
-  let name = Charon.PrintExpressions.builtin_fun_id_to_string fun_id in
+  let name = Charon.PrintTypes.builtin_fun_id_to_string fun_id in
   (fun_id, { fun_id; fun_sig; can_fail; name; keep_types })
 
 (** The list of builtin functions and all their information:
     - their signature
-    - a boolean indicating whether the function can fail or not (if true: can fail)
+    - a boolean indicating whether the function can fail or not (if true: can
+      fail)
     - their name
 
     Rk.: following what is written above, we don't include [Box::free].
 
-    Remark about the vector functions: for [Vec::len] to be correct and return
-    a [usize], we have to make sure that vectors are bounded by the max usize.
-    As a consequence, [Vec::push] is monadic.
- *)
+    Remark about the vector functions: for [Vec::len] to be correct and return a
+    [usize], we have to make sure that vectors are bounded by the max usize. As
+    a consequence, [Vec::push] is monadic. *)
 let raw_builtin_fun_infos : raw_builtin_fun_info list =
   [
     (* TODO: the names are not correct ("Box" should be an impl elem for instance)

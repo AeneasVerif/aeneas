@@ -32,3 +32,8 @@ theorem mem_range'_step_one (x start len : Nat) :
 theorem mem_std_range_step_one (x n0 n1 : Nat) :
   x ∈ [n0:n1] ↔ (n0 ≤ x ∧ x < n1) := by
   simp only [Membership.mem, Nat.mod_one, and_true]
+
+@[simp]
+theorem idRun_foldl (l : List α) (f : β → α → Id β) : l.foldlM f x = l.foldl f x := by
+  revert x
+  induction l <;> intros <;> simp only [List.foldlM_cons, bind, List.foldl_cons, List.foldlM_nil, pure, List.foldl_nil, *]

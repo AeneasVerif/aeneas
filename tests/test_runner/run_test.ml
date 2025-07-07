@@ -24,7 +24,9 @@ module Command = struct
 
     (* Run the command *)
     let out = Option.value cmd.redirect_out ~default:Unix.stdout in
-    let pid = Unix.create_process cmd.args.(0) cmd.args Unix.stdin out out in
+    let pid =
+      Unix.create_process cmd.args.(0) cmd.args Unix.stdin out Unix.stderr
+    in
     let status = Core_unix.waitpid (Core.Pid.of_int pid) in
     match status with
     | Ok () -> Success

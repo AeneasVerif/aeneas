@@ -16,11 +16,9 @@ import Aeneas.Range
 import Aeneas.ReduceFin
 import Aeneas.ReduceNat
 import Aeneas.ReduceZMod
-import Aeneas.Saturate
 import Aeneas.ScalarDecrTac
 import Aeneas.ScalarNF
 import Aeneas.ScalarTac
-import Aeneas.Simp
 import Aeneas.SimpIfs
 import Aeneas.SimpLemmas
 import Aeneas.SimpLists
@@ -29,7 +27,6 @@ import Aeneas.SimpScalar
 import Aeneas.Std
 import Aeneas.Setup
 import Aeneas.SimpBoolProp
-import Aeneas.Utils
 import Aeneas.Tests
 import Aeneas.Vector
 import Aeneas.Zify

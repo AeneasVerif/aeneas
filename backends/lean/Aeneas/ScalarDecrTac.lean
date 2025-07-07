@@ -1,7 +1,7 @@
 /- Some utilities to prove termination -/
 import Lean
 import Mathlib.Tactic.Core
-import Aeneas.Utils
+import AeneasMeta.Utils
 import Aeneas.ScalarTac
 
 namespace Aeneas

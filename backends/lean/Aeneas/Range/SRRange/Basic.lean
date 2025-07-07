@@ -1,5 +1,5 @@
 import Mathlib.Data.Nat.Basic
-import Aeneas.Utils
+import AeneasMeta.Utils
 
 namespace Aeneas
 

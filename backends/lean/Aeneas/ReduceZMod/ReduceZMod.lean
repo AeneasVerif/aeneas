@@ -1,6 +1,6 @@
 import Aeneas.ReduceZMod.Init
 import Mathlib.Algebra.Algebra.ZMod
-import Aeneas.Utils
+import AeneasMeta.Utils
 
 namespace Aeneas.ReduceZMod
 

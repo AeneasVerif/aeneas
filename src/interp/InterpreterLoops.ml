@@ -70,21 +70,19 @@ let eval_loop_concrete (span : Meta.span) (eval_loop_body : stl_cm_fun) :
 (** Auxiliary function for {!eval_loop_symbolic}.
 
     Match the context upon entering the loop with the loop fixed-point to
-    compute how to "apply" the fixed-point. Compute the correspondance from
-    the borrow ids in the current context to the loans which appear in the
-    loop context (we need this in order to know how to introduce the region
+    compute how to "apply" the fixed-point. Compute the correspondance from the
+    borrow ids in the current context to the loans which appear in the loop
+    context (we need this in order to know how to introduce the region
     abstractions of the loop).
 
     We check the fixed-point at the same time to make sure the loans and borrows
-    inside the region abstractions are properly ordered (this is necessary for the
-    synthesis).
-    Ex.: if in the fixed point we have:
+    inside the region abstractions are properly ordered (this is necessary for
+    the synthesis). Ex.: if in the fixed point we have:
     {[
       abs { MB l0, MB l1, ML l2, ML l3 }
     ]}
     we want to make sure that borrow l0 actually corresponds to loan l2, and
-    borrow l1 to loan l3.
- *)
+    borrow l1 to loan l3. *)
 let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
     (loop_id : LoopId.id) (init_ctx : eval_ctx) (fixed_ids : ids_sets)
     (fp_ctx : eval_ctx) (fp_input_svalues : SymbolicValueId.id list)
@@ -250,8 +248,7 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
 
 (** Auxiliary function for {!eval_loop_symbolic}.
 
-    Synthesize the body of the loop.
- *)
+    Synthesize the body of the loop. *)
 let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
     (eval_loop_body : stl_cm_fun) (loop_id : LoopId.id) (fixed_ids : ids_sets)
     (fp_ctx : eval_ctx) (fp_input_svalues : SymbolicValueId.id list)

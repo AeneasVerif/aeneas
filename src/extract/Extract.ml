@@ -20,7 +20,7 @@ let texpression_to_string (ctx : extraction_ctx) =
   PrintPure.texpression_to_string (extraction_ctx_to_fmt_env ctx) false "" "  "
 
 (** Compute the names for all the pure functions generated from a rust function.
- *)
+*)
 let extract_fun_decl_register_names (ctx : extraction_ctx)
     (has_decreases_clause : fun_decl -> bool) (def : pure_fun_translation) :
     extraction_ctx =
@@ -88,12 +88,11 @@ let extract_global_decl_register_names (ctx : extraction_ctx)
     Note that patterns can introduce new variables: we thus return an extraction
     context updated with new bindings.
 
-    [is_single_pat]: are we extracting a single pattern (a pattern for a let-binding
-    or a lambda)?
+    [is_single_pat]: are we extracting a single pattern (a pattern for a
+    let-binding or a lambda)?
 
-    TODO: we don't need something very generic anymore (some definitions used
-    to be polymorphic).
- *)
+    TODO: we don't need something very generic anymore (some definitions used to
+    be polymorphic). *)
 let extract_adt_g_value (span : Meta.span)
     (extract_value : extraction_ctx -> bool -> 'v -> extraction_ctx)
     (fmt : F.formatter) (ctx : extraction_ctx) (is_single_pat : bool)
@@ -154,7 +153,8 @@ let extract_adt_g_value (span : Meta.span)
       if
         PureUtils.type_decl_from_type_id_is_tuple_struct
           ctx.trans_ctx.type_ctx.type_infos adt_id
-      then (* Extract as a tuple *)
+      then
+        (* Extract as a tuple *)
         extract_as_tuple ()
       else if
         (* If we are generating a pattern for a let-binding and we target Lean,
@@ -268,14 +268,12 @@ let fun_builtin_filter_types (id : FunDeclId.id) (types : 'a list)
         in
         Result.Ok (types, explicit)
 
-(** [inside]: see {!extract_ty}.
-    [with_type]: do we also generate a type annotation? This is necessary for
-    backends like Coq when we write lambdas (Coq is not powerful enough to
-    infer the type).
+(** [inside]: see {!extract_ty}. [with_type]: do we also generate a type
+    annotation? This is necessary for backends like Coq when we write lambdas
+    (Coq is not powerful enough to infer the type).
 
     As a pattern can introduce new variables, we return an extraction context
-    updated with new bindings.
- *)
+    updated with new bindings. *)
 let rec extract_typed_pattern (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (is_let : bool) (inside : bool) ?(with_type = false)
     (v : typed_pattern) : extraction_ctx =
@@ -337,8 +335,7 @@ let lets_require_wrap_in_do (span : Meta.span)
     - expression formatter
     - [inside]
     - unop
-    - argument
- *)
+    - argument *)
 let extract_unop (span : Meta.span) (extract_expr : bool -> texpression -> unit)
     (fmt : F.formatter) (inside : bool) (unop : unop) (arg : texpression) : unit
     =
@@ -453,8 +450,7 @@ let extract_unop (span : Meta.span) (extract_expr : bool -> texpression -> unit)
     - [inside]
     - binop
     - argument 0
-    - argument 1
- *)
+    - argument 1 *)
 let extract_binop (span : Meta.span)
     (extract_expr : bool -> texpression -> unit) (fmt : F.formatter)
     (inside : bool) (binop : E.binop) (int_ty : integer_type)
@@ -531,13 +527,11 @@ let extract_binop (span : Meta.span)
 (** [inside]: controls the introduction of parentheses. See [extract_ty]
 
     TODO: replace the formatting boolean [inside] with something more general?
-    Also, it seems we don't really use it...
-    Cases to consider:
+    Also, it seems we don't really use it... Cases to consider:
     - right-expression in a let: [let x = re in _] (never parentheses?)
-    - next expression in a let:  [let x = _ in next_e] (never parentheses?)
+    - next expression in a let: [let x = _ in next_e] (never parentheses?)
     - application argument: [f (exp)]
-    - match/if scrutinee: [if exp then _ else _]/[match exp | _ -> _]
- *)
+    - match/if scrutinee: [if exp then _ else _]/[match exp | _ -> _] *)
 
 let extract_texpression_errors (fmt : F.formatter) =
   match backend () with
@@ -837,7 +831,7 @@ and extract_adt_cons (span : Meta.span) (ctx : extraction_ctx)
   in
   ()
 
-(** Subcase of the app case: ADT field projector.  *)
+(** Subcase of the app case: ADT field projector. *)
 and extract_field_projector (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (inside : bool) (original_app : texpression)
     (proj : projection) (_generics : generic_args) (args : texpression list) :
@@ -1469,16 +1463,15 @@ and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
 
     We return two contexts:
     - the context augmented with bindings for the generics
-    - the context augmented with bindings for the generics *and*
-      bindings for the input values
+    - the context augmented with bindings for the generics *and* bindings for
+      the input values
 
     We also return names for the type parameters, const generics, etc.
 
-    TODO: do we really need the first one?
-    It comes from the fact that when we print the input values for the
-    decrease clause, we introduce bindings in the context (because we print
-    patterns, not the variables). We should figure a cleaner way.
- *)
+    TODO: do we really need the first one? It comes from the fact that when we
+    print the input values for the decrease clause, we introduce bindings in the
+    context (because we print patterns, not the variables). We should figure a
+    cleaner way. *)
 let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
     (fmt : F.formatter) (def : fun_decl) :
     extraction_ctx * extraction_ctx * (explicit * string) list =
@@ -1536,11 +1529,9 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
   (ctx, ctx_body, List.concat [ type_params; cg_params; trait_clauses ])
 
 (** A small utility to print the types of the input parameters in the form:
-    [u32 -> list u32 -> ...]
-    (we don't print the return type of the function)
+    [u32 -> list u32 -> ...] (we don't print the return type of the function)
 
-    This is used for opaque function declarations, in particular.
- *)
+    This is used for opaque function declarations, in particular. *)
 let extract_fun_input_parameters_types (span : span) (ctx : extraction_ctx)
     (fmt : F.formatter) (inputs : ty list) : unit =
   let extract_param (ty : ty) : unit =
@@ -1564,8 +1555,8 @@ let assert_backend_supports_decreases_clauses (span : Meta.span) =
     For F* only.
 
     In order to help the user, we can generate a template for the functions
-    required by the decreases clauses for. We simply generate definitions of
-    the following form in a separate file:
+    required by the decreases clauses for. We simply generate definitions of the
+    following form in a separate file:
     {[
       let f_decrease (t : Type0) (x : t) : nat = admit()
     ]}
@@ -1573,8 +1564,7 @@ let assert_backend_supports_decreases_clauses (span : Meta.span) =
     Where the translated functions for [f] look like this:
     {[
       let f_fwd (t : Type0) (x : t) : Tot ... (decreases (f_decrease t x)) = ...
-    ]}
- *)
+    ]} *)
 let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
     (fmt : F.formatter) (def : fun_decl) : unit =
   cassert __FILE__ __LINE__
@@ -1644,8 +1634,7 @@ let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
     termination measure (the value derived from the function arguments that
     decreases over function calls). The second one is a macro definition that
     defines a proof script (allowed to refer to function arguments) that proves
-    termination.
-*)
+    termination. *)
 let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
     (fmt : F.formatter) (def : fun_decl) : unit =
   cassert __FILE__ __LINE__
@@ -1774,11 +1763,10 @@ let extract_fun_comment (ctx : extraction_ctx) (fmt : F.formatter)
 
 (** Extract a function declaration.
 
-    This function is for all function declarations and all backends **at the exception**
-    of opaque (builtin/declared) functions for HOL4.
+    This function is for all function declarations and all backends **at the
+    exception** of opaque (builtin/declared) functions for HOL4.
 
-    See {!extract_fun_decl}.
- *)
+    See {!extract_fun_decl}. *)
 let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     (kind : decl_kind) (has_decreases_clause : bool) (def : fun_decl) : unit =
   sanity_check __FILE__ __LINE__
@@ -2060,8 +2048,7 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
 (** Extract an opaque function declaration to HOL4.
 
     Remark (SH): having to treat this specific case separately is very annoying,
-    but I could not find a better way.
- *)
+    but I could not find a better way. *)
 let extract_fun_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
     (def : fun_decl) : unit =
   (* Retrieve the definition name *)
@@ -2111,12 +2098,11 @@ let extract_fun_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
     registered.
 
     We take the definition of the forward translation as parameter (which is
-    equal to the definition to extract, if we extract a forward function) because
-    it is useful for the decrease clause.
+    equal to the definition to extract, if we extract a forward function)
+    because it is useful for the decrease clause.
 
     This function should be inserted between calls to {!start_fun_decl_group}
-    and {!end_fun_decl_group}.
- *)
+    and {!end_fun_decl_group}. *)
 let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (kind : decl_kind) (has_decreases_clause : bool) (def : fun_decl) : unit =
   sanity_check __FILE__ __LINE__
@@ -2132,8 +2118,7 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
 
     We introduce this helper because every (non opaque) global declaration gets
     extracted to two declarations, and we can actually factor out the generation
-    of those declarations. See {!extract_global_decl} for more explanations.
- *)
+    of those declarations. See {!extract_global_decl} for more explanations. *)
 let extract_global_decl_body_gen (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (kind : decl_kind) ~(irreducible : bool) (name : string)
     (generics : generic_params) (explicit : explicit_info)
@@ -2240,8 +2225,7 @@ let extract_global_decl_body_gen (span : Meta.span) (ctx : extraction_ctx)
 (** Extract an opaque global declaration for HOL4.
 
     Remark (SH): having to treat this specific case separately is very annoying,
-    but I could not find a better way.
- *)
+    but I could not find a better way. *)
 let extract_global_decl_hol4_opaque (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (name : string) (generics : generic_params) (ty : ty) :
     unit =
@@ -2270,21 +2254,19 @@ let extract_global_decl_hol4_opaque (span : Meta.span) (ctx : extraction_ctx)
     We generate the body which *computes* the global value separately from the
     value declaration itself.
 
-    For example in Rust,
-    [static X: u32 = 3;]
+    For example in Rust, [static X: u32 = 3;]
 
-    will be translated to the following F*:
-    [let x_body : result u32 = Return 3] (* this has type [result u32] *)
-    [let x_c : u32 = eval_global x_body] (* this has type [u32] (no [result]!) *)
+    will be translated to the following F*: [let x_body : result u32 = Return 3]
+    (* this has type [result u32] *) [let x_c : u32 = eval_global x_body] (*
+    this has type [u32] (no [result]!) *)
 
     This function generates the two declarations.
 
-    Remark: because global declaration groups are always singletons (i.e.,
-    there are no groups of mutually recursive global declarations), this function
+    Remark: because global declaration groups are always singletons (i.e., there
+    are no groups of mutually recursive global declarations), this function
     doesn't need to be called between calls to functions of the shape
-    [{start,end}_gloabl_decl_group], contrary to {!extract_type_decl}
-    and {!extract_fun_decl}.
- *)
+    [{start,end}_gloabl_decl_group], contrary to {!extract_type_decl} and
+    {!extract_fun_decl}. *)
 let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
     (global : global_decl) (body : fun_decl) (interface : bool) : unit =
   let span = body.item_meta.span in
@@ -2686,8 +2668,7 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
 
 (** Small helper.
 
-    The type `ty` is to be understood in a very general sense.
- *)
+    The type `ty` is to be understood in a very general sense. *)
 let extract_trait_item (ctx : extraction_ctx) (fmt : F.formatter)
     (item_name : string) (separator : string) (ty : unit -> unit) : unit =
   F.pp_print_space fmt ();
@@ -2739,8 +2720,7 @@ let explicit_info_drop_prefix (g1 : generic_params) (g2 : explicit_info) :
 
 (** Small helper.
 
-    Extract the items for a method in a trait decl.
- *)
+    Extract the items for a method in a trait decl. *)
 let extract_trait_decl_method_items_aux (ctx : extraction_ctx)
     (fmt : F.formatter) (decl : trait_decl) (item_name : string)
     (fn : fun_decl_ref binder) : unit =
@@ -2945,7 +2925,8 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_print_break fmt 0 0
 
 (** Generate the [Arguments] instructions for the trait declarationsin Coq, so
-    that we don't have to provide the implicit arguments when projecting the fields. *)
+    that we don't have to provide the implicit arguments when projecting the
+    fields. *)
 let extract_trait_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
     (decl : trait_decl) : unit =
   (* Counting the number of parameters of the trait declaration itself *)
@@ -3019,8 +3000,7 @@ let extract_trait_decl_extra_info (ctx : extraction_ctx) (fmt : F.formatter)
 
 (** Small helper.
 
-    Extract the items for a method in a trait impl.
- *)
+    Extract the items for a method in a trait impl. *)
 let extract_trait_impl_method_items_aux (ctx : extraction_ctx)
     (fmt : F.formatter) (impl : trait_impl) (item_name : string)
     (fn : fun_decl_ref binder) : unit =
@@ -3268,8 +3248,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     Coq:
     {[
       Check (FUNCTION)%return).
-    ]}
- *)
+    ]} *)
 let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
     (def : fun_decl) : unit =
   (* Check if this is a unit function *)

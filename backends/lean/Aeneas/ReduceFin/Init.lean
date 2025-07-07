@@ -1,4 +1,4 @@
-import Aeneas.Extensions
+import AeneasMeta.Extensions
 open Lean Meta
 
 namespace Aeneas.ReduceFin

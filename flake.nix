@@ -37,7 +37,7 @@
           buildInputs = [
             ocamlPackages.dune_3
             ocamlPackages.ocaml
-            ocamlPackages.ocamlformat
+            ocamlPackages.ocamlformat_0_27_0
             charon.packages.${system}.rustToolchain
           ];
           buildPhase = ''
@@ -231,7 +231,7 @@
             pkgs.curl
             pkgs.elan
             ocamlPackages.ocaml
-            ocamlPackages.ocamlformat
+            ocamlPackages.ocamlformat_0_27_0
             ocamlPackages.menhir
             ocamlPackages.odoc
             # ocaml-lsp's version must match the ocaml version used. Pinning
