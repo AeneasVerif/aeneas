@@ -698,9 +698,8 @@ def evalProgress
     | none | some none => sgs := sgs.push mvarId
     | some (some proof) => mvarId.withContext do
       -- Introduce an auxiliary theorem
-      let declName? ← Term.getDeclName?
       mvarId.withContext do
-      let e ← mkAuxTheorem (prefix? := declName?) (← mvarId.getType) proof (zetaDelta := true)
+      let e ← mkAuxTheorem (← mvarId.getType) proof (zetaDelta := true)
       mvarId.assign e
   let mainGoal := match goals.mainGoal with
     | none => []

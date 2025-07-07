@@ -188,7 +188,7 @@ theorem BitVec.ofNat_sub' (n a b : Nat) (h : b ≤ a) :
   have : (2 ^ n : Int) - (b : Int) % 2 ^ n + (a : Int) =
          (2 ^ n : Int) + ((a : Int) - (b : Int) % 2 ^ n) := by ring_nf
   rw [this]; clear this
-  simp only [Int.add_emod_self_left]
+  simp only [Int.add_emod_left]
   rw [Int.sub_emod]
   conv => rhs; rw [Int.sub_emod]
   simp only [dvd_refl, Int.emod_emod_of_dvd]

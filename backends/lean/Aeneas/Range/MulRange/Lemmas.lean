@@ -16,6 +16,16 @@ theorem pow_ineq' (stop mul start : Nat) (hMul : 1 < mul) (hStart : 0 < start) :
 
 namespace MulRange
 
+theorem mulRange_step (stop mul : Nat) (hMul : 1 < mul) (i : Nat) (hi : 0 < i) (hi' : i < stop) :
+  Aeneas.mulRange stop mul hMul i hi = i :: Aeneas.mulRange stop mul hMul (i * mul) (by rw [Nat.mul_pos_iff_of_pos_left] <;> omega) := by
+  conv => lhs; unfold Aeneas.mulRange
+  simp [hi']
+
+theorem mulRange_nil (stop mul : Nat) (hMul : 1 < mul) (i : Nat) (hi : 0 < i) (hi' : stop ≤ i) :
+  Aeneas.mulRange stop mul hMul i hi = [] := by
+  conv => lhs; unfold Aeneas.mulRange
+  simp [hi']
+
 /-!
 # Lemmas about `MulRange`
 

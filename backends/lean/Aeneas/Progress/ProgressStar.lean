@@ -237,7 +237,7 @@ partial def evalProgressStar (cfg: Config) : TacticM Result :=
           -- Introduce an auxiliary theorem
           let declName? ← Term.getDeclName?
           mvarId.withContext do
-          let e ← mkAuxTheorem (prefix? := declName?) (← mvarId.getType) proof (zetaDelta := true)
+          let e ← mkAuxTheorem (← mvarId.getType) proof (zetaDelta := true)
           mvarId.assign proof
     setGoals sgs.toList
     pure { script := info.script, subgoals := sgs }

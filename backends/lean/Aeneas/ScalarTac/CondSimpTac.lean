@@ -13,13 +13,16 @@ declare_config_elab elabCondSimpTacConfig CondSimpTacConfig
 
 structure CondSimpPartialArgs where
   declsToUnfold : Array Name := #[]
+  letDeclsToUnfold : Array FVarId := #[]
   addSimpThms : Array Name := #[]
   hypsToUse : Array FVarId := #[]
 
 def condSimpParseArgs (tacName : String) (args : TSyntaxArray [`term, `token.«*»]) :
   TacticM CondSimpPartialArgs := do
   withTraceNode `ScalarTac (fun _ => pure m!"condSimpParseArgs") do
+  withMainContext do
   let mut declsToUnfold := #[]
+  let mut letDeclsToUnfold := #[]
   let mut addSimpThms := #[]
   let mut hypsToUse := #[]
   for arg in args do
@@ -31,7 +34,7 @@ def condSimpParseArgs (tacName : String) (args : TSyntaxArray [`term, `token.«*
       | .some decl =>
         trace[ScalarTac] "arg (local decl): {stx.raw}"
         if decl.isLet then
-          declsToUnfold := declsToUnfold.push decl.userName
+          letDeclsToUnfold := letDeclsToUnfold.push decl.fvarId
         else
           hypsToUse := hypsToUse.push decl.fvarId
       | .none =>
@@ -64,25 +67,27 @@ def condSimpParseArgs (tacName : String) (args : TSyntaxArray [`term, `token.«*
         -- TODO: we need to make that work
         trace[ScalarTac] "arg (term): {term}"
         throwError m!"Unimplemented: arbitrary terms are not supported yet as arguments to `{tacName}` (received: {arg})"
-  pure ⟨ declsToUnfold, addSimpThms, hypsToUse ⟩
+  pure { declsToUnfold, letDeclsToUnfold, addSimpThms, hypsToUse }
 
 structure CondSimpArgs where
   simpThms : Array SimpTheorems := #[]
   simprocs: Simp.SimprocsArray := #[]
   declsToUnfold : Array Name := #[]
+  letDeclsToUnfold : Array FVarId := #[]
   addSimpThms : Array Name := #[]
   hypsToUse : Array FVarId := #[]
 
 instance : HAppend CondSimpArgs CondSimpArgs CondSimpArgs where
   hAppend c0 c1 :=
-    let ⟨ a0, b0, c0, d0, e0 ⟩ := c0
-    let ⟨ a1, b1, c1, d1, e1 ⟩ := c1
-    ⟨ a0 ++ a1, b0 ++ b1, c0 ++ c1, d0 ++ d1, e0 ++ e1 ⟩
+    let ⟨ a0, b0, c0, d0, e0, f0 ⟩ := c0
+    let ⟨ a1, b1, c1, d1, e1, f1 ⟩ := c1
+    ⟨ a0 ++ a1, b0 ++ b1, c0 ++ c1, d0 ++ d1, e0 ++ e1, f0 ++ f1 ⟩
 
 def CondSimpArgs.toSimpArgs (args : CondSimpArgs) : Simp.SimpArgs := {
     simpThms := args.simpThms,
     simprocs := args.simprocs,
     declsToUnfold := args.declsToUnfold,
+    letDeclsToUnfold := args.letDeclsToUnfold,
     addSimpThms := args.addSimpThms,
     hypsToUse := args.hypsToUse }
 

@@ -151,4 +151,11 @@ example (x y d : ℕ) (h0 : d > 0) (h1 : x <= y) (h2 : x % d <= y % d) (h3 : y -
   y % d - x % d = y - x := by
   zmodify to d
 
+/-- Checking that unfolding of local declarations works properly -/
+example (x y : U32) (hx : x.val < 8) (hy : y.val < 8) :
+  let z := x.val + y.val
+  z < 16 := by
+  intro z
+  zmodify [z]
+
 end Aeneas.ZModify

@@ -115,16 +115,15 @@ theorem BitVec.getElem_set {n} {bv: BitVec n} {b: Bool} {i: Fin n} {j: Nat}
 # Simp lemmas
 -/
 
-@[simp, bvify_simps]
-theorem BitVec.ofNat_mul {n : ℕ} (x y : ℕ) : BitVec.ofNat n (x * y) = BitVec.ofNat n x * BitVec.ofNat n y := by
-  conv => lhs; unfold BitVec.ofNat
-  conv => rhs; simp only [BitVec.mul_def]
-  simp only [Fin.ofNat'_eq_cast, Nat.cast_mul, BitVec.toFin_ofNat]
+attribute [simp, bvify_simps] BitVec.ofNat_mul
 
 theorem BitVec.ofNat_pow {n : ℕ} (x d : ℕ) : BitVec.ofNat n (x ^ d) = (BitVec.ofNat n x)^d := by
-  conv => rhs; unfold HPow.hPow instHPow Pow.pow BitVec.instPowNat_mathlib; simp only
-  unfold BitVec.ofNat
-  simp only [Fin.ofNat'_eq_cast, Nat.cast_pow]
+  revert x
+  induction d
+  . simp
+  . rename_i d hind
+    intro x
+    simp only [pow_add, pow_one, ofNat_mul, hind]
 
 @[simp]
 theorem BitVec.toNat_pow {w : ℕ} (x : BitVec w) (d : ℕ) :
@@ -208,13 +207,14 @@ theorem BitVec.and_two_pow_sub_one_eq_mod {w} (x : BitVec w) (n : Nat) :
   . simp only [← ofNat_pow]
     simp only [not_lt] at hn
     have : BitVec.ofNat w (2 ^ n) = 0 := by
-      unfold BitVec.ofNat Fin.ofNat'
+      unfold BitVec.ofNat Fin.ofNat
       have : 2^n % 2^w = 0 := by
         have : n = w + (n - w) := by omega
         rw [this, Nat.pow_add]
         simp only [Nat.mul_mod_right]
       simp only [this]
-      simp only [Fin.mk_zero', BitVec.ofNat_eq_ofNat, BitVec.ofNat, Fin.ofNat'_eq_cast, Nat.cast_zero]
+      simp only [Fin.mk_zero', BitVec.ofNat_eq_ofNat, BitVec.ofNat, Fin.ofNat_eq_cast, Nat.cast_zero]
+      rfl
     rw [this]
     simp only [ofNat_eq_ofNat, BitVec.zero_sub, umod_zero]
     natify
@@ -290,7 +290,7 @@ theorem BitVec.getElem!_mod_pow2_eq {w} (x : BitVec w) (i j : ℕ) (h : j < i) :
         have : 2^i < 2^w := by
           apply Nat.pow_lt_pow_of_lt <;> omega
         simp (disch := omega) only [Nat.mod_eq_of_lt, Nat.testBit_mod_two_pow,
-          Bool.and_iff_right_iff_imp, decide_eq_true_eq]
+          Bool.and_eq_right_iff_imp, decide_eq_true_eq]
         omega
       . -- TODO: scalar_tac +nonLin
         have : 2^i % 2^w = 0 := by
@@ -431,7 +431,7 @@ theorem BitVec.toLEBytes_getElem!_testBit (v : BitVec w) (i j : ℕ) (hj : j < 8
       simp only [getElem!_eq_testBit_toNat, toNat_setWidth, toNat_ushiftRight,
         Nat.testBit_mod_two_pow, Nat.testBit_shiftRight]
       have : 8 + (8 * (i - 1) + j) = 8 * i + j := by omega
-      simp only [this, Bool.and_iff_right_iff_imp, decide_eq_true_eq]
+      simp only [this, Bool.and_eq_right_iff_imp, decide_eq_true_eq]
       by_cases 8 * i + j < w
       . omega
       . simp_lists
@@ -497,7 +497,7 @@ theorem BitVec.getElem!_default_eq_false {w} (i : ℕ) :
 theorem BitVec.getElem!_setWidth {n : Nat} (m : Nat) (x : BitVec n) (i : Nat) (h : i < m) :
   (setWidth m x)[i]! = x[i]! := by
   simp only [getElem!_eq_testBit_toNat, toNat_setWidth, Nat.testBit_mod_two_pow,
-    Bool.and_iff_right_iff_imp, decide_eq_true_eq]
+    Bool.and_eq_right_iff_imp, decide_eq_true_eq]
   omega
 
 @[simp, simp_lists_simps]
@@ -516,7 +516,8 @@ theorem BitVec.getElem!_setWidth_eq_false {n : Nat} (m : Nat) (x : BitVec n)
 theorem BitVec.getElem!_toLEBytes {w : ℕ} (b : BitVec w) (i j : ℕ) (h : j < 8) :
   (b.toLEBytes[i]!)[j]! = b[8 * i + j]! := by
   if h1: w = 0 then
-    simp_all [toLEBytes]
+    simp_all only [toLEBytes, gt_iff_lt, lt_self_iff_false, ↓reduceIte, List.length_nil,
+      not_lt_zero', not_false_eq_true, getElem!_neg, default, zero_eq, getElem!_pos, getElem_zero]
   else
     unfold toLEBytes
     have : w > 0 := by omega

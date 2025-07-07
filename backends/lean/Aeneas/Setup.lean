@@ -12,10 +12,11 @@ elab "#setup_aeneas_simps" : command => do
       attribute [-simp]
         /- We want to use `getElem!` as much as possible so we deactivate
           lemmas which turn `getElem!` into `getD`, and activate lemmas
-          which turn `getElem` into `getElem`.
+          which turn `getElem` into `getElem!`.
         -/
         _root_.List.getElem!_eq_getElem?_getD
         _root_.Array.set!_eq_setIfInBounds
+        _root_.getElem!_pos
         /- This one is annoying when writing, for instance, cryptographic specifications:
            it tends to reduce terms we don't want to reduce, leading to blowups -/
         _root_.List.reduceReplicate
