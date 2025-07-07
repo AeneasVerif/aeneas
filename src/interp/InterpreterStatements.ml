@@ -1484,7 +1484,7 @@ and eval_builtin_function_call_symbolic (config : config) (span : Meta.span)
 
     (* As we allow instantiating type parameters with types containing regions,
        we have to recompute the regions hierarchy. *)
-    let fun_name = Print.Expressions.builtin_fun_id_to_string fid in
+    let fun_name = Print.Types.builtin_fun_id_to_string fid in
     let inst_sig =
       compute_regions_hierarchy_for_fun_call (Some span) ctx.crate fun_name
         ctx.type_vars ctx.const_generic_vars func.generics sg

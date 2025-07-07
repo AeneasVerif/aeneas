@@ -590,7 +590,7 @@ let fun_suffix (lp_id : LoopId.id option) : string =
   lp_suff
 
 let llbc_builtin_fun_id_to_string (fid : A.builtin_fun_id) : string =
-  Charon.PrintExpressions.builtin_fun_id_to_string fid
+  Charon.PrintTypes.builtin_fun_id_to_string fid
 
 let llbc_fun_id_to_string (env : fmt_env) (fid : A.fun_id) : string =
   match fid with
