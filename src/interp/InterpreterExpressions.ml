@@ -16,14 +16,13 @@ open Errors
 (** The local logger *)
 let log = Logging.expressions_log
 
-(** As long as there are symbolic values at a given place (potentially in subvalues)
-    which contain borrows and are expandable, expand them.
+(** As long as there are symbolic values at a given place (potentially in
+    subvalues) which contain borrows and are expandable, expand them.
 
     We use this function before copying values.
 
     Note that the place should have been prepared so that there are no remaining
-    loans.
-*)
+    loans. *)
 let expand_if_borrows_at_place (config : config) (span : Meta.span)
     (access : access_kind) (p : place) : cm_fun =
  fun ctx ->
@@ -49,9 +48,7 @@ let expand_if_borrows_at_place (config : config) (span : Meta.span)
 
 (** Read a place.
 
-    We check that the value *doesn't contain bottoms or reserved
-    borrows*.
- *)
+    We check that the value *doesn't contain bottoms or reserved borrows*. *)
 let read_place_check (span : Meta.span) (access : access_kind) (p : place)
     (ctx : eval_ctx) : typed_value =
   let v = read_place span access p ctx in
@@ -98,7 +95,7 @@ let access_rplace_reorganize (config : config) (span : Meta.span)
 let literal_to_typed_value (span : Meta.span) (ty : literal_type) (cv : literal)
     : typed_value =
   (* Check the type while converting - we actually need some information
-     * contained in the type *)
+   * contained in the type *)
   log#ltrace
     (lazy
       ("literal_to_typed_value:" ^ "\n- cv: "
@@ -115,9 +112,9 @@ let literal_to_typed_value (span : Meta.span) (ty : literal_type) (cv : literal)
   (* Remaining cases (invalid) *)
   | _, _ -> craise __FILE__ __LINE__ span "Improperly typed constant value"
 
-(** Copy a value, and return the: the original value (we may have need to
-    update it - see the remark about the symbolic values with borrows)
-    and the resulting value.
+(** Copy a value, and return the: the original value (we may have need to update
+    it - see the remark about the symbolic values with borrows) and the
+    resulting value.
 
     Note that copying values might update the context. For instance, when
     copying shared borrows, we need to insert new shared borrows in the context.
@@ -128,21 +125,20 @@ let literal_to_typed_value (span : Meta.span) (ty : literal_type) (cv : literal)
     parameter to control this copy ([allow_adt_copy]). Note that here by ADT we
     mean the user-defined ADTs (not tuples or builtin types).
 
-    **Symbolic values with borrows**:
-    Side note about copying symbolic values with borrows: in order to make the
-    joins easier to compute, especially for the loops, whenever we copy a symbolic
-    value containing borrows we introduce an auxiliary abstraction and freshen
-    the copied value. This enforces the invariant that there can't be several
-    occurrences of the same borrow projector over the same symbolic value.
-    More precisely, we do something like this:
+    **Symbolic values with borrows**: Side note about copying symbolic values
+    with borrows: in order to make the joins easier to compute, especially for
+    the loops, whenever we copy a symbolic value containing borrows we introduce
+    an auxiliary abstraction and freshen the copied value. This enforces the
+    invariant that there can't be several occurrences of the same borrow
+    projector over the same symbolic value. More precisely, we do something like
+    this:
     {[
       // x -> s0
       y = copy x
       // x -> s1
       // y -> s2
       // abs { proj_borrows s0, proj_loans s1, proj_loans s2 }
-    ]}
- *)
+    ]} *)
 let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
     (ctx : eval_ctx) (v : typed_value) :
     typed_value
@@ -269,7 +265,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
             }
           in
           Invariants.opt_type_check_abs span ctx abs;
-          (*  *)
+          (* *)
           abs
         in
 
@@ -307,12 +303,12 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
 
 (** Reorganize the environment in preparation for the evaluation of an operand.
 
-    Evaluating an operand requires reorganizing the environment to get access
-    to a given place (by ending borrows, expanding symbolic values...) then
+    Evaluating an operand requires reorganizing the environment to get access to
+    a given place (by ending borrows, expanding symbolic values...) then
     applying the operand operation (move, copy, etc.).
 
-    Sometimes, we want to decouple the two operations.
-    Consider the following example:
+    Sometimes, we want to decouple the two operations. Consider the following
+    example:
     {[
       context = {
         x -> shared_borrow l0
@@ -324,13 +320,13 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
     ]}
 
     Because of the way {!end_borrow} is implemented, when giving back the borrow
-    [l0] upon evaluating [move y], if we have already moved the value of x,
-    we won't notice that [shared_borrow l0] has disappeared from the environment
+    [l0] upon evaluating [move y], if we have already moved the value of x, we
+    won't notice that [shared_borrow l0] has disappeared from the environment
     (it has been moved and not assigned yet, and so is hanging in "thin air").
 
     By first "preparing" the operands evaluation, we make sure no such thing
-    happens. To be more precise, we make sure all the updates to borrows triggered
-    by access *and* move operations have already been applied.
+    happens. To be more precise, we make sure all the updates to borrows
+    triggered by access *and* move operations have already been applied.
 
     Rem.: in the formalization, we always have an explicit "reorganization" step
     in the rule premises, before the actual operand evaluation, that allows to
@@ -338,11 +334,10 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
     function's role is to do the reorganization.
 
     Rem.: doing this is actually not completely necessary because when
-    generating MIR, rustc introduces intermediate assignments for all the function
-    parameters. Still, it is better for soundness purposes, and corresponds to
-    what we do in the formalization (because we don't enforce the same constraints
-    as MIR in the formalization).
- *)
+    generating MIR, rustc introduces intermediate assignments for all the
+    function parameters. Still, it is better for soundness purposes, and
+    corresponds to what we do in the formalization (because we don't enforce the
+    same constraints as MIR in the formalization). *)
 let prepare_eval_operand_reorganize (config : config) (span : Meta.span)
     (op : operand) : cm_fun =
  fun ctx ->
@@ -509,8 +504,7 @@ let eval_operand (config : config) (span : Meta.span) (op : operand)
 
 (** Small utility.
 
-    See [prepare_eval_operand_reorganize].
- *)
+    See [prepare_eval_operand_reorganize]. *)
 let prepare_eval_operands_reorganize (config : config) (span : Meta.span)
     (ops : operand list) : cm_fun =
   fold_left_apply_continuation (prepare_eval_operand_reorganize config span) ops
@@ -626,8 +620,9 @@ let cast_unsize_to_modified_fields (span : Meta.span) (ctx : eval_ctx)
     in
     (* Case 1: array to slice *)
     if compatible_array_slice (ty0, ty1) then None
-    else if (* Case 2: ADT to ADT *)
-            ty_is_custom_adt ty0 && ty_is_custom_adt ty1
+    else if
+      (* Case 2: ADT to ADT *)
+      ty_is_custom_adt ty0 && ty_is_custom_adt ty1
     then (
       let id0, generics0 = ty_as_custom_adt ty0 in
       let id1, generics1 = ty_as_custom_adt ty1 in
@@ -720,8 +715,7 @@ let eval_unary_op (config : config) (span : Meta.span) (unop : unop)
   | SymbolicMode -> eval_unary_op_symbolic config span unop op ctx
 
 (** Small helper for [eval_binary_op_concrete]: computes the result of applying
-    the binop *after* the operands have been successfully evaluated
- *)
+    the binop *after* the operands have been successfully evaluated *)
 let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
     (v1 : typed_value) (v2 : typed_value) : (typed_value, eval_error) result =
   (* Equality check binops (Eq, Ne) accept values from a wide variety of types.
@@ -874,8 +868,8 @@ let eval_binary_op (config : config) (span : Meta.span) (binop : binop)
   | ConcreteMode -> eval_binary_op_concrete config span binop op1 op2 ctx
   | SymbolicMode -> eval_binary_op_symbolic config span binop op1 op2 ctx
 
-(** Evaluate an rvalue which creates a reference (i.e., an rvalue which is
-    `&p` or `&mut p` or `&two-phase p`) *)
+(** Evaluate an rvalue which creates a reference (i.e., an rvalue which is `&p`
+    or `&mut p` or `&two-phase p`) *)
 let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
     (bkind : borrow_kind) (ctx : eval_ctx) :
     typed_value * eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression)

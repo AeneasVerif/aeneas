@@ -20,10 +20,9 @@ end
 module FunIdMap = Collections.MakeMap (FunIdOrderedType)
 module FunIdSet = Collections.MakeSet (FunIdOrderedType)
 
-(** Compute the dependencies of a function body, taking only into account
-    the *custom* (i.e., not builtin) functions ids (ignoring operations, types,
-    globals, etc.).
- *)
+(** Compute the dependencies of a function body, taking only into account the
+    *custom* (i.e., not builtin) functions ids (ignoring operations, types,
+    globals, etc.). *)
 let compute_body_fun_deps (e : texpression) : FunIdSet.t =
   let ids = ref FunIdSet.empty in
 
@@ -53,15 +52,13 @@ let compute_body_fun_deps (e : texpression) : FunIdSet.t =
 type function_group = {
   is_rec : bool;
       (** [true] if (mutually) recursive. Useful only if there is exactly one
-       declaration in the group.
-    *)
+          declaration in the group. *)
   decls : fun_decl list;
 }
 
 (** Group mutually recursive functions together and reorder the groups so that
     if a group B depends on a group A then A comes before B, while trying to
-    respect the original order as much as possible.
- *)
+    respect the original order as much as possible. *)
 let group_reorder_fun_decls (decls : fun_decl list) :
     (bool * fun_decl list) list =
   let module IntMap = MakeMap (OrderedInt) in

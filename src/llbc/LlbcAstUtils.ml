@@ -22,13 +22,14 @@ let lookup_fun_sig (fun_id : fun_id) (fun_decls : fun_decl FunDeclId.Map.t) :
   | FRegular id -> (FunDeclId.Map.find id fun_decls).signature
   | FBuiltin aid -> Builtin.get_builtin_fun_sig aid
 
-(** Return the opaque declarations found in the crate, which are also *not builtin*.
+(** Return the opaque declarations found in the crate, which are also *not
+    builtin*.
 
-    [filter_builtin]: if [true], do not consider as opaque the external definitions
-    that we will map to definitions from the standard library.
+    [filter_builtin]: if [true], do not consider as opaque the external
+    definitions that we will map to definitions from the standard library.
 
-    Remark: the list of functions also contains the list of opaque global bodies.
- *)
+    Remark: the list of functions also contains the list of opaque global
+    bodies. *)
 let crate_get_opaque_non_builtin_decls (k : crate) (filter_builtin : bool) :
     type_decl list * fun_decl list =
   let open ExtractBuiltin in

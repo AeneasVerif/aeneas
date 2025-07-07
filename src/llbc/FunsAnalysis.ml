@@ -1,11 +1,10 @@
 (** Compute various information, including:
-    - can a function fail (by having `Fail` in its body, or transitively
-      calling a function which can fail - this is false for globals)
+    - can a function fail (by having `Fail` in its body, or transitively calling
+      a function which can fail - this is false for globals)
     - can a function diverge (by being recursive, containing a loop or
       transitively calling a function which can diverge)
-    - does a function perform stateful operations (i.e., do we need a state
-      to translate it)
- *)
+    - does a function perform stateful operations (i.e., do we need a state to
+      translate it) *)
 
 open LlbcAst
 open ExpressionsUtils
@@ -17,7 +16,7 @@ let log = Logging.funs_analysis_log
 (** Various information about a function.
 
     Note that not all this information is used yet to adjust the extraction yet.
- *)
+*)
 type fun_info = {
   can_fail : bool;
       (* Not used yet: all the extracted functions use an error monad *)
@@ -196,7 +195,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
      * so that the functions which syntactically can't fail don't use an error monad.
      * However, we do keep the result of the analysis for global bodies and for
      * builtin functions which are marked as non-fallible.
-     * *)
+     *)
     can_fail :=
       if is_global_decl_body then !can_fail
       else if !group_has_builtin_info then !can_fail

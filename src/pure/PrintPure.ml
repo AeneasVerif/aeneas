@@ -4,11 +4,10 @@ open Pure
 open PureUtils
 open Errors
 
-(** The formatting context for pure definitions uses non-pure definitions
-    to lookup names. The main reason is that when building the pure definitions
-    like in [SymbolicToPure] we don't have a pure context available, while
-    at every stage we have the original LLBC definitions at hand.
- *)
+(** The formatting context for pure definitions uses non-pure definitions to
+    lookup names. The main reason is that when building the pure definitions
+    like in [SymbolicToPure] we don't have a pure context available, while at
+    every stage we have the original LLBC definitions at hand. *)
 type fmt_env = {
   crate : LlbcAst.crate;
   (* We need a list of params because we have nested binding levels for trait methods. *)

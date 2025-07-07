@@ -1,6 +1,5 @@
 (** This file implements various substitution utilities to instantiate types,
-    function bodies, etc.
- *)
+    function bodies, etc. *)
 
 include Charon.Substitute
 open Types
@@ -35,8 +34,7 @@ let fresh_regions_with_substs_from_vars (region_vars : region_var list)
 (** Substitute a function signature, together with the regions hierarchy
     associated to that signature.
 
-    **IMPORTANT:** this function doesn't normalize the types.
- *)
+    **IMPORTANT:** this function doesn't normalize the types. *)
 let substitute_signature (asubst : RegionGroupId.id -> AbstractionId.id)
     (r_id_subst : RegionId.id -> RegionId.id) (ty_sb_subst : TypeVarId.id -> ty)
     (cg_sb_subst : ConstGenericVarId.id -> const_generic)

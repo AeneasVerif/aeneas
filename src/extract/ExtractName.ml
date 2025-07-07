@@ -49,8 +49,7 @@ end
 (** Helper to convert name patterns to names for extraction.
 
     For impl blocks, we simply use the name of the type (without its arguments)
-    if all the arguments are variables.
- *)
+    if all the arguments are variables. *)
 let pattern_to_extract_name (span : Meta.span option) (name : pattern) :
     string list =
   let c = { tgt = TkName } in
@@ -131,8 +130,8 @@ let name_to_simple_name (ctx : 'stt ctx) (n : Types.name) : string list =
   in
   pattern_to_extract_name None (name_to_pattern ctx c n)
 
-(** If the [prefix] is Some, we attempt to remove the common prefix
-    between [prefix] and [name] from [name] *)
+(** If the [prefix] is Some, we attempt to remove the common prefix between
+    [prefix] and [name] from [name] *)
 let name_with_generics_to_simple_name (ctx : 'stt ctx)
     ?(prefix : Types.name option = None) (name : Types.name)
     (p : Types.generic_params) (g : Types.generic_args) : string list =
