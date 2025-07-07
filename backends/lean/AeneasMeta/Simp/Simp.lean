@@ -11,6 +11,7 @@ structure SimpArgs where
   simpThms : Array SimpTheorems := #[]
   addSimprocs : Array Name := #[]
   declsToUnfold : Array Name := #[]
+  letDeclsToUnfold : Array FVarId := #[]
   addSimpThms : Array Name := #[]
   hypsToUse : Array FVarId := #[]
 
@@ -64,6 +65,7 @@ def mkSimpCtx (simpOnly : Bool) (config : Simp.Config) (kind : SimpKind) (args :
     else thms.addDeclToUnfold decl
   let simpThms ←
     args.declsToUnfold.foldlM addDeclToUnfold simpThms
+  let simpThms := args.letDeclsToUnfold.foldl SimpTheorems.addLetDeclToUnfold simpThms
   -- Add the hypotheses and the rewriting theorems
   let simpThms ←
     args.hypsToUse.foldlM (fun thms fvarId =>
