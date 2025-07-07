@@ -3084,7 +3084,7 @@ let filter_loop_inputs (ctx : ctx) (transl : pure_fun_translation list) :
       (Option.is_some decl.loop_id)
       decl.item_meta.span;
 
-    let fun_id = (E.FRegular decl.def_id, decl.loop_id) in
+    let fun_id = (T.FRegular decl.def_id, decl.loop_id) in
 
     let set_used vid =
       used := List.map (fun (vid', b) -> (vid', b || vid = vid')) !used
@@ -3188,7 +3188,7 @@ let filter_loop_inputs (ctx : ctx) (transl : pure_fun_translation list) :
   (* We then apply the filtering to all the function definitions at once *)
   let filter_in_one (decl : fun_decl) : fun_decl =
     (* Filter the function signature *)
-    let fun_id = (E.FRegular decl.def_id, decl.loop_id) in
+    let fun_id = (T.FRegular decl.def_id, decl.loop_id) in
     let decl =
       match FunLoopIdMap.find_opt fun_id !used_map with
       | None -> (* Nothing to filter *) decl

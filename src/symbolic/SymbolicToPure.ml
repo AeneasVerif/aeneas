@@ -386,7 +386,7 @@ let texpression_to_string (ctx : bs_ctx) (e : texpression) : string =
 
 let fun_id_to_string (ctx : bs_ctx) (id : A.fun_id) : string =
   let env = bs_ctx_to_fmt_env ctx in
-  Print.Expressions.fun_id_to_string env id
+  Print.Types.fun_id_to_string env id
 
 let fun_sig_to_string (ctx : bs_ctx) (sg : fun_sig) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
@@ -1259,8 +1259,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
       (lazy
         (let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
          "Nested borrows are not supported yet (found in the signature of: "
-         ^ Charon.PrintExpressions.fun_id_or_trait_method_ref_to_string ctx
-             fun_id
+         ^ Charon.PrintTypes.fun_id_or_trait_method_ref_to_string ctx fun_id
          ^ ")"));
     (* For now, we don't allow nested borrows, so the additional inputs to the
        backward function can only come from borrows that were returned like
@@ -1283,8 +1282,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
            Print.list_to_string (PrintPure.ty_to_string pctx false) inputs
          in
          "translate_back_inputs_for_gid:" ^ "\n- function:"
-         ^ Charon.PrintExpressions.fun_id_or_trait_method_ref_to_string ctx
-             fun_id
+         ^ Charon.PrintTypes.fun_id_or_trait_method_ref_to_string ctx fun_id
          ^ "\n- gid: "
          ^ RegionGroupId.to_string gid
          ^ "\n- output: " ^ output ^ "\n- back inputs: " ^ inputs ^ "\n"));
@@ -1324,8 +1322,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
            Print.list_to_string (PrintPure.ty_to_string pctx false) outputs
          in
          "compute_back_outputs_for_gid:" ^ "\n- function:"
-         ^ Charon.PrintExpressions.fun_id_or_trait_method_ref_to_string ctx
-             fun_id
+         ^ Charon.PrintTypes.fun_id_or_trait_method_ref_to_string ctx fun_id
          ^ "\n- gid: "
          ^ RegionGroupId.to_string gid
          ^ "\n- inputs: " ^ inputs ^ "\n- back outputs: " ^ outputs ^ "\n"));
@@ -3634,7 +3631,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
   | V.LoopCall -> (
       (* We need to introduce a call to the backward function corresponding
          to a forward call which happened earlier *)
-      let fun_id = E.FRegular ctx.fun_decl.def_id in
+      let fun_id = T.FRegular ctx.fun_decl.def_id in
       let effect_info =
         get_fun_effect_info ctx (FunId fun_id) (Some vloop_id) (Some rg_id)
       in
@@ -4257,7 +4254,7 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
       let org_args = args in
 
       (* Lookup the effect info for the loop function *)
-      let fid = E.FRegular ctx.fun_decl.def_id in
+      let fid = T.FRegular ctx.fun_decl.def_id in
       let effect_info = get_fun_effect_info ctx (FunId fid) None ctx.bid in
 
       (* Introduce a fresh output value for the forward function *)

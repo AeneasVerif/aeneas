@@ -43,7 +43,7 @@ let trait_decl_ref_to_string = Print.EvalCtx.trait_decl_ref_to_string
 
 let fn_ptr_to_string (ctx : eval_ctx) (fn_ptr : fn_ptr) : string =
   let env = Print.Contexts.eval_ctx_to_fmt_env ctx in
-  Print.Expressions.fn_ptr_to_string env fn_ptr
+  Print.Types.fn_ptr_to_string env fn_ptr
 
 let trait_decl_ref_region_binder_to_string =
   Print.EvalCtx.trait_decl_ref_region_binder_to_string

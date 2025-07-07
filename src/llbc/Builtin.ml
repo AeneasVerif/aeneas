@@ -213,7 +213,7 @@ type builtin_fun_info = {
 let mk_builtin_fun_info (raw : raw_builtin_fun_info) :
     builtin_fun_id * builtin_fun_info =
   let fun_id, fun_sig, can_fail, keep_types = raw in
-  let name = Charon.PrintExpressions.builtin_fun_id_to_string fun_id in
+  let name = Charon.PrintTypes.builtin_fun_id_to_string fun_id in
   (fun_id, { fun_id; fun_sig; can_fail; name; keep_types })
 
 (** The list of builtin functions and all their information:
