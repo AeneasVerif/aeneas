@@ -161,7 +161,7 @@ let builtin_types () : Pure.builtin_type_info list =
       ~custom_name:(Some (backend_choice "string" "String"))
       ();
     (* Vec *)
-    mk_type "alloc::vec::Vec" ~keep_params:(Some [ true; false ]) ();
+    mk_type "alloc::vec::Vec" ();
     (* Range *)
     mk_type "core::ops::range::Range"
       ~kind:(KStruct [ ("start", None); ("end", Some "end_") ])
@@ -435,12 +435,12 @@ let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
     fmt "core::ops::deref::DerefMut<Box<@T>, @T>"
       ~extract_name:(Some "core::ops::deref::DerefBoxMutInst") ();
     (* core::ops::Deref<alloc::vec::Vec<T>> *)
-    fmt "core::ops::deref::Deref<alloc::vec::Vec<@T, @A>, [@T]>"
+    fmt "core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>"
       ~extract_name:(Some "core::ops::deref::DerefVecInst")
       ~filter:(Some [ true; false ])
       ();
     (* core::ops::DerefMut<alloc::vec::Vec<T>> *)
-    fmt "core::ops::deref::DerefMut<alloc::vec::Vec<@T, @A>, [@T]>"
+    fmt "core::ops::deref::DerefMut<alloc::vec::Vec<@T>, [@T]>"
       ~extract_name:(Some "core::ops::deref::DerefMutVecInst")
       ~filter:(Some [ true; false ])
       ();
@@ -475,23 +475,23 @@ let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
     fmt "core::slice::index::SliceIndex<usize, [@T], @T>"
       ~extract_name:(Some "core::slice::index::SliceIndexUsizeSliceInst") ();
     (* core::ops::index::Index<alloc::vec::Vec<T>, T> *)
-    fmt "core::ops::index::Index<alloc::vec::Vec<@T, @A>, @T, @O>"
+    fmt "core::ops::index::Index<alloc::vec::Vec<@T>, @T, @O>"
       ~extract_name:(Some "alloc::vec::Vec::IndexInst")
       ~filter:(Some [ true; true; false; true ])
       ();
     (* core::ops::index::IndexMut<alloc::vec::Vec<T>, T> *)
-    fmt "core::ops::index::IndexMut<alloc::vec::Vec<@T, @A>, @T, @O>"
+    fmt "core::ops::index::IndexMut<alloc::vec::Vec<@T>, @T, @O>"
       ~extract_name:(Some "alloc::vec::Vec::IndexMutInst")
       ~filter:(Some [ true; true; false; true ])
       ();
     (* core::clone::impls::{core::clone::Clone for bool} *)
     fmt "core::clone::Clone<bool>" ~extract_name:(Some "core::clone::CloneBool")
       ();
-    fmt "core::ops::deref::Deref<alloc::vec::Vec<@Self, @>>"
+    fmt "core::ops::deref::Deref<alloc::vec::Vec<@Self>>"
       ~extract_name:(Some "alloc.vec.DerefVec")
       ~filter:(Some [ true; false ])
       ();
-    fmt "core::ops::deref::DerefMut<alloc::vec::Vec<@Self, @>>"
+    fmt "core::ops::deref::DerefMut<alloc::vec::Vec<@Self>>"
       ~extract_name:(Some "alloc.vec.DerefMutVec")
       ~filter:(Some [ true; false ])
       ();
@@ -530,7 +530,7 @@ let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
           ~filter:(Some [ true; false ])
           ();
         fmt "core::clone::Clone<[@T; @N]>" ();
-        fmt "core::convert::From<Box<[@T]>, alloc::vec::Vec<@T, @A>>"
+        fmt "core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>"
           ~extract_name:(Some "core.convert.FromBoxSliceVec")
           ~filter:(Some [ true; false ])
           ();
@@ -709,25 +709,25 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
     mk_fun "core::slice::{[@T]}::len"
       ~extract_name:(Some (backend_choice "slice::len" "Slice::len"))
       ~can_fail:false ~lift:false ();
-    mk_fun "alloc::vec::{alloc::vec::Vec<@T, alloc::alloc::Global>}::new"
+    mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::new"
       ~extract_name:(Some "alloc::vec::Vec::new") ~can_fail:false ~lift:false ();
-    mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::push"
+    mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::push"
       ~filter:(Some [ true; false ])
       ();
-    mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::insert"
+    mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::insert"
       ~filter:(Some [ true; false ])
       ();
-    mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::len"
+    mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::len"
       ~filter:(Some [ true; false ])
       ~can_fail:false ~lift:false ();
     mk_fun
-      "alloc::vec::{core::ops::index::Index<alloc::vec::Vec<@T, @A>, @I, \
+      "alloc::vec::{core::ops::index::Index<alloc::vec::Vec<@T>, @I, \
        @O>}::index"
       ~extract_name:(Some "alloc.vec.Vec.index")
       ~filter:(Some [ true; true; false; true ])
       ();
     mk_fun
-      "alloc::vec::{core::ops::index::IndexMut<alloc::vec::Vec<@T, @A>, @I, \
+      "alloc::vec::{core::ops::index::IndexMut<alloc::vec::Vec<@T>, @I, \
        @O>}::index_mut"
       ~extract_name:(Some "alloc.vec.Vec.index_mut")
       ~filter:(Some [ true; true; false; true ])
@@ -812,20 +812,18 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
       ~extract_name:(Some "core_slice_index_Slice_index_mut") ();
     mk_fun "alloc::slice::{[@T]}::to_vec"
       ~extract_name:(Some "alloc.slice.Slice.to_vec") ();
-    mk_fun
-      "alloc::vec::{alloc::vec::Vec<@T, alloc::alloc::Global>}::with_capacity"
+    mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::with_capacity"
       ~extract_name:(Some "alloc.vec.Vec.with_capacity") ~can_fail:false
       ~lift:false ();
     mk_fun "core::slice::{[@T]}::reverse"
       ~extract_name:(Some "core.slice.Slice.reverse") ~can_fail:false ();
     mk_fun
-      "alloc::vec::{core::ops::deref::Deref<alloc::vec::Vec<@T, @A>, \
-       [@T]>}::deref"
+      "alloc::vec::{core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>}::deref"
       ~extract_name:(Some "alloc::vec::Vec::deref")
       ~filter:(Some [ true; false ])
       ~can_fail:false ~lift:false ();
     mk_fun
-      "alloc::vec::{core::ops::deref::DerefMut<alloc::vec::Vec<@T, @A>, \
+      "alloc::vec::{core::ops::deref::DerefMut<alloc::vec::Vec<@T>, \
        [@T]>}::deref_mut"
       ~extract_name:(Some "alloc::vec::Vec::deref_mut") ~can_fail:false
       ~filter:(Some [ true; false ])
@@ -912,13 +910,13 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
   (* Lean-only definitions *)
   @ mk_lean_only
       ([
-         mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::resize"
+         mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::resize"
            ~filter:(Some [ true; false ])
            ();
          mk_fun "alloc::vec::from_elem" ();
          mk_fun
-           "alloc::vec::{core::convert::From<Box<[@T]>, alloc::vec::Vec<@T, \
-            @A>>}::from"
+           "alloc::vec::{core::convert::From<Box<[@T]>, \
+            alloc::vec::Vec<@T>>}::from"
            ~filter:(Some [ true; false ])
            ~extract_name:(Some "alloc.vec.FromBoxSliceVec.from") ();
          mk_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone"
@@ -950,7 +948,7 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
          mk_fun "core::slice::{[@T]}::copy_from_slice" ();
          mk_fun "core::result::{core::result::Result<@T, @E>}::unwrap" ();
          (* Vec *)
-         mk_fun "alloc::vec::{alloc::vec::Vec<@T, @A>}::extend_from_slice"
+         mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::extend_from_slice"
            ~filter:(Some [ true; false ])
            ();
          mk_fun
