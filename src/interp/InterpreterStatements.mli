@@ -35,17 +35,20 @@ val pop_frame :
     - [rgl]: "region group list"
     - [region_can_end]: gives the region groups from which we generate functions
       which can end or not.
-    - [compute_abs_avalues]: this function must compute, given an initialized,
-      empty (i.e., with no avalues) abstraction, compute the avalues which
-      should be inserted in this abstraction before we insert it in the context.
-      Note that this function may update the context: it is necessary when
-      computing borrow projections, for instance.
+    - [compute_abs_avalues]: this function must, given an initialized, empty
+      (i.e., with no avalues) abstraction, compute the avalues which should be
+      inserted in this abstraction before we insert it in the context. Note that
+      this function may update the context: it is necessary when computing
+      borrow projections, for instance.
     - [ctx] *)
 val create_push_abstractions_from_abs_region_groups :
   (RegionGroupId.id -> abs_kind) ->
   abs_region_group list ->
   (RegionGroupId.id -> bool) ->
-  (abs -> eval_ctx -> eval_ctx * typed_avalue list) ->
+  (RegionGroupId.id ->
+  abs ->
+  eval_ctx ->
+  eval_ctx * typed_avalue list * abs_cont option) ->
   eval_ctx ->
   eval_ctx
 

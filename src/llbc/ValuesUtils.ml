@@ -336,3 +336,17 @@ let value_remove_shared_loans (v : typed_value) : typed_value =
     end
   in
   visitor#visit_typed_value () v
+
+let mk_abs_output_no_marker (opat : abs_output_pat) (opat_ty : ty) : abs_output
+    =
+  { opat; opat_ty; marker = PNone }
+
+let abs_output_pat_unit : abs_output_pat =
+  OAdt ({ id = TTuple; generics = empty_generic_args }, None, [])
+
+let abs_output_unit : abs_output =
+  mk_abs_output_no_marker abs_output_pat_unit
+    (TAdt { id = TTuple; generics = empty_generic_args })
+
+let abs_expr_unit : abs_expr =
+  EAdt ({ id = TTuple; generics = empty_generic_args }, None, [])

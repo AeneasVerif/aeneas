@@ -112,9 +112,9 @@ let literal_to_typed_value (span : Meta.span) (ty : literal_type) (cv : literal)
   (* Remaining cases (invalid) *)
   | _, _ -> craise __FILE__ __LINE__ span "Improperly typed constant value"
 
-(** Copy a value, and return the: the original value (we may have need to update
-    it - see the remark about the symbolic values with borrows) and the
-    resulting value.
+(** Copy a value, and return: the original value (we may have need to update it
+    \- see the remark about the symbolic values with borrows) and the resulting
+    value.
 
     Note that copying values might update the context. For instance, when
     copying shared borrows, we need to insert new shared borrows in the context.
@@ -248,30 +248,30 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
         in
         let updated_sv = mk_fresh_symbolic_value span ty in
         let copied_sv = mk_fresh_symbolic_value span ty in
-        let mk_abs (r_id : RegionId.id) (avalues : typed_avalue list) : abs =
-          let abs =
-            {
-              abs_id = fresh_abstraction_id ();
-              kind = CopySymbolicValue;
-              can_end = true;
-              parents = AbstractionId.Set.empty;
-              original_parents = [];
-              regions =
-                {
-                  owned = RegionId.Set.singleton r_id;
-                  ancestors = RegionId.Set.empty;
-                };
-              avalues;
-            }
-          in
-          Invariants.opt_type_check_abs span ctx abs;
-          (* *)
-          abs
-        in
 
         let abs =
           List.map
-            (fun rid ->
+            (fun (rid : region_id) ->
+              let owned_regions = RegionId.Set.singleton rid in
+              (* Create the continuation, for the translation *)
+              let abs_cont : abs_cont =
+                {
+                  outputs =
+                    [
+                      {
+                        opat = OSymbolic (sp.sv_id, ty);
+                        opat_ty = ty;
+                        marker = PNone;
+                      };
+                    ];
+                  (* Note that the values don't give back anything (we will
+                     simplify the given back value to unit when translating
+                     to pure) so we can use any value for the compuation. *)
+                  expr = ESymbolic (copied_sv.sv_id, ty, owned_regions);
+                }
+              in
+
+              (* Create the abstraction values *)
               let mk_proj (is_borrows : bool) sv_id : typed_avalue =
                 let proj =
                   if is_borrows then AProjBorrows (sv_id, ty, [])
@@ -283,7 +283,24 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
               let sv = mk_proj true sp.sv_id in
               let updated_sv = mk_proj false updated_sv.sv_id in
               let copied_sv = mk_proj false copied_sv.sv_id in
-              mk_abs rid [ sv; updated_sv; copied_sv ])
+
+              (* Put everything together in the region abstraction *)
+              let abs =
+                {
+                  abs_id = fresh_abstraction_id ();
+                  kind = CopySymbolicValue;
+                  can_end = true;
+                  parents = AbstractionId.Set.empty;
+                  original_parents = [];
+                  regions =
+                    { owned = owned_regions; ancestors = RegionId.Set.empty };
+                  avalues = [ sv; updated_sv; copied_sv ];
+                  cont = Some abs_cont;
+                }
+              in
+              Invariants.opt_type_check_abs span ctx abs;
+              (* *)
+              abs)
             (RegionId.Map.values regions)
         in
         let abs = List.map (fun a -> EAbs a) (List.rev abs) in

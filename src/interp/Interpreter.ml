@@ -1,5 +1,6 @@
 open Cps
 open InterpreterUtils
+open InterpreterAbsExpr
 open InterpreterProjectors
 open InterpreterBorrows
 open InterpreterStatements
@@ -235,8 +236,8 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
   (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
   let call_id = fresh_fun_call_id () in
   sanity_check __FILE__ __LINE__ (call_id = FunCallId.zero) span;
-  let compute_abs_avalues (abs : abs) (ctx : eval_ctx) :
-      eval_ctx * typed_avalue list =
+  let compute_abs_avalues_and_cont (rg_id : RegionGroupId.id) (abs : abs)
+      (ctx : eval_ctx) : eval_ctx * typed_avalue list * abs_cont option =
     (* Project over the values - we use *loan* projectors, as explained above *)
     let avalues =
       List.map
@@ -244,13 +245,23 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
           mk_aproj_loans_value_from_symbolic_value abs.regions.owned sv sv.sv_ty)
         input_svs
     in
-    (ctx, avalues)
+    let cont : abs_cont =
+      let inputs =
+        List.map
+          (typed_avalue_to_abs_expr (Some span) abs.regions.owned)
+          avalues
+      in
+      let expr = EApp (EFun (EInputAbs rg_id), inputs) in
+      { outputs = []; expr }
+    in
+    (ctx, avalues, Some cont)
   in
   let region_can_end _ = false in
   let ctx =
     create_push_abstractions_from_abs_region_groups
       (fun rg_id -> SynthInput rg_id)
-      inst_sg.abs_regions_hierarchy region_can_end compute_abs_avalues ctx
+      inst_sg.abs_regions_hierarchy region_can_end compute_abs_avalues_and_cont
+      ctx
   in
   (* Split the variables between return var, inputs and remaining locals *)
   let body = Option.get fdef.body in
@@ -338,13 +349,18 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
   let ctx =
     if is_regular_return then (
       let ret_value = Option.get ret_value in
-      let compute_abs_avalues (abs : abs) (ctx : eval_ctx) :
-          eval_ctx * typed_avalue list =
+      let compute_abs_avalues (rg_id : RegionGroupId.id) (abs : abs)
+          (ctx : eval_ctx) : eval_ctx * typed_avalue list * abs_cont option =
         let ctx, avalue =
           apply_proj_borrows_on_input_value config span ctx abs.regions.owned
             abs.regions.ancestors ret_value ret_rty
         in
-        (ctx, [ avalue ])
+        let cont : abs_cont =
+          let output = typed_avalue_to_abs_output (Some span) avalue in
+          let expr = EApp (EFun (EOutputAbs rg_id), []) in
+          { outputs = [ output ]; expr }
+        in
+        (ctx, [ avalue ], Some cont)
       in
 
       (* Initialize and insert the abstractions in the context.

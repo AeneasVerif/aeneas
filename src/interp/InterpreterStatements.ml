@@ -11,6 +11,7 @@ open InterpreterProjectors
 open InterpreterExpansion
 open InterpreterPaths
 open InterpreterExpressions
+open InterpreterAbsExpr
 open Errors
 module Subst = Substitute
 module S = SynthesizeSymbolic
@@ -492,7 +493,8 @@ let eval_builtin_function_call_concrete (config : config) (span : Meta.span)
     which can end or not. *)
 let create_empty_abstractions_from_abs_region_groups
     (kind : RegionGroupId.id -> abs_kind) (rgl : abs_region_group list)
-    (region_can_end : RegionGroupId.id -> bool) : abs list =
+    (region_can_end : RegionGroupId.id -> bool) : (RegionGroupId.id * abs) list
+    =
   (* We use a reference to progressively create a map from abstraction ids
    * to set of ancestor regions. Note that {!abs_to_ancestors_regions} [abs_id]
    * returns the union of:
@@ -503,7 +505,8 @@ let create_empty_abstractions_from_abs_region_groups
     ref AbstractionId.Map.empty
   in
   (* Auxiliary function to create one abstraction *)
-  let create_abs (rg_id : RegionGroupId.id) (rg : abs_region_group) : abs =
+  let create_abs (rg_id : RegionGroupId.id) (rg : abs_region_group) :
+      RegionGroupId.id * abs =
     let abs_id = rg.id in
     let original_parents = rg.parents in
     let parents =
@@ -530,15 +533,19 @@ let create_empty_abstractions_from_abs_region_groups
       AbstractionId.Map.add abs_id ancestors_regions_union_current_regions
         !abs_to_ancestors_regions;
     (* Create the abstraction *)
-    {
-      abs_id;
-      kind = kind rg_id;
-      can_end;
-      parents;
-      original_parents;
-      regions;
-      avalues = [];
-    }
+    let abs =
+      {
+        abs_id;
+        kind = kind rg_id;
+        can_end;
+        parents;
+        original_parents;
+        regions;
+        avalues = [];
+        cont = None;
+      }
+    in
+    (rg_id, abs)
   in
   (* Apply *)
   RegionGroupId.mapi create_abs rgl
@@ -546,8 +553,12 @@ let create_empty_abstractions_from_abs_region_groups
 let create_push_abstractions_from_abs_region_groups
     (kind : RegionGroupId.id -> abs_kind) (rgl : abs_region_group list)
     (region_can_end : RegionGroupId.id -> bool)
-    (compute_abs_avalues : abs -> eval_ctx -> eval_ctx * typed_avalue list)
-    (ctx : eval_ctx) : eval_ctx =
+    (compute_abs_avalues :
+      RegionGroupId.id ->
+      abs ->
+      eval_ctx ->
+      eval_ctx * typed_avalue list * abs_cont option) (ctx : eval_ctx) :
+    eval_ctx =
   (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
   let empty_absl =
     create_empty_abstractions_from_abs_region_groups kind rgl region_can_end
@@ -555,11 +566,13 @@ let create_push_abstractions_from_abs_region_groups
 
   (* Compute and add the avalues to the abstractions, the insert the abstractions
    * in the context. *)
-  let insert_abs (ctx : eval_ctx) (abs : abs) : eval_ctx =
+  let insert_abs (ctx : eval_ctx) (rgid_abs : RegionGroupId.id * abs) : eval_ctx
+      =
+    let rgid, abs = rgid_abs in
     (* Compute the values to insert in the abstraction *)
-    let ctx, avalues = compute_abs_avalues abs ctx in
+    let ctx, avalues, cont = compute_abs_avalues rgid abs ctx in
     (* Add the avalues to the abstraction *)
-    let abs = { abs with avalues } in
+    let abs = { abs with avalues; cont } in
     (* Insert the abstraction in the context *)
     let ctx = { ctx with env = EAbs abs :: ctx.env } in
     (* Return *)
@@ -1372,8 +1385,8 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
    * First, we define the function which, given an initialized, empty
    * abstraction, computes the avalues which should be inserted inside.
    *)
-  let compute_abs_avalues (abs : abs) (ctx : eval_ctx) :
-      eval_ctx * typed_avalue list =
+  let compute_abs_avalues (rg_id : RegionGroupId.id) (abs : abs)
+      (ctx : eval_ctx) : eval_ctx * typed_avalue list * abs_cont option =
     (* Project over the input values *)
     let ctx, args_projs =
       List.fold_left_map
@@ -1382,8 +1395,19 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
             abs.regions.ancestors arg arg_rty)
         ctx args_with_rtypes
     in
+    let ret_v = ret_av abs.regions.owned in
+    (* Compute the continuation used in the translation *)
+    let outputs =
+      List.map (typed_avalue_to_abs_output (Some span)) args_projs
+    in
+    let expr = EFun (EOutputAbs rg_id) in
+    let expr =
+      EApp
+        (expr, [ typed_avalue_to_abs_expr (Some span) abs.regions.owned ret_v ])
+    in
+    let cont : abs_cont = { outputs; expr } in
     (* Group the input and output values *)
-    (ctx, List.append args_projs [ ret_av abs.regions.owned ])
+    (ctx, List.append args_projs [ ret_v ], Some cont)
   in
   (* Actually initialize and insert the abstractions *)
   let call_id = fresh_fun_call_id () in
