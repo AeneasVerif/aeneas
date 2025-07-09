@@ -2,7 +2,6 @@
 #![feature(register_tool)]
 #![register_tool(aeneas)]
 #![feature(box_patterns)]
-#![feature(let_chains)]
 
 impl Ord for i32 {
     fn cmp(&self, other: &Self) -> Ordering {
@@ -38,7 +37,7 @@ pub struct Tree<T> {
 }
 
 impl<T> Node<T> {
-    fn rotate_left(root: &mut Box<Node<T>>, mut z : Box<Node<T>>) {
+    fn rotate_left(root: &mut Box<Node<T>>, mut z: Box<Node<T>>) {
         // We do (root is X):
         //
         //        X
@@ -64,32 +63,30 @@ impl<T> Node<T> {
         //        Z
         //         \
         //          C
-        
+
         let x = std::mem::replace(root, z);
         root.left = Some(x); // root is now Z
-        //        Z
-        //       / \
-        //      X   C
-        //     / \
-        //    A   B
+                             //        Z
+                             //       / \
+                             //      X   C
+                             //     / \
+                             //    A   B
 
         // Update the balance factors
         if let Some(x) = &mut root.left {
             if root.balance_factor == 0 {
                 x.balance_factor = 1;
                 root.balance_factor = -1;
-            }
-            else {
+            } else {
                 x.balance_factor = 0;
                 root.balance_factor = 0;
             }
-        }
-        else {
+        } else {
             panic!()
         }
     }
 
-    fn rotate_right(root: &mut Box<Node<T>>, mut z : Box<Node<T>>) {
+    fn rotate_right(root: &mut Box<Node<T>>, mut z: Box<Node<T>>) {
         // We do (root is X):
         //
         //        X
@@ -115,7 +112,7 @@ impl<T> Node<T> {
         //        Z
         //       /
         //      A
-        
+
         let x = std::mem::replace(root, z);
         root.right = Some(x); // root is now Z
 
@@ -124,18 +121,16 @@ impl<T> Node<T> {
             if root.balance_factor == 0 {
                 x.balance_factor = -1;
                 root.balance_factor = 1;
-            }
-            else {
+            } else {
                 x.balance_factor = 0;
                 root.balance_factor = 0;
             }
-        }
-        else {
+        } else {
             panic!()
         }
     }
 
-    fn rotate_left_right(root : &mut Box<Node<T>>, mut z : Box<Node<T>>) {
+    fn rotate_left_right(root: &mut Box<Node<T>>, mut z: Box<Node<T>>) {
         // We do (root is X):
         //
         //        X
@@ -185,7 +180,7 @@ impl<T> Node<T> {
         }
     }
 
-    fn rotate_right_left(root : &mut Box<Node<T>>, mut z : Box<Node<T>>) {
+    fn rotate_right_left(root: &mut Box<Node<T>>, mut z: Box<Node<T>>) {
         // We do (root is X):
         //
         //        X
@@ -247,16 +242,14 @@ impl<T: Ord> Node<T> {
                 if left.balance_factor <= 0 {
                     // Note that the left balance factor is actually < 0 here
                     Node::rotate_right(node, left);
-                }
-                else {
+                } else {
                     Node::rotate_left_right(node, left);
                 }
                 // In order to udnerstand what happens here we need a drawing.
                 // In effect, as we rebalanced the tree, the total height did not
                 // increase compared to before the insertion operation.
                 false
-            }
-            else {
+            } else {
                 // If the balance factor changed from 1 to 0: the height did not
                 // change (we increased the height of the left subtree, which
                 // has now the same height as the right subtree).
@@ -267,13 +260,12 @@ impl<T: Ord> Node<T> {
                 // is different from 0
                 node.balance_factor != 0
             }
-        }
-        else {
+        } else {
             // The height did not change
             false
         }
     }
-    
+
     fn insert_in_right(node: &mut Box<Node<T>>, value: T) -> bool {
         // Insert in the right sutbree, and check if we increased its height
         if Tree::insert_in_opt_node(&mut node.right, value) {
@@ -286,16 +278,14 @@ impl<T: Ord> Node<T> {
                 if right.balance_factor >= 0 {
                     // Note that the right balance factor is actually > 0 here
                     Node::rotate_left(node, right);
-                }
-                else {
+                } else {
                     Node::rotate_right_left(node, right);
                 }
                 // In order to udnerstand what happens here we need a drawing.
                 // In effect, as we rebalanced the tree, the total height did not
                 // increase compared to before the insertion operation.
                 false
-            }
-            else {
+            } else {
                 // If the balance factor changed from -1 to 0: the height did not
                 // change (we increased the height of the right subtree, which
                 // has now the same height as the left subtree).
@@ -306,14 +296,13 @@ impl<T: Ord> Node<T> {
                 // is different from 0
                 node.balance_factor != 0
             }
-        }
-        else {
+        } else {
             // The height of the right subtree did not change so the total
             // height did not change.
             false
         }
     }
-    
+
     // Return [true] if we increased the height of the tree
     fn insert(node: &mut Box<Node<T>>, value: T) -> bool {
         let ordering = value.cmp(&(*node).value);
@@ -323,13 +312,9 @@ impl<T: Ord> Node<T> {
         // we need to compute whether the height of the current tree increased
         // or not.
         match ordering {
-            Ordering::Less => {
-                Node::insert_in_left(node, value)
-            },
+            Ordering::Less => Node::insert_in_left(node, value),
             Ordering::Equal => false,
-            Ordering::Greater => {
-                Node::insert_in_right(node, value)
-            }
+            Ordering::Greater => Node::insert_in_right(node, value),
         }
     }
 }
@@ -355,9 +340,7 @@ impl<T: Ord> Tree<T> {
 
     fn insert_in_opt_node(node: &mut Option<Box<Node<T>>>, value: T) -> bool {
         match node {
-            Some(ref mut node) => {
-                Node::insert(node, value)
-            }
+            Some(node) => Node::insert(node, value),
             None => {
                 *node = Some(Box::new(Node {
                     value,
@@ -400,14 +383,17 @@ mod tests {
         }
     }
 
-
     impl<T> Node<T> {
         fn height(&self) -> usize {
-            1 + get_max(self.right.as_deref().map_or(0, |n| n.height()), self.left.as_deref().map_or(0, |n| n.height()))
+            1 + get_max(
+                self.right.as_deref().map_or(0, |n| n.height()),
+                self.left.as_deref().map_or(0, |n| n.height()),
+            )
         }
 
         fn balance_factor(&self) -> isize {
-            self.right.as_deref().map_or(0, |n| n.height()) as isize - self.left.as_deref().map_or(0, |n| n.height()) as isize
+            self.right.as_deref().map_or(0, |n| n.height()) as isize
+                - self.left.as_deref().map_or(0, |n| n.height()) as isize
         }
 
         fn check_inv(&self) {
@@ -433,7 +419,7 @@ mod tests {
 
     #[test]
     fn test1() {
-        let mut t : Tree<i32> = Tree::new();
+        let mut t: Tree<i32> = Tree::new();
 
         // Always inserting to the right
         for i in 0..100 {
@@ -444,7 +430,7 @@ mod tests {
 
     #[test]
     fn test2() {
-        let mut t : Tree<i32> = Tree::new();
+        let mut t: Tree<i32> = Tree::new();
 
         // Always inserting to the left
         for i in 0..(-100) {
@@ -455,7 +441,7 @@ mod tests {
 
     #[test]
     fn test3() {
-        let mut t : Tree<i32> = Tree::new();
+        let mut t: Tree<i32> = Tree::new();
 
         // Always inserting to the right
         for i in 0..100 {
@@ -472,7 +458,7 @@ mod tests {
 
     #[test]
     fn test4() {
-        let mut t : Tree<i32> = Tree::new();
+        let mut t: Tree<i32> = Tree::new();
 
         // Simulating randomness here
         for i in 0..100 {
