@@ -684,7 +684,7 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
     | Not, (TLiteral (TInteger _) as lty) -> lty
     | Neg OPanic, (TLiteral (TInteger _) as lty) -> lty
     | Cast (CastScalar (_, tgt_ty)), _ -> TLiteral tgt_ty
-    | Cast (CastUnsize (ty0, ty1)), _ ->
+    | Cast (CastUnsize (ty0, ty1, _)), _ ->
         (* If the following function succeeds, then it means the cast is well-formed
            (otherwise it throws an exception) *)
         let _ = cast_unsize_to_modified_fields span ctx ty0 ty1 in

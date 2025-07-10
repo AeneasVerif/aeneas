@@ -28,7 +28,6 @@
 
 open Types
 open TypesUtils
-open Expressions
 open LlbcAst
 open LlbcAstUtils
 open Builtin
