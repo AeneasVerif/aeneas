@@ -2922,7 +2922,7 @@ and translate_function_call (call : S.call) (e : S.expression) (ctx : bs_ctx) :
       ^ "\n"));
   (* We have to treat unsized casts separately *)
   match call.call_id with
-  | S.Unop (Cast (CastUnsize (ty0, ty1))) ->
+  | S.Unop (Cast (CastUnsize (ty0, ty1, _))) ->
       translate_cast_unsize call e ty0 ty1 ctx
   | _ -> translate_function_call_aux call e ctx
 
@@ -3161,8 +3161,6 @@ and translate_function_call_aux (call : S.call) (e : S.expression)
       end
     | S.Unop E.PtrMetadata ->
         craise __FILE__ __LINE__ ctx.span "Unsupported unop: PtrMetadata"
-    | S.Unop (E.ArrayToSlice _) ->
-        craise __FILE__ __LINE__ ctx.span "Unsupported unop: ArrayToSlice"
     | S.Binop binop -> (
         match args with
         | [ arg0; arg1 ] ->
