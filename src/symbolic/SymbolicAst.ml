@@ -90,7 +90,6 @@ class ['self] iter_expression_base =
 
     method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
     method visit_espan : 'env -> espan -> unit = fun _ _ -> ()
-    method visit_span : 'env -> Meta.span -> unit = fun _ _ -> ()
 
     method visit_region_group_id_map :
         'a. ('env -> 'a -> unit) -> 'env -> 'a region_group_id_map -> unit =
