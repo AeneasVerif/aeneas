@@ -419,7 +419,8 @@ end
 module Contexts = struct
   open Values
 
-  let var_binder_to_string (env : fmt_env) (bv : var_binder) : string =
+  let real_var_binder_to_string (env : fmt_env) (bv : real_var_binder) : string
+      =
     match bv.name with
     | None -> local_id_to_string env bv.index
     | Some name -> name ^ "^" ^ LocalId.to_string bv.index
@@ -429,7 +430,7 @@ module Contexts = struct
 
   let binder_to_string (env : fmt_env) (bv : binder) : string =
     match bv with
-    | BVar b -> var_binder_to_string env b
+    | BVar b -> real_var_binder_to_string env b
     | BDummy bid -> dummy_var_id_to_string bid
 
   let env_elem_to_string ?(span : Meta.span option = None) (env : fmt_env)
