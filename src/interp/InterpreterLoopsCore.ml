@@ -2,9 +2,9 @@
 
 open Types
 open Values
+open ValuesUtils
 open Contexts
 open InterpreterUtils
-open InterpreterBorrowsCore
 open Errors
 
 type updt_env_kind =

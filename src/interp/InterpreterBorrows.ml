@@ -8,6 +8,7 @@ open TypesUtils
 open InterpreterUtils
 open InterpreterBorrowsCore
 open InterpreterProjectors
+open InterpreterAbsExpr
 open Errors
 
 (** The local logger *)
@@ -2257,6 +2258,23 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
                  (fun (v : typed_avalue) ->
                    typed_avalue_to_string ctx v ^ " : " ^ ty_to_string ctx v.ty)
                  avalues)));
+      let owned_regions = RegionId.Set.singleton r_id in
+
+      (* Create the continuation for the pure translation *)
+      let cont : abs_cont =
+        let outputs =
+          List.map
+            (typed_avalue_to_abs_toutput (Some span) owned_regions)
+            avalues
+        in
+        let outputs = List.map (fun o -> (o, PNone)) outputs in
+        let expr =
+          typed_avalues_to_abs_texpr (Some span) owned_regions avalues
+        in
+        { outputs; expr }
+      in
+
+      (* Put everything together *)
       let abs =
         {
           abs_id = fresh_abstraction_id ();
@@ -2264,12 +2282,9 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
           can_end;
           parents = AbstractionId.Set.empty;
           original_parents = [];
-          regions =
-            {
-              owned = RegionId.Set.singleton r_id;
-              ancestors = RegionId.Set.empty;
-            };
+          regions = { owned = owned_regions; ancestors = RegionId.Set.empty };
           avalues;
+          cont = Some cont;
         }
       in
       log#ldebug
@@ -3224,7 +3239,7 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
         type borrow_content = ty * proj_marker * aproj
         type loan_content = ty * proj_marker * aproj
 
-        let to_string = marked_norm_symb_proj_to_string ctx
+        let to_string = Print.EvalCtx.marked_norm_symb_proj_to_string ctx
         let borrow_is_merged = borrow_proj_is_merged
         let loan_is_merged = loan_proj_is_merged
         let filter_marked = filter_symbolic
@@ -3711,6 +3726,146 @@ let merge_abstractions_merge_markers (span : Meta.span)
   let aborrows, aloans = List.partition is_borrow avalues in
   List.append aborrows aloans
 
+let merge_abs_exprs_aux (span : Meta.span) (ctx : eval_ctx)
+    (owned_regions : region_id_set) (avalues : typed_avalue list)
+    (cont0 : abs_cont) (cont1 : abs_cont) : abs_cont =
+  (* For now we do not support merging expressions containing markers: when
+     merging from different branches when computing fixed points for instance
+     the continuations should be [None]. *)
+  (* The way we proceed is simple.
+
+     Let's say we want to merge A1 into A0:
+     {[
+       A0 { MB l0, ML l1 } ⟦ l0 = l1 ⟧
+       A1 { MB l1, MB l2, ML l3 } ⟦ (l1, l2) = if b then (l3, 1) else (0, l3) ⟧
+     ]}
+
+     We first compute the list of borrows and borrow projectors over symbolic values
+     which remain after merging the two regions: those give us the expression outputs.
+     In the present case, the merged abstraction is:
+     {[
+       A2 { MB l0, MB l2, ML l3 } ⟦ ... ⟧
+     ]}
+     This means that we A2 has outputs: (l0, l2).
+     Then, we introduce the following expressions:
+     {[
+       // Introduce auxiliary variables to bind the expression of A1
+       let (v_l1, v_l2) = if b then (l3, 1) else (0, l3) in
+       // Introduce auxiliary variables to bind the expression of A2,
+       // replacing the value we introduce for l1 (we remember that
+       // we introduced v_l1 for l1, that is we have the mapping: l1 -> v_l1).
+       let v_l0 = v_l1 in
+       // We need to generate the expression to output the values for (l0, l2).
+       // We remember that: l2 -> v_l2, l0 -> v_l0.
+       (v_l0, v_l2)
+     ]}
+     The final region abstraction, with its expression, is thus:
+     {[
+       A2 { MB l0, MB l2, ML l3 } ⟦
+         let (v_l1, v_l2) = if b then (l3, 1) else (0, l3) in
+         let v_l0 = v_l1 in
+         (v_l0, v_l2)
+         ⟧
+     ]}
+     We note that the outputs of the composed continuation come from *both*
+     the continuation of A0 (i.e., v_l0) and the continuation of A1 (i.e., v_l2).
+  *)
+  (* First, compute the information from the avalues. This gives us in particular the output values. *)
+  let info = compute_merge_abstraction_info span ctx owned_regions avalues in
+
+  (* Sanity check: no free variables in the expressions *)
+  sanity_check __FILE__ __LINE__ (abs_texpr_no_free_vars cont0.expr) span;
+  sanity_check __FILE__ __LINE__ (abs_texpr_no_free_vars cont1.expr) span;
+
+  (* Let-bind the outputs of abs1 (we're merging it into abs0, and as a
+     consequence part of its outputs might be inputs to abs0). We need to
+     remember which variable we introduced for which output.
+   *)
+  let _, fresh_fvar_id = AbsFreeVarId.fresh_stateful_generator () in
+  let mk_let1, outputs_to_fvars1 =
+    let_bind_abs_cont_outputs span fresh_fvar_id cont1
+  in
+  let emap1 =
+    AbsTExprMap.to_opt_subst (AbsTExprMap.of_list outputs_to_fvars1)
+  in
+
+  (* Substitute the outputs of abs1 in abs0, then let-bind the outputs of abs0
+     in the resulting expression. *)
+  let cont0 = { cont0 with expr = subst_abs_texpr emap1 cont0.expr } in
+  let mk_let0, outputs_to_fvars0 =
+    let_bind_abs_cont_outputs span fresh_fvar_id cont0
+  in
+
+  (* Compute the outputs of the continuation *)
+  let outputs =
+    let output_borrows =
+      List.filter_map
+        (fun bl ->
+          match bl with
+          | Borrow (marker, bid) ->
+              (* We don't support merging abstractions with markers for now *)
+              sanity_check __FILE__ __LINE__ (marker = PNone) span;
+              (* We need to lookup the type of the borrow *)
+              begin
+                match
+                  MarkedBorrowId.Map.find (marker, bid) info.borrow_to_content
+                with
+                | Concrete _ -> craise __FILE__ __LINE__ span "Unexpected"
+                | Abstract (ty, _) ->
+                    let ty = normalize_proj_ty owned_regions ty in
+                    Some { opat = OBorrow bid; opat_ty = ty }
+              end
+          | Loan _ -> None)
+        info.borrows_loans
+    in
+    let output_symbolic =
+      List.filter_map
+        (fun proj ->
+          match proj with
+          | Borrow proj ->
+              (* We don't support merging abstractions with markers for now *)
+              sanity_check __FILE__ __LINE__ (proj.pm = PNone) span;
+              Some { opat = OSymbolic proj.sv_id; opat_ty = proj.norm_proj_ty }
+          | Loan _ -> None)
+        info.borrow_loan_projs
+    in
+    List.append output_borrows output_symbolic
+  in
+  let outputs = List.map (fun o -> (o, PNone)) outputs in
+
+  (* Generate the output expression of the composed continuation. *)
+  let output_expr =
+    let output_to_expr =
+      List.append
+        (List.combine cont0.outputs outputs_to_fvars0)
+        (List.combine cont1.outputs outputs_to_fvars1)
+    in
+    let output_to_expr =
+      List.map (fun ((o, _), (_, fv)) -> (o, fv)) output_to_expr
+    in
+    let output_to_expr =
+      AbsTOutputMap.to_subst (AbsTOutputMap.of_list output_to_expr)
+    in
+    let outputs = List.map output_to_expr (List.map fst outputs) in
+    abs_texpr_mk_tuple outputs
+  in
+
+  (* Create the let expressions (this binds the free variables) *)
+  let expr = mk_let1 (mk_let0 output_expr) in
+
+  (* Put together *)
+  { expr; outputs }
+
+(** Merge the expressions of two different abstractions. *)
+let merge_abs_exprs (span : Meta.span) (ctx : eval_ctx) (abs0 : abs)
+    (abs1 : abs) (owned_regions : region_id_set) (avalues : typed_avalue list) :
+    abs_cont option =
+  match (abs0.cont, abs1.cont) with
+  | None, None -> None
+  | None, Some _ | Some _, None -> craise __FILE__ __LINE__ span "Unexpected"
+  | Some cont0, Some cont1 ->
+      Some (merge_abs_exprs_aux span ctx owned_regions avalues cont0 cont1)
+
 (** Auxiliary function.
 
     Merge two abstractions into one, without updating the context. *)
@@ -3768,6 +3923,9 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
     merge_abstractions_merge_markers span merge_funs ctx regions.owned avalues
   in
 
+  (* Merge the expressions used for the pure translation. *)
+  let cont = merge_abs_exprs span ctx abs0 abs1 regions.owned avalues in
+
   (* Create the new abstraction *)
   let abs_id = fresh_abstraction_id () in
   let abs =
@@ -3779,6 +3937,7 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
       original_parents;
       regions;
       avalues;
+      cont;
     }
   in
 

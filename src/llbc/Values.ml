@@ -790,14 +790,17 @@ type abs_kind =
           containing borrows. *)
 [@@deriving show, ord]
 
-module RegionBoundVarId = IdGen ()
-module RegionFreeVarId = IdGen ()
+module AbsBoundVarId = IdGen ()
+module AbsFreeVarId = IdGen ()
 
-type region_bound_var_id = RegionBoundVarId.id [@@deriving show, ord]
-type region_free_var_id = RegionFreeVarId.id [@@deriving show, ord]
+(** A DeBruijn index identifying a group of bound variables *)
+type abs_db_scope_id = int [@@deriving show, ord]
 
-(** Ancestor for {!abs_cont} iter visitor *)
-class ['self] iter_abs_cont_base =
+type abs_bound_var_id = AbsBoundVarId.id [@@deriving show, ord]
+type abs_free_var_id = AbsFreeVarId.id [@@deriving show, ord]
+
+(** Ancestor for {!abs_expr} iter visitor *)
+class ['self] iter_abs_expr_base =
   object (_self : 'self)
     inherit [_] iter_typed_avalue
     method visit_loop_abs_kind : 'env -> loop_abs_kind -> unit = fun _ _ -> ()
@@ -808,15 +811,18 @@ class ['self] iter_abs_cont_base =
 
     method visit_loop_id : 'env -> loop_id -> unit = fun _ _ -> ()
 
-    method visit_region_bound_var_id : 'env -> region_bound_var_id -> unit =
+    method visit_abs_db_scope_id : 'env -> abs_db_scope_id -> unit =
       fun _ _ -> ()
 
-    method visit_region_free_var_id : 'env -> region_free_var_id -> unit =
+    method visit_abs_bound_var_id : 'env -> abs_bound_var_id -> unit =
+      fun _ _ -> ()
+
+    method visit_abs_free_var_id : 'env -> abs_free_var_id -> unit =
       fun _ _ -> ()
   end
 
-(** Ancestor for {!abs_cont} map visitor *)
-class ['self] map_abs_cont_base =
+(** Ancestor for {!abs_expr} map visitor *)
+class ['self] map_abs_expr_base =
   object (_self : 'self)
     inherit [_] map_typed_avalue
 
@@ -830,21 +836,31 @@ class ['self] map_abs_cont_base =
 
     method visit_loop_id : 'env -> loop_id -> loop_id = fun _ x -> x
 
-    method visit_region_bound_var_id :
-        'env -> region_bound_var_id -> region_bound_var_id =
+    method visit_abs_db_scope_id : 'env -> abs_db_scope_id -> abs_db_scope_id =
       fun _ x -> x
 
-    method visit_region_free_var_id :
-        'env -> region_free_var_id -> region_free_var_id =
+    method visit_abs_bound_var_id : 'env -> abs_bound_var_id -> abs_bound_var_id
+        =
+      fun _ x -> x
+
+    method visit_abs_free_var_id : 'env -> abs_free_var_id -> abs_free_var_id =
       fun _ x -> x
   end
 
-type abs_output_pat =
+type abs_output =
   | OBorrow of borrow_id
-  | OSymbolic of symbolic_value_id * ty
-  | OAdt of type_decl_ref * variant_id option * abs_output_pat list
+  | OSymbolic of symbolic_value_id
+  | OAdt of variant_id option * abs_toutput list
 
-and abs_output = { opat : abs_output_pat; opat_ty : ty; marker : proj_marker }
+and abs_toutput = {
+  opat : abs_output;
+  opat_ty : ty;  (** The type should have been normalized *)
+}
+
+and abs_bound_var = {
+  db_scope_id : abs_db_scope_id;
+  bvar_id : abs_bound_var_id;
+}
 
 and abs_fun =
   | EOutputAbs of region_group_id
@@ -869,26 +885,27 @@ and abs_fun =
 
 (** See {!abs_cont} *)
 and abs_expr =
-  | ELet of abs_expr_pat * abs_expr
+  | ELet of abs_expr_tpat * abs_texpr * abs_texpr
   | EFun of abs_fun
-  | EApp of abs_expr * abs_expr list
-  | ELambda of region_bound_var_id * abs_expr * abs_expr
+  | EApp of abs_expr * abs_texpr list
+      (** Remark: we're ignoring the type of the application here *)
+  | ELambda of abs_bound_var_id list * abs_texpr
   | EValue of typed_value
-  | EBVar of region_bound_var_id
-  | EFVar of region_free_var_id
-  | EBorrow of borrow_id
-      (** Evaluate to the value we consume upon ending the borrow.
+  | EBVar of abs_bound_var
+  | EFVar of abs_free_var_id
+  | ELoan of loan_id
+      (** Evaluate to the value we consume upon ending the loan.
 
           For example, let's consider the region abstraction below:
           {[
-            { MB l0, ML l1 }[(l0) = (Borrow l1)]
+            { MB l0, ML l1 }[(l0) = (ELoan l1)]
           ]}
           This means that when ending the region abstraction, the value given
           back for borrow [l0] is the value consumed upon ending [l1]. *)
-  | ESymbolic of symbolic_value_id * ty * region_id_set
-      (** Similar to [EBorrow], but for the borrows hidden inside a symbolic
-          value *)
-  | EAdt of type_decl_ref * variant_id option * abs_expr list
+  | ESymbolic of symbolic_value_id
+      (** Similar to [ELoan], but for the loans corresponding to the borrows
+          hidden inside a symbolic value. *)
+  | EAdt of variant_id option * abs_texpr list
   | EBottom
       (** Missing value. We use this when computing joins: the continuation
           coming from, say, the left state, may compute values under some
@@ -896,14 +913,18 @@ and abs_expr =
           by the continuation from the right state, meaning the left
           continuation evaluates to [bottom]). *)
 
-and abs_expr_pat_kind =
-  | PVar of region_bound_var_id
-  | PAdt of type_decl_ref * variant_id option * abs_expr_pat list
+and abs_texpr = {
+  e : abs_expr;
+  ty : ty;  (** The type should have been normalized *)
+}
 
-and abs_expr_pat = {
-  epat : abs_expr_pat_kind;
-  epat_ty : ty;
-  regions : region_id_set;
+and abs_expr_pat =
+  | PVar of abs_bound_var_id
+  | PAdt of variant_id option * abs_expr_tpat list
+
+and abs_expr_tpat = {
+  epat : abs_expr_pat;
+  epat_ty : ty;  (** The type should have been normalized *)
 }
 
 (** The continuation representating the computation performed that has to be
@@ -913,28 +934,28 @@ and abs_expr_pat = {
     This is used by the translation, and is particularly useful to compute
     joins: when merging regions, we compose their continuations. *)
 and abs_cont = {
-  outputs : abs_output list;
+  outputs : (abs_toutput * proj_marker) list;
       (** This field is here only to fix the *order* of the outputs, because
           otherwise, the list of outputs is given by the region abstraction
           itself (this would be redundant information). *)
-  expr : abs_expr;  (** The continuation. *)
+  expr : abs_texpr;  (** The continuation. *)
 }
 [@@deriving
   show,
   ord,
   visitors
     {
-      name = "iter_abs_cont";
+      name = "iter_abs_expr";
       variety = "iter";
-      ancestors = [ "iter_abs_cont_base" ];
+      ancestors = [ "iter_abs_expr_base" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
     },
   visitors
     {
-      name = "map_abs_cont";
+      name = "map_abs_expr";
       variety = "map";
-      ancestors = [ "map_abs_cont_base" ];
+      ancestors = [ "map_abs_expr_base" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
     }]

@@ -5,7 +5,6 @@ open Utils
 open TypesUtils
 open ValuesUtils
 open InterpreterUtils
-open InterpreterBorrowsCore
 open InterpreterBorrows
 open InterpreterLoopsCore
 open InterpreterLoopsMatchCtxs

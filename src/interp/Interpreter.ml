@@ -248,10 +248,11 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
     let cont : abs_cont =
       let inputs =
         List.map
-          (typed_avalue_to_abs_expr (Some span) abs.regions.owned)
+          (typed_avalue_to_abs_texpr (Some span) abs.regions.owned)
           avalues
       in
-      let expr = EApp (EFun (EInputAbs rg_id), inputs) in
+      let e = EApp (EFun (EInputAbs rg_id), inputs) in
+      let expr = { e; ty = mk_unit_ty } in
       { outputs = []; expr }
     in
     (ctx, avalues, Some cont)
@@ -356,9 +357,13 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
             abs.regions.ancestors ret_value ret_rty
         in
         let cont : abs_cont =
-          let output = typed_avalue_to_abs_output (Some span) avalue in
-          let expr = EApp (EFun (EOutputAbs rg_id), []) in
-          { outputs = [ output ]; expr }
+          let output =
+            typed_avalue_to_abs_toutput (Some span) abs.regions.owned avalue
+          in
+          let e = EApp (EFun (EOutputAbs rg_id), []) in
+          let ty = normalize_proj_ty abs.regions.owned ret_rty in
+          let expr = { e; ty } in
+          { outputs = [ (output, PNone) ]; expr }
         in
         (ctx, [ avalue ], Some cont)
       in

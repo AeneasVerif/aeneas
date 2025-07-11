@@ -5,6 +5,7 @@ open Types
 open Values
 open Contexts
 open TypesUtils
+open ValuesUtils
 open InterpreterUtils
 open InterpreterBorrowsCore
 open Errors

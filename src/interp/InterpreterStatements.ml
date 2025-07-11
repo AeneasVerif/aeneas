@@ -1398,13 +1398,16 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
     let ret_v = ret_av abs.regions.owned in
     (* Compute the continuation used in the translation *)
     let outputs =
-      List.map (typed_avalue_to_abs_output (Some span)) args_projs
+      List.map
+        (typed_avalue_to_abs_toutput (Some span) abs.regions.owned)
+        args_projs
     in
-    let expr = EFun (EOutputAbs rg_id) in
-    let expr =
-      EApp
-        (expr, [ typed_avalue_to_abs_expr (Some span) abs.regions.owned ret_v ])
+    let outputs = List.map (fun o -> (o, PNone)) outputs in
+    let e = EFun (EOutputAbs rg_id) in
+    let e =
+      EApp (e, [ typed_avalue_to_abs_texpr (Some span) abs.regions.owned ret_v ])
     in
+    let expr = { e; ty = normalize_proj_ty abs.regions.owned ret_v.ty } in
     let cont : abs_cont = { outputs; expr } in
     (* Group the input and output values *)
     (ctx, List.append args_projs [ ret_v ], Some cont)

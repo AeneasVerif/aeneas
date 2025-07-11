@@ -666,6 +666,14 @@ module EvalCtx = struct
     let env = eval_ctx_to_fmt_env ctx in
     symbolic_value_to_string env sv
 
+  let marked_norm_symb_proj_to_string (ctx : eval_ctx)
+      (p : marked_norm_symb_proj) : string =
+    let { pm; sv_id; norm_proj_ty } = p in
+    symbolic_value_id_to_pretty_string sv_id
+    ^ " <: "
+    ^ ty_to_string ctx norm_proj_ty
+    |> add_proj_marker pm
+
   let typed_value_to_string ?(span : Meta.span option = None) (ctx : eval_ctx)
       (v : typed_value) : string =
     let env = eval_ctx_to_fmt_env ctx in

@@ -253,23 +253,15 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
           List.map
             (fun (rid : region_id) ->
               let owned_regions = RegionId.Set.singleton rid in
+              let norm_ty = normalize_proj_ty owned_regions ty in
               (* Create the continuation, for the translation *)
-              let abs_cont : abs_cont =
-                {
-                  outputs =
-                    [
-                      {
-                        opat = OSymbolic (sp.sv_id, ty);
-                        opat_ty = ty;
-                        marker = PNone;
-                      };
-                    ];
-                  (* Note that the values don't give back anything (we will
-                     simplify the given back value to unit when translating
-                     to pure) so we can use any value for the compuation. *)
-                  expr = ESymbolic (copied_sv.sv_id, ty, owned_regions);
-                }
-              in
+              let output = { opat = OSymbolic sp.sv_id; opat_ty = norm_ty } in
+              let outputs = [ (output, PNone) ] in
+              (* Note that the values don't give back anything (we will
+                 simplify the given back value to unit when translating
+                 to pure) so we can use any value for the computation. *)
+              let expr = { e = ESymbolic copied_sv.sv_id; ty = norm_ty } in
+              let abs_cont : abs_cont = { outputs; expr } in
 
               (* Create the abstraction values *)
               let mk_proj (is_borrows : bool) sv_id : typed_avalue =
