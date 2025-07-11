@@ -70,10 +70,9 @@ let rec typed_avalue_to_abs_texpr (span : Meta.span option)
     | ABottom ->
         (* The function shouldn't be called on bottom values *)
         internal_error_opt_span __FILE__ __LINE__ span
-    | ALoan l ->
-      aloan_content_to_abs_expr span regions l
+    | ALoan l -> aloan_content_to_abs_expr span regions l
     | ABorrow _ ->
-      (* The function shouldn't be called on borrow values *)
+        (* The function shouldn't be called on borrow values *)
         internal_error_opt_span __FILE__ __LINE__ span
     | ASymbolic (marker, proj) ->
         cassert_opt_span __FILE__ __LINE__ (marker = PNone) span "Unexpected";

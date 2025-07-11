@@ -11,6 +11,7 @@ open InterpreterLoopsCore
     - [loop_id]
     - [abs_kind]
     - [can_end]
+    - [with_abs_conts]
     - [ctx]
     - [aid0]
     - [aid1] *)
@@ -18,6 +19,7 @@ val merge_into_first_abstraction :
   Meta.span ->
   loop_id ->
   abs_kind ->
+  bool ->
   bool ->
   eval_ctx ->
   abstraction_id ->

@@ -651,7 +651,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
                     (* Note that we merge *into* [id0] *)
                     let fp', id0' =
                       merge_into_first_abstraction span loop_id abs_kind false
-                        !fp !id0 id
+                        false !fp !id0 id
                     in
                     fp := fp';
                     id0 := id0';

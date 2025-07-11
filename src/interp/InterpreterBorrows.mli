@@ -321,6 +321,9 @@ type merge_duplicates_funcs = {
       *same ids* but different markers. This is necessary when doing a collapse
       (see the computation of joins). If [merge_funs] are not provided, we check
       that there are no markers.
+    - [with_abs_conts]: if [false], we discard region abstraction continuations
+      when merging. Otherwise we compose them, and raise an error if a
+      continuation is missing.
     - [ctx]
     - [abs_id0]
     - [abs_id1]
@@ -332,6 +335,7 @@ val merge_into_first_abstraction :
   abs_kind ->
   bool ->
   merge_duplicates_funcs option ->
+  bool ->
   eval_ctx ->
   AbstractionId.id ->
   AbstractionId.id ->

@@ -3857,21 +3857,28 @@ let merge_abs_exprs_aux (span : Meta.span) (ctx : eval_ctx)
   { expr; outputs }
 
 (** Merge the expressions of two different abstractions. *)
-let merge_abs_exprs (span : Meta.span) (ctx : eval_ctx) (abs0 : abs)
-    (abs1 : abs) (owned_regions : region_id_set) (avalues : typed_avalue list) :
-    abs_cont option =
+let merge_abs_exprs (span : Meta.span) (ctx : eval_ctx) (with_abs_conts : bool)
+    (abs0 : abs) (abs1 : abs) (owned_regions : region_id_set)
+    (avalues : typed_avalue list) : abs_cont option =
   match (abs0.cont, abs1.cont) with
-  | None, None -> None
-  | None, Some _ | Some _, None -> craise __FILE__ __LINE__ span "Unexpected"
+  | None, None | None, Some _ | Some _, None ->
+      sanity_check __FILE__ __LINE__ (not with_abs_conts) span;
+      None
   | Some cont0, Some cont1 ->
-      Some (merge_abs_exprs_aux span ctx owned_regions avalues cont0 cont1)
+      if with_abs_conts then
+        Some (merge_abs_exprs_aux span ctx owned_regions avalues cont0 cont1)
+      else None
 
 (** Auxiliary function.
 
-    Merge two abstractions into one, without updating the context. *)
+    Merge two abstractions into one, without updating the context.
+
+    If [with_abs_conts] is [false], we discard region abstraction continuations
+    when merging. Otherwise we compose them, and raise an error if a
+    continuation is missing. *)
 let merge_abstractions (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
-    (merge_funs : merge_duplicates_funcs option) (ctx : eval_ctx) (abs0 : abs)
-    (abs1 : abs) : abs =
+    (merge_funs : merge_duplicates_funcs option) (with_abs_conts : bool)
+    (ctx : eval_ctx) (abs0 : abs) (abs1 : abs) : abs =
   log#ltrace
     (lazy
       ("merge_abstractions:\n- abs0:\n"
@@ -3924,7 +3931,9 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
   in
 
   (* Merge the expressions used for the pure translation. *)
-  let cont = merge_abs_exprs span ctx abs0 abs1 regions.owned avalues in
+  let cont =
+    merge_abs_exprs span ctx with_abs_conts abs0 abs1 regions.owned avalues
+  in
 
   (* Create the new abstraction *)
   let abs_id = fresh_abstraction_id () in
@@ -3955,8 +3964,8 @@ let ctx_merge_regions (ctx : eval_ctx) (rid : RegionId.id)
 
 let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
     (can_end : bool) (merge_funs : merge_duplicates_funcs option)
-    (ctx : eval_ctx) (abs_id0 : AbstractionId.id) (abs_id1 : AbstractionId.id) :
-    eval_ctx * AbstractionId.id =
+    (with_abs_conts : bool) (ctx : eval_ctx) (abs_id0 : AbstractionId.id)
+    (abs_id1 : AbstractionId.id) : eval_ctx * AbstractionId.id =
   (* Small sanity check *)
   sanity_check __FILE__ __LINE__ (abs_id0 <> abs_id1) span;
 
@@ -3966,7 +3975,8 @@ let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
 
   (* Merge them *)
   let nabs =
-    merge_abstractions span abs_kind can_end merge_funs ctx abs0 abs1
+    merge_abstractions span abs_kind can_end merge_funs with_abs_conts ctx abs0
+      abs1
   in
   Invariants.opt_type_check_abs span ctx nabs;
 

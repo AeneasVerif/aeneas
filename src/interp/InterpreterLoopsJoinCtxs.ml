@@ -23,12 +23,12 @@ type ctx_with_info = { ctx : eval_ctx; info : abs_borrows_loans_maps }
 
 let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
     (can_end : bool) (merge_funs : merge_duplicates_funcs option)
-    (ctx : ctx_with_info) (abs_id0 : AbstractionId.id)
+    (with_abs_conts : bool) (ctx : ctx_with_info) (abs_id0 : AbstractionId.id)
     (abs_id1 : AbstractionId.id) : ctx_with_info =
   (* Compute the new context and the new abstraction id *)
   let nctx, nabs_id =
-    merge_into_first_abstraction span abs_kind can_end merge_funs ctx.ctx
-      abs_id0 abs_id1
+    merge_into_first_abstraction span abs_kind can_end merge_funs with_abs_conts
+      ctx.ctx abs_id0 abs_id1
   in
   let nabs = ctx_lookup_abs nctx nabs_id in
   (* Update the information *)
@@ -163,7 +163,7 @@ exception AbsToMerge of abstraction_id * abstraction_id
     abstractions that have to be merged according to a user-provided policy. *)
 let repeat_iter_borrows_merge (span : Meta.span) (old_ids : ids_sets)
     (abs_kind : abs_kind) (can_end : bool)
-    (merge_funs : merge_duplicates_funcs option)
+    (merge_funs : merge_duplicates_funcs option) (with_abs_conts : bool)
     (iter : ctx_with_info -> ('a -> unit) -> unit)
     (policy : ctx_with_info -> 'a -> (abstraction_id * abstraction_id) option)
     (ctx : eval_ctx) : eval_ctx =
@@ -191,8 +191,8 @@ let repeat_iter_borrows_merge (span : Meta.span) (old_ids : ids_sets)
     with AbsToMerge (abs_id0, abs_id1) ->
       (* Merge and recurse *)
       let ctx =
-        ctx_with_info_merge_into_first_abs span abs_kind can_end merge_funs ctx
-          abs_id0 abs_id1
+        ctx_with_info_merge_into_first_abs span abs_kind can_end merge_funs
+          with_abs_conts ctx abs_id0 abs_id1
       in
       explore_merge ctx
   in
@@ -270,10 +270,13 @@ let repeat_iter_borrows_merge (span : Meta.span) (old_ids : ids_sets)
     We get:
     {[
       abs@2 { MB l1 }
-    ]} *)
+    ]}
+
+    - if [with_abs_conts] is [false], we discarg region abstraction
+      continutations. We do this when computing loop fixed points. *)
 let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
-    (span : Meta.span) (loop_id : LoopId.id) (old_ids : ids_sets)
-    (ctx0 : eval_ctx) : eval_ctx =
+    (with_abs_conts : bool) (span : Meta.span) (loop_id : LoopId.id)
+    (old_ids : ids_sets) (ctx0 : eval_ctx) : eval_ctx =
   (* Debug *)
   log#ltrace
     (lazy
@@ -396,7 +399,7 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
     (* Iterate over the loans and merge the abstractions *)
     let iter_merge (ctx : eval_ctx) : eval_ctx =
       repeat_iter_borrows_merge span old_ids abs_kind can_end merge_funs
-        iterate_loans merge_policy ctx
+        with_abs_conts iterate_loans merge_policy ctx
   end in
   (* Instantiate the functor for the concrete borrows and loans *)
   let module IterMergeConcrete =
@@ -443,7 +446,7 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
   ctx
 
 (** Reduce_ctx can only be called in a context with no markers *)
-let reduce_ctx = reduce_ctx_with_markers None
+let reduce_ctx = reduce_ctx_with_markers None false
 
 (** Auxiliary function for collapse (see below).
 
@@ -598,7 +601,7 @@ let collapse_ctx_collapse (span : Meta.span) (loop_id : LoopId.id)
     (* Iterate and merge *)
     let iter_merge (ctx : eval_ctx) : eval_ctx =
       repeat_iter_borrows_merge span old_ids abs_kind can_end (Some merge_funs)
-        iter merge_policy ctx
+        false iter merge_policy ctx
   end in
   (* Instantiate the functor for concrete loans and borrows *)
   let module IterMergeConcrete =
@@ -707,7 +710,7 @@ let collapse_ctx (span : Meta.span) (loop_id : LoopId.id)
     (merge_funs : merge_duplicates_funcs) (old_ids : ids_sets) (ctx0 : eval_ctx)
     : eval_ctx =
   let ctx =
-    reduce_ctx_with_markers (Some merge_funs) span loop_id old_ids ctx0
+    reduce_ctx_with_markers (Some merge_funs) false span loop_id old_ids ctx0
   in
   let ctx = collapse_ctx_collapse span loop_id merge_funs old_ids ctx in
   (* Sanity check: there are no markers remaining *)
@@ -842,12 +845,12 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
   }
 
 let merge_into_first_abstraction (span : Meta.span) (loop_id : LoopId.id)
-    (abs_kind : abs_kind) (can_end : bool) (ctx : eval_ctx)
-    (aid0 : AbstractionId.id) (aid1 : AbstractionId.id) :
+    (abs_kind : abs_kind) (can_end : bool) (with_abs_conts : bool)
+    (ctx : eval_ctx) (aid0 : AbstractionId.id) (aid1 : AbstractionId.id) :
     eval_ctx * AbstractionId.id =
   let merge_funs = mk_collapse_ctx_merge_duplicate_funs span loop_id ctx in
-  merge_into_first_abstraction span abs_kind can_end (Some merge_funs) ctx aid0
-    aid1
+  merge_into_first_abstraction span abs_kind can_end (Some merge_funs)
+    with_abs_conts ctx aid0 aid1
 
 (** Collapse an environment, merging the duplicated borrows/loans.
 
