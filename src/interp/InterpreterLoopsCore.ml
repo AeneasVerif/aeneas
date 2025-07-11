@@ -396,10 +396,10 @@ module type MatchJoinState = sig
 
   val span : Meta.span
 
-  (** Should we generate region abstractions with continuations?
-      If [false], we leave the continuations to [None]. We do this
-      when computing loop fixed points for instance: in the process of
-      computing the fixed point we do not compute the abstraction continutations. *)
+  (** Should we generate region abstractions with continuations? If [false], we
+      leave the continuations to [None]. We do this when computing loop fixed
+      points for instance: in the process of computing the fixed point we do not
+      compute the abstraction continutations. *)
   val with_abs_conts : bool
 end
 

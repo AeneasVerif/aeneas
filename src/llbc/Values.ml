@@ -848,7 +848,7 @@ class ['self] map_abs_expr_base =
   end
 
 type abs_output =
-  | OBorrow of borrow_id
+  | OBorrow of borrow_id  (** A *mutable* borrow *)
   | OSymbolic of symbolic_value_id
   | OAdt of variant_id option * abs_toutput list
 
@@ -886,15 +886,15 @@ and abs_fun =
 (** See {!abs_cont} *)
 and abs_expr =
   | ELet of abs_expr_tpat * abs_texpr * abs_texpr
-  | EFun of abs_fun
-  | EApp of abs_expr * abs_texpr list
-      (** Remark: we're ignoring the type of the application here *)
+  | EApp of abs_fun * abs_texpr list
   | ELambda of abs_bound_var_id list * abs_texpr
+      (** TODO: remove? Not used for now *)
   | EValue of typed_value
   | EBVar of abs_bound_var
   | EFVar of abs_free_var_id
   | ELoan of loan_id
-      (** Evaluate to the value we consume upon ending the loan.
+      (** Evaluate to the value we consume upon ending the loan (which is
+          necessarily a mutable loan).
 
           For example, let's consider the region abstraction below:
           {[

@@ -38,56 +38,64 @@ module Values = struct
       (rty : ty) : string =
     symbolic_value_id_to_pretty_string sv_id ^ " <: " ^ ty_to_string env rty
 
+  let adt_to_string (span : Meta.span option) (env : fmt_env)
+      (value_to_debug_string : unit -> string) (ty : ty)
+      (variant_id : variant_id option) (field_values : string list) : string =
+    match ty with
+    | TAdt { id = TTuple; _ } ->
+        (* Tuple *)
+        "(" ^ String.concat ", " field_values ^ ")"
+    | TAdt { id = TAdtId def_id; _ } ->
+        (* "Regular" ADT *)
+        let adt_ident =
+          match variant_id with
+          | Some vid -> adt_variant_to_string env def_id vid
+          | None -> type_decl_id_to_string env def_id
+        in
+        if List.length field_values > 0 then
+          match adt_field_names env def_id variant_id with
+          | None ->
+              let field_values = String.concat ", " field_values in
+              adt_ident ^ " (" ^ field_values ^ ")"
+          | Some field_names ->
+              let field_values = List.combine field_names field_values in
+              let field_values =
+                List.map
+                  (fun (field, value) -> field ^ " = " ^ value ^ ";")
+                  field_values
+              in
+              let field_values = String.concat " " field_values in
+              adt_ident ^ " { " ^ field_values ^ " }"
+        else adt_ident
+    | TAdt { id = TBuiltin aty; _ } -> (
+        (* Builtin type *)
+        match (aty, field_values) with
+        | TBox, [ bv ] -> "@Box(" ^ bv ^ ")"
+        | TArray, _ ->
+            (* Happens when we aggregate values *)
+            "@Array[" ^ String.concat ", " field_values ^ "]"
+        | _ ->
+            craise_opt_span __FILE__ __LINE__ span
+              ("Inconsistent value: " ^ value_to_debug_string ()))
+    | _ ->
+        craise_opt_span __FILE__ __LINE__ span "Inconsistently typed value: "
+        ^ value_to_debug_string ()
+
   (* TODO: it may be a good idea to try to factorize this function with
-   * typed_avalue_to_string. At some point we had done it, because [typed_value]
-   * and [typed_avalue] were instances of the same general type [g_typed_value],
-   * but then we removed this general type because it proved to be a bad idea. *)
+     typed_avalue_to_string. At some point we had done it, because [typed_value]
+     and [typed_avalue] were instances of the same general type [g_typed_value],
+     but then we removed this general type because it proved to be a bad idea. *)
   let rec typed_value_to_string ?(span : Meta.span option = None)
       (env : fmt_env) (v : typed_value) : string =
     match v.value with
     | VLiteral cv -> literal_to_string cv
-    | VAdt av -> (
+    | VAdt av ->
         let field_values =
           List.map (typed_value_to_string ~span env) av.field_values
         in
-        match v.ty with
-        | TAdt { id = TTuple; _ } ->
-            (* Tuple *)
-            "(" ^ String.concat ", " field_values ^ ")"
-        | TAdt { id = TAdtId def_id; _ } ->
-            (* "Regular" ADT *)
-            let adt_ident =
-              match av.variant_id with
-              | Some vid -> adt_variant_to_string env def_id vid
-              | None -> type_decl_id_to_string env def_id
-            in
-            if List.length field_values > 0 then
-              match adt_field_names env def_id av.variant_id with
-              | None ->
-                  let field_values = String.concat ", " field_values in
-                  adt_ident ^ " (" ^ field_values ^ ")"
-              | Some field_names ->
-                  let field_values = List.combine field_names field_values in
-                  let field_values =
-                    List.map
-                      (fun (field, value) -> field ^ " = " ^ value ^ ";")
-                      field_values
-                  in
-                  let field_values = String.concat " " field_values in
-                  adt_ident ^ " { " ^ field_values ^ " }"
-            else adt_ident
-        | TAdt { id = TBuiltin aty; _ } -> (
-            (* Builtin type *)
-            match (aty, field_values) with
-            | TBox, [ bv ] -> "@Box(" ^ bv ^ ")"
-            | TArray, _ ->
-                (* Happens when we aggregate values *)
-                "@Array[" ^ String.concat ", " field_values ^ "]"
-            | _ ->
-                craise_opt_span __FILE__ __LINE__ span
-                  ("Inconsistent value: " ^ show_typed_value v))
-        | _ -> craise_opt_span __FILE__ __LINE__ span "Inconsistent typed value"
-        )
+        adt_to_string span env
+          (fun () -> show_typed_value v)
+          v.ty av.variant_id field_values
     | VBottom -> "⊥ : " ^ ty_to_string env v.ty
     | VBorrow bc -> borrow_content_to_string ~span env bc
     | VLoan lc -> loan_content_to_string ~span env lc
@@ -197,45 +205,15 @@ module Values = struct
   let rec typed_avalue_to_string ?(span : Meta.span option = None)
       ?(with_ended : bool = false) (env : fmt_env) (v : typed_avalue) : string =
     match v.value with
-    | AAdt av -> (
+    | AAdt av ->
         let field_values =
           List.map
             (typed_avalue_to_string ~span ~with_ended env)
             av.field_values
         in
-        match v.ty with
-        | TAdt { id = TTuple; _ } ->
-            (* Tuple *)
-            "(" ^ String.concat ", " field_values ^ ")"
-        | TAdt { id = TAdtId def_id; _ } ->
-            (* "Regular" ADT *)
-            let adt_ident =
-              match av.variant_id with
-              | Some vid -> adt_variant_to_string env def_id vid
-              | None -> type_decl_id_to_string env def_id
-            in
-            if List.length field_values > 0 then
-              match adt_field_names env def_id av.variant_id with
-              | None ->
-                  let field_values = String.concat ", " field_values in
-                  adt_ident ^ " (" ^ field_values ^ ")"
-              | Some field_names ->
-                  let field_values = List.combine field_names field_values in
-                  let field_values =
-                    List.map
-                      (fun (field, value) -> field ^ " = " ^ value ^ ";")
-                      field_values
-                  in
-                  let field_values = String.concat " " field_values in
-                  adt_ident ^ " { " ^ field_values ^ " }"
-            else adt_ident
-        | TAdt { id = TBuiltin aty; _ } -> (
-            (* Builtin type *)
-            match (aty, field_values) with
-            | TBox, [ bv ] -> "@Box(" ^ bv ^ ")"
-            | _ -> craise_opt_span __FILE__ __LINE__ span "Inconsistent value")
-        | _ -> craise_opt_span __FILE__ __LINE__ span "Inconsistent typed value"
-        )
+        adt_to_string span env
+          (fun () -> show_typed_avalue v)
+          v.ty av.variant_id field_values
     | ABottom -> "⊥ : " ^ ty_to_string env v.ty
     | ABorrow bc -> aborrow_content_to_string ~span ~with_ended env bc
     | ALoan lc -> aloan_content_to_string ~span ~with_ended env lc
@@ -414,6 +392,175 @@ module Values = struct
         ^ BorrowId.Set.to_string None bid
         ^ "} "
         ^ symbolic_value_to_string env sv
+
+  let rec abs_toutput_to_string ?(span : Meta.span option = None)
+      (env : fmt_env) (o : abs_toutput) : string =
+    match o.opat with
+    | OBorrow bid -> "mut_borrow@" ^ BorrowId.to_string bid
+    | OSymbolic sv_id ->
+        symbolic_value_to_string env { sv_id; sv_ty = o.opat_ty }
+    | OAdt (variant_id, fields) ->
+        let fields = List.map (abs_toutput_to_string env) fields in
+        adt_to_string span env
+          (fun () -> show_abs_toutput o)
+          o.opat_ty variant_id fields
+
+  (** An environment specific to abstraction expressions. We use it to properly
+      print the bound variables: as it is hard to interpret deBruijn indices, we
+      also use a unique identifier for all the bound variables. *)
+  type abs_texpr_env = {
+    fresh_index : unit -> int;
+    map : string AbsBoundVarId.Map.t list;
+  }
+
+  let empty_abs_texpr_env : abs_texpr_env =
+    {
+      fresh_index =
+        (let r = ref 0 in
+         fun () ->
+           let i = !r in
+           r := i + 1;
+           i);
+      map = [];
+    }
+
+  let abs_bound_var_to_pretty_string (bv : abs_bound_var)
+      (unique_name : string option) : string =
+    let unique_name =
+      match unique_name with
+      | None -> ""
+      | Some n -> "uid=" ^ n ^ ","
+    in
+    "bv@(" ^ unique_name ^ "scope="
+    ^ string_of_int bv.db_scope_id
+    ^ ",id="
+    ^ AbsBoundVarId.to_string bv.bvar_id
+    ^ ")"
+
+  let abs_texpr_env_get_bvar (aenv : abs_texpr_env) (bv : abs_bound_var) :
+      string =
+    match List.nth_opt aenv.map bv.db_scope_id with
+    | None -> abs_bound_var_to_pretty_string bv None
+    | Some m ->
+        let unique_name = AbsBoundVarId.Map.find_opt bv.bvar_id m in
+        abs_bound_var_to_pretty_string bv unique_name
+
+  let abs_texpr_env_push_pat (aenv : abs_texpr_env) (pat : abs_expr_tpat) :
+      abs_texpr_env =
+    let m = ref AbsBoundVarId.Map.empty in
+    let fresh_index = aenv.fresh_index in
+    let aenv = ref aenv in
+    let rec run (pat : abs_expr_tpat) =
+      match pat.epat with
+      | PVar bid ->
+          let id = fresh_index () in
+          let name = string_of_int id in
+          m := AbsBoundVarId.Map.add bid name !m
+      | PAdt (_, pats) -> List.iter run pats
+    in
+    run pat;
+    { !aenv with map = !m :: !aenv.map }
+
+  let abs_texpr_env_push_bound_vars (aenv : abs_texpr_env)
+      (vars : abs_bound_var_id list) : abs_texpr_env =
+    let m = ref AbsBoundVarId.Map.empty in
+    let fresh_index = aenv.fresh_index in
+    let aenv = ref aenv in
+    let run (bid : abs_bound_var_id) =
+      let id = fresh_index () in
+      let name = string_of_int id in
+      m := AbsBoundVarId.Map.add bid name !m
+    in
+    List.iter run vars;
+    { !aenv with map = !m :: !aenv.map }
+
+  let abs_fun_to_string (f : abs_fun) : string =
+    match f with
+    | EOutputAbs rg_id -> "OutputAbs@" ^ RegionGroupId.to_string rg_id
+    | EInputAbs rg_id -> "InputAbs@" ^ RegionGroupId.to_string rg_id
+    | FunCall (call_id, rg_id) ->
+        "FunCall(call@"
+        ^ FunCallId.to_string call_id
+        ^ ",rg@"
+        ^ RegionGroupId.to_string rg_id
+        ^ ")"
+    | Loop (lp_id, rg_id, kind) ->
+        let kind =
+          match kind with
+          | LoopSynthInput -> "synth_input"
+          | LoopCall -> "loop_call"
+        in
+        "Loop(loop_id@" ^ LoopId.to_string lp_id ^ ","
+        ^ option_to_string
+            (fun rg_id -> "rg@" ^ RegionGroupId.to_string rg_id)
+            rg_id
+        ^ "," ^ kind ^ ")"
+
+  let rec abs_texpr_to_string ?(span : Meta.span option = None) (env : fmt_env)
+      ?(aenv : abs_texpr_env = empty_abs_texpr_env) (indent : string)
+      (indent_incr : string) (e : abs_texpr) : string =
+    match e.e with
+    | ELet (pat, bound, next) ->
+        let bound =
+          abs_texpr_to_string ~span env ~aenv (indent ^ indent_incr) indent_incr
+            bound
+        in
+        let aenv = abs_texpr_env_push_pat aenv pat in
+        let pat = abs_expr_tpat_to_string ~span env ~aenv pat in
+        let next =
+          abs_texpr_to_string ~span env ~aenv indent indent_incr next
+        in
+        indent ^ "let " ^ pat ^ " = " ^ bound ^ "\n" ^ indent ^ next
+    | EApp (f, args) ->
+        let args =
+          List.map
+            (abs_texpr_to_string ~span env ~aenv (indent ^ indent_incr)
+               indent_incr)
+            args
+        in
+        let f = abs_fun_to_string f in
+        f ^ "(" ^ String.concat ", " args ^ ")"
+    | EValue v -> typed_value_to_string ~span env v
+    | EBVar bv -> abs_texpr_env_get_bvar aenv bv
+    | EFVar fvid -> "@" ^ AbsFreeVarId.to_string fvid
+    | ELoan lid -> "ml@" ^ BorrowId.to_string lid
+    | ESymbolic sv_id -> symbolic_value_to_string env { sv_id; sv_ty = e.ty }
+    | EAdt (variant_id, fields) ->
+        let fields =
+          List.map
+            (abs_texpr_to_string ~span env ~aenv indent indent_incr)
+            fields
+        in
+        adt_to_string span env
+          (fun () -> show_abs_texpr e)
+          e.ty variant_id fields
+    | EBottom -> "⊥"
+    | EProj (pm, e) ->
+        abs_texpr_to_string ~span env ~aenv indent indent_incr e
+        |> add_proj_marker pm
+    | ELambda (vars, body) ->
+        let aenv = abs_texpr_env_push_bound_vars aenv vars in
+        "fun "
+        ^ String.concat " "
+            (List.map
+               (abs_texpr_env_get_bvar aenv)
+               (List.map (fun bvar_id -> { db_scope_id = 0; bvar_id }) vars))
+        ^ " => "
+        ^ abs_texpr_to_string ~span env ~aenv (indent ^ indent_incr) indent_incr
+            body
+
+  and abs_expr_tpat_to_string ?(span : Meta.span option = None) (env : fmt_env)
+      ?(aenv : abs_texpr_env = empty_abs_texpr_env) (pat : abs_expr_tpat) :
+      string =
+    match pat.epat with
+    | PVar bvar_id -> abs_texpr_env_get_bvar aenv { db_scope_id = 0; bvar_id }
+    | PAdt (variant_id, fields) ->
+        let fields =
+          List.map (abs_expr_tpat_to_string ~span env ~aenv) fields
+        in
+        adt_to_string span env
+          (fun () -> show_abs_expr_tpat pat)
+          pat.epat_ty variant_id fields
 end
 
 (** Pretty-printing for contexts *)

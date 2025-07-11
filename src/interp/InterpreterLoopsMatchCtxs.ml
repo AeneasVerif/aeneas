@@ -613,7 +613,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
               ancestors = RegionId.Set.empty;
             };
           avalues;
-          cont = cont;
+          cont;
         }
       in
       push_abs abs;
@@ -924,7 +924,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
                 let outputs = [ mk_output sv0 PLeft; mk_output sv1 PRight ] in
                 let expr = { e = ESymbolic svj.sv_id; ty = norm_ty } in
                 let mk_expr proj = { e = EProj (proj, expr); ty = norm_ty } in
-                let expr = abs_texpr_mk_tuple [ mk_expr PLeft; mk_expr PRight ] in
+                let expr =
+                  abs_texpr_mk_tuple [ mk_expr PLeft; mk_expr PRight ]
+                in
                 Some { outputs; expr }
               else None
             in
