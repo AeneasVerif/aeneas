@@ -591,10 +591,12 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
       (* Create the continuation: this has no inputs/outputs as we only
          manipulate shared loans and borrows *)
-      let cont : abs_cont =
-        let outputs = [] in
-        let expr = abs_texpr_mk_tuple [] in
-        { outputs; expr }
+      let cont : abs_cont option =
+        if S.with_abs_conts then
+          let outputs = [] in
+          let expr = abs_texpr_mk_tuple [] in
+          Some { outputs; expr }
+        else None
       in
 
       (* Generate the abstraction *)
@@ -611,7 +613,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
               ancestors = RegionId.Set.empty;
             };
           avalues;
-          cont = Some cont;
+          cont = cont;
         }
       in
       push_abs abs;
@@ -720,12 +722,14 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         (* Create the continuation expression: it is simply the identity *)
         let owned_regions = RegionId.Set.singleton rid in
         let cont : abs_cont option =
-          let norm_ty = normalize_proj_ty owned_regions borrow_ty in
-          let outputs =
-            [ ({ opat = OBorrow bid0; opat_ty = norm_ty }, PNone) ]
-          in
-          let expr = { e = ELoan nbid; ty = norm_ty } in
-          Some { expr; outputs }
+          if S.with_abs_conts then
+            let norm_ty = normalize_proj_ty owned_regions borrow_ty in
+            let outputs =
+              [ ({ opat = OBorrow bid0; opat_ty = norm_ty }, PNone) ]
+            in
+            let expr = { e = ELoan nbid; ty = norm_ty } in
+            Some { expr; outputs }
+          else None
         in
 
         (* Generate the abstraction *)
@@ -783,15 +787,17 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Create the continuation expression: it is simply the identity *)
       let owned_regions = RegionId.Set.singleton rid in
       let cont : abs_cont option =
-        let norm_ty = normalize_proj_ty owned_regions borrow_ty in
-        let mk_output bid proj =
-          ({ opat = OBorrow bid; opat_ty = norm_ty }, proj)
-        in
-        let outputs = [ mk_output bid0 PLeft; mk_output bid1 PRight ] in
-        let expr = { e = ELoan bid2; ty = norm_ty } in
-        let mk_expr proj = { e = EProj (proj, expr); ty = expr.ty } in
-        let expr = abs_texpr_mk_tuple [ mk_expr PLeft; mk_expr PRight ] in
-        Some { expr; outputs }
+        if S.with_abs_conts then
+          let norm_ty = normalize_proj_ty owned_regions borrow_ty in
+          let mk_output bid proj =
+            ({ opat = OBorrow bid; opat_ty = norm_ty }, proj)
+          in
+          let outputs = [ mk_output bid0 PLeft; mk_output bid1 PRight ] in
+          let expr = { e = ELoan bid2; ty = norm_ty } in
+          let mk_expr proj = { e = EProj (proj, expr); ty = expr.ty } in
+          let expr = abs_texpr_mk_tuple [ mk_expr PLeft; mk_expr PRight ] in
+          Some { expr; outputs }
+        else None
       in
 
       (* Generate the abstraction *)
@@ -910,15 +916,17 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             (* Create the abstraction continuation *)
             let owned_regions = RegionId.Set.singleton rid in
             let cont : abs_cont option =
-              let norm_ty = normalize_proj_ty owned_regions proj_ty in
-              let mk_output (sv : symbolic_value) proj =
-                ({ opat = OSymbolic sv.sv_id; opat_ty = norm_ty }, proj)
-              in
-              let outputs = [ mk_output sv0 PLeft; mk_output sv1 PRight ] in
-              let expr = { e = ESymbolic svj.sv_id; ty = norm_ty } in
-              let mk_expr proj = { e = EProj (proj, expr); ty = norm_ty } in
-              let expr = abs_texpr_mk_tuple [ mk_expr PLeft; mk_expr PRight ] in
-              Some { outputs; expr }
+              if S.with_abs_conts then
+                let norm_ty = normalize_proj_ty owned_regions proj_ty in
+                let mk_output (sv : symbolic_value) proj =
+                  ({ opat = OSymbolic sv.sv_id; opat_ty = norm_ty }, proj)
+                in
+                let outputs = [ mk_output sv0 PLeft; mk_output sv1 PRight ] in
+                let expr = { e = ESymbolic svj.sv_id; ty = norm_ty } in
+                let mk_expr proj = { e = EProj (proj, expr); ty = norm_ty } in
+                let expr = abs_texpr_mk_tuple [ mk_expr PLeft; mk_expr PRight ] in
+                Some { outputs; expr }
+              else None
             in
 
             (* Create the region abstraction *)
@@ -1784,6 +1792,7 @@ let prepare_loop_match_ctx_with_target (config : config) (span : Meta.span)
       let span = span
       let loop_id = loop_id
       let nabs = nabs
+      let with_abs_conts = false
     end in
     let module JM = MakeJoinMatcher (S) in
     let module M = MakeMatcher (JM) in

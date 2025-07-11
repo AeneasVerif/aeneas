@@ -721,6 +721,7 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     let span = span
     let loop_id = loop_id
     let nabs = ref []
+    let with_abs_conts = false
   end in
   let module JM = MakeJoinMatcher (S) in
   let module M = MakeMatcher (JM) in
@@ -932,6 +933,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
     let span = span
     let loop_id = loop_id
     let nabs = nabs
+    let with_abs_conts = false
   end in
   let module JM = MakeJoinMatcher (S) in
   let module M = MakeMatcher (JM) in
