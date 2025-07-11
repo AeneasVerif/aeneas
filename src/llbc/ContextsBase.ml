@@ -139,18 +139,18 @@ class ['self] map_env_base =
   end
 
 (** A binder used in an environment, to map a variable to a value *)
-type var_binder = {
+type real_var_binder = {
   index : local_id;  (** Unique variable identifier *)
   name : string option;  (** Possible name *)
 }
 
 (** A binder, for a "real" variable or a dummy variable *)
-and binder = BVar of var_binder | BDummy of dummy_var_id
+and var_binder = BVar of real_var_binder | BDummy of dummy_var_id
 
 (** Environment value: mapping from variable to value, abstraction (only used in
     symbolic mode) or stack frame delimiter. *)
 and env_elem =
-  | EBinding of binder * typed_value
+  | EBinding of var_binder * typed_value
       (** Variable binding - the binder is None if the variable is a dummy
           variable (we use dummy variables to store temporaries while doing
           bookkeeping such as ending borrows for instance). *)

@@ -1467,7 +1467,6 @@ let rec norm_proj_tys_union (span : Meta.span) (ty1 : rty) (ty2 : rty) : rty =
   | TTraitType (tr1, item1), TTraitType (tr2, item2) ->
       sanity_check __FILE__ __LINE__ (item1 = item2) span;
       TTraitType (norm_proj_trait_refs_union span tr1 tr2, item1)
-  | TDynTrait (), TDynTrait () -> TDynTrait ()
   | ( TFnPtr
         { binder_regions = binder_regions1; binder_value = inputs1, output1 },
       TFnPtr

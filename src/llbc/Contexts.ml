@@ -7,13 +7,13 @@ open ValuesUtils
 open Errors
 include ContextsBase
 
-module OrderedBinder : Collections.OrderedType with type t = binder = struct
-  type t = binder
+module OrderedBinder : Collections.OrderedType with type t = var_binder = struct
+  type t = var_binder
 
-  let compare x y = compare_binder x y
-  let to_string x = show_binder x
-  let pp_t fmt x = Format.pp_print_string fmt (show_binder x)
-  let show_t x = show_binder x
+  let compare x y = compare_var_binder x y
+  let to_string x = show_var_binder x
+  let pp_t fmt x = Format.pp_print_string fmt (show_var_binder x)
+  let show_t x = show_var_binder x
 end
 
 module BinderMap = Collections.MakeMap (OrderedBinder)
@@ -104,7 +104,7 @@ let lookup_const_generic_var (ctx : eval_ctx) (vid : ConstGenericVarId.id) :
 
 (** Lookup a variable in the current frame *)
 let env_lookup_var (span : Meta.span) (env : env) (vid : LocalId.id) :
-    var_binder * typed_value =
+    real_var_binder * typed_value =
   (* We take care to stop at the end of current frame: different variables
      in different frames can have the same id!
   *)
@@ -120,8 +120,8 @@ let env_lookup_var (span : Meta.span) (env : env) (vid : LocalId.id) :
   in
   lookup env
 
-let ctx_lookup_var_binder (span : Meta.span) (ctx : eval_ctx) (vid : LocalId.id)
-    : var_binder =
+let ctx_lookup_real_var_binder (span : Meta.span) (ctx : eval_ctx)
+    (vid : LocalId.id) : real_var_binder =
   fst (env_lookup_var span ctx.env vid)
 
 let ctx_lookup_type_decl (span : Meta.span) (ctx : eval_ctx)
@@ -183,7 +183,7 @@ let env_update_var_value (span : Meta.span) (env : env) (vid : LocalId.id)
   in
   update env
 
-let var_to_binder (var : local) : var_binder =
+let var_to_binder (var : local) : real_var_binder =
   { index = var.index; name = var.name }
 
 (** Update a variable's value in an evaluation context.

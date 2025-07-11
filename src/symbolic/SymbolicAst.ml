@@ -16,7 +16,7 @@ open LlbcAst
     information, etc.). We later use this place information to generate
     meaningful name, to prettify the generated code. *)
 type mplace =
-  | PlaceLocal of Contexts.var_binder
+  | PlaceLocal of Contexts.real_var_binder
       (** It is important that we store the binder, and not just the variable
           id, because the most important information in a place is the name of
           the variable! *)
@@ -90,7 +90,6 @@ class ['self] iter_expression_base =
 
     method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
     method visit_espan : 'env -> espan -> unit = fun _ _ -> ()
-    method visit_span : 'env -> Meta.span -> unit = fun _ _ -> ()
 
     method visit_region_group_id_map :
         'a. ('env -> 'a -> unit) -> 'env -> 'a region_group_id_map -> unit =
