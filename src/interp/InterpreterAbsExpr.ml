@@ -70,10 +70,11 @@ let rec typed_avalue_to_abs_texpr (span : Meta.span option)
     | ABottom ->
         (* The function shouldn't be called on bottom values *)
         internal_error_opt_span __FILE__ __LINE__ span
-    | ALoan _ ->
-        (* The function shouldn't be called on loan values *)
+    | ALoan l ->
+      aloan_content_to_abs_expr span regions l
+    | ABorrow _ ->
+      (* The function shouldn't be called on borrow values *)
         internal_error_opt_span __FILE__ __LINE__ span
-    | ABorrow b -> aborrow_content_to_abs_expr span regions b
     | ASymbolic (marker, proj) ->
         cassert_opt_span __FILE__ __LINE__ (marker = PNone) span "Unexpected";
         aproj_to_abs_expr span proj
@@ -90,26 +91,26 @@ and adt_avalue_to_abs_expr (span : Meta.span option) (regions : region_id_set)
   in
   EAdt (av.variant_id, fields)
 
-and aborrow_content_to_abs_expr (span : Meta.span option)
-    (regions : region_id_set) (bc : aborrow_content) : abs_expr =
-  match bc with
-  | AMutBorrow (marker, bid, child) ->
+and aloan_content_to_abs_expr (span : Meta.span option)
+    (regions : region_id_set) (lc : aloan_content) : abs_expr =
+  match lc with
+  | AMutLoan (marker, bid, child) ->
       sanity_check_opt_span __FILE__ __LINE__ (marker = PNone) span;
       sanity_check_opt_span __FILE__ __LINE__ (is_aignored child.value) span;
       ELoan bid
-  | ASharedBorrow _ | AProjSharedBorrow _ -> abs_expr_unit
-  | AIgnoredMutBorrow (_, av) -> (typed_avalue_to_abs_texpr span regions av).e
-  | AEndedMutBorrow _ | AEndedSharedBorrow | AEndedIgnoredMutBorrow _ ->
+  | ASharedLoan _ | AIgnoredSharedLoan _ -> abs_expr_unit
+  | AIgnoredMutLoan (_, av) -> (typed_avalue_to_abs_texpr span regions av).e
+  | AEndedMutLoan _ | AEndedSharedLoan _ | AEndedIgnoredMutLoan _ ->
       (* The function shouldn't be called on this kind of values *)
       internal_error_opt_span __FILE__ __LINE__ span
 
 and aproj_to_abs_expr (span : Meta.span option) (proj : aproj) : abs_expr =
   match proj with
-  | AProjBorrows (sv_id, _, children) ->
+  | AProjLoans (sv_id, _, children) ->
       sanity_check_opt_span __FILE__ __LINE__ (children = []) span;
       ESymbolic sv_id
   | AEmpty -> abs_expr_unit
-  | AProjLoans _ | AEndedProjBorrows _ | AEndedProjLoans _ ->
+  | AProjBorrows _ | AEndedProjBorrows _ | AEndedProjLoans _ ->
       (* The function shouldn't be called on this kind of values *)
       internal_error_opt_span __FILE__ __LINE__ span
 

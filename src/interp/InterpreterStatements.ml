@@ -1382,8 +1382,8 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
     span;
 
   (* Initialize the abstractions and push them in the context.
-   * First, we define the function which, given an initialized, empty
-   * abstraction, computes the avalues which should be inserted inside.
+     First, we define the function which, given an initialized, empty
+     abstraction, computes the avalues which should be inserted inside.
    *)
   let compute_abs_avalues (rg_id : RegionGroupId.id) (abs : abs)
       (ctx : eval_ctx) : eval_ctx * typed_avalue list * abs_cont option =
