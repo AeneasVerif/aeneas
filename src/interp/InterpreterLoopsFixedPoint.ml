@@ -132,6 +132,15 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
     let borrow_value = ABorrow (ASharedBorrow (PNone, lid)) in
     let borrow_value = mk_typed_avalue span borrow_rty borrow_value in
 
+    (* Create the continuation expression *)
+    let cont : abs_cont =
+      (* There are no inputs/outputs, because the abstraction only manipulates
+         shared loans and borrows *)
+      let outputs = [] in
+      let expr = abs_texpr_mk_tuple [] in
+      { outputs; expr }
+    in
+
     (* Create the abstraction *)
     let avalues = [ borrow_value; loan_value ] in
     let kind : abs_kind =
@@ -152,6 +161,7 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
         original_parents = [];
         regions;
         avalues;
+        cont = Some cont;
       }
     in
     fresh_absl := fresh_abs :: !fresh_absl

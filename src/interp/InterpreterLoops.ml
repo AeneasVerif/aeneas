@@ -332,7 +332,9 @@ let eval_loop_symbolic (config : config) (span : span)
   let fresh_sids, input_svalues =
     compute_fp_ctx_symbolic_values span ctx fp_ctx
   in
-  let fp_input_svalues = List.map (fun sv -> sv.sv_id) input_svalues in
+  let fp_input_svalues =
+    List.map (fun (sv : symbolic_value) -> sv.sv_id) input_svalues
+  in
 
   (* Synthesize the end of the function - we simply match the context at the
      loop entry with the fixed point: in the synthesized code, the function

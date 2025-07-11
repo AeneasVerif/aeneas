@@ -912,6 +912,9 @@ and abs_expr =
           conditions (if the condition is false, the values have to be computed
           by the continuation from the right state, meaning the left
           continuation evaluates to [bottom]). *)
+  | EProj of proj_marker * abs_texpr
+      (** An expression which is valid only for a projection (left or right),
+          and which is bottom otherwise. TODO: update *)
 
 and abs_texpr = {
   e : abs_expr;
