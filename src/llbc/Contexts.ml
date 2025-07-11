@@ -7,13 +7,13 @@ open ValuesUtils
 open Errors
 include ContextsBase
 
-module OrderedBinder : Collections.OrderedType with type t = binder = struct
-  type t = binder
+module OrderedBinder : Collections.OrderedType with type t = var_binder = struct
+  type t = var_binder
 
-  let compare x y = compare_binder x y
-  let to_string x = show_binder x
-  let pp_t fmt x = Format.pp_print_string fmt (show_binder x)
-  let show_t x = show_binder x
+  let compare x y = compare_var_binder x y
+  let to_string x = show_var_binder x
+  let pp_t fmt x = Format.pp_print_string fmt (show_var_binder x)
+  let show_t x = show_var_binder x
 end
 
 module BinderMap = Collections.MakeMap (OrderedBinder)

@@ -428,7 +428,7 @@ module Contexts = struct
   let dummy_var_id_to_string (bid : DummyVarId.id) : string =
     "_@" ^ DummyVarId.to_string bid
 
-  let binder_to_string (env : fmt_env) (bv : binder) : string =
+  let var_binder_to_string (env : fmt_env) (bv : var_binder) : string =
     match bv with
     | BVar b -> real_var_binder_to_string env b
     | BDummy bid -> dummy_var_id_to_string bid
@@ -438,7 +438,7 @@ module Contexts = struct
       (indent_incr : string) (ev : env_elem) : string =
     match ev with
     | EBinding (var, tv) ->
-        let bv = binder_to_string env var in
+        let bv = var_binder_to_string env var in
         let ty =
           if with_var_types then " : " ^ ty_to_string env tv.ty else ""
         in
