@@ -1404,9 +1404,10 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
     in
     let outputs = List.map (fun o -> (o, PNone)) outputs in
     let f = EOutputAbs rg_id in
-    let e =
-      EApp (f, [ output_typed_avalue_to_abs_texpr (Some span) abs.regions.owned ret_v ])
+    let args =
+      [ output_typed_avalue_to_abs_texpr (Some span) abs.regions.owned ret_v ]
     in
+    let e = EApp (f, args) in
     let expr = { e; ty = normalize_proj_ty abs.regions.owned ret_v.ty } in
     let cont : abs_cont = { outputs; expr } in
     (* Group the input and output values *)

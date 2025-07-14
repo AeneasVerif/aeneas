@@ -2245,7 +2245,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
   (* Convert the value to a list of avalues *)
   let absl = ref [] in
   let push_abs (r_id : RegionId.id) (avalues : typed_avalue list)
-    (output : abs_toutput) (expr : abs_texpr) : unit =
+      (output : abs_toutput) (expr : abs_texpr) : unit =
     if avalues = [] then ()
     else begin
       (* Create the abs - note that we keep the order of the avalues as it is
@@ -2262,7 +2262,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
 
       (* Create the continuation for the pure translation *)
       let cont : abs_cont =
-        let outputs = [(output, PNone)] in
+        let outputs = [ (output, PNone) ] in
         { outputs; expr }
       in
 
@@ -2301,10 +2301,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
   *)
   let rec to_avalues ~(allow_borrows : bool) ~(inside_borrowed : bool)
       ~(group : bool) (r_id : RegionId.id) (v : typed_value) :
-    typed_avalue list
-    * abs_toutput
-    * abs_texpr
-    * typed_value =
+      typed_avalue list * abs_toutput * abs_texpr * typed_value =
     (* Debug *)
     log#ldebug
       (lazy
@@ -2330,7 +2327,10 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
                    (to_avalues ~allow_borrows ~inside_borrowed ~group r_id)
                    adt.field_values)
             in
-            (List.concat avl, abs_toutput_mk_tuple outputs, abs_texpr_mk_tuple exprs, field_values)
+            ( List.concat avl,
+              abs_toutput_mk_tuple outputs,
+              abs_texpr_mk_tuple exprs,
+              field_values )
           else
             (* Create one abstraction per field, and transmit nothing to the parent *)
             let field_values =
@@ -2383,9 +2383,14 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             in
             let value = { v with value = VBorrow (VMutBorrow (bid, bv)) } in
             (* Create the abstraction expression *)
-            cassert __FILE__ __LINE__ (abs_toutput_is_empty output) span "Unexpected";
+            cassert __FILE__ __LINE__
+              (abs_toutput_is_empty output)
+              span "Unexpected";
             let output =
-              {opat = OBorrow bid; opat_ty = normalize_proj_ty (RegionId.Set.singleton r_id) ty}
+              {
+                opat = OBorrow bid;
+                opat_ty = normalize_proj_ty (RegionId.Set.singleton r_id) ty;
+              }
             in
             (* *)
             (av :: avl, output, expr, value)
@@ -2412,7 +2417,9 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
               to_avalues ~allow_borrows:false ~inside_borrowed:true ~group:true
                 r_id sv
             in
-            cassert __FILE__ __LINE__ (abs_toutput_is_empty output) span "Unexpected";
+            cassert __FILE__ __LINE__
+              (abs_toutput_is_empty output)
+              span "Unexpected";
             let av = ALoan (ASharedLoan (PNone, bids, sv, ignored)) in
             let av = { value = av; ty } in
             (* Continue exploring, looking for loans (and forbidding borrows,
@@ -2435,10 +2442,11 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             let av = { value = av; ty } in
             (* Create the abstraction expression *)
             let output = abs_toutput_unit in
-            let expr : abs_texpr = {
-              e = ELoan bid;
-              ty = normalize_proj_ty (RegionId.Set.singleton r_id) ty;
-            }
+            let expr : abs_texpr =
+              {
+                e = ELoan bid;
+                ty = normalize_proj_ty (RegionId.Set.singleton r_id) ty;
+              }
             in
             (* *)
             ([ av ], output, expr, v))
@@ -2462,7 +2470,8 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
         if group then
           (* Check if the type contains regions: if not, simply ignore
              it (there are no projections to introduce) *)
-          if TypesUtils.ty_no_regions sv.sv_ty then ([], abs_toutput_unit, abs_texpr_unit, v)
+          if TypesUtils.ty_no_regions sv.sv_ty then
+            ([], abs_toutput_unit, abs_texpr_unit, v)
           else
             (* Substitute the regions in the type *)
             let visitor =
@@ -2480,11 +2489,8 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             let nv : typed_avalue = { value = nv; ty } in
             (* Introduce the region expression *)
             let norm_ty = normalize_proj_ty (RegionId.Set.singleton r_id) ty in
-            let output = { opat = OSymbolic sv.sv_id; opat_ty = norm_ty} in
-            let expr : abs_texpr = {
-              e = ESymbolic sv.sv_id;
-              ty = norm_ty;
-            } in
+            let output = { opat = OSymbolic sv.sv_id; opat_ty = norm_ty } in
+            let expr : abs_texpr = { e = ESymbolic sv.sv_id; ty = norm_ty } in
             (* *)
             ([ nv ], output, expr, v)
         else
@@ -2496,11 +2502,8 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
               let nv : typed_avalue = { value = nv; ty } in
               (* *)
               let norm_ty = normalize_proj_ty (RegionId.Set.singleton rid) ty in
-              let output = { opat = OSymbolic sv.sv_id; opat_ty = norm_ty} in
-              let expr : abs_texpr = {
-                e = ESymbolic sv.sv_id;
-                ty = norm_ty;
-              } in
+              let output = { opat = OSymbolic sv.sv_id; opat_ty = norm_ty } in
+              let expr : abs_texpr = { e = ESymbolic sv.sv_id; ty = norm_ty } in
               (* *)
               push_abs rid [ nv ] output expr)
             regions;

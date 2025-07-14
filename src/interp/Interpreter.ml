@@ -358,7 +358,8 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
         in
         let cont : abs_cont =
           let output =
-            input_typed_avalue_to_abs_toutput (Some span) abs.regions.owned avalue
+            input_typed_avalue_to_abs_toutput (Some span) abs.regions.owned
+              avalue
           in
           let e = EApp (EOutputAbs rg_id, []) in
           let ty = normalize_proj_ty abs.regions.owned ret_rty in

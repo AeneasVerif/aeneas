@@ -43,13 +43,14 @@ and input_aborrow_content_to_abs_toutput (span : Meta.span option)
       let opat_ty = normalize_proj_ty regions ty in
       { opat; opat_ty }
   | ASharedBorrow _ | AProjSharedBorrow _ -> abs_toutput_unit
-  | AIgnoredMutBorrow (_, av) -> input_typed_avalue_to_abs_toutput span regions av
+  | AIgnoredMutBorrow (_, av) ->
+      input_typed_avalue_to_abs_toutput span regions av
   | AEndedMutBorrow _ | AEndedSharedBorrow | AEndedIgnoredMutBorrow _ ->
       (* The function shouldn't be called on this kind of values *)
       internal_error_opt_span __FILE__ __LINE__ span
 
-and input_aproj_to_abs_toutput (span : Meta.span option) (regions : region_id_set)
-    (proj : aproj) : abs_toutput =
+and input_aproj_to_abs_toutput (span : Meta.span option)
+    (regions : region_id_set) (proj : aproj) : abs_toutput =
   match proj with
   | AProjBorrows (sv_id, proj_ty, children) ->
       sanity_check_opt_span __FILE__ __LINE__ (children = []) span;
@@ -83,8 +84,8 @@ let rec output_typed_avalue_to_abs_texpr (span : Meta.span option)
   in
   { e; ty }
 
-and output_adt_avalue_to_abs_expr (span : Meta.span option) (regions : region_id_set)
-    (av : adt_avalue) : abs_expr =
+and output_adt_avalue_to_abs_expr (span : Meta.span option)
+    (regions : region_id_set) (av : adt_avalue) : abs_expr =
   let fields =
     List.map (output_typed_avalue_to_abs_texpr span regions) av.field_values
   in
@@ -98,12 +99,14 @@ and output_aloan_content_to_abs_expr (span : Meta.span option)
       sanity_check_opt_span __FILE__ __LINE__ (is_aignored child.value) span;
       ELoan bid
   | ASharedLoan _ | AIgnoredSharedLoan _ -> abs_expr_unit
-  | AIgnoredMutLoan (_, av) -> (output_typed_avalue_to_abs_texpr span regions av).e
+  | AIgnoredMutLoan (_, av) ->
+      (output_typed_avalue_to_abs_texpr span regions av).e
   | AEndedMutLoan _ | AEndedSharedLoan _ | AEndedIgnoredMutLoan _ ->
       (* The function shouldn't be called on this kind of values *)
       internal_error_opt_span __FILE__ __LINE__ span
 
-and output_aproj_to_abs_expr (span : Meta.span option) (proj : aproj) : abs_expr =
+and output_aproj_to_abs_expr (span : Meta.span option) (proj : aproj) : abs_expr
+    =
   match proj with
   | AProjLoans (sv_id, _, children) ->
       sanity_check_opt_span __FILE__ __LINE__ (children = []) span;
