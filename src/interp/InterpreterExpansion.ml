@@ -189,6 +189,101 @@ let replace_symbolic_values (span : Meta.span) (at_most_once : bool)
   (* Return *)
   ctx
 
+(** Apply a symbolic expansion to abstraction continuations. *)
+let apply_symbolic_expansion_to_abs_conts (span : Meta.span)
+    (original_sv : symbolic_value)
+    (expansion : symbolic_expansion) (ctx : eval_ctx) : eval_ctx =
+  (* We need to nest visitors, because the value visitor (which is an ancestor of
+     the evaluation context visitor) was carefully implemented to not explore
+     abstraction continuations. As a consequence, we need a first visitor to
+     visit all the region abstractions in the context, and a second visitor
+     to visitor their continuations. *)
+  (* The abstraction continuation visitor *)
+  let cont_visitor =
+    object
+      inherit [_] map_abs_expr as super
+
+      method! visit_abs_texpr abs expr =
+        match expr.e with
+        | ESymbolic sv_id ->
+          (* Expression *)
+          let e =
+          if sv_id = original_sv.sv_id then
+            match expansion with
+            | SeLiteral lit ->
+              EValue ({value = VLiteral lit; ty = original_sv.sv_ty})
+            | SeAdt (variant_id, fields) ->
+              (* Note about the normalization of the type: as the expression is
+                 morally a loan projector, the regions in the type of the symbolic
+                 value should be "compatible" with the regions used in the projection
+                 here *)
+              let fields = List.map (fun (sv : symbolic_value) -> ({ e=ESymbolic sv.sv_id; ty = normalize_proj_ty abs.regions.owned sv.sv_ty} : abs_texpr)) fields in
+              EAdt (variant_id, fields)
+            | SeMutRef (bid, sv) ->
+              (* TODO: we need to do things differently with nested borrows *)
+              cassert __FILE__ __LINE__ (not (symbolic_value_has_borrows (Some span) ctx sv)) span "Nested borrows are not supported yet";
+              let (r, _, _) = ty_as_ref expr.ty in
+              if region_in_set r abs.regions.owned then
+                ELoan bid
+              else 
+                (* TODO: not sure if we should put the shared value, unit, or a special "ignore" value *)
+                abs_expr_unit
+            | SeSharedRef (_, sv) ->
+              (* TODO: we need to do things differently with nested borrows *)
+              cassert __FILE__ __LINE__ (not (symbolic_value_has_borrows (Some span) ctx sv)) span "Nested borrows are not supported yet";
+              (* TODO: not sure if we should put the shared value, unit, or a special "ignore" value *)
+              abs_expr_unit
+          else ESymbolic sv_id
+          in { expr with e }
+        | _ -> super#visit_abs_texpr abs expr
+
+      method! visit_abs_toutput abs output =
+        match output.opat with
+        | OSymbolic sv_id ->
+          (* TODO: all this works only if there are no nested borrows *)
+          let opat =
+          if sv_id = original_sv.sv_id then
+            match expansion with
+            | SeLiteral _ ->
+              (* TODO: not sure if we should use a special "ignored" pattern or not *)
+              abs_output_unit
+            | SeAdt (variant_id, fields) ->
+              (* Note about the normalization of the type: as the expression is
+                 morally a loan projector, the regions in the type of the symbolic
+                 value should be "compatible" with the regions used in the projection
+                 here *)
+              let fields = List.map (fun (sv : symbolic_value) -> ({ opat=OSymbolic sv.sv_id; opat_ty = normalize_proj_ty abs.regions.owned sv.sv_ty} : abs_toutput)) fields in
+              OAdt (variant_id, fields)
+            | SeMutRef (bid, sv) ->
+              (* TODO: we need to do things differently with nested borrows *)
+              cassert __FILE__ __LINE__ (not (symbolic_value_has_borrows (Some span) ctx sv)) span "Nested borrows are not supported yet";
+              let (r, _, _) = ty_as_ref output.opat_ty in
+              if region_in_set r abs.regions.owned then
+                OBorrow bid
+              else 
+                (* TODO: not sure if we should put the shared value, unit, or a special "ignore" value *)
+                abs_output_unit
+            | SeSharedRef (_, sv) ->
+              (* TODO: we need to do things differently with nested borrows *)
+              cassert __FILE__ __LINE__ (not (symbolic_value_has_borrows (Some span) ctx sv)) span "Nested borrows are not supported yet";
+              (* TODO: not sure if we should put the shared value, unit, or a special "ignore" value *)
+              abs_output_unit
+          else OSymbolic sv_id
+          in { output with opat }
+        | _ -> super#visit_abs_toutput abs output
+    end
+  in
+  (* The region abstraction visitor *)
+  let ctx_visitor  =
+    object inherit [_] map_eval_ctx
+
+      method! visit_abs _ abs =
+        { abs with cont = Option.map (cont_visitor#visit_abs_cont abs) abs.cont }
+      
+    end
+  in
+  ctx_visitor#visit_eval_ctx () ctx
+
 let apply_symbolic_expansion_non_borrow (config : config) (span : Meta.span)
     (original_sv : symbolic_value) (ctx : eval_ctx)
     (expansion : symbolic_expansion) : eval_ctx =
@@ -200,8 +295,10 @@ let apply_symbolic_expansion_non_borrow (config : config) (span : Meta.span)
   in
   (* Apply the expansion to abstraction values *)
   let allow_reborrows = false in
-  apply_symbolic_expansion_to_avalues config span allow_reborrows original_sv
-    expansion ctx
+  let ctx = apply_symbolic_expansion_to_avalues config span allow_reborrows original_sv
+      expansion ctx
+  in
+  apply_symbolic_expansion_to_abs_conts span original_sv expansion ctx
 
 (** Compute the expansion of a non-builtin (e.g.: not [Box], etc.) adt value.
 
