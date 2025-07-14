@@ -1399,13 +1399,13 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
     (* Compute the continuation used in the translation *)
     let outputs =
       List.map
-        (typed_avalue_to_abs_toutput (Some span) abs.regions.owned)
+        (input_typed_avalue_to_abs_toutput (Some span) abs.regions.owned)
         args_projs
     in
     let outputs = List.map (fun o -> (o, PNone)) outputs in
     let f = EOutputAbs rg_id in
     let e =
-      EApp (f, [ typed_avalue_to_abs_texpr (Some span) abs.regions.owned ret_v ])
+      EApp (f, [ output_typed_avalue_to_abs_texpr (Some span) abs.regions.owned ret_v ])
     in
     let expr = { e; ty = normalize_proj_ty abs.regions.owned ret_v.ty } in
     let cont : abs_cont = { outputs; expr } in

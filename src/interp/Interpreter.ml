@@ -190,15 +190,15 @@ let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
 let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
     eval_ctx * symbolic_value list * inst_fun_sig =
   (* The abstractions are not initialized the same way as for function
-   * calls: they contain *loan* projectors, because they "provide" us
-   * with the input values (which behave as if they had been returned
-   * by some function calls...).
-   * Also, note that we properly set the set of parents of every abstraction:
-   * this should not be necessary, as those abstractions should never be
-   * *automatically* ended (because ending some borrows requires to end
-   * one of them), but rather selectively ended when generating code
-   * for each of the backward functions. We do it only because we can
-   * do it, and because it gives a bit of sanity.
+     calls: they contain *loan* projectors, because they "provide" us
+     with the input values (which behave as if they had been returned
+     by some function calls...).
+     Also, note that we properly set the set of parents of every abstraction:
+     this should not be necessary, as those abstractions should never be
+     *automatically* ended (because ending some borrows requires to end
+     one of them), but rather selectively ended when generating code
+     for each of the backward functions. We do it only because we can
+     do it, and because it gives a bit of sanity.
    *)
   let sg = fdef.signature in
   let span = fdef.item_meta.span in
@@ -248,7 +248,7 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
     let cont : abs_cont =
       let inputs =
         List.map
-          (typed_avalue_to_abs_texpr (Some span) abs.regions.owned)
+          (output_typed_avalue_to_abs_texpr (Some span) abs.regions.owned)
           avalues
       in
       let e = EApp (EInputAbs rg_id, inputs) in
@@ -358,7 +358,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
         in
         let cont : abs_cont =
           let output =
-            typed_avalue_to_abs_toutput (Some span) abs.regions.owned avalue
+            input_typed_avalue_to_abs_toutput (Some span) abs.regions.owned avalue
           in
           let e = EApp (EOutputAbs rg_id, []) in
           let ty = normalize_proj_ty abs.regions.owned ret_rty in

@@ -346,6 +346,18 @@ let abs_toutput_unit : abs_toutput =
   mk_abs_toutput abs_output_unit
     (TAdt { id = TTuple; generics = empty_generic_args })
 
+let rec abs_toutput_is_empty (output : abs_toutput) : bool =
+  match output.opat with
+  | OAdt (_, []) -> true
+  | OAdt (_, fields) -> List.for_all abs_toutput_is_empty fields
+  | _ -> false
+
+let abs_toutput_mk_tuple (el : abs_toutput list) : abs_toutput =
+  let tys = List.map (fun (e : abs_toutput) -> e.opat_ty) el in
+  let opat = OAdt (None, el) in
+  let opat_ty = TAdt { id = TTuple; generics = mk_generic_args_from_types tys } in
+  { opat; opat_ty }
+
 let abs_expr_unit : abs_expr = EAdt (None, [])
 
 let abs_texpr_unit : abs_texpr =
