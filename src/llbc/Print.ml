@@ -14,6 +14,8 @@ open Errors
 module Types = Charon.PrintTypes
 module Expressions = Charon.PrintExpressions
 
+(* TODO: the indent and indent_incr should be in the fmt_env *)
+
 let list_to_string (to_string : 'a -> string) (ls : 'a list) : string =
   "[" ^ String.concat "; " (List.map to_string ls) ^ "]"
 
@@ -22,6 +24,13 @@ let pair_to_string (to_string0 : 'a -> string) (to_string1 : 'b -> string)
   "(" ^ to_string0 x ^ ", " ^ to_string1 y ^ ")"
 
 let bool_to_string (b : bool) : string = if b then "true" else "false"
+
+let tuple_to_string (to_string : 'a -> string) (ls : 'a list) : string =
+  let ls = List.map to_string ls in
+  match ls with
+  | [] -> "()"
+  | [ x ] -> x
+  | _ -> "(" ^ String.concat "," ls ^ ")"
 
 (** Pretty-printing for values *)
 module Values = struct
@@ -307,92 +316,6 @@ module Values = struct
         ^ abstract_shared_borrows_to_string env sb
         ^ ")"
 
-  let loop_abs_kind_to_string (kind : loop_abs_kind) : string =
-    match kind with
-    | LoopSynthInput -> "LoopSynthInput"
-    | LoopCall -> "LoopCall"
-
-  let abs_kind_to_string (kind : abs_kind) : string =
-    match kind with
-    | FunCall (fid, rg_id) ->
-        "FunCall(fid:" ^ FunCallId.to_string fid ^ ", rg_id:"
-        ^ RegionGroupId.to_string rg_id
-        ^ ")"
-    | SynthInput rg_id ->
-        "SynthInput(rg_id:" ^ RegionGroupId.to_string rg_id ^ ")"
-    | SynthOutput rg_id ->
-        "SynthOutput(rg_id:" ^ RegionGroupId.to_string rg_id ^ ")"
-    | Loop (lp_id, rg_id, abs_kind) ->
-        "Loop(loop_id:" ^ LoopId.to_string lp_id ^ ", rg_id:"
-        ^ option_to_string RegionGroupId.to_string rg_id
-        ^ ", loop abs kind: "
-        ^ loop_abs_kind_to_string abs_kind
-        ^ ")"
-    | Identity -> "Identity"
-    | CopySymbolicValue -> "CopySymbolicValue"
-
-  let abs_to_string ?(span : Meta.span option = None) (env : fmt_env)
-      ?(with_ended : bool = false) (verbose : bool) (indent : string)
-      (indent_incr : string) (abs : abs) : string =
-    let indent2 = indent ^ indent_incr in
-    let avs =
-      List.map
-        (fun av -> indent2 ^ typed_avalue_to_string ~span ~with_ended env av)
-        abs.avalues
-    in
-    let avs = String.concat ",\n" avs in
-    let kind =
-      if verbose then "kind:" ^ abs_kind_to_string abs.kind ^ "," else ""
-    in
-    let can_end = if abs.can_end then "endable" else "frozen" in
-    indent ^ "abs@"
-    ^ AbstractionId.to_string abs.abs_id
-    ^ "{" ^ kind ^ "parents="
-    ^ AbstractionId.Set.to_string None abs.parents
-    ^ ",regions="
-    ^ RegionId.Set.to_string None abs.regions.owned
-    ^ "," ^ can_end ^ "} {\n" ^ avs ^ "\n" ^ indent ^ "}"
-
-  let abs_region_group_to_string (gr : abs_region_group) : string =
-    g_region_group_to_string RegionId.to_string AbstractionId.to_string gr
-
-  let abs_region_groups_to_string (gl : abs_region_groups) : string =
-    String.concat "\n" (List.map abs_region_group_to_string gl)
-
-  let inst_fun_sig_to_string (env : fmt_env) (sg : LlbcAst.inst_fun_sig) :
-      string =
-    (* TODO: print the trait type constraints? *)
-    let ty_to_string = ty_to_string env in
-
-    let inputs =
-      "(" ^ String.concat ", " (List.map ty_to_string sg.inputs) ^ ")"
-    in
-    let output = ty_to_string sg.output in
-    inputs ^ " -> " ^ output ^ "\n- regions_hierarchy:\n"
-    ^ region_var_groups_to_string sg.regions_hierarchy
-    ^ "\n- abs_regions_hierarchy:\n"
-    ^ abs_region_groups_to_string sg.abs_regions_hierarchy
-
-  let symbolic_expansion_to_string (env : fmt_env) (ty : ty)
-      (se : symbolic_expansion) : string =
-    match se with
-    | SeLiteral lit -> literal_to_string lit
-    | SeAdt (variant_id, svl) ->
-        let field_values =
-          List.map ValuesUtils.mk_typed_value_from_symbolic_value svl
-        in
-        let v : typed_value =
-          { value = VAdt { variant_id; field_values }; ty }
-        in
-        typed_value_to_string env v
-    | SeMutRef (bid, sv) ->
-        "MB " ^ BorrowId.to_string bid ^ " " ^ symbolic_value_to_string env sv
-    | SeSharedRef (bid, sv) ->
-        "SB {"
-        ^ BorrowId.Set.to_string None bid
-        ^ "} "
-        ^ symbolic_value_to_string env sv
-
   let rec abs_toutput_to_string ?(span : Meta.span option = None)
       (env : fmt_env) (o : abs_toutput) : string =
     match o.opat with
@@ -561,11 +484,126 @@ module Values = struct
         adt_to_string span env
           (fun () -> show_abs_expr_tpat pat)
           pat.epat_ty variant_id fields
+
+  let loop_abs_kind_to_string (kind : loop_abs_kind) : string =
+    match kind with
+    | LoopSynthInput -> "LoopSynthInput"
+    | LoopCall -> "LoopCall"
+
+  let abs_kind_to_string (kind : abs_kind) : string =
+    match kind with
+    | FunCall (fid, rg_id) ->
+        "FunCall(fid:" ^ FunCallId.to_string fid ^ ", rg_id:"
+        ^ RegionGroupId.to_string rg_id
+        ^ ")"
+    | SynthInput rg_id ->
+        "SynthInput(rg_id:" ^ RegionGroupId.to_string rg_id ^ ")"
+    | SynthOutput rg_id ->
+        "SynthOutput(rg_id:" ^ RegionGroupId.to_string rg_id ^ ")"
+    | Loop (lp_id, rg_id, abs_kind) ->
+        "Loop(loop_id:" ^ LoopId.to_string lp_id ^ ", rg_id:"
+        ^ option_to_string RegionGroupId.to_string rg_id
+        ^ ", loop abs kind: "
+        ^ loop_abs_kind_to_string abs_kind
+        ^ ")"
+    | Identity -> "Identity"
+    | CopySymbolicValue -> "CopySymbolicValue"
+
+  let abs_cont_to_string ?(span : Meta.span option = None) (env : fmt_env)
+      (indent : string) (indent_incr : string) (cont : abs_cont) : string =
+    let outputs =
+      tuple_to_string
+        (fun (o, pm) -> abs_toutput_to_string ~span env o |> add_proj_marker pm)
+        cont.outputs
+    in
+    let expr =
+      abs_texpr_to_string ~span env (indent ^ indent_incr) indent_incr cont.expr
+    in
+    outputs ^ " = " ^ expr
+
+  let abs_to_string ?(span : Meta.span option = None) (env : fmt_env)
+      ?(with_ended : bool = false) ?(with_abs_cont : bool = false)
+      (verbose : bool) (indent : string) (indent_incr : string) (abs : abs) :
+      string =
+    let indent2 = indent ^ indent_incr in
+    let avs =
+      List.map
+        (fun av -> indent2 ^ typed_avalue_to_string ~span ~with_ended env av)
+        abs.avalues
+    in
+    let avs = String.concat ",\n" avs in
+    let kind =
+      if verbose then "kind:" ^ abs_kind_to_string abs.kind ^ "," else ""
+    in
+    let can_end = if abs.can_end then "endable" else "frozen" in
+    let abs_cont =
+      if with_abs_cont then
+        match abs.cont with
+        | Some abs_cont ->
+            "⦃\n" ^ indent
+            ^ abs_cont_to_string ~span env indent indent_incr abs_cont
+            ^ "\n" ^ indent ^ "⦄"
+        | None -> "∅"
+      else ""
+    in
+    indent ^ "abs@"
+    ^ AbstractionId.to_string abs.abs_id
+    ^ "{" ^ kind ^ "parents="
+    ^ AbstractionId.Set.to_string None abs.parents
+    ^ ",regions="
+    ^ RegionId.Set.to_string None abs.regions.owned
+    ^ "," ^ can_end ^ "} {\n" ^ avs ^ "\n" ^ indent ^ "}" ^ abs_cont
+
+  let abs_region_group_to_string (gr : abs_region_group) : string =
+    g_region_group_to_string RegionId.to_string AbstractionId.to_string gr
+
+  let abs_region_groups_to_string (gl : abs_region_groups) : string =
+    String.concat "\n" (List.map abs_region_group_to_string gl)
+
+  let inst_fun_sig_to_string (env : fmt_env) (sg : LlbcAst.inst_fun_sig) :
+      string =
+    (* TODO: print the trait type constraints? *)
+    let ty_to_string = ty_to_string env in
+
+    let inputs =
+      "(" ^ String.concat ", " (List.map ty_to_string sg.inputs) ^ ")"
+    in
+    let output = ty_to_string sg.output in
+    inputs ^ " -> " ^ output ^ "\n- regions_hierarchy:\n"
+    ^ region_var_groups_to_string sg.regions_hierarchy
+    ^ "\n- abs_regions_hierarchy:\n"
+    ^ abs_region_groups_to_string sg.abs_regions_hierarchy
+
+  let symbolic_expansion_to_string (env : fmt_env) (ty : ty)
+      (se : symbolic_expansion) : string =
+    match se with
+    | SeLiteral lit -> literal_to_string lit
+    | SeAdt (variant_id, svl) ->
+        let field_values =
+          List.map ValuesUtils.mk_typed_value_from_symbolic_value svl
+        in
+        let v : typed_value =
+          { value = VAdt { variant_id; field_values }; ty }
+        in
+        typed_value_to_string env v
+    | SeMutRef (bid, sv) ->
+        "MB " ^ BorrowId.to_string bid ^ " " ^ symbolic_value_to_string env sv
+    | SeSharedRef (bid, sv) ->
+        "SB {"
+        ^ BorrowId.Set.to_string None bid
+        ^ "} "
+        ^ symbolic_value_to_string env sv
 end
 
 (** Pretty-printing for contexts *)
 module Contexts = struct
   open Values
+
+  type options = {
+    verbose : bool;
+    with_var_types : bool;
+    with_abs_conts : bool;
+  }
 
   let var_binder_to_string (env : fmt_env) (bv : var_binder) : string =
     match bv.name with
@@ -581,27 +619,27 @@ module Contexts = struct
     | BDummy bid -> dummy_var_id_to_string bid
 
   let env_elem_to_string ?(span : Meta.span option = None) (env : fmt_env)
-      (verbose : bool) (with_var_types : bool) (indent : string)
-      (indent_incr : string) (ev : env_elem) : string =
+      (options : options) (indent : string) (indent_incr : string)
+      (ev : env_elem) : string =
     match ev with
     | EBinding (var, tv) ->
         let bv = binder_to_string env var in
         let ty =
-          if with_var_types then " : " ^ ty_to_string env tv.ty else ""
+          if options.with_var_types then " : " ^ ty_to_string env tv.ty else ""
         in
         indent ^ bv ^ ty ^ " -> " ^ typed_value_to_string ~span env tv ^ " ;"
-    | EAbs abs -> abs_to_string ~span env verbose indent indent_incr abs
+    | EAbs abs ->
+        abs_to_string ~span env options.verbose
+          ~with_abs_cont:options.with_abs_conts indent indent_incr abs
     | EFrame ->
         craise_opt_span __FILE__ __LINE__ span "Can't print a Frame element"
 
   let opt_env_elem_to_string ?(span : Meta.span option = None) (env : fmt_env)
-      (verbose : bool) (with_var_types : bool) (indent : string)
-      (indent_incr : string) (ev : env_elem option) : string =
+      (options : options) (indent : string) (indent_incr : string)
+      (ev : env_elem option) : string =
     match ev with
     | None -> indent ^ "..."
-    | Some ev ->
-        env_elem_to_string ~span env verbose with_var_types indent indent_incr
-          ev
+    | Some ev -> env_elem_to_string ~span env options indent indent_incr ev
 
   (** Filters "dummy" bindings from an environment, to gain space and clarity/
       See [env_to_string]. *)
@@ -641,8 +679,8 @@ module Contexts = struct
       with "..." to gain space and clarity. [with_var_types]: if true, print the
       type of the variables *)
   let env_to_string ?(span : Meta.span option = None) (filter : bool)
-      (fmt_env : fmt_env) (verbose : bool) (with_var_types : bool)
-      (ended_regions : RegionId.Set.t) (env : env) : string =
+      (fmt_env : fmt_env) (options : options) (ended_regions : RegionId.Set.t)
+      (env : env) : string =
     let env =
       if filter then filter_env ended_regions env
       else List.map (fun ev -> Some ev) env
@@ -650,9 +688,7 @@ module Contexts = struct
     "{\n"
     ^ String.concat "\n"
         (List.map
-           (fun ev ->
-             opt_env_elem_to_string ~span fmt_env verbose with_var_types "  "
-               "  " ev)
+           (fun ev -> opt_env_elem_to_string ~span fmt_env options "  " "  " ev)
            env)
     ^ "\n}"
 
@@ -709,11 +745,13 @@ module Contexts = struct
 
   let eval_ctx_to_string ?(span : Meta.span option = None)
       ?(verbose : bool = false) ?(filter : bool = true)
-      ?(with_var_types : bool = true) (ctx : eval_ctx) : string =
+      ?(with_var_types : bool = true) ?(with_abs_conts : bool = false)
+      (ctx : eval_ctx) : string =
     let fmt_env = eval_ctx_to_fmt_env ctx in
     let ended_regions = RegionId.Set.to_string None ctx.ended_regions in
     let frames = split_env_according_to_frames ctx.env in
     let num_frames = List.length frames in
+    let options = { verbose; with_var_types; with_abs_conts } in
     let frames =
       List.mapi
         (fun i f ->
@@ -732,8 +770,7 @@ module Contexts = struct
           ^ string_of_int !num_bindings
           ^ "\n- dummy bindings: " ^ string_of_int !num_dummies
           ^ "\n- abstractions: " ^ string_of_int !num_abs ^ "\n"
-          ^ env_to_string ~span filter fmt_env verbose with_var_types
-              ctx.ended_regions f
+          ^ env_to_string ~span filter fmt_env options ctx.ended_regions f
           ^ "\n")
         frames
     in
@@ -880,9 +917,11 @@ module EvalCtx = struct
     trait_impl_to_string env "  " "  " timpl
 
   let env_elem_to_string ?(span : Meta.span option = None) (ctx : eval_ctx)
-      (indent : string) (indent_incr : string) (ev : env_elem) : string =
+      ?(with_abs_conts : bool = false) (indent : string) (indent_incr : string)
+      (ev : env_elem) : string =
     let env = eval_ctx_to_fmt_env ctx in
-    env_elem_to_string ~span env false true indent indent_incr ev
+    let options = { verbose = false; with_var_types = true; with_abs_conts } in
+    env_elem_to_string ~span env options indent indent_incr ev
 
   let abs_to_string ?(span : Meta.span option = None) (ctx : eval_ctx)
       ?(with_ended : bool = false) (indent : string) (indent_incr : string)

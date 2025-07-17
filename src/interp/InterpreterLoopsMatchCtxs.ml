@@ -294,7 +294,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
           match (bc0, bc1) with
           | VSharedBorrow bid0, VSharedBorrow bid1 ->
               let bid =
-                M.match_shared_borrows ctx0 ctx1 match_rec ty bid0 bid1
+                M.match_shared_borrows match_rec ctx0 ctx1 ty bid0 bid1
               in
               VSharedBorrow bid
           | VMutBorrow (bid0, bv0), VMutBorrow (bid1, bv1) ->
@@ -326,17 +326,16 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
         let lc =
           match (lc0, lc1) with
           | VSharedLoan (ids0, sv0), VSharedLoan (ids1, sv1) ->
-              let sv = match_rec sv0 sv1 in
-              cassert __FILE__ __LINE__
-                (not (value_has_borrows sv.value))
-                M.span "The join of nested borrows is not supported yet";
-              let ids, sv = M.match_shared_loans ctx0 ctx1 ty ids0 ids1 sv in
-              VSharedLoan (ids, sv)
+              let bids, sv =
+                M.match_shared_loans match_rec ctx0 ctx1 ty ids0 sv0 ids1 sv1
+              in
+              VSharedLoan (bids, sv)
           | VMutLoan id0, VMutLoan id1 ->
               let id = M.match_mut_loans ctx0 ctx1 ty id0 id1 in
               VMutLoan id
           | VSharedLoan _, VMutLoan _ | VMutLoan _, VSharedLoan _ ->
-              craise __FILE__ __LINE__ M.span "Unreachable"
+              (* TODO: *)
+              craise __FILE__ __LINE__ M.span "Unimplemented"
         in
         { value = VLoan lc; ty = v1.ty }
     | VSymbolic sv0, VSymbolic sv1 ->
@@ -351,16 +350,12 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
         (* Match *)
         let sv = M.match_symbolic_values ctx0 ctx1 sv0 sv1 in
         { v1 with value = VSymbolic sv }
-    | VLoan lc, _ -> (
-        match lc with
-        | VSharedLoan (ids, _) -> raise (ValueMatchFailure (LoansInLeft ids))
-        | VMutLoan id -> raise (ValueMatchFailure (LoanInLeft id)))
-    | _, VLoan lc -> (
-        match lc with
-        | VSharedLoan (ids, _) -> raise (ValueMatchFailure (LoansInRight ids))
-        | VMutLoan id -> raise (ValueMatchFailure (LoanInRight id)))
-    | VSymbolic sv, _ -> M.match_symbolic_with_other ctx0 ctx1 true sv v1
-    | _, VSymbolic sv -> M.match_symbolic_with_other ctx0 ctx1 false sv v0
+    | VLoan lc, _ -> M.match_loan_with_other match_rec ctx0 ctx1 true lc v1
+    | _, VLoan lc -> M.match_loan_with_other match_rec ctx0 ctx1 false lc v0
+    | VSymbolic sv, _ ->
+        M.match_symbolic_with_other match_rec ctx0 ctx1 true sv v1
+    | _, VSymbolic sv ->
+        M.match_symbolic_with_other match_rec ctx0 ctx1 false sv v0
     | VBottom, _ -> M.match_bottom_with_other ctx0 ctx1 true v1
     | _, VBottom -> M.match_bottom_with_other ctx0 ctx1 false v0
     | _ ->
@@ -528,20 +523,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     List.iter (check_no_borrows ctx0) adt0.field_values;
     List.iter (check_no_borrows ctx1) adt1.field_values;
 
-    (* Check if there are loans: we request to end them *)
-    let check_loans (left : bool) (fields : typed_value list) : unit =
-      match InterpreterBorrowsCore.get_first_loan_in_values fields with
-      | Some (VSharedLoan (ids, _)) ->
-          if left then raise (ValueMatchFailure (LoansInLeft ids))
-          else raise (ValueMatchFailure (LoansInRight ids))
-      | Some (VMutLoan id) ->
-          if left then raise (ValueMatchFailure (LoanInLeft id))
-          else raise (ValueMatchFailure (LoanInRight id))
-      | None -> ()
-    in
-    check_loans true adt0.field_values;
-    check_loans false adt1.field_values;
-
     (* If there is a bottom in one of the two values, return bottom: *)
     if
       bottom_in_adt_value ctx0.ended_regions adt0
@@ -551,7 +532,102 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* No borrows, no loans, no bottoms: we can introduce a symbolic value *)
       mk_fresh_symbolic_typed_value_from_no_regions_ty span ty
 
-  let match_shared_borrows (ctx0 : eval_ctx) (ctx1 : eval_ctx) match_rec
+  (** Auxiliary helper: under the assumption that we can't dive into the values
+      (i.e., if we have pairs on the left and on the right, we can match the
+      sub-components of the pairs), match two values which may contain loans. We
+      need this in several situations, for instance: when matching a symbolic
+      value with a value containing loans (because we have a symbolic value on
+      one side, we can't dive into the values anymore) or when matching a loan
+      value with a value which is not a loan.
+
+      In order to make the match work, we do the following:
+      - we borrow the left and/or right values, so that they become loans of the
+        same kind, that we can now match.
+      - by borrowing the left and right values we introduced anonymous values in
+        the context. We convert those to region abstractions.
+
+      # Example (symbolic value and mutable loan): We want to join: [s0 U ML l0]
+      We introduce reborrows:
+      {ul
+       {- we now have to join: [ML l1 U ML l2] }
+       {- and we have introduced those anonymous values in the context:
+          [_ -> MB l1 s0, _ -> MB l2 (ML l1)] We compute the join:
+          {[
+            ML l1 U ML l2 ~> ML l3, { MB l3, |ML l1|, ︙ML l2︙ }
+          ]}
+          and we convert the anonymous values to region abstractions:
+          {[
+            { |MB l1| }
+            { ︙MB l2︙, ︙ML l1︙ }
+          ]}
+       }
+      }
+
+      The result:
+      {[
+        s0 U ML l0 ~> ML l3,
+            { MB l3, |ML l1|, ︙ML l2︙ },
+            { |MB l1| },
+            { ︙MB l2︙, ︙ML l1︙ }
+      ]} *)
+  let match_values_containing_loans
+      (match_rec : typed_value -> typed_value -> typed_value) (ctx0 : eval_ctx)
+      (ctx1 : eval_ctx) (v0 : typed_value) (v1 : typed_value) : typed_value =
+    (* Check whether we need to introduce a shared loan or a mutable loan:
+       if there is an outer mutable loan on one side, we need a mutable loan
+       on both sides. Otherwise we introduce a shared loan. *)
+    let mut_loan =
+      InterpreterBorrowsCore.value_has_outer_mut_loan v0
+      || InterpreterBorrowsCore.value_has_outer_mut_loan v1
+    in
+    (* Auxiliary helper to optionally introduce a loan *)
+    let intro_loan (v : typed_value) : typed_value * typed_value option =
+      (* Note that if the value is already a loan of the proper kind, we don't
+         need to borrow it. *)
+      if mut_loan then
+        if is_mutable_loan v then (v, None)
+        else
+          let lid0 = fresh_borrow_id () in
+          let jv0 = mk_mut_loan lid0 v.ty in
+          let av0 = mk_mut_borrow lid0 v in
+          (jv0, Some av0)
+      else if is_shared_loan v then (v, None)
+      else
+        let lid0 = fresh_borrow_id () in
+        let jv0 = mk_shared_loan lid0 v in
+        let av0 = mk_shared_borrow lid0 v.ty in
+        (jv0, Some av0)
+    in
+
+    (* Introduce loans *)
+    let jv0, av0 = intro_loan v0 in
+    let jv1, av1 = intro_loan v1 in
+
+    (* Convert the anonymous values to region abstractions with proper markers *)
+    let abs_kind : abs_kind = Loop (S.loop_id, None, LoopSynthInput) in
+    let convert_to_abs ctx av pm =
+      let absl =
+        match av with
+        | None -> []
+        | Some av ->
+            convert_value_to_abstractions span abs_kind ~can_end:true
+              ~destructure_shared_values:true ctx av
+      in
+      List.map (abs_add_marker span ctx pm) absl
+    in
+    let absl0 = convert_to_abs ctx0 av0 PLeft in
+    let absl1 = convert_to_abs ctx1 av1 PRight in
+    push_absl (absl0 @ absl1);
+
+    (* Join the loans.
+
+       Note that in the case we join shared loans this works because
+       when joining shared loans we do not recursively join the shared
+       values (if we did, we would enter an infinite loop here).
+     *)
+    match_rec jv0 jv1
+
+  let match_shared_borrows match_rec (ctx0 : eval_ctx) (ctx1 : eval_ctx)
       (ty : ety) (bid0 : borrow_id) (bid1 : borrow_id) : borrow_id =
     (* Lookup the shared values and match them - we do this mostly
        to make sure we end loans which might appear on one side
@@ -808,6 +884,70 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           can_end = true;
           parents = AbstractionId.Set.empty;
           original_parents = [];
+          regions = { owned = owned_regions; ancestors = RegionId.Set.empty };
+          avalues;
+          cont;
+        }
+      in
+      push_abs abs;
+
+      (* Return the new borrow *)
+      (bid2, sv)
+
+  let match_shared_loans
+      (match_typed_values : typed_value -> typed_value -> typed_value)
+      (_ : eval_ctx) (_ : eval_ctx) (ty : ety) (bids0 : loan_id_set)
+      (sv0 : typed_value) (bids1 : loan_id_set) (sv1 : typed_value) :
+      loan_id_set * typed_value =
+    let span = S.span in
+    (* Check if the ids are the same: if not, we need to introduce an intermediate
+       region abstraction. *)
+    if bids0 = bids1 then (
+      let sv = match_typed_values sv0 sv1 in
+      cassert __FILE__ __LINE__ (ty_no_regions sv.ty) span
+        "Nested borrows are not supported yet";
+      (bids0, sv))
+    else begin
+      cassert __FILE__ __LINE__ (ty_no_regions sv0.ty) span
+        "Nested borrows are not supported yet";
+      cassert __FILE__ __LINE__ (ty_no_regions sv1.ty) span
+        "Nested borrows are not supported yet";
+      let rid = fresh_region_id () in
+      let bid = fresh_borrow_id () in
+
+      (* Generate a fresh symbolic value for the shared value *)
+      let sv = mk_fresh_symbolic_typed_value_from_no_regions_ty span ty in
+      let borrow_ty = mk_ref_ty (RVar (Free rid)) sv.ty RShared in
+
+      (* Generate the avalues for the abstraction *)
+      let mk_aloan (pm : proj_marker) (bids : BorrowId.Set.t) (sv : typed_value)
+          : typed_avalue =
+        let value =
+          ALoan (ASharedLoan (pm, bids, sv, mk_aignored span ty None))
+        in
+        { value; ty = borrow_ty }
+      in
+      let loans = [ mk_aloan PLeft bids0 sv0; mk_aloan PRight bids1 sv1 ] in
+
+      let borrow = ASharedBorrow (PNone, bid) in
+      (* Note that an aloan has a borrow type *)
+      let borrow : typed_avalue = { value = ABorrow borrow; ty = borrow_ty } in
+      let avalues = borrow :: loans in
+
+      (* Create the continuation expression: it doesn't have any inputs/outputs *)
+      let cont : abs_cont option =
+        if S.with_abs_conts then Some { expr = abs_texpr_unit; outputs = [] }
+        else None
+      in
+
+      (* Generate the abstraction *)
+      let abs =
+        {
+          abs_id = fresh_abstraction_id ();
+          kind = Loop (S.loop_id, None, LoopSynthInput);
+          can_end = true;
+          parents = AbstractionId.Set.empty;
+          original_parents = [];
           regions =
             {
               owned = RegionId.Set.singleton rid;
@@ -819,39 +959,69 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       in
       push_abs abs;
 
-      (* Return the new borrow *)
-      (bid2, sv)
+      (* Return the new loan value *)
+      (BorrowId.Set.singleton bid, sv)
+    end
 
-  let match_shared_loans (_ : eval_ctx) (_ : eval_ctx) (_ : ety)
-      (ids0 : loan_id_set) (ids1 : loan_id_set) (sv : typed_value) :
-      loan_id_set * typed_value =
-    (* Check if the ids are the same - Rem.: we forbid the sets of loans
-       to be different. However, if we dive inside data-structures (by
-       using a shared borrow) the shared values might themselves contain
-       shared loans, which need to be matched. For this reason, we destructure
-       the shared values (see {!destructure_abs}).
-    *)
-    let extra_ids_left = BorrowId.Set.diff ids0 ids1 in
-    let extra_ids_right = BorrowId.Set.diff ids1 ids0 in
-    if not (BorrowId.Set.is_empty extra_ids_left) then
-      raise (ValueMatchFailure (LoansInLeft extra_ids_left));
-    if not (BorrowId.Set.is_empty extra_ids_right) then
-      raise (ValueMatchFailure (LoansInRight extra_ids_right));
+  let match_mut_loans (_ : eval_ctx) (_ : eval_ctx) (ty : ety) (bid0 : loan_id)
+      (bid1 : loan_id) : loan_id =
+    if bid0 = bid1 then bid0
+    else begin
+      cassert __FILE__ __LINE__ (ty_no_regions ty) span
+        "Nested borrows are not supported yet";
+      let rid = fresh_region_id () in
+      let bid = fresh_borrow_id () in
 
-    (* This should always be true if we get here *)
-    sanity_check __FILE__ __LINE__ (ids0 = ids1) span;
-    let ids = ids0 in
+      let borrow_ty = mk_ref_ty (RVar (Free rid)) ty RMut in
 
-    (* Return *)
-    (ids, sv)
+      (* Generate the avalues for the abstraction *)
+      let mk_aloan (pm : proj_marker) (bid : borrow_id) : typed_avalue =
+        let value = ALoan (AMutLoan (pm, bid, mk_aignored span ty None)) in
+        { value; ty = borrow_ty }
+      in
+      let loans = [ mk_aloan PLeft bid0; mk_aloan PRight bid1 ] in
 
-  let match_mut_loans (_ : eval_ctx) (_ : eval_ctx) (_ : ety) (id0 : loan_id)
-      (id1 : loan_id) : loan_id =
-    if id0 = id1 then id0
-    else
-      (* We forbid this case for now: if we get there, we force to end
-         both borrows *)
-      raise (ValueMatchFailure (LoanInLeft id0))
+      let borrow = AMutBorrow (PNone, bid, mk_aignored span ty None) in
+      let borrow : typed_avalue = { value = ABorrow borrow; ty = borrow_ty } in
+      let avalues = borrow :: loans in
+
+      (* Create the continuation expression: it is simply the identity *)
+      let owned_regions = RegionId.Set.singleton rid in
+      let cont : abs_cont option =
+        if S.with_abs_conts then
+          let norm_ty = normalize_proj_ty owned_regions borrow_ty in
+          let outputs =
+            [ ({ opat = OBorrow bid; opat_ty = norm_ty }, PNone) ]
+          in
+          let mk_expr pm bid =
+            let e = { e = ELoan bid; ty = norm_ty } in
+            { e = EProj (pm, e); ty = norm_ty }
+          in
+          let expr =
+            abs_texpr_mk_tuple [ mk_expr PLeft bid0; mk_expr PRight bid1 ]
+          in
+          Some { expr; outputs }
+        else None
+      in
+
+      (* Generate the abstraction *)
+      let abs =
+        {
+          abs_id = fresh_abstraction_id ();
+          kind = Loop (S.loop_id, None, LoopSynthInput);
+          can_end = true;
+          parents = AbstractionId.Set.empty;
+          original_parents = [];
+          regions = { owned = owned_regions; ancestors = RegionId.Set.empty };
+          avalues;
+          cont;
+        }
+      in
+      push_abs abs;
+
+      (* Return the new loan value *)
+      bid
+    end
 
   let match_symbolic_values (ctx0 : eval_ctx) (ctx1 : eval_ctx)
       (sv0 : symbolic_value) (sv1 : symbolic_value) : symbolic_value =
@@ -952,8 +1122,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         (* Otherwise we simply introduce a fresh symbolic value *)
         mk_fresh_symbolic_value span sv0.sv_ty)
 
-  let match_symbolic_with_other (ctx0 : eval_ctx) (ctx1 : eval_ctx)
-      (left : bool) (sv : symbolic_value) (v : typed_value) : typed_value =
+  let match_symbolic_with_other
+      (match_rec : typed_value -> typed_value -> typed_value) (ctx0 : eval_ctx)
+      (ctx1 : eval_ctx) (symbolic_is_left : bool) (sv : symbolic_value)
+      (v : typed_value) : typed_value =
     (* Check that:
        - there are no borrows in the symbolic value
        - there are no borrows in the "regular" value
@@ -965,32 +1137,47 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     sanity_check __FILE__ __LINE__
       (not (ValuesUtils.value_has_borrows (Some span) type_infos v.value))
       span;
-    let value_is_left = not left in
-    (* If there are loans in the regular value, raise an exception. *)
-    (match InterpreterBorrowsCore.get_first_loan_in_value v with
-    | None -> ()
-    | Some (VSharedLoan (ids, _)) ->
-        if value_is_left then raise (ValueMatchFailure (LoansInLeft ids))
-        else raise (ValueMatchFailure (LoansInRight ids))
-    | Some (VMutLoan id) ->
-        if value_is_left then raise (ValueMatchFailure (LoanInLeft id))
-        else raise (ValueMatchFailure (LoanInRight id)));
+    (* Check if there are loans in the regular value: if there are, we need
+       to put them in a region abstraction and introduce a loan *)
+    match InterpreterBorrowsCore.get_first_loan_in_value v with
+    | None ->
+        (* No loans: no need to introduce a region abstraction *)
+        (* There might be a bottom in the other value. We're being conservative:
+           if there is a bottom anywhere (it includes the case where part of the
+           value contains bottom) the result of the join is bottom. Otherwise,
+           we generate a fresh symbolic value.
 
-    (* There might be a bottom in the other value. We're being conservative:
-       if there is a bottom anywhere (it includes the case where part of the
-       value contains bottom) the result of the join is bottom. Otherwise,
-       we generate a fresh symbolic value. *)
-    if
-      symbolic_value_has_ended_regions ctx0.ended_regions sv
-      || bottom_in_value ctx1.ended_regions v
-    then mk_bottom span sv.sv_ty
-    else mk_fresh_symbolic_typed_value span sv.sv_ty
+           TODO: make this general
+        *)
+        if
+          symbolic_value_has_ended_regions ctx0.ended_regions sv
+          || bottom_in_value ctx1.ended_regions v
+        then mk_bottom span sv.sv_ty
+        else mk_fresh_symbolic_typed_value span sv.sv_ty
+    | Some _ ->
+        (* There are loans: we may need to introduce region abstractions *)
+        let sv = mk_typed_value_from_symbolic_value sv in
+        let v0, v1 = if symbolic_is_left then (sv, v) else (v, sv) in
+        match_values_containing_loans match_rec ctx0 ctx1 v0 v1
+
+  let match_loan_with_other
+      (match_rec : typed_value -> typed_value -> typed_value) (ctx0 : eval_ctx)
+      (ctx1 : eval_ctx) (loan_is_left : bool) (lc : loan_content)
+      (v : typed_value) : typed_value =
+    (* We simply delegate to the following helper *)
+    let lv : typed_value = { value = VLoan lc; ty = v.ty } in
+    let v0, v1 = if loan_is_left then (lv, v) else (v, lv) in
+    match_values_containing_loans match_rec ctx0 ctx1 v0 v1
 
   let match_bottom_with_other (ctx0 : eval_ctx) (ctx1 : eval_ctx)
       (bottom_is_left : bool) (v : typed_value) : typed_value =
     let value_is_left = not bottom_is_left in
     (* If there are outer loans in the non-bottom value, raise an exception.
        Otherwise, convert it to an abstraction and return [Bottom].
+
+       TODO: make this more general so that we don't have to end the loans
+       on the other side. We need a way of having a bottom such that if we
+       want to write to it we need to end some borrows.
     *)
     let with_borrows = false in
     match
@@ -1103,7 +1290,7 @@ module MakeMoveMatcher (S : MatchMoveState) : PrimMatcher = struct
        the value on the left should have been simplified to bottom. *)
     { ty; value = VAdt adt1 }
 
-  let match_shared_borrows (_ : eval_ctx) (_ : eval_ctx) _ (_ : ety)
+  let match_shared_borrows _match_rec (_ : eval_ctx) (_ : eval_ctx) (_ : ety)
       (_ : borrow_id) (bid1 : borrow_id) : borrow_id =
     (* There can't be bottoms in shared values *)
     bid1
@@ -1114,9 +1301,9 @@ module MakeMoveMatcher (S : MatchMoveState) : PrimMatcher = struct
     (* There can't be bottoms in borrowed values *)
     (bid1, bv1)
 
-  let match_shared_loans (_ : eval_ctx) (_ : eval_ctx) (_ : ety)
-      (_ : loan_id_set) (ids1 : loan_id_set) (sv : typed_value) :
-      loan_id_set * typed_value =
+  let match_shared_loans _match_rec (_ : eval_ctx) (_ : eval_ctx) (_ : ety)
+      (_ : loan_id_set) (_ : typed_value) (ids1 : loan_id_set)
+      (sv : typed_value) : loan_id_set * typed_value =
     (* There can't be bottoms in shared loans *)
     (ids1, sv)
 
@@ -1128,7 +1315,7 @@ module MakeMoveMatcher (S : MatchMoveState) : PrimMatcher = struct
       (sv1 : symbolic_value) : symbolic_value =
     sv1
 
-  let match_symbolic_with_other (ctx0 : eval_ctx) (ctx1 : eval_ctx)
+  let match_symbolic_with_other _match_rec (ctx0 : eval_ctx) (ctx1 : eval_ctx)
       (left : bool) (sv : symbolic_value) (v : typed_value) : typed_value =
     (* We're being conservative for now: if any of the two values contains
        a bottom, the join is bottom *)
@@ -1138,6 +1325,10 @@ module MakeMoveMatcher (S : MatchMoveState) : PrimMatcher = struct
     then mk_bottom span sv.sv_ty
     else if left then v
     else mk_typed_value_from_symbolic_value sv
+
+  let match_loan_with_other _match_rec (_ : eval_ctx) (_ : eval_ctx) (_ : bool)
+      (_ : loan_content) (_ : typed_value) : typed_value =
+    craise __FILE__ __LINE__ span "Unexpected"
 
   let match_bottom_with_other (_ : eval_ctx) (_ : eval_ctx) (left : bool)
       (v : typed_value) : typed_value =
@@ -1306,9 +1497,10 @@ struct
       (_adt0 : adt_value) (_adt1 : adt_value) : typed_value =
     raise (Distinct "match_distinct_adts")
 
-  let match_shared_borrows (ctx0 : eval_ctx) (ctx1 : eval_ctx)
+  let match_shared_borrows
       (match_typed_values : typed_value -> typed_value -> typed_value)
-      (_ty : ety) (bid0 : borrow_id) (bid1 : borrow_id) : borrow_id =
+      (ctx0 : eval_ctx) (ctx1 : eval_ctx) (_ty : ety) (bid0 : borrow_id)
+      (bid1 : borrow_id) : borrow_id =
     log#ldebug
       (lazy
         ("MakeCheckEquivMatcher: match_shared_borrows: " ^ "bid0: "
@@ -1342,10 +1534,11 @@ struct
     let bid = match_borrow_id bid0 bid1 in
     (bid, bv)
 
-  let match_shared_loans (_ : eval_ctx) (_ : eval_ctx) (_ : ety)
-      (ids0 : loan_id_set) (ids1 : loan_id_set) (sv : typed_value) :
-      loan_id_set * typed_value =
+  let match_shared_loans match_rec (_ : eval_ctx) (_ : eval_ctx) (_ : ety)
+      (ids0 : loan_id_set) (sv0 : typed_value) (ids1 : loan_id_set)
+      (sv1 : typed_value) : loan_id_set * typed_value =
     let ids = match_loan_ids ids0 ids1 in
+    let sv = match_rec sv0 sv1 in
     (ids, sv)
 
   let match_mut_loans (_ : eval_ctx) (_ : eval_ctx) (_ : ety) (bid0 : loan_id)
@@ -1391,7 +1584,7 @@ struct
          we want *)
       sv0)
 
-  let match_symbolic_with_other (_ : eval_ctx) (_ : eval_ctx) (left : bool)
+  let match_symbolic_with_other _ (_ : eval_ctx) (_ : eval_ctx) (left : bool)
       (sv : symbolic_value) (v : typed_value) : typed_value =
     if S.check_equiv then raise (Distinct "match_symbolic_with_other")
     else (
@@ -1407,23 +1600,38 @@ struct
       (* Return - the returned value is not used, so we can return whatever we want *)
       v)
 
-  let match_bottom_with_other (ctx0 : eval_ctx) (ctx1 : eval_ctx) (left : bool)
-      (v : typed_value) : typed_value =
+  let match_loan_with_other _match_rec (ctx0 : eval_ctx) (ctx1 : eval_ctx)
+      (loan_is_left : bool) (lc : loan_content) (v : typed_value) : typed_value
+      =
+    let ctx0, ctx1 = if loan_is_left then (ctx0, ctx1) else (ctx1, ctx0) in
+    raise
+      (Distinct
+         ("match_loan_with_other:\n- loan is in left environment: "
+         ^ Print.bool_to_string loan_is_left
+         ^ "\n- loan content: "
+         ^ loan_content_to_string ctx0 lc
+         ^ "\n- other value:\n"
+         ^ typed_value_to_string ctx1 v))
+
+  let match_bottom_with_other (ctx0 : eval_ctx) (ctx1 : eval_ctx)
+      (bottom_is_left : bool) (v : typed_value) : typed_value =
     (* It can happen that some variables get initialized in some branches
        and not in some others, which causes problems when matching. *)
     (* TODO: the returned value is not used, while it should: in generality it
        should be ok to match a fixed-point with the environment we get at
        a continue, where the fixed point contains some bottom values. *)
-    let value_is_left = not left in
+    let value_is_left = not bottom_is_left in
     let ctx = if value_is_left then ctx0 else ctx1 in
-    if left && not (value_has_loans_or_borrows (Some span) ctx v.value) then
-      mk_bottom span v.ty
+    if
+      bottom_is_left && not (value_has_loans_or_borrows (Some span) ctx v.value)
+    then mk_bottom span v.ty
     else
       raise
         (Distinct
            ("match_bottom_with_other:\n- bottom value is in left environment: "
-          ^ Print.bool_to_string left ^ "\n- value to match with bottom:\n"
-          ^ show_typed_value v))
+           ^ Print.bool_to_string bottom_is_left
+           ^ "\n- value to match with bottom:\n"
+           ^ typed_value_to_string ctx v))
 
   let match_distinct_aadts _ _ _ _ _ _ _ =
     raise (Distinct "match_distinct_adts")
@@ -1898,494 +2106,3 @@ let prepare_loop_match_ctx_with_target (config : config) (span : Meta.span)
   in
   (* Apply the reorganization *)
   reorganize_join_tgt tgt_ctx
-
-let loop_match_ctx_with_target (config : config) (span : Meta.span)
-    (loop_id : LoopId.id) (is_loop_entry : bool)
-    (fp_bl_maps : borrow_loan_corresp)
-    (fp_input_svalues : SymbolicValueId.id list) (fixed_ids : ids_sets)
-    (src_ctx : eval_ctx) : st_cm_fun =
- fun tgt_ctx ->
-  (* Debug *)
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ":\n" ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n"
-     ^ "\n- src_ctx: " ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: "
-     ^ eval_ctx_to_string tgt_ctx));
-
-  (* Simplify the target context *)
-  let tgt_ctx, cc =
-    simplify_dummy_values_useless_abs config span fixed_ids.aids tgt_ctx
-  in
-
-  (* We first reorganize [tgt_ctx] so that we can match [src_ctx] with it (by
-     ending loans for instance - remember that the [src_ctx] is the fixed point
-     context, which results from joins during which we ended the loans which
-     were introduced during the loop iterations)
-  *)
-  let tgt_ctx, cc =
-    comp cc
-      (prepare_loop_match_ctx_with_target config span loop_id fixed_ids src_ctx
-         tgt_ctx)
-  in
-
-  (* Introduce the "identity" abstractions for the loop re-entry.
-
-     Match the target context with the source context so as to compute how to
-     map the borrows from the target context (i.e., the fixed point context)
-     to the borrows in the source context.
-
-     Substitute the *loans* in the abstractions introduced by the target context
-     (the abstractions of the fixed point) to properly link those abstraction:
-     we introduce *identity* abstractions (the loans are equal to the borrows):
-     we substitute the loans and introduce fresh ids for the borrows, symbolic
-     values, etc. About the *identity abstractions*, see the comments for
-     [compute_fixed_point_id_correspondance].
-
-     TODO: this whole thing is very technical and error-prone.
-     We should rely on a more primitive and safer function
-     [add_identity_abs] to add the identity abstractions one by one.
-  *)
-  (* Match the source and target contexts *)
-  log#ltrace
-    (lazy
-      ("mach_ctx_with_target: about to introduce the identity abstractions (i):\n"
-     ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
-     ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: " ^ eval_ctx_to_string tgt_ctx
-      ));
-
-  let filt_tgt_env, _, _ = ctx_split_fixed_new span fixed_ids tgt_ctx in
-  let filt_src_env, new_absl, new_dummyl =
-    ctx_split_fixed_new span fixed_ids src_ctx
-  in
-  sanity_check __FILE__ __LINE__ (new_dummyl = []) span;
-  let filt_tgt_ctx = { tgt_ctx with env = filt_tgt_env } in
-  let filt_src_ctx = { src_ctx with env = filt_src_env } in
-
-  let src_to_tgt_maps =
-    let check_equiv = false in
-    let fixed_ids = ids_sets_empty_borrows_loans fixed_ids in
-    let open InterpreterBorrowsCore in
-    let lookup_shared_loan lid ctx : typed_value =
-      match snd (lookup_loan span ek_all lid ctx) with
-      | Concrete (VSharedLoan (_, v)) -> v
-      | Abstract (ASharedLoan (pm, _, v, _)) ->
-          sanity_check __FILE__ __LINE__ (pm = PNone) span;
-          v
-      | _ -> craise __FILE__ __LINE__ span "Unreachable"
-    in
-    let lookup_in_src id = lookup_shared_loan id src_ctx in
-    let lookup_in_tgt id = lookup_shared_loan id tgt_ctx in
-    (* Match *)
-    Option.get
-      (match_ctxs span check_equiv fixed_ids lookup_in_src lookup_in_tgt
-         filt_src_ctx filt_tgt_ctx)
-  in
-  let tgt_to_src_borrow_map =
-    BorrowId.Map.of_list
-      (List.map
-         (fun (x, y) -> (y, x))
-         (BorrowId.InjSubst.bindings src_to_tgt_maps.borrow_id_map))
-  in
-  let tgt_to_src_sid_map =
-    SymbolicValueId.Map.of_list
-      (List.filter_map
-         (fun ((sid, v) : _ * typed_value) ->
-           match v.value with
-           | VSymbolic sv -> Some (sv.sv_id, sid)
-           | _ -> None)
-         (SymbolicValueId.Map.bindings src_to_tgt_maps.sid_to_value_map))
-  in
-
-  (* Debug *)
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ": about to introduce the identity abstractions (ii):"
-     ^ "\n\n- src_ctx: "
-      ^ eval_ctx_to_string ~span:(Some span) src_ctx
-      ^ "\n\n- tgt_ctx: "
-      ^ eval_ctx_to_string ~span:(Some span) tgt_ctx
-      ^ "\n\n- filt_tgt_ctx: "
-      ^ eval_ctx_to_string ~span:(Some span) ~filter:false filt_tgt_ctx
-      ^ "\n\n- filt_src_ctx: "
-      ^ eval_ctx_to_string ~span:(Some span) ~filter:false filt_src_ctx
-      ^ "\n\n- new_absl:\n"
-      ^ eval_ctx_to_string ~span:(Some span)
-          { src_ctx with env = List.map (fun abs -> EAbs abs) new_absl }
-      ^ "\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids ^ "\n\n- fp_bl_maps:\n"
-      ^ show_borrow_loan_corresp fp_bl_maps
-      ^ "\n\n- src_to_tgt_maps: "
-      ^ ids_maps_to_string tgt_ctx src_to_tgt_maps));
-
-  (* Update the borrows and symbolic ids in the source context.
-
-     Going back to the [list_nth_mut_example], the original environment upon
-     re-entering the loop is:
-
-     {[
-       abs@0 { ML l0 }
-       ls -> MB l5 (s@6 : loops::List<T>)
-       i -> s@7 : u32
-       _@1 -> MB l0 (loops::List::Cons (ML l1, ML l2))
-       _@2 -> MB l2 (@Box (ML l4))                      // tail
-       _@3 -> MB l1 (s@3 : T)                           // hd
-       abs@1 { MB l4, ML l5 }
-     ]}
-
-     The fixed-point environment is:
-     {[
-       env_fp = {
-         abs@0 { ML l0 }
-         ls -> MB l1 (s@3 : loops::List<T>)
-         i -> s@4 : u32
-         abs@fp {
-           MB l0 // this borrow appears in [env0]
-           ML l1
-         }
-       }
-     ]}
-
-     Through matching, we detect that in [env_fp], [l1] is matched
-     to [l5]. We introduce a fresh borrow [l6] for [l1], and remember
-     in the map [src_fresh_borrows_map] that: [{ l1 -> l6 }].
-
-     We get:
-     {[
-       abs@0 { ML l0 }
-       ls -> MB l6 (s@6 : loops::List<T>) // l6 is fresh and doesn't have a corresponding loan
-       i -> s@7 : u32
-       _@1 -> MB l0 (loops::List::Cons (ML l1, ML l2))
-       _@2 -> MB l2 (@Box (ML l4))                      // tail
-       _@3 -> MB l1 (s@3 : T)                           // hd
-       abs@1 { MB l4, ML l5 }
-     ]}
-
-     Later, we will introduce the identity abstraction:
-     {[
-       abs@2 { MB l5, ML l6 }
-     ]}
-
-     We do something similar for symbolic values.
-  *)
-  (* First, compute the set of borrows and symbolic values appearing in *borrow*
-     projections which appear in the fresh abstractions of the fixed-point: we
-     want to introduce fresh ids only for those. *)
-  let new_absl_ids, _ = compute_absl_ids new_absl in
-  let src_fresh_borrows_map = ref BorrowId.Map.empty in
-  let src_fresh_sids_map = ref SymbolicValueId.Map.empty in
-  let register_symbolic_value_id (id : symbolic_value_id) : symbolic_value_id =
-    (* Register the symbolic value, if it needs to be mapped *)
-    if
-      (* We map the borrows for which we computed a mapping - TODO: simplify *)
-      SymbolicValueId.Map.mem id tgt_to_src_sid_map
-      (* And which have corresponding loans in the fresh fixed-point abstractions *)
-      && SymbolicValueId.Set.mem
-           (SymbolicValueId.Map.find id tgt_to_src_sid_map)
-           new_absl_ids.sids
-    then (
-      let src_id = SymbolicValueId.Map.find id tgt_to_src_sid_map in
-      let nid = fresh_symbolic_value_id () in
-      src_fresh_sids_map :=
-        SymbolicValueId.Map.add src_id nid !src_fresh_sids_map;
-      nid)
-    else id
-  in
-  let register_symbolic_value (sv : symbolic_value) : symbolic_value =
-    { sv with sv_id = register_symbolic_value_id sv.sv_id }
-  in
-  let visit_tgt =
-    object
-      inherit [_] map_eval_ctx as super
-
-      (* For *borrows* it is simple: there is a separation between *borrow*
-         ids and *loan* ids, meaning we simply have to update one visitor. *)
-      method! visit_borrow_id _ id =
-        (* Map the borrow, if it needs to be mapped - TODO: simplify *)
-        if
-          (* We map the borrows for which we computed a mapping *)
-          BorrowId.InjSubst.Set.mem id
-            (BorrowId.InjSubst.elements src_to_tgt_maps.borrow_id_map)
-          (* And which have corresponding loans in the fresh fixed-point abstractions *)
-          && BorrowId.Set.mem
-               (BorrowId.Map.find id tgt_to_src_borrow_map)
-               new_absl_ids.loan_ids
-        then (
-          let src_id = BorrowId.Map.find id tgt_to_src_borrow_map in
-          let nid = fresh_borrow_id () in
-          src_fresh_borrows_map :=
-            BorrowId.Map.add src_id nid !src_fresh_borrows_map;
-          nid)
-        else id
-
-      method! visit_VSymbolic _ sv = VSymbolic (register_symbolic_value sv)
-
-      method! visit_aproj env p =
-        match p with
-        | AProjLoans _ -> super#visit_aproj env p
-        | AProjBorrows (sv_id, proj_ty, children) ->
-            sanity_check __FILE__ __LINE__ (children = []) span;
-            let sv_id = register_symbolic_value_id sv_id in
-            AProjBorrows (sv_id, proj_ty, children)
-        | _ -> super#visit_aproj env p
-    end
-  in
-
-  let tgt_ctx = visit_tgt#visit_eval_ctx () tgt_ctx in
-
-  let refreshed_input_sids =
-    SymbolicValueId.Map.filter
-      (fun sid _ -> List.mem sid fp_input_svalues)
-      !src_fresh_sids_map
-  in
-
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ": cf_introduce_loop_fp_abs:"
-     ^ "\n- src_fresh_borrows_map:\n"
-      ^ BorrowId.Map.show BorrowId.to_string !src_fresh_borrows_map
-      ^ "\n- src_fresh_sids_map:\n"
-      ^ SymbolicValueId.Map.show SymbolicValueId.to_string !src_fresh_sids_map
-      ^ "\n- refreshed_input_sids:\n"
-      ^ SymbolicValueId.Map.show SymbolicValueId.to_string refreshed_input_sids
-      ^ "\n"));
-
-  sanity_check __FILE__ __LINE__ Config.greedy_expand_symbolics_with_borrows
-    span;
-
-  (* Update the borrows/loans and the borrow/loan projectors in the abstractions
-     of the target context.
-
-     Going back to the [list_nth_mut] example and by using [src_fresh_borrows_map],
-     we instantiate the fixed-point abstractions that we will insert into the
-     context.
-     The abstraction is [abs { MB l0, ML l1 }].
-     Because of [src_fresh_borrows_map], we substitute [l1] with [l6].
-     Because of the match between the contexts, we substitute [l0] with [l5].
-     We get:
-     {[
-       abs@2 { MB l5, ML l6 }
-     ]}
-  *)
-  let module MkGenerator (M : sig
-    include Collections.Map
-
-    type id
-
-    val fresh_id : unit -> id
-  end) =
-  struct
-    let id_map = ref M.empty
-
-    let get_id id =
-      match M.find_opt id !id_map with
-      | Some id -> id
-      | None ->
-          let nid = M.fresh_id () in
-          id_map := M.add id nid !id_map;
-          nid
-  end in
-  let module RegionIdGen = MkGenerator (struct
-    include RegionId.Map
-
-    type id = RegionId.id
-
-    let fresh_id = fresh_region_id
-  end) in
-  let get_region_id = RegionIdGen.get_id in
-
-  let module AbstractionIdGen = MkGenerator (struct
-    include AbstractionId.Map
-
-    type id = AbstractionId.id
-
-    let fresh_id = fresh_abstraction_id
-  end) in
-  let get_abs_id = AbstractionIdGen.get_id in
-
-  let visit_src =
-    object (self)
-      inherit [_] map_eval_ctx as super
-
-      method! visit_borrow_id _ bid =
-        log#ltrace
-          (lazy
-            (__FUNCTION__ ^ ": cf_introduce_loop_fp_abs: visit_borrow_id: "
-           ^ BorrowId.to_string bid ^ "\n"));
-
-        (* Lookup the id of the loan corresponding to this borrow *)
-        let src_lid =
-          BorrowId.InjSubst.find bid fp_bl_maps.borrow_to_loan_id_map
-        in
-
-        log#ltrace
-          (lazy
-            (__FUNCTION__ ^ ": cf_introduce_loop_fp_abs: looked up src_lid: "
-           ^ BorrowId.to_string src_lid ^ "\n"));
-
-        (* Lookup the tgt borrow id to which this borrow was mapped *)
-        let tgt_bid =
-          BorrowId.InjSubst.find src_lid src_to_tgt_maps.borrow_id_map
-        in
-
-        log#ltrace
-          (lazy
-            (__FUNCTION__ ^ ": cf_introduce_loop_fp_abs: looked up tgt_bid: "
-           ^ BorrowId.to_string tgt_bid ^ "\n"));
-
-        tgt_bid
-
-      method! visit_loan_id _ id =
-        log#ltrace
-          (lazy
-            (__FUNCTION__ ^ ": cf_introduce_loop_fp_abs: visit_loan_id: "
-           ^ BorrowId.to_string id ^ "\n"));
-        (* Map the borrow - rem.: we mapped the borrows *in the values*,
-           meaning we know how to map the *corresponding loans in the
-           abstractions* *)
-        match BorrowId.Map.find_opt id !src_fresh_borrows_map with
-        | None ->
-            (* No mapping: this means that the borrow was mapped when
-               we matched values (it doesn't come from a fresh abstraction)
-               and because of this, it should actually be mapped to itself *)
-            sanity_check __FILE__ __LINE__
-              (BorrowId.InjSubst.find id src_to_tgt_maps.borrow_id_map = id)
-              span;
-            id
-        | Some id -> id
-
-      method! visit_symbolic_value_id _ _ = fresh_symbolic_value_id ()
-      method! visit_abstraction_id _ id = get_abs_id id
-
-      method! visit_aproj env proj =
-        match proj with
-        | AProjLoans (sv_id, proj_ty, children) ->
-            (* The logic is similar to the concrete borrows/loans cases above *)
-            sanity_check __FILE__ __LINE__ (children = []) span;
-            let sv_id =
-              begin
-                match
-                  SymbolicValueId.Map.find_opt sv_id !src_fresh_sids_map
-                with
-                | None ->
-                    sanity_check __FILE__ __LINE__
-                      (SymbolicValueId.InjSubst.find sv_id
-                         src_to_tgt_maps.sid_map
-                      = sv_id)
-                      span;
-                    sv_id
-                | Some id -> id
-              end
-            in
-            let proj_ty = self#visit_ty env proj_ty in
-            AProjLoans (sv_id, proj_ty, children)
-        | AProjBorrows (sv_id, proj_ty, children) ->
-            sanity_check __FILE__ __LINE__ (children = []) span;
-            (* Lookup the loan corresponding to this borrow *)
-            let src_lid =
-              SymbolicValueId.InjSubst.find sv_id
-                fp_bl_maps.borrow_to_loan_proj_map
-            in
-
-            (* Lookup the value to which this borrow was mapped - note that it
-               is necessary a symbolic value *)
-            let tgt_value =
-              SymbolicValueId.Map.find src_lid src_to_tgt_maps.sid_to_value_map
-            in
-            let sv_id =
-              begin
-                match tgt_value.value with
-                | VSymbolic sv -> sv.sv_id
-                | _ -> internal_error __FILE__ __LINE__ span
-              end
-            in
-            let proj_ty = self#visit_ty env proj_ty in
-            AProjBorrows (sv_id, proj_ty, children)
-        | AEndedProjBorrows _ | AEndedProjLoans _ | AEmpty ->
-            super#visit_aproj env proj
-
-      method! visit_region_id _ _ =
-        craise_opt_span __FILE__ __LINE__ None
-          "Internal error: region ids should not be visited directly; the \
-           visitor should catch cases that contain region ids earlier."
-
-      method! visit_RVar _ var =
-        match var with
-        | Free id ->
-            (* If the bound region is free, then it is a region owned
-               by an abstraction, so we do the same as for the case
-               [abs_region_id]. *)
-            RVar (Free (get_region_id id))
-        | Bound _ -> RVar var
-
-      method! visit_abs_regions _ regions =
-        let { owned; ancestors } = regions in
-        let owned = RegionId.Set.map get_region_id owned in
-        let ancestors = RegionId.Set.map get_region_id ancestors in
-        { owned; ancestors }
-
-      (** We also need to change the abstraction kind *)
-      method! visit_abs env abs =
-        match abs.kind with
-        | Loop (loop_id', rg_id, kind) ->
-            sanity_check __FILE__ __LINE__ (loop_id' = loop_id) span;
-            sanity_check __FILE__ __LINE__ (kind = LoopSynthInput) span;
-            (* If we borrow-check: we can set the abstractions as endable.
-               If we synthesize we have to constrain the region abstractions
-               a bit. *)
-            let can_end = !Config.borrow_check in
-            let kind : abs_kind = Loop (loop_id, rg_id, LoopCall) in
-            let abs = { abs with kind; can_end } in
-            super#visit_abs env abs
-        | _ -> super#visit_abs env abs
-    end
-  in
-  let new_absl = List.map (visit_src#visit_abs ()) new_absl in
-  let new_absl = List.map (fun abs -> EAbs abs) new_absl in
-
-  (* Add the abstractions from the target context to the source context *)
-  let nenv = List.append new_absl tgt_ctx.env in
-  let tgt_ctx = { tgt_ctx with env = nenv } in
-
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ": cf_introduce_loop_fp_abs: done:\n- result ctx:\n"
-      ^ eval_ctx_to_string ~span:(Some span) tgt_ctx));
-
-  (* Sanity check *)
-  if !Config.sanity_checks then
-    Invariants.check_borrowed_values_invariant span tgt_ctx;
-  (* End all the borrows which appear in the *new* abstractions *)
-  let new_borrows =
-    BorrowId.Set.of_list
-      (List.map snd (BorrowId.Map.bindings !src_fresh_borrows_map))
-  in
-  let tgt_ctx, cc =
-    comp cc (InterpreterBorrows.end_borrows config span new_borrows tgt_ctx)
-  in
-
-  (* Compute the loop input values *)
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ": about to compute the input values:"
-     ^ "\n- fp_input_svalues: "
-      ^ String.concat ", " (List.map SymbolicValueId.to_string fp_input_svalues)
-      ^ "\n- src_to_tgt_maps:\n"
-      ^ ids_maps_to_string tgt_ctx src_to_tgt_maps
-      ^ "\n- refreshed_input_sids:\n"
-      ^ SymbolicValueId.Map.show SymbolicValueId.to_string refreshed_input_sids
-      ^ "\n- src_ctx:\n" ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx:\n"
-      ^ eval_ctx_to_string tgt_ctx ^ "\n"));
-  let input_values =
-    SymbolicValueId.Map.of_list
-      (List.map
-         (fun sid ->
-           (sid, SymbolicValueId.Map.find sid src_to_tgt_maps.sid_to_value_map))
-         fp_input_svalues)
-  in
-
-  let res =
-    if is_loop_entry then
-      EndEnterLoop (loop_id, input_values, refreshed_input_sids)
-    else EndContinue (loop_id, input_values, refreshed_input_sids)
-  in
-
-  ((tgt_ctx, res), cc)

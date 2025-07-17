@@ -77,13 +77,14 @@ val compute_loop_entry_fixed_point :
     identity abstractions (i.e., abstractions which do nothing - the input
     borrows are exactly the output loans).
 
-    **Context:** ============ When we (re-enter) the loop, we want to introduce
-    identity abstractions (i.e., abstractions which actually only introduce
-    fresh identifiers for some borrows, to abstract away a bit the borrow graph)
-    which have the same shape as the abstractions introduced for the fixed point
-    (see the explanations for [match_ctx_with_target]). This allows us to
-    transform the environment into a fixed point (again, see the explanations
-    for [match_ctx_with_target]).
+    **Context:**
+
+    When we (re-enter) the loop, we want to introduce identity abstractions
+    (i.e., abstractions which actually only introduce fresh identifiers for some
+    borrows, to abstract away a bit the borrow graph) which have the same shape
+    as the abstractions introduced for the fixed point (see the explanations for
+    [match_ctx_with_target]). This allows us to transform the environment into a
+    fixed point (again, see the explanations for [match_ctx_with_target]).
 
     In order to introduce those identity abstractions, we need to figure out,
     for those abstractions, which loans should be linked to which borrows. We do

@@ -506,6 +506,23 @@ let get_first_loan_in_value (v : typed_value) : loan_content option =
     None
   with FoundLoanContent lc -> Some lc
 
+let value_has_outer_mut_loan (v : typed_value) : bool =
+  let obj =
+    object
+      inherit [_] iter_typed_value
+
+      method! visit_loan_content _ lc =
+        match lc with
+        | VSharedLoan _ -> ()
+        | VMutLoan _ -> raise Found
+    end
+  in
+  (* We use exceptions *)
+  try
+    obj#visit_typed_value () v;
+    false
+  with Found -> true
+
 (** Return the first loan we find in a list of values *)
 let get_first_loan_in_values (vs : typed_value list) : loan_content option =
   let obj =

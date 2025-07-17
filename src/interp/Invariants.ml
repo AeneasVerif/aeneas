@@ -295,6 +295,119 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
     !borrows_infos
 
 (** Check that:
+    - the borrows (resp., loans) in a region abstraction are exactly the outputs
+      (resp., the inputs) of its continuation
+    - the (projection) types used in the continuations have been normalized *)
+let check_abs (span : Meta.span) (ctx : eval_ctx) : unit =
+  let visit_abs (abs : abs) : unit =
+    match abs.cont with
+    | None -> ()
+    | Some cont ->
+        (* Borrows/loans in the region abstraction - note that we do not use
+           the projection markers *)
+        let mut_borrows = ref BorrowId.Set.empty in
+        let mut_loans = ref BorrowId.Set.empty in
+        let borrow_projs = ref MarkedNormSymbProjSet.empty in
+        let loan_projs = ref MarkedNormSymbProjSet.empty in
+
+        (* Outputs (borrows)/inputs (loans) in the continuation - note that we do
+           not use the projection markers *)
+        let emut_borrows = ref BorrowId.Set.empty in
+        let emut_loans = ref BorrowId.Set.empty in
+        let eborrow_projs = ref MarkedNormSymbProjSet.empty in
+        let eloan_projs = ref MarkedNormSymbProjSet.empty in
+
+        let add_symb_proj sv_id proj_ty set =
+          let v : marked_norm_symb_proj =
+            {
+              pm = PNone;
+              sv_id;
+              norm_proj_ty = normalize_proj_ty abs.regions.owned proj_ty;
+            }
+          in
+          set := MarkedNormSymbProjSet.add v !set
+        in
+
+        (* Collect the borrows/loans of an abstraction *)
+        let abs_visitor =
+          object
+            inherit [_] iter_abs as super
+
+            method! visit_proj_marker _ pm =
+              sanity_check __FILE__ __LINE__ (pm = PNone) span
+
+            method! visit_AMutBorrow env pm bid child =
+              mut_borrows := BorrowId.Set.add bid !mut_borrows;
+              super#visit_AMutBorrow env pm bid child
+
+            method! visit_AMutLoan env pm bid child =
+              mut_loans := BorrowId.Set.add bid !mut_loans;
+              super#visit_AMutLoan env pm bid child
+
+            method! visit_AProjBorrows env sv_id proj_ty children =
+              add_symb_proj sv_id proj_ty borrow_projs;
+              super#visit_AProjBorrows env sv_id proj_ty children
+
+            method! visit_AProjLoans env sv_id proj_ty children =
+              add_symb_proj sv_id proj_ty loan_projs;
+              super#visit_AProjLoans env sv_id proj_ty children
+          end
+        in
+
+        (* Collect the inputs and outputs of an abstraction continuation *)
+        let abs_cont_visitor =
+          object
+            inherit [_] iter_abs_expr as super
+
+            (* Check that the types have been normalized - we check that all
+               the free region ids are equal to 0 *)
+            method! visit_RVar _ region =
+              match region with
+              | Bound _ -> ()
+              | Free rid ->
+                  cassert __FILE__ __LINE__ (rid = RegionId.zero) span
+                    "Found a non-normalized type in a region abstraction \
+                     continuation: please report an issue"
+
+            method! visit_abs_texpr _ e = super#visit_abs_texpr e.ty e
+
+            method! visit_OBorrow _ bid =
+              emut_borrows := BorrowId.Set.add bid !emut_borrows
+
+            method! visit_OSymbolic proj_ty sv_id =
+              add_symb_proj sv_id proj_ty borrow_projs
+
+            method! visit_ELoan _ lid =
+              emut_loans := BorrowId.Set.add lid !emut_loans
+
+            method! visit_ESymbolic proj_ty sv_id =
+              add_symb_proj sv_id proj_ty loan_projs
+          end
+        in
+
+        (* Visit *)
+        abs_cont_visitor#visit_abs_cont mk_unit_ty cont;
+        List.iter (abs_visitor#visit_typed_avalue None) abs.avalues;
+
+        (* Check *)
+        let msg =
+          "Found an inconsistent region abstraction: please report an issue"
+        in
+        cassert __FILE__ __LINE__ (!mut_borrows = !emut_borrows) span msg;
+        cassert __FILE__ __LINE__ (!mut_loans = !emut_loans) span msg;
+        cassert __FILE__ __LINE__ (!borrow_projs = !eborrow_projs) span msg;
+        cassert __FILE__ __LINE__ (!loan_projs = !eloan_projs) span msg
+  in
+  (* Visit the context *)
+  let ctx_visitor =
+    object
+      inherit [_] iter_eval_ctx
+      method! visit_abs _ abs = visit_abs abs
+    end
+  in
+  ctx_visitor#visit_eval_ctx () ctx
+
+(** Check that:
     - borrows/loans can't contain ⊥ or reserved mut borrows
     - shared loans can't contain mutable loans *)
 let check_borrowed_values_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
@@ -942,6 +1055,7 @@ let check_invariants (span : Meta.span) (ctx : eval_ctx) : unit =
       (lazy
         ("Checking invariants:\n" ^ eval_ctx_to_string ~span:(Some span) ctx));
     check_loans_borrows_relation_invariant span ctx;
+    check_abs span ctx;
     check_borrowed_values_invariant span ctx;
     check_typing_invariant span ctx true;
     check_symbolic_values span ctx)

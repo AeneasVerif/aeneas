@@ -7,6 +7,12 @@ open Contexts
 open InterpreterUtils
 open Errors
 
+(** Remark: the only situation where we need to end loans in one of the two
+    environment is when we need to join a bottom value with a value containing
+    loans.
+
+    TODO: make the join more general so that we don't need to take this case
+    into account. *)
 type updt_env_kind =
   | AbsInLeft of AbstractionId.id
   | LoanInLeft of BorrowId.id
@@ -75,9 +81,9 @@ module type PrimMatcher = sig
       values, in which case we have to manually look them up before calling the
       match function. *)
   val match_shared_borrows :
-    eval_ctx ->
-    eval_ctx ->
     (typed_value -> typed_value -> typed_value) ->
+    eval_ctx ->
+    eval_ctx ->
     ety ->
     borrow_id ->
     borrow_id ->
@@ -101,16 +107,25 @@ module type PrimMatcher = sig
     typed_value ->
     borrow_id * typed_value
 
-  (** Parameters: [ty] [ids0] [ids1] [v]: the result of matching the shared
-      values coming from the two loans *)
+  (** Parameters:
+      - [match_typed_values]
+      - [ty]
+      - [ids0]
+      - [sv0]
+      - [ids1]
+      - [sv1]
+
+      Return: the typed value resulting from the join *)
   val match_shared_loans :
+    (typed_value -> typed_value -> typed_value) ->
     eval_ctx ->
     eval_ctx ->
     ety ->
     loan_id_set ->
+    typed_value ->
     loan_id_set ->
     typed_value ->
-    loan_id_set * typed_value
+    borrow_id_set * typed_value
 
   val match_mut_loans :
     eval_ctx -> eval_ctx -> ety -> loan_id -> loan_id -> loan_id
@@ -126,7 +141,27 @@ module type PrimMatcher = sig
       important when throwing exceptions, for instance when we need to end loans
       in one of the two environments). *)
   val match_symbolic_with_other :
-    eval_ctx -> eval_ctx -> bool -> symbolic_value -> typed_value -> typed_value
+    (typed_value -> typed_value -> typed_value) ->
+    eval_ctx ->
+    eval_ctx ->
+    bool ->
+    symbolic_value ->
+    typed_value ->
+    typed_value
+
+  (** Match a loan with a value which is not a loan, or a loan which is not of
+      the same kind.
+
+      If the boolean is [true], it means the loan comes from the *left*
+      environment. *)
+  val match_loan_with_other :
+    (typed_value -> typed_value -> typed_value) ->
+    eval_ctx ->
+    eval_ctx ->
+    bool ->
+    loan_content ->
+    typed_value ->
+    typed_value
 
   (** Match a bottom value with a value which is not bottom.
 
@@ -148,8 +183,16 @@ module type PrimMatcher = sig
     rty ->
     typed_avalue
 
-  (** Parameters: [ctx0] [ctx1] [ty0] [pm0] [bid0] [ty1] [pm1] [bid1] [ty]:
-      result of matching ty0 and ty1 *)
+  (** Parameters:
+      - [ctx0]
+      - [ctx1]
+      - [ty0]
+      - [pm0]
+      - [bid0]
+      - [ty1]
+      - [pm1]
+      - [bid1]
+      - [ty]: result of matching ty0 and ty1 *)
   val match_ashared_borrows :
     eval_ctx ->
     eval_ctx ->
@@ -162,9 +205,19 @@ module type PrimMatcher = sig
     rty ->
     typed_avalue
 
-  (** Parameters: [ctx0] [ctx1] [ty0] [pm0] [bid0] [av0] [ty1] [pm1] [bid1]
-      [av1] [ty]: result of matching ty0 and ty1 [av]: result of matching av0
-      and av1 *)
+  (** Parameters:
+      - [ctx0]
+      - [ctx1]
+      - [ty0]
+      - [pm0]
+      - [bid0]
+      - [av0]
+      - [ty1]
+      - [pm1]
+      - [bid1]
+      - [av1]
+      - [ty]: result of matching ty0 and ty1 [av]: result of matching av0 and
+        av1 *)
   val match_amut_borrows :
     eval_ctx ->
     eval_ctx ->
@@ -180,9 +233,22 @@ module type PrimMatcher = sig
     typed_avalue ->
     typed_avalue
 
-  (** Parameters: [ctx0] [ctx1] [ty0] [pm0] [ids0] [v0] [av0] [ty1] [pm1] [ids1]
-      [v1] [av1] [ty]: result of matching ty0 and ty1 [v]: result of matching v0
-      and v1 [av]: result of matching av0 and av1 *)
+  (** Parameters:
+      - [ctx0]
+      - [ctx1]
+      - [ty0]
+      - [pm0]
+      - [ids0]
+      - [v0]
+      - [av0]
+      - [ty1]
+      - [pm1]
+      - [ids1]
+      - [v1]
+      - [av1]
+      - [ty]: result of matching ty0 and ty1
+      - [v]: result of matching v0 and v1
+      - [av]: result of matching av0 and av1 *)
   val match_ashared_loans :
     eval_ctx ->
     eval_ctx ->
@@ -201,9 +267,19 @@ module type PrimMatcher = sig
     typed_avalue ->
     typed_avalue
 
-  (** Parameters: [ctx0] [ctx1] [ty0] [pm0] [id0] [av0] [ty1] [pm1] [id1] [av1]
-      [ty]: result of matching ty0 and ty1 [av]: result of matching av0 and av1
-  *)
+  (** Parameters:
+      - [ctx0]
+      - [ctx1]
+      - [ty0]
+      - [pm0]
+      - [id0]
+      - [av0]
+      - [ty1]
+      - [pm1]
+      - [id1]
+      - [av1]
+      - [ty]: result of matching ty0 and ty1
+      - [av]: result of matching av0 and av1 *)
   val match_amut_loans :
     eval_ctx ->
     eval_ctx ->
@@ -219,9 +295,21 @@ module type PrimMatcher = sig
     typed_avalue ->
     typed_avalue
 
-  (** Parameters: [ctx0] [ctx1] [ty0] [pm0] [sv0] [proj_ty0] [children0] [ty1]
-      [pm1] [sv1] [proj_ty1] [children1] [ty]: result of matching ty0 and ty1
-      [proj_ty]: result of matching proj_ty0 and proj_ty1 *)
+  (** Parameters:
+      - [ctx0]
+      - [ctx1]
+      - [ty0]
+      - [pm0]
+      - [sv0]
+      - [proj_ty0]
+      - [children0]
+      - [ty1]
+      - [pm1]
+      - [sv1]
+      - [proj_ty1]
+      - [children1]
+      - [ty]: result of matching ty0 and ty1
+      - [proj_ty]: result of matching proj_ty0 and proj_ty1 *)
   val match_aproj_borrows :
     eval_ctx ->
     eval_ctx ->
@@ -239,9 +327,21 @@ module type PrimMatcher = sig
     rty ->
     typed_avalue
 
-  (** Parameters: [ctx0] [ctx1] [ty0] [pm0] [sv0] [proj_ty0] [children0] [ty1]
-      [pm1] [sv1] [proj_ty1] [children1] [ty]: result of matching ty0 and ty1
-      [proj_ty]: result of matching proj_ty0 and proj_ty1 *)
+  (** Parameters:
+      - [ctx0]
+      - [ctx1]
+      - [ty0]
+      - [pm0]
+      - [sv0]
+      - [proj_ty0]
+      - [children0]
+      - [ty1]
+      - [pm1]
+      - [sv1]
+      - [proj_ty1]
+      - [children1]
+      - [ty]: result of matching ty0 and ty1
+      - [proj_ty]: result of matching proj_ty0 and proj_ty1 *)
   val match_aproj_loans :
     eval_ctx ->
     eval_ctx ->

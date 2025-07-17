@@ -39,6 +39,18 @@ let mk_aignored (span : Meta.span) (ty : ty) (v : typed_value option) :
   sanity_check __FILE__ __LINE__ (ty_is_rty ty) span;
   { value = AIgnored v; ty }
 
+let mk_mut_borrow (bid : borrow_id) (v : typed_value) : typed_value =
+  { value = VBorrow (VMutBorrow (bid, v)); ty = TRef (RErased, v.ty, RMut) }
+
+let mk_mut_loan (bid : borrow_id) (ty : ty) : typed_value =
+  { value = VLoan (VMutLoan bid); ty }
+
+let mk_shared_borrow (bid : borrow_id) (ty : ty) : typed_value =
+  { value = VBorrow (VSharedBorrow bid); ty = TRef (RErased, ty, RShared) }
+
+let mk_shared_loan (bid : borrow_id) (v : typed_value) : typed_value =
+  { value = VLoan (VSharedLoan (BorrowId.Set.singleton bid, v)); ty = v.ty }
+
 let value_as_symbolic (span : Meta.span) (v : value) : symbolic_value =
   match v with
   | VSymbolic v -> v
@@ -61,6 +73,16 @@ let mk_box_value (span : Meta.span) (v : typed_value) : typed_value =
 let is_bottom (v : value) : bool =
   match v with
   | VBottom -> true
+  | _ -> false
+
+let is_mutable_loan (v : typed_value) : bool =
+  match v.value with
+  | VLoan (VMutLoan _) -> true
+  | _ -> false
+
+let is_shared_loan (v : typed_value) : bool =
+  match v.value with
+  | VLoan (VSharedLoan _) -> true
   | _ -> false
 
 let is_aignored (v : avalue) : bool =
