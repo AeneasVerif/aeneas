@@ -519,9 +519,9 @@ and translate_trait_instance_id (span : Meta.span option)
   | Clause var ->
       Clause var
       (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
-  | ParentClause (inst_id, decl_id, clause_id) ->
-      let inst_id = translate_trait_instance_id inst_id in
-      ParentClause (inst_id, decl_id, clause_id)
+  | ParentClause (tref, clause_id) ->
+      let inst_id = translate_trait_instance_id tref.trait_id in
+      ParentClause (inst_id, tref.trait_decl_ref.binder_value.id, clause_id)
   | Dyn _ ->
       craise_opt_span __FILE__ __LINE__ span
         "Dynamic trait types are not supported yet"
