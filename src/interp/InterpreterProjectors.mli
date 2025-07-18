@@ -12,11 +12,9 @@ open Contexts
     have erased regions [proj_ty]: shouldn't have erased regions [eval_ctx] *)
 val apply_proj_loans_on_symbolic_expansion :
   Meta.span ->
-  RegionId.Set.t ->
-  RegionId.Set.t ->
   symbolic_expansion ->
-  rty ->
-  rty ->
+  proj_ty ->
+  proj_ty ->
   eval_ctx ->
   typed_avalue
 
@@ -104,10 +102,9 @@ val apply_proj_borrows :
   bool ->
   eval_ctx ->
   (BorrowId.id -> BorrowId.id) ->
-  RegionId.Set.t ->
-  RegionId.Set.t ->
   typed_value ->
-  rty ->
+  proj_ty ->
+  proj_ty ->
   typed_avalue
 
 (** Parameters:
@@ -122,8 +119,7 @@ val apply_proj_borrows_on_input_value :
   config ->
   Meta.span ->
   eval_ctx ->
-  RegionId.Set.t ->
-  RegionId.Set.t ->
   typed_value ->
-  rty ->
+  proj_ty ->
+  proj_ty ->
   eval_ctx * typed_avalue

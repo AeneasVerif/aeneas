@@ -14,36 +14,43 @@ let log = Logging.projectors_log
 
 (** [ty] shouldn't contain erased regions *)
 let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
-    (fresh_reborrow : BorrowId.id -> BorrowId.id) (regions : RegionId.Set.t)
-    (v : typed_value) (ty : rty) : abstract_shared_borrows =
-  (* Sanity check - TODO: move those elsewhere (here we perform the check at every
-   * recursive call which is a bit overkill...) *)
-  let ety = Subst.erase_regions ty in
-  sanity_check __FILE__ __LINE__ (ty_is_rty ty && ety = v.ty) span;
+    (fresh_reborrow : BorrowId.id -> BorrowId.id) (v : typed_value)
+    (proj_ty : proj_ty) (outlive_proj_ty : proj_ty) : abstract_shared_borrows =
   (* Project - if there are no regions from the abstraction in the type, return [_] *)
-  if not (ty_has_regions_in_set regions ty) then []
+  if not (ty_has_free_regions proj_ty) then []
   else
-    match (v.value, ty) with
-    | VLiteral _, TLiteral _ -> []
-    | VAdt adt, TAdt { id; generics } ->
+    match (v.value, proj_ty, outlive_proj_ty) with
+    | VLiteral _, TLiteral _, TLiteral _ -> []
+    | ( VAdt adt,
+        TAdt { id; generics },
+        TAdt { id = id'; generics = outlive_generics } ) ->
+        sanity_check __FILE__ __LINE__ (id = id') span;
+
         (* Retrieve the types of the fields *)
-        let field_types =
+        let get_field_types =
           Assoc.ctx_adt_get_inst_norm_field_rtypes span ctx id adt.variant_id
-            generics
         in
+        let field_types = get_field_types generics in
+        let field_outlive_types = get_field_types outlive_generics in
 
         (* Project over the field values *)
-        let fields_types = List.combine adt.field_values field_types in
+        let fields_types =
+          Collections.List.combine3 adt.field_values field_types
+            field_outlive_types
+        in
         let proj_fields =
           List.map
-            (fun (fv, fty) ->
-              apply_proj_borrows_on_shared_borrow span ctx fresh_reborrow
-                regions fv fty)
+            (fun (fv, fty, f_outlive_ty) ->
+              apply_proj_borrows_on_shared_borrow span ctx fresh_reborrow fv fty
+                f_outlive_ty)
             fields_types
         in
         List.concat proj_fields
-    | VBottom, _ -> craise __FILE__ __LINE__ span "Unreachable"
-    | VBorrow bc, TRef (r, ref_ty, kind) ->
+    | VBottom, _, _ -> craise __FILE__ __LINE__ span "Unreachable"
+    | VBorrow bc, TRef (r, ref_ty, kind), TRef (r', ref_ty', kind') ->
+        sanity_check __FILE__ __LINE__ (kind = kind') span;
+        sanity_check __FILE__ __LINE__ (r' = RErased) span;
+
         (* Retrieve the bid of the borrow and the asb of the projected borrowed value *)
         let bid, asb =
           (* Not in the set: dive *)
@@ -51,8 +58,8 @@ let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
           | VMutBorrow (bid, bv), RMut ->
               (* Apply the projection on the borrowed value *)
               let asb =
-                apply_proj_borrows_on_shared_borrow span ctx fresh_reborrow
-                  regions bv ref_ty
+                apply_proj_borrows_on_shared_borrow span ctx fresh_reborrow bv
+                  ref_ty ref_ty'
               in
               (bid, asb)
           | VSharedBorrow bid, RShared ->
@@ -64,7 +71,7 @@ let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
                 | _, Concrete (VSharedLoan (_, sv))
                 | _, Abstract (ASharedLoan (_, _, sv, _)) ->
                     apply_proj_borrows_on_shared_borrow span ctx fresh_reborrow
-                      regions sv ref_ty
+                      sv ref_ty ref_ty'
                 | _ -> craise __FILE__ __LINE__ span "Unexpected"
               in
               (bid, asb)
@@ -76,59 +83,67 @@ let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
         let asb =
           (* Check if the region is in the set of projected regions (note that
            * we never project over static regions) *)
-          if region_in_set r regions then
+          if region_is_free r then
             let bid' = fresh_reborrow bid in
             AsbBorrow bid' :: asb
           else asb
         in
         asb
-    | VLoan _, _ -> craise __FILE__ __LINE__ span "Unreachable"
-    | VSymbolic s, _ ->
-        (* Check that the projection doesn't contain ended regions *)
+    | VLoan _, _, _ -> craise __FILE__ __LINE__ span "Unreachable"
+    | VSymbolic s, _, _ ->
+        (* Check that the projection doesn't contain ended regions (i.e.,
+           the symbolic value doesn't contain bottom) *)
         sanity_check __FILE__ __LINE__
-          (not
-             (projections_intersect span s.sv_ty ctx.ended_regions ty regions))
+          (not (symbolic_value_contains_bottom span ctx s))
           span;
-        [ AsbProjReborrows (s.sv_id, ty) ]
+        [ AsbProjReborrows { sv_id = s.sv_id; proj_ty; outlive_proj_ty } ]
     | _ -> craise __FILE__ __LINE__ span "Unreachable"
 
 let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
     (ctx : eval_ctx) (fresh_reborrow : BorrowId.id -> BorrowId.id)
-    (regions : RegionId.Set.t) (ancestors_regions : RegionId.Set.t)
-    (v : typed_value) (ty : rty) : typed_avalue =
-  (* Sanity check - TODO: move this elsewhere (here we perform the check at every
-   * recursive call which is a bit overkill...) *)
-  let ety = Substitute.erase_regions ty in
-  sanity_check __FILE__ __LINE__ (ty_is_rty ty && ety = v.ty) span;
+    (v : typed_value) (proj_ty : proj_ty) (outlive_proj_ty : proj_ty) :
+    typed_avalue =
   (* Project - if there are no regions from the abstraction in the type, return [_] *)
-  if not (ty_has_regions_in_set regions ty) then
-    { value = AIgnored (Some v); ty }
+  if not (ty_has_free_regions proj_ty) then
+    { value = AIgnored (Some v); ty = proj_ty }
   else
     let value : avalue =
-      match (v.value, ty) with
-      | VLiteral _, TLiteral _ -> AIgnored (Some v)
-      | VAdt adt, TAdt { id; generics } ->
+      match (v.value, proj_ty, outlive_proj_ty) with
+      | VLiteral _, TLiteral _, TLiteral _ -> AIgnored (Some v)
+      | ( VAdt adt,
+          TAdt { id; generics },
+          TAdt { id = id'; generics = outlive_generics } ) ->
+          sanity_check __FILE__ __LINE__ (id = id') span;
+
           (* Retrieve the types of the fields *)
-          let field_types =
+          let get_field_types =
             Assoc.ctx_adt_get_inst_norm_field_rtypes span ctx id adt.variant_id
-              generics
           in
+          let field_types = get_field_types generics in
+          let field_outlive_types = get_field_types outlive_generics in
+
           (* Project over the field values *)
-          let fields_types = List.combine adt.field_values field_types in
+          let fields_types =
+            Collections.List.combine3 adt.field_values field_types
+              field_outlive_types
+          in
           let proj_fields =
             List.map
-              (fun (fv, fty) ->
+              (fun (fv, fty, f_outlive_ty) ->
                 apply_proj_borrows span check_symbolic_no_ended ctx
-                  fresh_reborrow regions ancestors_regions fv fty)
+                  fresh_reborrow fv fty f_outlive_ty)
               fields_types
           in
           AAdt { variant_id = adt.variant_id; field_values = proj_fields }
-      | VBottom, _ -> craise __FILE__ __LINE__ span "Unreachable"
-      | VBorrow bc, TRef (r, ref_ty, kind) ->
+      | VBottom, _, _ -> craise __FILE__ __LINE__ span "Unreachable"
+      | VBorrow bc, TRef (r, ref_ty, kind), TRef (r', ref_ty', kind') ->
+          sanity_check __FILE__ __LINE__ (kind = kind') span;
+          sanity_check __FILE__ __LINE__ (r' = RErased) span;
+
           if
             (* Check if the region is in the set of projected regions (note that
-             * we never project over static regions) *)
-            region_in_set r regions
+               we never project over static regions) *)
+            region_is_free r
           then
             (* In the set *)
             let bc =
@@ -137,7 +152,7 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
                   (* Apply the projection on the borrowed value *)
                   let bv =
                     apply_proj_borrows span check_symbolic_no_ended ctx
-                      fresh_reborrow regions ancestors_regions bv ref_ty
+                      fresh_reborrow bv ref_ty ref_ty'
                   in
                   AMutBorrow (PNone, bid, bv)
               | VSharedBorrow bid, RShared ->
@@ -161,23 +176,20 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
             ABorrow bc
           else
             (* Not in the set: ignore the borrow, but project the borrowed
-               value (maybe some borrows *inside* the borrowed value are in
-               the region set) *)
+               value (the projection type is not empty, so there should be
+               some borrows *inside* the borrowed value that need to be projected) *)
             let bc =
               match (bc, kind) with
               | VMutBorrow (bid, bv), RMut ->
                   (* Apply the projection on the borrowed value *)
                   let bv =
                     apply_proj_borrows span check_symbolic_no_ended ctx
-                      fresh_reborrow regions ancestors_regions bv ref_ty
+                      fresh_reborrow bv ref_ty ref_ty'
                   in
-                  (* If the borrow id is in the ancestor's regions, we still need
-                   * to remember it *)
-                  let opt_bid =
-                    if region_in_set r ancestors_regions then Some bid else None
-                  in
+                  (* We need to remember the borrow, even though we ignore it *)
+                  let opt_bid = Some bid in
                   (* Return *)
-                  AIgnoredMutBorrow (opt_bid, bv)
+                  AIgnoredMutBorrow (opt_bid, ref_ty', bv)
               | VSharedBorrow bid, RShared ->
                   (* Lookup the shared value *)
                   let ek = ek_all in
@@ -187,7 +199,7 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
                     | _, Concrete (VSharedLoan (_, sv))
                     | _, Abstract (ASharedLoan (_, _, sv, _)) ->
                         apply_proj_borrows_on_shared_borrow span ctx
-                          fresh_reborrow regions sv ref_ty
+                          fresh_reborrow sv ref_ty ref_ty'
                     | _ -> craise __FILE__ __LINE__ span "Unexpected"
                   in
                   AProjSharedBorrow asb
@@ -197,36 +209,27 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
               | _ -> craise __FILE__ __LINE__ span "Unreachable"
             in
             ABorrow bc
-      | VLoan _, _ -> craise __FILE__ __LINE__ span "Unreachable"
-      | VSymbolic s, _ ->
+      | VLoan _, _, _ -> craise __FILE__ __LINE__ span "Unreachable"
+      | VSymbolic s, _, _ ->
           (* Check that the projection doesn't contain already ended regions,
-           * if necessary *)
-          if check_symbolic_no_ended then (
-            let ty1 = s.sv_ty in
-            let rset1 = ctx.ended_regions in
-            let ty2 = ty in
-            let rset2 = regions in
-            log#ltrace
-              (lazy
-                ("projections_intersect:" ^ "\n- ty1: " ^ ty_to_string ctx ty1
-               ^ "\n- rset1: "
-                ^ RegionId.Set.to_string None rset1
-                ^ "\n- ty2: " ^ ty_to_string ctx ty2 ^ "\n- rset2: "
-                ^ RegionId.Set.to_string None rset2
-                ^ "\n"));
+             if necessary *)
+          if check_symbolic_no_ended then
             sanity_check __FILE__ __LINE__
-              (not (projections_intersect span ty1 rset1 ty2 rset2))
-              span);
-          ASymbolic (PNone, AProjBorrows (s.sv_id, ty, []))
+              (not (symbolic_value_contains_bottom span ctx s))
+              span;
+          ASymbolic
+            ( PNone,
+              AProjBorrows ({ sv_id = s.sv_id; proj_ty; outlive_proj_ty }, [])
+            )
       | _ ->
           log#ltrace
             (lazy
               ("apply_proj_borrows: unexpected inputs:\n- input value: "
               ^ typed_value_to_string ~span:(Some span) ctx v
-              ^ "\n- proj rty: " ^ ty_to_string ctx ty));
+              ^ "\n- proj_ty: " ^ ty_to_string ctx proj_ty));
           internal_error __FILE__ __LINE__ span
     in
-    { value; ty }
+    { value; ty = proj_ty }
 
 let symbolic_expansion_non_borrow_to_value (span : Meta.span)
     (sv : symbolic_value) (see : symbolic_expansion) : typed_value =
@@ -260,65 +263,74 @@ let symbolic_expansion_non_shared_borrow_to_value (span : Meta.span)
 (** Apply (and reduce) a projector over loans to a value.
 
     Remark: we need the evaluation context only to access the type declarations.
+    Remark: the projection type should have been normalized (i.e., the regions
+    we should project should be free regions of id 0, and the regions we want to
+    ignore should have been erased).
 
     TODO: detailed comments. See [apply_proj_borrows] *)
 let apply_proj_loans_on_symbolic_expansion (span : Meta.span)
-    (regions : RegionId.Set.t) (ancestors_regions : RegionId.Set.t)
-    (see : symbolic_expansion) (original_sv_ty : rty) (proj_ty : rty)
+    (see : symbolic_expansion) (proj_ty : proj_ty) (outlive_proj_ty : proj_ty)
     (ctx : eval_ctx) : typed_avalue =
   (* Sanity check: if we have a proj_loans over a symbolic value, it should
    * contain regions which we will project *)
-  sanity_check __FILE__ __LINE__
-    (ty_has_regions_in_set regions original_sv_ty)
-    span;
+  sanity_check __FILE__ __LINE__ (ty_has_free_regions proj_ty) span;
   (* Match *)
   let (value, ty) : avalue * ty =
-    match (see, proj_ty) with
-    | SeLiteral lit, TLiteral _ ->
-        ( AIgnored (Some { value = VLiteral lit; ty = original_sv_ty }),
-          original_sv_ty )
-    | SeAdt (variant_id, field_values), TAdt { id = adt_id; generics } ->
+    match (see, proj_ty, outlive_proj_ty) with
+    | SeLiteral lit, TLiteral _, TLiteral _ ->
+        (AIgnored (Some { value = VLiteral lit; ty = proj_ty }), proj_ty)
+    | ( SeAdt (variant_id, field_values),
+        TAdt { id = adt_id; generics },
+        TAdt { id = adt_id'; generics = outlive_generics } ) ->
+        sanity_check __FILE__ __LINE__ (adt_id = adt_id') span;
+
         (* Project over the field values *)
-        let field_types =
+        let get_field_types =
           AssociatedTypes.ctx_adt_get_inst_norm_field_rtypes span ctx adt_id
-            variant_id generics
+            variant_id
         in
+        let field_types = get_field_types generics in
+        let field_outlive_types = get_field_types outlive_generics in
         let field_values =
-          List.map2
-            (mk_aproj_loans_value_from_symbolic_value regions)
-            field_values field_types
+          Collections.List.map3 mk_aproj_loans_value_from_symbolic_value
+            field_values field_types field_outlive_types
         in
-        (AAdt { variant_id; field_values }, original_sv_ty)
-    | SeMutRef (bid, spc), TRef (r, ref_ty, RMut) ->
+        (AAdt { variant_id; field_values }, proj_ty)
+    | SeMutRef (bid, spc), TRef (r, ref_ty, RMut), TRef (r', ref_ty', RMut) ->
         (* Sanity check *)
         sanity_check __FILE__ __LINE__ (spc.sv_ty = ref_ty) span;
+        sanity_check __FILE__ __LINE__ (region_is_erased r') span;
+
         (* Apply the projector to the borrowed value *)
         let child_av =
-          mk_aproj_loans_value_from_symbolic_value regions spc ref_ty
+          mk_aproj_loans_value_from_symbolic_value spc ref_ty ref_ty'
         in
         (* Check if the region is in the set of projected regions (note that
-         * we never project over static regions) *)
-        if region_in_set r regions then
+           we never project over static regions) *)
+        if region_is_free r then
           (* In the set: keep *)
           (ALoan (AMutLoan (PNone, bid, child_av)), ref_ty)
         else
-          (* Not in the set: ignore *)
+          (* Not in the set: check if the inner type has regions we might
+             need to project. *)
           (* If the borrow id is in the ancestor's regions, we still need
            * to remember it *)
-          let opt_bid =
-            if region_in_set r ancestors_regions then Some bid else None
-          in
-          (ALoan (AIgnoredMutLoan (opt_bid, child_av)), ref_ty)
-    | SeSharedRef (bids, spc), TRef (r, ref_ty, RShared) ->
+          let opt_bid = if ty_has_free_regions ref_ty then Some bid else None in
+          (ALoan (AIgnoredMutLoan (opt_bid, ref_ty', child_av)), ref_ty)
+    | ( SeSharedRef (bids, spc),
+        TRef (r, ref_ty, RShared),
+        TRef (r', ref_ty', RShared) ) ->
         (* Sanity check *)
         sanity_check __FILE__ __LINE__ (spc.sv_ty = ref_ty) span;
+        sanity_check __FILE__ __LINE__ (region_is_erased r') span;
+
         (* Apply the projector to the borrowed value *)
         let child_av =
-          mk_aproj_loans_value_from_symbolic_value regions spc ref_ty
+          mk_aproj_loans_value_from_symbolic_value spc ref_ty ref_ty'
         in
         (* Check if the region is in the set of projected regions (note that
-         * we never project over static regions) *)
-        if region_in_set r regions then
+           we never project over static regions) *)
+        if region_is_free r then
           (* In the set: keep *)
           let shared_value = mk_typed_value_from_symbolic_value spc in
           (ALoan (ASharedLoan (PNone, bids, shared_value, child_av)), ref_ty)
@@ -466,11 +478,9 @@ let apply_reborrows (span : Meta.span)
             in
             (* Update and explore *)
             super#visit_ASharedLoan env pm bids sv av
-        | AIgnoredSharedLoan _
-        | AMutLoan (_, _, _)
+        | AIgnoredSharedLoan _ | AMutLoan _
         | AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
-        | AEndedSharedLoan (_, _)
-        | AIgnoredMutLoan (_, _)
+        | AEndedSharedLoan _ | AIgnoredMutLoan _
         | AEndedIgnoredMutLoan
             { given_back = _; child = _; given_back_meta = _ } ->
             (* Nothing particular to do *)
@@ -511,10 +521,8 @@ let prepare_reborrows (config : config) (span : Meta.span)
 
 (** [ty] shouldn't have erased regions *)
 let apply_proj_borrows_on_input_value (config : config) (span : Meta.span)
-    (ctx : eval_ctx) (regions : RegionId.Set.t)
-    (ancestors_regions : RegionId.Set.t) (v : typed_value) (ty : rty) :
-    eval_ctx * typed_avalue =
-  sanity_check __FILE__ __LINE__ (ty_is_rty ty) span;
+    (ctx : eval_ctx) (v : typed_value) (proj_ty : proj_ty)
+    (outlive_proj_ty : proj_ty) : eval_ctx * typed_avalue =
   let check_symbolic_no_ended = true in
   let allow_reborrows = true in
   (* Prepare the reborrows *)
@@ -523,8 +531,8 @@ let apply_proj_borrows_on_input_value (config : config) (span : Meta.span)
   in
   (* Apply the projector *)
   let av =
-    apply_proj_borrows span check_symbolic_no_ended ctx fresh_reborrow regions
-      ancestors_regions v ty
+    apply_proj_borrows span check_symbolic_no_ended ctx fresh_reborrow v proj_ty
+      outlive_proj_ty
   in
   (* Apply the reborrows *)
   let ctx = apply_registered_reborrows ctx in

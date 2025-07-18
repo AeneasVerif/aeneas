@@ -92,12 +92,19 @@ let is_unit (v : typed_value) : bool =
   | _ -> false
 
 let mk_aproj_borrows (pm : proj_marker) (sv_id : symbolic_value_id)
-    (proj_ty : ty) =
-  { value = ASymbolic (pm, AProjBorrows (sv_id, proj_ty, [])); ty = proj_ty }
+    (proj_ty : ty) (outlive_proj_ty : ty) =
+  {
+    value =
+      ASymbolic (pm, AProjBorrows ({ sv_id; proj_ty; outlive_proj_ty }, []));
+    ty = proj_ty;
+  }
 
 let mk_aproj_loans (pm : proj_marker) (sv_id : symbolic_value_id) (proj_ty : ty)
-    =
-  { value = ASymbolic (pm, AProjLoans (sv_id, proj_ty, [])); ty = proj_ty }
+    (outlive_proj_ty : ty) =
+  {
+    value = ASymbolic (pm, AProjLoans ({ sv_id; proj_ty; outlive_proj_ty }, []));
+    ty = proj_ty;
+  }
 
 (** Check if a value contains a *concrete* borrow (i.e., a [Borrow] value - we
     don't check if there are borrows hidden in symbolic values). *)
@@ -252,33 +259,6 @@ let value_has_borrows span (infos : TypesAnalysis.type_infos) (v : value) : bool
   (* We use exceptions *)
   try
     obj#visit_value () v;
-    false
-  with Found -> true
-
-let value_has_non_ended_borrows_or_loans (ended_regions : RegionId.Set.t)
-    (v : value) : bool =
-  let ty_visitor =
-    object
-      inherit [_] iter_ty
-
-      method! visit_RVar _ region =
-        match region with
-        | Free rid ->
-            if not (RegionId.Set.mem rid ended_regions) then raise Found else ()
-        | Bound _ -> ()
-    end
-  in
-  let value_visitor =
-    object
-      inherit [_] iter_typed_value
-      method! visit_borrow_content _ _ = raise Found
-      method! visit_loan_content _ _ = raise Found
-      method! visit_symbolic_value _ sv = ty_visitor#visit_ty () sv.sv_ty
-    end
-  in
-  (* We use exceptions *)
-  try
-    value_visitor#visit_value () v;
     false
   with Found -> true
 

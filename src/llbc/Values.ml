@@ -261,16 +261,57 @@ class ['self] map_typed_avalue_base =
     symbolic values).
 
     TODO: we may actually need to remember the structure, in order to know which
-    borrows are inside which other borrows... *)
+    borrows are inside which other borrows...
+
+    TODO: remove once we simplify the handling of borrows. *)
 type abstract_shared_borrow =
   | AsbBorrow of borrow_id
-  | AsbProjReborrows of symbolic_value_id * ty
+  | AsbProjReborrows of symbolic_proj
 
 (** A set of abstract shared borrows *)
 and abstract_shared_borrows = abstract_shared_borrow list
 
+and symbolic_proj = {
+  sv_id : symbolic_value_id;
+  proj_ty : ty;  (** The normalized projection type *)
+  outlive_proj_ty : ty;
+      (** The normalized type to project the regions which outlive the current
+          region abstraction.
+
+          Ex.: ['b] outlives ['a] in [&'a mut &'b mut T].
+
+          We need the [outlive_proj_ty] when ending borrow projectors, so that
+          we know how to update loan projectors. We need to handle two cases:
+
+          1. If the ended regions of the borrow projector intersect with a loan
+          projector we can end the loan as there is nothing left to track
+          anymore.
+
+          Ex.: we are ending [abs1] below:
+          {[
+            abs0 {'a} { AProjLoans (s0 : &'a mut T) [] }
+            abs1 {'b} { AProjBorrows (s0 : &'b mut T) }
+          ]}
+          we can end the loan projector in [abs0].
+
+          2. If, when ending a borrow projector, the [outlive_proj_ty] of this
+          borrow intersects a loan projector, we need to update this loan so
+          that it consumes the (projection of the) borrows given back by ending
+          the borrow projector.
+
+          Ex.: we are ending [abs2] below, and considering [abs1]: we have to
+          project the inner borrows inside of [abs1]. However we do not project
+          anything into [abs0] (see the case above).
+          {[
+            abs0 {'a} { AProjLoans (s0 : &'a mut &'_ mut T) [] }
+            abs1 {'b} { AProjLoans (s0 : &'_ mut &'b mut T) [] }
+            abs2 {'c} { AProjBorrows (s0 : &'c mut &'_ mut T) }
+            abs3 {'d} { AProjBorrows (s0 : &'_ mut &'d mut T) }
+          ]} *)
+}
+
 and aproj =
-  | AProjLoans of symbolic_value_id * ty * (msymbolic_value_id * aproj) list
+  | AProjLoans of symbolic_proj * (msymbolic_value_id * aproj) list
       (** A projector of loans over a symbolic value.
 
           Whenever we call a function, we introduce a symbolic value for the
@@ -308,12 +349,8 @@ and aproj =
 
           We can later end the projector of loans if [s@0] is not referenced
           anywhere in the context below a projector of borrows which intersects
-          this projector of loans.
-
-          TODO: the projection type is redundant with the type of the avalue
-          TODO: we shouldn't use a symbolic value but rather a symbolic value id
-      *)
-  | AProjBorrows of symbolic_value_id * ty * (msymbolic_value_id * aproj) list
+          this projector of loans. *)
+  | AProjBorrows of symbolic_proj * (msymbolic_value_id * aproj) list
       (** Note that an AProjBorrows only operates on a value which is not below
           a shared loan: under a shared loan, we use {!abstract_shared_borrow}.
 
@@ -334,11 +371,7 @@ and aproj =
             abs1 {'a} { proj_loans (&'a mut &'c mut u32, &'b mut &'c mut u32)) }
             abs2 {'b} { proj_loans (&'a mut &'c mut u32, &'b mut &'c mut u32)) }
             ...
-          ]}
-
-          TODO: the projection type is redundant with the type of the avalue
-          TODO: we shouldn't use a symbolic value but rather a symbolic value id
-      *)
+          ]} *)
   | AEndedProjLoans of msymbolic_value_id * (msymbolic_value_id * aproj) list
       (** An ended projector of loans over a symbolic value.
 
@@ -484,7 +517,7 @@ and aloan_content =
           back values when the loan ends. We remember the shared value because
           it now behaves as a "regular" value (which might contain borrows we
           need to keep track of...). *)
-  | AIgnoredMutLoan of loan_id option * typed_avalue
+  | AIgnoredMutLoan of loan_id option * ty * typed_avalue
       (** An ignored mutable loan.
 
           We need to keep track of ignored mutable loans, because we may have to
@@ -496,6 +529,9 @@ and aloan_content =
 
           Note that we need to do so only for borrows consumed by parent
           abstractions, hence the optional loan id.
+
+          Remark: the projection type is the outlive projection type of the
+          referenced value (see [symbolic_proj]).
 
           Example: ========
           {[
@@ -585,7 +621,7 @@ and aborrow_content =
             > px -> ⊥
             > abs0 { a_shared_borrow l0 _ }
           ]} *)
-  | AIgnoredMutBorrow of borrow_id option * typed_avalue
+  | AIgnoredMutBorrow of borrow_id option * ty * typed_avalue
       (** An ignored mutable borrow.
 
           We need to keep track of ignored mut borrows because when ending such
@@ -598,6 +634,9 @@ and aborrow_content =
           Rem.: we don't have an equivalent for shared borrows because if we
           ignore a shared borrow we don't need to keep track it (we directly use
           {!AProjSharedBorrow} to project the shared value).
+
+          Remark: the projection type is the outlive projection type of the
+          referenced value (see [symbolic_proj]).
 
           TODO: the explanations below are obsolete
 
@@ -716,7 +755,10 @@ and aborrow_content =
     shared aloan has type [& (mut) T] instead of [T]). *)
 and typed_avalue = {
   value : avalue;
-  ty : ty;  (** This should be a type with regions *)
+  ty : ty;
+      (** This should be a type with *normalized* regions, that is: the type
+          should use free regions (with id 0) for the regions belonging to the
+          abstraction, and erased regions for the others. *)
 }
 [@@deriving
   show,
@@ -826,15 +868,7 @@ type abs = {
   original_parents : abstraction_id list;
       (** The original list of parents, ordered. This is used for synthesis.
           TODO: remove? *)
-  regions : abs_regions;
   avalues : typed_avalue list;  (** The values in this abstraction *)
-}
-
-and abs_regions = {
-  owned : region_id_set;  (** Regions owned by the abstraction *)
-  ancestors : region_id_set;
-      (** Union of the regions owned by this abstraction's ancestors (not
-          including the regions of this abstraction itself) *)
 }
 [@@deriving
   show,

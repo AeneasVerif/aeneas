@@ -200,8 +200,7 @@ let end_borrow_get_borrow (span : Meta.span)
                * of the two cases described above *)
               ABottom)
             else super#visit_ABorrow outer bc
-        | AIgnoredMutBorrow (_, _)
-        | AEndedMutBorrow _
+        | AIgnoredMutBorrow _ | AEndedMutBorrow _
         | AEndedIgnoredMutBorrow
             { given_back = _; child = _; given_back_meta = _ }
         | AEndedSharedBorrow ->
@@ -252,7 +251,7 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
     (not (concrete_loans_in_value nv))
     span "Can not end a borrow because the value to give back contains bottom";
   exec_assert __FILE__ __LINE__
-    (not (bottom_in_value ctx.ended_regions nv))
+    (not (bottom_in_value span ctx nv))
     span "Can not end a borrow because the value to give back contains bottom";
   (* Debug *)
   log#ltrace
@@ -329,14 +328,13 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
       method visit_typed_ABorrow (opt_abs : abs option) (ty : rty)
           (bc : aborrow_content) : avalue =
         match bc with
-        | AIgnoredMutBorrow (bid', child) ->
+        | AIgnoredMutBorrow (bid', outlive_ref_proj_ty, child) ->
             if bid' = Some bid then
               (* Insert a loans projector - note that if this case happens,
                * it is necessarily because we ended a parent abstraction,
                * and the given back value is thus a symbolic value *)
               match nv.value with
               | VSymbolic sv ->
-                  let abs = Option.get opt_abs in
                   (* Remember the given back value as a meta-value
                    * TODO: it is a bit annoying to have to deconstruct
                    * the value... Think about a more elegant way. *)
@@ -344,8 +342,8 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
                   (* The loan projector *)
                   let _, ty, _ = ty_as_ref ty in
                   let given_back =
-                    mk_aproj_loans_value_from_symbolic_value abs.regions.owned
-                      sv ty
+                    mk_aproj_loans_value_from_symbolic_value sv ty
+                      outlive_ref_proj_ty
                   in
                   (* Continue giving back in the child value *)
                   let child = super#visit_typed_avalue opt_abs child in
@@ -356,7 +354,9 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
               | _ -> craise __FILE__ __LINE__ span "Unreachable"
             else
               (* Continue exploring *)
-              ABorrow (super#visit_AIgnoredMutBorrow opt_abs bid' child)
+              ABorrow
+                (super#visit_AIgnoredMutBorrow opt_abs bid' outlive_ref_proj_ty
+                   child)
         | _ ->
             (* Continue exploring *)
             super#visit_ABorrow opt_abs bc
@@ -365,12 +365,6 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
           method (for projections, we need type information) *)
       method visit_typed_ALoan (opt_abs : abs option) (ty : rty)
           (lc : aloan_content) : avalue =
-        (* Preparing a bit *)
-        let regions, ancestors_regions =
-          match opt_abs with
-          | None -> craise __FILE__ __LINE__ span "Unreachable"
-          | Some abs -> (abs.regions.owned, abs.regions.ancestors)
-        in
         (* Rk.: there is a small issue with the types of the aloan values.
          * See the comment at the level of definition of {!typed_avalue} *)
         let borrowed_value_aty =
@@ -531,12 +525,12 @@ let give_back_symbolic_value (_config : config) (span : Meta.span)
   (* We need to handle two cases:
      - If the regions ended in the symbolic value intersect with the owned
        regions of the abstraction (not the ancestor ones): we can simply end the
-       loan, there is nothing left to track anymore.
+       loan as there is nothing left to track anymore.
 
        Ex.: we are ending abs1 below:
        {[
          abs0 {'a} { AProjLoans (s0 : &'a mut T) [] }
-         abs1 {'b} { AProjBorrows (s0 : &'a mut T <: &'b mut T) }
+         abs1 {'b} { AProjBorrows (s0 : &'b mut T) }
        ]}
      - if the regions ended in the symbolic value intersect with the ancestors
        regions of the abstraction, we have to introduce a projection
@@ -547,11 +541,12 @@ let give_back_symbolic_value (_config : config) (span : Meta.span)
        Ex.: we are ending abs2 below, and considering abs1: we have to project
        the inner borrows inside of abs1. However we do not project anything
        into abs0 (see the case above).
+
        {[
-         abs0 {'a} { AProjLoans (s0 : &'a mut &'b mut T) [] }
-         abs1 {'b} { AProjLoans (s0 : &'a mut &'b mut T) [] }
-         abs2 {'c} { AProjBorrows (s0 : &'a mut &'b mut T <: &'c mut T &'d mut T) }
-         abs3 {'d} { AProjBorrows (s0 : &'a mut &'b mut T <: &'c mut T &'d mut T) }
+         abs0 {'a} { AProjLoans (s0 : &'a mut &'_ mut T) [] }
+         abs1 {'b} { AProjLoans (s0 : &'_ mut &'b mut T) [] }
+         abs2 {'c} { AProjBorrows (s0 : &'c mut &'_ mut T) }
+         abs3 {'d} { AProjBorrows (s0 : &'_ mut &'d mut T) }
        ]}
 
      We proceed in two steps:
@@ -1520,8 +1515,8 @@ and end_proj_loans_symbolic (config : config) (span : Meta.span)
       let ctx =
         (* All the proj_borrows are owned: simply erase them *)
         let ctx =
-          remove_intersecting_aproj_borrows_shared span ~include_ancestors:false
-            ~include_owned:true regions sv_id proj_ty ctx
+          remove_intersecting_aproj_borrows_shared span regions sv_id proj_ty
+            ctx
         in
         (* End the loan itself *)
         update_aproj_loans_to_ended span abs_id sv_id ctx
