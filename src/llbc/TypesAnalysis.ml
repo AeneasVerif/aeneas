@@ -121,7 +121,7 @@ let rec trait_instance_id_reducible (span : Meta.span option)
   match id with
   | BuiltinOrAuto _ | TraitImpl _ -> true
   | Self | Clause _ -> false
-  | ParentClause (id, _, _) -> trait_instance_id_reducible span id
+  | ParentClause (tref, _) -> trait_instance_id_reducible span tref.trait_id
   | Dyn _ -> craise_opt_span __FILE__ __LINE__ span "Unreachable"
   | UnknownTrait _ -> false
 

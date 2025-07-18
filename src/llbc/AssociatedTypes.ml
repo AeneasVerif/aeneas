@@ -99,7 +99,7 @@ let ctx_add_norm_trait_types_from_preds (span : Meta.span option)
 let rec trait_instance_id_is_local_clause (id : trait_instance_id) : bool =
   match id with
   | Self | Clause _ -> true
-  | ParentClause (id, _, _) -> trait_instance_id_is_local_clause id
+  | ParentClause (tref, _) -> trait_instance_id_is_local_clause tref.trait_id
   | TraitImpl _ | BuiltinOrAuto _ | UnknownTrait _ | Dyn _ -> false
 
 (** About the conversion functions: for now we need them (TODO: merge ety, rty,
@@ -344,10 +344,10 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
       TraitImpl { impl_ref with generics }
   | Clause _ -> id
   | BuiltinOrAuto _ -> id
-  | ParentClause (inst_id, decl_id, clause_id) -> begin
-      let inst_id = norm_ctx_normalize_trait_instance_id ctx inst_id in
+  | ParentClause (tref, clause_id) -> begin
+      let tref = norm_ctx_normalize_trait_ref ctx tref in
       (* Check if the inst_id refers to a specific implementation, if yes project *)
-      match inst_id with
+      match tref.trait_id with
       | TraitImpl impl_ref ->
           (* We figure out the parent clause by doing the following:
              {[
@@ -370,9 +370,9 @@ and norm_ctx_normalize_trait_instance_id (ctx : norm_ctx)
       | _ ->
           (* This is actually a local clause *)
           sanity_check_opt_span __FILE__ __LINE__
-            (trait_instance_id_is_local_clause inst_id)
+            (trait_instance_id_is_local_clause tref.trait_id)
             ctx.span;
-          ParentClause (inst_id, decl_id, clause_id)
+          ParentClause (tref, clause_id)
     end
   | UnknownTrait _ ->
       (* This is actually an error case *)
