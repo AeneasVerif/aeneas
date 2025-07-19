@@ -835,7 +835,9 @@ let named_binop_name (binop : E.binop) (int_ty : integer_type) : string =
 let keywords () =
   let named_unops =
     unop_name (Not None)
-    :: List.map (fun it -> unop_name (Not (Some (Signed it)))) T.all_signed_int_types
+    :: List.map
+         (fun it -> unop_name (Not (Some (Signed it))))
+         T.all_signed_int_types
     @ List.map (fun it -> unop_name (Neg (Signed it))) T.all_signed_int_types
   in
   let named_binops =

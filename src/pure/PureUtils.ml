@@ -122,8 +122,8 @@ let dest_arrow_ty (span : Meta.span) (ty : ty) : ty * ty =
 
 let compute_literal_type (cv : literal) : literal_type =
   match cv with
-  | VScalar (SignedScalar (ty,_)) -> TInt ty
-  | VScalar (UnsignedScalar (ty,_)) -> TUInt ty
+  | VScalar (SignedScalar (ty, _)) -> TInt ty
+  | VScalar (UnsignedScalar (ty, _)) -> TUInt ty
   | VBool _ -> TBool
   | VChar _ -> TChar
   | VFloat _ | VStr _ | VByteStr _ ->

@@ -104,7 +104,7 @@ let update_array_default (crate : crate) : crate =
                    regions = [];
                    types = [ TVar (Free _) ];
                    const_generics =
-                     [ (CgValue (VScalar (UnsignedScalar (Usize,nv))) as n) ];
+                     [ (CgValue (VScalar (UnsignedScalar (Usize, nv))) as n) ];
                    trait_refs = _;
                  } as array_generics;
              };
