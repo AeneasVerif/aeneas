@@ -463,18 +463,18 @@ let int_name (int_ty : integer_type) : string =
     | Lean -> ("Isize", "Usize", format_of_string "I%d", format_of_string "U%d")
   in
   match int_ty with
-  | Isize -> isize
-  | I8 -> Printf.sprintf i_format 8
-  | I16 -> Printf.sprintf i_format 16
-  | I32 -> Printf.sprintf i_format 32
-  | I64 -> Printf.sprintf i_format 64
-  | I128 -> Printf.sprintf i_format 128
-  | Usize -> usize
-  | U8 -> Printf.sprintf u_format 8
-  | U16 -> Printf.sprintf u_format 16
-  | U32 -> Printf.sprintf u_format 32
-  | U64 -> Printf.sprintf u_format 64
-  | U128 -> Printf.sprintf u_format 128
+  | Signed Isize -> isize
+  | Signed I8 -> Printf.sprintf i_format 8
+  | Signed I16 -> Printf.sprintf i_format 16
+  | Signed I32 -> Printf.sprintf i_format 32
+  | Signed I64 -> Printf.sprintf i_format 64
+  | Signed I128 -> Printf.sprintf i_format 128
+  | Unsigned Usize -> usize
+  | Unsigned U8 -> Printf.sprintf u_format 8
+  | Unsigned U16 -> Printf.sprintf u_format 16
+  | Unsigned U32 -> Printf.sprintf u_format 32
+  | Unsigned U64 -> Printf.sprintf u_format 64
+  | Unsigned U128 -> Printf.sprintf u_format 128
 
 let float_name (float_ty : float_type) : string =
   let format =
@@ -490,7 +490,8 @@ let float_name (float_ty : float_type) : string =
 
 let scalar_name (ty : literal_type) : string =
   match ty with
-  | TInteger ty -> int_name ty
+  | TInt ty -> int_name (Signed ty)
+  | TUInt ty -> int_name (Unsigned ty)
   | TFloat ty -> float_name ty
   | TBool -> (
       match backend () with
@@ -834,8 +835,10 @@ let named_binop_name (binop : E.binop) (int_ty : integer_type) : string =
 let keywords () =
   let named_unops =
     unop_name (Not None)
-    :: List.map (fun it -> unop_name (Not (Some it))) T.all_signed_int_types
-    @ List.map (fun it -> unop_name (Neg it)) T.all_signed_int_types
+    :: List.map
+         (fun it -> unop_name (Not (Some (Signed it))))
+         T.all_signed_int_types
+    @ List.map (fun it -> unop_name (Neg (Signed it))) T.all_signed_int_types
   in
   let named_binops =
     [ E.Div OPanic; Rem OPanic; Add OPanic; Sub OPanic; Mul OPanic ]
@@ -1889,7 +1892,7 @@ let ctx_compute_var_basename (span : Meta.span) (ctx : extraction_ctx)
           match lty with
           | TBool -> "b"
           | TChar -> "c"
-          | TInteger _ -> "i"
+          | TInt _ | TUInt _ -> "i"
           | TFloat _ -> "fl")
       | TArrow _ -> "f"
       | TTraitType (_, name) -> name_from_type_ident name

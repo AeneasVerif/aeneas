@@ -378,7 +378,13 @@ let extract_unop (span : Meta.span) (extract_expr : bool -> texpression -> unit)
                    (PrintPure.integer_type_to_string ty)
              in
              match (src, tgt) with
-             | TInteger src, TInteger tgt ->
+             | _, _
+               when ValuesUtils.literal_type_is_integer src
+                    && ValuesUtils.literal_type_is_integer tgt ->
+                 let src, tgt =
+                   ( TypesUtils.literal_as_integer src,
+                     TypesUtils.literal_as_integer tgt )
+                 in
                  let cast_str =
                    match backend () with
                    | Coq | FStar -> "scalar_cast"
@@ -397,7 +403,8 @@ let extract_unop (span : Meta.span) (extract_expr : bool -> texpression -> unit)
                  in
                  let tgt = integer_type_to_string tgt in
                  (cast_str, src, Some tgt)
-             | TBool, TInteger tgt ->
+             | TBool, TInt _ | TBool, TUInt _ ->
+                 let tgt = TypesUtils.literal_as_integer tgt in
                  let cast_str =
                    match backend () with
                    | Coq | FStar -> "scalar_cast_bool"
@@ -409,7 +416,7 @@ let extract_unop (span : Meta.span) (extract_expr : bool -> texpression -> unit)
                  in
                  let tgt = integer_type_to_string tgt in
                  (cast_str, None, Some tgt)
-             | TInteger _, TBool ->
+             | TInt _, TBool | TUInt _, TBool ->
                  (* This is not allowed by rustc: the way of doing it in Rust is: [x != 0] *)
                  craise __FILE__ __LINE__ span
                    "Unexpected cast: integer to bool"

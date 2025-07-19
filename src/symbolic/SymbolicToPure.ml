@@ -3097,7 +3097,8 @@ and translate_function_call_aux (call : S.call) (e : S.expression)
               let lit_ty = ty_as_literal ctx.span arg.ty in
               match lit_ty with
               | TBool -> None
-              | TInteger int_ty -> Some int_ty
+              | TInt int_ty -> Some (V.Signed int_ty)
+              | TUInt int_ty -> Some (V.Unsigned int_ty)
               | _ -> craise __FILE__ __LINE__ ctx.span "Unreachable"
             in
             let effect_info =
@@ -3857,7 +3858,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
       in
       let branches = List.map translate_branch branches in
       let otherwise = translate_expression otherwise ctx in
-      let pat_ty = TLiteral (TInteger int_ty) in
+      let pat_ty = TLiteral (TypesUtils.integer_as_literal int_ty) in
       let otherwise_pat : typed_pattern = { value = PatDummy; ty = pat_ty } in
       let otherwise : match_branch =
         { pat = otherwise_pat; branch = otherwise }

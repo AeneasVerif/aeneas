@@ -573,7 +573,11 @@ let expand_symbolic_int (config : config) (span : Meta.span)
     * (SA.expression list * SA.expression -> SA.expression) =
  fun ctx ->
   (* Sanity check *)
-  sanity_check __FILE__ __LINE__ (sv.sv_ty = TLiteral (TInteger int_type)) span;
+  (match int_type with
+  | Signed int_type ->
+      sanity_check __FILE__ __LINE__ (sv.sv_ty = TLiteral (TInt int_type)) span
+  | Unsigned int_type ->
+      sanity_check __FILE__ __LINE__ (sv.sv_ty = TLiteral (TUInt int_type)) span);
   (* For all the branches of the switch, we expand the symbolic value
    * to the value given by the branch and execute the branch statement.
    * For the otherwise branch, we leave the symbolic value as it is

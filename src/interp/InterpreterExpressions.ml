@@ -93,22 +93,32 @@ let access_rplace_reorganize (config : config) (span : Meta.span)
 
 (** Convert an operand constant operand value to a typed value *)
 let literal_to_typed_value (span : Meta.span) (ty : literal_type) (cv : literal)
-    : typed_value =
+    (ctx : eval_ctx) : typed_value =
   (* Check the type while converting - we actually need some information
    * contained in the type *)
   log#ltrace
     (lazy
       ("literal_to_typed_value:" ^ "\n- cv: "
       ^ Print.Values.literal_to_string cv));
+  let ptr_size = ctx.crate.target_information.target_pointer_size in
   match (ty, cv) with
   (* Scalar, boolean... *)
   | TBool, VBool v -> { value = VLiteral (VBool v); ty = TLiteral ty }
   | TChar, VChar v -> { value = VLiteral (VChar v); ty = TLiteral ty }
-  | TInteger int_ty, VScalar v ->
+  | TInt int_ty, VScalar (SignedScalar (sv_ty, _) as sv) ->
       (* Check the type and the ranges *)
-      sanity_check __FILE__ __LINE__ (int_ty = v.int_ty) span;
-      sanity_check __FILE__ __LINE__ (check_scalar_value_in_range v) span;
-      { value = VLiteral (VScalar v); ty = TLiteral ty }
+      sanity_check __FILE__ __LINE__ (int_ty = sv_ty) span;
+      sanity_check __FILE__ __LINE__
+        (check_scalar_value_in_range ptr_size sv)
+        span;
+      { value = VLiteral (VScalar sv); ty = TLiteral ty }
+  | TUInt int_ty, VScalar (UnsignedScalar (sv_ty, _) as sv) ->
+      (* Check the type and the ranges *)
+      sanity_check __FILE__ __LINE__ (int_ty = sv_ty) span;
+      sanity_check __FILE__ __LINE__
+        (check_scalar_value_in_range ptr_size sv)
+        span;
+      { value = VLiteral (VScalar sv); ty = TLiteral ty }
   (* Remaining cases (invalid) *)
   | _, _ -> craise __FILE__ __LINE__ span "Improperly typed constant value"
 
@@ -380,7 +390,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
               let v : typed_value = { value = VLiteral lit; ty = cv.ty } in
               (v, ctx, fun e -> e)
           | TLiteral lit_ty ->
-              (literal_to_typed_value span lit_ty lit, ctx, fun e -> e)
+              (literal_to_typed_value span lit_ty lit ctx, ctx, fun e -> e)
           | _ ->
               craise __FILE__ __LINE__ span
                 ("Encountered an incorrectly typed constant: "
@@ -541,6 +551,7 @@ let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
     * (SymbolicAst.expression -> SymbolicAst.expression) =
   (* Evaluate the operand *)
   let v, ctx, cc = eval_operand config span op ctx in
+  let ptr_size = ctx.crate.target_information.target_pointer_size in
   (* Apply the unop *)
   let r =
     match (unop, v.value) with
@@ -549,43 +560,53 @@ let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
         (* The ! operator flips the bits.
            In effect, this does the operation we implement below.
         *)
-        let int_ty = i.int_ty in
+        let int_ty = get_ty i in
         let x =
           if integer_type_is_signed int_ty then Z.of_int (-1)
-          else scalar_max int_ty
+          else scalar_max ptr_size int_ty
         in
-        let value = Z.sub x i.value in
-        Ok { v with value = VLiteral (VScalar { value; int_ty }) }
+        let value = Z.sub x (get_val i) in
+        Ok
+          {
+            v with
+            value =
+              VLiteral
+                (VScalar (Result.get_ok (mk_scalar ptr_size int_ty value)));
+          }
     | Neg OPanic, VLiteral (VScalar sv) -> (
-        let i = Z.neg sv.value in
-        match mk_scalar sv.int_ty i with
+        let i = Z.neg (get_val sv) in
+        match mk_scalar ptr_size (get_ty sv) i with
         | Error _ -> Error EPanic
         | Ok sv -> Ok { v with value = VLiteral (VScalar sv) })
-    | ( Cast (CastScalar (TInteger src_ty, TInteger tgt_ty)),
-        VLiteral (VScalar sv) ) -> (
+    | Cast (CastScalar (src, tgt)), VLiteral (VScalar sv)
+      when literal_type_is_integer src && literal_type_is_integer tgt -> (
         (* Cast between integers *)
-        sanity_check __FILE__ __LINE__ (src_ty = sv.int_ty) span;
-        let i = sv.value in
-        match mk_scalar tgt_ty i with
+        let src_ty, tgt_ty = (literal_as_integer src, literal_as_integer tgt) in
+        sanity_check __FILE__ __LINE__ (src_ty = get_ty sv) span;
+        let i = get_val sv in
+        match mk_scalar ptr_size tgt_ty i with
         | Error _ -> Error EPanic
         | Ok sv ->
-            let ty = TLiteral (TInteger tgt_ty) in
+            let ty = TLiteral tgt in
             let value = VLiteral (VScalar sv) in
             Ok { ty; value })
-    | Cast (CastScalar (TBool, TInteger tgt_ty)), VLiteral (VBool sv) -> (
+    | Cast (CastScalar (TBool, tgt)), VLiteral (VBool sv)
+      when literal_type_is_integer tgt -> (
         (* Cast bool -> int *)
+        let tgt_ty = literal_as_integer tgt in
         let i = Z.of_int (if sv then 1 else 0) in
-        match mk_scalar tgt_ty i with
+        match mk_scalar ptr_size tgt_ty i with
         | Error _ -> Error EPanic
         | Ok sv ->
-            let ty = TLiteral (TInteger tgt_ty) in
+            let ty = TLiteral tgt in
             let value = VLiteral (VScalar sv) in
             Ok { ty; value })
-    | Cast (CastScalar (TInteger _, TBool)), VLiteral (VScalar sv) ->
+    | Cast (CastScalar (src, TBool)), VLiteral (VScalar sv)
+      when literal_type_is_integer src ->
         (* Cast int -> bool *)
         let b =
-          if Z.of_int 0 = sv.value then false
-          else if Z.of_int 1 = sv.value then true
+          if Z.of_int 0 = get_val sv then false
+          else if Z.of_int 1 = get_val sv then true
           else
             exec_raise __FILE__ __LINE__ span
               "Conversion from int to bool: out of range"
@@ -681,8 +702,10 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
   let res_sv_ty =
     match (unop, v.ty) with
     | Not, (TLiteral TBool as lty) -> lty
-    | Not, (TLiteral (TInteger _) as lty) -> lty
-    | Neg OPanic, (TLiteral (TInteger _) as lty) -> lty
+    | Not, (TLiteral (TInt _) as lty) -> lty
+    | Not, (TLiteral (TUInt _) as lty) -> lty
+    | Neg OPanic, (TLiteral (TInt _) as lty) -> lty
+    | Neg OPanic, (TLiteral (TUInt _) as lty) -> lty
     | Cast (CastScalar (_, tgt_ty)), _ -> TLiteral tgt_ty
     | Cast (CastUnsize (ty0, ty1, _)), _ ->
         (* If the following function succeeds, then it means the cast is well-formed
@@ -717,7 +740,8 @@ let eval_unary_op (config : config) (span : Meta.span) (unop : unop)
 (** Small helper for [eval_binary_op_concrete]: computes the result of applying
     the binop *after* the operands have been successfully evaluated *)
 let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
-    (v1 : typed_value) (v2 : typed_value) : (typed_value, eval_error) result =
+    (v1 : typed_value) (v2 : typed_value) (ctx : eval_ctx) :
+    (typed_value, eval_error) result =
   (* Equality check binops (Eq, Ne) accept values from a wide variety of types.
    * The remaining binops only operate on scalars. *)
   if binop = Eq || binop = Ne then (
@@ -733,6 +757,9 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
     (* For the non-equality operations, the input values are necessarily scalars *)
     match (v1.value, v2.value) with
     | VLiteral (VScalar sv1), VLiteral (VScalar sv2) -> begin
+        let ptr_size = ctx.crate.target_information.target_pointer_size in
+        let sv1_value, sv2_value = (get_val sv1, get_val sv2) in
+        let sv1_int_ty, sv2_int_ty = (get_ty sv1, get_ty sv2) in
         (* There are binops which require the two operands to have the same
            type, and binops for which it is not the case.
            There are also binops which return booleans, and binops which
@@ -741,13 +768,13 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
         match binop with
         | Lt | Le | Ge | Gt ->
             (* The two operands must have the same type and the result is a boolean *)
-            sanity_check __FILE__ __LINE__ (sv1.int_ty = sv2.int_ty) span;
+            sanity_check __FILE__ __LINE__ (sv1_int_ty = sv2_int_ty) span;
             let b =
               match binop with
-              | Lt -> Z.lt sv1.value sv2.value
-              | Le -> Z.leq sv1.value sv2.value
-              | Ge -> Z.geq sv1.value sv2.value
-              | Gt -> Z.gt sv1.value sv2.value
+              | Lt -> Z.lt sv1_value sv2_value
+              | Le -> Z.leq sv1_value sv2_value
+              | Ge -> Z.geq sv1_value sv2_value
+              | Gt -> Z.gt sv1_value sv2_value
               | _ -> craise __FILE__ __LINE__ span "Unreachable"
             in
             Ok
@@ -760,19 +787,22 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
         | Mul OPanic
         | BitXor | BitAnd | BitOr -> (
             (* The two operands must have the same type and the result is an integer *)
-            sanity_check __FILE__ __LINE__ (sv1.int_ty = sv2.int_ty) span;
+            sanity_check __FILE__ __LINE__ (sv1_int_ty = sv2_int_ty) span;
             let res : _ result =
               match binop with
               | Div OPanic ->
-                  if sv2.value = Z.zero then Error ()
-                  else mk_scalar sv1.int_ty (Z.div sv1.value sv2.value)
+                  if sv2_value = Z.zero then Error ()
+                  else mk_scalar ptr_size sv1_int_ty (Z.div sv1_value sv2_value)
               | Rem OPanic ->
                   (* See [https://github.com/ocaml/Zarith/blob/master/z.mli] *)
-                  if sv2.value = Z.zero then Error ()
-                  else mk_scalar sv1.int_ty (Z.rem sv1.value sv2.value)
-              | Add OPanic -> mk_scalar sv1.int_ty (Z.add sv1.value sv2.value)
-              | Sub OPanic -> mk_scalar sv1.int_ty (Z.sub sv1.value sv2.value)
-              | Mul OPanic -> mk_scalar sv1.int_ty (Z.mul sv1.value sv2.value)
+                  if sv2_value = Z.zero then Error ()
+                  else mk_scalar ptr_size sv1_int_ty (Z.rem sv1_value sv2_value)
+              | Add OPanic ->
+                  mk_scalar ptr_size sv1_int_ty (Z.add sv1_value sv2_value)
+              | Sub OPanic ->
+                  mk_scalar ptr_size sv1_int_ty (Z.sub sv1_value sv2_value)
+              | Mul OPanic ->
+                  mk_scalar ptr_size sv1_int_ty (Z.mul sv1_value sv2_value)
               | BitXor -> raise Unimplemented
               | BitAnd -> raise Unimplemented
               | BitOr -> raise Unimplemented
@@ -784,7 +814,7 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
                 Ok
                   {
                     value = VLiteral (VScalar sv);
-                    ty = TLiteral (TInteger sv1.int_ty);
+                    ty = TLiteral (integer_as_literal sv1_int_ty);
                   })
         | Ne | Eq -> craise __FILE__ __LINE__ span "Unreachable"
         | _ ->
@@ -803,7 +833,7 @@ let eval_binary_op_concrete (config : config) (span : Meta.span) (binop : binop)
   (* Evaluate the operands *)
   let (v1, v2), ctx, cc = eval_two_operands config span op1 op2 ctx in
   (* Compute the result of the binop *)
-  let r = eval_binary_op_concrete_compute span binop v1 v2 in
+  let r = eval_binary_op_concrete_compute span binop v1 v2 ctx in
   (* Return *)
   (r, ctx, cc)
 
@@ -827,24 +857,26 @@ let eval_binary_op_symbolic (config : config) (span : Meta.span) (binop : binop)
     else
       (* Other operations: input types are integers *)
       match (v1.ty, v2.ty) with
-      | TLiteral (TInteger int_ty1), TLiteral (TInteger int_ty2) -> (
+      | TLiteral lty1, TLiteral lty2
+        when literal_type_is_integer lty1 && literal_type_is_integer lty2 -> (
+          let int_ty1, int_ty2 = (ty_as_integer v1.ty, ty_as_integer v2.ty) in
           match binop with
           | Lt | Le | Ge | Gt ->
               sanity_check __FILE__ __LINE__ (int_ty1 = int_ty2) span;
               TLiteral TBool
           | Div _ | Rem _ | Add _ | Sub _ | Mul _ | BitXor | BitAnd | BitOr ->
               sanity_check __FILE__ __LINE__ (int_ty1 = int_ty2) span;
-              TLiteral (TInteger int_ty1)
+              TLiteral (integer_as_literal int_ty1)
           | Cmp ->
               sanity_check __FILE__ __LINE__ (int_ty1 = int_ty2) span;
-              TLiteral (TInteger I8)
+              TLiteral (TInt I8)
           (* These return `(int, bool)` / a pointer which isn't a literal type *)
           | AddChecked | SubChecked | MulChecked | Offset ->
               craise __FILE__ __LINE__ span "Unimplemented binary operation"
           | Shl _ | Shr _ ->
               (* The number of bits can be of a different integer type
                  than the operand *)
-              TLiteral (TInteger int_ty1)
+              TLiteral (integer_as_literal int_ty1)
           | Ne | Eq -> craise __FILE__ __LINE__ span "Unreachable")
       | _ -> craise __FILE__ __LINE__ span "Invalid inputs for binop"
   in
@@ -1016,7 +1048,7 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
                    values)
             ^ "]"));
         (* Sanity check: the number of values is consistent with the length *)
-        let len = (literal_as_scalar (const_generic_as_literal cg)).value in
+        let len = get_val (literal_as_scalar (const_generic_as_literal cg)) in
         sanity_check __FILE__ __LINE__
           (len = Z.of_int (List.length values))
           span;

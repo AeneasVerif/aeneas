@@ -122,7 +122,8 @@ let dest_arrow_ty (span : Meta.span) (ty : ty) : ty * ty =
 
 let compute_literal_type (cv : literal) : literal_type =
   match cv with
-  | VScalar sv -> TInteger sv.int_ty
+  | VScalar (SignedScalar (ty, _)) -> TInt ty
+  | VScalar (UnsignedScalar (ty, _)) -> TUInt ty
   | VBool _ -> TBool
   | VChar _ -> TChar
   | VFloat _ | VStr _ | VByteStr _ ->
@@ -735,7 +736,8 @@ let mk_adt_proj (span : span) (adt : texpression) (field_id : field_id)
 
 let ty_as_integer (span : Meta.span) (t : ty) : T.integer_type =
   match t with
-  | TLiteral (TInteger int_ty) -> int_ty
+  | TLiteral (TInt int_ty) -> Signed int_ty
+  | TLiteral (TUInt int_ty) -> Unsigned int_ty
   | _ -> craise __FILE__ __LINE__ span "Unreachable"
 
 let ty_as_literal (span : Meta.span) (t : ty) : T.literal_type =

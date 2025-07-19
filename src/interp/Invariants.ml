@@ -377,8 +377,10 @@ let check_borrowed_values_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
 let check_literal_type (span : Meta.span) (cv : literal) (ty : literal_type) :
     unit =
   match (cv, ty) with
-  | VScalar sv, TInteger int_ty ->
-      sanity_check __FILE__ __LINE__ (sv.int_ty = int_ty) span
+  | VScalar (SignedScalar (sv_ty, _)), TInt int_ty ->
+      sanity_check __FILE__ __LINE__ (sv_ty = int_ty) span
+  | VScalar (UnsignedScalar (sv_ty, _)), TUInt int_ty ->
+      sanity_check __FILE__ __LINE__ (sv_ty = int_ty) span
   | VBool _, TBool | VChar _, TChar -> ()
   | _ -> craise __FILE__ __LINE__ span "Erroneous typing"
 
@@ -489,9 +491,9 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
                 span;
               (* The length is necessarily concrete *)
               let len =
-                (ValuesUtils.literal_as_scalar
-                   (TypesUtils.const_generic_as_literal cg))
-                  .value
+                Scalars.get_val
+                  (ValuesUtils.literal_as_scalar
+                     (TypesUtils.const_generic_as_literal cg))
               in
               sanity_check __FILE__ __LINE__
                 (Z.of_int (List.length inner_values) = len)
