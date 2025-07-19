@@ -53,11 +53,11 @@ module Sig = struct
   (** Type parameter [T] of id 0 *)
   let type_param_0 : type_var = { index = tvar_id_0; name = "T" }
 
-  let usize_ty : ty = TLiteral (TInteger Usize)
+  let usize_ty : ty = TLiteral (TUInt Usize)
 
   (** Const generic parameter [const N : usize] of id 0 *)
   let cg_param_0 : const_generic_var =
-    { index = cgvar_id_0; name = "N"; ty = TInteger Usize }
+    { index = cgvar_id_0; name = "N"; ty = TUInt Usize }
 
   let empty_const_generic_params : const_generic_var list = []
 

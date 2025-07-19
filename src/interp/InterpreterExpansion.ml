@@ -573,26 +573,30 @@ let expand_symbolic_int (config : config) (span : Meta.span)
     * (SA.expression list * SA.expression -> SA.expression) =
  fun ctx ->
   (* Sanity check *)
-  sanity_check __FILE__ __LINE__ (sv.sv_ty = TLiteral (TInteger int_type)) span;
-  (* For all the branches of the switch, we expand the symbolic value
+  (match int_type with
+  | Signed int_type ->
+      sanity_check __FILE__ __LINE__ (sv.sv_ty = TLiteral (TInt int_type)) span
+  | Unsigned int_type ->
+      sanity_check __FILE__ __LINE__ (sv.sv_ty = TLiteral (TUInt int_type)) span);
+      (* For all the branches of the switch, we expand the symbolic value
    * to the value given by the branch and execute the branch statement.
    * For the otherwise branch, we leave the symbolic value as it is
    * (because this branch doesn't precisely define which should be the
    * value of the scrutinee...) and simply execute the otherwise statement.
    *)
-  (* Substitute the symbolic values to generate the contexts in the branches *)
-  let seel = List.map (fun v -> SeLiteral (VScalar v)) tgts in
-  let ctx_branches =
-    List.map (apply_symbolic_expansion_non_borrow config span sv ctx) seel
-  in
-  let ctx_otherwise = ctx in
-  (* Update the symbolic ast *)
-  let cf (el, e) =
-    let seel = List.map (fun x -> Some x) seel in
-    S.synthesize_symbolic_expansion span sv sv_place (seel @ [ None ])
-      (el @ [ e ])
-  in
-  ((ctx_branches, ctx_otherwise), cf)
+      (* Substitute the symbolic values to generate the contexts in the branches *)
+      let seel = List.map (fun v -> SeLiteral (VScalar v)) tgts in
+      let ctx_branches =
+        List.map (apply_symbolic_expansion_non_borrow config span sv ctx) seel
+      in
+      let ctx_otherwise = ctx in
+      (* Update the symbolic ast *)
+      let cf (el, e) =
+        let seel = List.map (fun x -> Some x) seel in
+        S.synthesize_symbolic_expansion span sv sv_place (seel @ [ None ])
+          (el @ [ e ])
+      in
+      ((ctx_branches, ctx_otherwise), cf)
 
 (** Expand all the symbolic values which contain borrows. Allows us to restrict
     ourselves to a simpler model for the projectors over symbolic values.

@@ -1051,7 +1051,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
         match op_v.value with
         | VLiteral (VScalar sv) -> (
             (* Sanity check *)
-            sanity_check __FILE__ __LINE__ (sv.int_ty = int_ty) span;
+            sanity_check __FILE__ __LINE__ (Scalars.get_ty sv = int_ty) span;
             (* Find the branch *)
             match List.find_opt (fun (svl, _) -> List.mem sv svl) stgts with
             | None -> eval_block config otherwise ctx

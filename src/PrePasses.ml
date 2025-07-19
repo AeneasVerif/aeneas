@@ -104,7 +104,7 @@ let update_array_default (crate : crate) : crate =
                    regions = [];
                    types = [ TVar (Free _) ];
                    const_generics =
-                     [ (CgValue (VScalar { value = nv; int_ty = Usize }) as n) ];
+                     [ (CgValue (VScalar (UnsignedScalar (Usize,nv))) as n) ];
                    trait_refs = _;
                  } as array_generics;
              };
@@ -145,7 +145,7 @@ let update_array_default (crate : crate) : crate =
                 {
                   impl.generics with
                   const_generics =
-                    [ { index = cg_id; name = "N"; ty = TInteger Usize } ];
+                    [ { index = cg_id; name = "N"; ty = TUInt Usize } ];
                 }
               in
               let impl = { impl with impl_trait; generics = params } in
@@ -210,7 +210,7 @@ let update_array_default (crate : crate) : crate =
                     {
                       sg.generics with
                       const_generics =
-                        [ { index = cg_id; name = "N"; ty = TInteger Usize } ];
+                        [ { index = cg_id; name = "N"; ty = TUInt Usize } ];
                     }
                   in
                   let sg =

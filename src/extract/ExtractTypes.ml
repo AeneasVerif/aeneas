@@ -21,32 +21,34 @@ let extract_literal (span : Meta.span) (fmt : F.formatter) (is_pattern : bool)
   match cv with
   | VScalar sv -> (
       match backend () with
-      | FStar -> F.pp_print_string fmt (Z.to_string sv.value)
+      | FStar -> F.pp_print_string fmt (Z.to_string (Scalars.get_val sv))
       | Coq | HOL4 | Lean ->
           let print_brackets = inside && backend () = HOL4 in
           if print_brackets then F.pp_print_string fmt "(";
           (match backend () with
           | Coq | Lean -> ()
           | HOL4 ->
-              F.pp_print_string fmt ("int_to_" ^ int_name sv.int_ty);
+              F.pp_print_string fmt ("int_to_" ^ int_name (Scalars.get_ty sv));
               F.pp_print_space fmt ()
           | _ -> admit_raise __FILE__ __LINE__ span "Unreachable" fmt);
           (* We need to add parentheses if the value is negative *)
-          if sv.value >= Z.of_int 0 then
-            F.pp_print_string fmt (Z.to_string sv.value)
-          else F.pp_print_string fmt ("(" ^ Z.to_string sv.value ^ ")");
+          let sv_value = Scalars.get_val sv in
+          if sv_value >= Z.of_int 0 then
+            F.pp_print_string fmt (Z.to_string sv_value)
+          else F.pp_print_string fmt ("(" ^ Z.to_string sv_value ^ ")");
           (match backend () with
           | Coq ->
-              let iname = int_name sv.int_ty in
+              let iname = int_name (Scalars.get_ty sv) in
               F.pp_print_string fmt ("%" ^ iname)
           | Lean ->
               (* We don't use the same notation for patterns and regular literals *)
+              let sv_int_ty = Scalars.get_ty sv in
               if is_pattern then
-                if Scalars.integer_type_is_signed sv.int_ty then
+                if Scalars.integer_type_is_signed sv_int_ty then
                   F.pp_print_string fmt "#iscalar"
                 else F.pp_print_string fmt "#uscalar"
               else
-                let iname = String.lowercase_ascii (int_name sv.int_ty) in
+                let iname = String.lowercase_ascii (int_name sv_int_ty) in
                 F.pp_print_string fmt ("#" ^ iname)
           | HOL4 -> ()
           | _ -> admit_raise __FILE__ __LINE__ span "Unreachable" fmt);
@@ -263,7 +265,8 @@ let extract_literal_type (_ctx : extraction_ctx) (fmt : F.formatter)
   match ty with
   | TBool -> F.pp_print_string fmt (bool_name ())
   | TChar -> F.pp_print_string fmt (char_name ())
-  | TInteger int_ty -> F.pp_print_string fmt (int_name int_ty)
+  | TInt int_ty -> F.pp_print_string fmt (int_name (Signed int_ty))
+  | TUInt int_ty -> F.pp_print_string fmt (int_name (Unsigned int_ty))
   | TFloat float_ty -> F.pp_print_string fmt (float_name float_ty)
 
 (** [inside] constrols whether we should add parentheses or not around type

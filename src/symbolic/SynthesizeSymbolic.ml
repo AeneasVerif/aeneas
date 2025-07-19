@@ -44,7 +44,8 @@ let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
          (Some (SeLiteral (VBool false)), false_exp);
         ] -> ExpandBool (true_exp, false_exp)
         | _ -> craise __FILE__ __LINE__ span "Ill-formed boolean expansion")
-    | TLiteral (TInteger int_ty) ->
+    | TLiteral (TInt _) | TLiteral (TUInt _) ->
+        let int_ty = ty_as_integer sv.sv_ty in
         (* Switch over an integer: split between the "regular" branches
            and the "otherwise" branch (which should be the last branch) *)
         let branches, otherwise = Collections.List.pop_last ls in
@@ -53,7 +54,7 @@ let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
         let get_scalar (see : symbolic_expansion option) : scalar_value =
           match see with
           | Some (SeLiteral (VScalar cv)) ->
-              sanity_check __FILE__ __LINE__ (cv.int_ty = int_ty) span;
+              sanity_check __FILE__ __LINE__ (Scalars.get_ty cv = int_ty) span;
               cv
           | _ -> craise __FILE__ __LINE__ span "Unreachable"
         in
