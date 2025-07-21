@@ -1552,25 +1552,33 @@ let norm_proj_ty_contains span (ty1 : rty) (ty2 : rty) : bool =
   let set = RegionId.Set.singleton RegionId.zero in
   projection_contains span ty1 set ty2 set
 
-(** Collect all the borrow projectors over a symbolic value *)
-let collect_symbolic_value_borrow_projectors (span : Meta.span) (ctx : eval_ctx)
-    (sv : symbolic_value) : ty list =
-  (* Case disjunction on whether the symbolic value contains borrows or not *)
-  if not (symbolic_value_has_borrows (Some span) ctx sv) then []
-  else
-    (* Collect the type projections *)
-    let types = ref [] in
-    let visitor =
-      object
-        inherit [_] iter_eval_ctx as super
+(** Collect all the borrow projectors over a symbolic value and make their
+    union.
 
-        method! visit_AProjBorrows env { proj; loans } =
-          if proj.sv_id = sv.sv_id then types := proj.proj_ty :: !types;
-          super#visit_AProjBorrows env { proj; loans }
-      end
-    in
-    visitor#visit_eval_ctx () ctx;
-    !types
+    If there are no such borrow projectors in the context, we return [None]. *)
+let collect_symbolic_value_borrow_projectors (span : Meta.span) (ctx : eval_ctx)
+    (sv : symbolic_value) : ty option =
+  (* Collect the type projections *)
+  let types = ref [] in
+  let visitor =
+    object
+      inherit [_] iter_eval_ctx as super
+
+      method! visit_AProjBorrows env { proj; loans } =
+        if proj.sv_id = sv.sv_id then types := proj.proj_ty :: !types;
+        super#visit_AProjBorrows env { proj; loans }
+    end
+  in
+  visitor#visit_eval_ctx () ctx;
+
+  (* Make the union of the types *)
+  match !types with
+  | [] -> None
+  | ty :: types ->
+      let ty = ref ty in
+      List.iter (fun ty' -> ty := norm_proj_tys_union span !ty ty') types;
+      (* *)
+      Some !ty
 
 (** Check whether a symbolic value contains bottom values or not (it can contain
     bottom values if some of the borrows it contains have ended). *)
@@ -1587,19 +1595,15 @@ let symbolic_value_contains_bottom (span : Meta.span) (ctx : eval_ctx)
        (because no borrow projector was ended) and thus the value doesn't contain
        bottoms.
     *)
-    (* First collect the types *)
-    let types = collect_symbolic_value_borrow_projectors span ctx sv in
+    (* Make the union of the borrow projectors *)
+    let ty = collect_symbolic_value_borrow_projectors span ctx sv in
     (* Make the union of the types *)
-    match types with
-    | [] ->
+    match ty with
+    | None ->
         (* The symbolic value contains borrows and we found no borrow projectors:
-         it means all the borrows have ended *)
+           it means all the borrows have ended *)
         true
-    | ty :: types ->
-        let ty = ref ty in
-        List.iter (fun ty' -> ty := norm_proj_tys_union span !ty ty') types;
-        (* *)
-        ty_has_erased_regions sv.sv_ty
+    | Some ty -> ty_has_erased_regions ty
 
 (** Check whether a symbolic value contains non ended borrows. *)
 let symbolic_value_contains_non_ended_borrows (span : Meta.span)
@@ -1608,19 +1612,14 @@ let symbolic_value_contains_non_ended_borrows (span : Meta.span)
   if not (symbolic_value_has_borrows (Some span) ctx sv) then false
   else
     (* This is similar to [symbolic_value_contains_bottom] *)
-    (* First collect the types *)
-    let types = collect_symbolic_value_borrow_projectors span ctx sv in
-    (* Make the union of the types *)
-    match types with
-    | [] ->
+    (* Make the union of the borrow projectors *)
+    let ty = collect_symbolic_value_borrow_projectors span ctx sv in
+    match ty with
+    | None ->
         (* The symbolic value contains borrows and we found no borrow projectors:
          it means all the borrows have ended *)
         false
-    | ty :: types ->
-        let ty = ref ty in
-        List.iter (fun ty' -> ty := norm_proj_tys_union span !ty ty') types;
-        (* *)
-        ty_has_free_regions sv.sv_ty
+    | Some ty -> ty_has_free_regions ty
 
 let bottom_in_value_visitor (span : Meta.span) (ctx : eval_ctx) =
   object
@@ -1673,7 +1672,7 @@ let value_has_non_ended_borrows_or_loans span (ctx : eval_ctx) (v : value) :
 
 (** Given a type with erased region, introduce a list of projections over all
     the regions in the type. *)
-let intro_projections_for_ty (span : Meta.span) (ty : rty) : ty list =
+let make_projections_for_ty (span : Meta.span) (ty : rty) : ty list =
   (* First, introduce one fresh free region per erased region *)
   let regions = ref RegionId.Set.empty in
   let fresh_rid () =

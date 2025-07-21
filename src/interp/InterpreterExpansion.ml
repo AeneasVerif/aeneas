@@ -416,6 +416,25 @@ let expand_symbolic_value_borrow (config : config) (span : Meta.span)
     (original_sv : symbolic_value) (original_sv_place : SA.mplace option)
     (ref_ty : ty) (rkind : ref_kind) : cm_fun =
  fun ctx ->
+  (* Check that we are allowed to expand the reference: we need to check that
+     there is at least one loan projector which projects the region corresponding
+     to the borrow (otherwise, it means we have ended the loan projector, and thus
+     the borrows it captures). We do this by collecting the projectors in the
+     environment and joining their projection: we can then check that the joined
+     projection is of the shape [&'r (mut) ...], where [r] is a free region (i.e.,
+     a region marked for projection).
+  *)
+  let proj_ty =
+    InterpreterBorrowsCore.collect_symbolic_value_borrow_projectors span ctx
+      original_sv
+  in
+  cassert __FILE__ __LINE__
+    (match proj_ty with
+    | Some (TRef (r, _, _)) -> region_is_free r
+    | _ -> false)
+    span
+    "Could not expand a borrow symbolic value: the borrow has already ended";
+
   (* Match on the reference kind *)
   match rkind with
   | RMut ->
