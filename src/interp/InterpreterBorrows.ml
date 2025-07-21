@@ -316,19 +316,17 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
       method! visit_typed_avalue opt_abs (av : typed_avalue) : typed_avalue =
         match av.value with
         | ALoan lc ->
-            let value = self#visit_typed_ALoan opt_abs av.ty av.outlive_ty lc in
+            let value = self#visit_typed_ALoan opt_abs av.ty lc in
             ({ av with value } : typed_avalue)
         | ABorrow bc ->
-            let value =
-              self#visit_typed_ABorrow opt_abs av.ty av.outlive_ty bc
-            in
+            let value = self#visit_typed_ABorrow opt_abs av.ty bc in
             ({ av with value } : typed_avalue)
         | _ -> super#visit_typed_avalue opt_abs av
 
       (** We need to inspect ignored mutable borrows, to insert loan projectors
           if necessary. *)
       method visit_typed_ABorrow (opt_abs : abs option) (ty : proj_ty)
-          (outlive_ty : proj_ty) (bc : aborrow_content) : avalue =
+          (bc : aborrow_content) : avalue =
         match bc with
         | AIgnoredMutBorrow (bid', child) ->
             if bid' = Some bid then
@@ -343,9 +341,8 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
                   let given_back_meta = as_symbolic span nv.value in
                   (* The loan projector *)
                   let _, ty, _ = ty_as_ref ty in
-                  let _, outlive_ty, _ = ty_as_ref outlive_ty in
                   let given_back =
-                    mk_aproj_loans_value_from_symbolic_value sv ty outlive_ty
+                    mk_aproj_loans_value_from_symbolic_value sv ty
                   in
                   (* Continue giving back in the child value *)
                   let child = super#visit_typed_avalue opt_abs child in
@@ -364,11 +361,10 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
       (** We are not specializing an already existing method, but adding a new
           method (for projections, we need type information) *)
       method visit_typed_ALoan (opt_abs : abs option) (ty : proj_ty)
-          (outlive_ty : proj_ty) (lc : aloan_content) : avalue =
+          (lc : aloan_content) : avalue =
         (* Rk.: there is a small issue with the types of the aloan values.
          * See the comment at the level of definition of {!typed_avalue} *)
         let _, borrowed_value_aty, _ = ty_get_ref ty in
-        let _, borrowed_value_outlive_aty, _ = ty_get_ref outlive_ty in
 
         match lc with
         | AMutLoan (pm, bid', child) ->
@@ -385,7 +381,6 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
               let given_back =
                 apply_proj_borrows span check_symbolic_no_ended ctx
                   fresh_reborrow nv borrowed_value_aty
-                  borrowed_value_outlive_aty
               in
               (* Continue giving back in the child value *)
               let child = super#visit_typed_avalue opt_abs child in
@@ -414,7 +409,6 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
               let given_back =
                 apply_proj_borrows span check_symbolic_no_ended ctx
                   fresh_reborrow nv borrowed_value_aty
-                  borrowed_value_outlive_aty
               in
               (* Continue giving back in the child value *)
               let child = super#visit_typed_avalue opt_abs child in
@@ -487,9 +481,8 @@ let end_aproj_borrows (span : Meta.span) (proj : symbolic_proj)
             borrows = [];
           }
       in
-      (* TODO: not sure about the proj_ty *)
       let consumed : mconsumed_symb =
-        { sv_id = nsv.sv_id; proj_ty = proj.outlive_proj_ty }
+        { sv_id = nsv.sv_id; proj_ty = proj.proj_ty }
       in
       AProjBorrows { proj; loans = (consumed, loan) :: aproj.loans }
   in
@@ -550,9 +543,8 @@ let give_back_symbolic_value (_config : config) (span : Meta.span)
         AProjBorrows
           { proj = { aproj.proj with sv_id = nsv.sv_id }; loans = [] }
       in
-      (* TODO: not sure about the proj_ty *)
       let consumed : mconsumed_symb =
-        { sv_id = nsv.sv_id; proj_ty = proj.outlive_proj_ty }
+        { sv_id = nsv.sv_id; proj_ty = proj.proj_ty }
       in
       AProjLoans { aproj with borrows = (consumed, borrow) :: aproj.borrows }
   in
@@ -1739,11 +1731,9 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
               if destructure_shared_values then list_values sv else ([], sv)
             in
             (* Push a value *)
-            let ignored =
-              mk_aignored span child_av.ty child_av.outlive_ty None
-            in
+            let ignored = mk_aignored span child_av.ty None in
             let value = ALoan (ASharedLoan (pm, bids, sv, ignored)) in
-            push { value; ty; outlive_ty = av.outlive_ty };
+            push { value; ty };
             (* Explore the child *)
             list_avalues false push_fail child_av;
             (* Push the avalues introduced because we decomposed the inner loans -
@@ -1757,11 +1747,9 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
             (* Explore the child *)
             list_avalues false push_fail child_av;
             (* Explore the whole loan *)
-            let ignored =
-              mk_aignored span child_av.ty child_av.outlive_ty None
-            in
+            let ignored = mk_aignored span child_av.ty None in
             let value = ALoan (AMutLoan (pm, bid, ignored)) in
-            push { value; ty; outlive_ty = av.outlive_ty }
+            push { value; ty }
         | AIgnoredMutLoan (opt_bid, child_av) ->
             (* We don't support nested borrows for now *)
             cassert __FILE__ __LINE__
@@ -1808,11 +1796,9 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
             (* Explore the child *)
             list_avalues false push_fail child_av;
             (* Explore the borrow *)
-            let ignored =
-              mk_aignored span child_av.ty child_av.outlive_ty None
-            in
+            let ignored = mk_aignored span child_av.ty None in
             let value = ABorrow (AMutBorrow (pm, bid, ignored)) in
-            push { value; ty; outlive_ty = av.outlive_ty }
+            push { value; ty }
         | ASharedBorrow _ ->
             (* Nothing specific to do: keep the value as it is *)
             push av
@@ -1916,19 +1902,16 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
                   visitor#visit_typed_value () v
                 in
                 let sv = mk_value_with_fresh_sids sv in
-                (* *)
-                let outlive_ty = erase_regions ty in
 
                 (* Create the new avalue *)
                 let value =
                   ALoan
-                    (ASharedLoan
-                       (PNone, bids, sv, mk_aignored span ty outlive_ty None))
+                    (ASharedLoan (PNone, bids, sv, mk_aignored span ty None))
                 in
                 (* We need to update the type of the value: abstract shared loans
                    have the type `& ...` - TODO: this is annoying and not very clean... *)
                 let ty = TRef (RVar (Free RegionId.zero), ty, RShared) in
-                { value; ty; outlive_ty }
+                { value; ty }
               in
               let avl = List.append [ av ] avl in
               (avl, sv))
@@ -2317,9 +2300,8 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             cassert __FILE__ __LINE__ (ty_no_regions ref_ty) span
               "Nested borrows are not supported yet";
             let ty = TRef (RVar (Free r_id), ref_ty, kind) in
-            let outlive_ty = TRef (RErased, ref_ty, kind) in
             let value = ABorrow (ASharedBorrow (PNone, bid)) in
-            ([ { value; ty; outlive_ty } ], v)
+            ([ { value; ty } ], v)
         | VMutBorrow (bid, bv) ->
             (* We don't support nested borrows for now *)
             cassert __FILE__ __LINE__
@@ -2327,10 +2309,9 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
               span "Nested borrows are not supported yet";
             (* Create an avalue to push - note that we use [AIgnore] for the inner avalue *)
             let ty = TRef (RVar (Free r_id), ref_ty, kind) in
-            let outlive_ty = TRef (RErased, ref_ty, kind) in
-            let ignored = mk_aignored span ref_ty ref_ty None in
+            let ignored = mk_aignored span ref_ty None in
             let av = ABorrow (AMutBorrow (PNone, bid, ignored)) in
-            let av = { value = av; ty; outlive_ty } in
+            let av = { value = av; ty } in
             (* Continue exploring, looking for loans (and forbidding borrows,
                because we don't support nested borrows for now) *)
             let avl, bv =
@@ -2353,18 +2334,17 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             cassert __FILE__ __LINE__ (ty_no_regions ty) span
               "Nested borrows are not supported yet";
             (* We use [AIgnore] for the inner value *)
-            let ignored = mk_aignored span ty ty None in
+            let ignored = mk_aignored span ty None in
             (* For avalues, a loan has the type borrow (see the comments in [avalue]) *)
             let ref_ty = ty in
             let ty = mk_ref_ty (RVar (Free r_id)) ref_ty RShared in
-            let outlive_ty = mk_ref_ty RErased ref_ty RShared in
             (* Rem.: the shared value might contain loans *)
             let avl, sv =
               to_avalues ~allow_borrows:false ~inside_borrowed:true ~group:true
                 sv
             in
             let av = ALoan (ASharedLoan (PNone, bids, sv, ignored)) in
-            let av = { value = av; ty; outlive_ty } in
+            let av = { value = av; ty } in
             (* Continue exploring, looking for loans (and forbidding borrows,
                because we don't support nested borrows for now) *)
             let value : value =
@@ -2378,13 +2358,12 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             cassert __FILE__ __LINE__ (ty_no_regions ty) span
               "Nested borrows are not supported yet";
             (* We use [AIgnore] for the inner value *)
-            let ignored = mk_aignored span ty ty in
+            let ignored = mk_aignored span ty in
             (* For avalues, a loan has the type borrow (see the comments in [avalue]) *)
             let ref_ty = ty in
             let ty = mk_ref_ty (RVar (Free r_id)) ref_ty RMut in
-            let outlive_ty = mk_ref_ty RErased ref_ty RMut in
             let av = ALoan (AMutLoan (PNone, bid, ignored None)) in
-            let av = { value = av; ty; outlive_ty } in
+            let av = { value = av; ty } in
             ([ av ], v))
     | VSymbolic sv ->
         (* Check that there are no nested borrows in the symbolic value -
@@ -2420,24 +2399,18 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
               end
             in
             let ty = visitor#visit_ty () sv.sv_ty in
-            let outlive_ty = erase_regions ty in
-            let proj : symbolic_proj =
-              { sv_id = sv.sv_id; proj_ty = ty; outlive_proj_ty = outlive_ty }
-            in
+            let proj : symbolic_proj = { sv_id = sv.sv_id; proj_ty = ty } in
             let nv = ASymbolic (PNone, AProjBorrows { proj; loans = [] }) in
-            let nv : typed_avalue = { value = nv; ty; outlive_ty } in
+            let nv : typed_avalue = { value = nv; ty } in
             ([ nv ], v)
         else
           (* Introduce one abstraction per live region *)
-          let tys = intro_projections_for_ty span sv.sv_ty in
-          let outlive_ty = erase_regions sv.sv_ty in
+          let tys = make_projections_for_ty span sv.sv_ty in
           List.iter
             (fun ty ->
-              let proj : symbolic_proj =
-                { sv_id = sv.sv_id; proj_ty = ty; outlive_proj_ty = outlive_ty }
-              in
+              let proj : symbolic_proj = { sv_id = sv.sv_id; proj_ty = ty } in
               let nv = ASymbolic (PNone, AProjBorrows { proj; loans = [] }) in
-              let nv : typed_avalue = { value = nv; ty; outlive_ty } in
+              let nv : typed_avalue = { value = nv; ty } in
               push_abs [ nv ])
             tys;
           ([], v)
@@ -3152,7 +3125,7 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
                 (not
                    (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos ty))
                 span "Nested borrows are not supported yet";
-              { value = ABorrow bc; ty; outlive_ty = erase_regions ty }
+              { value = ABorrow bc; ty }
 
         let make_loan_value _ lc : marked_borrow_id list * typed_avalue =
           match lc with
@@ -3179,13 +3152,13 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
                     (not
                        (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty))
                     span "Nested borrows are not supported yet";
-                  (marked_bids, { value = ALoan lc; ty; outlive_ty = ty })
+                  (marked_bids, { value = ALoan lc; ty })
               | AMutLoan (pm, bid, _) ->
                   cassert __FILE__ __LINE__
                     (not
                        (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty))
                     span "Nested borrows are not supported yet";
-                  ([ (pm, bid) ], { value = ALoan lc; ty; outlive_ty = ty })
+                  ([ (pm, bid) ], { value = ALoan lc; ty })
               | AEndedMutLoan _
               | AEndedSharedLoan _
               | AIgnoredMutLoan _
@@ -3222,16 +3195,13 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
           cassert __FILE__ __LINE__
             (not (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos ty))
             span "Nested borrows are not supported yet";
-          let outlive_ty = erase_regions ty in
-
-          { value = ASymbolic (pm, proj); ty; outlive_ty }
+          { value = ASymbolic (pm, proj); ty }
 
         let make_loan_value marked (ty, pm, proj) =
           cassert __FILE__ __LINE__
             (not (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos ty))
             span "Nested borrows are not supported yet";
-          let outlive_ty = erase_regions ty in
-          ([ marked ], { value = ASymbolic (pm, proj); ty; outlive_ty })
+          ([ marked ], { value = ASymbolic (pm, proj); ty })
       end)
   in
   MergeSymbolic.merge borrow_proj_to_content0 borrow_proj_to_content1
@@ -3343,8 +3313,7 @@ let merge_abstractions_merge_markers (span : Meta.span)
         cassert __FILE__ __LINE__
           (not (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos ty))
           span "Nested borrows are not supported yet";
-        let outlive_ty = erase_regions ty in
-        { value = ABorrow bc; ty; outlive_ty }
+        { value = ABorrow bc; ty }
   in
 
   (* Recreates an avalue from a loan_content, and adds the set of loan ids as merged.
@@ -3362,7 +3331,7 @@ let merge_abstractions_merge_markers (span : Meta.span)
         cassert __FILE__ __LINE__
           (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty))
           span "Nested borrows are not supported yet";
-        { value = ALoan bc; ty; outlive_ty = ty }
+        { value = ALoan bc; ty }
   in
 
   (* Recreates an avalue from a borrow projector. *)
@@ -3371,8 +3340,7 @@ let merge_abstractions_merge_markers (span : Meta.span)
     cassert __FILE__ __LINE__
       (not (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos ty))
       span "Nested borrows are not supported yet";
-    let outlive_ty = erase_regions ty in
-    { value = ASymbolic (pm, proj); ty; outlive_ty }
+    { value = ASymbolic (pm, proj); ty }
   in
 
   (* Recreates an avalue from a loan_content, and adds the set of loan ids as merged.
@@ -3382,8 +3350,7 @@ let merge_abstractions_merge_markers (span : Meta.span)
     cassert __FILE__ __LINE__
       (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty))
       span "Nested borrows are not supported yet";
-    let outlive_ty = ty in
-    { value = ASymbolic (pm, proj); ty; outlive_ty }
+    { value = ASymbolic (pm, proj); ty }
   in
 
   let complementary_markers pm0 pm1 =
