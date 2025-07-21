@@ -148,8 +148,16 @@ module type PrimMatcher = sig
     rty ->
     typed_avalue
 
-  (** Parameters: [ctx0] [ctx1] [ty0] [pm0] [bid0] [ty1] [pm1] [bid1] [ty]:
-      result of matching ty0 and ty1 *)
+  (** Parameters:
+      - [ctx0]
+      - [ctx1]
+      - [ty0]
+      - [pm0]
+      - [bid0]
+      - [ty1]
+      - [pm1]
+      - [bid1]
+      - [ty]: result of matching ty0 and ty1 *)
   val match_ashared_borrows :
     eval_ctx ->
     eval_ctx ->
@@ -162,9 +170,19 @@ module type PrimMatcher = sig
     rty ->
     typed_avalue
 
-  (** Parameters: [ctx0] [ctx1] [ty0] [pm0] [bid0] [av0] [ty1] [pm1] [bid1]
-      [av1] [ty]: result of matching ty0 and ty1 [av]: result of matching av0
-      and av1 *)
+  (** Parameters:
+      - [ctx0]
+      - [ctx1]
+      - [ty0]
+      - [pm0]
+      - [bid0]
+      - [av0]
+      - [ty1]
+      - [pm1]
+      - [bid1]
+      - [av1]
+      - [ty]: result of matching ty0 and ty1
+      - [av]: result of matching av0 and av1 *)
   val match_amut_borrows :
     eval_ctx ->
     eval_ctx ->
@@ -180,9 +198,22 @@ module type PrimMatcher = sig
     typed_avalue ->
     typed_avalue
 
-  (** Parameters: [ctx0] [ctx1] [ty0] [pm0] [ids0] [v0] [av0] [ty1] [pm1] [ids1]
-      [v1] [av1] [ty]: result of matching ty0 and ty1 [v]: result of matching v0
-      and v1 [av]: result of matching av0 and av1 *)
+  (** Parameters:
+      - [ctx0]
+      - [ctx1]
+      - [ty0]
+      - [pm0]
+      - [ids0]
+      - [v0]
+      - [av0]
+      - [ty1]
+      - [pm1]
+      - [ids1]
+      - [v1]
+      - [av1]
+      - [ty]: result of matching ty0 and ty1
+      - [v]: result of matching v0 and v1
+      - [av]: result of matching av0 and av1 *)
   val match_ashared_loans :
     eval_ctx ->
     eval_ctx ->
@@ -201,9 +232,19 @@ module type PrimMatcher = sig
     typed_avalue ->
     typed_avalue
 
-  (** Parameters: [ctx0] [ctx1] [ty0] [pm0] [id0] [av0] [ty1] [pm1] [id1] [av1]
-      [ty]: result of matching ty0 and ty1 [av]: result of matching av0 and av1
-  *)
+  (** Parameters:
+      - [ctx0]
+      - [ctx1]
+      - [ty0]
+      - [pm0]
+      - [id0]
+      - [av0]
+      - [ty1]
+      - [pm1]
+      - [id1]
+      - [av1]
+      - [ty]: result of matching ty0 and ty1
+      - [av]: result of matching av0 and av1 *)
   val match_amut_loans :
     eval_ctx ->
     eval_ctx ->
@@ -219,42 +260,50 @@ module type PrimMatcher = sig
     typed_avalue ->
     typed_avalue
 
-  (** Parameters: [ctx0] [ctx1] [ty0] [pm0] [sv0] [proj_ty0] [children0] [ty1]
-      [pm1] [sv1] [proj_ty1] [children1] [ty]: result of matching ty0 and ty1
-      [proj_ty]: result of matching proj_ty0 and proj_ty1 *)
+  (** Parameters:
+      - [ctx0]
+      - [ctx1]
+      - [ty0]
+      - [pm0]
+      - [proj0]
+      - [ty1]
+      - [pm1]
+      - [proj1]
+      - [ty]: result of matching ty0 and ty1
+      - [proj_ty]: result of matching proj_ty0 and proj_ty1 *)
   val match_aproj_borrows :
     eval_ctx ->
     eval_ctx ->
     rty ->
     proj_marker ->
-    symbolic_value_id ->
-    rty ->
-    (msymbolic_value_id * aproj) list ->
+    aproj_borrows ->
     rty ->
     proj_marker ->
-    symbolic_value_id ->
-    rty ->
-    (msymbolic_value_id * aproj) list ->
+    aproj_borrows ->
     rty ->
     rty ->
     typed_avalue
 
-  (** Parameters: [ctx0] [ctx1] [ty0] [pm0] [sv0] [proj_ty0] [children0] [ty1]
-      [pm1] [sv1] [proj_ty1] [children1] [ty]: result of matching ty0 and ty1
-      [proj_ty]: result of matching proj_ty0 and proj_ty1 *)
+  (** Parameters:
+      - [ctx0]
+      - [ctx1]
+      - [ty0]
+      - [pm0]
+      - [proj0]
+      - [ty1]
+      - [pm1]
+      - [proj1]
+      - [ty]: result of matching ty0 and ty1
+      - [proj_ty]: result of matching proj_ty0 and proj_ty1 *)
   val match_aproj_loans :
     eval_ctx ->
     eval_ctx ->
     rty ->
     proj_marker ->
-    symbolic_value_id ->
-    rty ->
-    (msymbolic_value_id * aproj) list ->
+    aproj_loans ->
     rty ->
     proj_marker ->
-    symbolic_value_id ->
-    rty ->
-    (msymbolic_value_id * aproj) list ->
+    aproj_loans ->
     rty ->
     rty ->
     typed_avalue
@@ -294,8 +343,6 @@ module type MatchCheckEquivState = sig
       source context with a target context. *)
   val check_equiv : bool
 
-  val rid_map : RegionId.InjSubst.t ref
-
   (** Substitution for the loan and borrow ids - used only if [check_equiv] is
       true *)
   val blid_map : BorrowId.InjSubst.t ref
@@ -324,8 +371,6 @@ module type CheckEquivMatcher = sig
   val match_aids :
     abstraction_id_set -> abstraction_id_set -> abstraction_id_set
 
-  val match_rid : region_id -> region_id -> region_id
-  val match_rids : region_id_set -> region_id_set -> region_id_set
   val match_borrow_id : borrow_id -> borrow_id -> borrow_id
   val match_borrow_idl : borrow_id list -> borrow_id list -> borrow_id list
   val match_borrow_ids : borrow_id_set -> borrow_id_set -> borrow_id_set
@@ -341,7 +386,6 @@ type ids_maps = {
       (** Substitution for the loan and borrow ids *)
   borrow_id_map : BorrowId.InjSubst.t;  (** Substitution for the borrow ids *)
   loan_id_map : BorrowId.InjSubst.t;  (** Substitution for the loan ids *)
-  rid_map : RegionId.InjSubst.t;
   sid_map : SymbolicValueId.InjSubst.t;
   sid_to_value_map : typed_value SymbolicValueId.Map.t;
 }
@@ -353,7 +397,6 @@ let ids_maps_to_string (ctx : eval_ctx) (m : ids_maps) : string =
     blid_map;
     borrow_id_map;
     loan_id_map;
-    rid_map;
     sid_map;
     sid_to_value_map;
   } =
@@ -368,8 +411,6 @@ let ids_maps_to_string (ctx : eval_ctx) (m : ids_maps) : string =
   ^ BorrowId.InjSubst.to_string indent borrow_id_map
   ^ "\n  loan_id_map = "
   ^ BorrowId.InjSubst.to_string indent loan_id_map
-  ^ "\n  rid_map = "
-  ^ RegionId.InjSubst.to_string indent rid_map
   ^ "\n  sid_map = "
   ^ SymbolicValueId.InjSubst.to_string indent sid_map
   ^ "\n  sid_to_value_map = "
@@ -443,20 +484,10 @@ let ctx_split_fixed_new (span : Meta.span) (fixed_ids : ids_sets)
   (filt_env, new_absl, new_dummyl)
 
 let ids_sets_empty_borrows_loans (ids : ids_sets) : ids_sets =
-  let { aids; blids = _; borrow_ids = _; loan_ids = _; dids; rids; sids } =
-    ids
-  in
+  let { aids; blids = _; borrow_ids = _; loan_ids = _; dids; sids } = ids in
   let empty = BorrowId.Set.empty in
   let ids =
-    {
-      aids;
-      blids = empty;
-      borrow_ids = empty;
-      loan_ids = empty;
-      dids;
-      rids;
-      sids;
-    }
+    { aids; blids = empty; borrow_ids = empty; loan_ids = empty; dids; sids }
   in
   ids
 

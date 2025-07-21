@@ -1353,6 +1353,8 @@ type marked_norm_symb_proj = {
   pm : proj_marker;
   sv_id : symbolic_value_id;
   norm_proj_ty : ty;
+      (** TODO: rename to [proj_ty] (we are now using projection types
+          everywhere *)
 }
 [@@deriving show, ord]
 

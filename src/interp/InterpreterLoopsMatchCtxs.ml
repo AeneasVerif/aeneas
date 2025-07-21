@@ -87,17 +87,19 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
     RAbsBorrow.register_mapping false abs_to_loans abs.abs_id (pm, bid);
     RBorrowAbs.register_mapping true loan_to_abs (pm, bid) abs.abs_id
   in
-  let register_borrow_proj abs pm (sv_id : symbolic_value_id) (proj_ty : ty) =
-    let norm_proj_ty = normalize_proj_ty abs.regions.owned proj_ty in
-    let proj : marked_norm_symb_proj = { pm; sv_id; norm_proj_ty } in
+  let register_borrow_proj abs pm (proj : symbolic_proj) =
+    let proj : marked_norm_symb_proj =
+      { pm; sv_id = proj.sv_id; norm_proj_ty = proj.proj_ty }
+    in
     RAbsSymbProj.register_mapping false abs_to_borrow_projs abs.abs_id proj;
     (* This mapping is *actually* injective because we refresh symbolic values
        with borrows when copying them. See [InterpreterExpressions.copy_value]. *)
     RSymbProjAbs.register_mapping true borrow_proj_to_abs proj abs.abs_id
   in
-  let register_loan_proj abs pm (sv_id : symbolic_value_id) (proj_ty : ty) =
-    let norm_proj_ty = normalize_proj_ty abs.regions.owned proj_ty in
-    let proj : marked_norm_symb_proj = { pm; sv_id; norm_proj_ty } in
+  let register_loan_proj abs pm (proj : symbolic_proj) =
+    let proj : marked_norm_symb_proj =
+      { pm; sv_id = proj.sv_id; norm_proj_ty = proj.proj_ty }
+    in
     RAbsSymbProj.register_mapping false abs_to_loan_projs abs.abs_id proj;
     RSymbProjAbs.register_mapping true loan_proj_to_abs proj abs.abs_id
   in
@@ -160,14 +162,18 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
 
       method! visit_ASymbolic (abs, _) pm proj =
         match proj with
-        | AProjLoans (sv, proj_ty, children) ->
-            sanity_check __FILE__ __LINE__ (children = []) span;
-            register_loan_proj abs pm sv proj_ty
-        | AProjBorrows (sv, proj_ty, children) ->
-            sanity_check __FILE__ __LINE__ (children = []) span;
-            register_borrow_proj abs pm sv proj_ty
-        | AEndedProjLoans (_, children) | AEndedProjBorrows (_, children) ->
-            sanity_check __FILE__ __LINE__ (children = []) span
+        | AProjLoans { proj; consumed; borrows } ->
+            sanity_check __FILE__ __LINE__ (consumed = []) span;
+            sanity_check __FILE__ __LINE__ (borrows = []) span;
+            register_loan_proj abs pm proj
+        | AProjBorrows { proj; loans } ->
+            sanity_check __FILE__ __LINE__ (loans = []) span;
+            register_borrow_proj abs pm proj
+        | AEndedProjLoans { proj = _; consumed; borrows } ->
+            sanity_check __FILE__ __LINE__ (consumed = []) span;
+            sanity_check __FILE__ __LINE__ (borrows = []) span
+        | AEndedProjBorrows { mvalues = _; loans } ->
+            sanity_check __FILE__ __LINE__ (loans = []) span
         | AEmpty -> ()
     end
   in
@@ -478,16 +484,16 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
         | _ -> craise __FILE__ __LINE__ M.span "Unreachable")
     | ASymbolic (pm0, proj0), ASymbolic (pm1, proj1) -> begin
         match (proj0, proj1) with
-        | ( AProjBorrows (sv0, proj_ty0, children0),
-            AProjBorrows (sv1, proj_ty1, children1) ) ->
-            let proj_ty = M.match_rtys ctx0 ctx1 proj_ty0 proj_ty1 in
-            M.match_aproj_borrows ctx0 ctx1 v0.ty pm0 sv0 proj_ty0 children0
-              v1.ty pm1 sv1 proj_ty1 children1 ty proj_ty
-        | ( AProjLoans (sv0, proj_ty0, children0),
-            AProjLoans (sv1, proj_ty1, children1) ) ->
-            let proj_ty = M.match_rtys ctx0 ctx1 proj_ty0 proj_ty1 in
-            M.match_aproj_loans ctx0 ctx1 v0.ty pm0 sv0 proj_ty0 children0 v1.ty
-              pm1 sv1 proj_ty1 children1 ty proj_ty
+        | ( AProjBorrows ({ proj = proj0; _ } as pborrows0),
+            AProjBorrows ({ proj = proj1; _ } as pborrows1) ) ->
+            let proj_ty = M.match_rtys ctx0 ctx1 proj0.proj_ty proj1.proj_ty in
+            M.match_aproj_borrows ctx0 ctx1 v0.ty pm0 pborrows0 v1.ty pm1
+              pborrows1 ty proj_ty
+        | ( AProjLoans ({ proj = proj0; _ } as ploans0),
+            AProjLoans ({ proj = proj1; _ } as ploans1) ) ->
+            let proj_ty = M.match_rtys ctx0 ctx1 proj0.proj_ty proj1.proj_ty in
+            M.match_aproj_loans ctx0 ctx1 v0.ty pm0 ploans0 v1.ty pm1 ploans1 ty
+              proj_ty
         | _ -> craise __FILE__ __LINE__ M.span "Unreachable"
       end
     | _ -> M.match_avalues ctx0 ctx1 v0 v1
@@ -544,8 +550,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
     (* If there is a bottom in one of the two values, return bottom: *)
     if
-      bottom_in_adt_value ctx0.ended_regions adt0
-      || bottom_in_adt_value ctx1.ended_regions adt1
+      bottom_in_adt_value S.span ctx0 adt0
+      || bottom_in_adt_value S.span ctx1 adt1
     then mk_bottom span ty
     else
       (* No borrows, no loans, no bottoms: we can introduce a symbolic value *)
@@ -567,7 +573,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
            { SB bid0, SB bid1, SL {bid2} }
          ]}
       *)
-      let rid = fresh_region_id () in
+      let rid = RegionId.zero in
       let bid2 = fresh_borrow_id () in
 
       (* Update the type of the shared loan to use the fresh region *)
@@ -598,11 +604,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           can_end = true;
           parents = AbstractionId.Set.empty;
           original_parents = [];
-          regions =
-            {
-              owned = RegionId.Set.singleton rid;
-              ancestors = RegionId.Set.empty;
-            };
           avalues;
         }
       in
@@ -681,7 +682,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         sanity_check __FILE__ __LINE__ (bv0 = bv) span;
         (bid0, bv))
       else
-        let rid = fresh_region_id () in
+        let rid = RegionId.zero in
         let nbid = fresh_borrow_id () in
 
         let kind = RMut in
@@ -716,11 +717,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             can_end = true;
             parents = AbstractionId.Set.empty;
             original_parents = [];
-            regions =
-              {
-                owned = RegionId.Set.singleton rid;
-                ancestors = RegionId.Set.empty;
-              };
             avalues;
           }
         in
@@ -736,7 +732,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
            { |MB bid0|, ︙MB bid1︙, ML bid2 }
          ]}
       *)
-      let rid = fresh_region_id () in
+      let rid = RegionId.zero in
       let bid2 = fresh_borrow_id () in
 
       (* Generate a fresh symbolic value for the borrowed value *)
@@ -772,11 +768,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           can_end = true;
           parents = AbstractionId.Set.empty;
           original_parents = [];
-          regions =
-            {
-              owned = RegionId.Set.singleton rid;
-              ancestors = RegionId.Set.empty;
-            };
           avalues;
         }
       in
@@ -838,8 +829,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
          A more general approach would be to introduce a symbolic value
          with some ended regions. *)
       sanity_check __FILE__ __LINE__
-        ((not (symbolic_value_has_ended_regions ctx0.ended_regions sv0))
-        && not (symbolic_value_has_ended_regions ctx1.ended_regions sv1))
+        ((not (symbolic_value_contains_bottom span ctx0 sv0))
+        && not (symbolic_value_contains_bottom span ctx1 sv1))
         span;
       (* If the symbolic values contain regions, we need to introduce abstractions *)
       if ty_has_borrows (Some span) ctx0.type_ctx.type_infos sv0.sv_ty then (
@@ -849,8 +840,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
              s1 : S<'2, '3>
            ]}
 
-           We introduce a fresh symbolic value with fresh regions, as well as
-           one abstraction per region. It looks like so:
+           We introduce a fresh symbolic value, as well as one abstraction per region
+           appearing in the symbolic value. It looks like so:
            {[
              join s0 s1 ~> s2 : S<'a, 'b>,
                A0('a) {
@@ -866,16 +857,19 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
            ]}
         *)
         (* Introduce one region abstraction per region appearing in the symbolic value *)
-        let fresh_regions, proj_ty =
-          ty_refresh_regions (Some span) fresh_region_id sv0.sv_ty
+        let proj_tys =
+          InterpreterBorrowsCore.make_projections_for_erased_regions_in_ty
+            S.span sv0.sv_ty
         in
-        let svj = mk_fresh_symbolic_value span proj_ty in
-        let proj_s0 = mk_aproj_borrows PLeft sv0.sv_id proj_ty in
-        let proj_s1 = mk_aproj_borrows PRight sv1.sv_id proj_ty in
-        let proj_svj = mk_aproj_loans PNone svj.sv_id proj_ty in
-        let avalues = [ proj_s0; proj_s1; proj_svj ] in
+        let svj = mk_fresh_symbolic_value span sv0.sv_ty in
+        let proj_s0 proj_ty = mk_aproj_borrows PLeft sv0.sv_id proj_ty in
+        let proj_s1 proj_ty = mk_aproj_borrows PRight sv1.sv_id proj_ty in
+        let proj_svj proj_ty = mk_aproj_loans PNone svj.sv_id proj_ty in
+        let avalues proj_ty =
+          [ proj_s0 proj_ty; proj_s1 proj_ty; proj_svj proj_ty ]
+        in
         List.iter
-          (fun rid ->
+          (fun proj_ty ->
             let abs =
               {
                 abs_id = fresh_abstraction_id ();
@@ -883,16 +877,11 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
                 can_end = true;
                 parents = AbstractionId.Set.empty;
                 original_parents = [];
-                regions =
-                  {
-                    owned = RegionId.Set.singleton rid;
-                    ancestors = RegionId.Set.empty;
-                  };
-                avalues;
+                avalues = avalues proj_ty;
               }
             in
             push_abs abs)
-          fresh_regions;
+          proj_tys;
         svj)
       else
         (* Otherwise we simply introduce a fresh symbolic value *)
@@ -927,8 +916,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
        value contains bottom) the result of the join is bottom. Otherwise,
        we generate a fresh symbolic value. *)
     if
-      symbolic_value_has_ended_regions ctx0.ended_regions sv
-      || bottom_in_value ctx1.ended_regions v
+      symbolic_value_contains_bottom span ctx0 sv || bottom_in_value span ctx1 v
     then mk_bottom span sv.sv_ty
     else mk_fresh_symbolic_typed_value span sv.sv_ty
 
@@ -987,10 +975,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
   let match_amut_loans _ _ _ _ _ _ _ _ _ _ =
     craise __FILE__ __LINE__ span "Unreachable"
 
-  let match_aproj_borrows _ _ _ _ _ _ _ _ _ _ _ _ _ _ =
+  let match_aproj_borrows _ _ _ _ _ _ _ _ _ _ =
     craise __FILE__ __LINE__ span "Unreachable"
 
-  let match_aproj_loans _ _ _ _ _ _ _ _ _ _ _ _ _ _ =
+  let match_aproj_loans _ _ _ _ _ _ _ _ _ _ =
     craise __FILE__ __LINE__ span "Unreachable"
 
   let match_avalues _ _ _ _ = craise __FILE__ __LINE__ span "Unreachable"
@@ -1079,8 +1067,7 @@ module MakeMoveMatcher (S : MatchMoveState) : PrimMatcher = struct
     (* We're being conservative for now: if any of the two values contains
        a bottom, the join is bottom *)
     if
-      symbolic_value_has_ended_regions ctx0.ended_regions sv
-      || bottom_in_value ctx1.ended_regions v
+      symbolic_value_contains_bottom span ctx0 sv || bottom_in_value span ctx1 v
     then mk_bottom span sv.sv_ty
     else if left then v
     else mk_typed_value_from_symbolic_value sv
@@ -1134,10 +1121,10 @@ module MakeMoveMatcher (S : MatchMoveState) : PrimMatcher = struct
 
   let match_avalues _ _ _ _ = craise __FILE__ __LINE__ span "Unreachable"
 
-  let match_aproj_borrows _ _ _ _ _ _ _ _ _ _ _ _ _ _ =
+  let match_aproj_borrows _ _ _ _ _ _ _ _ _ _ =
     craise __FILE__ __LINE__ span "Unreachable"
 
-  let match_aproj_loans _ _ _ _ _ _ _ _ _ _ _ _ _ _ =
+  let match_aproj_loans _ _ _ _ _ _ _ _ _ _ =
     craise __FILE__ __LINE__ span "Unreachable"
 end
 
@@ -1186,11 +1173,6 @@ struct
         (match_el msg m (Id.Set.elements ks0) (Id.Set.elements ks1))
   end
 
-  module GetSetRid = MkGetSetM (RegionId)
-
-  let match_rid = GetSetRid.match_e "match_rid: " S.rid_map
-  let match_rids = GetSetRid.match_es "match_rids: " S.rid_map
-
   module GetSetBid = MkGetSetM (BorrowId)
 
   let match_blid msg = GetSetBid.match_e msg S.blid_map
@@ -1238,8 +1220,10 @@ struct
       match (r0, r1) with
       | RStatic, RStatic -> r1
       | RVar (Free rid0), RVar (Free rid1) ->
-          let rid = match_rid rid0 rid1 in
-          RVar (Free rid)
+          (* The projection types should have been normalized *)
+          sanity_check __FILE__ __LINE__ (rid0 = RegionId.zero) span;
+          sanity_check __FILE__ __LINE__ (rid1 = RegionId.zero) span;
+          RVar (Free RegionId.zero)
       | _ -> raise (Distinct "match_rtys")
     in
     match_types span ctx0 ctx1 match_distinct_types match_regions ty0 ty1
@@ -1417,27 +1401,41 @@ struct
     let value = ALoan (AMutLoan (PNone, id, av)) in
     { value; ty }
 
-  let match_aproj_borrows (ctx0 : eval_ctx) (ctx1 : eval_ctx) _ty0 pm0 sv_id0
-      proj_ty0 children0 _ty1 pm1 sv_id1 proj_ty1 children1 ty proj_ty =
+  let match_aproj_borrows (ctx0 : eval_ctx) (ctx1 : eval_ctx) _ty0 pm0
+      (proj0 : aproj_borrows) _ty1 pm1 (proj1 : aproj_borrows) ty proj_ty =
     sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
-    sanity_check __FILE__ __LINE__ (children0 = [] && children1 = []) span;
+    let { proj = proj0; loans = loans0 } = proj0 in
+    let { proj = proj1; loans = loans1 } = proj1 in
+    sanity_check __FILE__ __LINE__ (loans0 = [] && loans1 = []) span;
     (* We only want to match the ids of the symbolic values, but in order
        to call [match_symbolic_values] we need to have types... *)
-    let sv0 = { sv_id = sv_id0; sv_ty = proj_ty0 } in
-    let sv1 = { sv_id = sv_id1; sv_ty = proj_ty1 } in
+    let sv0 = { sv_id = proj0.sv_id; sv_ty = proj0.proj_ty } in
+    let sv1 = { sv_id = proj1.sv_id; sv_ty = proj1.proj_ty } in
     let sv = match_symbolic_values ctx0 ctx1 sv0 sv1 in
-    { value = ASymbolic (PNone, AProjBorrows (sv.sv_id, proj_ty, [])); ty }
+    let proj : symbolic_proj = { sv_id = sv.sv_id; proj_ty } in
+    { value = ASymbolic (PNone, AProjBorrows { proj; loans = [] }); ty }
 
-  let match_aproj_loans (ctx0 : eval_ctx) (ctx1 : eval_ctx) _ty0 pm0 sv_id0
-      proj_ty0 children0 _ty1 pm1 sv_id1 proj_ty1 children1 ty proj_ty =
+  let match_aproj_loans (ctx0 : eval_ctx) (ctx1 : eval_ctx) _ty0 pm0
+      (proj0 : aproj_loans) _ty1 pm1 (proj1 : aproj_loans) ty proj_ty =
     sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
-    sanity_check __FILE__ __LINE__ (children0 = [] && children1 = []) span;
+    let { proj = proj0; consumed = consumed0; borrows = borrows0 } : aproj_loans
+        =
+      proj0
+    in
+    let { proj = proj1; consumed = consumed1; borrows = borrows1 } : aproj_loans
+        =
+      proj1
+    in
+    sanity_check __FILE__ __LINE__ (consumed0 = [] && consumed1 = []) span;
+    sanity_check __FILE__ __LINE__ (borrows0 = [] && borrows1 = []) span;
     (* We only want to match the ids of the symbolic values, but in order
        to call [match_symbolic_values] we need to have types... *)
-    let sv0 = { sv_id = sv_id0; sv_ty = proj_ty0 } in
-    let sv1 = { sv_id = sv_id1; sv_ty = proj_ty1 } in
+    let sv0 = { sv_id = proj0.sv_id; sv_ty = proj0.proj_ty } in
+    let sv1 = { sv_id = proj1.sv_id; sv_ty = proj1.proj_ty } in
     let sv = match_symbolic_values ctx0 ctx1 sv0 sv1 in
-    { value = ASymbolic (PNone, AProjLoans (sv.sv_id, proj_ty, [])); ty }
+    let proj : symbolic_proj = { sv_id = sv.sv_id; proj_ty } in
+    let proj = AProjLoans { proj; consumed = []; borrows = [] } in
+    { value = ASymbolic (PNone, proj); ty }
 
   let match_avalues (ctx0 : eval_ctx) (ctx1 : eval_ctx) v0 v1 =
     log#ldebug
@@ -1468,10 +1466,6 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
       ref
         (Id.InjSubst.of_list (List.map (fun x -> (x, x)) (Id.Set.elements ids)))
   end in
-  let rid_map =
-    let module IdMap = IdMap (RegionId) in
-    IdMap.mk_map_ref fixed_ids.rids
-  in
   let blid_map =
     let module IdMap = IdMap (BorrowId) in
     IdMap.mk_map_ref fixed_ids.blids
@@ -1503,7 +1497,6 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
   let module S : MatchCheckEquivState = struct
     let span = span
     let check_equiv = check_equiv
-    let rid_map = rid_map
     let blid_map = blid_map
     let borrow_id_map = borrow_id_map
     let loan_id_map = loan_id_map
@@ -1520,12 +1513,11 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
 
   (* Small utility: check that ids are fixed/mapped to themselves *)
   let ids_are_fixed (ids : ids_sets) : bool =
-    let { aids; blids = _; borrow_ids; loan_ids; dids; rids; sids } = ids in
+    let { aids; blids = _; borrow_ids; loan_ids; dids; sids } = ids in
     AbstractionId.Set.subset aids fixed_ids.aids
     && BorrowId.Set.subset borrow_ids fixed_ids.borrow_ids
     && BorrowId.Set.subset loan_ids fixed_ids.loan_ids
     && DummyVarId.Set.subset dids fixed_ids.dids
-    && RegionId.Set.subset rids fixed_ids.rids
     && SymbolicValueId.Set.subset sids fixed_ids.sids
   in
 
@@ -1537,7 +1529,6 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
       can_end = can_end0;
       parents = parents0;
       original_parents = original_parents0;
-      regions = { owned = regions0; ancestors = ancestors_regions0 };
       avalues = avalues0;
     } =
       abs0
@@ -1549,7 +1540,6 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
       can_end = can_end1;
       parents = parents1;
       original_parents = original_parents1;
-      regions = { owned = regions1; ancestors = ancestors_regions1 };
       avalues = avalues1;
     } =
       abs1
@@ -1560,8 +1550,6 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
       raise (Distinct "match_abstractions: kind or can_end");
     let _ = CEM.match_aids parents0 parents1 in
     let _ = CEM.match_aidl original_parents0 original_parents1 in
-    let _ = CEM.match_rids regions0 regions1 in
-    let _ = CEM.match_rids ancestors_regions0 ancestors_regions1 in
 
     log#ldebug (lazy "match_abstractions: matching values");
     let _ =
@@ -1582,9 +1570,7 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
     log#ldebug
       (lazy
         ("match_ctxs: match_envs:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
-       ^ "\n\n- rid_map: "
-        ^ RegionId.InjSubst.show_t !rid_map
-        ^ "\n- blid_map: "
+       ^ "\n" ^ "\n- blid_map: "
         ^ BorrowId.InjSubst.show_t !blid_map
         ^ "\n- sid_map: "
         ^ SymbolicValueId.InjSubst.show_t !sid_map
@@ -1670,7 +1656,6 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
         blid_map = !blid_map;
         borrow_id_map = !borrow_id_map;
         loan_id_map = !loan_id_map;
-        rid_map = !rid_map;
         sid_map = !sid_map;
         sid_to_value_map = !sid_to_value_map;
       }
@@ -2064,10 +2049,10 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
       method! visit_aproj env p =
         match p with
         | AProjLoans _ -> super#visit_aproj env p
-        | AProjBorrows (sv_id, proj_ty, children) ->
-            sanity_check __FILE__ __LINE__ (children = []) span;
+        | AProjBorrows { proj = { sv_id; proj_ty }; loans } ->
+            sanity_check __FILE__ __LINE__ (loans = []) span;
             let sv_id = register_symbolic_value_id sv_id in
-            AProjBorrows (sv_id, proj_ty, children)
+            AProjBorrows { proj = { sv_id; proj_ty }; loans }
         | _ -> super#visit_aproj env p
     end
   in
@@ -2133,8 +2118,6 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
 
     let fresh_id = fresh_region_id
   end) in
-  let get_region_id = RegionIdGen.get_id in
-
   let module AbstractionIdGen = MkGenerator (struct
     include AbstractionId.Map
 
@@ -2143,7 +2126,6 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
     let fresh_id = fresh_abstraction_id
   end) in
   let get_abs_id = AbstractionIdGen.get_id in
-
   let visit_src =
     object (self)
       inherit [_] map_eval_ctx as super
@@ -2200,9 +2182,10 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
 
       method! visit_aproj env proj =
         match proj with
-        | AProjLoans (sv_id, proj_ty, children) ->
+        | AProjLoans { proj = { sv_id; proj_ty }; consumed; borrows } ->
             (* The logic is similar to the concrete borrows/loans cases above *)
-            sanity_check __FILE__ __LINE__ (children = []) span;
+            sanity_check __FILE__ __LINE__ (consumed = []) span;
+            sanity_check __FILE__ __LINE__ (borrows = []) span;
             let sv_id =
               begin
                 match
@@ -2219,9 +2202,9 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
               end
             in
             let proj_ty = self#visit_ty env proj_ty in
-            AProjLoans (sv_id, proj_ty, children)
-        | AProjBorrows (sv_id, proj_ty, children) ->
-            sanity_check __FILE__ __LINE__ (children = []) span;
+            AProjLoans { proj = { sv_id; proj_ty }; consumed; borrows }
+        | AProjBorrows { proj = { sv_id; proj_ty }; loans } ->
+            sanity_check __FILE__ __LINE__ (loans = []) span;
             (* Lookup the loan corresponding to this borrow *)
             let src_lid =
               SymbolicValueId.InjSubst.find sv_id
@@ -2241,7 +2224,7 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
               end
             in
             let proj_ty = self#visit_ty env proj_ty in
-            AProjBorrows (sv_id, proj_ty, children)
+            AProjBorrows { proj = { sv_id; proj_ty }; loans }
         | AEndedProjBorrows _ | AEndedProjLoans _ | AEmpty ->
             super#visit_aproj env proj
 
@@ -2249,21 +2232,6 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
         craise_opt_span __FILE__ __LINE__ None
           "Internal error: region ids should not be visited directly; the \
            visitor should catch cases that contain region ids earlier."
-
-      method! visit_RVar _ var =
-        match var with
-        | Free id ->
-            (* If the bound region is free, then it is a region owned
-               by an abstraction, so we do the same as for the case
-               [abs_region_id]. *)
-            RVar (Free (get_region_id id))
-        | Bound _ -> RVar var
-
-      method! visit_abs_regions _ regions =
-        let { owned; ancestors } = regions in
-        let owned = RegionId.Set.map get_region_id owned in
-        let ancestors = RegionId.Set.map get_region_id ancestors in
-        { owned; ancestors }
 
       (** We also need to change the abstraction kind *)
       method! visit_abs env abs =
