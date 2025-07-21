@@ -45,7 +45,7 @@ val create_push_abstractions_from_abs_region_groups :
   (RegionGroupId.id -> abs_kind) ->
   abs_region_group list ->
   (RegionGroupId.id -> bool) ->
-  (region_id list -> abs -> eval_ctx -> eval_ctx * typed_avalue list) ->
+  (region_id_set -> eval_ctx -> eval_ctx * typed_avalue list) ->
   eval_ctx ->
   eval_ctx
 
