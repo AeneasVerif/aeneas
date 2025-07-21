@@ -554,10 +554,6 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
        so the cost of maintenance should be pretty low.
      *)
     method! visit_typed_avalue info atv =
-      (* Check that the outlive types don't intersect the owned types *)
-      sanity_check __FILE__ __LINE__
-        (not (norm_projections_intersect span atv.ty atv.outlive_ty))
-        span;
       (* Check the current pair (value, type) *)
       (match (atv.value, atv.ty) with
       (* ADT case *)

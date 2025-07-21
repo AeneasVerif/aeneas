@@ -817,18 +817,48 @@ let update_intersecting_aproj_borrows (span : Meta.span)
           "Found unexpected intersecting proj_borrows"
   in
   let check_proj_borrows is_shared (proj' : symbolic_proj) : bool * bool =
-    let check_intersects proj_ty =
-      proj_borrows_intersects_proj_loans span
-        (proj'.sv_id, proj'.proj_ty)
-        (proj.sv_id, proj_ty)
-    in
-    let intersects_owned = include_owned && check_intersects proj.proj_ty in
-    let intersects_outlive =
-      include_outlive && check_intersects proj.outlive_proj_ty
-    in
-    let intersects = intersects_owned || intersects_outlive in
-    if intersects then if is_shared then add_shared () else set_non_shared ();
-    (intersects_owned, intersects_outlive)
+    if proj.sv_id = proj'.sv_id then (
+      let intersects_owned =
+        norm_projections_intersect span proj'.proj_ty proj.proj_ty
+      in
+
+      (* Sanity check: if the projectors use the same symbolic id and the projections
+         do not intersect, then the loan projector must intersect the outlive
+         projection type of the borrow projector.
+
+         For example:
+          1. Ex.: we are ending [abs1] below:
+          {[
+            abs0 {'a} { AProjLoans (s0 : &'a mut T) [] }
+            abs1 {'b} { AProjBorrows (s0 : &'b mut T) }
+          ]}
+          we can end the loan projector in [abs0].
+
+          2. Ex.: we are ending [abs2] below, and considering [abs1]: we have to
+          project the inner borrows inside of [abs1]. However we do not project
+          anything into [abs0] (see the case above).
+          {[
+            abs0 {'a} { AProjLoans (s0 : &'a mut &'_ mut T) [] }
+            abs1 {'b} { AProjLoans (s0 : &'_ mut &'b mut T) [] }
+            abs2 {'c} { AProjBorrows (s0 : &'c mut &'_ mut T) }
+            abs3 {'d} { AProjBorrows (s0 : &'_ mut &'d mut T) }
+          ]}
+      *)
+      (if !Config.sanity_checks && not intersects_owned then
+         let outlive_proj_ty =
+           TypesAnalysis.compute_outlive_proj_ty (Some span)
+             ctx.type_ctx.type_decls proj.proj_ty
+         in
+         sanity_check __FILE__ __LINE__
+           (norm_projections_intersect span proj'.proj_ty outlive_proj_ty)
+           span);
+
+      let intersects_outlive = include_outlive && not intersects_owned in
+      let intersects_owned = include_owned && intersects_owned in
+      let intersects = intersects_owned || intersects_outlive in
+      if intersects then if is_shared then add_shared () else set_non_shared ();
+      (intersects_owned, intersects_outlive))
+    else (false, false)
   in
   (* The visitor *)
   let obj =
@@ -977,19 +1007,29 @@ let update_intersecting_aproj_loans (span : Meta.span)
             super#visit_aproj abs sproj
         | AProjLoans aproj_loans ->
             let abs = Option.get abs in
-            if proj.sv_id = aproj_loans.proj.sv_id then
+            if proj.sv_id = aproj_loans.proj.sv_id then (
               let owned =
-                include_owned
-                && norm_projections_intersect span proj.proj_ty
-                     aproj_loans.proj.proj_ty
+                norm_projections_intersect span proj.proj_ty
+                  aproj_loans.proj.proj_ty
               in
-              let outlive =
-                include_outlive
-                && norm_projections_intersect span proj.outlive_proj_ty
-                     aproj_loans.proj.proj_ty
-              in
-              if owned || outlive then update ~owned ~outlive abs aproj_loans
-              else super#visit_aproj (Some abs) sproj
+
+              (* Sanity check: if the symbolic ids are the same and the projection
+                 types don't intersect, then the borrow projection must intersect
+                 the outlive loan projection *)
+              (if !Config.sanity_checks && not owned then
+                 let outlive_proj_ty =
+                   TypesAnalysis.compute_outlive_proj_ty (Some span)
+                     ctx.type_ctx.type_decls proj.proj_ty
+                 in
+                 sanity_check __FILE__ __LINE__
+                   (norm_projections_intersect span outlive_proj_ty
+                      aproj_loans.proj.proj_ty)
+                   span);
+
+              let outlive = include_outlive && not owned in
+              let owned = include_owned && owned in
+
+              update ~owned ~outlive abs aproj_loans)
             else super#visit_aproj (Some abs) sproj
     end
   in

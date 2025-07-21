@@ -129,38 +129,34 @@ let mk_fresh_symbolic_typed_value_from_no_regions_ty (span : Meta.span)
 
     TODO: update to handle 'static *)
 let mk_aproj_loans_value_from_symbolic_value (svalue : symbolic_value)
-    (proj_ty : ty) (outlive_proj_ty : ty) : typed_avalue =
+    (proj_ty : ty) : typed_avalue =
   if ty_has_free_regions proj_ty then
     let av =
       ASymbolic
         ( PNone,
           AProjLoans
             {
-              proj = { sv_id = svalue.sv_id; proj_ty; outlive_proj_ty };
+              proj = { sv_id = svalue.sv_id; proj_ty };
               consumed = [];
               borrows = [];
             } )
     in
-    let av : typed_avalue =
-      { value = av; ty = proj_ty; outlive_ty = outlive_proj_ty }
-    in
+    let av : typed_avalue = { value = av; ty = proj_ty } in
     av
   else
     {
       value = AIgnored (Some (mk_typed_value_from_symbolic_value svalue));
       ty = svalue.sv_ty;
-      outlive_ty = outlive_proj_ty;
     }
 
 (** Create a borrows projector from a symbolic value.
 
     Note that the projection type should have been normalized. *)
 let mk_aproj_borrows_from_symbolic_value (span : Meta.span)
-    (svalue : symbolic_value) (proj_ty : ty) (outlive_proj_ty : ty) : aproj =
+    (svalue : symbolic_value) (proj_ty : ty) : aproj =
   sanity_check __FILE__ __LINE__ (ty_is_rty proj_ty) span;
   if ty_has_free_regions proj_ty then
-    AProjBorrows
-      { proj = { sv_id = svalue.sv_id; proj_ty; outlive_proj_ty }; loans = [] }
+    AProjBorrows { proj = { sv_id = svalue.sv_id; proj_ty }; loans = [] }
   else AEmpty
 
 (** TODO: move *)

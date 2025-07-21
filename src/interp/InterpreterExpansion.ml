@@ -103,7 +103,7 @@ let apply_symbolic_expansion_to_target_avalues (config : config)
               (* Apply the projector *)
               let projected_value =
                 apply_proj_loans_on_symbolic_expansion span expansion
-                  proj.proj_ty proj.outlive_proj_ty ctx
+                  proj.proj_ty ctx
               in
               (* Replace *)
               projected_value.value)
@@ -131,7 +131,7 @@ let apply_symbolic_expansion_to_target_avalues (config : config)
               (* Apply the projector *)
               let projected_value =
                 apply_proj_borrows span check_symbolic_no_ended ctx
-                  fresh_reborrow expansion proj.proj_ty proj.outlive_proj_ty
+                  fresh_reborrow expansion proj.proj_ty
               in
               (* Replace *)
               projected_value.value
@@ -316,18 +316,11 @@ let expand_symbolic_value_shared_borrow (config : config) (span : Meta.span)
      [None] otherwise *)
   let reborrow_ashared (proj : symbolic_proj) : abstract_shared_borrows option =
     if proj.sv_id = original_sv.sv_id then
-      match (proj.proj_ty, proj.outlive_proj_ty) with
-      | TRef (r, ref_ty, RShared), TRef (r', ref_ty', RShared) ->
-          sanity_check __FILE__ __LINE__ (region_is_erased r') span;
-
+      match proj.proj_ty with
+      | TRef (r, ref_ty, RShared) ->
           (* Projector over the shared value *)
           let shared_asb =
-            AsbProjReborrows
-              {
-                sv_id = shared_sv.sv_id;
-                proj_ty = ref_ty;
-                outlive_proj_ty = ref_ty';
-              }
+            AsbProjReborrows { sv_id = shared_sv.sv_id; proj_ty = ref_ty }
           in
           (* Check if the region is in the set of projected regions *)
           if region_is_free r then

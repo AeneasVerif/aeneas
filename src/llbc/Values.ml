@@ -297,38 +297,6 @@ and abstract_shared_borrows = abstract_shared_borrow list
 and symbolic_proj = {
   sv_id : symbolic_value_id;
   proj_ty : ty;  (** The normalized projection type *)
-  outlive_proj_ty : ty;
-      (** The normalized type to project the regions which outlive the current
-          region abstraction.
-
-          Ex.: ['b] outlives ['a] in [&'a mut &'b mut T].
-
-          We need the [outlive_proj_ty] when ending borrow projectors, so that
-          we know how to update loan projectors. We need to pay attention to the
-          following:
-          - if the projection over the symbolic value intersects the region
-            abstraction, we need to consume it.
-          - also, if the *outlive* projection over the symbolic value intersects
-            the region abstraction, we need to consume and project over it as
-            well. The reason is that there may be inner borrows that we need to
-            insert inside the region abstraction.
-
-          1. Ex.: we are ending [abs1] below:
-          {[
-            abs0 {'a} { AProjLoans (s0 : &'a mut T) [] }
-            abs1 {'b} { AProjBorrows (s0 : &'b mut T) }
-          ]}
-          we can end the loan projector in [abs0].
-
-          2. Ex.: we are ending [abs2] below, and considering [abs1]: we have to
-          project the inner borrows inside of [abs1]. However we do not project
-          anything into [abs0] (see the case above).
-          {[
-            abs0 {'a} { AProjLoans (s0 : &'a mut &'_ mut T) [] }
-            abs1 {'b} { AProjLoans (s0 : &'_ mut &'b mut T) [] }
-            abs2 {'c} { AProjBorrows (s0 : &'c mut &'_ mut T) }
-            abs3 {'d} { AProjBorrows (s0 : &'_ mut &'d mut T) }
-          ]} *)
 }
 
 and aproj =
@@ -809,9 +777,6 @@ and typed_avalue = {
       (** This should be a type with *normalized* regions, that is: the type
           should use free regions (with id 0) for the regions belonging to the
           abstraction, and erased regions for the others. *)
-  outlive_ty : ty;
-      (** This is the normalized projection type for the *outlive* regions. See
-          [symbolic_proj]. *)
 }
 [@@deriving
   show,

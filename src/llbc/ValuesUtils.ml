@@ -21,23 +21,23 @@ let mk_typed_value (span : Meta.span) (ty : ty) (value : value) : typed_value =
   sanity_check __FILE__ __LINE__ (ty_is_ety ty) span;
   { value; ty }
 
-let mk_typed_avalue (span : Meta.span) (ty : ty) (outlive_ty : ty)
-    (value : avalue) : typed_avalue =
+let mk_typed_avalue (span : Meta.span) (ty : ty) (value : avalue) : typed_avalue
+    =
   sanity_check __FILE__ __LINE__ (ty_is_rty ty) span;
-  { value; ty; outlive_ty }
+  { value; ty }
 
 let mk_bottom (span : Meta.span) (ty : ty) : typed_value =
   sanity_check __FILE__ __LINE__ (ty_is_ety ty) span;
   { value = VBottom; ty }
 
-let mk_abottom (span : Meta.span) (ty : ty) (outlive_ty : ty) : typed_avalue =
+let mk_abottom (span : Meta.span) (ty : ty) : typed_avalue =
   sanity_check __FILE__ __LINE__ (ty_is_rty ty) span;
-  { value = ABottom; ty; outlive_ty }
+  { value = ABottom; ty }
 
-let mk_aignored (span : Meta.span) (ty : ty) (outlive_ty : ty)
-    (v : typed_value option) : typed_avalue =
+let mk_aignored (span : Meta.span) (ty : ty) (v : typed_value option) :
+    typed_avalue =
   sanity_check __FILE__ __LINE__ (ty_is_rty ty) span;
-  { value = AIgnored v; ty; outlive_ty }
+  { value = AIgnored v; ty }
 
 let value_as_symbolic (span : Meta.span) (v : value) : symbolic_value =
   match v with
@@ -92,31 +92,22 @@ let is_unit (v : typed_value) : bool =
   | _ -> false
 
 let mk_aproj_borrows (pm : proj_marker) (sv_id : symbolic_value_id)
-    (proj_ty : ty) (outlive_proj_ty : ty) =
+    (proj_ty : ty) =
   {
     value =
-      ASymbolic
-        ( pm,
-          AProjBorrows
-            { proj = { sv_id; proj_ty; outlive_proj_ty }; loans = [] } );
+      ASymbolic (pm, AProjBorrows { proj = { sv_id; proj_ty }; loans = [] });
     ty = proj_ty;
-    outlive_ty = outlive_proj_ty;
   }
 
 let mk_aproj_loans (pm : proj_marker) (sv_id : symbolic_value_id) (proj_ty : ty)
-    (outlive_proj_ty : ty) =
+    =
   {
     value =
       ASymbolic
         ( pm,
-          AProjLoans
-            {
-              proj = { sv_id; proj_ty; outlive_proj_ty };
-              consumed = [];
-              borrows = [];
-            } );
+          AProjLoans { proj = { sv_id; proj_ty }; consumed = []; borrows = [] }
+        );
     ty = proj_ty;
-    outlive_ty = outlive_proj_ty;
   }
 
 (** Check if a value contains a *concrete* borrow (i.e., a [Borrow] value - we
