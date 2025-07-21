@@ -171,6 +171,13 @@ type mvalue = typed_value [@@deriving show, ord]
 type msymbolic_value = symbolic_value [@@deriving show, ord]
 
 type msymbolic_value_id = symbolic_value_id [@@deriving show, ord]
+
+type mconsumed_symb = { sv_id : symbolic_value_id; proj_ty : proj_ty }
+[@@deriving show, ord]
+
+type mgiven_back_symb = { sv_id : symbolic_value_id; proj_ty : proj_ty }
+[@@deriving show, ord]
+
 type abstraction_id = AbstractionId.id [@@deriving show, ord]
 type abstraction_id_set = AbstractionId.Set.t [@@deriving show, ord]
 
@@ -197,6 +204,11 @@ class ['self] iter_typed_avalue_base =
       fun _ _ -> ()
 
     method visit_msymbolic_value_id : 'env -> msymbolic_value_id -> unit =
+      fun _ _ -> ()
+
+    method visit_mconsumed_symb : 'env -> mconsumed_symb -> unit = fun _ _ -> ()
+
+    method visit_mgiven_back_symb : 'env -> mgiven_back_symb -> unit =
       fun _ _ -> ()
 
     method visit_region_id_set : 'env -> region_id_set -> unit = fun _ _ -> ()
@@ -226,6 +238,13 @@ class ['self] map_typed_avalue_base =
 
     method visit_msymbolic_value_id :
         'env -> msymbolic_value_id -> msymbolic_value_id =
+      fun _ m -> m
+
+    method visit_mconsumed_symb : 'env -> mconsumed_symb -> mconsumed_symb =
+      fun _ m -> m
+
+    method visit_mgiven_back_symb : 'env -> mgiven_back_symb -> mgiven_back_symb
+        =
       fun _ m -> m
 
     method visit_region_id_set : 'env -> region_id_set -> region_id_set =
@@ -271,6 +290,10 @@ type abstract_shared_borrow =
 (** A set of abstract shared borrows *)
 and abstract_shared_borrows = abstract_shared_borrow list
 
+(** Remark: the projection types inside the [symbolic_proj] are redundant with
+    the types contained in the typed avalues they belong to. We duplicate those
+    types because in practice it is a lot more convenient to also have them
+    here. *)
 and symbolic_proj = {
   sv_id : symbolic_value_id;
   proj_ty : ty;  (** The normalized projection type *)
@@ -281,25 +304,23 @@ and symbolic_proj = {
           Ex.: ['b] outlives ['a] in [&'a mut &'b mut T].
 
           We need the [outlive_proj_ty] when ending borrow projectors, so that
-          we know how to update loan projectors. We need to handle two cases:
+          we know how to update loan projectors. We need to pay attention to the
+          following:
+          - if the projection over the symbolic value intersects the region
+            abstraction, we need to consume it.
+          - also, if the *outlive* projection over the symbolic value intersects
+            the region abstraction, we need to consume and project over it as
+            well. The reason is that there may be inner borrows that we need to
+            insert inside the region abstraction.
 
-          1. If the ended regions of the borrow projector intersect with a loan
-          projector we can end the loan as there is nothing left to track
-          anymore.
-
-          Ex.: we are ending [abs1] below:
+          1. Ex.: we are ending [abs1] below:
           {[
             abs0 {'a} { AProjLoans (s0 : &'a mut T) [] }
             abs1 {'b} { AProjBorrows (s0 : &'b mut T) }
           ]}
           we can end the loan projector in [abs0].
 
-          2. If, when ending a borrow projector, the [outlive_proj_ty] of this
-          borrow intersects a loan projector, we need to update this loan so
-          that it consumes the (projection of the) borrows given back by ending
-          the borrow projector.
-
-          Ex.: we are ending [abs2] below, and considering [abs1]: we have to
+          2. Ex.: we are ending [abs2] below, and considering [abs1]: we have to
           project the inner borrows inside of [abs1]. However we do not project
           anything into [abs0] (see the case above).
           {[
@@ -311,81 +332,116 @@ and symbolic_proj = {
 }
 
 and aproj =
-  | AProjLoans of symbolic_proj * (msymbolic_value_id * aproj) list
-      (** A projector of loans over a symbolic value.
+  | AProjLoans of aproj_loans
+  | AProjBorrows of aproj_borrows
+  | AEndedProjLoans of aended_proj_loans
+  | AEndedProjBorrows of aended_proj_borrows
+  | AEmpty  (** Nothing to project (because there are no borrows, etc.) *)
 
-          Whenever we call a function, we introduce a symbolic value for the
-          returned value. We insert projectors of loans over this symbolic value
-          in the abstractions introduced by this function call: those projectors
-          allow to insert the proper loans in the various abstractions whenever
-          symbolic borrows get expanded.
+(** A projector of loans over a symbolic value.
 
-          The borrows of a symbolic value may be spread between different
-          abstractions, meaning that *one* projector of loans might receive
-          *several* (symbolic) given back values.
+    Whenever we call a function, we introduce a symbolic value for the returned
+    value. We insert projectors of loans over this symbolic value in the
+    abstractions introduced by this function call: those projectors allow to
+    insert the proper loans in the various abstractions whenever symbolic
+    borrows get expanded.
 
-          This is the case in the following example:
-          {[
-            fn f<'a> (...) -> (&'a mut u32, &'a mut u32);
-            fn g<'b, 'c>(p : (&'b mut u32, &'c mut u32));
+    The borrows of a symbolic value may be spread between different
+    abstractions, meaning that *one* projector of loans might receive *several*
+    (symbolic) given back values.
 
-            let p = f(...);
-            g(move p);
+    This is the case in the following example:
+    {[
+      fn f<'a> (...) -> (&'a mut u32, &'a mut u32);
+      fn g<'b, 'c>(p : (&'b mut u32, &'c mut u32));
 
-            // Symbolic context after the call to g:
-            // abs'a {'a} { proj_loans   [s@0 <: (&'a mut u32, &'a mut u32)] }
-            //
-            // abs'b {'b} { proj_borrows (s@0 <: (&'b mut u32, &'c mut u32)) }
-            // abs'c {'c} { proj_borrows (s@0 <: (&'b mut u32, &'c mut u32)) }
-          ]}
+      let p = f(...);
+      g(move p);
 
-          Upon evaluating the call to [f], we introduce a symbolic value [s@0]
-          and a projector of loans (projector loans from the region 'c). This
-          projector will later receive two given back values: one for 'a and one
-          for 'b.
+      // Symbolic context after the call to g:
+      // abs'a {'a} { proj_loans   [s@0 <: (&'a mut u32, &'a mut u32)] }
+      //
+      // abs'b {'b} { proj_borrows (s@0 <: (&'b mut u32, &'c mut u32)) }
+      // abs'c {'c} { proj_borrows (s@0 <: (&'b mut u32, &'c mut u32)) }
+    ]}
 
-          We accumulate those values in the list of projections (note that the
-          meta value stores the value which was given back).
+    Upon evaluating the call to [f], we introduce a symbolic value [s@0] and a
+    projector of loans (projector loans from the region 'c). This projector will
+    later receive two given back values: one for 'a and one for 'b.
 
-          We can later end the projector of loans if [s@0] is not referenced
-          anywhere in the context below a projector of borrows which intersects
-          this projector of loans. *)
-  | AProjBorrows of symbolic_proj * (msymbolic_value_id * aproj) list
-      (** Note that an AProjBorrows only operates on a value which is not below
-          a shared loan: under a shared loan, we use {!abstract_shared_borrow}.
+    We accumulate those values in the list of projections (note that the meta
+    value stores the value which was given back).
 
-          Also note that once given to a borrow projection, a symbolic value
-          can't get updated/expanded: this means that we don't need to save any
-          meta-value here.
+    We can later end the projector of loans if [s@0] is not referenced anywhere
+    in the context below a projector of borrows which intersects this projector
+    of loans. *)
+and aproj_loans = {
+  proj : symbolic_proj;
+  consumed : (mconsumed_symb * aproj) list;
+      (** The values we consumed because part of the loans in this loan
+          projector were ended. For the reason why there is a list, see the
+          explanations below. Note that because ending the loan may require
+          ending several borrow projectors (and consuming their given back
+          values) we accumulate the consumed values here, and turn the
+          [AProjLoans] into an [AEndedProjLoans] only when there are no
+          intersecting borrow projectors left in the environment. *)
+  borrows : (mconsumed_symb * aproj) list;
+      (** The additional borrow projectors we had to introduce because some
+          ancestor region ended *)
+}
 
-          Finally, we have the same problem as with loans, that is we may need
-          to reproject loans coming from several abstractions. Consider for
-          instance what happens if we end abs1 and abs2 below: the borrow
-          projector inside of abs0 will receive parts of their given back
-          symbolic values:
-          {[
-            ...
-            abs0 {'c} { proj_borrows (s@0 : (&'a mut &'c mut u32, &'b mut &'c mut u32)) }
-            ...
+(** Note that an AProjBorrows only operates on a value which is not below a
+    shared loan: under a shared loan, we use {!abstract_shared_borrow}.
 
-            abs1 {'a} { proj_loans (&'a mut &'c mut u32, &'b mut &'c mut u32)) }
-            abs2 {'b} { proj_loans (&'a mut &'c mut u32, &'b mut &'c mut u32)) }
-            ...
-          ]} *)
-  | AEndedProjLoans of msymbolic_value_id * (msymbolic_value_id * aproj) list
-      (** An ended projector of loans over a symbolic value.
+    Also note that once given to a borrow projection, a symbolic value can't get
+    updated/expanded: this means that we don't need to save any meta-value here.
 
-          See the explanations for {!AProjLoans}
+    TODO: the explanations below are wrong.
 
-          Note that we keep the original symbolic value as a meta-value. *)
-  | AEndedProjBorrows of
-      ended_proj_borrow_meta * (msymbolic_value_id * aproj) list
-      (** The only purpose of {!AEndedProjBorrows} is to store, for synthesis
-          purposes:
+    Finally, we have the same problem as with loans, that is we may need to
+    reproject loans coming from several abstractions. Consider for instance what
+    happens if we end abs1 and abs2 below: the borrow projector inside of abs0
+    will receive parts of their given back symbolic values:
+    {[
+      ...
+      abs0 {'c} { proj_borrows (s@0 : (&'a mut &'c mut u32, &'b mut &'c mut u32)) }
+      ...
+
+      abs1 {'a} { proj_loans (&'a mut &'c mut u32, &'b mut &'c mut u32)) }
+      abs2 {'b} { proj_loans (&'a mut &'c mut u32, &'b mut &'c mut u32)) }
+      ...
+    ]} *)
+and aproj_borrows = {
+  proj : symbolic_proj;
+  loans : (mconsumed_symb * aproj) list;
+      (** When an ancestor region ends, we may have to project the loans
+          corresponding to its given back values. We store them here. *)
+}
+
+(** An ended projector of loans over a symbolic value.
+
+    See the explanations for {!AProjLoans} *)
+and aended_proj_loans = {
+  proj : msymbolic_value_id;
+      (** The id of the original symbolic value, that we preserve as a
+          meta-value *)
+  consumed : (mconsumed_symb * aproj) list;
+      (** The values we consumed because part of the loans in this loan
+          projector were ended (for the reason why there is a list, see the
+          explanations below). *)
+  borrows : (mconsumed_symb * aproj) list;
+      (** The additional borrow projectors we had to introduce because some
+          ancestor region ended *)
+}
+
+and aended_proj_borrows = {
+  mvalues : ended_proj_borrow_meta;
+      (** This stores, for synthesis purposes:
           - the symbolic value which was consumed upon creating the projection
           - the symbolic value which was generated and given back upon ending
             the borrows *)
-  | AEmpty  (** Nothing to project (because there are no borrows, etc.) *)
+  loans : (mconsumed_symb * aproj) list;
+}
 
 (** Abstraction values are used inside of abstractions to properly model
     borrowing relations introduced by function calls.
@@ -517,7 +573,7 @@ and aloan_content =
           back values when the loan ends. We remember the shared value because
           it now behaves as a "regular" value (which might contain borrows we
           need to keep track of...). *)
-  | AIgnoredMutLoan of loan_id option * ty * typed_avalue
+  | AIgnoredMutLoan of loan_id option * typed_avalue
       (** An ignored mutable loan.
 
           We need to keep track of ignored mutable loans, because we may have to
@@ -529,9 +585,6 @@ and aloan_content =
 
           Note that we need to do so only for borrows consumed by parent
           abstractions, hence the optional loan id.
-
-          Remark: the projection type is the outlive projection type of the
-          referenced value (see [symbolic_proj]).
 
           Example: ========
           {[
@@ -621,7 +674,7 @@ and aborrow_content =
             > px -> ⊥
             > abs0 { a_shared_borrow l0 _ }
           ]} *)
-  | AIgnoredMutBorrow of borrow_id option * ty * typed_avalue
+  | AIgnoredMutBorrow of borrow_id option * typed_avalue
       (** An ignored mutable borrow.
 
           We need to keep track of ignored mut borrows because when ending such
@@ -634,9 +687,6 @@ and aborrow_content =
           Rem.: we don't have an equivalent for shared borrows because if we
           ignore a shared borrow we don't need to keep track it (we directly use
           {!AProjSharedBorrow} to project the shared value).
-
-          Remark: the projection type is the outlive projection type of the
-          referenced value (see [symbolic_proj]).
 
           TODO: the explanations below are obsolete
 
@@ -759,6 +809,9 @@ and typed_avalue = {
       (** This should be a type with *normalized* regions, that is: the type
           should use free regions (with id 0) for the regions belonging to the
           abstraction, and erased regions for the others. *)
+  outlive_ty : ty;
+      (** This is the normalized projection type for the *outlive* regions. See
+          [symbolic_proj]. *)
 }
 [@@deriving
   show,
@@ -770,6 +823,7 @@ and typed_avalue = {
       ancestors = [ "iter_typed_avalue_base" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
+      monomorphic = [ "env" ] (* We need this to allows duplicate field names *);
     },
   visitors
     {
@@ -778,6 +832,7 @@ and typed_avalue = {
       ancestors = [ "map_typed_avalue_base" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
+      monomorphic = [ "env" ] (* We need this to allows duplicate field names *);
     }]
 
 (** TODO: make those variants of [abs_kind] *)

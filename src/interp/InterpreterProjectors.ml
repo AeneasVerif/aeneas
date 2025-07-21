@@ -105,7 +105,7 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
     typed_avalue =
   (* Project - if there are no regions from the abstraction in the type, return [_] *)
   if not (ty_has_free_regions proj_ty) then
-    { value = AIgnored (Some v); ty = proj_ty }
+    { value = AIgnored (Some v); ty = proj_ty; outlive_ty = outlive_proj_ty }
   else
     let value : avalue =
       match (v.value, proj_ty, outlive_proj_ty) with
@@ -189,7 +189,7 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
                   (* We need to remember the borrow, even though we ignore it *)
                   let opt_bid = Some bid in
                   (* Return *)
-                  AIgnoredMutBorrow (opt_bid, ref_ty', bv)
+                  AIgnoredMutBorrow (opt_bid, bv)
               | VSharedBorrow bid, RShared ->
                   (* Lookup the shared value *)
                   let ek = ek_all in
@@ -219,8 +219,11 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
               span;
           ASymbolic
             ( PNone,
-              AProjBorrows ({ sv_id = s.sv_id; proj_ty; outlive_proj_ty }, [])
-            )
+              AProjBorrows
+                {
+                  proj = { sv_id = s.sv_id; proj_ty; outlive_proj_ty };
+                  loans = [];
+                } )
       | _ ->
           log#ltrace
             (lazy
@@ -229,7 +232,7 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
               ^ "\n- proj_ty: " ^ ty_to_string ctx proj_ty));
           internal_error __FILE__ __LINE__ span
     in
-    { value; ty = proj_ty }
+    { value; ty = proj_ty; outlive_ty = outlive_proj_ty }
 
 let symbolic_expansion_non_borrow_to_value (span : Meta.span)
     (sv : symbolic_value) (see : symbolic_expansion) : typed_value =
@@ -275,10 +278,12 @@ let apply_proj_loans_on_symbolic_expansion (span : Meta.span)
    * contain regions which we will project *)
   sanity_check __FILE__ __LINE__ (ty_has_free_regions proj_ty) span;
   (* Match *)
-  let (value, ty) : avalue * ty =
+  let (value, ty, outlive_ty) : avalue * ty * ty =
     match (see, proj_ty, outlive_proj_ty) with
     | SeLiteral lit, TLiteral _, TLiteral _ ->
-        (AIgnored (Some { value = VLiteral lit; ty = proj_ty }), proj_ty)
+        ( AIgnored (Some { value = VLiteral lit; ty = proj_ty }),
+          proj_ty,
+          outlive_proj_ty )
     | ( SeAdt (variant_id, field_values),
         TAdt { id = adt_id; generics },
         TAdt { id = adt_id'; generics = outlive_generics } ) ->
@@ -295,7 +300,7 @@ let apply_proj_loans_on_symbolic_expansion (span : Meta.span)
           Collections.List.map3 mk_aproj_loans_value_from_symbolic_value
             field_values field_types field_outlive_types
         in
-        (AAdt { variant_id; field_values }, proj_ty)
+        (AAdt { variant_id; field_values }, proj_ty, outlive_proj_ty)
     | SeMutRef (bid, spc), TRef (r, ref_ty, RMut), TRef (r', ref_ty', RMut) ->
         (* Sanity check *)
         sanity_check __FILE__ __LINE__ (spc.sv_ty = ref_ty) span;
@@ -309,14 +314,14 @@ let apply_proj_loans_on_symbolic_expansion (span : Meta.span)
            we never project over static regions) *)
         if region_is_free r then
           (* In the set: keep *)
-          (ALoan (AMutLoan (PNone, bid, child_av)), ref_ty)
+          (ALoan (AMutLoan (PNone, bid, child_av)), ref_ty, ref_ty')
         else
           (* Not in the set: check if the inner type has regions we might
              need to project. *)
           (* If the borrow id is in the ancestor's regions, we still need
            * to remember it *)
           let opt_bid = if ty_has_free_regions ref_ty then Some bid else None in
-          (ALoan (AIgnoredMutLoan (opt_bid, ref_ty', child_av)), ref_ty)
+          (ALoan (AIgnoredMutLoan (opt_bid, child_av)), ref_ty, ref_ty')
     | ( SeSharedRef (bids, spc),
         TRef (r, ref_ty, RShared),
         TRef (r', ref_ty', RShared) ) ->
@@ -333,13 +338,15 @@ let apply_proj_loans_on_symbolic_expansion (span : Meta.span)
         if region_is_free r then
           (* In the set: keep *)
           let shared_value = mk_typed_value_from_symbolic_value spc in
-          (ALoan (ASharedLoan (PNone, bids, shared_value, child_av)), ref_ty)
+          ( ALoan (ASharedLoan (PNone, bids, shared_value, child_av)),
+            ref_ty,
+            ref_ty' )
         else
           (* Not in the set: ignore *)
-          (ALoan (AIgnoredSharedLoan child_av), ref_ty)
+          (ALoan (AIgnoredSharedLoan child_av), ref_ty, ref_ty')
     | _ -> craise __FILE__ __LINE__ span "Unreachable"
   in
-  { value; ty }
+  { value; ty; outlive_ty }
 
 (** Auxiliary function. See [give_back_value].
 

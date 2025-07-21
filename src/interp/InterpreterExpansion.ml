@@ -74,7 +74,7 @@ let apply_symbolic_expansion_to_target_avalues (config : config)
           never happen *)
       method! visit_aproj current_abs aproj =
         (match aproj with
-        | AProjLoans (proj, _) | AProjBorrows (proj, _) ->
+        | AProjLoans { proj; _ } | AProjBorrows { proj; _ } ->
             sanity_check __FILE__ __LINE__
               (proj.sv_id <> original_sv.sv_id)
               span
@@ -92,11 +92,14 @@ let apply_symbolic_expansion_to_target_avalues (config : config)
             (* Explore the given back values to make sure we don't have to expand
              * anything in there *)
             ASymbolic (pm, self#visit_aproj (Some current_abs) aproj)
-        | AProjLoans (proj, given_back), LoanProj ->
+        | AProjLoans { proj; consumed; borrows }, LoanProj ->
             (* Check if this is the symbolic value we are looking for *)
             if proj.sv_id = original_sv.sv_id then (
               (* There mustn't be any given back values *)
-              sanity_check __FILE__ __LINE__ (given_back = []) span;
+              sanity_check __FILE__ __LINE__ (consumed = []) span;
+              (* Not sure what to do if the borrows are non empty: leaving
+                 this as a TODO *)
+              cassert __FILE__ __LINE__ (borrows = []) span "Unimplemented";
               (* Apply the projector *)
               let projected_value =
                 apply_proj_loans_on_symbolic_expansion span expansion
@@ -107,13 +110,13 @@ let apply_symbolic_expansion_to_target_avalues (config : config)
             else
               (* Not the searched symbolic value: nothing to do *)
               super#visit_ASymbolic (Some current_abs) pm aproj
-        | AProjBorrows (proj, given_back), BorrowProj ->
+        | AProjBorrows { proj; loans }, BorrowProj ->
             (* We should never expand a symbolic value which has consumed given
                back values (because then it means the symbolic value was consumed
                by region abstractions, and is thus inaccessible: such a value can't
                be expanded)
             *)
-            cassert __FILE__ __LINE__ (given_back = []) span "Unreachable";
+            cassert __FILE__ __LINE__ (loans = []) span "Unreachable";
             (* Check if this is the symbolic value we are looking for *)
             if proj.sv_id = original_sv.sv_id then
               (* Convert the symbolic expansion to a value on which we can
@@ -135,8 +138,7 @@ let apply_symbolic_expansion_to_target_avalues (config : config)
             else
               (* Not the searched symbolic value: nothing to do *)
               super#visit_ASymbolic (Some current_abs) pm aproj
-        | AProjLoans _, BorrowProj | AProjBorrows (_, _), LoanProj | AEmpty, _
-          ->
+        | AProjLoans _, BorrowProj | AProjBorrows _, LoanProj | AEmpty, _ ->
             (* Nothing to do *)
             ASymbolic (pm, aproj)
     end
@@ -368,7 +370,7 @@ let expand_symbolic_value_shared_borrow (config : config) (span : Meta.span)
           never happen *)
       method! visit_aproj proj_regions aproj =
         (match aproj with
-        | AProjLoans (proj, _) | AProjBorrows (proj, _) ->
+        | AProjLoans { proj; _ } | AProjBorrows { proj; _ } ->
             sanity_check __FILE__ __LINE__
               (proj.sv_id <> original_sv.sv_id)
               span
@@ -383,13 +385,13 @@ let expand_symbolic_value_shared_borrow (config : config) (span : Meta.span)
         | AProjLoans _ ->
             (* Loans are handled later *)
             ASymbolic (pm, aproj)
-        | AProjBorrows (proj, given_back) -> (
+        | AProjBorrows { proj; loans } -> (
             (* We should never expand a symbolic value which has consumed given
                back values (because then it means the symbolic value was consumed
                by region abstractions, and is thus inaccessible: such a value can't
                be expanded)
             *)
-            cassert __FILE__ __LINE__ (given_back = []) span "Unreachable";
+            cassert __FILE__ __LINE__ (loans = []) span "Unreachable";
             (* Check if we need to reborrow *)
             match reborrow_ashared proj with
             | None -> super#visit_ASymbolic proj_regions pm aproj

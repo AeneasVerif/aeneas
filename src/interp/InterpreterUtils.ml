@@ -88,7 +88,7 @@ let mk_place_from_var_id (ctx : eval_ctx) (span : Meta.span)
 let mk_fresh_symbolic_value_opt_span (span : Meta.span option) (ty : ty) :
     symbolic_value =
   (* Sanity check *)
-  sanity_check_opt_span __FILE__ __LINE__ (ty_is_rty ty) span;
+  sanity_check_opt_span __FILE__ __LINE__ (ty_is_ety ty) span;
   let sv_id = fresh_symbolic_value_id () in
   let svalue = { sv_id; sv_ty = ty } in
   svalue
@@ -134,14 +134,22 @@ let mk_aproj_loans_value_from_symbolic_value (svalue : symbolic_value)
     let av =
       ASymbolic
         ( PNone,
-          AProjLoans ({ sv_id = svalue.sv_id; proj_ty; outlive_proj_ty }, []) )
+          AProjLoans
+            {
+              proj = { sv_id = svalue.sv_id; proj_ty; outlive_proj_ty };
+              consumed = [];
+              borrows = [];
+            } )
     in
-    let av : typed_avalue = { value = av; ty = proj_ty } in
+    let av : typed_avalue =
+      { value = av; ty = proj_ty; outlive_ty = outlive_proj_ty }
+    in
     av
   else
     {
       value = AIgnored (Some (mk_typed_value_from_symbolic_value svalue));
       ty = svalue.sv_ty;
+      outlive_ty = outlive_proj_ty;
     }
 
 (** Create a borrows projector from a symbolic value.
@@ -151,7 +159,8 @@ let mk_aproj_borrows_from_symbolic_value (span : Meta.span)
     (svalue : symbolic_value) (proj_ty : ty) (outlive_proj_ty : ty) : aproj =
   sanity_check __FILE__ __LINE__ (ty_is_rty proj_ty) span;
   if ty_has_free_regions proj_ty then
-    AProjBorrows ({ sv_id = svalue.sv_id; proj_ty; outlive_proj_ty }, [])
+    AProjBorrows
+      { proj = { sv_id = svalue.sv_id; proj_ty; outlive_proj_ty }; loans = [] }
   else AEmpty
 
 (** TODO: move *)
@@ -217,10 +226,10 @@ exception FoundGBorrowContent of g_borrow_content
 exception FoundGLoanContent of g_loan_content
 
 (** Utility exception *)
-exception FoundAProjBorrows of symbolic_proj * (msymbolic_value_id * aproj) list
+exception FoundAProjBorrows of aproj_borrows
 
 (** Utility exception *)
-exception FoundAProjLoans of symbolic_proj * (msymbolic_value_id * aproj) list
+exception FoundAProjLoans of aproj_loans
 
 exception FoundAbsProj of abstraction_id * symbolic_value_id
 
@@ -235,7 +244,7 @@ let symbolic_value_id_in_ctx (sv_id : SymbolicValueId.id) (ctx : eval_ctx) :
 
       method! visit_aproj env aproj =
         (match aproj with
-        | AProjLoans (proj, _) | AProjBorrows (proj, _) ->
+        | AProjLoans { proj; _ } | AProjBorrows { proj; _ } ->
             if proj.sv_id = sv_id then raise Found else ()
         | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ());
         super#visit_aproj env aproj

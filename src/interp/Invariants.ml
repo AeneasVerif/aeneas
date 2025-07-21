@@ -151,8 +151,8 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
           match lc with
           | AMutLoan (_, bid, _) -> register_mut_loan inside_abs bid
           | ASharedLoan (_, bids, _, _) -> register_shared_loan inside_abs bids
-          | AIgnoredMutLoan (Some bid, _, _) -> register_ignored_loan RMut bid
-          | AIgnoredMutLoan (None, _, _)
+          | AIgnoredMutLoan (Some bid, _) -> register_ignored_loan RMut bid
+          | AIgnoredMutLoan (None, _)
           | AIgnoredSharedLoan _
           | AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
           | AEndedSharedLoan (_, _)
@@ -247,9 +247,8 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
           match bc with
           | AMutBorrow (_, bid, _) -> register_borrow BMut bid
           | ASharedBorrow (_, bid) -> register_borrow BShared bid
-          | AIgnoredMutBorrow (Some bid, _, _) ->
-              register_ignored_borrow RMut bid
-          | AIgnoredMutBorrow (None, _, _)
+          | AIgnoredMutBorrow (Some bid, _) -> register_ignored_borrow RMut bid
+          | AIgnoredMutBorrow (None, _)
           | AEndedMutBorrow _
           | AEndedIgnoredMutBorrow _
           | AEndedSharedBorrow
@@ -547,16 +546,18 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
       super#visit_typed_value info tv
 
     (* TODO: there is a lot of duplication with {!visit_typed_value}
-     * which is quite annoying. There might be a way of factorizing
-     * that by factorizing the definitions of value and avalue, but
-     * the generation of visitors then doesn't work properly (TODO:
-     * report that). Still, it is actually not that problematic
-     * because this code shouldn't change a lot in the future,
-     * so the cost of maintenance should be pretty low.
+       which is quite annoying. There might be a way of factorizing
+       that by factorizing the definitions of value and avalue, but
+       the generation of visitors then doesn't work properly (TODO:
+       report that). Still, it is actually not that problematic
+       because this code shouldn't change a lot in the future,
+       so the cost of maintenance should be pretty low.
      *)
     method! visit_typed_avalue info atv =
-      (* Check that the types have regions *)
-      sanity_check __FILE__ __LINE__ (ty_is_rty atv.ty) span;
+      (* Check that the outlive types don't intersect the owned types *)
+      sanity_check __FILE__ __LINE__
+        (not (norm_projections_intersect span atv.ty atv.outlive_ty))
+        span;
       (* Check the current pair (value, type) *)
       (match (atv.value, atv.ty) with
       (* ADT case *)
@@ -641,7 +642,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
                       (sv.ty = Substitute.erase_regions ref_ty)
                       span
                 | _ -> craise __FILE__ __LINE__ span "Inconsistent context")
-          | AIgnoredMutBorrow (_opt_bid, _, av), RMut ->
+          | AIgnoredMutBorrow (_opt_bid, av), RMut ->
               sanity_check __FILE__ __LINE__ (av.ty = ref_ty) span
           | ( AEndedIgnoredMutBorrow { given_back; child; given_back_meta = _ },
               RMut ) ->
@@ -651,7 +652,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
           | _ -> craise __FILE__ __LINE__ span "Inconsistent context")
       | ALoan lc, aty -> (
           match lc with
-          | AMutLoan (_, bid, child_av) | AIgnoredMutLoan (Some bid, _, child_av)
+          | AMutLoan (_, bid, child_av) | AIgnoredMutLoan (Some bid, child_av)
             -> (
               (* Check that the region is owned by the abstraction *)
               let region, _, _ = ty_as_ref aty in
@@ -677,7 +678,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
                       = Substitute.erase_regions borrowed_aty)
                       span
                 | _ -> craise __FILE__ __LINE__ span "Inconsistent context")
-          | AIgnoredMutLoan (None, _, child_av) ->
+          | AIgnoredMutLoan (None, child_av) ->
               let borrowed_aty = aloan_get_expected_child_type aty in
               sanity_check __FILE__ __LINE__ (child_av.ty = borrowed_aty) span
           | ASharedLoan (_, _, sv, child_av) | AEndedSharedLoan (sv, child_av)
@@ -710,25 +711,25 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
                 span)
       | ASymbolic (_, aproj), ty -> (
           match aproj with
-          | AProjLoans (proj, _) ->
+          | AProjLoans { proj; _ } ->
               check_symbolic_value_type proj.sv_id ty;
               sanity_check __FILE__ __LINE__
                 (ty_has_free_regions proj.proj_ty)
                 span
-          | AProjBorrows (proj, _) ->
+          | AProjBorrows { proj; _ } ->
               check_symbolic_value_type proj.sv_id ty;
               sanity_check __FILE__ __LINE__
                 (ty_has_free_regions proj.proj_ty)
                 span
-          | AEndedProjLoans (_msv, given_back_ls) ->
+          | AEndedProjLoans { proj = _; consumed; borrows } ->
               List.iter
                 (fun (_, proj) ->
                   match proj with
-                  | AProjBorrows (proj, _) ->
+                  | AProjBorrows { proj; _ } | AProjLoans { proj; _ } ->
                       sanity_check __FILE__ __LINE__ (proj.proj_ty = ty) span
                   | AEndedProjBorrows _ | AEmpty -> ()
                   | _ -> craise __FILE__ __LINE__ span "Unexpected")
-                given_back_ls
+                (consumed @ borrows)
           | AEndedProjBorrows _ | AEmpty -> ())
       | AIgnored _, _ -> ()
       | _ ->
@@ -850,9 +851,9 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
       method! visit_aproj abs aproj =
         (let abs = Option.get abs in
          match aproj with
-         | AProjLoans (proj, _) ->
+         | AProjLoans { proj; _ } ->
              add_aproj_loans proj.sv_id proj.proj_ty abs.abs_id
-         | AProjBorrows (proj, _) ->
+         | AProjBorrows { proj; _ } ->
              add_aproj_borrows proj.sv_id abs.abs_id proj.proj_ty false
          | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ());
         super#visit_aproj abs aproj
