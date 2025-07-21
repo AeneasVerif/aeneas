@@ -2724,45 +2724,34 @@ type merge_duplicates_funcs = {
   merge_aborrow_projs :
     ty ->
     proj_marker ->
-    symbolic_proj ->
-    symbolic_value_id ->
-    ty ->
-    (msymbolic_value_id * aproj) list ->
+    aproj_borrows ->
     ty ->
     proj_marker ->
-    symbolic_value_id ->
-    ty ->
-    (msymbolic_value_id * aproj) list ->
+    aproj_borrows ->
     typed_avalue;
       (** Parameters:
           - [ty0]
           - [pm0]
-          - [sv0]
-          - [proj_ty0]
-          - [children0]
+          - [proj0]
+          - [loans0]
           - [ty1]
           - [pm1]
-          - [sv1]
-          - [proj_ty1]
-          - [children1] *)
+          - [proj1]
+          - [loans1] *)
   merge_aloan_projs :
     ty ->
     proj_marker ->
-    symbolic_value_id ->
-    ty ->
-    (msymbolic_value_id * aproj) list ->
+    aproj_loans ->
     ty ->
     proj_marker ->
-    symbolic_value_id ->
-    ty ->
-    (msymbolic_value_id * aproj) list ->
+    aproj_loans ->
     typed_avalue;
       (** Parameters:
           - [ty0]
           - [pm0]
-          - [sv0]
-          - [proj_ty0]
-          - [children0]
+          - [proj0]
+          - [consumed0]
+          - [borrows0]
           - [ty1]
           - [pm1]
           - [sv1]
@@ -3266,8 +3255,7 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
     ]} *)
 let merge_abstractions_merge_markers (span : Meta.span)
     (merge_funs : merge_duplicates_funcs option) (ctx : eval_ctx)
-    (owned_regions : RegionId.Set.t) (avalues : typed_avalue list) :
-    typed_avalue list =
+    (avalues : typed_avalue list) : typed_avalue list =
   log#ltrace
     (lazy
       (__FUNCTION__ ^ ":\n- avalues:\n"
@@ -3503,13 +3491,13 @@ let merge_abstractions_merge_markers (span : Meta.span)
       ((ty1, pm1, proj1) : ty * proj_marker * aproj) : typed_avalue =
     sanity_check __FILE__ __LINE__ (complementary_markers pm0 pm1) span;
     match (proj0, proj1) with
-    | ( AProjBorrows { proj = proj0; loans = loans0 },
-        AProjBorrows { proj = proj1; loans = loans1 } ) ->
+    | AProjBorrows proj0, AProjBorrows proj1 ->
         (* Sanity-check of the precondition *)
-        sanity_check __FILE__ __LINE__ (proj0.sv_id = proj1.sv_id) span;
+        sanity_check __FILE__ __LINE__
+          (proj0.proj.sv_id = proj1.proj.sv_id)
+          span;
         (* Merge *)
-        (Option.get merge_funs).merge_aborrow_projs ty0 pm0 sv0 proj_ty0 child0
-          ty1 pm1 sv1 proj_ty1 child1
+        (Option.get merge_funs).merge_aborrow_projs ty0 pm0 proj0 ty1 pm1 proj1
     | _ ->
         (* Unreachable because those cases are ignored (ended/ignored borrows)
            or inconsistent *)
@@ -3520,12 +3508,13 @@ let merge_abstractions_merge_markers (span : Meta.span)
       ((ty1, pm1, proj1) : ty * proj_marker * aproj) : typed_avalue =
     sanity_check __FILE__ __LINE__ (complementary_markers pm0 pm1) span;
     match (proj0, proj1) with
-    | AProjLoans (sv0, proj_ty0, child0), AProjLoans (sv1, proj_ty1, child1) ->
+    | AProjLoans proj0, AProjLoans proj1 ->
         (* Sanity-check of the precondition *)
-        sanity_check __FILE__ __LINE__ (sv0 = sv1) span;
+        sanity_check __FILE__ __LINE__
+          (proj0.proj.sv_id = proj1.proj.sv_id)
+          span;
         (* Merge *)
-        (Option.get merge_funs).merge_aloan_projs ty0 pm0 sv0 proj_ty0 child0
-          ty1 pm1 sv1 proj_ty1 child1
+        (Option.get merge_funs).merge_aloan_projs ty0 pm0 proj0 ty1 pm1 proj1
     | _ ->
         (* Unreachable because those cases are ignored (ended/ignored borrows)
            or inconsistent *)
@@ -3706,9 +3695,8 @@ let merge_abstractions_merge_markers (span : Meta.span)
         let loan_content_to_ids ((_, pm, proj) : ty * proj_marker * aproj) :
             marked_norm_symb_proj =
           match proj with
-          | AProjLoans (sv_id, proj_ty, _) ->
-              let norm_proj_ty = normalize_proj_ty owned_regions proj_ty in
-              { pm; sv_id; norm_proj_ty }
+          | AProjLoans { proj; _ } ->
+              { pm; sv_id = proj.sv_id; norm_proj_ty = proj.proj_ty }
           | _ -> internal_error __FILE__ __LINE__ span
 
         let avalue_from_bc = avalue_from_borrow_proj
@@ -3768,15 +3756,6 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
       (AbstractionId.Set.of_list [ abs0.abs_id; abs1.abs_id ])
   in
   let original_parents = AbstractionId.Set.elements parents in
-  let regions =
-    let owned = RegionId.Set.union abs0.regions.owned abs1.regions.owned in
-    let ancestors =
-      RegionId.Set.diff
-        (RegionId.Set.union abs0.regions.ancestors abs1.regions.ancestors)
-        owned
-    in
-    { owned; ancestors }
-  in
 
   (* Phase 1: simplify the loans coming from the left abstraction with
      the borrows coming from the right abstraction. *)
@@ -3787,35 +3766,18 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
   (* Phase 2: we now remove markers, by merging pairs of the same element with
      different markers into one element. To do so, we linearly traverse the list
      of avalues created through the first phase. *)
-  let avalues =
-    merge_abstractions_merge_markers span merge_funs ctx regions.owned avalues
-  in
+  let avalues = merge_abstractions_merge_markers span merge_funs ctx avalues in
 
   (* Create the new abstraction *)
   let abs_id = fresh_abstraction_id () in
   let abs =
-    {
-      abs_id;
-      kind = abs_kind;
-      can_end;
-      parents;
-      original_parents;
-      regions;
-      avalues;
-    }
+    { abs_id; kind = abs_kind; can_end; parents; original_parents; avalues }
   in
 
   (* Sanity check *)
   sanity_check __FILE__ __LINE__ (abs_is_destructured span true ctx abs) span;
   (* Return *)
   abs
-
-(** Merge the regions in a context to a single region *)
-let ctx_merge_regions (ctx : eval_ctx) (rid : RegionId.id)
-    (rids : RegionId.Set.t) : eval_ctx =
-  let rsubst x = if RegionId.Set.mem x rids then rid else x in
-  let env = Substitute.env_subst_rids rsubst ctx.env in
-  { ctx with env }
 
 let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
     (can_end : bool) (merge_funs : merge_duplicates_funcs option)
@@ -3838,23 +3800,6 @@ let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
      remove the abstraction 1 *)
   let ctx = fst (ctx_subst_abs span ctx abs_id0 nabs) in
   let ctx = fst (ctx_remove_abs span ctx abs_id1) in
-
-  (* Merge all the regions from the abstraction into one (the first - i.e., the
-     one with the smallest id). Note that we need to do this in the whole
-     environment, as those regions may be referenced as ancestor regions by
-     the other abstractions, and may be present in symbolic values, etc. (this
-     is not the case if there are no nested borrows, but we anticipate).
-  *)
-  let ctx =
-    let regions = nabs.regions.owned in
-    (* Pick the first region id (this is the smallest) *)
-    let rid = RegionId.Set.min_elt regions in
-    (* If there is only one region, do nothing *)
-    if RegionId.Set.cardinal regions = 1 then ctx
-    else
-      let rids = RegionId.Set.remove rid regions in
-      ctx_merge_regions ctx rid rids
-  in
 
   (* Return *)
   (ctx, nabs.abs_id)
@@ -3919,7 +3864,7 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
       | ASymbolic (pm, aproj) -> begin
           sanity_check __FILE__ __LINE__ (allow_markers || pm = PNone) span;
           match aproj with
-          | AProjLoans (sv_id, _, _) | AProjBorrows (sv_id, _, _) -> sv_id
+          | AProjLoans { proj; _ } | AProjBorrows { proj; _ } -> proj.sv_id
           | _ -> craise __FILE__ __LINE__ span "Unexpected"
         end
       | _ -> craise __FILE__ __LINE__ span "Unexpected"
