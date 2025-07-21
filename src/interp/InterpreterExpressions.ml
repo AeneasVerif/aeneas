@@ -9,6 +9,7 @@ open ValuesUtils
 open SynthesizeSymbolic
 open Cps
 open InterpreterUtils
+open InterpreterBorrowsCore
 open InterpreterExpansion
 open InterpreterPaths
 open Errors
@@ -54,7 +55,7 @@ let read_place_check (span : Meta.span) (access : access_kind) (p : place)
   let v = read_place span access p ctx in
   (* Check that there are no bottoms in the value *)
   cassert __FILE__ __LINE__
-    (not (bottom_in_value ctx.ended_regions v))
+    (not (bottom_in_value span ctx v))
     span "There should be no bottoms in the value";
   (* Check that there are no reserved borrows in the value *)
   cassert __FILE__ __LINE__
@@ -112,9 +113,9 @@ let literal_to_typed_value (span : Meta.span) (ty : literal_type) (cv : literal)
   (* Remaining cases (invalid) *)
   | _, _ -> craise __FILE__ __LINE__ span "Improperly typed constant value"
 
-(** Copy a value, and return the: the original value (we may have need to update
-    it - see the remark about the symbolic values with borrows) and the
-    resulting value.
+(** Copy a value, and return: the original value (we may have need to update it
+    \- see the remark about the symbolic values with borrows) and the resulting
+    value.
 
     Note that copying values might update the context. For instance, when
     copying shared borrows, we need to insert new shared borrows in the context.
@@ -235,20 +236,26 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
         (ty_is_copyable (Substitute.erase_regions sp.sv_ty))
         span "Not primitively copyable";
       (* Check if the symbolic value contains borrows: if it does, we need to
-         introduce au auxiliary region abstraction (see document of the function) *)
+         introduce au auxiliary region abstraction (see comments about the function) *)
       if not (ty_has_borrows (Some span) ctx.type_ctx.type_infos v.ty) then
         (* No borrows: do nothing *)
         (v, v, ctx, fun e -> e)
       else
         let ctx0 = ctx in
+        (* We need to check that bottom does not appear in the value *)
+        cassert __FILE__ __LINE__
+          (not (symbolic_value_contains_bottom span ctx sp))
+          span "Can not copy a symbolic value containing bottom values";
+
         (* There are borrows: we need to introduce one region abstraction per live
            region present in the type *)
-        let regions, ty =
-          InterpreterBorrowsCore.refresh_live_regions_in_ty span ctx sp.sv_ty
+        let proj_tys =
+          InterpreterBorrowsCore.make_projections_for_erased_regions_in_ty span
+            sp.sv_ty
         in
-        let updated_sv = mk_fresh_symbolic_value span ty in
-        let copied_sv = mk_fresh_symbolic_value span ty in
-        let mk_abs (r_id : RegionId.id) (avalues : typed_avalue list) : abs =
+        let updated_sv = mk_fresh_symbolic_value span sp.sv_ty in
+        let copied_sv = mk_fresh_symbolic_value span sp.sv_ty in
+        let mk_abs (avalues : typed_avalue list) : abs =
           let abs =
             {
               abs_id = fresh_abstraction_id ();
@@ -256,11 +263,6 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
               can_end = true;
               parents = AbstractionId.Set.empty;
               original_parents = [];
-              regions =
-                {
-                  owned = RegionId.Set.singleton r_id;
-                  ancestors = RegionId.Set.empty;
-                };
               avalues;
             }
           in
@@ -271,20 +273,21 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
 
         let abs =
           List.map
-            (fun rid ->
+            (fun proj_ty ->
               let mk_proj (is_borrows : bool) sv_id : typed_avalue =
+                let proj : symbolic_proj = { sv_id; proj_ty } in
                 let proj =
-                  if is_borrows then AProjBorrows (sv_id, ty, [])
-                  else AProjLoans (sv_id, ty, [])
+                  if is_borrows then AProjBorrows { proj; loans = [] }
+                  else AProjLoans { proj; consumed = []; borrows = [] }
                 in
                 let value = ASymbolic (PNone, proj) in
-                { value; ty }
+                { value; ty = proj_ty }
               in
               let sv = mk_proj true sp.sv_id in
               let updated_sv = mk_proj false updated_sv.sv_id in
               let copied_sv = mk_proj false copied_sv.sv_id in
-              mk_abs rid [ sv; updated_sv; copied_sv ])
-            (RegionId.Map.values regions)
+              mk_abs [ sv; updated_sv; copied_sv ])
+            proj_tys
         in
         let abs = List.map (fun a -> EAbs a) (List.rev abs) in
         let ctx = { ctx with env = abs @ ctx.env } in
@@ -459,7 +462,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
       let v = read_place_check span access p ctx in
       (* Sanity checks *)
       exec_assert __FILE__ __LINE__
-        (not (bottom_in_value ctx.ended_regions v))
+        (not (bottom_in_value span ctx v))
         span "Can not copy a value containing bottom";
       sanity_check __FILE__ __LINE__
         (Option.is_none
@@ -481,7 +484,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
       let v = read_place_check span access p ctx in
       (* Check that there are no bottoms in the value we are about to move *)
       exec_assert __FILE__ __LINE__
-        (not (bottom_in_value ctx.ended_regions v))
+        (not (bottom_in_value span ctx v))
         span "There should be no bottoms in the value we are about to move";
       (* Move the value *)
       let bottom : typed_value = { value = VBottom; ty = v.ty } in
@@ -1084,6 +1087,6 @@ let eval_fake_read (config : config) (span : Meta.span) (p : place) : cm_fun =
     access_rplace_reorganize_and_read config span greedy_expand Read p ctx
   in
   cassert __FILE__ __LINE__
-    (not (bottom_in_value ctx.ended_regions v))
+    (not (bottom_in_value span ctx v))
     span "Fake read: the value contains bottom";
   (ctx, cc)

@@ -2405,7 +2405,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             ([ nv ], v)
         else
           (* Introduce one abstraction per live region *)
-          let tys = make_projections_for_ty span sv.sv_ty in
+          let tys = make_projections_for_erased_regions_in_ty span sv.sv_ty in
           List.iter
             (fun ty ->
               let proj : symbolic_proj = { sv_id = sv.sv_id; proj_ty = ty } in

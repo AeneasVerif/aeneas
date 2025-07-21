@@ -1670,10 +1670,19 @@ let value_has_non_ended_borrows_or_loans span (ctx : eval_ctx) (v : value) :
     false
   with Found -> true
 
-(** Given a type with erased region, introduce a list of projections over all
-    the regions in the type. *)
-let make_projections_for_ty (span : Meta.span) (ty : rty) : ty list =
-  (* First, introduce one fresh free region per erased region *)
+(** Auxiliary helper.
+
+    Given a type, introduce a list of projections over a subset of regions in
+    the type.
+
+    We handle two cases, controled by the option [erased]:
+    - if [erased] is [true], it means the type only has erased regions, in which
+      case we introduce a projection for every such region
+    - otherwise, it means we should introduce projections for all the *marked*
+      regions in the projection type *)
+let make_projections_for_ty_aux (span : Meta.span) (erased : bool) (ty : rty) :
+    ty list =
+  (* First, introduce one fresh free region per region to mask *)
   let regions = ref RegionId.Set.empty in
   let fresh_rid () =
     let nrid = fresh_region_id () in
@@ -1687,9 +1696,12 @@ let make_projections_for_ty (span : Meta.span) (ty : rty) : ty list =
 
       method! visit_region _ r =
         match r with
-        | RErased -> RVar (Free (fresh_rid ()))
+        | RErased -> if erased then RVar (Free (fresh_rid ())) else RErased
         | RStatic -> RStatic
-        | RVar (Free _ | Bound _) -> internal_error __FILE__ __LINE__ span
+        | RVar (Free _) ->
+            if erased then internal_error __FILE__ __LINE__ span
+            else RVar (Free (fresh_rid ()))
+        | RVar (Bound _) -> internal_error __FILE__ __LINE__ span
     end
   in
   let ty = visitor#visit_ty () ty in
@@ -1704,7 +1716,10 @@ let make_projections_for_ty (span : Meta.span) (ty : rty) : ty list =
 
           method! visit_region _ r =
             match r with
-            | RErased | RVar (Bound _) -> internal_error __FILE__ __LINE__ span
+            | RErased ->
+                if erased then internal_error __FILE__ __LINE__ span
+                else RErased
+            | RVar (Bound _) -> internal_error __FILE__ __LINE__ span
             | RStatic -> RStatic
             | RVar (Free rid') ->
                 if rid = rid' then RVar (Free RegionId.zero) else RErased
@@ -1715,3 +1730,11 @@ let make_projections_for_ty (span : Meta.span) (ty : rty) : ty list =
     !regions;
 
   !tys
+
+let make_projections_for_erased_regions_in_ty (span : Meta.span) (ty : rty) :
+    ty list =
+  make_projections_for_ty_aux span true ty
+
+let make_projections_for_marked_regions_in_ty (span : Meta.span) (ty : rty) :
+    ty list =
+  make_projections_for_ty_aux span false ty
