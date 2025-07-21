@@ -41,15 +41,13 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
      - the region ids found in the value and belonging to the set [rids] have
        been substituted with [nrid]
   *)
-  let mk_value_with_fresh_sids_no_shared_loans (rids : RegionId.Set.t)
-      (nrid : RegionId.id) (v : typed_value) : typed_value =
+  let mk_value_with_fresh_sids_no_shared_loans (v : typed_value) : typed_value =
     (* Remove the shared loans *)
     let v = value_remove_shared_loans v in
     (* Substitute the symbolic values and the region *)
     Substitute.typed_value_subst_ids
       {
         (Substitute.no_abs_id_subst span) with
-        r_subst = (fun r -> if RegionId.Set.mem r rids then nrid else r);
         ssubst =
           (fun id ->
             let nid = fresh_symbolic_value_id () in
@@ -97,9 +95,7 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
     let nrid = fresh_region_id () in
 
     (* Prepare the shared value *)
-    let nsv =
-      mk_value_with_fresh_sids_no_shared_loans abs.regions.owned nrid sv
-    in
+    let nsv = mk_value_with_fresh_sids_no_shared_loans sv in
 
     (* Save the borrow substitution, to apply it to the context later *)
     borrow_substs := (lid, nlid) :: !borrow_substs;
@@ -107,9 +103,6 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
     (* Rem.: the below sanity checks are not really necessary *)
     sanity_check __FILE__ __LINE__ (AbstractionId.Set.is_empty abs.parents) span;
     sanity_check __FILE__ __LINE__ (abs.original_parents = []) span;
-    sanity_check __FILE__ __LINE__
-      (RegionId.Set.is_empty abs.regions.ancestors)
-      span;
 
     (* Introduce the new abstraction for the shared values *)
     cassert __FILE__ __LINE__ (ty_no_regions sv.ty) span
@@ -140,9 +133,6 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
       | None -> Identity
     in
     let can_end = true in
-    let regions : abs_regions =
-      { owned = RegionId.Set.singleton nrid; ancestors = RegionId.Set.empty }
-    in
     let fresh_abs =
       {
         abs_id = fresh_abstraction_id ();
@@ -150,7 +140,6 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
         can_end;
         parents = AbstractionId.Set.empty;
         original_parents = [];
-        regions;
         avalues;
       }
     in
@@ -365,7 +354,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
      of new environments *)
   let compute_fixed_ids (ctxl : eval_ctx list) : ids_sets =
     let fixed_ids, _ = compute_ctx_ids ctx0 in
-    let { aids; blids; borrow_ids; loan_ids; dids; rids; sids } = fixed_ids in
+    let { aids; blids; borrow_ids; loan_ids; dids; sids } = fixed_ids in
     let sids = ref sids in
     List.iter
       (fun ctx ->
@@ -373,7 +362,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
         sids := SymbolicValueId.Set.inter !sids fixed_ids.sids)
       ctxl;
     let sids = !sids in
-    let fixed_ids = { aids; blids; borrow_ids; loan_ids; dids; rids; sids } in
+    let fixed_ids = { aids; blids; borrow_ids; loan_ids; dids; sids } in
     fixed_ids
   in
   (* Check if two contexts are equivalent - modulo alpha conversion on the
@@ -858,18 +847,19 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
 
       method! visit_aproj _ proj =
         match proj with
-        | AProjLoans (_sv, _proj_ty, children) ->
-            sanity_check __FILE__ __LINE__ (children = []) span;
+        | AProjLoans { proj = _; consumed; borrows } ->
+            sanity_check __FILE__ __LINE__ (consumed = []) span;
+            sanity_check __FILE__ __LINE__ (borrows = []) span;
             ()
-        | AProjBorrows (sv_id, _proj_ty, children) ->
-            sanity_check __FILE__ __LINE__ (children = []) span;
+        | AProjBorrows { proj; loans } ->
+            sanity_check __FILE__ __LINE__ (loans = []) span;
             (* Find the target borrow *)
             let tgt_borrow_id =
-              SymbolicValueId.Map.find sv_id src_to_tgt_sid_map
+              SymbolicValueId.Map.find proj.sv_id src_to_tgt_sid_map
             in
             (* Update the map *)
             tgt_borrow_to_loan_proj :=
-              SymbolicValueId.InjSubst.add sv_id tgt_borrow_id
+              SymbolicValueId.InjSubst.add proj.sv_id tgt_borrow_id
                 !tgt_borrow_to_loan_proj
         | AEndedProjBorrows _ | AEndedProjLoans _ | AEmpty ->
             (* We shouldn't get there *)
@@ -944,14 +934,24 @@ let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
           self#visit_typed_value true sv;
           self#visit_typed_avalue register child_av
 
-        method! visit_AProjLoans register sv_id proj_ty children =
+        method! visit_AProjLoans register proj =
+          let { proj = { sv_id; proj_ty }; consumed; borrows } : aproj_loans =
+            proj
+          in
           self#visit_symbolic_value_id true sv_id;
           self#visit_ty register proj_ty;
-          self#visit_list
-            (fun register (s, p) ->
-              self#visit_msymbolic_value_id register s;
+          sanity_check __FILE__ __LINE__ (consumed = []) span;
+          sanity_check __FILE__ __LINE__ (borrows = []) span
+        (*self#visit_list
+            (fun register ((s, p) : mconsumed_symb * _) ->
+              self#visit_msymbolic_value_id register s.sv_id;
               self#visit_aproj register p)
-            register children
+            register consumed;
+          self#visit_list
+            (fun register ((s, p) : mconsumed_symb * _) ->
+              self#visit_msymbolic_value_id register s.sv_id;
+              self#visit_aproj register p)
+            register borrows*)
 
         method! visit_symbolic_value_id register sid =
           if register then sids := SymbolicValueId.Set.add sid !sids
