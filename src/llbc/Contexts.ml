@@ -69,6 +69,8 @@ type eval_ctx = {
   type_ctx : type_ctx;
   fun_ctx : fun_ctx;
   region_groups : RegionGroupId.id list;
+      (** Region groups of the function we are symbolically executing (in case
+          we are performing a symbolic execution) *)
   type_vars : type_var list;
   const_generic_vars : const_generic_var list;
   const_generic_vars_map : typed_value Types.ConstGenericVarId.Map.t;
@@ -83,7 +85,6 @@ type eval_ctx = {
           representatives). Note that this doesn't take into account
           higher-order type constraints (of the shape `for<'a> ...`). *)
   env : env;
-  ended_regions : RegionId.Set.t;
 }
 [@@deriving show]
 

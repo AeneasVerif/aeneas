@@ -346,7 +346,7 @@ let check_borrowed_values_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
           | AEndedMutLoan { given_back = _; child = _; given_back_meta = _ } ->
               set_outer_mut info
           | AEndedSharedLoan (_, _) -> set_outer_shared info
-          | AIgnoredMutLoan (_, _) -> set_outer_mut info
+          | AIgnoredMutLoan _ -> set_outer_mut info
           | AEndedIgnoredMutLoan
               { given_back = _; child = _; given_back_meta = _ } ->
               set_outer_mut info
@@ -410,6 +410,13 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
   object
     inherit [_] iter_eval_ctx as super
     method! visit_abs _ abs = super#visit_abs (Some abs) abs
+
+    method! visit_region _ r =
+      (* All free regions should have id 0 because we normalize the projection types *)
+      match r with
+      | RVar (Free rid) ->
+          sanity_check __FILE__ __LINE__ (rid = RegionId.zero) span
+      | _ -> ()
 
     method! visit_EBinding info binder v =
       (* We also check that the regions are erased *)
@@ -548,16 +555,14 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
       super#visit_typed_value info tv
 
     (* TODO: there is a lot of duplication with {!visit_typed_value}
-     * which is quite annoying. There might be a way of factorizing
-     * that by factorizing the definitions of value and avalue, but
-     * the generation of visitors then doesn't work properly (TODO:
-     * report that). Still, it is actually not that problematic
-     * because this code shouldn't change a lot in the future,
-     * so the cost of maintenance should be pretty low.
+       which is quite annoying. There might be a way of factorizing
+       that by factorizing the definitions of value and avalue, but
+       the generation of visitors then doesn't work properly (TODO:
+       report that). Still, it is actually not that problematic
+       because this code shouldn't change a lot in the future,
+       so the cost of maintenance should be pretty low.
      *)
     method! visit_typed_avalue info atv =
-      (* Check that the types have regions *)
-      sanity_check __FILE__ __LINE__ (ty_is_rty atv.ty) span;
       (* Check the current pair (value, type) *)
       (match (atv.value, atv.ty) with
       (* ADT case *)
@@ -622,17 +627,16 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
           | _ -> craise __FILE__ __LINE__ span "Erroneous type")
       | ABottom, _ -> (* Nothing to check *) ()
       | ABorrow bc, TRef (region, ref_ty, rkind) -> (
-          let abs = Option.get info in
           (* Check the borrow content *)
           match (bc, rkind) with
           | AMutBorrow (_, _, av), RMut ->
               (* Check that the region is owned by the abstraction *)
-              sanity_check __FILE__ __LINE__ (region_is_owned abs region) span;
+              sanity_check __FILE__ __LINE__ (region_is_free region) span;
               (* Check that the child value has the proper type *)
               sanity_check __FILE__ __LINE__ (av.ty = ref_ty) span
           | ASharedBorrow (_, bid), RShared -> (
               (* Check that the region is owned by the abstraction *)
-              sanity_check __FILE__ __LINE__ (region_is_owned abs region) span;
+              sanity_check __FILE__ __LINE__ (region_is_free region) span;
               if lookups then
                 (* Lookup the borrowed value to check it has the proper type *)
                 let _, glc = lookup_loan span ek_all bid ctx in
@@ -652,7 +656,6 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
           | AProjSharedBorrow _, RShared -> ()
           | _ -> craise __FILE__ __LINE__ span "Inconsistent context")
       | ALoan lc, aty -> (
-          let abs = Option.get info in
           match lc with
           | AMutLoan (_, bid, child_av) | AIgnoredMutLoan (Some bid, child_av)
             -> (
@@ -661,9 +664,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
               begin
                 match lc with
                 | AMutLoan _ ->
-                    sanity_check __FILE__ __LINE__
-                      (region_is_owned abs region)
-                      span
+                    sanity_check __FILE__ __LINE__ (region_is_free region) span
                 | _ -> ()
               end;
               let borrowed_aty = aloan_get_expected_child_type aty in
@@ -689,7 +690,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
             ->
               (* Check that the region is owned by the abstraction *)
               let region, _, _ = ty_as_ref aty in
-              sanity_check __FILE__ __LINE__ (region_is_owned abs region) span;
+              sanity_check __FILE__ __LINE__ (region_is_free region) span;
               let borrowed_aty = aloan_get_expected_child_type aty in
               sanity_check __FILE__ __LINE__
                 (sv.ty = Substitute.erase_regions borrowed_aty)
@@ -703,9 +704,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
               begin
                 match lc with
                 | AEndedMutLoan _ ->
-                    sanity_check __FILE__ __LINE__
-                      (region_is_owned abs region)
-                      span
+                    sanity_check __FILE__ __LINE__ (region_is_free region) span
                 | _ -> ()
               end;
               let borrowed_aty = aloan_get_expected_child_type aty in
@@ -717,27 +716,25 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
                 span)
       | ASymbolic (_, aproj), ty -> (
           match aproj with
-          | AProjLoans (sv_id, proj_ty, _) ->
-              check_symbolic_value_type sv_id ty;
-              let abs = Option.get info in
+          | AProjLoans { proj; _ } ->
+              check_symbolic_value_type proj.sv_id ty;
               sanity_check __FILE__ __LINE__
-                (ty_has_regions_in_set abs.regions.owned proj_ty)
+                (ty_has_free_regions proj.proj_ty)
                 span
-          | AProjBorrows (sv_id, proj_ty, _) ->
-              check_symbolic_value_type sv_id ty;
-              let abs = Option.get info in
+          | AProjBorrows { proj; _ } ->
+              check_symbolic_value_type proj.sv_id ty;
               sanity_check __FILE__ __LINE__
-                (ty_has_regions_in_set abs.regions.owned proj_ty)
+                (ty_has_free_regions proj.proj_ty)
                 span
-          | AEndedProjLoans (_msv, given_back_ls) ->
+          | AEndedProjLoans { proj = _; consumed; borrows } ->
               List.iter
                 (fun (_, proj) ->
                   match proj with
-                  | AProjBorrows (_sv, ty', _) ->
-                      sanity_check __FILE__ __LINE__ (ty' = ty) span
+                  | AProjBorrows { proj; _ } | AProjLoans { proj; _ } ->
+                      sanity_check __FILE__ __LINE__ (proj.proj_ty = ty) span
                   | AEndedProjBorrows _ | AEmpty -> ()
                   | _ -> craise __FILE__ __LINE__ span "Unexpected")
-                given_back_ls
+                (consumed @ borrows)
           | AEndedProjBorrows _ | AEmpty -> ())
       | AIgnored _, _ -> ()
       | _ ->
@@ -760,17 +757,12 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) (lookups : bool)
 
 type proj_borrows_info = {
   abs_id : AbstractionId.id;
-  regions : RegionId.Set.t;
   proj_ty : rty;  (** The regions shouldn't be erased *)
   as_shared_value : bool;  (** True if the value is below a shared borrow *)
 }
 [@@deriving show]
 
-type proj_loans_info = {
-  abs_id : AbstractionId.id;
-  regions : RegionId.Set.t;
-  proj_ty : rty;
-}
+type proj_loans_info = { abs_id : AbstractionId.id; proj_ty : rty }
 [@@deriving show]
 
 type sv_info = {
@@ -782,22 +774,18 @@ type sv_info = {
 
 let proj_borrows_info_to_string (ctx : eval_ctx) (info : proj_borrows_info) :
     string =
-  let { abs_id; regions; proj_ty; as_shared_value } = info in
+  let { abs_id; proj_ty; as_shared_value } = info in
   "{ abs_id = "
   ^ AbstractionId.to_string abs_id
-  ^ "; regions = "
-  ^ RegionId.Set.to_string None regions
   ^ "; proj_ty = " ^ ty_to_string ctx proj_ty ^ "; as_shared_value = "
   ^ Print.bool_to_string as_shared_value
   ^ "}"
 
 let proj_loans_info_to_string (ctx : eval_ctx) (info : proj_loans_info) : string
     =
-  let { abs_id; regions; proj_ty } = info in
+  let { abs_id; proj_ty } = info in
   "{ abs_id = "
   ^ AbstractionId.to_string abs_id
-  ^ "; regions = "
-  ^ RegionId.Set.to_string None regions
   ^ "; proj_ty = " ^ ty_to_string ctx proj_ty ^ "}"
 
 let sv_info_to_string (ctx : eval_ctx) (info : sv_info) : string =
@@ -838,16 +826,16 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
     let info = { info with env_count = info.env_count + 1 } in
     update_info sv_id info
   in
-  let add_aproj_borrows (sv : symbolic_value_id) abs_id regions proj_ty
-      as_shared_value : unit =
+  let add_aproj_borrows (sv : symbolic_value_id) abs_id proj_ty as_shared_value
+      : unit =
     let info = lookup_info sv in
-    let binfo = { abs_id; regions; proj_ty; as_shared_value } in
+    let binfo = { abs_id; proj_ty; as_shared_value } in
     let info = { info with aproj_borrows = binfo :: info.aproj_borrows } in
     update_info sv info
   in
-  let add_aproj_loans (sv : symbolic_value_id) proj_ty abs_id regions : unit =
+  let add_aproj_loans (sv : symbolic_value_id) proj_ty abs_id : unit =
     let info = lookup_info sv in
-    let linfo = { abs_id; regions; proj_ty } in
+    let linfo = { abs_id; proj_ty } in
     let info = { info with aproj_loans = linfo :: info.aproj_loans } in
     update_info sv info
   in
@@ -862,16 +850,16 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
         let abs = Option.get abs in
         match asb with
         | AsbBorrow _ -> ()
-        | AsbProjReborrows (sv, proj_ty) ->
-            add_aproj_borrows sv abs.abs_id abs.regions.owned proj_ty true
+        | AsbProjReborrows proj ->
+            add_aproj_borrows proj.sv_id abs.abs_id proj.proj_ty true
 
       method! visit_aproj abs aproj =
         (let abs = Option.get abs in
          match aproj with
-         | AProjLoans (sv, proj_ty, _) ->
-             add_aproj_loans sv proj_ty abs.abs_id abs.regions.owned
-         | AProjBorrows (sv, proj_ty, _) ->
-             add_aproj_borrows sv abs.abs_id abs.regions.owned proj_ty false
+         | AProjLoans { proj; _ } ->
+             add_aproj_loans proj.sv_id proj.proj_ty abs.abs_id
+         | AProjBorrows { proj; _ } ->
+             add_aproj_borrows proj.sv_id abs.abs_id proj.proj_ty false
          | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ());
         super#visit_aproj abs aproj
     end
@@ -894,12 +882,11 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
       sanity_check __FILE__ __LINE__
         (info.aproj_borrows = [] || info.aproj_loans <> [])
         span;
-      (* Check that the loan projections don't intersect and compute
-         the normalized union of those projections *)
+      (* Check that the loan projections don't intersect by
+         computing their union. *)
       let aproj_loans =
         List.map
-          (fun (linfo : proj_loans_info) ->
-            normalize_proj_ty linfo.regions linfo.proj_ty)
+          (fun (linfo : proj_loans_info) -> linfo.proj_ty)
           info.aproj_loans
       in
 
@@ -917,8 +904,7 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
       (* Check that the union of the loan projectors contains the borrow projections. *)
       let aproj_borrows =
         List.map
-          (fun (linfo : proj_borrows_info) ->
-            normalize_proj_ty linfo.regions linfo.proj_ty)
+          (fun (linfo : proj_borrows_info) -> linfo.proj_ty)
           info.aproj_borrows
       in
       match aproj_borrows with

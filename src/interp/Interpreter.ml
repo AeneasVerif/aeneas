@@ -230,18 +230,23 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
   in
   (* Create fresh symbolic values for the inputs *)
   let input_svs =
-    List.map (fun ty -> mk_fresh_symbolic_value span ty) inst_sg.inputs
+    List.map
+      (fun ty -> mk_fresh_symbolic_value span (erase_regions ty))
+      inst_sg.inputs
   in
   (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
   let call_id = fresh_fun_call_id () in
   sanity_check __FILE__ __LINE__ (call_id = FunCallId.zero) span;
-  let compute_abs_avalues (abs : abs) (ctx : eval_ctx) :
+  let compute_abs_avalues (regions : region_id_set) (ctx : eval_ctx) :
       eval_ctx * typed_avalue list =
     (* Project over the values - we use *loan* projectors, as explained above *)
     let avalues =
       List.map
         (fun (sv : symbolic_value) ->
-          mk_aproj_loans_value_from_symbolic_value abs.regions.owned sv sv.sv_ty)
+          let proj_ty =
+            InterpreterBorrowsCore.normalize_proj_ty regions sv.sv_ty
+          in
+          mk_aproj_loans_value_from_symbolic_value sv proj_ty)
         input_svs
     in
     (ctx, avalues)
@@ -338,11 +343,14 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
   let ctx =
     if is_regular_return then (
       let ret_value = Option.get ret_value in
-      let compute_abs_avalues (abs : abs) (ctx : eval_ctx) :
+      let compute_abs_avalues (regions : region_id_set) (ctx : eval_ctx) :
           eval_ctx * typed_avalue list =
+        (* Normalize the projection type *)
+        let ret_rty =
+          InterpreterBorrowsCore.normalize_proj_ty regions ret_rty
+        in
         let ctx, avalue =
-          apply_proj_borrows_on_input_value config span ctx abs.regions.owned
-            abs.regions.ancestors ret_value ret_rty
+          apply_proj_borrows_on_input_value config span ctx ret_value ret_rty
         in
         (ctx, [ avalue ])
       in

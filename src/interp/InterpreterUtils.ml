@@ -88,7 +88,7 @@ let mk_place_from_var_id (ctx : eval_ctx) (span : Meta.span)
 let mk_fresh_symbolic_value_opt_span (span : Meta.span option) (ty : ty) :
     symbolic_value =
   (* Sanity check *)
-  sanity_check_opt_span __FILE__ __LINE__ (ty_is_rty ty) span;
+  sanity_check_opt_span __FILE__ __LINE__ (ty_is_ety ty) span;
   let sv_id = fresh_symbolic_value_id () in
   let svalue = { sv_id; sv_ty = ty } in
   svalue
@@ -123,12 +123,25 @@ let mk_fresh_symbolic_typed_value_from_no_regions_ty (span : Meta.span)
     Checks if the projector will actually project some regions. If not, returns
     {!Values.AIgnored} ([_]).
 
+    Note that the projection type should have been *normalized* (only the
+    projected regions should be free regions - with id 0 - and the others should
+    have been erased).
+
     TODO: update to handle 'static *)
-let mk_aproj_loans_value_from_symbolic_value (proj_regions : RegionId.Set.t)
-    (svalue : symbolic_value) (proj_ty : ty) : typed_avalue =
-  if ty_has_regions_in_set proj_regions proj_ty then
-    let av = ASymbolic (PNone, AProjLoans (svalue.sv_id, proj_ty, [])) in
-    let av : typed_avalue = { value = av; ty = svalue.sv_ty } in
+let mk_aproj_loans_value_from_symbolic_value (svalue : symbolic_value)
+    (proj_ty : ty) : typed_avalue =
+  if ty_has_free_regions proj_ty then
+    let av =
+      ASymbolic
+        ( PNone,
+          AProjLoans
+            {
+              proj = { sv_id = svalue.sv_id; proj_ty };
+              consumed = [];
+              borrows = [];
+            } )
+    in
+    let av : typed_avalue = { value = av; ty = proj_ty } in
     av
   else
     {
@@ -136,13 +149,14 @@ let mk_aproj_loans_value_from_symbolic_value (proj_regions : RegionId.Set.t)
       ty = svalue.sv_ty;
     }
 
-(** Create a borrows projector from a symbolic value *)
+(** Create a borrows projector from a symbolic value.
+
+    Note that the projection type should have been normalized. *)
 let mk_aproj_borrows_from_symbolic_value (span : Meta.span)
-    (proj_regions : RegionId.Set.t) (svalue : symbolic_value) (proj_ty : ty) :
-    aproj =
+    (svalue : symbolic_value) (proj_ty : ty) : aproj =
   sanity_check __FILE__ __LINE__ (ty_is_rty proj_ty) span;
-  if ty_has_regions_in_set proj_regions proj_ty then
-    AProjBorrows (svalue.sv_id, proj_ty, [])
+  if ty_has_free_regions proj_ty then
+    AProjBorrows { proj = { sv_id = svalue.sv_id; proj_ty }; loans = [] }
   else AEmpty
 
 (** TODO: move *)
@@ -208,13 +222,10 @@ exception FoundGBorrowContent of g_borrow_content
 exception FoundGLoanContent of g_loan_content
 
 (** Utility exception *)
-exception
-  FoundAProjBorrows of
-    symbolic_value_id * ty * (msymbolic_value_id * aproj) list
+exception FoundAProjBorrows of aproj_borrows
 
 (** Utility exception *)
-exception
-  FoundAProjLoans of symbolic_value_id * ty * (msymbolic_value_id * aproj) list
+exception FoundAProjLoans of aproj_loans
 
 exception FoundAbsProj of abstraction_id * symbolic_value_id
 
@@ -229,8 +240,8 @@ let symbolic_value_id_in_ctx (sv_id : SymbolicValueId.id) (ctx : eval_ctx) :
 
       method! visit_aproj env aproj =
         (match aproj with
-        | AProjLoans (sv_id1, _, _) | AProjBorrows (sv_id1, _, _) ->
-            if sv_id1 = sv_id then raise Found else ()
+        | AProjLoans { proj; _ } | AProjBorrows { proj; _ } ->
+            if proj.sv_id = sv_id then raise Found else ()
         | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ());
         super#visit_aproj env aproj
 
@@ -238,8 +249,8 @@ let symbolic_value_id_in_ctx (sv_id : SymbolicValueId.id) (ctx : eval_ctx) :
         let visit (asb : abstract_shared_borrow) : unit =
           match asb with
           | AsbBorrow _ -> ()
-          | AsbProjReborrows (sv_id1, _) ->
-              if sv_id1 = sv_id then raise Found else ()
+          | AsbProjReborrows proj ->
+              if proj.sv_id = sv_id then raise Found else ()
         in
         List.iter visit asb
     end
@@ -247,52 +258,6 @@ let symbolic_value_id_in_ctx (sv_id : SymbolicValueId.id) (ctx : eval_ctx) :
   (* We use exceptions *)
   try
     obj#visit_eval_ctx () ctx;
-    false
-  with Found -> true
-
-(** Check that a symbolic value doesn't contain ended regions.
-
-    Note that we don't check that the set of ended regions is empty: we check
-    that the set of ended regions doesn't intersect the set of regions used in
-    the type (this is more general). *)
-let symbolic_value_has_ended_regions (ended_regions : RegionId.Set.t)
-    (s : symbolic_value) : bool =
-  let regions = ty_regions s.sv_ty in
-  not (RegionId.Set.disjoint regions ended_regions)
-
-let region_is_owned (abs : abs) (r : region) : bool =
-  match r with
-  | RVar (Free rid) -> RegionId.Set.mem rid abs.regions.owned
-  | _ -> false
-
-let bottom_in_value_visitor (ended_regions : RegionId.Set.t) =
-  object
-    inherit [_] iter_typed_value
-    method! visit_VBottom _ = raise Found
-
-    method! visit_symbolic_value _ s =
-      if symbolic_value_has_ended_regions ended_regions s then raise Found
-      else ()
-  end
-
-(** Check if a {!type:Values.value} contains [⊥].
-
-    Note that this function is very general: it also checks wether symbolic
-    values contain already ended regions. *)
-let bottom_in_value (ended_regions : RegionId.Set.t) (v : typed_value) : bool =
-  let obj = bottom_in_value_visitor ended_regions in
-  (* We use exceptions *)
-  try
-    obj#visit_typed_value () v;
-    false
-  with Found -> true
-
-let bottom_in_adt_value (ended_regions : RegionId.Set.t) (v : adt_value) : bool
-    =
-  let obj = bottom_in_value_visitor ended_regions in
-  (* We use exceptions *)
-  try
-    obj#visit_adt_value () v;
     false
   with Found -> true
 
@@ -354,10 +319,6 @@ type ids_sets = {
   borrow_ids : BorrowId.Set.t;  (** Only the borrow ids *)
   loan_ids : BorrowId.Set.t;  (** Only the loan ids *)
   dids : DummyVarId.Set.t;
-  rids : RegionId.Set.t;
-      (** This should only contain **free** region ids (note that we have to be
-          careful because we use the same index type for bound regions and free
-          regions - see the implementation of [compute_ids] below) *)
   sids : SymbolicValueId.Set.t;
 }
 [@@deriving show]
@@ -373,7 +334,6 @@ let compute_ids () =
   let loan_ids = ref BorrowId.Set.empty in
   let aids = ref AbstractionId.Set.empty in
   let dids = ref DummyVarId.Set.empty in
-  let rids = ref RegionId.Set.empty in
   let sids = ref SymbolicValueId.Set.empty in
   let sids_to_values = ref SymbolicValueId.Map.empty in
 
@@ -384,7 +344,6 @@ let compute_ids () =
       borrow_ids = !borrow_ids;
       loan_ids = !loan_ids;
       dids = !dids;
-      rids = !rids;
       sids = !sids;
     }
   in
@@ -408,15 +367,6 @@ let compute_ids () =
         craise_opt_span __FILE__ __LINE__ None
           "Region ids should not be visited directly; the visitor should catch \
            cases that contain region ids earlier."
-
-      method! visit_RVar _ var =
-        match var with
-        | Free id -> rids := RegionId.Set.add id !rids
-        | Bound _ -> ()
-
-      method! visit_abs_regions _ (regions : abs_regions) : unit =
-        let { owned; ancestors } = regions in
-        rids := RegionId.Set.union (RegionId.Set.union owned ancestors) !rids
 
       method! visit_symbolic_value env sv =
         sids := SymbolicValueId.Set.add sv.sv_id !sids;
@@ -498,7 +448,6 @@ let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
     const_generic_vars_map;
     norm_trait_types = TraitTypeRefMap.empty (* Empty for now *);
     env = [ EFrame ];
-    ended_regions = RegionId.Set.empty;
   }
 
 (** Instantiate a function signature, introducing **fresh** abstraction ids and

@@ -7,6 +7,7 @@ open Contexts
 open LlbcAst
 open Cps
 open InterpreterUtils
+open InterpreterBorrowsCore
 open InterpreterProjectors
 open InterpreterExpansion
 open InterpreterPaths
@@ -113,7 +114,7 @@ let assign_to_place (config : config) (span : Meta.span) (rv : typed_value)
   (* Write to the destination *)
   (* Checks - maybe the bookkeeping updated the rvalue and introduced bottoms *)
   exec_assert __FILE__ __LINE__
-    (not (bottom_in_value ctx.ended_regions rv))
+    (not (bottom_in_value span ctx rv))
     span "The value to move contains bottom";
   (* Update the destination *)
   let ctx = write_place span Write p rv ctx in
@@ -355,7 +356,7 @@ let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
     | None -> ()
     | Some ret_value ->
         sanity_check __FILE__ __LINE__
-          (not (bottom_in_value ctx.ended_regions ret_value))
+          (not (bottom_in_value span ctx ret_value))
           span
   in
 
@@ -492,18 +493,10 @@ let eval_builtin_function_call_concrete (config : config) (span : Meta.span)
     which can end or not. *)
 let create_empty_abstractions_from_abs_region_groups
     (kind : RegionGroupId.id -> abs_kind) (rgl : abs_region_group list)
-    (region_can_end : RegionGroupId.id -> bool) : abs list =
-  (* We use a reference to progressively create a map from abstraction ids
-   * to set of ancestor regions. Note that {!abs_to_ancestors_regions} [abs_id]
-   * returns the union of:
-   * - the regions of the ancestors of abs_id
-   * - the regions of abs_id
-   *)
-  let abs_to_ancestors_regions : RegionId.Set.t AbstractionId.Map.t ref =
-    ref AbstractionId.Map.empty
-  in
+    (region_can_end : RegionGroupId.id -> bool) : (region_id_set * abs) list =
   (* Auxiliary function to create one abstraction *)
-  let create_abs (rg_id : RegionGroupId.id) (rg : abs_region_group) : abs =
+  let create_abs (rg_id : RegionGroupId.id) (rg : abs_region_group) :
+      region_id_set * abs =
     let abs_id = rg.id in
     let original_parents = rg.parents in
     let parents =
@@ -511,34 +504,21 @@ let create_empty_abstractions_from_abs_region_groups
         (fun s pid -> AbstractionId.Set.add pid s)
         AbstractionId.Set.empty rg.parents
     in
-    let regions =
-      let owned = RegionId.Set.of_list rg.regions in
-      let ancestors =
-        List.fold_left
-          (fun acc parent_id ->
-            RegionId.Set.union acc
-              (AbstractionId.Map.find parent_id !abs_to_ancestors_regions))
-          RegionId.Set.empty rg.parents
-      in
-      { owned; ancestors }
-    in
-    let ancestors_regions_union_current_regions =
-      RegionId.Set.union regions.owned regions.owned
-    in
+    let regions = rg.regions in
     let can_end = region_can_end rg_id in
-    abs_to_ancestors_regions :=
-      AbstractionId.Map.add abs_id ancestors_regions_union_current_regions
-        !abs_to_ancestors_regions;
     (* Create the abstraction *)
-    {
-      abs_id;
-      kind = kind rg_id;
-      can_end;
-      parents;
-      original_parents;
-      regions;
-      avalues = [];
-    }
+    let abs =
+      {
+        abs_id;
+        kind = kind rg_id;
+        can_end;
+        parents;
+        original_parents;
+        avalues = [];
+      }
+    in
+    (* Return *)
+    (RegionId.Set.of_list regions, abs)
   in
   (* Apply *)
   RegionGroupId.mapi create_abs rgl
@@ -546,7 +526,8 @@ let create_empty_abstractions_from_abs_region_groups
 let create_push_abstractions_from_abs_region_groups
     (kind : RegionGroupId.id -> abs_kind) (rgl : abs_region_group list)
     (region_can_end : RegionGroupId.id -> bool)
-    (compute_abs_avalues : abs -> eval_ctx -> eval_ctx * typed_avalue list)
+    (compute_abs_avalues :
+      region_id_set -> eval_ctx -> eval_ctx * typed_avalue list)
     (ctx : eval_ctx) : eval_ctx =
   (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
   let empty_absl =
@@ -555,9 +536,10 @@ let create_push_abstractions_from_abs_region_groups
 
   (* Compute and add the avalues to the abstractions, the insert the abstractions
    * in the context. *)
-  let insert_abs (ctx : eval_ctx) (abs : abs) : eval_ctx =
+  let insert_abs (ctx : eval_ctx) ((regions, abs) : region_id_set * abs) :
+      eval_ctx =
     (* Compute the values to insert in the abstraction *)
-    let ctx, avalues = compute_abs_avalues abs ctx in
+    let ctx, avalues = compute_abs_avalues regions ctx in
     (* Add the avalues to the abstraction *)
     let abs = { abs with avalues } in
     (* Insert the abstraction in the context *)
@@ -1331,10 +1313,12 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
 
   (* Generate a fresh symbolic value for the return value *)
   let ret_sv_ty = inst_sg.output in
-  let ret_spc = mk_fresh_symbolic_value span ret_sv_ty in
+  let ret_spc = mk_fresh_symbolic_value span (erase_regions ret_sv_ty) in
   let ret_value = mk_typed_value_from_symbolic_value ret_spc in
   let ret_av regions =
-    mk_aproj_loans_value_from_symbolic_value regions ret_spc ret_sv_ty
+    (* Normalize the type by masking only the regions we want to project *)
+    let ret_sv_ty = normalize_proj_ty regions ret_sv_ty in
+    mk_aproj_loans_value_from_symbolic_value ret_spc ret_sv_ty
   in
   let args_places =
     List.map (fun p -> S.mk_opt_place_from_op span p ctx) args
@@ -1372,18 +1356,19 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
    * First, we define the function which, given an initialized, empty
    * abstraction, computes the avalues which should be inserted inside.
    *)
-  let compute_abs_avalues (abs : abs) (ctx : eval_ctx) :
+  let compute_abs_avalues (regions : region_id_set) (ctx : eval_ctx) :
       eval_ctx * typed_avalue list =
     (* Project over the input values *)
     let ctx, args_projs =
       List.fold_left_map
         (fun ctx (arg, arg_rty) ->
-          apply_proj_borrows_on_input_value config span ctx abs.regions.owned
-            abs.regions.ancestors arg arg_rty)
+          (* Normalize the type by masking only the regions we want to project *)
+          let arg_rty = normalize_proj_ty regions arg_rty in
+          apply_proj_borrows_on_input_value config span ctx arg arg_rty)
         ctx args_with_rtypes
     in
     (* Group the input and output values *)
-    (ctx, List.append args_projs [ ret_av abs.regions.owned ])
+    (ctx, List.append args_projs [ ret_av regions ])
   in
   (* Actually initialize and insert the abstractions *)
   let call_id = fresh_fun_call_id () in

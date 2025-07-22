@@ -200,8 +200,7 @@ let end_borrow_get_borrow (span : Meta.span)
                * of the two cases described above *)
               ABottom)
             else super#visit_ABorrow outer bc
-        | AIgnoredMutBorrow (_, _)
-        | AEndedMutBorrow _
+        | AIgnoredMutBorrow _ | AEndedMutBorrow _
         | AEndedIgnoredMutBorrow
             { given_back = _; child = _; given_back_meta = _ }
         | AEndedSharedBorrow ->
@@ -252,7 +251,7 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
     (not (concrete_loans_in_value nv))
     span "Can not end a borrow because the value to give back contains bottom";
   exec_assert __FILE__ __LINE__
-    (not (bottom_in_value ctx.ended_regions nv))
+    (not (bottom_in_value span ctx nv))
     span "Can not end a borrow because the value to give back contains bottom";
   (* Debug *)
   log#ltrace
@@ -326,7 +325,7 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
 
       (** We need to inspect ignored mutable borrows, to insert loan projectors
           if necessary. *)
-      method visit_typed_ABorrow (opt_abs : abs option) (ty : rty)
+      method visit_typed_ABorrow (opt_abs : abs option) (ty : proj_ty)
           (bc : aborrow_content) : avalue =
         match bc with
         | AIgnoredMutBorrow (bid', child) ->
@@ -336,7 +335,6 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
                * and the given back value is thus a symbolic value *)
               match nv.value with
               | VSymbolic sv ->
-                  let abs = Option.get opt_abs in
                   (* Remember the given back value as a meta-value
                    * TODO: it is a bit annoying to have to deconstruct
                    * the value... Think about a more elegant way. *)
@@ -344,8 +342,7 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
                   (* The loan projector *)
                   let _, ty, _ = ty_as_ref ty in
                   let given_back =
-                    mk_aproj_loans_value_from_symbolic_value abs.regions.owned
-                      sv ty
+                    mk_aproj_loans_value_from_symbolic_value sv ty
                   in
                   (* Continue giving back in the child value *)
                   let child = super#visit_typed_avalue opt_abs child in
@@ -363,20 +360,12 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
 
       (** We are not specializing an already existing method, but adding a new
           method (for projections, we need type information) *)
-      method visit_typed_ALoan (opt_abs : abs option) (ty : rty)
+      method visit_typed_ALoan (opt_abs : abs option) (ty : proj_ty)
           (lc : aloan_content) : avalue =
-        (* Preparing a bit *)
-        let regions, ancestors_regions =
-          match opt_abs with
-          | None -> craise __FILE__ __LINE__ span "Unreachable"
-          | Some abs -> (abs.regions.owned, abs.regions.ancestors)
-        in
         (* Rk.: there is a small issue with the types of the aloan values.
          * See the comment at the level of definition of {!typed_avalue} *)
-        let borrowed_value_aty =
-          let _, ty, _ = ty_get_ref ty in
-          ty
-        in
+        let _, borrowed_value_aty, _ = ty_get_ref ty in
+
         match lc with
         | AMutLoan (pm, bid', child) ->
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
@@ -391,7 +380,7 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
               (* Apply the projection *)
               let given_back =
                 apply_proj_borrows span check_symbolic_no_ended ctx
-                  fresh_reborrow regions ancestors_regions nv borrowed_value_aty
+                  fresh_reborrow nv borrowed_value_aty
               in
               (* Continue giving back in the child value *)
               let child = super#visit_typed_avalue opt_abs child in
@@ -419,7 +408,7 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
                * (i.e., we don't call {!set_replaced}) *)
               let given_back =
                 apply_proj_borrows span check_symbolic_no_ended ctx
-                  fresh_reborrow regions ancestors_regions nv borrowed_value_aty
+                  fresh_reborrow nv borrowed_value_aty
               in
               (* Continue giving back in the child value *)
               let child = super#visit_typed_avalue opt_abs child in
@@ -453,90 +442,69 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
     Because doing this introduces a fresh symbolic value which may contain
     borrows, we may need to update the proj_borrows to introduce loan projectors
     over those borrows. *)
-let end_aproj_borrows (span : Meta.span) (ended_regions : RegionId.Set.t)
-    (proj_ty : rty) (sv_id : symbolic_value_id) (nsv : symbolic_value)
-    (ctx : eval_ctx) : eval_ctx =
+let end_aproj_borrows (span : Meta.span) (proj : symbolic_proj)
+    (nsv : symbolic_value) (ctx : eval_ctx) : eval_ctx =
   (* Sanity checks *)
-  sanity_check __FILE__ __LINE__ (sv_id <> nsv.sv_id && ty_is_rty proj_ty) span;
+  sanity_check __FILE__ __LINE__ (proj.sv_id <> nsv.sv_id) span;
   log#ltrace
     (lazy
-      ("end_aproj_borrows:" ^ "\n- ended regions: "
-      ^ RegionId.Set.to_string None ended_regions
-      ^ "\n- projection type: " ^ ty_to_string ctx proj_ty ^ "\n- sv: "
-      ^ symbolic_value_id_to_pretty_string sv_id
+      ("end_aproj_borrows:" ^ "\n- projection type: "
+      ^ ty_to_string ctx proj.proj_ty
+      ^ "\n- sv: "
+      ^ symbolic_value_id_to_pretty_string proj.sv_id
       ^ "\n- nsv: "
       ^ symbolic_value_to_string ctx nsv
       ^ "\n- ctx: " ^ eval_ctx_to_string ctx));
   (* Substitution functions, to replace the borrow projectors over symbolic values *)
-  (* We need to handle two cases:
-     - If the regions ended in the symbolic value intersect with the owned
-       regions of the abstraction (not the ancestor ones): we can simply end the
-       borrow projector, there is nothing left to track anymore.
-
-       Ex.: we are ending abs1 below:
-       {[
-         abs0 {'a} { AProjLoans (s0 : &'a mut T) [] }
-         abs1 {'b} { AProjBorrows (s0 : &'a mut T <: &'b mut T) }
-       ]}
-     - if the regions ended in the symbolic value intersect with the ancestors
-       regions of the abstraction, we have to introduce a projection
-       (because it means we ended ancestor "outer" borrows, and so we need
-       to project the given back inner loans into the abstraction).
-
-       Ex.: we are ending abs2 below, and considering abs1: we have to project
-       the inner loans inside of abs3. However we do not project anything
-       into abs2 (see the case above).
-       {[
-         abs0 {'a} { AProjLoans (s0 : &'a mut &'b mut T) [] }
-         abs1 {'b} { AProjLoans (s0 : &'a mut &'b mut T) [] }
-         abs2 {'c} { AProjBorrows (s0 : &'a mut &'b mut T <: &'c mut T &'d mut T) }
-         abs3 {'d} { AProjBorrows (s0 : &'a mut &'b mut T <: &'c mut T &'d mut T) }
-       ]}
-
-     We proceed in two steps:
-     - we first update when intersecting with ancestors regions
-     - then we update when intersecting with owned regions
+  (* See the comments about [AProjLoans], we have to update in two situations:
+     - if the projection over the symbolic value intersects the borrow projector:
+       this is because we are ending exactly this borrow projector, so we need
+       to end it.
+     - if the *outlive* projection intersects the borrow projector: we need to
+       project the inner loans of the given back value.
   *)
-  let update_ancestors (_abs : abs) (abs_sv_id : symbolic_value_id)
-      (abs_proj_ty : rty) (local_given_back : (msymbolic_value_id * aproj) list)
-      : aproj =
-    (* Compute the projection over the given back value *)
-    let child_proj = AProjLoans (nsv.sv_id, abs_proj_ty, []) in
-    AProjBorrows
-      (abs_sv_id, abs_proj_ty, (sv_id, child_proj) :: local_given_back)
-  in
-  let ctx =
-    update_intersecting_aproj_borrows span ~fail_if_unchanged:false
-      ~include_ancestors:true ~include_owned:false ~update_shared:None
-      ~update_mut:update_ancestors ended_regions sv_id proj_ty ctx
-  in
-  let update_owned (_abs : abs) (_abs_sv_id : symbolic_value_id)
-      (_abs_proj_ty : rty)
-      (local_given_back : (msymbolic_value_id * aproj) list) : aproj =
-    (* There is nothing to project *)
-    let mvalues = { consumed = sv_id; given_back = nsv } in
-    AEndedProjBorrows (mvalues, local_given_back)
+  let update_mut ~owned ~outlive (_abs : abs) (aproj : aproj_borrows) : aproj =
+    (* We can be in one case, or the other, but not both *)
+    sanity_check __FILE__ __LINE__ ((not owned) || not outlive) span;
+
+    if owned then
+      (* There is nothing to project *)
+      let mvalues = { consumed = proj.sv_id; given_back = nsv } in
+      AEndedProjBorrows { mvalues; loans = aproj.loans }
+    else
+      (* Compute the projection over the given back value (we project the loans) *)
+      let loan =
+        AProjLoans
+          {
+            proj = { aproj.proj with sv_id = nsv.sv_id };
+            consumed = [];
+            borrows = [];
+          }
+      in
+      let consumed : mconsumed_symb =
+        { sv_id = nsv.sv_id; proj_ty = proj.proj_ty }
+      in
+      AProjBorrows { proj; loans = (consumed, loan) :: aproj.loans }
   in
   update_intersecting_aproj_borrows span ~fail_if_unchanged:true
-    ~include_ancestors:false ~include_owned:true ~update_shared:None
-    ~update_mut:update_owned ended_regions sv_id proj_ty ctx
+    ~include_owned:true ~include_outlive:true ~update_shared:None ~update_mut
+    proj ctx
 
 (** Give back a *modified* symbolic value. *)
 let give_back_symbolic_value (_config : config) (span : Meta.span)
-    (ended_regions : RegionId.Set.t) (proj_ty : rty) (sv_id : symbolic_value_id)
-    (nsv : symbolic_value) (ctx : eval_ctx) : eval_ctx =
+    (proj : symbolic_proj) (nsv : symbolic_value) (ctx : eval_ctx) : eval_ctx =
   (* Sanity checks *)
-  sanity_check __FILE__ __LINE__ (sv_id <> nsv.sv_id && ty_is_rty proj_ty) span;
+  sanity_check __FILE__ __LINE__ (proj.sv_id <> nsv.sv_id) span;
   (* Substitution functions, to replace the borrow projectors over symbolic values *)
   (* We need to handle two cases:
      - If the regions ended in the symbolic value intersect with the owned
        regions of the abstraction (not the ancestor ones): we can simply end the
-       loan, there is nothing left to track anymore.
+       loan as there is nothing left to track anymore.
 
        Ex.: we are ending abs1 below:
        {[
          abs0 {'a} { AProjLoans (s0 : &'a mut T) [] }
-         abs1 {'b} { AProjBorrows (s0 : &'a mut T <: &'b mut T) }
+         abs1 {'b} { AProjBorrows (s0 : &'b mut T) }
        ]}
      - if the regions ended in the symbolic value intersect with the ancestors
        regions of the abstraction, we have to introduce a projection
@@ -547,35 +515,41 @@ let give_back_symbolic_value (_config : config) (span : Meta.span)
        Ex.: we are ending abs2 below, and considering abs1: we have to project
        the inner borrows inside of abs1. However we do not project anything
        into abs0 (see the case above).
+
        {[
-         abs0 {'a} { AProjLoans (s0 : &'a mut &'b mut T) [] }
-         abs1 {'b} { AProjLoans (s0 : &'a mut &'b mut T) [] }
-         abs2 {'c} { AProjBorrows (s0 : &'a mut &'b mut T <: &'c mut T &'d mut T) }
-         abs3 {'d} { AProjBorrows (s0 : &'a mut &'b mut T <: &'c mut T &'d mut T) }
+         abs0 {'a} { AProjLoans (s0 : &'a mut &'_ mut T) [] }
+         abs1 {'b} { AProjLoans (s0 : &'_ mut &'b mut T) [] }
+         abs2 {'c} { AProjBorrows (s0 : &'c mut &'_ mut T) }
+         abs3 {'d} { AProjBorrows (s0 : &'_ mut &'d mut T) }
        ]}
 
      We proceed in two steps:
      - we first update when intersecting with ancestors regions
      - then we update when intersecting with owned regions
   *)
-  let subst_ancestors (_abs : abs) abs_sv abs_proj_ty local_given_back =
-    (* Compute the projection over the given back value *)
-    let child_proj = AProjBorrows (nsv.sv_id, abs_proj_ty, []) in
-    AProjLoans (abs_sv, abs_proj_ty, (sv_id, child_proj) :: local_given_back)
-  in
-  let ctx =
-    update_intersecting_aproj_loans span ~fail_if_unchanged:false
-      ~include_ancestors:true ~include_owned:false ended_regions proj_ty sv_id
-      subst_ancestors ctx
-  in
-  let subst_owned (_abs : abs) abs_sv abs_proj_ty local_given_back =
-    (* There is nothing to project *)
-    let child_proj = AEmpty in
-    AProjLoans (abs_sv, abs_proj_ty, (nsv.sv_id, child_proj) :: local_given_back)
+  let subst ~owned ~outlive (_abs : abs) (aproj : aproj_loans) =
+    sanity_check __FILE__ __LINE__ ((not owned) || not outlive) span;
+    if owned then
+      (* There is nothing to project *)
+      let child_proj = AEmpty in
+      let consumed : mconsumed_symb =
+        { sv_id = nsv.sv_id; proj_ty = aproj.proj.proj_ty }
+      in
+      AProjLoans
+        { aproj with consumed = (consumed, child_proj) :: aproj.consumed }
+    else
+      (* Compute the projection over the given back value *)
+      let borrow =
+        AProjBorrows
+          { proj = { aproj.proj with sv_id = nsv.sv_id }; loans = [] }
+      in
+      let consumed : mconsumed_symb =
+        { sv_id = nsv.sv_id; proj_ty = proj.proj_ty }
+      in
+      AProjLoans { aproj with borrows = (consumed, borrow) :: aproj.borrows }
   in
   update_intersecting_aproj_loans span ~fail_if_unchanged:true
-    ~include_ancestors:false ~include_owned:true ended_regions proj_ty sv_id
-    subst_owned ctx
+    ~include_owned:true ~include_outlive:true proj subst ctx
 
 (** Auxiliary function to end borrows. See {!give_back}.
 
@@ -1147,16 +1121,6 @@ and end_abstraction_aux (config : config) (span : Meta.span)
         comp cc (end_abstraction_borrows config span chain abs_id ctx)
       in
 
-      (* End the regions owned by the abstraction - note that we don't need to
-         relookup the abstraction: the set of regions in an abstraction never
-         changes... *)
-      let ctx =
-        let ended_regions =
-          RegionId.Set.union ctx.ended_regions abs.regions.owned
-        in
-        { ctx with ended_regions }
-      in
-
       (* Remove all the references to the id of the current abstraction, and remove
          the abstraction itself.
          **Rk.**: this is where we synthesize the updated symbolic AST *)
@@ -1222,13 +1186,10 @@ and end_abstraction_loans (config : config) (span : Meta.span)
       in
       (* Reexplore, looking for loans *)
       comp cc (end_abstraction_loans config span chain abs_id ctx)
-  | Some (SymbolicValue (sv, proj_ty)) ->
+  | Some (SymbolicValue proj) ->
       (* There is a proj_loans over a symbolic value: end the proj_borrows
          which intersect this proj_loans, then end the proj_loans itself *)
-      let ctx, cc =
-        end_proj_loans_symbolic config span chain abs_id abs.regions.owned sv
-          proj_ty ctx
-      in
+      let ctx, cc = end_proj_loans_symbolic config span chain abs_id proj ctx in
       (* Reexplore, looking for loans *)
       comp cc (end_abstraction_loans config span chain abs_id ctx)
 
@@ -1289,8 +1250,7 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
       method! visit_aproj env sproj =
         (match sproj with
         | AProjLoans _ -> craise __FILE__ __LINE__ span "Unexpected"
-        | AProjBorrows (sv, proj_ty, given_back) ->
-            raise (FoundAProjBorrows (sv, proj_ty, given_back))
+        | AProjBorrows aproj_borrows -> raise (FoundAProjBorrows aproj_borrows)
         | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ());
         super#visit_aproj env sproj
 
@@ -1344,7 +1304,7 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
                 (fun asb ->
                   match asb with
                   | AsbBorrow bid -> Some bid
-                  | AsbProjReborrows (_, _) -> None)
+                  | AsbProjReborrows _ -> None)
                 asb
             in
             (* There should be at least one borrow identifier in the set, which we
@@ -1368,20 +1328,19 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
       (* Reexplore *)
       end_abstraction_borrows config span chain abs_id ctx
   (* There are symbolic borrows: end them, then reexplore *)
-  | FoundAProjBorrows (sv, proj_ty, given_back) ->
+  | FoundAProjBorrows aproj ->
       log#ltrace
         (lazy
           ("end_abstraction_borrows: found aproj borrows: "
-          ^ aproj_to_string ctx (AProjBorrows (sv, proj_ty, given_back))));
+          ^ aproj_to_string ctx (AProjBorrows aproj)));
       (* Generate a fresh symbolic value *)
-      let nsv = mk_fresh_symbolic_value span proj_ty in
-      (* Replace the proj_borrows - there should be exactly one *)
-      let ctx = end_aproj_borrows span abs.regions.owned proj_ty sv nsv ctx in
-      (* Give back the symbolic value *)
-      let ctx =
-        give_back_symbolic_value config span abs.regions.owned proj_ty sv nsv
-          ctx
+      let nsv =
+        mk_fresh_symbolic_value span (erase_regions aproj.proj.proj_ty)
       in
+      (* Replace the proj_borrows - there should be exactly one *)
+      let ctx = end_aproj_borrows span aproj.proj nsv ctx in
+      (* Give back the symbolic value *)
+      let ctx = give_back_symbolic_value config span aproj.proj nsv ctx in
       (* Reexplore *)
       end_abstraction_borrows config span chain abs_id ctx
   (* There are concrete (i.e., not symbolic) borrows in shared values: end them, then reexplore *)
@@ -1444,34 +1403,29 @@ and end_abstraction_remove_from_context (_config : config) (span : Meta.span)
       here. *)
 and end_proj_loans_symbolic (config : config) (span : Meta.span)
     (chain : borrow_or_abs_ids) (abs_id : AbstractionId.id)
-    (regions : RegionId.Set.t) (sv_id : symbolic_value_id) (proj_ty : rty) :
-    cm_fun =
+    (proj : symbolic_proj) : cm_fun =
  fun ctx ->
   log#ltrace
     (lazy
       ("end_proj_loans_symbolic:" ^ "\n- abs_id: "
       ^ AbstractionId.to_string abs_id
-      ^ "\n- regions: "
-      ^ RegionId.Set.to_string None regions
       ^ "\n- sv: "
-      ^ symbolic_value_id_to_pretty_string sv_id
-      ^ "\n- projection type: " ^ ty_to_string ctx proj_ty ^ "\n- ctx:\n"
-      ^ eval_ctx_to_string ctx));
+      ^ symbolic_value_id_to_pretty_string proj.sv_id
+      ^ "\n- projection type: "
+      ^ ty_to_string ctx proj.proj_ty
+      ^ "\n- ctx:\n" ^ eval_ctx_to_string ctx));
   (* Small helpers for sanity checks *)
-  let check ctx = no_aproj_over_symbolic_in_context span sv_id ctx in
+  let check ctx = no_aproj_over_symbolic_in_context span proj.sv_id ctx in
   (* Find the first proj_borrows which intersects the proj_loans *)
   let explore_shared = true in
-  match
-    lookup_intersecting_aproj_borrows_opt span explore_shared regions sv_id
-      proj_ty ctx
-  with
+  match lookup_intersecting_aproj_borrows_opt span explore_shared proj ctx with
   | None ->
       (* We couldn't find any in the context: it means that the symbolic value
          is in the concrete environment (or that we dropped it, in which case
          it is completely absent). We thus simply need to replace the loans
          projector with an ended projector.
       *)
-      let ctx = update_aproj_loans_to_ended span abs_id sv_id ctx in
+      let ctx = update_aproj_loans_to_ended span abs_id proj.sv_id ctx in
       (* Sanity check *)
       check ctx;
       (* Continue *)
@@ -1520,11 +1474,11 @@ and end_proj_loans_symbolic (config : config) (span : Meta.span)
       let ctx =
         (* All the proj_borrows are owned: simply erase them *)
         let ctx =
-          remove_intersecting_aproj_borrows_shared span ~include_ancestors:false
-            ~include_owned:true regions sv_id proj_ty ctx
+          remove_intersecting_aproj_borrows_shared ~include_owned:true
+            ~include_outlive:false span proj ctx
         in
         (* End the loan itself *)
-        update_aproj_loans_to_ended span abs_id sv_id ctx
+        update_aproj_loans_to_ended span abs_id proj.sv_id ctx
       in
       (* Sanity check *)
       check ctx;
@@ -1572,9 +1526,7 @@ and end_proj_loans_symbolic (config : config) (span : Meta.span)
         let ctx, cc = end_abstraction_aux config span chain abs_id' ctx in
         (* Retry ending the projector of loans *)
         let ctx, cc =
-          comp cc
-            (end_proj_loans_symbolic config span chain abs_id regions sv_id
-               proj_ty ctx)
+          comp cc (end_proj_loans_symbolic config span chain abs_id proj ctx)
         in
         (* Sanity check *)
         check ctx;
@@ -1644,7 +1596,7 @@ let promote_shared_loan_to_mut_loan (span : Meta.span) (l : BorrowId.id)
       sanity_check __FILE__ __LINE__ (not (concrete_loans_in_value sv)) span;
       (* Check there isn't {!Bottom} (this is actually an invariant *)
       cassert __FILE__ __LINE__
-        (not (bottom_in_value ctx.ended_regions sv))
+        (not (bottom_in_value span ctx sv))
         span "There shouldn't be a bottom";
       (* Check there aren't reserved borrows *)
       cassert __FILE__ __LINE__
@@ -1718,7 +1670,7 @@ let rec promote_reserved_mut_borrow (config : config) (span : Meta.span)
               ^ typed_value_to_string ~span:(Some span) ctx sv));
           sanity_check __FILE__ __LINE__ (not (concrete_loans_in_value sv)) span;
           sanity_check __FILE__ __LINE__
-            (not (bottom_in_value ctx.ended_regions sv))
+            (not (bottom_in_value span ctx sv))
             span;
           sanity_check __FILE__ __LINE__ (not (reserved_in_value sv)) span;
           (* End the borrows which borrow from the value, at the exception of
@@ -1883,22 +1835,30 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
     | ASymbolic (_, aproj) -> (
         (* *)
         match aproj with
-        | AProjLoans (_, _, children) ->
+        | AProjLoans { proj = _; consumed; borrows } ->
             (* There can be children in the presence of nested borrows: we
                don't handle those for now. *)
-            sanity_check __FILE__ __LINE__ (children = []) span;
+            sanity_check __FILE__ __LINE__ (consumed = []) span;
+            sanity_check __FILE__ __LINE__ (borrows = []) span;
             push av
-        | AProjBorrows (_, _, children) ->
+        | AProjBorrows { proj = _; loans } ->
             (* For now, we fore all symbolic values containing borrows to be eagerly
                expanded *)
             (* There can be children in the presence of nested borrows: we
                don't handle those for now. *)
-            sanity_check __FILE__ __LINE__ (children = []) span;
+            sanity_check __FILE__ __LINE__ (loans = []) span;
             push av
-        | AEndedProjLoans (_, children) | AEndedProjBorrows (_, children) ->
+        | AEndedProjLoans { proj = _; consumed; borrows } ->
             (* There can be children in the presence of nested borrows: we
                don't handle those for now. *)
-            sanity_check __FILE__ __LINE__ (children = []) span;
+            sanity_check __FILE__ __LINE__ (consumed = []) span;
+            sanity_check __FILE__ __LINE__ (borrows = []) span;
+            (* Just ignore *)
+            ()
+        | AEndedProjBorrows { mvalues = _; loans } ->
+            (* There can be children in the presence of nested borrows: we
+               don't handle those for now. *)
+            sanity_check __FILE__ __LINE__ (loans = []) span;
             (* Just ignore *)
             ()
         | AEmpty -> ())
@@ -1942,6 +1902,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
                   visitor#visit_typed_value () v
                 in
                 let sv = mk_value_with_fresh_sids sv in
+
                 (* Create the new avalue *)
                 let value =
                   ALoan
@@ -1949,11 +1910,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
                 in
                 (* We need to update the type of the value: abstract shared loans
                    have the type `& ...` - TODO: this is annoying and not very clean... *)
-                let ty =
-                  (* Take the first region of the abstraction - this doesn't really matter *)
-                  let r = RegionId.Set.min_elt abs0.regions.owned in
-                  TRef (RVar (Free r), ty, RShared)
-                in
+                let ty = TRef (RVar (Free RegionId.zero), ty, RShared) in
                 { value; ty }
               in
               let avl = List.append [ av ] avl in
@@ -1997,7 +1954,7 @@ let find_first_endable_loan_proj_in_abs (span : Meta.span) (ctx : eval_ctx)
 
       method! visit_aproj env proj =
         match proj with
-        | AProjLoans (sv_id, proj_ty, _) ->
+        | AProjLoans proj ->
             (* Check if there are borrow projectors in the context
                or symbolic values with the same id *)
             let explore_shared = false in
@@ -2007,7 +1964,7 @@ let find_first_endable_loan_proj_in_abs (span : Meta.span) (ctx : eval_ctx)
                 inherit [_] iter_eval_ctx
 
                 method! visit_VSymbolic _ sv' =
-                  if sv'.sv_id = sv_id then raise Found else ()
+                  if sv'.sv_id = proj.proj.sv_id then raise Found else ()
               end
             in
             begin
@@ -2018,14 +1975,14 @@ let find_first_endable_loan_proj_in_abs (span : Meta.span) (ctx : eval_ctx)
                    borrow projectors *)
                 match
                   lookup_intersecting_aproj_borrows_opt span explore_shared
-                    abs.regions.owned sv_id proj_ty ctx
+                    proj.proj ctx
                 with
                 | None ->
                     (* No intersecting projections: we can end this loan projector *)
-                    raise (FoundAbsProj (abs.abs_id, sv_id))
+                    raise (FoundAbsProj (abs.abs_id, proj.proj.sv_id))
                 | Some _ ->
                     (* There are intersecting projections: we can't end this loan projector *)
-                    super#visit_aproj env proj
+                    super#visit_aproj env (AProjLoans proj)
               with Found -> ()
             end
         | AProjBorrows _ | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty ->
@@ -2043,7 +2000,7 @@ let find_first_endable_loan_proj_in_abs (span : Meta.span) (ctx : eval_ctx)
 let abs_borrows_loans_in_fixed span (ctx : eval_ctx)
     (fixed_abs_ids : AbstractionId.Set.t) (abs : abs) : bool =
   (* Iterate through the loan projectors which intersect a given borrow projector *)
-  let visit_proj_loans (sid : symbolic_value_id) (proj_ty : rty) =
+  let visit_proj_loans (proj : symbolic_proj) =
     object
       inherit [_] iter_eval_ctx as super
 
@@ -2051,13 +2008,12 @@ let abs_borrows_loans_in_fixed span (ctx : eval_ctx)
         sanity_check __FILE__ __LINE__ (env = None) span;
         super#visit_abs (Some abs) abs
 
-      method! visit_AProjLoans env sid' proj_ty' children =
+      method! visit_AProjLoans env proj' =
         if
-          sid = sid'
-          && projections_intersect span proj_ty abs.regions.owned proj_ty'
-               (Option.get env).regions.owned
+          proj.sv_id = proj'.proj.sv_id
+          && norm_projections_intersect span proj.proj_ty proj'.proj.proj_ty
         then raise Found
-        else super#visit_AProjLoans env sid' proj_ty' children
+        else super#visit_AProjLoans env proj'
     end
   in
 
@@ -2096,8 +2052,8 @@ let abs_borrows_loans_in_fixed span (ctx : eval_ctx)
       method! visit_aproj env proj =
         super#visit_aproj env proj;
         match proj with
-        | AProjBorrows (sid, proj_ty, _) ->
-            (visit_proj_loans sid proj_ty)#visit_eval_ctx None ctx
+        | AProjBorrows proj ->
+            (visit_proj_loans proj.proj)#visit_eval_ctx None ctx
         | AProjLoans _ | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ()
     end
   in
@@ -2244,7 +2200,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
   log#ltrace (lazy (__FUNCTION__ ^ ": " ^ typed_value_to_string ctx v));
   (* Convert the value to a list of avalues *)
   let absl = ref [] in
-  let push_abs (r_id : RegionId.id) (avalues : typed_avalue list) : unit =
+  let push_abs (avalues : typed_avalue list) : unit =
     if avalues = [] then ()
     else begin
       (* Create the abs - note that we keep the order of the avalues as it is
@@ -2264,11 +2220,6 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
           can_end;
           parents = AbstractionId.Set.empty;
           original_parents = [];
-          regions =
-            {
-              owned = RegionId.Set.singleton r_id;
-              ancestors = RegionId.Set.empty;
-            };
           avalues;
         }
       in
@@ -2281,6 +2232,9 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
     end
   in
 
+  (* The projection types are normalized, so we project following the region 0 *)
+  let r_id = RegionId.zero in
+
   (* [group]: group in one abstraction (because we dived into a borrow/loan)
 
      We return one typed-value for the shared values: when we encounter a shared
@@ -2288,8 +2242,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
      is [true], this shared value will be stripped of its shared loans.
   *)
   let rec to_avalues ~(allow_borrows : bool) ~(inside_borrowed : bool)
-      ~(group : bool) (r_id : RegionId.id) (v : typed_value) :
-      typed_avalue list * typed_value =
+      ~(group : bool) (v : typed_value) : typed_avalue list * typed_value =
     (* Debug *)
     log#ldebug
       (lazy
@@ -2312,7 +2265,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             let avl, field_values =
               List.split
                 (List.map
-                   (to_avalues ~allow_borrows ~inside_borrowed ~group r_id)
+                   (to_avalues ~allow_borrows ~inside_borrowed ~group)
                    adt.field_values)
             in
             (List.concat avl, field_values)
@@ -2321,11 +2274,10 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             let field_values =
               List.map
                 (fun fv ->
-                  let r_id = fresh_region_id () in
                   let avl, fv =
-                    to_avalues ~allow_borrows ~inside_borrowed ~group r_id fv
+                    to_avalues ~allow_borrows ~inside_borrowed ~group fv
                   in
-                  push_abs r_id avl;
+                  push_abs avl;
                   fv)
                 (* Slightly tricky: pay attention to the order in which the
                    abstractions are pushed (i.e.: the [List.rev] is important
@@ -2364,7 +2316,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
                because we don't support nested borrows for now) *)
             let avl, bv =
               to_avalues ~allow_borrows:false ~inside_borrowed:true ~group:true
-                r_id bv
+                bv
             in
             let value = { v with value = VBorrow (VMutBorrow (bid, bv)) } in
             (av :: avl, value)
@@ -2374,7 +2326,6 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
     | VLoan lc -> (
         match lc with
         | VSharedLoan (bids, sv) ->
-            let r_id = if group then r_id else fresh_region_id () in
             (* We don't support nested borrows for now *)
             cassert __FILE__ __LINE__
               (not (value_has_borrows (Some span) ctx sv.value))
@@ -2385,11 +2336,12 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             (* We use [AIgnore] for the inner value *)
             let ignored = mk_aignored span ty None in
             (* For avalues, a loan has the type borrow (see the comments in [avalue]) *)
-            let ty = mk_ref_ty (RVar (Free r_id)) ty RShared in
+            let ref_ty = ty in
+            let ty = mk_ref_ty (RVar (Free r_id)) ref_ty RShared in
             (* Rem.: the shared value might contain loans *)
             let avl, sv =
               to_avalues ~allow_borrows:false ~inside_borrowed:true ~group:true
-                r_id sv
+                sv
             in
             let av = ALoan (ASharedLoan (PNone, bids, sv, ignored)) in
             let av = { value = av; ty } in
@@ -2408,7 +2360,8 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             (* We use [AIgnore] for the inner value *)
             let ignored = mk_aignored span ty in
             (* For avalues, a loan has the type borrow (see the comments in [avalue]) *)
-            let ty = mk_ref_ty (RVar (Free r_id)) ty RMut in
+            let ref_ty = ty in
+            let ty = mk_ref_ty (RVar (Free r_id)) ref_ty RMut in
             let av = ALoan (AMutLoan (PNone, bid, ignored None)) in
             let av = { value = av; ty } in
             ([ av ], v))
@@ -2424,7 +2377,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
            symbolic value is inside a mutable borrow for instance) check that
            none of the regions used by the symbolic value have ended. *)
         sanity_check __FILE__ __LINE__
-          (group || not (symbolic_value_has_ended_regions ctx.ended_regions sv))
+          (group || not (symbolic_value_contains_bottom span ctx sv))
           span;
 
         (* If we group the borrows: simply introduce a projector.
@@ -2446,28 +2399,29 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
               end
             in
             let ty = visitor#visit_ty () sv.sv_ty in
-            let nv = ASymbolic (PNone, AProjBorrows (sv.sv_id, ty, [])) in
+            let proj : symbolic_proj = { sv_id = sv.sv_id; proj_ty = ty } in
+            let nv = ASymbolic (PNone, AProjBorrows { proj; loans = [] }) in
             let nv : typed_avalue = { value = nv; ty } in
             ([ nv ], v)
         else
           (* Introduce one abstraction per live region *)
-          let regions, ty = refresh_live_regions_in_ty span ctx sv.sv_ty in
-          RegionId.Map.iter
-            (fun _ rid ->
-              let nv = ASymbolic (PNone, AProjBorrows (sv.sv_id, ty, [])) in
+          let tys = make_projections_for_erased_regions_in_ty span sv.sv_ty in
+          List.iter
+            (fun ty ->
+              let proj : symbolic_proj = { sv_id = sv.sv_id; proj_ty = ty } in
+              let nv = ASymbolic (PNone, AProjBorrows { proj; loans = [] }) in
               let nv : typed_avalue = { value = nv; ty } in
-              push_abs rid [ nv ])
-            regions;
+              push_abs [ nv ])
+            tys;
           ([], v)
   in
 
   (* Generate the avalues *)
-  let r_id = fresh_region_id () in
   let values, _ =
-    to_avalues ~allow_borrows:true ~inside_borrowed:false ~group:false r_id v
+    to_avalues ~allow_borrows:true ~inside_borrowed:false ~group:false v
   in
   (* Introduce an abstraction for the returned values *)
-  push_abs r_id values;
+  push_abs values;
   (* Return *)
   List.rev !absl
 
@@ -2505,8 +2459,7 @@ type merge_abstraction_info = {
     - all the borrows are destructured (for instance, shared loans can't contain
       shared loans). *)
 let compute_merge_abstraction_info (span : Meta.span) (ctx : eval_ctx)
-    (owned_regions : RegionId.Set.t) (avalues : typed_avalue list) :
-    merge_abstraction_info =
+    (avalues : typed_avalue list) : merge_abstraction_info =
   let loans : MarkedBorrowId.Set.t ref = ref MarkedBorrowId.Set.empty in
   let borrows : MarkedBorrowId.Set.t ref = ref MarkedBorrowId.Set.empty in
   let loan_projs = ref MarkedNormSymbProj.Set.empty in
@@ -2550,15 +2503,13 @@ let compute_merge_abstraction_info (span : Meta.span) (ctx : eval_ctx)
   let module PushSymbolic =
     Push (MarkedNormSymbProj.Set) (MarkedNormSymbProj.Map)
   in
-  let push_loan_proj pm sv_id proj_ty lc =
-    let norm_proj_ty = normalize_proj_ty owned_regions proj_ty in
-    let proj = { pm; sv_id; norm_proj_ty } in
+  let push_loan_proj pm (proj : symbolic_proj) lc =
+    let proj = { pm; sv_id = proj.sv_id; norm_proj_ty = proj.proj_ty } in
     PushSymbolic.push loan_projs lc loan_proj_to_content false borrow_loan_projs
       proj
   in
-  let push_borrow_proj pm sv_id proj_ty bc =
-    let norm_proj_ty = normalize_proj_ty owned_regions proj_ty in
-    let proj = { pm; sv_id; norm_proj_ty } in
+  let push_borrow_proj pm (proj : symbolic_proj) bc =
+    let proj = { pm; sv_id = proj.sv_id; norm_proj_ty = proj.proj_ty } in
     PushSymbolic.push borrow_projs bc borrow_proj_to_content true
       borrow_loan_projs proj
   in
@@ -2647,12 +2598,13 @@ let compute_merge_abstraction_info (span : Meta.span) (ctx : eval_ctx)
           | Abstract ty -> ty
         in
         match proj with
-        | AProjLoans (sv_id, proj_ty, children) ->
-            sanity_check __FILE__ __LINE__ (children = []) span;
-            push_loan_proj pm sv_id proj_ty (ty, pm, proj)
-        | AProjBorrows (sv_id, proj_ty, children) ->
-            sanity_check __FILE__ __LINE__ (children = []) span;
-            push_borrow_proj pm sv_id proj_ty (ty, pm, proj)
+        | AProjLoans { proj = proj'; consumed; borrows } ->
+            sanity_check __FILE__ __LINE__ (consumed = []) span;
+            sanity_check __FILE__ __LINE__ (borrows = []) span;
+            push_loan_proj pm proj' (ty, pm, proj)
+        | AProjBorrows { proj = proj'; loans } ->
+            sanity_check __FILE__ __LINE__ (loans = []) span;
+            push_borrow_proj pm proj' (ty, pm, proj)
         | AEndedProjLoans _ | AEndedProjBorrows _ ->
             craise __FILE__ __LINE__ span "Unreachable"
         | AEmpty -> ()
@@ -2745,44 +2697,34 @@ type merge_duplicates_funcs = {
   merge_aborrow_projs :
     ty ->
     proj_marker ->
-    symbolic_value_id ->
-    ty ->
-    (msymbolic_value_id * aproj) list ->
+    aproj_borrows ->
     ty ->
     proj_marker ->
-    symbolic_value_id ->
-    ty ->
-    (msymbolic_value_id * aproj) list ->
+    aproj_borrows ->
     typed_avalue;
       (** Parameters:
           - [ty0]
           - [pm0]
-          - [sv0]
-          - [proj_ty0]
-          - [children0]
+          - [proj0]
+          - [loans0]
           - [ty1]
           - [pm1]
-          - [sv1]
-          - [proj_ty1]
-          - [children1] *)
+          - [proj1]
+          - [loans1] *)
   merge_aloan_projs :
     ty ->
     proj_marker ->
-    symbolic_value_id ->
-    ty ->
-    (msymbolic_value_id * aproj) list ->
+    aproj_loans ->
     ty ->
     proj_marker ->
-    symbolic_value_id ->
-    ty ->
-    (msymbolic_value_id * aproj) list ->
+    aproj_loans ->
     typed_avalue;
       (** Parameters:
           - [ty0]
           - [pm0]
-          - [sv0]
-          - [proj_ty0]
-          - [children0]
+          - [proj0]
+          - [consumed0]
+          - [borrows0]
           - [ty1]
           - [pm1]
           - [sv1]
@@ -2839,8 +2781,13 @@ let typed_avalue_split_marker (span : Meta.span) (ctx : eval_ctx)
       if pm <> PNone then [ av ]
       else
         match proj with
-        | AProjLoans (_, _, children) | AProjBorrows (_, _, children) ->
-            sanity_check __FILE__ __LINE__ (children = []) span;
+        | AProjBorrows { proj = _; loans } ->
+            sanity_check __FILE__ __LINE__ (loans = []) span;
+            let mk_value pm = { av with value = ASymbolic (pm, proj) } in
+            mk_split mk_value
+        | AProjLoans { proj = _; consumed; borrows } ->
+            sanity_check __FILE__ __LINE__ (consumed = []) span;
+            sanity_check __FILE__ __LINE__ (borrows = []) span;
             let mk_value pm = { av with value = ASymbolic (pm, proj) } in
             mk_split mk_value
         | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty ->
@@ -2912,7 +2859,7 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
     borrow_to_content = borrow_to_content0;
     borrow_proj_to_content = borrow_proj_to_content0;
   } =
-    compute_merge_abstraction_info span ctx abs0.regions.owned abs0.avalues
+    compute_merge_abstraction_info span ctx abs0.avalues
   in
 
   let {
@@ -2927,7 +2874,7 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
     borrow_to_content = borrow_to_content1;
     borrow_proj_to_content = borrow_proj_to_content1;
   } =
-    compute_merge_abstraction_info span ctx abs1.regions.owned abs1.avalues
+    compute_merge_abstraction_info span ctx abs1.avalues
   in
 
   (* Sanity check: no markers appear unless we allow merging duplicates.
@@ -3173,7 +3120,12 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
               (* This can happen only in case of nested borrows - a concrete
                  borrow can only happen inside a shared loan *)
               craise __FILE__ __LINE__ span "Unreachable"
-          | Abstract (ty, bc) -> { value = ABorrow bc; ty }
+          | Abstract (ty, bc) ->
+              cassert __FILE__ __LINE__
+                (not
+                   (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos ty))
+                span "Nested borrows are not supported yet";
+              { value = ABorrow bc; ty }
 
         let make_loan_value _ lc : marked_borrow_id list * typed_avalue =
           match lc with
@@ -3196,8 +3148,16 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
                     List.map (fun bid -> (pm, bid)) (BorrowId.Set.elements bids)
                   in
                   let lc = ASharedLoan (pm, bids, sv, child) in
+                  cassert __FILE__ __LINE__
+                    (not
+                       (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty))
+                    span "Nested borrows are not supported yet";
                   (marked_bids, { value = ALoan lc; ty })
               | AMutLoan (pm, bid, _) ->
+                  cassert __FILE__ __LINE__
+                    (not
+                       (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty))
+                    span "Nested borrows are not supported yet";
                   ([ (pm, bid) ], { value = ALoan lc; ty })
               | AEndedMutLoan _
               | AEndedSharedLoan _
@@ -3232,9 +3192,15 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
         let set_loan_as_merged = set_loan_proj_as_merged
 
         let make_borrow_value _ (ty, pm, proj) =
+          cassert __FILE__ __LINE__
+            (not (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos ty))
+            span "Nested borrows are not supported yet";
           { value = ASymbolic (pm, proj); ty }
 
         let make_loan_value marked (ty, pm, proj) =
+          cassert __FILE__ __LINE__
+            (not (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos ty))
+            span "Nested borrows are not supported yet";
           ([ marked ], { value = ASymbolic (pm, proj); ty })
       end)
   in
@@ -3259,8 +3225,7 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
     ]} *)
 let merge_abstractions_merge_markers (span : Meta.span)
     (merge_funs : merge_duplicates_funcs option) (ctx : eval_ctx)
-    (owned_regions : RegionId.Set.t) (avalues : typed_avalue list) :
-    typed_avalue list =
+    (avalues : typed_avalue list) : typed_avalue list =
   log#ltrace
     (lazy
       (__FUNCTION__ ^ ":\n- avalues:\n"
@@ -3281,7 +3246,7 @@ let merge_abstractions_merge_markers (span : Meta.span)
     loan_proj_to_content;
     borrow_proj_to_content;
   } =
-    compute_merge_abstraction_info span ctx owned_regions avalues
+    compute_merge_abstraction_info span ctx avalues
   in
 
   (* Utilities to accumulate the list of values resulting from the merge *)
@@ -3344,7 +3309,11 @@ let merge_abstractions_merge_markers (span : Meta.span)
     | Concrete (_, _) ->
         (* This can happen only in case of nested borrows, and should have been filtered during phase 1 *)
         craise __FILE__ __LINE__ span "Unreachable"
-    | Abstract (ty, bc) -> { value = ABorrow bc; ty }
+    | Abstract (ty, bc) ->
+        cassert __FILE__ __LINE__
+          (not (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos ty))
+          span "Nested borrows are not supported yet";
+        { value = ABorrow bc; ty }
   in
 
   (* Recreates an avalue from a loan_content, and adds the set of loan ids as merged.
@@ -3359,12 +3328,18 @@ let merge_abstractions_merge_markers (span : Meta.span)
         | AMutLoan (_, id, _) -> set_loan_as_merged id
         | ASharedLoan (_, ids, _, _) -> set_loans_as_merged ids
         | _ -> craise __FILE__ __LINE__ span "Unreachable");
+        cassert __FILE__ __LINE__
+          (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty))
+          span "Nested borrows are not supported yet";
         { value = ALoan bc; ty }
   in
 
   (* Recreates an avalue from a borrow projector. *)
   let avalue_from_borrow_proj ((ty, pm, proj) : ty * proj_marker * aproj) :
       typed_avalue =
+    cassert __FILE__ __LINE__
+      (not (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos ty))
+      span "Nested borrows are not supported yet";
     { value = ASymbolic (pm, proj); ty }
   in
 
@@ -3372,6 +3347,9 @@ let merge_abstractions_merge_markers (span : Meta.span)
      See the comment in the loop below for a detailed explanation *)
   let avalue_from_loan_proj ((ty, pm, proj) : ty * proj_marker * aproj) :
       typed_avalue =
+    cassert __FILE__ __LINE__
+      (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty))
+      span "Nested borrows are not supported yet";
     { value = ASymbolic (pm, proj); ty }
   in
 
@@ -3480,13 +3458,13 @@ let merge_abstractions_merge_markers (span : Meta.span)
       ((ty1, pm1, proj1) : ty * proj_marker * aproj) : typed_avalue =
     sanity_check __FILE__ __LINE__ (complementary_markers pm0 pm1) span;
     match (proj0, proj1) with
-    | AProjBorrows (sv0, proj_ty0, child0), AProjBorrows (sv1, proj_ty1, child1)
-      ->
+    | AProjBorrows proj0, AProjBorrows proj1 ->
         (* Sanity-check of the precondition *)
-        sanity_check __FILE__ __LINE__ (sv0 = sv1) span;
+        sanity_check __FILE__ __LINE__
+          (proj0.proj.sv_id = proj1.proj.sv_id)
+          span;
         (* Merge *)
-        (Option.get merge_funs).merge_aborrow_projs ty0 pm0 sv0 proj_ty0 child0
-          ty1 pm1 sv1 proj_ty1 child1
+        (Option.get merge_funs).merge_aborrow_projs ty0 pm0 proj0 ty1 pm1 proj1
     | _ ->
         (* Unreachable because those cases are ignored (ended/ignored borrows)
            or inconsistent *)
@@ -3497,12 +3475,13 @@ let merge_abstractions_merge_markers (span : Meta.span)
       ((ty1, pm1, proj1) : ty * proj_marker * aproj) : typed_avalue =
     sanity_check __FILE__ __LINE__ (complementary_markers pm0 pm1) span;
     match (proj0, proj1) with
-    | AProjLoans (sv0, proj_ty0, child0), AProjLoans (sv1, proj_ty1, child1) ->
+    | AProjLoans proj0, AProjLoans proj1 ->
         (* Sanity-check of the precondition *)
-        sanity_check __FILE__ __LINE__ (sv0 = sv1) span;
+        sanity_check __FILE__ __LINE__
+          (proj0.proj.sv_id = proj1.proj.sv_id)
+          span;
         (* Merge *)
-        (Option.get merge_funs).merge_aloan_projs ty0 pm0 sv0 proj_ty0 child0
-          ty1 pm1 sv1 proj_ty1 child1
+        (Option.get merge_funs).merge_aloan_projs ty0 pm0 proj0 ty1 pm1 proj1
     | _ ->
         (* Unreachable because those cases are ignored (ended/ignored borrows)
            or inconsistent *)
@@ -3683,9 +3662,8 @@ let merge_abstractions_merge_markers (span : Meta.span)
         let loan_content_to_ids ((_, pm, proj) : ty * proj_marker * aproj) :
             marked_norm_symb_proj =
           match proj with
-          | AProjLoans (sv_id, proj_ty, _) ->
-              let norm_proj_ty = normalize_proj_ty owned_regions proj_ty in
-              { pm; sv_id; norm_proj_ty }
+          | AProjLoans { proj; _ } ->
+              { pm; sv_id = proj.sv_id; norm_proj_ty = proj.proj_ty }
           | _ -> internal_error __FILE__ __LINE__ span
 
         let avalue_from_bc = avalue_from_borrow_proj
@@ -3745,15 +3723,6 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
       (AbstractionId.Set.of_list [ abs0.abs_id; abs1.abs_id ])
   in
   let original_parents = AbstractionId.Set.elements parents in
-  let regions =
-    let owned = RegionId.Set.union abs0.regions.owned abs1.regions.owned in
-    let ancestors =
-      RegionId.Set.diff
-        (RegionId.Set.union abs0.regions.ancestors abs1.regions.ancestors)
-        owned
-    in
-    { owned; ancestors }
-  in
 
   (* Phase 1: simplify the loans coming from the left abstraction with
      the borrows coming from the right abstraction. *)
@@ -3764,35 +3733,18 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
   (* Phase 2: we now remove markers, by merging pairs of the same element with
      different markers into one element. To do so, we linearly traverse the list
      of avalues created through the first phase. *)
-  let avalues =
-    merge_abstractions_merge_markers span merge_funs ctx regions.owned avalues
-  in
+  let avalues = merge_abstractions_merge_markers span merge_funs ctx avalues in
 
   (* Create the new abstraction *)
   let abs_id = fresh_abstraction_id () in
   let abs =
-    {
-      abs_id;
-      kind = abs_kind;
-      can_end;
-      parents;
-      original_parents;
-      regions;
-      avalues;
-    }
+    { abs_id; kind = abs_kind; can_end; parents; original_parents; avalues }
   in
 
   (* Sanity check *)
   sanity_check __FILE__ __LINE__ (abs_is_destructured span true ctx abs) span;
   (* Return *)
   abs
-
-(** Merge the regions in a context to a single region *)
-let ctx_merge_regions (ctx : eval_ctx) (rid : RegionId.id)
-    (rids : RegionId.Set.t) : eval_ctx =
-  let rsubst x = if RegionId.Set.mem x rids then rid else x in
-  let env = Substitute.env_subst_rids rsubst ctx.env in
-  { ctx with env }
 
 let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
     (can_end : bool) (merge_funs : merge_duplicates_funcs option)
@@ -3815,23 +3767,6 @@ let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
      remove the abstraction 1 *)
   let ctx = fst (ctx_subst_abs span ctx abs_id0 nabs) in
   let ctx = fst (ctx_remove_abs span ctx abs_id1) in
-
-  (* Merge all the regions from the abstraction into one (the first - i.e., the
-     one with the smallest id). Note that we need to do this in the whole
-     environment, as those regions may be referenced as ancestor regions by
-     the other abstractions, and may be present in symbolic values, etc. (this
-     is not the case if there are no nested borrows, but we anticipate).
-  *)
-  let ctx =
-    let regions = nabs.regions.owned in
-    (* Pick the first region id (this is the smallest) *)
-    let rid = RegionId.Set.min_elt regions in
-    (* If there is only one region, do nothing *)
-    if RegionId.Set.cardinal regions = 1 then ctx
-    else
-      let rids = RegionId.Set.remove rid regions in
-      ctx_merge_regions ctx rid rids
-  in
 
   (* Return *)
   (ctx, nabs.abs_id)
@@ -3896,7 +3831,7 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
       | ASymbolic (pm, aproj) -> begin
           sanity_check __FILE__ __LINE__ (allow_markers || pm = PNone) span;
           match aproj with
-          | AProjLoans (sv_id, _, _) | AProjBorrows (sv_id, _, _) -> sv_id
+          | AProjLoans { proj; _ } | AProjBorrows { proj; _ } -> proj.sv_id
           | _ -> craise __FILE__ __LINE__ span "Unexpected"
         end
       | _ -> craise __FILE__ __LINE__ span "Unexpected"

@@ -1,4 +1,3 @@
-open Types
 open Values
 open Contexts
 open Utils
@@ -735,16 +734,14 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
      Note that the join matcher doesn't implement match functions for avalues
      (see the comments in {!MakeJoinMatcher}.
   *)
-  let merge_amut_borrows id ty0 _pm0 child0 _ty1 _pm1 child1 =
+  let merge_amut_borrows id ty0 _pm0 child0 ty1 _pm1 child1 =
     (* Sanity checks *)
     sanity_check __FILE__ __LINE__ (is_aignored child0.value) span;
     sanity_check __FILE__ __LINE__ (is_aignored child1.value) span;
+    sanity_check __FILE__ __LINE__ (ty0 = ty1) span;
 
-    (* We need to pick a type for the avalue. The types on the left and on the
-       right may use different regions: it doesn't really matter (here, we pick
-       the one from the left), because we will merge those regions together
-       anyway (see the comments for {!merge_into_first_abstraction}).
-    *)
+    (* We need to pick a type for the avalue: it can be the one from the left
+       or from the right: it doesn't really matter. *)
     let ty = ty0 in
     let child = child0 in
     let value = ABorrow (AMutBorrow (PNone, id, child)) in
@@ -804,32 +801,57 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     let value = ALoan (ASharedLoan (PNone, ids, sv, child)) in
     { value; ty }
   in
-  let merge_aborrow_projs ty0 _pm0 (sv0 : symbolic_value_id) proj_ty0 children0
-      _ty1 _pm1 (sv1 : symbolic_value_id) _proj_ty1 children1 =
+  let merge_aborrow_projs ty0 _pm0 (proj0 : aproj_borrows) _ty1 _pm1
+      (proj1 : aproj_borrows) =
+    let { proj = { sv_id = sv0; proj_ty = proj_ty0 }; loans = loans0 } =
+      proj0
+    in
+    let { proj = { sv_id = sv1; proj_ty = proj_ty1 }; loans = loans1 } =
+      proj1
+    in
     (* Sanity checks *)
-    sanity_check __FILE__ __LINE__ (children0 = []) span;
-    sanity_check __FILE__ __LINE__ (children1 = []) span;
+    sanity_check __FILE__ __LINE__ (loans0 = []) span;
+    sanity_check __FILE__ __LINE__ (loans1 = []) span;
+    sanity_check __FILE__ __LINE__ (proj_ty0 = proj_ty1) span;
     (* Same remarks as for [merge_amut_borrows]. *)
     let ty = ty0 in
     let proj_ty = proj_ty0 in
-    let children = [] in
+    let loans = [] in
     sanity_check __FILE__ __LINE__ (sv0 = sv1) span;
-    let sv = sv0 in
-    let value = ASymbolic (PNone, AProjBorrows (sv, proj_ty, children)) in
+    let sv_id = sv0 in
+    let proj : symbolic_proj = { sv_id; proj_ty } in
+    let value = ASymbolic (PNone, AProjBorrows { proj; loans }) in
     { value; ty }
   in
-  let merge_aloan_projs ty0 _pm0 (sv0 : symbolic_value_id) proj_ty0 children0
-      _ty1 _pm1 (sv1 : symbolic_value_id) _proj_ty1 children1 =
+  let merge_aloan_projs ty0 _pm0 (proj0 : aproj_loans) _ty1 _pm1
+      (proj1 : aproj_loans) =
+    let {
+      proj = { sv_id = sv0; proj_ty = proj_ty0 };
+      consumed = consumed0;
+      borrows = borrows0;
+    } : aproj_loans =
+      proj0
+    in
+    let {
+      proj = { sv_id = sv1; proj_ty = proj_ty1 };
+      consumed = consumed1;
+      borrows = borrows1;
+    } : aproj_loans =
+      proj1
+    in
     (* Sanity checks *)
-    sanity_check __FILE__ __LINE__ (children0 = []) span;
-    sanity_check __FILE__ __LINE__ (children1 = []) span;
+    sanity_check __FILE__ __LINE__ (consumed0 = [] && borrows0 = []) span;
+    sanity_check __FILE__ __LINE__ (consumed1 = [] && borrows1 = []) span;
+    sanity_check __FILE__ __LINE__ (proj_ty0 = proj_ty1) span;
     (* Same remarks as for [merge_amut_borrows]. *)
     let ty = ty0 in
     let proj_ty = proj_ty0 in
-    let children = [] in
+    let consumed = [] in
+    let borrows = [] in
     sanity_check __FILE__ __LINE__ (sv0 = sv1) span;
-    let sv = sv0 in
-    let value = ASymbolic (PNone, AProjLoans (sv, proj_ty, children)) in
+    let sv_id = sv0 in
+    let proj = { sv_id; proj_ty } in
+    let value = ASymbolic (PNone, AProjLoans { proj; consumed; borrows }) in
     { value; ty }
   in
   {
@@ -1035,7 +1057,6 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
       const_generic_vars_map;
       norm_trait_types;
       env = _;
-      ended_regions = ended_regions0;
     } =
       ctx0
     in
@@ -1049,11 +1070,9 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
       const_generic_vars_map = _;
       norm_trait_types = _;
       env = _;
-      ended_regions = ended_regions1;
     } =
       ctx1
     in
-    let ended_regions = RegionId.Set.union ended_regions0 ended_regions1 in
     Ok
       {
         crate;
@@ -1065,7 +1084,6 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
         const_generic_vars_map;
         norm_trait_types;
         env;
-        ended_regions;
       }
   with ValueMatchFailure e -> Error e
 

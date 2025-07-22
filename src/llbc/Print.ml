@@ -11,6 +11,7 @@ open Expressions
 open LlbcAst
 open Contexts
 open Errors
+open Utils
 module Types = Charon.PrintTypes
 module Expressions = Charon.PrintExpressions
 
@@ -115,8 +116,8 @@ module Values = struct
       (abs : abstract_shared_borrow) : string =
     match abs with
     | AsbBorrow bid -> BorrowId.to_string bid
-    | AsbProjReborrows (sv_id, rty) ->
-        "{" ^ symbolic_value_proj_to_string env sv_id rty ^ "}"
+    | AsbProjReborrows proj ->
+        "{" ^ symbolic_value_proj_to_string env proj.sv_id proj.proj_ty ^ "}"
 
   let abstract_shared_borrows_to_string (env : fmt_env)
       (abs : abstract_shared_borrows) : string =
@@ -127,57 +128,78 @@ module Values = struct
   let rec aproj_to_string ?(with_ended : bool = false) (env : fmt_env)
       (pv : aproj) : string =
     match pv with
-    | AProjLoans (sv, rty, given_back) ->
-        let given_back =
-          if given_back = [] then ""
+    | AProjLoans { proj; consumed; borrows } ->
+        let consumed =
+          if consumed = [] then ""
           else
-            let given_back = List.map snd given_back in
-            let given_back =
-              List.map (aproj_to_string ~with_ended env) given_back
+            let consumed = List.map snd consumed in
+            let consumed =
+              List.map (aproj_to_string ~with_ended env) consumed
             in
-            " [" ^ String.concat "," given_back ^ "]"
+            ", consumed=[" ^ String.concat "," consumed ^ "]"
         in
-        "⌊" ^ symbolic_value_proj_to_string env sv rty ^ given_back ^ "⌋"
-    | AProjBorrows (sv, rty, given_back) ->
-        let given_back =
-          if given_back = [] then ""
+        let borrows =
+          if borrows = [] then ""
           else
-            let given_back = List.map snd given_back in
-            let given_back =
-              List.map (aproj_to_string ~with_ended env) given_back
-            in
-            " [" ^ String.concat "," given_back ^ "]"
+            let borrows = List.map snd borrows in
+            let borrows = List.map (aproj_to_string ~with_ended env) borrows in
+            ", borrows=[" ^ String.concat "," borrows ^ "]"
         in
-        "(" ^ symbolic_value_proj_to_string env sv rty ^ given_back ^ ")"
-    | AEndedProjLoans (msv, given_back) ->
+        "⌊"
+        ^ symbolic_value_proj_to_string env proj.sv_id proj.proj_ty
+        ^ consumed ^ borrows ^ "⌋"
+    | AProjBorrows { proj; loans } ->
+        let loans =
+          if loans = [] then ""
+          else
+            let loans = List.map snd loans in
+            let loans = List.map (aproj_to_string ~with_ended env) loans in
+            ", loans=[" ^ String.concat "," loans ^ "]"
+        in
+        "("
+        ^ symbolic_value_proj_to_string env proj.sv_id proj.proj_ty
+        ^ loans ^ ")"
+    | AEndedProjLoans { proj = msv; consumed; borrows } ->
         let msv =
           if with_ended then
             "original_loan = " ^ symbolic_value_id_to_pretty_string msv
           else "_"
         in
-        let given_back = List.map snd given_back in
-        let given_back =
-          List.map (aproj_to_string ~with_ended env) given_back
+        let consumed =
+          if consumed = [] then ""
+          else
+            let consumed = List.map snd consumed in
+            let consumed =
+              List.map (aproj_to_string ~with_ended env) consumed
+            in
+            ", consumed=[" ^ String.concat "," consumed ^ "]"
         in
-        "ended_aproj_loans (" ^ msv ^ ", ["
-        ^ String.concat "," given_back
-        ^ "])"
-    | AEndedProjBorrows (meta, given_back) ->
+        let borrows =
+          if borrows = [] then ""
+          else
+            let borrows = List.map snd borrows in
+            let borrows = List.map (aproj_to_string ~with_ended env) borrows in
+            ", borrows=[" ^ String.concat "," borrows ^ "]"
+        in
+
+        "ended_aproj_loans (" ^ msv ^ consumed ^ borrows ^ ")"
+    | AEndedProjBorrows { mvalues; loans } ->
         let meta =
           if with_ended then
             "original_borrow = "
-            ^ symbolic_value_id_to_pretty_string meta.consumed
+            ^ symbolic_value_id_to_pretty_string mvalues.consumed
             ^ ", given_back = "
-            ^ symbolic_value_to_string env meta.given_back
+            ^ symbolic_value_to_string env mvalues.given_back
           else "_"
         in
-        let given_back = List.map snd given_back in
-        let given_back =
-          List.map (aproj_to_string ~with_ended env) given_back
+        let loans =
+          if loans = [] then ""
+          else
+            let loans = List.map snd loans in
+            let loans = List.map (aproj_to_string ~with_ended env) loans in
+            ", loans=[" ^ String.concat "," loans ^ "]"
         in
-        "ended_aproj_borrows (" ^ meta ^ ", ["
-        ^ String.concat "," given_back
-        ^ "])"
+        "ended_aproj_borrows (" ^ meta ^ loans ^ "])"
     | AEmpty -> "_"
 
   (** Wrap a value inside its marker, if there is one *)
@@ -370,8 +392,6 @@ module Values = struct
     ^ AbstractionId.to_string abs.abs_id
     ^ "{" ^ kind ^ "parents="
     ^ AbstractionId.Set.to_string None abs.parents
-    ^ ",regions="
-    ^ RegionId.Set.to_string None abs.regions.owned
     ^ "," ^ can_end ^ "} {\n" ^ avs ^ "\n" ^ indent ^ "}"
 
   let abs_region_group_to_string (gr : abs_region_group) : string =
@@ -456,10 +476,45 @@ module Contexts = struct
         env_elem_to_string ~span env verbose with_var_types indent indent_incr
           ev
 
-  (** Filters "dummy" bindings from an environment, to gain space and clarity/
+  (** Small helper to check whether a value is a dummy value or not.
+
+      This is is an approximation because checking whether a symbolic value
+      contains live borrows is non-trivial, and the helpers to do this are
+      introduced later. For now, we simply check whether symbolic values contain
+      borrows in their types: if yes, we consider that they contain non-ended
+      borrows. It is ok to be approximate because we do this only for printing
+      purposes. *)
+  let value_has_non_ended_borrows_or_loans_approx type_infos (v : value) : bool
+      =
+    let value_visitor =
+      object
+        inherit [_] iter_typed_value
+        method! visit_borrow_content _ _ = raise Found
+        method! visit_loan_content _ _ = raise Found
+
+        method! visit_symbolic_value _ sv =
+          (* This is an approximation: we only check whether the *type* of the
+             symbolic value contains borrows *)
+          if TypesUtils.ty_has_borrows None type_infos sv.sv_ty then raise Found
+          else ()
+      end
+    in
+    (* We use exceptions *)
+    try
+      value_visitor#visit_value () v;
+      false
+    with Found -> true
+
+  (** Filters "dummy" bindings from an environment, to gain space and clarity
+      (dummy bindings are bindings which map to values which do not contain
+      borrows or loans).
+
+      Remark: we have to do something approximate, because checking whether a
+      symbolic value contains non-ended borrows is non trivial (we need to
+      lookup all the borrow projectors in the environment).
+
       See [env_to_string]. *)
-  let filter_env (ended_regions : RegionId.Set.t) (env : env) :
-      env_elem option list =
+  let filter_env type_infos (env : env) : env_elem option list =
     (* We filter:
        - non-dummy bindings which point to ⊥
        - dummy bindings which don't contain loans nor borrows
@@ -473,8 +528,8 @@ module Contexts = struct
           if is_bottom tv.value then None else Some ev
       | EBinding (BDummy _, tv) ->
           (* Dummy binding: check if the value contains borrows or loans *)
-          if value_has_non_ended_borrows_or_loans ended_regions tv.value then
-            Some ev
+          if value_has_non_ended_borrows_or_loans_approx type_infos tv.value
+          then Some ev
           else None
       | _ -> Some ev
     in
@@ -495,9 +550,9 @@ module Contexts = struct
       type of the variables *)
   let env_to_string ?(span : Meta.span option = None) (filter : bool)
       (fmt_env : fmt_env) (verbose : bool) (with_var_types : bool)
-      (ended_regions : RegionId.Set.t) (env : env) : string =
+      (ctx : eval_ctx) (env : env) : string =
     let env =
-      if filter then filter_env ended_regions env
+      if filter then filter_env ctx.type_ctx.type_infos env
       else List.map (fun ev -> Some ev) env
     in
     "{\n"
@@ -564,7 +619,6 @@ module Contexts = struct
       ?(verbose : bool = false) ?(filter : bool = true)
       ?(with_var_types : bool = true) (ctx : eval_ctx) : string =
     let fmt_env = eval_ctx_to_fmt_env ctx in
-    let ended_regions = RegionId.Set.to_string None ctx.ended_regions in
     let frames = split_env_according_to_frames ctx.env in
     let num_frames = List.length frames in
     let frames =
@@ -585,13 +639,11 @@ module Contexts = struct
           ^ string_of_int !num_bindings
           ^ "\n- dummy bindings: " ^ string_of_int !num_dummies
           ^ "\n- abstractions: " ^ string_of_int !num_abs ^ "\n"
-          ^ env_to_string ~span filter fmt_env verbose with_var_types
-              ctx.ended_regions f
+          ^ env_to_string ~span filter fmt_env verbose with_var_types ctx f
           ^ "\n")
         frames
     in
-    "# Ended regions: " ^ ended_regions ^ "\n" ^ "# " ^ string_of_int num_frames
-    ^ " frame(s)\n" ^ String.concat "" frames
+    "# " ^ string_of_int num_frames ^ " frame(s)\n" ^ String.concat "" frames
 end
 
 (** Pretty-printing for LLBC ASTs (functions based on an evaluation context) *)
