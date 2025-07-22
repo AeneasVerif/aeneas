@@ -249,7 +249,12 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
       if not (ty_has_borrows (Some span) ctx.type_ctx.type_infos v.ty) then
         (* No borrows: do nothing *)
         (v, v, ctx, fun e -> e)
-      else
+      else begin
+        (* There are borrows: check that they are all live (i.e., the symbolic
+           value doesn't contain bottom) *)
+        cassert __FILE__ __LINE__
+          (not (symbolic_value_has_ended_regions ctx.ended_regions sp))
+          span "Attempted to copy a symbolic value containing ended borrows";
         let ctx0 = ctx in
         (* There are borrows: we need to introduce one region abstraction per live
            region present in the type *)
@@ -310,6 +315,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
           mk_typed_value_from_symbolic_value copied_sv,
           ctx,
           cf )
+      end
 
 (** Reorganize the environment in preparation for the evaluation of an operand.
 
