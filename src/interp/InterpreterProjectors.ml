@@ -2,7 +2,6 @@ open Types
 open Values
 open Contexts
 module Subst = Substitute
-module Assoc = AssociatedTypes
 open TypesUtils
 open ValuesUtils
 open InterpreterUtils
@@ -28,7 +27,7 @@ let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
     | VAdt adt, TAdt { id; generics } ->
         (* Retrieve the types of the fields *)
         let field_types =
-          Assoc.ctx_adt_get_inst_norm_field_rtypes span ctx id adt.variant_id
+          ctx_adt_get_instantiated_field_types span ctx id adt.variant_id
             generics
         in
 
@@ -110,7 +109,7 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
       | VAdt adt, TAdt { id; generics } ->
           (* Retrieve the types of the fields *)
           let field_types =
-            Assoc.ctx_adt_get_inst_norm_field_rtypes span ctx id adt.variant_id
+            ctx_adt_get_instantiated_field_types span ctx id adt.variant_id
               generics
           in
           (* Project over the field values *)
@@ -280,8 +279,8 @@ let apply_proj_loans_on_symbolic_expansion (span : Meta.span)
     | SeAdt (variant_id, field_values), TAdt { id = adt_id; generics } ->
         (* Project over the field values *)
         let field_types =
-          AssociatedTypes.ctx_adt_get_inst_norm_field_rtypes span ctx adt_id
-            variant_id generics
+          ctx_adt_get_instantiated_field_types span ctx adt_id variant_id
+            generics
         in
         let field_values =
           List.map2

@@ -32,9 +32,7 @@ let fresh_regions_with_substs_from_vars (region_vars : region_var list)
     fresh_region_id
 
 (** Substitute a function signature, together with the regions hierarchy
-    associated to that signature.
-
-    **IMPORTANT:** this function doesn't normalize the types. *)
+    associated to that signature. *)
 let substitute_signature (asubst : RegionGroupId.id -> AbstractionId.id)
     (r_id_subst : RegionId.id -> RegionId.id) (ty_sb_subst : TypeVarId.id -> ty)
     (cg_sb_subst : ConstGenericVarId.id -> const_generic)

@@ -1033,7 +1033,6 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
       type_vars;
       const_generic_vars;
       const_generic_vars_map;
-      norm_trait_types;
       env = _;
       ended_regions = ended_regions0;
     } =
@@ -1047,7 +1046,6 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
       type_vars = _;
       const_generic_vars = _;
       const_generic_vars_map = _;
-      norm_trait_types = _;
       env = _;
       ended_regions = ended_regions1;
     } =
@@ -1063,7 +1061,6 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
         type_vars;
         const_generic_vars;
         const_generic_vars_map;
-        norm_trait_types;
         env;
         ended_regions;
       }

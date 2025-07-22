@@ -275,16 +275,15 @@ let push_frame (ctx : eval_ctx) : eval_ctx = ctx_push_frame ctx
 
 (** Small helper: compute the type of the return value for a specific
     instantiation of an builtin function. *)
-let get_builtin_function_return_type (span : Meta.span) (ctx : eval_ctx)
-    (fid : builtin_fun_id) (generics : generic_args) : ety =
+let get_builtin_function_return_type (span : Meta.span) (fid : builtin_fun_id)
+    (generics : generic_args) : ety =
   sanity_check __FILE__ __LINE__ (generics.trait_refs = []) span;
   (* Retrieve the function's signature *)
   let sg = Builtin.get_builtin_fun_sig fid in
   (* Instantiate the return type  *)
   let generics = Subst.generic_args_erase_regions generics in
   let subst = Subst.make_subst_from_generics sg.generics generics in
-  let ty = Subst.erase_regions_substitute_types subst sg.output in
-  AssociatedTypes.ctx_normalize_erase_ty span ctx ty
+  Subst.erase_regions_substitute_types subst sg.output
 
 let move_return_value (config : config) (span : Meta.span)
     (pop_return_value : bool) (ctx : eval_ctx) :
@@ -454,7 +453,7 @@ let eval_builtin_function_call_concrete (config : config) (span : Meta.span)
 
       (* Create and push the return variable *)
       let ret_vid = LocalId.zero in
-      let ret_ty = get_builtin_function_return_type span ctx fid generics in
+      let ret_ty = get_builtin_function_return_type span fid generics in
       let ret_var = mk_var ret_vid (Some "@return") ret_ty in
       let ctx = push_uninitialized_var span ret_var ctx in
 

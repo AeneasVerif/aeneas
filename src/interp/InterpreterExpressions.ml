@@ -651,12 +651,12 @@ let cast_unsize_to_modified_fields (span : Meta.span) (ctx : eval_ctx)
       (* Retrieve the instantiated fields and make sure they are all the same
          but the last *)
       let fields_tys0 =
-        AssociatedTypes.ctx_type_get_inst_norm_variants_fields_etypes span ctx
-          id0 generics0
+        Contexts.ctx_type_get_instantiated_variants_fields_etypes span ctx id0
+          generics0
       in
       let fields_tys1 =
-        AssociatedTypes.ctx_type_get_inst_norm_variants_fields_etypes span ctx
-          id1 generics1
+        Contexts.ctx_type_get_instantiated_variants_fields_etypes span ctx id1
+          generics1
       in
       (* The ADTs should be structures *)
       let fields_tys0, fields_tys1 =
@@ -1017,8 +1017,8 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
               = List.length generics.regions)
               span;
             let expected_field_types =
-              AssociatedTypes.ctx_type_get_inst_norm_field_etypes span ctx
-                def_id opt_variant_id generics
+              ctx_type_get_instantiated_field_etypes span ctx def_id
+                opt_variant_id generics
             in
             sanity_check __FILE__ __LINE__
               (expected_field_types
