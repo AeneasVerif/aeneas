@@ -409,6 +409,13 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
     inherit [_] iter_eval_ctx as super
     method! visit_abs _ abs = super#visit_abs (Some abs) abs
 
+    method! visit_region _ r =
+      (* All free regions should have id 0 because we normalize the projection types *)
+      match r with
+      | RVar (Free rid) ->
+          sanity_check __FILE__ __LINE__ (rid = RegionId.zero) span
+      | _ -> ()
+
     method! visit_EBinding info binder v =
       (* We also check that the regions are erased *)
       sanity_check __FILE__ __LINE__ (ty_is_ety v.ty) span;
