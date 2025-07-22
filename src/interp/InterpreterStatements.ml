@@ -1313,7 +1313,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
 
   (* Generate a fresh symbolic value for the return value *)
   let ret_sv_ty = inst_sg.output in
-  let ret_spc = mk_fresh_symbolic_value span ret_sv_ty in
+  let ret_spc = mk_fresh_symbolic_value span (erase_regions ret_sv_ty) in
   let ret_value = mk_typed_value_from_symbolic_value ret_spc in
   let ret_av regions =
     (* Normalize the type by masking only the regions we want to project *)
