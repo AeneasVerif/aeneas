@@ -475,6 +475,18 @@ let ctx_type_get_instantiated_variants_fields_types (span : Meta.span)
   let def = ctx_lookup_type_decl span ctx def_id in
   Substitute.type_decl_get_instantiated_variants_fields_types def generics
 
+(** Same as [ctx_type_get_instantiated_variants_fields_types], but also erases
+    the regions *)
+let ctx_type_get_instantiated_variants_fields_etypes (span : Meta.span)
+    (ctx : eval_ctx) (def_id : TypeDeclId.id) (generics : generic_args) :
+    (VariantId.id option * ty list) list =
+  let res =
+    ctx_type_get_instantiated_variants_fields_types span ctx def_id generics
+  in
+  List.map
+    (fun (variant_id, types) -> (variant_id, List.map erase_regions types))
+    res
+
 (** Return the types of the properly instantiated ADT's variant, provided a
     context. *)
 let ctx_type_get_instantiated_field_types (span : Meta.span) (ctx : eval_ctx)
@@ -482,6 +494,17 @@ let ctx_type_get_instantiated_field_types (span : Meta.span) (ctx : eval_ctx)
     (generics : generic_args) : ty list =
   let def = ctx_lookup_type_decl span ctx def_id in
   Substitute.type_decl_get_instantiated_field_types def opt_variant_id generics
+
+(** Same as [ctx_type_get_instantiated_field_types] but also erases the regions
+*)
+let ctx_type_get_instantiated_field_etypes (span : Meta.span) (ctx : eval_ctx)
+    (def_id : TypeDeclId.id) (opt_variant_id : VariantId.id option)
+    (generics : generic_args) : ty list =
+  let types =
+    ctx_type_get_instantiated_field_types span ctx def_id opt_variant_id
+      generics
+  in
+  List.map erase_regions types
 
 (** Return the types of the properly instantiated ADT value (note that here, ADT
     is understood in its broad meaning: ADT, builtin value or tuple). *)

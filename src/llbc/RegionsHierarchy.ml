@@ -152,8 +152,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
            (otherwise it should have been normalized), or a special builtin
            trait (in particular, [core::marker::DiscriminantKind]) *)
         sanity_check_opt_span __FILE__ __LINE__
-          (AssociatedTypes.check_non_normalizable_trait_instance_id
-             trait_ref.trait_id)
+          (check_non_normalizable_trait_instance_id trait_ref.trait_id)
           span;
         (* We have nothing to do *)
         ()

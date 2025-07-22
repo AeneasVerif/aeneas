@@ -274,3 +274,26 @@ let type_decl_from_type_id_is_tuple_struct (ctx : TypesAnalysis.type_infos)
       let info = TypeDeclId.Map.find id ctx in
       info.is_tuple_struct
   | TBuiltin _ -> false
+
+(** A trait instance id refers to a local clause if it only uses the variants:
+    [Self], [Clause], [ParentClause] *)
+let rec trait_instance_id_is_local_clause (id : trait_instance_id) : bool =
+  match id with
+  | Self | Clause _ -> true
+  | ParentClause (tref, _) -> trait_instance_id_is_local_clause tref.trait_id
+  | TraitImpl _ | BuiltinOrAuto _ | UnknownTrait _ | Dyn _ -> false
+
+(** Check that it is ok for a trait instance id not to be normalizable.
+
+    We use this in sanity checks. If we can't normalize a trait instance id (and
+    in particular one of its associated types) there are two possibilities:
+    - either it is a local clause
+    - or it is a builtin trait (in particular, [core::marker::DiscriminantKind]
+      can never be reduced) *)
+let check_non_normalizable_trait_instance_id (trait_id : trait_instance_id) :
+    bool =
+  trait_instance_id_is_local_clause trait_id
+  ||
+  match trait_id with
+  | BuiltinOrAuto _ -> true
+  | _ -> false

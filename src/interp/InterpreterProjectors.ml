@@ -2,7 +2,6 @@ open Types
 open Values
 open Contexts
 module Subst = Substitute
-module Assoc = AssociatedTypes
 open TypesUtils
 open ValuesUtils
 open InterpreterUtils

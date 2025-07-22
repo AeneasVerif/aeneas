@@ -950,8 +950,9 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
       (* TODO: not sure what to do here *)
       None
   | TTraitType (trait_ref, type_name) ->
-      assert (
-        AssociatedTypes.trait_instance_id_is_local_clause trait_ref.trait_id);
+      sanity_check_opt_span __FILE__ __LINE__
+        (TypesUtils.trait_instance_id_is_local_clause trait_ref.trait_id)
+        span;
       if inside_mut then
         (* Translate the trait ref as a "forward" trait ref -
            we do not want to filter any type *)

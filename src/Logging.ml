@@ -93,9 +93,6 @@ let borrows_log = create_logger "Interpreter.Borrows"
 (** Logger for Invariants *)
 let invariants_log = create_logger "Interpreter.Invariants"
 
-(** Logger for AssociatedTypes *)
-let associated_types_log = create_logger "AssociatedTypes"
-
 (** Logger for SCC *)
 let scc_log = create_logger "Graph.SCC"
 

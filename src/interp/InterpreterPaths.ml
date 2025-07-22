@@ -379,7 +379,7 @@ let compute_expanded_bottom_adt_value (span : Meta.span) (ctx : eval_ctx)
     span;
   (* Compute the field types *)
   let field_types =
-    AssociatedTypes.type_decl_get_inst_norm_field_etypes def opt_variant_id
+    Substitute.type_decl_get_instantiated_field_etypes def opt_variant_id
       generics
   in
   (* Initialize the expanded value *)

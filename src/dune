@@ -17,7 +17,6 @@
   (pps ppx_deriving.show ppx_deriving.ord visitors.ppx))
  (libraries charon core_unix ocamlgraph str)
  (modules
-  AssociatedTypes
   BorrowCheck
   Builtin
   Collections
