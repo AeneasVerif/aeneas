@@ -473,8 +473,6 @@ let compute_ctx_ids (ctx : eval_ctx) : ids_sets * ids_to_values =
 
 let empty_ids_set = fst (compute_ctxs_ids [])
 
-(** **WARNING**: this function doesn't compute the normalized types (for the
-    trait type aliases). This should be computed afterwards. *)
 let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
     (region_groups : RegionGroupId.id list) (type_vars : type_var list)
     (const_generic_vars : const_generic_var list) : eval_ctx =
@@ -496,7 +494,6 @@ let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
     type_vars;
     const_generic_vars;
     const_generic_vars_map;
-    norm_trait_types = TraitTypeRefMap.empty (* Empty for now *);
     env = [ EFrame ];
     ended_regions = RegionId.Set.empty;
   }
@@ -548,8 +545,8 @@ let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
   in
   (* Substitute the signature *)
   let inst_sig =
-    AssociatedTypes.ctx_subst_norm_signature span ctx asubst rsubst tsubst
-      cgsubst tr_subst tr_self sg regions_hierarchy
+    Substitute.substitute_signature asubst rsubst tsubst cgsubst tr_subst
+      tr_self sg regions_hierarchy
   in
   (* Return *)
   inst_sig

@@ -1432,33 +1432,11 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed (span : span option)
     (decls_ctx : C.decls_ctx) (fun_id : A.fun_id_or_trait_method_ref)
     (regions_hierarchy : T.region_var_groups) (sg : A.fun_sig)
     (input_names : string option list) : decomposed_fun_sig =
-  (* We need to normalize the signature *)
   let inst_sg : LlbcAst.inst_fun_sig =
-    (* Create the context *)
-    let ctx =
-      let region_groups =
-        List.map (fun (g : T.region_var_group) -> g.id) regions_hierarchy
-      in
-      let ctx =
-        InterpreterUtils.initialize_eval_ctx span decls_ctx region_groups
-          sg.generics.types sg.generics.const_generics
-      in
-      (* Compute the normalization map for the *sty* types and add it to the context *)
-      AssociatedTypes.ctx_add_norm_trait_types_from_preds span ctx
-        sg.generics.trait_type_constraints
-    in
-
-    (* Normalize the signature *)
     let ({ A.inputs; output; _ } : A.fun_sig) = sg in
-    let norm = AssociatedTypes.ctx_normalize_ty span ctx in
-    let inputs = List.map norm inputs in
-    let output = norm output in
-    let trait_type_constraints =
-      List.map
-        (AssociatedTypes.ctx_normalize_trait_type_constraint_region_binder span
-           ctx)
-        sg.generics.trait_type_constraints
-    in
+    sanity_check_opt_span __FILE__ __LINE__
+      (sg.generics.trait_type_constraints = [])
+      span;
 
     let _, fresh_abs_id = V.AbstractionId.fresh_stateful_generator () in
     let region_gr_id_abs_id_list =
@@ -1482,7 +1460,7 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed (span : span option)
     {
       regions_hierarchy;
       abs_regions_hierarchy;
-      trait_type_constraints;
+      trait_type_constraints = [];
       inputs;
       output;
     }

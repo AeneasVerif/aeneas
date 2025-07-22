@@ -118,43 +118,10 @@ let compute_contexts (crate : crate) : decls_ctx =
 
   { crate; type_ctx; fun_ctx }
 
-(** Small helper.
-
-    Normalize an instantiated function signature provided we used this signature
-    to compute a normalization map (for the associated types) and that we added
-    it in the context. *)
-let normalize_inst_fun_sig (span : Meta.span) (ctx : eval_ctx)
-    (sg : inst_fun_sig) : inst_fun_sig =
-  let {
-    regions_hierarchy = _;
-    abs_regions_hierarchy = _;
-    trait_type_constraints;
-    inputs;
-    output;
-  } =
-    sg
-  in
-  cassert_warn __FILE__ __LINE__
-    (trait_type_constraints = [])
-    span
-    "Detected type constraints over associated traits (of the shape: `where \
-     Foo::T = U`). We do not handle this properly yet: the translation may be \
-     incorrect, and the generated output will likely not typecheck.";
-  let norm = AssociatedTypes.ctx_normalize_ty (Some span) ctx in
-  let inputs = List.map norm inputs in
-  let output = norm output in
-  { sg with inputs; output }
-
 (** Instantiate a function signature for a symbolic execution.
 
     We return a new context because we compute and add the type normalization
-    map in the same step.
-
-    **WARNING**: this doesn't normalize the types. This step has to be done
-    separately. Remark: we need to normalize essentially because of the where
-    clauses (we are not considering a function call, so we don't need to
-    normalize because a trait clause was instantiated with a specific trait
-    ref). *)
+    map in the same step. *)
 let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
     (sg : fun_sig) (regions_hierarchy : region_var_groups) (_kind : item_kind) :
     eval_ctx * inst_fun_sig =
@@ -165,13 +132,6 @@ let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
   let inst_sg =
     instantiate_fun_sig span ctx generics tr_self sg regions_hierarchy
   in
-  (* Compute the normalization maps *)
-  let ctx =
-    AssociatedTypes.ctx_add_norm_trait_types_from_preds (Some span) ctx
-      inst_sg.trait_type_constraints
-  in
-  (* Normalize the signature *)
-  let inst_sg = normalize_inst_fun_sig span ctx inst_sg in
   (* Return *)
   (ctx, inst_sg)
 

@@ -41,22 +41,6 @@ let log = Logging.regions_hierarchy_log
 let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
     (fun_name : string) (sg : fun_sig) : region_var_groups =
   log#ltrace (lazy (__FUNCTION__ ^ ": " ^ fun_name));
-  (* Initialize a normalization context (we may need to normalize some
-     associated types) *)
-  let norm_ctx : AssociatedTypes.norm_ctx =
-    let norm_trait_types =
-      AssociatedTypes.compute_norm_trait_types_from_preds span
-        sg.generics.trait_type_constraints
-    in
-    {
-      span;
-      norm_trait_types;
-      crate;
-      type_vars = sg.generics.types;
-      const_generic_vars = sg.generics.const_generics;
-    }
-  in
-
   (* Create the dependency graph.
 
      An edge from 'short to 'long means that 'long outlives 'short (that is
@@ -196,14 +180,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
 
   (* Substitute the regions in a type, then explore *)
   let explore_ty_subst ty = explore_ty [] ty in
-
-  (* Normalize the types then explore *)
-  let tys =
-    List.map
-      (AssociatedTypes.norm_ctx_normalize_ty norm_ctx)
-      (sg.output :: sg.inputs)
-  in
-  List.iter explore_ty_subst tys;
+  List.iter explore_ty_subst (sg.output :: sg.inputs);
 
   (* Compute the ordered SCCs *)
   let module Scc = SCC.Make (RegionOrderedType) in

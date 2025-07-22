@@ -78,10 +78,6 @@ type eval_ctx = {
 
           TODO: this is actually not used in symbolic mode, where we directly
           introduce fresh symbolic values. *)
-  norm_trait_types : ty TraitTypeRefMap.t;
-      (** The normalized trait types (a map from trait types to their
-          representatives). Note that this doesn't take into account
-          higher-order type constraints (of the shape `for<'a> ...`). *)
   env : env;
   ended_regions : RegionId.Set.t;
 }
@@ -472,10 +468,7 @@ let env_filter_abs (f : abs -> bool) (env : env) : env =
     env
 
 (** Return the types of the properly instantiated ADT's variant, provided a
-    context.
-
-    **IMPORTANT**: this function doesn't normalize the types, you may want to
-    use the [AssociatedTypes] equivalent instead. *)
+    context. *)
 let ctx_type_get_instantiated_variants_fields_types (span : Meta.span)
     (ctx : eval_ctx) (def_id : TypeDeclId.id) (generics : generic_args) :
     (VariantId.id option * ty list) list =
@@ -483,10 +476,7 @@ let ctx_type_get_instantiated_variants_fields_types (span : Meta.span)
   Substitute.type_decl_get_instantiated_variants_fields_types def generics
 
 (** Return the types of the properly instantiated ADT's variant, provided a
-    context.
-
-    **IMPORTANT**: this function doesn't normalize the types, you may want to
-    use the [AssociatedTypes] equivalent instead. *)
+    context. *)
 let ctx_type_get_instantiated_field_types (span : Meta.span) (ctx : eval_ctx)
     (def_id : TypeDeclId.id) (opt_variant_id : VariantId.id option)
     (generics : generic_args) : ty list =
@@ -494,10 +484,7 @@ let ctx_type_get_instantiated_field_types (span : Meta.span) (ctx : eval_ctx)
   Substitute.type_decl_get_instantiated_field_types def opt_variant_id generics
 
 (** Return the types of the properly instantiated ADT value (note that here, ADT
-    is understood in its broad meaning: ADT, builtin value or tuple).
-
-    **IMPORTANT**: this function doesn't normalize the types, you may want to
-    use the [AssociatedTypes] equivalent instead. *)
+    is understood in its broad meaning: ADT, builtin value or tuple). *)
 let ctx_adt_get_instantiated_field_types (span : Meta.span) (ctx : eval_ctx)
     (id : type_id) (variant_id : variant_id option) (generics : generic_args) :
     ty list =

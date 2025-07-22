@@ -222,8 +222,7 @@ let compute_expanded_symbolic_non_builtin_adt_value (span : Meta.span)
     span;
   (* Retrieve, for every variant, the list of its instantiated field types *)
   let variants_fields_types =
-    AssociatedTypes.type_decl_get_inst_norm_variants_fields_rtypes span ctx def
-      generics
+    Substitute.type_decl_get_instantiated_variants_fields_types def generics
   in
   (* Check if there is strictly more than one variant *)
   if List.length variants_fields_types > 1 && not expand_enumerations then

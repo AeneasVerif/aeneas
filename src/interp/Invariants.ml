@@ -449,7 +449,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
           | _ -> craise __FILE__ __LINE__ span "Erroneous typing");
           (* Check that the field types are correct *)
           let field_types =
-            AssociatedTypes.type_decl_get_inst_norm_field_etypes span ctx def
+            AssociatedTypes.type_decl_get_inst_norm_field_etypes def
               av.variant_id generics
           in
           let fields_with_types = List.combine av.field_values field_types in
@@ -586,7 +586,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
           | _ -> craise __FILE__ __LINE__ span "Erroneous typing");
           (* Check that the field types are correct *)
           let field_types =
-            AssociatedTypes.type_decl_get_inst_norm_field_rtypes span ctx def
+            AssociatedTypes.type_decl_get_inst_norm_field_rtypes def
               av.variant_id generics
           in
           let fields_with_types = List.combine av.field_values field_types in
