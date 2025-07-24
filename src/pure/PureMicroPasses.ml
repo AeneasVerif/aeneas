@@ -254,19 +254,25 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
   in
   (* Update a variable - used to update an expression after we computed constraints *)
   let update_var (ctx : pn_ctx) (v : var) (mp : mplace option) : var =
-    match v.basename with
-    | Some _ -> v
-    | None -> (
-        match LocalId.Map.find_opt v.id ctx.pure_vars with
-        | Some basename -> { v with basename = Some basename }
-        | None -> (
-            match mp with
-            | None -> v
-            | Some mp -> (
-                let var_id, _, _ = decompose_mplace mp in
-                match E.LocalId.Map.find_opt var_id ctx.llbc_vars with
-                | None -> v
-                | Some basename -> { v with basename = Some basename })))
+    let ( let- ) x f =
+      match x with
+      | Some x -> x
+      | None -> f ()
+    in
+    let- () = Option.map (fun _ -> v) v.basename in
+    let- () =
+      LocalId.Map.find_opt v.id ctx.pure_vars
+      |> Option.map (fun basename -> { v with basename = Some basename })
+    in
+    let- () = Option.fold ~none:(Some v) ~some:(fun _ -> None) mp in
+    let mp = Option.get mp in
+    let var_id, _, _ = decompose_mplace mp in
+    match var_id with
+    | Left var_id -> (
+        match E.LocalId.Map.find_opt var_id ctx.llbc_vars with
+        | None -> v
+        | Some basename -> { v with basename = Some basename })
+    | Right _ -> v
   in
   (* Update an pattern - used to update an expression after we computed constraints *)
   let update_typed_pattern ctx (lv : typed_pattern) : typed_pattern =
@@ -282,8 +288,9 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
   (* Register an mplace the first time we find one *)
   let register_mplace (mp : mplace) (ctx : pn_ctx) : pn_ctx =
     let var_id, name, _ = decompose_mplace mp in
-    match (E.LocalId.Map.find_opt var_id ctx.llbc_vars, name) with
-    | None, Some name ->
+    match (var_id, name) with
+    | Left var_id, Some name when not (E.LocalId.Map.mem var_id ctx.llbc_vars)
+      ->
         let llbc_vars = E.LocalId.Map.add var_id name ctx.llbc_vars in
         { ctx with llbc_vars }
     | _ -> ctx
@@ -316,7 +323,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     let ctx = register_mplace mp ctx in
     (* Update the variable name *)
     match decompose_mplace mp with
-    | mp_var_id, Some name, [] ->
+    | Left mp_var_id, Some name, [] ->
         (* Check if the variable already has a name - if not: insert the new name *)
         let ctx = add_pure_var_constraint var_id name ctx in
         let ctx = add_llbc_var_constraint mp_var_id name ctx in
@@ -397,9 +404,10 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
             (* Add the constraint for the LLBC variable *)
             match lmp with
             | None -> ctx
-            | Some lmp ->
-                let var_id, _, _ = decompose_mplace lmp in
-                add_llbc_var_constraint var_id name ctx
+            | Some lmp -> (
+                match decompose_mplace lmp with
+                | Left var_id, _, _ -> add_llbc_var_constraint var_id name ctx
+                | _ -> ctx)
           in
           (* We try to use the right-place information *)
           let rmp, re = opt_unmeta_mplace re in

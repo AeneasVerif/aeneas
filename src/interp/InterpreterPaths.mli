@@ -29,7 +29,8 @@ val update_ctx_along_write_place :
 
     Note that we only access the value at the place, and do not check that the
     value is "well-formed" (for instance that it doesn't contain bottoms). *)
-val read_place : Meta.span -> access_kind -> place -> eval_ctx -> typed_value
+val read_place :
+  config -> Meta.span -> access_kind -> place -> eval_ctx -> typed_value
 
 (** Update the value at a given place.
 
@@ -41,7 +42,13 @@ val read_place : Meta.span -> access_kind -> place -> eval_ctx -> typed_value
     the overwritten value contains borrows, loans, etc. and will simply
     overwrite it. *)
 val write_place :
-  Meta.span -> access_kind -> place -> typed_value -> eval_ctx -> eval_ctx
+  config ->
+  Meta.span ->
+  access_kind ->
+  place ->
+  typed_value ->
+  eval_ctx ->
+  eval_ctx
 
 (** Compute an expanded tuple ⊥ value.
 

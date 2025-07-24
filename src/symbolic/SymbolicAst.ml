@@ -21,6 +21,7 @@ type mplace =
           id, because the most important information in a place is the name of
           the variable! *)
   | PlaceProjection of mplace * projection_elem
+  | PlaceGlobal of global_decl_ref
 [@@deriving show]
 
 type call_id =

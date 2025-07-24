@@ -979,10 +979,13 @@ let opt_destruct_ret (e : texpression) : texpression option =
   | _ -> None
 
 let decompose_mplace (p : mplace) :
-    E.LocalId.id * string option * mprojection_elem list =
+    (E.LocalId.id, T.global_decl_id * generic_args) Either.t
+    * string option
+    * mprojection_elem list =
   let rec decompose (proj : mprojection_elem list) (p : mplace) =
     match p with
-    | PlaceLocal (id, name) -> (id, name, proj)
+    | PlaceLocal (id, name) -> (Either.Left id, name, proj)
+    | PlaceGlobal (id, generics) -> (Either.Right (id, generics), None, proj)
     | PlaceProjection (p, pe) -> decompose (pe :: proj) p
   in
   decompose [] p

@@ -52,13 +52,13 @@ val eval_operands :
   * eval_ctx
   * (SymbolicAst.expression -> SymbolicAst.expression)
 
-(** Evaluate an rvalue which is not a global (globals are handled elsewhere).
+(** Evaluate an rvalue.
 
     Transmits the computed rvalue to the received continuation.
 
     Note that this function fails on {!Aeneas.Expressions.rvalue.Discriminant}:
     discriminant reads should have been eliminated from the AST. *)
-val eval_rvalue_not_global :
+val eval_rvalue :
   config ->
   Meta.span ->
   rvalue ->

@@ -29,7 +29,7 @@ let expand_if_borrows_at_place (config : config) (span : Meta.span)
   (* Small helper *)
   let rec expand : cm_fun =
    fun ctx ->
-    let v = read_place span access p ctx in
+    let v = read_place config span access p ctx in
     match
       find_first_expandable_sv_with_borrows (Some span) ctx.type_ctx.type_decls
         ctx.type_ctx.type_infos v
@@ -49,9 +49,9 @@ let expand_if_borrows_at_place (config : config) (span : Meta.span)
 (** Read a place.
 
     We check that the value *doesn't contain bottoms or reserved borrows*. *)
-let read_place_check (span : Meta.span) (access : access_kind) (p : place)
-    (ctx : eval_ctx) : typed_value =
-  let v = read_place span access p ctx in
+let read_place_check (config : config) (span : Meta.span) (access : access_kind)
+    (p : place) (ctx : eval_ctx) : typed_value =
+  let v = read_place config span access p ctx in
   (* Check that there are no bottoms in the value *)
   cassert __FILE__ __LINE__
     (not (bottom_in_value ctx.ended_regions v))
@@ -79,7 +79,7 @@ let access_rplace_reorganize_and_read (config : config) (span : Meta.span)
        else (ctx, fun e -> e))
   in
   (* Read the place - note that this checks that the value doesn't contain bottoms *)
-  let ty_value = read_place_check span access p ctx in
+  let ty_value = read_place_check config span access p ctx in
   (* Compose *)
   (ty_value, ctx, cc)
 
@@ -466,7 +466,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
   | Copy p ->
       (* Access the value *)
       let access = Read in
-      let v = read_place_check span access p ctx in
+      let v = read_place_check config span access p ctx in
       (* Sanity checks *)
       exec_assert __FILE__ __LINE__
         (not (bottom_in_value ctx.ended_regions v))
@@ -482,20 +482,20 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
         copy_value span allow_adt_copy config ctx v
       in
       (* Update the original value *)
-      let ctx = write_place span access p updated_value ctx in
+      let ctx = write_place config span access p updated_value ctx in
       (* *)
       (copied_value, ctx, cc)
   | Move p ->
       (* Access the value *)
       let access = Move in
-      let v = read_place_check span access p ctx in
+      let v = read_place_check config span access p ctx in
       (* Check that there are no bottoms in the value we are about to move *)
       exec_assert __FILE__ __LINE__
         (not (bottom_in_value ctx.ended_regions v))
         span "There should be no bottoms in the value we are about to move";
       (* Move the value *)
       let bottom : typed_value = { value = VBottom; ty = v.ty } in
-      let ctx = write_place span access p bottom ctx in
+      let ctx = write_place config span access p bottom ctx in
       (v, ctx, fun e -> e)
 
 let eval_operand (config : config) (span : Meta.span) (op : operand)
@@ -945,7 +945,7 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
             { v with value = v' }
       in
       (* Update the value in the context to replace it with the loan *)
-      let ctx = write_place span access p nv ctx in
+      let ctx = write_place config span access p nv ctx in
       (* Compute the rvalue - simply a shared borrow with the fresh id.
        * Note that the reference is *mutable* if we do a two-phase borrow *)
       let ref_kind =
@@ -983,7 +983,7 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
       (* Compute the loan value with which to replace the value at place p *)
       let nv = { v with value = VLoan (VMutLoan bid) } in
       (* Update the value in the context to replace it with the loan *)
-      let ctx = write_place span access p nv ctx in
+      let ctx = write_place config span access p nv ctx in
       (* Return *)
       (rv, ctx, cc)
 
@@ -1083,8 +1083,8 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
   in
   (v, ctx, cc_comp cc cf_compute)
 
-let eval_rvalue_not_global (config : config) (span : Meta.span)
-    (rvalue : rvalue) (ctx : eval_ctx) :
+let eval_rvalue (config : config) (span : Meta.span) (rvalue : rvalue)
+    (ctx : eval_ctx) :
     (typed_value, eval_error) result
     * eval_ctx
     * (SymbolicAst.expression -> SymbolicAst.expression) =
@@ -1103,7 +1103,6 @@ let eval_rvalue_not_global (config : config) (span : Meta.span)
       craise __FILE__ __LINE__ span
         "Unreachable: discriminant reads should have been eliminated from the \
          AST"
-  | Global _ -> craise __FILE__ __LINE__ span "Unreachable"
   | Len _ -> craise __FILE__ __LINE__ span "Unhandled Len"
   | _ ->
       craise __FILE__ __LINE__ span

@@ -2302,6 +2302,9 @@ let translate_mprojection_elem (pe : E.projection_elem) :
 let rec translate_mplace (p : S.mplace) : mplace =
   match p with
   | PlaceLocal bv -> PlaceLocal (bv.index, bv.name)
+  | PlaceGlobal gref ->
+      let generics = translate_sgeneric_args None gref.generics in
+      PlaceGlobal (gref.id, generics)
   | PlaceProjection (p, pe) -> (
       let p = translate_mplace p in
       let pe = translate_mprojection_elem pe in

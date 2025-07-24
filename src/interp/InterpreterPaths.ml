@@ -1,4 +1,5 @@
 open Types
+open TypesUtils
 open Values
 open Expressions
 open Contexts
@@ -9,6 +10,7 @@ open InterpreterBorrowsCore
 open InterpreterBorrows
 open InterpreterExpansion
 open Errors
+module Subst = Substitute
 module Synth = SynthesizeSymbolic
 
 (** The local logger *)
@@ -225,12 +227,26 @@ let rec project_value (span : Meta.span) (access : projection_access)
         ("Inconsistent projection:\n" ^ pe ^ "\n" ^ v ^ "\n" ^ ty)
     end
 
+(** Helper: introduce a fresh symbolic value for a global *)
+let eval_global_as_fresh_symbolic_value (span : Meta.span)
+    (gref : global_decl_ref) (ctx : eval_ctx) : symbolic_value =
+  let generics = gref.generics in
+  let global = ctx_lookup_global_decl span ctx gref.id in
+  cassert __FILE__ __LINE__ (ty_no_regions global.ty) span
+    "Const globals should not contain regions";
+  (* Instantiate the type  *)
+  let generics = Subst.generic_args_erase_regions generics in
+  let subst = Subst.make_subst_from_generics global.generics generics in
+  let ty = Subst.erase_regions_substitute_types subst global.ty in
+  mk_fresh_symbolic_value span ty
+
 (** Generic function to access (read/write) the value inside a place.
 
     We return the read value and a backward function that propagates any changes
     to the projected value back to the original local. *)
-let rec access_place (span : Meta.span) (access : projection_access)
-    (ek : exploration_kind) (ctx : eval_ctx) (p : place) :
+let rec access_place (config : config) (span : Meta.span)
+    (access : projection_access) (ek : exploration_kind) (ctx : eval_ctx)
+    (p : place) :
     (typed_value * (eval_ctx * typed_value -> eval_ctx * typed_value))
     path_access_result =
   match p.kind with
@@ -252,7 +268,7 @@ let rec access_place (span : Meta.span) (access : projection_access)
       in
       Ok (v, backward)
   | PlaceProjection (p', pe) -> begin
-      match access_place span access ek ctx p' with
+      match access_place config span access ek ctx p' with
       | Error err -> Error err
       | Ok (v, backward) -> begin
           match project_value span access ek p' ctx pe v with
@@ -263,13 +279,32 @@ let rec access_place (span : Meta.span) (access : projection_access)
             end
         end
     end
+  | PlaceGlobal gref -> begin
+      if config.mode = ConcreteMode then
+        (* We should treat the evaluation of the global as a call to the global body. *)
+        craise __FILE__ __LINE__ span "Unimplemented";
+
+      (* Generate a fresh symbolic value. In the translation, this fresh symbolic value will be
+       * defined as equal to the value of the global (see {!S.synthesize_global_eval}).
+       * We then create a reference to the global.
+       *)
+      let sval = eval_global_as_fresh_symbolic_value span gref ctx in
+      let v = mk_typed_value_from_symbolic_value sval in
+      let backward (_, updated) =
+        craise __FILE__ __LINE__ span
+          ("Can't update the value of a global; tried updating "
+         ^ show_global_decl_ref gref ^ " with " ^ show_typed_value updated)
+      in
+      Ok (v, backward)
+    end
 
 (** Generic function to access (read/write) the value at a given place.
 
     We return the value we read at the place and the (eventually) updated
     environment, if we managed to access the place, or the precise reason why we
     failed. *)
-let access_update_place (span : Meta.span) (access : projection_access)
+let access_update_place (config : config) (span : Meta.span)
+    (access : projection_access)
     (* Function to (eventually) update the value we find *)
       (update : typed_value -> typed_value) (p : place) (ctx : eval_ctx) :
     (eval_ctx * typed_value) path_access_result =
@@ -278,7 +313,7 @@ let access_update_place (span : Meta.span) (access : projection_access)
     { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
   in
   (* Apply the projection *)
-  match access_place span access ek ctx p with
+  match access_place config span access ek ctx p with
   | Error err -> Error err
   | Ok (v, backward) ->
       let nv = update v in
@@ -317,12 +352,12 @@ let access_kind_to_projection_access (access : access_kind) : projection_access
 
     Note that we only access the value at the place, and do not check that the
     value is "well-formed" (for instance that it doesn't contain bottoms). *)
-let try_read_place (span : Meta.span) (access : access_kind) (p : place)
-    (ctx : eval_ctx) : typed_value path_access_result =
+let try_read_place (config : config) (span : Meta.span) (access : access_kind)
+    (p : place) (ctx : eval_ctx) : typed_value path_access_result =
   let access = access_kind_to_projection_access access in
   (* The update function is the identity *)
   let update v = v in
-  match access_update_place span access update p ctx with
+  match access_update_place config span access update p ctx with
   | Error err -> Error err
   | Ok (ctx1, read_value) ->
       (* Note that we ignore the new environment: it should be the same as the
@@ -337,28 +372,29 @@ let try_read_place (span : Meta.span) (access : access_kind) (p : place)
            craise __FILE__ __LINE__ span msg);
       Ok read_value
 
-let read_place (span : Meta.span) (access : access_kind) (p : place)
-    (ctx : eval_ctx) : typed_value =
-  match try_read_place span access p ctx with
+let read_place (config : config) (span : Meta.span) (access : access_kind)
+    (p : place) (ctx : eval_ctx) : typed_value =
+  match try_read_place config span access p ctx with
   | Error e ->
       craise __FILE__ __LINE__ span ("Unreachable: " ^ show_path_fail_kind e)
   | Ok v -> v
 
 (** Attempt to update the value at a given place *)
-let try_write_place (span : Meta.span) (access : access_kind) (p : place)
-    (nv : typed_value) (ctx : eval_ctx) : eval_ctx path_access_result =
+let try_write_place (config : config) (span : Meta.span) (access : access_kind)
+    (p : place) (nv : typed_value) (ctx : eval_ctx) :
+    eval_ctx path_access_result =
   let access = access_kind_to_projection_access access in
   (* The update function substitutes the value with the new value *)
   let update _ = nv in
-  match access_update_place span access update p ctx with
+  match access_update_place config span access update p ctx with
   | Error err -> Error err
   | Ok (ctx, _) ->
       (* We ignore the read value *)
       Ok ctx
 
-let write_place (span : Meta.span) (access : access_kind) (p : place)
-    (nv : typed_value) (ctx : eval_ctx) : eval_ctx =
-  match try_write_place span access p nv ctx with
+let write_place (config : config) (span : Meta.span) (access : access_kind)
+    (p : place) (nv : typed_value) (ctx : eval_ctx) : eval_ctx =
+  match try_write_place config span access p nv ctx with
   | Error e ->
       craise __FILE__ __LINE__ span ("Unreachable: " ^ show_path_fail_kind e)
   | Ok ctx -> ctx
@@ -421,7 +457,7 @@ let compute_expanded_bottom_tuple_value (span : Meta.span)
     Parameters:
     - [p]: the place where the {!Bottom} value appears
     - [pe]: the projection element we wish to evaluate *)
-let expand_bottom_value_from_projection (span : Meta.span)
+let expand_bottom_value_from_projection (config : config) (span : Meta.span)
     (access : access_kind) (p : place) (pe : projection_elem) (ctx : eval_ctx) :
     eval_ctx =
   (* Debugging *)
@@ -461,7 +497,7 @@ let expand_bottom_value_from_projection (span : Meta.span)
           ("Unreachable: " ^ show_projection_elem pe ^ ", " ^ show_ety p.ty)
   in
   (* Update the context by inserting the expanded value at the proper place *)
-  match try_write_place span access p nv ctx with
+  match try_write_place config span access p nv ctx with
   | Ok ctx -> ctx
   | Error _ -> craise __FILE__ __LINE__ span "Unreachable"
 
@@ -469,7 +505,7 @@ let rec update_ctx_along_read_place (config : config) (span : Meta.span)
     (access : access_kind) (p : place) : cm_fun =
  fun ctx ->
   (* Attempt to read the place: if it fails, update the environment and retry *)
-  match try_read_place span access p ctx with
+  match try_read_place config span access p ctx with
   | Ok _ -> (ctx, fun e -> e)
   | Error err ->
       let ctx, cc =
@@ -496,7 +532,7 @@ let rec update_ctx_along_write_place (config : config) (span : Meta.span)
  fun ctx ->
   (* Attempt to *read* (yes, *read*: we check the access to the place, and
      write to it later) the place: if it fails, update the environment and retry *)
-  match try_read_place span access p ctx with
+  match try_read_place config span access p ctx with
   | Ok _ -> (ctx, fun e -> e)
   | Error err ->
       (* Update the context *)
@@ -514,7 +550,7 @@ let rec update_ctx_along_write_place (config : config) (span : Meta.span)
         | FailBottom (p, pe) ->
             (* Expand the {!Bottom} value *)
             let ctx =
-              expand_bottom_value_from_projection span access p pe ctx
+              expand_bottom_value_from_projection config span access p pe ctx
             in
             (ctx, fun e -> e)
         | FailBorrow _ ->
@@ -566,7 +602,7 @@ let rec end_loans_at_place (config : config) (span : Meta.span)
   in
 
   (* First, retrieve the value *)
-  let v = read_place span access p ctx in
+  let v = read_place config span access p ctx in
   (* Inspect the value and update the context while doing so.
      If the context gets updated: perform a recursive call (many things
      may have been updated in the context: we need to re-read the value
@@ -588,8 +624,8 @@ let drop_outer_loans_at_lplace (config : config) (span : Meta.span) (p : place)
   (* Move the current value in the place outside of this place and into
    * a temporary dummy variable *)
   let access = Write in
-  let v = read_place span access p ctx in
-  let ctx = write_place span access p (mk_bottom span v.ty) ctx in
+  let v = read_place config span access p ctx in
+  let ctx = write_place config span access p (mk_bottom span v.ty) ctx in
   let dummy_id = fresh_dummy_var_id () in
   let ctx = ctx_push_dummy_var ctx dummy_id v in
   (* Auxiliary function: while there are loans to end in the
@@ -626,7 +662,7 @@ let drop_outer_loans_at_lplace (config : config) (span : Meta.span) (p : place)
   (* Sanity check *)
   sanity_check __FILE__ __LINE__ (not (outer_loans_in_value v)) span;
   (* Reinsert *)
-  let ctx = write_place span access p v ctx in
+  let ctx = write_place config span access p v ctx in
   (* Return *)
   (ctx, cc)
 
@@ -645,7 +681,7 @@ let prepare_lplace (config : config) (span : Meta.span) (p : place)
   (* End the loans at the place we are about to overwrite *)
   let ctx, cc = comp cc (drop_outer_loans_at_lplace config span p ctx) in
   (* Read the value and check it *)
-  let v = read_place span access p ctx in
+  let v = read_place config span access p ctx in
   (* Sanity checks *)
   sanity_check __FILE__ __LINE__ (not (outer_loans_in_value v)) span;
   (* Return *)
