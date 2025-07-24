@@ -317,6 +317,8 @@ let rec mplace_to_string (env : fmt_env) (p : mplace) : string =
   | PlaceProjection (p, pe) ->
       let inside = mplace_to_string env p in
       mprojection_elem_to_string env inside pe
+  | PlaceGlobal (id, generics) ->
+      global_decl_id_to_string env id ^ generic_args_to_string env generics
 
 let adt_variant_to_string ?(span = None) (env : fmt_env) (adt_id : type_id)
     (variant_id : VariantId.id option) : string =

@@ -14,6 +14,7 @@ let mk_mplace (span : Meta.span) (p : place) (ctx : Contexts.eval_ctx) : mplace
         PlaceLocal (Contexts.ctx_lookup_real_var_binder span ctx var_id)
     | PlaceProjection (subplace, pe) ->
         PlaceProjection (place_to_mplace subplace, pe)
+    | PlaceGlobal gref -> PlaceGlobal gref
   in
   place_to_mplace p
 
