@@ -36,6 +36,7 @@
   ExtractTypes
   FunsAnalysis
   Identifiers
+  InterpreterAbs
   InterpreterBorrowsCore
   InterpreterBorrows
   InterpreterExpansion

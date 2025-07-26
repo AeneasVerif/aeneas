@@ -7,6 +7,7 @@ open ValuesUtils
 open InterpreterUtils
 open InterpreterBorrowsCore
 open InterpreterBorrows
+open InterpreterAbs
 open InterpreterLoopsCore
 open InterpreterLoopsMatchCtxs
 open Errors

@@ -12,6 +12,7 @@ open Cps
 open InterpreterUtils
 open InterpreterBorrowsCore
 open InterpreterBorrows
+open InterpreterAbs
 open InterpreterLoopsCore
 open Errors
 module S = SynthesizeSymbolic

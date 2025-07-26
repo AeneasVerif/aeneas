@@ -7,6 +7,7 @@ module S = SynthesizeSymbolic
 open Cps
 open InterpreterUtils
 open InterpreterBorrows
+open InterpreterAbs
 open InterpreterLoopsCore
 open InterpreterLoopsMatchCtxs
 open InterpreterLoopsJoinCtxs
