@@ -481,59 +481,10 @@ and aloan_content =
             abs0 { a_shared_loan {l0} @s0 _ }
             px -> shared_loan l0
           ]} *)
-  | AEndedMutLoan of {
-      child : typed_avalue;
-      given_back : typed_avalue;
-      given_back_meta : mvalue;
-    }
+  | AEndedMutLoan of aended_mut_loan
       (** An ended mutable loan in an abstraction. We need it because
           abstractions must keep track of the values we gave back to them, so
-          that we can correctly instantiate backward functions.
-
-          [given_back]: stores the projected given back value (useful when there
-          are nested borrows: ending a loan might consume borrows which need to
-          be projected in the abstraction).
-
-          [given_back_meta]: stores the (meta-)value which was consumed upon
-          ending the loan. We use this for synthesis purposes.
-
-          Rk.: *DO NOT* use [visit_AEndedMutLoan]. If we update the order of the
-          arguments and you forget to swap them at the level of
-          [visit_AEndedMutLoan], you will not notice it.
-
-          Example 1: ==========
-          {[
-            abs0 { a_mut_loan l0 _ }
-            x -> mut_borrow l0 (U32 3)
-          ]}
-
-          After ending [l0]:
-
-          {[
-            abs0 { a_ended_mut_loan { child = _; given_back = _; given_back_meta = U32 3; }
-            x -> ⊥
-          ]}
-
-          Example 2 (nested borrows): ===========================
-          {[
-            abs0 { a_mut_loan l0 _ }
-            ... // abstraction containing a_mut_loan l1
-            x -> mut_borrow l0 (mut_borrow l1 (U32 3))
-          ]}
-
-          After ending [l0]:
-
-          {[
-            abs0 {
-              a_ended_mut_loan {
-                child = _;
-                given_back = a_mut_borrow l1 _;
-                given_back_meta = (mut_borrow l1 (U32 3));
-              }
-            }
-            ...
-            x -> ⊥
-          ]} *)
+          that we can correctly instantiate backward functions. *)
   | AEndedSharedLoan of typed_value * typed_avalue
       (** Similar to {!AEndedMutLoan} but in this case we don't consume given
           back values when the loan ends. We remember the shared value because
@@ -574,16 +525,7 @@ and aloan_content =
             }
             x -> ⊥
           ]} *)
-  | AEndedIgnoredMutLoan of {
-      child : typed_avalue;
-      given_back : typed_avalue;
-      given_back_meta : mvalue;
-    }
-      (** Similar to {!AEndedMutLoan}, for ignored loans. See the comments for
-          {!AIgnoredMutLoan}.
-
-          Rk.: *DO NOT* use [visit_AEndedIgnoredMutLoan] (for the reason why,
-          see the comments for {!AEndedMutLoan}). *)
+  | AEndedIgnoredMutLoan of aended_ignored_mut_loan
   | AIgnoredSharedLoan of typed_avalue
       (** An ignored shared loan.
 
@@ -596,6 +538,72 @@ and aloan_content =
             > abs'b { a_ignored_shared_loan (a_shared_loan {l1} @s1 _) }
             > x -> shared_borrow l0
           ]} *)
+
+(** An ended mutable loan in an abstraction. We need it because abstractions
+    must keep track of the values we gave back to them, so that we can correctly
+    instantiate backward functions.
+
+    [given_back]: stores the projected given back value (useful when there are
+    nested borrows: ending a loan might consume borrows which need to be
+    projected in the abstraction).
+
+    [given_back_meta]: stores the (meta-)value which was consumed upon ending
+    the loan. We use this for synthesis purposes.
+
+    Rk.: *DO NOT* use [visit_AEndedMutLoan]. If we update the order of the
+    arguments and you forget to swap them at the level of [visit_AEndedMutLoan],
+    you will not notice it.
+
+    Example 1: ==========
+    {[
+      abs0 { a_mut_loan l0 _ }
+      x -> mut_borrow l0 (U32 3)
+    ]}
+
+    After ending [l0]:
+
+    {[
+      abs0 { a_ended_mut_loan { child = _; given_back = _; given_back_meta = U32 3; }
+      x -> ⊥
+    ]}
+
+    Example 2 (nested borrows): ===========================
+    {[
+      abs0 { a_mut_loan l0 _ }
+      ... // abstraction containing a_mut_loan l1
+      x -> mut_borrow l0 (mut_borrow l1 (U32 3))
+    ]}
+
+    After ending [l0]:
+
+    {[
+      abs0 {
+        a_ended_mut_loan {
+          child = _;
+          given_back = a_mut_borrow l1 _;
+          given_back_meta = (mut_borrow l1 (U32 3));
+        }
+      }
+      ...
+      x -> ⊥
+    ]} *)
+and aended_mut_loan = {
+  child : typed_avalue;
+  given_back : typed_avalue;
+  given_back_meta : mvalue;
+}
+
+(** Similar to {!AEndedMutLoan}, for ignored loans. See the comments for
+    {!AIgnoredMutLoan}.
+
+    Rk.: *DO NOT* use [visit_AEndedIgnoredMutLoan] (for the reason why, see the
+    comments for {!AEndedMutLoan}). *)
+
+and aended_ignored_mut_loan = {
+  child : typed_avalue;
+  given_back : typed_avalue;
+  given_back_meta : mvalue;
+}
 
 (** Note that contrary to {!aloan_content}, here the children avalues are not
     independent of the parent avalues. For instance, a value
@@ -709,16 +717,7 @@ and aborrow_content =
   | AEndedSharedBorrow
       (** We don't really need {!AEndedSharedBorrow}: we simply want to be
           precise, and not insert ⊥ when ending borrows. *)
-  | AEndedIgnoredMutBorrow of {
-      child : typed_avalue;
-      given_back : typed_avalue;
-      given_back_meta : msymbolic_value;
-          (** [given_back_meta] is used to store the (symbolic) value we gave
-              back upon ending the borrow.
-
-              Rk.: *DO NOT* use [visit_AEndedIgnoredMutLoan]. See the comment
-              for {!AEndedMutLoan}. *)
-    }  (** See the explanations for {!AIgnoredMutBorrow} *)
+  | AEndedIgnoredMutBorrow of aended_ignored_mut_borrow
   | AProjSharedBorrow of abstract_shared_borrows
       (** A projected shared borrow.
 
@@ -765,6 +764,18 @@ and aborrow_content =
 
           TODO: maybe we should factorized [ASharedBorrow] and
           [AProjSharedBorrow]. *)
+
+(** See the explanations for {!AIgnoredMutBorrow} *)
+and aended_ignored_mut_borrow = {
+  child : typed_avalue;
+  given_back : typed_avalue;
+  given_back_meta : msymbolic_value;
+      (** [given_back_meta] is used to store the (symbolic) value we gave back
+          upon ending the borrow.
+
+          Rk.: *DO NOT* use [visit_AEndedIgnoredMutLoan]. See the comment for
+          {!AEndedMutLoan}. *)
+}
 
 (** Rem.: the of avalues is not to be understood in the same manner as for
     values. To be more precise, shared aloans have the borrow type (i.e., a
