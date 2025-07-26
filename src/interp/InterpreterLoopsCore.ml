@@ -75,9 +75,9 @@ module type PrimMatcher = sig
       values, in which case we have to manually look them up before calling the
       match function. *)
   val match_shared_borrows :
-    eval_ctx ->
-    eval_ctx ->
     (typed_value -> typed_value -> typed_value) ->
+    eval_ctx ->
+    eval_ctx ->
     ety ->
     borrow_id ->
     borrow_id ->
@@ -101,8 +101,12 @@ module type PrimMatcher = sig
     typed_value ->
     borrow_id * typed_value
 
-  (** Parameters: [ty] [ids0] [ids1] [v]: the result of matching the shared
-      values coming from the two loans *)
+  (** Parameters:
+      - [ty]
+      - [ids0]
+      - [ids1]
+      - [v]: the result of matching the shared values coming from the two loans
+  *)
   val match_shared_loans :
     eval_ctx ->
     eval_ctx ->
@@ -148,8 +152,16 @@ module type PrimMatcher = sig
     rty ->
     typed_avalue
 
-  (** Parameters: [ctx0] [ctx1] [ty0] [pm0] [bid0] [ty1] [pm1] [bid1] [ty]:
-      result of matching ty0 and ty1 *)
+  (** Parameters:
+      - [ctx0]
+      - [ctx1]
+      - [ty0]
+      - [pm0]
+      - [bid0]
+      - [ty1]
+      - [pm1]
+      - [bid1]
+      - [ty]: result of matching ty0 and ty1 *)
   val match_ashared_borrows :
     eval_ctx ->
     eval_ctx ->
@@ -162,9 +174,19 @@ module type PrimMatcher = sig
     rty ->
     typed_avalue
 
-  (** Parameters: [ctx0] [ctx1] [ty0] [pm0] [bid0] [av0] [ty1] [pm1] [bid1]
-      [av1] [ty]: result of matching ty0 and ty1 [av]: result of matching av0
-      and av1 *)
+  (** Parameters:
+      - [ctx0]
+      - [ctx1]
+      - [ty0]
+      - [pm0]
+      - [bid0]
+      - [av0]
+      - [ty1]
+      - [pm1]
+      - [bid1]
+      - [av1]
+      - [ty]: result of matching ty0 and ty1
+      - [av]: result of matching av0 and av1 *)
   val match_amut_borrows :
     eval_ctx ->
     eval_ctx ->
@@ -180,9 +202,22 @@ module type PrimMatcher = sig
     typed_avalue ->
     typed_avalue
 
-  (** Parameters: [ctx0] [ctx1] [ty0] [pm0] [ids0] [v0] [av0] [ty1] [pm1] [ids1]
-      [v1] [av1] [ty]: result of matching ty0 and ty1 [v]: result of matching v0
-      and v1 [av]: result of matching av0 and av1 *)
+  (** Parameters:
+      - [ctx0]
+      - [ctx1]
+      - [ty0]
+      - [pm0]
+      - [ids0]
+      - [v0]
+      - [av0]
+      - [ty1]
+      - [pm1]
+      - [ids1]
+      - [v1]
+      - [av1]
+      - [ty]: result of matching ty0 and ty1
+      - [v]: result of matching v0 and v1
+      - [av]: result of matching av0 and av1 *)
   val match_ashared_loans :
     eval_ctx ->
     eval_ctx ->
@@ -201,9 +236,19 @@ module type PrimMatcher = sig
     typed_avalue ->
     typed_avalue
 
-  (** Parameters: [ctx0] [ctx1] [ty0] [pm0] [id0] [av0] [ty1] [pm1] [id1] [av1]
-      [ty]: result of matching ty0 and ty1 [av]: result of matching av0 and av1
-  *)
+  (** Parameters:
+      - [ctx0]
+      - [ctx1]
+      - [ty0]
+      - [pm0]
+      - [id0]
+      - [av0]
+      - [ty1]
+      - [pm1]
+      - [id1]
+      - [av1]
+      - [ty]: result of matching ty0 and ty1
+      - [av]: result of matching av0 and av1 *)
   val match_amut_loans :
     eval_ctx ->
     eval_ctx ->
@@ -219,42 +264,50 @@ module type PrimMatcher = sig
     typed_avalue ->
     typed_avalue
 
-  (** Parameters: [ctx0] [ctx1] [ty0] [pm0] [sv0] [proj_ty0] [children0] [ty1]
-      [pm1] [sv1] [proj_ty1] [children1] [ty]: result of matching ty0 and ty1
-      [proj_ty]: result of matching proj_ty0 and proj_ty1 *)
+  (** Parameters:
+      - [ctx0]
+      - [ctx1]
+      - [ty0]
+      - [pm0]
+      - [proj0]
+      - [ty1]
+      - [pm1]
+      - [proj1]
+      - [ty]: result of matching ty0 and ty1
+      - [proj_ty]: result of matching proj_ty0 and proj_ty1 *)
   val match_aproj_borrows :
     eval_ctx ->
     eval_ctx ->
     rty ->
     proj_marker ->
-    symbolic_value_id ->
-    rty ->
-    (msymbolic_value_id * aproj) list ->
+    aproj_borrows ->
     rty ->
     proj_marker ->
-    symbolic_value_id ->
-    rty ->
-    (msymbolic_value_id * aproj) list ->
+    aproj_borrows ->
     rty ->
     rty ->
     typed_avalue
 
-  (** Parameters: [ctx0] [ctx1] [ty0] [pm0] [sv0] [proj_ty0] [children0] [ty1]
-      [pm1] [sv1] [proj_ty1] [children1] [ty]: result of matching ty0 and ty1
-      [proj_ty]: result of matching proj_ty0 and proj_ty1 *)
+  (** Parameters:
+      - [ctx0]
+      - [ctx1]
+      - [ty0]
+      - [pm0]
+      - [proj0]
+      - [ty1]
+      - [pm1]
+      - [proj1]
+      - [ty]: result of matching ty0 and ty1
+      - [proj_ty]: result of matching proj_ty0 and proj_ty1 *)
   val match_aproj_loans :
     eval_ctx ->
     eval_ctx ->
     rty ->
     proj_marker ->
-    symbolic_value_id ->
-    rty ->
-    (msymbolic_value_id * aproj) list ->
+    aproj_loans ->
     rty ->
     proj_marker ->
-    symbolic_value_id ->
-    rty ->
-    (msymbolic_value_id * aproj) list ->
+    aproj_loans ->
     rty ->
     rty ->
     typed_avalue

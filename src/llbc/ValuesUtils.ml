@@ -93,11 +93,22 @@ let is_unit (v : typed_value) : bool =
 
 let mk_aproj_borrows (pm : proj_marker) (sv_id : symbolic_value_id)
     (proj_ty : ty) =
-  { value = ASymbolic (pm, AProjBorrows (sv_id, proj_ty, [])); ty = proj_ty }
+  {
+    value =
+      ASymbolic (pm, AProjBorrows { proj = { sv_id; proj_ty }; loans = [] });
+    ty = proj_ty;
+  }
 
 let mk_aproj_loans (pm : proj_marker) (sv_id : symbolic_value_id) (proj_ty : ty)
     =
-  { value = ASymbolic (pm, AProjLoans (sv_id, proj_ty, [])); ty = proj_ty }
+  {
+    value =
+      ASymbolic
+        ( pm,
+          AProjLoans { proj = { sv_id; proj_ty }; consumed = []; borrows = [] }
+        );
+    ty = proj_ty;
+  }
 
 (** Check if a value contains a *concrete* borrow (i.e., a [Borrow] value - we
     don't check if there are borrows hidden in symbolic values). *)

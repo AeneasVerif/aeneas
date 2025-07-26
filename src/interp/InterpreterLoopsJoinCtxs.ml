@@ -804,32 +804,61 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     let value = ALoan (ASharedLoan (PNone, ids, sv, child)) in
     { value; ty }
   in
-  let merge_aborrow_projs ty0 _pm0 (sv0 : symbolic_value_id) proj_ty0 children0
-      _ty1 _pm1 (sv1 : symbolic_value_id) _proj_ty1 children1 =
+  let merge_aborrow_projs ty0 _pm0 (proj0 : aproj_borrows) _ty1 _pm1
+      (proj1 : aproj_borrows) =
+    let { proj = { sv_id = sv0; proj_ty = proj_ty0 }; loans = loans0 } =
+      proj0
+    in
+    let { proj = { sv_id = sv1; proj_ty = proj_ty1 }; loans = loans1 } =
+      proj1
+    in
     (* Sanity checks *)
-    sanity_check __FILE__ __LINE__ (children0 = []) span;
-    sanity_check __FILE__ __LINE__ (children1 = []) span;
+    sanity_check __FILE__ __LINE__ (loans0 = []) span;
+    sanity_check __FILE__ __LINE__ (loans1 = []) span;
+    sanity_check __FILE__ __LINE__
+      (erase_regions proj_ty0 = erase_regions proj_ty1)
+      span;
     (* Same remarks as for [merge_amut_borrows]. *)
     let ty = ty0 in
     let proj_ty = proj_ty0 in
-    let children = [] in
+    let loans = [] in
     sanity_check __FILE__ __LINE__ (sv0 = sv1) span;
-    let sv = sv0 in
-    let value = ASymbolic (PNone, AProjBorrows (sv, proj_ty, children)) in
+    let sv_id = sv0 in
+    let proj : symbolic_proj = { sv_id; proj_ty } in
+    let value = ASymbolic (PNone, AProjBorrows { proj; loans }) in
     { value; ty }
   in
-  let merge_aloan_projs ty0 _pm0 (sv0 : symbolic_value_id) proj_ty0 children0
-      _ty1 _pm1 (sv1 : symbolic_value_id) _proj_ty1 children1 =
+  let merge_aloan_projs ty0 _pm0 (proj0 : aproj_loans) _ty1 _pm1
+      (proj1 : aproj_loans) =
+    let {
+      proj = { sv_id = sv0; proj_ty = proj_ty0 };
+      consumed = consumed0;
+      borrows = borrows0;
+    } : aproj_loans =
+      proj0
+    in
+    let {
+      proj = { sv_id = sv1; proj_ty = proj_ty1 };
+      consumed = consumed1;
+      borrows = borrows1;
+    } : aproj_loans =
+      proj1
+    in
     (* Sanity checks *)
-    sanity_check __FILE__ __LINE__ (children0 = []) span;
-    sanity_check __FILE__ __LINE__ (children1 = []) span;
+    sanity_check __FILE__ __LINE__ (consumed0 = [] && borrows0 = []) span;
+    sanity_check __FILE__ __LINE__ (consumed1 = [] && borrows1 = []) span;
+    sanity_check __FILE__ __LINE__
+      (erase_regions proj_ty0 = erase_regions proj_ty1)
+      span;
     (* Same remarks as for [merge_amut_borrows]. *)
     let ty = ty0 in
     let proj_ty = proj_ty0 in
-    let children = [] in
+    let consumed = [] in
+    let borrows = [] in
     sanity_check __FILE__ __LINE__ (sv0 = sv1) span;
-    let sv = sv0 in
-    let value = ASymbolic (PNone, AProjLoans (sv, proj_ty, children)) in
+    let sv_id = sv0 in
+    let proj = { sv_id; proj_ty } in
+    let value = ASymbolic (PNone, AProjLoans { proj; consumed; borrows }) in
     { value; ty }
   in
   {

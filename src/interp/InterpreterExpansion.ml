@@ -74,8 +74,10 @@ let apply_symbolic_expansion_to_target_avalues (config : config)
           never happen *)
       method! visit_aproj current_abs aproj =
         (match aproj with
-        | AProjLoans (sv_id, _, _) | AProjBorrows (sv_id, _, _) ->
-            sanity_check __FILE__ __LINE__ (sv_id <> original_sv.sv_id) span
+        | AProjLoans { proj; _ } | AProjBorrows { proj; _ } ->
+            sanity_check __FILE__ __LINE__
+              (proj.sv_id <> original_sv.sv_id)
+              span
         | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ());
         super#visit_aproj current_abs aproj
 
@@ -92,30 +94,33 @@ let apply_symbolic_expansion_to_target_avalues (config : config)
             (* Explore the given back values to make sure we don't have to expand
              * anything in there *)
             ASymbolic (pm, self#visit_aproj (Some current_abs) aproj)
-        | AProjLoans (sv_id, proj_ty, given_back), LoanProj ->
+        | AProjLoans { proj; consumed; borrows }, LoanProj ->
             (* Check if this is the symbolic value we are looking for *)
-            if sv_id = original_sv.sv_id then (
-              (* There mustn't be any given back values *)
-              sanity_check __FILE__ __LINE__ (given_back = []) span;
+            if proj.sv_id = original_sv.sv_id then (
+              (* There mustn't be any consumed values *)
+              sanity_check __FILE__ __LINE__ (consumed = []) span;
+              (* Not sure what to do if the borrows are non empty: leaving
+                 this as a TODO *)
+              cassert __FILE__ __LINE__ (borrows = []) span "Unimplemented";
               (* Apply the projector *)
               let projected_value =
                 apply_proj_loans_on_symbolic_expansion span proj_regions
-                  ancestors_regions expansion original_sv.sv_ty proj_ty ctx
+                  ancestors_regions expansion original_sv.sv_ty proj.proj_ty ctx
               in
               (* Replace *)
               projected_value.value)
             else
               (* Not the searched symbolic value: nothing to do *)
               super#visit_ASymbolic (Some current_abs) pm aproj
-        | AProjBorrows (sv_id, proj_ty, given_back), BorrowProj ->
+        | AProjBorrows { proj; loans }, BorrowProj ->
             (* We should never expand a symbolic value which has consumed given
                back values (because then it means the symbolic value was consumed
                by region abstractions, and is thus inaccessible: such a value can't
                be expanded)
             *)
-            cassert __FILE__ __LINE__ (given_back = []) span "Unreachable";
+            cassert __FILE__ __LINE__ (loans = []) span "Unreachable";
             (* Check if this is the symbolic value we are looking for *)
-            if sv_id = original_sv.sv_id then
+            if proj.sv_id = original_sv.sv_id then
               (* Convert the symbolic expansion to a value on which we can
                * apply a projector (if the expansion is a reference expansion,
                * convert it to a borrow) *)
@@ -129,16 +134,14 @@ let apply_symbolic_expansion_to_target_avalues (config : config)
               let projected_value =
                 apply_proj_borrows span check_symbolic_no_ended ctx
                   fresh_reborrow proj_regions ancestors_regions expansion
-                  proj_ty
+                  proj.proj_ty
               in
               (* Replace *)
               projected_value.value
             else
               (* Not the searched symbolic value: nothing to do *)
               super#visit_ASymbolic (Some current_abs) pm aproj
-        | AProjLoans _, BorrowProj
-        | AProjBorrows (_, _, _), LoanProj
-        | AEmpty, _ ->
+        | AProjLoans _, BorrowProj | AProjBorrows _, LoanProj | AEmpty, _ ->
             (* Nothing to do *)
             ASymbolic (pm, aproj)
     end
@@ -295,17 +298,21 @@ let expand_symbolic_value_shared_borrow (config : config) (span : Meta.span)
     borrows := BorrowId.Set.add bid' !borrows;
     bid'
   in
+  (* The fresh symbolic value for the shared value *)
+  let shared_sv = mk_fresh_symbolic_value span ref_ty in
   (* Small utility used on shared borrows in abstractions (regular borrow
    * projector and asb).
    * Returns [Some] if the symbolic value has been expanded to an asb list,
    * [None] otherwise *)
-  let reborrow_ashared proj_regions (sv_id : symbolic_value_id) (proj_ty : rty)
-      : abstract_shared_borrows option =
-    if sv_id = original_sv.sv_id then
-      match proj_ty with
+  let reborrow_ashared proj_regions (proj : symbolic_proj) :
+      abstract_shared_borrows option =
+    if proj.sv_id = original_sv.sv_id then
+      match proj.proj_ty with
       | TRef (r, ref_ty, RShared) ->
           (* Projector over the shared value *)
-          let shared_asb = AsbProjReborrows (sv_id, ref_ty) in
+          let shared_asb =
+            AsbProjReborrows { sv_id = shared_sv.sv_id; proj_ty = ref_ty }
+          in
           (* Check if the region is in the set of projected regions *)
           if region_in_set r proj_regions then
             (* In the set: we need to reborrow *)
@@ -316,8 +323,6 @@ let expand_symbolic_value_shared_borrow (config : config) (span : Meta.span)
       | _ -> craise __FILE__ __LINE__ span "Unexpected"
     else None
   in
-  (* The fresh symbolic value for the shared value *)
-  let shared_sv = mk_fresh_symbolic_value span ref_ty in
   (* Visitor to replace the projectors on borrows *)
   let obj =
     object (self)
@@ -339,10 +344,8 @@ let expand_symbolic_value_shared_borrow (config : config) (span : Meta.span)
             =
           match asb with
           | AsbBorrow _ -> [ asb ]
-          | AsbProjReborrows (sv_id, proj_ty) -> (
-              match
-                reborrow_ashared (Option.get proj_regions) sv_id proj_ty
-              with
+          | AsbProjReborrows proj -> (
+              match reborrow_ashared (Option.get proj_regions) proj with
               | None -> [ asb ]
               | Some asb -> asb)
         in
@@ -356,8 +359,10 @@ let expand_symbolic_value_shared_borrow (config : config) (span : Meta.span)
           never happen *)
       method! visit_aproj proj_regions aproj =
         (match aproj with
-        | AProjLoans (sv_id, _, _) | AProjBorrows (sv_id, _, _) ->
-            sanity_check __FILE__ __LINE__ (sv_id <> original_sv.sv_id) span
+        | AProjLoans { proj; _ } | AProjBorrows { proj; _ } ->
+            sanity_check __FILE__ __LINE__
+              (proj.sv_id <> original_sv.sv_id)
+              span
         | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ());
         super#visit_aproj proj_regions aproj
 
@@ -369,15 +374,15 @@ let expand_symbolic_value_shared_borrow (config : config) (span : Meta.span)
         | AProjLoans _ ->
             (* Loans are handled later *)
             ASymbolic (pm, aproj)
-        | AProjBorrows (sv, proj_ty, given_back) -> (
+        | AProjBorrows { proj; loans } -> (
             (* We should never expand a symbolic value which has consumed given
                back values (because then it means the symbolic value was consumed
                by region abstractions, and is thus inaccessible: such a value can't
                be expanded)
             *)
-            cassert __FILE__ __LINE__ (given_back = []) span "Unreachable";
+            cassert __FILE__ __LINE__ (loans = []) span "Unreachable";
             (* Check if we need to reborrow *)
-            match reborrow_ashared (Option.get proj_regions) sv proj_ty with
+            match reborrow_ashared (Option.get proj_regions) proj with
             | None -> super#visit_ASymbolic proj_regions pm aproj
             | Some asb -> ABorrow (AProjSharedBorrow asb))
         | AEndedProjLoans _ ->

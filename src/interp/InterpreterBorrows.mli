@@ -234,44 +234,34 @@ type merge_duplicates_funcs = {
   merge_aborrow_projs :
     ty ->
     proj_marker ->
-    symbolic_value_id ->
-    ty ->
-    (msymbolic_value_id * aproj) list ->
+    aproj_borrows ->
     ty ->
     proj_marker ->
-    symbolic_value_id ->
-    ty ->
-    (msymbolic_value_id * aproj) list ->
+    aproj_borrows ->
     typed_avalue;
       (** Parameters:
           - [ty0]
           - [pm0]
-          - [sv0]
-          - [proj_ty0]
-          - [children0]
+          - [proj0]
+          - [loans0]
           - [ty1]
           - [pm1]
-          - [sv1]
-          - [proj_ty1]
-          - [children1] *)
+          - [proj1]
+          - [loans1] *)
   merge_aloan_projs :
     ty ->
     proj_marker ->
-    symbolic_value_id ->
-    ty ->
-    (msymbolic_value_id * aproj) list ->
+    aproj_loans ->
     ty ->
     proj_marker ->
-    symbolic_value_id ->
-    ty ->
-    (msymbolic_value_id * aproj) list ->
+    aproj_loans ->
     typed_avalue;
       (** Parameters:
           - [ty0]
           - [pm0]
-          - [sv0]
-          - [proj_ty0]
-          - [children0]
+          - [proj0]
+          - [consumed0]
+          - [borrows0]
           - [ty1]
           - [pm1]
           - [sv1]

@@ -858,18 +858,19 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
 
       method! visit_aproj _ proj =
         match proj with
-        | AProjLoans (_sv, _proj_ty, children) ->
-            sanity_check __FILE__ __LINE__ (children = []) span;
+        | AProjLoans { proj = _; consumed; borrows } ->
+            sanity_check __FILE__ __LINE__ (consumed = []) span;
+            sanity_check __FILE__ __LINE__ (borrows = []) span;
             ()
-        | AProjBorrows (sv_id, _proj_ty, children) ->
-            sanity_check __FILE__ __LINE__ (children = []) span;
+        | AProjBorrows { proj; loans } ->
+            sanity_check __FILE__ __LINE__ (loans = []) span;
             (* Find the target borrow *)
             let tgt_borrow_id =
-              SymbolicValueId.Map.find sv_id src_to_tgt_sid_map
+              SymbolicValueId.Map.find proj.sv_id src_to_tgt_sid_map
             in
             (* Update the map *)
             tgt_borrow_to_loan_proj :=
-              SymbolicValueId.InjSubst.add sv_id tgt_borrow_id
+              SymbolicValueId.InjSubst.add proj.sv_id tgt_borrow_id
                 !tgt_borrow_to_loan_proj
         | AEndedProjBorrows _ | AEndedProjLoans _ | AEmpty ->
             (* We shouldn't get there *)
@@ -944,14 +945,24 @@ let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
           self#visit_typed_value true sv;
           self#visit_typed_avalue register child_av
 
-        method! visit_AProjLoans register sv_id proj_ty children =
+        method! visit_AProjLoans register proj =
+          let { proj = { sv_id; proj_ty }; consumed; borrows } : aproj_loans =
+            proj
+          in
           self#visit_symbolic_value_id true sv_id;
           self#visit_ty register proj_ty;
-          self#visit_list
-            (fun register (s, p) ->
-              self#visit_msymbolic_value_id register s;
+          sanity_check __FILE__ __LINE__ (consumed = []) span;
+          sanity_check __FILE__ __LINE__ (borrows = []) span
+        (*self#visit_list
+            (fun register ((s, p) : mconsumed_symb * _) ->
+              self#visit_msymbolic_value_id register s.sv_id;
               self#visit_aproj register p)
-            register children
+            register consumed;
+          self#visit_list
+            (fun register ((s, p) : mconsumed_symb * _) ->
+              self#visit_msymbolic_value_id register s.sv_id;
+              self#visit_aproj register p)
+            register borrows*)
 
         method! visit_symbolic_value_id register sid =
           if register then sids := SymbolicValueId.Set.add sid !sids

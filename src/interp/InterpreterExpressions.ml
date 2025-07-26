@@ -288,9 +288,10 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
           List.map
             (fun rid ->
               let mk_proj (is_borrows : bool) sv_id : typed_avalue =
+                let proj : symbolic_proj = { sv_id; proj_ty = ty } in
                 let proj =
-                  if is_borrows then AProjBorrows (sv_id, ty, [])
-                  else AProjLoans (sv_id, ty, [])
+                  if is_borrows then AProjBorrows { proj; loans = [] }
+                  else AProjLoans { proj; consumed = []; borrows = [] }
                 in
                 let value = ASymbolic (PNone, proj) in
                 { value; ty }

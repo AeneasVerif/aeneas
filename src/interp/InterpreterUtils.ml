@@ -127,7 +127,16 @@ let mk_fresh_symbolic_typed_value_from_no_regions_ty (span : Meta.span)
 let mk_aproj_loans_value_from_symbolic_value (proj_regions : RegionId.Set.t)
     (svalue : symbolic_value) (proj_ty : ty) : typed_avalue =
   if ty_has_regions_in_set proj_regions proj_ty then
-    let av = ASymbolic (PNone, AProjLoans (svalue.sv_id, proj_ty, [])) in
+    let av =
+      ASymbolic
+        ( PNone,
+          AProjLoans
+            {
+              proj = { sv_id = svalue.sv_id; proj_ty };
+              consumed = [];
+              borrows = [];
+            } )
+    in
     let av : typed_avalue = { value = av; ty = svalue.sv_ty } in
     av
   else
@@ -142,7 +151,7 @@ let mk_aproj_borrows_from_symbolic_value (span : Meta.span)
     aproj =
   sanity_check __FILE__ __LINE__ (ty_is_rty proj_ty) span;
   if ty_has_regions_in_set proj_regions proj_ty then
-    AProjBorrows (svalue.sv_id, proj_ty, [])
+    AProjBorrows { proj = { sv_id = svalue.sv_id; proj_ty }; loans = [] }
   else AEmpty
 
 (** TODO: move *)
@@ -208,13 +217,10 @@ exception FoundGBorrowContent of g_borrow_content
 exception FoundGLoanContent of g_loan_content
 
 (** Utility exception *)
-exception
-  FoundAProjBorrows of
-    symbolic_value_id * ty * (msymbolic_value_id * aproj) list
+exception FoundAProjBorrows of aproj_borrows
 
 (** Utility exception *)
-exception
-  FoundAProjLoans of symbolic_value_id * ty * (msymbolic_value_id * aproj) list
+exception FoundAProjLoans of aproj_loans
 
 exception FoundAbsProj of abstraction_id * symbolic_value_id
 
@@ -229,8 +235,8 @@ let symbolic_value_id_in_ctx (sv_id : SymbolicValueId.id) (ctx : eval_ctx) :
 
       method! visit_aproj env aproj =
         (match aproj with
-        | AProjLoans (sv_id1, _, _) | AProjBorrows (sv_id1, _, _) ->
-            if sv_id1 = sv_id then raise Found else ()
+        | AProjLoans { proj; _ } | AProjBorrows { proj; _ } ->
+            if proj.sv_id = sv_id then raise Found else ()
         | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ());
         super#visit_aproj env aproj
 
@@ -238,8 +244,8 @@ let symbolic_value_id_in_ctx (sv_id : SymbolicValueId.id) (ctx : eval_ctx) :
         let visit (asb : abstract_shared_borrow) : unit =
           match asb with
           | AsbBorrow _ -> ()
-          | AsbProjReborrows (sv_id1, _) ->
-              if sv_id1 = sv_id then raise Found else ()
+          | AsbProjReborrows proj ->
+              if proj.sv_id = sv_id then raise Found else ()
         in
         List.iter visit asb
     end

@@ -87,17 +87,21 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
     RAbsBorrow.register_mapping false abs_to_loans abs.abs_id (pm, bid);
     RBorrowAbs.register_mapping true loan_to_abs (pm, bid) abs.abs_id
   in
-  let register_borrow_proj abs pm (sv_id : symbolic_value_id) (proj_ty : ty) =
-    let norm_proj_ty = normalize_proj_ty abs.regions.owned proj_ty in
-    let proj : marked_norm_symb_proj = { pm; sv_id; norm_proj_ty } in
+  let register_borrow_proj abs pm (proj : symbolic_proj) =
+    let norm_proj_ty = normalize_proj_ty abs.regions.owned proj.proj_ty in
+    let proj : marked_norm_symb_proj =
+      { pm; sv_id = proj.sv_id; norm_proj_ty }
+    in
     RAbsSymbProj.register_mapping false abs_to_borrow_projs abs.abs_id proj;
     (* This mapping is *actually* injective because we refresh symbolic values
        with borrows when copying them. See [InterpreterExpressions.copy_value]. *)
     RSymbProjAbs.register_mapping true borrow_proj_to_abs proj abs.abs_id
   in
-  let register_loan_proj abs pm (sv_id : symbolic_value_id) (proj_ty : ty) =
-    let norm_proj_ty = normalize_proj_ty abs.regions.owned proj_ty in
-    let proj : marked_norm_symb_proj = { pm; sv_id; norm_proj_ty } in
+  let register_loan_proj abs pm (proj : symbolic_proj) =
+    let norm_proj_ty = normalize_proj_ty abs.regions.owned proj.proj_ty in
+    let proj : marked_norm_symb_proj =
+      { pm; sv_id = proj.sv_id; norm_proj_ty }
+    in
     RAbsSymbProj.register_mapping false abs_to_loan_projs abs.abs_id proj;
     RSymbProjAbs.register_mapping true loan_proj_to_abs proj abs.abs_id
   in
@@ -160,14 +164,18 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
 
       method! visit_ASymbolic (abs, _) pm proj =
         match proj with
-        | AProjLoans (sv, proj_ty, children) ->
-            sanity_check __FILE__ __LINE__ (children = []) span;
-            register_loan_proj abs pm sv proj_ty
-        | AProjBorrows (sv, proj_ty, children) ->
-            sanity_check __FILE__ __LINE__ (children = []) span;
-            register_borrow_proj abs pm sv proj_ty
-        | AEndedProjLoans (_, children) | AEndedProjBorrows (_, children) ->
-            sanity_check __FILE__ __LINE__ (children = []) span
+        | AProjLoans { proj; consumed; borrows } ->
+            sanity_check __FILE__ __LINE__ (consumed = []) span;
+            sanity_check __FILE__ __LINE__ (borrows = []) span;
+            register_loan_proj abs pm proj
+        | AProjBorrows { proj; loans } ->
+            sanity_check __FILE__ __LINE__ (loans = []) span;
+            register_borrow_proj abs pm proj
+        | AEndedProjLoans { proj = _; consumed; borrows } ->
+            sanity_check __FILE__ __LINE__ (consumed = []) span;
+            sanity_check __FILE__ __LINE__ (borrows = []) span
+        | AEndedProjBorrows { mvalues = _; loans } ->
+            sanity_check __FILE__ __LINE__ (loans = []) span
         | AEmpty -> ()
     end
   in
@@ -294,7 +302,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
           match (bc0, bc1) with
           | VSharedBorrow bid0, VSharedBorrow bid1 ->
               let bid =
-                M.match_shared_borrows ctx0 ctx1 match_rec ty bid0 bid1
+                M.match_shared_borrows match_rec ctx0 ctx1 ty bid0 bid1
               in
               VSharedBorrow bid
           | VMutBorrow (bid0, bv0), VMutBorrow (bid1, bv1) ->
@@ -478,16 +486,16 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
         | _ -> craise __FILE__ __LINE__ M.span "Unreachable")
     | ASymbolic (pm0, proj0), ASymbolic (pm1, proj1) -> begin
         match (proj0, proj1) with
-        | ( AProjBorrows (sv0, proj_ty0, children0),
-            AProjBorrows (sv1, proj_ty1, children1) ) ->
-            let proj_ty = M.match_rtys ctx0 ctx1 proj_ty0 proj_ty1 in
-            M.match_aproj_borrows ctx0 ctx1 v0.ty pm0 sv0 proj_ty0 children0
-              v1.ty pm1 sv1 proj_ty1 children1 ty proj_ty
-        | ( AProjLoans (sv0, proj_ty0, children0),
-            AProjLoans (sv1, proj_ty1, children1) ) ->
-            let proj_ty = M.match_rtys ctx0 ctx1 proj_ty0 proj_ty1 in
-            M.match_aproj_loans ctx0 ctx1 v0.ty pm0 sv0 proj_ty0 children0 v1.ty
-              pm1 sv1 proj_ty1 children1 ty proj_ty
+        | ( AProjBorrows ({ proj = proj0; _ } as pborrows0),
+            AProjBorrows ({ proj = proj1; _ } as pborrows1) ) ->
+            let proj_ty = M.match_rtys ctx0 ctx1 proj0.proj_ty proj1.proj_ty in
+            M.match_aproj_borrows ctx0 ctx1 v0.ty pm0 pborrows0 v1.ty pm1
+              pborrows1 ty proj_ty
+        | ( AProjLoans ({ proj = proj0; _ } as ploans0),
+            AProjLoans ({ proj = proj1; _ } as ploans1) ) ->
+            let proj_ty = M.match_rtys ctx0 ctx1 proj0.proj_ty proj1.proj_ty in
+            M.match_aproj_loans ctx0 ctx1 v0.ty pm0 ploans0 v1.ty pm1 ploans1 ty
+              proj_ty
         | _ -> craise __FILE__ __LINE__ M.span "Unreachable"
       end
     | _ -> M.match_avalues ctx0 ctx1 v0 v1
@@ -551,7 +559,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* No borrows, no loans, no bottoms: we can introduce a symbolic value *)
       mk_fresh_symbolic_typed_value_from_no_regions_ty span ty
 
-  let match_shared_borrows (ctx0 : eval_ctx) (ctx1 : eval_ctx) match_rec
+  let match_shared_borrows match_rec (ctx0 : eval_ctx) (ctx1 : eval_ctx)
       (ty : ety) (bid0 : borrow_id) (bid1 : borrow_id) : borrow_id =
     (* Lookup the shared values and match them - we do this mostly
        to make sure we end loans which might appear on one side
@@ -987,10 +995,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
   let match_amut_loans _ _ _ _ _ _ _ _ _ _ =
     craise __FILE__ __LINE__ span "Unreachable"
 
-  let match_aproj_borrows _ _ _ _ _ _ _ _ _ _ _ _ _ _ =
+  let match_aproj_borrows _ _ _ _ _ _ _ _ _ _ =
     craise __FILE__ __LINE__ span "Unreachable"
 
-  let match_aproj_loans _ _ _ _ _ _ _ _ _ _ _ _ _ _ =
+  let match_aproj_loans _ _ _ _ _ _ _ _ _ _ =
     craise __FILE__ __LINE__ span "Unreachable"
 
   let match_avalues _ _ _ _ = craise __FILE__ __LINE__ span "Unreachable"
@@ -1049,7 +1057,7 @@ module MakeMoveMatcher (S : MatchMoveState) : PrimMatcher = struct
        the value on the left should have been simplified to bottom. *)
     { ty; value = VAdt adt1 }
 
-  let match_shared_borrows (_ : eval_ctx) (_ : eval_ctx) _ (_ : ety)
+  let match_shared_borrows _ (_ : eval_ctx) (_ : eval_ctx) (_ : ety)
       (_ : borrow_id) (bid1 : borrow_id) : borrow_id =
     (* There can't be bottoms in shared values *)
     bid1
@@ -1134,10 +1142,10 @@ module MakeMoveMatcher (S : MatchMoveState) : PrimMatcher = struct
 
   let match_avalues _ _ _ _ = craise __FILE__ __LINE__ span "Unreachable"
 
-  let match_aproj_borrows _ _ _ _ _ _ _ _ _ _ _ _ _ _ =
+  let match_aproj_borrows _ _ _ _ _ _ _ _ _ _ =
     craise __FILE__ __LINE__ span "Unreachable"
 
-  let match_aproj_loans _ _ _ _ _ _ _ _ _ _ _ _ _ _ =
+  let match_aproj_loans _ _ _ _ _ _ _ _ _ _ =
     craise __FILE__ __LINE__ span "Unreachable"
 end
 
@@ -1252,9 +1260,10 @@ struct
       (_adt0 : adt_value) (_adt1 : adt_value) : typed_value =
     raise (Distinct "match_distinct_adts")
 
-  let match_shared_borrows (ctx0 : eval_ctx) (ctx1 : eval_ctx)
+  let match_shared_borrows
       (match_typed_values : typed_value -> typed_value -> typed_value)
-      (_ty : ety) (bid0 : borrow_id) (bid1 : borrow_id) : borrow_id =
+      (ctx0 : eval_ctx) (ctx1 : eval_ctx) (_ty : ety) (bid0 : borrow_id)
+      (bid1 : borrow_id) : borrow_id =
     log#ldebug
       (lazy
         ("MakeCheckEquivMatcher: match_shared_borrows: " ^ "bid0: "
@@ -1417,27 +1426,41 @@ struct
     let value = ALoan (AMutLoan (PNone, id, av)) in
     { value; ty }
 
-  let match_aproj_borrows (ctx0 : eval_ctx) (ctx1 : eval_ctx) _ty0 pm0 sv_id0
-      proj_ty0 children0 _ty1 pm1 sv_id1 proj_ty1 children1 ty proj_ty =
+  let match_aproj_borrows (ctx0 : eval_ctx) (ctx1 : eval_ctx) _ty0 pm0
+      (proj0 : aproj_borrows) _ty1 pm1 (proj1 : aproj_borrows) ty proj_ty =
     sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
-    sanity_check __FILE__ __LINE__ (children0 = [] && children1 = []) span;
+    let { proj = proj0; loans = loans0 } = proj0 in
+    let { proj = proj1; loans = loans1 } = proj1 in
+    sanity_check __FILE__ __LINE__ (loans0 = [] && loans1 = []) span;
     (* We only want to match the ids of the symbolic values, but in order
        to call [match_symbolic_values] we need to have types... *)
-    let sv0 = { sv_id = sv_id0; sv_ty = proj_ty0 } in
-    let sv1 = { sv_id = sv_id1; sv_ty = proj_ty1 } in
+    let sv0 = { sv_id = proj0.sv_id; sv_ty = proj0.proj_ty } in
+    let sv1 = { sv_id = proj1.sv_id; sv_ty = proj1.proj_ty } in
     let sv = match_symbolic_values ctx0 ctx1 sv0 sv1 in
-    { value = ASymbolic (PNone, AProjBorrows (sv.sv_id, proj_ty, [])); ty }
+    let proj : symbolic_proj = { sv_id = sv.sv_id; proj_ty } in
+    { value = ASymbolic (PNone, AProjBorrows { proj; loans = [] }); ty }
 
-  let match_aproj_loans (ctx0 : eval_ctx) (ctx1 : eval_ctx) _ty0 pm0 sv_id0
-      proj_ty0 children0 _ty1 pm1 sv_id1 proj_ty1 children1 ty proj_ty =
+  let match_aproj_loans (ctx0 : eval_ctx) (ctx1 : eval_ctx) _ty0 pm0
+      (proj0 : aproj_loans) _ty1 pm1 (proj1 : aproj_loans) ty proj_ty =
     sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
-    sanity_check __FILE__ __LINE__ (children0 = [] && children1 = []) span;
+    let { proj = proj0; consumed = consumed0; borrows = borrows0 } : aproj_loans
+        =
+      proj0
+    in
+    let { proj = proj1; consumed = consumed1; borrows = borrows1 } : aproj_loans
+        =
+      proj1
+    in
+    sanity_check __FILE__ __LINE__ (consumed0 = [] && consumed1 = []) span;
+    sanity_check __FILE__ __LINE__ (borrows0 = [] && borrows1 = []) span;
     (* We only want to match the ids of the symbolic values, but in order
        to call [match_symbolic_values] we need to have types... *)
-    let sv0 = { sv_id = sv_id0; sv_ty = proj_ty0 } in
-    let sv1 = { sv_id = sv_id1; sv_ty = proj_ty1 } in
+    let sv0 = { sv_id = proj0.sv_id; sv_ty = proj0.proj_ty } in
+    let sv1 = { sv_id = proj1.sv_id; sv_ty = proj1.proj_ty } in
     let sv = match_symbolic_values ctx0 ctx1 sv0 sv1 in
-    { value = ASymbolic (PNone, AProjLoans (sv.sv_id, proj_ty, [])); ty }
+    let proj : symbolic_proj = { sv_id = sv.sv_id; proj_ty } in
+    let proj = AProjLoans { proj; consumed = []; borrows = [] } in
+    { value = ASymbolic (PNone, proj); ty }
 
   let match_avalues (ctx0 : eval_ctx) (ctx1 : eval_ctx) v0 v1 =
     log#ldebug
@@ -2064,10 +2087,10 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
       method! visit_aproj env p =
         match p with
         | AProjLoans _ -> super#visit_aproj env p
-        | AProjBorrows (sv_id, proj_ty, children) ->
-            sanity_check __FILE__ __LINE__ (children = []) span;
+        | AProjBorrows { proj = { sv_id; proj_ty }; loans } ->
+            sanity_check __FILE__ __LINE__ (loans = []) span;
             let sv_id = register_symbolic_value_id sv_id in
-            AProjBorrows (sv_id, proj_ty, children)
+            AProjBorrows { proj = { sv_id; proj_ty }; loans }
         | _ -> super#visit_aproj env p
     end
   in
@@ -2200,9 +2223,10 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
 
       method! visit_aproj env proj =
         match proj with
-        | AProjLoans (sv_id, proj_ty, children) ->
+        | AProjLoans { proj = { sv_id; proj_ty }; consumed; borrows } ->
             (* The logic is similar to the concrete borrows/loans cases above *)
-            sanity_check __FILE__ __LINE__ (children = []) span;
+            sanity_check __FILE__ __LINE__ (consumed = []) span;
+            sanity_check __FILE__ __LINE__ (borrows = []) span;
             let sv_id =
               begin
                 match
@@ -2219,9 +2243,9 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
               end
             in
             let proj_ty = self#visit_ty env proj_ty in
-            AProjLoans (sv_id, proj_ty, children)
-        | AProjBorrows (sv_id, proj_ty, children) ->
-            sanity_check __FILE__ __LINE__ (children = []) span;
+            AProjLoans { proj = { sv_id; proj_ty }; consumed; borrows }
+        | AProjBorrows { proj = { sv_id; proj_ty }; loans } ->
+            sanity_check __FILE__ __LINE__ (loans = []) span;
             (* Lookup the loan corresponding to this borrow *)
             let src_lid =
               SymbolicValueId.InjSubst.find sv_id
@@ -2241,7 +2265,7 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
               end
             in
             let proj_ty = self#visit_ty env proj_ty in
-            AProjBorrows (sv_id, proj_ty, children)
+            AProjBorrows { proj = { sv_id; proj_ty }; loans }
         | AEndedProjBorrows _ | AEndedProjLoans _ | AEmpty ->
             super#visit_aproj env proj
 

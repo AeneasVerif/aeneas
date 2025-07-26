@@ -1986,7 +1986,7 @@ let compute_typed_avalue_proj_kind span type_infos
       method! visit_ASymbolic ty pm aproj =
         sanity_check __FILE__ __LINE__ (pm = PNone) span;
         match aproj with
-        | V.AEndedProjLoans (_, _) ->
+        | V.AEndedProjLoans _ ->
             has_loans := true;
             (* We need to check wether the projected loans are mutable or not *)
             if
@@ -1995,7 +1995,7 @@ let compute_typed_avalue_proj_kind span type_infos
             then has_mut_loans := true;
             (* Continue exploring (same reasons as above) *)
             super#visit_ASymbolic ty pm aproj
-        | AProjLoans (_, _, _) ->
+        | AProjLoans _ ->
             (* TODO: we should probably fail here *)
             has_loans := true;
             (* Continue exploring (same reasons as above) *)
@@ -2009,7 +2009,7 @@ let compute_typed_avalue_proj_kind span type_infos
             then has_mut_borrows := true;
             (* Continue exploring (same reasons as above) *)
             super#visit_ASymbolic ty pm aproj
-        | AProjBorrows (_, _, _) ->
+        | AProjBorrows _ ->
             (* TODO: we should probably fail here *)
             has_borrows := true;
             (* Continue exploring (same reasons as above) *)
@@ -2203,14 +2203,15 @@ and aloan_content_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
 and aproj_to_consumed_aux (ctx : bs_ctx) (_abs_regions : T.RegionId.Set.t)
     (aproj : V.aproj) (ty : T.ty) : texpression option =
   match aproj with
-  | V.AEndedProjLoans (msv, []) ->
+  | V.AEndedProjLoans { proj = msv; consumed = []; borrows = [] } ->
       (* The symbolic value was left unchanged.
 
          We're using the projection type as the type of the symbolic value -
          it doesn't really matter. *)
       let msv : V.symbolic_value = { sv_id = msv; sv_ty = ty } in
       Some (symbolic_value_to_texpression ctx msv)
-  | V.AEndedProjLoans (_msv, [ (mnv, child_aproj) ]) ->
+  | V.AEndedProjLoans
+      { proj = _; consumed = [ (mnv, child_aproj) ]; borrows = [] } ->
       sanity_check __FILE__ __LINE__ (child_aproj = AEmpty) ctx.span;
       (* TODO: check that the updated symbolic values covers all the cases
          (part of the symbolic value might have been updated, and the rest
@@ -2228,9 +2229,9 @@ and aproj_to_consumed_aux (ctx : bs_ctx) (_abs_regions : T.RegionId.Set.t)
 
          We're using the projection type as the type of the symbolic value -
          it doesn't really matter. *)
-      let mnv : V.symbolic_value = { sv_id = mnv; sv_ty = ty } in
+      let mnv : V.symbolic_value = { sv_id = mnv.sv_id; sv_ty = ty } in
       Some (symbolic_value_to_texpression ctx mnv)
-  | V.AEndedProjLoans (_, _) ->
+  | V.AEndedProjLoans _ ->
       (* The symbolic value was updated, and the given back values come from several
          abstractions *)
       craise __FILE__ __LINE__ ctx.span "Unimplemented"
@@ -2238,7 +2239,7 @@ and aproj_to_consumed_aux (ctx : bs_ctx) (_abs_regions : T.RegionId.Set.t)
       (* The value should have been introduced by a loan projector, and should not
          contain nested borrows, so we can't get there *)
       craise __FILE__ __LINE__ ctx.span "Unreachable"
-  | AEmpty | AProjLoans (_, _, _) | AProjBorrows (_, _, _) ->
+  | AEmpty | AProjLoans _ | AProjBorrows _ ->
       craise __FILE__ __LINE__ ctx.span "Unreachable"
 
 let typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
@@ -2499,9 +2500,9 @@ and aborrow_content_to_given_back_aux ~(filter : bool) (mp : mplace option)
 and aproj_to_given_back_aux (mp : mplace option) (aproj : V.aproj) (ty : T.ty)
     (ctx : bs_ctx) : bs_ctx * typed_pattern option =
   match aproj with
-  | V.AEndedProjLoans (_, _) -> craise __FILE__ __LINE__ ctx.span "Unreachable"
-  | AEndedProjBorrows (mv, given_back) ->
-      cassert __FILE__ __LINE__ (given_back = []) ctx.span "Unreachable";
+  | V.AEndedProjLoans _ -> craise __FILE__ __LINE__ ctx.span "Unreachable"
+  | AEndedProjBorrows { mvalues = mv; loans } ->
+      cassert __FILE__ __LINE__ (loans = []) ctx.span "Unreachable";
       (* Return the meta-value *)
       let ctx, var = fresh_var_for_symbolic_value mv.given_back ctx in
       let pat = mk_typed_pattern_from_var var mp in
@@ -2519,7 +2520,7 @@ and aproj_to_given_back_aux (mp : mplace option) (aproj : V.aproj) (ty : T.ty)
         }
       in
       (ctx, Some pat)
-  | AEmpty | AProjLoans (_, _, _) | AProjBorrows (_, _, _) ->
+  | AEmpty | AProjLoans _ | AProjBorrows _ ->
       craise __FILE__ __LINE__ ctx.span "Unreachable"
 
 let typed_avalue_to_given_back (abs_regions : T.RegionId.Set.t)
@@ -4217,7 +4218,7 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
       (* Translate the input values *)
       let loop_input_values =
         List.map
-          (fun sv ->
+          (fun (sv : V.symbolic_value) ->
             log#ltrace
               (lazy
                 ("translate_forward_end: looking up input_svl: "
@@ -4417,7 +4418,8 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   (* Translate the loop inputs *)
   let inputs =
     List.map
-      (fun sv -> V.SymbolicValueId.Map.find sv.V.sv_id ctx.sv_to_var)
+      (fun (sv : V.symbolic_value) ->
+        V.SymbolicValueId.Map.find sv.V.sv_id ctx.sv_to_var)
       loop.input_svalues
   in
   let inputs_lvs =

@@ -14,7 +14,7 @@ let log = Logging.projectors_log
 (** [ty] shouldn't contain erased regions *)
 let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
     (fresh_reborrow : BorrowId.id -> BorrowId.id) (regions : RegionId.Set.t)
-    (v : typed_value) (ty : rty) : abstract_shared_borrows =
+    (v : typed_value) (ty : ty) : abstract_shared_borrows =
   (* Sanity check - TODO: move those elsewhere (here we perform the check at every
    * recursive call which is a bit overkill...) *)
   let ety = Subst.erase_regions ty in
@@ -86,9 +86,9 @@ let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
         (* Check that the projection doesn't contain ended regions *)
         sanity_check __FILE__ __LINE__
           (not
-             (projections_intersect span s.sv_ty ctx.ended_regions ty regions))
+             (projections_intersect span ctx.ended_regions s.sv_ty regions ty))
           span;
-        [ AsbProjReborrows (s.sv_id, ty) ]
+        [ AsbProjReborrows { sv_id = s.sv_id; proj_ty = ty } ]
     | _ -> craise __FILE__ __LINE__ span "Unreachable"
 
 let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
@@ -214,9 +214,12 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
                 ^ RegionId.Set.to_string None rset2
                 ^ "\n"));
             sanity_check __FILE__ __LINE__
-              (not (projections_intersect span ty1 rset1 ty2 rset2))
+              (not (projections_intersect span rset1 ty1 rset2 ty2))
               span);
-          ASymbolic (PNone, AProjBorrows (s.sv_id, ty, []))
+          ASymbolic
+            ( PNone,
+              AProjBorrows
+                { proj = { sv_id = s.sv_id; proj_ty = ty }; loans = [] } )
       | _ ->
           log#ltrace
             (lazy
