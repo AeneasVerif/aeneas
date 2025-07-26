@@ -8,11 +8,14 @@ open Contexts
     shared values, we generate {!type:Aeneas.Values.abstract_shared_borrows},
     not {!type:Aeneas.Values.avalue}s.
 
-    Parameters: [regions] [ancestor_regions] [see] [original_sv_ty]: shouldn't
-    have erased regions [proj_ty]: shouldn't have erased regions [eval_ctx] *)
+    Parameters
+    - [regions]
+    - [see]
+    - [original_sv_ty]: shouldn't have erased regions
+    - [proj_ty]: shouldn't have erased regions
+    - [eval_ctx] *)
 val apply_proj_loans_on_symbolic_expansion :
   Meta.span ->
-  RegionId.Set.t ->
   RegionId.Set.t ->
   symbolic_expansion ->
   rty ->
@@ -89,9 +92,7 @@ val prepare_reborrows :
     See {!prepare_reborrows}
 
     - [regions]: the regions to project
-    - [ancestor_regions]
     - [v]: the value on which to apply the projection
-
     - [ty]: the projection type (is used to map borrows to regions, or in other
       words to interpret the borrows as belonging to some regions). Remember
       that [v] doesn't contain region information. For instance, if we have:
@@ -105,7 +106,6 @@ val apply_proj_borrows :
   eval_ctx ->
   (BorrowId.id -> BorrowId.id) ->
   RegionId.Set.t ->
-  RegionId.Set.t ->
   typed_value ->
   rty ->
   typed_avalue
@@ -114,7 +114,6 @@ val apply_proj_borrows :
     - [config]
     - [ctx]
     - [regions]: the regions to project
-    - [ancestors_regions]
     - [v]: the value on which to apply the projection
     - [ty]: the type (with regions) to use for the projection (shouldn't have
       erased regions) *)
@@ -122,7 +121,6 @@ val apply_proj_borrows_on_input_value :
   config ->
   Meta.span ->
   eval_ctx ->
-  RegionId.Set.t ->
   RegionId.Set.t ->
   typed_value ->
   rty ->

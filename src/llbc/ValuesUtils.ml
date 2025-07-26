@@ -44,6 +44,15 @@ let value_as_symbolic (span : Meta.span) (v : value) : symbolic_value =
   | VSymbolic v -> v
   | _ -> craise __FILE__ __LINE__ span "Unexpected"
 
+(** Peel boxes as long as the value is of the form [Box<T>] *)
+let rec unbox_typed_value (span : Meta.span) (v : typed_value) : typed_value =
+  match (v.value, v.ty) with
+  | VAdt av, TAdt { id = TBuiltin TBox; _ } -> (
+      match av.field_values with
+      | [ bv ] -> unbox_typed_value span bv
+      | _ -> internal_error __FILE__ __LINE__ span)
+  | _ -> v
+
 (** Create a typed value from a symbolic value. *)
 let mk_typed_value_from_symbolic_value (svalue : symbolic_value) : typed_value =
   let av = VSymbolic svalue in
@@ -93,11 +102,22 @@ let is_unit (v : typed_value) : bool =
 
 let mk_aproj_borrows (pm : proj_marker) (sv_id : symbolic_value_id)
     (proj_ty : ty) =
-  { value = ASymbolic (pm, AProjBorrows (sv_id, proj_ty, [])); ty = proj_ty }
+  {
+    value =
+      ASymbolic (pm, AProjBorrows { proj = { sv_id; proj_ty }; loans = [] });
+    ty = proj_ty;
+  }
 
 let mk_aproj_loans (pm : proj_marker) (sv_id : symbolic_value_id) (proj_ty : ty)
     =
-  { value = ASymbolic (pm, AProjLoans (sv_id, proj_ty, [])); ty = proj_ty }
+  {
+    value =
+      ASymbolic
+        ( pm,
+          AProjLoans { proj = { sv_id; proj_ty }; consumed = []; borrows = [] }
+        );
+    ty = proj_ty;
+  }
 
 (** Check if a value contains a *concrete* borrow (i.e., a [Borrow] value - we
     don't check if there are borrows hidden in symbolic values). *)

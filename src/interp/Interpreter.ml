@@ -302,7 +302,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
           eval_ctx * typed_avalue list =
         let ctx, avalue =
           apply_proj_borrows_on_input_value config span ctx abs.regions.owned
-            abs.regions.ancestors ret_value ret_rty
+            ret_value ret_rty
         in
         (ctx, [ avalue ])
       in

@@ -71,7 +71,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
   in
   let type_ctx =
     {
-      SymbolicToPure.type_infos = trans_ctx.type_ctx.type_infos;
+      SymbolicToPureCore.type_infos = trans_ctx.type_ctx.type_infos;
       llbc_type_decls = trans_ctx.type_ctx.type_decls;
       type_decls = pure_type_decls;
       recursive_decls = recursive_type_decls;
@@ -79,7 +79,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
   in
   let fun_ctx =
     {
-      SymbolicToPure.llbc_fun_decls = trans_ctx.fun_ctx.fun_decls;
+      SymbolicToPureCore.llbc_fun_decls = trans_ctx.fun_ctx.fun_decls;
       fun_infos = trans_ctx.fun_ctx.fun_infos;
       regions_hierarchies = trans_ctx.fun_ctx.regions_hierarchies;
     }
@@ -114,7 +114,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
   in
 
   let sg =
-    SymbolicToPure.translate_fun_sig_from_decl_to_decomposed trans_ctx fdef
+    SymbolicToPureTypes.translate_fun_sig_from_decl_to_decomposed trans_ctx fdef
   in
 
   let var_counter, back_state_vars = (var_counter, []) in
@@ -122,9 +122,9 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
 
   let ctx =
     {
-      span = fdef.item_meta.span;
+      SymbolicToPureCore.span = fdef.item_meta.span;
       decls_ctx = trans_ctx;
-      SymbolicToPure.bid = None;
+      bid = None;
       sg;
       fun_dsigs;
       (* Will need to be updated for the backward functions *)
@@ -170,7 +170,8 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
         in
         let input_svs = List.combine forward_input_varnames input_svs in
         let ctx, forward_inputs =
-          SymbolicToPure.fresh_named_vars_for_symbolic_values input_svs ctx
+          SymbolicToPureValues.fresh_named_vars_for_symbolic_values input_svs
+            ctx
         in
         { ctx with forward_inputs }
     | _ -> craise __FILE__ __LINE__ fdef.item_meta.span "Unreachable"
@@ -267,7 +268,7 @@ let translate_crate_to_pure (crate : crate) :
            try
              Some
                ( fdef.def_id,
-                 SymbolicToPure.translate_fun_sig_from_decl_to_decomposed
+                 SymbolicToPureTypes.translate_fun_sig_from_decl_to_decomposed
                    trans_ctx fdef )
            with CFailure error ->
              let name = name_to_string trans_ctx fdef.item_meta.name in
@@ -290,7 +291,7 @@ let translate_crate_to_pure (crate : crate) :
   let builtin_sigs =
     BuiltinFunIdMap.map
       (fun (info : builtin_fun_info) ->
-        SymbolicToPure.translate_fun_sig trans_ctx (FBuiltin info.fun_id)
+        SymbolicToPureTypes.translate_fun_sig trans_ctx (FBuiltin info.fun_id)
           info.name info.fun_sig
           (List.map (fun _ -> None) info.fun_sig.inputs))
       builtin_fun_infos

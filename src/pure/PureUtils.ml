@@ -1048,3 +1048,178 @@ let adjust_explicit_info (explicit : explicit_info) (is_trait_method : bool)
           explicit_const_generics;
     }
   else explicit
+
+let mk_visited_params_visitor () =
+  let tys = ref Pure.TypeVarId.Set.empty in
+  let cgs = ref Pure.ConstGenericVarId.Set.empty in
+  let visitor =
+    object
+      inherit [_] Pure.iter_type_decl
+      method! visit_type_var_id _ id = tys := Pure.TypeVarId.Set.add id !tys
+
+      method! visit_const_generic_var_id _ id =
+        cgs := Pure.ConstGenericVarId.Set.add id !cgs
+    end
+  in
+  (visitor, tys, cgs)
+
+(** Compute which input parameters should be implicit or explicit.
+
+    The way we do it is simple: if a parameter appears in one of the inputs,
+    then it should be implicit. For instance, the type parameter of [Vec::get]
+    should be implicit, while the type parameter of [Vec::new] should be
+    explicit (it only appears in the output). Also note that here we consider
+    the trait obligations as inputs from which we can deduce an implicit
+    parameter. For instance:
+    {[
+      let f {a : Type} (clause0 : Foo a) : ...
+             ^^^^^^^^
+          implied by clause0
+    ]}
+
+    The [input_tys] are the types of the input arguments, in case we are
+    translating a function. *)
+let compute_explicit_info (generics : Pure.generic_params) (input_tys : ty list)
+    : explicit_info =
+  let visitor, implicit_tys, implicit_cgs = mk_visited_params_visitor () in
+  List.iter (visitor#visit_trait_clause ()) generics.trait_clauses;
+  List.iter (visitor#visit_ty ()) input_tys;
+  let make_explicit_ty (v : Pure.type_var) : Pure.explicit =
+    if Pure.TypeVarId.Set.mem v.index !implicit_tys then Implicit else Explicit
+  in
+  let make_explicit_cg (v : Pure.const_generic_var) : Pure.explicit =
+    if Pure.ConstGenericVarId.Set.mem v.index !implicit_cgs then Implicit
+    else Explicit
+  in
+  {
+    explicit_types = List.map make_explicit_ty generics.types;
+    explicit_const_generics = List.map make_explicit_cg generics.const_generics;
+  }
+
+(** Compute which input parameters can be infered if only the explicit types and
+    the trait refs are provided.
+
+    This is similar to [compute_explicit_info]. *)
+let compute_known_info (explicit : explicit_info)
+    (generics : Pure.generic_params) : known_info =
+  let visitor, known_tys, known_cgs = mk_visited_params_visitor () in
+  List.iter (visitor#visit_trait_clause ()) generics.trait_clauses;
+  let make_known_ty ((e, v) : explicit * Pure.type_var) : Pure.known =
+    if e = Explicit || Pure.TypeVarId.Set.mem v.index !known_tys then Known
+    else Unknown
+  in
+  let make_known_cg ((e, v) : explicit * Pure.const_generic_var) : Pure.known =
+    if e = Explicit || Pure.ConstGenericVarId.Set.mem v.index !known_cgs then
+      Known
+    else Unknown
+  in
+  {
+    known_types =
+      List.map make_known_ty
+        (List.combine explicit.explicit_types generics.types);
+    known_const_generics =
+      List.map make_known_cg
+        (List.combine explicit.explicit_const_generics generics.const_generics);
+  }
+
+let mk_checked_let file line span (monadic : bool) (lv : typed_pattern)
+    (re : texpression) (next_e : texpression) : texpression =
+  let re_ty = if monadic then unwrap_result_ty span re.ty else re.ty in
+  if !Config.type_check_pure_code then
+    sanity_check file line (lv.ty = re_ty) span;
+  mk_let monadic lv re next_e
+
+let mk_checked_lets file line span (monadic : bool)
+    (lets : (typed_pattern * texpression) list) (next_e : texpression) :
+    texpression =
+  if !Config.type_check_pure_code then
+    sanity_check file line
+      (List.for_all
+         (fun ((pat, e) : typed_pattern * texpression) ->
+           let e_ty = if monadic then unwrap_result_ty span e.ty else e.ty in
+           pat.ty = e_ty)
+         lets)
+      span;
+  mk_lets monadic lets next_e
+
+(** Wrap a function body in a match over the fuel to control termination. *)
+let wrap_in_match_fuel (span : Meta.span) (fuel0 : LocalId.id)
+    (fuel : LocalId.id) (body : texpression) : texpression =
+  let fuel0_var : var = mk_fuel_var fuel0 in
+  let fuel0 = mk_texpression_from_var fuel0_var in
+  let nfuel_var : var = mk_fuel_var fuel in
+  let nfuel_pat = mk_typed_pattern_from_var nfuel_var None in
+  let fail_branch =
+    mk_result_fail_texpression_with_error_id span error_out_of_fuel_id body.ty
+  in
+  match Config.backend () with
+  | FStar ->
+      (* Generate an expression:
+         {[
+           if fuel0 = 0 then Fail OutOfFuel
+           else
+             let fuel = decrease fuel0 in
+             ...
+         }]
+      *)
+      (* Create the expression: [fuel0 = 0] *)
+      let check_fuel =
+        let func =
+          {
+            id = FunOrOp (Fun (Pure FuelEqZero));
+            generics = empty_generic_args;
+          }
+        in
+        let func_ty = mk_arrow mk_fuel_ty mk_bool_ty in
+        let func = { e = Qualif func; ty = func_ty } in
+        mk_app span func fuel0
+      in
+      (* Create the expression: [decrease fuel0] *)
+      let decrease_fuel =
+        let func =
+          {
+            id = FunOrOp (Fun (Pure FuelDecrease));
+            generics = empty_generic_args;
+          }
+        in
+        let func_ty = mk_arrow mk_fuel_ty mk_fuel_ty in
+        let func = { e = Qualif func; ty = func_ty } in
+        mk_app span func fuel0
+      in
+
+      (* Create the success branch *)
+      let monadic = false in
+      let success_branch =
+        mk_checked_let __FILE__ __LINE__ span monadic nfuel_pat decrease_fuel
+          body
+      in
+
+      (* Put everything together *)
+      let match_e = Switch (check_fuel, If (fail_branch, success_branch)) in
+      let match_ty = body.ty in
+      { e = match_e; ty = match_ty }
+  | Coq ->
+      (* Generate an expression:
+         {[
+           match fuel0 with
+           | O -> Fail OutOfFuel
+           | S fuel ->
+             ...
+         }]
+      *)
+      (* Create the fail branch *)
+      let fail_pat = mk_adt_pattern mk_fuel_ty (Some fuel_zero_id) [] in
+      let fail_branch = { pat = fail_pat; branch = fail_branch } in
+      (* Create the success branch *)
+      let success_pat =
+        mk_adt_pattern mk_fuel_ty (Some fuel_succ_id) [ nfuel_pat ]
+      in
+      let success_branch = body in
+      let success_branch = { pat = success_pat; branch = success_branch } in
+      (* Put everything together *)
+      let match_ty = body.ty in
+      let match_e = Switch (fuel0, Match [ fail_branch; success_branch ]) in
+      { e = match_e; ty = match_ty }
+  | Lean | HOL4 ->
+      (* We should have checked the command line arguments before *)
+      raise (Failure "Unexpected")

@@ -717,27 +717,26 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
                 span)
       | ASymbolic (_, aproj), ty -> (
           match aproj with
-          | AProjLoans (sv_id, proj_ty, _) ->
-              check_symbolic_value_type sv_id ty;
+          | AProjLoans { proj; _ } ->
+              check_symbolic_value_type proj.sv_id ty;
               let abs = Option.get info in
               sanity_check __FILE__ __LINE__
-                (ty_has_regions_in_set abs.regions.owned proj_ty)
+                (ty_has_regions_in_set abs.regions.owned proj.proj_ty)
                 span
-          | AProjBorrows (sv_id, proj_ty, _) ->
-              check_symbolic_value_type sv_id ty;
-              let abs = Option.get info in
+          | AProjBorrows { proj; _ } ->
+              check_symbolic_value_type proj.sv_id ty;
               sanity_check __FILE__ __LINE__
-                (ty_has_regions_in_set abs.regions.owned proj_ty)
+                (ty_has_free_regions proj.proj_ty)
                 span
-          | AEndedProjLoans (_msv, given_back_ls) ->
+          | AEndedProjLoans { proj = _; consumed; borrows } ->
               List.iter
                 (fun (_, proj) ->
                   match proj with
-                  | AProjBorrows (_sv, ty', _) ->
-                      sanity_check __FILE__ __LINE__ (ty' = ty) span
+                  | AProjBorrows { proj; _ } | AProjLoans { proj; _ } ->
+                      sanity_check __FILE__ __LINE__ (proj.proj_ty = ty) span
                   | AEndedProjBorrows _ | AEmpty -> ()
                   | _ -> craise __FILE__ __LINE__ span "Unexpected")
-                given_back_ls
+                (consumed @ borrows)
           | AEndedProjBorrows _ | AEmpty -> ())
       | AIgnored _, _ -> ()
       | _ ->
@@ -838,16 +837,18 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
     let info = { info with env_count = info.env_count + 1 } in
     update_info sv_id info
   in
-  let add_aproj_borrows (sv : symbolic_value_id) abs_id regions proj_ty
-      as_shared_value : unit =
-    let info = lookup_info sv in
-    let binfo = { abs_id; regions; proj_ty; as_shared_value } in
+  let add_aproj_borrows abs_id regions (proj : symbolic_proj) as_shared_value :
+      unit =
+    let sv_id = proj.sv_id in
+    let info = lookup_info sv_id in
+    let binfo = { abs_id; regions; proj_ty = proj.proj_ty; as_shared_value } in
     let info = { info with aproj_borrows = binfo :: info.aproj_borrows } in
-    update_info sv info
+    update_info sv_id info
   in
-  let add_aproj_loans (sv : symbolic_value_id) proj_ty abs_id regions : unit =
+  let add_aproj_loans abs_id regions (proj : symbolic_proj) : unit =
+    let sv = proj.sv_id in
     let info = lookup_info sv in
-    let linfo = { abs_id; regions; proj_ty } in
+    let linfo = { abs_id; regions; proj_ty = proj.proj_ty } in
     let info = { info with aproj_loans = linfo :: info.aproj_loans } in
     update_info sv info
   in
@@ -862,16 +863,16 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
         let abs = Option.get abs in
         match asb with
         | AsbBorrow _ -> ()
-        | AsbProjReborrows (sv, proj_ty) ->
-            add_aproj_borrows sv abs.abs_id abs.regions.owned proj_ty true
+        | AsbProjReborrows proj ->
+            add_aproj_borrows abs.abs_id abs.regions.owned proj true
 
       method! visit_aproj abs aproj =
         (let abs = Option.get abs in
          match aproj with
-         | AProjLoans (sv, proj_ty, _) ->
-             add_aproj_loans sv proj_ty abs.abs_id abs.regions.owned
-         | AProjBorrows (sv, proj_ty, _) ->
-             add_aproj_borrows sv abs.abs_id abs.regions.owned proj_ty false
+         | AProjLoans { proj; _ } ->
+             add_aproj_loans abs.abs_id abs.regions.owned proj
+         | AProjBorrows { proj; _ } ->
+             add_aproj_borrows abs.abs_id abs.regions.owned proj false
          | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ());
         super#visit_aproj abs aproj
     end

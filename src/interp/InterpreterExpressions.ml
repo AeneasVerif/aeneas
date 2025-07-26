@@ -249,7 +249,12 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
       if not (ty_has_borrows (Some span) ctx.type_ctx.type_infos v.ty) then
         (* No borrows: do nothing *)
         (v, v, ctx, fun e -> e)
-      else
+      else begin
+        (* There are borrows: check that they are all live (i.e., the symbolic
+           value doesn't contain bottom) *)
+        cassert __FILE__ __LINE__
+          (not (symbolic_value_has_ended_regions ctx.ended_regions sp))
+          span "Attempted to copy a symbolic value containing ended borrows";
         let ctx0 = ctx in
         (* There are borrows: we need to introduce one region abstraction per live
            region present in the type *)
@@ -266,11 +271,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
               can_end = true;
               parents = AbstractionId.Set.empty;
               original_parents = [];
-              regions =
-                {
-                  owned = RegionId.Set.singleton r_id;
-                  ancestors = RegionId.Set.empty;
-                };
+              regions = { owned = RegionId.Set.singleton r_id };
               avalues;
             }
           in
@@ -283,9 +284,10 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
           List.map
             (fun rid ->
               let mk_proj (is_borrows : bool) sv_id : typed_avalue =
+                let proj : symbolic_proj = { sv_id; proj_ty = ty } in
                 let proj =
-                  if is_borrows then AProjBorrows (sv_id, ty, [])
-                  else AProjLoans (sv_id, ty, [])
+                  if is_borrows then AProjBorrows { proj; loans = [] }
+                  else AProjLoans { proj; consumed = []; borrows = [] }
                 in
                 let value = ASymbolic (PNone, proj) in
                 { value; ty }
@@ -310,6 +312,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
           mk_typed_value_from_symbolic_value copied_sv,
           ctx,
           cf )
+      end
 
 (** Reorganize the environment in preparation for the evaluation of an operand.
 
