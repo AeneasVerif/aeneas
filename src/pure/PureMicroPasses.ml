@@ -2046,8 +2046,8 @@ let decompose_loops (_ctx : ctx) (def : fun_decl) : fun_decl * fun_decl list =
               match fuel_vars with
               | None -> loop.loop_body
               | Some (fuel0, fuel) ->
-                  SymbolicToPure.wrap_in_match_fuel def.item_meta.span fuel0
-                    fuel loop.loop_body
+                  wrap_in_match_fuel def.item_meta.span fuel0 fuel
+                    loop.loop_body
             in
 
             let loop_body = { inputs; inputs_lvs; body = loop_body } in
@@ -3238,11 +3238,9 @@ let filter_loop_inputs (ctx : ctx) (transl : pure_fun_translation list) :
           sanity_check __FILE__ __LINE__
             (fun_sig_info_is_wf fwd_info)
             decl.item_meta.span;
-          let explicit_info =
-            SymbolicToPure.compute_explicit_info generics inputs
-          in
+          let explicit_info = compute_explicit_info generics inputs in
           let known_from_trait_refs =
-            SymbolicToPure.compute_known_info explicit_info generics
+            compute_known_info explicit_info generics
           in
           let signature =
             {
@@ -3615,7 +3613,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
                 in
                 (* TODO: we shouldn't call `SymbolicToPure` here, there should
                    be a way to translate these signatures earlier. *)
-                SymbolicToPure.translate_fun_sig trans_ctx
+                SymbolicToPureTypes.translate_fun_sig trans_ctx
                   (FRegular method_decl_id) method_name method_sig
                   (List.map (fun _ -> None) method_sig.inputs)
             | FunId (FBuiltin aid) ->

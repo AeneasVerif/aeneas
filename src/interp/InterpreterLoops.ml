@@ -382,8 +382,7 @@ let eval_loop_symbolic (config : config) (span : span)
      is important in {!SymbolicToPure}, where we expect the given back
      values to have a specific order.
 
-     Also, we filter the backward functions which and
-     return nothing.
+     Also, we filter the backward functions which and return nothing.
   *)
   let rg_to_given_back =
     let compute_abs_given_back_tys (abs_id : AbstractionId.id) : Pure.ty list =
@@ -404,7 +403,8 @@ let eval_loop_symbolic (config : config) (span : span)
 
       List.filter_map
         (fun (av : typed_avalue) ->
-          SymbolicToPure.translate_back_ty (Some span) ctx.type_ctx.type_infos
+          SymbolicToPureTypes.translate_back_ty (Some span)
+            ctx.type_ctx.type_infos
             (function
               | RVar (Free rid) -> RegionId.Set.mem rid abs.regions.owned
               | _ -> false)

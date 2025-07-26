@@ -74,6 +74,10 @@
   Substitute
   SymbolicAst
   SymbolicToPure
+  SymbolicToPureCore
+  SymbolicToPureExpressions
+  SymbolicToPureTypes
+  SymbolicToPureValues
   SynthesizeSymbolic
   TranslateCore
   Translate
