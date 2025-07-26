@@ -1,14 +1,8 @@
-open LlbcAstUtils
 open Pure
 open PureUtils
-open InterpreterUtils
-open FunsAnalysis
-open TypesAnalysis
 open Errors
-open PrintSymbolicAst
 open SymbolicToPureCore
 open SymbolicToPureTypes
-open SymbolicToPureValues
 open SymbolicToPureExpressions
 
 (** The local logger *)
@@ -223,6 +217,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     consts;
     types;
     methods;
+    vtable = _;
   } : A.trait_decl =
     trait_decl
   in
@@ -283,6 +278,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     consts;
     types;
     methods;
+    vtable = _;
   } =
     trait_impl
   in

@@ -1,11 +1,9 @@
 open LlbcAstUtils
 open Pure
 open PureUtils
-open InterpreterUtils
 open FunsAnalysis
 open TypesAnalysis
 open Errors
-open PrintSymbolicAst
 open SymbolicToPureCore
 
 (** The local logger *)
