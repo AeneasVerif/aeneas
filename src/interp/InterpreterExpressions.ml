@@ -271,11 +271,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
               can_end = true;
               parents = AbstractionId.Set.empty;
               original_parents = [];
-              regions =
-                {
-                  owned = RegionId.Set.singleton r_id;
-                  ancestors = RegionId.Set.empty;
-                };
+              regions = { owned = RegionId.Set.singleton r_id };
               avalues;
             }
           in

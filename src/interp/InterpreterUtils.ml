@@ -421,8 +421,8 @@ let compute_ids () =
         | Bound _ -> ()
 
       method! visit_abs_regions _ (regions : abs_regions) : unit =
-        let { owned; ancestors } = regions in
-        rids := RegionId.Set.union (RegionId.Set.union owned ancestors) !rids
+        let { owned } = regions in
+        rids := RegionId.Set.union owned !rids
 
       method! visit_symbolic_value env sv =
         sids := SymbolicValueId.Set.add sv.sv_id !sids;

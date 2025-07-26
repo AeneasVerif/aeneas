@@ -85,7 +85,6 @@ let apply_symbolic_expansion_to_target_avalues (config : config)
         sanity_check __FILE__ __LINE__ (pm = PNone) span;
         let current_abs = Option.get current_abs in
         let proj_regions = current_abs.regions.owned in
-        let ancestors_regions = current_abs.regions.ancestors in
         (* Explore in depth first - we won't update anything: we simply
          * want to check we don't have to expand inner symbolic value *)
         match (aproj, proj_kind) with
@@ -105,7 +104,7 @@ let apply_symbolic_expansion_to_target_avalues (config : config)
               (* Apply the projector *)
               let projected_value =
                 apply_proj_loans_on_symbolic_expansion span proj_regions
-                  ancestors_regions expansion original_sv.sv_ty proj.proj_ty ctx
+                  expansion original_sv.sv_ty proj.proj_ty ctx
               in
               (* Replace *)
               projected_value.value)
@@ -133,8 +132,7 @@ let apply_symbolic_expansion_to_target_avalues (config : config)
               (* Apply the projector *)
               let projected_value =
                 apply_proj_borrows span check_symbolic_no_ended ctx
-                  fresh_reborrow proj_regions ancestors_regions expansion
-                  proj.proj_ty
+                  fresh_reborrow proj_regions expansion proj.proj_ty
               in
               (* Replace *)
               projected_value.value

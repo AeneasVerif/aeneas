@@ -606,11 +606,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           can_end = true;
           parents = AbstractionId.Set.empty;
           original_parents = [];
-          regions =
-            {
-              owned = RegionId.Set.singleton rid;
-              ancestors = RegionId.Set.empty;
-            };
+          regions = { owned = RegionId.Set.singleton rid };
           avalues;
         }
       in
@@ -724,11 +720,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             can_end = true;
             parents = AbstractionId.Set.empty;
             original_parents = [];
-            regions =
-              {
-                owned = RegionId.Set.singleton rid;
-                ancestors = RegionId.Set.empty;
-              };
+            regions = { owned = RegionId.Set.singleton rid };
             avalues;
           }
         in
@@ -780,11 +772,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           can_end = true;
           parents = AbstractionId.Set.empty;
           original_parents = [];
-          regions =
-            {
-              owned = RegionId.Set.singleton rid;
-              ancestors = RegionId.Set.empty;
-            };
+          regions = { owned = RegionId.Set.singleton rid };
           avalues;
         }
       in
@@ -891,11 +879,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
                 can_end = true;
                 parents = AbstractionId.Set.empty;
                 original_parents = [];
-                regions =
-                  {
-                    owned = RegionId.Set.singleton rid;
-                    ancestors = RegionId.Set.empty;
-                  };
+                regions = { owned = RegionId.Set.singleton rid };
                 avalues;
               }
             in
@@ -1560,7 +1544,7 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
       can_end = can_end0;
       parents = parents0;
       original_parents = original_parents0;
-      regions = { owned = regions0; ancestors = ancestors_regions0 };
+      regions = { owned = regions0 };
       avalues = avalues0;
     } =
       abs0
@@ -1572,7 +1556,7 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
       can_end = can_end1;
       parents = parents1;
       original_parents = original_parents1;
-      regions = { owned = regions1; ancestors = ancestors_regions1 };
+      regions = { owned = regions1 };
       avalues = avalues1;
     } =
       abs1
@@ -1584,7 +1568,6 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
     let _ = CEM.match_aids parents0 parents1 in
     let _ = CEM.match_aidl original_parents0 original_parents1 in
     let _ = CEM.match_rids regions0 regions1 in
-    let _ = CEM.match_rids ancestors_regions0 ancestors_regions1 in
 
     log#ldebug (lazy "match_abstractions: matching values");
     let _ =
@@ -2284,10 +2267,9 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
         | Bound _ -> RVar var
 
       method! visit_abs_regions _ regions =
-        let { owned; ancestors } = regions in
+        let { owned } = regions in
         let owned = RegionId.Set.map get_region_id owned in
-        let ancestors = RegionId.Set.map get_region_id ancestors in
-        { owned; ancestors }
+        { owned }
 
       (** We also need to change the abstraction kind *)
       method! visit_abs env abs =

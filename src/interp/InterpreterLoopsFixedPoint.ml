@@ -107,9 +107,6 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
     (* Rem.: the below sanity checks are not really necessary *)
     sanity_check __FILE__ __LINE__ (AbstractionId.Set.is_empty abs.parents) span;
     sanity_check __FILE__ __LINE__ (abs.original_parents = []) span;
-    sanity_check __FILE__ __LINE__
-      (RegionId.Set.is_empty abs.regions.ancestors)
-      span;
 
     (* Introduce the new abstraction for the shared values *)
     cassert __FILE__ __LINE__ (ty_no_regions sv.ty) span
@@ -140,9 +137,7 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
       | None -> Identity
     in
     let can_end = true in
-    let regions : abs_regions =
-      { owned = RegionId.Set.singleton nrid; ancestors = RegionId.Set.empty }
-    in
+    let regions : abs_regions = { owned = RegionId.Set.singleton nrid } in
     let fresh_abs =
       {
         abs_id = fresh_abstraction_id ();

@@ -900,9 +900,6 @@ type abs = {
 
 and abs_regions = {
   owned : region_id_set;  (** Regions owned by the abstraction *)
-  ancestors : region_id_set;
-      (** Union of the regions owned by this abstraction's ancestors (not
-          including the regions of this abstraction itself) *)
 }
 [@@deriving
   show,

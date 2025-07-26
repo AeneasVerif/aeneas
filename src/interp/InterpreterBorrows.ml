@@ -366,10 +366,10 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
       method visit_typed_ALoan (opt_abs : abs option) (ty : rty)
           (lc : aloan_content) : avalue =
         (* Preparing a bit *)
-        let regions, ancestors_regions =
+        let regions =
           match opt_abs with
           | None -> craise __FILE__ __LINE__ span "Unreachable"
-          | Some abs -> (abs.regions.owned, abs.regions.ancestors)
+          | Some abs -> abs.regions.owned
         in
         (* Rk.: there is a small issue with the types of the aloan values.
          * See the comment at the level of definition of {!typed_avalue} *)
@@ -391,7 +391,7 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
               (* Apply the projection *)
               let given_back =
                 apply_proj_borrows span check_symbolic_no_ended ctx
-                  fresh_reborrow regions ancestors_regions nv borrowed_value_aty
+                  fresh_reborrow regions nv borrowed_value_aty
               in
               (* Continue giving back in the child value *)
               let child = super#visit_typed_avalue opt_abs child in
@@ -419,7 +419,7 @@ let give_back_value (config : config) (span : Meta.span) (bid : BorrowId.id)
                * (i.e., we don't call {!set_replaced}) *)
               let given_back =
                 apply_proj_borrows span check_symbolic_no_ended ctx
-                  fresh_reborrow regions ancestors_regions nv borrowed_value_aty
+                  fresh_reborrow regions nv borrowed_value_aty
               in
               (* Continue giving back in the child value *)
               let child = super#visit_typed_avalue opt_abs child in
@@ -2259,11 +2259,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
           can_end;
           parents = AbstractionId.Set.empty;
           original_parents = [];
-          regions =
-            {
-              owned = RegionId.Set.singleton r_id;
-              ancestors = RegionId.Set.empty;
-            };
+          regions = { owned = RegionId.Set.singleton r_id };
           avalues;
         }
       in
@@ -3741,12 +3737,7 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
   let original_parents = AbstractionId.Set.elements parents in
   let regions =
     let owned = RegionId.Set.union abs0.regions.owned abs1.regions.owned in
-    let ancestors =
-      RegionId.Set.diff
-        (RegionId.Set.union abs0.regions.ancestors abs1.regions.ancestors)
-        owned
-    in
-    { owned; ancestors }
+    { owned }
   in
 
   (* Phase 1: simplify the loans coming from the left abstraction with
