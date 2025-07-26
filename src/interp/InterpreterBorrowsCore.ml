@@ -164,7 +164,7 @@ let rec compare_rtys (span : Meta.span) (default : bool)
   | _ ->
       log#ltrace
         (lazy
-          ("compare_rtys: unexpected inputs:" ^ "\n- ty1: " ^ show_ty ty1
+          (__FUNCTION__ ^ ": unexpected inputs:" ^ "\n- ty1: " ^ show_ty ty1
          ^ "\n- ty2: " ^ show_ty ty2));
       internal_error __FILE__ __LINE__ span
 
@@ -1057,6 +1057,18 @@ let update_intersecting_aproj_loans (span : Meta.span)
                   projections_intersect span outlive_regions proj.proj_ty
                     abs.regions.owned aproj_loans.proj.proj_ty
                 in
+                log#ldebug
+                  (lazy
+                    (__FUNCTION__ ^ "\n- proj_regions: "
+                    ^ RegionId.Set.to_string None proj_regions
+                    ^ "\n- proj.proj_ty: "
+                    ^ ty_to_string ctx proj.proj_ty
+                    ^ "\n- abs.regions.owned: "
+                    ^ RegionId.Set.to_string None abs.regions.owned
+                    ^ "\n- aproj_loans.proj.proj_ty: "
+                    ^ ty_to_string ctx aproj_loans.proj.proj_ty
+                    ^ "\n- outlive_regions: "
+                    ^ RegionId.Set.to_string None outlive_regions));
                 sanity_check __FILE__ __LINE__ (owned || outlive) span;
                 sanity_check __FILE__ __LINE__ ((not owned) || not outlive) span);
 

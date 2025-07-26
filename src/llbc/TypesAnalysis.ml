@@ -467,7 +467,7 @@ let analyze_ty (span : Meta.span option) (infos : type_infos) (ty : ty) :
   partial_type_info_to_ty_info ty_info
 
 (** Small helper *)
-type region_kind = RkMarked | RkStatic | RkDefault
+type region_kind = RkMarked | RkOutlives | RkStatic | RkDefault
 
 (** Given a projection type and a set of regions [regions], compute the set of
     regions which outlive [regions] in this type.
@@ -714,24 +714,33 @@ let compute_outlive_proj_ty (span : Meta.span option)
         (SccId.Set.to_list (SccId.Map.find id sccs.scc_deps))
     in
     let kind = SccId.Map.find id scc_kind in
-    let kinds = kind :: deps_kinds in
     let has_marked = ref false in
     let has_static = ref false in
+    let outlives_marked = ref false in
     List.iter
       (fun k ->
         match k with
-        | RkMarked -> has_marked := true
+        | RkMarked | RkOutlives -> outlives_marked := true
         | RkStatic -> has_static := true
         | RkDefault -> ())
-      kinds;
+      deps_kinds;
+    begin
+      match kind with
+      | RkMarked -> has_marked := true
+      | RkOutlives -> internal_error_opt_span __FILE__ __LINE__ span
+      | RkStatic -> has_static := true
+      | RkDefault -> ()
+    end;
 
     let has_marked = !has_marked in
     let has_static = !has_static in
+    let outlives_marked = !outlives_marked in
     sanity_check_opt_span __FILE__ __LINE__
       ((not has_marked) || not has_static)
       span;
     let kind =
       if has_marked then RkMarked
+      else if outlives_marked then RkOutlives
       else if has_static then RkStatic
       else RkDefault
     in
@@ -751,16 +760,24 @@ let compute_outlive_proj_ty (span : Meta.span option)
     (fun id regions ->
       let kind = SccId.Map.find id scc_kind_full in
       match kind with
-      | RkMarked ->
+      | RkOutlives ->
           outlive_regions :=
             RegionSet.union !outlive_regions (RegionSet.of_list regions)
       | RkStatic -> craise_opt_span __FILE__ __LINE__ span "Not handled yet"
-      | RkDefault -> ())
+      | RkMarked | RkDefault -> ())
     sccs.sccs;
-  RegionId.Set.of_list
-    (List.map
-       (fun r ->
-         match r with
-         | RVar (Free rid) -> rid
-         | _ -> internal_error_opt_span __FILE__ __LINE__ span)
-       (RegionSet.to_list !outlive_regions))
+  let outlive_regions =
+    RegionId.Set.of_list
+      (List.map
+         (fun r ->
+           match r with
+           | RVar (Free rid) -> rid
+           | _ -> internal_error_opt_span __FILE__ __LINE__ span)
+         (RegionSet.to_list !outlive_regions))
+  in
+
+  sanity_check_opt_span __FILE__ __LINE__
+    (RegionId.Set.inter outlive_regions regions = RegionId.Set.empty)
+    span;
+
+  outlive_regions
