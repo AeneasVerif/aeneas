@@ -12,6 +12,7 @@ open Cps
 open InterpreterUtils
 open InterpreterBorrowsCore
 open InterpreterBorrows
+open InterpreterAbs
 open InterpreterLoopsCore
 open Errors
 module S = SynthesizeSymbolic
@@ -87,17 +88,21 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
     RAbsBorrow.register_mapping false abs_to_loans abs.abs_id (pm, bid);
     RBorrowAbs.register_mapping true loan_to_abs (pm, bid) abs.abs_id
   in
-  let register_borrow_proj abs pm (sv_id : symbolic_value_id) (proj_ty : ty) =
-    let norm_proj_ty = normalize_proj_ty abs.regions.owned proj_ty in
-    let proj : marked_norm_symb_proj = { pm; sv_id; norm_proj_ty } in
+  let register_borrow_proj abs pm (proj : symbolic_proj) =
+    let norm_proj_ty = normalize_proj_ty abs.regions.owned proj.proj_ty in
+    let proj : marked_norm_symb_proj =
+      { pm; sv_id = proj.sv_id; norm_proj_ty }
+    in
     RAbsSymbProj.register_mapping false abs_to_borrow_projs abs.abs_id proj;
     (* This mapping is *actually* injective because we refresh symbolic values
        with borrows when copying them. See [InterpreterExpressions.copy_value]. *)
     RSymbProjAbs.register_mapping true borrow_proj_to_abs proj abs.abs_id
   in
-  let register_loan_proj abs pm (sv_id : symbolic_value_id) (proj_ty : ty) =
-    let norm_proj_ty = normalize_proj_ty abs.regions.owned proj_ty in
-    let proj : marked_norm_symb_proj = { pm; sv_id; norm_proj_ty } in
+  let register_loan_proj abs pm (proj : symbolic_proj) =
+    let norm_proj_ty = normalize_proj_ty abs.regions.owned proj.proj_ty in
+    let proj : marked_norm_symb_proj =
+      { pm; sv_id = proj.sv_id; norm_proj_ty }
+    in
     RAbsSymbProj.register_mapping false abs_to_loan_projs abs.abs_id proj;
     RSymbProjAbs.register_mapping true loan_proj_to_abs proj abs.abs_id
   in
@@ -160,14 +165,18 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
 
       method! visit_ASymbolic (abs, _) pm proj =
         match proj with
-        | AProjLoans (sv, proj_ty, children) ->
-            sanity_check __FILE__ __LINE__ (children = []) span;
-            register_loan_proj abs pm sv proj_ty
-        | AProjBorrows (sv, proj_ty, children) ->
-            sanity_check __FILE__ __LINE__ (children = []) span;
-            register_borrow_proj abs pm sv proj_ty
-        | AEndedProjLoans (_, children) | AEndedProjBorrows (_, children) ->
-            sanity_check __FILE__ __LINE__ (children = []) span
+        | AProjLoans { proj; consumed; borrows } ->
+            sanity_check __FILE__ __LINE__ (consumed = []) span;
+            sanity_check __FILE__ __LINE__ (borrows = []) span;
+            register_loan_proj abs pm proj
+        | AProjBorrows { proj; loans } ->
+            sanity_check __FILE__ __LINE__ (loans = []) span;
+            register_borrow_proj abs pm proj
+        | AEndedProjLoans { proj = _; consumed; borrows } ->
+            sanity_check __FILE__ __LINE__ (consumed = []) span;
+            sanity_check __FILE__ __LINE__ (borrows = []) span
+        | AEndedProjBorrows { mvalues = _; loans } ->
+            sanity_check __FILE__ __LINE__ (loans = []) span
         | AEmpty -> ()
     end
   in
@@ -267,7 +276,8 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
     in
     match (v0.value, v1.value) with
     | VLiteral lv0, VLiteral lv1 ->
-        if lv0 = lv1 then v1 else M.match_distinct_literals ctx0 ctx1 ty lv0 lv1
+        if lv0 = lv1 then v1
+        else M.match_distinct_literals match_rec ctx0 ctx1 ty lv0 lv1
     | VAdt av0, VAdt av1 ->
         if av0.variant_id = av1.variant_id then
           let fields = List.combine av0.field_values av1.field_values in
@@ -287,14 +297,14 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
             (not (value_has_borrows v1.value))
             M.span;
           (* Merge *)
-          M.match_distinct_adts ctx0 ctx1 ty av0 av1)
+          M.match_distinct_adts match_rec ctx0 ctx1 ty av0 av1)
     | VBottom, VBottom -> v0
     | VBorrow bc0, VBorrow bc1 ->
         let bc =
           match (bc0, bc1) with
           | VSharedBorrow bid0, VSharedBorrow bid1 ->
               let bid =
-                M.match_shared_borrows ctx0 ctx1 match_rec ty bid0 bid1
+                M.match_shared_borrows match_rec ctx0 ctx1 ty bid0 bid1
               in
               VSharedBorrow bid
           | VMutBorrow (bid0, bv0), VMutBorrow (bid1, bv1) ->
@@ -306,7 +316,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
                       ctx0.type_ctx.type_infos bv.value))
                 M.span "The join of nested borrows is not supported yet";
               let bid, bv =
-                M.match_mut_borrows ctx0 ctx1 ty bid0 bv0 bid1 bv1 bv
+                M.match_mut_borrows match_rec ctx0 ctx1 ty bid0 bv0 bid1 bv1 bv
               in
               VMutBorrow (bid, bv)
           | VReservedMutBorrow _, _
@@ -330,10 +340,12 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
               cassert __FILE__ __LINE__
                 (not (value_has_borrows sv.value))
                 M.span "The join of nested borrows is not supported yet";
-              let ids, sv = M.match_shared_loans ctx0 ctx1 ty ids0 ids1 sv in
+              let ids, sv =
+                M.match_shared_loans match_rec ctx0 ctx1 ty ids0 ids1 sv
+              in
               VSharedLoan (ids, sv)
           | VMutLoan id0, VMutLoan id1 ->
-              let id = M.match_mut_loans ctx0 ctx1 ty id0 id1 in
+              let id = M.match_mut_loans match_rec ctx0 ctx1 ty id0 id1 in
               VMutLoan id
           | VSharedLoan _, VMutLoan _ | VMutLoan _, VSharedLoan _ ->
               craise __FILE__ __LINE__ M.span "Unreachable"
@@ -349,7 +361,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
              (ety_has_nested_borrows (Some span) ctx1.type_ctx.type_infos v1.ty))
           M.span "Nested borrows are not supported yet.";
         (* Match *)
-        let sv = M.match_symbolic_values ctx0 ctx1 sv0 sv1 in
+        let sv = M.match_symbolic_values match_rec ctx0 ctx1 sv0 sv1 in
         { v1 with value = VSymbolic sv }
     | VLoan lc, _ -> (
         match lc with
@@ -359,10 +371,12 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
         match lc with
         | VSharedLoan (ids, _) -> raise (ValueMatchFailure (LoansInRight ids))
         | VMutLoan id -> raise (ValueMatchFailure (LoanInRight id)))
-    | VSymbolic sv, _ -> M.match_symbolic_with_other ctx0 ctx1 true sv v1
-    | _, VSymbolic sv -> M.match_symbolic_with_other ctx0 ctx1 false sv v0
-    | VBottom, _ -> M.match_bottom_with_other ctx0 ctx1 true v1
-    | _, VBottom -> M.match_bottom_with_other ctx0 ctx1 false v0
+    | VSymbolic sv, _ ->
+        M.match_symbolic_with_other match_rec ctx0 ctx1 true sv v1
+    | _, VSymbolic sv ->
+        M.match_symbolic_with_other match_rec ctx0 ctx1 false sv v0
+    | VBottom, _ -> M.match_bottom_with_other match_rec ctx0 ctx1 true v1
+    | _, VBottom -> M.match_bottom_with_other match_rec ctx0 ctx1 false v0
     | _ ->
         log#ltrace
           (lazy
@@ -404,7 +418,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
           in
           { value; ty }
         else (* Merge *)
-          M.match_distinct_aadts ctx0 ctx1 v0.ty av0 v1.ty av1 ty
+          M.match_distinct_aadts match_rec ctx0 ctx1 v0.ty av0 v1.ty av1 ty
     | ABottom, ABottom -> mk_abottom M.span ty
     | AIgnored _, AIgnored _ -> mk_aignored M.span ty None
     | ABorrow bc0, ABorrow bc1 -> (
@@ -412,7 +426,8 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
         match (bc0, bc1) with
         | ASharedBorrow (pm0, bid0), ASharedBorrow (pm1, bid1) ->
             log#ltrace (lazy "match_typed_avalues: shared borrows");
-            M.match_ashared_borrows ctx0 ctx1 v0.ty pm0 bid0 v1.ty pm1 bid1 ty
+            M.match_ashared_borrows match_rec ctx0 ctx1 v0.ty pm0 bid0 v1.ty pm1
+              bid1 ty
         | AMutBorrow (pm0, bid0, av0), AMutBorrow (pm1, bid1, av1) ->
             log#ltrace (lazy "match_typed_avalues: mut borrows");
             log#ltrace
@@ -421,8 +436,8 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
             let av = match_arec av0 av1 in
             log#ltrace
               (lazy "match_typed_avalues: mut borrows: matched children values");
-            M.match_amut_borrows ctx0 ctx1 v0.ty pm0 bid0 av0 v1.ty pm1 bid1 av1
-              ty av
+            M.match_amut_borrows match_rec ctx0 ctx1 v0.ty pm0 bid0 av0 v1.ty
+              pm1 bid1 av1 ty av
         | AIgnoredMutBorrow _, AIgnoredMutBorrow _ ->
             (* The abstractions are destructured: we shouldn't get there *)
             craise __FILE__ __LINE__ M.span "Unexpected"
@@ -459,8 +474,8 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
             sanity_check __FILE__ __LINE__
               (not (value_has_borrows sv.value))
               M.span;
-            M.match_ashared_loans ctx0 ctx1 v0.ty pm0 ids0 sv0 av0 v1.ty pm1
-              ids1 sv1 av1 ty sv av
+            M.match_ashared_loans match_rec ctx0 ctx1 v0.ty pm0 ids0 sv0 av0
+              v1.ty pm1 ids1 sv1 av1 ty sv av
         | AMutLoan (pm0, id0, av0), AMutLoan (pm1, id1, av1) ->
             log#ltrace (lazy "match_typed_avalues: mut loans");
             log#ltrace
@@ -468,8 +483,8 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
             let av = match_arec av0 av1 in
             log#ltrace
               (lazy "match_typed_avalues: mut loans: matched children values");
-            M.match_amut_loans ctx0 ctx1 v0.ty pm0 id0 av0 v1.ty pm1 id1 av1 ty
-              av
+            M.match_amut_loans match_rec ctx0 ctx1 v0.ty pm0 id0 av0 v1.ty pm1
+              id1 av1 ty av
         | AIgnoredMutLoan _, AIgnoredMutLoan _
         | AIgnoredSharedLoan _, AIgnoredSharedLoan _ ->
             (* Those should have been filtered when destructuring the abstractions -
@@ -478,19 +493,19 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
         | _ -> craise __FILE__ __LINE__ M.span "Unreachable")
     | ASymbolic (pm0, proj0), ASymbolic (pm1, proj1) -> begin
         match (proj0, proj1) with
-        | ( AProjBorrows (sv0, proj_ty0, children0),
-            AProjBorrows (sv1, proj_ty1, children1) ) ->
-            let proj_ty = M.match_rtys ctx0 ctx1 proj_ty0 proj_ty1 in
-            M.match_aproj_borrows ctx0 ctx1 v0.ty pm0 sv0 proj_ty0 children0
-              v1.ty pm1 sv1 proj_ty1 children1 ty proj_ty
-        | ( AProjLoans (sv0, proj_ty0, children0),
-            AProjLoans (sv1, proj_ty1, children1) ) ->
-            let proj_ty = M.match_rtys ctx0 ctx1 proj_ty0 proj_ty1 in
-            M.match_aproj_loans ctx0 ctx1 v0.ty pm0 sv0 proj_ty0 children0 v1.ty
-              pm1 sv1 proj_ty1 children1 ty proj_ty
+        | ( AProjBorrows ({ proj = proj0; _ } as pborrows0),
+            AProjBorrows ({ proj = proj1; _ } as pborrows1) ) ->
+            let proj_ty = M.match_rtys ctx0 ctx1 proj0.proj_ty proj1.proj_ty in
+            M.match_aproj_borrows match_rec ctx0 ctx1 v0.ty pm0 pborrows0 v1.ty
+              pm1 pborrows1 ty proj_ty
+        | ( AProjLoans ({ proj = proj0; _ } as ploans0),
+            AProjLoans ({ proj = proj1; _ } as ploans1) ) ->
+            let proj_ty = M.match_rtys ctx0 ctx1 proj0.proj_ty proj1.proj_ty in
+            M.match_aproj_loans match_rec ctx0 ctx1 v0.ty pm0 ploans0 v1.ty pm1
+              ploans1 ty proj_ty
         | _ -> craise __FILE__ __LINE__ M.span "Unreachable"
       end
-    | _ -> M.match_avalues ctx0 ctx1 v0 v1
+    | _ -> M.match_avalues match_rec ctx0 ctx1 v0 v1
 end
 
 module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
@@ -510,12 +525,13 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     sanity_check __FILE__ __LINE__ (ty0 = ty1) span;
     ty0
 
-  let match_distinct_literals (_ : eval_ctx) (_ : eval_ctx) (ty : ety)
-      (_ : literal) (_ : literal) : typed_value =
+  let match_distinct_literals (_ : typed_value_matcher) (_ : eval_ctx)
+      (_ : eval_ctx) (ty : ety) (_ : literal) (_ : literal) : typed_value =
     mk_fresh_symbolic_typed_value_from_no_regions_ty span ty
 
-  let match_distinct_adts (ctx0 : eval_ctx) (ctx1 : eval_ctx) (ty : ety)
-      (adt0 : adt_value) (adt1 : adt_value) : typed_value =
+  let match_distinct_adts (_ : typed_value_matcher) (ctx0 : eval_ctx)
+      (ctx1 : eval_ctx) (ty : ety) (adt0 : adt_value) (adt1 : adt_value) :
+      typed_value =
     (* Check that the ADTs don't contain borrows - this is redundant with checks
        performed by the caller, but we prefer to be safe with regards to future
        updates
@@ -551,7 +567,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* No borrows, no loans, no bottoms: we can introduce a symbolic value *)
       mk_fresh_symbolic_typed_value_from_no_regions_ty span ty
 
-  let match_shared_borrows (ctx0 : eval_ctx) (ctx1 : eval_ctx) match_rec
+  let match_shared_borrows match_rec (ctx0 : eval_ctx) (ctx1 : eval_ctx)
       (ty : ety) (bid0 : borrow_id) (bid1 : borrow_id) : borrow_id =
     (* Lookup the shared values and match them - we do this mostly
        to make sure we end loans which might appear on one side
@@ -598,11 +614,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           can_end = true;
           parents = AbstractionId.Set.empty;
           original_parents = [];
-          regions =
-            {
-              owned = RegionId.Set.singleton rid;
-              ancestors = RegionId.Set.empty;
-            };
+          regions = { owned = RegionId.Set.singleton rid };
           avalues;
         }
       in
@@ -611,9 +623,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Return the new borrow *)
       bid2
 
-  let match_mut_borrows (ctx0 : eval_ctx) (_ : eval_ctx) (ty : ety)
-      (bid0 : borrow_id) (bv0 : typed_value) (bid1 : borrow_id)
-      (bv1 : typed_value) (bv : typed_value) : borrow_id * typed_value =
+  let match_mut_borrows (_ : typed_value_matcher) (ctx0 : eval_ctx)
+      (_ : eval_ctx) (ty : ety) (bid0 : borrow_id) (bv0 : typed_value)
+      (bid1 : borrow_id) (bv1 : typed_value) (bv : typed_value) :
+      borrow_id * typed_value =
     if bid0 = bid1 then (
       (* If the merged value is not the same as the original value, we introduce
          an abstraction:
@@ -716,11 +729,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             can_end = true;
             parents = AbstractionId.Set.empty;
             original_parents = [];
-            regions =
-              {
-                owned = RegionId.Set.singleton rid;
-                ancestors = RegionId.Set.empty;
-              };
+            regions = { owned = RegionId.Set.singleton rid };
             avalues;
           }
         in
@@ -772,11 +781,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           can_end = true;
           parents = AbstractionId.Set.empty;
           original_parents = [];
-          regions =
-            {
-              owned = RegionId.Set.singleton rid;
-              ancestors = RegionId.Set.empty;
-            };
+          regions = { owned = RegionId.Set.singleton rid };
           avalues;
         }
       in
@@ -785,8 +790,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Return the new borrow *)
       (bid2, sv)
 
-  let match_shared_loans (_ : eval_ctx) (_ : eval_ctx) (_ : ety)
-      (ids0 : loan_id_set) (ids1 : loan_id_set) (sv : typed_value) :
+  let match_shared_loans (_ : typed_value_matcher) (_ : eval_ctx) (_ : eval_ctx)
+      (_ : ety) (ids0 : loan_id_set) (ids1 : loan_id_set) (sv : typed_value) :
       loan_id_set * typed_value =
     (* Check if the ids are the same - Rem.: we forbid the sets of loans
        to be different. However, if we dive inside data-structures (by
@@ -808,16 +813,17 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     (* Return *)
     (ids, sv)
 
-  let match_mut_loans (_ : eval_ctx) (_ : eval_ctx) (_ : ety) (id0 : loan_id)
-      (id1 : loan_id) : loan_id =
+  let match_mut_loans (_ : typed_value_matcher) (_ : eval_ctx) (_ : eval_ctx)
+      (_ : ety) (id0 : loan_id) (id1 : loan_id) : loan_id =
     if id0 = id1 then id0
     else
       (* We forbid this case for now: if we get there, we force to end
          both borrows *)
       raise (ValueMatchFailure (LoanInLeft id0))
 
-  let match_symbolic_values (ctx0 : eval_ctx) (ctx1 : eval_ctx)
-      (sv0 : symbolic_value) (sv1 : symbolic_value) : symbolic_value =
+  let match_symbolic_values (_ : typed_value_matcher) (ctx0 : eval_ctx)
+      (ctx1 : eval_ctx) (sv0 : symbolic_value) (sv1 : symbolic_value) :
+      symbolic_value =
     let id0 = sv0.sv_id in
     let id1 = sv1.sv_id in
     if id0 = id1 then (
@@ -883,11 +889,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
                 can_end = true;
                 parents = AbstractionId.Set.empty;
                 original_parents = [];
-                regions =
-                  {
-                    owned = RegionId.Set.singleton rid;
-                    ancestors = RegionId.Set.empty;
-                  };
+                regions = { owned = RegionId.Set.singleton rid };
                 avalues;
               }
             in
@@ -898,8 +900,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         (* Otherwise we simply introduce a fresh symbolic value *)
         mk_fresh_symbolic_value span sv0.sv_ty)
 
-  let match_symbolic_with_other (ctx0 : eval_ctx) (ctx1 : eval_ctx)
-      (left : bool) (sv : symbolic_value) (v : typed_value) : typed_value =
+  let match_symbolic_with_other (_ : typed_value_matcher) (ctx0 : eval_ctx)
+      (ctx1 : eval_ctx) (left : bool) (sv : symbolic_value) (v : typed_value) :
+      typed_value =
     (* Check that:
        - there are no borrows in the symbolic value
        - there are no borrows in the "regular" value
@@ -932,8 +935,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     then mk_bottom span sv.sv_ty
     else mk_fresh_symbolic_typed_value span sv.sv_ty
 
-  let match_bottom_with_other (ctx0 : eval_ctx) (ctx1 : eval_ctx)
-      (bottom_is_left : bool) (v : typed_value) : typed_value =
+  let match_bottom_with_other (_ : typed_value_matcher) (ctx0 : eval_ctx)
+      (ctx1 : eval_ctx) (bottom_is_left : bool) (v : typed_value) : typed_value
+      =
     let value_is_left = not bottom_is_left in
     (* If there are outer loans in the non-bottom value, raise an exception.
        Otherwise, convert it to an abstraction and return [Bottom].
@@ -987,10 +991,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
   let match_amut_loans _ _ _ _ _ _ _ _ _ _ =
     craise __FILE__ __LINE__ span "Unreachable"
 
-  let match_aproj_borrows _ _ _ _ _ _ _ _ _ _ _ _ _ _ =
+  let match_aproj_borrows _ _ _ _ _ _ _ _ _ _ =
     craise __FILE__ __LINE__ span "Unreachable"
 
-  let match_aproj_loans _ _ _ _ _ _ _ _ _ _ _ _ _ _ =
+  let match_aproj_loans _ _ _ _ _ _ _ _ _ _ =
     craise __FILE__ __LINE__ span "Unreachable"
 
   let match_avalues _ _ _ _ = craise __FILE__ __LINE__ span "Unreachable"
@@ -1039,43 +1043,46 @@ module MakeMoveMatcher (S : MatchMoveState) : PrimMatcher = struct
     sanity_check __FILE__ __LINE__ (ty0 = ty1) span;
     ty0
 
-  let match_distinct_literals (_ : eval_ctx) (_ : eval_ctx) (ty : ety)
-      (_ : literal) (l : literal) : typed_value =
+  let match_distinct_literals (_ : typed_value_matcher) (_ : eval_ctx)
+      (_ : eval_ctx) (ty : ety) (_ : literal) (l : literal) : typed_value =
     { value = VLiteral l; ty }
 
-  let match_distinct_adts (_ : eval_ctx) (_ : eval_ctx) (ty : ety)
-      (_ : adt_value) (adt1 : adt_value) : typed_value =
+  let match_distinct_adts (_ : typed_value_matcher) (_ : eval_ctx)
+      (_ : eval_ctx) (ty : ety) (_ : adt_value) (adt1 : adt_value) : typed_value
+      =
     (* Note that if there was a bottom inside the ADT on the left,
        the value on the left should have been simplified to bottom. *)
     { ty; value = VAdt adt1 }
 
-  let match_shared_borrows (_ : eval_ctx) (_ : eval_ctx) _ (_ : ety)
-      (_ : borrow_id) (bid1 : borrow_id) : borrow_id =
+  let match_shared_borrows (_ : typed_value_matcher) (_ : eval_ctx)
+      (_ : eval_ctx) (_ : ety) (_ : borrow_id) (bid1 : borrow_id) : borrow_id =
     (* There can't be bottoms in shared values *)
     bid1
 
-  let match_mut_borrows (_ : eval_ctx) (_ : eval_ctx) (_ : ety) (_ : borrow_id)
-      (_ : typed_value) (bid1 : borrow_id) (bv1 : typed_value) (_ : typed_value)
-      : borrow_id * typed_value =
+  let match_mut_borrows (_ : typed_value_matcher) (_ : eval_ctx) (_ : eval_ctx)
+      (_ : ety) (_ : borrow_id) (_ : typed_value) (bid1 : borrow_id)
+      (bv1 : typed_value) (_ : typed_value) : borrow_id * typed_value =
     (* There can't be bottoms in borrowed values *)
     (bid1, bv1)
 
-  let match_shared_loans (_ : eval_ctx) (_ : eval_ctx) (_ : ety)
-      (_ : loan_id_set) (ids1 : loan_id_set) (sv : typed_value) :
+  let match_shared_loans (_ : typed_value_matcher) (_ : eval_ctx) (_ : eval_ctx)
+      (_ : ety) (_ : loan_id_set) (ids1 : loan_id_set) (sv : typed_value) :
       loan_id_set * typed_value =
     (* There can't be bottoms in shared loans *)
     (ids1, sv)
 
-  let match_mut_loans (_ : eval_ctx) (_ : eval_ctx) (_ : ety) (_ : loan_id)
-      (id1 : loan_id) : loan_id =
+  let match_mut_loans (_ : typed_value_matcher) (_ : eval_ctx) (_ : eval_ctx)
+      (_ : ety) (_ : loan_id) (id1 : loan_id) : loan_id =
     id1
 
-  let match_symbolic_values (_ : eval_ctx) (_ : eval_ctx) (_ : symbolic_value)
-      (sv1 : symbolic_value) : symbolic_value =
+  let match_symbolic_values (_ : typed_value_matcher) (_ : eval_ctx)
+      (_ : eval_ctx) (_ : symbolic_value) (sv1 : symbolic_value) :
+      symbolic_value =
     sv1
 
-  let match_symbolic_with_other (ctx0 : eval_ctx) (ctx1 : eval_ctx)
-      (left : bool) (sv : symbolic_value) (v : typed_value) : typed_value =
+  let match_symbolic_with_other (_ : typed_value_matcher) (ctx0 : eval_ctx)
+      (ctx1 : eval_ctx) (left : bool) (sv : symbolic_value) (v : typed_value) :
+      typed_value =
     (* We're being conservative for now: if any of the two values contains
        a bottom, the join is bottom *)
     if
@@ -1085,8 +1092,8 @@ module MakeMoveMatcher (S : MatchMoveState) : PrimMatcher = struct
     else if left then v
     else mk_typed_value_from_symbolic_value sv
 
-  let match_bottom_with_other (_ : eval_ctx) (_ : eval_ctx) (left : bool)
-      (v : typed_value) : typed_value =
+  let match_bottom_with_other (_ : typed_value_matcher) (_ : eval_ctx)
+      (_ : eval_ctx) (left : bool) (v : typed_value) : typed_value =
     let with_borrows = false in
     if left then (
       (* The bottom is on the left *)
@@ -1134,10 +1141,10 @@ module MakeMoveMatcher (S : MatchMoveState) : PrimMatcher = struct
 
   let match_avalues _ _ _ _ = craise __FILE__ __LINE__ span "Unreachable"
 
-  let match_aproj_borrows _ _ _ _ _ _ _ _ _ _ _ _ _ _ =
+  let match_aproj_borrows _ _ _ _ _ _ _ _ _ _ =
     craise __FILE__ __LINE__ span "Unreachable"
 
-  let match_aproj_loans _ _ _ _ _ _ _ _ _ _ _ _ _ _ =
+  let match_aproj_loans _ _ _ _ _ _ _ _ _ _ =
     craise __FILE__ __LINE__ span "Unreachable"
 end
 
@@ -1244,17 +1251,19 @@ struct
     in
     match_types span ctx0 ctx1 match_distinct_types match_regions ty0 ty1
 
-  let match_distinct_literals (_ : eval_ctx) (_ : eval_ctx) (ty : ety)
-      (_ : literal) (_ : literal) : typed_value =
+  let match_distinct_literals (_ : typed_value_matcher) (_ : eval_ctx)
+      (_ : eval_ctx) (ty : ety) (_ : literal) (_ : literal) : typed_value =
     mk_fresh_symbolic_typed_value_from_no_regions_ty span ty
 
-  let match_distinct_adts (_ : eval_ctx) (_ : eval_ctx) (_ty : ety)
-      (_adt0 : adt_value) (_adt1 : adt_value) : typed_value =
+  let match_distinct_adts (_ : typed_value_matcher) (_ : eval_ctx)
+      (_ : eval_ctx) (_ty : ety) (_adt0 : adt_value) (_adt1 : adt_value) :
+      typed_value =
     raise (Distinct "match_distinct_adts")
 
-  let match_shared_borrows (ctx0 : eval_ctx) (ctx1 : eval_ctx)
+  let match_shared_borrows
       (match_typed_values : typed_value -> typed_value -> typed_value)
-      (_ty : ety) (bid0 : borrow_id) (bid1 : borrow_id) : borrow_id =
+      (ctx0 : eval_ctx) (ctx1 : eval_ctx) (_ty : ety) (bid0 : borrow_id)
+      (bid1 : borrow_id) : borrow_id =
     log#ldebug
       (lazy
         ("MakeCheckEquivMatcher: match_shared_borrows: " ^ "bid0: "
@@ -1282,24 +1291,25 @@ struct
     in
     bid
 
-  let match_mut_borrows (_ : eval_ctx) (_ : eval_ctx) (_ty : ety)
-      (bid0 : borrow_id) (_bv0 : typed_value) (bid1 : borrow_id)
+  let match_mut_borrows (_ : typed_value_matcher) (_ : eval_ctx) (_ : eval_ctx)
+      (_ty : ety) (bid0 : borrow_id) (_bv0 : typed_value) (bid1 : borrow_id)
       (_bv1 : typed_value) (bv : typed_value) : borrow_id * typed_value =
     let bid = match_borrow_id bid0 bid1 in
     (bid, bv)
 
-  let match_shared_loans (_ : eval_ctx) (_ : eval_ctx) (_ : ety)
-      (ids0 : loan_id_set) (ids1 : loan_id_set) (sv : typed_value) :
+  let match_shared_loans (_ : typed_value_matcher) (_ : eval_ctx) (_ : eval_ctx)
+      (_ : ety) (ids0 : loan_id_set) (ids1 : loan_id_set) (sv : typed_value) :
       loan_id_set * typed_value =
     let ids = match_loan_ids ids0 ids1 in
     (ids, sv)
 
-  let match_mut_loans (_ : eval_ctx) (_ : eval_ctx) (_ : ety) (bid0 : loan_id)
-      (bid1 : loan_id) : loan_id =
+  let match_mut_loans (_ : typed_value_matcher) (_ : eval_ctx) (_ : eval_ctx)
+      (_ : ety) (bid0 : loan_id) (bid1 : loan_id) : loan_id =
     match_loan_id bid0 bid1
 
-  let match_symbolic_values (ctx0 : eval_ctx) (ctx1 : eval_ctx)
-      (sv0 : symbolic_value) (sv1 : symbolic_value) : symbolic_value =
+  let match_symbolic_values (_ : typed_value_matcher) (ctx0 : eval_ctx)
+      (ctx1 : eval_ctx) (sv0 : symbolic_value) (sv1 : symbolic_value) :
+      symbolic_value =
     let id0 = sv0.sv_id in
     let id1 = sv1.sv_id in
 
@@ -1337,8 +1347,9 @@ struct
          we want *)
       sv0)
 
-  let match_symbolic_with_other (_ : eval_ctx) (_ : eval_ctx) (left : bool)
-      (sv : symbolic_value) (v : typed_value) : typed_value =
+  let match_symbolic_with_other (_ : typed_value_matcher) (_ : eval_ctx)
+      (_ : eval_ctx) (left : bool) (sv : symbolic_value) (v : typed_value) :
+      typed_value =
     if S.check_equiv then raise (Distinct "match_symbolic_with_other")
     else (
       sanity_check __FILE__ __LINE__ left span;
@@ -1353,8 +1364,8 @@ struct
       (* Return - the returned value is not used, so we can return whatever we want *)
       v)
 
-  let match_bottom_with_other (ctx0 : eval_ctx) (ctx1 : eval_ctx) (left : bool)
-      (v : typed_value) : typed_value =
+  let match_bottom_with_other (_ : typed_value_matcher) (ctx0 : eval_ctx)
+      (ctx1 : eval_ctx) (left : bool) (v : typed_value) : typed_value =
     (* It can happen that some variables get initialized in some branches
        and not in some others, which causes problems when matching. *)
     (* TODO: the returned value is not used, while it should: in generality it
@@ -1374,8 +1385,8 @@ struct
   let match_distinct_aadts _ _ _ _ _ _ _ =
     raise (Distinct "match_distinct_adts")
 
-  let match_ashared_borrows (_ : eval_ctx) (_ : eval_ctx) _ty0 pm0 bid0 _ty1 pm1
-      bid1 ty =
+  let match_ashared_borrows (_ : typed_value_matcher) (_ : eval_ctx)
+      (_ : eval_ctx) _ty0 pm0 bid0 _ty1 pm1 bid1 ty =
     (* We are checking whether that two environments are equivalent:
        there shouldn't be any projection markers *)
     sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
@@ -1383,8 +1394,8 @@ struct
     let value = ABorrow (ASharedBorrow (PNone, bid)) in
     { value; ty }
 
-  let match_amut_borrows (_ : eval_ctx) (_ : eval_ctx) _ty0 pm0 bid0 _av0 _ty1
-      pm1 bid1 _av1 ty av =
+  let match_amut_borrows (_ : typed_value_matcher) (_ : eval_ctx) (_ : eval_ctx)
+      _ty0 pm0 bid0 _av0 _ty1 pm1 bid1 _av1 ty av =
     (* We are checking whether that two environments are equivalent:
        there shouldn't be any projection markers *)
     sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
@@ -1392,8 +1403,8 @@ struct
     let value = ABorrow (AMutBorrow (PNone, bid, av)) in
     { value; ty }
 
-  let match_ashared_loans (_ : eval_ctx) (_ : eval_ctx) _ty0 pm0 ids0 _v0 _av0
-      _ty1 pm1 ids1 _v1 _av1 ty v av =
+  let match_ashared_loans (_ : typed_value_matcher) (_ : eval_ctx)
+      (_ : eval_ctx) _ty0 pm0 ids0 _v0 _av0 _ty1 pm1 ids1 _v1 _av1 ty v av =
     (* We are checking whether that two environments are equivalent:
        there shouldn't be any projection markers *)
     sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
@@ -1401,8 +1412,8 @@ struct
     let value = ALoan (ASharedLoan (PNone, bids, v, av)) in
     { value; ty }
 
-  let match_amut_loans (ctx0 : eval_ctx) (ctx1 : eval_ctx) _ty0 pm0 id0 _av0
-      _ty1 pm1 id1 _av1 ty av =
+  let match_amut_loans (_ : typed_value_matcher) (ctx0 : eval_ctx)
+      (ctx1 : eval_ctx) _ty0 pm0 id0 _av0 _ty1 pm1 id1 _av1 ty av =
     (* We are checking whether that two environments are equivalent:
        there shouldn't be any projection markers *)
     sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
@@ -1417,29 +1428,46 @@ struct
     let value = ALoan (AMutLoan (PNone, id, av)) in
     { value; ty }
 
-  let match_aproj_borrows (ctx0 : eval_ctx) (ctx1 : eval_ctx) _ty0 pm0 sv_id0
-      proj_ty0 children0 _ty1 pm1 sv_id1 proj_ty1 children1 ty proj_ty =
+  let match_aproj_borrows (match_values : typed_value_matcher) (ctx0 : eval_ctx)
+      (ctx1 : eval_ctx) _ty0 pm0 (proj0 : aproj_borrows) _ty1 pm1
+      (proj1 : aproj_borrows) ty proj_ty =
     sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
-    sanity_check __FILE__ __LINE__ (children0 = [] && children1 = []) span;
+    let { proj = proj0; loans = loans0 } = proj0 in
+    let { proj = proj1; loans = loans1 } = proj1 in
+    sanity_check __FILE__ __LINE__ (loans0 = [] && loans1 = []) span;
     (* We only want to match the ids of the symbolic values, but in order
        to call [match_symbolic_values] we need to have types... *)
-    let sv0 = { sv_id = sv_id0; sv_ty = proj_ty0 } in
-    let sv1 = { sv_id = sv_id1; sv_ty = proj_ty1 } in
-    let sv = match_symbolic_values ctx0 ctx1 sv0 sv1 in
-    { value = ASymbolic (PNone, AProjBorrows (sv.sv_id, proj_ty, [])); ty }
+    let sv0 = { sv_id = proj0.sv_id; sv_ty = proj0.proj_ty } in
+    let sv1 = { sv_id = proj1.sv_id; sv_ty = proj1.proj_ty } in
+    let sv = match_symbolic_values match_values ctx0 ctx1 sv0 sv1 in
+    let proj : symbolic_proj = { sv_id = sv.sv_id; proj_ty } in
+    { value = ASymbolic (PNone, AProjBorrows { proj; loans = [] }); ty }
 
-  let match_aproj_loans (ctx0 : eval_ctx) (ctx1 : eval_ctx) _ty0 pm0 sv_id0
-      proj_ty0 children0 _ty1 pm1 sv_id1 proj_ty1 children1 ty proj_ty =
+  let match_aproj_loans (match_values : typed_value_matcher) (ctx0 : eval_ctx)
+      (ctx1 : eval_ctx) _ty0 pm0 (proj0 : aproj_loans) _ty1 pm1
+      (proj1 : aproj_loans) ty proj_ty =
     sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
-    sanity_check __FILE__ __LINE__ (children0 = [] && children1 = []) span;
+    let { proj = proj0; consumed = consumed0; borrows = borrows0 } : aproj_loans
+        =
+      proj0
+    in
+    let { proj = proj1; consumed = consumed1; borrows = borrows1 } : aproj_loans
+        =
+      proj1
+    in
+    sanity_check __FILE__ __LINE__ (consumed0 = [] && consumed1 = []) span;
+    sanity_check __FILE__ __LINE__ (borrows0 = [] && borrows1 = []) span;
     (* We only want to match the ids of the symbolic values, but in order
        to call [match_symbolic_values] we need to have types... *)
-    let sv0 = { sv_id = sv_id0; sv_ty = proj_ty0 } in
-    let sv1 = { sv_id = sv_id1; sv_ty = proj_ty1 } in
-    let sv = match_symbolic_values ctx0 ctx1 sv0 sv1 in
-    { value = ASymbolic (PNone, AProjLoans (sv.sv_id, proj_ty, [])); ty }
+    let sv0 = { sv_id = proj0.sv_id; sv_ty = proj0.proj_ty } in
+    let sv1 = { sv_id = proj1.sv_id; sv_ty = proj1.proj_ty } in
+    let sv = match_symbolic_values match_values ctx0 ctx1 sv0 sv1 in
+    let proj : symbolic_proj = { sv_id = sv.sv_id; proj_ty } in
+    let proj = AProjLoans { proj; consumed = []; borrows = [] } in
+    { value = ASymbolic (PNone, proj); ty }
 
-  let match_avalues (ctx0 : eval_ctx) (ctx1 : eval_ctx) v0 v1 =
+  let match_avalues (_ : typed_value_matcher) (ctx0 : eval_ctx)
+      (ctx1 : eval_ctx) v0 v1 =
     log#ldebug
       (lazy
         ("avalues don't match:\n- v0: "
@@ -1537,7 +1565,7 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
       can_end = can_end0;
       parents = parents0;
       original_parents = original_parents0;
-      regions = { owned = regions0; ancestors = ancestors_regions0 };
+      regions = { owned = regions0 };
       avalues = avalues0;
     } =
       abs0
@@ -1549,7 +1577,7 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
       can_end = can_end1;
       parents = parents1;
       original_parents = original_parents1;
-      regions = { owned = regions1; ancestors = ancestors_regions1 };
+      regions = { owned = regions1 };
       avalues = avalues1;
     } =
       abs1
@@ -1561,7 +1589,6 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
     let _ = CEM.match_aids parents0 parents1 in
     let _ = CEM.match_aidl original_parents0 original_parents1 in
     let _ = CEM.match_rids regions0 regions1 in
-    let _ = CEM.match_rids ancestors_regions0 ancestors_regions1 in
 
     log#ldebug (lazy "match_abstractions: matching values");
     let _ =
@@ -2064,10 +2091,10 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
       method! visit_aproj env p =
         match p with
         | AProjLoans _ -> super#visit_aproj env p
-        | AProjBorrows (sv_id, proj_ty, children) ->
-            sanity_check __FILE__ __LINE__ (children = []) span;
+        | AProjBorrows { proj = { sv_id; proj_ty }; loans } ->
+            sanity_check __FILE__ __LINE__ (loans = []) span;
             let sv_id = register_symbolic_value_id sv_id in
-            AProjBorrows (sv_id, proj_ty, children)
+            AProjBorrows { proj = { sv_id; proj_ty }; loans }
         | _ -> super#visit_aproj env p
     end
   in
@@ -2200,9 +2227,10 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
 
       method! visit_aproj env proj =
         match proj with
-        | AProjLoans (sv_id, proj_ty, children) ->
+        | AProjLoans { proj = { sv_id; proj_ty }; consumed; borrows } ->
             (* The logic is similar to the concrete borrows/loans cases above *)
-            sanity_check __FILE__ __LINE__ (children = []) span;
+            sanity_check __FILE__ __LINE__ (consumed = []) span;
+            sanity_check __FILE__ __LINE__ (borrows = []) span;
             let sv_id =
               begin
                 match
@@ -2219,9 +2247,9 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
               end
             in
             let proj_ty = self#visit_ty env proj_ty in
-            AProjLoans (sv_id, proj_ty, children)
-        | AProjBorrows (sv_id, proj_ty, children) ->
-            sanity_check __FILE__ __LINE__ (children = []) span;
+            AProjLoans { proj = { sv_id; proj_ty }; consumed; borrows }
+        | AProjBorrows { proj = { sv_id; proj_ty }; loans } ->
+            sanity_check __FILE__ __LINE__ (loans = []) span;
             (* Lookup the loan corresponding to this borrow *)
             let src_lid =
               SymbolicValueId.InjSubst.find sv_id
@@ -2241,7 +2269,7 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
               end
             in
             let proj_ty = self#visit_ty env proj_ty in
-            AProjBorrows (sv_id, proj_ty, children)
+            AProjBorrows { proj = { sv_id; proj_ty }; loans }
         | AEndedProjBorrows _ | AEndedProjLoans _ | AEmpty ->
             super#visit_aproj env proj
 
@@ -2260,10 +2288,9 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
         | Bound _ -> RVar var
 
       method! visit_abs_regions _ regions =
-        let { owned; ancestors } = regions in
+        let { owned } = regions in
         let owned = RegionId.Set.map get_region_id owned in
-        let ancestors = RegionId.Set.map get_region_id ancestors in
-        { owned; ancestors }
+        { owned }
 
       (** We also need to change the abstraction kind *)
       method! visit_abs env abs =

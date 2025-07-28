@@ -16,7 +16,7 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
-        ocamlPackages = pkgs.ocaml-ng.ocamlPackages_4_14;
+        ocamlPackages = pkgs.ocaml-ng.ocamlPackages_5_2;
         coqPackages = pkgs.coqPackages_8_18;
         charon-ml = charon.packages.${system}.charon-ml.override { inherit ocamlPackages; };
         easy_logging = ocamlPackages.buildDunePackage rec {

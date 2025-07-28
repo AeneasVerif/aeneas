@@ -512,14 +512,7 @@ let create_empty_abstractions_from_abs_region_groups
     in
     let regions =
       let owned = RegionId.Set.of_list rg.regions in
-      let ancestors =
-        List.fold_left
-          (fun acc parent_id ->
-            RegionId.Set.union acc
-              (AbstractionId.Map.find parent_id !abs_to_ancestors_regions))
-          RegionId.Set.empty rg.parents
-      in
-      { owned; ancestors }
+      { owned }
     in
     let ancestors_regions_union_current_regions =
       RegionId.Set.union regions.owned regions.owned
@@ -1386,7 +1379,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
       List.fold_left_map
         (fun ctx (arg, arg_rty) ->
           apply_proj_borrows_on_input_value config span ctx abs.regions.owned
-            abs.regions.ancestors arg arg_rty)
+            arg arg_rty)
         ctx args_with_rtypes
     in
     (* Group the input and output values *)

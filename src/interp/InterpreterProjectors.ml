@@ -14,7 +14,7 @@ let log = Logging.projectors_log
 (** [ty] shouldn't contain erased regions *)
 let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
     (fresh_reborrow : BorrowId.id -> BorrowId.id) (regions : RegionId.Set.t)
-    (v : typed_value) (ty : rty) : abstract_shared_borrows =
+    (v : typed_value) (ty : ty) : abstract_shared_borrows =
   (* Sanity check - TODO: move those elsewhere (here we perform the check at every
    * recursive call which is a bit overkill...) *)
   let ety = Subst.erase_regions ty in
@@ -86,15 +86,14 @@ let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
         (* Check that the projection doesn't contain ended regions *)
         sanity_check __FILE__ __LINE__
           (not
-             (projections_intersect span s.sv_ty ctx.ended_regions ty regions))
+             (projections_intersect span ctx.ended_regions s.sv_ty regions ty))
           span;
-        [ AsbProjReborrows (s.sv_id, ty) ]
+        [ AsbProjReborrows { sv_id = s.sv_id; proj_ty = ty } ]
     | _ -> craise __FILE__ __LINE__ span "Unreachable"
 
 let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
     (ctx : eval_ctx) (fresh_reborrow : BorrowId.id -> BorrowId.id)
-    (regions : RegionId.Set.t) (ancestors_regions : RegionId.Set.t)
-    (v : typed_value) (ty : rty) : typed_avalue =
+    (regions : RegionId.Set.t) (v : typed_value) (ty : rty) : typed_avalue =
   (* Sanity check - TODO: move this elsewhere (here we perform the check at every
    * recursive call which is a bit overkill...) *)
   let ety = Substitute.erase_regions ty in
@@ -118,7 +117,7 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
             List.map
               (fun (fv, fty) ->
                 apply_proj_borrows span check_symbolic_no_ended ctx
-                  fresh_reborrow regions ancestors_regions fv fty)
+                  fresh_reborrow regions fv fty)
               fields_types
           in
           AAdt { variant_id = adt.variant_id; field_values = proj_fields }
@@ -136,7 +135,7 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
                   (* Apply the projection on the borrowed value *)
                   let bv =
                     apply_proj_borrows span check_symbolic_no_ended ctx
-                      fresh_reborrow regions ancestors_regions bv ref_ty
+                      fresh_reborrow regions bv ref_ty
                   in
                   AMutBorrow (PNone, bid, bv)
               | VSharedBorrow bid, RShared ->
@@ -168,12 +167,13 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
                   (* Apply the projection on the borrowed value *)
                   let bv =
                     apply_proj_borrows span check_symbolic_no_ended ctx
-                      fresh_reborrow regions ancestors_regions bv ref_ty
+                      fresh_reborrow regions bv ref_ty
                   in
-                  (* If the borrow id is in the ancestor's regions, we still need
+                  (* If the referenced type contains the region, we still need
                    * to remember it *)
                   let opt_bid =
-                    if region_in_set r ancestors_regions then Some bid else None
+                    if ty_has_regions_in_set regions ref_ty then Some bid
+                    else None
                   in
                   (* Return *)
                   AIgnoredMutBorrow (opt_bid, bv)
@@ -214,9 +214,12 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
                 ^ RegionId.Set.to_string None rset2
                 ^ "\n"));
             sanity_check __FILE__ __LINE__
-              (not (projections_intersect span ty1 rset1 ty2 rset2))
+              (not (projections_intersect span rset1 ty1 rset2 ty2))
               span);
-          ASymbolic (PNone, AProjBorrows (s.sv_id, ty, []))
+          ASymbolic
+            ( PNone,
+              AProjBorrows
+                { proj = { sv_id = s.sv_id; proj_ty = ty }; loans = [] } )
       | _ ->
           log#ltrace
             (lazy
@@ -262,9 +265,8 @@ let symbolic_expansion_non_shared_borrow_to_value (span : Meta.span)
 
     TODO: detailed comments. See [apply_proj_borrows] *)
 let apply_proj_loans_on_symbolic_expansion (span : Meta.span)
-    (regions : RegionId.Set.t) (ancestors_regions : RegionId.Set.t)
-    (see : symbolic_expansion) (original_sv_ty : rty) (proj_ty : rty)
-    (ctx : eval_ctx) : typed_avalue =
+    (regions : RegionId.Set.t) (see : symbolic_expansion) (original_sv_ty : rty)
+    (proj_ty : rty) (ctx : eval_ctx) : typed_avalue =
   (* Sanity check: if we have a proj_loans over a symbolic value, it should
    * contain regions which we will project *)
   sanity_check __FILE__ __LINE__
@@ -302,10 +304,10 @@ let apply_proj_loans_on_symbolic_expansion (span : Meta.span)
           (ALoan (AMutLoan (PNone, bid, child_av)), ref_ty)
         else
           (* Not in the set: ignore *)
-          (* If the borrow id is in the ancestor's regions, we still need
-           * to remember it *)
+          (* If the type of the referenced value contains the region, we still
+             need to remember it *)
           let opt_bid =
-            if region_in_set r ancestors_regions then Some bid else None
+            if ty_has_regions_in_set regions ref_ty then Some bid else None
           in
           (ALoan (AIgnoredMutLoan (opt_bid, child_av)), ref_ty)
     | SeSharedRef (bids, spc), TRef (r, ref_ty, RShared) ->
@@ -510,8 +512,7 @@ let prepare_reborrows (config : config) (span : Meta.span)
 
 (** [ty] shouldn't have erased regions *)
 let apply_proj_borrows_on_input_value (config : config) (span : Meta.span)
-    (ctx : eval_ctx) (regions : RegionId.Set.t)
-    (ancestors_regions : RegionId.Set.t) (v : typed_value) (ty : rty) :
+    (ctx : eval_ctx) (regions : RegionId.Set.t) (v : typed_value) (ty : rty) :
     eval_ctx * typed_avalue =
   sanity_check __FILE__ __LINE__ (ty_is_rty ty) span;
   let check_symbolic_no_ended = true in
@@ -522,8 +523,8 @@ let apply_proj_borrows_on_input_value (config : config) (span : Meta.span)
   in
   (* Apply the projector *)
   let av =
-    apply_proj_borrows span check_symbolic_no_ended ctx fresh_reborrow regions
-      ancestors_regions v ty
+    apply_proj_borrows span check_symbolic_no_ended ctx fresh_reborrow regions v
+      ty
   in
   (* Apply the reborrows *)
   let ctx = apply_registered_reborrows ctx in

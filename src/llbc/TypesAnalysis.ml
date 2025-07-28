@@ -2,6 +2,8 @@ open Types
 open LlbcAst
 open Errors
 open Substitute
+open Charon.TypesUtils
+open SCC
 
 let log = Logging.types_analysis_log
 
@@ -463,3 +465,319 @@ let analyze_ty (span : Meta.span option) (infos : type_infos) (ty : ty) :
   let ty_info = analyze_full_ty span updated infos ty_info ty in
   (* Convert the ty_info *)
   partial_type_info_to_ty_info ty_info
+
+(** Small helper *)
+type region_kind = RkMarked | RkOutlives | RkStatic | RkDefault
+
+(** Given a projection type and a set of regions [regions], compute the set of
+    regions which outlive [regions] in this type.
+
+    Note that we ignore the static regions: static regions outlive all other
+    regions so in theory we should include them in the outlive type, but in
+    practice for now we handle them differently.
+
+    Ex.: compute_outlive_ty {'a} (&'a mut T) = ∅ (the original projection
+    projects the borrow, the set of outlive regions is empty)
+
+    compute_outlive_ty {'b} (&'a mut &'b mut T) = {'b} (the original
+    projection projects the *outer* borrow, the set of outlive regions
+    contains the region of the *inner* borrow)
+
+    compute_outlive_ty {'a} (&'a (Wrapper<'b, T>)) = {'b}
+      where struct Wrapper<'a, T>(&'a mut T)
+      (the outlive projection projects the region of the borrows inside the ADT) *)
+let compute_outlive_proj_ty (span : Meta.span option)
+    (type_decls : type_decl TypeDeclId.Map.t) (regions : RegionId.Set.t)
+    (ty : ty) : RegionId.Set.t =
+  (* The method is as follows:
+
+     1. We visit the type to  compute an "outlive" graph. From the outlive graph
+     we can determine whether a region outlives static or a projected region. Note
+     that computing this outlive graph is necessary to properly handle outlive
+     constraints that are implied, for instance, by ADTs.
+
+     2. From this graph, we then compute the set of regions which outlive a projected region
+     and don't outlive 'static ('static has its own treatment).
+  *)
+  (* The outlive graph. If r0 maps to r1, it means r0 outlives r1. *)
+  let graph = ref RegionMap.empty in
+
+  (* r0 outlives r1 *)
+  let add_outlive (r0 : region) (r1 : region) =
+    graph :=
+      RegionMap.update r0
+        (fun s ->
+          let s = Option.get s in
+          Some (RegionSet.add r1 s))
+        !graph
+  in
+
+  let add_region (r : region) : unit =
+    sanity_check_opt_span __FILE__ __LINE__ (not (RegionMap.mem r !graph)) span;
+    graph :=
+      RegionMap.update r
+        (fun s ->
+          match s with
+          | None -> Some RegionSet.empty
+          | Some s -> Some s)
+        !graph
+  in
+
+  (* [r] outlives the regions in [outlived] *)
+  let add_outlives r (outlived : region list) =
+    List.iter (fun r' -> add_outlive r r') outlived
+  in
+
+  (* Visit to compute the constraints *)
+  let visitor =
+    object (self)
+      inherit [_] iter_ty as super
+
+      (* Generate a fresh region, register it, and save the fact that it outlives
+         all the regions inside which we had to dive so far *)
+      method! visit_region outer r =
+        (* Sanity check *)
+        let add =
+          match r with
+          | RErased ->
+              craise_opt_span __FILE__ __LINE__ span
+                "Expected a type with regions"
+          | RVar (Free rid) -> RegionId.Set.mem rid regions
+          | RVar (Bound _) ->
+              craise_opt_span __FILE__ __LINE__ span "Not handled yet"
+          | RStatic -> false
+        in
+        if add then (
+          add_region r;
+          add_outlives r outer)
+
+      method! visit_generic_args outer generics =
+        (* TODO: we need to handle those *)
+        sanity_check_opt_span __FILE__ __LINE__ (generics.trait_refs = []) span;
+        super#visit_generic_args outer generics
+
+      method! visit_ty outer ty =
+        match ty with
+        | TAdt adt -> begin
+            (* TODO: we need to handle those *)
+            sanity_check_opt_span __FILE__ __LINE__
+              (adt.generics.trait_refs = [])
+              span;
+            match adt.id with
+            | TAdtId id ->
+                (* Lookup the declaration and use the region constraints
+                   to check which regions outlive the projected regions. *)
+                let decl =
+                  silent_unwrap_opt_span __FILE__ __LINE__ span
+                    (TypeDeclId.Map.find_opt id type_decls)
+                in
+                let { regions; types; const_generics; trait_refs } =
+                  adt.generics
+                in
+                List.iter (self#visit_region outer) regions;
+                List.iter (self#visit_ty outer) types;
+                List.iter (self#visit_const_generic outer) const_generics;
+                (* TODO: we need to handle those *)
+                sanity_check_opt_span __FILE__ __LINE__ (trait_refs = []) span;
+
+                (* Substitute in the constraints *)
+                let subst =
+                  Charon.Substitute.make_subst_from_generics decl.generics
+                    adt.generics
+                in
+                let params =
+                  Charon.Substitute.predicates_substitute subst decl.generics
+                in
+
+                (* Update the graph following the outlive *)
+                let {
+                  regions = _;
+                  types = _;
+                  const_generics = _;
+                  trait_clauses = _;
+                  regions_outlive;
+                  types_outlive;
+                  trait_type_constraints = _;
+                } =
+                  params
+                in
+
+                (* [r0] outlives [r1] *)
+                let visit_region_register_outlive r0 r1 =
+                  match r1 with
+                  | RVar (Bound _) ->
+                      craise_opt_span __FILE__ __LINE__ span
+                        "Bound regions are not handled yet"
+                  | RVar (Free _) -> add_outlives r0 [ r1 ]
+                  | RStatic | RErased ->
+                      internal_error_opt_span __FILE__ __LINE__ span
+                in
+
+                let outlive_visitor =
+                  object
+                    inherit [_] iter_ty
+
+                    (* [r1] outlives [r0] *)
+                    method! visit_region r0 r1 =
+                      visit_region_register_outlive r1 r0
+                  end
+                in
+
+                (* Visit the region outlives constraints (the first region outlives the second)  *)
+                List.iter
+                  (fun (pred : (region, region) outlives_pred region_binder) ->
+                    cassert_opt_span __FILE__ __LINE__
+                      (pred.binder_regions = []) span
+                      "Bound regions are not supported yet";
+                    let r0, r1 = pred.binder_value in
+                    visit_region_register_outlive r0 r1)
+                  regions_outlive;
+
+                (* Visit the type outlives constraints (the type outlives the region) *)
+                List.iter
+                  (fun (pred : (ty, region) outlives_pred region_binder) ->
+                    cassert_opt_span __FILE__ __LINE__
+                      (pred.binder_regions = []) span
+                      "Bound regions are not supported yet";
+                    let ty, r = pred.binder_value in
+                    outlive_visitor#visit_ty r ty)
+                  types_outlive
+            | TTuple -> super#visit_ty outer ty
+            | TBuiltin builtin_ty -> (
+                match builtin_ty with
+                | TBox | TArray | TSlice | TStr -> super#visit_ty outer ty)
+          end
+        | TVar _ | TLiteral _ | TNever -> ()
+        | TRef (r, ref_ty, _) ->
+            self#visit_region outer r;
+            let outer = r :: outer in
+            self#visit_ty outer ref_ty
+        | TTraitType (tref, _) ->
+            (* TODO: normalize the trait types.
+               For now we only emit a warning because it makes some tests fail. *)
+            cassert_warn_opt_span __FILE__ __LINE__
+              (not (trait_instance_id_reducible span tref.trait_id))
+              span
+              "Found an unexpected trait impl associated type which was not \
+               inlined while analyzing a type. This is a case we currently do \
+               not handle in all generality. As a result,the consumed/given \
+               back values computed for the generated backward functions may \
+               be incorrect.";
+            ()
+        | TRawPtr _ | TDynTrait _ | TFnPtr _ | TFnDef _ | TError _ ->
+            (* Don't know what to do *)
+            craise_opt_span __FILE__ __LINE__ span "Not handled yet"
+    end
+  in
+  visitor#visit_ty [] ty;
+
+  (* Compute the strongly connected components, and for each of them,
+     determine whether the component:
+     - contains a masked region
+     - contains a static region
+
+     Then, we map the different regions to a masked region or an erased region
+     depending on whether they outlive an SCC containing a masked region, etc.
+  *)
+  let module Scc = SCC.Make (RegionOrderedType) in
+  let sccs = Scc.compute (RegionMap.bindings !graph) in
+
+  (* Compute, for each SCC whether it contains a marked region or a static region *)
+  let scc_kind =
+    SccId.Map.map
+      (fun ls ->
+        let has_marked = ref false in
+        let has_static = ref false in
+        List.iter
+          (fun r ->
+            match r with
+            | RVar (Free _) -> has_marked := true
+            | RStatic -> has_static := true
+            | _ -> ())
+          ls;
+        let has_marked = !has_marked in
+        let has_static = !has_static in
+        sanity_check_opt_span __FILE__ __LINE__
+          ((not has_marked) || not has_static)
+          span;
+        if has_marked then RkMarked
+        else if has_static then RkStatic
+        else RkDefault)
+      sccs.sccs
+  in
+
+  (* Compute, for each SCC, whether it outlives an SCC containing a projected or static region *)
+  let scc_kind_full = ref SccId.Map.empty in
+  let rec compute_kind (id : SccId.id) : region_kind =
+    let deps_kinds =
+      List.map compute_kind
+        (SccId.Set.elements (SccId.Map.find id sccs.scc_deps))
+    in
+    let kind = SccId.Map.find id scc_kind in
+    let has_marked = ref false in
+    let has_static = ref false in
+    let outlives_marked = ref false in
+    List.iter
+      (fun k ->
+        match k with
+        | RkMarked | RkOutlives -> outlives_marked := true
+        | RkStatic -> has_static := true
+        | RkDefault -> ())
+      deps_kinds;
+    begin
+      match kind with
+      | RkMarked -> has_marked := true
+      | RkOutlives -> internal_error_opt_span __FILE__ __LINE__ span
+      | RkStatic -> has_static := true
+      | RkDefault -> ()
+    end;
+
+    let has_marked = !has_marked in
+    let has_static = !has_static in
+    let outlives_marked = !outlives_marked in
+    sanity_check_opt_span __FILE__ __LINE__
+      ((not has_marked) || not has_static)
+      span;
+    let kind =
+      if has_marked then RkMarked
+      else if outlives_marked then RkOutlives
+      else if has_static then RkStatic
+      else RkDefault
+    in
+    scc_kind_full := SccId.Map.add id kind !scc_kind_full;
+    kind
+  in
+  SccId.Map.iter
+    (fun id _ ->
+      let _ = compute_kind id in
+      ())
+    scc_kind;
+  let scc_kind_full = !scc_kind_full in
+
+  (* Compute the outlive regions *)
+  let outlive_regions = ref RegionSet.empty in
+  SccId.Map.iter
+    (fun id regions ->
+      let kind = SccId.Map.find id scc_kind_full in
+      match kind with
+      | RkOutlives ->
+          outlive_regions :=
+            RegionSet.union !outlive_regions (RegionSet.of_list regions)
+      | RkStatic -> craise_opt_span __FILE__ __LINE__ span "Not handled yet"
+      | RkMarked | RkDefault -> ())
+    sccs.sccs;
+  let outlive_regions =
+    RegionId.Set.of_list
+      (List.map
+         (fun r ->
+           match r with
+           | RVar (Free rid) -> rid
+           | _ -> internal_error_opt_span __FILE__ __LINE__ span)
+         (RegionSet.elements !outlive_regions))
+  in
+
+  sanity_check_opt_span __FILE__ __LINE__
+    (RegionId.Set.inter outlive_regions regions = RegionId.Set.empty)
+    span;
+
+  outlive_regions
