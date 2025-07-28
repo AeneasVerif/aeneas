@@ -179,10 +179,10 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
       List.filter_map
         (fun (av : typed_avalue) ->
           match av.value with
-          | ASymbolic (pm, AProjBorrows (sv_id, _proj_ty, children)) ->
+          | ASymbolic (pm, AProjBorrows { proj; loans }) ->
               sanity_check __FILE__ __LINE__ (pm = PNone) span;
-              sanity_check __FILE__ __LINE__ (children = []) span;
-              Some sv_id
+              sanity_check __FILE__ __LINE__ (loans = []) span;
+              Some proj.sv_id
           | _ -> None)
         borrows
     in
@@ -207,10 +207,11 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
       List.filter_map
         (fun (av : typed_avalue) ->
           match av.value with
-          | ASymbolic (pm, AProjLoans (sv_id, _proj_ty, children)) ->
+          | ASymbolic (pm, AProjLoans { proj; consumed; borrows }) ->
               sanity_check __FILE__ __LINE__ (pm = PNone) span;
-              sanity_check __FILE__ __LINE__ (children = []) span;
-              Some sv_id
+              sanity_check __FILE__ __LINE__ (consumed = []) span;
+              sanity_check __FILE__ __LINE__ (borrows = []) span;
+              Some proj.sv_id
           | _ -> None)
         loans
     in
@@ -332,7 +333,9 @@ let eval_loop_symbolic (config : config) (span : span)
   let fresh_sids, input_svalues =
     compute_fp_ctx_symbolic_values span ctx fp_ctx
   in
-  let fp_input_svalues = List.map (fun sv -> sv.sv_id) input_svalues in
+  let fp_input_svalues =
+    List.map (fun (sv : symbolic_value) -> sv.sv_id) input_svalues
+  in
 
   (* Synthesize the end of the function - we simply match the context at the
      loop entry with the fixed point: in the synthesized code, the function
@@ -379,8 +382,7 @@ let eval_loop_symbolic (config : config) (span : span)
      is important in {!SymbolicToPure}, where we expect the given back
      values to have a specific order.
 
-     Also, we filter the backward functions which and
-     return nothing.
+     Also, we filter the backward functions which and return nothing.
   *)
   let rg_to_given_back =
     let compute_abs_given_back_tys (abs_id : AbstractionId.id) : Pure.ty list =
@@ -401,7 +403,8 @@ let eval_loop_symbolic (config : config) (span : span)
 
       List.filter_map
         (fun (av : typed_avalue) ->
-          SymbolicToPure.translate_back_ty (Some span) ctx.type_ctx.type_infos
+          SymbolicToPureTypes.translate_back_ty (Some span)
+            ctx.type_ctx.type_infos
             (function
               | RVar (Free rid) -> RegionId.Set.mem rid abs.regions.owned
               | _ -> false)
