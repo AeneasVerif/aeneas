@@ -680,7 +680,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
      depending on whether they outlive an SCC containing a masked region, etc.
   *)
   let module Scc = SCC.Make (RegionOrderedType) in
-  let sccs = Scc.compute (RegionMap.to_list !graph) in
+  let sccs = Scc.compute (RegionMap.bindings !graph) in
 
   (* Compute, for each SCC whether it contains a marked region or a static region *)
   let scc_kind =
@@ -711,7 +711,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
   let rec compute_kind (id : SccId.id) : region_kind =
     let deps_kinds =
       List.map compute_kind
-        (SccId.Set.to_list (SccId.Map.find id sccs.scc_deps))
+        (SccId.Set.elements (SccId.Map.find id sccs.scc_deps))
     in
     let kind = SccId.Map.find id scc_kind in
     let has_marked = ref false in
@@ -773,7 +773,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
            match r with
            | RVar (Free rid) -> rid
            | _ -> internal_error_opt_span __FILE__ __LINE__ span)
-         (RegionSet.to_list !outlive_regions))
+         (RegionSet.elements !outlive_regions))
   in
 
   sanity_check_opt_span __FILE__ __LINE__
