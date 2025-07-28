@@ -86,10 +86,12 @@ let access_rplace_reorganize_and_read (config : config) (span : Meta.span)
 let access_rplace_reorganize (config : config) (span : Meta.span)
     (greedy_expand : bool) (access : access_kind) (p : place) : cm_fun =
  fun ctx ->
-  let _, ctx, f =
-    access_rplace_reorganize_and_read config span greedy_expand access p ctx
-  in
-  (ctx, f)
+  if ExpressionsUtils.place_accesses_global p then (ctx, fun x -> x)
+  else
+    let _, ctx, f =
+      access_rplace_reorganize_and_read config span greedy_expand access p ctx
+    in
+    (ctx, f)
 
 (** Convert an operand constant operand value to a typed value *)
 let literal_to_typed_value (span : Meta.span) (ty : literal_type) (cv : literal)
@@ -722,7 +724,7 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
   (* Synthesize the symbolic AST *)
   let cc =
     cc_comp cc
-      (synthesize_unary_op ctx unop v
+      (synthesize_unary_op span ctx unop v
          (mk_opt_place_from_op span op ctx)
          res_sv None)
   in
@@ -886,7 +888,7 @@ let eval_binary_op_symbolic (config : config) (span : Meta.span) (binop : binop)
   let p1 = mk_opt_place_from_op span op1 ctx in
   let p2 = mk_opt_place_from_op span op2 ctx in
   let cc =
-    cc_comp cc (synthesize_binary_op ctx binop v1 p1 v2 p2 res_sv None)
+    cc_comp cc (synthesize_binary_op span ctx binop v1 p1 v2 p2 res_sv None)
   in
   (* Compose and apply *)
   (Ok v, ctx, cc)
@@ -1103,7 +1105,6 @@ let eval_rvalue_not_global (config : config) (span : Meta.span)
       craise __FILE__ __LINE__ span
         "Unreachable: discriminant reads should have been eliminated from the \
          AST"
-  | Global _ -> craise __FILE__ __LINE__ span "Unreachable"
   | Len _ -> craise __FILE__ __LINE__ span "Unhandled Len"
   | _ ->
       craise __FILE__ __LINE__ span

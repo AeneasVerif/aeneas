@@ -112,8 +112,6 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
             match rv with
             | Use _
             | RvRef _
-            | Global _
-            | GlobalRef _
             | Discriminant _
             | Aggregate _
             | Len _

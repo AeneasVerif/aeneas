@@ -225,7 +225,8 @@ let rec project_value (span : Meta.span) (access : projection_access)
         ("Inconsistent projection:\n" ^ pe ^ "\n" ^ v ^ "\n" ^ ty)
     end
 
-(** Generic function to access (read/write) the value inside a place.
+(** Generic function to access (read/write) the value inside a place, provided
+    the place **does not refer to a global** (globals are handled elsewhere).
 
     We return the read value and a backward function that propagates any changes
     to the projected value back to the original local. *)
@@ -263,8 +264,11 @@ let rec access_place (span : Meta.span) (access : projection_access)
             end
         end
     end
+  | PlaceGlobal _ ->
+      craise __FILE__ __LINE__ span "Unexpected access to a global"
 
-(** Generic function to access (read/write) the value at a given place.
+(** Generic function to access (read/write) the value at a given place, provided
+    the place **does not refer to a global** (globals are handled elsewhere).
 
     We return the value we read at the place and the (eventually) updated
     environment, if we managed to access the place, or the precise reason why we
@@ -313,7 +317,8 @@ let access_kind_to_projection_access (access : access_kind) : projection_access
         lookup_shared_borrows = false;
       }
 
-(** Attempt to read the value at a given place.
+(** Attempt to read the value at a given place, provided the place **does not
+    refer to a global** (globals are handled elsewhere).
 
     Note that we only access the value at the place, and do not check that the
     value is "well-formed" (for instance that it doesn't contain bottoms). *)
@@ -344,7 +349,8 @@ let read_place (span : Meta.span) (access : access_kind) (p : place)
       craise __FILE__ __LINE__ span ("Unreachable: " ^ show_path_fail_kind e)
   | Ok v -> v
 
-(** Attempt to update the value at a given place *)
+(** Attempt to update the value at a given place, provided the place **does not
+    refer to a global** (globals are handled elsewhere). *)
 let try_write_place (span : Meta.span) (access : access_kind) (p : place)
     (nv : typed_value) (ctx : eval_ctx) : eval_ctx path_access_result =
   let access = access_kind_to_projection_access access in
