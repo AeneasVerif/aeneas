@@ -918,42 +918,14 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
 and eval_rvalue_global (config : config) (span : Meta.span) (dest : place)
     (rv : rvalue) : stl_cm_fun =
  fun ctx ->
-  (* We handle two cases:
-     - copying a global
-     - taking a reference to a global *)
+  (* One of the micro-passes makes sures there is only one case to handle *)
   match rv with
-  | Use (Copy { kind = PlaceGlobal gref; ty = _ }) ->
-      eval_global_copy config span dest gref ctx
   | RvRef ({ kind = PlaceGlobal gref; ty = _ }, BShared) ->
       eval_global_ref config span dest gref RShared ctx
   | _ ->
       craise __FILE__ __LINE__ span
         ("Unsupported case of rvalue accessing a global:\n"
         ^ Print.EvalCtx.rvalue_to_string ctx rv)
-
-and eval_global_copy (config : config) (span : Meta.span) (dest : place)
-    (gref : global_decl_ref) : stl_cm_fun =
- fun ctx ->
-  match config.mode with
-  | ConcreteMode ->
-      (* Treat the evaluation of the global as a call to the global body *)
-      let generics = gref.generics in
-      let global = ctx_lookup_global_decl span ctx gref.id in
-      let func = { func = FunId (FRegular global.body); generics } in
-      let call = { func = FnOpRegular func; args = []; dest } in
-      eval_transparent_function_call_concrete config span global.body call ctx
-  | SymbolicMode ->
-      (* Generate a fresh symbolic value. In the translation, this fresh symbolic value will be
-       * defined as equal to the value of the global (see {!S.synthesize_global_eval}). *)
-      let sval = eval_global_as_fresh_symbolic_value span gref ctx in
-      let ctx, cc =
-        assign_to_place config span
-          (mk_typed_value_from_symbolic_value sval)
-          dest ctx
-      in
-      ( [ (ctx, Unit) ],
-        cc_singleton __FILE__ __LINE__ span
-          (cc_comp (S.synthesize_global_eval gref sval) cc) )
 
 and eval_global_ref (config : config) (span : Meta.span) (dest : place)
     (gref : global_decl_ref) (rk : ref_kind) : stl_cm_fun =
