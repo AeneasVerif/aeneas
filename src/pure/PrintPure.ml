@@ -314,6 +314,9 @@ let rec mplace_to_string (env : fmt_env) (p : mplace) : string =
        * regular places use indices for the pure variables: we want to make
        * this explicit, otherwise it is confusing. *)
       name ^ "^" ^ E.LocalId.to_string var_id ^ "llbc"
+  | PlaceGlobal gref ->
+      let generics = generic_args_to_string env gref.global_generics in
+      global_decl_id_to_string env gref.global_id ^ generics
   | PlaceProjection (p, pe) ->
       let inside = mplace_to_string env p in
       mprojection_elem_to_string env inside pe

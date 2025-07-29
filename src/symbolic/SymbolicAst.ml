@@ -20,6 +20,7 @@ type mplace =
       (** It is important that we store the binder, and not just the variable
           id, because the most important information in a place is the name of
           the variable! *)
+  | PlaceGlobal of global_decl_ref
   | PlaceProjection of mplace * projection_elem
 [@@deriving show]
 
@@ -33,6 +34,7 @@ type call_id =
 
 type call = {
   call_id : call_id;
+  span : Meta.span;
   ctx : (Contexts.eval_ctx[@opaque]);
       (** The context upon calling the function (after the operands have been
           evaluated). We need it to compute the translated values for shared

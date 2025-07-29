@@ -552,21 +552,26 @@ let translate_mprojection_elem (pe : E.projection_elem) :
   | Field (pkind, field_id) -> Some { pkind; field_id }
   | ProjIndex _ | Subslice _ -> None
 
-(** Translate a "span"-place *)
-let rec translate_mplace (p : S.mplace) : mplace =
+(** Translate a "meta"-place *)
+let rec translate_mplace span type_infos (p : S.mplace) : mplace =
   match p with
   | PlaceLocal bv -> PlaceLocal (bv.index, bv.name)
+  | PlaceGlobal { id; generics } ->
+      let global_generics =
+        translate_fwd_generic_args span type_infos generics
+      in
+      PlaceGlobal { global_id = id; global_generics }
   | PlaceProjection (p, pe) -> (
-      let p = translate_mplace p in
+      let p = translate_mplace span type_infos p in
       let pe = translate_mprojection_elem pe in
       match pe with
       | None -> p
       | Some pe -> PlaceProjection (p, pe))
 
-let translate_opt_mplace (p : S.mplace option) : mplace option =
+let translate_opt_mplace span type_infos (p : S.mplace option) : mplace option =
   match p with
   | None -> None
-  | Some p -> Some (translate_mplace p)
+  | Some p -> Some (translate_mplace span type_infos p)
 
 type borrow_or_symbolic_id =
   | Borrow of V.BorrowId.id
