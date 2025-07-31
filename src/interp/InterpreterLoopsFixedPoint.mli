@@ -19,11 +19,11 @@ open InterpreterLoopsCore
 
         ~~>
 
-      abs'0 { SL l0 s0 }
+      abs'0 { SL l s0 }
       x0 -> SB l1
       x1 -> SB l2
-      abs'1 { SB l0, SL l1 s1 }
-      abs'2 { SB l1, SL l2 s2 }
+      abs'1 { SB l, SL l1 s1 }
+      abs'2 { SB l, SL l2 s2 }
     ]}
 
     This is sound but leads to information loss. This way, the fixed abstraction
@@ -38,8 +38,8 @@ open InterpreterLoopsCore
     For instance, if we have:
     {[
       abs'0 {
-        SL {l0} s0
-        SL {l1} s1
+        SL l0 s0
+        SL l1 s1
       }
       abs'1 { SB l0 }
       x -> SB l1

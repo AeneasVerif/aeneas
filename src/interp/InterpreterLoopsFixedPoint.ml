@@ -20,6 +20,8 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
     cm_fun =
  fun ctx0 ->
   let ctx = ctx0 in
+  log#ldebug (lazy (__FUNCTION__ ^ ": ctx0:\n" ^ eval_ctx_to_string ctx));
+
   (* Compute the set of borrows which appear in the abstractions, so that
      we can filter the borrows that we reborrow.
   *)
@@ -60,11 +62,9 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
       v
   in
 
-  let borrow_substs = ref [] in
   let fresh_absl = ref [] in
 
-  (* Auxiliary function to create a new abstraction for a shared value found in
-     an abstraction.
+  (* Auxiliary function to create a new abstraction for a shared value.
 
      Example:
      ========
@@ -99,9 +99,6 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
     let nsv =
       mk_value_with_fresh_sids_no_shared_loans abs.regions.owned nrid sv
     in
-
-    (* Save the borrow substitution, to apply it to the context later *)
-    borrow_substs := (lid, nlid) :: !borrow_substs;
 
     (* Rem.: the below sanity checks are not really necessary *)
     sanity_check __FILE__ __LINE__ (AbstractionId.Set.is_empty abs.parents) span;
@@ -150,7 +147,8 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
     (nlid, nsid)
   in
 
-  (* Compute the map from borrow id to shared value appearing in a region abstraction *)
+  (* Compute the map from borrow id to shared value appearing in a region abstraction -
+     we only visit the region abstractions *)
   let loan_to_shared_value = ref BorrowId.Map.empty in
   let visitor =
     object
@@ -158,7 +156,8 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
 
       method! visit_VSharedLoan abs bid sv =
         loan_to_shared_value :=
-          BorrowId.Map.add bid (abs, sv) !loan_to_shared_value
+          BorrowId.Map.add bid (abs, sv) !loan_to_shared_value;
+        super#visit_VSharedLoan abs bid sv
 
       method! visit_ASharedLoan abs pm bid sv child =
         loan_to_shared_value :=
@@ -194,8 +193,7 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
 
   (* Add the abstractions *)
   let fresh_absl = List.map (fun abs -> EAbs abs) !fresh_absl in
-  let env = List.append fresh_absl ctx.env in
-  let ctx = { ctx with env } in
+  let ctx = { ctx with env = List.append fresh_absl ctx.env } in
 
   let _, new_ctx_ids_map = compute_ctx_ids ctx in
 
@@ -209,6 +207,9 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
         SymbolicAst.IntroSymbolic (ctx, None, sv, VaSingleValue v, e))
       e !sid_subst
   in
+  Invariants.check_invariants span ctx;
+  log#ldebug
+    (lazy (__FUNCTION__ ^ ": resulting ctx:\n" ^ eval_ctx_to_string ctx));
   (ctx, cf)
 
 let prepare_ashared_loans_no_synth (span : Meta.span) (loop_id : LoopId.id)
