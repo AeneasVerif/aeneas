@@ -59,6 +59,7 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
      - then register the borrows *)
   (* Link all the borrow ids to a borrow information *)
   let borrows_infos : borrow_info BorrowId.Map.t ref = ref BorrowId.Map.empty in
+  let shared_borrow_ids = ref SharedBorrowId.Set.empty in
   let context_to_string () : string =
     eval_ctx_to_string ~span:(Some span) ctx
     ^ "\n- info:\n"
@@ -186,6 +187,14 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
     (match (info.loan_kind, kind) with
     | RShared, (BShared | BReserved) | RMut, BMut -> ()
     | _ -> craise __FILE__ __LINE__ span "Invariant not satisfied");
+    (* Check that shared borrow ids are unique *)
+    (match sid with
+    | None -> ()
+    | Some sid ->
+        sanity_check __FILE__ __LINE__
+          (not (SharedBorrowId.Set.mem sid !shared_borrow_ids))
+          span;
+        shared_borrow_ids := SharedBorrowId.Set.add sid !shared_borrow_ids);
     (* A reserved borrow can't point to a value inside an abstraction *)
     sanity_check __FILE__ __LINE__
       (kind <> BReserved || not info.loan_in_abs)
