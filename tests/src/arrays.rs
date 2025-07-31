@@ -381,3 +381,15 @@ fn loop_access_array(k: usize) {
         start += 1;
     }
 }
+
+/// This comes from an issue found in SymCrust and minimized
+fn loop_array_len()
+{
+    let buf = [0u8; 4];
+    let _: usize = buf.len();
+
+    loop
+    {
+        let _ = buf.len();
+    }
+}
