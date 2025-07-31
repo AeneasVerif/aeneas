@@ -593,7 +593,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     let sv1 = lookup_shared_value span ctx1 bid1 in
     let sv = match_rec sv0 sv1 in
     if bid0 = bid1 then
-      (* It's better to use a fresh shared borrow id *)
+      (* We always generate a fresh borrow id: borrows may be duplicated, and
+         we have to make sure that shared borrow ids remain unique.
+       *)
       let sid = fresh_shared_borrow_id () in
       (bid0, sid)
     else
@@ -641,7 +643,11 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       push_abs abs;
 
       (* Return the new borrow *)
-      (bid2, fresh_shared_borrow_id ())
+      (* We always generate a fresh borrow id: borrows may be duplicated, and
+         we have to make sure that shared borrow ids remain unique.
+      *)
+      let sid = fresh_shared_borrow_id () in
+      (bid2, sid)
 
   let match_mut_borrows (_ : typed_value_matcher) (ctx0 : eval_ctx)
       (_ : eval_ctx) (ty : ety) (bid0 : borrow_id) (bv0 : typed_value)
@@ -1299,7 +1305,7 @@ struct
         let _ = match_typed_values v0 v1 in
         ()
     in
-    (* The shared borrow id doesn't really matter: we might as well refresh it *)
+    (* The shared borrow id doesn't really matter but it's always safer to refresh it *)
     (bid, fresh_shared_borrow_id ())
 
   let match_mut_borrows (_ : typed_value_matcher) (_ : eval_ctx) (_ : eval_ctx)
@@ -1397,13 +1403,13 @@ struct
     raise (Distinct "match_distinct_adts")
 
   let match_ashared_borrows (_ : typed_value_matcher) (_ : eval_ctx)
-      (_ : eval_ctx) _ty0 pm0 bid0 sid0 _ty1 pm1 bid1 _sid1 ty =
+      (_ : eval_ctx) _ty0 pm0 bid0 _sid0 _ty1 pm1 bid1 _sid1 ty =
     (* We are checking whether that two environments are equivalent:
        there shouldn't be any projection markers *)
     sanity_check __FILE__ __LINE__ (pm0 = PNone && pm1 = PNone) span;
     let bid = match_borrow_id bid0 bid1 in
-    (* We can pick any identifer for the unique shared borrow id *)
-    let sid = sid0 in
+    (* It's always safer to refresh shared borrow ids *)
+    let sid = fresh_shared_borrow_id () in
     let value = ABorrow (ASharedBorrow (PNone, bid, sid)) in
     { value; ty }
 
@@ -2091,6 +2097,9 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
     object
       inherit [_] map_eval_ctx as super
 
+      (* We have to make sure shared borrow ids are always unique *)
+      method! visit_shared_borrow_id _ _ = fresh_shared_borrow_id ()
+
       (* For *borrows* it is simple: there is a separation between *borrow*
          ids and *loan* ids, meaning we simply have to update one visitor. *)
       method! visit_borrow_id _ id =
@@ -2382,5 +2391,7 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
       EndEnterLoop (loop_id, input_values, refreshed_input_sids)
     else EndContinue (loop_id, input_values, refreshed_input_sids)
   in
+
+  Invariants.check_invariants span tgt_ctx;
 
   ((tgt_ctx, res), cc)
