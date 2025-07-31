@@ -704,12 +704,10 @@ let merge_abstractions_merge_markers (span : Meta.span)
     match (bc0, bc1) with
     | AMutBorrow (pm0, id0, child0), AMutBorrow (pm1, id1, child1)
       when id0 = id1 ->
-        (* Sanity-check of the precondition *)
         sanity_check __FILE__ __LINE__ (complementary_markers pm0 pm1) span;
         Some (merge_funs.merge_amut_borrows id0 ty0 pm0 child0 ty1 pm1 child1)
     | ASharedBorrow (pm0, id0, sid0), ASharedBorrow (pm1, id1, sid1)
       when id0 = id1 ->
-        (* Sanity-check of the precondition *)
         sanity_check __FILE__ __LINE__ (complementary_markers pm0 pm1) span;
         Some (merge_funs.merge_ashared_borrows id0 ty0 pm0 sid0 ty1 pm1 sid1)
     | _ ->
@@ -721,15 +719,11 @@ let merge_abstractions_merge_markers (span : Meta.span)
       (lc1 : aloan_content) : typed_avalue option =
     match (lc0, lc1) with
     | AMutLoan (pm0, id0, child0), AMutLoan (pm1, id1, child1) when id0 = id1 ->
-        (* Sanity-check of the precondition *)
         sanity_check __FILE__ __LINE__ (complementary_markers pm0 pm1) span;
         (* Merge *)
         Some (merge_funs.merge_amut_loans id0 ty0 pm0 child0 ty1 pm1 child1)
     | ASharedLoan (pm0, id0, sv0, child0), ASharedLoan (pm1, id1, sv1, child1)
       when id0 = id1 ->
-        (* Check that the sets of ids are the same - if it is not the case, it
-           means we actually need to merge more than 2 avalues: we ignore this
-           case for now *)
         sanity_check __FILE__ __LINE__ (complementary_markers pm0 pm1) span;
         (* Merge *)
         Some
@@ -742,16 +736,17 @@ let merge_abstractions_merge_markers (span : Meta.span)
 
   let try_merge_projs ((ty0, pm0, proj0) : ty * proj_marker * aproj)
       ((ty1, pm1, proj1) : ty * proj_marker * aproj) : typed_avalue option =
-    sanity_check __FILE__ __LINE__ (complementary_markers pm0 pm1) span;
     match (proj0, proj1) with
     | AProjBorrows proj0, AProjBorrows proj1
       when projections_intersect span owned_regions proj0.proj.proj_ty
              owned_regions proj1.proj.proj_ty ->
+        sanity_check __FILE__ __LINE__ (complementary_markers pm0 pm1) span;
         (* Merge *)
         Some (merge_funs.merge_aborrow_projs ty0 pm0 proj0 ty1 pm1 proj1)
     | AProjLoans proj0, AProjLoans proj1
       when projections_intersect span owned_regions proj0.proj.proj_ty
              owned_regions proj1.proj.proj_ty ->
+        sanity_check __FILE__ __LINE__ (complementary_markers pm0 pm1) span;
         (* Merge *)
         Some (merge_funs.merge_aloan_projs ty0 pm0 proj0 ty1 pm1 proj1)
     | _ ->
