@@ -2113,6 +2113,7 @@ let abs_mut_borrows_loans_in_fixed span (ctx : eval_ctx)
    - end the region abstractions which can be ended (no loans)
    - replace the values in anonymous values with bottom whenever possible
      (the value is not inside a borrow/loan and doesn't itself contain borrows/loans)
+   - end the shared loans which don't have corresponding borrows
    - end the loan projectors inside region abstractions when the corresponding
      symbolic value doesn't appear anywhere else in the context
    However we ignore the "fixed" abstractions.
@@ -2144,11 +2145,22 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
           let visitor =
             object
               inherit [_] map_typed_value as super
-              method! visit_VLoan _ lc = VLoan lc (* Don't enter inside loans *)
 
-              method! visit_VBorrow _ bc =
+              method! visit_VLoan end_borrows lc =
+                (* Check if we can end the loan, but don't dive inside *)
+                match lc with
+                | VSharedLoan (l, value) -> begin
+                    match lookup_shared_reserved_borrows l ctx with
+                    | [] ->
+                        (* End the loan *)
+                        super#visit_value end_borrows value.value
+                    | _ -> super#visit_VLoan false lc
+                  end
+                | _ -> super#visit_VLoan false lc
+
+              method! visit_VBorrow end_borrows bc =
                 (* Simplify if the option is on *)
-                if simplify_borrows then
+                if end_borrows && simplify_borrows then
                   (* Check if we can end the borrow, do not enter inside if we can't *)
                   match bc with
                   | VSharedBorrow (_, sid) | VReservedMutBorrow (_, sid) ->
@@ -2162,18 +2174,47 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
                         VBorrow bc
                 else VBorrow bc
 
-              (* If no concrete borrows/loans: replace with bottow *)
-              method! visit_value _ v =
-                if not (concrete_borrows_loans_in_value v) then VBottom
-                else super#visit_value () v
+              (* If no concrete borrows/loans and we can end borrows (we are not
+                 inside a shared loan): replace with bottom *)
+              method! visit_value end_borrows v =
+                if end_borrows && not (concrete_borrows_loans_in_value v) then
+                  VBottom
+                else super#visit_value end_borrows v
             end
           in
-          let v = visitor#visit_typed_value () v in
+          let v = visitor#visit_typed_value true v in
           (* No exception was raised: continue *)
           EBinding (BDummy vid, v) :: explore_env ctx env
     | EAbs abs :: env
       when simplify_abs && abs.can_end
            && not (AbstractionId.Set.mem abs.abs_id fixed_abs_ids) -> (
+        (* End the shared loans with no corresponding borrows *)
+        let visitor =
+          object
+            inherit [_] map_abs as super
+
+            method! visit_VLoan () lc =
+              (* Check if we can end the loan, but don't dive inside *)
+              match lc with
+              | VSharedLoan (l, value) -> begin
+                  match lookup_shared_reserved_borrows l ctx with
+                  | [] ->
+                      (* End the loan *)
+                      super#visit_value () value.value
+                  | _ -> super#visit_VLoan () lc
+                end
+              | _ -> super#visit_VLoan () lc
+
+            method! visit_ASharedLoan () pm l sv child =
+              sanity_check __FILE__ __LINE__ (pm = PNone) span;
+              match lookup_shared_reserved_borrows l ctx with
+              | [] ->
+                  (* End the loan *)
+                  super#visit_AEndedSharedLoan () sv child
+              | _ -> super#visit_ASharedLoan () pm l sv child
+          end
+        in
+        let abs = visitor#visit_abs () abs in
         (* Check if it is possible to end the abstraction: if yes, raise an exception *)
         let opt_loan = get_first_non_ignored_aloan_in_abstraction span abs in
         match opt_loan with

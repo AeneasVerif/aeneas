@@ -464,7 +464,15 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
   ctx
 
 (** Reduce_ctx can only be called in a context with no markers *)
-let reduce_ctx = reduce_ctx_with_markers None
+let reduce_ctx config (span : Meta.span) (loop_id : loop_id)
+    (fixed_ids : ids_sets) (ctx : eval_ctx) : eval_ctx =
+  (* Simplify the context *)
+  let ctx, _ =
+    InterpreterBorrows.simplify_dummy_values_useless_abs config span
+      fixed_ids.aids ctx
+  in
+  (* Reduce *)
+  reduce_ctx_with_markers None span loop_id fixed_ids ctx
 
 (** Auxiliary function for collapse (see below).
 
@@ -1235,7 +1243,7 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
         ^ eval_ctx_to_string ~span:(Some span) ctx));
 
     (* Reduce the context we want to add to the join *)
-    let ctx = reduce_ctx span loop_id fixed_ids ctx in
+    let ctx = reduce_ctx config span loop_id fixed_ids ctx in
     log#ltrace
       (lazy
         (__FUNCTION__ ^ ":join_one: after reduce:\n"
@@ -1266,7 +1274,7 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
     if !Config.sanity_checks then Invariants.check_invariants span !joined_ctx;
 
     (* Reduce again to reach a fixed point *)
-    joined_ctx := reduce_ctx span loop_id fixed_ids !joined_ctx;
+    joined_ctx := reduce_ctx config span loop_id fixed_ids !joined_ctx;
     log#ltrace
       (lazy
         (__FUNCTION__ ^ ":join_one: after last reduce:\n"
