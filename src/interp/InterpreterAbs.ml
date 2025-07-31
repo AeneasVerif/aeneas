@@ -143,7 +143,6 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
     | VLoan lc -> (
         match lc with
         | VSharedLoan (bids, sv) ->
-            let r_id = if group then r_id else fresh_region_id () in
             (* We don't support nested borrows for now *)
             cassert __FILE__ __LINE__
               (not (value_has_borrows (Some span) ctx sv.value))
