@@ -246,7 +246,10 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
 
     {[
       abs { SB l0, SB l0 } ~> abs { SB l0 }
-    ]} *)
+    ]}
+
+    Note that this function supports projection markers: when merging two
+    borrows we take the union of the markers. *)
 let abs_simplify_duplicated_borrows (span : Meta.span) (ctx : eval_ctx)
     (abs : abs) : abs =
   (* Sanity check: the abstraction has been destructured *)
@@ -256,20 +259,43 @@ let abs_simplify_duplicated_borrows (span : Meta.span) (ctx : eval_ctx)
        (abs_is_destructured span destructure_shared_values ctx abs)
        span);
 
-  (* *)
-  let shared_borrows = ref BorrowId.Set.empty in
-  let keep_avalue (av : typed_avalue) : bool =
-    match av.value with
-    | ABorrow (ASharedBorrow (pm, bid, _)) ->
-        sanity_check __FILE__ __LINE__ (pm = PNone) span;
-        if BorrowId.Set.mem bid !shared_borrows then false
-        else (
-          shared_borrows := BorrowId.Set.add bid !shared_borrows;
-          true)
-    | _ -> true
+  let join_pm (pm0 : proj_marker) (pm1 : proj_marker) : proj_marker =
+    match (pm0, pm1) with
+    | PNone, _ | _, PNone -> PNone
+    | PLeft, PRight | PRight, PLeft -> PNone
+    | PRight, PRight -> PRight
+    | PLeft, PLeft -> PLeft
   in
 
+  (* We first filter the borrows which are duplicated *)
+  let shared_borrows = ref BorrowId.Map.empty in
+  let keep_avalue (av : typed_avalue) : bool =
+    match av.value with
+    | ABorrow (ASharedBorrow (pm, bid, _)) -> begin
+        match BorrowId.Map.find_opt bid !shared_borrows with
+        | None ->
+            shared_borrows := BorrowId.Map.add bid pm !shared_borrows;
+            true
+        | Some pm' ->
+            let pm = join_pm pm pm' in
+            shared_borrows := BorrowId.Map.add bid pm !shared_borrows;
+            false
+      end
+    | _ -> true
+  in
   let avalues = List.filter keep_avalue abs.avalues in
+
+  (* We update the projection markers of the remaining borrows *)
+  let update_avalue (av : typed_avalue) : typed_avalue =
+    match av.value with
+    | ABorrow (ASharedBorrow (_, bid, sid)) ->
+        let pm = BorrowId.Map.find bid !shared_borrows in
+        { av with value = ABorrow (ASharedBorrow (pm, bid, sid)) }
+    | _ -> av
+  in
+  let avalues = List.map update_avalue avalues in
+
+  (* Update the abstraction *)
   { abs with avalues }
 
 type merge_duplicates_funcs = {
