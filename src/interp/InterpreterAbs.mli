@@ -58,13 +58,22 @@ type merge_duplicates_funcs = {
 
           The children should be [AIgnored]. *)
   merge_ashared_borrows :
-    borrow_id -> rty -> proj_marker -> rty -> proj_marker -> typed_avalue;
+    borrow_id ->
+    rty ->
+    proj_marker ->
+    shared_borrow_id ->
+    rty ->
+    proj_marker ->
+    shared_borrow_id ->
+    typed_avalue;
       (** Parameters:
           - [id]
           - [ty0]
           - [pm0]
+          - [sid0]
           - [ty1]
-          - [pm1] *)
+          - [pm1]
+          - [sid1] *)
   merge_amut_loans :
     loan_id ->
     rty ->
@@ -85,7 +94,7 @@ type merge_duplicates_funcs = {
 
           The children should be [AIgnored]. *)
   merge_ashared_loans :
-    loan_id_set ->
+    loan_id ->
     rty ->
     proj_marker ->
     typed_value ->

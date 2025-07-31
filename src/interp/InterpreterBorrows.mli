@@ -1,7 +1,7 @@
 open Values
 open Contexts
 open Cps
-open InterpreterBorrowsCore
+open InterpreterUtils
 
 (** End a borrow identified by its id, while preserving the invariants.
 
@@ -15,6 +15,10 @@ val end_borrows : config -> Meta.span -> unique_borrow_id_set -> cm_fun
 
 (** End a loan identified by its id, while preserving the invariants *)
 val end_loan : config -> Meta.span -> loan_id -> cm_fun
+
+(** End a set of loans identified by their ids, while preserving the invariants
+*)
+val end_loans : config -> Meta.span -> loan_id_set -> cm_fun
 
 (** End an abstraction while preserving the invariants. *)
 val end_abstraction : config -> Meta.span -> AbstractionId.id -> cm_fun
@@ -30,6 +34,14 @@ val end_borrow_no_synth :
     synthesis *)
 val end_borrows_no_synth :
   config -> Meta.span -> unique_borrow_id_set -> eval_ctx -> eval_ctx
+
+(** End a loan and return the resulting environment, ignoring synthesis *)
+val end_loan_no_synth : config -> Meta.span -> loan_id -> eval_ctx -> eval_ctx
+
+(** End a set of loans and return the resulting environment, ignoring synthesis
+*)
+val end_loans_no_synth :
+  config -> Meta.span -> loan_id_set -> eval_ctx -> eval_ctx
 
 (** End an abstraction and return the resulting environment, ignoring synthesis
 *)

@@ -13,34 +13,6 @@ open Errors
 (** The local logger *)
 let log = Logging.borrows_log
 
-(** The borrow id of shared borrows doesn't uniquely identify shared borrows:
-    when we need to uniquely identify a borrow, we use the borrow id for mutable
-    borrows, and the shared borrow id for shared borrow (once again, the shared
-    borrow id is just an implementation detail, it doesn't have any impact in
-    the semantics). *)
-type unique_borrow_id = UMut of borrow_id | UShared of shared_borrow_id
-[@@deriving show, ord]
-
-let unique_borrow_id_to_string (uid : unique_borrow_id) : string =
-  match uid with
-  | UMut id -> "m@" ^ BorrowId.to_string id
-  | UShared id -> "s@" ^ SharedBorrowId.to_string id
-
-module UniqueBorrowIdOrderedType :
-  Collections.OrderedType with type t = unique_borrow_id = struct
-  type t = unique_borrow_id
-
-  let compare = compare_unique_borrow_id
-  let to_string = unique_borrow_id_to_string
-  let pp_t = pp_unique_borrow_id
-  let show_t = show_unique_borrow_id
-end
-
-module UniqueBorrowIdMap = Collections.MakeMap (UniqueBorrowIdOrderedType)
-module UniqueBorrowIdSet = Collections.MakeSet (UniqueBorrowIdOrderedType)
-
-type unique_borrow_id_set = UniqueBorrowIdSet.t [@@deriving show, ord]
-
 (** TODO: cleanup this a bit, once we have a better understanding about what we
     need. TODO: I'm not sure in which file this should be moved... *)
 type exploration_kind = {
@@ -1416,7 +1388,7 @@ let lookup_shared_value (span : Meta.span) (ctx : eval_ctx) (bid : BorrowId.id)
   Option.get (lookup_shared_value_opt span ctx bid)
 
 (** A marked borrow id *)
-type marked_borrow_id = proj_marker * BorrowId.id [@@deriving show, ord]
+type marked_borrow_id = proj_marker * borrow_id [@@deriving show, ord]
 
 module MarkedBorrowIdOrd = struct
   type t = marked_borrow_id
@@ -1446,6 +1418,52 @@ with type t = marked_borrow_id = struct
   module Set = MarkedBorrowIdSet
   module Map = MarkedBorrowIdMap
 end
+
+(** A marked borrow id *)
+type marked_unique_borrow_id = proj_marker * borrow_id * shared_borrow_id option
+[@@deriving show, ord]
+
+module MarkedUniqueBorrowIdOrd = struct
+  type t = marked_unique_borrow_id
+
+  let compare = compare_marked_unique_borrow_id
+  let to_string = show_marked_unique_borrow_id
+  let pp_t = pp_marked_unique_borrow_id
+  let show_t = show_marked_unique_borrow_id
+end
+
+module MarkedUniqueBorrowIdSet = Collections.MakeSet (MarkedUniqueBorrowIdOrd)
+module MarkedUniqueBorrowIdMap = Collections.MakeMap (MarkedUniqueBorrowIdOrd)
+
+module MarkedUniqueBorrowId : sig
+  type t
+
+  val to_string : t -> string
+
+  module Set : Collections.Set with type elt = t
+  module Map : Collections.Map with type key = t
+end
+with type t = marked_unique_borrow_id = struct
+  type t = marked_unique_borrow_id
+
+  let to_string = show_marked_unique_borrow_id
+
+  module Set = MarkedUniqueBorrowIdSet
+  module Map = MarkedUniqueBorrowIdMap
+end
+
+(** A marked loan id *)
+type marked_loan_id = proj_marker * loan_id [@@deriving show, ord]
+
+module MarkedLoanIdOrd = MarkedBorrowIdOrd
+module MarkedLoanIdSet = MarkedBorrowIdSet
+module MarkedLoanIdMap = MarkedBorrowIdMap
+module MarkedLoanId = MarkedBorrowId
+
+let marked_unique_borrow_to_loan_id (x : marked_unique_borrow_id) :
+    marked_loan_id =
+  let pm, bid, _ = x in
+  (pm, bid)
 
 (** A marked and normalized symbolic value (loan/borrow) projection.
 

@@ -242,206 +242,35 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
   (* Return *)
   List.rev !absl
 
-type 'a borrow_or_loan = Borrow of 'a | Loan of 'a
+(** Simplify the duplicated shared borrows in a region abstraction.
 
-type g_loan_content_with_ty =
-  (ety * loan_content, rty * aloan_content) concrete_or_abs
+    {[
+      abs { SB l0, SB l0 } ~> abs { SB l0 }
+    ]} *)
+let abs_simplify_duplicated_borrows (span : Meta.span) (ctx : eval_ctx)
+    (abs : abs) : abs =
+  (* Sanity check: the abstraction has been destructured *)
+  (if !Config.sanity_checks then
+     let destructure_shared_values = true in
+     sanity_check __FILE__ __LINE__
+       (abs_is_destructured span destructure_shared_values ctx abs)
+       span);
 
-type g_borrow_content_with_ty =
-  (ety * borrow_content, rty * aborrow_content) concrete_or_abs
-
-type merge_abstraction_info = {
-  loans : MarkedBorrowId.Set.t;
-  borrows : MarkedBorrowId.Set.t;
-  loan_projs : MarkedNormSymbProj.Set.t;
-  borrow_projs : MarkedNormSymbProj.Set.t;
-  borrows_loans : marked_borrow_id borrow_or_loan list;
-  borrow_loan_projs : marked_norm_symb_proj borrow_or_loan list;
-      (** We use a list to preserve the order in which the borrows were found *)
-  loan_to_content : g_loan_content_with_ty MarkedBorrowId.Map.t;
-  borrow_to_content : g_borrow_content_with_ty MarkedBorrowId.Map.t;
-  loan_proj_to_content : (ty * proj_marker * aproj) MarkedNormSymbProj.Map.t;
-  borrow_proj_to_content : (ty * proj_marker * aproj) MarkedNormSymbProj.Map.t;
-}
-
-(** Small utility to help merging abstractions.
-
-    We compute the list of loan/borrow contents, maps from borrow/loan ids to
-    borrow/loan contents, etc.
-
-    Note that this function is very specific to [merge_into_first_abstraction]:
-    we have strong assumptions about the shape of the abstraction, and in
-    particular that:
-    - its values don't contain nested borrows
-    - all the borrows are destructured (for instance, shared loans can't contain
-      shared loans). *)
-let compute_merge_abstraction_info (span : Meta.span) (ctx : eval_ctx)
-    (owned_regions : RegionId.Set.t) (avalues : typed_avalue list) :
-    merge_abstraction_info =
-  let loans : MarkedBorrowId.Set.t ref = ref MarkedBorrowId.Set.empty in
-  let borrows : MarkedBorrowId.Set.t ref = ref MarkedBorrowId.Set.empty in
-  let loan_projs = ref MarkedNormSymbProj.Set.empty in
-  let borrow_projs = ref MarkedNormSymbProj.Set.empty in
-  let borrows_loans : marked_borrow_id borrow_or_loan list ref = ref [] in
-  let borrow_loan_projs = ref [] in
-  let loan_to_content : g_loan_content_with_ty MarkedBorrowId.Map.t ref =
-    ref MarkedBorrowId.Map.empty
-  in
-  let borrow_to_content : g_borrow_content_with_ty MarkedBorrowId.Map.t ref =
-    ref MarkedBorrowId.Map.empty
-  in
-  let loan_proj_to_content = ref MarkedNormSymbProj.Map.empty in
-  let borrow_proj_to_content = ref MarkedNormSymbProj.Map.empty in
-
-  let module Push
-      (Set : Collections.Set)
-      (Map : Collections.Map with type key = Set.elt) =
-  struct
-    let push (set : Set.t ref) (content : 'a) (to_content : 'a Map.t ref)
-        (is_borrow : bool) (borrows_loans : Set.elt borrow_or_loan list ref)
-        (marked : Set.elt) : unit =
-      sanity_check __FILE__ __LINE__ (not (Set.mem marked !set)) span;
-      set := Set.add marked !set;
-      sanity_check __FILE__ __LINE__ (not (Map.mem marked !to_content)) span;
-      to_content := Map.add marked content !to_content;
-      borrows_loans :=
-        (if is_borrow then Borrow marked else Loan marked) :: !borrows_loans
-  end in
-  let module PushConcrete = Push (MarkedBorrowId.Set) (MarkedBorrowId.Map) in
-  let push_loan pm id (lc : g_loan_content_with_ty) =
-    PushConcrete.push loans lc loan_to_content false borrows_loans (pm, id)
-  in
-  let push_borrow pm id (bc : g_borrow_content_with_ty) =
-    PushConcrete.push borrows bc borrow_to_content true borrows_loans (pm, id)
+  (* *)
+  let shared_borrows = ref BorrowId.Set.empty in
+  let keep_avalue (av : typed_avalue) : bool =
+    match av.value with
+    | ABorrow (ASharedBorrow (pm, bid, _)) ->
+        sanity_check __FILE__ __LINE__ (pm = PNone) span;
+        if BorrowId.Set.mem bid !shared_borrows then false
+        else (
+          shared_borrows := BorrowId.Set.add bid !shared_borrows;
+          true)
+    | _ -> true
   in
 
-  let module PushSymbolic =
-    Push (MarkedNormSymbProj.Set) (MarkedNormSymbProj.Map)
-  in
-  let push_loan_proj pm (proj : symbolic_proj) lc =
-    let norm_proj_ty = normalize_proj_ty owned_regions proj.proj_ty in
-    let proj = { pm; sv_id = proj.sv_id; norm_proj_ty } in
-    PushSymbolic.push loan_projs lc loan_proj_to_content false borrow_loan_projs
-      proj
-  in
-  let push_borrow_proj pm (proj : symbolic_proj) bc =
-    let norm_proj_ty = normalize_proj_ty owned_regions proj.proj_ty in
-    let proj = { pm; sv_id = proj.sv_id; norm_proj_ty } in
-    PushSymbolic.push borrow_projs bc borrow_proj_to_content true
-      borrow_loan_projs proj
-  in
-
-  let iter_avalues =
-    object
-      inherit [_] iter_typed_avalue as super
-
-      (** We redefine this to track the types *)
-      method! visit_typed_avalue _ v =
-        super#visit_typed_avalue (Some (Abstract v.ty)) v
-
-      (** We redefine this to track the types *)
-      method! visit_typed_value _ (v : typed_value) =
-        super#visit_typed_value (Some (Concrete v.ty)) v
-
-      method! visit_loan_content _ _ =
-        (* Could happen if we explore shared values whose sub-values are
-           reborrowed. We use the fact that we destructure the nested shared
-           loans before reducing a context or computing a join. *)
-        craise __FILE__ __LINE__ span "Unreachable"
-
-      method! visit_borrow_content _ _ =
-        (* Can happen if we explore shared values which contain borrows -
-           i.e., if we have nested borrows (we forbid this for now) *)
-        craise __FILE__ __LINE__ span "Unreachable"
-
-      method! visit_aloan_content env lc =
-        let ty =
-          match Option.get env with
-          | Concrete _ -> craise __FILE__ __LINE__ span "Unreachable"
-          | Abstract ty -> ty
-        in
-        (* Register the loans *)
-        (match lc with
-        | ASharedLoan (pm, bid, _, _) -> push_loan pm bid (Abstract (ty, lc))
-        | AMutLoan (pm, bid, _) -> push_loan pm bid (Abstract (ty, lc))
-        | AEndedMutLoan _
-        | AEndedSharedLoan _
-        | AIgnoredMutLoan _
-        | AEndedIgnoredMutLoan _
-        | AIgnoredSharedLoan _ ->
-            (* The abstraction has been destructured, so those shouldn't appear *)
-            craise __FILE__ __LINE__ span "Unreachable");
-        (* Continue *)
-        super#visit_aloan_content env lc
-
-      method! visit_aborrow_content env bc =
-        let ty =
-          match Option.get env with
-          | Concrete _ -> craise __FILE__ __LINE__ span "Unreachable"
-          | Abstract ty -> ty
-        in
-        (* Explore the borrow content *)
-        (match bc with
-        | AMutBorrow (pm, bid, _) | ASharedBorrow (pm, bid) ->
-            push_borrow pm bid (Abstract (ty, bc))
-        | AProjSharedBorrow asb ->
-            let register asb =
-              match asb with
-              | AsbBorrow bid -> push_borrow PNone bid (Abstract (ty, bc))
-              | AsbProjReborrows _ ->
-                  (* Can only happen if the symbolic value (potentially) contains
-                     borrows - i.e., we have nested borrows *)
-                  craise __FILE__ __LINE__ span "Unreachable"
-            in
-            List.iter register asb
-        | AIgnoredMutBorrow _
-        | AEndedIgnoredMutBorrow _
-        | AEndedMutBorrow _
-        | AEndedSharedBorrow ->
-            (* The abstraction has been destructured, so those shouldn't appear *)
-            craise __FILE__ __LINE__ span "Unreachable");
-        super#visit_aborrow_content env bc
-
-      method! visit_symbolic_value _ sv =
-        (* Sanity check: no borrows *)
-        sanity_check __FILE__ __LINE__
-          (not (symbolic_value_has_borrows (Some span) ctx sv))
-          span
-
-      method! visit_ASymbolic env pm proj =
-        let ty =
-          match Option.get env with
-          | Concrete _ -> craise __FILE__ __LINE__ span "Unreachable"
-          | Abstract ty -> ty
-        in
-        match proj with
-        | AProjLoans { proj = proj'; consumed; borrows } ->
-            sanity_check __FILE__ __LINE__ (consumed = []) span;
-            sanity_check __FILE__ __LINE__ (borrows = []) span;
-            push_loan_proj pm proj' (ty, pm, proj)
-        | AProjBorrows { proj = proj'; loans } ->
-            sanity_check __FILE__ __LINE__ (loans = []) span;
-            push_borrow_proj pm proj' (ty, pm, proj)
-        | AEndedProjLoans _ | AEndedProjBorrows _ ->
-            craise __FILE__ __LINE__ span "Unreachable"
-        | AEmpty -> ()
-    end
-  in
-
-  List.iter (iter_avalues#visit_typed_avalue None) avalues;
-
-  {
-    loans = !loans;
-    borrows = !borrows;
-    borrows_loans = List.rev !borrows_loans;
-    loan_to_content = !loan_to_content;
-    borrow_to_content = !borrow_to_content;
-    loan_projs = !loan_projs;
-    borrow_projs = !borrow_projs;
-    borrow_loan_projs = List.rev !borrow_loan_projs;
-    loan_proj_to_content = !loan_proj_to_content;
-    borrow_proj_to_content = !borrow_proj_to_content;
-  }
+  let avalues = List.filter keep_avalue abs.avalues in
+  { abs with avalues }
 
 type merge_duplicates_funcs = {
   merge_amut_borrows :
@@ -464,13 +293,22 @@ type merge_duplicates_funcs = {
 
           The children should be [AIgnored]. *)
   merge_ashared_borrows :
-    borrow_id -> rty -> proj_marker -> rty -> proj_marker -> typed_avalue;
+    borrow_id ->
+    rty ->
+    proj_marker ->
+    shared_borrow_id ->
+    rty ->
+    proj_marker ->
+    shared_borrow_id ->
+    typed_avalue;
       (** Parameters:
           - [id]
           - [ty0]
           - [pm0]
+          - [sid0]
           - [ty1]
-          - [pm1] *)
+          - [pm1]
+          - [sid1] *)
   merge_amut_loans :
     loan_id ->
     rty ->
@@ -491,7 +329,7 @@ type merge_duplicates_funcs = {
 
           The children should be [AIgnored]. *)
   merge_ashared_loans :
-    loan_id_set ->
+    loan_id ->
     rty ->
     proj_marker ->
     typed_value ->
@@ -570,9 +408,9 @@ let typed_avalue_split_marker (span : Meta.span) (ctx : eval_ctx)
             { av with value = ABorrow (AMutBorrow (pm, bid, child)) }
           in
           mk_opt_split pm mk_value
-      | ASharedBorrow (pm, bid) ->
+      | ASharedBorrow (pm, bid, sid) ->
           let mk_value pm =
-            { av with value = ABorrow (ASharedBorrow (pm, bid)) }
+            { av with value = ABorrow (ASharedBorrow (pm, bid, sid)) }
           in
           mk_opt_split pm mk_value
       | _ -> internal_error __FILE__ __LINE__ span)
@@ -636,379 +474,173 @@ let abs_split_markers (span : Meta.span) (ctx : eval_ctx) (abs : abs) : abs =
           ~~> abs1 { MB l0, ML l0, MB l1 }
     ]}
 
-    We return the list of merged values. *)
+    We return the list of merged values.
+
+    **Remark:** we assume the abstractions have been destructured and that the
+    markers have been split (if markers are allowed). *)
 let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
-    (merge_funs : merge_duplicates_funcs option) (ctx : eval_ctx) (abs0 : abs)
-    (abs1 : abs) : typed_avalue list =
+    ~(allow_markers : bool) (ctx : eval_ctx) (abs0 : abs) (abs1 : abs) :
+    typed_avalue list =
   log#ltrace (lazy __FUNCTION__);
 
-  (* Split the markers inside the abstractions (if we allow using markers).
+  if !Config.sanity_checks then (
+    let destructure_shared_values = true in
+    sanity_check __FILE__ __LINE__
+      (abs_is_destructured span destructure_shared_values ctx abs0)
+      span;
+    sanity_check __FILE__ __LINE__
+      (abs_is_destructured span destructure_shared_values ctx abs1)
+      span);
 
-     We do so because it enables simplification later when we are in the following case:
-     {[
-       abs0 { ML l0 } |><| abs1 { |MB l0|, MB l1 }
-     ]}
-
-     If we split before merging we get:
-     {[
-       abs0 { |ML l0|, ︙ML l0︙ } |><| abs1 { |MB l0|, |MB l1|, ︙MB l1︙ }
-           ~~> merge
-       abs2 { ︙ML l0︙, |MB l1|, ︙MB l1︙ }
-           ~~> simplify the complementary markers
-       abs2 { ︙ML l0︙, MB l1 }
-     ]}
-  *)
-  let abs0, abs1 =
-    if merge_funs = None then (abs0, abs1)
-    else (abs_split_markers span ctx abs0, abs_split_markers span ctx abs1)
-  in
-
-  (* Compute the relevant information *)
-  let {
-    loans = loans0;
-    borrows = borrows0;
-    loan_projs = loan_projs0;
-    borrow_projs = borrow_projs0;
-    borrows_loans = borrows_loans0;
-    borrow_loan_projs = borrow_loan_projs0;
-    loan_to_content = loan_to_content0;
-    loan_proj_to_content = loan_proj_to_content0;
-    borrow_to_content = borrow_to_content0;
-    borrow_proj_to_content = borrow_proj_to_content0;
-  } =
-    compute_merge_abstraction_info span ctx abs0.regions.owned abs0.avalues
-  in
-
-  let {
-    loans = loans1;
-    borrows = borrows1;
-    loan_projs = loan_projs1;
-    borrow_projs = borrow_projs1;
-    borrows_loans = borrows_loans1;
-    borrow_loan_projs = borrow_loan_projs1;
-    loan_to_content = loan_to_content1;
-    loan_proj_to_content = loan_proj_to_content1;
-    borrow_to_content = borrow_to_content1;
-    borrow_proj_to_content = borrow_proj_to_content1;
-  } =
-    compute_merge_abstraction_info span ctx abs1.regions.owned abs1.avalues
-  in
+  (* Simplify the duplicated shared borrows *)
+  let abs0 = abs_simplify_duplicated_borrows span ctx abs0 in
+  let abs1 = abs_simplify_duplicated_borrows span ctx abs1 in
 
   (* Sanity check: no markers appear unless we allow merging duplicates.
      Also, the borrows must be disjoint, and the loans must be disjoint.
   *)
-  if merge_funs = None then (
-    sanity_check __FILE__ __LINE__
-      (List.for_all
-         (function
-           | Loan (pm, _) | Borrow (pm, _) -> pm = PNone)
-         (borrows_loans0 @ borrows_loans1))
-      span;
-    sanity_check __FILE__ __LINE__
-      (List.for_all
-         (function
-           | Loan proj | Borrow proj -> proj.pm = PNone)
-         (borrow_loan_projs0 @ borrow_loan_projs1))
-      span;
-    sanity_check __FILE__ __LINE__
-      (MarkedBorrowId.Set.disjoint borrows0 borrows1)
-      span;
-    sanity_check __FILE__ __LINE__
-      (MarkedBorrowId.Set.disjoint loans0 loans1)
-      span;
-    sanity_check __FILE__ __LINE__
-      (MarkedNormSymbProj.Set.disjoint borrow_projs0 borrow_projs1)
-      span;
-    sanity_check __FILE__ __LINE__
-      (MarkedNormSymbProj.Set.disjoint loan_projs0 loan_projs1)
-      span);
+  if not allow_markers then (
+    let visitor =
+      object
+        inherit [_] iter_abs
+
+        method! visit_proj_marker _ pm =
+          sanity_check __FILE__ __LINE__ (pm = PNone) span
+      end
+    in
+    visitor#visit_abs () abs0;
+    visitor#visit_abs () abs1);
 
   (* Merge.
-     There are several cases:
-     - if a borrow/loan is only in one abstraction, we simply check if we need
-       to filter it (because its associated loan/borrow is in the other
-       abstraction).
-     - if a borrow/loan is present in both abstractions, we need to merge its
-       content.
 
-     Note that we may need to merge strictly more than two avalues, because of
-     shared loans. For instance, if we have:
-     {[
-       abs'0 { shared_loan { l0, l1 } ... }
-       abs'1 { shared_loan { l0 } ..., shared_loan { l1 } ... }
-     ]}
-
-     We ignore this case for now: we check that whenever we merge two shared loans,
-     then their sets of ids are equal, and fail if it is not the case.
-     Remark: a way of solving this problem would be to destructure shared loans
-     so that they always have exactly one id.
+     We take all the values in the left abstraction and add the values from
+     the right abstraction one at a time. Whenever we add a value, we go
+     through all the *left* values in the abstraction to check if we need
+     to eliminate a shared borrow because there is already a shared loan,
+     or to check if we need to merge a mutable borrow and a mutable loan, etc.
   *)
-  let merged_borrows = ref MarkedBorrowId.Set.empty in
-  let merged_borrow_projs = ref MarkedNormSymbProj.Set.empty in
-  let merged_loans = ref MarkedBorrowId.Set.empty in
-  let merged_loan_projs = ref MarkedNormSymbProj.Set.empty in
-  let borrow_avalues = ref [] in
-  let loan_avalues = ref [] in
-  let push_borrow_avalue av =
-    log#ltrace
-      (lazy
-        (__FUNCTION__ ^ ": push_borrow_avalue: "
-        ^ typed_avalue_to_string ~span:(Some span) ctx av));
-    borrow_avalues := av :: !borrow_avalues
-  in
-  let push_loan_avalue av =
-    log#ltrace
-      (lazy
-        (__FUNCTION__ ^ ": push_loan_avalue: "
-        ^ typed_avalue_to_string ~span:(Some span) ctx av));
-    loan_avalues := av :: !loan_avalues
+  let left_avalues = ref abs0.avalues in
+  let right_avalues = ref [] in
+
+  (* Some preprocessing: save all the normalized types of the loan projectors in
+     the left abstraction *)
+  let left_norm_proj_loans = ref MarkedNormSymbProjSet.empty in
+  List.iter
+    (fun (av : typed_avalue) ->
+      match av.value with
+      | ASymbolic (pm, aproj) -> (
+          match aproj with
+          | AProjLoans { proj; consumed; borrows } ->
+              sanity_check __FILE__ __LINE__ (consumed = []) span;
+              sanity_check __FILE__ __LINE__ (borrows = []) span;
+              let norm_proj_ty =
+                normalize_proj_ty abs0.regions.owned proj.proj_ty
+              in
+              left_norm_proj_loans :=
+                MarkedNormSymbProjSet.add
+                  { pm; sv_id = proj.sv_id; norm_proj_ty }
+                  !left_norm_proj_loans
+          | _ -> ())
+      | _ -> ())
+    abs0.avalues;
+
+  let push_right_avalue (av : typed_avalue) : unit =
+    right_avalues := av :: !right_avalues
   in
 
-  (* Compute the intersection of:
-     - the loans coming from the left abstraction
-     - the borrows coming from the right abstraction
-     We will need to filter those (because the loan from the left will cancel
-     out with the borrow from the right)
-  *)
-  let intersect_concrete = MarkedBorrowId.Set.inter loans0 borrows1 in
-  let intersect_symbolic =
-    MarkedNormSymbProj.Set.inter loan_projs0 borrow_projs1
-  in
-
-  (* This function is called when handling shared loans: we have to apply a projection
-     marker to a set of borrow ids. *)
-  let filter_bids (pm : proj_marker) (bids : BorrowId.Set.t) : BorrowId.Set.t =
-    let bids =
-      BorrowId.Set.to_seq bids
-      |> Seq.map (fun x -> (pm, x))
-      |> MarkedBorrowId.Set.of_seq
-    in
-    let bids = MarkedBorrowId.Set.diff bids intersect_concrete in
-    sanity_check __FILE__ __LINE__ (not (MarkedBorrowId.Set.is_empty bids)) span;
-    MarkedBorrowId.Set.to_seq bids |> Seq.map snd |> BorrowId.Set.of_seq
-  in
-  let filter_concrete (bid : marked_borrow_id) : bool =
-    MarkedBorrowId.Set.mem bid intersect_concrete
-  in
-  let filter_symbolic (marked : marked_norm_symb_proj) : bool =
-    MarkedNormSymbProj.Set.mem marked intersect_symbolic
-  in
-
-  let borrow_is_merged id = MarkedBorrowId.Set.mem id !merged_borrows in
-  let borrow_proj_is_merged id =
-    MarkedNormSymbProj.Set.mem id !merged_borrow_projs
-  in
-  let set_borrow_as_merged id =
-    merged_borrows := MarkedBorrowId.Set.add id !merged_borrows
-  in
-  let set_borrow_proj_as_merged id =
-    merged_borrow_projs := MarkedNormSymbProj.Set.add id !merged_borrow_projs
-  in
-  let loan_is_merged id = MarkedBorrowId.Set.mem id !merged_loans in
-  let loan_proj_is_merged id =
-    MarkedNormSymbProj.Set.mem id !merged_loan_projs
-  in
-  let set_loan_as_merged id =
-    merged_loans := MarkedBorrowId.Set.add id !merged_loans
-  in
-  let set_loan_proj_as_merged id =
-    merged_loan_projs := MarkedNormSymbProj.Set.add id !merged_loan_projs
-  in
-
-  let module Merge
-      (Set : Collections.Set)
-      (Map : Collections.Map with type key = Set.elt)
-      (Marked : sig
-        type borrow_content
-        type loan_content
-
-        val to_string : Set.elt -> string
-        val borrow_is_merged : Set.elt -> bool
-        val loan_is_merged : Set.elt -> bool
-        val filter_marked : Set.elt -> bool
-        val set_borrow_as_merged : Set.elt -> unit
-        val set_loan_as_merged : Set.elt -> unit
-        val make_borrow_value : Set.elt -> borrow_content -> typed_avalue
-
-        (** Return the list of marked values to mark as merged - this is
-            important for shared loans: the loan itself is identified by a
-            single loan id, but we need to mark *all* the loan ids contained in
-            the set as merged. *)
-        val make_loan_value :
-          Set.elt -> loan_content -> Set.elt list * typed_avalue
-      end) =
-  struct
-    (* Iterate over all the borrows/loans found in the abstractions and merge them *)
-    let merge (borrow_to_content0 : Marked.borrow_content Map.t)
-        (borrow_to_content1 : Marked.borrow_content Map.t)
-        (loan_to_content0 : Marked.loan_content Map.t)
-        (loan_to_content1 : Marked.loan_content Map.t)
-        (borrows_loans : Set.elt borrow_or_loan list) : unit =
-      List.iter
-        (function
-          | Borrow marked ->
-              log#ltrace
-                (lazy
-                  (__FUNCTION__ ^ ": merging borrow: " ^ Marked.to_string marked));
-
-              (* Check if the borrow has already been merged - this can happen
-                 because we go through all the borrows/loans in [abs0] *then*
-                 all the borrows/loans in [abs1], and there may be duplicates
-                 between the two *)
-              if Marked.borrow_is_merged marked then ()
-              else (
-                Marked.set_borrow_as_merged marked;
-                (* Check if we need to filter it *)
-                if Marked.filter_marked marked then ()
-                else
-                  (* Lookup the contents *)
-                  let bc0 = Map.find_opt marked borrow_to_content0 in
-                  let bc1 = Map.find_opt marked borrow_to_content1 in
-                  (* Merge *)
-                  let av : typed_avalue =
-                    match (bc0, bc1) with
-                    | None, Some bc | Some bc, None ->
-                        Marked.make_borrow_value marked bc
-                    | Some _, Some _ ->
-                        (* Because of markers, the case where the same borrow is duplicated should
-                           be unreachable. Note, this is due to all shared borrows currently
-                           taking different ids, this will not be the case anymore when shared loans
-                           will take a unique id instead of a set *)
-                        craise __FILE__ __LINE__ span "Unreachable"
-                    | None, None -> craise __FILE__ __LINE__ span "Unreachable"
-                  in
-                  push_borrow_avalue av)
-          | Loan marked ->
-              if
-                (* Check if the loan has already been treated - it can happen
-                   for the same reason as for borrows, and also because shared
-                   loans contain sets of borrows (meaning that when taking care
-                   of one loan, we can merge several other loans at once).
-                *)
-                Marked.loan_is_merged marked
-              then ()
-              else (
-                (* Do not set the loans as merged yet *)
-                log#ltrace
-                  (lazy
-                    (__FUNCTION__ ^ ": merging loan: " ^ Marked.to_string marked));
-                (* Check if we need to filter it *)
-                if Marked.filter_marked marked then ()
-                else
-                  (* Lookup the contents *)
-                  let lc0 = Map.find_opt marked loan_to_content0 in
-                  let lc1 = Map.find_opt marked loan_to_content1 in
-                  (* Merge *)
-                  let ml, av =
-                    match (lc0, lc1) with
-                    | None, Some lc | Some lc, None ->
-                        Marked.make_loan_value marked lc
-                    | Some _, Some _ ->
-                        (* With projection markers, shared loans should not be duplicated *)
-                        craise __FILE__ __LINE__ span "Unreachable"
-                    | None, None -> craise __FILE__ __LINE__ span "Unreachable"
-                  in
-                  List.iter Marked.set_loan_as_merged ml;
-                  push_loan_avalue av))
-        borrows_loans
-  end in
-  (* First merge the concrete borrows/loans *)
-  let module MergeConcrete =
-    Merge (MarkedBorrowId.Set) (MarkedBorrowId.Map)
-      (struct
-        type borrow_content =
-          ( ty * Values.borrow_content,
-            ty * Values.aborrow_content )
-          concrete_or_abs
-
-        type loan_content =
-          (ty * Values.loan_content, ty * Values.aloan_content) concrete_or_abs
-
-        let to_string = MarkedBorrowId.to_string
-        let borrow_is_merged = borrow_is_merged
-        let loan_is_merged = loan_is_merged
-        let filter_marked = filter_concrete
-        let set_borrow_as_merged = set_borrow_as_merged
-        let set_loan_as_merged = set_loan_as_merged
-
-        let make_borrow_value _ bc : typed_avalue =
+  let add_avalue (av : typed_avalue) : unit =
+    match av.value with
+    | ALoan _ ->
+        (* We simply add the value: we only merge loans coming from the *left*
+         (this one comes from the right) with borrows coming from the *right*. *)
+        push_right_avalue av
+    | ABorrow bc ->
+        (* We may need to merge it *)
+        begin
           match bc with
-          | Concrete _ ->
-              (* This can happen only in case of nested borrows - a concrete
-                 borrow can only happen inside a shared loan *)
-              craise __FILE__ __LINE__ span "Unreachable"
-          | Abstract (ty, bc) -> { value = ABorrow bc; ty }
-
-        let make_loan_value _ lc : marked_borrow_id list * typed_avalue =
-          match lc with
-          | Concrete _ ->
-              (* This shouldn't happen because the avalues should
-                 have been destructured. *)
-              craise __FILE__ __LINE__ span "Unreachable"
-          | Abstract (ty, lc) -> (
-              match lc with
-              | ASharedLoan (pm, bids, sv, child) ->
-                  let bids = filter_bids pm bids in
-                  sanity_check __FILE__ __LINE__
-                    (not (BorrowId.Set.is_empty bids))
-                    span;
-                  sanity_check __FILE__ __LINE__ (is_aignored child.value) span;
-                  sanity_check __FILE__ __LINE__
-                    (not (value_has_loans_or_borrows (Some span) ctx sv.value))
-                    span;
-                  let marked_bids =
-                    List.map (fun bid -> (pm, bid)) (BorrowId.Set.elements bids)
-                  in
-                  let lc = ASharedLoan (pm, bids, sv, child) in
-                  (marked_bids, { value = ALoan lc; ty })
-              | AMutLoan (pm, bid, _) ->
-                  ([ (pm, bid) ], { value = ALoan lc; ty })
-              | AEndedMutLoan _
-              | AEndedSharedLoan _
-              | AIgnoredMutLoan _
-              | AEndedIgnoredMutLoan _
-              | AIgnoredSharedLoan _ ->
-                  (* The abstraction has been destructured, so those shouldn't appear *)
-                  craise __FILE__ __LINE__ span "Unreachable")
-      end)
+          | AMutBorrow (pm, bid, child) ->
+              sanity_check __FILE__ __LINE__ (is_aignored child.value) span;
+              let rec merge (avl : typed_avalue list) : typed_avalue list * bool
+                  =
+                match avl with
+                | [] -> ([], true)
+                | av :: avl -> (
+                    match av.value with
+                    | ALoan (AMutLoan (pm', bid', _))
+                      when pm = pm' && bid = bid' -> (avl, false)
+                    | _ ->
+                        let avl, keep = merge avl in
+                        (av :: avl, keep))
+              in
+              let avalues, keep = merge !left_avalues in
+              left_avalues := avalues;
+              if keep then push_right_avalue av else ()
+          | ASharedBorrow (pm, bid, _) ->
+              let rec keep (avl : typed_avalue list) : bool =
+                match avl with
+                | [] -> true
+                | av :: avl -> (
+                    match av.value with
+                    | ALoan (ASharedLoan (pm', bid', _, _))
+                      when pm = pm' && bid = bid' -> false
+                    | _ -> keep avl)
+              in
+              let keep = keep !left_avalues in
+              if keep then push_right_avalue av else ()
+          | AIgnoredMutBorrow _
+          | AEndedMutBorrow _
+          | AEndedSharedBorrow
+          | AEndedIgnoredMutBorrow _
+          | AProjSharedBorrow _ -> craise __FILE__ __LINE__ span "Unreachable"
+        end
+    | ASymbolic (pm, proj) -> begin
+        match proj with
+        | AProjLoans _ ->
+            (* We simply add the value: we only merge loans coming from the *left*
+               (this one comes from the right) with borrows coming from the *right*. *)
+            push_right_avalue av
+        | AProjBorrows { proj; loans } ->
+            sanity_check __FILE__ __LINE__ (loans = []) span;
+            (* Check if we need to eliminate it *)
+            let norm_proj_ty =
+              normalize_proj_ty abs1.regions.owned proj.proj_ty
+            in
+            if
+              MarkedNormSymbProjSet.mem
+                { pm; sv_id = proj.sv_id; norm_proj_ty }
+                !left_norm_proj_loans
+            then
+              (* Eliminate: we need to filter the left avalues to remove the loan projector *)
+              left_avalues :=
+                List.filter
+                  (fun (av : typed_avalue) ->
+                    match av.value with
+                    | ASymbolic (pm', proj') -> (
+                        match proj' with
+                        | AProjLoans { proj = proj'; _ } ->
+                            if
+                              proj'.sv_id = proj.sv_id && pm' = pm
+                              && normalize_proj_ty abs0.regions.owned
+                                   proj'.proj_ty
+                                 = norm_proj_ty
+                            then false
+                            else true
+                        | _ -> true)
+                    | _ -> true)
+                  !left_avalues
+            else
+              (* Do not eliminate *)
+              push_right_avalue av
+        | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty ->
+            craise __FILE__ __LINE__ span "Unreachable"
+      end
+    | AAdt _ | ABottom | AIgnored _ ->
+        craise __FILE__ __LINE__ span "Unreachable"
   in
-  (* Note that we first explore the borrows/loans of [abs0], because we
-     want to merge *into* this abstraction, and as a consequence we want to
-     preserve its structure as much as we can *)
-  let borrows_loans = List.append borrows_loans0 borrows_loans1 in
-  MergeConcrete.merge borrow_to_content0 borrow_to_content1 loan_to_content0
-    loan_to_content1 borrows_loans;
+  List.iter add_avalue abs1.avalues;
 
-  (* Do the same for the symbolic projections *)
-  let borrows_loans = List.append borrow_loan_projs0 borrow_loan_projs1 in
-  (* First merge the concrete borrows/loans *)
-  let module MergeSymbolic =
-    Merge (MarkedNormSymbProj.Set) (MarkedNormSymbProj.Map)
-      (struct
-        type borrow_content = ty * proj_marker * aproj
-        type loan_content = ty * proj_marker * aproj
-
-        let to_string = marked_norm_symb_proj_to_string ctx
-        let borrow_is_merged = borrow_proj_is_merged
-        let loan_is_merged = loan_proj_is_merged
-        let filter_marked = filter_symbolic
-        let set_borrow_as_merged = set_borrow_proj_as_merged
-        let set_loan_as_merged = set_loan_proj_as_merged
-
-        let make_borrow_value _ (ty, pm, proj) =
-          { value = ASymbolic (pm, proj); ty }
-
-        let make_loan_value marked (ty, pm, proj) =
-          ([ marked ], { value = ASymbolic (pm, proj); ty })
-      end)
-  in
-  MergeSymbolic.merge borrow_proj_to_content0 borrow_proj_to_content1
-    loan_proj_to_content0 loan_proj_to_content1 borrows_loans;
-
-  (* Reverse the avalues (we visited the loans/borrows in order, but pushed
-     new values at the beggining of the stack of avalues). Also note that we
-     put the borrows, then the loans. *)
-  List.rev !borrow_avalues @ List.rev !loan_avalues
+  (* We are done *)
+  !left_avalues @ List.rev !right_avalues
 
 (** Auxiliary function for {!merge_abstractions}.
 
@@ -1022,7 +654,7 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
       MB l0, MB l1
     ]} *)
 let merge_abstractions_merge_markers (span : Meta.span)
-    (merge_funs : merge_duplicates_funcs option) (ctx : eval_ctx)
+    (merge_funs : merge_duplicates_funcs) (ctx : eval_ctx)
     (owned_regions : RegionId.Set.t) (avalues : typed_avalue list) :
     typed_avalue list =
   log#ltrace
@@ -1030,451 +662,114 @@ let merge_abstractions_merge_markers (span : Meta.span)
       (__FUNCTION__ ^ ":\n- avalues:\n"
       ^ String.concat ", " (List.map (typed_avalue_to_string ctx) avalues)));
 
-  (* We linearly traverse the list of avalues created through the first phase. *)
-
-  (* Compute some relevant information *)
-  let {
-    loans = _;
-    borrows = _;
-    borrows_loans;
-    loan_to_content;
-    borrow_to_content;
-    loan_projs = _;
-    borrow_projs = _;
-    borrow_loan_projs;
-    loan_proj_to_content;
-    borrow_proj_to_content;
-  } =
-    compute_merge_abstraction_info span ctx owned_regions avalues
-  in
-
-  (* Utilities to accumulate the list of values resulting from the merge *)
-  let avalues = ref [] in
-  let push_avalue av =
-    log#ltrace
-      (lazy
-        (__FUNCTION__ ^ ": push_avalue: "
-        ^ typed_avalue_to_string ~span:(Some span) ctx av));
-    avalues := av :: !avalues
-  in
-
-  (* We will merge elements with the same borrow/loan id, but with different markers.
-     Hence, we only keep track of the id here: if [Borrow PLeft bid] has been merged
-     and we see [Borrow PRight bid], we should ignore [Borrow PRight bid] (because
-     when seeing [Borrow PLeft bid] we stored [Borrow PNone bid] into the list
-     of values to insert in the resulting abstraction). *)
-  let merged_borrows = ref BorrowId.Set.empty in
-  let merged_loans = ref BorrowId.Set.empty in
-  let merged_borrow_projs = ref NormSymbProj.Set.empty in
-  let merged_loan_projs = ref NormSymbProj.Set.empty in
-
-  let borrow_is_merged id = BorrowId.Set.mem id !merged_borrows in
-  let set_borrow_as_merged id =
-    merged_borrows := BorrowId.Set.add id !merged_borrows
-  in
-
-  let borrow_proj_is_merged m =
-    NormSymbProj.Set.mem
-      (marked_norm_symb_proj_to_unmarked m)
-      !merged_borrow_projs
-  in
-  let set_borrow_proj_as_merged m =
-    merged_borrow_projs :=
-      NormSymbProj.Set.add
-        (marked_norm_symb_proj_to_unmarked m)
-        !merged_borrow_projs
-  in
-
-  let loan_is_merged id = BorrowId.Set.mem id !merged_loans in
-  let set_loan_as_merged id =
-    merged_loans := BorrowId.Set.add id !merged_loans
-  in
-  let set_loans_as_merged ids = BorrowId.Set.iter set_loan_as_merged ids in
-
-  let loan_proj_is_merged m =
-    NormSymbProj.Set.mem
-      (marked_norm_symb_proj_to_unmarked m)
-      !merged_loan_projs
-  in
-  let set_loan_proj_as_merged m =
-    merged_loan_projs :=
-      NormSymbProj.Set.add
-        (marked_norm_symb_proj_to_unmarked m)
-        !merged_loan_projs
-  in
-
-  (* Recreates an avalue from a borrow_content. *)
-  let avalue_from_bc = function
-    | Concrete (_, _) ->
-        (* This can happen only in case of nested borrows, and should have been filtered during phase 1 *)
-        craise __FILE__ __LINE__ span "Unreachable"
-    | Abstract (ty, bc) -> { value = ABorrow bc; ty }
-  in
-
-  (* Recreates an avalue from a loan_content, and adds the set of loan ids as merged.
-     See the comment in the loop below for a detailed explanation *)
-  let avalue_from_lc = function
-    | Concrete (_, _) ->
-        (* This can happen only in case of nested borrows, and should have been filtered
-           during phase 1 *)
-        craise __FILE__ __LINE__ span "Unreachable"
-    | Abstract (ty, bc) ->
-        (match bc with
-        | AMutLoan (_, id, _) -> set_loan_as_merged id
-        | ASharedLoan (_, ids, _, _) -> set_loans_as_merged ids
-        | _ -> craise __FILE__ __LINE__ span "Unreachable");
-        { value = ALoan bc; ty }
-  in
-
-  (* Recreates an avalue from a borrow projector. *)
-  let avalue_from_borrow_proj ((ty, pm, proj) : ty * proj_marker * aproj) :
-      typed_avalue =
-    { value = ASymbolic (pm, proj); ty }
-  in
-
-  (* Recreates an avalue from a loan_content, and adds the set of loan ids as merged.
-     See the comment in the loop below for a detailed explanation *)
-  let avalue_from_loan_proj ((ty, pm, proj) : ty * proj_marker * aproj) :
-      typed_avalue =
-    { value = ASymbolic (pm, proj); ty }
-  in
-
+  (* We simply iterate through the list of avalues create during the first phase,
+     and progressively add them back: if we find a value with a complementary marker,
+     we merge the values together, otherwise we add it to the list of values. *)
   let complementary_markers pm0 pm1 =
     (pm0 = PLeft && pm1 = PRight) || (pm0 = PRight && pm1 = PLeft)
   in
 
   (* Some utility functions *)
-  (* Merge two aborrow contents - note that those contents must have the same id *)
-  let merge_aborrow_contents (ty0 : rty) (bc0 : aborrow_content) (ty1 : rty)
-      (bc1 : aborrow_content) : typed_avalue =
+  (* Merge two aborrow contents - return [Some] if they were merged into a single value,
+     return [None] otherwise.
+   *)
+  let try_merge_aborrow_contents (ty0 : rty) (bc0 : aborrow_content) (ty1 : rty)
+      (bc1 : aborrow_content) : typed_avalue option =
     match (bc0, bc1) with
-    | AMutBorrow (pm0, id0, child0), AMutBorrow (pm1, id1, child1) ->
+    | AMutBorrow (pm0, id0, child0), AMutBorrow (pm1, id1, child1)
+      when id0 = id1 ->
         (* Sanity-check of the precondition *)
         sanity_check __FILE__ __LINE__ (complementary_markers pm0 pm1) span;
-        sanity_check __FILE__ __LINE__ (id0 = id1) span;
-        (Option.get merge_funs).merge_amut_borrows id0 ty0 pm0 child0 ty1 pm1
-          child1
-    | ASharedBorrow (pm0, id0), ASharedBorrow (pm1, id1) ->
+        Some (merge_funs.merge_amut_borrows id0 ty0 pm0 child0 ty1 pm1 child1)
+    | ASharedBorrow (pm0, id0, sid0), ASharedBorrow (pm1, id1, sid1)
+      when id0 = id1 ->
         (* Sanity-check of the precondition *)
         sanity_check __FILE__ __LINE__ (complementary_markers pm0 pm1) span;
-        sanity_check __FILE__ __LINE__ (id0 = id1) span;
-        (Option.get merge_funs).merge_ashared_borrows id0 ty0 pm0 ty1 pm1
-    | AProjSharedBorrow _, AProjSharedBorrow _ ->
-        (* Unreachable because requires nested borrows *)
-        craise __FILE__ __LINE__ span "Unreachable"
+        Some (merge_funs.merge_ashared_borrows id0 ty0 pm0 sid0 ty1 pm1 sid1)
     | _ ->
-        (* Unreachable because those cases are ignored (ended/ignored borrows)
-           or inconsistent *)
-        craise __FILE__ __LINE__ span "Unreachable"
+        (* Nothing to merge *)
+        None
   in
 
-  let merge_g_borrow_contents (bc0 : g_borrow_content_with_ty)
-      (bc1 : g_borrow_content_with_ty) : typed_avalue =
-    match (bc0, bc1) with
-    | Concrete _, Concrete _ ->
-        (* This can happen only in case of nested borrows - the borrow has
-           to appear inside a shared loan. *)
-        craise __FILE__ __LINE__ span "Unreachable"
-    | Abstract (ty0, bc0), Abstract (ty1, bc1) ->
-        merge_aborrow_contents ty0 bc0 ty1 bc1
-    | Concrete _, Abstract _ | Abstract _, Concrete _ ->
-        (* TODO: is it really unreachable? *)
-        craise __FILE__ __LINE__ span "Unreachable"
-  in
-
-  let loan_content_to_ids (lc : g_loan_content_with_ty) : BorrowId.Set.t =
-    match lc with
-    | Abstract (_, lc) -> (
-        match lc with
-        | AMutLoan (_, id, _) -> BorrowId.Set.singleton id
-        | ASharedLoan (_, ids, _, _) -> ids
-        | _ ->
-            (* Unreachable because those cases are ignored (ended/ignored borrows)
-               or inconsistent *)
-            craise __FILE__ __LINE__ span "Unreachable")
-    | Concrete _ ->
-        (* Can only happen with nested borrows *)
-        craise __FILE__ __LINE__ span "Unreachable"
-  in
-
-  let merge_aloan_contents (ty0 : rty) (lc0 : aloan_content) (ty1 : rty)
-      (lc1 : aloan_content) : typed_avalue =
+  let try_merge_aloan_contents (ty0 : rty) (lc0 : aloan_content) (ty1 : rty)
+      (lc1 : aloan_content) : typed_avalue option =
     match (lc0, lc1) with
-    | AMutLoan (pm0, id0, child0), AMutLoan (pm1, id1, child1) ->
+    | AMutLoan (pm0, id0, child0), AMutLoan (pm1, id1, child1) when id0 = id1 ->
         (* Sanity-check of the precondition *)
         sanity_check __FILE__ __LINE__ (complementary_markers pm0 pm1) span;
-        sanity_check __FILE__ __LINE__ (id0 = id1) span;
         (* Merge *)
-        (Option.get merge_funs).merge_amut_loans id0 ty0 pm0 child0 ty1 pm1
-          child1
-    | ASharedLoan (pm0, ids0, sv0, child0), ASharedLoan (pm1, ids1, sv1, child1)
-      ->
+        Some (merge_funs.merge_amut_loans id0 ty0 pm0 child0 ty1 pm1 child1)
+    | ASharedLoan (pm0, id0, sv0, child0), ASharedLoan (pm1, id1, sv1, child1)
+      when id0 = id1 ->
         (* Check that the sets of ids are the same - if it is not the case, it
            means we actually need to merge more than 2 avalues: we ignore this
            case for now *)
         sanity_check __FILE__ __LINE__ (complementary_markers pm0 pm1) span;
-        sanity_check __FILE__ __LINE__ (BorrowId.Set.equal ids0 ids1) span;
-        let ids = ids0 in
         (* Merge *)
-        (Option.get merge_funs).merge_ashared_loans ids ty0 pm0 sv0 child0 ty1
-          pm1 sv1 child1
+        Some
+          (merge_funs.merge_ashared_loans id0 ty0 pm0 sv0 child0 ty1 pm1 sv1
+             child1)
     | _ ->
-        (* Unreachable because those cases are ignored (ended/ignored borrows)
-           or inconsistent *)
-        craise __FILE__ __LINE__ span "Unreachable"
+        (* Nothing to merge *)
+        None
   in
 
-  (* Note that because we may filter ids from a set of id, this function has
-     to register the merged loan ids: the caller doesn't do it (contrary to
-     the borrow case) *)
-  let merge_g_loan_contents (lc0 : g_loan_content_with_ty)
-      (lc1 : g_loan_content_with_ty) : typed_avalue =
-    match (lc0, lc1) with
-    | Concrete _, Concrete _ ->
-        (* This can not happen: the values should have been destructured *)
-        craise __FILE__ __LINE__ span "Unreachable"
-    | Abstract (ty0, lc0), Abstract (ty1, lc1) ->
-        merge_aloan_contents ty0 lc0 ty1 lc1
-    | Concrete _, Abstract _ | Abstract _, Concrete _ ->
-        (* TODO: is it really unreachable? *)
-        craise __FILE__ __LINE__ span "Unreachable"
-  in
-
-  let merge_borrow_projs ((ty0, pm0, proj0) : ty * proj_marker * aproj)
-      ((ty1, pm1, proj1) : ty * proj_marker * aproj) : typed_avalue =
+  let try_merge_projs ((ty0, pm0, proj0) : ty * proj_marker * aproj)
+      ((ty1, pm1, proj1) : ty * proj_marker * aproj) : typed_avalue option =
     sanity_check __FILE__ __LINE__ (complementary_markers pm0 pm1) span;
     match (proj0, proj1) with
-    | AProjBorrows proj0, AProjBorrows proj1 ->
-        (* Sanity-check of the precondition *)
-        sanity_check __FILE__ __LINE__
-          (proj0.proj.sv_id = proj1.proj.sv_id)
-          span;
+    | AProjBorrows proj0, AProjBorrows proj1
+      when projections_intersect span owned_regions proj0.proj.proj_ty
+             owned_regions proj1.proj.proj_ty ->
         (* Merge *)
-        (Option.get merge_funs).merge_aborrow_projs ty0 pm0 proj0 ty1 pm1 proj1
-    | _ ->
-        (* Unreachable because those cases are ignored (ended/ignored borrows)
-           or inconsistent *)
-        craise __FILE__ __LINE__ span "Unreachable"
-  in
-
-  let merge_loan_projs ((ty0, pm0, proj0) : ty * proj_marker * aproj)
-      ((ty1, pm1, proj1) : ty * proj_marker * aproj) : typed_avalue =
-    sanity_check __FILE__ __LINE__ (complementary_markers pm0 pm1) span;
-    match (proj0, proj1) with
-    | AProjLoans proj0, AProjLoans proj1 ->
-        (* Sanity-check of the precondition *)
-        sanity_check __FILE__ __LINE__
-          (proj0.proj.sv_id = proj1.proj.sv_id)
-          span;
+        Some (merge_funs.merge_aborrow_projs ty0 pm0 proj0 ty1 pm1 proj1)
+    | AProjLoans proj0, AProjLoans proj1
+      when projections_intersect span owned_regions proj0.proj.proj_ty
+             owned_regions proj1.proj.proj_ty ->
         (* Merge *)
-        (Option.get merge_funs).merge_aloan_projs ty0 pm0 proj0 ty1 pm1 proj1
+        Some (merge_funs.merge_aloan_projs ty0 pm0 proj0 ty1 pm1 proj1)
     | _ ->
-        (* Unreachable because those cases are ignored (ended/ignored borrows)
-           or inconsistent *)
-        craise __FILE__ __LINE__ span "Unreachable"
+        (* Nothing to merge *)
+        None
   in
 
-  let invert_proj_marker = function
-    | PNone -> craise __FILE__ __LINE__ span "Unreachable"
-    | PLeft -> PRight
-    | PRight -> PLeft
+  (* Attempt to merge two avalues, if they are mergeable.
+
+     Return [Some] with the result of the merge if it occurred, and [None]
+     if the two values can't be merged (because they are of two different
+     kinds for instance). *)
+  let try_merge_avalues (av0 : typed_avalue) (av1 : typed_avalue) :
+      typed_avalue option =
+    match (av0.value, av1.value) with
+    | ALoan c0, ALoan c1 -> try_merge_aloan_contents av0.ty c0 av1.ty c1
+    | ABorrow c0, ABorrow c1 -> try_merge_aborrow_contents av0.ty c0 av1.ty c1
+    | ASymbolic (pm0, proj0), ASymbolic (pm1, proj1) ->
+        try_merge_projs (av0.ty, pm0, proj0) (av1.ty, pm1, proj1)
+    | _ -> None
   in
 
-  (* We now iter over all the accumulated elements. For each element with a marker
-     (i.e., not [PNone]), we attempt to find the dual element in the rest of the list. If so,
-     we remove both elements, and insert the same element but with no marker.
-
-     Importantly, attempting the merge when first seeing a marked element allows us to preserve
-     the structure of the abstraction we are merging into (i.e., abs0). Note that during phase 1,
-     we traversed the borrow/loans of the abs 0 first, and hence these elements are at the top of
-     the list. *)
-  let module Merge
-      (Set : Collections.Set)
-      (Map : Collections.Map with type key = Set.elt)
-      (Marked : sig
-        type borrow_content
-        type loan_content
-        type loan_id_set
-
-        val get_marker : Set.elt -> proj_marker
-        val invert_marker : Set.elt -> Set.elt
-        val borrow_is_merged : Set.elt -> bool
-        val loan_is_merged : Set.elt -> bool
-        val set_borrow_as_merged : Set.elt -> unit
-        val set_loans_as_merged : loan_id_set -> unit
-        val loan_content_to_ids : loan_content -> loan_id_set
-        val avalue_from_bc : borrow_content -> typed_avalue
-        val avalue_from_lc : loan_content -> typed_avalue
-
-        val merge_borrow_contents :
-          borrow_content -> borrow_content -> typed_avalue
-
-        val merge_loan_contents : loan_content -> loan_content -> typed_avalue
-      end) =
-  struct
-    let merge (borrow_to_content : Marked.borrow_content Map.t)
-        (loan_to_content : Marked.loan_content Map.t) borrows_loans =
-      List.iter
-        (function
-          | Borrow marked ->
-              (* Case disjunction: no marker/marker *)
-              if Marked.get_marker marked = PNone then begin
-                sanity_check __FILE__ __LINE__
-                  (not (Marked.borrow_is_merged marked))
-                  span;
-                (* This element has no marker. We do not filter it, hence we retrieve the
-                   contents and inject it into the avalues list *)
-                let bc = Map.find marked borrow_to_content in
-                push_avalue (Marked.avalue_from_bc bc);
-                (* Setting the borrow as merged is not really necessary but we do it
-                   for consistency, and this allows us to do some sanity checks. *)
-                Marked.set_borrow_as_merged marked
-              end
-              else if
-                (* Check if the borrow has already been merged. If so, it means we already
-                   added the merged value to the avalues list, and we can thus skip it *)
-                Marked.borrow_is_merged marked
-              then ()
-              else (
-                (* Not merged: set it as merged *)
-                Marked.set_borrow_as_merged marked;
-                (* Lookup the content of the borrow *)
-                let bc0 = Map.find marked borrow_to_content in
-                (* Check if there exists the same borrow but with the complementary marker *)
-                let obc1 =
-                  Map.find_opt (Marked.invert_marker marked) borrow_to_content
-                in
-                match obc1 with
-                | None ->
-                    (* No dual element found, we keep the current one in the list of avalues,
-                       with the same marker *)
-                    push_avalue (Marked.avalue_from_bc bc0)
-                | Some bc1 ->
-                    (* We have borrows with left and right markers in the environment.
-                       We merge their values, and push the result to the list of avalues.
-                       The merge will also remove the projection marker *)
-                    push_avalue (Marked.merge_borrow_contents bc0 bc1))
-          | Loan marked -> (
-              if
-                (* Case disjunction: no marker/marker *)
-                Marked.get_marker marked = PNone
-              then (
-                if
-                  (* Since we currently have a set of loan ids associated to a shared_borrow, we can
-                     have several loan ids associated to the same element. Hence, we need to ensure
-                     that we did not previously add the corresponding element.
-
-                     To do so, we use the loan id merged set for both marked and unmarked values.
-                     The assumption is that we should not have the same loan id for both an unmarked
-                     element and a marked element. It might be better to sanity-check this.
-
-                     Adding the loan id to the merged set will be done inside avalue_from_lc.
-
-                     Remark: Once we move to a single loan id per shared_loan, this should not
-                     be needed anymore.
-                  *)
-                  Marked.loan_is_merged marked
-                then ()
-                else
-                  let lc = Map.find marked loan_to_content in
-                  push_avalue (Marked.avalue_from_lc lc);
-                  (* Mark as merged *)
-                  let ids = Marked.loan_content_to_ids lc in
-                  Marked.set_loans_as_merged ids)
-              else if
-                (* Check if the loan has already been merged. If so, we skip it. *)
-                Marked.loan_is_merged marked
-              then ()
-              else
-                let lc0 = Map.find marked loan_to_content in
-                let olc1 =
-                  Map.find_opt (Marked.invert_marker marked) loan_to_content
-                in
-                (* Mark as merged *)
-                let ids0 = Marked.loan_content_to_ids lc0 in
-                Marked.set_loans_as_merged ids0;
-                match olc1 with
-                | None ->
-                    (* No dual element found, we keep the current one with the same marker *)
-                    push_avalue (Marked.avalue_from_lc lc0)
-                | Some lc1 ->
-                    push_avalue (Marked.merge_loan_contents lc0 lc1);
-                    (* Mark as merged *)
-                    let ids1 = Marked.loan_content_to_ids lc1 in
-                    Marked.set_loans_as_merged ids1))
-        borrows_loans
-  end in
-  (* Merge the concrete borrows/loans *)
-  let module MergeConcrete =
-    Merge (MarkedBorrowId.Set) (MarkedBorrowId.Map)
-      (struct
-        type borrow_content = g_borrow_content_with_ty
-        type loan_content = g_loan_content_with_ty
-        type loan_id_set = Values.loan_id_set
-
-        let get_marker (pm, _) = pm
-        let invert_marker (pm, bid) = (invert_proj_marker pm, bid)
-        let borrow_is_merged (_, bid) = borrow_is_merged bid
-        let loan_is_merged (_, bid) = loan_is_merged bid
-        let set_borrow_as_merged (_, bid) = set_borrow_as_merged bid
-        let set_loans_as_merged bids = set_loans_as_merged bids
-        let loan_content_to_ids = loan_content_to_ids
-        let avalue_from_bc = avalue_from_bc
-        let avalue_from_lc = avalue_from_lc
-        let merge_borrow_contents = merge_g_borrow_contents
-        let merge_loan_contents = merge_g_loan_contents
-      end)
+  let merged = ref [] in
+  let add_avalue (av : typed_avalue) : unit =
+    let rec add avl =
+      match avl with
+      | [] -> [ av ]
+      | av' :: avl -> (
+          match try_merge_avalues av av' with
+          | None ->
+              (* No merge: continue *)
+              av' :: add avl
+          | Some av'' ->
+              (* The two values were merged together: introduce the merged value
+               and stop the exploration *)
+              av'' :: avl)
+    in
+    merged := add !merged
   in
-  MergeConcrete.merge borrow_to_content loan_to_content borrows_loans;
 
-  (* Merge the symbolic borrows/loans *)
-  let module MergeSymbolic =
-    Merge (MarkedNormSymbProj.Set) (MarkedNormSymbProj.Map)
-      (struct
-        type borrow_content = ty * proj_marker * aproj
-        type loan_content = ty * proj_marker * aproj
-        type loan_id_set = marked_norm_symb_proj
+  List.iter add_avalue avalues;
 
-        let get_marker marked = marked.pm
-
-        let invert_marker marked =
-          { marked with pm = invert_proj_marker marked.pm }
-
-        let borrow_is_merged marked = borrow_proj_is_merged marked
-        let loan_is_merged marked = loan_proj_is_merged marked
-        let set_borrow_as_merged marked = set_borrow_proj_as_merged marked
-        let set_loans_as_merged bids = set_loan_proj_as_merged bids
-
-        let loan_content_to_ids ((_, pm, proj) : ty * proj_marker * aproj) :
-            marked_norm_symb_proj =
-          match proj with
-          | AProjLoans { proj; _ } ->
-              let norm_proj_ty = normalize_proj_ty owned_regions proj.proj_ty in
-              { pm; sv_id = proj.sv_id; norm_proj_ty }
-          | _ -> internal_error __FILE__ __LINE__ span
-
-        let avalue_from_bc = avalue_from_borrow_proj
-        let avalue_from_lc = avalue_from_loan_proj
-        let merge_borrow_contents = merge_borrow_projs
-        let merge_loan_contents = merge_loan_projs
-      end)
-  in
-  MergeSymbolic.merge borrow_proj_to_content loan_proj_to_content
-    borrow_loan_projs;
-
-  (* Reorder the avalues. We want the avalues to have the borrows first, then
-     the loans (this structure is more stable when we merge abstractions together,
-     meaning it is easier to find fixed points).
-  *)
-  let avalues = List.rev !avalues in
-  let is_borrow (av : typed_avalue) : bool =
-    match av.value with
-    | ABorrow _ | ASymbolic (_, AProjBorrows _) -> true
-    | ALoan _ | ASymbolic (_, AProjLoans _) -> false
-    | _ -> craise __FILE__ __LINE__ span "Unexpected"
-  in
-  let aborrows, aloans = List.partition is_borrow avalues in
-  List.append aborrows aloans
+  (* We're done *)
+  !merged
 
 (** Auxiliary function.
 
@@ -1515,17 +810,46 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
     { owned }
   in
 
-  (* Phase 1: simplify the loans coming from the left abstraction with
-     the borrows coming from the right abstraction. *)
-  let avalues =
-    merge_abstractions_merge_loan_borrow_pairs span merge_funs ctx abs0 abs1
+  (* Phase 1: split the markers (note that the presence of markers is controlled
+     by [merge_funs]: if it is [Some] then there can be markers, otherwise there
+     can't be).
+
+     We do so because it makes it easier to implement the merge, in cases like this:
+     {[
+       abs0 { ML l0 } |><| abs1 { |MB l0|, MB l1 }
+     ]}
+
+     If we split before merging we get:
+     {[
+       abs0 { |ML l0|, ︙ML l0︙ } |><| abs1 { |MB l0|, |MB l1|, ︙MB l1︙ }
+           ~~> merge
+       abs2 { ︙ML l0︙, |MB l1|, ︙MB l1︙ }
+           ~~> simplify the complementary markers
+       abs2 { ︙ML l0︙, MB l1 }
+     ]}
+  *)
+  let allow_markers = Option.is_some merge_funs in
+  let abs0, abs1 =
+    if allow_markers then
+      (abs_split_markers span ctx abs0, abs_split_markers span ctx abs1)
+    else (abs0, abs1)
   in
 
-  (* Phase 2: we now remove markers, by merging pairs of the same element with
+  (* Phase 2: simplify the loans coming from the left abstraction with
+     the borrows coming from the right abstraction. *)
+  let avalues =
+    merge_abstractions_merge_loan_borrow_pairs span ~allow_markers ctx abs0 abs1
+  in
+
+  (* Phase 3: we now remove markers, by merging pairs of the same element with
      different markers into one element. To do so, we linearly traverse the list
      of avalues created through the first phase. *)
   let avalues =
-    merge_abstractions_merge_markers span merge_funs ctx regions.owned avalues
+    match merge_funs with
+    | None -> avalues
+    | Some merge_funs ->
+        merge_abstractions_merge_markers span merge_funs ctx regions.owned
+          avalues
   in
 
   (* Create the new abstraction *)
@@ -1636,7 +960,7 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
     *)
     let get_borrow_id (av : typed_avalue) : BorrowId.id =
       match av.value with
-      | ABorrow (AMutBorrow (pm, bid, _) | ASharedBorrow (pm, bid)) ->
+      | ABorrow (AMutBorrow (pm, bid, _) | ASharedBorrow (pm, bid, _)) ->
           sanity_check __FILE__ __LINE__ (allow_markers || pm = PNone) span;
           bid
       | _ -> craise __FILE__ __LINE__ span "Unexpected"
@@ -1646,9 +970,9 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
       | ALoan (AMutLoan (pm, lid, _)) ->
           sanity_check __FILE__ __LINE__ (allow_markers || pm = PNone) span;
           lid
-      | ALoan (ASharedLoan (pm, lids, _, _)) ->
+      | ALoan (ASharedLoan (pm, lid, _, _)) ->
           sanity_check __FILE__ __LINE__ (allow_markers || pm = PNone) span;
-          BorrowId.Set.min_elt lids
+          lid
       | _ -> craise __FILE__ __LINE__ span "Unexpected"
     in
     let get_symbolic_id (av : typed_avalue) : SymbolicValueId.id =

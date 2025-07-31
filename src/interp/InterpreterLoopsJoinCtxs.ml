@@ -38,8 +38,10 @@ let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
      the new region abstraction *)
   let {
     abs_to_borrows = nabs_to_borrows;
+    abs_to_non_unique_borrows = nabs_to_non_unique_borrows;
     abs_to_loans = nabs_to_loans;
     borrow_to_abs = borrow_to_nabs;
+    non_unique_borrow_to_abs = non_unique_borrow_to_nabs;
     loan_to_abs = loan_to_nabs;
     abs_to_borrow_projs = nabs_to_borrow_projs;
     abs_to_loan_projs = nabs_to_loan_projs;
@@ -53,8 +55,10 @@ let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
   let {
     abs_ids;
     abs_to_borrows;
+    abs_to_non_unique_borrows;
     abs_to_loans;
     borrow_to_abs;
+    non_unique_borrow_to_abs;
     loan_to_abs;
     abs_to_borrow_projs;
     abs_to_loan_projs;
@@ -106,12 +110,22 @@ let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
   let module UpdateMarkedBorrowId =
     UpdateToAbs (MarkedBorrowId.Map) (MarkedBorrowId.Set)
   in
+  let module UpdateMarkedUniqueBorrowId =
+    UpdateToAbs (MarkedUniqueBorrowId.Map) (MarkedUniqueBorrowId.Set)
+  in
+  let module UpdateMarkedLoanId =
+    UpdateToAbs (MarkedLoanId.Map) (MarkedLoanId.Set)
+  in
   let borrow_to_abs =
-    UpdateMarkedBorrowId.update_to_abs abs_to_borrows borrow_to_nabs
+    UpdateMarkedUniqueBorrowId.update_to_abs abs_to_borrows borrow_to_nabs
       borrow_to_abs
   in
+  let non_unique_borrow_to_abs =
+    UpdateMarkedBorrowId.update_to_abs abs_to_non_unique_borrows
+      non_unique_borrow_to_nabs non_unique_borrow_to_abs
+  in
   let loan_to_abs =
-    UpdateMarkedBorrowId.update_to_abs abs_to_loans loan_to_nabs loan_to_abs
+    UpdateMarkedLoanId.update_to_abs abs_to_loans loan_to_nabs loan_to_abs
   in
   let module UpdateSymbProj =
     UpdateToAbs (MarkedNormSymbProj.Map) (MarkedNormSymbProj.Set)
@@ -139,6 +153,9 @@ let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
       m
   in
   let abs_to_borrows = update_abs_to nabs_to_borrows abs_to_borrows in
+  let abs_to_non_unique_borrows =
+    update_abs_to nabs_to_non_unique_borrows abs_to_non_unique_borrows
+  in
   let abs_to_loans = update_abs_to nabs_to_loans abs_to_loans in
   let abs_to_borrow_projs =
     update_abs_to nabs_to_borrow_projs abs_to_borrow_projs
@@ -148,8 +165,10 @@ let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
     {
       abs_ids;
       abs_to_borrows;
+      abs_to_non_unique_borrows;
       abs_to_loans;
       borrow_to_abs;
+      non_unique_borrow_to_abs;
       loan_to_abs;
       borrow_proj_to_abs;
       loan_proj_to_abs;
@@ -405,7 +424,7 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
     IterMerge (MarkedBorrowId.Map) (MarkedBorrowId.Set)
       (struct
         let get_marker (pm, _) = pm
-        let get_borrow_to_abs info = info.borrow_to_abs
+        let get_borrow_to_abs info = info.non_unique_borrow_to_abs
         let get_to_loans info = info.abs_to_loans
       end)
   in
@@ -609,9 +628,9 @@ let collapse_ctx_collapse (span : Meta.span) (loop_id : LoopId.id)
         let get_marker (v : marked_borrow_id) = fst v
         let unmark (_, bid) = (PNone, bid)
         let invert_proj_marker (pm, bid) = (invert_proj_marker pm, bid)
-        let get_to_borrows info = info.abs_to_borrows
+        let get_to_borrows info = info.abs_to_non_unique_borrows
         let get_to_loans info = info.abs_to_loans
-        let get_borrow_to_abs info = info.borrow_to_abs
+        let get_borrow_to_abs info = info.non_unique_borrow_to_abs
         let get_loan_to_abs info = info.loan_to_abs
       end)
   in
@@ -752,7 +771,7 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     { value; ty }
   in
 
-  let merge_ashared_borrows id ty0 _pm0 ty1 _pm1 =
+  let merge_ashared_borrows id ty0 _pm0 _ ty1 _pm1 _ =
     (* Sanity checks *)
     let _ =
       let _, ty0, _ = ty_as_ref ty0 in
@@ -767,7 +786,9 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
 
     (* Same remarks as for [merge_amut_borrows] *)
     let ty = ty0 in
-    let value = ABorrow (ASharedBorrow (PNone, id)) in
+    let value =
+      ABorrow (ASharedBorrow (PNone, id, fresh_shared_borrow_id ()))
+    in
     { value; ty }
   in
 
@@ -1169,9 +1190,9 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
         let ctx =
           match err with
           | LoanInRight bid ->
-              InterpreterBorrows.end_borrow_no_synth config span bid ctx
+              InterpreterBorrows.end_loan_no_synth config span bid ctx
           | LoansInRight bids ->
-              InterpreterBorrows.end_borrows_no_synth config span bids ctx
+              InterpreterBorrows.end_loans_no_synth config span bids ctx
           | AbsInRight _ | AbsInLeft _ | LoanInLeft _ | LoansInLeft _ ->
               craise __FILE__ __LINE__ span "Unexpected"
         in

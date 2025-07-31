@@ -13,17 +13,17 @@ open InterpreterLoopsCore
     to leave unchanged, we introduce some reborrows in the following way:
 
     {[
-      abs'0 { SL {l0, l1} s0 }
-      l0 -> SB l0
-      l1 -> SB l1
+      abs'0 { SL l s0 }
+      x0 -> SB l
+      x1 -> SB l
 
         ~~>
 
-      abs'0 { SL {l0, l1} s0 }
-      l0 -> SB l2
-      l1 -> SB l3
-      abs'2 { SB l0, SL {l2} s2 }
-      abs'3 { SB l1, SL {l3} s3 }
+      abs'0 { SL l0 s0 }
+      x0 -> SB l1
+      x1 -> SB l2
+      abs'1 { SB l0, SL l1 s1 }
+      abs'2 { SB l1, SL l2 s2 }
     ]}
 
     This is sound but leads to information loss. This way, the fixed abstraction
