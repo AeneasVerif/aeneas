@@ -738,14 +738,16 @@ let merge_abstractions_merge_markers (span : Meta.span)
       ((ty1, pm1, proj1) : ty * proj_marker * aproj) : typed_avalue option =
     match (proj0, proj1) with
     | AProjBorrows proj0, AProjBorrows proj1
-      when projections_intersect span owned_regions proj0.proj.proj_ty
-             owned_regions proj1.proj.proj_ty ->
+      when proj0.proj.sv_id = proj1.proj.sv_id
+           && projections_intersect span owned_regions proj0.proj.proj_ty
+                owned_regions proj1.proj.proj_ty ->
         sanity_check __FILE__ __LINE__ (complementary_markers pm0 pm1) span;
         (* Merge *)
         Some (merge_funs.merge_aborrow_projs ty0 pm0 proj0 ty1 pm1 proj1)
     | AProjLoans proj0, AProjLoans proj1
-      when projections_intersect span owned_regions proj0.proj.proj_ty
-             owned_regions proj1.proj.proj_ty ->
+      when proj0.proj.sv_id = proj1.proj.sv_id
+           && projections_intersect span owned_regions proj0.proj.proj_ty
+                owned_regions proj1.proj.proj_ty ->
         sanity_check __FILE__ __LINE__ (complementary_markers pm0 pm1) span;
         (* Merge *)
         Some (merge_funs.merge_aloan_projs ty0 pm0 proj0 ty1 pm1 proj1)
