@@ -192,7 +192,7 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
       span;
     (* Insert the borrow id *)
     sanity_check __FILE__ __LINE__
-      (info.loan_kind = RMut || not info.found_borrow)
+      (info.loan_kind = RShared || not info.found_borrow)
       span;
     sanity_check __FILE__ __LINE__
       (match sid with
