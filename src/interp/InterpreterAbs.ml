@@ -113,11 +113,11 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
         sanity_check __FILE__ __LINE__ allow_borrows span;
         (* Convert the borrow content *)
         match bc with
-        | VSharedBorrow bid ->
+        | VSharedBorrow (bid, sid) ->
             cassert __FILE__ __LINE__ (ty_no_regions ref_ty) span
               "Nested borrows are not supported yet";
             let ty = TRef (RVar (Free r_id), ref_ty, kind) in
-            let value = ABorrow (ASharedBorrow (PNone, bid)) in
+            let value = ABorrow (ASharedBorrow (PNone, bid, sid)) in
             ([ { value; ty } ], v)
         | VMutBorrow (bid, bv) ->
             (* We don't support nested borrows for now *)
@@ -311,9 +311,6 @@ let compute_merge_abstraction_info (span : Meta.span) (ctx : eval_ctx)
   let push_loan pm id (lc : g_loan_content_with_ty) =
     PushConcrete.push loans lc loan_to_content false borrows_loans (pm, id)
   in
-  let push_loans pm ids lc : unit =
-    BorrowId.Set.iter (fun id -> push_loan pm id lc) ids
-  in
   let push_borrow pm id (bc : g_borrow_content_with_ty) =
     PushConcrete.push borrows bc borrow_to_content true borrows_loans (pm, id)
   in
@@ -365,7 +362,7 @@ let compute_merge_abstraction_info (span : Meta.span) (ctx : eval_ctx)
         in
         (* Register the loans *)
         (match lc with
-        | ASharedLoan (pm, bids, _, _) -> push_loans pm bids (Abstract (ty, lc))
+        | ASharedLoan (pm, bid, _, _) -> push_loan pm bid (Abstract (ty, lc))
         | AMutLoan (pm, bid, _) -> push_loan pm bid (Abstract (ty, lc))
         | AEndedMutLoan _
         | AEndedSharedLoan _

@@ -155,17 +155,19 @@ let mk_aproj_borrows_from_symbolic_value (span : Meta.span)
   else AEmpty
 
 (** TODO: move *)
-let borrow_is_asb (bid : BorrowId.id) (asb : abstract_shared_borrow) : bool =
+let borrow_is_asb (bid : SharedBorrowId.id) (asb : abstract_shared_borrow) :
+    bool =
   match asb with
-  | AsbBorrow bid' -> bid' = bid
+  | AsbBorrow (_, bid') -> bid' = bid
   | AsbProjReborrows _ -> false
 
 (** TODO: move *)
-let borrow_in_asb (bid : BorrowId.id) (asb : abstract_shared_borrows) : bool =
+let borrow_in_asb (bid : SharedBorrowId.id) (asb : abstract_shared_borrows) :
+    bool =
   List.exists (borrow_is_asb bid) asb
 
 (** TODO: move *)
-let remove_borrow_from_asb (span : Meta.span) (bid : BorrowId.id)
+let remove_borrow_from_asb (span : Meta.span) (bid : SharedBorrowId.id)
     (asb : abstract_shared_borrows) : abstract_shared_borrows =
   let removed = ref 0 in
   let asb =

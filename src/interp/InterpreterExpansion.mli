@@ -11,16 +11,11 @@ type proj_kind = LoanProj | BorrowProj
 
     This function does *not* update the synthesis. *)
 val apply_symbolic_expansion_non_borrow :
-  config ->
-  Meta.span ->
-  symbolic_value ->
-  eval_ctx ->
-  symbolic_expansion ->
-  eval_ctx
+  Meta.span -> symbolic_value -> eval_ctx -> symbolic_expansion -> eval_ctx
 
 (** Expand a symhbolic value, without branching *)
 val expand_symbolic_value_no_branching :
-  config -> Meta.span -> symbolic_value -> SA.mplace option -> cm_fun
+  Meta.span -> symbolic_value -> SA.mplace option -> cm_fun
 
 (** Expand a symbolic enumeration (leads to branching if the enumeration has
     more than one variant).
@@ -31,7 +26,6 @@ val expand_symbolic_value_no_branching :
     - [sv]
     - [sv_place] *)
 val expand_symbolic_adt :
-  config ->
   Meta.span ->
   symbolic_value ->
   SA.mplace option ->
@@ -42,7 +36,6 @@ val expand_symbolic_adt :
 
     Parameters: see {!expand_symbolic_adt}. *)
 val expand_symbolic_bool :
-  config ->
   Meta.span ->
   symbolic_value ->
   SA.mplace option ->
@@ -64,7 +57,6 @@ val expand_symbolic_bool :
     otherwise branch) and an additional evaluation context for the otherwise
     branch. *)
 val expand_symbolic_int :
-  config ->
   Meta.span ->
   symbolic_value ->
   SA.mplace option ->
@@ -77,4 +69,4 @@ val expand_symbolic_int :
 (** If this mode is activated through the [config], greedily expand the symbolic
     values which need to be expanded. See {!type:Contexts.config} for more
     information. *)
-val greedy_expand_symbolic_values : config -> Meta.span -> cm_fun
+val greedy_expand_symbolic_values : Meta.span -> cm_fun

@@ -23,8 +23,8 @@ let log = Logging.expressions_log
 
     Note that the place should have been prepared so that there are no remaining
     loans. *)
-let expand_if_borrows_at_place (config : config) (span : Meta.span)
-    (access : access_kind) (p : place) : cm_fun =
+let expand_if_borrows_at_place (span : Meta.span) (access : access_kind)
+    (p : place) : cm_fun =
  fun ctx ->
   (* Small helper *)
   let rec expand : cm_fun =
@@ -37,7 +37,7 @@ let expand_if_borrows_at_place (config : config) (span : Meta.span)
     | None -> (ctx, fun e -> e)
     | Some sv ->
         let ctx, cc =
-          expand_symbolic_value_no_branching config span sv
+          expand_symbolic_value_no_branching span sv
             (Some (mk_mplace span p ctx))
             ctx
         in
@@ -75,7 +75,7 @@ let access_rplace_reorganize_and_read (config : config) (span : Meta.span)
    * borrows) *)
   let ctx, cc =
     comp cc
-      (if greedy_expand then expand_if_borrows_at_place config span access p ctx
+      (if greedy_expand then expand_if_borrows_at_place span access p ctx
        else (ctx, fun e -> e))
   in
   (* Read the place - note that this checks that the value doesn't contain bottoms *)
@@ -128,8 +128,8 @@ let literal_to_typed_value (span : Meta.span) (ty : literal_type) (cv : literal)
     it - see the remark about the symbolic values with borrows) and the
     resulting value.
 
-    Note that copying values might update the context. For instance, when
-    copying shared borrows, we need to insert new shared borrows in the context.
+    This function essentially duplicates the value while refreshing the shared
+    borrow identifiers (which uniquely identify shared borrows).
 
     Also, this function is actually more general than it should be: it can be
     used to copy concrete ADT values, while ADT copy should be done through the
@@ -214,12 +214,14 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
   | VBorrow bc -> (
       (* We can only copy shared borrows *)
       match bc with
-      | VSharedBorrow bid ->
+      | VSharedBorrow (bid, _) ->
           (* We need to create a new borrow id for the copied borrow, and
            * update the context accordingly *)
-          let bid' = fresh_borrow_id () in
-          let ctx = InterpreterBorrows.reborrow_shared span bid bid' ctx in
-          (v, { v with value = VBorrow (VSharedBorrow bid') }, ctx, fun e -> e)
+          let sid' = fresh_shared_borrow_id () in
+          ( v,
+            { v with value = VBorrow (VSharedBorrow (bid, sid')) },
+            ctx,
+            fun e -> e )
       | VMutBorrow (_, _) ->
           exec_raise __FILE__ __LINE__ span "Can't copy a mutable borrow"
       | VReservedMutBorrow _ ->
@@ -935,19 +937,19 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
       let v, ctx, cc =
         access_rplace_reorganize_and_read config span greedy_expand access p ctx
       in
-      (* Generate the fresh borrow id *)
-      let bid = fresh_borrow_id () in
+      (* Generate the fresh shared borrow id *)
+      let sid = fresh_shared_borrow_id () in
       (* Compute the loan value, with which to replace the value at place p *)
-      let nv =
+      let bid, nv =
         match v.value with
-        | VLoan (VSharedLoan (bids, sv)) ->
-            (* Shared loan: insert the new borrow id *)
-            let bids1 = BorrowId.Set.add bid bids in
-            { v with value = VLoan (VSharedLoan (bids1, sv)) }
+        | VLoan (VSharedLoan (bid, _)) ->
+            (* The value is a shared loan: we do not need to do anything *)
+            (bid, v)
         | _ ->
             (* Not a shared loan: add a wrapper *)
-            let v' = VLoan (VSharedLoan (BorrowId.Set.singleton bid, v)) in
-            { v with value = v' }
+            let bid = fresh_borrow_id () in
+            let v' = VLoan (VSharedLoan (bid, v)) in
+            (bid, { v with value = v' })
       in
       (* Update the value in the context to replace it with the loan *)
       let ctx = write_place span access p nv ctx in
@@ -965,8 +967,8 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
         | BShared | BShallow ->
             (* See the remark at the beginning of the match branch: we
                handle shallow borrows like shared borrows *)
-            VSharedBorrow bid
-        | BTwoPhaseMut -> VReservedMutBorrow bid
+            VSharedBorrow (bid, sid)
+        | BTwoPhaseMut -> VReservedMutBorrow (bid, sid)
         | _ -> craise __FILE__ __LINE__ span "Unreachable"
       in
       let rv : typed_value = { value = VBorrow bc; ty = rv_ty } in

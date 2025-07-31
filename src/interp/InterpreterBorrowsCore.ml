@@ -13,6 +13,34 @@ open Errors
 (** The local logger *)
 let log = Logging.borrows_log
 
+(** The borrow id of shared borrows doesn't uniquely identify shared borrows:
+    when we need to uniquely identify a borrow, we use the borrow id for mutable
+    borrows, and the shared borrow id for shared borrow (once again, the shared
+    borrow id is just an implementation detail, it doesn't have any impact in
+    the semantics). *)
+type unique_borrow_id = UMut of borrow_id | UShared of shared_borrow_id
+[@@deriving show, ord]
+
+let unique_borrow_id_to_string (uid : unique_borrow_id) : string =
+  match uid with
+  | UMut id -> "m@" ^ BorrowId.to_string id
+  | UShared id -> "s@" ^ SharedBorrowId.to_string id
+
+module UniqueBorrowIdOrderedType :
+  Collections.OrderedType with type t = unique_borrow_id = struct
+  type t = unique_borrow_id
+
+  let compare = compare_unique_borrow_id
+  let to_string = unique_borrow_id_to_string
+  let pp_t = pp_unique_borrow_id
+  let show_t = show_unique_borrow_id
+end
+
+module UniqueBorrowIdMap = Collections.MakeMap (UniqueBorrowIdOrderedType)
+module UniqueBorrowIdSet = Collections.MakeSet (UniqueBorrowIdOrderedType)
+
+type unique_borrow_id_set = UniqueBorrowIdSet.t [@@deriving show, ord]
+
 (** TODO: cleanup this a bit, once we have a better understanding about what we
     need. TODO: I'm not sure in which file this should be moved... *)
 type exploration_kind = {
@@ -29,20 +57,18 @@ type exploration_kind = {
 let ek_all : exploration_kind =
   { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
 
-type borrow_ids = Borrows of BorrowId.Set.t | Borrow of BorrowId.id
-[@@deriving show]
-
-type borrow_ids_or_proj_symbolic_value =
-  | BorrowIds of borrow_ids
+type borrow_id_or_proj_symbolic_value =
+  | BorrowId of borrow_id
   | SymbolicValue of symbolic_proj
 [@@deriving show]
 
-exception FoundBorrowIds of borrow_ids
+exception FoundBorrowId of BorrowId.id
 
-type priority_borrows_or_abs =
-  | OuterBorrows of borrow_ids
+type priority_borrow_or_abs =
+  | OuterMutBorrow of borrow_id
+  | OuterSharedLoan of borrow_id
   | OuterAbs of AbstractionId.id
-  | InnerLoans of borrow_ids
+  | InnerLoan of loan_id
 [@@deriving show]
 
 let update_if_none opt x =
@@ -51,34 +77,43 @@ let update_if_none opt x =
   | _ -> opt
 
 (** Utility exception *)
-exception FoundPriority of priority_borrows_or_abs
+exception FoundPriority of priority_borrow_or_abs
+
+(** Utility exception *)
+exception FoundSharedBorrowId of borrow_id * shared_borrow_id
 
 type loan_or_borrow_content =
   | LoanContent of loan_content
   | BorrowContent of borrow_content
 [@@deriving show]
 
-type borrow_or_abs_id = BorrowId of BorrowId.id | AbsId of AbstractionId.id
-type borrow_or_abs_ids = borrow_or_abs_id list
+type borrow_loan_abs_id =
+  | BorrowId of unique_borrow_id
+  | LoanId of loan_id
+  | AbsId of AbstractionId.id
 
-let borrow_or_abs_id_to_string (id : borrow_or_abs_id) : string =
+type borrow_loan_abs_ids = borrow_loan_abs_id list
+
+let borrow_loan_abs_id_to_string (id : borrow_loan_abs_id) : string =
   match id with
   | AbsId id -> "abs@" ^ AbstractionId.to_string id
-  | BorrowId id -> "l@" ^ BorrowId.to_string id
+  | BorrowId id -> unique_borrow_id_to_string id
+  | LoanId id -> "l@" ^ BorrowId.to_string id
 
-let borrow_or_abs_ids_chain_to_string (ids : borrow_or_abs_ids) : string =
+let borrow_loan_abs_ids_chain_to_string (ids : borrow_loan_abs_ids) : string =
   let ids = List.rev ids in
-  let ids = List.map borrow_or_abs_id_to_string ids in
+  let ids = List.map borrow_loan_abs_id_to_string ids in
   String.concat " -> " ids
 
 (** Add a borrow or abs id to a chain of ids, while checking that we don't loop
 *)
-let add_borrow_or_abs_id_to_chain (span : Meta.span) (msg : string)
-    (id : borrow_or_abs_id) (ids : borrow_or_abs_ids) : borrow_or_abs_ids =
+let add_borrow_loan_abs_id_to_chain (span : Meta.span) (msg : string)
+    (id : borrow_loan_abs_id) (ids : borrow_loan_abs_ids) : borrow_loan_abs_ids
+    =
   if List.mem id ids then
     craise __FILE__ __LINE__ span
       (msg ^ "detected a loop in the chain of ids: "
-      ^ borrow_or_abs_ids_chain_to_string (id :: ids))
+      ^ borrow_loan_abs_ids_chain_to_string (id :: ids))
   else id :: ids
 
 (** Helper function.
@@ -221,12 +256,12 @@ let lookup_loan_opt (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
 
       method! visit_borrow_content env bc =
         match bc with
-        | VSharedBorrow bid ->
+        | VSharedBorrow (bid, sid) ->
             (* Nothing specific to do *)
-            super#visit_VSharedBorrow env bid
-        | VReservedMutBorrow bid ->
+            super#visit_VSharedBorrow env bid sid
+        | VReservedMutBorrow (bid, sid) ->
             (* Nothing specific to do *)
-            super#visit_VReservedMutBorrow env bid
+            super#visit_VReservedMutBorrow env bid sid
         | VMutBorrow (bid, mv) ->
             (* Control the dive *)
             if ek.enter_mut_borrows then super#visit_VMutBorrow env bid mv
@@ -238,12 +273,11 @@ let lookup_loan_opt (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
           our friend). *)
       method! visit_loan_content env lc =
         match lc with
-        | VSharedLoan (bids, sv) ->
+        | VSharedLoan (lid, sv) ->
             (* Check if this is the loan we are looking for, and control the dive *)
-            if BorrowId.Set.mem l bids then
-              raise (FoundGLoanContent (Concrete lc))
+            if l = lid then raise (FoundGLoanContent (Concrete lc))
             else if ek.enter_shared_loans then
-              super#visit_VSharedLoan env bids sv
+              super#visit_VSharedLoan env lid sv
             else ()
         | VMutLoan bid ->
             (* Check if this is the loan we are looking for *)
@@ -260,12 +294,11 @@ let lookup_loan_opt (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
             if bid = l then raise (FoundGLoanContent (Abstract lc))
             else super#visit_AMutLoan env pm bid av
-        | ASharedLoan (pm, bids, v, av) ->
+        | ASharedLoan (pm, lid, v, av) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
-            if BorrowId.Set.mem l bids then
-              raise (FoundGLoanContent (Abstract lc))
-            else super#visit_ASharedLoan env pm bids v av
+            if l = lid then raise (FoundGLoanContent (Abstract lc))
+            else super#visit_ASharedLoan env pm lid v av
         | AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
         | AEndedSharedLoan (_, _)
         | AIgnoredMutLoan (_, _)
@@ -346,13 +379,13 @@ let update_loan (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
           functions) on purpose: exhaustive matches are good for maintenance *)
       method! visit_loan_content env lc =
         match lc with
-        | VSharedLoan (bids, sv) ->
+        | VSharedLoan (lid, sv) ->
             (* Shared loan: check if this is the loan we are looking for, and
                control the dive. *)
-            if BorrowId.Set.mem l bids then update ()
+            if l = lid then update ()
             else if ek.enter_shared_loans then
-              super#visit_VSharedLoan env bids sv
-            else VSharedLoan (bids, sv)
+              super#visit_VSharedLoan env lid sv
+            else VSharedLoan (lid, sv)
         | VMutLoan bid ->
             (* Mut loan: checks if this is the loan we are looking for *)
             if bid = l then update () else super#visit_VMutLoan env bid
@@ -400,11 +433,11 @@ let update_aloan (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
             (* Sanity check: projection markers can only appear when we're doing a join *)
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
             if bid = l then update () else super#visit_AMutLoan env pm bid av
-        | ASharedLoan (pm, bids, v, av) ->
+        | ASharedLoan (pm, lid, v, av) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
-            if BorrowId.Set.mem l bids then update ()
-            else super#visit_ASharedLoan env pm bids v av
+            if l = lid then update ()
+            else super#visit_ASharedLoan env pm lid v av
         | AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
         | AEndedSharedLoan (_, _)
         | AIgnoredMutLoan (_, _)
@@ -426,7 +459,7 @@ let update_aloan (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
 
 (** Lookup a borrow content from a borrow id. *)
 let lookup_borrow_opt (span : Meta.span) (ek : exploration_kind)
-    (l : BorrowId.id) (ctx : eval_ctx) : g_borrow_content option =
+    (l : unique_borrow_id) (ctx : eval_ctx) : g_borrow_content option =
   let obj =
     object
       inherit [_] iter_eval_ctx as super
@@ -435,15 +468,17 @@ let lookup_borrow_opt (span : Meta.span) (ek : exploration_kind)
         match bc with
         | VMutBorrow (bid, mv) ->
             (* Check the borrow id and control the dive *)
-            if bid = l then raise (FoundGBorrowContent (Concrete bc))
+            if UMut bid = l then raise (FoundGBorrowContent (Concrete bc))
             else if ek.enter_mut_borrows then super#visit_VMutBorrow env bid mv
             else ()
-        | VSharedBorrow bid ->
+        | VSharedBorrow (_, uid) ->
             (* Check the borrow id *)
-            if bid = l then raise (FoundGBorrowContent (Concrete bc)) else ()
-        | VReservedMutBorrow bid ->
+            if UShared uid = l then raise (FoundGBorrowContent (Concrete bc))
+            else ()
+        | VReservedMutBorrow (_, uid) ->
             (* Check the borrow id *)
-            if bid = l then raise (FoundGBorrowContent (Concrete bc)) else ()
+            if UShared uid = l then raise (FoundGBorrowContent (Concrete bc))
+            else ()
 
       method! visit_loan_content env lc =
         match lc with
@@ -459,22 +494,25 @@ let lookup_borrow_opt (span : Meta.span) (ek : exploration_kind)
         | AMutBorrow (pm, bid, av) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
-            if bid = l then raise (FoundGBorrowContent (Abstract bc))
+            if UMut bid = l then raise (FoundGBorrowContent (Abstract bc))
             else super#visit_AMutBorrow env pm bid av
-        | ASharedBorrow (pm, bid) ->
+        | ASharedBorrow (pm, bid, uid) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
-            if bid = l then raise (FoundGBorrowContent (Abstract bc))
-            else super#visit_ASharedBorrow env pm bid
+            if UShared uid = l then raise (FoundGBorrowContent (Abstract bc))
+            else super#visit_ASharedBorrow env pm bid uid
         | AIgnoredMutBorrow (_, _)
         | AEndedMutBorrow _
         | AEndedIgnoredMutBorrow
             { given_back = _; child = _; given_back_meta = _ }
         | AEndedSharedBorrow -> super#visit_aborrow_content env bc
-        | AProjSharedBorrow asb ->
-            if borrow_in_asb l asb then
-              raise (FoundGBorrowContent (Abstract bc))
-            else ()
+        | AProjSharedBorrow asb -> (
+            match l with
+            | UShared l ->
+                if borrow_in_asb l asb then
+                  raise (FoundGBorrowContent (Abstract bc))
+                else ()
+            | UMut _ -> ())
 
       method! visit_abs env abs =
         if ek.enter_abs then super#visit_abs env abs else ()
@@ -489,22 +527,43 @@ let lookup_borrow_opt (span : Meta.span) (ek : exploration_kind)
 (** Lookup a borrow content from a borrow id.
 
     Raise an exception if no loan was found *)
-let lookup_borrow (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
-    (ctx : eval_ctx) : g_borrow_content =
+let lookup_borrow (span : Meta.span) (ek : exploration_kind)
+    (l : unique_borrow_id) (ctx : eval_ctx) : g_borrow_content =
   match lookup_borrow_opt span ek l ctx with
   | None -> craise __FILE__ __LINE__ span "Unreachable"
   | Some lc -> lc
+
+(** Lookup all the shared and reserved borrows associated with a given loan id
+*)
+let lookup_shared_reserved_borrows (l : loan_id) (ctx : eval_ctx) :
+    shared_borrow_id list =
+  let borrows = ref [] in
+  let obj =
+    object
+      inherit [_] iter_eval_ctx
+
+      method! visit_VSharedBorrow _ l' uid =
+        (* Check the borrow id *)
+        if l' = l then borrows := uid :: !borrows else ()
+
+      method! visit_ASharedBorrow _ _ l' uid =
+        (* Check the borrow id *)
+        if l' = l then borrows := uid :: !borrows else ()
+    end
+  in
+  obj#visit_eval_ctx () ctx;
+  List.rev !borrows
 
 (** Update a borrow content.
 
     The borrow is referred to by a borrow id.
 
     This is a helper function: it might break invariants. *)
-let update_borrow (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
-    (nbc : borrow_content) (ctx : eval_ctx) : eval_ctx =
+let update_borrow (span : Meta.span) (ek : exploration_kind)
+    (l : unique_borrow_id) (nbc : borrow_content) (ctx : eval_ctx) : eval_ctx =
   (* We use a reference to check that we update exactly one borrow: when updating
-   * inside values, we check we don't update more than one borrow. Then, upon
-   * returning we check that we updated at least once. *)
+     inside values, we check we don't update more than one borrow. Then, upon
+     returning we check that we updated at least once. *)
   let r = ref false in
   let update () : borrow_content =
     sanity_check __FILE__ __LINE__ (not !r) span;
@@ -520,16 +579,17 @@ let update_borrow (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
         match bc with
         | VMutBorrow (bid, mv) ->
             (* Check the id and control dive *)
-            if bid = l then update ()
+            if UMut bid = l then update ()
             else if ek.enter_mut_borrows then super#visit_VMutBorrow env bid mv
             else VMutBorrow (bid, mv)
-        | VSharedBorrow bid ->
+        | VSharedBorrow (bid, sid) ->
             (* Check the id *)
-            if bid = l then update () else super#visit_VSharedBorrow env bid
-        | VReservedMutBorrow bid ->
+            if UShared sid = l then update ()
+            else super#visit_VSharedBorrow env bid sid
+        | VReservedMutBorrow (bid, sid) ->
             (* Check the id *)
-            if bid = l then update ()
-            else super#visit_VReservedMutBorrow env bid
+            if UShared sid = l then update ()
+            else super#visit_VReservedMutBorrow env bid sid
 
       method! visit_loan_content env lc =
         match lc with
@@ -556,8 +616,8 @@ let update_borrow (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
     The borrow is referred to by a borrow id.
 
     This is a helper function: **it might break invariants**. *)
-let update_aborrow (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
-    (nv : avalue) (ctx : eval_ctx) : eval_ctx =
+let update_aborrow (span : Meta.span) (ek : exploration_kind)
+    (l : unique_borrow_id) (nv : avalue) (ctx : eval_ctx) : eval_ctx =
   (* We use a reference to check that we update exactly one borrow: when updating
      inside values, we check we don't update more than one borrow. Then, upon
      returning we check that we updated at least once. *)
@@ -577,20 +637,23 @@ let update_aborrow (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
         | AMutBorrow (pm, bid, av) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
-            if bid = l then update ()
+            if UMut bid = l then update ()
             else ABorrow (super#visit_AMutBorrow env pm bid av)
-        | ASharedBorrow (pm, bid) ->
+        | ASharedBorrow (pm, bid, sid) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
-            if bid = l then update ()
-            else ABorrow (super#visit_ASharedBorrow env pm bid)
+            if UShared sid = l then update ()
+            else ABorrow (super#visit_ASharedBorrow env pm bid sid)
         | AIgnoredMutBorrow _
         | AEndedMutBorrow _
         | AEndedSharedBorrow
         | AEndedIgnoredMutBorrow _ -> super#visit_ABorrow env bc
-        | AProjSharedBorrow asb ->
-            if borrow_in_asb l asb then update ()
-            else ABorrow (super#visit_AProjSharedBorrow env asb)
+        | AProjSharedBorrow asb -> (
+            match l with
+            | UShared l ->
+                if borrow_in_asb l asb then update ()
+                else ABorrow (super#visit_AProjSharedBorrow env asb)
+            | UMut _ -> super#visit_ABorrow env bc)
 
       method! visit_abs env abs =
         if ek.enter_abs then super#visit_abs env abs else abs
@@ -602,11 +665,19 @@ let update_aborrow (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
   cassert __FILE__ __LINE__ !r span "No borrow was updated";
   ctx
 
+type mut_borrow_or_shared_loan_id =
+  | MutBorrow of borrow_id  (** Mutable borrow *)
+  | SharedLoan of loan_id  (** Shared loan *)
+
+type outer = {
+  abs_id : AbstractionId.id option;
+  borrow_loan : mut_borrow_or_shared_loan_id option;
+}
+
 (** Auxiliary function: see its usage in [end_borrow_get_borrow_in_value] *)
-let update_outer_borrows (outer : AbstractionId.id option * borrow_ids option)
-    (x : borrow_ids) : AbstractionId.id option * borrow_ids option =
-  let abs, opt = outer in
-  (abs, update_if_none opt x)
+let update_outer_borrow (outer : outer) (x : mut_borrow_or_shared_loan_id) :
+    outer =
+  { outer with borrow_loan = update_if_none outer.borrow_loan x }
 
 (** Return the first loan we find in a value *)
 let get_first_loan_in_value (v : typed_value) : loan_content option =
@@ -1270,7 +1341,7 @@ let no_aproj_over_symbolic_in_context (span : Meta.span)
 
     **Remark:** we don't take the *ignored* mut/shared loans into account. *)
 let get_first_non_ignored_aloan_in_abstraction (span : Meta.span) (abs : abs) :
-    borrow_ids_or_proj_symbolic_value option =
+    borrow_id_or_proj_symbolic_value option =
   (* Explore to find a loan *)
   let obj =
     object
@@ -1281,11 +1352,11 @@ let get_first_non_ignored_aloan_in_abstraction (span : Meta.span) (abs : abs) :
         | AMutLoan (pm, bid, _) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
-            raise (FoundBorrowIds (Borrow bid))
-        | ASharedLoan (pm, bids, _, _) ->
+            raise (FoundBorrowId bid)
+        | ASharedLoan (pm, bid, _, _) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
             sanity_check __FILE__ __LINE__ (pm = PNone) span;
-            raise (FoundBorrowIds (Borrows bids))
+            raise (FoundBorrowId bid)
         | AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
         | AEndedSharedLoan (_, _) -> super#visit_aloan_content env lc
         | AIgnoredMutLoan (_, _) ->
@@ -1304,7 +1375,7 @@ let get_first_non_ignored_aloan_in_abstraction (span : Meta.span) (abs : abs) :
             (* The mut loan linked to the mutable borrow present in a shared
              * value in an abstraction should be in an AProjBorrows *)
             craise __FILE__ __LINE__ span "Unreachable"
-        | VSharedLoan (bids, _) -> raise (FoundBorrowIds (Borrows bids))
+        | VSharedLoan (bid, _) -> raise (FoundBorrowId bid)
 
       method! visit_aproj env sproj =
         (match sproj with
@@ -1321,7 +1392,7 @@ let get_first_non_ignored_aloan_in_abstraction (span : Meta.span) (abs : abs) :
     None
   with
   (* There are loans *)
-  | FoundBorrowIds bids -> Some (BorrowIds bids)
+  | FoundBorrowId bid -> Some (BorrowId bid)
   | FoundAProjLoans { proj; _ } ->
       (* There are loan projections over symbolic values *)
       Some (SymbolicValue proj)
