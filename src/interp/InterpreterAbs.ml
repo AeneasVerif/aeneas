@@ -904,6 +904,29 @@ let ctx_merge_regions (ctx : eval_ctx) (rid : RegionId.id)
   let env = Substitute.env_subst_rids rsubst ctx.env in
   { ctx with env }
 
+(** End the shared loans in a given abstraction which do not have corresponding
+    shared borrows in the context *)
+let end_endable_shared_loans_at_abs (span : Meta.span) (ctx : eval_ctx)
+    (abs_id : AbstractionId.id) : eval_ctx =
+  (* Compute the set of shared borrows appearing in the context *)
+  let bids = (fst (compute_ctx_ids ctx)).borrow_ids in
+
+  (* Update the shared borrows in the region abstraction - we assume the
+     region abstraction has been destructured
+  *)
+  let abs = ctx_lookup_abs ctx abs_id in
+  let keep_value (av : typed_avalue) : bool =
+    match av.value with
+    | ALoan (ASharedLoan (_, bid, _, child)) ->
+        sanity_check __FILE__ __LINE__ (is_aignored child.value) span;
+        BorrowId.Set.mem bid bids
+    | _ -> true
+  in
+
+  let avalues = List.filter keep_value abs.avalues in
+  let abs = { abs with avalues } in
+  fst (ctx_subst_abs span ctx abs_id abs)
+
 let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
     (can_end : bool) (merge_funs : merge_duplicates_funcs option)
     (ctx : eval_ctx) (abs_id0 : AbstractionId.id) (abs_id1 : AbstractionId.id) :
@@ -942,6 +965,9 @@ let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
       let rids = RegionId.Set.remove rid regions in
       ctx_merge_regions ctx rid rids
   in
+
+  (* End the loans in the region abstraction which don't have corresponding borrows anymore *)
+  let ctx = end_endable_shared_loans_at_abs span ctx nabs.abs_id in
 
   (* Return *)
   (ctx, nabs.abs_id)
