@@ -724,7 +724,7 @@ let eval_ctx_has_markers (ctx : eval_ctx) : bool =
 
     At the end of the second step, all markers should have been removed from the
     resulting environment. *)
-let collapse_ctx (span : Meta.span) (loop_id : LoopId.id)
+let collapse_ctx config (span : Meta.span) (loop_id : LoopId.id)
     (merge_funs : merge_duplicates_funcs) (old_ids : ids_sets) (ctx0 : eval_ctx)
     : eval_ctx =
   let ctx =
@@ -733,6 +733,11 @@ let collapse_ctx (span : Meta.span) (loop_id : LoopId.id)
   let ctx = collapse_ctx_collapse span loop_id merge_funs old_ids ctx in
   (* Sanity check: there are no markers remaining *)
   sanity_check __FILE__ __LINE__ (not (eval_ctx_has_markers ctx)) span;
+  (* One last cleanup *)
+  let ctx, _ =
+    InterpreterBorrows.simplify_dummy_values_useless_abs config span
+      old_ids.aids ctx
+  in
   ctx
 
 let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
@@ -907,10 +912,10 @@ let merge_into_first_abstraction (span : Meta.span) (loop_id : LoopId.id)
 
     We do this because when we join environments, we may introduce duplicated
     loans and borrows. See the explanations for {!join_ctxs}. *)
-let collapse_ctx_with_merge (span : Meta.span) (loop_id : LoopId.id)
+let collapse_ctx_with_merge config (span : Meta.span) (loop_id : LoopId.id)
     (old_ids : ids_sets) (ctx : eval_ctx) : eval_ctx =
   let merge_funs = mk_collapse_ctx_merge_duplicate_funs span loop_id ctx in
-  try collapse_ctx span loop_id merge_funs old_ids ctx
+  try collapse_ctx config span loop_id merge_funs old_ids ctx
   with ValueMatchFailure _ -> internal_error __FILE__ __LINE__ span
 
 let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
@@ -1251,7 +1256,8 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
         ^ eval_ctx_to_string ~span:(Some span) ctx1));
 
     (* Collapse to eliminate the markers *)
-    joined_ctx := collapse_ctx_with_merge span loop_id fixed_ids !joined_ctx;
+    joined_ctx :=
+      collapse_ctx_with_merge config span loop_id fixed_ids !joined_ctx;
     log#ltrace
       (lazy
         (__FUNCTION__ ^ ":join_one: after join-collapse:\n"
