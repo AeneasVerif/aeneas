@@ -370,3 +370,14 @@ fn add_acc(paSrc: &mut [u32; 256], peDst: &mut [u32; 256]) {
         i += 1;
     }
 }
+
+const CARRAY: [u16; 4] = [0, 0, 0, 0];
+
+/// This comes from an issue found in SymCrust and minimized
+fn loop_access_array(k: usize) {
+    let mut start = 0usize;
+    while start < 4 {
+        let _: u16 = CARRAY[k];
+        start += 1;
+    }
+}
