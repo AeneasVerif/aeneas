@@ -1070,7 +1070,11 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
 
     log#ldebug
       (lazy
-        ("- env0:\n" ^ show_env env0 ^ "\n\n- env1:\n" ^ show_env env1 ^ "\n\n"));
+        ("- env0:\n"
+        ^ env_to_string span ctx0 env0 ~filter:false
+        ^ "\n\n- env1:\n"
+        ^ env_to_string span ctx1 env1 ~filter:false
+        ^ "\n\n"));
 
     let env = List.rev (EFrame :: join_prefixes env0 env1) in
 

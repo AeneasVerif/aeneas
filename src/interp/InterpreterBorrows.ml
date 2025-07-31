@@ -929,33 +929,49 @@ and end_borrows_aux (config : config) (span : Meta.span)
     (fun id ctx -> end_borrow_aux config span chain allowed_abs id ctx)
     ids ctx
 
-and end_loan_aux (config : config) (span : Meta.span)
+and try_end_loan_aux (config : config) (span : Meta.span)
     (chain : borrow_loan_abs_ids) (allowed_abs : AbstractionId.id option)
-    (l : loan_id) : cm_fun =
+    ~(must_end : bool) (l : loan_id) : cm_fun =
  fun ctx ->
   (* Check that we don't loop *)
   let chain =
     add_borrow_loan_abs_id_to_chain span "end_borrow_aux: " (LoanId l) chain
   in
   (* Lookup the loan to identify whether this is a shared loan or a mutable loan *)
-  match snd (lookup_loan span ek_all l ctx) with
-  | Concrete (VSharedLoan _) | Abstract (ASharedLoan _) ->
-      end_shared_loan_aux config span chain allowed_abs l ctx
-  | Concrete (VMutLoan _) | Abstract (AMutLoan _) ->
-      end_borrow_aux config span chain allowed_abs (UMut l) ctx
-  | _ -> craise __FILE__ __LINE__ span "Unreachable"
+  match lookup_loan_opt span ek_all l ctx with
+  | None ->
+      sanity_check __FILE__ __LINE__ (not must_end) span;
+      (ctx, fun id -> id)
+  | Some loan -> (
+      match snd loan with
+      | Concrete (VSharedLoan _) | Abstract (ASharedLoan _) ->
+          end_shared_loan_aux config span chain allowed_abs l ctx
+      | Concrete (VMutLoan _) | Abstract (AMutLoan _) ->
+          end_borrow_aux config span chain allowed_abs (UMut l) ctx
+      | _ -> craise __FILE__ __LINE__ span "Unreachable")
 
-and end_loans_aux (config : config) (span : Meta.span)
+and end_loan_aux (config : config) (span : Meta.span)
     (chain : borrow_loan_abs_ids) (allowed_abs : AbstractionId.id option)
-    (lset : BorrowId.Set.t) : cm_fun =
+    (l : loan_id) : cm_fun =
+  try_end_loan_aux config span chain allowed_abs ~must_end:true l
+
+and try_end_loans_aux (config : config) (span : Meta.span)
+    (chain : borrow_loan_abs_ids) (allowed_abs : AbstractionId.id option)
+    ~(must_end : bool) (lset : BorrowId.Set.t) : cm_fun =
  fun ctx ->
   (* This is not necessary, but we prefer to reorder the borrow ids,
      so that we actually end from the smallest id to the highest id - just
      a matter of taste, and may make debugging easier *)
   let ids = BorrowId.Set.fold (fun id ids -> id :: ids) lset [] in
   fold_left_apply_continuation
-    (fun id ctx -> end_loan_aux config span chain allowed_abs id ctx)
+    (fun id ctx ->
+      try_end_loan_aux config span chain allowed_abs ~must_end id ctx)
     ids ctx
+
+and end_loans_aux (config : config) (span : Meta.span)
+    (chain : borrow_loan_abs_ids) (allowed_abs : AbstractionId.id option)
+    (lset : BorrowId.Set.t) : cm_fun =
+  try_end_loans_aux config span chain allowed_abs ~must_end:true lset
 
 and end_shared_loan_aux (config : config) (span : Meta.span)
     (chain : borrow_loan_abs_ids) (allowed_abs : AbstractionId.id option)
@@ -1547,6 +1563,9 @@ let end_loan config (span : Meta.span) : loan_id -> cm_fun =
 let end_loans config (span : Meta.span) : loan_id_set -> cm_fun =
   end_loans_aux config span [] None
 
+let try_end_loans config (span : Meta.span) : loan_id_set -> cm_fun =
+  try_end_loans_aux config span [] None ~must_end:false
+
 let end_abstraction config span = end_abstraction_aux config span []
 let end_abstractions config span = end_abstractions_aux config span []
 let end_borrow_no_synth config span id ctx = fst (end_borrow config span id ctx)
@@ -1556,6 +1575,9 @@ let end_borrows_no_synth config span ids ctx =
 
 let end_loan_no_synth config span id ctx = fst (end_loan config span id ctx)
 let end_loans_no_synth config span ids ctx = fst (end_loans config span ids ctx)
+
+let try_end_loans_no_synth config span ids ctx =
+  fst (try_end_loans config span ids ctx)
 
 let end_abstraction_no_synth config span id ctx =
   fst (end_abstraction config span id ctx)

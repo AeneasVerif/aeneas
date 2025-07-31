@@ -66,8 +66,8 @@ let statement_to_string_with_tab ctx =
 let env_elem_to_string span ctx =
   Print.EvalCtx.env_elem_to_string ~span:(Some span) ctx "" "  "
 
-let env_to_string span ctx env =
-  eval_ctx_to_string ~span:(Some span) { ctx with env }
+let env_to_string span ctx ?(filter = true) env =
+  eval_ctx_to_string ~span:(Some span) { ctx with env } ~filter
 
 let abs_to_string span ?(with_ended = false) ctx =
   Print.EvalCtx.abs_to_string ~span:(Some span) ~with_ended ctx "" "  "

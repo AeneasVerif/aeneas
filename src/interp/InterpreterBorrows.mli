@@ -43,6 +43,13 @@ val end_loan_no_synth : config -> Meta.span -> loan_id -> eval_ctx -> eval_ctx
 val end_loans_no_synth :
   config -> Meta.span -> loan_id_set -> eval_ctx -> eval_ctx
 
+(** End a set of loans and return the resulting environment, ignoring synthesis.
+
+    Contrary to [end_loans_no_synth], the function doesn't fail if one of the
+    loan ids actually doesn't exist in the context. *)
+val try_end_loans_no_synth :
+  config -> Meta.span -> loan_id_set -> eval_ctx -> eval_ctx
+
 (** End an abstraction and return the resulting environment, ignoring synthesis
 *)
 val end_abstraction_no_synth :

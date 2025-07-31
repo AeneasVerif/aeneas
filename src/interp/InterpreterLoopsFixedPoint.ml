@@ -260,11 +260,12 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
       | None ->
           let old_ids, _ = compute_ctx_ids ctx1 in
           let new_ids, _ = compute_ctxs_ids ctxs in
-          let blids = BorrowId.Set.diff old_ids.blids new_ids.blids in
+          let lids = BorrowId.Set.diff old_ids.loan_ids new_ids.loan_ids in
           let aids = AbstractionId.Set.diff old_ids.aids new_ids.aids in
           (* End those loans and abstractions *)
-          let end_loans_abs blids aids ctx =
-            let ctx = end_loans_no_synth config span blids ctx in
+          let end_loans_abs (lids : loan_id_set) (aids : abstraction_id_set) ctx
+              =
+            let ctx = try_end_loans_no_synth config span lids ctx in
             let ctx = end_abstractions_no_synth config span aids ctx in
             ctx
           in
@@ -274,18 +275,18 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
               (__FUNCTION__
              ^ ": join_ctxs: ending borrows/abstractions before entering the \
                 loop:\n\
-                - ending borrow ids: "
-              ^ BorrowId.Set.to_string None blids
+                - ending loan ids: "
+              ^ BorrowId.Set.to_string None lids
               ^ "\n- ending abstraction ids: "
               ^ AbstractionId.Set.to_string None aids
               ^ "\n\n"));
-          let ctx1 = end_loans_abs blids aids ctx1 in
+          let ctx1 = end_loans_abs lids aids ctx1 in
           (* We can also do the same in the contexts [ctxs]: if there are
              several contexts, maybe one of them ended some borrows and some
              others didn't. As we need to end those borrows anyway (the join
              will detect them and ask to end them) we do it preemptively.
           *)
-          let ctxs = List.map (end_loans_abs blids aids) ctxs in
+          let ctxs = List.map (end_loans_abs lids aids) ctxs in
           (* Note that the fixed ids are given by the original context, from *before*
              we introduce fresh abstractions/reborrows for the shared values *)
           fixed_ids := Some (fst (compute_ctx_ids ctx0));
