@@ -393,3 +393,20 @@ fn loop_array_len()
         let _ = buf.len();
     }
 }
+
+fn write(a : &mut [u8; 4]) { a[0] = 0 }
+
+/// This comes from an issue found in SymCrust and minimized
+fn loop_array_len_write(b : bool)
+{
+    let mut buf = [0u8; 4];
+    let _: usize = buf.len();
+
+    loop
+    {
+        if b
+        {
+            write (&mut buf);
+        }
+    }
+}
