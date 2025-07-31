@@ -1564,8 +1564,7 @@ let promote_shared_loan_to_mut_loan (span : Meta.span) (l : BorrowId.id)
   (* Debug *)
   log#ltrace
     (lazy
-      ("promote_shared_loan_to_mut_loan:\n- loan: " ^ BorrowId.to_string l
-     ^ "\n- context:\n"
+      (__FUNCTION__ ^ ":\n- loan: " ^ BorrowId.to_string l ^ "\n- context:\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx
       ^ "\n"));
   (* Sanity check: there is exactly one borrow mapping to [bid] in the context,

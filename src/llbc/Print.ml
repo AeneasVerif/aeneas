@@ -97,7 +97,7 @@ module Values = struct
       (bc : borrow_content) : string =
     match bc with
     | VSharedBorrow (bid, sid) ->
-        "shared_borrow@" ^ BorrowId.to_string bid ^ "(@"
+        "shared_borrow@" ^ BorrowId.to_string bid ^ "(^"
         ^ SharedBorrowId.to_string sid
         ^ ")"
     | VMutBorrow (bid, tv) ->
@@ -105,7 +105,7 @@ module Values = struct
         ^ typed_value_to_string ~span env tv
         ^ ")"
     | VReservedMutBorrow (bid, sid) ->
-        "reserved_borrow@" ^ BorrowId.to_string bid ^ "(@"
+        "reserved_borrow@" ^ BorrowId.to_string bid ^ "(^"
         ^ SharedBorrowId.to_string sid
         ^ ")"
 
@@ -114,7 +114,7 @@ module Values = struct
     match lc with
     | VSharedLoan (lid, v) ->
         let lid = BorrowId.to_string lid in
-        "@shared_loan(" ^ lid ^ ", " ^ typed_value_to_string ~span env v ^ ")"
+        "@shared_loan(@" ^ lid ^ ", " ^ typed_value_to_string ~span env v ^ ")"
     | VMutLoan bid -> "ml@" ^ BorrowId.to_string bid
 
   let abstract_shared_borrow_to_string (env : fmt_env)
@@ -280,7 +280,7 @@ module Values = struct
         ^ ")"
         |> add_proj_marker pm
     | ASharedLoan (pm, lid, v, av) ->
-        "@shared_loan(" ^ BorrowId.to_string lid ^ ", "
+        "@shared_loan(@" ^ BorrowId.to_string lid ^ ", "
         ^ typed_value_to_string ~span env v
         ^ ", "
         ^ typed_avalue_to_string ~span ~with_ended env av
@@ -330,7 +330,7 @@ module Values = struct
         ^ ")"
         |> add_proj_marker pm
     | ASharedBorrow (pm, bid, sid) ->
-        "sb@" ^ BorrowId.to_string bid ^ "(@"
+        "sb@" ^ BorrowId.to_string bid ^ "(^"
         ^ SharedBorrowId.to_string sid
         ^ ")"
         |> add_proj_marker pm

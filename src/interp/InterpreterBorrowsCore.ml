@@ -546,6 +546,10 @@ let lookup_shared_reserved_borrows (l : loan_id) (ctx : eval_ctx) :
         (* Check the borrow id *)
         if l' = l then borrows := uid :: !borrows else ()
 
+      method! visit_VReservedMutBorrow _ l' uid =
+        (* Check the borrow id *)
+        if l' = l then borrows := uid :: !borrows else ()
+
       method! visit_ASharedBorrow _ _ l' uid =
         (* Check the borrow id *)
         if l' = l then borrows := uid :: !borrows else ()
