@@ -1040,15 +1040,15 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
       let op_v, ctx, cf_eval_op = eval_operand config span op ctx in
       (* Switch on the value *)
       let ctx_resl, cf_switch =
-        match op_v.value with
-        | VLiteral (VScalar sv) -> (
+        match op_v.value, int_ty with
+        | VLiteral (VScalar sv), TInt (_) | VLiteral (VScalar sv), TUInt (_) -> (
             (* Sanity check *)
-            sanity_check __FILE__ __LINE__ (Scalars.get_ty sv = int_ty) span;
+            sanity_check __FILE__ __LINE__ (Scalars.get_ty sv = literal_as_integer int_ty) span;
             (* Find the branch *)
-            match List.find_opt (fun (svl, _) -> List.mem sv svl) stgts with
+            match List.find_opt (fun (svl, _) -> List.mem sv (literal_list_to_scalar_list svl)) stgts with
             | None -> eval_block config otherwise ctx
             | Some (_, tgt) -> eval_block config tgt ctx)
-        | VSymbolic sv ->
+        | VSymbolic sv, _ ->
             (* Several branches may be grouped together: every branch is described
                by a pair (list of values, branch expression).
                In order to do a symbolic evaluation, we make this "flat" by
@@ -1064,7 +1064,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
             let (ctx_branches, ctx_otherwise), cf_int =
               expand_symbolic_int config span sv
                 (S.mk_opt_place_from_op span op ctx)
-                int_ty values ctx
+                (literal_as_integer int_ty) (literal_list_to_scalar_list values) ctx
             in
             (* Evaluate the branches: first the "regular" branches *)
             let resl_branches =
