@@ -34,10 +34,14 @@ type ctx_or_update = (eval_ctx, updt_env_kind) result
     environment to get rid of those markers). *)
 type abs_borrows_loans_maps = {
   abs_ids : AbstractionId.id list;
-  abs_to_borrows : MarkedBorrowId.Set.t AbstractionId.Map.t;
-  abs_to_loans : MarkedBorrowId.Set.t AbstractionId.Map.t;
-  borrow_to_abs : AbstractionId.Set.t MarkedBorrowId.Map.t;
-  loan_to_abs : AbstractionId.Set.t MarkedBorrowId.Map.t;
+  abs_to_borrows : MarkedUniqueBorrowId.Set.t AbstractionId.Map.t;
+  abs_to_non_unique_borrows : MarkedBorrowId.Set.t AbstractionId.Map.t;
+  abs_to_loans : MarkedLoanId.Set.t AbstractionId.Map.t;
+  borrow_to_abs : AbstractionId.Set.t MarkedUniqueBorrowId.Map.t;
+  non_unique_borrow_to_abs : AbstractionId.Set.t MarkedBorrowId.Map.t;
+      (** A map from a non unique borrow id (in case of shared borrows) to the
+          set of region abstractions refering to this borrow *)
+  loan_to_abs : AbstractionId.Set.t MarkedLoanId.Map.t;
   abs_to_borrow_projs : MarkedNormSymbProj.Set.t AbstractionId.Map.t;
   abs_to_loan_projs : MarkedNormSymbProj.Set.t AbstractionId.Map.t;
   borrow_proj_to_abs : AbstractionId.Set.t MarkedNormSymbProj.Map.t;
@@ -86,8 +90,10 @@ module type PrimMatcher = sig
     eval_ctx ->
     ety ->
     borrow_id ->
+    shared_borrow_id ->
     borrow_id ->
-    borrow_id
+    shared_borrow_id ->
+    borrow_id * shared_borrow_id
 
   (** The input parameters are:
       - [match_values]
@@ -121,10 +127,10 @@ module type PrimMatcher = sig
     eval_ctx ->
     eval_ctx ->
     ety ->
-    loan_id_set ->
-    loan_id_set ->
+    loan_id ->
+    loan_id ->
     typed_value ->
-    loan_id_set * typed_value
+    loan_id * typed_value
 
   val match_mut_loans :
     typed_value_matcher ->
@@ -203,9 +209,11 @@ module type PrimMatcher = sig
     rty ->
     proj_marker ->
     borrow_id ->
+    shared_borrow_id ->
     rty ->
     proj_marker ->
     borrow_id ->
+    shared_borrow_id ->
     rty ->
     typed_avalue
 
@@ -262,12 +270,12 @@ module type PrimMatcher = sig
     eval_ctx ->
     rty ->
     proj_marker ->
-    loan_id_set ->
+    loan_id ->
     typed_value ->
     typed_avalue ->
     rty ->
     proj_marker ->
-    loan_id_set ->
+    loan_id ->
     typed_value ->
     typed_avalue ->
     rty ->
@@ -546,7 +554,17 @@ let ctx_split_fixed_new (span : Meta.span) (fixed_ids : ids_sets)
   (filt_env, new_absl, new_dummyl)
 
 let ids_sets_empty_borrows_loans (ids : ids_sets) : ids_sets =
-  let { aids; blids = _; borrow_ids = _; loan_ids = _; dids; rids; sids } =
+  let {
+    aids;
+    blids = _;
+    borrow_ids = _;
+    loan_ids = _;
+    unique_borrow_ids = _;
+    shared_borrow_ids = _;
+    dids;
+    rids;
+    sids;
+  } =
     ids
   in
   let empty = BorrowId.Set.empty in
@@ -555,6 +573,8 @@ let ids_sets_empty_borrows_loans (ids : ids_sets) : ids_sets =
       aids;
       blids = empty;
       borrow_ids = empty;
+      unique_borrow_ids = UniqueBorrowIdSet.empty;
+      shared_borrow_ids = SharedBorrowId.Set.empty;
       loan_ids = empty;
       dids;
       rids;
@@ -603,9 +623,9 @@ let typed_avalue_add_marker (span : Meta.span) (ctx : eval_ctx)
         | AMutBorrow (pm0, bid, av) ->
             sanity_check __FILE__ __LINE__ (pm0 = PNone) span;
             super#visit_aborrow_content env (AMutBorrow (pm, bid, av))
-        | ASharedBorrow (pm0, bid) ->
+        | ASharedBorrow (pm0, bid, sid) ->
             sanity_check __FILE__ __LINE__ (pm0 = PNone) span;
-            super#visit_aborrow_content env (ASharedBorrow (pm, bid))
+            super#visit_aborrow_content env (ASharedBorrow (pm, bid, sid))
         | _ -> internal_error __FILE__ __LINE__ span
     end
   in

@@ -45,16 +45,11 @@ type proj_kind = LoanProj | BorrowProj
     non-borrows 3. specialized functions for mut borrows and shared borrows Note
     that 2. and 3. may have a little bit of duplicated code, but hopefully it
     would make things clearer. *)
-let apply_symbolic_expansion_to_target_avalues (config : config)
-    (span : Meta.span) (allow_reborrows : bool) (proj_kind : proj_kind)
-    (original_sv : symbolic_value) (expansion : symbolic_expansion)
-    (ctx : eval_ctx) : eval_ctx =
+let apply_symbolic_expansion_to_target_avalues (span : Meta.span)
+    (proj_kind : proj_kind) (original_sv : symbolic_value)
+    (expansion : symbolic_expansion) (ctx : eval_ctx) : eval_ctx =
   (* Symbolic values contained in the expansion might contain already ended regions *)
   let check_symbolic_no_ended = false in
-  (* Prepare reborrows registration *)
-  let fresh_reborrow, apply_registered_reborrows =
-    prepare_reborrows config span allow_reborrows
-  in
   (* Visitor to apply the expansion *)
   let obj =
     object (self)
@@ -131,8 +126,8 @@ let apply_symbolic_expansion_to_target_avalues (config : config)
               in
               (* Apply the projector *)
               let projected_value =
-                apply_proj_borrows span check_symbolic_no_ended ctx
-                  fresh_reborrow proj_regions expansion proj.proj_ty
+                apply_proj_borrows span check_symbolic_no_ended ctx proj_regions
+                  expansion proj.proj_ty
               in
               (* Replace *)
               projected_value.value
@@ -145,17 +140,15 @@ let apply_symbolic_expansion_to_target_avalues (config : config)
     end
   in
   (* Apply the expansion *)
-  let ctx = obj#visit_eval_ctx None ctx in
-  (* Apply the reborrows *)
-  apply_registered_reborrows ctx
+  obj#visit_eval_ctx None ctx
 
 (** Auxiliary function. Apply a symbolic expansion to avalues in a context. *)
-let apply_symbolic_expansion_to_avalues (config : config) (span : Meta.span)
-    (allow_reborrows : bool) (original_sv : symbolic_value)
-    (expansion : symbolic_expansion) (ctx : eval_ctx) : eval_ctx =
+let apply_symbolic_expansion_to_avalues (span : Meta.span)
+    (original_sv : symbolic_value) (expansion : symbolic_expansion)
+    (ctx : eval_ctx) : eval_ctx =
   let apply_expansion proj_kind ctx =
-    apply_symbolic_expansion_to_target_avalues config span allow_reborrows
-      proj_kind original_sv expansion ctx
+    apply_symbolic_expansion_to_target_avalues span proj_kind original_sv
+      expansion ctx
   in
   (* First target the loan projectors, then the borrow projectors *)
   let ctx = apply_expansion LoanProj ctx in
@@ -190,7 +183,7 @@ let replace_symbolic_values (span : Meta.span) (at_most_once : bool)
   (* Return *)
   ctx
 
-let apply_symbolic_expansion_non_borrow (config : config) (span : Meta.span)
+let apply_symbolic_expansion_non_borrow (span : Meta.span)
     (original_sv : symbolic_value) (ctx : eval_ctx)
     (expansion : symbolic_expansion) : eval_ctx =
   (* Apply the expansion to non-abstraction values *)
@@ -200,9 +193,7 @@ let apply_symbolic_expansion_non_borrow (config : config) (span : Meta.span)
     replace_symbolic_values span at_most_once original_sv nv.value ctx
   in
   (* Apply the expansion to abstraction values *)
-  let allow_reborrows = false in
-  apply_symbolic_expansion_to_avalues config span allow_reborrows original_sv
-    expansion ctx
+  apply_symbolic_expansion_to_avalues span original_sv expansion ctx
 
 (** Compute the expansion of a non-builtin (e.g.: not [Box], etc.) adt value.
 
@@ -281,21 +272,12 @@ let compute_expanded_symbolic_adt_value (span : Meta.span)
       craise __FILE__ __LINE__ span
         "compute_expanded_symbolic_adt_value: unexpected combination"
 
-let expand_symbolic_value_shared_borrow (config : config) (span : Meta.span)
+let expand_symbolic_value_shared_borrow (span : Meta.span)
     (original_sv : symbolic_value) (original_sv_place : SA.mplace option)
     (ref_ty : rty) : cm_fun =
  fun ctx ->
-  (* First, replace the projectors on borrows.
-   * The important point is that the symbolic value to expand may appear
-   * several times, if it has been copied. In this case, we need to introduce
-   * one fresh borrow id per instance.
-   *)
-  let borrows = ref BorrowId.Set.empty in
-  let fresh_borrow () =
-    let bid' = fresh_borrow_id () in
-    borrows := BorrowId.Set.add bid' !borrows;
-    bid'
-  in
+  (* First, replace the projectors on borrows. *)
+  let bid = fresh_borrow_id () in
   (* The fresh symbolic value for the shared value *)
   let shared_sv = mk_fresh_symbolic_value span ref_ty in
   (* Small utility used on shared borrows in abstractions (regular borrow
@@ -314,8 +296,8 @@ let expand_symbolic_value_shared_borrow (config : config) (span : Meta.span)
           (* Check if the region is in the set of projected regions *)
           if region_in_set r proj_regions then
             (* In the set: we need to reborrow *)
-            let bid = fresh_borrow () in
-            Some [ AsbBorrow bid; shared_asb ]
+            let sid = fresh_shared_borrow_id () in
+            Some [ AsbBorrow (bid, sid); shared_asb ]
           else (* Not in the set: ignore *)
             Some [ shared_asb ]
       | _ -> craise __FILE__ __LINE__ span "Unexpected"
@@ -328,8 +310,8 @@ let expand_symbolic_value_shared_borrow (config : config) (span : Meta.span)
 
       method! visit_VSymbolic env sv =
         if same_symbolic_id sv original_sv then
-          let bid = fresh_borrow () in
-          VBorrow (VSharedBorrow bid)
+          let sid = fresh_shared_borrow_id () in
+          VBorrow (VSharedBorrow (bid, sid))
         else super#visit_VSymbolic env sv
 
       method! visit_EAbs proj_regions abs =
@@ -392,21 +374,15 @@ let expand_symbolic_value_shared_borrow (config : config) (span : Meta.span)
   (* Call the visitor *)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Finally, replace the projectors on loans *)
-  let bids = !borrows in
-  sanity_check __FILE__ __LINE__ (not (BorrowId.Set.is_empty bids)) span;
-  let see = SeSharedRef (bids, shared_sv) in
-  let allow_reborrows = true in
-  let ctx =
-    apply_symbolic_expansion_to_avalues config span allow_reborrows original_sv
-      see ctx
-  in
+  let see = SeSharedRef (bid, shared_sv) in
+  let ctx = apply_symbolic_expansion_to_avalues span original_sv see ctx in
   ( ctx,
     (* Update the synthesized program *)
     S.synthesize_symbolic_expansion_no_branching span original_sv
       original_sv_place see )
 
 (** TODO: simplify and merge with the other expansion function *)
-let expand_symbolic_value_borrow (config : config) (span : Meta.span)
+let expand_symbolic_value_borrow (span : Meta.span)
     (original_sv : symbolic_value) (original_sv_place : SA.mplace option)
     (region : region) (ref_ty : rty) (rkind : ref_kind) : cm_fun =
  fun ctx ->
@@ -433,11 +409,7 @@ let expand_symbolic_value_borrow (config : config) (span : Meta.span)
         replace_symbolic_values span at_most_once original_sv nv.value ctx
       in
       (* Expand the symbolic avalues *)
-      let allow_reborrows = true in
-      let ctx =
-        apply_symbolic_expansion_to_avalues config span allow_reborrows
-          original_sv see ctx
-      in
+      let ctx = apply_symbolic_expansion_to_avalues span original_sv see ctx in
       (* Apply the continuation *)
       ( ctx,
         fun e ->
@@ -445,11 +417,11 @@ let expand_symbolic_value_borrow (config : config) (span : Meta.span)
           S.synthesize_symbolic_expansion_no_branching span original_sv
             original_sv_place see e )
   | RShared ->
-      expand_symbolic_value_shared_borrow config span original_sv
-        original_sv_place ref_ty ctx
+      expand_symbolic_value_shared_borrow span original_sv original_sv_place
+        ref_ty ctx
 
-let expand_symbolic_bool (config : config) (span : Meta.span)
-    (sv : symbolic_value) (sv_place : SA.mplace option) :
+let expand_symbolic_bool (span : Meta.span) (sv : symbolic_value)
+    (sv_place : SA.mplace option) :
     eval_ctx ->
     (eval_ctx * eval_ctx) * (SA.expression * SA.expression -> SA.expression) =
  fun ctx ->
@@ -462,9 +434,7 @@ let expand_symbolic_bool (config : config) (span : Meta.span)
   let see_false = SeLiteral (VBool false) in
   let seel = [ Some see_true; Some see_false ] in
   (* Apply the symbolic expansion *)
-  let apply_expansion =
-    apply_symbolic_expansion_non_borrow config span sv ctx
-  in
+  let apply_expansion = apply_symbolic_expansion_non_borrow span sv ctx in
   let ctx_true = apply_expansion see_true in
   let ctx_false = apply_expansion see_false in
   (* Compute the continuation to build the expression *)
@@ -474,8 +444,8 @@ let expand_symbolic_bool (config : config) (span : Meta.span)
   (* Return *)
   ((ctx_true, ctx_false), cf)
 
-let expand_symbolic_value_no_branching (config : config) (span : Meta.span)
-    (sv : symbolic_value) (sv_place : SA.mplace option) : cm_fun =
+let expand_symbolic_value_no_branching (span : Meta.span) (sv : symbolic_value)
+    (sv_place : SA.mplace option) : cm_fun =
  fun ctx ->
   (* Debug *)
   log#ltrace
@@ -502,7 +472,7 @@ let expand_symbolic_value_no_branching (config : config) (span : Meta.span)
         let see = Collections.List.to_cons_nil seel in
         (* Apply in the context *)
         let ctx =
-          apply_symbolic_expansion_non_borrow config span original_sv ctx see
+          apply_symbolic_expansion_non_borrow span original_sv ctx see
         in
         (* Return*)
         ( ctx,
@@ -511,8 +481,8 @@ let expand_symbolic_value_no_branching (config : config) (span : Meta.span)
             original_sv_place see )
     (* Borrows *)
     | TRef (region, ref_ty, rkind) ->
-        expand_symbolic_value_borrow config span original_sv original_sv_place
-          region ref_ty rkind ctx
+        expand_symbolic_value_borrow span original_sv original_sv_place region
+          ref_ty rkind ctx
     | _ ->
         craise __FILE__ __LINE__ span
           ("expand_symbolic_value_no_branching: unexpected type: "
@@ -535,8 +505,8 @@ let expand_symbolic_value_no_branching (config : config) (span : Meta.span)
   (* Return *)
   (ctx, cc)
 
-let expand_symbolic_adt (config : config) (span : Meta.span)
-    (sv : symbolic_value) (sv_place : SA.mplace option) :
+let expand_symbolic_adt (span : Meta.span) (sv : symbolic_value)
+    (sv_place : SA.mplace option) :
     eval_ctx -> eval_ctx list * (SA.expression list -> SA.expression) =
  fun ctx ->
   (* Debug *)
@@ -558,7 +528,7 @@ let expand_symbolic_adt (config : config) (span : Meta.span)
       in
       (* Apply *)
       let ctx_branches =
-        List.map (apply_symbolic_expansion_non_borrow config span sv ctx) seel
+        List.map (apply_symbolic_expansion_non_borrow span sv ctx) seel
       in
       ( ctx_branches,
         S.synthesize_symbolic_expansion span sv original_sv_place
@@ -567,9 +537,9 @@ let expand_symbolic_adt (config : config) (span : Meta.span)
       craise __FILE__ __LINE__ span
         ("expand_symbolic_adt: unexpected type: " ^ show_rty rty)
 
-let expand_symbolic_int (config : config) (span : Meta.span)
-    (sv : symbolic_value) (sv_place : SA.mplace option)
-    (int_type : integer_type) (tgts : scalar_value list) :
+let expand_symbolic_int (span : Meta.span) (sv : symbolic_value)
+    (sv_place : SA.mplace option) (int_type : integer_type)
+    (tgts : scalar_value list) :
     eval_ctx ->
     (eval_ctx list * eval_ctx)
     * (SA.expression list * SA.expression -> SA.expression) =
@@ -589,7 +559,7 @@ let expand_symbolic_int (config : config) (span : Meta.span)
   (* Substitute the symbolic values to generate the contexts in the branches *)
   let seel = List.map (fun v -> SeLiteral (VScalar v)) tgts in
   let ctx_branches =
-    List.map (apply_symbolic_expansion_non_borrow config span sv ctx) seel
+    List.map (apply_symbolic_expansion_non_borrow span sv ctx) seel
   in
   let ctx_otherwise = ctx in
   (* Update the symbolic ast *)
@@ -606,8 +576,7 @@ let expand_symbolic_int (config : config) (span : Meta.span)
     Fails if doing this requires to do a branching (because we need to expand an
     enumeration with strictly more than one variant, a slice, etc.) or if we
     need to expand a recursive type (because this leads to looping). *)
-let greedy_expand_symbolics_with_borrows (config : config) (span : Meta.span) :
-    cm_fun =
+let greedy_expand_symbolics_with_borrows (span : Meta.span) : cm_fun =
  fun ctx ->
   (* The visitor object, to look for symbolic values in the concrete environment *)
   let obj =
@@ -670,10 +639,10 @@ let greedy_expand_symbolics_with_borrows (config : config) (span : Meta.span) :
                 ("Attempted to greedily expand a recursive definition (option \
                   [greedy_expand_symbolics_with_borrows] of [config]): "
                 ^ name_to_string ctx def.item_meta.name)
-            else expand_symbolic_value_no_branching config span sv None ctx
+            else expand_symbolic_value_no_branching span sv None ctx
         | TAdt { id = TTuple | TBuiltin TBox; _ } | TRef (_, _, _) ->
             (* Ok *)
-            expand_symbolic_value_no_branching config span sv None ctx
+            expand_symbolic_value_no_branching span sv None ctx
         | TAdt { id = TBuiltin (TArray | TSlice | TStr); _ } ->
             (* We can't expand those *)
             craise __FILE__ __LINE__ span
@@ -692,10 +661,9 @@ let greedy_expand_symbolics_with_borrows (config : config) (span : Meta.span) :
   (* Apply *)
   expand ctx
 
-let greedy_expand_symbolic_values (config : config) (span : Meta.span) : cm_fun
-    =
+let greedy_expand_symbolic_values (span : Meta.span) : cm_fun =
  fun ctx ->
   if Config.greedy_expand_symbolics_with_borrows then (
     log#ltrace (lazy "greedy_expand_symbolic_values");
-    greedy_expand_symbolics_with_borrows config span ctx)
+    greedy_expand_symbolics_with_borrows span ctx)
   else (ctx, fun e -> e)

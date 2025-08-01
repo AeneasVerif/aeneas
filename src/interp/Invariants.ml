@@ -14,17 +14,23 @@ let log = Logging.invariants_log
 
 type borrow_info = {
   loan_kind : ref_kind;
-  loan_in_abs : bool;
-  (* true if the loan was found in an abstraction *)
-  loan_ids : BorrowId.Set.t;
-  borrow_ids : BorrowId.Set.t;
+  loan_in_abs : bool;  (** true if the loan was found in an abstraction *)
+  found_borrow : bool;
+      (** [true] if we found the borrow (note that we start by registering the
+          loans appearing in the context, and then check that all corresponding
+          borrows appear: we thus don't need a [found_loan] field).
+
+          This is only useful for mutable borrows, as any mutable loan has a
+          unique corresponding mutable borrow (and vice-versa). *)
+  shared_borrow_ids : SharedBorrowId.Set.t;
+      (** For shared borrows: the set of unique shared borrow ids found in the
+          context *)
 }
 [@@deriving show]
 
 type outer_borrow_info = {
-  outer_borrow : bool;
-  (* true if the value is borrowed *)
-  outer_shared : bool; (* true if the value is borrowed as shared *)
+  outer_borrow : bool;  (** true if the value is borrowed *)
+  outer_shared : bool;  (** true if the value is borrowed as shared *)
 }
 
 let set_outer_mut (info : outer_borrow_info) : outer_borrow_info =
@@ -48,79 +54,60 @@ type borrow_kind = BMut | BShared | BReserved
     - a two-phase borrow can't point to a value inside an abstraction *)
 let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
     unit =
-  (* Link all the borrow ids to a representant - necessary because of shared
-   * borrows/loans *)
-  let ids_reprs : BorrowId.id BorrowId.Map.t ref = ref BorrowId.Map.empty in
-  (* Link all the id representants to a borrow information *)
+  (* We do this in two phases:
+     - we first register the loans
+     - then register the borrows *)
+  (* Link all the borrow ids to a borrow information *)
   let borrows_infos : borrow_info BorrowId.Map.t ref = ref BorrowId.Map.empty in
+  let shared_borrow_ids = ref SharedBorrowId.Set.empty in
   let context_to_string () : string =
     eval_ctx_to_string ~span:(Some span) ctx
-    ^ "- representants:\n"
-    ^ ids_reprs_to_string "  " !ids_reprs
     ^ "\n- info:\n"
     ^ borrows_infos_to_string "  " !borrows_infos
   in
   (* Ignored loans - when we find an ignored loan while building the borrows_infos
-   * map, we register it in this list; once the borrows_infos map is completely
-   * built, we check that all the borrow ids of the ignored loans are in this
-   * map *)
+     map, we register it in this list; once the borrows_infos map is completely
+     built, we check that all the borrow ids of the ignored loans are in this
+     map *)
   let ignored_loans : (ref_kind * BorrowId.id) list ref = ref [] in
 
-  (* first, register all the loans *)
+  (* First, register all the loans *)
   (* Some utilities to register the loans *)
   let register_ignored_loan (rkind : ref_kind) (bid : BorrowId.id) : unit =
     ignored_loans := (rkind, bid) :: !ignored_loans
   in
 
-  let register_shared_loan (loan_in_abs : bool) (bids : BorrowId.Set.t) : unit =
-    let reprs = !ids_reprs in
+  let register_shared_loan (loan_in_abs : bool) (bid : BorrowId.id) : unit =
     let infos = !borrows_infos in
-    (* Use the first borrow id as representant *)
-    let repr_bid = BorrowId.Set.min_elt bids in
-    sanity_check __FILE__ __LINE__ (not (BorrowId.Map.mem repr_bid infos)) span;
-    (* Insert the mappings to the representant *)
-    let reprs =
-      BorrowId.Set.fold
-        (fun bid reprs ->
-          sanity_check __FILE__ __LINE__ (not (BorrowId.Map.mem bid reprs)) span;
-          BorrowId.Map.add bid repr_bid reprs)
-        bids reprs
-    in
     (* Insert the loan info *)
     let info =
       {
         loan_kind = RShared;
         loan_in_abs;
-        loan_ids = bids;
-        borrow_ids = BorrowId.Set.empty;
+        found_borrow = false;
+        shared_borrow_ids = SharedBorrowId.Set.empty;
       }
     in
-    let infos = BorrowId.Map.add repr_bid info infos in
+    let infos = BorrowId.Map.add bid info infos in
     (* Update *)
-    ids_reprs := reprs;
     borrows_infos := infos
   in
 
   let register_mut_loan (loan_in_abs : bool) (bid : BorrowId.id) : unit =
-    let reprs = !ids_reprs in
     let infos = !borrows_infos in
     (* Sanity checks *)
-    sanity_check __FILE__ __LINE__ (not (BorrowId.Map.mem bid reprs)) span;
     sanity_check __FILE__ __LINE__ (not (BorrowId.Map.mem bid infos)) span;
-    (* Add the mapping for the representant *)
-    let reprs = BorrowId.Map.add bid bid reprs in
     (* Add the mapping for the loan info *)
     let info =
       {
         loan_kind = RMut;
         loan_in_abs;
-        loan_ids = BorrowId.Set.singleton bid;
-        borrow_ids = BorrowId.Set.empty;
+        found_borrow = false;
+        shared_borrow_ids = SharedBorrowId.Set.empty;
       }
     in
     let infos = BorrowId.Map.add bid info infos in
     (* Update *)
-    ids_reprs := reprs;
     borrows_infos := infos
   in
 
@@ -140,7 +127,7 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
         (* Register the loan *)
         let _ =
           match lc with
-          | VSharedLoan (bids, _) -> register_shared_loan inside_abs bids
+          | VSharedLoan (bid, _) -> register_shared_loan inside_abs bid
           | VMutLoan bid -> register_mut_loan inside_abs bid
         in
         (* Continue exploring *)
@@ -150,7 +137,7 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
         let _ =
           match lc with
           | AMutLoan (_, bid, _) -> register_mut_loan inside_abs bid
-          | ASharedLoan (_, bids, _, _) -> register_shared_loan inside_abs bids
+          | ASharedLoan (_, bid, _, _) -> register_shared_loan inside_abs bid
           | AIgnoredMutLoan (Some bid, _) -> register_ignored_loan RMut bid
           | AIgnoredMutLoan (None, _)
           | AIgnoredSharedLoan _
@@ -173,25 +160,13 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
   (* Then, register all the borrows *)
   (* Some utilities to register the borrows *)
   let find_info (bid : BorrowId.id) : borrow_info =
-    (* Find the representant *)
-    match BorrowId.Map.find_opt bid !ids_reprs with
-    | Some repr_bid ->
-        (* Lookup the info *)
-        BorrowId.Map.find repr_bid !borrows_infos
-    | None ->
-        let err =
-          "find_info: could not find the representant of borrow "
-          ^ BorrowId.to_string bid ^ ":\nContext:\n" ^ context_to_string ()
-        in
-        craise __FILE__ __LINE__ span err
+    BorrowId.Map.find bid !borrows_infos
   in
 
   let update_info (bid : BorrowId.id) (info : borrow_info) : unit =
-    (* Find the representant *)
-    let repr_bid = BorrowId.Map.find bid !ids_reprs in
     (* Update the info *)
     let infos =
-      BorrowId.Map.update repr_bid
+      BorrowId.Map.update bid
         (fun x ->
           match x with
           | Some _ -> Some info
@@ -203,21 +178,46 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
 
   let register_ignored_borrow = register_ignored_loan in
 
-  let register_borrow (kind : borrow_kind) (bid : BorrowId.id) : unit =
+  let register_borrow (kind : borrow_kind) (bid : BorrowId.id)
+      (sid : SharedBorrowId.id option) : unit =
+    sanity_check __FILE__ __LINE__ (kind = BMut || Option.is_some sid) span;
     (* Lookup the info *)
     let info = find_info bid in
     (* Check that the borrow kind is consistent *)
     (match (info.loan_kind, kind) with
     | RShared, (BShared | BReserved) | RMut, BMut -> ()
     | _ -> craise __FILE__ __LINE__ span "Invariant not satisfied");
+    (* Check that shared borrow ids are unique *)
+    (match sid with
+    | None -> ()
+    | Some sid ->
+        sanity_check __FILE__ __LINE__
+          (not (SharedBorrowId.Set.mem sid !shared_borrow_ids))
+          span;
+        shared_borrow_ids := SharedBorrowId.Set.add sid !shared_borrow_ids);
     (* A reserved borrow can't point to a value inside an abstraction *)
     sanity_check __FILE__ __LINE__
       (kind <> BReserved || not info.loan_in_abs)
       span;
     (* Insert the borrow id *)
-    let borrow_ids = info.borrow_ids in
-    sanity_check __FILE__ __LINE__ (not (BorrowId.Set.mem bid borrow_ids)) span;
-    let info = { info with borrow_ids = BorrowId.Set.add bid borrow_ids } in
+    sanity_check __FILE__ __LINE__
+      (info.loan_kind = RShared || not info.found_borrow)
+      span;
+    sanity_check __FILE__ __LINE__
+      (match sid with
+      | None -> true
+      | Some sid -> not (SharedBorrowId.Set.mem sid info.shared_borrow_ids))
+      span;
+    let info =
+      {
+        info with
+        found_borrow = true;
+        shared_borrow_ids =
+          (match sid with
+          | None -> info.shared_borrow_ids
+          | Some sid -> SharedBorrowId.Set.add sid info.shared_borrow_ids);
+      }
+    in
     (* Update the info in the map *)
     update_info bid info
   in
@@ -228,16 +228,17 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
 
       method! visit_abstract_shared_borrow _ asb =
         match asb with
-        | AsbBorrow bid -> register_borrow BShared bid
+        | AsbBorrow (bid, sid) -> register_borrow BShared bid (Some sid)
         | AsbProjReborrows _ -> ()
 
       method! visit_borrow_content env bc =
         (* Register the loan *)
         let _ =
           match bc with
-          | VSharedBorrow bid -> register_borrow BShared bid
-          | VMutBorrow (bid, _) -> register_borrow BMut bid
-          | VReservedMutBorrow bid -> register_borrow BReserved bid
+          | VSharedBorrow (bid, sid) -> register_borrow BShared bid (Some sid)
+          | VMutBorrow (bid, _) -> register_borrow BMut bid None
+          | VReservedMutBorrow (bid, sid) ->
+              register_borrow BReserved bid (Some sid)
         in
         (* Continue exploring *)
         super#visit_borrow_content env bc
@@ -245,8 +246,9 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
       method! visit_aborrow_content env bc =
         let _ =
           match bc with
-          | AMutBorrow (_, bid, _) -> register_borrow BMut bid
-          | ASharedBorrow (_, bid) -> register_borrow BShared bid
+          | AMutBorrow (_, bid, _) -> register_borrow BMut bid None
+          | ASharedBorrow (_, bid, sid) ->
+              register_borrow BShared bid (Some sid)
           | AIgnoredMutBorrow (Some bid, _) -> register_ignored_borrow RMut bid
           | AIgnoredMutBorrow (None, _)
           | AEndedMutBorrow _
@@ -278,19 +280,11 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
 
   (* Then, check the borrow infos *)
   BorrowId.Map.iter
-    (fun _ info ->
-      (* Note that we can't directly compare the sets - I guess they are
-       * different depending on the order in which we add the elements... *)
+    (fun _ (info : borrow_info) ->
+      (* If the loan is a mutable loan, then the corresponding borrow must appear somewhere *)
       sanity_check __FILE__ __LINE__
-        (BorrowId.Set.elements info.loan_ids
-        = BorrowId.Set.elements info.borrow_ids)
-        span;
-      match info.loan_kind with
-      | RMut ->
-          sanity_check __FILE__ __LINE__
-            (BorrowId.Set.cardinal info.loan_ids = 1)
-            span
-      | RShared -> ())
+        (info.loan_kind <> RMut || info.found_borrow)
+        span)
     !borrows_infos
 
 (** Check that:
@@ -504,7 +498,8 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
       | VBottom, _ -> (* Nothing to check *) ()
       | VBorrow bc, TRef (_, ref_ty, rkind) -> (
           match (bc, rkind) with
-          | VSharedBorrow bid, RShared | VReservedMutBorrow bid, RMut -> (
+          | VSharedBorrow (bid, _), RShared | VReservedMutBorrow (bid, _), RMut
+            -> (
               if
                 (* Lookup the borrowed value to check it has the proper type.
                    Note that we ignore the marker: we will check it when
@@ -530,7 +525,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
           | VMutLoan bid -> (
               if lookups then
                 (* Lookup the borrowed value to check it has the proper type. *)
-                let glc = lookup_borrow span ek_all bid ctx in
+                let glc = lookup_borrow span ek_all (UMut bid) ctx in
                 match glc with
                 | Concrete (VMutBorrow (_, bv)) ->
                     sanity_check __FILE__ __LINE__ (bv.ty = ty) span
@@ -630,7 +625,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
               sanity_check __FILE__ __LINE__ (region_is_owned abs region) span;
               (* Check that the child value has the proper type *)
               sanity_check __FILE__ __LINE__ (av.ty = ref_ty) span
-          | ASharedBorrow (_, bid), RShared -> (
+          | ASharedBorrow (_, bid, _), RShared -> (
               (* Check that the region is owned by the abstraction *)
               sanity_check __FILE__ __LINE__ (region_is_owned abs region) span;
               if lookups then
@@ -670,7 +665,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
               sanity_check __FILE__ __LINE__ (child_av.ty = borrowed_aty) span;
               if lookups then
                 (* Lookup the borrowed value to check it has the proper type *)
-                let glc = lookup_borrow span ek_all bid ctx in
+                let glc = lookup_borrow span ek_all (UMut bid) ctx in
                 match glc with
                 | Concrete (VMutBorrow (_, bv)) ->
                     sanity_check __FILE__ __LINE__

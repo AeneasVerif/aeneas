@@ -21,7 +21,8 @@ val update_ctx_along_read_place :
 val update_ctx_along_write_place :
   config -> Meta.span -> access_kind -> place -> cm_fun
 
-(** Read the value at a given place.
+(** Read the value at a given place, provided the place **does not refer to a
+    global** (globals are handled elsewhere).
 
     This function doesn't update the environment to make sure the value is
     accessible: if needs be, you should call {!update_ctx_along_read_place}
@@ -31,7 +32,8 @@ val update_ctx_along_write_place :
     value is "well-formed" (for instance that it doesn't contain bottoms). *)
 val read_place : Meta.span -> access_kind -> place -> eval_ctx -> typed_value
 
-(** Update the value at a given place.
+(** Update the value at a given place, provided the place **does not refer to a
+    global** (globals are handled elsewhere).
 
     This function doesn't update the environment to make sure the value is
     accessible: if needs be, you should call {!update_ctx_along_write_place}

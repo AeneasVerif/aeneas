@@ -2,6 +2,7 @@
     (concrete/symbolic) interpreter on it *)
 
 open Types
+open TypesUtils
 open Expressions
 open LlbcAst
 open Utils
@@ -117,7 +118,7 @@ let update_array_default (crate : crate) : crate =
           impls := TraitImplId.Map.add impl.def_id n !impls;
           assert (List.length impl.methods = 1);
           let meth = snd (List.hd impl.methods) in
-          assert (meth.binder_params = TypesUtils.empty_generic_params);
+          assert (meth.binder_params = empty_generic_params);
           let method_id = meth.binder_value.id in
           methods := FunDeclId.Map.add method_id n !methods;
           (* Is it the first implementation we find? *)
@@ -651,7 +652,7 @@ let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
     is concerned: they store bottom in the place. This maps all three to
     `Deinit` to simplify later work. Note: `Drop` actually also calls code to
     deallocate the value; we decide to ignore this for now. *)
-let unify_drops (f : fun_decl) : fun_decl =
+let unify_drops (_ : crate) (f : fun_decl) : fun_decl =
   let lookup_local (locals : locals) (var_id : local_id) : local =
     List.nth locals.locals (LocalId.to_int var_id)
   in
@@ -722,7 +723,7 @@ let filter_type_aliases (crate : crate) : crate =
 
     Remark: the new statements all have the id 0: this pass requires to refresh
     the ids later. *)
-let decompose_str_borrows (f : fun_decl) : fun_decl =
+let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
   (* Map  *)
   let body =
     match f.body with
@@ -828,26 +829,12 @@ let decompose_str_borrows (f : fun_decl) : fun_decl =
         in
 
         (* Visit all the statements and decompose the literals *)
-        let visitor =
-          object
-            inherit [_] map_statement as super
-            method! visit_statement _ st = super#visit_statement st.span st
-
-            method! visit_block _ blk =
-              let statements =
-                List.concat_map
-                  (fun (st : statement) ->
-                    let st = super#visit_statement st.span st in
-                    match st.content with
-                    | Assign (lv, rv) -> decompose_rvalue st.span lv rv
-                    | _ -> [ st ])
-                  blk.statements
-              in
-              { blk with statements }
-          end
+        let decompose_in_statement (st : statement) : statement list =
+          match st.content with
+          | Assign (lv, rv) -> decompose_rvalue st.span lv rv
+          | _ -> [ st ]
         in
-
-        let body_body = visitor#visit_block body.body.span body.body in
+        let body_body = map_statement decompose_in_statement body.body in
         Some
           {
             body with
@@ -863,7 +850,7 @@ let decompose_str_borrows (f : fun_decl) : fun_decl =
   { f with body }
 
 (** Refresh the statement ids to make sure they are unique *)
-let refresh_statement_ids (f : fun_decl) : fun_decl =
+let refresh_statement_ids (_ : crate) (f : fun_decl) : fun_decl =
   (* Map  *)
   let body =
     match f.body with
@@ -883,22 +870,170 @@ let refresh_statement_ids (f : fun_decl) : fun_decl =
   in
   { f with body }
 
+(** This micro-pass introduces intermediate assignments to access the global
+    values in order to simplify the semantics.
+
+    Whenever we access a constant, we introduce a shared borrow and a
+    dereference. Ex.:
+
+    {[
+      let x = copy C;
+
+        ~~>
+
+      let tmp = &C;
+      let x = copy *C;
+    ]}
+
+    Remark: we use the crate to lookup the type of the globals.
+
+    TODO: generalize the evaluation of globals in the symbolic interpreter. *)
+let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
+  (* Map  *)
+  let body =
+    match f.body with
+    | None -> None
+    | Some body -> (
+        let new_locals = ref [] in
+        let _, gen =
+          LocalId.mk_stateful_generator_starting_at_id
+            (LocalId.of_int (List.length body.locals.locals))
+        in
+        let fresh_local ty =
+          let local = { index = gen (); var_ty = ty; name = None } in
+          new_locals := local :: !new_locals;
+          local.index
+        in
+
+        (* Function to decompose the operands in a statement *)
+        let decompose_in_statement (st : statement) : statement list =
+          let span = st.span in
+          let new_statements = ref [] in
+
+          (* Visit the rvalue *)
+          let visitor =
+            object
+              inherit [_] map_statement as super
+              method! visit_place _ p = super#visit_place p.ty p
+
+              method! visit_PlaceGlobal ty gref =
+                (* Compute the type of the reference *)
+                let ref_ty = TRef (RErased, ty, RShared) in
+
+                (* Introduce the intermediate reference *)
+                let local_id =
+                  let local_id = fresh_local ref_ty in
+                  let st =
+                    {
+                      span;
+                      statement_id = StatementId.zero;
+                      content =
+                        Assign
+                          ( { kind = PlaceLocal local_id; ty = ref_ty },
+                            RvRef ({ kind = PlaceGlobal gref; ty }, BShared) );
+                      comments_before = [];
+                    }
+                  in
+                  new_statements := st :: !new_statements;
+                  local_id
+                in
+
+                (* Finally we can update the place *)
+                PlaceProjection
+                  ({ kind = PlaceLocal local_id; ty = ref_ty }, Deref)
+            end
+          in
+
+          let content =
+            match st.content with
+            | Assign (lv, rv) -> Assign (lv, visitor#visit_rvalue mk_unit_ty rv)
+            | CopyNonOverlapping { src; dst; count } ->
+                let src = visitor#visit_operand mk_unit_ty src in
+                CopyNonOverlapping { src; dst; count }
+            | Assert { cond; expected; on_failure } ->
+                let cond = visitor#visit_operand mk_unit_ty cond in
+                Assert { cond; expected; on_failure }
+            | Call { func; args; dest } ->
+                let func = visitor#visit_fn_operand mk_unit_ty func in
+                let args = List.map (visitor#visit_operand mk_unit_ty) args in
+                Call { func; args; dest }
+            | SetDiscriminant _
+            | StorageLive _
+            | StorageDead _
+            | Deinit _
+            | Drop _
+            | Abort _
+            | Return
+            | Break _
+            | Continue _
+            | Nop
+            | Switch _
+            | Loop _
+            | Error _ -> st.content
+          in
+          let st = { st with content } in
+
+          List.rev (st :: !new_statements)
+        in
+
+        (* Visit all the statements and decompose the operands *)
+        try
+          let body_body = map_statement decompose_in_statement body.body in
+          Some
+            {
+              body with
+              body = body_body;
+              locals =
+                {
+                  body.locals with
+                  locals = body.locals.locals @ List.rev !new_locals;
+                };
+            }
+        with CFailure error ->
+          let mctx = Charon.NameMatcher.ctx_from_crate crate in
+          let fmt_env = Print.Crate.crate_to_fmt_env crate in
+          let name = Print.Types.name_to_string fmt_env f.item_meta.name in
+          let name_pattern =
+            try
+              let c : Charon.NameMatcher.to_pat_config =
+                {
+                  tgt = TkPattern;
+                  use_trait_decl_refs = ExtractName.match_with_trait_decl_refs;
+                }
+              in
+              let pat =
+                LlbcAstUtils.name_to_pattern (Some f.item_meta.span) mctx c
+                  f.item_meta.name
+              in
+              Charon.NameMatcher.pattern_to_string { tgt = TkPattern } pat
+            with CFailure _ ->
+              "(could not compute the name pattern due to a different error)"
+          in
+          save_error_opt_span __FILE__ __LINE__ error.span
+            ("Failure when pre- processing: " ^ name
+           ^ "; ignoring its body.\nName pattern: '" ^ name_pattern ^ "'");
+          None)
+  in
+  { f with body }
+
 let apply_passes (crate : crate) : crate =
   (* Passes that apply to the whole crate *)
   let crate = update_array_default crate in
   (* Passes that apply to individual function bodies *)
   let function_passes =
     [
-      remove_loop_breaks crate;
-      remove_shallow_borrows_storage_live_dead crate;
+      remove_loop_breaks;
+      remove_shallow_borrows_storage_live_dead;
       decompose_str_borrows;
       unify_drops;
+      decompose_global_accesses;
       refresh_statement_ids;
     ]
   in
   (* Attempt to apply a pass: if it fails we replace the body by [None] *)
-  let apply_function_pass (pass : fun_decl -> fun_decl) (f : fun_decl) =
-    try pass f
+  let apply_function_pass (pass : crate -> fun_decl -> fun_decl) (f : fun_decl)
+      =
+    try pass crate f
     with CFailure _ ->
       (* The error was already registered, we don't need to register it twice.
          However, we replace the body of the function, and save an error to

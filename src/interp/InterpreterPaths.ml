@@ -22,11 +22,11 @@ let log = Logging.paths_log
 
     TODO: compare with borrow_lres? *)
 type path_fail_kind =
-  | FailSharedLoan of BorrowId.Set.t
+  | FailSharedLoan of BorrowId.id
       (** Failure because we couldn't go inside a shared loan *)
   | FailMutLoan of BorrowId.id
       (** Failure because we couldn't go inside a mutable loan *)
-  | FailReservedMutBorrow of BorrowId.id
+  | FailReservedMutBorrow of (BorrowId.id * SharedBorrowId.id)
       (** Failure because we couldn't go inside a reserved mutable borrow (which
           should get activated) *)
   | FailSymbolic of place * symbolic_value
@@ -128,7 +128,7 @@ let rec project_value (span : Meta.span) (access : projection_access)
         match bc with
         | VSharedBorrow _ when not access.lookup_shared_borrows ->
             Error (FailBorrow bc)
-        | VSharedBorrow bid -> begin
+        | VSharedBorrow (bid, _) -> begin
             (* Lookup the loan content, and explore from there *)
             match lookup_loan span ek bid ctx with
             | _, Concrete (VMutLoan _) ->
@@ -174,7 +174,8 @@ let rec project_value (span : Meta.span) (access : projection_access)
                       (ctx, v) )
               end
           end
-        | VReservedMutBorrow bid -> Error (FailReservedMutBorrow bid)
+        | VReservedMutBorrow (bid, sid) ->
+            Error (FailReservedMutBorrow (bid, sid))
         | VMutBorrow _ when not access.enter_mut_borrows ->
             Error (FailBorrow bc)
         | VMutBorrow (bid, bv) ->
@@ -225,7 +226,8 @@ let rec project_value (span : Meta.span) (access : projection_access)
         ("Inconsistent projection:\n" ^ pe ^ "\n" ^ v ^ "\n" ^ ty)
     end
 
-(** Generic function to access (read/write) the value inside a place.
+(** Generic function to access (read/write) the value inside a place, provided
+    the place **does not refer to a global** (globals are handled elsewhere).
 
     We return the read value and a backward function that propagates any changes
     to the projected value back to the original local. *)
@@ -263,8 +265,11 @@ let rec access_place (span : Meta.span) (access : projection_access)
             end
         end
     end
+  | PlaceGlobal _ ->
+      craise __FILE__ __LINE__ span "Unexpected access to a global"
 
-(** Generic function to access (read/write) the value at a given place.
+(** Generic function to access (read/write) the value at a given place, provided
+    the place **does not refer to a global** (globals are handled elsewhere).
 
     We return the value we read at the place and the (eventually) updated
     environment, if we managed to access the place, or the precise reason why we
@@ -313,7 +318,8 @@ let access_kind_to_projection_access (access : access_kind) : projection_access
         lookup_shared_borrows = false;
       }
 
-(** Attempt to read the value at a given place.
+(** Attempt to read the value at a given place, provided the place **does not
+    refer to a global** (globals are handled elsewhere).
 
     Note that we only access the value at the place, and do not check that the
     value is "well-formed" (for instance that it doesn't contain bottoms). *)
@@ -344,7 +350,8 @@ let read_place (span : Meta.span) (access : access_kind) (p : place)
       craise __FILE__ __LINE__ span ("Unreachable: " ^ show_path_fail_kind e)
   | Ok v -> v
 
-(** Attempt to update the value at a given place *)
+(** Attempt to update the value at a given place, provided the place **does not
+    refer to a global** (globals are handled elsewhere). *)
 let try_write_place (span : Meta.span) (access : access_kind) (p : place)
     (nv : typed_value) (ctx : eval_ctx) : eval_ctx path_access_result =
   let access = access_kind_to_projection_access access in
@@ -474,13 +481,12 @@ let rec update_ctx_along_read_place (config : config) (span : Meta.span)
   | Error err ->
       let ctx, cc =
         match err with
-        | FailSharedLoan bids -> end_borrows config span bids ctx
-        | FailMutLoan bid -> end_borrow config span bid ctx
-        | FailReservedMutBorrow bid ->
-            promote_reserved_mut_borrow config span bid ctx
+        | FailSharedLoan lid | FailMutLoan lid -> end_loan config span lid ctx
+        | FailReservedMutBorrow (bid, sid) ->
+            promote_reserved_mut_borrow config span bid sid ctx
         | FailSymbolic (p, sv) ->
             (* Expand the symbolic value *)
-            expand_symbolic_value_no_branching config span sv
+            expand_symbolic_value_no_branching span sv
               (Some (Synth.mk_mplace span p ctx))
               ctx
         | FailBottom (_, _) ->
@@ -502,13 +508,12 @@ let rec update_ctx_along_write_place (config : config) (span : Meta.span)
       (* Update the context *)
       let ctx, cc =
         match err with
-        | FailSharedLoan bids -> end_borrows config span bids ctx
-        | FailMutLoan bid -> end_borrow config span bid ctx
-        | FailReservedMutBorrow bid ->
-            promote_reserved_mut_borrow config span bid ctx
+        | FailSharedLoan lid | FailMutLoan lid -> end_loan config span lid ctx
+        | FailReservedMutBorrow (bid, sid) ->
+            promote_reserved_mut_borrow config span bid sid ctx
         | FailSymbolic (_pe, sp) ->
             (* Expand the symbolic value *)
-            expand_symbolic_value_no_branching config span sp
+            expand_symbolic_value_no_branching span sp
               (Some (Synth.mk_mplace span p ctx))
               ctx
         | FailBottom (p, pe) ->
@@ -543,24 +548,24 @@ let rec end_loans_at_place (config : config) (span : Meta.span)
         match bc with
         | VSharedBorrow _ | VMutBorrow (_, _) ->
             (* Nothing special to do *) super#visit_borrow_content env bc
-        | VReservedMutBorrow bid ->
+        | VReservedMutBorrow (bid, sid) ->
             (* We need to activate reserved borrows *)
-            let res = promote_reserved_mut_borrow config span bid ctx in
+            let res = promote_reserved_mut_borrow config span bid sid ctx in
             raise (UpdateCtx res)
 
       method! visit_loan_content env lc =
         match lc with
-        | VSharedLoan (bids, v) -> (
+        | VSharedLoan (lid, v) -> (
             (* End the loans if we need a modification access, otherwise dive into
                the shared value *)
             match access with
-            | Read -> super#visit_VSharedLoan env bids v
+            | Read -> super#visit_VSharedLoan env lid v
             | Write | Move ->
-                let res = end_borrows config span bids ctx in
+                let res = end_loan config span lid ctx in
                 raise (UpdateCtx res))
-        | VMutLoan bid ->
+        | VMutLoan lid ->
             (* We always need to end mutable borrows *)
-            let res = end_borrow config span bid ctx in
+            let res = end_loan config span lid ctx in
             raise (UpdateCtx res)
     end
   in
@@ -608,9 +613,8 @@ let drop_outer_loans_at_lplace (config : config) (span : Meta.span) (p : place)
         (* End the loans and retry *)
         let ctx, cc =
           match c with
-          | LoanContent (VSharedLoan (bids, _)) ->
-              end_borrows config span bids ctx
-          | LoanContent (VMutLoan bid) -> end_borrow config span bid ctx
+          | LoanContent (VSharedLoan (lid, _)) | LoanContent (VMutLoan lid) ->
+              end_loan config span lid ctx
           | BorrowContent _ ->
               (* Can't get there: we are only looking up the loans *)
               craise __FILE__ __LINE__ span "Unreachable"

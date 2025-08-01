@@ -79,6 +79,12 @@ let ( borrow_id_counter,
       fresh_borrow_id ) =
   BorrowId.fresh_marked_stateful_generator ()
 
+let ( shared_borrow_id_counter,
+      marked_shared_borrow_ids,
+      marked_shared_borrow_ids_insert_from_int,
+      fresh_shared_borrow_id ) =
+  SharedBorrowId.fresh_marked_stateful_generator ()
+
 let ( region_id_counter,
       marked_region_ids,
       marked_region_ids_insert_from_int,
@@ -99,19 +105,20 @@ let fun_call_id_counter, fresh_fun_call_id =
 let dummy_var_id_counter, fresh_dummy_var_id =
   DummyVarId.fresh_stateful_generator ()
 
-(** We shouldn't need to reset the global counters, but it might be good to do
-    it from time to time, for instance every time we start evaluating/
-    synthesizing a function.
+(** We don't need to reset the global counters, but it is good to do it from
+    time to time, for instance every time we start evaluating/ synthesizing a
+    function.
 
     The reasons are manifold:
     - it might prevent the counters from overflowing (although this seems
       extremely unlikely - as a side node: we have overflow checks to make sure
       the synthesis doesn't get impacted by potential overflows)
-    - most importantly, it allows to always manipulate low values, which is
+    - most importantly, it allows to always manipulate small values, which is
       always a lot more readable when debugging *)
 let reset_global_counters () =
   symbolic_value_id_counter := SymbolicValueId.generator_zero;
   borrow_id_counter := BorrowId.generator_zero;
+  shared_borrow_id_counter := SharedBorrowId.generator_zero;
   region_id_counter := RegionId.generator_zero;
   abstraction_id_counter := AbstractionId.generator_zero;
   loop_id_counter := LoopId.generator_zero;

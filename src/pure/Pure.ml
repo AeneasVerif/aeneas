@@ -683,6 +683,7 @@ type mprojection_elem = { pkind : field_proj_kind; field_id : field_id }
     variables we introduce. *)
 type mplace =
   | PlaceLocal of E.LocalId.id * string option
+  | PlaceGlobal of global_decl_ref
   | PlaceProjection of mplace * mprojection_elem
 [@@deriving show, ord]
 

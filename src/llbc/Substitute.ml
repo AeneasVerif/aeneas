@@ -82,6 +82,7 @@ type id_subst = {
   cg_subst : ConstGenericVarId.id -> ConstGenericVarId.id;
   ssubst : SymbolicValueId.id -> SymbolicValueId.id;
   bsubst : BorrowId.id -> BorrowId.id;
+  sbsubst : SharedBorrowId.id -> SharedBorrowId.id;
   asubst : AbstractionId.id -> AbstractionId.id;
 }
 
@@ -92,6 +93,7 @@ let empty_id_subst =
     cg_subst = (fun x -> x);
     ssubst = (fun x -> x);
     bsubst = (fun x -> x);
+    sbsubst = (fun x -> x);
     asubst = (fun x -> x);
   }
 
@@ -121,6 +123,7 @@ let subst_ids_visitor (subst : id_subst) =
       | Bound _ -> RVar var
 
     method! visit_borrow_id _ bid = subst.bsubst bid
+    method! visit_shared_borrow_id _ sid = subst.sbsubst sid
     method! visit_loan_id _ bid = subst.bsubst bid
     method! visit_symbolic_value_id _ id = subst.ssubst id
 

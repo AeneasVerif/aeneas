@@ -20,6 +20,8 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
     cm_fun =
  fun ctx0 ->
   let ctx = ctx0 in
+  log#ldebug (lazy (__FUNCTION__ ^ ": ctx0:\n" ^ eval_ctx_to_string ctx));
+
   (* Compute the set of borrows which appear in the abstractions, so that
      we can filter the borrows that we reborrow.
   *)
@@ -30,8 +32,7 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
         | EAbs abs -> Some abs)
       ctx.env
   in
-  let absl_ids, absl_id_maps = compute_absl_ids absl in
-  let abs_borrow_ids = absl_ids.borrow_ids in
+  let _, absl_id_maps = compute_absl_ids absl in
 
   (* Map from the fresh sids to the original symbolic values *)
   let sid_subst = ref [] in
@@ -61,38 +62,35 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
       v
   in
 
-  let borrow_substs = ref [] in
   let fresh_absl = ref [] in
 
-  (* Auxiliary function to create a new abstraction for a shared value found in
-     an abstraction.
+  (* Auxiliary function to create a new abstraction for a shared value.
 
      Example:
      ========
      When exploring:
      {[
-       abs'0 { SL {l0, l1} s0 }
+       abs'0 { SL l s0 }
+       x0 -> SB l
+       x1 -> SB l
      ]}
 
-     we find the shared value:
-
+     we find the shared borrow [SB l] in x0 and x1, which maps to a loan in a region
+     abstraction. We introduce reborrows the following way:
      {[
-       SL {l0, l1} s0
+       abs'0 { SL l s0 }
+       abs'2 { SB l, SL {l1} s1 }
+       abs'3 { SB l, SL {l2} s2 }
+       x0 -> SB l1
+       x1 -> SB l2
      ]}
-
-     and introduce the corresponding abstractions for the borrows l0 and l1:
-     {[
-       abs'2 { SB l0, SL {l0'} s1 } // Reborrow for l0
-       abs'3 { SB l1, SL {l1'} s2 } // Reborrow for l1
-     ]}
-
-     Remark: of course we also need to replace the [SB l0] and the [SB l1]
-     values we find in the environments with [SB l0'] and [SB l1'].
   *)
   let push_abs_for_shared_value (abs : abs) (sv : typed_value)
-      (lid : BorrowId.id) : unit =
-    (* Create a fresh borrow (for the reborrow) *)
+      (lid : BorrowId.id) (sid : SharedBorrowId.id) :
+      BorrowId.id * SharedBorrowId.id =
+    (* Create fresh borrows (for the reborrow) *)
     let nlid = fresh_borrow_id () in
+    let nsid = fresh_shared_borrow_id () in
 
     (* We need a fresh region for the new abstraction *)
     let nrid = fresh_region_id () in
@@ -101,9 +99,6 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
     let nsv =
       mk_value_with_fresh_sids_no_shared_loans abs.regions.owned nrid sv
     in
-
-    (* Save the borrow substitution, to apply it to the context later *)
-    borrow_substs := (lid, nlid) :: !borrow_substs;
 
     (* Rem.: the below sanity checks are not really necessary *)
     sanity_check __FILE__ __LINE__ (AbstractionId.Set.is_empty abs.parents) span;
@@ -120,14 +115,12 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
 
     (* Create the shared loan *)
     let loan_rty = TRef (RVar (Free nrid), rty, RShared) in
-    let loan_value =
-      ALoan (ASharedLoan (PNone, BorrowId.Set.singleton nlid, nsv, child_av))
-    in
+    let loan_value = ALoan (ASharedLoan (PNone, nlid, nsv, child_av)) in
     let loan_value = mk_typed_avalue span loan_rty loan_value in
 
     (* Create the shared borrow *)
     let borrow_rty = loan_rty in
-    let borrow_value = ABorrow (ASharedBorrow (PNone, lid)) in
+    let borrow_value = ABorrow (ASharedBorrow (PNone, lid, sid)) in
     let borrow_value = mk_typed_avalue span borrow_rty borrow_value in
 
     (* Create the abstraction *)
@@ -150,105 +143,57 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
         avalues;
       }
     in
-    fresh_absl := fresh_abs :: !fresh_absl
+    fresh_absl := fresh_abs :: !fresh_absl;
+    (nlid, nsid)
   in
 
-  (* Explore the shared values in the context abstractions, and introduce
-     fresh abstractions with reborrows for those shared values.
+  (* Compute the map from borrow id to shared value appearing in a region abstraction -
+     we only visit the region abstractions *)
+  let loan_to_shared_value = ref BorrowId.Map.empty in
+  let visitor =
+    object
+      inherit [_] iter_abs as super
+
+      method! visit_VSharedLoan abs bid sv =
+        loan_to_shared_value :=
+          BorrowId.Map.add bid (abs, sv) !loan_to_shared_value;
+        super#visit_VSharedLoan abs bid sv
+
+      method! visit_ASharedLoan abs pm bid sv child =
+        loan_to_shared_value :=
+          BorrowId.Map.add bid (abs, sv) !loan_to_shared_value;
+        super#visit_ASharedLoan abs pm bid sv child
+    end
+  in
+  List.iter (fun abs -> visitor#visit_abs abs abs) absl;
+
+  (* Explore the shared borrows in the environment, and introduce
+     fresh abstractions with reborrows.
 
      We simply explore the context and call {!push_abs_for_shared_value}
      when necessary.
   *)
-  let collect_shared_values_in_abs (abs : abs) : unit =
-    let collect_shared_value lids (sv : typed_value) =
-      (* Sanity check: we don't support nested borrows for now *)
-      sanity_check __FILE__ __LINE__
-        (not (value_has_borrows (Some span) ctx sv.value))
-        span;
+  let visitor =
+    object
+      inherit [_] map_eval_ctx as super
+      method! visit_abs _ abs = (* Do not explore region abstractions *) abs
 
-      (* Filter the loan ids whose corresponding borrows appear in abstractions
-         (see the documentation of the function) *)
-      let lids = BorrowId.Set.diff lids abs_borrow_ids in
-
-      (* Generate fresh borrows and values *)
-      BorrowId.Set.iter (push_abs_for_shared_value abs sv) lids
-    in
-
-    let visit_avalue =
-      object
-        inherit [_] iter_typed_avalue as super
-
-        method! visit_VSharedLoan env lids sv =
-          collect_shared_value lids sv;
-
-          (* Continue the exploration *)
-          super#visit_VSharedLoan env lids sv
-
-        method! visit_ASharedLoan env pm lids sv av =
-          collect_shared_value lids sv;
-
-          (* Continue the exploration *)
-          super#visit_ASharedLoan env pm lids sv av
-      end
-    in
-    List.iter (visit_avalue#visit_typed_avalue None) abs.avalues
+      method! visit_VSharedBorrow env bid sid =
+        (* Check if the corresponding loan is in a region abstraction *)
+        match BorrowId.Map.find_opt bid !loan_to_shared_value with
+        | None ->
+            (* Do nothing *)
+            super#visit_VSharedBorrow env bid sid
+        | Some (abs, sv) ->
+            let bid, sid = push_abs_for_shared_value abs sv bid sid in
+            VSharedBorrow (bid, sid)
+    end
   in
-  (* Note that we iterate over the environment by starting with the oldest
-     abstractions *)
-  env_iter_abs collect_shared_values_in_abs (List.rev ctx.env);
-
-  (* Update the borrow ids in the environment.
-
-     Example:
-     ========
-     If we start with environment:
-     {[
-       abs'0 { SL {l0, l1} s0 }
-       l0 -> SB l0
-       l1 -> SB l1
-     ]}
-
-     We introduce the following abstractions:
-     {[
-       abs'2 { SB l0, SL {l2} s2 }
-       abs'3 { SB l1, SL {l3} s3 }
-     ]}
-
-     While doing so, we registered the fact that we introduced [l2] for [l0]
-     and [l3] for [l1]: we now need to perform the proper substitutions in
-     the values [l0] and [l1]. This gives:
-
-     {[
-       l0 -> SB l0
-       l1 -> SB l1
-
-         ~~>
-
-       l0 -> SB l2
-       l1 -> SB l3
-     ]}
-  *)
-  let env =
-    let bmap = BorrowId.Map.of_list !borrow_substs in
-    let bsusbt bid =
-      match BorrowId.Map.find_opt bid bmap with
-      | None -> bid
-      | Some bid -> bid
-    in
-
-    let visitor =
-      object
-        inherit [_] map_env
-        method! visit_borrow_id _ bid = bsusbt bid
-      end
-    in
-    visitor#visit_env () ctx.env
-  in
+  let ctx = visitor#visit_eval_ctx () ctx in
 
   (* Add the abstractions *)
   let fresh_absl = List.map (fun abs -> EAbs abs) !fresh_absl in
-  let env = List.append fresh_absl env in
-  let ctx = { ctx with env } in
+  let ctx = { ctx with env = List.append fresh_absl ctx.env } in
 
   let _, new_ctx_ids_map = compute_ctx_ids ctx in
 
@@ -262,6 +207,9 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
         SymbolicAst.IntroSymbolic (ctx, None, sv, VaSingleValue v, e))
       e !sid_subst
   in
+  Invariants.check_invariants span ctx;
+  log#ldebug
+    (lazy (__FUNCTION__ ^ ": resulting ctx:\n" ^ eval_ctx_to_string ctx));
   (ctx, cf)
 
 let prepare_ashared_loans_no_synth (span : Meta.span) (loop_id : LoopId.id)
@@ -313,32 +261,33 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
       | None ->
           let old_ids, _ = compute_ctx_ids ctx1 in
           let new_ids, _ = compute_ctxs_ids ctxs in
-          let blids = BorrowId.Set.diff old_ids.blids new_ids.blids in
+          let lids = BorrowId.Set.diff old_ids.loan_ids new_ids.loan_ids in
           let aids = AbstractionId.Set.diff old_ids.aids new_ids.aids in
-          (* End those borrows and abstractions *)
-          let end_borrows_abs blids aids ctx =
-            let ctx = end_borrows_no_synth config span blids ctx in
+          (* End those loans and abstractions *)
+          let end_loans_abs (lids : loan_id_set) (aids : abstraction_id_set) ctx
+              =
+            let ctx = try_end_loans_no_synth config span lids ctx in
             let ctx = end_abstractions_no_synth config span aids ctx in
             ctx
           in
-          (* End the borrows/abs in [ctx1] *)
+          (* End the loans/abs in [ctx1] *)
           log#ltrace
             (lazy
               (__FUNCTION__
              ^ ": join_ctxs: ending borrows/abstractions before entering the \
                 loop:\n\
-                - ending borrow ids: "
-              ^ BorrowId.Set.to_string None blids
+                - ending loan ids: "
+              ^ BorrowId.Set.to_string None lids
               ^ "\n- ending abstraction ids: "
               ^ AbstractionId.Set.to_string None aids
               ^ "\n\n"));
-          let ctx1 = end_borrows_abs blids aids ctx1 in
+          let ctx1 = end_loans_abs lids aids ctx1 in
           (* We can also do the same in the contexts [ctxs]: if there are
              several contexts, maybe one of them ended some borrows and some
              others didn't. As we need to end those borrows anyway (the join
              will detect them and ask to end them) we do it preemptively.
           *)
-          let ctxs = List.map (end_borrows_abs blids aids) ctxs in
+          let ctxs = List.map (end_loans_abs lids aids) ctxs in
           (* Note that the fixed ids are given by the original context, from *before*
              we introduce fresh abstractions/reborrows for the shared values *)
           fixed_ids := Some (fst (compute_ctx_ids ctx0));
@@ -361,7 +310,19 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
      of new environments *)
   let compute_fixed_ids (ctxl : eval_ctx list) : ids_sets =
     let fixed_ids, _ = compute_ctx_ids ctx0 in
-    let { aids; blids; borrow_ids; loan_ids; dids; rids; sids } = fixed_ids in
+    let {
+      aids;
+      blids;
+      borrow_ids;
+      unique_borrow_ids;
+      shared_borrow_ids;
+      loan_ids;
+      dids;
+      rids;
+      sids;
+    } =
+      fixed_ids
+    in
     let sids = ref sids in
     List.iter
       (fun ctx ->
@@ -369,7 +330,19 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
         sids := SymbolicValueId.Set.inter !sids fixed_ids.sids)
       ctxl;
     let sids = !sids in
-    let fixed_ids = { aids; blids; borrow_ids; loan_ids; dids; rids; sids } in
+    let fixed_ids =
+      {
+        aids;
+        blids;
+        borrow_ids;
+        unique_borrow_ids;
+        shared_borrow_ids;
+        loan_ids;
+        dids;
+        rids;
+        sids;
+      }
+    in
     fixed_ids
   in
   (* Check if two contexts are equivalent - modulo alpha conversion on the
@@ -1004,7 +977,7 @@ let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
         inherit [_] iter_env
 
         (** We lookup the shared values *)
-        method! visit_VSharedBorrow env bid =
+        method! visit_VSharedBorrow env bid _ =
           let open InterpreterBorrowsCore in
           let v =
             match snd (lookup_loan span ek_all bid fp_ctx) with

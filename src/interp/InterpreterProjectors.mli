@@ -35,23 +35,6 @@ val symbolic_expansion_non_borrow_to_value :
 val symbolic_expansion_non_shared_borrow_to_value :
   Meta.span -> symbolic_value -> symbolic_expansion -> typed_value
 
-(** Auxiliary function to prepare reborrowing operations (used when applying
-    projectors).
-
-    Returns two functions:
-    - a function to generate fresh re-borrow ids, and register the reborrows
-    - a function to apply the reborrows in a context Those functions are of
-      course stateful.
-
-    Parameters:
-    - [config]
-    - [allow_reborrows] *)
-val prepare_reborrows :
-  config ->
-  Meta.span ->
-  bool ->
-  (BorrowId.id -> BorrowId.id) * (eval_ctx -> eval_ctx)
-
 (** Apply (and reduce) a projector over borrows to an avalue. We use this for
     instance to spread the borrows present in the inputs of a function into the
     regions introduced for this function. For instance:
@@ -81,16 +64,6 @@ val prepare_reborrows :
      {- [ctx] }
     }
 
-    - [fresh_reborrow]: a function which generates fresh ids for reborrows, and
-      registers the reborrows (to be applied later to the context).
-
-    When applying projections on shared values, we need to apply reborrows. This
-    is a bit annoying because, with the way we compute the projection on
-    borrows, we can't update the context immediately. Instead, we remember the
-    list of borrows we have to insert in the context *afterwards*.
-
-    See {!prepare_reborrows}
-
     - [regions]: the regions to project
     - [v]: the value on which to apply the projection
     - [ty]: the projection type (is used to map borrows to regions, or in other
@@ -104,7 +77,6 @@ val apply_proj_borrows :
   Meta.span ->
   bool ->
   eval_ctx ->
-  (BorrowId.id -> BorrowId.id) ->
   RegionId.Set.t ->
   typed_value ->
   rty ->
@@ -118,7 +90,6 @@ val apply_proj_borrows :
     - [ty]: the type (with regions) to use for the projection (shouldn't have
       erased regions) *)
 val apply_proj_borrows_on_input_value :
-  config ->
   Meta.span ->
   eval_ctx ->
   RegionId.Set.t ->

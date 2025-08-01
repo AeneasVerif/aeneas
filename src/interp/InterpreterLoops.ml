@@ -167,7 +167,7 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
               sanity_check __FILE__ __LINE__ (pm = PNone) span;
               sanity_check __FILE__ __LINE__ (is_aignored child_av.value) span;
               Some bid
-          | ABorrow (ASharedBorrow (pm, _)) ->
+          | ABorrow (ASharedBorrow (pm, _, _)) ->
               sanity_check __FILE__ __LINE__ (pm = PNone) span;
               None
           | ASymbolic (_, (AProjBorrows _ | AProjLoans _)) -> None
