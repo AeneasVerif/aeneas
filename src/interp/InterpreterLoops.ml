@@ -324,10 +324,12 @@ let eval_loop_symbolic (config : config) (span : span)
   (* Debug *)
   log#ltrace
     (lazy
-      (__FUNCTION__ ^ ":\nInitial context:\n"
+      (__FUNCTION__ ^ ":\n- Initial context:\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx
-      ^ "\n\nFixed point:\n"
-      ^ eval_ctx_to_string ~span:(Some span) fp_ctx));
+      ^ "\n\n- Fixed point:\n"
+      ^ eval_ctx_to_string ~span:(Some span) fp_ctx
+      ^ "\n\n- rg_to_abs:\n"
+      ^ RegionGroupId.Map.to_string None AbstractionId.to_string rg_to_abs));
 
   (* Compute the loop input parameters *)
   let fresh_sids, input_svalues =

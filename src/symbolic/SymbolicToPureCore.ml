@@ -412,6 +412,11 @@ let bs_ctx_expression_to_string (ctx : bs_ctx) (e : S.expression) : string =
   let env = bs_ctx_to_fmt_env ctx in
   expression_to_string env "" "  " e
 
+let bs_ctx_expansion_to_string (ctx : bs_ctx) (scrut : V.symbolic_value)
+    (e : S.expansion) : string =
+  let env = bs_ctx_to_fmt_env ctx in
+  expansion_to_string env "" "  " scrut e
+
 let ctx_get_effect_info_for_bid (ctx : bs_ctx) (bid : RegionGroupId.id option) :
     fun_effect_info =
   match bid with
