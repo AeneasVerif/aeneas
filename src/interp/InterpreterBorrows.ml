@@ -2185,6 +2185,29 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
           let v = visitor#visit_typed_value true v in
           (* No exception was raised: continue *)
           EBinding (BDummy vid, v) :: explore_env ctx env
+    | EBinding (BVar vid, v) :: env ->
+        (* End the shared loans which don't have corresponding borrows.
+         We explore the value and raise an exception if it finds a borrow to end *)
+        let visitor =
+          object
+            inherit [_] map_typed_value as super
+
+            method! visit_VLoan end_borrows lc =
+              (* Check if we can end the loan, but don't dive inside *)
+              match lc with
+              | VSharedLoan (l, value) -> begin
+                  match lookup_shared_reserved_borrows l ctx with
+                  | [] ->
+                      (* End the loan *)
+                      super#visit_value end_borrows value.value
+                  | _ -> super#visit_VLoan false lc
+                end
+              | _ -> super#visit_VLoan false lc
+          end
+        in
+        let v = visitor#visit_typed_value true v in
+        (* No exception was raised: continue *)
+        EBinding (BVar vid, v) :: explore_env ctx env
     | EAbs abs :: env
       when simplify_abs && abs.can_end
            && not (AbstractionId.Set.mem abs.abs_id fixed_abs_ids) -> (
