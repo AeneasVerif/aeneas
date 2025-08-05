@@ -1194,8 +1194,6 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
      For every context, we repeteadly attempt to join it with the current
      result of the join: if we fail (because we need to end loans for instance),
      we update the context and retry.
-     Rem.: we should never have to end loans in the aggregated context, only
-     in the one we are trying to add to the join.
   *)
   let joined_ctx = ref old_ctx in
   let rec join_one_aux (ctx : eval_ctx) : eval_ctx =
@@ -1210,7 +1208,16 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
               InterpreterBorrows.end_loan_no_synth config span bid ctx
           | LoansInRight bids ->
               InterpreterBorrows.end_loans_no_synth config span bids ctx
-          | AbsInRight _ | AbsInLeft _ | LoanInLeft _ | LoansInLeft _ ->
+          | LoanInLeft bid ->
+              joined_ctx :=
+                InterpreterBorrows.end_loan_no_synth config span bid !joined_ctx;
+              ctx
+          | LoansInLeft bids ->
+              joined_ctx :=
+                InterpreterBorrows.end_loans_no_synth config span bids
+                  !joined_ctx;
+              ctx
+          | AbsInRight _ | AbsInLeft _ ->
               craise __FILE__ __LINE__ span "Unexpected"
         in
         join_one_aux ctx
