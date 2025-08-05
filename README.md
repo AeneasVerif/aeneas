@@ -35,17 +35,17 @@ You need to install OCaml, together with some packages.
 We suggest you to follow those [instructions](https://ocaml.org/docs/install.html),
 and install OPAM on the way (same instructions).
 
-Any recent version of **OCaml 4** should do. For instance, if you want to use OCaml
-4.14.2:
+We are developing Aeneas by using **OCaml 5**. For instance, if you want to use OCaml 5.2.0:
 ```
-opam switch create 4.14.2
+opam switch create 5.2.0
 ```
+Note that any recent version of **OCaml 4** should actually work, though we do not guarantee that
+it will be the case.
 
 You can then install the dependencies with the following command:
-
 ```
 opam install ppx_deriving visitors easy_logging zarith yojson core_unix odoc \
-  ocamlgraph menhir ocamlformat unionFind
+  ocamlgraph menhir ocamlformat unionFind zarith
 ```
 
 Moreover, Aeneas uses the [Charon](https://github.com/AeneasVerif/charon) project and library.
