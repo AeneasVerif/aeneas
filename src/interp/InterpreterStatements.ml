@@ -176,7 +176,7 @@ let eval_assertion (config : config) (span : Meta.span) (assertion : assertion)
          * We will of course synthesize an assertion in the generated code
          * (see below). *)
         let ctx =
-          apply_symbolic_expansion_non_borrow config span sv ctx
+          apply_symbolic_expansion_non_borrow span sv ctx
             (SeLiteral (VBool true))
         in
         (* Add the synthesized assertion *)
@@ -775,7 +775,7 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
   let cc = S.save_snapshot ctx in
   (* Expand the symbolic values if necessary - we need to do that before
      checking the invariants *)
-  let ctx, cc = comp cc (greedy_expand_symbolic_values config st.span ctx) in
+  let ctx, cc = comp cc (greedy_expand_symbolic_values st.span ctx) in
   (* Sanity check *)
   Invariants.check_invariants st.span ctx;
 
@@ -947,15 +947,13 @@ and eval_global_ref (config : config) (span : Meta.span) (dest : place)
       let typed_sval = mk_typed_value_from_symbolic_value sval in
       (* Create a shared loan containing the global, as well as a shared borrow *)
       let bid = fresh_borrow_id () in
+      let sid = fresh_shared_borrow_id () in
       let loan : typed_value =
-        {
-          value = VLoan (VSharedLoan (BorrowId.Set.singleton bid, typed_sval));
-          ty = sval.sv_ty;
-        }
+        { value = VLoan (VSharedLoan (bid, typed_sval)); ty = sval.sv_ty }
       in
       let borrow : typed_value =
         {
-          value = VBorrow (VSharedBorrow bid);
+          value = VBorrow (VSharedBorrow (bid, sid));
           ty = TRef (RErased, sval.sv_ty, RShared);
         }
       in
@@ -996,7 +994,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
             (* Expand the symbolic boolean, and continue by evaluating
                the branches *)
             let (ctx_true, ctx_false), cf_bool =
-              expand_symbolic_bool config span sv
+              expand_symbolic_bool span sv
                 (S.mk_opt_place_from_op span op ctx)
                 ctx
             in
@@ -1042,7 +1040,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
             in
             (* Expand the symbolic value *)
             let (ctx_branches, ctx_otherwise), cf_int =
-              expand_symbolic_int config span sv
+              expand_symbolic_int span sv
                 (S.mk_opt_place_from_op span op ctx)
                 int_ty values ctx
             in
@@ -1096,9 +1094,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
         | VSymbolic sv ->
             (* Expand the symbolic value - may lead to branching *)
             let ctxl, cf_expand =
-              expand_symbolic_adt config span sv
-                (Some (S.mk_mplace span p ctx))
-                ctx
+              expand_symbolic_adt span sv (Some (S.mk_mplace span p ctx)) ctx
             in
             (* Re-evaluate the switch - the value is not symbolic anymore,
                which means we will go to the other branch *)
@@ -1350,8 +1346,8 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
     let ctx, args_projs =
       List.fold_left_map
         (fun ctx (arg, arg_rty) ->
-          apply_proj_borrows_on_input_value config span ctx abs.regions.owned
-            arg arg_rty)
+          apply_proj_borrows_on_input_value span ctx abs.regions.owned arg
+            arg_rty)
         ctx args_with_rtypes
     in
     (* Group the input and output values *)
@@ -1513,7 +1509,7 @@ and eval_function_body (config : config) (body : block) : stl_cm_fun =
           (lazy ("eval_function_body: cf_finish:\n" ^ eval_ctx_to_string ctx));
         (* Expand the symbolic values if necessary - we need to do that before
            checking the invariants *)
-        let ctx, cf = greedy_expand_symbolic_values config body.span ctx in
+        let ctx, cf = greedy_expand_symbolic_values body.span ctx in
         log#ltrace
           (lazy
             ("eval_function_body: after expansion:\n" ^ eval_ctx_to_string ctx));

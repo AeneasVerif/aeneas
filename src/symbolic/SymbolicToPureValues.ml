@@ -128,13 +128,13 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
         | VMutLoan _ -> craise __FILE__ __LINE__ ctx.span "Unreachable")
     | VBorrow bc -> (
         match bc with
-        | VSharedBorrow bid ->
+        | VSharedBorrow (bid, _) ->
             (* Lookup the shared value in the context, and continue *)
             let sv =
               InterpreterBorrowsCore.lookup_shared_value ctx.span ectx bid
             in
             translate sv
-        | VReservedMutBorrow bid ->
+        | VReservedMutBorrow (bid, _) ->
             (* Same as for shared borrows. However, note that we use reserved borrows
              * only in *meta-data*: a value *actually used* in the translation can't come
              * from an unpromoted reserved borrow *)
@@ -723,7 +723,7 @@ and aborrow_content_to_given_back_aux ~(filter : bool) (mp : mplace option)
     (bc : V.aborrow_content) (ty : T.ty) (ctx : bs_ctx) :
     bs_ctx * typed_pattern option =
   match bc with
-  | V.AMutBorrow (_, _, _) | ASharedBorrow (_, _) | AIgnoredMutBorrow (_, _) ->
+  | V.AMutBorrow _ | ASharedBorrow _ | AIgnoredMutBorrow _ ->
       (* All the borrows should have been ended upon ending the abstraction *)
       craise __FILE__ __LINE__ ctx.span "Unreachable"
   | AEndedMutBorrow (msv, _) ->

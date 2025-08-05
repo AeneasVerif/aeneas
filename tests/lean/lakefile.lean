@@ -6,9 +6,9 @@ require aeneas from "../../backends/lean"
 package «tests» {}
 
 @[default_target] lean_lib AdtBorrows
-@[default_target] lean_lib ArraySliceIndex
 @[default_target] lean_lib Arrays
 @[default_target] lean_lib ArraysDefs
+@[default_target] lean_lib ArraySliceIndex
 @[default_target] lean_lib AsMut
 @[default_target] lean_lib Avl
 @[default_target] lean_lib BaseTutorial
@@ -29,6 +29,7 @@ package «tests» {}
 @[default_target] lean_lib Issue270LoopList
 @[default_target] lean_lib Issue440TypeError
 @[default_target] lean_lib Loops
+@[default_target] lean_lib LoopsIssues
 @[default_target] lean_lib MiniTree
 @[default_target] lean_lib MutuallyRecursiveTraits
 @[default_target] lean_lib NoNestedBorrows

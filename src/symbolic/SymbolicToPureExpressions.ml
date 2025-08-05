@@ -306,6 +306,8 @@ let decompose_let_match (ctx : bs_ctx)
     (ctx, (pat, bound))
 
 let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
+  log#ldebug
+    (lazy (__FUNCTION__ ^ ": e:\n" ^ bs_ctx_expression_to_string ctx e ^ "\n"));
   match e with
   | S.Return (ectx, opt_v) ->
       (* We reached a return.
@@ -1266,6 +1268,11 @@ and translate_assertion (ectx : C.eval_ctx) (v : V.typed_value)
 
 and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
     (exp : S.expansion) (ctx : bs_ctx) : texpression =
+  log#ldebug
+    (lazy
+      (__FUNCTION__ ^ ": expansion:\n"
+      ^ bs_ctx_expansion_to_string ctx sv exp
+      ^ "\n"));
   (* Translate the scrutinee *)
   let scrutinee = symbolic_value_to_texpression ctx sv in
   let scrutinee_mplace =
@@ -1355,7 +1362,14 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
           ("true_e.ty: "
           ^ pure_ty_to_string ctx true_e.ty
           ^ "\n\nfalse_e.ty: "
-          ^ pure_ty_to_string ctx false_e.ty));
+          ^ pure_ty_to_string ctx false_e.ty
+          ^ "\n"));
+      log#ltrace
+        (lazy
+          ("true_e: "
+          ^ texpression_to_string ctx true_e
+          ^ " \n\nfalse_e: "
+          ^ texpression_to_string ctx false_e));
       sanity_check __FILE__ __LINE__ (ty = false_e.ty) ctx.span;
       { e; ty }
   | ExpandInt (int_ty, branches, otherwise) ->
@@ -2065,7 +2079,24 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
     let mk_panic =
       (* Note that we reuse the effect information from the parent function *)
       let effect_info = ctx_get_effect_info ctx in
-      let back_tys = compute_back_tys ctx.sg.fun_ty None in
+      let back_tys =
+        (* We need to filter the region abstractions which are not used by the
+         loop - TODO: update this, it will become useless once we allow non
+         terminal loops.
+      *)
+        let fun_ty = ctx.sg.fun_ty in
+        let fun_ty =
+          {
+            fun_ty with
+            back_sg =
+              RegionGroupId.Map.filter
+                (fun rg_id _ ->
+                  RegionGroupId.Map.mem rg_id rg_to_given_back_tys)
+                fun_ty.back_sg;
+          }
+        in
+        compute_back_tys fun_ty None
+      in
       let back_tys = List.filter_map (fun x -> x) back_tys in
       let tys =
         if ctx.sg.fun_ty.fwd_info.ignore_output then back_tys
