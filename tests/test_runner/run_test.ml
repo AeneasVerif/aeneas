@@ -112,6 +112,11 @@ let run_aeneas (env : runner_env) (case : Input.t) (backend : Backend.t) =
 
 (* Run Charon on a specific input with the given options *)
 let run_charon (env : runner_env) (case : Input.t) =
+  (* Create the folder for the .llbc files, if it doesn't exist yet *)
+  (if not (Sys.file_exists env.llbc_dir) then
+     (* Note that the [full_perm] argument is ignored on Windows *)
+     let full_perm = 0o777 in
+     Sys.mkdir env.llbc_dir full_perm);
   let llbc_name =
     Filename_unix.realpath env.llbc_dir ^ "/" ^ case.name ^ ".llbc"
   in
