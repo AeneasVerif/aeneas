@@ -978,11 +978,12 @@ let opt_destruct_ret (e : texpression) : texpression option =
     when variant_id = Some result_ok_id -> Some arg
   | _ -> None
 
-let decompose_mplace (p : mplace) :
-    E.LocalId.id * string option * mprojection_elem list =
+let decompose_mplace_to_local (p : mplace) :
+    (E.LocalId.id * string option * mprojection_elem list) option =
   let rec decompose (proj : mprojection_elem list) (p : mplace) =
     match p with
-    | PlaceLocal (id, name) -> (id, name, proj)
+    | PlaceLocal (id, name) -> Some (id, name, proj)
+    | PlaceGlobal _ -> None
     | PlaceProjection (p, pe) -> decompose (pe :: proj) p
   in
   decompose [] p
