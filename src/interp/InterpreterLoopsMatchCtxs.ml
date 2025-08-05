@@ -1358,7 +1358,7 @@ struct
 
       (* Update the symbolic value mapping *)
       S.sid_to_value_map :=
-        SymbolicValueId.Map.add_strict id0 sv1 !S.sid_to_value_map;
+        SymbolicValueId.Map.add_strict_or_unchanged id0 sv1 !S.sid_to_value_map;
 
       (* Return - the returned value is not used: we can return whatever
          we want *)
@@ -1377,7 +1377,7 @@ struct
         span;
       (* Update the binding for the target symbolic value *)
       S.sid_to_value_map :=
-        SymbolicValueId.Map.add_strict id v !S.sid_to_value_map;
+        SymbolicValueId.Map.add_strict_or_unchanged id v !S.sid_to_value_map;
       (* Return - the returned value is not used, so we can return whatever we want *)
       v)
 
@@ -1500,7 +1500,7 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
     (lookup_shared_value_in_ctx0 : BorrowId.id -> typed_value)
     (lookup_shared_value_in_ctx1 : BorrowId.id -> typed_value) (ctx0 : eval_ctx)
     (ctx1 : eval_ctx) : ids_maps option =
-  log#ldebug
+  log#ltrace
     (lazy
       ("match_ctxs:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
      ^ "\n\n- ctx0:\n"

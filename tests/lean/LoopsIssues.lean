@@ -66,4 +66,23 @@ def loop_array_len_write (b : Bool) : Result Unit :=
   let buf := Array.repeat 4#usize 0#u8
   loop_array_len_write_loop b buf
 
+/- [loops_issues::MAX_NROWS]
+   Source: 'tests/src/loops-issues.rs', lines 44:0-44:27 -/
+@[global_simps] def MAX_NROWS_body : Result Usize := ok 4#usize
+@[global_simps, irreducible]
+def MAX_NROWS : Usize := eval_global MAX_NROWS_body
+
+/- [loops_issues::read_global_loop]: loop 0:
+   Source: 'tests/src/loops-issues.rs', lines 50:4-50:11 -/
+def read_global_loop_loop : Result Unit :=
+  read_global_loop_loop
+partial_fixpoint
+
+/- [loops_issues::read_global_loop]:
+   Source: 'tests/src/loops-issues.rs', lines 47:0-51:1 -/
+def read_global_loop (n_rows : Usize) : Result Unit :=
+  do
+  massert (n_rows <= MAX_NROWS)
+  read_global_loop_loop
+
 end loops_issues

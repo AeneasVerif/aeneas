@@ -40,3 +40,12 @@ fn loop_array_len_write(b : bool)
         }
     }
 }
+
+const MAX_NROWS: usize = 4;
+
+/// This comes from an issue found in SymCrust and minimized
+fn read_global_loop(n_rows: usize)
+{
+    debug_assert!(n_rows <= MAX_NROWS);
+    loop {}
+}
