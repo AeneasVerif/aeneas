@@ -49,3 +49,13 @@ fn read_global_loop(n_rows: usize)
     debug_assert!(n_rows <= MAX_NROWS);
     loop {}
 }
+
+fn mut_loop_len(_: &mut u32)
+{
+    let buf = [0u8; 8];
+
+    loop
+    {
+        debug_assert!(0 <= buf.len());
+    }
+}

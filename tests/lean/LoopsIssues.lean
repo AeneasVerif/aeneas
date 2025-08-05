@@ -85,4 +85,22 @@ def read_global_loop (n_rows : Usize) : Result Unit :=
   massert (n_rows <= MAX_NROWS)
   read_global_loop_loop
 
+/- [loops_issues::mut_loop_len]: loop 0:
+   Source: '/rustc/library/core/src/macros/mod.rs', lines 308:8-310:9 -/
+def mut_loop_len_loop (buf : Array U8 8#usize) : Result Unit :=
+  do
+  let s ← (↑(Array.to_slice buf) : Result (Slice U8))
+  let i := Slice.len s
+  massert (0#usize <= i)
+  mut_loop_len_loop buf
+partial_fixpoint
+
+/- [loops_issues::mut_loop_len]:
+   Source: 'tests/src/loops-issues.rs', lines 53:0-61:1 -/
+def mut_loop_len (i : U32) : Result U32 :=
+  do
+  let buf := Array.repeat 8#usize 0#u8
+  mut_loop_len_loop buf
+  ok i
+
 end loops_issues
