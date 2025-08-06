@@ -582,7 +582,7 @@ example (x y z w : Int) (h0 : x < y) (_ : x < w) (h1 : y < z) : x < z := by
 
    TODO: there must be simpler. Use use _root_.Lean.MVarId.cases for instance.
    On the other hand this tactic is a good reference for this kind of manipulations. -/
-def splitDisjTac (h : Expr) (kleft kright : TacticM Unit) : TacticM Unit := do
+def splitDisjTac (h : Expr) (kleft kright : Expr → TacticM Unit) : TacticM Unit := do
   trace[Utils] "assumption on which to split: {h}"
   -- Retrieve the main goal
   withMainContext do
@@ -597,11 +597,12 @@ def splitDisjTac (h : Expr) (kleft kright : TacticM Unit) : TacticM Unit := do
   if ¬ (f.isConstOf ``Or ∧ xs.size = 2) then throwError "Invalid argument to splitDisjTac"
   let a := xs[0]!
   let b := xs[1]!
-  -- Introduce the new goals
-  -- Returns:
-  -- - the match branch
-  -- - a fresh new mvar id
-  let mkGoal (hTy : Expr) (nGoalName : String) : MetaM (Expr × MVarId) := do
+  /- Introduce the new goals
+      Returns:
+      - the new assumption
+      - the match branch
+      - a fresh new mvar id -/
+  let mkGoal (hTy : Expr) (nGoalName : String) : MetaM (Expr × Expr × MVarId) := do
     -- Introduce a variable for the assumption (`a` or `b`). Note that we reuse
     -- the name of the assumption we split.
     withLocalDeclD hName hTy fun var => do
@@ -611,9 +612,9 @@ def splitDisjTac (h : Expr) (kleft kright : TacticM Unit) : TacticM Unit := do
     let mgoal ← mgoal.mvarId!.tryClearMany #[h.fvarId!]
     -- The branch expression
     let branch ← mkLambdaFVars #[var] (mkMVar mgoal)
-    pure (branch, mgoal)
-  let (inl, mleft) ← mkGoal a "left"
-  let (inr, mright) ← mkGoal b "right"
+    pure (var, branch, mgoal)
+  let (hl, inl, mleft) ← mkGoal a "left"
+  let (hr, inr, mright) ← mkGoal b "right"
   trace[Utils] "left: {inl}: {mleft}"
   trace[Utils] "right: {inr}: {mright}"
   -- Create the match expression
@@ -627,26 +628,38 @@ def splitDisjTac (h : Expr) (kleft kright : TacticM Unit) : TacticM Unit := do
   let goals ← getUnsolvedGoals
   -- Focus on the left
   setGoals [mleft]
-  withMainContext kleft
+  withMainContext (kleft hl)
   let leftGoals ← getUnsolvedGoals
   -- Focus on the right
   setGoals [mright]
-  withMainContext kright
+  withMainContext (kright hr)
   let rightGoals ← getUnsolvedGoals
   -- Put all the goals back
   setGoals (leftGoals ++ rightGoals ++ goals)
   trace[Utils] "new goals: {← getUnsolvedGoals}"
 
-elab "split_disj " n:ident : tactic => do
+partial def splitDisjsTac (h : Expr) : TacticM Unit :=
+  tryTac (splitDisjTac h splitDisjsTac splitDisjsTac)
+
+elab "split_disj" " at " n:ident : tactic => do
   withMainContext do
   let decl ← Lean.Meta.getLocalDeclFromUserName n.getId
   let fvar := mkFVar decl.fvarId
   splitDisjTac fvar (fun _ => pure ()) (fun _ => pure ())
 
+elab "split_disjs" " at " n:ident : tactic => do
+    withMainContext do
+    let decl ← Lean.Meta.getLocalDeclFromUserName n.getId
+    let fvar := mkFVar decl.fvarId
+    splitDisjsTac fvar
+
 example (x y : Int) (h0 : x ≤ y ∨ x ≥ y) : x ≤ y ∨ x ≥ y := by
-  split_disj h0
+  split_disj at h0
   . apply Or.inl; assumption
   . apply Or.inr; assumption
+
+example (x : Int) (h : x = 0 ∨ x = 1 ∨ x = 2) : x ≤ 2 := by
+  split_disjs at h <;> simp [*]
 
 -- Tactic to split on an exists.
 -- `h` must be an FVar
