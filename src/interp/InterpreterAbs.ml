@@ -6,7 +6,6 @@ open TypesUtils
 open InterpreterUtils
 open InterpreterBorrowsCore
 open InterpreterBorrows
-open Errors
 
 (** The local logger *)
 let log = Logging.abs_log
@@ -107,23 +106,23 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
         (avl, { v with value = VAdt adt })
     | VBorrow bc -> (
         let _, ref_ty, kind = ty_as_ref ty in
-        cassert __FILE__ __LINE__ (ty_no_regions ref_ty) span
+        [%cassert] span (ty_no_regions ref_ty)
           "Nested borrows are not supported yet";
         (* Sanity check *)
-        sanity_check __FILE__ __LINE__ allow_borrows span;
+        [%sanity_check] span allow_borrows;
         (* Convert the borrow content *)
         match bc with
         | VSharedBorrow (bid, sid) ->
-            cassert __FILE__ __LINE__ (ty_no_regions ref_ty) span
+            [%cassert] span (ty_no_regions ref_ty)
               "Nested borrows are not supported yet";
             let ty = TRef (RVar (Free r_id), ref_ty, kind) in
             let value = ABorrow (ASharedBorrow (PNone, bid, sid)) in
             ([ { value; ty } ], v)
         | VMutBorrow (bid, bv) ->
             (* We don't support nested borrows for now *)
-            cassert __FILE__ __LINE__
+            [%cassert] span
               (not (value_has_borrows (Some span) ctx bv.value))
-              span "Nested borrows are not supported yet";
+              "Nested borrows are not supported yet";
             (* Create an avalue to push - note that we use [AIgnore] for the inner avalue *)
             let ty = TRef (RVar (Free r_id), ref_ty, kind) in
             let ignored = mk_aignored span ref_ty None in
@@ -139,16 +138,16 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             (av :: avl, value)
         | VReservedMutBorrow _ ->
             (* This borrow should have been activated *)
-            craise __FILE__ __LINE__ span "Unexpected")
+            [%craise] span "Unexpected")
     | VLoan lc -> (
         match lc with
         | VSharedLoan (bids, sv) ->
             (* We don't support nested borrows for now *)
-            cassert __FILE__ __LINE__
+            [%cassert] span
               (not (value_has_borrows (Some span) ctx sv.value))
-              span "Nested borrows are not supported yet";
+              "Nested borrows are not supported yet";
             (* Push the avalue *)
-            cassert __FILE__ __LINE__ (ty_no_regions ty) span
+            [%cassert] span (ty_no_regions ty)
               "Nested borrows are not supported yet";
             (* We use [AIgnore] for the inner value *)
             let ignored = mk_aignored span ty None in
@@ -171,7 +170,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             (av :: avl, value)
         | VMutLoan bid ->
             (* Push the avalue *)
-            cassert __FILE__ __LINE__ (ty_no_regions ty) span
+            [%cassert] span (ty_no_regions ty)
               "Nested borrows are not supported yet";
             (* We use [AIgnore] for the inner value *)
             let ignored = mk_aignored span ty in
@@ -183,17 +182,16 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
     | VSymbolic sv ->
         (* Check that there are no nested borrows in the symbolic value -
            we don't support this case yet *)
-        cassert __FILE__ __LINE__
+        [%cassert] span
           (not
              (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos sv.sv_ty))
-          span "Nested borrows are not supported yet";
+          "Nested borrows are not supported yet";
 
         (* If we don't need to group the borrows into one region (because the
            symbolic value is inside a mutable borrow for instance) check that
            none of the regions used by the symbolic value have ended. *)
-        sanity_check __FILE__ __LINE__
-          (group || not (symbolic_value_has_ended_regions ctx.ended_regions sv))
-          span;
+        [%sanity_check] span
+          (group || not (symbolic_value_has_ended_regions ctx.ended_regions sv));
 
         (* If we group the borrows: simply introduce a projector.
            Otherwise, introduce one abstraction per region *)
@@ -210,7 +208,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
                 method! visit_RVar _ var =
                   match var with
                   | Free _ -> RVar (Free r_id)
-                  | Bound _ -> internal_error __FILE__ __LINE__ span
+                  | Bound _ -> [%internal_error] span
               end
             in
             let ty = visitor#visit_ty () sv.sv_ty in
@@ -254,9 +252,8 @@ let abs_simplify_duplicated_borrows (span : Meta.span) (ctx : eval_ctx)
   (* Sanity check: the abstraction has been destructured *)
   (if !Config.sanity_checks then
      let destructure_shared_values = true in
-     sanity_check __FILE__ __LINE__
-       (abs_is_destructured span destructure_shared_values ctx abs)
-       span);
+     [%sanity_check] span
+       (abs_is_destructured span destructure_shared_values ctx abs));
 
   let join_pm (pm0 : proj_marker) (pm1 : proj_marker) : proj_marker =
     match (pm0, pm1) with
@@ -424,11 +421,11 @@ let typed_avalue_split_marker (span : Meta.span) (ctx : eval_ctx)
     if pm = PNone then mk_split mk_value else [ av ]
   in
   match av.value with
-  | AAdt _ | ABottom | AIgnored _ -> internal_error __FILE__ __LINE__ span
+  | AAdt _ | ABottom | AIgnored _ -> [%internal_error] span
   | ABorrow bc -> (
       match bc with
       | AMutBorrow (pm, bid, child) ->
-          sanity_check __FILE__ __LINE__ (is_aignored child.value) span;
+          [%sanity_check] span (is_aignored child.value);
           let mk_value pm =
             { av with value = ABorrow (AMutBorrow (pm, bid, child)) }
           in
@@ -438,40 +435,39 @@ let typed_avalue_split_marker (span : Meta.span) (ctx : eval_ctx)
             { av with value = ABorrow (ASharedBorrow (pm, bid, sid)) }
           in
           mk_opt_split pm mk_value
-      | _ -> internal_error __FILE__ __LINE__ span)
+      | _ -> [%internal_error] span)
   | ALoan lc -> (
       match lc with
       | AMutLoan (pm, bid, child) ->
-          sanity_check __FILE__ __LINE__ (is_aignored child.value) span;
+          [%sanity_check] span (is_aignored child.value);
           let mk_value pm =
             { av with value = ALoan (AMutLoan (pm, bid, child)) }
           in
           mk_opt_split pm mk_value
       | ASharedLoan (pm, bids, sv, child) ->
-          sanity_check __FILE__ __LINE__ (is_aignored child.value) span;
-          sanity_check __FILE__ __LINE__
-            (not (value_has_borrows (Some span) ctx sv.value))
-            span;
+          [%sanity_check] span (is_aignored child.value);
+          [%sanity_check] span
+            (not (value_has_borrows (Some span) ctx sv.value));
           let mk_value pm =
             { av with value = ALoan (ASharedLoan (pm, bids, sv, child)) }
           in
           mk_opt_split pm mk_value
-      | _ -> internal_error __FILE__ __LINE__ span)
+      | _ -> [%internal_error] span)
   | ASymbolic (pm, proj) -> (
       if pm <> PNone then [ av ]
       else
         match proj with
         | AProjBorrows { proj = _; loans } ->
-            sanity_check __FILE__ __LINE__ (loans = []) span;
+            [%sanity_check] span (loans = []);
             let mk_value pm = { av with value = ASymbolic (pm, proj) } in
             mk_split mk_value
         | AProjLoans { proj = _; consumed; borrows } ->
-            sanity_check __FILE__ __LINE__ (consumed = []) span;
-            sanity_check __FILE__ __LINE__ (borrows = []) span;
+            [%sanity_check] span (consumed = []);
+            [%sanity_check] span (borrows = []);
             let mk_value pm = { av with value = ASymbolic (pm, proj) } in
             mk_split mk_value
         | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty ->
-            internal_error __FILE__ __LINE__ span)
+            [%internal_error] span)
 
 let abs_split_markers (span : Meta.span) (ctx : eval_ctx) (abs : abs) : abs =
   {
@@ -510,12 +506,10 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
 
   if !Config.sanity_checks then (
     let destructure_shared_values = true in
-    sanity_check __FILE__ __LINE__
-      (abs_is_destructured span destructure_shared_values ctx abs0)
-      span;
-    sanity_check __FILE__ __LINE__
-      (abs_is_destructured span destructure_shared_values ctx abs1)
-      span);
+    [%sanity_check] span
+      (abs_is_destructured span destructure_shared_values ctx abs0);
+    [%sanity_check] span
+      (abs_is_destructured span destructure_shared_values ctx abs1));
 
   (* Simplify the duplicated shared borrows *)
   let abs0 = abs_simplify_duplicated_borrows span ctx abs0 in
@@ -528,9 +522,7 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
     let visitor =
       object
         inherit [_] iter_abs
-
-        method! visit_proj_marker _ pm =
-          sanity_check __FILE__ __LINE__ (pm = PNone) span
+        method! visit_proj_marker _ pm = [%sanity_check] span (pm = PNone)
       end
     in
     visitor#visit_abs () abs0;
@@ -556,8 +548,8 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
       | ASymbolic (pm, aproj) -> (
           match aproj with
           | AProjLoans { proj; consumed; borrows } ->
-              sanity_check __FILE__ __LINE__ (consumed = []) span;
-              sanity_check __FILE__ __LINE__ (borrows = []) span;
+              [%sanity_check] span (consumed = []);
+              [%sanity_check] span (borrows = []);
               let norm_proj_ty =
                 normalize_proj_ty abs0.regions.owned proj.proj_ty
               in
@@ -584,7 +576,7 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
         begin
           match bc with
           | AMutBorrow (pm, bid, child) ->
-              sanity_check __FILE__ __LINE__ (is_aignored child.value) span;
+              [%sanity_check] span (is_aignored child.value);
               let rec merge (avl : typed_avalue list) : typed_avalue list * bool
                   =
                 match avl with
@@ -616,7 +608,7 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
           | AEndedMutBorrow _
           | AEndedSharedBorrow
           | AEndedIgnoredMutBorrow _
-          | AProjSharedBorrow _ -> craise __FILE__ __LINE__ span "Unreachable"
+          | AProjSharedBorrow _ -> [%craise] span "Unreachable"
         end
     | ASymbolic (pm, proj) -> begin
         match proj with
@@ -625,7 +617,7 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
                (this one comes from the right) with borrows coming from the *right*. *)
             push_right_avalue av
         | AProjBorrows { proj; loans } ->
-            sanity_check __FILE__ __LINE__ (loans = []) span;
+            [%sanity_check] span (loans = []);
             (* Check if we need to eliminate it *)
             let norm_proj_ty =
               normalize_proj_ty abs1.regions.owned proj.proj_ty
@@ -657,10 +649,9 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
               (* Do not eliminate *)
               push_right_avalue av
         | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty ->
-            craise __FILE__ __LINE__ span "Unreachable"
+            [%craise] span "Unreachable"
       end
-    | AAdt _ | ABottom | AIgnored _ ->
-        craise __FILE__ __LINE__ span "Unreachable"
+    | AAdt _ | ABottom | AIgnored _ -> [%craise] span "Unreachable"
   in
   List.iter add_avalue abs1.avalues;
 
@@ -703,11 +694,11 @@ let merge_abstractions_merge_markers (span : Meta.span)
     match (bc0, bc1) with
     | AMutBorrow (pm0, id0, child0), AMutBorrow (pm1, id1, child1)
       when id0 = id1 ->
-        sanity_check __FILE__ __LINE__ (complementary_markers pm0 pm1) span;
+        [%sanity_check] span (complementary_markers pm0 pm1);
         Some (merge_funs.merge_amut_borrows id0 ty0 pm0 child0 ty1 pm1 child1)
     | ASharedBorrow (pm0, id0, sid0), ASharedBorrow (pm1, id1, sid1)
       when id0 = id1 ->
-        sanity_check __FILE__ __LINE__ (complementary_markers pm0 pm1) span;
+        [%sanity_check] span (complementary_markers pm0 pm1);
         Some (merge_funs.merge_ashared_borrows id0 ty0 pm0 sid0 ty1 pm1 sid1)
     | _ ->
         (* Nothing to merge *)
@@ -718,12 +709,12 @@ let merge_abstractions_merge_markers (span : Meta.span)
       (lc1 : aloan_content) : typed_avalue option =
     match (lc0, lc1) with
     | AMutLoan (pm0, id0, child0), AMutLoan (pm1, id1, child1) when id0 = id1 ->
-        sanity_check __FILE__ __LINE__ (complementary_markers pm0 pm1) span;
+        [%sanity_check] span (complementary_markers pm0 pm1);
         (* Merge *)
         Some (merge_funs.merge_amut_loans id0 ty0 pm0 child0 ty1 pm1 child1)
     | ASharedLoan (pm0, id0, sv0, child0), ASharedLoan (pm1, id1, sv1, child1)
       when id0 = id1 ->
-        sanity_check __FILE__ __LINE__ (complementary_markers pm0 pm1) span;
+        [%sanity_check] span (complementary_markers pm0 pm1);
         (* Merge *)
         Some
           (merge_funs.merge_ashared_loans id0 ty0 pm0 sv0 child0 ty1 pm1 sv1
@@ -740,14 +731,14 @@ let merge_abstractions_merge_markers (span : Meta.span)
       when proj0.proj.sv_id = proj1.proj.sv_id
            && projections_intersect span owned_regions proj0.proj.proj_ty
                 owned_regions proj1.proj.proj_ty ->
-        sanity_check __FILE__ __LINE__ (complementary_markers pm0 pm1) span;
+        [%sanity_check] span (complementary_markers pm0 pm1);
         (* Merge *)
         Some (merge_funs.merge_aborrow_projs ty0 pm0 proj0 ty1 pm1 proj1)
     | AProjLoans proj0, AProjLoans proj1
       when proj0.proj.sv_id = proj1.proj.sv_id
            && projections_intersect span owned_regions proj0.proj.proj_ty
                 owned_regions proj1.proj.proj_ty ->
-        sanity_check __FILE__ __LINE__ (complementary_markers pm0 pm1) span;
+        [%sanity_check] span (complementary_markers pm0 pm1);
         (* Merge *)
         Some (merge_funs.merge_aloan_projs ty0 pm0 proj0 ty1 pm1 proj1)
     | _ ->
@@ -806,18 +797,16 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
       ^ "\n\n- abs1:\n"
       ^ abs_to_string span ctx abs1));
   (* Sanity check: we can't merge an abstraction with itself *)
-  sanity_check __FILE__ __LINE__ (abs0.abs_id <> abs1.abs_id) span;
+  [%sanity_check] span (abs0.abs_id <> abs1.abs_id);
 
   (* Check that the abstractions are destructured (i.e., there are no nested
      values, etc.) *)
   if !Config.sanity_checks then (
     let destructure_shared_values = true in
-    sanity_check __FILE__ __LINE__
-      (abs_is_destructured span destructure_shared_values ctx abs0)
-      span;
-    sanity_check __FILE__ __LINE__
-      (abs_is_destructured span destructure_shared_values ctx abs1)
-      span);
+    [%sanity_check] span
+      (abs_is_destructured span destructure_shared_values ctx abs0);
+    [%sanity_check] span
+      (abs_is_destructured span destructure_shared_values ctx abs1));
 
   (* Compute the ancestor regions, owned regions, etc.
      Note that one of the two abstractions might a parent of the other *)
@@ -889,7 +878,7 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
   in
 
   (* Sanity check *)
-  sanity_check __FILE__ __LINE__ (abs_is_destructured span true ctx abs) span;
+  [%sanity_check] span (abs_is_destructured span true ctx abs);
   (* Return *)
   abs
 
@@ -914,7 +903,7 @@ let end_endable_shared_loans_at_abs (span : Meta.span) (ctx : eval_ctx)
   let keep_value (av : typed_avalue) : bool =
     match av.value with
     | ALoan (ASharedLoan (_, bid, _, child)) ->
-        sanity_check __FILE__ __LINE__ (is_aignored child.value) span;
+        [%sanity_check] span (is_aignored child.value);
         BorrowId.Set.mem bid bids
     | _ -> true
   in
@@ -928,7 +917,7 @@ let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
     (ctx : eval_ctx) (abs_id0 : AbstractionId.id) (abs_id1 : AbstractionId.id) :
     eval_ctx * AbstractionId.id =
   (* Small sanity check *)
-  sanity_check __FILE__ __LINE__ (abs_id0 <> abs_id1) span;
+  [%sanity_check] span (abs_id0 <> abs_id1);
 
   (* Lookup the abstractions *)
   let abs0 = ctx_lookup_abs ctx abs_id0 in
@@ -980,13 +969,13 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
       match av.value with
       | ABorrow _ | ASymbolic (_, AProjBorrows _) -> true
       | ALoan _ | ASymbolic (_, AProjLoans _) -> false
-      | _ -> craise __FILE__ __LINE__ span "Unexpected"
+      | _ -> [%craise] span "Unexpected"
     in
     let is_concrete (av : typed_avalue) : bool =
       match av.value with
       | ABorrow _ | ALoan _ -> true
       | ASymbolic (_, (AProjBorrows _ | AProjLoans _)) -> false
-      | _ -> craise __FILE__ __LINE__ span "Unexpected"
+      | _ -> [%craise] span "Unexpected"
     in
     let aborrows, aloans = List.partition is_borrow abs.avalues in
     let aborrows, borrow_projs = List.partition is_concrete aborrows in
@@ -1009,35 +998,35 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
     let get_borrow_id (av : typed_avalue) : BorrowId.id =
       match av.value with
       | ABorrow (AMutBorrow (pm, bid, _) | ASharedBorrow (pm, bid, _)) ->
-          sanity_check __FILE__ __LINE__ (allow_markers || pm = PNone) span;
+          [%sanity_check] span (allow_markers || pm = PNone);
           bid
-      | _ -> craise __FILE__ __LINE__ span "Unexpected"
+      | _ -> [%craise] span "Unexpected"
     in
     let get_loan_id (av : typed_avalue) : BorrowId.id =
       match av.value with
       | ALoan (AMutLoan (pm, lid, _)) ->
-          sanity_check __FILE__ __LINE__ (allow_markers || pm = PNone) span;
+          [%sanity_check] span (allow_markers || pm = PNone);
           lid
       | ALoan (ASharedLoan (pm, lid, _, _)) ->
-          sanity_check __FILE__ __LINE__ (allow_markers || pm = PNone) span;
+          [%sanity_check] span (allow_markers || pm = PNone);
           lid
-      | _ -> craise __FILE__ __LINE__ span "Unexpected"
+      | _ -> [%craise] span "Unexpected"
     in
     let get_symbolic_id (av : typed_avalue) : SymbolicValueId.id =
       match av.value with
       | ASymbolic (pm, aproj) -> begin
-          sanity_check __FILE__ __LINE__ (allow_markers || pm = PNone) span;
+          [%sanity_check] span (allow_markers || pm = PNone);
           match aproj with
           | AProjLoans { proj; _ } | AProjBorrows { proj; _ } -> proj.sv_id
-          | _ -> craise __FILE__ __LINE__ span "Unexpected"
+          | _ -> [%craise] span "Unexpected"
         end
-      | _ -> craise __FILE__ __LINE__ span "Unexpected"
+      | _ -> [%craise] span "Unexpected"
     in
     let compare_pair :
         'a. ('a -> 'a -> int) -> 'a * typed_avalue -> 'a * typed_avalue -> int =
      fun compare_id x y ->
       let fst = compare_id (fst x) (fst y) in
-      cassert __FILE__ __LINE__ (fst <> 0) span
+      [%cassert] span (fst <> 0)
         ("Unexpected: can't compare: '"
         ^ typed_avalue_to_string ctx (snd x)
         ^ "' with '"
@@ -1113,7 +1102,7 @@ let reorder_fresh_abs_aux (span : Meta.span) (old_abs_ids : AbstractionId.Set.t)
     match (abs0, abs1) with
     | EAbs abs0, EAbs abs1 ->
         compare_typed_avalue_list abs0.avalues abs1.avalues
-    | _ -> internal_error __FILE__ __LINE__ span
+    | _ -> [%internal_error] span
   in
   let fresh_abs = List.sort cmp fresh_abs |> List.rev in
 

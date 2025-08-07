@@ -3,11 +3,11 @@ open Types
 open Values
 open LlbcAst
 open Contexts
-open Errors
 open Builtin
 module SA = SymbolicAst
 module Micro = PureMicroPasses
 open TranslateCore
+open Errors
 
 (** The local logger *)
 let log = TranslateCore.log
@@ -174,7 +174,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
             ctx
         in
         { ctx with forward_inputs }
-    | _ -> craise __FILE__ __LINE__ fdef.item_meta.span "Unreachable"
+    | _ -> [%craise] fdef.item_meta.span "Unreachable"
   in
 
   (* Add the backward inputs *)
@@ -208,7 +208,7 @@ let translate_function_to_pure (trans_ctx : trans_ctx)
       with CFailure _ ->
         "(could not compute the name pattern due to a different error)"
     in
-    save_error_opt_span __FILE__ __LINE__ error.span
+    [%save_error_opt_span] error.span
       ("Could not translate the function '" ^ name
      ^ " because of previous error.\nName pattern: '" ^ name_pattern ^ "'");
     None
@@ -252,7 +252,7 @@ let translate_crate_to_pure (crate : crate) :
             with CFailure _ ->
               "(could not compute the name pattern due to a different error)"
           in
-          save_error_opt_span __FILE__ __LINE__ error.span
+          [%save_error_opt_span] error.span
             ("Could not translate the global declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
             );
@@ -279,7 +279,7 @@ let translate_crate_to_pure (crate : crate) :
                with CFailure _ ->
                  "(could not compute the name pattern due to a different error)"
              in
-             save_error_opt_span __FILE__ __LINE__ error.span
+             [%save_error_opt_span] error.span
                ("Could not translate the function signature of '" ^ name
               ^ " because of previous error\nName pattern: '" ^ name_pattern
               ^ "'");
@@ -322,7 +322,7 @@ let translate_crate_to_pure (crate : crate) :
             with CFailure _ ->
               "(could not compute the name pattern due to a different error)"
           in
-          save_error_opt_span __FILE__ __LINE__ error.span
+          [%save_error_opt_span] error.span
             ("Could not translate the trait declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
             );
@@ -344,7 +344,7 @@ let translate_crate_to_pure (crate : crate) :
             with CFailure _ ->
               "(could not compute the name pattern due to a different error)"
           in
-          save_error_opt_span __FILE__ __LINE__ error.span
+          [%save_error_opt_span] error.span
             ("Could not translate the trait instance '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
             );
@@ -548,10 +548,10 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
   let global_decls = ctx.trans_ctx.crate.global_decls in
   let global = GlobalDeclId.Map.find id global_decls in
   let trans =
-    silent_unwrap_opt_span __FILE__ __LINE__ None
+    [%silent_unwrap_opt_span] None
       (FunDeclId.Map.find_opt global.body ctx.trans_funs)
   in
-  sanity_check __FILE__ __LINE__ (trans.loops = []) global.item_meta.span;
+  [%sanity_check] global.item_meta.span (trans.loops = []);
   let body = trans.f in
 
   let is_opaque = Option.is_none body.Pure.body in
@@ -758,7 +758,7 @@ let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
     (ctx : gen_ctx) (trait_decl_id : Pure.trait_decl_id) (extract_decl : bool)
     (extract_extra_info : bool) : unit =
   let trait_decl =
-    silent_unwrap_opt_span __FILE__ __LINE__ None
+    [%silent_unwrap_opt_span] None
       (TraitDeclId.Map.find_opt trait_decl_id ctx.trans_trait_decls)
   in
   (* Check if the trait declaration is builtin, in which case we ignore it *)
@@ -858,16 +858,14 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
             ids
         in
         if List.exists (fun pf -> pf.f.is_global_decl_body) pure_funs then
-          craise_opt_span __FILE__ __LINE__ None
-            "Mutually recursive globals are not supported"
+          [%craise_opt_span] None "Mutually recursive globals are not supported"
         else (* Translate *)
           export_functions_group pure_funs
     | GlobalGroup (NonRecGroup id) -> export_global id
     | GlobalGroup (RecGroup _ids) ->
-        craise_opt_span __FILE__ __LINE__ None
-          "Mutually recursive globals are not supported"
+        [%craise_opt_span] None "Mutually recursive globals are not supported"
     | TraitDeclGroup (RecGroup _ids) ->
-        craise_opt_span __FILE__ __LINE__ None
+        [%craise_opt_span] None
           "Mutually recursive trait declarations are not supported"
     | TraitDeclGroup (NonRecGroup id) ->
         (* TODO: update to extract groups *)
@@ -878,10 +876,10 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
         if config.extract_trait_impls && config.extract_transparent then
           export_trait_impl id
     | TraitImplGroup (RecGroup _ids) ->
-        craise_opt_span __FILE__ __LINE__ None
+        [%craise_opt_span] None
           "Mutually recursive trait implementations are not supported"
     | MixedGroup _ ->
-        craise_opt_span __FILE__ __LINE__ None
+        [%craise_opt_span] None
           "Mixed-recursive declaration groups are not supported"
   in
 
@@ -1168,7 +1166,7 @@ let translate_crate (filename : string) (dest_dir : string)
             with CFailure _ ->
               "(could not compute the name pattern due to a different error)"
           in
-          save_error_opt_span __FILE__ __LINE__ error.span
+          [%save_error_opt_span] error.span
             ("Could not generate names for the type declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
             );
@@ -1204,7 +1202,7 @@ let translate_crate (filename : string) (dest_dir : string)
             with CFailure _ ->
               "(could not compute the name pattern due to a different error)"
           in
-          save_error_opt_span __FILE__ __LINE__ error.span
+          [%save_error_opt_span] error.span
             ("Could not generate names for the function declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
             );
@@ -1227,7 +1225,7 @@ let translate_crate (filename : string) (dest_dir : string)
             with CFailure _ ->
               "(could not compute the name pattern due to a different error)"
           in
-          save_error_opt_span __FILE__ __LINE__ error.span
+          [%save_error_opt_span] error.span
             ("Could not generate names for the global declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
             );
@@ -1249,7 +1247,7 @@ let translate_crate (filename : string) (dest_dir : string)
             with CFailure _ ->
               "(could not compute the name pattern due to a different error)"
           in
-          save_error_opt_span __FILE__ __LINE__ error.span
+          [%save_error_opt_span] error.span
             ("Could not generate names for the trait declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
             );
@@ -1271,7 +1269,7 @@ let translate_crate (filename : string) (dest_dir : string)
             with CFailure _ ->
               "(could not compute the name pattern due to a different error)"
           in
-          save_error_opt_span __FILE__ __LINE__ error.span
+          [%save_error_opt_span] error.span
             ("Could not generate names for the trait implementation '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
             );

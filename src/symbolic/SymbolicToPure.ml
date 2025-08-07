@@ -1,9 +1,9 @@
 open Pure
 open PureUtils
-open Errors
 open SymbolicToPureCore
 open SymbolicToPureTypes
 open SymbolicToPureExpressions
+open Errors
 
 (** The local logger *)
 let log = Logging.symbolic_to_pure_log
@@ -126,11 +126,10 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
                 (List.map (pure_ty_to_string ctx) signature.inputs)));
         (* TODO: we need to normalize the types *)
         if !Config.type_check_pure_code then
-          sanity_check __FILE__ __LINE__
+          [%sanity_check] def.item_meta.span
             (List.for_all
                (fun (var, ty) -> (var : var).ty = ty)
-               (List.combine inputs signature.inputs))
-            def.item_meta.span;
+               (List.combine inputs signature.inputs));
         Some { inputs; inputs_lvs; body }
   in
 
@@ -185,7 +184,7 @@ let translate_type_decls (ctx : Contexts.decls_ctx) : type_decl list =
           with CFailure _ ->
             "(could not compute the name pattern due to a different error)"
         in
-        save_error_opt_span __FILE__ __LINE__ error.span
+        [%save_error_opt_span] error.span
           ("Could not translate type decl '" ^ name
          ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'");
         None)
@@ -315,7 +314,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
   let builtin_info =
     let decl_id = trait_impl.impl_trait.id in
     let trait_decl =
-      silent_unwrap_opt_span __FILE__ __LINE__ span
+      [%silent_unwrap_opt_span] span
         (TraitDeclId.Map.find_opt decl_id ctx.crate.trait_decls)
     in
     match_name_with_generics_find_opt ctx trait_decl.item_meta.name

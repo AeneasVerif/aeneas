@@ -10,7 +10,6 @@ open InterpreterBorrows
 open InterpreterAbs
 open InterpreterLoopsCore
 open InterpreterLoopsMatchCtxs
-open Errors
 
 (** The local logger *)
 let log = Logging.loops_join_ctxs_log
@@ -103,7 +102,7 @@ let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
          merged abstraction to this abstraction's id *)
       let merge _ _ _ =
         (* We shouldn't see the same key twice *)
-        craise __FILE__ __LINE__ span "Unreachable"
+        [%craise] span "Unreachable"
       in
       M.union merge to_nabs to_abs
   end in
@@ -387,7 +386,7 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
     (* Given a **loan**, check if there is a fresh abstraction with the corresponding borrow *)
     let merge_policy (ctx : ctx_with_info) (abs_id0, loan) =
       if not with_markers then
-        sanity_check __FILE__ __LINE__ (Marked.get_marker loan = PNone) span;
+        [%sanity_check] span (Marked.get_marker loan = PNone);
       (* If we use markers: we are doing a collapse, which means we attempt
          to eliminate markers (and this is the only goal of the operation).
          We thus ignore the non-marked values (we merge non-marked values
@@ -506,7 +505,7 @@ let collapse_ctx_collapse (span : Meta.span) (loop_id : LoopId.id)
   let can_end = true in
 
   let invert_proj_marker = function
-    | PNone -> craise __FILE__ __LINE__ span "Unreachable"
+    | PNone -> [%craise] span "Unreachable"
     | PLeft -> PRight
     | PRight -> PLeft
   in
@@ -740,7 +739,7 @@ let collapse_ctx config (span : Meta.span) (loop_id : LoopId.id)
   in
   let ctx = collapse_ctx_collapse span loop_id merge_funs old_ids ctx in
   (* Sanity check: there are no markers remaining *)
-  sanity_check __FILE__ __LINE__ (not (eval_ctx_has_markers ctx)) span;
+  [%sanity_check] span (not (eval_ctx_has_markers ctx));
   (* One last cleanup *)
   let ctx, _ =
     InterpreterBorrows.simplify_dummy_values_useless_abs config span
@@ -770,8 +769,8 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
   *)
   let merge_amut_borrows id ty0 _pm0 child0 _ty1 _pm1 child1 =
     (* Sanity checks *)
-    sanity_check __FILE__ __LINE__ (is_aignored child0.value) span;
-    sanity_check __FILE__ __LINE__ (is_aignored child1.value) span;
+    [%sanity_check] span (is_aignored child0.value);
+    [%sanity_check] span (is_aignored child1.value);
 
     (* We need to pick a type for the avalue. The types on the left and on the
        right may use different regions: it doesn't really matter (here, we pick
@@ -789,12 +788,10 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     let _ =
       let _, ty0, _ = ty_as_ref ty0 in
       let _, ty1, _ = ty_as_ref ty1 in
-      sanity_check __FILE__ __LINE__
-        (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty0))
-        span;
-      sanity_check __FILE__ __LINE__
+      [%sanity_check] span
+        (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty0));
+      [%sanity_check] span
         (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty1))
-        span
     in
 
     (* Same remarks as for [merge_amut_borrows] *)
@@ -807,8 +804,8 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
 
   let merge_amut_loans id ty0 _pm0 child0 _ty1 _pm1 child1 =
     (* Sanity checks *)
-    sanity_check __FILE__ __LINE__ (is_aignored child0.value) span;
-    sanity_check __FILE__ __LINE__ (is_aignored child1.value) span;
+    [%sanity_check] span (is_aignored child0.value);
+    [%sanity_check] span (is_aignored child1.value);
 
     (* Same remarks as for [merge_amut_borrows] *)
     let ty = ty0 in
@@ -819,19 +816,17 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
   let merge_ashared_loans ids ty0 _pm0 (sv0 : typed_value) child0 _ty1 _pm1
       (sv1 : typed_value) child1 =
     (* Sanity checks *)
-    sanity_check __FILE__ __LINE__ (is_aignored child0.value) span;
-    sanity_check __FILE__ __LINE__ (is_aignored child1.value) span;
+    [%sanity_check] span (is_aignored child0.value);
+    [%sanity_check] span (is_aignored child1.value);
     (* Same remarks as for [merge_amut_borrows].
 
        This time we need to also merge the shared values. We rely on the
        join matcher [JM] to do so.
     *)
-    sanity_check __FILE__ __LINE__
-      (not (value_has_loans_or_borrows (Some span) ctx sv0.value))
-      span;
-    sanity_check __FILE__ __LINE__
-      (not (value_has_loans_or_borrows (Some span) ctx sv1.value))
-      span;
+    [%sanity_check] span
+      (not (value_has_loans_or_borrows (Some span) ctx sv0.value));
+    [%sanity_check] span
+      (not (value_has_loans_or_borrows (Some span) ctx sv1.value));
 
     let ty = ty0 in
     let child = child0 in
@@ -848,16 +843,14 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
       proj1
     in
     (* Sanity checks *)
-    sanity_check __FILE__ __LINE__ (loans0 = []) span;
-    sanity_check __FILE__ __LINE__ (loans1 = []) span;
-    sanity_check __FILE__ __LINE__
-      (erase_regions proj_ty0 = erase_regions proj_ty1)
-      span;
+    [%sanity_check] span (loans0 = []);
+    [%sanity_check] span (loans1 = []);
+    [%sanity_check] span (erase_regions proj_ty0 = erase_regions proj_ty1);
     (* Same remarks as for [merge_amut_borrows]. *)
     let ty = ty0 in
     let proj_ty = proj_ty0 in
     let loans = [] in
-    sanity_check __FILE__ __LINE__ (sv0 = sv1) span;
+    [%sanity_check] span (sv0 = sv1);
     let sv_id = sv0 in
     let proj : symbolic_proj = { sv_id; proj_ty } in
     let value = ASymbolic (PNone, AProjBorrows { proj; loans }) in
@@ -880,17 +873,15 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
       proj1
     in
     (* Sanity checks *)
-    sanity_check __FILE__ __LINE__ (consumed0 = [] && borrows0 = []) span;
-    sanity_check __FILE__ __LINE__ (consumed1 = [] && borrows1 = []) span;
-    sanity_check __FILE__ __LINE__
-      (erase_regions proj_ty0 = erase_regions proj_ty1)
-      span;
+    [%sanity_check] span (consumed0 = [] && borrows0 = []);
+    [%sanity_check] span (consumed1 = [] && borrows1 = []);
+    [%sanity_check] span (erase_regions proj_ty0 = erase_regions proj_ty1);
     (* Same remarks as for [merge_amut_borrows]. *)
     let ty = ty0 in
     let proj_ty = proj_ty0 in
     let consumed = [] in
     let borrows = [] in
-    sanity_check __FILE__ __LINE__ (sv0 = sv1) span;
+    [%sanity_check] span (sv0 = sv1);
     let sv_id = sv0 in
     let proj = { sv_id; proj_ty } in
     let value = ASymbolic (PNone, AProjLoans { proj; consumed; borrows }) in
@@ -924,7 +915,7 @@ let collapse_ctx_with_merge config (span : Meta.span) (loop_id : LoopId.id)
     (old_ids : ids_sets) (ctx : eval_ctx) : eval_ctx =
   let merge_funs = mk_collapse_ctx_merge_duplicate_funs span loop_id ctx in
   try collapse_ctx config span loop_id merge_funs old_ids ctx
-  with ValueMatchFailure _ -> internal_error __FILE__ __LINE__ span
+  with ValueMatchFailure _ -> [%internal_error] span
 
 let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
     (ctx0 : eval_ctx) (ctx1 : eval_ctx) : ctx_or_update =
@@ -961,18 +952,15 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
       match ee with
       | EBinding (BVar _, _) ->
           (* Variables are necessarily in the prefix *)
-          craise __FILE__ __LINE__ span "Unreachable"
+          [%craise] span "Unreachable"
       | EBinding (BDummy did, _) ->
-          sanity_check __FILE__ __LINE__
-            (not (DummyVarId.Set.mem did fixed_ids.dids))
-            span
+          [%sanity_check] span (not (DummyVarId.Set.mem did fixed_ids.dids))
       | EAbs abs ->
-          sanity_check __FILE__ __LINE__
+          [%sanity_check] span
             (not (AbstractionId.Set.mem abs.abs_id fixed_ids.aids))
-            span
       | EFrame ->
           (* This should have been eliminated *)
-          craise __FILE__ __LINE__ span "Unreachable"
+          [%craise] span "Unreachable"
     in
 
     (* Add projection marker to all abstractions in the left and right environments *)
@@ -1020,7 +1008,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
            are not in the prefix anymore *)
         if DummyVarId.Set.mem b0 fixed_ids.dids then (
           (* Still in the prefix: match the values *)
-          sanity_check __FILE__ __LINE__ (b0 = b1) span;
+          [%sanity_check] span (b0 = b1);
           let b = b0 in
           let v = M.match_typed_values ctx0 ctx1 v0 v1 in
           let var = EBinding (BDummy b, v) in
@@ -1042,7 +1030,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
 
         (* Variable bindings *must* be in the prefix and consequently their
            ids must be the same *)
-        sanity_check __FILE__ __LINE__ (b0 = b1) span;
+        [%sanity_check] span (b0 = b1);
         (* Match the values *)
         let b = b0 in
         let v = M.match_typed_values ctx0 ctx1 v0 v1 in
@@ -1063,7 +1051,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
         (* Same as for the dummy values: there are two cases *)
         if AbstractionId.Set.mem abs0.abs_id fixed_ids.aids then (
           (* Still in the prefix: the abstractions must be the same *)
-          sanity_check __FILE__ __LINE__ (abs0 = abs1) span;
+          [%sanity_check] span (abs0 = abs1);
           (* Continue *)
           abs :: join_prefixes env0' env1')
         else (* Not in the prefix anymore *)
@@ -1078,7 +1066,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
     let env0, env1 =
       match (env0, env1) with
       | EFrame :: env0, EFrame :: env1 -> (env0, env1)
-      | _ -> craise __FILE__ __LINE__ span "Unreachable"
+      | _ -> [%craise] span "Unreachable"
     in
 
     log#ldebug
@@ -1217,8 +1205,7 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
                 InterpreterBorrows.end_loans_no_synth config span bids
                   !joined_ctx;
               ctx
-          | AbsInRight _ | AbsInLeft _ ->
-              craise __FILE__ __LINE__ span "Unexpected"
+          | AbsInRight _ | AbsInLeft _ -> [%craise] span "Unexpected"
         in
         join_one_aux ctx
   in

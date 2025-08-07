@@ -4,7 +4,6 @@ open Values
 open LlbcAst
 open LlbcAstUtils
 open ValuesUtils
-open Errors
 include ContextsBase
 
 module OrderedBinder : Collections.OrderedType with type t = var_binder = struct
@@ -112,7 +111,7 @@ let env_lookup_var (span : Meta.span) (env : env) (vid : LocalId.id) :
     | EBinding (BVar var, v) :: env' ->
         if var.index = vid then (var, v) else lookup env'
     | (EBinding (BDummy _, _) | EAbs _) :: env' -> lookup env'
-    | EFrame :: _ -> craise __FILE__ __LINE__ span "End of frame"
+    | EFrame :: _ -> [%craise] span "End of frame"
   in
   lookup env
 
@@ -122,27 +121,27 @@ let ctx_lookup_real_var_binder (span : Meta.span) (ctx : eval_ctx)
 
 let ctx_lookup_type_decl (span : Meta.span) (ctx : eval_ctx)
     (tid : TypeDeclId.id) : type_decl =
-  silent_unwrap_opt_span __FILE__ __LINE__ (Some span)
+  [%silent_unwrap_opt_span] (Some span)
     (TypeDeclId.Map.find_opt tid ctx.crate.type_decls)
 
 let ctx_lookup_fun_decl (span : Meta.span) (ctx : eval_ctx) (fid : FunDeclId.id)
     : fun_decl =
-  silent_unwrap_opt_span __FILE__ __LINE__ (Some span)
+  [%silent_unwrap_opt_span] (Some span)
     (FunDeclId.Map.find_opt fid ctx.crate.fun_decls)
 
 let ctx_lookup_global_decl (span : Meta.span) (ctx : eval_ctx)
     (gid : GlobalDeclId.id) : global_decl =
-  silent_unwrap_opt_span __FILE__ __LINE__ (Some span)
+  [%silent_unwrap_opt_span] (Some span)
     (GlobalDeclId.Map.find_opt gid ctx.crate.global_decls)
 
 let ctx_lookup_trait_decl (span : Meta.span) (ctx : eval_ctx)
     (id : TraitDeclId.id) : trait_decl =
-  silent_unwrap_opt_span __FILE__ __LINE__ (Some span)
+  [%silent_unwrap_opt_span] (Some span)
     (TraitDeclId.Map.find_opt id ctx.crate.trait_decls)
 
 let ctx_lookup_trait_impl (span : Meta.span) (ctx : eval_ctx)
     (id : TraitImplId.id) : trait_impl =
-  silent_unwrap_opt_span __FILE__ __LINE__ (Some span)
+  [%silent_unwrap_opt_span] (Some span)
     (TraitImplId.Map.find_opt id ctx.crate.trait_impls)
 
 (** Retrieve a variable's value in the current frame *)
@@ -170,12 +169,12 @@ let env_update_var_value (span : Meta.span) (env : env) (vid : LocalId.id)
   *)
   let rec update env =
     match env with
-    | [] -> craise __FILE__ __LINE__ span "Unexpected"
+    | [] -> [%craise] span "Unexpected"
     | EBinding ((BVar b as var), v) :: env' ->
         if b.index = vid then EBinding (var, nv) :: env'
         else EBinding (var, v) :: update env'
     | ((EBinding (BDummy _, _) | EAbs _) as ee) :: env' -> ee :: update env'
-    | EFrame :: _ -> craise __FILE__ __LINE__ span "End of frame"
+    | EFrame :: _ -> [%craise] span "End of frame"
   in
   update env
 
@@ -196,9 +195,9 @@ let ctx_update_var_value (span : Meta.span) (ctx : eval_ctx) (vid : LocalId.id)
     important). *)
 let ctx_push_var (span : Meta.span) (ctx : eval_ctx) (var : local)
     (v : typed_value) : eval_ctx =
-  cassert __FILE__ __LINE__
+  [%cassert] span
     (TypesUtils.ty_is_ety var.var_ty && var.var_ty = v.ty)
-    span "The pushed variables and their values do not have the same type";
+    "The pushed variables and their values do not have the same type";
   let bv = var_to_binder var in
   { ctx with env = EBinding (BVar bv, v) :: ctx.env }
 
@@ -217,12 +216,12 @@ let ctx_push_vars (span : Meta.span) (ctx : eval_ctx)
                (* We can unfortunately not use Print because it depends on Contexts... *)
                show_var var ^ " -> " ^ show_typed_value value)
              vars)));
-  cassert __FILE__ __LINE__
+  [%cassert] span
     (List.for_all
        (fun (var, (value : typed_value)) ->
          TypesUtils.ty_is_ety var.var_ty && var.var_ty = value.ty)
        vars)
-    span "The pushed variables and their values do not have the same type";
+    "The pushed variables and their values do not have the same type";
   let vars =
     List.map
       (fun (var, value) -> EBinding (BVar (var_to_binder var), value))
@@ -248,7 +247,7 @@ let ctx_remove_dummy_var span (ctx : eval_ctx) (vid : DummyVarId.id) :
     eval_ctx * typed_value =
   let rec remove_var (env : env) : env * typed_value =
     match env with
-    | [] -> craise __FILE__ __LINE__ span "Could not lookup a dummy variable"
+    | [] -> [%craise] span "Could not lookup a dummy variable"
     | EBinding (BDummy vid', v) :: env when vid' = vid -> (env, v)
     | ee :: env ->
         let env, v = remove_var env in
@@ -262,7 +261,7 @@ let ctx_lookup_dummy_var (span : Meta.span) (ctx : eval_ctx)
     (vid : DummyVarId.id) : typed_value =
   let rec lookup_var (env : env) : typed_value =
     match env with
-    | [] -> craise __FILE__ __LINE__ span "Could not lookup a dummy variable"
+    | [] -> [%craise] span "Could not lookup a dummy variable"
     | EBinding (BDummy vid', v) :: _env when vid' = vid -> v
     | _ :: env -> lookup_var env
   in
@@ -312,7 +311,7 @@ let env_remove_abs (span : Meta.span) (env : env) (abs_id : AbstractionId.id) :
     env * abs option =
   let rec remove (env : env) : env * abs option =
     match env with
-    | [] -> craise __FILE__ __LINE__ span "Unreachable"
+    | [] -> [%craise] span "Unreachable"
     | EFrame :: _ -> (env, None)
     | EBinding (bv, v) :: env ->
         let env, abs_opt = remove env in
@@ -337,7 +336,7 @@ let env_subst_abs (span : Meta.span) (env : env) (abs_id : AbstractionId.id)
     (nabs : abs) : env * abs option =
   let rec update (env : env) : env * abs option =
     match env with
-    | [] -> craise __FILE__ __LINE__ span "Unreachable"
+    | [] -> [%craise] span "Unreachable"
     | EFrame :: _ -> (* We're done *) (env, None)
     | EBinding (bv, v) :: env ->
         let env, opt_abs = update env in
@@ -516,20 +515,18 @@ let ctx_adt_get_instantiated_field_types (span : Meta.span) (ctx : eval_ctx)
       (* Retrieve the types of the fields *)
       ctx_type_get_instantiated_field_types span ctx id variant_id generics
   | TTuple ->
-      cassert __FILE__ __LINE__ (variant_id = None) span
-        "Tuples don't have variants";
-      cassert __FILE__ __LINE__ (generics.regions = []) span
+      [%cassert] span (variant_id = None) "Tuples don't have variants";
+      [%cassert] span (generics.regions = [])
         "Tuples don't have region parameters";
       generics.types
   | TBuiltin aty -> (
       match aty with
       | TBox ->
-          cassert __FILE__ __LINE__ (variant_id = None) span
-            "Boxes don't have variants";
-          sanity_check __FILE__ __LINE__ (generics.regions = []) span;
-          sanity_check __FILE__ __LINE__ (List.length generics.types = 1) span;
-          sanity_check __FILE__ __LINE__ (generics.const_generics = []) span;
+          [%cassert] span (variant_id = None) "Boxes don't have variants";
+          [%sanity_check] span (generics.regions = []);
+          [%sanity_check] span (List.length generics.types = 1);
+          [%sanity_check] span (generics.const_generics = []);
           generics.types
       | TArray | TSlice | TStr ->
           (* Those types don't have fields *)
-          craise __FILE__ __LINE__ span "Unreachable")
+          [%craise] span "Unreachable")

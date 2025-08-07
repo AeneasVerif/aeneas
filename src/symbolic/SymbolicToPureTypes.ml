@@ -3,7 +3,6 @@ open Pure
 open PureUtils
 open FunsAnalysis
 open TypesAnalysis
-open Errors
 open SymbolicToPureCore
 
 (** The local logger *)
@@ -69,18 +68,15 @@ and translate_trait_instance_id (span : Meta.span option)
       TraitImpl (impl_ref.id, generics)
   | BuiltinOrAuto _ ->
       (* We should have eliminated those in the prepasses *)
-      craise_opt_span __FILE__ __LINE__ span "Unreachable"
+      [%craise_opt_span] span "Unreachable"
   | Clause var ->
       Clause var
       (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
   | ParentClause (tref, clause_id) ->
       let inst_id = translate_trait_instance_id tref.trait_id in
       ParentClause (inst_id, tref.trait_decl_ref.binder_value.id, clause_id)
-  | Dyn _ ->
-      craise_opt_span __FILE__ __LINE__ span
-        "Dynamic trait types are not supported yet"
-  | UnknownTrait s ->
-      craise_opt_span __FILE__ __LINE__ span ("Unknown trait found: " ^ s)
+  | Dyn _ -> [%craise_opt_span] span "Dynamic trait types are not supported yet"
+  | UnknownTrait s -> [%craise_opt_span] span ("Unknown trait found: " ^ s)
 
 (** Translate a signature type - TODO: factor out the different translation
     functions *)
@@ -92,9 +88,7 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
       match id with
       | T.TAdtId adt_id -> TAdt (TAdtId adt_id, generics)
       | T.TTuple ->
-          sanity_check_opt_span __FILE__ __LINE__
-            (generics.const_generics = [])
-            span;
+          [%sanity_check_opt_span] span (generics.const_generics = []);
           mk_simpl_tuple_ty generics.types
       | T.TBuiltin aty -> (
           match aty with
@@ -103,7 +97,7 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
               match generics.types with
               | [ ty ] -> ty
               | _ ->
-                  craise_opt_span __FILE__ __LINE__ span
+                  [%craise_opt_span] span
                     "Box/vec/option type with incorrect number of arguments")
           | T.TArray -> TAdt (TBuiltin TArray, generics)
           | T.TSlice -> TAdt (TBuiltin TSlice, generics)
@@ -112,7 +106,7 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
       TVar var
       (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
   | TLiteral ty -> TLiteral ty
-  | TNever -> craise_opt_span __FILE__ __LINE__ span "Unreachable"
+  | TNever -> [%craise_opt_span] span "Unreachable"
   | TRef (_, rty, _) -> translate span rty
   | TRawPtr (ty, rkind) ->
       let mut =
@@ -127,13 +121,11 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
       let trait_ref = translate_strait_ref span trait_ref in
       TTraitType (trait_ref, type_name)
   | TFnDef _ | TFnPtr _ ->
-      craise_opt_span __FILE__ __LINE__ span "Arrow types are not supported yet"
+      [%craise_opt_span] span "Arrow types are not supported yet"
   | TDynTrait _ ->
-      craise_opt_span __FILE__ __LINE__ span
-        "Dynamic trait types are not supported yet"
+      [%craise_opt_span] span "Dynamic trait types are not supported yet"
   | TError _ ->
-      craise_opt_span __FILE__ __LINE__ span
-        "Found type error in the output of charon"
+      [%craise_opt_span] span "Found type error in the output of charon"
 
 and translate_sgeneric_args (span : Meta.span option)
     (generics : T.generic_args) : generic_args =
@@ -208,9 +200,7 @@ let translate_type_decl_kind (span : Meta.span) (kind : T.type_decl_kind) :
   match kind with
   | T.Struct fields -> Struct (translate_fields span fields)
   | T.Enum variants -> Enum (translate_variants span variants)
-  | Alias _ ->
-      craise __FILE__ __LINE__ span
-        "type aliases should have been removed earlier"
+  | Alias _ -> [%craise] span "type aliases should have been removed earlier"
   | T.Union _ | T.Opaque | T.TDeclError _ -> Opaque
 
 (** Translate a type definition from LLBC
@@ -230,11 +220,11 @@ let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
   let name = Print.Types.name_to_string env def.item_meta.name in
   let span = def.item_meta.span in
   (* Can't translate types with nested borrows for now *)
-  cassert __FILE__ __LINE__
+  [%cassert] span
     (not
        (TypesUtils.type_decl_has_nested_borrows (Some span)
           ctx.type_ctx.type_infos def))
-    span "ADTs containing borrows are not supported yet";
+    "ADTs containing borrows are not supported yet";
   let generics, preds = translate_generic_params (Some span) def.generics in
   let explicit_info = compute_explicit_info generics [] in
   let kind = translate_type_decl_kind span def.T.kind in
@@ -268,7 +258,7 @@ let translate_type_id (span : Meta.span option) (id : T.type_id) : type_id =
         | T.TBox ->
             (* Boxes have to be eliminated: this type id shouldn't
                be translated *)
-            craise_opt_span __FILE__ __LINE__ span "Unexpected box type"
+            [%craise_opt_span] span "Unexpected box type"
       in
       TBuiltin aty
   | TTuple -> TTuple
@@ -300,11 +290,11 @@ let rec translate_fwd_ty (span : Meta.span option) (type_infos : type_infos)
           match t_generics.types with
           | [ bty ] -> bty
           | _ ->
-              craise_opt_span __FILE__ __LINE__ span
+              [%craise_opt_span] span
                 "Unreachable: box/vec/option receives exactly one type \
                  parameter"))
   | TVar var -> TVar var
-  | TNever -> craise_opt_span __FILE__ __LINE__ span "Unreachable"
+  | TNever -> [%craise_opt_span] span "Unreachable"
   | TLiteral lty -> TLiteral lty
   | TRef (_, rty, _) -> translate rty
   | TRawPtr (ty, rkind) ->
@@ -320,13 +310,11 @@ let rec translate_fwd_ty (span : Meta.span option) (type_infos : type_infos)
       let trait_ref = translate_fwd_trait_ref span type_infos trait_ref in
       TTraitType (trait_ref, type_name)
   | TFnDef _ | TFnPtr _ ->
-      craise_opt_span __FILE__ __LINE__ span "Arrow types are not supported yet"
+      [%craise_opt_span] span "Arrow types are not supported yet"
   | TDynTrait _ ->
-      craise_opt_span __FILE__ __LINE__ span
-        "Dynamic trait types are not supported yet"
+      [%craise_opt_span] span "Dynamic trait types are not supported yet"
   | TError _ ->
-      craise_opt_span __FILE__ __LINE__ span
-        "Found type error in the output of charon"
+      [%craise_opt_span] span "Found type error in the output of charon"
 
 and translate_fwd_generic_args (span : Meta.span option)
     (type_infos : type_infos) (generics : T.generic_args) : generic_args =
@@ -395,7 +383,7 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
           match generics.types with
           | [ bty ] -> translate bty
           | _ ->
-              craise_opt_span __FILE__ __LINE__ span
+              [%craise_opt_span] span
                 "Unreachable: boxes receive exactly one type parameter")
       | TTuple -> (
           if inside_mut then
@@ -414,7 +402,7 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
                  * is the identity *)
                 Some (mk_simpl_tuple_ty tys_t)))
   | TVar var -> wrap (TVar var)
-  | TNever -> craise_opt_span __FILE__ __LINE__ span "Unreachable"
+  | TNever -> [%craise_opt_span] span "Unreachable"
   | TLiteral lty -> wrap (TLiteral lty)
   | TRef (r, rty, rkind) -> (
       match rkind with
@@ -431,9 +419,8 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
       (* TODO: not sure what to do here *)
       None
   | TTraitType (trait_ref, type_name) ->
-      sanity_check_opt_span __FILE__ __LINE__
-        (TypesUtils.trait_instance_id_is_local_clause trait_ref.trait_id)
-        span;
+      [%sanity_check_opt_span] span
+        (TypesUtils.trait_instance_id_is_local_clause trait_ref.trait_id);
       if inside_mut then
         (* Translate the trait ref as a "forward" trait ref -
            we do not want to filter any type *)
@@ -441,13 +428,11 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
         Some (TTraitType (trait_ref, type_name))
       else None
   | TFnDef _ | TFnPtr _ ->
-      craise_opt_span __FILE__ __LINE__ span "Arrow types are not supported yet"
+      [%craise_opt_span] span "Arrow types are not supported yet"
   | TDynTrait _ ->
-      craise_opt_span __FILE__ __LINE__ span
-        "Dynamic trait types are not supported yet"
+      [%craise_opt_span] span "Dynamic trait types are not supported yet"
   | TError _ ->
-      craise_opt_span __FILE__ __LINE__ span
-        "Found type error in the output of charon"
+      [%craise_opt_span] span "Found type error in the output of charon"
 
 (** Simply calls [translate_back_ty] *)
 let ctx_translate_back_ty (ctx : bs_ctx) (keep_region : 'r -> bool)
@@ -520,8 +505,7 @@ let compute_raw_fun_effect_info (span : Meta.span option)
   match fun_id with
   | TraitMethod (_, _, fid) | FunId (FRegular fid) ->
       let info =
-        silent_unwrap_opt_span __FILE__ __LINE__ span
-          (A.FunDeclId.Map.find_opt fid fun_infos)
+        [%silent_unwrap_opt_span] span (A.FunDeclId.Map.find_opt fid fun_infos)
       in
       let stateful_group = info.stateful in
       let stateful =
@@ -536,7 +520,7 @@ let compute_raw_fun_effect_info (span : Meta.span option)
         is_rec = (info.is_rec || Option.is_some lid) && gid = None;
       }
   | FunId (FBuiltin aid) ->
-      sanity_check_opt_span __FILE__ __LINE__ (lid = None) span;
+      [%sanity_check_opt_span] span (lid = None);
       {
         (* Note that backward functions can't fail *)
         can_fail = Builtin.builtin_fun_can_fail aid && gid = None;
@@ -632,12 +616,10 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
     let gr_regions = T.RegionId.Set.of_list rg.regions in
     let keep_region r =
       match r with
-      | T.RStatic ->
-          craise_opt_span __FILE__ __LINE__ span "Unimplemented: static region"
-      | RErased ->
-          craise_opt_span __FILE__ __LINE__ span "Unexpected erased region"
+      | T.RStatic -> [%craise_opt_span] span "Unimplemented: static region"
+      | RErased -> [%craise_opt_span] span "Unexpected erased region"
       | RVar (Bound _ as var) ->
-          craise_opt_span __FILE__ __LINE__ span
+          [%craise_opt_span] span
             ("Unexpected bound region: "
             ^ Charon.PrintTypes.region_db_var_to_pretty_string var)
       | RVar (Free rid) -> T.RegionId.Set.mem rid gr_regions
@@ -649,9 +631,8 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
     (* For now we don't support nested borrows, so we check that there
        aren't parent regions *)
     let parents = list_ancestor_region_groups sg.regions_hierarchy gid in
-    classert_opt_span __FILE__ __LINE__
+    [%classert_opt_span] span
       (T.RegionGroupId.Set.is_empty parents)
-      span
       (lazy
         (let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
          "Nested borrows are not supported yet (found in the signature of: "
@@ -817,7 +798,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
       else false
     in
     let info = { fwd_info; effect_info = fwd_effect_info; ignore_output } in
-    sanity_check_opt_span __FILE__ __LINE__ (fun_sig_info_is_wf info) span;
+    [%sanity_check_opt_span] span (fun_sig_info_is_wf info);
     info
   in
 
@@ -830,9 +811,7 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed (span : span option)
     (input_names : string option list) : decomposed_fun_sig =
   let inst_sg : LlbcAst.inst_fun_sig =
     let ({ A.inputs; output; _ } : A.fun_sig) = sg in
-    sanity_check_opt_span __FILE__ __LINE__
-      (sg.generics.trait_type_constraints = [])
-      span;
+    [%sanity_check_opt_span] span (sg.generics.trait_type_constraints = []);
 
     let _, fresh_abs_id = V.AbstractionId.fresh_stateful_generator () in
     let region_gr_id_abs_id_list =
@@ -875,14 +854,14 @@ let translate_fun_sig_to_decomposed (decls_ctx : C.decls_ctx)
     (fun_id : FunDeclId.id) (sg : A.fun_sig) (input_names : string option list)
     : decomposed_fun_sig =
   let span =
-    (silent_unwrap_opt_span __FILE__ __LINE__ None
+    ([%silent_unwrap_opt_span] None
        (FunDeclId.Map.find_opt fun_id decls_ctx.fun_ctx.fun_decls))
       .item_meta
       .span
   in
   (* Retrieve the list of parent backward functions *)
   let regions_hierarchy =
-    silent_unwrap __FILE__ __LINE__ span
+    [%silent_unwrap] span
       (FunIdMap.find_opt (FRegular fun_id) decls_ctx.fun_ctx.regions_hierarchies)
   in
 

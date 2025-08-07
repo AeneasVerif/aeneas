@@ -7,8 +7,6 @@ open Config
 module F = Format
 open ExtractBuiltin
 open TranslateCore
-open Errors
-include ExtractErrors
 
 (** The local logger *)
 let log = Logging.extract_log
@@ -236,7 +234,7 @@ let report_name_collision (id_to_string : id -> string)
      We don't link this error to any span information because we already put
      the span information about the two problematic definitions in the error
      message above. *)
-  save_error_opt_span __FILE__ __LINE__ None err
+  [%save_error_opt_span] None err
 
 let names_map_get_id_from_name (name : string) (nm : names_map) :
     (id * Meta.span option) option =
@@ -270,7 +268,7 @@ let names_map_add (id_to_string : id -> string) ((id, span) : id * span option)
        ^ ":\nThe chosen name is already in the names set: " ^ name
      in
      (* If we fail hard on errors, raise an exception *)
-     save_error_opt_span __FILE__ __LINE__ span err);
+     [%save_error_opt_span] span err);
   (* Insert *)
   names_map_add_unchecked (id, span) name nm
 
@@ -412,7 +410,7 @@ let names_maps_get (span : Meta.span option) (id_to_string : id -> string)
     | Some s -> s
     | None ->
         let err = "Could not find: " ^ id_to_string id in
-        save_error_opt_span __FILE__ __LINE__ span err;
+        [%save_error_opt_span] span err;
         "(%%%ERROR: unknown identifier\": " ^ id_to_string id ^ "\"%%%)")
   else
     let m = nm.names_map.id_to_name in
@@ -420,7 +418,7 @@ let names_maps_get (span : Meta.span option) (id_to_string : id -> string)
     | Some s -> s
     | None ->
         let err = "Could not find: " ^ id_to_string id in
-        save_error_opt_span __FILE__ __LINE__ span err;
+        [%save_error_opt_span] span err;
         "(ERROR: \"" ^ id_to_string id ^ "\")"
 
 type names_map_init = {
@@ -680,7 +678,7 @@ let ctx_get_local_function (span : Meta.span) (id : A.FunDeclId.id)
 
 let ctx_get_type (span : Meta.span option) (id : type_id) (ctx : extraction_ctx)
     : string =
-  sanity_check_opt_span __FILE__ __LINE__ (id <> TTuple) span;
+  [%sanity_check_opt_span] span (id <> TTuple);
   ctx_get span (TypeId id) ctx
 
 let ctx_get_local_type (span : Meta.span) (id : TypeDeclId.id)
@@ -1320,7 +1318,7 @@ let type_decl_kind_to_qualif (span : Meta.span) (kind : decl_kind)
           (* This is for traits *)
           Some "Record"
       | _ ->
-          craise __FILE__ __LINE__ span
+          [%craise] span
             ("Unexpected: (" ^ show_decl_kind kind ^ ", "
             ^ Print.option_to_string show_type_decl_kind type_kind
             ^ ")"))
@@ -1389,13 +1387,13 @@ let type_keyword (span : Meta.span) =
   match backend () with
   | FStar -> "Type0"
   | Coq | Lean -> "Type"
-  | HOL4 -> craise __FILE__ __LINE__ span "Unexpected"
+  | HOL4 -> [%craise] span "Unexpected"
 
 (** Helper *)
 let name_last_elem_as_ident (span : Meta.span) (n : llbc_name) : string =
   match Collections.List.last n with
   | PeIdent (s, _) -> s
-  | _ -> craise __FILE__ __LINE__ span "Unexpected"
+  | _ -> [%craise] span "Unexpected"
 
 (** Helper
 
@@ -1409,7 +1407,7 @@ let ctx_prepare_name (meta : T.item_meta) (ctx : extraction_ctx)
   | (PeIdent (crate, _) as id) :: name ->
       if crate = ctx.crate.name then name else id :: name
   | _ ->
-      craise __FILE__ __LINE__ meta.span
+      [%craise] meta.span
         ("Unexpected name shape: "
         ^ TranslateCore.name_to_string ctx.trans_ctx name)
 
@@ -1525,7 +1523,7 @@ let ctx_compute_fun_name_no_suffix (meta : T.item_meta) (ctx : extraction_ctx)
     | [ PeImpl (ImplElemTrait impl_id); _ ] ->
         (* This is a trait impl method: check if the impl is a blanket impl *)
         let trait_impl =
-          silent_unwrap __FILE__ __LINE__ meta.span
+          [%silent_unwrap] meta.span
             (TraitImplId.Map.find_opt impl_id ctx.trans_trait_impls)
         in
         let args = trait_impl.llbc_impl_trait.generics in
@@ -1789,7 +1787,7 @@ let ctx_compute_termination_measure_name (meta : T.item_meta)
     match Config.backend () with
     | FStar -> "_decreases"
     | Lean -> "_terminates"
-    | Coq | HOL4 -> craise __FILE__ __LINE__ meta.span "Unexpected"
+    | Coq | HOL4 -> [%craise] meta.span "Unexpected"
   in
   (* Concatenate *)
   fname ^ lp_suffix ^ suffix
@@ -1816,7 +1814,7 @@ let ctx_compute_decreases_proof_name (meta : T.item_meta) (ctx : extraction_ctx)
   let suffix =
     match Config.backend () with
     | Lean -> "_decreases"
-    | FStar | Coq | HOL4 -> craise __FILE__ __LINE__ meta.span "Unexpected"
+    | FStar | Coq | HOL4 -> [%craise] meta.span "Unexpected"
   in
   (* Concatenate *)
   fname ^ lp_suffix ^ suffix
@@ -1845,7 +1843,7 @@ let ctx_compute_var_basename (span : Meta.span) (ctx : extraction_ctx)
     let cl = to_snake_case name in
     let cl = String.split_on_char '_' cl in
     let cl = List.filter (fun s -> String.length s > 0) cl in
-    sanity_check __FILE__ __LINE__ (List.length cl > 0) span;
+    [%sanity_check] span (List.length cl > 0);
     let cl = List.map (fun s -> s.[0]) cl in
     StringUtils.string_of_chars cl
   in
@@ -2192,9 +2190,7 @@ let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
 let ctx_add_fun_decl (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
   (* Sanity check: the function should not be a global body - those are handled
    * separately *)
-  sanity_check __FILE__ __LINE__
-    (not def.is_global_decl_body)
-    def.item_meta.span;
+  [%sanity_check] def.item_meta.span (not def.is_global_decl_body);
   let def_id = def.def_id in
   (* Add the function name *)
   let def_name = ctx_compute_fun_name def false ctx in

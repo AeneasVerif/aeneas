@@ -5,7 +5,6 @@ open Values
 open Contexts
 open InterpreterUtils
 open InterpreterBorrowsCore
-open Errors
 
 type updt_env_kind =
   | AbsInLeft of AbstractionId.id
@@ -540,7 +539,7 @@ let ctx_split_fixed_new (span : Meta.span) (fixed_ids : ids_sets)
       (fun ee ->
         match ee with
         | EAbs abs -> abs
-        | _ -> craise __FILE__ __LINE__ span "Unreachable")
+        | _ -> [%craise] span "Unreachable")
       new_absl
   in
   let new_dummyl =
@@ -548,7 +547,7 @@ let ctx_split_fixed_new (span : Meta.span) (fixed_ids : ids_sets)
       (fun ee ->
         match ee with
         | EBinding (BDummy _, v) -> v
-        | _ -> craise __FILE__ __LINE__ span "Unreachable")
+        | _ -> [%craise] span "Unreachable")
       new_dummyl
   in
   (filt_env, new_absl, new_dummyl)
@@ -590,43 +589,38 @@ let typed_avalue_add_marker (span : Meta.span) (ctx : eval_ctx)
   let obj =
     object
       inherit [_] map_typed_avalue as super
-
-      method! visit_borrow_content _ _ =
-        craise __FILE__ __LINE__ span "Unexpected borrow"
-
-      method! visit_loan_content _ _ =
-        craise __FILE__ __LINE__ span "Unexpected loan"
+      method! visit_borrow_content _ _ = [%craise] span "Unexpected borrow"
+      method! visit_loan_content _ _ = [%craise] span "Unexpected loan"
 
       method! visit_ASymbolic _ pm0 aproj =
-        sanity_check __FILE__ __LINE__ (pm0 = PNone) span;
+        [%sanity_check] span (pm0 = PNone);
         ASymbolic (pm, aproj)
 
       method! visit_symbolic_value _ sv =
         (* Symbolic values can appear in shared values *)
-        sanity_check __FILE__ __LINE__
-          (not (symbolic_value_has_borrows (Some span) ctx sv))
-          span;
+        [%sanity_check] span
+          (not (symbolic_value_has_borrows (Some span) ctx sv));
         sv
 
       method! visit_aloan_content env lc =
         match lc with
         | AMutLoan (pm0, bid, av) ->
-            sanity_check __FILE__ __LINE__ (pm0 = PNone) span;
+            [%sanity_check] span (pm0 = PNone);
             super#visit_aloan_content env (AMutLoan (pm, bid, av))
         | ASharedLoan (pm0, bids, av, child) ->
-            sanity_check __FILE__ __LINE__ (pm0 = PNone) span;
+            [%sanity_check] span (pm0 = PNone);
             super#visit_aloan_content env (ASharedLoan (pm, bids, av, child))
-        | _ -> internal_error __FILE__ __LINE__ span
+        | _ -> [%internal_error] span
 
       method! visit_aborrow_content env bc =
         match bc with
         | AMutBorrow (pm0, bid, av) ->
-            sanity_check __FILE__ __LINE__ (pm0 = PNone) span;
+            [%sanity_check] span (pm0 = PNone);
             super#visit_aborrow_content env (AMutBorrow (pm, bid, av))
         | ASharedBorrow (pm0, bid, sid) ->
-            sanity_check __FILE__ __LINE__ (pm0 = PNone) span;
+            [%sanity_check] span (pm0 = PNone);
             super#visit_aborrow_content env (ASharedBorrow (pm, bid, sid))
-        | _ -> internal_error __FILE__ __LINE__ span
+        | _ -> [%internal_error] span
     end
   in
   obj#visit_typed_avalue () av

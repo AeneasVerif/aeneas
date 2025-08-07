@@ -1,7 +1,6 @@
 open Pure
 open PureUtils
 open InterpreterUtils
-open Errors
 open SymbolicToPureCore
 open SymbolicToPureTypes
 open SymbolicToPureValues
@@ -35,14 +34,14 @@ let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fun_id_or_trait_method_ref)
       (* This is necessarily for the current function *)
       match fun_id with
       | FunId (FRegular fid) -> (
-          sanity_check __FILE__ __LINE__ (fid = ctx.fun_decl.def_id) ctx.span;
+          [%sanity_check] ctx.span (fid = ctx.fun_decl.def_id);
           (* Lookup the loop *)
           let lid = V.LoopId.Map.find lid ctx.loop_ids_map in
           let loop_info = LoopId.Map.find lid ctx.loops in
           match gid with
           | None -> loop_info.fwd_effect_info
           | Some gid -> RegionGroupId.Map.find gid loop_info.back_effect_infos)
-      | _ -> craise __FILE__ __LINE__ ctx.span "Unreachable")
+      | _ -> [%craise] ctx.span "Unreachable")
 
 let translate_fun_id_or_trait_method_ref (ctx : bs_ctx)
     (id : A.fun_id_or_trait_method_ref) : fun_id_or_trait_method_ref =
@@ -231,7 +230,7 @@ let decompose_let_match (ctx : bs_ctx)
             super#visit_adt_pattern ty pat
         | TBuiltin _ ->
             (* Shouldn't happen *)
-            craise __FILE__ __LINE__ ctx.span "Unreachable"
+            [%craise] ctx.span "Unreachable"
 
       method! visit_PatVar _ var _ = [ var ]
     end
@@ -279,7 +278,7 @@ let decompose_let_match (ctx : bs_ctx)
               (* This is a bug, but we might want to continue generating the model:
                  as an escape hatch, simply use the original variable (this will
                  lead to incorrect code of course) *)
-              save_error __FILE__ __LINE__ ctx.span
+              [%save_error] ctx.span
                 ("Internal error: could not find variable. Please report an \
                   issue. Debugging information:" ^ "\n- v.id: "
                ^ LocalId.to_string v.id ^ "\n- ctx.var_id_to_default: "
@@ -351,9 +350,9 @@ and translate_return (ectx : C.eval_ctx) (opt_v : V.typed_value option)
 
 and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
     (ctx : bs_ctx) : texpression =
-  sanity_check __FILE__ __LINE__ (is_continue = ctx.inside_loop) ctx.span;
+  [%sanity_check] ctx.span (is_continue = ctx.inside_loop);
   let loop_id = V.LoopId.Map.find loop_id ctx.loop_ids_map in
-  sanity_check __FILE__ __LINE__ (loop_id = Option.get ctx.loop_id) ctx.span;
+  [%sanity_check] ctx.span (loop_id = Option.get ctx.loop_id);
 
   (* Lookup the loop information *)
   let loop_id = Option.get ctx.loop_id in
@@ -519,7 +518,7 @@ and translate_function_call_aux (call : S.call) (e : S.expression)
                   | PeIdent (s, _) -> s
                   | _ ->
                       (* We shouldn't get there *)
-                      craise __FILE__ __LINE__ decl.item_meta.span "Unexpected")
+                      [%craise] decl.item_meta.span "Unexpected")
             in
             name ^ "_back"
           in
@@ -600,7 +599,7 @@ and translate_function_call_aux (call : S.call) (e : S.expression)
               | TBool -> None
               | TInt int_ty -> Some (V.Signed int_ty)
               | TUInt int_ty -> Some (V.Unsigned int_ty)
-              | _ -> craise __FILE__ __LINE__ ctx.span "Unreachable"
+              | _ -> [%craise] ctx.span "Unreachable"
             in
             let effect_info =
               {
@@ -614,7 +613,7 @@ and translate_function_call_aux (call : S.call) (e : S.expression)
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
             let dest = mk_typed_pattern_from_var dest dest_mplace in
             (ctx, Unop (Not ty), effect_info, args, [], dest)
-        | _ -> craise __FILE__ __LINE__ ctx.span "Unreachable")
+        | _ -> [%craise] ctx.span "Unreachable")
     | S.Unop (E.Neg overflow) -> (
         match args with
         | [ arg ] ->
@@ -633,7 +632,7 @@ and translate_function_call_aux (call : S.call) (e : S.expression)
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
             let dest = mk_typed_pattern_from_var dest dest_mplace in
             (ctx, Unop (Neg int_ty), effect_info, args, [], dest)
-        | _ -> craise __FILE__ __LINE__ ctx.span "Unreachable")
+        | _ -> [%craise] ctx.span "Unreachable")
     | S.Unop (E.Cast cast_kind) -> begin
         match cast_kind with
         | CastScalar (src_ty, tgt_ty) ->
@@ -650,19 +649,15 @@ and translate_function_call_aux (call : S.call) (e : S.expression)
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
             let dest = mk_typed_pattern_from_var dest dest_mplace in
             (ctx, Unop (Cast (src_ty, tgt_ty)), effect_info, args, [], dest)
-        | CastFnPtr _ ->
-            craise __FILE__ __LINE__ ctx.span "TODO: function casts"
+        | CastFnPtr _ -> [%craise] ctx.span "TODO: function casts"
         | CastUnsize _ ->
             (* We shouldn't get there: this case should have been detected before
                and handled in [translate_cast_unsize] *)
-            internal_error __FILE__ __LINE__ ctx.span
-        | CastRawPtr _ ->
-            craise __FILE__ __LINE__ ctx.span "Unsupported: raw ptr casts"
-        | CastTransmute _ ->
-            craise __FILE__ __LINE__ ctx.span "Unsupported: transmute"
+            [%internal_error] ctx.span
+        | CastRawPtr _ -> [%craise] ctx.span "Unsupported: raw ptr casts"
+        | CastTransmute _ -> [%craise] ctx.span "Unsupported: transmute"
       end
-    | S.Unop E.PtrMetadata ->
-        craise __FILE__ __LINE__ ctx.span "Unsupported unop: PtrMetadata"
+    | S.Unop E.PtrMetadata -> [%craise] ctx.span "Unsupported unop: PtrMetadata"
     | S.Binop binop -> (
         match args with
         | [ arg0; arg1 ] ->
@@ -671,7 +666,7 @@ and translate_function_call_aux (call : S.call) (e : S.expression)
             (match binop with
             (* The Rust compiler accepts bitshifts for any integer type combination for ty0, ty1 *)
             | E.Shl _ | E.Shr _ -> ()
-            | _ -> sanity_check __FILE__ __LINE__ (int_ty0 = int_ty1) ctx.span);
+            | _ -> [%sanity_check] ctx.span (int_ty0 = int_ty1));
             let effect_info =
               {
                 can_fail = ExpressionsUtils.binop_can_fail binop;
@@ -684,7 +679,7 @@ and translate_function_call_aux (call : S.call) (e : S.expression)
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
             let dest = mk_typed_pattern_from_var dest dest_mplace in
             (ctx, Binop (binop, int_ty0), effect_info, args, [], dest)
-        | _ -> craise __FILE__ __LINE__ ctx.span "Unreachable")
+        | _ -> [%craise] ctx.span "Unreachable")
   in
   let func = { id = FunOrOp fun_id; generics } in
   let input_tys = (List.map (fun (x : texpression) -> x.ty)) args in
@@ -721,7 +716,7 @@ and translate_function_call_aux (call : S.call) (e : S.expression)
           | [ x ] ->
               let call = { call with ty = mk_arrows [ x.ty ] x.ty } in
               mk_app ctx.span call x
-          | _ -> internal_error __FILE__ __LINE__ ctx.span
+          | _ -> [%internal_error] ctx.span
         in
         let call_e =
           mk_simpl_tuple_texpression ctx.span (call_e :: back_funs_bodies)
@@ -737,13 +732,12 @@ and translate_function_call_aux (call : S.call) (e : S.expression)
       ^ pure_ty_to_string ctx dest_v.ty
       ^ "\n- call_e.ty: "
       ^ pure_ty_to_string ctx call_e.ty));
-  sanity_check __FILE__ __LINE__
+  [%sanity_check] ctx.span
     (let call_ty =
        if effect_info.can_fail then unwrap_result_ty ctx.span call_e.ty
        else call_e.ty
      in
-     dest_v.ty = call_ty)
-    ctx.span;
+     dest_v.ty = call_ty);
   (* Translate the next expression *)
   let next_e = translate_expression e ctx in
   (* Put together *)
@@ -768,7 +762,7 @@ and translate_cast_unsize (call : S.call) (e : S.expression) (ty0 : T.ty)
   let arg =
     match call.args with
     | [ arg ] -> arg
-    | _ -> internal_error __FILE__ __LINE__ ctx.span
+    | _ -> [%internal_error] ctx.span
   in
   let arg = typed_value_to_texpression ctx call.ctx arg in
   let arg_mp =
@@ -881,7 +875,7 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
      for a parent backward function.
   *)
   let bid = Option.get ctx.bid in
-  sanity_check __FILE__ __LINE__ (rg_id = bid) ctx.span;
+  [%sanity_check] ctx.span (rg_id = bid);
 
   (* First, introduce the given back variables.
 
@@ -926,9 +920,8 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
   let given_back_variables =
     List.map (fun v -> mk_typed_pattern_from_var v None) given_back_variables
   in
-  sanity_check __FILE__ __LINE__
-    (List.length given_back_variables = List.length consumed_values)
-    ctx.span;
+  [%sanity_check] ctx.span
+    (List.length given_back_variables = List.length consumed_values);
   let variables_values = List.combine given_back_variables consumed_values in
 
   (* Sanity check: the two lists match (same types) *)
@@ -936,9 +929,8 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
   if !Config.type_check_pure_code then
     List.iter
       (fun (var, v) ->
-        sanity_check __FILE__ __LINE__
-          ((var : typed_pattern).ty = (v : texpression).ty)
-          ctx.span)
+        [%sanity_check] ctx.span
+          ((var : typed_pattern).ty = (v : texpression).ty))
       variables_values;
   (* Translate the next expression *)
   let next_e = translate_expression e ctx in
@@ -956,7 +948,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
     | S.Fun (fun_id, _) -> fun_id
     | Unop _ | Binop _ ->
         (* Those don't have backward functions *)
-        craise __FILE__ __LINE__ ctx.span "Unreachable"
+        [%craise] ctx.span "Unreachable"
   in
   let effect_info = get_fun_effect_info ctx fun_id None (Some rg_id) in
   (* Retrieve the values consumed upon ending the loans inside this
@@ -1037,8 +1029,8 @@ and translate_end_abstraction_identity (ectx : C.eval_ctx) (abs : V.abs)
   (* We can do this simply by checking that it consumes and gives back nothing *)
   let inputs = abs_to_consumed ctx ectx abs in
   let ctx, outputs = abs_to_given_back None abs ctx in
-  sanity_check __FILE__ __LINE__ (inputs = []) ctx.span;
-  sanity_check __FILE__ __LINE__ (outputs = []) ctx.span;
+  [%sanity_check] ctx.span (inputs = []);
+  [%sanity_check] ctx.span (outputs = []);
 
   (* Translate the next expression *)
   translate_expression e ctx
@@ -1086,8 +1078,7 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
   (* Retrieve the values consumed upon ending the loans inside this
    * abstraction: as there are no nested borrows, there should be none. *)
   let consumed = abs_to_consumed ctx ectx abs in
-  cassert __FILE__ __LINE__ (consumed = []) ctx.span
-    "Nested borrows are not supported yet";
+  [%cassert] ctx.span (consumed = []) "Nested borrows are not supported yet";
   (* Retrieve the values given back upon ending this abstraction - note that
      we don't provide meta-place information, because those assignments will
      be inlined anyway... *)
@@ -1109,7 +1100,7 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
           ^ pure_ty_to_string ctx given_back.ty
           ^ "\n- sig input ty: "
           ^ pure_ty_to_string ctx input.ty));
-      sanity_check __FILE__ __LINE__ (given_back.ty = input.ty) ctx.span)
+      [%sanity_check] ctx.span (given_back.ty = input.ty))
     given_back_inputs;
   (* Prepare the let-bindings by introducing a match if necessary *)
   let given_back_inputs =
@@ -1130,7 +1121,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
     texpression =
   let vloop_id = loop_id in
   let loop_id = V.LoopId.Map.find loop_id ctx.loop_ids_map in
-  sanity_check __FILE__ __LINE__ (loop_id = Option.get ctx.loop_id) ctx.span;
+  [%sanity_check] ctx.span (loop_id = Option.get ctx.loop_id);
   let rg_id = Option.get rg_id in
   (* There are two cases depending on the [abs_kind] (whether this is a
      synth input or a regular loop call) *)
@@ -1285,7 +1276,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
       | V.SeLiteral _ ->
           (* We do not *register* symbolic expansions to literal
              values in the symbolic ADT *)
-          craise __FILE__ __LINE__ ctx.span "Unreachable"
+          [%craise] ctx.span "Unreachable"
       | SeMutRef (_, nsv) | SeSharedRef (_, nsv) ->
           (* The (mut/shared) borrow type is extracted to identity: we thus simply
              introduce an reassignment *)
@@ -1298,11 +1289,11 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
             next_e
       | SeAdt _ ->
           (* Should be in the [ExpandAdt] case *)
-          craise __FILE__ __LINE__ ctx.span "Unreachable")
+          [%craise] ctx.span "Unreachable")
   | ExpandAdt branches -> (
       (* We don't do the same thing if there is a branching or not *)
       match branches with
-      | [] -> craise __FILE__ __LINE__ ctx.span "Unreachable"
+      | [] -> [%craise] ctx.span "Unreachable"
       | [ (variant_id, svl, branch) ]
         when not
                (TypesUtils.ty_is_custom_adt sv.V.sv_ty
@@ -1341,9 +1332,8 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
           let branch = List.hd branches in
           let ty = branch.branch.ty in
           (* Sanity check *)
-          sanity_check __FILE__ __LINE__
-            (List.for_all (fun br -> br.branch.ty = ty) branches)
-            ctx.span;
+          [%sanity_check] ctx.span
+            (List.for_all (fun br -> br.branch.ty = ty) branches);
           (* Return *)
           { e; ty })
   | ExpandBool (true_e, false_e) ->
@@ -1370,7 +1360,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
           ^ texpression_to_string ctx true_e
           ^ " \n\nfalse_e: "
           ^ texpression_to_string ctx false_e));
-      sanity_check __FILE__ __LINE__ (ty = false_e.ty) ctx.span;
+      [%sanity_check] ctx.span (ty = false_e.ty);
       { e; ty }
   | ExpandInt (int_ty, branches, otherwise) ->
       let translate_branch ((v, branch_e) : V.scalar_value * S.expression) :
@@ -1395,9 +1385,8 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
             Match all_branches )
       in
       let ty = otherwise.branch.ty in
-      sanity_check __FILE__ __LINE__
-        (List.for_all (fun (br : match_branch) -> br.branch.ty = ty) branches)
-        ctx.span;
+      [%sanity_check] ctx.span
+        (List.for_all (fun (br : match_branch) -> br.branch.ty = ty) branches);
       { e; ty }
 
 (* Translate and [ExpandAdt] when there is no branching (i.e., one branch).
@@ -1437,7 +1426,7 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
       let var =
         match vars with
         | [ v ] -> v
-        | _ -> craise __FILE__ __LINE__ ctx.span "Unreachable"
+        | _ -> [%craise] ctx.span "Unreachable"
       in
       (* We simply introduce an assignment - the box type is the
        * identity when extracted ([box a = a]) *)
@@ -1451,8 +1440,7 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
        * through the functions provided by the API (note that we don't
        * know how to expand values like vectors or arrays, because they have a variable number
        * of fields!) *)
-      craise __FILE__ __LINE__ ctx.span
-        "Attempt to expand a non-expandable value"
+      [%craise] ctx.span "Attempt to expand a non-expandable value"
 
 and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
     (sv : V.symbolic_value) (v : S.value_aggregate) (e : S.expression)
@@ -1953,12 +1941,11 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   in
 
   (* Sanity check: all the non-fresh symbolic values are in the context *)
-  sanity_check __FILE__ __LINE__
+  [%sanity_check] ctx.span
     (List.for_all
        (fun (sv : V.symbolic_value) ->
          V.SymbolicValueId.Map.mem sv.sv_id ctx.sv_to_var)
-       loop.input_svalues)
-    ctx.span;
+       loop.input_svalues);
 
   (* Translate the loop inputs *)
   let inputs =
@@ -2046,9 +2033,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
 
   (* Add the loop information in the context *)
   let ctx =
-    sanity_check __FILE__ __LINE__
-      (not (LoopId.Map.mem loop_id ctx.loops))
-      ctx.span;
+    [%sanity_check] ctx.span (not (LoopId.Map.mem loop_id ctx.loops));
 
     (* Note that we will retrieve the input values later in the [ForwardEnd]
        (and will introduce the outputs at that moment, together with the actual

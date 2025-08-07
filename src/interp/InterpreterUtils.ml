@@ -6,7 +6,6 @@ open LlbcAst
 open Utils
 open TypesUtils
 open ValuesUtils
-open Errors
 
 (* TODO: we should probably rename the file to ContextsUtils *)
 
@@ -88,7 +87,7 @@ let mk_place_from_var_id (ctx : eval_ctx) (span : Meta.span)
 let mk_fresh_symbolic_value_opt_span (span : Meta.span option) (ty : ty) :
     symbolic_value =
   (* Sanity check *)
-  sanity_check_opt_span __FILE__ __LINE__ (ty_is_rty ty) span;
+  [%sanity_check_opt_span] span (ty_is_rty ty);
   let sv_id = fresh_symbolic_value_id () in
   let svalue = { sv_id; sv_ty = ty } in
   svalue
@@ -97,13 +96,13 @@ let mk_fresh_symbolic_value span = mk_fresh_symbolic_value_opt_span (Some span)
 
 let mk_fresh_symbolic_value_from_no_regions_ty (span : Meta.span) (ty : ty) :
     symbolic_value =
-  sanity_check __FILE__ __LINE__ (ty_no_regions ty) span;
+  [%sanity_check] span (ty_no_regions ty);
   mk_fresh_symbolic_value span ty
 
 (** Create a fresh symbolic value *)
 let mk_fresh_symbolic_typed_value_opt_span (span : Meta.span option) (rty : ty)
     : typed_value =
-  sanity_check_opt_span __FILE__ __LINE__ (ty_is_rty rty) span;
+  [%sanity_check_opt_span] span (ty_is_rty rty);
   let ty = Substitute.erase_regions rty in
   (* Generate the fresh a symbolic value *)
   let value = mk_fresh_symbolic_value_opt_span span rty in
@@ -115,7 +114,7 @@ let mk_fresh_symbolic_typed_value span =
 
 let mk_fresh_symbolic_typed_value_from_no_regions_ty (span : Meta.span)
     (ty : ty) : typed_value =
-  sanity_check __FILE__ __LINE__ (ty_no_regions ty) span;
+  [%sanity_check] span (ty_no_regions ty);
   mk_fresh_symbolic_typed_value span ty
 
 (** Create a loans projector value from a symbolic value.
@@ -149,7 +148,7 @@ let mk_aproj_loans_value_from_symbolic_value (proj_regions : RegionId.Set.t)
 let mk_aproj_borrows_from_symbolic_value (span : Meta.span)
     (proj_regions : RegionId.Set.t) (svalue : symbolic_value) (proj_ty : ty) :
     aproj =
-  sanity_check __FILE__ __LINE__ (ty_is_rty proj_ty) span;
+  [%sanity_check] span (ty_is_rty proj_ty);
   if ty_has_regions_in_set proj_regions proj_ty then
     AProjBorrows { proj = { sv_id = svalue.sv_id; proj_ty }; loans = [] }
   else AEmpty
@@ -179,7 +178,7 @@ let remove_borrow_from_asb (span : Meta.span) (bid : SharedBorrowId.id)
           false))
       asb
   in
-  sanity_check __FILE__ __LINE__ (!removed = 1) span;
+  [%sanity_check] span (!removed = 1);
   asb
 
 (** We sometimes need to return a value whose type may vary depending on whether
@@ -443,7 +442,7 @@ let compute_ids () =
 
       method! visit_shared_borrow_id _ _ =
         (* Make sure we don't miss any *)
-        internal_error_opt_span __FILE__ __LINE__ None
+        [%internal_error_opt_span] None
 
       method! visit_borrow_id _ id =
         blids := BorrowId.Set.add id !blids;
@@ -462,7 +461,7 @@ let compute_ids () =
       method! visit_abstraction_id _ id = aids := AbstractionId.Set.add id !aids
 
       method! visit_region_id _ _ =
-        craise_opt_span __FILE__ __LINE__ None
+        [%craise_opt_span] None
           "Region ids should not be visited directly; the visitor should catch \
            cases that contain region ids earlier."
 
@@ -586,9 +585,7 @@ let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
       fresh_region_id
   in
   (* Generate the type substitution. *)
-  sanity_check __FILE__ __LINE__
-    (TypesUtils.trait_instance_id_no_regions tr_self)
-    span;
+  [%sanity_check] span (TypesUtils.trait_instance_id_no_regions tr_self);
   let tsubst =
     Substitute.make_type_subst_from_vars sg.generics.types generics.types
   in
@@ -649,7 +646,7 @@ let compute_regions_hierarchy_for_fun_call (span : Meta.span option)
       inherit [_] map_ty
 
       method! visit_region_id _ _ =
-        craise_opt_span __FILE__ __LINE__ None
+        [%craise_opt_span] None
           "Region ids should not be visited directly; the visitor should catch \
            cases that contain region ids earlier."
 

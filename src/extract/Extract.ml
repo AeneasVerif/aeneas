@@ -8,6 +8,7 @@ open PureUtils
 open TranslateCore
 open Config
 open Errors
+open ExtractErrors
 include ExtractTypes
 
 let fun_or_op_id_to_string (ctx : extraction_ctx) =
@@ -64,7 +65,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
               (* Add the decreases proof for Lean only *)
               match backend () with
               | Coq | FStar -> ctx
-              | HOL4 -> craise __FILE__ __LINE__ def.item_meta.span "Unexpected"
+              | HOL4 -> [%craise] def.item_meta.span "Unexpected"
               | Lean -> ctx_add_decreases_proof def ctx
             else ctx
           in
@@ -139,12 +140,12 @@ let extract_adt_g_value (span : Meta.span)
   | TAdt (TTuple, generics) ->
       (* Tuple *)
       (* For now, we only support fully applied tuple constructors *)
-      cassert __FILE__ __LINE__
+      [%cassert] span
         (List.length generics.types = List.length field_values)
-        span "Only fully applied tuple constructors are currently supported";
-      cassert __FILE__ __LINE__
+        "Only fully applied tuple constructors are currently supported";
+      [%cassert] span
         (generics.const_generics = [] && generics.trait_refs = [])
-        span "Only fully applied tuple constructors are currently supported";
+        "Only fully applied tuple constructors are currently supported";
       extract_as_tuple ()
   | TAdt (adt_id, _) ->
       (* "Regular" ADT *)
@@ -200,7 +201,7 @@ let extract_adt_g_value (span : Meta.span)
         if use_parentheses then F.pp_print_string fmt ")";
         ctx
   | _ ->
-      admit_raise __FILE__ __LINE__ span "Inconsistently typed value" fmt;
+      [%admit_raise] span "Inconsistently typed value" fmt;
       ctx
 
 (* Extract globals in the same way as variables *)
@@ -246,7 +247,7 @@ let fun_builtin_filter_types (id : FunDeclId.id) (types : 'a list)
           ^ String.concat ", " (List.map (ty_to_string ctx) types)
           ^ ")"
         in
-        save_error_opt_span __FILE__ __LINE__ None err;
+        [%save_error_opt_span] None err;
         Result.Error (types, err))
       else
         let filter_f =
@@ -320,9 +321,7 @@ let lets_require_wrap_in_do (span : Meta.span)
       (* HOL4 is similar to HOL4, but we add a sanity check *)
       let wrap_in_do = List.exists (fun (m, _, _) -> m) lets in
       if wrap_in_do then
-        sanity_check __FILE__ __LINE__
-          (List.for_all (fun (m, _, _) -> m) lets)
-          span;
+        [%sanity_check] span (List.for_all (fun (m, _, _) -> m) lets);
       wrap_in_do
   | FStar | Coq -> false
 
@@ -418,15 +417,14 @@ let extract_unop (span : Meta.span) (extract_expr : bool -> texpression -> unit)
                  (cast_str, None, Some tgt)
              | TInt _, TBool | TUInt _, TBool ->
                  (* This is not allowed by rustc: the way of doing it in Rust is: [x != 0] *)
-                 craise __FILE__ __LINE__ span
-                   "Unexpected cast: integer to bool"
+                 [%craise] span "Unexpected cast: integer to bool"
              | TBool, TBool ->
                  (* There shouldn't be any cast here. Note that if
                     one writes [b as bool] in Rust (where [b] is a
                     boolean), it gets compiled to [b] (i.e., no cast
                     is introduced). *)
-                 craise __FILE__ __LINE__ span "Unexpected cast: bool to bool"
-             | _ -> craise __FILE__ __LINE__ span "Unreachable"
+                 [%craise] span "Unexpected cast: bool to bool"
+             | _ -> [%craise] span "Unreachable"
            in
            (* Print the name of the function *)
            F.pp_print_string fmt cast_str;
@@ -572,7 +570,7 @@ let rec extract_texpression (span : Meta.span) (ctx : extraction_ctx)
   | StructUpdate supd -> extract_StructUpdate span ctx fmt inside e.ty supd
   | Loop _ ->
       (* The loop nodes should have been eliminated in {!PureMicroPasses} *)
-      admit_raise __FILE__ __LINE__ span "Unreachable" fmt
+      [%admit_raise] span "Unreachable" fmt
   | EError (_, _) -> extract_texpression_errors fmt
 
 (* Extract an application *or* a top-level qualif (function extraction has
@@ -706,8 +704,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
             TraitDeclId.Map.find trait_decl_id ctx.trans_trait_decls
           in
 
-          sanity_check __FILE__ __LINE__ (lp_id = None)
-            trait_decl.item_meta.span;
+          [%sanity_check] trait_decl.item_meta.span (lp_id = None);
           extract_trait_ref trait_decl.item_meta.span ctx fmt
             TypeDeclId.Set.empty true trait_ref;
           let fun_name =
@@ -723,15 +720,13 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
           F.pp_print_string fmt fun_name);
 
       (* Sanity check: HOL4 doesn't support const generics *)
-      sanity_check __FILE__ __LINE__
-        (generics.const_generics = [] || backend () <> HOL4)
-        span;
+      [%sanity_check] span (generics.const_generics = [] || backend () <> HOL4);
       (* Compute the information about the explicit/implicit input type parameters *)
       let explicit =
         let lookup is_trait_method fun_decl_id lp_id =
           (* Lookup the function to retrieve the signature information *)
           let trans_fun =
-            silent_unwrap __FILE__ __LINE__ span
+            [%silent_unwrap] span
               (A.FunDeclId.Map.find_opt fun_decl_id ctx.trans_funs)
           in
           let trans_fun =
@@ -794,7 +789,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
       | Error (types, err) ->
           extract_generic_args span ctx fmt TypeDeclId.Set.empty ~explicit
             { generics with types };
-          save_error __FILE__ __LINE__ span err;
+          [%save_error] span err;
           F.pp_print_string fmt
             "(\"ERROR: ill-formed builtin: invalid number of filtering \
              arguments\")");
@@ -810,7 +805,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
       (* Return *)
       if use_brackets then F.pp_print_string fmt ")"
   | (Unop _ | Binop _), _ ->
-      admit_raise __FILE__ __LINE__ span
+      [%admit_raise] span
         ("Unreachable:\n" ^ "Function: " ^ show_fun_or_op_id fid
        ^ ",\nNumber of arguments: "
         ^ string_of_int (List.length args)
@@ -826,9 +821,8 @@ and extract_adt_cons (span : Meta.span) (ctx : extraction_ctx)
   let is_single_pat = false in
   (* Sanity check: make sure the expression is not a tuple constructor
      with no arguments (the properly extracted expression would be a function) *)
-  sanity_check __FILE__ __LINE__
-    (not (adt_cons.adt_id = TTuple && generics.types != [] && args = []))
-    span;
+  [%sanity_check] span
+    (not (adt_cons.adt_id = TTuple && generics.types != [] && args = []));
   let _ =
     extract_adt_g_value span
       (fun ctx inside e ->
@@ -940,7 +934,7 @@ and extract_field_projector (span : Meta.span) (ctx : extraction_ctx)
       extract_App span ctx fmt inside (mk_app span original_app arg) args
   | [] ->
       (* No argument: shouldn't happen *)
-      admit_raise __FILE__ __LINE__ span "Unreachable" fmt
+      [%admit_raise] span "Unreachable" fmt
 
 and extract_Lambda (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
     (inside : bool) (xl : typed_pattern list) (e : texpression) : unit =
@@ -949,7 +943,7 @@ and extract_Lambda (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open parentheses *)
   if inside then F.pp_print_string fmt "(";
   (* Print the lambda - note that there should always be at least one variable *)
-  sanity_check __FILE__ __LINE__ (xl <> []) span;
+  [%sanity_check] span (xl <> []);
   F.pp_print_string fmt "fun";
   let with_type =
     match backend () with
@@ -1029,7 +1023,7 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
         let arrow =
           match backend () with
           | Coq | HOL4 -> "<-"
-          | FStar | Lean -> internal_error __FILE__ __LINE__ span
+          | FStar | Lean -> [%internal_error] span
         in
         F.pp_print_string fmt arrow;
         F.pp_close_box fmt ();
@@ -1305,7 +1299,7 @@ and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
     unit =
   (* We can't update a subset of the fields in Coq (i.e., we can do
      [{| x:= 3; y := 4 |}], but there is no syntax for [{| s with x := 3 |}]) *)
-  sanity_check __FILE__ __LINE__ (backend () <> Coq || supd.init = None) span;
+  [%sanity_check] span (backend () <> Coq || supd.init = None);
   (* In the case of HOL4, records with no fields are not supported and are
      thus extracted to unit. We need to check that by looking up the definition *)
   let extract_as_unit =
@@ -1464,7 +1458,7 @@ and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
         F.pp_print_string fmt "]";
         if need_paren then F.pp_print_string fmt ")";
         F.pp_close_box fmt ()
-    | _ -> admit_raise __FILE__ __LINE__ span "Unreachable" fmt
+    | _ -> [%admit_raise] span "Unreachable" fmt
 
 (** A small utility to print the parameters of a function signature.
 
@@ -1554,7 +1548,7 @@ let assert_backend_supports_decreases_clauses (span : Meta.span) =
   match backend () with
   | FStar | Lean -> ()
   | _ ->
-      craise __FILE__ __LINE__ span
+      [%craise] span
         "Decreases clauses are only supported for the Lean and F* backends"
 
 (** Extract a decreases clause function template body.
@@ -1574,9 +1568,8 @@ let assert_backend_supports_decreases_clauses (span : Meta.span) =
     ]} *)
 let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
     (fmt : F.formatter) (def : fun_decl) : unit =
-  cassert __FILE__ __LINE__
+  [%cassert] def.item_meta.span
     (backend () = FStar)
-    def.item_meta.span
     "The generation of template decrease clauses is only supported for the F* \
      backend";
 
@@ -1644,9 +1637,8 @@ let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
     termination. *)
 let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
     (fmt : F.formatter) (def : fun_decl) : unit =
-  cassert __FILE__ __LINE__
+  [%cassert] def.item_meta.span
     (backend () = Lean)
-    def.item_meta.span
     "The generation of template termination and decreasing clauses is only \
      supported for the Lean backend";
   (*
@@ -1776,9 +1768,7 @@ let extract_fun_comment (ctx : extraction_ctx) (fmt : F.formatter)
     See {!extract_fun_decl}. *)
 let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     (kind : decl_kind) (has_decreases_clause : bool) (def : fun_decl) : unit =
-  sanity_check __FILE__ __LINE__
-    (not def.is_global_decl_body)
-    def.item_meta.span;
+  [%sanity_check] def.item_meta.span (not def.is_global_decl_body);
   (* Retrieve the function name *)
   let def_name =
     ctx_get_local_function def.item_meta.span def.def_id def.loop_id ctx
@@ -2062,9 +2052,8 @@ let extract_fun_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
   let def_name =
     ctx_get_local_function def.item_meta.span def.def_id def.loop_id ctx
   in
-  cassert __FILE__ __LINE__
+  [%cassert] def.item_meta.span
     (def.signature.generics.const_generics = [])
-    def.item_meta.span
     "Constant generics are not supported yet when generating code for HOL4";
   (* Add the type/const gen parameters - note that we need those bindings
      only for the generation of the type (they are not top-level) *)
@@ -2112,9 +2101,7 @@ let extract_fun_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
     and {!end_fun_decl_group}. *)
 let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (kind : decl_kind) (has_decreases_clause : bool) (def : fun_decl) : unit =
-  sanity_check __FILE__ __LINE__
-    (not def.is_global_decl_body)
-    def.item_meta.span;
+  [%sanity_check] def.item_meta.span (not def.is_global_decl_body);
   (* We treat HOL4 opaque functions in a specific manner *)
   if backend () = HOL4 && Option.is_none def.body then
     extract_fun_decl_hol4_opaque ctx fmt def
@@ -2147,7 +2134,7 @@ let extract_global_decl_body_gen (span : Meta.span) (ctx : extraction_ctx)
   F.pp_open_hvbox fmt 0;
 
   (* For lean: add the irreducible attribute *)
-  sanity_check __FILE__ __LINE__ (backend () = Lean || not irreducible) span;
+  [%sanity_check] span (backend () = Lean || not irreducible);
   if backend () = Lean then (
     if irreducible then F.pp_print_string fmt "@[global_simps, irreducible]"
     else F.pp_print_string fmt "@[global_simps]";
@@ -2277,8 +2264,8 @@ let extract_global_decl_hol4_opaque (span : Meta.span) (ctx : extraction_ctx)
 let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
     (global : global_decl) (body : fun_decl) (interface : bool) : unit =
   let span = body.item_meta.span in
-  sanity_check __FILE__ __LINE__ body.is_global_decl_body span;
-  sanity_check __FILE__ __LINE__ (body.signature.inputs = []) span;
+  [%sanity_check] span body.is_global_decl_body;
+  [%sanity_check] span (body.signature.inputs = []);
 
   (* Add a break then the name of the corresponding LLBC declaration *)
   F.pp_print_break fmt 0 0;
@@ -2411,10 +2398,9 @@ let extract_trait_decl_register_parent_clause_names (ctx : extraction_ctx)
             (c.clause_id, name))
           trait_decl.parent_clauses
     | Some info ->
-        cassert __FILE__ __LINE__
+        [%cassert] trait_decl.item_meta.span
           (List.length trait_decl.parent_clauses
           = List.length info.parent_clauses)
-          trait_decl.item_meta.span
           ("Invalid builtin information for trait decl: "
           ^ name_to_string ctx trait_decl.item_meta.name
           ^ "; expected "
@@ -2526,7 +2512,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
             match FunDeclId.Map.find_opt id ctx.trans_funs with
             | Some decl -> decl
             | None ->
-                craise __FILE__ __LINE__ trait_decl.item_meta.span
+                [%craise] trait_decl.item_meta.span
                   ("Unexpected error: could not find the declaration for \
                     method " ^ item_name ^ " for trait declaration "
                   ^ name_to_string ctx trait_decl.item_meta.name)
@@ -2564,7 +2550,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
           (fun (item_name, fun_binder) ->
             match StringMap.find_opt item_name funs_map with
             | None ->
-                craise __FILE__ __LINE__ trait_decl.item_meta.span
+                [%craise] trait_decl.item_meta.span
                   ("When retrieving the builtin information for trait decl '"
                  ^ trait_decl.name
                  ^ "', could not find the information for item '" ^ item_name
@@ -2734,7 +2720,7 @@ let extract_trait_decl_method_items_aux (ctx : extraction_ctx)
   (* Lookup the definition *)
   let fun_decl_id = fn.binder_value.fun_id in
   let trans =
-    silent_unwrap_opt_span __FILE__ __LINE__ None
+    [%silent_unwrap_opt_span] None
       (A.FunDeclId.Map.find_opt fun_decl_id ctx.trans_funs)
   in
   let span = trans.f.item_meta.span in
@@ -3016,7 +3002,7 @@ let extract_trait_impl_method_items_aux (ctx : extraction_ctx)
   let method_decl_id = fn.binder_value.fun_id in
   (* Lookup the definition *)
   let trans =
-    silent_unwrap_opt_span __FILE__ __LINE__ None
+    [%silent_unwrap_opt_span] None
       (A.FunDeclId.Map.find_opt method_decl_id ctx.trans_funs)
   in
   (* Extract the items *)

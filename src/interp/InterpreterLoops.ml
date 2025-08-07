@@ -9,7 +9,6 @@ open InterpreterUtils
 open InterpreterLoopsCore
 open InterpreterLoopsMatchCtxs
 open InterpreterLoopsFixedPoint
-open Errors
 
 (** The local logger *)
 let log = Logging.loops_log
@@ -54,17 +53,17 @@ let eval_loop_concrete (span : Meta.span) (eval_loop_body : stl_cm_fun) :
          * {!Unit} would account for the first iteration of the loop.
          * We prefer to write it this way for consistency and sanity,
          * though. *)
-        craise __FILE__ __LINE__ span "Unreachable"
+        [%craise] span "Unreachable"
     | LoopReturn _ | EndEnterLoop _ | EndContinue _ ->
         (* We can't get there: this is only used in symbolic mode *)
-        craise __FILE__ __LINE__ span "Unreachable"
+        [%craise] span "Unreachable"
   in
 
   (* Apply - for the first iteration, we use the result `Continue 0` to evaluate
      the loop body at least once *)
   let ctx_resl = rec_eval_loop_body ctx (Continue 0) in
   (* If we evaluate in concrete mode, we shouldn't have to generate any symbolic expression *)
-  let cf _ = internal_error __FILE__ __LINE__ span in
+  let cf _ = [%internal_error] span in
   (ctx_resl, cf)
 
 (** Auxiliary function for {!eval_loop_symbolic}.
@@ -155,7 +154,7 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
       match av.value with
       | ABorrow _ | ASymbolic (_, AProjBorrows _) -> true
       | ALoan _ | ASymbolic (_, AProjLoans _) -> false
-      | _ -> craise __FILE__ __LINE__ span "Unreachable"
+      | _ -> [%craise] span "Unreachable"
     in
     let borrows, loans = List.partition is_borrow abs.avalues in
 
@@ -164,14 +163,14 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
         (fun (av : typed_avalue) ->
           match av.value with
           | ABorrow (AMutBorrow (pm, bid, child_av)) ->
-              sanity_check __FILE__ __LINE__ (pm = PNone) span;
-              sanity_check __FILE__ __LINE__ (is_aignored child_av.value) span;
+              [%sanity_check] span (pm = PNone);
+              [%sanity_check] span (is_aignored child_av.value);
               Some bid
           | ABorrow (ASharedBorrow (pm, _, _)) ->
-              sanity_check __FILE__ __LINE__ (pm = PNone) span;
+              [%sanity_check] span (pm = PNone);
               None
           | ASymbolic (_, (AProjBorrows _ | AProjLoans _)) -> None
-          | _ -> craise __FILE__ __LINE__ span "Unreachable")
+          | _ -> [%craise] span "Unreachable")
         borrows
     in
 
@@ -180,8 +179,8 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
         (fun (av : typed_avalue) ->
           match av.value with
           | ASymbolic (pm, AProjBorrows { proj; loans }) ->
-              sanity_check __FILE__ __LINE__ (pm = PNone) span;
-              sanity_check __FILE__ __LINE__ (loans = []) span;
+              [%sanity_check] span (pm = PNone);
+              [%sanity_check] span (loans = []);
               Some proj.sv_id
           | _ -> None)
         borrows
@@ -192,14 +191,14 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
         (fun (av : typed_avalue) ->
           match av.value with
           | ALoan (AMutLoan (pm, bid, child_av)) ->
-              sanity_check __FILE__ __LINE__ (pm = PNone) span;
-              sanity_check __FILE__ __LINE__ (is_aignored child_av.value) span;
+              [%sanity_check] span (pm = PNone);
+              [%sanity_check] span (is_aignored child_av.value);
               Some bid
           | ALoan (ASharedLoan (pm, _, _, _)) ->
-              sanity_check __FILE__ __LINE__ (pm = PNone) span;
+              [%sanity_check] span (pm = PNone);
               None
           | ASymbolic (_, (AProjBorrows _ | AProjLoans _)) -> None
-          | _ -> craise __FILE__ __LINE__ span "Unreachable")
+          | _ -> [%craise] span "Unreachable")
         loans
     in
 
@@ -208,20 +207,16 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
         (fun (av : typed_avalue) ->
           match av.value with
           | ASymbolic (pm, AProjLoans { proj; consumed; borrows }) ->
-              sanity_check __FILE__ __LINE__ (pm = PNone) span;
-              sanity_check __FILE__ __LINE__ (consumed = []) span;
-              sanity_check __FILE__ __LINE__ (borrows = []) span;
+              [%sanity_check] span (pm = PNone);
+              [%sanity_check] span (consumed = []);
+              [%sanity_check] span (borrows = []);
               Some proj.sv_id
           | _ -> None)
         loans
     in
 
-    sanity_check __FILE__ __LINE__
-      (List.length mut_borrows = List.length mut_loans)
-      span;
-    sanity_check __FILE__ __LINE__
-      (List.length borrow_projs = List.length loan_projs)
-      span;
+    [%sanity_check] span (List.length mut_borrows = List.length mut_loans);
+    [%sanity_check] span (List.length borrow_projs = List.length loan_projs);
 
     let borrows_loans = List.combine mut_borrows mut_loans in
     List.iter
@@ -229,7 +224,7 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
         let lid_of_bid =
           BorrowId.InjSubst.find bid fp_bl_corresp.borrow_to_loan_id_map
         in
-        sanity_check __FILE__ __LINE__ (lid_of_bid = lid) span)
+        [%sanity_check] span (lid_of_bid = lid))
       borrows_loans;
 
     let borrow_loan_projs = List.combine borrow_projs loan_projs in
@@ -239,7 +234,7 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
           SymbolicValueId.InjSubst.find bid
             fp_bl_corresp.borrow_to_loan_proj_map
         in
-        sanity_check __FILE__ __LINE__ (lid_of_bid = lid) span)
+        [%sanity_check] span (lid_of_bid = lid))
       borrow_loan_projs
   in
   List.iter check_abs (RegionGroupId.Map.values rg_to_abs);
@@ -271,11 +266,10 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
     | Panic -> ((ctx, res), fun e -> e)
     | Break _ ->
         (* Breaks should have been eliminated in the prepasses *)
-        craise __FILE__ __LINE__ span "Unexpected break"
+        [%craise] span "Unexpected break"
     | Continue i ->
         (* We don't support nested loops for now *)
-        cassert __FILE__ __LINE__ (i = 0) span
-          "Nested loops are not supported yet";
+        [%cassert] span (i = 0) "Nested loops are not supported yet";
         log#ltrace
           (lazy
             ("eval_loop_symbolic: about to match the fixed-point context with \
@@ -290,7 +284,7 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
         (* For why we can't get [Unit], see the comments inside {!eval_loop_concrete}.
            For [EndEnterLoop] and [EndContinue]: we don't support nested loops for now.
         *)
-        craise __FILE__ __LINE__ span "Unreachable"
+        [%craise] span "Unreachable"
   in
 
   (* Apply and compose *)
@@ -399,7 +393,7 @@ let eval_loop_symbolic (config : config) (span : span)
         match av.value with
         | ABorrow _ | ASymbolic (_, AProjBorrows _) -> true
         | ALoan _ | ASymbolic (_, AProjLoans _) -> false
-        | _ -> craise __FILE__ __LINE__ span "Unreachable"
+        | _ -> [%craise] span "Unreachable"
       in
       let borrows, _ = List.partition is_borrow abs.avalues in
 
@@ -419,7 +413,7 @@ let eval_loop_symbolic (config : config) (span : span)
   (* Put everything together *)
   let cc (el : SymbolicAst.expression list) =
     match el with
-    | [] -> internal_error __FILE__ __LINE__ span
+    | [] -> [%internal_error] span
     | e :: el ->
         let fun_end_expr = cf_fun_end e in
         let loop_expr = cf_loop_body el in

@@ -80,7 +80,7 @@ let update_array_default (crate : crate) : crate =
   let visit_trait_impl _id (impl : trait_impl) : trait_impl option =
     (* Check this is an impl of [Default] for arrays *)
     let trait_decl =
-      silent_unwrap_opt_span __FILE__ __LINE__ (Some impl.item_meta.span)
+      [%silent_unwrap_opt_span] (Some impl.item_meta.span)
         (TraitDeclId.Map.find_opt impl.impl_trait.id crate.trait_decls)
     in
     if match_name impl_pat trait_decl.item_meta.name then (
@@ -224,7 +224,7 @@ let update_array_default (crate : crate) : crate =
                   in
                   let fdecl = { fdecl with signature = sg } in
                   Some fdecl
-              | _ -> internal_error __FILE__ __LINE__ fdecl.item_meta.span)
+              | _ -> [%internal_error] fdecl.item_meta.span)
             else (* Filter *)
               None
       in
@@ -491,12 +491,12 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
         method! visit_block_suffix entered_loop stmts =
           match stmts with
           | ({ content = Loop loop; _ } as st) :: tl ->
-              cassert __FILE__ __LINE__ (not entered_loop) st.span
+              [%cassert] st.span (not entered_loop)
                 "Nested loops are not supported yet";
               { st with content = super#visit_Loop true loop }
               :: self#visit_block_suffix entered_loop tl
           | ({ content = Break i; _ } as st) :: tl ->
-              cassert __FILE__ __LINE__ (i = 0) st.span
+              [%cassert] st.span (i = 0)
                 "Breaks to outer loops are not supported yet";
               new_stmts @ self#visit_block_suffix entered_loop tl
           | _ -> super#visit_block_suffix entered_loop stmts
@@ -512,9 +512,9 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
       method! visit_block_suffix env stmts =
         match stmts with
         | ({ content = Loop _; _ } as st) :: tl ->
-            cassert __FILE__ __LINE__
+            [%cassert] st.span
               (List.for_all statement_has_no_loop_break_continue tl)
-              st.span "Sequences of loops are not supported yet";
+              "Sequences of loops are not supported yet";
             [ super#visit_statement env (replace_breaks_with st tl) ]
         | ({ content = Switch switch; _ } as st) :: tl ->
             (* Push the remaining statements inside of the switch *)
@@ -620,9 +620,8 @@ let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
         method! visit_statement _ st = super#visit_statement st.span st
 
         method! visit_local_id span id =
-          cassert __FILE__ __LINE__
+          [%cassert] span
             (not (LocalId.Set.mem id !filtered))
-            span
             "Filtered variables should have completely disappeared from the \
              body"
       end
@@ -696,7 +695,7 @@ let filter_type_aliases (crate : crate) : crate =
           (fun id ->
             let ty = TypeDeclId.Map.find id crate.type_decls in
             if type_decl_is_alias ty then
-              craise __FILE__ __LINE__ ty.item_meta.span
+              [%craise] ty.item_meta.span
                 "found a type alias within a recursive group; this is \
                  unexpected")
           ids;
@@ -1009,7 +1008,7 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
             with CFailure _ ->
               "(could not compute the name pattern due to a different error)"
           in
-          save_error_opt_span __FILE__ __LINE__ error.span
+          [%save_error_opt_span] error.span
             ("Failure when pre- processing: " ^ name
            ^ "; ignoring its body.\nName pattern: '" ^ name_pattern ^ "'");
           None)
@@ -1040,7 +1039,7 @@ let apply_passes (crate : crate) : crate =
          report to the user the fact that we will ignore the function body *)
       let fmt = Print.Crate.crate_to_fmt_env crate in
       let name = Print.name_to_string fmt f.item_meta.name in
-      save_error __FILE__ __LINE__ f.item_meta.span
+      [%save_error] f.item_meta.span
         ("Ignoring the body of '" ^ name ^ "' because of previous error");
       { f with body = None }
   in

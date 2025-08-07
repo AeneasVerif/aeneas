@@ -3,7 +3,6 @@
 open Pure
 open PureUtils
 open TranslateCore
-open Errors
 
 (** The local logger *)
 let log = Logging.pure_micro_passes_log
@@ -243,9 +242,8 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
   (* Register a variable for constraints propagation - used when an variable is
    * introduced (left-hand side of a left binding) *)
   let register_var (ctx : pn_ctx) (v : var) : pn_ctx =
-    sanity_check __FILE__ __LINE__
-      (not (LocalId.Map.mem v.id ctx.pure_vars))
-      def.item_meta.span;
+    [%sanity_check] def.item_meta.span
+      (not (LocalId.Map.mem v.id ctx.pure_vars));
     match v.basename with
     | None -> ctx
     | Some name ->
@@ -941,7 +939,7 @@ let simplify_let_bindings (ctx : ctx) (def : fun_decl) : fun_decl =
             else if variant_id = result_fail_id then
               (* Fail case *)
               self#visit_expression env rv.e
-            else craise __FILE__ __LINE__ def.item_meta.span "Unexpected"
+            else [%craise] def.item_meta.span "Unexpected"
         | App _ ->
             (* This might be the tuple case *)
             if not monadic then
@@ -1528,17 +1526,15 @@ let simplify_aggregates (ctx : ctx) (def : fun_decl) : fun_decl =
                 let fields =
                   match adt_decl.kind with
                   | Enum _ | Alias _ | Opaque | TDeclError _ ->
-                      craise __FILE__ __LINE__ def.item_meta.span "Unreachable"
+                      [%craise] def.item_meta.span "Unreachable"
                   | Union _ ->
-                      craise __FILE__ __LINE__ def.item_meta.span
-                        "Unions are not supported"
+                      [%craise] def.item_meta.span "Unions are not supported"
                   | Struct fields -> fields
                 in
                 let num_fields = List.length fields in
                 (* In order to simplify, there must be as many arguments as
                  * there are fields *)
-                sanity_check __FILE__ __LINE__ (num_fields > 0)
-                  def.item_meta.span;
+                [%sanity_check] def.item_meta.span (num_fields > 0);
                 if num_fields = List.length args then
                   (* We now need to check that all the arguments are of the form:
                    * [x.field] for some variable [x], and where the projection
@@ -1574,11 +1570,10 @@ let simplify_aggregates (ctx : ctx) (def : fun_decl) : fun_decl =
                     if List.for_all (fun (_, y) -> y = x) end_args then (
                       (* We can substitute *)
                       (* Sanity check: all types correct *)
-                      sanity_check __FILE__ __LINE__
+                      [%sanity_check] def.item_meta.span
                         (List.for_all
                            (fun (generics1, _) -> generics1 = generics)
-                           args)
-                        def.item_meta.span;
+                           args);
                       { e with e = Var x })
                     else e
                   else e
@@ -1968,9 +1963,8 @@ let decompose_loops (_ctx : ctx) (def : fun_decl) : fun_decl * fun_decl list =
 
               { fwd_info; effect_info = loop_fwd_effect_info; ignore_output }
             in
-            sanity_check __FILE__ __LINE__
-              (fun_sig_info_is_wf loop_fwd_sig_info)
-              def.item_meta.span;
+            [%sanity_check] def.item_meta.span
+              (fun_sig_info_is_wf loop_fwd_sig_info);
 
             let inputs_tys =
               let fuel = if !Config.use_fuel then [ mk_fuel_ty ] else [] in
@@ -2012,10 +2006,9 @@ let decompose_loops (_ctx : ctx) (def : fun_decl) : fun_decl * fun_decl list =
 
               (* Introduce the forward input state *)
               let fwd_state_var, fwd_state_lvs =
-                sanity_check __FILE__ __LINE__
+                [%sanity_check] def.item_meta.span
                   (loop_fwd_effect_info.stateful
-                  = Option.is_some loop.input_state)
-                  def.item_meta.span;
+                  = Option.is_some loop.input_state);
                 match loop.input_state with
                 | None -> ([], [])
                 | Some input_state ->
@@ -2061,8 +2054,7 @@ let decompose_loops (_ctx : ctx) (def : fun_decl) : fun_decl * fun_decl list =
              *but* replace its span with the span of the loop *)
             let item_meta = { def.item_meta with span = loop.span } in
 
-            sanity_check __FILE__ __LINE__ (def.builtin_info = None)
-              def.item_meta.span;
+            [%sanity_check] def.item_meta.span (def.builtin_info = None);
 
             let loop_def : fun_decl =
               {
@@ -2687,7 +2679,7 @@ let unfold_monadic_let_bindings (_ctx : ctx) (def : fun_decl) : fun_decl =
               let re_ty =
                 Option.get (opt_destruct_result def.item_meta.span re.ty)
               in
-              sanity_check __FILE__ __LINE__ (lv.ty = re_ty) def.item_meta.span;
+              [%sanity_check] def.item_meta.span (lv.ty = re_ty);
               let err_vid = fresh_id () in
               let err_var : var =
                 {
@@ -3086,9 +3078,7 @@ let filter_loop_inputs (ctx : ctx) (transl : pure_fun_translation list) :
         ^ String.concat ", " (List.map (var_to_string ctx) inputs_prefix)
         ^ "\n"));
     let inputs_set = LocalId.Set.of_list (List.map var_get_id inputs_prefix) in
-    sanity_check __FILE__ __LINE__
-      (Option.is_some decl.loop_id)
-      decl.item_meta.span;
+    [%sanity_check] decl.item_meta.span (Option.is_some decl.loop_id);
 
     let fun_id = (T.FRegular decl.def_id, decl.loop_id) in
 
@@ -3241,9 +3231,7 @@ let filter_loop_inputs (ctx : ctx) (transl : pure_fun_translation list) :
           in
 
           let fwd_info = { fwd_info; effect_info; ignore_output } in
-          sanity_check __FILE__ __LINE__
-            (fun_sig_info_is_wf fwd_info)
-            decl.item_meta.span;
+          [%sanity_check] decl.item_meta.span (fun_sig_info_is_wf fwd_info);
           let explicit_info = compute_explicit_info generics inputs in
           let known_from_trait_refs =
             compute_known_info explicit_info generics
@@ -3489,7 +3477,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
         { e with e = Switch (discr, body) }
     | Loop _ ->
         (* Loops should have been eliminated *)
-        internal_error __FILE__ __LINE__ span
+        [%internal_error] span
     | StructUpdate supd ->
         log#ldebug
           (lazy (__FUNCTION__ ^ ": exploring: " ^ texpression_to_string e));
@@ -3514,9 +3502,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
                    initializing an array) *)
                 match adt_id with
                 | TBuiltin TArray ->
-                    sanity_check __FILE__ __LINE__
-                      (List.length generics.types = 1)
-                      span;
+                    [%sanity_check] span (List.length generics.types = 1);
                     Collections.List.repeat (List.length supd.updates)
                       (List.nth generics.types 0)
                 | _ ->
@@ -3595,7 +3581,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
             match fid with
             | FunId (FRegular fid) ->
                 let trans_fun =
-                  silent_unwrap __FILE__ __LINE__ span
+                  [%silent_unwrap] span
                     (LlbcAst.FunDeclId.Map.find_opt fid trans_funs)
                 in
                 let trans_fun =
@@ -3610,10 +3596,10 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
                 log#ldebug
                   (lazy (__FUNCTION__ ^ ": method name: " ^ method_name));
                 if Option.is_some lp_id then
-                  craise __FILE__ __LINE__ span
+                  [%craise] span
                     "Trying to get a loop subfunction from a method call";
                 let method_sig =
-                  silent_unwrap __FILE__ __LINE__ span
+                  [%silent_unwrap] span
                     (Charon.Substitute.lookup_flat_method_sig trans_ctx.crate
                        tref.trait_decl_ref.trait_decl_id method_name)
                 in

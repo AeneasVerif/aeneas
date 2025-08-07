@@ -11,7 +11,6 @@ open InterpreterAbs
 open InterpreterLoopsCore
 open InterpreterLoopsMatchCtxs
 open InterpreterLoopsJoinCtxs
-open Errors
 
 (** The local logger *)
 let log = Logging.loops_fixed_point_log
@@ -101,12 +100,11 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
     in
 
     (* Rem.: the below sanity checks are not really necessary *)
-    sanity_check __FILE__ __LINE__ (AbstractionId.Set.is_empty abs.parents) span;
-    sanity_check __FILE__ __LINE__ (abs.original_parents = []) span;
+    [%sanity_check] span (AbstractionId.Set.is_empty abs.parents);
+    [%sanity_check] span (abs.original_parents = []);
 
     (* Introduce the new abstraction for the shared values *)
-    cassert __FILE__ __LINE__ (ty_no_regions sv.ty) span
-      "Nested borrows are not supported yet";
+    [%cassert] span (ty_no_regions sv.ty) "Nested borrows are not supported yet";
     let rty = sv.ty in
 
     (* Create the shared loan child *)
@@ -352,7 +350,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
     log#ltrace (lazy "compute_fixed_point: equiv_ctx:");
     let fixed_ids = compute_fixed_ids [ ctx1; ctx2 ] in
     let check_equivalent = true in
-    let lookup_shared_value _ = craise __FILE__ __LINE__ span "Unreachable" in
+    let lookup_shared_value _ = [%craise] span "Unreachable" in
     Option.is_some
       (match_ctxs span check_equivalent fixed_ids lookup_shared_value
          lookup_shared_value ctx1 ctx2)
@@ -360,7 +358,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
   let max_num_iter = Config.loop_fixed_point_max_num_iters in
   let rec compute_fixed_point (ctx : eval_ctx) (i0 : int) (i : int) : eval_ctx =
     if i = 0 then
-      craise __FILE__ __LINE__ span
+      [%craise] span
         ("Could not compute a loop fixed point in " ^ string_of_int i0
        ^ " iterations")
     else
@@ -373,16 +371,14 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
         | Return | Panic | Break _ -> None
         | Unit ->
             (* See the comment in {!eval_loop} *)
-            craise __FILE__ __LINE__ span "Unreachable"
+            [%craise] span "Unreachable"
         | Continue i ->
             (* For now we don't support continues to outer loops *)
-            cassert __FILE__ __LINE__ (i = 0) span
-              "Continues to outer loops not supported yet";
+            [%cassert] span (i = 0) "Continues to outer loops not supported yet";
             Some ctx
         | LoopReturn _ | EndEnterLoop _ | EndContinue _ ->
             (* We don't support nested loops for now *)
-            craise __FILE__ __LINE__ span
-              "Nested loops are not supported for now"
+            [%craise] span "Nested loops are not supported for now"
       in
       let continue_ctxs = List.filter_map keep_continue_ctx ctx_resl in
 
@@ -445,10 +441,10 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
         method! visit_abs _ abs =
           match abs.kind with
           | Loop (loop_id', _, kind) ->
-              sanity_check __FILE__ __LINE__ (loop_id' = loop_id) span;
-              sanity_check __FILE__ __LINE__ (kind = LoopSynthInput) span;
+              [%sanity_check] span (loop_id' = loop_id);
+              [%sanity_check] span (kind = LoopSynthInput);
               (* The abstractions introduced so far should be endable *)
-              sanity_check __FILE__ __LINE__ (abs.can_end = true) span;
+              [%sanity_check] span (abs.can_end = true);
               add_aid abs.abs_id;
               abs
           | _ -> abs
@@ -478,12 +474,12 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
       | Continue _ | Panic -> ()
       | Break _ ->
           (* We enforce that we can't get there: see {!PrePasses.remove_loop_breaks} *)
-          craise __FILE__ __LINE__ span "Unreachable"
+          [%craise] span "Unreachable"
       | Unit | LoopReturn _ | EndEnterLoop _ | EndContinue _ ->
           (* For why we can't get [Unit], see the comments inside {!eval_loop_concrete}.
              For [EndEnterLoop] and [EndContinue]: we don't support nested loops for now.
           *)
-          craise __FILE__ __LINE__ span "Unreachable"
+          [%craise] span "Unreachable"
       | Return ->
           log#ltrace (lazy (__FUNCTION__ ^ ": cf_loop: Return"));
           (* Should we consume the return value and pop the frame?
@@ -499,10 +495,9 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
               let abs_id = AbstractionId.of_int (RegionGroupId.to_int rg_id) in
               (* By default, the [SynthInput] abs can't end *)
               let ctx = ctx_set_abs_can_end span ctx abs_id true in
-              sanity_check __FILE__ __LINE__
+              [%sanity_check] span
                 (let abs = ctx_lookup_abs ctx abs_id in
-                 abs.kind = SynthInput rg_id)
-                span;
+                 abs.kind = SynthInput rg_id);
               (* End this abstraction *)
               let ctx = end_abstraction_no_synth config span abs_id ctx in
               (* Explore the context, and check which abstractions are not there anymore *)
@@ -519,9 +514,8 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
     let _ =
       RegionGroupId.Map.iter
         (fun _ ids ->
-          cassert __FILE__ __LINE__
+          [%cassert] span
             (AbstractionId.Set.disjoint !aids_union ids)
-            span
             "The sets of abstractions we need to end per region group are not \
              pairwise disjoint";
           aids_union := AbstractionId.Set.union ids !aids_union)
@@ -539,9 +533,8 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
        We need this check for now for technical reasons to make the translation work.
        If we only borrow-check, we can ignore this.
     *)
-    sanity_check __FILE__ __LINE__
-      (!Config.borrow_check || AbstractionId.Set.equal !aids_union !fp_aids)
-      span;
+    [%sanity_check] span
+      (!Config.borrow_check || AbstractionId.Set.equal !aids_union !fp_aids);
 
     (* Merge the abstractions which need to be merged, and compute the map from
        region id to abstraction id *)
@@ -615,8 +608,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
                     fp := fp';
                     id0 := id0';
                     ()
-                  with ValueMatchFailure _ ->
-                    craise __FILE__ __LINE__ span "Unexpected")
+                  with ValueMatchFailure _ -> [%craise] span "Unexpected")
                 ids;
               (* Register the mapping *)
               rg_to_abs := RegionGroupId.Map.add_strict rg_id !id0 !rg_to_abs)
@@ -648,8 +640,8 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
         method! visit_abs _ abs =
           match abs.kind with
           | Loop (loop_id', _, kind) ->
-              sanity_check __FILE__ __LINE__ (loop_id' = loop_id) span;
-              sanity_check __FILE__ __LINE__ (kind = LoopSynthInput) span;
+              [%sanity_check] span (loop_id' = loop_id);
+              [%sanity_check] span (kind = LoopSynthInput);
               let kind : abs_kind =
                 if remove_rg_id then Loop (loop_id, None, LoopSynthInput)
                 else abs.kind
@@ -724,9 +716,9 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
       match snd (lookup_loan span ek_all lid ctx) with
       | Concrete (VSharedLoan (_, v)) -> v
       | Abstract (ASharedLoan (pm, _, v, _)) ->
-          sanity_check __FILE__ __LINE__ (pm = PNone) span;
+          [%sanity_check] span (pm = PNone);
           v
-      | _ -> craise __FILE__ __LINE__ span "Unreachable"
+      | _ -> [%craise] span "Unreachable"
     in
     let lookup_in_tgt id = lookup_shared_loan id tgt_ctx in
     let lookup_in_src id = lookup_shared_loan id src_ctx in
@@ -796,9 +788,7 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
           ids.loan_ids
       in
       (* Check that the loans and borrows are related *)
-      sanity_check __FILE__ __LINE__
-        (BorrowId.Set.equal ids.borrow_ids loan_ids)
-        span)
+      [%sanity_check] span (BorrowId.Set.equal ids.borrow_ids loan_ids))
     new_absl;
 
   (* For every target abstraction (going back to the [list_nth_mut] example,
@@ -828,11 +818,11 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
       method! visit_aproj _ proj =
         match proj with
         | AProjLoans { proj = _; consumed; borrows } ->
-            sanity_check __FILE__ __LINE__ (consumed = []) span;
-            sanity_check __FILE__ __LINE__ (borrows = []) span;
+            [%sanity_check] span (consumed = []);
+            [%sanity_check] span (borrows = []);
             ()
         | AProjBorrows { proj; loans } ->
-            sanity_check __FILE__ __LINE__ (loans = []) span;
+            [%sanity_check] span (loans = []);
             (* Find the target borrow *)
             let tgt_borrow_id =
               SymbolicValueId.Map.find proj.sv_id src_to_tgt_sid_map
@@ -843,7 +833,7 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
                 !tgt_borrow_to_loan_proj
         | AEndedProjBorrows _ | AEndedProjLoans _ | AEmpty ->
             (* We shouldn't get there *)
-            internal_error __FILE__ __LINE__ span
+            [%internal_error] span
     end
   in
   List.iter (visit_tgt#visit_abs ()) new_absl;
@@ -920,8 +910,8 @@ let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
           in
           self#visit_symbolic_value_id true sv_id;
           self#visit_ty register proj_ty;
-          sanity_check __FILE__ __LINE__ (consumed = []) span;
-          sanity_check __FILE__ __LINE__ (borrows = []) span
+          [%sanity_check] span (consumed = []);
+          [%sanity_check] span (borrows = [])
         (*self#visit_list
             (fun register ((s, p) : mconsumed_symb * _) ->
               self#visit_msymbolic_value_id register s.sv_id;
@@ -983,9 +973,9 @@ let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
             match snd (lookup_loan span ek_all bid fp_ctx) with
             | Concrete (VSharedLoan (_, v)) -> v
             | Abstract (ASharedLoan (pm, _, v, _)) ->
-                sanity_check __FILE__ __LINE__ (pm = PNone) span;
+                [%sanity_check] span (pm = PNone);
                 v
-            | _ -> craise __FILE__ __LINE__ span "Unreachable"
+            | _ -> [%craise] span "Unreachable"
           in
           self#visit_typed_value env v
 

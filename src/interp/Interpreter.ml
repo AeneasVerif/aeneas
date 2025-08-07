@@ -46,7 +46,7 @@ let analyze_type_declarations (crate : crate)
         in
         let decls = List.map decl_id_to_string decls in
         let decls = String.concat "\n" decls in
-        save_error_opt_span __FILE__ __LINE__ error.span
+        [%save_error_opt_span] error.span
           ("Encountered an error when analyzing the following type \
             declarations group:\n" ^ decls);
         infos)
@@ -98,7 +98,7 @@ let compute_contexts (crate : crate) : decls_ctx =
      in
      let msgs = List.mapi group_to_msg mixed_groups in
      let msgs = String.concat "\n\n" msgs in
-     save_error_opt_span __FILE__ __LINE__ None
+     [%save_error_opt_span] None
        ("Detected groups of mixed mutually recursive definitions (such as a \
          type mutually recursive with a function, or a function mutually \
          recursive with a trait implementation):\n\n" ^ msgs));
@@ -162,16 +162,16 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
   let sg = fdef.signature in
   let span = fdef.item_meta.span in
   (* Sanity check: no nested borrows *)
-  cassert __FILE__ __LINE__
+  [%cassert] span
     (List.for_all
        (fun ty ->
          not (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos ty))
        (sg.output :: sg.inputs))
-    span "Nested borrows are not supported yet";
+    "Nested borrows are not supported yet";
 
   (* Create the context *)
   let regions_hierarchy =
-    silent_unwrap __FILE__ __LINE__ fdef.item_meta.span
+    [%silent_unwrap] fdef.item_meta.span
       (FunIdMap.find_opt (FRegular fdef.def_id) ctx.fun_ctx.regions_hierarchies)
   in
   let region_groups =
@@ -194,7 +194,7 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
   in
   (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
   let call_id = fresh_fun_call_id () in
-  sanity_check __FILE__ __LINE__ (call_id = FunCallId.zero) span;
+  [%sanity_check] span (call_id = FunCallId.zero);
   let compute_abs_avalues (abs : abs) (ctx : eval_ctx) :
       eval_ctx * typed_avalue list =
     (* Project over the values - we use *loan* projectors, as explained above *)
@@ -291,7 +291,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
     List.filter_map (fun x -> x) parent_input_abs_ids
   in
   (* TODO: need to be careful for loops *)
-  sanity_check __FILE__ __LINE__ (parent_input_abs_ids = []) fdef.item_meta.span;
+  [%sanity_check] fdef.item_meta.span (parent_input_abs_ids = []);
 
   (* Insert the return value in the return abstractions (by applying
    * borrow projections) *)
@@ -317,7 +317,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
       let region_can_end rid =
         RegionGroupId.Set.mem rid parent_and_current_rgs
       in
-      sanity_check __FILE__ __LINE__ (region_can_end back_id) span;
+      [%sanity_check] span (region_can_end back_id);
       let ctx =
         create_push_abstractions_from_abs_region_groups
           (fun rg_id -> SynthRet rg_id)
@@ -433,10 +433,9 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
           | Loop (loop_id', rg_id', LoopSynthInput) ->
               (* We only allow to end the loop synth input abs for the region
                  group [rg_id] *)
-              sanity_check __FILE__ __LINE__
+              [%sanity_check] span
                 (if Option.is_some loop_id then loop_id = Some loop_id'
-                 else true)
-                span;
+                 else true);
               (* Loop abstractions *)
               let rg_id' = Option.get rg_id' in
               if rg_id' = back_id && inside_loop then
@@ -444,7 +443,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
               else abs
           | Loop (loop_id', _, LoopCall) ->
               (* We can end all the loop call abstractions *)
-              sanity_check __FILE__ __LINE__ (loop_id = Some loop_id') span;
+              [%sanity_check] span (loop_id = Some loop_id');
               { abs with can_end = true }
           | SynthInput rg_id' ->
               if rg_id' = back_id && end_fun_synth_input then
@@ -547,7 +546,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
           match res with
           | Return -> None
           | LoopReturn loop_id -> Some loop_id
-          | _ -> craise __FILE__ __LINE__ span "Unreachable"
+          | _ -> [%craise] span "Unreachable"
         in
         let is_regular_return = true in
         let inside_loop = Option.is_some loop_id in
@@ -570,7 +569,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
           match res with
           | EndEnterLoop _ -> false
           | EndContinue _ -> true
-          | _ -> craise __FILE__ __LINE__ span "Unreachable"
+          | _ -> [%craise] span "Unreachable"
         in
         (* Forward translation *)
         let fwd_e =
@@ -610,7 +609,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
          * the executions can lead to a panic *)
         SA.Panic
     | Unit | Break _ | Continue _ ->
-        craise __FILE__ __LINE__ span
+        [%craise] span
           ("evaluate_function_symbolic failed on: " ^ name_to_string ())
   in
 
@@ -648,10 +647,8 @@ module Test = struct
             fdef.item_meta.name));
 
     (* Sanity check - *)
-    sanity_check __FILE__ __LINE__
-      (fdef.signature.generics = empty_generic_params)
-      span;
-    sanity_check __FILE__ __LINE__ (body.locals.arg_count = 0) span;
+    [%sanity_check] span (fdef.signature.generics = empty_generic_params);
+    [%sanity_check] span (body.locals.arg_count = 0);
 
     (* Create the evaluation context *)
     let ctx = initialize_eval_ctx (Some span) decls_ctx [] [] [] in
@@ -668,7 +665,7 @@ module Test = struct
           let pop_return_value = true in
           pop_frame config span pop_return_value ctx
       | _ ->
-          craise __FILE__ __LINE__ span
+          [%craise] span
             ("Unit test failed (concrete execution) on: "
             ^ Print.Types.name_to_string
                 (Print.Contexts.decls_ctx_to_fmt_env decls_ctx)

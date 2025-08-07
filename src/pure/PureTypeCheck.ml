@@ -3,7 +3,6 @@
 
 open Pure
 open PureUtils
-open Errors
 
 let log = Logging.pure_type_check_log
 
@@ -17,9 +16,9 @@ let get_adt_field_types (span : Meta.span)
   match type_id with
   | TTuple ->
       (* Tuple *)
-      sanity_check __FILE__ __LINE__ (generics.const_generics = []) span;
-      sanity_check __FILE__ __LINE__ (generics.trait_refs = []) span;
-      sanity_check __FILE__ __LINE__ (variant_id = None) span;
+      [%sanity_check] span (generics.const_generics = []);
+      [%sanity_check] span (generics.trait_refs = []);
+      [%sanity_check] span (variant_id = None);
       generics.types
   | TAdtId def_id ->
       (* "Regular" ADT *)
@@ -30,34 +29,28 @@ let get_adt_field_types (span : Meta.span)
       match aty with
       | TState ->
           (* This type is opaque *)
-          craise __FILE__ __LINE__ span "Unreachable: opaque type"
+          [%craise] span "Unreachable: opaque type"
       | TResult ->
           let ty = Collections.List.to_cons_nil generics.types in
           let variant_id = Option.get variant_id in
           if variant_id = result_ok_id then [ ty ]
           else if variant_id = result_fail_id then [ mk_error_ty ]
-          else
-            craise __FILE__ __LINE__ span
-              "Unreachable: improper variant id for result type"
+          else [%craise] span "Unreachable: improper variant id for result type"
       | TError ->
-          sanity_check __FILE__ __LINE__ (generics = empty_generic_args) span;
+          [%sanity_check] span (generics = empty_generic_args);
           let variant_id = Option.get variant_id in
-          sanity_check __FILE__ __LINE__
-            (variant_id = error_failure_id || variant_id = error_out_of_fuel_id)
-            span;
+          [%sanity_check] span
+            (variant_id = error_failure_id || variant_id = error_out_of_fuel_id);
           []
       | TFuel ->
           let variant_id = Option.get variant_id in
           if variant_id = fuel_zero_id then []
           else if variant_id = fuel_succ_id then [ mk_fuel_ty ]
-          else
-            craise __FILE__ __LINE__ span
-              "Unreachable: improper variant id for fuel type"
+          else [%craise] span "Unreachable: improper variant id for fuel type"
       | TArray | TSlice | TStr | TRawPtr _ ->
           (* Array: when not symbolic values (for instance, because of aggregates),
              the array expressions are introduced as struct updates *)
-          craise __FILE__ __LINE__ span
-            "Attempting to access the fields of an opaque type")
+          [%craise] span "Attempting to access the fields of an opaque type")
 
 type tc_ctx = {
   decls_ctx : Contexts.decls_ctx;
@@ -85,15 +78,11 @@ let ty_to_string (ctx : tc_ctx) (x : ty) : string =
 let check_literal (span : Meta.span) (v : literal) (ty : literal_type) : unit =
   match (ty, v) with
   | TInt int_ty, VScalar (SignedScalar (ty, _)) ->
-      sanity_check __FILE__ __LINE__ (int_ty = ty) span
+      [%sanity_check] span (int_ty = ty)
   | TUInt int_ty, VScalar (UnsignedScalar (ty, _)) ->
-      sanity_check __FILE__ __LINE__ (int_ty = ty) span
+      [%sanity_check] span (int_ty = ty)
   | TBool, VBool _ | TChar, VChar _ -> ()
-  | _ -> craise __FILE__ __LINE__ span "Inconsistent type"
-
-let check file line b span =
-  cassert file line b span
-    "Internal error: found a type-checking error in the generated model"
+  | _ -> [%craise] span "Inconsistent type"
 
 let rec check_typed_pattern (span : Meta.span) (ctx : tc_ctx)
     (v : typed_pattern) : tc_ctx =
@@ -104,7 +93,7 @@ let rec check_typed_pattern (span : Meta.span) (ctx : tc_ctx)
       ctx
   | PatDummy -> ctx
   | PatVar (var, _) ->
-      check __FILE__ __LINE__ (var.ty = v.ty) span;
+      [%pure_type_check] span (var.ty = v.ty);
       let env = LocalId.Map.add var.id var.ty ctx.env in
       { ctx with env }
   | PatAdt av ->
@@ -116,7 +105,7 @@ let rec check_typed_pattern (span : Meta.span) (ctx : tc_ctx)
       let check_value (ctx : tc_ctx) (ty : ty) (v : typed_pattern) : tc_ctx =
         if ty <> v.ty then
           (* TODO: we need to normalize the types *)
-          craise __FILE__ __LINE__ span
+          [%craise] span
             ("Inconsistent types:" ^ "\n- ty: " ^ show_ty ty ^ "\n- v.ty: "
            ^ show_ty v.ty);
         check_typed_pattern span ctx v
@@ -139,21 +128,21 @@ let rec check_texpression (span : Meta.span) (ctx : tc_ctx) (e : texpression) :
        * we use a locally nameless representation *)
       match LocalId.Map.find_opt var_id ctx.env with
       | None -> ()
-      | Some ty -> check __FILE__ __LINE__ (ty = e.ty) span)
+      | Some ty -> [%pure_type_check] span (ty = e.ty))
   | CVar cg_id ->
       let ty = T.ConstGenericVarId.Map.find cg_id ctx.const_generics in
-      check __FILE__ __LINE__ (ty = e.ty) span
+      [%pure_type_check] span (ty = e.ty)
   | Const cv -> check_literal span cv (ty_as_literal span e.ty)
   | App (app, arg) ->
       let input_ty, output_ty = destruct_arrow span app.ty in
-      check __FILE__ __LINE__ (input_ty = arg.ty) span;
-      check __FILE__ __LINE__ (output_ty = e.ty) span;
+      [%pure_type_check] span (input_ty = arg.ty);
+      [%pure_type_check] span (output_ty = e.ty);
       check_texpression span ctx app;
       check_texpression span ctx arg
   | Lambda (pat, body) ->
       let pat_ty, body_ty = destruct_arrow span e.ty in
-      check __FILE__ __LINE__ (pat.ty = pat_ty) span;
-      check __FILE__ __LINE__ (body.ty = body_ty) span;
+      [%pure_type_check] span (pat.ty = pat_ty);
+      [%pure_type_check] span (body.ty = body_ty);
       (* Check the pattern and register the introduced variables at the same time *)
       let ctx = check_typed_pattern span ctx pat in
       check_texpression span ctx body
@@ -168,8 +157,8 @@ let rec check_texpression (span : Meta.span) (ctx : tc_ctx) (e : texpression) :
           let adt_ty, field_ty = destruct_arrow span e.ty in
           let adt_id, adt_generics = ty_as_adt span adt_ty in
           (* Check the ADT type *)
-          check __FILE__ __LINE__ (adt_id = proj_adt_id) span;
-          check __FILE__ __LINE__ (adt_generics = qualif.generics) span;
+          [%pure_type_check] span (adt_id = proj_adt_id);
+          [%pure_type_check] span (adt_generics = qualif.generics);
           (* Retrieve and check the expected field type *)
           let variant_id = None in
           let expected_field_tys =
@@ -177,19 +166,19 @@ let rec check_texpression (span : Meta.span) (ctx : tc_ctx) (e : texpression) :
               qualif.generics
           in
           let expected_field_ty = FieldId.nth expected_field_tys field_id in
-          check __FILE__ __LINE__ (expected_field_ty = field_ty) span
+          [%pure_type_check] span (expected_field_ty = field_ty)
       | AdtCons id -> (
           let expected_field_tys =
             get_adt_field_types span ctx.type_decls id.adt_id id.variant_id
               qualif.generics
           in
           let field_tys, adt_ty = destruct_arrows e.ty in
-          check __FILE__ __LINE__ (expected_field_tys = field_tys) span;
+          [%pure_type_check] span (expected_field_tys = field_tys);
           match adt_ty with
           | TAdt (type_id, generics) ->
-              check __FILE__ __LINE__ (type_id = id.adt_id) span;
-              check __FILE__ __LINE__ (generics = qualif.generics) span
-          | _ -> craise __FILE__ __LINE__ span "Unreachable"))
+              [%pure_type_check] span (type_id = id.adt_id);
+              [%pure_type_check] span (generics = qualif.generics)
+          | _ -> [%craise] span "Unreachable"))
   | Let (monadic, pat, re, e_next) ->
       log#ldebug
         (lazy
@@ -202,8 +191,8 @@ let rec check_texpression (span : Meta.span) (ctx : tc_ctx) (e : texpression) :
           (__FUNCTION__ ^ ": Let:\n- pat.ty: " ^ ty_to_string ctx pat.ty
          ^ "\n- expected_pat_ty: "
           ^ ty_to_string ctx expected_pat_ty));
-      check __FILE__ __LINE__ (pat.ty = expected_pat_ty) span;
-      check __FILE__ __LINE__ (e.ty = e_next.ty) span;
+      [%pure_type_check] span (pat.ty = expected_pat_ty);
+      [%pure_type_check] span (e.ty = e_next.ty);
       (* Check the right-expression *)
       check_texpression span ctx re;
       (* Check the pattern and register the introduced variables at the same time *)
@@ -214,20 +203,20 @@ let rec check_texpression (span : Meta.span) (ctx : tc_ctx) (e : texpression) :
       check_texpression span ctx scrut;
       match switch_body with
       | If (e_then, e_else) ->
-          check __FILE__ __LINE__ (scrut.ty = TLiteral TBool) span;
-          check __FILE__ __LINE__ (e_then.ty = e.ty) span;
-          check __FILE__ __LINE__ (e_else.ty = e.ty) span;
+          [%pure_type_check] span (scrut.ty = TLiteral TBool);
+          [%pure_type_check] span (e_then.ty = e.ty);
+          [%pure_type_check] span (e_else.ty = e.ty);
           check_texpression span ctx e_then;
           check_texpression span ctx e_else
       | Match branches ->
           let check_branch (br : match_branch) : unit =
-            check __FILE__ __LINE__ (br.pat.ty = scrut.ty) span;
+            [%pure_type_check] span (br.pat.ty = scrut.ty);
             let ctx = check_typed_pattern span ctx br.pat in
             check_texpression span ctx br.branch
           in
           List.iter check_branch branches)
   | Loop loop ->
-      check __FILE__ __LINE__ (loop.fun_end.ty = e.ty) span;
+      [%pure_type_check] span (loop.fun_end.ty = e.ty);
       check_texpression span ctx loop.fun_end;
       check_texpression span ctx loop.loop_body
   | StructUpdate supd -> (
@@ -237,12 +226,12 @@ let rec check_texpression (span : Meta.span) (ctx : tc_ctx) (e : texpression) :
         | None -> ()
         | Some init ->
             check_texpression span ctx init;
-            check __FILE__ __LINE__ (init.ty = e.ty) span
+            [%pure_type_check] span (init.ty = e.ty)
       end;
       (* Check the fields *)
       (* Retrieve and check the expected field type *)
       let adt_id, adt_generics = ty_as_adt span e.ty in
-      check __FILE__ __LINE__ (adt_id = supd.struct_id) span;
+      [%pure_type_check] span (adt_id = supd.struct_id);
       (* The id can only be: a custom type decl or an array *)
       match adt_id with
       | TAdtId _ ->
@@ -254,7 +243,7 @@ let rec check_texpression (span : Meta.span) (ctx : tc_ctx) (e : texpression) :
           List.iter
             (fun ((fid, fe) : _ * texpression) ->
               let expected_field_ty = FieldId.nth expected_field_tys fid in
-              check __FILE__ __LINE__ (expected_field_ty = fe.ty) span;
+              [%pure_type_check] span (expected_field_ty = fe.ty);
               check_texpression span ctx fe)
             supd.updates
       | TBuiltin TArray ->
@@ -263,11 +252,11 @@ let rec check_texpression (span : Meta.span) (ctx : tc_ctx) (e : texpression) :
           in
           List.iter
             (fun ((_, fe) : _ * texpression) ->
-              check __FILE__ __LINE__ (expected_field_ty = fe.ty) span;
+              [%pure_type_check] span (expected_field_ty = fe.ty);
               check_texpression span ctx fe)
             supd.updates
-      | _ -> craise __FILE__ __LINE__ span "Unexpected")
+      | _ -> [%craise] span "Unexpected")
   | Meta (_, e_next) ->
-      check __FILE__ __LINE__ (e_next.ty = e.ty) span;
+      [%pure_type_check] span (e_next.ty = e.ty);
       check_texpression span ctx e_next
-  | EError (span, msg) -> craise_opt_span __FILE__ __LINE__ span msg
+  | EError (span, msg) -> [%craise_opt_span] span msg

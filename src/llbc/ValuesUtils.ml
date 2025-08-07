@@ -2,7 +2,6 @@ open Utils
 open TypesUtils
 open Types
 open Values
-open Errors
 include Charon.ValuesUtils
 
 (** Utility exception *)
@@ -18,31 +17,31 @@ let mk_true : typed_value = mk_bool_value true
 let mk_false : typed_value = mk_bool_value false
 
 let mk_typed_value (span : Meta.span) (ty : ty) (value : value) : typed_value =
-  sanity_check __FILE__ __LINE__ (ty_is_ety ty) span;
+  [%sanity_check] span (ty_is_ety ty);
   { value; ty }
 
 let mk_typed_avalue (span : Meta.span) (ty : ty) (value : avalue) : typed_avalue
     =
-  sanity_check __FILE__ __LINE__ (ty_is_rty ty) span;
+  [%sanity_check] span (ty_is_rty ty);
   { value; ty }
 
 let mk_bottom (span : Meta.span) (ty : ty) : typed_value =
-  sanity_check __FILE__ __LINE__ (ty_is_ety ty) span;
+  [%sanity_check] span (ty_is_ety ty);
   { value = VBottom; ty }
 
 let mk_abottom (span : Meta.span) (ty : ty) : typed_avalue =
-  sanity_check __FILE__ __LINE__ (ty_is_rty ty) span;
+  [%sanity_check] span (ty_is_rty ty);
   { value = ABottom; ty }
 
 let mk_aignored (span : Meta.span) (ty : ty) (v : typed_value option) :
     typed_avalue =
-  sanity_check __FILE__ __LINE__ (ty_is_rty ty) span;
+  [%sanity_check] span (ty_is_rty ty);
   { value = AIgnored v; ty }
 
 let value_as_symbolic (span : Meta.span) (v : value) : symbolic_value =
   match v with
   | VSymbolic v -> v
-  | _ -> craise __FILE__ __LINE__ span "Unexpected"
+  | _ -> [%craise] span "Unexpected"
 
 (** Peel boxes as long as the value is of the form [Box<T>] *)
 let rec unbox_typed_value (span : Meta.span) (v : typed_value) : typed_value =
@@ -50,7 +49,7 @@ let rec unbox_typed_value (span : Meta.span) (v : typed_value) : typed_value =
   | VAdt av, TAdt { id = TBuiltin TBox; _ } -> (
       match av.field_values with
       | [ bv ] -> unbox_typed_value span bv
-      | _ -> internal_error __FILE__ __LINE__ span)
+      | _ -> [%internal_error] span)
   | _ -> v
 
 (** Create a typed value from a symbolic value. *)
@@ -85,13 +84,13 @@ let is_symbolic (v : value) : bool =
 let as_symbolic (span : Meta.span) (v : value) : symbolic_value =
   match v with
   | VSymbolic s -> s
-  | _ -> craise __FILE__ __LINE__ span "Unexpected"
+  | _ -> [%craise] span "Unexpected"
 
 let as_mut_borrow (span : Meta.span) (v : typed_value) :
     BorrowId.id * typed_value =
   match v.value with
   | VBorrow (VMutBorrow (bid, bv)) -> (bid, bv)
-  | _ -> craise __FILE__ __LINE__ span "Unexpected"
+  | _ -> [%craise] span "Unexpected"
 
 let is_unit (v : typed_value) : bool =
   ty_is_unit v.ty

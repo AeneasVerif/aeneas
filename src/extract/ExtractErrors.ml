@@ -1,4 +1,12 @@
 (** Error utilities for the extraction *)
+(*
+   The easiest way of using the helpers below is to use the PPX macros that are
+   introduced in the [aeneas-ppx] library. For example, [[%extract_raise]] expands to
+   [extract_raise __FILE__ __LINE__].
+
+   The convention is simple: if a function has name [NAME], then [[%NAME]]
+   expands to [NAME __FILE__ __LINE__].
+ *)
 
 open Errors
 
