@@ -85,8 +85,7 @@ module Values = struct
             | _ ->
                 [%craise_opt_span] span
                   ("Inconsistent value: " ^ show_typed_value v))
-        | _ -> [%craise_opt_span] span "Inconsistent typed value"
-        )
+        | _ -> [%craise_opt_span] span "Inconsistent typed value")
     | VBottom -> "⊥ : " ^ ty_to_string env v.ty
     | VBorrow bc -> borrow_content_to_string ~span env bc
     | VLoan lc -> loan_content_to_string ~span env lc
@@ -260,8 +259,7 @@ module Values = struct
             match (aty, field_values) with
             | TBox, [ bv ] -> "@Box(" ^ bv ^ ")"
             | _ -> [%craise_opt_span] span "Inconsistent value")
-        | _ -> [%craise_opt_span] span "Inconsistent typed value"
-        )
+        | _ -> [%craise_opt_span] span "Inconsistent typed value")
     | ABottom -> "⊥ : " ^ ty_to_string env v.ty
     | ABorrow bc -> aborrow_content_to_string ~span ~with_ended env bc
     | ALoan lc -> aloan_content_to_string ~span ~with_ended env lc
@@ -469,8 +467,7 @@ module Contexts = struct
         in
         indent ^ bv ^ ty ^ " -> " ^ typed_value_to_string ~span env tv ^ " ;"
     | EAbs abs -> abs_to_string ~span env verbose indent indent_incr abs
-    | EFrame ->
-        [%craise_opt_span] span "Can't print a Frame element"
+    | EFrame -> [%craise_opt_span] span "Can't print a Frame element"
 
   let opt_env_elem_to_string ?(span : Meta.span option = None) (env : fmt_env)
       (verbose : bool) (with_var_types : bool) (indent : string)

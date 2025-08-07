@@ -2,7 +2,8 @@
  (name aeneas_ppx)
  (public_name aeneas.ppx)
  (kind ppx_rewriter)
- (preprocess (pps ppxlib.metaquot))
+ (preprocess
+  (pps ppxlib.metaquot))
  (libraries ppxlib)
  (modules AeneasPpx))
 

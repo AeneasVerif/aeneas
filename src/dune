@@ -6,7 +6,9 @@
  (modes byte exe)
  (modules Main))
 
-(include_subdirs unqualified) ;; TODO: change to qualified
+;; TODO: change to qualified
+
+(include_subdirs unqualified)
 
 ;; Scan all subdirectories for OCaml files
 
