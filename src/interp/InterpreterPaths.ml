@@ -8,7 +8,6 @@ open InterpreterUtils
 open InterpreterBorrowsCore
 open InterpreterBorrows
 open InterpreterExpansion
-open Errors
 module Synth = SynthesizeSymbolic
 
 (** The local logger *)
@@ -73,8 +72,8 @@ let rec project_value (span : Meta.span) (access : projection_access)
       VAdt adt,
       TAdt { id = TAdtId def_id'; _ } ) -> begin
       (* Check consistency *)
-      sanity_check __FILE__ __LINE__ (def_id = def_id') span;
-      sanity_check __FILE__ __LINE__ (opt_variant_id = adt.variant_id) span;
+      [%sanity_check] span (def_id = def_id');
+      [%sanity_check] span (opt_variant_id = adt.variant_id);
       (* Actually project *)
       let fv = FieldId.nth adt.field_values field_id in
       let backward (ctx, updated) =
@@ -88,7 +87,7 @@ let rec project_value (span : Meta.span) (access : projection_access)
   (* Tuples *)
   | Field (ProjTuple arity, field_id), VAdt adt, TAdt { id = TTuple; _ } ->
   begin
-      sanity_check __FILE__ __LINE__ (arity = List.length adt.field_values) span;
+      [%sanity_check] span (arity = List.length adt.field_values);
       let fv = FieldId.nth adt.field_values field_id in
       let backward (ctx, updated) =
         (* Update the field value *)
@@ -132,7 +131,7 @@ let rec project_value (span : Meta.span) (access : projection_access)
             (* Lookup the loan content, and explore from there *)
             match lookup_loan span ek bid ctx with
             | _, Concrete (VMutLoan _) ->
-                craise __FILE__ __LINE__ span "Expected a shared loan"
+                [%craise] span "Expected a shared loan"
             | _, Concrete (VSharedLoan (bids, sv)) ->
                 (* Return the shared value *)
                 Ok
@@ -152,11 +151,10 @@ let rec project_value (span : Meta.span) (access : projection_access)
                   | AIgnoredMutLoan _
                   | AEndedIgnoredMutLoan _
                   | AIgnoredSharedLoan _ ) ) ->
-                craise __FILE__ __LINE__ span
-                  "Expected a shared (abstraction) loan"
+                [%craise] span "Expected a shared (abstraction) loan"
             | _, Abstract (ASharedLoan (pm, bids, sv, _av)) -> begin
                 (* Sanity check: projection markers can only appear when we're doing a join *)
-                sanity_check __FILE__ __LINE__ (pm = PNone) span;
+                [%sanity_check] span (pm = PNone);
                 (* Return the shared value *)
                 Ok
                   ( sv,
@@ -164,7 +162,7 @@ let rec project_value (span : Meta.span) (access : projection_access)
                       let av =
                         match lookup_loan span ek bid ctx with
                         | _, Abstract (ASharedLoan (_, _, _, av)) -> av
-                        | _ -> craise __FILE__ __LINE__ span "Unexpected"
+                        | _ -> [%craise] span "Unexpected"
                       in
                       let ctx =
                         update_aloan span ek bid
@@ -216,14 +214,12 @@ let rec project_value (span : Meta.span) (access : projection_access)
               Ok (fv, backward)
         end
     end
-  | _, VBottom, _ ->
-      craise __FILE__ __LINE__ span "Can not apply a projection to the ⊥ value"
+  | _, VBottom, _ -> [%craise] span "Can not apply a projection to the ⊥ value"
   | pe, ((VLiteral _ | VAdt _ | VBorrow _) as v), ty -> begin
       let pe = "- pe: " ^ show_projection_elem pe in
       let v = "- v:\n" ^ show_value v in
       let ty = "- ty:\n" ^ show_ety ty in
-      craise __FILE__ __LINE__ span
-        ("Inconsistent projection:\n" ^ pe ^ "\n" ^ v ^ "\n" ^ ty)
+      [%craise] span ("Inconsistent projection:\n" ^ pe ^ "\n" ^ v ^ "\n" ^ ty)
     end
 
 (** Generic function to access (read/write) the value inside a place, provided
@@ -243,11 +239,10 @@ let rec access_place (span : Meta.span) (access : projection_access)
         let ctx = ctx_update_var_value span ctx var_id updated in
         (* Type checking *)
         if updated.ty <> v.ty then (
-          log#ltrace
-            (lazy
-              ("Not the same type:\n- nv.ty: " ^ show_ety updated.ty
-             ^ "\n- v.ty: " ^ show_ety v.ty));
-          craise __FILE__ __LINE__ span
+          [%ltrace
+            "Not the same type:\n- nv.ty: " ^ show_ety updated.ty ^ "\n- v.ty: "
+            ^ show_ety v.ty];
+          [%craise] span
             "Assertion failed: new value doesn't have the same type as its \
              destination");
         (ctx, updated)
@@ -265,8 +260,7 @@ let rec access_place (span : Meta.span) (access : projection_access)
             end
         end
     end
-  | PlaceGlobal _ ->
-      craise __FILE__ __LINE__ span "Unexpected access to a global"
+  | PlaceGlobal _ -> [%craise] span "Unexpected access to a global"
 
 (** Generic function to access (read/write) the value at a given place, provided
     the place **does not refer to a global** (globals are handled elsewhere).
@@ -340,14 +334,13 @@ let try_read_place (span : Meta.span) (access : access_kind) (p : place)
              "Unexpected environment update:\nNew environment:\n"
              ^ show_env ctx1.env ^ "\n\nOld environment:\n" ^ show_env ctx.env
            in
-           craise __FILE__ __LINE__ span msg);
+           [%craise] span msg);
       Ok read_value
 
 let read_place (span : Meta.span) (access : access_kind) (p : place)
     (ctx : eval_ctx) : typed_value =
   match try_read_place span access p ctx with
-  | Error e ->
-      craise __FILE__ __LINE__ span ("Unreachable: " ^ show_path_fail_kind e)
+  | Error e -> [%craise] span ("Unreachable: " ^ show_path_fail_kind e)
   | Ok v -> v
 
 (** Attempt to update the value at a given place, provided the place **does not
@@ -366,24 +359,20 @@ let try_write_place (span : Meta.span) (access : access_kind) (p : place)
 let write_place (span : Meta.span) (access : access_kind) (p : place)
     (nv : typed_value) (ctx : eval_ctx) : eval_ctx =
   match try_write_place span access p nv ctx with
-  | Error e ->
-      craise __FILE__ __LINE__ span ("Unreachable: " ^ show_path_fail_kind e)
+  | Error e -> [%craise] span ("Unreachable: " ^ show_path_fail_kind e)
   | Ok ctx -> ctx
 
 let compute_expanded_bottom_adt_value (span : Meta.span) (ctx : eval_ctx)
     (def_id : TypeDeclId.id) (opt_variant_id : VariantId.id option)
     (generics : generic_args) : typed_value =
-  sanity_check __FILE__ __LINE__
-    (TypesUtils.generic_args_only_erased_regions generics)
-    span;
+  [%sanity_check] span (TypesUtils.generic_args_only_erased_regions generics);
   (* Lookup the definition and check if it is an enumeration - it
      should be an enumeration if and only if the projection element
      is a field projection with *some* variant id. Retrieve the list
      of fields at the same time. *)
   let def = ctx_lookup_type_decl span ctx def_id in
-  sanity_check __FILE__ __LINE__
-    (List.length generics.regions = List.length def.generics.regions)
-    span;
+  [%sanity_check] span
+    (List.length generics.regions = List.length def.generics.regions);
   (* Compute the field types *)
   let field_types =
     Substitute.type_decl_get_instantiated_field_etypes def opt_variant_id
@@ -432,10 +421,7 @@ let expand_bottom_value_from_projection (span : Meta.span)
     (access : access_kind) (p : place) (pe : projection_elem) (ctx : eval_ctx) :
     eval_ctx =
   (* Debugging *)
-  log#ltrace
-    (lazy
-      ("expand_bottom_value_from_projection:\n" ^ "pe: "
-     ^ show_projection_elem pe ^ "\n" ^ "ty: " ^ show_ety p.ty));
+  [%ltrace "pe: " ^ show_projection_elem pe ^ "\n" ^ "ty: " ^ show_ety p.ty];
   (* Compute the expanded value.
      The type of the {!Bottom} value should be a tuple or an ADT
      Note that the projection element we got stuck at should be a
@@ -449,7 +435,7 @@ let expand_bottom_value_from_projection (span : Meta.span)
     (* "Regular" ADTs *)
     | ( Field (ProjAdt (def_id, opt_variant_id), _),
         TAdt { id = TAdtId def_id'; generics } ) ->
-        sanity_check __FILE__ __LINE__ (def_id = def_id') span;
+        [%sanity_check] span (def_id = def_id');
         compute_expanded_bottom_adt_value span ctx def_id opt_variant_id
           generics
     (* Tuples *)
@@ -460,17 +446,17 @@ let expand_bottom_value_from_projection (span : Meta.span)
             generics =
               { regions = []; types; const_generics = []; trait_refs = [] };
           } ) ->
-        sanity_check __FILE__ __LINE__ (arity = List.length types) span;
+        [%sanity_check] span (arity = List.length types);
         (* Generate the field values *)
         compute_expanded_bottom_tuple_value span types
     | _ ->
-        craise __FILE__ __LINE__ span
+        [%craise] span
           ("Unreachable: " ^ show_projection_elem pe ^ ", " ^ show_ety p.ty)
   in
   (* Update the context by inserting the expanded value at the proper place *)
   match try_write_place span access p nv ctx with
   | Ok ctx -> ctx
-  | Error _ -> craise __FILE__ __LINE__ span "Unreachable"
+  | Error _ -> [%craise] span "Unreachable"
 
 let rec update_ctx_along_read_place (config : config) (span : Meta.span)
     (access : access_kind) (p : place) : cm_fun =
@@ -491,9 +477,8 @@ let rec update_ctx_along_read_place (config : config) (span : Meta.span)
               ctx
         | FailBottom (_, _) ->
             (* We can't expand {!Bottom} values while reading them *)
-            craise __FILE__ __LINE__ span "Found bottom while reading a place"
-        | FailBorrow _ ->
-            craise __FILE__ __LINE__ span "Could not read a borrow"
+            [%craise] span "Found bottom while reading a place"
+        | FailBorrow _ -> [%craise] span "Could not read a borrow"
       in
       comp cc (update_ctx_along_read_place config span access p ctx)
 
@@ -522,8 +507,7 @@ let rec update_ctx_along_write_place (config : config) (span : Meta.span)
               expand_bottom_value_from_projection span access p pe ctx
             in
             (ctx, fun e -> e)
-        | FailBorrow _ ->
-            craise __FILE__ __LINE__ span "Could not write to a borrow"
+        | FailBorrow _ -> [%craise] span "Could not write to a borrow"
       in
       (* Retry *)
       comp cc (update_ctx_along_write_place config span access p ctx)
@@ -617,7 +601,7 @@ let drop_outer_loans_at_lplace (config : config) (span : Meta.span) (p : place)
               end_loan config span lid ctx
           | BorrowContent _ ->
               (* Can't get there: we are only looking up the loans *)
-              craise __FILE__ __LINE__ span "Unreachable"
+              [%craise] span "Unreachable"
         in
         (* Retry *)
         comp cc (drop ctx)
@@ -628,7 +612,7 @@ let drop_outer_loans_at_lplace (config : config) (span : Meta.span) (p : place)
   (* Pop *)
   let ctx, v = ctx_remove_dummy_var span ctx dummy_id in
   (* Sanity check *)
-  sanity_check __FILE__ __LINE__ (not (outer_loans_in_value v)) span;
+  [%sanity_check] span (not (outer_loans_in_value v));
   (* Reinsert *)
   let ctx = write_place span access p v ctx in
   (* Return *)
@@ -638,11 +622,9 @@ let prepare_lplace (config : config) (span : Meta.span) (p : place)
     (ctx : eval_ctx) :
     typed_value * eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression)
     =
-  log#ltrace
-    (lazy
-      ("prepare_lplace:" ^ "\n- p: " ^ place_to_string ctx p
-     ^ "\n- Initial context:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx));
+  [%ltrace
+    "- p: " ^ place_to_string ctx p ^ "\n- Initial context:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx];
   (* Access the place *)
   let access = Write in
   let ctx, cc = update_ctx_along_write_place config span access p ctx in
@@ -651,6 +633,6 @@ let prepare_lplace (config : config) (span : Meta.span) (p : place)
   (* Read the value and check it *)
   let v = read_place span access p ctx in
   (* Sanity checks *)
-  sanity_check __FILE__ __LINE__ (not (outer_loans_in_value v)) span;
+  [%sanity_check] span (not (outer_loans_in_value v));
   (* Return *)
   (v, ctx, cc)

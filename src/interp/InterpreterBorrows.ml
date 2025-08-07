@@ -8,7 +8,6 @@ open TypesUtils
 open InterpreterUtils
 open InterpreterBorrowsCore
 open InterpreterProjectors
-open Errors
 
 (** The local logger *)
 let log = Logging.borrows_log
@@ -42,7 +41,7 @@ let end_borrow_get_borrow (span : Meta.span)
   in
   let set_replaced_bc (abs_id : AbstractionId.id option) (bc : g_borrow_content)
       =
-    sanity_check __FILE__ __LINE__ (Option.is_none !replaced_bc) span;
+    [%sanity_check] span (Option.is_none !replaced_bc);
     replaced_bc := Some (abs_id, bc)
   in
   (* Raise an exception if:
@@ -135,11 +134,11 @@ let end_borrow_get_borrow (span : Meta.span)
          * the pure translation. *)
         match lc with
         | AMutLoan (pm, _, _) ->
-            sanity_check __FILE__ __LINE__ (pm = PNone) span;
+            [%sanity_check] span (pm = PNone);
             (* Nothing special to do *)
             super#visit_ALoan outer lc
         | ASharedLoan (pm, bid, v, av) ->
-            sanity_check __FILE__ __LINE__ (pm = PNone) span;
+            [%sanity_check] span (pm = PNone);
             (* Explore the shared value - we need to update the outer borrows *)
             let souter = update_outer_borrow outer (SharedLoan bid) in
             let v = super#visit_typed_value souter v in
@@ -161,19 +160,19 @@ let end_borrow_get_borrow (span : Meta.span)
       method! visit_ABorrow outer bc =
         match bc with
         | AMutBorrow (pm, bid, _) ->
-            sanity_check __FILE__ __LINE__ (pm = PNone) span;
+            [%sanity_check] span (pm = PNone);
             (* Check if this is the borrow we are looking for *)
             if UMut bid = l then (
               (* Signal that we should replace the whole abstraction *)
               raise_if_priority outer None;
               (* We shouldn't get there *)
-              craise __FILE__ __LINE__ span "Unreachable")
+              [%craise] span "Unreachable")
             else
               (* Update the outer borrows before diving into the child avalue *)
               let outer = update_outer_borrow outer (MutBorrow bid) in
               super#visit_ABorrow outer bc
         | ASharedBorrow (pm, _, sid) ->
-            sanity_check __FILE__ __LINE__ (pm = PNone) span;
+            [%sanity_check] span (pm = PNone);
             (* Check if this is the borrow we are looking for *)
             if UShared sid = l then (
               (* Check there are outer borrows, or if we need to end the whole
@@ -212,8 +211,8 @@ let end_borrow_get_borrow (span : Meta.span)
 
       method! visit_abs outer abs =
         (* Update the outer abs *)
-        sanity_check __FILE__ __LINE__ (Option.is_none outer.abs_id) span;
-        sanity_check __FILE__ __LINE__ (Option.is_none outer.borrow_loan) span;
+        [%sanity_check] span (Option.is_none outer.abs_id);
+        [%sanity_check] span (Option.is_none outer.borrow_loan);
         let outer = { abs_id = Some abs.abs_id; borrow_loan = None } in
         super#visit_abs outer abs
     end
@@ -237,24 +236,22 @@ let end_borrow_get_borrow (span : Meta.span)
 let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : typed_value)
     (ctx : eval_ctx) : eval_ctx =
   (* Sanity check *)
-  exec_assert __FILE__ __LINE__
+  [%cassert] span
     (not (concrete_loans_in_value nv))
-    span "Can not end a borrow because the value to give back contains bottom";
-  exec_assert __FILE__ __LINE__
+    "Can not end a borrow because the value to give back contains bottom";
+  [%cassert] span
     (not (bottom_in_value ctx.ended_regions nv))
-    span "Can not end a borrow because the value to give back contains bottom";
+    "Can not end a borrow because the value to give back contains bottom";
   (* Debug *)
-  log#ltrace
-    (lazy
-      ("give_back_value:\n- bid: " ^ BorrowId.to_string bid ^ "\n- value: "
-      ^ typed_value_to_string ~span:(Some span) ctx nv
-      ^ "\n- context:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx
-      ^ "\n"));
+  [%ltrace
+    "- bid: " ^ BorrowId.to_string bid ^ "\n- value: "
+    ^ typed_value_to_string ~span:(Some span) ctx nv
+    ^ "\n- context:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx];
   (* We use a reference to check that we updated exactly one loan *)
   let replaced : bool ref = ref false in
   let set_replaced () =
-    sanity_check __FILE__ __LINE__ (not !replaced) span;
+    [%sanity_check] span (not !replaced);
     replaced := true
   in
   (* Whenever giving back symbolic values, they shouldn't contain already ended regions *)
@@ -286,7 +283,7 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : typed_value)
               (* Sanity check *)
               let expected_ty = ty in
               if nv.ty <> expected_ty then
-                craise __FILE__ __LINE__ span
+                [%craise] span
                   ("Value given back doesn't have the proper type:\n\
                     - expected: " ^ ty_to_string ctx ty ^ "\n- received: "
                  ^ ty_to_string ctx nv.ty);
@@ -337,7 +334,7 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : typed_value)
                   ABorrow
                     (AEndedIgnoredMutBorrow
                        { given_back; child; given_back_meta })
-              | _ -> craise __FILE__ __LINE__ span "Unreachable"
+              | _ -> [%craise] span "Unreachable"
             else
               (* Continue exploring *)
               ABorrow (super#visit_AIgnoredMutBorrow opt_abs bid' child)
@@ -352,7 +349,7 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : typed_value)
         (* Preparing a bit *)
         let regions =
           match opt_abs with
-          | None -> craise __FILE__ __LINE__ span "Unreachable"
+          | None -> [%craise] span "Unreachable"
           | Some abs -> abs.regions.owned
         in
         (* Rk.: there is a small issue with the types of the aloan values.
@@ -363,7 +360,7 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : typed_value)
         in
         match lc with
         | AMutLoan (pm, bid', child) ->
-            sanity_check __FILE__ __LINE__ (pm = PNone) span;
+            [%sanity_check] span (pm = PNone);
             if bid' = bid then (
               (* This is the loan we are looking for: apply the projection to
                * the value we give back and replaced this mutable loan with
@@ -384,7 +381,7 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : typed_value)
             else (* Continue exploring *)
               super#visit_ALoan opt_abs lc
         | ASharedLoan (pm, _, _, _) ->
-            sanity_check __FILE__ __LINE__ (pm = PNone) span;
+            [%sanity_check] span (pm = PNone);
             (* We are giving back a value to a *mutable* loan: nothing special to do *)
             super#visit_ALoan opt_abs lc
         | AEndedMutLoan { child = _; given_back = _; given_back_meta = _ }
@@ -420,7 +417,7 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : typed_value)
         (* We remember in which abstraction we are before diving -
          * this is necessary for projecting values: we need to know
          * over which regions to project *)
-        sanity_check __FILE__ __LINE__ (Option.is_none opt_abs) span;
+        [%sanity_check] span (Option.is_none opt_abs);
         super#visit_EAbs (Some abs) abs
     end
   in
@@ -428,7 +425,7 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : typed_value)
   (* Explore the environment *)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Check we gave back to exactly one loan *)
-  cassert __FILE__ __LINE__ !replaced span "No loan updated";
+  [%cassert] span !replaced "No loan updated";
   (* *)
   ctx
 
@@ -440,20 +437,17 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : typed_value)
 let end_aproj_borrows (span : Meta.span) (ended_regions : RegionId.Set.t)
     (proj : symbolic_proj) (nsv : symbolic_value) (ctx : eval_ctx) : eval_ctx =
   (* Sanity checks *)
-  sanity_check __FILE__ __LINE__
-    (proj.sv_id <> nsv.sv_id && ty_is_rty proj.proj_ty)
-    span;
-  log#ltrace
-    (lazy
-      ("end_aproj_borrows:" ^ "\n- ended regions: "
-      ^ RegionId.Set.to_string None ended_regions
-      ^ "\n- projection type: "
-      ^ ty_to_string ctx proj.proj_ty
-      ^ "\n- sv: "
-      ^ symbolic_value_id_to_pretty_string proj.sv_id
-      ^ "\n- nsv: "
-      ^ symbolic_value_to_string ctx nsv
-      ^ "\n- ctx: " ^ eval_ctx_to_string ctx));
+  [%sanity_check] span (proj.sv_id <> nsv.sv_id && ty_is_rty proj.proj_ty);
+  [%ltrace
+    "- ended regions: "
+    ^ RegionId.Set.to_string None ended_regions
+    ^ "\n- projection type: "
+    ^ ty_to_string ctx proj.proj_ty
+    ^ "\n- sv: "
+    ^ symbolic_value_id_to_pretty_string proj.sv_id
+    ^ "\n- nsv: "
+    ^ symbolic_value_to_string ctx nsv
+    ^ "\n- ctx: " ^ eval_ctx_to_string ctx];
   (* Substitution functions, to replace the borrow projectors over symbolic values *)
   (* Substitution functions, to replace the borrow projectors over symbolic values *)
   (* See the comments about [AProjLoans], we have to update in two situations:
@@ -465,7 +459,7 @@ let end_aproj_borrows (span : Meta.span) (ended_regions : RegionId.Set.t)
   *)
   let update_mut ~owned ~outlive (_abs : abs) (aproj : aproj_borrows) : aproj =
     (* We can be in one case, or the other, but not both *)
-    sanity_check __FILE__ __LINE__ ((not owned) || not outlive) span;
+    [%sanity_check] span ((not owned) || not outlive);
 
     if owned then
       (* There is nothing to project *)
@@ -495,9 +489,7 @@ let give_back_symbolic_value (_config : config) (span : Meta.span)
     (ended_regions : RegionId.Set.t) (proj : symbolic_proj)
     (nsv : symbolic_value) (ctx : eval_ctx) : eval_ctx =
   (* Sanity checks *)
-  sanity_check __FILE__ __LINE__
-    (proj.sv_id <> nsv.sv_id && ty_is_rty proj.proj_ty)
-    span;
+  [%sanity_check] span (proj.sv_id <> nsv.sv_id && ty_is_rty proj.proj_ty);
   (* Substitution functions, to replace the borrow projectors over symbolic values *)
   (* We need to handle two cases:
      - the regions ended in the symbolic value might intersect with the owned
@@ -528,7 +520,7 @@ let give_back_symbolic_value (_config : config) (span : Meta.span)
      - then we update when intersecting with owned regions
   *)
   let subst ~owned ~outlive (_abs : abs) (aproj : aproj_loans) =
-    sanity_check __FILE__ __LINE__ ((not owned) || not outlive) span;
+    [%sanity_check] span ((not owned) || not outlive);
     if owned then
       (* There is nothing to project *)
       let child_proj = AEmpty in
@@ -570,8 +562,7 @@ let give_back_avalue_to_same_abstraction (_config : config) (span : Meta.span)
   (* We use a reference to check that we updated exactly one loan *)
   let replaced : bool ref = ref false in
   let set_replaced () =
-    cassert __FILE__ __LINE__ (not !replaced) span
-      "Exacly one loan should be updated";
+    [%cassert] span (not !replaced) "Exacly one loan should be updated";
     replaced := true
   in
   let obj =
@@ -600,7 +591,7 @@ let give_back_avalue_to_same_abstraction (_config : config) (span : Meta.span)
           (lc : aloan_content) : avalue =
         match lc with
         | AMutLoan (pm, bid', child) ->
-            sanity_check __FILE__ __LINE__ (pm = PNone) span;
+            [%sanity_check] span (pm = PNone);
             if bid' = bid then (
               (* Sanity check - about why we need to call {!ty_get_ref}
                * (and don't do the same thing as in {!give_back_value})
@@ -608,7 +599,7 @@ let give_back_avalue_to_same_abstraction (_config : config) (span : Meta.span)
                * {!typed_avalue} *)
               let _, expected_ty, _ = ty_get_ref ty in
               if nv.ty <> expected_ty then
-                craise __FILE__ __LINE__ span
+                [%craise] span
                   ("Value given back doesn't have the proper type:\n\
                     - expected: " ^ ty_to_string ctx ty ^ "\n- received: "
                  ^ ty_to_string ctx nv.ty);
@@ -630,7 +621,7 @@ let give_back_avalue_to_same_abstraction (_config : config) (span : Meta.span)
             super#visit_ALoan opt_abs lc
         | ASharedLoan (_, _, _, _) ->
             (* We get there if the projection marker is not [PNone] *)
-            internal_error __FILE__ __LINE__ span
+            [%internal_error] span
         | AIgnoredMutLoan (bid_opt, child) ->
             (* This loan is ignored, but we may have to project on a subvalue
              * of the value which is given back *)
@@ -640,7 +631,7 @@ let give_back_avalue_to_same_abstraction (_config : config) (span : Meta.span)
                * we don't register the fact that we inserted the value somewhere
                * (i.e., we don't call {!set_replaced}) *)
               (* Sanity check *)
-              sanity_check __FILE__ __LINE__ (nv.ty = ty) span;
+              [%sanity_check] span (nv.ty = ty);
               ALoan
                 (AEndedIgnoredMutLoan
                    { given_back = nv; child; given_back_meta = nsv }))
@@ -656,7 +647,7 @@ let give_back_avalue_to_same_abstraction (_config : config) (span : Meta.span)
   (* Explore the environment *)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Check we gave back to exactly one loan *)
-  cassert __FILE__ __LINE__ !replaced span "No loan updated";
+  [%cassert] span !replaced "No loan updated";
   (* Return *)
   ctx
 
@@ -696,18 +687,16 @@ let convert_avalue_to_given_back_value (span : Meta.span) (av : typed_avalue) :
 let give_back (config : config) (span : Meta.span) (l : unique_borrow_id)
     (bc : g_borrow_content) (ctx : eval_ctx) : eval_ctx =
   (* Debug *)
-  log#ltrace
-    (lazy
-      (let bc =
-         match bc with
-         | Concrete bc -> borrow_content_to_string ~span:(Some span) ctx bc
-         | Abstract bc -> aborrow_content_to_string ~span:(Some span) ctx bc
-       in
-       "give_back:\n- bid: "
-       ^ unique_borrow_id_to_string l
-       ^ "\n- content: " ^ bc ^ "\n- context:\n"
-       ^ eval_ctx_to_string ~span:(Some span) ctx
-       ^ "\n"));
+  [%ltrace
+    let bc =
+      match bc with
+      | Concrete bc -> borrow_content_to_string ~span:(Some span) ctx bc
+      | Abstract bc -> aborrow_content_to_string ~span:(Some span) ctx bc
+    in
+    "- bid: "
+    ^ unique_borrow_id_to_string l
+    ^ "\n- content: " ^ bc ^ "\n- context:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx];
   (* This is used for sanity checks *)
   let sanity_ek =
     { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
@@ -715,31 +704,28 @@ let give_back (config : config) (span : Meta.span) (l : unique_borrow_id)
   match bc with
   | Concrete (VMutBorrow (l', tv)) ->
       (* Sanity check *)
-      sanity_check __FILE__ __LINE__ (UMut l' = l) span;
-      sanity_check __FILE__ __LINE__ (not (concrete_loans_in_value tv)) span;
+      [%sanity_check] span (UMut l' = l);
+      [%sanity_check] span (not (concrete_loans_in_value tv));
       (* Check that the corresponding loan is somewhere - purely a sanity check *)
-      sanity_check __FILE__ __LINE__
-        (Option.is_some (lookup_loan_opt span sanity_ek l' ctx))
-        span;
+      [%sanity_check] span
+        (Option.is_some (lookup_loan_opt span sanity_ek l' ctx));
       (* Update the context *)
       give_back_value span l' tv ctx
   | Concrete (VSharedBorrow (bid, l') | VReservedMutBorrow (bid, l')) ->
       (* Sanity check *)
-      sanity_check __FILE__ __LINE__ (UShared l' = l) span;
+      [%sanity_check] span (UShared l' = l);
       (* Check that the borrow is somewhere - purely a sanity check *)
-      sanity_check __FILE__ __LINE__
-        (Option.is_some (lookup_loan_opt span sanity_ek bid ctx))
-        span;
+      [%sanity_check] span
+        (Option.is_some (lookup_loan_opt span sanity_ek bid ctx));
       (* We have nothing to update in the context *)
       ctx
   | Abstract (AMutBorrow (pm, l', av)) ->
       (* Sanity check *)
-      sanity_check __FILE__ __LINE__ (pm = PNone) span;
-      sanity_check __FILE__ __LINE__ (UMut l' = l) span;
+      [%sanity_check] span (pm = PNone);
+      [%sanity_check] span (UMut l' = l);
       (* Check that the corresponding loan is somewhere - purely a sanity check *)
-      sanity_check __FILE__ __LINE__
-        (Option.is_some (lookup_loan_opt span sanity_ek l' ctx))
-        span;
+      [%sanity_check] span
+        (Option.is_some (lookup_loan_opt span sanity_ek l' ctx));
       (* Convert the avalue to a (fresh symbolic) value.
 
          Rem.: we shouldn't do this here. We should do this in a function
@@ -752,28 +738,26 @@ let give_back (config : config) (span : Meta.span) (l : unique_borrow_id)
         ctx
   | Abstract (ASharedBorrow (pm, bid, l')) ->
       (* Sanity check *)
-      sanity_check __FILE__ __LINE__ (pm = PNone) span;
-      sanity_check __FILE__ __LINE__ (UShared l' = l) span;
+      [%sanity_check] span (pm = PNone);
+      [%sanity_check] span (UShared l' = l);
       (* Check that the borrow is somewhere - purely a sanity check *)
-      sanity_check __FILE__ __LINE__
-        (Option.is_some (lookup_loan_opt span sanity_ek bid ctx))
-        span;
+      [%sanity_check] span
+        (Option.is_some (lookup_loan_opt span sanity_ek bid ctx));
       (* We have nothing to update in the context *)
       ctx
   | Abstract (AProjSharedBorrow asb) ->
       (* Sanity check *)
-      sanity_check __FILE__ __LINE__
+      [%sanity_check] span
         (match l with
         | UShared l -> borrow_in_asb l asb
-        | UMut _ -> false)
-        span;
+        | UMut _ -> false);
       (* We have nothing to update in the context *)
       ctx
   | Abstract
       ( AEndedMutBorrow _
       | AIgnoredMutBorrow _
       | AEndedIgnoredMutBorrow _
-      | AEndedSharedBorrow ) -> craise __FILE__ __LINE__ span "Unreachable"
+      | AEndedSharedBorrow ) -> [%craise] span "Unreachable"
 
 let check_borrow_disappeared (span : Meta.span) (fun_name : string)
     (l : unique_borrow_id) (ctx0 : eval_ctx) (ctx : eval_ctx) : unit =
@@ -788,7 +772,7 @@ let check_borrow_disappeared (span : Meta.span) (fun_name : string)
           ^ eval_ctx_to_string ~span:(Some span) ctx0
           ^ "\n\n- new context:\n"
           ^ eval_ctx_to_string ~span:(Some span) ctx));
-      internal_error __FILE__ __LINE__ span);
+      [%internal_error] span);
   match l with
   | UShared _ -> ()
   | UMut l -> (
@@ -802,7 +786,7 @@ let check_borrow_disappeared (span : Meta.span) (fun_name : string)
               ^ eval_ctx_to_string ~span:(Some span) ctx0
               ^ "\n\n- new context:\n"
               ^ eval_ctx_to_string ~span:(Some span) ctx));
-          internal_error __FILE__ __LINE__ span)
+          [%internal_error] span)
 
 (** End a borrow identified by its borrow id in a context.
 
@@ -834,12 +818,10 @@ let rec end_borrow_aux (config : config) (span : Meta.span)
   let chain =
     add_borrow_loan_abs_id_to_chain span "end_borrow_aux: " (BorrowId l) chain
   in
-  log#ltrace
-    (lazy
-      ("end borrow: "
-      ^ unique_borrow_id_to_string l
-      ^ ":\n- original context:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx));
+  [%ltrace
+    unique_borrow_id_to_string l
+    ^ ":\n- original context:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx];
 
   (* Utility function for the sanity checks: check that the borrow disappeared
    * from the context *)
@@ -861,12 +843,10 @@ let rec end_borrow_aux (config : config) (span : Meta.span)
   *)
   | Error priority -> (
       (* Debug *)
-      log#ltrace
-        (lazy
-          ("end borrow: "
-          ^ unique_borrow_id_to_string l
-          ^ ": found outer borrows/abs or inner loans:"
-          ^ show_priority_borrow_or_abs priority));
+      [%ltrace
+        unique_borrow_id_to_string l
+        ^ ": found outer borrows/abs or inner loans:"
+        ^ show_priority_borrow_or_abs priority];
       (* End the priority borrows, abstractions, then try again to end the target
        * borrow (if necessary) *)
       match priority with
@@ -891,10 +871,10 @@ let rec end_borrow_aux (config : config) (span : Meta.span)
           check ctx;
           (ctx, end_abs))
   | Ok (ctx, None) ->
-      log#ltrace (lazy "End borrow: borrow not found");
+      [%ltrace "borrow not found"];
       (* It is possible that we can't find a borrow in symbolic mode (ending
        * an abstraction may end several borrows at once *)
-      sanity_check __FILE__ __LINE__ (config.mode = SymbolicMode) span;
+      [%sanity_check] span (config.mode = SymbolicMode);
       (* Do a sanity check and continue *)
       check ctx;
       (ctx, fun e -> e)
@@ -904,9 +884,7 @@ let rec end_borrow_aux (config : config) (span : Meta.span)
       (* Sanity check: the borrowed value shouldn't contain loans *)
       (match bc with
       | Concrete (VMutBorrow (_, bv)) ->
-          sanity_check __FILE__ __LINE__
-            (Option.is_none (get_first_loan_in_value bv))
-            span
+          [%sanity_check] span (Option.is_none (get_first_loan_in_value bv))
       | _ -> ());
       (* Give back the value *)
       let ctx = give_back config span l bc ctx in
@@ -940,7 +918,7 @@ and try_end_loan_aux (config : config) (span : Meta.span)
   (* Lookup the loan to identify whether this is a shared loan or a mutable loan *)
   match lookup_loan_opt span ek_all l ctx with
   | None ->
-      sanity_check __FILE__ __LINE__ (not must_end) span;
+      [%sanity_check] span (not must_end);
       (ctx, fun id -> id)
   | Some loan -> (
       match snd loan with
@@ -948,7 +926,7 @@ and try_end_loan_aux (config : config) (span : Meta.span)
           end_shared_loan_aux config span chain allowed_abs l ctx
       | Concrete (VMutLoan _) | Abstract (AMutLoan _) ->
           end_borrow_aux config span chain allowed_abs (UMut l) ctx
-      | _ -> craise __FILE__ __LINE__ span "Unreachable")
+      | _ -> [%craise] span "Unreachable")
 
 and end_loan_aux (config : config) (span : Meta.span)
     (chain : borrow_loan_abs_ids) (allowed_abs : AbstractionId.id option)
@@ -986,7 +964,7 @@ and end_shared_loan_aux (config : config) (span : Meta.span)
         if bid = l then raise (FoundSharedBorrowId (bid, sid)) else ()
 
       method! visit_ASharedBorrow _ pm bid sid =
-        sanity_check __FILE__ __LINE__ (pm = PNone) span;
+        [%sanity_check] span (pm = PNone);
         if bid = l then raise (FoundSharedBorrowId (bid, sid)) else ()
     end
   in
@@ -1007,8 +985,7 @@ and end_shared_loan_aux (config : config) (span : Meta.span)
   (* We use a reference to check that we updated exactly one loan *)
   let replaced : bool ref = ref false in
   let set_replaced () =
-    cassert __FILE__ __LINE__ (not !replaced) span
-      "Exactly one loan should be updated";
+    [%cassert] span (not !replaced) "Exactly one loan should be updated";
     replaced := true
   in
   let obj =
@@ -1033,11 +1010,11 @@ and end_shared_loan_aux (config : config) (span : Meta.span)
       method! visit_ALoan opt_abs lc =
         match lc with
         | AMutLoan (pm, bid, av) ->
-            sanity_check __FILE__ __LINE__ (pm = PNone) span;
+            [%sanity_check] span (pm = PNone);
             (* Nothing special to do (we are ending a *shared* loan) *)
             ALoan (super#visit_AMutLoan opt_abs pm bid av)
         | ASharedLoan (pm, l', shared_value, child) ->
-            sanity_check __FILE__ __LINE__ (pm = PNone) span;
+            [%sanity_check] span (pm = PNone);
             if l = l' then (
               (* This is the loan we are looking for *)
               set_replaced ();
@@ -1063,7 +1040,7 @@ and end_shared_loan_aux (config : config) (span : Meta.span)
   (* Explore the environment *)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Check we gave back to exactly one loan *)
-  cassert __FILE__ __LINE__ !replaced span "No loan updated";
+  [%cassert] span !replaced "No loan updated";
   (* Return *)
   (ctx, cc)
 
@@ -1077,12 +1054,10 @@ and end_abstraction_aux (config : config) (span : Meta.span)
   in
   (* Remember the original context for printing purposes *)
   let ctx0 = ctx in
-  log#ltrace
-    (lazy
-      ("end_abstraction_aux: "
-      ^ AbstractionId.to_string abs_id
-      ^ "\n- original context:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx0));
+  [%ltrace
+    AbstractionId.to_string abs_id
+    ^ "\n- original context:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx0];
 
   (* Lookup the abstraction - note that if we end a list of abstractions [A1, A0],
      ending the first abstraction A1 may require the last abstraction A0 to
@@ -1090,40 +1065,35 @@ and end_abstraction_aux (config : config) (span : Meta.span)
      context anymore, meaning we have to simply ignore it. *)
   match ctx_lookup_abs_opt ctx abs_id with
   | None ->
-      log#ltrace
-        (lazy
-          ("abs not found (already ended): "
-          ^ AbstractionId.to_string abs_id
-          ^ "\n"));
+      [%ltrace
+        "abs not found (already ended): "
+        ^ AbstractionId.to_string abs_id
+        ^ "\n"];
       (ctx, fun e -> e)
   | Some abs ->
       (* Check that we can end the abstraction *)
       if abs.can_end then ()
       else
-        craise __FILE__ __LINE__ span
+        [%craise] span
           ("Can't end abstraction "
           ^ AbstractionId.to_string abs.abs_id
           ^ " as it is set as non-endable");
 
       (* End the parent abstractions first *)
       let ctx, cc = end_abstractions_aux config span chain abs.parents ctx in
-      log#ltrace
-        (lazy
-          ("end_abstraction_aux: "
-          ^ AbstractionId.to_string abs_id
-          ^ "\n- context after parent abstractions ended:\n"
-          ^ eval_ctx_to_string ~span:(Some span) ctx));
+      [%ltrace
+        AbstractionId.to_string abs_id
+        ^ "\n- context after parent abstractions ended:\n"
+        ^ eval_ctx_to_string ~span:(Some span) ctx];
 
       (* End the loans inside the abstraction *)
       let ctx, cc =
         comp cc (end_abstraction_loans config span chain abs_id ctx)
       in
-      log#ltrace
-        (lazy
-          ("end_abstraction_aux: "
-          ^ AbstractionId.to_string abs_id
-          ^ "\n- context after loans ended:\n"
-          ^ eval_ctx_to_string ~span:(Some span) ctx));
+      [%ltrace
+        AbstractionId.to_string abs_id
+        ^ "\n- context after loans ended:\n"
+        ^ eval_ctx_to_string ~span:(Some span) ctx];
 
       (* End the abstraction itself by redistributing the borrows it contains *)
       let ctx, cc =
@@ -1148,14 +1118,12 @@ and end_abstraction_aux (config : config) (span : Meta.span)
       in
 
       (* Debugging *)
-      log#ltrace
-        (lazy
-          ("end_abstraction_aux: "
-          ^ AbstractionId.to_string abs_id
-          ^ "\n- original context:\n"
-          ^ eval_ctx_to_string ~span:(Some span) ctx0
-          ^ "\n\n- new context:\n"
-          ^ eval_ctx_to_string ~span:(Some span) ctx));
+      [%ltrace
+        AbstractionId.to_string abs_id
+        ^ "\n- original context:\n"
+        ^ eval_ctx_to_string ~span:(Some span) ctx0
+        ^ "\n\n- new context:\n"
+        ^ eval_ctx_to_string ~span:(Some span) ctx];
 
       (* Sanity check: ending an abstraction must preserve the invariants *)
       Invariants.check_invariants span ctx;
@@ -1180,11 +1148,10 @@ and end_abstractions_aux (config : config) (span : Meta.span)
 and end_abstraction_loans (config : config) (span : Meta.span)
     (chain : borrow_loan_abs_ids) (abs_id : AbstractionId.id) : cm_fun =
  fun ctx ->
-  log#ltrace
-    (lazy
-      ("end_abstraction_loans:" ^ "\n- abs_id: "
-      ^ AbstractionId.to_string abs_id
-      ^ "\n- ctx:\n" ^ eval_ctx_to_string ctx));
+  [%ltrace
+    "- abs_id: "
+    ^ AbstractionId.to_string abs_id
+    ^ "\n- ctx:\n" ^ eval_ctx_to_string ctx];
   (* Lookup the abstraction *)
   let abs = ctx_lookup_abs ctx abs_id in
   (* End the first loan we find.
@@ -1214,9 +1181,7 @@ and end_abstraction_loans (config : config) (span : Meta.span)
 and end_abstraction_borrows (config : config) (span : Meta.span)
     (chain : borrow_loan_abs_ids) (abs_id : AbstractionId.id) : cm_fun =
  fun ctx ->
-  log#ltrace
-    (lazy
-      ("end_abstraction_borrows: abs_id: " ^ AbstractionId.to_string abs_id));
+  [%ltrace "abs_id: " ^ AbstractionId.to_string abs_id];
   (* Note that the abstraction mustn't contain any loans *)
   (* We end the borrows, starting with the *inner* ones. This is important
      when considering nested borrows which have the same lifetime.
@@ -1267,7 +1232,7 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
 
       method! visit_aproj env sproj =
         (match sproj with
-        | AProjLoans _ -> craise __FILE__ __LINE__ span "Unexpected"
+        | AProjLoans _ -> [%craise] span "Unexpected"
         | AProjBorrows aproj -> raise (FoundAProjBorrows aproj)
         | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ());
         super#visit_aproj env sproj
@@ -1277,7 +1242,7 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
       method! visit_borrow_content _ bc =
         match bc with
         | VSharedBorrow _ | VMutBorrow (_, _) -> raise (FoundBorrowContent bc)
-        | VReservedMutBorrow _ -> craise __FILE__ __LINE__ span "Unreachable"
+        | VReservedMutBorrow _ -> [%craise] span "Unreachable"
     end
   in
   (* Lookup the abstraction *)
@@ -1290,14 +1255,13 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
   with
   (* There are concrete (i.e., not symbolic) borrows: end them, then re-explore *)
   | FoundABorrowContent bc ->
-      log#ltrace
-        (lazy
-          ("end_abstraction_borrows: found aborrow content: "
-          ^ aborrow_content_to_string ~span:(Some span) ctx bc));
+      [%ltrace
+        "found aborrow content: "
+        ^ aborrow_content_to_string ~span:(Some span) ctx bc];
       let ctx =
         match bc with
         | AMutBorrow (pm, bid, av) ->
-            sanity_check __FILE__ __LINE__ (pm = PNone) span;
+            [%sanity_check] span (pm = PNone);
             (* First, convert the avalue to a (fresh symbolic) value *)
             let sv = convert_avalue_to_given_back_value span av in
             (* Replace the mut borrow to register the fact that we ended
@@ -1309,7 +1273,7 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
             let sv = mk_typed_value_from_symbolic_value sv in
             give_back_value span bid sv ctx
         | ASharedBorrow (pm, _, sid) ->
-            sanity_check __FILE__ __LINE__ (pm = PNone) span;
+            [%sanity_check] span (pm = PNone);
             (* Replace the shared borrow to account for the fact it ended *)
             let ended_borrow = ABorrow AEndedSharedBorrow in
             update_aborrow span ek_all (UShared sid) ended_borrow ctx
@@ -1335,16 +1299,14 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
         | AEndedMutBorrow _
         | AIgnoredMutBorrow _
         | AEndedIgnoredMutBorrow _
-        | AEndedSharedBorrow -> craise __FILE__ __LINE__ span "Unexpected"
+        | AEndedSharedBorrow -> [%craise] span "Unexpected"
       in
       (* Reexplore *)
       end_abstraction_borrows config span chain abs_id ctx
   (* There are symbolic borrows: end them, then re-explore *)
   | FoundAProjBorrows aproj ->
-      log#ltrace
-        (lazy
-          ("end_abstraction_borrows: found aproj borrows: "
-          ^ aproj_to_string ctx (AProjBorrows aproj)));
+      [%ltrace
+        "found aproj borrows: " ^ aproj_to_string ctx (AProjBorrows aproj)];
       (* Generate a fresh symbolic value *)
       let nsv = mk_fresh_symbolic_value span aproj.proj.proj_ty in
       (* Replace the proj_borrows - there should be exactly one *)
@@ -1358,10 +1320,9 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
       end_abstraction_borrows config span chain abs_id ctx
   (* There are concrete (i.e., not symbolic) borrows in shared values: end them, then reexplore *)
   | FoundBorrowContent bc ->
-      log#ltrace
-        (lazy
-          ("end_abstraction_borrows: found borrow content: "
-          ^ borrow_content_to_string ~span:(Some span) ctx bc));
+      [%ltrace
+        "found borrow content: "
+        ^ borrow_content_to_string ~span:(Some span) ctx bc];
       let ctx =
         match bc with
         | VSharedBorrow (_, sid) -> (
@@ -1369,17 +1330,17 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
             match
               end_borrow_get_borrow span (Some abs_id) (UShared sid) ctx
             with
-            | Error _ -> craise __FILE__ __LINE__ span "Unreachable"
+            | Error _ -> [%craise] span "Unreachable"
             | Ok (ctx, _) -> ctx)
         | VMutBorrow (bid, v) -> (
             (* Replace the mut borrow with bottom *)
             match end_borrow_get_borrow span (Some abs_id) (UMut bid) ctx with
-            | Error _ -> craise __FILE__ __LINE__ span "Unreachable"
+            | Error _ -> [%craise] span "Unreachable"
             | Ok (ctx, _) ->
                 (* Give the value back - note that the mut borrow was below a
                  * shared borrow: the value is thus unchanged *)
                 give_back_value span bid v ctx)
-        | VReservedMutBorrow _ -> craise __FILE__ __LINE__ span "Unreachable"
+        | VReservedMutBorrow _ -> [%craise] span "Unreachable"
       in
       (* Reexplore *)
       end_abstraction_borrows config span chain abs_id ctx
@@ -1418,17 +1379,16 @@ and end_proj_loans_symbolic (config : config) (span : Meta.span)
     (chain : borrow_loan_abs_ids) (abs_id : AbstractionId.id)
     (regions : RegionId.Set.t) (proj : symbolic_proj) : cm_fun =
  fun ctx ->
-  log#ltrace
-    (lazy
-      ("end_proj_loans_symbolic:" ^ "\n- abs_id: "
-      ^ AbstractionId.to_string abs_id
-      ^ "\n- regions: "
-      ^ RegionId.Set.to_string None regions
-      ^ "\n- sv: "
-      ^ symbolic_value_id_to_pretty_string proj.sv_id
-      ^ "\n- projection type: "
-      ^ ty_to_string ctx proj.proj_ty
-      ^ "\n- ctx:\n" ^ eval_ctx_to_string ctx));
+  [%ltrace
+    "- abs_id: "
+    ^ AbstractionId.to_string abs_id
+    ^ "\n- regions: "
+    ^ RegionId.Set.to_string None regions
+    ^ "\n- sv: "
+    ^ symbolic_value_id_to_pretty_string proj.sv_id
+    ^ "\n- projection type: "
+    ^ ty_to_string ctx proj.proj_ty
+    ^ "\n- ctx:\n" ^ eval_ctx_to_string ctx];
   (* Small helpers for sanity checks *)
   let check ctx = no_aproj_over_symbolic_in_context span proj.sv_id ctx in
   (* Find the first proj_borrows which intersects the proj_loans *)
@@ -1527,11 +1487,11 @@ and end_proj_loans_symbolic (config : config) (span : Meta.span)
             * replace it with... Maybe we should introduce an ABottomProj? *)
            let ctx = update_aproj_borrows span abs_id sv AEmpty ctx in
            (* Sanity check: no other occurrence of an intersecting projector of borrows *)
-           sanity_check __FILE__ __LINE__
+           [%sanity_check] span
              (Option.is_none
                 (lookup_intersecting_aproj_borrows_opt span explore_shared regions
                    sv proj_ty ctx))
-             span;
+             ;
            (* End the projector of loans *)
            let ctx = update_aproj_loans_to_ended span abs_id sv ctx in
            (* Sanity check *)
@@ -1602,16 +1562,14 @@ let end_abstractions_no_synth config span ids ctx =
 let promote_shared_loan_to_mut_loan (span : Meta.span) (l : BorrowId.id)
     (bid : SharedBorrowId.id) (ctx : eval_ctx) : typed_value * eval_ctx =
   (* Debug *)
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ":\n- loan: " ^ BorrowId.to_string l ^ "\n- context:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx
-      ^ "\n"));
+  [%ltrace
+    "- loan: " ^ BorrowId.to_string l ^ "\n- context:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx];
   (* Sanity check: there is exactly one borrow mapping to [bid] in the context,
      and it is the one we want to promote.
    *)
   let borrows = lookup_shared_reserved_borrows l ctx in
-  sanity_check __FILE__ __LINE__ (borrows = [ bid ]) span;
+  [%sanity_check] span (borrows = [ bid ]);
   (* Lookup the shared loan - note that we can't promote a shared loan
      in a shared value, but we can do it in a mutably borrowed value.
      This is important because we can do: [let y = &two-phase ( *x );]
@@ -1621,20 +1579,20 @@ let promote_shared_loan_to_mut_loan (span : Meta.span) (l : BorrowId.id)
   in
   match lookup_loan span ek l ctx with
   | _, Concrete (VMutLoan _) ->
-      craise __FILE__ __LINE__ span "Expected a shared loan, found a mut loan"
+      [%craise] span "Expected a shared loan, found a mut loan"
   | _, Concrete (VSharedLoan (_, sv)) ->
       (* We need to check that there aren't any loans in the value:
          we should have gotten rid of those already, but it is better
          to do a sanity check. *)
-      sanity_check __FILE__ __LINE__ (not (concrete_loans_in_value sv)) span;
+      [%sanity_check] span (not (concrete_loans_in_value sv));
       (* Check there isn't {!Bottom} (this is actually an invariant *)
-      cassert __FILE__ __LINE__
+      [%cassert] span
         (not (bottom_in_value ctx.ended_regions sv))
-        span "There shouldn't be a bottom";
+        "There shouldn't be a bottom";
       (* Check there aren't reserved borrows *)
-      cassert __FILE__ __LINE__
+      [%cassert] span
         (not (reserved_in_value sv))
-        span "There shouldn't be reserved borrows";
+        "There shouldn't be reserved borrows";
       (* Update the loan content *)
       let ctx = update_loan span ek l (VMutLoan l) ctx in
       (* Return *)
@@ -1642,7 +1600,7 @@ let promote_shared_loan_to_mut_loan (span : Meta.span) (l : BorrowId.id)
   | _, Abstract _ ->
       (* I don't think it is possible to have two-phase borrows involving borrows
          returned by abstractions. I'm not sure how we could handle that anyway. *)
-      craise __FILE__ __LINE__ span
+      [%craise] span
         "Can't promote a shared loan to a mutable loan if the loan is inside a \
          region abstraction"
 
@@ -1661,13 +1619,13 @@ let replace_reserved_borrow_with_mut_borrow (span : Meta.span) (l : BorrowId.id)
   in
   match lookup_borrow span ek (UShared bid) ctx with
   | Concrete (VSharedBorrow _ | VMutBorrow (_, _)) ->
-      craise __FILE__ __LINE__ span "Expected a reserved mutable borrow"
+      [%craise] span "Expected a reserved mutable borrow"
   | Concrete (VReservedMutBorrow _) ->
       (* Update it *)
       update_borrow span ek (UShared bid) (VMutBorrow (l, borrowed_value)) ctx
   | Abstract _ ->
       (* This can't happen for sure *)
-      craise __FILE__ __LINE__ span
+      [%craise] span
         "Can't promote a shared borrow to a mutable borrow if the borrow is \
          inside a region abstraction"
 
@@ -1680,7 +1638,7 @@ let rec promote_reserved_mut_borrow (config : config) (span : Meta.span)
     { enter_shared_loans = false; enter_mut_borrows = true; enter_abs = false }
   in
   match lookup_loan span ek l ctx with
-  | _, Concrete (VMutLoan _) -> craise __FILE__ __LINE__ span "Unreachable"
+  | _, Concrete (VMutLoan _) -> [%craise] span "Unreachable"
   | _, Concrete (VSharedLoan (_, sv)) -> (
       (* If there are loans inside the value, end them. Note that there can't be
          reserved borrows inside the value.
@@ -1698,15 +1656,12 @@ let rec promote_reserved_mut_borrow (config : config) (span : Meta.span)
       | None ->
           (* No loan to end inside the value *)
           (* Some sanity checks *)
-          log#ltrace
-            (lazy
-              ("activate_reserved_mut_borrow: resulting value:\n"
-              ^ typed_value_to_string ~span:(Some span) ctx sv));
-          sanity_check __FILE__ __LINE__ (not (concrete_loans_in_value sv)) span;
-          sanity_check __FILE__ __LINE__
-            (not (bottom_in_value ctx.ended_regions sv))
-            span;
-          sanity_check __FILE__ __LINE__ (not (reserved_in_value sv)) span;
+          [%ltrace
+            "resulting value:\n"
+            ^ typed_value_to_string ~span:(Some span) ctx sv];
+          [%sanity_check] span (not (concrete_loans_in_value sv));
+          [%sanity_check] span (not (bottom_in_value ctx.ended_regions sv));
+          [%sanity_check] span (not (reserved_in_value sv));
           (* End the borrows which borrow from the value, at the exception of
              the borrow we want to promote *)
           let bids =
@@ -1732,7 +1687,7 @@ let rec promote_reserved_mut_borrow (config : config) (span : Meta.span)
   | _, Abstract _ ->
       (* I don't think it is possible to have two-phase borrows involving borrows
        * returned by abstractions. I'm not sure how we could handle that anyway. *)
-      craise __FILE__ __LINE__ span
+      [%craise] span
         "Can't activate a reserved mutable borrow referencing a loan inside\n\
         \         a region abstraction"
 
@@ -1749,7 +1704,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
      ignore the children altogether. Instead, we explore them and make sure
      we don't register values while doing so.
   *)
-  let push_fail _ = craise __FILE__ __LINE__ span "Unreachable" in
+  let push_fail _ = [%craise] span "Unreachable" in
   (* Function to explore an avalue and destructure it *)
   let rec list_avalues (allow_borrows : bool) (push : typed_avalue -> unit)
       (av : typed_avalue) : unit =
@@ -1764,9 +1719,9 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
         match lc with
         | ASharedLoan (pm, bids, sv, child_av) ->
             (* We don't support nested borrows for now *)
-            cassert __FILE__ __LINE__
+            [%cassert] span
               (not (value_has_borrows (Some span) ctx sv.value))
-              span "Nested borrows are not supported yet";
+              "Nested borrows are not supported yet";
             (* Destructure the shared value *)
             let avl, sv =
               if destructure_shared_values then list_values sv else ([], sv)
@@ -1793,19 +1748,19 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
             push { value; ty }
         | AIgnoredMutLoan (opt_bid, child_av) ->
             (* We don't support nested borrows for now *)
-            cassert __FILE__ __LINE__
+            [%cassert] span
               (not
                  (ty_has_borrows (Some span) ctx.type_ctx.type_infos child_av.ty))
-              span "Nested borrows are not supported yet";
-            sanity_check __FILE__ __LINE__ (opt_bid = None) span;
+              "Nested borrows are not supported yet";
+            [%sanity_check] span (opt_bid = None);
             (* Simply explore the child *)
             list_avalues false push_fail child_av
         | AEndedSharedLoan (sv, child_av) ->
             (* We don't support nested borrows for now *)
-            cassert __FILE__ __LINE__
+            [%cassert] span
               (not
                  (ty_has_borrows (Some span) ctx.type_ctx.type_infos child_av.ty))
-              span "Nested borrows are not supported yet";
+              "Nested borrows are not supported yet";
             (* Explore the shared value *)
             (* Destructure the shared value *)
             let avl, _ =
@@ -1822,15 +1777,15 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
             { child = child_av; given_back = _; given_back_meta = _ }
         | AIgnoredSharedLoan child_av ->
             (* We don't support nested borrows for now *)
-            cassert __FILE__ __LINE__
+            [%cassert] span
               (not
                  (ty_has_borrows (Some span) ctx.type_ctx.type_infos child_av.ty))
-              span "Nested borrows are not supported yet";
+              "Nested borrows are not supported yet";
             (* Simply explore the child *)
             list_avalues false push_fail child_av)
     | ABorrow bc -> (
         (* Sanity check - rem.: may be redundant with [push_fail] *)
-        sanity_check __FILE__ __LINE__ allow_borrows span;
+        [%sanity_check] span allow_borrows;
         (* Explore the borrow content *)
         match bc with
         | AMutBorrow (pm, bid, child_av) ->
@@ -1845,26 +1800,25 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
             push av
         | AIgnoredMutBorrow (opt_bid, child_av) ->
             (* We don't support nested borrows for now *)
-            cassert __FILE__ __LINE__
+            [%cassert] span
               (not
                  (ty_has_borrows (Some span) ctx.type_ctx.type_infos child_av.ty))
-              span "Nested borrows are not supported yet";
-            sanity_check __FILE__ __LINE__ (opt_bid = None) span;
+              "Nested borrows are not supported yet";
+            [%sanity_check] span (opt_bid = None);
             (* Just explore the child *)
             list_avalues false push_fail child_av
         | AEndedIgnoredMutBorrow
             { child = child_av; given_back = _; given_back_meta = _ } ->
             (* We don't support nested borrows for now *)
-            cassert __FILE__ __LINE__
+            [%cassert] span
               (not
                  (ty_has_borrows (Some span) ctx.type_ctx.type_infos child_av.ty))
-              span "Nested borrows are not supported yet";
+              "Nested borrows are not supported yet";
             (* Just explore the child *)
             list_avalues false push_fail child_av
         | AProjSharedBorrow asb ->
             (* We don't support nested borrows *)
-            cassert __FILE__ __LINE__ (asb = []) span
-              "Nested borrows are not supported yet";
+            [%cassert] span (asb = []) "Nested borrows are not supported yet";
             (* Nothing specific to do *)
             ()
         | AEndedMutBorrow _ | AEndedSharedBorrow ->
@@ -1872,34 +1826,34 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
                be in the context anymore (if we end *one* borrow in an abstraction,
                we have to end them all and remove the abstraction from the context)
             *)
-            craise __FILE__ __LINE__ span "Unreachable")
+            [%craise] span "Unreachable")
     | ASymbolic (_, aproj) -> (
         (* *)
         match aproj with
         | AProjLoans { proj = _; consumed; borrows } ->
             (* There can be children in the presence of nested borrows: we
                don't handle those for now. *)
-            sanity_check __FILE__ __LINE__ (consumed = []) span;
-            sanity_check __FILE__ __LINE__ (borrows = []) span;
+            [%sanity_check] span (consumed = []);
+            [%sanity_check] span (borrows = []);
             push av
         | AProjBorrows { proj = _; loans } ->
             (* For now, we fore all symbolic values containing borrows to be eagerly
                expanded *)
             (* There can be children in the presence of nested borrows: we
                don't handle those for now. *)
-            sanity_check __FILE__ __LINE__ (loans = []) span;
+            [%sanity_check] span (loans = []);
             push av
         | AEndedProjLoans { proj = _; consumed; borrows } ->
             (* There can be children in the presence of nested borrows: we
                don't handle those for now. *)
-            sanity_check __FILE__ __LINE__ (consumed = []) span;
-            sanity_check __FILE__ __LINE__ (borrows = []) span;
+            [%sanity_check] span (consumed = []);
+            [%sanity_check] span (borrows = []);
             (* Just ignore *)
             ()
         | AEndedProjBorrows { mvalues = _; loans } ->
             (* There can be children in the presence of nested borrows: we
                don't handle those for now. *)
-            sanity_check __FILE__ __LINE__ (loans = []) span;
+            [%sanity_check] span (loans = []);
             (* Just ignore *)
             ()
         | AEmpty -> ())
@@ -1914,22 +1868,21 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
         let avl = List.concat avll in
         let adt = { adt with field_values } in
         (avl, { v with value = VAdt adt })
-    | VBottom -> craise __FILE__ __LINE__ span "Unreachable"
+    | VBottom -> [%craise] span "Unreachable"
     | VBorrow _ ->
         (* We don't support nested borrows for now *)
-        craise __FILE__ __LINE__ span "Unreachable"
+        [%craise] span "Unreachable"
     | VLoan lc -> (
         match lc with
         | VSharedLoan (bids, sv) ->
             let avl, sv = list_values sv in
             if destructure_shared_values then (
               (* Rem.: the shared value can't contain loans nor borrows *)
-              cassert __FILE__ __LINE__ (ty_no_regions ty) span
+              [%cassert] span (ty_no_regions ty)
                 "Nested borrows are not supported yet";
               let av : typed_avalue =
-                sanity_check __FILE__ __LINE__
-                  (not (value_has_loans_or_borrows (Some span) ctx sv.value))
-                  span;
+                [%sanity_check] span
+                  (not (value_has_loans_or_borrows (Some span) ctx sv.value));
                 (* We introduce fresh ids for the symbolic values *)
                 let mk_value_with_fresh_sids (v : typed_value) : typed_value =
                   let visitor =
@@ -1960,13 +1913,12 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
               let avl = List.append [ av ] avl in
               (avl, sv))
             else (avl, { v with value = VLoan (VSharedLoan (bids, sv)) })
-        | VMutLoan _ -> craise __FILE__ __LINE__ span "Unreachable")
+        | VMutLoan _ -> [%craise] span "Unreachable")
     | VSymbolic _ ->
         (* For now, we fore all symbolic values containing borrows to be eagerly
            expanded *)
-        sanity_check __FILE__ __LINE__
-          (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty))
-          span;
+        [%sanity_check] span
+          (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty));
         ([], v)
   in
 
@@ -2049,7 +2001,7 @@ let abs_mut_borrows_loans_in_fixed span (ctx : eval_ctx)
       inherit [_] iter_eval_ctx as super
 
       method! visit_abs env abs =
-        sanity_check __FILE__ __LINE__ (env = None) span;
+        [%sanity_check] span (env = None);
         super#visit_abs (Some abs) abs
 
       method! visit_AProjLoans env proj' =
@@ -2070,7 +2022,7 @@ let abs_mut_borrows_loans_in_fixed span (ctx : eval_ctx)
         (* We can get there through shared loans: let's just ignore it for now
            (this function should be used to explore abstractions which don't
            have remaining loans - see its use below) *)
-        internal_error __FILE__ __LINE__ span
+        [%internal_error] span
 
       method! visit_aborrow_content env lc =
         super#visit_aborrow_content env lc;
@@ -2093,7 +2045,7 @@ let abs_mut_borrows_loans_in_fixed span (ctx : eval_ctx)
         | AEndedIgnoredMutBorrow _ -> ()
         | AProjSharedBorrow _ ->
             (* Unimplemented for now *)
-            internal_error __FILE__ __LINE__ span
+            [%internal_error] span
 
       method! visit_aproj env proj =
         super#visit_aproj env proj;
@@ -2229,7 +2181,7 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
               | _ -> super#visit_VLoan () lc
 
             method! visit_ASharedLoan () pm l sv child =
-              sanity_check __FILE__ __LINE__ (pm = PNone) span;
+              [%sanity_check] span (pm = PNone);
               match lookup_shared_reserved_borrows l ctx with
               | [] ->
                   (* End the loan *)
@@ -2294,10 +2246,9 @@ let simplify_dummy_values_useless_abs (config : config) (span : Meta.span)
     if ctx = ctx0 then (ctx, cc) else comp cc (simplify ctx)
   in
   let ctx, cc = simplify ctx0 in
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ":\n- fixed_aids: "
-      ^ AbstractionId.Set.to_string None fixed_abs_ids
-      ^ "\n- ctx0:\n" ^ eval_ctx_to_string ctx0 ^ "\n- ctx1:\n"
-      ^ if ctx = ctx0 then "UNCHANGED" else eval_ctx_to_string ctx ^ "\n"));
+  [%ltrace
+    "- fixed_aids: "
+    ^ AbstractionId.Set.to_string None fixed_abs_ids
+    ^ "\n- ctx0:\n" ^ eval_ctx_to_string ctx0 ^ "\n- ctx1:\n"
+    ^ if ctx = ctx0 then "UNCHANGED" else eval_ctx_to_string ctx];
   (ctx, cc)

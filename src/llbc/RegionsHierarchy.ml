@@ -40,7 +40,7 @@ let log = Logging.regions_hierarchy_log
 
 let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
     (fun_name : string) (sg : fun_sig) : region_var_groups =
-  log#ltrace (lazy (__FUNCTION__ ^ ": " ^ fun_name));
+  [%ltrace fun_name];
   (* Create the dependency graph.
 
      An edge from 'short to 'long means that 'long outlives 'short (that is
@@ -70,8 +70,8 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
 
   let add_edge ~(short : region) ~(long : region) =
     (* Sanity checks *)
-    sanity_check_opt_span __FILE__ __LINE__ (short <> RErased) span;
-    sanity_check_opt_span __FILE__ __LINE__ (long <> RErased) span;
+    [%sanity_check_opt_span] span (short <> RErased);
+    [%sanity_check_opt_span] span (long <> RErased);
     (* Ignore the locally bound regions (at the level of arrow types for instance *)
     match (short, long) with
     | RVar (Bound _), _ | _, RVar (Bound _) -> ()
@@ -85,7 +85,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
   let add_edges_from_region_binder :
       'a. ('a -> unit) -> 'a region_binder -> unit =
    fun visit c ->
-    sanity_check_opt_span __FILE__ __LINE__ (c.binder_regions = []) span;
+    [%sanity_check_opt_span] span (c.binder_regions = []);
     visit c.binder_value
   in
 
@@ -112,7 +112,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
         | TAdtId id ->
             (* Lookup the type declaration *)
             let decl =
-              silent_unwrap_opt_span __FILE__ __LINE__ span
+              [%silent_unwrap_opt_span] span
                 (TypeDeclId.Map.find_opt id crate.type_decls)
             in
             (* Instantiate the predicates *)
@@ -151,26 +151,23 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
         (* The trait should reference a clause, and not an implementation
            (otherwise it should have been normalized), or a special builtin
            trait (in particular, [core::marker::DiscriminantKind]) *)
-        sanity_check_opt_span __FILE__ __LINE__
-          (check_non_normalizable_trait_instance_id trait_ref.trait_id)
-          span;
+        [%sanity_check_opt_span] span
+          (check_non_normalizable_trait_instance_id trait_ref.trait_id);
         (* We have nothing to do *)
         ()
     | TFnPtr binder ->
         (* TODO: *)
-        cassert_opt_span __FILE__ __LINE__
+        [%cassert_opt_span] span
           (binder.binder_regions = [])
-          span "We don't support arrow types with locally quantified regions";
+          "We don't support arrow types with locally quantified regions";
         (* We can ignore the outer regions *)
         let inputs, output = binder.binder_value in
         List.iter (explore_ty []) (output :: inputs)
-    | TFnDef _ -> craise_opt_span __FILE__ __LINE__ span "unsupported: FnDef"
+    | TFnDef _ -> [%craise_opt_span] span "unsupported: FnDef"
     | TDynTrait _ ->
-        craise_opt_span __FILE__ __LINE__ span
-          "Dynamic trait types are not supported yet"
+        [%craise_opt_span] span "Dynamic trait types are not supported yet"
     | TError _ ->
-        craise_opt_span __FILE__ __LINE__ span
-          "Found type error in the output of charon"
+        [%craise_opt_span] span "Found type error in the output of charon"
   and explore_generics (outer : region list) (generics : generic_args) =
     let { regions; types; const_generics = _; trait_refs = _ } = generics in
     List.iter (fun long -> add_edges ~long ~shorts:outer) regions;
@@ -201,7 +198,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
         (SccId.Map.bindings sccs.sccs)
     in
     (* The SCC should only contain the 'static *)
-    sanity_check_opt_span __FILE__ __LINE__ (static_scc = [ RStatic ]) span;
+    [%sanity_check_opt_span] span (static_scc = [ RStatic ]);
     (* Remove the group as well as references to this group from the
        other SCCs *)
     let { sccs; scc_deps } = sccs in
@@ -257,7 +254,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
           (fun r ->
             match r with
             | RVar (Free rid) -> rid
-            | _ -> craise __FILE__ __LINE__ (Option.get span) "Unreachable")
+            | _ -> [%craise] (Option.get span) "Unreachable")
           scc
       in
 
@@ -316,7 +313,7 @@ let compute_regions_hierarchies (crate : crate) : region_var_groups FunIdMap.t =
                " (Could not compute the name pattern due to an additional \
                 error)"
            in
-           save_error_opt_span __FILE__ __LINE__ error.span
+           [%save_error_opt_span] error.span
              ("Could not compute the region hierarchies for function '" ^ name
             ^ " because of previous error." ^ pattern);
            None)

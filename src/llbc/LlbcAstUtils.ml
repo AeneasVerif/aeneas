@@ -2,7 +2,6 @@ open Types
 open LlbcAst
 include Charon.LlbcAstUtils
 open Collections
-open Errors
 
 module FunIdOrderedType : OrderedType with type t = fun_id = struct
   type t = fun_id
@@ -68,7 +67,7 @@ let name_to_pattern (span : Meta.span option) (ctx : 'a Charon.NameMatcher.ctx)
   else
     try Charon.NameMatcher.name_to_pattern ctx c n
     with Not_found ->
-      craise_opt_span __FILE__ __LINE__ span
+      [%craise_opt_span] span
         "Could not convert the name to a pattern because of missing \
          definition(s)"
 
@@ -92,7 +91,7 @@ let name_with_generics_to_pattern (span : Meta.span option)
   else
     try Charon.NameMatcher.name_with_generics_to_pattern ctx c params n args
     with Not_found ->
-      craise_opt_span __FILE__ __LINE__ span
+      [%craise_opt_span] span
         "Could not convert the name to a pattern because of missing \
          definition(s)"
 

@@ -11,7 +11,6 @@ open Cps
 open InterpreterUtils
 open InterpreterExpansion
 open InterpreterPaths
-open Errors
 
 (** The local logger *)
 let log = Logging.expressions_log
@@ -53,13 +52,13 @@ let read_place_check (span : Meta.span) (access : access_kind) (p : place)
     (ctx : eval_ctx) : typed_value =
   let v = read_place span access p ctx in
   (* Check that there are no bottoms in the value *)
-  cassert __FILE__ __LINE__
+  [%cassert] span
     (not (bottom_in_value ctx.ended_regions v))
-    span "There should be no bottoms in the value";
+    "There should be no bottoms in the value";
   (* Check that there are no reserved borrows in the value *)
-  cassert __FILE__ __LINE__
+  [%cassert] span
     (not (reserved_in_value v))
-    span "There should be no reserved borrows in the value";
+    "There should be no reserved borrows in the value";
   (* Return *)
   v
 
@@ -98,10 +97,7 @@ let literal_to_typed_value (span : Meta.span) (ty : literal_type) (cv : literal)
     (ctx : eval_ctx) : typed_value =
   (* Check the type while converting - we actually need some information
    * contained in the type *)
-  log#ltrace
-    (lazy
-      ("literal_to_typed_value:" ^ "\n- cv: "
-      ^ Print.Values.literal_to_string cv));
+  [%ltrace "- cv: " ^ Print.Values.literal_to_string cv];
   let ptr_size = ctx.crate.target_information.target_pointer_size in
   match (ty, cv) with
   (* Scalar, boolean... *)
@@ -109,20 +105,16 @@ let literal_to_typed_value (span : Meta.span) (ty : literal_type) (cv : literal)
   | TChar, VChar v -> { value = VLiteral (VChar v); ty = TLiteral ty }
   | TInt int_ty, VScalar (SignedScalar (sv_ty, _) as sv) ->
       (* Check the type and the ranges *)
-      sanity_check __FILE__ __LINE__ (int_ty = sv_ty) span;
-      sanity_check __FILE__ __LINE__
-        (check_scalar_value_in_range ptr_size sv)
-        span;
+      [%sanity_check] span (int_ty = sv_ty);
+      [%sanity_check] span (check_scalar_value_in_range ptr_size sv);
       { value = VLiteral (VScalar sv); ty = TLiteral ty }
   | TUInt int_ty, VScalar (UnsignedScalar (sv_ty, _) as sv) ->
       (* Check the type and the ranges *)
-      sanity_check __FILE__ __LINE__ (int_ty = sv_ty) span;
-      sanity_check __FILE__ __LINE__
-        (check_scalar_value_in_range ptr_size sv)
-        span;
+      [%sanity_check] span (int_ty = sv_ty);
+      [%sanity_check] span (check_scalar_value_in_range ptr_size sv);
       { value = VLiteral (VScalar sv); ty = TLiteral ty }
   (* Remaining cases (invalid) *)
-  | _, _ -> craise __FILE__ __LINE__ span "Improperly typed constant value"
+  | _, _ -> [%craise] span "Improperly typed constant value"
 
 (** Copy a value, and return the: the original value (we may have need to update
     it - see the remark about the symbolic values with borrows) and the
@@ -157,12 +149,10 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
     * typed_value
     * eval_ctx
     * (SymbolicAst.expression -> SymbolicAst.expression) =
-  log#ltrace
-    (lazy
-      ("copy_value: "
-      ^ typed_value_to_string ~span:(Some span) ctx v
-      ^ "\n- context:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx));
+  [%ltrace
+    typed_value_to_string ~span:(Some span) ctx v
+    ^ "\n- context:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx];
   (* Remark: at some point we rewrote this function to use iterators, but then
    * we reverted the changes: the result was less clear actually. In particular,
    * the fact that we have exhaustive matches below makes very obvious the cases
@@ -173,12 +163,9 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
       (* Sanity check *)
       (match v.ty with
       | TAdt { id = TBuiltin TBox; _ } ->
-          exec_raise __FILE__ __LINE__ span
-            "Can't copy an builtin value other than Option"
+          [%craise] span "Can't copy an builtin value other than Option"
       | TAdt { id = TAdtId _; _ } as ty ->
-          sanity_check __FILE__ __LINE__
-            (allow_adt_copy || ty_is_copyable ty)
-            span
+          [%sanity_check] span (allow_adt_copy || ty_is_copyable ty)
       | TAdt { id = TTuple; _ } -> () (* Ok *)
       | TAdt
           {
@@ -191,9 +178,9 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
                 trait_refs = [];
               };
           } ->
-          exec_assert __FILE__ __LINE__ (ty_is_copyable ty) span
+          [%cassert] span (ty_is_copyable ty)
             "The type is not primitively copyable"
-      | _ -> exec_raise __FILE__ __LINE__ span "Unreachable");
+      | _ -> [%craise] span "Unreachable");
       let (ctx, cc), fields =
         List.fold_left_map
           (fun (ctx, cc) v ->
@@ -210,7 +197,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
       in
       let v = { v with value = VAdt { av with field_values = fields } } in
       (v, copied, ctx, cc)
-  | VBottom -> exec_raise __FILE__ __LINE__ span "Can't copy ⊥"
+  | VBottom -> [%craise] span "Can't copy ⊥"
   | VBorrow bc -> (
       (* We can only copy shared borrows *)
       match bc with
@@ -222,15 +209,13 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
             { v with value = VBorrow (VSharedBorrow (bid, sid')) },
             ctx,
             fun e -> e )
-      | VMutBorrow (_, _) ->
-          exec_raise __FILE__ __LINE__ span "Can't copy a mutable borrow"
+      | VMutBorrow (_, _) -> [%craise] span "Can't copy a mutable borrow"
       | VReservedMutBorrow _ ->
-          exec_raise __FILE__ __LINE__ span "Can't copy a reserved mut borrow")
+          [%craise] span "Can't copy a reserved mut borrow")
   | VLoan lc -> (
       (* We can only copy shared loans *)
       match lc with
-      | VMutLoan _ ->
-          exec_raise __FILE__ __LINE__ span "Can't copy a mutable loan"
+      | VMutLoan _ -> [%craise] span "Can't copy a mutable loan"
       | VSharedLoan (sids, sv) ->
           (* We don't copy the shared loan: only the shared value inside *)
           let updt_value, copied_value, ctx, cf =
@@ -245,9 +230,9 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
          Note that in the general case, copy is a trait: copying values
          thus requires calling the proper function. Here, we copy values
          for very simple types such as integers, shared borrows, etc. *)
-      cassert __FILE__ __LINE__
+      [%cassert] span
         (ty_is_copyable (Substitute.erase_regions sp.sv_ty))
-        span "Not primitively copyable";
+        "Not primitively copyable";
       (* Check if the symbolic value contains borrows: if it does, we need to
          introduce au auxiliary region abstraction (see document of the function) *)
       if not (ty_has_borrows (Some span) ctx.type_ctx.type_infos v.ty) then
@@ -256,9 +241,9 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
       else begin
         (* There are borrows: check that they are all live (i.e., the symbolic
            value doesn't contain bottom) *)
-        cassert __FILE__ __LINE__
+        [%cassert] span
           (not (symbolic_value_has_ended_regions ctx.ended_regions sp))
-          span "Attempted to copy a symbolic value containing ended borrows";
+          "Attempted to copy a symbolic value containing ended borrows";
         let ctx0 = ctx in
         (* There are borrows: we need to introduce one region abstraction per live
            region present in the type *)
@@ -380,12 +365,9 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
     typed_value * eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression)
     =
   (* Debug *)
-  log#ltrace
-    (lazy
-      ("eval_operand_no_reorganize: op: " ^ operand_to_string ctx op
-     ^ "\n- ctx:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx
-      ^ "\n"));
+  [%ltrace
+    "op: " ^ operand_to_string ctx op ^ "\n- ctx:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx];
   (* Evaluate *)
   match op with
   | Constant cv -> begin
@@ -399,7 +381,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
           | TLiteral lit_ty ->
               (literal_to_typed_value span lit_ty lit ctx, ctx, fun e -> e)
           | _ ->
-              craise __FILE__ __LINE__ span
+              [%craise] span
                 ("Encountered an incorrectly typed constant: "
                 ^ constant_expr_to_string ctx cv
                 ^ " : " ^ ty_to_string ctx cv.ty))
@@ -438,7 +420,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
                 in
                 (* As we are copying a const generic, we shouldn't have updated
                    the original value *)
-                sanity_check __FILE__ __LINE__ (cv = updated_value) span;
+                [%sanity_check] span (cv = updated_value);
                 (* *)
                 (ctx, copied_value, cc)
             | SymbolicMode ->
@@ -450,7 +432,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
           let cf e =
             (* If we are synthesizing a symbolic AST, it means that we are in symbolic
                mode: the value of the const generic is necessarily symbolic. *)
-            sanity_check __FILE__ __LINE__ (is_symbolic cv.value) span;
+            [%sanity_check] span (is_symbolic cv.value);
             (* *)
             SymbolicAst.IntroSymbolic
               ( ctx0,
@@ -460,29 +442,24 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
                 e )
           in
           (cv, ctx, cc_comp cc cf)
-      | CFnPtr _ ->
-          craise __FILE__ __LINE__ span
-            "Function pointers are not supported yet"
+      | CFnPtr _ -> [%craise] span "Function pointers are not supported yet"
       | CRawMemory _ ->
-          craise __FILE__ __LINE__ span
-            "Raw memory cannot be interpreted by the interpreter"
+          [%craise] span "Raw memory cannot be interpreted by the interpreter"
       | COpaque reason ->
-          craise __FILE__ __LINE__ span
-            ("Charon failed to compile constant: " ^ reason)
+          [%craise] span ("Charon failed to compile constant: " ^ reason)
     end
   | Copy p ->
       (* Access the value *)
       let access = Read in
       let v = read_place_check span access p ctx in
       (* Sanity checks *)
-      exec_assert __FILE__ __LINE__
+      [%cassert] span
         (not (bottom_in_value ctx.ended_regions v))
-        span "Can not copy a value containing bottom";
-      sanity_check __FILE__ __LINE__
+        "Can not copy a value containing bottom";
+      [%sanity_check] span
         (Option.is_none
            (find_first_expandable_sv_with_borrows (Some span)
-              ctx.type_ctx.type_decls ctx.type_ctx.type_infos v))
-        span;
+              ctx.type_ctx.type_decls ctx.type_ctx.type_infos v));
       (* Copy the value *)
       let allow_adt_copy = false in
       let updated_value, copied_value, ctx, cc =
@@ -497,9 +474,9 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
       let access = Move in
       let v = read_place_check span access p ctx in
       (* Check that there are no bottoms in the value we are about to move *)
-      exec_assert __FILE__ __LINE__
+      [%cassert] span
         (not (bottom_in_value ctx.ended_regions v))
-        span "There should be no bottoms in the value we are about to move";
+        "There should be no bottoms in the value we are about to move";
       (* Move the value *)
       let bottom : typed_value = { value = VBottom; ty = v.ty } in
       let ctx = write_place span access p bottom ctx in
@@ -510,11 +487,9 @@ let eval_operand (config : config) (span : Meta.span) (op : operand)
     typed_value * eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression)
     =
   (* Debug *)
-  log#ltrace
-    (lazy
-      ("eval_operand: op: " ^ operand_to_string ctx op ^ "\n- ctx:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx
-      ^ "\n"));
+  [%ltrace
+    "op: " ^ operand_to_string ctx op ^ "\n- ctx:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx];
   (* We reorganize the context, then evaluate the operand *)
   let ctx, cc = prepare_eval_operand_reorganize config span op ctx in
   comp2 cc (eval_operand_no_reorganize config span op ctx)
@@ -547,7 +522,7 @@ let eval_two_operands (config : config) (span : Meta.span) (op1 : operand)
   let res =
     match res with
     | [ v1; v2 ] -> (v1, v2)
-    | _ -> craise __FILE__ __LINE__ span "Unreachable"
+    | _ -> [%craise] span "Unreachable"
   in
   (res, ctx, cc)
 
@@ -589,7 +564,7 @@ let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
       when literal_type_is_integer src && literal_type_is_integer tgt -> (
         (* Cast between integers *)
         let src_ty, tgt_ty = (literal_as_integer src, literal_as_integer tgt) in
-        sanity_check __FILE__ __LINE__ (src_ty = get_ty sv) span;
+        [%sanity_check] span (src_ty = get_ty sv);
         let i = get_val sv in
         match mk_scalar ptr_size tgt_ty i with
         | Error _ -> Error EPanic
@@ -614,16 +589,12 @@ let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
         let b =
           if Z.of_int 0 = get_val sv then false
           else if Z.of_int 1 = get_val sv then true
-          else
-            exec_raise __FILE__ __LINE__ span
-              "Conversion from int to bool: out of range"
+          else [%craise] span "Conversion from int to bool: out of range"
         in
         let value = VLiteral (VBool b) in
         let ty = TLiteral TBool in
         Ok { ty; value }
-    | _ ->
-        exec_raise __FILE__ __LINE__ span
-          ("Invalid input for unop: " ^ unop_to_string ctx unop)
+    | _ -> [%craise] span ("Invalid input for unop: " ^ unop_to_string ctx unop)
   in
   (r, ctx, cc)
 
@@ -635,7 +606,7 @@ let cast_unsize_to_modified_fields (span : Meta.span) (ctx : eval_ctx)
     ^ "\n- output ty: " ^ ty_to_string ctx ty1
   in
   if (not (ty_is_box ty0)) || not (ty_is_box ty1) then
-    exec_raise __FILE__ __LINE__ span (mk_msg ())
+    [%craise] span (mk_msg ())
   else
     let ty0 = ty_as_box ty0 in
     let ty1 = ty_as_box ty1 in
@@ -654,7 +625,7 @@ let cast_unsize_to_modified_fields (span : Meta.span) (ctx : eval_ctx)
     then (
       let id0, generics0 = ty_as_custom_adt ty0 in
       let id1, generics1 = ty_as_custom_adt ty1 in
-      cassert __FILE__ __LINE__ (id0 = id1) span (mk_msg ());
+      [%cassert] span (id0 = id1) (mk_msg ());
       (* Retrieve the instantiated fields and make sure they are all the same
          but the last *)
       let fields_tys0 =
@@ -669,33 +640,30 @@ let cast_unsize_to_modified_fields (span : Meta.span) (ctx : eval_ctx)
       let fields_tys0, fields_tys1 =
         match (fields_tys0, fields_tys1) with
         | [ (None, tys0) ], [ (None, tys1) ] -> (tys0, tys1)
-        | _ -> exec_raise __FILE__ __LINE__ span (mk_msg ())
+        | _ -> [%craise] span (mk_msg ())
       in
-      cassert __FILE__ __LINE__
+      [%cassert] span
         (List.length fields_tys0 = List.length fields_tys1
         && List.length fields_tys0 > 0)
-        span (mk_msg ());
+        (mk_msg ());
       let fields_tys = List.combine fields_tys0 fields_tys1 in
       let fields_beg, last_field = Collections.List.pop_last fields_tys in
-      cassert __FILE__ __LINE__
+      [%cassert] span
         (List.for_all (fun (ty0, ty1) -> ty0 = ty1) fields_beg)
-        span (mk_msg ());
-      log#ldebug
-        (lazy
-          (__FUNCTION__ ^ ": structure cast unsized:\n- input field type: "
-          ^ ty_to_string ctx (fst last_field)
-          ^ "\n- output field type: "
-          ^ ty_to_string ctx (snd last_field)));
-      cassert __FILE__ __LINE__
-        (compatible_array_slice last_field)
-        span (mk_msg ());
+        (mk_msg ());
+      [%ldebug
+        "structure cast unsized:\n- input field type: "
+        ^ ty_to_string ctx (fst last_field)
+        ^ "\n- output field type: "
+        ^ ty_to_string ctx (snd last_field)];
+      [%cassert] span (compatible_array_slice last_field) (mk_msg ());
       Some
         ( id0,
           generics0,
           FieldId.of_int (List.length fields_beg),
           fst last_field,
           snd last_field ))
-    else exec_raise __FILE__ __LINE__ span (mk_msg ())
+    else [%craise] span (mk_msg ())
 
 let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
     (op : operand) (ctx : eval_ctx) :
@@ -719,9 +687,7 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
            (otherwise it throws an exception) *)
         let _ = cast_unsize_to_modified_fields span ctx ty0 ty1 in
         ty1
-    | _ ->
-        exec_raise __FILE__ __LINE__ span
-          ("Invalid input for unop: " ^ unop_to_string ctx unop)
+    | _ -> [%craise] span ("Invalid input for unop: " ^ unop_to_string ctx unop)
   in
   let res_sv = { sv_id = res_sv_id; sv_ty = res_sv_ty } in
   (* Compute the result *)
@@ -753,11 +719,10 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
    * The remaining binops only operate on scalars. *)
   if binop = Eq || binop = Ne then (
     (* Equality operations *)
-    exec_assert __FILE__ __LINE__ (v1.ty = v2.ty) span
+    [%cassert] span (v1.ty = v2.ty)
       "The arguments given to the binop don't have the same type";
     (* Equality/inequality check is primitive only for a subset of types *)
-    exec_assert __FILE__ __LINE__ (ty_is_copyable v1.ty) span
-      "Type is not primitively copyable";
+    [%cassert] span (ty_is_copyable v1.ty) "Type is not primitively copyable";
     let b = v1 = v2 in
     Ok { value = VLiteral (VBool b); ty = TLiteral TBool })
   else
@@ -775,14 +740,14 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
         match binop with
         | Lt | Le | Ge | Gt ->
             (* The two operands must have the same type and the result is a boolean *)
-            sanity_check __FILE__ __LINE__ (sv1_int_ty = sv2_int_ty) span;
+            [%sanity_check] span (sv1_int_ty = sv2_int_ty);
             let b =
               match binop with
               | Lt -> Z.lt sv1_value sv2_value
               | Le -> Z.leq sv1_value sv2_value
               | Ge -> Z.geq sv1_value sv2_value
               | Gt -> Z.gt sv1_value sv2_value
-              | _ -> craise __FILE__ __LINE__ span "Unreachable"
+              | _ -> [%craise] span "Unreachable"
             in
             Ok
               ({ value = VLiteral (VBool b); ty = TLiteral TBool }
@@ -794,7 +759,7 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
         | Mul OPanic
         | BitXor | BitAnd | BitOr -> (
             (* The two operands must have the same type and the result is an integer *)
-            sanity_check __FILE__ __LINE__ (sv1_int_ty = sv2_int_ty) span;
+            [%sanity_check] span (sv1_int_ty = sv2_int_ty);
             let res : _ result =
               match binop with
               | Div OPanic ->
@@ -813,7 +778,7 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
               | BitXor -> raise Unimplemented
               | BitAnd -> raise Unimplemented
               | BitOr -> raise Unimplemented
-              | _ -> craise __FILE__ __LINE__ span "Unreachable"
+              | _ -> [%craise] span "Unreachable"
             in
             match res with
             | Error _ -> Error EPanic
@@ -823,14 +788,12 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
                     value = VLiteral (VScalar sv);
                     ty = TLiteral (integer_as_literal sv1_int_ty);
                   })
-        | Ne | Eq -> craise __FILE__ __LINE__ span "Unreachable"
+        | Ne | Eq -> [%craise] span "Unreachable"
         | _ ->
-            craise __FILE__ __LINE__ span
+            [%craise] span
               ("Unimplemented binary operation: " ^ binop_to_string binop)
       end
-    | _ ->
-        craise __FILE__ __LINE__ span
-          ("Invalid inputs for binop: " ^ binop_to_string binop)
+    | _ -> [%craise] span ("Invalid inputs for binop: " ^ binop_to_string binop)
 
 let eval_binary_op_concrete (config : config) (span : Meta.span) (binop : binop)
     (op1 : operand) (op2 : operand) (ctx : eval_ctx) :
@@ -856,9 +819,9 @@ let eval_binary_op_symbolic (config : config) (span : Meta.span) (binop : binop)
   let res_sv_ty =
     if binop = Eq || binop = Ne then (
       (* Equality operations *)
-      sanity_check __FILE__ __LINE__ (v1.ty = v2.ty) span;
+      [%sanity_check] span (v1.ty = v2.ty);
       (* Equality/inequality check is primitive only for a subset of types *)
-      exec_assert __FILE__ __LINE__ (ty_is_copyable v1.ty) span
+      [%cassert] span (ty_is_copyable v1.ty)
         "The type is not primitively copyable";
       TLiteral TBool)
     else
@@ -869,23 +832,23 @@ let eval_binary_op_symbolic (config : config) (span : Meta.span) (binop : binop)
           let int_ty1, int_ty2 = (ty_as_integer v1.ty, ty_as_integer v2.ty) in
           match binop with
           | Lt | Le | Ge | Gt ->
-              sanity_check __FILE__ __LINE__ (int_ty1 = int_ty2) span;
+              [%sanity_check] span (int_ty1 = int_ty2);
               TLiteral TBool
           | Div _ | Rem _ | Add _ | Sub _ | Mul _ | BitXor | BitAnd | BitOr ->
-              sanity_check __FILE__ __LINE__ (int_ty1 = int_ty2) span;
+              [%sanity_check] span (int_ty1 = int_ty2);
               TLiteral (integer_as_literal int_ty1)
           | Cmp ->
-              sanity_check __FILE__ __LINE__ (int_ty1 = int_ty2) span;
+              [%sanity_check] span (int_ty1 = int_ty2);
               TLiteral (TInt I8)
           (* These return `(int, bool)` / a pointer which isn't a literal type *)
           | AddChecked | SubChecked | MulChecked | Offset ->
-              craise __FILE__ __LINE__ span "Unimplemented binary operation"
+              [%craise] span "Unimplemented binary operation"
           | Shl _ | Shr _ ->
               (* The number of bits can be of a different integer type
                  than the operand *)
               TLiteral (integer_as_literal int_ty1)
-          | Ne | Eq -> craise __FILE__ __LINE__ span "Unreachable")
-      | _ -> craise __FILE__ __LINE__ span "Invalid inputs for binop"
+          | Ne | Eq -> [%craise] span "Unreachable")
+      | _ -> [%craise] span "Invalid inputs for binop"
   in
   let res_sv = { sv_id = res_sv_id; sv_ty = res_sv_ty } in
   let v = mk_typed_value_from_symbolic_value res_sv in
@@ -915,22 +878,21 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
     =
   match bkind with
   | BUniqueImmutable ->
-      craise __FILE__ __LINE__ span
-        "Unique immutable closure captures are not supported"
+      [%craise] span "Unique immutable closure captures are not supported"
   | BShared | BTwoPhaseMut | BShallow ->
       (* **REMARK**: we initially treated shallow borrows like shared borrows.
          In practice this restricted the behaviour too much, so for now we
          forbid them and remove them in the prepasses (see the comments there
          as to why this is sound).
       *)
-      sanity_check __FILE__ __LINE__ (bkind <> BShallow) span;
+      [%sanity_check] span (bkind <> BShallow);
 
       (* Access the value *)
       let access =
         match bkind with
         | BShared | BShallow -> Read
         | BTwoPhaseMut -> Write
-        | _ -> craise __FILE__ __LINE__ span "Unreachable"
+        | _ -> [%craise] span "Unreachable"
       in
 
       let greedy_expand = false in
@@ -959,7 +921,7 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
         match bkind with
         | BShared | BShallow -> RShared
         | BTwoPhaseMut -> RMut
-        | _ -> craise __FILE__ __LINE__ span "Unreachable"
+        | _ -> [%craise] span "Unreachable"
       in
       let rv_ty = TRef (RErased, v.ty, ref_kind) in
       let bc =
@@ -969,7 +931,7 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
                handle shallow borrows like shared borrows *)
             VSharedBorrow (bid, sid)
         | BTwoPhaseMut -> VReservedMutBorrow (bid, sid)
-        | _ -> craise __FILE__ __LINE__ span "Unreachable"
+        | _ -> [%craise] span "Unreachable"
       in
       let rv : typed_value = { value = VBorrow bc; ty = rv_ty } in
       (* Return *)
@@ -1007,7 +969,7 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
     | AggregatedAdt ({ id = type_id; generics }, opt_variant_id, opt_field_id)
       -> (
         (* The opt_field_id is Some only for unions, that we don't support *)
-        sanity_check __FILE__ __LINE__ (opt_field_id = None) span;
+        [%sanity_check] span (opt_field_id = None);
         match type_id with
         | TTuple ->
             let tys = List.map (fun (v : typed_value) -> v.ty) values in
@@ -1019,18 +981,16 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
         | TAdtId def_id ->
             (* Sanity checks *)
             let type_decl = ctx_lookup_type_decl span ctx def_id in
-            sanity_check __FILE__ __LINE__
+            [%sanity_check] span
               (List.length type_decl.generics.regions
-              = List.length generics.regions)
-              span;
+              = List.length generics.regions);
             let expected_field_types =
               ctx_type_get_instantiated_field_etypes span ctx def_id
                 opt_variant_id generics
             in
-            sanity_check __FILE__ __LINE__
+            [%sanity_check] span
               (expected_field_types
-              = List.map (fun (v : typed_value) -> v.ty) values)
-              span;
+              = List.map (fun (v : typed_value) -> v.ty) values);
             (* Construct the value *)
             let av : adt_value =
               { variant_id = opt_variant_id; field_values = values }
@@ -1039,12 +999,11 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
             let aggregated : typed_value = { value = VAdt av; ty = aty } in
             (* Call the continuation *)
             (aggregated, fun e -> e)
-        | TBuiltin _ -> craise __FILE__ __LINE__ span "Unreachable")
+        | TBuiltin _ -> [%craise] span "Unreachable")
     | AggregatedArray (ety, cg) ->
         (* Sanity check: all the values have the proper type *)
-        classert __FILE__ __LINE__
+        [%classert] span
           (List.for_all (fun (v : typed_value) -> v.ty = ety) values)
-          span
           (lazy
             ("Aggregated array: some values don't have the proper type:"
            ^ "\n- expected type: " ^ ty_to_string ctx ety ^ "\n- values: ["
@@ -1056,9 +1015,7 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
             ^ "]"));
         (* Sanity check: the number of values is consistent with the length *)
         let len = get_val (literal_as_scalar (const_generic_as_literal cg)) in
-        sanity_check __FILE__ __LINE__
-          (len = Z.of_int (List.length values))
-          span;
+        [%sanity_check] span (len = Z.of_int (List.length values));
         let generics = TypesUtils.mk_generic_args [] [ ety ] [ cg ] [] in
         let ty = TAdt { id = TBuiltin TArray; generics } in
         (* In order to generate a better AST, we introduce a symbolic
@@ -1085,8 +1042,7 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
           in
           (saggregated, cf)
     | AggregatedRawPtr _ ->
-        craise __FILE__ __LINE__ span
-          "Aggregated raw pointers are not supported yet"
+        [%craise] span "Aggregated raw pointers are not supported yet"
   in
   (v, ctx, cc_comp cc cf_compute)
 
@@ -1095,7 +1051,7 @@ let eval_rvalue_not_global (config : config) (span : Meta.span)
     (typed_value, eval_error) result
     * eval_ctx
     * (SymbolicAst.expression -> SymbolicAst.expression) =
-  log#ltrace (lazy "eval_rvalue");
+  [%ltrace ""];
   (* Small helper *)
   let wrap_in_result (v, ctx, cc) = (Ok v, ctx, cc) in
   (* Delegate to the proper auxiliary function *)
@@ -1107,12 +1063,12 @@ let eval_rvalue_not_global (config : config) (span : Meta.span)
   | Aggregate (aggregate_kind, ops) ->
       wrap_in_result (eval_rvalue_aggregate config span aggregate_kind ops ctx)
   | Discriminant _ ->
-      craise __FILE__ __LINE__ span
+      [%craise] span
         "Unreachable: discriminant reads should have been eliminated from the \
          AST"
-  | Len _ -> craise __FILE__ __LINE__ span "Unhandled Len"
+  | Len _ -> [%craise] span "Unhandled Len"
   | _ ->
-      craise __FILE__ __LINE__ span
+      [%craise] span
         ("Unsupported operation: " ^ Print.EvalCtx.rvalue_to_string ctx rvalue)
 
 let eval_fake_read (config : config) (span : Meta.span) (p : place) : cm_fun =
@@ -1121,7 +1077,7 @@ let eval_fake_read (config : config) (span : Meta.span) (p : place) : cm_fun =
   let v, ctx, cc =
     access_rplace_reorganize_and_read config span greedy_expand Read p ctx
   in
-  cassert __FILE__ __LINE__
+  [%cassert] span
     (not (bottom_in_value ctx.ended_regions v))
-    span "Fake read: the value contains bottom";
+    "Fake read: the value contains bottom";
   (ctx, cc)

@@ -10,7 +10,6 @@ open InterpreterBorrows
 open InterpreterAbs
 open InterpreterLoopsCore
 open InterpreterLoopsMatchCtxs
-open Errors
 
 (** The local logger *)
 let log = Logging.loops_join_ctxs_log
@@ -103,7 +102,7 @@ let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
          merged abstraction to this abstraction's id *)
       let merge _ _ _ =
         (* We shouldn't see the same key twice *)
-        craise __FILE__ __LINE__ span "Unreachable"
+        [%craise] span "Unreachable"
       in
       M.union merge to_nabs to_abs
   end in
@@ -296,12 +295,10 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
     (span : Meta.span) (loop_id : LoopId.id) (old_ids : ids_sets)
     (ctx0 : eval_ctx) : eval_ctx =
   (* Debug *)
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ":\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
-     ^ "\n\n- ctx0:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx0
-      ^ "\n\n"));
+  [%ltrace
+    "\n- fixed_ids:\n" ^ show_ids_sets old_ids ^ "\n\n- ctx0:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx0
+    ^ "\n"];
 
   let with_markers = merge_funs <> None in
 
@@ -335,20 +332,17 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
          ctx.env)
   in
   let ctx = { ctx with env } in
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ": after converting values to abstractions:\n"
-     ^ show_ids_sets old_ids ^ "\n\n- ctx:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx
-      ^ "\n\n"));
+  [%ltrace
+    "after converting values to abstractions:\n" ^ show_ids_sets old_ids
+    ^ "\n\n- ctx:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx
+    ^ "\n"];
 
-  log#ltrace
-    (lazy
-      (__FUNCTION__
-     ^ ": after decomposing the shared values in the abstractions:\n"
-     ^ show_ids_sets old_ids ^ "\n\n- ctx:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx
-      ^ "\n\n"));
+  [%ltrace
+    "after decomposing the shared values in the abstractions:\n"
+    ^ show_ids_sets old_ids ^ "\n\n- ctx:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx
+    ^ "\n"];
 
   (*
    * Merge all the mergeable abs.
@@ -387,7 +381,7 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
     (* Given a **loan**, check if there is a fresh abstraction with the corresponding borrow *)
     let merge_policy (ctx : ctx_with_info) (abs_id0, loan) =
       if not with_markers then
-        sanity_check __FILE__ __LINE__ (Marked.get_marker loan = PNone) span;
+        [%sanity_check] span (Marked.get_marker loan = PNone);
       (* If we use markers: we are doing a collapse, which means we attempt
          to eliminate markers (and this is the only goal of the operation).
          We thus ignore the non-marked values (we merge non-marked values
@@ -404,14 +398,13 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
             match AbstractionId.Set.elements abs_ids1 with
             | [] -> None
             | abs_id1 :: _ ->
-                log#ltrace
-                  (lazy
-                    (__FUNCTION__ ^ ": merging abstraction "
-                    ^ AbstractionId.to_string abs_id1
-                    ^ " into "
-                    ^ AbstractionId.to_string abs_id0
-                    ^ ":\n\n"
-                    ^ eval_ctx_to_string ~span:(Some span) ctx.ctx));
+                [%ltrace
+                  "merging abstraction "
+                  ^ AbstractionId.to_string abs_id1
+                  ^ " into "
+                  ^ AbstractionId.to_string abs_id0
+                  ^ ":\n\n"
+                  ^ eval_ctx_to_string ~span:(Some span) ctx.ctx];
                 Some (abs_id0, abs_id1))
 
     (* Iterate over the loans and merge the abstractions *)
@@ -442,23 +435,20 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
   let ctx = IterMergeSymbolic.iter_merge ctx in
 
   (* Debugging *)
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ":\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
-     ^ "\n\n- after reduce:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx
-      ^ "\n\n"));
+  [%ltrace
+    "\n- fixed_ids:\n" ^ show_ids_sets old_ids ^ "\n\n- after reduce:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx
+    ^ "\n"];
 
   (* Reorder the fresh region abstractions - note that we may not have eliminated
      all the markers at this point. *)
   let ctx = reorder_fresh_abs span true old_ids.aids ctx in
 
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ":\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
-     ^ "\n\n- after reduce and reorder borrows/loans and abstractions:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx
-      ^ "\n\n"));
+  [%ltrace
+    "\n- fixed_ids:\n" ^ show_ids_sets old_ids
+    ^ "\n\n- after reduce and reorder borrows/loans and abstractions:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx
+    ^ "\n"];
 
   (* Return the new context *)
   ctx
@@ -495,18 +485,16 @@ let collapse_ctx_collapse (span : Meta.span) (loop_id : LoopId.id)
     (merge_funs : merge_duplicates_funcs) (old_ids : ids_sets) (ctx : eval_ctx)
     : eval_ctx =
   (* Debug *)
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ":\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
-     ^ "\n\n- initial ctx:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx
-      ^ "\n\n"));
+  [%ltrace
+    "\n- fixed_ids:\n" ^ show_ids_sets old_ids ^ "\n\n- initial ctx:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx
+    ^ "\n"];
 
   let abs_kind : abs_kind = Loop (loop_id, None, LoopSynthInput) in
   let can_end = true in
 
   let invert_proj_marker = function
-    | PNone -> craise __FILE__ __LINE__ span "Unreachable"
+    | PNone -> [%craise] span "Unreachable"
     | PLeft -> PRight
     | PRight -> PLeft
   in
@@ -659,23 +647,20 @@ let collapse_ctx_collapse (span : Meta.span) (loop_id : LoopId.id)
   let ctx = IterMergeConcrete.iter_merge ctx in
   let ctx = IterMergeSymbolic.iter_merge ctx in
 
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ":\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
-     ^ "\n\n- after collapse:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx
-      ^ "\n\n"));
+  [%ltrace
+    "\n- fixed_ids:\n" ^ show_ids_sets old_ids ^ "\n\n- after collapse:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx
+    ^ "\n"];
 
   (* Reorder the fresh region abstractions - note that we may not have eliminated
      all the markers yet *)
   let ctx = reorder_fresh_abs span true old_ids.aids ctx in
 
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ":\n\n- fixed_ids:\n" ^ show_ids_sets old_ids
-     ^ "\n\n- after collapse and reorder borrows/loans:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx
-      ^ "\n\n"));
+  [%ltrace
+    "\n- fixed_ids:\n" ^ show_ids_sets old_ids
+    ^ "\n\n- after collapse and reorder borrows/loans:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx
+    ^ "\n"];
 
   (* Return the new context *)
   ctx
@@ -740,7 +725,7 @@ let collapse_ctx config (span : Meta.span) (loop_id : LoopId.id)
   in
   let ctx = collapse_ctx_collapse span loop_id merge_funs old_ids ctx in
   (* Sanity check: there are no markers remaining *)
-  sanity_check __FILE__ __LINE__ (not (eval_ctx_has_markers ctx)) span;
+  [%sanity_check] span (not (eval_ctx_has_markers ctx));
   (* One last cleanup *)
   let ctx, _ =
     InterpreterBorrows.simplify_dummy_values_useless_abs config span
@@ -770,8 +755,8 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
   *)
   let merge_amut_borrows id ty0 _pm0 child0 _ty1 _pm1 child1 =
     (* Sanity checks *)
-    sanity_check __FILE__ __LINE__ (is_aignored child0.value) span;
-    sanity_check __FILE__ __LINE__ (is_aignored child1.value) span;
+    [%sanity_check] span (is_aignored child0.value);
+    [%sanity_check] span (is_aignored child1.value);
 
     (* We need to pick a type for the avalue. The types on the left and on the
        right may use different regions: it doesn't really matter (here, we pick
@@ -789,12 +774,10 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     let _ =
       let _, ty0, _ = ty_as_ref ty0 in
       let _, ty1, _ = ty_as_ref ty1 in
-      sanity_check __FILE__ __LINE__
-        (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty0))
-        span;
-      sanity_check __FILE__ __LINE__
+      [%sanity_check] span
+        (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty0));
+      [%sanity_check] span
         (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty1))
-        span
     in
 
     (* Same remarks as for [merge_amut_borrows] *)
@@ -807,8 +790,8 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
 
   let merge_amut_loans id ty0 _pm0 child0 _ty1 _pm1 child1 =
     (* Sanity checks *)
-    sanity_check __FILE__ __LINE__ (is_aignored child0.value) span;
-    sanity_check __FILE__ __LINE__ (is_aignored child1.value) span;
+    [%sanity_check] span (is_aignored child0.value);
+    [%sanity_check] span (is_aignored child1.value);
 
     (* Same remarks as for [merge_amut_borrows] *)
     let ty = ty0 in
@@ -819,19 +802,17 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
   let merge_ashared_loans ids ty0 _pm0 (sv0 : typed_value) child0 _ty1 _pm1
       (sv1 : typed_value) child1 =
     (* Sanity checks *)
-    sanity_check __FILE__ __LINE__ (is_aignored child0.value) span;
-    sanity_check __FILE__ __LINE__ (is_aignored child1.value) span;
+    [%sanity_check] span (is_aignored child0.value);
+    [%sanity_check] span (is_aignored child1.value);
     (* Same remarks as for [merge_amut_borrows].
 
        This time we need to also merge the shared values. We rely on the
        join matcher [JM] to do so.
     *)
-    sanity_check __FILE__ __LINE__
-      (not (value_has_loans_or_borrows (Some span) ctx sv0.value))
-      span;
-    sanity_check __FILE__ __LINE__
-      (not (value_has_loans_or_borrows (Some span) ctx sv1.value))
-      span;
+    [%sanity_check] span
+      (not (value_has_loans_or_borrows (Some span) ctx sv0.value));
+    [%sanity_check] span
+      (not (value_has_loans_or_borrows (Some span) ctx sv1.value));
 
     let ty = ty0 in
     let child = child0 in
@@ -848,16 +829,14 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
       proj1
     in
     (* Sanity checks *)
-    sanity_check __FILE__ __LINE__ (loans0 = []) span;
-    sanity_check __FILE__ __LINE__ (loans1 = []) span;
-    sanity_check __FILE__ __LINE__
-      (erase_regions proj_ty0 = erase_regions proj_ty1)
-      span;
+    [%sanity_check] span (loans0 = []);
+    [%sanity_check] span (loans1 = []);
+    [%sanity_check] span (erase_regions proj_ty0 = erase_regions proj_ty1);
     (* Same remarks as for [merge_amut_borrows]. *)
     let ty = ty0 in
     let proj_ty = proj_ty0 in
     let loans = [] in
-    sanity_check __FILE__ __LINE__ (sv0 = sv1) span;
+    [%sanity_check] span (sv0 = sv1);
     let sv_id = sv0 in
     let proj : symbolic_proj = { sv_id; proj_ty } in
     let value = ASymbolic (PNone, AProjBorrows { proj; loans }) in
@@ -880,17 +859,15 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
       proj1
     in
     (* Sanity checks *)
-    sanity_check __FILE__ __LINE__ (consumed0 = [] && borrows0 = []) span;
-    sanity_check __FILE__ __LINE__ (consumed1 = [] && borrows1 = []) span;
-    sanity_check __FILE__ __LINE__
-      (erase_regions proj_ty0 = erase_regions proj_ty1)
-      span;
+    [%sanity_check] span (consumed0 = [] && borrows0 = []);
+    [%sanity_check] span (consumed1 = [] && borrows1 = []);
+    [%sanity_check] span (erase_regions proj_ty0 = erase_regions proj_ty1);
     (* Same remarks as for [merge_amut_borrows]. *)
     let ty = ty0 in
     let proj_ty = proj_ty0 in
     let consumed = [] in
     let borrows = [] in
-    sanity_check __FILE__ __LINE__ (sv0 = sv1) span;
+    [%sanity_check] span (sv0 = sv1);
     let sv_id = sv0 in
     let proj = { sv_id; proj_ty } in
     let value = ASymbolic (PNone, AProjLoans { proj; consumed; borrows }) in
@@ -924,19 +901,17 @@ let collapse_ctx_with_merge config (span : Meta.span) (loop_id : LoopId.id)
     (old_ids : ids_sets) (ctx : eval_ctx) : eval_ctx =
   let merge_funs = mk_collapse_ctx_merge_duplicate_funs span loop_id ctx in
   try collapse_ctx config span loop_id merge_funs old_ids ctx
-  with ValueMatchFailure _ -> internal_error __FILE__ __LINE__ span
+  with ValueMatchFailure _ -> [%internal_error] span
 
 let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
     (ctx0 : eval_ctx) (ctx1 : eval_ctx) : ctx_or_update =
   (* Debug *)
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ":\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
-     ^ "\n\n- ctx0:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ~filter:true ctx0
-      ^ "\n\n- ctx1:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ~filter:true ctx1
-      ^ "\n\n"));
+  [%ltrace
+    "\n- fixed_ids:\n" ^ show_ids_sets fixed_ids ^ "\n\n- ctx0:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ~filter:true ctx0
+    ^ "\n\n- ctx1:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ~filter:true ctx1
+    ^ "\n"];
 
   let env0 = List.rev ctx0.env in
   let env1 = List.rev ctx1.env in
@@ -945,34 +920,30 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
   (* Explore the environments. *)
   let join_suffixes (env0 : env) (env1 : env) : env =
     (* Debug *)
-    log#ldebug
-      (lazy
-        (__FUNCTION__ ^ ": join_suffixes:\n\n- fixed_ids:\n"
-       ^ show_ids_sets fixed_ids ^ "\n\n- ctx0:\n"
-        ^ eval_ctx_to_string ~span:(Some span) ~filter:false
-            { ctx0 with env = List.rev env0 }
-        ^ "\n\n- ctx1:\n"
-        ^ eval_ctx_to_string ~span:(Some span) ~filter:false
-            { ctx1 with env = List.rev env1 }
-        ^ "\n\n"));
+    [%ldebug
+      "join_suffixes:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
+      ^ "\n\n- ctx0:\n"
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:false
+          { ctx0 with env = List.rev env0 }
+      ^ "\n\n- ctx1:\n"
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:false
+          { ctx1 with env = List.rev env1 }
+      ^ "\n"];
 
     (* Sanity check: there are no values/abstractions which should be in the prefix *)
     let check_valid (ee : env_elem) : unit =
       match ee with
       | EBinding (BVar _, _) ->
           (* Variables are necessarily in the prefix *)
-          craise __FILE__ __LINE__ span "Unreachable"
+          [%craise] span "Unreachable"
       | EBinding (BDummy did, _) ->
-          sanity_check __FILE__ __LINE__
-            (not (DummyVarId.Set.mem did fixed_ids.dids))
-            span
+          [%sanity_check] span (not (DummyVarId.Set.mem did fixed_ids.dids))
       | EAbs abs ->
-          sanity_check __FILE__ __LINE__
+          [%sanity_check] span
             (not (AbstractionId.Set.mem abs.abs_id fixed_ids.aids))
-            span
       | EFrame ->
           (* This should have been eliminated *)
-          craise __FILE__ __LINE__ span "Unreachable"
+          [%craise] span "Unreachable"
     in
 
     (* Add projection marker to all abstractions in the left and right environments *)
@@ -1006,21 +977,20 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
     | ( (EBinding (BDummy b0, v0) as var0) :: env0',
         (EBinding (BDummy b1, v1) as var1) :: env1' ) ->
         (* Debug *)
-        log#ldebug
-          (lazy
-            (__FUNCTION__ ^ ": join_prefixes: BDummys:\n\n- fixed_ids:\n" ^ "\n"
-           ^ show_ids_sets fixed_ids ^ "\n\n- value0:\n"
-            ^ env_elem_to_string span ctx0 var0
-            ^ "\n\n- value1:\n"
-            ^ env_elem_to_string span ctx1 var1
-            ^ "\n\n"));
+        [%ldebug
+          "join_prefixes: BDummys:\n\n- fixed_ids:\n" ^ "\n"
+          ^ show_ids_sets fixed_ids ^ "\n\n- value0:\n"
+          ^ env_elem_to_string span ctx0 var0
+          ^ "\n\n- value1:\n"
+          ^ env_elem_to_string span ctx1 var1
+          ^ "\n"];
 
         (* Two cases: the dummy value is an old value, in which case the bindings
            must be the same and we must join their values. Otherwise, it means we
            are not in the prefix anymore *)
         if DummyVarId.Set.mem b0 fixed_ids.dids then (
           (* Still in the prefix: match the values *)
-          sanity_check __FILE__ __LINE__ (b0 = b1) span;
+          [%sanity_check] span (b0 = b1);
           let b = b0 in
           let v = M.match_typed_values ctx0 ctx1 v0 v1 in
           let var = EBinding (BDummy b, v) in
@@ -1031,18 +1001,17 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
     | ( (EBinding (BVar b0, v0) as var0) :: env0',
         (EBinding (BVar b1, v1) as var1) :: env1' ) ->
         (* Debug *)
-        log#ldebug
-          (lazy
-            (__FUNCTION__ ^ ": join_prefixes: BVars:\n\n- fixed_ids:\n" ^ "\n"
-           ^ show_ids_sets fixed_ids ^ "\n\n- value0:\n"
-            ^ env_elem_to_string span ctx0 var0
-            ^ "\n\n- value1:\n"
-            ^ env_elem_to_string span ctx1 var1
-            ^ "\n\n"));
+        [%ldebug
+          "join_prefixes: BVars:\n\n- fixed_ids:\n" ^ "\n"
+          ^ show_ids_sets fixed_ids ^ "\n\n- value0:\n"
+          ^ env_elem_to_string span ctx0 var0
+          ^ "\n\n- value1:\n"
+          ^ env_elem_to_string span ctx1 var1
+          ^ "\n"];
 
         (* Variable bindings *must* be in the prefix and consequently their
            ids must be the same *)
-        sanity_check __FILE__ __LINE__ (b0 = b1) span;
+        [%sanity_check] span (b0 = b1);
         (* Match the values *)
         let b = b0 in
         let v = M.match_typed_values ctx0 ctx1 v0 v1 in
@@ -1051,19 +1020,18 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
         var :: join_prefixes env0' env1'
     | (EAbs abs0 as abs) :: env0', EAbs abs1 :: env1' ->
         (* Debug *)
-        log#ldebug
-          (lazy
-            (__FUNCTION__ ^ ": join_prefixes: Abs:\n\n- fixed_ids:\n" ^ "\n"
-           ^ show_ids_sets fixed_ids ^ "\n\n- abs0:\n"
-            ^ abs_to_string span ctx0 abs0
-            ^ "\n\n- abs1:\n"
-            ^ abs_to_string span ctx1 abs1
-            ^ "\n\n"));
+        [%ldebug
+          "join_prefixes: Abs:\n\n- fixed_ids:\n" ^ "\n"
+          ^ show_ids_sets fixed_ids ^ "\n\n- abs0:\n"
+          ^ abs_to_string span ctx0 abs0
+          ^ "\n\n- abs1:\n"
+          ^ abs_to_string span ctx1 abs1
+          ^ "\n"];
 
         (* Same as for the dummy values: there are two cases *)
         if AbstractionId.Set.mem abs0.abs_id fixed_ids.aids then (
           (* Still in the prefix: the abstractions must be the same *)
-          sanity_check __FILE__ __LINE__ (abs0 = abs1) span;
+          [%sanity_check] span (abs0 = abs1);
           (* Continue *)
           abs :: join_prefixes env0' env1')
         else (* Not in the prefix anymore *)
@@ -1078,16 +1046,15 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
     let env0, env1 =
       match (env0, env1) with
       | EFrame :: env0, EFrame :: env1 -> (env0, env1)
-      | _ -> craise __FILE__ __LINE__ span "Unreachable"
+      | _ -> [%craise] span "Unreachable"
     in
 
-    log#ldebug
-      (lazy
-        ("- env0:\n"
-        ^ env_to_string span ctx0 env0 ~filter:false
-        ^ "\n\n- env1:\n"
-        ^ env_to_string span ctx1 env1 ~filter:false
-        ^ "\n\n"));
+    [%ldebug
+      "- env0:\n"
+      ^ env_to_string span ctx0 env0 ~filter:false
+      ^ "\n\n- env1:\n"
+      ^ env_to_string span ctx1 env1 ~filter:false
+      ^ "\n"];
 
     let env = List.rev (EFrame :: join_prefixes env0 env1) in
 
@@ -1137,7 +1104,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
 (** Destructure all the new abstractions *)
 let destructure_new_abs (span : Meta.span) (loop_id : LoopId.id)
     (old_abs_ids : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
-  log#ltrace (lazy (__FUNCTION__ ^ ": ctx:\n\n" ^ eval_ctx_to_string ctx));
+  [%ltrace "ctx:\n\n" ^ eval_ctx_to_string ctx];
   let abs_kind : abs_kind = Loop (loop_id, None, LoopSynthInput) in
   let can_end = true in
   let destructure_shared_values = true in
@@ -1157,8 +1124,7 @@ let destructure_new_abs (span : Meta.span) (loop_id : LoopId.id)
       ctx.env
   in
   let ctx = { ctx with env } in
-  log#ltrace
-    (lazy (__FUNCTION__ ^ ": resulting ctx:\n\n" ^ eval_ctx_to_string ctx));
+  [%ltrace "resulting ctx:\n\n" ^ eval_ctx_to_string ctx];
   Invariants.check_invariants span ctx;
   ctx
 
@@ -1217,44 +1183,35 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
                 InterpreterBorrows.end_loans_no_synth config span bids
                   !joined_ctx;
               ctx
-          | AbsInRight _ | AbsInLeft _ ->
-              craise __FILE__ __LINE__ span "Unexpected"
+          | AbsInRight _ | AbsInLeft _ -> [%craise] span "Unexpected"
         in
         join_one_aux ctx
   in
   let join_one (ctx : eval_ctx) : eval_ctx =
-    log#ltrace
-      (lazy
-        (__FUNCTION__ ^ ":join_one: initial ctx:\n"
-        ^ eval_ctx_to_string ~span:(Some span) ctx));
+    [%ltrace
+      "join_one: initial ctx:\n" ^ eval_ctx_to_string ~span:(Some span) ctx];
 
     (* Simplify the dummy values, by removing as many as we can -
        we ignore the synthesis continuation *)
     let ctx, _ =
       simplify_dummy_values_useless_abs config span fixed_ids.aids ctx
     in
-    log#ltrace
-      (lazy
-        (__FUNCTION__
-       ^ ":join_one: after simplify_dummy_values_useless_abs \
-          (fixed_ids.abs_ids = "
-        ^ AbstractionId.Set.to_string None fixed_ids.aids
-        ^ "):\n"
-        ^ eval_ctx_to_string ~span:(Some span) ctx));
+    [%ltrace
+      "join_one: after simplify_dummy_values_useless_abs (fixed_ids.abs_ids = "
+      ^ AbstractionId.Set.to_string None fixed_ids.aids
+      ^ "):\n"
+      ^ eval_ctx_to_string ~span:(Some span) ctx];
 
     (* Destructure the abstractions introduced in the new context *)
     let ctx = destructure_new_abs span loop_id fixed_ids.aids ctx in
-    log#ltrace
-      (lazy
-        (__FUNCTION__ ^ ":join_one: after destructure:\n"
-        ^ eval_ctx_to_string ~span:(Some span) ctx));
+    [%ltrace
+      "join_one: after destructure:\n"
+      ^ eval_ctx_to_string ~span:(Some span) ctx];
 
     (* Reduce the context we want to add to the join *)
     let ctx = reduce_ctx config span loop_id fixed_ids ctx in
-    log#ltrace
-      (lazy
-        (__FUNCTION__ ^ ":join_one: after reduce:\n"
-        ^ eval_ctx_to_string ~span:(Some span) ctx));
+    [%ltrace
+      "join_one: after reduce:\n" ^ eval_ctx_to_string ~span:(Some span) ctx];
     (* Sanity check *)
     if !Config.sanity_checks then Invariants.check_invariants span ctx;
 
@@ -1265,27 +1222,23 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
 
     (* Join the two contexts  *)
     let ctx1 = join_one_aux ctx in
-    log#ltrace
-      (lazy
-        (__FUNCTION__ ^ ":join_one: after join:\n"
-        ^ eval_ctx_to_string ~span:(Some span) ctx1));
+    [%ltrace
+      "join_one: after join:\n" ^ eval_ctx_to_string ~span:(Some span) ctx1];
 
     (* Collapse to eliminate the markers *)
     joined_ctx :=
       collapse_ctx_with_merge config span loop_id fixed_ids !joined_ctx;
-    log#ltrace
-      (lazy
-        (__FUNCTION__ ^ ":join_one: after join-collapse:\n"
-        ^ eval_ctx_to_string ~span:(Some span) !joined_ctx));
+    [%ltrace
+      "join_one: after join-collapse:\n"
+      ^ eval_ctx_to_string ~span:(Some span) !joined_ctx];
     (* Sanity check *)
     if !Config.sanity_checks then Invariants.check_invariants span !joined_ctx;
 
     (* Reduce again to reach a fixed point *)
     joined_ctx := reduce_ctx config span loop_id fixed_ids !joined_ctx;
-    log#ltrace
-      (lazy
-        (__FUNCTION__ ^ ":join_one: after last reduce:\n"
-        ^ eval_ctx_to_string ~span:(Some span) !joined_ctx));
+    [%ltrace
+      "join_one: after last reduce:\n"
+      ^ eval_ctx_to_string ~span:(Some span) !joined_ctx];
 
     (* Sanity check *)
     if !Config.sanity_checks then Invariants.check_invariants span !joined_ctx;

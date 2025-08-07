@@ -1,6 +1,5 @@
 open Types
 open LlbcAst
-open Errors
 open Substitute
 open Charon.TypesUtils
 open SCC
@@ -124,7 +123,7 @@ let rec trait_instance_id_reducible (span : Meta.span option)
   | BuiltinOrAuto _ | TraitImpl _ -> true
   | Self | Clause _ -> false
   | ParentClause (tref, _) -> trait_instance_id_reducible span tref.trait_id
-  | Dyn _ -> craise_opt_span __FILE__ __LINE__ span "Unreachable"
+  | Dyn _ -> [%craise_opt_span] span "Unreachable"
   | UnknownTrait _ -> false
 
 let analyze_full_ty (span : Meta.span option) (updated : bool ref)
@@ -149,7 +148,7 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
     match mut_region with
     | RStatic | RVar (Bound _) ->
         mut_regions (* We can have bound vars because of arrows *)
-    | RErased -> internal_error_opt_span __FILE__ __LINE__ span
+    | RErased -> [%internal_error_opt_span] span
     | RVar (Free rid) -> update_mut_regions_with_rid mut_regions rid
   in
 
@@ -205,9 +204,8 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
     | TTraitType (tref, _) ->
         (* TODO: normalize the trait types.
            For now we only emit a warning because it makes some tests fail. *)
-        cassert_warn_opt_span __FILE__ __LINE__
+        [%cassert_warn_opt_span] span
           (not (trait_instance_id_reducible span tref.trait_id))
-          span
           "Found an unexpected trait impl associated type which was not \
            inlined while analyzing a type. This is a case we currently do not \
            handle in all generality. As a result,the consumed/given back \
@@ -282,8 +280,7 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
     | TAdt { id = TAdtId adt_id; generics } ->
         (* Lookup the information for this type definition *)
         let adt_info =
-          silent_unwrap_opt_span __FILE__ __LINE__ span
-            (TypeDeclId.Map.find_opt adt_id infos)
+          [%silent_unwrap_opt_span] span (TypeDeclId.Map.find_opt adt_id infos)
         in
         (* Update the type info with the information from the adt *)
         let ty_info = update_ty_info ty_info None adt_info.borrows_info in
@@ -366,10 +363,9 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
             ty_info inputs
         in
         analyze span expl_info ty_info output
-    | TFnDef _ -> craise_opt_span __FILE__ __LINE__ span "unsupported: FnDef"
+    | TFnDef _ -> [%craise_opt_span] span "unsupported: FnDef"
     | TError _ ->
-        craise_opt_span __FILE__ __LINE__ span
-          "Found type error in the output of charon"
+        [%craise_opt_span] span "Found type error in the output of charon"
   in
   (* Explore *)
   analyze span expl_info_init ty_info ty
@@ -395,12 +391,10 @@ let analyze_type_decl (updated : bool ref) (infos : type_infos)
                (fun v -> List.map (fun f -> f.field_ty) v.fields)
                variants)
       | Alias _ ->
-          craise __FILE__ __LINE__ def.item_meta.span
+          [%craise] def.item_meta.span
             "type aliases should have been removed earlier"
-      | Union _ ->
-          craise __FILE__ __LINE__ def.item_meta.span "unions are not supported"
-      | Opaque | TDeclError _ ->
-          craise __FILE__ __LINE__ def.item_meta.span "unreachable"
+      | Union _ -> [%craise] def.item_meta.span "unions are not supported"
+      | Opaque | TDeclError _ -> [%craise] def.item_meta.span "unreachable"
     in
     (* Explore the types and accumulate information *)
     let type_decl_info = TypeDeclId.Map.find def.def_id infos in
@@ -457,7 +451,7 @@ let analyze_type_declaration_group (type_decls : type_decl TypeDeclId.Map.t)
     already analyzed the type definitions in the context. *)
 let analyze_ty (span : Meta.span option) (infos : type_infos) (ty : ty) :
     ty_info =
-  log#ltrace (lazy (__FUNCTION__ ^ ": ty:\n" ^ show_ty ty));
+  [%ltrace "ty:\n" ^ show_ty ty];
   (* We don't use [updated] but need to give it as parameter *)
   let updated = ref false in
   (* We don't need to compute whether the type contains 'static or not *)
@@ -513,7 +507,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
   in
 
   let add_region (r : region) : unit =
-    sanity_check_opt_span __FILE__ __LINE__ (not (RegionMap.mem r !graph)) span;
+    [%sanity_check_opt_span] span (not (RegionMap.mem r !graph));
     graph :=
       RegionMap.update r
         (fun s ->
@@ -539,12 +533,9 @@ let compute_outlive_proj_ty (span : Meta.span option)
         (* Sanity check *)
         let add =
           match r with
-          | RErased ->
-              craise_opt_span __FILE__ __LINE__ span
-                "Expected a type with regions"
+          | RErased -> [%craise_opt_span] span "Expected a type with regions"
           | RVar (Free rid) -> RegionId.Set.mem rid regions
-          | RVar (Bound _) ->
-              craise_opt_span __FILE__ __LINE__ span "Not handled yet"
+          | RVar (Bound _) -> [%craise_opt_span] span "Not handled yet"
           | RStatic -> false
         in
         if add then (
@@ -553,22 +544,20 @@ let compute_outlive_proj_ty (span : Meta.span option)
 
       method! visit_generic_args outer generics =
         (* TODO: we need to handle those *)
-        sanity_check_opt_span __FILE__ __LINE__ (generics.trait_refs = []) span;
+        [%sanity_check_opt_span] span (generics.trait_refs = []);
         super#visit_generic_args outer generics
 
       method! visit_ty outer ty =
         match ty with
         | TAdt adt -> begin
             (* TODO: we need to handle those *)
-            sanity_check_opt_span __FILE__ __LINE__
-              (adt.generics.trait_refs = [])
-              span;
+            [%sanity_check_opt_span] span (adt.generics.trait_refs = []);
             match adt.id with
             | TAdtId id ->
                 (* Lookup the declaration and use the region constraints
                    to check which regions outlive the projected regions. *)
                 let decl =
-                  silent_unwrap_opt_span __FILE__ __LINE__ span
+                  [%silent_unwrap_opt_span] span
                     (TypeDeclId.Map.find_opt id type_decls)
                 in
                 let { regions; types; const_generics; trait_refs } =
@@ -578,7 +567,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
                 List.iter (self#visit_ty outer) types;
                 List.iter (self#visit_const_generic outer) const_generics;
                 (* TODO: we need to handle those *)
-                sanity_check_opt_span __FILE__ __LINE__ (trait_refs = []) span;
+                [%sanity_check_opt_span] span (trait_refs = []);
 
                 (* Substitute in the constraints *)
                 let subst =
@@ -606,11 +595,10 @@ let compute_outlive_proj_ty (span : Meta.span option)
                 let visit_region_register_outlive r0 r1 =
                   match r1 with
                   | RVar (Bound _) ->
-                      craise_opt_span __FILE__ __LINE__ span
+                      [%craise_opt_span] span
                         "Bound regions are not handled yet"
                   | RVar (Free _) -> add_outlives r0 [ r1 ]
-                  | RStatic | RErased ->
-                      internal_error_opt_span __FILE__ __LINE__ span
+                  | RStatic | RErased -> [%internal_error_opt_span] span
                 in
 
                 let outlive_visitor =
@@ -626,8 +614,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
                 (* Visit the region outlives constraints (the first region outlives the second)  *)
                 List.iter
                   (fun (pred : (region, region) outlives_pred region_binder) ->
-                    cassert_opt_span __FILE__ __LINE__
-                      (pred.binder_regions = []) span
+                    [%cassert_opt_span] span (pred.binder_regions = [])
                       "Bound regions are not supported yet";
                     let r0, r1 = pred.binder_value in
                     visit_region_register_outlive r0 r1)
@@ -636,8 +623,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
                 (* Visit the type outlives constraints (the type outlives the region) *)
                 List.iter
                   (fun (pred : (ty, region) outlives_pred region_binder) ->
-                    cassert_opt_span __FILE__ __LINE__
-                      (pred.binder_regions = []) span
+                    [%cassert_opt_span] span (pred.binder_regions = [])
                       "Bound regions are not supported yet";
                     let ty, r = pred.binder_value in
                     outlive_visitor#visit_ty r ty)
@@ -655,9 +641,8 @@ let compute_outlive_proj_ty (span : Meta.span option)
         | TTraitType (tref, _) ->
             (* TODO: normalize the trait types.
                For now we only emit a warning because it makes some tests fail. *)
-            cassert_warn_opt_span __FILE__ __LINE__
+            [%cassert_warn_opt_span] span
               (not (trait_instance_id_reducible span tref.trait_id))
-              span
               "Found an unexpected trait impl associated type which was not \
                inlined while analyzing a type. This is a case we currently do \
                not handle in all generality. As a result,the consumed/given \
@@ -666,7 +651,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
             ()
         | TRawPtr _ | TDynTrait _ | TFnPtr _ | TFnDef _ | TError _ ->
             (* Don't know what to do *)
-            craise_opt_span __FILE__ __LINE__ span "Not handled yet"
+            [%craise_opt_span] span "Not handled yet"
     end
   in
   visitor#visit_ty [] ty;
@@ -697,9 +682,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
           ls;
         let has_marked = !has_marked in
         let has_static = !has_static in
-        sanity_check_opt_span __FILE__ __LINE__
-          ((not has_marked) || not has_static)
-          span;
+        [%sanity_check_opt_span] span ((not has_marked) || not has_static);
         if has_marked then RkMarked
         else if has_static then RkStatic
         else RkDefault)
@@ -727,7 +710,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
     begin
       match kind with
       | RkMarked -> has_marked := true
-      | RkOutlives -> internal_error_opt_span __FILE__ __LINE__ span
+      | RkOutlives -> [%internal_error_opt_span] span
       | RkStatic -> has_static := true
       | RkDefault -> ()
     end;
@@ -735,9 +718,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
     let has_marked = !has_marked in
     let has_static = !has_static in
     let outlives_marked = !outlives_marked in
-    sanity_check_opt_span __FILE__ __LINE__
-      ((not has_marked) || not has_static)
-      span;
+    [%sanity_check_opt_span] span ((not has_marked) || not has_static);
     let kind =
       if has_marked then RkMarked
       else if outlives_marked then RkOutlives
@@ -763,7 +744,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
       | RkOutlives ->
           outlive_regions :=
             RegionSet.union !outlive_regions (RegionSet.of_list regions)
-      | RkStatic -> craise_opt_span __FILE__ __LINE__ span "Not handled yet"
+      | RkStatic -> [%craise_opt_span] span "Not handled yet"
       | RkMarked | RkDefault -> ())
     sccs.sccs;
   let outlive_regions =
@@ -772,12 +753,11 @@ let compute_outlive_proj_ty (span : Meta.span option)
          (fun r ->
            match r with
            | RVar (Free rid) -> rid
-           | _ -> internal_error_opt_span __FILE__ __LINE__ span)
+           | _ -> [%internal_error_opt_span] span)
          (RegionSet.elements !outlive_regions))
   in
 
-  sanity_check_opt_span __FILE__ __LINE__
-    (RegionId.Set.inter outlive_regions regions = RegionId.Set.empty)
-    span;
+  [%sanity_check_opt_span] span
+    (RegionId.Set.inter outlive_regions regions = RegionId.Set.empty);
 
   outlive_regions

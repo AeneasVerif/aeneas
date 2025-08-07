@@ -1,9 +1,9 @@
 open Pure
 open PureUtils
-open Errors
 open SymbolicToPureCore
 open SymbolicToPureTypes
 open SymbolicToPureExpressions
+open Errors
 
 (** The local logger *)
 let log = Logging.symbolic_to_pure_log
@@ -12,8 +12,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
   (* Translate *)
   let def = ctx.fun_decl in
   assert (ctx.bid = None);
-  log#ltrace
-    (lazy (__FUNCTION__ ^ ": " ^ name_to_string ctx def.item_meta.name ^ "\n"));
+  [%ltrace name_to_string ctx def.item_meta.name];
 
   (* Translate the declaration *)
   let def_id = def.def_id in
@@ -25,12 +24,10 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
     match body with
     | None -> None
     | Some body ->
-        log#ltrace
-          (lazy
-            ("SymbolicToPure.translate_fun_decl: "
-            ^ name_to_string ctx def.item_meta.name
-            ^ "\n- body:\n"
-            ^ bs_ctx_expression_to_string ctx body));
+        [%ltrace
+          name_to_string ctx def.item_meta.name
+          ^ "\n- body:\n"
+          ^ bs_ctx_expression_to_string ctx body];
 
         let effect_info =
           get_fun_effect_info ctx (FunId (FRegular def_id)) None None
@@ -113,24 +110,21 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
           List.map (fun v -> mk_typed_pattern_from_var v None) inputs
         in
         (* Sanity check *)
-        log#ltrace
-          (lazy
-            ("SymbolicToPure.translate_fun_decl: "
-            ^ name_to_string ctx def.item_meta.name
-            ^ "\n- inputs: "
-            ^ String.concat ", " (List.map show_var ctx.forward_inputs)
-            ^ "\n- state: "
-            ^ String.concat ", " (List.map show_var fwd_state)
-            ^ "\n- signature.inputs: "
-            ^ String.concat ", "
-                (List.map (pure_ty_to_string ctx) signature.inputs)));
+        [%ltrace
+          name_to_string ctx def.item_meta.name
+          ^ "\n- inputs: "
+          ^ String.concat ", " (List.map show_var ctx.forward_inputs)
+          ^ "\n- state: "
+          ^ String.concat ", " (List.map show_var fwd_state)
+          ^ "\n- signature.inputs: "
+          ^ String.concat ", "
+              (List.map (pure_ty_to_string ctx) signature.inputs)];
         (* TODO: we need to normalize the types *)
         if !Config.type_check_pure_code then
-          sanity_check __FILE__ __LINE__
+          [%sanity_check] def.item_meta.span
             (List.for_all
                (fun (var, ty) -> (var : var).ty = ty)
-               (List.combine inputs signature.inputs))
-            def.item_meta.span;
+               (List.combine inputs signature.inputs));
         Some { inputs; inputs_lvs; body }
   in
 
@@ -164,10 +158,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
     }
   in
   (* Debugging *)
-  log#ltrace
-    (lazy
-      ("SymbolicToPure.translate_fun_decl: translated:\n"
-     ^ fun_decl_to_string ctx def));
+  [%ltrace "translated:\n" ^ fun_decl_to_string ctx def];
   (* return *)
   def
 
@@ -185,7 +176,7 @@ let translate_type_decls (ctx : Contexts.decls_ctx) : type_decl list =
           with CFailure _ ->
             "(could not compute the name pattern due to a different error)"
         in
-        save_error_opt_span __FILE__ __LINE__ error.span
+        [%save_error_opt_span] error.span
           ("Could not translate type decl '" ^ name
          ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'");
         None)
@@ -264,11 +255,10 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
 
 let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     : trait_impl =
-  log#ltrace
-    (lazy
-      (let ctx = Print.Contexts.decls_ctx_to_fmt_env ctx in
-       __FUNCTION__ ^ ": " ^ "- trait impl: implemented trait: "
-       ^ Print.Types.trait_decl_ref_to_string ctx trait_impl.impl_trait));
+  [%ltrace
+    let ctx = Print.Contexts.decls_ctx_to_fmt_env ctx in
+    "- trait impl: implemented trait: "
+    ^ Print.Types.trait_decl_ref_to_string ctx trait_impl.impl_trait];
   let {
     A.def_id;
     item_meta;
@@ -315,7 +305,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
   let builtin_info =
     let decl_id = trait_impl.impl_trait.id in
     let trait_decl =
-      silent_unwrap_opt_span __FILE__ __LINE__ span
+      [%silent_unwrap_opt_span] span
         (TraitDeclId.Map.find_opt decl_id ctx.crate.trait_decls)
     in
     match_name_with_generics_find_opt ctx trait_decl.item_meta.name

@@ -2,7 +2,6 @@
 
 open Pure
 open PureUtils
-open Errors
 
 (** The formatting context for pure definitions uses non-pure definitions to
     lookup names. The main reason is that when building the pure definitions
@@ -335,34 +334,34 @@ let adt_variant_to_string ?(span = None) (env : fmt_env) (adt_id : type_id)
       match aty with
       | TState | TArray | TSlice | TStr | TRawPtr _ ->
           (* Those types are opaque: we can't get there *)
-          craise_opt_span __FILE__ __LINE__ span "Unreachable"
+          [%craise_opt_span] span "Unreachable"
       | TResult ->
           let variant_id = Option.get variant_id in
           if variant_id = result_ok_id then "@Result::Return"
           else if variant_id = result_fail_id then "@Result::Fail"
           else
-            craise_opt_span __FILE__ __LINE__ span
+            [%craise_opt_span] span
               "Unreachable: improper variant id for result type"
       | TError ->
           let variant_id = Option.get variant_id in
           if variant_id = error_failure_id then "@Error::Failure"
           else if variant_id = error_out_of_fuel_id then "@Error::OutOfFuel"
           else
-            craise_opt_span __FILE__ __LINE__ span
+            [%craise_opt_span] span
               "Unreachable: improper variant id for error type"
       | TFuel ->
           let variant_id = Option.get variant_id in
           if variant_id = fuel_zero_id then "@Fuel::Zero"
           else if variant_id = fuel_succ_id then "@Fuel::Succ"
           else
-            craise_opt_span __FILE__ __LINE__ span
+            [%craise_opt_span] span
               "Unreachable: improper variant id for fuel type")
 
 let adt_field_to_string ?(span = None) (env : fmt_env) (adt_id : type_id)
     (field_id : FieldId.id) : string =
   match adt_id with
   | TTuple ->
-      craise_opt_span __FILE__ __LINE__ span "Unreachable"
+      [%craise_opt_span] span "Unreachable"
       (* Tuples don't use the opaque field id for the field indices, but [int] *)
   | TAdtId def_id -> (
       (* "Regular" ADT *)
@@ -375,10 +374,10 @@ let adt_field_to_string ?(span = None) (env : fmt_env) (adt_id : type_id)
       match aty with
       | TState | TFuel | TArray | TSlice | TStr ->
           (* Opaque types: we can't get there *)
-          craise_opt_span __FILE__ __LINE__ span "Unreachable"
+          [%craise_opt_span] span "Unreachable"
       | TResult | TError | TRawPtr _ ->
           (* Enumerations: we can't get there *)
-          craise_opt_span __FILE__ __LINE__ span "Unreachable")
+          [%craise_opt_span] span "Unreachable")
 
 let rec typed_pattern_to_string_aux (span : Meta.span option) (env : fmt_env)
     (v : typed_pattern) : fmt_env * string =
@@ -438,58 +437,55 @@ and adt_pattern_to_string (span : Meta.span option) (env : fmt_env)
         match aty with
         | TState | TRawPtr _ ->
             (* This type is opaque: we can't get there *)
-            craise_opt_span __FILE__ __LINE__ span "Unreachable"
+            [%craise_opt_span] span "Unreachable"
         | TResult ->
             let variant_id = Option.get variant_id in
             if variant_id = result_ok_id then
               match field_values with
               | [ v ] -> "@Result::Return " ^ v
               | _ ->
-                  craise_opt_span __FILE__ __LINE__ span
+                  [%craise_opt_span] span
                     "Result::Return takes exactly one value"
             else if variant_id = result_fail_id then
               match field_values with
               | [ v ] -> "@Result::Fail " ^ v
               | _ ->
-                  craise_opt_span __FILE__ __LINE__ span
-                    "Result::Fail takes exactly one value"
+                  [%craise_opt_span] span "Result::Fail takes exactly one value"
             else
-              craise_opt_span __FILE__ __LINE__ span
+              [%craise_opt_span] span
                 "Unreachable: improper variant id for result type"
         | TError ->
-            cassert_opt_span __FILE__ __LINE__ (field_values = []) span
+            [%cassert_opt_span] span (field_values = [])
               "Ill-formed error value";
             let variant_id = Option.get variant_id in
             if variant_id = error_failure_id then "@Error::Failure"
             else if variant_id = error_out_of_fuel_id then "@Error::OutOfFuel"
             else
-              craise_opt_span __FILE__ __LINE__ span
+              [%craise_opt_span] span
                 "Unreachable: improper variant id for error type"
         | TFuel ->
             let variant_id = Option.get variant_id in
             if variant_id = fuel_zero_id then (
-              cassert_opt_span __FILE__ __LINE__ (field_values = []) span
+              [%cassert_opt_span] span (field_values = [])
                 "Ill-formed full value";
               "@Fuel::Zero")
             else if variant_id = fuel_succ_id then
               match field_values with
               | [ v ] -> "@Fuel::Succ " ^ v
               | _ ->
-                  craise_opt_span __FILE__ __LINE__ span
-                    "@Fuel::Succ takes exactly one value"
+                  [%craise_opt_span] span "@Fuel::Succ takes exactly one value"
             else
-              craise_opt_span __FILE__ __LINE__ span
+              [%craise_opt_span] span
                 "Unreachable: improper variant id for fuel type"
         | TArray | TSlice | TStr ->
-            cassert_opt_span __FILE__ __LINE__ (variant_id = None) span
-              "Ill-formed value";
+            [%cassert_opt_span] span (variant_id = None) "Ill-formed value";
             let field_values =
               List.mapi (fun i v -> string_of_int i ^ " -> " ^ v) field_values
             in
             let id = builtin_ty_to_string aty in
             id ^ " [" ^ String.concat "; " field_values ^ "]")
     | _ ->
-        craise_opt_span __FILE__ __LINE__ span
+        [%craise_opt_span] span
           ("Inconsistently typed value: expected ADT type but found:"
          ^ "\n- ty: " ^ ty_to_string env false ty ^ "\n- variant_id: "
           ^ Print.option_to_string VariantId.to_string variant_id)
@@ -827,7 +823,7 @@ and struct_update_to_string ?(span : Meta.span option = None) (env : fmt_env)
           supd.updates
       in
       "[ " ^ String.concat ", " fields ^ " ]"
-  | _ -> craise_opt_span __FILE__ __LINE__ span "Unexpected"
+  | _ -> [%craise_opt_span] span "Unexpected"
 
 and loop_to_string ?(span : Meta.span option = None) (env : fmt_env)
     (indent : string) (indent_incr : string) (loop : loop) : string =

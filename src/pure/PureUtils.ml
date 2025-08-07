@@ -1,5 +1,4 @@
 open Pure
-open Errors
 
 (** Default logger *)
 let log = Logging.pure_utils_log
@@ -118,7 +117,7 @@ let is_result_ty (ty : ty) : bool = Option.is_some (opt_dest_result_ty ty)
 let dest_arrow_ty (span : Meta.span) (ty : ty) : ty * ty =
   match opt_dest_arrow_ty ty with
   | Some (arg_ty, ret_ty) -> (arg_ty, ret_ty)
-  | None -> craise __FILE__ __LINE__ span "Not an arrow type"
+  | None -> [%craise] span "Not an arrow type"
 
 let compute_literal_type (cv : literal) : literal_type =
   match cv with
@@ -127,7 +126,7 @@ let compute_literal_type (cv : literal) : literal_type =
   | VBool _ -> TBool
   | VChar _ -> TChar
   | VFloat _ | VStr _ | VByteStr _ ->
-      craise_opt_span __FILE__ __LINE__ None
+      [%craise_opt_span] None
         "Float, string and byte string literals are unsupported"
 
 let var_get_id (v : var) : LocalId.id = v.id
@@ -275,9 +274,9 @@ let rec let_group_requires_parentheses (span : Meta.span) (e : texpression) :
       true
   | Loop _ ->
       (* Should have been eliminated *)
-      craise __FILE__ __LINE__ span "Unreachable"
+      [%craise] span "Unreachable"
   | EError (span, msg) ->
-      craise_opt_span __FILE__ __LINE__ span
+      [%craise_opt_span] span
         msg (* TODO : check if true should'nt be returned instead ? *)
 
 let texpression_requires_parentheses span e =
@@ -293,7 +292,7 @@ let is_var (e : texpression) : bool =
 let as_var (span : Meta.span) (e : texpression) : LocalId.id =
   match e.e with
   | Var v -> v
-  | _ -> craise __FILE__ __LINE__ span "Not a var"
+  | _ -> [%craise] span "Not a var"
 
 let is_cvar (e : texpression) : bool =
   match e.e with
@@ -307,7 +306,7 @@ let as_opt_pat_var (p : typed_pattern) : (var * mplace option) option =
 
 let as_pat_var (span : Meta.span) (p : typed_pattern) : var * mplace option =
   match as_opt_pat_var p with
-  | None -> craise __FILE__ __LINE__ span "Not a var"
+  | None -> [%craise] span "Not a var"
   | Some (v, mp) -> (v, mp)
 
 let is_pat_var (p : typed_pattern) : bool = Option.is_some (as_opt_pat_var p)
@@ -385,7 +384,7 @@ let is_fail_panic (e : expression) : bool =
 let ty_as_adt (span : Meta.span) (ty : ty) : type_id * generic_args =
   match ty with
   | TAdt (id, generics) -> (id, generics)
-  | _ -> craise __FILE__ __LINE__ span "Not an ADT"
+  | _ -> [%craise] span "Not an ADT"
 
 let ty_as_opt_result (ty : ty) : ty option =
   match ty with
@@ -405,7 +404,7 @@ let ty_as_opt_array (ty : ty) : (ty * const_generic) option =
 let ty_as_array (span : Meta.span) (ty : ty) : ty * const_generic =
   match ty_as_opt_array ty with
   | Some (ty, n) -> (ty, n)
-  | None -> craise __FILE__ __LINE__ span "Not an ADT"
+  | None -> [%craise] span "Not an ADT"
 
 let ty_as_opt_slice (ty : ty) : ty option =
   match ty with
@@ -417,7 +416,7 @@ let ty_as_opt_slice (ty : ty) : ty option =
 let ty_as_slice (span : Meta.span) (ty : ty) : ty =
   match ty_as_opt_slice ty with
   | Some ty -> ty
-  | None -> craise __FILE__ __LINE__ span "Not an ADT"
+  | None -> [%craise] span "Not an ADT"
 
 let ty_as_opt_arrow (ty : ty) : (ty * ty) option =
   match ty with
@@ -468,7 +467,7 @@ let destruct_lets_no_interleave (span : Meta.span) (e : texpression) :
   let m =
     match e.e with
     | Let (monadic, _, _, _) -> monadic
-    | _ -> craise __FILE__ __LINE__ span "Not a let-binding"
+    | _ -> [%craise] span "Not a let-binding"
   in
   (* Destruct the rest *)
   let rec destruct_lets (e : texpression) :
@@ -501,7 +500,7 @@ let mk_app (span : Meta.span) (app : texpression) (arg : texpression) :
     texpression =
   let raise_or_return msg =
     (* We shouldn't get there, so we save an error (and eventually raise an exception) *)
-    save_error __FILE__ __LINE__ span msg;
+    [%save_error] span msg;
     let e = App (app, arg) in
     (* Dummy type - TODO: introduce an error type *)
     let ty = app.ty in
@@ -551,8 +550,8 @@ let opt_destruct_function_call (e : texpression) :
 let opt_destruct_result (span : Meta.span) (ty : ty) : ty option =
   match ty with
   | TAdt (TBuiltin TResult, generics) ->
-      sanity_check __FILE__ __LINE__ (generics.const_generics = []) span;
-      sanity_check __FILE__ __LINE__ (generics.trait_refs = []) span;
+      [%sanity_check] span (generics.const_generics = []);
+      [%sanity_check] span (generics.trait_refs = []);
       Some (Collections.List.to_cons_nil generics.types)
   | _ -> None
 
@@ -562,15 +561,15 @@ let destruct_result (span : Meta.span) (ty : ty) : ty =
 let opt_destruct_tuple (span : Meta.span) (ty : ty) : ty list option =
   match ty with
   | TAdt (TTuple, generics) ->
-      sanity_check __FILE__ __LINE__ (generics.const_generics = []) span;
-      sanity_check __FILE__ __LINE__ (generics.trait_refs = []) span;
+      [%sanity_check] span (generics.const_generics = []);
+      [%sanity_check] span (generics.trait_refs = []);
       Some generics.types
   | _ -> None
 
 let destruct_arrow (span : Meta.span) (ty : ty) : ty * ty =
   match ty with
   | TArrow (ty0, ty1) -> (ty0, ty1)
-  | _ -> craise __FILE__ __LINE__ span "Not an arrow type"
+  | _ -> [%craise] span "Not an arrow type"
 
 let rec destruct_arrows (ty : ty) : ty list * ty =
   match ty with
@@ -608,17 +607,14 @@ let mk_switch (span : Meta.span) (scrut : texpression) (sb : switch_body) :
     texpression =
   (* Sanity check: the scrutinee has the proper type *)
   (match sb with
-  | If (_, _) -> sanity_check __FILE__ __LINE__ (scrut.ty = TLiteral TBool) span
+  | If (_, _) -> [%sanity_check] span (scrut.ty = TLiteral TBool)
   | Match branches ->
       List.iter
-        (fun (b : match_branch) ->
-          sanity_check __FILE__ __LINE__ (b.pat.ty = scrut.ty) span)
+        (fun (b : match_branch) -> [%sanity_check] span (b.pat.ty = scrut.ty))
         branches);
   (* Sanity check: all the branches have the same type *)
   let ty = get_switch_body_ty sb in
-  iter_switch_body_branches
-    (fun e -> sanity_check __FILE__ __LINE__ (e.ty = ty) span)
-    sb;
+  iter_switch_body_branches (fun e -> [%sanity_check] span (e.ty = ty)) sb;
   (* Put together *)
   let e = Switch (scrut, sb) in
   { e; ty }
@@ -738,12 +734,12 @@ let ty_as_integer (span : Meta.span) (t : ty) : T.integer_type =
   match t with
   | TLiteral (TInt int_ty) -> Signed int_ty
   | TLiteral (TUInt int_ty) -> Unsigned int_ty
-  | _ -> craise __FILE__ __LINE__ span "Unreachable"
+  | _ -> [%craise] span "Unreachable"
 
 let ty_as_literal (span : Meta.span) (t : ty) : T.literal_type =
   match t with
   | TLiteral ty -> ty
-  | _ -> craise __FILE__ __LINE__ span "Unreachable"
+  | _ -> [%craise] span "Unreachable"
 
 let mk_state_ty : ty = TAdt (TBuiltin TState, empty_generic_args)
 
@@ -765,7 +761,7 @@ let unwrap_result_ty (span : Meta.span) (ty : ty) : ty =
   | TAdt
       ( TBuiltin TResult,
         { types = [ ty ]; const_generics = []; trait_refs = [] } ) -> ty
-  | _ -> craise __FILE__ __LINE__ span "not a result type"
+  | _ -> [%craise] span "not a result type"
 
 let mk_result_fail_texpression (span : Meta.span) (error : texpression)
     (ty : ty) : texpression =
@@ -1127,20 +1123,19 @@ let mk_checked_let file line span (monadic : bool) (lv : typed_pattern)
     (re : texpression) (next_e : texpression) : texpression =
   let re_ty = if monadic then unwrap_result_ty span re.ty else re.ty in
   if !Config.type_check_pure_code then
-    sanity_check file line (lv.ty = re_ty) span;
+    Errors.sanity_check file line span (lv.ty = re_ty);
   mk_let monadic lv re next_e
 
 let mk_checked_lets file line span (monadic : bool)
     (lets : (typed_pattern * texpression) list) (next_e : texpression) :
     texpression =
   if !Config.type_check_pure_code then
-    sanity_check file line
+    Errors.sanity_check file line span
       (List.for_all
          (fun ((pat, e) : typed_pattern * texpression) ->
            let e_ty = if monadic then unwrap_result_ty span e.ty else e.ty in
            pat.ty = e_ty)
-         lets)
-      span;
+         lets);
   mk_lets monadic lets next_e
 
 (** Wrap a function body in a match over the fuel to control termination. *)

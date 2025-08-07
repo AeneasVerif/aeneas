@@ -1,7 +1,6 @@
 (** Utilities for extracting names *)
 
 open Charon.NameMatcher
-open Errors
 
 let log = Logging.extract_log
 let match_with_trait_decl_refs = Config.match_patterns_with_trait_decl_refs
@@ -97,7 +96,7 @@ let pattern_to_extract_name (span : Meta.span option) (name : pattern) :
             let id = Collections.List.last id in
             match id with
             | PIdent (_, _, _) -> super#visit_PImpl () (EComp [ id ])
-            | PImpl _ -> craise_opt_span __FILE__ __LINE__ span "Unreachable")
+            | PImpl _ -> [%craise_opt_span] span "Unreachable")
         | _ -> super#visit_PImpl () ty
 
       method! visit_EPrimAdt _ adt g =
