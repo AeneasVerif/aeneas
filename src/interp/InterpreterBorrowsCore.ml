@@ -166,10 +166,9 @@ let rec compare_rtys (span : Meta.span) (default : bool)
       [%sanity_check] span (ty1 = ty2);
       default
   | _ ->
-      log#ltrace
-        (lazy
-          (__FUNCTION__ ^ ": unexpected inputs:" ^ "\n- ty1: " ^ show_ty ty1
-         ^ "\n- ty2: " ^ show_ty ty2));
+      [%ltrace
+        "unexpected inputs:" ^ "\n- ty1: " ^ show_ty ty1 ^ "\n- ty2: "
+        ^ show_ty ty2];
       [%internal_error] span
 
 (** Check if two different projections intersect.
@@ -1093,18 +1092,17 @@ let update_intersecting_aproj_loans (span : Meta.span)
                   projections_intersect span outlive_regions proj.proj_ty
                     abs.regions.owned aproj_loans.proj.proj_ty
                 in
-                log#ldebug
-                  (lazy
-                    (__FUNCTION__ ^ "\n- proj_regions: "
-                    ^ RegionId.Set.to_string None proj_regions
-                    ^ "\n- proj.proj_ty: "
-                    ^ ty_to_string ctx proj.proj_ty
-                    ^ "\n- abs.regions.owned: "
-                    ^ RegionId.Set.to_string None abs.regions.owned
-                    ^ "\n- aproj_loans.proj.proj_ty: "
-                    ^ ty_to_string ctx aproj_loans.proj.proj_ty
-                    ^ "\n- outlive_regions: "
-                    ^ RegionId.Set.to_string None outlive_regions));
+                [%ldebug
+                  "- proj_regions: "
+                  ^ RegionId.Set.to_string None proj_regions
+                  ^ "\n- proj.proj_ty: "
+                  ^ ty_to_string ctx proj.proj_ty
+                  ^ "\n- abs.regions.owned: "
+                  ^ RegionId.Set.to_string None abs.regions.owned
+                  ^ "\n- aproj_loans.proj.proj_ty: "
+                  ^ ty_to_string ctx aproj_loans.proj.proj_ty
+                  ^ "\n- outlive_regions: "
+                  ^ RegionId.Set.to_string None outlive_regions];
                 [%sanity_check] span (owned || outlive);
                 [%sanity_check] span ((not owned) || not outlive));
 

@@ -209,12 +209,9 @@ let translate_type_decl_kind (span : Meta.span) (kind : T.type_decl_kind) :
     the point of moving this definition for now. *)
 let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
     type_decl =
-  log#ltrace
-    (lazy
-      (let ctx = Print.Contexts.decls_ctx_to_fmt_env ctx in
-       "translate_type_decl:\n\n"
-       ^ Print.Types.type_decl_to_string ctx def
-       ^ "\n"));
+  [%ltrace
+    let ctx = Print.Contexts.decls_ctx_to_fmt_env ctx in
+    "\n" ^ Print.Types.type_decl_to_string ctx def];
   let env = Print.Contexts.decls_ctx_to_fmt_env ctx in
   let def_id = def.T.def_id in
   let name = Print.Types.name_to_string env def.item_meta.name in
@@ -569,14 +566,12 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
     (decls_ctx : C.decls_ctx) (fun_id : A.fun_id_or_trait_method_ref)
     (sg : A.inst_fun_sig) (input_names : string option list) :
     decomposed_fun_type =
-  log#ltrace
-    (lazy
-      (let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
-       __FUNCTION__ ^ ": " ^ "\n- sg.regions_hierarchy: "
-       ^ Print.Values.abs_region_groups_to_string sg.abs_regions_hierarchy
-       ^ "\n- inst_sg (inputs, output): "
-       ^ Print.Values.inst_fun_sig_to_string ctx sg
-       ^ "\n"));
+  [%ltrace
+    let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
+    "- sg.regions_hierarchy: "
+    ^ Print.Values.abs_region_groups_to_string sg.abs_regions_hierarchy
+    ^ "\n- inst_sg (inputs, output): "
+    ^ Print.Values.inst_fun_sig_to_string ctx sg];
 
   let fun_infos = decls_ctx.fun_ctx.fun_infos in
   let type_infos = decls_ctx.type_ctx.type_infos in
@@ -650,19 +645,18 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
     let inputs =
       List.filter_map (translate_back_ty_for_gid gid) [ sg.output ]
     in
-    log#ltrace
-      (lazy
-        (let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
-         let pctx = PrintPure.decls_ctx_to_fmt_env decls_ctx in
-         let output = Print.Types.ty_to_string ctx sg.output in
-         let inputs =
-           Print.list_to_string (PrintPure.ty_to_string pctx false) inputs
-         in
-         "translate_back_inputs_for_gid:" ^ "\n- function:"
-         ^ Charon.PrintTypes.fun_id_or_trait_method_ref_to_string ctx fun_id
-         ^ "\n- gid: "
-         ^ RegionGroupId.to_string gid
-         ^ "\n- output: " ^ output ^ "\n- back inputs: " ^ inputs ^ "\n"));
+    [%ltrace
+      let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
+      let pctx = PrintPure.decls_ctx_to_fmt_env decls_ctx in
+      let output = Print.Types.ty_to_string ctx sg.output in
+      let inputs =
+        Print.list_to_string (PrintPure.ty_to_string pctx false) inputs
+      in
+      "translate_back_inputs_for_gid:" ^ "\n- function:"
+      ^ Charon.PrintTypes.fun_id_or_trait_method_ref_to_string ctx fun_id
+      ^ "\n- gid: "
+      ^ RegionGroupId.to_string gid
+      ^ "\n- output: " ^ output ^ "\n- back inputs: " ^ inputs];
     inputs
   in
   let compute_back_outputs_for_gid (gid : RegionGroupId.id) :
@@ -688,21 +682,20 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
       List.map (fun (name, opt_ty) -> (name, Option.get opt_ty)) outputs
     in
     let names, outputs = List.split outputs in
-    log#ltrace
-      (lazy
-        (let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
-         let pctx = PrintPure.decls_ctx_to_fmt_env decls_ctx in
-         let inputs =
-           Print.list_to_string (Print.Types.ty_to_string ctx) sg.inputs
-         in
-         let outputs =
-           Print.list_to_string (PrintPure.ty_to_string pctx false) outputs
-         in
-         "compute_back_outputs_for_gid:" ^ "\n- function:"
-         ^ Charon.PrintTypes.fun_id_or_trait_method_ref_to_string ctx fun_id
-         ^ "\n- gid: "
-         ^ RegionGroupId.to_string gid
-         ^ "\n- inputs: " ^ inputs ^ "\n- back outputs: " ^ outputs ^ "\n"));
+    [%ltrace
+      let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
+      let pctx = PrintPure.decls_ctx_to_fmt_env decls_ctx in
+      let inputs =
+        Print.list_to_string (Print.Types.ty_to_string ctx) sg.inputs
+      in
+      let outputs =
+        Print.list_to_string (PrintPure.ty_to_string pctx false) outputs
+      in
+      "compute_back_outputs_for_gid:" ^ "\n- function:"
+      ^ Charon.PrintTypes.fun_id_or_trait_method_ref_to_string ctx fun_id
+      ^ "\n- gid: "
+      ^ RegionGroupId.to_string gid
+      ^ "\n- inputs: " ^ inputs ^ "\n- back outputs: " ^ outputs];
     (names, outputs)
   in
   let compute_back_info_for_group (rg : T.region_var_group) :
@@ -882,15 +875,13 @@ let translate_fun_sig_from_decl_to_decomposed (decls_ctx : C.decls_ctx)
     translate_fun_sig_to_decomposed decls_ctx fdef.def_id fdef.signature
       input_names
   in
-  log#ltrace
-    (lazy
-      ("translate_fun_sig_from_decl_to_decomposed:" ^ "\n- name: "
-      ^ T.show_name fdef.item_meta.name
-      ^ "\n- sg:\n"
-      ^ PrintPure.decomposed_fun_sig_to_string
-          (PrintPure.decls_ctx_to_fmt_env decls_ctx)
-          sg
-      ^ "\n"));
+  [%ltrace
+    "- name: "
+    ^ T.show_name fdef.item_meta.name
+    ^ "\n- sg:\n"
+    ^ PrintPure.decomposed_fun_sig_to_string
+        (PrintPure.decls_ctx_to_fmt_env decls_ctx)
+        sg];
   sg
 
 let mk_output_ty_from_effect_info (effect_info : fun_effect_info) (ty : ty) : ty

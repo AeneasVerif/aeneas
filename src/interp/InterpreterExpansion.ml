@@ -439,9 +439,7 @@ let expand_symbolic_value_no_branching (span : Meta.span) (sv : symbolic_value)
     (sv_place : SA.mplace option) : cm_fun =
  fun ctx ->
   (* Debug *)
-  log#ltrace
-    (lazy
-      ("expand_symbolic_value_no_branching: " ^ symbolic_value_to_string ctx sv));
+  [%ltrace symbolic_value_to_string ctx sv];
   (* Remember the initial context for printing purposes *)
   let ctx0 = ctx in
   (* Compute the expanded value - note that when doing so, we may introduce
@@ -480,15 +478,12 @@ let expand_symbolic_value_no_branching (span : Meta.span) (sv : symbolic_value)
          ^ show_rty rty)
   in
   (* Debug *)
-  log#ltrace
-    (lazy
-      ("expand_symbolic_value_no_branching: "
-      ^ symbolic_value_to_string ctx0 sv
-      ^ "\n\n- original context:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx0
-      ^ "\n\n- new context:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx
-      ^ "\n"));
+  [%ltrace
+    symbolic_value_to_string ctx0 sv
+    ^ "\n\n- original context:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx0
+    ^ "\n\n- new context:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx];
   (* Sanity check: the symbolic value has disappeared *)
   [%sanity_check] span (not (symbolic_value_id_in_ctx original_sv.sv_id ctx));
   (* Return *)
@@ -499,7 +494,7 @@ let expand_symbolic_adt (span : Meta.span) (sv : symbolic_value)
     eval_ctx -> eval_ctx list * (SA.expression list -> SA.expression) =
  fun ctx ->
   (* Debug *)
-  log#ltrace (lazy ("expand_symbolic_adt:" ^ symbolic_value_to_string ctx sv));
+  [%ltrace symbolic_value_to_string ctx sv];
   (* Compute the expanded value - note that when doing so, we may introduce
    * fresh symbolic values in the context (which thus gets updated) *)
   let original_sv = sv in
@@ -587,16 +582,12 @@ let greedy_expand_symbolics_with_borrows (span : Meta.span) : cm_fun =
       (* We reverse the environment before exploring it - this way the values
          get expanded in a more "logical" order (this is only for convenience) *)
       obj#visit_env () (List.rev ctx.env);
-      log#ltrace
-        (lazy "greedy_expand_symbolics_with_borrows: no value to expand\n");
+      [%ltrace "no value to expand"];
       (* Nothing to expand: continue *)
       (ctx, fun e -> e)
     with FoundSymbolicValue sv ->
       (* Expand and recheck the environment *)
-      log#ltrace
-        (lazy
-          ("greedy_expand_symbolics_with_borrows: about to expand: "
-          ^ symbolic_value_to_string ctx sv));
+      [%ltrace "about to expand: " ^ symbolic_value_to_string ctx sv];
       let ctx, cc =
         match sv.sv_ty with
         | TAdt { id = TAdtId def_id; _ } ->
@@ -635,11 +626,8 @@ let greedy_expand_symbolics_with_borrows (span : Meta.span) : cm_fun =
         | _ -> [%craise] span "Unreachable"
       in
       (* *)
-      log#ltrace
-        (lazy
-          ("\ngreedy_expand_symbolics_with_borrows: after expansion:\n"
-          ^ eval_ctx_to_string ~span:(Some span) ctx
-          ^ "\n\n"));
+      [%ltrace
+        "after expansion:\n" ^ eval_ctx_to_string ~span:(Some span) ctx ^ "\n"];
       (* Compose and continue *)
       comp cc (expand ctx)
   in

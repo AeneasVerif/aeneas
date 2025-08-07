@@ -97,10 +97,7 @@ let literal_to_typed_value (span : Meta.span) (ty : literal_type) (cv : literal)
     (ctx : eval_ctx) : typed_value =
   (* Check the type while converting - we actually need some information
    * contained in the type *)
-  log#ltrace
-    (lazy
-      ("literal_to_typed_value:" ^ "\n- cv: "
-      ^ Print.Values.literal_to_string cv));
+  [%ltrace "- cv: " ^ Print.Values.literal_to_string cv];
   let ptr_size = ctx.crate.target_information.target_pointer_size in
   match (ty, cv) with
   (* Scalar, boolean... *)
@@ -152,12 +149,10 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
     * typed_value
     * eval_ctx
     * (SymbolicAst.expression -> SymbolicAst.expression) =
-  log#ltrace
-    (lazy
-      ("copy_value: "
-      ^ typed_value_to_string ~span:(Some span) ctx v
-      ^ "\n- context:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx));
+  [%ltrace
+    typed_value_to_string ~span:(Some span) ctx v
+    ^ "\n- context:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx];
   (* Remark: at some point we rewrote this function to use iterators, but then
    * we reverted the changes: the result was less clear actually. In particular,
    * the fact that we have exhaustive matches below makes very obvious the cases
@@ -370,12 +365,9 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
     typed_value * eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression)
     =
   (* Debug *)
-  log#ltrace
-    (lazy
-      ("eval_operand_no_reorganize: op: " ^ operand_to_string ctx op
-     ^ "\n- ctx:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx
-      ^ "\n"));
+  [%ltrace
+    "op: " ^ operand_to_string ctx op ^ "\n- ctx:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx];
   (* Evaluate *)
   match op with
   | Constant cv -> begin
@@ -495,11 +487,9 @@ let eval_operand (config : config) (span : Meta.span) (op : operand)
     typed_value * eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression)
     =
   (* Debug *)
-  log#ltrace
-    (lazy
-      ("eval_operand: op: " ^ operand_to_string ctx op ^ "\n- ctx:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx
-      ^ "\n"));
+  [%ltrace
+    "op: " ^ operand_to_string ctx op ^ "\n- ctx:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx];
   (* We reorganize the context, then evaluate the operand *)
   let ctx, cc = prepare_eval_operand_reorganize config span op ctx in
   comp2 cc (eval_operand_no_reorganize config span op ctx)
@@ -661,12 +651,11 @@ let cast_unsize_to_modified_fields (span : Meta.span) (ctx : eval_ctx)
       [%cassert] span
         (List.for_all (fun (ty0, ty1) -> ty0 = ty1) fields_beg)
         (mk_msg ());
-      log#ldebug
-        (lazy
-          (__FUNCTION__ ^ ": structure cast unsized:\n- input field type: "
-          ^ ty_to_string ctx (fst last_field)
-          ^ "\n- output field type: "
-          ^ ty_to_string ctx (snd last_field)));
+      [%ldebug
+        "structure cast unsized:\n- input field type: "
+        ^ ty_to_string ctx (fst last_field)
+        ^ "\n- output field type: "
+        ^ ty_to_string ctx (snd last_field)];
       [%cassert] span (compatible_array_slice last_field) (mk_msg ());
       Some
         ( id0,
@@ -1062,7 +1051,7 @@ let eval_rvalue_not_global (config : config) (span : Meta.span)
     (typed_value, eval_error) result
     * eval_ctx
     * (SymbolicAst.expression -> SymbolicAst.expression) =
-  log#ltrace (lazy "eval_rvalue");
+  [%ltrace ""];
   (* Small helper *)
   let wrap_in_result (v, ctx, cc) = (Ok v, ctx, cc) in
   (* Delegate to the proper auxiliary function *)

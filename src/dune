@@ -4,6 +4,8 @@
  (package aeneas)
  (libraries aeneas)
  (modes byte exe)
+ (preprocess
+  (pps ppx_deriving.show ppx_deriving.ord visitors.ppx aeneas.ppx))
  (modules Main))
 
 ;; TODO: change to qualified

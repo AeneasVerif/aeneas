@@ -19,7 +19,7 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
     cm_fun =
  fun ctx0 ->
   let ctx = ctx0 in
-  log#ldebug (lazy (__FUNCTION__ ^ ": ctx0:\n" ^ eval_ctx_to_string ctx));
+  [%ldebug "ctx0:\n" ^ eval_ctx_to_string ctx];
 
   (* Compute the set of borrows which appear in the abstractions, so that
      we can filter the borrows that we reborrow.
@@ -206,8 +206,7 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
       e !sid_subst
   in
   Invariants.check_invariants span ctx;
-  log#ldebug
-    (lazy (__FUNCTION__ ^ ": resulting ctx:\n" ^ eval_ctx_to_string ctx));
+  [%ldebug "resulting ctx:\n" ^ eval_ctx_to_string ctx];
   (ctx, cf)
 
 let prepare_ashared_loans_no_synth (span : Meta.span) (loop_id : LoopId.id)
@@ -227,13 +226,12 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
   let ctx = prepare_ashared_loans_no_synth span loop_id ctx0 in
 
   (* Debug *)
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ": after prepare_ashared_loans:" ^ "\n\n- ctx0:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx0
-      ^ "\n\n- ctx1:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx
-      ^ "\n\n"));
+  [%ltrace
+    "after prepare_ashared_loans:" ^ "\n\n- ctx0:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx0
+    ^ "\n\n- ctx1:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx
+    ^ "\n"];
 
   (* The fixed ids. They are the ids of the original ctx, after we ended
      the borrows/loans which end during the first loop iteration (we do
@@ -245,7 +243,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
      context (the context at the loop entry, after we called
      {!prepare_ashared_loans}, if this is the first iteration) *)
   let join_ctxs (ctx1 : eval_ctx) (ctxs : eval_ctx list) : eval_ctx =
-    log#ltrace (lazy (__FUNCTION__ ^ ": join_ctxs"));
+    [%ltrace "join_ctxs"];
     (* If this is the first iteration, end the borrows/loans/abs which
        appear in ctx1 and not in the other contexts, then compute the
        set of fixed ids. This means those borrows/loans have to end
@@ -269,16 +267,12 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
             ctx
           in
           (* End the loans/abs in [ctx1] *)
-          log#ltrace
-            (lazy
-              (__FUNCTION__
-             ^ ": join_ctxs: ending borrows/abstractions before entering the \
-                loop:\n\
-                - ending loan ids: "
-              ^ BorrowId.Set.to_string None lids
-              ^ "\n- ending abstraction ids: "
-              ^ AbstractionId.Set.to_string None aids
-              ^ "\n\n"));
+          [%ltrace
+            "join_ctxs: ending borrows/abstractions before entering the loop:\n\
+             - ending loan ids: "
+            ^ BorrowId.Set.to_string None lids
+            ^ "\n- ending abstraction ids: "
+            ^ AbstractionId.Set.to_string None aids];
           let ctx1 = end_loans_abs lids aids ctx1 in
           (* We can also do the same in the contexts [ctxs]: if there are
              several contexts, maybe one of them ended some borrows and some
@@ -301,7 +295,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
     in
     ctx2
   in
-  log#ltrace (lazy (__FUNCTION__ ^ ": after join_ctxs"));
+  [%ltrace "after join_ctxs"];
 
   (* Compute the set of fixed ids - for the symbolic ids, we compute the
      intersection of ids between the original environment and the list
@@ -347,7 +341,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
      existentially quantified borrows/abstractions/symbolic values.
   *)
   let equiv_ctxs (ctx1 : eval_ctx) (ctx2 : eval_ctx) : bool =
-    log#ltrace (lazy "compute_fixed_point: equiv_ctx:");
+    [%ltrace "equiv_ctx:"];
     let fixed_ids = compute_fixed_ids [ ctx1; ctx2 ] in
     let check_equivalent = true in
     let lookup_shared_value _ = [%craise] span "Unreachable" in
@@ -366,7 +360,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
       let ctx_resl, _ = eval_loop_body ctx in
       (* Keep only the contexts which reached a `continue`. *)
       let keep_continue_ctx (ctx, res) =
-        log#ltrace (lazy (__FUNCTION__ ^ ": register_continue_ctx"));
+        [%ltrace "register_continue_ctx"];
         match res with
         | Return | Panic | Break _ -> None
         | Unit ->
@@ -382,32 +376,29 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
       in
       let continue_ctxs = List.filter_map keep_continue_ctx ctx_resl in
 
-      log#ltrace
-        (lazy
-          ("compute_fixed_point: about to join with continue_ctx"
-         ^ "\n\n- ctx0:\n"
-          ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx
-          ^ "\n\n"
-          ^ String.concat "\n\n"
-              (List.map
-                 (fun ctx ->
-                   "- continue_ctx:\n"
-                   ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx)
-                 continue_ctxs)
-          ^ "\n\n"));
+      [%ltrace
+        "about to join with continue_ctx" ^ "\n\n- ctx0:\n"
+        ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx
+        ^ "\n\n"
+        ^ String.concat "\n\n"
+            (List.map
+               (fun ctx ->
+                 "- continue_ctx:\n"
+                 ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx)
+               continue_ctxs)
+        ^ "\n"];
 
       (* Compute the join between the original contexts and the contexts computed
          upon reentry *)
       let ctx1 = join_ctxs ctx continue_ctxs in
 
       (* Debug *)
-      log#ltrace
-        (lazy
-          ("compute_fixed_point: after joining continue ctxs" ^ "\n\n- ctx0:\n"
-          ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx
-          ^ "\n\n- ctx1:\n"
-          ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx1
-          ^ "\n\n"));
+      [%ltrace
+        "after joining continue ctxs" ^ "\n\n- ctx0:\n"
+        ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx
+        ^ "\n\n- ctx1:\n"
+        ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx1
+        ^ "\n"];
 
       (* Check if we reached a fixed point: if not, iterate *)
       if equiv_ctxs ctx ctx1 then ctx1 else compute_fixed_point ctx1 i0 (i - 1)
@@ -415,12 +406,11 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
   let fp = compute_fixed_point ctx max_num_iter max_num_iter in
 
   (* Debug *)
-  log#ltrace
-    (lazy
-      ("compute_fixed_point: fixed point computed before matching with input \
-        region groups:" ^ "\n\n- fp:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp
-      ^ "\n\n"));
+  [%ltrace
+    "fixed point computed before matching with input region groups:"
+    ^ "\n\n- fp:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp
+    ^ "\n"];
 
   (* Make sure we have exactly one loop abstraction per function region (merge
      abstractions accordingly).
@@ -469,7 +459,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
           fp_ended_aids := RegionGroupId.Map.add rg_id aids !fp_ended_aids
     in
     let end_at_return (ctx, res) =
-      log#ltrace (lazy (__FUNCTION__ ^ ": cf_loop"));
+      [%ltrace "cf_loop"];
       match res with
       | Continue _ | Panic -> ()
       | Break _ ->
@@ -481,7 +471,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
           *)
           [%craise] span "Unreachable"
       | Return ->
-          log#ltrace (lazy (__FUNCTION__ ^ ": cf_loop: Return"));
+          [%ltrace "cf_loop: Return"];
           (* Should we consume the return value and pop the frame?
            * If we check in [Interpreter] that the loop abstraction we end is
            * indeed the correct one, I think it is sound to under-approximate here
@@ -521,12 +511,11 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
           aids_union := AbstractionId.Set.union ids !aids_union)
         !fp_ended_aids
     in
-    log#ltrace
-      (lazy
-        ("- aids_union: "
-        ^ AbstractionId.Set.to_string None !aids_union
-        ^ "\n" ^ "- fp_aids: "
-        ^ AbstractionId.Set.to_string None !fp_aids));
+    [%ltrace
+      "- aids_union: "
+      ^ AbstractionId.Set.to_string None !aids_union
+      ^ "\n" ^ "- fp_aids: "
+      ^ AbstractionId.Set.to_string None !fp_aids];
 
     (* If we generate a translation, we check that all the regions need to end
        - this is not necessary per se, but if it doesn't happen it is bizarre and worth investigating...
@@ -576,10 +565,9 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
                    }
                  ]}
               *)
-              log#ltrace
-                (lazy
-                  ("No loop region to end for the region group "
-                  ^ RegionGroupId.to_string rg_id));
+              [%ltrace
+                "No loop region to end for the region group "
+                ^ RegionGroupId.to_string rg_id];
               ()
           | id0 :: ids ->
               let id0 = ref id0 in
@@ -595,11 +583,10 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
               List.iter
                 (fun id ->
                   try
-                    log#ltrace
-                      (lazy
-                        (__FUNCTION__ ^ ": merge FP abstraction: "
-                       ^ AbstractionId.to_string id ^ " into "
-                        ^ AbstractionId.to_string !id0));
+                    [%ltrace
+                      "merge FP abstraction: " ^ AbstractionId.to_string id
+                      ^ " into "
+                      ^ AbstractionId.to_string !id0];
                     (* Note that we merge *into* [id0] *)
                     let fp', id0' =
                       merge_into_first_abstraction span loop_id abs_kind false
@@ -665,11 +652,9 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
        while allowing exactly one iteration to see if it fails *)
     let _ =
       let fp_test = update_kinds_can_end true fp in
-      log#ltrace
-        (lazy
-          ("compute_fixed_point: fixed point after matching with the function \
-            region groups:\n"
-          ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp_test));
+      [%ltrace
+        "fixed point after matching with the function region groups:\n"
+        ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp_test];
       compute_fixed_point fp_test 1 1
     in
 
@@ -684,28 +669,24 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
 let compute_fixed_point_id_correspondance (span : Meta.span)
     (fixed_ids : ids_sets) (src_ctx : eval_ctx) (tgt_ctx : eval_ctx) :
     borrow_loan_corresp =
-  log#ltrace
-    (lazy
-      ("compute_fixed_point_id_correspondance:\n\n- fixed_ids:\n"
-     ^ show_ids_sets fixed_ids ^ "\n\n- src_ctx:\n"
-      ^ eval_ctx_to_string ~span:(Some span) src_ctx
-      ^ "\n\n- tgt_ctx:\n"
-      ^ eval_ctx_to_string ~span:(Some span) tgt_ctx
-      ^ "\n\n"));
+  [%ltrace
+    "\n- fixed_ids:\n" ^ show_ids_sets fixed_ids ^ "\n\n- src_ctx:\n"
+    ^ eval_ctx_to_string ~span:(Some span) src_ctx
+    ^ "\n\n- tgt_ctx:\n"
+    ^ eval_ctx_to_string ~span:(Some span) tgt_ctx
+    ^ "\n"];
 
   let filt_src_env, _, _ = ctx_split_fixed_new span fixed_ids src_ctx in
   let filt_src_ctx = { src_ctx with env = filt_src_env } in
   let filt_tgt_env, new_absl, _ = ctx_split_fixed_new span fixed_ids tgt_ctx in
   let filt_tgt_ctx = { tgt_ctx with env = filt_tgt_env } in
 
-  log#ltrace
-    (lazy
-      ("compute_fixed_point_id_correspondance:\n\n- fixed_ids:\n"
-     ^ show_ids_sets fixed_ids ^ "\n\n- filt_src_ctx:\n"
-      ^ eval_ctx_to_string ~span:(Some span) filt_src_ctx
-      ^ "\n\n- filt_tgt_ctx:\n"
-      ^ eval_ctx_to_string ~span:(Some span) filt_tgt_ctx
-      ^ "\n\n"));
+  [%ltrace
+    "\n- fixed_ids:\n" ^ show_ids_sets fixed_ids ^ "\n\n- filt_src_ctx:\n"
+    ^ eval_ctx_to_string ~span:(Some span) filt_src_ctx
+    ^ "\n\n- filt_tgt_ctx:\n"
+    ^ eval_ctx_to_string ~span:(Some span) filt_tgt_ctx
+    ^ "\n"];
 
   (* Match the source context and the filtered target context *)
   let maps =
@@ -727,11 +708,7 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
          filt_tgt_ctx filt_src_ctx)
   in
 
-  log#ltrace
-    (lazy
-      ("compute_fixed_point_id_correspondance:\n\n- tgt_to_src_maps:\n"
-      ^ ids_maps_to_string src_ctx maps
-      ^ "\n\n"));
+  [%ltrace "\n- tgt_to_src_maps:\n" ^ ids_maps_to_string src_ctx maps ^ "\n"];
 
   let src_to_tgt_borrow_map =
     BorrowId.Map.of_list
@@ -938,13 +915,11 @@ let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
   (* Also remove the symbolic values which appear inside of projectors in
      fixed abstractions - those are "fixed" and not modified between iterations
      of the loop, *)
-  log#ltrace
-    (lazy
-      ("compute_fp_ctx_symbolic_values:" ^ "\n- sids_in_fixed_abs:"
-      ^ SymbolicValueId.Set.show sids_in_fixed_abs
-      ^ "\n- all_sids_to_values: "
-      ^ SymbolicValueId.Map.show (symbolic_value_to_string ctx) sids_to_values
-      ^ "\n"));
+  [%ltrace
+    "- sids_in_fixed_abs:"
+    ^ SymbolicValueId.Set.show sids_in_fixed_abs
+    ^ "\n- all_sids_to_values: "
+    ^ SymbolicValueId.Map.show (symbolic_value_to_string ctx) sids_to_values];
 
   let sids_to_values =
     SymbolicValueId.Map.filter
@@ -993,16 +968,15 @@ let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
       (List.rev !ordered_sids)
   in
 
-  log#ltrace
-    (lazy
-      ("compute_fp_ctx_symbolic_values:" ^ "\n- src context:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx
-      ^ "\n- fixed point:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp_ctx
-      ^ "\n- fresh_sids: "
-      ^ SymbolicValueId.Set.show fresh_sids
-      ^ "\n- input_svalues: "
-      ^ Print.list_to_string (symbolic_value_to_string ctx) input_svalues
-      ^ "\n\n"));
+  [%ltrace
+    "- src context:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx
+    ^ "\n- fixed point:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp_ctx
+    ^ "\n- fresh_sids: "
+    ^ SymbolicValueId.Set.show fresh_sids
+    ^ "\n- input_svalues: "
+    ^ Print.list_to_string (symbolic_value_to_string ctx) input_svalues
+    ^ "\n"];
 
   (fresh_sids, input_svalues)

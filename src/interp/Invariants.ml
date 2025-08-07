@@ -260,8 +260,7 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
   borrows_visitor#visit_eval_ctx () ctx;
 
   (* Debugging *)
-  log#ltrace
-    (lazy ("\nAbout to check context invariant:\n" ^ context_to_string ()));
+  [%ltrace "About to check context invariant:\n" ^ context_to_string ()];
 
   (* Finally, check that everything is consistant *)
   (* First, check all the ignored loans are present at the proper place *)
@@ -698,12 +697,11 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
           | AEndedProjBorrows _ | AEmpty -> ())
       | AIgnored _, _ -> ()
       | _ ->
-          log#ltrace
-            (lazy
-              ("Erroneous typing:" ^ "\n- raw value: " ^ show_typed_avalue atv
-             ^ "\n- value: "
-              ^ typed_avalue_to_string ~span:(Some span) ctx atv
-              ^ "\n- type: " ^ ty_to_string ctx atv.ty));
+          [%ltrace
+            "Erroneous typing:" ^ "\n- raw value: " ^ show_typed_avalue atv
+            ^ "\n- value: "
+            ^ typed_avalue_to_string ~span:(Some span) ctx atv
+            ^ "\n- type: " ^ ty_to_string ctx atv.ty];
           [%internal_error] span);
       (* Continue exploring to inspect the subterms *)
       super#visit_typed_avalue info atv
@@ -840,11 +838,10 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
 
   (* Check *)
   let check_info id info =
-    log#ltrace
-      (lazy
-        (__FUNCTION__ ^ ": checking info (sid: )"
-        ^ SymbolicValueId.to_string id
-        ^ ":\n" ^ sv_info_to_string ctx info));
+    [%ltrace
+      "checking info (sid: )"
+      ^ SymbolicValueId.to_string id
+      ^ ":\n" ^ sv_info_to_string ctx info];
     if info.aproj_borrows = [] && info.aproj_loans = [] then ()
     else (
       (* TODO: check that:
@@ -895,14 +892,13 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
 
 let check_invariants (span : Meta.span) (ctx : eval_ctx) : unit =
   if !Config.sanity_checks then (
-    log#ltrace
-      (lazy
-        ("Checking invariants:\n" ^ eval_ctx_to_string ~span:(Some span) ctx));
+    [%ltrace
+      "Checking invariants:\n" ^ eval_ctx_to_string ~span:(Some span) ctx];
     check_loans_borrows_relation_invariant span ctx;
     check_borrowed_values_invariant span ctx;
     check_typing_invariant span ctx true;
     check_symbolic_values span ctx)
-  else log#ltrace (lazy "Not checking invariants (check is not activated)")
+  else [%ltrace "Not checking invariants (check is not activated)"]
 
 let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
   if !Config.sanity_checks then check_typing_invariant span ctx true

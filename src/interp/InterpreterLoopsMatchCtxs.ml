@@ -387,22 +387,20 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
     | VBottom, _ -> M.match_bottom_with_other match_rec ctx0 ctx1 true v1
     | _, VBottom -> M.match_bottom_with_other match_rec ctx0 ctx1 false v0
     | _ ->
-        log#ltrace
-          (lazy
-            ("Unexpected match case:\n- value0: "
-            ^ typed_value_to_string ~span:(Some M.span) ctx0 v0
-            ^ "\n- value1: "
-            ^ typed_value_to_string ~span:(Some M.span) ctx1 v1));
+        [%ltrace
+          "Unexpected match case:\n- value0: "
+          ^ typed_value_to_string ~span:(Some M.span) ctx0 v0
+          ^ "\n- value1: "
+          ^ typed_value_to_string ~span:(Some M.span) ctx1 v1];
         [%internal_error] M.span
 
   and match_typed_avalues (ctx0 : eval_ctx) (ctx1 : eval_ctx)
       (v0 : typed_avalue) (v1 : typed_avalue) : typed_avalue =
-    log#ltrace
-      (lazy
-        ("match_typed_avalues:\n- value0: "
-        ^ typed_avalue_to_string ~span:(Some M.span) ctx0 v0
-        ^ "\n- value1: "
-        ^ typed_avalue_to_string ~span:(Some M.span) ctx1 v1));
+    [%ltrace
+      "- value0: "
+      ^ typed_avalue_to_string ~span:(Some M.span) ctx0 v0
+      ^ "\n- value1: "
+      ^ typed_avalue_to_string ~span:(Some M.span) ctx1 v1];
 
     (* Using ValuesUtils.value_has_borrows on purpose here: we want
        to make explicit the fact that, though we have to pick
@@ -431,20 +429,17 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
     | ABottom, ABottom -> mk_abottom M.span ty
     | AIgnored _, AIgnored _ -> mk_aignored M.span ty None
     | ABorrow bc0, ABorrow bc1 -> (
-        log#ltrace (lazy "match_typed_avalues: borrows");
+        [%ltrace "borrows"];
         match (bc0, bc1) with
         | ASharedBorrow (pm0, bid0, sid0), ASharedBorrow (pm1, bid1, sid1) ->
-            log#ltrace (lazy "match_typed_avalues: shared borrows");
+            [%ltrace "shared borrows"];
             M.match_ashared_borrows match_rec ctx0 ctx1 v0.ty pm0 bid0 sid0
               v1.ty pm1 bid1 sid1 ty
         | AMutBorrow (pm0, bid0, av0), AMutBorrow (pm1, bid1, av1) ->
-            log#ltrace (lazy "match_typed_avalues: mut borrows");
-            log#ltrace
-              (lazy
-                "match_typed_avalues: mut borrows: matching children values");
+            [%ltrace "mut borrows"];
+            [%ltrace "mut borrows: matching children values"];
             let av = match_arec av0 av1 in
-            log#ltrace
-              (lazy "match_typed_avalues: mut borrows: matched children values");
+            [%ltrace "mut borrows: matched children values"];
             M.match_amut_borrows match_rec ctx0 ctx1 v0.ty pm0 bid0 av0 v1.ty
               pm1 bid1 av1 ty av
         | AIgnoredMutBorrow _, AIgnoredMutBorrow _ ->
@@ -471,24 +466,22 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
             *)
             [%craise] M.span "Unexpected")
     | ALoan lc0, ALoan lc1 -> (
-        log#ltrace (lazy "match_typed_avalues: loans");
+        [%ltrace "loans"];
         (* TODO: maybe we should enforce that the ids are always exactly the same -
            without matching *)
         match (lc0, lc1) with
         | ASharedLoan (pm0, id0, sv0, av0), ASharedLoan (pm1, id1, sv1, av1) ->
-            log#ltrace (lazy "match_typed_avalues: shared loans");
+            [%ltrace "shared loans"];
             let sv = match_rec sv0 sv1 in
             let av = match_arec av0 av1 in
             [%sanity_check] M.span (not (value_has_borrows sv.value));
             M.match_ashared_loans match_rec ctx0 ctx1 v0.ty pm0 id0 sv0 av0
               v1.ty pm1 id1 sv1 av1 ty sv av
         | AMutLoan (pm0, id0, av0), AMutLoan (pm1, id1, av1) ->
-            log#ltrace (lazy "match_typed_avalues: mut loans");
-            log#ltrace
-              (lazy "match_typed_avalues: mut loans: matching children values");
+            [%ltrace "mut loans"];
+            [%ltrace "mut loans: matching children values"];
             let av = match_arec av0 av1 in
-            log#ltrace
-              (lazy "match_typed_avalues: mut loans: matched children values");
+            [%ltrace "mut loans: matched children values"];
             M.match_amut_loans match_rec ctx0 ctx1 v0.ty pm0 id0 av0 v1.ty pm1
               id1 av1 ty av
         | AIgnoredMutLoan _, AIgnoredMutLoan _
@@ -1238,10 +1231,8 @@ struct
       (ctx0 : eval_ctx) (ctx1 : eval_ctx) (_ty : ety) (bid0 : borrow_id)
       (_sid0 : shared_borrow_id) (bid1 : borrow_id) (_sid1 : shared_borrow_id) :
       borrow_id * shared_borrow_id =
-    log#ldebug
-      (lazy
-        ("MakeCheckEquivMatcher: match_shared_borrows: " ^ "bid0: "
-       ^ BorrowId.to_string bid0 ^ ", bid1: " ^ BorrowId.to_string bid1));
+    [%ldebug
+      "bid0: " ^ BorrowId.to_string bid0 ^ ", bid1: " ^ BorrowId.to_string bid1];
 
     let bid = match_borrow_id bid0 bid1 in
     (* If we don't check for equivalence (i.e., we apply a fixed-point),
@@ -1252,13 +1243,11 @@ struct
       else
         let v0 = S.lookup_shared_value_in_ctx0 bid0 in
         let v1 = S.lookup_shared_value_in_ctx1 bid1 in
-        log#ldebug
-          (lazy
-            ("MakeCheckEquivMatcher: match_shared_borrows: looked up values:"
-           ^ "sv0: "
-            ^ typed_value_to_string ~span:(Some span) ctx0 v0
-            ^ ", sv1: "
-            ^ typed_value_to_string ~span:(Some span) ctx1 v1));
+        [%ldebug
+          "looked up values:" ^ "sv0: "
+          ^ typed_value_to_string ~span:(Some span) ctx0 v0
+          ^ ", sv1: "
+          ^ typed_value_to_string ~span:(Some span) ctx1 v1];
 
         let _ = match_typed_values v0 v1 in
         ()
@@ -1288,12 +1277,11 @@ struct
     let id0 = sv0.sv_id in
     let id1 = sv1.sv_id in
 
-    log#ldebug
-      (lazy
-        ("MakeCheckEquivMatcher: match_symbolic_values: " ^ "sv0: "
-        ^ SymbolicValueId.to_string id0
-        ^ ", sv1: "
-        ^ SymbolicValueId.to_string id1));
+    [%ldebug
+      "sv0: "
+      ^ SymbolicValueId.to_string id0
+      ^ ", sv1: "
+      ^ SymbolicValueId.to_string id1];
 
     (* If we don't check for equivalence, we also update the map from sids
        to values *)
@@ -1391,12 +1379,10 @@ struct
     (* We are checking whether that two environments are equivalent:
        there shouldn't be any projection markers *)
     [%sanity_check] span (pm0 = PNone && pm1 = PNone);
-    log#ldebug
-      (lazy
-        ("MakeCheckEquivMatcher:match_amut_loans:" ^ "\n- id0: "
-       ^ BorrowId.to_string id0 ^ "\n- id1: " ^ BorrowId.to_string id1
-       ^ "\n- ty: " ^ ty_to_string ctx0 ty ^ "\n- av: "
-        ^ typed_avalue_to_string ~span:(Some span) ctx1 av));
+    [%ldebug
+      "- id0: " ^ BorrowId.to_string id0 ^ "\n- id1: " ^ BorrowId.to_string id1
+      ^ "\n- ty: " ^ ty_to_string ctx0 ty ^ "\n- av: "
+      ^ typed_avalue_to_string ~span:(Some span) ctx1 av];
 
     let id = match_loan_id id0 id1 in
     let value = ALoan (AMutLoan (PNone, id, av)) in
@@ -1442,12 +1428,11 @@ struct
 
   let match_avalues (_ : typed_value_matcher) (ctx0 : eval_ctx)
       (ctx1 : eval_ctx) v0 v1 =
-    log#ldebug
-      (lazy
-        ("avalues don't match:\n- v0: "
-        ^ typed_avalue_to_string ~span:(Some span) ctx0 v0
-        ^ "\n- v1: "
-        ^ typed_avalue_to_string ~span:(Some span) ctx1 v1));
+    [%ldebug
+      "avalues don't match:\n- v0: "
+      ^ typed_avalue_to_string ~span:(Some span) ctx0 v0
+      ^ "\n- v1: "
+      ^ typed_avalue_to_string ~span:(Some span) ctx1 v1];
     raise (Distinct "match_avalues")
 end
 
@@ -1455,14 +1440,12 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
     (lookup_shared_value_in_ctx0 : BorrowId.id -> typed_value)
     (lookup_shared_value_in_ctx1 : BorrowId.id -> typed_value) (ctx0 : eval_ctx)
     (ctx1 : eval_ctx) : ids_maps option =
-  log#ltrace
-    (lazy
-      ("match_ctxs:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
-     ^ "\n\n- ctx0:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx0
-      ^ "\n\n- ctx1:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx1
-      ^ "\n\n"));
+  [%ltrace
+    "\n- fixed_ids:\n" ^ show_ids_sets fixed_ids ^ "\n\n- ctx0:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx0
+    ^ "\n\n- ctx1:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx1
+    ^ "\n"];
 
   (* Initialize the maps and instantiate the matcher *)
   let module IdMap (Id : Identifiers.Id) = struct
@@ -1577,7 +1560,7 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
     let _ = CEM.match_aidl original_parents0 original_parents1 in
     let _ = CEM.match_rids regions0 regions1 in
 
-    log#ldebug (lazy "match_abstractions: matching values");
+    [%ldebug "match_abstractions: matching values"];
     let _ =
       if List.length avalues0 <> List.length avalues1 then
         raise
@@ -1587,30 +1570,29 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
           (fun (v0, v1) -> M.match_typed_avalues ctx0 ctx1 v0 v1)
           (List.combine avalues0 avalues1)
     in
-    log#ldebug (lazy "match_abstractions: values matched OK");
+    [%ldebug "match_abstractions: values matched OK"];
     ()
   in
 
   (* Rem.: this function raises exceptions of type [Distinct] *)
   let rec match_envs (env0 : env) (env1 : env) : unit =
-    log#ldebug
-      (lazy
-        ("match_ctxs: match_envs:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
-       ^ "\n\n- rid_map: "
-        ^ RegionId.InjSubst.show_t !rid_map
-        ^ "\n- blid_map: "
-        ^ BorrowId.InjSubst.show_t !blid_map
-        ^ "\n- sid_map: "
-        ^ SymbolicValueId.InjSubst.show_t !sid_map
-        ^ "\n- aid_map: "
-        ^ AbstractionId.InjSubst.show_t !aid_map
-        ^ "\n\n- ctx0:\n"
-        ^ eval_ctx_to_string ~span:(Some span) ~filter:false
-            { ctx0 with env = List.rev env0 }
-        ^ "\n\n- ctx1:\n"
-        ^ eval_ctx_to_string ~span:(Some span) ~filter:false
-            { ctx1 with env = List.rev env1 }
-        ^ "\n\n"));
+    [%ldebug
+      "match_envs:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
+      ^ "\n\n- rid_map: "
+      ^ RegionId.InjSubst.show_t !rid_map
+      ^ "\n- blid_map: "
+      ^ BorrowId.InjSubst.show_t !blid_map
+      ^ "\n- sid_map: "
+      ^ SymbolicValueId.InjSubst.show_t !sid_map
+      ^ "\n- aid_map: "
+      ^ AbstractionId.InjSubst.show_t !aid_map
+      ^ "\n\n- ctx0:\n"
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:false
+          { ctx0 with env = List.rev env0 }
+      ^ "\n\n- ctx1:\n"
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:false
+          { ctx1 with env = List.rev env1 }
+      ^ "\n\n"];
 
     match (env0, env1) with
     | EBinding (BDummy b0, v0) :: env0', EBinding (BDummy b1, v1) :: env1' ->
@@ -1634,10 +1616,10 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
         (* Continue *)
         match_envs env0' env1'
     | EAbs abs0 :: env0', EAbs abs1 :: env1' ->
-        log#ldebug (lazy "match_ctxs: match_envs: matching abs");
+        [%ldebug "match_envs: matching abs"];
         (* Same as for the dummy values: there are two cases *)
         if AbstractionId.Set.mem abs0.abs_id fixed_ids.aids then (
-          log#ldebug (lazy "match_ctxs: match_envs: matching abs: fixed abs");
+          [%ldebug "match_envs: matching abs: fixed abs"];
           (* Still in the prefix: the abstractions must be the same *)
           [%sanity_check] span (abs0 = abs1);
           (* Their ids must be fixed *)
@@ -1646,8 +1628,7 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
           (* Continue *)
           match_envs env0' env1')
         else (
-          log#ldebug
-            (lazy "match_ctxs: match_envs: matching abs: not fixed abs");
+          [%ldebug "match_envs: matching abs: not fixed abs"];
           (* Match the values *)
           match_abstractions abs0 abs1;
           (* Continue *)
@@ -1688,13 +1669,10 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
     Some maps
   with
   | Distinct msg ->
-      log#ltrace (lazy ("match_ctxs: distinct: " ^ msg ^ "\n"));
+      [%ltrace "distinct: " ^ msg];
       None
   | ValueMatchFailure k ->
-      log#ltrace
-        (lazy
-          ("match_ctxs: distinct: ValueMatchFailure" ^ show_updt_env_kind k
-         ^ "\n"));
+      [%ltrace "distinct: ValueMatchFailure" ^ show_updt_env_kind k];
       None
 
 let ctxs_are_equivalent (span : Meta.span) (fixed_ids : ids_sets)
@@ -1709,13 +1687,11 @@ let prepare_loop_match_ctx_with_target (config : config) (span : Meta.span)
     (loop_id : LoopId.id) (fixed_ids : ids_sets) (src_ctx : eval_ctx) : cm_fun =
  fun tgt_ctx ->
   (* Debug *)
-  log#ldebug
-    (lazy
-      (__FUNCTION__ ^ ":\n" ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n"
-     ^ "\n- src_ctx: "
-      ^ eval_ctx_to_string ~span:(Some span) src_ctx
-      ^ "\n- tgt_ctx: "
-      ^ eval_ctx_to_string ~span:(Some span) tgt_ctx));
+  [%ldebug
+    "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
+    ^ eval_ctx_to_string ~span:(Some span) src_ctx
+    ^ "\n- tgt_ctx: "
+    ^ eval_ctx_to_string ~span:(Some span) tgt_ctx];
   (* End the loans which lead to mismatches when joining *)
   let rec reorganize_join_tgt : cm_fun =
    fun tgt_ctx ->
@@ -1724,13 +1700,12 @@ let prepare_loop_match_ctx_with_target (config : config) (span : Meta.span)
     let filt_src_env, _, _ = ctx_split_fixed_new span fixed_ids src_ctx in
     let filt_tgt_env, _, _ = ctx_split_fixed_new span fixed_ids tgt_ctx in
 
-    log#ldebug
-      (lazy
-        (__FUNCTION__ ^ ": reorganize_join_tgt:\n" ^ "\n- fixed_ids: "
-       ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- filt_src_ctx: "
-        ^ env_to_string span src_ctx filt_src_env
-        ^ "\n- filt_tgt_ctx: "
-        ^ env_to_string span tgt_ctx filt_tgt_env));
+    [%ldebug
+      "reorganize_join_tgt:\n" ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids
+      ^ "\n" ^ "\n- filt_src_ctx: "
+      ^ env_to_string span src_ctx filt_src_env
+      ^ "\n- filt_tgt_ctx: "
+      ^ env_to_string span tgt_ctx filt_tgt_env];
 
     (* Remove the abstractions *)
     let filter (ee : env_elem) : bool =
@@ -1768,14 +1743,12 @@ let prepare_loop_match_ctx_with_target (config : config) (span : Meta.span)
           (List.combine filt_src_env filt_tgt_env)
       in
       (* No exception was thrown: continue *)
-      log#ldebug
-        (lazy
-          (__FUNCTION__ ^ ": reorganize_join_tgt: done with borrows/loans:\n"
-         ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n"
-         ^ "\n- filt_src_ctx: "
-          ^ env_to_string span src_ctx filt_src_env
-          ^ "\n- filt_tgt_ctx: "
-          ^ env_to_string span tgt_ctx filt_tgt_env));
+      [%ldebug
+        "reorganize_join_tgt: done with borrows/loans:\n" ^ "\n- fixed_ids: "
+        ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- filt_src_ctx: "
+        ^ env_to_string span src_ctx filt_src_env
+        ^ "\n- filt_tgt_ctx: "
+        ^ env_to_string span tgt_ctx filt_tgt_env];
 
       (* We are done with the borrows/loans: now make sure we move all
          the values which are bottom in the src environment (i.e., the
@@ -1826,14 +1799,12 @@ let prepare_loop_match_ctx_with_target (config : config) (span : Meta.span)
         ctx_push_fresh_dummy_vars tgt_ctx (List.rev !nvalues)
       in
 
-      log#ldebug
-        (lazy
-          (__FUNCTION__
-         ^ ": reorganize_join_tgt: done with borrows/loans and moves:\n"
-         ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
-          ^ eval_ctx_to_string ~span:(Some span) src_ctx
-          ^ "\n- tgt_ctx: "
-          ^ eval_ctx_to_string ~span:(Some span) tgt_ctx));
+      [%ldebug
+        "reorganize_join_tgt: done with borrows/loans and moves:\n"
+        ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
+        ^ eval_ctx_to_string ~span:(Some span) src_ctx
+        ^ "\n- tgt_ctx: "
+        ^ eval_ctx_to_string ~span:(Some span) tgt_ctx];
 
       (tgt_ctx, fun e -> e)
     with ValueMatchFailure e ->
@@ -1858,11 +1829,9 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
     (src_ctx : eval_ctx) : st_cm_fun =
  fun tgt_ctx ->
   (* Debug *)
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ":\n" ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n"
-     ^ "\n- src_ctx: " ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: "
-     ^ eval_ctx_to_string tgt_ctx));
+  [%ltrace
+    "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
+    ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: " ^ eval_ctx_to_string tgt_ctx];
 
   (* Simplify the target context *)
   let tgt_ctx, cc =
@@ -1898,12 +1867,10 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
      [add_identity_abs] to add the identity abstractions one by one.
   *)
   (* Match the source and target contexts *)
-  log#ltrace
-    (lazy
-      ("mach_ctx_with_target: about to introduce the identity abstractions (i):\n"
-     ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
-     ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: " ^ eval_ctx_to_string tgt_ctx
-      ));
+  [%ltrace
+    "about to introduce the identity abstractions (i):\n" ^ "\n- fixed_ids: "
+    ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
+    ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: " ^ eval_ctx_to_string tgt_ctx];
 
   let filt_tgt_env, _, _ = ctx_split_fixed_new span fixed_ids tgt_ctx in
   let filt_src_env, new_absl, new_dummyl =
@@ -1949,24 +1916,22 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
   in
 
   (* Debug *)
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ": about to introduce the identity abstractions (ii):"
-     ^ "\n\n- src_ctx: "
-      ^ eval_ctx_to_string ~span:(Some span) src_ctx
-      ^ "\n\n- tgt_ctx: "
-      ^ eval_ctx_to_string ~span:(Some span) tgt_ctx
-      ^ "\n\n- filt_tgt_ctx: "
-      ^ eval_ctx_to_string ~span:(Some span) ~filter:false filt_tgt_ctx
-      ^ "\n\n- filt_src_ctx: "
-      ^ eval_ctx_to_string ~span:(Some span) ~filter:false filt_src_ctx
-      ^ "\n\n- new_absl:\n"
-      ^ eval_ctx_to_string ~span:(Some span)
-          { src_ctx with env = List.map (fun abs -> EAbs abs) new_absl }
-      ^ "\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids ^ "\n\n- fp_bl_maps:\n"
-      ^ show_borrow_loan_corresp fp_bl_maps
-      ^ "\n\n- src_to_tgt_maps: "
-      ^ ids_maps_to_string tgt_ctx src_to_tgt_maps));
+  [%ltrace
+    "about to introduce the identity abstractions (ii):" ^ "\n\n- src_ctx: "
+    ^ eval_ctx_to_string ~span:(Some span) src_ctx
+    ^ "\n\n- tgt_ctx: "
+    ^ eval_ctx_to_string ~span:(Some span) tgt_ctx
+    ^ "\n\n- filt_tgt_ctx: "
+    ^ eval_ctx_to_string ~span:(Some span) ~filter:false filt_tgt_ctx
+    ^ "\n\n- filt_src_ctx: "
+    ^ eval_ctx_to_string ~span:(Some span) ~filter:false filt_src_ctx
+    ^ "\n\n- new_absl:\n"
+    ^ eval_ctx_to_string ~span:(Some span)
+        { src_ctx with env = List.map (fun abs -> EAbs abs) new_absl }
+    ^ "\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids ^ "\n\n- fp_bl_maps:\n"
+    ^ show_borrow_loan_corresp fp_bl_maps
+    ^ "\n\n- src_to_tgt_maps: "
+    ^ ids_maps_to_string tgt_ctx src_to_tgt_maps];
 
   (* Update the borrows and symbolic ids in the source context.
 
@@ -2092,16 +2057,13 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
       !src_fresh_sids_map
   in
 
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ": cf_introduce_loop_fp_abs:"
-     ^ "\n- src_fresh_borrows_map:\n"
-      ^ BorrowId.Map.show BorrowId.to_string !src_fresh_borrows_map
-      ^ "\n- src_fresh_sids_map:\n"
-      ^ SymbolicValueId.Map.show SymbolicValueId.to_string !src_fresh_sids_map
-      ^ "\n- refreshed_input_sids:\n"
-      ^ SymbolicValueId.Map.show SymbolicValueId.to_string refreshed_input_sids
-      ^ "\n"));
+  [%ltrace
+    "cf_introduce_loop_fp_abs:" ^ "\n- src_fresh_borrows_map:\n"
+    ^ BorrowId.Map.show BorrowId.to_string !src_fresh_borrows_map
+    ^ "\n- src_fresh_sids_map:\n"
+    ^ SymbolicValueId.Map.show SymbolicValueId.to_string !src_fresh_sids_map
+    ^ "\n- refreshed_input_sids:\n"
+    ^ SymbolicValueId.Map.show SymbolicValueId.to_string refreshed_input_sids];
 
   [%sanity_check] span Config.greedy_expand_symbolics_with_borrows;
 
@@ -2160,38 +2122,33 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
       inherit [_] map_eval_ctx as super
 
       method! visit_borrow_id _ bid =
-        log#ltrace
-          (lazy
-            (__FUNCTION__ ^ ": cf_introduce_loop_fp_abs: visit_borrow_id: "
-           ^ BorrowId.to_string bid ^ "\n"));
+        [%ltrace
+          "cf_introduce_loop_fp_abs: visit_borrow_id: " ^ BorrowId.to_string bid];
 
         (* Lookup the id of the loan corresponding to this borrow *)
         let src_lid =
           BorrowId.InjSubst.find bid fp_bl_maps.borrow_to_loan_id_map
         in
 
-        log#ltrace
-          (lazy
-            (__FUNCTION__ ^ ": cf_introduce_loop_fp_abs: looked up src_lid: "
-           ^ BorrowId.to_string src_lid ^ "\n"));
+        [%ltrace
+          "cf_introduce_loop_fp_abs: looked up src_lid: "
+          ^ BorrowId.to_string src_lid];
 
         (* Lookup the tgt borrow id to which this borrow was mapped *)
         let tgt_bid =
           BorrowId.InjSubst.find src_lid src_to_tgt_maps.borrow_id_map
         in
 
-        log#ltrace
-          (lazy
-            (__FUNCTION__ ^ ": cf_introduce_loop_fp_abs: looked up tgt_bid: "
-           ^ BorrowId.to_string tgt_bid ^ "\n"));
+        [%ltrace
+          "cf_introduce_loop_fp_abs: looked up tgt_bid: "
+          ^ BorrowId.to_string tgt_bid];
 
         tgt_bid
 
       method! visit_loan_id _ id =
-        log#ltrace
-          (lazy
-            (__FUNCTION__ ^ ": cf_introduce_loop_fp_abs: visit_loan_id: "
-           ^ BorrowId.to_string id ^ "\n"));
+        [%ltrace
+          "cf_introduce_loop_fp_abs: visit_loan_id: " ^ BorrowId.to_string id
+          ^ "\n"];
         (* Map the borrow - rem.: we mapped the borrows *in the values*,
            meaning we know how to map the *corresponding loans in the
            abstractions* *)
@@ -2297,10 +2254,9 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
   let nenv = List.append new_absl tgt_ctx.env in
   let tgt_ctx = { tgt_ctx with env = nenv } in
 
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ": cf_introduce_loop_fp_abs: done:\n- result ctx:\n"
-      ^ eval_ctx_to_string ~span:(Some span) tgt_ctx));
+  [%ltrace
+    "cf_introduce_loop_fp_abs: done:\n- result ctx:\n"
+    ^ eval_ctx_to_string ~span:(Some span) tgt_ctx];
 
   (* Sanity check *)
   if !Config.sanity_checks then
@@ -2315,17 +2271,15 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
   in
 
   (* Compute the loop input values *)
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ": about to compute the input values:"
-     ^ "\n- fp_input_svalues: "
-      ^ String.concat ", " (List.map SymbolicValueId.to_string fp_input_svalues)
-      ^ "\n- src_to_tgt_maps:\n"
-      ^ ids_maps_to_string tgt_ctx src_to_tgt_maps
-      ^ "\n- refreshed_input_sids:\n"
-      ^ SymbolicValueId.Map.show SymbolicValueId.to_string refreshed_input_sids
-      ^ "\n- src_ctx:\n" ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx:\n"
-      ^ eval_ctx_to_string tgt_ctx ^ "\n"));
+  [%ltrace
+    "about to compute the input values:" ^ "\n- fp_input_svalues: "
+    ^ String.concat ", " (List.map SymbolicValueId.to_string fp_input_svalues)
+    ^ "\n- src_to_tgt_maps:\n"
+    ^ ids_maps_to_string tgt_ctx src_to_tgt_maps
+    ^ "\n- refreshed_input_sids:\n"
+    ^ SymbolicValueId.Map.show SymbolicValueId.to_string refreshed_input_sids
+    ^ "\n- src_ctx:\n" ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx:\n"
+    ^ eval_ctx_to_string tgt_ctx];
   let input_values =
     SymbolicValueId.Map.of_list
       (List.map

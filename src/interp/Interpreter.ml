@@ -245,21 +245,19 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
     (loop_id : LoopId.id option) (is_regular_return : bool) (inside_loop : bool)
     (ctx : eval_ctx) : SA.expression =
   let span = fdef.item_meta.span in
-  log#ltrace
-    (lazy
-      ("evaluate_function_symbolic_synthesize_backward_from_return:"
-     ^ "\n- fname: "
-      ^ Print.EvalCtx.name_to_string ctx fdef.item_meta.name
-      ^ "\n- back_id: "
-      ^ RegionGroupId.to_string back_id
-      ^ "\n- loop_id: "
-      ^ Print.option_to_string LoopId.to_string loop_id
-      ^ "\n- is_regular_return: "
-      ^ Print.bool_to_string is_regular_return
-      ^ "\n- inside_loop: "
-      ^ Print.bool_to_string inside_loop
-      ^ "\n- ctx:\n"
-      ^ Print.Contexts.eval_ctx_to_string ~span:(Some span) ctx));
+  [%ltrace
+    "- fname: "
+    ^ Print.EvalCtx.name_to_string ctx fdef.item_meta.name
+    ^ "\n- back_id: "
+    ^ RegionGroupId.to_string back_id
+    ^ "\n- loop_id: "
+    ^ Print.option_to_string LoopId.to_string loop_id
+    ^ "\n- is_regular_return: "
+    ^ Print.bool_to_string is_regular_return
+    ^ "\n- inside_loop: "
+    ^ Print.bool_to_string inside_loop
+    ^ "\n- ctx:\n"
+    ^ Print.Contexts.eval_ctx_to_string ~span:(Some span) ctx];
   (* We need to instantiate the function signature - to retrieve
    * the return type. Note that it is important to re-generate
    * an instantiation of the signature, so that we use fresh
@@ -327,11 +325,9 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
       ctx)
     else ctx
   in
-  log#ltrace
-    (lazy
-      ("evaluate_function_symbolic_synthesize_backward_from_return: (after \
-        putting the return value in the proper abstraction)\n" ^ "\n- ctx:\n"
-      ^ Print.Contexts.eval_ctx_to_string ~span:(Some span) ctx));
+  [%ltrace
+    "After putting the return value in the proper abstraction:\n" ^ "\n- ctx:\n"
+    ^ Print.Contexts.eval_ctx_to_string ~span:(Some span) ctx];
 
   (* We now need to end the proper *input* abstractions - pay attention
    * to the fact that we end the *input* abstractions, not the *return*
@@ -416,11 +412,9 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
           if !Config.borrow_check then (Some fun_abs_id, true) else (None, false)
       | Some abs -> (Some abs.abs_id, false)
   in
-  log#ltrace
-    (lazy
-      ("evaluate_function_symbolic_synthesize_backward_from_return: ending \
-        input abstraction: "
-      ^ Print.option_to_string AbstractionId.to_string current_abs_id));
+  [%ltrace
+    "ending input abstraction: "
+    ^ Print.option_to_string AbstractionId.to_string current_abs_id];
 
   (* Set the proper abstractions as endable *)
   let ctx =
@@ -497,7 +491,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
       fdef.item_meta.name
   in
-  log#ltrace (lazy ("evaluate_function_symbolic: " ^ name_to_string ()));
+  [%ltrace name_to_string ()];
 
   (* Create the evaluation context *)
   let ctx, input_svs, inst_sg = initialize_symbolic_context_for_fun ctx fdef in
@@ -510,10 +504,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
   let config = mk_config SymbolicMode in
   let finish (res : statement_eval_res) (ctx : eval_ctx) =
     let ctx0 = ctx in
-    log#ltrace
-      (lazy
-        ("evaluate_function_symbolic: cf_finish: "
-        ^ Cps.show_statement_eval_res res));
+    [%ltrace "cf_finish:\n" ^ Cps.show_statement_eval_res res];
 
     match res with
     | Return | LoopReturn _ ->
@@ -639,12 +630,10 @@ module Test = struct
     let span = fdef.item_meta.span in
 
     (* Debug *)
-    log#ltrace
-      (lazy
-        ("test_unit_function: "
-        ^ Print.Types.name_to_string
-            (Print.Contexts.decls_ctx_to_fmt_env decls_ctx)
-            fdef.item_meta.name));
+    [%ltrace
+      Print.Types.name_to_string
+        (Print.Contexts.decls_ctx_to_fmt_env decls_ctx)
+        fdef.item_meta.name];
 
     (* Sanity check - *)
     [%sanity_check] span (fdef.signature.generics = empty_generic_params);

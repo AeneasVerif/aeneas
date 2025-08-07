@@ -147,12 +147,11 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
     | VSymbolic sv -> symbolic_value_to_texpression ctx sv
   in
   (* Debugging *)
-  log#ltrace
-    (lazy
-      ("typed_value_to_texpression: result:" ^ "\n- input value:\n"
-      ^ typed_value_to_string ctx v
-      ^ "\n- translated expression:\n"
-      ^ texpression_to_string ctx value));
+  [%ltrace
+    "result:" ^ "\n- input value:\n"
+    ^ typed_value_to_string ctx v
+    ^ "\n- translated expression:\n"
+    ^ texpression_to_string ctx value];
   (* Sanity check *)
   type_check_texpression ctx value;
   (* Return *)
@@ -493,27 +492,20 @@ let typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
      it contains mutable loans, then we generate a consumed value (because
      upon ending the borrow we consumed a value).
      Otherwise we ignore it. *)
-  log#ltrace
-    (lazy
-      ("typed_avalue_to_consumed: "
-      ^ typed_avalue_to_string ~with_ended:true ectx av));
+  [%ltrace typed_avalue_to_string ~with_ended:true ectx av];
   match
     compute_typed_avalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions
       av
   with
   | LoanProj BMut ->
-      log#ltrace
-        (lazy
-          "typed_avalue_to_consumed: the value contains mutable loan projectors");
+      [%ltrace "the value contains mutable loan projectors"];
       typed_avalue_to_consumed_aux ~filter:true ctx ectx abs_regions av
   | LoanProj BShared | BorrowProj _ | UnknownProj ->
       (* If it is a borrow proj we ignore it. If it is an unknown projection,
          it means the value doesn't contain loans nor borrows, so nothing
          is consumed upon ending the abstraction: we can ignore it as well. *)
-      log#ltrace
-        (lazy
-          "typed_avalue_to_consumed: the value doesn't contains mutable loan \
-           projectors (ignoring it)");
+      [%ltrace
+        "the value doesn't contains mutable loan projectors (ignoring it)"];
       None
 
 (** Convert the abstraction values in an abstraction to consumed values.
@@ -521,19 +513,17 @@ let typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
     See [typed_avalue_to_consumed_aux]. *)
 let abs_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs) :
     texpression list =
-  log#ltrace
-    (lazy ("abs_to_consumed:\n" ^ abs_to_string ~with_ended:true ctx abs));
+  [%ltrace abs_to_string ~with_ended:true ctx abs];
   let values =
     List.filter_map
       (typed_avalue_to_consumed ctx ectx abs.regions.owned)
       abs.avalues
   in
-  log#ltrace
-    (lazy
-      ("abs_to_consumed:\n- abs: "
-      ^ abs_to_string ~with_ended:true ctx abs
-      ^ "\n- values: "
-      ^ Print.list_to_string (texpression_to_string ctx) values));
+  [%ltrace
+    "- abs: "
+    ^ abs_to_string ~with_ended:true ctx abs
+    ^ "\n- values: "
+    ^ Print.list_to_string (texpression_to_string ctx) values];
   values
 
 let translate_mprojection_elem (pe : E.projection_elem) :
@@ -807,12 +797,11 @@ let abs_to_given_back (mpl : mplace option list option) (abs : V.abs)
       ctx avalues
   in
   let values = List.filter_map (fun x -> x) values in
-  log#ltrace
-    (lazy
-      ("abs_to_given_back:\n- abs: "
-      ^ abs_to_string ~with_ended:true ctx abs
-      ^ "\n- values: "
-      ^ Print.list_to_string (typed_pattern_to_string ctx) values));
+  [%ltrace
+    "- abs: "
+    ^ abs_to_string ~with_ended:true ctx abs
+    ^ "\n- values: "
+    ^ Print.list_to_string (typed_pattern_to_string ctx) values];
   (ctx, values)
 
 (** Simply calls [abs_to_given_back] *)

@@ -40,7 +40,7 @@ let log = Logging.regions_hierarchy_log
 
 let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
     (fun_name : string) (sg : fun_sig) : region_var_groups =
-  log#ltrace (lazy (__FUNCTION__ ^ ": " ^ fun_name));
+  [%ltrace fun_name];
   (* Create the dependency graph.
 
      An edge from 'short to 'long means that 'long outlives 'short (that is

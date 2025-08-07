@@ -1768,8 +1768,7 @@ let simplify_aggregates_unchanged_fields (ctx : ctx) (def : fun_decl) : fun_decl
       inherit [_] map_expression as super
 
       method! visit_Switch env scrut switch =
-        log#ltrace
-          (lazy ("Visiting switch: " ^ switch_to_string ctx scrut switch));
+        [%ltrace "Visiting switch: " ^ switch_to_string ctx scrut switch];
         (* Update the scrutinee *)
         let scrut = self#visit_texpression env scrut in
         let switch =
@@ -1812,9 +1811,8 @@ let simplify_aggregates_unchanged_fields (ctx : ctx) (def : fun_decl) : fun_decl
         let e =
           match e0.e with
           | StructUpdate updt ->
-              log#ltrace
-                (lazy
-                  ("Visiting struct update: " ^ struct_update_to_string ctx updt));
+              [%ltrace
+                "Visiting struct update: " ^ struct_update_to_string ctx updt];
               (* Update the fields *)
               let updt = super#visit_struct_update env updt in
               (* Simplify *)
@@ -1833,39 +1831,34 @@ let simplify_aggregates_unchanged_fields (ctx : ctx) (def : fun_decl) : fun_decl
                       (* If this value is equal to the value we update the field
                          with, we can simply ignore the update *)
                       if field_value = expand_expression env e.e then (
-                        log#ltrace
-                          (lazy
-                            ("Simplifying field: " ^ texpression_to_string ctx e));
+                        [%ltrace
+                          "Simplifying field: " ^ texpression_to_string ctx e];
                         None)
                       else (
-                        log#ltrace
-                          (lazy
-                            ("Not simplifying field: "
-                            ^ texpression_to_string ctx e));
+                        [%ltrace
+                          "Not simplifying field: "
+                          ^ texpression_to_string ctx e];
                         Some (fid, e))
                     in
                     let updates = List.filter_map update_field updt.updates in
                     if updates = [] then (
-                      log#ltrace
-                        (lazy
-                          ("StructUpdate: "
-                          ^ texpression_to_string ctx e0
-                          ^ " ~~> "
-                          ^ texpression_to_string ctx init));
+                      [%ltrace
+                        "StructUpdate: "
+                        ^ texpression_to_string ctx e0
+                        ^ " ~~> "
+                        ^ texpression_to_string ctx init];
                       init.e)
                     else
                       let updt1 = { updt with updates } in
-                      log#ltrace
-                        (lazy
-                          ("StructUpdate: "
-                          ^ struct_update_to_string ctx updt
-                          ^ " ~~> "
-                          ^ struct_update_to_string ctx updt1));
+                      [%ltrace
+                        "StructUpdate: "
+                        ^ struct_update_to_string ctx updt
+                        ^ " ~~> "
+                        ^ struct_update_to_string ctx updt1];
                       super#visit_StructUpdate env updt1
               end
           | App _ ->
-              log#ltrace
-                (lazy ("Visiting app: " ^ texpression_to_string ctx e0));
+              [%ltrace "Visiting app: " ^ texpression_to_string ctx e0];
               (* It may be an ADT expression (e.g., [Cons x y] or [(x, y)]):
                  check if it is the case, and if it is, compute the expansion
                  of all the values expanded so far, and see if exactly one of
@@ -1884,12 +1877,11 @@ let simplify_aggregates_unchanged_fields (ctx : ctx) (def : fun_decl) : fun_decl
                 begin
                   match expanded with
                   | [ e2 ] ->
-                      log#ltrace
-                        (lazy
-                          ("Simplified: "
-                          ^ texpression_to_string ctx e1
-                          ^ " ~~> "
-                          ^ texpression_to_string ctx { e1 with e = e2 }));
+                      [%ltrace
+                        "Simplified: "
+                        ^ texpression_to_string ctx e1
+                        ^ " ~~> "
+                        ^ texpression_to_string ctx { e1 with e = e2 }];
                       e2
                   | _ -> e1.e
                 end
@@ -2284,12 +2276,10 @@ let simplify_array_slice_update (ctx : ctx) (def : fun_decl) : fun_decl =
                 generics = index_generics;
               },
             [ a; i ] ) ->
-            log#ldebug
-              (lazy
-                (__FUNCTION__ ^ ": identified a pattern to simplify:\n"
-                ^ texpression_to_string ctx
-                    { e = Let (monadic, pat, e1, e2); ty = e2.ty }
-                ^ "\n"));
+            [%ldebug
+              "identified a pattern to simplify:\n"
+              ^ texpression_to_string ctx
+                  { e = Let (monadic, pat, e1, e2); ty = e2.ty }];
 
             (* Some auxiliary functions *)
             (* Helper to check if an expression is actually the backward function *)
@@ -2381,13 +2371,11 @@ let simplify_array_slice_update (ctx : ctx) (def : fun_decl) : fun_decl =
               end
             in
             let e' = updt_visitor1#visit_texpression () e2 in
-            log#ldebug
-              (lazy
-                (__FUNCTION__ ^ ": e':\n" ^ texpression_to_string ctx e' ^ "\n"));
+            [%ldebug "e':\n" ^ texpression_to_string ctx e'];
 
             (* Should we keep the change? *)
             if !count = 1 && Option.is_some !back_call then (
-              log#ldebug (lazy (__FUNCTION__ ^ ": keeping the change"));
+              [%ldebug "keeping the change"];
               let pat, arg = Option.get !back_call in
               let call = mk_call_to_update arg in
               (* Recurse on the updated expression *)
@@ -2403,9 +2391,7 @@ let simplify_array_slice_update (ctx : ctx) (def : fun_decl) : fun_decl =
                  function, that is: as soon as all the variables needed for its
                  arguments have been introduced.
               *)
-              let _ =
-                log#ldebug (lazy (__FUNCTION__ ^ ": not keeping the change"))
-              in
+              let _ = [%ldebug "not keeping the change"] in
               let e'' =
                 if !count = 1 then (
                   let back_pat, back_arg = Option.get !back_call_with_fresh in
@@ -2414,14 +2400,11 @@ let simplify_array_slice_update (ctx : ctx) (def : fun_decl) : fun_decl =
                       (texpression_get_vars back_arg)
                   in
                   let rec insert_call_below (fresh_vars : LocalId.Set.t) e =
-                    log#ldebug
-                      (lazy
-                        (__FUNCTION__ ^ ": insert_call_below:"
-                       ^ "\n- fresh_vars:\n"
-                        ^ LocalId.Set.to_string None fresh_vars
-                        ^ "\n- e:\n"
-                        ^ texpression_to_string ctx e
-                        ^ "\n"));
+                    [%ldebug
+                      "insert_call_below:" ^ "\n- fresh_vars:\n"
+                      ^ LocalId.Set.to_string None fresh_vars
+                      ^ "\n- e:\n"
+                      ^ texpression_to_string ctx e];
                     match e.e with
                     | Let (monadic, pat, e1, e2) ->
                         let fresh_vars =
@@ -2438,8 +2421,7 @@ let simplify_array_slice_update (ctx : ctx) (def : fun_decl) : fun_decl =
                           (ok, { e = Let (monadic, pat, e1, e2); ty = e.ty })
                     | _ -> (false, e)
                   in
-                  log#ldebug
-                    (lazy (__FUNCTION__ ^ ": insert_call_below: START"));
+                  [%ldebug "insert_call_below: START"];
                   let ok, e'' = insert_call_below fresh_vars e' in
                   if ok then Some e''.e else None)
                 else None
@@ -2986,12 +2968,10 @@ let apply_end_passes_to_def (ctx : ctx) (def : fun_decl) : fun_decl =
 
       if apply then (
         let def = pass ctx def in
-        log#ltrace
-          (lazy (pass_name ^ ":\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
+        [%ltrace pass_name ^ ":\n\n" ^ fun_decl_to_string ctx def];
         def)
       else (
-        log#ltrace
-          (lazy ("ignoring " ^ pass_name ^ " due to the configuration\n"));
+        [%ltrace "ignoring " ^ pass_name ^ " due to the configuration\n"];
         def))
     def end_passes
 
@@ -3039,11 +3019,9 @@ let filter_loop_inputs (ctx : ctx) (transl : pure_fun_translation list) :
   in
   let subgroups = ReorderDecls.group_reorder_fun_decls all_decls in
 
-  log#ltrace
-    (lazy
-      ("filter_loop_inputs: all_decls:\n\n"
-      ^ String.concat "\n\n" (List.map (fun_decl_to_string ctx) all_decls)
-      ^ "\n"));
+  [%ltrace
+    "all_decls:\n\n"
+    ^ String.concat "\n\n" (List.map (fun_decl_to_string ctx) all_decls)];
 
   (* Explore the subgroups one by one.
 
@@ -3072,11 +3050,9 @@ let filter_loop_inputs (ctx : ctx) (transl : pure_fun_translation list) :
         (fun v -> (var_get_id v, mk_texpression_from_var v))
         inputs_prefix
     in
-    log#ltrace
-      (lazy
-        ("inputs:\n"
-        ^ String.concat ", " (List.map (var_to_string ctx) inputs_prefix)
-        ^ "\n"));
+    [%ltrace
+      "inputs:\n"
+      ^ String.concat ", " (List.map (var_to_string ctx) inputs_prefix)];
     let inputs_set = LocalId.Set.of_list (List.map var_get_id inputs_prefix) in
     [%sanity_check] decl.item_meta.span (Option.is_some decl.loop_id);
 
@@ -3116,12 +3092,10 @@ let filter_loop_inputs (ctx : ctx) (transl : pure_fun_translation list) :
                         let beg_args, end_args =
                           Collections.List.split_at args inputs_prefix_length
                         in
-                        log#ltrace
-                          (lazy
-                            ("beg_args:\n"
-                            ^ String.concat ", "
-                                (List.map (texpression_to_string ctx) beg_args)
-                            ^ "\n"));
+                        [%ltrace
+                          "beg_args:\n"
+                          ^ String.concat ", "
+                              (List.map (texpression_to_string ctx) beg_args)];
                         let used_args = List.combine inputs beg_args in
                         List.iter
                           (fun ((vid, var), arg) ->
@@ -3144,14 +3118,12 @@ let filter_loop_inputs (ctx : ctx) (transl : pure_fun_translation list) :
     in
     visitor#visit_texpression () body.body;
 
-    log#ltrace
-      (lazy
-        ("\n- used variables: "
-        ^ String.concat ", "
-            (List.map
-               (Print.pair_to_string LocalId.to_string string_of_bool)
-               !used)
-        ^ "\n"));
+    [%ltrace
+      "- used variables: "
+      ^ String.concat ", "
+          (List.map
+             (Print.pair_to_string LocalId.to_string string_of_bool)
+             !used)];
 
     (* Save the filtering information, if there is anything to filter *)
     if List.exists (fun (_, b) -> not b) !used then
@@ -3170,10 +3142,7 @@ let filter_loop_inputs (ctx : ctx) (transl : pure_fun_translation list) :
       | [ f ] ->
           (* Group made of one function: check if it is a loop. If it is the
              case, explore it. *)
-          log#ltrace
-            (lazy
-              ("filter_loop_inputs: singleton:\n\n" ^ fun_decl_to_string ctx f
-             ^ "\n"));
+          [%ltrace "singleton:\n\n" ^ fun_decl_to_string ctx f];
 
           if Option.is_some f.loop_id then compute_one_filter_info f else ()
       | _ ->
@@ -3372,14 +3341,12 @@ let compute_reducible (_ctx : ctx) (transl : pure_fun_translation list) :
     [ctx]: used only for printing. *)
 let apply_passes_to_def (ctx : ctx) (def : fun_decl) : fun_and_loops =
   (* Debug *)
-  log#ltrace (lazy ("PureMicroPasses.apply_passes_to_def: " ^ def.name));
-
-  log#ltrace (lazy ("original decl:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
+  [%ltrace def.name];
+  [%ltrace "original decl:\n\n" ^ fun_decl_to_string ctx def];
 
   (* First, find names for the variables which are unnamed *)
   let def = compute_pretty_names def in
-  log#ltrace
-    (lazy ("compute_pretty_name:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
+  [%ltrace "compute_pretty_name:\n\n" ^ fun_decl_to_string ctx def];
 
   (* TODO: we might want to leverage more the assignment meta-data, for
    * aggregates for instance. *)
@@ -3390,7 +3357,7 @@ let apply_passes_to_def (ctx : ctx) (def : fun_decl) : fun_and_loops =
    * Rk.: some passes below use the fact that we removed the meta-data
    * (otherwise we would have to "unmeta" expressions before matching) *)
   let def = remove_meta def in
-  log#ltrace (lazy ("remove_meta:\n\n" ^ fun_decl_to_string ctx def ^ "\n"));
+  [%ltrace "remove_meta:\n\n" ^ fun_decl_to_string ctx def];
 
   (* Extract the loop definitions by removing the {!Loop} node *)
   let def, loops = decompose_loops ctx def in
@@ -3479,8 +3446,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
         (* Loops should have been eliminated *)
         [%internal_error] span
     | StructUpdate supd ->
-        log#ldebug
-          (lazy (__FUNCTION__ ^ ": exploring: " ^ texpression_to_string e));
+        [%ldebug "exploring: " ^ texpression_to_string e];
         (* Some backends need a type annotation here if we create a new structure
            and if the type is unknown.
            TODO: actually we may change the type of the structure by changing
@@ -3534,10 +3500,9 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
         let ty = if meta = TypeAnnot then e'.ty else ty in
         { e with e = Meta (meta, visit ty e') }
   and visit_App (ty : ty) (e : texpression) : texpression =
-    log#ldebug
-      (lazy
-        (__FUNCTION__ ^ ": visit_App:\n- ty: " ^ ty_to_string ty ^ "\n- e: "
-       ^ texpression_to_string e));
+    [%ldebug
+      "visit_App:\n- ty: " ^ ty_to_string ty ^ "\n- e: "
+      ^ texpression_to_string e];
     (* Deconstruct the app *)
     let f, args = destruct_apps e in
     (* Compute the types of the arguments: it depends on the function *)
@@ -3589,12 +3554,10 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
                   | None -> trans_fun.f
                   | Some lp_id -> Pure.LoopId.nth trans_fun.loops lp_id
                 in
-                log#ldebug
-                  (lazy (__FUNCTION__ ^ ": function name: " ^ trans_fun.name));
+                [%ldebug "function name: " ^ trans_fun.name];
                 trans_fun.signature
             | TraitMethod (tref, method_name, method_decl_id) ->
-                log#ldebug
-                  (lazy (__FUNCTION__ ^ ": method name: " ^ method_name));
+                [%ldebug "method name: " ^ method_name];
                 if Option.is_some lp_id then
                   [%craise] span
                     "Trying to get a loop subfunction from a method call";
@@ -3611,8 +3574,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
             | FunId (FBuiltin aid) ->
                 Builtin.BuiltinFunIdMap.find aid builtin_sigs
           in
-          log#ldebug
-            (lazy (__FUNCTION__ ^ ": signature: " ^ fun_sig_to_string sg));
+          [%ldebug "signature: " ^ fun_sig_to_string sg];
           (* In case this is a trait method, we need to concatenate the generics
              args of the trait ref with the generics args of the method call itself *)
           let generics =
@@ -3651,12 +3613,11 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
           in
           let generics = { qualif.generics with types; const_generics } in
           (* Compute the types of the arguments *)
-          log#ldebug
-            (lazy
-              (__FUNCTION__ ^ ":\n- sg.generics: "
-              ^ generic_params_to_string sg.generics
-              ^ "\n- generics: "
-              ^ generic_args_to_string generics));
+          [%ldebug
+            "- sg.generics: "
+            ^ generic_params_to_string sg.generics
+            ^ "\n- generics: "
+            ^ generic_args_to_string generics];
           let subst =
             make_subst_from_generics_for_trait sg.generics tr_self generics
           in

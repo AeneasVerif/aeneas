@@ -84,10 +84,9 @@ let update_array_default (crate : crate) : crate =
         (TraitDeclId.Map.find_opt impl.impl_trait.id crate.trait_decls)
     in
     if match_name impl_pat trait_decl.item_meta.name then (
-      log#ldebug
-        (lazy
-          (__FUNCTION__ ^ ": found a matching impl.\n - decl_generics: "
-          ^ Print.generic_args_to_string pctx impl.impl_trait.generics));
+      [%ldebug
+        "found a matching impl.\n - decl_generics: "
+        ^ Print.generic_args_to_string pctx impl.impl_trait.generics];
       (* Check the generics. Note that we ignore the case where the length
          is equal to 0, because in this case rustc uses a different impl
          which doesn't require that the type of the elements also has a
@@ -382,13 +381,11 @@ let remove_useless_cf_merges (crate : crate) (f : fun_decl) : fun_decl =
     | None -> None
   in
   let f = { f with body } in
-  log#ldebug
-    (lazy
-      ("Before/after [remove_useless_cf_merges]:\n"
-      ^ Print.Crate.crate_fun_decl_to_string crate f0
-      ^ "\n\n"
-      ^ Print.Crate.crate_fun_decl_to_string crate f
-      ^ "\n"));
+  [%ldebug
+    "Before/after [remove_useless_cf_merges]:\n"
+    ^ Print.Crate.crate_fun_decl_to_string crate f0
+    ^ "\n\n"
+    ^ Print.Crate.crate_fun_decl_to_string crate f];
   f
 
 (** This pass restructures the control-flow by inserting all the statements
@@ -534,13 +531,11 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
   in
 
   let f = { f with body } in
-  log#ldebug
-    (lazy
-      ("Before/after [remove_loop_breaks]:\n"
-      ^ Print.Crate.crate_fun_decl_to_string crate f0
-      ^ "\n\n"
-      ^ Print.Crate.crate_fun_decl_to_string crate f
-      ^ "\n"));
+  [%ldebug
+    "Before/after [remove_loop_breaks]:\n"
+    ^ Print.Crate.crate_fun_decl_to_string crate f0
+    ^ "\n\n"
+    ^ Print.Crate.crate_fun_decl_to_string crate f];
   f
 
 (** Remove the use of shallow borrows and the storage live/dead instructions.
@@ -638,13 +633,11 @@ let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
     | Some body -> Some { body with body = filter_in_body body.body }
   in
   let f = { f with body } in
-  log#ldebug
-    (lazy
-      ("Before/after [remove_shallow_borrows]:\n"
-      ^ Print.Crate.crate_fun_decl_to_string crate f0
-      ^ "\n\n"
-      ^ Print.Crate.crate_fun_decl_to_string crate f
-      ^ "\n"));
+  [%ldebug
+    "Before/after [remove_shallow_borrows]:\n"
+    ^ Print.Crate.crate_fun_decl_to_string crate f0
+    ^ "\n\n"
+    ^ Print.Crate.crate_fun_decl_to_string crate f];
   f
 
 (** `StorageDead`, `Deinit` and `Drop` have the same semantics as far as Aeneas
@@ -1050,6 +1043,5 @@ let apply_passes (crate : crate) : crate =
   in
   let crate = { crate with fun_decls } in
   let crate = filter_type_aliases crate in
-  log#ldebug
-    (lazy ("After pre-passes:\n" ^ Print.Crate.crate_to_string crate ^ "\n"));
+  [%ldebug "After pre-passes:\n" ^ Print.Crate.crate_to_string crate ^ "\n"];
   crate

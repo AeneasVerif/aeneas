@@ -22,8 +22,7 @@ type symbolic_fun_translation = symbolic_value list * SA.expression
 let translate_function_to_symbolics (trans_ctx : trans_ctx) (fdef : fun_decl) :
     symbolic_fun_translation option =
   (* Debug *)
-  log#ldebug
-    (lazy (__FUNCTION__ ^ ": " ^ name_to_string trans_ctx fdef.item_meta.name));
+  [%ldebug name_to_string trans_ctx fdef.item_meta.name];
 
   match fdef.body with
   | None -> None
@@ -44,8 +43,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     (fun_dsigs : Pure.decomposed_fun_sig FunDeclId.Map.t) (fdef : fun_decl) :
     pure_fun_translation_no_loops =
   (* Debug *)
-  log#ldebug
-    (lazy (__FUNCTION__ ^ ": " ^ name_to_string trans_ctx fdef.item_meta.name));
+  [%ldebug name_to_string trans_ctx fdef.item_meta.name];
 
   (* Compute the symbolic ASTs, if the function is transparent *)
   let symbolic_trans = translate_function_to_symbolics trans_ctx fdef in
@@ -223,7 +221,7 @@ let translate_crate_to_pure (crate : crate) :
     * Pure.trait_decl list
     * Pure.trait_impl list =
   (* Debug *)
-  log#ldebug (lazy __FUNCTION__);
+  [%ldebug ""];
 
   (* Compute the translation context *)
   let trans_ctx = compute_contexts crate in
@@ -1052,11 +1050,9 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
 (** Translate a crate and write the synthesized code to an output file. *)
 let translate_crate (filename : string) (dest_dir : string)
     (subdir : string option) (crate : crate) : unit =
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ":" ^ "\n- filename: " ^ filename ^ "\n- dest_dir: "
-     ^ dest_dir ^ "\n- subdir: "
-      ^ Print.option_to_string (fun x -> x) subdir));
+  [%ltrace
+    "- filename: " ^ filename ^ "\n- dest_dir: " ^ dest_dir ^ "\n- subdir: "
+    ^ Print.option_to_string (fun x -> x) subdir];
 
   (* Translate the module to the pure AST *)
   let ( trans_ctx,
@@ -1339,11 +1335,10 @@ let translate_crate (filename : string) (dest_dir : string)
         (* Concatenate *)
         (namespace, crate_name, full_dest_dir, filebasename)
   in
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ":" ^ "\n- namespace: " ^ namespace ^ "\n- crate_name: "
-     ^ crate_name ^ "\n- full_dest_dir: " ^ full_dest_dir
-     ^ "\n- extract_filebasename: " ^ extract_filebasename));
+  [%ltrace
+    "namespace: " ^ namespace ^ "\n- crate_name: " ^ crate_name
+    ^ "\n- full_dest_dir: " ^ full_dest_dir ^ "\n- extract_filebasename: "
+    ^ extract_filebasename];
 
   let mkdir_if dest_dir =
     if not (Sys.file_exists dest_dir) then (
@@ -1406,7 +1401,7 @@ let translate_crate (filename : string) (dest_dir : string)
           (List.filter (fun s -> s <> "") (String.split_on_char '/' subdir))
   in
   let import_prefix = import_prefix ^ module_delimiter in
-  log#ltrace (lazy (__FUNCTION__ ^ ": import_prefix: " ^ import_prefix));
+  [%ltrace "import_prefix: " ^ import_prefix];
 
   (* File extension for the "regular" modules *)
   let ext =

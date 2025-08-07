@@ -13,7 +13,7 @@ let log = Logging.abs_log
 let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
     ~(can_end : bool) ~(destructure_shared_values : bool) (ctx : eval_ctx)
     (v : typed_value) : abs list =
-  log#ltrace (lazy (__FUNCTION__ ^ ": " ^ typed_value_to_string ctx v));
+  [%ltrace typed_value_to_string ctx v];
   (* Convert the value to a list of avalues *)
   let absl = ref [] in
   let push_abs (r_id : RegionId.id) (avalues : typed_avalue list) : unit =
@@ -21,14 +21,13 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
     else begin
       (* Create the abs - note that we keep the order of the avalues as it is
          (unlike the environments) *)
-      log#ldebug
-        (lazy
-          (__FUNCTION__ ^ ": push_abs: avalues:\n"
-          ^ String.concat "\n"
-              (List.map
-                 (fun (v : typed_avalue) ->
-                   typed_avalue_to_string ctx v ^ " : " ^ ty_to_string ctx v.ty)
-                 avalues)));
+      [%ldebug
+        "avalues:\n"
+        ^ String.concat "\n"
+            (List.map
+               (fun (v : typed_avalue) ->
+                 typed_avalue_to_string ctx v ^ " : " ^ ty_to_string ctx v.ty)
+               avalues)];
       let abs =
         {
           abs_id = fresh_abstraction_id ();
@@ -40,9 +39,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
           avalues;
         }
       in
-      log#ldebug
-        (lazy
-          (__FUNCTION__ ^ ": push_abs: abs:\n" ^ abs_to_string span ctx abs));
+      [%ldebug "abs:\n" ^ abs_to_string span ctx abs];
       Invariants.opt_type_check_abs span ctx abs;
       (* Add to the list of abstractions *)
       absl := abs :: !absl
@@ -59,10 +56,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
       ~(group : bool) (r_id : RegionId.id) (v : typed_value) :
       typed_avalue list * typed_value =
     (* Debug *)
-    log#ldebug
-      (lazy
-        (__FUNCTION__ ^ ": to_avalues:\n- value: "
-        ^ typed_value_to_string ~span:(Some span) ctx v));
+    [%ldebug "\n- value: " ^ typed_value_to_string ~span:(Some span) ctx v];
 
     let ty = v.ty in
     match v.value with
@@ -502,7 +496,7 @@ let abs_split_markers (span : Meta.span) (ctx : eval_ctx) (abs : abs) : abs =
 let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
     ~(allow_markers : bool) (ctx : eval_ctx) (abs0 : abs) (abs1 : abs) :
     typed_avalue list =
-  log#ltrace (lazy __FUNCTION__);
+  [%ltrace ""];
 
   if !Config.sanity_checks then (
     let destructure_shared_values = true in
@@ -673,10 +667,9 @@ let merge_abstractions_merge_markers (span : Meta.span)
     (merge_funs : merge_duplicates_funcs) (ctx : eval_ctx)
     (owned_regions : RegionId.Set.t) (avalues : typed_avalue list) :
     typed_avalue list =
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ":\n- avalues:\n"
-      ^ String.concat ", " (List.map (typed_avalue_to_string ctx) avalues)));
+  [%ltrace
+    "- avalues:\n"
+    ^ String.concat ", " (List.map (typed_avalue_to_string ctx) avalues)];
 
   (* We simply iterate through the list of avalues create during the first phase,
      and progressively add them back: if we find a value with a complementary marker,
@@ -790,12 +783,11 @@ let merge_abstractions_merge_markers (span : Meta.span)
 let merge_abstractions (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
     (merge_funs : merge_duplicates_funcs option) (ctx : eval_ctx) (abs0 : abs)
     (abs1 : abs) : abs =
-  log#ltrace
-    (lazy
-      ("merge_abstractions:\n- abs0:\n"
-      ^ abs_to_string span ctx abs0
-      ^ "\n\n- abs1:\n"
-      ^ abs_to_string span ctx abs1));
+  [%ltrace
+    "- abs0:\n"
+    ^ abs_to_string span ctx abs0
+    ^ "\n\n- abs1:\n"
+    ^ abs_to_string span ctx abs1];
   (* Sanity check: we can't merge an abstraction with itself *)
   [%sanity_check] span (abs0.abs_id <> abs1.abs_id);
 

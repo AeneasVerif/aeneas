@@ -207,15 +207,13 @@ let ctx_push_var (span : Meta.span) (ctx : eval_ctx) (var : local)
     is important). *)
 let ctx_push_vars (span : Meta.span) (ctx : eval_ctx)
     (vars : (local * typed_value) list) : eval_ctx =
-  log#ltrace
-    (lazy
-      ("push_vars:\n"
-      ^ String.concat "\n"
-          (List.map
-             (fun (var, value) ->
-               (* We can unfortunately not use Print because it depends on Contexts... *)
-               show_var var ^ " -> " ^ show_typed_value value)
-             vars)));
+  [%ltrace
+    String.concat "\n"
+      (List.map
+         (fun (var, value) ->
+           (* We can unfortunately not use Print because it depends on Contexts... *)
+           show_var var ^ " -> " ^ show_typed_value value)
+         vars)];
   [%cassert] span
     (List.for_all
        (fun (var, (value : typed_value)) ->

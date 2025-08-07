@@ -86,7 +86,7 @@ let check_literal (span : Meta.span) (v : literal) (ty : literal_type) : unit =
 
 let rec check_typed_pattern (span : Meta.span) (ctx : tc_ctx)
     (v : typed_pattern) : tc_ctx =
-  log#ltrace (lazy (__FUNCTION__ ^ ": " ^ typed_pattern_to_string ctx v));
+  [%ltrace typed_pattern_to_string ctx v];
   match v.value with
   | PatConstant cv ->
       check_literal span cv (ty_as_literal span v.ty);
@@ -119,7 +119,7 @@ let rec check_typed_pattern (span : Meta.span) (ctx : tc_ctx)
 
 let rec check_texpression (span : Meta.span) (ctx : tc_ctx) (e : texpression) :
     unit =
-  log#ltrace (lazy (__FUNCTION__ ^ ": " ^ texpression_to_string ctx e ^ "\n"));
+  [%ltrace texpression_to_string ctx e];
   match e.e with
   | Var var_id -> (
       (* Lookup the variable - note that the variable may not be there,
@@ -180,17 +180,13 @@ let rec check_texpression (span : Meta.span) (ctx : tc_ctx) (e : texpression) :
               [%pure_type_check] span (generics = qualif.generics)
           | _ -> [%craise] span "Unreachable"))
   | Let (monadic, pat, re, e_next) ->
-      log#ldebug
-        (lazy
-          (__FUNCTION__ ^ ": Let: e:\n" ^ texpression_to_string ctx e ^ "\n"));
+      [%ldebug "Let: e:\n" ^ texpression_to_string ctx e];
       let expected_pat_ty =
         if monadic then destruct_result span re.ty else re.ty
       in
-      log#ldebug
-        (lazy
-          (__FUNCTION__ ^ ": Let:\n- pat.ty: " ^ ty_to_string ctx pat.ty
-         ^ "\n- expected_pat_ty: "
-          ^ ty_to_string ctx expected_pat_ty));
+      [%ldebug
+        "Let:\n- pat.ty: " ^ ty_to_string ctx pat.ty ^ "\n- expected_pat_ty: "
+        ^ ty_to_string ctx expected_pat_ty];
       [%pure_type_check] span (pat.ty = expected_pat_ty);
       [%pure_type_check] span (e.ty = e_next.ty);
       (* Check the right-expression *)

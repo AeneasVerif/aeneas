@@ -2161,10 +2161,7 @@ let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
     | _ -> def.item_meta
   in
   let llbc_name = rename_llbc_name item_meta.attr_info def.item_meta.name in
-  log#ldebug
-    (lazy
-      (__FUNCTION__ ^ ": llbc_name after renaming: "
-      ^ name_to_string ctx llbc_name));
+  [%ldebug "llbc_name after renaming: " ^ name_to_string ctx llbc_name];
   (* When a trait method has a default implementation, this becomes a [fun_decl]
      that we may want to extract. By default, its name is [Trait::method], which
      for lean creates a name clash with the method name as a field in the trait
@@ -2179,11 +2176,9 @@ let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
           llbc_name @ [ PeIdent ("default", Disambiguator.zero) ]
       | _ -> llbc_name
   in
-  log#ldebug
-    (lazy
-      (__FUNCTION__
-     ^ ": llbc_name after adding 'default' suffix (for default methods): "
-      ^ name_to_string ctx llbc_name));
+  [%ldebug
+    "llbc_name after adding 'default' suffix (for default methods): "
+    ^ name_to_string ctx llbc_name];
   ctx_compute_fun_name def.item_meta ctx llbc_name def.num_loops def.loop_id
 
 (* TODO: move to Extract *)

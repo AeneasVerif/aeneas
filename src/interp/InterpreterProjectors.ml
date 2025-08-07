@@ -201,14 +201,12 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
             let rset1 = ctx.ended_regions in
             let ty2 = ty in
             let rset2 = regions in
-            log#ltrace
-              (lazy
-                ("projections_intersect:" ^ "\n- ty1: " ^ ty_to_string ctx ty1
-               ^ "\n- rset1: "
-                ^ RegionId.Set.to_string None rset1
-                ^ "\n- ty2: " ^ ty_to_string ctx ty2 ^ "\n- rset2: "
-                ^ RegionId.Set.to_string None rset2
-                ^ "\n"));
+            [%ltrace
+              "- ty1: " ^ ty_to_string ctx ty1 ^ "\n- rset1: "
+              ^ RegionId.Set.to_string None rset1
+              ^ "\n- ty2: " ^ ty_to_string ctx ty2 ^ "\n- rset2: "
+              ^ RegionId.Set.to_string None rset2
+              ^ "\n"];
             [%sanity_check] span
               (not (projections_intersect span rset1 ty1 rset2 ty2)));
           ASymbolic
@@ -216,11 +214,10 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
               AProjBorrows
                 { proj = { sv_id = s.sv_id; proj_ty = ty }; loans = [] } )
       | _ ->
-          log#ltrace
-            (lazy
-              ("apply_proj_borrows: unexpected inputs:\n- input value: "
-              ^ typed_value_to_string ~span:(Some span) ctx v
-              ^ "\n- proj rty: " ^ ty_to_string ctx ty));
+          [%ltrace
+            "unexpected inputs:\n- input value: "
+            ^ typed_value_to_string ~span:(Some span) ctx v
+            ^ "\n- proj rty: " ^ ty_to_string ctx ty];
           [%internal_error] span
     in
     { value; ty }

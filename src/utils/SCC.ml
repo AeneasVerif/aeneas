@@ -241,10 +241,9 @@ module Make (Id : OrderedType) = struct
       (* Check that all the ids are in the sccs *)
       let scc_ids = S.of_list (List.concat sccs) in
 
-      log#ldebug
-        (lazy
-          ("group_reorder_fun_decls: sanity check:" ^ "\n- ids    : "
-         ^ S.show ids ^ "\n- scc_ids: " ^ S.show scc_ids));
+      [%ldebug
+        "sanity check:" ^ "\n- ids    : " ^ S.show ids ^ "\n- scc_ids: "
+        ^ S.show scc_ids];
 
       assert (S.equal scc_ids ids)
     in

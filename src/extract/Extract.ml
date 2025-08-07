@@ -624,14 +624,12 @@ and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
 and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (inside : bool) (fid : fun_or_op_id)
     (generics : generic_args) (args : texpression list) : unit =
-  log#ltrace
-    (lazy
-      ("extract_function_call: "
-      ^ fun_or_op_id_to_string ctx fid
-      ^ "\n- generics: "
-      ^ generic_args_to_string ctx generics
-      ^ "\n- args: "
-      ^ String.concat ", " (List.map (texpression_to_string ctx) args)));
+  [%ltrace
+    fun_or_op_id_to_string ctx fid
+    ^ "\n- generics: "
+    ^ generic_args_to_string ctx generics
+    ^ "\n- args: "
+    ^ String.concat ", " (List.map (texpression_to_string ctx) args)];
   match (fid, args) with
   | Unop unop, [ arg ] ->
       (* A unop can have *at most* one argument (the result can't be a function!).
@@ -2495,7 +2493,7 @@ let extract_trait_decl_type_names (ctx : extraction_ctx)
 let extract_trait_decl_method_names (ctx : extraction_ctx)
     (trait_decl : trait_decl) (trait_decl_name : string)
     (builtin_info : Pure.builtin_trait_decl_info option) : extraction_ctx =
-  log#ltrace (lazy (__FUNCTION__ ^ ": " ^ trait_decl.name));
+  [%ltrace trait_decl.name];
   let methods = trait_decl.methods in
   (* Compute the names *)
   let method_names =
@@ -2504,10 +2502,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
         (* Not a builtin function *)
         let compute_item_name (item_name : string) (id : fun_decl_id) :
             string * FunDeclId.id option * string =
-          log#ldebug
-            (lazy
-              (__FUNCTION__ ^ "(" ^ trait_decl.name ^ "): compute_item_name: "
-             ^ item_name));
+          [%ldebug "(" ^ trait_decl.name ^ "): compute_item_name: " ^ item_name];
           let trans : pure_fun_translation =
             match FunDeclId.Map.find_opt id ctx.trans_funs with
             | Some decl -> decl
@@ -2527,10 +2522,9 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
           let f =
             { f with item_meta = { f.item_meta with name = llbc_name } }
           in
-          log#ldebug
-            (lazy
-              (__FUNCTION__ ^ ": compute_item_name: llbc_name="
-              ^ name_to_string ctx f.item_meta.name));
+          [%ldebug
+            "compute_item_name: llbc_name="
+            ^ name_to_string ctx f.item_meta.name];
           let name = ctx_compute_fun_name f true ctx in
           (* Add a prefix if necessary *)
           let name =
@@ -2624,10 +2618,8 @@ let extract_trait_decl_register_names (ctx : extraction_ctx)
 (** Similar to {!extract_type_decl_register_names} *)
 let extract_trait_impl_register_names (ctx : extraction_ctx)
     (trait_impl : trait_impl) : extraction_ctx =
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ "trait_impl.impl_trait"
-      ^ trait_decl_ref_to_string ctx trait_impl.impl_trait));
+  [%ltrace
+    "trait_impl.impl_trait" ^ trait_decl_ref_to_string ctx trait_impl.impl_trait];
   let decl_id = trait_impl.impl_trait.trait_decl_id in
   let trait_decl = TraitDeclId.Map.find decl_id ctx.trans_trait_decls in
   (* Register some builtin information (if necessary) *)
@@ -3043,8 +3035,7 @@ let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
 (** Extract a trait implementation *)
 let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     (impl : trait_impl) : unit =
-  log#ltrace
-    (lazy (__FUNCTION__ ^ ": " ^ name_to_string ctx impl.item_meta.name));
+  [%ltrace name_to_string ctx impl.item_meta.name];
   (* Retrieve the impl name *)
   let impl_name = ctx_get_trait_impl impl.item_meta.span impl.def_id ctx in
   (* Add a break before *)
@@ -3055,18 +3046,17 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
        let decl_id = impl.impl_trait.trait_decl_id in
        let trait_decl = TraitDeclId.Map.find decl_id ctx.trans_trait_decls in
        let decl_ref = impl.llbc_impl_trait in
-       log#ldebug
-         (lazy
-           (let params0, params1 =
-              llbc_generic_params_to_strings ctx impl.llbc_generics
-            in
-            let params = String.concat ", " (params0 @ params1) in
-            let args0, args1 =
-              llbc_generic_args_to_strings ctx decl_ref.generics
-            in
-            let args = String.concat ", " (args0 @ args1) in
-            __FUNCTION__ ^ ":" ^ "\n- trait_decl.llbc_generics: [" ^ params
-            ^ "]" ^ "\n- decl_ref.decl_generics: [" ^ args ^ "]"));
+       [%ldebug
+         let params0, params1 =
+           llbc_generic_params_to_strings ctx impl.llbc_generics
+         in
+         let params = String.concat ", " (params0 @ params1) in
+         let args0, args1 =
+           llbc_generic_args_to_strings ctx decl_ref.generics
+         in
+         let args = String.concat ", " (args0 @ args1) in
+         "- trait_decl.llbc_generics: [" ^ params ^ "]"
+         ^ "\n- decl_ref.decl_generics: [" ^ args ^ "]"];
        ( Some trait_decl.item_meta.name,
          Some (impl.llbc_generics, decl_ref.generics) ))
      else (None, None)

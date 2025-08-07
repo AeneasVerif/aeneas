@@ -27,7 +27,7 @@ let eval_loop_concrete (span : Meta.span) (eval_loop_body : stl_cm_fun) :
      new context (and repeat this an indefinite number of times).
   *)
   let rec rec_eval_loop_body (ctx : eval_ctx) (res : statement_eval_res) =
-    log#ltrace (lazy "eval_loop_concrete: reeval_loop_body");
+    [%ltrace ""];
     match res with
     | Return -> [ (ctx, LoopReturn loop_id) ]
     | Panic -> [ (ctx, Panic) ]
@@ -89,14 +89,12 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
     ((eval_ctx * statement_eval_res)
     * (SymbolicAst.expression -> SymbolicAst.expression))
     * borrow_loan_corresp =
-  log#ltrace
-    (lazy
-      (__FUNCTION__
-     ^ ": about to reorganize the original context to match the fixed-point \
-        ctx with it:\n\
-        - src ctx (fixed-point ctx):\n" ^ eval_ctx_to_string fp_ctx
-     ^ "\n\n-tgt ctx (original context):\n"
-      ^ eval_ctx_to_string init_ctx));
+  [%ltrace
+    "about to reorganize the original context to match the fixed-point ctx \
+     with it:\n\
+     - src ctx (fixed-point ctx):\n" ^ eval_ctx_to_string fp_ctx
+    ^ "\n\n-tgt ctx (original context):\n"
+    ^ eval_ctx_to_string init_ctx];
 
   let ctx = init_ctx in
 
@@ -107,29 +105,24 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
   in
 
   (* Actually match *)
-  log#ltrace
-    (lazy
-      (__FUNCTION__
-     ^ ": about to compute the id correspondance between the fixed-point ctx \
-        and the original ctx:\n\
-        - src ctx (fixed-point ctx)\n" ^ eval_ctx_to_string fp_ctx
-     ^ "\n\n-tgt ctx (original context):\n" ^ eval_ctx_to_string ctx));
+  [%ltrace
+    "about to compute the id correspondance between the fixed-point ctx and \
+     the original ctx:\n\
+     - src ctx (fixed-point ctx)\n" ^ eval_ctx_to_string fp_ctx
+    ^ "\n\n-tgt ctx (original context):\n" ^ eval_ctx_to_string ctx];
 
   (* Compute the id correspondance between the contexts *)
   let fp_bl_corresp =
     compute_fixed_point_id_correspondance span fixed_ids ctx fp_ctx
   in
-  log#ltrace
-    (lazy
-      (__FUNCTION__
-     ^ ": about to match the fixed-point context with the original context:\n\
-        - src ctx (fixed-point ctx)"
-      ^ eval_ctx_to_string ~span:(Some span) fp_ctx
-      ^ "\n\n-tgt ctx (original context):\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx
-      ^ "\n\n- fp_bl_corresp:\n"
-      ^ show_borrow_loan_corresp fp_bl_corresp
-      ^ "\n"));
+  [%ltrace
+    "about to match the fixed-point context with the original context:\n\
+     - src ctx (fixed-point ctx)"
+    ^ eval_ctx_to_string ~span:(Some span) fp_ctx
+    ^ "\n\n-tgt ctx (original context):\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx
+    ^ "\n\n- fp_bl_corresp:\n"
+    ^ show_borrow_loan_corresp fp_bl_corresp];
 
   (* Compute the end expression, that is the expresion corresponding to the
      end of the function where we call the loop (for now, when calling a loop
@@ -146,9 +139,7 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
      inside the region abstractions. *)
   let check_abs (abs_id : AbstractionId.id) =
     let abs = ctx_lookup_abs fp_ctx abs_id in
-    log#ltrace
-      (lazy
-        (__FUNCTION__ ^ ": checking abs:\n" ^ abs_to_string span ctx abs ^ "\n"));
+    [%ltrace "checking abs:\n" ^ abs_to_string span ctx abs];
 
     let is_borrow (av : typed_avalue) : bool =
       match av.value with
@@ -258,7 +249,7 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
      For now, we forbid having breaks in loops (and eliminate breaks
      in the prepasses) *)
   let eval_after_loop_iter (ctx, res) =
-    log#ltrace (lazy "eval_loop_symbolic: eval_after_loop_iter");
+    [%ltrace ""];
     match res with
     | Return ->
         (* We replace the [Return] with a [LoopReturn] *)
@@ -270,14 +261,13 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
     | Continue i ->
         (* We don't support nested loops for now *)
         [%cassert] span (i = 0) "Nested loops are not supported yet";
-        log#ltrace
-          (lazy
-            ("eval_loop_symbolic: about to match the fixed-point context with \
-              the context at a continue:\n\
-              - src ctx (fixed-point ctx)"
-            ^ eval_ctx_to_string ~span:(Some span) fp_ctx
-            ^ "\n\n-tgt ctx (ctx at continue):\n"
-            ^ eval_ctx_to_string ~span:(Some span) ctx));
+        [%ltrace
+          "about to match the fixed-point context with the context at a \
+           continue:\n\
+           - src ctx (fixed-point ctx)"
+          ^ eval_ctx_to_string ~span:(Some span) fp_ctx
+          ^ "\n\n-tgt ctx (ctx at continue):\n"
+          ^ eval_ctx_to_string ~span:(Some span) ctx];
         loop_match_ctx_with_target config span loop_id false fp_bl_corresp
           fp_input_svalues fixed_ids fp_ctx ctx
     | Unit | LoopReturn _ | EndEnterLoop _ | EndContinue _ ->
@@ -301,11 +291,7 @@ let eval_loop_symbolic (config : config) (span : span)
     (eval_loop_body : stl_cm_fun) : stl_cm_fun =
  fun ctx ->
   (* Debug *)
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ":\nContext:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx
-      ^ "\n\n"));
+  [%ltrace "Context:\n" ^ eval_ctx_to_string ~span:(Some span) ctx ^ "\n"];
 
   (* Generate a fresh loop id *)
   let loop_id = fresh_loop_id () in
@@ -316,14 +302,13 @@ let eval_loop_symbolic (config : config) (span : span)
   in
 
   (* Debug *)
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ":\n- Initial context:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx
-      ^ "\n\n- Fixed point:\n"
-      ^ eval_ctx_to_string ~span:(Some span) fp_ctx
-      ^ "\n\n- rg_to_abs:\n"
-      ^ RegionGroupId.Map.to_string None AbstractionId.to_string rg_to_abs));
+  [%ltrace
+    "- Initial context:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx
+    ^ "\n\n- Fixed point:\n"
+    ^ eval_ctx_to_string ~span:(Some span) fp_ctx
+    ^ "\n\n- rg_to_abs:\n"
+    ^ RegionGroupId.Map.to_string None AbstractionId.to_string rg_to_abs];
 
   (* Compute the loop input parameters *)
   let fresh_sids, input_svalues =
@@ -345,10 +330,7 @@ let eval_loop_symbolic (config : config) (span : span)
       fp_ctx fp_input_svalues rg_to_abs
   in
 
-  log#ltrace
-    (lazy
-      (__FUNCTION__
-     ^ ": matched the fixed-point context with the original context."));
+  [%ltrace "matched the fixed-point context with the original context."];
 
   (* Synthesize the loop body *)
   let resl_loop_body, cf_loop_body =
@@ -356,19 +338,18 @@ let eval_loop_symbolic (config : config) (span : span)
       fixed_ids fp_ctx fp_input_svalues fp_bl_corresp
   in
 
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ": result:" ^ "\n- src context:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx
-      ^ "\n- fixed point:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp_ctx
-      ^ "\n- fixed_sids: "
-      ^ SymbolicValueId.Set.show fixed_ids.sids
-      ^ "\n- fresh_sids: "
-      ^ SymbolicValueId.Set.show fresh_sids
-      ^ "\n- input_svalues: "
-      ^ Print.list_to_string (symbolic_value_to_string ctx) input_svalues
-      ^ "\n\n"));
+  [%ltrace
+    "result:" ^ "\n- src context:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx
+    ^ "\n- fixed point:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp_ctx
+    ^ "\n- fixed_sids: "
+    ^ SymbolicValueId.Set.show fixed_ids.sids
+    ^ "\n- fresh_sids: "
+    ^ SymbolicValueId.Set.show fresh_sids
+    ^ "\n- input_svalues: "
+    ^ Print.list_to_string (symbolic_value_to_string ctx) input_svalues
+    ^ "\n"];
 
   (* For every abstraction introduced by the fixed-point, compute the
      types of the given back values.
@@ -383,11 +364,7 @@ let eval_loop_symbolic (config : config) (span : span)
   let rg_to_given_back =
     let compute_abs_given_back_tys (abs_id : AbstractionId.id) : Pure.ty list =
       let abs = ctx_lookup_abs fp_ctx abs_id in
-      log#ltrace
-        (lazy
-          (__FUNCTION__ ^ ": compute_abs_given_back_tys:\n- abs:\n"
-          ^ abs_to_string span ~with_ended:true ctx abs
-          ^ "\n"));
+      [%ltrace "- abs:\n" ^ abs_to_string span ~with_ended:true ctx abs];
 
       let is_borrow (av : typed_avalue) : bool =
         match av.value with

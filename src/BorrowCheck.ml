@@ -10,7 +10,7 @@ let log = Logging.borrow_check_log
     register them and print them later. *)
 let borrow_check_crate (crate : crate) : unit =
   (* Debug *)
-  log#ldebug (lazy "translate_crate_to_pure");
+  [%ldebug "translate_crate_to_pure"];
 
   (* Compute the translation context *)
   let trans_ctx = compute_contexts crate in

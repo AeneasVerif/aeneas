@@ -11,6 +11,9 @@ let create_logger name =
   loggers := StringMap.add name l !loggers;
   l
 
+let to_log_msg (f : string) (msg : string) : string =
+  if msg = "" then f ^ "\n" else f ^ ":\n" ^ msg ^ "\n"
+
 (** Logger for Errors *)
 let errors_log = create_logger "Errors"
 

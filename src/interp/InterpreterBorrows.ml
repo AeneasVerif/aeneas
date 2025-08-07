@@ -243,13 +243,11 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : typed_value)
     (not (bottom_in_value ctx.ended_regions nv))
     "Can not end a borrow because the value to give back contains bottom";
   (* Debug *)
-  log#ltrace
-    (lazy
-      ("give_back_value:\n- bid: " ^ BorrowId.to_string bid ^ "\n- value: "
-      ^ typed_value_to_string ~span:(Some span) ctx nv
-      ^ "\n- context:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx
-      ^ "\n"));
+  [%ltrace
+    "- bid: " ^ BorrowId.to_string bid ^ "\n- value: "
+    ^ typed_value_to_string ~span:(Some span) ctx nv
+    ^ "\n- context:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx];
   (* We use a reference to check that we updated exactly one loan *)
   let replaced : bool ref = ref false in
   let set_replaced () =
@@ -440,17 +438,16 @@ let end_aproj_borrows (span : Meta.span) (ended_regions : RegionId.Set.t)
     (proj : symbolic_proj) (nsv : symbolic_value) (ctx : eval_ctx) : eval_ctx =
   (* Sanity checks *)
   [%sanity_check] span (proj.sv_id <> nsv.sv_id && ty_is_rty proj.proj_ty);
-  log#ltrace
-    (lazy
-      ("end_aproj_borrows:" ^ "\n- ended regions: "
-      ^ RegionId.Set.to_string None ended_regions
-      ^ "\n- projection type: "
-      ^ ty_to_string ctx proj.proj_ty
-      ^ "\n- sv: "
-      ^ symbolic_value_id_to_pretty_string proj.sv_id
-      ^ "\n- nsv: "
-      ^ symbolic_value_to_string ctx nsv
-      ^ "\n- ctx: " ^ eval_ctx_to_string ctx));
+  [%ltrace
+    "- ended regions: "
+    ^ RegionId.Set.to_string None ended_regions
+    ^ "\n- projection type: "
+    ^ ty_to_string ctx proj.proj_ty
+    ^ "\n- sv: "
+    ^ symbolic_value_id_to_pretty_string proj.sv_id
+    ^ "\n- nsv: "
+    ^ symbolic_value_to_string ctx nsv
+    ^ "\n- ctx: " ^ eval_ctx_to_string ctx];
   (* Substitution functions, to replace the borrow projectors over symbolic values *)
   (* Substitution functions, to replace the borrow projectors over symbolic values *)
   (* See the comments about [AProjLoans], we have to update in two situations:
@@ -690,18 +687,16 @@ let convert_avalue_to_given_back_value (span : Meta.span) (av : typed_avalue) :
 let give_back (config : config) (span : Meta.span) (l : unique_borrow_id)
     (bc : g_borrow_content) (ctx : eval_ctx) : eval_ctx =
   (* Debug *)
-  log#ltrace
-    (lazy
-      (let bc =
-         match bc with
-         | Concrete bc -> borrow_content_to_string ~span:(Some span) ctx bc
-         | Abstract bc -> aborrow_content_to_string ~span:(Some span) ctx bc
-       in
-       "give_back:\n- bid: "
-       ^ unique_borrow_id_to_string l
-       ^ "\n- content: " ^ bc ^ "\n- context:\n"
-       ^ eval_ctx_to_string ~span:(Some span) ctx
-       ^ "\n"));
+  [%ltrace
+    let bc =
+      match bc with
+      | Concrete bc -> borrow_content_to_string ~span:(Some span) ctx bc
+      | Abstract bc -> aborrow_content_to_string ~span:(Some span) ctx bc
+    in
+    "- bid: "
+    ^ unique_borrow_id_to_string l
+    ^ "\n- content: " ^ bc ^ "\n- context:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx];
   (* This is used for sanity checks *)
   let sanity_ek =
     { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
@@ -823,12 +818,10 @@ let rec end_borrow_aux (config : config) (span : Meta.span)
   let chain =
     add_borrow_loan_abs_id_to_chain span "end_borrow_aux: " (BorrowId l) chain
   in
-  log#ltrace
-    (lazy
-      ("end borrow: "
-      ^ unique_borrow_id_to_string l
-      ^ ":\n- original context:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx));
+  [%ltrace
+    unique_borrow_id_to_string l
+    ^ ":\n- original context:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx];
 
   (* Utility function for the sanity checks: check that the borrow disappeared
    * from the context *)
@@ -850,12 +843,10 @@ let rec end_borrow_aux (config : config) (span : Meta.span)
   *)
   | Error priority -> (
       (* Debug *)
-      log#ltrace
-        (lazy
-          ("end borrow: "
-          ^ unique_borrow_id_to_string l
-          ^ ": found outer borrows/abs or inner loans:"
-          ^ show_priority_borrow_or_abs priority));
+      [%ltrace
+        unique_borrow_id_to_string l
+        ^ ": found outer borrows/abs or inner loans:"
+        ^ show_priority_borrow_or_abs priority];
       (* End the priority borrows, abstractions, then try again to end the target
        * borrow (if necessary) *)
       match priority with
@@ -880,7 +871,7 @@ let rec end_borrow_aux (config : config) (span : Meta.span)
           check ctx;
           (ctx, end_abs))
   | Ok (ctx, None) ->
-      log#ltrace (lazy "End borrow: borrow not found");
+      [%ltrace "borrow not found"];
       (* It is possible that we can't find a borrow in symbolic mode (ending
        * an abstraction may end several borrows at once *)
       [%sanity_check] span (config.mode = SymbolicMode);
@@ -1063,12 +1054,10 @@ and end_abstraction_aux (config : config) (span : Meta.span)
   in
   (* Remember the original context for printing purposes *)
   let ctx0 = ctx in
-  log#ltrace
-    (lazy
-      ("end_abstraction_aux: "
-      ^ AbstractionId.to_string abs_id
-      ^ "\n- original context:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx0));
+  [%ltrace
+    AbstractionId.to_string abs_id
+    ^ "\n- original context:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx0];
 
   (* Lookup the abstraction - note that if we end a list of abstractions [A1, A0],
      ending the first abstraction A1 may require the last abstraction A0 to
@@ -1076,11 +1065,10 @@ and end_abstraction_aux (config : config) (span : Meta.span)
      context anymore, meaning we have to simply ignore it. *)
   match ctx_lookup_abs_opt ctx abs_id with
   | None ->
-      log#ltrace
-        (lazy
-          ("abs not found (already ended): "
-          ^ AbstractionId.to_string abs_id
-          ^ "\n"));
+      [%ltrace
+        "abs not found (already ended): "
+        ^ AbstractionId.to_string abs_id
+        ^ "\n"];
       (ctx, fun e -> e)
   | Some abs ->
       (* Check that we can end the abstraction *)
@@ -1093,23 +1081,19 @@ and end_abstraction_aux (config : config) (span : Meta.span)
 
       (* End the parent abstractions first *)
       let ctx, cc = end_abstractions_aux config span chain abs.parents ctx in
-      log#ltrace
-        (lazy
-          ("end_abstraction_aux: "
-          ^ AbstractionId.to_string abs_id
-          ^ "\n- context after parent abstractions ended:\n"
-          ^ eval_ctx_to_string ~span:(Some span) ctx));
+      [%ltrace
+        AbstractionId.to_string abs_id
+        ^ "\n- context after parent abstractions ended:\n"
+        ^ eval_ctx_to_string ~span:(Some span) ctx];
 
       (* End the loans inside the abstraction *)
       let ctx, cc =
         comp cc (end_abstraction_loans config span chain abs_id ctx)
       in
-      log#ltrace
-        (lazy
-          ("end_abstraction_aux: "
-          ^ AbstractionId.to_string abs_id
-          ^ "\n- context after loans ended:\n"
-          ^ eval_ctx_to_string ~span:(Some span) ctx));
+      [%ltrace
+        AbstractionId.to_string abs_id
+        ^ "\n- context after loans ended:\n"
+        ^ eval_ctx_to_string ~span:(Some span) ctx];
 
       (* End the abstraction itself by redistributing the borrows it contains *)
       let ctx, cc =
@@ -1134,14 +1118,12 @@ and end_abstraction_aux (config : config) (span : Meta.span)
       in
 
       (* Debugging *)
-      log#ltrace
-        (lazy
-          ("end_abstraction_aux: "
-          ^ AbstractionId.to_string abs_id
-          ^ "\n- original context:\n"
-          ^ eval_ctx_to_string ~span:(Some span) ctx0
-          ^ "\n\n- new context:\n"
-          ^ eval_ctx_to_string ~span:(Some span) ctx));
+      [%ltrace
+        AbstractionId.to_string abs_id
+        ^ "\n- original context:\n"
+        ^ eval_ctx_to_string ~span:(Some span) ctx0
+        ^ "\n\n- new context:\n"
+        ^ eval_ctx_to_string ~span:(Some span) ctx];
 
       (* Sanity check: ending an abstraction must preserve the invariants *)
       Invariants.check_invariants span ctx;
@@ -1166,11 +1148,10 @@ and end_abstractions_aux (config : config) (span : Meta.span)
 and end_abstraction_loans (config : config) (span : Meta.span)
     (chain : borrow_loan_abs_ids) (abs_id : AbstractionId.id) : cm_fun =
  fun ctx ->
-  log#ltrace
-    (lazy
-      ("end_abstraction_loans:" ^ "\n- abs_id: "
-      ^ AbstractionId.to_string abs_id
-      ^ "\n- ctx:\n" ^ eval_ctx_to_string ctx));
+  [%ltrace
+    "- abs_id: "
+    ^ AbstractionId.to_string abs_id
+    ^ "\n- ctx:\n" ^ eval_ctx_to_string ctx];
   (* Lookup the abstraction *)
   let abs = ctx_lookup_abs ctx abs_id in
   (* End the first loan we find.
@@ -1200,9 +1181,7 @@ and end_abstraction_loans (config : config) (span : Meta.span)
 and end_abstraction_borrows (config : config) (span : Meta.span)
     (chain : borrow_loan_abs_ids) (abs_id : AbstractionId.id) : cm_fun =
  fun ctx ->
-  log#ltrace
-    (lazy
-      ("end_abstraction_borrows: abs_id: " ^ AbstractionId.to_string abs_id));
+  [%ltrace "abs_id: " ^ AbstractionId.to_string abs_id];
   (* Note that the abstraction mustn't contain any loans *)
   (* We end the borrows, starting with the *inner* ones. This is important
      when considering nested borrows which have the same lifetime.
@@ -1276,10 +1255,9 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
   with
   (* There are concrete (i.e., not symbolic) borrows: end them, then re-explore *)
   | FoundABorrowContent bc ->
-      log#ltrace
-        (lazy
-          ("end_abstraction_borrows: found aborrow content: "
-          ^ aborrow_content_to_string ~span:(Some span) ctx bc));
+      [%ltrace
+        "found aborrow content: "
+        ^ aborrow_content_to_string ~span:(Some span) ctx bc];
       let ctx =
         match bc with
         | AMutBorrow (pm, bid, av) ->
@@ -1327,10 +1305,8 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
       end_abstraction_borrows config span chain abs_id ctx
   (* There are symbolic borrows: end them, then re-explore *)
   | FoundAProjBorrows aproj ->
-      log#ltrace
-        (lazy
-          ("end_abstraction_borrows: found aproj borrows: "
-          ^ aproj_to_string ctx (AProjBorrows aproj)));
+      [%ltrace
+        "found aproj borrows: " ^ aproj_to_string ctx (AProjBorrows aproj)];
       (* Generate a fresh symbolic value *)
       let nsv = mk_fresh_symbolic_value span aproj.proj.proj_ty in
       (* Replace the proj_borrows - there should be exactly one *)
@@ -1344,10 +1320,9 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
       end_abstraction_borrows config span chain abs_id ctx
   (* There are concrete (i.e., not symbolic) borrows in shared values: end them, then reexplore *)
   | FoundBorrowContent bc ->
-      log#ltrace
-        (lazy
-          ("end_abstraction_borrows: found borrow content: "
-          ^ borrow_content_to_string ~span:(Some span) ctx bc));
+      [%ltrace
+        "found borrow content: "
+        ^ borrow_content_to_string ~span:(Some span) ctx bc];
       let ctx =
         match bc with
         | VSharedBorrow (_, sid) -> (
@@ -1404,17 +1379,16 @@ and end_proj_loans_symbolic (config : config) (span : Meta.span)
     (chain : borrow_loan_abs_ids) (abs_id : AbstractionId.id)
     (regions : RegionId.Set.t) (proj : symbolic_proj) : cm_fun =
  fun ctx ->
-  log#ltrace
-    (lazy
-      ("end_proj_loans_symbolic:" ^ "\n- abs_id: "
-      ^ AbstractionId.to_string abs_id
-      ^ "\n- regions: "
-      ^ RegionId.Set.to_string None regions
-      ^ "\n- sv: "
-      ^ symbolic_value_id_to_pretty_string proj.sv_id
-      ^ "\n- projection type: "
-      ^ ty_to_string ctx proj.proj_ty
-      ^ "\n- ctx:\n" ^ eval_ctx_to_string ctx));
+  [%ltrace
+    "- abs_id: "
+    ^ AbstractionId.to_string abs_id
+    ^ "\n- regions: "
+    ^ RegionId.Set.to_string None regions
+    ^ "\n- sv: "
+    ^ symbolic_value_id_to_pretty_string proj.sv_id
+    ^ "\n- projection type: "
+    ^ ty_to_string ctx proj.proj_ty
+    ^ "\n- ctx:\n" ^ eval_ctx_to_string ctx];
   (* Small helpers for sanity checks *)
   let check ctx = no_aproj_over_symbolic_in_context span proj.sv_id ctx in
   (* Find the first proj_borrows which intersects the proj_loans *)
@@ -1588,11 +1562,9 @@ let end_abstractions_no_synth config span ids ctx =
 let promote_shared_loan_to_mut_loan (span : Meta.span) (l : BorrowId.id)
     (bid : SharedBorrowId.id) (ctx : eval_ctx) : typed_value * eval_ctx =
   (* Debug *)
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ":\n- loan: " ^ BorrowId.to_string l ^ "\n- context:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx
-      ^ "\n"));
+  [%ltrace
+    "- loan: " ^ BorrowId.to_string l ^ "\n- context:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx];
   (* Sanity check: there is exactly one borrow mapping to [bid] in the context,
      and it is the one we want to promote.
    *)
@@ -1684,10 +1656,9 @@ let rec promote_reserved_mut_borrow (config : config) (span : Meta.span)
       | None ->
           (* No loan to end inside the value *)
           (* Some sanity checks *)
-          log#ltrace
-            (lazy
-              ("activate_reserved_mut_borrow: resulting value:\n"
-              ^ typed_value_to_string ~span:(Some span) ctx sv));
+          [%ltrace
+            "resulting value:\n"
+            ^ typed_value_to_string ~span:(Some span) ctx sv];
           [%sanity_check] span (not (concrete_loans_in_value sv));
           [%sanity_check] span (not (bottom_in_value ctx.ended_regions sv));
           [%sanity_check] span (not (reserved_in_value sv));
@@ -2275,10 +2246,9 @@ let simplify_dummy_values_useless_abs (config : config) (span : Meta.span)
     if ctx = ctx0 then (ctx, cc) else comp cc (simplify ctx)
   in
   let ctx, cc = simplify ctx0 in
-  log#ltrace
-    (lazy
-      (__FUNCTION__ ^ ":\n- fixed_aids: "
-      ^ AbstractionId.Set.to_string None fixed_abs_ids
-      ^ "\n- ctx0:\n" ^ eval_ctx_to_string ctx0 ^ "\n- ctx1:\n"
-      ^ if ctx = ctx0 then "UNCHANGED" else eval_ctx_to_string ctx ^ "\n"));
+  [%ltrace
+    "- fixed_aids: "
+    ^ AbstractionId.Set.to_string None fixed_abs_ids
+    ^ "\n- ctx0:\n" ^ eval_ctx_to_string ctx0 ^ "\n- ctx1:\n"
+    ^ if ctx = ctx0 then "UNCHANGED" else eval_ctx_to_string ctx];
   (ctx, cc)

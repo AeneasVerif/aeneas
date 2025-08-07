@@ -629,10 +629,7 @@ let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
 
 let mk_builtin_trait_impls_map () =
   let m = NameMatcherMap.of_list (builtin_trait_impls_info ()) in
-  log#ltrace
-    (lazy
-      ("builtin_trait_impls_map:\n"
-      ^ NameMatcherMap.to_string (fun _ -> "...") m));
+  [%ltrace NameMatcherMap.to_string (fun _ -> "...") m];
   m
 
 let builtin_trait_impls_map = mk_memoized mk_builtin_trait_impls_map
@@ -1148,8 +1145,7 @@ let mk_builtin_funs_map () =
     NameMatcherMap.of_list
       (List.map (fun (name, info) -> (name, info)) (builtin_funs ()))
   in
-  log#ltrace
-    (lazy ("builtin_funs_map:\n" ^ NameMatcherMap.to_string (fun _ -> "...") m));
+  [%ltrace NameMatcherMap.to_string (fun _ -> "...") m];
   m
 
 let builtin_funs_map = mk_memoized mk_builtin_funs_map

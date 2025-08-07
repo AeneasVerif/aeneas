@@ -451,7 +451,7 @@ let analyze_type_declaration_group (type_decls : type_decl TypeDeclId.Map.t)
     already analyzed the type definitions in the context. *)
 let analyze_ty (span : Meta.span option) (infos : type_infos) (ty : ty) :
     ty_info =
-  log#ltrace (lazy (__FUNCTION__ ^ ": ty:\n" ^ show_ty ty));
+  [%ltrace "ty:\n" ^ show_ty ty];
   (* We don't use [updated] but need to give it as parameter *)
   let updated = ref false in
   (* We don't need to compute whether the type contains 'static or not *)

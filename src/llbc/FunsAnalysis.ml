@@ -77,10 +77,9 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
     (* JP: Why not use a reduce visitor here with a tuple of the values to be
        computed? *)
     let visit_fun (f : fun_decl) : unit =
-      log#ltrace
-        (lazy
-          (__FUNCTION__ ^ ": Analyzing fun:\n"
-          ^ Charon.PrintTypes.name_to_string fmt_env f.item_meta.name));
+      [%ltrace
+        "Analyzing fun:\n"
+        ^ Charon.PrintTypes.name_to_string fmt_env f.item_meta.name];
       let obj =
         object (self)
           inherit [_] iter_statement as super

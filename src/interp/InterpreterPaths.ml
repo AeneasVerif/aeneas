@@ -239,10 +239,9 @@ let rec access_place (span : Meta.span) (access : projection_access)
         let ctx = ctx_update_var_value span ctx var_id updated in
         (* Type checking *)
         if updated.ty <> v.ty then (
-          log#ltrace
-            (lazy
-              ("Not the same type:\n- nv.ty: " ^ show_ety updated.ty
-             ^ "\n- v.ty: " ^ show_ety v.ty));
+          [%ltrace
+            "Not the same type:\n- nv.ty: " ^ show_ety updated.ty ^ "\n- v.ty: "
+            ^ show_ety v.ty];
           [%craise] span
             "Assertion failed: new value doesn't have the same type as its \
              destination");
@@ -422,10 +421,7 @@ let expand_bottom_value_from_projection (span : Meta.span)
     (access : access_kind) (p : place) (pe : projection_elem) (ctx : eval_ctx) :
     eval_ctx =
   (* Debugging *)
-  log#ltrace
-    (lazy
-      ("expand_bottom_value_from_projection:\n" ^ "pe: "
-     ^ show_projection_elem pe ^ "\n" ^ "ty: " ^ show_ety p.ty));
+  [%ltrace "pe: " ^ show_projection_elem pe ^ "\n" ^ "ty: " ^ show_ety p.ty];
   (* Compute the expanded value.
      The type of the {!Bottom} value should be a tuple or an ADT
      Note that the projection element we got stuck at should be a
@@ -626,11 +622,9 @@ let prepare_lplace (config : config) (span : Meta.span) (p : place)
     (ctx : eval_ctx) :
     typed_value * eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression)
     =
-  log#ltrace
-    (lazy
-      ("prepare_lplace:" ^ "\n- p: " ^ place_to_string ctx p
-     ^ "\n- Initial context:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx));
+  [%ltrace
+    "- p: " ^ place_to_string ctx p ^ "\n- Initial context:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx];
   (* Access the place *)
   let access = Write in
   let ctx, cc = update_ctx_along_write_place config span access p ctx in
