@@ -6,7 +6,7 @@
  (modes byte exe)
  (modules Main))
 
-(include_subdirs unqualified)
+(include_subdirs unqualified) ;; TODO: change to qualified
 
 ;; Scan all subdirectories for OCaml files
 
@@ -14,7 +14,7 @@
  (name aeneas) ;; The name as used in the project
  (public_name aeneas) ;; The name as revealed to the projects importing this library
  (preprocess
-  (pps ppx_deriving.show ppx_deriving.ord visitors.ppx))
+  (pps ppx_deriving.show ppx_deriving.ord visitors.ppx aeneas.ppx))
  (libraries charon core_unix ocamlgraph str)
  (modules
   BorrowCheck
