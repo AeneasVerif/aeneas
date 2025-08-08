@@ -992,7 +992,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
       let op_v, ctx, cf_eval_op = eval_operand config span op ctx in
       (* Switch on the value *)
       let ctx_resl, cf_switch =
-        match (op_v.value, int_ty) with
+        match (op_v.value, (int_ty : literal_type)) with
         | VLiteral (VScalar sv), TInt _ | VLiteral (VScalar sv), TUInt _ -> (
             (* Sanity check *)
             [%sanity_check] span (Scalars.get_ty sv = literal_as_integer int_ty);
