@@ -953,7 +953,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
    * (and would thus floating in thin air...)!
    * *)
   (* Match on the targets *)
-  match switch with
+  match (switch : LlbcAst.switch) with
   | If (op, true_block, false_block) ->
       (* Evaluate the operand *)
       let op_v, ctx, cf_eval_op = eval_operand config span op ctx in
