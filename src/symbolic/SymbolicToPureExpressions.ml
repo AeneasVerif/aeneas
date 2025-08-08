@@ -306,6 +306,8 @@ let decompose_let_match (ctx : bs_ctx)
     (ctx, (pat, bound))
 
 let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
+  log#ldebug
+    (lazy (__FUNCTION__ ^ ": e:\n" ^ bs_ctx_expression_to_string ctx e ^ "\n"));
   match e with
   | S.Return (ectx, opt_v) ->
       (* We reached a return.
@@ -429,12 +431,19 @@ and translate_function_call_aux (call : S.call) (e : S.expression)
   let generics = ctx_translate_fwd_generic_args ctx call.generics in
   let args =
     let args = List.map (typed_value_to_texpression ctx call.ctx) call.args in
-    let args_mplaces = List.map translate_opt_mplace call.args_places in
+    let args_mplaces =
+      List.map
+        (translate_opt_mplace (Some call.span) ctx.type_ctx.type_infos)
+        call.args_places
+    in
     List.map
       (fun (arg, mp) -> mk_opt_mplace_texpression mp arg)
       (List.combine args args_mplaces)
   in
-  let dest_mplace = translate_opt_mplace call.dest_place in
+  let dest_mplace =
+    translate_opt_mplace (Some call.span) ctx.type_ctx.type_infos
+      call.dest_place
+  in
   (* Retrieve the function id, and register the function call in the context
      if necessary. *)
   let ctx, fun_id, effect_info, args, back_funs, dest_v =
@@ -750,7 +759,10 @@ and translate_cast_unsize (call : S.call) (e : S.expression) (ty0 : T.ty)
   in
 
   (* Process the arguments and the destination *)
-  let dest_mplace = translate_opt_mplace call.dest_place in
+  let dest_mplace =
+    translate_opt_mplace (Some call.span) ctx.type_ctx.type_infos
+      call.dest_place
+  in
   let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
   let dest = mk_typed_pattern_from_var dest dest_mplace in
   let arg =
@@ -759,7 +771,10 @@ and translate_cast_unsize (call : S.call) (e : S.expression) (ty0 : T.ty)
     | _ -> internal_error __FILE__ __LINE__ ctx.span
   in
   let arg = typed_value_to_texpression ctx call.ctx arg in
-  let arg_mp = translate_opt_mplace (List.hd call.args_places) in
+  let arg_mp =
+    translate_opt_mplace (Some call.span) ctx.type_ctx.type_infos
+      (List.hd call.args_places)
+  in
   let arg = mk_opt_mplace_texpression arg_mp arg in
 
   (* Small helper to create an [array_to_slice] expression *)
@@ -964,7 +979,11 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
    * meta-place information from the input values given to the forward function
    * (we need to add [None] for the return avalue) *)
   let output_mpl =
-    List.append (List.map translate_opt_mplace call.args_places) [ None ]
+    List.append
+      (List.map
+         (translate_opt_mplace (Some call.span) ctx.type_ctx.type_infos)
+         call.args_places)
+      [ None ]
   in
   let ctx, outputs = abs_to_given_back (Some output_mpl) abs ctx in
   (* Group the output values together: first the updated inputs *)
@@ -1249,9 +1268,16 @@ and translate_assertion (ectx : C.eval_ctx) (v : V.typed_value)
 
 and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
     (exp : S.expansion) (ctx : bs_ctx) : texpression =
+  log#ldebug
+    (lazy
+      (__FUNCTION__ ^ ": expansion:\n"
+      ^ bs_ctx_expansion_to_string ctx sv exp
+      ^ "\n"));
   (* Translate the scrutinee *)
   let scrutinee = symbolic_value_to_texpression ctx sv in
-  let scrutinee_mplace = translate_opt_mplace p in
+  let scrutinee_mplace =
+    translate_opt_mplace (Some ctx.span) ctx.type_ctx.type_infos p
+  in
   (* Translate the branches *)
   match exp with
   | ExpandNoBranch (sexp, e) -> (
@@ -1336,7 +1362,14 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
           ("true_e.ty: "
           ^ pure_ty_to_string ctx true_e.ty
           ^ "\n\nfalse_e.ty: "
-          ^ pure_ty_to_string ctx false_e.ty));
+          ^ pure_ty_to_string ctx false_e.ty
+          ^ "\n"));
+      log#ltrace
+        (lazy
+          ("true_e: "
+          ^ texpression_to_string ctx true_e
+          ^ " \n\nfalse_e: "
+          ^ texpression_to_string ctx false_e));
       sanity_check __FILE__ __LINE__ (ty = false_e.ty) ctx.span;
       { e; ty }
   | ExpandInt (int_ty, branches, otherwise) ->
@@ -1428,7 +1461,7 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
     (lazy
       ("translate_intro_symbolic:" ^ "\n- value aggregate: "
      ^ S.show_value_aggregate v));
-  let mplace = translate_opt_mplace p in
+  let mplace = translate_opt_mplace (Some ctx.span) ctx.type_ctx.type_infos p in
 
   (* Introduce a fresh variable for the symbolic value. *)
   let ctx, var = fresh_var_for_symbolic_value sv ctx in
@@ -2046,7 +2079,24 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
     let mk_panic =
       (* Note that we reuse the effect information from the parent function *)
       let effect_info = ctx_get_effect_info ctx in
-      let back_tys = compute_back_tys ctx.sg.fun_ty None in
+      let back_tys =
+        (* We need to filter the region abstractions which are not used by the
+         loop - TODO: update this, it will become useless once we allow non
+         terminal loops.
+      *)
+        let fun_ty = ctx.sg.fun_ty in
+        let fun_ty =
+          {
+            fun_ty with
+            back_sg =
+              RegionGroupId.Map.filter
+                (fun rg_id _ ->
+                  RegionGroupId.Map.mem rg_id rg_to_given_back_tys)
+                fun_ty.back_sg;
+          }
+        in
+        compute_back_tys fun_ty None
+      in
       let back_tys = List.filter_map (fun x -> x) back_tys in
       let tys =
         if ctx.sg.fun_ty.fwd_info.ignore_output then back_tys
@@ -2139,9 +2189,10 @@ and translate_espan (span : S.espan) (e : S.expression) (ctx : bs_ctx) :
   let span =
     match span with
     | S.Assignment (ectx, lp, rv, rp) ->
-        let lp = translate_mplace lp in
+        let type_infos = ctx.type_ctx.type_infos in
+        let lp = translate_mplace (Some ctx.span) type_infos lp in
         let rv = typed_value_to_texpression ctx ectx rv in
-        let rp = translate_opt_mplace rp in
+        let rp = translate_opt_mplace (Some ctx.span) type_infos rp in
         Some (Assignment (lp, rv, rp))
     | S.Snapshot ectx ->
         let infos = eval_ctx_to_symbolic_assignments_info ctx ectx in

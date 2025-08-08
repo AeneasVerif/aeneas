@@ -23,8 +23,8 @@ let log = Logging.expressions_log
 
     Note that the place should have been prepared so that there are no remaining
     loans. *)
-let expand_if_borrows_at_place (config : config) (span : Meta.span)
-    (access : access_kind) (p : place) : cm_fun =
+let expand_if_borrows_at_place (span : Meta.span) (access : access_kind)
+    (p : place) : cm_fun =
  fun ctx ->
   (* Small helper *)
   let rec expand : cm_fun =
@@ -37,7 +37,7 @@ let expand_if_borrows_at_place (config : config) (span : Meta.span)
     | None -> (ctx, fun e -> e)
     | Some sv ->
         let ctx, cc =
-          expand_symbolic_value_no_branching config span sv
+          expand_symbolic_value_no_branching span sv
             (Some (mk_mplace span p ctx))
             ctx
         in
@@ -75,7 +75,7 @@ let access_rplace_reorganize_and_read (config : config) (span : Meta.span)
    * borrows) *)
   let ctx, cc =
     comp cc
-      (if greedy_expand then expand_if_borrows_at_place config span access p ctx
+      (if greedy_expand then expand_if_borrows_at_place span access p ctx
        else (ctx, fun e -> e))
   in
   (* Read the place - note that this checks that the value doesn't contain bottoms *)
@@ -86,10 +86,12 @@ let access_rplace_reorganize_and_read (config : config) (span : Meta.span)
 let access_rplace_reorganize (config : config) (span : Meta.span)
     (greedy_expand : bool) (access : access_kind) (p : place) : cm_fun =
  fun ctx ->
-  let _, ctx, f =
-    access_rplace_reorganize_and_read config span greedy_expand access p ctx
-  in
-  (ctx, f)
+  if ExpressionsUtils.place_accesses_global p then (ctx, fun x -> x)
+  else
+    let _, ctx, f =
+      access_rplace_reorganize_and_read config span greedy_expand access p ctx
+    in
+    (ctx, f)
 
 (** Convert an operand constant operand value to a typed value *)
 let literal_to_typed_value (span : Meta.span) (ty : literal_type) (cv : literal)
@@ -126,8 +128,8 @@ let literal_to_typed_value (span : Meta.span) (ty : literal_type) (cv : literal)
     it - see the remark about the symbolic values with borrows) and the
     resulting value.
 
-    Note that copying values might update the context. For instance, when
-    copying shared borrows, we need to insert new shared borrows in the context.
+    This function essentially duplicates the value while refreshing the shared
+    borrow identifiers (which uniquely identify shared borrows).
 
     Also, this function is actually more general than it should be: it can be
     used to copy concrete ADT values, while ADT copy should be done through the
@@ -212,12 +214,14 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
   | VBorrow bc -> (
       (* We can only copy shared borrows *)
       match bc with
-      | VSharedBorrow bid ->
+      | VSharedBorrow (bid, _) ->
           (* We need to create a new borrow id for the copied borrow, and
            * update the context accordingly *)
-          let bid' = fresh_borrow_id () in
-          let ctx = InterpreterBorrows.reborrow_shared span bid bid' ctx in
-          (v, { v with value = VBorrow (VSharedBorrow bid') }, ctx, fun e -> e)
+          let sid' = fresh_shared_borrow_id () in
+          ( v,
+            { v with value = VBorrow (VSharedBorrow (bid, sid')) },
+            ctx,
+            fun e -> e )
       | VMutBorrow (_, _) ->
           exec_raise __FILE__ __LINE__ span "Can't copy a mutable borrow"
       | VReservedMutBorrow _ ->
@@ -725,7 +729,7 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
   (* Synthesize the symbolic AST *)
   let cc =
     cc_comp cc
-      (synthesize_unary_op ctx unop v
+      (synthesize_unary_op span ctx unop v
          (mk_opt_place_from_op span op ctx)
          res_sv None)
   in
@@ -889,7 +893,7 @@ let eval_binary_op_symbolic (config : config) (span : Meta.span) (binop : binop)
   let p1 = mk_opt_place_from_op span op1 ctx in
   let p2 = mk_opt_place_from_op span op2 ctx in
   let cc =
-    cc_comp cc (synthesize_binary_op ctx binop v1 p1 v2 p2 res_sv None)
+    cc_comp cc (synthesize_binary_op span ctx binop v1 p1 v2 p2 res_sv None)
   in
   (* Compose and apply *)
   (Ok v, ctx, cc)
@@ -933,19 +937,19 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
       let v, ctx, cc =
         access_rplace_reorganize_and_read config span greedy_expand access p ctx
       in
-      (* Generate the fresh borrow id *)
-      let bid = fresh_borrow_id () in
+      (* Generate the fresh shared borrow id *)
+      let sid = fresh_shared_borrow_id () in
       (* Compute the loan value, with which to replace the value at place p *)
-      let nv =
+      let bid, nv =
         match v.value with
-        | VLoan (VSharedLoan (bids, sv)) ->
-            (* Shared loan: insert the new borrow id *)
-            let bids1 = BorrowId.Set.add bid bids in
-            { v with value = VLoan (VSharedLoan (bids1, sv)) }
+        | VLoan (VSharedLoan (bid, _)) ->
+            (* The value is a shared loan: we do not need to do anything *)
+            (bid, v)
         | _ ->
             (* Not a shared loan: add a wrapper *)
-            let v' = VLoan (VSharedLoan (BorrowId.Set.singleton bid, v)) in
-            { v with value = v' }
+            let bid = fresh_borrow_id () in
+            let v' = VLoan (VSharedLoan (bid, v)) in
+            (bid, { v with value = v' })
       in
       (* Update the value in the context to replace it with the loan *)
       let ctx = write_place span access p nv ctx in
@@ -963,8 +967,8 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
         | BShared | BShallow ->
             (* See the remark at the beginning of the match branch: we
                handle shallow borrows like shared borrows *)
-            VSharedBorrow bid
-        | BTwoPhaseMut -> VReservedMutBorrow bid
+            VSharedBorrow (bid, sid)
+        | BTwoPhaseMut -> VReservedMutBorrow (bid, sid)
         | _ -> craise __FILE__ __LINE__ span "Unreachable"
       in
       let rv : typed_value = { value = VBorrow bc; ty = rv_ty } in
@@ -1106,7 +1110,6 @@ let eval_rvalue_not_global (config : config) (span : Meta.span)
       craise __FILE__ __LINE__ span
         "Unreachable: discriminant reads should have been eliminated from the \
          AST"
-  | Global _ -> craise __FILE__ __LINE__ span "Unreachable"
   | Len _ -> craise __FILE__ __LINE__ span "Unhandled Len"
   | _ ->
       craise __FILE__ __LINE__ span

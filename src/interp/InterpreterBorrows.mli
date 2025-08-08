@@ -1,24 +1,24 @@
 open Values
 open Contexts
 open Cps
-
-(** When copying values, we duplicate the shared borrows. This is tantamount to
-    reborrowing the shared value. The [reborrow_shared original_id new_bid ctx]
-    applies this change to an environment [ctx] by inserting a new borrow id in
-    the set of borrows tracked by a shared value, referenced by the
-    [original_bid] argument. *)
-val reborrow_shared :
-  Meta.span -> BorrowId.id -> BorrowId.id -> eval_ctx -> eval_ctx
+open InterpreterUtils
 
 (** End a borrow identified by its id, while preserving the invariants.
 
     If the borrow is inside another borrow/an abstraction or contains loans,
     [end_borrow] will end those borrows/abstractions/loans first. *)
-val end_borrow : config -> Meta.span -> BorrowId.id -> cm_fun
+val end_borrow : config -> Meta.span -> unique_borrow_id -> cm_fun
 
 (** End a set of borrows identified by their ids, while preserving the
     invariants. *)
-val end_borrows : config -> Meta.span -> BorrowId.Set.t -> cm_fun
+val end_borrows : config -> Meta.span -> unique_borrow_id_set -> cm_fun
+
+(** End a loan identified by its id, while preserving the invariants *)
+val end_loan : config -> Meta.span -> loan_id -> cm_fun
+
+(** End a set of loans identified by their ids, while preserving the invariants
+*)
+val end_loans : config -> Meta.span -> loan_id_set -> cm_fun
 
 (** End an abstraction while preserving the invariants. *)
 val end_abstraction : config -> Meta.span -> AbstractionId.id -> cm_fun
@@ -28,12 +28,27 @@ val end_abstractions : config -> Meta.span -> AbstractionId.Set.t -> cm_fun
 
 (** End a borrow and return the resulting environment, ignoring synthesis *)
 val end_borrow_no_synth :
-  config -> Meta.span -> BorrowId.id -> eval_ctx -> eval_ctx
+  config -> Meta.span -> unique_borrow_id -> eval_ctx -> eval_ctx
 
 (** End a set of borrows and return the resulting environment, ignoring
     synthesis *)
 val end_borrows_no_synth :
-  config -> Meta.span -> BorrowId.Set.t -> eval_ctx -> eval_ctx
+  config -> Meta.span -> unique_borrow_id_set -> eval_ctx -> eval_ctx
+
+(** End a loan and return the resulting environment, ignoring synthesis *)
+val end_loan_no_synth : config -> Meta.span -> loan_id -> eval_ctx -> eval_ctx
+
+(** End a set of loans and return the resulting environment, ignoring synthesis
+*)
+val end_loans_no_synth :
+  config -> Meta.span -> loan_id_set -> eval_ctx -> eval_ctx
+
+(** End a set of loans and return the resulting environment, ignoring synthesis.
+
+    Contrary to [end_loans_no_synth], the function doesn't fail if one of the
+    loan ids actually doesn't exist in the context. *)
+val try_end_loans_no_synth :
+  config -> Meta.span -> loan_id_set -> eval_ctx -> eval_ctx
 
 (** End an abstraction and return the resulting environment, ignoring synthesis
 *)
@@ -54,7 +69,8 @@ val end_abstractions_no_synth :
     This function replaces the reserved borrow with a mutable borrow, then
     replaces the corresponding shared loan with a mutable loan (after having
     ended the other shared borrows which point to this loan). *)
-val promote_reserved_mut_borrow : config -> Meta.span -> BorrowId.id -> cm_fun
+val promote_reserved_mut_borrow :
+  config -> Meta.span -> loan_id -> shared_borrow_id -> cm_fun
 
 (** Transform an abstraction to an abstraction where the values are not
     structured.

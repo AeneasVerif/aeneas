@@ -167,7 +167,7 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
               sanity_check __FILE__ __LINE__ (pm = PNone) span;
               sanity_check __FILE__ __LINE__ (is_aignored child_av.value) span;
               Some bid
-          | ABorrow (ASharedBorrow (pm, _)) ->
+          | ABorrow (ASharedBorrow (pm, _, _)) ->
               sanity_check __FILE__ __LINE__ (pm = PNone) span;
               None
           | ASymbolic (_, (AProjBorrows _ | AProjLoans _)) -> None
@@ -324,10 +324,12 @@ let eval_loop_symbolic (config : config) (span : span)
   (* Debug *)
   log#ltrace
     (lazy
-      (__FUNCTION__ ^ ":\nInitial context:\n"
+      (__FUNCTION__ ^ ":\n- Initial context:\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx
-      ^ "\n\nFixed point:\n"
-      ^ eval_ctx_to_string ~span:(Some span) fp_ctx));
+      ^ "\n\n- Fixed point:\n"
+      ^ eval_ctx_to_string ~span:(Some span) fp_ctx
+      ^ "\n\n- rg_to_abs:\n"
+      ^ RegionGroupId.Map.to_string None AbstractionId.to_string rg_to_abs));
 
   (* Compute the loop input parameters *)
   let fresh_sids, input_svalues =

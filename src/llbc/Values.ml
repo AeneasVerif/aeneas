@@ -7,6 +7,7 @@ include Charon.Values
  * inside abstractions) *)
 
 module BorrowId = IdGen ()
+module SharedBorrowId = IdGen ()
 module SymbolicValueId = IdGen ()
 module AbstractionId = IdGen ()
 module FunCallId = IdGen ()
@@ -17,6 +18,7 @@ type symbolic_value_id_set = SymbolicValueId.Set.t [@@deriving show, ord]
 type loop_id = LoopId.id [@@deriving show, ord]
 type borrow_id = BorrowId.id [@@deriving show, ord]
 type borrow_id_set = BorrowId.Set.t [@@deriving show, ord]
+type shared_borrow_id = SharedBorrowId.id [@@deriving show, ord]
 type loan_id = BorrowId.id [@@deriving show, ord]
 type loan_id_set = BorrowId.Set.t [@@deriving show, ord]
 
@@ -30,6 +32,10 @@ class ['self] iter_typed_value_base =
 
     method visit_variant_id : 'env -> variant_id -> unit = fun _ _ -> ()
     method visit_borrow_id : 'env -> borrow_id -> unit = fun _ _ -> ()
+
+    method visit_shared_borrow_id : 'env -> shared_borrow_id -> unit =
+      fun _ _ -> ()
+
     method visit_loan_id : 'env -> loan_id -> unit = fun _ _ -> ()
 
     method visit_borrow_id_set : 'env -> borrow_id_set -> unit =
@@ -50,6 +56,11 @@ class ['self] map_typed_value_base =
 
     method visit_variant_id : 'env -> variant_id -> variant_id = fun _ x -> x
     method visit_borrow_id : 'env -> borrow_id -> borrow_id = fun _ id -> id
+
+    method visit_shared_borrow_id : 'env -> shared_borrow_id -> shared_borrow_id
+        =
+      fun _ id -> id
+
     method visit_loan_id : 'env -> loan_id -> loan_id = fun _ id -> id
 
     method visit_borrow_id_set : 'env -> borrow_id_set -> borrow_id_set =
@@ -86,9 +97,15 @@ and adt_value = {
 }
 
 and borrow_content =
-  | VSharedBorrow of borrow_id  (** A shared borrow. *)
+  | VSharedBorrow of borrow_id * shared_borrow_id
+      (** A shared borrow. The [borrow_id] is the identifier appearing in the
+          formalism and which links the borrow to its loan. The
+          [shared_borrow_id] doesn't appear in the formalism and is here to
+          uniquely identify the borrow, for convenience purposes. This is only
+          an implementation detail and doesn't have any impact on the semantics.
+      *)
   | VMutBorrow of borrow_id * typed_value  (** A mutably borrowed value. *)
-  | VReservedMutBorrow of borrow_id
+  | VReservedMutBorrow of borrow_id * shared_borrow_id
       (** A reserved mut borrow.
 
           This is used to model
@@ -126,9 +143,7 @@ and borrow_content =
             Vec::push(move v1, move l); // v1 gets promoted to a mutable borrow here
           ]} *)
 
-and loan_content =
-  | VSharedLoan of loan_id_set * typed_value
-  | VMutLoan of loan_id
+and loan_content = VSharedLoan of loan_id * typed_value | VMutLoan of loan_id
 
 (** "Regular" typed value (we map variables to typed values) *)
 and typed_value = { value : value; ty : ty }
@@ -286,7 +301,7 @@ class ['self] map_typed_avalue_base =
 
     TODO: remove once we simplify the handling of borrows. *)
 type abstract_shared_borrow =
-  | AsbBorrow of borrow_id
+  | AsbBorrow of borrow_id * shared_borrow_id
   | AsbProjReborrows of symbolic_proj
 
 (** A set of abstract shared borrows *)
@@ -464,7 +479,7 @@ and aloan_content =
             }
             px -> mut_borrow l0 (mut_borrow @s1)
           ]} *)
-  | ASharedLoan of proj_marker * loan_id_set * typed_value * typed_avalue
+  | ASharedLoan of proj_marker * loan_id * typed_value * typed_avalue
       (** A shared loan owned by an abstraction.
 
           The avalue is the child avalue.
@@ -632,7 +647,7 @@ and aborrow_content =
             > px -> ⊥
             > abs0 { a_mut_borrow l0 (U32 0) _ }
           ]} *)
-  | ASharedBorrow of proj_marker * borrow_id
+  | ASharedBorrow of proj_marker * borrow_id * shared_borrow_id
       (** A shared borrow owned by an abstraction.
 
           Example: ========
@@ -931,5 +946,5 @@ type symbolic_expansion =
   | SeLiteral of literal
   | SeAdt of (VariantId.id option * symbolic_value list)
   | SeMutRef of BorrowId.id * symbolic_value
-  | SeSharedRef of BorrowId.Set.t * symbolic_value
+  | SeSharedRef of BorrowId.id * symbolic_value
 [@@deriving show]

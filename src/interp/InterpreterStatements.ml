@@ -176,7 +176,7 @@ let eval_assertion (config : config) (span : Meta.span) (assertion : assertion)
          * We will of course synthesize an assertion in the generated code
          * (see below). *)
         let ctx =
-          apply_symbolic_expansion_non_borrow config span sv ctx
+          apply_symbolic_expansion_non_borrow span sv ctx
             (SeLiteral (VBool true))
         in
         (* Add the synthesized assertion *)
@@ -775,7 +775,7 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
   let cc = S.save_snapshot ctx in
   (* Expand the symbolic values if necessary - we need to do that before
      checking the invariants *)
-  let ctx, cc = comp cc (greedy_expand_symbolic_values config st.span ctx) in
+  let ctx, cc = comp cc (greedy_expand_symbolic_values st.span ctx) in
   (* Sanity check *)
   Invariants.check_invariants st.span ctx;
 
@@ -829,73 +829,65 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
       ^ statement_to_string_with_tab ctx st
       ^ "\n\n"));
   match st.content with
-  | Assign (p, rvalue) -> (
-      (* We handle global assignments separately *)
-      match rvalue with
-      | Global gref ->
-          (* Evaluate the global *)
-          eval_global config st.span p gref ctx
-      | GlobalRef (gref, rkind) ->
-          (* Evaluate the reference to the global *)
-          eval_global_ref config st.span p gref rkind ctx
-      | _ ->
-          (* Evaluate the rvalue *)
-          let res, ctx, cc = eval_rvalue_not_global config st.span rvalue ctx in
-          (* Assign *)
-          log#ltrace
-            (lazy
-              ("about to assign to place: " ^ place_to_string ctx p
-             ^ "\n- Context:\n"
-              ^ eval_ctx_to_string ~span:(Some st.span) ctx));
-          let (ctx, res), cf_assign =
-            match res with
-            | Error EPanic -> ((ctx, Panic), fun e -> e)
-            | Ok rv ->
-                (* Update the synthesized AST - here we store additional span-information.
-                 * We do it only in specific cases (it is not always useful, and
-                 * also it can lead to issues - for instance, if we borrow a
-                 * reserved borrow, we later can't translate it to pure values...) *)
-                let cc =
-                  match rvalue with
-                  | Global _ | GlobalRef _ ->
-                      craise __FILE__ __LINE__ st.span "Unreachable"
-                  | Len _ ->
-                      craise __FILE__ __LINE__ st.span "Len is not handled yet"
-                  | Repeat _ ->
-                      craise __FILE__ __LINE__ st.span
-                        "Repeat should have been removed in a micropass"
-                  | ShallowInitBox _ ->
-                      craise __FILE__ __LINE__ st.span
-                        "ShallowInitBox should have been removed in a micropass"
-                  | Use _
-                  | RvRef
-                      ( _,
-                        ( BShared
-                        | BMut
-                        | BTwoPhaseMut
-                        | BShallow
-                        | BUniqueImmutable ) )
-                  | NullaryOp _
-                  | UnaryOp _
-                  | BinaryOp _
-                  | Discriminant _
-                  | Aggregate _
-                  | RawPtr _ ->
-                      let p = S.mk_mplace st.span p ctx in
-                      let rp = rvalue_get_place rvalue in
-                      let rp =
-                        Option.map (fun rp -> S.mk_mplace st.span rp ctx) rp
-                      in
-                      S.synthesize_assignment ctx p rv rp
-                in
-                let ctx, cc =
-                  comp cc (assign_to_place config st.span rv p ctx)
-                in
-                ((ctx, Unit), cc)
-          in
-          let cc = cc_comp cc cf_assign in
-          (* Compose and apply *)
-          ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc))
+  | Assign (p, rvalue) ->
+      if
+        (* We handle global assignments separately as a specific case. *)
+        ExpressionsUtils.rvalue_accesses_global rvalue
+      then eval_rvalue_global config st.span p rvalue ctx
+      else
+        (* Evaluate the rvalue *)
+        let res, ctx, cc = eval_rvalue_not_global config st.span rvalue ctx in
+        (* Assign *)
+        log#ltrace
+          (lazy
+            ("about to assign to place: " ^ place_to_string ctx p
+           ^ "\n- Context:\n"
+            ^ eval_ctx_to_string ~span:(Some st.span) ctx));
+        let (ctx, res), cf_assign =
+          match res with
+          | Error EPanic -> ((ctx, Panic), fun e -> e)
+          | Ok rv ->
+              (* Update the synthesized AST - here we store additional span-information.
+               * We do it only in specific cases (it is not always useful, and
+               * also it can lead to issues - for instance, if we borrow a
+               * reserved borrow, we later can't translate it to pure values...) *)
+              let cc =
+                match rvalue with
+                | Len _ ->
+                    craise __FILE__ __LINE__ st.span "Len is not handled yet"
+                | Repeat _ ->
+                    craise __FILE__ __LINE__ st.span
+                      "Repeat should have been removed in a micropass"
+                | ShallowInitBox _ ->
+                    craise __FILE__ __LINE__ st.span
+                      "ShallowInitBox should have been removed in a micropass"
+                | Use _
+                | RvRef
+                    ( _,
+                      ( BShared
+                      | BMut
+                      | BTwoPhaseMut
+                      | BShallow
+                      | BUniqueImmutable ) )
+                | NullaryOp _
+                | UnaryOp _
+                | BinaryOp _
+                | Discriminant _
+                | Aggregate _
+                | RawPtr _ ->
+                    let p = S.mk_mplace st.span p ctx in
+                    let rp = rvalue_get_place rvalue in
+                    let rp =
+                      Option.map (fun rp -> S.mk_mplace st.span rp ctx) rp
+                    in
+                    S.synthesize_assignment ctx p rv rp
+              in
+              let ctx, cc = comp cc (assign_to_place config st.span rv p ctx) in
+              ((ctx, Unit), cc)
+        in
+        let cc = cc_comp cc cf_assign in
+        (* Compose and apply *)
+        ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc)
   | SetDiscriminant (p, variant_id) ->
       let (ctx, res), cc = set_discriminant config st.span p variant_id ctx in
       ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc)
@@ -923,29 +915,17 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
         "StorageDead/Drop should have been removed in a prepass"
   | Error s -> craise __FILE__ __LINE__ st.span s
 
-and eval_global (config : config) (span : Meta.span) (dest : place)
-    (gref : global_decl_ref) : stl_cm_fun =
+and eval_rvalue_global (config : config) (span : Meta.span) (dest : place)
+    (rv : rvalue) : stl_cm_fun =
  fun ctx ->
-  match config.mode with
-  | ConcreteMode ->
-      (* Treat the evaluation of the global as a call to the global body *)
-      let generics = gref.generics in
-      let global = ctx_lookup_global_decl span ctx gref.id in
-      let func = { func = FunId (FRegular global.body); generics } in
-      let call = { func = FnOpRegular func; args = []; dest } in
-      eval_transparent_function_call_concrete config span global.body call ctx
-  | SymbolicMode ->
-      (* Generate a fresh symbolic value. In the translation, this fresh symbolic value will be
-       * defined as equal to the value of the global (see {!S.synthesize_global_eval}). *)
-      let sval = eval_global_as_fresh_symbolic_value span gref ctx in
-      let ctx, cc =
-        assign_to_place config span
-          (mk_typed_value_from_symbolic_value sval)
-          dest ctx
-      in
-      ( [ (ctx, Unit) ],
-        cc_singleton __FILE__ __LINE__ span
-          (cc_comp (S.synthesize_global_eval gref sval) cc) )
+  (* One of the micro-passes makes sures there is only one case to handle *)
+  match rv with
+  | RvRef ({ kind = PlaceGlobal gref; ty = _ }, BShared) ->
+      eval_global_ref config span dest gref RShared ctx
+  | _ ->
+      craise __FILE__ __LINE__ span
+        ("Unsupported case of rvalue accessing a global:\n"
+        ^ Print.EvalCtx.rvalue_to_string ctx rv)
 
 and eval_global_ref (config : config) (span : Meta.span) (dest : place)
     (gref : global_decl_ref) (rk : ref_kind) : stl_cm_fun =
@@ -967,15 +947,13 @@ and eval_global_ref (config : config) (span : Meta.span) (dest : place)
       let typed_sval = mk_typed_value_from_symbolic_value sval in
       (* Create a shared loan containing the global, as well as a shared borrow *)
       let bid = fresh_borrow_id () in
+      let sid = fresh_shared_borrow_id () in
       let loan : typed_value =
-        {
-          value = VLoan (VSharedLoan (BorrowId.Set.singleton bid, typed_sval));
-          ty = sval.sv_ty;
-        }
+        { value = VLoan (VSharedLoan (bid, typed_sval)); ty = sval.sv_ty }
       in
       let borrow : typed_value =
         {
-          value = VBorrow (VSharedBorrow bid);
+          value = VBorrow (VSharedBorrow (bid, sid));
           ty = TRef (RErased, sval.sv_ty, RShared);
         }
       in
@@ -1016,7 +994,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
             (* Expand the symbolic boolean, and continue by evaluating
                the branches *)
             let (ctx_true, ctx_false), cf_bool =
-              expand_symbolic_bool config span sv
+              expand_symbolic_bool span sv
                 (S.mk_opt_place_from_op span op ctx)
                 ctx
             in
@@ -1068,7 +1046,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
             in
             (* Expand the symbolic value *)
             let (ctx_branches, ctx_otherwise), cf_int =
-              expand_symbolic_int config span sv
+              expand_symbolic_int span sv
                 (S.mk_opt_place_from_op span op ctx)
                 (literal_as_integer int_ty)
                 (literal_list_to_scalar_list values)
@@ -1124,9 +1102,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
         | VSymbolic sv ->
             (* Expand the symbolic value - may lead to branching *)
             let ctxl, cf_expand =
-              expand_symbolic_adt config span sv
-                (Some (S.mk_mplace span p ctx))
-                ctx
+              expand_symbolic_adt span sv (Some (S.mk_mplace span p ctx)) ctx
             in
             (* Re-evaluate the switch - the value is not symbolic anymore,
                which means we will go to the other branch *)
@@ -1378,8 +1354,8 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
     let ctx, args_projs =
       List.fold_left_map
         (fun ctx (arg, arg_rty) ->
-          apply_proj_borrows_on_input_value config span ctx abs.regions.owned
-            arg arg_rty)
+          apply_proj_borrows_on_input_value span ctx abs.regions.owned arg
+            arg_rty)
         ctx args_with_rtypes
     in
     (* Group the input and output values *)
@@ -1396,8 +1372,9 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
   (* Synthesize the symbolic AST *)
   let cc =
     cc_comp cc
-      (S.synthesize_regular_function_call fid call_id ctx sg inst_sg abs_ids
-         generics trait_method_generics args args_places ret_spc dest_place)
+      (S.synthesize_regular_function_call span fid call_id ctx sg inst_sg
+         abs_ids generics trait_method_generics args args_places ret_spc
+         dest_place)
   in
 
   (* Move the return value to its destination *)
@@ -1540,7 +1517,7 @@ and eval_function_body (config : config) (body : block) : stl_cm_fun =
           (lazy ("eval_function_body: cf_finish:\n" ^ eval_ctx_to_string ctx));
         (* Expand the symbolic values if necessary - we need to do that before
            checking the invariants *)
-        let ctx, cf = greedy_expand_symbolic_values config body.span ctx in
+        let ctx, cf = greedy_expand_symbolic_values body.span ctx in
         log#ltrace
           (lazy
             ("eval_function_body: after expansion:\n" ^ eval_ctx_to_string ctx));

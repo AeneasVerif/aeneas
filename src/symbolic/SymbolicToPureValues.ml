@@ -128,13 +128,13 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
         | VMutLoan _ -> craise __FILE__ __LINE__ ctx.span "Unreachable")
     | VBorrow bc -> (
         match bc with
-        | VSharedBorrow bid ->
+        | VSharedBorrow (bid, _) ->
             (* Lookup the shared value in the context, and continue *)
             let sv =
               InterpreterBorrowsCore.lookup_shared_value ctx.span ectx bid
             in
             translate sv
-        | VReservedMutBorrow bid ->
+        | VReservedMutBorrow (bid, _) ->
             (* Same as for shared borrows. However, note that we use reserved borrows
              * only in *meta-data*: a value *actually used* in the translation can't come
              * from an unpromoted reserved borrow *)
@@ -552,21 +552,26 @@ let translate_mprojection_elem (pe : E.projection_elem) :
   | Field (pkind, field_id) -> Some { pkind; field_id }
   | ProjIndex _ | Subslice _ -> None
 
-(** Translate a "span"-place *)
-let rec translate_mplace (p : S.mplace) : mplace =
+(** Translate a "meta"-place *)
+let rec translate_mplace span type_infos (p : S.mplace) : mplace =
   match p with
   | PlaceLocal bv -> PlaceLocal (bv.index, bv.name)
+  | PlaceGlobal { id; generics } ->
+      let global_generics =
+        translate_fwd_generic_args span type_infos generics
+      in
+      PlaceGlobal { global_id = id; global_generics }
   | PlaceProjection (p, pe) -> (
-      let p = translate_mplace p in
+      let p = translate_mplace span type_infos p in
       let pe = translate_mprojection_elem pe in
       match pe with
       | None -> p
       | Some pe -> PlaceProjection (p, pe))
 
-let translate_opt_mplace (p : S.mplace option) : mplace option =
+let translate_opt_mplace span type_infos (p : S.mplace option) : mplace option =
   match p with
   | None -> None
-  | Some p -> Some (translate_mplace p)
+  | Some p -> Some (translate_mplace span type_infos p)
 
 type borrow_or_symbolic_id =
   | Borrow of V.BorrowId.id
@@ -718,7 +723,7 @@ and aborrow_content_to_given_back_aux ~(filter : bool) (mp : mplace option)
     (bc : V.aborrow_content) (ty : T.ty) (ctx : bs_ctx) :
     bs_ctx * typed_pattern option =
   match bc with
-  | V.AMutBorrow (_, _, _) | ASharedBorrow (_, _) | AIgnoredMutBorrow (_, _) ->
+  | V.AMutBorrow _ | ASharedBorrow _ | AIgnoredMutBorrow _ ->
       (* All the borrows should have been ended upon ending the abstraction *)
       craise __FILE__ __LINE__ ctx.span "Unreachable"
   | AEndedMutBorrow (msv, _) ->

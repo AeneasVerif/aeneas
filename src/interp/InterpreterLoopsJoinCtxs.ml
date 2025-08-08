@@ -38,8 +38,10 @@ let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
      the new region abstraction *)
   let {
     abs_to_borrows = nabs_to_borrows;
+    abs_to_non_unique_borrows = nabs_to_non_unique_borrows;
     abs_to_loans = nabs_to_loans;
     borrow_to_abs = borrow_to_nabs;
+    non_unique_borrow_to_abs = non_unique_borrow_to_nabs;
     loan_to_abs = loan_to_nabs;
     abs_to_borrow_projs = nabs_to_borrow_projs;
     abs_to_loan_projs = nabs_to_loan_projs;
@@ -53,8 +55,10 @@ let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
   let {
     abs_ids;
     abs_to_borrows;
+    abs_to_non_unique_borrows;
     abs_to_loans;
     borrow_to_abs;
+    non_unique_borrow_to_abs;
     loan_to_abs;
     abs_to_borrow_projs;
     abs_to_loan_projs;
@@ -106,12 +110,22 @@ let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
   let module UpdateMarkedBorrowId =
     UpdateToAbs (MarkedBorrowId.Map) (MarkedBorrowId.Set)
   in
+  let module UpdateMarkedUniqueBorrowId =
+    UpdateToAbs (MarkedUniqueBorrowId.Map) (MarkedUniqueBorrowId.Set)
+  in
+  let module UpdateMarkedLoanId =
+    UpdateToAbs (MarkedLoanId.Map) (MarkedLoanId.Set)
+  in
   let borrow_to_abs =
-    UpdateMarkedBorrowId.update_to_abs abs_to_borrows borrow_to_nabs
+    UpdateMarkedUniqueBorrowId.update_to_abs abs_to_borrows borrow_to_nabs
       borrow_to_abs
   in
+  let non_unique_borrow_to_abs =
+    UpdateMarkedBorrowId.update_to_abs abs_to_non_unique_borrows
+      non_unique_borrow_to_nabs non_unique_borrow_to_abs
+  in
   let loan_to_abs =
-    UpdateMarkedBorrowId.update_to_abs abs_to_loans loan_to_nabs loan_to_abs
+    UpdateMarkedLoanId.update_to_abs abs_to_loans loan_to_nabs loan_to_abs
   in
   let module UpdateSymbProj =
     UpdateToAbs (MarkedNormSymbProj.Map) (MarkedNormSymbProj.Set)
@@ -139,6 +153,9 @@ let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
       m
   in
   let abs_to_borrows = update_abs_to nabs_to_borrows abs_to_borrows in
+  let abs_to_non_unique_borrows =
+    update_abs_to nabs_to_non_unique_borrows abs_to_non_unique_borrows
+  in
   let abs_to_loans = update_abs_to nabs_to_loans abs_to_loans in
   let abs_to_borrow_projs =
     update_abs_to nabs_to_borrow_projs abs_to_borrow_projs
@@ -148,8 +165,10 @@ let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
     {
       abs_ids;
       abs_to_borrows;
+      abs_to_non_unique_borrows;
       abs_to_loans;
       borrow_to_abs;
+      non_unique_borrow_to_abs;
       loan_to_abs;
       borrow_proj_to_abs;
       loan_proj_to_abs;
@@ -405,7 +424,7 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
     IterMerge (MarkedBorrowId.Map) (MarkedBorrowId.Set)
       (struct
         let get_marker (pm, _) = pm
-        let get_borrow_to_abs info = info.borrow_to_abs
+        let get_borrow_to_abs info = info.non_unique_borrow_to_abs
         let get_to_loans info = info.abs_to_loans
       end)
   in
@@ -445,7 +464,15 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
   ctx
 
 (** Reduce_ctx can only be called in a context with no markers *)
-let reduce_ctx = reduce_ctx_with_markers None
+let reduce_ctx config (span : Meta.span) (loop_id : loop_id)
+    (fixed_ids : ids_sets) (ctx : eval_ctx) : eval_ctx =
+  (* Simplify the context *)
+  let ctx, _ =
+    InterpreterBorrows.simplify_dummy_values_useless_abs config span
+      fixed_ids.aids ctx
+  in
+  (* Reduce *)
+  reduce_ctx_with_markers None span loop_id fixed_ids ctx
 
 (** Auxiliary function for collapse (see below).
 
@@ -609,9 +636,9 @@ let collapse_ctx_collapse (span : Meta.span) (loop_id : LoopId.id)
         let get_marker (v : marked_borrow_id) = fst v
         let unmark (_, bid) = (PNone, bid)
         let invert_proj_marker (pm, bid) = (invert_proj_marker pm, bid)
-        let get_to_borrows info = info.abs_to_borrows
+        let get_to_borrows info = info.abs_to_non_unique_borrows
         let get_to_loans info = info.abs_to_loans
-        let get_borrow_to_abs info = info.borrow_to_abs
+        let get_borrow_to_abs info = info.non_unique_borrow_to_abs
         let get_loan_to_abs info = info.loan_to_abs
       end)
   in
@@ -705,7 +732,7 @@ let eval_ctx_has_markers (ctx : eval_ctx) : bool =
 
     At the end of the second step, all markers should have been removed from the
     resulting environment. *)
-let collapse_ctx (span : Meta.span) (loop_id : LoopId.id)
+let collapse_ctx config (span : Meta.span) (loop_id : LoopId.id)
     (merge_funs : merge_duplicates_funcs) (old_ids : ids_sets) (ctx0 : eval_ctx)
     : eval_ctx =
   let ctx =
@@ -714,6 +741,11 @@ let collapse_ctx (span : Meta.span) (loop_id : LoopId.id)
   let ctx = collapse_ctx_collapse span loop_id merge_funs old_ids ctx in
   (* Sanity check: there are no markers remaining *)
   sanity_check __FILE__ __LINE__ (not (eval_ctx_has_markers ctx)) span;
+  (* One last cleanup *)
+  let ctx, _ =
+    InterpreterBorrows.simplify_dummy_values_useless_abs config span
+      old_ids.aids ctx
+  in
   ctx
 
 let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
@@ -752,7 +784,7 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     { value; ty }
   in
 
-  let merge_ashared_borrows id ty0 _pm0 ty1 _pm1 =
+  let merge_ashared_borrows id ty0 _pm0 _ ty1 _pm1 _ =
     (* Sanity checks *)
     let _ =
       let _, ty0, _ = ty_as_ref ty0 in
@@ -767,7 +799,9 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
 
     (* Same remarks as for [merge_amut_borrows] *)
     let ty = ty0 in
-    let value = ABorrow (ASharedBorrow (PNone, id)) in
+    let value =
+      ABorrow (ASharedBorrow (PNone, id, fresh_shared_borrow_id ()))
+    in
     { value; ty }
   in
 
@@ -886,10 +920,10 @@ let merge_into_first_abstraction (span : Meta.span) (loop_id : LoopId.id)
 
     We do this because when we join environments, we may introduce duplicated
     loans and borrows. See the explanations for {!join_ctxs}. *)
-let collapse_ctx_with_merge (span : Meta.span) (loop_id : LoopId.id)
+let collapse_ctx_with_merge config (span : Meta.span) (loop_id : LoopId.id)
     (old_ids : ids_sets) (ctx : eval_ctx) : eval_ctx =
   let merge_funs = mk_collapse_ctx_merge_duplicate_funs span loop_id ctx in
-  try collapse_ctx span loop_id merge_funs old_ids ctx
+  try collapse_ctx config span loop_id merge_funs old_ids ctx
   with ValueMatchFailure _ -> internal_error __FILE__ __LINE__ span
 
 let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
@@ -1049,7 +1083,11 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
 
     log#ldebug
       (lazy
-        ("- env0:\n" ^ show_env env0 ^ "\n\n- env1:\n" ^ show_env env1 ^ "\n\n"));
+        ("- env0:\n"
+        ^ env_to_string span ctx0 env0 ~filter:false
+        ^ "\n\n- env1:\n"
+        ^ env_to_string span ctx1 env1 ~filter:false
+        ^ "\n\n"));
 
     let env = List.rev (EFrame :: join_prefixes env0 env1) in
 
@@ -1156,8 +1194,6 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
      For every context, we repeteadly attempt to join it with the current
      result of the join: if we fail (because we need to end loans for instance),
      we update the context and retry.
-     Rem.: we should never have to end loans in the aggregated context, only
-     in the one we are trying to add to the join.
   *)
   let joined_ctx = ref old_ctx in
   let rec join_one_aux (ctx : eval_ctx) : eval_ctx =
@@ -1169,10 +1205,19 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
         let ctx =
           match err with
           | LoanInRight bid ->
-              InterpreterBorrows.end_borrow_no_synth config span bid ctx
+              InterpreterBorrows.end_loan_no_synth config span bid ctx
           | LoansInRight bids ->
-              InterpreterBorrows.end_borrows_no_synth config span bids ctx
-          | AbsInRight _ | AbsInLeft _ | LoanInLeft _ | LoansInLeft _ ->
+              InterpreterBorrows.end_loans_no_synth config span bids ctx
+          | LoanInLeft bid ->
+              joined_ctx :=
+                InterpreterBorrows.end_loan_no_synth config span bid !joined_ctx;
+              ctx
+          | LoansInLeft bids ->
+              joined_ctx :=
+                InterpreterBorrows.end_loans_no_synth config span bids
+                  !joined_ctx;
+              ctx
+          | AbsInRight _ | AbsInLeft _ ->
               craise __FILE__ __LINE__ span "Unexpected"
         in
         join_one_aux ctx
@@ -1205,7 +1250,7 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
         ^ eval_ctx_to_string ~span:(Some span) ctx));
 
     (* Reduce the context we want to add to the join *)
-    let ctx = reduce_ctx span loop_id fixed_ids ctx in
+    let ctx = reduce_ctx config span loop_id fixed_ids ctx in
     log#ltrace
       (lazy
         (__FUNCTION__ ^ ":join_one: after reduce:\n"
@@ -1226,7 +1271,8 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
         ^ eval_ctx_to_string ~span:(Some span) ctx1));
 
     (* Collapse to eliminate the markers *)
-    joined_ctx := collapse_ctx_with_merge span loop_id fixed_ids !joined_ctx;
+    joined_ctx :=
+      collapse_ctx_with_merge config span loop_id fixed_ids !joined_ctx;
     log#ltrace
       (lazy
         (__FUNCTION__ ^ ":join_one: after join-collapse:\n"
@@ -1235,7 +1281,7 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
     if !Config.sanity_checks then Invariants.check_invariants span !joined_ctx;
 
     (* Reduce again to reach a fixed point *)
-    joined_ctx := reduce_ctx span loop_id fixed_ids !joined_ctx;
+    joined_ctx := reduce_ctx config span loop_id fixed_ids !joined_ctx;
     log#ltrace
       (lazy
         (__FUNCTION__ ^ ":join_one: after last reduce:\n"
