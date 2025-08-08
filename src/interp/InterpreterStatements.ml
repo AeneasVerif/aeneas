@@ -995,9 +995,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
         match (op_v.value, int_ty) with
         | VLiteral (VScalar sv), TInt _ | VLiteral (VScalar sv), TUInt _ -> (
             (* Sanity check *)
-            [%sanity_check] span
-              (Scalars.get_ty sv = literal_as_integer int_ty)
-             ;
+            [%sanity_check] span (Scalars.get_ty sv = literal_as_integer int_ty);
             (* Find the branch *)
             match
               List.find_opt
