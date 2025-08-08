@@ -8,7 +8,6 @@ open Contexts
 open Utils
 open TypesUtils
 open InterpreterUtils
-open Errors
 
 (** The local logger *)
 let log = Logging.borrows_log
@@ -83,7 +82,7 @@ let add_borrow_loan_abs_id_to_chain (span : Meta.span) (msg : string)
     (id : borrow_loan_abs_id) (ids : borrow_loan_abs_ids) : borrow_loan_abs_ids
     =
   if List.mem id ids then
-    craise __FILE__ __LINE__ span
+    [%craise] span
       (msg ^ "detected a loop in the chain of ids: "
       ^ borrow_loan_abs_ids_chain_to_string (id :: ids))
   else id :: ids
@@ -105,21 +104,19 @@ let rec compare_rtys (span : Meta.span) (default : bool)
     =
   let compare = compare_rtys span default combine compare_regions in
   (* Sanity check - TODO: don't do this at every recursive call *)
-  sanity_check __FILE__ __LINE__ (ty_is_rty ty1 && ty_is_rty ty2) span;
+  [%sanity_check] span (ty_is_rty ty1 && ty_is_rty ty2);
   (* Normalize the associated types *)
   match (ty1, ty2) with
   | TLiteral lit1, TLiteral lit2 ->
-      sanity_check __FILE__ __LINE__ (lit1 = lit2) span;
+      [%sanity_check] span (lit1 = lit2);
       default
   | TAdt tref1, TAdt tref2 ->
       let generics1 = tref1.generics in
       let generics2 = tref2.generics in
-      sanity_check __FILE__ __LINE__ (tref1.id = tref2.id) span;
+      [%sanity_check] span (tref1.id = tref2.id);
       (* There are no regions in the const generics, so we ignore them,
          but we still check they are the same, for sanity *)
-      sanity_check __FILE__ __LINE__
-        (generics1.const_generics = generics2.const_generics)
-        span;
+      [%sanity_check] span (generics1.const_generics = generics2.const_generics);
 
       (* We also ignore the trait refs *)
 
@@ -153,7 +150,7 @@ let rec compare_rtys (span : Meta.span) (default : bool)
       combine params_b tys_b
   | TRef (r1, ty1, kind1), TRef (r2, ty2, kind2) ->
       (* Sanity check *)
-      sanity_check __FILE__ __LINE__ (kind1 = kind2) span;
+      [%sanity_check] span (kind1 = kind2);
       (* Explanation for the case where we check if projections intersect:
        * the projections intersect if the borrows intersect or their contents
        * intersect. *)
@@ -161,19 +158,18 @@ let rec compare_rtys (span : Meta.span) (default : bool)
       let tys_b = compare ty1 ty2 in
       combine regions_b tys_b
   | TVar id1, TVar id2 ->
-      sanity_check __FILE__ __LINE__ (id1 = id2) span;
+      [%sanity_check] span (id1 = id2);
       default
   | TTraitType _, TTraitType _ ->
       (* The types should have been normalized. If after normalization we
          get trait types, we can consider them as variables *)
-      sanity_check __FILE__ __LINE__ (ty1 = ty2) span;
+      [%sanity_check] span (ty1 = ty2);
       default
   | _ ->
-      log#ltrace
-        (lazy
-          (__FUNCTION__ ^ ": unexpected inputs:" ^ "\n- ty1: " ^ show_ty ty1
-         ^ "\n- ty2: " ^ show_ty ty2));
-      internal_error __FILE__ __LINE__ span
+      [%ltrace
+        "unexpected inputs:" ^ "\n- ty1: " ^ show_ty ty1 ^ "\n- ty2: "
+        ^ show_ty ty2];
+      [%internal_error] span
 
 (** Check if two different projections intersect.
 
@@ -263,12 +259,12 @@ let lookup_loan_opt (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
         match lc with
         | AMutLoan (pm, bid, av) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
-            sanity_check __FILE__ __LINE__ (pm = PNone) span;
+            [%sanity_check] span (pm = PNone);
             if bid = l then raise (FoundGLoanContent (Abstract lc))
             else super#visit_AMutLoan env pm bid av
         | ASharedLoan (pm, lid, v, av) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
-            sanity_check __FILE__ __LINE__ (pm = PNone) span;
+            [%sanity_check] span (pm = PNone);
             if l = lid then raise (FoundGLoanContent (Abstract lc))
             else super#visit_ASharedLoan env pm lid v av
         | AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
@@ -279,7 +275,7 @@ let lookup_loan_opt (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
         | AIgnoredSharedLoan _ -> super#visit_aloan_content env lc
 
       method! visit_EBinding env bv v =
-        sanity_check __FILE__ __LINE__ (Option.is_none !abs_or_var) span;
+        [%sanity_check] span (Option.is_none !abs_or_var);
         abs_or_var :=
           Some
             (match bv with
@@ -289,7 +285,7 @@ let lookup_loan_opt (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
         abs_or_var := None
 
       method! visit_EAbs env abs =
-        sanity_check __FILE__ __LINE__ (Option.is_none !abs_or_var) span;
+        [%sanity_check] span (Option.is_none !abs_or_var);
         if ek.enter_abs then (
           abs_or_var := Some (AbsId abs.abs_id);
           super#visit_EAbs env abs;
@@ -304,7 +300,7 @@ let lookup_loan_opt (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
   with FoundGLoanContent lc -> (
     match !abs_or_var with
     | Some abs_or_var -> Some (abs_or_var, lc)
-    | None -> craise __FILE__ __LINE__ span "Inconsistent state")
+    | None -> [%craise] span "Inconsistent state")
 
 (** Lookup a loan content.
 
@@ -313,7 +309,7 @@ let lookup_loan_opt (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
 let lookup_loan (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
     (ctx : eval_ctx) : abs_or_var_id * g_loan_content =
   match lookup_loan_opt span ek l ctx with
-  | None -> craise __FILE__ __LINE__ span "Unreachable"
+  | None -> [%craise] span "Unreachable"
   | Some res -> res
 
 (** Update a loan content.
@@ -328,7 +324,7 @@ let update_loan (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
    * returning we check that we updated at least once. *)
   let r = ref false in
   let update () : loan_content =
-    sanity_check __FILE__ __LINE__ (not !r) span;
+    [%sanity_check] span (not !r);
     r := true;
     nlc
   in
@@ -375,7 +371,7 @@ let update_loan (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
 
   let ctx = obj#visit_eval_ctx () ctx in
   (* Check that we updated at least one loan *)
-  sanity_check __FILE__ __LINE__ !r span;
+  [%sanity_check] span !r;
   ctx
 
 (** Update a abstraction loan content.
@@ -390,7 +386,7 @@ let update_aloan (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
    * returning we check that we updated at least once. *)
   let r = ref false in
   let update () : aloan_content =
-    sanity_check __FILE__ __LINE__ (not !r) span;
+    [%sanity_check] span (not !r);
     r := true;
     nlc
   in
@@ -403,11 +399,11 @@ let update_aloan (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
         match lc with
         | AMutLoan (pm, bid, av) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
-            sanity_check __FILE__ __LINE__ (pm = PNone) span;
+            [%sanity_check] span (pm = PNone);
             if bid = l then update () else super#visit_AMutLoan env pm bid av
         | ASharedLoan (pm, lid, v, av) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
-            sanity_check __FILE__ __LINE__ (pm = PNone) span;
+            [%sanity_check] span (pm = PNone);
             if l = lid then update ()
             else super#visit_ASharedLoan env pm lid v av
         | AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
@@ -426,7 +422,7 @@ let update_aloan (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
 
   let ctx = obj#visit_eval_ctx () ctx in
   (* Check that we updated at least one loan *)
-  sanity_check __FILE__ __LINE__ !r span;
+  [%sanity_check] span !r;
   ctx
 
 (** Lookup a borrow content from a borrow id. *)
@@ -465,12 +461,12 @@ let lookup_borrow_opt (span : Meta.span) (ek : exploration_kind)
         match bc with
         | AMutBorrow (pm, bid, av) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
-            sanity_check __FILE__ __LINE__ (pm = PNone) span;
+            [%sanity_check] span (pm = PNone);
             if UMut bid = l then raise (FoundGBorrowContent (Abstract bc))
             else super#visit_AMutBorrow env pm bid av
         | ASharedBorrow (pm, bid, uid) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
-            sanity_check __FILE__ __LINE__ (pm = PNone) span;
+            [%sanity_check] span (pm = PNone);
             if UShared uid = l then raise (FoundGBorrowContent (Abstract bc))
             else super#visit_ASharedBorrow env pm bid uid
         | AIgnoredMutBorrow (_, _)
@@ -502,7 +498,7 @@ let lookup_borrow_opt (span : Meta.span) (ek : exploration_kind)
 let lookup_borrow (span : Meta.span) (ek : exploration_kind)
     (l : unique_borrow_id) (ctx : eval_ctx) : g_borrow_content =
   match lookup_borrow_opt span ek l ctx with
-  | None -> craise __FILE__ __LINE__ span "Unreachable"
+  | None -> [%craise] span "Unreachable"
   | Some lc -> lc
 
 (** Lookup all the shared and reserved borrows associated with a given loan id
@@ -542,7 +538,7 @@ let update_borrow (span : Meta.span) (ek : exploration_kind)
      returning we check that we updated at least once. *)
   let r = ref false in
   let update () : borrow_content =
-    sanity_check __FILE__ __LINE__ (not !r) span;
+    [%sanity_check] span (not !r);
     r := true;
     nbc
   in
@@ -584,7 +580,7 @@ let update_borrow (span : Meta.span) (ek : exploration_kind)
 
   let ctx = obj#visit_eval_ctx () ctx in
   (* Check that we updated at least one borrow *)
-  sanity_check __FILE__ __LINE__ !r span;
+  [%sanity_check] span !r;
   ctx
 
 (** Update an abstraction borrow content.
@@ -599,7 +595,7 @@ let update_aborrow (span : Meta.span) (ek : exploration_kind)
      returning we check that we updated at least once. *)
   let r = ref false in
   let update () : avalue =
-    sanity_check __FILE__ __LINE__ (not !r) span;
+    [%sanity_check] span (not !r);
     r := true;
     nv
   in
@@ -612,12 +608,12 @@ let update_aborrow (span : Meta.span) (ek : exploration_kind)
         match bc with
         | AMutBorrow (pm, bid, av) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
-            sanity_check __FILE__ __LINE__ (pm = PNone) span;
+            [%sanity_check] span (pm = PNone);
             if UMut bid = l then update ()
             else ABorrow (super#visit_AMutBorrow env pm bid av)
         | ASharedBorrow (pm, bid, sid) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
-            sanity_check __FILE__ __LINE__ (pm = PNone) span;
+            [%sanity_check] span (pm = PNone);
             if UShared sid = l then update ()
             else ABorrow (super#visit_ASharedBorrow env pm bid sid)
         | AIgnoredMutBorrow _
@@ -638,7 +634,7 @@ let update_aborrow (span : Meta.span) (ek : exploration_kind)
 
   let ctx = obj#visit_eval_ctx () ctx in
   (* Check that we updated at least one borrow *)
-  cassert __FILE__ __LINE__ !r span "No borrow was updated";
+  [%cassert] span !r "No borrow was updated";
   ctx
 
 type mut_borrow_or_shared_loan_id =
@@ -764,13 +760,13 @@ let lookup_intersecting_aproj_borrows_opt (span : Meta.span)
   let set_non_shared ((id, ty) : AbstractionId.id * rty) : unit =
     match !found with
     | None -> found := Some (NonSharedProj (id, ty))
-    | Some _ -> craise __FILE__ __LINE__ span "Unreachable"
+    | Some _ -> [%craise] span "Unreachable"
   in
   let add_shared (x : AbstractionId.id * rty) : unit =
     match !found with
     | None -> found := Some (SharedProjs [ x ])
     | Some (SharedProjs pl) -> found := Some (SharedProjs (x :: pl))
-    | Some (NonSharedProj _) -> craise __FILE__ __LINE__ span "Unreachable"
+    | Some (NonSharedProj _) -> [%craise] span "Unreachable"
   in
   let check_add_proj_borrows (is_shared : bool) abs proj' =
     if
@@ -790,7 +786,7 @@ let lookup_intersecting_aproj_borrows_opt (span : Meta.span)
       method! visit_abstract_shared_borrow abs asb =
         (* Sanity check *)
         (match !found with
-        | Some (NonSharedProj _) -> craise __FILE__ __LINE__ span "Unreachable"
+        | Some (NonSharedProj _) -> [%craise] span "Unreachable"
         | _ -> ());
         (* Explore *)
         if lookup_shared then
@@ -835,7 +831,7 @@ let lookup_intersecting_aproj_borrows_not_shared_opt (span : Meta.span)
   with
   | None -> None
   | Some (NonSharedProj (abs_id, rty)) -> Some (abs_id, rty)
-  | _ -> craise __FILE__ __LINE__ span "Unexpected"
+  | _ -> [%craise] span "Unexpected"
 
 (** Similar to {!lookup_intersecting_aproj_borrows_opt}, but updates the values.
 
@@ -863,14 +859,12 @@ let update_intersecting_aproj_borrows (span : Meta.span)
   let add_shared () =
     match !shared with
     | None -> shared := Some true
-    | Some b -> sanity_check __FILE__ __LINE__ b span
+    | Some b -> [%sanity_check] span b
   in
   let set_non_shared () =
     match !shared with
     | None -> shared := Some false
-    | Some _ ->
-        craise __FILE__ __LINE__ span
-          "Found unexpected intersecting proj_borrows"
+    | Some _ -> [%craise] span "Found unexpected intersecting proj_borrows"
   in
   (* Return: [(intersects_owned, intersects_outlive)] *)
   let check_proj_borrows is_shared abs (proj' : symbolic_proj) : bool * bool =
@@ -913,12 +907,8 @@ let update_intersecting_aproj_borrows (span : Meta.span)
           projections_intersect span outlive_regions proj.proj_ty
             abs.regions.owned proj'.proj_ty
         in
-        sanity_check __FILE__ __LINE__
-          (intersects_owned || intersect_outlive)
-          span;
-        sanity_check __FILE__ __LINE__
-          ((not intersects_owned) || not intersect_outlive)
-          span);
+        [%sanity_check] span (intersects_owned || intersect_outlive);
+        [%sanity_check] span ((not intersects_owned) || not intersect_outlive));
 
       let intersects_outlive = include_outlive && not intersects_owned in
       let intersects_owned = include_owned && intersects_owned in
@@ -936,7 +926,7 @@ let update_intersecting_aproj_borrows (span : Meta.span)
       method! visit_abstract_shared_borrows abs asb =
         (* Sanity check *)
         (match !shared with
-        | Some b -> sanity_check __FILE__ __LINE__ b span
+        | Some b -> [%sanity_check] span b
         | _ -> ());
         (* Explore *)
         match update_shared with
@@ -971,9 +961,9 @@ let update_intersecting_aproj_borrows (span : Meta.span)
   (* Apply *)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Check that we updated the context at least once *)
-  cassert __FILE__ __LINE__
+  [%cassert] span
     ((not fail_if_unchanged) || Option.is_some !shared)
-    span "Context was not updated";
+    "Context was not updated";
   (* Return *)
   ctx
 
@@ -1001,7 +991,7 @@ let update_intersecting_aproj_borrows_mut (span : Meta.span)
       proj_regions proj ctx
   in
   (* Check that we updated at least once *)
-  sanity_check __FILE__ __LINE__ !updated span;
+  [%sanity_check] span !updated;
   (* Return *)
   ctx
 
@@ -1014,9 +1004,7 @@ let remove_intersecting_aproj_borrows_shared (span : Meta.span)
     (proj : symbolic_proj) (ctx : eval_ctx) : eval_ctx =
   (* Small helpers *)
   let update_shared = Some (fun ~owned:_ ~outlive:_ _ _ -> []) in
-  let update_mut ~owned:_ ~outlive:_ _ =
-    craise __FILE__ __LINE__ span "Unexpected"
-  in
+  let update_mut ~owned:_ ~outlive:_ _ = [%craise] span "Unexpected" in
   (* Update *)
   update_intersecting_aproj_borrows span ~fail_if_unchanged:true ~include_owned
     ~include_outlive ~update_shared ~update_mut regions proj ctx
@@ -1063,7 +1051,7 @@ let update_intersecting_aproj_loans (span : Meta.span)
     (subst : owned:bool -> outlive:bool -> abs -> aproj_loans -> aproj)
     (ctx : eval_ctx) : eval_ctx =
   (* *)
-  sanity_check __FILE__ __LINE__ (ty_is_rty proj.proj_ty) span;
+  [%sanity_check] span (ty_is_rty proj.proj_ty);
   (* Small helpers for sanity checks *)
   let updated = ref false in
   let update ~owned ~outlive abs aproj_loans : aproj =
@@ -1104,20 +1092,19 @@ let update_intersecting_aproj_loans (span : Meta.span)
                   projections_intersect span outlive_regions proj.proj_ty
                     abs.regions.owned aproj_loans.proj.proj_ty
                 in
-                log#ldebug
-                  (lazy
-                    (__FUNCTION__ ^ "\n- proj_regions: "
-                    ^ RegionId.Set.to_string None proj_regions
-                    ^ "\n- proj.proj_ty: "
-                    ^ ty_to_string ctx proj.proj_ty
-                    ^ "\n- abs.regions.owned: "
-                    ^ RegionId.Set.to_string None abs.regions.owned
-                    ^ "\n- aproj_loans.proj.proj_ty: "
-                    ^ ty_to_string ctx aproj_loans.proj.proj_ty
-                    ^ "\n- outlive_regions: "
-                    ^ RegionId.Set.to_string None outlive_regions));
-                sanity_check __FILE__ __LINE__ (owned || outlive) span;
-                sanity_check __FILE__ __LINE__ ((not owned) || not outlive) span);
+                [%ldebug
+                  "- proj_regions: "
+                  ^ RegionId.Set.to_string None proj_regions
+                  ^ "\n- proj.proj_ty: "
+                  ^ ty_to_string ctx proj.proj_ty
+                  ^ "\n- abs.regions.owned: "
+                  ^ RegionId.Set.to_string None abs.regions.owned
+                  ^ "\n- aproj_loans.proj.proj_ty: "
+                  ^ ty_to_string ctx aproj_loans.proj.proj_ty
+                  ^ "\n- outlive_regions: "
+                  ^ RegionId.Set.to_string None outlive_regions];
+                [%sanity_check] span (owned || outlive);
+                [%sanity_check] span ((not owned) || not outlive));
 
               let outlive = include_outlive && not owned in
               let owned = include_owned && owned in
@@ -1128,7 +1115,7 @@ let update_intersecting_aproj_loans (span : Meta.span)
   (* Apply *)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Check that we updated the context at least once *)
-  sanity_check __FILE__ __LINE__ ((not fail_if_unchanged) || !updated) span;
+  [%sanity_check] span ((not fail_if_unchanged) || !updated);
   (* Return *)
   ctx
 
@@ -1147,7 +1134,7 @@ let lookup_aproj_loans_opt (span : Meta.span) (abs_id : AbstractionId.id)
   let found = ref None in
   let set_found x =
     (* There is at most one projector which corresponds to the description *)
-    sanity_check __FILE__ __LINE__ (Option.is_none !found) span;
+    [%sanity_check] span (Option.is_none !found);
     found := Some x
   in
   (* The visitor *)
@@ -1164,7 +1151,7 @@ let lookup_aproj_loans_opt (span : Meta.span) (abs_id : AbstractionId.id)
             super#visit_aproj abs sproj
         | AProjLoans aproj_loan ->
             let abs = Option.get abs in
-            sanity_check __FILE__ __LINE__ (abs.abs_id = abs_id) span;
+            [%sanity_check] span (abs.abs_id = abs_id);
             if aproj_loan.proj.sv_id = sv_id then set_found aproj_loan else ());
         super#visit_aproj abs sproj
     end
@@ -1191,7 +1178,7 @@ let update_aproj_loans (span : Meta.span) (abs_id : AbstractionId.id)
   let found = ref false in
   let update () =
     (* We update at most once *)
-    sanity_check __FILE__ __LINE__ (not !found) span;
+    [%sanity_check] span (not !found);
     found := true;
     nproj
   in
@@ -1209,7 +1196,7 @@ let update_aproj_loans (span : Meta.span) (abs_id : AbstractionId.id)
             super#visit_aproj abs sproj
         | AProjLoans { proj = abs_proj; _ } ->
             let abs = Option.get abs in
-            sanity_check __FILE__ __LINE__ (abs.abs_id = abs_id) span;
+            [%sanity_check] span (abs.abs_id = abs_id);
             if abs_proj.sv_id = sv_id then update ()
             else super#visit_aproj (Some abs) sproj
     end
@@ -1217,7 +1204,7 @@ let update_aproj_loans (span : Meta.span) (abs_id : AbstractionId.id)
   (* Apply *)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Sanity check *)
-  sanity_check __FILE__ __LINE__ !found span;
+  [%sanity_check] span !found;
   (* Return *)
   ctx
 
@@ -1236,7 +1223,7 @@ let update_aproj_borrows (span : Meta.span) (abs_id : AbstractionId.id)
   let found = ref false in
   let update () =
     (* We update at most once *)
-    sanity_check __FILE__ __LINE__ (not !found) span;
+    [%sanity_check] span (not !found);
     found := true;
     nproj
   in
@@ -1254,7 +1241,7 @@ let update_aproj_borrows (span : Meta.span) (abs_id : AbstractionId.id)
             super#visit_aproj abs sproj
         | AProjBorrows { proj = abs_proj; _ } ->
             let abs = Option.get abs in
-            sanity_check __FILE__ __LINE__ (abs.abs_id = abs_id) span;
+            [%sanity_check] span (abs.abs_id = abs_id);
             if abs_proj.sv_id = sv.sv_id then update ()
             else super#visit_aproj (Some abs) sproj
     end
@@ -1262,7 +1249,7 @@ let update_aproj_borrows (span : Meta.span) (abs_id : AbstractionId.id)
   (* Apply *)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Sanity check *)
-  sanity_check __FILE__ __LINE__ !found span;
+  [%sanity_check] span !found;
   (* Return *)
   ctx
 
@@ -1307,8 +1294,7 @@ let no_aproj_over_symbolic_in_context (span : Meta.span)
   in
   (* Apply *)
   try obj#visit_eval_ctx () ctx
-  with Found ->
-    craise __FILE__ __LINE__ span "update_aproj_loans_to_ended: failed"
+  with Found -> [%craise] span "update_aproj_loans_to_ended: failed"
 
 (** Helper function
 
@@ -1327,11 +1313,11 @@ let get_first_non_ignored_aloan_in_abstraction (span : Meta.span) (abs : abs) :
         match lc with
         | AMutLoan (pm, bid, _) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
-            sanity_check __FILE__ __LINE__ (pm = PNone) span;
+            [%sanity_check] span (pm = PNone);
             raise (FoundBorrowId bid)
         | ASharedLoan (pm, bid, _, _) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
-            sanity_check __FILE__ __LINE__ (pm = PNone) span;
+            [%sanity_check] span (pm = PNone);
             raise (FoundBorrowId bid)
         | AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
         | AEndedSharedLoan (_, _) -> super#visit_aloan_content env lc
@@ -1350,7 +1336,7 @@ let get_first_non_ignored_aloan_in_abstraction (span : Meta.span) (abs : abs) :
         | VMutLoan _ ->
             (* The mut loan linked to the mutable borrow present in a shared
              * value in an abstraction should be in an AProjBorrows *)
-            craise __FILE__ __LINE__ span "Unreachable"
+            [%craise] span "Unreachable"
         | VSharedLoan (bid, _) -> raise (FoundBorrowId bid)
 
       method! visit_aproj env sproj =
@@ -1588,7 +1574,7 @@ let normalize_proj_ty (regions : RegionId.Set.t) (ty : rty) : rty =
 let rec norm_proj_tys_union (span : Meta.span) (ty1 : rty) (ty2 : rty) : rty =
   match (ty1, ty2) with
   | TAdt tref1, TAdt tref2 ->
-      sanity_check __FILE__ __LINE__ (tref1.id = tref2.id) span;
+      [%sanity_check] span (tref1.id = tref2.id);
       TAdt
         {
           id = tref1.id;
@@ -1596,23 +1582,23 @@ let rec norm_proj_tys_union (span : Meta.span) (ty1 : rty) (ty2 : rty) : rty =
             norm_proj_generic_args_union span tref1.generics tref2.generics;
         }
   | TVar id1, TVar id2 ->
-      sanity_check __FILE__ __LINE__ (id1 = id2) span;
+      [%sanity_check] span (id1 = id2);
       TVar id1
   | TLiteral lit1, TLiteral lit2 ->
-      sanity_check __FILE__ __LINE__ (lit1 = lit2) span;
+      [%sanity_check] span (lit1 = lit2);
       TLiteral lit1
   | TNever, TNever -> TNever
   | TRef (r1, ty1, rk1), TRef (r2, ty2, rk2) ->
-      sanity_check __FILE__ __LINE__ (rk1 = rk2) span;
+      [%sanity_check] span (rk1 = rk2);
       TRef
         ( norm_proj_regions_union span r1 r2,
           norm_proj_tys_union span ty1 ty2,
           rk1 )
   | TRawPtr (ty1, rk1), TRawPtr (ty2, rk2) ->
-      sanity_check __FILE__ __LINE__ (rk1 = rk2) span;
+      [%sanity_check] span (rk1 = rk2);
       TRawPtr (norm_proj_tys_union span ty1 ty2, rk1)
   | TTraitType (tr1, item1), TTraitType (tr2, item2) ->
-      sanity_check __FILE__ __LINE__ (item1 = item2) span;
+      [%sanity_check] span (item1 = item2);
       TTraitType (norm_proj_trait_refs_union span tr1 tr2, item1)
   | ( TFnPtr
         { binder_regions = binder_regions1; binder_value = inputs1, output1 },
@@ -1620,14 +1606,14 @@ let rec norm_proj_tys_union (span : Meta.span) (ty1 : rty) (ty2 : rty) : rty =
         { binder_regions = binder_regions2; binder_value = inputs2, output2 } )
     ->
       (* TODO: general case *)
-      sanity_check __FILE__ __LINE__ (binder_regions1 = []) span;
-      sanity_check __FILE__ __LINE__ (binder_regions2 = []) span;
+      [%sanity_check] span (binder_regions1 = []);
+      [%sanity_check] span (binder_regions2 = []);
       let binder_value =
         ( List.map2 (norm_proj_tys_union span) inputs1 inputs2,
           norm_proj_tys_union span output1 output2 )
       in
       TFnPtr { binder_regions = []; binder_value }
-  | _ -> internal_error __FILE__ __LINE__ span
+  | _ -> [%internal_error] span
 
 and norm_proj_generic_args_union span (generics1 : generic_args)
     (generics2 : generic_args) : generic_args =
@@ -1663,24 +1649,24 @@ and norm_proj_regions_union (span : Meta.span) (r1 : region) (r2 : region) :
   match (r1, r2) with
   | RVar (Free _), RVar (Free _) ->
       (* There is an intersection: the regions should be disjoint *)
-      internal_error __FILE__ __LINE__ span
+      [%internal_error] span
   | RVar (Free rid), RErased | RErased, RVar (Free rid) ->
-      sanity_check __FILE__ __LINE__ (rid = RegionId.zero) span;
+      [%sanity_check] span (rid = RegionId.zero);
       RVar (Free rid)
-  | _ -> internal_error __FILE__ __LINE__ span
+  | _ -> [%internal_error] span
 
 and norm_proj_trait_refs_union (span : Meta.span) (tr1 : trait_ref)
     (tr2 : trait_ref) : trait_ref =
   let { trait_id = trait_id1; trait_decl_ref = decl_ref1 } = tr1 in
   let { trait_id = trait_id2; trait_decl_ref = decl_ref2 } = tr2 in
-  sanity_check __FILE__ __LINE__ (trait_id1 = trait_id2) span;
+  [%sanity_check] span (trait_id1 = trait_id2);
   (* There might be regions but let's ignore this for now... *)
-  sanity_check __FILE__ __LINE__ (decl_ref1 = decl_ref2) span;
+  [%sanity_check] span (decl_ref1 = decl_ref2);
   tr1
 
 and norm_proj_const_generics_union (span : Meta.span) (cg1 : const_generic)
     (cg2 : const_generic) : const_generic =
-  sanity_check __FILE__ __LINE__ (cg1 = cg2) span;
+  [%sanity_check] span (cg1 = cg2);
   cg1
 
 let norm_proj_ty_contains span (ty1 : rty) (ty2 : rty) : bool =
@@ -1711,7 +1697,7 @@ let refresh_live_regions_in_ty (span : Meta.span) (ctx : eval_ctx) (ty : rty) :
       method! visit_RVar _ var =
         match var with
         | Free rid -> RVar (Free (get_region rid))
-        | Bound _ -> internal_error __FILE__ __LINE__ span
+        | Bound _ -> [%internal_error] span
     end
   in
   let ty = visitor#visit_ty () ty in

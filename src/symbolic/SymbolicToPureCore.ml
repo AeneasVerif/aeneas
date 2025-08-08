@@ -3,7 +3,6 @@ open Pure
 open PureUtils
 open FunsAnalysis
 open TypesAnalysis
-open Errors
 open PrintSymbolicAst
 module T = Types
 module V = Values
@@ -444,9 +443,7 @@ let bs_ctx_register_forward_call (call_id : V.FunCallId.id) (forward : S.call)
     (back_funs : texpression option RegionGroupId.Map.t option) (ctx : bs_ctx) :
     bs_ctx =
   let calls = ctx.calls in
-  sanity_check __FILE__ __LINE__
-    (not (V.FunCallId.Map.mem call_id calls))
-    ctx.span;
+  [%sanity_check] ctx.span (not (V.FunCallId.Map.mem call_id calls));
   let info = { forward; forward_inputs = args; back_funs } in
   let calls = V.FunCallId.Map.add call_id info calls in
   { ctx with calls }
@@ -467,9 +464,8 @@ let bs_ctx_register_backward_call (abs : V.abs) (call_id : V.FunCallId.id)
   let calls = V.FunCallId.Map.add call_id info ctx.calls in
   (* Insert the abstraction in the abstractions map *)
   let abstractions = ctx.abstractions in
-  sanity_check __FILE__ __LINE__
-    (not (V.AbstractionId.Map.mem abs.abs_id abstractions))
-    ctx.span;
+  [%sanity_check] ctx.span
+    (not (V.AbstractionId.Map.mem abs.abs_id abstractions));
   let abstractions =
     V.AbstractionId.Map.add abs.abs_id (abs, back_args) abstractions
   in
@@ -526,7 +522,7 @@ let lookup_var_for_symbolic_value (id : V.symbolic_value_id) (ctx : bs_ctx) :
   match V.SymbolicValueId.Map.find_opt id ctx.sv_to_var with
   | Some v -> Some v
   | None ->
-      save_error __FILE__ __LINE__ ctx.span
+      [%save_error] ctx.span
         ("Could not find var for symbolic value: "
         ^ V.SymbolicValueId.to_string id);
       None

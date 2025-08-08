@@ -4,7 +4,6 @@ open Pure
 open PureUtils
 open TranslateCore
 open Config
-open Errors
 include ExtractBase
 module T = Types
 
@@ -30,7 +29,7 @@ let extract_literal (span : Meta.span) (fmt : F.formatter) (is_pattern : bool)
           | HOL4 ->
               F.pp_print_string fmt ("int_to_" ^ int_name (Scalars.get_ty sv));
               F.pp_print_space fmt ()
-          | _ -> admit_raise __FILE__ __LINE__ span "Unreachable" fmt);
+          | _ -> [%admit_raise] span "Unreachable" fmt);
           (* We need to add parentheses if the value is negative *)
           let sv_value = Scalars.get_val sv in
           if sv_value >= Z.of_int 0 then
@@ -51,7 +50,7 @@ let extract_literal (span : Meta.span) (fmt : F.formatter) (is_pattern : bool)
                 let iname = String.lowercase_ascii (int_name sv_int_ty) in
                 F.pp_print_string fmt ("#" ^ iname)
           | HOL4 -> ()
-          | _ -> admit_raise __FILE__ __LINE__ span "Unreachable" fmt);
+          | _ -> [%admit_raise] span "Unreachable" fmt);
           if print_brackets then F.pp_print_string fmt ")")
   | VBool b ->
       let b =
@@ -81,7 +80,7 @@ let extract_literal (span : Meta.span) (fmt : F.formatter) (is_pattern : bool)
           F.pp_print_string fmt c;
           if inside then F.pp_print_string fmt ")")
   | VChar _ | VFloat _ | VStr _ | VByteStr _ ->
-      admit_raise __FILE__ __LINE__ span
+      [%admit_raise] span
         "Float, string, non-ASCII chars and byte string literals are \
          unsupported"
         fmt
@@ -140,7 +139,7 @@ let start_fun_decl_group (ctx : extraction_ctx) (fmt : F.formatter)
           F.pp_print_string fmt
             ("val [" ^ String.concat ", " names ^ "] = DefineDiv ‘")
         else (
-          sanity_check_opt_span __FILE__ __LINE__ (List.length names = 1) None;
+          [%sanity_check_opt_span] None (List.length names = 1);
           let name = List.hd names in
           F.pp_print_string fmt ("val " ^ name ^ " = Define ‘"));
         F.pp_print_cut fmt ()
@@ -382,7 +381,7 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
           | HOL4 ->
               let { types; const_generics; trait_refs } = generics in
               (* Const generics are not supported in HOL4 *)
-              cassert __FILE__ __LINE__ (const_generics = []) span
+              [%cassert] span (const_generics = [])
                 "Constant generics are not supported yet when generating code \
                  for HOL4";
               let print_tys =
@@ -390,7 +389,7 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
                 | TAdtId id -> not (TypeDeclId.Set.mem id no_params_tys)
                 | TBuiltin _ -> true
                 | _ ->
-                    save_error __FILE__ __LINE__ span "Unreachable";
+                    [%save_error] span "Unreachable";
                     false
               in
               if types <> [] && print_tys then (
@@ -422,8 +421,7 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       extract_rec false ret_ty;
       if inside then F.pp_print_string fmt ")"
   | TTraitType (trait_ref, type_name) -> (
-      if !parameterize_trait_types then
-        admit_raise __FILE__ __LINE__ span "Unimplemented" fmt
+      if !parameterize_trait_types then [%admit_raise] span "Unimplemented" fmt
       else
         let type_name =
           ctx_get_trait_type span trait_ref.trait_decl_ref.trait_decl_id
@@ -446,9 +444,8 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
             F.pp_print_string fmt type_name
         | _ ->
             (* HOL4 doesn't have 1st class types *)
-            cassert __FILE__ __LINE__
+            [%cassert] span
               (backend () <> HOL4)
-              span
               "Trait types are not supported yet when generating code for HOL4";
             extract_trait_ref span ctx fmt no_params_tys false trait_ref;
             F.pp_print_string fmt ("." ^ add_brackets type_name))
@@ -501,9 +498,8 @@ and extract_generic_args (span : Meta.span) (ctx : extraction_ctx)
         (extract_ty span ctx fmt no_params_tys true)
         types);
     if const_generics <> [] then (
-      cassert __FILE__ __LINE__
+      [%cassert] span
         (backend () <> HOL4)
-        span
         "Constant generics are not supported yet when generating code for HOL4";
       F.pp_print_space fmt ();
       Collections.List.iter_link (F.pp_print_space fmt)
@@ -543,7 +539,7 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
   | Self ->
       (* This has a specific treatment depending on the item we're extracting
          (associated type, etc.). We should have caught this elsewhere. *)
-      save_error __FILE__ __LINE__ span "Unexpected occurrence of `Self`";
+      [%save_error] span "Unexpected occurrence of `Self`";
       F.pp_print_string fmt "ERROR(\"Unexpected Self\")"
   | TraitImpl (id, generics) ->
       (* Lookup the the information about the explicit/implicit parameters. *)
@@ -595,7 +591,7 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
       F.pp_print_string fmt (add_brackets name)
   | UnknownTrait _ ->
       (* This is an error case *)
-      admit_raise __FILE__ __LINE__ span "Unexpected" fmt
+      [%admit_raise] span "Unexpected" fmt
 
 (** Compute the names for all the top-level identifiers used in a type
     definition (type name, variant names, field names, etc. but not type
@@ -668,7 +664,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                 in
                 (field_names, cons_name)
             | Some info ->
-                craise __FILE__ __LINE__ def.item_meta.span
+                [%craise] def.item_meta.span
                   ("Invalid builtin information for type "
                   ^ name_to_string ctx def.item_meta.name
                   ^ ": expected builtin information about a structure, got:\n"
@@ -716,7 +712,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                     (variant_id, StringMap.find variant.variant_name variant_map))
                   variants
             | Some info ->
-                craise __FILE__ __LINE__ def.item_meta.span
+                [%craise] def.item_meta.span
                   ("Invalid builtin information for type "
                   ^ name_to_string ctx def.item_meta.name
                   ^ ": expected builtin information about an enumeration, got:\n"
@@ -791,7 +787,7 @@ let extract_type_decl_variant (span : Meta.span) (ctx : extraction_ctx)
     List.fold_left (fun ctx (fid, f) -> print_field fid f ctx) ctx fields
   in
   (* Sanity check: HOL4 doesn't support const generics *)
-  sanity_check __FILE__ __LINE__ (cg_params = [] || backend () <> HOL4) span;
+  [%sanity_check] span (cg_params = [] || backend () <> HOL4);
   (* Print the final type *)
   if backend () <> HOL4 then (
     F.pp_print_space fmt ();
@@ -996,9 +992,8 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
     else (
       (* We extract for Coq or Lean, and we have a recursive record, or a record in
          a group of mutually recursive types: we extract it as an inductive type *)
-      cassert __FILE__ __LINE__
+      [%cassert] def.item_meta.span
         (is_rec && (backend () = Coq || backend () = Lean))
-        def.item_meta.span
         "Constant generics are not supported yet when generating code for HOL4";
       (* Small trick: in Lean we use namespaces, meaning we don't need to prefix
          the constructor name with the name of the type at definition site,
@@ -1057,7 +1052,7 @@ let extract_comment_with_span (ctx : extraction_ctx) (fmt : F.formatter)
           ^ "]";
         ]
   in
-  let span = span_to_string span in
+  let span = Errors.span_to_string span in
   extract_comment fmt (sl @ [ span ] @ name)
 
 let extract_trait_clause_type (span : Meta.span) (ctx : extraction_ctx)
@@ -1085,9 +1080,9 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
     (cg_params : string list) (trait_clauses : string list) : unit =
   let all_params = List.concat [ type_params; cg_params; trait_clauses ] in
   (* HOL4 doesn't support const generics *)
-  cassert __FILE__ __LINE__
+  [%cassert] span
     (cg_params = [] || backend () <> HOL4)
-    span "Constant generics are not supported yet when generating code for HOL4";
+    "Constant generics are not supported yet when generating code for HOL4";
   let left_bracket (explicit : explicit) =
     if explicit = Implicit && backend () <> FStar then F.pp_print_string fmt "{"
     else F.pp_print_string fmt "("
@@ -1204,9 +1199,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     (type_decl_group : TypeDeclId.Set.t) (kind : decl_kind) (def : type_decl)
     (extract_body : bool) : unit =
   (* Sanity check *)
-  sanity_check __FILE__ __LINE__
-    (extract_body || backend () <> HOL4)
-    def.item_meta.span;
+  [%sanity_check] def.item_meta.span (extract_body || backend () <> HOL4);
   let is_tuple_struct =
     TypesUtils.type_decl_from_decl_id_is_tuple_struct
       ctx.trans_ctx.type_ctx.type_infos def.def_id
@@ -1281,9 +1274,8 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   | None -> F.pp_print_string fmt def_name);
   (* HOL4 doesn't support const generics, and type definitions in HOL4 don't
      support trait clauses *)
-  cassert __FILE__ __LINE__
+  [%cassert] def.item_meta.span
     ((cg_params = [] && trait_clauses = []) || backend () <> HOL4)
-    def.item_meta.span
     "Constant generics and type definitions with trait clauses are not \
      supported yet when generating code for HOL4";
   (* Print the generic parameters *)
@@ -1328,7 +1320,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
      | Enum variants ->
          extract_type_decl_enum_body ctx_body fmt type_decl_group def def_name
            type_params cg_params variants
-     | Opaque -> craise __FILE__ __LINE__ def.item_meta.span "Unreachable");
+     | Opaque -> [%craise] def.item_meta.span "Unreachable");
   (* Add the definition end delimiter *)
   if backend () = HOL4 && decl_is_not_last_from_group kind then (
     F.pp_print_space fmt ();
@@ -1353,14 +1345,12 @@ let extract_type_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
   (* Retrieve the definition name *)
   let def_name = ctx_get_local_type def.item_meta.span def.def_id ctx in
   (* Generic parameters are unsupported *)
-  cassert __FILE__ __LINE__
+  [%cassert] def.item_meta.span
     (def.generics.const_generics = [])
-    def.item_meta.span
     "Constant generics are not supported yet when generating code for HOL4";
   (* Trait clauses on type definitions are unsupported *)
-  cassert __FILE__ __LINE__
+  [%cassert] def.item_meta.span
     (def.generics.trait_clauses = [])
-    def.item_meta.span
     "Types with trait clauses are not supported yet when generating code for \
      HOL4";
   (* Types  *)
@@ -1384,9 +1374,7 @@ let extract_type_decl_hol4_empty_record (ctx : extraction_ctx)
   (* Retrieve the definition name *)
   let def_name = ctx_get_local_type def.item_meta.span def.def_id ctx in
   (* Sanity check *)
-  sanity_check __FILE__ __LINE__
-    (def.generics = empty_generic_params)
-    def.item_meta.span;
+  [%sanity_check] def.item_meta.span (def.generics = empty_generic_params);
   (* Generate the declaration *)
   F.pp_print_space fmt ();
   F.pp_print_string fmt ("Type " ^ def_name ^ " = “: unit”");
@@ -1459,7 +1447,7 @@ let extract_coq_arguments_instruction (ctx : extraction_ctx) (fmt : F.formatter)
     Generate [Arguments] instructions in Coq for type definitions. *)
 let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
     (kind : decl_kind) (decl : type_decl) : unit =
-  sanity_check __FILE__ __LINE__ (backend () = Coq) decl.item_meta.span;
+  [%sanity_check] decl.item_meta.span (backend () = Coq);
   (* Generating the [Arguments] instructions is useful only if there are parameters *)
   let num_params =
     List.length decl.generics.types
@@ -1509,9 +1497,7 @@ let extract_type_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
     projectors allow to retrieve the facilities provided by Lean structures. *)
 let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
     (fmt : F.formatter) (kind : decl_kind) (decl : type_decl) : unit =
-  sanity_check __FILE__ __LINE__
-    (backend () = Coq || backend () = Lean)
-    decl.item_meta.span;
+  [%sanity_check] decl.item_meta.span (backend () = Coq || backend () = Lean);
   match decl.kind with
   | Opaque | Enum _ -> ()
   | Struct fields ->
@@ -1556,7 +1542,7 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
           (match backend () with
           | Lean -> F.pp_print_string fmt "def"
           | Coq -> F.pp_print_string fmt "Definition"
-          | _ -> internal_error __FILE__ __LINE__ decl.item_meta.span);
+          | _ -> [%internal_error] decl.item_meta.span);
           F.pp_print_space fmt ();
 
           (* Print the function name. In Lean, the syntax ADT.proj will
@@ -1704,7 +1690,7 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
 let extract_type_decl_record_field_projectors_simp_lemmas (ctx : extraction_ctx)
     (fmt : F.formatter) (kind : decl_kind) (decl : type_decl) : unit =
   let span = decl.item_meta.span in
-  sanity_check __FILE__ __LINE__ (backend () = Coq || backend () = Lean) span;
+  [%sanity_check] span (backend () = Coq || backend () = Lean);
   match decl.kind with
   | Opaque | Enum _ -> ()
   | Struct fields ->
@@ -1746,7 +1732,7 @@ let extract_type_decl_record_field_projectors_simp_lemmas (ctx : extraction_ctx)
           F.pp_open_hovbox fmt ctx.indent_incr;
           (match backend () with
           | Lean -> F.pp_print_string fmt "theorem"
-          | _ -> internal_error __FILE__ __LINE__ span);
+          | _ -> [%internal_error] span);
           F.pp_print_space fmt ();
 
           (* Print the theorem name. *)

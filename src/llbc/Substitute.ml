@@ -6,13 +6,11 @@ open Types
 open Values
 open LlbcAst
 open ContextsBase
-open Errors
 
 (* Fails if the variable is bound *)
 let expect_free_var span (var : 'id de_bruijn_var) : 'id =
   match var with
-  | Bound _ ->
-      craise_opt_span __FILE__ __LINE__ span "Found unexpected bound variable"
+  | Bound _ -> [%craise_opt_span] span "Found unexpected bound variable"
   | Free id -> id
 
 (** Generate fresh regions for region variables. *)
@@ -98,7 +96,7 @@ let empty_id_subst =
   }
 
 let no_abs_id_subst span =
-  let asubst _ = craise __FILE__ __LINE__ span "Unreachable" in
+  let asubst _ = [%craise] span "Unreachable" in
   { empty_id_subst with asubst }
 
 let subst_ids_visitor (subst : id_subst) =
@@ -108,7 +106,7 @@ let subst_ids_visitor (subst : id_subst) =
     method! visit_const_generic_var_id _ id = subst.cg_subst id
 
     method! visit_region_id _ _ =
-      craise_opt_span __FILE__ __LINE__ None
+      [%craise_opt_span] None
         "Region ids should not be visited directly; the visitor should catch \
          cases that contain region ids earlier."
 
@@ -171,9 +169,7 @@ let generic_args_of_params_erase_regions (span : Meta.span option)
   let trait_refs =
     List.map
       (fun (tref : trait_ref) ->
-        sanity_check_opt_span __FILE__ __LINE__
-          (tref.trait_decl_ref.binder_regions = [])
-          span;
+        [%sanity_check_opt_span] span (tref.trait_decl_ref.binder_regions = []);
         st_substitute_visitor#visit_trait_ref erase_regions_subst tref)
       generics.trait_refs
   in

@@ -13,7 +13,6 @@ open ValuesUtils
 open InterpreterUtils
 open InterpreterProjectors
 open Print.EvalCtx
-open Errors
 module S = SynthesizeSymbolic
 
 (** The local logger *)
@@ -58,7 +57,7 @@ let apply_symbolic_expansion_to_target_avalues (span : Meta.span)
       (** When visiting an abstraction, we remember the regions it owns to be
           able to properly reduce projectors when expanding symbolic values *)
       method! visit_abs current_abs abs =
-        sanity_check __FILE__ __LINE__ (Option.is_none current_abs) span;
+        [%sanity_check] span (Option.is_none current_abs);
         let current_abs = Some abs in
         super#visit_abs current_abs abs
 
@@ -70,14 +69,12 @@ let apply_symbolic_expansion_to_target_avalues (span : Meta.span)
       method! visit_aproj current_abs aproj =
         (match aproj with
         | AProjLoans { proj; _ } | AProjBorrows { proj; _ } ->
-            sanity_check __FILE__ __LINE__
-              (proj.sv_id <> original_sv.sv_id)
-              span
+            [%sanity_check] span (proj.sv_id <> original_sv.sv_id)
         | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ());
         super#visit_aproj current_abs aproj
 
       method! visit_ASymbolic current_abs pm aproj =
-        sanity_check __FILE__ __LINE__ (pm = PNone) span;
+        [%sanity_check] span (pm = PNone);
         let current_abs = Option.get current_abs in
         let proj_regions = current_abs.regions.owned in
         (* Explore in depth first - we won't update anything: we simply
@@ -92,10 +89,10 @@ let apply_symbolic_expansion_to_target_avalues (span : Meta.span)
             (* Check if this is the symbolic value we are looking for *)
             if proj.sv_id = original_sv.sv_id then (
               (* There mustn't be any consumed values *)
-              sanity_check __FILE__ __LINE__ (consumed = []) span;
+              [%sanity_check] span (consumed = []);
               (* Not sure what to do if the borrows are non empty: leaving
                  this as a TODO *)
-              cassert __FILE__ __LINE__ (borrows = []) span "Unimplemented";
+              [%cassert] span (borrows = []) "Unimplemented";
               (* Apply the projector *)
               let projected_value =
                 apply_proj_loans_on_symbolic_expansion span proj_regions
@@ -112,7 +109,7 @@ let apply_symbolic_expansion_to_target_avalues (span : Meta.span)
                by region abstractions, and is thus inaccessible: such a value can't
                be expanded)
             *)
-            cassert __FILE__ __LINE__ (loans = []) span "Unreachable";
+            [%cassert] span (loans = []) "Unreachable";
             (* Check if this is the symbolic value we are looking for *)
             if proj.sv_id = original_sv.sv_id then
               (* Convert the symbolic expansion to a value on which we can
@@ -164,7 +161,7 @@ let replace_symbolic_values (span : Meta.span) (at_most_once : bool)
   (* Count *)
   let replaced = ref false in
   let replace () =
-    if at_most_once then sanity_check __FILE__ __LINE__ (not !replaced) span;
+    if at_most_once then [%sanity_check] span (not !replaced);
     replaced := true;
     nv
   in
@@ -209,17 +206,15 @@ let compute_expanded_symbolic_non_builtin_adt_value (span : Meta.span)
   (* Lookup the definition and check if it is an enumeration with several
    * variants *)
   let def = ctx_lookup_type_decl span ctx def_id in
-  sanity_check __FILE__ __LINE__
-    (List.length generics.regions = List.length def.generics.regions)
-    span;
+  [%sanity_check] span
+    (List.length generics.regions = List.length def.generics.regions);
   (* Retrieve, for every variant, the list of its instantiated field types *)
   let variants_fields_types =
     Substitute.type_decl_get_instantiated_variants_fields_types def generics
   in
   (* Check if there is strictly more than one variant *)
   if List.length variants_fields_types > 1 && not expand_enumerations then
-    craise __FILE__ __LINE__ span
-      "Not allowed to expand enumerations with several variants";
+    [%craise] span "Not allowed to expand enumerations with several variants";
   (* Initialize the expanded value for a given variant *)
   let initialize ((variant_id, field_types) : VariantId.id option * rty list) :
       symbolic_expansion =
@@ -269,7 +264,7 @@ let compute_expanded_symbolic_adt_value (span : Meta.span)
   | TBuiltin TBox, [], [ boxed_ty ] ->
       [ compute_expanded_symbolic_box_value span boxed_ty ]
   | _ ->
-      craise __FILE__ __LINE__ span
+      [%craise] span
         "compute_expanded_symbolic_adt_value: unexpected combination"
 
 let expand_symbolic_value_shared_borrow (span : Meta.span)
@@ -300,7 +295,7 @@ let expand_symbolic_value_shared_borrow (span : Meta.span)
             Some [ AsbBorrow (bid, sid); shared_asb ]
           else (* Not in the set: ignore *)
             Some [ shared_asb ]
-      | _ -> craise __FILE__ __LINE__ span "Unexpected"
+      | _ -> [%craise] span "Unexpected"
     else None
   in
   (* Visitor to replace the projectors on borrows *)
@@ -315,7 +310,7 @@ let expand_symbolic_value_shared_borrow (span : Meta.span)
         else super#visit_VSymbolic env sv
 
       method! visit_EAbs proj_regions abs =
-        sanity_check __FILE__ __LINE__ (Option.is_none proj_regions) span;
+        [%sanity_check] span (Option.is_none proj_regions);
         let proj_regions = Some abs.regions.owned in
         super#visit_EAbs proj_regions abs
 
@@ -340,14 +335,12 @@ let expand_symbolic_value_shared_borrow (span : Meta.span)
       method! visit_aproj proj_regions aproj =
         (match aproj with
         | AProjLoans { proj; _ } | AProjBorrows { proj; _ } ->
-            sanity_check __FILE__ __LINE__
-              (proj.sv_id <> original_sv.sv_id)
-              span
+            [%sanity_check] span (proj.sv_id <> original_sv.sv_id)
         | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ());
         super#visit_aproj proj_regions aproj
 
       method! visit_ASymbolic proj_regions pm aproj =
-        sanity_check __FILE__ __LINE__ (pm = PNone) span;
+        [%sanity_check] span (pm = PNone);
         match aproj with
         | AEndedProjBorrows _ | AEmpty ->
             (* We ignore borrows *) ASymbolic (pm, aproj)
@@ -360,7 +353,7 @@ let expand_symbolic_value_shared_borrow (span : Meta.span)
                by region abstractions, and is thus inaccessible: such a value can't
                be expanded)
             *)
-            cassert __FILE__ __LINE__ (loans = []) span "Unreachable";
+            [%cassert] span (loans = []) "Unreachable";
             (* Check if we need to reborrow *)
             match reborrow_ashared (Option.get proj_regions) proj with
             | None -> super#visit_ASymbolic proj_regions pm aproj
@@ -386,11 +379,9 @@ let expand_symbolic_value_borrow (span : Meta.span)
     (original_sv : symbolic_value) (original_sv_place : SA.mplace option)
     (region : region) (ref_ty : rty) (rkind : ref_kind) : cm_fun =
  fun ctx ->
-  sanity_check __FILE__ __LINE__ (region <> RErased) span;
+  [%sanity_check] span (region <> RErased);
   (* Check that we are allowed to expand the reference *)
-  sanity_check __FILE__ __LINE__
-    (not (region_in_set region ctx.ended_regions))
-    span;
+  [%sanity_check] span (not (region_in_set region ctx.ended_regions));
   (* Match on the reference kind *)
   match rkind with
   | RMut ->
@@ -428,7 +419,7 @@ let expand_symbolic_bool (span : Meta.span) (sv : symbolic_value)
   (* Compute the expanded value *)
   let original_sv = sv in
   let rty = original_sv.sv_ty in
-  sanity_check __FILE__ __LINE__ (rty = TLiteral TBool) span;
+  [%sanity_check] span (rty = TLiteral TBool);
   (* Expand the symbolic value to true or false and continue execution *)
   let see_true = SeLiteral (VBool true) in
   let see_false = SeLiteral (VBool false) in
@@ -448,9 +439,7 @@ let expand_symbolic_value_no_branching (span : Meta.span) (sv : symbolic_value)
     (sv_place : SA.mplace option) : cm_fun =
  fun ctx ->
   (* Debug *)
-  log#ltrace
-    (lazy
-      ("expand_symbolic_value_no_branching: " ^ symbolic_value_to_string ctx sv));
+  [%ltrace symbolic_value_to_string ctx sv];
   (* Remember the initial context for printing purposes *)
   let ctx0 = ctx in
   (* Compute the expanded value - note that when doing so, we may introduce
@@ -484,24 +473,19 @@ let expand_symbolic_value_no_branching (span : Meta.span) (sv : symbolic_value)
         expand_symbolic_value_borrow span original_sv original_sv_place region
           ref_ty rkind ctx
     | _ ->
-        craise __FILE__ __LINE__ span
+        [%craise] span
           ("expand_symbolic_value_no_branching: unexpected type: "
          ^ show_rty rty)
   in
   (* Debug *)
-  log#ltrace
-    (lazy
-      ("expand_symbolic_value_no_branching: "
-      ^ symbolic_value_to_string ctx0 sv
-      ^ "\n\n- original context:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx0
-      ^ "\n\n- new context:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx
-      ^ "\n"));
+  [%ltrace
+    symbolic_value_to_string ctx0 sv
+    ^ "\n\n- original context:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx0
+    ^ "\n\n- new context:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx];
   (* Sanity check: the symbolic value has disappeared *)
-  sanity_check __FILE__ __LINE__
-    (not (symbolic_value_id_in_ctx original_sv.sv_id ctx))
-    span;
+  [%sanity_check] span (not (symbolic_value_id_in_ctx original_sv.sv_id ctx));
   (* Return *)
   (ctx, cc)
 
@@ -510,7 +494,7 @@ let expand_symbolic_adt (span : Meta.span) (sv : symbolic_value)
     eval_ctx -> eval_ctx list * (SA.expression list -> SA.expression) =
  fun ctx ->
   (* Debug *)
-  log#ltrace (lazy ("expand_symbolic_adt:" ^ symbolic_value_to_string ctx sv));
+  [%ltrace symbolic_value_to_string ctx sv];
   (* Compute the expanded value - note that when doing so, we may introduce
    * fresh symbolic values in the context (which thus gets updated) *)
   let original_sv = sv in
@@ -533,9 +517,7 @@ let expand_symbolic_adt (span : Meta.span) (sv : symbolic_value)
       ( ctx_branches,
         S.synthesize_symbolic_expansion span sv original_sv_place
           (List.map (fun el -> Some el) seel) )
-  | _ ->
-      craise __FILE__ __LINE__ span
-        ("expand_symbolic_adt: unexpected type: " ^ show_rty rty)
+  | _ -> [%craise] span ("expand_symbolic_adt: unexpected type: " ^ show_rty rty)
 
 let expand_symbolic_int (span : Meta.span) (sv : symbolic_value)
     (sv_place : SA.mplace option) (int_type : integer_type)
@@ -546,10 +528,9 @@ let expand_symbolic_int (span : Meta.span) (sv : symbolic_value)
  fun ctx ->
   (* Sanity check *)
   (match int_type with
-  | Signed int_type ->
-      sanity_check __FILE__ __LINE__ (sv.sv_ty = TLiteral (TInt int_type)) span
+  | Signed int_type -> [%sanity_check] span (sv.sv_ty = TLiteral (TInt int_type))
   | Unsigned int_type ->
-      sanity_check __FILE__ __LINE__ (sv.sv_ty = TLiteral (TUInt int_type)) span);
+      [%sanity_check] span (sv.sv_ty = TLiteral (TUInt int_type)));
   (* For all the branches of the switch, we expand the symbolic value
    * to the value given by the branch and execute the branch statement.
    * For the otherwise branch, we leave the symbolic value as it is
@@ -601,16 +582,12 @@ let greedy_expand_symbolics_with_borrows (span : Meta.span) : cm_fun =
       (* We reverse the environment before exploring it - this way the values
          get expanded in a more "logical" order (this is only for convenience) *)
       obj#visit_env () (List.rev ctx.env);
-      log#ltrace
-        (lazy "greedy_expand_symbolics_with_borrows: no value to expand\n");
+      [%ltrace "no value to expand"];
       (* Nothing to expand: continue *)
       (ctx, fun e -> e)
     with FoundSymbolicValue sv ->
       (* Expand and recheck the environment *)
-      log#ltrace
-        (lazy
-          ("greedy_expand_symbolics_with_borrows: about to expand: "
-          ^ symbolic_value_to_string ctx sv));
+      [%ltrace "about to expand: " ^ symbolic_value_to_string ctx sv];
       let ctx, cc =
         match sv.sv_ty with
         | TAdt { id = TAdtId def_id; _ } ->
@@ -622,20 +599,19 @@ let greedy_expand_symbolics_with_borrows (span : Meta.span) : cm_fun =
               match def.kind with
               | Struct _ | Enum ([] | [ _ ]) -> ()
               | Enum (_ :: _) ->
-                  craise __FILE__ __LINE__ span
+                  [%craise] span
                     ("Attempted to greedily expand a symbolic enumeration with \
                       > 1 variants (option \
                       [greedy_expand_symbolics_with_borrows] of [config]): "
                     ^ name_to_string ctx def.item_meta.name)
               | Alias _ | Opaque | TDeclError _ ->
-                  craise __FILE__ __LINE__ span
+                  [%craise] span
                     "Attempted to greedily expand an alias or opaque type"
-              | Union _ ->
-                  craise __FILE__ __LINE__ span "Unions are not supported"
+              | Union _ -> [%craise] span "Unions are not supported"
             end;
             (* Also, we need to check if the definition is recursive *)
             if ctx_type_decl_is_rec ctx def_id then
-              craise __FILE__ __LINE__ span
+              [%craise] span
                 ("Attempted to greedily expand a recursive definition (option \
                   [greedy_expand_symbolics_with_borrows] of [config]): "
                 ^ name_to_string ctx def.item_meta.name)
@@ -645,16 +621,13 @@ let greedy_expand_symbolics_with_borrows (span : Meta.span) : cm_fun =
             expand_symbolic_value_no_branching span sv None ctx
         | TAdt { id = TBuiltin (TArray | TSlice | TStr); _ } ->
             (* We can't expand those *)
-            craise __FILE__ __LINE__ span
+            [%craise] span
               "Attempted to greedily expand an ADT which can't be expanded "
-        | _ -> craise __FILE__ __LINE__ span "Unreachable"
+        | _ -> [%craise] span "Unreachable"
       in
       (* *)
-      log#ltrace
-        (lazy
-          ("\ngreedy_expand_symbolics_with_borrows: after expansion:\n"
-          ^ eval_ctx_to_string ~span:(Some span) ctx
-          ^ "\n\n"));
+      [%ltrace
+        "after expansion:\n" ^ eval_ctx_to_string ~span:(Some span) ctx ^ "\n"];
       (* Compose and continue *)
       comp cc (expand ctx)
   in

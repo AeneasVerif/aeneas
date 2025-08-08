@@ -77,10 +77,9 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
     (* JP: Why not use a reduce visitor here with a tuple of the values to be
        computed? *)
     let visit_fun (f : fun_decl) : unit =
-      log#ltrace
-        (lazy
-          (__FUNCTION__ ^ ": Analyzing fun:\n"
-          ^ Charon.PrintTypes.name_to_string fmt_env f.item_meta.name));
+      [%ltrace
+        "Analyzing fun:\n"
+        ^ Charon.PrintTypes.name_to_string fmt_env f.item_meta.name];
       let obj =
         object (self)
           inherit [_] iter_statement as super
@@ -95,7 +94,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
             else
               let info = FunDeclId.Map.find_opt id !infos in
               let info =
-                unwrap_opt_span __FILE__ __LINE__ (Some span) info
+                [%unwrap_opt_span] (Some span) info
                   "The function called here is missing from the crate \
                    (probably because of a previous error, or because of the \
                    use of --exclude"
@@ -152,9 +151,8 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
         end
       in
       (* Sanity check: global bodies don't contain stateful calls *)
-      cassert __FILE__ __LINE__
+      [%cassert] f.item_meta.span
         (Option.is_none f.is_global_initializer || not !stateful)
-        f.item_meta.span
         "Global definition containing a stateful call in its body";
       let builtin_info = get_builtin_info f in
       let has_builtin_info = builtin_info <> None in
@@ -179,13 +177,11 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
     let is_global_decl_body =
       List.exists (fun f -> Option.is_some f.is_global_initializer) d
     in
-    cassert __FILE__ __LINE__
+    [%cassert] (List.hd d).item_meta.span
       ((not is_global_decl_body) || List.length d = 1)
-      (List.hd d).item_meta.span
       "This global definition is in a group of mutually recursive definitions";
-    cassert __FILE__ __LINE__
+    [%cassert] (List.hd d).item_meta.span
       ((not !group_has_builtin_info) || List.length d = 1)
-      (List.hd d).item_meta.span
       "This builtin function belongs to a group of mutually recursive \
        definitions";
     (* We ignore on purpose functions that cannot fail and consider they *can*
@@ -211,8 +207,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
     let funs =
       List.map
         (fun id ->
-          silent_unwrap_opt_span __FILE__ __LINE__ None
-            (FunDeclId.Map.find_opt id funs_map))
+          [%silent_unwrap_opt_span] None (FunDeclId.Map.find_opt id funs_map))
         funs
     in
     let fun_ids = List.map (fun (d : fun_decl) -> d.def_id) funs in
@@ -242,12 +237,12 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
            in
            let decls = List.map decl_id_to_string decls in
            let decls = String.concat "\n" decls in
-           save_error_opt_span __FILE__ __LINE__ error.span
+           [%save_error_opt_span] error.span
              ("Encountered an error when analyzing the following function \
                declaration group:\n" ^ decls));
         analyze_decl_groups decls'
     | MixedGroup ids :: _ ->
-        save_error_opt_span __FILE__ __LINE__ None
+        [%save_error_opt_span] None
           ("Mixed declaration groups are not supported yet: ["
           ^ String.concat ", "
               (List.map Charon.PrintGAst.any_decl_id_to_string

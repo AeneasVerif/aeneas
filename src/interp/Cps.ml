@@ -130,7 +130,7 @@ let comp_seqs (file : string) (line : int) (span : Meta.span)
     match ls with
     | [] ->
         (* End of the list of branches: there shouldn't be any expression remaining *)
-        sanity_check file line (el = []) span;
+        sanity_check file line span (el = []);
         []
     | (resl, cf) :: ls ->
         (* Split the list of expressions between:

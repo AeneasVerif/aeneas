@@ -1,6 +1,5 @@
 open Types
 open Utils
-open Errors
 include Charon.TypesUtils
 
 let expect_free_var = Substitute.expect_free_var
@@ -77,7 +76,7 @@ let ty_refresh_regions (span : Meta.span option)
 
       method! visit_region_id _ _ =
         (* We shouldn't get there and should rather catch all the call sites *)
-        internal_error_opt_span __FILE__ __LINE__ span
+        [%internal_error_opt_span] span
 
       method! visit_RVar _ var =
         match var with

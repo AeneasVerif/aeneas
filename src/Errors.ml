@@ -1,3 +1,12 @@
+(*
+   The easiest way of using the helpers below is to use the PPX macros that are
+   introduced in the [aeneas-ppx] library. For example, [[%craise]] expands to
+   [craise __FILE__ __LINE__].
+
+   The convention is simple: if a function has name [NAME], then [[%NAME]]
+   expands to [NAME __FILE__ __LINE__].
+ *)
+
 let log = Logging.errors_log
 
 let raw_span_to_string (raw_span : Meta.raw_span) =
@@ -90,28 +99,28 @@ let craise_silent (file : string) (line : int) (span : Meta.span) (msg : string)
   craise_opt_span_silent file line (Some span) msg
 
 (** Lazy assert *)
-let classert_opt_span (file : string) (line : int) (b : bool)
-    (span : Meta.span option) (msg : string Lazy.t) =
+let classert_opt_span (file : string) (line : int) (span : Meta.span option)
+    (b : bool) (msg : string Lazy.t) =
   if not b then craise_opt_span file line span (Lazy.force msg)
 
 (** Lazy assert *)
-let classert (file : string) (line : int) (b : bool) (span : Meta.span)
+let classert (file : string) (line : int) (span : Meta.span) (b : bool)
     (msg : string Lazy.t) =
-  classert_opt_span file line b (Some span) msg
+  classert_opt_span file line (Some span) b msg
 
-let cassert_opt_span (file : string) (line : int) (b : bool)
-    (span : Meta.span option) (msg : string) =
+let cassert_opt_span (file : string) (line : int) (span : Meta.span option)
+    (b : bool) (msg : string) =
   if not b then craise_opt_span file line span msg
 
-let cassert (file : string) (line : int) (b : bool) (span : Meta.span)
+let cassert (file : string) (line : int) (span : Meta.span) (b : bool)
     (msg : string) =
-  cassert_opt_span file line b (Some span) msg
+  cassert_opt_span file line (Some span) b msg
 
-let sanity_check (file : string) (line : int) b span =
-  cassert file line b span "Internal error, please file an issue"
+let sanity_check (file : string) (line : int) span b =
+  cassert file line span b "Internal error, please file an issue"
 
-let sanity_check_opt_span (file : string) (line : int) b span =
-  cassert_opt_span file line b span "Internal error, please file an issue"
+let sanity_check_opt_span (file : string) (line : int) span b =
+  cassert_opt_span file line span b "Internal error, please file an issue"
 
 let internal_error_opt_span (file : string) (line : int)
     (span : Meta.span option) =
@@ -129,16 +138,13 @@ let warn_opt_span (file : string) (line : int) (span : Meta.span option)
     let msg = format_error_message_with_file_line file line span msg in
     log#swarning (msg ^ "\n")
 
-let cassert_warn_opt_span (file : string) (line : int) (b : bool)
-    (span : Meta.span option) (msg : string) =
+let cassert_warn_opt_span (file : string) (line : int) (span : Meta.span option)
+    (b : bool) (msg : string) =
   if not b then warn_opt_span file line span msg
 
-let cassert_warn (file : string) (line : int) (b : bool) (span : Meta.span)
+let cassert_warn (file : string) (line : int) (span : Meta.span) (b : bool)
     (msg : string) =
   if not b then warn_opt_span file line (Some span) msg
-
-let exec_raise = craise
-let exec_assert = cassert
 
 let unwrap_opt_span (file : string) (line : int) (span : Meta.span option)
     (x : 'a option) (msg : string) : 'a =

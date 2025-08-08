@@ -4,7 +4,6 @@ open Expressions
 open Values
 open LlbcAst
 open SymbolicAst
-open Errors
 
 let mk_mplace (span : Meta.span) (p : place) (ctx : Contexts.eval_ctx) : mplace
     =
@@ -44,7 +43,7 @@ let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
          (Some (SeLiteral (VBool true)), true_exp);
          (Some (SeLiteral (VBool false)), false_exp);
         ] -> ExpandBool (true_exp, false_exp)
-        | _ -> craise __FILE__ __LINE__ span "Ill-formed boolean expansion")
+        | _ -> [%craise] span "Ill-formed boolean expansion")
     | TLiteral (TInt _) | TLiteral (TUInt _) ->
         let int_ty = ty_as_integer sv.sv_ty in
         (* Switch over an integer: split between the "regular" branches
@@ -55,9 +54,9 @@ let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
         let get_scalar (see : symbolic_expansion option) : scalar_value =
           match see with
           | Some (SeLiteral (VScalar cv)) ->
-              sanity_check __FILE__ __LINE__ (Scalars.get_ty cv = int_ty) span;
+              [%sanity_check] span (Scalars.get_ty cv = int_ty);
               cv
-          | _ -> craise __FILE__ __LINE__ span "Unreachable"
+          | _ -> [%craise] span "Unreachable"
         in
         let branches =
           List.map (fun (see, exp) -> (get_scalar see, exp)) branches
@@ -65,19 +64,18 @@ let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
         (* For the otherwise branch, the symbolic value should have been left
          * unchanged *)
         let otherwise_see, otherwise = otherwise in
-        sanity_check __FILE__ __LINE__ (otherwise_see = None) span;
+        [%sanity_check] span (otherwise_see = None);
         (* Return *)
         ExpandInt (int_ty, branches, otherwise)
     | TLiteral (TFloat _) ->
-        craise __FILE__ __LINE__ span "Float are not supported in Aeneas yet"
+        [%craise] span "Float are not supported in Aeneas yet"
     | TAdt _ ->
         (* Branching: it is necessarily an enumeration expansion *)
         let get_variant (see : symbolic_expansion option) :
             VariantId.id option * symbolic_value list =
           match see with
           | Some (SeAdt (vid, fields)) -> (vid, fields)
-          | _ ->
-              craise __FILE__ __LINE__ span "Ill-formed branching ADT expansion"
+          | _ -> [%craise] span "Ill-formed branching ADT expansion"
         in
         let exp =
           List.map
@@ -91,7 +89,7 @@ let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
         (* Reference expansion: there should be one branch *)
         match ls with
         | [ (Some see, exp) ] -> ExpandNoBranch (see, exp)
-        | _ -> craise __FILE__ __LINE__ span "Ill-formed borrow expansion")
+        | _ -> [%craise] span "Ill-formed borrow expansion")
     | TVar _
     | TLiteral TChar
     | TNever
@@ -100,7 +98,7 @@ let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
     | TFnPtr _
     | TRawPtr _
     | TDynTrait _
-    | TError _ -> craise __FILE__ __LINE__ span "Ill-formed symbolic expansion"
+    | TError _ -> [%craise] span "Ill-formed symbolic expansion"
   in
   Expansion (place, sv, expansion)
 

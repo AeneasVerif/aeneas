@@ -52,7 +52,7 @@ ifdef IN_CI
 build-dev:
 	@true
 else
-build-dev: build-bin build-lib build-bin-dir doc
+build-dev: build-bin build-lib build-bin-dir
 endif
 
 .PHONY: build-bin
@@ -78,6 +78,7 @@ build-bin-dir: build-bin build-lib build-runner
 	cp -rf backends/fstar/*.fst* bin/backends/fstar/
 	cp -rf backends/coq/*.v bin/backends/coq/
 
+# TODO: using ppx (in aeneas-ppx) breaks this command
 .PHONY: doc
 doc:
 	cd src && dune build @doc

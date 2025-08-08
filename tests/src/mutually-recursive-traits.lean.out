@@ -1,4 +1,4 @@
 [[92mInfo[39m ] Imported: tests/llbc/mutually_recursive_traits.llbc
-[[91mError[39m] In file Translate.ml, line 870:
+[[91mError[39m] In file Translate.ml, line 866:
 Mutually recursive trait declarations are not supported
 
