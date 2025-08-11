@@ -271,7 +271,7 @@ let decompose_let_match (ctx : bs_ctx)
     let match_pat = subst_visitor#visit_typed_pattern () pat in
     let match_e = List.map mk_texpression_from_fvar fresh_vars in
     let match_e = mk_simpl_tuple_texpression ctx.span match_e in
-    let match_branch = { pat = match_pat; branch = match_e } in
+    let match_branch = close_branch ctx.span match_pat match_e in
     (* Create the otherwise branch *)
     let default_e =
       List.map
@@ -297,7 +297,7 @@ let decompose_let_match (ctx : bs_ctx)
     in
     let default_e = mk_simpl_tuple_texpression ctx.span default_e in
     let default_pat = mk_dummy_pattern pat.ty in
-    let default_branch = { pat = default_pat; branch = default_e } in
+    let default_branch = close_branch ctx.span default_pat default_e in
     let switch_e = Switch (bound, Match [ match_branch; default_branch ]) in
     let bound = { e = switch_e; ty = match_e.ty } in
     (* Update the pattern itself *)
