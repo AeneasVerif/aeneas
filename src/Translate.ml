@@ -33,6 +33,26 @@ let translate_function_to_symbolics (trans_ctx : trans_ctx) (fdef : fun_decl) :
       let inputs, symb = evaluate_function_symbolic synthesize trans_ctx fdef in
       Some (inputs, Option.get symb)
 
+(** Sanity check helper.
+
+    Check that all the variables in a function declaration:
+    - are bound variables
+    - are well-bound *)
+let check_fun_decl_vars_are_well_bound (_trans_ctx : trans_ctx)
+    (f : Pure.fun_decl) : unit =
+  let span = f.item_meta.span in
+
+  if !Config.sanity_checks then (
+    match f.body with
+    | None -> ()
+    | Some body ->
+        [%sanity_check] span (not (PureUtils.texpression_has_fvars body.body));
+
+        (* Open all the free variables: if there is a bound variable which is not well-bound, this will raise an exception *)
+        let _ = PureUtils.open_all_fun_body span body in
+        ())
+  else ()
+
 (** Translate a function, by generating its forward and backward translations.
 
     [fun_sigs]: maps the forward/backward functions to their signatures. In case
@@ -197,9 +217,19 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
   let ctx = { ctx with backward_inputs_no_state; backward_inputs_with_state } in
 
   (* Translate the function *)
-  match symbolic_trans with
-  | None -> SymbolicToPure.translate_fun_decl ctx None
-  | Some (_, ast) -> SymbolicToPure.translate_fun_decl ctx (Some ast)
+  let f =
+    match symbolic_trans with
+    | None -> SymbolicToPure.translate_fun_decl ctx None
+    | Some (_, ast) -> SymbolicToPure.translate_fun_decl ctx (Some ast)
+  in
+
+  (* Sanity check:
+     - there are no free variables appearing in the body
+     - all the variables are properly bound *)
+  check_fun_decl_vars_are_well_bound trans_ctx f;
+
+  (* *)
+  f
 
 let translate_function_to_pure (trans_ctx : trans_ctx)
     (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t)

@@ -766,7 +766,7 @@ let simplify_decompose_struct_visitor (ctx : ctx) (def : fun_decl) =
               List.fold_right
                 (fun (fid, pat) e ->
                   let field_proj = gen_field_proj fid pat in
-                  mk_open_let span monadic pat field_proj e)
+                  mk_opened_let monadic pat field_proj e)
                 id_var_pairs next
             in
             (super#visit_texpression env e).e
@@ -909,7 +909,6 @@ let intro_struct_updates = lift_expr_map_visitor intro_struct_updates_visitor
       ...
     ]} *)
 let simplify_let_bindings_visitor (ctx : ctx) (def : fun_decl) =
-  let span = def.item_meta.span in
   object (self)
     inherit [_] map_expression as super
 
@@ -956,7 +955,7 @@ let simplify_let_bindings_visitor (ctx : ctx) (def : fun_decl) =
                 let pat_vals = List.combine pats vals in
                 let e =
                   List.fold_right
-                    (fun (pat, v) next -> mk_open_let span false pat v next)
+                    (fun (pat, v) next -> mk_opened_let false pat v next)
                     pat_vals next
                 in
                 super#visit_expression env e.e
@@ -2165,11 +2164,11 @@ let apply_beta_reduction_visitor (_ctx : ctx) (def : fun_decl) =
         in
         (* Reconstruct the term *)
         mk_apps span
-          (mk_open_lambdas span kept_pats (super#visit_texpression env body))
+          (mk_opened_lambdas span kept_pats (super#visit_texpression env body))
           kept_args
       else
         mk_apps span
-          (mk_open_lambdas span pats (super#visit_texpression env body))
+          (mk_opened_lambdas span pats (super#visit_texpression env body))
           args
   end
 
@@ -2543,7 +2542,7 @@ let decompose_let_bindings_visitor (decompose_monadic : bool)
               (* Visit the next expression *)
               let next_e = self#visit_texpression env next_e in
               (* Create the let-bindings *)
-              (monadic, ltmp, re, mk_open_let span false lv rtmp next_e)
+              (monadic, ltmp, re, mk_opened_let false lv rtmp next_e)
       in
       (* Decompose the nested let-patterns *)
       let lv, next_e =
@@ -2552,7 +2551,7 @@ let decompose_let_bindings_visitor (decompose_monadic : bool)
           let pats, first_pat = decompose_pat lv in
           let e =
             List.fold_left
-              (fun next_e (lpat, rv) -> mk_open_let span false lpat rv next_e)
+              (fun next_e (lpat, rv) -> mk_opened_let false lpat rv next_e)
               next_e pats
           in
           (first_pat, e)
@@ -2889,11 +2888,14 @@ let apply_end_passes_to_def (ctx : ctx) (def : fun_decl) : fun_decl =
       in
 
       if apply then (
+        [%ltrace "About to apply: '" ^ pass_name ^ "'"];
         let def = pass ctx def in
-        [%ltrace pass_name ^ ":\n\n" ^ fun_decl_to_string ctx def];
+        [%ltrace
+          "After applying '" ^ pass_name ^ "'" ^ ":\n\n"
+          ^ fun_decl_to_string ctx def];
         def)
       else (
-        [%ltrace "ignoring " ^ pass_name ^ " due to the configuration\n"];
+        [%ltrace "Ignoring " ^ pass_name ^ " due to the configuration\n"];
         def))
     def end_passes
 
@@ -3282,11 +3284,12 @@ let compute_reducible (_ctx : ctx) (transl : pure_fun_translation list) :
 let apply_passes_to_def (ctx : ctx) (def : fun_decl) : fun_and_loops =
   (* Debug *)
   [%ltrace def.name];
-  [%ltrace "original decl:\n\n" ^ fun_decl_to_string ctx def];
+  [%ltrace "Original decl:\n\n" ^ fun_decl_to_string ctx def];
 
   (* First, find names for the variables which are unnamed *)
+  [%ltrace "About to apply 'compute_pretty_names'"];
   let def = compute_pretty_names def in
-  [%ltrace "compute_pretty_name:\n\n" ^ fun_decl_to_string ctx def];
+  [%ltrace "After 'compute_pretty_name':\n\n" ^ fun_decl_to_string ctx def];
 
   (* TODO: we might want to leverage more the assignment meta-data, for
    * aggregates for instance. *)
@@ -3297,7 +3300,7 @@ let apply_passes_to_def (ctx : ctx) (def : fun_decl) : fun_and_loops =
    * Rk.: some passes below use the fact that we removed the meta-data
    * (otherwise we would have to "unmeta" expressions before matching) *)
   let def = remove_meta def in
-  [%ltrace "remove_meta:\n\n" ^ fun_decl_to_string ctx def];
+  [%ltrace "Remove_meta:\n\n" ^ fun_decl_to_string ctx def];
 
   (* Extract the loop definitions by removing the {!Loop} node *)
   let def, loops = decompose_loops ctx def in

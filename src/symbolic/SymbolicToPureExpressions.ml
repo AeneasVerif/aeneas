@@ -1580,7 +1580,7 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
               RegionGroupId.Map.find bid ctx.backward_inputs_with_state
             in
             let places = List.map (fun _ -> None) inputs in
-            mk_open_lambdas_from_fvars ctx.span inputs places e
+            mk_closed_lambdas_from_fvars ctx.span inputs places e
           in
           (ctx, e, finish)
     in

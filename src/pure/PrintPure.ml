@@ -58,16 +58,16 @@ let fmt_env_push_pbvars (env : fmt_env) : fmt_env =
 (** Register a bound variable.
 
     Only call this between [fmt_env_start_pbvars] and [fmt_env_push_pbvars]. *)
-let fmt_env_push_var (env : fmt_env) (v : var) : fmt_env * bvar_id =
+let fmt_env_push_var (env : fmt_env) (v : var) : fmt_env * bvar_id * string =
   let pbvars = Option.get env.pbvars in
-  let name, counter =
+  let uid = env.bvar_id_counter in
+  let counter = uid + 1 in
+  let name =
     match v.basename with
-    | None ->
-        let id = env.bvar_id_counter in
-        let name = "b@" ^ string_of_int id in
-        (name, id + 1)
-    | Some name -> (name, env.bvar_id_counter)
+    | None -> ""
+    | Some name -> name
   in
+  let name = name ^ "@" ^ string_of_int uid in
   let bvar_id = env.pbvars_counter in
   let pbvars = Some (BVarId.Map.add bvar_id name pbvars) in
   let env =
@@ -78,7 +78,7 @@ let fmt_env_push_var (env : fmt_env) (v : var) : fmt_env * bvar_id =
       pbvars_counter = BVarId.incr env.pbvars_counter;
     }
   in
-  (env, bvar_id)
+  (env, bvar_id, name)
 
 (** We use this to push bound variables when entering a let, a lambda, or a
     match. *)
@@ -89,7 +89,11 @@ let fmt_env_push_binders (env : fmt_env) (pat : typed_pattern) : fmt_env =
   let visitor =
     object
       inherit [_] iter_typed_pattern
-      method! visit_PatBound _ v _ = env := fst (fmt_env_push_var !env v)
+
+      method! visit_PatBound _ v _ =
+        env :=
+          let x, _, _ = fmt_env_push_var !env v in
+          x
     end
   in
   visitor#visit_typed_pattern () pat;
@@ -100,7 +104,12 @@ let fmt_env_push_locals (env : fmt_env) (vars : var list) : fmt_env =
   (* Initialize the map *)
   let env = ref (fmt_env_start_pbvars env) in
   (* Explore *)
-  List.iter (fun v -> env := fst (fmt_env_push_var !env v)) vars;
+  List.iter
+    (fun v ->
+      env :=
+        let x, _, _ = fmt_env_push_var !env v in
+        x)
+    vars;
   (* Push the map *)
   fmt_env_push_pbvars !env
 
@@ -160,10 +169,10 @@ let bvar_to_string (env : fmt_env) (v : bvar) : string =
     | Some pbvars -> pbvars :: env.bvars
   in
   match Collections.List.nth_opt vars v.scope with
-  | None -> bvar_to_pretty_string v
+  | None -> "?" ^ bvar_to_pretty_string v
   | Some names -> (
       match BVarId.Map.find_opt v.id names with
-      | None -> bvar_to_pretty_string v
+      | None -> "?" ^ bvar_to_pretty_string v
       | Some name -> name ^ bvar_to_pretty_string v)
 
 let fvar_id_to_pretty_string (id : fvar_id) : string = "^" ^ FVarId.to_string id
@@ -383,7 +392,7 @@ let type_decl_to_string (env : fmt_env) (def : type_decl) : string =
 let var_to_varname (v : var) : string =
   match v.basename with
   | Some name -> name
-  | None -> "^"
+  | None -> "@"
 
 let var_to_string (env : fmt_env) (v : var) : string =
   let varname = var_to_varname v in
@@ -494,14 +503,13 @@ let rec typed_pattern_to_string_core (span : Meta.span option) (env : fmt_env)
   match v.value with
   | PatConstant cv -> (env, literal_to_string cv)
   | PatBound (v, mp) ->
-      let env, id = fmt_env_push_var env v in
-      let sv = var_to_string env v in
+      let env, _, sv = fmt_env_push_var env v in
+      let sv = var_to_string env { v with basename = Some sv } in
       begin
         match mp with
         | None -> (env, sv)
         | Some mp ->
             let mp = "[@mplace=" ^ mplace_to_string env mp ^ "]" in
-            let sv = bvar_to_string env { scope = 0; id } in
             let s =
               "(" ^ sv ^ " " ^ mp ^ " : " ^ ty_to_string env false v.ty ^ ")"
             in
