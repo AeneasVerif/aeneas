@@ -2112,7 +2112,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   (* Add the input state *)
   let input_state =
     if (ctx_get_effect_info ctx).stateful then
-      Some (mk_texpression_from_fvar (mk_state_fvar ctx.state_var))
+      Some (mk_typed_pattern_from_fvar (mk_state_fvar ctx.state_var) None)
     else None
   in
 
@@ -2121,18 +2121,21 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
 
   (* Create the loop node and return *)
   let loop =
-    Loop
-      {
-        fun_end;
-        loop_id;
-        span = loop.span;
-        fuel0 = mk_texpression_from_fvar (mk_fuel_fvar ctx.fuel0);
-        fuel = mk_texpression_from_fvar (mk_fuel_fvar ctx.fuel);
-        input_state;
-        inputs = List.map mk_texpression_from_fvar inputs;
-        output_ty;
-        loop_body;
-      }
+    let loop =
+      close_loop loop.span
+        {
+          fun_end;
+          loop_id;
+          span = loop.span;
+          fuel0 = mk_texpression_from_fvar (mk_fuel_fvar ctx.fuel0);
+          fuel = mk_typed_pattern_from_fvar (mk_fuel_fvar ctx.fuel) None;
+          input_state;
+          inputs = List.map (fun v -> mk_typed_pattern_from_fvar v None) inputs;
+          output_ty;
+          loop_body;
+        }
+    in
+    Loop loop
   in
   let ty = fun_end.ty in
   { e = loop; ty }

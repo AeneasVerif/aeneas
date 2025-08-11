@@ -996,14 +996,26 @@ and loop_to_string ?(span : Meta.span option = None) (env : fmt_env)
     (indent : string) (indent_incr : string) (loop : loop) : string =
   let indent1 = indent ^ indent_incr in
   let indent2 = indent1 ^ indent_incr in
-  let loop_inputs =
-    "loop_inputs: ["
-    ^ String.concat "; "
-        (List.map
-           (texpression_to_string ~span env false indent indent_incr)
-           loop.inputs)
-    ^ "]"
+  (* Introduce the inputs *)
+  let env, loop_inputs =
+    let env = fmt_env_start_pbvars env in
+    let env, _ =
+      match loop.input_state with
+      | None -> (env, None)
+      | Some input_state ->
+          let env, input_state =
+            typed_pattern_to_string_core span env input_state
+          in
+          (env, Some input_state)
+    in
+    let env, loop_inputs =
+      List.fold_left_map (typed_pattern_to_string_core span) env loop.inputs
+    in
+    let loop_inputs = "loop_inputs: [" ^ String.concat "; " loop_inputs ^ "]" in
+    let env = fmt_env_push_pbvars env in
+    (env, loop_inputs)
   in
+  (* *)
   let output_ty = "output_ty: " ^ ty_to_string env false loop.output_ty in
   let fun_end =
     texpression_to_string ~span env false indent2 indent_incr loop.fun_end

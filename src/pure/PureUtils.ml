@@ -122,6 +122,32 @@ class ['self] scoped_iter_expression =
       let scope' = scope + 1 in
       self#visit_typed_pattern scope pat;
       self#visit_texpression scope' body
+
+    method! visit_loop scope loop =
+      let {
+        fun_end;
+        loop_id = _;
+        span = _;
+        fuel0;
+        fuel;
+        input_state;
+        inputs;
+        output_ty;
+        loop_body;
+      } =
+        loop
+      in
+      (* Visit what can be visited before entering the binder *)
+      self#visit_texpression scope fuel0;
+      self#visit_ty scope output_ty;
+      (* Visit the patterns *)
+      self#visit_typed_pattern scope fuel;
+      Option.iter (self#visit_typed_pattern scope) input_state;
+      List.iter (self#visit_typed_pattern scope) inputs;
+      (* Enter the inner expressions *)
+      let scope' = scope + 1 in
+      self#visit_texpression scope' fun_end;
+      self#visit_texpression scope' loop_body
   end
 
 (** A map visitor for expressions where the environment is the current
@@ -160,6 +186,45 @@ class ['self] scoped_map_expression =
       let pat = self#visit_typed_pattern scope pat in
       let body = self#visit_texpression scope' body in
       Lambda (pat, body)
+
+    method! visit_loop scope loop =
+      let {
+        fun_end;
+        loop_id;
+        span;
+        fuel0;
+        fuel;
+        input_state;
+        inputs;
+        output_ty;
+        loop_body;
+      } =
+        loop
+      in
+      (* Visit what can be visited before entering the binder *)
+      let fuel0 = self#visit_texpression scope fuel0 in
+      let output_ty = self#visit_ty scope output_ty in
+      (* Visit the patterns *)
+      let fuel = self#visit_typed_pattern scope fuel in
+      let input_state =
+        Option.map (self#visit_typed_pattern scope) input_state
+      in
+      let inputs = List.map (self#visit_typed_pattern scope) inputs in
+      (* Enter the inner expressions *)
+      let scope' = scope + 1 in
+      let fun_end = self#visit_texpression scope' fun_end in
+      let loop_body = self#visit_texpression scope' loop_body in
+      {
+        fun_end;
+        loop_id;
+        span;
+        fuel0;
+        fuel;
+        input_state;
+        inputs;
+        output_ty;
+        loop_body;
+      }
   end
 
 let inputs_info_is_wf (info : inputs_info) : bool =
@@ -1009,15 +1074,14 @@ let open_binder (span : Meta.span) (pat : typed_pattern) (e : texpression) :
   let patl, e = open_binders span [ pat ] e in
   (List.hd patl, e)
 
-(** Close a binder group in an expression.
+(** Helper visitor to close a binder group.
 
     Return the close binder (where the free variables have been replaced with
     bound variables).
 
     We use this when handling function bodies: the list of type patterns is the
     list of input variables, that we treat as a single binder group. *)
-let close_binders (span : Meta.span) (patl : typed_pattern list)
-    (e : texpression) : typed_pattern list * texpression =
+let close_binders_visitor (span : Meta.span) (patl : typed_pattern list) =
   (* Close the pattern *)
   let map, patl = close_typed_patterns span patl in
   (* Use the map to update the expression *)
@@ -1037,6 +1101,18 @@ let close_binders (span : Meta.span) (patl : typed_pattern list)
         else BVar var
     end
   in
+  (patl, visitor)
+
+(** Close a binder group in an expression.
+
+    Return the close binder (where the free variables have been replaced with
+    bound variables).
+
+    We use this when handling function bodies: the list of type patterns is the
+    list of input variables, that we treat as a single binder group. *)
+let close_binders (span : Meta.span) (patl : typed_pattern list)
+    (e : texpression) : typed_pattern list * texpression =
+  let patl, visitor = close_binders_visitor span patl in
   let e = visitor#visit_texpression 0 e in
   (patl, e)
 
@@ -1173,6 +1249,34 @@ let mk_closed_lambda span (x : typed_pattern) (e : texpression) : texpression =
   let x, e = close_binder span x e in
   let e = Lambda (x, e) in
   { e; ty }
+
+let close_loop span (loop : loop) : loop =
+  let {
+    fun_end;
+    loop_id = _;
+    span = _;
+    fuel0 = _;
+    fuel;
+    input_state;
+    inputs;
+    output_ty = _;
+    loop_body;
+  } =
+    loop
+  in
+  let input_state = Option.to_list input_state in
+  match close_binders_visitor span ([ fuel ] @ input_state @ inputs) with
+  | fuel :: inputs_with_state, visitor ->
+      let fun_end = visitor#visit_texpression 0 fun_end in
+      let loop_body = visitor#visit_texpression 0 loop_body in
+      let input_state, inputs =
+        match (input_state, inputs_with_state) with
+        | [ _ ], input_state :: inputs -> (Some input_state, inputs)
+        | [], inputs -> (None, inputs)
+        | _ -> [%internal_error] span
+      in
+      { loop with fuel; input_state; inputs; fun_end; loop_body }
+  | _ -> [%internal_error] span
 
 (** Make an open lambda expression.
 
@@ -1686,6 +1790,47 @@ class virtual ['self] open_close_all_visitor =
       let body = self#visit_texpression env body in
       self#pop_scope env;
       { inputs; body }
+
+    method! visit_loop env loop =
+      let {
+        fun_end;
+        loop_id;
+        span;
+        fuel0;
+        fuel;
+        input_state;
+        inputs;
+        output_ty;
+        loop_body;
+      } =
+        loop
+      in
+      (* Visit what can be visited before entering the binder *)
+      let fuel0 = self#visit_texpression env fuel0 in
+      let output_ty = self#visit_ty env output_ty in
+      (* Visit the patterns to push a new scope *)
+      self#start_scope env;
+      let fuel = self#visit_typed_pattern env fuel in
+      let input_state = Option.map (self#visit_typed_pattern env) input_state in
+      let inputs = List.map (self#visit_typed_pattern env) inputs in
+      self#push_scope env;
+      (* Enter the inner expressions *)
+      let fun_end = self#visit_texpression env fun_end in
+      let loop_body = self#visit_texpression env loop_body in
+      (* Pop the stack *)
+      self#pop_scope env;
+      (* *)
+      {
+        fun_end;
+        loop_id;
+        span;
+        fuel0;
+        fuel;
+        input_state;
+        inputs;
+        output_ty;
+        loop_body;
+      }
 
     method! visit_FVar env (id : fvar_id) = BVar (self#get_fvar env id)
     method! visit_BVar env (v : bvar) = FVar (self#get_bvar env v)

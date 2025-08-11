@@ -1101,12 +1101,19 @@ and loop = {
       (** The original fuel taken as input by the function (if we use fuel).
 
           This should be a variable. *)
-  fuel : texpression;
+  fuel : typed_pattern;
       (** The fuel to use for the recursive calls (if we use fuel).
 
-          This should be a variable *)
-  input_state : texpression option;  (** This should be a variable *)
-  inputs : texpression list;  (** Those should be variables *)
+          Note that this variable is used both in [loop_body] and [fun_end]. *)
+  input_state : typed_pattern option;
+      (** This should be a variable.
+
+          Note that this variable is used both in [loop_body] and [fun_end]. *)
+  inputs : typed_pattern list;
+      (** Those should be variables.
+
+          Note that those variables are used both in [loop_body] and [fun_end].
+      *)
   output_ty : ty;  (** The output type of the loop *)
   loop_body : texpression;
 }

@@ -543,7 +543,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     in
     let ctx, fun_end = update_texpression fun_end ctx in
     let ctx, loop_body = update_texpression loop_body ctx in
-    let inputs = List.map (fun v -> snd (update_texpression v ctx)) inputs in
+    let inputs = List.map (fun v -> update_typed_pattern ctx v) inputs in
     let loop =
       {
         fun_end;
@@ -1931,7 +1931,7 @@ let decompose_loops_aux (_ctx : ctx) (def : fun_decl) (body : fun_body) :
         let inputs_tys =
           let fuel = if !Config.use_fuel then [ mk_fuel_ty ] else [] in
           let fwd_inputs =
-            List.map (fun (v : texpression) -> v.ty) loop.inputs
+            List.map (fun (v : typed_pattern) -> v.ty) loop.inputs
           in
           let info = fwd_info.fwd_info in
           let fwd_state =
@@ -1975,8 +1975,8 @@ let decompose_loops_aux (_ctx : ctx) (def : fun_decl) (body : fun_body) :
             match loop.input_state with
             | None -> []
             | Some input_state ->
-                let input_state = as_fvar span input_state in
-                let state_var = mk_state_fvar input_state in
+                let input_state, _ = as_pat_open span input_state in
+                let state_var = mk_state_fvar input_state.id in
                 [ state_var ]
           in
 
@@ -1994,8 +1994,8 @@ let decompose_loops_aux (_ctx : ctx) (def : fun_decl) (body : fun_body) :
           let loop_inputs =
             List.map
               (fun x ->
-                let id = as_fvar span x in
-                ({ id; basename = None; ty = x.ty } : fvar))
+                let v, _ = as_pat_open span x in
+                ({ id = v.id; basename = None; ty = x.ty } : fvar))
               loop.inputs
           in
 
@@ -2011,7 +2011,8 @@ let decompose_loops_aux (_ctx : ctx) (def : fun_decl) (body : fun_body) :
           | None -> loop.loop_body
           | Some (fuel0, fuel) ->
               wrap_in_match_fuel def.item_meta.span (as_fvar span fuel0)
-                (as_fvar span fuel) ~close:false loop.loop_body
+                (as_pat_open_fvar_id span fuel)
+                ~close:false loop.loop_body
         in
 
         let inputs =
