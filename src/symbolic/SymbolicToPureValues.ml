@@ -10,21 +10,15 @@ let log = Logging.symbolic_to_pure_log
 (** WARNING: do not call this function directly. Call
     [fresh_named_var_for_symbolic_value] instead. *)
 let fresh_var_llbc_ty (basename : string option) (ty : T.ty) (ctx : bs_ctx) :
-    bs_ctx * var =
-  (* Generate the fresh variable *)
-  let id, var_counter = LocalId.fresh !(ctx.var_counter) in
+    bs_ctx * fvar =
   let ty = ctx_translate_fwd_ty ctx ty in
-  let var = { id; basename; ty } in
-  (* Update the context *)
-  ctx.var_counter := var_counter;
-  (* Return *)
-  (ctx, var)
+  fresh_var basename ty ctx
 
 let fresh_named_var_for_symbolic_value (basename : string option)
-    (sv : V.symbolic_value) (ctx : bs_ctx) : bs_ctx * var =
+    (sv : V.symbolic_value) (ctx : bs_ctx) : bs_ctx * fvar =
   (* Generate the fresh variable *)
   let ctx, var = fresh_var_llbc_ty basename sv.sv_ty ctx in
-  (* Insert in the map *)
+  (* Insert in the map from symbolic value to variable *)
   let sv_to_var = V.SymbolicValueId.Map.add_strict sv.sv_id var ctx.sv_to_var in
   (* Update the context *)
   let ctx = { ctx with sv_to_var } in
@@ -32,16 +26,16 @@ let fresh_named_var_for_symbolic_value (basename : string option)
   (ctx, var)
 
 let fresh_var_for_symbolic_value (sv : V.symbolic_value) (ctx : bs_ctx) :
-    bs_ctx * var =
+    bs_ctx * fvar =
   fresh_named_var_for_symbolic_value None sv ctx
 
 let fresh_vars_for_symbolic_values (svl : V.symbolic_value list) (ctx : bs_ctx)
-    : bs_ctx * var list =
+    : bs_ctx * fvar list =
   List.fold_left_map (fun ctx sv -> fresh_var_for_symbolic_value sv ctx) ctx svl
 
 let fresh_named_vars_for_symbolic_values
     (svl : (string option * V.symbolic_value) list) (ctx : bs_ctx) :
-    bs_ctx * var list =
+    bs_ctx * fvar list =
   List.fold_left_map
     (fun ctx (name, sv) -> fresh_named_var_for_symbolic_value name sv ctx)
     ctx svl
@@ -60,7 +54,7 @@ let symbolic_value_to_texpression (ctx : bs_ctx) (sv : V.symbolic_value) :
   else
     (* Otherwise lookup the variable *)
     match lookup_var_for_symbolic_value sv.sv_id ctx with
-    | Some var -> mk_texpression_from_var var
+    | Some var -> mk_texpression_from_fvar var
     | None ->
         {
           e =
@@ -564,13 +558,15 @@ type borrow_or_symbolic_id =
     and convert it to a given back value by collecting all the meta-values from
     the ended *borrows*.
 
-    Note that given back values are patterns, because when an abstraction ends
-    we introduce a call to a backward function in the synthesized program, which
-    introduces new values:
+    Note that given back values are *open* patterns. They are patterns because
+    when an abstraction ends we introduce a call to a backward function in the
+    synthesized program, which introduces new values:
     {[
       let (nx, ny) = f_back ... in
           ^^^^^^^^
     ]}
+    The patterns are open, because functions like [mk_let] expect open patterns
+    (and they close them when creating the let).
 
     [mp]: it is possible to provide some meta-place information, to guide the
     heuristics which later find pretty names for the variables.
@@ -710,7 +706,7 @@ and aborrow_content_to_given_back_aux ~(filter : bool) (mp : mplace option)
   | AEndedMutBorrow (msv, _) ->
       (* Return the meta symbolic-value *)
       let ctx, var = fresh_var_for_symbolic_value msv.given_back ctx in
-      let pat = mk_typed_pattern_from_var var mp in
+      let pat = mk_typed_pattern_from_fvar var mp in
       (* Lookup the default value and update the [var_id_to_default] map.
          Note that the default value might be missing, for instance for
          abstractions which were not introduced because of function calls but
@@ -722,7 +718,7 @@ and aborrow_content_to_given_back_aux ~(filter : bool) (mp : mplace option)
         | Some e ->
             {
               ctx with
-              var_id_to_default = LocalId.Map.add var.id e ctx.var_id_to_default;
+              var_id_to_default = FVarId.Map.add var.id e ctx.var_id_to_default;
             }
       in
       (* *)
@@ -744,7 +740,7 @@ and aproj_to_given_back_aux (mp : mplace option) (aproj : V.aproj) (ty : T.ty)
       [%cassert] ctx.span (loans = []) "Unreachable";
       (* Return the meta-value *)
       let ctx, var = fresh_var_for_symbolic_value mv.given_back ctx in
-      let pat = mk_typed_pattern_from_var var mp in
+      let pat = mk_typed_pattern_from_fvar var mp in
       (* Register the default value *)
       let ctx =
         (* Using the projection type as the type of the symbolic value - it
@@ -753,7 +749,7 @@ and aproj_to_given_back_aux (mp : mplace option) (aproj : V.aproj) (ty : T.ty)
         {
           ctx with
           var_id_to_default =
-            LocalId.Map.add var.id
+            FVarId.Map.add var.id
               (symbolic_value_to_texpression ctx sv)
               ctx.var_id_to_default;
         }

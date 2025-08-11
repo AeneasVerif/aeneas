@@ -6,26 +6,106 @@ open PureUtils
 (** The formatting context for pure definitions uses non-pure definitions to
     lookup names. The main reason is that when building the pure definitions
     like in [SymbolicToPure] we don't have a pure context available, while at
-    every stage we have the original LLBC definitions at hand. *)
+    every stage we have the original LLBC definitions at hand.
+
+    Note that the environment contains information about free variables because
+    when printing an expression we do not make any assumption about this
+    expression: in particular it may not be closed. However, when diving inside
+    binders we do not introduce fresh free variables: we keep the bound
+    variables. *)
 type fmt_env = {
   crate : LlbcAst.crate;
-  (* We need a list of params because we have nested binding levels for trait methods. *)
   generics : generic_params list;
-  vars : string LocalId.Map.t;
+      (** We need a list of params because we have nested binding levels for
+          trait methods. *)
+  bvars : string BVarId.Map.t list;
+      (** Similar to [benv]: this represents a stack of binder groups *)
+  fvars : string FVarId.Map.t;
+  bvar_id_counter : int;
+      (** We use this counter to generate unique names for the nameless bound
+          var ids *)
+  pbvars : string BVarId.Map.t option;
+      (** Partial map of bound variables that we're pushing.
+
+          This is useful when exploring a binder: we start accumulating the
+          names here, then push it in [bvars] when we're done.
+
+          The way to proceed is:
+          {[
+            let env = fmt_env_start_pbvars env in
+            ... (* Explore the binder to accumulate the mappings from bid to name *)
+            let env = fmt_env_push_pbvars in
+          ]} *)
+  pbvars_counter : bvar_id;
 }
 
-let fmt_env_push_var (env : fmt_env) (var : var) : fmt_env =
-  (* Only push the binding if the name is not [None] *)
-  match var.basename with
-  | None -> env
-  | Some name -> { env with vars = LocalId.Map.add var.id name env.vars }
+(** Start a new partial map (call this before exploring a binder) *)
+let fmt_env_start_pbvars (env : fmt_env) : fmt_env =
+  assert (env.pbvars = None);
+  { env with pbvars = Some BVarId.Map.empty; pbvars_counter = BVarId.zero }
+
+(** After we're done accumulating the bound variables of a pattern in [pbvars],
+    push this partial map to [bvars] *)
+let fmt_env_push_pbvars (env : fmt_env) : fmt_env =
+  let pbvars = Option.get env.pbvars in
+  {
+    env with
+    bvars = pbvars :: env.bvars;
+    pbvars = None;
+    pbvars_counter = BVarId.zero;
+  }
+
+(** Register a bound variable.
+
+    Only call this between [fmt_env_start_pbvars] and [fmt_env_push_pbvars]. *)
+let fmt_env_push_var (env : fmt_env) (v : var) : fmt_env * bvar_id =
+  let pbvars = Option.get env.pbvars in
+  let name, counter =
+    match v.basename with
+    | None ->
+        let id = env.bvar_id_counter in
+        let name = "b@" ^ string_of_int id in
+        (name, id + 1)
+    | Some name -> (name, env.bvar_id_counter)
+  in
+  let bvar_id = env.pbvars_counter in
+  let pbvars = Some (BVarId.Map.add bvar_id name pbvars) in
+  let env =
+    {
+      env with
+      pbvars;
+      bvar_id_counter = counter;
+      pbvars_counter = BVarId.incr env.pbvars_counter;
+    }
+  in
+  (env, bvar_id)
+
+(** We use this to push bound variables when entering a let, a lambda, or a
+    match. *)
+let fmt_env_push_binders (env : fmt_env) (pat : typed_pattern) : fmt_env =
+  (* Initialize the map *)
+  let env = ref (fmt_env_start_pbvars env) in
+  (* Explore *)
+  let visitor =
+    object
+      inherit [_] iter_typed_pattern
+      method! visit_PatBound _ v _ = env := fst (fmt_env_push_var !env v)
+    end
+  in
+  visitor#visit_typed_pattern () pat;
+  (* Push the map *)
+  fmt_env_push_pbvars !env
 
 let fmt_env_push_locals (env : fmt_env) (vars : var list) : fmt_env =
-  List.fold_left fmt_env_push_var env vars
+  (* Initialize the map *)
+  let env = ref (fmt_env_start_pbvars env) in
+  (* Explore *)
+  List.iter (fun v -> env := fst (fmt_env_push_var !env v)) vars;
+  (* Push the map *)
+  fmt_env_push_pbvars !env
 
-let var_id_to_pretty_string (id : local_id) : string =
-  "^" ^ LocalId.to_string id
-
+(** We use this to lookup type parameters, const generics, etc., but not
+    "regular" variables *)
 let lookup_var_in_env (env : fmt_env)
     (find_in : generic_params -> 'id -> 'b option) (var : 'id de_bruijn_var) :
     'b option =
@@ -68,10 +148,33 @@ let const_generic_db_var_to_string (env : fmt_env)
   | None -> Print.Types.const_generic_db_var_to_pretty_string var
   | Some x -> Print.Types.const_generic_var_to_string x
 
-let var_id_to_string (env : fmt_env) (id : LocalId.id) : string =
-  match LocalId.Map.find_opt id env.vars with
-  | None -> var_id_to_pretty_string id
-  | Some name -> name ^ "^" ^ LocalId.to_string id
+let bvar_to_pretty_string (v : bvar) : string =
+  "^(" ^ string_of_int v.scope ^ "," ^ BVarId.to_string v.id ^ ")"
+
+let bvar_to_string (env : fmt_env) (v : bvar) : string =
+  (* We push the partial map [pbvars] to the stack: this allows us to
+       benefit from this partial map when we are in the process of updating it *)
+  let vars =
+    match env.pbvars with
+    | None -> env.bvars
+    | Some pbvars -> pbvars :: env.bvars
+  in
+  match Collections.List.nth_opt vars v.scope with
+  | None -> bvar_to_pretty_string v
+  | Some names -> (
+      match BVarId.Map.find_opt v.id names with
+      | None -> bvar_to_pretty_string v
+      | Some name -> name ^ bvar_to_pretty_string v)
+
+let fvar_id_to_pretty_string (id : fvar_id) : string = "^" ^ FVarId.to_string id
+
+let fvar_id_to_string (env : fmt_env) (id : fvar_id) : string =
+  match FVarId.Map.find_opt id env.fvars with
+  | None -> fvar_id_to_pretty_string id
+  | Some name -> name ^ fvar_id_to_pretty_string id
+
+let fvar_to_string (env : fmt_env) (v : fvar) : string =
+  fvar_id_to_string env v.id
 
 let trait_clause_id_to_string = Print.Types.trait_clause_id_to_string
 
@@ -82,7 +185,11 @@ let decls_ctx_to_fmt_env (ctx : Contexts.decls_ctx) : fmt_env =
   {
     crate = ctx.crate;
     generics = [ empty_generic_params ];
-    vars = LocalId.Map.empty;
+    fvars = FVarId.Map.empty;
+    bvars = [];
+    bvar_id_counter = 0;
+    pbvars = None;
+    pbvars_counter = BVarId.zero;
   }
 
 let name_to_string (env : fmt_env) =
@@ -275,8 +382,8 @@ let type_decl_to_string (env : fmt_env) (def : type_decl) : string =
 
 let var_to_varname (v : var) : string =
   match v.basename with
-  | Some name -> name ^ "^" ^ LocalId.to_string v.id
-  | None -> "^" ^ LocalId.to_string v.id
+  | Some name -> name
+  | None -> "^"
 
 let var_to_string (env : fmt_env) (v : var) : string =
   let varname = var_to_varname v in
@@ -379,31 +486,53 @@ let adt_field_to_string ?(span = None) (env : fmt_env) (adt_id : type_id)
           (* Enumerations: we can't get there *)
           [%craise_opt_span] span "Unreachable")
 
-let rec typed_pattern_to_string_aux (span : Meta.span option) (env : fmt_env)
+(** Not safe to use (this function should be used between calls to
+    [fmt_env_start_pbvars]) and [fmt_env_push_pbvars]): use
+    [typed_pattern_to_string] instead. *)
+let rec typed_pattern_to_string_core (span : Meta.span option) (env : fmt_env)
     (v : typed_pattern) : fmt_env * string =
   match v.value with
   | PatConstant cv -> (env, literal_to_string cv)
-  | PatVar (v, None) -> (fmt_env_push_var env v, var_to_string env v)
-  | PatVar (v, Some mp) ->
-      let mp = "[@mplace=" ^ mplace_to_string env mp ^ "]" in
-      let env = fmt_env_push_var env v in
-      let s =
-        "(" ^ var_to_varname v ^ " " ^ mp ^ " : "
-        ^ ty_to_string env false v.ty
-        ^ ")"
-      in
-      (env, s)
+  | PatBound (v, mp) ->
+      let env, id = fmt_env_push_var env v in
+      let sv = var_to_string env v in
+      begin
+        match mp with
+        | None -> (env, sv)
+        | Some mp ->
+            let mp = "[@mplace=" ^ mplace_to_string env mp ^ "]" in
+            let sv = bvar_to_string env { scope = 0; id } in
+            let s =
+              "(" ^ sv ^ " " ^ mp ^ " : " ^ ty_to_string env false v.ty ^ ")"
+            in
+            (env, s)
+      end
+  | PatOpen (v, mp) ->
+      let sv = fvar_id_to_string env v.id in
+      begin
+        match mp with
+        | None -> (env, sv)
+        | Some mp ->
+            let mp = "[@mplace=" ^ mplace_to_string env mp ^ "]" in
+            let s =
+              "(" ^ fvar_id_to_string env v.id ^ " " ^ mp ^ " : "
+              ^ ty_to_string env false v.ty
+              ^ ")"
+            in
+            (env, s)
+      end
   | PatDummy -> (env, "_")
   | PatAdt av ->
-      adt_pattern_to_string span env av.variant_id av.field_values v.ty
+      adt_pattern_to_string_core span env av.variant_id av.field_values v.ty
 
-(* TODO: can't make the [span] parameter optional because OCaml infers its type
-   to be [span option option]?? *)
-and adt_pattern_to_string (span : Meta.span option) (env : fmt_env)
+(** Not safe to use (this function should be used between calls to
+    [fmt_env_start_pbvars]) and [fmt_env_push_pbvars]): use
+    [adt_pattern_to_string] instead. *)
+and adt_pattern_to_string_core (span : Meta.span option) (env : fmt_env)
     (variant_id : VariantId.id option) (field_values : typed_pattern list)
     (ty : ty) : fmt_env * string =
   let env, field_values =
-    List.fold_left_map (typed_pattern_to_string_aux span) env field_values
+    List.fold_left_map (typed_pattern_to_string_core span) env field_values
   in
   let s =
     match ty with
@@ -492,9 +621,38 @@ and adt_pattern_to_string (span : Meta.span option) (env : fmt_env)
   in
   (env, s)
 
-let typed_pattern_to_string ?(span : Meta.span option = None) (env : fmt_env)
+let typed_patterns_to_string_aux (span : Meta.span option) (env : fmt_env)
+    (vl : typed_pattern list) : fmt_env * string list =
+  let env = fmt_env_start_pbvars env in
+  let env, sl =
+    List.fold_left_map
+      (fun env v -> typed_pattern_to_string_core span env v)
+      env vl
+  in
+  (fmt_env_push_pbvars env, sl)
+
+let typed_pattern_to_string_aux (span : Meta.span option) (env : fmt_env)
+    (v : typed_pattern) : fmt_env * string =
+  let env, s = typed_pattern_to_string_core span (fmt_env_start_pbvars env) v in
+  (fmt_env_push_pbvars env, s)
+
+let typed_pattern_to_string ?(span : Meta.span option) (env : fmt_env)
     (v : typed_pattern) : string =
   snd (typed_pattern_to_string_aux span env v)
+
+let adt_pattern_to_string_aux (span : Meta.span option) (env : fmt_env)
+    (variant_id : VariantId.id option) (field_values : typed_pattern list)
+    (ty : ty) : fmt_env * string =
+  let env, s =
+    adt_pattern_to_string_core span (fmt_env_start_pbvars env) variant_id
+      field_values ty
+  in
+  (fmt_env_push_pbvars env, s)
+
+let adt_pattern_to_string ?(span : Meta.span option) (env : fmt_env)
+    (variant_id : VariantId.id option) (field_values : typed_pattern list)
+    (ty : ty) : string =
+  snd (adt_pattern_to_string_aux span env variant_id field_values ty)
 
 let back_sg_info_to_string (env : fmt_env) (info : back_sg_info) : string =
   let { inputs; inputs_no_state; outputs; output_names; effect_info; filter } =
@@ -646,7 +804,8 @@ let rec texpression_to_string ?(span : Meta.span option = None) (env : fmt_env)
     (inside : bool) (indent : string) (indent_incr : string) (e : texpression) :
     string =
   match e.e with
-  | Var var_id -> var_id_to_string env var_id
+  | BVar v -> bvar_to_string env v
+  | FVar v -> fvar_id_to_string env v
   | CVar cg_id -> const_generic_db_var_to_string env (Free cg_id)
   | Const cv -> literal_to_string cv
   | App _ ->
@@ -655,8 +814,8 @@ let rec texpression_to_string ?(span : Meta.span option = None) (env : fmt_env)
       (* Convert to string *)
       app_to_string ~span env inside indent indent_incr app args
   | Lambda _ ->
-      let xl, e = destruct_lambdas e in
-      let e = lambda_to_string ~span env indent indent_incr xl e in
+      let xl, e = raw_destruct_lambdas e in
+      let e = lambdas_to_string ~span env indent indent_incr xl e in
       if inside then "(" ^ e ^ ")" else e
   | Qualif _ ->
       (* Qualifier without arguments *)
@@ -742,7 +901,7 @@ and app_to_string ?(span : Meta.span option = None) (env : fmt_env)
   (* Add parentheses *)
   if all_args <> [] && inside then "(" ^ e ^ ")" else e
 
-and lambda_to_string ?(span : Meta.span option = None) (env : fmt_env)
+and lambdas_to_string ?(span : Meta.span option = None) (env : fmt_env)
     (indent : string) (indent_incr : string) (xl : typed_pattern list)
     (e : texpression) : string =
   let env, xl = List.fold_left_map (typed_pattern_to_string_aux span) env xl in
@@ -830,8 +989,11 @@ and loop_to_string ?(span : Meta.span option = None) (env : fmt_env)
   let indent1 = indent ^ indent_incr in
   let indent2 = indent1 ^ indent_incr in
   let loop_inputs =
-    "fresh_vars: ["
-    ^ String.concat "; " (List.map (var_to_string env) loop.inputs)
+    "loop_inputs: ["
+    ^ String.concat "; "
+        (List.map
+           (texpression_to_string ~span env false indent indent_incr)
+           loop.inputs)
     ^ "]"
   in
   let output_ty = "output_ty: " ^ ty_to_string env false loop.output_ty in
@@ -862,8 +1024,9 @@ and emeta_to_string ?(span : Meta.span option = None) (env : fmt_env)
     | SymbolicAssignments info ->
         let infos =
           List.map
-            (fun (var_id, rv) ->
-              LocalId.to_string var_id ^ " == "
+            (fun (var, rv) ->
+              texpression_to_string ~span env false "" "" var
+              ^ " == "
               ^ texpression_to_string ~span env false "" "" rv)
             info
         in
@@ -872,8 +1035,9 @@ and emeta_to_string ?(span : Meta.span option = None) (env : fmt_env)
     | SymbolicPlaces info ->
         let infos =
           List.map
-            (fun (var_id, name) ->
-              LocalId.to_string var_id ^ " == \"" ^ name ^ "\"")
+            (fun (var, name) ->
+              texpression_to_string ~span env false "" "" var
+              ^ " == \"" ^ name ^ "\"")
             info
         in
         let infos = String.concat ", " infos in
@@ -893,7 +1057,15 @@ let fun_decl_to_string (env : fmt_env) (def : fun_decl) : string =
   | Some body ->
       let inside = false in
       let indent = "  " in
-      let inputs = List.map (var_to_string env) body.inputs in
+      let env, inputs =
+        typed_patterns_to_string_aux (Some def.item_meta.span) env body.inputs
+      in
+      let inputs =
+        List.map
+          (fun ((v, v') : _ * typed_pattern) ->
+            "(" ^ v ^ " : " ^ ty_to_string env false v'.ty ^ ")")
+          (List.combine inputs body.inputs)
+      in
       let inputs =
         if inputs = [] then indent
         else "  fun " ^ String.concat " " inputs ^ " ->\n" ^ indent

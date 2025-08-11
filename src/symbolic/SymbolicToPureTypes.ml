@@ -445,13 +445,17 @@ let mk_type_check_ctx (ctx : bs_ctx) : PureTypeCheck.tc_ctx =
            (cg.index, ctx_translate_fwd_ty ctx (T.TLiteral cg.ty)))
          ctx.sg.generics.const_generics)
   in
-  let env = LocalId.Map.empty in
+  let fenv = ctx.fvars_tys in
+  let benv = [] in
   {
     PureTypeCheck.type_decls = ctx.type_ctx.type_decls;
     global_decls = ctx.decls_ctx.crate.global_decls;
-    env;
     const_generics;
     decls_ctx = ctx.decls_ctx;
+    fenv;
+    benv;
+    pbenv = None;
+    bvar_counter = BVarId.zero;
   }
 
 let type_check_pattern (ctx : bs_ctx) (v : typed_pattern) : unit =

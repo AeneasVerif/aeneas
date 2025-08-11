@@ -82,7 +82,8 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
         (* Add a match over the fuel, if necessary *)
         let body =
           if function_decreases_fuel effect_info then
-            wrap_in_match_fuel def.item_meta.span ctx.fuel0 ctx.fuel body
+            wrap_in_match_fuel def.item_meta.span ctx.fuel0 ctx.fuel ~close:true
+              body
           else body
         in
         (* Sanity check *)
@@ -94,28 +95,25 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
               if function_decreases_fuel effect_info then ctx.fuel0
               else ctx.fuel
             in
-            [ mk_fuel_var fuel_var ]
+            [ mk_fuel_fvar fuel_var ]
           else []
         in
         (* Introduce the forward input state (the state at call site of the
          * *forward* function), if necessary. *)
         let fwd_state =
           (* We check if the *whole group* is stateful. See {!effect_info} *)
-          if effect_info.stateful_group then [ mk_state_var ctx.state_var ]
+          if effect_info.stateful_group then [ mk_state_fvar ctx.state_var ]
           else []
         in
         (* Group the inputs together *)
         let inputs = List.concat [ fuel; ctx.forward_inputs; fwd_state ] in
-        let inputs_lvs =
-          List.map (fun v -> mk_typed_pattern_from_var v None) inputs
-        in
         (* Sanity check *)
         [%ltrace
           name_to_string ctx def.item_meta.name
           ^ "\n- inputs: "
-          ^ String.concat ", " (List.map show_var ctx.forward_inputs)
+          ^ String.concat ", " (List.map show_fvar ctx.forward_inputs)
           ^ "\n- state: "
-          ^ String.concat ", " (List.map show_var fwd_state)
+          ^ String.concat ", " (List.map show_fvar fwd_state)
           ^ "\n- signature.inputs: "
           ^ String.concat ", "
               (List.map (pure_ty_to_string ctx) signature.inputs)];
@@ -123,9 +121,12 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
         if !Config.type_check_pure_code then
           [%sanity_check] def.item_meta.span
             (List.for_all
-               (fun (var, ty) -> (var : var).ty = ty)
+               (fun (var, ty) -> (var : fvar).ty = ty)
                (List.combine inputs signature.inputs));
-        Some { inputs; inputs_lvs; body }
+        let inputs =
+          List.map (fun v -> mk_typed_pattern_from_fvar v None) inputs
+        in
+        Some (mk_closed_fun_body def.item_meta.span inputs body)
   in
 
   (* Note that for now, the loops are still *inside* the function body (and we

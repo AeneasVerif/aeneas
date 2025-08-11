@@ -51,11 +51,22 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
   (* Convert the symbolic ASTs to pure ASTs: *)
 
   (* Initialize the context *)
+  Pure.reset_fvar_id_counter ();
   let sv_to_var = SymbolicValueId.Map.empty in
-  let var_counter = Pure.LocalId.generator_zero in
-  let state_var, var_counter = Pure.LocalId.fresh var_counter in
-  let fuel0, var_counter = Pure.LocalId.fresh var_counter in
-  let fuel, var_counter = Pure.LocalId.fresh var_counter in
+  let state_var = Pure.fresh_fvar_id () in
+  let fuel0 = Pure.fresh_fvar_id () in
+  let fuel = Pure.fresh_fvar_id () in
+
+  let fvars =
+    Pure.FVarId.Map.of_list
+      [
+        (state_var, PureUtils.mk_state_fvar state_var);
+        (fuel0, PureUtils.mk_fuel_fvar fuel0);
+        (fuel, PureUtils.mk_fuel_fvar fuel);
+      ]
+  in
+  let fvars_tys = Pure.FVarId.Map.map (fun (v : Pure.fvar) -> v.ty) fvars in
+
   let calls = FunCallId.Map.empty in
   let abstractions = AbstractionId.Map.empty in
   let recursive_type_decls =
@@ -115,8 +126,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     SymbolicToPureTypes.translate_fun_sig_from_decl_to_decomposed trans_ctx fdef
   in
 
-  let var_counter, back_state_vars = (var_counter, []) in
-  let back_state_vars = RegionGroupId.Map.of_list back_state_vars in
+  let back_state_vars = RegionGroupId.Map.of_list [] in
 
   let ctx =
     {
@@ -127,7 +137,8 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
       fun_dsigs;
       (* Will need to be updated for the backward functions *)
       sv_to_var;
-      var_counter = ref var_counter;
+      fvars;
+      fvars_tys;
       state_var;
       back_state_vars;
       fuel0;
@@ -151,7 +162,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
       mk_return = None;
       mk_panic = None;
       mut_borrow_to_consumed = BorrowId.Map.empty;
-      var_id_to_default = Pure.LocalId.Map.empty;
+      var_id_to_default = Pure.FVarId.Map.empty;
     }
   in
 

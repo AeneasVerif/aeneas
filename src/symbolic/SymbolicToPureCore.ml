@@ -110,7 +110,7 @@ type call_info = {
     is one. *)
 type loop_info = {
   loop_id : LoopId.id;
-  input_vars : var list;
+  input_vars : fvar list;
   input_svl : V.symbolic_value list;
   generics : generic_args;
   forward_inputs : texpression list option;
@@ -148,18 +148,20 @@ type bs_ctx = {
   sg : decomposed_fun_sig;
       (** Information about the function signature - useful in particular to
           translate [Panic] *)
-  sv_to_var : var V.SymbolicValueId.Map.t;
+  sv_to_var : fvar V.SymbolicValueId.Map.t;
       (** Whenever we encounter a new symbolic value (introduced because of a
           symbolic expansion or upon ending an abstraction, for instance) we
           introduce a new variable (with a let-binding). *)
-  var_counter : LocalId.generator ref;
-      (** Using a ref to make sure all the variables identifiers are unique.
-          TODO: this is not very clean, and the code was initially written
-          without a reference (and it's shape hasn't changed). We should use
-          DeBruijn indices. *)
-  state_var : LocalId.id;
+  fvars : fvar FVarId.Map.t;
+      (** The free variables introduced so far.
+
+          Remark: we never remove the variables from here (after closing an
+          expression for instance), but it is ok because we generate a fresh,
+          unique identifier whenever we insert a free variable. *)
+  fvars_tys : ty FVarId.Map.t;  (** The free variables introduced so far *)
+  state_var : FVarId.id;
       (** The current state variable, in case the function is stateful *)
-  back_state_vars : LocalId.id RegionGroupId.Map.t;
+  back_state_vars : FVarId.id RegionGroupId.Map.t;
       (** The additional input state variable received by a stateful backward
           function, **in case we are splitting the forward/backward functions**.
 
@@ -178,14 +180,14 @@ type bs_ctx = {
           forward function and the call to the backward function. We also need
           to make sure we use the same variable in all the branches (because
           this variable is quantified at the definition level). *)
-  fuel0 : LocalId.id;
+  fuel0 : FVarId.id;
       (** The original fuel taken as input by the function (if we use fuel) *)
-  fuel : LocalId.id;
+  fuel : FVarId.id;
       (** The fuel to use for the recursive calls (if we use fuel) *)
-  forward_inputs : var list;
+  forward_inputs : fvar list;
       (** The input parameters for the forward function corresponding to the
           translated Rust inputs (no fuel, no state). *)
-  backward_inputs_no_state : var list RegionGroupId.Map.t;
+  backward_inputs_no_state : fvar list RegionGroupId.Map.t;
       (** The additional input parameters for the backward functions coming from
           the borrows consumed upon ending the lifetime (as a consequence those
           don't include the backward state, if there is one).
@@ -194,11 +196,11 @@ type bs_ctx = {
           when initializing the bs_ctx, because those variables are quantified
           at the definition level. Otherwise, we initialize it upon diving into
           the expressions which are specific to the backward functions. *)
-  backward_inputs_with_state : var list RegionGroupId.Map.t;
+  backward_inputs_with_state : fvar list RegionGroupId.Map.t;
       (** All the additional input parameters for the backward functions.
 
           Same remarks as for {!backward_inputs_no_state}. *)
-  backward_outputs : var list option;
+  backward_outputs : fvar list option;
       (** The variables that the backward functions will output, corresponding
           to the borrows they give back (don't include the backward state).
 
@@ -320,7 +322,7 @@ type bs_ctx = {
             when transforming the symbolic trace to a pure model may not be the
             most obvious way of retrieving those consumed values but in practice
             it is quite straightforward and easy to debug. *)
-  var_id_to_default : texpression LocalId.Map.t;
+  var_id_to_default : texpression FVarId.Map.t;
       (** Map from the variable identifier of a given back value and introduced
           when deconstructing an ended abstraction, to the default value that we
           can use when introducing the otherwise branch of the deconstructing
@@ -340,7 +342,11 @@ let bs_ctx_to_pure_fmt_env (ctx : bs_ctx) : PrintPure.fmt_env =
   {
     crate = ctx.decls_ctx.crate;
     generics = [ ctx.sg.generics ];
-    vars = LocalId.Map.empty;
+    fvars = FVarId.Map.empty;
+    bvars = [];
+    bvar_id_counter = 0;
+    pbvars = None;
+    pbvars_counter = BVarId.zero;
   }
 
 let ctx_generic_args_to_string (ctx : bs_ctx) (args : T.generic_args) : string =
@@ -362,9 +368,9 @@ let pure_ty_to_string (ctx : bs_ctx) (ty : ty) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
   PrintPure.ty_to_string env false ty
 
-let pure_var_to_string (ctx : bs_ctx) (v : var) : string =
+let fvar_to_string (ctx : bs_ctx) (v : fvar) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
-  PrintPure.var_to_string env v
+  PrintPure.fvar_to_string env v
 
 let ty_to_string (ctx : bs_ctx) (ty : T.ty) : string =
   let env = bs_ctx_to_fmt_env ctx in
@@ -396,7 +402,7 @@ let fun_decl_to_string (ctx : bs_ctx) (def : Pure.fun_decl) : string =
 
 let typed_pattern_to_string (ctx : bs_ctx) (p : Pure.typed_pattern) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
-  PrintPure.typed_pattern_to_string ~span:(Some ctx.span) env p
+  PrintPure.typed_pattern_to_string ~span:ctx.span env p
 
 let abs_to_string ?(with_ended : bool = false) (ctx : bs_ctx) (abs : V.abs) :
     string =
@@ -475,37 +481,37 @@ let bs_ctx_register_backward_call (abs : V.abs) (call_id : V.FunCallId.id)
   (* Update the context and return *)
   ({ ctx with calls; abstractions }, func)
 
-let bs_ctx_fresh_state_var (ctx : bs_ctx) : bs_ctx * var * typed_pattern =
+(** This generates a fresh variable **which is not to be linked to any symbolic
+    value** *)
+let fresh_var (basename : string option) (ty : ty) (ctx : bs_ctx) :
+    bs_ctx * fvar =
   (* Generate the fresh variable *)
-  let id, var_counter = LocalId.fresh !(ctx.var_counter) in
-  let state_var =
-    { id; basename = Some ConstStrings.state_basename; ty = mk_state_ty }
+  let id = fresh_fvar_id () in
+  let var = { id; basename; ty } in
+  (* Insert in the context *)
+  let ctx = { ctx with fvars = FVarId.Map.add id var ctx.fvars } in
+  let ctx = { ctx with fvars_tys = FVarId.Map.add id var.ty ctx.fvars_tys } in
+  (* Return *)
+  (ctx, var)
+
+let bs_ctx_fresh_state_var (ctx : bs_ctx) : bs_ctx * fvar * typed_pattern =
+  (* Generate the fresh variable *)
+  let id = fresh_fvar_id () in
+  let ctx, state_var =
+    fresh_var (Some ConstStrings.state_basename) mk_state_ty ctx
   in
-  let state_pat = mk_typed_pattern_from_var state_var None in
-  (* Update the context *)
-  ctx.var_counter := var_counter;
+  let state_pat = mk_typed_pattern_from_fvar state_var None in
+  (* Register the state variable in the context *)
   let ctx = { ctx with state_var = id } in
   (* Return *)
   (ctx, state_var, state_pat)
 
-(** This generates a fresh variable **which is not to be linked to any symbolic
-    value** *)
-let fresh_var (basename : string option) (ty : ty) (ctx : bs_ctx) : bs_ctx * var
-    =
-  (* Generate the fresh variable *)
-  let id, var_counter = LocalId.fresh !(ctx.var_counter) in
-  let var = { id; basename; ty } in
-  (* Update the context *)
-  ctx.var_counter := var_counter;
-  (* Return *)
-  (ctx, var)
-
 let fresh_vars (vars : (string option * ty) list) (ctx : bs_ctx) :
-    bs_ctx * var list =
+    bs_ctx * fvar list =
   List.fold_left_map (fun ctx (name, ty) -> fresh_var name ty ctx) ctx vars
 
 let fresh_opt_vars (vars : (string option * ty) option list) (ctx : bs_ctx) :
-    bs_ctx * var option list =
+    bs_ctx * fvar option list =
   List.fold_left_map
     (fun ctx var ->
       match var with
@@ -518,7 +524,7 @@ let fresh_opt_vars (vars : (string option * ty) option list) (ctx : bs_ctx) :
 (** IMPORTANT: do not use this one directly, but rather
     {!symbolic_value_to_texpression} *)
 let lookup_var_for_symbolic_value (id : V.symbolic_value_id) (ctx : bs_ctx) :
-    var option =
+    fvar option =
   match V.SymbolicValueId.Map.find_opt id ctx.sv_to_var with
   | Some v -> Some v
   | None ->

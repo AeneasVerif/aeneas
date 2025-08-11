@@ -28,11 +28,8 @@ IdGen ()
 module SynthPhaseId =
 IdGen ()
 
-(** Pay attention to the fact that we also define a {!E.LocalId} module in
-    Values *)
-module LocalId =
-IdGen ()
-
+module BVarId = IdGen ()
+module FVarId = IdGen ()
 module ConstGenericVarId = T.ConstGenericVarId
 
 type llbc_name = T.name [@@deriving show, ord]
@@ -56,6 +53,16 @@ type raw_span = Meta.raw_span [@@deriving show, ord]
 type span = Meta.span [@@deriving show, ord]
 type ref_kind = Types.ref_kind [@@deriving show, ord]
 type 'a de_bruijn_var = 'a Types.de_bruijn_var [@@deriving show, ord]
+
+(** A DeBruijn index identifying a group of bound variables *)
+type db_scope_id = int [@@deriving show, ord]
+
+type bvar_id = BVarId.id [@@deriving show, ord]
+type fvar_id = FVarId.id [@@deriving show, ord]
+
+let fvar_id_counter, fresh_fvar_id = FVarId.fresh_stateful_generator ()
+let reset_global_counters () = fvar_id_counter := FVarId.generator_zero
+let reset_fvar_id_counter () = fvar_id_counter := FVarId.generator_zero
 
 (** The builtin types for the pure AST.
 
@@ -664,7 +671,6 @@ and type_decl = {
 
 type scalar_value = V.scalar_value [@@deriving show, ord]
 type literal = V.literal [@@deriving show, ord]
-type local_id = LocalId.id [@@deriving show, ord]
 type field_proj_kind = E.field_proj_kind [@@deriving show, ord]
 type field_id = FieldId.id [@@deriving show, ord]
 
@@ -689,11 +695,18 @@ type mplace =
 
 type variant_id = VariantId.id [@@deriving show, ord]
 
-(** Because we introduce a lot of temporary variables, the list of variables is
-    not fixed: we thus must carry all its information with the variable itself.
-*)
+(** A variable *)
 type var = {
-  id : local_id;
+  basename : string option;
+      (** The "basename" is used to generate a meaningful name for the variable
+          (by potentially adding an index to uniquely identify it). *)
+  ty : ty;
+}
+[@@deriving show, ord]
+
+(** A free variable *)
+type fvar = {
+  id : fvar_id;
   basename : string option;
       (** The "basename" is used to generate a meaningful name for the variable
           (by potentially adding an index to uniquely identify it). *)
@@ -705,13 +718,19 @@ type var = {
 class ['self] iter_typed_pattern_base =
   object (self : 'self)
     inherit [_] iter_type_decl
-    method visit_local_id : 'env -> local_id -> unit = fun _ _ -> ()
+    method visit_fvar_id : 'env -> fvar_id -> unit = fun _ _ -> ()
+    method visit_bvar_id : 'env -> bvar_id -> unit = fun _ _ -> ()
     method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
     method visit_variant_id : 'env -> variant_id -> unit = fun _ _ -> ()
 
     method visit_var : 'env -> var -> unit =
       fun e var ->
-        self#visit_local_id e var.id;
+        self#visit_option self#visit_string e var.basename;
+        self#visit_ty e var.ty
+
+    method visit_fvar : 'env -> fvar -> unit =
+      fun e var ->
+        self#visit_fvar_id e var.id;
         self#visit_option self#visit_string e var.basename;
         self#visit_ty e var.ty
   end
@@ -720,14 +739,22 @@ class ['self] iter_typed_pattern_base =
 class ['self] map_typed_pattern_base =
   object (self : 'self)
     inherit [_] map_type_decl
-    method visit_local_id : 'env -> local_id -> local_id = fun _ x -> x
+    method visit_fvar_id : 'env -> fvar_id -> fvar_id = fun _ x -> x
+    method visit_bvar_id : 'env -> bvar_id -> bvar_id = fun _ x -> x
     method visit_mplace : 'env -> mplace -> mplace = fun _ x -> x
     method visit_variant_id : 'env -> variant_id -> variant_id = fun _ x -> x
 
     method visit_var : 'env -> var -> var =
       fun e var ->
         {
-          id = self#visit_local_id e var.id;
+          basename = self#visit_option self#visit_string e var.basename;
+          ty = self#visit_ty e var.ty;
+        }
+
+    method visit_fvar : 'env -> fvar -> fvar =
+      fun e var ->
+        {
+          id = self#visit_fvar_id e var.id;
           basename = self#visit_option self#visit_string e var.basename;
           ty = self#visit_ty e var.ty;
         }
@@ -737,13 +764,20 @@ class ['self] map_typed_pattern_base =
 class virtual ['self] reduce_typed_pattern_base =
   object (self : 'self)
     inherit [_] reduce_type_decl
-    method visit_local_id : 'env -> local_id -> 'a = fun _ _ -> self#zero
+    method visit_fvar_id : 'env -> fvar_id -> 'a = fun _ _ -> self#zero
+    method visit_bvar_id : 'env -> bvar_id -> 'a = fun _ _ -> self#zero
     method visit_mplace : 'env -> mplace -> 'a = fun _ _ -> self#zero
     method visit_variant_id : 'env -> variant_id -> 'a = fun _ _ -> self#zero
 
     method visit_var : 'env -> var -> 'a =
       fun e var ->
-        let x0 = self#visit_local_id e var.id in
+        let x1 = self#visit_option self#visit_string e var.basename in
+        let x2 = self#visit_ty e var.ty in
+        self#plus x1 x2
+
+    method visit_fvar : 'env -> fvar -> 'a =
+      fun e var ->
+        let x0 = self#visit_fvar_id e var.id in
         let x1 = self#visit_option self#visit_string e var.basename in
         let x2 = self#visit_ty e var.ty in
         self#plus (self#plus x0 x1) x2
@@ -754,7 +788,10 @@ class virtual ['self] mapreduce_typed_pattern_base =
   object (self : 'self)
     inherit [_] mapreduce_type_decl
 
-    method visit_local_id : 'env -> local_id -> local_id * 'a =
+    method visit_fvar_id : 'env -> fvar_id -> fvar_id * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_bvar_id : 'env -> bvar_id -> bvar_id * 'a =
       fun _ x -> (x, self#zero)
 
     method visit_mplace : 'env -> mplace -> mplace * 'a =
@@ -765,7 +802,13 @@ class virtual ['self] mapreduce_typed_pattern_base =
 
     method visit_var : 'env -> var -> var * 'a =
       fun e var ->
-        let id, x0 = self#visit_local_id e var.id in
+        let basename, x1 = self#visit_option self#visit_string e var.basename in
+        let ty, x2 = self#visit_ty e var.ty in
+        ({ basename; ty }, self#plus x1 x2)
+
+    method visit_fvar : 'env -> fvar -> fvar * 'a =
+      fun e var ->
+        let id, x0 = self#visit_fvar_id e var.id in
         let basename, x1 = self#visit_option self#visit_string e var.basename in
         let ty, x2 = self#visit_ty e var.ty in
         ({ id; basename; ty }, self#plus (self#plus x0 x1) x2)
@@ -776,8 +819,38 @@ type pattern =
   | PatConstant of literal
       (** {!PatConstant} is necessary because we merge the switches over integer
           values and the matches over enumerations *)
-  | PatVar of var * mplace option
+  | PatBound of var * mplace option
+      (** The index of the variable is determined by its position (it is the
+          index given by a depth-first search, which is consistent with the way
+          visitors work). *)
   | PatDummy  (** Ignored value: [_]. *)
+  | PatOpen of fvar * mplace option
+      (** We replace [PatBound] with [PatOpen] when opening binders.
+
+          When we open a binder (say, the expression [let x = v in e]) by
+          replacing the bound variables (in [e]) with free variables, we also
+          substitute those bound variables in the pattern used in the binder.
+          This both provides useful information as to where the variables come
+          from, and is also necessary when closing the term back, to properly
+          figure out how to compute the indices of the bound variables.
+
+          Ex.: We want to simplify the expression (1) [let (x, y) = v in y] into
+          [let (_, y) = v in y]. If we use DeBruijn indices the expression (1)
+          looks like: [let (PatBound, PatBound) = v in BVar (0, 1)], while the
+          expression (2) looks like: [let (_, PatBound) = v in BVar (0, 0)].
+          Note that in [BVar (0, 1)] the first number (the 0) identifies the
+          scope/level of the variable (how many binder groups we have to
+          traverse) while the second number (the 1) identifies the variable in
+          the binder group. We resort to this representation because a binder
+          group like a let-binding can bind several variables at once (see the
+          explanations in [bvar]).
+
+          We first open the expression [let (PatOpen, PatOpen) = v in BVar 1],
+          producing the pattern (let's pretend we identify free variables with
+          names rather than indices) [(x, y)] and the expression [y]. We then
+          update the pattern to [(_,y)] and close the expression by reforming
+          the let: [y] now has the index 0 and we get the expected expression:
+          [let (_, BVar) = v in BVar 0]. *)
   | PatAdt of adt_pattern
 
 and adt_pattern = {
@@ -898,6 +971,7 @@ class ['self] iter_expression_base =
     method visit_loop_id : 'env -> loop_id -> unit = fun _ _ -> ()
     method visit_field_id : 'env -> field_id -> unit = fun _ _ -> ()
     method visit_span : 'env -> Meta.span -> unit = fun _ _ -> ()
+    method visit_db_scope_id : 'env -> db_scope_id -> unit = fun _ _ -> ()
   end
 
 (** Ancestor for {!map_expression} visitor *)
@@ -909,6 +983,7 @@ class ['self] map_expression_base =
     method visit_loop_id : 'env -> loop_id -> loop_id = fun _ x -> x
     method visit_field_id : 'env -> field_id -> field_id = fun _ x -> x
     method visit_span : 'env -> Meta.span -> Meta.span = fun _ x -> x
+    method visit_db_scope_id : 'env -> db_scope_id -> db_scope_id = fun _ x -> x
   end
 
 (** Ancestor for {!reduce_expression} visitor *)
@@ -920,6 +995,7 @@ class virtual ['self] reduce_expression_base =
     method visit_loop_id : 'env -> loop_id -> 'a = fun _ _ -> self#zero
     method visit_field_id : 'env -> field_id -> 'a = fun _ _ -> self#zero
     method visit_span : 'env -> Meta.span -> 'a = fun _ _ -> self#zero
+    method visit_db_scope_id : 'env -> db_scope_id -> 'a = fun _ _ -> self#zero
   end
 
 (** Ancestor for {!mapreduce_expression} visitor *)
@@ -939,13 +1015,17 @@ class virtual ['self] mapreduce_expression_base =
 
     method visit_span : 'env -> Meta.span -> Meta.span * 'a =
       fun _ x -> (x, self#zero)
+
+    method visit_db_scope_id : 'env -> db_scope_id -> db_scope_id * 'a =
+      fun _ x -> (x, self#zero)
   end
 
 (** **Rk.:** here, {!expression} is not at all equivalent to the expressions
     used in LLBC. They are lambda-calculus expressions, and are thus actually
     more general than the LLBC statements, in a sense. *)
 type expression =
-  | Var of local_id  (** a variable *)
+  | FVar of fvar_id  (** a free variable *)
+  | BVar of bvar  (** a bound variable *)
   | CVar of const_generic_var_id  (** a const generic var *)
   | Const of literal
   | App of texpression * texpression
@@ -1017,12 +1097,16 @@ and loop = {
   fun_end : texpression;
   loop_id : loop_id;
   span : span; [@opaque]
-  fuel0 : local_id;
-  fuel : local_id;
-  input_state : local_id option;
-  inputs : var list;
-  inputs_lvs : typed_pattern list;
-      (** The inputs seen as patterns. See {!fun_body}. *)
+  fuel0 : texpression;
+      (** The original fuel taken as input by the function (if we use fuel).
+
+          This should be a variable. *)
+  fuel : texpression;
+      (** The fuel to use for the recursive calls (if we use fuel).
+
+          This should be a variable *)
+  input_state : texpression option;  (** This should be a variable *)
+  inputs : texpression list;  (** Those should be variables *)
   output_ty : ty;  (** The output type of the loop *)
   loop_body : texpression;
 }
@@ -1061,13 +1145,47 @@ and struct_update = {
 
 and texpression = { e : expression; ty : ty }
 
-(** Meta-value (converted to an expression). It is important that the content is
-    opaque.
+and bvar = {
+  scope : db_scope_id;
+      (** The scope (or level) of the variable identifies the number of external
+          binder groups we have to traverse to reach the binder group the
+          variable comes from *)
+  id : bvar_id;
+      (** This id identifies the variable in the binder group in which it is
+          bound.
 
-    TODO: is it possible to mark the whole mvalue type as opaque? *)
-and mvalue = (texpression[@opaque])
+          We need to use two identifiers because binder groups can bind several
+          variables at once, meaning the scope is not enough to identify a
+          variable.
 
-(** Meta-information stored in the AST *)
+          Ex.:
+          {[
+            let (x, y) = v in // this binder group has level 1
+            let z = 3 in // this binder group has level 0
+            // Counting the levels from here:
+            // - z is represented as (0, 0)
+            // - x is represented as (1, 0)
+            // - y is represented as (1, 1)
+            ...
+          ]} *)
+}
+
+(** Meta-value (converted to an expression). *)
+and mvalue = texpression
+
+(** Variable used in meta-information.
+
+    We use the type [texpression] to make sure the meta-data is compatible with
+    the use of de bruijn indices. *)
+and mvar = texpression
+
+(** Meta-information stored in the AST.
+
+    There are two kinds of information:
+    - information about assignments and names: we use those during the first
+      pure micro-pass to derive pretty names, then get rid of them.
+    - information about type annotations: we insert them during the last
+      micro-pass to guide the generation of code. *)
 and emeta =
   | Assignment of mplace * mvalue * mplace option
       (** Information about an assignment which occured in LLBC. We use this to
@@ -1076,11 +1194,11 @@ and emeta =
           The first mplace stores the destination. The mvalue stores the value
           which is put in the destination The second (optional) mplace stores
           the origin. *)
-  | SymbolicAssignments of ((local_id[@opaque]) * mvalue) list
+  | SymbolicAssignments of (mvar * mvalue) list
       (** Informationg linking a variable (from the pure AST) to an expression.
 
           We use this to guide the heuristics which derive pretty names. *)
-  | SymbolicPlaces of ((local_id[@opaque]) * string) list
+  | SymbolicPlaces of (mvar * string) list
       (** Informationg linking a variable (from the pure AST) to a name.
 
           We generate this information by exploring the context, and use it to
@@ -1342,10 +1460,9 @@ type fun_sig = {
 type inst_fun_sig = { inputs : ty list; output : ty } [@@deriving show]
 
 type fun_body = {
-  inputs : var list;
-  inputs_lvs : typed_pattern list;
-      (** The inputs seen as patterns. Allows to make transformations, for
-          example to replace unused variables by [_] *)
+  inputs : typed_pattern list;
+      (** Note that we consider the inputs as a single binder group when
+          computing de bruijn indices *)
   body : texpression;
 }
 [@@deriving show]

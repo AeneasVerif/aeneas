@@ -37,51 +37,68 @@ let typed_pattern_to_string (ctx : ctx) pat : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.typed_pattern_to_string fmt pat
 
-(** Small utility.
-
-    We sometimes have to insert new fresh variables in a function body, in which
-    case we need to make their indices greater than the indices of all the
-    variables in the body. TODO: things would be simpler if we used a better
-    representation of the variables indices... *)
-let get_body_min_var_counter (body : fun_body) : LocalId.generator =
-  (* Find the max id in the input variables - some of them may have been
-   * filtered from the body *)
-  let min_input_id =
-    List.fold_left
-      (fun id (var : var) -> LocalId.max id var.id)
-      LocalId.zero body.inputs
-  in
-  let obj =
-    object
-      inherit [_] reduce_expression
-      method zero _ = min_input_id
-      method plus id0 id1 _ = LocalId.max (id0 ()) (id1 ())
-      (* Get the maximum *)
-
-      (** For the patterns *)
-      method! visit_var _ v _ = v.id
-
-      (** For the rvalues *)
-      method! visit_Var _ vid _ = vid
-    end
-  in
-  (* Find the max counter in the body *)
-  let id = obj#visit_expression () body.body.e () in
-  LocalId.generator_from_incr_id id
-
-let get_opt_body_min_var_counter (body : fun_body option) : LocalId.generator =
-  match body with
-  | Some body -> get_body_min_var_counter body
-  | None -> LocalId.generator_zero
-
 (** "Pretty-Name context": see {!compute_pretty_names} *)
 type pn_ctx = {
-  pure_vars : string LocalId.Map.t;
+  pure_vars : string FVarId.Map.t;
       (** Information about the pure variables used in the synthesized program
       *)
   llbc_vars : string E.LocalId.Map.t;
       (** Information about the LLBC variables used in the original program *)
 }
+
+let lift_map_fun_decl_body (f : ctx -> fun_decl -> fun_body -> fun_body)
+    (ctx : ctx) (def : fun_decl) : fun_decl =
+  (* We open all the bound variables in the body before exploring it, then
+     close them all after performing the updates - this makes it easier to
+     deal with variables *)
+  map_open_fun_decl_body (f ctx def) def
+
+(** Lift a visitor of expressions to a function which updates a function body *)
+let lift_expr_map_visitor_with_state
+    (obj :
+      ctx ->
+      fun_decl ->
+      < visit_texpression : 'a -> texpression -> texpression ; .. >)
+    (state : 'a) (ctx : ctx) (def : fun_decl) : fun_decl =
+  (* We open all the bound variables in the body before exploring it, then
+     close them all after performing the updates - this makes it easier to
+     deal with variables *)
+  map_open_fun_decl_body_expr ((obj ctx def)#visit_texpression state) def
+
+(** Lift a visitor of expressions to a function which updates a function body *)
+let lift_expr_map_visitor
+    (obj :
+      ctx ->
+      fun_decl ->
+      < visit_texpression : unit -> texpression -> texpression ; .. >)
+    (ctx : ctx) (def : fun_decl) : fun_decl =
+  lift_expr_map_visitor_with_state obj () ctx def
+
+let lift_iter_fun_decl_body (f : ctx -> fun_decl -> fun_body -> unit)
+    (ctx : ctx) (def : fun_decl) : unit =
+  (* We open all the bound variables in the body before exploring it, then
+     close them all after performing the updates - this makes it easier to
+     deal with variables *)
+  iter_open_fun_decl_body (f ctx def) def
+
+(** Lift a visitor of expressions to a function which updates a function body *)
+let lift_expr_iter_visitor_with_state
+    (obj :
+      ctx -> fun_decl -> < visit_texpression : 'a -> texpression -> unit ; .. >)
+    (state : 'a) (ctx : ctx) (def : fun_decl) : unit =
+  (* We open all the bound variables in the body before exploring it, then
+     close them all after performing the updates - this makes it easier to
+     deal with variables *)
+  iter_open_fun_decl_body_expr ((obj ctx def)#visit_texpression state) def
+
+(** Lift a visitor of expressions to a function which updates a function body *)
+let lift_expr_iter_visitor
+    (obj :
+      ctx ->
+      fun_decl ->
+      < visit_texpression : unit -> texpression -> unit ; .. >) (ctx : ctx)
+    (def : fun_decl) : unit =
+  lift_expr_iter_visitor_with_state obj () ctx def
 
 (** This function computes pretty names for the variables in the pure AST. It
     relies on the "meta"-place information in the AST to generate naming
@@ -192,6 +209,7 @@ type pn_ctx = {
     This way, because of [^0 = &mut x], we can propagate the name "x" to the
     place [^0], then to the given back variable across the function call. *)
 let compute_pretty_names (def : fun_decl) : fun_decl =
+  let span = def.item_meta.span in
   (* Small helpers *)
   (*
    * When we do branchings, we need to merge (the constraints saved in) the
@@ -210,8 +228,8 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
    *)
   let merge_ctxs (ctx0 : pn_ctx) (ctx1 : pn_ctx) : pn_ctx =
     let pure_vars =
-      LocalId.Map.fold
-        (fun id name ctx -> LocalId.Map.add id name ctx)
+      FVarId.Map.fold
+        (fun id name ctx -> FVarId.Map.add id name ctx)
         ctx0.pure_vars ctx1.pure_vars
     in
     let llbc_vars =
@@ -222,7 +240,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     { pure_vars; llbc_vars }
   in
   let empty_ctx =
-    { pure_vars = LocalId.Map.empty; llbc_vars = E.LocalId.Map.empty }
+    { pure_vars = FVarId.Map.empty; llbc_vars = E.LocalId.Map.empty }
   in
   let merge_ctxs_ls (ctxs : pn_ctx list) : pn_ctx =
     List.fold_left (fun ctx0 ctx1 -> merge_ctxs ctx0 ctx1) empty_ctx ctxs
@@ -241,21 +259,20 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
 
   (* Register a variable for constraints propagation - used when an variable is
    * introduced (left-hand side of a left binding) *)
-  let register_var (ctx : pn_ctx) (v : var) : pn_ctx =
-    [%sanity_check] def.item_meta.span
-      (not (LocalId.Map.mem v.id ctx.pure_vars));
+  let register_var (ctx : pn_ctx) (v : fvar) : pn_ctx =
+    [%sanity_check] span (not (FVarId.Map.mem v.id ctx.pure_vars));
     match v.basename with
     | None -> ctx
     | Some name ->
-        let pure_vars = LocalId.Map.add v.id name ctx.pure_vars in
+        let pure_vars = FVarId.Map.add v.id name ctx.pure_vars in
         { ctx with pure_vars }
   in
   (* Update a variable - used to update an expression after we computed constraints *)
-  let update_var (ctx : pn_ctx) (v : var) (mp : mplace option) : var =
+  let update_var (ctx : pn_ctx) (v : fvar) (mp : mplace option) : fvar =
     match v.basename with
     | Some _ -> v
     | None -> (
-        match LocalId.Map.find_opt v.id ctx.pure_vars with
+        match FVarId.Map.find_opt v.id ctx.pure_vars with
         | Some basename -> { v with basename = Some basename }
         | None -> (
             match mp with
@@ -273,7 +290,8 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     let obj =
       object
         inherit [_] map_typed_pattern
-        method! visit_PatVar _ v mp = PatVar (update_var ctx v mp, mp)
+        method! visit_PatOpen _ v mp = PatOpen (update_var ctx v mp, mp)
+        method! visit_PatBound _ _ _ = [%internal_error] span
       end
     in
     obj#visit_typed_pattern () lv
@@ -293,11 +311,11 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
 
   (* Register the fact that [name] can be used for the pure variable identified
    * by [var_id] (will add this name in the map if the variable is anonymous) *)
-  let add_pure_var_constraint (var_id : LocalId.id) (name : string)
+  let add_pure_var_constraint (var_id : FVarId.id) (name : string)
       (ctx : pn_ctx) : pn_ctx =
     let pure_vars =
-      if LocalId.Map.mem var_id ctx.pure_vars then ctx.pure_vars
-      else LocalId.Map.add var_id name ctx.pure_vars
+      if FVarId.Map.mem var_id ctx.pure_vars then ctx.pure_vars
+      else FVarId.Map.add var_id name ctx.pure_vars
     in
     { ctx with pure_vars }
   in
@@ -312,7 +330,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
   in
   (* Add a constraint: given a variable id and an associated meta-place, try to
    * extract naming information from the meta-place and save it *)
-  let add_constraint (mp : mplace) (var_id : LocalId.id) (ctx : pn_ctx) : pn_ctx
+  let add_constraint (mp : mplace) (var_id : FVarId.id) (ctx : pn_ctx) : pn_ctx
       =
     (* Register the place *)
     let ctx = register_mplace mp ctx in
@@ -332,18 +350,20 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     let ctx = register_mplace mp ctx in
     (* Add the constraint *)
     match (unmeta rv).e with
-    | Var vid -> add_constraint mp vid ctx
+    | FVar vid -> add_constraint mp vid ctx
+    | BVar _ -> [%internal_error] span
     | _ -> ctx
   in
-  let add_pure_var_value_constraint (var_id : LocalId.id) (rv : texpression)
+  let add_pure_var_value_constraint (var_id : FVarId.id) (rv : texpression)
       (ctx : pn_ctx) : pn_ctx =
     (* Add the constraint *)
     match (unmeta rv).e with
-    | Var vid -> (
+    | FVar vid -> (
         (* Try to find a name for the vid *)
-        match LocalId.Map.find_opt vid ctx.pure_vars with
+        match FVarId.Map.find_opt vid ctx.pure_vars with
         | None -> ctx
         | Some name -> add_pure_var_constraint var_id name ctx)
+    | BVar _ -> [%internal_error] span
     | _ -> ctx
   in
   (* Specific case of constraint on left values *)
@@ -353,8 +373,9 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
         inherit [_] reduce_typed_pattern
         method zero _ = empty_ctx
         method plus ctx0 ctx1 _ = merge_ctxs (ctx0 ()) (ctx1 ())
+        method! visit_PatBound _ _ _ = [%internal_error] span
 
-        method! visit_PatVar _ v mp () =
+        method! visit_PatOpen _ v mp () =
           (* Register the variable *)
           let ctx = register_var (self#zero ()) v in
           (* Register the mplace information if there is such information *)
@@ -371,7 +392,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
   let add_eq_var_constraint (lv : typed_pattern) (re : texpression)
       (ctx : pn_ctx) : pn_ctx =
     match (lv.value, re.e) with
-    | PatVar (lv, _), Var rv when Option.is_some lv.basename ->
+    | PatOpen (lv, _), FVar rv when Option.is_some lv.basename ->
         add_pure_var_constraint rv (Option.get lv.basename) ctx
     | _ -> ctx
   in
@@ -384,10 +405,10 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     (* We propagate constraints across variable reassignments: [^0 = x],
      * if the destination doesn't have naming information *)
     match lv.value with
-    | PatVar (({ id = _; basename = None; ty = _ } as lvar), lmp) ->
+    | PatOpen (({ id = _; basename = None; ty = _ } as lvar), lmp) ->
         if
           (* Check that there is not already a name for the variable *)
-          LocalId.Map.mem lvar.id ctx.pure_vars
+          FVarId.Map.mem lvar.id ctx.pure_vars
         then ctx
         else
           (* We ignore the left meta-place information: it should have been taken
@@ -421,8 +442,8 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
           (* We try to use the rvalue information, if it is a variable *)
           let ctx =
             match (unmeta re).e with
-            | Var rvar_id -> (
-                match LocalId.Map.find_opt rvar_id ctx.pure_vars with
+            | FVar rvar_id -> (
+                match FVarId.Map.find_opt rvar_id ctx.pure_vars with
                 | None -> ctx
                 | Some name -> add name ctx)
             | _ -> ctx
@@ -437,7 +458,8 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     let ty = e.ty in
     let ctx, e =
       match e.e with
-      | Var _ | CVar _ | Const _ -> (* Nothing to do *) (ctx, e.e)
+      | FVar _ | CVar _ | Const _ -> (* Nothing to do *) (ctx, e.e)
+      | BVar _ -> [%internal_error] span
       | App (app, arg) ->
           let ctx, app = update_texpression app ctx in
           let ctx, arg = update_texpression arg ctx in
@@ -514,7 +536,6 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
       fuel;
       input_state;
       inputs;
-      inputs_lvs;
       output_ty;
       loop_body;
     } =
@@ -522,8 +543,7 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     in
     let ctx, fun_end = update_texpression fun_end ctx in
     let ctx, loop_body = update_texpression loop_body ctx in
-    let inputs = List.map (fun v -> update_var ctx v None) inputs in
-    let inputs_lvs = List.map (update_typed_pattern ctx) inputs_lvs in
+    let inputs = List.map (fun v -> snd (update_texpression v ctx)) inputs in
     let loop =
       {
         fun_end;
@@ -533,7 +553,6 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
         fuel;
         input_state;
         inputs;
-        inputs_lvs;
         output_ty;
         loop_body;
       }
@@ -574,12 +593,15 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
           ctx
       | SymbolicAssignments infos ->
           List.fold_left
-            (fun ctx (var_id, rvalue) ->
+            (fun ctx (var, rvalue) ->
+              let var_id = as_fvar span var in
               add_pure_var_value_constraint var_id rvalue ctx)
             ctx infos
       | SymbolicPlaces infos ->
           List.fold_left
-            (fun ctx (var_id, name) -> add_pure_var_constraint var_id name ctx)
+            (fun ctx (var, name) ->
+              let var_id = as_fvar span var in
+              add_pure_var_constraint var_id name ctx)
             ctx infos
       | MPlace mp -> add_right_constraint mp e ctx
       | Tag _ | TypeAnnot -> ctx
@@ -589,36 +611,33 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     (ctx, e.e)
   in
 
-  let body =
-    match def.body with
-    | None -> None
-    | Some body ->
-        let input_names =
-          List.filter_map
-            (fun (v : var) ->
-              match v.basename with
-              | None -> None
-              | Some name -> Some (v.id, name))
-            body.inputs
-        in
-        let ctx =
-          {
-            pure_vars = LocalId.Map.of_list input_names;
-            llbc_vars = E.LocalId.Map.empty;
-          }
-        in
-        let _, body_exp = update_texpression body.body ctx in
-        Some { body with body = body_exp }
-  in
-  { def with body }
+  (* We open all the bound variables in the body before exploring it, then
+     close them all after performing the updates - this makes it easier to
+     deal with variables *)
+  map_open_fun_decl_body
+    (fun (body : fun_body) ->
+      let input_names =
+        List.filter_map
+          (fun (v : typed_pattern) ->
+            let v, _ = as_pat_open span v in
+            match v.basename with
+            | None -> None
+            | Some name -> Some (v.id, name))
+          body.inputs
+      in
+      let ctx =
+        {
+          pure_vars = FVarId.Map.of_list input_names;
+          llbc_vars = E.LocalId.Map.empty;
+        }
+      in
+      let _, body_exp = update_texpression body.body ctx in
+      { body with body = body_exp })
+    def
 
 (** Remove the meta-information *)
 let remove_meta (def : fun_decl) : fun_decl =
-  match def.body with
-  | None -> def
-  | Some body ->
-      let body = { body with body = PureUtils.remove_meta body.body } in
-      { def with body = Some body }
+  map_open_fun_decl_body_expr PureUtils.remove_meta def
 
 (** Introduce calls to [massert] (monadic assertion).
 
@@ -628,45 +647,40 @@ let remove_meta (def : fun_decl) : fun_decl =
       if b then e else fail ~~>massert b;
       e
     ]} *)
-let intro_massert (_ctx : ctx) (def : fun_decl) : fun_decl =
+let intro_massert_visitor (_ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
-  let visitor =
-    object
-      inherit [_] map_expression as super
+  object
+    inherit [_] map_expression as super
 
-      method! visit_Switch env scrut switch =
-        match switch with
-        | If (e_true, e_false) ->
-            if is_fail_panic e_false.e then begin
-              (* Introduce a call to [massert] *)
-              let massert =
-                Qualif
-                  {
-                    id = FunOrOp (Fun (Pure Assert));
-                    generics = empty_generic_args;
-                  }
-              in
-              let massert =
+    method! visit_Switch env scrut switch =
+      match switch with
+      | If (e_true, e_false) ->
+          if is_fail_panic e_false.e then begin
+            (* Introduce a call to [massert] *)
+            let massert =
+              Qualif
                 {
-                  e = massert;
-                  ty = mk_arrow mk_bool_ty (mk_result_ty mk_unit_ty);
+                  id = FunOrOp (Fun (Pure Assert));
+                  generics = empty_generic_args;
                 }
-              in
-              let massert = mk_app span massert scrut in
-              (* Introduce the let-binding *)
-              let monadic = true in
-              let pat = mk_dummy_pattern mk_unit_ty in
-              super#visit_Let env monadic pat massert e_true
-            end
-            else super#visit_Switch env scrut switch
-        | _ -> super#visit_Switch env scrut switch
-    end
-  in
-  match def.body with
-  | None -> def
-  | Some body ->
-      let body = { body with body = visitor#visit_texpression () body.body } in
-      { def with body = Some body }
+            in
+            let massert =
+              {
+                e = massert;
+                ty = mk_arrow mk_bool_ty (mk_result_ty mk_unit_ty);
+              }
+            in
+            let massert = mk_app span massert scrut in
+            (* Introduce the let-binding *)
+            let monadic = true in
+            let pat = mk_dummy_pattern mk_unit_ty in
+            super#visit_Let env monadic pat massert e_true
+          end
+          else super#visit_Switch env scrut switch
+      | _ -> super#visit_Switch env scrut switch
+  end
+
+let intro_massert = lift_expr_map_visitor intro_massert_visitor
 
 (** Simplify the let-bindings which bind the fields of structures.
 
@@ -698,73 +712,69 @@ let intro_massert (_ctx : ctx) (def : fun_decl) : fun_decl =
 
     The subsequent passes, in particular the ones which inline the useless
     assignments, simplify this further. *)
-let simplify_decompose_struct (ctx : ctx) (def : fun_decl) : fun_decl =
+let simplify_decompose_struct_visitor (ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
-  let visitor =
-    object
-      inherit [_] map_expression as super
+  object
+    inherit [_] map_expression as super
 
-      method! visit_Let env (monadic : bool) (lv : typed_pattern)
-          (scrutinee : texpression) (next : texpression) =
-        match (lv.value, lv.ty) with
-        | PatAdt adt_pat, TAdt (TAdtId adt_id, generics) ->
-            (* Detect if this is an enumeration or not *)
-            let tdef =
-              TypeDeclId.Map.find adt_id ctx.trans_ctx.type_ctx.type_decls
-            in
-            let is_enum = TypesUtils.type_decl_is_enum tdef in
-            (* We deconstruct the ADT with a single let-binding in two situations:
+    method! visit_Let env (monadic : bool) (lv : typed_pattern)
+        (scrutinee : texpression) (next : texpression) =
+      match (lv.value, lv.ty) with
+      | PatAdt adt_pat, TAdt (TAdtId adt_id, generics) ->
+          (* Detect if this is an enumeration or not *)
+          let tdef =
+            TypeDeclId.Map.find adt_id ctx.trans_ctx.type_ctx.type_decls
+          in
+          let is_enum = TypesUtils.type_decl_is_enum tdef in
+          (* We deconstruct the ADT with a single let-binding in two situations:
                - if the ADT is an enumeration (which must have exactly one branch)
                - if we forbid using field projectors
             *)
-            let use_let_with_cons =
-              is_enum
-              || !Config.dont_use_field_projectors
-              (* Also, there is a special case when the ADT is to be extracted as
+          let use_let_with_cons =
+            is_enum
+            || !Config.dont_use_field_projectors
+            (* Also, there is a special case when the ADT is to be extracted as
                  a tuple, because it is a structure with unnamed fields. Some backends
                  like Lean have projectors for tuples (like so: `x.3`), but others
                  like Coq don't, in which case we have to deconstruct the whole ADT
                  at once (`let (a, b, c) = x in`) *)
-              || TypesUtils.type_decl_from_type_id_is_tuple_struct
-                   ctx.trans_ctx.type_ctx.type_infos (T.TAdtId adt_id)
-                 && not !Config.use_tuple_projectors
-            in
-            if use_let_with_cons then
-              super#visit_Let env monadic lv scrutinee next
-            else
-              (* This is not an enumeration: introduce let-bindings for every
+            || TypesUtils.type_decl_from_type_id_is_tuple_struct
+                 ctx.trans_ctx.type_ctx.type_infos (T.TAdtId adt_id)
+               && not !Config.use_tuple_projectors
+          in
+          if use_let_with_cons then
+            super#visit_Let env monadic lv scrutinee next
+          else
+            (* This is not an enumeration: introduce let-bindings for every
                  field.
                  We use the [dest] variable in order not to have to recompute
                  the type of the result of the projection... *)
-              let gen_field_proj (field_id : FieldId.id) (dest : typed_pattern)
-                  : texpression =
-                let proj_kind = { adt_id = TAdtId adt_id; field_id } in
-                let qualif = { id = Proj proj_kind; generics } in
-                let proj_e = Qualif qualif in
-                let proj_ty = mk_arrow scrutinee.ty dest.ty in
-                let proj = { e = proj_e; ty = proj_ty } in
-                mk_app span proj scrutinee
-              in
-              let id_var_pairs =
-                FieldId.mapi (fun fid v -> (fid, v)) adt_pat.field_values
-              in
-              let monadic = false in
-              let e =
-                List.fold_right
-                  (fun (fid, pat) e ->
-                    let field_proj = gen_field_proj fid pat in
-                    mk_let monadic pat field_proj e)
-                  id_var_pairs next
-              in
-              (super#visit_texpression env e).e
-        | _ -> super#visit_Let env monadic lv scrutinee next
-    end
-  in
-  match def.body with
-  | None -> def
-  | Some body ->
-      let body = { body with body = visitor#visit_texpression () body.body } in
-      { def with body = Some body }
+            let gen_field_proj (field_id : FieldId.id) (dest : typed_pattern) :
+                texpression =
+              let proj_kind = { adt_id = TAdtId adt_id; field_id } in
+              let qualif = { id = Proj proj_kind; generics } in
+              let proj_e = Qualif qualif in
+              let proj_ty = mk_arrow scrutinee.ty dest.ty in
+              let proj = { e = proj_e; ty = proj_ty } in
+              mk_app span proj scrutinee
+            in
+            let id_var_pairs =
+              FieldId.mapi (fun fid v -> (fid, v)) adt_pat.field_values
+            in
+            let monadic = false in
+            let e =
+              List.fold_right
+                (fun (fid, pat) e ->
+                  let field_proj = gen_field_proj fid pat in
+                  mk_open_let span monadic pat field_proj e)
+                id_var_pairs next
+            in
+            (super#visit_texpression env e).e
+      | _ -> super#visit_Let env monadic lv scrutinee next
+  end
+
+let simplify_decompose_struct =
+  lift_expr_map_visitor simplify_decompose_struct_visitor
 
 (** Introduce the special structure create/update expressions.
 
@@ -783,77 +793,72 @@ let simplify_decompose_struct (ctx : ctx) (def : fun_decl) : fun_decl =
 
     Note however that we do not apply this transformation if the structure is to
     be extracted as a tuple. *)
-let intro_struct_updates (ctx : ctx) (def : fun_decl) : fun_decl =
-  let visitor =
-    object (self)
-      inherit [_] map_expression as super
+let intro_struct_updates_visitor (ctx : ctx) (def : fun_decl) =
+  object (self)
+    inherit [_] map_expression as super
 
-      method! visit_texpression env (e : texpression) =
-        match e.e with
-        | App _ -> (
-            let app, args = destruct_apps e in
-            let ignore () =
-              mk_apps def.item_meta.span
-                (self#visit_texpression env app)
-                (List.map (self#visit_texpression env) args)
-            in
-            match app.e with
-            | Qualif
-                {
-                  id = AdtCons { adt_id = TAdtId adt_id; variant_id = None };
-                  generics = _;
-                } ->
-                (* Lookup the def *)
-                let decl =
-                  TypeDeclId.Map.find adt_id ctx.trans_ctx.type_ctx.type_decls
-                in
-                (* Check if the def will be extracted as a tuple *)
-                if
-                  TypesUtils.type_decl_from_decl_id_is_tuple_struct
-                    ctx.trans_ctx.type_ctx.type_infos adt_id
-                then ignore ()
-                else
-                  (* Check that there are as many arguments as there are fields - note
+    method! visit_texpression env (e : texpression) =
+      match e.e with
+      | App _ -> (
+          let app, args = destruct_apps e in
+          let ignore () =
+            mk_apps def.item_meta.span
+              (self#visit_texpression env app)
+              (List.map (self#visit_texpression env) args)
+          in
+          match app.e with
+          | Qualif
+              {
+                id = AdtCons { adt_id = TAdtId adt_id; variant_id = None };
+                generics = _;
+              } ->
+              (* Lookup the def *)
+              let decl =
+                TypeDeclId.Map.find adt_id ctx.trans_ctx.type_ctx.type_decls
+              in
+              (* Check if the def will be extracted as a tuple *)
+              if
+                TypesUtils.type_decl_from_decl_id_is_tuple_struct
+                  ctx.trans_ctx.type_ctx.type_infos adt_id
+              then ignore ()
+              else
+                (* Check that there are as many arguments as there are fields - note
                      that the def should have a body (otherwise we couldn't use the
                      constructor) *)
-                  let fields = TypesUtils.type_decl_get_fields decl None in
-                  if List.length fields = List.length args then
-                    (* Check if the definition is recursive *)
-                    let is_rec =
-                      match
-                        TypeDeclId.Map.find adt_id
-                          ctx.trans_ctx.type_ctx.type_decls_groups
-                      with
-                      | NonRecGroup _ -> false
-                      | RecGroup _ -> true
-                    in
-                    (* Convert, if possible - note that for now for Lean and Coq
+                let fields = TypesUtils.type_decl_get_fields decl None in
+                if List.length fields = List.length args then
+                  (* Check if the definition is recursive *)
+                  let is_rec =
+                    match
+                      TypeDeclId.Map.find adt_id
+                        ctx.trans_ctx.type_ctx.type_decls_groups
+                    with
+                    | NonRecGroup _ -> false
+                    | RecGroup _ -> true
+                  in
+                  (* Convert, if possible - note that for now for Lean and Coq
                        we don't support the structure syntax on recursive structures *)
-                    if
-                      (Config.backend () <> Lean && Config.backend () <> Coq)
-                      || not is_rec
-                    then
-                      let struct_id = TAdtId adt_id in
-                      let init = None in
-                      let updates =
-                        FieldId.mapi
-                          (fun fid fe -> (fid, self#visit_texpression env fe))
-                          args
-                      in
-                      let ne = { struct_id; init; updates } in
-                      let nty = e.ty in
-                      { e = StructUpdate ne; ty = nty }
-                    else ignore ()
+                  if
+                    (Config.backend () <> Lean && Config.backend () <> Coq)
+                    || not is_rec
+                  then
+                    let struct_id = TAdtId adt_id in
+                    let init = None in
+                    let updates =
+                      FieldId.mapi
+                        (fun fid fe -> (fid, self#visit_texpression env fe))
+                        args
+                    in
+                    let ne = { struct_id; init; updates } in
+                    let nty = e.ty in
+                    { e = StructUpdate ne; ty = nty }
                   else ignore ()
-            | _ -> ignore ())
-        | _ -> super#visit_texpression env e
-    end
-  in
-  match def.body with
-  | None -> def
-  | Some body ->
-      let body = { body with body = visitor#visit_texpression () body.body } in
-      { def with body = Some body }
+                else ignore ()
+          | _ -> ignore ())
+      | _ -> super#visit_texpression env e
+  end
+
+let intro_struct_updates = lift_expr_map_visitor intro_struct_updates_visitor
 
 (** Simplify the let-bindings by performing the following rewritings:
 
@@ -903,98 +908,94 @@ let intro_struct_updates (ctx : ctx) (def : fun_decl) : fun_decl =
       let f := g in
       ...
     ]} *)
-let simplify_let_bindings (ctx : ctx) (def : fun_decl) : fun_decl =
-  let obj =
-    object (self)
-      inherit [_] map_expression as super
+let simplify_let_bindings_visitor (ctx : ctx) (def : fun_decl) =
+  let span = def.item_meta.span in
+  object (self)
+    inherit [_] map_expression as super
 
-      method! visit_Let env monadic lv rv next =
-        match rv.e with
-        | Let (rmonadic, rlv, rrv, rnext) ->
-            (* Case 1: move the inner let outside then re-visit *)
-            let rnext1 = Let (monadic, lv, rnext, next) in
-            let rnext1 = { ty = next.ty; e = rnext1 } in
-            self#visit_Let env rmonadic rlv rrv rnext1
-        | App
-            ( {
-                e =
-                  Qualif
-                    {
-                      id =
-                        AdtCons
-                          {
-                            adt_id = TBuiltin TResult;
-                            variant_id = Some variant_id;
-                          };
-                      generics = _;
-                    };
-                ty = _;
-              },
-              x ) ->
-            (* return/fail case *)
-            if variant_id = result_ok_id then
-              (* Return case - note that the simplification we just perform
+    method! visit_Let env monadic lv rv next =
+      match rv.e with
+      | Let (rmonadic, rlv, rrv, rnext) ->
+          (* Case 1: move the inner let outside then re-visit *)
+          let rnext1 = Let (monadic, lv, rnext, next) in
+          let rnext1 = { ty = next.ty; e = rnext1 } in
+          self#visit_Let env rmonadic rlv rrv rnext1
+      | App
+          ( {
+              e =
+                Qualif
+                  {
+                    id =
+                      AdtCons
+                        {
+                          adt_id = TBuiltin TResult;
+                          variant_id = Some variant_id;
+                        };
+                    generics = _;
+                  };
+              ty = _;
+            },
+            x ) ->
+          (* return/fail case *)
+          if variant_id = result_ok_id then
+            (* Return case - note that the simplification we just perform
                  might have unlocked the tuple simplification below *)
-              self#visit_Let env false lv x next
-            else if variant_id = result_fail_id then
-              (* Fail case *)
-              self#visit_expression env rv.e
-            else [%craise] def.item_meta.span "Unexpected"
-        | App _ ->
-            (* This might be the tuple case *)
-            if not monadic then
-              match
-                (opt_dest_struct_pattern lv, opt_dest_tuple_texpression rv)
-              with
-              | Some pats, Some vals ->
-                  (* Tuple case *)
-                  let pat_vals = List.combine pats vals in
-                  let e =
-                    List.fold_right
-                      (fun (pat, v) next -> mk_let false pat v next)
-                      pat_vals next
-                  in
-                  super#visit_expression env e.e
-              | _ -> super#visit_Let env monadic lv rv next
-            else super#visit_Let env monadic lv rv next
-        | Lambda _ ->
-            if not monadic then
-              (* Arrow case *)
-              let pats, e = destruct_lambdas rv in
-              let g, args = destruct_apps e in
-              if List.length pats = List.length args then
-                (* Check if the arguments are exactly the lambdas *)
-                let check_pat_arg ((pat, arg) : typed_pattern * texpression) =
-                  match (pat.value, arg.e) with
-                  | PatVar (v, _), Var vid -> v.id = vid
-                  | _ -> false
+            self#visit_Let env false lv x next
+          else if variant_id = result_fail_id then
+            (* Fail case *)
+            self#visit_expression env rv.e
+          else [%craise] def.item_meta.span "Unexpected"
+      | App _ ->
+          (* This might be the tuple case *)
+          if not monadic then
+            match
+              (opt_dest_struct_pattern lv, opt_dest_tuple_texpression rv)
+            with
+            | Some pats, Some vals ->
+                (* Tuple case *)
+                let pat_vals = List.combine pats vals in
+                let e =
+                  List.fold_right
+                    (fun (pat, v) next -> mk_open_let span false pat v next)
+                    pat_vals next
                 in
-                if List.for_all check_pat_arg (List.combine pats args) then
-                  (* Check if the application is a tuple constructor
+                super#visit_expression env e.e
+            | _ -> super#visit_Let env monadic lv rv next
+          else super#visit_Let env monadic lv rv next
+      | Lambda _ ->
+          if not monadic then
+            (* Arrow case *)
+            let pats, e = raw_destruct_lambdas rv in
+            let g, args = destruct_apps e in
+            if List.length pats = List.length args then
+              (* Check if the arguments are exactly the lambdas *)
+              let check_pat_arg ((pat, arg) : typed_pattern * texpression) =
+                match (pat.value, arg.e) with
+                | PatOpen (v, _), FVar vid -> v.id = vid
+                | _ -> false
+              in
+              if List.for_all check_pat_arg (List.combine pats args) then
+                (* Check if the application is a tuple constructor
                      or will be extracted as a projector: if
                      it is, keep the lambdas, otherwise simplify *)
-                  let simplify =
-                    match g.e with
-                    | Qualif { id = AdtCons { adt_id; _ }; _ } ->
-                        not
-                          (PureUtils.type_decl_from_type_id_is_tuple_struct
-                             ctx.trans_ctx.type_ctx.type_infos adt_id)
-                    | Qualif { id = Proj _; _ } -> false
-                    | _ -> true
-                  in
-                  if simplify then self#visit_Let env monadic lv g next
-                  else super#visit_Let env monadic lv rv next
+                let simplify =
+                  match g.e with
+                  | Qualif { id = AdtCons { adt_id; _ }; _ } ->
+                      not
+                        (PureUtils.type_decl_from_type_id_is_tuple_struct
+                           ctx.trans_ctx.type_ctx.type_infos adt_id)
+                  | Qualif { id = Proj _; _ } -> false
+                  | _ -> true
+                in
+                if simplify then self#visit_Let env monadic lv g next
                 else super#visit_Let env monadic lv rv next
               else super#visit_Let env monadic lv rv next
             else super#visit_Let env monadic lv rv next
-        | _ -> super#visit_Let env monadic lv rv next
-    end
-  in
-  match def.body with
-  | None -> def
-  | Some body ->
-      let body = { body with body = obj#visit_texpression () body.body } in
-      { def with body = Some body }
+          else super#visit_Let env monadic lv rv next
+      | _ -> super#visit_Let env monadic lv rv next
+  end
+
+let simplify_let_bindings = lift_expr_map_visitor simplify_let_bindings_visitor
 
 (** Remove the duplicated function calls.
 
@@ -1018,44 +1019,37 @@ let simplify_let_bindings (ctx : ctx) (def : fun_decl) : fun_decl =
     ]}
 
     This micro pass removes those duplicate function calls. *)
-let simplify_duplicate_calls (_ctx : ctx) (def : fun_decl) : fun_decl =
-  let visitor =
-    object (self)
-      inherit [_] map_expression as super
+let simplify_duplicate_calls_visitor (_ctx : ctx) (def : fun_decl) =
+  object (self)
+    inherit [_] map_expression as super
 
-      method! visit_Let env monadic pat bound next =
-        let bound = self#visit_texpression env bound in
-        (* Register the function call if the pattern doesn't contain dummy
+    method! visit_Let env monadic pat bound next =
+      let bound = self#visit_texpression env bound in
+      (* Register the function call if the pattern doesn't contain dummy
            variables *)
-        let env =
-          if monadic then
-            match typed_pattern_to_texpression def.item_meta.span pat with
-            | None -> env
-            | Some pat_expr -> TExprMap.add bound (monadic, pat_expr) env
-          else env
-        in
-        let next = self#visit_texpression env next in
-        Let (monadic, pat, bound, next)
-
-      method! visit_texpression env e =
-        let e =
-          match TExprMap.find_opt e env with
-          | None -> e
-          | Some (monadic, e) ->
-              if monadic then mk_result_ok_texpression def.item_meta.span e
-              else e
-        in
-        super#visit_texpression env e
-    end
-  in
-
-  match def.body with
-  | None -> def
-  | Some body ->
-      let body =
-        { body with body = visitor#visit_texpression TExprMap.empty body.body }
+      let env =
+        if monadic then
+          match typed_pattern_to_texpression def.item_meta.span pat with
+          | None -> env
+          | Some pat_expr -> TExprMap.add bound (monadic, pat_expr) env
+        else env
       in
-      { def with body = Some body }
+      let next = self#visit_texpression env next in
+      Let (monadic, pat, bound, next)
+
+    method! visit_texpression env e =
+      let e =
+        match TExprMap.find_opt e env with
+        | None -> e
+        | Some (monadic, e) ->
+            if monadic then mk_result_ok_texpression def.item_meta.span e else e
+      in
+      super#visit_texpression env e
+  end
+
+let simplify_duplicate_calls =
+  lift_expr_map_visitor_with_state simplify_duplicate_calls_visitor
+    TExprMap.empty
 
 (** A helper predicate *)
 let lift_unop (unop : unop) : bool =
@@ -1137,149 +1131,146 @@ let inline_fun (_ : fun_id) : bool = false
     expressions... For now, this forces us to substitute whenever we can, but
     leave the let-bindings where they are, and eliminated them in a subsequent
     pass (if they are useless). *)
-let inline_useless_var_assignments ~(inline_named : bool) ~(inline_const : bool)
-    ~(inline_pure : bool) ~(inline_identity : bool) (ctx : ctx) (def : fun_decl)
-    : fun_decl =
-  let obj =
-    object (self)
-      inherit [_] map_expression as super
+let inline_useless_var_assignments_visitor ~(inline_named : bool)
+    ~(inline_const : bool) ~(inline_pure : bool) ~(inline_identity : bool)
+    (ctx : ctx) (def : fun_decl) =
+  object (self)
+    inherit [_] map_expression as super
 
-      (** Visit the let-bindings to filter the useless ones (and update the
-          substitution map while doing so *)
-      method! visit_Let (env : texpression LocalId.Map.t) monadic lv re e =
-        (* In order to filter, we need to check first that:
+    (** Visit the let-bindings to filter the useless ones (and update the
+        substitution map while doing so *)
+    method! visit_Let (env : texpression FVarId.Map.t) monadic lv re e =
+      (* In order to filter, we need to check first that:
            - the let-binding is not monadic
            - the left-value is a variable
 
            We also inline if the binding decomposes a structure that is to be
            extracted as a tuple, and the right value is a variable.
         *)
-        match (monadic, lv.value) with
-        | false, PatVar (lv_var, _) ->
-            (* We can filter if: 1. *)
-            let filter_pure =
-              (* 1.1. the left variable is unnamed or [inline_named] is true *)
-              let filter_left =
-                match (inline_named, lv_var.basename) with
-                | true, _ | _, None -> true
-                | _ -> false
-              in
-              (* And either:
-                 1.2.1 the right-expression is a variable, a global or a const generic var *)
-              let var_or_global = is_var re || is_cvar re || is_global re in
-              (* Or:
-                 1.2.2 the right-expression is a constant-value and we inline constant values,
-                     *or* it is a qualif with no arguments (we consider this as a const) *)
-              let const_re =
-                inline_const
-                &&
-                let is_const_adt =
-                  let app, args = destruct_apps re in
-                  if args = [] then
-                    match app.e with
-                    | Qualif _ -> true
-                    | StructUpdate upd -> upd.updates = []
-                    | _ -> false
-                  else false
-                in
-                is_const re || is_const_adt
-              in
-              (* Or:
-                 1.2.3 the right-expression is an ADT value, a projection or a
-                     primitive function call *and* the flag [inline_pure] is set *)
-              let pure_re =
-                inline_pure
-                &&
-                let app, _ = destruct_apps re in
-                match app.e with
-                | Qualif qualif -> (
-                    match qualif.id with
-                    | AdtCons _ -> true (* ADT constructor *)
-                    | Proj _ -> true (* Projector *)
-                    | FunOrOp (Unop unop) -> inline_unop unop
-                    | FunOrOp (Binop (binop, _)) -> inline_binop binop
-                    | FunOrOp (Fun fun_id) -> inline_fun fun_id
-                    | _ -> false)
-                | StructUpdate _ -> true (* ADT constructor *)
-                | _ -> false
-              in
-              filter_left && (var_or_global || const_re || pure_re)
-            in
-
-            (* Or if: 2. the let-binding bounds the identity function *)
-            let filter_id =
-              inline_identity
-              &&
-              match re.e with
-              | Lambda ({ value = PatVar (v0, _); _ }, { e = Var v1; _ }) ->
-                  v0.id = v1
+      match (monadic, lv.value) with
+      | false, PatOpen (lv_var, _) ->
+          (* We can filter if: 1. *)
+          let filter_pure =
+            (* 1.1. the left variable is unnamed or [inline_named] is true *)
+            let filter_left =
+              match (inline_named, lv_var.basename) with
+              | true, _ | _, None -> true
               | _ -> false
             in
-
-            let filter = filter_pure || filter_id in
-
-            (* Update the rhs (we may perform substitutions inside, and it is
-             * better to do them *before* we inline it *)
-            let re = self#visit_texpression env re in
-            (* Update the substitution environment *)
-            let env =
-              if filter then LocalId.Map.add lv_var.id re env else env
+            (* And either:
+                 1.2.1 the right-expression is a variable, a global or a const generic var *)
+            let var_or_global = is_fvar re || is_cvar re || is_global re in
+            (* Or:
+                 1.2.2 the right-expression is a constant-value and we inline constant values,
+                     *or* it is a qualif with no arguments (we consider this as a const) *)
+            let const_re =
+              inline_const
+              &&
+              let is_const_adt =
+                let app, args = destruct_apps re in
+                if args = [] then
+                  match app.e with
+                  | Qualif _ -> true
+                  | StructUpdate upd -> upd.updates = []
+                  | _ -> false
+                else false
+              in
+              is_const re || is_const_adt
             in
+            (* Or:
+                 1.2.3 the right-expression is an ADT value, a projection or a
+                     primitive function call *and* the flag [inline_pure] is set *)
+            let pure_re =
+              inline_pure
+              &&
+              let app, _ = destruct_apps re in
+              match app.e with
+              | Qualif qualif -> (
+                  match qualif.id with
+                  | AdtCons _ -> true (* ADT constructor *)
+                  | Proj _ -> true (* Projector *)
+                  | FunOrOp (Unop unop) -> inline_unop unop
+                  | FunOrOp (Binop (binop, _)) -> inline_binop binop
+                  | FunOrOp (Fun fun_id) -> inline_fun fun_id
+                  | _ -> false)
+              | StructUpdate _ -> true (* ADT constructor *)
+              | _ -> false
+            in
+            filter_left && (var_or_global || const_re || pure_re)
+          in
+
+          (* Or if: 2. the let-binding bounds the identity function *)
+          let filter_id =
+            inline_identity
+            &&
+            match re.e with
+            | Lambda ({ value = PatOpen (v0, _); _ }, { e = FVar v1; _ }) ->
+                v0.id = v1
+            | _ -> false
+          in
+
+          let filter = filter_pure || filter_id in
+
+          (* Update the rhs (we may perform substitutions inside, and it is
+           * better to do them *before* we inline it *)
+          let re = self#visit_texpression env re in
+          (* Update the substitution environment *)
+          let env = if filter then FVarId.Map.add lv_var.id re env else env in
+          (* Update the next expression *)
+          let e = self#visit_texpression env e in
+          (* Reconstruct the [let], only if the binding is not filtered *)
+          if filter then e.e else Let (monadic, lv, re, e)
+      | ( false,
+          PatAdt
+            {
+              variant_id = None;
+              field_values = [ { value = PatOpen (lv_var, _); ty = _ } ];
+            } ) ->
+          (* Second case: we deconstruct a structure with one field that we will
+               extract as tuple. *)
+          let adt_id, _ = PureUtils.ty_as_adt def.item_meta.span re.ty in
+          (* Update the rhs (we may perform substitutions inside, and it is
+           * better to do them *before* we inline it *)
+          let re = self#visit_texpression env re in
+          if
+            PureUtils.is_fvar re
+            && type_decl_from_type_id_is_tuple_struct
+                 ctx.trans_ctx.type_ctx.type_infos adt_id
+          then
+            (* Update the substitution environment *)
+            let env = FVarId.Map.add lv_var.id re env in
             (* Update the next expression *)
             let e = self#visit_texpression env e in
-            (* Reconstruct the [let], only if the binding is not filtered *)
-            if filter then e.e else Let (monadic, lv, re, e)
-        | ( false,
-            PatAdt
-              {
-                variant_id = None;
-                field_values = [ { value = PatVar (lv_var, _); ty = _ } ];
-              } ) ->
-            (* Second case: we deconstruct a structure with one field that we will
-               extract as tuple. *)
-            let adt_id, _ = PureUtils.ty_as_adt def.item_meta.span re.ty in
-            (* Update the rhs (we may perform substitutions inside, and it is
-             * better to do them *before* we inline it *)
-            let re = self#visit_texpression env re in
-            if
-              PureUtils.is_var re
-              && type_decl_from_type_id_is_tuple_struct
-                   ctx.trans_ctx.type_ctx.type_infos adt_id
-            then
-              (* Update the substitution environment *)
-              let env = LocalId.Map.add lv_var.id re env in
-              (* Update the next expression *)
-              let e = self#visit_texpression env e in
-              (* We filter the [let], and thus do not reconstruct it *)
-              e.e
-            else (* Nothing to do *)
-              super#visit_Let env monadic lv re e
-        | _ -> super#visit_Let env monadic lv re e
+            (* We filter the [let], and thus do not reconstruct it *)
+            e.e
+          else (* Nothing to do *)
+            super#visit_Let env monadic lv re e
+      | _ -> super#visit_Let env monadic lv re e
 
-      (** Substitute the variables *)
-      method! visit_Var (env : texpression LocalId.Map.t) (vid : LocalId.id) =
-        match LocalId.Map.find_opt vid env with
-        | None -> (* No substitution *) super#visit_Var env vid
-        | Some ne ->
-            (* Substitute - note that we need to reexplore, because
-             * there may be stacked substitutions, if we have:
-             * var0 --> var1
-             * var1 --> var2.
-             *)
-            self#visit_expression env ne.e
-    end
-  in
-  match def.body with
-  | None -> def
-  | Some body ->
-      let body =
-        { body with body = obj#visit_texpression LocalId.Map.empty body.body }
-      in
-      { def with body = Some body }
+    (** Substitute the variables *)
+    method! visit_FVar (env : texpression FVarId.Map.t) (vid : FVarId.id) =
+      match FVarId.Map.find_opt vid env with
+      | None -> (* No substitution *) super#visit_FVar env vid
+      | Some ne ->
+          (* Substitute - note that we need to reexplore, because
+           * there may be stacked substitutions, if we have:
+           * var0 --> var1
+           * var1 --> var2.
+           *)
+          self#visit_expression env ne.e
+  end
+
+let inline_useless_var_assignments ~inline_named ~inline_const ~inline_pure
+    ~inline_identity =
+  lift_expr_map_visitor_with_state
+    (inline_useless_var_assignments_visitor ~inline_named ~inline_const
+       ~inline_pure ~inline_identity)
+    FVarId.Map.empty
 
 (** Filter the useless assignments (removes the useless variables, filters the
     function calls) *)
 let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
+  let span = def.item_meta.span in
   (* We first need a transformation on *left-values*, which filters the useless
      variables and tells us whether the value contains any variable which has
      not been replaced by [_] (in which case we need to keep the assignment,
@@ -1301,12 +1292,14 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
       method zero _ = true
       method plus b0 b1 _ = b0 () && b1 ()
 
-      method! visit_PatVar env v mp =
-        if LocalId.Set.mem v.id env then (PatVar (v, mp), fun _ -> false)
+      method! visit_PatOpen env v mp =
+        if FVarId.Set.mem v.id env then (PatOpen (v, mp), fun _ -> false)
         else (PatDummy, fun _ -> true)
+
+      method! visit_PatBound _ _ _ = [%internal_error] span
     end
   in
-  let filter_typed_pattern (used_vars : LocalId.Set.t) (lv : typed_pattern) :
+  let filter_typed_pattern (used_vars : FVarId.Set.t) (lv : typed_pattern) :
       typed_pattern * bool =
     let lv, all_dummies = lv_visitor#visit_typed_pattern used_vars lv in
     (lv, all_dummies ())
@@ -1320,15 +1313,16 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
   let expr_visitor =
     object (self)
       inherit [_] mapreduce_expression as super
-      method zero _ = LocalId.Set.empty
-      method plus s0 s1 _ = LocalId.Set.union (s0 ()) (s1 ())
+      method zero _ = FVarId.Set.empty
+      method plus s0 s1 _ = FVarId.Set.union (s0 ()) (s1 ())
 
       (** Whenever we visit a variable, we need to register the used variable *)
-      method! visit_Var _ vid = (Var vid, fun _ -> LocalId.Set.singleton vid)
+      method! visit_FVar _ vid = (FVar vid, fun _ -> FVarId.Set.singleton vid)
 
       method! visit_expression env e =
         match e with
-        | Var _ | CVar _ | Const _ | App _ | Qualif _
+        | BVar _ -> [%internal_error] span
+        | FVar _ | CVar _ | Const _ | App _ | Qualif _
         | Meta (_, _)
         | StructUpdate _ | Lambda _
         | EError (_, _) -> super#visit_expression env e
@@ -1355,7 +1349,7 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
             (* Small utility - called if we can't filter the let-binding *)
             let dont_filter () =
               let re, used_re = self#visit_texpression env re in
-              let used = LocalId.Set.union used (used_re ()) in
+              let used = FVarId.Set.union used (used_re ()) in
               (* Simplify the left pattern if it only contains dummy variables *)
               let lv =
                 if all_dummies then
@@ -1381,11 +1375,10 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
             let loop_body, _ = self#visit_texpression () loop.loop_body in
             (Loop { loop with fun_end; loop_body }, s)
     end
+    (* We filter only inside of transparent (i.e., non-opaque) definitions *)
   in
-  (* We filter only inside of transparent (i.e., non-opaque) definitions *)
-  match def.body with
-  | None -> def
-  | Some body ->
+  map_open_fun_decl_body
+    (fun body ->
       (* Visit the body *)
       let body_exp, used_vars = expr_visitor#visit_texpression () body.body in
       (* Visit the parameters - TODO: update: we can filter only if the definition
@@ -1395,16 +1388,16 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
          decreases clause).
          For now we deactivate the filtering. *)
       let used_vars = used_vars () in
-      let inputs_lvs =
+      let inputs =
         if false then
           List.map
             (fun lv -> fst (filter_typed_pattern used_vars lv))
-            body.inputs_lvs
-        else body.inputs_lvs
+            body.inputs
+        else body.inputs
       in
       (* Return *)
-      let body = { body with body = body_exp; inputs_lvs } in
-      { def with body = Some body }
+      { body = body_exp; inputs })
+    def
 
 (** Simplify the lets immediately followed by an ok.
 
@@ -1417,14 +1410,14 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
 
       f y
     ]} *)
-let simplify_let_then_ok _ctx (def : fun_decl) =
+let simplify_let_then_ok_visitor _ctx (def : fun_decl) =
   (* Match a pattern and an expression: evaluates to [true] if the expression
      is actually exactly the pattern *)
   let rec match_pattern_and_expr (pat : typed_pattern) (e : texpression) : bool
       =
     match (pat.value, e.e) with
     | PatConstant plit, Const lit -> plit = lit
-    | PatVar (pv, _), Var vid -> pv.id = vid
+    | PatOpen (pv, _), FVar vid -> pv.id = vid
     | PatDummy, _ ->
         (* It is ok only if we ignore the unit value *)
         pat.ty = mk_unit_ty && e = mk_unit_rvalue
@@ -1445,52 +1438,42 @@ let simplify_let_then_ok _ctx (def : fun_decl) =
     | _ -> false
   in
 
-  let expr_visitor =
-    object (self)
-      inherit [_] map_expression
+  object (self)
+    inherit [_] map_expression
 
-      method! visit_Let env monadic lv rv next_e =
-        (* We do a bottom up traversal (simplifying in the children nodes
+    method! visit_Let env monadic lv rv next_e =
+      (* We do a bottom up traversal (simplifying in the children nodes
            can allow to simplify in the parent nodes) *)
-        let rv = self#visit_texpression env rv in
-        let next_e = self#visit_texpression env next_e in
-        let not_simpl_e = Let (monadic, lv, rv, next_e) in
-        match next_e.e with
-        | Switch _ | Loop _ | Let _ ->
-            (* Small shortcut to avoid doing the check on every let-binding *)
-            not_simpl_e
-        | _ -> (
-            if
-              (* Do the check *)
-              monadic
-            then
-              (* The first let-binding is monadic *)
-              match opt_destruct_ret next_e with
-              | Some e ->
-                  if match_pattern_and_expr lv e then rv.e else not_simpl_e
-              | None -> not_simpl_e
-            else
-              (* The first let-binding is not monadic *)
-              match opt_destruct_ret next_e with
-              | Some e ->
-                  if match_pattern_and_expr lv e then
-                    (* We need to wrap the right-value in a ret *)
-                    (mk_result_ok_texpression def.item_meta.span rv).e
-                  else not_simpl_e
-              | None ->
-                  if match_pattern_and_expr lv next_e then rv.e else not_simpl_e
-            )
-    end
-  in
+      let rv = self#visit_texpression env rv in
+      let next_e = self#visit_texpression env next_e in
+      let not_simpl_e = Let (monadic, lv, rv, next_e) in
+      match next_e.e with
+      | Switch _ | Loop _ | Let _ ->
+          (* Small shortcut to avoid doing the check on every let-binding *)
+          not_simpl_e
+      | _ -> (
+          if
+            (* Do the check *)
+            monadic
+          then
+            (* The first let-binding is monadic *)
+            match opt_destruct_ret next_e with
+            | Some e ->
+                if match_pattern_and_expr lv e then rv.e else not_simpl_e
+            | None -> not_simpl_e
+          else
+            (* The first let-binding is not monadic *)
+            match opt_destruct_ret next_e with
+            | Some e ->
+                if match_pattern_and_expr lv e then
+                  (* We need to wrap the right-value in a ret *)
+                  (mk_result_ok_texpression def.item_meta.span rv).e
+                else not_simpl_e
+            | None ->
+                if match_pattern_and_expr lv next_e then rv.e else not_simpl_e)
+  end
 
-  match def.body with
-  | None -> def
-  | Some body ->
-      (* Visit the body *)
-      let body_exp = expr_visitor#visit_texpression () body.body in
-      (* Return *)
-      let body = { body with body = body_exp } in
-      { def with body = Some body }
+let simplify_let_then_ok = lift_expr_map_visitor simplify_let_then_ok_visitor
 
 (** Simplify the aggregated ADTs. Ex.:
     {[
@@ -1498,174 +1481,162 @@ let simplify_let_then_ok _ctx (def : fun_decl) =
 
       Mkstruct x.f0 x.f1 x.f2 ~~> x
     ]} *)
-let simplify_aggregates (ctx : ctx) (def : fun_decl) : fun_decl =
-  let expr_visitor =
-    object
-      inherit [_] map_expression as super
+let simplify_aggregates_visitor (ctx : ctx) (def : fun_decl) =
+  object
+    inherit [_] map_expression as super
 
-      (* Look for a type constructor applied to arguments *)
-      method! visit_texpression env e =
-        (* First simplify the sub-expressions *)
-        let e = super#visit_texpression env e in
-        match e.e with
-        | App _ -> (
-            (* TODO: we should remove this case, which dates from before the
+    (* Look for a type constructor applied to arguments *)
+    method! visit_texpression env e =
+      (* First simplify the sub-expressions *)
+      let e = super#visit_texpression env e in
+      match e.e with
+      | App _ -> (
+          (* TODO: we should remove this case, which dates from before the
                introduction of [StructUpdate] *)
-            let app, args = destruct_apps e in
-            match app.e with
-            | Qualif
-                {
-                  id = AdtCons { adt_id = TAdtId adt_id; variant_id = None };
-                  generics;
-                } ->
-                (* This is a struct *)
-                (* Retrieve the definiton, to find how many fields there are *)
-                let adt_decl =
-                  TypeDeclId.Map.find adt_id ctx.trans_ctx.type_ctx.type_decls
+          let app, args = destruct_apps e in
+          match app.e with
+          | Qualif
+              {
+                id = AdtCons { adt_id = TAdtId adt_id; variant_id = None };
+                generics;
+              } ->
+              (* This is a struct *)
+              (* Retrieve the definiton, to find how many fields there are *)
+              let adt_decl =
+                TypeDeclId.Map.find adt_id ctx.trans_ctx.type_ctx.type_decls
+              in
+              let fields =
+                match adt_decl.kind with
+                | Enum _ | Alias _ | Opaque | TDeclError _ ->
+                    [%craise] def.item_meta.span "Unreachable"
+                | Union _ ->
+                    [%craise] def.item_meta.span "Unions are not supported"
+                | Struct fields -> fields
+              in
+              let num_fields = List.length fields in
+              (* In order to simplify, there must be as many arguments as
+               * there are fields *)
+              [%sanity_check] def.item_meta.span (num_fields > 0);
+              if num_fields = List.length args then
+                (* We now need to check that all the arguments are of the form:
+                 * [x.field] for some variable [x], and where the projection
+                 * is for the proper ADT *)
+                let to_var_proj (i : int) (arg : texpression) :
+                    (generic_args * fvar_id) option =
+                  match arg.e with
+                  | App (proj, x) -> (
+                      match (proj.e, x.e) with
+                      | ( Qualif
+                            {
+                              id =
+                                Proj { adt_id = TAdtId proj_adt_id; field_id };
+                              generics = proj_generics;
+                            },
+                          FVar v ) ->
+                          (* We check that this is the proper ADT, and the proper field *)
+                          if proj_adt_id = adt_id && FieldId.to_int field_id = i
+                          then Some (proj_generics, v)
+                          else None
+                      | _ -> None)
+                  | _ -> None
                 in
-                let fields =
-                  match adt_decl.kind with
-                  | Enum _ | Alias _ | Opaque | TDeclError _ ->
-                      [%craise] def.item_meta.span "Unreachable"
-                  | Union _ ->
-                      [%craise] def.item_meta.span "Unions are not supported"
-                  | Struct fields -> fields
-                in
-                let num_fields = List.length fields in
-                (* In order to simplify, there must be as many arguments as
-                 * there are fields *)
-                [%sanity_check] def.item_meta.span (num_fields > 0);
-                if num_fields = List.length args then
-                  (* We now need to check that all the arguments are of the form:
-                   * [x.field] for some variable [x], and where the projection
-                   * is for the proper ADT *)
-                  let to_var_proj (i : int) (arg : texpression) :
-                      (generic_args * local_id) option =
-                    match arg.e with
-                    | App (proj, x) -> (
-                        match (proj.e, x.e) with
-                        | ( Qualif
-                              {
-                                id =
-                                  Proj { adt_id = TAdtId proj_adt_id; field_id };
-                                generics = proj_generics;
-                              },
-                            Var v ) ->
-                            (* We check that this is the proper ADT, and the proper field *)
-                            if
-                              proj_adt_id = adt_id
-                              && FieldId.to_int field_id = i
-                            then Some (proj_generics, v)
-                            else None
-                        | _ -> None)
-                    | _ -> None
-                  in
-                  let args = List.mapi to_var_proj args in
-                  let args = List.filter_map (fun x -> x) args in
-                  (* Check that all the arguments are of the expected form *)
-                  if List.length args = num_fields then
-                    (* Check that this is the same variable we project from -
-                     * note that we checked above that there is at least one field *)
-                    let (_, x), end_args = Collections.List.pop args in
-                    if List.for_all (fun (_, y) -> y = x) end_args then (
-                      (* We can substitute *)
-                      (* Sanity check: all types correct *)
-                      [%sanity_check] def.item_meta.span
-                        (List.for_all
-                           (fun (generics1, _) -> generics1 = generics)
-                           args);
-                      { e with e = Var x })
-                    else e
+                let args = List.mapi to_var_proj args in
+                let args = List.filter_map (fun x -> x) args in
+                (* Check that all the arguments are of the expected form *)
+                if List.length args = num_fields then
+                  (* Check that this is the same variable we project from -
+                   * note that we checked above that there is at least one field *)
+                  let (_, x), end_args = Collections.List.pop args in
+                  if List.for_all (fun (_, y) -> y = x) end_args then (
+                    (* We can substitute *)
+                    (* Sanity check: all types correct *)
+                    [%sanity_check] def.item_meta.span
+                      (List.for_all
+                         (fun (generics1, _) -> generics1 = generics)
+                         args);
+                    { e with e = FVar x })
                   else e
                 else e
-            | _ -> e)
-        | StructUpdate { struct_id; init = None; updates } ->
-            let adt_ty = e.ty in
-            (* Attempt to convert all the field updates to projections
+              else e
+          | _ -> e)
+      | StructUpdate { struct_id; init = None; updates } ->
+          let adt_ty = e.ty in
+          (* Attempt to convert all the field updates to projections
                of fields from an ADT with the same type *)
-            let to_expr_proj ((fid, arg) : FieldId.id * texpression) :
-                texpression option =
-              match arg.e with
-              | App (proj, x) -> (
-                  match proj.e with
-                  | Qualif
-                      {
-                        id = Proj { adt_id = TAdtId proj_adt_id; field_id };
-                        generics = _;
-                      } ->
-                      (* We check that this is the proper ADT, and the proper field *)
-                      if
-                        TAdtId proj_adt_id = struct_id
-                        && field_id = fid && x.ty = adt_ty
-                      then Some x
-                      else None
-                  | _ -> None)
-              | _ -> None
-            in
-            let expr_projs = List.map to_expr_proj updates in
-            let filt_expr_projs = List.filter_map (fun x -> x) expr_projs in
-            if filt_expr_projs = [] then e
-            else
-              (* If all the projections are from the same expression [x], we
+          let to_expr_proj ((fid, arg) : FieldId.id * texpression) :
+              texpression option =
+            match arg.e with
+            | App (proj, x) -> (
+                match proj.e with
+                | Qualif
+                    {
+                      id = Proj { adt_id = TAdtId proj_adt_id; field_id };
+                      generics = _;
+                    } ->
+                    (* We check that this is the proper ADT, and the proper field *)
+                    if
+                      TAdtId proj_adt_id = struct_id
+                      && field_id = fid && x.ty = adt_ty
+                    then Some x
+                    else None
+                | _ -> None)
+            | _ -> None
+          in
+          let expr_projs = List.map to_expr_proj updates in
+          let filt_expr_projs = List.filter_map (fun x -> x) expr_projs in
+          if filt_expr_projs = [] then e
+          else
+            (* If all the projections are from the same expression [x], we
                  simply replace the whole expression with [x] *)
-              let x = List.hd filt_expr_projs in
-              if
-                List.length filt_expr_projs = List.length updates
-                && List.for_all (fun y -> y = x) filt_expr_projs
-              then x
-              else if
-                (* Attempt to create an "update" expression (i.e., of
+            let x = List.hd filt_expr_projs in
+            if
+              List.length filt_expr_projs = List.length updates
+              && List.for_all (fun y -> y = x) filt_expr_projs
+            then x
+            else if
+              (* Attempt to create an "update" expression (i.e., of
                    the shape [{ x with f := v }]).
 
                    This is not supported by Coq.
                 *)
-                Config.backend () <> Coq
-              then (
-                (* Compute the number of occurrences of each init value *)
-                let occurs = ref TExprMap.empty in
-                List.iter
-                  (fun x ->
-                    let num =
-                      match TExprMap.find_opt x !occurs with
-                      | None -> 1
-                      | Some n -> n + 1
-                    in
-                    occurs := TExprMap.add x num !occurs)
-                  filt_expr_projs;
-                (* Find the max - note that we can initialize the max at 0,
+              Config.backend () <> Coq
+            then (
+              (* Compute the number of occurrences of each init value *)
+              let occurs = ref TExprMap.empty in
+              List.iter
+                (fun x ->
+                  let num =
+                    match TExprMap.find_opt x !occurs with
+                    | None -> 1
+                    | Some n -> n + 1
+                  in
+                  occurs := TExprMap.add x num !occurs)
+                filt_expr_projs;
+              (* Find the max - note that we can initialize the max at 0,
                    because there is at least one init value *)
-                let max = ref 0 in
-                let x = ref x in
-                List.iter
-                  (fun (y, n) ->
-                    if n > !max then (
-                      max := n;
-                      x := y))
-                  (TExprMap.bindings !occurs);
-                (* Create the update expression *)
-                let updates =
-                  List.filter_map
-                    (fun ((fid, fe), y_opt) ->
-                      if y_opt = Some !x then None else Some (fid, fe))
-                    (List.combine updates expr_projs)
-                in
-                let supd =
-                  StructUpdate { struct_id; init = Some !x; updates }
-                in
-                let e = { e with e = supd } in
-                e)
-              else e
-        | _ -> e
-    end
-  in
-  match def.body with
-  | None -> def
-  | Some body ->
-      (* Visit the body *)
-      let body_exp = expr_visitor#visit_texpression () body.body in
-      (* Return *)
-      let body = { body with body = body_exp } in
-      { def with body = Some body }
+              let max = ref 0 in
+              let x = ref x in
+              List.iter
+                (fun (y, n) ->
+                  if n > !max then (
+                    max := n;
+                    x := y))
+                (TExprMap.bindings !occurs);
+              (* Create the update expression *)
+              let updates =
+                List.filter_map
+                  (fun ((fid, fe), y_opt) ->
+                    if y_opt = Some !x then None else Some (fid, fe))
+                  (List.combine updates expr_projs)
+              in
+              let supd = StructUpdate { struct_id; init = Some !x; updates } in
+              let e = { e with e = supd } in
+              e)
+            else e
+      | _ -> e
+  end
+
+let simplify_aggregates = lift_expr_map_visitor simplify_aggregates_visitor
 
 (** Remark: it might be better to use egraphs *)
 type simp_aggr_env = {
@@ -1699,12 +1670,10 @@ type simp_aggr_env = {
     {[
       if x.field then x else x
     ]} *)
-let simplify_aggregates_unchanged_fields (ctx : ctx) (def : fun_decl) : fun_decl
-    =
+let simplify_aggregates_unchanged_fields_visitor (ctx : ctx) (def : fun_decl) =
   let log = Logging.simplify_aggregates_unchanged_fields_log in
   let span = def.item_meta.span in
   (* Some helpers *)
-  let empty_simp_aggr_env = { expand_map = ExprMap.empty; expanded = [] } in
   let add_expand v e m = { m with expand_map = ExprMap.add v e m.expand_map } in
   let add_expands l m =
     { m with expand_map = ExprMap.add_list l m.expand_map }
@@ -1732,10 +1701,11 @@ let simplify_aggregates_unchanged_fields (ctx : ctx) (def : fun_decl) : fun_decl
           Collections.List.filter_map
             (fun ((fid, f) : _ * typed_pattern) ->
               match f.value with
-              | PatVar (var, _) ->
+              | PatOpen (var, _) ->
                   let proj = mk_adt_proj span bound_adt fid f.ty in
-                  let var = { e = Var var.id; ty = f.ty } in
+                  let var = { e = FVar var.id; ty = f.ty } in
                   Some (var.e, proj.e)
+              | PatBound _ -> [%internal_error] span
               | _ -> None)
             fields
         in
@@ -1763,138 +1733,135 @@ let simplify_aggregates_unchanged_fields (ctx : ctx) (def : fun_decl) : fun_decl
   in
 
   (* The visitor *)
-  let visitor =
-    object (self)
-      inherit [_] map_expression as super
+  object (self)
+    inherit [_] map_expression as super
 
-      method! visit_Switch env scrut switch =
-        [%ltrace "Visiting switch: " ^ switch_to_string ctx scrut switch];
-        (* Update the scrutinee *)
-        let scrut = self#visit_texpression env scrut in
-        let switch =
-          match switch with
-          | If (b0, b1) ->
-              (* Register the expansions:
+    method! visit_Switch env scrut switch =
+      [%ltrace "Visiting switch: " ^ switch_to_string ctx scrut switch];
+      (* Update the scrutinee *)
+      let scrut = self#visit_texpression env scrut in
+      let switch =
+        match switch with
+        | If (b0, b1) ->
+            (* Register the expansions:
                  {[
                    scrut -> true    (for the then branch)
                    scrut -> false   (for the else branch)
                  ]}
               *)
-              let update v st =
-                self#visit_texpression
-                  (add_expand scrut.e (mk_bool_value v).e env)
-                  st
-              in
-              let b0 = update true b0 in
-              let b1 = update false b1 in
-              If (b0, b1)
-          | Match branches ->
-              let update_branch (b : match_branch) =
-                (* Register the information introduced by the patterns *)
-                let env = add_pattern_eqs scrut b.pat env in
-                { b with branch = self#visit_texpression env b.branch }
-              in
-              let branches = List.map update_branch branches in
-              Match branches
-        in
-        Switch (scrut, switch)
+            let update v st =
+              self#visit_texpression
+                (add_expand scrut.e (mk_bool_value v).e env)
+                st
+            in
+            let b0 = update true b0 in
+            let b1 = update false b1 in
+            If (b0, b1)
+        | Match branches ->
+            let update_branch (b : match_branch) =
+              (* Register the information introduced by the patterns *)
+              let env = add_pattern_eqs scrut b.pat env in
+              { b with branch = self#visit_texpression env b.branch }
+            in
+            let branches = List.map update_branch branches in
+            Match branches
+      in
+      Switch (scrut, switch)
 
-      (* We need to detect patterns of the shape: [let (x, y) = t in ...] *)
-      method! visit_Let env monadic pat bound next =
-        (* Register the pattern if it is not a monadic let binding *)
-        let env = if monadic then env else add_pattern_eqs bound pat env in
-        (* Continue *)
-        super#visit_Let env monadic pat bound next
+    (* We need to detect patterns of the shape: [let (x, y) = t in ...] *)
+    method! visit_Let env monadic pat bound next =
+      (* Register the pattern if it is not a monadic let binding *)
+      let env = if monadic then env else add_pattern_eqs bound pat env in
+      (* Continue *)
+      super#visit_Let env monadic pat bound next
 
-      (* Update the ADT values *)
-      method! visit_texpression env e0 =
-        let e =
-          match e0.e with
-          | StructUpdate updt ->
-              [%ltrace
-                "Visiting struct update: " ^ struct_update_to_string ctx updt];
-              (* Update the fields *)
-              let updt = super#visit_struct_update env updt in
-              (* Simplify *)
-              begin
-                match updt.init with
-                | None -> super#visit_StructUpdate env updt
-                | Some init ->
-                    let update_field ((fid, e) : field_id * texpression) :
-                        (field_id * texpression) option =
-                      (* Recursively expand the value of the field, to check if it is
+    (* Update the ADT values *)
+    method! visit_texpression env e0 =
+      let e =
+        match e0.e with
+        | StructUpdate updt ->
+            [%ltrace
+              "Visiting struct update: " ^ struct_update_to_string ctx updt];
+            (* Update the fields *)
+            let updt = super#visit_struct_update env updt in
+            (* Simplify *)
+            begin
+              match updt.init with
+              | None -> super#visit_StructUpdate env updt
+              | Some init ->
+                  let update_field ((fid, e) : field_id * texpression) :
+                      (field_id * texpression) option =
+                    (* Recursively expand the value of the field, to check if it is
                          equal to the updated value: if it is the case, we can omit
                          the update. *)
-                      let adt = init in
-                      let field_value = mk_adt_proj span adt fid e.ty in
-                      let field_value = expand_expression env field_value.e in
-                      (* If this value is equal to the value we update the field
+                    let adt = init in
+                    let field_value = mk_adt_proj span adt fid e.ty in
+                    let field_value = expand_expression env field_value.e in
+                    (* If this value is equal to the value we update the field
                          with, we can simply ignore the update *)
-                      if field_value = expand_expression env e.e then (
-                        [%ltrace
-                          "Simplifying field: " ^ texpression_to_string ctx e];
-                        None)
-                      else (
-                        [%ltrace
-                          "Not simplifying field: "
-                          ^ texpression_to_string ctx e];
-                        Some (fid, e))
-                    in
-                    let updates = List.filter_map update_field updt.updates in
-                    if updates = [] then (
+                    if field_value = expand_expression env e.e then (
                       [%ltrace
-                        "StructUpdate: "
-                        ^ texpression_to_string ctx e0
-                        ^ " ~~> "
-                        ^ texpression_to_string ctx init];
-                      init.e)
-                    else
-                      let updt1 = { updt with updates } in
+                        "Simplifying field: " ^ texpression_to_string ctx e];
+                      None)
+                    else (
                       [%ltrace
-                        "StructUpdate: "
-                        ^ struct_update_to_string ctx updt
-                        ^ " ~~> "
-                        ^ struct_update_to_string ctx updt1];
-                      super#visit_StructUpdate env updt1
-              end
-          | App _ ->
-              [%ltrace "Visiting app: " ^ texpression_to_string ctx e0];
-              (* It may be an ADT expression (e.g., [Cons x y] or [(x, y)]):
+                        "Not simplifying field: " ^ texpression_to_string ctx e];
+                      Some (fid, e))
+                  in
+                  let updates = List.filter_map update_field updt.updates in
+                  if updates = [] then (
+                    [%ltrace
+                      "StructUpdate: "
+                      ^ texpression_to_string ctx e0
+                      ^ " ~~> "
+                      ^ texpression_to_string ctx init];
+                    init.e)
+                  else
+                    let updt1 = { updt with updates } in
+                    [%ltrace
+                      "StructUpdate: "
+                      ^ struct_update_to_string ctx updt
+                      ^ " ~~> "
+                      ^ struct_update_to_string ctx updt1];
+                    super#visit_StructUpdate env updt1
+            end
+        | App _ ->
+            [%ltrace "Visiting app: " ^ texpression_to_string ctx e0];
+            (* It may be an ADT expression (e.g., [Cons x y] or [(x, y)]):
                  check if it is the case, and if it is, compute the expansion
                  of all the values expanded so far, and see if exactly one of
                  those is equal to the current expression *)
-              let e1 = super#visit_texpression env e0 in
-              let e1_exp = expand_expression env e1.e in
-              let f, _ = destruct_apps e1 in
-              if is_adt_cons f then
-                let expanded =
-                  List.filter_map
-                    (fun e ->
-                      let e' = expand_expression env e in
-                      if e1_exp = e' then Some e else None)
-                    env.expanded
-                in
-                begin
-                  match expanded with
-                  | [ e2 ] ->
-                      [%ltrace
-                        "Simplified: "
-                        ^ texpression_to_string ctx e1
-                        ^ " ~~> "
-                        ^ texpression_to_string ctx { e1 with e = e2 }];
-                      e2
-                  | _ -> e1.e
-                end
-              else e1.e
-          | _ -> super#visit_expression env e0.e
-        in
-        { e0 with e }
-    end
-  in
-  let simplify (body : fun_body) : fun_body =
-    { body with body = visitor#visit_texpression empty_simp_aggr_env body.body }
-  in
-  { def with body = Option.map simplify def.body }
+            let e1 = super#visit_texpression env e0 in
+            let e1_exp = expand_expression env e1.e in
+            let f, _ = destruct_apps e1 in
+            if is_adt_cons f then
+              let expanded =
+                List.filter_map
+                  (fun e ->
+                    let e' = expand_expression env e in
+                    if e1_exp = e' then Some e else None)
+                  env.expanded
+              in
+              begin
+                match expanded with
+                | [ e2 ] ->
+                    [%ltrace
+                      "Simplified: "
+                      ^ texpression_to_string ctx e1
+                      ^ " ~~> "
+                      ^ texpression_to_string ctx { e1 with e = e2 }];
+                    e2
+                | _ -> e1.e
+              end
+            else e1.e
+        | _ -> super#visit_expression env e0.e
+      in
+      { e0 with e }
+  end
+
+let simplify_aggregates_unchanged_fields =
+  lift_expr_map_visitor_with_state simplify_aggregates_unchanged_fields_visitor
+    { expand_map = ExprMap.empty; expanded = [] }
 
 (** Retrieve the loop definitions from the function definition.
 
@@ -1902,192 +1869,213 @@ let simplify_aggregates_unchanged_fields (ctx : ctx) (def : fun_decl) : fun_decl
     function body (see the {!Pure.Loop} node). This function extracts those
     function bodies into independent definitions while removing occurrences of
     the {!Pure.Loop} node. *)
-let decompose_loops (_ctx : ctx) (def : fun_decl) : fun_decl * fun_decl list =
+let decompose_loops_aux (_ctx : ctx) (def : fun_decl) (body : fun_body) :
+    fun_decl * fun_decl list =
+  let span = def.item_meta.span in
+
+  (* Reset the fvart counter and open all the binders - it is easier to manipulate unique variable indices *)
+  reset_fvar_id_counter ();
+  let body = open_all_fun_body span body in
+
+  (* Count the number of loops *)
+  let loops = ref LoopId.Set.empty in
+  let expr_visitor =
+    object
+      inherit [_] iter_expression as super
+
+      method! visit_Loop env loop =
+        loops := LoopId.Set.add loop.loop_id !loops;
+        super#visit_Loop env loop
+    end
+  in
+  expr_visitor#visit_texpression () body.body;
+  let num_loops = LoopId.Set.cardinal !loops in
+
+  (* Store the loops here *)
+  let loops = ref LoopId.Map.empty in
+  let expr_visitor =
+    object (self)
+      inherit [_] map_expression
+
+      method! visit_Loop env loop =
+        let span = loop.span in
+        let fun_sig = def.signature in
+        let fwd_info = fun_sig.fwd_info in
+        let fwd_effect_info = fwd_info.effect_info in
+        let ignore_output = fwd_info.ignore_output in
+
+        (* Generate the loop definition *)
+        let loop_fwd_effect_info = fwd_effect_info in
+
+        let loop_fwd_sig_info : fun_sig_info =
+          let fuel = if !Config.use_fuel then 1 else 0 in
+          let num_inputs = List.length loop.inputs in
+          let fwd_info : inputs_info =
+            let info = fwd_info.fwd_info in
+            let fwd_state =
+              info.num_inputs_with_fuel_with_state
+              - info.num_inputs_with_fuel_no_state
+            in
+            {
+              has_fuel = !Config.use_fuel;
+              num_inputs_no_fuel_no_state = num_inputs;
+              num_inputs_with_fuel_no_state = num_inputs + fuel;
+              num_inputs_with_fuel_with_state = num_inputs + fuel + fwd_state;
+            }
+          in
+
+          { fwd_info; effect_info = loop_fwd_effect_info; ignore_output }
+        in
+        [%sanity_check] def.item_meta.span
+          (fun_sig_info_is_wf loop_fwd_sig_info);
+
+        let inputs_tys =
+          let fuel = if !Config.use_fuel then [ mk_fuel_ty ] else [] in
+          let fwd_inputs =
+            List.map (fun (v : texpression) -> v.ty) loop.inputs
+          in
+          let info = fwd_info.fwd_info in
+          let fwd_state =
+            Collections.List.subslice fun_sig.inputs
+              info.num_inputs_with_fuel_no_state
+              info.num_inputs_with_fuel_with_state
+          in
+          List.concat [ fuel; fwd_inputs; fwd_state ]
+        in
+
+        let output = loop.output_ty in
+
+        let loop_sig =
+          {
+            generics = fun_sig.generics;
+            explicit_info = fun_sig.explicit_info;
+            known_from_trait_refs = fun_sig.known_from_trait_refs;
+            llbc_generics = fun_sig.llbc_generics;
+            preds = fun_sig.preds;
+            inputs = inputs_tys;
+            output;
+            fwd_info = loop_fwd_sig_info;
+            back_effect_info = fun_sig.back_effect_info;
+          }
+        in
+
+        let (fuel_vars, inputs) : _ * fvar list =
+          (* Introduce the fuel input *)
+          let (fuel_vars, fuel0_var) : _ * fvar list =
+            if !Config.use_fuel then
+              let fuel0 = as_fvar span loop.fuel0 in
+              let fuel0_var = mk_fuel_fvar fuel0 in
+              (Some (loop.fuel0, loop.fuel), [ fuel0_var ])
+            else (None, [])
+          in
+
+          (* Introduce the forward input state *)
+          let fwd_state_var =
+            [%sanity_check] def.item_meta.span
+              (loop_fwd_effect_info.stateful = Option.is_some loop.input_state);
+            match loop.input_state with
+            | None -> []
+            | Some input_state ->
+                let input_state = as_fvar span input_state in
+                let state_var = mk_state_fvar input_state in
+                [ state_var ]
+          in
+
+          (* Introduce the additional backward inputs, if necessary *)
+          let fun_body = Option.get def.body in
+          let info = fwd_info.fwd_info in
+          let _, back_inputs =
+            Collections.List.split_at fun_body.inputs
+              info.num_inputs_with_fuel_with_state
+          in
+          let back_inputs : fvar list =
+            List.map (fun x -> as_pat_open span x |> fst) back_inputs
+          in
+
+          let loop_inputs =
+            List.map
+              (fun x ->
+                let id = as_fvar span x in
+                ({ id; basename = None; ty = x.ty } : fvar))
+              loop.inputs
+          in
+
+          let inputs =
+            List.concat [ fuel0_var; fwd_state_var; loop_inputs; back_inputs ]
+          in
+          (fuel_vars, inputs)
+        in
+
+        (* Wrap the loop body in a match over the fuel *)
+        let loop_body =
+          match fuel_vars with
+          | None -> loop.loop_body
+          | Some (fuel0, fuel) ->
+              wrap_in_match_fuel def.item_meta.span (as_fvar span fuel0)
+                (as_fvar span fuel) ~close:false loop.loop_body
+        in
+
+        let inputs =
+          List.map (fun x -> mk_typed_pattern_from_fvar x None) inputs
+        in
+        let loop_body =
+          close_all_fun_body loop.span { inputs; body = loop_body }
+        in
+        (* We retrieve the meta information from the parent function
+         *but* replace its span with the span of the loop *)
+        let item_meta = { def.item_meta with span = loop.span } in
+
+        [%sanity_check] def.item_meta.span (def.builtin_info = None);
+
+        let loop_def : fun_decl =
+          {
+            def_id = def.def_id;
+            item_meta;
+            builtin_info = def.builtin_info;
+            kind = def.kind;
+            backend_attributes = def.backend_attributes;
+            num_loops;
+            loop_id = Some loop.loop_id;
+            name = def.name;
+            signature = loop_sig;
+            is_global_decl_body = def.is_global_decl_body;
+            body = Some loop_body;
+          }
+        in
+        (* Store the loop definition *)
+        loops := LoopId.Map.add_strict loop.loop_id loop_def !loops;
+
+        (* Update the current expression to remove the [Loop] node, and continue *)
+        (self#visit_texpression env loop.fun_end).e
+    end
+  in
+
+  let body_expr = expr_visitor#visit_texpression () body.body in
+  let body = close_all_fun_body span { body with body = body_expr } in
+  let def = { def with body = Some body; num_loops } in
+  let loops = List.map snd (LoopId.Map.bindings !loops) in
+  (def, loops)
+
+let decompose_loops (ctx : ctx) (def : fun_decl) =
   match def.body with
   | None -> (def, [])
-  | Some body ->
-      (* Count the number of loops *)
-      let loops = ref LoopId.Set.empty in
-      let expr_visitor =
-        object
-          inherit [_] iter_expression as super
-
-          method! visit_Loop env loop =
-            loops := LoopId.Set.add loop.loop_id !loops;
-            super#visit_Loop env loop
-        end
-      in
-      expr_visitor#visit_texpression () body.body;
-      let num_loops = LoopId.Set.cardinal !loops in
-
-      (* Store the loops here *)
-      let loops = ref LoopId.Map.empty in
-      let expr_visitor =
-        object (self)
-          inherit [_] map_expression
-
-          method! visit_Loop env loop =
-            let fun_sig = def.signature in
-            let fwd_info = fun_sig.fwd_info in
-            let fwd_effect_info = fwd_info.effect_info in
-            let ignore_output = fwd_info.ignore_output in
-
-            (* Generate the loop definition *)
-            let loop_fwd_effect_info = fwd_effect_info in
-
-            let loop_fwd_sig_info : fun_sig_info =
-              let fuel = if !Config.use_fuel then 1 else 0 in
-              let num_inputs = List.length loop.inputs in
-              let fwd_info : inputs_info =
-                let info = fwd_info.fwd_info in
-                let fwd_state =
-                  info.num_inputs_with_fuel_with_state
-                  - info.num_inputs_with_fuel_no_state
-                in
-                {
-                  has_fuel = !Config.use_fuel;
-                  num_inputs_no_fuel_no_state = num_inputs;
-                  num_inputs_with_fuel_no_state = num_inputs + fuel;
-                  num_inputs_with_fuel_with_state =
-                    num_inputs + fuel + fwd_state;
-                }
-              in
-
-              { fwd_info; effect_info = loop_fwd_effect_info; ignore_output }
-            in
-            [%sanity_check] def.item_meta.span
-              (fun_sig_info_is_wf loop_fwd_sig_info);
-
-            let inputs_tys =
-              let fuel = if !Config.use_fuel then [ mk_fuel_ty ] else [] in
-              let fwd_inputs = List.map (fun (v : var) -> v.ty) loop.inputs in
-              let info = fwd_info.fwd_info in
-              let fwd_state =
-                Collections.List.subslice fun_sig.inputs
-                  info.num_inputs_with_fuel_no_state
-                  info.num_inputs_with_fuel_with_state
-              in
-              List.concat [ fuel; fwd_inputs; fwd_state ]
-            in
-
-            let output = loop.output_ty in
-
-            let loop_sig =
-              {
-                generics = fun_sig.generics;
-                explicit_info = fun_sig.explicit_info;
-                known_from_trait_refs = fun_sig.known_from_trait_refs;
-                llbc_generics = fun_sig.llbc_generics;
-                preds = fun_sig.preds;
-                inputs = inputs_tys;
-                output;
-                fwd_info = loop_fwd_sig_info;
-                back_effect_info = fun_sig.back_effect_info;
-              }
-            in
-
-            let fuel_vars, inputs, inputs_lvs =
-              (* Introduce the fuel input *)
-              let fuel_vars, fuel0_var, fuel_lvs =
-                if !Config.use_fuel then
-                  let fuel0_var = mk_fuel_var loop.fuel0 in
-                  let fuel_lvs = mk_typed_pattern_from_var fuel0_var None in
-                  (Some (loop.fuel0, loop.fuel), [ fuel0_var ], [ fuel_lvs ])
-                else (None, [], [])
-              in
-
-              (* Introduce the forward input state *)
-              let fwd_state_var, fwd_state_lvs =
-                [%sanity_check] def.item_meta.span
-                  (loop_fwd_effect_info.stateful
-                  = Option.is_some loop.input_state);
-                match loop.input_state with
-                | None -> ([], [])
-                | Some input_state ->
-                    let state_var = mk_state_var input_state in
-                    let state_lvs = mk_typed_pattern_from_var state_var None in
-                    ([ state_var ], [ state_lvs ])
-              in
-
-              (* Introduce the additional backward inputs, if necessary *)
-              let fun_body = Option.get def.body in
-              let info = fwd_info.fwd_info in
-              let _, back_inputs =
-                Collections.List.split_at fun_body.inputs
-                  info.num_inputs_with_fuel_with_state
-              in
-              let _, back_inputs_lvs =
-                Collections.List.split_at fun_body.inputs_lvs
-                  info.num_inputs_with_fuel_with_state
-              in
-
-              let inputs =
-                List.concat
-                  [ fuel0_var; fwd_state_var; loop.inputs; back_inputs ]
-              in
-              let inputs_lvs =
-                List.concat
-                  [ fuel_lvs; fwd_state_lvs; loop.inputs_lvs; back_inputs_lvs ]
-              in
-              (fuel_vars, inputs, inputs_lvs)
-            in
-
-            (* Wrap the loop body in a match over the fuel *)
-            let loop_body =
-              match fuel_vars with
-              | None -> loop.loop_body
-              | Some (fuel0, fuel) ->
-                  wrap_in_match_fuel def.item_meta.span fuel0 fuel
-                    loop.loop_body
-            in
-
-            let loop_body = { inputs; inputs_lvs; body = loop_body } in
-            (* We retrieve the meta information from the parent function
-             *but* replace its span with the span of the loop *)
-            let item_meta = { def.item_meta with span = loop.span } in
-
-            [%sanity_check] def.item_meta.span (def.builtin_info = None);
-
-            let loop_def : fun_decl =
-              {
-                def_id = def.def_id;
-                item_meta;
-                builtin_info = def.builtin_info;
-                kind = def.kind;
-                backend_attributes = def.backend_attributes;
-                num_loops;
-                loop_id = Some loop.loop_id;
-                name = def.name;
-                signature = loop_sig;
-                is_global_decl_body = def.is_global_decl_body;
-                body = Some loop_body;
-              }
-            in
-            (* Store the loop definition *)
-            loops := LoopId.Map.add_strict loop.loop_id loop_def !loops;
-
-            (* Update the current expression to remove the [Loop] node, and continue *)
-            (self#visit_texpression env loop.fun_end).e
-        end
-      in
-
-      let body_expr = expr_visitor#visit_texpression () body.body in
-      let body = { body with body = body_expr } in
-      let def = { def with body = Some body; num_loops } in
-      let loops = List.map snd (LoopId.Map.bindings !loops) in
-      (def, loops)
+  | Some body -> decompose_loops_aux ctx def body
 
 (** Convert the unit variables to [()] if they are used as right-values or [_]
     if they are used as left values in patterns. *)
-let unit_vars_to_unit (def : fun_decl) : fun_decl =
+let unit_vars_to_unit _ (def : fun_decl) : fun_decl =
+  let span = def.item_meta.span in
+
   (* The map visitor *)
   let obj =
     object
       inherit [_] map_expression as super
 
       (** Replace in patterns *)
-      method! visit_PatVar _ v mp =
-        if v.ty = mk_unit_ty then PatDummy else PatVar (v, mp)
+      method! visit_PatOpen _ v mp =
+        if v.ty = mk_unit_ty then PatDummy else PatOpen (v, mp)
+
+      method! visit_PatBound _ _ _ = [%internal_error] span
 
       (** Replace in "regular" expressions - note that we could limit ourselves
           to variables, but this is more powerful *)
@@ -2097,15 +2085,14 @@ let unit_vars_to_unit (def : fun_decl) : fun_decl =
     end
   in
   (* Update the body *)
-  match def.body with
-  | None -> def
-  | Some body ->
+  map_open_fun_decl_body
+    (fun body ->
       let body_exp = obj#visit_texpression () body.body in
       (* Update the input parameters *)
-      let inputs_lvs = List.map (obj#visit_typed_pattern ()) body.inputs_lvs in
+      let inputs = List.map (obj#visit_typed_pattern ()) body.inputs in
       (* Return *)
-      let body = Some { body with body = body_exp; inputs_lvs } in
-      { def with body }
+      { body = body_exp; inputs })
+    def
 
 (** Eliminate the box functions like [Box::new] (which is translated to the
     identity) and [Box::free] (which is translated to [()]).
@@ -2115,96 +2102,79 @@ let unit_vars_to_unit (def : fun_decl) : fun_decl =
     at the same time is that we would need to eliminate them in two different
     places: when translating function calls, and when translating end
     abstractions. Here, we can do something simpler, in one micro-pass. *)
-let eliminate_box_functions (_ctx : ctx) (def : fun_decl) : fun_decl =
+let eliminate_box_functions_visitor (_ctx : ctx) (def : fun_decl) =
   (* The map visitor *)
-  let obj =
-    object
-      inherit [_] map_expression as super
+  object
+    inherit [_] map_expression as super
 
-      method! visit_texpression env e =
-        match opt_destruct_function_call e with
-        | Some (fun_id, _tys, args) -> (
-            (* Below, when dealing with the arguments: we consider the very
-             * general case, where functions could be boxed (meaning we
-             * could have: [box_new f x])
-             *)
-            match fun_id with
-            | Fun (FromLlbc (FunId (FBuiltin aid), _lp_id)) -> (
-                match aid with
-                | BoxNew ->
-                    let arg, args = Collections.List.pop args in
-                    mk_apps def.item_meta.span arg args
-                | Index _
-                | ArrayToSliceShared
-                | ArrayToSliceMut
-                | ArrayRepeat
-                | PtrFromParts _ -> super#visit_texpression env e)
-            | _ -> super#visit_texpression env e)
-        | _ -> super#visit_texpression env e
-    end
-  in
-  (* Update the body *)
-  match def.body with
-  | None -> def
-  | Some body ->
-      let body = Some { body with body = obj#visit_texpression () body.body } in
-      { def with body }
+    method! visit_texpression env e =
+      match opt_destruct_function_call e with
+      | Some (fun_id, _tys, args) -> (
+          (* Below, when dealing with the arguments: we consider the very
+           * general case, where functions could be boxed (meaning we
+           * could have: [box_new f x])
+           *)
+          match fun_id with
+          | Fun (FromLlbc (FunId (FBuiltin aid), _lp_id)) -> (
+              match aid with
+              | BoxNew ->
+                  let arg, args = Collections.List.pop args in
+                  mk_apps def.item_meta.span arg args
+              | Index _
+              | ArrayToSliceShared
+              | ArrayToSliceMut
+              | ArrayRepeat
+              | PtrFromParts _ -> super#visit_texpression env e)
+          | _ -> super#visit_texpression env e)
+      | _ -> super#visit_texpression env e
+  end
+
+let eliminate_box_functions =
+  lift_expr_map_visitor eliminate_box_functions_visitor
 
 (** Simplify the lambdas by applying beta-reduction *)
-let apply_beta_reduction (_ctx : ctx) (def : fun_decl) : fun_decl =
-  (* The map visitor *)
-  let visitor =
-    object (self)
-      inherit [_] map_expression as super
+let apply_beta_reduction_visitor (_ctx : ctx) (def : fun_decl) =
+  let span = def.item_meta.span in
 
-      method! visit_Var env vid =
-        match LocalId.Map.find_opt vid env with
-        | None -> Var vid
-        | Some e -> e.e
+  object (self)
+    inherit [_] map_expression as super
 
-      method! visit_texpression env e =
-        let f, args = destruct_apps e in
-        let args = List.map (self#visit_texpression env) args in
-        let pats, body = destruct_lambdas f in
-        if args <> [] && pats <> [] then
-          (* Apply the beta-reduction
+    method! visit_FVar env vid =
+      match FVarId.Map.find_opt vid env with
+      | None -> FVar vid
+      | Some e -> e.e
+
+    method! visit_texpression env e =
+      let f, args = destruct_apps e in
+      let args = List.map (self#visit_texpression env) args in
+      let pats, body = raw_destruct_lambdas f in
+      if args <> [] && pats <> [] then
+        (* Apply the beta-reduction
 
              First split the arguments/patterns between those that
              will disappear and those we have to preserve.
           *)
-          let min = Int.min (List.length args) (List.length pats) in
-          let pats, kept_pats = Collections.List.split_at pats min in
-          let args, kept_args = Collections.List.split_at args min in
-          (* Substitute *)
-          let vars =
-            List.map (fun v -> (fst (as_pat_var def.item_meta.span v)).id) pats
-          in
-          let body =
-            let env = LocalId.Map.add_list (List.combine vars args) env in
-            super#visit_texpression env body
-          in
-          (* Reconstruct the term *)
-          mk_apps def.item_meta.span
-            (mk_lambdas kept_pats (super#visit_texpression env body))
-            kept_args
-        else
-          mk_apps def.item_meta.span
-            (mk_lambdas pats (super#visit_texpression env body))
-            args
-    end
-  in
-  (* Update the body *)
-  match def.body with
-  | None -> def
-  | Some body ->
-      let body =
-        Some
-          {
-            body with
-            body = visitor#visit_texpression LocalId.Map.empty body.body;
-          }
-      in
-      { def with body }
+        let min = Int.min (List.length args) (List.length pats) in
+        let pats, kept_pats = Collections.List.split_at pats min in
+        let args, kept_args = Collections.List.split_at args min in
+        (* Substitute *)
+        let vars = List.map (fun v -> (fst (as_pat_open span v)).id) pats in
+        let body =
+          let env = FVarId.Map.add_list (List.combine vars args) env in
+          super#visit_texpression env body
+        in
+        (* Reconstruct the term *)
+        mk_apps span
+          (mk_open_lambdas span kept_pats (super#visit_texpression env body))
+          kept_args
+      else
+        mk_apps span
+          (mk_open_lambdas span pats (super#visit_texpression env body))
+          args
+  end
+
+let apply_beta_reduction =
+  lift_expr_map_visitor_with_state apply_beta_reduction_visitor FVarId.Map.empty
 
 (** This pass simplifies uses of array/slice index operations.
 
@@ -2224,7 +2194,7 @@ let apply_beta_reduction (_ctx : ctx) (def : fun_decl) : fun_decl =
       let _, back = Array.index_mut_usize a i in
       back x ~~>Array.update a i x
     ]} *)
-let simplify_array_slice_update (ctx : ctx) (def : fun_decl) : fun_decl =
+let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
 
   (* The difficulty is that the let-binding which uses the backward function
@@ -2233,77 +2203,71 @@ let simplify_array_slice_update (ctx : ctx) (def : fun_decl) : fun_decl =
      The micro-pass is written in a general way: for instance we do not leverage
      the fact that a backward function should be used only once.
   *)
+  object (self)
+    inherit [_] map_expression as super
 
-  (* We may need to introduce fresh variables *)
-  let var_cnt = get_opt_body_min_var_counter def.body in
-  let _, fresh_var_id = LocalId.mk_stateful_generator var_cnt in
+    method! visit_Let env monadic pat e1 e2 =
+      (* Update the first expression *)
+      let e1 = super#visit_texpression env e1 in
+      (* Check if the current let-binding is a call to an index function *)
+      let e1_app, e1_args = destruct_apps e1 in
+      match (pat.value, e1_app.e, e1_args) with
+      | ( (* let (_, back) = ... *)
+          PatAdt
+            {
+              variant_id = None;
+              field_values =
+                [
+                  { value = PatDummy; _ }; { value = PatOpen (back_var, _); _ };
+                ];
+            },
+          (* ... = Array.index_mut_usize a i *)
+          Qualif
+            {
+              id =
+                FunOrOp
+                  (Fun
+                     (FromLlbc
+                        ( FunId
+                            (FBuiltin
+                               (Index
+                                  {
+                                    is_array;
+                                    mutability = RMut;
+                                    is_range = false;
+                                  })),
+                          None )));
+              generics = index_generics;
+            },
+          [ a; i ] ) ->
+          [%ldebug
+            "identified a pattern to simplify:\n"
+            ^ texpression_to_string ctx
+                { e = Let (monadic, pat, e1, e2); ty = e2.ty }];
 
-  let visitor =
-    object (self)
-      inherit [_] map_expression as super
-
-      method! visit_Let env monadic pat e1 e2 =
-        (* Update the first expression *)
-        let e1 = super#visit_texpression env e1 in
-        (* Check if the current let-binding is a call to an index function *)
-        let e1_app, e1_args = destruct_apps e1 in
-        match (pat.value, e1_app.e, e1_args) with
-        | ( (* let (_, back) = ... *)
-            PatAdt
-              {
-                variant_id = None;
-                field_values =
-                  [
-                    { value = PatDummy; _ }; { value = PatVar (back_var, _); _ };
-                  ];
-              },
-            (* ... = Array.index_mut_usize a i *)
-            Qualif
-              {
-                id =
-                  FunOrOp
-                    (Fun
-                       (FromLlbc
-                          ( FunId
-                              (FBuiltin
-                                 (Index
-                                    {
-                                      is_array;
-                                      mutability = RMut;
-                                      is_range = false;
-                                    })),
-                            None )));
-                generics = index_generics;
-              },
-            [ a; i ] ) ->
-            [%ldebug
-              "identified a pattern to simplify:\n"
-              ^ texpression_to_string ctx
-                  { e = Let (monadic, pat, e1, e2); ty = e2.ty }];
-
-            (* Some auxiliary functions *)
-            (* Helper to check if an expression is actually the backward function *)
-            let is_call_to_back (app : texpression) =
-              match app.e with
-              | Var id -> id = back_var.id
-              | _ -> false
+          (* Some auxiliary functions *)
+          (* Helper to check if an expression is actually the backward function *)
+          let is_call_to_back (app : texpression) =
+            match app.e with
+            | FVar id -> id = back_var.id
+            | _ -> false
+          in
+          (* Helper to introduce a call to the proper update function *)
+          let mk_call_to_update (back_v : texpression) =
+            let array_or_slice = if is_array then Array else Slice in
+            let qualif =
+              Qualif
+                {
+                  id = FunOrOp (Fun (Pure (UpdateAtIndex array_or_slice)));
+                  generics = index_generics;
+                }
             in
-            (* Helper to introduce a call to the proper update function *)
-            let mk_call_to_update (back_v : texpression) =
-              let array_or_slice = if is_array then Array else Slice in
-              let qualif =
-                Qualif
-                  {
-                    id = FunOrOp (Fun (Pure (UpdateAtIndex array_or_slice)));
-                    generics = index_generics;
-                  }
-              in
-              let qualif =
-                { e = qualif; ty = mk_arrows [ a.ty; i.ty; back_v.ty ] e2.ty }
-              in
-              mk_apps span qualif [ a; i; back_v ]
+            let qualif =
+              { e = qualif; ty = mk_arrows [ a.ty; i.ty; back_v.ty ] e2.ty }
             in
-            (* Attempt to remove the let-binding.
+            mk_apps span qualif [ a; i; back_v ]
+          in
+          (* Attempt to remove the let-binding.
 
                We perform two attempts:
                1. we check if we can actually insert the update in place of the index
@@ -2313,75 +2277,75 @@ let simplify_array_slice_update (ctx : ctx) (def : fun_decl) : fun_decl =
                    *before*
                2. otherwise, we check that we manage to replace all the uses to the
                  backward function before comitting the changes . *)
-            let count = ref 0 in
-            let back_call = ref None in
-            let back_call_with_fresh = ref None in
-            let fresh_vars = ref LocalId.Set.empty in
-            let register_back_call pat arg =
-              count := !count + 1;
-              back_call_with_fresh := Some (pat, arg);
-              (* Check that the argument doesn't use fresh vars *)
-              if
-                LocalId.Set.is_empty
-                  (LocalId.Set.inter (texpression_get_vars arg) !fresh_vars)
-              then back_call := Some (pat, arg)
-            in
-            let updt_visitor1 =
-              object
-                inherit [_] map_expression as super
+          let count = ref 0 in
+          let back_call = ref None in
+          let back_call_with_fresh = ref None in
+          let fresh_vars = ref FVarId.Set.empty in
+          let register_back_call pat arg =
+            count := !count + 1;
+            back_call_with_fresh := Some (pat, arg);
+            (* Check that the argument doesn't use fresh vars *)
+            if
+              FVarId.Set.is_empty
+                (FVarId.Set.inter (texpression_get_fvars arg) !fresh_vars)
+            then back_call := Some (pat, arg)
+          in
+          let updt_visitor1 =
+            object
+              inherit [_] map_expression as super
+              method! visit_PatBound _ _ _ = [%internal_error] span
 
-                method! visit_PatVar env var mp =
-                  fresh_vars := LocalId.Set.add var.id !fresh_vars;
-                  super#visit_PatVar env var mp
+              method! visit_PatOpen env var mp =
+                fresh_vars := FVarId.Set.add var.id !fresh_vars;
+                super#visit_PatOpen env var mp
 
-                method! visit_Let env monadic' pat' e' e3 =
-                  (* Check if this is a call to the backward function *)
-                  match e'.e with
-                  | App (app, v) when is_result_ty e3.ty && is_call_to_back app
-                    ->
-                      register_back_call pat' v;
-                      (self#visit_texpression env e3).e
-                  | _ -> super#visit_Let env monadic' pat' e' e3
+              method! visit_Let env monadic' pat' e' e3 =
+                (* Check if this is a call to the backward function *)
+                match e'.e with
+                | App (app, v) when is_result_ty e3.ty && is_call_to_back app ->
+                    register_back_call pat' v;
+                    (self#visit_texpression env e3).e
+                | _ -> super#visit_Let env monadic' pat' e' e3
 
-                method! visit_App env app x =
-                  (* Look for: [ok (back x)] *)
-                  match app.e with
-                  | Qualif
-                      {
-                        id =
-                          AdtCons
-                            {
-                              adt_id = TBuiltin TResult;
-                              variant_id = Some variant_id;
-                            };
-                        _;
-                      }
-                    when variant_id = result_ok_id -> begin
-                      match x.e with
-                      | App (app', v) when is_call_to_back app' ->
-                          let id = fresh_var_id () in
-                          let var : var = { id; basename = None; ty = x.ty } in
-                          register_back_call
-                            (mk_typed_pattern_from_var var None)
-                            v;
-                          super#visit_App env app (mk_texpression_from_var var)
-                      | _ -> super#visit_App env app x
-                    end
-                  | _ -> super#visit_App env app x
-              end
-            in
-            let e' = updt_visitor1#visit_texpression () e2 in
-            [%ldebug "e':\n" ^ texpression_to_string ctx e'];
+              method! visit_App env app x =
+                (* Look for: [ok (back x)] *)
+                match app.e with
+                | Qualif
+                    {
+                      id =
+                        AdtCons
+                          {
+                            adt_id = TBuiltin TResult;
+                            variant_id = Some variant_id;
+                          };
+                      _;
+                    }
+                  when variant_id = result_ok_id -> begin
+                    match x.e with
+                    | App (app', v) when is_call_to_back app' ->
+                        let id = fresh_fvar_id () in
+                        let var : fvar = { id; basename = None; ty = x.ty } in
+                        register_back_call
+                          (mk_typed_pattern_from_fvar var None)
+                          v;
+                        super#visit_App env app (mk_texpression_from_fvar var)
+                    | _ -> super#visit_App env app x
+                  end
+                | _ -> super#visit_App env app x
+            end
+          in
+          let e' = updt_visitor1#visit_texpression () e2 in
+          [%ldebug "e':\n" ^ texpression_to_string ctx e'];
 
-            (* Should we keep the change? *)
-            if !count = 1 && Option.is_some !back_call then (
-              [%ldebug "keeping the change"];
-              let pat, arg = Option.get !back_call in
-              let call = mk_call_to_update arg in
-              (* Recurse on the updated expression *)
-              super#visit_expression env (Let (true, pat, call, e')))
-            else
-              (* Sometimes the call to the backward function needs to
+          (* Should we keep the change? *)
+          if !count = 1 && Option.is_some !back_call then (
+            [%ldebug "keeping the change"];
+            let pat, arg = Option.get !back_call in
+            let call = mk_call_to_update arg in
+            (* Recurse on the updated expression *)
+            super#visit_expression env (Let (true, pat, call, e')))
+          else
+            (* Sometimes the call to the backward function needs to
                  use fresh variables which are introduced *after* the
                  call to the backward function, but the call itself happens
                  quite late (because we end region abstractions in a lazy manner),
@@ -2391,101 +2355,97 @@ let simplify_array_slice_update (ctx : ctx) (def : fun_decl) : fun_decl =
                  function, that is: as soon as all the variables needed for its
                  arguments have been introduced.
               *)
-              let _ = [%ldebug "not keeping the change"] in
-              let e'' =
-                if !count = 1 then (
-                  let back_pat, back_arg = Option.get !back_call_with_fresh in
-                  let fresh_vars =
-                    LocalId.Set.inter !fresh_vars
-                      (texpression_get_vars back_arg)
-                  in
-                  let rec insert_call_below (fresh_vars : LocalId.Set.t) e =
-                    [%ldebug
-                      "insert_call_below:" ^ "\n- fresh_vars:\n"
-                      ^ LocalId.Set.to_string None fresh_vars
-                      ^ "\n- e:\n"
-                      ^ texpression_to_string ctx e];
-                    match e.e with
-                    | Let (monadic, pat, e1, e2) ->
-                        let fresh_vars =
-                          LocalId.Set.diff fresh_vars
-                            (typed_pattern_get_vars pat)
-                        in
-                        if LocalId.Set.is_empty fresh_vars then
-                          let call = mk_call_to_update back_arg in
-                          let e' = Let (true, back_pat, call, e2) in
-                          let e' = { e = e'; ty = e.ty } in
-                          (true, { e = Let (monadic, pat, e1, e'); ty = e.ty })
-                        else
-                          let ok, e2 = insert_call_below fresh_vars e2 in
-                          (ok, { e = Let (monadic, pat, e1, e2); ty = e.ty })
-                    | _ -> (false, e)
-                  in
-                  [%ldebug "insert_call_below: START"];
-                  let ok, e'' = insert_call_below fresh_vars e' in
-                  if ok then Some e''.e else None)
-                else None
-              in
-              if Option.is_some e'' then Option.get e''
-              else
-                (* Attempt 1. didn't work: perform attempt 2. (see above) *)
-                let ok = ref true in
-                let updt_visitor2 =
-                  object
-                    inherit [_] map_expression as super
+            let _ = [%ldebug "not keeping the change"] in
+            let e'' =
+              if !count = 1 then (
+                let back_pat, back_arg = Option.get !back_call_with_fresh in
+                let fresh_vars =
+                  FVarId.Set.inter !fresh_vars (texpression_get_fvars back_arg)
+                in
+                let rec insert_call_below (fresh_vars : FVarId.Set.t) e =
+                  [%ldebug
+                    "insert_call_below:" ^ "\n- fresh_vars:\n"
+                    ^ FVarId.Set.to_string None fresh_vars
+                    ^ "\n- e:\n"
+                    ^ texpression_to_string ctx e];
+                  match e.e with
+                  | Let (monadic, pat, e1, e2) ->
+                      let fresh_vars =
+                        FVarId.Set.diff fresh_vars (typed_pattern_get_fvars pat)
+                      in
+                      if FVarId.Set.is_empty fresh_vars then
+                        let call = mk_call_to_update back_arg in
+                        let e' = Let (true, back_pat, call, e2) in
+                        let e' = { e = e'; ty = e.ty } in
+                        (true, { e = Let (monadic, pat, e1, e'); ty = e.ty })
+                      else
+                        let ok, e2 = insert_call_below fresh_vars e2 in
+                        (ok, { e = Let (monadic, pat, e1, e2); ty = e.ty })
+                  | _ -> (false, e)
+                in
+                [%ldebug "insert_call_below: START"];
+                let ok, e'' = insert_call_below fresh_vars e' in
+                if ok then Some e''.e else None)
+              else None
+            in
+            if Option.is_some e'' then Option.get e''
+            else
+              (* Attempt 1. didn't work: perform attempt 2. (see above) *)
+              let ok = ref true in
+              let updt_visitor2 =
+                object
+                  inherit [_] map_expression as super
 
-                    method! visit_Var env var_id =
-                      (* If we find a use of the backward function which was not
+                  method! visit_FVar env var_id =
+                    (* If we find a use of the backward function which was not
                          replaced then we set the [ok] boolean to false, meaning
                          we should not remove the call to the index function. *)
-                      if var_id = back_var.id then ok := false else ();
-                      super#visit_Var env var_id
+                    if var_id = back_var.id then ok := false else ();
+                    super#visit_FVar env var_id
 
-                    method! visit_Let env monadic' pat' e' e3 =
-                      (* Check if this is a call to the backward function*)
-                      match e'.e with
-                      | App (app, v)
-                        when is_result_ty e3.ty && is_call_to_back app ->
-                          super#visit_expression env
-                            (Let (true, pat', mk_call_to_update v, e3))
-                      | _ -> super#visit_Let env monadic' pat' e' e3
+                  method! visit_Let env monadic' pat' e' e3 =
+                    (* Check if this is a call to the backward function*)
+                    match e'.e with
+                    | App (app, v)
+                      when is_result_ty e3.ty && is_call_to_back app ->
+                        super#visit_expression env
+                          (Let (true, pat', mk_call_to_update v, e3))
+                    | _ -> super#visit_Let env monadic' pat' e' e3
 
-                    method! visit_App env app x =
-                      (* Look for: [ok (back x)] *)
-                      match app.e with
-                      | Qualif
-                          {
-                            id =
-                              AdtCons
-                                {
-                                  adt_id = TBuiltin TResult;
-                                  variant_id = Some variant_id;
-                                };
-                            _;
-                          }
-                        when variant_id = result_ok_id -> begin
-                          match x.e with
-                          | App (app, back_v) when is_call_to_back app ->
-                              (super#visit_texpression env
-                                 (mk_call_to_update back_v))
-                                .e
-                          | _ -> super#visit_App env app x
-                        end
-                      | _ -> super#visit_App env app x
-                  end
-                in
-                let e' = updt_visitor2#visit_texpression () e2 in
+                  method! visit_App env app x =
+                    (* Look for: [ok (back x)] *)
+                    match app.e with
+                    | Qualif
+                        {
+                          id =
+                            AdtCons
+                              {
+                                adt_id = TBuiltin TResult;
+                                variant_id = Some variant_id;
+                              };
+                          _;
+                        }
+                      when variant_id = result_ok_id -> begin
+                        match x.e with
+                        | App (app, back_v) when is_call_to_back app ->
+                            (super#visit_texpression env
+                               (mk_call_to_update back_v))
+                              .e
+                        | _ -> super#visit_App env app x
+                      end
+                    | _ -> super#visit_App env app x
+                end
+              in
+              let e' = updt_visitor2#visit_texpression () e2 in
 
-                (* Should we keep the change? *)
-                if !ok then (self#visit_texpression env e').e
-                else super#visit_Let env monadic pat e1 e2
-        | _ -> super#visit_Let env monadic pat e1 e2
-    end
-  in
-  let simplify (body : fun_body) : fun_body =
-    { body with body = visitor#visit_texpression () body.body }
-  in
-  { def with body = Option.map simplify def.body }
+              (* Should we keep the change? *)
+              if !ok then (self#visit_texpression env e').e
+              else super#visit_Let env monadic pat e1 e2
+      | _ -> super#visit_Let env monadic pat e1 e2
+  end
+
+let simplify_array_slice_update =
+  lift_expr_map_visitor simplify_array_slice_update_visitor
 
 (** Decompose let-bindings by introducing intermediate let-bindings.
 
@@ -2494,122 +2454,117 @@ let simplify_array_slice_update (ctx : ctx) (def : fun_decl) : fun_decl =
 
     [decompose_monadic]: always decompose a monadic let-binding
     [decompose_nested_pats]: decompose the nested patterns *)
+let decompose_let_bindings_visitor (decompose_monadic : bool)
+    (decompose_nested_pats : bool) (_ctx : ctx) (def : fun_decl) =
+  let span = def.item_meta.span in
+
+  (* Set up the var id generator *)
+  let mk_fresh (ty : ty) : typed_pattern * texpression =
+    let vid = fresh_fvar_id () in
+    let tmp : fvar = { id = vid; basename = None; ty } in
+    let ltmp = mk_typed_pattern_from_fvar tmp None in
+    let rtmp = mk_texpression_from_fvar tmp in
+    (ltmp, rtmp)
+  in
+
+  (* Utility function - returns the patterns to introduce, from the last to
+     the first.
+
+     For instance, if it returns:
+     {[
+       ([
+         ((x3, x4), x1);
+         ((x1, x2), tmp)
+       ],
+         (x0, tmp))
+     ]}
+     then we need to introduce:
+     {[
+       let (x0, tmp) = original_term in
+       let (x1, x2) = tmp in
+       let (x3, x4) = x1 in
+       ...
+     }]
+  *)
+  let decompose_pat (lv : typed_pattern) :
+      (typed_pattern * texpression) list * typed_pattern =
+    let patterns = ref [] in
+
+    (* We decompose patterns *inside* other patterns.
+       The boolean [inside] allows us to remember if we dived into a
+       pattern already *)
+    let visit_pats =
+      object
+        inherit [_] map_typed_pattern as super
+
+        method! visit_typed_pattern (inside : bool) (pat : typed_pattern) :
+            typed_pattern =
+          match pat.value with
+          | PatConstant _ | PatOpen _ | PatDummy -> pat
+          | PatBound _ -> [%internal_error] span
+          | PatAdt _ ->
+              if not inside then super#visit_typed_pattern true pat
+              else
+                let ltmp, rtmp = mk_fresh pat.ty in
+                let pat = super#visit_typed_pattern false pat in
+                patterns := (pat, rtmp) :: !patterns;
+                ltmp
+      end
+    in
+
+    let inside = false in
+    let lv = visit_pats#visit_typed_pattern inside lv in
+    (!patterns, lv)
+  in
+
+  (* It is a very simple map *)
+  object (self)
+    inherit [_] map_expression as super
+
+    method! visit_Let env monadic lv re next_e =
+      (* Decompose the monadic let-bindings *)
+      let monadic, lv, re, next_e =
+        if (not monadic) || not decompose_monadic then (monadic, lv, re, next_e)
+        else
+          (* If monadic, we need to check if the left-value is a variable:
+           * - if yes, don't decompose
+           * - if not, make the decomposition in two steps
+           *)
+          match lv.value with
+          | PatOpen _ | PatDummy ->
+              (* Variable: nothing to do *)
+              (monadic, lv, re, next_e)
+          | PatBound _ -> [%internal_error] span
+          | _ ->
+              (* Not a variable: decompose if required *)
+              (* Introduce a temporary variable to receive the value of the
+               * monadic binding *)
+              let ltmp, rtmp = mk_fresh lv.ty in
+              (* Visit the next expression *)
+              let next_e = self#visit_texpression env next_e in
+              (* Create the let-bindings *)
+              (monadic, ltmp, re, mk_open_let span false lv rtmp next_e)
+      in
+      (* Decompose the nested let-patterns *)
+      let lv, next_e =
+        if not decompose_nested_pats then (lv, next_e)
+        else
+          let pats, first_pat = decompose_pat lv in
+          let e =
+            List.fold_left
+              (fun next_e (lpat, rv) -> mk_open_let span false lpat rv next_e)
+              next_e pats
+          in
+          (first_pat, e)
+      in
+      (* Continue *)
+      super#visit_Let env monadic lv re next_e
+  end
+
 let decompose_let_bindings (decompose_monadic : bool)
-    (decompose_nested_pats : bool) (_ctx : ctx) (def : fun_decl) : fun_decl =
-  match def.body with
-  | None -> def
-  | Some body ->
-      (* Set up the var id generator *)
-      let cnt = get_body_min_var_counter body in
-      let _, fresh_id = LocalId.mk_stateful_generator cnt in
-      let mk_fresh (ty : ty) : typed_pattern * texpression =
-        let vid = fresh_id () in
-        let tmp : var = { id = vid; basename = None; ty } in
-        let ltmp = mk_typed_pattern_from_var tmp None in
-        let rtmp = mk_texpression_from_var tmp in
-        (ltmp, rtmp)
-      in
-
-      (* Utility function - returns the patterns to introduce, from the last to
-         the first.
-
-         For instance, if it returns:
-         {[
-           ([
-              ((x3, x4), x1);
-              ((x1, x2), tmp)
-            ],
-            (x0, tmp))
-         ]}
-         then we need to introduce:
-         {[
-           let (x0, tmp) = original_term in
-           let (x1, x2) = tmp in
-           let (x3, x4) = x1 in
-           ...
-         }]
-      *)
-      let decompose_pat (lv : typed_pattern) :
-          (typed_pattern * texpression) list * typed_pattern =
-        let patterns = ref [] in
-
-        (* We decompose patterns *inside* other patterns.
-           The boolean [inside] allows us to remember if we dived into a
-           pattern already *)
-        let visit_pats =
-          object
-            inherit [_] map_typed_pattern as super
-
-            method! visit_typed_pattern (inside : bool) (pat : typed_pattern) :
-                typed_pattern =
-              match pat.value with
-              | PatConstant _ | PatVar _ | PatDummy -> pat
-              | PatAdt _ ->
-                  if not inside then super#visit_typed_pattern true pat
-                  else
-                    let ltmp, rtmp = mk_fresh pat.ty in
-                    let pat = super#visit_typed_pattern false pat in
-                    patterns := (pat, rtmp) :: !patterns;
-                    ltmp
-          end
-        in
-
-        let inside = false in
-        let lv = visit_pats#visit_typed_pattern inside lv in
-        (!patterns, lv)
-      in
-
-      (* It is a very simple map *)
-      let visit_lets =
-        object (self)
-          inherit [_] map_expression as super
-
-          method! visit_Let env monadic lv re next_e =
-            (* Decompose the monadic let-bindings *)
-            let monadic, lv, re, next_e =
-              if (not monadic) || not decompose_monadic then
-                (monadic, lv, re, next_e)
-              else
-                (* If monadic, we need to check if the left-value is a variable:
-                 * - if yes, don't decompose
-                 * - if not, make the decomposition in two steps
-                 *)
-                match lv.value with
-                | PatVar _ | PatDummy ->
-                    (* Variable: nothing to do *)
-                    (monadic, lv, re, next_e)
-                | _ ->
-                    (* Not a variable: decompose if required *)
-                    (* Introduce a temporary variable to receive the value of the
-                     * monadic binding *)
-                    let ltmp, rtmp = mk_fresh lv.ty in
-                    (* Visit the next expression *)
-                    let next_e = self#visit_texpression env next_e in
-                    (* Create the let-bindings *)
-                    (monadic, ltmp, re, mk_let false lv rtmp next_e)
-            in
-            (* Decompose the nested let-patterns *)
-            let lv, next_e =
-              if not decompose_nested_pats then (lv, next_e)
-              else
-                let pats, first_pat = decompose_pat lv in
-                let e =
-                  List.fold_left
-                    (fun next_e (lpat, rv) -> mk_let false lpat rv next_e)
-                    next_e pats
-                in
-                (first_pat, e)
-            in
-            (* Continue *)
-            super#visit_Let env monadic lv re next_e
-        end
-      in
-      (* Update the body *)
-      let body =
-        Some { body with body = visit_lets#visit_texpression () body.body }
-      in
-      (* Return *)
-      { def with body }
+    (decompose_nested_pats : bool) =
+  lift_expr_map_visitor
+    (decompose_let_bindings_visitor decompose_monadic decompose_nested_pats)
 
 (** Decompose monadic let-bindings.
 
@@ -2624,72 +2579,60 @@ let decompose_nested_let_patterns (ctx : ctx) (def : fun_decl) : fun_decl =
   decompose_let_bindings false true ctx def
 
 (** Unfold the monadic let-bindings to explicit matches. *)
-let unfold_monadic_let_bindings (_ctx : ctx) (def : fun_decl) : fun_decl =
-  match def.body with
-  | None -> def
-  | Some body ->
-      let cnt = get_body_min_var_counter body in
-      let _, fresh_id = LocalId.mk_stateful_generator cnt in
+let unfold_monadic_let_bindings_visitors (_ctx : ctx) (def : fun_decl) =
+  (* It is a very simple map *)
+  object (_self)
+    inherit [_] map_expression as super
 
-      (* It is a very simple map *)
-      let obj =
-        object (_self)
-          inherit [_] map_expression as super
+    method! visit_Let env monadic lv re e =
+      (* We simply do the following transformation:
+         {[
+           pat <-- re; e
 
-          method! visit_Let env monadic lv re e =
-            (* We simply do the following transformation:
-               {[
-                 pat <-- re; e
+             ~~>
 
-                     ~~>
+             match re with
+             | Fail err -> Fail err
+             | Return pat -> e
+         ]}
+      *)
+      (* TODO: we should use a monad "kind" instead of a boolean *)
+      if not monadic then super#visit_Let env monadic lv re e
+      else
+        (* We don't do the same thing if we use a state-error monad or simply
+           an error monad.
+           Note that some functions always live in the error monad (arithmetic
+           operations, for instance).
+        *)
+        (* TODO: this information should be computed in SymbolicToPure and
+         * store in an enum ("monadic" should be an enum, not a bool). *)
+        let re_ty = Option.get (opt_destruct_result def.item_meta.span re.ty) in
+        [%sanity_check] def.item_meta.span (lv.ty = re_ty);
+        let err_vid = fresh_fvar_id () in
+        let err_var : fvar =
+          {
+            id = err_vid;
+            basename = Some ConstStrings.error_basename;
+            ty = mk_error_ty;
+          }
+        in
+        let err_pat = mk_typed_pattern_from_fvar err_var None in
+        let fail_pat = mk_result_fail_pattern err_pat.value lv.ty in
+        let err_v = mk_texpression_from_fvar err_var in
+        let fail_value =
+          mk_result_fail_texpression def.item_meta.span err_v e.ty
+        in
+        let fail_branch = { pat = fail_pat; branch = fail_value } in
+        let success_pat = mk_result_ok_pattern lv in
+        let success_branch = { pat = success_pat; branch = e } in
+        let switch_body = Match [ fail_branch; success_branch ] in
+        let e = Switch (re, switch_body) in
+        (* Continue *)
+        super#visit_expression env e
+  end
 
-                 match re with
-                 | Fail err -> Fail err
-                 | Return pat -> e
-               ]}
-            *)
-            (* TODO: we should use a monad "kind" instead of a boolean *)
-            if not monadic then super#visit_Let env monadic lv re e
-            else
-              (* We don't do the same thing if we use a state-error monad or simply
-                 an error monad.
-                 Note that some functions always live in the error monad (arithmetic
-                 operations, for instance).
-              *)
-              (* TODO: this information should be computed in SymbolicToPure and
-               * store in an enum ("monadic" should be an enum, not a bool). *)
-              let re_ty =
-                Option.get (opt_destruct_result def.item_meta.span re.ty)
-              in
-              [%sanity_check] def.item_meta.span (lv.ty = re_ty);
-              let err_vid = fresh_id () in
-              let err_var : var =
-                {
-                  id = err_vid;
-                  basename = Some ConstStrings.error_basename;
-                  ty = mk_error_ty;
-                }
-              in
-              let err_pat = mk_typed_pattern_from_var err_var None in
-              let fail_pat = mk_result_fail_pattern err_pat.value lv.ty in
-              let err_v = mk_texpression_from_var err_var in
-              let fail_value =
-                mk_result_fail_texpression def.item_meta.span err_v e.ty
-              in
-              let fail_branch = { pat = fail_pat; branch = fail_value } in
-              let success_pat = mk_result_ok_pattern lv in
-              let success_branch = { pat = success_pat; branch = e } in
-              let switch_body = Match [ fail_branch; success_branch ] in
-              let e = Switch (re, switch_body) in
-              (* Continue *)
-              super#visit_expression env e
-        end
-      in
-      (* Update the body *)
-      let body_e = obj#visit_texpression () body.body in
-      let body = { body with body = body_e } in
-      (* Return *)
-      { def with body = Some body }
+let unfold_monadic_let_bindings =
+  lift_expr_map_visitor unfold_monadic_let_bindings_visitors
 
 (** Perform the following transformation:
 
@@ -2704,7 +2647,7 @@ let unfold_monadic_let_bindings (_ctx : ctx) (def : fun_decl) : fun_decl =
     We only do this on a specific set of pure functions calls - those functions
     are identified in the "builtin" information about external function calls.
 *)
-let lift_pure_function_calls (ctx : ctx) (def : fun_decl) : fun_decl =
+let lift_pure_function_calls_visitor (ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
 
   let try_lift_expr (super_visit_e : texpression -> texpression)
@@ -2727,56 +2670,46 @@ let lift_pure_function_calls (ctx : ctx) (def : fun_decl) : fun_decl =
   in
 
   (* The map visitor *)
-  let visitor =
-    object (self)
-      inherit [_] map_expression as super
+  object (self)
+    inherit [_] map_expression as super
 
-      method! visit_texpression env e0 =
-        (* Check if this is an expression of the shape: [ok (f ...)] where
+    method! visit_texpression env e0 =
+      (* Check if this is an expression of the shape: [ok (f ...)] where
            `f` has been identified as a function which should be lifted. *)
-        match destruct_apps e0 with
-        | ( ({ e = Qualif { id = FunOrOp (Fun (Pure ToResult)); _ }; _ } as
-             to_result_expr),
-            [ app ] ) ->
-            (* Attempt to lift the expression *)
-            let lifted, app =
+      match destruct_apps e0 with
+      | ( ({ e = Qualif { id = FunOrOp (Fun (Pure ToResult)); _ }; _ } as
+           to_result_expr),
+          [ app ] ) ->
+          (* Attempt to lift the expression *)
+          let lifted, app =
+            try_lift_expr
+              (super#visit_texpression env)
+              (self#visit_texpression env)
+              app
+          in
+
+          if lifted then app else mk_app span to_result_expr app
+      | { e = Let (monadic, pat, bound, next); ty }, [] ->
+          let next = self#visit_texpression env next in
+          (* Attempt to lift only if the let-expression is not already monadic *)
+          let lifted, bound =
+            if monadic then (true, self#visit_texpression env bound)
+            else
               try_lift_expr
                 (super#visit_texpression env)
                 (self#visit_texpression env)
-                app
-            in
+                bound
+          in
+          { e = Let (lifted, pat, bound, next); ty }
+      | f, args ->
+          let f = super#visit_texpression env f in
+          let args = List.map (self#visit_texpression env) args in
+          mk_apps span f args
+  end
 
-            if lifted then app else mk_app span to_result_expr app
-        | { e = Let (monadic, pat, bound, next); ty }, [] ->
-            let next = self#visit_texpression env next in
-            (* Attempt to lift only if the let-expression is not already monadic *)
-            let lifted, bound =
-              if monadic then (true, self#visit_texpression env bound)
-              else
-                try_lift_expr
-                  (super#visit_texpression env)
-                  (self#visit_texpression env)
-                  bound
-            in
-            { e = Let (lifted, pat, bound, next); ty }
-        | f, args ->
-            let f = super#visit_texpression env f in
-            let args = List.map (self#visit_texpression env) args in
-            mk_apps span f args
-    end
-  in
-  (* Update the body *)
-  match def.body with
-  | None -> def
-  | Some body ->
-      let body =
-        Some
-          {
-            body with
-            body = visitor#visit_texpression LocalId.Map.empty body.body;
-          }
-      in
-      { def with body }
+let lift_pure_function_calls =
+  lift_expr_map_visitor_with_state lift_pure_function_calls_visitor
+    FVarId.Map.empty
 
 (** Perform the following transformation:
 
@@ -2792,74 +2725,63 @@ let lift_pure_function_calls (ctx : ctx) (def : fun_decl) : fun_decl =
       let (a, b) <-- f x
       ...
     ]} *)
-let merge_let_app_then_decompose_tuple (_ctx : ctx) (def : fun_decl) : fun_decl
-    =
+let merge_let_app_then_decompose_tuple_visitor (_ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
-  (* We may need to introduce fresh variables *)
-  let var_cnt = get_opt_body_min_var_counter def.body in
-  let _, fresh_var_id = LocalId.mk_stateful_generator var_cnt in
+  object (self)
+    inherit [_] map_expression
 
-  let visitor =
-    object (self)
-      inherit [_] map_expression
-
-      method! visit_Let env monadic0 pat0 bound0 next0 =
-        let bound0 = self#visit_texpression env bound0 in
-        (* Check if we need to merge two let-bindings *)
-        if is_pat_var pat0 then
-          let var0, _ = as_pat_var span pat0 in
-          match next0.e with
-          | Let (false, pat1, { e = Var var_id; _ }, next1)
-            when var_id = var0.id -> begin
-              (* Check if we are decomposing a tuple *)
-              if is_pat_tuple pat1 then
-                (* Introduce fresh variables for all the dummy variables
+    method! visit_Let env monadic0 pat0 bound0 next0 =
+      let bound0 = self#visit_texpression env bound0 in
+      (* Check if we need to merge two let-bindings *)
+      if is_pat_open pat0 then
+        let var0, _ = as_pat_open span pat0 in
+        match next0.e with
+        | Let (false, pat1, { e = FVar var_id; _ }, next1) when var_id = var0.id
+          -> begin
+            (* Check if we are decomposing a tuple *)
+            if is_pat_tuple pat1 then
+              (* Introduce fresh variables for all the dummy variables
                    to make sure we can turn the pattern into an expression *)
-                let pat1 = typed_pattern_replace_dummy_vars fresh_var_id pat1 in
-                let pat1_expr =
-                  Option.get (typed_pattern_to_texpression span pat1)
-                in
-                (* Register the mapping from the variable we remove to the expression *)
-                let env = LocalId.Map.add var0.id pat1_expr env in
-                (* Continue *)
-                let next1 = self#visit_texpression env next1 in
-                Let (monadic0, pat1, bound0, next1)
-              else
-                let next0 = self#visit_texpression env next0 in
-                Let (monadic0, pat0, bound0, next0)
-            end
-          | _ ->
+              let pat1 =
+                typed_pattern_replace_dummy_vars_with_free_vars fresh_fvar_id
+                  pat1
+              in
+              let pat1_expr =
+                Option.get (typed_pattern_to_texpression span pat1)
+              in
+              (* Register the mapping from the variable we remove to the expression *)
+              let env = FVarId.Map.add var0.id pat1_expr env in
+              (* Continue *)
+              let next1 = self#visit_texpression env next1 in
+              Let (monadic0, pat1, bound0, next1)
+            else
               let next0 = self#visit_texpression env next0 in
               Let (monadic0, pat0, bound0, next0)
-        else
-          let next0 = self#visit_texpression env next0 in
-          Let (monadic0, pat0, bound0, next0)
+          end
+        | _ ->
+            let next0 = self#visit_texpression env next0 in
+            Let (monadic0, pat0, bound0, next0)
+      else
+        let next0 = self#visit_texpression env next0 in
+        Let (monadic0, pat0, bound0, next0)
 
-      (* Replace the variables *)
-      method! visit_Var env var_id =
-        match LocalId.Map.find_opt var_id env with
-        | None -> Var var_id
-        | Some e -> e.e
-    end
-  in
+    (* Replace the variables *)
+    method! visit_FVar env var_id =
+      match FVarId.Map.find_opt var_id env with
+      | None -> FVar var_id
+      | Some e -> e.e
+  end
 
-  match def.body with
-  | None -> def
-  | Some body ->
-      let body =
-        {
-          body with
-          body = visitor#visit_texpression LocalId.Map.empty body.body;
-        }
-      in
-      { def with body = Some body }
+let merge_let_app_then_decompose_tuple =
+  lift_expr_map_visitor_with_state merge_let_app_then_decompose_tuple_visitor
+    FVarId.Map.empty
 
 let end_passes : (bool ref option * string * (ctx -> fun_decl -> fun_decl)) list
     =
   [
     (* Convert the unit variables to [()] if they are used as right-values or
      * [_] if they are used as left values. *)
-    (None, "unit_vars_to_unit", fun _ -> unit_vars_to_unit);
+    (None, "unit_vars_to_unit", unit_vars_to_unit);
     (* Introduce [massert] - we do this early because it makes the AST nicer to
        read by removing indentation. *)
     (Some Config.intro_massert, "intro_massert", intro_massert);
@@ -2998,6 +2920,262 @@ end
 
 module FunLoopIdMap = Collections.MakeMap (FunLoopIdOrderedType)
 
+(** Helper for [filter_loop_inputs].
+
+    Explore one loop body and compute the used information. *)
+let filter_loop_inputs_explor_one_visitor (ctx : ctx)
+    (used_map : bool list FunLoopIdMap.t ref) (decl : fun_decl) =
+  let span = decl.item_meta.span in
+  (* There should be a body *)
+  let body = Option.get decl.body in
+  (* We only look at the forward inputs, without the state *)
+  let inputs_prefix, _ =
+    Collections.List.split_at body.inputs
+      decl.signature.fwd_info.fwd_info.num_inputs_with_fuel_no_state
+  in
+  let used =
+    ref
+      (List.map (fun v -> ((fst (as_pat_open span v)).id, false)) inputs_prefix)
+  in
+  let inputs_prefix_length = List.length inputs_prefix in
+  let inputs =
+    List.map
+      (fun v ->
+        let v, _ = as_pat_open span v in
+        (v.id, mk_texpression_from_fvar v))
+      inputs_prefix
+  in
+  [%ltrace
+    "inputs:\n"
+    ^ String.concat ", " (List.map (typed_pattern_to_string ctx) inputs_prefix)];
+  let inputs_set =
+    FVarId.Set.of_list
+      (List.map
+         (fun x ->
+           let x, _ = as_pat_open span x in
+           x.id)
+         inputs_prefix)
+  in
+  [%sanity_check] decl.item_meta.span (Option.is_some decl.loop_id);
+
+  let fun_id = (T.FRegular decl.def_id, decl.loop_id) in
+
+  let set_used (vid : fvar_id) =
+    used := List.map (fun (vid', b) -> (vid', b || vid = vid')) !used
+  in
+
+  (* Set the fuel as used *)
+  let sg_info = decl.signature.fwd_info in
+  if sg_info.fwd_info.has_fuel then
+    set_used (fst (Collections.List.nth inputs 0));
+
+  let visitor =
+    object (self : 'self)
+      inherit [_] iter_expression as super
+
+      (** Override the expression visitor, to look for loop function calls *)
+      method! visit_texpression env e =
+        match e.e with
+        | App _ -> (
+            (* If this is an app: destruct all the arguments, and check if
+                 the leftmost expression is the loop function call *)
+            let e_app, args = destruct_apps e in
+            match e_app.e with
+            | Qualif qualif -> (
+                match qualif.id with
+                | FunOrOp (Fun (FromLlbc (FunId fun_id', loop_id'))) ->
+                    if (fun_id', loop_id') = fun_id then (
+                      (* For each argument, check if it is exactly the original
+                       input parameter. Note that there shouldn't be partial
+                       applications of loop functions: the number of arguments
+                       should be exactly the number of input parameters (i.e.,
+                       we can use [combine])
+                    *)
+                      let beg_args, end_args =
+                        Collections.List.split_at args inputs_prefix_length
+                      in
+                      [%ltrace
+                        "beg_args:\n"
+                        ^ String.concat ", "
+                            (List.map (texpression_to_string ctx) beg_args)];
+                      let used_args = List.combine inputs beg_args in
+                      List.iter
+                        (fun ((vid, var), arg) ->
+                          if var <> arg then (
+                            self#visit_texpression env arg;
+                            set_used vid))
+                        used_args;
+                      List.iter (self#visit_texpression env) end_args)
+                    else super#visit_texpression env e
+                | _ -> super#visit_texpression env e)
+            | _ -> super#visit_texpression env e)
+        | _ -> super#visit_texpression env e
+
+      (** If we visit a variable which is actually an input parameter, we set it
+          as used. Note that we take care of ignoring some of those input
+          parameters given in [visit_texpression]. *)
+      method! visit_fvar_id _ id =
+        if FVarId.Set.mem id inputs_set then set_used id
+    end
+  in
+
+  (* Apply the visitor to the body *)
+  iter_open_fun_decl_body
+    (fun (fb : fun_body) -> visitor#visit_texpression () fb.body)
+    decl;
+
+  [%ltrace
+    "- used variables: "
+    ^ String.concat ", "
+        (List.map (Print.pair_to_string FVarId.to_string string_of_bool) !used)];
+
+  (* Save the filtering information, if there is anything to filter *)
+  if List.exists (fun (_, b) -> not b) !used then
+    let used = List.map snd !used in
+    let used =
+      match FunLoopIdMap.find_opt fun_id !used_map with
+      | None -> used
+      | Some used0 ->
+          List.map (fun (b0, b1) -> b0 || b1) (List.combine used0 used)
+    in
+    used_map := FunLoopIdMap.add fun_id used !used_map
+
+(** Helper for [filter_loop_inputs].
+
+    Filter the inputs in one loop declaration. *)
+let filter_loop_inputs_filter_in_one (_ctx : ctx)
+    (used_map : bool list FunLoopIdMap.t) (decl : fun_decl) : fun_decl =
+  (* Filter the function signature *)
+  let fun_id = (T.FRegular decl.def_id, decl.loop_id) in
+  let decl =
+    match FunLoopIdMap.find_opt fun_id used_map with
+    | None -> (* Nothing to filter *) decl
+    | Some used_info ->
+        let num_filtered =
+          List.length (List.filter (fun b -> not b) used_info)
+        in
+        let {
+          generics;
+          explicit_info = _;
+          known_from_trait_refs = _;
+          llbc_generics;
+          preds;
+          inputs;
+          output;
+          fwd_info;
+          back_effect_info;
+        } =
+          decl.signature
+        in
+        let { fwd_info; effect_info; ignore_output } = fwd_info in
+
+        let {
+          has_fuel;
+          num_inputs_no_fuel_no_state;
+          num_inputs_with_fuel_no_state;
+          num_inputs_with_fuel_with_state;
+        } =
+          fwd_info
+        in
+
+        let inputs = filter_prefix used_info inputs in
+
+        let fwd_info =
+          {
+            has_fuel;
+            num_inputs_no_fuel_no_state =
+              num_inputs_no_fuel_no_state - num_filtered;
+            num_inputs_with_fuel_no_state =
+              num_inputs_with_fuel_no_state - num_filtered;
+            num_inputs_with_fuel_with_state =
+              num_inputs_with_fuel_with_state - num_filtered;
+          }
+        in
+
+        let fwd_info = { fwd_info; effect_info; ignore_output } in
+        [%sanity_check] decl.item_meta.span (fun_sig_info_is_wf fwd_info);
+        let explicit_info = compute_explicit_info generics inputs in
+        let known_from_trait_refs = compute_known_info explicit_info generics in
+        let signature =
+          {
+            generics;
+            explicit_info;
+            known_from_trait_refs;
+            llbc_generics;
+            preds;
+            inputs;
+            output;
+            fwd_info;
+            back_effect_info;
+          }
+        in
+
+        { decl with signature }
+  in
+
+  (* Filter the function body *)
+  let filter_in_body (body : fun_body) : fun_body =
+    (* Update the list of vars *)
+    let { inputs; body } = body in
+
+    let inputs =
+      match FunLoopIdMap.find_opt fun_id used_map with
+      | None -> (* Nothing to filter *) inputs
+      | Some used_info ->
+          let inputs = filter_prefix used_info inputs in
+          inputs
+    in
+
+    (* Update the body expression *)
+    let visitor =
+      object (self)
+        inherit [_] map_expression as super
+
+        method! visit_texpression env e =
+          match e.e with
+          | App _ -> (
+              let e_app, args = destruct_apps e in
+              match e_app.e with
+              | Qualif qualif -> (
+                  match qualif.id with
+                  | FunOrOp (Fun (FromLlbc (FunId fun_id, loop_id))) -> (
+                      match
+                        FunLoopIdMap.find_opt (fun_id, loop_id) used_map
+                      with
+                      | None -> super#visit_texpression env e
+                      | Some used_info ->
+                          (* Filter the types in the arrow type *)
+                          let tys, ret_ty = destruct_arrows e_app.ty in
+                          let tys = filter_prefix used_info tys in
+                          let ty = mk_arrows tys ret_ty in
+                          let e_app = { e_app with ty } in
+
+                          (* Filter the arguments *)
+                          let args = filter_prefix used_info args in
+
+                          (* Explore the arguments *)
+                          let args =
+                            List.map (self#visit_texpression env) args
+                          in
+
+                          (* Rebuild *)
+                          mk_apps decl.item_meta.span e_app args)
+                  | _ ->
+                      let e_app = self#visit_texpression env e_app in
+                      let args = List.map (self#visit_texpression env) args in
+                      mk_apps decl.item_meta.span e_app args)
+              | _ ->
+                  let e_app = self#visit_texpression env e_app in
+                  let args = List.map (self#visit_texpression env) args in
+                  mk_apps decl.item_meta.span e_app args)
+          | _ -> super#visit_texpression env e
+      end
+    in
+    let body = visitor#visit_texpression () body in
+    { inputs; body }
+  in
+  map_open_fun_decl_body filter_in_body decl
+
 (** Filter the useless loop input parameters. *)
 let filter_loop_inputs (ctx : ctx) (transl : pure_fun_translation list) :
     pure_fun_translation list =
@@ -3032,110 +3210,9 @@ let filter_loop_inputs (ctx : ctx) (transl : pure_fun_translation list) :
      for the loop forward *and* the loop backward functions.
   *)
   (* The [filtered] map: maps function identifiers to filtering information. *)
-  let used_map = ref FunLoopIdMap.empty in
+  let used_map : bool list FunLoopIdMap.t ref = ref FunLoopIdMap.empty in
 
   (* We start by computing the filtering information, for each function *)
-  let compute_one_filter_info (decl : fun_decl) =
-    (* There should be a body *)
-    let body = Option.get decl.body in
-    (* We only look at the forward inputs, without the state *)
-    let inputs_prefix, _ =
-      Collections.List.split_at body.inputs
-        decl.signature.fwd_info.fwd_info.num_inputs_with_fuel_no_state
-    in
-    let used = ref (List.map (fun v -> (var_get_id v, false)) inputs_prefix) in
-    let inputs_prefix_length = List.length inputs_prefix in
-    let inputs =
-      List.map
-        (fun v -> (var_get_id v, mk_texpression_from_var v))
-        inputs_prefix
-    in
-    [%ltrace
-      "inputs:\n"
-      ^ String.concat ", " (List.map (var_to_string ctx) inputs_prefix)];
-    let inputs_set = LocalId.Set.of_list (List.map var_get_id inputs_prefix) in
-    [%sanity_check] decl.item_meta.span (Option.is_some decl.loop_id);
-
-    let fun_id = (T.FRegular decl.def_id, decl.loop_id) in
-
-    let set_used vid =
-      used := List.map (fun (vid', b) -> (vid', b || vid = vid')) !used
-    in
-
-    (* Set the fuel as used *)
-    let sg_info = decl.signature.fwd_info in
-    if sg_info.fwd_info.has_fuel then
-      set_used (fst (Collections.List.nth inputs 0));
-
-    let visitor =
-      object (self : 'self)
-        inherit [_] iter_expression as super
-
-        (** Override the expression visitor, to look for loop function calls *)
-        method! visit_texpression env e =
-          match e.e with
-          | App _ -> (
-              (* If this is an app: destruct all the arguments, and check if
-                 the leftmost expression is the loop function call *)
-              let e_app, args = destruct_apps e in
-              match e_app.e with
-              | Qualif qualif -> (
-                  match qualif.id with
-                  | FunOrOp (Fun (FromLlbc (FunId fun_id', loop_id'))) ->
-                      if (fun_id', loop_id') = fun_id then (
-                        (* For each argument, check if it is exactly the original
-                           input parameter. Note that there shouldn't be partial
-                           applications of loop functions: the number of arguments
-                           should be exactly the number of input parameters (i.e.,
-                           we can use [combine])
-                        *)
-                        let beg_args, end_args =
-                          Collections.List.split_at args inputs_prefix_length
-                        in
-                        [%ltrace
-                          "beg_args:\n"
-                          ^ String.concat ", "
-                              (List.map (texpression_to_string ctx) beg_args)];
-                        let used_args = List.combine inputs beg_args in
-                        List.iter
-                          (fun ((vid, var), arg) ->
-                            if var <> arg then (
-                              self#visit_texpression env arg;
-                              set_used vid))
-                          used_args;
-                        List.iter (self#visit_texpression env) end_args)
-                      else super#visit_texpression env e
-                  | _ -> super#visit_texpression env e)
-              | _ -> super#visit_texpression env e)
-          | _ -> super#visit_texpression env e
-
-        (** If we visit a variable which is actually an input parameter, we set
-            it as used. Note that we take care of ignoring some of those input
-            parameters given in [visit_texpression]. *)
-        method! visit_local_id _ id =
-          if LocalId.Set.mem id inputs_set then set_used id
-      end
-    in
-    visitor#visit_texpression () body.body;
-
-    [%ltrace
-      "- used variables: "
-      ^ String.concat ", "
-          (List.map
-             (Print.pair_to_string LocalId.to_string string_of_bool)
-             !used)];
-
-    (* Save the filtering information, if there is anything to filter *)
-    if List.exists (fun (_, b) -> not b) !used then
-      let used = List.map snd !used in
-      let used =
-        match FunLoopIdMap.find_opt fun_id !used_map with
-        | None -> used
-        | Some used0 ->
-            List.map (fun (b0, b1) -> b0 || b1) (List.combine used0 used)
-      in
-      used_map := FunLoopIdMap.add fun_id used !used_map
-  in
   List.iter
     (fun (_, fl) ->
       match fl with
@@ -3144,153 +3221,16 @@ let filter_loop_inputs (ctx : ctx) (transl : pure_fun_translation list) :
              case, explore it. *)
           [%ltrace "singleton:\n\n" ^ fun_decl_to_string ctx f];
 
-          if Option.is_some f.loop_id then compute_one_filter_info f else ()
+          if Option.is_some f.loop_id then
+            filter_loop_inputs_explor_one_visitor ctx used_map f
+          else ()
       | _ ->
           (* Group of mutually recursive functions: ignore for now *)
           ())
     subgroups;
 
   (* We then apply the filtering to all the function definitions at once *)
-  let filter_in_one (decl : fun_decl) : fun_decl =
-    (* Filter the function signature *)
-    let fun_id = (T.FRegular decl.def_id, decl.loop_id) in
-    let decl =
-      match FunLoopIdMap.find_opt fun_id !used_map with
-      | None -> (* Nothing to filter *) decl
-      | Some used_info ->
-          let num_filtered =
-            List.length (List.filter (fun b -> not b) used_info)
-          in
-          let {
-            generics;
-            explicit_info = _;
-            known_from_trait_refs = _;
-            llbc_generics;
-            preds;
-            inputs;
-            output;
-            fwd_info;
-            back_effect_info;
-          } =
-            decl.signature
-          in
-          let { fwd_info; effect_info; ignore_output } = fwd_info in
-
-          let {
-            has_fuel;
-            num_inputs_no_fuel_no_state;
-            num_inputs_with_fuel_no_state;
-            num_inputs_with_fuel_with_state;
-          } =
-            fwd_info
-          in
-
-          let inputs = filter_prefix used_info inputs in
-
-          let fwd_info =
-            {
-              has_fuel;
-              num_inputs_no_fuel_no_state =
-                num_inputs_no_fuel_no_state - num_filtered;
-              num_inputs_with_fuel_no_state =
-                num_inputs_with_fuel_no_state - num_filtered;
-              num_inputs_with_fuel_with_state =
-                num_inputs_with_fuel_with_state - num_filtered;
-            }
-          in
-
-          let fwd_info = { fwd_info; effect_info; ignore_output } in
-          [%sanity_check] decl.item_meta.span (fun_sig_info_is_wf fwd_info);
-          let explicit_info = compute_explicit_info generics inputs in
-          let known_from_trait_refs =
-            compute_known_info explicit_info generics
-          in
-          let signature =
-            {
-              generics;
-              explicit_info;
-              known_from_trait_refs;
-              llbc_generics;
-              preds;
-              inputs;
-              output;
-              fwd_info;
-              back_effect_info;
-            }
-          in
-
-          { decl with signature }
-    in
-
-    (* Filter the function body *)
-    let body =
-      match decl.body with
-      | None -> None
-      | Some body ->
-          (* Update the list of vars *)
-          let { inputs; inputs_lvs; body } = body in
-
-          let inputs, inputs_lvs =
-            match FunLoopIdMap.find_opt fun_id !used_map with
-            | None -> (* Nothing to filter *) (inputs, inputs_lvs)
-            | Some used_info ->
-                let inputs = filter_prefix used_info inputs in
-                let inputs_lvs = filter_prefix used_info inputs_lvs in
-                (inputs, inputs_lvs)
-          in
-
-          (* Update the body expression *)
-          let visitor =
-            object (self)
-              inherit [_] map_expression as super
-
-              method! visit_texpression env e =
-                match e.e with
-                | App _ -> (
-                    let e_app, args = destruct_apps e in
-                    match e_app.e with
-                    | Qualif qualif -> (
-                        match qualif.id with
-                        | FunOrOp (Fun (FromLlbc (FunId fun_id, loop_id))) -> (
-                            match
-                              FunLoopIdMap.find_opt (fun_id, loop_id) !used_map
-                            with
-                            | None -> super#visit_texpression env e
-                            | Some used_info ->
-                                (* Filter the types in the arrow type *)
-                                let tys, ret_ty = destruct_arrows e_app.ty in
-                                let tys = filter_prefix used_info tys in
-                                let ty = mk_arrows tys ret_ty in
-                                let e_app = { e_app with ty } in
-
-                                (* Filter the arguments *)
-                                let args = filter_prefix used_info args in
-
-                                (* Explore the arguments *)
-                                let args =
-                                  List.map (self#visit_texpression env) args
-                                in
-
-                                (* Rebuild *)
-                                mk_apps decl.item_meta.span e_app args)
-                        | _ ->
-                            let e_app = self#visit_texpression env e_app in
-                            let args =
-                              List.map (self#visit_texpression env) args
-                            in
-                            mk_apps decl.item_meta.span e_app args)
-                    | _ ->
-                        let e_app = self#visit_texpression env e_app in
-                        let args = List.map (self#visit_texpression env) args in
-                        mk_apps decl.item_meta.span e_app args)
-                | _ -> super#visit_texpression env e
-            end
-          in
-          let body = visitor#visit_texpression () body in
-          Some { inputs; inputs_lvs; body }
-    in
-    { decl with body }
-  in
+  let filter_in_one = filter_loop_inputs_filter_in_one ctx !used_map in
   let transl =
     List.map
       (fun f ->
@@ -3334,9 +3274,9 @@ let compute_reducible (_ctx : ctx) (transl : pure_fun_translation list) :
 (** Apply all the micro-passes to a function.
 
     As loops are initially directly integrated into the function definition,
-    {!apply_passes_to_def} extracts those loops definitions from the body; it
-    thus returns the pair: (function def, loop defs). See {!decompose_loops} for
-    more information.
+    {!apply_passes_to_def extracts those loops definitions from the body; it
+    thus returns the pair: (function def, loop defs). See {!decompose_loops}
+    for more information.
 
     [ctx]: used only for printing. *)
 let apply_passes_to_def (ctx : ctx) (def : fun_decl) : fun_and_loops =
@@ -3422,7 +3362,8 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
 
   let rec visit (ty : ty) (e : texpression) : texpression =
     match e.e with
-    | Var _ | CVar _ | Const _ | EError _ | Qualif _ -> e
+    | FVar _ | CVar _ | Const _ | EError _ | Qualif _ -> e
+    | BVar _ -> [%internal_error] span
     | App _ -> visit_App ty e
     | Lambda (pat, e') ->
         (* Decompose the type *)
@@ -3684,10 +3625,11 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
               (* Being conservative here *)
               (hole, mk_holes (), false)
         end
-      | Var _ ->
+      | FVar _ ->
           (* We consider that the full type of the function should be known,
              so the type of the arguments should be known *)
           (f.ty, mk_known (), false)
+      | BVar _ -> [%internal_error] span
       | _ ->
           (* Being conservative: the type is unknown (we actually shouldn't
              get here) *)
@@ -3714,18 +3656,9 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
   in
 
   (* Update the body *)
-  match def.body with
-  | None -> def
-  | Some body ->
-      let body =
-        Some
-          {
-            body with
-            (* Note that the type is originally known *)
-            body = visit body.body.ty body.body;
-          }
-      in
-      { def with body }
+  map_open_fun_decl_body_expr
+    (fun (body : texpression) -> visit body.ty body)
+    def
 
 (** Introduce type annotations.
 
