@@ -1304,7 +1304,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
             let pat_ty = scrutinee.ty in
             let pat = mk_adt_pattern pat_ty variant_id vars in
             let branch = translate_expression branch ctx in
-            { pat; branch }
+            close_branch ctx.span pat branch
           in
           let branches =
             List.map (fun (vid, svl, e) -> translate_branch vid svl e) branches
@@ -1352,7 +1352,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
            new values/variables *)
         let branch = translate_expression branch_e ctx in
         let pat = mk_typed_pattern_from_literal (VScalar v) in
-        { pat; branch }
+        close_branch ctx.span pat branch
       in
       let branches = List.map translate_branch branches in
       let otherwise = translate_expression otherwise ctx in
