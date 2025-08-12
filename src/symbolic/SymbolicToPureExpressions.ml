@@ -1142,8 +1142,8 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
              TODO: improve the heuristics, to give weight to the hints for
              instance.
           *)
-          let next_e ctx =
-            if ctx.inside_loop then
+          let next_e ctx = next_e ctx in
+          (*            if ctx.inside_loop then
               let consumed_values = abs_to_consumed ctx ectx abs in
               let var_values = List.combine outputs consumed_values in
               let var_values =
@@ -1158,7 +1158,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
               let vars, values = List.split var_values in
               mk_emeta_symbolic_assignments vars values (next_e ctx)
             else next_e ctx
-          in
+              in *)
 
           (* Create the let-binding - we may have to introduce a match *)
           let ctx, (output, call) = decompose_let_match ctx (output, call) in
@@ -1797,7 +1797,8 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
          We then remove all the span information from the body *before* calling
          {!PureMicroPasses.decompose_loops}.
       *)
-      mk_emeta_symbolic_assignments loop_info.input_vars org_args e
+      (*mk_emeta_symbolic_assignments loop_info.input_vars org_args e*)
+      e
 
 and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   let loop_id = V.LoopId.Map.find loop.loop_id ctx.loop_ids_map in

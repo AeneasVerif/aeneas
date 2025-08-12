@@ -270,9 +270,7 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
   let register_var_at_place (v : fvar) (mp : mplace option) =
     register_var v;
     match Option.map decompose_mplace_to_local mp with
-    | Some (Some (_, Some name, pel)) ->
-        let dist = List.length pel in
-        register v.id name dist
+    | Some (Some (_, Some name, [])) -> register v.id name 0
     | _ -> ()
   in
 
@@ -301,8 +299,9 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
   in
   let register_texpression_at_place (e : texpression) (mp : mplace) =
     match decompose_mplace_to_local mp with
-    | Some (_, Some name, pel) ->
-        register_texpression_has_name e name (List.length pel)
+    | Some (_, Some name, []) ->
+        (* Check that there are no projectors *)
+        register_texpression_has_name e name 0
     | _ -> ()
   in
 
