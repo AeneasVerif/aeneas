@@ -129,6 +129,7 @@ class ['self] scoped_iter_expression =
         loop_id = _;
         span = _;
         fuel0;
+        input_values;
         fuel;
         input_state;
         inputs;
@@ -139,14 +140,15 @@ class ['self] scoped_iter_expression =
       in
       (* Visit what can be visited before entering the binder *)
       Option.iter (self#visit_texpression scope) fuel0;
-      self#visit_texpression scope fun_end;
       self#visit_ty scope output_ty;
+      List.iter (self#visit_texpression scope) input_values;
       (* Visit the patterns *)
       Option.iter (self#visit_typed_pattern scope) fuel;
       Option.iter (self#visit_typed_pattern scope) input_state;
       List.iter (self#visit_typed_pattern scope) inputs;
       (* Enter the inner expressions *)
       let scope' = scope + 1 in
+      self#visit_texpression scope' fun_end;
       self#visit_texpression scope' loop_body
   end
 
@@ -193,6 +195,7 @@ class ['self] scoped_map_expression =
         loop_id;
         span;
         fuel0;
+        input_values;
         fuel;
         input_state;
         inputs;
@@ -203,8 +206,8 @@ class ['self] scoped_map_expression =
       in
       (* Visit what can be visited before entering the binder *)
       let fuel0 = Option.map (self#visit_texpression scope) fuel0 in
-      let fun_end = self#visit_texpression scope fun_end in
       let output_ty = self#visit_ty scope output_ty in
+      let input_values = List.map (self#visit_texpression scope) input_values in
       (* Visit the patterns *)
       let fuel = Option.map (self#visit_typed_pattern scope) fuel in
       let input_state =
@@ -213,12 +216,14 @@ class ['self] scoped_map_expression =
       let inputs = List.map (self#visit_typed_pattern scope) inputs in
       (* Enter the inner expressions *)
       let scope' = scope + 1 in
+      let fun_end = self#visit_texpression scope' fun_end in
       let loop_body = self#visit_texpression scope' loop_body in
       {
         fun_end;
         loop_id;
         span;
         fuel0;
+        input_values;
         fuel;
         input_state;
         inputs;
@@ -1252,10 +1257,11 @@ let mk_closed_lambda span (x : typed_pattern) (e : texpression) : texpression =
 
 let close_loop span (loop : loop) : loop =
   let {
-    fun_end = _;
+    fun_end;
     loop_id = _;
     span = _;
     fuel0 = _;
+    input_values = _;
     fuel;
     input_state;
     inputs;
@@ -1276,8 +1282,9 @@ let close_loop span (loop : loop) : loop =
   in
   let fuel, inputs = opt_pop fuel inputs in
   let input_state, inputs = opt_pop input_state inputs in
+  let fun_end = visitor#visit_texpression 0 fun_end in
   let loop_body = visitor#visit_texpression 0 loop_body in
-  { loop with fuel; input_state; inputs; loop_body }
+  { loop with fun_end; fuel; input_state; inputs; loop_body }
 
 (** Make an open lambda expression.
 
@@ -1798,6 +1805,7 @@ class virtual ['self] open_close_all_visitor =
         loop_id;
         span;
         fuel0;
+        input_values;
         fuel;
         input_state;
         inputs;
@@ -1808,8 +1816,8 @@ class virtual ['self] open_close_all_visitor =
       in
       (* Visit what can be visited before entering the binder *)
       let fuel0 = Option.map (self#visit_texpression env) fuel0 in
-      let fun_end = self#visit_texpression env fun_end in
       let output_ty = self#visit_ty env output_ty in
+      let input_values = List.map (self#visit_texpression env) input_values in
       (* Visit the patterns to push a new scope *)
       self#start_scope env;
       let fuel = Option.map (self#visit_typed_pattern env) fuel in
@@ -1817,6 +1825,7 @@ class virtual ['self] open_close_all_visitor =
       let inputs = List.map (self#visit_typed_pattern env) inputs in
       self#push_scope env;
       (* Enter the inner expression *)
+      let fun_end = self#visit_texpression env fun_end in
       let loop_body = self#visit_texpression env loop_body in
       (* Pop the stack *)
       self#pop_scope env;
@@ -1826,6 +1835,7 @@ class virtual ['self] open_close_all_visitor =
         loop_id;
         span;
         fuel0;
+        input_values;
         fuel;
         input_state;
         inputs;
