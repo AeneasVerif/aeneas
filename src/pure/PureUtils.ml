@@ -1916,7 +1916,9 @@ let open_all_visitor (span : Meta.span) =
     method get_bvar (env : open_all_env ref) v =
       open_all_env_get_var span !env v
 
-    method get_fvar _ _ = [%internal_error] span
+    method get_fvar _ fid =
+      [%craise] span ("Internal error: could not find fvar: " ^ show_fvar_id fid)
+
     method! visit_PatOpen _ _ = [%internal_error] span
   end
 

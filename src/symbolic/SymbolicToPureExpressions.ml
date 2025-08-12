@@ -8,6 +8,12 @@ open SymbolicToPureValues
 (** The local logger *)
 let log = Logging.symbolic_to_pure_expressions_log
 
+let mk_closed_checked_let file line ctx can_fail pat bound next =
+  mk_closed_checked_let file line ctx.span can_fail pat bound next
+
+let mk_closed_checked_lets file line ctx can_fail pat_bounds next =
+  mk_closed_checked_lets file line ctx.span can_fail pat_bounds next
+
 (** TODO: not very clean. *)
 let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fun_id_or_trait_method_ref)
     (lid : V.LoopId.id option) (gid : T.RegionGroupId.id option) :
@@ -741,8 +747,8 @@ and translate_function_call_aux (call : S.call) (e : S.expression)
   (* Translate the next expression *)
   let next_e = translate_expression e ctx in
   (* Put together *)
-  mk_closed_checked_let __FILE__ __LINE__ ctx.span effect_info.can_fail dest_v
-    call_e next_e
+  mk_closed_checked_let __FILE__ __LINE__ ctx effect_info.can_fail dest_v call_e
+    next_e
 
 and translate_cast_unsize (call : S.call) (e : S.expression) (ty0 : T.ty)
     (ty1 : T.ty) (ctx : bs_ctx) : texpression =
@@ -830,7 +836,7 @@ and translate_cast_unsize (call : S.call) (e : S.expression) (ty0 : T.ty)
   (* Create the let-binding *)
   let next_e = translate_expression e ctx in
   let monadic = false in
-  mk_closed_checked_let __FILE__ __LINE__ ctx.span monadic dest cast_expr next_e
+  mk_closed_checked_let __FILE__ __LINE__ ctx monadic dest cast_expr next_e
 
 and translate_end_abstraction (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expression) (ctx : bs_ctx) : texpression =
@@ -929,8 +935,7 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
   let next_e = translate_expression e ctx in
   (* Generate the assignemnts *)
   let monadic = false in
-  mk_closed_checked_lets __FILE__ __LINE__ ctx.span monadic variables_values
-    next_e
+  mk_closed_checked_lets __FILE__ __LINE__ ctx monadic variables_values next_e
 
 and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expression) (ctx : bs_ctx) (call_id : V.FunCallId.id)
@@ -1011,8 +1016,8 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
       (* Introduce a match if necessary *)
       let ctx, (output, call) = decompose_let_match ctx (output, call) in
       (* Translate the next expression and construct the let *)
-      mk_closed_checked_let __FILE__ __LINE__ ctx.span effect_info.can_fail
-        output call (next_e ctx)
+      mk_closed_checked_let __FILE__ __LINE__ ctx effect_info.can_fail output
+        call (next_e ctx)
 
 and translate_end_abstraction_identity (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expression) (ctx : bs_ctx) : texpression =
@@ -1101,8 +1106,7 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
   let next_e = translate_expression e ctx in
   (* Generate the assignments *)
   let monadic = false in
-  mk_closed_checked_lets __FILE__ __LINE__ ctx.span monadic given_back_inputs
-    next_e
+  mk_closed_checked_lets __FILE__ __LINE__ ctx monadic given_back_inputs next_e
 
 and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expression) (ctx : bs_ctx) (loop_id : V.LoopId.id)
@@ -1214,7 +1218,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
 
           (* Create the let-binding - we may have to introduce a match *)
           let ctx, (output, call) = decompose_let_match ctx (output, call) in
-          mk_closed_checked_let __FILE__ __LINE__ ctx.span effect_info.can_fail
+          mk_closed_checked_let __FILE__ __LINE__ ctx effect_info.can_fail
             output call (next_e ctx))
 
 and translate_global_eval (gid : A.GlobalDeclId.id) (generics : T.generic_args)
@@ -1227,7 +1231,7 @@ and translate_global_eval (gid : A.GlobalDeclId.id) (generics : T.generic_args)
   let ty = ctx_translate_fwd_ty ctx decl.ty in
   let gval = { e = Qualif global_expr; ty } in
   let e = translate_expression e ctx in
-  mk_closed_checked_let __FILE__ __LINE__ ctx.span false
+  mk_closed_checked_let __FILE__ __LINE__ ctx false
     (mk_typed_pattern_from_fvar var None)
     gval e
 
@@ -1243,7 +1247,7 @@ and translate_assertion (ectx : C.eval_ctx) (v : V.typed_value)
   let func_ty = mk_arrow (TLiteral TBool) (mk_result_ty mk_unit_ty) in
   let func = { e = Qualif func; ty = func_ty } in
   let assertion = mk_apps ctx.span func args in
-  mk_closed_checked_let __FILE__ __LINE__ ctx.span monadic
+  mk_closed_checked_let __FILE__ __LINE__ ctx monadic
     (mk_dummy_pattern mk_unit_ty)
     assertion next_e
 
@@ -1269,7 +1273,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
           let ctx, var = fresh_var_for_symbolic_value nsv ctx in
           let next_e = translate_expression e ctx in
           let monadic = false in
-          mk_closed_checked_let __FILE__ __LINE__ ctx.span monadic
+          mk_closed_checked_let __FILE__ __LINE__ ctx monadic
             (mk_typed_pattern_from_fvar var None)
             (mk_opt_mplace_texpression scrutinee_mplace scrutinee)
             next_e
@@ -1394,13 +1398,13 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
       let lvars = List.map (fun v -> mk_typed_pattern_from_fvar v None) vars in
       let lv = mk_adt_pattern scrutinee.ty variant_id lvars in
       let monadic = false in
-      mk_closed_checked_let __FILE__ __LINE__ ctx.span monadic lv
+      mk_closed_checked_let __FILE__ __LINE__ ctx monadic lv
         (mk_opt_mplace_texpression scrutinee_mplace scrutinee)
         branch
   | TTuple ->
       let vars = List.map (fun x -> mk_typed_pattern_from_fvar x None) vars in
       let monadic = false in
-      mk_closed_checked_let __FILE__ __LINE__ ctx.span monadic
+      mk_closed_checked_let __FILE__ __LINE__ ctx monadic
         (mk_simpl_tuple_pattern vars)
         (mk_opt_mplace_texpression scrutinee_mplace scrutinee)
         branch
@@ -1414,7 +1418,7 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value)
       (* We simply introduce an assignment - the box type is the
        * identity when extracted ([box a = a]) *)
       let monadic = false in
-      mk_closed_checked_let __FILE__ __LINE__ ctx.span monadic
+      mk_closed_checked_let __FILE__ __LINE__ ctx monadic
         (mk_typed_pattern_from_fvar var None)
         (mk_opt_mplace_texpression scrutinee_mplace scrutinee)
         branch
@@ -1468,7 +1472,7 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
   (* Make the let-binding *)
   let monadic = false in
   let var = mk_typed_pattern_from_fvar var mplace in
-  mk_closed_checked_let __FILE__ __LINE__ ctx.span monadic var v next_e
+  mk_closed_checked_let __FILE__ __LINE__ ctx monadic var v next_e
 
 and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
     (ectx : C.eval_ctx)
@@ -1691,16 +1695,17 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
     let e =
       List.fold_right
         (fun (var, evaluate, back_e) e ->
-          mk_closed_checked_let __FILE__ __LINE__ ctx.span evaluate
+          mk_closed_checked_let __FILE__ __LINE__ ctx evaluate
             (mk_typed_pattern_from_fvar var None)
             back_e e)
         back_vars_els ret
     in
+
     (* Bind the expression for the forward output *)
     let fwd_var = mk_typed_pattern_from_fvar pure_fwd_var None in
     let pat = mk_simpl_tuple_pattern (state_pat @ [ fwd_var ]) in
-    mk_closed_checked_let __FILE__ __LINE__ ctx.span fwd_effect_info.can_fail
-      pat fwd_e e
+    mk_closed_checked_let __FILE__ __LINE__ ctx fwd_effect_info.can_fail pat
+      fwd_e e
   in
 
   (* If we are (re-)entering a loop, we need to introduce a call to the
@@ -1735,6 +1740,10 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
             V.SymbolicValueId.Map.find sv.V.sv_id loop_input_values_map)
           loop_info.input_svl
       in
+      [%ltrace
+        "loop_input_values: "
+        ^ String.concat ","
+            (List.map (typed_value_to_string ctx) loop_input_values)];
       let args =
         List.map (typed_value_to_texpression ctx ectx) loop_input_values
       in
@@ -1843,10 +1852,10 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
 
       (* Translate the end of the function *)
       let next_e = translate_end ctx in
-      let next_e =
-        mk_closed_checked_lets __FILE__ __LINE__ ctx.span false refreshed_inputs
+      (*let next_e =
+        mk_closed_checked_lets __FILE__ __LINE__ ctx false refreshed_inputs
           next_e
-      in
+        in*)
 
       (* Introduce the call to the loop forward function in the generated AST *)
       let out_pat = mk_simpl_tuple_pattern out_pats in
@@ -1866,8 +1875,8 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
 
       (* Create the let expression with the loop call *)
       let e =
-        mk_closed_checked_let __FILE__ __LINE__ ctx.span effect_info.can_fail
-          out_pat loop_call next_e
+        mk_closed_checked_let __FILE__ __LINE__ ctx effect_info.can_fail out_pat
+          loop_call next_e
       in
 
       (* Add meta-information linking the loop input parameters and the

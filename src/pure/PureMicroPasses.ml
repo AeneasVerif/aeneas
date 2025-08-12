@@ -1872,7 +1872,7 @@ let simplify_aggregates_unchanged_fields =
     function body (see the {!Pure.Loop} node). This function extracts those
     function bodies into independent definitions while removing occurrences of
     the {!Pure.Loop} node. *)
-let decompose_loops_aux (_ctx : ctx) (def : fun_decl) (body : fun_body) :
+let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
     fun_decl * fun_decl list =
   let span = def.item_meta.span in
 
@@ -2015,6 +2015,7 @@ let decompose_loops_aux (_ctx : ctx) (def : fun_decl) (body : fun_body) :
           | None -> loop.loop_body
           | Some (fuel0, fuel) ->
               wrap_in_match_fuel def.item_meta.span
+                (* TODO: the use of fuel is messed up *)
                 (as_fvar span (Option.get fuel0))
                 (as_pat_open_fvar_id span (Option.get fuel))
                 ~close:false loop.loop_body
@@ -2051,11 +2052,18 @@ let decompose_loops_aux (_ctx : ctx) (def : fun_decl) (body : fun_body) :
         loops := LoopId.Map.add_strict loop.loop_id loop_def !loops;
 
         (* Update the current expression to remove the [Loop] node, and continue *)
-        (self#visit_texpression env loop.fun_end).e
+        let inner_e = self#visit_texpression env loop.fun_end in
+        (* We need to propagate the fuel - TODO: we really need to cleanup the way fuel is handled *)
+        match fuel_vars with
+        | None -> inner_e.e
+        | Some (fuel0, fuel) ->
+            (mk_opened_let false (Option.get fuel) (Option.get fuel0) inner_e).e
     end
   in
 
   let body_expr = expr_visitor#visit_texpression () body.body in
+  [%ldebug
+    "Resulting body:\n" ^ fun_body_to_string ctx { body with body = body_expr }];
   let body = close_all_fun_body span { body with body = body_expr } in
   let def = { def with body = Some body; num_loops } in
   let loops = List.map snd (LoopId.Map.bindings !loops) in

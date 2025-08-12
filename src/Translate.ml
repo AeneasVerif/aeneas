@@ -22,7 +22,7 @@ type symbolic_fun_translation = symbolic_value list * SA.expression
 let translate_function_to_symbolics (trans_ctx : trans_ctx) (fdef : fun_decl) :
     symbolic_fun_translation option =
   (* Debug *)
-  [%ldebug name_to_string trans_ctx fdef.item_meta.name];
+  [%ltrace name_to_string trans_ctx fdef.item_meta.name];
 
   match fdef.body with
   | None -> None
@@ -38,7 +38,7 @@ let translate_function_to_symbolics (trans_ctx : trans_ctx) (fdef : fun_decl) :
     Check that all the variables in a function declaration:
     - are bound variables
     - are well-bound *)
-let check_fun_decl_vars_are_well_bound (_trans_ctx : trans_ctx)
+let check_fun_decl_vars_are_well_bound (trans_ctx : trans_ctx)
     (f : Pure.fun_decl) : unit =
   let span = f.item_meta.span in
 
@@ -46,9 +46,35 @@ let check_fun_decl_vars_are_well_bound (_trans_ctx : trans_ctx)
     match f.body with
     | None -> ()
     | Some body ->
-        [%sanity_check] span (not (PureUtils.texpression_has_fvars body.body));
+        (* First, check the function without meta information *)
+        let fmt_env = PrintPure.decls_ctx_to_fmt_env trans_ctx in
+        (let f =
+           {
+             f with
+             body =
+               Option.map
+                 (fun (body : Pure.fun_body) ->
+                   { body with body = PureUtils.remove_meta body.body })
+                 f.body;
+           }
+         in
 
-        (* Open all the free variables: if there is a bound variable which is not well-bound, this will raise an exception *)
+         [%ldebug PrintPure.fun_decl_to_string fmt_env f];
+         let fvars = PureUtils.texpression_get_fvars body.body in
+         if not (Pure.FVarId.Set.is_empty fvars) then
+           [%craise] span
+             ("Internal errors: found unexpected fvars: "
+             ^ Pure.FVarId.Set.to_string None fvars));
+
+        [%ldebug PrintPure.fun_decl_to_string fmt_env f];
+        let fvars = PureUtils.texpression_get_fvars body.body in
+        if not (Pure.FVarId.Set.is_empty fvars) then
+          [%craise] span
+            ("Internal errors: found unexpected fvars: "
+            ^ Pure.FVarId.Set.to_string None fvars);
+
+        (* Open all the free variables: if there is a bound variable which is not well-bound,
+           this will raise an exception *)
         let _ = PureUtils.open_all_fun_body span body in
         ())
   else ()
@@ -63,7 +89,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     (fun_dsigs : Pure.decomposed_fun_sig FunDeclId.Map.t) (fdef : fun_decl) :
     pure_fun_translation_no_loops =
   (* Debug *)
-  [%ldebug name_to_string trans_ctx fdef.item_meta.name];
+  [%ltrace name_to_string trans_ctx fdef.item_meta.name];
 
   (* Compute the symbolic ASTs, if the function is transparent *)
   let symbolic_trans = translate_function_to_symbolics trans_ctx fdef in
@@ -262,7 +288,7 @@ let translate_crate_to_pure (crate : crate) :
     * Pure.trait_decl list
     * Pure.trait_impl list =
   (* Debug *)
-  [%ldebug ""];
+  [%ltrace ""];
 
   (* Compute the translation context *)
   let trans_ctx = compute_contexts crate in

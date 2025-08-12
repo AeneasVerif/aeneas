@@ -110,13 +110,17 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
         (* Sanity check *)
         [%ltrace
           name_to_string ctx def.item_meta.name
-          ^ "\n- inputs: "
+          ^ "\n- ctx.forward_inputs: "
           ^ String.concat ", " (List.map show_fvar ctx.forward_inputs)
           ^ "\n- state: "
           ^ String.concat ", " (List.map show_fvar fwd_state)
           ^ "\n- signature.inputs: "
           ^ String.concat ", "
-              (List.map (pure_ty_to_string ctx) signature.inputs)];
+              (List.map (pure_ty_to_string ctx) signature.inputs)
+          ^ "\n- inputs: "
+          ^ String.concat ", " (List.map (fvar_to_string ctx) inputs)
+          ^ "\n- body:\n"
+          ^ texpression_to_string ctx body];
         (* TODO: we need to normalize the types *)
         if !Config.type_check_pure_code then
           [%sanity_check] def.item_meta.span
