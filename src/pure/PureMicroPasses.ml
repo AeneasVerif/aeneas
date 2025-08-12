@@ -209,7 +209,7 @@ let rec decompose_texpression span (x : texpression) : (fvar_id * int) option =
     linked at distance 1, etc. We then use this information to propagate the
     names we computed above. *)
 let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
-    (body : fun_body) : (string * int) NcNodeMap.t * NcEdgeSet.t =
+    (body : fun_body) : (string * int) NcNodeMap.t * nc_edge list =
   [%ldebug fun_body_to_string ctx body];
   (*
      The way we do is as follows:
@@ -224,7 +224,12 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
   let span = def.item_meta.span in
 
   let nodes : (string * int) NcNodeMap.t ref = ref NcNodeMap.empty in
-  let edges : NcEdgeSet.t ref = ref NcEdgeSet.empty in
+
+  (* We use a list instead of a set on purpose: we want to propagate following
+     the first edges we found *first*.
+     TODO: we can make this even more sophisticated.
+   *)
+  let edges : nc_edge list ref = ref [] in
 
   (* Information about the loops: we remember the binders defining their inputs so that
      later, when we find a call site, we can equate those binders and the input arguments
@@ -259,7 +264,7 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
   in
 
   let register_edge (src : nc_node) (dist : int) (dest : nc_node) =
-    edges := NcEdgeSet.add { src; dist; dest } !edges
+    edges := { src; dist; dest } :: !edges
   in
 
   (* Register an mplace the first time we find one *)
@@ -363,7 +368,7 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
   List.iter (visitor#visit_typed_pattern ()) body.inputs;
   visitor#visit_texpression () body.body;
 
-  (!nodes, !edges)
+  (!nodes, List.rev !edges)
 
 (** Partial edge *)
 type nc_pedge = { dest : nc_node; dist : int } [@@deriving show, ord]
@@ -384,7 +389,7 @@ module NcPEdgeSet = Collections.MakeSet (NcPEdgeOrderedType)
 
     Compute names for the variables given sets of constraints. *)
 let compute_pretty_names_propagate_constraints
-    (nodes : (string * int) NcNodeMap.t) (edges0 : NcEdgeSet.t) :
+    (nodes : (string * int) NcNodeMap.t) (edges0 : nc_edge list) :
     string FVarId.Map.t =
   (* *)
   let nodes = ref nodes in
@@ -402,7 +407,7 @@ let compute_pretty_names_propagate_constraints
         !edges
   in
 
-  NcEdgeSet.iter
+  List.iter
     (fun (c : nc_edge) ->
       register_edge c.src c.dist c.dest;
       register_edge c.dest c.dist c.src)
@@ -414,13 +419,7 @@ let compute_pretty_names_propagate_constraints
 
      Note that the edges in the stack are bidirectional: we explore them both ways.
   *)
-  let stack : nc_edge list ref =
-    ref
-      (NcEdgeSet.elements edges0
-      @ List.map
-          (fun (e : nc_edge) -> { src = e.dest; dist = e.dist; dest = e.src })
-          (NcEdgeSet.elements edges0))
-  in
+  let stack : nc_edge list ref = ref edges0 in
   let push_constraints (src : nc_node) =
     match NcNodeMap.find_opt src !edges with
     | None -> ()
@@ -430,7 +429,8 @@ let compute_pretty_names_propagate_constraints
             (fun { dest; dist } -> { src; dist; dest })
             (NcPEdgeSet.elements cs)
         in
-        stack := edges @ !stack
+        (* We push the constraints at the end of the stack *)
+        stack := !stack @ edges
   in
   let update_one_way (src : nc_node) (dist : int) (dst : nc_node) =
     (* Lookup the information about the source  *)
