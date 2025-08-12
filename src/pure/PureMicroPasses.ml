@@ -104,6 +104,308 @@ let lift_expr_iter_visitor
     (def : fun_decl) : unit =
   lift_expr_iter_visitor_with_state obj () ctx def
 
+(** Helper for [compute_pretty_names].
+
+    We explore the function body, while accumulating constraints. Note that all
+    the binders should have been opened, and the variable ids should be unique:
+    this is important because we will need the information computed for, say,
+    one branch of the function to influence the naming of the variables in a
+    different branch of the function. *)
+let compute_pretty_names_accumulate_constraints (def : fun_decl)
+    (body : fun_body) : pn_ctx =
+  (*
+     The way we do is as follows:
+     - we explore the expressions
+     - we register the variables introduced by the let-bindings
+     - we use the naming information we find (through the variables and the
+       meta-places) to update our context (i.e., maps from variable ids to
+       names)
+     - we use this information to update the names of the variables used in the
+       expressions
+   *)
+  let span = def.item_meta.span in
+
+  let ctx : pn_ctx ref =
+    ref { pure_vars = FVarId.Map.empty; llbc_vars = E.LocalId.Map.empty }
+  in
+
+  (* Information about the loops: we remember the binders defining their inputs so that
+     later, when we find a call site, we can equate those binders and the input arguments
+     actually used.
+
+     For instance, if the loop has two inputs and we have at the call site:
+     {[
+       loop1 x y
+     ]}
+     then 'x' and 'y' are candidate names for the inputs.
+  *)
+  let loop_infos = ref LoopId.Map.empty in
+
+  (* Register a variable for constraints propagation - used when an variable is
+     introduced (left-hand side of a left binding) *)
+  let register_var (v : fvar) : unit =
+    (*[%sanity_check] span (not (FVarId.Map.mem v.id !ctx.pure_vars));*)
+    match v.basename with
+    | None -> ()
+    | Some name ->
+        let pure_vars = FVarId.Map.add v.id name !ctx.pure_vars in
+        ctx := { !ctx with pure_vars }
+  in
+  (* Register an mplace the first time we find one *)
+  let register_mplace (mp : mplace) =
+    match decompose_mplace_to_local mp with
+    | None -> ()
+    | Some (var_id, name, _) -> (
+        match (E.LocalId.Map.find_opt var_id !ctx.llbc_vars, name) with
+        | None, Some name ->
+            let llbc_vars = E.LocalId.Map.add var_id name !ctx.llbc_vars in
+            ctx := { !ctx with llbc_vars }
+        | _ -> ())
+  in
+
+  (* Register the fact that [name] can be used for the pure variable identified
+     by [var_id] (will add this name in the map if the variable is anonymous) *)
+  let add_pure_var_constraint (var_id : FVarId.id) (name : string) =
+    let pure_vars =
+      if FVarId.Map.mem var_id !ctx.pure_vars then !ctx.pure_vars
+      else FVarId.Map.add var_id name !ctx.pure_vars
+    in
+    ctx := { !ctx with pure_vars }
+  in
+  (* Similar to [add_pure_var_constraint], but for LLBC variables *)
+  let add_llbc_var_constraint (var_id : E.LocalId.id) (name : string) =
+    let llbc_vars =
+      if E.LocalId.Map.mem var_id !ctx.llbc_vars then !ctx.llbc_vars
+      else E.LocalId.Map.add var_id name !ctx.llbc_vars
+    in
+    ctx := { !ctx with llbc_vars }
+  in
+  (* Add a constraint: given a variable id and an associated meta-place, try to
+   * extract naming information from the meta-place and save it *)
+  let add_constraint (mp : mplace) (var_id : FVarId.id) =
+    (* Register the place *)
+    register_mplace mp;
+    (* Update the variable name *)
+    match decompose_mplace_to_local mp with
+    | Some (mp_var_id, Some name, []) ->
+        (* Check if the variable already has a name - if not: insert the new name *)
+        add_pure_var_constraint var_id name;
+        add_llbc_var_constraint mp_var_id name
+    | _ -> ()
+  in
+  (* Specific case of constraint on rvalues *)
+  let add_right_constraint (mp : mplace) (rv : texpression) =
+    (* Register the place *)
+    register_mplace mp;
+    (* Add the constraint *)
+    match (unmeta rv).e with
+    | FVar vid -> add_constraint mp vid
+    | BVar _ -> [%internal_error] span
+    | _ -> ()
+  in
+  let add_pure_var_value_constraint (var_id : FVarId.id) (rv : texpression) =
+    (* Add the constraint *)
+    match (unmeta rv).e with
+    | FVar vid -> (
+        (* Try to find a name for the vid *)
+        match FVarId.Map.find_opt vid !ctx.pure_vars with
+        | None -> ()
+        | Some name -> add_pure_var_constraint var_id name)
+    | BVar _ -> [%internal_error] span
+    | _ -> ()
+  in
+  (* Specific case of constraint on left values *)
+  let add_left_constraint (fv : fvar) (mp : mplace option) =
+    (* Register the variable *)
+    register_var fv;
+    (* Register the mplace information if there is such information *)
+    match mp with
+    | Some mp -> add_constraint mp fv.id
+    | None -> ()
+  in
+  (* If we have [x = y] where x and y are variables, add a constraint linking
+     the names of x and y.
+
+     TODO: merge with add_left_right_constraint
+  *)
+  let add_eq_var_constraint (lv : typed_pattern) (re : texpression) =
+    match (lv.value, re.e) with
+    | PatOpen (lv, _), FVar rv when Option.is_some lv.basename ->
+        add_pure_var_constraint rv (Option.get lv.basename)
+    | _ -> ()
+  in
+
+  (* This is used to propagate constraint information about places in case of
+   * variable reassignments: we try to propagate the information from the
+   * rvalue to the left *)
+  let add_left_right_constraint (lv : typed_pattern) (re : texpression) =
+    (* We propagate constraints across variable reassignments: [^0 = x],
+     * if the destination doesn't have naming information *)
+    match lv.value with
+    | PatOpen (({ id = _; basename = None; ty = _ } as lvar), lmp) -> (
+        if
+          (* Check that there is not already a name for the variable *)
+          FVarId.Map.mem lvar.id !ctx.pure_vars
+        then ()
+        else
+          (* We ignore the left meta-place information: it should have been taken
+           * care of by [add_left_constraint]. We try to use the right meta-place
+           * information *)
+          let add (name : string) =
+            (* Add the constraint for the pure variable *)
+            add_pure_var_constraint lvar.id name;
+            (* Add the constraint for the LLBC variable *)
+            match lmp with
+            | None -> ()
+            | Some lmp -> (
+                match decompose_mplace_to_local lmp with
+                | None -> ()
+                | Some (var_id, _, _) -> add_llbc_var_constraint var_id name)
+          in
+          (* We try to use the right-place information *)
+          let rmp, re = opt_unmeta_mplace re in
+
+          (match rmp with
+          | Some (PlaceLocal (var_id, name)) ->
+              if Option.is_some name then add (Option.get name)
+              else begin
+                match E.LocalId.Map.find_opt var_id !ctx.llbc_vars with
+                | None -> ()
+                | Some name -> add name
+              end
+          | _ -> ());
+          (* We try to use the rvalue information, if it is a variable *)
+          match (unmeta re).e with
+          | FVar rvar_id -> (
+              match FVarId.Map.find_opt rvar_id !ctx.pure_vars with
+              | None -> ()
+              | Some name -> add name)
+          | _ -> ())
+    | _ -> ()
+  in
+
+  let visitor =
+    object (self)
+      inherit [_] iter_expression as super
+
+      method! visit_Let env monadic lv re e =
+        add_left_right_constraint lv re;
+        add_eq_var_constraint lv re;
+        super#visit_Let env monadic lv re e
+
+      method! visit_PatBound _ _ _ = [%internal_error] span
+      method! visit_PatOpen _ lv mp = add_left_constraint lv mp
+
+      method! visit_Meta env meta e =
+        begin
+          match meta with
+          | Assignment (mp, rvalue, rmp) ->
+              add_right_constraint mp rvalue;
+              begin
+                match (mp, rmp) with
+                | PlaceLocal (mp_var_id, _), Some (PlaceLocal (var_id, name))
+                  -> (
+                    let name =
+                      match name with
+                      | Some name -> Some name
+                      | None -> E.LocalId.Map.find_opt var_id !ctx.llbc_vars
+                    in
+                    match name with
+                    | None -> ()
+                    | Some name -> add_llbc_var_constraint mp_var_id name)
+                | _ -> ()
+              end
+          | SymbolicAssignments infos ->
+              List.iter
+                (fun (var, rvalue) ->
+                  let var_id = as_fvar span var in
+                  add_pure_var_value_constraint var_id rvalue)
+                infos
+          | SymbolicPlaces infos ->
+              List.iter
+                (fun (var, name) ->
+                  let var_id = as_fvar span var in
+                  add_pure_var_constraint var_id name)
+                infos
+          | MPlace mp -> add_right_constraint mp e
+          | Tag _ | TypeAnnot -> ()
+        end;
+        super#visit_Meta env meta e
+
+      method! visit_loop env loop =
+        loop_infos := LoopId.Map.add loop.loop_id loop.inputs !loop_infos;
+        super#visit_loop env loop
+
+      method! visit_App env f arg =
+        (* Check if this is a loop call *)
+        let f, args = destruct_apps f in
+        let args = args @ [ arg ] in
+        (match f.e with
+        | Qualif
+            {
+              id = FunOrOp (Fun (FromLlbc (FunId (FRegular fid), Some lp_id)));
+              _;
+            }
+          when fid = def.def_id ->
+            let inputs = LoopId.Map.find lp_id !loop_infos in
+            (* Note that there shouldn't be partial applications *)
+            List.iter
+              (fun (lv, re) ->
+                add_left_right_constraint lv re;
+                add_eq_var_constraint lv re)
+              (List.combine inputs args)
+        | _ -> ());
+        (* Continue exploring *)
+        List.iter (self#visit_texpression env) (f :: args)
+    end
+  in
+  List.iter (visitor#visit_typed_pattern ()) body.inputs;
+  visitor#visit_texpression () body.body;
+
+  !ctx
+
+(** Helper for [compute_pretty_name]: update a fun body given naming
+    constraints.
+
+    As with [compute_pretty_names_accumulate_constraints] the binders should
+    have been opened so that every variable is uniquely identified. *)
+let compute_pretty_names_update (def : fun_decl) (ctx : pn_ctx)
+    (body : fun_body) : fun_body =
+  let span = def.item_meta.span in
+  (* Update a variable  *)
+  let update_var (ctx : pn_ctx) (v : fvar) (mp : mplace option) : fvar =
+    match v.basename with
+    | Some _ -> v
+    | None -> (
+        match FVarId.Map.find_opt v.id ctx.pure_vars with
+        | Some basename -> { v with basename = Some basename }
+        | None -> (
+            match mp with
+            | None -> v
+            | Some mp -> (
+                match decompose_mplace_to_local mp with
+                | None -> v
+                | Some (var_id, _, _) -> (
+                    match E.LocalId.Map.find_opt var_id ctx.llbc_vars with
+                    | None -> v
+                    | Some basename -> { v with basename = Some basename }))))
+  in
+
+  (* The visitor to update the whole body *)
+  let visitor =
+    object
+      inherit [_] map_expression
+      method! visit_PatOpen _ v mp = PatOpen (update_var ctx v mp, mp)
+      method! visit_PatBound _ _ _ = [%internal_error] span
+    end
+  in
+
+  (* Apply *)
+  let { inputs; body } = body in
+  let inputs = List.map (visitor#visit_typed_pattern ()) inputs in
+  let body = visitor#visit_texpression () body in
+  { inputs; body }
+
 (** This function computes pretty names for the variables in the pure AST. It
     relies on the "meta"-place information in the AST to generate naming
     constraints, and then uses those to compute the names.
@@ -213,406 +515,13 @@ let lift_expr_iter_visitor
     This way, because of [^0 = &mut x], we can propagate the name "x" to the
     place [^0], then to the given back variable across the function call. *)
 let compute_pretty_names (def : fun_decl) : fun_decl =
-  let span = def.item_meta.span in
-  (* Small helpers *)
-  (*
-   * When we do branchings, we need to merge (the constraints saved in) the
-   * contexts returned by the different branches.
-   *
-   * Note that by doing so, some mappings from var id to name
-   * in one context may be overriden by the ones in the other context.
-   *
-   * This should be ok because:
-   * - generally, the overriden variables should have been introduced *inside*
-   *   the branches, in which case we don't care
-   * - or they were introduced before, in which case the naming should generally
-   *   be consistent? In the worse case, it isn't, but it leads only to less
-   *   readable code, not to unsoundness. This case should be pretty rare,
-   *   also.
-   *)
-  let merge_ctxs (ctx0 : pn_ctx) (ctx1 : pn_ctx) : pn_ctx =
-    let pure_vars =
-      FVarId.Map.fold
-        (fun id name ctx -> FVarId.Map.add id name ctx)
-        ctx0.pure_vars ctx1.pure_vars
-    in
-    let llbc_vars =
-      E.LocalId.Map.fold
-        (fun id name ctx -> E.LocalId.Map.add id name ctx)
-        ctx0.llbc_vars ctx1.llbc_vars
-    in
-    { pure_vars; llbc_vars }
-  in
-  let empty_ctx =
-    { pure_vars = FVarId.Map.empty; llbc_vars = E.LocalId.Map.empty }
-  in
-  let merge_ctxs_ls (ctxs : pn_ctx list) : pn_ctx =
-    List.fold_left (fun ctx0 ctx1 -> merge_ctxs ctx0 ctx1) empty_ctx ctxs
-  in
-
-  (*
-   * The way we do is as follows:
-   * - we explore the expressions
-   * - we register the variables introduced by the let-bindings
-   * - we use the naming information we find (through the variables and the
-   *   meta-places) to update our context (i.e., maps from variable ids to
-   *   names)
-   * - we use this information to update the names of the variables used in the
-   *   expressions
-   *)
-
-  (* Register a variable for constraints propagation - used when an variable is
-   * introduced (left-hand side of a left binding) *)
-  let register_var (ctx : pn_ctx) (v : fvar) : pn_ctx =
-    [%sanity_check] span (not (FVarId.Map.mem v.id ctx.pure_vars));
-    match v.basename with
-    | None -> ctx
-    | Some name ->
-        let pure_vars = FVarId.Map.add v.id name ctx.pure_vars in
-        { ctx with pure_vars }
-  in
-  (* Update a variable - used to update an expression after we computed constraints *)
-  let update_var (ctx : pn_ctx) (v : fvar) (mp : mplace option) : fvar =
-    match v.basename with
-    | Some _ -> v
-    | None -> (
-        match FVarId.Map.find_opt v.id ctx.pure_vars with
-        | Some basename -> { v with basename = Some basename }
-        | None -> (
-            match mp with
-            | None -> v
-            | Some mp -> (
-                match decompose_mplace_to_local mp with
-                | None -> v
-                | Some (var_id, _, _) -> (
-                    match E.LocalId.Map.find_opt var_id ctx.llbc_vars with
-                    | None -> v
-                    | Some basename -> { v with basename = Some basename }))))
-  in
-  (* Update an pattern - used to update an expression after we computed constraints *)
-  let update_typed_pattern ctx (lv : typed_pattern) : typed_pattern =
-    let obj =
-      object
-        inherit [_] map_typed_pattern
-        method! visit_PatOpen _ v mp = PatOpen (update_var ctx v mp, mp)
-        method! visit_PatBound _ _ _ = [%internal_error] span
-      end
-    in
-    obj#visit_typed_pattern () lv
-  in
-
-  (* Register an mplace the first time we find one *)
-  let register_mplace (mp : mplace) (ctx : pn_ctx) : pn_ctx =
-    match decompose_mplace_to_local mp with
-    | None -> ctx
-    | Some (var_id, name, _) -> (
-        match (E.LocalId.Map.find_opt var_id ctx.llbc_vars, name) with
-        | None, Some name ->
-            let llbc_vars = E.LocalId.Map.add var_id name ctx.llbc_vars in
-            { ctx with llbc_vars }
-        | _ -> ctx)
-  in
-
-  (* Register the fact that [name] can be used for the pure variable identified
-   * by [var_id] (will add this name in the map if the variable is anonymous) *)
-  let add_pure_var_constraint (var_id : FVarId.id) (name : string)
-      (ctx : pn_ctx) : pn_ctx =
-    let pure_vars =
-      if FVarId.Map.mem var_id ctx.pure_vars then ctx.pure_vars
-      else FVarId.Map.add var_id name ctx.pure_vars
-    in
-    { ctx with pure_vars }
-  in
-  (* Similar to [add_pure_var_constraint], but for LLBC variables *)
-  let add_llbc_var_constraint (var_id : E.LocalId.id) (name : string)
-      (ctx : pn_ctx) : pn_ctx =
-    let llbc_vars =
-      if E.LocalId.Map.mem var_id ctx.llbc_vars then ctx.llbc_vars
-      else E.LocalId.Map.add var_id name ctx.llbc_vars
-    in
-    { ctx with llbc_vars }
-  in
-  (* Add a constraint: given a variable id and an associated meta-place, try to
-   * extract naming information from the meta-place and save it *)
-  let add_constraint (mp : mplace) (var_id : FVarId.id) (ctx : pn_ctx) : pn_ctx
-      =
-    (* Register the place *)
-    let ctx = register_mplace mp ctx in
-    (* Update the variable name *)
-    match decompose_mplace_to_local mp with
-    | Some (mp_var_id, Some name, []) ->
-        (* Check if the variable already has a name - if not: insert the new name *)
-        let ctx = add_pure_var_constraint var_id name ctx in
-        let ctx = add_llbc_var_constraint mp_var_id name ctx in
-        ctx
-    | _ -> ctx
-  in
-  (* Specific case of constraint on rvalues *)
-  let add_right_constraint (mp : mplace) (rv : texpression) (ctx : pn_ctx) :
-      pn_ctx =
-    (* Register the place *)
-    let ctx = register_mplace mp ctx in
-    (* Add the constraint *)
-    match (unmeta rv).e with
-    | FVar vid -> add_constraint mp vid ctx
-    | BVar _ -> [%internal_error] span
-    | _ -> ctx
-  in
-  let add_pure_var_value_constraint (var_id : FVarId.id) (rv : texpression)
-      (ctx : pn_ctx) : pn_ctx =
-    (* Add the constraint *)
-    match (unmeta rv).e with
-    | FVar vid -> (
-        (* Try to find a name for the vid *)
-        match FVarId.Map.find_opt vid ctx.pure_vars with
-        | None -> ctx
-        | Some name -> add_pure_var_constraint var_id name ctx)
-    | BVar _ -> [%internal_error] span
-    | _ -> ctx
-  in
-  (* Specific case of constraint on left values *)
-  let add_left_constraint (lv : typed_pattern) (ctx : pn_ctx) : pn_ctx =
-    let obj =
-      object (self)
-        inherit [_] reduce_typed_pattern
-        method zero _ = empty_ctx
-        method plus ctx0 ctx1 _ = merge_ctxs (ctx0 ()) (ctx1 ())
-        method! visit_PatBound _ _ _ = [%internal_error] span
-
-        method! visit_PatOpen _ v mp () =
-          (* Register the variable *)
-          let ctx = register_var (self#zero ()) v in
-          (* Register the mplace information if there is such information *)
-          match mp with
-          | Some mp -> add_constraint mp v.id ctx
-          | None -> ctx
-      end
-    in
-    let ctx1 = obj#visit_typed_pattern () lv () in
-    merge_ctxs ctx ctx1
-  in
-  (* If we have [x = y] where x and y are variables, add a constraint linking
-     the names of x and y *)
-  let add_eq_var_constraint (lv : typed_pattern) (re : texpression)
-      (ctx : pn_ctx) : pn_ctx =
-    match (lv.value, re.e) with
-    | PatOpen (lv, _), FVar rv when Option.is_some lv.basename ->
-        add_pure_var_constraint rv (Option.get lv.basename) ctx
-    | _ -> ctx
-  in
-
-  (* This is used to propagate constraint information about places in case of
-   * variable reassignments: we try to propagate the information from the
-   * rvalue to the left *)
-  let add_left_right_constraint (lv : typed_pattern) (re : texpression)
-      (ctx : pn_ctx) : pn_ctx =
-    (* We propagate constraints across variable reassignments: [^0 = x],
-     * if the destination doesn't have naming information *)
-    match lv.value with
-    | PatOpen (({ id = _; basename = None; ty = _ } as lvar), lmp) ->
-        if
-          (* Check that there is not already a name for the variable *)
-          FVarId.Map.mem lvar.id ctx.pure_vars
-        then ctx
-        else
-          (* We ignore the left meta-place information: it should have been taken
-           * care of by [add_left_constraint]. We try to use the right meta-place
-           * information *)
-          let add (name : string) (ctx : pn_ctx) : pn_ctx =
-            (* Add the constraint for the pure variable *)
-            let ctx = add_pure_var_constraint lvar.id name ctx in
-            (* Add the constraint for the LLBC variable *)
-            match lmp with
-            | None -> ctx
-            | Some lmp -> (
-                match decompose_mplace_to_local lmp with
-                | None -> ctx
-                | Some (var_id, _, _) -> add_llbc_var_constraint var_id name ctx
-                )
-          in
-          (* We try to use the right-place information *)
-          let rmp, re = opt_unmeta_mplace re in
-          let ctx =
-            match rmp with
-            | Some (PlaceLocal (var_id, name)) ->
-                if Option.is_some name then add (Option.get name) ctx
-                else begin
-                  match E.LocalId.Map.find_opt var_id ctx.llbc_vars with
-                  | None -> ctx
-                  | Some name -> add name ctx
-                end
-            | _ -> ctx
-          in
-          (* We try to use the rvalue information, if it is a variable *)
-          let ctx =
-            match (unmeta re).e with
-            | FVar rvar_id -> (
-                match FVarId.Map.find_opt rvar_id ctx.pure_vars with
-                | None -> ctx
-                | Some name -> add name ctx)
-            | _ -> ctx
-          in
-          ctx
-    | _ -> ctx
-  in
-
-  (* *)
-  let rec update_texpression (e : texpression) (ctx : pn_ctx) :
-      pn_ctx * texpression =
-    let ty = e.ty in
-    let ctx, e =
-      match e.e with
-      | FVar _ | CVar _ | Const _ -> (* Nothing to do *) (ctx, e.e)
-      | BVar _ -> [%internal_error] span
-      | App (app, arg) ->
-          let ctx, app = update_texpression app ctx in
-          let ctx, arg = update_texpression arg ctx in
-          let e = App (app, arg) in
-          (ctx, e)
-      | Qualif _ -> (* nothing to do *) (ctx, e.e)
-      | Let (monadic, lb, re, e) -> update_let monadic lb re e ctx
-      | Switch (scrut, body) -> update_switch_body scrut body ctx
-      | Loop loop -> update_loop loop ctx
-      | StructUpdate supd -> update_struct_update supd ctx
-      | Lambda (lb, e) -> update_lambda lb e ctx
-      | Meta (meta, e) -> update_emeta meta e ctx
-      | EError (span, msg) -> (ctx, EError (span, msg))
-    in
-    (ctx, { e; ty })
-  (* *)
-  and update_lambda (x : typed_pattern) (e : texpression) (ctx : pn_ctx) :
-      pn_ctx * expression =
-    (* We first add the left-constraint *)
-    let ctx = add_left_constraint x ctx in
-    (* Update the expression, and add additional constraints *)
-    let ctx, e = update_texpression e ctx in
-    (* Update the abstracted value *)
-    let x = update_typed_pattern ctx x in
-    (* Put together *)
-    (ctx, Lambda (x, e))
-  (* *)
-  and update_let (monadic : bool) (lv : typed_pattern) (re : texpression)
-      (e : texpression) (ctx : pn_ctx) : pn_ctx * expression =
-    (* We first add the left-constraint *)
-    let ctx = add_left_constraint lv ctx in
-    (* Then we try to propagate the right-constraints to the left, in case
-     * the left constraints didn't give naming information *)
-    let ctx = add_left_right_constraint lv re ctx in
-    let ctx, re = update_texpression re ctx in
-    let ctx, e = update_texpression e ctx in
-    let lv = update_typed_pattern ctx lv in
-    let ctx = add_eq_var_constraint lv re ctx in
-    (ctx, Let (monadic, lv, re, e))
-  (* *)
-  and update_switch_body (scrut : texpression) (body : switch_body)
-      (ctx : pn_ctx) : pn_ctx * expression =
-    let ctx, scrut = update_texpression scrut ctx in
-
-    let ctx, body =
-      match body with
-      | If (e_true, e_false) ->
-          let ctx1, e_true = update_texpression e_true ctx in
-          let ctx2, e_false = update_texpression e_false ctx in
-          let ctx = merge_ctxs ctx1 ctx2 in
-          (ctx, If (e_true, e_false))
-      | Match branches ->
-          let ctx_branches_ls =
-            List.map
-              (fun br ->
-                let ctx = add_left_constraint br.pat ctx in
-                let ctx, branch = update_texpression br.branch ctx in
-                let pat = update_typed_pattern ctx br.pat in
-                (ctx, { pat; branch }))
-              branches
-          in
-          let ctxs, branches = List.split ctx_branches_ls in
-          let ctx = merge_ctxs_ls ctxs in
-          (ctx, Match branches)
-    in
-    (ctx, Switch (scrut, body))
-  (* *)
-  and update_loop (loop : loop) (ctx : pn_ctx) : pn_ctx * expression =
-    let { fun_end; loop_id; span; inputs; output_ty; loop_body } = loop in
-    let ctx, fun_end = update_texpression fun_end ctx in
-    let ctx, loop_body = update_texpression loop_body ctx in
-    let inputs = List.map (fun v -> update_typed_pattern ctx v) inputs in
-    let loop = { fun_end; loop_id; span; inputs; output_ty; loop_body } in
-    (ctx, Loop loop)
-  and update_struct_update (supd : struct_update) (ctx : pn_ctx) :
-      pn_ctx * expression =
-    let { struct_id; init; updates } = supd in
-    let ctx, updates =
-      List.fold_left_map
-        (fun ctx (fid, fe) ->
-          let ctx, fe = update_texpression fe ctx in
-          (ctx, (fid, fe)))
-        ctx updates
-    in
-    let supd = { struct_id; init; updates } in
-    (ctx, StructUpdate supd)
-  (* *)
-  and update_emeta (meta : emeta) (e : texpression) (ctx : pn_ctx) :
-      pn_ctx * expression =
-    let ctx =
-      match meta with
-      | Assignment (mp, rvalue, rmp) ->
-          let ctx = add_right_constraint mp rvalue ctx in
-          let ctx =
-            match (mp, rmp) with
-            | PlaceLocal (mp_var_id, _), Some (PlaceLocal (var_id, name)) -> (
-                let name =
-                  match name with
-                  | Some name -> Some name
-                  | None -> E.LocalId.Map.find_opt var_id ctx.llbc_vars
-                in
-                match name with
-                | None -> ctx
-                | Some name -> add_llbc_var_constraint mp_var_id name ctx)
-            | _ -> ctx
-          in
-          ctx
-      | SymbolicAssignments infos ->
-          List.fold_left
-            (fun ctx (var, rvalue) ->
-              let var_id = as_fvar span var in
-              add_pure_var_value_constraint var_id rvalue ctx)
-            ctx infos
-      | SymbolicPlaces infos ->
-          List.fold_left
-            (fun ctx (var, name) ->
-              let var_id = as_fvar span var in
-              add_pure_var_constraint var_id name ctx)
-            ctx infos
-      | MPlace mp -> add_right_constraint mp e ctx
-      | Tag _ | TypeAnnot -> ctx
-    in
-    let ctx, e = update_texpression e ctx in
-    let e = mk_emeta meta e in
-    (ctx, e.e)
-  in
-
   (* We open all the bound variables in the body before exploring it, then
      close them all after performing the updates - this makes it easier to
      deal with variables *)
   map_open_fun_decl_body
     (fun (body : fun_body) ->
-      let input_names =
-        List.filter_map
-          (fun (v : typed_pattern) ->
-            let v, _ = as_pat_open span v in
-            match v.basename with
-            | None -> None
-            | Some name -> Some (v.id, name))
-          body.inputs
-      in
-      let ctx =
-        {
-          pure_vars = FVarId.Map.of_list input_names;
-          llbc_vars = E.LocalId.Map.empty;
-        }
-      in
-      let _, body_exp = update_texpression body.body ctx in
-      { body with body = body_exp })
+      let ctx = compute_pretty_names_accumulate_constraints def body in
+      compute_pretty_names_update def ctx body)
     def
 
 (** Remove the meta-information *)
@@ -1914,11 +1823,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
         in
 
         let inputs : fvar list =
-          List.map
-            (fun x ->
-              let v, _ = as_pat_open span x in
-              ({ id = v.id; basename = None; ty = x.ty } : fvar))
-            loop.inputs
+          List.map (fun x -> fst (as_pat_open span x)) loop.inputs
         in
 
         let inputs =
@@ -3172,6 +3077,10 @@ let apply_passes_to_def (ctx : ctx) (def : fun_decl) : fun_and_loops =
 
   (* Extract the loop definitions by removing the {!Loop} node *)
   let def, loops = decompose_loops ctx def in
+  [%ltrace
+    let funs = def :: loops in
+    "After decomposing loops:\n\n"
+    ^ String.concat "\n\n" (List.map (fun_decl_to_string ctx) funs)];
 
   (* Apply the remaining passes *)
   let f = apply_end_passes_to_def ctx def in

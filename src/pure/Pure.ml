@@ -1083,7 +1083,7 @@ type expression =
   | Switch of texpression * switch_body
   | Loop of loop  (** See the comments for {!loop} *)
   | StructUpdate of struct_update  (** See the comments for {!struct_update} *)
-  | Meta of (emeta[@opaque]) * texpression  (** Meta-information *)
+  | Meta of emeta * texpression  (** Meta-information *)
   | EError of Meta.span option * string
 
 and switch_body = If of texpression * texpression | Match of match_branch list
@@ -1175,8 +1175,8 @@ and mvalue = texpression
 
 (** Variable used in meta-information.
 
-    We use the type [texpression] to make sure the meta-data is compatible with
-    the use of de bruijn indices. *)
+    We use the type [texpression] so that the variable id gets properly updated
+    by the functions which open/close binders. *)
 and mvar = texpression
 
 (** Meta-information stored in the AST.
