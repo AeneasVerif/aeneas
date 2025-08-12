@@ -400,12 +400,6 @@ and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
    * the same.
    *)
   let effect_info = ctx_get_effect_info ctx in
-  let output =
-    if effect_info.stateful then
-      let state_rvalue = mk_state_texpression ctx.state_var in
-      mk_simpl_tuple_texpression ctx.span [ state_rvalue; output ]
-    else output
-  in
   (* Wrap in a result if the backward function cal fail *)
   let output =
     if effect_info.can_fail then mk_result_ok_texpression ctx.span output
@@ -468,14 +462,6 @@ and translate_function_call_aux (call : S.call) (e : S.expression)
            - add the state input argument
            - generate a fresh state variable for the returned state
         *)
-        let args, ctx, out_state =
-          let fuel = mk_fuel_input_as_list ctx effect_info in
-          if effect_info.stateful then
-            let state_var = mk_state_texpression ctx.state_var in
-            let ctx, _, nstate_var = bs_ctx_fresh_state_var ctx in
-            (List.concat [ fuel; args; [ state_var ] ], ctx, Some nstate_var)
-          else (List.concat [ fuel; args ], ctx, None)
-        in
         (* Generate the variables for the backward functions returned by the forward
            function. *)
         let ctx, ignore_fwd_output, back_funs_map, back_funs =
@@ -587,11 +573,6 @@ and translate_function_call_aux (call : S.call) (e : S.expression)
             if ignore_fwd_output then back_funs else dest :: back_funs
           in
           mk_simpl_tuple_pattern vars
-        in
-        let dest =
-          match out_state with
-          | None -> dest
-          | Some out_state -> mk_simpl_tuple_pattern [ out_state; dest ]
         in
         (* Register the function call *)
         let ctx =
@@ -953,18 +934,6 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
   (* Retrieve the values consumed upon ending the loans inside this
    * abstraction: those give us the remaining input values *)
   let back_inputs = abs_to_consumed ctx ectx abs in
-  (* If the function is stateful:
-   * - add the state input argument
-   * - generate a fresh state variable for the returned state
-   *)
-  let back_state, ctx, nstate =
-    if effect_info.stateful then
-      let back_state = mk_state_texpression ctx.state_var in
-      let ctx, _, nstate = bs_ctx_fresh_state_var ctx in
-      ([ back_state ], ctx, Some nstate)
-    else ([], ctx, None)
-  in
-  let back_inputs = List.append back_inputs back_state in
   (* Retrieve the values given back by this function: those are the output
    * values. We rely on the fact that there are no nested borrows to use the
    * meta-place information from the input values given to the forward function
@@ -977,14 +946,8 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
       [ None ]
   in
   let ctx, outputs = abs_to_given_back (Some output_mpl) abs ctx in
-  (* Group the output values together: first the updated inputs *)
+  (* Group the output values together *)
   let output = mk_simpl_tuple_pattern outputs in
-  (* Add the returned state if the function is stateful *)
-  let output =
-    match nstate with
-    | None -> output
-    | Some nstate -> mk_simpl_tuple_pattern [ nstate; output ]
-  in
   (* Retrieve the function id, and register the function call in the context
      if necessary. *)
   let ctx, func =
@@ -1138,30 +1101,11 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
       let back_inputs_vars =
         T.RegionGroupId.Map.find rg_id ctx.backward_inputs_no_state
       in
-      let back_inputs = List.map mk_texpression_from_fvar back_inputs_vars in
-      (* If the function is stateful:
-       * - add the state input argument
-       * - generate a fresh state variable for the returned state
-       *)
-      let back_state, ctx, nstate =
-        if effect_info.stateful then
-          let back_state = mk_state_texpression ctx.state_var in
-          let ctx, _, nstate = bs_ctx_fresh_state_var ctx in
-          ([ back_state ], ctx, Some nstate)
-        else ([], ctx, None)
-      in
-      (* Concatenate all the inputs *)
-      let inputs = List.concat [ back_inputs; back_state ] in
+      let inputs = List.map mk_texpression_from_fvar back_inputs_vars in
       (* Retrieve the values given back by this function *)
       let ctx, outputs = abs_to_given_back None abs ctx in
       (* Group the output values together: first the updated inputs *)
       let output = mk_simpl_tuple_pattern outputs in
-      (* Add the returned state if the function is stateful *)
-      let output =
-        match nstate with
-        | None -> output
-        | Some nstate -> mk_simpl_tuple_pattern [ nstate; output ]
-      in
       (* Translate the next expression *)
       let next_e ctx = translate_expression e ctx in
       (* Put everything together *)
@@ -1510,15 +1454,7 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
                because they are locally introduced in a lambda.
             *)
             let back_sg = RegionGroupId.Map.find bid ctx.sg.fun_ty.back_sg in
-            let ctx, backward_inputs_no_state =
-              fresh_vars back_sg.inputs_no_state ctx
-            in
-            let ctx, backward_inputs_with_state =
-              if back_sg.effect_info.stateful then
-                let ctx, var, _ = bs_ctx_fresh_state_var ctx in
-                (ctx, backward_inputs_no_state @ [ var ])
-              else (ctx, backward_inputs_no_state)
-            in
+            let ctx, backward_inputs = fresh_vars back_sg.inputs ctx in
             (* Update the functions mk_return and mk_panic *)
             let effect_info = back_sg.effect_info in
             let mk_return ctx v =
@@ -1531,12 +1467,6 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
                   List.map mk_texpression_from_fvar backward_outputs
                 in
                 mk_simpl_tuple_texpression ctx.span field_values
-              in
-              let output =
-                if effect_info.stateful then
-                  let state_rvalue = mk_state_texpression ctx.state_var in
-                  mk_simpl_tuple_texpression ctx.span [ state_rvalue; output ]
-                else output
               in
               (* Wrap in a result if the backward function can fail *)
               if effect_info.can_fail then
@@ -1567,10 +1497,10 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
             {
               ctx with
               backward_inputs_no_state =
-                RegionGroupId.Map.add bid backward_inputs_no_state
+                RegionGroupId.Map.add bid backward_inputs
                   ctx.backward_inputs_no_state;
               backward_inputs_with_state =
-                RegionGroupId.Map.add bid backward_inputs_with_state
+                RegionGroupId.Map.add bid backward_inputs
                   ctx.backward_inputs_with_state;
               mk_return = Some mk_return;
               mk_panic = Some mk_panic;
@@ -1662,17 +1592,6 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
     in
     let vars = List.map mk_texpression_from_fvar vars in
     let ret = mk_simpl_tuple_texpression ctx.span vars in
-
-    (* Introduce a fresh input state variable for the forward expression *)
-    let _ctx, state_var, state_pat =
-      if fwd_effect_info.stateful then
-        let ctx, var, pat = bs_ctx_fresh_state_var ctx in
-        (ctx, [ var ], [ pat ])
-      else (ctx, [], [])
-    in
-
-    let state_var = List.map mk_texpression_from_fvar state_var in
-    let ret = mk_simpl_tuple_texpression ctx.span (state_var @ [ ret ]) in
     let ret = mk_result_ok_texpression ctx.span ret in
 
     (* Introduce all the let-bindings *)
@@ -1702,8 +1621,7 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
     in
 
     (* Bind the expression for the forward output *)
-    let fwd_var = mk_typed_pattern_from_fvar pure_fwd_var None in
-    let pat = mk_simpl_tuple_pattern (state_pat @ [ fwd_var ]) in
+    let pat = mk_typed_pattern_from_fvar pure_fwd_var None in
     mk_closed_checked_let __FILE__ __LINE__ ctx fwd_effect_info.can_fail pat
       fwd_e e
   in
@@ -1805,20 +1723,7 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
       let args, ctx, out_pats =
         (* Add the returned backward functions (they might be empty) *)
         let output_pat = mk_simpl_tuple_pattern (output_pat @ back_funs) in
-
-        (* Depending on the function effects:
-         * - add the fuel
-         * - add the state input argument
-         * - generate a fresh state variable for the returned state
-         *)
-        let fuel = mk_fuel_input_as_list ctx effect_info in
-        if effect_info.stateful then
-          let state_var = mk_state_texpression ctx.state_var in
-          let ctx, _, nstate_pat = bs_ctx_fresh_state_var ctx in
-          ( List.concat [ fuel; args; [ state_var ] ],
-            ctx,
-            [ nstate_pat; output_pat ] )
-        else (List.concat [ fuel; args ], ctx, [ output_pat ])
+        (List.concat [ args ], ctx, [ output_pat ])
       in
 
       (* Update the loop information in the context *)
@@ -2082,12 +1987,6 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
       | None -> raise (Failure "Unexpected")
       | Some output ->
           let effect_info = ctx_get_effect_info ctx in
-          let output =
-            if effect_info.stateful then
-              let state_rvalue = mk_state_texpression ctx.state_var in
-              mk_simpl_tuple_texpression ctx.span [ state_rvalue; output ]
-            else output
-          in
           (* Wrap in a result if the function can fail *)
           if effect_info.can_fail then mk_result_ok_texpression ctx.span output
           else output
@@ -2118,13 +2017,6 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   (* Update the context for the loop body *)
   let ctx_loop = { ctx_end with inside_loop = true } in
 
-  (* Add the input state *)
-  let input_state =
-    if (ctx_get_effect_info ctx).stateful then
-      Some (mk_typed_pattern_from_fvar (mk_state_fvar ctx.state_var) None)
-    else None
-  in
-
   (* Translate the loop body *)
   let loop_body = translate_expression loop.loop_expr ctx_loop in
 
@@ -2136,15 +2028,6 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
           fun_end;
           loop_id;
           span = loop.span;
-          fuel0 =
-            (if !Config.use_fuel then
-               Some (mk_texpression_from_fvar (mk_fuel_fvar ctx.fuel0))
-             else None);
-          fuel =
-            (if !Config.use_fuel then
-               Some (mk_typed_pattern_from_fvar (mk_fuel_fvar ctx.fuel) None)
-             else None);
-          input_state;
           inputs = List.map (fun v -> mk_typed_pattern_from_fvar v None) inputs;
           output_ty;
           loop_body;

@@ -1904,13 +1904,7 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
        * functions - we also ignore the additional state received by the
        * backward function, if there is one).
        *)
-      let inputs_lvs =
-        let all_inputs = (Option.get def.body).inputs in
-        let num_fwd_inputs =
-          def.signature.fwd_info.fwd_info.num_inputs_with_fuel_with_state
-        in
-        Collections.List.prefix num_fwd_inputs all_inputs
-      in
+      let inputs_lvs = (Option.get def.body).inputs in
       (* TODO: we should probably print the input variables, not the typed
          patterns *)
       let _ =
@@ -1964,11 +1958,7 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   (* Termination clause and proof for Lean *)
   if has_decreases_clause && backend () = Lean then (
     let def_body = Option.get def.body in
-    let all_vars = List.map (as_pat_open_fvar_id span) def_body.inputs in
-    let num_fwd_inputs =
-      def.signature.fwd_info.fwd_info.num_inputs_with_fuel_with_state
-    in
-    let vars = Collections.List.prefix num_fwd_inputs all_vars in
+    let vars = List.map (as_pat_open_fvar_id span) def_body.inputs in
 
     (* termination_by *)
     let terminates_name =
@@ -1986,7 +1976,7 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
       (fun v ->
         F.pp_print_space fmt ();
         F.pp_print_string fmt (ctx_get_var def.item_meta.span v ctx_body))
-      all_vars;
+      vars;
     F.pp_print_space fmt ();
     F.pp_print_string fmt "=>";
     (* Close the box for [termination_by CALL =>] *)

@@ -1102,23 +1102,12 @@ and loop = {
   fun_end : texpression;
   loop_id : loop_id;
   span : span; [@opaque]
-  fuel0 : texpression option;
-      (** The original fuel taken as input by the function (if we use fuel).
-
-          This should be a variable. *)
-  fuel : typed_pattern option;
-      (** The fuel to use for the recursive calls (if we use fuel).
-
-          Note that this variable is used in [loop_body]. *)
-  input_state : typed_pattern option;
-      (** This should be a variable.
-
-          Note that this variable is used in [loop_body]. *)
+  output_ty : ty;  (** The output type of the loop *)
   inputs : typed_pattern list;
       (** Those should be variables.
 
-          Note that those variables are used in [loop_body]. *)
-  output_ty : ty;  (** The output type of the loop *)
+          Those variables are the variables bound in [loop_body] (they are the
+          input arguments of the loop). *)
   loop_body : texpression;
 }
 
@@ -1272,30 +1261,17 @@ type fun_effect_info = {
   stateful : bool;  (** [true] if the function is stateful (updates a state) *)
   can_fail : bool;  (** [true] if the return type is a [result] *)
   can_diverge : bool;
-      (** [true] if the function can diverge (i.e., not terminate) *)
+      (** [true] if the function can diverge (i.e., not terminate). It happens
+          if the function is recursive or contains a loop but also if it
+          (transitively) calls a function which can diverge. *)
   is_rec : bool;
       (** [true] if the function is recursive (or in a mutually recursive group)
       *)
 }
 [@@deriving show]
 
-type inputs_info = {
-  has_fuel : bool;
-  num_inputs_no_fuel_no_state : int;
-      (** The number of input types ignoring the fuel (if used) and ignoring the
-          state (if used) *)
-  num_inputs_with_fuel_no_state : int;
-      (** The number of input types, with the fuel (if used) and ignoring the
-          state (if used) *)
-  num_inputs_with_fuel_with_state : int;
-      (** The number of input types, with fuel and state (if used) *)
-}
-[@@deriving show]
-
 (** Meta information about a function signature *)
 type fun_sig_info = {
-  fwd_info : inputs_info;
-      (** Information about the inputs of the forward function *)
   effect_info : fun_effect_info;
   ignore_output : bool;
       (** In case we merge the forward/backward functions: should we ignore the
@@ -1307,7 +1283,6 @@ type fun_sig_info = {
 type back_sg_info = {
   inputs : (string option * ty) list;
       (** The additional inputs of the backward function *)
-  inputs_no_state : (string option * ty) list;
   outputs : ty list;
       (** The "decomposed" list of outputs.
 
@@ -1415,7 +1390,7 @@ type decomposed_fun_sig = {
     ]}
 
     The function's type should be given by [mk_arrows sig.inputs sig.output]. We
-    provide additional span-information with {!fun_sig.info}:
+    provide additional meta-information with {!fun_sig.info}:
     - we divide between forward inputs and backward inputs (i.e., inputs
       specific to the forward functions, and additional inputs necessary if the
       signature is for a backward function)

@@ -532,35 +532,11 @@ let compute_pretty_names (def : fun_decl) : fun_decl =
     (ctx, Switch (scrut, body))
   (* *)
   and update_loop (loop : loop) (ctx : pn_ctx) : pn_ctx * expression =
-    let {
-      fun_end;
-      loop_id;
-      span;
-      fuel0;
-      fuel;
-      input_state;
-      inputs;
-      output_ty;
-      loop_body;
-    } =
-      loop
-    in
+    let { fun_end; loop_id; span; inputs; output_ty; loop_body } = loop in
     let ctx, fun_end = update_texpression fun_end ctx in
     let ctx, loop_body = update_texpression loop_body ctx in
     let inputs = List.map (fun v -> update_typed_pattern ctx v) inputs in
-    let loop =
-      {
-        fun_end;
-        loop_id;
-        span;
-        fuel0;
-        fuel;
-        input_state;
-        inputs;
-        output_ty;
-        loop_body;
-      }
-    in
+    let loop = { fun_end; loop_id; span; inputs; output_ty; loop_body } in
     (ctx, Loop loop)
   and update_struct_update (supd : struct_update) (ctx : pn_ctx) :
       pn_ctx * expression =
@@ -1911,39 +1887,14 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
         let loop_fwd_effect_info = fwd_effect_info in
 
         let loop_fwd_sig_info : fun_sig_info =
-          let fuel = if !Config.use_fuel then 1 else 0 in
-          let num_inputs = List.length loop.inputs in
-          let fwd_info : inputs_info =
-            let info = fwd_info.fwd_info in
-            let fwd_state =
-              info.num_inputs_with_fuel_with_state
-              - info.num_inputs_with_fuel_no_state
-            in
-            {
-              has_fuel = !Config.use_fuel;
-              num_inputs_no_fuel_no_state = num_inputs;
-              num_inputs_with_fuel_no_state = num_inputs + fuel;
-              num_inputs_with_fuel_with_state = num_inputs + fuel + fwd_state;
-            }
-          in
-
-          { fwd_info; effect_info = loop_fwd_effect_info; ignore_output }
+          { effect_info = loop_fwd_effect_info; ignore_output }
         in
-        [%sanity_check] def.item_meta.span
-          (fun_sig_info_is_wf loop_fwd_sig_info);
 
         let inputs_tys =
-          let fuel = if !Config.use_fuel then [ mk_fuel_ty ] else [] in
           let fwd_inputs =
             List.map (fun (v : typed_pattern) -> v.ty) loop.inputs
           in
-          let info = fwd_info.fwd_info in
-          let fwd_state =
-            Collections.List.subslice fun_sig.inputs
-              info.num_inputs_with_fuel_no_state
-              info.num_inputs_with_fuel_with_state
-          in
-          List.concat [ fuel; fwd_inputs; fwd_state ]
+          fwd_inputs
         in
 
         let output = loop.output_ty in
@@ -1962,70 +1913,19 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
           }
         in
 
-        let (fuel_vars, inputs) : _ * fvar list =
-          (* Introduce the fuel input *)
-          let (fuel_vars, fuel0_var) : _ * fvar list =
-            if !Config.use_fuel then
-              let fuel0 = as_fvar span (Option.get loop.fuel0) in
-              let fuel0_var = mk_fuel_fvar fuel0 in
-              (Some (loop.fuel0, loop.fuel), [ fuel0_var ])
-            else (None, [])
-          in
-
-          (* Introduce the forward input state *)
-          let fwd_state_var =
-            [%sanity_check] def.item_meta.span
-              (loop_fwd_effect_info.stateful = Option.is_some loop.input_state);
-            match loop.input_state with
-            | None -> []
-            | Some input_state ->
-                let input_state, _ = as_pat_open span input_state in
-                let state_var = mk_state_fvar input_state.id in
-                [ state_var ]
-          in
-
-          (* Introduce the additional backward inputs, if necessary *)
-          let fun_body = Option.get def.body in
-          let info = fwd_info.fwd_info in
-          let _, back_inputs =
-            Collections.List.split_at fun_body.inputs
-              info.num_inputs_with_fuel_with_state
-          in
-          let back_inputs : fvar list =
-            List.map (fun x -> as_pat_open span x |> fst) back_inputs
-          in
-
-          let loop_inputs =
-            List.map
-              (fun x ->
-                let v, _ = as_pat_open span x in
-                ({ id = v.id; basename = None; ty = x.ty } : fvar))
-              loop.inputs
-          in
-
-          let inputs =
-            List.concat [ fuel0_var; fwd_state_var; loop_inputs; back_inputs ]
-          in
-          (fuel_vars, inputs)
-        in
-
-        (* Wrap the loop body in a match over the fuel *)
-        let loop_body =
-          match fuel_vars with
-          | None -> loop.loop_body
-          | Some (fuel0, fuel) ->
-              wrap_in_match_fuel def.item_meta.span
-                (* TODO: the use of fuel is messed up *)
-                (as_fvar span (Option.get fuel0))
-                (as_pat_open_fvar_id span (Option.get fuel))
-                ~close:false loop.loop_body
+        let inputs : fvar list =
+          List.map
+            (fun x ->
+              let v, _ = as_pat_open span x in
+              ({ id = v.id; basename = None; ty = x.ty } : fvar))
+            loop.inputs
         in
 
         let inputs =
           List.map (fun x -> mk_typed_pattern_from_fvar x None) inputs
         in
         let loop_body =
-          close_all_fun_body loop.span { inputs; body = loop_body }
+          close_all_fun_body loop.span { inputs; body = loop.loop_body }
         in
         (* We retrieve the meta information from the parent function
          *but* replace its span with the span of the loop *)
@@ -2052,12 +1952,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
         loops := LoopId.Map.add_strict loop.loop_id loop_def !loops;
 
         (* Update the current expression to remove the [Loop] node, and continue *)
-        let inner_e = self#visit_texpression env loop.fun_end in
-        (* We need to propagate the fuel - TODO: we really need to cleanup the way fuel is handled *)
-        match fuel_vars with
-        | None -> inner_e.e
-        | Some (fuel0, fuel) ->
-            (mk_opened_let false (Option.get fuel) (Option.get fuel0) inner_e).e
+        (self#visit_texpression env loop.fun_end).e
     end
   in
 
@@ -2948,33 +2843,26 @@ let filter_loop_inputs_explore_one_visitor (ctx : ctx)
   reset_fvar_id_counter ();
   let body = open_all_fun_body span body in
   [%ldebug "After opening binders:\n" ^ fun_body_to_string ctx body];
-  (* We only look at the forward inputs, without the state *)
-  let inputs_prefix, _ =
-    Collections.List.split_at body.inputs
-      decl.signature.fwd_info.fwd_info.num_inputs_with_fuel_no_state
-  in
   let used =
-    ref
-      (List.map (fun v -> ((fst (as_pat_open span v)).id, false)) inputs_prefix)
+    ref (List.map (fun v -> ((fst (as_pat_open span v)).id, false)) body.inputs)
   in
-  let inputs_prefix_length = List.length inputs_prefix in
   let inputs =
     List.map
       (fun v ->
         let v, _ = as_pat_open span v in
         (v.id, mk_texpression_from_fvar v))
-      inputs_prefix
+      body.inputs
   in
   [%ltrace
     "inputs:\n"
-    ^ String.concat ", " (List.map (typed_pattern_to_string ctx) inputs_prefix)];
+    ^ String.concat ", " (List.map (typed_pattern_to_string ctx) body.inputs)];
   let inputs_set =
     FVarId.Set.of_list
       (List.map
          (fun x ->
            let x, _ = as_pat_open span x in
            x.id)
-         inputs_prefix)
+         body.inputs)
   in
   [%sanity_check] decl.item_meta.span (Option.is_some decl.loop_id);
 
@@ -2986,9 +2874,6 @@ let filter_loop_inputs_explore_one_visitor (ctx : ctx)
 
   (* Set the fuel as used *)
   let sg_info = decl.signature.fwd_info in
-  if sg_info.fwd_info.has_fuel then
-    set_used (fst (Collections.List.nth inputs 0));
-
   let visitor =
     object (self : 'self)
       inherit [_] iter_expression as super
@@ -3006,26 +2891,22 @@ let filter_loop_inputs_explore_one_visitor (ctx : ctx)
                 | FunOrOp (Fun (FromLlbc (FunId fun_id', loop_id'))) ->
                     if (fun_id', loop_id') = fun_id then (
                       (* For each argument, check if it is exactly the original
-                       input parameter. Note that there shouldn't be partial
-                       applications of loop functions: the number of arguments
-                       should be exactly the number of input parameters (i.e.,
-                       we can use [combine])
-                    *)
-                      let beg_args, end_args =
-                        Collections.List.split_at args inputs_prefix_length
-                      in
+                         input parameter. Note that there shouldn't be partial
+                         applications of loop functions: the number of arguments
+                         should be exactly the number of input parameters (i.e.,
+                         we can use [combine])
+                      *)
                       [%ltrace
-                        "beg_args:\n"
+                        "args:\n"
                         ^ String.concat ", "
-                            (List.map (texpression_to_string ctx) beg_args)];
-                      let used_args = List.combine inputs beg_args in
+                            (List.map (texpression_to_string ctx) args)];
+                      let used_args = List.combine inputs args in
                       List.iter
                         (fun ((vid, var), arg) ->
                           if var <> arg then (
                             self#visit_texpression env arg;
                             set_used vid))
-                        used_args;
-                      List.iter (self#visit_texpression env) end_args)
+                        used_args)
                     else super#visit_texpression env e
                 | _ -> super#visit_texpression env e)
             | _ -> super#visit_texpression env e)
@@ -3069,9 +2950,6 @@ let filter_loop_inputs_filter_in_one (_ctx : ctx)
     match FunLoopIdMap.find_opt fun_id used_map with
     | None -> (* Nothing to filter *) decl
     | Some used_info ->
-        let num_filtered =
-          List.length (List.filter (fun b -> not b) used_info)
-        in
         let {
           generics;
           explicit_info = _;
@@ -3085,33 +2963,7 @@ let filter_loop_inputs_filter_in_one (_ctx : ctx)
         } =
           decl.signature
         in
-        let { fwd_info; effect_info; ignore_output } = fwd_info in
-
-        let {
-          has_fuel;
-          num_inputs_no_fuel_no_state;
-          num_inputs_with_fuel_no_state;
-          num_inputs_with_fuel_with_state;
-        } =
-          fwd_info
-        in
-
         let inputs = filter_prefix used_info inputs in
-
-        let fwd_info =
-          {
-            has_fuel;
-            num_inputs_no_fuel_no_state =
-              num_inputs_no_fuel_no_state - num_filtered;
-            num_inputs_with_fuel_no_state =
-              num_inputs_with_fuel_no_state - num_filtered;
-            num_inputs_with_fuel_with_state =
-              num_inputs_with_fuel_with_state - num_filtered;
-          }
-        in
-
-        let fwd_info = { fwd_info; effect_info; ignore_output } in
-        [%sanity_check] decl.item_meta.span (fun_sig_info_is_wf fwd_info);
         let explicit_info = compute_explicit_info generics inputs in
         let known_from_trait_refs = compute_known_info explicit_info generics in
         let signature =

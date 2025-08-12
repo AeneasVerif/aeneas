@@ -99,18 +99,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
   (* Initialize the context *)
   Pure.reset_fvar_id_counter ();
   let sv_to_var = SymbolicValueId.Map.empty in
-  let state_var = Pure.fresh_fvar_id () in
-  let fuel0 = Pure.fresh_fvar_id () in
-  let fuel = Pure.fresh_fvar_id () in
-
-  let fvars =
-    Pure.FVarId.Map.of_list
-      [
-        (state_var, PureUtils.mk_state_fvar state_var);
-        (fuel0, PureUtils.mk_fuel_fvar fuel0);
-        (fuel, PureUtils.mk_fuel_fvar fuel);
-      ]
-  in
+  let fvars = Pure.FVarId.Map.empty in
   let fvars_tys = Pure.FVarId.Map.map (fun (v : Pure.fvar) -> v.ty) fvars in
 
   let calls = FunCallId.Map.empty in
@@ -172,8 +161,6 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     SymbolicToPureTypes.translate_fun_sig_from_decl_to_decomposed trans_ctx fdef
   in
 
-  let back_state_vars = RegionGroupId.Map.of_list [] in
-
   let ctx =
     {
       SymbolicToPureCore.span = fdef.item_meta.span;
@@ -185,10 +172,6 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
       sv_to_var;
       fvars;
       fvars_tys;
-      state_var;
-      back_state_vars;
-      fuel0;
-      fuel;
       type_ctx;
       fun_ctx;
       fun_decl = fdef;

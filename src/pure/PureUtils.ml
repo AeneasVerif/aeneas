@@ -124,26 +124,13 @@ class ['self] scoped_iter_expression =
       self#visit_texpression scope' body
 
     method! visit_loop scope loop =
-      let {
-        fun_end;
-        loop_id = _;
-        span = _;
-        fuel0;
-        fuel;
-        input_state;
-        inputs;
-        output_ty;
-        loop_body;
-      } =
+      let { fun_end; loop_id = _; span = _; inputs; output_ty; loop_body } =
         loop
       in
       (* Visit what can be visited before entering the binder *)
-      Option.iter (self#visit_texpression scope) fuel0;
       self#visit_texpression scope fun_end;
       self#visit_ty scope output_ty;
       (* Visit the patterns *)
-      Option.iter (self#visit_typed_pattern scope) fuel;
-      Option.iter (self#visit_typed_pattern scope) input_state;
       List.iter (self#visit_typed_pattern scope) inputs;
       (* Enter the inner expressions *)
       let scope' = scope + 1 in
@@ -188,61 +175,17 @@ class ['self] scoped_map_expression =
       Lambda (pat, body)
 
     method! visit_loop scope loop =
-      let {
-        fun_end;
-        loop_id;
-        span;
-        fuel0;
-        fuel;
-        input_state;
-        inputs;
-        output_ty;
-        loop_body;
-      } =
-        loop
-      in
+      let { fun_end; loop_id; span; inputs; output_ty; loop_body } = loop in
       (* Visit what can be visited before entering the binder *)
-      let fuel0 = Option.map (self#visit_texpression scope) fuel0 in
       let fun_end = self#visit_texpression scope fun_end in
       let output_ty = self#visit_ty scope output_ty in
       (* Visit the patterns *)
-      let fuel = Option.map (self#visit_typed_pattern scope) fuel in
-      let input_state =
-        Option.map (self#visit_typed_pattern scope) input_state
-      in
       let inputs = List.map (self#visit_typed_pattern scope) inputs in
       (* Enter the inner expressions *)
       let scope' = scope + 1 in
       let loop_body = self#visit_texpression scope' loop_body in
-      {
-        fun_end;
-        loop_id;
-        span;
-        fuel0;
-        fuel;
-        input_state;
-        inputs;
-        output_ty;
-        loop_body;
-      }
+      { fun_end; loop_id; span; inputs; output_ty; loop_body }
   end
-
-let inputs_info_is_wf (info : inputs_info) : bool =
-  let {
-    has_fuel;
-    num_inputs_no_fuel_no_state;
-    num_inputs_with_fuel_no_state;
-    num_inputs_with_fuel_with_state;
-  } =
-    info
-  in
-  let fuel = if has_fuel then 1 else 0 in
-  num_inputs_no_fuel_no_state >= 0
-  && num_inputs_with_fuel_no_state = num_inputs_no_fuel_no_state + fuel
-  && num_inputs_with_fuel_with_state >= num_inputs_with_fuel_no_state
-
-let fun_sig_info_is_wf (info : fun_sig_info) : bool =
-  inputs_info_is_wf info.fwd_info
 
 let opt_dest_arrow_ty (ty : ty) : (ty * ty) option =
   match ty with
@@ -1251,33 +1194,12 @@ let mk_closed_lambda span (x : typed_pattern) (e : texpression) : texpression =
   { e; ty }
 
 let close_loop span (loop : loop) : loop =
-  let {
-    fun_end = _;
-    loop_id = _;
-    span = _;
-    fuel0 = _;
-    fuel;
-    input_state;
-    inputs;
-    output_ty = _;
-    loop_body;
-  } =
+  let { fun_end = _; loop_id = _; span = _; inputs; output_ty = _; loop_body } =
     loop
   in
-  let opt_pop x ls =
-    match (x, ls) with
-    | None, _ -> (None, ls)
-    | Some _, hd :: ls -> (Some hd, ls)
-    | _ -> [%internal_error] span
-  in
-  let inputs, visitor =
-    close_binders_visitor span
-      (Option.to_list fuel @ Option.to_list input_state @ inputs)
-  in
-  let fuel, inputs = opt_pop fuel inputs in
-  let input_state, inputs = opt_pop input_state inputs in
+  let inputs, visitor = close_binders_visitor span inputs in
   let loop_body = visitor#visit_texpression 0 loop_body in
-  { loop with fuel; input_state; inputs; loop_body }
+  { loop with inputs; loop_body }
 
 (** Make an open lambda expression.
 
@@ -1793,27 +1715,12 @@ class virtual ['self] open_close_all_visitor =
       { inputs; body }
 
     method! visit_loop env loop =
-      let {
-        fun_end;
-        loop_id;
-        span;
-        fuel0;
-        fuel;
-        input_state;
-        inputs;
-        output_ty;
-        loop_body;
-      } =
-        loop
-      in
+      let { fun_end; loop_id; span; inputs; output_ty; loop_body } = loop in
       (* Visit what can be visited before entering the binder *)
-      let fuel0 = Option.map (self#visit_texpression env) fuel0 in
       let fun_end = self#visit_texpression env fun_end in
       let output_ty = self#visit_ty env output_ty in
       (* Visit the patterns to push a new scope *)
       self#start_scope env;
-      let fuel = Option.map (self#visit_typed_pattern env) fuel in
-      let input_state = Option.map (self#visit_typed_pattern env) input_state in
       let inputs = List.map (self#visit_typed_pattern env) inputs in
       self#push_scope env;
       (* Enter the inner expression *)
@@ -1821,17 +1728,7 @@ class virtual ['self] open_close_all_visitor =
       (* Pop the stack *)
       self#pop_scope env;
       (* *)
-      {
-        fun_end;
-        loop_id;
-        span;
-        fuel0;
-        fuel;
-        input_state;
-        inputs;
-        output_ty;
-        loop_body;
-      }
+      { fun_end; loop_id; span; inputs; output_ty; loop_body }
 
     method! visit_FVar env (id : fvar_id) = BVar (self#get_fvar env id)
     method! visit_BVar env (v : bvar) = FVar (self#get_bvar env v)

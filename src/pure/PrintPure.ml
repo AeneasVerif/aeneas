@@ -663,9 +663,7 @@ let adt_pattern_to_string ?(span : Meta.span option) (env : fmt_env)
   snd (adt_pattern_to_string_aux span env variant_id field_values ty)
 
 let back_sg_info_to_string (env : fmt_env) (info : back_sg_info) : string =
-  let { inputs; inputs_no_state; outputs; output_names; effect_info; filter } =
-    info
-  in
+  let { inputs; outputs; output_names; effect_info; filter } = info in
   let input_to_string (n, ty) =
     (match n with
     | None -> ""
@@ -675,9 +673,7 @@ let back_sg_info_to_string (env : fmt_env) (info : back_sg_info) : string =
   let inputs_to_string inputs =
     "[" ^ String.concat "," (List.map input_to_string inputs) ^ "]"
   in
-  "{ inputs = " ^ inputs_to_string inputs ^ "; inputs_no_state = "
-  ^ inputs_to_string inputs_no_state
-  ^ "; outputs = ["
+  "{ inputs = " ^ inputs_to_string inputs ^ "; outputs = ["
   ^ String.concat "," (List.map (ty_to_string env false) outputs)
   ^ "; output_names = ["
   ^ String.concat ","
@@ -1001,48 +997,22 @@ and loop_to_string ?(span : Meta.span option = None) (env : fmt_env)
   let fun_end =
     texpression_to_string ~span env false indent2 indent_incr loop.fun_end
   in
-  let fuel0 =
-    "fuel0: "
-    ^ option_to_string
-        (texpression_to_string ~span env false indent2 indent_incr)
-        loop.fuel0
-  in
   (* Introduce the inputs *)
-  let env, fuel, input_state, loop_inputs =
+  let env, loop_inputs =
     let env = fmt_env_start_pbvars env in
-    let env, fuel =
-      match loop.fuel with
-      | None -> (env, None)
-      | Some fuel ->
-          let env, fuel = typed_pattern_to_string_core span env fuel in
-          (env, Some fuel)
-    in
-    let env, input_state =
-      match loop.input_state with
-      | None -> (env, None)
-      | Some input_state ->
-          let env, input_state =
-            typed_pattern_to_string_core span env input_state
-          in
-          (env, Some input_state)
-    in
     let env, loop_inputs =
       List.fold_left_map (typed_pattern_to_string_core span) env loop.inputs
     in
     let loop_inputs = "loop_inputs: [" ^ String.concat "; " loop_inputs ^ "]" in
     let env = fmt_env_push_pbvars env in
-    (env, fuel, input_state, loop_inputs)
+    (env, loop_inputs)
   in
   (* *)
   let loop_body =
     texpression_to_string ~span env false indent2 indent_incr loop.loop_body
   in
   "loop {\n" ^ indent1 ^ "fun_end: {\n" ^ indent2 ^ fun_end ^ "\n" ^ indent1
-  ^ "}\n" ^ indent1 ^ "fuel0: " ^ fuel0 ^ "\n" ^ indent1 ^ "fuel: "
-  ^ option_to_string (fun x -> x) fuel
-  ^ "\n" ^ indent1 ^ "input_state: "
-  ^ option_to_string (fun x -> x) input_state
-  ^ "\n" ^ indent1 ^ loop_inputs ^ "\n" ^ indent1 ^ output_ty ^ "\n" ^ indent1
+  ^ "}\n" ^ indent1 ^ loop_inputs ^ "\n" ^ indent1 ^ output_ty ^ "\n" ^ indent1
   ^ "loop_body: {\n" ^ indent2 ^ loop_body ^ "\n" ^ indent1 ^ "}\n" ^ indent
   ^ "}"
 

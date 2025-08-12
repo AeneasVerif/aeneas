@@ -32,7 +32,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
         let effect_info =
           get_fun_effect_info ctx (FunId (FRegular def_id)) None None
         in
-        let mk_return ctx v =
+        let mk_return (ctx : bs_ctx) v =
           match v with
           | None ->
               raise
@@ -40,12 +40,6 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
                    "Unexpected: reached a return expression without value in a \
                     function forward expression")
           | Some output ->
-              let output =
-                if effect_info.stateful then
-                  let state_rvalue = mk_state_texpression ctx.state_var in
-                  mk_simpl_tuple_texpression ctx.span [ state_rvalue; output ]
-                else output
-              in
               (* Wrap in a result if the function can fail *)
               if effect_info.can_fail then
                 mk_result_ok_texpression ctx.span output
@@ -79,41 +73,15 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
           { ctx with mk_return = Some mk_return; mk_panic = Some mk_panic }
         in
         let body = translate_expression body ctx in
-        (* Add a match over the fuel, if necessary *)
-        let body =
-          if function_decreases_fuel effect_info then
-            wrap_in_match_fuel def.item_meta.span ctx.fuel0 ctx.fuel ~close:true
-              body
-          else body
-        in
         (* Sanity check *)
         type_check_texpression ctx body;
-        (* Introduce the fuel parameter, if necessary *)
-        let fuel =
-          if function_uses_fuel effect_info then
-            let fuel_var =
-              if function_decreases_fuel effect_info then ctx.fuel0
-              else ctx.fuel
-            in
-            [ mk_fuel_fvar fuel_var ]
-          else []
-        in
-        (* Introduce the forward input state (the state at call site of the
-         * *forward* function), if necessary. *)
-        let fwd_state =
-          (* We check if the *whole group* is stateful. See {!effect_info} *)
-          if effect_info.stateful_group then [ mk_state_fvar ctx.state_var ]
-          else []
-        in
         (* Group the inputs together *)
-        let inputs = List.concat [ fuel; ctx.forward_inputs; fwd_state ] in
+        let inputs = ctx.forward_inputs in
         (* Sanity check *)
         [%ltrace
           name_to_string ctx def.item_meta.name
           ^ "\n- ctx.forward_inputs: "
           ^ String.concat ", " (List.map show_fvar ctx.forward_inputs)
-          ^ "\n- state: "
-          ^ String.concat ", " (List.map show_fvar fwd_state)
           ^ "\n- signature.inputs: "
           ^ String.concat ", "
               (List.map (pure_ty_to_string ctx) signature.inputs)

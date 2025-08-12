@@ -531,27 +531,6 @@ let compute_raw_fun_effect_info (span : Meta.span option)
         is_rec = false;
       }
 
-(** Small utility.
-
-    Does the function *decrease* the fuel? [true] if recursive. *)
-let function_decreases_fuel (info : fun_effect_info) : bool =
-  !Config.use_fuel && info.is_rec
-
-(** Small utility.
-
-    Does the function *use* the fuel? [true] if can diverge. *)
-let function_uses_fuel (info : fun_effect_info) : bool =
-  !Config.use_fuel && info.can_diverge
-
-(** Small utility *)
-let mk_fuel_input_ty_as_list (info : fun_effect_info) : ty list =
-  if function_uses_fuel info then [ mk_fuel_ty ] else []
-
-(** Small utility *)
-let mk_fuel_input_as_list (ctx : bs_ctx) (info : fun_effect_info) :
-    texpression list =
-  if function_uses_fuel info then [ mk_fuel_texpression ctx.fuel ] else []
-
 (** Translate an instantiated function signature to a decomposed function
     signature.
 
@@ -590,19 +569,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
     compute_raw_fun_effect_info span fun_infos fun_id None None
   in
   (* Compute the forward inputs *)
-  let fwd_fuel = mk_fuel_input_ty_as_list fwd_effect_info in
-  let fwd_inputs_no_fuel_no_state =
-    List.map (translate_fwd_ty span type_infos) sg.inputs
-  in
-  (* State input for the forward function *)
-  let fwd_state_ty =
-    (* For the forward state, we check if the *whole group* is stateful.
-       See {!effect_info}. *)
-    if fwd_effect_info.stateful_group then [ mk_state_ty ] else []
-  in
-  let fwd_inputs =
-    List.concat [ fwd_fuel; fwd_inputs_no_fuel_no_state; fwd_state_ty ]
-  in
+  let fwd_inputs = List.map (translate_fwd_ty span type_infos) sg.inputs in
   (* Compute the backward output, without the effect information *)
   let fwd_output = translate_fwd_ty span type_infos sg.output in
 
@@ -708,10 +675,8 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
     let back_effect_info =
       compute_raw_fun_effect_info span fun_infos fun_id None (Some gid)
     in
-    let inputs_no_state = translate_back_inputs_for_gid gid in
-    let inputs_no_state =
-      List.map (fun ty -> (Some "ret", ty)) inputs_no_state
-    in
+    let inputs = translate_back_inputs_for_gid gid in
+    let inputs = List.map (fun ty -> (Some "ret", ty)) inputs in
     (* We consider a backward function as stateful and potentially failing
        **only if it has inputs** (for the "potentially failing": if it has
        not inputs, we directly evaluate it in the body of the forward function).
@@ -734,30 +699,19 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
        ]}
     *)
     let back_effect_info =
-      let b = inputs_no_state <> [] in
+      let b = inputs <> [] in
       {
         back_effect_info with
         stateful = back_effect_info.stateful && b;
         can_fail = back_effect_info.can_fail && b;
       }
     in
-    let state =
-      if back_effect_info.stateful then [ (None, mk_state_ty) ] else []
-    in
-    let inputs = inputs_no_state @ state in
     let output_names, outputs = compute_back_outputs_for_gid gid in
     let filter =
       !Config.simplify_merged_fwd_backs && inputs = [] && outputs = []
     in
     let info =
-      {
-        inputs;
-        inputs_no_state;
-        outputs;
-        output_names;
-        effect_info = back_effect_info;
-        filter;
-      }
+      { inputs; outputs; output_names; effect_info = back_effect_info; filter }
     in
     (gid, info)
   in
@@ -767,25 +721,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
   in
 
   (* The additional information about the forward function *)
-  let fwd_info =
-    (* *)
-    let has_fuel = fwd_fuel <> [] in
-    let num_inputs_no_fuel_no_state = List.length fwd_inputs_no_fuel_no_state in
-    let num_inputs_with_fuel_no_state =
-      (* We use the fact that [fuel] has length 1 if we use some fuel, 0 otherwise *)
-      List.length fwd_fuel + num_inputs_no_fuel_no_state
-    in
-    let fwd_info : inputs_info =
-      {
-        has_fuel;
-        num_inputs_no_fuel_no_state;
-        num_inputs_with_fuel_no_state;
-        num_inputs_with_fuel_with_state =
-          (* We use the fact that [fwd_state_ty] has length 1 if there is a state,
-             and 0 otherwise *)
-          num_inputs_with_fuel_no_state + List.length fwd_state_ty;
-      }
-    in
+  let fwd_info : fun_sig_info =
     let ignore_output =
       if !Config.simplify_merged_fwd_backs then
         ty_is_unit fwd_output
@@ -794,9 +730,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
              (RegionGroupId.Map.values back_sg)
       else false
     in
-    let info = { fwd_info; effect_info = fwd_effect_info; ignore_output } in
-    [%sanity_check_opt_span] span (fun_sig_info_is_wf info);
-    info
+    { effect_info = fwd_effect_info; ignore_output }
   in
 
   (* Return *)

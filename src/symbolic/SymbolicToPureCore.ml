@@ -1,6 +1,5 @@
 open LlbcAstUtils
 open Pure
-open PureUtils
 open FunsAnalysis
 open TypesAnalysis
 open PrintSymbolicAst
@@ -156,31 +155,6 @@ type bs_ctx = {
           expression for instance), but it is ok because we generate a fresh,
           unique identifier whenever we insert a free variable. *)
   fvars_tys : ty FVarId.Map.t;  (** The free variables introduced so far *)
-  state_var : FVarId.id;
-      (** The current state variable, in case the function is stateful *)
-  back_state_vars : FVarId.id RegionGroupId.Map.t;
-      (** The additional input state variable received by a stateful backward
-          function, **in case we are splitting the forward/backward functions**.
-
-          When generating stateful functions, we generate code of the following
-          form:
-
-          {[
-            (st1, y)  <-- f_fwd x st0; // st0 is the state upon calling f_fwd
-            ... // the state may be updated
-            (st3, x') <-- f_back x st0 y' st2; // st2 is the state upon calling f_back
-          ]}
-
-          When translating a backward function, we need at some point to update
-          [state_var] with [back_state_var], to account for the fact that the
-          state may have been updated by the caller between the call to the
-          forward function and the call to the backward function. We also need
-          to make sure we use the same variable in all the branches (because
-          this variable is quantified at the definition level). *)
-  fuel0 : FVarId.id;
-      (** The original fuel taken as input by the function (if we use fuel) *)
-  fuel : FVarId.id;
-      (** The fuel to use for the recursive calls (if we use fuel) *)
   forward_inputs : fvar list;
       (** The input parameters for the forward function corresponding to the
           translated Rust inputs (no fuel, no state). *)
@@ -490,18 +464,6 @@ let fresh_var (basename : string option) (ty : ty) (ctx : bs_ctx) :
   let ctx = { ctx with fvars_tys = FVarId.Map.add id var.ty ctx.fvars_tys } in
   (* Return *)
   (ctx, var)
-
-let bs_ctx_fresh_state_var (ctx : bs_ctx) : bs_ctx * fvar * typed_pattern =
-  (* Generate the fresh variable *)
-  let id = fresh_fvar_id () in
-  let ctx, state_var =
-    fresh_var (Some ConstStrings.state_basename) mk_state_ty ctx
-  in
-  let state_pat = mk_typed_pattern_from_fvar state_var None in
-  (* Register the state variable in the context *)
-  let ctx = { ctx with state_var = id } in
-  (* Return *)
-  (ctx, state_var, state_pat)
 
 let fresh_vars (vars : (string option * ty) list) (ctx : bs_ctx) :
     bs_ctx * fvar list =
