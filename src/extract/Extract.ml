@@ -1575,10 +1575,17 @@ let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
     (backend () = FStar)
     "The generation of template decrease clauses is only supported for the F* \
      backend";
-
   (* Retrieve the function name *)
   let def_name =
     ctx_get_termination_measure def.item_meta.span def.def_id def.loop_id ctx
+  in
+  (* Open the binders - it is easier to only manipulate variables which have unique ids *)
+  reset_fvar_id_counter ();
+  let def =
+    {
+      def with
+      body = Option.map (open_all_fun_body def.item_meta.span) def.body;
+    }
   in
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
@@ -1647,6 +1654,14 @@ let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
   (*
    * Extract a template for the termination measure
    *)
+  (* Open the binders - it is easier to only manipulate variables which have unique ids *)
+  reset_fvar_id_counter ();
+  let def =
+    {
+      def with
+      body = Option.map (open_all_fun_body def.item_meta.span) def.body;
+    }
+  in
   (* Retrieve the function name *)
   let def_name =
     ctx_get_termination_measure def.item_meta.span def.def_id def.loop_id ctx
@@ -2277,7 +2292,14 @@ let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
   let span = body.item_meta.span in
   [%sanity_check] span body.is_global_decl_body;
   [%sanity_check] span (body.signature.inputs = []);
-
+  (* Open the binders - it is easier to only manipulate variables which have unique ids *)
+  reset_fvar_id_counter ();
+  let body =
+    {
+      body with
+      body = Option.map (open_all_fun_body body.item_meta.span) body.body;
+    }
+  in
   (* Add a break then the name of the corresponding LLBC declaration *)
   F.pp_print_break fmt 0 0;
   let name =
