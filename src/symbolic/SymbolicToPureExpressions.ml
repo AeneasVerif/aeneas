@@ -1129,10 +1129,18 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
       | None -> next_e ctx
       | Some func ->
           let call = mk_apps ctx.span func args in
+          (* Create the let-binding - we may have to introduce a match *)
+          let ctx, (output, call) = decompose_let_match ctx (output, call) in
+
+          let next_e = next_e ctx in
+
           (* Add meta-information - this is slightly hacky: we look at the
              values consumed by the abstraction (note that those come from
              *before* we applied the fixed-point context) and use them to
-             guide the naming of the output vars.
+             guide the naming of the output vars. Because of this, the meta
+             information might reference *some variables which are not in
+             the context*. This forces us to cleanup the meta-data later
+             to make sure the expressions are well-formed.
 
              Also, we need to convert the backward outputs from patterns to
              variables.
@@ -1142,8 +1150,9 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
              TODO: improve the heuristics, to give weight to the hints for
              instance.
           *)
-          let next_e ctx = next_e ctx in
-          (*            if ctx.inside_loop then
+          let next_e =
+            if ctx.inside_loop && Config.allow_unbound_variables_in_metadata
+            then
               let consumed_values = abs_to_consumed ctx ectx abs in
               let var_values = List.combine outputs consumed_values in
               let var_values =
@@ -1156,14 +1165,12 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
                   var_values
               in
               let vars, values = List.split var_values in
-              mk_emeta_symbolic_assignments vars values (next_e ctx)
-            else next_e ctx
-              in *)
+              mk_emeta_symbolic_assignments vars values next_e
+            else next_e
+          in
 
-          (* Create the let-binding - we may have to introduce a match *)
-          let ctx, (output, call) = decompose_let_match ctx (output, call) in
           mk_closed_checked_let __FILE__ __LINE__ ctx effect_info.can_fail
-            output call (next_e ctx))
+            output call next_e)
 
 and translate_global_eval (gid : A.GlobalDeclId.id) (generics : T.generic_args)
     (sval : V.symbolic_value) (e : S.expression) (ctx : bs_ctx) : texpression =
