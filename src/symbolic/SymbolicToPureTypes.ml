@@ -6,7 +6,7 @@ open TypesAnalysis
 open SymbolicToPureCore
 
 (** The local logger *)
-let log = Logging.symbolic_to_pure_log
+let log = Logging.symbolic_to_pure_types_log
 
 (* We simply ignore the bound regions. Note that this messes up the de bruijn
    ids in variables: variables inside `rb.binder_value` are nested deeper so

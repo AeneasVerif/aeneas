@@ -60,7 +60,12 @@ type db_scope_id = int [@@deriving show, ord]
 type bvar_id = BVarId.id [@@deriving show, ord]
 type fvar_id = FVarId.id [@@deriving show, ord]
 
-let fvar_id_counter, fresh_fvar_id = FVarId.fresh_stateful_generator ()
+let ( fvar_id_counter,
+      marked_fvar_ids,
+      marked_fvar_ids_insert_from_int,
+      fresh_fvar_id ) =
+  FVarId.fresh_marked_stateful_generator ()
+
 let reset_global_counters () = fvar_id_counter := FVarId.generator_zero
 let reset_fvar_id_counter () = fvar_id_counter := FVarId.generator_zero
 

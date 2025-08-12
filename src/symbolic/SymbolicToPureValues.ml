@@ -5,7 +5,7 @@ open SymbolicToPureCore
 open SymbolicToPureTypes
 
 (** The local logger *)
-let log = Logging.symbolic_to_pure_log
+let log = Logging.symbolic_to_pure_values_log
 
 (** WARNING: do not call this function directly. Call
     [fresh_named_var_for_symbolic_value] instead. *)

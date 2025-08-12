@@ -10,9 +10,6 @@ module C = Contexts
 module A = LlbcAst
 module S = SymbolicAst
 
-(** The local logger *)
-let log = Logging.symbolic_to_pure_log
-
 let match_name_find_opt = TranslateCore.match_name_find_opt
 
 let match_name_with_generics_find_opt =

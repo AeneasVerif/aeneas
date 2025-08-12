@@ -14,6 +14,7 @@ let _ =
    * command-line arguments *)
   (* By setting a level for the main_logger_handler, we filter everything.
      To have a good trace: one should switch between Info and Debug.
+     TODO: remove
   *)
   Easy_logging.Handlers.set_level main_logger_handler EL.Debug;
   main_log#set_level EL.Info;
@@ -34,6 +35,9 @@ let _ =
   borrows_log#set_level EL.Info;
   invariants_log#set_level EL.Info;
   pure_utils_log#set_level EL.Info;
+  symbolic_to_pure_types_log#set_level EL.Info;
+  symbolic_to_pure_values_log#set_level EL.Info;
+  symbolic_to_pure_expressions_log#set_level EL.Info;
   symbolic_to_pure_log#set_level EL.Info;
   pure_micro_passes_log#set_level EL.Info;
   simplify_aggregates_unchanged_fields_log#set_level EL.Info;
@@ -187,7 +191,7 @@ let () =
          using the log. For example, one can mark the symbolic value ids 1 and \
          2 with '-mark-ids s1,s2', or '-mark-ids s@1, s@2. The supported \
          prefixes are: 's' (symbolic value id), 'b' (borrow id), 'a' \
-         (abstraction id), 'r' (region id)." );
+         (abstraction id), 'r' (region id), 'f' (pure free variable id)." );
     ]
   in
 
@@ -294,6 +298,7 @@ let () =
           | 'b' -> marked_borrow_ids_insert_from_int i
           | 'a' -> marked_abstraction_ids_insert_from_int i
           | 'r' -> marked_region_ids_insert_from_int i
+          | 'f' -> Pure.marked_fvar_ids_insert_from_int i
           | _ ->
               log#serror
                 ("Invalid identifier provided to option: '" ^ id

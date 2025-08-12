@@ -6,7 +6,7 @@ open SymbolicToPureTypes
 open SymbolicToPureValues
 
 (** The local logger *)
-let log = Logging.symbolic_to_pure_log
+let log = Logging.symbolic_to_pure_expressions_log
 
 (** TODO: not very clean. *)
 let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fun_id_or_trait_method_ref)
