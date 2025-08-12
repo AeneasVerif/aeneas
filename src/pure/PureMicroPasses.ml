@@ -112,13 +112,22 @@ type nc_assign = {
 }
 [@@deriving show, ord]
 
+let nc_node_to_string (n : nc_node) =
+  match n with
+  | Pure id -> "Pure " ^ FVarId.to_string id
+  | Llbc id -> "Llbc " ^ E.LocalId.to_string id
+
+let nc_edge_to_string (e : nc_edge) =
+  nc_node_to_string e.src ^ " -(" ^ string_of_int e.dist ^ ")-> "
+  ^ nc_node_to_string e.dest
+
 module NcNodeOrderedType = struct
   type t = nc_node
 
   let compare = compare_nc_node
-  let to_string = show_nc_node
+  let to_string = nc_node_to_string
   let pp_t = pp_nc_node
-  let show_t = show_nc_node
+  let show_t = nc_node_to_string
 end
 
 module NcNodeMap = Collections.MakeMap (NcNodeOrderedType)
@@ -128,9 +137,9 @@ module NcEdgeOrderedType = struct
   type t = nc_edge
 
   let compare = compare_nc_edge
-  let to_string = show_nc_edge
+  let to_string = nc_edge_to_string
   let pp_t = pp_nc_edge
-  let show_t = show_nc_edge
+  let show_t = nc_edge_to_string
 end
 
 module NcEdgeMap = Collections.MakeMap (NcEdgeOrderedType)
@@ -245,8 +254,8 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
 
   let register_node (node : nc_node) (name : string) (dist : int) =
     [%ldebug
-      "register: id=" ^ show_nc_node node ^ ", name=" ^ name ^ ", dist="
-      ^ string_of_int dist];
+      "register_node: id=" ^ nc_node_to_string node ^ ", name=" ^ name
+      ^ ", dist=" ^ string_of_int dist];
     nodes :=
       NcNodeMap.update node
         (fun x ->
@@ -264,6 +273,9 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
   in
 
   let register_edge (src : nc_node) (dist : int) (dest : nc_node) =
+    [%ldebug
+      "register_edge: src=" ^ nc_node_to_string src ^ ", dist="
+      ^ string_of_int dist ^ ", dist=" ^ nc_node_to_string dest];
     edges := { src; dist; dest } :: !edges
   in
 
@@ -368,6 +380,11 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
   List.iter (visitor#visit_typed_pattern ()) body.inputs;
   visitor#visit_texpression () body.body;
 
+  [%ldebug
+    "nodes:\n"
+    ^ NcNodeMap.to_string None
+        (fun (n, i) -> "(" ^ n ^ "," ^ string_of_int i ^ ")")
+        !nodes];
   (!nodes, List.rev !edges)
 
 (** Partial edge *)
@@ -437,6 +454,7 @@ let compute_pretty_names_propagate_constraints
     match NcNodeMap.find_opt src !nodes with
     | None -> ()
     | Some (name, weight) ->
+        let weight = max weight 0 in
         nodes :=
           NcNodeMap.update dst
             (fun nw ->
@@ -446,7 +464,7 @@ let compute_pretty_names_propagate_constraints
                   push_constraints dst;
                   Some (name, weight + dist)
               | Some (name', weight') ->
-                  if max (weight + dist) 0 < weight' then (
+                  if weight + dist < weight' then (
                     (* Similar to case above *)
                     push_constraints dst;
                     Some (name, weight + dist))
@@ -463,6 +481,11 @@ let compute_pretty_names_propagate_constraints
         (* Update in both ways *)
         update_one_way c.src c.dist c.dest;
         update_one_way c.dest c.dist c.src;
+        [%ldebug
+          "After applying edge:\n" ^ nc_edge_to_string c ^ "\nNodes:\n"
+          ^ NcNodeMap.to_string None
+              (fun (n, i) -> "(" ^ n ^ "," ^ string_of_int i ^ ")")
+              !nodes];
         (* Recursive *)
         go ()
   in
