@@ -2127,8 +2127,14 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
           fun_end;
           loop_id;
           span = loop.span;
-          fuel0 = mk_texpression_from_fvar (mk_fuel_fvar ctx.fuel0);
-          fuel = mk_typed_pattern_from_fvar (mk_fuel_fvar ctx.fuel) None;
+          fuel0 =
+            (if !Config.use_fuel then
+               Some (mk_texpression_from_fvar (mk_fuel_fvar ctx.fuel0))
+             else None);
+          fuel =
+            (if !Config.use_fuel then
+               Some (mk_typed_pattern_from_fvar (mk_fuel_fvar ctx.fuel) None)
+             else None);
           input_state;
           inputs = List.map (fun v -> mk_typed_pattern_from_fvar v None) inputs;
           output_ty;

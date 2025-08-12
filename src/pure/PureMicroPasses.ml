@@ -25,6 +25,10 @@ let texpression_to_string (ctx : ctx) (x : texpression) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.texpression_to_string fmt false "" "  " x
 
+let fun_body_to_string (ctx : ctx) (x : fun_body) : string =
+  let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
+  PrintPure.fun_body_to_string fmt x
+
 let switch_to_string (ctx : ctx) scrut (x : switch_body) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.switch_to_string fmt "" "  " scrut x
@@ -1962,7 +1966,7 @@ let decompose_loops_aux (_ctx : ctx) (def : fun_decl) (body : fun_body) :
           (* Introduce the fuel input *)
           let (fuel_vars, fuel0_var) : _ * fvar list =
             if !Config.use_fuel then
-              let fuel0 = as_fvar span loop.fuel0 in
+              let fuel0 = as_fvar span (Option.get loop.fuel0) in
               let fuel0_var = mk_fuel_fvar fuel0 in
               (Some (loop.fuel0, loop.fuel), [ fuel0_var ])
             else (None, [])
@@ -2010,8 +2014,9 @@ let decompose_loops_aux (_ctx : ctx) (def : fun_decl) (body : fun_body) :
           match fuel_vars with
           | None -> loop.loop_body
           | Some (fuel0, fuel) ->
-              wrap_in_match_fuel def.item_meta.span (as_fvar span fuel0)
-                (as_pat_open_fvar_id span fuel)
+              wrap_in_match_fuel def.item_meta.span
+                (as_fvar span (Option.get fuel0))
+                (as_pat_open_fvar_id span (Option.get fuel))
                 ~close:false loop.loop_body
         in
 
@@ -2926,11 +2931,15 @@ module FunLoopIdMap = Collections.MakeMap (FunLoopIdOrderedType)
 (** Helper for [filter_loop_inputs].
 
     Explore one loop body and compute the used information. *)
-let filter_loop_inputs_explor_one_visitor (ctx : ctx)
+let filter_loop_inputs_explore_one_visitor (ctx : ctx)
     (used_map : bool list FunLoopIdMap.t ref) (decl : fun_decl) =
   let span = decl.item_meta.span in
   (* There should be a body *)
   let body = Option.get decl.body in
+  (* Open the binders *)
+  reset_fvar_id_counter ();
+  let body = open_all_fun_body span body in
+  [%ldebug "After opening binders:\n" ^ fun_body_to_string ctx body];
   (* We only look at the forward inputs, without the state *)
   let inputs_prefix, _ =
     Collections.List.split_at body.inputs
@@ -3023,9 +3032,7 @@ let filter_loop_inputs_explor_one_visitor (ctx : ctx)
   in
 
   (* Apply the visitor to the body *)
-  iter_open_fun_decl_body
-    (fun (fb : fun_body) -> visitor#visit_texpression () fb.body)
-    decl;
+  visitor#visit_texpression () body.body;
 
   [%ltrace
     "- used variables: "
@@ -3225,7 +3232,7 @@ let filter_loop_inputs (ctx : ctx) (transl : pure_fun_translation list) :
           [%ltrace "singleton:\n\n" ^ fun_decl_to_string ctx f];
 
           if Option.is_some f.loop_id then
-            filter_loop_inputs_explor_one_visitor ctx used_map f
+            filter_loop_inputs_explore_one_visitor ctx used_map f
           else ()
       | _ ->
           (* Group of mutually recursive functions: ignore for now *)

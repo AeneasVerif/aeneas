@@ -1097,23 +1097,22 @@ and loop = {
   fun_end : texpression;
   loop_id : loop_id;
   span : span; [@opaque]
-  fuel0 : texpression;
+  fuel0 : texpression option;
       (** The original fuel taken as input by the function (if we use fuel).
 
           This should be a variable. *)
-  fuel : typed_pattern;
+  fuel : typed_pattern option;
       (** The fuel to use for the recursive calls (if we use fuel).
 
-          Note that this variable is used both in [loop_body] and [fun_end]. *)
+          Note that this variable is used in [loop_body]. *)
   input_state : typed_pattern option;
       (** This should be a variable.
 
-          Note that this variable is used both in [loop_body] and [fun_end]. *)
+          Note that this variable is used in [loop_body]. *)
   inputs : typed_pattern list;
       (** Those should be variables.
 
-          Note that those variables are used both in [loop_body] and [fun_end].
-      *)
+          Note that those variables are used in [loop_body]. *)
   output_ty : ty;  (** The output type of the loop *)
   loop_body : texpression;
 }

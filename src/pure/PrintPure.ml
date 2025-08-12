@@ -996,10 +996,28 @@ and loop_to_string ?(span : Meta.span option = None) (env : fmt_env)
     (indent : string) (indent_incr : string) (loop : loop) : string =
   let indent1 = indent ^ indent_incr in
   let indent2 = indent1 ^ indent_incr in
+  (* Print what can be printed before entering the binder *)
+  let output_ty = "output_ty: " ^ ty_to_string env false loop.output_ty in
+  let fun_end =
+    texpression_to_string ~span env false indent2 indent_incr loop.fun_end
+  in
+  let fuel0 =
+    "fuel0: "
+    ^ option_to_string
+        (texpression_to_string ~span env false indent2 indent_incr)
+        loop.fuel0
+  in
   (* Introduce the inputs *)
-  let env, loop_inputs =
+  let env, fuel, input_state, loop_inputs =
     let env = fmt_env_start_pbvars env in
-    let env, _ =
+    let env, fuel =
+      match loop.fuel with
+      | None -> (env, None)
+      | Some fuel ->
+          let env, fuel = typed_pattern_to_string_core span env fuel in
+          (env, Some fuel)
+    in
+    let env, input_state =
       match loop.input_state with
       | None -> (env, None)
       | Some input_state ->
@@ -1013,20 +1031,20 @@ and loop_to_string ?(span : Meta.span option = None) (env : fmt_env)
     in
     let loop_inputs = "loop_inputs: [" ^ String.concat "; " loop_inputs ^ "]" in
     let env = fmt_env_push_pbvars env in
-    (env, loop_inputs)
+    (env, fuel, input_state, loop_inputs)
   in
   (* *)
-  let output_ty = "output_ty: " ^ ty_to_string env false loop.output_ty in
-  let fun_end =
-    texpression_to_string ~span env false indent2 indent_incr loop.fun_end
-  in
   let loop_body =
     texpression_to_string ~span env false indent2 indent_incr loop.loop_body
   in
-  "loop {\n" ^ indent1 ^ loop_inputs ^ "\n" ^ indent1 ^ output_ty ^ "\n"
-  ^ indent1 ^ "fun_end: {\n" ^ indent2 ^ fun_end ^ "\n" ^ indent1 ^ "}\n"
-  ^ indent1 ^ "loop_body: {\n" ^ indent2 ^ loop_body ^ "\n" ^ indent1 ^ "}\n"
-  ^ indent ^ "}"
+  "loop {\n" ^ indent1 ^ "fuel0: " ^ fuel0 ^ "\n" ^ indent1 ^ "fuel: "
+  ^ option_to_string (fun x -> x) fuel
+  ^ "\n" ^ indent1 ^ "input_state: "
+  ^ option_to_string (fun x -> x) input_state
+  ^ "\n" ^ indent1 ^ loop_inputs ^ "\n" ^ indent1 ^ output_ty ^ "\n" ^ indent1
+  ^ "fun_end: {\n" ^ indent2 ^ fun_end ^ "\n" ^ indent1 ^ "}\n" ^ indent1
+  ^ "loop_body: {\n" ^ indent2 ^ loop_body ^ "\n" ^ indent1 ^ "}\n" ^ indent
+  ^ "}"
 
 and emeta_to_string ?(span : Meta.span option = None) (env : fmt_env)
     (emeta : emeta) : string =
@@ -1067,6 +1085,25 @@ and emeta_to_string ?(span : Meta.span option = None) (env : fmt_env)
     | TypeAnnot -> "@typeannot"
   in
   "@span[" ^ emeta ^ "]"
+
+let fun_body_to_string (env : fmt_env) (body : fun_body) : string =
+  let inside = false in
+  let indent = "  " in
+  let env, inputs = typed_patterns_to_string_aux None env body.inputs in
+  let inputs =
+    List.map
+      (fun ((v, v') : _ * typed_pattern) ->
+        "(" ^ v ^ " : " ^ ty_to_string env false v'.ty ^ ")")
+      (List.combine inputs body.inputs)
+  in
+  let inputs =
+    if inputs = [] then indent
+    else "  fun " ^ String.concat " " inputs ^ " ->\n" ^ indent
+  in
+  let body =
+    texpression_to_string ~span:None env inside indent indent body.body
+  in
+  inputs ^ body
 
 let fun_decl_to_string (env : fmt_env) (def : fun_decl) : string =
   let env = { env with generics = [ def.signature.generics ] } in

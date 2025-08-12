@@ -138,15 +138,15 @@ class ['self] scoped_iter_expression =
         loop
       in
       (* Visit what can be visited before entering the binder *)
-      self#visit_texpression scope fuel0;
+      Option.iter (self#visit_texpression scope) fuel0;
+      self#visit_texpression scope fun_end;
       self#visit_ty scope output_ty;
       (* Visit the patterns *)
-      self#visit_typed_pattern scope fuel;
+      Option.iter (self#visit_typed_pattern scope) fuel;
       Option.iter (self#visit_typed_pattern scope) input_state;
       List.iter (self#visit_typed_pattern scope) inputs;
       (* Enter the inner expressions *)
       let scope' = scope + 1 in
-      self#visit_texpression scope' fun_end;
       self#visit_texpression scope' loop_body
   end
 
@@ -202,17 +202,17 @@ class ['self] scoped_map_expression =
         loop
       in
       (* Visit what can be visited before entering the binder *)
-      let fuel0 = self#visit_texpression scope fuel0 in
+      let fuel0 = Option.map (self#visit_texpression scope) fuel0 in
+      let fun_end = self#visit_texpression scope fun_end in
       let output_ty = self#visit_ty scope output_ty in
       (* Visit the patterns *)
-      let fuel = self#visit_typed_pattern scope fuel in
+      let fuel = Option.map (self#visit_typed_pattern scope) fuel in
       let input_state =
         Option.map (self#visit_typed_pattern scope) input_state
       in
       let inputs = List.map (self#visit_typed_pattern scope) inputs in
       (* Enter the inner expressions *)
       let scope' = scope + 1 in
-      let fun_end = self#visit_texpression scope' fun_end in
       let loop_body = self#visit_texpression scope' loop_body in
       {
         fun_end;
@@ -1252,7 +1252,7 @@ let mk_closed_lambda span (x : typed_pattern) (e : texpression) : texpression =
 
 let close_loop span (loop : loop) : loop =
   let {
-    fun_end;
+    fun_end = _;
     loop_id = _;
     span = _;
     fuel0 = _;
@@ -1264,19 +1264,20 @@ let close_loop span (loop : loop) : loop =
   } =
     loop
   in
-  let input_state = Option.to_list input_state in
-  match close_binders_visitor span ([ fuel ] @ input_state @ inputs) with
-  | fuel :: inputs_with_state, visitor ->
-      let fun_end = visitor#visit_texpression 0 fun_end in
-      let loop_body = visitor#visit_texpression 0 loop_body in
-      let input_state, inputs =
-        match (input_state, inputs_with_state) with
-        | [ _ ], input_state :: inputs -> (Some input_state, inputs)
-        | [], inputs -> (None, inputs)
-        | _ -> [%internal_error] span
-      in
-      { loop with fuel; input_state; inputs; fun_end; loop_body }
-  | _ -> [%internal_error] span
+  let opt_pop x ls =
+    match (x, ls) with
+    | None, _ -> (None, ls)
+    | Some _, hd :: ls -> (Some hd, ls)
+    | _ -> [%internal_error] span
+  in
+  let inputs, visitor =
+    close_binders_visitor span
+      (Option.to_list fuel @ Option.to_list input_state @ inputs)
+  in
+  let fuel, inputs = opt_pop fuel inputs in
+  let input_state, inputs = opt_pop input_state inputs in
+  let loop_body = visitor#visit_texpression 0 loop_body in
+  { loop with fuel; input_state; inputs; loop_body }
 
 (** Make an open lambda expression.
 
@@ -1806,16 +1807,16 @@ class virtual ['self] open_close_all_visitor =
         loop
       in
       (* Visit what can be visited before entering the binder *)
-      let fuel0 = self#visit_texpression env fuel0 in
+      let fuel0 = Option.map (self#visit_texpression env) fuel0 in
+      let fun_end = self#visit_texpression env fun_end in
       let output_ty = self#visit_ty env output_ty in
       (* Visit the patterns to push a new scope *)
       self#start_scope env;
-      let fuel = self#visit_typed_pattern env fuel in
+      let fuel = Option.map (self#visit_typed_pattern env) fuel in
       let input_state = Option.map (self#visit_typed_pattern env) input_state in
       let inputs = List.map (self#visit_typed_pattern env) inputs in
       self#push_scope env;
-      (* Enter the inner expressions *)
-      let fun_end = self#visit_texpression env fun_end in
+      (* Enter the inner expression *)
       let loop_body = self#visit_texpression env loop_body in
       (* Pop the stack *)
       self#pop_scope env;
@@ -1966,7 +1967,9 @@ let close_all_env_push_var (env : close_all_env) (fid : fvar_id) :
 
 let close_all_env_get_var span (env : close_all_env) (fid : fvar_id) : bvar =
   match FVarId.Map.find_opt fid env.fenv with
-  | None -> [%internal_error] span
+  | None ->
+      [%craise] span
+        ("Internal error: could not find fvar: " ^ FVarId.to_string fid)
   | Some v -> { v with scope = env.scope - v.scope - 1 }
 
 (** Visitor to close *all* the bound variables in an expression.
