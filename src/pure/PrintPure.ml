@@ -998,6 +998,9 @@ and loop_to_string ?(span : Meta.span option = None) (env : fmt_env)
   let indent2 = indent1 ^ indent_incr in
   (* Print what can be printed before entering the binder *)
   let output_ty = "output_ty: " ^ ty_to_string env false loop.output_ty in
+  let fun_end =
+    texpression_to_string ~span env false indent2 indent_incr loop.fun_end
+  in
   let fuel0 =
     "fuel0: "
     ^ option_to_string
@@ -1034,16 +1037,14 @@ and loop_to_string ?(span : Meta.span option = None) (env : fmt_env)
   let loop_body =
     texpression_to_string ~span env false indent2 indent_incr loop.loop_body
   in
-  let fun_end =
-    texpression_to_string ~span env false indent2 indent_incr loop.fun_end
-  in
-  "loop {\n" ^ indent1 ^ "loop_body: {\n" ^ indent2 ^ loop_body ^ "\n" ^ indent1
-  ^ "}\n" ^ indent1 ^ fuel0 ^ "\n" ^ indent1 ^ "fuel: "
+  "loop {\n" ^ indent1 ^ "fuel0: " ^ fuel0 ^ "\n" ^ indent1 ^ "fuel: "
   ^ option_to_string (fun x -> x) fuel
   ^ "\n" ^ indent1 ^ "input_state: "
   ^ option_to_string (fun x -> x) input_state
   ^ "\n" ^ indent1 ^ loop_inputs ^ "\n" ^ indent1 ^ output_ty ^ "\n" ^ indent1
-  ^ "fun_end: {\n" ^ indent2 ^ fun_end ^ "\n" ^ indent1 ^ "}\n" ^ indent ^ "}"
+  ^ "fun_end: {\n" ^ indent2 ^ fun_end ^ "\n" ^ indent1 ^ "}\n" ^ indent1
+  ^ "loop_body: {\n" ^ indent2 ^ loop_body ^ "\n" ^ indent1 ^ "}\n" ^ indent
+  ^ "}"
 
 and emeta_to_string ?(span : Meta.span option = None) (env : fmt_env)
     (emeta : emeta) : string =
