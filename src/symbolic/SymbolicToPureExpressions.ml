@@ -316,123 +316,6 @@ let decompose_let_match (ctx : bs_ctx)
   else (* Nothing to do *)
     (ctx, (pat, bound))
 
-exception FoundLoan of (V.loan_id, S.mplace) Either.t
-
-(** TODO: for now we just check if we eventually end up exactly in a variable *)
-let add_mplace_to_typed_pattern (ctx : bs_ctx) (ectx : C.eval_ctx)
-    (pat : typed_pattern) =
-  [%ldebug
-    "- pat: "
-    ^ typed_pattern_to_string ctx pat
-    ^ "\n- ctx:\n"
-    ^ Print.Contexts.eval_ctx_to_string ectx];
-  let rec find_loan (lid : V.loan_id) : S.mplace option =
-    let visitor =
-      object
-        inherit [_] C.iter_eval_ctx as super
-
-        method! visit_typed_value (p, outer) (v : V.typed_value) =
-          match v.value with
-          | VBorrow (VMutBorrow (bid, v)) ->
-              super#visit_typed_value (None, Some bid) v
-          | VLoan (VMutLoan lid') ->
-              if lid' = lid then
-                match (p, outer) with
-                | Some p, _ -> raise (FoundLoan (Either.right p))
-                | None, Some lid'' -> begin
-                    match find_loan lid'' with
-                    | Some p -> raise (FoundLoan (Either.right p))
-                    | None -> raise Utils.Found
-                  end
-                | _ -> raise Utils.Found
-              else ()
-          | _ -> super#visit_typed_value (None, None) v
-
-        method! visit_EBinding _ var v =
-          match var with
-          | BVar x ->
-              super#visit_EBinding (Some (PlaceLocal x : S.mplace), None) var v
-          | _ -> super#visit_EBinding (None, None) var v
-      end
-    in
-    try
-      visitor#visit_eval_ctx (None, None) ectx;
-      None
-    with
-    | FoundLoan (Left lid) -> find_loan lid
-    | FoundLoan (Right mp) -> Some mp
-    | Utils.Found -> None
-  in
-
-  let find_sv_id (sid : V.symbolic_value_id) : S.mplace option =
-    let visitor =
-      object
-        inherit [_] C.iter_eval_ctx as super
-
-        method! visit_typed_value (p, outer) (v : V.typed_value) =
-          match v.value with
-          | VBorrow (VMutBorrow (bid, v)) ->
-              super#visit_typed_value (None, Some bid) v
-          | VSymbolic sv' ->
-              if sv'.sv_id = sid then
-                match (p, outer) with
-                | Some p, _ -> raise (FoundLoan (Either.right p))
-                | None, Some lid'' -> begin
-                    match find_loan lid'' with
-                    | Some p -> raise (FoundLoan (Either.right p))
-                    | None -> raise Utils.Found
-                  end
-                | _ -> raise Utils.Found
-              else super#visit_typed_value (None, None) v
-          | _ -> super#visit_typed_value (None, None) v
-
-        method! visit_EBinding _ var v =
-          match var with
-          | BVar x ->
-              super#visit_EBinding (Some (PlaceLocal x : S.mplace), None) var v
-          | _ -> super#visit_EBinding (None, None) var v
-      end
-    in
-    try
-      visitor#visit_eval_ctx (None, None) ectx;
-      None
-    with
-    | FoundLoan (Left lid) -> find_loan lid
-    | FoundLoan (Right mp) -> Some mp
-    | Utils.Found -> None
-  in
-
-  let find_final_dest (fid : fvar_id) : S.mplace option =
-    match FVarId.Map.find_opt fid ctx.fvar_to_sv with
-    | None -> None
-    | Some sv_id ->
-        (* Find the symbolic value in the context *)
-        find_sv_id sv_id
-  in
-  let pat_visitor =
-    object
-      inherit [_] map_typed_pattern
-
-      method! visit_PatOpen _ fvar mp =
-        match mp with
-        | Some mp -> PatOpen (fvar, Some mp)
-        | None ->
-            (* Try to figure out where the given back value goes *)
-            PatOpen
-              ( fvar,
-                translate_opt_mplace (Some ctx.span) ctx.type_ctx.type_infos
-                  (find_final_dest fvar.id) )
-    end
-  in
-
-  let pat' = pat_visitor#visit_typed_pattern () pat in
-  [%ldebug
-    "- original pat: "
-    ^ typed_pattern_to_string ctx pat
-    ^ "\n- updated pat: "
-    ^ typed_pattern_to_string ctx pat'];
-  pat'
-
 let rec translate_expression (e : S.expression) (ctx : bs_ctx) : texpression =
   [%ldebug "e:\n" ^ bs_ctx_expression_to_string ctx e];
   match e with
@@ -1063,7 +946,6 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
       [ None ]
   in
   let ctx, outputs = abs_to_given_back (Some output_mpl) abs ctx in
-  let outputs = List.map (add_mplace_to_typed_pattern ctx ectx) outputs in
   (* Group the output values together *)
   let output = mk_simpl_tuple_pattern outputs in
   (* Retrieve the function id, and register the function call in the context
@@ -1222,8 +1104,6 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
       let inputs = List.map mk_texpression_from_fvar back_inputs_vars in
       (* Retrieve the values given back by this function *)
       let ctx, outputs = abs_to_given_back None abs ctx in
-      (* Lookup the output variables in the context, and add the corresponding place information *)
-      let outputs = List.map (add_mplace_to_typed_pattern ctx ectx) outputs in
       (* Group the output values together: first the updated inputs *)
       let output = mk_simpl_tuple_pattern outputs in
       (* Translate the next expression *)
@@ -1249,7 +1129,6 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
       | None -> next_e ctx
       | Some func ->
           let call = mk_apps ctx.span func args in
-
           (* Add meta-information - this is slightly hacky: we look at the
              values consumed by the abstraction (note that those come from
              *before* we applied the fixed-point context) and use them to
@@ -1263,19 +1142,15 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
              TODO: improve the heuristics, to give weight to the hints for
              instance.
           *)
-          (*let next_e ctx =
-            if ctx.inside_loop then
-              let fvars = typed_pattern_get_fvars output in
-              
+          let next_e ctx = next_e ctx in
+          (*            if ctx.inside_loop then
               let consumed_values = abs_to_consumed ctx ectx abs in
               let var_values = List.combine outputs consumed_values in
               let var_values =
                 List.filter_map
                   (fun (var, v) ->
                     match var.Pure.value with
-                    | PatOpen (var, _) ->
-                        if FVarId.Set.mem var.id fvars then Some (var, v)
-                        else None
+                    | PatOpen (var, _) -> Some (var, v)
                     | PatBound _ -> [%internal_error] ctx.span
                     | _ -> None)
                   var_values
@@ -1283,7 +1158,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
               let vars, values = List.split var_values in
               mk_emeta_symbolic_assignments vars values (next_e ctx)
             else next_e ctx
-            in*)
+              in *)
 
           (* Create the let-binding - we may have to introduce a match *)
           let ctx, (output, call) = decompose_let_match ctx (output, call) in

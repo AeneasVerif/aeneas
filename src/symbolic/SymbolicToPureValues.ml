@@ -20,9 +20,8 @@ let fresh_named_var_for_symbolic_value (basename : string option)
   let ctx, var = fresh_var_llbc_ty basename sv.sv_ty ctx in
   (* Insert in the map from symbolic value to variable *)
   let sv_to_var = V.SymbolicValueId.Map.add_strict sv.sv_id var ctx.sv_to_var in
-  let fvar_to_sv = FVarId.Map.add_strict var.id sv.sv_id ctx.fvar_to_sv in
   (* Update the context *)
-  let ctx = { ctx with sv_to_var; fvar_to_sv } in
+  let ctx = { ctx with sv_to_var } in
   (* Return *)
   (ctx, var)
 

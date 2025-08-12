@@ -148,9 +148,6 @@ type bs_ctx = {
       (** Whenever we encounter a new symbolic value (introduced because of a
           symbolic expansion or upon ending an abstraction, for instance) we
           introduce a new variable (with a let-binding). *)
-  fvar_to_sv : V.SymbolicValueId.id FVarId.Map.t;
-      (** The map reverse of [sv_to_var]. Note that this is a partial map: not
-          all the free variables are introduced because of symbolic values. *)
   fvars : fvar FVarId.Map.t;
       (** The free variables introduced so far.
 
