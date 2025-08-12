@@ -95,50 +95,46 @@ let lift_expr_iter_visitor
     (def : fun_decl) : unit =
   lift_expr_iter_visitor_with_state obj () ctx def
 
-(** Naming constraint deriving from the fact that a symbolic value was place at
-    a given LLBC place *)
-type nc_var_at_place = {
-  name : string;
-  place_depth : int;
-      (** -1 means that the variable *must* have this name (for instance, if the
-          variable is a named input variable). Otherwise, it means the
-          constraint comes from the fact that we found the variable at a
-          specific LLBC place: the depth gives us the number of projection
-          elements which were necessary to access the variable.
+(** A node in the constraints graph *)
+type nc_node = Pure of fvar_id | Llbc of E.local_id [@@deriving show, ord]
 
-          The rationale is that if, for instance, we get the following
-          environment at some point:
-          {[
-            x -> Box s0
-          ]}
-          then it makes sense to give the name [x] to the symbolic value [s0]
-          (remember that the variables in the translation are the symbolic
-          values which appear in the symbolic execution). *)
-  id : fvar_id;
-}
+(** An edge in the constraints graph *)
+type nc_edge = { src : nc_node; dest : nc_node; dist : int }
 [@@deriving show, ord]
 
 (** Naming constraint deriving from the fact that we assigned a value to a
     different value *)
 type nc_assign = {
-  rhs_id : fvar_id;
+  rhs_id : nc_node;
   rhs_depth : int;
-  lhs_id : fvar_id;
+  lhs_id : nc_node;
   lhs_depth : int;
 }
 [@@deriving show, ord]
 
-module NcVarAtPlaceOrderedType = struct
-  type t = nc_var_at_place
+module NcNodeOrderedType = struct
+  type t = nc_node
 
-  let compare = compare_nc_var_at_place
-  let to_string = show_nc_var_at_place
-  let pp_t = pp_nc_var_at_place
-  let show_t = show_nc_var_at_place
+  let compare = compare_nc_node
+  let to_string = show_nc_node
+  let pp_t = pp_nc_node
+  let show_t = show_nc_node
 end
 
-module NcVarAtPlaceMap = Collections.MakeMap (NcVarAtPlaceOrderedType)
-module NcVarAtPlaceSet = Collections.MakeSet (NcVarAtPlaceOrderedType)
+module NcNodeMap = Collections.MakeMap (NcNodeOrderedType)
+module NcNodeSet = Collections.MakeSet (NcNodeOrderedType)
+
+module NcEdgeOrderedType = struct
+  type t = nc_edge
+
+  let compare = compare_nc_edge
+  let to_string = show_nc_edge
+  let pp_t = pp_nc_edge
+  let show_t = show_nc_edge
+end
+
+module NcEdgeMap = Collections.MakeMap (NcEdgeOrderedType)
+module NcEdgeSet = Collections.MakeSet (NcEdgeOrderedType)
 
 module NcAssignOrderedType = struct
   type t = nc_assign
@@ -213,7 +209,7 @@ let rec decompose_texpression span (x : texpression) : (fvar_id * int) option =
     linked at distance 1, etc. We then use this information to propagate the
     names we computed above. *)
 let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
-    (body : fun_body) : (string * int) FVarId.Map.t * NcAssignSet.t =
+    (body : fun_body) : (string * int) NcNodeMap.t * NcEdgeSet.t =
   [%ldebug fun_body_to_string ctx body];
   (*
      The way we do is as follows:
@@ -227,8 +223,8 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
    *)
   let span = def.item_meta.span in
 
-  let var_at_place : (string * int) FVarId.Map.t ref = ref FVarId.Map.empty in
-  let assign = ref NcAssignSet.empty in
+  let nodes : (string * int) NcNodeMap.t ref = ref NcNodeMap.empty in
+  let edges : NcEdgeSet.t ref = ref NcEdgeSet.empty in
 
   (* Information about the loops: we remember the binders defining their inputs so that
      later, when we find a call site, we can equate those binders and the input arguments
@@ -242,35 +238,35 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
   *)
   let loop_infos = ref LoopId.Map.empty in
 
-  (* Register a variable for constraints propagation - used when an variable is
-     introduced (left-hand side of a left binding) *)
-  let register_var (v : fvar) : unit =
-    match v.basename with
-    | None -> ()
-    | Some name ->
-        [%ldebug
-          "register: id=" ^ FVarId.to_string v.id ^ ", name=" ^ name
-          ^ ", dist=-1"];
-        var_at_place := FVarId.Map.add v.id (name, -1) !var_at_place
-  in
-  let register (id : fvar_id) (name : string) (dist : int) =
+  let register_node (node : nc_node) (name : string) (dist : int) =
     [%ldebug
-      "register: id=" ^ FVarId.to_string id ^ ", name=" ^ name ^ ", dist="
+      "register: id=" ^ show_nc_node node ^ ", name=" ^ name ^ ", dist="
       ^ string_of_int dist];
-    var_at_place :=
-      FVarId.Map.update id
+    nodes :=
+      NcNodeMap.update node
         (fun x ->
           match x with
           | None -> Some (name, dist)
           | Some (name', dist') ->
               if dist < dist' then Some (name, dist) else Some (name', dist'))
-        !var_at_place
+        !nodes
   in
+  let register_var (v : fvar) =
+    Option.iter (fun name -> register_node (Pure v.id) name (-1)) v.basename
+  in
+  let register_local (id : E.local_id) (name : string option) =
+    Option.iter (fun name -> register_node (Llbc id) name (-1)) name
+  in
+
+  let register_edge (src : nc_node) (dist : int) (dest : nc_node) =
+    edges := NcEdgeSet.add { src; dist; dest } !edges
+  in
+
   (* Register an mplace the first time we find one *)
   let register_var_at_place (v : fvar) (mp : mplace option) =
     register_var v;
     match Option.map decompose_mplace_to_local mp with
-    | Some (Some (_, Some name, [])) -> register v.id name 0
+    | Some (Some (id, _, [])) -> register_edge (Pure v.id) 0 (Llbc id)
     | _ -> ()
   in
 
@@ -278,30 +274,25 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
   let register_assign (lv : typed_pattern) (rv : texpression) =
     match (decompose_typed_pattern span lv, decompose_texpression span rv) with
     | Some (lhs, lhs_depth), Some (rhs_id, rhs_depth) ->
-        assign :=
-          NcAssignSet.add
-            { lhs_id = lhs.id; lhs_depth; rhs_id; rhs_depth }
-            !assign
+        register_edge (Pure lhs.id) (lhs_depth + rhs_depth) (Pure rhs_id)
     | _ -> ()
   in
   let register_expression_eq (lv : texpression) (rv : texpression) =
     match (decompose_texpression span lv, decompose_texpression span rv) with
     | Some (lhs_id, lhs_depth), Some (rhs_id, rhs_depth) ->
-        assign :=
-          NcAssignSet.add { lhs_id; lhs_depth; rhs_id; rhs_depth } !assign
+        register_edge (Pure lhs_id) (lhs_depth + rhs_depth) (Pure rhs_id)
     | _ -> ()
   in
   let register_texpression_has_name (e : texpression) (name : string)
       (depth : int) =
     match decompose_texpression span e with
-    | Some (id, depth') -> register id name (depth + depth')
+    | Some (id, depth') -> register_node (Pure id) name (depth + depth')
     | _ -> ()
   in
   let register_texpression_at_place (e : texpression) (mp : mplace) =
-    match decompose_mplace_to_local mp with
-    | Some (_, Some name, []) ->
-        (* Check that there are no projectors *)
-        register_texpression_has_name e name 0
+    match (decompose_texpression span e, decompose_mplace_to_local mp) with
+    | Some (fid, depth), Some (lid, _, []) ->
+        register_edge (Pure fid) depth (Llbc lid)
     | _ -> ()
   in
 
@@ -315,7 +306,10 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
         super#visit_Let env monadic lv re e
 
       method! visit_PatBound _ _ _ = [%internal_error] span
-      method! visit_PatOpen _ lv mp = register_var_at_place lv mp
+
+      method! visit_PatOpen env lv mp =
+        register_var_at_place lv mp;
+        super#visit_PatOpen env lv mp
 
       method! visit_Meta env meta e =
         begin
@@ -339,6 +333,11 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
       method! visit_loop env loop =
         loop_infos := LoopId.Map.add loop.loop_id loop.inputs !loop_infos;
         super#visit_loop env loop
+
+      method! visit_mplace _ mp =
+        match decompose_mplace_to_local mp with
+        | Some (vid, name, _) -> register_local vid name
+        | _ -> ()
 
       method! visit_App env f arg =
         (* Check if this is a loop call *)
@@ -364,76 +363,82 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
   List.iter (visitor#visit_typed_pattern ()) body.inputs;
   visitor#visit_texpression () body.body;
 
-  (!var_at_place, !assign)
+  (!nodes, !edges)
 
-(** An edge in the constraints graph *)
-type nc_edge = { dest : fvar_id; dist : int } [@@deriving show, ord]
+(** Partial edge *)
+type nc_pedge = { dest : nc_node; dist : int } [@@deriving show, ord]
 
-module NcEdgeOrderedType = struct
-  type t = nc_edge
+module NcPEdgeOrderedType = struct
+  type t = nc_pedge
 
-  let compare = compare_nc_edge
-  let to_string = show_nc_edge
-  let pp_t = pp_nc_edge
-  let show_t = show_nc_edge
+  let compare = compare_nc_pedge
+  let to_string = show_nc_pedge
+  let pp_t = pp_nc_pedge
+  let show_t = show_nc_pedge
 end
 
-module NcEdgeMap = Collections.MakeMap (NcEdgeOrderedType)
-module NcEdgeSet = Collections.MakeSet (NcEdgeOrderedType)
+module NcPEdgeMap = Collections.MakeMap (NcPEdgeOrderedType)
+module NcPEdgeSet = Collections.MakeSet (NcPEdgeOrderedType)
 
 (** Helper for [compute_pretty_names].
 
     Compute names for the variables given sets of constraints. *)
 let compute_pretty_names_propagate_constraints
-    (names : (string * int) FVarId.Map.t) (assign : NcAssignSet.t) :
+    (nodes : (string * int) NcNodeMap.t) (edges0 : NcEdgeSet.t) :
     string FVarId.Map.t =
   (* *)
-  let names = ref names in
+  let nodes = ref nodes in
 
   (* Initialize the map from variable to set of [assign] constraints *)
-  let edges = ref FVarId.Map.empty in
-  let register_edge (src : fvar_id) (dist : int) (dest : fvar_id) =
+  let edges : NcPEdgeSet.t NcNodeMap.t ref = ref NcNodeMap.empty in
+  let register_edge (src : nc_node) (dist : int) (dest : nc_node) =
     edges :=
-      FVarId.Map.update src
+      NcNodeMap.update src
         (fun s ->
-          let e = { dest; dist } in
+          let e : nc_pedge = { dest; dist } in
           match s with
-          | None -> Some (NcEdgeSet.singleton e)
-          | Some s -> Some (NcEdgeSet.add e s))
+          | None -> Some (NcPEdgeSet.singleton e)
+          | Some s -> Some (NcPEdgeSet.add e s))
         !edges
   in
 
-  NcAssignSet.iter
-    (fun (c : nc_assign) ->
-      let dist = c.rhs_depth + c.lhs_depth in
-      register_edge c.rhs_id dist c.lhs_id;
-      register_edge c.lhs_id dist c.rhs_id)
-    assign;
+  NcEdgeSet.iter
+    (fun (c : nc_edge) ->
+      register_edge c.src c.dist c.dest;
+      register_edge c.dest c.dist c.src)
+    edges0;
 
   (* Push the [assign] constraints to the stack. As long as the stack is not empty,
      pop the first constraint, apply it, if it leads to changes lookup the constraints
      which apply to the modified variables, push them to the stack, continue.
+
+     Note that the edges in the stack are bidirectional: we explore them both ways.
   *)
-  let stack : nc_assign list ref = ref (NcAssignSet.elements assign) in
-  let push_constraints (v : fvar_id) =
-    match FVarId.Map.find_opt v !edges with
+  let stack : nc_edge list ref =
+    ref
+      (NcEdgeSet.elements edges0
+      @ List.map
+          (fun (e : nc_edge) -> { src = e.dest; dist = e.dist; dest = e.src })
+          (NcEdgeSet.elements edges0))
+  in
+  let push_constraints (src : nc_node) =
+    match NcNodeMap.find_opt src !edges with
     | None -> ()
     | Some cs ->
-        let cs =
+        let edges =
           List.map
-            (fun (e : nc_edge) ->
-              { rhs_id = v; rhs_depth = 0; lhs_depth = e.dist; lhs_id = e.dest })
-            (NcEdgeSet.elements cs)
+            (fun { dest; dist } -> { src; dist; dest })
+            (NcPEdgeSet.elements cs)
         in
-        stack := cs @ !stack
+        stack := edges @ !stack
   in
-  let update_one_way (src : fvar_id) (dist : int) (dst : fvar_id) =
+  let update_one_way (src : nc_node) (dist : int) (dst : nc_node) =
     (* Lookup the information about the source  *)
-    match FVarId.Map.find_opt src !names with
+    match NcNodeMap.find_opt src !nodes with
     | None -> ()
     | Some (name, weight) ->
-        names :=
-          FVarId.Map.update dst
+        nodes :=
+          NcNodeMap.update dst
             (fun nw ->
               match nw with
               | None ->
@@ -446,7 +451,7 @@ let compute_pretty_names_propagate_constraints
                     push_constraints dst;
                     Some (name, weight + dist))
                   else Some (name', weight'))
-            !names
+            !nodes
   in
 
   (* Propagate the constraints until we reach a fixed-point *)
@@ -456,16 +461,21 @@ let compute_pretty_names_propagate_constraints
     | c :: stack' ->
         stack := stack';
         (* Update in both ways *)
-        let dist = c.rhs_depth + c.lhs_depth in
-        update_one_way c.rhs_id dist c.lhs_id;
-        update_one_way c.lhs_id dist c.rhs_id;
+        update_one_way c.src c.dist c.dest;
+        update_one_way c.dest c.dist c.src;
         (* Recursive *)
         go ()
   in
   go ();
 
   (* Return the result *)
-  FVarId.Map.map fst !names
+  FVarId.Map.of_list
+    (List.filter_map
+       (fun (n, (name, _)) ->
+         match n with
+         | Pure id -> Some (id, name)
+         | Llbc _ -> None)
+       (NcNodeMap.bindings !nodes))
 
 (** Helper for [compute_pretty_name]: update a fun body given naming
     constraints.
