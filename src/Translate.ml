@@ -99,6 +99,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
   (* Initialize the context *)
   Pure.reset_fvar_id_counter ();
   let sv_to_var = SymbolicValueId.Map.empty in
+  let fvar_to_sv = Pure.FVarId.Map.empty in
   let fvars = Pure.FVarId.Map.empty in
   let fvars_tys = Pure.FVarId.Map.map (fun (v : Pure.fvar) -> v.ty) fvars in
 
@@ -170,6 +171,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
       fun_dsigs;
       (* Will need to be updated for the backward functions *)
       sv_to_var;
+      fvar_to_sv;
       fvars;
       fvars_tys;
       type_ctx;
