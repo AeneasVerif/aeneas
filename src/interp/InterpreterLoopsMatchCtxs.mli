@@ -92,8 +92,8 @@ val match_ctxs :
   Meta.span ->
   bool ->
   ids_sets ->
-  (loan_id -> typed_value) ->
-  (loan_id -> typed_value) ->
+  (loan_id -> tvalue) ->
+  (loan_id -> tvalue) ->
   eval_ctx ->
   eval_ctx ->
   ids_maps option

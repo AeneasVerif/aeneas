@@ -26,7 +26,7 @@ let loan_content_to_string = Print.EvalCtx.loan_content_to_string
 let aborrow_content_to_string = Print.EvalCtx.aborrow_content_to_string
 let aloan_content_to_string = Print.EvalCtx.aloan_content_to_string
 let aproj_to_string = Print.EvalCtx.aproj_to_string
-let typed_value_to_string = Print.EvalCtx.typed_value_to_string
+let tvalue_to_string = Print.EvalCtx.tvalue_to_string
 let typed_avalue_to_string = Print.EvalCtx.typed_avalue_to_string
 let place_to_string = Print.EvalCtx.place_to_string
 let operand_to_string = Print.EvalCtx.operand_to_string
@@ -100,8 +100,8 @@ let mk_fresh_symbolic_value_from_no_regions_ty (span : Meta.span) (ty : ty) :
   mk_fresh_symbolic_value span ty
 
 (** Create a fresh symbolic value *)
-let mk_fresh_symbolic_typed_value_opt_span (span : Meta.span option) (rty : ty)
-    : typed_value =
+let mk_fresh_symbolic_tvalue_opt_span (span : Meta.span option) (rty : ty) :
+    tvalue =
   [%sanity_check_opt_span] span (ty_is_rty rty);
   let ty = Substitute.erase_regions rty in
   (* Generate the fresh a symbolic value *)
@@ -109,13 +109,13 @@ let mk_fresh_symbolic_typed_value_opt_span (span : Meta.span option) (rty : ty)
   let value = VSymbolic value in
   { value; ty }
 
-let mk_fresh_symbolic_typed_value span =
-  mk_fresh_symbolic_typed_value_opt_span (Some span)
+let mk_fresh_symbolic_tvalue span =
+  mk_fresh_symbolic_tvalue_opt_span (Some span)
 
-let mk_fresh_symbolic_typed_value_from_no_regions_ty (span : Meta.span)
-    (ty : ty) : typed_value =
+let mk_fresh_symbolic_tvalue_from_no_regions_ty (span : Meta.span) (ty : ty) :
+    tvalue =
   [%sanity_check] span (ty_no_regions ty);
-  mk_fresh_symbolic_typed_value span ty
+  mk_fresh_symbolic_tvalue span ty
 
 (** Create a loans projector value from a symbolic value.
 
@@ -140,7 +140,7 @@ let mk_aproj_loans_value_from_symbolic_value (proj_regions : RegionId.Set.t)
     av
   else
     {
-      value = AIgnored (Some (mk_typed_value_from_symbolic_value svalue));
+      value = AIgnored (Some (mk_tvalue_from_symbolic_value svalue));
       ty = svalue.sv_ty;
     }
 
@@ -274,7 +274,7 @@ let region_is_owned (abs : abs) (r : region) : bool =
 
 let bottom_in_value_visitor (ended_regions : RegionId.Set.t) =
   object
-    inherit [_] iter_typed_value
+    inherit [_] iter_tvalue
     method! visit_VBottom _ = raise Found
 
     method! visit_symbolic_value _ s =
@@ -286,11 +286,11 @@ let bottom_in_value_visitor (ended_regions : RegionId.Set.t) =
 
     Note that this function is very general: it also checks wether symbolic
     values contain already ended regions. *)
-let bottom_in_value (ended_regions : RegionId.Set.t) (v : typed_value) : bool =
+let bottom_in_value (ended_regions : RegionId.Set.t) (v : tvalue) : bool =
   let obj = bottom_in_value_visitor ended_regions in
   (* We use exceptions *)
   try
-    obj#visit_typed_value () v;
+    obj#visit_tvalue () v;
     false
   with Found -> true
 
@@ -304,10 +304,10 @@ let bottom_in_adt_value (ended_regions : RegionId.Set.t) (v : adt_value) : bool
   with Found -> true
 
 let value_has_ret_symbolic_value_with_borrow_under_mut span (ctx : eval_ctx)
-    (v : typed_value) : bool =
+    (v : tvalue) : bool =
   let obj =
     object
-      inherit [_] iter_typed_value
+      inherit [_] iter_tvalue
 
       method! visit_symbolic_value _ s =
         if ty_has_borrow_under_mut span ctx.type_ctx.type_infos s.sv_ty then
@@ -317,7 +317,7 @@ let value_has_ret_symbolic_value_with_borrow_under_mut span (ctx : eval_ctx)
   in
   (* We use exceptions *)
   try
-    obj#visit_typed_value () v;
+    obj#visit_tvalue () v;
     false
   with Found -> true
 
@@ -380,7 +380,7 @@ module UniqueBorrowIdSet = Collections.MakeSet (UniqueBorrowIdOrderedType)
 
 type unique_borrow_id_set = UniqueBorrowIdSet.t [@@deriving show, ord]
 
-(** See {!compute_typed_value_ids}, {!compute_context_ids}, etc. *)
+(** See {!compute_tvalue_ids}, {!compute_context_ids}, etc. *)
 type ids_sets = {
   aids : AbstractionId.Set.t;
   blids : BorrowId.Set.t;  (** All the borrow/loan ids *)
@@ -398,7 +398,7 @@ type ids_sets = {
 }
 [@@deriving show]
 
-(** See {!compute_typed_value_ids}, {!compute_context_ids}, etc.
+(** See {!compute_tvalue_ids}, {!compute_context_ids}, etc.
 
     TODO: there misses information. *)
 type ids_to_values = { sids_to_values : symbolic_value SymbolicValueId.Map.t }
@@ -487,15 +487,14 @@ let compute_ids () =
   (obj, get_ids, get_ids_to_values)
 
 (** Compute the sets of ids found in a list of typed values. *)
-let compute_typed_values_ids (xl : typed_value list) : ids_sets * ids_to_values
-    =
+let compute_tvalues_ids (xl : tvalue list) : ids_sets * ids_to_values =
   let compute, get_ids, get_ids_to_values = compute_ids () in
-  List.iter (compute#visit_typed_value ()) xl;
+  List.iter (compute#visit_tvalue ()) xl;
   (get_ids (), get_ids_to_values ())
 
 (** Compute the sets of ids found in a typed value. *)
-let compute_typed_value_ids (x : typed_value) : ids_sets * ids_to_values =
-  compute_typed_values_ids [ x ]
+let compute_tvalue_ids (x : tvalue) : ids_sets * ids_to_values =
+  compute_tvalues_ids [ x ]
 
 (** Compute the sets of ids found in a list of abstractions. *)
 let compute_absl_ids (xl : abs list) : ids_sets * ids_to_values =
@@ -538,7 +537,7 @@ let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
       (List.map
          (fun (cg : const_generic_var) ->
            let ty = TLiteral cg.ty in
-           let cv = mk_fresh_symbolic_typed_value_opt_span span ty in
+           let cv = mk_fresh_symbolic_tvalue_opt_span span ty in
            (cg.index, cv))
          const_generic_vars)
   in

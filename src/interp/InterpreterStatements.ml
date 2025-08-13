@@ -51,13 +51,13 @@ let drop_value (config : config) (span : Meta.span) (p : place) : cm_fun =
   (ctx, cc)
 
 (** Push a dummy variable to the environment *)
-let push_dummy_var (vid : DummyVarId.id) (v : typed_value) (ctx : eval_ctx) :
+let push_dummy_var (vid : DummyVarId.id) (v : tvalue) (ctx : eval_ctx) :
     eval_ctx =
   ctx_push_dummy_var ctx vid v
 
 (** Remove a dummy variable from the environment *)
 let remove_dummy_var (span : Meta.span) (vid : DummyVarId.id) (ctx : eval_ctx) :
-    typed_value * eval_ctx =
+    tvalue * eval_ctx =
   let ctx, v = ctx_remove_dummy_var span ctx vid in
   (v, ctx)
 
@@ -72,13 +72,13 @@ let push_uninitialized_vars (span : Meta.span) (vars : local list)
   ctx_push_uninitialized_vars span ctx vars
 
 (** Push a variable to the environment *)
-let push_var (span : Meta.span) (var : local) (v : typed_value) (ctx : eval_ctx)
-    : eval_ctx =
+let push_var (span : Meta.span) (var : local) (v : tvalue) (ctx : eval_ctx) :
+    eval_ctx =
   ctx_push_var span ctx var v
 
 (** Push a list of variables to the environment *)
-let push_vars (span : Meta.span) (vars : (local * typed_value) list)
-    (ctx : eval_ctx) : eval_ctx =
+let push_vars (span : Meta.span) (vars : (local * tvalue) list) (ctx : eval_ctx)
+    : eval_ctx =
   ctx_push_vars span ctx vars
 
 (** Assign a value to a given place.
@@ -87,12 +87,12 @@ let push_vars (span : Meta.span) (vars : (local * typed_value) list)
     variable, then prepares the destination (by ending borrows, etc.) before
     popping the dummy variable and putting in its destination (after having
     checked that preparing the destination didn't introduce ⊥). *)
-let assign_to_place (config : config) (span : Meta.span) (rv : typed_value)
+let assign_to_place (config : config) (span : Meta.span) (rv : tvalue)
     (p : place) : cm_fun =
  fun ctx ->
   [%ltrace
     "- rv: "
-    ^ typed_value_to_string ~span:(Some span) ctx rv
+    ^ tvalue_to_string ~span:(Some span) ctx rv
     ^ "\n- p: " ^ place_to_string ctx p ^ "\n- Initial context:\n"
     ^ eval_ctx_to_string ~span:(Some span) ctx];
   (* Push the rvalue to a dummy variable, for bookkeeping *)
@@ -117,7 +117,7 @@ let assign_to_place (config : config) (span : Meta.span) (rv : typed_value)
   (* Debug *)
   [%ltrace
     "- rv: "
-    ^ typed_value_to_string ~span:(Some span) ctx rv
+    ^ tvalue_to_string ~span:(Some span) ctx rv
     ^ "\n- p: " ^ place_to_string ctx p ^ "\n- Final context:\n"
     ^ eval_ctx_to_string ~span:(Some span) ctx];
   (* Return *)
@@ -137,7 +137,7 @@ let eval_assertion_concrete (config : config) (span : Meta.span)
     | _ ->
         [%craise] span
           ("Expected a boolean, got: "
-          ^ typed_value_to_string ~span:(Some span) ctx v)
+          ^ tvalue_to_string ~span:(Some span) ctx v)
   in
   (* Compose and apply *)
   ((ctx, st), eval_op)
@@ -180,7 +180,7 @@ let eval_assertion (config : config) (span : Meta.span) (assertion : assertion)
     | _ ->
         [%craise] span
           ("Expected a boolean, got: "
-          ^ typed_value_to_string ~span:(Some span) ctx v)
+          ^ tvalue_to_string ~span:(Some span) ctx v)
   in
   (* Compose and apply *)
   (st, cc_comp cf_eval_op cf_eval_assert)
@@ -278,7 +278,7 @@ let get_builtin_function_return_type (span : Meta.span) (fid : builtin_fun_id)
 
 let move_return_value (config : config) (span : Meta.span)
     (pop_return_value : bool) (ctx : eval_ctx) :
-    typed_value option * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
+    tvalue option * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   if pop_return_value then
     let ret_vid = LocalId.zero in
     let v, ctx, cc =
@@ -291,7 +291,7 @@ let move_return_value (config : config) (span : Meta.span)
 
 let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
     (ctx : eval_ctx) :
-    typed_value option * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
+    tvalue option * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Debug *)
   [%ltrace eval_ctx_to_string ~span:(Some span) ctx];
 
@@ -396,7 +396,7 @@ let eval_box_new_concrete (config : config) (span : Meta.span)
       let generics = TypesUtils.mk_generic_args_from_types [ boxed_ty ] in
       let box_ty = TAdt { id = TBuiltin TBox; generics } in
       let box_v = VAdt { variant_id = None; field_values = [ v ] } in
-      let box_v = mk_typed_value span box_ty box_v in
+      let box_v = mk_tvalue span box_ty box_v in
 
       (* Move this value to the return variable *)
       let dest = mk_place_from_var_id ctx span LocalId.zero in
@@ -443,7 +443,7 @@ let eval_builtin_function_call_concrete (config : config) (span : Meta.span)
       (* Create and push the input variables *)
       let input_vars =
         LocalId.mapi_from1
-          (fun id (v : typed_value) -> (mk_var id None v.ty, v))
+          (fun id (v : tvalue) -> (mk_var id None v.ty, v))
           args_vl
       in
       let ctx = push_vars span input_vars ctx in
@@ -914,14 +914,14 @@ and eval_global_ref (config : config) (span : Meta.span) (dest : place)
        * We then create a reference to the global.
        *)
       let sval = eval_global_as_fresh_symbolic_value span gref ctx in
-      let typed_sval = mk_typed_value_from_symbolic_value sval in
+      let typed_sval = mk_tvalue_from_symbolic_value sval in
       (* Create a shared loan containing the global, as well as a shared borrow *)
       let bid = fresh_borrow_id () in
       let sid = fresh_shared_borrow_id () in
-      let loan : typed_value =
+      let loan : tvalue =
         { value = VLoan (VSharedLoan (bid, typed_sval)); ty = sval.sv_ty }
       in
-      let borrow : typed_value =
+      let borrow : tvalue =
         {
           value = VBorrow (VSharedBorrow (bid, sid));
           ty = TRef (RErased, sval.sv_ty, RShared);
@@ -1265,7 +1265,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
   (* Generate a fresh symbolic value for the return value *)
   let ret_sv_ty = inst_sg.output in
   let ret_spc = mk_fresh_symbolic_value span ret_sv_ty in
-  let ret_value = mk_typed_value_from_symbolic_value ret_spc in
+  let ret_value = mk_tvalue_from_symbolic_value ret_spc in
   let ret_av regions =
     mk_aproj_loans_value_from_symbolic_value regions ret_spc ret_sv_ty
   in
@@ -1284,8 +1284,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
   (* Check the type of the input arguments *)
   [%cassert] span
     (List.for_all
-       (fun ((arg, rty) : typed_value * rty) ->
-         arg.ty = Subst.erase_regions rty)
+       (fun ((arg, rty) : tvalue * rty) -> arg.ty = Subst.erase_regions rty)
        args_with_rtypes)
     "The input arguments don't have the proper type";
   (* Check that the input arguments don't contain symbolic values that can't

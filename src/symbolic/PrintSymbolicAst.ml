@@ -22,19 +22,16 @@ let call_to_string (env : fmt_env) (indent : string) (call : call) : string =
     if call.args = [] then ""
     else
       "("
-      ^ String.concat ", "
-          (List.map (Values.typed_value_to_string env) call.args)
+      ^ String.concat ", " (List.map (Values.tvalue_to_string env) call.args)
       ^ ")"
   in
   indent ^ dest ^ " = " ^ call_id ^ generics ^ args
 
 let value_aggregate_to_string (env : fmt_env) (v : value_aggregate) : string =
   match v with
-  | VaSingleValue v -> Values.typed_value_to_string env v
+  | VaSingleValue v -> Values.tvalue_to_string env v
   | VaArray vl ->
-      "["
-      ^ String.concat ", " (List.map (Values.typed_value_to_string env) vl)
-      ^ "]"
+      "[" ^ String.concat ", " (List.map (Values.tvalue_to_string env) vl) ^ "]"
   | VaCgValue cg_id -> const_generic_db_var_to_string env (Free cg_id)
   | VaTraitConstValue (trait_ref, item) ->
       trait_ref_to_string env trait_ref ^ "." ^ item
@@ -46,7 +43,7 @@ let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
       let ret =
         match ret with
         | None -> ""
-        | Some ret -> " " ^ Values.typed_value_to_string env ret
+        | Some ret -> " " ^ Values.tvalue_to_string env ret
       in
       indent ^ "return" ^ ret
   | Panic -> indent ^ "panic"
@@ -69,7 +66,7 @@ let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
       let next = expr_to_string env indent indent_incr next in
       indent ^ "let " ^ sv ^ " = " ^ global ^ " in\n" ^ next
   | Assertion (_, b, next) ->
-      let b = Values.typed_value_to_string env b in
+      let b = Values.tvalue_to_string env b in
       let next = expr_to_string env indent indent_incr next in
       indent ^ "assert " ^ b ^ ";\n" ^ next
   | Expansion (_, sv, exp) -> expansion_to_string env indent indent_incr sv exp
@@ -85,7 +82,7 @@ let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
       let ret =
         match ret with
         | None -> "None"
-        | Some (_, ret) -> "Some " ^ Values.typed_value_to_string env ret
+        | Some (_, ret) -> "Some " ^ Values.tvalue_to_string env ret
       in
       let ret = "ret = " ^ ret in
       let sid_to_value, refreshed_sids =
@@ -93,7 +90,7 @@ let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
         | None -> ("None", "None")
         | Some (sid_to_value, refreshed_sids) ->
             ( SymbolicValueId.Map.to_string None
-                (Values.typed_value_to_string env)
+                (Values.tvalue_to_string env)
                 sid_to_value,
               SymbolicValueId.Map.to_string None SymbolicValueId.to_string
                 refreshed_sids )
@@ -134,13 +131,11 @@ and expansion_to_string (env : fmt_env) (indent : string) (indent_incr : string)
           ((variant_id, svl, branch) :
             variant_id option * symbolic_value list * expr) : string =
         let field_values =
-          List.map ValuesUtils.mk_typed_value_from_symbolic_value svl
+          List.map ValuesUtils.mk_tvalue_from_symbolic_value svl
         in
-        let v : typed_value =
-          { value = VAdt { variant_id; field_values }; ty }
-        in
+        let v : tvalue = { value = VAdt { variant_id; field_values }; ty } in
         indent ^ "| "
-        ^ Values.typed_value_to_string env v
+        ^ Values.tvalue_to_string env v
         ^ " ->\n"
         ^ expr_to_string env indent1 indent_incr branch
       in

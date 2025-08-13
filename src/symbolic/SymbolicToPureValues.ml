@@ -79,11 +79,11 @@ let symbolic_value_to_texpr (ctx : bs_ctx) (sv : V.symbolic_value) : texpr =
     - function call
     - end abstraction
     - return *)
-let rec typed_value_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx)
-    (v : V.typed_value) : texpr =
+let rec tvalue_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (v : V.tvalue) :
+    texpr =
   (* We need to ignore boxes *)
-  let v = ValuesUtils.unbox_typed_value ctx.span v in
-  let translate = typed_value_to_texpr ctx ectx in
+  let v = ValuesUtils.unbox_tvalue ctx.span v in
+  let translate = tvalue_to_texpr ctx ectx in
   (* Translate the type *)
   let ty = ctx_translate_fwd_ty ctx v.ty in
   (* Translate the value *)
@@ -139,8 +139,7 @@ let rec typed_value_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx)
   in
   (* Debugging *)
   [%ltrace
-    "result:" ^ "\n- input value:\n"
-    ^ typed_value_to_string ctx v
+    "result:" ^ "\n- input value:\n" ^ tvalue_to_string ctx v
     ^ "\n- translated expression:\n" ^ texpr_to_string ctx value];
   (* Sanity check *)
   type_check_texpr ctx value;
@@ -309,7 +308,7 @@ let rec typed_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
              is the meta-value. *)
           match mv with
           | None -> [%craise] ctx.span "Unreachable"
-          | Some mv -> Some (typed_value_to_texpr ctx ectx mv))
+          | Some mv -> Some (tvalue_to_texpr ctx ectx mv))
   in
   (* Sanity check - Rk.: we do this at every recursive call, which is a bit
    * expansive... *)
@@ -417,14 +416,14 @@ and aloan_content_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
         (ValuesUtils.is_aignored given_back.value)
         "Unreachable";
       (* Return the meta-value *)
-      Some (typed_value_to_texpr ctx ectx given_back_meta)
+      Some (tvalue_to_texpr ctx ectx given_back_meta)
   | AEndedSharedLoan (sv, child) ->
       [%cassert] ctx.span (ValuesUtils.is_aignored child.value) "Unreachable";
       (* We don't diveinto shared loans: there is nothing to give back
          inside (note that there could be a mutable borrow in the shared
          value, pointing to a mutable loan in the child avalue, but this
          borrow is in practice immutable) *)
-      if filter then None else Some (typed_value_to_texpr ctx ectx sv)
+      if filter then None else Some (tvalue_to_texpr ctx ectx sv)
   | AIgnoredMutLoan (_, _) ->
       (* There can be *inner* not ended mutable loans, but not outer ones *)
       [%craise] ctx.span "Unreachable"
@@ -807,14 +806,14 @@ let abs_to_given_back_no_mp (abs : V.abs) (ctx : bs_ctx) :
     We need this to compute default values for given back values - see the
     explanations about [bs_ctx.mut_borrow_to_consumed]. *)
 let register_consumed_mut_borrows (ectx : C.eval_ctx) (ctx : bs_ctx)
-    (v : V.typed_value) : bs_ctx =
+    (v : V.tvalue) : bs_ctx =
   let ctx = ref ctx in
   let visitor =
     object
-      inherit [_] V.iter_typed_value as super
+      inherit [_] V.iter_tvalue as super
 
       method! visit_VMutBorrow env bid v =
-        let e = typed_value_to_texpr !ctx ectx v in
+        let e = tvalue_to_texpr !ctx ectx v in
         ctx :=
           {
             !ctx with
@@ -824,5 +823,5 @@ let register_consumed_mut_borrows (ectx : C.eval_ctx) (ctx : bs_ctx)
         super#visit_VMutBorrow env bid v
     end
   in
-  visitor#visit_typed_value () v;
+  visitor#visit_tvalue () v;
   !ctx

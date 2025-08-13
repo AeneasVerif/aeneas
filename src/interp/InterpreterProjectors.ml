@@ -12,8 +12,8 @@ let log = Logging.projectors_log
 
 (** [ty] shouldn't contain erased regions *)
 let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
-    (regions : RegionId.Set.t) (v : typed_value) (ty : ty) :
-    abstract_shared_borrows =
+    (regions : RegionId.Set.t) (v : tvalue) (ty : ty) : abstract_shared_borrows
+    =
   (* Sanity check - TODO: move those elsewhere (here we perform the check at every
    * recursive call which is a bit overkill...) *)
   let ety = Subst.erase_regions ty in
@@ -88,7 +88,7 @@ let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
     | _ -> [%craise] span "Unreachable"
 
 let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
-    (ctx : eval_ctx) (regions : RegionId.Set.t) (v : typed_value) (ty : rty) :
+    (ctx : eval_ctx) (regions : RegionId.Set.t) (v : tvalue) (ty : rty) :
     typed_avalue =
   (* Sanity check - TODO: move this elsewhere (here we perform the check at every
    * recursive call which is a bit overkill...) *)
@@ -216,21 +216,21 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
       | _ ->
           [%ltrace
             "unexpected inputs:\n- input value: "
-            ^ typed_value_to_string ~span:(Some span) ctx v
+            ^ tvalue_to_string ~span:(Some span) ctx v
             ^ "\n- proj rty: " ^ ty_to_string ctx ty];
           [%internal_error] span
     in
     { value; ty }
 
 let symbolic_expansion_non_borrow_to_value (span : Meta.span)
-    (sv : symbolic_value) (see : symbolic_expansion) : typed_value =
+    (sv : symbolic_value) (see : symbolic_expansion) : tvalue =
   let ty = Subst.erase_regions sv.sv_ty in
   let value =
     match see with
     | SeLiteral cv -> VLiteral cv
     | SeAdt (variant_id, field_values) ->
         let field_values =
-          List.map mk_typed_value_from_symbolic_value field_values
+          List.map mk_tvalue_from_symbolic_value field_values
         in
         VAdt { variant_id; field_values }
     | SeMutRef (_, _) | SeSharedRef (_, _) ->
@@ -239,11 +239,11 @@ let symbolic_expansion_non_borrow_to_value (span : Meta.span)
   { value; ty }
 
 let symbolic_expansion_non_shared_borrow_to_value (span : Meta.span)
-    (sv : symbolic_value) (see : symbolic_expansion) : typed_value =
+    (sv : symbolic_value) (see : symbolic_expansion) : tvalue =
   match see with
   | SeMutRef (bid, bv) ->
       let ty = Subst.erase_regions sv.sv_ty in
-      let bv = mk_typed_value_from_symbolic_value bv in
+      let bv = mk_tvalue_from_symbolic_value bv in
       let value = VBorrow (VMutBorrow (bid, bv)) in
       { value; ty }
   | SeSharedRef (_, _) ->
@@ -310,7 +310,7 @@ let apply_proj_loans_on_symbolic_expansion (span : Meta.span)
          * we never project over static regions) *)
         if region_in_set r regions then
           (* In the set: keep *)
-          let shared_value = mk_typed_value_from_symbolic_value spc in
+          let shared_value = mk_tvalue_from_symbolic_value spc in
           (ALoan (ASharedLoan (PNone, bid, shared_value, child_av)), ref_ty)
         else
           (* Not in the set: ignore *)
@@ -321,8 +321,8 @@ let apply_proj_loans_on_symbolic_expansion (span : Meta.span)
 
 (** [ty] shouldn't have erased regions *)
 let apply_proj_borrows_on_input_value (span : Meta.span) (ctx : eval_ctx)
-    (regions : RegionId.Set.t) (v : typed_value) (ty : rty) :
-    eval_ctx * typed_avalue =
+    (regions : RegionId.Set.t) (v : tvalue) (ty : rty) : eval_ctx * typed_avalue
+    =
   [%sanity_check] span (ty_is_rty ty);
   let check_symbolic_no_ended = true in
   (* Apply the projector *)

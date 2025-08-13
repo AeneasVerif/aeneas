@@ -19,7 +19,7 @@ type statement_eval_res =
       (** We reached a return statement *while inside a loop* *)
   | EndEnterLoop of
       loop_id
-      * typed_value SymbolicValueId.Map.t
+      * tvalue SymbolicValueId.Map.t
       * symbolic_value_id SymbolicValueId.Map.t
       (** When we enter a loop, we delegate the end of the function is
           synthesized with a call to the loop translation. We use this
@@ -35,7 +35,7 @@ type statement_eval_res =
           generalize. *)
   | EndContinue of
       loop_id
-      * typed_value SymbolicValueId.Map.t
+      * tvalue SymbolicValueId.Map.t
       * symbolic_value_id SymbolicValueId.Map.t
       (** For loop translations: we end with a continue (i.e., a recursive call
           to the translation for the loop body).

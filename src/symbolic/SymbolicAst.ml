@@ -53,7 +53,7 @@ type call = {
       (** In case the call is to a trait method, we may need an additional type
           parameter ([Self]) and the self trait clause to instantiate the
           function signature. *)
-  args : typed_value list;
+  args : tvalue list;
   args_places : mplace option list;  (** Meta information *)
   dest : symbolic_value;
   dest_place : mplace option;  (** Meta information *)
@@ -63,7 +63,7 @@ type call = {
 (** Meta information for expressions, not necessary for synthesis but useful to
     guide it to generate a pretty output. *)
 type espan =
-  | Assignment of Contexts.eval_ctx * mplace * typed_value * mplace option
+  | Assignment of Contexts.eval_ctx * mplace * tvalue * mplace option
       (** We generated an assignment (destination, assigned value, src) *)
   | Snapshot of Contexts.eval_ctx
       (** Remember an environment snapshot - this is useful to check where the
@@ -122,7 +122,7 @@ class ['self] iter_expr_base =
     used in LLBC or in lambda-calculus: they are simply a first step towards
     lambda-calculus expressions. *)
 type expr =
-  | Return of (Contexts.eval_ctx[@opaque]) * typed_value option
+  | Return of (Contexts.eval_ctx[@opaque]) * tvalue option
       (** There are two cases:
           - the AST is for a forward function: the typed value should contain
             the value which was in the return variable
@@ -141,7 +141,7 @@ type expr =
           asserted value. It has the same purpose as for the {!Return} case. *)
   | EvalGlobal of global_decl_id * generic_args * symbolic_value * expr
       (** Evaluate a global to a fresh symbolic value *)
-  | Assertion of (Contexts.eval_ctx[@opaque]) * typed_value * expr
+  | Assertion of (Contexts.eval_ctx[@opaque]) * tvalue * expr
       (** An assertion.
 
           The context is the evaluation context from after evaluating the
@@ -171,10 +171,9 @@ type expr =
           The context is the evaluation context from before introducing the new
           value. It has the same purpose as for the {!Return} case. *)
   | ForwardEnd of
-      ((Contexts.eval_ctx[@opaque]) * typed_value) option
+      ((Contexts.eval_ctx[@opaque]) * tvalue) option
       * (Contexts.eval_ctx[@opaque])
-      * (typed_value symbolic_value_id_map
-        * symbolic_value_id symbolic_value_id_map)
+      * (tvalue symbolic_value_id_map * symbolic_value_id symbolic_value_id_map)
         option
       * expr
       * expr region_group_id_map
@@ -245,8 +244,8 @@ and expansion =
 (* Remark: this type doesn't have to be mutually recursive with the other
    types, but it makes it easy to generate the visitors *)
 and value_aggregate =
-  | VaSingleValue of typed_value  (** Regular case *)
-  | VaArray of typed_value list
+  | VaSingleValue of tvalue  (** Regular case *)
+  | VaArray of tvalue list
       (** This is used when introducing array aggregates *)
   | VaCgValue of const_generic_var_id
       (** This is used when evaluating a const generic value: in the
