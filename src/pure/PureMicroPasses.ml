@@ -193,6 +193,25 @@ let rec decompose_texpression span (x : texpression) : (fvar_id * int) option =
   | EError _ -> None
   | Meta (_, x) -> decompose_texpression span x
 
+type loop_info = {
+  inputs : typed_pattern list;  (** The inputs bound by the loop *)
+  outputs : typed_pattern list;
+      (** The outputs that we accumulated at each loop call.
+
+          We use this to propagate naming information between all the call
+          sites. For instance, if we have:
+
+          {[
+            if b then
+              let x <- loop ...
+            else
+              let y <- loop ...
+          ]}
+          it can happen that we derive a pretty name for [x] but not [y], in
+          which case we might want to use the same name for [y] (but we must
+          know they are related). *)
+}
+
 (** Helper for [compute_pretty_names].
 
     We explore the function body, while accumulating constraints. Note that all
@@ -330,7 +349,29 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
             | _ -> ())
           (fst (opt_unmeta_mplace re));
         register_assign lv re;
-        (* *)
+        (* Check if this is a loop call *)
+        let f, args = destruct_apps re in
+        begin
+          match f.e with
+          | Qualif
+              {
+                id = FunOrOp (Fun (FromLlbc (FunId (FRegular fid), Some lp_id)));
+                _;
+              }
+            when fid = def.def_id ->
+              (* This is a loop! *)
+              let info = LoopId.Map.find lp_id !loop_infos in
+              (* Link the input arguments to the input variables.
+               Note that there shouldn't be partial applications *)
+              List.iter
+                (fun (lv, re) -> register_assign lv re)
+                (List.combine info.inputs args);
+              (* Register the output *)
+              let info = { info with outputs = lv :: info.outputs } in
+              loop_infos := LoopId.Map.add lp_id info !loop_infos
+          | _ -> ()
+        end;
+        (* Continue exploring *)
         super#visit_Let env monadic lv re e
 
       method! visit_PatBound _ _ _ = [%internal_error] span
@@ -359,7 +400,8 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
         super#visit_Meta env meta e
 
       method! visit_loop env loop =
-        loop_infos := LoopId.Map.add loop.loop_id loop.inputs !loop_infos;
+        let info : loop_info = { inputs = loop.inputs; outputs = [] } in
+        loop_infos := LoopId.Map.add loop.loop_id info !loop_infos;
         (* The body should be wrapped in "sym places" meta information: we want to use
            it with priority 0 (rather than 1 as is done by default in visit_Meta).
         *)
@@ -375,30 +417,44 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
         match decompose_mplace_to_local mp with
         | Some (vid, name, _) -> register_local vid name
         | _ -> ()
-
-      method! visit_App env f arg =
-        (* Check if this is a loop call *)
-        let f, args = destruct_apps f in
-        let args = args @ [ arg ] in
-        (match f.e with
-        | Qualif
-            {
-              id = FunOrOp (Fun (FromLlbc (FunId (FRegular fid), Some lp_id)));
-              _;
-            }
-          when fid = def.def_id ->
-            let inputs = LoopId.Map.find lp_id !loop_infos in
-            (* Note that there shouldn't be partial applications *)
-            List.iter
-              (fun (lv, re) -> register_assign lv re)
-              (List.combine inputs args)
-        | _ -> ());
-        (* Continue exploring *)
-        List.iter (self#visit_texpression env) (f :: args)
     end
   in
   List.iter (visitor#visit_typed_pattern ()) body.inputs;
   visitor#visit_texpression () body.body;
+
+  (* Equate the loop outputs *)
+  let rec equate (out0 : typed_pattern) (out1 : typed_pattern) : unit =
+    match (out0.value, out1.value) with
+    | PatOpen (v0, _), PatOpen (v1, _) ->
+        register_edge (Pure v0.id) 0 (Pure v1.id)
+    | PatAdt adt0, PatAdt adt1 ->
+        if
+          adt0.variant_id = adt1.variant_id
+          && List.length adt0.field_values = List.length adt1.field_values
+        then
+          List.iter
+            (fun (x, y) -> equate x y)
+            (List.combine adt0.field_values adt1.field_values)
+    | _ -> ()
+  in
+  LoopId.Map.iter
+    (fun _ (info : loop_info) ->
+      (* TODO: do we really need to equate them two by two? *)
+      let rec go outputs =
+        match outputs with
+        | [] -> ()
+        | out0 :: outputs ->
+            let rec go_inner outputs =
+              match outputs with
+              | [] -> ()
+              | out1 :: outputs ->
+                  equate out0 out1;
+                  go_inner outputs
+            in
+            go_inner outputs
+      in
+      go info.outputs)
+    !loop_infos;
 
   [%ldebug
     "nodes:\n"
