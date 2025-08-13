@@ -100,4 +100,4 @@ val prepare_lplace :
   Meta.span ->
   place ->
   eval_ctx ->
-  typed_value * eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression)
+  typed_value * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr)

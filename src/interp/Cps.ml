@@ -53,19 +53,17 @@ type statement_eval_res =
     - a new context
     - a continuation with which to build the execution trace, provided the trace
       for the end of the execution. *)
-type cm_fun =
-  eval_ctx -> eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression)
+type cm_fun = eval_ctx -> eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr)
 
 type st_cm_fun =
   eval_ctx ->
-  (eval_ctx * statement_eval_res)
-  * (SymbolicAst.expression -> SymbolicAst.expression)
+  (eval_ctx * statement_eval_res) * (SymbolicAst.expr -> SymbolicAst.expr)
 
 (** Type of a function used when evaluating a statement *)
 type stl_cm_fun =
   eval_ctx ->
   (eval_ctx * statement_eval_res) list
-  * (SymbolicAst.expression list -> SymbolicAst.expression)
+  * (SymbolicAst.expr list -> SymbolicAst.expr)
 
 (** Compose continuations that we use to compute execution traces *)
 let cc_comp (f : 'b -> 'c) (g : 'a -> 'b) : 'a -> 'c = fun e -> f (g e)
@@ -121,9 +119,8 @@ let cf_singleton file line span el =
     the symbolic expressions, we need to decompose the list of expressions we
     get to give it to the individual continuations for the branches. *)
 let comp_seqs (file : string) (line : int) (span : Meta.span)
-    (ls :
-      ('a list * (SymbolicAst.expression list -> SymbolicAst.expression)) list)
-    : 'a list * (SymbolicAst.expression list -> SymbolicAst.expression list) =
+    (ls : ('a list * (SymbolicAst.expr list -> SymbolicAst.expr)) list) :
+    'a list * (SymbolicAst.expr list -> SymbolicAst.expr list) =
   (* Auxiliary function: given a list of expressions el, build the expressions
      corresponding to the different branches *)
   let rec cc ls el =

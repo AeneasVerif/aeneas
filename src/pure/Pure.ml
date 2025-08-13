@@ -967,8 +967,8 @@ type qualif_id =
     constructor is always fully instantiated. *)
 type qualif = { id : qualif_id; generics : generic_args } [@@deriving show, ord]
 
-(** Ancestor for {!iter_expression} visitor *)
-class ['self] iter_expression_base =
+(** Ancestor for {!iter_expr} visitor *)
+class ['self] iter_expr_base =
   object (_self : 'self)
     inherit [_] iter_tpattern
     inherit! [_] iter_type_id
@@ -979,8 +979,8 @@ class ['self] iter_expression_base =
     method visit_db_scope_id : 'env -> db_scope_id -> unit = fun _ _ -> ()
   end
 
-(** Ancestor for {!map_expression} visitor *)
-class ['self] map_expression_base =
+(** Ancestor for {!map_expr} visitor *)
+class ['self] map_expr_base =
   object (_self : 'self)
     inherit [_] map_tpattern
     inherit! [_] map_type_id
@@ -991,8 +991,8 @@ class ['self] map_expression_base =
     method visit_db_scope_id : 'env -> db_scope_id -> db_scope_id = fun _ x -> x
   end
 
-(** Ancestor for {!reduce_expression} visitor *)
-class virtual ['self] reduce_expression_base =
+(** Ancestor for {!reduce_expr} visitor *)
+class virtual ['self] reduce_expr_base =
   object (self : 'self)
     inherit [_] reduce_tpattern
     inherit! [_] reduce_type_id
@@ -1003,8 +1003,8 @@ class virtual ['self] reduce_expression_base =
     method visit_db_scope_id : 'env -> db_scope_id -> 'a = fun _ _ -> self#zero
   end
 
-(** Ancestor for {!mapreduce_expression} visitor *)
-class virtual ['self] mapreduce_expression_base =
+(** Ancestor for {!mapreduce_expr} visitor *)
+class virtual ['self] mapreduce_expr_base =
   object (self : 'self)
     inherit [_] mapreduce_tpattern
     inherit! [_] mapreduce_type_id
@@ -1025,15 +1025,15 @@ class virtual ['self] mapreduce_expression_base =
       fun _ x -> (x, self#zero)
   end
 
-(** **Rk.:** here, {!expression} is not at all equivalent to the expressions
-    used in LLBC. They are lambda-calculus expressions, and are thus actually
-    more general than the LLBC statements, in a sense. *)
-type expression =
+(** **Rk.:** here, {!expr} is not at all equivalent to the expressions used in
+    LLBC. They are lambda-calculus expressions, and are thus actually more
+    general than the LLBC statements, in a sense. *)
+type expr =
   | FVar of fvar_id  (** a free variable *)
   | BVar of bvar  (** a bound variable *)
   | CVar of const_generic_var_id  (** a const generic var *)
   | Const of literal
-  | App of texpression * texpression
+  | App of texpr * texpr
       (** Application of a function to an argument.
 
           The function calls are still quite structured. Change that?... We
@@ -1041,9 +1041,9 @@ type expression =
           argument): this would allow us to replace some field accesses with
           calls to projectors over fields (when there are clashes of field
           names, some provers like F* get pretty bad...) *)
-  | Lambda of tpattern * texpression  (** Lambda abstraction: [λ x => e] *)
+  | Lambda of tpattern * texpr  (** Lambda abstraction: [λ x => e] *)
   | Qualif of qualif  (** A top-level qualifier *)
-  | Let of bool * tpattern * texpression * texpression
+  | Let of bool * tpattern * texpr * texpr
       (** Let binding.
 
           TODO: the boolean should be replaced by an enum: sometimes we use the
@@ -1080,14 +1080,14 @@ type expression =
             let tl = Cons?.tl ls in
             ...
           ]} *)
-  | Switch of texpression * switch_body
+  | Switch of texpr * switch_body
   | Loop of loop  (** See the comments for {!loop} *)
   | StructUpdate of struct_update  (** See the comments for {!struct_update} *)
-  | Meta of emeta * texpression  (** Meta-information *)
+  | Meta of emeta * texpr  (** Meta-information *)
   | EError of Meta.span option * string
 
-and switch_body = If of texpression * texpression | Match of match_branch list
-and match_branch = { pat : tpattern; branch : texpression }
+and switch_body = If of texpr * texpr | Match of match_branch list
+and match_branch = { pat : tpattern; branch : texpr }
 
 (** In {!SymbolicToPure}, whenever we encounter a loop we insert a {!loop} node,
     which contains the end of the function (i.e., the call to the loop function)
@@ -1099,7 +1099,7 @@ and match_branch = { pat : tpattern; branch : texpression }
     function, and a backward body (for the corresponding region group) if the
     function is a backward function. *)
 and loop = {
-  fun_end : texpression;
+  fun_end : texpr;
   loop_id : loop_id;
   span : span; [@opaque]
   output_ty : ty;  (** The output type of the loop *)
@@ -1108,7 +1108,7 @@ and loop = {
 
           Those variables are the variables bound in [loop_body] (they are the
           input arguments of the loop). *)
-  loop_body : texpression;
+  loop_body : texpr;
 }
 
 (** Structure creation/update.
@@ -1139,11 +1139,11 @@ and loop = {
     ]} *)
 and struct_update = {
   struct_id : type_id;
-  init : texpression option;
-  updates : (field_id * texpression) list;
+  init : texpr option;
+  updates : (field_id * texpr) list;
 }
 
-and texpression = { e : expression; ty : ty }
+and texpr = { e : expr; ty : ty }
 
 and bvar = {
   scope : db_scope_id;
@@ -1171,13 +1171,13 @@ and bvar = {
 }
 
 (** Meta-value (converted to an expression). *)
-and mvalue = texpression
+and mvalue = texpr
 
 (** Variable used in meta-information.
 
-    We use the type [texpression] so that the variable id gets properly updated
-    by the functions which open/close binders. *)
-and mvar = texpression
+    We use the type [texpr] so that the variable id gets properly updated by the
+    functions which open/close binders. *)
+and mvar = texpr
 
 (** Meta-information stored in the AST.
 
@@ -1218,32 +1218,32 @@ and emeta =
   ord,
   visitors
     {
-      name = "iter_expression";
+      name = "iter_expr";
       variety = "iter";
-      ancestors = [ "iter_expression_base" ];
+      ancestors = [ "iter_expr_base" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
     },
   visitors
     {
-      name = "map_expression";
+      name = "map_expr";
       variety = "map";
-      ancestors = [ "map_expression_base" ];
+      ancestors = [ "map_expr_base" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
     },
   visitors
     {
-      name = "reduce_expression";
+      name = "reduce_expr";
       variety = "reduce";
-      ancestors = [ "reduce_expression_base" ];
+      ancestors = [ "reduce_expr_base" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
     },
   visitors
     {
-      name = "mapreduce_expression";
+      name = "mapreduce_expr";
       variety = "mapreduce";
-      ancestors = [ "mapreduce_expression_base" ];
+      ancestors = [ "mapreduce_expr_base" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
     }]
 
@@ -1453,7 +1453,7 @@ type fun_body = {
   inputs : tpattern list;
       (** Note that we consider the inputs as a single binder group when
           computing de bruijn indices *)
-  body : texpression;
+  body : texpr;
 }
 [@@deriving show]
 

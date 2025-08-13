@@ -513,8 +513,7 @@ let rec update_ctx_along_write_place (config : config) (span : Meta.span)
       comp cc (update_ctx_along_write_place config span access p ctx)
 
 (** Small utility used to break control-flow *)
-exception
-  UpdateCtx of (eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression))
+exception UpdateCtx of (eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr))
 
 let rec end_loans_at_place (config : config) (span : Meta.span)
     (access : access_kind) (p : place) : cm_fun =
@@ -620,8 +619,7 @@ let drop_outer_loans_at_lplace (config : config) (span : Meta.span) (p : place)
 
 let prepare_lplace (config : config) (span : Meta.span) (p : place)
     (ctx : eval_ctx) :
-    typed_value * eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression)
-    =
+    typed_value * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   [%ltrace
     "- p: " ^ place_to_string ctx p ^ "\n- Initial context:\n"
     ^ eval_ctx_to_string ~span:(Some span) ctx];

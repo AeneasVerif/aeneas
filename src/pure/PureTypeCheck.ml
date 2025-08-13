@@ -67,9 +67,9 @@ type tc_ctx = {
   bvar_counter : BVarId.id;
 }
 
-let texpression_to_string (ctx : tc_ctx) (e : texpression) : string =
+let texpr_to_string (ctx : tc_ctx) (e : texpr) : string =
   let fmt = PrintPure.decls_ctx_to_fmt_env ctx.decls_ctx in
-  PrintPure.texpression_to_string fmt false "" "  " e
+  PrintPure.texpr_to_string fmt false "" "  " e
 
 let tpattern_to_string (ctx : tc_ctx) (x : tpattern) : string =
   let fmt = PrintPure.decls_ctx_to_fmt_env ctx.decls_ctx in
@@ -106,8 +106,8 @@ let tc_ctx_push_bvar (ctx : tc_ctx) (v : var) : tc_ctx =
   let pbenv = BVarId.Map.add id v.ty (Option.get ctx.pbenv) in
   { ctx with pbenv = Some pbenv; bvar_counter = counter }
 
-let rec check_tpattern_aux (span : Meta.span) (ctx : tc_ctx)
-    (v : tpattern) : tc_ctx =
+let rec check_tpattern_aux (span : Meta.span) (ctx : tc_ctx) (v : tpattern) :
+    tc_ctx =
   [%ltrace tpattern_to_string ctx v];
   match v.value with
   | PConstant cv ->
@@ -141,13 +141,11 @@ let rec check_tpattern_aux (span : Meta.span) (ctx : tc_ctx)
         ctx
         (List.combine field_tys av.field_values)
 
-let check_tpattern (span : Meta.span) (ctx : tc_ctx) (v : tpattern) :
-    tc_ctx =
+let check_tpattern (span : Meta.span) (ctx : tc_ctx) (v : tpattern) : tc_ctx =
   tc_ctx_push_pbenv (check_tpattern_aux span (tc_ctx_start_pbenv ctx) v)
 
-let rec check_texpression (span : Meta.span) (ctx : tc_ctx) (e : texpression) :
-    unit =
-  [%ltrace texpression_to_string ctx e];
+let rec check_texpr (span : Meta.span) (ctx : tc_ctx) (e : texpr) : unit =
+  [%ltrace texpr_to_string ctx e];
   match e.e with
   | BVar var ->
       (* Lookup the variable - note that the variable may not be there,
@@ -170,15 +168,15 @@ let rec check_texpression (span : Meta.span) (ctx : tc_ctx) (e : texpression) :
       let input_ty, output_ty = destruct_arrow span app.ty in
       [%pure_type_check] span (input_ty = arg.ty);
       [%pure_type_check] span (output_ty = e.ty);
-      check_texpression span ctx app;
-      check_texpression span ctx arg
+      check_texpr span ctx app;
+      check_texpr span ctx arg
   | Lambda (pat, body) ->
       let pat_ty, body_ty = destruct_arrow span e.ty in
       [%pure_type_check] span (pat.ty = pat_ty);
       [%pure_type_check] span (body.ty = body_ty);
       (* Check the pattern and register the introduced variables at the same time *)
       let ctx = check_tpattern span ctx pat in
-      check_texpression span ctx body
+      check_texpr span ctx body
   | Qualif qualif -> (
       match qualif.id with
       | FunOrOp _ -> () (* TODO *)
@@ -213,7 +211,7 @@ let rec check_texpression (span : Meta.span) (ctx : tc_ctx) (e : texpression) :
               [%pure_type_check] span (generics = qualif.generics)
           | _ -> [%craise] span "Unreachable"))
   | Let (monadic, pat, re, e_next) ->
-      [%ldebug "Let: e:\n" ^ texpression_to_string ctx e];
+      [%ldebug "Let: e:\n" ^ texpr_to_string ctx e];
       let expected_pat_ty =
         if monadic then destruct_result span re.ty else re.ty
       in
@@ -223,38 +221,38 @@ let rec check_texpression (span : Meta.span) (ctx : tc_ctx) (e : texpression) :
       [%pure_type_check] span (pat.ty = expected_pat_ty);
       [%pure_type_check] span (e.ty = e_next.ty);
       (* Check the right-expression *)
-      check_texpression span ctx re;
+      check_texpr span ctx re;
       (* Check the pattern and register the introduced variables at the same time *)
       let ctx = check_tpattern span ctx pat in
       (* Check the next expression *)
-      check_texpression span ctx e_next
+      check_texpr span ctx e_next
   | Switch (scrut, switch_body) -> (
-      check_texpression span ctx scrut;
+      check_texpr span ctx scrut;
       match switch_body with
       | If (e_then, e_else) ->
           [%pure_type_check] span (scrut.ty = TLiteral TBool);
           [%pure_type_check] span (e_then.ty = e.ty);
           [%pure_type_check] span (e_else.ty = e.ty);
-          check_texpression span ctx e_then;
-          check_texpression span ctx e_else
+          check_texpr span ctx e_then;
+          check_texpr span ctx e_else
       | Match branches ->
           let check_branch (br : match_branch) : unit =
             [%pure_type_check] span (br.pat.ty = scrut.ty);
             let ctx = check_tpattern span ctx br.pat in
-            check_texpression span ctx br.branch
+            check_texpr span ctx br.branch
           in
           List.iter check_branch branches)
   | Loop loop ->
       [%pure_type_check] span (loop.fun_end.ty = e.ty);
-      check_texpression span ctx loop.fun_end;
-      check_texpression span ctx loop.loop_body
+      check_texpr span ctx loop.fun_end;
+      check_texpr span ctx loop.loop_body
   | StructUpdate supd -> (
       (* Check the init value *)
       begin
         match supd.init with
         | None -> ()
         | Some init ->
-            check_texpression span ctx init;
+            check_texpr span ctx init;
             [%pure_type_check] span (init.ty = e.ty)
       end;
       (* Check the fields *)
@@ -270,22 +268,22 @@ let rec check_texpression (span : Meta.span) (ctx : tc_ctx) (e : texpression) :
               adt_generics
           in
           List.iter
-            (fun ((fid, fe) : _ * texpression) ->
+            (fun ((fid, fe) : _ * texpr) ->
               let expected_field_ty = FieldId.nth expected_field_tys fid in
               [%pure_type_check] span (expected_field_ty = fe.ty);
-              check_texpression span ctx fe)
+              check_texpr span ctx fe)
             supd.updates
       | TBuiltin TArray ->
           let expected_field_ty =
             Collections.List.to_cons_nil adt_generics.types
           in
           List.iter
-            (fun ((_, fe) : _ * texpression) ->
+            (fun ((_, fe) : _ * texpr) ->
               [%pure_type_check] span (expected_field_ty = fe.ty);
-              check_texpression span ctx fe)
+              check_texpr span ctx fe)
             supd.updates
       | _ -> [%craise] span "Unexpected")
   | Meta (_, e_next) ->
       [%pure_type_check] span (e_next.ty = e.ty);
-      check_texpression span ctx e_next
+      check_texpr span ctx e_next
   | EError (span, msg) -> [%craise_opt_span] span msg
