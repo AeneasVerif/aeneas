@@ -134,9 +134,10 @@ let () =
       ( "-use-fuel",
         Arg.Set use_fuel,
         " Use a fuel parameter to control divergence" );
-      ( "-backward-no-state-update",
-        Arg.Set backward_no_state_update,
-        " Forbid backward functions from updating the state" );
+      ( "-backward-state-update",
+        Arg.Set backward_state_update,
+        " Generate backward functions which update the state. THIS OPTION IS \
+         DEPRECATED." );
       ( "-no-template-clauses",
         Arg.Clear extract_template_decreases_clauses,
         " Do not generate templates for the required decreases \
@@ -312,9 +313,9 @@ let () =
     "-no-template-clauses" !extract_decreases_clauses "-decreases-clauses";
   if not !extract_decreases_clauses then
     extract_template_decreases_clauses := false;
-  (* Sanity check: -backward-no-state-update ==> -state *)
-  check_arg_implies !backward_no_state_update "-backward-no-state-update"
-    !use_state "-state";
+  (* Sanity check: -backward-state-update ==> -state *)
+  check_arg_implies !backward_state_update "-backward-state-update" !use_state
+    "-state";
   (* Sanity check: the use of decrease clauses is not compatible with the use of fuel *)
   check_arg_not !use_fuel "-use-fuel" !extract_decreases_clauses
     "-decreases-clauses";

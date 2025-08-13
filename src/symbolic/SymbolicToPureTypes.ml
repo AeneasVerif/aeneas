@@ -510,7 +510,7 @@ let compute_raw_fun_effect_info (span : Meta.span option)
       in
       let stateful_group = info.stateful in
       let stateful =
-        stateful_group && ((not !Config.backward_no_state_update) || gid = None)
+        stateful_group && (!Config.backward_state_update || gid = None)
       in
       {
         (* Note that backward functions can't fail *)
