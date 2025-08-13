@@ -360,6 +360,15 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
 
       method! visit_loop env loop =
         loop_infos := LoopId.Map.add loop.loop_id loop.inputs !loop_infos;
+        (* The body should be wrapped in "sym places" meta information: we want to use
+           it with priority 0 (rather than 1 as is done by default in visit_Meta).
+        *)
+        (match loop.loop_body.e with
+        | Meta (SymbolicPlaces infos, _) ->
+            List.iter
+              (fun (var, name) -> register_texpression_has_name var name 0)
+              infos
+        | _ -> ());
         super#visit_loop env loop
 
       method! visit_mplace _ mp =
