@@ -300,12 +300,12 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
         register_edge (Pure lhs_id) (lhs_depth + rhs_depth) (Pure rhs_id)
     | _ -> ()
   in
-  let register_texpression_has_name (e : texpression) (name : string)
+  (*let register_texpression_has_name (e : texpression) (name : string)
       (depth : int) =
     match decompose_texpression span e with
     | Some (id, depth') -> register_node (Pure id) name (depth + depth')
     | _ -> ()
-  in
+    in*)
   let register_texpression_at_place (e : texpression) (mp : mplace) =
     match (decompose_texpression span e, decompose_mplace_to_local mp) with
     | Some (fid, depth), Some (lid, _, []) ->
@@ -319,7 +319,18 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
       method! visit_fvar _ v = register_var v
 
       method! visit_Let env monadic lv re e =
+        (* There might be meta information wrapped around the RHS *)
+        Option.iter
+          (fun mp ->
+            match
+              (decompose_typed_pattern span lv, decompose_mplace_to_local mp)
+            with
+            | Some (lhs, depth), Some (lid, _, []) ->
+                register_edge (Pure lhs.id) depth (Llbc lid)
+            | _ -> ())
+          (fst (opt_unmeta_mplace re));
         register_assign lv re;
+        (* *)
         super#visit_Let env monadic lv re e
 
       method! visit_PatBound _ _ _ = [%internal_error] span
@@ -338,10 +349,11 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
               List.iter
                 (fun (var, rvalue) -> register_expression_eq var rvalue)
                 infos
-          | SymbolicPlaces infos ->
-              List.iter
+          | SymbolicPlaces _ ->
+              ()
+              (*List.iter
                 (fun (var, name) -> register_texpression_has_name var name 0)
-                infos
+                infos*)
           | MPlace mp -> register_texpression_at_place e mp
           | Tag _ | TypeAnnot -> ()
         end;
