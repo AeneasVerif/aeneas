@@ -111,7 +111,7 @@ let synthesize_function_call (span : Meta.span) (call_id : call_id)
     (ctx : Contexts.eval_ctx) (sg : (fun_sig * inst_fun_sig) option)
     (abstractions : AbstractionId.id list) (generics : generic_args)
     (trait_method_generics : (generic_args * trait_instance_id) option)
-    (args : typed_value list) (args_places : mplace option list)
+    (args : tvalue list) (args_places : mplace option list)
     (dest : symbolic_value) (dest_place : mplace option) (e : expr) : expr =
   let sg, inst_sg =
     match sg with
@@ -145,7 +145,7 @@ let synthesize_regular_function_call (span : Meta.span)
     (ctx : Contexts.eval_ctx) (sg : fun_sig) (inst_sg : inst_fun_sig)
     (abstractions : AbstractionId.id list) (generics : generic_args)
     (trait_method_generics : (generic_args * trait_instance_id) option)
-    (args : typed_value list) (args_places : mplace option list)
+    (args : tvalue list) (args_places : mplace option list)
     (dest : symbolic_value) (dest_place : mplace option) (e : expr) : expr =
   synthesize_function_call span
     (Fun (fun_id, call_id))
@@ -155,15 +155,15 @@ let synthesize_regular_function_call (span : Meta.span)
     e
 
 let synthesize_unary_op (span : Meta.span) (ctx : Contexts.eval_ctx)
-    (unop : unop) (arg : typed_value) (arg_place : mplace option)
+    (unop : unop) (arg : tvalue) (arg_place : mplace option)
     (dest : symbolic_value) (dest_place : mplace option) (e : expr) : expr =
   let generics = empty_generic_args in
   synthesize_function_call span (Unop unop) ctx None [] generics None [ arg ]
     [ arg_place ] dest dest_place e
 
 let synthesize_binary_op (span : Meta.span) (ctx : Contexts.eval_ctx)
-    (binop : binop) (arg0 : typed_value) (arg0_place : mplace option)
-    (arg1 : typed_value) (arg1_place : mplace option) (dest : symbolic_value)
+    (binop : binop) (arg0 : tvalue) (arg0_place : mplace option) (arg1 : tvalue)
+    (arg1_place : mplace option) (dest : symbolic_value)
     (dest_place : mplace option) (e : expr) : expr =
   let generics = empty_generic_args in
   synthesize_function_call span (Binop binop) ctx None [] generics None
@@ -174,11 +174,10 @@ let synthesize_end_abstraction (ctx : Contexts.eval_ctx) (abs : abs) (e : expr)
   EndAbstraction (ctx, abs, e)
 
 let synthesize_assignment (ctx : Contexts.eval_ctx) (lplace : mplace)
-    (rvalue : typed_value) (rplace : mplace option) (e : expr) : expr =
+    (rvalue : tvalue) (rplace : mplace option) (e : expr) : expr =
   Meta (Assignment (ctx, lplace, rvalue, rplace), e)
 
-let synthesize_assertion (ctx : Contexts.eval_ctx) (v : typed_value) (e : expr)
-    =
+let synthesize_assertion (ctx : Contexts.eval_ctx) (v : tvalue) (e : expr) =
   Assertion (ctx, v, e)
 
 let save_snapshot (ctx : Contexts.eval_ctx) (e : expr) : expr =

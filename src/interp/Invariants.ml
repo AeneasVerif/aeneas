@@ -404,7 +404,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
       [%sanity_check] span (ty_is_rty v.sv_ty);
       super#visit_symbolic_value inside_abs v
 
-    method! visit_typed_value info tv =
+    method! visit_tvalue info tv =
       (* Check that the types have erased regions *)
       [%sanity_check] span (ty_is_ety tv.ty);
       (* Check the current pair (value, type) *)
@@ -434,8 +434,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
           in
           let fields_with_types = List.combine av.field_values field_types in
           List.iter
-            (fun ((v, ty) : typed_value * ty) ->
-              [%sanity_check] span (v.ty = ty))
+            (fun ((v, ty) : tvalue * ty) -> [%sanity_check] span (v.ty = ty))
             fields_with_types
       (* Tuple case *)
       | VAdt av, TAdt { id = TTuple; generics } ->
@@ -446,8 +445,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
            * are as many fields as field types at the same time *)
           let fields_with_types = List.combine av.field_values generics.types in
           List.iter
-            (fun ((v, ty) : typed_value * ty) ->
-              [%sanity_check] span (v.ty = ty))
+            (fun ((v, ty) : tvalue * ty) -> [%sanity_check] span (v.ty = ty))
             fields_with_types
       (* Builtin type case *)
       | VAdt av, TAdt { id = TBuiltin aty_id; generics } -> (
@@ -466,7 +464,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
               (* *)
               [%sanity_check] span
                 (List.for_all
-                   (fun (v : typed_value) -> v.ty = inner_ty)
+                   (fun (v : tvalue) -> v.ty = inner_ty)
                    inner_values);
               (* The length is necessarily concrete *)
               let len =
@@ -518,9 +516,9 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
           [%sanity_check] span (ty' = ty)
       | _ -> [%craise] span "Erroneous typing");
       (* Continue exploring to inspect the subterms *)
-      super#visit_typed_value info tv
+      super#visit_tvalue info tv
 
-    (* TODO: there is a lot of duplication with {!visit_typed_value}
+    (* TODO: there is a lot of duplication with {!visit_tvalue}
      * which is quite annoying. There might be a way of factorizing
      * that by factorizing the definitions of value and avalue, but
      * the generation of visitors then doesn't work properly (TODO:

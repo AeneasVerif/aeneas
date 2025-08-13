@@ -25,7 +25,7 @@ val apply_proj_loans_on_symbolic_expansion :
 
 (** Convert a symbolic expansion *which is not a borrow* to a value *)
 val symbolic_expansion_non_borrow_to_value :
-  Meta.span -> symbolic_value -> symbolic_expansion -> typed_value
+  Meta.span -> symbolic_value -> symbolic_expansion -> tvalue
 
 (** Convert a symbolic expansion *which is not a shared borrow* to a value.
 
@@ -33,7 +33,7 @@ val symbolic_expansion_non_borrow_to_value :
     borrow. This function is meant to be used when reducing projectors over
     borrows, during a symbolic expansion. *)
 val symbolic_expansion_non_shared_borrow_to_value :
-  Meta.span -> symbolic_value -> symbolic_expansion -> typed_value
+  Meta.span -> symbolic_value -> symbolic_expansion -> tvalue
 
 (** Apply (and reduce) a projector over borrows to an avalue. We use this for
     instance to spread the borrows present in the inputs of a function into the
@@ -78,7 +78,7 @@ val apply_proj_borrows :
   bool ->
   eval_ctx ->
   RegionId.Set.t ->
-  typed_value ->
+  tvalue ->
   rty ->
   typed_avalue
 
@@ -93,6 +93,6 @@ val apply_proj_borrows_on_input_value :
   Meta.span ->
   eval_ctx ->
   RegionId.Set.t ->
-  typed_value ->
+  tvalue ->
   rty ->
   eval_ctx * typed_avalue

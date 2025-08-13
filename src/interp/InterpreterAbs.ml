@@ -12,8 +12,8 @@ let log = Logging.abs_log
 
 let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
     ~(can_end : bool) ~(destructure_shared_values : bool) (ctx : eval_ctx)
-    (v : typed_value) : abs list =
-  [%ltrace typed_value_to_string ctx v];
+    (v : tvalue) : abs list =
+  [%ltrace tvalue_to_string ctx v];
   (* Convert the value to a list of avalues *)
   let absl = ref [] in
   let push_abs (r_id : RegionId.id) (avalues : typed_avalue list) : unit =
@@ -53,10 +53,10 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
      is [true], this shared value will be stripped of its shared loans.
   *)
   let rec to_avalues ~(allow_borrows : bool) ~(inside_borrowed : bool)
-      ~(group : bool) (r_id : RegionId.id) (v : typed_value) :
-      typed_avalue list * typed_value =
+      ~(group : bool) (r_id : RegionId.id) (v : tvalue) :
+      typed_avalue list * tvalue =
     (* Debug *)
-    [%ldebug "\n- value: " ^ typed_value_to_string ~span:(Some span) ctx v];
+    [%ldebug "\n- value: " ^ tvalue_to_string ~span:(Some span) ctx v];
 
     let ty = v.ty in
     match v.value with
@@ -348,11 +348,11 @@ type merge_duplicates_funcs = {
     loan_id ->
     rty ->
     proj_marker ->
-    typed_value ->
+    tvalue ->
     typed_avalue ->
     rty ->
     proj_marker ->
-    typed_value ->
+    tvalue ->
     typed_avalue ->
     typed_avalue;
       (** Parameters:

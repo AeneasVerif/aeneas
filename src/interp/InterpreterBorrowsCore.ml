@@ -652,44 +652,44 @@ let update_outer_borrow (outer : outer) (x : mut_borrow_or_shared_loan_id) :
   { outer with borrow_loan = update_if_none outer.borrow_loan x }
 
 (** Return the first loan we find in a value *)
-let get_first_loan_in_value (v : typed_value) : loan_content option =
+let get_first_loan_in_value (v : tvalue) : loan_content option =
   let obj =
     object
-      inherit [_] iter_typed_value
+      inherit [_] iter_tvalue
       method! visit_loan_content _ lc = raise (FoundLoanContent lc)
     end
   in
   (* We use exceptions *)
   try
-    obj#visit_typed_value () v;
+    obj#visit_tvalue () v;
     None
   with FoundLoanContent lc -> Some lc
 
 (** Return the first loan we find in a list of values *)
-let get_first_loan_in_values (vs : typed_value list) : loan_content option =
+let get_first_loan_in_values (vs : tvalue list) : loan_content option =
   let obj =
     object
-      inherit [_] iter_typed_value
+      inherit [_] iter_tvalue
       method! visit_loan_content _ lc = raise (FoundLoanContent lc)
     end
   in
   (* We use exceptions *)
   try
-    List.iter (obj#visit_typed_value ()) vs;
+    List.iter (obj#visit_tvalue ()) vs;
     None
   with FoundLoanContent lc -> Some lc
 
 (** Return the first borrow we find in a value *)
-let get_first_borrow_in_value (v : typed_value) : borrow_content option =
+let get_first_borrow_in_value (v : tvalue) : borrow_content option =
   let obj =
     object
-      inherit [_] iter_typed_value
+      inherit [_] iter_tvalue
       method! visit_borrow_content _ bc = raise (FoundBorrowContent bc)
     end
   in
   (* We use exceptions *)
   try
-    obj#visit_typed_value () v;
+    obj#visit_tvalue () v;
     None
   with FoundBorrowContent bc -> Some bc
 
@@ -700,11 +700,11 @@ let get_first_borrow_in_value (v : typed_value) : borrow_content option =
     - if [true]: return the first loan or borrow we find
     - if [false]: return the first loan we find, do not dive into borrowed
       values *)
-let get_first_outer_loan_or_borrow_in_value (with_borrows : bool)
-    (v : typed_value) : loan_or_borrow_content option =
+let get_first_outer_loan_or_borrow_in_value (with_borrows : bool) (v : tvalue) :
+    loan_or_borrow_content option =
   let obj =
     object
-      inherit [_] iter_typed_value
+      inherit [_] iter_tvalue
 
       method! visit_borrow_content _ bc =
         if with_borrows then raise (FoundBorrowContent bc) else ()
@@ -714,7 +714,7 @@ let get_first_outer_loan_or_borrow_in_value (with_borrows : bool)
   in
   (* We use exceptions *)
   try
-    obj#visit_typed_value () v;
+    obj#visit_tvalue () v;
     None
   with
   | FoundLoanContent lc -> Some (LoanContent lc)
@@ -1360,7 +1360,7 @@ let get_first_non_ignored_aloan_in_abstraction (span : Meta.span) (abs : abs) :
       Some (SymbolicValue proj)
 
 let lookup_shared_value_opt (span : Meta.span) (ctx : eval_ctx)
-    (bid : BorrowId.id) : typed_value option =
+    (bid : BorrowId.id) : tvalue option =
   match lookup_loan_opt span ek_all bid ctx with
   | None -> None
   | Some (_, lc) -> (
@@ -1370,7 +1370,7 @@ let lookup_shared_value_opt (span : Meta.span) (ctx : eval_ctx)
       | _ -> None)
 
 let lookup_shared_value (span : Meta.span) (ctx : eval_ctx) (bid : BorrowId.id)
-    : typed_value =
+    : tvalue =
   Option.get (lookup_shared_value_opt span ctx bid)
 
 (** A marked borrow id *)

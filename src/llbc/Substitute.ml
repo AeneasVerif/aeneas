@@ -129,18 +129,18 @@ let subst_ids_visitor (subst : id_subst) =
     method! visit_msymbolic_value env sv = self#visit_symbolic_value env sv
 
     (** We *do* visit meta-values *)
-    method! visit_mvalue env v = self#visit_typed_value env v
+    method! visit_mvalue env v = self#visit_tvalue env v
 
     method! visit_abstraction_id _ id = subst.asubst id
   end
 
-let typed_value_subst_ids (subst : id_subst) (v : typed_value) : typed_value =
+let tvalue_subst_ids (subst : id_subst) (v : tvalue) : tvalue =
   let vis = subst_ids_visitor subst in
-  vis#visit_typed_value () v
+  vis#visit_tvalue () v
 
-let typed_value_subst_rids (span : Meta.span)
-    (r_subst : RegionId.id -> RegionId.id) (v : typed_value) : typed_value =
-  typed_value_subst_ids { (no_abs_id_subst span) with r_subst } v
+let tvalue_subst_rids (span : Meta.span) (r_subst : RegionId.id -> RegionId.id)
+    (v : tvalue) : tvalue =
+  tvalue_subst_ids { (no_abs_id_subst span) with r_subst } v
 
 let abs_subst_ids (subst : id_subst) (x : abs) : abs =
   let vis = subst_ids_visitor subst in

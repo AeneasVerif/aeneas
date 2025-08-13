@@ -43,11 +43,11 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
        been substituted with [nrid]
   *)
   let mk_value_with_fresh_sids_no_shared_loans (rids : RegionId.Set.t)
-      (nrid : RegionId.id) (v : typed_value) : typed_value =
+      (nrid : RegionId.id) (v : tvalue) : tvalue =
     (* Remove the shared loans *)
     let v = value_remove_shared_loans v in
     (* Substitute the symbolic values and the region *)
-    Substitute.typed_value_subst_ids
+    Substitute.tvalue_subst_ids
       {
         (Substitute.no_abs_id_subst span) with
         r_subst = (fun r -> if RegionId.Set.mem r rids then nrid else r);
@@ -84,9 +84,8 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
        x1 -> SB l2
      ]}
   *)
-  let push_abs_for_shared_value (abs : abs) (sv : typed_value)
-      (lid : BorrowId.id) (sid : SharedBorrowId.id) :
-      BorrowId.id * SharedBorrowId.id =
+  let push_abs_for_shared_value (abs : abs) (sv : tvalue) (lid : BorrowId.id)
+      (sid : SharedBorrowId.id) : BorrowId.id * SharedBorrowId.id =
     (* Create fresh borrows (for the reborrow) *)
     let nlid = fresh_borrow_id () in
     let nsid = fresh_shared_borrow_id () in
@@ -200,7 +199,7 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
     (* Add the let-bindings which introduce the fresh symbolic values *)
     List.fold_left
       (fun e (sid, v) ->
-        let v = mk_typed_value_from_symbolic_value v in
+        let v = mk_tvalue_from_symbolic_value v in
         let sv = SymbolicValueId.Map.find sid new_ctx_ids_map.sids_to_values in
         SymbolicAst.IntroSymbolic (ctx, None, sv, VaSingleValue v, e))
       e !sid_subst
@@ -693,7 +692,7 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
     let check_equiv = false in
     let fixed_ids = ids_sets_empty_borrows_loans fixed_ids in
     let open InterpreterBorrowsCore in
-    let lookup_shared_loan lid ctx : typed_value =
+    let lookup_shared_loan lid ctx : tvalue =
       match snd (lookup_loan span ek_all lid ctx) with
       | Concrete (VSharedLoan (_, v)) -> v
       | Abstract (ASharedLoan (pm, _, v, _)) ->
@@ -719,7 +718,7 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
   let src_to_tgt_sid_map =
     SymbolicValueId.Map.of_list
       (List.filter_map
-         (fun ((sid, v) : _ * typed_value) ->
+         (fun ((sid, v) : _ * tvalue) ->
            match v.value with
            | VSymbolic v -> Some (v.sv_id, sid)
            | _ -> None)
@@ -878,7 +877,7 @@ let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
         inherit [_] iter_env
 
         method! visit_ASharedLoan register _ _ sv child_av =
-          self#visit_typed_value true sv;
+          self#visit_tvalue true sv;
           self#visit_typed_avalue register child_av
 
         method! visit_AProjLoans register proj =
@@ -952,7 +951,7 @@ let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
                 v
             | _ -> [%craise] span "Unreachable"
           in
-          self#visit_typed_value env v
+          self#visit_tvalue env v
 
         method! visit_symbolic_value_id _ id =
           if not (SymbolicValueId.Set.mem id !found_sids) then (

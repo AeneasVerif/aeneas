@@ -70,7 +70,7 @@ type eval_ctx = {
   region_groups : RegionGroupId.id list;
   type_vars : type_var list;
   const_generic_vars : const_generic_var list;
-  const_generic_vars_map : typed_value Types.ConstGenericVarId.Map.t;
+  const_generic_vars_map : tvalue Types.ConstGenericVarId.Map.t;
       (** The map from const generic vars to their values. Those values can be
           symbolic values or concrete values (in the latter case: if we run in
           interpreter mode).
@@ -99,7 +99,7 @@ let lookup_const_generic_var (ctx : eval_ctx) (vid : ConstGenericVarId.id) :
 
 (** Lookup a variable in the current frame *)
 let env_lookup_var (span : Meta.span) (env : env) (vid : LocalId.id) :
-    real_var_binder * typed_value =
+    real_var_binder * tvalue =
   (* We take care to stop at the end of current frame: different variables
      in different frames can have the same id!
   *)
@@ -146,16 +146,16 @@ let ctx_lookup_trait_impl (span : Meta.span) (ctx : eval_ctx)
 
 (** Retrieve a variable's value in the current frame *)
 let env_lookup_var_value (span : Meta.span) (env : env) (vid : LocalId.id) :
-    typed_value =
+    tvalue =
   snd (env_lookup_var span env vid)
 
 let ctx_lookup_var_value (span : Meta.span) (ctx : eval_ctx) (vid : LocalId.id)
-    : typed_value =
+    : tvalue =
   env_lookup_var_value span ctx.env vid
 
 (** Retrieve a const generic value in an evaluation context *)
 let ctx_lookup_const_generic_value (ctx : eval_ctx) (vid : ConstGenericVarId.id)
-    : typed_value =
+    : tvalue =
   Types.ConstGenericVarId.Map.find vid ctx.const_generic_vars_map
 
 (** Update a variable's value in the current frame.
@@ -163,7 +163,7 @@ let ctx_lookup_const_generic_value (ctx : eval_ctx) (vid : ConstGenericVarId.id)
     This is a helper function: it can break invariants and doesn't perform any
     check. *)
 let env_update_var_value (span : Meta.span) (env : env) (vid : LocalId.id)
-    (nv : typed_value) : env =
+    (nv : tvalue) : env =
   (* We take care to stop at the end of current frame: different variables
      in different frames can have the same id!
   *)
@@ -186,15 +186,15 @@ let var_to_binder (var : local) : real_var_binder =
     This is a helper function: it can break invariants and doesn't perform any
     check. *)
 let ctx_update_var_value (span : Meta.span) (ctx : eval_ctx) (vid : LocalId.id)
-    (nv : typed_value) : eval_ctx =
+    (nv : tvalue) : eval_ctx =
   { ctx with env = env_update_var_value span ctx.env vid nv }
 
 (** Push a variable in the context's environment.
 
     Checks that the pushed variable and its value have the same type (this is
     important). *)
-let ctx_push_var (span : Meta.span) (ctx : eval_ctx) (var : local)
-    (v : typed_value) : eval_ctx =
+let ctx_push_var (span : Meta.span) (ctx : eval_ctx) (var : local) (v : tvalue)
+    : eval_ctx =
   [%cassert] span
     (TypesUtils.ty_is_ety var.var_ty && var.var_ty = v.ty)
     "The pushed variables and their values do not have the same type";
@@ -206,17 +206,17 @@ let ctx_push_var (span : Meta.span) (ctx : eval_ctx) (var : local)
     Checks that the pushed variables and their values have the same type (this
     is important). *)
 let ctx_push_vars (span : Meta.span) (ctx : eval_ctx)
-    (vars : (local * typed_value) list) : eval_ctx =
+    (vars : (local * tvalue) list) : eval_ctx =
   [%ltrace
     String.concat "\n"
       (List.map
          (fun (var, value) ->
            (* We can unfortunately not use Print because it depends on Contexts... *)
-           show_var var ^ " -> " ^ show_typed_value value)
+           show_var var ^ " -> " ^ show_tvalue value)
          vars)];
   [%cassert] span
     (List.for_all
-       (fun (var, (value : typed_value)) ->
+       (fun (var, (value : tvalue)) ->
          TypesUtils.ty_is_ety var.var_ty && var.var_ty = value.ty)
        vars)
     "The pushed variables and their values do not have the same type";
@@ -229,21 +229,20 @@ let ctx_push_vars (span : Meta.span) (ctx : eval_ctx)
   { ctx with env = List.append vars ctx.env }
 
 (** Push a dummy variable in the context's environment. *)
-let ctx_push_dummy_var (ctx : eval_ctx) (vid : DummyVarId.id) (v : typed_value)
-    : eval_ctx =
+let ctx_push_dummy_var (ctx : eval_ctx) (vid : DummyVarId.id) (v : tvalue) :
+    eval_ctx =
   { ctx with env = EBinding (BDummy vid, v) :: ctx.env }
 
-let ctx_push_fresh_dummy_var (ctx : eval_ctx) (v : typed_value) : eval_ctx =
+let ctx_push_fresh_dummy_var (ctx : eval_ctx) (v : tvalue) : eval_ctx =
   ctx_push_dummy_var ctx (fresh_dummy_var_id ()) v
 
-let ctx_push_fresh_dummy_vars (ctx : eval_ctx) (vl : typed_value list) :
-    eval_ctx =
+let ctx_push_fresh_dummy_vars (ctx : eval_ctx) (vl : tvalue list) : eval_ctx =
   List.fold_left (fun ctx v -> ctx_push_fresh_dummy_var ctx v) ctx vl
 
 (** Remove a dummy variable from a context's environment. *)
 let ctx_remove_dummy_var span (ctx : eval_ctx) (vid : DummyVarId.id) :
-    eval_ctx * typed_value =
-  let rec remove_var (env : env) : env * typed_value =
+    eval_ctx * tvalue =
+  let rec remove_var (env : env) : env * tvalue =
     match env with
     | [] -> [%craise] span "Could not lookup a dummy variable"
     | EBinding (BDummy vid', v) :: env when vid' = vid -> (env, v)
@@ -256,8 +255,8 @@ let ctx_remove_dummy_var span (ctx : eval_ctx) (vid : DummyVarId.id) :
 
 (** Lookup a dummy variable in a context's environment. *)
 let ctx_lookup_dummy_var (span : Meta.span) (ctx : eval_ctx)
-    (vid : DummyVarId.id) : typed_value =
-  let rec lookup_var (env : env) : typed_value =
+    (vid : DummyVarId.id) : tvalue =
+  let rec lookup_var (env : env) : tvalue =
     match env with
     | [] -> [%craise] span "Could not lookup a dummy variable"
     | EBinding (BDummy vid', v) :: _env when vid' = vid -> v

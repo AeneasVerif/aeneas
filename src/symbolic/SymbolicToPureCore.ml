@@ -327,9 +327,9 @@ let symbolic_value_to_string (ctx : bs_ctx) (sv : V.symbolic_value) : string =
   let env = bs_ctx_to_fmt_env ctx in
   Print.Values.symbolic_value_to_string env sv
 
-let typed_value_to_string (ctx : bs_ctx) (v : V.typed_value) : string =
+let tvalue_to_string (ctx : bs_ctx) (v : V.tvalue) : string =
   let env = bs_ctx_to_fmt_env ctx in
-  Print.Values.typed_value_to_string ~span:(Some ctx.span) env v
+  Print.Values.tvalue_to_string ~span:(Some ctx.span) env v
 
 let pure_ty_to_string (ctx : bs_ctx) (ty : ty) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in

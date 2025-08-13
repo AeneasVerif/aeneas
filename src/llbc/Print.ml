@@ -38,16 +38,16 @@ module Values = struct
     symbolic_value_id_to_pretty_string sv_id ^ " <: " ^ ty_to_string env rty
 
   (* TODO: it may be a good idea to try to factorize this function with
-   * typed_avalue_to_string. At some point we had done it, because [typed_value]
-   * and [typed_avalue] were instances of the same general type [g_typed_value],
+   * typed_avalue_to_string. At some point we had done it, because [tvalue]
+   * and [typed_avalue] were instances of the same general type [g_tvalue],
    * but then we removed this general type because it proved to be a bad idea. *)
-  let rec typed_value_to_string ?(span : Meta.span option = None)
-      (env : fmt_env) (v : typed_value) : string =
+  let rec tvalue_to_string ?(span : Meta.span option = None) (env : fmt_env)
+      (v : tvalue) : string =
     match v.value with
     | VLiteral cv -> literal_to_string cv
     | VAdt av -> (
         let field_values =
-          List.map (typed_value_to_string ~span env) av.field_values
+          List.map (tvalue_to_string ~span env) av.field_values
         in
         match v.ty with
         | TAdt { id = TTuple; _ } ->
@@ -83,8 +83,8 @@ module Values = struct
                 (* Happens when we aggregate values *)
                 "@Array[" ^ String.concat ", " field_values ^ "]"
             | _ ->
-                [%craise_opt_span] span
-                  ("Inconsistent value: " ^ show_typed_value v))
+                [%craise_opt_span] span ("Inconsistent value: " ^ show_tvalue v)
+            )
         | _ -> [%craise_opt_span] span "Inconsistent typed value")
     | VBottom -> "⊥ : " ^ ty_to_string env v.ty
     | VBorrow bc -> borrow_content_to_string ~span env bc
@@ -100,7 +100,7 @@ module Values = struct
         ^ ")"
     | VMutBorrow (bid, tv) ->
         "mut_borrow@" ^ BorrowId.to_string bid ^ " ("
-        ^ typed_value_to_string ~span env tv
+        ^ tvalue_to_string ~span env tv
         ^ ")"
     | VReservedMutBorrow (bid, sid) ->
         "reserved_borrow@" ^ BorrowId.to_string bid ^ "(^"
@@ -112,7 +112,7 @@ module Values = struct
     match lc with
     | VSharedLoan (lid, v) ->
         let lid = BorrowId.to_string lid in
-        "@shared_loan(@" ^ lid ^ ", " ^ typed_value_to_string ~span env v ^ ")"
+        "@shared_loan(@" ^ lid ^ ", " ^ tvalue_to_string ~span env v ^ ")"
     | VMutLoan bid -> "ml@" ^ BorrowId.to_string bid
 
   let abstract_shared_borrow_to_string (env : fmt_env)
@@ -278,7 +278,7 @@ module Values = struct
         |> add_proj_marker pm
     | ASharedLoan (pm, lid, v, av) ->
         "@shared_loan(@" ^ BorrowId.to_string lid ^ ", "
-        ^ typed_value_to_string ~span env v
+        ^ tvalue_to_string ~span env v
         ^ ", "
         ^ typed_avalue_to_string ~span ~with_ended env av
         ^ ")"
@@ -286,7 +286,7 @@ module Values = struct
     | AEndedMutLoan ml ->
         let consumed =
           if with_ended then
-            "consumed = " ^ typed_value_to_string env ml.given_back_meta ^ ", "
+            "consumed = " ^ tvalue_to_string env ml.given_back_meta ^ ", "
           else ""
         in
         "@ended_mut_loan{" ^ consumed
@@ -296,7 +296,7 @@ module Values = struct
         ^ " }"
     | AEndedSharedLoan (v, av) ->
         "@ended_shared_loan("
-        ^ typed_value_to_string ~span env v
+        ^ tvalue_to_string ~span env v
         ^ ", "
         ^ typed_avalue_to_string ~span ~with_ended env av
         ^ ")"
@@ -426,12 +426,10 @@ module Values = struct
     | SeLiteral lit -> literal_to_string lit
     | SeAdt (variant_id, svl) ->
         let field_values =
-          List.map ValuesUtils.mk_typed_value_from_symbolic_value svl
+          List.map ValuesUtils.mk_tvalue_from_symbolic_value svl
         in
-        let v : typed_value =
-          { value = VAdt { variant_id; field_values }; ty }
-        in
-        typed_value_to_string env v
+        let v : tvalue = { value = VAdt { variant_id; field_values }; ty } in
+        tvalue_to_string env v
     | SeMutRef (bid, sv) ->
         "MB " ^ BorrowId.to_string bid ^ " " ^ symbolic_value_to_string env sv
     | SeSharedRef (bid, sv) ->
@@ -465,7 +463,7 @@ module Contexts = struct
         let ty =
           if with_var_types then " : " ^ ty_to_string env tv.ty else ""
         in
-        indent ^ bv ^ ty ^ " -> " ^ typed_value_to_string ~span env tv ^ " ;"
+        indent ^ bv ^ ty ^ " -> " ^ tvalue_to_string ~span env tv ^ " ;"
     | EAbs abs -> abs_to_string ~span env verbose indent indent_incr abs
     | EFrame -> [%craise_opt_span] span "Can't print a Frame element"
 
@@ -688,10 +686,10 @@ module EvalCtx = struct
     let env = eval_ctx_to_fmt_env ctx in
     symbolic_value_to_string env sv
 
-  let typed_value_to_string ?(span : Meta.span option = None) (ctx : eval_ctx)
-      (v : typed_value) : string =
+  let tvalue_to_string ?(span : Meta.span option = None) (ctx : eval_ctx)
+      (v : tvalue) : string =
     let env = eval_ctx_to_fmt_env ctx in
-    typed_value_to_string ~span env v
+    tvalue_to_string ~span env v
 
   let typed_avalue_to_string ?(span : Meta.span option = None)
       ?(with_ended : bool = false) (ctx : eval_ctx) (v : typed_avalue) : string

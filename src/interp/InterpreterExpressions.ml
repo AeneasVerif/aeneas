@@ -49,7 +49,7 @@ let expand_if_borrows_at_place (span : Meta.span) (access : access_kind)
 
     We check that the value *doesn't contain bottoms or reserved borrows*. *)
 let read_place_check (span : Meta.span) (access : access_kind) (p : place)
-    (ctx : eval_ctx) : typed_value =
+    (ctx : eval_ctx) : tvalue =
   let v = read_place span access p ctx in
   (* Check that there are no bottoms in the value *)
   [%cassert] span
@@ -64,7 +64,7 @@ let read_place_check (span : Meta.span) (access : access_kind) (p : place)
 
 let access_rplace_reorganize_and_read (config : config) (span : Meta.span)
     (greedy_expand : bool) (access : access_kind) (p : place) (ctx : eval_ctx) :
-    typed_value * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
+    tvalue * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Make sure we can evaluate the path *)
   let ctx, cc = update_ctx_along_read_place config span access p ctx in
   (* End the proper loans at the place itself *)
@@ -92,8 +92,8 @@ let access_rplace_reorganize (config : config) (span : Meta.span)
     (ctx, f)
 
 (** Convert an operand constant operand value to a typed value *)
-let literal_to_typed_value (span : Meta.span) (ty : literal_type) (cv : literal)
-    (ctx : eval_ctx) : typed_value =
+let literal_to_tvalue (span : Meta.span) (ty : literal_type) (cv : literal)
+    (ctx : eval_ctx) : tvalue =
   (* Check the type while converting - we actually need some information
    * contained in the type *)
   [%ltrace "- cv: " ^ Print.Values.literal_to_string cv];
@@ -143,13 +143,10 @@ let literal_to_typed_value (span : Meta.span) (ty : literal_type) (cv : literal)
       // abs { proj_borrows s0, proj_loans s1, proj_loans s2 }
     ]} *)
 let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
-    (ctx : eval_ctx) (v : typed_value) :
-    typed_value
-    * typed_value
-    * eval_ctx
-    * (SymbolicAst.expr -> SymbolicAst.expr) =
+    (ctx : eval_ctx) (v : tvalue) :
+    tvalue * tvalue * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   [%ltrace
-    typed_value_to_string ~span:(Some span) ctx v
+    tvalue_to_string ~span:(Some span) ctx v
     ^ "\n- context:\n"
     ^ eval_ctx_to_string ~span:(Some span) ctx];
   (* Remark: at some point we rewrote this function to use iterators, but then
@@ -296,8 +293,8 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
           in
           mk updated_sv (mk copied_sv e)
         in
-        ( mk_typed_value_from_symbolic_value updated_sv,
-          mk_typed_value_from_symbolic_value copied_sv,
+        ( mk_tvalue_from_symbolic_value updated_sv,
+          mk_tvalue_from_symbolic_value copied_sv,
           ctx,
           cf )
       end
@@ -361,7 +358,7 @@ let prepare_eval_operand_reorganize (config : config) (span : Meta.span)
 (** Evaluate an operand, without reorganizing the context before *)
 let eval_operand_no_reorganize (config : config) (span : Meta.span)
     (op : operand) (ctx : eval_ctx) :
-    typed_value * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
+    tvalue * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Debug *)
   [%ltrace
     "op: " ^ operand_to_string ctx op ^ "\n- ctx:\n"
@@ -374,10 +371,10 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
           (* FIXME: the str type is not in [literal_type] *)
           match cv.ty with
           | TAdt { id = TBuiltin TStr; _ } ->
-              let v : typed_value = { value = VLiteral lit; ty = cv.ty } in
+              let v : tvalue = { value = VLiteral lit; ty = cv.ty } in
               (v, ctx, fun e -> e)
           | TLiteral lit_ty ->
-              (literal_to_typed_value span lit_ty lit ctx, ctx, fun e -> e)
+              (literal_to_tvalue span lit_ty lit ctx, ctx, fun e -> e)
           | _ ->
               [%craise] span
                 ("Encountered an incorrectly typed constant: "
@@ -387,7 +384,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
           let ctx0 = ctx in
           (* Simply introduce a fresh symbolic value *)
           let ty = cv.ty in
-          let v = mk_fresh_symbolic_typed_value span ty in
+          let v = mk_fresh_symbolic_tvalue span ty in
           (* Wrap the generated expression *)
           let cf e =
             SymbolicAst.IntroSymbolic
@@ -423,7 +420,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
                 (ctx, copied_value, cc)
             | SymbolicMode ->
                 (* We use the looked up value only for its type *)
-                let v = mk_fresh_symbolic_typed_value span cv.ty in
+                let v = mk_fresh_symbolic_tvalue span cv.ty in
                 (ctx, v, fun e -> e)
           in
           (* We have to wrap the generated expression *)
@@ -476,13 +473,13 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
         (not (bottom_in_value ctx.ended_regions v))
         "There should be no bottoms in the value we are about to move";
       (* Move the value *)
-      let bottom : typed_value = { value = VBottom; ty = v.ty } in
+      let bottom : tvalue = { value = VBottom; ty = v.ty } in
       let ctx = write_place span access p bottom ctx in
       (v, ctx, fun e -> e)
 
 let eval_operand (config : config) (span : Meta.span) (op : operand)
     (ctx : eval_ctx) :
-    typed_value * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
+    tvalue * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Debug *)
   [%ltrace
     "op: " ^ operand_to_string ctx op ^ "\n- ctx:\n"
@@ -501,7 +498,7 @@ let prepare_eval_operands_reorganize (config : config) (span : Meta.span)
 (** Evaluate several operands. *)
 let eval_operands (config : config) (span : Meta.span) (ops : operand list)
     (ctx : eval_ctx) :
-    typed_value list * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
+    tvalue list * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Prepare the operands *)
   let ctx, cc = prepare_eval_operands_reorganize config span ops ctx in
   (* Evaluate the operands *)
@@ -510,9 +507,7 @@ let eval_operands (config : config) (span : Meta.span) (ops : operand list)
 
 let eval_two_operands (config : config) (span : Meta.span) (op1 : operand)
     (op2 : operand) (ctx : eval_ctx) :
-    (typed_value * typed_value)
-    * eval_ctx
-    * (SymbolicAst.expr -> SymbolicAst.expr) =
+    (tvalue * tvalue) * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   let res, ctx, cc = eval_operands config span [ op1; op2 ] ctx in
   let res =
     match res with
@@ -523,7 +518,7 @@ let eval_two_operands (config : config) (span : Meta.span) (op1 : operand)
 
 let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
     (op : operand) (ctx : eval_ctx) :
-    (typed_value, eval_error) result
+    (tvalue, eval_error) result
     * eval_ctx
     * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Evaluate the operand *)
@@ -662,7 +657,7 @@ let cast_unsize_to_modified_fields (span : Meta.span) (ctx : eval_ctx)
 
 let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
     (op : operand) (ctx : eval_ctx) :
-    (typed_value, eval_error) result
+    (tvalue, eval_error) result
     * eval_ctx
     * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Evaluate the operand *)
@@ -686,7 +681,7 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
   in
   let res_sv = { sv_id = res_sv_id; sv_ty = res_sv_ty } in
   (* Compute the result *)
-  let res = Ok (mk_typed_value_from_symbolic_value res_sv) in
+  let res = Ok (mk_tvalue_from_symbolic_value res_sv) in
   (* Synthesize the symbolic AST *)
   let cc =
     cc_comp cc
@@ -698,7 +693,7 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
 
 let eval_unary_op (config : config) (span : Meta.span) (unop : unop)
     (op : operand) (ctx : eval_ctx) :
-    (typed_value, eval_error) result
+    (tvalue, eval_error) result
     * eval_ctx
     * (SymbolicAst.expr -> SymbolicAst.expr) =
   match config.mode with
@@ -708,8 +703,7 @@ let eval_unary_op (config : config) (span : Meta.span) (unop : unop)
 (** Small helper for [eval_binary_op_concrete]: computes the result of applying
     the binop *after* the operands have been successfully evaluated *)
 let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
-    (v1 : typed_value) (v2 : typed_value) (ctx : eval_ctx) :
-    (typed_value, eval_error) result =
+    (v1 : tvalue) (v2 : tvalue) (ctx : eval_ctx) : (tvalue, eval_error) result =
   (* Equality check binops (Eq, Ne) accept values from a wide variety of types.
    * The remaining binops only operate on scalars. *)
   if binop = Eq || binop = Ne then (
@@ -744,9 +738,7 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
               | Gt -> Z.gt sv1_value sv2_value
               | _ -> [%craise] span "Unreachable"
             in
-            Ok
-              ({ value = VLiteral (VBool b); ty = TLiteral TBool }
-                : typed_value)
+            Ok ({ value = VLiteral (VBool b); ty = TLiteral TBool } : tvalue)
         | Div OPanic
         | Rem OPanic
         | Add OPanic
@@ -792,7 +784,7 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
 
 let eval_binary_op_concrete (config : config) (span : Meta.span) (binop : binop)
     (op1 : operand) (op2 : operand) (ctx : eval_ctx) :
-    (typed_value, eval_error) result
+    (tvalue, eval_error) result
     * eval_ctx
     * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Evaluate the operands *)
@@ -804,7 +796,7 @@ let eval_binary_op_concrete (config : config) (span : Meta.span) (binop : binop)
 
 let eval_binary_op_symbolic (config : config) (span : Meta.span) (binop : binop)
     (op1 : operand) (op2 : operand) (ctx : eval_ctx) :
-    (typed_value, eval_error) result
+    (tvalue, eval_error) result
     * eval_ctx
     * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Evaluate the operands *)
@@ -846,7 +838,7 @@ let eval_binary_op_symbolic (config : config) (span : Meta.span) (binop : binop)
       | _ -> [%craise] span "Invalid inputs for binop"
   in
   let res_sv = { sv_id = res_sv_id; sv_ty = res_sv_ty } in
-  let v = mk_typed_value_from_symbolic_value res_sv in
+  let v = mk_tvalue_from_symbolic_value res_sv in
   (* Synthesize the symbolic AST *)
   let p1 = mk_opt_place_from_op span op1 ctx in
   let p2 = mk_opt_place_from_op span op2 ctx in
@@ -858,7 +850,7 @@ let eval_binary_op_symbolic (config : config) (span : Meta.span) (binop : binop)
 
 let eval_binary_op (config : config) (span : Meta.span) (binop : binop)
     (op1 : operand) (op2 : operand) (ctx : eval_ctx) :
-    (typed_value, eval_error) result
+    (tvalue, eval_error) result
     * eval_ctx
     * (SymbolicAst.expr -> SymbolicAst.expr) =
   match config.mode with
@@ -869,7 +861,7 @@ let eval_binary_op (config : config) (span : Meta.span) (binop : binop)
     or `&mut p` or `&two-phase p`) *)
 let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
     (bkind : borrow_kind) (ctx : eval_ctx) :
-    typed_value * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
+    tvalue * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   match bkind with
   | BUniqueImmutable ->
       [%craise] span "Unique immutable closure captures are not supported"
@@ -927,7 +919,7 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
         | BTwoPhaseMut -> VReservedMutBorrow (bid, sid)
         | _ -> [%craise] span "Unreachable"
       in
-      let rv : typed_value = { value = VBorrow bc; ty = rv_ty } in
+      let rv : tvalue = { value = VBorrow bc; ty = rv_ty } in
       (* Return *)
       (rv, ctx, cc)
   | BMut ->
@@ -940,9 +932,7 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
       (* Compute the rvalue - wrap the value in a mutable borrow with a fresh id *)
       let bid = fresh_borrow_id () in
       let rv_ty = TRef (RErased, v.ty, RMut) in
-      let rv : typed_value =
-        { value = VBorrow (VMutBorrow (bid, v)); ty = rv_ty }
-      in
+      let rv : tvalue = { value = VBorrow (VMutBorrow (bid, v)); ty = rv_ty } in
       (* Compute the loan value with which to replace the value at place p *)
       let nv = { v with value = VLoan (VMutLoan bid) } in
       (* Update the value in the context to replace it with the loan *)
@@ -952,7 +942,7 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
 
 let eval_rvalue_aggregate (config : config) (span : Meta.span)
     (aggregate_kind : aggregate_kind) (ops : operand list) (ctx : eval_ctx) :
-    typed_value * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
+    tvalue * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Evaluate the operands *)
   let values, ctx, cc = eval_operands config span ops ctx in
   (* Compute the value *)
@@ -965,11 +955,11 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
         [%sanity_check] span (opt_field_id = None);
         match type_id with
         | TTuple ->
-            let tys = List.map (fun (v : typed_value) -> v.ty) values in
+            let tys = List.map (fun (v : tvalue) -> v.ty) values in
             let v = VAdt { variant_id = None; field_values = values } in
             let generics = mk_generic_args [] tys [] [] in
             let ty = TAdt { id = TTuple; generics } in
-            let aggregated : typed_value = { value = v; ty } in
+            let aggregated : tvalue = { value = v; ty } in
             (aggregated, fun e -> e)
         | TAdtId def_id ->
             (* Sanity checks *)
@@ -982,28 +972,27 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
                 opt_variant_id generics
             in
             [%sanity_check] span
-              (expected_field_types
-              = List.map (fun (v : typed_value) -> v.ty) values);
+              (expected_field_types = List.map (fun (v : tvalue) -> v.ty) values);
             (* Construct the value *)
             let av : adt_value =
               { variant_id = opt_variant_id; field_values = values }
             in
             let aty = TAdt { id = TAdtId def_id; generics } in
-            let aggregated : typed_value = { value = VAdt av; ty = aty } in
+            let aggregated : tvalue = { value = VAdt av; ty = aty } in
             (* Call the continuation *)
             (aggregated, fun e -> e)
         | TBuiltin _ -> [%craise] span "Unreachable")
     | AggregatedArray (ety, cg) ->
         (* Sanity check: all the values have the proper type *)
         [%classert] span
-          (List.for_all (fun (v : typed_value) -> v.ty = ety) values)
+          (List.for_all (fun (v : tvalue) -> v.ty = ety) values)
           (lazy
             ("Aggregated array: some values don't have the proper type:"
            ^ "\n- expected type: " ^ ty_to_string ctx ety ^ "\n- values: ["
             ^ String.concat ", "
                 (List.map
-                   (fun (v : typed_value) ->
-                     typed_value_to_string ctx v ^ " : " ^ ty_to_string ctx v.ty)
+                   (fun (v : tvalue) ->
+                     tvalue_to_string ctx v ^ " : " ^ ty_to_string ctx v.ty)
                    values)
             ^ "]"));
         (* Sanity check: the number of values is consistent with the length *)
@@ -1023,10 +1012,10 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
         *)
         if ty_has_borrows (Some span) ctx.type_ctx.type_infos ty then
           let value = VAdt { variant_id = None; field_values = values } in
-          let value : typed_value = { value; ty } in
+          let value : tvalue = { value; ty } in
           (value, fun e -> e)
         else
-          let saggregated = mk_fresh_symbolic_typed_value span ty in
+          let saggregated = mk_fresh_symbolic_tvalue span ty in
           (* Update the symbolic ast *)
           let cf e =
             (* Introduce the symbolic value in the AST *)
@@ -1041,7 +1030,7 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
 
 let eval_rvalue_not_global (config : config) (span : Meta.span)
     (rvalue : rvalue) (ctx : eval_ctx) :
-    (typed_value, eval_error) result
+    (tvalue, eval_error) result
     * eval_ctx
     * (SymbolicAst.expr -> SymbolicAst.expr) =
   [%ltrace ""];

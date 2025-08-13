@@ -30,7 +30,7 @@ val update_ctx_along_write_place :
 
     Note that we only access the value at the place, and do not check that the
     value is "well-formed" (for instance that it doesn't contain bottoms). *)
-val read_place : Meta.span -> access_kind -> place -> eval_ctx -> typed_value
+val read_place : Meta.span -> access_kind -> place -> eval_ctx -> tvalue
 
 (** Update the value at a given place, provided the place **does not refer to a
     global** (globals are handled elsewhere).
@@ -43,13 +43,13 @@ val read_place : Meta.span -> access_kind -> place -> eval_ctx -> typed_value
     the overwritten value contains borrows, loans, etc. and will simply
     overwrite it. *)
 val write_place :
-  Meta.span -> access_kind -> place -> typed_value -> eval_ctx -> eval_ctx
+  Meta.span -> access_kind -> place -> tvalue -> eval_ctx -> eval_ctx
 
 (** Compute an expanded tuple ⊥ value.
 
     [compute_expanded_bottom_tuple_value [ty0, ..., tyn]] returns
     [(⊥:ty0, ..., ⊥:tyn)] *)
-val compute_expanded_bottom_tuple_value : Meta.span -> ety list -> typed_value
+val compute_expanded_bottom_tuple_value : Meta.span -> ety list -> tvalue
 
 (** Compute an expanded ADT ⊥ value.
 
@@ -60,7 +60,7 @@ val compute_expanded_bottom_adt_value :
   TypeDeclId.id ->
   VariantId.id option ->
   generic_args ->
-  typed_value
+  tvalue
 
 (** Drop (end) outer loans at a given place, which should be seen as an l-value
     (we will write to it later, but need to drop the loans before writing).
@@ -100,4 +100,4 @@ val prepare_lplace :
   Meta.span ->
   place ->
   eval_ctx ->
-  typed_value * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr)
+  tvalue * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr)

@@ -147,14 +147,14 @@ let eval_ctx_to_symbolic_assignments_info (ctx : bs_ctx)
       method! visit_env_elem _ ee =
         match ee with
         | EBinding (BVar { index = _; name = Some name }, v) ->
-            self#visit_typed_value name v
+            self#visit_tvalue name v
         | _ -> () (* Ignore *)
 
       method! visit_value name v =
         match v with
         | VLiteral _ | VBottom -> ()
         | VBorrow (VMutBorrow (_, v)) | VLoan (VSharedLoan (_, v)) ->
-            self#visit_typed_value name v
+            self#visit_tvalue name v
         | VSymbolic sv ->
             (* Translate the type *)
             let ty = ctx_translate_fwd_ty ctx sv.sv_ty in
@@ -348,9 +348,9 @@ and translate_panic (ctx : bs_ctx) : texpr = Option.get ctx.mk_panic
 
     Remark: in case we merge the forward/backward functions, we introduce those
     in [translate_forward_end]. *)
-and translate_return (ectx : C.eval_ctx) (opt_v : V.typed_value option)
+and translate_return (ectx : C.eval_ctx) (opt_v : V.tvalue option)
     (ctx : bs_ctx) : texpr =
-  let opt_v = Option.map (typed_value_to_texpr ctx ectx) opt_v in
+  let opt_v = Option.map (tvalue_to_texpr ctx ectx) opt_v in
   (Option.get ctx.mk_return) ctx opt_v
 
 and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
@@ -425,7 +425,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
   (* Translate the function call *)
   let generics = ctx_translate_fwd_generic_args ctx call.generics in
   let args =
-    let args = List.map (typed_value_to_texpr ctx call.ctx) call.args in
+    let args = List.map (tvalue_to_texpr ctx call.ctx) call.args in
     let args_mplaces =
       List.map
         (translate_opt_mplace (Some call.span) ctx.type_ctx.type_infos)
@@ -737,7 +737,7 @@ and translate_cast_unsize (call : S.call) (e : S.expr) (ty0 : T.ty) (ty1 : T.ty)
     | [ arg ] -> arg
     | _ -> [%internal_error] ctx.span
   in
-  let arg = typed_value_to_texpr ctx call.ctx arg in
+  let arg = tvalue_to_texpr ctx call.ctx arg in
   let arg_mp =
     translate_opt_mplace (Some call.span) ctx.type_ctx.type_infos
       (List.hd call.args_places)
@@ -1164,11 +1164,11 @@ and translate_global_eval (gid : A.GlobalDeclId.id) (generics : T.generic_args)
     (mk_tpattern_from_fvar var None)
     gval e
 
-and translate_assertion (ectx : C.eval_ctx) (v : V.typed_value) (e : S.expr)
+and translate_assertion (ectx : C.eval_ctx) (v : V.tvalue) (e : S.expr)
     (ctx : bs_ctx) : texpr =
   let next_e = translate_expr e ctx in
   let monadic = true in
-  let v = typed_value_to_texpr ctx ectx v in
+  let v = tvalue_to_texpr ctx ectx v in
   let args = [ v ] in
   let func =
     { id = FunOrOp (Fun (Pure Assert)); generics = empty_generic_args }
@@ -1367,12 +1367,12 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
   *)
   let v =
     match v with
-    | VaSingleValue v -> typed_value_to_texpr ctx ectx v
+    | VaSingleValue v -> tvalue_to_texpr ctx ectx v
     | VaArray values ->
         (* We use a struct update to encode the array aggregate, in order
            to preserve the structure and allow generating code of the shape
            `[x0, ...., xn]` *)
-        let values = List.map (typed_value_to_texpr ctx ectx) values in
+        let values = List.map (tvalue_to_texpr ctx ectx) values in
         let values = FieldId.mapi (fun fid v -> (fid, v)) values in
         let su : struct_update =
           { struct_id = TBuiltin TArray; init = None; updates = values }
@@ -1394,10 +1394,10 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
   let var = mk_tpattern_from_fvar var mplace in
   mk_closed_checked_let __FILE__ __LINE__ ctx monadic var v next_e
 
-and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
+and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
     (ectx : C.eval_ctx)
     (loop_sid_maps :
-      (V.typed_value S.symbolic_value_id_map
+      (V.tvalue S.symbolic_value_id_map
       * V.symbolic_value_id S.symbolic_value_id_map)
       option) (fwd_e : S.expr) (back_e : S.expr S.region_group_id_map)
     (ctx : bs_ctx) : texpr =
@@ -1594,8 +1594,7 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
 
       [%ltrace
         "- loop_input_values_map:\n"
-        ^ V.SymbolicValueId.Map.show
-            (typed_value_to_string ctx)
+        ^ V.SymbolicValueId.Map.show (tvalue_to_string ctx)
             loop_input_values_map
         ^ "\n- loop_info.input_svl:\n"
         ^ Print.list_to_string
@@ -1613,9 +1612,8 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
       in
       [%ltrace
         "loop_input_values: "
-        ^ String.concat ","
-            (List.map (typed_value_to_string ctx) loop_input_values)];
-      let args = List.map (typed_value_to_texpr ctx ectx) loop_input_values in
+        ^ String.concat "," (List.map (tvalue_to_string ctx) loop_input_values)];
+      let args = List.map (tvalue_to_texpr ctx ectx) loop_input_values in
 
       (* Lookup the effect info for the loop function *)
       let fid = T.FRegular ctx.fun_decl.def_id in
@@ -1972,7 +1970,7 @@ and translate_espan (span : S.espan) (e : S.expr) (ctx : bs_ctx) : texpr =
     | S.Assignment (ectx, lp, rv, rp) ->
         let type_infos = ctx.type_ctx.type_infos in
         let lp = translate_mplace (Some ctx.span) type_infos lp in
-        let rv = typed_value_to_texpr ctx ectx rv in
+        let rv = tvalue_to_texpr ctx ectx rv in
         let rp = translate_opt_mplace (Some ctx.span) type_infos rp in
         Some (Assignment (lp, rv, rp))
     | S.Snapshot ectx ->
