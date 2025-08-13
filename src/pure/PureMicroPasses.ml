@@ -310,13 +310,15 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
   let register_assign (lv : typed_pattern) (rv : texpression) =
     match (decompose_typed_pattern span lv, decompose_texpression span rv) with
     | Some (lhs, lhs_depth), Some (rhs_id, rhs_depth) ->
-        register_edge (Pure lhs.id) (lhs_depth + rhs_depth) (Pure rhs_id)
+        if lhs_depth + rhs_depth = 0 then
+          register_edge (Pure lhs.id) 0 (Pure rhs_id)
     | _ -> ()
   in
   let register_expression_eq (lv : texpression) (rv : texpression) =
     match (decompose_texpression span lv, decompose_texpression span rv) with
     | Some (lhs_id, lhs_depth), Some (rhs_id, rhs_depth) ->
-        register_edge (Pure lhs_id) (lhs_depth + rhs_depth) (Pure rhs_id)
+        if lhs_depth + rhs_depth = 0 then
+          register_edge (Pure lhs_id) 0 (Pure rhs_id)
     | _ -> ()
   in
   let register_texpression_has_name (e : texpression) (name : string)
@@ -327,13 +329,12 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
   in
   let register_texpression_at_place (e : texpression) (mp : mplace) =
     match (decompose_texpression span e, decompose_mplace_to_local mp) with
-    | Some (fid, depth), Some (lid, _, []) ->
-        register_edge (Pure fid) depth (Llbc lid)
+    | Some (fid, 0), Some (lid, _, []) -> register_edge (Pure fid) 0 (Llbc lid)
     | _ -> ()
   in
 
   let visitor =
-    object (self)
+    object
       inherit [_] iter_expression as super
       method! visit_fvar _ v = register_var v
 
@@ -344,8 +345,8 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
             match
               (decompose_typed_pattern span lv, decompose_mplace_to_local mp)
             with
-            | Some (lhs, depth), Some (lid, _, []) ->
-                register_edge (Pure lhs.id) depth (Llbc lid)
+            | Some (lhs, 0), Some (lid, _, []) ->
+                register_edge (Pure lhs.id) 0 (Llbc lid)
             | _ -> ())
           (fst (opt_unmeta_mplace re));
         register_assign lv re;
