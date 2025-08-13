@@ -300,12 +300,12 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
         register_edge (Pure lhs_id) (lhs_depth + rhs_depth) (Pure rhs_id)
     | _ -> ()
   in
-  (*let register_texpression_has_name (e : texpression) (name : string)
+  let register_texpression_has_name (e : texpression) (name : string)
       (depth : int) =
     match decompose_texpression span e with
     | Some (id, depth') -> register_node (Pure id) name (depth + depth')
     | _ -> ()
-    in*)
+  in
   let register_texpression_at_place (e : texpression) (mp : mplace) =
     match (decompose_texpression span e, decompose_mplace_to_local mp) with
     | Some (fid, depth), Some (lid, _, []) ->
@@ -349,11 +349,10 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
               List.iter
                 (fun (var, rvalue) -> register_expression_eq var rvalue)
                 infos
-          | SymbolicPlaces _ ->
-              ()
-              (*List.iter
-                (fun (var, name) -> register_texpression_has_name var name 0)
-                infos*)
+          | SymbolicPlaces infos ->
+              List.iter
+                (fun (var, name) -> register_texpression_has_name var name 1)
+                infos
           | MPlace mp -> register_texpression_at_place e mp
           | Tag _ | TypeAnnot -> ()
         end;
@@ -466,7 +465,7 @@ let compute_pretty_names_propagate_constraints
     match NcNodeMap.find_opt src !nodes with
     | None -> ()
     | Some (name, weight) ->
-        let weight = max weight 0 in
+        let nweight = max weight 0 + dist in
         nodes :=
           NcNodeMap.update dst
             (fun nw ->
@@ -474,12 +473,12 @@ let compute_pretty_names_propagate_constraints
               | None ->
                   (* We update: lookup the constraints about the destination and push them to the stack *)
                   push_constraints dst;
-                  Some (name, weight + dist)
+                  Some (name, nweight)
               | Some (name', weight') ->
-                  if weight + dist < weight' then (
+                  if nweight < weight' then (
                     (* Similar to case above *)
                     push_constraints dst;
-                    Some (name, weight + dist))
+                    Some (name, nweight))
                   else Some (name', weight'))
             !nodes
   in
