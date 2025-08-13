@@ -37,9 +37,9 @@ let struct_update_to_string (ctx : ctx) supd : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.struct_update_to_string fmt "" "  " supd
 
-let typed_pattern_to_string (ctx : ctx) pat : string =
+let tpattern_to_string (ctx : ctx) pat : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
-  PrintPure.typed_pattern_to_string fmt pat
+  PrintPure.tpattern_to_string fmt pat
 
 let lift_map_fun_decl_body (f : ctx -> fun_decl -> fun_body -> fun_body)
     (ctx : ctx) (def : fun_decl) : fun_decl =
@@ -157,14 +157,14 @@ end
 module NcAssignMap = Collections.MakeMap (NcAssignOrderedType)
 module NcAssignSet = Collections.MakeSet (NcAssignOrderedType)
 
-let rec decompose_typed_pattern span (x : typed_pattern) : (fvar * int) option =
+let rec decompose_tpattern span (x : tpattern) : (fvar * int) option =
   match x.value with
   | PBound _ -> [%internal_error] span
   | POpen (v, _) -> Some (v, 0)
   | PAdt { variant_id = None; field_values = [ x ] } -> begin
       Option.map
         (fun (vid, depth) -> (vid, depth + 1))
-        (decompose_typed_pattern span x)
+        (decompose_tpattern span x)
     end
   | PConstant _ | PDummy | PAdt _ -> None
 
@@ -194,8 +194,8 @@ let rec decompose_texpression span (x : texpression) : (fvar_id * int) option =
   | Meta (_, x) -> decompose_texpression span x
 
 type loop_info = {
-  inputs : typed_pattern list;  (** The inputs bound by the loop *)
-  outputs : typed_pattern list;
+  inputs : tpattern list;  (** The inputs bound by the loop *)
+  outputs : tpattern list;
       (** The outputs that we accumulated at each loop call.
 
           We use this to propagate naming information between all the call
@@ -307,8 +307,8 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
   in
 
   (* *)
-  let register_assign (lv : typed_pattern) (rv : texpression) =
-    match (decompose_typed_pattern span lv, decompose_texpression span rv) with
+  let register_assign (lv : tpattern) (rv : texpression) =
+    match (decompose_tpattern span lv, decompose_texpression span rv) with
     | Some (lhs, lhs_depth), Some (rhs_id, rhs_depth) ->
         if lhs_depth + rhs_depth = 0 then
           register_edge (Pure lhs.id) 0 (Pure rhs_id)
@@ -343,7 +343,7 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
         Option.iter
           (fun mp ->
             match
-              (decompose_typed_pattern span lv, decompose_mplace_to_local mp)
+              (decompose_tpattern span lv, decompose_mplace_to_local mp)
             with
             | Some (lhs, 0), Some (lid, _, []) ->
                 register_edge (Pure lhs.id) 0 (Llbc lid)
@@ -420,11 +420,11 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
         | _ -> ()
     end
   in
-  List.iter (visitor#visit_typed_pattern ()) body.inputs;
+  List.iter (visitor#visit_tpattern ()) body.inputs;
   visitor#visit_texpression () body.body;
 
   (* Equate the loop outputs *)
-  let rec equate (out0 : typed_pattern) (out1 : typed_pattern) : unit =
+  let rec equate (out0 : tpattern) (out1 : tpattern) : unit =
     match (out0.value, out1.value) with
     | POpen (v0, _), POpen (v1, _) ->
         register_edge (Pure v0.id) 0 (Pure v1.id)
@@ -607,7 +607,7 @@ let compute_pretty_names_update (def : fun_decl) (names : string FVarId.Map.t)
 
   (* Apply *)
   let { inputs; body } = body in
-  let inputs = List.map (visitor#visit_typed_pattern ()) inputs in
+  let inputs = List.map (visitor#visit_tpattern ()) inputs in
   let body = visitor#visit_texpression () body in
   { inputs; body }
 
@@ -711,7 +711,7 @@ let simplify_decompose_struct_visitor (ctx : ctx) (def : fun_decl) =
   object
     inherit [_] map_expression as super
 
-    method! visit_Let env (monadic : bool) (lv : typed_pattern)
+    method! visit_Let env (monadic : bool) (lv : tpattern)
         (scrutinee : texpression) (next : texpression) =
       match (lv.value, lv.ty) with
       | PAdt adt_pat, TAdt (TAdtId adt_id, generics) ->
@@ -743,7 +743,7 @@ let simplify_decompose_struct_visitor (ctx : ctx) (def : fun_decl) =
                  field.
                  We use the [dest] variable in order not to have to recompute
                  the type of the result of the projection... *)
-            let gen_field_proj (field_id : FieldId.id) (dest : typed_pattern) :
+            let gen_field_proj (field_id : FieldId.id) (dest : tpattern) :
                 texpression =
               let proj_kind = { adt_id = TAdtId adt_id; field_id } in
               let qualif = { id = Proj proj_kind; generics } in
@@ -962,7 +962,7 @@ let simplify_let_bindings_visitor (ctx : ctx) (def : fun_decl) =
             let g, args = destruct_apps e in
             if List.length pats = List.length args then
               (* Check if the arguments are exactly the lambdas *)
-              let check_pat_arg ((pat, arg) : typed_pattern * texpression) =
+              let check_pat_arg ((pat, arg) : tpattern * texpression) =
                 match (pat.value, arg.e) with
                 | POpen (v, _), FVar vid -> v.id = vid
                 | _ -> false
@@ -1022,7 +1022,7 @@ let simplify_duplicate_calls_visitor (_ctx : ctx) (def : fun_decl) =
            variables *)
       let env =
         if monadic then
-          match typed_pattern_to_texpression def.item_meta.span pat with
+          match tpattern_to_texpression def.item_meta.span pat with
           | None -> env
           | Some pat_expr -> TExprMap.add bound (monadic, pat_expr) env
         else env
@@ -1281,7 +1281,7 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
   *)
   let lv_visitor =
     object
-      inherit [_] mapreduce_typed_pattern
+      inherit [_] mapreduce_tpattern
       method zero _ = true
       method plus b0 b1 _ = b0 () && b1 ()
 
@@ -1292,9 +1292,9 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
       method! visit_PBound _ _ _ = [%internal_error] span
     end
   in
-  let filter_typed_pattern (used_vars : FVarId.Set.t) (lv : typed_pattern) :
-      typed_pattern * bool =
-    let lv, all_dummies = lv_visitor#visit_typed_pattern used_vars lv in
+  let filter_tpattern (used_vars : FVarId.Set.t) (lv : tpattern) :
+      tpattern * bool =
+    let lv, all_dummies = lv_visitor#visit_tpattern used_vars lv in
     (lv, all_dummies ())
   in
 
@@ -1328,7 +1328,7 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
                   (* Compute the set of values used inside the branch *)
                   let branch, used = self#visit_texpression env br.branch in
                   (* Simplify the pattern *)
-                  let pat, _ = filter_typed_pattern (used ()) br.pat in
+                  let pat, _ = filter_tpattern (used ()) br.pat in
                   { pat; branch }
                 in
                 super#visit_expression env
@@ -1338,7 +1338,7 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
             let e, used = self#visit_texpression env e in
             let used = used () in
             (* Filter the left values *)
-            let lv, all_dummies = filter_typed_pattern used lv in
+            let lv, all_dummies = filter_tpattern used lv in
             (* Small utility - called if we can't filter the let-binding *)
             let dont_filter () =
               let re, used_re = self#visit_texpression env re in
@@ -1384,7 +1384,7 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
       let inputs =
         if false then
           List.map
-            (fun lv -> fst (filter_typed_pattern used_vars lv))
+            (fun lv -> fst (filter_tpattern used_vars lv))
             body.inputs
         else body.inputs
       in
@@ -1406,7 +1406,7 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
 let simplify_let_then_ok_visitor _ctx (def : fun_decl) =
   (* Match a pattern and an expression: evaluates to [true] if the expression
      is actually exactly the pattern *)
-  let rec match_pattern_and_expr (pat : typed_pattern) (e : texpression) : bool
+  let rec match_pattern_and_expr (pat : tpattern) (e : texpression) : bool
       =
     match (pat.value, e.e) with
     | PConstant plit, Const lit -> plit = lit
@@ -1673,12 +1673,12 @@ let simplify_aggregates_unchanged_fields_visitor (ctx : ctx) (def : fun_decl) =
   in
   let get_expand v m = ExprMap.find_opt v m.expand_map in
   let add_expanded e m = { m with expanded = e :: m.expanded } in
-  let add_pattern_eqs (bound_adt : texpression) (pat : typed_pattern)
+  let add_pattern_eqs (bound_adt : texpression) (pat : tpattern)
       (env : simp_aggr_env) : simp_aggr_env =
     (* Register the pattern - note that we may not be able to convert the
        pattern to an expression if, for instance, it contains [_] *)
     let env =
-      match typed_pattern_to_texpression span pat with
+      match tpattern_to_texpression span pat with
       | Some pat_expr -> add_expand bound_adt.e pat_expr.e env
       | None -> env
     in
@@ -1692,7 +1692,7 @@ let simplify_aggregates_unchanged_fields_visitor (ctx : ctx) (def : fun_decl) =
         let fields = FieldId.mapi (fun id x -> (id, x)) adt.field_values in
         let vars_to_projs =
           Collections.List.filter_map
-            (fun ((fid, f) : _ * typed_pattern) ->
+            (fun ((fid, f) : _ * tpattern) ->
               match f.value with
               | POpen (var, _) ->
                   let proj = mk_adt_proj span bound_adt fid f.ty in
@@ -1906,7 +1906,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
 
         let inputs_tys =
           let fwd_inputs =
-            List.map (fun (v : typed_pattern) -> v.ty) loop.inputs
+            List.map (fun (v : tpattern) -> v.ty) loop.inputs
           in
           fwd_inputs
         in
@@ -1932,7 +1932,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
         in
 
         let inputs =
-          List.map (fun x -> mk_typed_pattern_from_fvar x None) inputs
+          List.map (fun x -> mk_tpattern_from_fvar x None) inputs
         in
         let loop_body =
           close_all_fun_body loop.span { inputs; body = loop.loop_body }
@@ -2007,7 +2007,7 @@ let unit_vars_to_unit _ (def : fun_decl) : fun_decl =
     (fun body ->
       let body_exp = obj#visit_texpression () body.body in
       (* Update the input parameters *)
-      let inputs = List.map (obj#visit_typed_pattern ()) body.inputs in
+      let inputs = List.map (obj#visit_tpattern ()) body.inputs in
       (* Return *)
       { body = body_exp; inputs })
     def
@@ -2244,7 +2244,7 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
                         let id = fresh_fvar_id () in
                         let var : fvar = { id; basename = None; ty = x.ty } in
                         register_back_call
-                          (mk_typed_pattern_from_fvar var None)
+                          (mk_tpattern_from_fvar var None)
                           v;
                         super#visit_App env app (mk_texpression_from_fvar var)
                     | _ -> super#visit_App env app x
@@ -2289,7 +2289,7 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
                   match e.e with
                   | Let (monadic, pat, e1, e2) ->
                       let fresh_vars =
-                        FVarId.Set.diff fresh_vars (typed_pattern_get_fvars pat)
+                        FVarId.Set.diff fresh_vars (tpattern_get_fvars pat)
                       in
                       if FVarId.Set.is_empty fresh_vars then
                         let call = mk_call_to_update back_arg in
@@ -2377,10 +2377,10 @@ let decompose_let_bindings_visitor (decompose_monadic : bool)
   let span = def.item_meta.span in
 
   (* Set up the var id generator *)
-  let mk_fresh (ty : ty) : typed_pattern * texpression =
+  let mk_fresh (ty : ty) : tpattern * texpression =
     let vid = fresh_fvar_id () in
     let tmp : fvar = { id = vid; basename = None; ty } in
-    let ltmp = mk_typed_pattern_from_fvar tmp None in
+    let ltmp = mk_tpattern_from_fvar tmp None in
     let rtmp = mk_texpression_from_fvar tmp in
     (ltmp, rtmp)
   in
@@ -2404,8 +2404,8 @@ let decompose_let_bindings_visitor (decompose_monadic : bool)
        ...
      }]
   *)
-  let decompose_pat (lv : typed_pattern) :
-      (typed_pattern * texpression) list * typed_pattern =
+  let decompose_pat (lv : tpattern) :
+      (tpattern * texpression) list * tpattern =
     let patterns = ref [] in
 
     (* We decompose patterns *inside* other patterns.
@@ -2413,25 +2413,25 @@ let decompose_let_bindings_visitor (decompose_monadic : bool)
        pattern already *)
     let visit_pats =
       object
-        inherit [_] map_typed_pattern as super
+        inherit [_] map_tpattern as super
 
-        method! visit_typed_pattern (inside : bool) (pat : typed_pattern) :
-            typed_pattern =
+        method! visit_tpattern (inside : bool) (pat : tpattern) :
+            tpattern =
           match pat.value with
           | PConstant _ | POpen _ | PDummy -> pat
           | PBound _ -> [%internal_error] span
           | PAdt _ ->
-              if not inside then super#visit_typed_pattern true pat
+              if not inside then super#visit_tpattern true pat
               else
                 let ltmp, rtmp = mk_fresh pat.ty in
-                let pat = super#visit_typed_pattern false pat in
+                let pat = super#visit_tpattern false pat in
                 patterns := (pat, rtmp) :: !patterns;
                 ltmp
       end
     in
 
     let inside = false in
-    let lv = visit_pats#visit_typed_pattern inside lv in
+    let lv = visit_pats#visit_tpattern inside lv in
     (!patterns, lv)
   in
 
@@ -2534,7 +2534,7 @@ let unfold_monadic_let_bindings_visitors (_ctx : ctx) (def : fun_decl) =
             ty = mk_error_ty;
           }
         in
-        let err_pat = mk_typed_pattern_from_fvar err_var None in
+        let err_pat = mk_tpattern_from_fvar err_var None in
         let fail_pat = mk_result_fail_pattern err_pat.value lv.ty in
         let err_v = mk_texpression_from_fvar err_var in
         let fail_value =
@@ -2682,7 +2682,7 @@ let add_fuel_and_state_one (ctx : ctx) (loops : fun_decl LoopId.Map.t)
      the updated expession together with the new state *)
   let update_call (f : texpression) (args : texpression list)
       (fuel : texpression option) (state : texpression option) :
-      texpression * typed_pattern option * texpression option =
+      texpression * tpattern option * texpression option =
     (* We need to update the type of the function *)
     let inputs, output = destruct_arrows f.ty in
     let fuel_ty = Option.map (fun (v : texpression) -> v.ty) fuel in
@@ -2701,7 +2701,7 @@ let add_fuel_and_state_one (ctx : ctx) (loops : fun_decl LoopId.Map.t)
     let state' = Option.map (fun _ -> mk_fresh_state_var ()) state in
     let state'_expr = Option.map mk_texpression_from_fvar state' in
     let state'_pat =
-      Option.map (fun f -> mk_typed_pattern_from_fvar f None) state'
+      Option.map (fun f -> mk_tpattern_from_fvar f None) state'
     in
     let e =
       mk_apps span f (Option.to_list fuel @ args @ Option.to_list state)
@@ -2930,7 +2930,7 @@ let add_fuel_and_state_one (ctx : ctx) (loops : fun_decl LoopId.Map.t)
               if re_is_stateful then
                 let state' = mk_fresh_state_var () in
                 let state'_expr = mk_texpression_from_fvar state' in
-                let state'_pat = mk_typed_pattern_from_fvar state' None in
+                let state'_pat = mk_tpattern_from_fvar state' None in
                 let lv = mk_simpl_tuple_pattern [ state'_pat; lv ] in
                 let next = update fuel (Some state'_expr) next in
                 mk_opened_let monadic lv re next
@@ -2984,10 +2984,10 @@ let add_fuel_and_state_one (ctx : ctx) (loops : fun_decl LoopId.Map.t)
         (* Update the inputs *)
         let inputs =
           let fuel_pat =
-            Option.map (fun f -> mk_typed_pattern_from_fvar f None) fuel_input
+            Option.map (fun f -> mk_tpattern_from_fvar f None) fuel_input
           in
           let state_pat =
-            Option.map (fun f -> mk_typed_pattern_from_fvar f None) state
+            Option.map (fun f -> mk_tpattern_from_fvar f None) state
           in
           Option.to_list fuel_pat @ inputs @ Option.to_list state_pat
         in
@@ -3055,11 +3055,11 @@ let merge_let_app_then_decompose_tuple_visitor (_ctx : ctx) (def : fun_decl) =
               (* Introduce fresh variables for all the dummy variables
                    to make sure we can turn the pattern into an expression *)
               let pat1 =
-                typed_pattern_replace_dummy_vars_with_free_vars fresh_fvar_id
+                tpattern_replace_dummy_vars_with_free_vars fresh_fvar_id
                   pat1
               in
               let pat1_expr =
-                Option.get (typed_pattern_to_texpression span pat1)
+                Option.get (tpattern_to_texpression span pat1)
               in
               (* Register the mapping from the variable we remove to the expression *)
               let env = FVarId.Map.add var0.id pat1_expr env in
@@ -3259,7 +3259,7 @@ let filter_loop_inputs_explore_one_visitor (ctx : ctx)
   in
   [%ltrace
     "inputs:\n"
-    ^ String.concat ", " (List.map (typed_pattern_to_string ctx) body.inputs)];
+    ^ String.concat ", " (List.map (tpattern_to_string ctx) body.inputs)];
   let inputs_set =
     FVarId.Set.of_list
       (List.map

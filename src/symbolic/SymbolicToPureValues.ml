@@ -583,8 +583,8 @@ type borrow_or_symbolic_id =
     - the pattern *)
 let rec typed_avalue_to_given_back_aux ~(filter : bool)
     (abs_regions : T.RegionId.Set.t) (mp : mplace option) (av : V.typed_avalue)
-    (ctx : bs_ctx) : bs_ctx * typed_pattern option =
-  let (ctx, value) : _ * typed_pattern option =
+    (ctx : bs_ctx) : bs_ctx * tpattern option =
+  let (ctx, value) : _ * tpattern option =
     match av.value with
     | AAdt adt_v ->
         adt_avalue_to_given_back_aux ~filter abs_regions av adt_v ctx
@@ -615,7 +615,7 @@ let rec typed_avalue_to_given_back_aux ~(filter : bool)
 
 and adt_avalue_to_given_back_aux ~(filter : bool)
     (abs_regions : T.RegionId.Set.t) (av : V.typed_avalue)
-    (adt_v : V.adt_avalue) (ctx : bs_ctx) : bs_ctx * typed_pattern option =
+    (adt_v : V.adt_avalue) (ctx : bs_ctx) : bs_ctx * tpattern option =
   (* Check if the ADT contains borrows *)
   match
     compute_typed_avalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions
@@ -698,7 +698,7 @@ and adt_avalue_to_given_back_aux ~(filter : bool)
 
 and aborrow_content_to_given_back_aux ~(filter : bool) (mp : mplace option)
     (bc : V.aborrow_content) (ty : T.ty) (ctx : bs_ctx) :
-    bs_ctx * typed_pattern option =
+    bs_ctx * tpattern option =
   match bc with
   | V.AMutBorrow _ | ASharedBorrow _ | AIgnoredMutBorrow _ ->
       (* All the borrows should have been ended upon ending the abstraction *)
@@ -706,7 +706,7 @@ and aborrow_content_to_given_back_aux ~(filter : bool) (mp : mplace option)
   | AEndedMutBorrow (msv, _) ->
       (* Return the meta symbolic-value *)
       let ctx, var = fresh_var_for_symbolic_value msv.given_back ctx in
-      let pat = mk_typed_pattern_from_fvar var mp in
+      let pat = mk_tpattern_from_fvar var mp in
       (* Lookup the default value and update the [var_id_to_default] map.
          Note that the default value might be missing, for instance for
          abstractions which were not introduced because of function calls but
@@ -733,14 +733,14 @@ and aborrow_content_to_given_back_aux ~(filter : bool) (mp : mplace option)
         (ctx, Some (mk_dummy_pattern ty))
 
 and aproj_to_given_back_aux (mp : mplace option) (aproj : V.aproj) (ty : T.ty)
-    (ctx : bs_ctx) : bs_ctx * typed_pattern option =
+    (ctx : bs_ctx) : bs_ctx * tpattern option =
   match aproj with
   | V.AEndedProjLoans _ -> [%craise] ctx.span "Unreachable"
   | AEndedProjBorrows { mvalues = mv; loans } ->
       [%cassert] ctx.span (loans = []) "Unreachable";
       (* Return the meta-value *)
       let ctx, var = fresh_var_for_symbolic_value mv.given_back ctx in
-      let pat = mk_typed_pattern_from_fvar var mp in
+      let pat = mk_tpattern_from_fvar var mp in
       (* Register the default value *)
       let ctx =
         (* Using the projection type as the type of the symbolic value - it
@@ -759,7 +759,7 @@ and aproj_to_given_back_aux (mp : mplace option) (aproj : V.aproj) (ty : T.ty)
 
 let typed_avalue_to_given_back (abs_regions : T.RegionId.Set.t)
     (mp : mplace option) (v : V.typed_avalue) (ctx : bs_ctx) :
-    bs_ctx * typed_pattern option =
+    bs_ctx * tpattern option =
   (* Check if the value was generated from a borrow projector: if yes, and if
      it contains mutable borrows we generate a given back pattern (because
      upon ending the borrow the abstraction gave back a value).
@@ -780,7 +780,7 @@ let typed_avalue_to_given_back (abs_regions : T.RegionId.Set.t)
 
     See [typed_avalue_to_given_back]. *)
 let abs_to_given_back (mpl : mplace option list option) (abs : V.abs)
-    (ctx : bs_ctx) : bs_ctx * typed_pattern list =
+    (ctx : bs_ctx) : bs_ctx * tpattern list =
   let avalues =
     match mpl with
     | None -> List.map (fun av -> (None, av)) abs.avalues
@@ -797,12 +797,12 @@ let abs_to_given_back (mpl : mplace option list option) (abs : V.abs)
     "- abs: "
     ^ abs_to_string ~with_ended:true ctx abs
     ^ "\n- values: "
-    ^ Print.list_to_string (typed_pattern_to_string ctx) values];
+    ^ Print.list_to_string (tpattern_to_string ctx) values];
   (ctx, values)
 
 (** Simply calls [abs_to_given_back] *)
 let abs_to_given_back_no_mp (abs : V.abs) (ctx : bs_ctx) :
-    bs_ctx * typed_pattern list =
+    bs_ctx * tpattern list =
   let mpl = List.map (fun _ -> None) abs.avalues in
   abs_to_given_back (Some mpl) abs ctx
 

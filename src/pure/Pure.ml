@@ -719,8 +719,8 @@ type fvar = {
 }
 [@@deriving show, ord]
 
-(** Ancestor for {!iter_typed_pattern} visitor *)
-class ['self] iter_typed_pattern_base =
+(** Ancestor for {!iter_tpattern} visitor *)
+class ['self] iter_tpattern_base =
   object (self : 'self)
     inherit [_] iter_type_decl
     method visit_fvar_id : 'env -> fvar_id -> unit = fun _ _ -> ()
@@ -740,8 +740,8 @@ class ['self] iter_typed_pattern_base =
         self#visit_ty e var.ty
   end
 
-(** Ancestor for {!map_typed_pattern} visitor *)
-class ['self] map_typed_pattern_base =
+(** Ancestor for {!map_tpattern} visitor *)
+class ['self] map_tpattern_base =
   object (self : 'self)
     inherit [_] map_type_decl
     method visit_fvar_id : 'env -> fvar_id -> fvar_id = fun _ x -> x
@@ -765,8 +765,8 @@ class ['self] map_typed_pattern_base =
         }
   end
 
-(** Ancestor for {!reduce_typed_pattern} visitor *)
-class virtual ['self] reduce_typed_pattern_base =
+(** Ancestor for {!reduce_tpattern} visitor *)
+class virtual ['self] reduce_tpattern_base =
   object (self : 'self)
     inherit [_] reduce_type_decl
     method visit_fvar_id : 'env -> fvar_id -> 'a = fun _ _ -> self#zero
@@ -788,8 +788,8 @@ class virtual ['self] reduce_typed_pattern_base =
         self#plus (self#plus x0 x1) x2
   end
 
-(** Ancestor for {!mapreduce_typed_pattern} visitor *)
-class virtual ['self] mapreduce_typed_pattern_base =
+(** Ancestor for {!mapreduce_tpattern} visitor *)
+class virtual ['self] mapreduce_tpattern_base =
   object (self : 'self)
     inherit [_] mapreduce_type_decl
 
@@ -860,44 +860,44 @@ type pattern =
 
 and adt_pattern = {
   variant_id : variant_id option;
-  field_values : typed_pattern list;
+  field_values : tpattern list;
 }
 
-and typed_pattern = { value : pattern; ty : ty }
+and tpattern = { value : pattern; ty : ty }
 [@@deriving
   show,
   ord,
   visitors
     {
-      name = "iter_typed_pattern";
+      name = "iter_tpattern";
       variety = "iter";
-      ancestors = [ "iter_typed_pattern_base" ];
+      ancestors = [ "iter_tpattern_base" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
       polymorphic = false;
     },
   visitors
     {
-      name = "map_typed_pattern";
+      name = "map_tpattern";
       variety = "map";
-      ancestors = [ "map_typed_pattern_base" ];
+      ancestors = [ "map_tpattern_base" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
       polymorphic = false;
     },
   visitors
     {
-      name = "reduce_typed_pattern";
+      name = "reduce_tpattern";
       variety = "reduce";
-      ancestors = [ "reduce_typed_pattern_base" ];
+      ancestors = [ "reduce_tpattern_base" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       polymorphic = false;
     },
   visitors
     {
-      name = "mapreduce_typed_pattern";
+      name = "mapreduce_tpattern";
       variety = "mapreduce";
-      ancestors = [ "mapreduce_typed_pattern_base" ];
+      ancestors = [ "mapreduce_tpattern_base" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       polymorphic = false;
     }]
@@ -970,7 +970,7 @@ type qualif = { id : qualif_id; generics : generic_args } [@@deriving show, ord]
 (** Ancestor for {!iter_expression} visitor *)
 class ['self] iter_expression_base =
   object (_self : 'self)
-    inherit [_] iter_typed_pattern
+    inherit [_] iter_tpattern
     inherit! [_] iter_type_id
     method visit_qualif : 'env -> qualif -> unit = fun _ _ -> ()
     method visit_loop_id : 'env -> loop_id -> unit = fun _ _ -> ()
@@ -982,7 +982,7 @@ class ['self] iter_expression_base =
 (** Ancestor for {!map_expression} visitor *)
 class ['self] map_expression_base =
   object (_self : 'self)
-    inherit [_] map_typed_pattern
+    inherit [_] map_tpattern
     inherit! [_] map_type_id
     method visit_qualif : 'env -> qualif -> qualif = fun _ x -> x
     method visit_loop_id : 'env -> loop_id -> loop_id = fun _ x -> x
@@ -994,7 +994,7 @@ class ['self] map_expression_base =
 (** Ancestor for {!reduce_expression} visitor *)
 class virtual ['self] reduce_expression_base =
   object (self : 'self)
-    inherit [_] reduce_typed_pattern
+    inherit [_] reduce_tpattern
     inherit! [_] reduce_type_id
     method visit_qualif : 'env -> qualif -> 'a = fun _ _ -> self#zero
     method visit_loop_id : 'env -> loop_id -> 'a = fun _ _ -> self#zero
@@ -1006,7 +1006,7 @@ class virtual ['self] reduce_expression_base =
 (** Ancestor for {!mapreduce_expression} visitor *)
 class virtual ['self] mapreduce_expression_base =
   object (self : 'self)
-    inherit [_] mapreduce_typed_pattern
+    inherit [_] mapreduce_tpattern
     inherit! [_] mapreduce_type_id
 
     method visit_qualif : 'env -> qualif -> qualif * 'a =
@@ -1041,9 +1041,9 @@ type expression =
           argument): this would allow us to replace some field accesses with
           calls to projectors over fields (when there are clashes of field
           names, some provers like F* get pretty bad...) *)
-  | Lambda of typed_pattern * texpression  (** Lambda abstraction: [λ x => e] *)
+  | Lambda of tpattern * texpression  (** Lambda abstraction: [λ x => e] *)
   | Qualif of qualif  (** A top-level qualifier *)
-  | Let of bool * typed_pattern * texpression * texpression
+  | Let of bool * tpattern * texpression * texpression
       (** Let binding.
 
           TODO: the boolean should be replaced by an enum: sometimes we use the
@@ -1087,7 +1087,7 @@ type expression =
   | EError of Meta.span option * string
 
 and switch_body = If of texpression * texpression | Match of match_branch list
-and match_branch = { pat : typed_pattern; branch : texpression }
+and match_branch = { pat : tpattern; branch : texpression }
 
 (** In {!SymbolicToPure}, whenever we encounter a loop we insert a {!loop} node,
     which contains the end of the function (i.e., the call to the loop function)
@@ -1103,7 +1103,7 @@ and loop = {
   loop_id : loop_id;
   span : span; [@opaque]
   output_ty : ty;  (** The output type of the loop *)
-  inputs : typed_pattern list;
+  inputs : tpattern list;
       (** Those should be variables.
 
           Those variables are the variables bound in [loop_body] (they are the
@@ -1450,7 +1450,7 @@ type fun_sig = {
 type inst_fun_sig = { inputs : ty list; output : ty } [@@deriving show]
 
 type fun_body = {
-  inputs : typed_pattern list;
+  inputs : tpattern list;
       (** Note that we consider the inputs as a single binder group when
           computing de bruijn indices *)
   body : texpression;
