@@ -275,9 +275,9 @@ let fun_builtin_filter_types (id : FunDeclId.id) (types : 'a list)
 
     As a pattern can introduce new variables, we return an extraction context
     updated with new bindings. *)
-let rec extract_typed_pattern (span : Meta.span) (ctx : extraction_ctx)
+let rec extract_tpattern (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (is_let : bool) (inside : bool) ?(with_type = false)
-    (v : typed_pattern) : extraction_ctx =
+    (v : tpattern) : extraction_ctx =
   if with_type then F.pp_print_string fmt "(";
   let is_pattern = true in
   let inside = inside && not with_type in
@@ -299,7 +299,7 @@ let rec extract_typed_pattern (span : Meta.span) (ctx : extraction_ctx)
         ctx
     | PAdt av ->
         let extract_value ctx inside v =
-          extract_typed_pattern span ctx fmt is_let inside v
+          extract_tpattern span ctx fmt is_let inside v
         in
         extract_adt_g_value span extract_value fmt ctx is_let inside
           av.variant_id av.field_values v.ty
@@ -315,7 +315,7 @@ let rec extract_typed_pattern (span : Meta.span) (ctx : extraction_ctx)
 (** Return true if we need to wrap a succession of let-bindings in a [do ...]
     block (because some of them are monadic) *)
 let lets_require_wrap_in_do (span : Meta.span)
-    (lets : (bool * typed_pattern * texpression) list) : bool =
+    (lets : (bool * tpattern * texpression) list) : bool =
   match backend () with
   | Lean ->
       (* For Lean, we wrap in a block iff at least one of the let-bindings is monadic *)
@@ -939,7 +939,7 @@ and extract_field_projector (span : Meta.span) (ctx : extraction_ctx)
       [%admit_raise] span "Unreachable" fmt
 
 and extract_Lambda (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
-    (inside : bool) (xl : typed_pattern list) (e : texpression) : unit =
+    (inside : bool) (xl : tpattern list) (e : texpression) : unit =
   (* Open a box for the abs expression *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* Open parentheses *)
@@ -956,7 +956,7 @@ and extract_Lambda (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
     List.fold_left
       (fun ctx x ->
         F.pp_print_space fmt ();
-        extract_typed_pattern span ctx fmt true true ~with_type x)
+        extract_tpattern span ctx fmt true true ~with_type x)
       ctx xl
   in
   F.pp_print_space fmt ();
@@ -1000,7 +1000,7 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
     | FStar | Coq | Lean -> raw_destruct_lets e
   in
   (* Extract the let-bindings *)
-  let extract_let (ctx : extraction_ctx) (monadic : bool) (lv : typed_pattern)
+  let extract_let (ctx : extraction_ctx) (monadic : bool) (lv : tpattern)
       (re : texpression) : extraction_ctx =
     (* Open a box for the let-binding *)
     F.pp_open_hvbox fmt 0;
@@ -1020,7 +1020,7 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       if monadic && (backend () = Coq || backend () = HOL4) then (
         (* Box for the let .. <- *)
         F.pp_open_hovbox fmt ctx.indent_incr;
-        let ctx = extract_typed_pattern span ctx fmt true true lv in
+        let ctx = extract_tpattern span ctx fmt true true lv in
         F.pp_print_space fmt ();
         let arrow =
           match backend () with
@@ -1060,7 +1060,7 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
             else (
               F.pp_print_string fmt "let";
               F.pp_print_space fmt ());
-            let ctx = extract_typed_pattern span ctx fmt true true lv in
+            let ctx = extract_tpattern span ctx fmt true true lv in
             F.pp_print_space fmt ();
             let eq =
               match backend () with
@@ -1250,7 +1250,7 @@ and extract_Switch (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
         (* Print the pattern *)
         F.pp_print_string fmt "|";
         F.pp_print_space fmt ();
-        let ctx = extract_typed_pattern span ctx fmt false false br.pat in
+        let ctx = extract_tpattern span ctx fmt false false br.pat in
         F.pp_print_space fmt ();
         let arrow =
           match backend () with
@@ -1508,13 +1508,13 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
     | None -> ctx
     | Some body ->
         List.fold_left
-          (fun ctx (lv : typed_pattern) ->
+          (fun ctx (lv : tpattern) ->
             insert_req_space fmt space;
             (* Open a box for the input parameter *)
             F.pp_open_hovbox fmt 0;
             F.pp_print_string fmt "(";
             let ctx =
-              extract_typed_pattern def.item_meta.span ctx fmt true false lv
+              extract_tpattern def.item_meta.span ctx fmt true false lv
             in
             F.pp_print_space fmt ();
             F.pp_print_string fmt ":";
@@ -1924,10 +1924,10 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
          patterns *)
       let _ =
         List.fold_left
-          (fun ctx (lv : typed_pattern) ->
+          (fun ctx (lv : tpattern) ->
             F.pp_print_space fmt ();
             let ctx =
-              extract_typed_pattern def.item_meta.span ctx fmt true false lv
+              extract_tpattern def.item_meta.span ctx fmt true false lv
             in
             ctx)
           ctx inputs_lvs

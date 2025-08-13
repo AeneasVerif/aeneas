@@ -108,19 +108,19 @@ class ['self] scoped_iter_expression =
           List.iter
             (fun (b : match_branch) ->
               let { pat; branch } = b in
-              self#visit_typed_pattern scope pat;
+              self#visit_tpattern scope pat;
               self#visit_texpression scope' branch)
             branches
 
     method! visit_Let scope _ pat bound next =
       let scope' = scope + 1 in
-      self#visit_typed_pattern scope pat;
+      self#visit_tpattern scope pat;
       self#visit_texpression scope bound;
       self#visit_texpression scope' next
 
     method! visit_Lambda scope pat body =
       let scope' = scope + 1 in
-      self#visit_typed_pattern scope pat;
+      self#visit_tpattern scope pat;
       self#visit_texpression scope' body
 
     method! visit_loop scope loop =
@@ -131,7 +131,7 @@ class ['self] scoped_iter_expression =
       self#visit_texpression scope fun_end;
       self#visit_ty scope output_ty;
       (* Visit the patterns *)
-      List.iter (self#visit_typed_pattern scope) inputs;
+      List.iter (self#visit_tpattern scope) inputs;
       (* Enter the inner expressions *)
       let scope' = scope + 1 in
       self#visit_texpression scope' loop_body
@@ -154,7 +154,7 @@ class ['self] scoped_map_expression =
               (List.map
                  (fun (b : match_branch) ->
                    let { pat; branch } = b in
-                   let pat = self#visit_typed_pattern scope pat in
+                   let pat = self#visit_tpattern scope pat in
                    let branch = self#visit_texpression (scope + 1) branch in
                    { pat; branch })
                  branches)
@@ -163,14 +163,14 @@ class ['self] scoped_map_expression =
 
     method! visit_Let scope monadic pat bound next =
       let scope' = scope + 1 in
-      let pat = self#visit_typed_pattern scope pat in
+      let pat = self#visit_tpattern scope pat in
       let bound = self#visit_texpression scope bound in
       let next = self#visit_texpression scope' next in
       Let (monadic, pat, bound, next)
 
     method! visit_Lambda scope pat body =
       let scope' = scope + 1 in
-      let pat = self#visit_typed_pattern scope pat in
+      let pat = self#visit_tpattern scope pat in
       let body = self#visit_texpression scope' body in
       Lambda (pat, body)
 
@@ -180,7 +180,7 @@ class ['self] scoped_map_expression =
       let fun_end = self#visit_texpression scope fun_end in
       let output_ty = self#visit_ty scope output_ty in
       (* Visit the patterns *)
-      let inputs = List.map (self#visit_typed_pattern scope) inputs in
+      let inputs = List.map (self#visit_tpattern scope) inputs in
       (* Enter the inner expressions *)
       let scope' = scope + 1 in
       let loop_body = self#visit_texpression scope' loop_body in
@@ -225,7 +225,7 @@ let compute_literal_type (cv : literal) : literal_type =
 
 let fvar_get_id (v : fvar) : fvar_id = v.id
 
-let mk_typed_pattern_from_literal (cv : literal) : typed_pattern =
+let mk_tpattern_from_literal (cv : literal) : tpattern =
   let ty = TLiteral (compute_literal_type cv) in
   { value = PConstant cv; ty }
 
@@ -392,33 +392,33 @@ let is_cvar (e : texpression) : bool =
   | CVar _ -> true
   | _ -> false
 
-let is_pat_open (p : typed_pattern) : bool =
+let is_pat_open (p : tpattern) : bool =
   match p.value with
   | POpen _ -> true
   | _ -> false
 
-let as_pat_open span (p : typed_pattern) : fvar * mplace option =
+let as_pat_open span (p : tpattern) : fvar * mplace option =
   match p.value with
   | POpen (v, pm) -> (v, pm)
   | _ -> [%craise] span "Not an open binder"
 
-let as_pat_open_fvar_id span (p : typed_pattern) : fvar_id =
+let as_pat_open_fvar_id span (p : tpattern) : fvar_id =
   (fst (as_pat_open span p)).id
 
-let as_opt_pat_bound (p : typed_pattern) : (var * mplace option) option =
+let as_opt_pat_bound (p : tpattern) : (var * mplace option) option =
   match p.value with
   | PBound (v, mp) -> Some (v, mp)
   | _ -> None
 
-let as_pat_bound (span : Meta.span) (p : typed_pattern) : var * mplace option =
+let as_pat_bound (span : Meta.span) (p : tpattern) : var * mplace option =
   match as_opt_pat_bound p with
   | None -> [%craise] span "Not a var"
   | Some (v, mp) -> (v, mp)
 
-let is_pat_bound (p : typed_pattern) : bool =
+let is_pat_bound (p : tpattern) : bool =
   Option.is_some (as_opt_pat_bound p)
 
-let as_opt_pat_tuple (p : typed_pattern) : typed_pattern list option =
+let as_opt_pat_tuple (p : tpattern) : tpattern list option =
   match p with
   | {
    value = PAdt { variant_id = None; field_values };
@@ -427,23 +427,23 @@ let as_opt_pat_tuple (p : typed_pattern) : typed_pattern list option =
   | _ -> None
 
 (** Replace all the dummy variables in a pattern with free variables *)
-let typed_pattern_replace_dummy_vars_with_free_vars
-    (fresh_fvar_id : unit -> fvar_id) (p : typed_pattern) : typed_pattern =
+let tpattern_replace_dummy_vars_with_free_vars
+    (fresh_fvar_id : unit -> fvar_id) (p : tpattern) : tpattern =
   let visitor =
     object
-      inherit [_] map_typed_pattern as super
+      inherit [_] map_tpattern as super
 
-      method! visit_typed_pattern env p =
+      method! visit_tpattern env p =
         match p.value with
         | PDummy ->
             let value = { id = fresh_fvar_id (); basename = None; ty = p.ty } in
             { p with value = POpen (value, None) }
-        | _ -> super#visit_typed_pattern env p
+        | _ -> super#visit_tpattern env p
     end
   in
-  visitor#visit_typed_pattern () p
+  visitor#visit_tpattern () p
 
-let is_pat_tuple (p : typed_pattern) : bool =
+let is_pat_tuple (p : tpattern) : bool =
   Option.is_some (as_opt_pat_tuple p)
 
 let is_global (e : texpression) : bool =
@@ -708,16 +708,16 @@ let mk_texpression_from_fvar (v : fvar) : texpression =
   let ty = v.ty in
   { e; ty }
 
-let mk_typed_pattern_from_fvar (v : fvar) (mp : mplace option) : typed_pattern =
+let mk_tpattern_from_fvar (v : fvar) (mp : mplace option) : tpattern =
   let value = POpen (v, mp) in
   let ty = v.ty in
   { value; ty }
 
-let mk_dummy_pattern (ty : ty) : typed_pattern =
+let mk_dummy_pattern (ty : ty) : tpattern =
   let value = PDummy in
   { value; ty }
 
-let is_dummy_pattern (p : typed_pattern) : bool =
+let is_dummy_pattern (p : tpattern) : bool =
   match p.value with
   | PDummy -> true
   | _ -> false
@@ -739,11 +739,11 @@ let mk_opt_mplace_texpression (mp : mplace option) (e : texpression) :
 (** Make a "simplified" tuple value from a list of values:
     - if there is exactly one value, just return it
     - if there is > one value: wrap them in a tuple *)
-let mk_simpl_tuple_pattern (vl : typed_pattern list) : typed_pattern =
+let mk_simpl_tuple_pattern (vl : tpattern list) : tpattern =
   match vl with
   | [ v ] -> v
   | _ ->
-      let tys = List.map (fun (v : typed_pattern) -> v.ty) vl in
+      let tys = List.map (fun (v : tpattern) -> v.ty) vl in
       let ty = TAdt (TTuple, mk_generic_args_from_types tys) in
       let value = PAdt { variant_id = None; field_values = vl } in
       { value; ty }
@@ -766,7 +766,7 @@ let mk_simpl_tuple_texpression (span : Meta.span) (vl : texpression list) :
       mk_apps span cons vl
 
 let mk_adt_pattern (adt_ty : ty) (variant_id : VariantId.id option)
-    (vl : typed_pattern list) : typed_pattern =
+    (vl : tpattern list) : tpattern =
   let value = PAdt { variant_id; field_values = vl } in
   { value; ty = adt_ty }
 
@@ -856,8 +856,8 @@ let mk_result_ok_texpression (span : Meta.span) (v : texpression) : texpression
   mk_app span cons v
 
 (** Create a [Fail err] pattern which captures the error *)
-let mk_result_fail_pattern (error_pat : pattern) (ty : ty) : typed_pattern =
-  let error_pat : typed_pattern = { value = error_pat; ty = mk_error_ty } in
+let mk_result_fail_pattern (error_pat : pattern) (ty : ty) : tpattern =
+  let error_pat : tpattern = { value = error_pat; ty = mk_error_ty } in
   let ty = TAdt (TBuiltin TResult, mk_generic_args_from_types [ ty ]) in
   let value =
     PAdt { variant_id = Some result_fail_id; field_values = [ error_pat ] }
@@ -865,11 +865,11 @@ let mk_result_fail_pattern (error_pat : pattern) (ty : ty) : typed_pattern =
   { value; ty }
 
 (** Create a [Fail _] pattern (we ignore the error) *)
-let mk_result_fail_pattern_ignore_error (ty : ty) : typed_pattern =
+let mk_result_fail_pattern_ignore_error (ty : ty) : tpattern =
   let error_pat : pattern = PDummy in
   mk_result_fail_pattern error_pat ty
 
-let mk_result_ok_pattern (v : typed_pattern) : typed_pattern =
+let mk_result_ok_pattern (v : tpattern) : tpattern =
   let ty = TAdt (TBuiltin TResult, mk_generic_args_from_types [ v.ty ]) in
   let value = PAdt { variant_id = Some result_ok_id; field_values = [ v ] } in
   { value; ty }
@@ -892,7 +892,7 @@ let mk_fuel_texpression (id : FVarId.id) : texpression =
   { e = FVar id; ty = mk_fuel_ty }
 
 (** Convert an **open** pattern to an expression *)
-let rec typed_pattern_to_texpression (span : Meta.span) (pat : typed_pattern) :
+let rec tpattern_to_texpression (span : Meta.span) (pat : tpattern) :
     texpression option =
   let e_opt =
     match pat.value with
@@ -902,7 +902,7 @@ let rec typed_pattern_to_texpression (span : Meta.span) (pat : typed_pattern) :
     | PDummy -> None
     | PAdt av ->
         let fields =
-          List.map (typed_pattern_to_texpression span) av.field_values
+          List.map (tpattern_to_texpression span) av.field_values
         in
         if List.mem None fields then None
         else
@@ -930,11 +930,11 @@ let rec typed_pattern_to_texpression (span : Meta.span) (pat : typed_pattern) :
 
 (** Open a typed pattern by introducing fresh free variables for the bound
     variables. *)
-let open_typed_pattern (span : Meta.span) (fresh_fvar_id : var -> fvar_id)
-    (pat : typed_pattern) : typed_pattern =
+let open_tpattern (span : Meta.span) (fresh_fvar_id : var -> fvar_id)
+    (pat : tpattern) : tpattern =
   let visitor =
     object
-      inherit [_] map_typed_pattern
+      inherit [_] map_tpattern
       method! visit_POpen _ _ = [%internal_error] span
 
       method! visit_PBound _ v m =
@@ -943,20 +943,20 @@ let open_typed_pattern (span : Meta.span) (fresh_fvar_id : var -> fvar_id)
         POpen ({ id; basename; ty }, m)
     end
   in
-  visitor#visit_typed_pattern () pat
+  visitor#visit_tpattern () pat
 
 (** Close a list of typed patterns by replacing their free variables with bound
     variables. We also return the map from free variable ids to bound variables.
 
     We use this when handling function bodies: the list of type patterns is the
     list of input variables, that we treat as a single binder group. *)
-let close_typed_patterns (span : Meta.span) (patl : typed_pattern list) :
-    BVarId.id FVarId.Map.t * typed_pattern list =
+let close_tpatterns (span : Meta.span) (patl : tpattern list) :
+    BVarId.id FVarId.Map.t * tpattern list =
   let _, fresh_bvar_id = BVarId.fresh_stateful_generator () in
   let map = ref FVarId.Map.empty in
   let visitor =
     object
-      inherit [_] map_typed_pattern
+      inherit [_] map_tpattern
 
       method! visit_POpen _ v m =
         let bid = fresh_bvar_id () in
@@ -967,14 +967,14 @@ let close_typed_patterns (span : Meta.span) (patl : typed_pattern list) :
       method! visit_PBound _ _ _ = [%internal_error] span
     end
   in
-  let patl = List.map (visitor#visit_typed_pattern ()) patl in
+  let patl = List.map (visitor#visit_tpattern ()) patl in
   (!map, patl)
 
 (** Close a typed pattern by replacing its free variables with bound variables.
     We also return the map from free variable ids to bound variables. *)
-let close_typed_pattern (span : Meta.span) (pat : typed_pattern) :
-    BVarId.id FVarId.Map.t * typed_pattern =
-  let map, patl = close_typed_patterns span [ pat ] in
+let close_tpattern (span : Meta.span) (pat : tpattern) :
+    BVarId.id FVarId.Map.t * tpattern =
+  let map, patl = close_tpatterns span [ pat ] in
   (map, List.hd patl)
 
 (** Open a binder in an expression.
@@ -984,8 +984,8 @@ let close_typed_pattern (span : Meta.span) (pat : typed_pattern) :
 
     We use this when handling function bodies: the list of type patterns is the
     list of input variables, that we treat as a single binder group. *)
-let open_binders (span : Meta.span) (patl : typed_pattern list)
-    (e : texpression) : typed_pattern list * texpression =
+let open_binders (span : Meta.span) (patl : tpattern list)
+    (e : texpression) : tpattern list * texpression =
   (* We start by introducing the free variables in the pattern *)
   (* The map from bound var ids to freshly introduced fvar ids *)
   let m = ref BVarId.Map.empty in
@@ -997,7 +997,7 @@ let open_binders (span : Meta.span) (patl : typed_pattern list)
     m := BVarId.Map.add bid fid !m;
     fid
   in
-  let patl = List.map (open_typed_pattern span fresh_fvar_id) patl in
+  let patl = List.map (open_tpattern span fresh_fvar_id) patl in
   (* We can now open the expression *)
   let visitor =
     object
@@ -1017,8 +1017,8 @@ let open_binders (span : Meta.span) (patl : typed_pattern list)
 
     Return the opened binder (where the bound variables have been replaced with
     fresh free variables).*)
-let open_binder (span : Meta.span) (pat : typed_pattern) (e : texpression) :
-    typed_pattern * texpression =
+let open_binder (span : Meta.span) (pat : tpattern) (e : texpression) :
+    tpattern * texpression =
   let patl, e = open_binders span [ pat ] e in
   (List.hd patl, e)
 
@@ -1029,9 +1029,9 @@ let open_binder (span : Meta.span) (pat : typed_pattern) (e : texpression) :
 
     We use this when handling function bodies: the list of type patterns is the
     list of input variables, that we treat as a single binder group. *)
-let close_binders_visitor (span : Meta.span) (patl : typed_pattern list) =
+let close_binders_visitor (span : Meta.span) (patl : tpattern list) =
   (* Close the pattern *)
-  let map, patl = close_typed_patterns span patl in
+  let map, patl = close_tpatterns span patl in
   (* Use the map to update the expression *)
   (* We can now open the expression *)
   let visitor =
@@ -1058,8 +1058,8 @@ let close_binders_visitor (span : Meta.span) (patl : typed_pattern list) =
 
     We use this when handling function bodies: the list of type patterns is the
     list of input variables, that we treat as a single binder group. *)
-let close_binders (span : Meta.span) (patl : typed_pattern list)
-    (e : texpression) : typed_pattern list * texpression =
+let close_binders (span : Meta.span) (patl : tpattern list)
+    (e : texpression) : tpattern list * texpression =
   let patl, visitor = close_binders_visitor span patl in
   let e = visitor#visit_texpression 0 e in
   (patl, e)
@@ -1068,8 +1068,8 @@ let close_binders (span : Meta.span) (patl : typed_pattern list)
 
     Return the close binder (where the free variables have been replaced with
     bound variables). *)
-let close_binder (span : Meta.span) (pat : typed_pattern) (e : texpression) :
-    typed_pattern * texpression =
+let close_binder (span : Meta.span) (pat : tpattern) (e : texpression) :
+    tpattern * texpression =
   let patl, e = close_binders span [ pat ] e in
   (List.hd patl, e)
 
@@ -1078,7 +1078,7 @@ let close_binder (span : Meta.span) (pat : typed_pattern) (e : texpression) :
     We introduce free variables for the variables bound in the lets while doing
     so. *)
 let rec destruct_open_lets span (e : texpression) :
-    (bool * typed_pattern * texpression) list * texpression =
+    (bool * tpattern * texpression) list * texpression =
   match e.e with
   | Let (monadic, lv, re, next_e) ->
       let lv, next_e = open_binder span lv next_e in
@@ -1091,7 +1091,7 @@ let rec destruct_open_lets span (e : texpression) :
     We expect the binders to be open and *do not* introduce fresh free
     variables. *)
 let rec raw_destruct_lets (e : texpression) :
-    (bool * typed_pattern * texpression) list * texpression =
+    (bool * tpattern * texpression) list * texpression =
   match e.e with
   | Let (monadic, lv, re, next_e) ->
       let lets, last_e = raw_destruct_lets next_e in
@@ -1104,7 +1104,7 @@ let rec raw_destruct_lets (e : texpression) :
     We expect the binders to be open and do not introduce fresh free variables.
 *)
 let raw_destruct_lets_no_interleave (span : Meta.span) (e : texpression) :
-    (bool * typed_pattern * texpression) list * texpression =
+    (bool * tpattern * texpression) list * texpression =
   (* Find the "kind" of the first let (monadic or non-monadic) *)
   let m =
     match e.e with
@@ -1113,7 +1113,7 @@ let raw_destruct_lets_no_interleave (span : Meta.span) (e : texpression) :
   in
   (* Destruct the rest *)
   let rec destruct_lets (e : texpression) :
-      (bool * typed_pattern * texpression) list * texpression =
+      (bool * tpattern * texpression) list * texpression =
     match e.e with
     | Let (monadic, lv, re, next_e) ->
         if monadic = m then
@@ -1165,15 +1165,15 @@ let trait_impl_is_empty (trait_impl : trait_impl) : bool =
   in
   parent_trait_refs = [] && consts = [] && types = [] && methods = []
 
-let typed_pattern_is_open (pat : typed_pattern) : bool =
+let tpattern_is_open (pat : tpattern) : bool =
   let visitor =
     object
-      inherit [_] iter_typed_pattern
+      inherit [_] iter_tpattern
       method! visit_PBound _ _ = raise Utils.Found
     end
   in
   try
-    visitor#visit_typed_pattern () pat;
+    visitor#visit_tpattern () pat;
     true
   with Utils.Found -> false
 
@@ -1192,7 +1192,7 @@ let type_decl_from_type_id_is_tuple_struct (ctx : TypesAnalysis.type_infos)
 
     The typed pattern should be open (i.e., use free variables): this function
     will close the binders while making the lambda. *)
-let mk_closed_lambda span (x : typed_pattern) (e : texpression) : texpression =
+let mk_closed_lambda span (x : tpattern) (e : texpression) : texpression =
   let ty = TArrow (x.ty, e.ty) in
   let x, e = close_binder span x e in
   let e = Lambda (x, e) in
@@ -1210,8 +1210,8 @@ let close_loop span (loop : loop) : loop =
 
     The typed pattern should be open (i.e., use free variables) and will be left
     open. *)
-let mk_opened_lambda span (x : typed_pattern) (e : texpression) : texpression =
-  [%sanity_check] span (typed_pattern_is_open x);
+let mk_opened_lambda span (x : tpattern) (e : texpression) : texpression =
+  [%sanity_check] span (tpattern_is_open x);
   let ty = TArrow (x.ty, e.ty) in
   let e = Lambda (x, e) in
   { e; ty }
@@ -1220,11 +1220,11 @@ let mk_opened_lambda span (x : typed_pattern) (e : texpression) : texpression =
 
     The typed pattern should be open (i.e., use free variables): this function
     will close the binders while making the lambda. *)
-let mk_closed_lambdas span (xl : typed_pattern list) (e : texpression) :
+let mk_closed_lambdas span (xl : tpattern list) (e : texpression) :
     texpression =
   List.fold_right (mk_closed_lambda span) xl e
 
-let mk_opened_lambdas span (xl : typed_pattern list) (e : texpression) :
+let mk_opened_lambdas span (xl : tpattern list) (e : texpression) :
     texpression =
   List.fold_right (mk_opened_lambda span) xl e
 
@@ -1258,7 +1258,7 @@ let mk_opened_lambdas_from_fvars span (vars : fvar list)
 
     We introduce free variables for the variables bound in the lambdas while
     doing so. *)
-let rec open_lambdas span (e : texpression) : typed_pattern list * texpression =
+let rec open_lambdas span (e : texpression) : tpattern list * texpression =
   match e.e with
   | Lambda (pat, e) ->
       let pat, e = open_binder span pat e in
@@ -1270,7 +1270,7 @@ let rec open_lambdas span (e : texpression) : typed_pattern list * texpression =
 
     TODO: rename *)
 let rec raw_destruct_lambdas (e : texpression) :
-    typed_pattern list * texpression =
+    tpattern list * texpression =
   match e.e with
   | Lambda (pat, e) ->
       let pats, e = raw_destruct_lambdas e in
@@ -1284,7 +1284,7 @@ let opt_dest_tuple_texpression (e : texpression) : texpression list option =
     -> Some args
   | _ -> None
 
-let opt_dest_struct_pattern (pat : typed_pattern) : typed_pattern list option =
+let opt_dest_struct_pattern (pat : tpattern) : tpattern list option =
   match pat.value with
   | PAdt { variant_id = None; field_values } -> Some field_values
   | _ -> None
@@ -1351,7 +1351,7 @@ let texpression_has_bvars (e : texpression) : bool =
     false
   with Utils.Found -> true
 
-let typed_pattern_get_fvars (pat : typed_pattern) : FVarId.Set.t =
+let tpattern_get_fvars (pat : tpattern) : FVarId.Set.t =
   let vars = ref FVarId.Set.empty in
   let visitor =
     object
@@ -1359,7 +1359,7 @@ let typed_pattern_get_fvars (pat : typed_pattern) : FVarId.Set.t =
       method! visit_fvar_id _ var_id = vars := FVarId.Set.add var_id !vars
     end
   in
-  visitor#visit_typed_pattern () pat;
+  visitor#visit_tpattern () pat;
   !vars
 
 let mk_to_result_texpression (span : Meta.span) (e : texpression) : texpression
@@ -1476,7 +1476,7 @@ let compute_known_info (explicit : explicit_info)
   }
 
 (** This helper closes the binder *)
-let mk_closed_let span (monadic : bool) (lv : typed_pattern) (re : texpression)
+let mk_closed_let span (monadic : bool) (lv : tpattern) (re : texpression)
     (next_e : texpression) : texpression =
   let lv, next_e = close_binder span lv next_e in
   let e = Let (monadic, lv, re, next_e) in
@@ -1485,7 +1485,7 @@ let mk_closed_let span (monadic : bool) (lv : typed_pattern) (re : texpression)
 
 (** This helper closes the binders *)
 let mk_closed_lets span (monadic : bool)
-    (lets : (typed_pattern * texpression) list) (next_e : texpression) :
+    (lets : (tpattern * texpression) list) (next_e : texpression) :
     texpression =
   List.fold_right
     (fun (pat, value) (e : texpression) ->
@@ -1493,7 +1493,7 @@ let mk_closed_lets span (monadic : bool)
     lets next_e
 
 (** This helper closes the binder *)
-let mk_closed_checked_let file line span (monadic : bool) (lv : typed_pattern)
+let mk_closed_checked_let file line span (monadic : bool) (lv : tpattern)
     (re : texpression) (next_e : texpression) : texpression =
   let re_ty = if monadic then unwrap_result_ty span re.ty else re.ty in
   if !Config.type_check_pure_code then
@@ -1501,21 +1501,21 @@ let mk_closed_checked_let file line span (monadic : bool) (lv : typed_pattern)
   mk_closed_let span monadic lv re next_e
 
 (** This helper does not close the binder *)
-let mk_opened_let (monadic : bool) (lv : typed_pattern) (re : texpression)
+let mk_opened_let (monadic : bool) (lv : tpattern) (re : texpression)
     (next_e : texpression) : texpression =
   let e = Let (monadic, lv, re, next_e) in
   let ty = next_e.ty in
   { e; ty }
 
 (** This helper does not close the binders *)
-let mk_opened_lets (monadic : bool) (lets : (typed_pattern * texpression) list)
+let mk_opened_lets (monadic : bool) (lets : (tpattern * texpression) list)
     (next_e : texpression) : texpression =
   List.fold_right
     (fun (pat, value) (e : texpression) -> mk_opened_let monadic pat value e)
     lets next_e
 
 (** This helper does not close the binder *)
-let mk_opened_checked_let file line span (monadic : bool) (lv : typed_pattern)
+let mk_opened_checked_let file line span (monadic : bool) (lv : tpattern)
     (re : texpression) (next_e : texpression) : texpression =
   let re_ty = if monadic then unwrap_result_ty span re.ty else re.ty in
   if !Config.type_check_pure_code then
@@ -1523,29 +1523,29 @@ let mk_opened_checked_let file line span (monadic : bool) (lv : typed_pattern)
   mk_opened_let monadic lv re next_e
 
 (** This helper opens the binder *)
-let open_branch span (branch : match_branch) : typed_pattern * texpression =
+let open_branch span (branch : match_branch) : tpattern * texpression =
   let { pat; branch } = branch in
   open_binder span pat branch
 
 (** This helper closes the binder *)
-let close_branch span (pat : typed_pattern) (branch : texpression) :
+let close_branch span (pat : tpattern) (branch : texpression) :
     match_branch =
   let pat, branch = close_binder span pat branch in
   { pat; branch }
 
 (** This helper does not close the binder *)
-let mk_opened_branch (pat : typed_pattern) (branch : texpression) : match_branch
+let mk_opened_branch (pat : tpattern) (branch : texpression) : match_branch
     =
   { pat; branch }
 
 (** This helper closes the binder *)
 let mk_closed_checked_lets file line span (monadic : bool)
-    (lets : (typed_pattern * texpression) list) (next_e : texpression) :
+    (lets : (tpattern * texpression) list) (next_e : texpression) :
     texpression =
   if !Config.type_check_pure_code then
     Errors.sanity_check file line span
       (List.for_all
-         (fun ((pat, e) : typed_pattern * texpression) ->
+         (fun ((pat, e) : tpattern * texpression) ->
            let e_ty = if monadic then unwrap_result_ty span e.ty else e.ty in
            pat.ty = e_ty)
          lets);
@@ -1553,12 +1553,12 @@ let mk_closed_checked_lets file line span (monadic : bool)
 
 (** This helper does not close the binder *)
 let mk_opened_checked_lets file line span (monadic : bool)
-    (lets : (typed_pattern * texpression) list) (next_e : texpression) :
+    (lets : (tpattern * texpression) list) (next_e : texpression) :
     texpression =
   if !Config.type_check_pure_code then
     Errors.sanity_check file line span
       (List.for_all
-         (fun ((pat, e) : typed_pattern * texpression) ->
+         (fun ((pat, e) : tpattern * texpression) ->
            let e_ty = if monadic then unwrap_result_ty span e.ty else e.ty in
            pat.ty = e_ty)
          lets);
@@ -1572,7 +1572,7 @@ let wrap_in_match_fuel (span : Meta.span) (fuel0 : FVarId.id) (fuel : FVarId.id)
   let fuel0_var = mk_fuel_fvar fuel0 in
   let fuel0 = mk_texpression_from_fvar fuel0_var in
   let nfuel_var = mk_fuel_fvar fuel in
-  let nfuel_pat = mk_typed_pattern_from_fvar nfuel_var None in
+  let nfuel_pat = mk_tpattern_from_fvar nfuel_var None in
   let fail_branch =
     mk_result_fail_texpression_with_error_id span error_out_of_fuel_id body.ty
   in
@@ -1649,12 +1649,12 @@ let wrap_in_match_fuel (span : Meta.span) (fuel0 : FVarId.id) (fuel : FVarId.id)
       (* We should have checked the command line arguments before *)
       raise (Failure "Unexpected")
 
-let mk_closed_fun_body span (inputs : typed_pattern list) (body : texpression) :
+let mk_closed_fun_body span (inputs : tpattern list) (body : texpression) :
     fun_body =
   let inputs, body = close_binders span inputs body in
   { inputs; body }
 
-let open_fun_body span (body : fun_body) : typed_pattern list * texpression =
+let open_fun_body span (body : fun_body) : tpattern list * texpression =
   let { inputs; body } = body in
   open_binders span inputs body
 
@@ -1686,7 +1686,7 @@ class virtual ['self] open_close_all_visitor =
 
     method! visit_Lambda env pat inner =
       self#start_scope env;
-      let pat = self#visit_typed_pattern env pat in
+      let pat = self#visit_tpattern env pat in
       self#push_scope env;
       let inner = self#visit_texpression env inner in
       self#pop_scope env;
@@ -1695,7 +1695,7 @@ class virtual ['self] open_close_all_visitor =
     method! visit_Let env monadic pat bound next =
       let bound = self#visit_texpression env bound in
       self#start_scope env;
-      let pat = self#visit_typed_pattern env pat in
+      let pat = self#visit_tpattern env pat in
       self#push_scope env;
       let next = self#visit_texpression env next in
       self#pop_scope env;
@@ -1704,7 +1704,7 @@ class virtual ['self] open_close_all_visitor =
     method! visit_match_branch env branch =
       let { pat; branch } : match_branch = branch in
       self#start_scope env;
-      let pat = self#visit_typed_pattern env pat in
+      let pat = self#visit_tpattern env pat in
       self#push_scope env;
       let branch = self#visit_texpression env branch in
       self#pop_scope env;
@@ -1713,7 +1713,7 @@ class virtual ['self] open_close_all_visitor =
     method visit_fun_body env (fbody : fun_body) : fun_body =
       let { inputs; body } = fbody in
       self#start_scope env;
-      let inputs = List.map (self#visit_typed_pattern env) inputs in
+      let inputs = List.map (self#visit_tpattern env) inputs in
       self#push_scope env;
       let body = self#visit_texpression env body in
       self#pop_scope env;
@@ -1726,7 +1726,7 @@ class virtual ['self] open_close_all_visitor =
       let output_ty = self#visit_ty env output_ty in
       (* Visit the patterns to push a new scope *)
       self#start_scope env;
-      let inputs = List.map (self#visit_typed_pattern env) inputs in
+      let inputs = List.map (self#visit_tpattern env) inputs in
       self#push_scope env;
       (* Enter the inner expression *)
       let loop_body = self#visit_texpression env loop_body in

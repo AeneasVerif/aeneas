@@ -96,7 +96,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
                (fun (var, ty) -> (var : fvar).ty = ty)
                (List.combine inputs signature.inputs));
         let inputs =
-          List.map (fun v -> mk_typed_pattern_from_fvar v None) inputs
+          List.map (fun v -> mk_tpattern_from_fvar v None) inputs
         in
         Some (mk_closed_fun_body def.item_meta.span inputs body)
   in

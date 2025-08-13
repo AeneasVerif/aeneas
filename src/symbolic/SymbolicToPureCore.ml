@@ -367,9 +367,9 @@ let fun_decl_to_string (ctx : bs_ctx) (def : Pure.fun_decl) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
   PrintPure.fun_decl_to_string env def
 
-let typed_pattern_to_string (ctx : bs_ctx) (p : Pure.typed_pattern) : string =
+let tpattern_to_string (ctx : bs_ctx) (p : Pure.tpattern) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
-  PrintPure.typed_pattern_to_string ~span:ctx.span env p
+  PrintPure.tpattern_to_string ~span:ctx.span env p
 
 let abs_to_string ?(with_ended : bool = false) (ctx : bs_ctx) (abs : V.abs) :
     string =
