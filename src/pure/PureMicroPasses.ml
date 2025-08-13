@@ -3006,9 +3006,21 @@ let add_fuel_and_state (ctx : ctx) (trans : pure_fun_translation) :
     LoopId.Map.of_list
       (List.map (fun (f : fun_decl) -> (Option.get f.loop_id, f)) trans.loops)
   in
+
+  (* Add the fuel and the state *)
   let f = add_fuel_and_state_one ctx loops_map trans.f in
   let loops = List.map (add_fuel_and_state_one ctx loops_map) trans.loops in
 
+  (* Decompose the monadic let-bindings if necessary (Coq needs this) *)
+  let f, loops =
+    if !Config.decompose_monadic_let_bindings then
+      let f = decompose_monadic_let_bindings ctx f in
+      let loops = List.map (decompose_monadic_let_bindings ctx) loops in
+      (f, loops)
+    else (f, loops)
+  in
+
+  (* *)
   { f; loops }
 
 (** Perform the following transformation:
