@@ -1135,8 +1135,8 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
               let var_values = List.combine outputs consumed_values in
               let var_values =
                 List.filter_map
-                  (fun (var, v) ->
-                    match var.Pure.value with
+                  (fun ((var, v) : tpattern * _) ->
+                    match var.Pure.pat with
                     | POpen (var, _) -> Some (var, v)
                     | PBound _ -> [%internal_error] ctx.span
                     | _ -> None)
@@ -1283,7 +1283,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
       let branches = List.map translate_branch branches in
       let otherwise = translate_expr otherwise ctx in
       let pat_ty = TLiteral (TypesUtils.integer_as_literal int_ty) in
-      let otherwise_pat : tpattern = { value = PDummy; ty = pat_ty } in
+      let otherwise_pat : tpattern = { pat = PDummy; ty = pat_ty } in
       let otherwise : match_branch =
         { pat = otherwise_pat; branch = otherwise }
       in

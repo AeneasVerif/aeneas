@@ -227,7 +227,7 @@ let fvar_get_id (v : fvar) : fvar_id = v.id
 
 let mk_tpattern_from_literal (cv : literal) : tpattern =
   let ty = TLiteral (compute_literal_type cv) in
-  { value = PConstant cv; ty }
+  { pat = PConstant cv; ty }
 
 let mk_tag (msg : string) (next_e : texpr) : texpr =
   let e = Meta (Tag msg, next_e) in
@@ -392,12 +392,12 @@ let is_cvar (e : texpr) : bool =
   | _ -> false
 
 let is_pat_open (p : tpattern) : bool =
-  match p.value with
+  match p.pat with
   | POpen _ -> true
   | _ -> false
 
 let as_pat_open span (p : tpattern) : fvar * mplace option =
-  match p.value with
+  match p.pat with
   | POpen (v, pm) -> (v, pm)
   | _ -> [%craise] span "Not an open binder"
 
@@ -405,7 +405,7 @@ let as_pat_open_fvar_id span (p : tpattern) : fvar_id =
   (fst (as_pat_open span p)).id
 
 let as_opt_pat_bound (p : tpattern) : (var * mplace option) option =
-  match p.value with
+  match p.pat with
   | PBound (v, mp) -> Some (v, mp)
   | _ -> None
 
@@ -418,8 +418,8 @@ let is_pat_bound (p : tpattern) : bool = Option.is_some (as_opt_pat_bound p)
 
 let as_opt_pat_tuple (p : tpattern) : tpattern list option =
   match p with
-  | { value = PAdt { variant_id = None; field_values }; ty = TAdt (TTuple, _) }
-    -> Some field_values
+  | { pat = PAdt { variant_id = None; fields }; ty = TAdt (TTuple, _) } ->
+      Some fields
   | _ -> None
 
 (** Replace all the dummy variables in a pattern with free variables *)
@@ -430,10 +430,10 @@ let tpattern_replace_dummy_vars_with_free_vars (fresh_fvar_id : unit -> fvar_id)
       inherit [_] map_tpattern as super
 
       method! visit_tpattern env p =
-        match p.value with
+        match p.pat with
         | PDummy ->
-            let value = { id = fresh_fvar_id (); basename = None; ty = p.ty } in
-            { p with value = POpen (value, None) }
+            let pat = { id = fresh_fvar_id (); basename = None; ty = p.ty } in
+            { p with pat = POpen (pat, None) }
         | _ -> super#visit_tpattern env p
     end
   in
@@ -699,16 +699,16 @@ let mk_texpr_from_fvar (v : fvar) : texpr =
   { e; ty }
 
 let mk_tpattern_from_fvar (v : fvar) (mp : mplace option) : tpattern =
-  let value = POpen (v, mp) in
+  let pat = POpen (v, mp) in
   let ty = v.ty in
-  { value; ty }
+  { pat; ty }
 
 let mk_dummy_pattern (ty : ty) : tpattern =
-  let value = PDummy in
-  { value; ty }
+  let pat = PDummy in
+  { pat; ty }
 
 let is_dummy_pattern (p : tpattern) : bool =
-  match p.value with
+  match p.pat with
   | PDummy -> true
   | _ -> false
 
@@ -733,8 +733,8 @@ let mk_simpl_tuple_pattern (vl : tpattern list) : tpattern =
   | _ ->
       let tys = List.map (fun (v : tpattern) -> v.ty) vl in
       let ty = TAdt (TTuple, mk_generic_args_from_types tys) in
-      let value = PAdt { variant_id = None; field_values = vl } in
-      { value; ty }
+      let pat = PAdt { variant_id = None; fields = vl } in
+      { pat; ty }
 
 (** Similar to {!mk_simpl_tuple_pattern} *)
 let mk_simpl_tuple_texpr (span : Meta.span) (vl : texpr list) : texpr =
@@ -754,8 +754,8 @@ let mk_simpl_tuple_texpr (span : Meta.span) (vl : texpr list) : texpr =
 
 let mk_adt_pattern (adt_ty : ty) (variant_id : VariantId.id option)
     (vl : tpattern list) : tpattern =
-  let value = PAdt { variant_id; field_values = vl } in
-  { value; ty = adt_ty }
+  let pat = PAdt { variant_id; fields = vl } in
+  { pat; ty = adt_ty }
 
 let mk_adt_value (span : span) (adt_ty : ty) (variant_id : VariantId.id option)
     (fields : texpr list) : texpr =
@@ -842,12 +842,10 @@ let mk_result_ok_texpr (span : Meta.span) (v : texpr) : texpr =
 
 (** Create a [Fail err] pattern which captures the error *)
 let mk_result_fail_pattern (error_pat : pattern) (ty : ty) : tpattern =
-  let error_pat : tpattern = { value = error_pat; ty = mk_error_ty } in
+  let error_pat : tpattern = { pat = error_pat; ty = mk_error_ty } in
   let ty = TAdt (TBuiltin TResult, mk_generic_args_from_types [ ty ]) in
-  let value =
-    PAdt { variant_id = Some result_fail_id; field_values = [ error_pat ] }
-  in
-  { value; ty }
+  let pat = PAdt { variant_id = Some result_fail_id; fields = [ error_pat ] } in
+  { pat; ty }
 
 (** Create a [Fail _] pattern (we ignore the error) *)
 let mk_result_fail_pattern_ignore_error (ty : ty) : tpattern =
@@ -856,8 +854,8 @@ let mk_result_fail_pattern_ignore_error (ty : ty) : tpattern =
 
 let mk_result_ok_pattern (v : tpattern) : tpattern =
   let ty = TAdt (TBuiltin TResult, mk_generic_args_from_types [ v.ty ]) in
-  let value = PAdt { variant_id = Some result_ok_id; field_values = [ v ] } in
-  { value; ty }
+  let pat = PAdt { variant_id = Some result_ok_id; fields = [ v ] } in
+  { pat; ty }
 
 let opt_unmeta_mplace (e : texpr) : mplace option * texpr =
   match e.e with
@@ -877,13 +875,13 @@ let mk_fuel_texpr (id : FVarId.id) : texpr = { e = FVar id; ty = mk_fuel_ty }
 (** Convert an **open** pattern to an expression *)
 let rec tpattern_to_texpr (span : Meta.span) (pat : tpattern) : texpr option =
   let e_opt =
-    match pat.value with
+    match pat.pat with
     | PConstant pv -> Some (Const pv)
     | POpen (v, _) -> Some (FVar v.id)
     | PBound (_, _) -> [%internal_error] span
     | PDummy -> None
     | PAdt av ->
-        let fields = List.map (tpattern_to_texpr span) av.field_values in
+        let fields = List.map (tpattern_to_texpr span) av.fields in
         if List.mem None fields then None
         else
           let fields_values = List.map (fun e -> Option.get e) fields in
@@ -1205,13 +1203,13 @@ let mk_opened_lambdas span (xl : tpattern list) (e : texpr) : texpr =
 let mk_closed_lambda_from_fvar span (var : fvar) (mp : mplace option)
     (e : texpr) : texpr =
   let pat = POpen (var, mp) in
-  let pat = { value = pat; ty = var.ty } in
+  let pat = { pat; ty = var.ty } in
   mk_closed_lambda span pat e
 
 let mk_opened_lambda_from_fvar span (var : fvar) (mp : mplace option)
     (e : texpr) : texpr =
   let pat = POpen (var, mp) in
-  let pat = { value = pat; ty = var.ty } in
+  let pat = { pat; ty = var.ty } in
   mk_opened_lambda span pat e
 
 let mk_closed_lambdas_from_fvars span (vars : fvar list)
@@ -1258,8 +1256,8 @@ let opt_dest_tuple_texpr (e : texpr) : texpr list option =
   | _ -> None
 
 let opt_dest_struct_pattern (pat : tpattern) : tpattern list option =
-  match pat.value with
-  | PAdt { variant_id = None; field_values } -> Some field_values
+  match pat.pat with
+  | PAdt { variant_id = None; fields } -> Some fields
   | _ -> None
 
 (** Destruct a [ret ...] expression *)

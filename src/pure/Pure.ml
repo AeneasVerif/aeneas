@@ -858,12 +858,9 @@ type pattern =
           [let (_, BVar) = v in BVar 0]. *)
   | PAdt of adt_pattern
 
-and adt_pattern = {
-  variant_id : variant_id option;
-  field_values : tpattern list;
-}
+and adt_pattern = { variant_id : variant_id option; fields : tpattern list }
 
-and tpattern = { value : pattern; ty : ty }
+and tpattern = { pat : pattern; ty : ty }
 [@@deriving
   show,
   ord,

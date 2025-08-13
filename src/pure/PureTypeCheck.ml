@@ -109,7 +109,7 @@ let tc_ctx_push_bvar (ctx : tc_ctx) (v : var) : tc_ctx =
 let rec check_tpattern_aux (span : Meta.span) (ctx : tc_ctx) (v : tpattern) :
     tc_ctx =
   [%ltrace tpattern_to_string ctx v];
-  match v.value with
+  match v.pat with
   | PConstant cv ->
       check_literal span cv (ty_as_literal span v.ty);
       ctx
@@ -139,7 +139,7 @@ let rec check_tpattern_aux (span : Meta.span) (ctx : tc_ctx) (v : tpattern) :
       List.fold_left
         (fun ctx (ty, v) -> check_value ctx ty v)
         ctx
-        (List.combine field_tys av.field_values)
+        (List.combine field_tys av.fields)
 
 let check_tpattern (span : Meta.span) (ctx : tc_ctx) (v : tpattern) : tc_ctx =
   tc_ctx_push_pbenv (check_tpattern_aux span (tc_ctx_start_pbenv ctx) v)
