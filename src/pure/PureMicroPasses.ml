@@ -1898,7 +1898,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
         let ignore_output = fwd_info.ignore_output in
 
         (* Generate the loop definition *)
-        let loop_fwd_effect_info = fwd_effect_info in
+        let loop_fwd_effect_info = { fwd_effect_info with is_rec = true } in
 
         let loop_fwd_sig_info : fun_sig_info =
           { effect_info = loop_fwd_effect_info; ignore_output }
@@ -2641,7 +2641,6 @@ let mk_fresh_fuel_var () : fvar =
 let add_fuel_and_state_one (ctx : ctx) (loops : fun_decl LoopId.Map.t)
     (def : fun_decl) : fun_decl =
   [%ldebug fun_decl_to_string ctx def];
-
   let span = def.item_meta.span in
   (* Open the binders - this is more convenient *)
   reset_fvar_id_counter ();
@@ -2712,101 +2711,268 @@ let add_fuel_and_state_one (ctx : ctx) (loops : fun_decl LoopId.Map.t)
     (e, state'_pat, state'_expr)
   in
 
+  (* A small helper: return (can_diverge, stateful) *)
+  let get_app_effect (e : texpression) : bool * bool =
+    let f, args = destruct_apps e in
+    match f.e with
+    | Qualif { id = FunOrOp (Fun (FromLlbc (FunId (FRegular fid'), lp_id))); _ }
+      ->
+        (* Lookup the decl *)
+        let def' : fun_decl =
+          match lp_id with
+          | None -> FunDeclId.Map.find fid' ctx.fun_decls
+          | Some lp_id ->
+              [%sanity_check] span (fid' = def.def_id);
+              LoopId.Map.find lp_id loops
+        in
+        (* This should be a full application *)
+        [%sanity_check] span
+          (List.length args = List.length def'.signature.inputs);
+
+        (* Add the fuel and the state parameters. *)
+        let effect' = def'.signature.fwd_info.effect_info in
+        (effect'.can_diverge, effect'.stateful)
+    | _ -> (false, false)
+  in
+
+  (* A small helper: returns true if the expression is stateful *)
+  let rec expr_is_stateful (e : texpression) : bool =
+    match e.e with
+    | FVar _ | BVar _ | CVar _ | Const _ | StructUpdate _ -> false
+    | App _ | Qualif _ ->
+        let _, stateful = get_app_effect e in
+        stateful
+    | Lambda _ -> false
+    | Let (_, _, re, next) ->
+        let _, stateful = get_app_effect re in
+        stateful || expr_is_stateful next
+    | Switch (_, If (e1, e2)) -> expr_is_stateful e1 || expr_is_stateful e2
+    | Switch (_, Match branches) ->
+        List.exists
+          (fun (b : match_branch) -> expr_is_stateful b.branch)
+          branches
+    | Loop _ ->
+        (* Loops should have been eliminated *)
+        [%internal_error] span
+    | Meta (_, e') -> expr_is_stateful e'
+    | EError _ -> false
+  in
+
   (* Update the body *)
-  let visitor =
-    object (self)
-      inherit [_] map_expression as super
-
-      method! visit_texpression (fuel, state) e =
-        [%sanity_check] span ((not effect.stateful) || Option.is_some state);
-
-        (* Is it a function/loop call? Note that the arguments themselves should not be stateful *)
+  let rec update (fuel : texpression option) (state : texpression option)
+      (e : texpression) : texpression =
+    match e.e with
+    | FVar _ | BVar _ | CVar _ | Const _ -> e
+    | App _ | Qualif _ ->
+        (* We treat function calls, [Result::ok], [Result::fail] here *)
         let f, args = destruct_apps e in
-        let f = super#visit_texpression (fuel, state) f in
-        let args = List.map (self#visit_texpression (fuel, state)) args in
-        match f.e with
-        | Qualif
-            { id = FunOrOp (Fun (FromLlbc (FunId (FRegular fid'), lp_id))); _ }
-          ->
-            (* Lookup the decl *)
-            let def' : fun_decl =
-              match lp_id with
-              | None -> FunDeclId.Map.find fid' ctx.fun_decls
-              | Some lp_id ->
-                  [%sanity_check] span (fid' = def.def_id);
-                  LoopId.Map.find lp_id loops
-            in
-            (* This should be a full application *)
-            [%sanity_check] span
-              (List.length args = List.length def'.signature.inputs);
+        (* The arguments *must* be pure (which means they can not be stateful
+         nor divergent) *)
+        let args = List.map (update None None) args in
+        (* *)
+        begin
+          match f.e with
+          | Qualif
+              {
+                id = FunOrOp (Fun (FromLlbc (FunId (FRegular fid'), lp_id)));
+                _;
+              } ->
+              (* Lookup the decl *)
+              let def' : fun_decl =
+                match lp_id with
+                | None -> FunDeclId.Map.find fid' ctx.fun_decls
+                | Some lp_id ->
+                    [%sanity_check] span (fid' = def.def_id);
+                    LoopId.Map.find lp_id loops
+              in
+              (* This should be a full application *)
+              [%sanity_check] span
+                (List.length args = List.length def'.signature.inputs);
 
-            (* Add the fuel and the state parameters. *)
-            let effect' = def'.signature.fwd_info.effect_info in
-            let fuel = if effect'.can_diverge then fuel else None in
-            let state = if effect'.stateful then state else None in
-            let call, _, _ = update_call f args fuel state in
-            call
-        | _ -> mk_apps span f args
-
-      method! visit_Let (fuel, state) monadic lv re next =
-        (* Is it a function/loop call? *)
-        let f, args = destruct_apps re in
-        let f = super#visit_texpression (fuel, state) f in
-        let args = List.map (self#visit_texpression (fuel, state)) args in
-        match f.e with
-        | Qualif
-            { id = FunOrOp (Fun (FromLlbc (FunId (FRegular fid'), lp_id))); _ }
-          ->
-            (* Lookup the decl *)
-            let def' : fun_decl =
-              match lp_id with
-              | None -> FunDeclId.Map.find fid' ctx.fun_decls
-              | Some lp_id ->
-                  [%sanity_check] span (fid' = def.def_id);
-                  LoopId.Map.find lp_id loops
-            in
-            (* This should be a full application *)
-            [%sanity_check] span
-              (List.length args = List.length def'.signature.inputs);
-
-            (* Add the fuel and the state parameters. *)
-            let call, state_pat, nstate =
+              (* Add the fuel and the state parameters. *)
               let effect' = def'.signature.fwd_info.effect_info in
+              [%sanity_check] span
+                ((not effect'.can_diverge) || (not !Config.use_fuel)
+               || Option.is_some fuel);
               let fuel = if effect'.can_diverge then fuel else None in
-              let state = if effect'.stateful then state else None in
-
-              [%sanity_check] span ((not effect'.stateful) || effect.stateful);
               [%sanity_check] span
                 ((not effect'.stateful) || Option.is_some state);
+              let state = if effect'.stateful then state else None in
+              let call, _, _ = update_call f args fuel state in
+              call
+          | Qualif
+              {
+                id =
+                  AdtCons
+                    { adt_id = TBuiltin TResult; variant_id = Some variant_id }
+                  as id;
+                generics;
+              } -> begin
+              match state with
+              | Some state ->
+                  if variant_id = result_ok_id then (
+                    let input, output = destruct_arrow span f.ty in
+                    [%sanity_check] span (List.length generics.types = 1);
+                    let arg_ty = mk_simpl_tuple_ty [ mk_state_ty; input ] in
+                    let output = dest_result_ty span output in
+                    let output = mk_simpl_tuple_ty [ mk_state_ty; output ] in
+                    let output = mk_result_ty output in
+                    let qualif =
+                      { id; generics = { generics with types = [ arg_ty ] } }
+                    in
+                    let f =
+                      { e = Qualif qualif; ty = mk_arrow arg_ty output }
+                    in
+                    [%sanity_check] span (List.length args = 1);
+                    let arg = List.hd args in
+                    mk_app span f
+                      (mk_simpl_tuple_texpression span [ state; arg ]))
+                  else (
+                    [%sanity_check] span (variant_id = result_fail_id);
+                    (* Simply update the type *)
+                    let input, output = destruct_arrow span f.ty in
+                    [%sanity_check] span (List.length generics.types = 1);
+                    let output = dest_result_ty span output in
+                    let output = mk_simpl_tuple_ty [ mk_state_ty; output ] in
+                    let output = mk_result_ty output in
+                    [%sanity_check] span (List.length generics.types = 1);
+                    let qualif =
+                      {
+                        id;
+                        generics =
+                          {
+                            generics with
+                            types =
+                              [
+                                mk_simpl_tuple_ty
+                                  [ mk_state_ty; List.hd generics.types ];
+                              ];
+                          };
+                      }
+                    in
+                    let f = { e = Qualif qualif; ty = mk_arrow input output } in
+                    [%sanity_check] span (List.length args = 1);
+                    let arg = List.hd args in
+                    mk_app span f
+                      (mk_simpl_tuple_texpression span [ state; arg ]))
+              | None -> mk_apps span f args
+            end
+          | _ -> mk_apps span f args
+        end
+    | Lambda _ ->
+        (* Destruct the lambda. The expression itself is not stateful, but
+         the body of the lambda might be.
 
-              update_call f args fuel state
-            in
-            (* Update the state to use for the remaining calls, if and only if
-               the current call introduced a new state *)
-            let state =
-              match nstate with
-              | None -> state
-              | Some nstate -> Some nstate
-            in
+         For now we check that it is not: one issue is that if the body
+         is stateful, we have to update its call sites.
+      *)
+        let _, body = raw_destruct_lambdas e in
+        [%cassert] span (not (expr_is_stateful body)) "Unimplemented";
+        e
+    | Let (monadic, lv, re, next) ->
+        (* Is it a function/loop call? *)
+        let f, args = destruct_apps re in
+        begin
+          match f.e with
+          | Qualif
+              {
+                id = FunOrOp (Fun (FromLlbc (FunId (FRegular fid'), lp_id)));
+                _;
+              } ->
+              (* Lookup the decl *)
+              let def' : fun_decl =
+                match lp_id with
+                | None -> FunDeclId.Map.find fid' ctx.fun_decls
+                | Some lp_id ->
+                    [%sanity_check] span (fid' = def.def_id);
+                    LoopId.Map.find lp_id loops
+              in
+              (* This should be a full application *)
+              [%sanity_check] span
+                (List.length args = List.length def'.signature.inputs);
 
-            (* Update the let binding *)
-            let next = self#visit_texpression (fuel, state) next in
-            Let
-              ( monadic,
-                mk_simpl_tuple_pattern (Option.to_list state_pat @ [ lv ]),
-                call,
-                next )
-        | _ ->
-            let next = self#visit_texpression (fuel, state) next in
-            Let (monadic, lv, mk_apps span f args, next)
-    end
+              (* Add the fuel and the state parameters. *)
+              let call, state_pat, nstate =
+                let effect' = def'.signature.fwd_info.effect_info in
+                let fuel' = if effect'.can_diverge then fuel else None in
+                let state' = if effect'.stateful then state else None in
+
+                [%sanity_check] span ((not effect'.stateful) || effect.stateful);
+                [%sanity_check] span
+                  ((not effect'.stateful) || Option.is_some state');
+                [%sanity_check] span
+                  ((not effect'.can_diverge) || (not !Config.use_fuel)
+                 || Option.is_some fuel');
+
+                update_call f args fuel' state'
+              in
+              (* Update the state to use for the remaining calls, if and only if
+                   the current call introduced a new state *)
+              let state =
+                match nstate with
+                | None -> state
+                | Some nstate -> Some nstate
+              in
+
+              (* Update the let binding *)
+              let next = update fuel state next in
+              mk_opened_let monadic
+                (mk_simpl_tuple_pattern (Option.to_list state_pat @ [ lv ]))
+                call next
+          | _ ->
+              (* Check if the bound expression is stateful: if yes, we need to
+                 introduce a new state *)
+              let re_is_stateful = expr_is_stateful re in
+              [%sanity_check] span ((not re_is_stateful) || Option.is_some state);
+              let re =
+                update fuel (if re_is_stateful then state else None) re
+              in
+              if re_is_stateful then
+                let state' = mk_fresh_state_var () in
+                let state'_expr = mk_texpression_from_fvar state' in
+                let state'_pat = mk_typed_pattern_from_fvar state' None in
+                let lv = mk_simpl_tuple_pattern [ state'_pat; lv ] in
+                let next = update fuel (Some state'_expr) next in
+                mk_opened_let monadic lv re next
+              else
+                let next = update fuel state next in
+                mk_opened_let monadic lv (mk_apps span f args) next
+        end
+    | Switch (scrut, If (e1, e2)) ->
+        (* The scrutinee must be pure *)
+        let scrut = update None None scrut in
+        (* *)
+        let e1 = update fuel state e1 in
+        let e2 = update fuel state e2 in
+        { e = Switch (scrut, If (e1, e2)); ty = e1.ty }
+    | Switch (scrut, Match branches) ->
+        (* The scrutinee must be pure *)
+        let scrut = update None None scrut in
+        (* *)
+        let branches =
+          List.map
+            (fun (b : match_branch) ->
+              { b with branch = update fuel state b.branch })
+            branches
+        in
+        (* *)
+        {
+          e = Switch (scrut, Match branches);
+          ty = (List.hd branches).branch.ty;
+        }
+    | Loop _ ->
+        (* Loops should have been eliminated by then *)
+        [%internal_error] span
+    | StructUpdate _ -> e
+    | Meta (m, e') -> mk_emeta m e'
+    | EError _ -> e
   in
   let body =
     Option.map
       (fun (body : fun_body) ->
         let { body; inputs } = body in
-        (* Explore the body *)
-        let body = visitor#visit_texpression (fuel_expr, state_expr) body in
+        (* Update the body *)
+        let body = update fuel_expr state_expr body in
         (* Wrap it in a match over the fuel if necessary *)
         let body, fuel_input =
           if effect.is_rec && !Config.use_fuel then
@@ -3098,8 +3264,6 @@ let filter_loop_inputs_explore_one_visitor (ctx : ctx)
     used := List.map (fun (vid', b) -> (vid', b || vid = vid')) !used
   in
 
-  (* Set the fuel as used *)
-  let sg_info = decl.signature.fwd_info in
   let visitor =
     object (self : 'self)
       inherit [_] iter_expression as super
@@ -3419,6 +3583,9 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
     (trans_funs : pure_fun_translation FunDeclId.Map.t)
     (builtin_sigs : fun_sig Builtin.BuiltinFunIdMap.t)
     (type_decls : type_decl TypeDeclId.Map.t) (def : fun_decl) : fun_decl =
+  [%ldebug
+    let fmt = trans_ctx_to_pure_fmt_env trans_ctx in
+    PrintPure.fun_decl_to_string fmt def];
   let span = def.item_meta.span in
   let fmt = trans_ctx_to_pure_fmt_env trans_ctx in
   let texpression_to_string (x : texpression) : string =
