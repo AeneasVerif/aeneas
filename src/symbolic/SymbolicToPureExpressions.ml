@@ -457,11 +457,6 @@ and translate_function_call_aux (call : S.call) (e : S.expression)
         (* Retrieve the effect information about this function (can fail,
          * takes a state as input, etc.) *)
         let effect_info = get_fun_effect_info ctx fid None None in
-        (* Depending on the function effects:
-           - add the fuel
-           - add the state input argument
-           - generate a fresh state variable for the returned state
-        *)
         (* Generate the variables for the backward functions returned by the forward
            function. *)
         let ctx, ignore_fwd_output, back_funs_map, back_funs =
@@ -1030,7 +1025,7 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
   *)
   (* First, retrieve the list of variables used for the inputs for the
    * backward function *)
-  let inputs = T.RegionGroupId.Map.find rg_id ctx.backward_inputs_no_state in
+  let inputs = T.RegionGroupId.Map.find rg_id ctx.backward_inputs in
   [%ltrace
     "Consumed inputs: " ^ Print.list_to_string (fvar_to_string ctx) inputs];
   (* Retrieve the values consumed upon ending the loans inside this
@@ -1099,7 +1094,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
          values consumed upon ending the abstraction (i.e., we don't use
          [abs_to_consumed]) *)
       let back_inputs_vars =
-        T.RegionGroupId.Map.find rg_id ctx.backward_inputs_no_state
+        T.RegionGroupId.Map.find rg_id ctx.backward_inputs
       in
       let inputs = List.map mk_texpression_from_fvar back_inputs_vars in
       (* Retrieve the values given back by this function *)
@@ -1441,25 +1436,18 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
 
   let translate_one_end ctx (bid : RegionGroupId.id option) =
     let ctx = { ctx with bid } in
-    (* Update the current state with the additional state received by the backward
-       function, if needs be, and lookup the proper expression *)
     let ctx, e, finish =
       match bid with
       | None ->
           (* We are translating the forward function - nothing to do *)
           (ctx, fwd_e, fun e -> e)
       | Some bid ->
-          (* We need to update the state, and wrap the expression in a
-             lambda, which introduces the additional inputs of the backward
-             function.
+          (* We need to wrap the expression in a lambda, which introduces the
+           additional inputs of the backward function.
           *)
           let ctx =
-            (* Introduce variables for the inputs and the state variable
-               and update the context.
-
-               We need to introduce fresh variables for the additional inputs,
-               because they are locally introduced in a lambda.
-            *)
+            (* We need to introduce fresh variables for the additional inputs,
+               because they are locally introduced in a lambda. *)
             let back_sg = RegionGroupId.Map.find bid ctx.sg.fun_ty.back_sg in
             let ctx, backward_inputs = fresh_vars back_sg.inputs ctx in
             (* Update the functions mk_return and mk_panic *)
@@ -1483,17 +1471,8 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
             let mk_panic =
               (* TODO: we should use a [Fail] function *)
               let mk_output output_ty =
-                if effect_info.stateful then
-                  (* Create the [Fail] value *)
-                  let ret_ty = mk_simpl_tuple_ty [ mk_state_ty; output_ty ] in
-                  let ret_v =
-                    mk_result_fail_texpression_with_error_id ctx.span
-                      error_failure_id ret_ty
-                  in
-                  ret_v
-                else
-                  mk_result_fail_texpression_with_error_id ctx.span
-                    error_failure_id output_ty
+                mk_result_fail_texpression_with_error_id ctx.span
+                  error_failure_id output_ty
               in
               let output =
                 mk_simpl_tuple_ty
@@ -1503,12 +1482,8 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
             in
             {
               ctx with
-              backward_inputs_no_state =
-                RegionGroupId.Map.add bid backward_inputs
-                  ctx.backward_inputs_no_state;
-              backward_inputs_with_state =
-                RegionGroupId.Map.add bid backward_inputs
-                  ctx.backward_inputs_with_state;
+              backward_inputs =
+                RegionGroupId.Map.add bid backward_inputs ctx.backward_inputs;
               mk_return = Some mk_return;
               mk_panic = Some mk_panic;
             }
@@ -1517,9 +1492,7 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
           let e = T.RegionGroupId.Map.find bid back_e in
           let finish e =
             (* Wrap in lambdas if necessary *)
-            let inputs =
-              RegionGroupId.Map.find bid ctx.backward_inputs_with_state
-            in
+            let inputs = RegionGroupId.Map.find bid ctx.backward_inputs in
             let places = List.map (fun _ -> None) inputs in
             mk_closed_lambdas_from_fvars ctx.span inputs places e
           in
@@ -1804,7 +1777,7 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
          We then remove all the span information from the body *before* calling
          {!PureMicroPasses.decompose_loops}.
       *)
-      (*mk_emeta_symbolic_assignments loop_info.input_vars org_args e*)
+      (*mk_emeta_symbolic_assignments loop_info.input_vars org_args*)
       e
 
 and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
@@ -1912,10 +1885,6 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
       in
       let output = mk_simpl_tuple_ty output in
       let effect_info = ctx.sg.fun_ty.fwd_info.effect_info in
-      let output =
-        if effect_info.stateful then mk_simpl_tuple_ty [ mk_state_ty; output ]
-        else output
-      in
       if effect_info.can_fail then mk_result_ty output else output
     in
     (back_info, output)
@@ -1980,7 +1949,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
       let output_ty = mk_simpl_tuple_ty tys in
       if effect_info.stateful then
         (* Create the [Fail] value *)
-        let ret_ty = mk_simpl_tuple_ty [ mk_state_ty; output_ty ] in
+        let ret_ty = output_ty in
         let ret_v =
           mk_result_fail_texpression_with_error_id ctx.span error_failure_id
             ret_ty

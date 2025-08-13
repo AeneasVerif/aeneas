@@ -824,17 +824,11 @@ let translate_fun_sig_from_decl_to_decomposed (decls_ctx : C.decls_ctx)
 
 let mk_output_ty_from_effect_info (effect_info : fun_effect_info) (ty : ty) : ty
     =
-  let output =
-    if effect_info.stateful then mk_simpl_tuple_ty [ mk_state_ty; ty ] else ty
-  in
-  if effect_info.can_fail then mk_result_ty output else output
+  if effect_info.can_fail then mk_result_ty ty else ty
 
 let mk_back_output_ty_from_effect_info (effect_info : fun_effect_info)
     (inputs : ty list) (ty : ty) : ty =
-  let output =
-    if effect_info.stateful then mk_simpl_tuple_ty [ mk_state_ty; ty ] else ty
-  in
-  if effect_info.can_fail && inputs <> [] then mk_result_ty output else output
+  if effect_info.can_fail && inputs <> [] then mk_result_ty ty else ty
 
 (** Compute the arrow types for all the backward functions.
 
