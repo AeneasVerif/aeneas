@@ -452,7 +452,8 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
                   equate out0 out1;
                   go_inner outputs
             in
-            go_inner outputs
+            go_inner outputs;
+            go outputs
       in
       go info.outputs)
     !loop_infos;
@@ -2628,6 +2629,222 @@ let lift_pure_function_calls =
   lift_expr_map_visitor_with_state lift_pure_function_calls_visitor
     FVarId.Map.empty
 
+let mk_fresh_state_var () : fvar =
+  let id = fresh_fvar_id () in
+  { id; basename = Some ConstStrings.state_basename; ty = mk_state_ty }
+
+let mk_fresh_fuel_var () : fvar =
+  let id = fresh_fvar_id () in
+  { id; basename = Some ConstStrings.fuel_basename; ty = mk_fuel_ty }
+
+(** Add fuel and state parameters, if necessary *)
+let add_fuel_and_state_one (ctx : ctx) (loops : fun_decl LoopId.Map.t)
+    (def : fun_decl) : fun_decl =
+  [%ldebug fun_decl_to_string ctx def];
+
+  let span = def.item_meta.span in
+  (* Open the binders - this is more convenient *)
+  reset_fvar_id_counter ();
+  let body = Option.map (open_all_fun_body span) def.body in
+
+  (* Introduce variables for the fuel and the state *)
+  let effect = def.signature.fwd_info.effect_info in
+  let fuel0 =
+    if effect.can_diverge && !Config.use_fuel then Some (mk_fresh_fuel_var ())
+    else None
+  in
+  let fuel =
+    if effect.can_diverge && !Config.use_fuel then Some (mk_fresh_fuel_var ())
+    else None
+  in
+  let fuel_expr = Option.map mk_texpression_from_fvar fuel in
+  let fuel_ty = Option.map (fun (v : fvar) -> v.ty) fuel in
+
+  let state = if effect.stateful then Some (mk_fresh_state_var ()) else None in
+  let state_expr = Option.map mk_texpression_from_fvar state in
+  let state_ty = Option.map (fun (v : fvar) -> v.ty) state in
+
+  (* Update the signature *)
+  let sg = def.signature in
+  let sg =
+    {
+      sg with
+      inputs = Option.to_list fuel_ty @ sg.inputs @ Option.to_list state_ty;
+      output =
+        (if effect.stateful then
+           let output = dest_result_ty span sg.output in
+           mk_result_ty (mk_simpl_tuple_ty [ mk_state_ty; output ])
+         else sg.output);
+    }
+  in
+  let def = { def with signature = sg } in
+
+  (* Small helper: update a call by adding the fuel and state parameters, return
+     the updated expession together with the new state *)
+  let update_call (f : texpression) (args : texpression list)
+      (fuel : texpression option) (state : texpression option) :
+      texpression * typed_pattern option * texpression option =
+    (* We need to update the type of the function *)
+    let inputs, output = destruct_arrows f.ty in
+    let fuel_ty = Option.map (fun (v : texpression) -> v.ty) fuel in
+    let state_ty = Option.map (fun (v : texpression) -> v.ty) state in
+    let inputs = Option.to_list fuel_ty @ inputs @ Option.to_list state_ty in
+    let output =
+      match state with
+      | None -> output
+      | Some state ->
+          let output = dest_result_ty span output in
+          mk_result_ty (mk_simpl_tuple_ty [ state.ty; output ])
+    in
+    let f = { f with ty = mk_arrows inputs output } in
+
+    (* Put everything together *)
+    let state' = Option.map (fun _ -> mk_fresh_state_var ()) state in
+    let state'_expr = Option.map mk_texpression_from_fvar state' in
+    let state'_pat =
+      Option.map (fun f -> mk_typed_pattern_from_fvar f None) state'
+    in
+    let e =
+      mk_apps span f (Option.to_list fuel @ args @ Option.to_list state)
+    in
+
+    (* Return *)
+    (e, state'_pat, state'_expr)
+  in
+
+  (* Update the body *)
+  let visitor =
+    object (self)
+      inherit [_] map_expression as super
+
+      method! visit_texpression (fuel, state) e =
+        [%sanity_check] span ((not effect.stateful) || Option.is_some state);
+
+        (* Is it a function/loop call? Note that the arguments themselves should not be stateful *)
+        let f, args = destruct_apps e in
+        let f = super#visit_texpression (fuel, state) f in
+        let args = List.map (self#visit_texpression (fuel, state)) args in
+        match f.e with
+        | Qualif
+            { id = FunOrOp (Fun (FromLlbc (FunId (FRegular fid'), lp_id))); _ }
+          ->
+            (* Lookup the decl *)
+            let def' : fun_decl =
+              match lp_id with
+              | None -> FunDeclId.Map.find fid' ctx.fun_decls
+              | Some lp_id ->
+                  [%sanity_check] span (fid' = def.def_id);
+                  LoopId.Map.find lp_id loops
+            in
+            (* This should be a full application *)
+            [%sanity_check] span
+              (List.length args = List.length def'.signature.inputs);
+
+            (* Add the fuel and the state parameters. *)
+            let effect' = def'.signature.fwd_info.effect_info in
+            let fuel = if effect'.can_diverge then fuel else None in
+            let state = if effect'.stateful then state else None in
+            let call, _, _ = update_call f args fuel state in
+            call
+        | _ -> mk_apps span f args
+
+      method! visit_Let (fuel, state) monadic lv re next =
+        (* Is it a function/loop call? *)
+        let f, args = destruct_apps re in
+        let f = super#visit_texpression (fuel, state) f in
+        let args = List.map (self#visit_texpression (fuel, state)) args in
+        match f.e with
+        | Qualif
+            { id = FunOrOp (Fun (FromLlbc (FunId (FRegular fid'), lp_id))); _ }
+          ->
+            (* Lookup the decl *)
+            let def' : fun_decl =
+              match lp_id with
+              | None -> FunDeclId.Map.find fid' ctx.fun_decls
+              | Some lp_id ->
+                  [%sanity_check] span (fid' = def.def_id);
+                  LoopId.Map.find lp_id loops
+            in
+            (* This should be a full application *)
+            [%sanity_check] span
+              (List.length args = List.length def'.signature.inputs);
+
+            (* Add the fuel and the state parameters. *)
+            let call, state_pat, nstate =
+              let effect' = def'.signature.fwd_info.effect_info in
+              let fuel = if effect'.can_diverge then fuel else None in
+              let state = if effect'.stateful then state else None in
+
+              [%sanity_check] span ((not effect'.stateful) || effect.stateful);
+              [%sanity_check] span
+                ((not effect'.stateful) || Option.is_some state);
+
+              update_call f args fuel state
+            in
+            (* Update the state to use for the remaining calls, if and only if
+               the current call introduced a new state *)
+            let state =
+              match nstate with
+              | None -> state
+              | Some nstate -> Some nstate
+            in
+
+            (* Update the let binding *)
+            let next = self#visit_texpression (fuel, state) next in
+            Let
+              ( monadic,
+                mk_simpl_tuple_pattern (Option.to_list state_pat @ [ lv ]),
+                call,
+                next )
+        | _ ->
+            let next = self#visit_texpression (fuel, state) next in
+            Let (monadic, lv, mk_apps span f args, next)
+    end
+  in
+  let body =
+    Option.map
+      (fun (body : fun_body) ->
+        let { body; inputs } = body in
+        (* Explore the body *)
+        let body = visitor#visit_texpression (fuel_expr, state_expr) body in
+        (* Wrap it in a match over the fuel if necessary *)
+        let body, fuel_input =
+          if effect.is_rec && !Config.use_fuel then
+            ( wrap_in_match_fuel span (Option.get fuel0).id (Option.get fuel).id
+                ~close:false body,
+              fuel0 )
+          else (body, fuel)
+        in
+        (* Update the inputs *)
+        let inputs =
+          let fuel_pat =
+            Option.map (fun f -> mk_typed_pattern_from_fvar f None) fuel_input
+          in
+          let state_pat =
+            Option.map (fun f -> mk_typed_pattern_from_fvar f None) state
+          in
+          Option.to_list fuel_pat @ inputs @ Option.to_list state_pat
+        in
+        (* *)
+        { body; inputs })
+      body
+  in
+
+  (* Close the binders *)
+  let body = Option.map (close_all_fun_body span) body in
+  { def with body }
+
+let add_fuel_and_state (ctx : ctx) (trans : pure_fun_translation) :
+    pure_fun_translation =
+  let loops_map =
+    LoopId.Map.of_list
+      (List.map (fun (f : fun_decl) -> (Option.get f.loop_id, f)) trans.loops)
+  in
+  let f = add_fuel_and_state_one ctx loops_map trans.f in
+  let loops = List.map (add_fuel_and_state_one ctx loops_map) trans.loops in
+
+  { f; loops }
+
 (** Perform the following transformation:
 
     {[
@@ -2693,15 +2910,15 @@ let merge_let_app_then_decompose_tuple =
   lift_expr_map_visitor_with_state merge_let_app_then_decompose_tuple_visitor
     FVarId.Map.empty
 
-let end_passes : (bool ref option * string * (ctx -> fun_decl -> fun_decl)) list
-    =
+let end_passes :
+    ((unit -> bool) option * string * (ctx -> fun_decl -> fun_decl)) list =
   [
     (* Convert the unit variables to [()] if they are used as right-values or
      * [_] if they are used as left values. *)
     (None, "unit_vars_to_unit", unit_vars_to_unit);
     (* Introduce [massert] - we do this early because it makes the AST nicer to
        read by removing indentation. *)
-    (Some Config.intro_massert, "intro_massert", intro_massert);
+    (Some (fun _ -> !Config.intro_massert), "intro_massert", intro_massert);
     (* Simplify the let-bindings which bind the fields of ADTs
        which only have one variant (i.e., enumerations with one variant
        and structures). *)
@@ -2723,7 +2940,7 @@ let end_passes : (bool ref option * string * (ctx -> fun_decl -> fun_decl)) list
     (* Remove the duplicated function calls *)
     (None, "simplify_duplicate_calls", simplify_duplicate_calls);
     (* Merge let bindings which bind an expression then decompose a tuple *)
-    ( Some Config.merge_let_app_decompose_tuple,
+    ( Some (fun _ -> !Config.merge_let_app_decompose_tuple),
       "merge_let_app_then_decompose_tuple",
       merge_let_app_then_decompose_tuple );
     (* Filter the useless variables, assignments, function calls, etc. *)
@@ -2777,20 +2994,20 @@ let end_passes : (bool ref option * string * (ctx -> fun_decl -> fun_decl)) list
        unlocked more simplifications here) *)
     (None, "simplify_let_then_ok (pass 3)", simplify_let_then_ok);
     (* Decompose the monadic let-bindings - used by Coq *)
-    ( Some Config.decompose_monadic_let_bindings,
+    ( Some (fun _ -> !Config.decompose_monadic_let_bindings),
       "decompose_monadic_let_bindings",
       decompose_monadic_let_bindings );
     (* Decompose nested let-patterns *)
-    ( Some Config.decompose_nested_let_patterns,
+    ( Some (fun _ -> !Config.decompose_nested_let_patterns),
       "decompose_nested_let_patterns",
       decompose_nested_let_patterns );
     (* Unfold the monadic let-bindings *)
-    ( Some Config.unfold_monadic_let_bindings,
+    ( Some (fun _ -> !Config.unfold_monadic_let_bindings),
       "unfold_monadic_let_bindings",
       unfold_monadic_let_bindings );
     (* Introduce calls to [toResult] to lift pure function calls to monadic
        function calls *)
-    ( Some Config.lift_pure_function_calls,
+    ( Some (fun _ -> !Config.lift_pure_function_calls),
       "lift_pure_function_calls",
       lift_pure_function_calls );
   ]
@@ -2802,7 +3019,7 @@ let apply_end_passes_to_def (ctx : ctx) (def : fun_decl) : fun_decl =
       let apply =
         match option with
         | None -> true
-        | Some option -> !option
+        | Some option -> option ()
       in
 
       if apply then (
@@ -3189,6 +3406,8 @@ let apply_passes_to_def (ctx : ctx) (def : fun_decl) : fun_and_loops =
   (* Apply the remaining passes *)
   let f = apply_end_passes_to_def ctx def in
   let loops = List.map (apply_end_passes_to_def ctx) loops in
+
+  (* *)
   { f; loops }
 
 (** Introduce type annotations.
@@ -3608,6 +3827,18 @@ let apply_passes_to_pure_fun_translations (trans_ctx : trans_ctx)
      parameterized by *all* the symbolic values in the context, because
      they may access any of them). *)
   let transl = filter_loop_inputs ctx transl in
+
+  (* Introduce the fuel and the state, if necessary.
+
+     We do this last, because some other passes need to manipulate the
+     functions *wihout* fuel and state (otherwise it messes up the
+     parameter manipulations - see [filter_loop_inputs] for instance).
+   *)
+  let transl =
+    if !Config.use_fuel || !Config.use_state then
+      List.map (add_fuel_and_state ctx) transl
+    else transl
+  in
 
   (* Add the type annotations - we add those only now because we need
      to use the final types of the functions (in particular, we introduce

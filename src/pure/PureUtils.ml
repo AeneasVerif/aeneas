@@ -201,6 +201,11 @@ let opt_dest_result_ty (ty : ty) : ty option =
         { types = [ ty ]; const_generics = []; trait_refs = [] } ) -> Some ty
   | _ -> None
 
+let dest_result_ty span (ty : ty) : ty =
+  match opt_dest_result_ty ty with
+  | None -> [%craise] span "Not a result type"
+  | Some ty -> ty
+
 let is_result_ty (ty : ty) : bool = Option.is_some (opt_dest_result_ty ty)
 
 let dest_arrow_ty (span : Meta.span) (ty : ty) : ty * ty =
