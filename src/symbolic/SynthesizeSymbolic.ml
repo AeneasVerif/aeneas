@@ -27,11 +27,11 @@ let mk_opt_place_from_op (span : Meta.span) (op : operand)
   | Copy p | Move p -> Some (mk_mplace span p ctx)
   | Constant _ -> None
 
-let mk_espan (m : espan) (e : expression) : expression = Meta (m, e)
+let mk_espan (m : espan) (e : expr) : expr = Meta (m, e)
 
 let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
     (place : mplace option) (seel : symbolic_expansion option list)
-    (el : expression list) : expression =
+    (el : expr list) : expr =
   let ls = List.combine seel el in
   (* Match on the symbolic value type to know which can of expansion happened *)
   let expansion =
@@ -104,16 +104,15 @@ let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
 
 let synthesize_symbolic_expansion_no_branching (span : Meta.span)
     (sv : symbolic_value) (place : mplace option) (see : symbolic_expansion)
-    (e : expression) : expression =
+    (e : expr) : expr =
   synthesize_symbolic_expansion span sv place [ Some see ] [ e ]
 
 let synthesize_function_call (span : Meta.span) (call_id : call_id)
     (ctx : Contexts.eval_ctx) (sg : (fun_sig * inst_fun_sig) option)
     (abstractions : AbstractionId.id list) (generics : generic_args)
     (trait_method_generics : (generic_args * trait_instance_id) option)
-    (args : typed_value list) (args_places : mplace option list)
-    (dest : symbolic_value) (dest_place : mplace option) (e : expression) :
-    expression =
+    (args : tvalue list) (args_places : mplace option list)
+    (dest : symbolic_value) (dest_place : mplace option) (e : expr) : expr =
   let sg, inst_sg =
     match sg with
     | Some (sg, inst_sg) -> (Some sg, Some inst_sg)
@@ -138,7 +137,7 @@ let synthesize_function_call (span : Meta.span) (call_id : call_id)
   FunCall (call, e)
 
 let synthesize_global_eval (gref : global_decl_ref) (dest : symbolic_value)
-    (e : expression) : expression =
+    (e : expr) : expr =
   EvalGlobal (gref.id, gref.generics, dest, e)
 
 let synthesize_regular_function_call (span : Meta.span)
@@ -146,9 +145,8 @@ let synthesize_regular_function_call (span : Meta.span)
     (ctx : Contexts.eval_ctx) (sg : fun_sig) (inst_sg : inst_fun_sig)
     (abstractions : AbstractionId.id list) (generics : generic_args)
     (trait_method_generics : (generic_args * trait_instance_id) option)
-    (args : typed_value list) (args_places : mplace option list)
-    (dest : symbolic_value) (dest_place : mplace option) (e : expression) :
-    expression =
+    (args : tvalue list) (args_places : mplace option list)
+    (dest : symbolic_value) (dest_place : mplace option) (e : expr) : expr =
   synthesize_function_call span
     (Fun (fun_id, call_id))
     ctx
@@ -157,33 +155,30 @@ let synthesize_regular_function_call (span : Meta.span)
     e
 
 let synthesize_unary_op (span : Meta.span) (ctx : Contexts.eval_ctx)
-    (unop : unop) (arg : typed_value) (arg_place : mplace option)
-    (dest : symbolic_value) (dest_place : mplace option) (e : expression) :
-    expression =
+    (unop : unop) (arg : tvalue) (arg_place : mplace option)
+    (dest : symbolic_value) (dest_place : mplace option) (e : expr) : expr =
   let generics = empty_generic_args in
   synthesize_function_call span (Unop unop) ctx None [] generics None [ arg ]
     [ arg_place ] dest dest_place e
 
 let synthesize_binary_op (span : Meta.span) (ctx : Contexts.eval_ctx)
-    (binop : binop) (arg0 : typed_value) (arg0_place : mplace option)
-    (arg1 : typed_value) (arg1_place : mplace option) (dest : symbolic_value)
-    (dest_place : mplace option) (e : expression) : expression =
+    (binop : binop) (arg0 : tvalue) (arg0_place : mplace option) (arg1 : tvalue)
+    (arg1_place : mplace option) (dest : symbolic_value)
+    (dest_place : mplace option) (e : expr) : expr =
   let generics = empty_generic_args in
   synthesize_function_call span (Binop binop) ctx None [] generics None
     [ arg0; arg1 ] [ arg0_place; arg1_place ] dest dest_place e
 
-let synthesize_end_abstraction (ctx : Contexts.eval_ctx) (abs : abs)
-    (e : expression) : expression =
+let synthesize_end_abstraction (ctx : Contexts.eval_ctx) (abs : abs) (e : expr)
+    : expr =
   EndAbstraction (ctx, abs, e)
 
 let synthesize_assignment (ctx : Contexts.eval_ctx) (lplace : mplace)
-    (rvalue : typed_value) (rplace : mplace option) (e : expression) :
-    expression =
+    (rvalue : tvalue) (rplace : mplace option) (e : expr) : expr =
   Meta (Assignment (ctx, lplace, rvalue, rplace), e)
 
-let synthesize_assertion (ctx : Contexts.eval_ctx) (v : typed_value)
-    (e : expression) =
+let synthesize_assertion (ctx : Contexts.eval_ctx) (v : tvalue) (e : expr) =
   Assertion (ctx, v, e)
 
-let save_snapshot (ctx : Contexts.eval_ctx) (e : expression) : expression =
+let save_snapshot (ctx : Contexts.eval_ctx) (e : expr) : expr =
   Meta (Snapshot ctx, e)

@@ -6,7 +6,7 @@ open TypesAnalysis
 open SymbolicToPureCore
 
 (** The local logger *)
-let log = Logging.symbolic_to_pure_log
+let log = Logging.symbolic_to_pure_types_log
 
 (* We simply ignore the bound regions. Note that this messes up the de bruijn
    ids in variables: variables inside `rb.binder_value` are nested deeper so
@@ -445,26 +445,30 @@ let mk_type_check_ctx (ctx : bs_ctx) : PureTypeCheck.tc_ctx =
            (cg.index, ctx_translate_fwd_ty ctx (T.TLiteral cg.ty)))
          ctx.sg.generics.const_generics)
   in
-  let env = LocalId.Map.empty in
+  let fenv = ctx.fvars_tys in
+  let benv = [] in
   {
     PureTypeCheck.type_decls = ctx.type_ctx.type_decls;
     global_decls = ctx.decls_ctx.crate.global_decls;
-    env;
     const_generics;
     decls_ctx = ctx.decls_ctx;
+    fenv;
+    benv;
+    pbenv = None;
+    bvar_counter = BVarId.zero;
   }
 
-let type_check_pattern (ctx : bs_ctx) (v : typed_pattern) : unit =
+let type_check_pattern (ctx : bs_ctx) (v : tpattern) : unit =
   let span = ctx.span in
   let ctx = mk_type_check_ctx ctx in
-  let _ = PureTypeCheck.check_typed_pattern span ctx v in
+  let _ = PureTypeCheck.check_tpattern span ctx v in
   ()
 
-let type_check_texpression (ctx : bs_ctx) (e : texpression) : unit =
+let type_check_texpr (ctx : bs_ctx) (e : texpr) : unit =
   if !Config.type_check_pure_code then
     let span = ctx.span in
     let ctx = mk_type_check_ctx ctx in
-    PureTypeCheck.check_texpression span ctx e
+    PureTypeCheck.check_texpr span ctx e
 
 (** List the ancestors of an abstraction *)
 let list_ancestor_abstractions_ids (ctx : bs_ctx) (abs : V.abs)
@@ -490,7 +494,7 @@ let list_ancestor_abstractions_ids (ctx : bs_ctx) (abs : V.abs)
 (** List the ancestor abstractions of an abstraction introduced because of a
     function call *)
 let list_ancestor_abstractions (ctx : bs_ctx) (abs : V.abs)
-    (call_id : V.FunCallId.id) : (V.abs * texpression list) list =
+    (call_id : V.FunCallId.id) : (V.abs * texpr list) list =
   let abs_ids = list_ancestor_abstractions_ids ctx abs call_id in
   List.map (fun id -> V.AbstractionId.Map.find id ctx.abstractions) abs_ids
 
@@ -506,7 +510,7 @@ let compute_raw_fun_effect_info (span : Meta.span option)
       in
       let stateful_group = info.stateful in
       let stateful =
-        stateful_group && ((not !Config.backward_no_state_update) || gid = None)
+        stateful_group && (!Config.backward_state_update || gid = None)
       in
       {
         (* Note that backward functions can't fail *)
@@ -526,27 +530,6 @@ let compute_raw_fun_effect_info (span : Meta.span option)
         can_diverge = false;
         is_rec = false;
       }
-
-(** Small utility.
-
-    Does the function *decrease* the fuel? [true] if recursive. *)
-let function_decreases_fuel (info : fun_effect_info) : bool =
-  !Config.use_fuel && info.is_rec
-
-(** Small utility.
-
-    Does the function *use* the fuel? [true] if can diverge. *)
-let function_uses_fuel (info : fun_effect_info) : bool =
-  !Config.use_fuel && info.can_diverge
-
-(** Small utility *)
-let mk_fuel_input_ty_as_list (info : fun_effect_info) : ty list =
-  if function_uses_fuel info then [ mk_fuel_ty ] else []
-
-(** Small utility *)
-let mk_fuel_input_as_list (ctx : bs_ctx) (info : fun_effect_info) :
-    texpression list =
-  if function_uses_fuel info then [ mk_fuel_texpression ctx.fuel ] else []
 
 (** Translate an instantiated function signature to a decomposed function
     signature.
@@ -586,19 +569,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
     compute_raw_fun_effect_info span fun_infos fun_id None None
   in
   (* Compute the forward inputs *)
-  let fwd_fuel = mk_fuel_input_ty_as_list fwd_effect_info in
-  let fwd_inputs_no_fuel_no_state =
-    List.map (translate_fwd_ty span type_infos) sg.inputs
-  in
-  (* State input for the forward function *)
-  let fwd_state_ty =
-    (* For the forward state, we check if the *whole group* is stateful.
-       See {!effect_info}. *)
-    if fwd_effect_info.stateful_group then [ mk_state_ty ] else []
-  in
-  let fwd_inputs =
-    List.concat [ fwd_fuel; fwd_inputs_no_fuel_no_state; fwd_state_ty ]
-  in
+  let fwd_inputs = List.map (translate_fwd_ty span type_infos) sg.inputs in
   (* Compute the backward output, without the effect information *)
   let fwd_output = translate_fwd_ty span type_infos sg.output in
 
@@ -704,10 +675,8 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
     let back_effect_info =
       compute_raw_fun_effect_info span fun_infos fun_id None (Some gid)
     in
-    let inputs_no_state = translate_back_inputs_for_gid gid in
-    let inputs_no_state =
-      List.map (fun ty -> (Some "ret", ty)) inputs_no_state
-    in
+    let inputs = translate_back_inputs_for_gid gid in
+    let inputs = List.map (fun ty -> (Some "ret", ty)) inputs in
     (* We consider a backward function as stateful and potentially failing
        **only if it has inputs** (for the "potentially failing": if it has
        not inputs, we directly evaluate it in the body of the forward function).
@@ -730,30 +699,19 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
        ]}
     *)
     let back_effect_info =
-      let b = inputs_no_state <> [] in
+      let b = inputs <> [] in
       {
         back_effect_info with
         stateful = back_effect_info.stateful && b;
         can_fail = back_effect_info.can_fail && b;
       }
     in
-    let state =
-      if back_effect_info.stateful then [ (None, mk_state_ty) ] else []
-    in
-    let inputs = inputs_no_state @ state in
     let output_names, outputs = compute_back_outputs_for_gid gid in
     let filter =
       !Config.simplify_merged_fwd_backs && inputs = [] && outputs = []
     in
     let info =
-      {
-        inputs;
-        inputs_no_state;
-        outputs;
-        output_names;
-        effect_info = back_effect_info;
-        filter;
-      }
+      { inputs; outputs; output_names; effect_info = back_effect_info; filter }
     in
     (gid, info)
   in
@@ -763,25 +721,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
   in
 
   (* The additional information about the forward function *)
-  let fwd_info =
-    (* *)
-    let has_fuel = fwd_fuel <> [] in
-    let num_inputs_no_fuel_no_state = List.length fwd_inputs_no_fuel_no_state in
-    let num_inputs_with_fuel_no_state =
-      (* We use the fact that [fuel] has length 1 if we use some fuel, 0 otherwise *)
-      List.length fwd_fuel + num_inputs_no_fuel_no_state
-    in
-    let fwd_info : inputs_info =
-      {
-        has_fuel;
-        num_inputs_no_fuel_no_state;
-        num_inputs_with_fuel_no_state;
-        num_inputs_with_fuel_with_state =
-          (* We use the fact that [fwd_state_ty] has length 1 if there is a state,
-             and 0 otherwise *)
-          num_inputs_with_fuel_no_state + List.length fwd_state_ty;
-      }
-    in
+  let fwd_info : fun_sig_info =
     let ignore_output =
       if !Config.simplify_merged_fwd_backs then
         ty_is_unit fwd_output
@@ -790,9 +730,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
              (RegionGroupId.Map.values back_sg)
       else false
     in
-    let info = { fwd_info; effect_info = fwd_effect_info; ignore_output } in
-    [%sanity_check_opt_span] span (fun_sig_info_is_wf info);
-    info
+    { effect_info = fwd_effect_info; ignore_output }
   in
 
   (* Return *)
@@ -886,17 +824,11 @@ let translate_fun_sig_from_decl_to_decomposed (decls_ctx : C.decls_ctx)
 
 let mk_output_ty_from_effect_info (effect_info : fun_effect_info) (ty : ty) : ty
     =
-  let output =
-    if effect_info.stateful then mk_simpl_tuple_ty [ mk_state_ty; ty ] else ty
-  in
-  if effect_info.can_fail then mk_result_ty output else output
+  if effect_info.can_fail then mk_result_ty ty else ty
 
 let mk_back_output_ty_from_effect_info (effect_info : fun_effect_info)
     (inputs : ty list) (ty : ty) : ty =
-  let output =
-    if effect_info.stateful then mk_simpl_tuple_ty [ mk_state_ty; ty ] else ty
-  in
-  if effect_info.can_fail && inputs <> [] then mk_result_ty output else output
+  if effect_info.can_fail && inputs <> [] then mk_result_ty ty else ty
 
 (** Compute the arrow types for all the backward functions.
 

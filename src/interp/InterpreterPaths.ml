@@ -64,9 +64,8 @@ type projection_access = {
    to the original one. *)
 let rec project_value (span : Meta.span) (access : projection_access)
     (ek : exploration_kind) (current_place : place) (ctx : eval_ctx)
-    (pe : projection_elem) (v : typed_value) :
-    (typed_value * (eval_ctx * typed_value -> eval_ctx * typed_value))
-    path_access_result =
+    (pe : projection_elem) (v : tvalue) :
+    (tvalue * (eval_ctx * tvalue -> eval_ctx * tvalue)) path_access_result =
   match (pe, v.value, v.ty) with
   | ( Field (ProjAdt (def_id, opt_variant_id), field_id),
       VAdt adt,
@@ -229,8 +228,7 @@ let rec project_value (span : Meta.span) (access : projection_access)
     to the projected value back to the original local. *)
 let rec access_place (span : Meta.span) (access : projection_access)
     (ek : exploration_kind) (ctx : eval_ctx) (p : place) :
-    (typed_value * (eval_ctx * typed_value -> eval_ctx * typed_value))
-    path_access_result =
+    (tvalue * (eval_ctx * tvalue -> eval_ctx * tvalue)) path_access_result =
   match p.kind with
   | PlaceLocal var_id ->
       (* Lookup the variable's value *)
@@ -270,8 +268,8 @@ let rec access_place (span : Meta.span) (access : projection_access)
     failed. *)
 let access_update_place (span : Meta.span) (access : projection_access)
     (* Function to (eventually) update the value we find *)
-      (update : typed_value -> typed_value) (p : place) (ctx : eval_ctx) :
-    (eval_ctx * typed_value) path_access_result =
+      (update : tvalue -> tvalue) (p : place) (ctx : eval_ctx) :
+    (eval_ctx * tvalue) path_access_result =
   (* For looking up/updating shared loans *)
   let ek : exploration_kind =
     { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
@@ -318,7 +316,7 @@ let access_kind_to_projection_access (access : access_kind) : projection_access
     Note that we only access the value at the place, and do not check that the
     value is "well-formed" (for instance that it doesn't contain bottoms). *)
 let try_read_place (span : Meta.span) (access : access_kind) (p : place)
-    (ctx : eval_ctx) : typed_value path_access_result =
+    (ctx : eval_ctx) : tvalue path_access_result =
   let access = access_kind_to_projection_access access in
   (* The update function is the identity *)
   let update v = v in
@@ -338,7 +336,7 @@ let try_read_place (span : Meta.span) (access : access_kind) (p : place)
       Ok read_value
 
 let read_place (span : Meta.span) (access : access_kind) (p : place)
-    (ctx : eval_ctx) : typed_value =
+    (ctx : eval_ctx) : tvalue =
   match try_read_place span access p ctx with
   | Error e -> [%craise] span ("Unreachable: " ^ show_path_fail_kind e)
   | Ok v -> v
@@ -346,7 +344,7 @@ let read_place (span : Meta.span) (access : access_kind) (p : place)
 (** Attempt to update the value at a given place, provided the place **does not
     refer to a global** (globals are handled elsewhere). *)
 let try_write_place (span : Meta.span) (access : access_kind) (p : place)
-    (nv : typed_value) (ctx : eval_ctx) : eval_ctx path_access_result =
+    (nv : tvalue) (ctx : eval_ctx) : eval_ctx path_access_result =
   let access = access_kind_to_projection_access access in
   (* The update function substitutes the value with the new value *)
   let update _ = nv in
@@ -357,14 +355,14 @@ let try_write_place (span : Meta.span) (access : access_kind) (p : place)
       Ok ctx
 
 let write_place (span : Meta.span) (access : access_kind) (p : place)
-    (nv : typed_value) (ctx : eval_ctx) : eval_ctx =
+    (nv : tvalue) (ctx : eval_ctx) : eval_ctx =
   match try_write_place span access p nv ctx with
   | Error e -> [%craise] span ("Unreachable: " ^ show_path_fail_kind e)
   | Ok ctx -> ctx
 
 let compute_expanded_bottom_adt_value (span : Meta.span) (ctx : eval_ctx)
     (def_id : TypeDeclId.id) (opt_variant_id : VariantId.id option)
-    (generics : generic_args) : typed_value =
+    (generics : generic_args) : tvalue =
   [%sanity_check] span (TypesUtils.generic_args_only_erased_regions generics);
   (* Lookup the definition and check if it is an enumeration - it
      should be an enumeration if and only if the projection element
@@ -385,7 +383,7 @@ let compute_expanded_bottom_adt_value (span : Meta.span) (ctx : eval_ctx)
   { value = av; ty }
 
 let compute_expanded_bottom_tuple_value (span : Meta.span)
-    (field_types : ety list) : typed_value =
+    (field_types : ety list) : tvalue =
   (* Generate the field values *)
   let fields = List.map (mk_bottom span) field_types in
   let v = VAdt { variant_id = None; field_values = fields } in
@@ -513,8 +511,7 @@ let rec update_ctx_along_write_place (config : config) (span : Meta.span)
       comp cc (update_ctx_along_write_place config span access p ctx)
 
 (** Small utility used to break control-flow *)
-exception
-  UpdateCtx of (eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression))
+exception UpdateCtx of (eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr))
 
 let rec end_loans_at_place (config : config) (span : Meta.span)
     (access : access_kind) (p : place) : cm_fun =
@@ -526,7 +523,7 @@ let rec end_loans_at_place (config : config) (span : Meta.span)
    *)
   let obj =
     object
-      inherit [_] iter_typed_value as super
+      inherit [_] iter_tvalue as super
 
       method! visit_borrow_content env bc =
         match bc with
@@ -563,7 +560,7 @@ let rec end_loans_at_place (config : config) (span : Meta.span)
      anymore...)
   *)
   try
-    obj#visit_typed_value () v;
+    obj#visit_tvalue () v;
     (* No context update required: apply the continuation *)
     (ctx, fun e -> e)
   with UpdateCtx (ctx, cc) ->
@@ -620,8 +617,7 @@ let drop_outer_loans_at_lplace (config : config) (span : Meta.span) (p : place)
 
 let prepare_lplace (config : config) (span : Meta.span) (p : place)
     (ctx : eval_ctx) :
-    typed_value * eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression)
-    =
+    tvalue * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   [%ltrace
     "- p: " ^ place_to_string ctx p ^ "\n- Initial context:\n"
     ^ eval_ctx_to_string ~span:(Some span) ctx];

@@ -23,12 +23,12 @@ module FunIdSet = Collections.MakeSet (FunIdOrderedType)
 (** Compute the dependencies of a function body, taking only into account the
     *custom* (i.e., not builtin) functions ids (ignoring operations, types,
     globals, etc.). *)
-let compute_body_fun_deps (e : texpression) : FunIdSet.t =
+let compute_body_fun_deps (e : texpr) : FunIdSet.t =
   let ids = ref FunIdSet.empty in
 
   let visitor =
     object
-      inherit [_] iter_expression
+      inherit [_] iter_expr
 
       method! visit_qualif _ id =
         match id.id with
@@ -46,7 +46,7 @@ let compute_body_fun_deps (e : texpression) : FunIdSet.t =
     end
   in
 
-  visitor#visit_texpression () e;
+  visitor#visit_texpr () e;
   !ids
 
 type function_group = {

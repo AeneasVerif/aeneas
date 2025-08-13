@@ -124,14 +124,14 @@ Fixpoint hashMap_clear_loop
     Source: 'tests/src/hashmap.rs', lines 100:4-108:5 *)
 Definition hashMap_clear
   {T : Type} (n : nat) (self : HashMap_t T) : result (HashMap_t T) :=
-  hm <- hashMap_clear_loop n self.(hashMap_slots) 0%usize;
+  slots <- hashMap_clear_loop n self.(hashMap_slots) 0%usize;
   Ok
     {|
       hashMap_num_entries := 0%usize;
       hashMap_max_load_factor := self.(hashMap_max_load_factor);
       hashMap_max_load := self.(hashMap_max_load);
       hashMap_saturated := self.(hashMap_saturated);
-      hashMap_slots := hm
+      hashMap_slots := slots
     |}
 .
 

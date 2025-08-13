@@ -221,7 +221,7 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
   (* Push the return variable (initialized with ⊥) *)
   let ctx = ctx_push_uninitialized_var span ctx ret_var in
   (* Push the input variables (initialized with symbolic values) *)
-  let input_values = List.map mk_typed_value_from_symbolic_value input_svs in
+  let input_values = List.map mk_tvalue_from_symbolic_value input_svs in
   let ctx = ctx_push_vars span ctx (List.combine input_vars input_values) in
   (* Push the remaining local variables (initialized with ⊥) *)
   let ctx = ctx_push_uninitialized_vars span ctx local_vars in
@@ -243,7 +243,7 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
 let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
     (fdef : fun_decl) (inst_sg : inst_fun_sig) (back_id : RegionGroupId.id)
     (loop_id : LoopId.id option) (is_regular_return : bool) (inside_loop : bool)
-    (ctx : eval_ctx) : SA.expression =
+    (ctx : eval_ctx) : SA.expr =
   let span = fdef.item_meta.span in
   [%ltrace
     "- fname: "
@@ -483,7 +483,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
     the translation. Otherwise, we do not (the symbolic execution then simply
     borrow-checks the function). *)
 let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
-    (fdef : fun_decl) : symbolic_value list * SA.expression option =
+    (fdef : fun_decl) : symbolic_value list * SA.expr option =
   (* Debug *)
   let span = fdef.item_meta.span in
   let name_to_string () =

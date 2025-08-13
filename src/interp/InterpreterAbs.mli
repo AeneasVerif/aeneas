@@ -30,7 +30,7 @@ val convert_value_to_abstractions :
   can_end:bool ->
   destructure_shared_values:bool ->
   eval_ctx ->
-  typed_value ->
+  tvalue ->
   abs list
 
 (** See {!merge_into_abstraction}.
@@ -97,11 +97,11 @@ type merge_duplicates_funcs = {
     loan_id ->
     rty ->
     proj_marker ->
-    typed_value ->
+    tvalue ->
     typed_avalue ->
     rty ->
     proj_marker ->
-    typed_value ->
+    tvalue ->
     typed_avalue ->
     typed_avalue;
       (** Parameters:

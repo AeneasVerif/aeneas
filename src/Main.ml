@@ -14,34 +14,13 @@ let _ =
    * command-line arguments *)
   (* By setting a level for the main_logger_handler, we filter everything.
      To have a good trace: one should switch between Info and Debug.
+     TODO: remove
   *)
   Easy_logging.Handlers.set_level main_logger_handler EL.Debug;
+  (* Set the level for the Charon loggers (for the ones internal to Aeneas,
+     the level was set up at creation time) *)
   main_log#set_level EL.Info;
-  llbc_of_json_logger#set_level EL.Info;
-  regions_hierarchy_log#set_level EL.Info;
-  pre_passes_log#set_level EL.Info;
-  contexts_log#set_level EL.Info;
-  interpreter_log#set_level EL.Info;
-  statements_log#set_level EL.Info;
-  loops_match_ctxs_log#set_level EL.Info;
-  loops_join_ctxs_log#set_level EL.Info;
-  loops_fixed_point_log#set_level EL.Info;
-  loops_log#set_level EL.Info;
-  paths_log#set_level EL.Info;
-  expressions_log#set_level EL.Info;
-  expansion_log#set_level EL.Info;
-  projectors_log#set_level EL.Info;
-  borrows_log#set_level EL.Info;
-  invariants_log#set_level EL.Info;
-  pure_utils_log#set_level EL.Info;
-  symbolic_to_pure_log#set_level EL.Info;
-  pure_micro_passes_log#set_level EL.Info;
-  simplify_aggregates_unchanged_fields_log#set_level EL.Info;
-  extract_log#set_level EL.Info;
-  builtin_log#set_level EL.Info;
-  translate_log#set_level EL.Info;
-  scc_log#set_level EL.Info;
-  reorder_decls_log#set_level EL.Info
+  llbc_of_json_logger#set_level EL.Info
 
 (* This is necessary to have a backtrace when raising exceptions - for some
  * reason, the -g option doesn't work.
@@ -130,9 +109,10 @@ let () =
       ( "-use-fuel",
         Arg.Set use_fuel,
         " Use a fuel parameter to control divergence" );
-      ( "-backward-no-state-update",
-        Arg.Set backward_no_state_update,
-        " Forbid backward functions from updating the state" );
+      ( "-backward-state-update",
+        Arg.Set backward_state_update,
+        " Generate backward functions which update the state. THIS OPTION IS \
+         DEPRECATED." );
       ( "-no-template-clauses",
         Arg.Clear extract_template_decreases_clauses,
         " Do not generate templates for the required decreases \
@@ -187,7 +167,7 @@ let () =
          using the log. For example, one can mark the symbolic value ids 1 and \
          2 with '-mark-ids s1,s2', or '-mark-ids s@1, s@2. The supported \
          prefixes are: 's' (symbolic value id), 'b' (borrow id), 'a' \
-         (abstraction id), 'r' (region id)." );
+         (abstraction id), 'r' (region id), 'f' (pure free variable id)." );
     ]
   in
 
@@ -294,6 +274,7 @@ let () =
           | 'b' -> marked_borrow_ids_insert_from_int i
           | 'a' -> marked_abstraction_ids_insert_from_int i
           | 'r' -> marked_region_ids_insert_from_int i
+          | 'f' -> Pure.marked_fvar_ids_insert_from_int i
           | _ ->
               log#serror
                 ("Invalid identifier provided to option: '" ^ id
@@ -307,9 +288,9 @@ let () =
     "-no-template-clauses" !extract_decreases_clauses "-decreases-clauses";
   if not !extract_decreases_clauses then
     extract_template_decreases_clauses := false;
-  (* Sanity check: -backward-no-state-update ==> -state *)
-  check_arg_implies !backward_no_state_update "-backward-no-state-update"
-    !use_state "-state";
+  (* Sanity check: -backward-state-update ==> -state *)
+  check_arg_implies !backward_state_update "-backward-state-update" !use_state
+    "-state";
   (* Sanity check: the use of decrease clauses is not compatible with the use of fuel *)
   check_arg_not !use_fuel "-use-fuel" !extract_decreases_clauses
     "-decreases-clauses";
