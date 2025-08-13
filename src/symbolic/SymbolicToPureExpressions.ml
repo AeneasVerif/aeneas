@@ -1645,7 +1645,6 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
       let args =
         List.map (typed_value_to_texpression ctx ectx) loop_input_values
       in
-      let org_args = args in
 
       (* Lookup the effect info for the loop function *)
       let fid = T.FRegular ctx.fun_decl.def_id in
@@ -1719,8 +1718,12 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
         { ctx with loops = LoopId.Map.add loop_id loop_info ctx.loops }
       in
 
-      (* Introduce the refreshed input symbolic values *)
-      let ctx, refreshed_inputs =
+      (* Introduce the refreshed input symbolic values.
+
+         TODO: remove. We used to need them, but we don't anymore, though we
+         have to make sure they are in the context.
+      *)
+      let ctx, _ =
         List.fold_left_map
           (fun ctx (sid, nid) ->
             let sv_ty =
@@ -1737,10 +1740,6 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
 
       (* Translate the end of the function *)
       let next_e = translate_end ctx in
-      (*let next_e =
-        mk_closed_checked_lets __FILE__ __LINE__ ctx false refreshed_inputs
-          next_e
-        in*)
 
       (* Introduce the call to the loop forward function in the generated AST *)
       let out_pat = mk_simpl_tuple_pattern out_pats in
@@ -1759,26 +1758,8 @@ and translate_forward_end (return_value : (C.eval_ctx * V.typed_value) option)
       in
 
       (* Create the let expression with the loop call *)
-      let e =
-        mk_closed_checked_let __FILE__ __LINE__ ctx effect_info.can_fail out_pat
-          loop_call next_e
-      in
-
-      (* Add meta-information linking the loop input parameters and the
-         loop input values - we use this to derive proper names.
-
-         There is something important here: as we group the end of the function
-         and the loop body in a {!Loop} node, when exploring the function
-         and applying micro passes, we introduce the variables specific to
-         the loop body before exploring both the loop body and the end of
-         the function. It means it is ok to reference some variables which might
-         actually be defined, in the end, in a different branch.
-
-         We then remove all the span information from the body *before* calling
-         {!PureMicroPasses.decompose_loops}.
-      *)
-      (*mk_emeta_symbolic_assignments loop_info.input_vars org_args*)
-      e
+      mk_closed_checked_let __FILE__ __LINE__ ctx effect_info.can_fail out_pat
+        loop_call next_e
 
 and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpression =
   let loop_id = V.LoopId.Map.find loop.loop_id ctx.loop_ids_map in
