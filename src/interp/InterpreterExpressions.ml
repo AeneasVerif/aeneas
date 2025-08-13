@@ -64,8 +64,7 @@ let read_place_check (span : Meta.span) (access : access_kind) (p : place)
 
 let access_rplace_reorganize_and_read (config : config) (span : Meta.span)
     (greedy_expand : bool) (access : access_kind) (p : place) (ctx : eval_ctx) :
-    typed_value * eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression)
-    =
+    typed_value * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Make sure we can evaluate the path *)
   let ctx, cc = update_ctx_along_read_place config span access p ctx in
   (* End the proper loans at the place itself *)
@@ -148,7 +147,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
     typed_value
     * typed_value
     * eval_ctx
-    * (SymbolicAst.expression -> SymbolicAst.expression) =
+    * (SymbolicAst.expr -> SymbolicAst.expr) =
   [%ltrace
     typed_value_to_string ~span:(Some span) ctx v
     ^ "\n- context:\n"
@@ -362,8 +361,7 @@ let prepare_eval_operand_reorganize (config : config) (span : Meta.span)
 (** Evaluate an operand, without reorganizing the context before *)
 let eval_operand_no_reorganize (config : config) (span : Meta.span)
     (op : operand) (ctx : eval_ctx) :
-    typed_value * eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression)
-    =
+    typed_value * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Debug *)
   [%ltrace
     "op: " ^ operand_to_string ctx op ^ "\n- ctx:\n"
@@ -484,8 +482,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
 
 let eval_operand (config : config) (span : Meta.span) (op : operand)
     (ctx : eval_ctx) :
-    typed_value * eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression)
-    =
+    typed_value * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Debug *)
   [%ltrace
     "op: " ^ operand_to_string ctx op ^ "\n- ctx:\n"
@@ -504,9 +501,7 @@ let prepare_eval_operands_reorganize (config : config) (span : Meta.span)
 (** Evaluate several operands. *)
 let eval_operands (config : config) (span : Meta.span) (ops : operand list)
     (ctx : eval_ctx) :
-    typed_value list
-    * eval_ctx
-    * (SymbolicAst.expression -> SymbolicAst.expression) =
+    typed_value list * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Prepare the operands *)
   let ctx, cc = prepare_eval_operands_reorganize config span ops ctx in
   (* Evaluate the operands *)
@@ -517,7 +512,7 @@ let eval_two_operands (config : config) (span : Meta.span) (op1 : operand)
     (op2 : operand) (ctx : eval_ctx) :
     (typed_value * typed_value)
     * eval_ctx
-    * (SymbolicAst.expression -> SymbolicAst.expression) =
+    * (SymbolicAst.expr -> SymbolicAst.expr) =
   let res, ctx, cc = eval_operands config span [ op1; op2 ] ctx in
   let res =
     match res with
@@ -530,7 +525,7 @@ let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
     (op : operand) (ctx : eval_ctx) :
     (typed_value, eval_error) result
     * eval_ctx
-    * (SymbolicAst.expression -> SymbolicAst.expression) =
+    * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Evaluate the operand *)
   let v, ctx, cc = eval_operand config span op ctx in
   let ptr_size = ctx.crate.target_information.target_pointer_size in
@@ -669,7 +664,7 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
     (op : operand) (ctx : eval_ctx) :
     (typed_value, eval_error) result
     * eval_ctx
-    * (SymbolicAst.expression -> SymbolicAst.expression) =
+    * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Evaluate the operand *)
   let v, ctx, cc = eval_operand config span op ctx in
   (* Generate a fresh symbolic value to store the result *)
@@ -705,7 +700,7 @@ let eval_unary_op (config : config) (span : Meta.span) (unop : unop)
     (op : operand) (ctx : eval_ctx) :
     (typed_value, eval_error) result
     * eval_ctx
-    * (SymbolicAst.expression -> SymbolicAst.expression) =
+    * (SymbolicAst.expr -> SymbolicAst.expr) =
   match config.mode with
   | ConcreteMode -> eval_unary_op_concrete config span unop op ctx
   | SymbolicMode -> eval_unary_op_symbolic config span unop op ctx
@@ -799,7 +794,7 @@ let eval_binary_op_concrete (config : config) (span : Meta.span) (binop : binop)
     (op1 : operand) (op2 : operand) (ctx : eval_ctx) :
     (typed_value, eval_error) result
     * eval_ctx
-    * (SymbolicAst.expression -> SymbolicAst.expression) =
+    * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Evaluate the operands *)
   let (v1, v2), ctx, cc = eval_two_operands config span op1 op2 ctx in
   (* Compute the result of the binop *)
@@ -811,7 +806,7 @@ let eval_binary_op_symbolic (config : config) (span : Meta.span) (binop : binop)
     (op1 : operand) (op2 : operand) (ctx : eval_ctx) :
     (typed_value, eval_error) result
     * eval_ctx
-    * (SymbolicAst.expression -> SymbolicAst.expression) =
+    * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Evaluate the operands *)
   let (v1, v2), ctx, cc = eval_two_operands config span op1 op2 ctx in
   (* Generate a fresh symbolic value to store the result *)
@@ -865,7 +860,7 @@ let eval_binary_op (config : config) (span : Meta.span) (binop : binop)
     (op1 : operand) (op2 : operand) (ctx : eval_ctx) :
     (typed_value, eval_error) result
     * eval_ctx
-    * (SymbolicAst.expression -> SymbolicAst.expression) =
+    * (SymbolicAst.expr -> SymbolicAst.expr) =
   match config.mode with
   | ConcreteMode -> eval_binary_op_concrete config span binop op1 op2 ctx
   | SymbolicMode -> eval_binary_op_symbolic config span binop op1 op2 ctx
@@ -874,8 +869,7 @@ let eval_binary_op (config : config) (span : Meta.span) (binop : binop)
     or `&mut p` or `&two-phase p`) *)
 let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
     (bkind : borrow_kind) (ctx : eval_ctx) :
-    typed_value * eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression)
-    =
+    typed_value * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   match bkind with
   | BUniqueImmutable ->
       [%craise] span "Unique immutable closure captures are not supported"
@@ -958,8 +952,7 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
 
 let eval_rvalue_aggregate (config : config) (span : Meta.span)
     (aggregate_kind : aggregate_kind) (ops : operand list) (ctx : eval_ctx) :
-    typed_value * eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression)
-    =
+    typed_value * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Evaluate the operands *)
   let values, ctx, cc = eval_operands config span ops ctx in
   (* Compute the value *)
@@ -1050,7 +1043,7 @@ let eval_rvalue_not_global (config : config) (span : Meta.span)
     (rvalue : rvalue) (ctx : eval_ctx) :
     (typed_value, eval_error) result
     * eval_ctx
-    * (SymbolicAst.expression -> SymbolicAst.expression) =
+    * (SymbolicAst.expr -> SymbolicAst.expr) =
   [%ltrace ""];
   (* Small helper *)
   let wrap_in_result (v, ctx, cc) = (Ok v, ctx, cc) in

@@ -39,8 +39,8 @@ let value_aggregate_to_string (env : fmt_env) (v : value_aggregate) : string =
   | VaTraitConstValue (trait_ref, item) ->
       trait_ref_to_string env trait_ref ^ "." ^ item
 
-let rec expression_to_string (env : fmt_env) (indent : string)
-    (indent_incr : string) (e : expression) : string =
+let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
+    (e : expr) : string =
   match e with
   | Return (_ctx, ret) ->
       let ret =
@@ -52,7 +52,7 @@ let rec expression_to_string (env : fmt_env) (indent : string)
   | Panic -> indent ^ "panic"
   | FunCall (call, next) ->
       let call = call_to_string env indent call in
-      let next = expression_to_string env indent indent_incr next in
+      let next = expr_to_string env indent indent_incr next in
       call ^ "\n" ^ next
   | EndAbstraction (_, abs, next) ->
       let indent1 = indent ^ indent_incr in
@@ -61,22 +61,22 @@ let rec expression_to_string (env : fmt_env) (indent : string)
         Values.abs_to_string env ~with_ended:true verbose indent1 indent_incr
           abs
       in
-      let next = expression_to_string env indent indent_incr next in
+      let next = expr_to_string env indent indent_incr next in
       indent ^ "end\n" ^ abs ^ "\n" ^ next
   | EvalGlobal (id, generics, sv, next) ->
       let sv = Values.symbolic_value_to_string env sv in
       let global = global_decl_ref_to_string env { id; generics } in
-      let next = expression_to_string env indent indent_incr next in
+      let next = expr_to_string env indent indent_incr next in
       indent ^ "let " ^ sv ^ " = " ^ global ^ " in\n" ^ next
   | Assertion (_, b, next) ->
       let b = Values.typed_value_to_string env b in
-      let next = expression_to_string env indent indent_incr next in
+      let next = expr_to_string env indent indent_incr next in
       indent ^ "assert " ^ b ^ ";\n" ^ next
   | Expansion (_, sv, exp) -> expansion_to_string env indent indent_incr sv exp
   | IntroSymbolic (_, _, sv, v, next) ->
       let sv = Values.symbolic_value_to_string env sv in
       let v = value_aggregate_to_string env v in
-      let next = expression_to_string env indent indent_incr next in
+      let next = expr_to_string env indent indent_incr next in
       indent ^ "let " ^ sv ^ " = " ^ v ^ "in\n" ^ next
   | ForwardEnd (ret, _, loop_sid_maps, fwd_end, backs) ->
       let indent1 = indent ^ indent_incr in
@@ -101,10 +101,10 @@ let rec expression_to_string (env : fmt_env) (indent : string)
       let sid_to_value = "sid_to_value = " ^ sid_to_value in
       let refreshed_sids = "refreshed_sids = " ^ refreshed_sids in
 
-      let fwd_end = expression_to_string env indent2 indent_incr fwd_end in
+      let fwd_end = expr_to_string env indent2 indent_incr fwd_end in
       let backs =
         RegionGroupId.Map.to_string (Some indent2)
-          (fun e -> "\n" ^ expression_to_string env indent3 indent_incr e)
+          (fun e -> "\n" ^ expr_to_string env indent3 indent_incr e)
           backs
       in
       indent ^ "forward_end {\n" ^ indent1 ^ ret ^ "\n" ^ indent1 ^ sid_to_value
@@ -115,7 +115,7 @@ let rec expression_to_string (env : fmt_env) (indent : string)
   | ReturnWithLoop (loop_id, is_continue) ->
       indent ^ "return_with_loop (" ^ LoopId.to_string loop_id
       ^ ", is_continue: " ^ bool_to_string is_continue ^ ")"
-  | Meta (_, next) -> expression_to_string env indent indent_incr next
+  | Meta (_, next) -> expr_to_string env indent indent_incr next
   | Error (_, error) -> indent ^ "ERROR(" ^ error ^ ")"
 
 and expansion_to_string (env : fmt_env) (indent : string) (indent_incr : string)
@@ -125,14 +125,14 @@ and expansion_to_string (env : fmt_env) (indent : string) (indent_incr : string)
   let indent1 = indent ^ indent_incr in
   match e with
   | ExpandNoBranch (se, next) ->
-      let next = expression_to_string env indent indent_incr next in
+      let next = expr_to_string env indent indent_incr next in
       indent ^ "let "
       ^ Values.symbolic_expansion_to_string env ty se
       ^ " = " ^ scrut ^ "in\n" ^ next
   | ExpandAdt branches ->
       let branch_to_string
           ((variant_id, svl, branch) :
-            variant_id option * symbolic_value list * expression) : string =
+            variant_id option * symbolic_value list * expr) : string =
         let field_values =
           List.map ValuesUtils.mk_typed_value_from_symbolic_value svl
         in
@@ -142,22 +142,22 @@ and expansion_to_string (env : fmt_env) (indent : string) (indent_incr : string)
         indent ^ "| "
         ^ Values.typed_value_to_string env v
         ^ " ->\n"
-        ^ expression_to_string env indent1 indent_incr branch
+        ^ expr_to_string env indent1 indent_incr branch
       in
       indent ^ "match " ^ scrut ^ " with\n"
       ^ String.concat "\n" (List.map branch_to_string branches)
   | ExpandBool (e0, e1) ->
-      let e0 = expression_to_string env indent1 indent_incr e0 in
-      let e1 = expression_to_string env indent1 indent_incr e1 in
+      let e0 = expr_to_string env indent1 indent_incr e0 in
+      let e1 = expr_to_string env indent1 indent_incr e1 in
       indent ^ "if " ^ scrut ^ " then\n" ^ e0 ^ "\n" ^ indent ^ "else\n" ^ e1
   | ExpandInt (_, branches, otherwise) ->
-      let branch_to_string ((sv, branch) : scalar_value * expression) : string =
+      let branch_to_string ((sv, branch) : scalar_value * expr) : string =
         indent ^ "| "
         ^ Values.scalar_value_to_string sv
         ^ " ->\n"
-        ^ expression_to_string env indent1 indent_incr branch
+        ^ expr_to_string env indent1 indent_incr branch
       in
-      let otherwise = expression_to_string env indent1 indent_incr otherwise in
+      let otherwise = expr_to_string env indent1 indent_incr otherwise in
       indent ^ "match " ^ scrut ^ " with\n"
       ^ String.concat "\n" (List.map branch_to_string branches)
       ^ "\n" ^ indent ^ "| _ ->\n" ^ otherwise
@@ -167,8 +167,8 @@ and loop_to_string (env : fmt_env) (indent : string) (indent_incr : string)
   let indent1 = indent ^ indent_incr in
   let loop_id = LoopId.to_string loop.loop_id in
   let fresh_svalues = SymbolicValueId.Set.to_string None loop.fresh_svalues in
-  let end_expr = expression_to_string env indent1 indent_incr loop.end_expr in
-  let loop_expr = expression_to_string env indent1 indent_incr loop.loop_expr in
+  let end_expr = expr_to_string env indent1 indent_incr loop.end_expr in
+  let loop_expr = expr_to_string env indent1 indent_incr loop.loop_expr in
   "loop@" ^ loop_id ^ " {\n\n" ^ indent1 ^ "fresh_svalues = " ^ fresh_svalues
   ^ "\n\n" ^ indent1 ^ "end_expr=\n" ^ end_expr ^ "\n\n" ^ indent1
   ^ "loop_expr=\n" ^ loop_expr ^ "\n" ^ indent ^ "}"

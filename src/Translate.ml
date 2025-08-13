@@ -15,7 +15,7 @@ let log = TranslateCore.log
 (** The result of running the symbolic interpreter on a function:
     - the list of symbolic values used for the input values
     - the generated symbolic AST *)
-type symbolic_fun_translation = symbolic_value list * SA.expression
+type symbolic_fun_translation = symbolic_value list * SA.expr
 
 (** Execute the symbolic interpreter on a function to generate a list of
     symbolic ASTs, for the forward function and the backward functions. *)
@@ -60,14 +60,14 @@ let check_fun_decl_vars_are_well_bound (trans_ctx : trans_ctx)
          in
 
          [%ldebug PrintPure.fun_decl_to_string fmt_env f];
-         let fvars = PureUtils.texpression_get_fvars body.body in
+         let fvars = PureUtils.texpr_get_fvars body.body in
          if not (Pure.FVarId.Set.is_empty fvars) then
            [%craise] span
              ("Internal errors: found unexpected fvars: "
              ^ Pure.FVarId.Set.to_string None fvars));
 
         [%ldebug PrintPure.fun_decl_to_string fmt_env f];
-        let fvars = PureUtils.texpression_get_fvars body.body in
+        let fvars = PureUtils.texpr_get_fvars body.body in
         if not (Pure.FVarId.Set.is_empty fvars) then
           [%craise] span
             ("Internal errors: found unexpected fvars: "
@@ -142,7 +142,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
 
         let visitor =
           object
-            inherit [_] SA.iter_expression as super
+            inherit [_] SA.iter_expr as super
 
             method! visit_loop env loop =
               let _ =
@@ -153,7 +153,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
               super#visit_loop env loop
           end
         in
-        visitor#visit_expression () ast;
+        visitor#visit_expr () ast;
         !m
   in
 

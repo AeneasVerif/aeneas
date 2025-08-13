@@ -20,9 +20,7 @@ val pop_frame :
   Meta.span ->
   bool ->
   eval_ctx ->
-  typed_value option
-  * eval_ctx
-  * (SymbolicAst.expression -> SymbolicAst.expression)
+  typed_value option * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr)
 
 (** Helper.
 

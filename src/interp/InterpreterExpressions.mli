@@ -25,7 +25,7 @@ val access_rplace_reorganize_and_read :
   access_kind ->
   place ->
   eval_ctx ->
-  typed_value * eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression)
+  typed_value * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr)
 
 (** Evaluate an operand.
 
@@ -40,7 +40,7 @@ val eval_operand :
   Meta.span ->
   operand ->
   eval_ctx ->
-  typed_value * eval_ctx * (SymbolicAst.expression -> SymbolicAst.expression)
+  typed_value * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr)
 
 (** Evaluate several operands at once. *)
 val eval_operands :
@@ -48,9 +48,7 @@ val eval_operands :
   Meta.span ->
   operand list ->
   eval_ctx ->
-  typed_value list
-  * eval_ctx
-  * (SymbolicAst.expression -> SymbolicAst.expression)
+  typed_value list * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr)
 
 (** Evaluate an rvalue which is not a global (globals are handled elsewhere).
 
@@ -65,7 +63,7 @@ val eval_rvalue_not_global :
   eval_ctx ->
   (typed_value, eval_error) result
   * eval_ctx
-  * (SymbolicAst.expression -> SymbolicAst.expression)
+  * (SymbolicAst.expr -> SymbolicAst.expr)
 
 (** Evaluate a fake read (update the context so that we can read a place) *)
 val eval_fake_read : config -> Meta.span -> place -> cm_fun

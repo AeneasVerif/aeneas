@@ -278,9 +278,7 @@ let get_builtin_function_return_type (span : Meta.span) (fid : builtin_fun_id)
 
 let move_return_value (config : config) (span : Meta.span)
     (pop_return_value : bool) (ctx : eval_ctx) :
-    typed_value option
-    * eval_ctx
-    * (SymbolicAst.expression -> SymbolicAst.expression) =
+    typed_value option * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   if pop_return_value then
     let ret_vid = LocalId.zero in
     let v, ctx, cc =
@@ -293,9 +291,7 @@ let move_return_value (config : config) (span : Meta.span)
 
 let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
     (ctx : eval_ctx) :
-    typed_value option
-    * eval_ctx
-    * (SymbolicAst.expression -> SymbolicAst.expression) =
+    typed_value option * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Debug *)
   [%ltrace eval_ctx_to_string ~span:(Some span) ctx];
 

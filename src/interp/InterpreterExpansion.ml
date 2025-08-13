@@ -413,8 +413,7 @@ let expand_symbolic_value_borrow (span : Meta.span)
 
 let expand_symbolic_bool (span : Meta.span) (sv : symbolic_value)
     (sv_place : SA.mplace option) :
-    eval_ctx ->
-    (eval_ctx * eval_ctx) * (SA.expression * SA.expression -> SA.expression) =
+    eval_ctx -> (eval_ctx * eval_ctx) * (SA.expr * SA.expr -> SA.expr) =
  fun ctx ->
   (* Compute the expanded value *)
   let original_sv = sv in
@@ -491,7 +490,7 @@ let expand_symbolic_value_no_branching (span : Meta.span) (sv : symbolic_value)
 
 let expand_symbolic_adt (span : Meta.span) (sv : symbolic_value)
     (sv_place : SA.mplace option) :
-    eval_ctx -> eval_ctx list * (SA.expression list -> SA.expression) =
+    eval_ctx -> eval_ctx list * (SA.expr list -> SA.expr) =
  fun ctx ->
   (* Debug *)
   [%ltrace symbolic_value_to_string ctx sv];
@@ -522,9 +521,8 @@ let expand_symbolic_adt (span : Meta.span) (sv : symbolic_value)
 let expand_symbolic_int (span : Meta.span) (sv : symbolic_value)
     (sv_place : SA.mplace option) (int_type : integer_type)
     (tgts : scalar_value list) :
-    eval_ctx ->
-    (eval_ctx list * eval_ctx)
-    * (SA.expression list * SA.expression -> SA.expression) =
+    eval_ctx -> (eval_ctx list * eval_ctx) * (SA.expr list * SA.expr -> SA.expr)
+    =
  fun ctx ->
   (* Sanity check *)
   (match int_type with

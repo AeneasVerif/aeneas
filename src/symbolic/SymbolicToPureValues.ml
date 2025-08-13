@@ -45,8 +45,7 @@ let fresh_named_vars_for_symbolic_values
     Because we do not necessarily introduce variables for the symbolic values of
     (translated) type unit, it is important that we do not lookup variables in
     case the symbolic value has type unit. *)
-let symbolic_value_to_texpression (ctx : bs_ctx) (sv : V.symbolic_value) :
-    texpression =
+let symbolic_value_to_texpr (ctx : bs_ctx) (sv : V.symbolic_value) : texpr =
   (* Translate the type *)
   let ty = ctx_translate_fwd_ty ctx sv.sv_ty in
   (* If the type is unit, directly return unit *)
@@ -54,7 +53,7 @@ let symbolic_value_to_texpression (ctx : bs_ctx) (sv : V.symbolic_value) :
   else
     (* Otherwise lookup the variable *)
     match lookup_var_for_symbolic_value sv.sv_id ctx with
-    | Some var -> mk_texpression_from_fvar var
+    | Some var -> mk_texpr_from_fvar var
     | None ->
         {
           e =
@@ -80,11 +79,11 @@ let symbolic_value_to_texpression (ctx : bs_ctx) (sv : V.symbolic_value) :
     - function call
     - end abstraction
     - return *)
-let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
-    (v : V.typed_value) : texpression =
+let rec typed_value_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx)
+    (v : V.typed_value) : texpr =
   (* We need to ignore boxes *)
   let v = ValuesUtils.unbox_typed_value ctx.span v in
-  let translate = typed_value_to_texpression ctx ectx in
+  let translate = typed_value_to_texpr ctx ectx in
   (* Translate the type *)
   let ty = ctx_translate_fwd_ty ctx v.ty in
   (* Translate the value *)
@@ -98,7 +97,7 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
         match v.ty with
         | TAdt { id = TTuple; _ } ->
             [%sanity_check] ctx.span (variant_id = None);
-            mk_simpl_tuple_texpression ctx.span field_values
+            mk_simpl_tuple_texpr ctx.span field_values
         | _ ->
             (* Retrieve the type and the translated generics from the translated
                type (simpler this way) *)
@@ -107,9 +106,7 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
             let qualif_id = AdtCons { adt_id; variant_id = av.variant_id } in
             let qualif = { id = qualif_id; generics } in
             let cons_e = Qualif qualif in
-            let field_tys =
-              List.map (fun (v : texpression) -> v.ty) field_values
-            in
+            let field_tys = List.map (fun (v : texpr) -> v.ty) field_values in
             let cons_ty = mk_arrows field_tys ty in
             let cons = { e = cons_e; ty = cons_ty } in
             (* Apply the constructor *)
@@ -138,16 +135,15 @@ let rec typed_value_to_texpression (ctx : bs_ctx) (ectx : C.eval_ctx)
         | VMutBorrow (_, v) ->
             (* Borrows are the identity in the extraction *)
             translate v)
-    | VSymbolic sv -> symbolic_value_to_texpression ctx sv
+    | VSymbolic sv -> symbolic_value_to_texpr ctx sv
   in
   (* Debugging *)
   [%ltrace
     "result:" ^ "\n- input value:\n"
     ^ typed_value_to_string ctx v
-    ^ "\n- translated expression:\n"
-    ^ texpression_to_string ctx value];
+    ^ "\n- translated expression:\n" ^ texpr_to_string ctx value];
   (* Sanity check *)
-  type_check_texpression ctx value;
+  type_check_texpr ctx value;
   (* Return *)
   value
 
@@ -288,7 +284,7 @@ let compute_typed_avalue_proj_kind span type_infos
     ]} *)
 let rec typed_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
     (ectx : C.eval_ctx) (abs_regions : T.RegionId.Set.t) (av : V.typed_avalue) :
-    texpression option =
+    texpr option =
   let value =
     match av.value with
     | AAdt adt_v ->
@@ -313,19 +309,19 @@ let rec typed_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
              is the meta-value. *)
           match mv with
           | None -> [%craise] ctx.span "Unreachable"
-          | Some mv -> Some (typed_value_to_texpression ctx ectx mv))
+          | Some mv -> Some (typed_value_to_texpr ctx ectx mv))
   in
   (* Sanity check - Rk.: we do this at every recursive call, which is a bit
    * expansive... *)
   (match value with
   | None -> ()
-  | Some value -> type_check_texpression ctx value);
+  | Some value -> type_check_texpr ctx value);
   (* Return *)
   value
 
 and adt_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
     (ectx : C.eval_ctx) (abs_regions : T.RegionId.Set.t) (av : V.typed_avalue)
-    (adt_v : V.adt_avalue) : texpression option =
+    (adt_v : V.adt_avalue) : texpr option =
   (* We do not do the same thing depending on whether we visit a tuple
      or a "regular" ADT *)
   let adt_id, _ = TypesUtils.ty_as_adt av.ty in
@@ -353,7 +349,7 @@ and adt_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
                 translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty
               in
               Some (mk_adt_value ctx.span ty adt_v.variant_id fields)
-          | TTuple -> Some (mk_simpl_tuple_texpression ctx.span fields)
+          | TTuple -> Some (mk_simpl_tuple_texpr ctx.span fields)
         end
   | LoanProj borrow_kind -> begin
       (* Translate the field values *)
@@ -400,18 +396,18 @@ and adt_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
             else
               (* Note that if there is exactly one field value,
                * [mk_simpl_tuple_rvalue] is the identity *)
-              let rv = mk_simpl_tuple_texpression ctx.span field_values in
+              let rv = mk_simpl_tuple_texpr ctx.span field_values in
               Some rv
           else
             (* If we do not filter the fields, all the values should be [Some ...] *)
             let field_values = List.map Option.get field_values in
-            let v = mk_simpl_tuple_texpression ctx.span field_values in
+            let v = mk_simpl_tuple_texpr ctx.span field_values in
             Some v
     end
 
 and aloan_content_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
     (ectx : C.eval_ctx) (_abs_regions : T.RegionId.Set.t) (lc : V.aloan_content)
-    : texpression option =
+    : texpr option =
   match lc with
   | AMutLoan (_, _, _) | ASharedLoan (_, _, _, _) ->
       [%craise] ctx.span "Unreachable"
@@ -421,14 +417,14 @@ and aloan_content_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
         (ValuesUtils.is_aignored given_back.value)
         "Unreachable";
       (* Return the meta-value *)
-      Some (typed_value_to_texpression ctx ectx given_back_meta)
+      Some (typed_value_to_texpr ctx ectx given_back_meta)
   | AEndedSharedLoan (sv, child) ->
       [%cassert] ctx.span (ValuesUtils.is_aignored child.value) "Unreachable";
       (* We don't diveinto shared loans: there is nothing to give back
          inside (note that there could be a mutable borrow in the shared
          value, pointing to a mutable loan in the child avalue, but this
          borrow is in practice immutable) *)
-      if filter then None else Some (typed_value_to_texpression ctx ectx sv)
+      if filter then None else Some (typed_value_to_texpr ctx ectx sv)
   | AIgnoredMutLoan (_, _) ->
       (* There can be *inner* not ended mutable loans, but not outer ones *)
       [%craise] ctx.span "Unreachable"
@@ -440,7 +436,7 @@ and aloan_content_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
       [%craise] ctx.span "Unimplemented"
 
 and aproj_to_consumed_aux (ctx : bs_ctx) (_abs_regions : T.RegionId.Set.t)
-    (aproj : V.aproj) (ty : T.ty) : texpression option =
+    (aproj : V.aproj) (ty : T.ty) : texpr option =
   match aproj with
   | V.AEndedProjLoans { proj = msv; consumed = []; borrows = [] } ->
       (* The symbolic value was left unchanged.
@@ -448,7 +444,7 @@ and aproj_to_consumed_aux (ctx : bs_ctx) (_abs_regions : T.RegionId.Set.t)
          We're using the projection type as the type of the symbolic value -
          it doesn't really matter. *)
       let msv : V.symbolic_value = { sv_id = msv; sv_ty = ty } in
-      Some (symbolic_value_to_texpression ctx msv)
+      Some (symbolic_value_to_texpr ctx msv)
   | V.AEndedProjLoans
       { proj = _; consumed = [ (mnv, child_aproj) ]; borrows = [] } ->
       [%sanity_check] ctx.span (child_aproj = AEmpty);
@@ -468,7 +464,7 @@ and aproj_to_consumed_aux (ctx : bs_ctx) (_abs_regions : T.RegionId.Set.t)
          We're using the projection type as the type of the symbolic value -
          it doesn't really matter. *)
       let mnv : V.symbolic_value = { sv_id = mnv.sv_id; sv_ty = ty } in
-      Some (symbolic_value_to_texpression ctx mnv)
+      Some (symbolic_value_to_texpr ctx mnv)
   | V.AEndedProjLoans _ ->
       (* The symbolic value was updated, and the given back values come from several
          abstractions *)
@@ -480,8 +476,7 @@ and aproj_to_consumed_aux (ctx : bs_ctx) (_abs_regions : T.RegionId.Set.t)
   | AEmpty | AProjLoans _ | AProjBorrows _ -> [%craise] ctx.span "Unreachable"
 
 let typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
-    (abs_regions : T.RegionId.Set.t) (av : V.typed_avalue) : texpression option
-    =
+    (abs_regions : T.RegionId.Set.t) (av : V.typed_avalue) : texpr option =
   (* Check if the value was generated from a loan projector: if yes, and if
      it contains mutable loans, then we generate a consumed value (because
      upon ending the borrow we consumed a value).
@@ -506,7 +501,7 @@ let typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
 
     See [typed_avalue_to_consumed_aux]. *)
 let abs_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs) :
-    texpression list =
+    texpr list =
   [%ltrace abs_to_string ~with_ended:true ctx abs];
   let values =
     List.filter_map
@@ -517,7 +512,7 @@ let abs_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs) :
     "- abs: "
     ^ abs_to_string ~with_ended:true ctx abs
     ^ "\n- values: "
-    ^ Print.list_to_string (texpression_to_string ctx) values];
+    ^ Print.list_to_string (texpr_to_string ctx) values];
   values
 
 let translate_mprojection_elem (pe : E.projection_elem) :
@@ -750,7 +745,7 @@ and aproj_to_given_back_aux (mp : mplace option) (aproj : V.aproj) (ty : T.ty)
           ctx with
           var_id_to_default =
             FVarId.Map.add var.id
-              (symbolic_value_to_texpression ctx sv)
+              (symbolic_value_to_texpr ctx sv)
               ctx.var_id_to_default;
         }
       in
@@ -819,7 +814,7 @@ let register_consumed_mut_borrows (ectx : C.eval_ctx) (ctx : bs_ctx)
       inherit [_] V.iter_typed_value as super
 
       method! visit_VMutBorrow env bid v =
-        let e = typed_value_to_texpression !ctx ectx v in
+        let e = typed_value_to_texpr !ctx ectx v in
         ctx :=
           {
             !ctx with
