@@ -227,7 +227,7 @@ let fvar_get_id (v : fvar) : fvar_id = v.id
 
 let mk_typed_pattern_from_literal (cv : literal) : typed_pattern =
   let ty = TLiteral (compute_literal_type cv) in
-  { value = PatConstant cv; ty }
+  { value = PConstant cv; ty }
 
 let mk_tag (msg : string) (next_e : texpression) : texpression =
   let e = Meta (Tag msg, next_e) in
@@ -394,12 +394,12 @@ let is_cvar (e : texpression) : bool =
 
 let is_pat_open (p : typed_pattern) : bool =
   match p.value with
-  | PatOpen _ -> true
+  | POpen _ -> true
   | _ -> false
 
 let as_pat_open span (p : typed_pattern) : fvar * mplace option =
   match p.value with
-  | PatOpen (v, pm) -> (v, pm)
+  | POpen (v, pm) -> (v, pm)
   | _ -> [%craise] span "Not an open binder"
 
 let as_pat_open_fvar_id span (p : typed_pattern) : fvar_id =
@@ -407,7 +407,7 @@ let as_pat_open_fvar_id span (p : typed_pattern) : fvar_id =
 
 let as_opt_pat_bound (p : typed_pattern) : (var * mplace option) option =
   match p.value with
-  | PatBound (v, mp) -> Some (v, mp)
+  | PBound (v, mp) -> Some (v, mp)
   | _ -> None
 
 let as_pat_bound (span : Meta.span) (p : typed_pattern) : var * mplace option =
@@ -421,7 +421,7 @@ let is_pat_bound (p : typed_pattern) : bool =
 let as_opt_pat_tuple (p : typed_pattern) : typed_pattern list option =
   match p with
   | {
-   value = PatAdt { variant_id = None; field_values };
+   value = PAdt { variant_id = None; field_values };
    ty = TAdt (TTuple, _);
   } -> Some field_values
   | _ -> None
@@ -435,9 +435,9 @@ let typed_pattern_replace_dummy_vars_with_free_vars
 
       method! visit_typed_pattern env p =
         match p.value with
-        | PatDummy ->
+        | PDummy ->
             let value = { id = fresh_fvar_id (); basename = None; ty = p.ty } in
-            { p with value = PatOpen (value, None) }
+            { p with value = POpen (value, None) }
         | _ -> super#visit_typed_pattern env p
     end
   in
@@ -709,17 +709,17 @@ let mk_texpression_from_fvar (v : fvar) : texpression =
   { e; ty }
 
 let mk_typed_pattern_from_fvar (v : fvar) (mp : mplace option) : typed_pattern =
-  let value = PatOpen (v, mp) in
+  let value = POpen (v, mp) in
   let ty = v.ty in
   { value; ty }
 
 let mk_dummy_pattern (ty : ty) : typed_pattern =
-  let value = PatDummy in
+  let value = PDummy in
   { value; ty }
 
 let is_dummy_pattern (p : typed_pattern) : bool =
   match p.value with
-  | PatDummy -> true
+  | PDummy -> true
   | _ -> false
 
 let mk_emeta (m : emeta) (e : texpression) : texpression =
@@ -745,7 +745,7 @@ let mk_simpl_tuple_pattern (vl : typed_pattern list) : typed_pattern =
   | _ ->
       let tys = List.map (fun (v : typed_pattern) -> v.ty) vl in
       let ty = TAdt (TTuple, mk_generic_args_from_types tys) in
-      let value = PatAdt { variant_id = None; field_values = vl } in
+      let value = PAdt { variant_id = None; field_values = vl } in
       { value; ty }
 
 (** Similar to {!mk_simpl_tuple_pattern} *)
@@ -767,7 +767,7 @@ let mk_simpl_tuple_texpression (span : Meta.span) (vl : texpression list) :
 
 let mk_adt_pattern (adt_ty : ty) (variant_id : VariantId.id option)
     (vl : typed_pattern list) : typed_pattern =
-  let value = PatAdt { variant_id; field_values = vl } in
+  let value = PAdt { variant_id; field_values = vl } in
   { value; ty = adt_ty }
 
 let mk_adt_value (span : span) (adt_ty : ty) (variant_id : VariantId.id option)
@@ -860,18 +860,18 @@ let mk_result_fail_pattern (error_pat : pattern) (ty : ty) : typed_pattern =
   let error_pat : typed_pattern = { value = error_pat; ty = mk_error_ty } in
   let ty = TAdt (TBuiltin TResult, mk_generic_args_from_types [ ty ]) in
   let value =
-    PatAdt { variant_id = Some result_fail_id; field_values = [ error_pat ] }
+    PAdt { variant_id = Some result_fail_id; field_values = [ error_pat ] }
   in
   { value; ty }
 
 (** Create a [Fail _] pattern (we ignore the error) *)
 let mk_result_fail_pattern_ignore_error (ty : ty) : typed_pattern =
-  let error_pat : pattern = PatDummy in
+  let error_pat : pattern = PDummy in
   mk_result_fail_pattern error_pat ty
 
 let mk_result_ok_pattern (v : typed_pattern) : typed_pattern =
   let ty = TAdt (TBuiltin TResult, mk_generic_args_from_types [ v.ty ]) in
-  let value = PatAdt { variant_id = Some result_ok_id; field_values = [ v ] } in
+  let value = PAdt { variant_id = Some result_ok_id; field_values = [ v ] } in
   { value; ty }
 
 let opt_unmeta_mplace (e : texpression) : mplace option * texpression =
@@ -896,11 +896,11 @@ let rec typed_pattern_to_texpression (span : Meta.span) (pat : typed_pattern) :
     texpression option =
   let e_opt =
     match pat.value with
-    | PatConstant pv -> Some (Const pv)
-    | PatOpen (v, _) -> Some (FVar v.id)
-    | PatBound (_, _) -> [%internal_error] span
-    | PatDummy -> None
-    | PatAdt av ->
+    | PConstant pv -> Some (Const pv)
+    | POpen (v, _) -> Some (FVar v.id)
+    | PBound (_, _) -> [%internal_error] span
+    | PDummy -> None
+    | PAdt av ->
         let fields =
           List.map (typed_pattern_to_texpression span) av.field_values
         in
@@ -935,12 +935,12 @@ let open_typed_pattern (span : Meta.span) (fresh_fvar_id : var -> fvar_id)
   let visitor =
     object
       inherit [_] map_typed_pattern
-      method! visit_PatOpen _ _ = [%internal_error] span
+      method! visit_POpen _ _ = [%internal_error] span
 
-      method! visit_PatBound _ v m =
+      method! visit_PBound _ v m =
         let id = fresh_fvar_id v in
         let { basename; ty } : var = v in
-        PatOpen ({ id; basename; ty }, m)
+        POpen ({ id; basename; ty }, m)
     end
   in
   visitor#visit_typed_pattern () pat
@@ -958,13 +958,13 @@ let close_typed_patterns (span : Meta.span) (patl : typed_pattern list) :
     object
       inherit [_] map_typed_pattern
 
-      method! visit_PatOpen _ v m =
+      method! visit_POpen _ v m =
         let bid = fresh_bvar_id () in
         let { id; basename; ty } : fvar = v in
         map := FVarId.Map.add id bid !map;
-        PatBound ({ basename; ty }, m)
+        PBound ({ basename; ty }, m)
 
-      method! visit_PatBound _ _ _ = [%internal_error] span
+      method! visit_PBound _ _ _ = [%internal_error] span
     end
   in
   let patl = List.map (visitor#visit_typed_pattern ()) patl in
@@ -1169,7 +1169,7 @@ let typed_pattern_is_open (pat : typed_pattern) : bool =
   let visitor =
     object
       inherit [_] iter_typed_pattern
-      method! visit_PatBound _ _ = raise Utils.Found
+      method! visit_PBound _ _ = raise Utils.Found
     end
   in
   try
@@ -1230,13 +1230,13 @@ let mk_opened_lambdas span (xl : typed_pattern list) (e : texpression) :
 
 let mk_closed_lambda_from_fvar span (var : fvar) (mp : mplace option)
     (e : texpression) : texpression =
-  let pat = PatOpen (var, mp) in
+  let pat = POpen (var, mp) in
   let pat = { value = pat; ty = var.ty } in
   mk_closed_lambda span pat e
 
 let mk_opened_lambda_from_fvar span (var : fvar) (mp : mplace option)
     (e : texpression) : texpression =
-  let pat = PatOpen (var, mp) in
+  let pat = POpen (var, mp) in
   let pat = { value = pat; ty = var.ty } in
   mk_opened_lambda span pat e
 
@@ -1286,7 +1286,7 @@ let opt_dest_tuple_texpression (e : texpression) : texpression list option =
 
 let opt_dest_struct_pattern (pat : typed_pattern) : typed_pattern list option =
   match pat.value with
-  | PatAdt { variant_id = None; field_values } -> Some field_values
+  | PAdt { variant_id = None; field_values } -> Some field_values
   | _ -> None
 
 (** Destruct a [ret ...] expression *)
@@ -1674,15 +1674,15 @@ class virtual ['self] open_close_all_visitor =
     method virtual get_bvar : 'env ref -> bvar -> fvar_id
     method virtual get_fvar : 'env ref -> fvar_id -> bvar
 
-    method! visit_PatOpen env v mp =
+    method! visit_POpen env v mp =
       let _ = self#push_fvar env v in
       let { basename; ty; id = _ } = v in
-      PatBound ({ basename; ty }, mp)
+      PBound ({ basename; ty }, mp)
 
-    method! visit_PatBound env (v : var) mp =
+    method! visit_PBound env (v : var) mp =
       let fid = self#push_var env v in
       let { basename; ty } : var = v in
-      PatOpen ({ basename; ty; id = fid }, mp)
+      POpen ({ basename; ty; id = fid }, mp)
 
     method! visit_Lambda env pat inner =
       self#start_scope env;
@@ -1821,7 +1821,7 @@ let open_all_visitor (span : Meta.span) =
     method get_fvar _ fid =
       [%craise] span ("Internal error: could not find fvar: " ^ show_fvar_id fid)
 
-    method! visit_PatOpen _ _ = [%internal_error] span
+    method! visit_POpen _ _ = [%internal_error] span
   end
 
 let open_all_texpression (span : Meta.span) (e : texpression) : texpression =

@@ -90,7 +90,7 @@ let fmt_env_push_binders (env : fmt_env) (pat : typed_pattern) : fmt_env =
     object
       inherit [_] iter_typed_pattern
 
-      method! visit_PatBound _ v _ =
+      method! visit_PBound _ v _ =
         env :=
           let x, _, _ = fmt_env_push_var !env v in
           x
@@ -501,8 +501,8 @@ let adt_field_to_string ?(span = None) (env : fmt_env) (adt_id : type_id)
 let rec typed_pattern_to_string_core (span : Meta.span option) (env : fmt_env)
     (v : typed_pattern) : fmt_env * string =
   match v.value with
-  | PatConstant cv -> (env, literal_to_string cv)
-  | PatBound (v, mp) ->
+  | PConstant cv -> (env, literal_to_string cv)
+  | PBound (v, mp) ->
       let env, _, sv = fmt_env_push_var env v in
       let sv = var_to_string env { v with basename = Some sv } in
       begin
@@ -515,7 +515,7 @@ let rec typed_pattern_to_string_core (span : Meta.span option) (env : fmt_env)
             in
             (env, s)
       end
-  | PatOpen (v, mp) ->
+  | POpen (v, mp) ->
       let sv = fvar_id_to_string env v.id in
       begin
         match mp with
@@ -529,8 +529,8 @@ let rec typed_pattern_to_string_core (span : Meta.span option) (env : fmt_env)
             in
             (env, s)
       end
-  | PatDummy -> (env, "_")
-  | PatAdt av ->
+  | PDummy -> (env, "_")
+  | PAdt av ->
       adt_pattern_to_string_core span env av.variant_id av.field_values v.ty
 
 (** Not safe to use (this function should be used between calls to

@@ -283,21 +283,21 @@ let rec extract_typed_pattern (span : Meta.span) (ctx : extraction_ctx)
   let inside = inside && not with_type in
   let ctx =
     match v.value with
-    | PatConstant cv ->
+    | PConstant cv ->
         extract_literal span fmt is_pattern inside cv;
         ctx
-    | PatBound _ ->
+    | PBound _ ->
         (* We should have opened the pattern *)
         [%internal_error] span
-    | PatOpen (v, _) ->
+    | POpen (v, _) ->
         let vname = ctx_compute_var_basename span ctx v.basename v.ty in
         let ctx, vname = ctx_add_var span vname v.id ctx in
         F.pp_print_string fmt vname;
         ctx
-    | PatDummy ->
+    | PDummy ->
         F.pp_print_string fmt "_";
         ctx
-    | PatAdt av ->
+    | PAdt av ->
         let extract_value ctx inside v =
           extract_typed_pattern span ctx fmt is_let inside v
         in

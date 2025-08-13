@@ -821,16 +821,16 @@ class virtual ['self] mapreduce_typed_pattern_base =
 
 (** A pattern (which appears on the left of assignments, in matches, etc.). *)
 type pattern =
-  | PatConstant of literal
-      (** {!PatConstant} is necessary because we merge the switches over integer
+  | PConstant of literal
+      (** {!PConstant} is necessary because we merge the switches over integer
           values and the matches over enumerations *)
-  | PatBound of var * mplace option
+  | PBound of var * mplace option
       (** The index of the variable is determined by its position (it is the
           index given by a depth-first search, which is consistent with the way
           visitors work). *)
-  | PatDummy  (** Ignored value: [_]. *)
-  | PatOpen of fvar * mplace option
-      (** We replace [PatBound] with [PatOpen] when opening binders.
+  | PDummy  (** Ignored value: [_]. *)
+  | POpen of fvar * mplace option
+      (** We replace [PBound] with [POpen] when opening binders.
 
           When we open a binder (say, the expression [let x = v in e]) by
           replacing the bound variables (in [e]) with free variables, we also
@@ -841,22 +841,22 @@ type pattern =
 
           Ex.: We want to simplify the expression (1) [let (x, y) = v in y] into
           [let (_, y) = v in y]. If we use DeBruijn indices the expression (1)
-          looks like: [let (PatBound, PatBound) = v in BVar (0, 1)], while the
-          expression (2) looks like: [let (_, PatBound) = v in BVar (0, 0)].
-          Note that in [BVar (0, 1)] the first number (the 0) identifies the
+          looks like: [let (PBound, PBound) = v in BVar (0, 1)], while the
+          expression (2) looks like: [let (_, PBound) = v in BVar (0, 0)]. Note
+          that in [BVar (0, 1)] the first number (the 0) identifies the
           scope/level of the variable (how many binder groups we have to
           traverse) while the second number (the 1) identifies the variable in
           the binder group. We resort to this representation because a binder
           group like a let-binding can bind several variables at once (see the
           explanations in [bvar]).
 
-          We first open the expression [let (PatOpen, PatOpen) = v in BVar 1],
+          We first open the expression [let (POpen, POpen) = v in BVar 1],
           producing the pattern (let's pretend we identify free variables with
           names rather than indices) [(x, y)] and the expression [y]. We then
           update the pattern to [(_,y)] and close the expression by reforming
           the let: [y] now has the index 0 and we get the expected expression:
           [let (_, BVar) = v in BVar 0]. *)
-  | PatAdt of adt_pattern
+  | PAdt of adt_pattern
 
 and adt_pattern = {
   variant_id : variant_id option;
