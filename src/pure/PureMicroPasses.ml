@@ -148,10 +148,10 @@ module NcAssignMap = Collections.MakeMap (NcAssignOrderedType)
 module NcAssignSet = Collections.MakeSet (NcAssignOrderedType)
 
 let rec decompose_tpattern span (x : tpattern) : (fvar * int) option =
-  match x.value with
+  match x.pat with
   | PBound _ -> [%internal_error] span
   | POpen (v, _) -> Some (v, 0)
-  | PAdt { variant_id = None; field_values = [ x ] } -> begin
+  | PAdt { variant_id = None; fields = [ x ] } -> begin
       Option.map
         (fun (vid, depth) -> (vid, depth + 1))
         (decompose_tpattern span x)
@@ -412,16 +412,16 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
 
   (* Equate the loop outputs *)
   let rec equate (out0 : tpattern) (out1 : tpattern) : unit =
-    match (out0.value, out1.value) with
+    match (out0.pat, out1.pat) with
     | POpen (v0, _), POpen (v1, _) -> register_edge (Pure v0.id) 0 (Pure v1.id)
     | PAdt adt0, PAdt adt1 ->
         if
           adt0.variant_id = adt1.variant_id
-          && List.length adt0.field_values = List.length adt1.field_values
+          && List.length adt0.fields = List.length adt1.fields
         then
           List.iter
             (fun (x, y) -> equate x y)
-            (List.combine adt0.field_values adt1.field_values)
+            (List.combine adt0.fields adt1.fields)
     | _ -> ()
   in
   LoopId.Map.iter
@@ -699,7 +699,7 @@ let simplify_decompose_struct_visitor (ctx : ctx) (def : fun_decl) =
 
     method! visit_Let env (monadic : bool) (lv : tpattern) (scrutinee : texpr)
         (next : texpr) =
-      match (lv.value, lv.ty) with
+      match (lv.pat, lv.ty) with
       | PAdt adt_pat, TAdt (TAdtId adt_id, generics) ->
           (* Detect if this is an enumeration or not *)
           let tdef =
@@ -739,7 +739,7 @@ let simplify_decompose_struct_visitor (ctx : ctx) (def : fun_decl) =
               mk_app span proj scrutinee
             in
             let id_var_pairs =
-              FieldId.mapi (fun fid v -> (fid, v)) adt_pat.field_values
+              FieldId.mapi (fun fid v -> (fid, v)) adt_pat.fields
             in
             let monadic = false in
             let e =
@@ -946,7 +946,7 @@ let simplify_let_bindings_visitor (ctx : ctx) (def : fun_decl) =
             if List.length pats = List.length args then
               (* Check if the arguments are exactly the lambdas *)
               let check_pat_arg ((pat, arg) : tpattern * texpr) =
-                match (pat.value, arg.e) with
+                match (pat.pat, arg.e) with
                 | POpen (v, _), FVar vid -> v.id = vid
                 | _ -> false
               in
@@ -1123,7 +1123,7 @@ let inline_useless_var_assignments_visitor ~(inline_named : bool)
            We also inline if the binding decomposes a structure that is to be
            extracted as a tuple, and the right value is a variable.
         *)
-      match (monadic, lv.value) with
+      match (monadic, lv.pat) with
       | false, POpen (lv_var, _) ->
           (* We can filter if: 1. *)
           let filter_pure =
@@ -1180,7 +1180,7 @@ let inline_useless_var_assignments_visitor ~(inline_named : bool)
             inline_identity
             &&
             match re.e with
-            | Lambda ({ value = POpen (v0, _); _ }, { e = FVar v1; _ }) ->
+            | Lambda ({ pat = POpen (v0, _); _ }, { e = FVar v1; _ }) ->
                 v0.id = v1
             | _ -> false
           in
@@ -1200,7 +1200,7 @@ let inline_useless_var_assignments_visitor ~(inline_named : bool)
           PAdt
             {
               variant_id = None;
-              field_values = [ { value = POpen (lv_var, _); ty = _ } ];
+              fields = [ { pat = POpen (lv_var, _); ty = _ } ];
             } ) ->
           (* Second case: we deconstruct a structure with one field that we will
                extract as tuple. *)
@@ -1330,8 +1330,8 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
               let lv =
                 if all_dummies then
                   let ty = lv.ty in
-                  let value = PDummy in
-                  { value; ty }
+                  let pat = PDummy in
+                  { pat; ty }
                 else lv
               in
               (Let (monadic, lv, re, e), fun _ -> used)
@@ -1388,7 +1388,7 @@ let simplify_let_then_ok_visitor _ctx (def : fun_decl) =
   (* Match a pattern and an expression: evaluates to [true] if the expression
      is actually exactly the pattern *)
   let rec match_pattern_and_expr (pat : tpattern) (e : texpr) : bool =
-    match (pat.value, e.e) with
+    match (pat.pat, e.e) with
     | PConstant plit, Const lit -> plit = lit
     | POpen (pv, _), FVar vid -> pv.id = vid
     | PDummy, _ ->
@@ -1401,11 +1401,11 @@ let simplify_let_then_ok_visitor _ctx (def : fun_decl) =
             if
               pat.ty = e.ty
               && padt.variant_id = cons_id.variant_id
-              && List.length padt.field_values = List.length args
+              && List.length padt.fields = List.length args
             then
               List.for_all
                 (fun (p, e) -> match_pattern_and_expr p e)
-                (List.combine padt.field_values args)
+                (List.combine padt.fields args)
             else false
         | _ -> false)
     | _ -> false
@@ -1664,15 +1664,15 @@ let simplify_aggregates_unchanged_fields_visitor (ctx : ctx) (def : fun_decl) =
     (* Register the fact that the scrutinee got expanded *)
     let env = add_expanded bound_adt.e env in
     (* Check if we are decomposing an ADT to introduce variables for its fields *)
-    match pat.value with
+    match pat.pat with
     | PAdt adt ->
         (* Check if the fields are all variables, and compute the tuple:
            (variable introduced for the field, projection) *)
-        let fields = FieldId.mapi (fun id x -> (id, x)) adt.field_values in
+        let fields = FieldId.mapi (fun id x -> (id, x)) adt.fields in
         let vars_to_projs =
           Collections.List.filter_map
             (fun ((fid, f) : _ * tpattern) ->
-              match f.value with
+              match f.pat with
               | POpen (var, _) ->
                   let proj = mk_adt_proj span bound_adt fid f.ty in
                   let var = { e = FVar var.id; ty = f.ty } in
@@ -2096,13 +2096,12 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
       let e1 = super#visit_texpr env e1 in
       (* Check if the current let-binding is a call to an index function *)
       let e1_app, e1_args = destruct_apps e1 in
-      match (pat.value, e1_app.e, e1_args) with
+      match (pat.pat, e1_app.e, e1_args) with
       | ( (* let (_, back) = ... *)
           PAdt
             {
               variant_id = None;
-              field_values =
-                [ { value = PDummy; _ }; { value = POpen (back_var, _); _ } ];
+              fields = [ { pat = PDummy; _ }; { pat = POpen (back_var, _); _ } ];
             },
           (* ... = Array.index_mut_usize a i *)
           Qualif
@@ -2374,7 +2373,7 @@ let decompose_let_bindings_visitor (decompose_monadic : bool)
         inherit [_] map_tpattern as super
 
         method! visit_tpattern (inside : bool) (pat : tpattern) : tpattern =
-          match pat.value with
+          match pat.pat with
           | PConstant _ | POpen _ | PDummy -> pat
           | PBound _ -> [%internal_error] span
           | PAdt _ ->
@@ -2405,7 +2404,7 @@ let decompose_let_bindings_visitor (decompose_monadic : bool)
            * - if yes, don't decompose
            * - if not, make the decomposition in two steps
            *)
-          match lv.value with
+          match lv.pat with
           | POpen _ | PDummy ->
               (* Variable: nothing to do *)
               (monadic, lv, re, next_e)
@@ -2492,7 +2491,7 @@ let unfold_monadic_let_bindings_visitors (_ctx : ctx) (def : fun_decl) =
           }
         in
         let err_pat = mk_tpattern_from_fvar err_var None in
-        let fail_pat = mk_result_fail_pattern err_pat.value lv.ty in
+        let fail_pat = mk_result_fail_pattern err_pat.pat lv.ty in
         let err_v = mk_texpr_from_fvar err_var in
         let fail_value = mk_result_fail_texpr def.item_meta.span err_v e.ty in
         let fail_branch = { pat = fail_pat; branch = fail_value } in

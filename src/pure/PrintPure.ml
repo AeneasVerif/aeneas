@@ -500,7 +500,7 @@ let adt_field_to_string ?(span = None) (env : fmt_env) (adt_id : type_id)
     instead. *)
 let rec tpattern_to_string_core (span : Meta.span option) (env : fmt_env)
     (v : tpattern) : fmt_env * string =
-  match v.value with
+  match v.pat with
   | PConstant cv -> (env, literal_to_string cv)
   | PBound (v, mp) ->
       let env, _, sv = fmt_env_push_var env v in
@@ -530,23 +530,22 @@ let rec tpattern_to_string_core (span : Meta.span option) (env : fmt_env)
             (env, s)
       end
   | PDummy -> (env, "_")
-  | PAdt av ->
-      adt_pattern_to_string_core span env av.variant_id av.field_values v.ty
+  | PAdt av -> adt_pattern_to_string_core span env av.variant_id av.fields v.ty
 
 (** Not safe to use (this function should be used between calls to
     [fmt_env_start_pbvars]) and [fmt_env_push_pbvars]): use
     [adt_pattern_to_string] instead. *)
 and adt_pattern_to_string_core (span : Meta.span option) (env : fmt_env)
-    (variant_id : VariantId.id option) (field_values : tpattern list) (ty : ty)
-    : fmt_env * string =
-  let env, field_values =
-    List.fold_left_map (tpattern_to_string_core span) env field_values
+    (variant_id : VariantId.id option) (fields : tpattern list) (ty : ty) :
+    fmt_env * string =
+  let env, fields =
+    List.fold_left_map (tpattern_to_string_core span) env fields
   in
   let s =
     match ty with
     | TAdt (TTuple, _) ->
         (* Tuple *)
-        "(" ^ String.concat ", " field_values ^ ")"
+        "(" ^ String.concat ", " fields ^ ")"
     | TAdt (TAdtId def_id, _) ->
         (* "Regular" ADT *)
         let adt_ident =
@@ -554,20 +553,20 @@ and adt_pattern_to_string_core (span : Meta.span option) (env : fmt_env)
           | Some vid -> adt_variant_from_type_decl_id_to_string env def_id vid
           | None -> type_decl_id_to_string env def_id
         in
-        if field_values <> [] then
+        if fields <> [] then
           match adt_field_names env def_id variant_id with
           | None ->
-              let field_values = String.concat ", " field_values in
-              adt_ident ^ " (" ^ field_values ^ ")"
+              let fields = String.concat ", " fields in
+              adt_ident ^ " (" ^ fields ^ ")"
           | Some field_names ->
-              let field_values = List.combine field_names field_values in
-              let field_values =
+              let fields = List.combine field_names fields in
+              let fields =
                 List.map
                   (fun (field, value) -> field ^ " = " ^ value ^ ";")
-                  field_values
+                  fields
               in
-              let field_values = String.concat " " field_values in
-              adt_ident ^ " { " ^ field_values ^ " }"
+              let fields = String.concat " " fields in
+              adt_ident ^ " { " ^ fields ^ " }"
         else adt_ident
     | TAdt (TBuiltin aty, _) -> (
         (* Builtin type *)
@@ -578,13 +577,13 @@ and adt_pattern_to_string_core (span : Meta.span option) (env : fmt_env)
         | TResult ->
             let variant_id = Option.get variant_id in
             if variant_id = result_ok_id then
-              match field_values with
+              match fields with
               | [ v ] -> "@Result::Return " ^ v
               | _ ->
                   [%craise_opt_span] span
                     "Result::Return takes exactly one value"
             else if variant_id = result_fail_id then
-              match field_values with
+              match fields with
               | [ v ] -> "@Result::Fail " ^ v
               | _ ->
                   [%craise_opt_span] span "Result::Fail takes exactly one value"
@@ -592,8 +591,7 @@ and adt_pattern_to_string_core (span : Meta.span option) (env : fmt_env)
               [%craise_opt_span] span
                 "Unreachable: improper variant id for result type"
         | TError ->
-            [%cassert_opt_span] span (field_values = [])
-              "Ill-formed error value";
+            [%cassert_opt_span] span (fields = []) "Ill-formed error value";
             let variant_id = Option.get variant_id in
             if variant_id = error_failure_id then "@Error::Failure"
             else if variant_id = error_out_of_fuel_id then "@Error::OutOfFuel"
@@ -603,11 +601,10 @@ and adt_pattern_to_string_core (span : Meta.span option) (env : fmt_env)
         | TFuel ->
             let variant_id = Option.get variant_id in
             if variant_id = fuel_zero_id then (
-              [%cassert_opt_span] span (field_values = [])
-                "Ill-formed full value";
+              [%cassert_opt_span] span (fields = []) "Ill-formed full value";
               "@Fuel::Zero")
             else if variant_id = fuel_succ_id then
-              match field_values with
+              match fields with
               | [ v ] -> "@Fuel::Succ " ^ v
               | _ ->
                   [%craise_opt_span] span "@Fuel::Succ takes exactly one value"
@@ -616,11 +613,11 @@ and adt_pattern_to_string_core (span : Meta.span option) (env : fmt_env)
                 "Unreachable: improper variant id for fuel type"
         | TArray | TSlice | TStr ->
             [%cassert_opt_span] span (variant_id = None) "Ill-formed value";
-            let field_values =
-              List.mapi (fun i v -> string_of_int i ^ " -> " ^ v) field_values
+            let fields =
+              List.mapi (fun i v -> string_of_int i ^ " -> " ^ v) fields
             in
             let id = builtin_ty_to_string aty in
-            id ^ " [" ^ String.concat "; " field_values ^ "]")
+            id ^ " [" ^ String.concat "; " fields ^ "]")
     | _ ->
         [%craise_opt_span] span
           ("Inconsistently typed value: expected ADT type but found:"
@@ -647,18 +644,18 @@ let tpattern_to_string ?(span : Meta.span option) (env : fmt_env) (v : tpattern)
   snd (tpattern_to_string_aux span env v)
 
 let adt_pattern_to_string_aux (span : Meta.span option) (env : fmt_env)
-    (variant_id : VariantId.id option) (field_values : tpattern list) (ty : ty)
-    : fmt_env * string =
+    (variant_id : VariantId.id option) (fields : tpattern list) (ty : ty) :
+    fmt_env * string =
   let env, s =
-    adt_pattern_to_string_core span (fmt_env_start_pbvars env) variant_id
-      field_values ty
+    adt_pattern_to_string_core span (fmt_env_start_pbvars env) variant_id fields
+      ty
   in
   (fmt_env_push_pbvars env, s)
 
 let adt_pattern_to_string ?(span : Meta.span option) (env : fmt_env)
-    (variant_id : VariantId.id option) (field_values : tpattern list) (ty : ty)
-    : string =
-  snd (adt_pattern_to_string_aux span env variant_id field_values ty)
+    (variant_id : VariantId.id option) (fields : tpattern list) (ty : ty) :
+    string =
+  snd (adt_pattern_to_string_aux span env variant_id fields ty)
 
 let back_sg_info_to_string (env : fmt_env) (info : back_sg_info) : string =
   let { inputs; outputs; output_names; effect_info; filter } = info in

@@ -282,7 +282,7 @@ let rec extract_tpattern (span : Meta.span) (ctx : extraction_ctx)
   let is_pattern = true in
   let inside = inside && not with_type in
   let ctx =
-    match v.value with
+    match v.pat with
     | PConstant cv ->
         extract_literal span fmt is_pattern inside cv;
         ctx
@@ -302,7 +302,7 @@ let rec extract_tpattern (span : Meta.span) (ctx : extraction_ctx)
           extract_tpattern span ctx fmt is_let inside v
         in
         extract_adt_g_value span extract_value fmt ctx is_let inside
-          av.variant_id av.field_values v.ty
+          av.variant_id av.fields v.ty
   in
   if with_type then (
     F.pp_print_space fmt ();
