@@ -159,14 +159,14 @@ module NcAssignSet = Collections.MakeSet (NcAssignOrderedType)
 
 let rec decompose_typed_pattern span (x : typed_pattern) : (fvar * int) option =
   match x.value with
-  | PatBound _ -> [%internal_error] span
-  | PatOpen (v, _) -> Some (v, 0)
-  | PatAdt { variant_id = None; field_values = [ x ] } -> begin
+  | PBound _ -> [%internal_error] span
+  | POpen (v, _) -> Some (v, 0)
+  | PAdt { variant_id = None; field_values = [ x ] } -> begin
       Option.map
         (fun (vid, depth) -> (vid, depth + 1))
         (decompose_typed_pattern span x)
     end
-  | PatConstant _ | PatDummy | PatAdt _ -> None
+  | PConstant _ | PDummy | PAdt _ -> None
 
 let rec decompose_texpression span (x : texpression) : (fvar_id * int) option =
   match x.e with
@@ -375,11 +375,11 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
         (* Continue exploring *)
         super#visit_Let env monadic lv re e
 
-      method! visit_PatBound _ _ _ = [%internal_error] span
+      method! visit_PBound _ _ _ = [%internal_error] span
 
-      method! visit_PatOpen env lv mp =
+      method! visit_POpen env lv mp =
         register_var_at_place lv mp;
-        super#visit_PatOpen env lv mp
+        super#visit_POpen env lv mp
 
       method! visit_Meta env meta e =
         begin
@@ -426,9 +426,9 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
   (* Equate the loop outputs *)
   let rec equate (out0 : typed_pattern) (out1 : typed_pattern) : unit =
     match (out0.value, out1.value) with
-    | PatOpen (v0, _), PatOpen (v1, _) ->
+    | POpen (v0, _), POpen (v1, _) ->
         register_edge (Pure v0.id) 0 (Pure v1.id)
-    | PatAdt adt0, PatAdt adt1 ->
+    | PAdt adt0, PAdt adt1 ->
         if
           adt0.variant_id = adt1.variant_id
           && List.length adt0.field_values = List.length adt1.field_values
@@ -600,8 +600,8 @@ let compute_pretty_names_update (def : fun_decl) (names : string FVarId.Map.t)
   let visitor =
     object
       inherit [_] map_expression
-      method! visit_PatOpen _ v mp = PatOpen (update_var v, mp)
-      method! visit_PatBound _ _ _ = [%internal_error] span
+      method! visit_POpen _ v mp = POpen (update_var v, mp)
+      method! visit_PBound _ _ _ = [%internal_error] span
     end
   in
 
@@ -714,7 +714,7 @@ let simplify_decompose_struct_visitor (ctx : ctx) (def : fun_decl) =
     method! visit_Let env (monadic : bool) (lv : typed_pattern)
         (scrutinee : texpression) (next : texpression) =
       match (lv.value, lv.ty) with
-      | PatAdt adt_pat, TAdt (TAdtId adt_id, generics) ->
+      | PAdt adt_pat, TAdt (TAdtId adt_id, generics) ->
           (* Detect if this is an enumeration or not *)
           let tdef =
             TypeDeclId.Map.find adt_id ctx.trans_ctx.type_ctx.type_decls
@@ -964,7 +964,7 @@ let simplify_let_bindings_visitor (ctx : ctx) (def : fun_decl) =
               (* Check if the arguments are exactly the lambdas *)
               let check_pat_arg ((pat, arg) : typed_pattern * texpression) =
                 match (pat.value, arg.e) with
-                | PatOpen (v, _), FVar vid -> v.id = vid
+                | POpen (v, _), FVar vid -> v.id = vid
                 | _ -> false
               in
               if List.for_all check_pat_arg (List.combine pats args) then
@@ -1141,7 +1141,7 @@ let inline_useless_var_assignments_visitor ~(inline_named : bool)
            extracted as a tuple, and the right value is a variable.
         *)
       match (monadic, lv.value) with
-      | false, PatOpen (lv_var, _) ->
+      | false, POpen (lv_var, _) ->
           (* We can filter if: 1. *)
           let filter_pure =
             (* 1.1. the left variable is unnamed or [inline_named] is true *)
@@ -1197,7 +1197,7 @@ let inline_useless_var_assignments_visitor ~(inline_named : bool)
             inline_identity
             &&
             match re.e with
-            | Lambda ({ value = PatOpen (v0, _); _ }, { e = FVar v1; _ }) ->
+            | Lambda ({ value = POpen (v0, _); _ }, { e = FVar v1; _ }) ->
                 v0.id = v1
             | _ -> false
           in
@@ -1214,10 +1214,10 @@ let inline_useless_var_assignments_visitor ~(inline_named : bool)
           (* Reconstruct the [let], only if the binding is not filtered *)
           if filter then e.e else Let (monadic, lv, re, e)
       | ( false,
-          PatAdt
+          PAdt
             {
               variant_id = None;
-              field_values = [ { value = PatOpen (lv_var, _); ty = _ } ];
+              field_values = [ { value = POpen (lv_var, _); ty = _ } ];
             } ) ->
           (* Second case: we deconstruct a structure with one field that we will
                extract as tuple. *)
@@ -1285,11 +1285,11 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
       method zero _ = true
       method plus b0 b1 _ = b0 () && b1 ()
 
-      method! visit_PatOpen env v mp =
-        if FVarId.Set.mem v.id env then (PatOpen (v, mp), fun _ -> false)
-        else (PatDummy, fun _ -> true)
+      method! visit_POpen env v mp =
+        if FVarId.Set.mem v.id env then (POpen (v, mp), fun _ -> false)
+        else (PDummy, fun _ -> true)
 
-      method! visit_PatBound _ _ _ = [%internal_error] span
+      method! visit_PBound _ _ _ = [%internal_error] span
     end
   in
   let filter_typed_pattern (used_vars : FVarId.Set.t) (lv : typed_pattern) :
@@ -1347,7 +1347,7 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
               let lv =
                 if all_dummies then
                   let ty = lv.ty in
-                  let value = PatDummy in
+                  let value = PDummy in
                   { value; ty }
                 else lv
               in
@@ -1409,12 +1409,12 @@ let simplify_let_then_ok_visitor _ctx (def : fun_decl) =
   let rec match_pattern_and_expr (pat : typed_pattern) (e : texpression) : bool
       =
     match (pat.value, e.e) with
-    | PatConstant plit, Const lit -> plit = lit
-    | PatOpen (pv, _), FVar vid -> pv.id = vid
-    | PatDummy, _ ->
+    | PConstant plit, Const lit -> plit = lit
+    | POpen (pv, _), FVar vid -> pv.id = vid
+    | PDummy, _ ->
         (* It is ok only if we ignore the unit value *)
         pat.ty = mk_unit_ty && e = mk_unit_rvalue
-    | PatAdt padt, _ -> (
+    | PAdt padt, _ -> (
         let qualif, args = destruct_apps e in
         match qualif.e with
         | Qualif { id = AdtCons cons_id; generics = _ } ->
@@ -1686,7 +1686,7 @@ let simplify_aggregates_unchanged_fields_visitor (ctx : ctx) (def : fun_decl) =
     let env = add_expanded bound_adt.e env in
     (* Check if we are decomposing an ADT to introduce variables for its fields *)
     match pat.value with
-    | PatAdt adt ->
+    | PAdt adt ->
         (* Check if the fields are all variables, and compute the tuple:
            (variable introduced for the field, projection) *)
         let fields = FieldId.mapi (fun id x -> (id, x)) adt.field_values in
@@ -1694,11 +1694,11 @@ let simplify_aggregates_unchanged_fields_visitor (ctx : ctx) (def : fun_decl) =
           Collections.List.filter_map
             (fun ((fid, f) : _ * typed_pattern) ->
               match f.value with
-              | PatOpen (var, _) ->
+              | POpen (var, _) ->
                   let proj = mk_adt_proj span bound_adt fid f.ty in
                   let var = { e = FVar var.id; ty = f.ty } in
                   Some (var.e, proj.e)
-              | PatBound _ -> [%internal_error] span
+              | PBound _ -> [%internal_error] span
               | _ -> None)
             fields
         in
@@ -1990,10 +1990,10 @@ let unit_vars_to_unit _ (def : fun_decl) : fun_decl =
       inherit [_] map_expression as super
 
       (** Replace in patterns *)
-      method! visit_PatOpen _ v mp =
-        if v.ty = mk_unit_ty then PatDummy else PatOpen (v, mp)
+      method! visit_POpen _ v mp =
+        if v.ty = mk_unit_ty then PDummy else POpen (v, mp)
 
-      method! visit_PatBound _ _ _ = [%internal_error] span
+      method! visit_PBound _ _ _ = [%internal_error] span
 
       (** Replace in "regular" expressions - note that we could limit ourselves
           to variables, but this is more powerful *)
@@ -2131,12 +2131,12 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
       let e1_app, e1_args = destruct_apps e1 in
       match (pat.value, e1_app.e, e1_args) with
       | ( (* let (_, back) = ... *)
-          PatAdt
+          PAdt
             {
               variant_id = None;
               field_values =
                 [
-                  { value = PatDummy; _ }; { value = PatOpen (back_var, _); _ };
+                  { value = PDummy; _ }; { value = POpen (back_var, _); _ };
                 ];
             },
           (* ... = Array.index_mut_usize a i *)
@@ -2211,11 +2211,11 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
           let updt_visitor1 =
             object
               inherit [_] map_expression as super
-              method! visit_PatBound _ _ _ = [%internal_error] span
+              method! visit_PBound _ _ _ = [%internal_error] span
 
-              method! visit_PatOpen env var mp =
+              method! visit_POpen env var mp =
                 fresh_vars := FVarId.Set.add var.id !fresh_vars;
-                super#visit_PatOpen env var mp
+                super#visit_POpen env var mp
 
               method! visit_Let env monadic' pat' e' e3 =
                 (* Check if this is a call to the backward function *)
@@ -2418,9 +2418,9 @@ let decompose_let_bindings_visitor (decompose_monadic : bool)
         method! visit_typed_pattern (inside : bool) (pat : typed_pattern) :
             typed_pattern =
           match pat.value with
-          | PatConstant _ | PatOpen _ | PatDummy -> pat
-          | PatBound _ -> [%internal_error] span
-          | PatAdt _ ->
+          | PConstant _ | POpen _ | PDummy -> pat
+          | PBound _ -> [%internal_error] span
+          | PAdt _ ->
               if not inside then super#visit_typed_pattern true pat
               else
                 let ltmp, rtmp = mk_fresh pat.ty in
@@ -2449,10 +2449,10 @@ let decompose_let_bindings_visitor (decompose_monadic : bool)
            * - if not, make the decomposition in two steps
            *)
           match lv.value with
-          | PatOpen _ | PatDummy ->
+          | POpen _ | PDummy ->
               (* Variable: nothing to do *)
               (monadic, lv, re, next_e)
-          | PatBound _ -> [%internal_error] span
+          | PBound _ -> [%internal_error] span
           | _ ->
               (* Not a variable: decompose if required *)
               (* Introduce a temporary variable to receive the value of the

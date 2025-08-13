@@ -110,17 +110,17 @@ let rec check_typed_pattern_aux (span : Meta.span) (ctx : tc_ctx)
     (v : typed_pattern) : tc_ctx =
   [%ltrace typed_pattern_to_string ctx v];
   match v.value with
-  | PatConstant cv ->
+  | PConstant cv ->
       check_literal span cv (ty_as_literal span v.ty);
       ctx
-  | PatDummy -> ctx
-  | PatBound (var, _) ->
+  | PDummy -> ctx
+  | PBound (var, _) ->
       [%pure_type_check] span (var.ty = v.ty);
       tc_ctx_push_bvar ctx var
-  | PatOpen (var, _) ->
+  | POpen (var, _) ->
       [%pure_type_check] span (var.ty = v.ty);
       ctx
-  | PatAdt av ->
+  | PAdt av ->
       (* Compute the field types *)
       let type_id, generics = ty_as_adt span v.ty in
       let field_tys =
