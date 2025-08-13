@@ -177,9 +177,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
       fun_decl = fdef;
       forward_inputs = [];
       (* Initialized just below *)
-      backward_inputs_no_state = RegionGroupId.Map.empty;
-      (* Initialized just below *)
-      backward_inputs_with_state = RegionGroupId.Map.empty;
+      backward_inputs = RegionGroupId.Map.empty;
       backward_outputs = None;
       (* Empty for now *)
       calls;
@@ -216,14 +214,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
   in
 
   (* Add the backward inputs *)
-  let backward_inputs_no_state, backward_inputs_with_state = ([], []) in
-  let backward_inputs_no_state =
-    RegionGroupId.Map.of_list backward_inputs_no_state
-  in
-  let backward_inputs_with_state =
-    RegionGroupId.Map.of_list backward_inputs_with_state
-  in
-  let ctx = { ctx with backward_inputs_no_state; backward_inputs_with_state } in
+  let ctx = { ctx with backward_inputs = RegionGroupId.Map.of_list [] } in
 
   (* Translate the function *)
   let f =

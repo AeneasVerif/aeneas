@@ -1428,7 +1428,11 @@ type fun_sig = {
             val f : nat -> int -> state -> result (state * unit);
           ]}
 
-          In particular, the list of input types is: [[nat; int; state]]. *)
+          In particular, the list of input types is: [[nat; int; state]].
+
+          *Remark*: the fuel and state parameters are introduced during a micro
+          pass, so if we use fuel and state the signature evolves during the
+          compilation. *)
   output : ty;
       (** The output type.
 

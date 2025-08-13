@@ -158,7 +158,7 @@ type bs_ctx = {
   forward_inputs : fvar list;
       (** The input parameters for the forward function corresponding to the
           translated Rust inputs (no fuel, no state). *)
-  backward_inputs_no_state : fvar list RegionGroupId.Map.t;
+  backward_inputs : fvar list RegionGroupId.Map.t;
       (** The additional input parameters for the backward functions coming from
           the borrows consumed upon ending the lifetime (as a consequence those
           don't include the backward state, if there is one).
@@ -167,10 +167,6 @@ type bs_ctx = {
           when initializing the bs_ctx, because those variables are quantified
           at the definition level. Otherwise, we initialize it upon diving into
           the expressions which are specific to the backward functions. *)
-  backward_inputs_with_state : fvar list RegionGroupId.Map.t;
-      (** All the additional input parameters for the backward functions.
-
-          Same remarks as for {!backward_inputs_no_state}. *)
   backward_outputs : fvar list option;
       (** The variables that the backward functions will output, corresponding
           to the borrows they give back (don't include the backward state).
