@@ -225,7 +225,7 @@ and loop = {
   end_expr : expression;
       (** The end of the function (upon the moment it enters the loop) *)
   loop_expr : expression;  (** The symbolically executed loop body *)
-  span : Meta.span;  (** Information about where the origin of the loop body *)
+  span : Meta.span;  (** Information about the origin of the loop body *)
 }
 
 and expansion =

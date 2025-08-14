@@ -138,7 +138,7 @@ Definition betree_List_reverse
     Source: 'src/betree.rs', lines 290:8-300:9 *)
 Fixpoint betree_List_split_at_loop
   {T : Type} (n : nat) (n1 : u64) (beg : betree_List_t T)
-  (self : betree_List_t T) :
+  (end1 : betree_List_t T) :
   result ((betree_List_t T) * (betree_List_t T))
   :=
   match n with
@@ -146,13 +146,13 @@ Fixpoint betree_List_split_at_loop
   | S n2 =>
     if n1 s> 0%u64
     then
-      match self with
+      match end1 with
       | Betree_List_Cons hd tl =>
         n3 <- u64_sub n1 1%u64;
         betree_List_split_at_loop n2 n3 (Betree_List_Cons hd beg) tl
       | Betree_List_Nil => Fail_ Failure
       end
-    else (l <- betree_List_reverse n2 beg; Ok (l, self))
+    else (l <- betree_List_reverse n2 beg; Ok (l, end1))
   end
 .
 
@@ -207,13 +207,13 @@ Definition betree_ListPairU64T_head_has_key
     Source: 'src/betree.rs', lines 359:8-368:9 *)
 Fixpoint betree_ListPairU64T_partition_at_pivot_loop
   {T : Type} (n : nat) (pivot : u64) (beg : betree_List_t (u64 * T))
-  (end1 : betree_List_t (u64 * T)) (self : betree_List_t (u64 * T)) :
+  (end1 : betree_List_t (u64 * T)) (curr : betree_List_t (u64 * T)) :
   result ((betree_List_t (u64 * T)) * (betree_List_t (u64 * T)))
   :=
   match n with
   | O => Fail_ OutOfFuel
   | S n1 =>
-    match self with
+    match curr with
     | Betree_List_Cons hd tl =>
       let (i, _) := hd in
       if i s>= pivot
@@ -437,8 +437,8 @@ with betree_Node_lookup
         then (
           p3 <- betree_Internal_lookup_in_children n1 node key st1;
           let (st2, p4) := p3 in
-          let (o, node1) := p4 in
-          Ok (st2, (o, Betree_Node_Internal node1)))
+          let (o, i) := p4 in
+          Ok (st2, (o, Betree_Node_Internal i)))
         else
           match msg with
           | Betree_Message_Insert v => Ok (st1, (Some v, self))
@@ -458,8 +458,8 @@ with betree_Node_lookup
       | Betree_List_Nil =>
         p2 <- betree_Internal_lookup_in_children n1 node key st1;
         let (st2, p3) := p2 in
-        let (o, node1) := p3 in
-        Ok (st2, (o, Betree_Node_Internal node1))
+        let (o, i) := p3 in
+        Ok (st2, (o, Betree_Node_Internal i))
       end
     | Betree_Node_Leaf node =>
       p <- betree_load_leaf_node node.(betree_Leaf_id) st;

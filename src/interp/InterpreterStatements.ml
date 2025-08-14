@@ -824,9 +824,9 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
           | Error EPanic -> ((ctx, Panic), fun e -> e)
           | Ok rv ->
               (* Update the synthesized AST - here we store additional span-information.
-               * We do it only in specific cases (it is not always useful, and
-               * also it can lead to issues - for instance, if we borrow a
-               * reserved borrow, we later can't translate it to pure values...) *)
+                 We do it only in specific cases (it is not always useful, and
+                 also it can lead to issues - for instance, if we borrow a
+                 reserved borrow, we later can't translate it to pure values...) *)
               let cc =
                 match rvalue with
                 | Len _ -> [%craise] st.span "Len is not handled yet"

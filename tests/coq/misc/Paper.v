@@ -67,11 +67,11 @@ Fixpoint list_nth_mut
     else (
       i1 <- u32_sub i 1%u32;
       p <- list_nth_mut tl i1;
-      let (t, list_nth_mut_back) := p in
+      let (x1, list_nth_mut_back) := p in
       let back :=
         fun (ret : T) => let tl1 := list_nth_mut_back ret in List_Cons x tl1
       in
-      Ok (t, back))
+      Ok (x1, back))
   | List_Nil => Fail_ Failure
   end
 .

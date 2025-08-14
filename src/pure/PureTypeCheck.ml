@@ -57,10 +57,14 @@ type tc_ctx = {
   type_decls : type_decl TypeDeclId.Map.t;  (** The type declarations *)
   global_decls : A.global_decl A.GlobalDeclId.Map.t;
       (** The global declarations *)
-  env : ty LocalId.Map.t;  (** Environment from variables to types *)
+  fenv : ty FVarId.Map.t;  (** Environment from variables to types *)
+  benv : ty BVarId.Map.t list;  (** Environment from variables to types *)
   const_generics : ty T.ConstGenericVarId.Map.t;
       (** The types of the const generics *)
-      (* TODO: add trait type constraints *)
+  (* TODO: add trait type constraints *)
+  pbenv : ty BVarId.Map.t option;
+      (** This is similar to what we do with [fmt_env] *)
+  bvar_counter : BVarId.id;
 }
 
 let texpression_to_string (ctx : tc_ctx) (e : texpression) : string =
@@ -84,7 +88,25 @@ let check_literal (span : Meta.span) (v : literal) (ty : literal_type) : unit =
   | TBool, VBool _ | TChar, VChar _ -> ()
   | _ -> [%craise] span "Inconsistent type"
 
-let rec check_typed_pattern (span : Meta.span) (ctx : tc_ctx)
+let tc_ctx_start_pbenv (ctx : tc_ctx) : tc_ctx =
+  assert (ctx.pbenv = None);
+  { ctx with pbenv = Some BVarId.Map.empty; bvar_counter = BVarId.zero }
+
+let tc_ctx_push_pbenv (ctx : tc_ctx) : tc_ctx =
+  {
+    ctx with
+    benv = Option.get ctx.pbenv :: ctx.benv;
+    pbenv = None;
+    bvar_counter = BVarId.zero;
+  }
+
+let tc_ctx_push_bvar (ctx : tc_ctx) (v : var) : tc_ctx =
+  let id = ctx.bvar_counter in
+  let counter = BVarId.incr id in
+  let pbenv = BVarId.Map.add id v.ty (Option.get ctx.pbenv) in
+  { ctx with pbenv = Some pbenv; bvar_counter = counter }
+
+let rec check_typed_pattern_aux (span : Meta.span) (ctx : tc_ctx)
     (v : typed_pattern) : tc_ctx =
   [%ltrace typed_pattern_to_string ctx v];
   match v.value with
@@ -92,10 +114,12 @@ let rec check_typed_pattern (span : Meta.span) (ctx : tc_ctx)
       check_literal span cv (ty_as_literal span v.ty);
       ctx
   | PatDummy -> ctx
-  | PatVar (var, _) ->
+  | PatBound (var, _) ->
       [%pure_type_check] span (var.ty = v.ty);
-      let env = LocalId.Map.add var.id var.ty ctx.env in
-      { ctx with env }
+      tc_ctx_push_bvar ctx var
+  | PatOpen (var, _) ->
+      [%pure_type_check] span (var.ty = v.ty);
+      ctx
   | PatAdt av ->
       (* Compute the field types *)
       let type_id, generics = ty_as_adt span v.ty in
@@ -108,7 +132,7 @@ let rec check_typed_pattern (span : Meta.span) (ctx : tc_ctx)
           [%craise] span
             ("Inconsistent types:" ^ "\n- ty: " ^ show_ty ty ^ "\n- v.ty: "
            ^ show_ty v.ty);
-        check_typed_pattern span ctx v
+        check_typed_pattern_aux span ctx v
       in
       (* Check the field types: check that the field patterns have the expected
        * types, and check that the field patterns themselves are well-typed *)
@@ -117,18 +141,27 @@ let rec check_typed_pattern (span : Meta.span) (ctx : tc_ctx)
         ctx
         (List.combine field_tys av.field_values)
 
+let check_typed_pattern (span : Meta.span) (ctx : tc_ctx) (v : typed_pattern) :
+    tc_ctx =
+  tc_ctx_push_pbenv (check_typed_pattern_aux span (tc_ctx_start_pbenv ctx) v)
+
 let rec check_texpression (span : Meta.span) (ctx : tc_ctx) (e : texpression) :
     unit =
   [%ltrace texpression_to_string ctx e];
   match e.e with
-  | Var var_id -> (
+  | BVar var ->
       (* Lookup the variable - note that the variable may not be there,
        * if we type-check a subexpression (i.e.: if the variable is introduced
        * "outside" of the expression) - TODO: this won't happen once
        * we use a locally nameless representation *)
-      match LocalId.Map.find_opt var_id ctx.env with
-      | None -> ()
-      | Some ty -> [%pure_type_check] span (ty = e.ty))
+      let tys =
+        [%silent_unwrap] span (Collections.List.nth_opt ctx.benv var.scope)
+      in
+      let ty = [%silent_unwrap] span (BVarId.Map.find_opt var.id tys) in
+      [%pure_type_check] span (ty = e.ty)
+  | FVar fid ->
+      let ty = [%silent_unwrap] span (FVarId.Map.find_opt fid ctx.fenv) in
+      [%pure_type_check] span (ty = e.ty)
   | CVar cg_id ->
       let ty = T.ConstGenericVarId.Map.find cg_id ctx.const_generics in
       [%pure_type_check] span (ty = e.ty)

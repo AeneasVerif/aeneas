@@ -9,6 +9,7 @@ let loggers : L.logger StringMap.t ref = ref StringMap.empty
 let create_logger name =
   let l = L.get_logger ("MainLogger." ^ name) in
   loggers := StringMap.add name l !loggers;
+  l#set_level Info;
   l
 
 let to_log_msg (f : string) (msg : string) : string =
@@ -43,6 +44,15 @@ let pure_utils_log = create_logger "PureUtils"
 
 (** Logger for PureTypeCheck *)
 let pure_type_check_log = create_logger "PureTypeCheck"
+
+(** Logger for SymbolicToPureTypes *)
+let symbolic_to_pure_types_log = create_logger "SymbolicToPureTypes"
+
+(** Logger for SymbolicToPureValues *)
+let symbolic_to_pure_values_log = create_logger "SymbolicToPureValues"
+
+(** Logger for SymbolicToPureExpressions *)
+let symbolic_to_pure_expressions_log = create_logger "SymbolicToPureExpressions"
 
 (** Logger for SymbolicToPure *)
 let symbolic_to_pure_log = create_logger "SymbolicToPure"
