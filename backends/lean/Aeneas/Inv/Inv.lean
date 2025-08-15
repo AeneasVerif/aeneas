@@ -1,8 +1,246 @@
 import Aeneas.Std.Primitives
+import AeneasMeta.Extensions
 
 namespace Aeneas.Inv
 
-open Lean Meta
+open Lean Elab Meta
+open Extensions
+
+/-!
+# Extensions
+-/
+
+/-- Helper for the extensions. -/
+structure ExtBase (α : Type) where
+  rules : DiscrTree (Name × α)
+  /- We can't remove keys from a discrimination tree, so to support
+     local rules we keep a set of deactivated rules (rules which have
+     come out of scope) on the side -/
+  deactivated : Std.HashSet Name
+deriving Inhabited
+
+def ExtBase.empty {α} : ExtBase α := ⟨ DiscrTree.empty, Std.HashSet.emptyWithCapacity ⟩
+
+def ExtBase.insert {α} [BEq α] (e : ExtBase α) (kv : Array DiscrTree.Key × Name × α) : ExtBase α :=
+  { rules := e.rules.insertCore kv.fst kv.snd,
+    deactivated := e.deactivated.erase kv.snd.fst }
+
+def ExtBase.erase {α} (r : ExtBase α) (k : Name) : ExtBase α :=
+  { r with deactivated := r.deactivated.insert k }
+
+initialize arrayGetterExt : SimpExtension ←
+  registerSimpAttr `inv_array_getter "\
+    Registers an array get expression, so that the invariant inferencer is aware of it."
+
+structure ArrayAttr (α : Type) where
+  attr : AttributeImpl
+  ext  : SimpleScopedEnvExtension (DiscrTreeKey × Name × α) (ExtBase α)
+deriving Inhabited
+
+def initializeArrayAttrExt {α : Type} [BEq α] (name : Name)
+  (add : SimpleScopedEnvExtension (Array DiscrTree.Key × Name × α) (ExtBase α) →
+         Name → Syntax → AttributeKind → AttrM Unit) : IO (ArrayAttr α) := do
+  let ext ← registerSimpleScopedEnvExtension {
+      name := name,
+      initial := ExtBase.empty,
+      addEntry := ExtBase.insert,
+  }
+  let attrImpl : AttributeImpl := {
+    name := `progress
+    descr := "Adds theorems to the `progress` database"
+    add := add ext
+    erase := fun thName => do
+      let s := ext.getState (← getEnv)
+      let s := s.erase thName
+      modifyEnv fun env => ext.modifyState env fun _ => s
+  }
+  registerBuiltinAttribute attrImpl
+  pure { attr := attrImpl, ext := ext }
+
+/-- Find at which positions the expressions in `toFind` appear in `args` -/
+def findPositions (toFind : Array Expr) (args : Array Expr) : MetaM (Array Nat) := do
+  let mut map : Std.HashMap Expr Nat := Std.HashMap.emptyWithCapacity
+  let toFindSet := Std.HashSet.ofArray toFind
+  for h: i in [0:args.size] do
+    let arg := args[i]
+    if toFindSet.contains arg then
+      map := map.insert arg i
+  -- Sanity check:
+  for e in toFind do
+    if ¬ map.contains e then
+      throwError m!"Could not find argument: {e}"
+  pure (toFind.map (Std.HashMap.get! map))
+
+/-!
+# Attribute: `inv_array_getter`
+-/
+
+structure Getter where
+  -- The array/slice/etc.
+  array : Nat
+  /- The arguments which stand for the indices.
+
+     We use an array of indices to support cases like multidimentional
+     arrays and matrices.
+   -/
+  indices : Array Nat
+deriving Inhabited, BEq
+
+syntax (name := arrayGetter) "inv_array_getter" term "at" term,* : attr
+
+def parseArrayGetterArgs
+: Syntax -> MetaM (Expr × Array Expr)
+| `(attr| inv_array_getter $array at $indices,* ) => do
+  let elabExpr e := do instantiateMVars (← Elab.Term.elabTerm e none |>.run')
+  let array ← elabExpr array
+  let indices : Array (TSyntax `term):= indices.getElems
+  let indices ← Array.mapM elabExpr indices
+  return (array, indices)
+| _ => throwUnsupportedSyntax
+
+initialize arrayGetterAttr : ArrayAttr Getter ← do
+  initializeArrayAttrExt `arrayGetterAttr
+    fun ext defName stx attrKind => do
+    -- Lookup the definition
+    let env ← getEnv
+    let some decl := env.findAsync? defName
+      | throwError "Could not find definition {defName}"
+    let sig := decl.sig.get
+    let ty := sig.type
+    -- Find where the position of the arguments
+    let getter : Getter ← MetaM.run' do
+      /- Strip the quantifiers.
+
+          We do this before elaborating the pattern because we need the universally
+          quantified variables to be in the context.
+      -/
+      forallTelescope ty.consumeMData fun fvars _ => do
+      let (array, indices) ← parseArrayGetterArgs stx
+      /- Find the position of every fvar id -/
+      let positions ← findPositions (indices ++ #[array]) fvars
+      pure { array := positions.back!, indices := positions.pop }
+    -- Generate the key for the discrimination tree
+    let key ← MetaM.run' do
+      let (mvars, _) ← forallMetaTelescope ty.consumeMData
+      DiscrTree.mkPath (← mkAppOptM defName (mvars.map Option.some))
+    -- Store
+    ScopedEnvExtension.add ext (key, defName, getter) attrKind
+
+/-!
+# Attribute: `inv_array_setter`
+-/
+
+structure Setter where
+  -- The array/slice/etc.
+  array : Nat
+  /- The arguments which stand for the indices.
+
+     We use an array of indices to support cases like multidimentional
+     arrays and matrices. -/
+  indices : Array Nat
+  -- The new
+  value : Nat
+deriving Inhabited, BEq
+
+syntax (name := arraySetter) "inv_array_setter" term "at" term,* "to" term : attr
+
+def parseArraySetterArgs
+: Syntax -> MetaM (Expr × Array Expr × Expr)
+| `(attr| inv_array_setter $array at $indices,* to $value ) => do
+  let elabExpr e := do instantiateMVars (← Elab.Term.elabTerm e none |>.run')
+  let array ← elabExpr array
+  let indices : Array (TSyntax `term):= indices.getElems
+  let indices ← Array.mapM elabExpr indices
+  let value ← elabExpr value
+  return (array, indices, value)
+| _ => throwUnsupportedSyntax
+
+initialize arraySetterAttr : ArrayAttr Setter ← do
+  initializeArrayAttrExt `arraySetterAttr
+    fun ext defName stx attrKind => do
+    -- Lookup the definition
+    let env ← getEnv
+    let some decl := env.findAsync? defName
+      | throwError "Could not find definition {defName}"
+    let sig := decl.sig.get
+    let ty := sig.type
+    -- Find where the position of the arguments
+    let setter : Setter ← MetaM.run' do
+      /- Strip the quantifiers.
+
+          We do this before elaborating the pattern because we need the universally
+          quantified variables to be in the context.
+      -/
+      forallTelescope ty.consumeMData fun fvars _ => do
+      let (array, indices, value) ← parseArraySetterArgs stx
+      /- Find the position of every fvar id -/
+      let positions ← findPositions (indices ++ #[array, value]) fvars
+      let value := positions.back!
+      let positions := positions.pop
+      let array := positions.back!
+      let indices := positions.pop
+      pure { array, indices, value }
+    -- Generate the key for the discrimination tree
+    let key ← MetaM.run' do
+      let (mvars, _) ← forallMetaTelescope ty.consumeMData
+      DiscrTree.mkPath (← mkAppOptM defName (mvars.map Option.some))
+    -- Store
+    ScopedEnvExtension.add ext (key, defName, setter) attrKind
+
+/-!
+# Attribute: `inv_array_val`
+-/
+
+/-- This is used to minimize array expressions.
+
+    For instance, if `x : Array α`, then in the expression `x.toList`
+    we consider that `x` is the minimal array expression.
+ -/
+structure ArrayVal where
+  -- The array/slice/etc.
+  array : Nat
+deriving Inhabited, BEq
+
+syntax (name := arrayVal) "inv_array_val" term : attr
+
+def parseArrayValArgs
+: Syntax -> MetaM Expr
+| `(attr| inv_array_val $array ) => do
+  let elabExpr e := do instantiateMVars (← Elab.Term.elabTerm e none |>.run')
+  elabExpr array
+| _ => throwUnsupportedSyntax
+
+initialize arrayValAttr : ArrayAttr ArrayVal ← do
+  initializeArrayAttrExt `arrayValAttr
+    fun ext defName stx attrKind => do
+    -- Lookup the definition
+    let env ← getEnv
+    let some decl := env.findAsync? defName
+      | throwError "Could not find definition {defName}"
+    let sig := decl.sig.get
+    let ty := sig.type
+    -- Find where the position of the arguments
+    let array : ArrayVal ← MetaM.run' do
+      /- Strip the quantifiers.
+
+          We do this before elaborating the pattern because we need the universally
+          quantified variables to be in the context.
+      -/
+      forallTelescope ty.consumeMData fun fvars _ => do
+      let array ← parseArrayValArgs stx
+      /- Find the position of every fvar id -/
+      let positions ← findPositions (#[array]) fvars
+      pure { array := positions[0]! }
+    -- Generate the key for the discrimination tree
+    let key ← MetaM.run' do
+      let (mvars, _) ← forallMetaTelescope ty.consumeMData
+      DiscrTree.mkPath (← mkAppOptM defName (mvars.map Option.some))
+    -- Store
+    ScopedEnvExtension.add ext (key, defName, array) attrKind
+
+/-!
+# Footprints
+-/
 
 inductive ArithBinop where
   | add
@@ -35,8 +273,8 @@ instance : Inhabited ArithExpr := { default := .unknown }
 -/
 inductive FootprintExpr where
   | input (v : FVarId) -- An input of the loop
-  | get (p : FootprintExpr) (fn : Name) (index : ArithExpr)
-  | set (p : FootprintExpr) (fn : Name) (index : ArithExpr)
+  | get (array : FootprintExpr) (indices : Array ArithExpr)
+  | set (array : FootprintExpr) (indices : Array ArithExpr)
   | arith (e : ArithExpr)
   | unknown
 deriving BEq
@@ -160,6 +398,26 @@ def lambdaLetTelescope (e : Expr) (k : Array Expr → Expr → FootprintM α) : 
     -- Continue
     pure x
 
+def FootprintExpr.toArithExpr (e : FootprintExpr) : ArithExpr :=
+  match e with
+  | .input v => .input v
+  | .get _ _ | .set _ _ => .unknown
+  | .arith e => e
+  | .unknown => .unknown
+
+def minimizeArrayVal (e : Expr) : FootprintM Expr := do
+  let env ← getEnv
+  let arrayValState := arrayValAttr.ext.getState env
+  let rec minimize (e : Expr) : FootprintM Expr := do
+    let rules ← arrayValState.rules.getMatch e
+    -- Just try the first rule - there should be no more than one
+    if rules.size > 0 then
+      let (_, rule) := rules[0]!
+      let args := e.getAppArgs
+      pure args[rule.array]!
+    else pure e
+  minimize e
+
 mutual
 
 /-- Compute the footprint of an expression.
@@ -214,7 +472,7 @@ partial def footprint.exprAux (terminal : Bool) (e : Expr) : FootprintM Footprin
         -- Continue exploring the inner expression
         footprint.expr false inner
     -- Check if this is a get/set expression
-    if let some e ← footprint.arrayExpr e then
+    if let some e ← footprint.arrayExpr terminal e then
       return e
     -- Don't know
     pure .unknown
@@ -242,15 +500,38 @@ partial def footprint.exprAux (terminal : Bool) (e : Expr) : FootprintM Footprin
        we can just stop -/
     pure .unknown
 
-partial def footprint.arrayExpr (e : Expr) : FootprintM (Option FootprintExpr) := do
-  /- Attempt to deconstruct a getter/setter -/
+partial def footprint.arrayExpr (terminal : Bool) (e : Expr) : FootprintM (Option FootprintExpr) := do
+  let env ← getEnv
+  /- Attempt to deconstruct a getter -/
+  let getterState := arrayGetterAttr.ext.getState env
+  let rules ← getterState.rules.getMatch e
+  -- Just try the first rule - there should be no more than one
+  if rules.size > 0 then
+    let (_, rule) := rules[0]!
+    let args := e.getAppArgs
+    let array := args[rule.array]!
+    let array ← footprint.expr false array
+    let indices := rule.indices.map fun id => args[id]!
+    let indices ← indices.mapM (footprint.expr false)
+    let indices := indices.map FootprintExpr.toArithExpr
+    return (FootprintExpr.get array indices)
 
-  /- Minimize the array expression -/
+  /- Attempt to deconstruct a setter -/
+  let setterState := arraySetterAttr.ext.getState env
+  let rules ← setterState.rules.getMatch e
+  -- Just try the first rule - there should be no more than one
+  if rules.size > 0 then
+    let (_, rule) := rules[0]!
+    let args := e.getAppArgs
+    let array := args[rule.array]!
+    let array ← footprint.expr false array
+    let indices := rule.indices.map fun id => args[id]!
+    let indices ← indices.mapM (footprint.expr false)
+    let indices := indices.map FootprintExpr.toArithExpr
+    return (FootprintExpr.set array indices)
 
-  match ← trySynthInstance (← mkAppM ``ArrayExpr #[gty]) with
-  | .some _ => pure true
-  | _ => pure false
-  sorry
+  /- Attempt to deconstruct an array value -/
+  footprint.expr terminal (← minimizeArrayVal e)
 
 end
 
