@@ -288,7 +288,7 @@ instance : Inhabited ArithExpr := { default := .unknown }
 def ArithExpr.format (e : ArithExpr) : Format :=
   match e with
   | .input fv => f!"input({Expr.fvar fv})"
-  | .lit n => f!"lit({n})"
+  | .lit n => f!"{n}"
   | .const e => f!"const({e})"
   | .binop op a b => f!"{format a} {op} {format b}"
   | .unknown => f!"?"
@@ -299,7 +299,7 @@ instance : ToFormat ArithExpr where
 def ArithExpr.toMessageData (e : ArithExpr) : MessageData :=
   match e with
   | .input fv => m!"input({Expr.fvar fv})"
-  | .lit n => m!"lit({n})"
+  | .lit n => m!"{n}"
   | .const e => m!"const({e})"
   | .binop op a b => m!"{a.toMessageData} {op} {b.toMessageData}"
   | .unknown => m!"?"
@@ -588,14 +588,23 @@ partial def footprint.exprAux (terminal : Bool) (e : Expr) : FootprintM Footprin
   | .app _ _ =>
     trace[Inv] ".app"
     /- There are several cases:
+       - it might be a constant
        - it might be a tuple (`Prod` or `MProd`)
        - it might be a monadic let, in which case we need to destruct it
        - it might be a get/set expression
     -/
+    -- Check if this is a constant
+    if e.isAppOfArity ``OfNat.ofNat 3 then
+      trace[Inv] "is OfNat.ofNat"
+      let args := e.getAppArgs
+      return (← footprint.expr terminal args[1]!)
+
+    -- Check if this is a. tuple
     if e.isAppOfArity ``Prod.mk 4 ∨ e.isAppOfArity ``MProd.mk 4 then
       let fields := destTuple e
       let fields ← fields.mapM (footprint.expr false)
       return (.tuple fields.toArray)
+
     -- Check if this is a monadic let-binding
     if let some e ← destBind e
       fun bound fvarId inner => do
