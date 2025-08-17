@@ -319,6 +319,8 @@ inductive FootprintExpr where
   /- Handling projectors properly is particularly useful because we often need to
      decompose loop inputs (which are usually a tuple) -/
   | proj (typename : Name) (field : Nat) (e : FootprintExpr)
+  /- Useful for the outputs -/
+  | tuple (fields : Array FootprintExpr)
   | unknown
 deriving BEq
 
@@ -331,6 +333,7 @@ def FootprintExpr.format (e : FootprintExpr) : Format :=
   | .set a ids v => f!"{a.format}[{ids.map ArithExpr.format}] := {v.format}"
   | .arith x => f!"{x.format}"
   | .proj _ f x => f!"{x.format}.{f}"
+  | .tuple fields => f!"({fields.map format})"
   | .unknown => f!"?"
 
 instance : ToFormat FootprintExpr where
@@ -343,6 +346,7 @@ def FootprintExpr.toMessageData (e : FootprintExpr) : MessageData :=
   | .set a ids v => m!"{a.toMessageData}[{ids.map ArithExpr.toMessageData}] := {v.toMessageData}"
   | .arith x => m!"{x.toMessageData}"
   | .proj _ f x => m!"{x.toMessageData}.{f}"
+  | .tuple fields => m!"({fields.map toMessageData})"
   | .unknown => m!"?"
 
 instance : ToMessageData FootprintExpr where
@@ -464,15 +468,10 @@ def withFVars (fvars : Array (FVarId × FootprintExpr)) (k : FootprintM α) : Fo
 
 def pushOutput (p : FootprintExpr) : FootprintM Unit := do
   let s ← get
-  set ({ s with outputs := s.outputs ++ #[p] })
+  set ({ s with outputs := s.outputs ++ #[p], footprint := s.footprint ++ #[p] })
 
 def pushOptOutput (push : Bool) (p : FootprintExpr) : FootprintM Unit := do
   if push then pushOutput p
-
--- TODO: remove
-def pushFootprint (e : FootprintExpr) : FootprintM Unit := do
-  let s ← get
-  set ({ s with footprint := s.footprint ++ #[e] })
 
 def lambdaTelescope (e : Expr) (k : Array Expr → Expr → FootprintM α) : FootprintM α :=
   Meta.lambdaTelescope e fun fvars e => do
@@ -495,7 +494,7 @@ def FootprintExpr.toArithExpr (e : FootprintExpr) : ArithExpr :=
   | .input v => .input v
   | .get _ _ | .set _ _ _ | .proj _ _ _ => .unknown
   | .arith e => e
-  | .unknown => .unknown
+  | .tuple _ | .unknown => .unknown
 
 def minimizeArrayVal (e : Expr) : FootprintM Expr := do
   let env ← getEnv
@@ -523,6 +522,15 @@ def destBind (e : Expr) (k : Expr → FVarId → Expr → FootprintM α) : Footp
     let bound := args[4]!
     k bound fvar.fvarId! body
   else pure none
+
+partial def destTuple (e : Expr) : List Expr :=
+  if e.isAppOfArity ``Prod.mk 4 ∨ e.isAppOfArity ``MProd.mk 4 then
+    let args := e.getAppArgs
+    let x := args[2]!
+    let y := args[3]!
+    let y := destTuple y
+    x :: y
+  else [e]
 
 mutual
 
@@ -580,9 +588,14 @@ partial def footprint.exprAux (terminal : Bool) (e : Expr) : FootprintM Footprin
   | .app _ _ =>
     trace[Inv] ".app"
     /- There are several cases:
+       - it might be a tuple (`Prod` or `MProd`)
        - it might be a monadic let, in which case we need to destruct it
        - it might be a get/set expression
     -/
+    if e.isAppOfArity ``Prod.mk 4 ∨ e.isAppOfArity ``MProd.mk 4 then
+      let fields := destTuple e
+      let fields ← fields.mapM (footprint.expr false)
+      return (.tuple fields.toArray)
     -- Check if this is a monadic let-binding
     if let some e ← destBind e
       fun bound fvarId inner => do
@@ -653,7 +666,6 @@ partial def footprint.arrayExpr (_terminal : Bool) (e : Expr) : FootprintM (Opti
     let indices ← indices.mapM (footprint.expr false)
     let indices := indices.map FootprintExpr.toArithExpr
     let e := FootprintExpr.get array indices
-    pushFootprint e -- TODO: remove
     return e
 
   /- Attempt to deconstruct a setter -/
@@ -670,7 +682,6 @@ partial def footprint.arrayExpr (_terminal : Bool) (e : Expr) : FootprintM (Opti
     let indices := indices.map FootprintExpr.toArithExpr
     let value ← footprint.expr false args[rule.value]!
     let e := FootprintExpr.set array indices value
-    pushFootprint e -- TODO: remove
     return e
 
   /- Don't know -/
