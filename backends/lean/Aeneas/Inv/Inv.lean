@@ -270,7 +270,7 @@ instance : ToMessageData ArithBinop where
   toMessageData x := m!"{toString x}"
 
 inductive ArithExpr where
-  | input (fvarId : FVarId) -- An input of the loop
+  | input (v : FVarId) -- An input of the loop
   | lit (n : Nat)
   /- A constant natural number.
 
@@ -384,10 +384,10 @@ instance : ToFormat Footprint where
   format := Footprint.format
 
 def Footprint.toMessageData (e : Footprint) : MessageData :=
-  f!"- inputs := {e.inputs.toArray.map Expr.fvar}
-     \n- outputs := {e.outputs}
-     \n- provenance := {e.provenance.toArray.map fun (x, y) => (Expr.fvar x, y)}
-     \n- footprint := {e.footprint}"
+  m!"- inputs := {e.inputs.toArray.map Expr.fvar}
+     - outputs := {e.outputs}
+     - provenance := {e.provenance.toArray.map fun (x, y) => (Expr.fvar x, y)}
+     - footprint := {e.footprint}"
 
 instance : ToMessageData Footprint where
   toMessageData := Footprint.toMessageData
@@ -469,6 +469,11 @@ def pushOutput (p : FootprintExpr) : FootprintM Unit := do
 def pushOptOutput (push : Bool) (p : FootprintExpr) : FootprintM Unit := do
   if push then pushOutput p
 
+-- TODO: remove
+def pushFootprint (e : FootprintExpr) : FootprintM Unit := do
+  let s ← get
+  set ({ s with footprint := s.footprint ++ #[e] })
+
 def lambdaTelescope (e : Expr) (k : Array Expr → Expr → FootprintM α) : FootprintM α :=
   Meta.lambdaTelescope e fun fvars e => do
     let x ← k fvars e
@@ -531,6 +536,9 @@ mutual
   even when encountering unexpected situations.
  -/
 partial def footprint.expr (terminal : Bool) (e : Expr) : FootprintM FootprintExpr := do
+  withTraceNode `Inv (fun _ => pure m!"footprint.expr") do
+  trace[Inv] "e: {e}"
+  trace[Inv] "terminal: {terminal}"
   let e := e.consumeMData
   let e ← footprint.exprAux terminal e
   /- If this is terminal expression, we need to register this as an output -/
@@ -543,11 +551,19 @@ partial def footprint.exprAux (terminal : Bool) (e : Expr) : FootprintM Footprin
     -- This is unexpected, but we can gracefully stop the exploration
     pure .unknown
   | .fvar fvarId =>
-    match (← get).provenance.get? fvarId with
-    | none => pure .unknown
-    | some p => pure p
+    trace[Inv] ".fvar"
+    let s ← get
+    if let some p := s.provenance.get? fvarId then
+      trace[Inv] "known provenance: {p}"
+      return p
+    if s.inputs.contains fvarId then
+      trace[Inv] "input"
+      return (.input fvarId)
+    trace[Inv] "unknown provenance"
+    pure .unknown
   | .mvar _ | .sort _ => pure .unknown
   | .const _ _ =>
+    trace[Inv] ".const"
     -- Check if this is a natural number
     let ty ← inferType e
     let p ←
@@ -557,10 +573,12 @@ partial def footprint.exprAux (terminal : Bool) (e : Expr) : FootprintM Footprin
     pushOptOutput terminal p
     pure p
   | .lit l =>
+    trace[Inv] ".lit"
     match l with
     | .natVal n => pure (.arith (.lit n))
     | .strVal _ => pure .unknown
   | .app _ _ =>
+    trace[Inv] ".app"
     /- There are several cases:
        - it might be a monadic let, in which case we need to destruct it
        - it might be a get/set expression
@@ -574,43 +592,59 @@ partial def footprint.exprAux (terminal : Bool) (e : Expr) : FootprintM Footprin
           withFVar fvarId bound do
           -- Continue exploring the inner expression
           footprint.expr false inner
-      then return e
+      then
+        trace[Inv] "is moandic bind"
+        return e
     -- Check if this is a get/set expression
     if let some e ← footprint.arrayExpr terminal e then
+      trace[Inv] "is an array expression"
       return e
-    -- Don't know
+    -- Don't know: explore the arguments
+    let args := e.getAppArgs
+    let _ ← Array.mapM (footprint.expr false) args
+    -- TODO: tuple case
     pure .unknown
   | .lam _ _ _ _ =>
+    trace[Inv] ".lam"
     -- Typically happens when diving into a match or a let-binding
     lambdaTelescope e fun _ body => do
     footprint.expr terminal body
   | .letE _ _ _ _ _ =>
+    trace[Inv] ".letE"
     -- How do we destruct exactly *one* let?
-    lambdaLetTelescope e fun bound inner => do
+    lambdaLetTelescope e fun boundFVars inner => do
     -- Explore the bound expressions
-    for fvar in bound do
-      -- Retrieve the declaration
-      if let some decl := (← getLCtx).fvarIdToDecl.find? fvar.fvarId! then do
+    let boundExprs ← boundFVars.filterMapM fun fvar => do
+      let fvarId := fvar.fvarId!
+      if let some decl := (← getLCtx).fvarIdToDecl.find? fvarId then do
         if let some value := decl.value? then
-          let _ ← footprint.expr false value
+          pure (some (fvarId, ← footprint.expr false value))
+        else pure none
+      else pure none
+    withFVars boundExprs do
     -- Explore the inner body
     footprint.expr terminal inner
   | .mdata _ e => footprint.expr terminal e
   | .proj typename idx struct =>
+    trace[Inv] ".proj"
     let struct ← footprint.expr false struct
     pure (.proj typename idx struct)
   | .forallE _ _ _ _ =>
+    trace[Inv] ".forallE"
     /- If we find a forall it's probably because we're exploring a type:
        we can just stop -/
     pure .unknown
 
-partial def footprint.arrayExpr (terminal : Bool) (e : Expr) : FootprintM (Option FootprintExpr) := do
+partial def footprint.arrayExpr (_terminal : Bool) (e : Expr) : FootprintM (Option FootprintExpr) := do
+  withTraceNode `Inv (fun _ => pure m!"footprint.arrayExpr") do
+  trace[Inv] "e: {e}"
   let env ← getEnv
   /- Attempt to deconstruct a getter -/
   let getterState := arrayGetterAttr.ext.getState env
   let rules ← getterState.rules.getMatch e
   -- Just try the first rule - there should be no more than one
   if rules.size > 0 then
+    trace[Inv] "is a getter"
     let (_, rule) := rules[0]!
     let args := e.getAppArgs
     let array := args[rule.array]!
@@ -618,13 +652,16 @@ partial def footprint.arrayExpr (terminal : Bool) (e : Expr) : FootprintM (Optio
     let indices := rule.indices.map fun id => args[id]!
     let indices ← indices.mapM (footprint.expr false)
     let indices := indices.map FootprintExpr.toArithExpr
-    return (FootprintExpr.get array indices)
+    let e := FootprintExpr.get array indices
+    pushFootprint e -- TODO: remove
+    return e
 
   /- Attempt to deconstruct a setter -/
   let setterState := arraySetterAttr.ext.getState env
   let rules ← setterState.rules.getMatch e
   -- Just try the first rule - there should be no more than one
   if rules.size > 0 then
+    trace[Inv] "is a setter"
     let (_, rule) := rules[0]!
     let args := e.getAppArgs
     let array ← footprint.expr false (← minimizeArrayVal args[rule.array]!)
@@ -632,7 +669,9 @@ partial def footprint.arrayExpr (terminal : Bool) (e : Expr) : FootprintM (Optio
     let indices ← indices.mapM (footprint.expr false)
     let indices := indices.map FootprintExpr.toArithExpr
     let value ← footprint.expr false args[rule.value]!
-    return (FootprintExpr.set array indices value)
+    let e := FootprintExpr.set array indices value
+    pushFootprint e -- TODO: remove
+    return e
 
   /- Don't know -/
   pure .none

@@ -16,24 +16,26 @@ elab "analyze_inv" : tactic => do
   let body := args[1]!
   -- Dive into the lambdas
   Meta.lambdaTelescope body.consumeMData fun inputs body => do
-  trace[Inv] "inputs: {inputs}\nbody: {body}"
+  trace[Inv] "inputs: {inputs}"
+  let inputs := Std.HashSet.ofArray (inputs.map Expr.fvarId!)
   let fp : Footprint := {
-    inputs := Std.HashSet.ofArray (inputs.map Expr.fvarId!),
+    inputs,
     outputs := #[],
     provenance := Std.HashMap.emptyWithCapacity,
     footprint := #[],
   }
   let state : State := ⟨ fp ⟩
+  trace[Inv] "initial state: {state}"
   let (_, state) ← FootprintM.run (footprint.expr true body) (← readThe Meta.Context) state
   trace[Inv] "{state}"
 
-def loop (x : α) : Prop := True
+def loop (_ : α) : Prop := True
 
 attribute [inv_array_getter xs at i] getElem!
 attribute [inv_array_setter xs at i to v] Array.set!
 
 set_option trace.Inv true in
-example : loop (fun (x y : Array Nat) => (x.set! x[0]! 1, y)) := by
+example : loop (fun (x y : Array Nat) => (x.set! 0 x[0]!, y)) := by
   analyze_inv
   simp [loop]
 
