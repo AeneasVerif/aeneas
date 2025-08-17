@@ -6,6 +6,8 @@ namespace Aeneas.Inv
 open Lean Elab Meta
 open Extensions
 
+initialize registerTraceClass `Inv
+
 /-!
 # Extensions
 -/
@@ -37,16 +39,16 @@ structure ArrayAttr (α : Type) where
   ext  : SimpleScopedEnvExtension (DiscrTreeKey × Name × α) (ExtBase α)
 deriving Inhabited
 
-def initializeArrayAttrExt {α : Type} [BEq α] (name : Name)
+def initializeArrayAttrExt {α : Type} [BEq α] (extName attrName : Name)
   (add : SimpleScopedEnvExtension (Array DiscrTree.Key × Name × α) (ExtBase α) →
          Name → Syntax → AttributeKind → AttrM Unit) : IO (ArrayAttr α) := do
   let ext ← registerSimpleScopedEnvExtension {
-      name := name,
+      name := extName,
       initial := ExtBase.empty,
       addEntry := ExtBase.insert,
   }
   let attrImpl : AttributeImpl := {
-    name := `progress
+    name := attrName
     descr := "Adds theorems to the `progress` database"
     add := add ext
     erase := fun thName => do
@@ -99,7 +101,7 @@ def parseArrayGetterArgs
 | _ => throwUnsupportedSyntax
 
 initialize arrayGetterAttr : ArrayAttr Getter ← do
-  initializeArrayAttrExt `arrayGetterAttr
+  initializeArrayAttrExt `arrayGetterAttr `arrayGetter
     fun ext defName stx attrKind => do
     -- Lookup the definition
     let env ← getEnv
@@ -156,7 +158,7 @@ def parseArraySetterArgs
 | _ => throwUnsupportedSyntax
 
 initialize arraySetterAttr : ArrayAttr Setter ← do
-  initializeArrayAttrExt `arraySetterAttr
+  initializeArrayAttrExt `arraySetterAttr `arraySetter
     fun ext defName stx attrKind => do
     -- Lookup the definition
     let env ← getEnv
@@ -211,7 +213,7 @@ def parseArrayValArgs
 | _ => throwUnsupportedSyntax
 
 initialize arrayValAttr : ArrayAttr ArrayVal ← do
-  initializeArrayAttrExt `arrayValAttr
+  initializeArrayAttrExt `arrayValAttr `arrayVal
     fun ext defName stx attrKind => do
     -- Lookup the definition
     let env ← getEnv
@@ -251,6 +253,22 @@ inductive ArithBinop where
   | pow
 deriving Inhabited, BEq
 
+instance : ToString ArithBinop where
+  toString x :=
+    match x with
+    | .add => "+"
+    | .sub => "-"
+    | .mul => "*"
+    | .div => "/"
+    | .mod => "%"
+    | .pow => "^"
+
+instance : ToFormat ArithBinop where
+  format x := f!"{toString x}"
+
+instance : ToMessageData ArithBinop where
+  toMessageData x := m!"{toString x}"
+
 inductive ArithExpr where
   | input (fvarId : FVarId) -- An input of the loop
   | lit (n : Nat)
@@ -267,6 +285,28 @@ deriving BEq
 
 instance : Inhabited ArithExpr := { default := .unknown }
 
+def ArithExpr.format (e : ArithExpr) : Format :=
+  match e with
+  | .input fv => f!"input({Expr.fvar fv})"
+  | .lit n => f!"lit({n})"
+  | .const e => f!"const({e})"
+  | .binop op a b => f!"{format a} {op} {format b}"
+  | .unknown => f!"?"
+
+instance : ToFormat ArithExpr where
+  format := ArithExpr.format
+
+def ArithExpr.toMessageData (e : ArithExpr) : MessageData :=
+  match e with
+  | .input fv => m!"input({Expr.fvar fv})"
+  | .lit n => m!"lit({n})"
+  | .const e => m!"const({e})"
+  | .binop op a b => m!"{a.toMessageData} {op} {b.toMessageData}"
+  | .unknown => m!"?"
+
+instance : ToMessageData ArithExpr where
+  toMessageData := ArithExpr.toMessageData
+
 /-- An expression which we register in the footprint.
 
     This is typically an expression which reads or writes to an array.
@@ -274,12 +314,34 @@ instance : Inhabited ArithExpr := { default := .unknown }
 inductive FootprintExpr where
   | input (v : FVarId) -- An input of the loop
   | get (array : FootprintExpr) (indices : Array ArithExpr)
-  | set (array : FootprintExpr) (indices : Array ArithExpr)
+  | set (array : FootprintExpr) (indices : Array ArithExpr) (value : FootprintExpr)
   | arith (e : ArithExpr)
   | unknown
 deriving BEq
 
 instance : Inhabited FootprintExpr := { default := .unknown }
+
+def FootprintExpr.format (e : FootprintExpr) : Format :=
+  match e with
+  | .input fv => f!"input({Expr.fvar fv})"
+  | .get a ids => f!"{a.format}[{ids.map ArithExpr.format}]"
+  | .set a ids v => f!"{a.format}[{ids.map ArithExpr.format}] := {v.format}"
+  | .arith x => f!"{x.format}"
+  | .unknown => f!"?"
+
+instance : ToFormat FootprintExpr where
+  format := FootprintExpr.format
+
+def FootprintExpr.toMessageData (e : FootprintExpr) : MessageData :=
+  match e with
+  | .input fv => m!"input({Expr.fvar fv})"
+  | .get a ids => m!"{a.toMessageData}[{ids.map ArithExpr.toMessageData}]"
+  | .set a ids v => m!"{a.toMessageData}[{ids.map ArithExpr.toMessageData}] := {v.toMessageData}"
+  | .arith x => m!"{x.toMessageData}"
+  | .unknown => m!"?"
+
+instance : ToMessageData FootprintExpr where
+  toMessageData := FootprintExpr.toMessageData
 
 structure Footprint where
   /- Inputs of the loop.
@@ -308,10 +370,6 @@ structure Footprint where
 deriving Inhabited
 
 structure State extends Footprint where
-  /- Destruct a monadic result (ex.: `pure x`) -/
-  destResult : Expr → MetaM (Option Expr)
-  /- Destruct a monadic bind into: the bound expression, the bound variable, the inner expression -/
-  destBind : Expr → MetaM (Option (Expr × FVarId × Expr))
 deriving Inhabited
 
 abbrev FootprintM := ReaderT Context $ StateRefT State MetaM
@@ -401,7 +459,7 @@ def lambdaLetTelescope (e : Expr) (k : Array Expr → Expr → FootprintM α) : 
 def FootprintExpr.toArithExpr (e : FootprintExpr) : ArithExpr :=
   match e with
   | .input v => .input v
-  | .get _ _ | .set _ _ => .unknown
+  | .get _ _ | .set _ _ _ => .unknown
   | .arith e => e
   | .unknown => .unknown
 
@@ -409,6 +467,7 @@ def minimizeArrayVal (e : Expr) : FootprintM Expr := do
   let env ← getEnv
   let arrayValState := arrayValAttr.ext.getState env
   let rec minimize (e : Expr) : FootprintM Expr := do
+    let e := e.consumeMData
     let rules ← arrayValState.rules.getMatch e
     -- Just try the first rule - there should be no more than one
     if rules.size > 0 then
@@ -417,6 +476,13 @@ def minimizeArrayVal (e : Expr) : FootprintM Expr := do
       pure args[rule.array]!
     else pure e
   minimize e
+
+#check Bind.bind
+def destBind (e : Expr) : MetaM (Option ()) := do
+  let (f, args) := e.withApp (fun f args => (f, args))
+  if f.name = ``Bind.bind ∧ args.size = 6 then
+    sorry
+  else pure None
 
 mutual
 
@@ -430,10 +496,11 @@ mutual
   even when encountering unexpected situations.
  -/
 partial def footprint.expr (terminal : Bool) (e : Expr) : FootprintM FootprintExpr := do
-  let p ← footprint.exprAux terminal e
+  let e := e.consumeMData
+  let e ← footprint.exprAux terminal e
   /- If this is terminal expression, we need to register this as an output -/
-  pushOptOutput terminal p
-  pure p
+  pushOptOutput terminal e
+  pure e
 
 partial def footprint.exprAux (terminal : Bool) (e : Expr) : FootprintM FootprintExpr := do
   match e with
@@ -523,12 +590,12 @@ partial def footprint.arrayExpr (terminal : Bool) (e : Expr) : FootprintM (Optio
   if rules.size > 0 then
     let (_, rule) := rules[0]!
     let args := e.getAppArgs
-    let array := args[rule.array]!
-    let array ← footprint.expr false array
+    let array ← footprint.expr false args[rule.array]!
     let indices := rule.indices.map fun id => args[id]!
     let indices ← indices.mapM (footprint.expr false)
     let indices := indices.map FootprintExpr.toArithExpr
-    return (FootprintExpr.set array indices)
+    let value ← footprint.expr false args[rule.value]!
+    return (FootprintExpr.set array indices value)
 
   /- Attempt to deconstruct an array value -/
   footprint.expr terminal (← minimizeArrayVal e)
