@@ -316,6 +316,9 @@ inductive FootprintExpr where
   | get (array : FootprintExpr) (indices : Array ArithExpr)
   | set (array : FootprintExpr) (indices : Array ArithExpr) (value : FootprintExpr)
   | arith (e : ArithExpr)
+  /- Handling projectors properly is particularly useful because we often need to
+     decompose loop inputs (which are usually a tuple) -/
+  | proj (typename : Name) (field : Nat) (e : FootprintExpr)
   | unknown
 deriving BEq
 
@@ -327,6 +330,7 @@ def FootprintExpr.format (e : FootprintExpr) : Format :=
   | .get a ids => f!"{a.format}[{ids.map ArithExpr.format}]"
   | .set a ids v => f!"{a.format}[{ids.map ArithExpr.format}] := {v.format}"
   | .arith x => f!"{x.format}"
+  | .proj _ f x => f!"{x.format}.{f}"
   | .unknown => f!"?"
 
 instance : ToFormat FootprintExpr where
@@ -338,6 +342,7 @@ def FootprintExpr.toMessageData (e : FootprintExpr) : MessageData :=
   | .get a ids => m!"{a.toMessageData}[{ids.map ArithExpr.toMessageData}]"
   | .set a ids v => m!"{a.toMessageData}[{ids.map ArithExpr.toMessageData}] := {v.toMessageData}"
   | .arith x => m!"{x.toMessageData}"
+  | .proj _ f x => m!"{x.toMessageData}.{f}"
   | .unknown => m!"?"
 
 instance : ToMessageData FootprintExpr where
@@ -369,8 +374,32 @@ structure Footprint where
   footprint : Array FootprintExpr := #[]
 deriving Inhabited
 
+def Footprint.format (e : Footprint) : Format :=
+  f!"- inputs := {e.inputs.toArray.map Expr.fvar}
+     \n- outputs := {e.outputs}
+     \n- provenance := {e.provenance.toArray.map fun (x, y) => (Expr.fvar x, y)}
+     \n- footprint := {e.footprint}"
+
+instance : ToFormat Footprint where
+  format := Footprint.format
+
+def Footprint.toMessageData (e : Footprint) : MessageData :=
+  f!"- inputs := {e.inputs.toArray.map Expr.fvar}
+     \n- outputs := {e.outputs}
+     \n- provenance := {e.provenance.toArray.map fun (x, y) => (Expr.fvar x, y)}
+     \n- footprint := {e.footprint}"
+
+instance : ToMessageData Footprint where
+  toMessageData := Footprint.toMessageData
+
 structure State extends Footprint where
 deriving Inhabited
+
+instance : ToFormat State where
+  format s := s.toFootprint.format
+
+instance : ToMessageData State where
+  toMessageData s := s.toFootprint.toMessageData
 
 abbrev FootprintM := ReaderT Context $ StateRefT State MetaM
 
@@ -459,7 +488,7 @@ def lambdaLetTelescope (e : Expr) (k : Array Expr → Expr → FootprintM α) : 
 def FootprintExpr.toArithExpr (e : FootprintExpr) : ArithExpr :=
   match e with
   | .input v => .input v
-  | .get _ _ | .set _ _ _ => .unknown
+  | .get _ _ | .set _ _ _ | .proj _ _ _ => .unknown
   | .arith e => e
   | .unknown => .unknown
 
@@ -477,12 +506,18 @@ def minimizeArrayVal (e : Expr) : FootprintM Expr := do
     else pure e
   minimize e
 
-#check Bind.bind
-def destBind (e : Expr) : MetaM (Option ()) := do
-  let (f, args) := e.withApp (fun f args => (f, args))
-  if f.name = ``Bind.bind ∧ args.size = 6 then
-    sorry
-  else pure None
+def destBind (e : Expr) (k : Expr → FVarId → Expr → FootprintM α) : FootprintM (Option α) := do
+  let (f, args) := e.consumeMData.withApp (fun f args => (f, args))
+  let f := f.consumeMData
+  if ¬ f.isConst then return none
+  if f.constName! = ``Bind.bind ∧ args.size = 6 ∧ args[5]!.isLambda then
+    let .lam xName xTy body binderInfo := args[5]!
+      | throwError "Unreachable"
+    withLocalDecl xName binderInfo xTy fun fvar => do
+    let body := body.instantiate #[fvar]
+    let bound := args[4]!
+    k bound fvar.fvarId! body
+  else pure none
 
 mutual
 
@@ -531,13 +566,15 @@ partial def footprint.exprAux (terminal : Bool) (e : Expr) : FootprintM Footprin
        - it might be a get/set expression
     -/
     -- Check if this is a monadic let-binding
-    if let some (bound, fvarId, inner) ← (← get).destBind e then
-      -- Explore the bound expression
-      let bound ← footprint.expr false bound
-      return ← do
-        withFVar fvarId bound do
-        -- Continue exploring the inner expression
-        footprint.expr false inner
+    if let some e ← destBind e
+      fun bound fvarId inner => do
+        -- Explore the bound expression
+        let bound ← footprint.expr false bound
+        return ← do
+          withFVar fvarId bound do
+          -- Continue exploring the inner expression
+          footprint.expr false inner
+      then return e
     -- Check if this is a get/set expression
     if let some e ← footprint.arrayExpr terminal e then
       return e
@@ -559,9 +596,9 @@ partial def footprint.exprAux (terminal : Bool) (e : Expr) : FootprintM Footprin
     -- Explore the inner body
     footprint.expr terminal inner
   | .mdata _ e => footprint.expr terminal e
-  | .proj _ _ struct =>
-    let _ ← footprint.expr false struct
-    pure .unknown
+  | .proj typename idx struct =>
+    let struct ← footprint.expr false struct
+    pure (.proj typename idx struct)
   | .forallE _ _ _ _ =>
     /- If we find a forall it's probably because we're exploring a type:
        we can just stop -/
@@ -577,7 +614,7 @@ partial def footprint.arrayExpr (terminal : Bool) (e : Expr) : FootprintM (Optio
     let (_, rule) := rules[0]!
     let args := e.getAppArgs
     let array := args[rule.array]!
-    let array ← footprint.expr false array
+    let array ← footprint.expr false (← minimizeArrayVal array)
     let indices := rule.indices.map fun id => args[id]!
     let indices ← indices.mapM (footprint.expr false)
     let indices := indices.map FootprintExpr.toArithExpr
@@ -590,15 +627,15 @@ partial def footprint.arrayExpr (terminal : Bool) (e : Expr) : FootprintM (Optio
   if rules.size > 0 then
     let (_, rule) := rules[0]!
     let args := e.getAppArgs
-    let array ← footprint.expr false args[rule.array]!
+    let array ← footprint.expr false (← minimizeArrayVal args[rule.array]!)
     let indices := rule.indices.map fun id => args[id]!
     let indices ← indices.mapM (footprint.expr false)
     let indices := indices.map FootprintExpr.toArithExpr
     let value ← footprint.expr false args[rule.value]!
     return (FootprintExpr.set array indices value)
 
-  /- Attempt to deconstruct an array value -/
-  footprint.expr terminal (← minimizeArrayVal e)
+  /- Don't know -/
+  pure .none
 
 end
 
