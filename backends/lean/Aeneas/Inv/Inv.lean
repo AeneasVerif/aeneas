@@ -380,18 +380,18 @@ deriving Inhabited
 
 def Footprint.format (e : Footprint) : Format :=
   f!"- inputs := {e.inputs.toArray.map Expr.fvar}
-     \n- outputs := {e.outputs}
-     \n- provenance := {e.provenance.toArray.map fun (x, y) => (Expr.fvar x, y)}
-     \n- footprint := {e.footprint}"
+  - outputs := {e.outputs}
+  - provenance := {e.provenance.toArray.map fun (x, y) => (Expr.fvar x, y)}
+  - footprint := {e.footprint}"
 
 instance : ToFormat Footprint where
   format := Footprint.format
 
 def Footprint.toMessageData (e : Footprint) : MessageData :=
   m!"- inputs := {e.inputs.toArray.map Expr.fvar}
-     - outputs := {e.outputs}
-     - provenance := {e.provenance.toArray.map fun (x, y) => (Expr.fvar x, y)}
-     - footprint := {e.footprint}"
+  - outputs := {e.outputs}
+  - provenance := {e.provenance.toArray.map fun (x, y) => (Expr.fvar x, y)}
+  - footprint := {e.footprint}"
 
 instance : ToMessageData Footprint where
   toMessageData := Footprint.toMessageData
