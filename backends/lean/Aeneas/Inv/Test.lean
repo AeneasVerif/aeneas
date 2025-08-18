@@ -36,6 +36,8 @@ attribute [inv_array_getter xs at i] getElem
 -- TODO: `getElem?`: a problem is that we can't provide the name of the index
 attribute [inv_array_setter xs at i to v] Array.set!
 attribute [inv_array_val self] Array.toList
+attribute [inv_index_val self] Fin.val
+attribute [inv_index_val val] Fin.mk
 
 set_option trace.Inv true in
 example : loop (fun (x y : Array Nat) => (x.set! 0 x[0]!, y)) := by
@@ -111,6 +113,21 @@ example : loopIter (fun i (state : Array Nat × Array Nat) =>
   (src, dst)) := by
   analyze_inv
   simp [loopIter]
+
+-- `Fin`
+set_option trace.Inv true in
+example : loop (fun (i : Fin 32) (state : Array Nat × Array Nat) =>
+  let (src, dst) := state
+  let j := Fin.mk i.val i.isLt
+  let a := src[2 * j]! + dst[2 * j]!
+  let b := src[2 * j + 1]! + dst[2 * j + 1]!
+  let src := src.set! (2 * i) 0
+  let src := src.set! (2 * i + 1) 0
+  let dst := dst.set! (2 * i) a
+  let dst := dst.set! (2 * i + 1) b
+  (src, dst)) := by
+  analyze_inv
+  simp [loop]
 
 -- TODO: test monadic binds
 
