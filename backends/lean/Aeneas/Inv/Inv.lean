@@ -12,6 +12,23 @@ initialize registerTraceClass `Inv
 # Helpers
 -/
 
+def arrayToTupleFormat (format : α → Format) (x : Array α) : Format := Id.run do
+  let mut s := f!"("
+  for h: i in [0:x.size-1] do
+    have h' : i < x.size := by simp [Membership.mem] at h; omega
+    s := s ++ f!"{format x[i]}, "
+  if h: x.size > 0 then s := s ++ f!"{format x[x.size-1]}"
+  pure (s ++ f!")")
+
+def arrayToTupleMessageData (toMessageData : α → MessageData) (x : Array α) :
+  MessageData := Id.run do
+  let mut s := m!"("
+  for h: i in [0:x.size-1] do
+    have h' : i < x.size := by simp [Membership.mem] at h; omega
+    s := s ++ m!"{toMessageData x[i]}, "
+  if h: x.size > 0 then s := s ++ m!"{toMessageData x[x.size-1]}"
+  pure (s ++ m!")")
+
 /-- Find at which positions the expressions in `toFind` appear in `args` -/
 def findPositions (toFind : Array Expr) (args : Array Expr) : MetaM (Array Nat) := do
   let mut map : Std.HashMap Expr Nat := Std.HashMap.emptyWithCapacity
@@ -390,7 +407,7 @@ inductive FootprintExpr where
      decompose loop inputs (which are usually a tuple) -/
   | proj (typename : Name) (field : Nat) (e : FootprintExpr)
   /- Useful for the outputs -/
-  | tuple (x y : FootprintExpr)
+  | struct (typename : Name) (fields : Array FootprintExpr)
   | lit (n : Nat)
   /- A constant natural number.
 
@@ -408,13 +425,13 @@ deriving BEq
 
 instance : Inhabited FootprintExpr := { default := .unknown }
 
-def FootprintExpr.format (e : FootprintExpr) : Format :=
+partial def FootprintExpr.format (e : FootprintExpr) : Format :=
   match e with
   | .input fv => f!"{Expr.fvar fv}"
   | .get a ids => f!"{a.format}{ids.map ArithExpr.format}"
   | .set a ids v => f!"({a.format}{ids.map ArithExpr.format} := {v.format})"
   | .proj _ f x => f!"{x.format}.{f}"
-  | .tuple x y => f!"({x.format}, {y.format})"
+  | .struct _ fields => f!"({arrayToTupleFormat format fields})"
   | .lit n => f!"{n}"
   | .const e => f!"{e}"
   | .binop op x y => f!"({x.format} {op} {y.format})"
@@ -425,13 +442,13 @@ def FootprintExpr.format (e : FootprintExpr) : Format :=
 instance : ToFormat FootprintExpr where
   format := FootprintExpr.format
 
-def FootprintExpr.toMessageData (e : FootprintExpr) : MessageData :=
+partial def FootprintExpr.toMessageData (e : FootprintExpr) : MessageData :=
   match e with
   | .input fv => m!"{Expr.fvar fv}"
   | .get a ids => m!"{a.toMessageData}[{ids.map ArithExpr.toMessageData}]"
   | .set a ids v => m!"({a.toMessageData}{ids.map ArithExpr.toMessageData} := {v.toMessageData})"
   | .proj _ f x => m!"{x.toMessageData}.{f}"
-  | .tuple x y => m!"({x.toMessageData}, {y.toMessageData})"
+  | .struct _ fields => m!"({arrayToTupleMessageData toMessageData fields})"
   | .lit n => m!"{n}"
   | .const e => m!"{e}"
   | .binop op x y => m!"({x.toMessageData} {op} {y.toMessageData})"
@@ -592,7 +609,7 @@ def FootprintExpr.toArithExpr (e : FootprintExpr) : ArithExpr :=
   | .const c => .const c
   | .binop op x y => .binop op x.toArithExpr y.toArithExpr
   | .range start stop step kind => .range start stop step kind
-  | .tuple _ _ | .unknown => .unknown
+  | .struct _ _ | .unknown => .unknown
 
 /-- Minimize a value.
 
@@ -758,6 +775,7 @@ partial def footprint.app (terminal : Bool) (e : Expr) : FootprintM FootprintExp
   -/
   let f := e.getAppFn
   let args := e.getAppArgs
+  let env ← getEnv
 
   -- Check if this is a constant
   if e.isAppOfArity ``OfNat.ofNat 3 then
@@ -765,12 +783,18 @@ partial def footprint.app (terminal : Bool) (e : Expr) : FootprintM FootprintExp
     let args := e.getAppArgs
     return (← footprint.expr terminal args[1]!)
 
-  -- Check if this is a tuple
-  if let some (x, y) := destTuple e then
-    trace[Inv] "is a tuple"
-    let x ← footprint.expr false x
-    let y ← footprint.expr false y
-    return (.tuple x y)
+  -- Check if this is a structure constructor
+  let ty ← inferType e
+  let fty := ty.getAppFn
+  if let .const fName _ := f then
+    if let Expr.const tyName _ := fty then
+      if isStructureLike env tyName then
+        let info := getStructureCtor env tyName
+        if info.name = fName then
+          trace[Inv] "is a structure constructor"
+          let fields := args.extract (args.size - info.numFields)
+          let fields ← fields.mapM (footprint.expr false)
+          return (.struct tyName fields)
 
   -- Check if this is a tuple projector
   if e.isAppOfArity ``Prod.fst 3 ∨ e.isAppOfArity ``MProd.fst 3 then
@@ -824,7 +848,7 @@ partial def footprint.app (terminal : Bool) (e : Expr) : FootprintM FootprintExp
 
   -- Check if this is a casesOn expression (a "primitive" match)
   if let .const fname _ := f then
-    if isCasesOnRecursor (← getEnv) fname then
+    if isCasesOnRecursor env fname then
       trace[Inv] "is a casesOn"
       return (← footprint.casesOn e)
 
@@ -881,6 +905,7 @@ partial def footprint.casesOn (e : Expr) : FootprintM FootprintExpr := do
         we have special treatment for these cases.
       - or this is an unknown match, in which case we deconstruct the match and continue -/
 
+  -- TODO: generalize
   if (fname = ``Prod.casesOn ∨ fname = ``MProd.casesOn) ∧ args.size = 5 then
     trace[Inv] "is a Prod.casesOn or an MProd.casesOn"
     let scrut := args[3]!
