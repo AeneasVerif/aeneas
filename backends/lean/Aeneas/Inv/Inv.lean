@@ -600,21 +600,15 @@ partial def footprint.exprAux (terminal : Bool) (e : Expr) : FootprintM Footprin
     -- Typically happens when diving into a match or a let-binding
     lambdaTelescope e fun _ body => do
     footprint.expr terminal body
-  | .letE _ _ _ _ _ =>
+  | .letE declName type value body _ =>
     trace[Inv] ".letE"
-    -- How do we destruct exactly *one* let?
-    lambdaLetTelescope e fun boundFVars inner => do
-    -- Explore the bound expressions
-    let boundExprs ← boundFVars.filterMapM fun fvar => do
-      let fvarId := fvar.fvarId!
-      if let some decl := (← getLCtx).fvarIdToDecl.find? fvarId then do
-        if let some value := decl.value? then
-          pure (some (fvarId, ← footprint.expr false value))
-        else pure none
-      else pure none
-    withFVars boundExprs do
-    -- Explore the inner body
-    footprint.expr terminal inner
+    -- Explore the bound value
+    let value ← footprint.expr false value
+    -- Explore the body
+    withLocalDecl declName .default type fun fvar => do
+    let body := body.instantiate #[fvar]
+    withFVar fvar.fvarId! value do
+    footprint.expr false body
   | .mdata _ e => footprint.expr terminal e
   | .proj typename idx struct =>
     trace[Inv] ".proj"
@@ -632,6 +626,7 @@ partial def footprint.app (terminal : Bool) (e : Expr) : FootprintM FootprintExp
   /- There are several cases:
       - it might be a constant
       - it might be a tuple (`Prod` or `MProd`)
+      - it might be a tuple projector
       - it might be a match
       - it might be a monadic let, in which case we need to destruct it
       - it might be a get/set expression
@@ -644,12 +639,22 @@ partial def footprint.app (terminal : Bool) (e : Expr) : FootprintM FootprintExp
     let args := e.getAppArgs
     return (← footprint.expr terminal args[1]!)
 
-  -- Check if this is a. tuple
+  -- Check if this is a tuple
   if let some (x, y) := destTuple e then
     trace[Inv] "is a tuple"
     let x ← footprint.expr false x
     let y ← footprint.expr false y
     return (.tuple x y)
+
+  -- Check if this is a tuple projector
+  if e.isAppOfArity ``Prod.fst 3 ∨ e.isAppOfArity ``MProd.fst 3 then
+    trace[Inv] "tuple projector fst"
+    let x ← footprint.expr false e.getAppArgs[2]!
+    return (.proj (if f.constName! = ``Prod.fst then ``Prod else ``MProd) 0 x)
+  if e.isAppOfArity ``Prod.snd 3 ∨ e.isAppOfArity ``MProd.snd 3 then
+    trace[Inv] "tuple projector snd"
+    let x ← footprint.expr false e.getAppArgs[2]!
+    return (.proj (if f.constName! = ``Prod.snd then ``Prod else ``MProd) 1 x)
 
   /- Check if this is a matcher (a call to an auxiliary definition
       which implements a match) -/
@@ -707,7 +712,7 @@ partial def footprint.app (terminal : Bool) (e : Expr) : FootprintM FootprintExp
         -- Continue exploring the inner expression
         footprint.expr false inner
     then
-      trace[Inv] "is moandic bind"
+      trace[Inv] "is monadic bind"
       return e
   -- Check if this is a get/set expression
   if let some e ← footprint.arrayExpr terminal e then

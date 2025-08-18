@@ -49,12 +49,12 @@ example : loop (fun (x y : Array Nat) => (x.set! 0 x.toList[0]!, y)) := by
 
 def loopIter (_ : Nat → α → α) : Prop := True
 
--- TODO: tuple projectors
+-- Tuple projectors
 set_option trace.Inv true in
 example : loopIter (fun i (xy : Array Nat × Array Nat) =>
   let x := xy.fst
   let y := xy.snd
-  (x.set! 0 x[0]!, y)) := by
+  (x.set! i x[i]!, y.set! i x[i]!)) := by
   analyze_inv
   simp [loopIter]
 
