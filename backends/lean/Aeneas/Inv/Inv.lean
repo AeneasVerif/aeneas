@@ -320,7 +320,7 @@ inductive FootprintExpr where
      decompose loop inputs (which are usually a tuple) -/
   | proj (typename : Name) (field : Nat) (e : FootprintExpr)
   /- Useful for the outputs -/
-  | tuple (fields : Array FootprintExpr)
+  | tuple (x y : FootprintExpr)
   | unknown
 deriving BEq
 
@@ -333,7 +333,7 @@ def FootprintExpr.format (e : FootprintExpr) : Format :=
   | .set a ids v => f!"{a.format}[{ids.map ArithExpr.format}] := {v.format}"
   | .arith x => f!"{x.format}"
   | .proj _ f x => f!"{x.format}.{f}"
-  | .tuple fields => f!"({fields.map format})"
+  | .tuple x y => f!"({x.format}, {y.format})"
   | .unknown => f!"?"
 
 instance : ToFormat FootprintExpr where
@@ -346,7 +346,7 @@ def FootprintExpr.toMessageData (e : FootprintExpr) : MessageData :=
   | .set a ids v => m!"{a.toMessageData}[{ids.map ArithExpr.toMessageData}] := {v.toMessageData}"
   | .arith x => m!"{x.toMessageData}"
   | .proj _ f x => m!"{x.toMessageData}.{f}"
-  | .tuple fields => m!"({fields.map toMessageData})"
+  | .tuple x y => m!"({x.toMessageData}, {y.toMessageData})"
   | .unknown => m!"?"
 
 instance : ToMessageData FootprintExpr where
@@ -494,7 +494,7 @@ def FootprintExpr.toArithExpr (e : FootprintExpr) : ArithExpr :=
   | .input v => .input v
   | .get _ _ | .set _ _ _ | .proj _ _ _ => .unknown
   | .arith e => e
-  | .tuple _ | .unknown => .unknown
+  | .tuple _ _ | .unknown => .unknown
 
 def minimizeArrayVal (e : Expr) : FootprintM Expr := do
   let env ← getEnv
@@ -523,14 +523,13 @@ def destBind (e : Expr) (k : Expr → FVarId → Expr → FootprintM α) : Footp
     k bound fvar.fvarId! body
   else pure none
 
-partial def destTuple (e : Expr) : List Expr :=
+partial def destTuple (e : Expr) : Option (Expr × Expr) :=
   if e.isAppOfArity ``Prod.mk 4 ∨ e.isAppOfArity ``MProd.mk 4 then
     let args := e.getAppArgs
     let x := args[2]!
     let y := args[3]!
-    let y := destTuple y
-    x :: y
-  else [e]
+    some (x, y)
+  else none
 
 mutual
 
@@ -590,6 +589,7 @@ partial def footprint.exprAux (terminal : Bool) (e : Expr) : FootprintM Footprin
     /- There are several cases:
        - it might be a constant
        - it might be a tuple (`Prod` or `MProd`)
+       - it might be a match
        - it might be a monadic let, in which case we need to destruct it
        - it might be a get/set expression
     -/
@@ -600,10 +600,11 @@ partial def footprint.exprAux (terminal : Bool) (e : Expr) : FootprintM Footprin
       return (← footprint.expr terminal args[1]!)
 
     -- Check if this is a. tuple
-    if e.isAppOfArity ``Prod.mk 4 ∨ e.isAppOfArity ``MProd.mk 4 then
-      let fields := destTuple e
-      let fields ← fields.mapM (footprint.expr false)
-      return (.tuple fields.toArray)
+    if let some (x, y) := destTuple e then
+      trace[Inv] "is a tuple"
+      let x ← footprint.expr false x
+      let y ← footprint.expr false y
+      return (.tuple x y)
 
     -- Check if this is a monadic let-binding
     if let some e ← destBind e
