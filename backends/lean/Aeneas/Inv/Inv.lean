@@ -328,7 +328,7 @@ instance : Inhabited FootprintExpr := { default := .unknown }
 
 def FootprintExpr.format (e : FootprintExpr) : Format :=
   match e with
-  | .input fv => f!"input({Expr.fvar fv})"
+  | .input fv => f!"{Expr.fvar fv}"
   | .get a ids => f!"{a.format}[{ids.map ArithExpr.format}]"
   | .set a ids v => f!"{a.format}[{ids.map ArithExpr.format}] := {v.format}"
   | .arith x => f!"{x.format}"
@@ -341,7 +341,7 @@ instance : ToFormat FootprintExpr where
 
 def FootprintExpr.toMessageData (e : FootprintExpr) : MessageData :=
   match e with
-  | .input fv => m!"input({Expr.fvar fv})"
+  | .input fv => m!"{Expr.fvar fv}"
   | .get a ids => m!"{a.toMessageData}[{ids.map ArithExpr.toMessageData}]"
   | .set a ids v => m!"{a.toMessageData}[{ids.map ArithExpr.toMessageData}] := {v.toMessageData}"
   | .arith x => m!"{x.toMessageData}"

@@ -58,20 +58,34 @@ example : loopIter (fun i (xy : Array Nat × Array Nat) =>
   analyze_inv
   simp [loopIter]
 
--- TODO: handles matches over tuples
+-- Tuple with 2 elements
 set_option trace.Inv true in
 example : loopIter (fun i (xy : Array Nat × Array Nat) =>
   let (x, y) := xy
-  (x.set! 0 x[0]!, y)) := by
+  (x.set! i x[i]!, y)) := by
   analyze_inv
   simp [loopIter]
 
+-- Tuple with 3 elements (make sure the handling of tuples is general)
 set_option trace.Inv true in
 example : loopIter (fun i (xyz : Array Nat × Array Nat × Array Nat) =>
   let (x, y, z) := xyz
   (x.set! i x[i]!, y, z)) := by
   analyze_inv
   simp [loopIter]
+
+inductive Either (α β : Type)
+| left  : α → Either α β
+| right : β → Either α β
+
+-- Just checking that we don't crash on arbitrary match expressions
+set_option trace.Inv true in
+example {α β} : loop (fun (e : Either α β) =>
+  match e with
+  | .left _ => true
+  | .right _ => false) := by
+  analyze_inv
+  simp [loop]
 
 -- TODO: test monadic binds
 
