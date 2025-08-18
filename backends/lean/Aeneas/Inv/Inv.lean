@@ -901,7 +901,6 @@ partial def footprint.app (terminal : Bool) (e : Expr) : FootprintM FootprintExp
 partial def footprint.casesOn (e : Expr) : FootprintM FootprintExpr := do
   withTraceNode `Inv (fun _ => pure m!"footprint.casesOn") do
   let f := e.getAppFn
-  let fname := f.constName!
   let args := e.getAppArgs
 
   /-  The casesOn definition is always of the following shape:
