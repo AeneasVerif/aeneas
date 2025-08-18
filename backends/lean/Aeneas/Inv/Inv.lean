@@ -287,7 +287,7 @@ instance : Inhabited ArithExpr := { default := .unknown }
 
 def ArithExpr.format (e : ArithExpr) : Format :=
   match e with
-  | .input fv => f!"input({Expr.fvar fv})"
+  | .input fv => f!"{Expr.fvar fv}"
   | .lit n => f!"{n}"
   | .const e => f!"const({e})"
   | .binop op a b => f!"{format a} {op} {format b}"
@@ -298,7 +298,7 @@ instance : ToFormat ArithExpr where
 
 def ArithExpr.toMessageData (e : ArithExpr) : MessageData :=
   match e with
-  | .input fv => m!"input({Expr.fvar fv})"
+  | .input fv => m!"{Expr.fvar fv}"
   | .lit n => m!"{n}"
   | .const e => m!"const({e})"
   | .binop op a b => m!"{a.toMessageData} {op} {b.toMessageData}"
@@ -481,6 +481,14 @@ def lambdaTelescope (e : Expr) (k : Array Expr → Expr → FootprintM α) : Foo
     -- Continue
     pure x
 
+def lambdaBoundedTelescope (e : Expr) (maxFVars : Nat) (k : Array Expr → Expr → FootprintM α) : FootprintM α :=
+  Meta.lambdaBoundedTelescope e maxFVars fun fvars e => do
+    let x ← k fvars e
+    -- Pop the variables from the provenance and insert them in the footprint
+    popFVars (fvars.map Expr.fvarId!)
+    -- Continue
+    pure x
+
 def lambdaLetTelescope (e : Expr) (k : Array Expr → Expr → FootprintM α) : FootprintM α :=
   Meta.lambdaLetTelescope e fun fvars e => do
     let x ← k fvars e
@@ -586,47 +594,7 @@ partial def footprint.exprAux (terminal : Bool) (e : Expr) : FootprintM Footprin
     | .strVal _ => pure .unknown
   | .app _ _ =>
     trace[Inv] ".app"
-    /- There are several cases:
-       - it might be a constant
-       - it might be a tuple (`Prod` or `MProd`)
-       - it might be a match
-       - it might be a monadic let, in which case we need to destruct it
-       - it might be a get/set expression
-    -/
-    -- Check if this is a constant
-    if e.isAppOfArity ``OfNat.ofNat 3 then
-      trace[Inv] "is OfNat.ofNat"
-      let args := e.getAppArgs
-      return (← footprint.expr terminal args[1]!)
-
-    -- Check if this is a. tuple
-    if let some (x, y) := destTuple e then
-      trace[Inv] "is a tuple"
-      let x ← footprint.expr false x
-      let y ← footprint.expr false y
-      return (.tuple x y)
-
-    -- Check if this is a monadic let-binding
-    if let some e ← destBind e
-      fun bound fvarId inner => do
-        -- Explore the bound expression
-        let bound ← footprint.expr false bound
-        return ← do
-          withFVar fvarId bound do
-          -- Continue exploring the inner expression
-          footprint.expr false inner
-      then
-        trace[Inv] "is moandic bind"
-        return e
-    -- Check if this is a get/set expression
-    if let some e ← footprint.arrayExpr terminal e then
-      trace[Inv] "is an array expression"
-      return e
-    -- Don't know: explore the arguments
-    let args := e.getAppArgs
-    let _ ← Array.mapM (footprint.expr false) args
-    -- TODO: tuple case
-    pure .unknown
+    footprint.app terminal e
   | .lam _ _ _ _ =>
     trace[Inv] ".lam"
     -- Typically happens when diving into a match or a let-binding
@@ -657,6 +625,167 @@ partial def footprint.exprAux (terminal : Bool) (e : Expr) : FootprintM Footprin
     /- If we find a forall it's probably because we're exploring a type:
        we can just stop -/
     pure .unknown
+
+-- Subcase: the expression is a function application
+partial def footprint.app (terminal : Bool) (e : Expr) : FootprintM FootprintExpr := do
+  withTraceNode `Inv (fun _ => pure m!"footprint.app") do
+  /- There are several cases:
+      - it might be a constant
+      - it might be a tuple (`Prod` or `MProd`)
+      - it might be a match
+      - it might be a monadic let, in which case we need to destruct it
+      - it might be a get/set expression
+  -/
+  let f := e.getAppFn
+
+  -- Check if this is a constant
+  if e.isAppOfArity ``OfNat.ofNat 3 then
+    trace[Inv] "is OfNat.ofNat"
+    let args := e.getAppArgs
+    return (← footprint.expr terminal args[1]!)
+
+  -- Check if this is a. tuple
+  if let some (x, y) := destTuple e then
+    trace[Inv] "is a tuple"
+    let x ← footprint.expr false x
+    let y ← footprint.expr false y
+    return (.tuple x y)
+
+  /- Check if this is a matcher (a call to an auxiliary definition
+      which implements a match) -/
+  if let some me := ← matchMatcherApp? e then
+    /-  We want to work on the more primitive `casesOn` expressions,
+        to check if the match is, for instance, a match deconstructing.
+
+        Note that for instance, when writing:
+        ```
+        match xyz with
+        | (x, y, z) => ...
+        ```
+        Lean actually introduces the following auxiliary definition:
+        ```
+        def match_1 :=
+          fun motive xyz h_1 => Prod.casesOn xyz fun fst snd => Prod.casesOn snd fun fst_1 snd => h_1 fst fst_1 snd
+        ```
+        and the match becomes a call to `match_1`.
+
+        In order to properly analyze it the simplest is to unfold it to reveal the nested calls to `Prod.casesOn`.
+      -/
+    trace[Inv] "is a match"
+    trace[Inv]
+      "matcherApp:
+      - params: {me.params}
+      - motive: {me.motive}
+      - discrs: {me.discrs}
+      - altNumParams: {me.altNumParams}
+      - alts: {me.alts}
+      - remaining: {me.remaining}"
+
+    /- Unfold the match definition: we need to unfold the definition, then beta-reduce
+       it to get rid of the lambdas -/
+    let e ← deltaExpand e (fun name => name = me.matcherName)
+    let e ← Core.betaReduce e
+    trace[Inv] "unfolded and reduced match: {e}"
+    -- Small sanity check: we managed to unfold the match
+    if e.getAppFn == f then return .unknown
+    -- Otherwise, explore the unfolded expression
+    return (← footprint.expr terminal e)
+
+  -- Check if this is a casesOn expression (a "primitive" match)
+  if let .const fname _ := f then
+    if isCasesOnRecursor (← getEnv) fname then
+      trace[Inv] "is a casesOn"
+      return (← footprint.casesOn e)
+
+  -- Check if this is a monadic let-binding
+  if let some e ← destBind e
+    fun bound fvarId inner => do
+      -- Explore the bound expression
+      let bound ← footprint.expr false bound
+      return ← do
+        withFVar fvarId bound do
+        -- Continue exploring the inner expression
+        footprint.expr false inner
+    then
+      trace[Inv] "is moandic bind"
+      return e
+  -- Check if this is a get/set expression
+  if let some e ← footprint.arrayExpr terminal e then
+    trace[Inv] "is an array expression"
+    return e
+  -- Don't know: explore the arguments
+  let args := e.getAppArgs
+  let _ ← Array.mapM (footprint.expr false) args
+  -- TODO: tuple case
+  pure .unknown
+
+partial def footprint.casesOn (e : Expr) : FootprintM FootprintExpr := do
+  withTraceNode `Inv (fun _ => pure m!"footprint.casesOn") do
+  let f := e.getAppFn
+  let fname := f.constName!
+  let args := e.getAppArgs
+
+  /-  There are two cases:
+      - either this is a known match, such as a match over a `Prod` or `MProd`:
+        we have special treatment for these cases.
+      - or this is an unknown match, in which case we deconstruct the match and continue -/
+
+  if (fname = ``Prod.casesOn ∨ fname = ``MProd.casesOn) ∧ args.size = 5 then
+    trace[Inv] "is a Prod.casesOn or an MProd.casesOn"
+    let scrut := args[3]!
+    let branch := args[4]!
+    trace[Inv] "scrut: {scrut}"
+    trace[Inv] "branch: {branch}"
+
+    -- Explore the scrutinee
+    let scrut ← footprint.expr false scrut
+
+    -- Explore the branch, which should have exactly two inputs (for the fields of the pair)
+    lambdaBoundedTelescope branch 2 fun fvars branch => do
+    if fvars.size ≠ 2 then
+      -- This is unexpected: simply explore the branches
+      trace[Inv] "Expected two inputs, got {fvars}"
+      let _ ← footprint.expr false branch
+      return .unknown
+
+    -- Register the branch inputs as being projections of the scrutinee
+    let typeName := if fname = ``Prod.casesOn then ``Prod else ``MProd
+    withFVar fvars[0]!.fvarId! (.proj typeName 0 scrut) do
+    withFVar fvars[1]!.fvarId! (.proj typeName 1 scrut) do
+    -- Explore the branch expression
+    footprint.expr false branch
+
+  else
+    /- The casesOn definition is always of the following shape:
+        - input parameters (implicit parameters)
+        - motive (implicit), -- the motive gives the return type of the match
+        - scrutinee (explicit)
+        - branches (explicit).
+        In particular, we notice that the scrutinee is the first *explicit*
+        parameter - this is how we spot it.
+      -/
+    -- Find the first explicit parameter: this is the scrutinee
+    let scrutIdx ← do
+      forallTelescope (← inferType f) fun xs _ => do
+      let rec findFirstExplicit (i : Nat) : MetaM Nat := do
+        if i ≥ xs.size then throwError "Unexpected: could not find an explicit parameter"
+        else
+          let x := xs[i]!
+          let xFVarId := x.fvarId!
+          let localDecl ← xFVarId.getDecl
+          match localDecl.binderInfo with
+          | .default => pure i
+          | _ => findFirstExplicit (i + 1)
+      findFirstExplicit 0
+    -- Split the arguments
+    let scrut := args[scrutIdx]!
+    let branches := args.extract (scrutIdx + 1) args.size
+
+    -- Explore the scrutinee and the branches
+    let _ ← footprint.expr false scrut
+    let _ ← branches.mapM (footprint.expr false)
+    pure .unknown
+
 
 partial def footprint.arrayExpr (_terminal : Bool) (e : Expr) : FootprintM (Option FootprintExpr) := do
   withTraceNode `Inv (fun _ => pure m!"footprint.arrayExpr") do

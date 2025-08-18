@@ -66,6 +66,13 @@ example : loopIter (fun i (xy : Array Nat × Array Nat) =>
   analyze_inv
   simp [loopIter]
 
+set_option trace.Inv true in
+example : loopIter (fun i (xyz : Array Nat × Array Nat × Array Nat) =>
+  let (x, y, z) := xyz
+  (x.set! i x[i]!, y, z)) := by
+  analyze_inv
+  simp [loopIter]
+
 -- TODO: test monadic binds
 
 -- TODO: Fin
