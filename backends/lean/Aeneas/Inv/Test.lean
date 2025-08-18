@@ -80,6 +80,14 @@ example : loopIter (fun i (xy : Array Nat × Array Nat) =>
   analyze_loop
   simp [loopIter]
 
+-- `MProd` with 2 elements: checking that the constructor is handled properly
+set_option trace.Inv true in
+example : loopIter (fun i (xy : MProd (Array Nat) (Array Nat)) =>
+  let ⟨ x, y ⟩ := xy
+  ⟨ x.set! i x[i]!, y ⟩) := by
+  analyze_loop
+  simp [loopIter]
+
 -- Tuple with 3 elements (make sure the handling of tuples is general)
 set_option trace.Inv true in
 example : loopIter (fun i (xyz : Array Nat × Array Nat × Array Nat) =>

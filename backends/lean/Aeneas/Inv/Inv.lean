@@ -904,63 +904,75 @@ partial def footprint.casesOn (e : Expr) : FootprintM FootprintExpr := do
   let fname := f.constName!
   let args := e.getAppArgs
 
-  /-  There are two cases:
-      - either this is a known match, such as a match over a `Prod` or `MProd`:
-        we have special treatment for these cases.
-      - or this is an unknown match, in which case we deconstruct the match and continue -/
+  /-  The casesOn definition is always of the following shape:
+      - input parameters (implicit parameters)
+      - motive (implicit), -- the motive gives the return type of the match
+      - scrutinee (explicit)
+      - branches (explicit).
+      In particular, we notice that the scrutinee is the first *explicit*
+      parameter - this is how we spot it.
+    -/
+  -- Find the first explicit parameter: this is the scrutinee
+  let scrutIdx ← do
+    forallTelescope (← inferType f) fun xs _ => do
+    let rec findFirstExplicit (i : Nat) : MetaM Nat := do
+      if i ≥ xs.size then throwError "Unexpected: could not find an explicit parameter"
+      else
+        let x := xs[i]!
+        let xFVarId := x.fvarId!
+        let localDecl ← xFVarId.getDecl
+        match localDecl.binderInfo with
+        | .default => pure i
+        | _ => findFirstExplicit (i + 1)
+    findFirstExplicit 0
 
-  -- TODO: generalize
-  if (fname = ``Prod.casesOn ∨ fname = ``MProd.casesOn) ∧ args.size = 5 then
-    trace[Inv] "is a Prod.casesOn or an MProd.casesOn"
-    let scrut := args[3]!
-    let branch := args[4]!
-    trace[Inv] "scrut: {scrut}"
-    trace[Inv] "branch: {branch}"
+  -- Split the arguments
+  let scrut := args[scrutIdx]!
+  let branches := args.extract (scrutIdx + 1) args.size
+  trace[Inv] "scrut: {scrut}"
+  trace[Inv] "branches: {branches}"
+
+  /-  If this is a cases over a structure, then we know that the variables bound
+      in the branch should refer exactly to the fields of the structure: we use this
+      fact. -/
+
+  -- Check if this is a cases on over a *structure* and retrieve the number of fields
+  let scrutTy ← inferType scrut
+  let scrutfty := scrutTy.getAppFn
+  let structNumFields ← do
+    if let .const fname _ := scrutfty then
+      if isStructureLike (← getEnv) fname then
+        pure (some (getStructureLikeNumFields (← getEnv) fname))
+      else pure none
+    else pure none
+
+  -- If we're matching over a structure, there should be exactly one branch
+  if structNumFields.isSome ∧ branches.size = 1 then
+    trace[Inv] "is a casesOn over a structure"
+    -- Retrieve this structure's information
+    let numFields := structNumFields.get!
+    let branch := branches[0]!
 
     -- Explore the scrutinee
     let scrut ← footprint.expr false scrut
 
-    -- Explore the branch, which should have exactly two inputs (for the fields of the pair)
-    lambdaBoundedTelescope branch 2 fun fvars branch => do
-    if fvars.size ≠ 2 then
+    -- Explore the branch, which should have exactly `numFields` inputs
+    lambdaBoundedTelescope branch numFields fun fvars branch => do
+    if fvars.size ≠ numFields then
       -- This is unexpected: simply explore the branches
-      trace[Inv] "Expected two inputs, got {fvars}"
+      trace[Inv] "Expected {numFields} inputs, got {fvars}"
       let _ ← footprint.expr false branch
       return .unknown
 
     -- Register the branch inputs as being projections of the scrutinee
-    let typeName := if fname = ``Prod.casesOn then ``Prod else ``MProd
-    withFVar fvars[0]!.fvarId! (.proj typeName 0 scrut) do
-    withFVar fvars[1]!.fvarId! (.proj typeName 1 scrut) do
+    let .const typeName _ := scrutfty
+      | throwError "Unreachable"
+    let fvars := fvars.mapIdx (fun i fv => (fv.fvarId!, .proj typeName i scrut))
+    withFVars fvars do
     -- Explore the branch expression
     footprint.expr false branch
 
   else
-    /- The casesOn definition is always of the following shape:
-        - input parameters (implicit parameters)
-        - motive (implicit), -- the motive gives the return type of the match
-        - scrutinee (explicit)
-        - branches (explicit).
-        In particular, we notice that the scrutinee is the first *explicit*
-        parameter - this is how we spot it.
-      -/
-    -- Find the first explicit parameter: this is the scrutinee
-    let scrutIdx ← do
-      forallTelescope (← inferType f) fun xs _ => do
-      let rec findFirstExplicit (i : Nat) : MetaM Nat := do
-        if i ≥ xs.size then throwError "Unexpected: could not find an explicit parameter"
-        else
-          let x := xs[i]!
-          let xFVarId := x.fvarId!
-          let localDecl ← xFVarId.getDecl
-          match localDecl.binderInfo with
-          | .default => pure i
-          | _ => findFirstExplicit (i + 1)
-      findFirstExplicit 0
-    -- Split the arguments
-    let scrut := args[scrutIdx]!
-    let branches := args.extract (scrutIdx + 1) args.size
-
     -- Explore the scrutinee and the branches
     let _ ← footprint.expr false scrut
     let _ ← branches.mapM (footprint.expr false)
