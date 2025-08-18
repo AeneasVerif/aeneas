@@ -87,6 +87,31 @@ example {α β} : loop (fun (e : Either α β) =>
   analyze_inv
   simp [loop]
 
+-- Basic operations: map i
+set_option trace.Inv true in
+example : loopIter (fun i (state : Array Nat × Array Nat) =>
+  let (src, dst) := state
+  let a := src[i]! + dst[i]!
+  let src' := src.set! i 0
+  let dst := dst.set! i a
+  (src', dst)) := by
+  analyze_inv
+  simp [loopIter]
+
+-- Basic operations: 2 * i, 2 * i + 1
+set_option trace.Inv true in
+example : loopIter (fun i (state : Array Nat × Array Nat) =>
+  let (src, dst) := state
+  let a := src[2 * i]! + dst[2 * i]!
+  let b := src[2 * i + 1]! + dst[2 * i + 1]!
+  let src := src.set! (2 * i) 0
+  let src := src.set! (2 * i + 1) 0
+  let dst := dst.set! (2 * i) a
+  let dst := dst.set! (2 * i + 1) b
+  (src, dst)) := by
+  analyze_inv
+  simp [loopIter]
+
 -- TODO: test monadic binds
 
 -- TODO: Fin

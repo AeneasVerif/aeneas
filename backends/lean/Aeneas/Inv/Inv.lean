@@ -315,12 +315,21 @@ inductive FootprintExpr where
   | input (v : FVarId) -- An input of the loop
   | get (array : FootprintExpr) (indices : Array ArithExpr)
   | set (array : FootprintExpr) (indices : Array ArithExpr) (value : FootprintExpr)
-  | arith (e : ArithExpr)
   /- Handling projectors properly is particularly useful because we often need to
      decompose loop inputs (which are usually a tuple) -/
   | proj (typename : Name) (field : Nat) (e : FootprintExpr)
   /- Useful for the outputs -/
   | tuple (x y : FootprintExpr)
+  | lit (n : Nat)
+  /- A constant natural number.
+
+     We store a general expression rather than, e.g., a constant name, because
+     it might be an expression of the shape: `n config`, where `config`
+     remains constant inside the loop (and typically within the function).
+  -/
+  | const (e : Expr)
+  | binop (op : ArithBinop) (a b : FootprintExpr)
+  --
   | unknown
 deriving BEq
 
@@ -330,10 +339,12 @@ def FootprintExpr.format (e : FootprintExpr) : Format :=
   match e with
   | .input fv => f!"{Expr.fvar fv}"
   | .get a ids => f!"{a.format}[{ids.map ArithExpr.format}]"
-  | .set a ids v => f!"{a.format}[{ids.map ArithExpr.format}] := {v.format}"
-  | .arith x => f!"{x.format}"
+  | .set a ids v => f!"({a.format}[{ids.map ArithExpr.format}] := {v.format})"
   | .proj _ f x => f!"{x.format}.{f}"
   | .tuple x y => f!"({x.format}, {y.format})"
+  | .lit n => f!"lit({n})"
+  | .const e => f!"const({e})"
+  | .binop op x y => f!"({x.format} {op} {y.format})"
   | .unknown => f!"?"
 
 instance : ToFormat FootprintExpr where
@@ -343,10 +354,12 @@ def FootprintExpr.toMessageData (e : FootprintExpr) : MessageData :=
   match e with
   | .input fv => m!"{Expr.fvar fv}"
   | .get a ids => m!"{a.toMessageData}[{ids.map ArithExpr.toMessageData}]"
-  | .set a ids v => m!"{a.toMessageData}[{ids.map ArithExpr.toMessageData}] := {v.toMessageData}"
-  | .arith x => m!"{x.toMessageData}"
+  | .set a ids v => m!"({a.toMessageData}[{ids.map ArithExpr.toMessageData}] := {v.toMessageData})"
   | .proj _ f x => m!"{x.toMessageData}.{f}"
   | .tuple x y => m!"({x.toMessageData}, {y.toMessageData})"
+  | .lit n => m!"lit({n})"
+  | .const e => m!"const({e})"
+  | .binop op x y => m!"({x.toMessageData} {op} {y.toMessageData})"
   | .unknown => m!"?"
 
 instance : ToMessageData FootprintExpr where
@@ -501,7 +514,9 @@ def FootprintExpr.toArithExpr (e : FootprintExpr) : ArithExpr :=
   match e with
   | .input v => .input v
   | .get _ _ | .set _ _ _ | .proj _ _ _ => .unknown
-  | .arith e => e
+  | .lit n => .lit n
+  | .const c => .const c
+  | .binop op x y => .binop op x.toArithExpr y.toArithExpr
   | .tuple _ _ | .unknown => .unknown
 
 def minimizeArrayVal (e : Expr) : FootprintM Expr := do
@@ -538,6 +553,26 @@ partial def destTuple (e : Expr) : Option (Expr × Expr) :=
     let y := args[3]!
     some (x, y)
   else none
+
+/-- Homogeneous binops -/
+def arithBinops : Std.HashMap Name ArithBinop := Std.HashMap.ofList [
+  (``Add.add, .add),
+  (``Sub.sub, .sub),
+  (``Mul.mul, .mul),
+  (``Mod.mod, .mod),
+  (``Div.div, .div),
+  (``Pow.pow, .pow),
+]
+
+/-- Heterogeneous biniops -/
+def arithHBinops : Std.HashMap Name ArithBinop := Std.HashMap.ofList [
+  (``HAdd.hAdd, .add),
+  (``HSub.hSub, .sub),
+  (``HMul.hMul, .mul),
+  (``HMod.hMod, .mod),
+  (``HDiv.hDiv, .div),
+  (``HPow.hPow, .pow),
+]
 
 mutual
 
@@ -583,14 +618,14 @@ partial def footprint.exprAux (terminal : Bool) (e : Expr) : FootprintM Footprin
     let ty ← inferType e
     let p ←
       match ty with
-      | .const ``Nat [] => pure (.arith (.const e))
+      | .const ``Nat [] => pure (.const e)
       | _ => pure .unknown
     pushOptOutput terminal p
     pure p
   | .lit l =>
     trace[Inv] ".lit"
     match l with
-    | .natVal n => pure (.arith (.lit n))
+    | .natVal n => pure (.lit n)
     | .strVal _ => pure .unknown
   | .app _ _ =>
     trace[Inv] ".app"
@@ -624,14 +659,16 @@ partial def footprint.exprAux (terminal : Bool) (e : Expr) : FootprintM Footprin
 partial def footprint.app (terminal : Bool) (e : Expr) : FootprintM FootprintExpr := do
   withTraceNode `Inv (fun _ => pure m!"footprint.app") do
   /- There are several cases:
-      - it might be a constant
-      - it might be a tuple (`Prod` or `MProd`)
-      - it might be a tuple projector
-      - it might be a match
-      - it might be a monadic let, in which case we need to destruct it
-      - it might be a get/set expression
+      - constant
+      - tuple (`Prod` or `MProd`)
+      - tuple projector
+      - match
+      - monadic let, in which case we need to destruct it
+      - get/set expression
+      - binary operation
   -/
   let f := e.getAppFn
+  let args := e.getAppArgs
 
   -- Check if this is a constant
   if e.isAppOfArity ``OfNat.ofNat 3 then
@@ -714,10 +751,30 @@ partial def footprint.app (terminal : Bool) (e : Expr) : FootprintM FootprintExp
     then
       trace[Inv] "is monadic bind"
       return e
+
+  -- Homogeneous binary operations
+  if f.isConst ∧ args.size = 3 then
+    let fname := f.constName!
+    if let some op := arithBinops.get? fname then
+      trace[Inv] "homogeneous binop"
+      let x ← footprint.expr false args[1]!
+      let y ← footprint.expr false args[2]!
+      return (.binop op x y)
+
+  -- Heterogeneous binary operations
+  if f.isConst ∧ args.size = 6 then
+    let fname := f.constName!
+    if let some op := arithHBinops.get? fname then
+      trace[Inv] "heterogeneous binop"
+      let x ← footprint.expr false args[4]!
+      let y ← footprint.expr false args[5]!
+      return (.binop op x y)
+
   -- Check if this is a get/set expression
   if let some e ← footprint.arrayExpr terminal e then
     trace[Inv] "is an array expression"
     return e
+
   -- Don't know: explore the arguments
   let args := e.getAppArgs
   let _ ← Array.mapM (footprint.expr false) args
@@ -792,10 +849,12 @@ partial def footprint.casesOn (e : Expr) : FootprintM FootprintExpr := do
     pure .unknown
 
 
-partial def footprint.arrayExpr (_terminal : Bool) (e : Expr) : FootprintM (Option FootprintExpr) := do
+partial def footprint.arrayExpr (_terminal : Bool) (e : Expr) :
+  FootprintM (Option FootprintExpr) := do
   withTraceNode `Inv (fun _ => pure m!"footprint.arrayExpr") do
   trace[Inv] "e: {e}"
   let env ← getEnv
+
   /- Attempt to deconstruct a getter -/
   let getterState := arrayGetterAttr.ext.getState env
   let rules ← getterState.rules.getMatch e
@@ -805,8 +864,10 @@ partial def footprint.arrayExpr (_terminal : Bool) (e : Expr) : FootprintM (Opti
     let (_, rule) := rules[0]!
     let args := e.getAppArgs
     let array := args[rule.array]!
+    trace[Inv] "array value: {array}"
     let array ← footprint.expr false (← minimizeArrayVal array)
     let indices := rule.indices.map fun id => args[id]!
+    trace[Inv] "indices: {indices}"
     let indices ← indices.mapM (footprint.expr false)
     let indices := indices.map FootprintExpr.toArithExpr
     let e := FootprintExpr.get array indices
@@ -820,11 +881,16 @@ partial def footprint.arrayExpr (_terminal : Bool) (e : Expr) : FootprintM (Opti
     trace[Inv] "is a setter"
     let (_, rule) := rules[0]!
     let args := e.getAppArgs
-    let array ← footprint.expr false (← minimizeArrayVal args[rule.array]!)
+    let array ← minimizeArrayVal args[rule.array]!
+    trace[Inv] "array value: {array}"
+    let array ← footprint.expr false array
     let indices := rule.indices.map fun id => args[id]!
+    trace[Inv] "indices: {indices}"
     let indices ← indices.mapM (footprint.expr false)
     let indices := indices.map FootprintExpr.toArithExpr
-    let value ← footprint.expr false args[rule.value]!
+    let value := args[rule.value]!
+    trace[Inv] "value: {value}"
+    let value ← footprint.expr false value
     let e := FootprintExpr.set array indices value
     return e
 
