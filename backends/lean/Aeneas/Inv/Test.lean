@@ -26,7 +26,7 @@ elab "analyze_loop" : tactic => do
   }
   let state : State := ⟨ fp ⟩
   trace[Inv] "initial state: {state}"
-  let (_, state) ← FootprintM.run (footprint.expr true body) (← readThe Meta.Context) state
+  let (_, state) ← FootprintM.run (footprint.expr true body) state
   trace[Inv] "{state}"
 
 def loop (_ : α) : Prop := True

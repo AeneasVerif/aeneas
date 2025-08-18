@@ -512,31 +512,28 @@ instance : ToFormat State where
 instance : ToMessageData State where
   toMessageData s := s.toFootprint.toMessageData
 
-abbrev FootprintM := ReaderT Context $ StateRefT State MetaM
+abbrev FootprintM := StateRefT State MetaM
 
 -- Make the compiler generate specialized `pure`/`bind` so we do not have to optimize through the
 -- whole monad stack at every use site. May eventually be covered by `deriving`.
 @[always_inline]
 instance : Monad FootprintM := let i := inferInstanceAs (Monad FootprintM); { pure := i.pure, bind := i.bind }
 
-instance : Inhabited (FootprintM α) where
-  default := fun _ _ => default
-
 instance : MonadLCtx FootprintM where
-  getLCtx := return (← read).lctx
+  getLCtx := do pure (← read).lctx
 
 instance : AddMessageContext FootprintM where
   addMessageContext := addMessageContextFull
 
-@[inline] def FootprintM.run (x : FootprintM α) (ctx : Context := {}) (s : State) : MetaM (α × State) :=
-  x ctx |>.run s
+@[inline] def FootprintM.run (x : FootprintM α) (s : State) : MetaM (α × State) := do
+  StateRefT'.run x s
 
-@[inline] def FootprintM.run' (x : FootprintM α) (ctx : Context := {}) (s : State) : MetaM α :=
-  Prod.fst <$> x.run ctx s
+@[inline] def FootprintM.run' (x : FootprintM α) (s : State) : MetaM α :=
+  Prod.fst <$> x.run s
 
-@[inline] def FootprintM.toIO (x : FootprintM α) (ctxCore : Core.Context) (sCore : Core.State) (ctx : Context := {}) (s : State) :
+@[inline] def FootprintM.toIO (x : FootprintM α) (ctxCore : Core.Context) (sCore : Core.State) (s : State) :
   IO (α × Core.State × Meta.State × State) := do
-  let ((a, s), (sCore, mState)) ← (x.run ctx s).toIO ctxCore sCore
+  let ((a, s), (sCore, mState)) ← (x.run s).toIO ctxCore sCore
   pure (a, sCore, mState, s)
 
 @[inline] def liftMetaM [MonadLiftT FootprinM m] (x : FootprinM α) : m α :=
@@ -553,7 +550,7 @@ def popFVar (fvar : FVarId) : FootprintM Unit := do
 def popFVars (fvars : Array FVarId) : FootprintM Unit := do
   for fvar in fvars do popFVar fvar
 
-def withFVar (fvar : FVarId) (e : FootprintExpr) (k : FootprintM α) : FootprintM α := do
+def withFVar {α} (fvar : FVarId) (e : FootprintExpr) (k : FootprintM α) : FootprintM α := do
   -- TODO: this is probably not the proper way of scoping things
   let s ← get
   set ({s with provenance := s.provenance.insert fvar e})
@@ -561,7 +558,7 @@ def withFVar (fvar : FVarId) (e : FootprintExpr) (k : FootprintM α) : Footprint
   popFVar fvar
   pure x
 
-def withFVars (fvars : Array (FVarId × FootprintExpr)) (k : FootprintM α) : FootprintM α := do
+def withFVars {α} (fvars : Array (FVarId × FootprintExpr)) (k : FootprintM α) : FootprintM α := do
   -- TODO: this is probably not the proper way of scoping things
   let s ← get
   set ({s with provenance := s.provenance.insertMany fvars})
