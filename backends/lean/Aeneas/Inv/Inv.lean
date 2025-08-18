@@ -312,6 +312,24 @@ instance : ToFormat ArithBinop where
 instance : ToMessageData ArithBinop where
   toMessageData x := m!"{toString x}"
 
+/-- Kind of range iterator.
+
+    We hardcode them for now.
+-/
+inductive RangeKind where
+  | add -- add a constant at every step
+  | sub -- subtract a constant at every step
+  | mul -- multiply by a constant at every step
+  | div -- divide by a constant at every step
+deriving BEq
+
+def RangeKind.toString (k : RangeKind) : String :=
+  match k with
+  | .add => "+"
+  | .sub => "-"
+  | .mul => "*"
+  | .div => "/"
+
 inductive ArithExpr where
   | input (v : FVarId) -- An input of the loop
   | lit (n : Nat)
@@ -323,6 +341,12 @@ inductive ArithExpr where
   -/
   | const (e : Expr)
   | binop (op : ArithBinop) (a b : ArithExpr)
+  /-- An index in a range (such as `[0:256]`).
+
+      For now we hardcode the different ranges we support.
+      The `stop` value is exclusive.
+   -/
+  | range (start stop step : ArithExpr) (kind : RangeKind)
   | unknown
 deriving BEq
 
@@ -334,6 +358,8 @@ def ArithExpr.format (e : ArithExpr) : Format :=
   | .lit n => f!"{n}"
   | .const e => f!"{e}"
   | .binop op a b => f!"{format a} {op} {format b}"
+  | .range start stop step kind =>
+    f!"[{start.format}:{stop.format}:{kind.toString}={step.format}]"
   | .unknown => f!"?"
 
 instance : ToFormat ArithExpr where
@@ -345,6 +371,8 @@ def ArithExpr.toMessageData (e : ArithExpr) : MessageData :=
   | .lit n => m!"{n}"
   | .const e => m!"{e}"
   | .binop op a b => m!"{a.toMessageData} {op} {b.toMessageData}"
+  | .range start stop step kind =>
+    m!"[{start.toMessageData}:{stop.toMessageData}:{kind.toString}={step.toMessageData}]"
   | .unknown => m!"?"
 
 instance : ToMessageData ArithExpr where
@@ -373,6 +401,8 @@ inductive FootprintExpr where
   | const (e : Expr)
   | binop (op : ArithBinop) (a b : FootprintExpr)
   --
+  | range (start stop step : ArithExpr) (kind : RangeKind)
+  --
   | unknown
 deriving BEq
 
@@ -388,6 +418,8 @@ def FootprintExpr.format (e : FootprintExpr) : Format :=
   | .lit n => f!"{n}"
   | .const e => f!"{e}"
   | .binop op x y => f!"({x.format} {op} {y.format})"
+  | .range start stop step kind =>
+    f!"[{start.format}:{stop.format}:{kind.toString}={step.format}]"
   | .unknown => f!"?"
 
 instance : ToFormat FootprintExpr where
@@ -403,6 +435,8 @@ def FootprintExpr.toMessageData (e : FootprintExpr) : MessageData :=
   | .lit n => m!"{n}"
   | .const e => m!"{e}"
   | .binop op x y => m!"({x.toMessageData} {op} {y.toMessageData})"
+  | .range start stop step kind =>
+    m!"[{start.toMessageData}:{stop.toMessageData}:{kind.toString}={step.toMessageData}]"
   | .unknown => m!"?"
 
 instance : ToMessageData FootprintExpr where
@@ -557,6 +591,7 @@ def FootprintExpr.toArithExpr (e : FootprintExpr) : ArithExpr :=
   | .lit n => .lit n
   | .const c => .const c
   | .binop op x y => .binop op x.toArithExpr y.toArithExpr
+  | .range start stop step kind => .range start stop step kind
   | .tuple _ _ | .unknown => .unknown
 
 /-- Minimize a value.
