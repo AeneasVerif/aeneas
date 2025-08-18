@@ -33,7 +33,7 @@ def loop (_ : α) : Prop := True
 
 attribute [inv_array_getter xs at i] getElem!
 attribute [inv_array_getter xs at i] getElem
--- TODO: `getElem?`: a problem is that we can't provide the name of the index
+attribute [inv_array_getter 5 at 6] getElem?
 attribute [inv_array_setter xs at i to v] Array.set!
 attribute [inv_val self] Array.toList
 attribute [inv_val self] Fin.val
@@ -116,11 +116,11 @@ example : loopIter (fun i (state : Array Nat × Array Nat) =>
   analyze_loop
   simp [loopIter]
 
--- `Fin`
+-- We are not limited to `Nat`: the following loop uses `Fin`
 set_option trace.Inv true in
 example : loop (fun (i : Fin 32) (state : Array Nat × Array Nat) =>
   let (src, dst) := state
-  let j := Fin.mk i.val i.isLt
+  let j := Fin.mk i.val i.isLt -- create a new `Fin` equal to `i`
   let a := src[2 * j]! + dst[2 * j]!
   let b := src[2 * j + 1]! + dst[2 * j + 1]!
   let src := src.set! (2 * j) 0
