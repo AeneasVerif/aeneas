@@ -32,11 +32,42 @@ elab "analyze_inv" : tactic => do
 def loop (_ : α) : Prop := True
 
 attribute [inv_array_getter xs at i] getElem!
+attribute [inv_array_getter xs at i] getElem
+-- TODO: `getElem?`: a problem is that we can't provide the name of the index
 attribute [inv_array_setter xs at i to v] Array.set!
+attribute [inv_array_val self] Array.toList
 
 set_option trace.Inv true in
 example : loop (fun (x y : Array Nat) => (x.set! 0 x[0]!, y)) := by
   analyze_inv
   simp [loop]
+
+set_option trace.Inv true in
+example : loop (fun (x y : Array Nat) => (x.set! 0 x.toList[0]!, y)) := by
+  analyze_inv
+  simp [loop]
+
+def loopIter (_ : Nat → α → α) : Prop := True
+
+-- TODO: tuple projectors
+set_option trace.Inv true in
+example : loopIter (fun i (xy : Array Nat × Array Nat) =>
+  let x := xy.fst
+  let y := xy.snd
+  (x.set! 0 x[0]!, y)) := by
+  analyze_inv
+  simp [loopIter]
+
+-- TODO: handles matches over tuples
+set_option trace.Inv true in
+example : loopIter (fun i (xy : Array Nat × Array Nat) =>
+  let (x, y) := xy
+  (x.set! 0 x[0]!, y)) := by
+  analyze_inv
+  simp [loopIter]
+
+-- TODO: test monadic binds
+
+-- TODO: Fin
 
 end Aeneas.Inv.Test
