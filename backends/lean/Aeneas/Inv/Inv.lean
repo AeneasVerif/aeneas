@@ -289,7 +289,7 @@ def ArithExpr.format (e : ArithExpr) : Format :=
   match e with
   | .input fv => f!"{Expr.fvar fv}"
   | .lit n => f!"{n}"
-  | .const e => f!"const({e})"
+  | .const e => f!"{e}"
   | .binop op a b => f!"{format a} {op} {format b}"
   | .unknown => f!"?"
 
@@ -300,7 +300,7 @@ def ArithExpr.toMessageData (e : ArithExpr) : MessageData :=
   match e with
   | .input fv => m!"{Expr.fvar fv}"
   | .lit n => m!"{n}"
-  | .const e => m!"const({e})"
+  | .const e => m!"{e}"
   | .binop op a b => m!"{a.toMessageData} {op} {b.toMessageData}"
   | .unknown => m!"?"
 
@@ -338,12 +338,12 @@ instance : Inhabited FootprintExpr := { default := .unknown }
 def FootprintExpr.format (e : FootprintExpr) : Format :=
   match e with
   | .input fv => f!"{Expr.fvar fv}"
-  | .get a ids => f!"{a.format}[{ids.map ArithExpr.format}]"
-  | .set a ids v => f!"({a.format}[{ids.map ArithExpr.format}] := {v.format})"
+  | .get a ids => f!"{a.format}{ids.map ArithExpr.format}"
+  | .set a ids v => f!"({a.format}{ids.map ArithExpr.format} := {v.format})"
   | .proj _ f x => f!"{x.format}.{f}"
   | .tuple x y => f!"({x.format}, {y.format})"
-  | .lit n => f!"lit({n})"
-  | .const e => f!"const({e})"
+  | .lit n => f!"{n}"
+  | .const e => f!"{e}"
   | .binop op x y => f!"({x.format} {op} {y.format})"
   | .unknown => f!"?"
 
@@ -354,11 +354,11 @@ def FootprintExpr.toMessageData (e : FootprintExpr) : MessageData :=
   match e with
   | .input fv => m!"{Expr.fvar fv}"
   | .get a ids => m!"{a.toMessageData}[{ids.map ArithExpr.toMessageData}]"
-  | .set a ids v => m!"({a.toMessageData}[{ids.map ArithExpr.toMessageData}] := {v.toMessageData})"
+  | .set a ids v => m!"({a.toMessageData}{ids.map ArithExpr.toMessageData} := {v.toMessageData})"
   | .proj _ f x => m!"{x.toMessageData}.{f}"
   | .tuple x y => m!"({x.toMessageData}, {y.toMessageData})"
-  | .lit n => m!"lit({n})"
-  | .const e => m!"const({e})"
+  | .lit n => m!"{n}"
+  | .const e => m!"{e}"
   | .binop op x y => m!"({x.toMessageData} {op} {y.toMessageData})"
   | .unknown => m!"?"
 
@@ -430,10 +430,6 @@ instance : Inhabited (FootprintM α) where
 
 instance : MonadLCtx FootprintM where
   getLCtx := return (← read).lctx
-
-/-instance : MonadEnv FootprintM where
-  getEnv      := return (← getThe Core.State).env
-  modifyEnv f := do modifyThe Core.State fun s => { s with env := f s.env, cache := {} }; modify fun s => { s with cache := {} }-/
 
 instance : AddMessageContext FootprintM where
   addMessageContext := addMessageContextFull
