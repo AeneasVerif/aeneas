@@ -796,16 +796,6 @@ partial def footprint.app (terminal : Bool) (e : Expr) : FootprintM FootprintExp
           let fields ← fields.mapM (footprint.expr false)
           return (.struct tyName fields)
 
-  -- Check if this is a tuple projector
-  if e.isAppOfArity ``Prod.fst 3 ∨ e.isAppOfArity ``MProd.fst 3 then
-    trace[Inv] "tuple projector fst"
-    let x ← footprint.expr false e.getAppArgs[2]!
-    return (.proj (if f.constName! = ``Prod.fst then ``Prod else ``MProd) 0 x)
-  if e.isAppOfArity ``Prod.snd 3 ∨ e.isAppOfArity ``MProd.snd 3 then
-    trace[Inv] "tuple projector snd"
-    let x ← footprint.expr false e.getAppArgs[2]!
-    return (.proj (if f.constName! = ``Prod.snd then ``Prod else ``MProd) 1 x)
-
   /- Check if this is a matcher (a call to an auxiliary definition
       which implements a match) -/
   if let some me := ← matchMatcherApp? e then
@@ -887,6 +877,23 @@ partial def footprint.app (terminal : Bool) (e : Expr) : FootprintM FootprintExp
   if let some e ← footprint.arrayExpr terminal e then
     trace[Inv] "is an array expression"
     return e
+
+  /- Check if this is a projector
+
+     We have to do this *after* checking whether an expression is a getter because
+     some getter functions (like `getElem!`) are considered as projectors.
+   -/
+  if let .const fName _ := f then
+    if let some info ← getProjectionFnInfo? fName then
+      trace[Inv] "projector"
+      trace[Inv] "numParams: {info.numParams}"
+      trace[Inv] "i: {info.i}"
+      trace[Inv] "args: {e.getAppArgs}"
+      let x := e.getAppArgs[info.numParams]!
+      let x ← footprint.expr false x
+      let idx := info.i
+      let structName := (Environment.getProjectionStructureName? env fName).get!
+      return (.proj structName idx x)
 
   -- Don't know: explore the arguments
   let args := e.getAppArgs
