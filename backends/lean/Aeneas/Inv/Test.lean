@@ -4,9 +4,9 @@ namespace Aeneas.Inv.Test
 
 open Lean Elab Meta Tactic
 
-scoped syntax "analyze_inv" : tactic
+scoped syntax "analyze_loop" : tactic
 
-elab "analyze_inv" : tactic => do
+elab "analyze_loop" : tactic => do
   withMainContext do
   let tgt ← getMainTarget
   trace[Inv] "{tgt}"
@@ -43,12 +43,12 @@ attribute [inv_val x] Id.run
 
 set_option trace.Inv true in
 example : loop (fun (x y : Array Nat) => (x.set! 0 x[0]!, y)) := by
-  analyze_inv
+  analyze_loop
   simp [loop]
 
 set_option trace.Inv true in
 example : loop (fun (x y : Array Nat) => (x.set! 0 x.toList[0]!, y)) := by
-  analyze_inv
+  analyze_loop
   simp [loop]
 
 def loopIter (_ : Nat → α → α) : Prop := True
@@ -59,7 +59,7 @@ example : loopIter (fun i (xy : Array Nat × Array Nat) =>
   let x := xy.fst
   let y := xy.snd
   (x.set! i x[i]!, y.set! i x[i]!)) := by
-  analyze_inv
+  analyze_loop
   simp [loopIter]
 
 -- Tuple with 2 elements
@@ -67,7 +67,7 @@ set_option trace.Inv true in
 example : loopIter (fun i (xy : Array Nat × Array Nat) =>
   let (x, y) := xy
   (x.set! i x[i]!, y)) := by
-  analyze_inv
+  analyze_loop
   simp [loopIter]
 
 -- Tuple with 3 elements (make sure the handling of tuples is general)
@@ -75,7 +75,7 @@ set_option trace.Inv true in
 example : loopIter (fun i (xyz : Array Nat × Array Nat × Array Nat) =>
   let (x, y, z) := xyz
   (x.set! i x[i]!, y, z)) := by
-  analyze_inv
+  analyze_loop
   simp [loopIter]
 
 inductive Either (α β : Type)
@@ -88,7 +88,7 @@ example {α β} : loop (fun (e : Either α β) =>
   match e with
   | .left _ => true
   | .right _ => false) := by
-  analyze_inv
+  analyze_loop
   simp [loop]
 
 -- Basic operations: map i
@@ -99,7 +99,7 @@ example : loopIter (fun i (state : Array Nat × Array Nat) =>
   let src' := src.set! i 0
   let dst := dst.set! i a
   (src', dst)) := by
-  analyze_inv
+  analyze_loop
   simp [loopIter]
 
 -- Basic operations: 2 * i, 2 * i + 1
@@ -113,7 +113,7 @@ example : loopIter (fun i (state : Array Nat × Array Nat) =>
   let dst := dst.set! (2 * i) a
   let dst := dst.set! (2 * i + 1) b
   (src, dst)) := by
-  analyze_inv
+  analyze_loop
   simp [loopIter]
 
 -- `Fin`
@@ -128,7 +128,7 @@ example : loop (fun (i : Fin 32) (state : Array Nat × Array Nat) =>
   let dst := dst.set! (2 * j) a
   let dst := dst.set! (2 * j + 1) b
   (src, dst)) := by
-  analyze_inv
+  analyze_loop
   simp [loop]
 
 -- Monadic binds: state has one array
@@ -136,7 +136,7 @@ set_option trace.Inv true in
 example : loop (fun (i : Nat) (a : Array Nat) => Id.run do
   let a ← a.set! i 0
   pure a) := by
-  analyze_inv
+  analyze_loop
   simp [loop]
 
 -- Monadic bind: state is a tuple of arrays
@@ -151,7 +151,7 @@ example : loop (fun (i : Fin 32) (state : Array Nat × Array Nat) => Id.run do
   let dst ← dst.set! (2 * j) a
   let dst ← dst.set! (2 * j + 1) b
   pure (src, dst)) := by
-  analyze_inv
+  analyze_loop
   simp [loop]
 
 end Aeneas.Inv.Test
