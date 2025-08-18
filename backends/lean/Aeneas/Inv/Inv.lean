@@ -190,30 +190,34 @@ initialize arraySetterAttr : ArrayAttr Setter ← do
     ScopedEnvExtension.add ext (key, defName, setter) attrKind
 
 /-!
-# Attribute: `inv_array_val`
+# Attribute: `inv_val`
 -/
 
-/-- This is used to minimize array expressions.
+/-- This is used to minimize values such as array and index expressions.
 
     For instance, if `x : Array α`, then in the expression `x.toList`
-    we consider that `x` is the minimal array expression.
+    we consider that `x` is the minimal array expression. Similarly,
+    if `x : Fin 32`, then in the expression `x.val` we consider that `x`
+    is the minimal index expression. Also, in `Fin.mk 32 ...`, we
+    consider the minimal expression to be `32`. This allows to make
+    the provenance and bound analyzes more flexible.
  -/
-structure ArrayVal where
+structure Val where
   -- The index of the minimized value in the list of arguments
   val : Nat
 deriving Inhabited, BEq
 
-syntax (name := arrayVal) "inv_array_val" term : attr
+syntax (name := invVal) "inv_val" term : attr
 
-def parseArrayValArgs
+def parseValArgs
 : Syntax -> MetaM Expr
-| `(attr| inv_array_val $array ) => do
+| `(attr| inv_val $array ) => do
   let elabExpr e := do instantiateMVars (← Elab.Term.elabTerm e none |>.run')
   elabExpr array
 | _ => throwUnsupportedSyntax
 
-initialize arrayValAttr : ArrayAttr ArrayVal ← do
-  initializeArrayAttrExt `arrayValAttr `arrayVal
+initialize valAttr : ArrayAttr Val ← do
+  initializeArrayAttrExt `invValAttr `invVal
     fun ext defName stx attrKind => do
     -- Lookup the definition
     let env ← getEnv
@@ -222,73 +226,16 @@ initialize arrayValAttr : ArrayAttr ArrayVal ← do
     let sig := decl.sig.get
     let ty := sig.type
     -- Find where the position of the arguments
-    let array : ArrayVal ← MetaM.run' do
+    let array : Val ← MetaM.run' do
       /- Strip the quantifiers.
 
           We do this before elaborating the pattern because we need the universally
           quantified variables to be in the context.
       -/
       forallTelescope ty.consumeMData fun fvars _ => do
-      let array ← parseArrayValArgs stx
+      let val ← parseValArgs stx
       /- Find the position of every fvar id -/
-      let positions ← findPositions (#[array]) fvars
-      pure { val := positions[0]! }
-    -- Generate the key for the discrimination tree
-    let key ← MetaM.run' do
-      let (mvars, _) ← forallMetaTelescope ty.consumeMData
-      DiscrTree.mkPath (← mkAppOptM defName (mvars.map Option.some))
-    -- Store
-    ScopedEnvExtension.add ext (key, defName, array) attrKind
-
-/-!
-# Attribute: `inv_array_val`
--/
-
-/-- This is used to minimize index expressions.
-
-    For instance, if `x : Fin 32`, then in the expression `x.val`
-    we consider that `x` is the minimal index expression. Similarly,
-    in `Fin.mk 32 ...`, we consider the minimal expression to be `32`.
-
-    TODO: merge with `ArrayVal`? But it's good to have something specifically
-    for indices, as we might want to be able to coerce them (to `Nat`).
- -/
-structure IndexVal where
-  /- The index of the minimized value in the list of arguments.
-
-     Ex.: `1` in `Fin.val : {n} → Fin n → Nat` -/
-  val : Nat
-deriving Inhabited, BEq
-
-syntax (name := indexVal) "inv_index_val" term : attr
-
-def parseindexValArgs
-: Syntax -> MetaM Expr
-| `(attr| inv_index_val $val ) => do
-  let elabExpr e := do instantiateMVars (← Elab.Term.elabTerm e none |>.run')
-  elabExpr val
-| _ => throwUnsupportedSyntax
-
-initialize indexValAttr : ArrayAttr IndexVal ← do
-  initializeArrayAttrExt `indexValAttr `indexVal
-    fun ext defName stx attrKind => do
-    -- Lookup the definition
-    let env ← getEnv
-    let some decl := env.findAsync? defName
-      | throwError "Could not find definition {defName}"
-    let sig := decl.sig.get
-    let ty := sig.type
-    -- Find where the position of the arguments
-    let array : IndexVal ← MetaM.run' do
-      /- Strip the quantifiers.
-
-          We do this before elaborating the pattern because we need the universally
-          quantified variables to be in the context.
-      -/
-      forallTelescope ty.consumeMData fun fvars _ => do
-      let array ← parseindexValArgs stx
-      /- Find the position of every fvar id -/
-      let positions ← findPositions (#[array]) fvars
+      let positions ← findPositions (#[val]) fvars
       pure { val := positions[0]! }
     -- Generate the key for the discrimination tree
     let key ← MetaM.run' do
@@ -572,32 +519,25 @@ def FootprintExpr.toArithExpr (e : FootprintExpr) : ArithExpr :=
   | .binop op x y => .binop op x.toArithExpr y.toArithExpr
   | .tuple _ _ | .unknown => .unknown
 
-def minimizeArrayVal (e : Expr) : FootprintM Expr := do
-  let env ← getEnv
-  let arrayValState := arrayValAttr.ext.getState env
-  let rec minimize (e : Expr) : FootprintM Expr := do
-    let e := e.consumeMData
-    let rules ← arrayValState.rules.getMatch e
-    -- Just try the first rule - there should be no more than one
-    if rules.size > 0 then
-      let (_, rule) := rules[0]!
-      let args := e.getAppArgs
-      pure args[rule.val]!
-    else pure e
-  minimize e
+/-- Minimize a value.
 
-def minimizeIndexVal (e : Expr) : FootprintM Expr := do
+    Return `some` if the value was minimized, `none` if it was left unchnaged.
+-/
+partial def minimizeVal (e : Expr) : FootprintM (Option Expr) := do
+  withTraceNode `Inv (fun _ => pure m!"minimizeVal") do
   let env ← getEnv
-  let indexValState := indexValAttr.ext.getState env
-  let rec minimize (e : Expr) : FootprintM Expr := do
+  let inValState := valAttr.ext.getState env
+  let rec minimize (e : Expr) : FootprintM (Option Expr) := do
     let e := e.consumeMData
-    let rules ← indexValState.rules.getMatch e
+    let rules ← inValState.rules.getMatch e
     -- Just try the first rule - there should be no more than one
     if rules.size > 0 then
       let (_, rule) := rules[0]!
       let args := e.getAppArgs
-      pure args[rule.val]!
-    else pure e
+      let arg := args[rule.val]!
+      -- Minimize again
+      if let some arg' ← minimizeVal arg then pure arg' else pure arg
+    else pure none
   minimize e
 
 def destBind (e : Expr) (k : Expr → FVarId → Expr → FootprintM α) : FootprintM (Option α) := do
@@ -657,8 +597,15 @@ partial def footprint.expr (terminal : Bool) (e : Expr) : FootprintM FootprintEx
   trace[Inv] "e: {e}"
   trace[Inv] "terminal: {terminal}"
   let e := e.consumeMData
+  /- We always minimize the expressions -/
+  let e ← do
+    if let some e' ← minimizeVal e then
+      trace[Inv] "Value was minimized: {e'}"
+      pure e'
+    else pure e
+  /- Explore -/
   let e ← footprint.exprAux terminal e
-  /- If this is terminal expression, we need to register this as an output -/
+  /- If this is a terminal expression, we need to register this as an output -/
   pushOptOutput terminal e
   pure e
 
@@ -824,8 +771,8 @@ partial def footprint.app (terminal : Bool) (e : Expr) : FootprintM FootprintExp
     let fname := f.constName!
     if let some op := arithBinops.get? fname then
       trace[Inv] "homogeneous binop"
-      let x ← footprint.indexExpr false args[1]!
-      let y ← footprint.indexExpr false args[2]!
+      let x ← footprint.expr false args[1]!
+      let y ← footprint.expr false args[2]!
       return (.binop op x y)
 
   -- Heterogeneous binary operations
@@ -833,8 +780,8 @@ partial def footprint.app (terminal : Bool) (e : Expr) : FootprintM FootprintExp
     let fname := f.constName!
     if let some op := arithHBinops.get? fname then
       trace[Inv] "heterogeneous binop"
-      let x ← footprint.indexExpr false args[4]!
-      let y ← footprint.indexExpr false args[5]!
+      let x ← footprint.expr false args[4]!
+      let y ← footprint.expr false args[5]!
       return (.binop op x y)
 
   -- Check if this is a get/set expression
@@ -932,10 +879,10 @@ partial def footprint.arrayExpr (_terminal : Bool) (e : Expr) :
     let args := e.getAppArgs
     let array := args[rule.array]!
     trace[Inv] "array value: {array}"
-    let array ← footprint.expr false (← minimizeArrayVal array)
+    let array ← footprint.expr false array
     let indices := rule.indices.map fun id => args[id]!
     trace[Inv] "indices: {indices}"
-    let indices ← indices.mapM (footprint.indexExpr false)
+    let indices ← indices.mapM (footprint.expr false)
     let indices := indices.map FootprintExpr.toArithExpr
     let e := FootprintExpr.get array indices
     return e
@@ -948,12 +895,12 @@ partial def footprint.arrayExpr (_terminal : Bool) (e : Expr) :
     trace[Inv] "is a setter"
     let (_, rule) := rules[0]!
     let args := e.getAppArgs
-    let array ← minimizeArrayVal args[rule.array]!
+    let array := args[rule.array]!
     trace[Inv] "array value: {array}"
     let array ← footprint.expr false array
     let indices := rule.indices.map fun id => args[id]!
     trace[Inv] "indices: {indices}"
-    let indices ← indices.mapM (footprint.indexExpr false)
+    let indices ← indices.mapM (footprint.expr false)
     let indices := indices.map FootprintExpr.toArithExpr
     let value := args[rule.value]!
     trace[Inv] "value: {value}"
@@ -963,10 +910,6 @@ partial def footprint.arrayExpr (_terminal : Bool) (e : Expr) :
 
   /- Don't know -/
   pure .none
-
-partial def footprint.indexExpr (terminal : Bool) (e : Expr) : FootprintM FootprintExpr := do
-  let e ← minimizeIndexVal e
-  footprint.expr terminal e
 
 end
 
