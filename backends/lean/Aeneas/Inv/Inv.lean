@@ -9,6 +9,59 @@ open Extensions
 initialize registerTraceClass `Inv
 
 /-!
+# Helpers
+-/
+
+/-- Find at which positions the expressions in `toFind` appear in `args` -/
+def findPositions (toFind : Array Expr) (args : Array Expr) : MetaM (Array Nat) := do
+  let mut map : Std.HashMap Expr Nat := Std.HashMap.emptyWithCapacity
+  let toFindSet := Std.HashSet.ofArray toFind
+  for h: i in [0:args.size] do
+    let arg := args[i]
+    if toFindSet.contains arg then
+      map := map.insert arg i
+  -- Sanity check:
+  for e in toFind do
+    if ¬ map.contains e then
+      throwError m!"Could not find argument: {e}"
+  pure (toFind.map (Std.HashMap.get! map))
+
+def exprToNat (e : Expr) : Option Nat :=
+  if e.isAppOfArity ``OfNat.ofNat 3 then
+    let args := e.getAppArgs
+    match args[1]! with
+    | .lit (.natVal n) => some n
+    | _ => none
+  else none
+
+/-- Find at which positions the expressions in `toFind` appear in `args`, with the exception that
+    if an expression is a number then we should directly use this number as an index, rather than
+    look for the expression inside of `args`. -/
+def findPositionsOfIndexOrExpr (toFind : Array Expr) (args : Array Expr) :
+  MetaM (Array Nat) := do
+  let mut map : Std.HashMap Expr Nat := Std.HashMap.emptyWithCapacity
+  let toFindSet := Std.HashSet.ofArray toFind
+  for h: i in [0:args.size] do
+    let arg := args[i]
+    if toFindSet.contains arg then
+      map := map.insert arg i
+  -- Find every argument's index
+  let indices ← do
+    toFind.mapM fun e => do
+      -- Is the expression an index?
+      match exprToNat e with
+      | some i =>
+        -- Yes: use this index
+        -- Sanity check
+        if i ≥ args.size then throwError m!"Invalid index: {i}"
+        pure i
+      | none =>
+        -- No: look up where the expression appears in the arguments
+        if let some i := Std.HashMap.get? map e then pure i
+        else throwError m!"Could not find argument: {e}"
+  pure indices
+
+/-!
 # Extensions
 -/
 
@@ -59,20 +112,6 @@ def initializeArrayAttrExt {α : Type} [BEq α] (extName attrName : Name)
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl, ext := ext }
 
-/-- Find at which positions the expressions in `toFind` appear in `args` -/
-def findPositions (toFind : Array Expr) (args : Array Expr) : MetaM (Array Nat) := do
-  let mut map : Std.HashMap Expr Nat := Std.HashMap.emptyWithCapacity
-  let toFindSet := Std.HashSet.ofArray toFind
-  for h: i in [0:args.size] do
-    let arg := args[i]
-    if toFindSet.contains arg then
-      map := map.insert arg i
-  -- Sanity check:
-  for e in toFind do
-    if ¬ map.contains e then
-      throwError m!"Could not find argument: {e}"
-  pure (toFind.map (Std.HashMap.get! map))
-
 /-!
 # Attribute: `inv_array_getter`
 -/
@@ -119,7 +158,7 @@ initialize arrayGetterAttr : ArrayAttr Getter ← do
       forallTelescope ty.consumeMData fun fvars _ => do
       let (array, indices) ← parseArrayGetterArgs stx
       /- Find the position of every fvar id -/
-      let positions ← findPositions (indices ++ #[array]) fvars
+      let positions ← findPositionsOfIndexOrExpr (indices ++ #[array]) fvars
       pure { array := positions.back!, indices := positions.pop }
     -- Generate the key for the discrimination tree
     let key ← MetaM.run' do
@@ -176,7 +215,7 @@ initialize arraySetterAttr : ArrayAttr Setter ← do
       forallTelescope ty.consumeMData fun fvars _ => do
       let (array, indices, value) ← parseArraySetterArgs stx
       /- Find the position of every fvar id -/
-      let positions ← findPositions (indices ++ #[array, value]) fvars
+      let positions ← findPositionsOfIndexOrExpr (indices ++ #[array, value]) fvars
       let value := positions.back!
       let positions := positions.pop
       let array := positions.back!
@@ -235,7 +274,7 @@ initialize valAttr : ArrayAttr Val ← do
       forallTelescope ty.consumeMData fun fvars _ => do
       let val ← parseValArgs stx
       /- Find the position of every fvar id -/
-      let positions ← findPositions (#[val]) fvars
+      let positions ← findPositionsOfIndexOrExpr (#[val]) fvars
       pure { val := positions[0]! }
     -- Generate the key for the discrimination tree
     let key ← MetaM.run' do
@@ -480,6 +519,7 @@ def withFVars (fvars : Array (FVarId × FootprintExpr)) (k : FootprintM α) : Fo
   pure x
 
 def pushOutput (p : FootprintExpr) : FootprintM Unit := do
+  trace[Inv] "Pushing output: {p}"
   let s ← get
   set ({ s with outputs := s.outputs ++ #[p], footprint := s.footprint ++ #[p] })
 
@@ -756,14 +796,14 @@ partial def footprint.app (terminal : Bool) (e : Expr) : FootprintM FootprintExp
   -- Check if this is a monadic let-binding
   if let some e ← destBind e
     fun bound fvarId inner => do
+      trace[Inv] "is monadic bind"
       -- Explore the bound expression
       let bound ← footprint.expr false bound
-      return ← do
-        withFVar fvarId bound do
-        -- Continue exploring the inner expression
-        footprint.expr false inner
+      withFVar fvarId bound do
+      -- Continue exploring the inner expression
+      footprint.expr false inner
     then
-      trace[Inv] "is monadic bind"
+      trace[Inv] "monadic bind result: {e}"
       return e
 
   -- Homogeneous binary operations

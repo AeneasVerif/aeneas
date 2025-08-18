@@ -38,6 +38,8 @@ attribute [inv_array_setter xs at i to v] Array.set!
 attribute [inv_val self] Array.toList
 attribute [inv_val self] Fin.val
 attribute [inv_val val] Fin.mk
+attribute [inv_val 3] pure
+attribute [inv_val x] Id.run
 
 set_option trace.Inv true in
 example : loop (fun (x y : Array Nat) => (x.set! 0 x[0]!, y)) := by
@@ -129,8 +131,27 @@ example : loop (fun (i : Fin 32) (state : Array Nat × Array Nat) =>
   analyze_inv
   simp [loop]
 
--- TODO: test monadic binds
+-- Monadic binds: state has one array
+set_option trace.Inv true in
+example : loop (fun (i : Nat) (a : Array Nat) => Id.run do
+  let a ← a.set! i 0
+  pure a) := by
+  analyze_inv
+  simp [loop]
 
--- TODO: Fin
+-- Monadic bind: state is a tuple of arrays
+set_option trace.Inv true in
+example : loop (fun (i : Fin 32) (state : Array Nat × Array Nat) => Id.run do
+  let (src, dst) ← state
+  let j ← Fin.mk i.val i.isLt
+  let a ← src[2 * j]! + dst[2 * j]!
+  let b ← src[2 * j + 1]! + dst[2 * j + 1]!
+  let src ← src.set! (2 * j) 0
+  let src ← src.set! (2 * j + 1) 0
+  let dst ← dst.set! (2 * j) a
+  let dst ← dst.set! (2 * j + 1) b
+  pure (src, dst)) := by
+  analyze_inv
+  simp [loop]
 
 end Aeneas.Inv.Test
