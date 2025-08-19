@@ -608,6 +608,16 @@ def FootprintExpr.toArithExpr (e : FootprintExpr) : ArithExpr :=
   | .range start stop step kind => .range start stop step kind
   | .struct _ _ | .unknown => .unknown
 
+def mkReducedProj (typename : Name) (field : Nat) (e : FootprintExpr) : FootprintExpr :=
+  match e with
+  | .struct typename fields =>
+    -- Sanity check
+    if h: field < fields.size then
+      fields[field]
+    else
+      .proj typename field e
+  | _ => .proj typename field e
+
 /-- Minimize a value.
 
     Return `some` if the value was minimized, `none` if it was left unchnaged.
@@ -751,7 +761,7 @@ partial def footprint.exprAux (terminal : Bool) (e : Expr) : FootprintM Footprin
   | .proj typename idx struct =>
     trace[Inv] ".proj"
     let struct ← footprint.expr false struct
-    pure (.proj typename idx struct)
+    pure (mkReducedProj typename idx struct)
   | .forallE _ _ _ _ =>
     trace[Inv] ".forallE"
     /- If we find a forall it's probably because we're exploring a type:
@@ -890,7 +900,7 @@ partial def footprint.app (terminal : Bool) (e : Expr) : FootprintM FootprintExp
       let x ← footprint.expr false x
       let idx := info.i
       let structName := (Environment.getProjectionStructureName? env fName).get!
-      return (.proj structName idx x)
+      return (mkReducedProj structName idx x)
 
   -- Don't know: explore the arguments
   let args := e.getAppArgs
@@ -966,7 +976,7 @@ partial def footprint.casesOn (e : Expr) : FootprintM FootprintExpr := do
     -- Register the branch inputs as being projections of the scrutinee
     let .const typeName _ := scrutfty
       | throwError "Unreachable"
-    let fvars := fvars.mapIdx (fun i fv => (fv.fvarId!, .proj typeName i scrut))
+    let fvars ← fvars.mapIdxM (fun i fv => do pure (fv.fvarId!, mkReducedProj typeName i scrut))
     withFVars fvars do
     -- Explore the branch expression
     footprint.expr false branch
@@ -1032,8 +1042,34 @@ end
     where `a(i)` is a constant, and `f(i)` is a free variable).
   -/
 structure LinArithExpr where
-  coefs : Std.HashMap FVarId Nat
+  coefs : Std.HashMap FVarId Nat -- TODO: don't use a HashMap
   const : Nat
+
+instance : BEq LinArithExpr where -- TODO: I don't like that
+  beq a1 a2 := Id.run do
+    for (fid, v) in a1.coefs do
+      if a2.coefs.get? fid ≠ some v then return false
+    for (fid, v) in a2.coefs do
+      if a1.coefs.get? fid ≠ some v then return false
+    if a1.const ≠ a2.const then pure false else pure true
+
+def LinArithExpr.toMessageData (e : LinArithExpr) : MessageData := Id.run do
+  let coefs := e.coefs.toArray.map fun (fv, coef) =>
+    let coef :=
+      let fv := Expr.fvar fv
+      if coef = 1 then m!"{fv}" else m!"{coef} * {fv}"
+    m!"{coef}"
+  let const := if e.const = 0 then [] else [m!"{e.const}"]
+  let coefs := coefs ++ const
+  if coefs.size = 0 then m!"0"
+  else
+    let mut s := coefs[0]!
+    for i in [1:coefs.size] do
+      s := s ++ coefs[i]!
+    pure s
+
+instance : ToMessageData LinArithExpr where
+  toMessageData := LinArithExpr.toMessageData
 
 def ArithExpr.getFVars (e : ArithExpr) : Std.HashSet FVarId :=
   -- Using a state monad to store the set of fvar ids
@@ -1080,5 +1116,103 @@ def ArithExpr.normalize (e : ArithExpr) : Option LinArithExpr := do
       pure { const, coefs := Std.HashMap.ofList coefs }
     | _ => none
   | .range _ _ _ _ => none
+
+inductive Input where
+| input (fv : FVarId)
+| proj (typename : Name) (field : Nat) (e : Input)
+deriving BEq
+
+inductive Output where
+| arith (a : LinArithExpr)
+| array (a : Input) (writeIndices : Array LinArithExpr)
+| struct (typename : Name) (fields : Array Output)
+
+def Input.toMessageData (e : Input) : MessageData := Id.run do
+  match e with
+  | .input fv => m!"{Expr.fvar fv}"
+  | .proj _ field e => m!"{e.toMessageData}.{field}"
+
+instance : ToMessageData Input where
+  toMessageData := Input.toMessageData
+
+partial def Output.toMessageData (e : Output) : MessageData := Id.run do
+  match e with
+  | .arith e => e.toMessageData
+  | .array a indices => m!"{a} ← {indices}"
+  | .struct _ fields => m!"{arrayToTupleMessageData Output.toMessageData fields}"
+
+instance : ToMessageData Output where
+  toMessageData := Output.toMessageData
+
+partial def analyzeFootprint (fp : Footprint) : Option Output := do
+  /- Normalize the outputs.
+
+    We are only interested in the provenance (i.e., which subfield of an input value
+    it comes from) and the indices at which they are update. -/
+  /- Normalize an input (i.e., an expression of the shape `x.1.0` where `x` is an input
+     variable). -/
+  let rec normalizeInput (e : FootprintExpr) : Option Input := do
+    match e with
+    | .input fv => pure (.input fv)
+    | .proj typename field e => pure (.proj typename field (← normalizeInput e))
+    | .get _ _ | .set _ _ _ | .struct _ _ | .lit _ | .const _  | .binop _ _ _
+    | .range _ _ _ _ | .unknown => none
+
+  /- Normalize an array expression -/
+  let rec normalizeArrayExpr (e : FootprintExpr) : Option (Input × Array LinArithExpr) := do
+    match e with
+    | .input fv => pure (.input fv, #[])
+    | .get a _ =>
+      -- We ignore the read indices
+      normalizeArrayExpr a
+    | .set a indices _ =>
+      let indices ← indices.mapM ArithExpr.normalize
+      let (input, indices') ← normalizeArrayExpr a
+      pure (input, indices' ++ indices)
+    | .proj _ _ _ =>
+      pure (← normalizeInput e, #[])
+    | .struct _ _ | .lit _ | .const _ | .binop _ _ _ | .range _ _ _ _ | .unknown => none
+
+  /- Normalize an output expression -/
+  let rec normalizeOutput (e : FootprintExpr) : Option Output := do
+    match e with
+    | .input _ | .get _ _ | .set _ _ _ | .proj _ _ _ =>
+      let (input, writes) ← normalizeArrayExpr e
+      pure (.array input writes)
+    | .lit _ | .const _ | .binop _ _ _ | .range _ _ _ _ =>
+      let e ← e.toArithExpr.normalize
+      pure (.arith e)
+    | .struct typename fields =>
+      let fields ← fields.mapM normalizeOutput
+      pure (.struct typename fields)
+    | .unknown => none
+
+  /- Normalize the outputs -/
+  let outputs ← fp.outputs.mapM normalizeOutput
+
+  /- Merge the outputs together -/
+  let rec mergeOutputs (out : Output × Output) : Option Output := do
+    match out with
+    | (.arith a1, .arith a2) =>
+      if a1 == a2 then pure (.arith a1) else none
+    | (.array a1 i1, .array a2 i2) =>
+      if a1 == a2 then
+        let i2 := i2.filter (fun e => not (Array.elem e i1))
+        pure (.array a1 (i1 ++ i2))
+      else none
+    | (.struct typename fields1, .struct _ fields2) =>
+      if fields1.size = fields2.size then
+        let fields ← (fields1.zip fields2).mapM mergeOutputs
+        pure (.struct typename fields)
+      else none
+    | _ => none
+
+  match outputs.toList with
+  | [] => none
+  | output :: outputs =>
+    let mut res := output
+    for output in outputs do
+      res ← mergeOutputs (res, output)
+    pure res
 
 end Aeneas.Inv
