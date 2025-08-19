@@ -311,7 +311,7 @@ inductive ArithBinop where
   | div
   | mod
   | pow
-deriving Inhabited, BEq
+deriving Inhabited, BEq, Ord
 
 instance : ToString ArithBinop where
   toString x :=
@@ -338,7 +338,7 @@ inductive RangeKind where
   | sub -- subtract a constant at every step
   | mul -- multiply by a constant at every step
   | div -- divide by a constant at every step
-deriving BEq
+deriving BEq, Ord
 
 def RangeKind.toString (k : RangeKind) : String :=
   match k with
@@ -1027,5 +1027,58 @@ partial def footprint.arrayExpr (_terminal : Bool) (e : Expr) :
   pure .none
 
 end
+
+/-- A normalized linear arithmetic expression (of the shape: `a + ∑ a(i) * f(i)`,
+    where `a(i)` is a constant, and `f(i)` is a free variable).
+  -/
+structure LinArithExpr where
+  coefs : Std.HashMap FVarId Nat
+  const : Nat
+
+def ArithExpr.getFVars (e : ArithExpr) : Std.HashSet FVarId :=
+  -- Using a state monad to store the set of fvar ids
+  let m := StateT (Std.HashSet FVarId) Id
+  let add (fid : FVarId) : m Unit := do
+    StateT.set ((← StateT.get).insert fid)
+  -- The visitor
+  let rec go (e : ArithExpr) : m Unit := do
+    match e with
+    | .input fv => add fv
+    | .lit _ | .const _ | .unknown => pure ()
+    | .binop _ a b => go a; go b
+    | .range start stop step _ => go start; go stop; go step
+  (Id.run (StateT.run (go e) Std.HashSet.emptyWithCapacity)).snd
+
+/-- Normalize an arithmetic expression, if possible -/
+def ArithExpr.normalize (e : ArithExpr) : Option LinArithExpr := do
+  match e with
+  | .input fid => pure { coefs := Std.HashMap.ofList [(fid, 1)], const := 0 }
+  | .lit n => pure { coefs := Std.HashMap.emptyWithCapacity, const := n }
+  | .const _ | .unknown => none
+  | .binop op a b =>
+    let { coefs := acoefs, const := aconst } ← normalize a
+    let { coefs := bcoefs, const := bconst } ← normalize b
+    /- Combine the maps, if the result is non-linear we abort. -/
+    match op with
+    | .add =>
+      let const := aconst + bconst
+      let mut coefs := acoefs
+      for (fid, n) in bcoefs do
+        coefs := coefs.alter fid (fun n' =>
+          match n' with
+          | none => some n
+          | some n' => some (n + n'))
+      pure { const, coefs }
+    | .mul =>
+      let const := aconst * bconst
+      let coefs ← do
+        match acoefs.toList, bcoefs.toList with
+        | [], [] => pure []
+        | [(fid, n)], [] => pure [(fid, n * bconst)]
+        | [], [(fid, n)] => pure [(fid, n * aconst)]
+        | _, _ => none
+      pure { const, coefs := Std.HashMap.ofList coefs }
+    | _ => none
+  | .range _ _ _ _ => none
 
 end Aeneas.Inv
