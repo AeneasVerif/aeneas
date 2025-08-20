@@ -54,10 +54,10 @@ def exprToNat (e : Expr) : Option Nat :=
 /-- Find at which positions the expressions in `toFind` appear in `args`, with the exception that
     if an expression is a number then we should directly use this number as an index, rather than
     look for the expression inside of `args`. -/
-def findPositionsOfIndexOrExpr (toFind : Array Expr) (args : Array Expr) :
-  MetaM (Array Nat) := do
+def findPositionsOfIndexOrExpr {n} (toFind : Vector Expr n) (args : Array Expr) :
+  MetaM (Vector Nat n) := do
   let mut map : Std.HashMap Expr Nat := Std.HashMap.emptyWithCapacity
-  let toFindSet := Std.HashSet.ofArray toFind
+  let toFindSet := Std.HashSet.ofArray toFind.toArray
   for h: i in [0:args.size] do
     let arg := args[i]
     if toFindSet.contains arg then
@@ -181,7 +181,8 @@ initialize arrayGetterAttr : ArrayAttr Getter ← do
       forallTelescope ty.consumeMData fun fvars _ => do
       let (array, indices) ← parseArrayGetterArgs stx
       /- Find the position of every fvar id -/
-      let positions ← findPositionsOfIndexOrExpr (indices ++ #[array]) fvars
+      let positions ← findPositionsOfIndexOrExpr (Vector.mk (indices ++ #[array]) (by simp; rfl)) fvars
+      let positions := positions.toArray
       pure { array := positions.back!, indices := positions.pop }
     -- Generate the key for the discrimination tree
     let key ← MetaM.run' do
@@ -238,7 +239,8 @@ initialize arraySetterAttr : ArrayAttr Setter ← do
       forallTelescope ty.consumeMData fun fvars _ => do
       let (array, indices, value) ← parseArraySetterArgs stx
       /- Find the position of every fvar id -/
-      let positions ← findPositionsOfIndexOrExpr (indices ++ #[array, value]) fvars
+      let positions ← findPositionsOfIndexOrExpr (Vector.mk (indices ++ #[array, value]) (by simp; rfl)) fvars
+      let positions := positions.toArray
       let value := positions.back!
       let positions := positions.pop
       let array := positions.back!
@@ -297,8 +299,8 @@ initialize valAttr : ArrayAttr Val ← do
       forallTelescope ty.consumeMData fun fvars _ => do
       let val ← parseValArgs stx
       /- Find the position of every fvar id -/
-      let positions ← findPositionsOfIndexOrExpr (#[val]) fvars
-      pure { val := positions[0]! }
+      let positions ← findPositionsOfIndexOrExpr (Vector.mk #[val] (by simp; rfl)) fvars
+      pure { val := positions[0] }
     -- Generate the key for the discrimination tree
     let key ← MetaM.run' do
       let (mvars, _) ← forallMetaTelescope ty.consumeMData
@@ -339,7 +341,7 @@ inductive RangeKind where
   | sub -- subtract a constant at every step
   | mul -- multiply by a constant at every step
   | div -- divide by a constant at every step
-deriving Inhabited, BEq, Ord
+deriving Inhabited, BEq, Ord, Hashable
 
 def RangeKind.toString (k : RangeKind) : String :=
   match k with
@@ -355,7 +357,7 @@ inductive ArithBinop where
   | div
   | mod
   | pow
-deriving Inhabited, BEq, Ord
+deriving Inhabited, BEq, Ord, Hashable
 
 instance : ToString ArithBinop where
   toString x :=
@@ -373,17 +375,43 @@ instance : ToFormat ArithBinop where
 instance : ToMessageData ArithBinop where
   toMessageData x := m!"{toString x}"
 
+/-- Characterizes a variable introduced by a loop -/
+inductive LoopVarKind where
+/-- The variable binding the state in a loop iteration.
+
+    Ex.: `x` in the expression `loopIter (fun i x => ...)`
+-/
+| input
+/-- The variable binding the iteration index in a loop iteration.
+
+    Ex.: `i` in the expression `loopIter (fun i s => ...)`
+-/
+| index
+/-- The output of a loop.
+
+    Ex.: `x` in the expression `let x ← loopIter ...; ...`
+ -/
+| output
+deriving Inhabited, BEq, Ord, Hashable
+
+instance : ToMessageData LoopVarKind where
+  toMessageData k :=
+    match k with
+    | .input => "input" | .index => "index" | .output => "output"
+
+abbrev LoopId := Nat
+
 /-- An expression which we register in the footprint.
 
     This is typically an expression which reads or writes to an array.
 -/
-inductive FootprintExpr where -- TODO: rename to Expr
+inductive FootprintExpr where
   | var (v : Var) -- A variable
   | get (array : FootprintExpr) (indices : Array FootprintExpr)
   | set (array : FootprintExpr) (indices : Array FootprintExpr) (value : FootprintExpr)
   /- Handling projectors properly is particularly useful because we often need to
      decompose loop inputs (which are usually a tuple) -/
-  | proj (typename : Name) (field : Nat) (e : FootprintExpr)
+  | proj (field : Nat) (e : FootprintExpr)
   /- Useful for the outputs -/
   | struct (typename : Name) (fields : Array FootprintExpr)
   | lit (n : Nat)
@@ -399,33 +427,16 @@ inductive FootprintExpr where -- TODO: rename to Expr
   | range (start stop step : FootprintExpr) (kind : RangeKind)
   --
   | unknown
-deriving BEq
+deriving Inhabited, BEq, Hashable
 
 instance : Inhabited FootprintExpr := { default := .unknown }
-
-partial def FootprintExpr.format (e : FootprintExpr) : Format :=
-  match e with
-  | .var v => f!"{v}"
-  | .get a ids => f!"{a.format}{ids.map format}"
-  | .set a ids v => f!"({a.format}{ids.map format} := {v.format})"
-  | .proj _ f x => f!"{x.format}.{f}"
-  | .struct _ fields => f!"({arrayToTupleFormat format fields})"
-  | .lit n => f!"{n}"
-  | .const e => f!"{e}"
-  | .binop op x y => f!"({x.format} {op} {y.format})"
-  | .range start stop step kind =>
-    f!"[{start.format}:{stop.format}:{kind.toString}={step.format}]"
-  | .unknown => f!"?"
-
-instance : ToFormat FootprintExpr where
-  format := FootprintExpr.format
 
 partial def FootprintExpr.toMessageData (e : FootprintExpr) : MessageData :=
   match e with
   | .var v => m!"{v}"
   | .get a ids => m!"{a.toMessageData}[{ids.map toMessageData}]"
   | .set a ids v => m!"({a.toMessageData}{ids.map toMessageData} := {v.toMessageData})"
-  | .proj _ f x => m!"{x.toMessageData}.{f}"
+  | .proj f x => m!"{x.toMessageData}.{f}"
   | .struct _ fields => m!"({arrayToTupleMessageData toMessageData fields})"
   | .lit n => m!"{n}"
   | .const e => m!"{e}"
@@ -437,7 +448,74 @@ partial def FootprintExpr.toMessageData (e : FootprintExpr) : MessageData :=
 instance : ToMessageData FootprintExpr where
   toMessageData := FootprintExpr.toMessageData
 
+/-- Projection over a variable -/
+structure VarProj where
+  var : Var
+  projs : List Nat
+deriving Inhabited, BEq, Hashable, Ord
+
+instance : ToMessageData VarProj where
+  toMessageData x :=
+    let rec go (m : MessageData) (projs : List Nat) :=
+      match projs with
+      | [] => m
+      | p :: projs =>
+        go m!"{m}.{p}" projs
+    go m!"{x.var}" x.projs
+
+inductive VarProjOrLit where
+| var (v : VarProj)
+| lit (n : Nat)
+deriving Inhabited, BEq, Hashable, Ord
+
+instance : ToMessageData VarProjOrLit where
+  toMessageData x :=
+    match x with
+    | .var v => m!"{v}"
+    | .lit n => m!"{n}"
+
+structure Range where
+  start : FootprintExpr
+  stop : FootprintExpr
+  step : FootprintExpr
+  kind : RangeKind
+deriving Inhabited, BEq, Hashable
+
+instance : ToMessageData Range where
+  toMessageData r :=
+    let { start, stop, step, kind } := r
+    m!"[{start.toMessageData}:{stop.toMessageData}:{kind.toString}={step.toMessageData}]"
+
+/-- A loop which iterates over an index.
+
+    The definition should have the signature:
+    ```
+    loop (body : Idx → α → m α) (range : ...) (input : α) : m α
+    ```
+    where the arguments may be reordered (`input` placed before `range`, etc.).
+ -/
+structure LoopIterDesc where
+  body : Nat
+  /- The arguments which stands for the index range. -/
+  start : VarProjOrLit
+  stop : VarProjOrLit
+  step : VarProjOrLit
+  rangeKind : RangeKind
+  --
+  input : Nat
+deriving Inhabited, BEq
+
+structure LoopIter where
+  range : Range
+  input : FootprintExpr
+deriving Inhabited, BEq
+
+instance : ToMessageData LoopIter where
+  toMessageData x := m!"{'{'}range := {x.range}, input := {x.input}{'}'}"
+
 structure Footprint where
+  /-- Var id counter: we increment it whenever we find a new var id -/
+  varId : VarId := 0
   /- Inputs of the loop.
 
      Ex.: when exploring `loop (fun (x, y) => ...)`, the inputs of the loop
@@ -449,7 +527,15 @@ structure Footprint where
     Ex.: when exploring `foldl (fun x => if x % 2 = 0 then x + 1 else x + 2)`, `x` is a loop input,
     while `x + 1` and `x + 2` are loop outputs.
   -/
-  outputs : Array FootprintExpr := #[]
+  outputs : Std.HashMap LoopId (Array FootprintExpr) := {}
+  /-- Loop id counter: we increment it whenever we find a loop -/
+  loopId : LoopId := 0
+  /-- The loops found so far -/
+  loopIters : Std.HashMap LoopId LoopIter := {}
+  /-- Partial map from variable to the loop which introduced it, together with the
+      kind of the variable. See `LoopVarKind`.
+   -/
+  varToLoop : Std.HashMap Var (LoopId × LoopVarKind) := {}
   /- The provenance of a variable, if we could compute one.
 
      For now, we only track array like operations (get and set).
@@ -463,18 +549,11 @@ structure Footprint where
   footprint : Array FootprintExpr := #[]
 deriving Inhabited
 
-def Footprint.format (e : Footprint) : Format :=
-  f!"- inputs := {e.inputs.toArray.map (fun (fid, v) => (Expr.fvar fid, v))}
-  - outputs := {e.outputs}
-  - provenance := {e.provenance.toArray.map fun (x, y) => (Expr.fvar x, y)}
-  - footprint := {e.footprint}"
-
-instance : ToFormat Footprint where
-  format := Footprint.format
-
 def Footprint.toMessageData (e : Footprint) : MessageData :=
   m!"- inputs := {e.inputs.toArray.map (fun (fid, v) => (Expr.fvar fid, v))}
-  - outputs := {e.outputs}
+  - outputs := {e.outputs.toArray}
+  - loopIters := {e.loopIters.toArray}
+  - varToLoop := {e.varToLoop.toArray}
   - provenance := {e.provenance.toArray.map fun (x, y) => (Expr.fvar x, y)}
   - footprint := {e.footprint}"
 
@@ -483,9 +562,6 @@ instance : ToMessageData Footprint where
 
 structure State extends Footprint where
 deriving Inhabited
-
-instance : ToFormat State where
-  format s := s.toFootprint.format
 
 instance : ToMessageData State where
   toMessageData s := s.toFootprint.toMessageData
@@ -523,10 +599,34 @@ def popFVar (fvar : FVarId) : FootprintM Unit := do
   match s.provenance.get? fvar with
   | none => pure ()
   | some p =>
-    set ({ s with provenance := s.provenance.erase fvar, footprint := s.footprint ++ #[p] })
+    set { s with provenance := s.provenance.erase fvar, footprint := s.footprint ++ #[p] }
 
 def popFVars (fvars : Array FVarId) : FootprintM Unit := do
   for fvar in fvars do popFVar fvar
+
+def freshLoopId : FootprintM LoopId := do
+  let s ← get
+  let id := s.loopId
+  set { s with loopId := id + 1 }
+  pure id
+
+def freshVarId : FootprintM VarId := do
+  let s ← get
+  let id := s.varId
+  set { s with varId := id + 1 }
+  pure id
+
+def freshLoopVar (loopId : LoopId) (name : Option String) (kind : LoopVarKind) :
+  FootprintM Var := do
+  let id ← freshVarId
+  let s ← get
+  let v : Var := { id, name }
+  set { s with varToLoop := s.varToLoop.insert v (loopId, kind) }
+  pure v
+
+def pushLoop (loopId : LoopId) (loop : LoopIter) : FootprintM Unit := do
+  let s ← get
+  set {s with loopIters := s.loopIters.insert loopId loop }
 
 def withFVar {α} (fvar : FVarId) (e : FootprintExpr) (k : FootprintM α) : FootprintM α := do
   -- TODO: this is probably not the proper way of scoping things
@@ -544,13 +644,18 @@ def withFVars {α} (fvars : Array (FVarId × FootprintExpr)) (k : FootprintM α)
   popFVars (fvars.map Prod.fst)
   pure x
 
-def pushOutput (p : FootprintExpr) : FootprintM Unit := do
+def pushOutput (lpId : LoopId) (p : FootprintExpr) : FootprintM Unit := do
   trace[Inv] "Pushing output: {p}"
   let s ← get
-  set ({ s with outputs := s.outputs ++ #[p], footprint := s.footprint ++ #[p] })
+  let outputs :=
+    s.outputs.alter lpId (fun outputs =>
+      match outputs with | none => #[p] | some outputs => outputs ++ #[p])
+  set ({ s with outputs := outputs, footprint := s.footprint ++ #[p] })
 
-def pushOptOutput (push : Bool) (p : FootprintExpr) : FootprintM Unit := do
-  if push then pushOutput p
+def pushOptOutput (push : Option LoopId) (p : FootprintExpr) : FootprintM Unit := do
+  match push with
+  | none => pure ()
+  | some lpId => pushOutput lpId p
 
 def lambdaTelescope (e : Expr) (k : Array Expr → Expr → FootprintM α) : FootprintM α :=
   Meta.lambdaTelescope e fun fvars e => do
@@ -576,15 +681,15 @@ def lambdaLetTelescope (e : Expr) (k : Array Expr → Expr → FootprintM α) : 
     -- Continue
     pure x
 
-def mkReducedProj (typename : Name) (field : Nat) (e : FootprintExpr) : FootprintExpr :=
+def mkReducedProj (field : Nat) (e : FootprintExpr) : FootprintExpr :=
   match e with
-  | .struct typename fields =>
+  | .struct _ fields =>
     -- Sanity check
     if h: field < fields.size then
       fields[field]
     else
-      .proj typename field e
-  | _ => .proj typename field e
+      .proj field e
+  | _ => .proj field e
 
 /-- Minimize a value.
 
@@ -598,12 +703,14 @@ partial def minimizeVal (e : Expr) : FootprintM (Option Expr) := do
     let e := e.consumeMData
     let rules ← inValState.rules.getMatch e
     -- Just try the first rule - there should be no more than one
-    if rules.size > 0 then
-      let (_, rule) := rules[0]!
+    if h: rules.size > 0 then
+      let (_, rule) := rules[0]
       let args := e.getAppArgs
-      let arg := args[rule.val]!
-      -- Minimize again
-      if let some arg' ← minimizeVal arg then pure arg' else pure arg
+      if h: rule.val < args.size then
+        let arg := args[rule.val]
+        -- Minimize again
+        if let some arg' ← minimizeVal arg then pure arg' else pure arg
+      else pure none
     else pure none
   minimize e
 
@@ -611,22 +718,16 @@ def destBind (e : Expr) (k : Expr → FVarId → Expr → FootprintM α) : Footp
   let (f, args) := e.consumeMData.withApp (fun f args => (f, args))
   let f := f.consumeMData
   if ¬ f.isConst then return none
-  if f.constName! = ``Bind.bind ∧ args.size = 6 ∧ args[5]!.isLambda then
-    let .lam xName xTy body binderInfo := args[5]!
-      | throwError "Unreachable"
-    withLocalDecl xName binderInfo xTy fun fvar => do
-    let body := body.instantiate #[fvar]
-    let bound := args[4]!
-    k bound fvar.fvarId! body
+  if h: f.constName! = ``Bind.bind ∧ args.size = 6 then
+    if args[5].isLambda then
+      let .lam xName xTy body binderInfo := args[5]
+        | throwError "Unreachable"
+      withLocalDecl xName binderInfo xTy fun fvar => do
+      let body := body.instantiate #[fvar]
+      let bound := args[4]
+      k bound fvar.fvarId! body
+    else pure none
   else pure none
-
-partial def destTuple (e : Expr) : Option (Expr × Expr) :=
-  if e.isAppOfArity ``Prod.mk 4 ∨ e.isAppOfArity ``MProd.mk 4 then
-    let args := e.getAppArgs
-    let x := args[2]!
-    let y := args[3]!
-    some (x, y)
-  else none
 
 /-- Homogeneous binops -/
 def arithBinops : Std.HashMap Name ArithBinop := Std.HashMap.ofList [
@@ -648,57 +749,12 @@ def arithHBinops : Std.HashMap Name ArithBinop := Std.HashMap.ofList [
   (``HPow.hPow, .pow),
 ]
 
-/-- Projection over a variable -/
-structure VarProj where
-  var : Var
-  projs : List Nat
-deriving Inhabited, BEq, Hashable, Ord
-
-instance : ToMessageData VarProj where
-  toMessageData x :=
-    let rec go (m : MessageData) (projs : List Nat) :=
-      match projs with
-      | [] => m
-      | p :: projs =>
-        go m!"{m}.{p}" projs
-    go m!"{x.var}" x.projs
-
-inductive VarProjOrLit where
-| var (v : VarProj)
-| lit (n : Nat)
-deriving Inhabited, BEq, Hashable, Ord
-
-instance : ToMessageData VarProjOrLit where
-  toMessageData x :=
-    match x with
-    | .var v => m!"{v}"
-    | .lit n => m!"{n}"
-
 /-!
 # Extension: `inv_loop_iter`
 We have to separate the extension from the attribute because:
 - `footprint.expr` needs to access the extension
 - the attribute `inv_loop_iter` needs `footprint.expr` to parse some of is arguments
 -/
-
-/-- A loop which iterates over an index.
-
-    The definition should have the signature:
-    ```
-    loop (body : Idx → α → m α) (range : ...) (input : α) : m α
-    ```
-    where the arguments may be reordered (`input` placed before `range`, etc.).
- -/
-structure LoopIter where
-  body : Nat
-  /- The arguments which stands for the index range. -/
-  start : VarProjOrLit
-  stop : VarProjOrLit
-  step : VarProjOrLit
-  rangeKind : RangeKind
-  --
-  input : Nat
-deriving Inhabited, BEq
 
 syntax (name := loopIter) "inv_loop_iter" "{" term "}"
   "[" term ":" term ":" ("+=" <|> "-=" <|> "*=" <|> "/=") term "]" term : attr
@@ -724,21 +780,21 @@ def parseLoopIterArgs
 | _ => throwUnsupportedSyntax
 
 initialize loopIterExt :
-  SimpleScopedEnvExtension (Array DiscrTree.Key × Name × LoopIter) (ExtBase LoopIter) ← do
+  SimpleScopedEnvExtension (Array DiscrTree.Key × Name × LoopIterDesc) (ExtBase LoopIterDesc) ← do
   initializeArrayExt `loopIterExt
 
 mutual
 
 /-- Compute the footprint of an expression.
 
-  `terminal` is true if we are exploring an expression which evaluates to
-  the result of a loop. For instance, in `loop do let x ← e1; e2`, `e2` is terminal
-  while `e1` is not.
+  `terminal` is `some lpId` if we are exploring an expression which evaluates to
+  the result of a loop, given by `lpId`. For instance, in `loop do let x ← e1; e2`, `e2`
+  is terminal while `e1` is not.
 
   Remark: this function attempts to be robust, so we try not too fail as much as possible,
   even when encountering unexpected situations.
  -/
-partial def footprint.expr (terminal : Bool) (e : Expr) : FootprintM FootprintExpr := do
+partial def footprint.expr (terminal : Option LoopId) (e : Expr) : FootprintM FootprintExpr := do
   withTraceNode `Inv (fun _ => pure m!"footprint.expr") do
   trace[Inv] "e: {e}"
   trace[Inv] "terminal: {terminal}"
@@ -755,7 +811,7 @@ partial def footprint.expr (terminal : Bool) (e : Expr) : FootprintM FootprintEx
   pushOptOutput terminal e
   pure e
 
-partial def footprint.exprAux (terminal : Bool) (e : Expr) : FootprintM FootprintExpr := do
+partial def footprint.exprAux (terminal : Option LoopId) (e : Expr) : FootprintM FootprintExpr := do
   match e with
   | .bvar _ =>
     -- This is unexpected, but we can gracefully stop the exploration
@@ -798,17 +854,17 @@ partial def footprint.exprAux (terminal : Bool) (e : Expr) : FootprintM Footprin
   | .letE declName type value body _ =>
     trace[Inv] ".letE"
     -- Explore the bound value
-    let value ← footprint.expr false value
+    let value ← footprint.expr none value
     -- Explore the body
     withLocalDecl declName .default type fun fvar => do
     let body := body.instantiate #[fvar]
     withFVar fvar.fvarId! value do
-    footprint.expr false body
+    footprint.expr none body
   | .mdata _ e => footprint.expr terminal e
-  | .proj typename idx struct =>
+  | .proj _typename idx struct =>
     trace[Inv] ".proj"
-    let struct ← footprint.expr false struct
-    pure (mkReducedProj typename idx struct)
+    let struct ← footprint.expr none struct
+    pure (mkReducedProj idx struct)
   | .forallE _ _ _ _ =>
     trace[Inv] ".forallE"
     /- If we find a forall it's probably because we're exploring a type:
@@ -816,7 +872,7 @@ partial def footprint.exprAux (terminal : Bool) (e : Expr) : FootprintM Footprin
     pure .unknown
 
 -- Subcase: the expression is a function application
-partial def footprint.app (terminal : Bool) (e : Expr) : FootprintM FootprintExpr := do
+partial def footprint.app (terminal : Option LoopId) (e : Expr) : FootprintM FootprintExpr := do
   withTraceNode `Inv (fun _ => pure m!"footprint.app") do
   /- There are several cases:
       - constant
@@ -825,6 +881,7 @@ partial def footprint.app (terminal : Bool) (e : Expr) : FootprintM FootprintExp
       - match
       - monadic let, in which case we need to destruct it
       - get/set expression
+      - loop
       - binary operation
   -/
   let f := e.getAppFn
@@ -847,7 +904,7 @@ partial def footprint.app (terminal : Bool) (e : Expr) : FootprintM FootprintExp
         if info.name = fName then
           trace[Inv] "is a structure constructor"
           let fields := args.extract (args.size - info.numFields)
-          let fields ← fields.mapM (footprint.expr false)
+          let fields ← fields.mapM (footprint.expr none)
           return (.struct tyName fields)
 
   /- Check if this is a matcher (a call to an auxiliary definition
@@ -901,30 +958,30 @@ partial def footprint.app (terminal : Bool) (e : Expr) : FootprintM FootprintExp
     fun bound fvarId inner => do
       trace[Inv] "is monadic bind"
       -- Explore the bound expression
-      let bound ← footprint.expr false bound
+      let bound ← footprint.expr none bound
       withFVar fvarId bound do
       -- Continue exploring the inner expression
-      footprint.expr false inner
+      footprint.expr none inner
     then
       trace[Inv] "monadic bind result: {e}"
       return e
 
   -- Homogeneous binary operations
-  if f.isConst ∧ args.size = 3 then
+  if h: f.isConst ∧ args.size = 3 then
     let fname := f.constName!
     if let some op := arithBinops.get? fname then
       trace[Inv] "homogeneous binop"
-      let x ← footprint.expr false args[1]!
-      let y ← footprint.expr false args[2]!
+      let x ← footprint.expr none args[1]
+      let y ← footprint.expr none args[2]
       return (.binop op x y)
 
   -- Heterogeneous binary operations
-  if f.isConst ∧ args.size = 6 then
+  if h: f.isConst ∧ args.size = 6 then
     let fname := f.constName!
     if let some op := arithHBinops.get? fname then
       trace[Inv] "heterogeneous binop"
-      let x ← footprint.expr false args[4]!
-      let y ← footprint.expr false args[5]!
+      let x ← footprint.expr none args[4]
+      let y ← footprint.expr none args[5]
       return (.binop op x y)
 
   -- Check if this is a get/set expression
@@ -939,19 +996,24 @@ partial def footprint.app (terminal : Bool) (e : Expr) : FootprintM FootprintExp
    -/
   if let .const fName _ := f then
     if let some info ← getProjectionFnInfo? fName then
-      trace[Inv] "projector"
-      trace[Inv] "numParams: {info.numParams}"
-      trace[Inv] "i: {info.i}"
-      trace[Inv] "args: {e.getAppArgs}"
-      let x := e.getAppArgs[info.numParams]!
-      let x ← footprint.expr false x
-      let idx := info.i
-      let structName := (Environment.getProjectionStructureName? env fName).get!
-      return (mkReducedProj structName idx x)
+      if h: info.numParams < args.size then
+        trace[Inv] "projector"
+        trace[Inv] "numParams: {info.numParams}"
+        trace[Inv] "i: {info.i}"
+        trace[Inv] "args: {e.getAppArgs}"
+        let x := e.getAppArgs[info.numParams]
+        let x ← footprint.expr none x
+        let idx := info.i
+        return (mkReducedProj idx x)
+
+  -- Check if this is a loop
+  if let some e ← footprint.loop terminal e then
+    trace[Inv] "is an array expression"
+    return e
 
   -- Don't know: explore the arguments
   let args := e.getAppArgs
-  let _ ← Array.mapM (footprint.expr false) args
+  let _ ← Array.mapM (footprint.expr none) args
   -- TODO: tuple case
   pure .unknown
 
@@ -972,9 +1034,9 @@ partial def footprint.casesOn (e : Expr) : FootprintM FootprintExpr := do
   let scrutIdx ← do
     forallTelescope (← inferType f) fun xs _ => do
     let rec findFirstExplicit (i : Nat) : MetaM Nat := do
-      if i ≥ xs.size then throwError "Unexpected: could not find an explicit parameter"
+      if h: i ≥ xs.size then throwError "Unexpected: could not find an explicit parameter"
       else
-        let x := xs[i]!
+        let x := xs[i]
         let xFVarId := x.fvarId!
         let localDecl ← xFVarId.getDecl
         match localDecl.binderInfo with
@@ -983,7 +1045,7 @@ partial def footprint.casesOn (e : Expr) : FootprintM FootprintExpr := do
     findFirstExplicit 0
 
   -- Split the arguments
-  let scrut := args[scrutIdx]!
+  let scrut ← if h: scrutIdx< args.size then pure args[scrutIdx] else throwError "Unreachable"
   let branches := args.extract (scrutIdx + 1) args.size
   trace[Inv] "scrut: {scrut}"
   trace[Inv] "branches: {branches}"
@@ -1003,39 +1065,39 @@ partial def footprint.casesOn (e : Expr) : FootprintM FootprintExpr := do
     else pure none
 
   -- If we're matching over a structure, there should be exactly one branch
-  if structNumFields.isSome ∧ branches.size = 1 then
+  if h: structNumFields.isSome ∧ branches.size = 1 then
     trace[Inv] "is a casesOn over a structure"
     -- Retrieve this structure's information
     let numFields := structNumFields.get!
-    let branch := branches[0]!
+    let branch := branches[0]
 
     -- Explore the scrutinee
-    let scrut ← footprint.expr false scrut
+    let scrut ← footprint.expr none scrut
 
     -- Explore the branch, which should have exactly `numFields` inputs
     lambdaBoundedTelescope branch numFields fun fvars branch => do
     if fvars.size ≠ numFields then
       -- This is unexpected: simply explore the branches
       trace[Inv] "Expected {numFields} inputs, got {fvars}"
-      let _ ← footprint.expr false branch
+      let _ ← footprint.expr none branch
       return .unknown
 
     -- Register the branch inputs as being projections of the scrutinee
-    let .const typeName _ := scrutfty
+    let .const _typeName _ := scrutfty
       | throwError "Unreachable"
-    let fvars ← fvars.mapIdxM (fun i fv => do pure (fv.fvarId!, mkReducedProj typeName i scrut))
+    let fvars ← fvars.mapIdxM (fun i fv => do pure (fv.fvarId!, mkReducedProj i scrut))
     withFVars fvars do
     -- Explore the branch expression
-    footprint.expr false branch
+    footprint.expr none branch
 
   else
     -- Explore the scrutinee and the branches
-    let _ ← footprint.expr false scrut
-    let _ ← branches.mapM (footprint.expr false)
+    let _ ← footprint.expr none scrut
+    let _ ← branches.mapM (footprint.expr none)
     pure .unknown
 
 
-partial def footprint.arrayExpr (_terminal : Bool) (e : Expr) :
+partial def footprint.arrayExpr (_terminal : Option LoopId) (e : Expr) :
   FootprintM (Option FootprintExpr) := do
   withTraceNode `Inv (fun _ => pure m!"footprint.arrayExpr") do
   trace[Inv] "e: {e}"
@@ -1044,17 +1106,20 @@ partial def footprint.arrayExpr (_terminal : Bool) (e : Expr) :
   /- Attempt to deconstruct a getter -/
   let getterState := arrayGetterAttr.ext.getState env
   let rules ← getterState.rules.getMatch e
+  let analyzeArg (args : Array Expr) (i : Nat) : FootprintM FootprintExpr :=
+    if h: i < args.size then
+      let arg := args[i]
+      footprint.expr none arg
+    else pure .unknown
+
   -- Just try the first rule - there should be no more than one
-  if rules.size > 0 then
+  if h: rules.size > 0 then
     trace[Inv] "is a getter"
-    let (_, rule) := rules[0]!
-    let args := e.getAppArgs
-    let array := args[rule.array]!
-    trace[Inv] "array value: {array}"
-    let array ← footprint.expr false array
-    let indices := rule.indices.map fun id => args[id]!
-    trace[Inv] "indices: {indices}"
-    let indices ← indices.mapM (footprint.expr false)
+    let (_, rule) := rules[0]
+    let analyzeArg := analyzeArg e.getAppArgs
+
+    let array ← analyzeArg rule.array
+    let indices ← rule.indices.mapM analyzeArg
     let e := FootprintExpr.get array indices
     return e
 
@@ -1062,23 +1127,89 @@ partial def footprint.arrayExpr (_terminal : Bool) (e : Expr) :
   let setterState := arraySetterAttr.ext.getState env
   let rules ← setterState.rules.getMatch e
   -- Just try the first rule - there should be no more than one
-  if rules.size > 0 then
+  if h: rules.size > 0 then
     trace[Inv] "is a setter"
-    let (_, rule) := rules[0]!
-    let args := e.getAppArgs
-    let array := args[rule.array]!
-    trace[Inv] "array value: {array}"
-    let array ← footprint.expr false array
-    let indices := rule.indices.map fun id => args[id]!
-    trace[Inv] "indices: {indices}"
-    let indices ← indices.mapM (footprint.expr false)
-    let value := args[rule.value]!
-    trace[Inv] "value: {value}"
-    let value ← footprint.expr false value
+    let (_, rule) := rules[0]
+    let analyzeArg := analyzeArg e.getAppArgs
+
+    let array ← analyzeArg rule.array
+    let indices ← rule.indices.mapM analyzeArg
+    let value ← analyzeArg rule.value
     let e := FootprintExpr.set array indices value
     return e
 
-  /- Don't know -/
+  /- Not a getter or setter -/
+  pure .none
+
+partial def footprint.loop (_terminal : Option LoopId) (e : Expr) :
+  FootprintM (Option FootprintExpr) := do
+  withTraceNode `Inv (fun _ => pure m!"footprint.arrayExpr") do
+  trace[Inv] "e: {e}"
+  let env ← getEnv
+
+  /- Attempt to deconstruct a getter -/
+  let loopState := loopIterExt.getState env
+  let rules ← loopState.rules.getMatch e
+  -- Just try the first rule - there should be no more than one
+  if h: rules.size > 0 then
+    trace[Inv] "is a loop iter"
+    let (_, rule) := rules[0]
+    let args := e.getAppArgs
+    let loopId ← freshLoopId
+
+    let body ← if h: rule.body < args.size then pure args[rule.body] else throwError "Unexpected"
+    let rec addProjs (e : FootprintExpr) (projs : List Nat) : FootprintExpr :=
+      match projs with
+      | [] => e
+      | p :: projs => addProjs (.proj p e) projs
+    let rangeIndexToExpr (v : VarProjOrLit) : FootprintM FootprintExpr := do
+      match v with
+      | .var v =>
+        let e ← do
+          if h: v.var.id < args.size then
+            footprint.expr none args[v.var.id]
+          else pure .unknown
+        pure (addProjs e v.projs)
+      | .lit n => pure (.lit n)
+    let start ← rangeIndexToExpr rule.start
+    let stop ← rangeIndexToExpr rule.stop
+    let step ← rangeIndexToExpr rule.step
+
+    let input ← do
+      if h: rule.input < args.size then footprint.expr none args[rule.input]
+      else pure .unknown
+
+    /- Explore the body.
+
+       We need to push fresh variables for the bound inputs.
+    -/
+    let _ ← do
+      lambdaBoundedTelescope body 2 fun fvars body => do
+      if h: fvars.size ≠ 2 then
+        trace[Inv] "Expected 2 inputs, got {fvars}"
+        return .unknown -- Abort
+      else
+        let addVar (fvarId : FVarId) (kind : LoopVarKind) : FootprintM FootprintExpr := do
+          let decl ← fvarId.getDecl
+          let name := decl.userName.toString
+          let var ← freshLoopVar loopId (some name) kind
+          pure (.var var)
+
+        let idx := fvars[0].fvarId!
+        let idxe ← addVar idx .index
+        let input := fvars[1].fvarId!
+        let inpute ← addVar input .input
+        withFVars #[(idx, idxe), (input, inpute)] do
+        footprint.expr (some loopId) body
+
+    /- Register the loop -/
+    pushLoop loopId { range := {start, stop, step, kind := rule.rangeKind}, input }
+
+    -- Push a fresh var for the output
+    let outputVar ← freshLoopVar loopId none .output
+    return (FootprintExpr.var outputVar)
+
+  /- Not a loop -/
   pure .none
 
 end
@@ -1106,11 +1237,11 @@ def LinArithExpr.toMessageData (e : LinArithExpr) : MessageData := Id.run do
     m!"{coef}"
   let const := if e.const = 0 then [] else [m!"{e.const}"]
   let coefs := coefs ++ const
-  if coefs.size = 0 then m!"0"
+  if h: coefs.size = 0 then m!"0"
   else
-    let mut s := coefs[0]!
-    for i in [1:coefs.size] do
-      s := s ++ m!" + {coefs[i]!}"
+    let mut s := coefs[0]
+    for h: i in [1:coefs.size] do
+      s := s ++ m!" + {coefs[i]}"
     pure s
 
 instance : ToMessageData LinArithExpr where
@@ -1129,7 +1260,7 @@ partial def FootprintExpr.getVars (e : FootprintExpr) : Std.HashSet Var :=
     | .binop _ a b => go a; go b
     | .range start stop step _ => go start; go stop; go step
     | .struct _ fields => let _ ← fields.mapM go
-    | .proj _ _ e => go e
+    | .proj _ e => go e
     | .get a ids => go a; let _ ← ids.mapM go
     | .set a ids v => go a; let _ ← ids.mapM go; go v
   (Id.run (StateT.run (go e) Std.HashSet.emptyWithCapacity)).snd
@@ -1137,7 +1268,7 @@ partial def FootprintExpr.getVars (e : FootprintExpr) : Std.HashSet Var :=
 def FootprintExpr.toVarProj (e : FootprintExpr) : Option VarProj := do
   match e with
   | .var v => pure { var := v, projs := [] }
-  | .proj _ field e =>
+  | .proj field e =>
     let p ← e.toVarProj
     pure { p with projs := field :: p.projs}
   | _ => none
@@ -1150,7 +1281,7 @@ def FootprintExpr.toVarProjOrLit (e : FootprintExpr) : Option VarProjOrLit := do
 /-- Normalize an arithmetic expression, if possible -/
 def FootprintExpr.normalize (e : FootprintExpr) : Option LinArithExpr := do
   match e with
-  | .var _ | .proj _ _ _ =>
+  | .var _ | .proj _ _ =>
     let v ← e.toVarProj
     pure { coefs := Std.HashMap.ofList [(v, 1)], const := 0 }
   | .lit n => pure { coefs := Std.HashMap.emptyWithCapacity, const := n }
@@ -1182,7 +1313,7 @@ def FootprintExpr.normalize (e : FootprintExpr) : Option LinArithExpr := do
 
 inductive Input where
 | var (v : Var)
-| proj (typename : Name) (field : Nat) (e : Input)
+| proj (field : Nat) (e : Input)
 deriving BEq
 
 inductive Output where
@@ -1193,7 +1324,7 @@ inductive Output where
 def Input.toMessageData (e : Input) : MessageData := Id.run do
   match e with
   | .var v => m!"{v}"
-  | .proj _ field e => m!"{e.toMessageData}.{field}"
+  | .proj field e => m!"{e.toMessageData}.{field}"
 
 instance : ToMessageData Input where
   toMessageData := Input.toMessageData
@@ -1207,7 +1338,8 @@ partial def Output.toMessageData (e : Output) : MessageData := Id.run do
 instance : ToMessageData Output where
   toMessageData := Output.toMessageData
 
-partial def analyzeFootprint (fp : Footprint) (input : Var) : Option Output := do
+partial def analyzeFootprint (fp : Footprint) (indices : Std.HashSet Var) :
+  Option (Std.HashMap LoopId Output) := do
   /- Normalize the outputs.
 
     We are only interested in the provenance (i.e., which subfield of an input value
@@ -1217,7 +1349,7 @@ partial def analyzeFootprint (fp : Footprint) (input : Var) : Option Output := d
   let rec normalizeInput (e : FootprintExpr) : Option Input := do
     match e with
     | .var fv => pure (.var fv)
-    | .proj typename field e => pure (.proj typename field (← normalizeInput e))
+    | .proj field e => pure (.proj field (← normalizeInput e))
     | .get _ _ | .set _ _ _ | .struct _ _ | .lit _ | .const _  | .binop _ _ _
     | .range _ _ _ _ | .unknown => none
 
@@ -1232,14 +1364,14 @@ partial def analyzeFootprint (fp : Footprint) (input : Var) : Option Output := d
       let indices ← indices.mapM FootprintExpr.normalize
       let (input, indices') ← normalizeArrayExpr a
       pure (input, indices' ++ indices)
-    | .proj _ _ _ =>
+    | .proj _ _ =>
       pure (← normalizeInput e, #[])
     | .struct _ _ | .lit _ | .const _ | .binop _ _ _ | .range _ _ _ _ | .unknown => none
 
   /- Normalize an output expression -/
   let rec normalizeOutput (e : FootprintExpr) : Option Output := do
     match e with
-    | .var _ | .get _ _ | .set _ _ _ | .proj _ _ _ =>
+    | .var _ | .get _ _ | .set _ _ _ | .proj _ _ =>
       let (input, writes) ← normalizeArrayExpr e
       pure (.array input writes)
     | .lit _ | .const _ | .binop _ _ _ | .range _ _ _ _ =>
@@ -1251,71 +1383,81 @@ partial def analyzeFootprint (fp : Footprint) (input : Var) : Option Output := d
     | .unknown => none
 
   /- Normalize the outputs -/
-  let outputs ← fp.outputs.mapM normalizeOutput
+  let mut loopOutputs : Std.HashMap LoopId Output := Std.HashMap.emptyWithCapacity
+  for (loopId, outputs) in fp.outputs do
+    let outputs ← outputs.mapM normalizeOutput
 
-  /- Merge the outputs together -/
-  let rec mergeOutputs (out : Output × Output) : Option Output := do
-    match out with
-    | (.arith a1, .arith a2) =>
-      if a1 == a2 then pure (.arith a1) else none
-    | (.array a1 i1, .array a2 i2) =>
-      if a1 == a2 then
-        let i2 := i2.filter (fun e => not (Array.elem e i1))
-        pure (.array a1 (i1 ++ i2))
-      else none
-    | (.struct typename fields1, .struct _ fields2) =>
-      if fields1.size = fields2.size then
-        let fields ← (fields1.zip fields2).mapM mergeOutputs
-        pure (.struct typename fields)
-      else none
-    | _ => none
+    /- Merge the outputs together -/
+    let rec mergeOutputs (out : Output × Output) : Option Output := do
+      match out with
+      | (.arith a1, .arith a2) =>
+        if a1 == a2 then pure (.arith a1) else none
+      | (.array a1 i1, .array a2 i2) =>
+        if a1 == a2 then
+          let i2 := i2.filter (fun e => not (Array.elem e i1))
+          pure (.array a1 (i1 ++ i2))
+        else none
+      | (.struct typename fields1, .struct _ fields2) =>
+        if fields1.size = fields2.size then
+          let fields ← (fields1.zip fields2).mapM mergeOutputs
+          pure (.struct typename fields)
+        else none
+      | _ => none
 
-  let output ← do
-    match outputs.toList with
-    | [] => none
-    | output :: outputs =>
-      let mut res := output
-      for output in outputs do
-        res ← mergeOutputs (res, output)
-      pure res
-
-  /- Check that the relation between the inputs and the outputs is consistent, that is if
-     we receive a tuple as input, we do not change the order of the elements of the tuple
-     (but might update them). Typically, this is ok:
-     ```
-      fun i state =>
-      let (a, b) := state
-      (a, b.set i a[i])
-     ```
-     but this is not (we swap `a` and `b`):
-     ```
-      fun i state =>
-      let (a, b) := state
-      (b, a)
-     ```
-  -/
-  let rec checkInput (projs : List Nat) (e : Input) : Option Unit := do
-    match e with
-    | .var v =>
-      -- TODO: we might do something like incrementing a counter
-      if projs = [] ∧ v == input then pure () else none
-    | .proj _ field e =>
-      match projs with
+    let output ← do
+      match outputs.toList with
       | [] => none
-      | p :: projs => if p = field then checkInput projs e else none
+      | output :: outputs =>
+        let mut res := output
+        for output in outputs do
+          res ← mergeOutputs (res, output)
+        pure res
 
-  let rec checkOutput (projs : List Nat) (e : Output) : Option Unit := do
-    match e with
-    | .arith a =>
-      -- TODO: we might increment a counter
-      none
-    | .array a _ => checkInput projs a
-    | .struct _ fields =>
-      let _ ← fields.mapIdxM fun i => checkOutput (i :: projs)
-      pure ()
-  checkOutput [] output
+    /- Check that the relation between the inputs and the outputs is consistent, that is if
+      we receive a tuple as input, we do not change the order of the elements of the tuple
+      (but might update them). Typically, this is ok:
+      ```
+        fun i state =>
+        let (a, b) := state
+        (a, b.set i a[i])
+      ```
+      but this is not (we swap `a` and `b`):
+      ```
+        fun i state =>
+        let (a, b) := state
+        (b, a)
+      ```
+    -/
+    let rec checkInput (projs : List Nat) (e : Input) : Option Unit := do
+      match e with
+      | .var v =>
+        if projs = [] then
+          if indices.contains v then pure ()
+          else if let some (_, .index) := fp.varToLoop.get? v then pure () else none
+        else none
+      | .proj field e =>
+        match projs with
+        | [] => none
+        | p :: projs => if p = field then checkInput projs e else none
+
+    let rec checkOutputArith (projs : List Nat) (e : LinArithExpr) : Option Unit := do
+      match e.coefs.toList with
+      | [(var, _)] =>
+        if var.projs = projs then pure () else none
+      | _ => none
+
+    let rec checkOutput (projs : List Nat) (e : Output) : Option Unit := do
+      match e with
+      | .arith a => checkOutputArith projs a
+      | .array a _ => checkInput projs a
+      | .struct _ fields =>
+        let _ ← fields.mapIdxM fun i => checkOutput (i :: projs)
+        pure ()
+    checkOutput [] output
+
+    loopOutputs := loopOutputs.insert loopId output
 
   --
-  pure output
+  pure loopOutputs
 
 end Aeneas.Inv
