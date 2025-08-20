@@ -1338,6 +1338,170 @@ partial def Output.toMessageData (e : Output) : MessageData := Id.run do
 instance : ToMessageData Output where
   toMessageData := Output.toMessageData
 
+partial def normalizeLoopOutputs (fp : Footprint) (indices : Std.HashSet Var)
+  (outputs : Array FootprintExpr) : MetaM Output := do
+  withTraceNode `Inv (fun _ => pure m!"normalizeLoopOutputs") do
+
+  let normalizeFootprintExpr (e : FootprintExpr) : MetaM LinArithExpr :=
+    match e.normalize with
+    | none => throwError "Could not normalize to a LinArithExpr: {e}"
+    | some e => pure e
+
+  /- Normalize the outputs.
+
+    We are only interested in the provenance (i.e., which subfield of an input value
+    it comes from) and the indices at which they are update. -/
+  /- Normalize an input (i.e., an expression of the shape `x.1.0` where `x` is an input
+     variable). -/
+  let rec normalizeInput (e : FootprintExpr) : MetaM Input := do
+    withTraceNode `Inv (fun _ => pure m!"normalizeInput") do
+    trace[Inv] "e: {e}"
+    match e with
+    | .var fv => pure (.var fv)
+    | .proj field e => pure (.proj field (← normalizeInput e))
+    | .get _ _ | .set _ _ _ | .struct _ _ | .lit _ | .const _  | .binop _ _ _
+    | .range _ _ _ _ | .unknown => throwError "Could not normalize input: {e}"
+
+  /- Normalize an array expression -/
+  let rec normalizeArrayExpr (e : FootprintExpr) : MetaM (Input × Array LinArithExpr) := do
+     withTraceNode `Inv (fun _ => pure m!"normalizeArrayExpr") do
+    trace[Inv] "e: {e}"
+    match e with
+    | .var fv => pure (.var fv, #[])
+    | .get a _ =>
+      -- We ignore the read indices
+      normalizeArrayExpr a
+    | .set a indices _ =>
+      let indices ← indices.mapM normalizeFootprintExpr
+      let (input, indices') ← normalizeArrayExpr a
+      pure (input, indices' ++ indices)
+    | .proj _ _ =>
+      pure (← normalizeInput e, #[])
+    | .struct _ _ | .lit _ | .const _ | .binop _ _ _ | .range _ _ _ _ | .unknown =>
+      throwError "Could not normalize array expression: {e}"
+
+  /- Normalize an output expression -/
+  let rec normalizeOutput (e : FootprintExpr) : MetaM Output := do
+     withTraceNode `Inv (fun _ => pure m!"normalizeOutput") do
+    trace[Inv] "e: {e}"
+    match e with
+    | .var _ | .get _ _ | .set _ _ _ | .proj _ _ =>
+      let (input, writes) ← normalizeArrayExpr e
+      pure (.array input writes)
+    | .lit _ | .const _ | .binop _ _ _ | .range _ _ _ _ =>
+      let e ← normalizeFootprintExpr e
+      pure (.arith e)
+    | .struct typename fields =>
+      let fields ← fields.mapM normalizeOutput
+      pure (.struct typename fields)
+    | .unknown => throwError "Could not normalize output: {e}"
+
+  let outputs ← outputs.mapM normalizeOutput
+
+  /- Merge the outputs together -/
+  let rec mergeOutputs (out : Output × Output) : MetaM Output := do
+    withTraceNode `Inv (fun _ => pure m!"mergeOutputs") do
+    trace[Inv] "out: {out}"
+    match out with
+    | (.arith a1, .arith a2) =>
+      if a1 == a2 then pure (.arith a1) else throwError "Could not merge: {out}"
+    | (.array a1 i1, .array a2 i2) =>
+      if a1 == a2 then
+        let i2 := i2.filter (fun e => not (Array.elem e i1))
+        pure (.array a1 (i1 ++ i2))
+      else throwError "Could not merge: {out}"
+    | (.struct typename fields1, .struct _ fields2) =>
+      if fields1.size = fields2.size then
+        let fields ← (fields1.zip fields2).mapM mergeOutputs
+        pure (.struct typename fields)
+      else throwError "Could not merge: {out}"
+    | _ => throwError "Could not merge: {out}"
+
+  let output ← do
+    match outputs.toList with
+    | [] => throwError "No output"
+    | output :: outputs =>
+      let mut res := output
+      for output in outputs do
+        res ← mergeOutputs (res, output)
+      pure res
+
+  /- Check that the relation between the inputs and the outputs is consistent, that is if
+    we receive a tuple as input, we do not change the order of the elements of the tuple
+    (but might update them). Typically, this is ok:
+    ```
+      fun i state =>
+      let (a, b) := state
+      (a, b.set i a[i])
+    ```
+    but this is not (we swap `a` and `b`):
+    ```
+      fun i state =>
+      let (a, b) := state
+      (b, a)
+    ```
+  -/
+  let rec checkInput (projs : List Nat) (e : Input) : MetaM Unit := do
+    withTraceNode `Inv (fun _ => pure m!"checkInput") do
+    trace[Inv] "projs: {projs}"
+    trace[Inv] "e: {e}"
+    match e with
+    | .var v =>
+      if projs = [] then
+        if indices.contains v then pure ()
+        else
+          if let some (_, .input) := fp.varToLoop.get? v then pure ()
+          else throwError "Invalid input: {e}"
+      else throwError "Invalid input and projs: input: {e}, projs: {projs}"
+    | .proj field e =>
+      match projs with
+      | [] => throwError "Invalid input: {e}"
+      | p :: projs =>
+        if p = field then checkInput projs e
+        else throwError "Invalid input and projs: input: {e}, projs: {projs}"
+
+  let rec checkOutputArith (projs : List Nat) (e : LinArithExpr) : MetaM Unit := do
+    withTraceNode `Inv (fun _ => pure m!"checkOutputArith") do
+    trace[Inv] "projs: {projs}"
+    trace[Inv] "e: {e}"
+    match e.coefs.toList with
+    | [(var, _)] =>
+      if var.projs = projs then pure ()
+      else throwError "Invalid output arith expr: expr: {e}, projs: {projs}"
+    | _ => throwError "Invalid output arith expr: expr: {e}, projs: {projs}"
+
+  let rec checkOutput (projs : List Nat) (e : Output) : MetaM Unit := do
+    withTraceNode `Inv (fun _ => pure m!"checkOutput") do
+    trace[Inv] "projs: {projs}"
+    trace[Inv] "e: {e}"
+    match e with
+    | .arith a => checkOutputArith projs a
+    | .array a _ =>
+      -- No need to check the write indices: they've already been normalized
+      checkInput projs a
+    | .struct _ fields =>
+      let _ ← fields.mapIdxM fun i => checkOutput (i :: projs)
+      pure ()
+  checkOutput [] output
+
+  pure output
+
+partial def analyzeFootprint (fp : Footprint) (indices : Std.HashSet Var) :
+  MetaM (Std.HashMap LoopId (Option Output)) := do
+  withTraceNode `Inv (fun _ => pure m!"analyzeFootprint") do
+
+  /- Normalize the outputs -/
+  let mut loopOutputs := Std.HashMap.emptyWithCapacity
+  for (loopId, outputs) in fp.outputs do
+    let output ← do
+      try pure (some (← normalizeLoopOutputs fp indices outputs))
+      catch | _ => pure none
+    loopOutputs := loopOutputs.insert loopId output
+
+  --
+  pure loopOutputs
+
+/-
 partial def analyzeFootprint (fp : Footprint) (indices : Std.HashSet Var) :
   MetaM (Std.HashMap LoopId Output) := do
   withTraceNode `Inv (fun _ => pure m!"analyzeFootprint") do
@@ -1491,5 +1655,6 @@ partial def analyzeFootprint (fp : Footprint) (indices : Std.HashSet Var) :
 
   --
   pure loopOutputs
+-/
 
 end Aeneas.Inv

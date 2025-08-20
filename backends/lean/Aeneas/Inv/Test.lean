@@ -235,4 +235,17 @@ example :
   analyze_loop
   simp [post]
 
+-- Nested loops: simple
+set_option trace.Inv true in
+example (src : Array Nat) :
+  post (
+    loopIter 0 8 src (fun i (dst : Array Nat) =>
+      loopIter 0 8 dst (fun j (dst : Array Nat) =>
+        dst.set! (8 * i + j) src[8 * i + j]!
+        )))
+    (fun _ => True)
+  := by
+  analyze_loop
+  simp [post]
+
 end Aeneas.Inv.Test
