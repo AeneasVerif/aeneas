@@ -1,2 +1,2 @@
-import Aeneas.Inv.Inv
+import Aeneas.Inv.Base
 import Aeneas.Inv.Test
