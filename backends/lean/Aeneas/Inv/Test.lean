@@ -23,7 +23,9 @@ def analyzeLoop (k : Array (FVarId × Var) → Expr → State → TacticM α) : 
 
 elab "analyze_loop" : tactic => do
   analyzeLoop fun _ _body state => do
-  let output := analyzeFootprint state.toFootprint {}
+  let output ← do
+    try pure (some (← analyzeFootprint state.toFootprint {}))
+    catch _ => pure none
   trace[Inv] "Analyzed output:\n{output.map Std.HashMap.toArray}"
   pure ()
 
