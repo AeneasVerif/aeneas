@@ -21,7 +21,7 @@ val apply_proj_loans_on_symbolic_expansion :
   rty ->
   rty ->
   eval_ctx ->
-  typed_avalue
+  tavalue
 
 (** Convert a symbolic expansion *which is not a borrow* to a value *)
 val symbolic_expansion_non_borrow_to_value :
@@ -74,13 +74,7 @@ val symbolic_expansion_non_shared_borrow_to_value :
     - [ty = Ref (r, ...)] then we interpret the borrow [l] as belonging to
       region [r] *)
 val apply_proj_borrows :
-  Meta.span ->
-  bool ->
-  eval_ctx ->
-  RegionId.Set.t ->
-  tvalue ->
-  rty ->
-  typed_avalue
+  Meta.span -> bool -> eval_ctx -> RegionId.Set.t -> tvalue -> rty -> tavalue
 
 (** Parameters:
     - [config]
@@ -90,9 +84,4 @@ val apply_proj_borrows :
     - [ty]: the type (with regions) to use for the projection (shouldn't have
       erased regions) *)
 val apply_proj_borrows_on_input_value :
-  Meta.span ->
-  eval_ctx ->
-  RegionId.Set.t ->
-  tvalue ->
-  rty ->
-  eval_ctx * typed_avalue
+  Meta.span -> eval_ctx -> RegionId.Set.t -> tvalue -> rty -> eval_ctx * tavalue

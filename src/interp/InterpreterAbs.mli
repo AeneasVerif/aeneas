@@ -42,11 +42,11 @@ type merge_duplicates_funcs = {
     borrow_id ->
     rty ->
     proj_marker ->
-    typed_avalue ->
+    tavalue ->
     rty ->
     proj_marker ->
-    typed_avalue ->
-    typed_avalue;
+    tavalue ->
+    tavalue;
       (** Parameters:
           - [id]
           - [ty0]
@@ -65,7 +65,7 @@ type merge_duplicates_funcs = {
     rty ->
     proj_marker ->
     shared_borrow_id ->
-    typed_avalue;
+    tavalue;
       (** Parameters:
           - [id]
           - [ty0]
@@ -78,11 +78,11 @@ type merge_duplicates_funcs = {
     loan_id ->
     rty ->
     proj_marker ->
-    typed_avalue ->
+    tavalue ->
     rty ->
     proj_marker ->
-    typed_avalue ->
-    typed_avalue;
+    tavalue ->
+    tavalue;
       (** Parameters:
           - [id]
           - [ty0]
@@ -98,12 +98,12 @@ type merge_duplicates_funcs = {
     rty ->
     proj_marker ->
     tvalue ->
-    typed_avalue ->
+    tavalue ->
     rty ->
     proj_marker ->
     tvalue ->
-    typed_avalue ->
-    typed_avalue;
+    tavalue ->
+    tavalue;
       (** Parameters:
           - [ids]
           - [ty0]
@@ -121,7 +121,7 @@ type merge_duplicates_funcs = {
     ty ->
     proj_marker ->
     aproj_borrows ->
-    typed_avalue;
+    tavalue;
       (** Parameters:
           - [ty0]
           - [pm0]
@@ -138,7 +138,7 @@ type merge_duplicates_funcs = {
     ty ->
     proj_marker ->
     aproj_loans ->
-    typed_avalue;
+    tavalue;
       (** Parameters:
           - [ty0]
           - [pm0]

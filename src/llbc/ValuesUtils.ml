@@ -20,8 +20,7 @@ let mk_tvalue (span : Meta.span) (ty : ty) (value : value) : tvalue =
   [%sanity_check] span (ty_is_ety ty);
   { value; ty }
 
-let mk_typed_avalue (span : Meta.span) (ty : ty) (value : avalue) : typed_avalue
-    =
+let mk_tavalue (span : Meta.span) (ty : ty) (value : avalue) : tavalue =
   [%sanity_check] span (ty_is_rty ty);
   { value; ty }
 
@@ -29,12 +28,11 @@ let mk_bottom (span : Meta.span) (ty : ty) : tvalue =
   [%sanity_check] span (ty_is_ety ty);
   { value = VBottom; ty }
 
-let mk_abottom (span : Meta.span) (ty : ty) : typed_avalue =
+let mk_abottom (span : Meta.span) (ty : ty) : tavalue =
   [%sanity_check] span (ty_is_rty ty);
   { value = ABottom; ty }
 
-let mk_aignored (span : Meta.span) (ty : ty) (v : tvalue option) : typed_avalue
-    =
+let mk_aignored (span : Meta.span) (ty : ty) (v : tvalue option) : tavalue =
   [%sanity_check] span (ty_is_rty ty);
   { value = AIgnored v; ty }
 

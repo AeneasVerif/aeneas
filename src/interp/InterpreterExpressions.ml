@@ -248,7 +248,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
         in
         let updated_sv = mk_fresh_symbolic_value span ty in
         let copied_sv = mk_fresh_symbolic_value span ty in
-        let mk_abs (r_id : RegionId.id) (avalues : typed_avalue list) : abs =
+        let mk_abs (r_id : RegionId.id) (avalues : tavalue list) : abs =
           let abs =
             {
               abs_id = fresh_abstraction_id ();
@@ -268,7 +268,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
         let abs =
           List.map
             (fun rid ->
-              let mk_proj (is_borrows : bool) sv_id : typed_avalue =
+              let mk_proj (is_borrows : bool) sv_id : tavalue =
                 let proj : symbolic_proj = { sv_id; proj_ty = ty } in
                 let proj =
                   if is_borrows then AProjBorrows { proj; loans = [] }

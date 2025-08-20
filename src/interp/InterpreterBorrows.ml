@@ -143,7 +143,7 @@ let end_borrow_get_borrow (span : Meta.span)
             let souter = update_outer_borrow outer (SharedLoan bid) in
             let v = super#visit_tvalue souter v in
             (* Explore the child avalue - we keep the same outer borrows *)
-            let av = super#visit_typed_avalue outer av in
+            let av = super#visit_tavalue outer av in
             (* Reconstruct *)
             ALoan (ASharedLoan (pm, bid, v, av))
         | AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
@@ -262,8 +262,8 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : tvalue)
       inherit [_] map_eval_ctx as super
 
       (** This is a bit annoying, but as we need the type of the value we are
-          exploring, for sanity checks, we need to implement
-          {!visit_typed_avalue} instead of overriding {!visit_ALoan} *)
+          exploring, for sanity checks, we need to implement {!visit_tavalue}
+          instead of overriding {!visit_ALoan} *)
       method! visit_tvalue opt_abs (v : tvalue) : tvalue =
         match v.value with
         | VLoan lc ->
@@ -294,16 +294,16 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : tvalue)
 
       (** This is a bit annoying, but as we need the type of the avalue we are
           exploring, in order to be able to project the value we give back, we
-          need to reimplement {!visit_typed_avalue} instead of {!visit_ALoan} *)
-      method! visit_typed_avalue opt_abs (av : typed_avalue) : typed_avalue =
+          need to reimplement {!visit_tavalue} instead of {!visit_ALoan} *)
+      method! visit_tavalue opt_abs (av : tavalue) : tavalue =
         match av.value with
         | ALoan lc ->
             let value = self#visit_typed_ALoan opt_abs av.ty lc in
-            ({ av with value } : typed_avalue)
+            ({ av with value } : tavalue)
         | ABorrow bc ->
             let value = self#visit_typed_ABorrow opt_abs av.ty bc in
-            ({ av with value } : typed_avalue)
-        | _ -> super#visit_typed_avalue opt_abs av
+            ({ av with value } : tavalue)
+        | _ -> super#visit_tavalue opt_abs av
 
       (** We need to inspect ignored mutable borrows, to insert loan projectors
           if necessary. *)
@@ -329,7 +329,7 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : tvalue)
                       sv ty
                   in
                   (* Continue giving back in the child value *)
-                  let child = super#visit_typed_avalue opt_abs child in
+                  let child = super#visit_tavalue opt_abs child in
                   (* Return *)
                   ABorrow
                     (AEndedIgnoredMutBorrow
@@ -353,7 +353,7 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : tvalue)
           | Some abs -> abs.regions.owned
         in
         (* Rk.: there is a small issue with the types of the aloan values.
-         * See the comment at the level of definition of {!typed_avalue} *)
+         * See the comment at the level of definition of {!tavalue} *)
         let borrowed_value_aty =
           let _, ty, _ = ty_get_ref ty in
           ty
@@ -375,7 +375,7 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : tvalue)
                   borrowed_value_aty
               in
               (* Continue giving back in the child value *)
-              let child = super#visit_typed_avalue opt_abs child in
+              let child = super#visit_tavalue opt_abs child in
               (* Return the new value *)
               ALoan (AEndedMutLoan { child; given_back; given_back_meta }))
             else (* Continue exploring *)
@@ -403,7 +403,7 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : tvalue)
                   borrowed_value_aty
               in
               (* Continue giving back in the child value *)
-              let child = super#visit_typed_avalue opt_abs child in
+              let child = super#visit_tavalue opt_abs child in
               ALoan
                 (AEndedIgnoredMutLoan { given_back; child; given_back_meta })
             else super#visit_ALoan opt_abs lc
@@ -557,7 +557,7 @@ let give_back_symbolic_value (_config : config) (span : Meta.span)
     convert the {!avalue} to a {!type:value} by introducing the proper symbolic
     values. *)
 let give_back_avalue_to_same_abstraction (_config : config) (span : Meta.span)
-    (bid : BorrowId.id) (nv : typed_avalue) (nsv : tvalue) (ctx : eval_ctx) :
+    (bid : BorrowId.id) (nv : tavalue) (nsv : tvalue) (ctx : eval_ctx) :
     eval_ctx =
   (* We use a reference to check that we updated exactly one loan *)
   let replaced : bool ref = ref false in
@@ -571,16 +571,16 @@ let give_back_avalue_to_same_abstraction (_config : config) (span : Meta.span)
 
       (** This is a bit annoying, but as we need the type of the avalue we are
           exploring, in order to be able to project the value we give back, we
-          need to reimplement {!visit_typed_avalue} instead of {!visit_ALoan}.
+          need to reimplement {!visit_tavalue} instead of {!visit_ALoan}.
 
           TODO: it is possible to do this by remembering the type of the last
           typed avalue we entered. *)
-      method! visit_typed_avalue opt_abs (av : typed_avalue) : typed_avalue =
+      method! visit_tavalue opt_abs (av : tavalue) : tavalue =
         match av.value with
         | ALoan lc ->
             let value = self#visit_typed_ALoan opt_abs av.ty lc in
-            ({ av with value } : typed_avalue)
-        | _ -> super#visit_typed_avalue opt_abs av
+            ({ av with value } : tavalue)
+        | _ -> super#visit_tavalue opt_abs av
 
       (** We are not specializing an already existing method, but adding a new
           method (for projections, we need type information).
@@ -596,7 +596,7 @@ let give_back_avalue_to_same_abstraction (_config : config) (span : Meta.span)
               (* Sanity check - about why we need to call {!ty_get_ref}
                * (and don't do the same thing as in {!give_back_value})
                * see the comment at the level of the definition of
-               * {!typed_avalue} *)
+               * {!tavalue} *)
               let _, expected_ty, _ = ty_get_ref ty in
               if nv.ty <> expected_ty then
                 [%craise] span
@@ -666,7 +666,7 @@ let give_back_avalue_to_same_abstraction (_config : config) (span : Meta.span)
     should be ⊥. In practice, we will give back a symbolic value which can't be
     expanded (because expanding this symbolic value would require expanding a
     reference whose region has already ended). *)
-let convert_avalue_to_given_back_value (span : Meta.span) (av : typed_avalue) :
+let convert_avalue_to_given_back_value (span : Meta.span) (av : tavalue) :
     symbolic_value =
   mk_fresh_symbolic_value span av.ty
 
@@ -1705,8 +1705,8 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
   *)
   let push_fail _ = [%craise] span "Unreachable" in
   (* Function to explore an avalue and destructure it *)
-  let rec list_avalues (allow_borrows : bool) (push : typed_avalue -> unit)
-      (av : typed_avalue) : unit =
+  let rec list_avalues (allow_borrows : bool) (push : tavalue -> unit)
+      (av : tavalue) : unit =
     let ty = av.ty in
     match av.value with
     | ABottom | AIgnored _ -> ()
@@ -1856,7 +1856,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
             (* Just ignore *)
             ()
         | AEmpty -> ())
-  and list_values (v : tvalue) : typed_avalue list * tvalue =
+  and list_values (v : tvalue) : tavalue list * tvalue =
     let ty = v.ty in
     match v.value with
     | VLiteral _ -> ([], v)
@@ -1879,14 +1879,14 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
               (* Rem.: the shared value can't contain loans nor borrows *)
               [%cassert] span (ty_no_regions ty)
                 "Nested borrows are not supported yet";
-              let av : typed_avalue =
+              let av : tavalue =
                 [%sanity_check] span
                   (not (value_has_loans_or_borrows (Some span) ctx sv.value));
                 (* We introduce fresh ids for the symbolic values *)
                 let mk_value_with_fresh_sids (v : tvalue) : tvalue =
                   let visitor =
                     object
-                      inherit [_] map_typed_avalue
+                      inherit [_] map_tavalue
 
                       method! visit_symbolic_value_id _ _ =
                         fresh_symbolic_value_id ()

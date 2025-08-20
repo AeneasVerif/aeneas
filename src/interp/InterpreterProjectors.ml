@@ -89,7 +89,7 @@ let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
 
 let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
     (ctx : eval_ctx) (regions : RegionId.Set.t) (v : tvalue) (ty : rty) :
-    typed_avalue =
+    tavalue =
   (* Sanity check - TODO: move this elsewhere (here we perform the check at every
    * recursive call which is a bit overkill...) *)
   let ety = Substitute.erase_regions ty in
@@ -257,7 +257,7 @@ let symbolic_expansion_non_shared_borrow_to_value (span : Meta.span)
     TODO: detailed comments. See [apply_proj_borrows] *)
 let apply_proj_loans_on_symbolic_expansion (span : Meta.span)
     (regions : RegionId.Set.t) (see : symbolic_expansion) (original_sv_ty : rty)
-    (proj_ty : rty) (ctx : eval_ctx) : typed_avalue =
+    (proj_ty : rty) (ctx : eval_ctx) : tavalue =
   (* Sanity check: if we have a proj_loans over a symbolic value, it should
    * contain regions which we will project *)
   [%sanity_check] span (ty_has_regions_in_set regions original_sv_ty);
@@ -321,8 +321,7 @@ let apply_proj_loans_on_symbolic_expansion (span : Meta.span)
 
 (** [ty] shouldn't have erased regions *)
 let apply_proj_borrows_on_input_value (span : Meta.span) (ctx : eval_ctx)
-    (regions : RegionId.Set.t) (v : tvalue) (ty : rty) : eval_ctx * typed_avalue
-    =
+    (regions : RegionId.Set.t) (v : tvalue) (ty : rty) : eval_ctx * tavalue =
   [%sanity_check] span (ty_is_rty ty);
   let check_symbolic_no_ended = true in
   (* Apply the projector *)

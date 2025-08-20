@@ -140,7 +140,7 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
     let abs = ctx_lookup_abs fp_ctx abs_id in
     [%ltrace "checking abs:\n" ^ abs_to_string span ctx abs];
 
-    let is_borrow (av : typed_avalue) : bool =
+    let is_borrow (av : tavalue) : bool =
       match av.value with
       | ABorrow _ | ASymbolic (_, AProjBorrows _) -> true
       | ALoan _ | ASymbolic (_, AProjLoans _) -> false
@@ -150,7 +150,7 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
 
     let mut_borrows =
       List.filter_map
-        (fun (av : typed_avalue) ->
+        (fun (av : tavalue) ->
           match av.value with
           | ABorrow (AMutBorrow (pm, bid, child_av)) ->
               [%sanity_check] span (pm = PNone);
@@ -166,7 +166,7 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
 
     let borrow_projs =
       List.filter_map
-        (fun (av : typed_avalue) ->
+        (fun (av : tavalue) ->
           match av.value with
           | ASymbolic (pm, AProjBorrows { proj; loans }) ->
               [%sanity_check] span (pm = PNone);
@@ -178,7 +178,7 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
 
     let mut_loans =
       List.filter_map
-        (fun (av : typed_avalue) ->
+        (fun (av : tavalue) ->
           match av.value with
           | ALoan (AMutLoan (pm, bid, child_av)) ->
               [%sanity_check] span (pm = PNone);
@@ -194,7 +194,7 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
 
     let loan_projs =
       List.filter_map
-        (fun (av : typed_avalue) ->
+        (fun (av : tavalue) ->
           match av.value with
           | ASymbolic (pm, AProjLoans { proj; consumed; borrows }) ->
               [%sanity_check] span (pm = PNone);
@@ -365,7 +365,7 @@ let eval_loop_symbolic (config : config) (span : span)
       let abs = ctx_lookup_abs fp_ctx abs_id in
       [%ltrace "- abs:\n" ^ abs_to_string span ~with_ended:true ctx abs];
 
-      let is_borrow (av : typed_avalue) : bool =
+      let is_borrow (av : tavalue) : bool =
         match av.value with
         | ABorrow _ | ASymbolic (_, AProjBorrows _) -> true
         | ALoan _ | ASymbolic (_, AProjLoans _) -> false
@@ -374,7 +374,7 @@ let eval_loop_symbolic (config : config) (span : span)
       let borrows, _ = List.partition is_borrow abs.avalues in
 
       List.filter_map
-        (fun (av : typed_avalue) ->
+        (fun (av : tavalue) ->
           SymbolicToPureTypes.translate_back_ty (Some span)
             ctx.type_ctx.type_infos
             (function

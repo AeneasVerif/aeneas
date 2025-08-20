@@ -113,12 +113,12 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
     (* Create the shared loan *)
     let loan_rty = TRef (RVar (Free nrid), rty, RShared) in
     let loan_value = ALoan (ASharedLoan (PNone, nlid, nsv, child_av)) in
-    let loan_value = mk_typed_avalue span loan_rty loan_value in
+    let loan_value = mk_tavalue span loan_rty loan_value in
 
     (* Create the shared borrow *)
     let borrow_rty = loan_rty in
     let borrow_value = ABorrow (ASharedBorrow (PNone, lid, sid)) in
-    let borrow_value = mk_typed_avalue span borrow_rty borrow_value in
+    let borrow_value = mk_tavalue span borrow_rty borrow_value in
 
     (* Create the abstraction *)
     let avalues = [ borrow_value; loan_value ] in
@@ -878,7 +878,7 @@ let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
 
         method! visit_ASharedLoan register _ _ sv child_av =
           self#visit_tvalue true sv;
-          self#visit_typed_avalue register child_av
+          self#visit_tavalue register child_av
 
         method! visit_AProjLoans register proj =
           let { proj = { sv_id; proj_ty }; consumed; borrows } : aproj_loans =

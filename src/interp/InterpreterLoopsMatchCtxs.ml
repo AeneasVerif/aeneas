@@ -123,7 +123,7 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
 
   let explore_abs =
     object (self : 'self)
-      inherit [_] iter_typed_avalue as super
+      inherit [_] iter_tavalue as super
 
       (** Make sure we don't register the ignored ids *)
       method! visit_aloan_content (abs, pm) lc =
@@ -133,19 +133,19 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
             (* Add the current marker when visiting the loan id *)
             self#visit_loan_id (abs, npm) lid;
             (* Recurse with the old marker *)
-            super#visit_typed_avalue (abs, pm) child
+            super#visit_tavalue (abs, pm) child
         | ASharedLoan (npm, lid, sv, child) ->
             (* Add the current marker when visiting the loan ids and the shared value *)
             self#visit_loan_id (abs, npm) lid;
             self#visit_tvalue (abs, npm) sv;
             (* Recurse with the old marker *)
-            self#visit_typed_avalue (abs, pm) child
+            self#visit_tavalue (abs, pm) child
         | AIgnoredMutLoan (_, child)
         | AEndedIgnoredMutLoan { child; given_back = _; given_back_meta = _ }
         | AIgnoredSharedLoan child ->
             [%sanity_check] span (pm = PNone);
             (* Ignore the id of the loan, if there is *)
-            self#visit_typed_avalue (abs, pm) child
+            self#visit_tavalue (abs, pm) child
         | AEndedMutLoan _ | AEndedSharedLoan _ -> [%craise] span "Unreachable"
 
       (** Make sure we don't register the ignored ids *)
@@ -156,7 +156,7 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
             (* Add the current marker when visiting the borrow id *)
             register_borrow_id abs npm bid None;
             (* Recurse with the old marker *)
-            self#visit_typed_avalue (abs, pm) child
+            self#visit_tavalue (abs, pm) child
         | ASharedBorrow (npm, bid, sid) ->
             (* Add the current marker when visiting the borrow id *)
             register_borrow_id abs npm bid (Some sid)
@@ -169,7 +169,7 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
           ->
             [%sanity_check] span (pm = PNone);
             (* Ignore the id of the borrow, if there is *)
-            self#visit_typed_avalue (abs, pm) child
+            self#visit_tavalue (abs, pm) child
         | AEndedMutBorrow _ | AEndedSharedBorrow -> [%craise] span "Unreachable"
 
       method! visit_borrow_id _ _ = [%internal_error] span
@@ -206,7 +206,7 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
         abs_to_loans :=
           AbstractionId.Map.add abs.abs_id MarkedLoanId.Set.empty !abs_to_loans;
         abs_ids := abs.abs_id :: !abs_ids;
-        List.iter (explore_abs#visit_typed_avalue (abs, PNone)) abs.avalues)
+        List.iter (explore_abs#visit_tavalue (abs, PNone)) abs.avalues)
       else ())
     env;
 
@@ -394,13 +394,13 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
           ^ tvalue_to_string ~span:(Some M.span) ctx1 v1];
         [%internal_error] M.span
 
-  and match_typed_avalues (ctx0 : eval_ctx) (ctx1 : eval_ctx)
-      (v0 : typed_avalue) (v1 : typed_avalue) : typed_avalue =
+  and match_tavalues (ctx0 : eval_ctx) (ctx1 : eval_ctx) (v0 : tavalue)
+      (v1 : tavalue) : tavalue =
     [%ltrace
       "- value0: "
-      ^ typed_avalue_to_string ~span:(Some M.span) ctx0 v0
+      ^ tavalue_to_string ~span:(Some M.span) ctx0 v0
       ^ "\n- value1: "
-      ^ typed_avalue_to_string ~span:(Some M.span) ctx1 v1];
+      ^ tavalue_to_string ~span:(Some M.span) ctx1 v1];
 
     (* Using ValuesUtils.value_has_borrows on purpose here: we want
        to make explicit the fact that, though we have to pick
@@ -411,7 +411,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
     in
 
     let match_rec = match_tvalues ctx0 ctx1 in
-    let match_arec = match_typed_avalues ctx0 ctx1 in
+    let match_arec = match_tavalues ctx0 ctx1 in
     let ty = M.match_rtys ctx0 ctx1 v0.ty v1.ty in
     match (v0.value, v1.value) with
     | AAdt av0, AAdt av1 ->
@@ -592,7 +592,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
       (* Generate the avalues for the abstraction *)
       let mk_aborrow (pm : proj_marker) (bid : borrow_id)
-          (sid : shared_borrow_id) : typed_avalue =
+          (sid : shared_borrow_id) : tavalue =
         let value = ABorrow (ASharedBorrow (pm, bid, sid)) in
         { value; ty = borrow_ty }
       in
@@ -602,7 +602,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
       let loan = ASharedLoan (PNone, bid2, sv, mk_aignored span bv_ty None) in
       (* Note that an aloan has a borrow type *)
-      let loan : typed_avalue = { value = ALoan loan; ty = borrow_ty } in
+      let loan : tavalue = { value = ALoan loan; ty = borrow_ty } in
 
       let avalues = List.append borrows [ loan ] in
 
@@ -711,7 +711,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           let value =
             ABorrow (AMutBorrow (PNone, bid0, mk_aignored span bv_ty None))
           in
-          mk_typed_avalue span ty value
+          mk_tavalue span ty value
         in
 
         let loan_av =
@@ -719,7 +719,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           let value =
             ALoan (AMutLoan (PNone, nbid, mk_aignored span bv_ty None))
           in
-          mk_typed_avalue span ty value
+          mk_tavalue span ty value
         in
 
         let avalues = [ borrow_av; loan_av ] in
@@ -759,7 +759,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
       (* Generate the avalues for the abstraction *)
       let mk_aborrow (pm : proj_marker) (bid : borrow_id) (bv : tvalue) :
-          typed_avalue =
+          tavalue =
         let bv_ty = bv.ty in
         [%cassert] span (ty_no_regions bv_ty)
           "Nested borrows are not supported yet";
@@ -772,7 +772,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
       let loan = AMutLoan (PNone, bid2, mk_aignored span bv_ty None) in
       (* Note that an aloan has a borrow type *)
-      let loan : typed_avalue = { value = ALoan loan; ty = borrow_ty } in
+      let loan : tavalue = { value = ALoan loan; ty = borrow_ty } in
 
       let avalues = List.append borrows [ loan ] in
 
@@ -1373,7 +1373,7 @@ struct
     [%ldebug
       "- id0: " ^ BorrowId.to_string id0 ^ "\n- id1: " ^ BorrowId.to_string id1
       ^ "\n- ty: " ^ ty_to_string ctx0 ty ^ "\n- av: "
-      ^ typed_avalue_to_string ~span:(Some span) ctx1 av];
+      ^ tavalue_to_string ~span:(Some span) ctx1 av];
 
     let id = match_loan_id id0 id1 in
     let value = ALoan (AMutLoan (PNone, id, av)) in
@@ -1421,9 +1421,9 @@ struct
       v1 =
     [%ldebug
       "avalues don't match:\n- v0: "
-      ^ typed_avalue_to_string ~span:(Some span) ctx0 v0
+      ^ tavalue_to_string ~span:(Some span) ctx0 v0
       ^ "\n- v1: "
-      ^ typed_avalue_to_string ~span:(Some span) ctx1 v1];
+      ^ tavalue_to_string ~span:(Some span) ctx1 v1];
     raise (Distinct "match_avalues")
 end
 
@@ -1558,7 +1558,7 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
           (Distinct "Region abstractions with not the same number of values")
       else
         List.map
-          (fun (v0, v1) -> M.match_typed_avalues ctx0 ctx1 v0 v1)
+          (fun (v0, v1) -> M.match_tavalues ctx0 ctx1 v0 v1)
           (List.combine avalues0 avalues1)
     in
     [%ldebug "match_abstractions: values matched OK"];

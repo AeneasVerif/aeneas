@@ -150,10 +150,10 @@ let env_subst_ids (subst : id_subst) (x : env) : env =
   let vis = subst_ids_visitor subst in
   vis#visit_env () x
 
-let typed_avalue_subst_rids (span : Meta.span)
-    (r_subst : RegionId.id -> RegionId.id) (x : typed_avalue) : typed_avalue =
+let tavalue_subst_rids (span : Meta.span) (r_subst : RegionId.id -> RegionId.id)
+    (x : tavalue) : tavalue =
   let vis = subst_ids_visitor { (no_abs_id_subst span) with r_subst } in
-  vis#visit_typed_avalue () x
+  vis#visit_tavalue () x
 
 let env_subst_rids (r_subst : RegionId.id -> RegionId.id) (x : env) : env =
   let vis = subst_ids_visitor { empty_id_subst with r_subst } in

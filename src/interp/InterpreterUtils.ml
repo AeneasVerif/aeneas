@@ -27,7 +27,7 @@ let aborrow_content_to_string = Print.EvalCtx.aborrow_content_to_string
 let aloan_content_to_string = Print.EvalCtx.aloan_content_to_string
 let aproj_to_string = Print.EvalCtx.aproj_to_string
 let tvalue_to_string = Print.EvalCtx.tvalue_to_string
-let typed_avalue_to_string = Print.EvalCtx.typed_avalue_to_string
+let tavalue_to_string = Print.EvalCtx.tavalue_to_string
 let place_to_string = Print.EvalCtx.place_to_string
 let operand_to_string = Print.EvalCtx.operand_to_string
 let fun_sig_to_string = Print.EvalCtx.fun_sig_to_string
@@ -124,7 +124,7 @@ let mk_fresh_symbolic_tvalue_from_no_regions_ty (span : Meta.span) (ty : ty) :
 
     TODO: update to handle 'static *)
 let mk_aproj_loans_value_from_symbolic_value (proj_regions : RegionId.Set.t)
-    (svalue : symbolic_value) (proj_ty : ty) : typed_avalue =
+    (svalue : symbolic_value) (proj_ty : ty) : tavalue =
   if ty_has_regions_in_set proj_regions proj_ty then
     let av =
       ASymbolic
@@ -136,7 +136,7 @@ let mk_aproj_loans_value_from_symbolic_value (proj_regions : RegionId.Set.t)
               borrows = [];
             } )
     in
-    let av : typed_avalue = { value = av; ty = svalue.sv_ty } in
+    let av : tavalue = { value = av; ty = svalue.sv_ty } in
     av
   else
     {

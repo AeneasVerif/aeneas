@@ -195,8 +195,8 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
   (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
   let call_id = fresh_fun_call_id () in
   [%sanity_check] span (call_id = FunCallId.zero);
-  let compute_abs_avalues (abs : abs) (ctx : eval_ctx) :
-      eval_ctx * typed_avalue list =
+  let compute_abs_avalues (abs : abs) (ctx : eval_ctx) : eval_ctx * tavalue list
+      =
     (* Project over the values - we use *loan* projectors, as explained above *)
     let avalues =
       List.map
@@ -297,7 +297,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
     if is_regular_return then (
       let ret_value = Option.get ret_value in
       let compute_abs_avalues (abs : abs) (ctx : eval_ctx) :
-          eval_ctx * typed_avalue list =
+          eval_ctx * tavalue list =
         let ctx, avalue =
           apply_proj_borrows_on_input_value span ctx abs.regions.owned ret_value
             ret_rty

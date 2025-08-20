@@ -521,7 +521,7 @@ let create_empty_abstractions_from_abs_region_groups
 let create_push_abstractions_from_abs_region_groups
     (kind : RegionGroupId.id -> abs_kind) (rgl : abs_region_group list)
     (region_can_end : RegionGroupId.id -> bool)
-    (compute_abs_avalues : abs -> eval_ctx -> eval_ctx * typed_avalue list)
+    (compute_abs_avalues : abs -> eval_ctx -> eval_ctx * tavalue list)
     (ctx : eval_ctx) : eval_ctx =
   (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
   let empty_absl =
@@ -1303,8 +1303,8 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
    * First, we define the function which, given an initialized, empty
    * abstraction, computes the avalues which should be inserted inside.
    *)
-  let compute_abs_avalues (abs : abs) (ctx : eval_ctx) :
-      eval_ctx * typed_avalue list =
+  let compute_abs_avalues (abs : abs) (ctx : eval_ctx) : eval_ctx * tavalue list
+      =
     (* Project over the input values *)
     let ctx, args_projs =
       List.fold_left_map

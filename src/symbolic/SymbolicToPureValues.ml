@@ -159,7 +159,7 @@ type borrow_kind = BMut | BShared
     an ended proj loan can contain borrows in one of its children. In this
     situation, we will need to first project the avalues at the proper level,
     before translating them. *)
-type typed_avalue_kind =
+type tavalue_kind =
   | BorrowProj of borrow_kind
       (** The value was produced by a borrow projector (it contains borrows or
           borrow projections).
@@ -176,8 +176,8 @@ type typed_avalue_kind =
       (** No borrows, loans or projections inside the value so we can't know for
           sure *)
 
-let compute_typed_avalue_proj_kind span type_infos
-    (abs_regions : T.RegionId.Set.t) (av : V.typed_avalue) : typed_avalue_kind =
+let compute_tavalue_proj_kind span type_infos (abs_regions : T.RegionId.Set.t)
+    (av : V.tavalue) : tavalue_kind =
   let has_borrows = ref false in
   let has_mut_borrows = ref false in
   let has_loans = ref false in
@@ -189,11 +189,11 @@ let compute_typed_avalue_proj_kind span type_infos
   in
   let visitor =
     object
-      inherit [_] V.iter_typed_avalue as super
+      inherit [_] V.iter_tavalue as super
 
-      method! visit_typed_avalue _ av =
+      method! visit_tavalue _ av =
         (* Remember the type of the current value *)
-        super#visit_typed_avalue av.ty av
+        super#visit_tavalue av.ty av
 
       method! visit_ALoan env lc =
         has_loans := true;
@@ -259,7 +259,7 @@ let compute_typed_avalue_proj_kind span type_infos
             super#visit_ASymbolic ty pm aproj
     end
   in
-  visitor#visit_typed_avalue av.ty av;
+  visitor#visit_tavalue av.ty av;
   [%cassert] span ((not !has_borrows) || not !has_loans) "Unreachable";
   let to_borrow_kind b = if b then BMut else BShared in
   if !has_borrows then BorrowProj (to_borrow_kind !has_mut_borrows)
@@ -281,8 +281,8 @@ let compute_typed_avalue_proj_kind span type_infos
       let ... = choose_back b x y nz in
                                   ^^
     ]} *)
-let rec typed_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
-    (ectx : C.eval_ctx) (abs_regions : T.RegionId.Set.t) (av : V.typed_avalue) :
+let rec tavalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
+    (ectx : C.eval_ctx) (abs_regions : T.RegionId.Set.t) (av : V.tavalue) :
     texpr option =
   let value =
     match av.value with
@@ -319,15 +319,14 @@ let rec typed_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
   value
 
 and adt_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
-    (ectx : C.eval_ctx) (abs_regions : T.RegionId.Set.t) (av : V.typed_avalue)
+    (ectx : C.eval_ctx) (abs_regions : T.RegionId.Set.t) (av : V.tavalue)
     (adt_v : V.adt_avalue) : texpr option =
   (* We do not do the same thing depending on whether we visit a tuple
      or a "regular" ADT *)
   let adt_id, _ = TypesUtils.ty_as_adt av.ty in
   (* Check if the ADT contains borrows *)
   match
-    compute_typed_avalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions
-      av
+    compute_tavalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions av
   with
   | BorrowProj _ -> [%craise] ctx.span "Unreachable"
   | UnknownProj ->
@@ -337,7 +336,7 @@ and adt_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
       else
         let fields =
           List.map
-            (typed_avalue_to_consumed_aux ~filter ctx ectx abs_regions)
+            (tavalue_to_consumed_aux ~filter ctx ectx abs_regions)
             adt_v.field_values
         in
         let fields = List.map Option.get fields in
@@ -361,7 +360,7 @@ and adt_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
           | TBuiltin _ | TAdtId _ -> borrow_kind = BShared
         in
         List.map
-          (typed_avalue_to_consumed_aux ~filter ctx ectx abs_regions)
+          (tavalue_to_consumed_aux ~filter ctx ectx abs_regions)
           adt_v.field_values
       in
       match adt_id with
@@ -474,20 +473,19 @@ and aproj_to_consumed_aux (ctx : bs_ctx) (_abs_regions : T.RegionId.Set.t)
       [%craise] ctx.span "Unreachable"
   | AEmpty | AProjLoans _ | AProjBorrows _ -> [%craise] ctx.span "Unreachable"
 
-let typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
-    (abs_regions : T.RegionId.Set.t) (av : V.typed_avalue) : texpr option =
+let tavalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
+    (abs_regions : T.RegionId.Set.t) (av : V.tavalue) : texpr option =
   (* Check if the value was generated from a loan projector: if yes, and if
      it contains mutable loans, then we generate a consumed value (because
      upon ending the borrow we consumed a value).
      Otherwise we ignore it. *)
-  [%ltrace typed_avalue_to_string ~with_ended:true ectx av];
+  [%ltrace tavalue_to_string ~with_ended:true ectx av];
   match
-    compute_typed_avalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions
-      av
+    compute_tavalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions av
   with
   | LoanProj BMut ->
       [%ltrace "the value contains mutable loan projectors"];
-      typed_avalue_to_consumed_aux ~filter:true ctx ectx abs_regions av
+      tavalue_to_consumed_aux ~filter:true ctx ectx abs_regions av
   | LoanProj BShared | BorrowProj _ | UnknownProj ->
       (* If it is a borrow proj we ignore it. If it is an unknown projection,
          it means the value doesn't contain loans nor borrows, so nothing
@@ -498,14 +496,12 @@ let typed_avalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
 
 (** Convert the abstraction values in an abstraction to consumed values.
 
-    See [typed_avalue_to_consumed_aux]. *)
+    See [tavalue_to_consumed_aux]. *)
 let abs_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs) :
     texpr list =
   [%ltrace abs_to_string ~with_ended:true ctx abs];
   let values =
-    List.filter_map
-      (typed_avalue_to_consumed ctx ectx abs.regions.owned)
-      abs.avalues
+    List.filter_map (tavalue_to_consumed ctx ectx abs.regions.owned) abs.avalues
   in
   [%ltrace
     "- abs: "
@@ -575,8 +571,8 @@ type borrow_or_symbolic_id =
       which gave it back. We need this to compute default values (see
       [bs_ctx.mut_borrow_to_consumed]).
     - the pattern *)
-let rec typed_avalue_to_given_back_aux ~(filter : bool)
-    (abs_regions : T.RegionId.Set.t) (mp : mplace option) (av : V.typed_avalue)
+let rec tavalue_to_given_back_aux ~(filter : bool)
+    (abs_regions : T.RegionId.Set.t) (mp : mplace option) (av : V.tavalue)
     (ctx : bs_ctx) : bs_ctx * tpattern option =
   let (ctx, value) : _ * tpattern option =
     match av.value with
@@ -608,12 +604,11 @@ let rec typed_avalue_to_given_back_aux ~(filter : bool)
   (ctx, value)
 
 and adt_avalue_to_given_back_aux ~(filter : bool)
-    (abs_regions : T.RegionId.Set.t) (av : V.typed_avalue)
-    (adt_v : V.adt_avalue) (ctx : bs_ctx) : bs_ctx * tpattern option =
+    (abs_regions : T.RegionId.Set.t) (av : V.tavalue) (adt_v : V.adt_avalue)
+    (ctx : bs_ctx) : bs_ctx * tpattern option =
   (* Check if the ADT contains borrows *)
   match
-    compute_typed_avalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions
-      av
+    compute_tavalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions av
   with
   | LoanProj _ -> [%craise] ctx.span "Unreachable"
   | UnknownProj ->
@@ -644,7 +639,7 @@ and adt_avalue_to_given_back_aux ~(filter : bool)
         in
         List.fold_left_map
           (fun ctx fv ->
-            typed_avalue_to_given_back_aux ~filter abs_regions mp fv ctx)
+            tavalue_to_given_back_aux ~filter abs_regions mp fv ctx)
           ctx adt_v.field_values
       in
       match adt_id with
@@ -751,19 +746,17 @@ and aproj_to_given_back_aux (mp : mplace option) (aproj : V.aproj) (ty : T.ty)
       (ctx, Some pat)
   | AEmpty | AProjLoans _ | AProjBorrows _ -> [%craise] ctx.span "Unreachable"
 
-let typed_avalue_to_given_back (abs_regions : T.RegionId.Set.t)
-    (mp : mplace option) (v : V.typed_avalue) (ctx : bs_ctx) :
-    bs_ctx * tpattern option =
+let tavalue_to_given_back (abs_regions : T.RegionId.Set.t) (mp : mplace option)
+    (v : V.tavalue) (ctx : bs_ctx) : bs_ctx * tpattern option =
   (* Check if the value was generated from a borrow projector: if yes, and if
      it contains mutable borrows we generate a given back pattern (because
      upon ending the borrow the abstraction gave back a value).
      Otherwise we ignore it. *)
   match
-    compute_typed_avalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions
-      v
+    compute_tavalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions v
   with
   | BorrowProj BMut ->
-      typed_avalue_to_given_back_aux abs_regions mp ~filter:true v ctx
+      tavalue_to_given_back_aux abs_regions mp ~filter:true v ctx
   | BorrowProj BShared | LoanProj _ | UnknownProj ->
       (* If it is a loan proj we ignore it. If it is an unknown projection,
          it means the value doesn't contain loans nor borrows, so nothing
@@ -772,7 +765,7 @@ let typed_avalue_to_given_back (abs_regions : T.RegionId.Set.t)
 
 (** Convert the abstraction values in an abstraction to given back values.
 
-    See [typed_avalue_to_given_back]. *)
+    See [tavalue_to_given_back]. *)
 let abs_to_given_back (mpl : mplace option list option) (abs : V.abs)
     (ctx : bs_ctx) : bs_ctx * tpattern list =
   let avalues =
@@ -782,8 +775,7 @@ let abs_to_given_back (mpl : mplace option list option) (abs : V.abs)
   in
   let ctx, values =
     List.fold_left_map
-      (fun ctx (mp, av) ->
-        typed_avalue_to_given_back abs.regions.owned mp av ctx)
+      (fun ctx (mp, av) -> tavalue_to_given_back abs.regions.owned mp av ctx)
       ctx avalues
   in
   let values = List.filter_map (fun x -> x) values in

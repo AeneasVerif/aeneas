@@ -183,7 +183,7 @@ module type PrimMatcher = sig
     rty ->
     adt_avalue ->
     rty ->
-    typed_avalue
+    tavalue
 
   (** Parameters:
       - [match_values]
@@ -209,7 +209,7 @@ module type PrimMatcher = sig
     borrow_id ->
     shared_borrow_id ->
     rty ->
-    typed_avalue
+    tavalue
 
   (** Parameters:
       - [match_values]
@@ -232,14 +232,14 @@ module type PrimMatcher = sig
     rty ->
     proj_marker ->
     borrow_id ->
-    typed_avalue ->
+    tavalue ->
     rty ->
     proj_marker ->
     borrow_id ->
-    typed_avalue ->
+    tavalue ->
     rty ->
-    typed_avalue ->
-    typed_avalue
+    tavalue ->
+    tavalue
 
   (** Parameters:
       - [match_values]
@@ -266,16 +266,16 @@ module type PrimMatcher = sig
     proj_marker ->
     loan_id ->
     tvalue ->
-    typed_avalue ->
+    tavalue ->
     rty ->
     proj_marker ->
     loan_id ->
     tvalue ->
-    typed_avalue ->
+    tavalue ->
     rty ->
     tvalue ->
-    typed_avalue ->
-    typed_avalue
+    tavalue ->
+    tavalue
 
   (** Parameters:
       - [match_values]
@@ -298,14 +298,14 @@ module type PrimMatcher = sig
     rty ->
     proj_marker ->
     borrow_id ->
-    typed_avalue ->
+    tavalue ->
     rty ->
     proj_marker ->
     borrow_id ->
-    typed_avalue ->
+    tavalue ->
     rty ->
-    typed_avalue ->
-    typed_avalue
+    tavalue ->
+    tavalue
 
   (** Parameters:
       - [match_values]
@@ -331,7 +331,7 @@ module type PrimMatcher = sig
     aproj_borrows ->
     rty ->
     rty ->
-    typed_avalue
+    tavalue
 
   (** Parameters:
       - [match_values]
@@ -357,17 +357,12 @@ module type PrimMatcher = sig
     aproj_loans ->
     rty ->
     rty ->
-    typed_avalue
+    tavalue
 
   (** Match two arbitrary avalues whose constructors don't match (this function
       is typically used to raise the proper exception). *)
   val match_avalues :
-    tvalue_matcher ->
-    eval_ctx ->
-    eval_ctx ->
-    typed_avalue ->
-    typed_avalue ->
-    typed_avalue
+    tvalue_matcher -> eval_ctx -> eval_ctx -> tavalue -> tavalue -> tavalue
 end
 
 module type Matcher = sig
@@ -383,8 +378,7 @@ module type Matcher = sig
 
       Rem.: this function raises exceptions of type
       {!Aeneas.InterpreterLoopsCore.ValueMatchFailure}. *)
-  val match_typed_avalues :
-    eval_ctx -> eval_ctx -> typed_avalue -> typed_avalue -> typed_avalue
+  val match_tavalues : eval_ctx -> eval_ctx -> tavalue -> tavalue -> tavalue
 end
 
 (** See {!module:InterpreterLoopsMatchCtxs.MakeCheckEquivMatcher} and
@@ -576,11 +570,11 @@ let ids_sets_empty_borrows_loans (ids : ids_sets) : ids_sets =
 
 (** Small utility: add a projection marker to a typed avalue. This can be used
     in combination with List.map to add markers to an entire abstraction *)
-let typed_avalue_add_marker (span : Meta.span) (ctx : eval_ctx)
-    (pm : proj_marker) (av : typed_avalue) : typed_avalue =
+let tavalue_add_marker (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
+    (av : tavalue) : tavalue =
   let obj =
     object
-      inherit [_] map_typed_avalue as super
+      inherit [_] map_tavalue as super
       method! visit_borrow_content _ _ = [%craise] span "Unexpected borrow"
       method! visit_loan_content _ _ = [%craise] span "Unexpected loan"
 
@@ -615,13 +609,10 @@ let typed_avalue_add_marker (span : Meta.span) (ctx : eval_ctx)
         | _ -> [%internal_error] span
     end
   in
-  obj#visit_typed_avalue () av
+  obj#visit_tavalue () av
 
 (** Small utility: add a projection marker to an abstraction. This can be used
     in combination with List.map to add markers to an entire abstraction *)
 let abs_add_marker (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
     (abs : abs) : abs =
-  {
-    abs with
-    avalues = List.map (typed_avalue_add_marker span ctx pm) abs.avalues;
-  }
+  { abs with avalues = List.map (tavalue_add_marker span ctx pm) abs.avalues }
