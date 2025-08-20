@@ -12,7 +12,7 @@ elab "analyze_loop" : tactic => do
   trace[Inv] "{tgt}"
   -- Dive into the loop
   let args := tgt.consumeMData.getAppArgs
-  if args.size ≠ 2 then throwError "Expected one argument, got: {args.size}"
+  if args.size ≠ 2 then throwError "Expected two arguments, got: {args}"
   let body := args[1]!
   -- Dive into the lambdas
   Meta.lambdaTelescope body.consumeMData fun inputs body => do
@@ -28,9 +28,38 @@ elab "analyze_loop" : tactic => do
   trace[Inv] "initial state: {state}"
   let (_, state) ← FootprintM.run (footprint.expr true body) state
   trace[Inv] "{state}"
-  let output := analyzeFootprint state.toFootprint
+  pure ()
+
+scoped syntax "analyze_loopiter" : tactic
+
+elab "analyze_loopIter" : tactic => do
+  withMainContext do
+  let tgt ← getMainTarget
+  trace[Inv] "{tgt}"
+  -- Dive into the loop
+  let args := tgt.consumeMData.getAppArgs
+  if args.size ≠ 2 then throwError "Expected two arguments, got: {args}"
+  let body := args[1]!
+  trace[Inv] "{body}"
+  -- Dive into the lambdas
+  Meta.lambdaTelescope body.consumeMData fun inputFVars body => do
+  if inputFVars.size ≠ 2 then throwError "Expected 2 lambdas, got: {inputFVars}"
+  trace[Inv] "inputs: {inputFVars}"
+  let inputs := Std.HashSet.ofArray (inputFVars.map Expr.fvarId!)
+  let fp : Footprint := {
+    inputs,
+    outputs := #[],
+    provenance := Std.HashMap.emptyWithCapacity,
+    footprint := #[],
+  }
+  let state : State := ⟨ fp ⟩
+  trace[Inv] "initial state: {state}"
+  let (_, state) ← FootprintM.run (footprint.expr true body) state
+  trace[Inv] "{state}"
+  let output := analyzeFootprint state.toFootprint inputFVars[1]!.fvarId!
   trace[Inv] "Analyzed output:\n{output}"
   pure ()
+
 
 def loop (_ : α) : Prop := True
 
@@ -62,7 +91,7 @@ example : loopIter (fun i (xy : Array Nat × Array Nat) =>
   let x := xy.fst
   let y := xy.snd
   (x.set! i x[i]!, y.set! i x[i]!)) := by
-  analyze_loop
+  analyze_loopIter
   simp [loopIter]
 
 -- Tuple with 2 elements
@@ -70,7 +99,7 @@ set_option trace.Inv true in
 example : loopIter (fun i (xy : Array Nat × Array Nat) =>
   let (x, y) := xy
   (x.set! i x[i]!, y)) := by
-  analyze_loop
+  analyze_loopIter
   simp [loopIter]
 
 -- Tuple with 2 elements: checking that the constructor is handled properly
@@ -80,7 +109,7 @@ example : loopIter (fun i (xy : Array Nat × Array Nat) =>
   let xy := (x, y)
   let (x, y) := xy
   (x.set! i x[i]!, y)) := by
-  analyze_loop
+  analyze_loopIter
   simp [loopIter]
 
 -- `MProd` with 2 elements: checking that the constructor is handled properly
@@ -88,7 +117,7 @@ set_option trace.Inv true in
 example : loopIter (fun i (xy : MProd (Array Nat) (Array Nat)) =>
   let ⟨ x, y ⟩ := xy
   ⟨ x.set! i x[i]!, y ⟩) := by
-  analyze_loop
+  analyze_loopIter
   simp [loopIter]
 
 -- Tuple with 3 elements (make sure the handling of tuples is general)
@@ -96,7 +125,7 @@ set_option trace.Inv true in
 example : loopIter (fun i (xyz : Array Nat × Array Nat × Array Nat) =>
   let (x, y, z) := xyz
   (x.set! i x[i]!, y, z)) := by
-  analyze_loop
+  analyze_loopIter
   simp [loopIter]
 
 inductive Either (α β : Type)
@@ -120,7 +149,7 @@ example : loopIter (fun i (state : Array Nat × Array Nat) =>
   let src' := src.set! i 0
   let dst := dst.set! i a
   (src', dst)) := by
-  analyze_loop
+  analyze_loopIter
   simp [loopIter]
 
 -- Basic operations: 2 * i, 2 * i + 1
@@ -134,7 +163,7 @@ example : loopIter (fun i (state : Array Nat × Array Nat) =>
   let dst := dst.set! (2 * i) a
   let dst := dst.set! (2 * i + 1) b
   (src, dst)) := by
-  analyze_loop
+  analyze_loopIter
   simp [loopIter]
 
 -- We are not limited to `Nat`: the following loop uses `Fin`
@@ -149,16 +178,16 @@ example : loop (fun (i : Fin 32) (state : Array Nat × Array Nat) =>
   let dst := dst.set! (2 * j) a
   let dst := dst.set! (2 * j + 1) b
   (src, dst)) := by
-  analyze_loop
+  analyze_loopIter
   simp [loop]
 
 -- Monadic binds: state has one array
 set_option trace.Inv true in
-example : loop (fun (i : Nat) (a : Array Nat) => Id.run do
+example : loopIter (fun (i : Nat) (a : Array Nat) => Id.run do
   let a ← a.set! i 0
   pure a) := by
-  analyze_loop
-  simp [loop]
+  analyze_loopIter
+  simp [loopIter]
 
 -- Monadic bind: state is a tuple of arrays
 set_option trace.Inv true in
@@ -172,7 +201,7 @@ example : loop (fun (i : Fin 32) (state : Array Nat × Array Nat) => Id.run do
   let dst ← dst.set! (2 * j) a
   let dst ← dst.set! (2 * j + 1) b
   pure (src, dst)) := by
-  analyze_loop
+  analyze_loopIter
   simp [loop]
 
 end Aeneas.Inv.Test

@@ -1042,7 +1042,9 @@ end
     where `a(i)` is a constant, and `f(i)` is a free variable).
   -/
 structure LinArithExpr where
-  coefs : Std.HashMap FVarId Nat -- TODO: don't use a HashMap
+  -- TODO: don't use a HashMap
+  -- TODO: allow using projections over inputs
+  coefs : Std.HashMap FVarId Nat
   const : Nat
 
 instance : BEq LinArithExpr where -- TODO: I don't like that
@@ -1065,7 +1067,7 @@ def LinArithExpr.toMessageData (e : LinArithExpr) : MessageData := Id.run do
   else
     let mut s := coefs[0]!
     for i in [1:coefs.size] do
-      s := s ++ coefs[i]!
+      s := s ++ m!" + {coefs[i]!}"
     pure s
 
 instance : ToMessageData LinArithExpr where
@@ -1144,7 +1146,7 @@ partial def Output.toMessageData (e : Output) : MessageData := Id.run do
 instance : ToMessageData Output where
   toMessageData := Output.toMessageData
 
-partial def analyzeFootprint (fp : Footprint) : Option Output := do
+partial def analyzeFootprint (fp : Footprint) (input : FVarId) : Option Output := do
   /- Normalize the outputs.
 
     We are only interested in the provenance (i.e., which subfield of an input value
@@ -1207,12 +1209,53 @@ partial def analyzeFootprint (fp : Footprint) : Option Output := do
       else none
     | _ => none
 
-  match outputs.toList with
-  | [] => none
-  | output :: outputs =>
-    let mut res := output
-    for output in outputs do
-      res ← mergeOutputs (res, output)
-    pure res
+  let output ← do
+    match outputs.toList with
+    | [] => none
+    | output :: outputs =>
+      let mut res := output
+      for output in outputs do
+        res ← mergeOutputs (res, output)
+      pure res
+
+  /- Check that the relation between the inputs and the outputs is consistent, that is if
+     we receive a tuple as input, we do not change the order of the elements of the tuple
+     (but might update them). Typically, this is ok:
+     ```
+      fun i state =>
+      let (a, b) := state
+      (a, b.set i a[i])
+     ```
+     but this is not (we swap `a` and `b`):
+     ```
+      fun i state =>
+      let (a, b) := state
+      (b, a)
+     ```
+  -/
+  let rec checkInput (projs : List Nat) (e : Input) : Option Unit := do
+    match e with
+    | .input fv =>
+      -- TODO: we might do something like incrementing a counter
+      if projs = [] ∧ fv == input then pure () else none
+    | .proj _ field e =>
+      match projs with
+      | [] => none
+      | p :: projs => if p = field then checkInput projs e else none
+
+  let rec checkOutput (projs : List Nat) (e : Output) : Option Unit := do
+    match e with
+    | .arith a =>
+      -- TODO: we might increment a counter
+      none
+    | .array a _ => checkInput projs a
+    | .struct _ fields =>
+      let _ ← fields.mapIdxM fun i => checkOutput (i :: projs)
+      pure ()
+  checkOutput [] output
+
+  --
+  pure output
+
 
 end Aeneas.Inv
