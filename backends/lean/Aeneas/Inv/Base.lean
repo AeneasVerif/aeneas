@@ -100,10 +100,6 @@ def ExtBase.insert {α} [BEq α] (e : ExtBase α) (kv : Array DiscrTree.Key × N
 def ExtBase.erase {α} (r : ExtBase α) (k : Name) : ExtBase α :=
   { r with deactivated := r.deactivated.insert k }
 
-initialize arrayGetterExt : SimpExtension ←
-  registerSimpAttr `inv_array_getter "\
-    Registers an array get expression, so that the invariant inferencer is aware of it."
-
 structure ArrayAttr (α : Type) where
   attr : AttributeImpl
   ext  : SimpleScopedEnvExtension (DiscrTreeKey × Name × α) (ExtBase α)
@@ -167,7 +163,7 @@ def parseArrayGetterArgs
 | _ => throwUnsupportedSyntax
 
 initialize arrayGetterAttr : ArrayAttr Getter ← do
-  initializeArrayAttrExtAndAttr `arrayGetterExt `arrayGetterAttr
+  initializeArrayAttrExtAndAttr `arrayGetterExt `arrayGetter
     fun ext defName stx attrKind => do
     -- Lookup the definition
     let env ← getEnv
@@ -224,7 +220,7 @@ def parseArraySetterArgs
 | _ => throwUnsupportedSyntax
 
 initialize arraySetterAttr : ArrayAttr Setter ← do
-  initializeArrayAttrExtAndAttr `arraySetterExt `arraySetterAttr
+  initializeArrayAttrExtAndAttr `arraySetterExt `arraySetter
     fun ext defName stx attrKind => do
     -- Lookup the definition
     let env ← getEnv
@@ -283,7 +279,7 @@ def parseValArgs
 | _ => throwUnsupportedSyntax
 
 initialize valAttr : ArrayAttr Val ← do
-  initializeArrayAttrExtAndAttr `invValExt `invValAttr
+  initializeArrayAttrExtAndAttr `invValExt `invVal
     fun ext defName stx attrKind => do
     -- Lookup the definition
     let env ← getEnv
@@ -667,6 +663,17 @@ instance : ToMessageData VarProj where
         go m!"{m}.{p}" projs
     go m!"{x.var}" x.projs
 
+inductive VarProjOrLit where
+| var (v : VarProj)
+| lit (n : Nat)
+deriving Inhabited, BEq, Hashable, Ord
+
+instance : ToMessageData VarProjOrLit where
+  toMessageData x :=
+    match x with
+    | .var v => m!"{v}"
+    | .lit n => m!"{n}"
+
 /-!
 # Extension: `inv_loop_iter`
 We have to separate the extension from the attribute because:
@@ -685,9 +692,9 @@ We have to separate the extension from the attribute because:
 structure LoopIter where
   body : Nat
   /- The arguments which stands for the index range. -/
-  start : VarProj
-  stop : VarProj
-  step : VarProj
+  start : VarProjOrLit
+  stop : VarProjOrLit
+  step : VarProjOrLit
   rangeKind : RangeKind
   --
   input : Nat
@@ -1135,6 +1142,11 @@ def FootprintExpr.toVarProj (e : FootprintExpr) : Option VarProj := do
     pure { p with projs := field :: p.projs}
   | _ => none
 
+def FootprintExpr.toVarProjOrLit (e : FootprintExpr) : Option VarProjOrLit := do
+  match e with
+  | .lit n => pure (.lit n)
+  | _ => pure (.var (← e.toVarProj))
+
 /-- Normalize an arithmetic expression, if possible -/
 def FootprintExpr.normalize (e : FootprintExpr) : Option LinArithExpr := do
   match e with
@@ -1305,78 +1317,5 @@ partial def analyzeFootprint (fp : Footprint) (input : Var) : Option Output := d
 
   --
   pure output
-
-/-!
-# Attribute: `inv_loop_iter`
--/
-def State.init (startFid : Nat) (inputFVars : Array Expr) : MetaM State := do
-  trace[Inv] "inputs: {inputFVars}"
-  let mut fid := startFid
-  let inputVars ← do
-    let lctx ← getLCtx
-    let mut m : Array (FVarId × Var) := #[]
-    for fv in inputFVars do
-      let id := fid
-      fid := fid + 1
-      let decl := lctx.get! fv.fvarId!
-      let name := m!"{decl.userName}"
-      let name ← name.toString
-      m := m ++ #[(fv.fvarId!, {id, name := some name})]
-    pure m
-  let inputs := Std.HashMap.ofList inputVars.toList
-  let fp : Footprint := {
-    inputs,
-    outputs := #[],
-    provenance := Std.HashMap.emptyWithCapacity,
-    footprint := #[],
-  }
-  pure ⟨ fp ⟩
-
-initialize loopIterAttr : ArrayAttr LoopIter ← do
-  initializeArrayAttr `loopIterAttr loopIterExt
-    fun ext defName stx attrKind => do
-    -- Lookup the definition
-    let env ← getEnv
-    let some decl := env.findAsync? defName
-      | throwError "Could not find definition {defName}"
-    let sig := decl.sig.get
-    let ty := sig.type
-    -- Find where the position of the arguments
-    let loop : LoopIter ← MetaM.run' do
-      /- Strip the quantifiers.
-
-          We do this before elaborating the pattern because we need the universally
-          quantified variables to be in the context.
-      -/
-      forallTelescope ty.consumeMData fun fvars _ => do
-      let (body, start, stop, step, rangeKind, input) ← parseLoopIterArgs stx
-      /- Find the position of every fvar id -/
-      let positions ← findPositionsOfIndexOrExpr (#[body, input]) fvars
-      let body := positions[0]!
-      let input := positions[1]!
-
-      /- Process the range: -/
-      let state ← State.init 0 fvars
-      let toExpr e : MetaM VarProj := do
-        let e' ← FootprintM.run' (footprint.expr false e) state
-        let e' := e'.toVarProj
-        match e' with
-        | none => throwError "Invalid range index: {e}"
-        | some v => pure v
-      let start ← toExpr start
-      let stop ← toExpr stop
-      let step ← toExpr step
-
-      /- Check the range expressions -/
-      --let rec checkRangeExpr (e : FootprintExpr)
-
-      pure { body, start, stop, step, rangeKind, input }
-    -- Generate the key for the discrimination tree
-    let key ← MetaM.run' do
-      let (mvars, _) ← forallMetaTelescope ty.consumeMData
-      DiscrTree.mkPath (← mkAppOptM defName (mvars.map Option.some))
-    -- Store
-    ScopedEnvExtension.add ext (key, defName, loop) attrKind
-
 
 end Aeneas.Inv
