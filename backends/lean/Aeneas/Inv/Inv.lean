@@ -401,6 +401,25 @@ initialize loopIterAttr : ArrayAttr LoopIter ← do
 # Footprints
 -/
 
+abbrev VarId := Nat
+
+structure Var where
+  id : VarId
+  name : Option String
+deriving Inhabited, BEq, Ord, Hashable
+
+instance : ToFormat Var where
+  format v :=
+    match v.name with
+    | some name => f!"{name}@{v.id}"
+    | none => f!"@{v.id}"
+
+instance : ToMessageData Var where
+  toMessageData v :=
+    match v.name with
+    | some name => m!"{name}@{v.id}"
+    | none => m!"@{v.id}"
+
 inductive ArithBinop where
   | add
   | sub
@@ -427,7 +446,7 @@ instance : ToMessageData ArithBinop where
   toMessageData x := m!"{toString x}"
 
 inductive ArithExpr where
-  | input (v : FVarId) -- An input of the loop
+  | var (v : Var)-- a variable
   | lit (n : Nat)
   /- A constant natural number.
 
@@ -450,7 +469,7 @@ instance : Inhabited ArithExpr := { default := .unknown }
 
 def ArithExpr.format (e : ArithExpr) : Format :=
   match e with
-  | .input fv => f!"{Expr.fvar fv}"
+  | .var v => f!"{v}"
   | .lit n => f!"{n}"
   | .const e => f!"{e}"
   | .binop op a b => f!"{format a} {op} {format b}"
@@ -463,7 +482,7 @@ instance : ToFormat ArithExpr where
 
 def ArithExpr.toMessageData (e : ArithExpr) : MessageData :=
   match e with
-  | .input fv => m!"{Expr.fvar fv}"
+  | .var v => m!"{v}"
   | .lit n => m!"{n}"
   | .const e => m!"{e}"
   | .binop op a b => m!"{a.toMessageData} {op} {b.toMessageData}"
@@ -479,7 +498,7 @@ instance : ToMessageData ArithExpr where
     This is typically an expression which reads or writes to an array.
 -/
 inductive FootprintExpr where
-  | input (v : FVarId) -- An input of the loop
+  | var (v : Var) -- A variable
   | get (array : FootprintExpr) (indices : Array ArithExpr)
   | set (array : FootprintExpr) (indices : Array ArithExpr) (value : FootprintExpr)
   /- Handling projectors properly is particularly useful because we often need to
@@ -506,7 +525,7 @@ instance : Inhabited FootprintExpr := { default := .unknown }
 
 partial def FootprintExpr.format (e : FootprintExpr) : Format :=
   match e with
-  | .input fv => f!"{Expr.fvar fv}"
+  | .var v => f!"{v}"
   | .get a ids => f!"{a.format}{ids.map ArithExpr.format}"
   | .set a ids v => f!"({a.format}{ids.map ArithExpr.format} := {v.format})"
   | .proj _ f x => f!"{x.format}.{f}"
@@ -523,7 +542,7 @@ instance : ToFormat FootprintExpr where
 
 partial def FootprintExpr.toMessageData (e : FootprintExpr) : MessageData :=
   match e with
-  | .input fv => m!"{Expr.fvar fv}"
+  | .var v => m!"{v}"
   | .get a ids => m!"{a.toMessageData}[{ids.map ArithExpr.toMessageData}]"
   | .set a ids v => m!"({a.toMessageData}{ids.map ArithExpr.toMessageData} := {v.toMessageData})"
   | .proj _ f x => m!"{x.toMessageData}.{f}"
@@ -544,7 +563,7 @@ structure Footprint where
      Ex.: when exploring `loop (fun (x, y) => ...)`, the inputs of the loop
      are `x` and `y`.
    -/
-  inputs : Std.HashSet FVarId := {}
+  inputs : Std.HashMap FVarId Var := {}
   /- The expressions a loop body evaluates to.
 
     Ex.: when exploring `foldl (fun x => if x % 2 = 0 then x + 1 else x + 2)`, `x` is a loop input,
@@ -565,7 +584,7 @@ structure Footprint where
 deriving Inhabited
 
 def Footprint.format (e : Footprint) : Format :=
-  f!"- inputs := {e.inputs.toArray.map Expr.fvar}
+  f!"- inputs := {e.inputs.toArray.map (fun (fid, v) => (Expr.fvar fid, v))}
   - outputs := {e.outputs}
   - provenance := {e.provenance.toArray.map fun (x, y) => (Expr.fvar x, y)}
   - footprint := {e.footprint}"
@@ -574,7 +593,7 @@ instance : ToFormat Footprint where
   format := Footprint.format
 
 def Footprint.toMessageData (e : Footprint) : MessageData :=
-  m!"- inputs := {e.inputs.toArray.map Expr.fvar}
+  m!"- inputs := {e.inputs.toArray.map (fun (fid, v) => (Expr.fvar fid, v))}
   - outputs := {e.outputs}
   - provenance := {e.provenance.toArray.map fun (x, y) => (Expr.fvar x, y)}
   - footprint := {e.footprint}"
@@ -679,7 +698,7 @@ def lambdaLetTelescope (e : Expr) (k : Array Expr → Expr → FootprintM α) : 
 
 def FootprintExpr.toArithExpr (e : FootprintExpr) : ArithExpr :=
   match e with
-  | .input v => .input v
+  | .var v => .var v
   | .get _ _ | .set _ _ _ | .proj _ _ _ => .unknown
   | .lit n => .lit n
   | .const c => .const c
@@ -798,9 +817,9 @@ partial def footprint.exprAux (terminal : Bool) (e : Expr) : FootprintM Footprin
     if let some p := s.provenance.get? fvarId then
       trace[Inv] "known provenance: {p}"
       return p
-    if s.inputs.contains fvarId then
-      trace[Inv] "input"
-      return (.input fvarId)
+    if let some v := s.inputs.get? fvarId then
+      trace[Inv] "var"
+      return (.var v)
     trace[Inv] "unknown provenance"
     pure .unknown
   | .mvar _ | .sort _ => pure .unknown
@@ -1123,22 +1142,21 @@ end
 structure LinArithExpr where
   -- TODO: don't use a HashMap
   -- TODO: allow using projections over inputs
-  coefs : Std.HashMap FVarId Nat
+  coefs : Std.HashMap Var Nat
   const : Nat
 
 instance : BEq LinArithExpr where -- TODO: I don't like that
   beq a1 a2 := Id.run do
-    for (fid, v) in a1.coefs do
-      if a2.coefs.get? fid ≠ some v then return false
-    for (fid, v) in a2.coefs do
-      if a1.coefs.get? fid ≠ some v then return false
+    for (v, n) in a1.coefs do
+      if a2.coefs.get? v ≠ some n then return false
+    for (v, n) in a2.coefs do
+      if a1.coefs.get? v ≠ some n then return false
     if a1.const ≠ a2.const then pure false else pure true
 
 def LinArithExpr.toMessageData (e : LinArithExpr) : MessageData := Id.run do
-  let coefs := e.coefs.toArray.map fun (fv, coef) =>
+  let coefs := e.coefs.toArray.map fun (v, coef) =>
     let coef :=
-      let fv := Expr.fvar fv
-      if coef = 1 then m!"{fv}" else m!"{coef} * {fv}"
+      if coef = 1 then m!"{v}" else m!"{coef} * {v}"
     m!"{coef}"
   let const := if e.const = 0 then [] else [m!"{e.const}"]
   let coefs := coefs ++ const
@@ -1152,15 +1170,15 @@ def LinArithExpr.toMessageData (e : LinArithExpr) : MessageData := Id.run do
 instance : ToMessageData LinArithExpr where
   toMessageData := LinArithExpr.toMessageData
 
-def ArithExpr.getFVars (e : ArithExpr) : Std.HashSet FVarId :=
+def ArithExpr.getVars (e : ArithExpr) : Std.HashSet Var :=
   -- Using a state monad to store the set of fvar ids
-  let m := StateT (Std.HashSet FVarId) Id
-  let add (fid : FVarId) : m Unit := do
-    StateT.set ((← StateT.get).insert fid)
+  let m := StateT (Std.HashSet Var) Id
+  let add (v : Var) : m Unit := do
+    StateT.set ((← StateT.get).insert v)
   -- The visitor
   let rec go (e : ArithExpr) : m Unit := do
     match e with
-    | .input fv => add fv
+    | .var v => add v
     | .lit _ | .const _ | .unknown => pure ()
     | .binop _ a b => go a; go b
     | .range start stop step _ => go start; go stop; go step
@@ -1169,7 +1187,7 @@ def ArithExpr.getFVars (e : ArithExpr) : Std.HashSet FVarId :=
 /-- Normalize an arithmetic expression, if possible -/
 def ArithExpr.normalize (e : ArithExpr) : Option LinArithExpr := do
   match e with
-  | .input fid => pure { coefs := Std.HashMap.ofList [(fid, 1)], const := 0 }
+  | .var v => pure { coefs := Std.HashMap.ofList [(v, 1)], const := 0 }
   | .lit n => pure { coefs := Std.HashMap.emptyWithCapacity, const := n }
   | .const _ | .unknown => none
   | .binop op a b =>
@@ -1199,7 +1217,7 @@ def ArithExpr.normalize (e : ArithExpr) : Option LinArithExpr := do
   | .range _ _ _ _ => none
 
 inductive Input where
-| input (fv : FVarId)
+| var (v : Var)
 | proj (typename : Name) (field : Nat) (e : Input)
 deriving BEq
 
@@ -1210,7 +1228,7 @@ inductive Output where
 
 def Input.toMessageData (e : Input) : MessageData := Id.run do
   match e with
-  | .input fv => m!"{Expr.fvar fv}"
+  | .var v => m!"{v}"
   | .proj _ field e => m!"{e.toMessageData}.{field}"
 
 instance : ToMessageData Input where
@@ -1225,7 +1243,7 @@ partial def Output.toMessageData (e : Output) : MessageData := Id.run do
 instance : ToMessageData Output where
   toMessageData := Output.toMessageData
 
-partial def analyzeFootprint (fp : Footprint) (input : FVarId) : Option Output := do
+partial def analyzeFootprint (fp : Footprint) (input : Var) : Option Output := do
   /- Normalize the outputs.
 
     We are only interested in the provenance (i.e., which subfield of an input value
@@ -1234,7 +1252,7 @@ partial def analyzeFootprint (fp : Footprint) (input : FVarId) : Option Output :
      variable). -/
   let rec normalizeInput (e : FootprintExpr) : Option Input := do
     match e with
-    | .input fv => pure (.input fv)
+    | .var fv => pure (.var fv)
     | .proj typename field e => pure (.proj typename field (← normalizeInput e))
     | .get _ _ | .set _ _ _ | .struct _ _ | .lit _ | .const _  | .binop _ _ _
     | .range _ _ _ _ | .unknown => none
@@ -1242,7 +1260,7 @@ partial def analyzeFootprint (fp : Footprint) (input : FVarId) : Option Output :
   /- Normalize an array expression -/
   let rec normalizeArrayExpr (e : FootprintExpr) : Option (Input × Array LinArithExpr) := do
     match e with
-    | .input fv => pure (.input fv, #[])
+    | .var fv => pure (.var fv, #[])
     | .get a _ =>
       -- We ignore the read indices
       normalizeArrayExpr a
@@ -1257,7 +1275,7 @@ partial def analyzeFootprint (fp : Footprint) (input : FVarId) : Option Output :
   /- Normalize an output expression -/
   let rec normalizeOutput (e : FootprintExpr) : Option Output := do
     match e with
-    | .input _ | .get _ _ | .set _ _ _ | .proj _ _ _ =>
+    | .var _ | .get _ _ | .set _ _ _ | .proj _ _ _ =>
       let (input, writes) ← normalizeArrayExpr e
       pure (.array input writes)
     | .lit _ | .const _ | .binop _ _ _ | .range _ _ _ _ =>
@@ -1314,9 +1332,9 @@ partial def analyzeFootprint (fp : Footprint) (input : FVarId) : Option Output :
   -/
   let rec checkInput (projs : List Nat) (e : Input) : Option Unit := do
     match e with
-    | .input fv =>
+    | .var v =>
       -- TODO: we might do something like incrementing a counter
-      if projs = [] ∧ fv == input then pure () else none
+      if projs = [] ∧ v == input then pure () else none
     | .proj _ field e =>
       match projs with
       | [] => none

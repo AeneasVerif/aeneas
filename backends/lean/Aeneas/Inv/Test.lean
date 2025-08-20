@@ -6,7 +6,7 @@ open Lean Elab Meta Tactic
 
 scoped syntax "analyze_loop" : tactic
 
-elab "analyze_loop" : tactic => do
+def analyzeLoop (k : Array (FVarId × Var) → Expr → State → TacticM α) : TacticM α := do
   withMainContext do
   let tgt ← getMainTarget
   trace[Inv] "{tgt}"
@@ -15,9 +15,21 @@ elab "analyze_loop" : tactic => do
   if args.size ≠ 2 then throwError "Expected two arguments, got: {args}"
   let body := args[1]!
   -- Dive into the lambdas
-  Meta.lambdaTelescope body.consumeMData fun inputs body => do
-  trace[Inv] "inputs: {inputs}"
-  let inputs := Std.HashSet.ofArray (inputs.map Expr.fvarId!)
+  Meta.lambdaTelescope body.consumeMData fun inputFVars body => do
+  trace[Inv] "inputs: {inputFVars}"
+  let mut fid := 0
+  let inputVars ← do
+    let lctx ← getLCtx
+    let mut m : Array (FVarId × Var) := #[]
+    for fv in inputFVars do
+      let id := fid
+      fid := fid + 1
+      let decl := lctx.get! fv.fvarId!
+      let name := m!"{decl.userName}"
+      let name ← name.toString
+      m := m ++ #[(fv.fvarId!, {id, name := some name})]
+    pure m
+  let inputs := Std.HashMap.ofList inputVars.toList
   let fp : Footprint := {
     inputs,
     outputs := #[],
@@ -28,38 +40,18 @@ elab "analyze_loop" : tactic => do
   trace[Inv] "initial state: {state}"
   let (_, state) ← FootprintM.run (footprint.expr true body) state
   trace[Inv] "{state}"
-  pure ()
+  k inputVars body state
+
+elab "analyze_loop" : tactic => do
+  analyzeLoop fun _ _ _ => pure ()
 
 scoped syntax "analyze_loopiter" : tactic
 
 elab "analyze_loopIter" : tactic => do
-  withMainContext do
-  let tgt ← getMainTarget
-  trace[Inv] "{tgt}"
-  -- Dive into the loop
-  let args := tgt.consumeMData.getAppArgs
-  if args.size ≠ 2 then throwError "Expected two arguments, got: {args}"
-  let body := args[1]!
-  trace[Inv] "{body}"
-  -- Dive into the lambdas
-  Meta.lambdaTelescope body.consumeMData fun inputFVars body => do
-  if inputFVars.size ≠ 2 then throwError "Expected 2 lambdas, got: {inputFVars}"
-  trace[Inv] "inputs: {inputFVars}"
-  let inputs := Std.HashSet.ofArray (inputFVars.map Expr.fvarId!)
-  let fp : Footprint := {
-    inputs,
-    outputs := #[],
-    provenance := Std.HashMap.emptyWithCapacity,
-    footprint := #[],
-  }
-  let state : State := ⟨ fp ⟩
-  trace[Inv] "initial state: {state}"
-  let (_, state) ← FootprintM.run (footprint.expr true body) state
-  trace[Inv] "{state}"
-  let output := analyzeFootprint state.toFootprint inputFVars[1]!.fvarId!
+  analyzeLoop fun inputVars _body state => do
+  let output := analyzeFootprint state.toFootprint inputVars[1]!.snd
   trace[Inv] "Analyzed output:\n{output}"
   pure ()
-
 
 def loop (_ : α) : Prop := True
 
