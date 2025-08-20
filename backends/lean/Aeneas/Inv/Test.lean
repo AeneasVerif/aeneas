@@ -85,6 +85,9 @@ example : loop (fun (x y : Array Nat) => (x.set! 0 x.toList[0]!, y)) := by
 
 def loopIter (_ : Nat → α → α) : Prop := True
 
+@[inv_loop_iter {_body} [_start:_stop: += 1] _input]
+def loopIterRange {α} (_body : Nat → α → α) (_start _stop : Nat) (_input : α) : Prop := True
+
 -- Tuple projectors
 set_option trace.Inv true in
 example : loopIter (fun i (xy : Array Nat × Array Nat) =>

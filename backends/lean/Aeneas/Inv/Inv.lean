@@ -301,6 +301,103 @@ initialize valAttr : ArrayAttr Val ← do
     ScopedEnvExtension.add ext (key, defName, array) attrKind
 
 /-!
+# Attribute: `inv_loop_iter`
+-/
+
+/-- Kind of range iterator.
+
+    We hardcode them for now.
+-/
+inductive RangeKind where
+  | add -- add a constant at every step
+  | sub -- subtract a constant at every step
+  | mul -- multiply by a constant at every step
+  | div -- divide by a constant at every step
+deriving Inhabited, BEq, Ord
+
+def RangeKind.toString (k : RangeKind) : String :=
+  match k with
+  | .add => "+"
+  | .sub => "-"
+  | .mul => "*"
+  | .div => "/"
+
+/-- A loop which iterates over an index.
+
+    The definition should have the signature:
+    ```
+    loop (body : Idx → α → m α) (range : ...) (input : α) : m α
+    ```
+    where the arguments may be reordered (`input` placed before `range`, etc.).
+ -/
+structure LoopIter where
+  body : Nat
+  /- The arguments which stands for the index range. -/
+  start : Nat
+  stop : Nat
+  step : Nat
+  rangeKind : RangeKind
+  --
+  input : Nat
+deriving Inhabited, BEq
+
+syntax (name := loopIter) "inv_loop_iter" "{" term "}"
+  "[" term ":" term ":" ("+=" <|> "-=" <|> "*=" <|> "/=") term "]" term : attr
+
+def parseLoopIterArgs
+: Syntax -> MetaM (Expr × Expr × Expr × Expr × RangeKind × Expr)
+| `(attr| inv_loop_iter { $body } [ $start : $stop : $kind $step ] $input ) => do
+  let elabExpr e := do instantiateMVars (← Elab.Term.elabTerm e none |>.run')
+  let body ← elabExpr body
+  let start ← elabExpr start
+  let stop ← elabExpr stop
+  let step ← elabExpr step
+  let input ← elabExpr input
+  trace[Inv] "kind.getKind: {kind.raw.getKind}"
+  let kind ← do
+    match kind.raw.getKind with
+    | `token.«+=»  => pure RangeKind.add
+    | `token.«-=» => pure .sub
+    | `token.«*=» => pure .mul
+    | `token.«/=» => pure .div
+    | _ => throwUnsupportedSyntax
+  return (body, start, stop, step, kind, input)
+| _ => throwUnsupportedSyntax
+
+initialize loopIterAttr : ArrayAttr LoopIter ← do
+  initializeArrayAttrExt `loopIterAttr `loopIter
+    fun ext defName stx attrKind => do
+    -- Lookup the definition
+    let env ← getEnv
+    let some decl := env.findAsync? defName
+      | throwError "Could not find definition {defName}"
+    let sig := decl.sig.get
+    let ty := sig.type
+    -- Find where the position of the arguments
+    let loop : LoopIter ← MetaM.run' do
+      /- Strip the quantifiers.
+
+          We do this before elaborating the pattern because we need the universally
+          quantified variables to be in the context.
+      -/
+      forallTelescope ty.consumeMData fun fvars _ => do
+      let (body, start, stop, step, rangeKind, input) ← parseLoopIterArgs stx
+      /- Find the position of every fvar id -/
+      let positions ← findPositionsOfIndexOrExpr (#[body, start, stop, step, input]) fvars
+      let body := positions[0]!
+      let start := positions[1]!
+      let stop := positions[2]!
+      let step := positions[3]!
+      let input := positions[4]!
+      pure { body, start, stop, step, rangeKind, input }
+    -- Generate the key for the discrimination tree
+    let key ← MetaM.run' do
+      let (mvars, _) ← forallMetaTelescope ty.consumeMData
+      DiscrTree.mkPath (← mkAppOptM defName (mvars.map Option.some))
+    -- Store
+    ScopedEnvExtension.add ext (key, defName, loop) attrKind
+
+/-!
 # Footprints
 -/
 
@@ -328,24 +425,6 @@ instance : ToFormat ArithBinop where
 
 instance : ToMessageData ArithBinop where
   toMessageData x := m!"{toString x}"
-
-/-- Kind of range iterator.
-
-    We hardcode them for now.
--/
-inductive RangeKind where
-  | add -- add a constant at every step
-  | sub -- subtract a constant at every step
-  | mul -- multiply by a constant at every step
-  | div -- divide by a constant at every step
-deriving BEq, Ord
-
-def RangeKind.toString (k : RangeKind) : String :=
-  match k with
-  | .add => "+"
-  | .sub => "-"
-  | .mul => "*"
-  | .div => "/"
 
 inductive ArithExpr where
   | input (v : FVarId) -- An input of the loop
