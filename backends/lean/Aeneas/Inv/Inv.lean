@@ -109,14 +109,18 @@ structure ArrayAttr (α : Type) where
   ext  : SimpleScopedEnvExtension (DiscrTreeKey × Name × α) (ExtBase α)
 deriving Inhabited
 
-def initializeArrayAttrExt {α : Type} [BEq α] (extName attrName : Name)
-  (add : SimpleScopedEnvExtension (Array DiscrTree.Key × Name × α) (ExtBase α) →
-         Name → Syntax → AttributeKind → AttrM Unit) : IO (ArrayAttr α) := do
-  let ext ← registerSimpleScopedEnvExtension {
+def initializeArrayExt {α : Type} [BEq α] (extName : Name) :
+  IO (SimpleScopedEnvExtension (Array DiscrTree.Key × Name × α) (ExtBase α)) := do
+  registerSimpleScopedEnvExtension {
       name := extName,
       initial := ExtBase.empty,
       addEntry := ExtBase.insert,
   }
+
+def initializeArrayAttr {α : Type} [BEq α] (attrName : Name)
+  (ext : SimpleScopedEnvExtension (Array DiscrTree.Key × Name × α) (ExtBase α))
+  (add : SimpleScopedEnvExtension (Array DiscrTree.Key × Name × α) (ExtBase α) →
+         Name → Syntax → AttributeKind → AttrM Unit) : IO (ArrayAttr α) := do
   let attrImpl : AttributeImpl := {
     name := attrName
     descr := "Adds theorems to the `progress` database"
@@ -128,6 +132,12 @@ def initializeArrayAttrExt {α : Type} [BEq α] (extName attrName : Name)
   }
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl, ext := ext }
+
+def initializeArrayAttrExtAndAttr {α : Type} [BEq α] (extName attrName : Name)
+  (add : SimpleScopedEnvExtension (Array DiscrTree.Key × Name × α) (ExtBase α) →
+         Name → Syntax → AttributeKind → AttrM Unit) : IO (ArrayAttr α) := do
+  let ext ← initializeArrayExt extName
+  initializeArrayAttr attrName ext add
 
 /-!
 # Attribute: `inv_array_getter`
@@ -157,7 +167,7 @@ def parseArrayGetterArgs
 | _ => throwUnsupportedSyntax
 
 initialize arrayGetterAttr : ArrayAttr Getter ← do
-  initializeArrayAttrExt `arrayGetterAttr `arrayGetter
+  initializeArrayAttrExtAndAttr `arrayGetterExt `arrayGetterAttr
     fun ext defName stx attrKind => do
     -- Lookup the definition
     let env ← getEnv
@@ -214,7 +224,7 @@ def parseArraySetterArgs
 | _ => throwUnsupportedSyntax
 
 initialize arraySetterAttr : ArrayAttr Setter ← do
-  initializeArrayAttrExt `arraySetterAttr `arraySetter
+  initializeArrayAttrExtAndAttr `arraySetterExt `arraySetterAttr
     fun ext defName stx attrKind => do
     -- Lookup the definition
     let env ← getEnv
@@ -273,7 +283,7 @@ def parseValArgs
 | _ => throwUnsupportedSyntax
 
 initialize valAttr : ArrayAttr Val ← do
-  initializeArrayAttrExt `invValAttr `invVal
+  initializeArrayAttrExtAndAttr `invValExt `invValAttr
     fun ext defName stx attrKind => do
     -- Lookup the definition
     let env ← getEnv
@@ -301,103 +311,6 @@ initialize valAttr : ArrayAttr Val ← do
     ScopedEnvExtension.add ext (key, defName, array) attrKind
 
 /-!
-# Attribute: `inv_loop_iter`
--/
-
-/-- Kind of range iterator.
-
-    We hardcode them for now.
--/
-inductive RangeKind where
-  | add -- add a constant at every step
-  | sub -- subtract a constant at every step
-  | mul -- multiply by a constant at every step
-  | div -- divide by a constant at every step
-deriving Inhabited, BEq, Ord
-
-def RangeKind.toString (k : RangeKind) : String :=
-  match k with
-  | .add => "+"
-  | .sub => "-"
-  | .mul => "*"
-  | .div => "/"
-
-/-- A loop which iterates over an index.
-
-    The definition should have the signature:
-    ```
-    loop (body : Idx → α → m α) (range : ...) (input : α) : m α
-    ```
-    where the arguments may be reordered (`input` placed before `range`, etc.).
- -/
-structure LoopIter where
-  body : Nat
-  /- The arguments which stands for the index range. -/
-  start : Nat
-  stop : Nat
-  step : Nat
-  rangeKind : RangeKind
-  --
-  input : Nat
-deriving Inhabited, BEq
-
-syntax (name := loopIter) "inv_loop_iter" "{" term "}"
-  "[" term ":" term ":" ("+=" <|> "-=" <|> "*=" <|> "/=") term "]" term : attr
-
-def parseLoopIterArgs
-: Syntax -> MetaM (Expr × Expr × Expr × Expr × RangeKind × Expr)
-| `(attr| inv_loop_iter { $body } [ $start : $stop : $kind $step ] $input ) => do
-  let elabExpr e := do instantiateMVars (← Elab.Term.elabTerm e none |>.run')
-  let body ← elabExpr body
-  let start ← elabExpr start
-  let stop ← elabExpr stop
-  let step ← elabExpr step
-  let input ← elabExpr input
-  trace[Inv] "kind.getKind: {kind.raw.getKind}"
-  let kind ← do
-    match kind.raw.getKind with
-    | `token.«+=»  => pure RangeKind.add
-    | `token.«-=» => pure .sub
-    | `token.«*=» => pure .mul
-    | `token.«/=» => pure .div
-    | _ => throwUnsupportedSyntax
-  return (body, start, stop, step, kind, input)
-| _ => throwUnsupportedSyntax
-
-initialize loopIterAttr : ArrayAttr LoopIter ← do
-  initializeArrayAttrExt `loopIterAttr `loopIter
-    fun ext defName stx attrKind => do
-    -- Lookup the definition
-    let env ← getEnv
-    let some decl := env.findAsync? defName
-      | throwError "Could not find definition {defName}"
-    let sig := decl.sig.get
-    let ty := sig.type
-    -- Find where the position of the arguments
-    let loop : LoopIter ← MetaM.run' do
-      /- Strip the quantifiers.
-
-          We do this before elaborating the pattern because we need the universally
-          quantified variables to be in the context.
-      -/
-      forallTelescope ty.consumeMData fun fvars _ => do
-      let (body, start, stop, step, rangeKind, input) ← parseLoopIterArgs stx
-      /- Find the position of every fvar id -/
-      let positions ← findPositionsOfIndexOrExpr (#[body, start, stop, step, input]) fvars
-      let body := positions[0]!
-      let start := positions[1]!
-      let stop := positions[2]!
-      let step := positions[3]!
-      let input := positions[4]!
-      pure { body, start, stop, step, rangeKind, input }
-    -- Generate the key for the discrimination tree
-    let key ← MetaM.run' do
-      let (mvars, _) ← forallMetaTelescope ty.consumeMData
-      DiscrTree.mkPath (← mkAppOptM defName (mvars.map Option.some))
-    -- Store
-    ScopedEnvExtension.add ext (key, defName, loop) attrKind
-
-/-!
 # Footprints
 -/
 
@@ -419,6 +332,25 @@ instance : ToMessageData Var where
     match v.name with
     | some name => m!"{name}@{v.id}"
     | none => m!"@{v.id}"
+
+
+/-- Kind of range iterator.
+
+    We hardcode them for now.
+-/
+inductive RangeKind where
+  | add -- add a constant at every step
+  | sub -- subtract a constant at every step
+  | mul -- multiply by a constant at every step
+  | div -- divide by a constant at every step
+deriving Inhabited, BEq, Ord
+
+def RangeKind.toString (k : RangeKind) : String :=
+  match k with
+  | .add => "+"
+  | .sub => "-"
+  | .mul => "*"
+  | .div => "/"
 
 inductive ArithBinop where
   | add
@@ -445,62 +377,14 @@ instance : ToFormat ArithBinop where
 instance : ToMessageData ArithBinop where
   toMessageData x := m!"{toString x}"
 
-inductive ArithExpr where
-  | var (v : Var)-- a variable
-  | lit (n : Nat)
-  /- A constant natural number.
-
-     We store a general expression rather than, e.g., a constant name, because
-     it might be an expression of the shape: `n config`, where `config`
-     remains constant inside the loop (and typically within the function).
-  -/
-  | const (e : Expr)
-  | binop (op : ArithBinop) (a b : ArithExpr)
-  /-- An index in a range (such as `[0:256]`).
-
-      For now we hardcode the different ranges we support.
-      The `stop` value is exclusive.
-   -/
-  | range (start stop step : ArithExpr) (kind : RangeKind)
-  | unknown
-deriving BEq
-
-instance : Inhabited ArithExpr := { default := .unknown }
-
-def ArithExpr.format (e : ArithExpr) : Format :=
-  match e with
-  | .var v => f!"{v}"
-  | .lit n => f!"{n}"
-  | .const e => f!"{e}"
-  | .binop op a b => f!"{format a} {op} {format b}"
-  | .range start stop step kind =>
-    f!"[{start.format}:{stop.format}:{kind.toString}={step.format}]"
-  | .unknown => f!"?"
-
-instance : ToFormat ArithExpr where
-  format := ArithExpr.format
-
-def ArithExpr.toMessageData (e : ArithExpr) : MessageData :=
-  match e with
-  | .var v => m!"{v}"
-  | .lit n => m!"{n}"
-  | .const e => m!"{e}"
-  | .binop op a b => m!"{a.toMessageData} {op} {b.toMessageData}"
-  | .range start stop step kind =>
-    m!"[{start.toMessageData}:{stop.toMessageData}:{kind.toString}={step.toMessageData}]"
-  | .unknown => m!"?"
-
-instance : ToMessageData ArithExpr where
-  toMessageData := ArithExpr.toMessageData
-
 /-- An expression which we register in the footprint.
 
     This is typically an expression which reads or writes to an array.
 -/
-inductive FootprintExpr where
+inductive FootprintExpr where -- TODO: rename to Expr
   | var (v : Var) -- A variable
-  | get (array : FootprintExpr) (indices : Array ArithExpr)
-  | set (array : FootprintExpr) (indices : Array ArithExpr) (value : FootprintExpr)
+  | get (array : FootprintExpr) (indices : Array FootprintExpr)
+  | set (array : FootprintExpr) (indices : Array FootprintExpr) (value : FootprintExpr)
   /- Handling projectors properly is particularly useful because we often need to
      decompose loop inputs (which are usually a tuple) -/
   | proj (typename : Name) (field : Nat) (e : FootprintExpr)
@@ -516,7 +400,7 @@ inductive FootprintExpr where
   | const (e : Expr)
   | binop (op : ArithBinop) (a b : FootprintExpr)
   --
-  | range (start stop step : ArithExpr) (kind : RangeKind)
+  | range (start stop step : FootprintExpr) (kind : RangeKind)
   --
   | unknown
 deriving BEq
@@ -526,8 +410,8 @@ instance : Inhabited FootprintExpr := { default := .unknown }
 partial def FootprintExpr.format (e : FootprintExpr) : Format :=
   match e with
   | .var v => f!"{v}"
-  | .get a ids => f!"{a.format}{ids.map ArithExpr.format}"
-  | .set a ids v => f!"({a.format}{ids.map ArithExpr.format} := {v.format})"
+  | .get a ids => f!"{a.format}{ids.map format}"
+  | .set a ids v => f!"({a.format}{ids.map format} := {v.format})"
   | .proj _ f x => f!"{x.format}.{f}"
   | .struct _ fields => f!"({arrayToTupleFormat format fields})"
   | .lit n => f!"{n}"
@@ -543,8 +427,8 @@ instance : ToFormat FootprintExpr where
 partial def FootprintExpr.toMessageData (e : FootprintExpr) : MessageData :=
   match e with
   | .var v => m!"{v}"
-  | .get a ids => m!"{a.toMessageData}[{ids.map ArithExpr.toMessageData}]"
-  | .set a ids v => m!"({a.toMessageData}{ids.map ArithExpr.toMessageData} := {v.toMessageData})"
+  | .get a ids => m!"{a.toMessageData}[{ids.map toMessageData}]"
+  | .set a ids v => m!"({a.toMessageData}{ids.map toMessageData} := {v.toMessageData})"
   | .proj _ f x => m!"{x.toMessageData}.{f}"
   | .struct _ fields => m!"({arrayToTupleMessageData toMessageData fields})"
   | .lit n => m!"{n}"
@@ -696,16 +580,6 @@ def lambdaLetTelescope (e : Expr) (k : Array Expr → Expr → FootprintM α) : 
     -- Continue
     pure x
 
-def FootprintExpr.toArithExpr (e : FootprintExpr) : ArithExpr :=
-  match e with
-  | .var v => .var v
-  | .get _ _ | .set _ _ _ | .proj _ _ _ => .unknown
-  | .lit n => .lit n
-  | .const c => .const c
-  | .binop op x y => .binop op x.toArithExpr y.toArithExpr
-  | .range start stop step kind => .range start stop step kind
-  | .struct _ _ | .unknown => .unknown
-
 def mkReducedProj (typename : Name) (field : Nat) (e : FootprintExpr) : FootprintExpr :=
   match e with
   | .struct typename fields =>
@@ -777,6 +651,74 @@ def arithHBinops : Std.HashMap Name ArithBinop := Std.HashMap.ofList [
   (``HDiv.hDiv, .div),
   (``HPow.hPow, .pow),
 ]
+
+/-- Projection over a variable -/
+structure VarProj where
+  var : Var
+  projs : List Nat
+deriving Inhabited, BEq, Hashable, Ord
+
+instance : ToMessageData VarProj where
+  toMessageData x :=
+    let rec go (m : MessageData) (projs : List Nat) :=
+      match projs with
+      | [] => m
+      | p :: projs =>
+        go m!"{m}.{p}" projs
+    go m!"{x.var}" x.projs
+
+/-!
+# Extension: `inv_loop_iter`
+We have to separate the extension from the attribute because:
+- `footprint.expr` needs to access the extension
+- the attribute `inv_loop_iter` needs `footprint.expr` to parse some of is arguments
+-/
+
+/-- A loop which iterates over an index.
+
+    The definition should have the signature:
+    ```
+    loop (body : Idx → α → m α) (range : ...) (input : α) : m α
+    ```
+    where the arguments may be reordered (`input` placed before `range`, etc.).
+ -/
+structure LoopIter where
+  body : Nat
+  /- The arguments which stands for the index range. -/
+  start : VarProj
+  stop : VarProj
+  step : VarProj
+  rangeKind : RangeKind
+  --
+  input : Nat
+deriving Inhabited, BEq
+
+syntax (name := loopIter) "inv_loop_iter" "{" term "}"
+  "[" term ":" term ":" ("+=" <|> "-=" <|> "*=" <|> "/=") term "]" term : attr
+
+def parseLoopIterArgs
+: Syntax -> MetaM (Expr × Expr × Expr × Expr × RangeKind × Expr)
+| `(attr| inv_loop_iter { $body } [ $start : $stop : $kind $step ] $input ) => do
+  let elabExpr e := do instantiateMVars (← Elab.Term.elabTerm e none |>.run')
+  let body ← elabExpr body
+  let start ← elabExpr start
+  let stop ← elabExpr stop
+  let step ← elabExpr step
+  let input ← elabExpr input
+  trace[Inv] "kind.getKind: {kind.raw.getKind}"
+  let kind ← do
+    match kind.raw.getKind with
+    | `token.«+=»  => pure RangeKind.add
+    | `token.«-=» => pure .sub
+    | `token.«*=» => pure .mul
+    | `token.«/=» => pure .div
+    | _ => throwUnsupportedSyntax
+  return (body, start, stop, step, kind, input)
+| _ => throwUnsupportedSyntax
+
+initialize loopIterExt :
+  SimpleScopedEnvExtension (Array DiscrTree.Key × Name × LoopIter) (ExtBase LoopIter) ← do
+  initializeArrayExt `loopIterExt
 
 mutual
 
@@ -1106,7 +1048,6 @@ partial def footprint.arrayExpr (_terminal : Bool) (e : Expr) :
     let indices := rule.indices.map fun id => args[id]!
     trace[Inv] "indices: {indices}"
     let indices ← indices.mapM (footprint.expr false)
-    let indices := indices.map FootprintExpr.toArithExpr
     let e := FootprintExpr.get array indices
     return e
 
@@ -1124,7 +1065,6 @@ partial def footprint.arrayExpr (_terminal : Bool) (e : Expr) :
     let indices := rule.indices.map fun id => args[id]!
     trace[Inv] "indices: {indices}"
     let indices ← indices.mapM (footprint.expr false)
-    let indices := indices.map FootprintExpr.toArithExpr
     let value := args[rule.value]!
     trace[Inv] "value: {value}"
     let value ← footprint.expr false value
@@ -1141,8 +1081,7 @@ end
   -/
 structure LinArithExpr where
   -- TODO: don't use a HashMap
-  -- TODO: allow using projections over inputs
-  coefs : Std.HashMap Var Nat
+  coefs : Std.HashMap VarProj Nat
   const : Nat
 
 instance : BEq LinArithExpr where -- TODO: I don't like that
@@ -1170,26 +1109,39 @@ def LinArithExpr.toMessageData (e : LinArithExpr) : MessageData := Id.run do
 instance : ToMessageData LinArithExpr where
   toMessageData := LinArithExpr.toMessageData
 
-def ArithExpr.getVars (e : ArithExpr) : Std.HashSet Var :=
+partial def FootprintExpr.getVars (e : FootprintExpr) : Std.HashSet Var :=
   -- Using a state monad to store the set of fvar ids
   let m := StateT (Std.HashSet Var) Id
   let add (v : Var) : m Unit := do
     StateT.set ((← StateT.get).insert v)
   -- The visitor
-  let rec go (e : ArithExpr) : m Unit := do
+  let rec go (e : FootprintExpr) : m Unit := do
     match e with
     | .var v => add v
     | .lit _ | .const _ | .unknown => pure ()
     | .binop _ a b => go a; go b
     | .range start stop step _ => go start; go stop; go step
+    | .struct _ fields => let _ ← fields.mapM go
+    | .proj _ _ e => go e
+    | .get a ids => go a; let _ ← ids.mapM go
+    | .set a ids v => go a; let _ ← ids.mapM go; go v
   (Id.run (StateT.run (go e) Std.HashSet.emptyWithCapacity)).snd
 
-/-- Normalize an arithmetic expression, if possible -/
-def ArithExpr.normalize (e : ArithExpr) : Option LinArithExpr := do
+def FootprintExpr.toVarProj (e : FootprintExpr) : Option VarProj := do
   match e with
-  | .var v => pure { coefs := Std.HashMap.ofList [(v, 1)], const := 0 }
+  | .var v => pure { var := v, projs := [] }
+  | .proj _ field e =>
+    let p ← e.toVarProj
+    pure { p with projs := field :: p.projs}
+  | _ => none
+
+/-- Normalize an arithmetic expression, if possible -/
+def FootprintExpr.normalize (e : FootprintExpr) : Option LinArithExpr := do
+  match e with
+  | .var _ | .proj _ _ _ =>
+    let v ← e.toVarProj
+    pure { coefs := Std.HashMap.ofList [(v, 1)], const := 0 }
   | .lit n => pure { coefs := Std.HashMap.emptyWithCapacity, const := n }
-  | .const _ | .unknown => none
   | .binop op a b =>
     let { coefs := acoefs, const := aconst } ← normalize a
     let { coefs := bcoefs, const := bconst } ← normalize b
@@ -1214,7 +1166,7 @@ def ArithExpr.normalize (e : ArithExpr) : Option LinArithExpr := do
         | _, _ => none
       pure { const, coefs := Std.HashMap.ofList coefs }
     | _ => none
-  | .range _ _ _ _ => none
+  | .const _ | .unknown | .struct _ _ | .get _ _ | .set _ _ _ | .range _ _ _ _ => none
 
 inductive Input where
 | var (v : Var)
@@ -1265,7 +1217,7 @@ partial def analyzeFootprint (fp : Footprint) (input : Var) : Option Output := d
       -- We ignore the read indices
       normalizeArrayExpr a
     | .set a indices _ =>
-      let indices ← indices.mapM ArithExpr.normalize
+      let indices ← indices.mapM FootprintExpr.normalize
       let (input, indices') ← normalizeArrayExpr a
       pure (input, indices' ++ indices)
     | .proj _ _ _ =>
@@ -1279,7 +1231,7 @@ partial def analyzeFootprint (fp : Footprint) (input : Var) : Option Output := d
       let (input, writes) ← normalizeArrayExpr e
       pure (.array input writes)
     | .lit _ | .const _ | .binop _ _ _ | .range _ _ _ _ =>
-      let e ← e.toArithExpr.normalize
+      let e ← e.normalize
       pure (.arith e)
     | .struct typename fields =>
       let fields ← fields.mapM normalizeOutput
@@ -1353,6 +1305,78 @@ partial def analyzeFootprint (fp : Footprint) (input : Var) : Option Output := d
 
   --
   pure output
+
+/-!
+# Attribute: `inv_loop_iter`
+-/
+def State.init (startFid : Nat) (inputFVars : Array Expr) : MetaM State := do
+  trace[Inv] "inputs: {inputFVars}"
+  let mut fid := startFid
+  let inputVars ← do
+    let lctx ← getLCtx
+    let mut m : Array (FVarId × Var) := #[]
+    for fv in inputFVars do
+      let id := fid
+      fid := fid + 1
+      let decl := lctx.get! fv.fvarId!
+      let name := m!"{decl.userName}"
+      let name ← name.toString
+      m := m ++ #[(fv.fvarId!, {id, name := some name})]
+    pure m
+  let inputs := Std.HashMap.ofList inputVars.toList
+  let fp : Footprint := {
+    inputs,
+    outputs := #[],
+    provenance := Std.HashMap.emptyWithCapacity,
+    footprint := #[],
+  }
+  pure ⟨ fp ⟩
+
+initialize loopIterAttr : ArrayAttr LoopIter ← do
+  initializeArrayAttr `loopIterAttr loopIterExt
+    fun ext defName stx attrKind => do
+    -- Lookup the definition
+    let env ← getEnv
+    let some decl := env.findAsync? defName
+      | throwError "Could not find definition {defName}"
+    let sig := decl.sig.get
+    let ty := sig.type
+    -- Find where the position of the arguments
+    let loop : LoopIter ← MetaM.run' do
+      /- Strip the quantifiers.
+
+          We do this before elaborating the pattern because we need the universally
+          quantified variables to be in the context.
+      -/
+      forallTelescope ty.consumeMData fun fvars _ => do
+      let (body, start, stop, step, rangeKind, input) ← parseLoopIterArgs stx
+      /- Find the position of every fvar id -/
+      let positions ← findPositionsOfIndexOrExpr (#[body, input]) fvars
+      let body := positions[0]!
+      let input := positions[1]!
+
+      /- Process the range: -/
+      let state ← State.init 0 fvars
+      let toExpr e : MetaM VarProj := do
+        let e' ← FootprintM.run' (footprint.expr false e) state
+        let e' := e'.toVarProj
+        match e' with
+        | none => throwError "Invalid range index: {e}"
+        | some v => pure v
+      let start ← toExpr start
+      let stop ← toExpr stop
+      let step ← toExpr step
+
+      /- Check the range expressions -/
+      --let rec checkRangeExpr (e : FootprintExpr)
+
+      pure { body, start, stop, step, rangeKind, input }
+    -- Generate the key for the discrimination tree
+    let key ← MetaM.run' do
+      let (mvars, _) ← forallMetaTelescope ty.consumeMData
+      DiscrTree.mkPath (← mkAppOptM defName (mvars.map Option.some))
+    -- Store
+    ScopedEnvExtension.add ext (key, defName, loop) attrKind
 
 
 end Aeneas.Inv

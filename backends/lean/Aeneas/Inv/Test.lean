@@ -17,26 +17,7 @@ def analyzeLoop (k : Array (FVarId × Var) → Expr → State → TacticM α) : 
   -- Dive into the lambdas
   Meta.lambdaTelescope body.consumeMData fun inputFVars body => do
   trace[Inv] "inputs: {inputFVars}"
-  let mut fid := 0
-  let inputVars ← do
-    let lctx ← getLCtx
-    let mut m : Array (FVarId × Var) := #[]
-    for fv in inputFVars do
-      let id := fid
-      fid := fid + 1
-      let decl := lctx.get! fv.fvarId!
-      let name := m!"{decl.userName}"
-      let name ← name.toString
-      m := m ++ #[(fv.fvarId!, {id, name := some name})]
-    pure m
-  let inputs := Std.HashMap.ofList inputVars.toList
-  let fp : Footprint := {
-    inputs,
-    outputs := #[],
-    provenance := Std.HashMap.emptyWithCapacity,
-    footprint := #[],
-  }
-  let state : State := ⟨ fp ⟩
+  let state ←  State.init 0 inputFVars
   trace[Inv] "initial state: {state}"
   let (_, state) ← FootprintM.run (footprint.expr true body) state
   trace[Inv] "{state}"
