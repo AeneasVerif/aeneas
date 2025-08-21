@@ -1350,6 +1350,24 @@ instance : ToMessageData LinRange where
     let { start, stop, step, kind } := r
     m!"[{start}:{stop}:{kind.toString}={step}]"
 
+def LinArithExpr.add (e0 e1 : LinArithExpr) : MetaM LinArithExpr := do
+  let { coefs := coefs0, const := const0 } := e0
+  let { coefs := coefs1, const := const1 } := e1
+  let mut coefs := coefs0
+  for (var, coef) in coefs1 do
+    coefs := coefs.alter var (fun coef' =>
+      match coef' with
+      | none => some coef
+      | some coef' => coef + coef')
+  pure { coefs, const := const0 + const1 }
+
+def LinArithExpr.addConst (e : LinArithExpr) (n : Nat) : LinArithExpr :=
+  { e with const := e.const + n }
+
+def LinArithExpr.mulConst (e : LinArithExpr) (n : Nat) : LinArithExpr :=
+  if n = 0 then { coefs := {}, const := 0 }
+  else { coefs := e.coefs.map fun _ n' => n * n', const := e.const * n }
+
 -- For now we only support cases where the number of steps is known to be a constant
 def LinRange.toNumSteps (r : LinRange) : MetaM Nat := do
   let toSimpl (e : LinArithExpr) := (e.coefs.toList, e.const)
@@ -1382,24 +1400,6 @@ def LinRange.toNumSteps (r : LinRange) : MetaM Nat := do
     | .sub => pure ((startCoef - stopCoef) / stepCoef)
     | .mul | .div => throwError "Unimplemented"
   | _ => throwError "Unimplemented"
-
-def LinArithExpr.add (e0 e1 : LinArithExpr) : MetaM LinArithExpr := do
-  let { coefs := coefs0, const := const0 } := e0
-  let { coefs := coefs1, const := const1 } := e1
-  let mut coefs := coefs0
-  for (var, coef) in coefs1 do
-    coefs := coefs.alter var (fun coef' =>
-      match coef' with
-      | none => some coef
-      | some coef' => coef + coef')
-  pure { coefs, const := const0 + const1 }
-
-def LinArithExpr.addConst (e : LinArithExpr) (n : Nat) : LinArithExpr :=
-  { e with const := e.const + n }
-
-def LinArithExpr.mulConst (e : LinArithExpr) (n : Nat) : LinArithExpr :=
-  if n = 0 then { coefs := {}, const := 0 }
-  else { e with coefs := e.coefs.map fun _ n' => n * n'}
 
 structure NormalizeState where
   -- Mapping from index variable to its range
@@ -1449,7 +1449,7 @@ partial def normalizeLoop (fp : Footprint)
         (b, a)
       ```
     -/
-    checkOutput [] output
+    --checkOutput [] output
 
 
     /- Apply the transformation to the inputs of the loop.
@@ -1560,6 +1560,7 @@ where
       else throwError "Could not merge: {out}"
     | _ => throwError "Could not merge: {out}"
 
+  -- TODO: remove
   checkOutput (projs : List Nat) (e : Output) : NormalizeM Unit := do
     withTraceNode `Inv (fun _ => pure m!"checkOutput") do
     trace[Inv] "projs: {projs}"
@@ -1578,6 +1579,7 @@ where
     trace[Inv] "projs: {projs}"
     trace[Inv] "e: {e}"
     match e.coefs.toList with
+    | [] => pure ()
     | [(var, _)] =>
       if var.projs = projs then pure ()
       else throwError "Invalid output arith expr: expr: {e}, projs: {projs}"
@@ -1643,33 +1645,48 @@ where
     /- Check that the output sub-field is consistent.
 
       We support the following case:
-      `fun (x, y) => (a * x + c + ..., y)`
+      `fun (x, y) => (a * x + e)`
             ^             ^
             the output is a linarith expression of the input
-            all the factors are are constant throughout the loop iterations
+            e is a linarith expr in which all the factors are constant throughout the loop iterations
       We can do: `fun (x, y) => (x + 1, y)`
       but not: `fun (x, y) => (y, x + 1)` (we do not allow swapping fields).
 
       Also, for now we only allow adding/subtracting a single variable.
      -/
-    match a.coefs.toList with
+    -- First, either the output is constant, or there is exactly one term which refers the loop input
+    let (lpCoefs, coefs) := a.coefs.toList.partition (fun (v, _) => isCurrentLoopInput v.var)
+    match lpCoefs with
+    | [] =>
+      -- Constant output
+      trace[Inv] "No current loop coef: the output is constant"
+      pure a
     | [(var, coef)] =>
-      trace[Inv] "only one coef"
+      trace[Inv] "exactly one coef"
       -- Check the variable and the projectors
       if var.projs ≠ projs then throwError "Could not apply linarith output {a} to input {input}: the projections don't match"
-      if ¬ isCurrentLoopInput var.var then
-        throwError "Could not apply linarith output {a} to input {input}: the output var is not an input of the current loop"
-      --
       let numSteps ← range.toNumSteps
-      -- We support: `N + c`, `N - c` and `N * c`
       if coef ≠ 1 then
-        if a.const ≠ 0 then throwError "Could not apply linarith output {a} to input {input}: coef ≠ 1 and const ≠ 0"
-        else pure (input.mulConst (coef ^ numSteps))
-      else pure (input.addConst (a.const * numSteps))
-
+        if a.const ≠ 0 ∨ ¬ coefs.isEmpty then throwError "Could not apply linarith output {a} to input {input}: the coef ≠ 1 and the other coefficients/the constant are ≠ 0"
+        else
+          trace[Inv] "coef ≠ 1"
+          let output := input.mulConst (coef ^ numSteps)
+          trace[Inv] "output: {output}"
+          pure output
+      else
+        trace[Inv] "coef = 1"
+        /- The coefficient in front of the input is 1, so we're just adding `numSteps * c` where `c` is the
+           formula without the coefficient about the current input -/
+        let toAdd : LinArithExpr := { coefs := Std.HashMap.ofList coefs, const := a.const }
+        trace[Inv] "toAdd: {toAdd}, numSteps: {numSteps}"
+        let toAdd := toAdd.mulConst numSteps
+        trace[Inv] "toAdd * numSteps: {toAdd}"
+        let output ← input.add toAdd
+        trace[Inv] "output: {output}"
+        pure output
     | _ =>
       trace[Inv] "⚠ Not handled yet"
-      throwError "Could not apply linarith output {a} to input {input}"
+      throwError "Could not apply linarith output {a} to input {input} because the input/output relation involves more than one input of the current loop"
 
 partial def getLoopOutputDependencies (fp : Footprint) (outputs : Array FootprintExpr) :
   Std.HashSet LoopId :=

@@ -239,6 +239,17 @@ example :
   analyze_loop
   simp [post]
 
+-- Constant output (shouldn't be useful, but good for completeness)
+set_option trace.Inv true in
+example (n : Nat) :
+  post (
+    loopIter 0 256 n
+      fun (_i : Nat) (_n : Nat) =>
+      0)
+    (fun _ => True) := by
+  analyze_loop
+  simp [post]
+
 -- Increment a value by 1 at every iteration
 set_option trace.Inv true in
 example (n : Nat) :
