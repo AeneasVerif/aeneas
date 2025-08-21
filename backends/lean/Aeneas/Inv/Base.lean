@@ -1497,7 +1497,7 @@ partial def normalizeLoop (fp : Footprint)
   (range : Range)
   (input : FootprintExpr)
   (outputs : Array FootprintExpr) : NormalizeM Output := do
-  withTraceNode `Inv (fun _ => pure m!"normalizeLoopOutputs") do
+  withTraceNode `Inv (fun _ => pure m!"normalizeLoop") do
   try
     /- Normalize the outputs.
 
@@ -1693,25 +1693,29 @@ where
     trace[Inv] "range: {range}"
     trace[Inv] "output: {output}"
     trace[Inv] "input: {input}"
-    match (output, input) with
-    | (.struct typeName outFields, .struct _ inFields) =>
+    match output, input with
+    | .struct typeName outFields, .struct _ inFields =>
       if outFields.size ≠ inFields.size
       then throwError "Could not apply output {output} to input {input}"
       else
         let fields := outFields.zip inFields
         pure (.struct typeName (← fields.mapIdxM (fun i f => applyOutputRelToInput (i :: projs) range f.fst f.snd)))
-    | (.arith a, _) =>
+    | .struct typeName outFields, .var _
+    | .struct typeName outFields, .proj _ _ =>
+      -- The input may have been not fully expanded
+      pure (.struct typeName (← outFields.mapIdxM (fun i f => applyOutputRelToInput (i :: projs) range f (.proj i input))))
+    | .arith a, _ =>
       -- Normalize the input to a linear arithmetic expression and apply the transformation
       let input ← normalizeLinArithExpr input
       let output ← applyArithToInput projs a range input
       pure (.arith output)
-    | (.array a indices, _) =>
+    | .array a indices, _ =>
       let (input, indices') ← normalizeArrayExpr input
       -- Check that the output array corresponds to the input array (same projections)
       checkInput projs a
       -- Add the indices
       pure (.array input (indices ++ indices'))
-    | _ => throwError "Could not apply output {output} to input {input}"
+    | _, _ => throwError "Could not apply output {output} to input {input}"
 
   applyArithToInput (projs : List Nat) (a : LinArithExpr) (range : LinRange) (input : LinArithExpr) :
     NormalizeM LinArithExpr := do

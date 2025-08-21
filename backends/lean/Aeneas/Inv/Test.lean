@@ -335,8 +335,8 @@ set_option trace.Inv true in
 example (src : Array Nat) :
   post (
     loopIter 0 8 (0, src)
-      fun (_ : Nat) (state : Nat × Array Nat) =>
-      loopIter 0 8 state fun _ state =>
+      fun (_i : Nat) (state : Nat × Array Nat) =>
+      loopIter 0 8 state fun _j state =>
       let (n, a) := state
       (n + 1, a))
     (fun _ => True) := by
