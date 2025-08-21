@@ -1318,6 +1318,7 @@ inductive Input where
 deriving BEq
 
 inductive Output where
+| input (v : Input)
 | arith (a : LinArithExpr)
 | array (a : Input) (writeIndices : Array LinArithExpr) -- TODO: add write values
 | struct (typename : Name) (fields : Array Output)
@@ -1332,6 +1333,7 @@ instance : ToMessageData Input where
 
 partial def Output.toMessageData (e : Output) : MessageData := Id.run do
   match e with
+  | .input v => m!"{v}"
   | .arith e => e.toMessageData
   | .array a indices => m!"{a}{indices} ← *"
   | .struct _ fields => m!"{arrayToTupleMessageData Output.toMessageData fields}"
@@ -1483,6 +1485,30 @@ def LinRange.toNumSteps (r : LinRange) : MetaM LinArithExpr := do
       else throwError "Could not compute: log ({r.step}) ({r.start} / {r.stop})"
     else throwError "Could not compute: log ({r.step}) ({r.start} / {r.stop})"
 
+def Input.mk (projs : List Nat) (v : Var) : Input :=
+  match projs with
+  | [] => .var v
+  | p :: projs => .proj p (.mk projs v)
+
+def Input.addProjs (projs : List Nat) (e : Input) : Input :=
+  match projs with
+  | [] => e
+  | p :: projs => .proj p (.addProjs projs e)
+
+def applyProjsToOutput (projs : List Nat) (output : Output) : MetaM Output := do
+  match projs with
+  | [] => pure output
+  | p :: projs' =>
+    match output with
+    | .input v => pure (.input (Input.addProjs projs v))
+    | .struct typename fields =>
+      if h: p < fields.size then
+        let field := fields[p]
+        applyProjsToOutput projs' field
+      else throwError "Out of bound projection {p} applied to structure {output}"
+    | .arith _ | .array _ _ => throwError "Unexpected projection over output: {output}"
+
+-- TODO: add more things in there, such as the loop outputs
 structure NormalizeState where
   -- Mapping from index variable to its range
   varToRange : Std.HashMap Var LinRange := {}
@@ -1491,8 +1517,10 @@ abbrev NormalizeM := StateRefT NormalizeState MetaM
 
 def NormalizeState.empty : NormalizeState := {}
 
-partial def normalizeLoop (fp : Footprint)
+partial def normalizeLoop
+  (fp : Footprint)
   (indices : Std.HashSet Var)
+  (loopOutputs : Std.HashMap LoopId (Option Output))
   (loopId : LoopId)
   (range : Range)
   (input : FootprintExpr)
@@ -1503,7 +1531,7 @@ partial def normalizeLoop (fp : Footprint)
 
       We are only interested in the provenance (i.e., which subfield of an input value
       it comes from) and the indices at which they are update. -/
-    let outputs ← outputs.mapM normalizeOutput
+    let outputs ← outputs.mapM (normalizeOutput [])
 
     /- Merge the outputs together -/
     let output ← do
@@ -1609,18 +1637,25 @@ where
       throwError "Could not normalize array expression: {e}"
 
   /- Normalize an output expression -/
-  normalizeOutput (e : FootprintExpr) : NormalizeM Output := do
+  normalizeOutput (projs : List Nat) (e : FootprintExpr) : NormalizeM Output := do
      withTraceNode `Inv (fun _ => pure m!"normalizeOutput") do
     trace[Inv] "e: {e}"
     match e with
-    | .var _ | .get _ _ | .set _ _ _ | .proj _ _ =>
+    | .var v =>
+      -- This may be a loop output, in which case we need to look it up
+      if let some (loopId', .output) := fp.varToLoop.get? v then
+        if let some (some output) := loopOutputs.get? loopId' then
+          applyProjsToOutput projs output
+        else throwError "Could not lookup the normalized output of loop {loopId'}"
+      else pure (.input (.var v))
+    | .get _ _ | .set _ _ _ | .proj _ _ =>
       let (input, writes) ← normalizeArrayExpr e
       pure (.array input writes)
     | .lit _ | .const _ | .binop _ _ _ | .range _ _ _ _ =>
       let e ← normalizeLinArithExpr e
       pure (.arith e)
     | .struct typename fields =>
-      let fields ← fields.mapM normalizeOutput
+      let fields ← fields.mapM (normalizeOutput projs)
       pure (.struct typename fields)
     | .unknown => throwError "Could not normalize output: {e}"
 
@@ -1648,6 +1683,7 @@ where
     trace[Inv] "projs: {projs}"
     trace[Inv] "e: {e}"
     match e with
+    | .input _ => pure () -- TODO?
     | .arith a => checkOutputArith projs a
     | .array a _ =>
       -- No need to check the write indices: they've already been normalized
@@ -1834,17 +1870,17 @@ partial def analyzeFootprint (fp : Footprint) (indices : Std.HashSet Var) :
       stack := stack.enqueue (loopId, outputs)
     else
       -- Treated: normalize and add to the map
-      trace[Inv] "Normalizing: {loopId}"
-      let loop := fp.loopIters.get! loopId
-      let output ← do
+      let (output, monadState') ← do
+        withTraceNode `Inv (fun _ => pure m!"Normalizing: {loopId}") do
+        let loop := fp.loopIters.get! loopId
         try
           let (output, monadState') ←
-            StateRefT'.run (normalizeLoop fp indices loopId loop.range loop.input outputs) monadState
-          monadState := monadState'
-          pure (some output)
+            StateRefT'.run (normalizeLoop fp indices loopOutputs loopId loop.range loop.input outputs) monadState
+          pure (some output, monadState')
         catch | e => do
           trace[Inv] "Aborted with error: {e.toMessageData}"
-          pure none
+          pure (none, monadState)
+      monadState := monadState'
       loopOutputs := loopOutputs.insert loopId output
 
   --
