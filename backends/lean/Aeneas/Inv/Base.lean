@@ -1259,10 +1259,10 @@ partial def FootprintExpr.getVars (e : FootprintExpr) : Std.HashSet Var :=
     | .lit _ | .const _ | .unknown => pure ()
     | .binop _ a b => go a; go b
     | .range start stop step _ => go start; go stop; go step
-    | .struct _ fields => let _ ← fields.mapM go
+    | .struct _ fields => fields.forM go
     | .proj _ e => go e
-    | .get a ids => go a; let _ ← ids.mapM go
-    | .set a ids v => go a; let _ ← ids.mapM go; go v
+    | .get a ids => go a; ids.forM go
+    | .set a ids v => go a; ids.forM go; go v
   (Id.run (StateT.run (go e) Std.HashSet.emptyWithCapacity)).snd
 
 def FootprintExpr.toVarProj (e : FootprintExpr) : Option VarProj := do
@@ -1486,17 +1486,67 @@ partial def normalizeLoopOutputs (fp : Footprint) (indices : Std.HashSet Var)
 
   pure output
 
+partial def getLoopOutputDependencies (fp : Footprint) (outputs : Array FootprintExpr) :
+  Std.HashSet LoopId :=
+  let m := StateM (Std.HashSet LoopId)
+  let getVarDeps (v : Var) : m Unit := do
+    match fp.varToLoop.get? v with
+    | some (lpId, .output) => set ((← get).insert lpId)
+    | _ => pure ()
+  let rec getInputDeps (x : Input) : m Unit :=
+    match x with
+    | .var v => getVarDeps v
+    | .proj _ e => getInputDeps e
+  let rec getDeps (output : FootprintExpr) : m Unit := do
+    match output with
+    | .var v => getVarDeps v
+    | .get a indices => getDeps a; indices.forM getDeps
+    | .set a indices value => getDeps a; indices.forM getDeps; getDeps value
+    | .proj _ e => getDeps e
+    | .struct _ fields => fields.forM getDeps
+    | .lit _  | .const _ | .unknown => pure ()
+    | .binop _ a b => getDeps a; getDeps b
+    | .range start stop step _ => getDeps start; getDeps stop; getDeps step
+  let runAll : m Unit := do
+    outputs.forM getDeps
+  let (_, s) := StateT.run runAll Std.HashSet.emptyWithCapacity
+  s
+
 partial def analyzeFootprint (fp : Footprint) (indices : Std.HashSet Var) :
   MetaM (Std.HashMap LoopId (Option Output)) := do
   withTraceNode `Inv (fun _ => pure m!"analyzeFootprint") do
 
-  /- Normalize the outputs -/
+  let loopDeps ← fp.outputs.toArray.mapM fun (loopId, outputs) => do
+    pure (loopId, getLoopOutputDependencies fp outputs)
+  let loopDeps : Std.HashMap LoopId (Std.HashSet LoopId) :=
+    Std.HashMap.ofList loopDeps.toList
   let mut loopOutputs := Std.HashMap.emptyWithCapacity
-  for (loopId, outputs) in fp.outputs do
-    let output ← do
-      try pure (some (← normalizeLoopOutputs fp indices outputs))
-      catch | _ => pure none
-    loopOutputs := loopOutputs.insert loopId output
+  let mut stack := Std.Queue.empty
+  stack := stack.enqueueAll fp.outputs.toList
+
+  let mut visited : Std.HashSet LoopId := Std.HashSet.emptyWithCapacity
+
+  while ¬ stack.isEmpty do
+    let some ((loopId, outputs), stack') := stack.dequeue?
+      | throwError "Unreachable"
+    stack := stack'
+    -- Sanity check: we're not stuck in a loop
+    if visited.contains loopId then
+      continue
+    visited := visited.insert loopId
+    -- Check if we treated all the dependencies
+    let deps := loopDeps.get! loopId
+    if ¬ deps.all loopOutputs.contains then
+      -- Not treated: enqueue the loop
+      trace[Inv] "Enqueuing: {loopId}"
+      stack := stack.enqueue (loopId, outputs)
+    else
+      -- Treated: normalize and add to the map
+      trace[Inv] "Normalizing: {loopId}"
+      let output ← do
+        try pure (some (← normalizeLoopOutputs fp indices outputs))
+        catch | _ => pure none
+      loopOutputs := loopOutputs.insert loopId output
 
   --
   pure loopOutputs
