@@ -277,10 +277,10 @@ def list_nth_mut
     else
       do
       let i1 ← i - 1#u32
-      let (t, list_nth_mut_back) ← list_nth_mut tl i1
+      let (x1, list_nth_mut_back) ← list_nth_mut tl i1
       let back := fun ret => let tl1 := list_nth_mut_back ret
                              List.Cons x tl1
-      ok (t, back)
+      ok (x1, back)
   | List.Nil => fail panic
 partial_fixpoint
 

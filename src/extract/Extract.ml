@@ -286,7 +286,10 @@ let rec extract_typed_pattern (span : Meta.span) (ctx : extraction_ctx)
     | PatConstant cv ->
         extract_literal span fmt is_pattern inside cv;
         ctx
-    | PatVar (v, _) ->
+    | PatBound _ ->
+        (* We should have opened the pattern *)
+        [%internal_error] span
+    | PatOpen (v, _) ->
         let vname = ctx_compute_var_basename span ctx v.basename v.ty in
         let ctx, vname = ctx_add_var span vname v.id ctx in
         F.pp_print_string fmt vname;
@@ -548,9 +551,10 @@ let rec extract_texpression (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (inside : bool) (e : texpression) : unit =
   let is_pattern = false in
   match e.e with
-  | Var var_id ->
+  | FVar var_id ->
       let var_name = ctx_get_var span var_id ctx in
       F.pp_print_string fmt var_name
+  | BVar _ -> [%internal_error] span
   | CVar var_id ->
       let var_name = ctx_get_const_generic_var span Item var_id ctx in
       F.pp_print_string fmt var_name
@@ -559,7 +563,7 @@ let rec extract_texpression (span : Meta.span) (ctx : extraction_ctx)
       let app, args = destruct_apps e in
       extract_App span ctx fmt inside app args
   | Lambda _ ->
-      let xl, e = destruct_lambdas e in
+      let xl, e = raw_destruct_lambdas e in
       extract_Lambda (span : Meta.span) ctx fmt inside xl e
   | Qualif _ ->
       (* We use the app case *)
@@ -992,8 +996,8 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
   *)
   let lets, next_e =
     match backend () with
-    | HOL4 -> destruct_lets_no_interleave span e
-    | FStar | Coq | Lean -> destruct_lets e
+    | HOL4 -> raw_destruct_lets_no_interleave span e
+    | FStar | Coq | Lean -> raw_destruct_lets e
   in
   (* Extract the let-bindings *)
   let extract_let (ctx : extraction_ctx) (monadic : bool) (lv : typed_pattern)
@@ -1394,9 +1398,10 @@ and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
             *)
             let has_same_name =
               match fe.e with
-              | Var vid ->
+              | FVar vid ->
                   let var_name = ctx_get_var span vid ctx in
                   f = var_name
+              | BVar _ -> [%internal_error] span
               | _ -> false
             in
             if not has_same_name then (
@@ -1520,7 +1525,7 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
             (* Close the box for the input parameters *)
             F.pp_close_box fmt ();
             ctx)
-          ctx body.inputs_lvs
+          ctx body.inputs
   in
   let type_params = List.combine explicit.explicit_types type_params in
   let cg_params = List.combine explicit.explicit_const_generics cg_params in
@@ -1570,10 +1575,17 @@ let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
     (backend () = FStar)
     "The generation of template decrease clauses is only supported for the F* \
      backend";
-
   (* Retrieve the function name *)
   let def_name =
     ctx_get_termination_measure def.item_meta.span def.def_id def.loop_id ctx
+  in
+  (* Open the binders - it is easier to only manipulate variables which have unique ids *)
+  reset_fvar_id_counter ();
+  let def =
+    {
+      def with
+      body = Option.map (open_all_fun_body def.item_meta.span) def.body;
+    }
   in
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
@@ -1642,11 +1654,20 @@ let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
   (*
    * Extract a template for the termination measure
    *)
+  (* Open the binders - it is easier to only manipulate variables which have unique ids *)
+  reset_fvar_id_counter ();
+  let def =
+    {
+      def with
+      body = Option.map (open_all_fun_body def.item_meta.span) def.body;
+    }
+  in
   (* Retrieve the function name *)
   let def_name =
     ctx_get_termination_measure def.item_meta.span def.def_id def.loop_id ctx
   in
   let def_body = Option.get def.body in
+  let span = def.item_meta.span in
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
@@ -1677,7 +1698,7 @@ let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
   F.pp_close_box fmt ();
   F.pp_print_space fmt ();
   (* Tuple of the arguments *)
-  let vars = List.map (fun (v : var) -> v.id) def_body.inputs in
+  let vars = List.map (as_pat_open_fvar_id span) def_body.inputs in
 
   if List.length vars = 1 then
     F.pp_print_string fmt
@@ -1771,6 +1792,15 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   let def_name =
     ctx_get_local_function def.item_meta.span def.def_id def.loop_id ctx
   in
+  (* Open the binders - it is easier to only manipulate variables which have unique ids *)
+  reset_fvar_id_counter ();
+  let def =
+    {
+      def with
+      body = Option.map (open_all_fun_body def.item_meta.span) def.body;
+    }
+  in
+  let span = def.item_meta.span in
   (* Add a break before *)
   if backend () <> HOL4 || not (decl_is_first_from_group kind) then
     F.pp_print_break fmt 0 0;
@@ -1889,13 +1919,7 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
        * functions - we also ignore the additional state received by the
        * backward function, if there is one).
        *)
-      let inputs_lvs =
-        let all_inputs = (Option.get def.body).inputs_lvs in
-        let num_fwd_inputs =
-          def.signature.fwd_info.fwd_info.num_inputs_with_fuel_with_state
-        in
-        Collections.List.prefix num_fwd_inputs all_inputs
-      in
+      let inputs_lvs = (Option.get def.body).inputs in
       (* TODO: we should probably print the input variables, not the typed
          patterns *)
       let _ =
@@ -1949,11 +1973,7 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   (* Termination clause and proof for Lean *)
   if has_decreases_clause && backend () = Lean then (
     let def_body = Option.get def.body in
-    let all_vars = List.map (fun (v : var) -> v.id) def_body.inputs in
-    let num_fwd_inputs =
-      def.signature.fwd_info.fwd_info.num_inputs_with_fuel_with_state
-    in
-    let vars = Collections.List.prefix num_fwd_inputs all_vars in
+    let vars = List.map (as_pat_open_fvar_id span) def_body.inputs in
 
     (* termination_by *)
     let terminates_name =
@@ -1971,7 +1991,7 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
       (fun v ->
         F.pp_print_space fmt ();
         F.pp_print_string fmt (ctx_get_var def.item_meta.span v ctx_body))
-      all_vars;
+      vars;
     F.pp_print_space fmt ();
     F.pp_print_string fmt "=>";
     (* Close the box for [termination_by CALL =>] *)
@@ -2049,6 +2069,14 @@ let extract_fun_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
   (* Retrieve the definition name *)
   let def_name =
     ctx_get_local_function def.item_meta.span def.def_id def.loop_id ctx
+  in
+  (* Open the binders - it is easier to only manipulate variables which have unique ids *)
+  reset_fvar_id_counter ();
+  let def =
+    {
+      def with
+      body = Option.map (open_all_fun_body def.item_meta.span) def.body;
+    }
   in
   [%cassert] def.item_meta.span
     (def.signature.generics.const_generics = [])
@@ -2264,7 +2292,14 @@ let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
   let span = body.item_meta.span in
   [%sanity_check] span body.is_global_decl_body;
   [%sanity_check] span (body.signature.inputs = []);
-
+  (* Open the binders - it is easier to only manipulate variables which have unique ids *)
+  reset_fvar_id_counter ();
+  let body =
+    {
+      body with
+      body = Option.map (open_all_fun_body body.item_meta.span) body.body;
+    }
+  in
   (* Add a break then the name of the corresponding LLBC declaration *)
   F.pp_print_break fmt 0 0;
   let name =

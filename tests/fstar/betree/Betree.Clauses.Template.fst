@@ -24,7 +24,7 @@ let betree_List_reverse_loop_decreases (#t : Type0) (self : betree_List_t t)
     Source: 'src/betree.rs', lines 290:8-300:9 *)
 unfold
 let betree_List_split_at_loop_decreases (#t : Type0) (n : u64)
-  (beg : betree_List_t t) (self : betree_List_t t) : nat =
+  (beg : betree_List_t t) (end1 : betree_List_t t) : nat =
   admit ()
 
 (** [betree::betree::{betree::betree::List<(u64, T)>}::partition_at_pivot]: decreases clause
@@ -32,7 +32,7 @@ let betree_List_split_at_loop_decreases (#t : Type0) (n : u64)
 unfold
 let betree_ListPairU64T_partition_at_pivot_loop_decreases (#t : Type0)
   (pivot : u64) (beg : betree_List_t (u64 & t))
-  (end1 : betree_List_t (u64 & t)) (self : betree_List_t (u64 & t)) : nat =
+  (end1 : betree_List_t (u64 & t)) (curr : betree_List_t (u64 & t)) : nat =
   admit ()
 
 (** [betree::betree::{betree::betree::Node}::lookup_in_bindings]: decreases clause

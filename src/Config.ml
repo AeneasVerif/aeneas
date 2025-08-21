@@ -185,7 +185,7 @@ let use_fuel = ref false
      [RefCell::try_mut_borrow]}: in order to model this behaviour we would need
     a state, and calling the backward function would update the state by
     reinserting the updated value in it. *)
-let backward_no_state_update = ref false
+let backward_state_update = ref false
 
 (** Controls whether we split the generated definitions between different files
     for the types, clauses and functions, or if we group them in one file. *)
@@ -428,3 +428,6 @@ let extract_external_name_patterns = ref true
 
 (** *)
 let match_patterns_with_trait_decl_refs = true
+
+(** *)
+let allow_unbound_variables_in_metadata = true
