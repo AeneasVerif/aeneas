@@ -22,6 +22,10 @@ namespace LocalContext
     let ls ← lctx.getDecls
     ls.filterM (fun d => isProp d.type)
 
+  def getNonAssumptions (lctx : Lean.LocalContext) : MetaM (List Lean.LocalDecl) := do
+    let ls ← lctx.getDecls
+    ls.filterM (fun d => do pure ¬ (← isProp d.type))
+
 end LocalContext
 
 end Lean

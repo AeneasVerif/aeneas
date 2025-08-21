@@ -1,5 +1,6 @@
 import Aeneas.Std.Primitives
 import AeneasMeta.Extensions
+import Mathlib.Data.Nat.Log
 
 namespace Aeneas.Inv
 
@@ -1318,7 +1319,7 @@ deriving BEq
 
 inductive Output where
 | arith (a : LinArithExpr)
-| array (a : Input) (writeIndices : Array LinArithExpr)
+| array (a : Input) (writeIndices : Array LinArithExpr) -- TODO: add write values
 | struct (typename : Name) (fields : Array Output)
 
 def Input.toMessageData (e : Input) : MessageData := Id.run do
@@ -1332,28 +1333,173 @@ instance : ToMessageData Input where
 partial def Output.toMessageData (e : Output) : MessageData := Id.run do
   match e with
   | .arith e => e.toMessageData
-  | .array a indices => m!"{a} ← {indices}"
+  | .array a indices => m!"{a}{indices} ← *"
   | .struct _ fields => m!"{arrayToTupleMessageData Output.toMessageData fields}"
 
 instance : ToMessageData Output where
   toMessageData := Output.toMessageData
 
-partial def normalizeLoopOutputs (fp : Footprint) (indices : Std.HashSet Var)
-  (outputs : Array FootprintExpr) : MetaM Output := do
-  withTraceNode `Inv (fun _ => pure m!"normalizeLoopOutputs") do
+structure LinRange where
+  start : LinArithExpr
+  stop : LinArithExpr
+  step : LinArithExpr
+  kind : RangeKind
 
-  let normalizeFootprintExpr (e : FootprintExpr) : MetaM LinArithExpr :=
+instance : ToMessageData LinRange where
+  toMessageData r :=
+    let { start, stop, step, kind } := r
+    m!"[{start}:{stop}:{kind.toString}={step}]"
+
+-- For now we only support cases where the number of steps is known to be a constant
+def LinRange.toNumSteps (r : LinRange) : MetaM Nat := do
+  let toSimpl (e : LinArithExpr) := (e.coefs.toList, e.const)
+  let start := toSimpl r.start
+  let stop := toSimpl r.stop
+  let step := toSimpl r.step
+  match (start, stop, step) with
+  | (([], start), ([], stop), ([], step)) =>
+    if step = 0 then throwError "Step is 0"
+    match r.kind with
+    | .add => pure ((stop - start) / step)
+    | .sub => pure ((start - stop) / step)
+    | .mul => pure (Nat.log step (stop/start))
+    | .div => pure (Nat.log step (start/stop))
+  | (([startCoef], startConst), ([stopCoef], stopConst), ([], step)) =>
+    if ¬ startCoef == stopCoef then throwError "Unimplemented"
+    match r.kind with
+    | .add => pure ((stopConst - startConst) / step)
+    | .sub => pure ((startConst - stopConst) / step)
+    | .mul | .div => throwError "Unimplemented"
+  | (([(startVar, startCoef)], startConst),
+    ([(stopVar, stopCoef)], stopConst),
+    ([(stepVar, stepCoef)], stepConst)) =>
+    if ¬ startVar.var == stopVar.var then throwError "Unimplemented"
+    if ¬ startVar.var == stepVar.var then throwError "Unimplemented"
+    if stepConst ≠ 0 then throwError "Unimplemented"
+    if startConst ≠ stopConst then throwError "Unimplemented"
+    match r.kind with
+    | .add => pure ((stopCoef - startCoef) / stepCoef)
+    | .sub => pure ((startCoef - stopCoef) / stepCoef)
+    | .mul | .div => throwError "Unimplemented"
+  | _ => throwError "Unimplemented"
+
+def LinArithExpr.add (e0 e1 : LinArithExpr) : MetaM LinArithExpr := do
+  let { coefs := coefs0, const := const0 } := e0
+  let { coefs := coefs1, const := const1 } := e1
+  let mut coefs := coefs0
+  for (var, coef) in coefs1 do
+    coefs := coefs.alter var (fun coef' =>
+      match coef' with
+      | none => some coef
+      | some coef' => coef + coef')
+  pure { coefs, const := const0 + const1 }
+
+def LinArithExpr.addConst (e : LinArithExpr) (n : Nat) : LinArithExpr :=
+  { e with const := e.const + n }
+
+def LinArithExpr.mulConst (e : LinArithExpr) (n : Nat) : LinArithExpr :=
+  if n = 0 then { coefs := {}, const := 0 }
+  else { e with coefs := e.coefs.map fun _ n' => n * n'}
+
+structure NormalizeState where
+  -- Mapping from index variable to its range
+  varToRange : Std.HashMap Var LinRange := {}
+
+abbrev NormalizeM := StateRefT NormalizeState MetaM
+
+def NormalizeState.empty : NormalizeState := {}
+
+partial def normalizeLoop (fp : Footprint)
+  (indices : Std.HashSet Var)
+  (loopId : LoopId)
+  (range : Range)
+  (input : FootprintExpr)
+  (outputs : Array FootprintExpr) : NormalizeM Output := do
+  withTraceNode `Inv (fun _ => pure m!"normalizeLoopOutputs") do
+  try
+    /- Normalize the outputs.
+
+      We are only interested in the provenance (i.e., which subfield of an input value
+      it comes from) and the indices at which they are update. -/
+    let outputs ← outputs.mapM normalizeOutput
+
+    /- Merge the outputs together -/
+    let output ← do
+      match outputs.toList with
+      | [] => throwError "No output"
+      | output :: outputs =>
+        let mut res := output
+        for output in outputs do
+          res ← mergeOutputs (res, output)
+        pure res
+
+    /- TODO: remove
+      Check that the relation between the inputs and the outputs is consistent, that is if
+      we receive a tuple as input, we do not change the order of the elements of the tuple
+      (but might update them). Typically, this is ok:
+      ```
+        fun i state =>
+        let (a, b) := state
+        (a, b.set i a[i])
+      ```
+      but this is not (we swap `a` and `b`):
+      ```
+        fun i state =>
+        let (a, b) := state
+        (b, a)
+      ```
+    -/
+    checkOutput [] output
+
+
+    /- Apply the transformation to the inputs of the loop.
+
+      For instance, if we have: `loopIter 0 256 (n, a) (fun i (n', a') => (n' + 1, a'.set! i 0))`
+      The output is: `(loop@0.input.0 + 1, loop@0.input.0.set! loop@0.index 0)`
+      The input is: `(n, a)`
+      And the range is: `loop@0.index ∈ [0:256:+=1]`
+      We want the result to be: `(n + 256, a[i] ← *) where i ∈ [0:256:+=1]`
+    -/
+    let output ← applyOutputRelToInput [] (← normalizeRange range) output input
+
+    --
+    pure output
+  catch e => do
+    trace[Inv] "⚠ Aborted with error: {e.toMessageData}"
+    throw e
+
+where
+  registerIndex (v : Var) : NormalizeM Unit := do
+    let s ← get
+    if s.varToRange.contains v then pure ()
+    else
+      match fp.varToLoop.get? v with
+      | some (loopId, .index) =>
+        -- This variable is used as an index: lookup the loop information and register the range
+        let loop := fp.loopIters.get! loopId
+        let range ← normalizeRange loop.range
+        set { s with varToRange := s.varToRange.insert v range }
+      | _ => pure ()
+
+  normalizeRange (range : Range) : NormalizeM LinRange := do
+    let { start, stop, step, kind } := range
+    let start ← normalizeLinArithExpr start
+    let stop ← normalizeLinArithExpr stop
+    let step ← normalizeLinArithExpr step
+    pure {start, stop, step, kind}
+
+  normalizeLinArithExpr (e : FootprintExpr) : NormalizeM LinArithExpr := do
     match e.normalize with
     | none => throwError "Could not normalize to a LinArithExpr: {e}"
-    | some e => pure e
+    | some e =>
+      -- Register the ranges that we need
+      e.coefs.forM fun v _ => registerIndex v.var
+      --
+      pure e
 
-  /- Normalize the outputs.
-
-    We are only interested in the provenance (i.e., which subfield of an input value
-    it comes from) and the indices at which they are update. -/
   /- Normalize an input (i.e., an expression of the shape `x.1.0` where `x` is an input
      variable). -/
-  let rec normalizeInput (e : FootprintExpr) : MetaM Input := do
+  normalizeInput (e : FootprintExpr) : NormalizeM Input := do
     withTraceNode `Inv (fun _ => pure m!"normalizeInput") do
     trace[Inv] "e: {e}"
     match e with
@@ -1363,7 +1509,7 @@ partial def normalizeLoopOutputs (fp : Footprint) (indices : Std.HashSet Var)
     | .range _ _ _ _ | .unknown => throwError "Could not normalize input: {e}"
 
   /- Normalize an array expression -/
-  let rec normalizeArrayExpr (e : FootprintExpr) : MetaM (Input × Array LinArithExpr) := do
+  normalizeArrayExpr (e : FootprintExpr) : NormalizeM (Input × Array LinArithExpr) := do
      withTraceNode `Inv (fun _ => pure m!"normalizeArrayExpr") do
     trace[Inv] "e: {e}"
     match e with
@@ -1372,7 +1518,7 @@ partial def normalizeLoopOutputs (fp : Footprint) (indices : Std.HashSet Var)
       -- We ignore the read indices
       normalizeArrayExpr a
     | .set a indices _ =>
-      let indices ← indices.mapM normalizeFootprintExpr
+      let indices ← indices.mapM normalizeLinArithExpr
       let (input, indices') ← normalizeArrayExpr a
       pure (input, indices' ++ indices)
     | .proj _ _ =>
@@ -1381,7 +1527,7 @@ partial def normalizeLoopOutputs (fp : Footprint) (indices : Std.HashSet Var)
       throwError "Could not normalize array expression: {e}"
 
   /- Normalize an output expression -/
-  let rec normalizeOutput (e : FootprintExpr) : MetaM Output := do
+  normalizeOutput (e : FootprintExpr) : NormalizeM Output := do
      withTraceNode `Inv (fun _ => pure m!"normalizeOutput") do
     trace[Inv] "e: {e}"
     match e with
@@ -1389,17 +1535,14 @@ partial def normalizeLoopOutputs (fp : Footprint) (indices : Std.HashSet Var)
       let (input, writes) ← normalizeArrayExpr e
       pure (.array input writes)
     | .lit _ | .const _ | .binop _ _ _ | .range _ _ _ _ =>
-      let e ← normalizeFootprintExpr e
+      let e ← normalizeLinArithExpr e
       pure (.arith e)
     | .struct typename fields =>
       let fields ← fields.mapM normalizeOutput
       pure (.struct typename fields)
     | .unknown => throwError "Could not normalize output: {e}"
 
-  let outputs ← outputs.mapM normalizeOutput
-
-  /- Merge the outputs together -/
-  let rec mergeOutputs (out : Output × Output) : MetaM Output := do
+  mergeOutputs (out : Output × Output) : NormalizeM Output := do
     withTraceNode `Inv (fun _ => pure m!"mergeOutputs") do
     trace[Inv] "out: {out}"
     match out with
@@ -1417,31 +1560,30 @@ partial def normalizeLoopOutputs (fp : Footprint) (indices : Std.HashSet Var)
       else throwError "Could not merge: {out}"
     | _ => throwError "Could not merge: {out}"
 
-  let output ← do
-    match outputs.toList with
-    | [] => throwError "No output"
-    | output :: outputs =>
-      let mut res := output
-      for output in outputs do
-        res ← mergeOutputs (res, output)
-      pure res
+  checkOutput (projs : List Nat) (e : Output) : NormalizeM Unit := do
+    withTraceNode `Inv (fun _ => pure m!"checkOutput") do
+    trace[Inv] "projs: {projs}"
+    trace[Inv] "e: {e}"
+    match e with
+    | .arith a => checkOutputArith projs a
+    | .array a _ =>
+      -- No need to check the write indices: they've already been normalized
+      checkInput projs a
+    | .struct _ fields =>
+      let _ ← fields.mapIdxM fun i => checkOutput (i :: projs)
+      pure ()
 
-  /- Check that the relation between the inputs and the outputs is consistent, that is if
-    we receive a tuple as input, we do not change the order of the elements of the tuple
-    (but might update them). Typically, this is ok:
-    ```
-      fun i state =>
-      let (a, b) := state
-      (a, b.set i a[i])
-    ```
-    but this is not (we swap `a` and `b`):
-    ```
-      fun i state =>
-      let (a, b) := state
-      (b, a)
-    ```
-  -/
-  let rec checkInput (projs : List Nat) (e : Input) : MetaM Unit := do
+  checkOutputArith (projs : List Nat) (e : LinArithExpr) : NormalizeM Unit := do
+    withTraceNode `Inv (fun _ => pure m!"checkOutputArith") do
+    trace[Inv] "projs: {projs}"
+    trace[Inv] "e: {e}"
+    match e.coefs.toList with
+    | [(var, _)] =>
+      if var.projs = projs then pure ()
+      else throwError "Invalid output arith expr: expr: {e}, projs: {projs}"
+    | _ => throwError "Invalid output arith expr: expr: {e}, projs: {projs}"
+
+  checkInput (projs : List Nat) (e : Input) : NormalizeM Unit := do
     withTraceNode `Inv (fun _ => pure m!"checkInput") do
     trace[Inv] "projs: {projs}"
     trace[Inv] "e: {e}"
@@ -1460,31 +1602,74 @@ partial def normalizeLoopOutputs (fp : Footprint) (indices : Std.HashSet Var)
         if p = field then checkInput projs e
         else throwError "Invalid input and projs: input: {e}, projs: {projs}"
 
-  let rec checkOutputArith (projs : List Nat) (e : LinArithExpr) : MetaM Unit := do
-    withTraceNode `Inv (fun _ => pure m!"checkOutputArith") do
+  applyOutputRelToInput
+    (projs : List Nat) (range : LinRange) (output : Output) (input : FootprintExpr) : NormalizeM Output := do
+    withTraceNode `Inv (fun _ => pure m!"applyOutputRelToInput") do
     trace[Inv] "projs: {projs}"
-    trace[Inv] "e: {e}"
-    match e.coefs.toList with
-    | [(var, _)] =>
-      if var.projs = projs then pure ()
-      else throwError "Invalid output arith expr: expr: {e}, projs: {projs}"
-    | _ => throwError "Invalid output arith expr: expr: {e}, projs: {projs}"
-
-  let rec checkOutput (projs : List Nat) (e : Output) : MetaM Unit := do
-    withTraceNode `Inv (fun _ => pure m!"checkOutput") do
-    trace[Inv] "projs: {projs}"
-    trace[Inv] "e: {e}"
-    match e with
-    | .arith a => checkOutputArith projs a
-    | .array a _ =>
-      -- No need to check the write indices: they've already been normalized
+    trace[Inv] "range: {range}"
+    trace[Inv] "output: {output}"
+    trace[Inv] "input: {input}"
+    match (output, input) with
+    | (.struct typeName outFields, .struct _ inFields) =>
+      if outFields.size ≠ inFields.size
+      then throwError "Could not apply output {output} to input {input}"
+      else
+        let fields := outFields.zip inFields
+        pure (.struct typeName (← fields.mapIdxM (fun i f => applyOutputRelToInput (i :: projs) range f.fst f.snd)))
+    | (.arith a, _) =>
+      -- Normalize the input to a linear arithmetic expression and apply the transformation
+      let input ← normalizeLinArithExpr input
+      let output ← applyArithToInput projs a range input
+      pure (.arith output)
+    | (.array a indices, _) =>
+      let (input, indices') ← normalizeArrayExpr input
+      -- Check that the output array corresponds to the input array (same projections)
       checkInput projs a
-    | .struct _ fields =>
-      let _ ← fields.mapIdxM fun i => checkOutput (i :: projs)
-      pure ()
-  checkOutput [] output
+      -- Add the indices
+      pure (.array input (indices ++ indices'))
+    | _ => throwError "Could not apply output {output} to input {input}"
 
-  pure output
+  applyArithToInput (projs : List Nat) (a : LinArithExpr) (range : LinRange) (input : LinArithExpr) :
+    NormalizeM LinArithExpr := do
+    withTraceNode `Inv (fun _ => pure m!"applyArithToInput") do
+    trace[Inv] "a: {a}"
+    trace[Inv] "range: {range}"
+    trace[Inv] "input: {input}"
+    -- Small helper
+    let isCurrentLoopInput (v : Var) : Bool :=
+      if let some (loopId', .input) := fp.varToLoop.get? v then loopId' = loopId
+      else false
+
+    /- Check that the output sub-field is consistent.
+
+      We support the following case:
+      `fun (x, y) => (a * x + c + ..., y)`
+            ^             ^
+            the output is a linarith expression of the input
+            all the factors are are constant throughout the loop iterations
+      We can do: `fun (x, y) => (x + 1, y)`
+      but not: `fun (x, y) => (y, x + 1)` (we do not allow swapping fields).
+
+      Also, for now we only allow adding/subtracting a single variable.
+     -/
+    match a.coefs.toList with
+    | [(var, coef)] =>
+      trace[Inv] "only one coef"
+      -- Check the variable and the projectors
+      if var.projs ≠ projs then throwError "Could not apply linarith output {a} to input {input}: the projections don't match"
+      if ¬ isCurrentLoopInput var.var then
+        throwError "Could not apply linarith output {a} to input {input}: the output var is not an input of the current loop"
+      --
+      let numSteps ← range.toNumSteps
+      -- We support: `N + c`, `N - c` and `N * c`
+      if coef ≠ 1 then
+        if a.const ≠ 0 then throwError "Could not apply linarith output {a} to input {input}: coef ≠ 1 and const ≠ 0"
+        else pure (input.mulConst (coef ^ numSteps))
+      else pure (input.addConst (a.const * numSteps))
+
+    | _ =>
+      trace[Inv] "⚠ Not handled yet"
+      throwError "Could not apply linarith output {a} to input {input}"
 
 partial def getLoopOutputDependencies (fp : Footprint) (outputs : Array FootprintExpr) :
   Std.HashSet LoopId :=
@@ -1525,6 +1710,7 @@ partial def analyzeFootprint (fp : Footprint) (indices : Std.HashSet Var) :
   stack := stack.enqueueAll fp.outputs.toList
 
   let mut visited : Std.HashSet LoopId := Std.HashSet.emptyWithCapacity
+  let mut monadState := NormalizeState.empty
 
   while ¬ stack.isEmpty do
     let some ((loopId, outputs), stack') := stack.dequeue?
@@ -1543,9 +1729,16 @@ partial def analyzeFootprint (fp : Footprint) (indices : Std.HashSet Var) :
     else
       -- Treated: normalize and add to the map
       trace[Inv] "Normalizing: {loopId}"
+      let loop := fp.loopIters.get! loopId
       let output ← do
-        try pure (some (← normalizeLoopOutputs fp indices outputs))
-        catch | _ => pure none
+        try
+          let (output, monadState') ←
+            StateRefT'.run (normalizeLoop fp indices loopId loop.range loop.input outputs) monadState
+          monadState := monadState'
+          pure (some output)
+        catch | e => do
+          trace[Inv] "Aborted with error: {e.toMessageData}"
+          pure none
       loopOutputs := loopOutputs.insert loopId output
 
   --

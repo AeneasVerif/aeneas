@@ -5,6 +5,8 @@ namespace Aeneas.Inv.Test
 
 open Lean Elab Meta Tactic
 
+set_option linter.unusedTactic false
+
 scoped syntax "analyze_loop" : tactic
 
 def analyzeLoop (k : Array (FVarId × Var) → Expr → State → TacticM α) : TacticM α := do
@@ -16,7 +18,9 @@ def analyzeLoop (k : Array (FVarId × Var) → Expr → State → TacticM α) : 
   if h: args.size ≠ 3 then throwError "Expected 3 arguments, got: {args}"
   else
     let body := args[1]
-    let (inputVars, state) ← State.init 0 0 #[]
+    let decls ← (← getLCtx).getNonAssumptions
+    let decls := decls.toArray.map LocalDecl.fvarId
+    let (inputVars, state) ← State.init 0 0 decls
     let (_, state) ← FootprintM.run (footprint.expr none body) state
     trace[Inv] "{state}"
     k inputVars body state
@@ -235,11 +239,67 @@ example :
   analyze_loop
   simp [post]
 
--- Nested loops: simple
+-- Increment a value by 1 at every iteration
+set_option trace.Inv true in
+example (n : Nat) :
+  post (
+    loopIter 0 256 n
+      fun (_ : Nat) (n : Nat) =>
+      n + 1)
+    (fun _ => True) := by
+  analyze_loop
+  simp [post]
+
+-- Increment a value by 2 at every iteration
+set_option trace.Inv true in
+example (n : Nat) :
+  post (
+    loopIter 0 256 n
+      fun (_i : Nat) (n : Nat) =>
+      n + 2)
+    (fun _ => True) := by
+  analyze_loop
+  simp [post]
+
+-- Increment a value by an unknown constant at every iteration
+set_option trace.Inv true in
+example (n k : Nat) :
+  post (
+    loopIter 0 256 n
+      fun (_i : Nat) (n : Nat) =>
+      n + k)
+    (fun _ => True) := by
+  analyze_loop
+  simp [post]
+
+-- Increment a value by an known constant but in an unknown range
+set_option trace.Inv true in
+example (n : Nat) :
+  post (
+    loopIter 0 n 0
+      fun (_i : Nat) (n : Nat) =>
+      n + 1)
+    (fun _ => True) := by
+  analyze_loop
+  simp [post]
+
+-- Increment a value and modify an array in a loop
 set_option trace.Inv true in
 example (src : Array Nat) :
   post (
-    loopIter 0 8 src (fun i (dst : Array Nat) =>
+    loopIter 0 256 (0, src)
+      fun (i : Nat) (state : Nat × Array Nat) =>
+      let (n, a) := state
+      (n + 1, a.set! i 0))
+    (fun _ => True) := by
+  analyze_loop
+  simp [post]
+
+-- Nested loops: simple
+set_option trace.Inv true in
+example (src dst : Array Nat) :
+  post (
+    loopIter 0 8 dst (fun i (dst : Array Nat) =>
       loopIter 0 8 dst (fun j (dst : Array Nat) =>
         dst.set! (8 * i + j) src[8 * i + j]!
         )))
@@ -247,5 +307,56 @@ example (src : Array Nat) :
   := by
   analyze_loop
   simp [post]
+
+-- Nested loop: with increment
+set_option trace.Inv true in
+example (src : Array Nat) :
+  post (
+    loopIter 0 8 (0, src)
+      fun (_ : Nat) (state : Nat × Array Nat) =>
+      loopIter 0 8 state fun _ state =>
+      let (n, a) := state
+      (n + 1, a))
+    (fun _ => True) := by
+  analyze_loop
+  simp [post]
+
+set_option trace.Inv true in
+example (src dst : Array Nat)
+  (_ : src.size = 256 ∧ ∀ i < 256, src[i]! = 0)
+  (_ : dst.size = 256 ∧ ∀ i < 256, dst[i]! = 1) :
+  post (
+    loopIter 0 8 dst (fun i (dst : Array Nat) =>
+      loopIter 0 8 dst (fun j (dst : Array Nat) =>
+        dst.set! (8 * i + j) src[8 * i + j]!
+        )))
+    (fun dst => dst.size = 256 ∧ ∀ i < 256, dst[i]! = 0)
+  := by
+  analyze_loop
+  simp [post]
+
+set_option grind.warning false
+
+example (P : Nat → Prop) (_ : ∀ i < 8, ∀ j < 8, P (8 * i + j)) :
+  ∀ k < 64, P k := by
+  intro k hk
+  have : (k % 8) + 8 * (k / 8) = k := by apply Nat.mod_add_div
+  have : k / 8 < 8 := by
+    calc k / 8 ≤ 63 / 8 := by apply Nat.div_le_div <;> omega
+         _ = 7 := by simp
+         _ < 8 := by omega
+  grind
+
+example (P : Nat → Prop) (h : ∀ i < 8, P (2 * i) ∧ P (2 * i + 1)) :
+  ∀ k < 16, P k := by
+  intro k hk
+  have : (k % 2) + 2 * (k / 2) = k := by apply Nat.mod_add_div
+  have : k % 2 = 0 ∨ k % 2 = 1 := by
+    have := @Nat.mod_lt k 2 (by omega)
+    revert this
+    native_decide +revert
+  grind
+
+example (P : Nat → Prop) (h : ∀ i < 2, P i) : P 0 ∧ P 1 := by grind
 
 end Aeneas.Inv.Test

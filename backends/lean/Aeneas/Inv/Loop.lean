@@ -11,8 +11,8 @@ Note that because we decided to initialize the extension and the attribute separ
 we can't define them in the same module.
 -/
 
-def State.init (startVarId startLoopId : Nat) (inputFVars : Array Expr) : MetaM (Array (FVarId × Var) × State) := do
-  trace[Inv] "inputs: {inputFVars}"
+def State.init (startVarId startLoopId : Nat) (inputFVars : Array FVarId) : MetaM (Array (FVarId × Var) × State) := do
+  trace[Inv] "inputs: {inputFVars.map Expr.fvar}"
   let mut fid := startVarId
   let inputVars ← do
     let lctx ← getLCtx
@@ -20,10 +20,10 @@ def State.init (startVarId startLoopId : Nat) (inputFVars : Array Expr) : MetaM 
     for fv in inputFVars do
       let id := fid
       fid := fid + 1
-      let decl := lctx.get! fv.fvarId!
+      let decl := lctx.get! fv
       let name := m!"{decl.userName}"
       let name ← name.toString
-      m := m ++ #[(fv.fvarId!, {id, name := some name})]
+      m := m ++ #[(fv, {id, name := some name})]
     pure m
   let inputs := Std.HashMap.ofList inputVars.toList
   let fp : Footprint := { inputs, varId := fid, loopId := startLoopId }
@@ -53,7 +53,7 @@ initialize loopIterAttr : ArrayAttr LoopIterDesc ← do
       let input := positions[1]
 
       /- Process the range: -/
-      let (_, state) ← State.init 0 0 fvars
+      let (_, state) ← State.init 0 0 (fvars.map Expr.fvarId!)
       let (start, stop, step) ← do
         withTraceNode `Inv (fun _ => pure m!"range") do
         let toExpr e : MetaM VarProjOrLit := do
