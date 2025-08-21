@@ -285,9 +285,20 @@ example (n k : Nat) :
 
 -- Increment a value by an known constant but in an unknown range
 set_option trace.Inv true in
-example (n : Nat) :
+example (n stop : Nat) :
   post (
-    loopIter 0 n 0
+    loopIter 0 stop n
+      fun (_i : Nat) (n : Nat) =>
+      n + 1)
+    (fun _ => True) := by
+  analyze_loop
+  simp [post]
+
+-- Increment a value by an known constant but in an unknown range
+set_option trace.Inv true in
+example (start range n : Nat) :
+  post (
+    loopIter start (start + range) n
       fun (_i : Nat) (n : Nat) =>
       n + 1)
     (fun _ => True) := by

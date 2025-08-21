@@ -1220,8 +1220,8 @@ end
   -/
 structure LinArithExpr where
   -- TODO: don't use a HashMap
-  coefs : Std.HashMap VarProj Nat
-  const : Nat
+  coefs : Std.HashMap VarProj Int
+  const : Int
 
 instance : BEq LinArithExpr where -- TODO: I don't like that
   beq a1 a2 := Id.run do
@@ -1350,7 +1350,7 @@ instance : ToMessageData LinRange where
     let { start, stop, step, kind } := r
     m!"[{start}:{stop}:{kind.toString}={step}]"
 
-def LinArithExpr.add (e0 e1 : LinArithExpr) : MetaM LinArithExpr := do
+def LinArithExpr.add (e0 e1 : LinArithExpr) : LinArithExpr := Id.run do
   let { coefs := coefs0, const := const0 } := e0
   let { coefs := coefs1, const := const1 } := e1
   let mut coefs := coefs0
@@ -1361,45 +1361,127 @@ def LinArithExpr.add (e0 e1 : LinArithExpr) : MetaM LinArithExpr := do
       | some coef' => coef + coef')
   pure { coefs, const := const0 + const1 }
 
-def LinArithExpr.addConst (e : LinArithExpr) (n : Nat) : LinArithExpr :=
+instance : HAdd LinArithExpr LinArithExpr LinArithExpr where
+  hAdd e0 e1 := e0.add e1
+
+def LinArithExpr.sub (e0 e1 : LinArithExpr) : LinArithExpr := Id.run do
+  let { coefs := coefs0, const := const0 } := e0
+  let { coefs := coefs1, const := const1 } := e1
+  let mut coefs := coefs0
+  for (var1, coef1) in coefs1 do
+    coefs := coefs.alter var1 (fun coef0 =>
+      match coef0 with
+      | none => pure (-coef1)
+      | some coef0 => pure (coef0 - coef1))
+  pure { coefs, const := const0 + const1 }
+
+instance : HSub LinArithExpr LinArithExpr LinArithExpr where
+  hSub e0 e1 := e0.sub e1
+
+def LinArithExpr.toPos (e0 : LinArithExpr) : LinArithExpr := Id.run do
+  let { coefs, const } := e0
+  let const := max const 0
+  let coefs := coefs.filterMap fun _ c => if c > 0 then some c else none
+  { coefs, const }
+
+def LinArithExpr.addConst (e : LinArithExpr) (n : Int) : LinArithExpr :=
   { e with const := e.const + n }
 
-def LinArithExpr.mulConst (e : LinArithExpr) (n : Nat) : LinArithExpr :=
+instance : HAdd LinArithExpr Int LinArithExpr where
+  hAdd e0 n := e0.addConst n
+
+def LinArithExpr.mulConst (e : LinArithExpr) (n : Int) : LinArithExpr :=
   if n = 0 then { coefs := {}, const := 0 }
   else { coefs := e.coefs.map fun _ n' => n * n', const := e.const * n }
 
+instance : HMul LinArithExpr Int LinArithExpr where
+  hMul e0 n := e0.mulConst n
+
+def LinArithExpr.divConst (e : LinArithExpr) (n : Int) : LinArithExpr :=
+  if n = 0 then { coefs := {}, const := 0 }
+  else
+    let updtCoef _ n' :=
+      let d := n' / n
+      if d = 0 then none
+      else some d
+    { coefs := e.coefs.filterMap updtCoef, const := e.const / n }
+
+def LinArithExpr.ofConst (const : Int) : LinArithExpr := { coefs := {}, const }
+def LinArithExpr.ofCoef (var : VarProj) (coef : Int) : LinArithExpr :=
+  { coefs := Std.HashMap.ofList [(var, coef)], const := 0 }
+def LinArithExpr.zero := LinArithExpr.ofConst 0
+
+def LinArithExpr.toConst (e : LinArithExpr) : Option Int :=
+  if e.coefs.size = 0 then pure e.const else none
+
+def LinArithExpr.toCoef (e : LinArithExpr) : Option (VarProj × Int) :=
+  if e.const = 0 then
+    match e.coefs.toList with
+    | [(var, n)] => pure (var, n)
+    | _ => none
+  else none
+
+/-- Only handles a subset of cases. -/
+def LinArithExpr.div (e0 e1 : LinArithExpr) : Option LinArithExpr := do
+  match e1.coefs.toList with
+  | [] => -- Division by a constant
+    e0.divConst e1.const
+  | [(var1, coef1)] =>
+    if let [(var0, coef0)] := e0.coefs.toList then
+      if ¬ var0 == var1 then failure
+      if e0.const ≠ 0 then failure
+      if e1.const ≠ 0 then failure
+      let d := coef0 / coef1
+      if d = 0 then pure .zero
+      else pure { coefs := Std.HashMap.ofList [(var0, d)], const := 0 }
+    else failure
+  | _ => none -- not supported yet
+
+instance : HDiv LinArithExpr LinArithExpr (Option LinArithExpr) where
+  hDiv e0 e1 := e0.div e1
+
+def LinArithExpr.isZero (e : LinArithExpr) : Bool :=
+  e.const = 0 ∧ e.coefs.toList.all fun (_, coef) => coef = 0
+
+/-- Only succeeds if the result is a linarith expression -/
+def LinArithExpr.mul (e0 e1 : LinArithExpr) : Option LinArithExpr := do
+  if e0.isZero ∨ e1.isZero then some LinArithExpr.zero
+  else
+    match e0.coefs.toList, e1.coefs.toList with
+    | [], _ => e1.mulConst e0.const
+    | _, [] => e0.mulConst e1.const
+    | _, _ => none
+
+instance : HMul LinArithExpr LinArithExpr (Option LinArithExpr) where
+  hMul e0 e1 := e0.mul e1
+
 -- For now we only support cases where the number of steps is known to be a constant
-def LinRange.toNumSteps (r : LinRange) : MetaM Nat := do
-  let toSimpl (e : LinArithExpr) := (e.coefs.toList, e.const)
-  let start := toSimpl r.start
-  let stop := toSimpl r.stop
-  let step := toSimpl r.step
-  match (start, stop, step) with
-  | (([], start), ([], stop), ([], step)) =>
-    if step = 0 then throwError "Step is 0"
-    match r.kind with
-    | .add => pure ((stop - start) / step)
-    | .sub => pure ((start - stop) / step)
-    | .mul => pure (Nat.log step (stop/start))
-    | .div => pure (Nat.log step (start/stop))
-  | (([startCoef], startConst), ([stopCoef], stopConst), ([], step)) =>
-    if ¬ startCoef == stopCoef then throwError "Unimplemented"
-    match r.kind with
-    | .add => pure ((stopConst - startConst) / step)
-    | .sub => pure ((startConst - stopConst) / step)
-    | .mul | .div => throwError "Unimplemented"
-  | (([(startVar, startCoef)], startConst),
-    ([(stopVar, stopCoef)], stopConst),
-    ([(stepVar, stepCoef)], stepConst)) =>
-    if ¬ startVar.var == stopVar.var then throwError "Unimplemented"
-    if ¬ startVar.var == stepVar.var then throwError "Unimplemented"
-    if stepConst ≠ 0 then throwError "Unimplemented"
-    if startConst ≠ stopConst then throwError "Unimplemented"
-    match r.kind with
-    | .add => pure ((stopCoef - startCoef) / stepCoef)
-    | .sub => pure ((startCoef - stopCoef) / stepCoef)
-    | .mul | .div => throwError "Unimplemented"
-  | _ => throwError "Unimplemented"
+def LinRange.toNumSteps (r : LinRange) : MetaM LinArithExpr := do
+  match r.kind with
+  | .add =>
+    match (r.stop - r.start) / r.step with
+    | none => throwError "Could not compute: ({r.stop} - {r.start}) / {r.step}"
+    | some res => pure res.toPos
+  | .sub =>
+    match (r.start - r.stop) / r.step with
+    | none => throwError "Could not compute: ({r.stop} - {r.start}) / {r.step}"
+    | some res => pure res.toPos
+  | .mul =>
+    if let some d := r.stop / r.start then
+      if let some d := d.toConst then
+        if let some step := r.step.toConst then
+          pure (LinArithExpr.ofConst (Nat.log step.toNat d.toNat)).toPos
+        else throwError "Could not compute: log ({r.step}) ({r.stop} / {r.start})"
+      else throwError "Could not compute: log ({r.step}) ({r.stop} / {r.start})"
+    else throwError "Could not compute: log ({r.step}) ({r.stop} / {r.start})"
+  | .div =>
+    if let some d := r.start / r.stop then
+      if let some d := d.toConst then
+        if let some step := r.step.toConst then
+          pure (LinArithExpr.ofConst (Nat.log step.toNat d.toNat)).toPos
+        else throwError "Could not compute: log ({r.step}) ({r.start} / {r.stop})"
+      else throwError "Could not compute: log ({r.step}) ({r.start} / {r.stop})"
+    else throwError "Could not compute: log ({r.step}) ({r.start} / {r.stop})"
 
 structure NormalizeState where
   -- Mapping from index variable to its range
@@ -1670,20 +1752,23 @@ where
         if a.const ≠ 0 ∨ ¬ coefs.isEmpty then throwError "Could not apply linarith output {a} to input {input}: the coef ≠ 1 and the other coefficients/the constant are ≠ 0"
         else
           trace[Inv] "coef ≠ 1"
-          let output := input.mulConst (coef ^ numSteps)
-          trace[Inv] "output: {output}"
-          pure output
+          if let some numSteps := numSteps.toConst then
+            let output := input.mulConst (coef ^ numSteps.toNat)
+            trace[Inv] "output: {output}"
+            pure output
+          else throwError "Could not compute: ({coef}) ^ ({numSteps})"
       else
         trace[Inv] "coef = 1"
         /- The coefficient in front of the input is 1, so we're just adding `numSteps * c` where `c` is the
            formula without the coefficient about the current input -/
         let toAdd : LinArithExpr := { coefs := Std.HashMap.ofList coefs, const := a.const }
         trace[Inv] "toAdd: {toAdd}, numSteps: {numSteps}"
-        let toAdd := toAdd.mulConst numSteps
-        trace[Inv] "toAdd * numSteps: {toAdd}"
-        let output ← input.add toAdd
-        trace[Inv] "output: {output}"
-        pure output
+        if let some toAdd := toAdd * numSteps then
+          trace[Inv] "toAdd * numSteps: {toAdd}"
+          let output := input + toAdd
+          trace[Inv] "output: {output}"
+          pure output
+        else throwError "Could not compute ({toAdd}) * ({numSteps})"
     | _ =>
       trace[Inv] "⚠ Not handled yet"
       throwError "Could not apply linarith output {a} to input {input} because the input/output relation involves more than one input of the current loop"
