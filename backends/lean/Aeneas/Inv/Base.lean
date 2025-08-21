@@ -784,6 +784,150 @@ initialize loopIterExt :
   SimpleScopedEnvExtension (Array DiscrTree.Key × Name × LoopIterDesc) (ExtBase LoopIterDesc) ← do
   initializeArrayExt `loopIterExt
 
+/-- -/
+def asNatLit? (e : Expr) : Option Nat :=
+  if e.isAppOfArity ``OfNat.ofNat 3 then
+    if let .lit (.natVal n) := e.getAppArgs[1]! then pure n
+    else none
+  else none
+
+/-- Return the type name and the fields -/
+def asStructureConstructor? (e : Expr) : MetaM (Option (Name × Array Expr)) := do
+  let ty ← inferType e
+  let fty := ty.getAppFn
+  let f := e.getAppFn
+  let args := e.getAppArgs
+  let env ← getEnv
+  if let .const fName _ := f then
+    if let Expr.const tyName _ := fty then
+      if isStructureLike env tyName then
+        let info := getStructureCtor env tyName
+        if info.name = fName then
+          trace[Inv] "is a structure constructor"
+          let fields := args.extract (args.size - info.numFields)
+          return (some (tyName, fields))
+  pure none
+
+/-- Check if this is a matcher application, if yes unfold and reduce the map to
+    reveal the casesOn.
+
+    We want to work on the more primitive `casesOn` expressions,
+    to check if the match is, for instance, a match deconstructing.
+
+    Note that for instance, when writing:
+    ```
+    match xyz with
+    | (x, y, z) => ...
+    ```
+    Lean actually introduces the following auxiliary definition:
+    ```
+    def match_1 :=
+      fun motive xyz h_1 => Prod.casesOn xyz fun fst snd => Prod.casesOn snd fun fst_1 snd => h_1 fst fst_1 snd
+    ```
+    and the match becomes a call to `match_1`.
+
+    In order to properly analyze it the simplest is to unfold it to reveal the nested calls to `Prod.casesOn`.
+-/
+def asMatcherApp? (e : Expr) : MetaM (Option Expr) := do
+  if let some me := ← matchMatcherApp? e then
+    trace[Inv] "is a match"
+    trace[Inv]
+      "matcherApp:
+      - params: {me.params}
+      - motive: {me.motive}
+      - discrs: {me.discrs}
+      - altNumParams: {me.altNumParams}
+      - alts: {me.alts}
+      - remaining: {me.remaining}"
+    let f := e.getAppFn
+
+    /- Unfold the match definition: we need to unfold the definition, then beta-reduce
+       it to get rid of the lambdas -/
+    let e ← deltaExpand e (fun name => name = me.matcherName)
+    let e ← Core.betaReduce e
+    trace[Inv] "unfolded and reduced match: {e}"
+    -- Small sanity check: we managed to unfold the match
+    if e.getAppFn == f then pure none
+    else pure e
+  else pure none
+
+def asBinop? (e : Expr) : Option (ArithBinop × Expr × Expr) :=
+  let f := e.getAppFn
+  let args := e.getAppArgs
+  if h: f.isConst ∧ args.size = 3 then
+    let fname := f.constName!
+    if let some op := arithBinops.get? fname then
+      pure (op, args[1], args[2])
+    else none
+  else none
+
+def asHBinop? (e : Expr) : Option (ArithBinop × Expr × Expr) :=
+  let f := e.getAppFn
+  let args := e.getAppArgs
+  if h: f.isConst ∧ args.size = 6 then
+    let fname := f.constName!
+    if let some op := arithHBinops.get? fname then
+      return (op, args[4], args[5])
+    else none
+  else none
+
+def asProjector? (e : Expr) : MetaM (Option (Nat × Expr)) := do
+  let f := e.getAppFn
+  if let .const fName _ := f then
+    if let some info ← getProjectionFnInfo? fName then
+      let args := e.getAppArgs
+      if h: info.numParams < args.size then
+        trace[Inv] "projector"
+        trace[Inv] "numParams: {info.numParams}"
+        trace[Inv] "i: {info.i}"
+        trace[Inv] "args: {e.getAppArgs}"
+        let x := e.getAppArgs[info.numParams]
+        let idx := info.i
+        return (some (idx, x))
+  pure none
+
+/-- Return the list/array expression and the indices -/
+def asGetter? (e : Expr) : MetaM (Option (Expr × Array Expr)) := do
+  let env ← getEnv
+  let getterState := arrayGetterAttr.ext.getState env
+  let rules ← getterState.rules.getMatch e
+
+  -- Just try the first rule - there should be no more than one
+  if h: rules.size > 0 then
+    let args := e.getAppArgs
+    let getArg (i : Nat) : MetaM Expr :=
+      if h: i < args.size then pure args[i]
+      else throwError ""
+    let (_, rule) := rules[0]
+
+    try
+      let array ← getArg rule.array
+      let indices ← rule.indices.mapM getArg
+      pure (some (array, indices))
+    catch _ => pure none
+  else pure none
+
+/-- Return the list/array expression, the indices and the value -/
+def asSetter? (e : Expr) : MetaM (Option (Expr × Array Expr × Expr)) := do
+  let env ← getEnv
+  let setterState := arraySetterAttr.ext.getState env
+  let rules ← setterState.rules.getMatch e
+  -- Just try the first rule - there should be no more than one
+  if h: rules.size > 0 then
+    let args := e.getAppArgs
+    let getArg (i : Nat) : MetaM Expr :=
+      if h: i < args.size then pure args[i]
+      else throwError ""
+    let (_, rule) := rules[0]
+
+    try
+      let array ← getArg rule.array
+      let indices ← rule.indices.mapM getArg
+      let value ← getArg rule.value
+      pure (some (array, indices, value))
+    catch _ => pure none
+  else pure none
+
 mutual
 
 /-- Compute the footprint of an expression.
@@ -886,67 +1030,23 @@ partial def footprint.app (terminal : Option LoopId) (e : Expr) : FootprintM Foo
       - binary operation
   -/
   let f := e.getAppFn
-  let args := e.getAppArgs
   let env ← getEnv
 
   -- Check if this is a constant
-  if e.isAppOfArity ``OfNat.ofNat 3 then
+  if let some n := asNatLit? e then
     trace[Inv] "is OfNat.ofNat"
-    let args := e.getAppArgs
-    return (← footprint.expr terminal args[1]!)
+    return (.lit n)
 
   -- Check if this is a structure constructor
-  let ty ← inferType e
-  let fty := ty.getAppFn
-  if let .const fName _ := f then
-    if let Expr.const tyName _ := fty then
-      if isStructureLike env tyName then
-        let info := getStructureCtor env tyName
-        if info.name = fName then
-          trace[Inv] "is a structure constructor"
-          let fields := args.extract (args.size - info.numFields)
-          let fields ← fields.mapM (footprint.expr none)
-          return (.struct tyName fields)
+  if let some (tyName, fields) ← asStructureConstructor? e then
+    let fields ← fields.mapM (footprint.expr none)
+    return (.struct tyName fields)
 
   /- Check if this is a matcher (a call to an auxiliary definition
       which implements a match) -/
-  if let some me := ← matchMatcherApp? e then
-    /-  We want to work on the more primitive `casesOn` expressions,
-        to check if the match is, for instance, a match deconstructing.
-
-        Note that for instance, when writing:
-        ```
-        match xyz with
-        | (x, y, z) => ...
-        ```
-        Lean actually introduces the following auxiliary definition:
-        ```
-        def match_1 :=
-          fun motive xyz h_1 => Prod.casesOn xyz fun fst snd => Prod.casesOn snd fun fst_1 snd => h_1 fst fst_1 snd
-        ```
-        and the match becomes a call to `match_1`.
-
-        In order to properly analyze it the simplest is to unfold it to reveal the nested calls to `Prod.casesOn`.
-      -/
-    trace[Inv] "is a match"
-    trace[Inv]
-      "matcherApp:
-      - params: {me.params}
-      - motive: {me.motive}
-      - discrs: {me.discrs}
-      - altNumParams: {me.altNumParams}
-      - alts: {me.alts}
-      - remaining: {me.remaining}"
-
-    /- Unfold the match definition: we need to unfold the definition, then beta-reduce
-       it to get rid of the lambdas -/
-    let e ← deltaExpand e (fun name => name = me.matcherName)
-    let e ← Core.betaReduce e
-    trace[Inv] "unfolded and reduced match: {e}"
-    -- Small sanity check: we managed to unfold the match
-    if e.getAppFn == f then return .unknown
-    -- Otherwise, explore the unfolded expression
-    return (← footprint.expr terminal e)
+  if let some me := ← asMatcherApp? e then
+    -- Explore the unfolded expression
+    return (← footprint.expr terminal me)
 
   -- Check if this is a casesOn expression (a "primitive" match)
   if let .const fname _ := f then
@@ -968,22 +1068,16 @@ partial def footprint.app (terminal : Option LoopId) (e : Expr) : FootprintM Foo
       return e
 
   -- Homogeneous binary operations
-  if h: f.isConst ∧ args.size = 3 then
-    let fname := f.constName!
-    if let some op := arithBinops.get? fname then
-      trace[Inv] "homogeneous binop"
-      let x ← footprint.expr none args[1]
-      let y ← footprint.expr none args[2]
-      return (.binop op x y)
+  if let some (op, x, y) := asBinop? e then
+    let x ← footprint.expr none x
+    let y ← footprint.expr none y
+    return (.binop op x y)
 
   -- Heterogeneous binary operations
-  if h: f.isConst ∧ args.size = 6 then
-    let fname := f.constName!
-    if let some op := arithHBinops.get? fname then
-      trace[Inv] "heterogeneous binop"
-      let x ← footprint.expr none args[4]
-      let y ← footprint.expr none args[5]
-      return (.binop op x y)
+  if let some (op, x, y) := asHBinop? e then
+    let x ← footprint.expr none x
+    let y ← footprint.expr none y
+    return (.binop op x y)
 
   -- Check if this is a get/set expression
   if let some e ← footprint.arrayExpr terminal e then
@@ -995,17 +1089,10 @@ partial def footprint.app (terminal : Option LoopId) (e : Expr) : FootprintM Foo
      We have to do this *after* checking whether an expression is a getter because
      some getter functions (like `getElem!`) are considered as projectors.
    -/
-  if let .const fName _ := f then
-    if let some info ← getProjectionFnInfo? fName then
-      if h: info.numParams < args.size then
-        trace[Inv] "projector"
-        trace[Inv] "numParams: {info.numParams}"
-        trace[Inv] "i: {info.i}"
-        trace[Inv] "args: {e.getAppArgs}"
-        let x := e.getAppArgs[info.numParams]
-        let x ← footprint.expr none x
-        let idx := info.i
-        return (mkReducedProj idx x)
+  if let some (idx, x) ← asProjector? e then
+    trace[Inv] "projector"
+    let x ← footprint.expr none x
+    return (mkReducedProj idx x)
 
   -- Check if this is a loop
   if let some e ← footprint.loop terminal e then
@@ -1015,7 +1102,6 @@ partial def footprint.app (terminal : Option LoopId) (e : Expr) : FootprintM Foo
   -- Don't know: explore the arguments
   let args := e.getAppArgs
   let _ ← Array.mapM (footprint.expr none) args
-  -- TODO: tuple case
   pure .unknown
 
 partial def footprint.casesOn (e : Expr) : FootprintM FootprintExpr := do
@@ -1102,42 +1188,22 @@ partial def footprint.arrayExpr (_terminal : Option LoopId) (e : Expr) :
   FootprintM (Option FootprintExpr) := do
   withTraceNode `Inv (fun _ => pure m!"footprint.arrayExpr") do
   trace[Inv] "e: {e}"
-  let env ← getEnv
 
   /- Attempt to deconstruct a getter -/
-  let getterState := arrayGetterAttr.ext.getState env
-  let rules ← getterState.rules.getMatch e
-  let analyzeArg (args : Array Expr) (i : Nat) : FootprintM FootprintExpr :=
-    if h: i < args.size then
-      let arg := args[i]
-      footprint.expr none arg
-    else pure .unknown
-
-  -- Just try the first rule - there should be no more than one
-  if h: rules.size > 0 then
+  if let some (array, indices) ← asGetter? e then
     trace[Inv] "is a getter"
-    let (_, rule) := rules[0]
-    let analyzeArg := analyzeArg e.getAppArgs
-
-    let array ← analyzeArg rule.array
-    let indices ← rule.indices.mapM analyzeArg
-    let e := FootprintExpr.get array indices
-    return e
+    let array ← footprint.expr none array
+    let indices ← indices.mapM (footprint.expr none)
+    return FootprintExpr.get array indices
 
   /- Attempt to deconstruct a setter -/
-  let setterState := arraySetterAttr.ext.getState env
-  let rules ← setterState.rules.getMatch e
-  -- Just try the first rule - there should be no more than one
-  if h: rules.size > 0 then
+  if let some (array, indices, value) ← asSetter? e then
     trace[Inv] "is a setter"
-    let (_, rule) := rules[0]
-    let analyzeArg := analyzeArg e.getAppArgs
 
-    let array ← analyzeArg rule.array
-    let indices ← rule.indices.mapM analyzeArg
-    let value ← analyzeArg rule.value
-    let e := FootprintExpr.set array indices value
-    return e
+    let array ← footprint.expr none array
+    let indices ← indices.mapM (footprint.expr none)
+    let value ← footprint.expr none value
+    return FootprintExpr.set array indices value
 
   /- Not a getter or setter -/
   pure .none
@@ -1517,6 +1583,13 @@ abbrev NormalizeM := StateRefT NormalizeState MetaM
 
 def NormalizeState.empty : NormalizeState := {}
 
+/-- Normalized footprint -/
+structure NormFootprint where
+  -- Mapping from index variable to its range
+  varToRange : Std.HashMap Var LinRange
+  -- Mapping from loops to their outputs
+  loopOutputs : Std.HashMap LoopId (Option Output)
+
 partial def normalizeLoop
   (fp : Footprint)
   (indices : Std.HashSet Var)
@@ -1840,7 +1913,7 @@ partial def getLoopOutputDependencies (fp : Footprint) (outputs : Array Footprin
   s
 
 partial def analyzeFootprint (fp : Footprint) (indices : Std.HashSet Var) :
-  MetaM (Std.HashMap LoopId (Option Output)) := do
+  MetaM NormFootprint := do
   withTraceNode `Inv (fun _ => pure m!"analyzeFootprint") do
 
   let loopDeps ← fp.outputs.toArray.mapM fun (loopId, outputs) => do
@@ -1884,6 +1957,6 @@ partial def analyzeFootprint (fp : Footprint) (indices : Std.HashSet Var) :
       loopOutputs := loopOutputs.insert loopId output
 
   --
-  pure loopOutputs
+  pure { loopOutputs, varToRange := monadState.varToRange }
 
 end Aeneas.Inv

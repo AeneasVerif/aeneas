@@ -1,5 +1,4 @@
-import Aeneas.Inv.Base
-import Aeneas.Inv.Loop
+import Aeneas.Inv.Formula
 
 namespace Aeneas.Inv.Test
 
@@ -27,10 +26,10 @@ def analyzeLoop (k : Array (FVarId × Var) → Expr → State → TacticM α) : 
 
 elab "analyze_loop" : tactic => do
   analyzeLoop fun _ _body state => do
-  let output ← do
+  let nfp ← do
     try pure (some (← analyzeFootprint state.toFootprint {}))
     catch _ => pure none
-  trace[Inv] "Analyzed output:\n{output.map Std.HashMap.toArray}"
+  trace[Inv] "Analyzed output:\n{nfp.map fun out => out.loopOutputs.toArray}"
   pure ()
 
 attribute [inv_array_getter xs at i] getElem!
@@ -235,6 +234,17 @@ example :
       let dst ← dst.set! (2 * j) a
       let dst ← dst.set! (2 * j + 1) b
       pure (src, dst))
+    (fun _ => True) := by
+  analyze_loop
+  simp [post]
+
+-- Constant expression used for a range
+set_option trace.Inv true in
+example (n k : Nat) :
+  post (
+    loopIter 0 (2^k) n
+      fun (_i : Nat) (_n : Nat) =>
+      0)
     (fun _ => True) := by
   analyze_loop
   simp [post]
