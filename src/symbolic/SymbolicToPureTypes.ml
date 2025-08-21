@@ -458,17 +458,17 @@ let mk_type_check_ctx (ctx : bs_ctx) : PureTypeCheck.tc_ctx =
     bvar_counter = BVarId.zero;
   }
 
-let type_check_pattern (ctx : bs_ctx) (v : typed_pattern) : unit =
+let type_check_pattern (ctx : bs_ctx) (v : tpattern) : unit =
   let span = ctx.span in
   let ctx = mk_type_check_ctx ctx in
-  let _ = PureTypeCheck.check_typed_pattern span ctx v in
+  let _ = PureTypeCheck.check_tpattern span ctx v in
   ()
 
-let type_check_texpression (ctx : bs_ctx) (e : texpression) : unit =
+let type_check_texpr (ctx : bs_ctx) (e : texpr) : unit =
   if !Config.type_check_pure_code then
     let span = ctx.span in
     let ctx = mk_type_check_ctx ctx in
-    PureTypeCheck.check_texpression span ctx e
+    PureTypeCheck.check_texpr span ctx e
 
 (** List the ancestors of an abstraction *)
 let list_ancestor_abstractions_ids (ctx : bs_ctx) (abs : V.abs)
@@ -494,7 +494,7 @@ let list_ancestor_abstractions_ids (ctx : bs_ctx) (abs : V.abs)
 (** List the ancestor abstractions of an abstraction introduced because of a
     function call *)
 let list_ancestor_abstractions (ctx : bs_ctx) (abs : V.abs)
-    (call_id : V.FunCallId.id) : (V.abs * texpression list) list =
+    (call_id : V.FunCallId.id) : (V.abs * texpr list) list =
   let abs_ids = list_ancestor_abstractions_ids ctx abs call_id in
   List.map (fun id -> V.AbstractionId.Map.find id ctx.abstractions) abs_ids
 

@@ -53,11 +53,11 @@ type fun_ctx = {
     abstractions). *)
 type call_info = {
   forward : S.call;
-  forward_inputs : texpression list;
+  forward_inputs : texpr list;
       (** Remember the list of inputs given to the forward function.
 
           Those inputs include the fuel and the state, if pertinent. *)
-  back_funs : texpression option RegionGroupId.Map.t option;
+  back_funs : texpr option RegionGroupId.Map.t option;
       (** If we do not split between the forward/backward functions: the
           variables we introduced for the backward functions.
 
@@ -109,14 +109,14 @@ type loop_info = {
   input_vars : fvar list;
   input_svl : V.symbolic_value list;
   generics : generic_args;
-  forward_inputs : texpression list option;
+  forward_inputs : texpr list option;
       (** The forward inputs are initialized at [None] *)
-  forward_output_no_state_no_result : texpression option;
+  forward_output_no_state_no_result : texpr option;
       (** The forward outputs are initialized at [None] *)
   back_outputs : ty list RegionGroupId.Map.t;
       (** The map from region group ids to the types of the values given back by
           the corresponding loop abstractions. This map is partial. *)
-  back_funs : texpression option RegionGroupId.Map.t option;
+  back_funs : texpr option RegionGroupId.Map.t option;
       (** Same as {!call_info.back_funs}. Initialized with [None], gets updated
           to [Some] only if we merge the fwd/back functions. *)
   fwd_effect_info : fun_effect_info;
@@ -195,7 +195,7 @@ type bs_ctx = {
           [Some] afterwards. *)
   calls : call_info V.FunCallId.Map.t;
       (** The function calls we encountered so far *)
-  abstractions : (V.abs * texpression list) V.AbstractionId.Map.t;
+  abstractions : (V.abs * texpr list) V.AbstractionId.Map.t;
       (** The ended abstractions we encountered so far, with their additional
           input arguments. We store it here and not in {!call_info} because we
           need a map from abstraction id to abstraction (and not from call id +
@@ -217,7 +217,7 @@ type bs_ctx = {
 
           Note that when a function contains a loop, we group the function
           symbolic AST and the loop symbolic AST in a single function. *)
-  mk_return : (bs_ctx -> texpression option -> texpression) option;
+  mk_return : (bs_ctx -> texpr option -> texpr) option;
       (** Small helper: translate a [return] expression, given a value to
           "return". The translation of [return] depends on the context, and in
           particular depends on whether we are inside a subexpression like a
@@ -228,11 +228,11 @@ type bs_ctx = {
           - [None] for a backward computation
 
           We initialize this at [None]. *)
-  mk_panic : texpression option;
+  mk_panic : texpr option;
       (** Small helper: translate a [fail] expression.
 
           We initialize this at [None]. *)
-  mut_borrow_to_consumed : texpression V.BorrowId.Map.t;
+  mut_borrow_to_consumed : texpr V.BorrowId.Map.t;
       (** A map from mutable borrows consumed by region abstractions to consumed
           values.
 
@@ -289,7 +289,7 @@ type bs_ctx = {
             when transforming the symbolic trace to a pure model may not be the
             most obvious way of retrieving those consumed values but in practice
             it is quite straightforward and easy to debug. *)
-  var_id_to_default : texpression FVarId.Map.t;
+  var_id_to_default : texpr FVarId.Map.t;
       (** Map from the variable identifier of a given back value and introduced
           when deconstructing an ended abstraction, to the default value that we
           can use when introducing the otherwise branch of the deconstructing
@@ -327,9 +327,9 @@ let symbolic_value_to_string (ctx : bs_ctx) (sv : V.symbolic_value) : string =
   let env = bs_ctx_to_fmt_env ctx in
   Print.Values.symbolic_value_to_string env sv
 
-let typed_value_to_string (ctx : bs_ctx) (v : V.typed_value) : string =
+let tvalue_to_string (ctx : bs_ctx) (v : V.tvalue) : string =
   let env = bs_ctx_to_fmt_env ctx in
-  Print.Values.typed_value_to_string ~span:(Some ctx.span) env v
+  Print.Values.tvalue_to_string ~span:(Some ctx.span) env v
 
 let pure_ty_to_string (ctx : bs_ctx) (ty : ty) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
@@ -351,9 +351,9 @@ let pure_type_decl_to_string (ctx : bs_ctx) (def : type_decl) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
   PrintPure.type_decl_to_string env def
 
-let texpression_to_string (ctx : bs_ctx) (e : texpression) : string =
+let texpr_to_string (ctx : bs_ctx) (e : texpr) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
-  PrintPure.texpression_to_string ~span:(Some ctx.span) env false "" "  " e
+  PrintPure.texpr_to_string ~span:(Some ctx.span) env false "" "  " e
 
 let fun_id_to_string (ctx : bs_ctx) (id : A.fun_id) : string =
   let env = bs_ctx_to_fmt_env ctx in
@@ -367,9 +367,9 @@ let fun_decl_to_string (ctx : bs_ctx) (def : Pure.fun_decl) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
   PrintPure.fun_decl_to_string env def
 
-let typed_pattern_to_string (ctx : bs_ctx) (p : Pure.typed_pattern) : string =
+let tpattern_to_string (ctx : bs_ctx) (p : Pure.tpattern) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
-  PrintPure.typed_pattern_to_string ~span:ctx.span env p
+  PrintPure.tpattern_to_string ~span:ctx.span env p
 
 let abs_to_string ?(with_ended : bool = false) (ctx : bs_ctx) (abs : V.abs) :
     string =
@@ -380,9 +380,9 @@ let abs_to_string ?(with_ended : bool = false) (ctx : bs_ctx) (abs : V.abs) :
   Print.Values.abs_to_string ~span:(Some ctx.span) ~with_ended env verbose
     indent indent_incr abs
 
-let bs_ctx_expression_to_string (ctx : bs_ctx) (e : S.expression) : string =
+let bs_ctx_expr_to_string (ctx : bs_ctx) (e : S.expr) : string =
   let env = bs_ctx_to_fmt_env ctx in
-  expression_to_string env "" "  " e
+  expr_to_string env "" "  " e
 
 let bs_ctx_expansion_to_string (ctx : bs_ctx) (scrut : V.symbolic_value)
     (e : S.expansion) : string =
@@ -412,9 +412,8 @@ let bs_ctx_lookup_type_decl (id : TypeDeclId.id) (ctx : bs_ctx) : type_decl =
   TypeDeclId.Map.find id ctx.type_ctx.type_decls
 
 let bs_ctx_register_forward_call (call_id : V.FunCallId.id) (forward : S.call)
-    (args : texpression list)
-    (back_funs : texpression option RegionGroupId.Map.t option) (ctx : bs_ctx) :
-    bs_ctx =
+    (args : texpr list) (back_funs : texpr option RegionGroupId.Map.t option)
+    (ctx : bs_ctx) : bs_ctx =
   let calls = ctx.calls in
   [%sanity_check] ctx.span (not (V.FunCallId.Map.mem call_id calls));
   let info = { forward; forward_inputs = args; back_funs } in
@@ -430,8 +429,8 @@ let bs_ctx_register_forward_call (call_id : V.FunCallId.id) (forward : S.call)
     that we need to call. This function may be [None] if it has to be ignored
     (because it does nothing). *)
 let bs_ctx_register_backward_call (abs : V.abs) (call_id : V.FunCallId.id)
-    (back_id : T.RegionGroupId.id) (back_args : texpression list) (ctx : bs_ctx)
-    : bs_ctx * texpression option =
+    (back_id : T.RegionGroupId.id) (back_args : texpr list) (ctx : bs_ctx) :
+    bs_ctx * texpr option =
   (* Insert the abstraction in the call informations *)
   let info = V.FunCallId.Map.find call_id ctx.calls in
   let calls = V.FunCallId.Map.add call_id info ctx.calls in
@@ -477,7 +476,7 @@ let fresh_opt_vars (vars : (string option * ty) option list) (ctx : bs_ctx) :
     ctx vars
 
 (** IMPORTANT: do not use this one directly, but rather
-    {!symbolic_value_to_texpression} *)
+    {!symbolic_value_to_texpr} *)
 let lookup_var_for_symbolic_value (id : V.symbolic_value_id) (ctx : bs_ctx) :
     fvar option =
   match V.SymbolicValueId.Map.find_opt id ctx.sv_to_var with

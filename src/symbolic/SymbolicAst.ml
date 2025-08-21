@@ -53,7 +53,7 @@ type call = {
       (** In case the call is to a trait method, we may need an additional type
           parameter ([Self]) and the self trait clause to instantiate the
           function signature. *)
-  args : typed_value list;
+  args : tvalue list;
   args_places : mplace option list;  (** Meta information *)
   dest : symbolic_value;
   dest_place : mplace option;  (** Meta information *)
@@ -63,7 +63,7 @@ type call = {
 (** Meta information for expressions, not necessary for synthesis but useful to
     guide it to generate a pretty output. *)
 type espan =
-  | Assignment of Contexts.eval_ctx * mplace * typed_value * mplace option
+  | Assignment of Contexts.eval_ctx * mplace * tvalue * mplace option
       (** We generated an assignment (destination, assigned value, src) *)
   | Snapshot of Contexts.eval_ctx
       (** Remember an environment snapshot - this is useful to check where the
@@ -75,12 +75,12 @@ type global_decl_id = GlobalDeclId.id [@@deriving show]
 type 'a symbolic_value_id_map = 'a SymbolicValueId.Map.t [@@deriving show]
 type 'a region_group_id_map = 'a RegionGroupId.Map.t [@@deriving show]
 
-(** Ancestor for {!expression} iter visitor.
+(** Ancestor for {!expr} iter visitor.
 
     We could make it inherit the visitor for {!Contexts.eval_ctx}, but in all
     the uses of this visitor we don't need to explore {!Contexts.eval_ctx}, so
     we make it inherit the abstraction visitors instead. *)
-class ['self] iter_expression_base =
+class ['self] iter_expr_base =
   object (self : 'self)
     inherit [_] iter_abs
     method visit_eval_ctx : 'env -> Contexts.eval_ctx -> unit = fun _ _ -> ()
@@ -121,8 +121,8 @@ class ['self] iter_expression_base =
 (** **Rem.:** here, {!expression} is not at all equivalent to the expressions
     used in LLBC or in lambda-calculus: they are simply a first step towards
     lambda-calculus expressions. *)
-type expression =
-  | Return of (Contexts.eval_ctx[@opaque]) * typed_value option
+type expr =
+  | Return of (Contexts.eval_ctx[@opaque]) * tvalue option
       (** There are two cases:
           - the AST is for a forward function: the typed value should contain
             the value which was in the return variable
@@ -132,16 +132,16 @@ type expression =
           need it to translate shared borrows to pure values (we need to be able
           to look up the shared values in the context). *)
   | Panic
-  | FunCall of call * expression
-  | EndAbstraction of (Contexts.eval_ctx[@opaque]) * abs * expression
+  | FunCall of call * expr
+  | EndAbstraction of (Contexts.eval_ctx[@opaque]) * abs * expr
       (** The context is the evaluation context upon ending the abstraction,
           just after we removed the abstraction from the context.
 
           The context is the evaluation context from after evaluating the
           asserted value. It has the same purpose as for the {!Return} case. *)
-  | EvalGlobal of global_decl_id * generic_args * symbolic_value * expression
+  | EvalGlobal of global_decl_id * generic_args * symbolic_value * expr
       (** Evaluate a global to a fresh symbolic value *)
-  | Assertion of (Contexts.eval_ctx[@opaque]) * typed_value * expression
+  | Assertion of (Contexts.eval_ctx[@opaque]) * tvalue * expr
       (** An assertion.
 
           The context is the evaluation context from after evaluating the
@@ -159,7 +159,7 @@ type expression =
       * mplace option
       * symbolic_value
       * value_aggregate
-      * expression
+      * expr
       (** We introduce a new symbolic value, equal to some other value.
 
           This is used for instance when reorganizing the environment to compute
@@ -171,13 +171,12 @@ type expression =
           The context is the evaluation context from before introducing the new
           value. It has the same purpose as for the {!Return} case. *)
   | ForwardEnd of
-      ((Contexts.eval_ctx[@opaque]) * typed_value) option
+      ((Contexts.eval_ctx[@opaque]) * tvalue) option
       * (Contexts.eval_ctx[@opaque])
-      * (typed_value symbolic_value_id_map
-        * symbolic_value_id symbolic_value_id_map)
+      * (tvalue symbolic_value_id_map * symbolic_value_id symbolic_value_id_map)
         option
-      * expression
-      * expression region_group_id_map
+      * expr
+      * expr region_group_id_map
       (** We use this delimiter to indicate at which point we switch to the
           generation of code specific to the backward function(s).
 
@@ -211,7 +210,7 @@ type expression =
   | ReturnWithLoop of loop_id * bool
       (** We reach a return while inside a loop. The boolean is [true]. TODO:
           merge this with Return. *)
-  | Meta of (espan[@opaque]) * expression  (** Meta information *)
+  | Meta of (espan[@opaque]) * expr  (** Meta information *)
   | Error of Meta.span option * string
 
 and loop = {
@@ -222,31 +221,31 @@ and loop = {
   rg_to_given_back_tys : (Pure.ty list RegionGroupId.Map.t[@opaque]);
       (** The map from region group ids to the types of the values given back by
           the corresponding loop abstractions. *)
-  end_expr : expression;
+  end_expr : expr;
       (** The end of the function (upon the moment it enters the loop) *)
-  loop_expr : expression;  (** The symbolically executed loop body *)
+  loop_expr : expr;  (** The symbolically executed loop body *)
   span : Meta.span;  (** Information about the origin of the loop body *)
 }
 
 and expansion =
-  | ExpandNoBranch of symbolic_expansion * expression
+  | ExpandNoBranch of symbolic_expansion * expr
       (** A symbolic expansion which doesn't generate a branching. Includes:
           - concrete expansion
           - borrow expansion *Doesn't* include:
           - expansion of ADTs with one variant *)
-  | ExpandAdt of (variant_id option * symbolic_value list * expression) list
+  | ExpandAdt of (variant_id option * symbolic_value list * expr) list
       (** ADT expansion *)
-  | ExpandBool of expression * expression
+  | ExpandBool of expr * expr
       (** A boolean expansion (i.e, an [if ... then ... else ...]) *)
-  | ExpandInt of integer_type * (scalar_value * expression) list * expression
+  | ExpandInt of integer_type * (scalar_value * expr) list * expr
       (** An integer expansion (i.e, a switch over an integer). The last
           expression is for the "otherwise" branch. *)
 
 (* Remark: this type doesn't have to be mutually recursive with the other
    types, but it makes it easy to generate the visitors *)
 and value_aggregate =
-  | VaSingleValue of typed_value  (** Regular case *)
-  | VaArray of typed_value list
+  | VaSingleValue of tvalue  (** Regular case *)
+  | VaArray of tvalue list
       (** This is used when introducing array aggregates *)
   | VaCgValue of const_generic_var_id
       (** This is used when evaluating a const generic value: in the
@@ -256,9 +255,9 @@ and value_aggregate =
   show,
   visitors
     {
-      name = "iter_expression";
+      name = "iter_expr";
       variety = "iter";
-      ancestors = [ "iter_expression_base" ];
+      ancestors = [ "iter_expr_base" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
       polymorphic = false;

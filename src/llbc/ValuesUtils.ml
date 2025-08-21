@@ -7,34 +7,32 @@ include Charon.ValuesUtils
 (** Utility exception *)
 exception FoundSymbolicValue of symbolic_value
 
-let mk_unit_value : typed_value =
+let mk_unit_value : tvalue =
   { value = VAdt { variant_id = None; field_values = [] }; ty = mk_unit_ty }
 
-let mk_bool_value (b : bool) : typed_value =
+let mk_bool_value (b : bool) : tvalue =
   { value = VLiteral (VBool b); ty = TLiteral TBool }
 
-let mk_true : typed_value = mk_bool_value true
-let mk_false : typed_value = mk_bool_value false
+let mk_true : tvalue = mk_bool_value true
+let mk_false : tvalue = mk_bool_value false
 
-let mk_typed_value (span : Meta.span) (ty : ty) (value : value) : typed_value =
+let mk_tvalue (span : Meta.span) (ty : ty) (value : value) : tvalue =
   [%sanity_check] span (ty_is_ety ty);
   { value; ty }
 
-let mk_typed_avalue (span : Meta.span) (ty : ty) (value : avalue) : typed_avalue
-    =
+let mk_tavalue (span : Meta.span) (ty : ty) (value : avalue) : tavalue =
   [%sanity_check] span (ty_is_rty ty);
   { value; ty }
 
-let mk_bottom (span : Meta.span) (ty : ty) : typed_value =
+let mk_bottom (span : Meta.span) (ty : ty) : tvalue =
   [%sanity_check] span (ty_is_ety ty);
   { value = VBottom; ty }
 
-let mk_abottom (span : Meta.span) (ty : ty) : typed_avalue =
+let mk_abottom (span : Meta.span) (ty : ty) : tavalue =
   [%sanity_check] span (ty_is_rty ty);
   { value = ABottom; ty }
 
-let mk_aignored (span : Meta.span) (ty : ty) (v : typed_value option) :
-    typed_avalue =
+let mk_aignored (span : Meta.span) (ty : ty) (v : tvalue option) : tavalue =
   [%sanity_check] span (ty_is_rty ty);
   { value = AIgnored v; ty }
 
@@ -44,27 +42,27 @@ let value_as_symbolic (span : Meta.span) (v : value) : symbolic_value =
   | _ -> [%craise] span "Unexpected"
 
 (** Peel boxes as long as the value is of the form [Box<T>] *)
-let rec unbox_typed_value (span : Meta.span) (v : typed_value) : typed_value =
+let rec unbox_tvalue (span : Meta.span) (v : tvalue) : tvalue =
   match (v.value, v.ty) with
   | VAdt av, TAdt { id = TBuiltin TBox; _ } -> (
       match av.field_values with
-      | [ bv ] -> unbox_typed_value span bv
+      | [ bv ] -> unbox_tvalue span bv
       | _ -> [%internal_error] span)
   | _ -> v
 
 (** Create a typed value from a symbolic value. *)
-let mk_typed_value_from_symbolic_value (svalue : symbolic_value) : typed_value =
+let mk_tvalue_from_symbolic_value (svalue : symbolic_value) : tvalue =
   let av = VSymbolic svalue in
-  let av : typed_value =
+  let av : tvalue =
     { value = av; ty = Substitute.erase_regions svalue.sv_ty }
   in
   av
 
 (** Box a value *)
-let mk_box_value (span : Meta.span) (v : typed_value) : typed_value =
+let mk_box_value (span : Meta.span) (v : tvalue) : tvalue =
   let box_ty = mk_box_ty v.ty in
   let box_v = VAdt { variant_id = None; field_values = [ v ] } in
-  mk_typed_value span box_ty box_v
+  mk_tvalue span box_ty box_v
 
 let is_bottom (v : value) : bool =
   match v with
@@ -86,13 +84,12 @@ let as_symbolic (span : Meta.span) (v : value) : symbolic_value =
   | VSymbolic s -> s
   | _ -> [%craise] span "Unexpected"
 
-let as_mut_borrow (span : Meta.span) (v : typed_value) :
-    BorrowId.id * typed_value =
+let as_mut_borrow (span : Meta.span) (v : tvalue) : BorrowId.id * tvalue =
   match v.value with
   | VBorrow (VMutBorrow (bid, bv)) -> (bid, bv)
   | _ -> [%craise] span "Unexpected"
 
-let is_unit (v : typed_value) : bool =
+let is_unit (v : tvalue) : bool =
   ty_is_unit v.ty
   &&
   match v.value with
@@ -120,46 +117,46 @@ let mk_aproj_loans (pm : proj_marker) (sv_id : symbolic_value_id) (proj_ty : ty)
 
 (** Check if a value contains a *concrete* borrow (i.e., a [Borrow] value - we
     don't check if there are borrows hidden in symbolic values). *)
-let concrete_borrows_in_value (v : typed_value) : bool =
+let concrete_borrows_in_value (v : tvalue) : bool =
   let obj =
     object
-      inherit [_] iter_typed_value
+      inherit [_] iter_tvalue
       method! visit_borrow_content _env _ = raise Found
     end
   in
   (* We use exceptions *)
   try
-    obj#visit_typed_value () v;
+    obj#visit_tvalue () v;
     false
   with Found -> true
 
 (** Check if a value contains reserved mutable borrows (which are necessarily
     *concrete*: a symbolic value can't "hide" reserved borrows). *)
-let reserved_in_value (v : typed_value) : bool =
+let reserved_in_value (v : tvalue) : bool =
   let obj =
     object
-      inherit [_] iter_typed_value
+      inherit [_] iter_tvalue
       method! visit_VReservedMutBorrow _env _ = raise Found
     end
   in
   (* We use exceptions *)
   try
-    obj#visit_typed_value () v;
+    obj#visit_tvalue () v;
     false
   with Found -> true
 
 (** Check if a value contains a loan (which is necessarily *concrete*: symbolic
     values can't "hide" loans). *)
-let concrete_loans_in_value (v : typed_value) : bool =
+let concrete_loans_in_value (v : tvalue) : bool =
   let obj =
     object
-      inherit [_] iter_typed_value
+      inherit [_] iter_tvalue
       method! visit_loan_content _env _ = raise Found
     end
   in
   (* We use exceptions *)
   try
-    obj#visit_typed_value () v;
+    obj#visit_tvalue () v;
     false
   with Found -> true
 
@@ -167,7 +164,7 @@ let concrete_loans_in_value (v : typed_value) : bool =
 let concrete_borrows_loans_in_value (v : value) : bool =
   let obj =
     object
-      inherit [_] iter_typed_value
+      inherit [_] iter_tvalue
       method! visit_borrow_content _env _ = raise Found
       method! visit_loan_content _env _ = raise Found
     end
@@ -180,10 +177,10 @@ let concrete_borrows_loans_in_value (v : value) : bool =
 
 (** Check if a value contains outer loans (i.e., loans which are not in borrwed
     values. *)
-let outer_loans_in_value (v : typed_value) : bool =
+let outer_loans_in_value (v : tvalue) : bool =
   let obj =
     object
-      inherit [_] iter_typed_value
+      inherit [_] iter_tvalue
       method! visit_loan_content _env _ = raise Found
 
       method! visit_borrow_content _ _ =
@@ -192,7 +189,7 @@ let outer_loans_in_value (v : typed_value) : bool =
   in
   (* We use exceptions *)
   try
-    obj#visit_typed_value () v;
+    obj#visit_tvalue () v;
     false
   with Found -> true
 
@@ -220,12 +217,12 @@ let symbolic_value_is_greedily_expandable (span : Meta.span option)
 
 let find_first_expandable_sv_with_borrows (span : Meta.span option)
     (type_decls : type_decl TypeDeclId.Map.t)
-    (type_infos : TypesAnalysis.type_infos) (v : typed_value) :
-    symbolic_value option =
+    (type_infos : TypesAnalysis.type_infos) (v : tvalue) : symbolic_value option
+    =
   (* The visitor *)
   let obj =
     object
-      inherit [_] iter_typed_value
+      inherit [_] iter_tvalue
 
       method! visit_VSymbolic _ sv =
         if symbolic_value_is_greedily_expandable span type_decls type_infos sv
@@ -235,14 +232,14 @@ let find_first_expandable_sv_with_borrows (span : Meta.span option)
   in
   (* Small helper *)
   try
-    obj#visit_typed_value () v;
+    obj#visit_tvalue () v;
     None
   with FoundSymbolicValue sv -> Some sv
 
 (** Strip the outer shared loans in a value. Ex.:
     [shared_loan {l0, l1} (3 : u32, shared_loan {l2} (4 : u32))] ~~>
     [(3 : u32, shared_loan {l2} (4 : u32))] *)
-let rec value_strip_shared_loans (v : typed_value) : typed_value =
+let rec value_strip_shared_loans (v : tvalue) : tvalue =
   match v.value with
   | VLoan (VSharedLoan (_, v')) -> value_strip_shared_loans v'
   | _ -> v
@@ -261,7 +258,7 @@ let value_has_borrows span (infos : TypesAnalysis.type_infos) (v : value) : bool
     =
   let obj =
     object
-      inherit [_] iter_typed_value
+      inherit [_] iter_tvalue
       method! visit_borrow_content _env _ = raise Found
 
       method! visit_symbolic_value _ sv =
@@ -289,7 +286,7 @@ let value_has_non_ended_borrows_or_loans (ended_regions : RegionId.Set.t)
   in
   let value_visitor =
     object
-      inherit [_] iter_typed_value
+      inherit [_] iter_tvalue
       method! visit_borrow_content _ _ = raise Found
       method! visit_loan_content _ _ = raise Found
       method! visit_symbolic_value _ sv = ty_visitor#visit_ty () sv.sv_ty
@@ -308,7 +305,7 @@ let value_has_non_ended_borrows_or_loans (ended_regions : RegionId.Set.t)
 let value_has_loans (v : value) : bool =
   let obj =
     object
-      inherit [_] iter_typed_value
+      inherit [_] iter_tvalue
       method! visit_loan_content _env _ = raise Found
     end
   in
@@ -328,7 +325,7 @@ let value_has_loans_or_borrows span (infos : TypesAnalysis.type_infos)
     (v : value) : bool =
   let obj =
     object
-      inherit [_] iter_typed_value
+      inherit [_] iter_tvalue
       method! visit_borrow_content _env _ = raise Found
       method! visit_loan_content _env _ = raise Found
 
@@ -343,15 +340,15 @@ let value_has_loans_or_borrows span (infos : TypesAnalysis.type_infos)
   with Found -> true
 
 (** Remove the shared loans in a value *)
-let value_remove_shared_loans (v : typed_value) : typed_value =
+let value_remove_shared_loans (v : tvalue) : tvalue =
   let visitor =
     object (self : 'self)
-      inherit [_] map_typed_value as super
+      inherit [_] map_tvalue as super
 
-      method! visit_typed_value env v =
+      method! visit_tvalue env v =
         match v.value with
-        | VLoan (VSharedLoan (_, sv)) -> self#visit_typed_value env sv
-        | _ -> super#visit_typed_value env v
+        | VLoan (VSharedLoan (_, sv)) -> self#visit_tvalue env sv
+        | _ -> super#visit_tvalue env v
     end
   in
-  visitor#visit_typed_value () v
+  visitor#visit_tvalue () v

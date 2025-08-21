@@ -21,9 +21,9 @@ let var_to_string (ctx : ctx) (v : var) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.var_to_string fmt v
 
-let texpression_to_string (ctx : ctx) (x : texpression) : string =
+let texpr_to_string (ctx : ctx) (x : texpr) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
-  PrintPure.texpression_to_string fmt false "" "  " x
+  PrintPure.texpr_to_string fmt false "" "  " x
 
 let fun_body_to_string (ctx : ctx) (x : fun_body) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
@@ -37,9 +37,9 @@ let struct_update_to_string (ctx : ctx) supd : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.struct_update_to_string fmt "" "  " supd
 
-let typed_pattern_to_string (ctx : ctx) pat : string =
+let tpattern_to_string (ctx : ctx) pat : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
-  PrintPure.typed_pattern_to_string fmt pat
+  PrintPure.tpattern_to_string fmt pat
 
 let lift_map_fun_decl_body (f : ctx -> fun_decl -> fun_body -> fun_body)
     (ctx : ctx) (def : fun_decl) : fun_decl =
@@ -50,22 +50,16 @@ let lift_map_fun_decl_body (f : ctx -> fun_decl -> fun_body -> fun_body)
 
 (** Lift a visitor of expressions to a function which updates a function body *)
 let lift_expr_map_visitor_with_state
-    (obj :
-      ctx ->
-      fun_decl ->
-      < visit_texpression : 'a -> texpression -> texpression ; .. >)
+    (obj : ctx -> fun_decl -> < visit_texpr : 'a -> texpr -> texpr ; .. >)
     (state : 'a) (ctx : ctx) (def : fun_decl) : fun_decl =
   (* We open all the bound variables in the body before exploring it, then
      close them all after performing the updates - this makes it easier to
      deal with variables *)
-  map_open_fun_decl_body_expr ((obj ctx def)#visit_texpression state) def
+  map_open_fun_decl_body_expr ((obj ctx def)#visit_texpr state) def
 
 (** Lift a visitor of expressions to a function which updates a function body *)
 let lift_expr_map_visitor
-    (obj :
-      ctx ->
-      fun_decl ->
-      < visit_texpression : unit -> texpression -> texpression ; .. >)
+    (obj : ctx -> fun_decl -> < visit_texpr : unit -> texpr -> texpr ; .. >)
     (ctx : ctx) (def : fun_decl) : fun_decl =
   lift_expr_map_visitor_with_state obj () ctx def
 
@@ -78,21 +72,17 @@ let lift_iter_fun_decl_body (f : ctx -> fun_decl -> fun_body -> unit)
 
 (** Lift a visitor of expressions to a function which updates a function body *)
 let lift_expr_iter_visitor_with_state
-    (obj :
-      ctx -> fun_decl -> < visit_texpression : 'a -> texpression -> unit ; .. >)
+    (obj : ctx -> fun_decl -> < visit_texpr : 'a -> texpr -> unit ; .. >)
     (state : 'a) (ctx : ctx) (def : fun_decl) : unit =
   (* We open all the bound variables in the body before exploring it, then
      close them all after performing the updates - this makes it easier to
      deal with variables *)
-  iter_open_fun_decl_body_expr ((obj ctx def)#visit_texpression state) def
+  iter_open_fun_decl_body_expr ((obj ctx def)#visit_texpr state) def
 
 (** Lift a visitor of expressions to a function which updates a function body *)
 let lift_expr_iter_visitor
-    (obj :
-      ctx ->
-      fun_decl ->
-      < visit_texpression : unit -> texpression -> unit ; .. >) (ctx : ctx)
-    (def : fun_decl) : unit =
+    (obj : ctx -> fun_decl -> < visit_texpr : unit -> texpr -> unit ; .. >)
+    (ctx : ctx) (def : fun_decl) : unit =
   lift_expr_iter_visitor_with_state obj () ctx def
 
 (** A node in the constraints graph *)
@@ -157,18 +147,18 @@ end
 module NcAssignMap = Collections.MakeMap (NcAssignOrderedType)
 module NcAssignSet = Collections.MakeSet (NcAssignOrderedType)
 
-let rec decompose_typed_pattern span (x : typed_pattern) : (fvar * int) option =
-  match x.value with
-  | PatBound _ -> [%internal_error] span
-  | PatOpen (v, _) -> Some (v, 0)
-  | PatAdt { variant_id = None; field_values = [ x ] } -> begin
+let rec decompose_tpattern span (x : tpattern) : (fvar * int) option =
+  match x.pat with
+  | PBound _ -> [%internal_error] span
+  | POpen (v, _) -> Some (v, 0)
+  | PAdt { variant_id = None; fields = [ x ] } -> begin
       Option.map
         (fun (vid, depth) -> (vid, depth + 1))
-        (decompose_typed_pattern span x)
+        (decompose_tpattern span x)
     end
-  | PatConstant _ | PatDummy | PatAdt _ -> None
+  | PConstant _ | PDummy | PAdt _ -> None
 
-let rec decompose_texpression span (x : texpression) : (fvar_id * int) option =
+let rec decompose_texpr span (x : texpr) : (fvar_id * int) option =
   match x.e with
   | FVar vid -> Some (vid, 0)
   | BVar _ -> [%internal_error] span
@@ -179,7 +169,7 @@ let rec decompose_texpression span (x : texpression) : (fvar_id * int) option =
         | Qualif { id = AdtCons _; _ }, [ x ] ->
             Option.map
               (fun (vid, depth) -> (vid, depth + 1))
-              (decompose_texpression span x)
+              (decompose_texpr span x)
         | _ -> None
       end
   | CVar _
@@ -191,11 +181,11 @@ let rec decompose_texpression span (x : texpression) : (fvar_id * int) option =
   | Loop _
   | StructUpdate _
   | EError _ -> None
-  | Meta (_, x) -> decompose_texpression span x
+  | Meta (_, x) -> decompose_texpr span x
 
 type loop_info = {
-  inputs : typed_pattern list;  (** The inputs bound by the loop *)
-  outputs : typed_pattern list;
+  inputs : tpattern list;  (** The inputs bound by the loop *)
+  outputs : tpattern list;
       (** The outputs that we accumulated at each loop call.
 
           We use this to propagate naming information between all the call
@@ -307,35 +297,34 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
   in
 
   (* *)
-  let register_assign (lv : typed_pattern) (rv : texpression) =
-    match (decompose_typed_pattern span lv, decompose_texpression span rv) with
+  let register_assign (lv : tpattern) (rv : texpr) =
+    match (decompose_tpattern span lv, decompose_texpr span rv) with
     | Some (lhs, lhs_depth), Some (rhs_id, rhs_depth) ->
         if lhs_depth + rhs_depth = 0 then
           register_edge (Pure lhs.id) 0 (Pure rhs_id)
     | _ -> ()
   in
-  let register_expression_eq (lv : texpression) (rv : texpression) =
-    match (decompose_texpression span lv, decompose_texpression span rv) with
+  let register_expr_eq (lv : texpr) (rv : texpr) =
+    match (decompose_texpr span lv, decompose_texpr span rv) with
     | Some (lhs_id, lhs_depth), Some (rhs_id, rhs_depth) ->
         if lhs_depth + rhs_depth = 0 then
           register_edge (Pure lhs_id) 0 (Pure rhs_id)
     | _ -> ()
   in
-  let register_texpression_has_name (e : texpression) (name : string)
-      (depth : int) =
-    match decompose_texpression span e with
+  let register_texpr_has_name (e : texpr) (name : string) (depth : int) =
+    match decompose_texpr span e with
     | Some (id, depth') -> register_node (Pure id) name (depth + depth')
     | _ -> ()
   in
-  let register_texpression_at_place (e : texpression) (mp : mplace) =
-    match (decompose_texpression span e, decompose_mplace_to_local mp) with
+  let register_texpr_at_place (e : texpr) (mp : mplace) =
+    match (decompose_texpr span e, decompose_mplace_to_local mp) with
     | Some (fid, 0), Some (lid, _, []) -> register_edge (Pure fid) 0 (Llbc lid)
     | _ -> ()
   in
 
   let visitor =
     object
-      inherit [_] iter_expression as super
+      inherit [_] iter_expr as super
       method! visit_fvar _ v = register_var v
 
       method! visit_Let env monadic lv re e =
@@ -343,7 +332,7 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
         Option.iter
           (fun mp ->
             match
-              (decompose_typed_pattern span lv, decompose_mplace_to_local mp)
+              (decompose_tpattern span lv, decompose_mplace_to_local mp)
             with
             | Some (lhs, 0), Some (lid, _, []) ->
                 register_edge (Pure lhs.id) 0 (Llbc lid)
@@ -375,27 +364,25 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
         (* Continue exploring *)
         super#visit_Let env monadic lv re e
 
-      method! visit_PatBound _ _ _ = [%internal_error] span
+      method! visit_PBound _ _ _ = [%internal_error] span
 
-      method! visit_PatOpen env lv mp =
+      method! visit_POpen env lv mp =
         register_var_at_place lv mp;
-        super#visit_PatOpen env lv mp
+        super#visit_POpen env lv mp
 
       method! visit_Meta env meta e =
         begin
           match meta with
           | Assignment (mp, rvalue, rmp) ->
-              register_texpression_at_place rvalue mp;
-              Option.iter (register_texpression_at_place rvalue) rmp
+              register_texpr_at_place rvalue mp;
+              Option.iter (register_texpr_at_place rvalue) rmp
           | SymbolicAssignments infos ->
-              List.iter
-                (fun (var, rvalue) -> register_expression_eq var rvalue)
-                infos
+              List.iter (fun (var, rvalue) -> register_expr_eq var rvalue) infos
           | SymbolicPlaces infos ->
               List.iter
-                (fun (var, name) -> register_texpression_has_name var name 1)
+                (fun (var, name) -> register_texpr_has_name var name 1)
                 infos
-          | MPlace mp -> register_texpression_at_place e mp
+          | MPlace mp -> register_texpr_at_place e mp
           | Tag _ | TypeAnnot -> ()
         end;
         super#visit_Meta env meta e
@@ -409,7 +396,7 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
         (match loop.loop_body.e with
         | Meta (SymbolicPlaces infos, _) ->
             List.iter
-              (fun (var, name) -> register_texpression_has_name var name 0)
+              (fun (var, name) -> register_texpr_has_name var name 0)
               infos
         | _ -> ());
         super#visit_loop env loop
@@ -420,22 +407,21 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
         | _ -> ()
     end
   in
-  List.iter (visitor#visit_typed_pattern ()) body.inputs;
-  visitor#visit_texpression () body.body;
+  List.iter (visitor#visit_tpattern ()) body.inputs;
+  visitor#visit_texpr () body.body;
 
   (* Equate the loop outputs *)
-  let rec equate (out0 : typed_pattern) (out1 : typed_pattern) : unit =
-    match (out0.value, out1.value) with
-    | PatOpen (v0, _), PatOpen (v1, _) ->
-        register_edge (Pure v0.id) 0 (Pure v1.id)
-    | PatAdt adt0, PatAdt adt1 ->
+  let rec equate (out0 : tpattern) (out1 : tpattern) : unit =
+    match (out0.pat, out1.pat) with
+    | POpen (v0, _), POpen (v1, _) -> register_edge (Pure v0.id) 0 (Pure v1.id)
+    | PAdt adt0, PAdt adt1 ->
         if
           adt0.variant_id = adt1.variant_id
-          && List.length adt0.field_values = List.length adt1.field_values
+          && List.length adt0.fields = List.length adt1.fields
         then
           List.iter
             (fun (x, y) -> equate x y)
-            (List.combine adt0.field_values adt1.field_values)
+            (List.combine adt0.fields adt1.fields)
     | _ -> ()
   in
   LoopId.Map.iter
@@ -599,16 +585,16 @@ let compute_pretty_names_update (def : fun_decl) (names : string FVarId.Map.t)
   (* The visitor to update the whole body *)
   let visitor =
     object
-      inherit [_] map_expression
-      method! visit_PatOpen _ v mp = PatOpen (update_var v, mp)
-      method! visit_PatBound _ _ _ = [%internal_error] span
+      inherit [_] map_expr
+      method! visit_POpen _ v mp = POpen (update_var v, mp)
+      method! visit_PBound _ _ _ = [%internal_error] span
     end
   in
 
   (* Apply *)
   let { inputs; body } = body in
-  let inputs = List.map (visitor#visit_typed_pattern ()) inputs in
-  let body = visitor#visit_texpression () body in
+  let inputs = List.map (visitor#visit_tpattern ()) inputs in
+  let body = visitor#visit_texpr () body in
   { inputs; body }
 
 (** This function computes pretty names for the variables in the pure AST. It
@@ -644,7 +630,7 @@ let remove_meta (def : fun_decl) : fun_decl =
 let intro_massert_visitor (_ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
   object
-    inherit [_] map_expression as super
+    inherit [_] map_expr as super
 
     method! visit_Switch env scrut switch =
       match switch with
@@ -709,12 +695,12 @@ let intro_massert = lift_expr_map_visitor intro_massert_visitor
 let simplify_decompose_struct_visitor (ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
   object
-    inherit [_] map_expression as super
+    inherit [_] map_expr as super
 
-    method! visit_Let env (monadic : bool) (lv : typed_pattern)
-        (scrutinee : texpression) (next : texpression) =
-      match (lv.value, lv.ty) with
-      | PatAdt adt_pat, TAdt (TAdtId adt_id, generics) ->
+    method! visit_Let env (monadic : bool) (lv : tpattern) (scrutinee : texpr)
+        (next : texpr) =
+      match (lv.pat, lv.ty) with
+      | PAdt adt_pat, TAdt (TAdtId adt_id, generics) ->
           (* Detect if this is an enumeration or not *)
           let tdef =
             TypeDeclId.Map.find adt_id ctx.trans_ctx.type_ctx.type_decls
@@ -743,8 +729,8 @@ let simplify_decompose_struct_visitor (ctx : ctx) (def : fun_decl) =
                  field.
                  We use the [dest] variable in order not to have to recompute
                  the type of the result of the projection... *)
-            let gen_field_proj (field_id : FieldId.id) (dest : typed_pattern) :
-                texpression =
+            let gen_field_proj (field_id : FieldId.id) (dest : tpattern) : texpr
+                =
               let proj_kind = { adt_id = TAdtId adt_id; field_id } in
               let qualif = { id = Proj proj_kind; generics } in
               let proj_e = Qualif qualif in
@@ -753,7 +739,7 @@ let simplify_decompose_struct_visitor (ctx : ctx) (def : fun_decl) =
               mk_app span proj scrutinee
             in
             let id_var_pairs =
-              FieldId.mapi (fun fid v -> (fid, v)) adt_pat.field_values
+              FieldId.mapi (fun fid v -> (fid, v)) adt_pat.fields
             in
             let monadic = false in
             let e =
@@ -763,7 +749,7 @@ let simplify_decompose_struct_visitor (ctx : ctx) (def : fun_decl) =
                   mk_opened_let monadic pat field_proj e)
                 id_var_pairs next
             in
-            (super#visit_texpression env e).e
+            (super#visit_texpr env e).e
       | _ -> super#visit_Let env monadic lv scrutinee next
   end
 
@@ -789,16 +775,15 @@ let simplify_decompose_struct =
     be extracted as a tuple. *)
 let intro_struct_updates_visitor (ctx : ctx) (def : fun_decl) =
   object (self)
-    inherit [_] map_expression as super
+    inherit [_] map_expr as super
 
-    method! visit_texpression env (e : texpression) =
+    method! visit_texpr env (e : texpr) =
       match e.e with
       | App _ -> (
           let app, args = destruct_apps e in
           let ignore () =
-            mk_apps def.item_meta.span
-              (self#visit_texpression env app)
-              (List.map (self#visit_texpression env) args)
+            mk_apps def.item_meta.span (self#visit_texpr env app)
+              (List.map (self#visit_texpr env) args)
           in
           match app.e with
           | Qualif
@@ -840,7 +825,7 @@ let intro_struct_updates_visitor (ctx : ctx) (def : fun_decl) =
                     let init = None in
                     let updates =
                       FieldId.mapi
-                        (fun fid fe -> (fid, self#visit_texpression env fe))
+                        (fun fid fe -> (fid, self#visit_texpr env fe))
                         args
                     in
                     let ne = { struct_id; init; updates } in
@@ -849,7 +834,7 @@ let intro_struct_updates_visitor (ctx : ctx) (def : fun_decl) =
                   else ignore ()
                 else ignore ()
           | _ -> ignore ())
-      | _ -> super#visit_texpression env e
+      | _ -> super#visit_texpr env e
   end
 
 let intro_struct_updates = lift_expr_map_visitor intro_struct_updates_visitor
@@ -904,7 +889,7 @@ let intro_struct_updates = lift_expr_map_visitor intro_struct_updates_visitor
     ]} *)
 let simplify_let_bindings_visitor (ctx : ctx) (def : fun_decl) =
   object (self)
-    inherit [_] map_expression as super
+    inherit [_] map_expr as super
 
     method! visit_Let env monadic lv rv next =
       match rv.e with
@@ -936,14 +921,12 @@ let simplify_let_bindings_visitor (ctx : ctx) (def : fun_decl) =
             self#visit_Let env false lv x next
           else if variant_id = result_fail_id then
             (* Fail case *)
-            self#visit_expression env rv.e
+            self#visit_expr env rv.e
           else [%craise] def.item_meta.span "Unexpected"
       | App _ ->
           (* This might be the tuple case *)
           if not monadic then
-            match
-              (opt_dest_struct_pattern lv, opt_dest_tuple_texpression rv)
-            with
+            match (opt_dest_struct_pattern lv, opt_dest_tuple_texpr rv) with
             | Some pats, Some vals ->
                 (* Tuple case *)
                 let pat_vals = List.combine pats vals in
@@ -952,7 +935,7 @@ let simplify_let_bindings_visitor (ctx : ctx) (def : fun_decl) =
                     (fun (pat, v) next -> mk_opened_let false pat v next)
                     pat_vals next
                 in
-                super#visit_expression env e.e
+                super#visit_expr env e.e
             | _ -> super#visit_Let env monadic lv rv next
           else super#visit_Let env monadic lv rv next
       | Lambda _ ->
@@ -962,9 +945,9 @@ let simplify_let_bindings_visitor (ctx : ctx) (def : fun_decl) =
             let g, args = destruct_apps e in
             if List.length pats = List.length args then
               (* Check if the arguments are exactly the lambdas *)
-              let check_pat_arg ((pat, arg) : typed_pattern * texpression) =
-                match (pat.value, arg.e) with
-                | PatOpen (v, _), FVar vid -> v.id = vid
+              let check_pat_arg ((pat, arg) : tpattern * texpr) =
+                match (pat.pat, arg.e) with
+                | POpen (v, _), FVar vid -> v.id = vid
                 | _ -> false
               in
               if List.for_all check_pat_arg (List.combine pats args) then
@@ -1014,30 +997,30 @@ let simplify_let_bindings = lift_expr_map_visitor simplify_let_bindings_visitor
     This micro pass removes those duplicate function calls. *)
 let simplify_duplicate_calls_visitor (_ctx : ctx) (def : fun_decl) =
   object (self)
-    inherit [_] map_expression as super
+    inherit [_] map_expr as super
 
     method! visit_Let env monadic pat bound next =
-      let bound = self#visit_texpression env bound in
+      let bound = self#visit_texpr env bound in
       (* Register the function call if the pattern doesn't contain dummy
            variables *)
       let env =
         if monadic then
-          match typed_pattern_to_texpression def.item_meta.span pat with
+          match tpattern_to_texpr def.item_meta.span pat with
           | None -> env
           | Some pat_expr -> TExprMap.add bound (monadic, pat_expr) env
         else env
       in
-      let next = self#visit_texpression env next in
+      let next = self#visit_texpr env next in
       Let (monadic, pat, bound, next)
 
-    method! visit_texpression env e =
+    method! visit_texpr env e =
       let e =
         match TExprMap.find_opt e env with
         | None -> e
         | Some (monadic, e) ->
-            if monadic then mk_result_ok_texpression def.item_meta.span e else e
+            if monadic then mk_result_ok_texpr def.item_meta.span e else e
       in
-      super#visit_texpression env e
+      super#visit_texpr env e
   end
 
 let simplify_duplicate_calls =
@@ -1128,11 +1111,11 @@ let inline_useless_var_assignments_visitor ~(inline_named : bool)
     ~(inline_const : bool) ~(inline_pure : bool) ~(inline_identity : bool)
     (ctx : ctx) (def : fun_decl) =
   object (self)
-    inherit [_] map_expression as super
+    inherit [_] map_expr as super
 
     (** Visit the let-bindings to filter the useless ones (and update the
         substitution map while doing so *)
-    method! visit_Let (env : texpression FVarId.Map.t) monadic lv re e =
+    method! visit_Let (env : texpr FVarId.Map.t) monadic lv re e =
       (* In order to filter, we need to check first that:
            - the let-binding is not monadic
            - the left-value is a variable
@@ -1140,8 +1123,8 @@ let inline_useless_var_assignments_visitor ~(inline_named : bool)
            We also inline if the binding decomposes a structure that is to be
            extracted as a tuple, and the right value is a variable.
         *)
-      match (monadic, lv.value) with
-      | false, PatOpen (lv_var, _) ->
+      match (monadic, lv.pat) with
+      | false, POpen (lv_var, _) ->
           (* We can filter if: 1. *)
           let filter_pure =
             (* 1.1. the left variable is unnamed or [inline_named] is true *)
@@ -1197,7 +1180,7 @@ let inline_useless_var_assignments_visitor ~(inline_named : bool)
             inline_identity
             &&
             match re.e with
-            | Lambda ({ value = PatOpen (v0, _); _ }, { e = FVar v1; _ }) ->
+            | Lambda ({ pat = POpen (v0, _); _ }, { e = FVar v1; _ }) ->
                 v0.id = v1
             | _ -> false
           in
@@ -1206,25 +1189,25 @@ let inline_useless_var_assignments_visitor ~(inline_named : bool)
 
           (* Update the rhs (we may perform substitutions inside, and it is
            * better to do them *before* we inline it *)
-          let re = self#visit_texpression env re in
+          let re = self#visit_texpr env re in
           (* Update the substitution environment *)
           let env = if filter then FVarId.Map.add lv_var.id re env else env in
           (* Update the next expression *)
-          let e = self#visit_texpression env e in
+          let e = self#visit_texpr env e in
           (* Reconstruct the [let], only if the binding is not filtered *)
           if filter then e.e else Let (monadic, lv, re, e)
       | ( false,
-          PatAdt
+          PAdt
             {
               variant_id = None;
-              field_values = [ { value = PatOpen (lv_var, _); ty = _ } ];
+              fields = [ { pat = POpen (lv_var, _); ty = _ } ];
             } ) ->
           (* Second case: we deconstruct a structure with one field that we will
                extract as tuple. *)
           let adt_id, _ = PureUtils.ty_as_adt def.item_meta.span re.ty in
           (* Update the rhs (we may perform substitutions inside, and it is
            * better to do them *before* we inline it *)
-          let re = self#visit_texpression env re in
+          let re = self#visit_texpr env re in
           if
             PureUtils.is_fvar re
             && type_decl_from_type_id_is_tuple_struct
@@ -1233,7 +1216,7 @@ let inline_useless_var_assignments_visitor ~(inline_named : bool)
             (* Update the substitution environment *)
             let env = FVarId.Map.add lv_var.id re env in
             (* Update the next expression *)
-            let e = self#visit_texpression env e in
+            let e = self#visit_texpr env e in
             (* We filter the [let], and thus do not reconstruct it *)
             e.e
           else (* Nothing to do *)
@@ -1241,7 +1224,7 @@ let inline_useless_var_assignments_visitor ~(inline_named : bool)
       | _ -> super#visit_Let env monadic lv re e
 
     (** Substitute the variables *)
-    method! visit_FVar (env : texpression FVarId.Map.t) (vid : FVarId.id) =
+    method! visit_FVar (env : texpr FVarId.Map.t) (vid : FVarId.id) =
       match FVarId.Map.find_opt vid env with
       | None -> (* No substitution *) super#visit_FVar env vid
       | Some ne ->
@@ -1250,7 +1233,7 @@ let inline_useless_var_assignments_visitor ~(inline_named : bool)
            * var0 --> var1
            * var1 --> var2.
            *)
-          self#visit_expression env ne.e
+          self#visit_expr env ne.e
   end
 
 let inline_useless_var_assignments ~inline_named ~inline_const ~inline_pure
@@ -1281,20 +1264,20 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
   *)
   let lv_visitor =
     object
-      inherit [_] mapreduce_typed_pattern
+      inherit [_] mapreduce_tpattern
       method zero _ = true
       method plus b0 b1 _ = b0 () && b1 ()
 
-      method! visit_PatOpen env v mp =
-        if FVarId.Set.mem v.id env then (PatOpen (v, mp), fun _ -> false)
-        else (PatDummy, fun _ -> true)
+      method! visit_POpen env v mp =
+        if FVarId.Set.mem v.id env then (POpen (v, mp), fun _ -> false)
+        else (PDummy, fun _ -> true)
 
-      method! visit_PatBound _ _ _ = [%internal_error] span
+      method! visit_PBound _ _ _ = [%internal_error] span
     end
   in
-  let filter_typed_pattern (used_vars : FVarId.Set.t) (lv : typed_pattern) :
-      typed_pattern * bool =
-    let lv, all_dummies = lv_visitor#visit_typed_pattern used_vars lv in
+  let filter_tpattern (used_vars : FVarId.Set.t) (lv : tpattern) :
+      tpattern * bool =
+    let lv, all_dummies = lv_visitor#visit_tpattern used_vars lv in
     (lv, all_dummies ())
   in
 
@@ -1305,50 +1288,50 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
   *)
   let expr_visitor =
     object (self)
-      inherit [_] mapreduce_expression as super
+      inherit [_] mapreduce_expr as super
       method zero _ = FVarId.Set.empty
       method plus s0 s1 _ = FVarId.Set.union (s0 ()) (s1 ())
 
       (** Whenever we visit a variable, we need to register the used variable *)
       method! visit_FVar _ vid = (FVar vid, fun _ -> FVarId.Set.singleton vid)
 
-      method! visit_expression env e =
+      method! visit_expr env e =
         match e with
         | BVar _ -> [%internal_error] span
         | FVar _ | CVar _ | Const _ | App _ | Qualif _
         | Meta (_, _)
         | StructUpdate _ | Lambda _
-        | EError (_, _) -> super#visit_expression env e
+        | EError (_, _) -> super#visit_expr env e
         | Switch (scrut, switch) -> (
             match switch with
-            | If (_, _) -> super#visit_expression env e
+            | If (_, _) -> super#visit_expr env e
             | Match branches ->
                 (* Simplify the branches *)
                 let simplify_branch (br : match_branch) =
                   (* Compute the set of values used inside the branch *)
-                  let branch, used = self#visit_texpression env br.branch in
+                  let branch, used = self#visit_texpr env br.branch in
                   (* Simplify the pattern *)
-                  let pat, _ = filter_typed_pattern (used ()) br.pat in
+                  let pat, _ = filter_tpattern (used ()) br.pat in
                   { pat; branch }
                 in
-                super#visit_expression env
+                super#visit_expr env
                   (Switch (scrut, Match (List.map simplify_branch branches))))
         | Let (monadic, lv, re, e) ->
             (* Compute the set of values used in the next expression *)
-            let e, used = self#visit_texpression env e in
+            let e, used = self#visit_texpr env e in
             let used = used () in
             (* Filter the left values *)
-            let lv, all_dummies = filter_typed_pattern used lv in
+            let lv, all_dummies = filter_tpattern used lv in
             (* Small utility - called if we can't filter the let-binding *)
             let dont_filter () =
-              let re, used_re = self#visit_texpression env re in
+              let re, used_re = self#visit_texpr env re in
               let used = FVarId.Set.union used (used_re ()) in
               (* Simplify the left pattern if it only contains dummy variables *)
               let lv =
                 if all_dummies then
                   let ty = lv.ty in
-                  let value = PatDummy in
-                  { value; ty }
+                  let pat = PDummy in
+                  { pat; ty }
                 else lv
               in
               (Let (monadic, lv, re, e), fun _ -> used)
@@ -1364,8 +1347,8 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
               dont_filter ()
         | Loop loop ->
             (* We take care to ignore the varset computed on the *loop body* *)
-            let fun_end, s = self#visit_texpression () loop.fun_end in
-            let loop_body, _ = self#visit_texpression () loop.loop_body in
+            let fun_end, s = self#visit_texpr () loop.fun_end in
+            let loop_body, _ = self#visit_texpr () loop.loop_body in
             (Loop { loop with fun_end; loop_body }, s)
     end
     (* We filter only inside of transparent (i.e., non-opaque) definitions *)
@@ -1373,7 +1356,7 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
   map_open_fun_decl_body
     (fun body ->
       (* Visit the body *)
-      let body_exp, used_vars = expr_visitor#visit_texpression () body.body in
+      let body_exp, used_vars = expr_visitor#visit_texpr () body.body in
       (* Visit the parameters - TODO: update: we can filter only if the definition
          is not recursive (otherwise it might mess up with the decrease clauses:
          the decrease clauses uses all the inputs given to the function, if some
@@ -1383,9 +1366,7 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
       let used_vars = used_vars () in
       let inputs =
         if false then
-          List.map
-            (fun lv -> fst (filter_typed_pattern used_vars lv))
-            body.inputs
+          List.map (fun lv -> fst (filter_tpattern used_vars lv)) body.inputs
         else body.inputs
       in
       (* Return *)
@@ -1406,39 +1387,38 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
 let simplify_let_then_ok_visitor _ctx (def : fun_decl) =
   (* Match a pattern and an expression: evaluates to [true] if the expression
      is actually exactly the pattern *)
-  let rec match_pattern_and_expr (pat : typed_pattern) (e : texpression) : bool
-      =
-    match (pat.value, e.e) with
-    | PatConstant plit, Const lit -> plit = lit
-    | PatOpen (pv, _), FVar vid -> pv.id = vid
-    | PatDummy, _ ->
+  let rec match_pattern_and_expr (pat : tpattern) (e : texpr) : bool =
+    match (pat.pat, e.e) with
+    | PConstant plit, Const lit -> plit = lit
+    | POpen (pv, _), FVar vid -> pv.id = vid
+    | PDummy, _ ->
         (* It is ok only if we ignore the unit value *)
         pat.ty = mk_unit_ty && e = mk_unit_rvalue
-    | PatAdt padt, _ -> (
+    | PAdt padt, _ -> (
         let qualif, args = destruct_apps e in
         match qualif.e with
         | Qualif { id = AdtCons cons_id; generics = _ } ->
             if
               pat.ty = e.ty
               && padt.variant_id = cons_id.variant_id
-              && List.length padt.field_values = List.length args
+              && List.length padt.fields = List.length args
             then
               List.for_all
                 (fun (p, e) -> match_pattern_and_expr p e)
-                (List.combine padt.field_values args)
+                (List.combine padt.fields args)
             else false
         | _ -> false)
     | _ -> false
   in
 
   object (self)
-    inherit [_] map_expression
+    inherit [_] map_expr
 
     method! visit_Let env monadic lv rv next_e =
       (* We do a bottom up traversal (simplifying in the children nodes
            can allow to simplify in the parent nodes) *)
-      let rv = self#visit_texpression env rv in
-      let next_e = self#visit_texpression env next_e in
+      let rv = self#visit_texpr env rv in
+      let next_e = self#visit_texpr env next_e in
       let not_simpl_e = Let (monadic, lv, rv, next_e) in
       match next_e.e with
       | Switch _ | Loop _ | Let _ ->
@@ -1460,7 +1440,7 @@ let simplify_let_then_ok_visitor _ctx (def : fun_decl) =
             | Some e ->
                 if match_pattern_and_expr lv e then
                   (* We need to wrap the right-value in a ret *)
-                  (mk_result_ok_texpression def.item_meta.span rv).e
+                  (mk_result_ok_texpr def.item_meta.span rv).e
                 else not_simpl_e
             | None ->
                 if match_pattern_and_expr lv next_e then rv.e else not_simpl_e)
@@ -1476,12 +1456,12 @@ let simplify_let_then_ok = lift_expr_map_visitor simplify_let_then_ok_visitor
     ]} *)
 let simplify_aggregates_visitor (ctx : ctx) (def : fun_decl) =
   object
-    inherit [_] map_expression as super
+    inherit [_] map_expr as super
 
     (* Look for a type constructor applied to arguments *)
-    method! visit_texpression env e =
+    method! visit_texpr env e =
       (* First simplify the sub-expressions *)
-      let e = super#visit_texpression env e in
+      let e = super#visit_texpr env e in
       match e.e with
       | App _ -> (
           (* TODO: we should remove this case, which dates from before the
@@ -1514,7 +1494,7 @@ let simplify_aggregates_visitor (ctx : ctx) (def : fun_decl) =
                 (* We now need to check that all the arguments are of the form:
                  * [x.field] for some variable [x], and where the projection
                  * is for the proper ADT *)
-                let to_var_proj (i : int) (arg : texpression) :
+                let to_var_proj (i : int) (arg : texpr) :
                     (generic_args * fvar_id) option =
                   match arg.e with
                   | App (proj, x) -> (
@@ -1556,8 +1536,7 @@ let simplify_aggregates_visitor (ctx : ctx) (def : fun_decl) =
           let adt_ty = e.ty in
           (* Attempt to convert all the field updates to projections
                of fields from an ADT with the same type *)
-          let to_expr_proj ((fid, arg) : FieldId.id * texpression) :
-              texpression option =
+          let to_expr_proj ((fid, arg) : FieldId.id * texpr) : texpr option =
             match arg.e with
             | App (proj, x) -> (
                 match proj.e with
@@ -1643,13 +1622,13 @@ type simp_aggr_env = {
        p.1 -> y
      ]}
   *)
-  expand_map : expression ExprMap.t;
+  expand_map : expr ExprMap.t;
   (* The list of values which were expanded through matches or let-bindings.
 
      For instance, if we see the expression [let (x, y) = p in ...] we push
      the expression [p].
   *)
-  expanded : expression list;
+  expanded : expr list;
 }
 
 (** Simplify the unchanged fields in the aggregated ADTs.
@@ -1673,32 +1652,32 @@ let simplify_aggregates_unchanged_fields_visitor (ctx : ctx) (def : fun_decl) =
   in
   let get_expand v m = ExprMap.find_opt v m.expand_map in
   let add_expanded e m = { m with expanded = e :: m.expanded } in
-  let add_pattern_eqs (bound_adt : texpression) (pat : typed_pattern)
-      (env : simp_aggr_env) : simp_aggr_env =
+  let add_pattern_eqs (bound_adt : texpr) (pat : tpattern) (env : simp_aggr_env)
+      : simp_aggr_env =
     (* Register the pattern - note that we may not be able to convert the
        pattern to an expression if, for instance, it contains [_] *)
     let env =
-      match typed_pattern_to_texpression span pat with
+      match tpattern_to_texpr span pat with
       | Some pat_expr -> add_expand bound_adt.e pat_expr.e env
       | None -> env
     in
     (* Register the fact that the scrutinee got expanded *)
     let env = add_expanded bound_adt.e env in
     (* Check if we are decomposing an ADT to introduce variables for its fields *)
-    match pat.value with
-    | PatAdt adt ->
+    match pat.pat with
+    | PAdt adt ->
         (* Check if the fields are all variables, and compute the tuple:
            (variable introduced for the field, projection) *)
-        let fields = FieldId.mapi (fun id x -> (id, x)) adt.field_values in
+        let fields = FieldId.mapi (fun id x -> (id, x)) adt.fields in
         let vars_to_projs =
           Collections.List.filter_map
-            (fun ((fid, f) : _ * typed_pattern) ->
-              match f.value with
-              | PatOpen (var, _) ->
+            (fun ((fid, f) : _ * tpattern) ->
+              match f.pat with
+              | POpen (var, _) ->
                   let proj = mk_adt_proj span bound_adt fid f.ty in
                   let var = { e = FVar var.id; ty = f.ty } in
                   Some (var.e, proj.e)
-              | PatBound _ -> [%internal_error] span
+              | PBound _ -> [%internal_error] span
               | _ -> None)
             fields
         in
@@ -1711,28 +1690,28 @@ let simplify_aggregates_unchanged_fields_visitor (ctx : ctx) (def : fun_decl) =
   in
 
   (* Recursively expand a value and its subvalues *)
-  let expand_expression simp_env (v : expression) : expression =
+  let expand_expr simp_env (v : expr) : expr =
     let visitor =
       object
-        inherit [_] map_expression as super
+        inherit [_] map_expr as super
 
-        method! visit_expression env e =
+        method! visit_expr env e =
           match get_expand e simp_env with
-          | None -> super#visit_expression env e
-          | Some e -> super#visit_expression env e
+          | None -> super#visit_expr env e
+          | Some e -> super#visit_expr env e
       end
     in
-    visitor#visit_expression () v
+    visitor#visit_expr () v
   in
 
   (* The visitor *)
   object (self)
-    inherit [_] map_expression as super
+    inherit [_] map_expr as super
 
     method! visit_Switch env scrut switch =
       [%ltrace "Visiting switch: " ^ switch_to_string ctx scrut switch];
       (* Update the scrutinee *)
-      let scrut = self#visit_texpression env scrut in
+      let scrut = self#visit_texpr env scrut in
       let switch =
         match switch with
         | If (b0, b1) ->
@@ -1743,9 +1722,7 @@ let simplify_aggregates_unchanged_fields_visitor (ctx : ctx) (def : fun_decl) =
                  ]}
               *)
             let update v st =
-              self#visit_texpression
-                (add_expand scrut.e (mk_bool_value v).e env)
-                st
+              self#visit_texpr (add_expand scrut.e (mk_bool_value v).e env) st
             in
             let b0 = update true b0 in
             let b1 = update false b1 in
@@ -1754,7 +1731,7 @@ let simplify_aggregates_unchanged_fields_visitor (ctx : ctx) (def : fun_decl) =
             let update_branch (b : match_branch) =
               (* Register the information introduced by the patterns *)
               let env = add_pattern_eqs scrut b.pat env in
-              { b with branch = self#visit_texpression env b.branch }
+              { b with branch = self#visit_texpr env b.branch }
             in
             let branches = List.map update_branch branches in
             Match branches
@@ -1769,7 +1746,7 @@ let simplify_aggregates_unchanged_fields_visitor (ctx : ctx) (def : fun_decl) =
       super#visit_Let env monadic pat bound next
 
     (* Update the ADT values *)
-    method! visit_texpression env e0 =
+    method! visit_texpr env e0 =
       let e =
         match e0.e with
         | StructUpdate updt ->
@@ -1782,32 +1759,29 @@ let simplify_aggregates_unchanged_fields_visitor (ctx : ctx) (def : fun_decl) =
               match updt.init with
               | None -> super#visit_StructUpdate env updt
               | Some init ->
-                  let update_field ((fid, e) : field_id * texpression) :
-                      (field_id * texpression) option =
+                  let update_field ((fid, e) : field_id * texpr) :
+                      (field_id * texpr) option =
                     (* Recursively expand the value of the field, to check if it is
                          equal to the updated value: if it is the case, we can omit
                          the update. *)
                     let adt = init in
                     let field_value = mk_adt_proj span adt fid e.ty in
-                    let field_value = expand_expression env field_value.e in
+                    let field_value = expand_expr env field_value.e in
                     (* If this value is equal to the value we update the field
                          with, we can simply ignore the update *)
-                    if field_value = expand_expression env e.e then (
-                      [%ltrace
-                        "Simplifying field: " ^ texpression_to_string ctx e];
+                    if field_value = expand_expr env e.e then (
+                      [%ltrace "Simplifying field: " ^ texpr_to_string ctx e];
                       None)
                     else (
                       [%ltrace
-                        "Not simplifying field: " ^ texpression_to_string ctx e];
+                        "Not simplifying field: " ^ texpr_to_string ctx e];
                       Some (fid, e))
                   in
                   let updates = List.filter_map update_field updt.updates in
                   if updates = [] then (
                     [%ltrace
-                      "StructUpdate: "
-                      ^ texpression_to_string ctx e0
-                      ^ " ~~> "
-                      ^ texpression_to_string ctx init];
+                      "StructUpdate: " ^ texpr_to_string ctx e0 ^ " ~~> "
+                      ^ texpr_to_string ctx init];
                     init.e)
                   else
                     let updt1 = { updt with updates } in
@@ -1819,19 +1793,19 @@ let simplify_aggregates_unchanged_fields_visitor (ctx : ctx) (def : fun_decl) =
                     super#visit_StructUpdate env updt1
             end
         | App _ ->
-            [%ltrace "Visiting app: " ^ texpression_to_string ctx e0];
-            (* It may be an ADT expression (e.g., [Cons x y] or [(x, y)]):
+            [%ltrace "Visiting app: " ^ texpr_to_string ctx e0];
+            (* It may be an ADT expr (e.g., [Cons x y] or [(x, y)]):
                  check if it is the case, and if it is, compute the expansion
                  of all the values expanded so far, and see if exactly one of
                  those is equal to the current expression *)
-            let e1 = super#visit_texpression env e0 in
-            let e1_exp = expand_expression env e1.e in
+            let e1 = super#visit_texpr env e0 in
+            let e1_exp = expand_expr env e1.e in
             let f, _ = destruct_apps e1 in
             if is_adt_cons f then
               let expanded =
                 List.filter_map
                   (fun e ->
-                    let e' = expand_expression env e in
+                    let e' = expand_expr env e in
                     if e1_exp = e' then Some e else None)
                   env.expanded
               in
@@ -1839,15 +1813,13 @@ let simplify_aggregates_unchanged_fields_visitor (ctx : ctx) (def : fun_decl) =
                 match expanded with
                 | [ e2 ] ->
                     [%ltrace
-                      "Simplified: "
-                      ^ texpression_to_string ctx e1
-                      ^ " ~~> "
-                      ^ texpression_to_string ctx { e1 with e = e2 }];
+                      "Simplified: " ^ texpr_to_string ctx e1 ^ " ~~> "
+                      ^ texpr_to_string ctx { e1 with e = e2 }];
                     e2
                 | _ -> e1.e
               end
             else e1.e
-        | _ -> super#visit_expression env e0.e
+        | _ -> super#visit_expr env e0.e
       in
       { e0 with e }
   end
@@ -1874,21 +1846,21 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
   let loops = ref LoopId.Set.empty in
   let expr_visitor =
     object
-      inherit [_] iter_expression as super
+      inherit [_] iter_expr as super
 
       method! visit_Loop env loop =
         loops := LoopId.Set.add loop.loop_id !loops;
         super#visit_Loop env loop
     end
   in
-  expr_visitor#visit_texpression () body.body;
+  expr_visitor#visit_texpr () body.body;
   let num_loops = LoopId.Set.cardinal !loops in
 
   (* Store the loops here *)
   let loops = ref LoopId.Map.empty in
   let expr_visitor =
     object (self)
-      inherit [_] map_expression
+      inherit [_] map_expr
 
       method! visit_Loop env loop =
         let span = loop.span in
@@ -1905,9 +1877,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
         in
 
         let inputs_tys =
-          let fwd_inputs =
-            List.map (fun (v : typed_pattern) -> v.ty) loop.inputs
-          in
+          let fwd_inputs = List.map (fun (v : tpattern) -> v.ty) loop.inputs in
           fwd_inputs
         in
 
@@ -1931,9 +1901,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
           List.map (fun x -> fst (as_pat_open span x)) loop.inputs
         in
 
-        let inputs =
-          List.map (fun x -> mk_typed_pattern_from_fvar x None) inputs
-        in
+        let inputs = List.map (fun x -> mk_tpattern_from_fvar x None) inputs in
         let loop_body =
           close_all_fun_body loop.span { inputs; body = loop.loop_body }
         in
@@ -1962,11 +1930,11 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
         loops := LoopId.Map.add_strict loop.loop_id loop_def !loops;
 
         (* Update the current expression to remove the [Loop] node, and continue *)
-        (self#visit_texpression env loop.fun_end).e
+        (self#visit_texpr env loop.fun_end).e
     end
   in
 
-  let body_expr = expr_visitor#visit_texpression () body.body in
+  let body_expr = expr_visitor#visit_texpr () body.body in
   [%ldebug
     "Resulting body:\n" ^ fun_body_to_string ctx { body with body = body_expr }];
   let body = close_all_fun_body span { body with body = body_expr } in
@@ -1987,27 +1955,26 @@ let unit_vars_to_unit _ (def : fun_decl) : fun_decl =
   (* The map visitor *)
   let obj =
     object
-      inherit [_] map_expression as super
+      inherit [_] map_expr as super
 
       (** Replace in patterns *)
-      method! visit_PatOpen _ v mp =
-        if v.ty = mk_unit_ty then PatDummy else PatOpen (v, mp)
+      method! visit_POpen _ v mp =
+        if v.ty = mk_unit_ty then PDummy else POpen (v, mp)
 
-      method! visit_PatBound _ _ _ = [%internal_error] span
+      method! visit_PBound _ _ _ = [%internal_error] span
 
       (** Replace in "regular" expressions - note that we could limit ourselves
           to variables, but this is more powerful *)
-      method! visit_texpression env e =
-        if e.ty = mk_unit_ty then mk_unit_rvalue
-        else super#visit_texpression env e
+      method! visit_texpr env e =
+        if e.ty = mk_unit_ty then mk_unit_rvalue else super#visit_texpr env e
     end
   in
   (* Update the body *)
   map_open_fun_decl_body
     (fun body ->
-      let body_exp = obj#visit_texpression () body.body in
+      let body_exp = obj#visit_texpr () body.body in
       (* Update the input parameters *)
-      let inputs = List.map (obj#visit_typed_pattern ()) body.inputs in
+      let inputs = List.map (obj#visit_tpattern ()) body.inputs in
       (* Return *)
       { body = body_exp; inputs })
     def
@@ -2023,9 +1990,9 @@ let unit_vars_to_unit _ (def : fun_decl) : fun_decl =
 let eliminate_box_functions_visitor (_ctx : ctx) (def : fun_decl) =
   (* The map visitor *)
   object
-    inherit [_] map_expression as super
+    inherit [_] map_expr as super
 
-    method! visit_texpression env e =
+    method! visit_texpr env e =
       match opt_destruct_function_call e with
       | Some (fun_id, _tys, args) -> (
           (* Below, when dealing with the arguments: we consider the very
@@ -2042,9 +2009,9 @@ let eliminate_box_functions_visitor (_ctx : ctx) (def : fun_decl) =
               | ArrayToSliceShared
               | ArrayToSliceMut
               | ArrayRepeat
-              | PtrFromParts _ -> super#visit_texpression env e)
-          | _ -> super#visit_texpression env e)
-      | _ -> super#visit_texpression env e
+              | PtrFromParts _ -> super#visit_texpr env e)
+          | _ -> super#visit_texpr env e)
+      | _ -> super#visit_texpr env e
   end
 
 let eliminate_box_functions =
@@ -2055,16 +2022,16 @@ let apply_beta_reduction_visitor (_ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
 
   object (self)
-    inherit [_] map_expression as super
+    inherit [_] map_expr as super
 
     method! visit_FVar env vid =
       match FVarId.Map.find_opt vid env with
       | None -> FVar vid
       | Some e -> e.e
 
-    method! visit_texpression env e =
+    method! visit_texpr env e =
       let f, args = destruct_apps e in
-      let args = List.map (self#visit_texpression env) args in
+      let args = List.map (self#visit_texpr env) args in
       let pats, body = raw_destruct_lambdas f in
       if args <> [] && pats <> [] then
         (* Apply the beta-reduction
@@ -2079,15 +2046,15 @@ let apply_beta_reduction_visitor (_ctx : ctx) (def : fun_decl) =
         let vars = List.map (fun v -> (fst (as_pat_open span v)).id) pats in
         let body =
           let env = FVarId.Map.add_list (List.combine vars args) env in
-          super#visit_texpression env body
+          super#visit_texpr env body
         in
         (* Reconstruct the term *)
         mk_apps span
-          (mk_opened_lambdas span kept_pats (super#visit_texpression env body))
+          (mk_opened_lambdas span kept_pats (super#visit_texpr env body))
           kept_args
       else
         mk_apps span
-          (mk_opened_lambdas span pats (super#visit_texpression env body))
+          (mk_opened_lambdas span pats (super#visit_texpr env body))
           args
   end
 
@@ -2122,22 +2089,19 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
      the fact that a backward function should be used only once.
   *)
   object (self)
-    inherit [_] map_expression as super
+    inherit [_] map_expr as super
 
     method! visit_Let env monadic pat e1 e2 =
       (* Update the first expression *)
-      let e1 = super#visit_texpression env e1 in
+      let e1 = super#visit_texpr env e1 in
       (* Check if the current let-binding is a call to an index function *)
       let e1_app, e1_args = destruct_apps e1 in
-      match (pat.value, e1_app.e, e1_args) with
+      match (pat.pat, e1_app.e, e1_args) with
       | ( (* let (_, back) = ... *)
-          PatAdt
+          PAdt
             {
               variant_id = None;
-              field_values =
-                [
-                  { value = PatDummy; _ }; { value = PatOpen (back_var, _); _ };
-                ];
+              fields = [ { pat = PDummy; _ }; { pat = POpen (back_var, _); _ } ];
             },
           (* ... = Array.index_mut_usize a i *)
           Qualif
@@ -2160,18 +2124,17 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
           [ a; i ] ) ->
           [%ldebug
             "identified a pattern to simplify:\n"
-            ^ texpression_to_string ctx
-                { e = Let (monadic, pat, e1, e2); ty = e2.ty }];
+            ^ texpr_to_string ctx { e = Let (monadic, pat, e1, e2); ty = e2.ty }];
 
           (* Some auxiliary functions *)
           (* Helper to check if an expression is actually the backward function *)
-          let is_call_to_back (app : texpression) =
+          let is_call_to_back (app : texpr) =
             match app.e with
             | FVar id -> id = back_var.id
             | _ -> false
           in
           (* Helper to introduce a call to the proper update function *)
-          let mk_call_to_update (back_v : texpression) =
+          let mk_call_to_update (back_v : texpr) =
             let array_or_slice = if is_array then Array else Slice in
             let qualif =
               Qualif
@@ -2205,24 +2168,24 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
             (* Check that the argument doesn't use fresh vars *)
             if
               FVarId.Set.is_empty
-                (FVarId.Set.inter (texpression_get_fvars arg) !fresh_vars)
+                (FVarId.Set.inter (texpr_get_fvars arg) !fresh_vars)
             then back_call := Some (pat, arg)
           in
           let updt_visitor1 =
             object
-              inherit [_] map_expression as super
-              method! visit_PatBound _ _ _ = [%internal_error] span
+              inherit [_] map_expr as super
+              method! visit_PBound _ _ _ = [%internal_error] span
 
-              method! visit_PatOpen env var mp =
+              method! visit_POpen env var mp =
                 fresh_vars := FVarId.Set.add var.id !fresh_vars;
-                super#visit_PatOpen env var mp
+                super#visit_POpen env var mp
 
               method! visit_Let env monadic' pat' e' e3 =
                 (* Check if this is a call to the backward function *)
                 match e'.e with
                 | App (app, v) when is_result_ty e3.ty && is_call_to_back app ->
                     register_back_call pat' v;
-                    (self#visit_texpression env e3).e
+                    (self#visit_texpr env e3).e
                 | _ -> super#visit_Let env monadic' pat' e' e3
 
               method! visit_App env app x =
@@ -2243,17 +2206,15 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
                     | App (app', v) when is_call_to_back app' ->
                         let id = fresh_fvar_id () in
                         let var : fvar = { id; basename = None; ty = x.ty } in
-                        register_back_call
-                          (mk_typed_pattern_from_fvar var None)
-                          v;
-                        super#visit_App env app (mk_texpression_from_fvar var)
+                        register_back_call (mk_tpattern_from_fvar var None) v;
+                        super#visit_App env app (mk_texpr_from_fvar var)
                     | _ -> super#visit_App env app x
                   end
                 | _ -> super#visit_App env app x
             end
           in
-          let e' = updt_visitor1#visit_texpression () e2 in
-          [%ldebug "e':\n" ^ texpression_to_string ctx e'];
+          let e' = updt_visitor1#visit_texpr () e2 in
+          [%ldebug "e':\n" ^ texpr_to_string ctx e'];
 
           (* Should we keep the change? *)
           if !count = 1 && Option.is_some !back_call then (
@@ -2261,7 +2222,7 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
             let pat, arg = Option.get !back_call in
             let call = mk_call_to_update arg in
             (* Recurse on the updated expression *)
-            super#visit_expression env (Let (true, pat, call, e')))
+            super#visit_expr env (Let (true, pat, call, e')))
           else
             (* Sometimes the call to the backward function needs to
                  use fresh variables which are introduced *after* the
@@ -2278,18 +2239,17 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
               if !count = 1 then (
                 let back_pat, back_arg = Option.get !back_call_with_fresh in
                 let fresh_vars =
-                  FVarId.Set.inter !fresh_vars (texpression_get_fvars back_arg)
+                  FVarId.Set.inter !fresh_vars (texpr_get_fvars back_arg)
                 in
                 let rec insert_call_below (fresh_vars : FVarId.Set.t) e =
                   [%ldebug
                     "insert_call_below:" ^ "\n- fresh_vars:\n"
                     ^ FVarId.Set.to_string None fresh_vars
-                    ^ "\n- e:\n"
-                    ^ texpression_to_string ctx e];
+                    ^ "\n- e:\n" ^ texpr_to_string ctx e];
                   match e.e with
                   | Let (monadic, pat, e1, e2) ->
                       let fresh_vars =
-                        FVarId.Set.diff fresh_vars (typed_pattern_get_fvars pat)
+                        FVarId.Set.diff fresh_vars (tpattern_get_fvars pat)
                       in
                       if FVarId.Set.is_empty fresh_vars then
                         let call = mk_call_to_update back_arg in
@@ -2312,7 +2272,7 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
               let ok = ref true in
               let updt_visitor2 =
                 object
-                  inherit [_] map_expression as super
+                  inherit [_] map_expr as super
 
                   method! visit_FVar env var_id =
                     (* If we find a use of the backward function which was not
@@ -2326,7 +2286,7 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
                     match e'.e with
                     | App (app, v)
                       when is_result_ty e3.ty && is_call_to_back app ->
-                        super#visit_expression env
+                        super#visit_expr env
                           (Let (true, pat', mk_call_to_update v, e3))
                     | _ -> super#visit_Let env monadic' pat' e' e3
 
@@ -2346,18 +2306,16 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
                       when variant_id = result_ok_id -> begin
                         match x.e with
                         | App (app, back_v) when is_call_to_back app ->
-                            (super#visit_texpression env
-                               (mk_call_to_update back_v))
-                              .e
+                            (super#visit_texpr env (mk_call_to_update back_v)).e
                         | _ -> super#visit_App env app x
                       end
                     | _ -> super#visit_App env app x
                 end
               in
-              let e' = updt_visitor2#visit_texpression () e2 in
+              let e' = updt_visitor2#visit_texpr () e2 in
 
               (* Should we keep the change? *)
-              if !ok then (self#visit_texpression env e').e
+              if !ok then (self#visit_texpr env e').e
               else super#visit_Let env monadic pat e1 e2
       | _ -> super#visit_Let env monadic pat e1 e2
   end
@@ -2377,11 +2335,11 @@ let decompose_let_bindings_visitor (decompose_monadic : bool)
   let span = def.item_meta.span in
 
   (* Set up the var id generator *)
-  let mk_fresh (ty : ty) : typed_pattern * texpression =
+  let mk_fresh (ty : ty) : tpattern * texpr =
     let vid = fresh_fvar_id () in
     let tmp : fvar = { id = vid; basename = None; ty } in
-    let ltmp = mk_typed_pattern_from_fvar tmp None in
-    let rtmp = mk_texpression_from_fvar tmp in
+    let ltmp = mk_tpattern_from_fvar tmp None in
+    let rtmp = mk_texpr_from_fvar tmp in
     (ltmp, rtmp)
   in
 
@@ -2404,8 +2362,7 @@ let decompose_let_bindings_visitor (decompose_monadic : bool)
        ...
      }]
   *)
-  let decompose_pat (lv : typed_pattern) :
-      (typed_pattern * texpression) list * typed_pattern =
+  let decompose_pat (lv : tpattern) : (tpattern * texpr) list * tpattern =
     let patterns = ref [] in
 
     (* We decompose patterns *inside* other patterns.
@@ -2413,31 +2370,30 @@ let decompose_let_bindings_visitor (decompose_monadic : bool)
        pattern already *)
     let visit_pats =
       object
-        inherit [_] map_typed_pattern as super
+        inherit [_] map_tpattern as super
 
-        method! visit_typed_pattern (inside : bool) (pat : typed_pattern) :
-            typed_pattern =
-          match pat.value with
-          | PatConstant _ | PatOpen _ | PatDummy -> pat
-          | PatBound _ -> [%internal_error] span
-          | PatAdt _ ->
-              if not inside then super#visit_typed_pattern true pat
+        method! visit_tpattern (inside : bool) (pat : tpattern) : tpattern =
+          match pat.pat with
+          | PConstant _ | POpen _ | PDummy -> pat
+          | PBound _ -> [%internal_error] span
+          | PAdt _ ->
+              if not inside then super#visit_tpattern true pat
               else
                 let ltmp, rtmp = mk_fresh pat.ty in
-                let pat = super#visit_typed_pattern false pat in
+                let pat = super#visit_tpattern false pat in
                 patterns := (pat, rtmp) :: !patterns;
                 ltmp
       end
     in
 
     let inside = false in
-    let lv = visit_pats#visit_typed_pattern inside lv in
+    let lv = visit_pats#visit_tpattern inside lv in
     (!patterns, lv)
   in
 
   (* It is a very simple map *)
   object (self)
-    inherit [_] map_expression as super
+    inherit [_] map_expr as super
 
     method! visit_Let env monadic lv re next_e =
       (* Decompose the monadic let-bindings *)
@@ -2448,18 +2404,18 @@ let decompose_let_bindings_visitor (decompose_monadic : bool)
            * - if yes, don't decompose
            * - if not, make the decomposition in two steps
            *)
-          match lv.value with
-          | PatOpen _ | PatDummy ->
+          match lv.pat with
+          | POpen _ | PDummy ->
               (* Variable: nothing to do *)
               (monadic, lv, re, next_e)
-          | PatBound _ -> [%internal_error] span
+          | PBound _ -> [%internal_error] span
           | _ ->
               (* Not a variable: decompose if required *)
               (* Introduce a temporary variable to receive the value of the
                * monadic binding *)
               let ltmp, rtmp = mk_fresh lv.ty in
               (* Visit the next expression *)
-              let next_e = self#visit_texpression env next_e in
+              let next_e = self#visit_texpr env next_e in
               (* Create the let-bindings *)
               (monadic, ltmp, re, mk_opened_let false lv rtmp next_e)
       in
@@ -2500,7 +2456,7 @@ let decompose_nested_let_patterns (ctx : ctx) (def : fun_decl) : fun_decl =
 let unfold_monadic_let_bindings_visitors (_ctx : ctx) (def : fun_decl) =
   (* It is a very simple map *)
   object (_self)
-    inherit [_] map_expression as super
+    inherit [_] map_expr as super
 
     method! visit_Let env monadic lv re e =
       (* We simply do the following transformation:
@@ -2534,19 +2490,17 @@ let unfold_monadic_let_bindings_visitors (_ctx : ctx) (def : fun_decl) =
             ty = mk_error_ty;
           }
         in
-        let err_pat = mk_typed_pattern_from_fvar err_var None in
-        let fail_pat = mk_result_fail_pattern err_pat.value lv.ty in
-        let err_v = mk_texpression_from_fvar err_var in
-        let fail_value =
-          mk_result_fail_texpression def.item_meta.span err_v e.ty
-        in
+        let err_pat = mk_tpattern_from_fvar err_var None in
+        let fail_pat = mk_result_fail_pattern err_pat.pat lv.ty in
+        let err_v = mk_texpr_from_fvar err_var in
+        let fail_value = mk_result_fail_texpr def.item_meta.span err_v e.ty in
         let fail_branch = { pat = fail_pat; branch = fail_value } in
         let success_pat = mk_result_ok_pattern lv in
         let success_branch = { pat = success_pat; branch = e } in
         let switch_body = Match [ fail_branch; success_branch ] in
         let e = Switch (re, switch_body) in
         (* Continue *)
-        super#visit_expression env e
+        super#visit_expr env e
   end
 
 let unfold_monadic_let_bindings =
@@ -2568,9 +2522,8 @@ let unfold_monadic_let_bindings =
 let lift_pure_function_calls_visitor (ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
 
-  let try_lift_expr (super_visit_e : texpression -> texpression)
-      (visit_e : texpression -> texpression) (app : texpression) :
-      bool * texpression =
+  let try_lift_expr (super_visit_e : texpr -> texpr) (visit_e : texpr -> texpr)
+      (app : texpr) : bool * texpr =
     (* Check if the function should be lifted *)
     let f, args = destruct_apps app in
     let f = super_visit_e f in
@@ -2584,14 +2537,14 @@ let lift_pure_function_calls_visitor (ctx : ctx) (def : fun_decl) =
       | _ -> false
     in
     let app = mk_apps span f args in
-    if lift then (true, mk_to_result_texpression span app) else (false, app)
+    if lift then (true, mk_to_result_texpr span app) else (false, app)
   in
 
   (* The map visitor *)
   object (self)
-    inherit [_] map_expression as super
+    inherit [_] map_expr as super
 
-    method! visit_texpression env e0 =
+    method! visit_texpr env e0 =
       (* Check if this is an expression of the shape: [ok (f ...)] where
            `f` has been identified as a function which should be lifted. *)
       match destruct_apps e0 with
@@ -2600,28 +2553,22 @@ let lift_pure_function_calls_visitor (ctx : ctx) (def : fun_decl) =
           [ app ] ) ->
           (* Attempt to lift the expression *)
           let lifted, app =
-            try_lift_expr
-              (super#visit_texpression env)
-              (self#visit_texpression env)
-              app
+            try_lift_expr (super#visit_texpr env) (self#visit_texpr env) app
           in
 
           if lifted then app else mk_app span to_result_expr app
       | { e = Let (monadic, pat, bound, next); ty }, [] ->
-          let next = self#visit_texpression env next in
+          let next = self#visit_texpr env next in
           (* Attempt to lift only if the let-expression is not already monadic *)
           let lifted, bound =
-            if monadic then (true, self#visit_texpression env bound)
+            if monadic then (true, self#visit_texpr env bound)
             else
-              try_lift_expr
-                (super#visit_texpression env)
-                (self#visit_texpression env)
-                bound
+              try_lift_expr (super#visit_texpr env) (self#visit_texpr env) bound
           in
           { e = Let (lifted, pat, bound, next); ty }
       | f, args ->
-          let f = super#visit_texpression env f in
-          let args = List.map (self#visit_texpression env) args in
+          let f = super#visit_texpr env f in
+          let args = List.map (self#visit_texpr env) args in
           mk_apps span f args
   end
 
@@ -2656,11 +2603,11 @@ let add_fuel_and_state_one (ctx : ctx) (loops : fun_decl LoopId.Map.t)
     if effect.can_diverge && !Config.use_fuel then Some (mk_fresh_fuel_var ())
     else None
   in
-  let fuel_expr = Option.map mk_texpression_from_fvar fuel in
+  let fuel_expr = Option.map mk_texpr_from_fvar fuel in
   let fuel_ty = Option.map (fun (v : fvar) -> v.ty) fuel in
 
   let state = if effect.stateful then Some (mk_fresh_state_var ()) else None in
-  let state_expr = Option.map mk_texpression_from_fvar state in
+  let state_expr = Option.map mk_texpr_from_fvar state in
   let state_ty = Option.map (fun (v : fvar) -> v.ty) state in
 
   (* Update the signature *)
@@ -2680,13 +2627,12 @@ let add_fuel_and_state_one (ctx : ctx) (loops : fun_decl LoopId.Map.t)
 
   (* Small helper: update a call by adding the fuel and state parameters, return
      the updated expession together with the new state *)
-  let update_call (f : texpression) (args : texpression list)
-      (fuel : texpression option) (state : texpression option) :
-      texpression * typed_pattern option * texpression option =
+  let update_call (f : texpr) (args : texpr list) (fuel : texpr option)
+      (state : texpr option) : texpr * tpattern option * texpr option =
     (* We need to update the type of the function *)
     let inputs, output = destruct_arrows f.ty in
-    let fuel_ty = Option.map (fun (v : texpression) -> v.ty) fuel in
-    let state_ty = Option.map (fun (v : texpression) -> v.ty) state in
+    let fuel_ty = Option.map (fun (v : texpr) -> v.ty) fuel in
+    let state_ty = Option.map (fun (v : texpr) -> v.ty) state in
     let inputs = Option.to_list fuel_ty @ inputs @ Option.to_list state_ty in
     let output =
       match state with
@@ -2699,9 +2645,9 @@ let add_fuel_and_state_one (ctx : ctx) (loops : fun_decl LoopId.Map.t)
 
     (* Put everything together *)
     let state' = Option.map (fun _ -> mk_fresh_state_var ()) state in
-    let state'_expr = Option.map mk_texpression_from_fvar state' in
+    let state'_expr = Option.map mk_texpr_from_fvar state' in
     let state'_pat =
-      Option.map (fun f -> mk_typed_pattern_from_fvar f None) state'
+      Option.map (fun f -> mk_tpattern_from_fvar f None) state'
     in
     let e =
       mk_apps span f (Option.to_list fuel @ args @ Option.to_list state)
@@ -2712,7 +2658,7 @@ let add_fuel_and_state_one (ctx : ctx) (loops : fun_decl LoopId.Map.t)
   in
 
   (* A small helper: return (can_diverge, stateful) *)
-  let get_app_effect (e : texpression) : bool * bool =
+  let get_app_effect (e : texpr) : bool * bool =
     let f, args = destruct_apps e in
     match f.e with
     | Qualif { id = FunOrOp (Fun (FromLlbc (FunId (FRegular fid'), lp_id))); _ }
@@ -2736,7 +2682,7 @@ let add_fuel_and_state_one (ctx : ctx) (loops : fun_decl LoopId.Map.t)
   in
 
   (* A small helper: returns true if the expression is stateful *)
-  let rec expr_is_stateful (e : texpression) : bool =
+  let rec expr_is_stateful (e : texpr) : bool =
     match e.e with
     | FVar _ | BVar _ | CVar _ | Const _ | StructUpdate _ -> false
     | App _ | Qualif _ ->
@@ -2759,8 +2705,8 @@ let add_fuel_and_state_one (ctx : ctx) (loops : fun_decl LoopId.Map.t)
   in
 
   (* Update the body *)
-  let rec update (fuel : texpression option) (state : texpression option)
-      (e : texpression) : texpression =
+  let rec update (fuel : texpr option) (state : texpr option) (e : texpr) :
+      texpr =
     match e.e with
     | FVar _ | BVar _ | CVar _ | Const _ -> e
     | App _ | Qualif _ ->
@@ -2825,8 +2771,7 @@ let add_fuel_and_state_one (ctx : ctx) (loops : fun_decl LoopId.Map.t)
                     in
                     [%sanity_check] span (List.length args = 1);
                     let arg = List.hd args in
-                    mk_app span f
-                      (mk_simpl_tuple_texpression span [ state; arg ]))
+                    mk_app span f (mk_simpl_tuple_texpr span [ state; arg ]))
                   else (
                     [%sanity_check] span (variant_id = result_fail_id);
                     (* Simply update the type *)
@@ -2853,8 +2798,7 @@ let add_fuel_and_state_one (ctx : ctx) (loops : fun_decl LoopId.Map.t)
                     let f = { e = Qualif qualif; ty = mk_arrow input output } in
                     [%sanity_check] span (List.length args = 1);
                     let arg = List.hd args in
-                    mk_app span f
-                      (mk_simpl_tuple_texpression span [ state; arg ]))
+                    mk_app span f (mk_simpl_tuple_texpr span [ state; arg ]))
               | None -> mk_apps span f args
             end
           | _ -> mk_apps span f args
@@ -2929,8 +2873,8 @@ let add_fuel_and_state_one (ctx : ctx) (loops : fun_decl LoopId.Map.t)
               in
               if re_is_stateful then
                 let state' = mk_fresh_state_var () in
-                let state'_expr = mk_texpression_from_fvar state' in
-                let state'_pat = mk_typed_pattern_from_fvar state' None in
+                let state'_expr = mk_texpr_from_fvar state' in
+                let state'_pat = mk_tpattern_from_fvar state' None in
                 let lv = mk_simpl_tuple_pattern [ state'_pat; lv ] in
                 let next = update fuel (Some state'_expr) next in
                 mk_opened_let monadic lv re next
@@ -2984,10 +2928,10 @@ let add_fuel_and_state_one (ctx : ctx) (loops : fun_decl LoopId.Map.t)
         (* Update the inputs *)
         let inputs =
           let fuel_pat =
-            Option.map (fun f -> mk_typed_pattern_from_fvar f None) fuel_input
+            Option.map (fun f -> mk_tpattern_from_fvar f None) fuel_input
           in
           let state_pat =
-            Option.map (fun f -> mk_typed_pattern_from_fvar f None) state
+            Option.map (fun f -> mk_tpattern_from_fvar f None) state
           in
           Option.to_list fuel_pat @ inputs @ Option.to_list state_pat
         in
@@ -3040,10 +2984,10 @@ let add_fuel_and_state (ctx : ctx) (trans : pure_fun_translation) :
 let merge_let_app_then_decompose_tuple_visitor (_ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
   object (self)
-    inherit [_] map_expression
+    inherit [_] map_expr
 
     method! visit_Let env monadic0 pat0 bound0 next0 =
-      let bound0 = self#visit_texpression env bound0 in
+      let bound0 = self#visit_texpr env bound0 in
       (* Check if we need to merge two let-bindings *)
       if is_pat_open pat0 then
         let var0, _ = as_pat_open span pat0 in
@@ -3055,26 +2999,23 @@ let merge_let_app_then_decompose_tuple_visitor (_ctx : ctx) (def : fun_decl) =
               (* Introduce fresh variables for all the dummy variables
                    to make sure we can turn the pattern into an expression *)
               let pat1 =
-                typed_pattern_replace_dummy_vars_with_free_vars fresh_fvar_id
-                  pat1
+                tpattern_replace_dummy_vars_with_free_vars fresh_fvar_id pat1
               in
-              let pat1_expr =
-                Option.get (typed_pattern_to_texpression span pat1)
-              in
+              let pat1_expr = Option.get (tpattern_to_texpr span pat1) in
               (* Register the mapping from the variable we remove to the expression *)
               let env = FVarId.Map.add var0.id pat1_expr env in
               (* Continue *)
-              let next1 = self#visit_texpression env next1 in
+              let next1 = self#visit_texpr env next1 in
               Let (monadic0, pat1, bound0, next1)
             else
-              let next0 = self#visit_texpression env next0 in
+              let next0 = self#visit_texpr env next0 in
               Let (monadic0, pat0, bound0, next0)
           end
         | _ ->
-            let next0 = self#visit_texpression env next0 in
+            let next0 = self#visit_texpr env next0 in
             Let (monadic0, pat0, bound0, next0)
       else
-        let next0 = self#visit_texpression env next0 in
+        let next0 = self#visit_texpr env next0 in
         Let (monadic0, pat0, bound0, next0)
 
     (* Replace the variables *)
@@ -3254,12 +3195,12 @@ let filter_loop_inputs_explore_one_visitor (ctx : ctx)
     List.map
       (fun v ->
         let v, _ = as_pat_open span v in
-        (v.id, mk_texpression_from_fvar v))
+        (v.id, mk_texpr_from_fvar v))
       body.inputs
   in
   [%ltrace
     "inputs:\n"
-    ^ String.concat ", " (List.map (typed_pattern_to_string ctx) body.inputs)];
+    ^ String.concat ", " (List.map (tpattern_to_string ctx) body.inputs)];
   let inputs_set =
     FVarId.Set.of_list
       (List.map
@@ -3278,10 +3219,10 @@ let filter_loop_inputs_explore_one_visitor (ctx : ctx)
 
   let visitor =
     object (self : 'self)
-      inherit [_] iter_expression as super
+      inherit [_] iter_expr as super
 
       (** Override the expression visitor, to look for loop function calls *)
-      method! visit_texpression env e =
+      method! visit_texpr env e =
         match e.e with
         | App _ -> (
             (* If this is an app: destruct all the arguments, and check if
@@ -3301,29 +3242,29 @@ let filter_loop_inputs_explore_one_visitor (ctx : ctx)
                       [%ltrace
                         "args:\n"
                         ^ String.concat ", "
-                            (List.map (texpression_to_string ctx) args)];
+                            (List.map (texpr_to_string ctx) args)];
                       let used_args = List.combine inputs args in
                       List.iter
                         (fun ((vid, var), arg) ->
                           if var <> arg then (
-                            self#visit_texpression env arg;
+                            self#visit_texpr env arg;
                             set_used vid))
                         used_args)
-                    else super#visit_texpression env e
-                | _ -> super#visit_texpression env e)
-            | _ -> super#visit_texpression env e)
-        | _ -> super#visit_texpression env e
+                    else super#visit_texpr env e
+                | _ -> super#visit_texpr env e)
+            | _ -> super#visit_texpr env e)
+        | _ -> super#visit_texpr env e
 
       (** If we visit a variable which is actually an input parameter, we set it
           as used. Note that we take care of ignoring some of those input
-          parameters given in [visit_texpression]. *)
+          parameters given in [visit_texpr]. *)
       method! visit_fvar_id _ id =
         if FVarId.Set.mem id inputs_set then set_used id
     end
   in
 
   (* Apply the visitor to the body *)
-  visitor#visit_texpression () body.body;
+  visitor#visit_texpr () body.body;
 
   [%ltrace
     "- used variables: "
@@ -3401,9 +3342,9 @@ let filter_loop_inputs_filter_in_one (_ctx : ctx)
     (* Update the body expression *)
     let visitor =
       object (self)
-        inherit [_] map_expression as super
+        inherit [_] map_expr as super
 
-        method! visit_texpression env e =
+        method! visit_texpr env e =
           match e.e with
           | App _ -> (
               let e_app, args = destruct_apps e in
@@ -3414,7 +3355,7 @@ let filter_loop_inputs_filter_in_one (_ctx : ctx)
                       match
                         FunLoopIdMap.find_opt (fun_id, loop_id) used_map
                       with
-                      | None -> super#visit_texpression env e
+                      | None -> super#visit_texpr env e
                       | Some used_info ->
                           (* Filter the types in the arrow type *)
                           let tys, ret_ty = destruct_arrows e_app.ty in
@@ -3426,24 +3367,22 @@ let filter_loop_inputs_filter_in_one (_ctx : ctx)
                           let args = filter_prefix used_info args in
 
                           (* Explore the arguments *)
-                          let args =
-                            List.map (self#visit_texpression env) args
-                          in
+                          let args = List.map (self#visit_texpr env) args in
 
                           (* Rebuild *)
                           mk_apps decl.item_meta.span e_app args)
                   | _ ->
-                      let e_app = self#visit_texpression env e_app in
-                      let args = List.map (self#visit_texpression env) args in
+                      let e_app = self#visit_texpr env e_app in
+                      let args = List.map (self#visit_texpr env) args in
                       mk_apps decl.item_meta.span e_app args)
               | _ ->
-                  let e_app = self#visit_texpression env e_app in
-                  let args = List.map (self#visit_texpression env) args in
+                  let e_app = self#visit_texpr env e_app in
+                  let args = List.map (self#visit_texpr env) args in
                   mk_apps decl.item_meta.span e_app args)
-          | _ -> super#visit_texpression env e
+          | _ -> super#visit_texpr env e
       end
     in
-    let body = visitor#visit_texpression () body in
+    let body = visitor#visit_texpr () body in
     { inputs; body }
   in
   map_open_fun_decl_body filter_in_body decl
@@ -3600,8 +3539,8 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
     PrintPure.fun_decl_to_string fmt def];
   let span = def.item_meta.span in
   let fmt = trans_ctx_to_pure_fmt_env trans_ctx in
-  let texpression_to_string (x : texpression) : string =
-    PrintPure.texpression_to_string fmt false "" "  " x
+  let texpr_to_string (x : texpr) : string =
+    PrintPure.texpr_to_string fmt false "" "  " x
   in
   let ty_to_string (x : ty) : string = PrintPure.ty_to_string fmt false x in
   let generic_params_to_string (generics : generic_params) : string =
@@ -3638,11 +3577,11 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
   in
 
   (* Small helper to add a type annotation *)
-  let mk_type_annot (e : texpression) : texpression =
+  let mk_type_annot (e : texpr) : texpr =
     { e = Meta (TypeAnnot, e); ty = e.ty }
   in
 
-  let rec visit (ty : ty) (e : texpression) : texpression =
+  let rec visit (ty : ty) (e : texpr) : texpr =
     match e.e with
     | FVar _ | CVar _ | Const _ | EError _ | Qualif _ -> e
     | BVar _ -> [%internal_error] span
@@ -3669,7 +3608,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
         (* Loops should have been eliminated *)
         [%internal_error] span
     | StructUpdate supd ->
-        [%ldebug "exploring: " ^ texpression_to_string e];
+        [%ldebug "exploring: " ^ texpr_to_string e];
         (* Some backends need a type annotation here if we create a new structure
            and if the type is unknown.
            TODO: actually we may change the type of the structure by changing
@@ -3701,7 +3640,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
               (* Update the fields *)
               let updates =
                 List.map
-                  (fun ((fid, fe) : _ * texpression) ->
+                  (fun ((fid, fe) : _ * texpr) ->
                     let field_ty = FieldId.nth field_tys fid in
                     (fid, visit field_ty fe))
                   supd.updates
@@ -3712,7 +3651,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
                  From there, the type of the field updates is known *)
               let updates =
                 List.map
-                  (fun ((fid, fe) : _ * texpression) -> (fid, visit fe.ty fe))
+                  (fun ((fid, fe) : _ * texpr) -> (fid, visit fe.ty fe))
                   supd.updates
               in
               let e = { e with e = StructUpdate { supd with updates } } in
@@ -3722,15 +3661,14 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
     | Meta (meta, e') ->
         let ty = if meta = TypeAnnot then e'.ty else ty in
         { e with e = Meta (meta, visit ty e') }
-  and visit_App (ty : ty) (e : texpression) : texpression =
+  and visit_App (ty : ty) (e : texpr) : texpr =
     [%ldebug
-      "visit_App:\n- ty: " ^ ty_to_string ty ^ "\n- e: "
-      ^ texpression_to_string e];
+      "visit_App:\n- ty: " ^ ty_to_string ty ^ "\n- e: " ^ texpr_to_string e];
     (* Deconstruct the app *)
     let f, args = destruct_apps e in
     (* Compute the types of the arguments: it depends on the function *)
     let mk_holes () = List.map (fun _ -> hole) args in
-    let mk_known () = List.map (fun (e : texpression) -> e.ty) args in
+    let mk_known () = List.map (fun (e : texpr) -> e.ty) args in
     let known_f_ty, known_args_tys =
       let rec compute_known_tys known_ty args =
         match args with
@@ -3938,9 +3876,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
   in
 
   (* Update the body *)
-  map_open_fun_decl_body_expr
-    (fun (body : texpression) -> visit body.ty body)
-    def
+  map_open_fun_decl_body_expr (fun (body : texpr) -> visit body.ty body) def
 
 (** Introduce type annotations.
 

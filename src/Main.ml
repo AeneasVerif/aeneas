@@ -17,35 +17,10 @@ let _ =
      TODO: remove
   *)
   Easy_logging.Handlers.set_level main_logger_handler EL.Debug;
+  (* Set the level for the Charon loggers (for the ones internal to Aeneas,
+     the level was set up at creation time) *)
   main_log#set_level EL.Info;
-  llbc_of_json_logger#set_level EL.Info;
-  regions_hierarchy_log#set_level EL.Info;
-  pre_passes_log#set_level EL.Info;
-  contexts_log#set_level EL.Info;
-  interpreter_log#set_level EL.Info;
-  statements_log#set_level EL.Info;
-  loops_match_ctxs_log#set_level EL.Info;
-  loops_join_ctxs_log#set_level EL.Info;
-  loops_fixed_point_log#set_level EL.Info;
-  loops_log#set_level EL.Info;
-  paths_log#set_level EL.Info;
-  expressions_log#set_level EL.Info;
-  expansion_log#set_level EL.Info;
-  projectors_log#set_level EL.Info;
-  borrows_log#set_level EL.Info;
-  invariants_log#set_level EL.Info;
-  pure_utils_log#set_level EL.Info;
-  symbolic_to_pure_types_log#set_level EL.Info;
-  symbolic_to_pure_values_log#set_level EL.Info;
-  symbolic_to_pure_expressions_log#set_level EL.Info;
-  symbolic_to_pure_log#set_level EL.Info;
-  pure_micro_passes_log#set_level EL.Info;
-  simplify_aggregates_unchanged_fields_log#set_level EL.Info;
-  extract_log#set_level EL.Info;
-  builtin_log#set_level EL.Info;
-  translate_log#set_level EL.Info;
-  scc_log#set_level EL.Info;
-  reorder_decls_log#set_level EL.Info
+  llbc_of_json_logger#set_level EL.Info
 
 (* This is necessary to have a backtrace when raising exceptions - for some
  * reason, the -g option doesn't work.

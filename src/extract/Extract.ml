@@ -17,8 +17,8 @@ let fun_or_op_id_to_string (ctx : extraction_ctx) =
 let generic_args_to_string (ctx : extraction_ctx) =
   PrintPure.generic_args_to_string (extraction_ctx_to_fmt_env ctx)
 
-let texpression_to_string (ctx : extraction_ctx) =
-  PrintPure.texpression_to_string (extraction_ctx_to_fmt_env ctx) false "" "  "
+let texpr_to_string (ctx : extraction_ctx) =
+  PrintPure.texpr_to_string (extraction_ctx_to_fmt_env ctx) false "" "  "
 
 (** Compute the names for all the pure functions generated from a rust function.
 *)
@@ -275,34 +275,34 @@ let fun_builtin_filter_types (id : FunDeclId.id) (types : 'a list)
 
     As a pattern can introduce new variables, we return an extraction context
     updated with new bindings. *)
-let rec extract_typed_pattern (span : Meta.span) (ctx : extraction_ctx)
+let rec extract_tpattern (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (is_let : bool) (inside : bool) ?(with_type = false)
-    (v : typed_pattern) : extraction_ctx =
+    (v : tpattern) : extraction_ctx =
   if with_type then F.pp_print_string fmt "(";
   let is_pattern = true in
   let inside = inside && not with_type in
   let ctx =
-    match v.value with
-    | PatConstant cv ->
+    match v.pat with
+    | PConstant cv ->
         extract_literal span fmt is_pattern inside cv;
         ctx
-    | PatBound _ ->
+    | PBound _ ->
         (* We should have opened the pattern *)
         [%internal_error] span
-    | PatOpen (v, _) ->
+    | POpen (v, _) ->
         let vname = ctx_compute_var_basename span ctx v.basename v.ty in
         let ctx, vname = ctx_add_var span vname v.id ctx in
         F.pp_print_string fmt vname;
         ctx
-    | PatDummy ->
+    | PDummy ->
         F.pp_print_string fmt "_";
         ctx
-    | PatAdt av ->
+    | PAdt av ->
         let extract_value ctx inside v =
-          extract_typed_pattern span ctx fmt is_let inside v
+          extract_tpattern span ctx fmt is_let inside v
         in
         extract_adt_g_value span extract_value fmt ctx is_let inside
-          av.variant_id av.field_values v.ty
+          av.variant_id av.fields v.ty
   in
   if with_type then (
     F.pp_print_space fmt ();
@@ -315,7 +315,7 @@ let rec extract_typed_pattern (span : Meta.span) (ctx : extraction_ctx)
 (** Return true if we need to wrap a succession of let-bindings in a [do ...]
     block (because some of them are monadic) *)
 let lets_require_wrap_in_do (span : Meta.span)
-    (lets : (bool * typed_pattern * texpression) list) : bool =
+    (lets : (bool * tpattern * texpr) list) : bool =
   match backend () with
   | Lean ->
       (* For Lean, we wrap in a block iff at least one of the let-bindings is monadic *)
@@ -338,9 +338,8 @@ let lets_require_wrap_in_do (span : Meta.span)
     - [inside]
     - unop
     - argument *)
-let extract_unop (span : Meta.span) (extract_expr : bool -> texpression -> unit)
-    (fmt : F.formatter) (inside : bool) (unop : unop) (arg : texpression) : unit
-    =
+let extract_unop (span : Meta.span) (extract_expr : bool -> texpr -> unit)
+    (fmt : F.formatter) (inside : bool) (unop : unop) (arg : texpr) : unit =
   match unop with
   | Not _ | Neg _ | ArrayToSlice ->
       let unop = unop_name unop in
@@ -459,10 +458,9 @@ let extract_unop (span : Meta.span) (extract_expr : bool -> texpression -> unit)
     - binop
     - argument 0
     - argument 1 *)
-let extract_binop (span : Meta.span)
-    (extract_expr : bool -> texpression -> unit) (fmt : F.formatter)
-    (inside : bool) (binop : E.binop) (int_ty : integer_type)
-    (arg0 : texpression) (arg1 : texpression) : unit =
+let extract_binop (span : Meta.span) (extract_expr : bool -> texpr -> unit)
+    (fmt : F.formatter) (inside : bool) (binop : E.binop)
+    (int_ty : integer_type) (arg0 : texpr) (arg1 : texpr) : unit =
   if inside then F.pp_print_string fmt "(";
   (* Some binary operations have a special notation depending on the backend *)
   (match (backend (), binop) with
@@ -541,14 +539,14 @@ let extract_binop (span : Meta.span)
     - application argument: [f (exp)]
     - match/if scrutinee: [if exp then _ else _]/[match exp | _ -> _] *)
 
-let extract_texpression_errors (fmt : F.formatter) =
+let extract_texpr_errors (fmt : F.formatter) =
   match backend () with
   | FStar | Coq -> F.pp_print_string fmt "admit"
   | Lean -> F.pp_print_string fmt "sorry"
   | HOL4 -> F.pp_print_string fmt "(* ERROR: could not generate the code *)"
 
-let rec extract_texpression (span : Meta.span) (ctx : extraction_ctx)
-    (fmt : F.formatter) (inside : bool) (e : texpression) : unit =
+let rec extract_texpr (span : Meta.span) (ctx : extraction_ctx)
+    (fmt : F.formatter) (inside : bool) (e : texpr) : unit =
   let is_pattern = false in
   match e.e with
   | FVar var_id ->
@@ -575,13 +573,13 @@ let rec extract_texpression (span : Meta.span) (ctx : extraction_ctx)
   | Loop _ ->
       (* The loop nodes should have been eliminated in {!PureMicroPasses} *)
       [%admit_raise] span "Unreachable" fmt
-  | EError (_, _) -> extract_texpression_errors fmt
+  | EError (_, _) -> extract_texpr_errors fmt
 
 (* Extract an application *or* a top-level qualif (function extraction has
  * to handle top-level qualifiers, so it seemed more natural to merge the
  * two cases) *)
 and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
-    (inside : bool) (app : texpression) (args : texpression list) : unit =
+    (inside : bool) (app : texpr) (args : texpr list) : unit =
   (* We don't do the same thing if the app is a top-level identifier (function,
    * ADT constructor...) or a "regular" expression *)
   match app.e with
@@ -614,12 +612,12 @@ and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       if inside then F.pp_print_string fmt "(";
       (* Print the app expression *)
       let app_inside = (inside && args = []) || args <> [] in
-      extract_texpression span ctx fmt app_inside app;
+      extract_texpr span ctx fmt app_inside app;
       (* Print the arguments *)
       List.iter
         (fun ve ->
           F.pp_print_space fmt ();
-          extract_texpression span ctx fmt true ve)
+          extract_texpr span ctx fmt true ve)
         args;
       (* Close parentheses *)
       if inside then F.pp_print_string fmt ")"
@@ -627,24 +625,24 @@ and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
 (** Subcase of the app case: function call *)
 and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (inside : bool) (fid : fun_or_op_id)
-    (generics : generic_args) (args : texpression list) : unit =
+    (generics : generic_args) (args : texpr list) : unit =
   [%ltrace
     fun_or_op_id_to_string ctx fid
     ^ "\n- generics: "
     ^ generic_args_to_string ctx generics
     ^ "\n- args: "
-    ^ String.concat ", " (List.map (texpression_to_string ctx) args)];
+    ^ String.concat ", " (List.map (texpr_to_string ctx) args)];
   match (fid, args) with
   | Unop unop, [ arg ] ->
       (* A unop can have *at most* one argument (the result can't be a function!).
        * Note that the way we generate the translation, we shouldn't get the
        * case where we have no argument (all functions are fully instantiated,
        * and no AST transformation introduces partial calls). *)
-      extract_unop span (extract_texpression span ctx fmt) fmt inside unop arg
+      extract_unop span (extract_texpr span ctx fmt) fmt inside unop arg
   | Binop (binop, int_ty), [ arg0; arg1 ] ->
       (* Number of arguments: similar to unop *)
       extract_binop span
-        (extract_texpression span ctx fmt)
+        (extract_texpr span ctx fmt)
         fmt inside binop int_ty arg0 arg1
   | Fun fun_id, _ ->
       let use_brackets = inside in
@@ -800,7 +798,7 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
       List.iter
         (fun ve ->
           if !print_space then F.pp_print_space fmt () else print_space := true;
-          extract_texpression span ctx fmt true ve)
+          extract_texpr span ctx fmt true ve)
         args;
       (* Close the box for the function call *)
       (*F.pp_close_box fmt ();*)
@@ -812,23 +810,23 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
        ^ ",\nNumber of arguments: "
         ^ string_of_int (List.length args)
         ^ ",\nArguments: "
-        ^ String.concat " " (List.map show_texpression args))
+        ^ String.concat " " (List.map show_texpr args))
         fmt
 
 (** Subcase of the app case: ADT constructor *)
 and extract_adt_cons (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (inside : bool) (adt_cons : adt_cons_id)
-    (generics : generic_args) (args : texpression list) : unit =
+    (generics : generic_args) (args : texpr list) : unit =
   let e_ty = TAdt (adt_cons.adt_id, generics) in
   let is_single_pat = false in
-  (* Sanity check: make sure the expression is not a tuple constructor
-     with no arguments (the properly extracted expression would be a function) *)
+  (* Sanity check: make sure the expr is not a tuple constructor
+     with no arguments (the properly extracted expr would be a function) *)
   [%sanity_check] span
     (not (adt_cons.adt_id = TTuple && generics.types != [] && args = []));
   let _ =
     extract_adt_g_value span
       (fun ctx inside e ->
-        extract_texpression span ctx fmt inside e;
+        extract_texpr span ctx fmt inside e;
         ctx)
       fmt ctx is_single_pat inside adt_cons.variant_id args e_ty
   in
@@ -836,9 +834,8 @@ and extract_adt_cons (span : Meta.span) (ctx : extraction_ctx)
 
 (** Subcase of the app case: ADT field projector. *)
 and extract_field_projector (span : Meta.span) (ctx : extraction_ctx)
-    (fmt : F.formatter) (inside : bool) (original_app : texpression)
-    (proj : projection) (_generics : generic_args) (args : texpression list) :
-    unit =
+    (fmt : F.formatter) (inside : bool) (original_app : texpr)
+    (proj : projection) (_generics : generic_args) (args : texpr list) : unit =
   (* We isolate the first argument (if there is), in order to pretty print the
    * projection ([x.field] instead of [MkAdt?.field x] *)
   match args with
@@ -864,7 +861,7 @@ and extract_field_projector (span : Meta.span) (ctx : extraction_ctx)
         | None -> false
       in
       if is_tuple_struct && has_one_field then
-        extract_texpression span ctx fmt inside arg
+        extract_texpr span ctx fmt inside arg
       else
         (* Exactly one argument: pretty-print *)
         let field_name =
@@ -920,7 +917,7 @@ and extract_field_projector (span : Meta.span) (ctx : extraction_ctx)
         (* Open a box *)
         F.pp_open_hovbox fmt ctx.indent_incr;
         (* Extract the expression *)
-        extract_texpression span ctx fmt true arg;
+        extract_texpr span ctx fmt true arg;
         (* We allow to break where the "." appears (except Lean, it's a syntax error) *)
         if backend () <> Lean then F.pp_print_break fmt 0 0;
         F.pp_print_string fmt ".";
@@ -939,7 +936,7 @@ and extract_field_projector (span : Meta.span) (ctx : extraction_ctx)
       [%admit_raise] span "Unreachable" fmt
 
 and extract_Lambda (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
-    (inside : bool) (xl : typed_pattern list) (e : texpression) : unit =
+    (inside : bool) (xl : tpattern list) (e : texpr) : unit =
   (* Open a box for the abs expression *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* Open parentheses *)
@@ -956,7 +953,7 @@ and extract_Lambda (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
     List.fold_left
       (fun ctx x ->
         F.pp_print_space fmt ();
-        extract_typed_pattern span ctx fmt true true ~with_type x)
+        extract_tpattern span ctx fmt true true ~with_type x)
       ctx xl
   in
   F.pp_print_space fmt ();
@@ -964,14 +961,14 @@ and extract_Lambda (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
   else F.pp_print_string fmt "->";
   F.pp_print_space fmt ();
   (* Print the body *)
-  extract_texpression span ctx fmt false e;
+  extract_texpr span ctx fmt false e;
   (* Close parentheses *)
   if inside then F.pp_print_string fmt ")";
-  (* Close the box for the abs expression *)
+  (* Close the box for the abs expr *)
   F.pp_close_box fmt ()
 
 and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
-    (inside : bool) (e : texpression) : unit =
+    (inside : bool) (e : texpr) : unit =
   (* Destruct the lets.
 
      Note that in the case of HOL4, we stop destructing the lets if at some point
@@ -1000,8 +997,8 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
     | FStar | Coq | Lean -> raw_destruct_lets e
   in
   (* Extract the let-bindings *)
-  let extract_let (ctx : extraction_ctx) (monadic : bool) (lv : typed_pattern)
-      (re : texpression) : extraction_ctx =
+  let extract_let (ctx : extraction_ctx) (monadic : bool) (lv : tpattern)
+      (re : texpr) : extraction_ctx =
     (* Open a box for the let-binding *)
     F.pp_open_hvbox fmt 0;
     F.pp_open_hvbox fmt ctx.indent_incr;
@@ -1020,7 +1017,7 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       if monadic && (backend () = Coq || backend () = HOL4) then (
         (* Box for the let .. <- *)
         F.pp_open_hovbox fmt ctx.indent_incr;
-        let ctx = extract_typed_pattern span ctx fmt true true lv in
+        let ctx = extract_tpattern span ctx fmt true true lv in
         F.pp_print_space fmt ();
         let arrow =
           match backend () with
@@ -1032,7 +1029,7 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_space fmt ();
         (* Box for the bound expression *)
         F.pp_open_hovbox fmt ctx.indent_incr;
-        extract_texpression span ctx fmt false re;
+        extract_texpr span ctx fmt false re;
         F.pp_print_string fmt ";";
         F.pp_close_box fmt ();
         (ctx, fun _ -> ()))
@@ -1060,7 +1057,7 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
             else (
               F.pp_print_string fmt "let";
               F.pp_print_space fmt ());
-            let ctx = extract_typed_pattern span ctx fmt true true lv in
+            let ctx = extract_tpattern span ctx fmt true true lv in
             F.pp_print_space fmt ();
             let eq =
               match backend () with
@@ -1087,7 +1084,7 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
         in
         (* Print the bound expression *)
         F.pp_open_hovbox fmt ctx.indent_incr;
-        extract_texpression span ctx fmt false re;
+        extract_texpr span ctx fmt false re;
         F.pp_close_box fmt ();
         (ctx, end_let)
     in
@@ -1123,7 +1120,7 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open a box for the next expression *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* Print the next expression *)
-  extract_texpression span ctx fmt false next_e;
+  extract_texpr span ctx fmt false next_e;
   (* Close the box for the next expression *)
   F.pp_close_box fmt ();
 
@@ -1138,7 +1135,7 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_close_box fmt ()
 
 and extract_Switch (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
-    (_inside : bool) (scrut : texpression) (body : switch_body) : unit =
+    (_inside : bool) (scrut : texpr) (body : switch_body) : unit =
   (* Remark: we don't use the [inside] parameter because we extract matches in
      a conservative manner: we always make sure they are parenthesized/delimited
      with keywords such as [end] *)
@@ -1156,15 +1153,13 @@ and extract_Switch (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_print_string fmt "if";
       if backend () = Lean && ctx.use_dep_ite then F.pp_print_string fmt " h:";
       F.pp_print_space fmt ();
-      let scrut_inside =
-        PureUtils.texpression_requires_parentheses span scrut
-      in
-      extract_texpression span ctx fmt scrut_inside scrut;
+      let scrut_inside = PureUtils.texpr_requires_parentheses span scrut in
+      extract_texpr span ctx fmt scrut_inside scrut;
       (* Close the box for the [if e] *)
       F.pp_close_box fmt ();
 
       (* Extract the branches *)
-      let extract_branch (is_then : bool) (e_branch : texpression) : unit =
+      let extract_branch (is_then : bool) (e_branch : texpr) : unit =
         F.pp_print_space fmt ();
         (* Open a box for the then/else+branch *)
         F.pp_open_hvbox fmt ctx.indent_incr;
@@ -1172,9 +1167,7 @@ and extract_Switch (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_open_hovbox fmt 0;
         let then_or_else = if is_then then "then" else "else" in
         F.pp_print_string fmt then_or_else;
-        let parenth =
-          PureUtils.texpression_requires_parentheses span e_branch
-        in
+        let parenth = PureUtils.texpr_requires_parentheses span e_branch in
         (* Open the parenthesized expression *)
         let print_space_after_parenth =
           if parenth then (
@@ -1195,7 +1188,7 @@ and extract_Switch (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
         (* Open a box for the branch *)
         F.pp_open_hovbox fmt ctx.indent_incr;
         (* Print the branch expression *)
-        extract_texpression span ctx fmt false e_branch;
+        extract_texpr span ctx fmt false e_branch;
         (* Close the box for the branch *)
         F.pp_close_box fmt ();
         (* Close the parenthesized expression *)
@@ -1226,10 +1219,8 @@ and extract_Switch (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       in
       F.pp_print_string fmt match_begin;
       F.pp_print_space fmt ();
-      let scrut_inside =
-        PureUtils.texpression_requires_parentheses span scrut
-      in
-      extract_texpression span ctx fmt scrut_inside scrut;
+      let scrut_inside = PureUtils.texpr_requires_parentheses span scrut in
+      extract_texpr span ctx fmt scrut_inside scrut;
       F.pp_print_space fmt ();
       let match_scrut_end =
         match backend () with
@@ -1250,7 +1241,7 @@ and extract_Switch (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
         (* Print the pattern *)
         F.pp_print_string fmt "|";
         F.pp_print_space fmt ();
-        let ctx = extract_typed_pattern span ctx fmt false false br.pat in
+        let ctx = extract_tpattern span ctx fmt false false br.pat in
         F.pp_print_space fmt ();
         let arrow =
           match backend () with
@@ -1264,7 +1255,7 @@ and extract_Switch (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
         (* Open a box for the branch *)
         F.pp_open_hovbox fmt ctx.indent_incr;
         (* Print the branch itself *)
-        extract_texpression span ctx fmt false br.branch;
+        extract_texpr span ctx fmt false br.branch;
         (* Close the box for the branch *)
         F.pp_close_box fmt ();
         (* Close the box for the pattern+branch *)
@@ -1284,17 +1275,17 @@ and extract_Switch (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_close_box fmt ()
 
 and extract_meta (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
-    (inside : bool) (meta : emeta) (e : texpression) : unit =
+    (inside : bool) (meta : emeta) (e : texpr) : unit =
   match meta with
   | TypeAnnot ->
       F.pp_print_string fmt "(";
-      extract_texpression span ctx fmt false e;
+      extract_texpr span ctx fmt false e;
       F.pp_print_space fmt ();
       F.pp_print_string fmt ":";
       F.pp_print_space fmt ();
       extract_ty span ctx fmt TypeDeclId.Set.empty false e.ty;
       F.pp_print_string fmt ")"
-  | _ -> extract_texpression span ctx fmt inside e
+  | _ -> extract_texpr span ctx fmt inside e
 
 and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (inside : bool) (e_ty : ty) (supd : struct_update) :
@@ -1367,7 +1358,7 @@ and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
         F.pp_open_hvbox fmt ctx.indent_incr;
         if supd.init <> None then (
           let init = Option.get supd.init in
-          extract_texpression span ctx fmt false init;
+          extract_texpr span ctx fmt false init;
           F.pp_print_space fmt ();
           F.pp_print_string fmt "with";
           F.pp_print_space fmt ());
@@ -1408,7 +1399,7 @@ and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
               F.pp_print_string fmt (" " ^ assign);
               F.pp_print_space fmt ();
               F.pp_open_hvbox fmt ctx.indent_incr;
-              extract_texpression span ctx fmt true fe;
+              extract_texpr span ctx fmt true fe;
               F.pp_close_box fmt ());
             F.pp_close_box fmt ())
           supd.updates;
@@ -1453,7 +1444,7 @@ and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
           (fun () ->
             F.pp_print_string fmt delimiter;
             F.pp_print_space fmt ())
-          (fun (_, fe) -> extract_texpression span ctx fmt false fe)
+          (fun (_, fe) -> extract_texpr span ctx fmt false fe)
           supd.updates;
         (* Close the boxes *)
         F.pp_close_box fmt ();
@@ -1508,13 +1499,13 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
     | None -> ctx
     | Some body ->
         List.fold_left
-          (fun ctx (lv : typed_pattern) ->
+          (fun ctx (lv : tpattern) ->
             insert_req_space fmt space;
             (* Open a box for the input parameter *)
             F.pp_open_hovbox fmt 0;
             F.pp_print_string fmt "(";
             let ctx =
-              extract_typed_pattern def.item_meta.span ctx fmt true false lv
+              extract_tpattern def.item_meta.span ctx fmt true false lv
             in
             F.pp_print_space fmt ();
             F.pp_print_string fmt ":";
@@ -1924,10 +1915,10 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
          patterns *)
       let _ =
         List.fold_left
-          (fun ctx (lv : typed_pattern) ->
+          (fun ctx (lv : tpattern) ->
             F.pp_print_space fmt ();
             let ctx =
-              extract_typed_pattern def.item_meta.span ctx fmt true false lv
+              extract_tpattern def.item_meta.span ctx fmt true false lv
             in
             ctx)
           ctx inputs_lvs
@@ -1961,7 +1952,7 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     let _ =
       F.pp_open_hovbox fmt ctx.indent_incr;
       let _ =
-        extract_texpression def.item_meta.span ctx_body fmt false
+        extract_texpr def.item_meta.span ctx_body fmt false
           (Option.get def.body).body
       in
       F.pp_close_box fmt ()
@@ -2346,7 +2337,7 @@ let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
       extract_global_decl_body_gen span ctx fmt SingleNonRec ~irreducible:false
         body_name global.generics global.explicit_info type_params cg_params
         trait_clauses body_ty
-        (Some (fun fmt -> extract_texpression span ctx fmt false body.body));
+        (Some (fun fmt -> extract_texpr span ctx fmt false body.body));
       F.pp_print_break fmt 0 0;
       (* Generate: [let x_c : u32 = eval_global x_body] *)
       extract_global_decl_body_gen span ctx fmt SingleNonRec

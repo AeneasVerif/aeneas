@@ -20,9 +20,7 @@ val pop_frame :
   Meta.span ->
   bool ->
   eval_ctx ->
-  typed_value option
-  * eval_ctx
-  * (SymbolicAst.expression -> SymbolicAst.expression)
+  tvalue option * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr)
 
 (** Helper.
 
@@ -45,7 +43,7 @@ val create_push_abstractions_from_abs_region_groups :
   (RegionGroupId.id -> abs_kind) ->
   abs_region_group list ->
   (RegionGroupId.id -> bool) ->
-  (abs -> eval_ctx -> eval_ctx * typed_avalue list) ->
+  (abs -> eval_ctx -> eval_ctx * tavalue list) ->
   eval_ctx ->
   eval_ctx
 

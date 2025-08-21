@@ -799,8 +799,8 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     let value = ALoan (AMutLoan (PNone, id, child)) in
     { value; ty }
   in
-  let merge_ashared_loans ids ty0 _pm0 (sv0 : typed_value) child0 _ty1 _pm1
-      (sv1 : typed_value) child1 =
+  let merge_ashared_loans ids ty0 _pm0 (sv0 : tvalue) child0 _ty1 _pm1
+      (sv1 : tvalue) child1 =
     (* Sanity checks *)
     [%sanity_check] span (is_aignored child0.value);
     [%sanity_check] span (is_aignored child1.value);
@@ -816,7 +816,7 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
 
     let ty = ty0 in
     let child = child0 in
-    let sv = M.match_typed_values ctx ctx sv0 sv1 in
+    let sv = M.match_tvalues ctx ctx sv0 sv1 in
     let value = ALoan (ASharedLoan (PNone, ids, sv, child)) in
     { value; ty }
   in
@@ -992,7 +992,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
           (* Still in the prefix: match the values *)
           [%sanity_check] span (b0 = b1);
           let b = b0 in
-          let v = M.match_typed_values ctx0 ctx1 v0 v1 in
+          let v = M.match_tvalues ctx0 ctx1 v0 v1 in
           let var = EBinding (BDummy b, v) in
           (* Continue *)
           var :: join_prefixes env0' env1')
@@ -1014,7 +1014,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
         [%sanity_check] span (b0 = b1);
         (* Match the values *)
         let b = b0 in
-        let v = M.match_typed_values ctx0 ctx1 v0 v1 in
+        let v = M.match_tvalues ctx0 ctx1 v0 v1 in
         let var = EBinding (BVar b, v) in
         (* Continue *)
         var :: join_prefixes env0' env1'

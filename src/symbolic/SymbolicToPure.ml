@@ -8,7 +8,7 @@ open Errors
 (** The local logger *)
 let log = Logging.symbolic_to_pure_log
 
-let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
+let translate_fun_decl (ctx : bs_ctx) (body : S.expr option) : fun_decl =
   (* Translate *)
   let def = ctx.fun_decl in
   assert (ctx.bid = None);
@@ -27,7 +27,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
         [%ltrace
           name_to_string ctx def.item_meta.name
           ^ "\n- body:\n"
-          ^ bs_ctx_expression_to_string ctx body];
+          ^ bs_ctx_expr_to_string ctx body];
 
         let effect_info =
           get_fun_effect_info ctx (FunId (FRegular def_id)) None None
@@ -41,8 +41,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
                     function forward expression")
           | Some output ->
               (* Wrap in a result if the function can fail *)
-              if effect_info.can_fail then
-                mk_result_ok_texpression ctx.span output
+              if effect_info.can_fail then mk_result_ok_texpr ctx.span output
               else output
         in
         let mk_panic =
@@ -52,12 +51,12 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
               (* Create the [Fail] value *)
               let ret_ty = mk_simpl_tuple_ty [ mk_state_ty; output_ty ] in
               let ret_v =
-                mk_result_fail_texpression_with_error_id ctx.span
-                  error_failure_id ret_ty
+                mk_result_fail_texpr_with_error_id ctx.span error_failure_id
+                  ret_ty
               in
               ret_v
             else
-              mk_result_fail_texpression_with_error_id ctx.span error_failure_id
+              mk_result_fail_texpr_with_error_id ctx.span error_failure_id
                 output_ty
           in
           let back_tys = compute_back_tys ctx.sg.fun_ty None in
@@ -72,9 +71,9 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
         let ctx =
           { ctx with mk_return = Some mk_return; mk_panic = Some mk_panic }
         in
-        let body = translate_expression body ctx in
+        let body = translate_expr body ctx in
         (* Sanity check *)
-        type_check_texpression ctx body;
+        type_check_texpr ctx body;
         (* Group the inputs together *)
         let inputs = ctx.forward_inputs in
         (* Sanity check *)
@@ -87,17 +86,14 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
               (List.map (pure_ty_to_string ctx) signature.inputs)
           ^ "\n- inputs: "
           ^ String.concat ", " (List.map (fvar_to_string ctx) inputs)
-          ^ "\n- body:\n"
-          ^ texpression_to_string ctx body];
+          ^ "\n- body:\n" ^ texpr_to_string ctx body];
         (* TODO: we need to normalize the types *)
         if !Config.type_check_pure_code then
           [%sanity_check] def.item_meta.span
             (List.for_all
                (fun (var, ty) -> (var : fvar).ty = ty)
                (List.combine inputs signature.inputs));
-        let inputs =
-          List.map (fun v -> mk_typed_pattern_from_fvar v None) inputs
-        in
+        let inputs = List.map (fun v -> mk_tpattern_from_fvar v None) inputs in
         Some (mk_closed_fun_body def.item_meta.span inputs body)
   in
 
@@ -111,19 +107,18 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
         (fun (body : fun_body) ->
           let visitor =
             object
-              inherit [_] Pure.map_expression
+              inherit [_] Pure.map_expr
 
               (* We only need to visit those *)
               method! visit_SymbolicAssignments () assigns =
                 SymbolicAssignments
                   (List.filter_map
                      (fun (var, value) ->
-                       if texpression_has_fvars value then None
-                       else Some (var, value))
+                       if texpr_has_fvars value then None else Some (var, value))
                      assigns)
             end
           in
-          { body with body = visitor#visit_texpression () body.body })
+          { body with body = visitor#visit_texpr () body.body })
         body
     else body
   in

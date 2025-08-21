@@ -82,21 +82,21 @@ let fmt_env_push_var (env : fmt_env) (v : var) : fmt_env * bvar_id * string =
 
 (** We use this to push bound variables when entering a let, a lambda, or a
     match. *)
-let fmt_env_push_binders (env : fmt_env) (pat : typed_pattern) : fmt_env =
+let fmt_env_push_binders (env : fmt_env) (pat : tpattern) : fmt_env =
   (* Initialize the map *)
   let env = ref (fmt_env_start_pbvars env) in
   (* Explore *)
   let visitor =
     object
-      inherit [_] iter_typed_pattern
+      inherit [_] iter_tpattern
 
-      method! visit_PatBound _ v _ =
+      method! visit_PBound _ v _ =
         env :=
           let x, _, _ = fmt_env_push_var !env v in
           x
     end
   in
-  visitor#visit_typed_pattern () pat;
+  visitor#visit_tpattern () pat;
   (* Push the map *)
   fmt_env_push_pbvars !env
 
@@ -496,13 +496,13 @@ let adt_field_to_string ?(span = None) (env : fmt_env) (adt_id : type_id)
           [%craise_opt_span] span "Unreachable")
 
 (** Not safe to use (this function should be used between calls to
-    [fmt_env_start_pbvars]) and [fmt_env_push_pbvars]): use
-    [typed_pattern_to_string] instead. *)
-let rec typed_pattern_to_string_core (span : Meta.span option) (env : fmt_env)
-    (v : typed_pattern) : fmt_env * string =
-  match v.value with
-  | PatConstant cv -> (env, literal_to_string cv)
-  | PatBound (v, mp) ->
+    [fmt_env_start_pbvars]) and [fmt_env_push_pbvars]): use [tpattern_to_string]
+    instead. *)
+let rec tpattern_to_string_core (span : Meta.span option) (env : fmt_env)
+    (v : tpattern) : fmt_env * string =
+  match v.pat with
+  | PConstant cv -> (env, literal_to_string cv)
+  | PBound (v, mp) ->
       let env, _, sv = fmt_env_push_var env v in
       let sv = var_to_string env { v with basename = Some sv } in
       begin
@@ -515,7 +515,7 @@ let rec typed_pattern_to_string_core (span : Meta.span option) (env : fmt_env)
             in
             (env, s)
       end
-  | PatOpen (v, mp) ->
+  | POpen (v, mp) ->
       let sv = fvar_id_to_string env v.id in
       begin
         match mp with
@@ -529,24 +529,23 @@ let rec typed_pattern_to_string_core (span : Meta.span option) (env : fmt_env)
             in
             (env, s)
       end
-  | PatDummy -> (env, "_")
-  | PatAdt av ->
-      adt_pattern_to_string_core span env av.variant_id av.field_values v.ty
+  | PDummy -> (env, "_")
+  | PAdt av -> adt_pattern_to_string_core span env av.variant_id av.fields v.ty
 
 (** Not safe to use (this function should be used between calls to
     [fmt_env_start_pbvars]) and [fmt_env_push_pbvars]): use
     [adt_pattern_to_string] instead. *)
 and adt_pattern_to_string_core (span : Meta.span option) (env : fmt_env)
-    (variant_id : VariantId.id option) (field_values : typed_pattern list)
-    (ty : ty) : fmt_env * string =
-  let env, field_values =
-    List.fold_left_map (typed_pattern_to_string_core span) env field_values
+    (variant_id : VariantId.id option) (fields : tpattern list) (ty : ty) :
+    fmt_env * string =
+  let env, fields =
+    List.fold_left_map (tpattern_to_string_core span) env fields
   in
   let s =
     match ty with
     | TAdt (TTuple, _) ->
         (* Tuple *)
-        "(" ^ String.concat ", " field_values ^ ")"
+        "(" ^ String.concat ", " fields ^ ")"
     | TAdt (TAdtId def_id, _) ->
         (* "Regular" ADT *)
         let adt_ident =
@@ -554,20 +553,20 @@ and adt_pattern_to_string_core (span : Meta.span option) (env : fmt_env)
           | Some vid -> adt_variant_from_type_decl_id_to_string env def_id vid
           | None -> type_decl_id_to_string env def_id
         in
-        if field_values <> [] then
+        if fields <> [] then
           match adt_field_names env def_id variant_id with
           | None ->
-              let field_values = String.concat ", " field_values in
-              adt_ident ^ " (" ^ field_values ^ ")"
+              let fields = String.concat ", " fields in
+              adt_ident ^ " (" ^ fields ^ ")"
           | Some field_names ->
-              let field_values = List.combine field_names field_values in
-              let field_values =
+              let fields = List.combine field_names fields in
+              let fields =
                 List.map
                   (fun (field, value) -> field ^ " = " ^ value ^ ";")
-                  field_values
+                  fields
               in
-              let field_values = String.concat " " field_values in
-              adt_ident ^ " { " ^ field_values ^ " }"
+              let fields = String.concat " " fields in
+              adt_ident ^ " { " ^ fields ^ " }"
         else adt_ident
     | TAdt (TBuiltin aty, _) -> (
         (* Builtin type *)
@@ -578,13 +577,13 @@ and adt_pattern_to_string_core (span : Meta.span option) (env : fmt_env)
         | TResult ->
             let variant_id = Option.get variant_id in
             if variant_id = result_ok_id then
-              match field_values with
+              match fields with
               | [ v ] -> "@Result::Return " ^ v
               | _ ->
                   [%craise_opt_span] span
                     "Result::Return takes exactly one value"
             else if variant_id = result_fail_id then
-              match field_values with
+              match fields with
               | [ v ] -> "@Result::Fail " ^ v
               | _ ->
                   [%craise_opt_span] span "Result::Fail takes exactly one value"
@@ -592,8 +591,7 @@ and adt_pattern_to_string_core (span : Meta.span option) (env : fmt_env)
               [%craise_opt_span] span
                 "Unreachable: improper variant id for result type"
         | TError ->
-            [%cassert_opt_span] span (field_values = [])
-              "Ill-formed error value";
+            [%cassert_opt_span] span (fields = []) "Ill-formed error value";
             let variant_id = Option.get variant_id in
             if variant_id = error_failure_id then "@Error::Failure"
             else if variant_id = error_out_of_fuel_id then "@Error::OutOfFuel"
@@ -603,11 +601,10 @@ and adt_pattern_to_string_core (span : Meta.span option) (env : fmt_env)
         | TFuel ->
             let variant_id = Option.get variant_id in
             if variant_id = fuel_zero_id then (
-              [%cassert_opt_span] span (field_values = [])
-                "Ill-formed full value";
+              [%cassert_opt_span] span (fields = []) "Ill-formed full value";
               "@Fuel::Zero")
             else if variant_id = fuel_succ_id then
-              match field_values with
+              match fields with
               | [ v ] -> "@Fuel::Succ " ^ v
               | _ ->
                   [%craise_opt_span] span "@Fuel::Succ takes exactly one value"
@@ -616,11 +613,11 @@ and adt_pattern_to_string_core (span : Meta.span option) (env : fmt_env)
                 "Unreachable: improper variant id for fuel type"
         | TArray | TSlice | TStr ->
             [%cassert_opt_span] span (variant_id = None) "Ill-formed value";
-            let field_values =
-              List.mapi (fun i v -> string_of_int i ^ " -> " ^ v) field_values
+            let fields =
+              List.mapi (fun i v -> string_of_int i ^ " -> " ^ v) fields
             in
             let id = builtin_ty_to_string aty in
-            id ^ " [" ^ String.concat "; " field_values ^ "]")
+            id ^ " [" ^ String.concat "; " fields ^ "]")
     | _ ->
         [%craise_opt_span] span
           ("Inconsistently typed value: expected ADT type but found:"
@@ -629,38 +626,36 @@ and adt_pattern_to_string_core (span : Meta.span option) (env : fmt_env)
   in
   (env, s)
 
-let typed_patterns_to_string_aux (span : Meta.span option) (env : fmt_env)
-    (vl : typed_pattern list) : fmt_env * string list =
+let tpatterns_to_string_aux (span : Meta.span option) (env : fmt_env)
+    (vl : tpattern list) : fmt_env * string list =
   let env = fmt_env_start_pbvars env in
   let env, sl =
-    List.fold_left_map
-      (fun env v -> typed_pattern_to_string_core span env v)
-      env vl
+    List.fold_left_map (fun env v -> tpattern_to_string_core span env v) env vl
   in
   (fmt_env_push_pbvars env, sl)
 
-let typed_pattern_to_string_aux (span : Meta.span option) (env : fmt_env)
-    (v : typed_pattern) : fmt_env * string =
-  let env, s = typed_pattern_to_string_core span (fmt_env_start_pbvars env) v in
+let tpattern_to_string_aux (span : Meta.span option) (env : fmt_env)
+    (v : tpattern) : fmt_env * string =
+  let env, s = tpattern_to_string_core span (fmt_env_start_pbvars env) v in
   (fmt_env_push_pbvars env, s)
 
-let typed_pattern_to_string ?(span : Meta.span option) (env : fmt_env)
-    (v : typed_pattern) : string =
-  snd (typed_pattern_to_string_aux span env v)
+let tpattern_to_string ?(span : Meta.span option) (env : fmt_env) (v : tpattern)
+    : string =
+  snd (tpattern_to_string_aux span env v)
 
 let adt_pattern_to_string_aux (span : Meta.span option) (env : fmt_env)
-    (variant_id : VariantId.id option) (field_values : typed_pattern list)
-    (ty : ty) : fmt_env * string =
+    (variant_id : VariantId.id option) (fields : tpattern list) (ty : ty) :
+    fmt_env * string =
   let env, s =
-    adt_pattern_to_string_core span (fmt_env_start_pbvars env) variant_id
-      field_values ty
+    adt_pattern_to_string_core span (fmt_env_start_pbvars env) variant_id fields
+      ty
   in
   (fmt_env_push_pbvars env, s)
 
 let adt_pattern_to_string ?(span : Meta.span option) (env : fmt_env)
-    (variant_id : VariantId.id option) (field_values : typed_pattern list)
-    (ty : ty) : string =
-  snd (adt_pattern_to_string_aux span env variant_id field_values ty)
+    (variant_id : VariantId.id option) (fields : tpattern list) (ty : ty) :
+    string =
+  snd (adt_pattern_to_string_aux span env variant_id fields ty)
 
 let back_sg_info_to_string (env : fmt_env) (info : back_sg_info) : string =
   let { inputs; outputs; output_names; effect_info; filter } = info in
@@ -804,8 +799,8 @@ let fun_or_op_id_to_string (env : fmt_env) (fun_id : fun_or_op_id) : string =
       binop_to_string binop ^ "<" ^ integer_type_to_string int_ty ^ ">"
 
 (** [inside]: controls the introduction of parentheses *)
-let rec texpression_to_string ?(span : Meta.span option = None) (env : fmt_env)
-    (inside : bool) (indent : string) (indent_incr : string) (e : texpression) :
+let rec texpr_to_string ?(span : Meta.span option = None) (env : fmt_env)
+    (inside : bool) (indent : string) (indent_incr : string) (e : texpr) :
     string =
   match e.e with
   | BVar v -> bvar_to_string env v
@@ -841,7 +836,7 @@ let rec texpression_to_string ?(span : Meta.span option = None) (env : fmt_env)
       let inside = if span' = TypeAnnot then false else inside in
       let span_s = emeta_to_string ~span env span' in
       let ty = e.ty in
-      let e = texpression_to_string ~span env inside indent indent_incr e in
+      let e = texpr_to_string ~span env inside indent indent_incr e in
       match span' with
       | Assignment _ | SymbolicAssignments _ | SymbolicPlaces _ | Tag _ ->
           let e = span_s ^ "\n" ^ indent ^ e in
@@ -851,8 +846,8 @@ let rec texpression_to_string ?(span : Meta.span option = None) (env : fmt_env)
   | EError (_, _) -> "@Error"
 
 and app_to_string ?(span : Meta.span option = None) (env : fmt_env)
-    (inside : bool) (indent : string) (indent_incr : string) (app : texpression)
-    (args : texpression list) : string =
+    (inside : bool) (indent : string) (indent_incr : string) (app : texpr)
+    (args : texpr list) : string =
   (* There are two possibilities: either the [app] is an instantiated,
    * top-level qualifier (function, ADT constructore...), or it is a "regular"
    * expression *)
@@ -886,7 +881,7 @@ and app_to_string ?(span : Meta.span option = None) (env : fmt_env)
     | _ ->
         (* "Regular" expression case *)
         let inside = args <> [] || (args = [] && inside) in
-        (texpression_to_string ~span env inside indent indent_incr app, [])
+        (texpr_to_string ~span env inside indent indent_incr app, [])
   in
   (* Convert the arguments.
    * The arguments are expressions, so indentation might get weird... (though
@@ -894,7 +889,7 @@ and app_to_string ?(span : Meta.span option = None) (env : fmt_env)
   let arg_to_string =
     let inside = true in
     let indent1 = indent ^ indent_incr in
-    texpression_to_string ~span env inside indent1 indent_incr
+    texpr_to_string ~span env inside indent1 indent_incr
   in
   let args = List.map arg_to_string args in
   let all_args = List.append generics args in
@@ -906,36 +901,32 @@ and app_to_string ?(span : Meta.span option = None) (env : fmt_env)
   if all_args <> [] && inside then "(" ^ e ^ ")" else e
 
 and lambdas_to_string ?(span : Meta.span option = None) (env : fmt_env)
-    (indent : string) (indent_incr : string) (xl : typed_pattern list)
-    (e : texpression) : string =
-  let env, xl = List.fold_left_map (typed_pattern_to_string_aux span) env xl in
-  let e = texpression_to_string ~span env false indent indent_incr e in
+    (indent : string) (indent_incr : string) (xl : tpattern list) (e : texpr) :
+    string =
+  let env, xl = List.fold_left_map (tpattern_to_string_aux span) env xl in
+  let e = texpr_to_string ~span env false indent indent_incr e in
   "λ " ^ String.concat " " xl ^ ". " ^ e
 
 and let_to_string ?(span : Meta.span option = None) (env : fmt_env)
-    (indent : string) (indent_incr : string) (monadic : bool)
-    (lv : typed_pattern) (re : texpression) (e : texpression) : string =
+    (indent : string) (indent_incr : string) (monadic : bool) (lv : tpattern)
+    (re : texpr) (e : texpr) : string =
   let indent1 = indent ^ indent_incr in
   let inside = false in
-  let re = texpression_to_string ~span env inside indent1 indent_incr re in
-  let env, lv = typed_pattern_to_string_aux span env lv in
-  let e = texpression_to_string ~span env inside indent indent_incr e in
+  let re = texpr_to_string ~span env inside indent1 indent_incr re in
+  let env, lv = tpattern_to_string_aux span env lv in
+  let e = texpr_to_string ~span env inside indent indent_incr e in
   if monadic then lv ^ " <-- " ^ re ^ ";\n" ^ indent ^ e
   else "let " ^ lv ^ " = " ^ re ^ " in\n" ^ indent ^ e
 
 and switch_to_string ?(span : Meta.span option = None) (env : fmt_env)
-    (indent : string) (indent_incr : string) (scrutinee : texpression)
+    (indent : string) (indent_incr : string) (scrutinee : texpr)
     (body : switch_body) : string =
   let indent1 = indent ^ indent_incr in
   (* Printing can mess up on the scrutinee, because it is an expression - but
    * in most situations it will be a value or a function call, so it should be
    * ok*)
-  let scrut =
-    texpression_to_string ~span env true indent1 indent_incr scrutinee
-  in
-  let e_to_string env =
-    texpression_to_string ~span env false indent1 indent_incr
-  in
+  let scrut = texpr_to_string ~span env true indent1 indent_incr scrutinee in
+  let e_to_string env = texpr_to_string ~span env false indent1 indent_incr in
   match body with
   | If (e_true, e_false) ->
       let e_true = e_to_string env e_true in
@@ -944,7 +935,7 @@ and switch_to_string ?(span : Meta.span option = None) (env : fmt_env)
       ^ indent ^ "else\n" ^ indent1 ^ e_false
   | Match branches ->
       let branch_to_string (b : match_branch) : string =
-        let env, pat = typed_pattern_to_string_aux span env b.pat in
+        let env, pat = tpattern_to_string_aux span env b.pat in
         indent ^ "| " ^ pat ^ " ->\n" ^ indent1 ^ e_to_string env b.branch
       in
       let branches = List.map branch_to_string branches in
@@ -958,9 +949,7 @@ and struct_update_to_string ?(span : Meta.span option = None) (env : fmt_env)
     match supd.init with
     | None -> ""
     | Some init ->
-        " "
-        ^ texpression_to_string ~span env false indent1 indent_incr init
-        ^ " with"
+        " " ^ texpr_to_string ~span env false indent1 indent_incr init ^ " with"
   in
   (* The id should be a custom type decl id or an array *)
   match supd.struct_id with
@@ -970,9 +959,7 @@ and struct_update_to_string ?(span : Meta.span option = None) (env : fmt_env)
         List.map
           (fun (fid, fe) ->
             let field = FieldId.nth field_names fid in
-            let fe =
-              texpression_to_string ~span env false indent2 indent_incr fe
-            in
+            let fe = texpr_to_string ~span env false indent2 indent_incr fe in
             "\n" ^ indent1 ^ field ^ " := " ^ fe ^ ";")
           supd.updates
       in
@@ -982,7 +969,7 @@ and struct_update_to_string ?(span : Meta.span option = None) (env : fmt_env)
       let fields =
         List.map
           (fun (_, fe) ->
-            texpression_to_string ~span env false indent2 indent_incr fe)
+            texpr_to_string ~span env false indent2 indent_incr fe)
           supd.updates
       in
       "[ " ^ String.concat ", " fields ^ " ]"
@@ -995,13 +982,13 @@ and loop_to_string ?(span : Meta.span option = None) (env : fmt_env)
   (* Print what can be printed before entering the binder *)
   let output_ty = "output_ty: " ^ ty_to_string env false loop.output_ty in
   let fun_end =
-    texpression_to_string ~span env false indent2 indent_incr loop.fun_end
+    texpr_to_string ~span env false indent2 indent_incr loop.fun_end
   in
   (* Introduce the inputs *)
   let env, loop_inputs =
     let env = fmt_env_start_pbvars env in
     let env, loop_inputs =
-      List.fold_left_map (typed_pattern_to_string_core span) env loop.inputs
+      List.fold_left_map (tpattern_to_string_core span) env loop.inputs
     in
     let loop_inputs = "loop_inputs: [" ^ String.concat "; " loop_inputs ^ "]" in
     let env = fmt_env_push_pbvars env in
@@ -1009,7 +996,7 @@ and loop_to_string ?(span : Meta.span option = None) (env : fmt_env)
   in
   (* *)
   let loop_body =
-    texpression_to_string ~span env false indent2 indent_incr loop.loop_body
+    texpr_to_string ~span env false indent2 indent_incr loop.loop_body
   in
   "loop {\n" ^ indent1 ^ "fun_end: {\n" ^ indent2 ^ fun_end ^ "\n" ^ indent1
   ^ "}\n" ^ indent1 ^ loop_inputs ^ "\n" ^ indent1 ^ output_ty ^ "\n" ^ indent1
@@ -1027,15 +1014,15 @@ and emeta_to_string ?(span : Meta.span option = None) (env : fmt_env)
           | Some rp -> " [@src=" ^ mplace_to_string env rp ^ "]"
         in
         "@assign(" ^ mplace_to_string env lp ^ " := "
-        ^ texpression_to_string ~span env false "" "" rv
+        ^ texpr_to_string ~span env false "" "" rv
         ^ rp ^ ")"
     | SymbolicAssignments info ->
         let infos =
           List.map
             (fun (var, rv) ->
-              texpression_to_string ~span env false "" "" var
+              texpr_to_string ~span env false "" "" var
               ^ " == "
-              ^ texpression_to_string ~span env false "" "" rv)
+              ^ texpr_to_string ~span env false "" "" rv)
             info
         in
         let infos = String.concat ", " infos in
@@ -1044,8 +1031,7 @@ and emeta_to_string ?(span : Meta.span option = None) (env : fmt_env)
         let infos =
           List.map
             (fun (var, name) ->
-              texpression_to_string ~span env false "" "" var
-              ^ " == \"" ^ name ^ "\"")
+              texpr_to_string ~span env false "" "" var ^ " == \"" ^ name ^ "\"")
             info
         in
         let infos = String.concat ", " infos in
@@ -1059,10 +1045,10 @@ and emeta_to_string ?(span : Meta.span option = None) (env : fmt_env)
 let fun_body_to_string (env : fmt_env) (body : fun_body) : string =
   let inside = false in
   let indent = "  " in
-  let env, inputs = typed_patterns_to_string_aux None env body.inputs in
+  let env, inputs = tpatterns_to_string_aux None env body.inputs in
   let inputs =
     List.map
-      (fun ((v, v') : _ * typed_pattern) ->
+      (fun ((v, v') : _ * tpattern) ->
         "(" ^ v ^ " : " ^ ty_to_string env false v'.ty ^ ")")
       (List.combine inputs body.inputs)
   in
@@ -1070,9 +1056,7 @@ let fun_body_to_string (env : fmt_env) (body : fun_body) : string =
     if inputs = [] then indent
     else "  fun " ^ String.concat " " inputs ^ " ->\n" ^ indent
   in
-  let body =
-    texpression_to_string ~span:None env inside indent indent body.body
-  in
+  let body = texpr_to_string ~span:None env inside indent indent body.body in
   inputs ^ body
 
 let fun_decl_to_string (env : fmt_env) (def : fun_decl) : string =
@@ -1085,11 +1069,11 @@ let fun_decl_to_string (env : fmt_env) (def : fun_decl) : string =
       let inside = false in
       let indent = "  " in
       let env, inputs =
-        typed_patterns_to_string_aux (Some def.item_meta.span) env body.inputs
+        tpatterns_to_string_aux (Some def.item_meta.span) env body.inputs
       in
       let inputs =
         List.map
-          (fun ((v, v') : _ * typed_pattern) ->
+          (fun ((v, v') : _ * tpattern) ->
             "(" ^ v ^ " : " ^ ty_to_string env false v'.ty ^ ")")
           (List.combine inputs body.inputs)
       in
@@ -1098,7 +1082,7 @@ let fun_decl_to_string (env : fmt_env) (def : fun_decl) : string =
         else "  fun " ^ String.concat " " inputs ^ " ->\n" ^ indent
       in
       let body =
-        texpression_to_string ~span:(Some def.item_meta.span) env inside indent
-          indent body.body
+        texpr_to_string ~span:(Some def.item_meta.span) env inside indent indent
+          body.body
       in
       "let " ^ name ^ " :\n  " ^ signature ^ " =\n" ^ inputs ^ body

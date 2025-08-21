@@ -86,8 +86,7 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
     (loop_id : LoopId.id) (init_ctx : eval_ctx) (fixed_ids : ids_sets)
     (fp_ctx : eval_ctx) (fp_input_svalues : SymbolicValueId.id list)
     (rg_to_abs : AbstractionId.id RegionGroupId.Map.t) :
-    ((eval_ctx * statement_eval_res)
-    * (SymbolicAst.expression -> SymbolicAst.expression))
+    ((eval_ctx * statement_eval_res) * (SymbolicAst.expr -> SymbolicAst.expr))
     * borrow_loan_corresp =
   [%ltrace
     "about to reorganize the original context to match the fixed-point ctx \
@@ -141,7 +140,7 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
     let abs = ctx_lookup_abs fp_ctx abs_id in
     [%ltrace "checking abs:\n" ^ abs_to_string span ctx abs];
 
-    let is_borrow (av : typed_avalue) : bool =
+    let is_borrow (av : tavalue) : bool =
       match av.value with
       | ABorrow _ | ASymbolic (_, AProjBorrows _) -> true
       | ALoan _ | ASymbolic (_, AProjLoans _) -> false
@@ -151,7 +150,7 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
 
     let mut_borrows =
       List.filter_map
-        (fun (av : typed_avalue) ->
+        (fun (av : tavalue) ->
           match av.value with
           | ABorrow (AMutBorrow (pm, bid, child_av)) ->
               [%sanity_check] span (pm = PNone);
@@ -167,7 +166,7 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
 
     let borrow_projs =
       List.filter_map
-        (fun (av : typed_avalue) ->
+        (fun (av : tavalue) ->
           match av.value with
           | ASymbolic (pm, AProjBorrows { proj; loans }) ->
               [%sanity_check] span (pm = PNone);
@@ -179,7 +178,7 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
 
     let mut_loans =
       List.filter_map
-        (fun (av : typed_avalue) ->
+        (fun (av : tavalue) ->
           match av.value with
           | ALoan (AMutLoan (pm, bid, child_av)) ->
               [%sanity_check] span (pm = PNone);
@@ -195,7 +194,7 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
 
     let loan_projs =
       List.filter_map
-        (fun (av : typed_avalue) ->
+        (fun (av : tavalue) ->
           match av.value with
           | ASymbolic (pm, AProjLoans { proj; consumed; borrows }) ->
               [%sanity_check] span (pm = PNone);
@@ -241,7 +240,7 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
     (fp_ctx : eval_ctx) (fp_input_svalues : SymbolicValueId.id list)
     (fp_bl_corresp : borrow_loan_corresp) :
     (eval_ctx * statement_eval_res) list
-    * (SymbolicAst.expression list -> SymbolicAst.expression) =
+    * (SymbolicAst.expr list -> SymbolicAst.expr) =
   (* First, evaluate the loop body starting from the **fixed-point** context *)
   let ctx_resl, cf_loop = eval_loop_body fp_ctx in
 
@@ -279,7 +278,7 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
 
   (* Apply and compose *)
   let ctx_resl, cfl = List.split (List.map eval_after_loop_iter ctx_resl) in
-  let cc (el : SymbolicAst.expression list) : SymbolicAst.expression =
+  let cc (el : SymbolicAst.expr list) : SymbolicAst.expr =
     let el = List.map (fun (cf, e) -> cf e) (List.combine cfl el) in
     cf_loop el
   in
@@ -366,7 +365,7 @@ let eval_loop_symbolic (config : config) (span : span)
       let abs = ctx_lookup_abs fp_ctx abs_id in
       [%ltrace "- abs:\n" ^ abs_to_string span ~with_ended:true ctx abs];
 
-      let is_borrow (av : typed_avalue) : bool =
+      let is_borrow (av : tavalue) : bool =
         match av.value with
         | ABorrow _ | ASymbolic (_, AProjBorrows _) -> true
         | ALoan _ | ASymbolic (_, AProjLoans _) -> false
@@ -375,7 +374,7 @@ let eval_loop_symbolic (config : config) (span : span)
       let borrows, _ = List.partition is_borrow abs.avalues in
 
       List.filter_map
-        (fun (av : typed_avalue) ->
+        (fun (av : tavalue) ->
           SymbolicToPureTypes.translate_back_ty (Some span)
             ctx.type_ctx.type_infos
             (function
@@ -388,7 +387,7 @@ let eval_loop_symbolic (config : config) (span : span)
   in
 
   (* Put everything together *)
-  let cc (el : SymbolicAst.expression list) =
+  let cc (el : SymbolicAst.expr list) =
     match el with
     | [] -> [%internal_error] span
     | e :: el ->

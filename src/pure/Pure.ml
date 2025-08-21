@@ -719,8 +719,8 @@ type fvar = {
 }
 [@@deriving show, ord]
 
-(** Ancestor for {!iter_typed_pattern} visitor *)
-class ['self] iter_typed_pattern_base =
+(** Ancestor for {!iter_tpattern} visitor *)
+class ['self] iter_tpattern_base =
   object (self : 'self)
     inherit [_] iter_type_decl
     method visit_fvar_id : 'env -> fvar_id -> unit = fun _ _ -> ()
@@ -740,8 +740,8 @@ class ['self] iter_typed_pattern_base =
         self#visit_ty e var.ty
   end
 
-(** Ancestor for {!map_typed_pattern} visitor *)
-class ['self] map_typed_pattern_base =
+(** Ancestor for {!map_tpattern} visitor *)
+class ['self] map_tpattern_base =
   object (self : 'self)
     inherit [_] map_type_decl
     method visit_fvar_id : 'env -> fvar_id -> fvar_id = fun _ x -> x
@@ -765,8 +765,8 @@ class ['self] map_typed_pattern_base =
         }
   end
 
-(** Ancestor for {!reduce_typed_pattern} visitor *)
-class virtual ['self] reduce_typed_pattern_base =
+(** Ancestor for {!reduce_tpattern} visitor *)
+class virtual ['self] reduce_tpattern_base =
   object (self : 'self)
     inherit [_] reduce_type_decl
     method visit_fvar_id : 'env -> fvar_id -> 'a = fun _ _ -> self#zero
@@ -788,8 +788,8 @@ class virtual ['self] reduce_typed_pattern_base =
         self#plus (self#plus x0 x1) x2
   end
 
-(** Ancestor for {!mapreduce_typed_pattern} visitor *)
-class virtual ['self] mapreduce_typed_pattern_base =
+(** Ancestor for {!mapreduce_tpattern} visitor *)
+class virtual ['self] mapreduce_tpattern_base =
   object (self : 'self)
     inherit [_] mapreduce_type_decl
 
@@ -821,16 +821,16 @@ class virtual ['self] mapreduce_typed_pattern_base =
 
 (** A pattern (which appears on the left of assignments, in matches, etc.). *)
 type pattern =
-  | PatConstant of literal
-      (** {!PatConstant} is necessary because we merge the switches over integer
+  | PConstant of literal
+      (** {!PConstant} is necessary because we merge the switches over integer
           values and the matches over enumerations *)
-  | PatBound of var * mplace option
+  | PBound of var * mplace option
       (** The index of the variable is determined by its position (it is the
           index given by a depth-first search, which is consistent with the way
           visitors work). *)
-  | PatDummy  (** Ignored value: [_]. *)
-  | PatOpen of fvar * mplace option
-      (** We replace [PatBound] with [PatOpen] when opening binders.
+  | PDummy  (** Ignored value: [_]. *)
+  | POpen of fvar * mplace option
+      (** We replace [PBound] with [POpen] when opening binders.
 
           When we open a binder (say, the expression [let x = v in e]) by
           replacing the bound variables (in [e]) with free variables, we also
@@ -841,63 +841,60 @@ type pattern =
 
           Ex.: We want to simplify the expression (1) [let (x, y) = v in y] into
           [let (_, y) = v in y]. If we use DeBruijn indices the expression (1)
-          looks like: [let (PatBound, PatBound) = v in BVar (0, 1)], while the
-          expression (2) looks like: [let (_, PatBound) = v in BVar (0, 0)].
-          Note that in [BVar (0, 1)] the first number (the 0) identifies the
+          looks like: [let (PBound, PBound) = v in BVar (0, 1)], while the
+          expression (2) looks like: [let (_, PBound) = v in BVar (0, 0)]. Note
+          that in [BVar (0, 1)] the first number (the 0) identifies the
           scope/level of the variable (how many binder groups we have to
           traverse) while the second number (the 1) identifies the variable in
           the binder group. We resort to this representation because a binder
           group like a let-binding can bind several variables at once (see the
           explanations in [bvar]).
 
-          We first open the expression [let (PatOpen, PatOpen) = v in BVar 1],
+          We first open the expression [let (POpen, POpen) = v in BVar 1],
           producing the pattern (let's pretend we identify free variables with
           names rather than indices) [(x, y)] and the expression [y]. We then
           update the pattern to [(_,y)] and close the expression by reforming
           the let: [y] now has the index 0 and we get the expected expression:
           [let (_, BVar) = v in BVar 0]. *)
-  | PatAdt of adt_pattern
+  | PAdt of adt_pattern
 
-and adt_pattern = {
-  variant_id : variant_id option;
-  field_values : typed_pattern list;
-}
+and adt_pattern = { variant_id : variant_id option; fields : tpattern list }
 
-and typed_pattern = { value : pattern; ty : ty }
+and tpattern = { pat : pattern; ty : ty }
 [@@deriving
   show,
   ord,
   visitors
     {
-      name = "iter_typed_pattern";
+      name = "iter_tpattern";
       variety = "iter";
-      ancestors = [ "iter_typed_pattern_base" ];
+      ancestors = [ "iter_tpattern_base" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
       polymorphic = false;
     },
   visitors
     {
-      name = "map_typed_pattern";
+      name = "map_tpattern";
       variety = "map";
-      ancestors = [ "map_typed_pattern_base" ];
+      ancestors = [ "map_tpattern_base" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
       polymorphic = false;
     },
   visitors
     {
-      name = "reduce_typed_pattern";
+      name = "reduce_tpattern";
       variety = "reduce";
-      ancestors = [ "reduce_typed_pattern_base" ];
+      ancestors = [ "reduce_tpattern_base" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       polymorphic = false;
     },
   visitors
     {
-      name = "mapreduce_typed_pattern";
+      name = "mapreduce_tpattern";
       variety = "mapreduce";
-      ancestors = [ "mapreduce_typed_pattern_base" ];
+      ancestors = [ "mapreduce_tpattern_base" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       polymorphic = false;
     }]
@@ -967,10 +964,10 @@ type qualif_id =
     constructor is always fully instantiated. *)
 type qualif = { id : qualif_id; generics : generic_args } [@@deriving show, ord]
 
-(** Ancestor for {!iter_expression} visitor *)
-class ['self] iter_expression_base =
+(** Ancestor for {!iter_expr} visitor *)
+class ['self] iter_expr_base =
   object (_self : 'self)
-    inherit [_] iter_typed_pattern
+    inherit [_] iter_tpattern
     inherit! [_] iter_type_id
     method visit_qualif : 'env -> qualif -> unit = fun _ _ -> ()
     method visit_loop_id : 'env -> loop_id -> unit = fun _ _ -> ()
@@ -979,10 +976,10 @@ class ['self] iter_expression_base =
     method visit_db_scope_id : 'env -> db_scope_id -> unit = fun _ _ -> ()
   end
 
-(** Ancestor for {!map_expression} visitor *)
-class ['self] map_expression_base =
+(** Ancestor for {!map_expr} visitor *)
+class ['self] map_expr_base =
   object (_self : 'self)
-    inherit [_] map_typed_pattern
+    inherit [_] map_tpattern
     inherit! [_] map_type_id
     method visit_qualif : 'env -> qualif -> qualif = fun _ x -> x
     method visit_loop_id : 'env -> loop_id -> loop_id = fun _ x -> x
@@ -991,10 +988,10 @@ class ['self] map_expression_base =
     method visit_db_scope_id : 'env -> db_scope_id -> db_scope_id = fun _ x -> x
   end
 
-(** Ancestor for {!reduce_expression} visitor *)
-class virtual ['self] reduce_expression_base =
+(** Ancestor for {!reduce_expr} visitor *)
+class virtual ['self] reduce_expr_base =
   object (self : 'self)
-    inherit [_] reduce_typed_pattern
+    inherit [_] reduce_tpattern
     inherit! [_] reduce_type_id
     method visit_qualif : 'env -> qualif -> 'a = fun _ _ -> self#zero
     method visit_loop_id : 'env -> loop_id -> 'a = fun _ _ -> self#zero
@@ -1003,10 +1000,10 @@ class virtual ['self] reduce_expression_base =
     method visit_db_scope_id : 'env -> db_scope_id -> 'a = fun _ _ -> self#zero
   end
 
-(** Ancestor for {!mapreduce_expression} visitor *)
-class virtual ['self] mapreduce_expression_base =
+(** Ancestor for {!mapreduce_expr} visitor *)
+class virtual ['self] mapreduce_expr_base =
   object (self : 'self)
-    inherit [_] mapreduce_typed_pattern
+    inherit [_] mapreduce_tpattern
     inherit! [_] mapreduce_type_id
 
     method visit_qualif : 'env -> qualif -> qualif * 'a =
@@ -1025,15 +1022,15 @@ class virtual ['self] mapreduce_expression_base =
       fun _ x -> (x, self#zero)
   end
 
-(** **Rk.:** here, {!expression} is not at all equivalent to the expressions
-    used in LLBC. They are lambda-calculus expressions, and are thus actually
-    more general than the LLBC statements, in a sense. *)
-type expression =
+(** **Rk.:** here, {!expr} is not at all equivalent to the expressions used in
+    LLBC. They are lambda-calculus expressions, and are thus actually more
+    general than the LLBC statements, in a sense. *)
+type expr =
   | FVar of fvar_id  (** a free variable *)
   | BVar of bvar  (** a bound variable *)
   | CVar of const_generic_var_id  (** a const generic var *)
   | Const of literal
-  | App of texpression * texpression
+  | App of texpr * texpr
       (** Application of a function to an argument.
 
           The function calls are still quite structured. Change that?... We
@@ -1041,9 +1038,9 @@ type expression =
           argument): this would allow us to replace some field accesses with
           calls to projectors over fields (when there are clashes of field
           names, some provers like F* get pretty bad...) *)
-  | Lambda of typed_pattern * texpression  (** Lambda abstraction: [λ x => e] *)
+  | Lambda of tpattern * texpr  (** Lambda abstraction: [λ x => e] *)
   | Qualif of qualif  (** A top-level qualifier *)
-  | Let of bool * typed_pattern * texpression * texpression
+  | Let of bool * tpattern * texpr * texpr
       (** Let binding.
 
           TODO: the boolean should be replaced by an enum: sometimes we use the
@@ -1080,14 +1077,14 @@ type expression =
             let tl = Cons?.tl ls in
             ...
           ]} *)
-  | Switch of texpression * switch_body
+  | Switch of texpr * switch_body
   | Loop of loop  (** See the comments for {!loop} *)
   | StructUpdate of struct_update  (** See the comments for {!struct_update} *)
-  | Meta of emeta * texpression  (** Meta-information *)
+  | Meta of emeta * texpr  (** Meta-information *)
   | EError of Meta.span option * string
 
-and switch_body = If of texpression * texpression | Match of match_branch list
-and match_branch = { pat : typed_pattern; branch : texpression }
+and switch_body = If of texpr * texpr | Match of match_branch list
+and match_branch = { pat : tpattern; branch : texpr }
 
 (** In {!SymbolicToPure}, whenever we encounter a loop we insert a {!loop} node,
     which contains the end of the function (i.e., the call to the loop function)
@@ -1099,16 +1096,16 @@ and match_branch = { pat : typed_pattern; branch : texpression }
     function, and a backward body (for the corresponding region group) if the
     function is a backward function. *)
 and loop = {
-  fun_end : texpression;
+  fun_end : texpr;
   loop_id : loop_id;
   span : span; [@opaque]
   output_ty : ty;  (** The output type of the loop *)
-  inputs : typed_pattern list;
+  inputs : tpattern list;
       (** Those should be variables.
 
           Those variables are the variables bound in [loop_body] (they are the
           input arguments of the loop). *)
-  loop_body : texpression;
+  loop_body : texpr;
 }
 
 (** Structure creation/update.
@@ -1139,11 +1136,11 @@ and loop = {
     ]} *)
 and struct_update = {
   struct_id : type_id;
-  init : texpression option;
-  updates : (field_id * texpression) list;
+  init : texpr option;
+  updates : (field_id * texpr) list;
 }
 
-and texpression = { e : expression; ty : ty }
+and texpr = { e : expr; ty : ty }
 
 and bvar = {
   scope : db_scope_id;
@@ -1171,13 +1168,13 @@ and bvar = {
 }
 
 (** Meta-value (converted to an expression). *)
-and mvalue = texpression
+and mvalue = texpr
 
 (** Variable used in meta-information.
 
-    We use the type [texpression] so that the variable id gets properly updated
-    by the functions which open/close binders. *)
-and mvar = texpression
+    We use the type [texpr] so that the variable id gets properly updated by the
+    functions which open/close binders. *)
+and mvar = texpr
 
 (** Meta-information stored in the AST.
 
@@ -1218,32 +1215,32 @@ and emeta =
   ord,
   visitors
     {
-      name = "iter_expression";
+      name = "iter_expr";
       variety = "iter";
-      ancestors = [ "iter_expression_base" ];
+      ancestors = [ "iter_expr_base" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
     },
   visitors
     {
-      name = "map_expression";
+      name = "map_expr";
       variety = "map";
-      ancestors = [ "map_expression_base" ];
+      ancestors = [ "map_expr_base" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
     },
   visitors
     {
-      name = "reduce_expression";
+      name = "reduce_expr";
       variety = "reduce";
-      ancestors = [ "reduce_expression_base" ];
+      ancestors = [ "reduce_expr_base" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
     },
   visitors
     {
-      name = "mapreduce_expression";
+      name = "mapreduce_expr";
       variety = "mapreduce";
-      ancestors = [ "mapreduce_expression_base" ];
+      ancestors = [ "mapreduce_expr_base" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
     }]
 
@@ -1450,10 +1447,10 @@ type fun_sig = {
 type inst_fun_sig = { inputs : ty list; output : ty } [@@deriving show]
 
 type fun_body = {
-  inputs : typed_pattern list;
+  inputs : tpattern list;
       (** Note that we consider the inputs as a single binder group when
           computing de bruijn indices *)
-  body : texpression;
+  body : texpr;
 }
 [@@deriving show]
 

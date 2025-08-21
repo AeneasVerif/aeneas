@@ -22,8 +22,8 @@ type shared_borrow_id = SharedBorrowId.id [@@deriving show, ord]
 type loan_id = BorrowId.id [@@deriving show, ord]
 type loan_id_set = BorrowId.Set.t [@@deriving show, ord]
 
-(** Ancestor for {!typed_value} iter visitor *)
-class ['self] iter_typed_value_base =
+(** Ancestor for {!tvalue} iter visitor *)
+class ['self] iter_tvalue_base =
   object (self : 'self)
     inherit [_] iter_ty
 
@@ -45,8 +45,8 @@ class ['self] iter_typed_value_base =
       fun env ids -> BorrowId.Set.iter (self#visit_loan_id env) ids
   end
 
-(** Ancestor for {!typed_value} map visitor for *)
-class ['self] map_typed_value_base =
+(** Ancestor for {!tvalue} map visitor for *)
+class ['self] map_tvalue_base =
   object (self : 'self)
     inherit [_] map_ty
 
@@ -91,10 +91,7 @@ and value =
           appearing in regular values are interpreted as *borrow* projectors,
           they can never be *loan* projectors. *)
 
-and adt_value = {
-  variant_id : variant_id option;
-  field_values : typed_value list;
-}
+and adt_value = { variant_id : variant_id option; field_values : tvalue list }
 
 and borrow_content =
   | VSharedBorrow of borrow_id * shared_borrow_id
@@ -104,7 +101,7 @@ and borrow_content =
           uniquely identify the borrow, for convenience purposes. This is only
           an implementation detail and doesn't have any impact on the semantics.
       *)
-  | VMutBorrow of borrow_id * typed_value  (** A mutably borrowed value. *)
+  | VMutBorrow of borrow_id * tvalue  (** A mutably borrowed value. *)
   | VReservedMutBorrow of borrow_id * shared_borrow_id
       (** A reserved mut borrow.
 
@@ -143,26 +140,26 @@ and borrow_content =
             Vec::push(move v1, move l); // v1 gets promoted to a mutable borrow here
           ]} *)
 
-and loan_content = VSharedLoan of loan_id * typed_value | VMutLoan of loan_id
+and loan_content = VSharedLoan of loan_id * tvalue | VMutLoan of loan_id
 
 (** "Regular" typed value (we map variables to typed values) *)
-and typed_value = { value : value; ty : ty }
+and tvalue = { value : value; ty : ty }
 [@@deriving
   show,
   ord,
   visitors
     {
-      name = "iter_typed_value";
+      name = "iter_tvalue";
       variety = "iter";
-      ancestors = [ "iter_typed_value_base" ];
+      ancestors = [ "iter_tvalue_base" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
     },
   visitors
     {
-      name = "map_typed_value";
+      name = "map_tvalue";
       variety = "map";
-      ancestors = [ "map_typed_value_base" ];
+      ancestors = [ "map_tvalue_base" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
     }]
@@ -175,7 +172,7 @@ and typed_value = { value : value; ty : ty }
 
     TODO: we may want to create wrappers, to prevent accidently mixing meta
     values and regular values. *)
-type mvalue = typed_value [@@deriving show, ord]
+type mvalue = tvalue [@@deriving show, ord]
 
 (** "Meta"-symbolic value.
 
@@ -211,10 +208,10 @@ type ended_proj_borrow_meta = {
 type ended_mut_borrow_meta = { bid : borrow_id; given_back : msymbolic_value }
 [@@deriving show, ord]
 
-(** Ancestor for {!typed_avalue} iter visitor *)
-class ['self] iter_typed_avalue_base =
+(** Ancestor for {!tavalue} iter visitor *)
+class ['self] iter_tavalue_base =
   object (self : 'self)
-    inherit [_] iter_typed_value
+    inherit [_] iter_tvalue
     method visit_mvalue : 'env -> mvalue -> unit = fun _ _ -> ()
 
     method visit_msymbolic_value : 'env -> msymbolic_value -> unit =
@@ -244,10 +241,10 @@ class ['self] iter_typed_avalue_base =
       fun _ _ -> ()
   end
 
-(** Ancestor for {!typed_avalue} map visitor *)
-class ['self] map_typed_avalue_base =
+(** Ancestor for {!tavalue} map visitor *)
+class ['self] map_tavalue_base =
   object (self : 'self)
-    inherit [_] map_typed_value
+    inherit [_] map_tvalue
     method visit_mvalue : 'env -> mvalue -> mvalue = fun _ x -> x
 
     method visit_msymbolic_value : 'env -> msymbolic_value -> msymbolic_value =
@@ -447,7 +444,7 @@ and avalue =
 
 and adt_avalue = {
   variant_id : (VariantId.id option[@opaque]);
-  field_values : typed_avalue list;
+  field_values : tavalue list;
 }
 
 (** A loan content as stored in an abstraction.
@@ -460,7 +457,7 @@ and adt_avalue = {
     instance, the child avalue contained in an {!AMutLoan} will likely contain
     other, independent loans. *)
 and aloan_content =
-  | AMutLoan of proj_marker * loan_id * typed_avalue
+  | AMutLoan of proj_marker * loan_id * tavalue
       (** A mutable loan owned by an abstraction.
 
           The avalue is the child avalue.
@@ -479,7 +476,7 @@ and aloan_content =
             }
             px -> mut_borrow l0 (mut_borrow @s1)
           ]} *)
-  | ASharedLoan of proj_marker * loan_id * typed_value * typed_avalue
+  | ASharedLoan of proj_marker * loan_id * tvalue * tavalue
       (** A shared loan owned by an abstraction.
 
           The avalue is the child avalue.
@@ -500,12 +497,12 @@ and aloan_content =
       (** An ended mutable loan in an abstraction. We need it because
           abstractions must keep track of the values we gave back to them, so
           that we can correctly instantiate backward functions. *)
-  | AEndedSharedLoan of typed_value * typed_avalue
+  | AEndedSharedLoan of tvalue * tavalue
       (** Similar to {!AEndedMutLoan} but in this case we don't consume given
           back values when the loan ends. We remember the shared value because
           it now behaves as a "regular" value (which might contain borrows we
           need to keep track of...). *)
-  | AIgnoredMutLoan of loan_id option * typed_avalue
+  | AIgnoredMutLoan of loan_id option * tavalue
       (** An ignored mutable loan.
 
           We need to keep track of ignored mutable loans, because we may have to
@@ -541,7 +538,7 @@ and aloan_content =
             x -> ⊥
           ]} *)
   | AEndedIgnoredMutLoan of aended_ignored_mut_loan
-  | AIgnoredSharedLoan of typed_avalue
+  | AIgnoredSharedLoan of tavalue
       (** An ignored shared loan.
 
           Example: ========
@@ -603,8 +600,8 @@ and aloan_content =
       x -> ⊥
     ]} *)
 and aended_mut_loan = {
-  child : typed_avalue;
-  given_back : typed_avalue;
+  child : tavalue;
+  given_back : tavalue;
   given_back_meta : mvalue;
 }
 
@@ -615,8 +612,8 @@ and aended_mut_loan = {
     comments for {!AEndedMutLoan}). *)
 
 and aended_ignored_mut_loan = {
-  child : typed_avalue;
-  given_back : typed_avalue;
+  child : tavalue;
+  given_back : tavalue;
   given_back_meta : mvalue;
 }
 
@@ -628,7 +625,7 @@ and aended_ignored_mut_loan = {
     TODO: be more precise about the ignored borrows (keep track of the borrow
     ids)? *)
 and aborrow_content =
-  | AMutBorrow of proj_marker * borrow_id * typed_avalue
+  | AMutBorrow of proj_marker * borrow_id * tavalue
       (** A mutable borrow owned by an abstraction.
 
           Is used when an abstraction "consumes" borrows, when giving borrows as
@@ -663,7 +660,7 @@ and aborrow_content =
             > px -> ⊥
             > abs0 { a_shared_borrow l0 _ }
           ]} *)
-  | AIgnoredMutBorrow of borrow_id option * typed_avalue
+  | AIgnoredMutBorrow of borrow_id option * tavalue
       (** An ignored mutable borrow.
 
           We need to keep track of ignored mut borrows because when ending such
@@ -725,7 +722,7 @@ and aborrow_content =
           rules to specifically handle the case of AIgnoredMutBorrow with Some
           borrow id) and also remove the AEndedIgnoredMutBorrow variant. For
           now, we prefer to be more precise that required. *)
-  | AEndedMutBorrow of ended_mut_borrow_meta * typed_avalue
+  | AEndedMutBorrow of ended_mut_borrow_meta * tavalue
       (** The sole purpose of {!AEndedMutBorrow} is to store meta information
           for the synthesis, with in particular the (symbolic) value that was
           given back upon ending the borrow. *)
@@ -782,8 +779,8 @@ and aborrow_content =
 
 (** See the explanations for {!AIgnoredMutBorrow} *)
 and aended_ignored_mut_borrow = {
-  child : typed_avalue;
-  given_back : typed_avalue;
+  child : tavalue;
+  given_back : tavalue;
   given_back_meta : msymbolic_value;
       (** [given_back_meta] is used to store the (symbolic) value we gave back
           upon ending the borrow.
@@ -795,7 +792,7 @@ and aended_ignored_mut_borrow = {
 (** Rem.: the of avalues is not to be understood in the same manner as for
     values. To be more precise, shared aloans have the borrow type (i.e., a
     shared aloan has type [& (mut) T] instead of [T]). *)
-and typed_avalue = {
+and tavalue = {
   value : avalue;
   ty : ty;  (** This should be a type with regions *)
 }
@@ -804,18 +801,18 @@ and typed_avalue = {
   ord,
   visitors
     {
-      name = "iter_typed_avalue";
+      name = "iter_tavalue";
       variety = "iter";
-      ancestors = [ "iter_typed_avalue_base" ];
+      ancestors = [ "iter_tavalue_base" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
       monomorphic = [ "env" ] (* We need this to allows duplicate field names *);
     },
   visitors
     {
-      name = "map_typed_avalue";
+      name = "map_tavalue";
       variety = "map";
-      ancestors = [ "map_typed_avalue_base" ];
+      ancestors = [ "map_tavalue_base" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
       monomorphic = [ "env" ] (* We need this to allows duplicate field names *);
@@ -875,14 +872,14 @@ type abs_kind =
 (** Ancestor for {!abs} iter visitor *)
 class ['self] iter_abs_base =
   object (_self : 'self)
-    inherit [_] iter_typed_avalue
+    inherit [_] iter_tavalue
     method visit_abs_kind : 'env -> abs_kind -> unit = fun _ _ -> ()
   end
 
 (** Ancestor for {!abs} map visitor *)
 class ['self] map_abs_base =
   object (_self : 'self)
-    inherit [_] map_typed_avalue
+    inherit [_] map_tavalue
     method visit_abs_kind : 'env -> abs_kind -> abs_kind = fun _ x -> x
   end
 
@@ -910,7 +907,7 @@ type abs = {
       (** The original list of parents, ordered. This is used for synthesis.
           TODO: remove? *)
   regions : abs_regions;
-  avalues : typed_avalue list;  (** The values in this abstraction *)
+  avalues : tavalue list;  (** The values in this abstraction *)
 }
 
 and abs_regions = {
