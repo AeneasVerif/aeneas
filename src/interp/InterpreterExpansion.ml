@@ -32,8 +32,10 @@ type proj_kind = LoanProj | BorrowProj
     reducing the borrow projectors might require to perform some reborrows, in
     which case we need to lookup the corresponding loans in the context.
 
-    Also, if this function is called on an expansion for *shared references*,
-    the proj borrows should already have been expanded.
+    If this function is called on an expansion for *shared references*, the proj
+    borrows should already have been expanded.
+
+    Note that this function is expands abstraction values and *expressions*.
 
     TODO: the way this function is used is a bit complex, especially because of
     the above condition. Maybe we should have:
@@ -43,7 +45,7 @@ type proj_kind = LoanProj | BorrowProj
 
     Note that 2. and 3. may have a little bit of duplicated code, but hopefully
     it would make things clearer. *)
-let apply_symbolic_expansion_to_target_avalues (span : Meta.span)
+let apply_symbolic_expansion_to_target_aevalues (span : Meta.span)
     (proj_kind : proj_kind) (original_sv : symbolic_value)
     (expansion : symbolic_expansion) (ctx : eval_ctx) : eval_ctx =
   (* Symbolic values contained in the expansion might contain already ended regions *)
@@ -62,15 +64,27 @@ let apply_symbolic_expansion_to_target_avalues (span : Meta.span)
 
       (** We carefully updated {!visit_ASymbolic} so that {!visit_aproj} is
           called only on child projections (i.e., projections which appear in
-          {!AEndedProjLoans}). The role of visit_aproj is then to check we don't
-          have to expand symbolic values in child projections, because it should
-          never happen *)
+          {!AEndedProjLoans}). The role of [visit_aproj] is then to check we
+          don't have to expand symbolic values in child projections, because it
+          should never happen *)
       method! visit_aproj current_abs aproj =
         (match aproj with
         | AProjLoans { proj; _ } | AProjBorrows { proj; _ } ->
             [%sanity_check] span (proj.sv_id <> original_sv.sv_id)
         | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ());
         super#visit_aproj current_abs aproj
+
+      (** We carefully updated {!visit_ESymbolic} so that {!visit_eproj} is
+          called only on child projections (i.e., projections which appear in
+          {!EEndedProjLoans}). The role of [visit_eproj] is then to check we
+          don't have to expand symbolic values in child projections, because it
+          should never happen *)
+      method! visit_eproj current_abs aproj =
+        (match aproj with
+        | EProjLoans { proj; _ } | EProjBorrows { proj; _ } ->
+            [%sanity_check] span (proj.sv_id <> original_sv.sv_id)
+        | EEndedProjLoans _ | EEndedProjBorrows _ | EEmpty -> ());
+        super#visit_eproj current_abs aproj
 
       method! visit_ASymbolic current_abs pm aproj =
         [%sanity_check] span (pm = PNone);
@@ -133,17 +147,79 @@ let apply_symbolic_expansion_to_target_avalues (span : Meta.span)
         | AProjLoans _, BorrowProj | AProjBorrows _, LoanProj | AEmpty, _ ->
             (* Nothing to do *)
             ASymbolic (pm, aproj)
+
+      method! visit_ESymbolic current_abs pm aproj =
+        [%sanity_check] span (pm = PNone);
+        let current_abs = Option.get current_abs in
+        let proj_regions = current_abs.regions.owned in
+        (* Explore in depth first - we won't update anything: we simply
+         * want to check we don't have to expand inner symbolic value *)
+        match (aproj, proj_kind) with
+        | EEndedProjBorrows _, _ -> ESymbolic (pm, aproj)
+        | EEndedProjLoans _, _ ->
+            (* Explore the given back values to make sure we don't have to expand
+             * anything in there *)
+            ESymbolic (pm, self#visit_eproj (Some current_abs) aproj)
+        | EProjLoans { proj; consumed; borrows }, LoanProj ->
+            (* Check if this is the symbolic value we are looking for *)
+            if proj.sv_id = original_sv.sv_id then (
+              (* There mustn't be any consumed values *)
+              [%sanity_check] span (consumed = []);
+              (* Not sure what to do if the borrows are non empty: leaving
+                 this as a TODO *)
+              [%cassert] span (borrows = []) "Unimplemented";
+              (* Epply the projector *)
+              let projected_value =
+                apply_eproj_loans_on_symbolic_expansion span proj_regions
+                  expansion original_sv.sv_ty proj.proj_ty ctx
+              in
+              (* Replace *)
+              projected_value.value)
+            else
+              (* Not the searched symbolic value: nothing to do *)
+              super#visit_ESymbolic (Some current_abs) pm aproj
+        | EProjBorrows { proj; loans }, BorrowProj ->
+            (* We should never expand a symbolic value which has consumed given
+               back values (because then it means the symbolic value was consumed
+               by region abstractions, and is thus inaccessible: such a value can't
+               be expanded)
+            *)
+            [%cassert] span (loans = []) "Unreachable";
+            (* Check if this is the symbolic value we are looking for *)
+            if proj.sv_id = original_sv.sv_id then
+              (* Convert the symbolic expansion to a value on which we can
+               * apply a projector (if the expansion is a reference expansion,
+               * convert it to a borrow) *)
+              (* WARNING: we mustn't get there if the expansion is for a shared
+               * reference. *)
+              let expansion =
+                symbolic_expansion_non_shared_borrow_to_value span original_sv
+                  expansion
+              in
+              (* Epply the projector *)
+              let projected_value =
+                apply_eproj_borrows span check_symbolic_no_ended ctx
+                  proj_regions expansion proj.proj_ty
+              in
+              (* Replace *)
+              projected_value.value
+            else
+              (* Not the searched symbolic value: nothing to do *)
+              super#visit_ESymbolic (Some current_abs) pm aproj
+        | EProjLoans _, BorrowProj | EProjBorrows _, LoanProj | EEmpty, _ ->
+            (* Nothing to do *)
+            ESymbolic (pm, aproj)
     end
   in
   (* Apply the expansion *)
   obj#visit_eval_ctx None ctx
 
 (** Auxiliary function. Apply a symbolic expansion to avalues in a context. *)
-let apply_symbolic_expansion_to_avalues (span : Meta.span)
+let apply_symbolic_expansion_to_aevalues (span : Meta.span)
     (original_sv : symbolic_value) (expansion : symbolic_expansion)
     (ctx : eval_ctx) : eval_ctx =
   let apply_expansion proj_kind ctx =
-    apply_symbolic_expansion_to_target_avalues span proj_kind original_sv
+    apply_symbolic_expansion_to_target_aevalues span proj_kind original_sv
       expansion ctx
   in
   (* First target the loan projectors, then the borrow projectors *)
@@ -189,7 +265,7 @@ let apply_symbolic_expansion_non_borrow (span : Meta.span)
     replace_symbolic_values span at_most_once original_sv nv.value ctx
   in
   (* Apply the expansion to abstraction values *)
-  apply_symbolic_expansion_to_avalues span original_sv expansion ctx
+  apply_symbolic_expansion_to_aevalues span original_sv expansion ctx
 
 (** Compute the expansion of a non-builtin (e.g.: not [Box], etc.) adt value.
 
@@ -275,9 +351,9 @@ let expand_symbolic_value_shared_borrow (span : Meta.span)
   (* The fresh symbolic value for the shared value *)
   let shared_sv = mk_fresh_symbolic_value span ref_ty in
   (* Small utility used on shared borrows in abstractions (regular borrow
-   * projector and asb).
-   * Returns [Some] if the symbolic value has been expanded to an asb list,
-   * [None] otherwise *)
+     projector and asb).
+     Returns [Some] if the symbolic value has been expanded to an asb list,
+     [None] otherwise *)
   let reborrow_ashared proj_regions (proj : symbolic_proj) :
       abstract_shared_borrows option =
     if proj.sv_id = original_sv.sv_id then
@@ -313,6 +389,8 @@ let expand_symbolic_value_shared_borrow (span : Meta.span)
         let proj_regions = Some abs.regions.owned in
         super#visit_EAbs proj_regions abs
 
+      (* Note that there is no equivalent [EProjSharedBorrow] (we don't need to track shared borrows/loans
+         in abstraction expressions *)
       method! visit_AProjSharedBorrow proj_regions asb =
         let expand_asb (asb : abstract_shared_borrow) : abstract_shared_borrows
             =
@@ -328,15 +406,27 @@ let expand_symbolic_value_shared_borrow (span : Meta.span)
 
       (** We carefully updated {!visit_ASymbolic} so that {!visit_aproj} is
           called only on child projections (i.e., projections which appear in
-          {!AEndedProjLoans}). The role of visit_aproj is then to check we don't
-          have to expand symbolic values in child projections, because it should
-          never happen *)
+          {!AEndedProjLoans}). The role of [visit_aproj] is then to check we
+          don't have to expand symbolic values in child projections, because it
+          should never happen *)
       method! visit_aproj proj_regions aproj =
         (match aproj with
         | AProjLoans { proj; _ } | AProjBorrows { proj; _ } ->
             [%sanity_check] span (proj.sv_id <> original_sv.sv_id)
         | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ());
         super#visit_aproj proj_regions aproj
+
+      (** We carefully updated {!visit_ESymbolic} so that {!visit_aproj} is
+          called only on child projections (i.e., projections which appear in
+          {!EEndedProjLoans}). The role of [visit_eproj] is then to check we
+          don't have to expand symbolic values in child projections, because it
+          should never happen *)
+      method! visit_eproj proj_regions aproj =
+        (match aproj with
+        | EProjLoans { proj; _ } | EProjBorrows { proj; _ } ->
+            [%sanity_check] span (proj.sv_id <> original_sv.sv_id)
+        | EEndedProjLoans _ | EEndedProjBorrows _ | EEmpty -> ());
+        super#visit_eproj proj_regions aproj
 
       method! visit_ASymbolic proj_regions pm aproj =
         [%sanity_check] span (pm = PNone);
@@ -361,13 +451,36 @@ let expand_symbolic_value_shared_borrow (span : Meta.span)
             (* Sanity check: make sure there is nothing to expand inside the
              * children projections *)
             ASymbolic (pm, self#visit_aproj proj_regions aproj)
+
+      method! visit_ESymbolic proj_regions pm aproj =
+        [%sanity_check] span (pm = PNone);
+        match aproj with
+        | EEndedProjBorrows _ | EEmpty ->
+            (* We ignore borrows *) ESymbolic (pm, aproj)
+        | EProjLoans _ ->
+            (* Loans are handled later *)
+            ESymbolic (pm, aproj)
+        | EProjBorrows { proj = _; loans } ->
+            (* We should never expand a symbolic value which has consumed given
+               back values (because then it means the symbolic value was consumed
+               by region abstractions, and is thus inaccessible: such a value can't
+               be expanded)
+            *)
+            [%cassert] span (loans = []) "Unreachable";
+            (* No need to check for reborrows of shared values: we don't track
+               them in abstraction expressions *)
+            super#visit_ESymbolic proj_regions pm aproj
+        | EEndedProjLoans _ ->
+            (* Sanity check: make sure there is nothing to expand inside the
+             * children projections *)
+            ESymbolic (pm, self#visit_eproj proj_regions aproj)
     end
   in
   (* Call the visitor *)
   let ctx = obj#visit_eval_ctx None ctx in
   (* Finally, replace the projectors on loans *)
   let see = SeSharedRef (bid, shared_sv) in
-  let ctx = apply_symbolic_expansion_to_avalues span original_sv see ctx in
+  let ctx = apply_symbolic_expansion_to_aevalues span original_sv see ctx in
   ( ctx,
     (* Update the synthesized program *)
     S.synthesize_symbolic_expansion_no_branching span original_sv
@@ -399,7 +512,7 @@ let expand_symbolic_value_borrow (span : Meta.span)
         replace_symbolic_values span at_most_once original_sv nv.value ctx
       in
       (* Expand the symbolic avalues *)
-      let ctx = apply_symbolic_expansion_to_avalues span original_sv see ctx in
+      let ctx = apply_symbolic_expansion_to_aevalues span original_sv see ctx in
       (* Apply the continuation *)
       ( ctx,
         fun e ->
