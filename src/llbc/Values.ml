@@ -1091,7 +1091,10 @@ and adt_evalue = {
 
     Note that the children evalues are independent of the parent evalues. For
     instance, the child evalue contained in an {!AMutLoan} will likely contain
-    other, independent loans. *)
+    other, independent loans.
+
+    Note that because shared loans do not consume anything we do not track them.
+*)
 and eloan_content =
   | EMutLoan of proj_marker * loan_id * tevalue
       (** A mutable loan owned by an abstraction.
@@ -1112,36 +1115,10 @@ and eloan_content =
             }
             px -> mut_borrow l0 (mut_borrow @s1)
           ]} *)
-  | ESharedLoan
-      (** A shared loan owned by an abstraction.
-
-          The evalue is the child evalue.
-
-          Example: ========
-          {[
-            fn f<'a>(...) -> &'a u32;
-
-            let px = f(...);
-          ]}
-
-          We get:
-          {[
-            abs0 { a_shared_loan {l0} @s0 _ }
-            px -> shared_loan l0
-          ]}
-
-          Note that because shared values are immutable and we thus don't need
-          to consume anything upon ending the borrow, we do not track shared
-          loans. *)
   | EEndedMutLoan of eended_mut_loan
       (** An ended mutable loan in an abstraction. We need it because
           abstractions must keep track of the values we gave back to them, so
           that we can correctly instantiate backward functions. *)
-  | EEndedSharedLoan of tvalue * tevalue
-      (** Similar to {!EEndedMutLoan} but in this case we don't consume given
-          back values when the loan ends. We remember the shared value because
-          it now behaves as a "regular" value (which might contain borrows we
-          need to keep track of...). *)
   | EIgnoredMutLoan of loan_id option * tevalue
       (** An ignored mutable loan.
 
@@ -1178,18 +1155,6 @@ and eloan_content =
             x -> ⊥
           ]} *)
   | EEndedIgnoredMutLoan of eended_ignored_mut_loan
-  | EIgnoredSharedLoan of tevalue
-      (** An ignored shared loan.
-
-          Example: ========
-          {[
-            fn f<'a,'b>(...) -> &'a &'b u32;
-            let x = f(...);
-
-            > abs'a { a_shared_loan {l0} (shared_borrow l1) (a_ignored_shared_loan _) }
-            > abs'b { a_ignored_shared_loan (a_shared_loan {l1} @s1 _) }
-            > x -> shared_borrow l0
-          ]} *)
 
 (** An ended mutable loan in an abstraction. We need it because abstractions
     must keep track of the values we gave back to them, so that we can correctly
@@ -1263,7 +1228,10 @@ and eended_ignored_mut_loan = {
     seen like a [mut_borrow ... (mut_borrow ...)] (i.e., it is a nested borrow).
 
     TODO: be more precise about the ignored borrows (keep track of the borrow
-    ids)? *)
+    ids)?
+
+    Note that because shared borrows do not give back anything we do not track
+    them. *)
 and eborrow_content =
   | EMutBorrow of proj_marker * borrow_id * tevalue
       (** A mutable borrow owned by an abstraction.
@@ -1284,25 +1252,6 @@ and eborrow_content =
             > px -> ⊥
             > abs0 { a_mut_borrow l0 (U32 0) _ }
           ]} *)
-  | ESharedBorrow
-      (** A shared borrow owned by an abstraction.
-
-          Example: ========
-          {[
-            fn f<'a>(px : &'a u32);
-
-            > x -> shared_loan {l0} (U32 0)
-            > px -> shared_borrow l0
-
-            f(move px);
-
-            > x -> shared_loan {l0} (U32 0)
-            > px -> ⊥
-            > abs0 { a_shared_borrow l0 _ }
-          ]}
-
-          Note that we do not track shared borrows inside the abstraction
-          expressions because ending them doesn't give back anything. *)
   | EIgnoredMutBorrow of borrow_id option * tevalue
       (** An ignored mutable borrow.
 
@@ -1370,9 +1319,6 @@ and eborrow_content =
           for the synthesis, with in particular the (symbolic) value that was
           given back upon ending the borrow. *)
   | EEndedIgnoredMutBorrow of eended_ignored_mut_borrow
-  | EProjSharedBorrow
-      (** A projected shared borrow. We ignore shared borrows in the expression
-          values, as they are not necessary for the translation. *)
 
 (** See the explanations for {!AIgnoredMutBorrow} *)
 and eended_ignored_mut_borrow = {

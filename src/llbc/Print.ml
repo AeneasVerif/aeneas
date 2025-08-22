@@ -559,7 +559,6 @@ module Values = struct
         ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr av
         ^ ")"
         |> add_proj_marker pm
-    | ESharedLoan -> "@shared_loan"
     | EEndedMutLoan ml ->
         let consumed =
           if with_ended then
@@ -573,12 +572,6 @@ module Values = struct
         ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr
             ml.given_back
         ^ " }"
-    | EEndedSharedLoan (v, av) ->
-        "@ended_shared_loan("
-        ^ tvalue_to_string ~span env v
-        ^ ", "
-        ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr av
-        ^ ")"
     | EIgnoredMutLoan (opt_bid, av) ->
         "@ignored_mut_loan("
         ^ option_to_string BorrowId.to_string opt_bid
@@ -593,10 +586,6 @@ module Values = struct
         ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr
             ml.given_back
         ^ "}"
-    | EIgnoredSharedLoan sl ->
-        "@ignored_shared_loan("
-        ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr sl
-        ^ ")"
 
   and tapat_to_string ?(span : Meta.span option = None) (env : fmt_env)
       (aenv : evalue_env) (indent : string) (indent_incr : string) (pat : tapat)
@@ -620,7 +609,6 @@ module Values = struct
         ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr av
         ^ ")"
         |> add_proj_marker pm
-    | ESharedBorrow -> "@shared_borrow"
     | EIgnoredMutBorrow (opt_bid, av) ->
         "@ignored_mut_borrow("
         ^ option_to_string BorrowId.to_string opt_bid
@@ -644,7 +632,6 @@ module Values = struct
         ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr
             given_back
         ^ ")"
-    | EProjSharedBorrow -> "@proj_shared_borrow"
 
   let loop_abs_kind_to_string (kind : loop_abs_kind) : string =
     match kind with
