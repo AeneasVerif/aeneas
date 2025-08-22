@@ -1964,7 +1964,9 @@ exception FoundAbsId of AbstractionId.id
 (** Find the first endable loan projector in an abstraction.
 
     An endable loan projector is a loan projector over a symbolic value which
-    doesn't appear anywhere else in the context. *)
+    doesn't appear anywhere else in the context.
+
+    This function may raise a [FoundAbsProj] exception. *)
 let find_first_endable_loan_proj_in_abs (span : Meta.span) (ctx : eval_ctx)
     (abs : abs) : unit =
   let visitor =

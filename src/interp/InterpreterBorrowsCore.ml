@@ -1157,13 +1157,20 @@ let update_intersecting_aproj_loans (span : Meta.span)
     Sanity check: we check that there is not more than one projector which
     corresponds to the couple (abstraction id, symbolic value). *)
 let lookup_aproj_loans_opt (span : Meta.span) (abs_id : AbstractionId.id)
-    (sv_id : symbolic_value_id) (ctx : eval_ctx) : aproj_loans option =
+    (sv_id : symbolic_value_id) (ctx : eval_ctx) :
+    (aproj_loans * eproj_loans option) option =
   (* Small helpers for sanity checks *)
   let found = ref None in
   let set_found x =
     (* There is at most one projector which corresponds to the description *)
     [%sanity_check] span (Option.is_none !found);
     found := Some x
+  in
+  let found_eproj = ref None in
+  let set_found_eproj x =
+    (* There is at most one projector which corresponds to the description *)
+    [%sanity_check] span (Option.is_none !found);
+    found_eproj := Some x
   in
   (* The visitor *)
   let obj =
@@ -1182,15 +1189,30 @@ let lookup_aproj_loans_opt (span : Meta.span) (abs_id : AbstractionId.id)
             [%sanity_check] span (abs.abs_id = abs_id);
             if aproj_loan.proj.sv_id = sv_id then set_found aproj_loan else ());
         super#visit_aproj abs sproj
+
+      method! visit_eproj (abs : abs option) sproj =
+        (match sproj with
+        | EProjBorrows _ | EEndedProjLoans _ | EEndedProjBorrows _ | EEmpty ->
+            super#visit_eproj abs sproj
+        | EProjLoans aproj_loan ->
+            let abs = Option.get abs in
+            [%sanity_check] span (abs.abs_id = abs_id);
+            if aproj_loan.proj.sv_id = sv_id then set_found_eproj aproj_loan
+            else ());
+        super#visit_eproj abs sproj
     end
   in
   (* Apply *)
   obj#visit_eval_ctx None ctx;
   (* Return *)
-  !found
+  [%sanity_check] span (!found_eproj = None || Option.is_some !found);
+  match !found with
+  | None -> None
+  | Some aproj -> Some (aproj, !found_eproj)
 
 let lookup_aproj_loans (span : Meta.span) (abs_id : AbstractionId.id)
-    (sv_id : symbolic_value_id) (ctx : eval_ctx) : aproj_loans =
+    (sv_id : symbolic_value_id) (ctx : eval_ctx) :
+    aproj_loans * eproj_loans option =
   Option.get (lookup_aproj_loans_opt span abs_id sv_id ctx)
 
 (** Helper function: might break invariants.
@@ -1199,9 +1221,12 @@ let lookup_aproj_loans (span : Meta.span) (abs_id : AbstractionId.id)
     value and an abstraction id.
 
     Sanity check: we check that there is exactly one projector which corresponds
-    to the couple (abstraction id, symbolic value). *)
+    to the couple (abstraction id, symbolic value).
+
+    This function updates abstraction values *and* abstraction expressions. *)
 let update_aproj_loans (span : Meta.span) (abs_id : AbstractionId.id)
-    (sv_id : symbolic_value_id) (nproj : aproj) (ctx : eval_ctx) : eval_ctx =
+    (sv_id : symbolic_value_id) (nproj : aproj) (neproj : eproj option)
+    (ctx : eval_ctx) : eval_ctx =
   (* Small helpers for sanity checks *)
   let found = ref false in
   let update () =
@@ -1209,6 +1234,15 @@ let update_aproj_loans (span : Meta.span) (abs_id : AbstractionId.id)
     [%sanity_check] span (not !found);
     found := true;
     nproj
+  in
+  let found_eproj = ref false in
+  let update_eproj () =
+    (* We update at most once *)
+    [%sanity_check] span (not !found);
+    found_eproj := true;
+    match neproj with
+    | None -> [%internal_error] span
+    | Some proj -> proj
   in
   (* The visitor *)
   let obj =
@@ -1227,6 +1261,16 @@ let update_aproj_loans (span : Meta.span) (abs_id : AbstractionId.id)
             [%sanity_check] span (abs.abs_id = abs_id);
             if abs_proj.sv_id = sv_id then update ()
             else super#visit_aproj (Some abs) sproj
+
+      method! visit_eproj (abs : abs option) sproj =
+        match sproj with
+        | EProjBorrows _ | EEndedProjLoans _ | EEndedProjBorrows _ | EEmpty ->
+            super#visit_eproj abs sproj
+        | EProjLoans { proj = abs_proj; _ } ->
+            let abs = Option.get abs in
+            [%sanity_check] span (abs.abs_id = abs_id);
+            if abs_proj.sv_id = sv_id then update_eproj ()
+            else super#visit_eproj (Some abs) sproj
     end
   in
   (* Apply *)
@@ -1246,7 +1290,8 @@ let update_aproj_loans (span : Meta.span) (abs_id : AbstractionId.id)
 
     TODO: factorize with {!update_aproj_loans}? *)
 let update_aproj_borrows (span : Meta.span) (abs_id : AbstractionId.id)
-    (sv : symbolic_value) (nproj : aproj) (ctx : eval_ctx) : eval_ctx =
+    (sv : symbolic_value) (nproj : aproj) (neproj : eproj) (ctx : eval_ctx) :
+    eval_ctx =
   (* Small helpers for sanity checks *)
   let found = ref false in
   let update () =
@@ -1254,6 +1299,13 @@ let update_aproj_borrows (span : Meta.span) (abs_id : AbstractionId.id)
     [%sanity_check] span (not !found);
     found := true;
     nproj
+  in
+  let found_eproj = ref false in
+  let update_eproj () =
+    (* We update at most once *)
+    [%sanity_check] span (not !found_eproj);
+    found_eproj := true;
+    neproj
   in
   (* The visitor *)
   let obj =
@@ -1272,6 +1324,16 @@ let update_aproj_borrows (span : Meta.span) (abs_id : AbstractionId.id)
             [%sanity_check] span (abs.abs_id = abs_id);
             if abs_proj.sv_id = sv.sv_id then update ()
             else super#visit_aproj (Some abs) sproj
+
+      method! visit_eproj (abs : abs option) sproj =
+        match sproj with
+        | EProjLoans _ | EEndedProjLoans _ | EEndedProjBorrows _ | EEmpty ->
+            super#visit_eproj abs sproj
+        | EProjBorrows { proj = abs_proj; _ } ->
+            let abs = Option.get abs in
+            [%sanity_check] span (abs.abs_id = abs_id);
+            if abs_proj.sv_id = sv.sv_id then update_eproj ()
+            else super#visit_eproj (Some abs) sproj
     end
   in
   (* Apply *)
@@ -1293,11 +1355,17 @@ let update_aproj_loans_to_ended (span : Meta.span) (abs_id : AbstractionId.id)
     (sv_id : symbolic_value_id) (ctx : eval_ctx) : eval_ctx =
   (* Lookup the projector of loans *)
   match lookup_aproj_loans_opt span abs_id sv_id ctx with
-  | Some { proj = _; consumed; borrows } ->
+  | Some ({ proj = _; consumed; borrows }, eproj) ->
       (* Create the new value for the projector *)
       let nproj = AEndedProjLoans { proj = sv_id; consumed; borrows } in
+      let neproj =
+        match eproj with
+        | Some { proj = _; consumed; borrows } ->
+            Some (EEndedProjLoans { proj = sv_id; consumed; borrows })
+        | None -> None
+      in
       (* Insert it *)
-      let ctx = update_aproj_loans span abs_id sv_id nproj ctx in
+      let ctx = update_aproj_loans span abs_id sv_id nproj neproj ctx in
       (* Return *)
       ctx
   | _ ->
@@ -1318,6 +1386,14 @@ let no_aproj_over_symbolic_in_context (span : Meta.span)
         | AProjBorrows { proj = abs_proj; _ } ->
             if abs_proj.sv_id = sv_id then raise Found else ());
         super#visit_aproj env sproj
+
+      method! visit_eproj env sproj =
+        (match sproj with
+        | EEndedProjLoans _ | EEndedProjBorrows _ | EEmpty -> ()
+        | EProjLoans { proj = abs_proj; _ }
+        | EProjBorrows { proj = abs_proj; _ } ->
+            if abs_proj.sv_id = sv_id then raise Found else ());
+        super#visit_eproj env sproj
     end
   in
   (* Apply *)
