@@ -1006,6 +1006,8 @@ and end_shared_loan_aux (config : config) (span : Meta.span)
     replaced := true
   in
   let obj =
+    (* Note that abstraction expressions do not track shared loans/borrows,
+       so we only need to look at "regular" abstraction values *)
     object
       inherit [_] map_eval_ctx as super
 
@@ -1268,6 +1270,8 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
     (* Explore the abstraction, looking for borrows *)
     visitor#visit_abs () abs;
     (* No borrows: nothing to update *)
+    (* Last sanity check: the region abstraction doesn't contain borrows in its *expression* *)
+    [%sanity_check] span (not (abs_has_eborrows abs));
     (ctx, fun e -> e)
   with
   (* There are concrete (i.e., not symbolic) borrows: end them, then re-explore *)

@@ -1324,6 +1324,43 @@ let no_aproj_over_symbolic_in_context (span : Meta.span)
   try obj#visit_eval_ctx () ctx
   with Found -> [%craise] span "update_aproj_loans_to_ended: failed"
 
+let abs_has_eborrows (abs : abs) : bool =
+  let visitor =
+    object
+      inherit [_] iter_abs as super
+      method! visit_eborrow_content _ _ = raise Found
+
+      method! visit_eproj env sproj =
+        (match sproj with
+        | EProjBorrows _ -> raise Found
+        | EProjLoans _ | EEndedProjLoans _ | EEndedProjBorrows _ | EEmpty -> ());
+        super#visit_eproj env sproj
+    end
+  in
+  try
+    visitor#visit_abs () abs;
+    false
+  with Found -> true
+
+let abs_has_eloans (abs : abs) : bool =
+  let visitor =
+    object
+      inherit [_] iter_abs as super
+      method! visit_eloan_content _ _ = raise Found
+
+      method! visit_eproj env sproj =
+        (match sproj with
+        | EProjLoans _ -> raise Found
+        | EProjBorrows _ | EEndedProjLoans _ | EEndedProjBorrows _ | EEmpty ->
+            ());
+        super#visit_eproj env sproj
+    end
+  in
+  try
+    visitor#visit_abs () abs;
+    false
+  with Found -> true
+
 (** Helper function
 
     Return the loan (aloan, loan, proj_loans over a symbolic value) we find in
