@@ -1112,7 +1112,7 @@ and eloan_content =
             }
             px -> mut_borrow l0 (mut_borrow @s1)
           ]} *)
-  | ESharedLoan of proj_marker * loan_id * tvalue * tevalue
+  | ESharedLoan
       (** A shared loan owned by an abstraction.
 
           The evalue is the child evalue.
@@ -1128,7 +1128,11 @@ and eloan_content =
           {[
             abs0 { a_shared_loan {l0} @s0 _ }
             px -> shared_loan l0
-          ]} *)
+          ]}
+
+          Note that because shared values are immutable and we thus don't need
+          to consume anything upon ending the borrow, we do not track shared
+          loans. *)
   | EEndedMutLoan of eended_mut_loan
       (** An ended mutable loan in an abstraction. We need it because
           abstractions must keep track of the values we gave back to them, so
@@ -1280,7 +1284,7 @@ and eborrow_content =
             > px -> ⊥
             > abs0 { a_mut_borrow l0 (U32 0) _ }
           ]} *)
-  | ESharedBorrow of proj_marker * borrow_id * shared_borrow_id
+  | ESharedBorrow
       (** A shared borrow owned by an abstraction.
 
           Example: ========
@@ -1295,7 +1299,10 @@ and eborrow_content =
             > x -> shared_loan {l0} (U32 0)
             > px -> ⊥
             > abs0 { a_shared_borrow l0 _ }
-          ]} *)
+          ]}
+
+          Note that we do not track shared borrows inside the abstraction
+          expressions because ending them doesn't give back anything. *)
   | EIgnoredMutBorrow of borrow_id option * tevalue
       (** An ignored mutable borrow.
 
@@ -1362,9 +1369,6 @@ and eborrow_content =
       (** The sole purpose of {!EEndedMutBorrow} is to store meta information
           for the synthesis, with in particular the (symbolic) value that was
           given back upon ending the borrow. *)
-  | EEndedSharedBorrow
-      (** We don't really need {!EEndedSharedBorrow}: we simply want to be
-          precise, and not insert ⊥ when ending borrows. *)
   | EEndedIgnoredMutBorrow of eended_ignored_mut_borrow
   | EProjSharedBorrow
       (** A projected shared borrow. We ignore shared borrows in the expression
