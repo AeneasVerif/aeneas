@@ -898,8 +898,8 @@ and tavalue = {
 and esymbolic_proj = { sv_id : symbolic_value_id; proj_ty : ty }
 
 and eproj =
-  | EprojLoans of eproj_loans
-  | EprojBorrows of eproj_borrows
+  | EProjLoans of eproj_loans
+  | EProjBorrows of eproj_borrows
   | EEndedProjLoans of aended_proj_loans
   | EEndedProjBorrows of aended_proj_borrows
   | EEmpty  (** Nothing to project (because there are no borrows, etc.) *)
