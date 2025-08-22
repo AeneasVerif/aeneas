@@ -753,7 +753,8 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
      Note that the join matcher doesn't implement match functions for avalues
      (see the comments in {!MakeJoinMatcher}.
   *)
-  let merge_amut_borrows id ty0 _pm0 child0 _ty1 _pm1 child1 =
+  let merge_amut_borrows id ty0 _pm0 (child0 : tavalue) _ty1 _pm1
+      (child1 : tavalue) : tavalue =
     (* Sanity checks *)
     [%sanity_check] span (is_aignored child0.value);
     [%sanity_check] span (is_aignored child1.value);
@@ -769,7 +770,7 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     { value; ty }
   in
 
-  let merge_ashared_borrows id ty0 _pm0 _ ty1 _pm1 _ =
+  let merge_ashared_borrows id ty0 _pm0 _ ty1 _pm1 _ : tavalue =
     (* Sanity checks *)
     let _ =
       let _, ty0, _ = ty_as_ref ty0 in
@@ -788,7 +789,8 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     { value; ty }
   in
 
-  let merge_amut_loans id ty0 _pm0 child0 _ty1 _pm1 child1 =
+  let merge_amut_loans id ty0 _pm0 (child0 : tavalue) _ty1 _pm1
+      (child1 : tavalue) : tavalue =
     (* Sanity checks *)
     [%sanity_check] span (is_aignored child0.value);
     [%sanity_check] span (is_aignored child1.value);
@@ -799,8 +801,8 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     let value = ALoan (AMutLoan (PNone, id, child)) in
     { value; ty }
   in
-  let merge_ashared_loans ids ty0 _pm0 (sv0 : tvalue) child0 _ty1 _pm1
-      (sv1 : tvalue) child1 =
+  let merge_ashared_loans ids ty0 _pm0 (sv0 : tvalue) (child0 : tavalue) _ty1
+      _pm1 (sv1 : tvalue) (child1 : tavalue) : tavalue =
     (* Sanity checks *)
     [%sanity_check] span (is_aignored child0.value);
     [%sanity_check] span (is_aignored child1.value);
@@ -821,11 +823,13 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     { value; ty }
   in
   let merge_aborrow_projs ty0 _pm0 (proj0 : aproj_borrows) _ty1 _pm1
-      (proj1 : aproj_borrows) =
-    let { proj = { sv_id = sv0; proj_ty = proj_ty0 }; loans = loans0 } =
+      (proj1 : aproj_borrows) : tavalue =
+    let { proj = { sv_id = sv0; proj_ty = proj_ty0 }; loans = loans0 } :
+        aproj_borrows =
       proj0
     in
-    let { proj = { sv_id = sv1; proj_ty = proj_ty1 }; loans = loans1 } =
+    let { proj = { sv_id = sv1; proj_ty = proj_ty1 }; loans = loans1 } :
+        aproj_borrows =
       proj1
     in
     (* Sanity checks *)
@@ -843,7 +847,7 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     { value; ty }
   in
   let merge_aloan_projs ty0 _pm0 (proj0 : aproj_loans) _ty1 _pm1
-      (proj1 : aproj_loans) =
+      (proj1 : aproj_loans) : tavalue =
     let {
       proj = { sv_id = sv0; proj_ty = proj_ty0 };
       consumed = consumed0;
@@ -869,7 +873,7 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     let borrows = [] in
     [%sanity_check] span (sv0 = sv1);
     let sv_id = sv0 in
-    let proj = { sv_id; proj_ty } in
+    let proj : symbolic_proj = { sv_id; proj_ty } in
     let value = ASymbolic (PNone, AProjLoans { proj; consumed; borrows }) in
     { value; ty }
   in

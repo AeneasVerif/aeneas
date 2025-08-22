@@ -97,7 +97,7 @@ let is_unit (v : tvalue) : bool =
   | _ -> false
 
 let mk_aproj_borrows (pm : proj_marker) (sv_id : symbolic_value_id)
-    (proj_ty : ty) =
+    (proj_ty : ty) : tavalue =
   {
     value =
       ASymbolic (pm, AProjBorrows { proj = { sv_id; proj_ty }; loans = [] });
@@ -105,7 +105,7 @@ let mk_aproj_borrows (pm : proj_marker) (sv_id : symbolic_value_id)
   }
 
 let mk_aproj_loans (pm : proj_marker) (sv_id : symbolic_value_id) (proj_ty : ty)
-    =
+    : tavalue =
   {
     value =
       ASymbolic

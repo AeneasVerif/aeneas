@@ -85,11 +85,6 @@ class ['self] iter_expr_base =
     inherit [_] iter_abs
     method visit_eval_ctx : 'env -> Contexts.eval_ctx -> unit = fun _ _ -> ()
     method visit_call : 'env -> call -> unit = fun _ _ -> ()
-    method visit_loop_id : 'env -> loop_id -> unit = fun _ _ -> ()
-
-    method visit_region_group_id : 'env -> RegionGroupId.id -> unit =
-      fun _ _ -> ()
-
     method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
     method visit_espan : 'env -> espan -> unit = fun _ _ -> ()
 

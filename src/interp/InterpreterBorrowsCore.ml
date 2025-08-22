@@ -768,7 +768,8 @@ let lookup_intersecting_aproj_borrows_opt (span : Meta.span)
     | Some (SharedProjs pl) -> found := Some (SharedProjs (x :: pl))
     | Some (NonSharedProj _) -> [%craise] span "Unreachable"
   in
-  let check_add_proj_borrows (is_shared : bool) abs proj' =
+  let check_add_proj_borrows (is_shared : bool) (abs : abs)
+      (proj' : symbolic_proj) =
     if
       proj_borrows_intersects_proj_loans span
         (abs.regions.owned, proj'.sv_id, proj'.proj_ty)

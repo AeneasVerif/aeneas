@@ -1337,7 +1337,7 @@ struct
     raise (Distinct "match_distinct_adts")
 
   let match_ashared_borrows (_ : tvalue_matcher) (_ : eval_ctx) (_ : eval_ctx)
-      _ty0 pm0 bid0 _sid0 _ty1 pm1 bid1 _sid1 ty =
+      _ty0 pm0 bid0 _sid0 _ty1 pm1 bid1 _sid1 ty : tavalue =
     (* We are checking whether that two environments are equivalent:
        there shouldn't be any projection markers *)
     [%sanity_check] span (pm0 = PNone && pm1 = PNone);
@@ -1348,7 +1348,7 @@ struct
     { value; ty }
 
   let match_amut_borrows (_ : tvalue_matcher) (_ : eval_ctx) (_ : eval_ctx) _ty0
-      pm0 bid0 _av0 _ty1 pm1 bid1 _av1 ty av =
+      pm0 bid0 _av0 _ty1 pm1 bid1 _av1 ty av : tavalue =
     (* We are checking whether that two environments are equivalent:
        there shouldn't be any projection markers *)
     [%sanity_check] span (pm0 = PNone && pm1 = PNone);
@@ -1357,7 +1357,7 @@ struct
     { value; ty }
 
   let match_ashared_loans (_ : tvalue_matcher) (_ : eval_ctx) (_ : eval_ctx)
-      _ty0 pm0 id0 _v0 _av0 _ty1 pm1 id1 _v1 _av1 ty v av =
+      _ty0 pm0 id0 _v0 _av0 _ty1 pm1 id1 _v1 _av1 ty v av : tavalue =
     (* We are checking whether that two environments are equivalent:
        there shouldn't be any projection markers *)
     [%sanity_check] span (pm0 = PNone && pm1 = PNone);
@@ -1366,7 +1366,7 @@ struct
     { value; ty }
 
   let match_amut_loans (_ : tvalue_matcher) (ctx0 : eval_ctx) (ctx1 : eval_ctx)
-      _ty0 pm0 id0 _av0 _ty1 pm1 id1 _av1 ty av =
+      _ty0 pm0 id0 _av0 _ty1 pm1 id1 _av1 ty av : tavalue =
     (* We are checking whether that two environments are equivalent:
        there shouldn't be any projection markers *)
     [%sanity_check] span (pm0 = PNone && pm1 = PNone);
@@ -1381,10 +1381,10 @@ struct
 
   let match_aproj_borrows (match_values : tvalue_matcher) (ctx0 : eval_ctx)
       (ctx1 : eval_ctx) _ty0 pm0 (proj0 : aproj_borrows) _ty1 pm1
-      (proj1 : aproj_borrows) ty proj_ty =
+      (proj1 : aproj_borrows) ty proj_ty : tavalue =
     [%sanity_check] span (pm0 = PNone && pm1 = PNone);
-    let { proj = proj0; loans = loans0 } = proj0 in
-    let { proj = proj1; loans = loans1 } = proj1 in
+    let { proj = proj0; loans = loans0 } : aproj_borrows = proj0 in
+    let { proj = proj1; loans = loans1 } : aproj_borrows = proj1 in
     [%sanity_check] span (loans0 = [] && loans1 = []);
     (* We only want to match the ids of the symbolic values, but in order
        to call [match_symbolic_values] we need to have types... *)
@@ -1396,7 +1396,7 @@ struct
 
   let match_aproj_loans (match_values : tvalue_matcher) (ctx0 : eval_ctx)
       (ctx1 : eval_ctx) _ty0 pm0 (proj0 : aproj_loans) _ty1 pm1
-      (proj1 : aproj_loans) ty proj_ty =
+      (proj1 : aproj_loans) ty proj_ty : tavalue =
     [%sanity_check] span (pm0 = PNone && pm1 = PNone);
     let { proj = proj0; consumed = consumed0; borrows = borrows0 } : aproj_loans
         =
