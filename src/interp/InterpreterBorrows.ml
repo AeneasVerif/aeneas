@@ -247,7 +247,7 @@ let end_concrete_borrow_in_abs_get_borrow (span : Meta.span)
     result =
   end_concrete_borrow_get_borrow_core span (Some abs_id) l ctx
 
-(** Auxiliary function to end borrows. See {!give_back}.
+(** Auxiliary function to end borrows. See {!give_back_concrete}.
 
     When we end a mutable borrow, we need to "give back" the value it contained
     to its original owner by reinserting it at the proper position.
@@ -758,8 +758,8 @@ let convert_avalue_to_given_back_value (span : Meta.span) (av : tavalue) :
 
     Rem.: this function is used when we ending *concrete* borrows (we handle
     borrows inside region abstractions elsewhere). *)
-let give_back (span : Meta.span) (l : unique_borrow_id) (bc : g_borrow_content)
-    (ctx : eval_ctx) : eval_ctx =
+let give_back_concrete (span : Meta.span) (l : unique_borrow_id)
+    (bc : g_borrow_content) (ctx : eval_ctx) : eval_ctx =
   (* Debug *)
   [%ltrace
     let bc =
@@ -912,7 +912,7 @@ let rec end_borrow_aux (config : config) (span : Meta.span)
           [%sanity_check] span (Option.is_none (get_first_loan_in_value bv))
       | _ -> ());
       (* Give back the value *)
-      let ctx = give_back span l bc ctx in
+      let ctx = give_back_concrete span l bc ctx in
       (* Do a sanity check and continue *)
       check ctx;
       (* Save a snapshot of the environment for the name generation *)
