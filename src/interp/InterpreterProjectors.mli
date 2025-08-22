@@ -98,7 +98,10 @@ val apply_eproj_borrows :
     - [regions]: the regions to project
     - [v]: the value on which to apply the projection
     - [ty]: the type (with regions) to use for the projection (shouldn't have
-      erased regions) *)
+      erased regions)
+
+    We use this function to project input values into region abstractions when
+    evaluating function calls. *)
 val apply_proj_borrows_on_input_value :
   Meta.span -> eval_ctx -> RegionId.Set.t -> tvalue -> rty -> eval_ctx * tavalue
 

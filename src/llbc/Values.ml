@@ -1127,7 +1127,7 @@ and eloan_content =
           have a borrow of type [&'a mut &'b mut], in the abstraction 'b, the
           outer loan is ignored, however you need to keep track of it so that
           when ending the borrow corresponding to 'a you can correctly project
-          on the inner given back value).
+          on the inner given back value). We also use this to
 
           Note that we need to do so only for borrows consumed by parent
           abstractions, hence the optional loan id.
@@ -1257,10 +1257,9 @@ and eborrow_content =
 
           We need to keep track of ignored mut borrows because when ending such
           borrows, we need to project the loans of the given back value to
-          insert them in the proper abstractions.
-
-          Note that we need to do so only for borrows consumed by parent
-          abstractions (hence the optional borrow id).
+          insert them in the proper abstractions. We also use ignored mutable
+          borrows in input expressions: see the explanations for [abs_cont]
+          below. This is the reason why the borrow id is optional.
 
           Rem.: we don't have an equivalent for shared borrows because if we
           ignore a shared borrow we don't need to keep track it (we directly use
@@ -1338,6 +1337,49 @@ and eended_ignored_mut_borrow = {
 and tevalue = {
   value : evalue;
   ty : ty;  (** This should be a type with regions *)
+}
+
+(** The continuation representing the computation that has to be performed when
+    ending a region abstraction (this continuation computes the values given
+    back by the abstraction from the values it consumed).
+
+    This is used by the translation, and is particularly useful to compute
+    joins: when merging regions, we compose their continuations. *)
+and abs_cont = {
+  output : tevalue;
+  input : tevalue;
+      (** [output] gives the output borrows, while [input] is the computation
+          which yields the value. If this computation is not present, it means
+          that when ending a borrow we should give back the same value it holds.
+
+          For instance, let's say we have a function
+          [fn id<'a, T>(&'a mut T) -> &'a mut T]. Its evaluation gives:
+          {[
+            // x  -> ML l0
+            // px -> MB l0 0
+            py = id(move x);
+            // x  -> ML l0
+            // px -> ⊥
+            // abs { MB l0, ML l1 }[[ MB l0: id_back (ML l1) ]]
+            //                        ^^^^^  ^^^^^^^^^^^^^^^
+            //                       output    input
+            // py -> MB l1 s0
+          ]}
+          This environment means that when ending the region abstraction [abs],
+          the value we give back upon ending [l0] is the backward function
+          introduced by the call to [id] applied to the value consumed upon
+          ending [ML L1].
+
+          Similarly, we can do the following promotion to turn an anonymous
+          value into a region abstraction:
+          {[
+            _ -> MB l0 v
+              ~>
+            abs { MB l0 }[[MB l0:IMB v]]
+          ]}
+          This means that upon ending [l0] we get the value [v]. [IMB] is an
+          "ignored" mutable borrow: we must ignore borrows in the input, and
+          keep them for the outputs. *)
 }
 [@@deriving
   show,
