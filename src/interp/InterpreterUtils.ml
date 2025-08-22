@@ -144,6 +144,27 @@ let mk_aproj_loans_value_from_symbolic_value (proj_regions : RegionId.Set.t)
       ty = svalue.sv_ty;
     }
 
+let mk_eproj_loans_value_from_symbolic_value (proj_regions : RegionId.Set.t)
+    (svalue : symbolic_value) (proj_ty : ty) : tevalue =
+  if ty_has_regions_in_set proj_regions proj_ty then
+    let av =
+      ESymbolic
+        ( PNone,
+          EProjLoans
+            {
+              proj = { sv_id = svalue.sv_id; proj_ty };
+              consumed = [];
+              borrows = [];
+            } )
+    in
+    let av : tevalue = { value = av; ty = svalue.sv_ty } in
+    av
+  else
+    {
+      value = EIgnored (Some (mk_tvalue_from_symbolic_value svalue));
+      ty = svalue.sv_ty;
+    }
+
 (** Create a borrows projector from a symbolic value *)
 let mk_aproj_borrows_from_symbolic_value (span : Meta.span)
     (proj_regions : RegionId.Set.t) (svalue : symbolic_value) (proj_ty : ty) :
@@ -152,6 +173,14 @@ let mk_aproj_borrows_from_symbolic_value (span : Meta.span)
   if ty_has_regions_in_set proj_regions proj_ty then
     AProjBorrows { proj = { sv_id = svalue.sv_id; proj_ty }; loans = [] }
   else AEmpty
+
+let mk_eproj_borrows_from_symbolic_value (span : Meta.span)
+    (proj_regions : RegionId.Set.t) (svalue : symbolic_value) (proj_ty : ty) :
+    eproj =
+  [%sanity_check] span (ty_is_rty proj_ty);
+  if ty_has_regions_in_set proj_regions proj_ty then
+    EProjBorrows { proj = { sv_id = svalue.sv_id; proj_ty }; loans = [] }
+  else EEmpty
 
 (** TODO: move *)
 let borrow_is_asb (bid : SharedBorrowId.id) (asb : abstract_shared_borrow) :
