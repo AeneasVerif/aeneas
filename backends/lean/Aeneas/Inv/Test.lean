@@ -367,6 +367,8 @@ example (src dst : Array Nat)
   analyze_loop
   simp [post]
 
+-- TODO: call a loop on an array which is not a variable (ex.: `List.replicate ...`)
+
 set_option grind.warning false
 
 example (P : Nat → Prop) (_ : ∀ i < 8, ∀ j < 8, P (8 * i + j)) :
@@ -390,5 +392,12 @@ example (P : Nat → Prop) (h : ∀ i < 8, P (2 * i) ∧ P (2 * i + 1)) :
   grind
 
 example (P : Nat → Prop) (h : ∀ i < 2, P i) : P 0 ∧ P 1 := by grind
+
+example (P : Nat → Prop) (_ : ∀ i < 8, ∀ j < 8, P (8 * i + j))
+  -- This should be given by a theorem
+  (h : (∀ k < 64, P k) ↔ (∀ i < 8, ∀ j < 8, P (8 * i + j))) :
+  ∀ k < 64, P k := by
+  grind
+
 
 end Aeneas.Inv.Test
