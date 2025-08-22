@@ -841,7 +841,11 @@ let lookup_intersecting_aproj_borrows_not_shared_opt (span : Meta.span)
     [include_ancestors]: when exploring an abstraction and computing projection
     intersections, use the ancestor regions. [include_owned]: when exploring an
     abstraction and computing projection intersections, use the owned regions.
-*)
+
+    Note that we take care of also updating abstraction regions (we only require
+    a function to update mutable borrows in expressions and no function to
+    update shared borrows because abstraction expressions do not track shared
+    borrows/loans). *)
 let update_intersecting_aproj_borrows (span : Meta.span)
     ~(fail_if_unchanged : bool) ~(include_owned : bool)
     ~(include_outlive : bool)
@@ -853,6 +857,7 @@ let update_intersecting_aproj_borrows (span : Meta.span)
        abstract_shared_borrows)
        option)
     ~(update_mut : owned:bool -> outlive:bool -> abs -> aproj_borrows -> aproj)
+    ~(update_emut : owned:bool -> outlive:bool -> abs -> eproj_borrows -> eproj)
     (proj_regions : RegionId.Set.t) (proj : symbolic_proj) (ctx : eval_ctx) :
     eval_ctx =
   (* Small helpers for sanity checks *)
@@ -868,11 +873,12 @@ let update_intersecting_aproj_borrows (span : Meta.span)
     | Some _ -> [%craise] span "Found unexpected intersecting proj_borrows"
   in
   (* Return: [(intersects_owned, intersects_outlive)] *)
-  let check_proj_borrows is_shared abs (proj' : symbolic_proj) : bool * bool =
-    if proj.sv_id = proj'.sv_id then (
+  let check_proj_borrows_core is_shared abs (proj'_sv_id : symbolic_value_id)
+      (proj'_ty : ty) : bool * bool =
+    if proj.sv_id = proj'_sv_id then (
       let intersects_owned =
         projections_intersect span proj_regions proj.proj_ty abs.regions.owned
-          proj'.proj_ty
+          proj'_ty
       in
 
       (* Sanity check: if the projectors use the same symbolic id then:
@@ -906,7 +912,7 @@ let update_intersecting_aproj_borrows (span : Meta.span)
         in
         let intersect_outlive =
           projections_intersect span outlive_regions proj.proj_ty
-            abs.regions.owned proj'.proj_ty
+            abs.regions.owned proj'_ty
         in
         [%sanity_check] span (intersects_owned || intersect_outlive);
         [%sanity_check] span ((not intersects_owned) || not intersect_outlive));
@@ -917,6 +923,13 @@ let update_intersecting_aproj_borrows (span : Meta.span)
       if intersects then if is_shared then add_shared () else set_non_shared ();
       (intersects_owned, intersects_outlive))
     else (false, false)
+  in
+
+  let check_proj_borrows is_shared abs (proj' : symbolic_proj) : bool * bool =
+    check_proj_borrows_core is_shared abs proj'.sv_id proj'.proj_ty
+  in
+  let check_eproj_borrows is_shared abs (proj' : esymbolic_proj) : bool * bool =
+    check_proj_borrows_core is_shared abs proj'.sv_id proj'.proj_ty
   in
   (* The visitor *)
   let obj =
@@ -957,6 +970,17 @@ let update_intersecting_aproj_borrows (span : Meta.span)
             let owned, outlive = check_proj_borrows is_shared abs proj'.proj in
             if owned || outlive then update_mut ~owned ~outlive abs proj'
             else super#visit_aproj (Some abs) sproj
+
+      method! visit_eproj abs sproj =
+        match sproj with
+        | EProjLoans _ | EEndedProjLoans _ | EEndedProjBorrows _ | EEmpty ->
+            super#visit_eproj abs sproj
+        | EProjBorrows proj' ->
+            let abs = Option.get abs in
+            let is_shared = true in
+            let owned, outlive = check_eproj_borrows is_shared abs proj'.proj in
+            if owned || outlive then update_emut ~owned ~outlive abs proj'
+            else super#visit_eproj (Some abs) sproj
     end
   in
   (* Apply *)
@@ -965,34 +989,6 @@ let update_intersecting_aproj_borrows (span : Meta.span)
   [%cassert] span
     ((not fail_if_unchanged) || Option.is_some !shared)
     "Context was not updated";
-  (* Return *)
-  ctx
-
-(** Simply calls {!update_intersecting_aproj_borrows} to update a proj_borrows
-    over a non-shared value.
-
-    We check that we update *at least* one proj_borrows.
-
-    This is a helper function: it might break invariants. *)
-let update_intersecting_aproj_borrows_mut (span : Meta.span)
-    ~(include_owned : bool) ~(include_outlive : bool)
-    (proj_regions : RegionId.Set.t) (proj : symbolic_proj) (nv : aproj)
-    (ctx : eval_ctx) : eval_ctx =
-  (* Small helpers *)
-  let updated = ref false in
-  let update_mut ~owned:_ ~outlive:_ _ _ =
-    (* We can update more than one borrow! *)
-    updated := true;
-    nv
-  in
-  (* Update *)
-  let ctx =
-    update_intersecting_aproj_borrows span ~fail_if_unchanged:true
-      ~include_owned ~include_outlive ~update_shared:None ~update_mut
-      proj_regions proj ctx
-  in
-  (* Check that we updated at least once *)
-  [%sanity_check] span !updated;
   (* Return *)
   ctx
 
@@ -1006,9 +1002,10 @@ let remove_intersecting_aproj_borrows_shared (span : Meta.span)
   (* Small helpers *)
   let update_shared = Some (fun ~owned:_ ~outlive:_ _ _ -> []) in
   let update_mut ~owned:_ ~outlive:_ _ = [%craise] span "Unexpected" in
+  let update_emut ~owned:_ ~outlive:_ _ = [%craise] span "Unexpected" in
   (* Update *)
   update_intersecting_aproj_borrows span ~fail_if_unchanged:true ~include_owned
-    ~include_outlive ~update_shared ~update_mut regions proj ctx
+    ~include_outlive ~update_shared ~update_mut ~update_emut regions proj ctx
 
 (** Updates the proj_loans intersecting some projection.
 
@@ -1050,6 +1047,7 @@ let update_intersecting_aproj_loans (span : Meta.span)
     ~(include_outlive : bool) (proj_regions : RegionId.Set.t)
     (proj : symbolic_proj)
     (subst : owned:bool -> outlive:bool -> abs -> aproj_loans -> aproj)
+    (esubst : owned:bool -> outlive:bool -> abs -> eproj_loans -> eproj)
     (ctx : eval_ctx) : eval_ctx =
   (* *)
   [%sanity_check] span (ty_is_rty proj.proj_ty);
@@ -1060,6 +1058,41 @@ let update_intersecting_aproj_loans (span : Meta.span)
     updated := true;
     subst ~owned ~outlive abs aproj_loans
   in
+  let updated_evalue = ref false in
+  let update_evalue ~owned ~outlive abs aproj_loans : eproj =
+    (* Note that we can update more than once! *)
+    updated_evalue := true;
+    esubst ~owned ~outlive abs aproj_loans
+  in
+  (* Helper for sanity check: if the symbolic ids are the same then:
+     - either the projections types intersect
+     - or the borrow projection intersects the outlive loan projection
+       and those two situations are mutually exclusive
+  *)
+  let check_proj abs aproj_ty owned =
+    if !Config.sanity_checks then (
+      let outlive_regions =
+        TypesAnalysis.compute_outlive_proj_ty (Some span)
+          ctx.type_ctx.type_decls proj_regions proj.proj_ty
+      in
+      let outlive =
+        projections_intersect span outlive_regions proj.proj_ty
+          abs.regions.owned aproj_ty
+      in
+      [%ldebug
+        "- proj_regions: "
+        ^ RegionId.Set.to_string None proj_regions
+        ^ "\n- proj.proj_ty: "
+        ^ ty_to_string ctx proj.proj_ty
+        ^ "\n- abs.regions.owned: "
+        ^ RegionId.Set.to_string None abs.regions.owned
+        ^ "\n- aproj_loans.proj.proj_ty: " ^ ty_to_string ctx aproj_ty
+        ^ "\n- outlive_regions: "
+        ^ RegionId.Set.to_string None outlive_regions];
+      [%sanity_check] span (owned || outlive);
+      [%sanity_check] span ((not owned) || not outlive))
+  in
+
   (* The visitor *)
   let obj =
     object
@@ -1078,39 +1111,33 @@ let update_intersecting_aproj_loans (span : Meta.span)
                   abs.regions.owned aproj_loans.proj.proj_ty
               in
 
-              (* Sanity check: if the symbolic ids are the same then:
-                 - either the projections types intersect
-                 - or the borrow projection intersects the outlive loan projection
-
-                 and those two situations are mutually exclusive
-               *)
-              if !Config.sanity_checks then (
-                let outlive_regions =
-                  TypesAnalysis.compute_outlive_proj_ty (Some span)
-                    ctx.type_ctx.type_decls proj_regions proj.proj_ty
-                in
-                let outlive =
-                  projections_intersect span outlive_regions proj.proj_ty
-                    abs.regions.owned aproj_loans.proj.proj_ty
-                in
-                [%ldebug
-                  "- proj_regions: "
-                  ^ RegionId.Set.to_string None proj_regions
-                  ^ "\n- proj.proj_ty: "
-                  ^ ty_to_string ctx proj.proj_ty
-                  ^ "\n- abs.regions.owned: "
-                  ^ RegionId.Set.to_string None abs.regions.owned
-                  ^ "\n- aproj_loans.proj.proj_ty: "
-                  ^ ty_to_string ctx aproj_loans.proj.proj_ty
-                  ^ "\n- outlive_regions: "
-                  ^ RegionId.Set.to_string None outlive_regions];
-                [%sanity_check] span (owned || outlive);
-                [%sanity_check] span ((not owned) || not outlive));
+              (* Sanity check *)
+              check_proj abs aproj_loans.proj.proj_ty owned;
 
               let outlive = include_outlive && not owned in
               let owned = include_owned && owned in
               update ~owned ~outlive abs aproj_loans)
             else super#visit_aproj (Some abs) sproj
+
+      method! visit_eproj abs sproj =
+        match sproj with
+        | EProjBorrows _ | EEndedProjLoans _ | EEndedProjBorrows _ | EEmpty ->
+            super#visit_eproj abs sproj
+        | EProjLoans aproj_loans ->
+            let abs = Option.get abs in
+            if proj.sv_id = aproj_loans.proj.sv_id then (
+              let owned =
+                projections_intersect span proj_regions proj.proj_ty
+                  abs.regions.owned aproj_loans.proj.proj_ty
+              in
+
+              (* Sanity check *)
+              check_proj abs aproj_loans.proj.proj_ty owned;
+
+              let outlive = include_outlive && not owned in
+              let owned = include_owned && owned in
+              update_evalue ~owned ~outlive abs aproj_loans)
+            else super#visit_eproj (Some abs) sproj
     end
   in
   (* Apply *)

@@ -232,7 +232,9 @@ let end_borrow_get_borrow (span : Meta.span)
 
     Note that this function checks that there is exactly one loan to which we
     give the value back. TODO: this was not the case before, so some sanity
-    checks are not useful anymore. *)
+    checks are not useful anymore.
+
+    Also, we take care to also update the **abstraction expressions**. *)
 let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : tvalue)
     (ctx : eval_ctx) : eval_ctx =
   (* Sanity check *)
@@ -253,6 +255,11 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : tvalue)
   let set_replaced () =
     [%sanity_check] span (not !replaced);
     replaced := true
+  in
+  let replaced_evalue : bool ref = ref false in
+  let set_replaced_evalue () =
+    [%sanity_check] span (not !replaced_evalue);
+    replaced_evalue := true
   in
   (* Whenever giving back symbolic values, they shouldn't contain already ended regions *)
   let check_symbolic_no_ended = true in
@@ -304,6 +311,17 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : tvalue)
             let value = self#visit_typed_ABorrow opt_abs av.ty bc in
             ({ av with value } : tavalue)
         | _ -> super#visit_tavalue opt_abs av
+
+      (** Similar to [visit_tevalue] *)
+      method! visit_tevalue opt_abs (av : tevalue) : tevalue =
+        match av.value with
+        | ELoan lc ->
+            let value = self#visit_typed_ELoan opt_abs av.ty lc in
+            ({ av with value } : tevalue)
+        | EBorrow bc ->
+            let value = self#visit_typed_EBorrow opt_abs av.ty bc in
+            ({ av with value } : tevalue)
+        | _ -> super#visit_tevalue opt_abs av
 
       (** We need to inspect ignored mutable borrows, to insert loan projectors
           if necessary. *)
@@ -413,6 +431,108 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : tvalue)
             (* Nothing special to do *)
             super#visit_ALoan opt_abs lc
 
+      (** We need to inspect ignored mutable borrows, to insert loan projectors
+          if necessary. *)
+      method visit_typed_EBorrow (opt_abs : abs option) (ty : rty)
+          (bc : eborrow_content) : evalue =
+        match bc with
+        | EIgnoredMutBorrow (bid', child) ->
+            if bid' = Some bid then
+              (* Insert a loans projector - note that if this case happens,
+               * it is necessarily because we ended a parent abstraction,
+               * and the given back value is thus a symbolic value *)
+              match nv.value with
+              | VSymbolic sv ->
+                  let abs = Option.get opt_abs in
+                  (* Remember the given back value as a meta-value
+                   * TODO: it is a bit annoying to have to deconstruct
+                   * the value... Think about a more elegant way. *)
+                  let given_back_meta = as_symbolic span nv.value in
+                  (* The loan projector *)
+                  let _, ty, _ = ty_as_ref ty in
+                  let given_back =
+                    mk_eproj_loans_value_from_symbolic_value abs.regions.owned
+                      sv ty
+                  in
+                  (* Continue giving back in the child value *)
+                  let child = super#visit_tevalue opt_abs child in
+                  (* Return *)
+                  EBorrow
+                    (EEndedIgnoredMutBorrow
+                       { given_back; child; given_back_meta })
+              | _ -> [%craise] span "Unreachable"
+            else
+              (* Continue exploring *)
+              EBorrow (super#visit_EIgnoredMutBorrow opt_abs bid' child)
+        | _ ->
+            (* Continue exploring *)
+            super#visit_EBorrow opt_abs bc
+
+      (** We are not specializing an already existing method, but adding a new
+          method (for projections, we need type information) *)
+      method visit_typed_ELoan (opt_abs : abs option) (ty : rty)
+          (lc : eloan_content) : evalue =
+        (* Preparing a bit *)
+        let regions =
+          match opt_abs with
+          | None -> [%craise] span "Unreachable"
+          | Some abs -> abs.regions.owned
+        in
+        (* Rk.: there is a small issue with the types of the aloan values.
+         * See the comment at the level of definition of {!tavalue} *)
+        let borrowed_value_aty =
+          let _, ty, _ = ty_get_ref ty in
+          ty
+        in
+        match lc with
+        | EMutLoan (pm, bid', child) ->
+            [%sanity_check] span (pm = PNone);
+            if bid' = bid then (
+              (* This is the loan we are looking for: apply the projection to
+               * the value we give back and replaced this mutable loan with
+               * an ended loan *)
+              (* Register the insertion *)
+              set_replaced_evalue ();
+              (* Remember the given back value as a meta-value *)
+              let given_back_meta = nv in
+              (* Apply the projection *)
+              let given_back =
+                apply_eproj_borrows span check_symbolic_no_ended ctx regions nv
+                  borrowed_value_aty
+              in
+              (* Continue giving back in the child value *)
+              let child = super#visit_tevalue opt_abs child in
+              (* Return the new value *)
+              ELoan (EEndedMutLoan { child; given_back; given_back_meta }))
+            else (* Continue exploring *)
+              super#visit_ELoan opt_abs lc
+        | EEndedMutLoan { child = _; given_back = _; given_back_meta = _ } ->
+            (* Nothing special to do *)
+            super#visit_ELoan opt_abs lc
+        | EIgnoredMutLoan (opt_bid, child) ->
+            (* This loan is ignored, but we may have to project on a subvalue
+             * of the value which is given back *)
+            if opt_bid = Some bid then
+              (* Remember the given back value as a meta-value *)
+              let given_back_meta = nv in
+              (* Note that we replace the ignored mut loan by an *ended* ignored
+               * mut loan. Also, this is not the loan we are looking for *per se*:
+               * we don't register the fact that we inserted the value somewhere
+               * (i.e., we don't call {!set_replaced}) *)
+              let given_back =
+                apply_eproj_borrows span check_symbolic_no_ended ctx regions nv
+                  borrowed_value_aty
+              in
+              (* Continue giving back in the child value *)
+              let child = super#visit_tevalue opt_abs child in
+              ELoan
+                (EEndedIgnoredMutLoan { given_back; child; given_back_meta })
+            else super#visit_ELoan opt_abs lc
+        | EEndedIgnoredMutLoan
+            { given_back = _; child = _; given_back_meta = _ } ->
+            (* Nothing special to do *)
+            super#visit_ELoan opt_abs lc
+
       method! visit_EAbs opt_abs abs =
         (* We remember in which abstraction we are before diving -
          * this is necessary for projecting values: we need to know
@@ -433,7 +553,9 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : tvalue)
 
     Because doing this introduces a fresh symbolic value which may contain
     borrows, we may need to update the proj_borrows to introduce loan projectors
-    over those borrows. *)
+    over those borrows.
+
+    Note that we also update the abstraction expressions. *)
 let end_aproj_borrows (span : Meta.span) (ended_regions : RegionId.Set.t)
     (proj : symbolic_proj) (nsv : symbolic_value) (ctx : eval_ctx) : eval_ctx =
   (* Sanity checks *)
@@ -448,8 +570,6 @@ let end_aproj_borrows (span : Meta.span) (ended_regions : RegionId.Set.t)
     ^ "\n- nsv: "
     ^ symbolic_value_to_string ctx nsv
     ^ "\n- ctx: " ^ eval_ctx_to_string ctx];
-  (* Substitution functions, to replace the borrow projectors over symbolic values *)
-  (* Substitution functions, to replace the borrow projectors over symbolic values *)
   (* See the comments about [AProjLoans], we have to update in two situations:
      - if the projection over the symbolic value intersects the borrow projector:
        this is because we are ending exactly this borrow projector, so we need
@@ -480,9 +600,34 @@ let end_aproj_borrows (span : Meta.span) (ended_regions : RegionId.Set.t)
       in
       AProjBorrows { proj; loans = (consumed, loan) :: aproj.loans }
   in
+  let update_emut ~owned ~outlive (_abs : abs) (aproj : eproj_borrows) : eproj =
+    (* We can be in one case, or the other, but not both *)
+    [%sanity_check] span ((not owned) || not outlive);
+
+    if owned then
+      (* There is nothing to project *)
+      let mvalues = { consumed = proj.sv_id; given_back = nsv } in
+      EEndedProjBorrows { mvalues; loans = aproj.loans }
+    else
+      (* Compute the projection over the given back value (we project the loans) *)
+      let loan =
+        EProjLoans
+          {
+            proj = { aproj.proj with sv_id = nsv.sv_id };
+            consumed = [];
+            borrows = [];
+          }
+      in
+      let consumed : mconsumed_symb =
+        { sv_id = nsv.sv_id; proj_ty = aproj.proj.proj_ty }
+      in
+      let { sv_id; proj_ty } : symbolic_proj = proj in
+      EProjBorrows
+        { proj = { sv_id; proj_ty }; loans = (consumed, loan) :: aproj.loans }
+  in
   update_intersecting_aproj_borrows span ~fail_if_unchanged:true
     ~include_owned:true ~include_outlive:true ~update_shared:None ~update_mut
-    ended_regions proj ctx
+    ~update_emut ended_regions proj ctx
 
 (** Give back a *modified* symbolic value. *)
 let give_back_symbolic_value (_config : config) (span : Meta.span)
@@ -519,7 +664,7 @@ let give_back_symbolic_value (_config : config) (span : Meta.span)
      - we first update when intersecting with ancestors regions
      - then we update when intersecting with owned regions
   *)
-  let subst ~owned ~outlive (_abs : abs) (aproj : aproj_loans) =
+  let subst ~owned ~outlive (_abs : abs) (aproj : aproj_loans) : aproj =
     [%sanity_check] span ((not owned) || not outlive);
     if owned then
       (* There is nothing to project *)
@@ -540,10 +685,34 @@ let give_back_symbolic_value (_config : config) (span : Meta.span)
       in
       AProjLoans { aproj with borrows = (consumed, borrow) :: aproj.borrows }
   in
+  let esubst ~owned ~outlive (_abs : abs) (aproj : eproj_loans) : eproj =
+    [%sanity_check] span ((not owned) || not outlive);
+    if owned then
+      (* There is nothing to project *)
+      let child_proj = EEmpty in
+      let consumed : mconsumed_symb =
+        { sv_id = nsv.sv_id; proj_ty = aproj.proj.proj_ty }
+      in
+      EProjLoans
+        { aproj with consumed = (consumed, child_proj) :: aproj.consumed }
+    else
+      (* Compute the projection over the given back value *)
+      let borrow =
+        EProjBorrows
+          { proj = { aproj.proj with sv_id = nsv.sv_id }; loans = [] }
+      in
+      let consumed : mconsumed_symb =
+        { sv_id = nsv.sv_id; proj_ty = proj.proj_ty }
+      in
+      EProjLoans { aproj with borrows = (consumed, borrow) :: aproj.borrows }
+  in
   update_intersecting_aproj_loans span ~fail_if_unchanged:true
-    ~include_owned:true ~include_outlive:true ended_regions proj subst ctx
+    ~include_owned:true ~include_outlive:true ended_regions proj subst esubst
+    ctx
 
 (** Auxiliary function to end borrows. See {!give_back}.
+
+    TODO: this is deprecated and should be removed.
 
     This function is similar to {!give_back_value} but gives back an {!avalue}
     (coming from an abstraction).
