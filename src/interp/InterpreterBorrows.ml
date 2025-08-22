@@ -844,15 +844,8 @@ let convert_avalue_to_given_back_value (span : Meta.span) (av : tavalue) :
     When we end a mutable borrow, we need to "give back" the value it contained
     to its original owner by reinserting it at the proper position.
 
-    Rem.: this function is used when we end *one single* borrow (we don't end
-    this borrow as member of the group of borrows belonging to an abstraction).
-    If the borrow is an "abstract" borrow, it means we are ending a borrow
-    inside an abstraction (we end a borrow whose corresponding loan is in the
-    same abstraction - we are allowed to do so without ending the whole
-    abstraction). TODO: we should not treat this case here, and should only
-    consider internal borrows. This kind of internal reshuffling. should be
-    similar to ending abstractions (it is tantamount to ending
-    *sub*-abstractions). *)
+    Rem.: this function is used when we ending *concrete* borrows (we handle
+    borrows inside region abstractions elsewhere). *)
 let give_back (config : config) (span : Meta.span) (l : unique_borrow_id)
     (bc : g_borrow_content) (ctx : eval_ctx) : eval_ctx =
   (* Debug *)
@@ -888,45 +881,10 @@ let give_back (config : config) (span : Meta.span) (l : unique_borrow_id)
         (Option.is_some (lookup_loan_opt span sanity_ek bid ctx));
       (* We have nothing to update in the context *)
       ctx
-  | Abstract (AMutBorrow (pm, l', av)) ->
-      (* Sanity check *)
-      [%sanity_check] span (pm = PNone);
-      [%sanity_check] span (UMut l' = l);
-      (* Check that the corresponding loan is somewhere - purely a sanity check *)
-      [%sanity_check] span
-        (Option.is_some (lookup_loan_opt span sanity_ek l' ctx));
-      (* Convert the avalue to a (fresh symbolic) value.
-
-         Rem.: we shouldn't do this here. We should do this in a function
-         which takes care of ending *sub*-abstractions.
-      *)
-      let sv = convert_avalue_to_given_back_value span av in
-      (* Update the context - TODO: we shouldn't do this *)
-      give_back_avalue_to_same_abstraction config span l' av
-        (mk_tvalue_from_symbolic_value sv)
-        ctx
-  | Abstract (ASharedBorrow (pm, bid, l')) ->
-      (* Sanity check *)
-      [%sanity_check] span (pm = PNone);
-      [%sanity_check] span (UShared l' = l);
-      (* Check that the borrow is somewhere - purely a sanity check *)
-      [%sanity_check] span
-        (Option.is_some (lookup_loan_opt span sanity_ek bid ctx));
-      (* We have nothing to update in the context *)
-      ctx
-  | Abstract (AProjSharedBorrow asb) ->
-      (* Sanity check *)
-      [%sanity_check] span
-        (match l with
-        | UShared l -> borrow_in_asb l asb
-        | UMut _ -> false);
-      (* We have nothing to update in the context *)
-      ctx
-  | Abstract
-      ( AEndedMutBorrow _
-      | AIgnoredMutBorrow _
-      | AEndedIgnoredMutBorrow _
-      | AEndedSharedBorrow ) -> [%craise] span "Unreachable"
+  | Abstract _ ->
+      (* We shouldn't get here: ending borrows inside abstractions is taken care
+       of separately *)
+      [%internal_error] span
 
 let check_borrow_disappeared (span : Meta.span) (fun_name : string)
     (l : unique_borrow_id) (ctx0 : eval_ctx) (ctx : eval_ctx) : unit =
