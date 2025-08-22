@@ -900,8 +900,8 @@ and esymbolic_proj = { sv_id : symbolic_value_id; proj_ty : ty }
 and eproj =
   | EProjLoans of eproj_loans
   | EProjBorrows of eproj_borrows
-  | EEndedProjLoans of aended_proj_loans
-  | EEndedProjBorrows of aended_proj_borrows
+  | EEndedProjLoans of eended_proj_loans
+  | EEndedProjBorrows of eended_proj_borrows
   | EEmpty  (** Nothing to project (because there are no borrows, etc.) *)
 
 (** A projector of loans over a symbolic value.

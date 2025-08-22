@@ -477,7 +477,7 @@ module Values = struct
           else
             let consumed = List.map snd consumed in
             let consumed =
-              List.map (aproj_to_string ~with_ended env) consumed
+              List.map (eproj_to_string ~with_ended env) consumed
             in
             ", consumed=[" ^ String.concat "," consumed ^ "]"
         in
@@ -485,7 +485,7 @@ module Values = struct
           if borrows = [] then ""
           else
             let borrows = List.map snd borrows in
-            let borrows = List.map (aproj_to_string ~with_ended env) borrows in
+            let borrows = List.map (eproj_to_string ~with_ended env) borrows in
             ", borrows=[" ^ String.concat "," borrows ^ "]"
         in
         "ended_aproj_loans (" ^ msv ^ consumed ^ borrows ^ ")"
@@ -502,7 +502,7 @@ module Values = struct
           if loans = [] then ""
           else
             let loans = List.map snd loans in
-            let loans = List.map (aproj_to_string ~with_ended env) loans in
+            let loans = List.map (eproj_to_string ~with_ended env) loans in
             ", loans=[" ^ String.concat "," loans ^ "]"
         in
         "ended_aproj_borrows (" ^ meta ^ loans ^ "])"
