@@ -12,10 +12,17 @@ open InterpreterProjectors
 (** The local logger *)
 let log = Logging.borrows_log
 
-(** Auxiliary function to end borrows: lookup a borrow in the environment,
-    update it (by returning an updated environment where the borrow has been
-    replaced by {!Bottom})) if we can end the borrow (for instance, it is not an
-    outer borrow...) or return the reason why we couldn't update the borrow.
+(** Auxiliary function to end borrows: lookup a *concrete* borrow in the
+    environment, update it (by returning an updated environment where the borrow
+    has been replaced by {!Bottom})) if we can end the borrow (for instance, it
+    is not an outer borrow...) or return the reason why we couldn't update the
+    borrow.
+
+    We can end a borrow if:
+    - it is not inside a borrow
+    - it doesn't contain loans
+    - it is not inside a region abstraction (it can happen if the borrow is
+      inside a shared value)
 
     [end_borrow_aux] then simply performs a loop: as long as we need to end
     (outer) borrows, we end them, before finally ending the borrow we wanted to
@@ -28,7 +35,7 @@ let log = Logging.borrows_log
       one before removing the abstraction from the context). We use this to end
       shared borrows and mutable borrows inside of **shared values**; the other
       borrows are taken care of differently. *)
-let end_borrow_get_borrow (span : Meta.span)
+let end_concrete_borrow_get_borrow_core (span : Meta.span)
     (allowed_abs : AbstractionId.id option) (l : unique_borrow_id)
     (ctx : eval_ctx) :
     ( eval_ctx * (AbstractionId.id option * g_borrow_content) option,
@@ -165,7 +172,7 @@ let end_borrow_get_borrow (span : Meta.span)
             if UMut bid = l then (
               (* Signal that we should replace the whole abstraction *)
               raise_if_priority outer None;
-              (* We shouldn't get there *)
+              (* We shouldn't get there: this should be taken care of elsewhere *)
               [%craise] span "Unreachable")
             else
               (* Update the outer borrows before diving into the child avalue *)
@@ -225,14 +232,31 @@ let end_borrow_get_borrow (span : Meta.span)
     Ok (ctx, !replaced_bc)
   with FoundPriority outers -> Error outers
 
-(** Auxiliary function to end borrows. See {!give_back}.
+(** See [end_borrow_get_borrow] *)
+let end_concrete_borrow_get_borrow (span : Meta.span) (l : unique_borrow_id)
+    (ctx : eval_ctx) :
+    ( eval_ctx * (AbstractionId.id option * g_borrow_content) option,
+      priority_borrow_or_abs )
+    result =
+  end_concrete_borrow_get_borrow_core span None l ctx
+
+let end_concrete_borrow_in_abs_get_borrow (span : Meta.span)
+    (abs_id : abstraction_id) (l : unique_borrow_id) (ctx : eval_ctx) :
+    ( eval_ctx * (AbstractionId.id option * g_borrow_content) option,
+      priority_borrow_or_abs )
+    result =
+  end_concrete_borrow_get_borrow_core span (Some abs_id) l ctx
+
+(** Auxiliary function to end borrows. See {!give_back_concrete}.
 
     When we end a mutable borrow, we need to "give back" the value it contained
     to its original owner by reinserting it at the proper position.
 
     Note that this function checks that there is exactly one loan to which we
     give the value back. TODO: this was not the case before, so some sanity
-    checks are not useful anymore. *)
+    checks are not useful anymore.
+
+    Also, we take care to also update the **abstraction expressions**. *)
 let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : tvalue)
     (ctx : eval_ctx) : eval_ctx =
   (* Sanity check *)
@@ -253,6 +277,11 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : tvalue)
   let set_replaced () =
     [%sanity_check] span (not !replaced);
     replaced := true
+  in
+  let replaced_evalue : bool ref = ref false in
+  let set_replaced_evalue () =
+    [%sanity_check] span (not !replaced_evalue);
+    replaced_evalue := true
   in
   (* Whenever giving back symbolic values, they shouldn't contain already ended regions *)
   let check_symbolic_no_ended = true in
@@ -304,6 +333,17 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : tvalue)
             let value = self#visit_typed_ABorrow opt_abs av.ty bc in
             ({ av with value } : tavalue)
         | _ -> super#visit_tavalue opt_abs av
+
+      (** Similar to [visit_tevalue] *)
+      method! visit_tevalue opt_abs (av : tevalue) : tevalue =
+        match av.value with
+        | ELoan lc ->
+            let value = self#visit_typed_ELoan opt_abs av.ty lc in
+            ({ av with value } : tevalue)
+        | EBorrow bc ->
+            let value = self#visit_typed_EBorrow opt_abs av.ty bc in
+            ({ av with value } : tevalue)
+        | _ -> super#visit_tevalue opt_abs av
 
       (** We need to inspect ignored mutable borrows, to insert loan projectors
           if necessary. *)
@@ -413,6 +453,108 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : tvalue)
             (* Nothing special to do *)
             super#visit_ALoan opt_abs lc
 
+      (** We need to inspect ignored mutable borrows, to insert loan projectors
+          if necessary. *)
+      method visit_typed_EBorrow (opt_abs : abs option) (ty : rty)
+          (bc : eborrow_content) : evalue =
+        match bc with
+        | EIgnoredMutBorrow (bid', child) ->
+            if bid' = Some bid then
+              (* Insert a loans projector - note that if this case happens,
+               * it is necessarily because we ended a parent abstraction,
+               * and the given back value is thus a symbolic value *)
+              match nv.value with
+              | VSymbolic sv ->
+                  let abs = Option.get opt_abs in
+                  (* Remember the given back value as a meta-value
+                   * TODO: it is a bit annoying to have to deconstruct
+                   * the value... Think about a more elegant way. *)
+                  let given_back_meta = as_symbolic span nv.value in
+                  (* The loan projector *)
+                  let _, ty, _ = ty_as_ref ty in
+                  let given_back =
+                    mk_eproj_loans_value_from_symbolic_value abs.regions.owned
+                      sv ty
+                  in
+                  (* Continue giving back in the child value *)
+                  let child = super#visit_tevalue opt_abs child in
+                  (* Return *)
+                  EBorrow
+                    (EEndedIgnoredMutBorrow
+                       { given_back; child; given_back_meta })
+              | _ -> [%craise] span "Unreachable"
+            else
+              (* Continue exploring *)
+              EBorrow (super#visit_EIgnoredMutBorrow opt_abs bid' child)
+        | _ ->
+            (* Continue exploring *)
+            super#visit_EBorrow opt_abs bc
+
+      (** We are not specializing an already existing method, but adding a new
+          method (for projections, we need type information) *)
+      method visit_typed_ELoan (opt_abs : abs option) (ty : rty)
+          (lc : eloan_content) : evalue =
+        (* Preparing a bit *)
+        let regions =
+          match opt_abs with
+          | None -> [%craise] span "Unreachable"
+          | Some abs -> abs.regions.owned
+        in
+        (* Rk.: there is a small issue with the types of the aloan values.
+         * See the comment at the level of definition of {!tavalue} *)
+        let borrowed_value_aty =
+          let _, ty, _ = ty_get_ref ty in
+          ty
+        in
+        match lc with
+        | EMutLoan (pm, bid', child) ->
+            [%sanity_check] span (pm = PNone);
+            if bid' = bid then (
+              (* This is the loan we are looking for: apply the projection to
+               * the value we give back and replaced this mutable loan with
+               * an ended loan *)
+              (* Register the insertion *)
+              set_replaced_evalue ();
+              (* Remember the given back value as a meta-value *)
+              let given_back_meta = nv in
+              (* Apply the projection *)
+              let given_back =
+                apply_eproj_borrows span check_symbolic_no_ended ctx regions nv
+                  borrowed_value_aty
+              in
+              (* Continue giving back in the child value *)
+              let child = super#visit_tevalue opt_abs child in
+              (* Return the new value *)
+              ELoan (EEndedMutLoan { child; given_back; given_back_meta }))
+            else (* Continue exploring *)
+              super#visit_ELoan opt_abs lc
+        | EEndedMutLoan { child = _; given_back = _; given_back_meta = _ } ->
+            (* Nothing special to do *)
+            super#visit_ELoan opt_abs lc
+        | EIgnoredMutLoan (opt_bid, child) ->
+            (* This loan is ignored, but we may have to project on a subvalue
+             * of the value which is given back *)
+            if opt_bid = Some bid then
+              (* Remember the given back value as a meta-value *)
+              let given_back_meta = nv in
+              (* Note that we replace the ignored mut loan by an *ended* ignored
+               * mut loan. Also, this is not the loan we are looking for *per se*:
+               * we don't register the fact that we inserted the value somewhere
+               * (i.e., we don't call {!set_replaced}) *)
+              let given_back =
+                apply_eproj_borrows span check_symbolic_no_ended ctx regions nv
+                  borrowed_value_aty
+              in
+              (* Continue giving back in the child value *)
+              let child = super#visit_tevalue opt_abs child in
+              ELoan
+                (EEndedIgnoredMutLoan { given_back; child; given_back_meta })
+            else super#visit_ELoan opt_abs lc
+        | EEndedIgnoredMutLoan
+            { given_back = _; child = _; given_back_meta = _ } ->
+            (* Nothing special to do *)
+            super#visit_ELoan opt_abs lc
+
       method! visit_EAbs opt_abs abs =
         (* We remember in which abstraction we are before diving -
          * this is necessary for projecting values: we need to know
@@ -433,7 +575,9 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : tvalue)
 
     Because doing this introduces a fresh symbolic value which may contain
     borrows, we may need to update the proj_borrows to introduce loan projectors
-    over those borrows. *)
+    over those borrows.
+
+    Note that we also update the abstraction expressions. *)
 let end_aproj_borrows (span : Meta.span) (ended_regions : RegionId.Set.t)
     (proj : symbolic_proj) (nsv : symbolic_value) (ctx : eval_ctx) : eval_ctx =
   (* Sanity checks *)
@@ -448,8 +592,6 @@ let end_aproj_borrows (span : Meta.span) (ended_regions : RegionId.Set.t)
     ^ "\n- nsv: "
     ^ symbolic_value_to_string ctx nsv
     ^ "\n- ctx: " ^ eval_ctx_to_string ctx];
-  (* Substitution functions, to replace the borrow projectors over symbolic values *)
-  (* Substitution functions, to replace the borrow projectors over symbolic values *)
   (* See the comments about [AProjLoans], we have to update in two situations:
      - if the projection over the symbolic value intersects the borrow projector:
        this is because we are ending exactly this borrow projector, so we need
@@ -480,9 +622,34 @@ let end_aproj_borrows (span : Meta.span) (ended_regions : RegionId.Set.t)
       in
       AProjBorrows { proj; loans = (consumed, loan) :: aproj.loans }
   in
+  let update_emut ~owned ~outlive (_abs : abs) (aproj : eproj_borrows) : eproj =
+    (* We can be in one case, or the other, but not both *)
+    [%sanity_check] span ((not owned) || not outlive);
+
+    if owned then
+      (* There is nothing to project *)
+      let mvalues = { consumed = proj.sv_id; given_back = nsv } in
+      EEndedProjBorrows { mvalues; loans = aproj.loans }
+    else
+      (* Compute the projection over the given back value (we project the loans) *)
+      let loan =
+        EProjLoans
+          {
+            proj = { aproj.proj with sv_id = nsv.sv_id };
+            consumed = [];
+            borrows = [];
+          }
+      in
+      let consumed : mconsumed_symb =
+        { sv_id = nsv.sv_id; proj_ty = aproj.proj.proj_ty }
+      in
+      let { sv_id; proj_ty } : symbolic_proj = proj in
+      EProjBorrows
+        { proj = { sv_id; proj_ty }; loans = (consumed, loan) :: aproj.loans }
+  in
   update_intersecting_aproj_borrows span ~fail_if_unchanged:true
     ~include_owned:true ~include_outlive:true ~update_shared:None ~update_mut
-    ended_regions proj ctx
+    ~update_emut ended_regions proj ctx
 
 (** Give back a *modified* symbolic value. *)
 let give_back_symbolic_value (_config : config) (span : Meta.span)
@@ -519,7 +686,7 @@ let give_back_symbolic_value (_config : config) (span : Meta.span)
      - we first update when intersecting with ancestors regions
      - then we update when intersecting with owned regions
   *)
-  let subst ~owned ~outlive (_abs : abs) (aproj : aproj_loans) =
+  let subst ~owned ~outlive (_abs : abs) (aproj : aproj_loans) : aproj =
     [%sanity_check] span ((not owned) || not outlive);
     if owned then
       (* There is nothing to project *)
@@ -540,8 +707,30 @@ let give_back_symbolic_value (_config : config) (span : Meta.span)
       in
       AProjLoans { aproj with borrows = (consumed, borrow) :: aproj.borrows }
   in
+  let esubst ~owned ~outlive (_abs : abs) (aproj : eproj_loans) : eproj =
+    [%sanity_check] span ((not owned) || not outlive);
+    if owned then
+      (* There is nothing to project *)
+      let child_proj = EEmpty in
+      let consumed : mconsumed_symb =
+        { sv_id = nsv.sv_id; proj_ty = aproj.proj.proj_ty }
+      in
+      EProjLoans
+        { aproj with consumed = (consumed, child_proj) :: aproj.consumed }
+    else
+      (* Compute the projection over the given back value *)
+      let borrow =
+        EProjBorrows
+          { proj = { aproj.proj with sv_id = nsv.sv_id }; loans = [] }
+      in
+      let consumed : mconsumed_symb =
+        { sv_id = nsv.sv_id; proj_ty = proj.proj_ty }
+      in
+      EProjLoans { aproj with borrows = (consumed, borrow) :: aproj.borrows }
+  in
   update_intersecting_aproj_loans span ~fail_if_unchanged:true
-    ~include_owned:true ~include_outlive:true ended_regions proj subst ctx
+    ~include_owned:true ~include_outlive:true ended_regions proj subst esubst
+    ctx
 
 (** Convert an {!type:avalue} to a {!type:value}.
 
@@ -569,7 +758,7 @@ let convert_avalue_to_given_back_value (span : Meta.span) (av : tavalue) :
 
     Rem.: this function is used when we ending *concrete* borrows (we handle
     borrows inside region abstractions elsewhere). *)
-let give_back (config : config) (span : Meta.span) (l : unique_borrow_id)
+let give_back_concrete (span : Meta.span) (l : unique_borrow_id)
     (bc : g_borrow_content) (ctx : eval_ctx) : eval_ctx =
   (* Debug *)
   [%ltrace
@@ -644,8 +833,6 @@ let check_borrow_disappeared (span : Meta.span) (fun_name : string)
     the borrow is inside another borrow/an abstraction, we end the outer
     borrow/abstraction first, etc.
 
-    [allowed_abs]: see the comment for {!end_borrow_get_borrow}.
-
     [chain]: contains the list of borrows/abstraction ids on which
     {!end_borrow_aux} and {!end_abstraction_aux} were called, to remember the
     chain of calls. This is useful for debugging purposes, and also for sanity
@@ -660,8 +847,7 @@ let check_borrow_disappeared (span : Meta.span) (fun_name : string)
     perform anything smart and is trusted, and another function for the
     book-keeping. *)
 let rec end_borrow_aux (config : config) (span : Meta.span)
-    (chain : borrow_loan_abs_ids) (allowed_abs : AbstractionId.id option)
-    (l : unique_borrow_id) : cm_fun =
+    (chain : borrow_loan_abs_ids) (l : unique_borrow_id) : cm_fun =
  fun ctx ->
   (* Check that we don't loop *)
   let chain0 = chain in
@@ -678,18 +864,13 @@ let rec end_borrow_aux (config : config) (span : Meta.span)
   let ctx0 = ctx in
   let check = check_borrow_disappeared span "end borrow" l ctx0 in
   (* Start by ending the borrow itself (we lookup it up and replace it with [Bottom] *)
-  match end_borrow_get_borrow span allowed_abs l ctx with
+  match end_concrete_borrow_get_borrow span l ctx with
   (* Two cases:
-     - error: we found outer borrows (the borrow is inside a borrowed value) or
-       inner loans (the borrow contains loans)
-     - success: we didn't find outer borrows when updating (but maybe we actually
-       didn't find the borrow we were looking for...). The borrow was successfully
+     - error: we found outer borrows (the borrow is inside a borrowed value),
+       inner loans (the borrow contains loans), or the borrow is inside a
+       region abstraction
+     - success: either we could not find the borrow or it was successfully
        replaced with [Bottom], and we can proceed to ending the corresponding loan.
-
-     Note that if [allowed_abs] is [Some abs_id] and the borrow is inside the
-     abstraction identified by [abs_id], the abstraction is ignored (i.e.:
-     {!end_borrow_get_borrow} won't return [Error] because of the abstraction
-     itself).
   *)
   | Error priority -> (
       (* Debug *)
@@ -701,16 +882,10 @@ let rec end_borrow_aux (config : config) (span : Meta.span)
        * borrow (if necessary) *)
       match priority with
       | OuterMutBorrow bid | OuterSharedLoan bid | InnerLoan bid ->
-          (* Note that we might get there with [allowed_abs <> None]: we might
-           * be trying to end a borrow inside an abstraction, but which is actually
-           * inside another borrow *)
-          let allowed_abs' = None in
           (* End the outer borrows *)
-          let ctx, cc = end_loan_aux config span chain allowed_abs' bid ctx in
+          let ctx, cc = end_loan_aux config span chain bid ctx in
           (* Retry to end the borrow *)
-          let ctx, cc =
-            comp cc (end_borrow_aux config span chain0 allowed_abs l ctx)
-          in
+          let ctx, cc = comp cc (end_borrow_aux config span chain0 l ctx) in
           (* Check and continue *)
           check ctx;
           (ctx, cc)
@@ -737,7 +912,7 @@ let rec end_borrow_aux (config : config) (span : Meta.span)
           [%sanity_check] span (Option.is_none (get_first_loan_in_value bv))
       | _ -> ());
       (* Give back the value *)
-      let ctx = give_back config span l bc ctx in
+      let ctx = give_back_concrete span l bc ctx in
       (* Do a sanity check and continue *)
       check ctx;
       (* Save a snapshot of the environment for the name generation *)
@@ -746,20 +921,18 @@ let rec end_borrow_aux (config : config) (span : Meta.span)
       (ctx, cc)
 
 and end_borrows_aux (config : config) (span : Meta.span)
-    (chain : borrow_loan_abs_ids) (allowed_abs : AbstractionId.id option)
-    (lset : UniqueBorrowIdSet.t) : cm_fun =
+    (chain : borrow_loan_abs_ids) (lset : UniqueBorrowIdSet.t) : cm_fun =
  fun ctx ->
   (* This is not necessary, but we prefer to reorder the borrow ids,
      so that we actually end from the smallest id to the highest id - just
      a matter of taste, and may make debugging easier *)
   let ids = UniqueBorrowIdSet.fold (fun id ids -> id :: ids) lset [] in
   fold_left_apply_continuation
-    (fun id ctx -> end_borrow_aux config span chain allowed_abs id ctx)
+    (fun id ctx -> end_borrow_aux config span chain id ctx)
     ids ctx
 
 and try_end_loan_aux (config : config) (span : Meta.span)
-    (chain : borrow_loan_abs_ids) (allowed_abs : AbstractionId.id option)
-    ~(must_end : bool) (l : loan_id) : cm_fun =
+    (chain : borrow_loan_abs_ids) ~(must_end : bool) (l : loan_id) : cm_fun =
  fun ctx ->
   (* Check that we don't loop *)
   let chain =
@@ -773,37 +946,33 @@ and try_end_loan_aux (config : config) (span : Meta.span)
   | Some loan -> (
       match snd loan with
       | Concrete (VSharedLoan _) | Abstract (ASharedLoan _) ->
-          end_shared_loan_aux config span chain allowed_abs l ctx
+          end_shared_loan_aux config span chain l ctx
       | Concrete (VMutLoan _) | Abstract (AMutLoan _) ->
-          end_borrow_aux config span chain allowed_abs (UMut l) ctx
+          end_borrow_aux config span chain (UMut l) ctx
       | _ -> [%craise] span "Unreachable")
 
 and end_loan_aux (config : config) (span : Meta.span)
-    (chain : borrow_loan_abs_ids) (allowed_abs : AbstractionId.id option)
-    (l : loan_id) : cm_fun =
-  try_end_loan_aux config span chain allowed_abs ~must_end:true l
+    (chain : borrow_loan_abs_ids) (l : loan_id) : cm_fun =
+  try_end_loan_aux config span chain ~must_end:true l
 
 and try_end_loans_aux (config : config) (span : Meta.span)
-    (chain : borrow_loan_abs_ids) (allowed_abs : AbstractionId.id option)
-    ~(must_end : bool) (lset : BorrowId.Set.t) : cm_fun =
+    (chain : borrow_loan_abs_ids) ~(must_end : bool) (lset : BorrowId.Set.t) :
+    cm_fun =
  fun ctx ->
   (* This is not necessary, but we prefer to reorder the borrow ids,
      so that we actually end from the smallest id to the highest id - just
      a matter of taste, and may make debugging easier *)
   let ids = BorrowId.Set.fold (fun id ids -> id :: ids) lset [] in
   fold_left_apply_continuation
-    (fun id ctx ->
-      try_end_loan_aux config span chain allowed_abs ~must_end id ctx)
+    (fun id ctx -> try_end_loan_aux config span chain ~must_end id ctx)
     ids ctx
 
 and end_loans_aux (config : config) (span : Meta.span)
-    (chain : borrow_loan_abs_ids) (allowed_abs : AbstractionId.id option)
-    (lset : BorrowId.Set.t) : cm_fun =
-  try_end_loans_aux config span chain allowed_abs ~must_end:true lset
+    (chain : borrow_loan_abs_ids) (lset : BorrowId.Set.t) : cm_fun =
+  try_end_loans_aux config span chain ~must_end:true lset
 
 and end_shared_loan_aux (config : config) (span : Meta.span)
-    (chain : borrow_loan_abs_ids) (allowed_abs : AbstractionId.id option)
-    (l : loan_id) : cm_fun =
+    (chain : borrow_loan_abs_ids) (l : loan_id) : cm_fun =
  fun ctx ->
   (* Repeateadly lookup and end the borrows corresponding to this loan *)
   let visitor =
@@ -824,9 +993,7 @@ and end_shared_loan_aux (config : config) (span : Meta.span)
       visitor#visit_eval_ctx () ctx;
       (ctx, fun x -> x)
     with FoundSharedBorrowId (_, sid) ->
-      let ctx, cc =
-        end_borrow_aux config span chain allowed_abs (UShared sid) ctx
-      in
+      let ctx, cc = end_borrow_aux config span chain (UShared sid) ctx in
       comp cc (run ctx)
   in
   let ctx, cc = run ctx in
@@ -839,6 +1006,8 @@ and end_shared_loan_aux (config : config) (span : Meta.span)
     replaced := true
   in
   let obj =
+    (* Note that abstraction expressions do not track shared loans/borrows,
+       so we only need to look at "regular" abstraction values *)
     object
       inherit [_] map_eval_ctx as super
 
@@ -1015,7 +1184,7 @@ and end_abstraction_loans (config : config) (span : Meta.span)
       (ctx, fun e -> e)
   | Some (BorrowId bid) ->
       (* There are loans: end them, then recheck *)
-      let ctx, cc = end_loan_aux config span chain None bid ctx in
+      let ctx, cc = end_loan_aux config span chain bid ctx in
       (* Reexplore, looking for loans *)
       comp cc (end_abstraction_loans config span chain abs_id ctx)
   | Some (SymbolicValue proj) ->
@@ -1101,6 +1270,8 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
     (* Explore the abstraction, looking for borrows *)
     visitor#visit_abs () abs;
     (* No borrows: nothing to update *)
+    (* Last sanity check: the region abstraction doesn't contain borrows in its *expression* *)
+    [%sanity_check] span (not (abs_has_eborrows abs));
     (ctx, fun e -> e)
   with
   (* There are concrete (i.e., not symbolic) borrows: end them, then re-explore *)
@@ -1178,13 +1349,16 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
         | VSharedBorrow (_, sid) -> (
             (* Replace the shared borrow with bottom *)
             match
-              end_borrow_get_borrow span (Some abs_id) (UShared sid) ctx
+              end_concrete_borrow_in_abs_get_borrow span abs_id (UShared sid)
+                ctx
             with
             | Error _ -> [%craise] span "Unreachable"
             | Ok (ctx, _) -> ctx)
         | VMutBorrow (bid, v) -> (
             (* Replace the mut borrow with bottom *)
-            match end_borrow_get_borrow span (Some abs_id) (UMut bid) ctx with
+            match
+              end_concrete_borrow_in_abs_get_borrow span abs_id (UMut bid) ctx
+            with
             | Error _ -> [%craise] span "Unreachable"
             | Ok (ctx, _) ->
                 (* Give the value back - note that the mut borrow was below a
@@ -1207,8 +1381,7 @@ and end_abstraction_remove_from_context (_config : config) (span : Meta.span)
 (** End a proj_loan over a symbolic value by ending the proj_borrows which
     intersect this proj_loan.
 
-    Rk.:
-    - if this symbolic value is primitively copiable, then:
+    Remark: if this symbolic value is primitively copiable, then:
     - either proj_borrows are only present in the concrete context
     - or there is only one intersecting proj_borrow present in an abstraction
     - otherwise, this symbolic value is not primitively copiable:
@@ -1222,9 +1395,10 @@ and end_abstraction_remove_from_context (_config : config) (span : Meta.span)
     - attempt ending a loan projector
     - end a borrow projector before, and by doing this actually end the loan
       projector
-    - retry ending the loan projector We thus have to be careful about the fact
-      that maybe the loan projector actually doesn't exist anymore when we get
-      here. *)
+    - retry ending the loan projector
+
+    We thus have to be careful about the fact that maybe the loan projector
+    actually doesn't exist anymore when we get here. *)
 and end_proj_loans_symbolic (config : config) (span : Meta.span)
     (chain : borrow_loan_abs_ids) (abs_id : AbstractionId.id)
     (regions : RegionId.Set.t) (proj : symbolic_proj) : cm_fun =
@@ -1362,19 +1536,19 @@ and end_proj_loans_symbolic (config : config) (span : Meta.span)
         (ctx, cc)
 
 let end_borrow config (span : Meta.span) : unique_borrow_id -> cm_fun =
-  end_borrow_aux config span [] None
+  end_borrow_aux config span []
 
 let end_borrows config (span : Meta.span) : unique_borrow_id_set -> cm_fun =
-  end_borrows_aux config span [] None
+  end_borrows_aux config span []
 
 let end_loan config (span : Meta.span) : loan_id -> cm_fun =
-  end_loan_aux config span [] None
+  end_loan_aux config span []
 
 let end_loans config (span : Meta.span) : loan_id_set -> cm_fun =
-  end_loans_aux config span [] None
+  end_loans_aux config span []
 
 let try_end_loans config (span : Meta.span) : loan_id_set -> cm_fun =
-  try_end_loans_aux config span [] None ~must_end:false
+  try_end_loans_aux config span [] ~must_end:false
 
 let end_abstraction config span = end_abstraction_aux config span []
 let end_abstractions config span = end_abstractions_aux config span []
@@ -1790,7 +1964,9 @@ exception FoundAbsId of AbstractionId.id
 (** Find the first endable loan projector in an abstraction.
 
     An endable loan projector is a loan projector over a symbolic value which
-    doesn't appear anywhere else in the context. *)
+    doesn't appear anywhere else in the context.
+
+    This function may raise a [FoundAbsProj] exception. *)
 let find_first_endable_loan_proj_in_abs (span : Meta.span) (ctx : eval_ctx)
     (abs : abs) : unit =
   let visitor =

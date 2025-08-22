@@ -121,7 +121,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             let ty = TRef (RVar (Free r_id), ref_ty, kind) in
             let ignored = mk_aignored span ref_ty None in
             let av = ABorrow (AMutBorrow (PNone, bid, ignored)) in
-            let av = { value = av; ty } in
+            let av : tavalue = { value = av; ty } in
             (* Continue exploring, looking for loans (and forbidding borrows,
                because we don't support nested borrows for now) *)
             let avl, bv =
@@ -153,7 +153,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
                 r_id sv
             in
             let av = ALoan (ASharedLoan (PNone, bids, sv, ignored)) in
-            let av = { value = av; ty } in
+            let av : tavalue = { value = av; ty } in
             (* Continue exploring, looking for loans (and forbidding borrows,
                because we don't support nested borrows for now) *)
             let value : value =
@@ -171,7 +171,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             (* For avalues, a loan has the type borrow (see the comments in [avalue]) *)
             let ty = mk_ref_ty (RVar (Free r_id)) ty RMut in
             let av = ALoan (AMutLoan (PNone, bid, ignored None)) in
-            let av = { value = av; ty } in
+            let av : tavalue = { value = av; ty } in
             ([ av ], v))
     | VSymbolic sv ->
         (* Check that there are no nested borrows in the symbolic value -
