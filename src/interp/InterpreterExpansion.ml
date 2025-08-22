@@ -32,18 +32,17 @@ type proj_kind = LoanProj | BorrowProj
     reducing the borrow projectors might require to perform some reborrows, in
     which case we need to lookup the corresponding loans in the context.
 
-    [allow_reborrows] controls whether we allow reborrows or not. It is useful
-    only if we target borrow projectors.
-
     Also, if this function is called on an expansion for *shared references*,
     the proj borrows should already have been expanded.
 
     TODO: the way this function is used is a bit complex, especially because of
-    the above condition. Maybe we should have: 1. a generic function to expand
-    the loan projectors 2. a function to expand the borrow projectors for
-    non-borrows 3. specialized functions for mut borrows and shared borrows Note
-    that 2. and 3. may have a little bit of duplicated code, but hopefully it
-    would make things clearer. *)
+    the above condition. Maybe we should have:
+    - 1. a generic function to expand the loan projectors
+    - 2. a function to expand the borrow projectors for non-borrows
+    - 3. specialized functions for mut borrows and shared borrows
+
+    Note that 2. and 3. may have a little bit of duplicated code, but hopefully
+    it would make things clearer. *)
 let apply_symbolic_expansion_to_target_avalues (span : Meta.span)
     (proj_kind : proj_kind) (original_sv : symbolic_value)
     (expansion : symbolic_expansion) (ctx : eval_ctx) : eval_ctx =
