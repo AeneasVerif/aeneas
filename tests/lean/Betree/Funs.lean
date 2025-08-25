@@ -121,12 +121,12 @@ def betree.List.reverse
 /- [betree::betree::{betree::betree::List<T>}::split_at]: loop 0:
    Source: 'src/betree.rs', lines 290:8-300:9 -/
 def betree.List.split_at_loop
-  {T : Type} (n : U64) (beg : betree.List T) (self : betree.List T) :
+  {T : Type} (n : U64) (beg : betree.List T) (end1 : betree.List T) :
   Result ((betree.List T) × (betree.List T))
   :=
   if n > 0#u64
   then
-    match self with
+    match end1 with
     | betree.List.Cons hd tl =>
       do
       let n1 ← n - 1#u64
@@ -134,7 +134,7 @@ def betree.List.split_at_loop
     | betree.List.Nil => fail panic
   else do
        let l ← betree.List.reverse beg
-       ok (l, self)
+       ok (l, end1)
 partial_fixpoint
 
 /- [betree::betree::{betree::betree::List<T>}::split_at]:
@@ -182,10 +182,10 @@ def betree.ListPairU64T.head_has_key
    Source: 'src/betree.rs', lines 359:8-368:9 -/
 def betree.ListPairU64T.partition_at_pivot_loop
   {T : Type} (pivot : U64) (beg : betree.List (U64 × T))
-  (end1 : betree.List (U64 × T)) (self : betree.List (U64 × T)) :
+  (end1 : betree.List (U64 × T)) (curr : betree.List (U64 × T)) :
   Result ((betree.List (U64 × T)) × (betree.List (U64 × T)))
   :=
-  match self with
+  match curr with
   | betree.List.Cons hd tl =>
     let (i, _) := hd
     if i >= pivot
@@ -359,9 +359,8 @@ def betree.Node.lookup
       if k != key
       then
         do
-        let (st2, (o, node1)) ←
-          betree.Internal.lookup_in_children node key st1
-        ok (st2, (o, betree.Node.Internal node1))
+        let (st2, (o, i)) ← betree.Internal.lookup_in_children node key st1
+        ok (st2, (o, betree.Node.Internal i))
       else
         match msg with
         | betree.Message.Insert v => ok (st1, (some v, self))
@@ -376,8 +375,8 @@ def betree.Node.lookup
           ok (st3, (some v1, betree.Node.Internal node1))
     | betree.List.Nil =>
       do
-      let (st2, (o, node1)) ← betree.Internal.lookup_in_children node key st1
-      ok (st2, (o, betree.Node.Internal node1))
+      let (st2, (o, i)) ← betree.Internal.lookup_in_children node key st1
+      ok (st2, (o, betree.Node.Internal i))
   | betree.Node.Leaf node =>
     do
     let (st1, bindings) ← betree.load_leaf_node node.id st
@@ -640,17 +639,15 @@ mutual def betree.Internal.flush
   if len_left >= params.min_flush_size
   then
     do
-    let (st1, p) ←
+    let (st1, (n, node_id_cnt1)) ←
       betree.Node.apply_messages self.left params node_id_cnt msgs_left st
-    let (n, node_id_cnt1) := p
     let len_right ← betree.List.len msgs_right
     if len_right >= params.min_flush_size
     then
       do
-      let (st2, p1) ←
+      let (st2, (n1, node_id_cnt2)) ←
         betree.Node.apply_messages self.right params node_id_cnt1 msgs_right
           st1
-      let (n1, node_id_cnt2) := p1
       ok (st2, (betree.List.Nil, (betree.Internal.mk self.id self.pivot n n1,
         node_id_cnt2)))
     else
@@ -658,9 +655,8 @@ mutual def betree.Internal.flush
         self.right, node_id_cnt1)))
   else
     do
-    let (st1, p) ←
+    let (st1, (n, node_id_cnt1)) ←
       betree.Node.apply_messages self.right params node_id_cnt msgs_right st
-    let (n, node_id_cnt1) := p
     ok (st1, (msgs_left, (betree.Internal.mk self.id self.pivot self.left n,
       node_id_cnt1)))
 partial_fixpoint
@@ -747,9 +743,8 @@ def betree.BeTree.apply
   Result (State × betree.BeTree)
   :=
   do
-  let (st1, p) ←
+  let (st1, (n, nic)) ←
     betree.Node.apply self.root self.params self.node_id_cnt key msg st
-  let (n, nic) := p
   ok (st1, { self with node_id_cnt := nic, root := n })
 
 /- [betree::betree::{betree::betree::BeTree}::insert]:

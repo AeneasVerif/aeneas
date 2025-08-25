@@ -114,19 +114,19 @@ let betree_List_reverse
 (** [betree::betree::{betree::betree::List<T>}::split_at]: loop 0:
     Source: 'src/betree.rs', lines 290:8-300:9 *)
 let rec betree_List_split_at_loop
-  (#t : Type0) (n : u64) (beg : betree_List_t t) (self : betree_List_t t) :
+  (#t : Type0) (n : u64) (beg : betree_List_t t) (end1 : betree_List_t t) :
   Tot (result ((betree_List_t t) & (betree_List_t t)))
-  (decreases (betree_List_split_at_loop_decreases n beg self))
+  (decreases (betree_List_split_at_loop_decreases n beg end1))
   =
   if n > 0
   then
-    begin match self with
+    begin match end1 with
     | Betree_List_Cons hd tl ->
       let* n1 = u64_sub n 1 in
       betree_List_split_at_loop n1 (Betree_List_Cons hd beg) tl
     | Betree_List_Nil -> Fail Failure
     end
-  else let* l = betree_List_reverse beg in Ok (l, self)
+  else let* l = betree_List_reverse beg in Ok (l, end1)
 
 (** [betree::betree::{betree::betree::List<T>}::split_at]:
     Source: 'src/betree.rs', lines 287:4-302:5 *)
@@ -174,12 +174,12 @@ let betree_ListPairU64T_head_has_key
     Source: 'src/betree.rs', lines 359:8-368:9 *)
 let rec betree_ListPairU64T_partition_at_pivot_loop
   (#t : Type0) (pivot : u64) (beg : betree_List_t (u64 & t))
-  (end1 : betree_List_t (u64 & t)) (self : betree_List_t (u64 & t)) :
+  (end1 : betree_List_t (u64 & t)) (curr : betree_List_t (u64 & t)) :
   Tot (result ((betree_List_t (u64 & t)) & (betree_List_t (u64 & t))))
   (decreases (
-    betree_ListPairU64T_partition_at_pivot_loop_decreases pivot beg end1 self))
+    betree_ListPairU64T_partition_at_pivot_loop_decreases pivot beg end1 curr))
   =
-  begin match self with
+  begin match curr with
   | Betree_List_Cons hd tl ->
     let (i, _) = hd in
     if i >= pivot
@@ -349,10 +349,8 @@ and betree_Node_lookup
       let (k, msg) = p in
       if k <> key
       then
-        let* (st2, (o, node1)) =
-          betree_Internal_lookup_in_children node key st1
-        in
-        Ok (st2, (o, (Betree_Node_Internal node1)))
+        let* (st2, (o, i)) = betree_Internal_lookup_in_children node key st1 in
+        Ok (st2, (o, (Betree_Node_Internal i)))
       else
         begin match msg with
         | Betree_Message_Insert v -> Ok (st1, ((Some v), self))
@@ -367,9 +365,8 @@ and betree_Node_lookup
           Ok (st3, ((Some v1), (Betree_Node_Internal node1)))
         end
     | Betree_List_Nil ->
-      let* (st2, (o, node1)) = betree_Internal_lookup_in_children node key st1
-      in
-      Ok (st2, (o, (Betree_Node_Internal node1)))
+      let* (st2, (o, i)) = betree_Internal_lookup_in_children node key st1 in
+      Ok (st2, (o, (Betree_Node_Internal i)))
     end
   | Betree_Node_Leaf node ->
     let* (st1, bindings) = betree_load_leaf_node node.id st in

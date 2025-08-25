@@ -8,7 +8,7 @@ open Errors
 (** The local logger *)
 let log = Logging.symbolic_to_pure_log
 
-let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
+let translate_fun_decl (ctx : bs_ctx) (body : S.expr option) : fun_decl =
   (* Translate *)
   let def = ctx.fun_decl in
   assert (ctx.bid = None);
@@ -27,12 +27,12 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
         [%ltrace
           name_to_string ctx def.item_meta.name
           ^ "\n- body:\n"
-          ^ bs_ctx_expression_to_string ctx body];
+          ^ bs_ctx_expr_to_string ctx body];
 
         let effect_info =
           get_fun_effect_info ctx (FunId (FRegular def_id)) None None
         in
-        let mk_return ctx v =
+        let mk_return (ctx : bs_ctx) v =
           match v with
           | None ->
               raise
@@ -40,15 +40,8 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
                    "Unexpected: reached a return expression without value in a \
                     function forward expression")
           | Some output ->
-              let output =
-                if effect_info.stateful then
-                  let state_rvalue = mk_state_texpression ctx.state_var in
-                  mk_simpl_tuple_texpression ctx.span [ state_rvalue; output ]
-                else output
-              in
               (* Wrap in a result if the function can fail *)
-              if effect_info.can_fail then
-                mk_result_ok_texpression ctx.span output
+              if effect_info.can_fail then mk_result_ok_texpr ctx.span output
               else output
         in
         let mk_panic =
@@ -58,12 +51,12 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
               (* Create the [Fail] value *)
               let ret_ty = mk_simpl_tuple_ty [ mk_state_ty; output_ty ] in
               let ret_v =
-                mk_result_fail_texpression_with_error_id ctx.span
-                  error_failure_id ret_ty
+                mk_result_fail_texpr_with_error_id ctx.span error_failure_id
+                  ret_ty
               in
               ret_v
             else
-              mk_result_fail_texpression_with_error_id ctx.span error_failure_id
+              mk_result_fail_texpr_with_error_id ctx.span error_failure_id
                 output_ty
           in
           let back_tys = compute_back_tys ctx.sg.fun_ty None in
@@ -78,54 +71,56 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expression option) : fun_decl =
         let ctx =
           { ctx with mk_return = Some mk_return; mk_panic = Some mk_panic }
         in
-        let body = translate_expression body ctx in
-        (* Add a match over the fuel, if necessary *)
-        let body =
-          if function_decreases_fuel effect_info then
-            wrap_in_match_fuel def.item_meta.span ctx.fuel0 ctx.fuel body
-          else body
-        in
+        let body = translate_expr body ctx in
         (* Sanity check *)
-        type_check_texpression ctx body;
-        (* Introduce the fuel parameter, if necessary *)
-        let fuel =
-          if function_uses_fuel effect_info then
-            let fuel_var =
-              if function_decreases_fuel effect_info then ctx.fuel0
-              else ctx.fuel
-            in
-            [ mk_fuel_var fuel_var ]
-          else []
-        in
-        (* Introduce the forward input state (the state at call site of the
-         * *forward* function), if necessary. *)
-        let fwd_state =
-          (* We check if the *whole group* is stateful. See {!effect_info} *)
-          if effect_info.stateful_group then [ mk_state_var ctx.state_var ]
-          else []
-        in
+        type_check_texpr ctx body;
         (* Group the inputs together *)
-        let inputs = List.concat [ fuel; ctx.forward_inputs; fwd_state ] in
-        let inputs_lvs =
-          List.map (fun v -> mk_typed_pattern_from_var v None) inputs
-        in
+        let inputs = ctx.forward_inputs in
         (* Sanity check *)
         [%ltrace
           name_to_string ctx def.item_meta.name
-          ^ "\n- inputs: "
-          ^ String.concat ", " (List.map show_var ctx.forward_inputs)
-          ^ "\n- state: "
-          ^ String.concat ", " (List.map show_var fwd_state)
+          ^ "\n- ctx.forward_inputs: "
+          ^ String.concat ", " (List.map show_fvar ctx.forward_inputs)
           ^ "\n- signature.inputs: "
           ^ String.concat ", "
-              (List.map (pure_ty_to_string ctx) signature.inputs)];
+              (List.map (pure_ty_to_string ctx) signature.inputs)
+          ^ "\n- inputs: "
+          ^ String.concat ", " (List.map (fvar_to_string ctx) inputs)
+          ^ "\n- body:\n" ^ texpr_to_string ctx body];
         (* TODO: we need to normalize the types *)
         if !Config.type_check_pure_code then
           [%sanity_check] def.item_meta.span
             (List.for_all
-               (fun (var, ty) -> (var : var).ty = ty)
+               (fun (var, ty) -> (var : fvar).ty = ty)
                (List.combine inputs signature.inputs));
-        Some { inputs; inputs_lvs; body }
+        let inputs = List.map (fun v -> mk_tpattern_from_fvar v None) inputs in
+        Some (mk_closed_fun_body def.item_meta.span inputs body)
+  in
+
+  (* Cleanup the meta-data in the body: some meta-data may refer to variables which
+     are actually not bound. We remove those to make sure the body is well-formed.
+     TODO: this is really hacky.
+  *)
+  let body =
+    if Config.allow_unbound_variables_in_metadata then
+      Option.map
+        (fun (body : fun_body) ->
+          let visitor =
+            object
+              inherit [_] Pure.map_expr
+
+              (* We only need to visit those *)
+              method! visit_SymbolicAssignments () assigns =
+                SymbolicAssignments
+                  (List.filter_map
+                     (fun (var, value) ->
+                       if texpr_has_fvars value then None else Some (var, value))
+                     assigns)
+            end
+          in
+          { body with body = visitor#visit_texpr () body.body })
+        body
+    else body
   in
 
   (* Note that for now, the loops are still *inside* the function body (and we

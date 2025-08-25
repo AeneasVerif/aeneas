@@ -100,8 +100,8 @@ let rec hashMap_clear_loop
 (** [hashmap::{hashmap::HashMap<T>}::clear]:
     Source: 'tests/src/hashmap.rs', lines 100:4-108:5 *)
 let hashMap_clear (#t : Type0) (self : hashMap_t t) : result (hashMap_t t) =
-  let* hm = hashMap_clear_loop self.slots 0 in
-  Ok { self with num_entries = 0; slots = hm }
+  let* slots = hashMap_clear_loop self.slots 0 in
+  Ok { self with num_entries = 0; slots }
 
 (** [hashmap::{hashmap::HashMap<T>}::len]:
     Source: 'tests/src/hashmap.rs', lines 110:4-112:5 *)

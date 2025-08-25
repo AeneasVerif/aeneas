@@ -759,7 +759,7 @@ let extract_type_decl_variant (span : Meta.span) (ctx : extraction_ctx)
           match f.field_name with
           | None -> ctx
           | Some field_name ->
-              let var_id = LocalId.of_int (FieldId.to_int fid) in
+              let var_id = FVarId.of_int (FieldId.to_int fid) in
               let field_name =
                 ctx_compute_var_basename span ctx (Some field_name) f.field_ty
               in
@@ -1511,11 +1511,11 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
         in
         (* Record_var will be the ADT argument to the projector *)
         let ctx, record_var =
-          ctx_add_var decl.item_meta.span "x" (LocalId.of_int 0) ctx
+          ctx_add_var decl.item_meta.span "x" (FVarId.of_int 0) ctx
         in
         (* Field_var will be the variable in the constructor that is returned by the projector *)
         let ctx, field_var =
-          ctx_add_var decl.item_meta.span "x" (LocalId.of_int 1) ctx
+          ctx_add_var decl.item_meta.span "x" (FVarId.of_int 1) ctx
         in
         (* Name of the ADT *)
         let def_name = ctx_get_local_type decl.item_meta.span decl.def_id ctx in
@@ -1644,7 +1644,7 @@ let extract_type_decl_record_field_projectors (ctx : extraction_ctx)
           (* Inner box for the projector definition *)
           F.pp_open_hovbox fmt ctx.indent_incr;
           let ctx, record_var =
-            ctx_add_var decl.item_meta.span "x" (LocalId.of_int 0) ctx
+            ctx_add_var decl.item_meta.span "x" (FVarId.of_int 0) ctx
           in
           F.pp_print_string fmt "Notation";
           F.pp_print_space fmt ();
@@ -1750,7 +1750,7 @@ let extract_type_decl_record_field_projectors_simp_lemmas (ctx : extraction_ctx)
           (* Print the input parameters (the fields) *)
           let print_field (ctx : extraction_ctx) (field_id : FieldId.id)
               (f : field) : extraction_ctx * string =
-            let id = LocalId.of_int (FieldId.to_int field_id) in
+            let id = FVarId.of_int (FieldId.to_int field_id) in
             let field_name =
               ctx_get_field span (TAdtId decl.def_id) field_id ctx
             in

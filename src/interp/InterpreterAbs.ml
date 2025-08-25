@@ -12,11 +12,11 @@ let log = Logging.abs_log
 
 let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
     ~(can_end : bool) ~(destructure_shared_values : bool) (ctx : eval_ctx)
-    (v : typed_value) : abs list =
-  [%ltrace typed_value_to_string ctx v];
+    (v : tvalue) : abs list =
+  [%ltrace tvalue_to_string ctx v];
   (* Convert the value to a list of avalues *)
   let absl = ref [] in
-  let push_abs (r_id : RegionId.id) (avalues : typed_avalue list) : unit =
+  let push_abs (r_id : RegionId.id) (avalues : tavalue list) : unit =
     if avalues = [] then ()
     else begin
       (* Create the abs - note that we keep the order of the avalues as it is
@@ -25,8 +25,8 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
         "avalues:\n"
         ^ String.concat "\n"
             (List.map
-               (fun (v : typed_avalue) ->
-                 typed_avalue_to_string ctx v ^ " : " ^ ty_to_string ctx v.ty)
+               (fun (v : tavalue) ->
+                 tavalue_to_string ctx v ^ " : " ^ ty_to_string ctx v.ty)
                avalues)];
       let abs =
         {
@@ -53,10 +53,10 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
      is [true], this shared value will be stripped of its shared loans.
   *)
   let rec to_avalues ~(allow_borrows : bool) ~(inside_borrowed : bool)
-      ~(group : bool) (r_id : RegionId.id) (v : typed_value) :
-      typed_avalue list * typed_value =
+      ~(group : bool) (r_id : RegionId.id) (v : tvalue) : tavalue list * tvalue
+      =
     (* Debug *)
-    [%ldebug "\n- value: " ^ typed_value_to_string ~span:(Some span) ctx v];
+    [%ldebug "\n- value: " ^ tvalue_to_string ~span:(Some span) ctx v];
 
     let ty = v.ty in
     match v.value with
@@ -208,7 +208,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             let ty = visitor#visit_ty () sv.sv_ty in
             let proj : symbolic_proj = { sv_id = sv.sv_id; proj_ty = ty } in
             let nv = ASymbolic (PNone, AProjBorrows { proj; loans = [] }) in
-            let nv : typed_avalue = { value = nv; ty } in
+            let nv : tavalue = { value = nv; ty } in
             ([ nv ], v)
         else
           (* Introduce one abstraction per live region *)
@@ -217,7 +217,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             (fun _ rid ->
               let proj : symbolic_proj = { sv_id = sv.sv_id; proj_ty = ty } in
               let nv = ASymbolic (PNone, AProjBorrows { proj; loans = [] }) in
-              let nv : typed_avalue = { value = nv; ty } in
+              let nv : tavalue = { value = nv; ty } in
               push_abs rid [ nv ])
             regions;
           ([], v)
@@ -259,7 +259,7 @@ let abs_simplify_duplicated_borrows (span : Meta.span) (ctx : eval_ctx)
 
   (* We first filter the borrows which are duplicated *)
   let shared_borrows = ref BorrowId.Map.empty in
-  let keep_avalue (av : typed_avalue) : bool =
+  let keep_avalue (av : tavalue) : bool =
     match av.value with
     | ABorrow (ASharedBorrow (pm, bid, _)) -> begin
         match BorrowId.Map.find_opt bid !shared_borrows with
@@ -276,7 +276,7 @@ let abs_simplify_duplicated_borrows (span : Meta.span) (ctx : eval_ctx)
   let avalues = List.filter keep_avalue abs.avalues in
 
   (* We update the projection markers of the remaining borrows *)
-  let update_avalue (av : typed_avalue) : typed_avalue =
+  let update_avalue (av : tavalue) : tavalue =
     match av.value with
     | ABorrow (ASharedBorrow (_, bid, sid)) ->
         let pm = BorrowId.Map.find bid !shared_borrows in
@@ -293,11 +293,11 @@ type merge_duplicates_funcs = {
     borrow_id ->
     rty ->
     proj_marker ->
-    typed_avalue ->
+    tavalue ->
     rty ->
     proj_marker ->
-    typed_avalue ->
-    typed_avalue;
+    tavalue ->
+    tavalue;
       (** Parameters:
           - [id]
           - [ty0]
@@ -316,7 +316,7 @@ type merge_duplicates_funcs = {
     rty ->
     proj_marker ->
     shared_borrow_id ->
-    typed_avalue;
+    tavalue;
       (** Parameters:
           - [id]
           - [ty0]
@@ -329,11 +329,11 @@ type merge_duplicates_funcs = {
     loan_id ->
     rty ->
     proj_marker ->
-    typed_avalue ->
+    tavalue ->
     rty ->
     proj_marker ->
-    typed_avalue ->
-    typed_avalue;
+    tavalue ->
+    tavalue;
       (** Parameters:
           - [id]
           - [ty0]
@@ -348,13 +348,13 @@ type merge_duplicates_funcs = {
     loan_id ->
     rty ->
     proj_marker ->
-    typed_value ->
-    typed_avalue ->
+    tvalue ->
+    tavalue ->
     rty ->
     proj_marker ->
-    typed_value ->
-    typed_avalue ->
-    typed_avalue;
+    tvalue ->
+    tavalue ->
+    tavalue;
       (** Parameters:
           - [ids]
           - [ty0]
@@ -372,7 +372,7 @@ type merge_duplicates_funcs = {
     ty ->
     proj_marker ->
     aproj_borrows ->
-    typed_avalue;
+    tavalue;
       (** Parameters:
           - [ty0]
           - [pm0]
@@ -389,7 +389,7 @@ type merge_duplicates_funcs = {
     ty ->
     proj_marker ->
     aproj_loans ->
-    typed_avalue;
+    tavalue;
       (** Parameters:
           - [ty0]
           - [pm0]
@@ -408,8 +408,8 @@ type merge_duplicates_funcs = {
 
     We assume the value has been destructured (there are no nested loans, adts,
     the children are ignored, etc.). *)
-let typed_avalue_split_marker (span : Meta.span) (ctx : eval_ctx)
-    (av : typed_avalue) : typed_avalue list =
+let tavalue_split_marker (span : Meta.span) (ctx : eval_ctx) (av : tavalue) :
+    tavalue list =
   let mk_split mk_value = [ mk_value PLeft; mk_value PRight ] in
   let mk_opt_split pm mk_value =
     if pm = PNone then mk_split mk_value else [ av ]
@@ -466,8 +466,7 @@ let typed_avalue_split_marker (span : Meta.span) (ctx : eval_ctx)
 let abs_split_markers (span : Meta.span) (ctx : eval_ctx) (abs : abs) : abs =
   {
     abs with
-    avalues =
-      List.concat (List.map (typed_avalue_split_marker span ctx) abs.avalues);
+    avalues = List.concat (List.map (tavalue_split_marker span ctx) abs.avalues);
   }
 
 (** Auxiliary function for {!merge_abstractions}.
@@ -495,7 +494,7 @@ let abs_split_markers (span : Meta.span) (ctx : eval_ctx) (abs : abs) : abs =
     markers have been split (if markers are allowed). *)
 let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
     ~(allow_markers : bool) (ctx : eval_ctx) (abs0 : abs) (abs1 : abs) :
-    typed_avalue list =
+    tavalue list =
   [%ltrace ""];
 
   if !Config.sanity_checks then (
@@ -537,7 +536,7 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
      the left abstraction *)
   let left_norm_proj_loans = ref MarkedNormSymbProjSet.empty in
   List.iter
-    (fun (av : typed_avalue) ->
+    (fun (av : tavalue) ->
       match av.value with
       | ASymbolic (pm, aproj) -> (
           match aproj with
@@ -555,11 +554,11 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
       | _ -> ())
     abs0.avalues;
 
-  let push_right_avalue (av : typed_avalue) : unit =
+  let push_right_avalue (av : tavalue) : unit =
     right_avalues := av :: !right_avalues
   in
 
-  let add_avalue (av : typed_avalue) : unit =
+  let add_avalue (av : tavalue) : unit =
     match av.value with
     | ALoan _ ->
         (* We simply add the value: we only merge loans coming from the *left*
@@ -571,8 +570,7 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
           match bc with
           | AMutBorrow (pm, bid, child) ->
               [%sanity_check] span (is_aignored child.value);
-              let rec merge (avl : typed_avalue list) : typed_avalue list * bool
-                  =
+              let rec merge (avl : tavalue list) : tavalue list * bool =
                 match avl with
                 | [] -> ([], true)
                 | av :: avl -> (
@@ -587,7 +585,7 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
               left_avalues := avalues;
               if keep then push_right_avalue av else ()
           | ASharedBorrow (pm, bid, _) ->
-              let rec keep (avl : typed_avalue list) : bool =
+              let rec keep (avl : tavalue list) : bool =
                 match avl with
                 | [] -> true
                 | av :: avl -> (
@@ -624,7 +622,7 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
               (* Eliminate: we need to filter the left avalues to remove the loan projector *)
               left_avalues :=
                 List.filter
-                  (fun (av : typed_avalue) ->
+                  (fun (av : tavalue) ->
                     match av.value with
                     | ASymbolic (pm', proj') -> (
                         match proj' with
@@ -665,11 +663,10 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
     ]} *)
 let merge_abstractions_merge_markers (span : Meta.span)
     (merge_funs : merge_duplicates_funcs) (ctx : eval_ctx)
-    (owned_regions : RegionId.Set.t) (avalues : typed_avalue list) :
-    typed_avalue list =
+    (owned_regions : RegionId.Set.t) (avalues : tavalue list) : tavalue list =
   [%ltrace
     "- avalues:\n"
-    ^ String.concat ", " (List.map (typed_avalue_to_string ctx) avalues)];
+    ^ String.concat ", " (List.map (tavalue_to_string ctx) avalues)];
 
   (* We simply iterate through the list of avalues create during the first phase,
      and progressively add them back: if we find a value with a complementary marker,
@@ -683,7 +680,7 @@ let merge_abstractions_merge_markers (span : Meta.span)
      return [None] otherwise.
    *)
   let try_merge_aborrow_contents (ty0 : rty) (bc0 : aborrow_content) (ty1 : rty)
-      (bc1 : aborrow_content) : typed_avalue option =
+      (bc1 : aborrow_content) : tavalue option =
     match (bc0, bc1) with
     | AMutBorrow (pm0, id0, child0), AMutBorrow (pm1, id1, child1)
       when id0 = id1 ->
@@ -699,7 +696,7 @@ let merge_abstractions_merge_markers (span : Meta.span)
   in
 
   let try_merge_aloan_contents (ty0 : rty) (lc0 : aloan_content) (ty1 : rty)
-      (lc1 : aloan_content) : typed_avalue option =
+      (lc1 : aloan_content) : tavalue option =
     match (lc0, lc1) with
     | AMutLoan (pm0, id0, child0), AMutLoan (pm1, id1, child1) when id0 = id1 ->
         [%sanity_check] span (complementary_markers pm0 pm1);
@@ -718,7 +715,7 @@ let merge_abstractions_merge_markers (span : Meta.span)
   in
 
   let try_merge_projs ((ty0, pm0, proj0) : ty * proj_marker * aproj)
-      ((ty1, pm1, proj1) : ty * proj_marker * aproj) : typed_avalue option =
+      ((ty1, pm1, proj1) : ty * proj_marker * aproj) : tavalue option =
     match (proj0, proj1) with
     | AProjBorrows proj0, AProjBorrows proj1
       when proj0.proj.sv_id = proj1.proj.sv_id
@@ -744,8 +741,7 @@ let merge_abstractions_merge_markers (span : Meta.span)
      Return [Some] with the result of the merge if it occurred, and [None]
      if the two values can't be merged (because they are of two different
      kinds for instance). *)
-  let try_merge_avalues (av0 : typed_avalue) (av1 : typed_avalue) :
-      typed_avalue option =
+  let try_merge_avalues (av0 : tavalue) (av1 : tavalue) : tavalue option =
     match (av0.value, av1.value) with
     | ALoan c0, ALoan c1 -> try_merge_aloan_contents av0.ty c0 av1.ty c1
     | ABorrow c0, ABorrow c1 -> try_merge_aborrow_contents av0.ty c0 av1.ty c1
@@ -755,7 +751,7 @@ let merge_abstractions_merge_markers (span : Meta.span)
   in
 
   let merged = ref [] in
-  let add_avalue (av : typed_avalue) : unit =
+  let add_avalue (av : tavalue) : unit =
     let rec add avl =
       match avl with
       | [] -> [ av ]
@@ -892,7 +888,7 @@ let end_endable_shared_loans_at_abs (span : Meta.span) (ctx : eval_ctx)
      region abstraction has been destructured
   *)
   let abs = ctx_lookup_abs ctx abs_id in
-  let keep_value (av : typed_avalue) : bool =
+  let keep_value (av : tavalue) : bool =
     match av.value with
     | ALoan (ASharedLoan (_, bid, _, child)) ->
         [%sanity_check] span (is_aignored child.value);
@@ -957,13 +953,13 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
   let reorder_in_fresh_abs (abs : abs) : abs =
     (* Split between the loans and borrows, and between the concrete
        and symbolic values. *)
-    let is_borrow (av : typed_avalue) : bool =
+    let is_borrow (av : tavalue) : bool =
       match av.value with
       | ABorrow _ | ASymbolic (_, AProjBorrows _) -> true
       | ALoan _ | ASymbolic (_, AProjLoans _) -> false
       | _ -> [%craise] span "Unexpected"
     in
-    let is_concrete (av : typed_avalue) : bool =
+    let is_concrete (av : tavalue) : bool =
       match av.value with
       | ABorrow _ | ALoan _ -> true
       | ASymbolic (_, (AProjBorrows _ | AProjLoans _)) -> false
@@ -987,14 +983,14 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
          borrows, borrow projectors, loans, loan projectors
        (all sorted by increasing id)
     *)
-    let get_borrow_id (av : typed_avalue) : BorrowId.id =
+    let get_borrow_id (av : tavalue) : BorrowId.id =
       match av.value with
       | ABorrow (AMutBorrow (pm, bid, _) | ASharedBorrow (pm, bid, _)) ->
           [%sanity_check] span (allow_markers || pm = PNone);
           bid
       | _ -> [%craise] span "Unexpected"
     in
-    let get_loan_id (av : typed_avalue) : BorrowId.id =
+    let get_loan_id (av : tavalue) : BorrowId.id =
       match av.value with
       | ALoan (AMutLoan (pm, lid, _)) ->
           [%sanity_check] span (allow_markers || pm = PNone);
@@ -1004,7 +1000,7 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
           lid
       | _ -> [%craise] span "Unexpected"
     in
-    let get_symbolic_id (av : typed_avalue) : SymbolicValueId.id =
+    let get_symbolic_id (av : tavalue) : SymbolicValueId.id =
       match av.value with
       | ASymbolic (pm, aproj) -> begin
           [%sanity_check] span (allow_markers || pm = PNone);
@@ -1015,24 +1011,21 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
       | _ -> [%craise] span "Unexpected"
     in
     let compare_pair :
-        'a. ('a -> 'a -> int) -> 'a * typed_avalue -> 'a * typed_avalue -> int =
+        'a. ('a -> 'a -> int) -> 'a * tavalue -> 'a * tavalue -> int =
      fun compare_id x y ->
       let fst = compare_id (fst x) (fst y) in
       [%cassert] span (fst <> 0)
         ("Unexpected: can't compare: '"
-        ^ typed_avalue_to_string ctx (snd x)
+        ^ tavalue_to_string ctx (snd x)
         ^ "' with '"
-        ^ typed_avalue_to_string ctx (snd y)
+        ^ tavalue_to_string ctx (snd y)
         ^ "'");
       fst
     in
     (* We use ordered maps to reorder the borrows and loans *)
     let reorder :
-        'a.
-        (typed_avalue -> 'a) ->
-        ('a -> 'a -> int) ->
-        typed_avalue list ->
-        typed_avalue list =
+        'a. (tavalue -> 'a) -> ('a -> 'a -> int) -> tavalue list -> tavalue list
+        =
      fun get_id compare_id values ->
       let values = List.map (fun v -> (get_id v, v)) values in
       List.map snd (List.stable_sort (compare_pair compare_id) values)
@@ -1058,16 +1051,16 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
 
   { ctx with env }
 
-type typed_avalue_list = typed_avalue list [@@deriving ord, show]
+type tavalue_list = tavalue list [@@deriving ord, show]
 
 module OrderedTypedAvalueList :
-  Collections.OrderedType with type t = typed_avalue list = struct
-  type t = typed_avalue_list
+  Collections.OrderedType with type t = tavalue list = struct
+  type t = tavalue_list
 
-  let compare x y = compare_typed_avalue_list x y
-  let to_string x = show_typed_avalue_list x
-  let pp_t fmt x = Format.pp_print_string fmt (show_typed_avalue_list x)
-  let show_t x = show_typed_avalue_list x
+  let compare x y = compare_tavalue_list x y
+  let to_string x = show_tavalue_list x
+  let pp_t fmt x = Format.pp_print_string fmt (show_tavalue_list x)
+  let show_t x = show_tavalue_list x
 end
 
 let reorder_fresh_abs_aux (span : Meta.span) (old_abs_ids : AbstractionId.Set.t)
@@ -1092,8 +1085,7 @@ let reorder_fresh_abs_aux (span : Meta.span) (old_abs_ids : AbstractionId.Set.t)
   *)
   let cmp abs0 abs1 =
     match (abs0, abs1) with
-    | EAbs abs0, EAbs abs1 ->
-        compare_typed_avalue_list abs0.avalues abs1.avalues
+    | EAbs abs0, EAbs abs1 -> compare_tavalue_list abs0.avalues abs1.avalues
     | _ -> [%internal_error] span
   in
   let fresh_abs = List.sort cmp fresh_abs |> List.rev in

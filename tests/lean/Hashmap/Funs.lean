@@ -113,8 +113,8 @@ partial_fixpoint
    Source: 'tests/src/hashmap.rs', lines 100:4-108:5 -/
 def HashMap.clear {T : Type} (self : HashMap T) : Result (HashMap T) :=
   do
-  let hm ← HashMap.clear_loop self.slots 0#usize
-  ok { self with num_entries := 0#usize, slots := hm }
+  let slots ← HashMap.clear_loop self.slots 0#usize
+  ok { self with num_entries := 0#usize, slots }
 
 /- [hashmap::{hashmap::HashMap<T>}::len]:
    Source: 'tests/src/hashmap.rs', lines 110:4-112:5 -/

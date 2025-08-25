@@ -72,7 +72,7 @@ def TreeSet.insert
   Result (Bool × (TreeSet T))
   :=
   do
-  let (b, ts) ← TreeSet.insert_loop OrdInst value self.root
-  ok (b, { root := ts })
+  let (b, current_tree) ← TreeSet.insert_loop OrdInst value self.root
+  ok (b, { root := current_tree })
 
 end bst

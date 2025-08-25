@@ -157,7 +157,7 @@ and var_binder = BVar of real_var_binder | BDummy of dummy_var_id
 (** Environment value: mapping from variable to value, abstraction (only used in
     symbolic mode) or stack frame delimiter. *)
 and env_elem =
-  | EBinding of var_binder * typed_value
+  | EBinding of var_binder * tvalue
       (** Variable binding - the binder is None if the variable is a dummy
           variable (we use dummy variables to store temporaries while doing
           bookkeeping such as ending borrows for instance). *)

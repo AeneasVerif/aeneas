@@ -15,14 +15,14 @@ let log = TranslateCore.log
 (** The result of running the symbolic interpreter on a function:
     - the list of symbolic values used for the input values
     - the generated symbolic AST *)
-type symbolic_fun_translation = symbolic_value list * SA.expression
+type symbolic_fun_translation = symbolic_value list * SA.expr
 
 (** Execute the symbolic interpreter on a function to generate a list of
     symbolic ASTs, for the forward function and the backward functions. *)
 let translate_function_to_symbolics (trans_ctx : trans_ctx) (fdef : fun_decl) :
     symbolic_fun_translation option =
   (* Debug *)
-  [%ldebug name_to_string trans_ctx fdef.item_meta.name];
+  [%ltrace name_to_string trans_ctx fdef.item_meta.name];
 
   match fdef.body with
   | None -> None
@@ -32,6 +32,52 @@ let translate_function_to_symbolics (trans_ctx : trans_ctx) (fdef : fun_decl) :
       let synthesize = true in
       let inputs, symb = evaluate_function_symbolic synthesize trans_ctx fdef in
       Some (inputs, Option.get symb)
+
+(** Sanity check helper.
+
+    Check that all the variables in a function declaration:
+    - are bound variables
+    - are well-bound *)
+let check_fun_decl_vars_are_well_bound (trans_ctx : trans_ctx)
+    (f : Pure.fun_decl) : unit =
+  let span = f.item_meta.span in
+
+  if !Config.sanity_checks then (
+    match f.body with
+    | None -> ()
+    | Some body ->
+        (* First, check the function without meta information *)
+        let fmt_env = PrintPure.decls_ctx_to_fmt_env trans_ctx in
+        (let f =
+           {
+             f with
+             body =
+               Option.map
+                 (fun (body : Pure.fun_body) ->
+                   { body with body = PureUtils.remove_meta body.body })
+                 f.body;
+           }
+         in
+
+         [%ldebug PrintPure.fun_decl_to_string fmt_env f];
+         let fvars = PureUtils.texpr_get_fvars body.body in
+         if not (Pure.FVarId.Set.is_empty fvars) then
+           [%craise] span
+             ("Internal errors: found unexpected fvars: "
+             ^ Pure.FVarId.Set.to_string None fvars));
+
+        [%ldebug PrintPure.fun_decl_to_string fmt_env f];
+        let fvars = PureUtils.texpr_get_fvars body.body in
+        if not (Pure.FVarId.Set.is_empty fvars) then
+          [%craise] span
+            ("Internal errors: found unexpected fvars: "
+            ^ Pure.FVarId.Set.to_string None fvars);
+
+        (* Open all the free variables: if there is a bound variable which is not well-bound,
+           this will raise an exception *)
+        let _ = PureUtils.open_all_fun_body span body in
+        ())
+  else ()
 
 (** Translate a function, by generating its forward and backward translations.
 
@@ -43,7 +89,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     (fun_dsigs : Pure.decomposed_fun_sig FunDeclId.Map.t) (fdef : fun_decl) :
     pure_fun_translation_no_loops =
   (* Debug *)
-  [%ldebug name_to_string trans_ctx fdef.item_meta.name];
+  [%ltrace name_to_string trans_ctx fdef.item_meta.name];
 
   (* Compute the symbolic ASTs, if the function is transparent *)
   let symbolic_trans = translate_function_to_symbolics trans_ctx fdef in
@@ -51,11 +97,11 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
   (* Convert the symbolic ASTs to pure ASTs: *)
 
   (* Initialize the context *)
+  Pure.reset_fvar_id_counter ();
   let sv_to_var = SymbolicValueId.Map.empty in
-  let var_counter = Pure.LocalId.generator_zero in
-  let state_var, var_counter = Pure.LocalId.fresh var_counter in
-  let fuel0, var_counter = Pure.LocalId.fresh var_counter in
-  let fuel, var_counter = Pure.LocalId.fresh var_counter in
+  let fvars = Pure.FVarId.Map.empty in
+  let fvars_tys = Pure.FVarId.Map.map (fun (v : Pure.fvar) -> v.ty) fvars in
+
   let calls = FunCallId.Map.empty in
   let abstractions = AbstractionId.Map.empty in
   let recursive_type_decls =
@@ -96,7 +142,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
 
         let visitor =
           object
-            inherit [_] SA.iter_expression as super
+            inherit [_] SA.iter_expr as super
 
             method! visit_loop env loop =
               let _ =
@@ -107,16 +153,13 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
               super#visit_loop env loop
           end
         in
-        visitor#visit_expression () ast;
+        visitor#visit_expr () ast;
         !m
   in
 
   let sg =
     SymbolicToPureTypes.translate_fun_sig_from_decl_to_decomposed trans_ctx fdef
   in
-
-  let var_counter, back_state_vars = (var_counter, []) in
-  let back_state_vars = RegionGroupId.Map.of_list back_state_vars in
 
   let ctx =
     {
@@ -127,19 +170,14 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
       fun_dsigs;
       (* Will need to be updated for the backward functions *)
       sv_to_var;
-      var_counter = ref var_counter;
-      state_var;
-      back_state_vars;
-      fuel0;
-      fuel;
+      fvars;
+      fvars_tys;
       type_ctx;
       fun_ctx;
       fun_decl = fdef;
       forward_inputs = [];
       (* Initialized just below *)
-      backward_inputs_no_state = RegionGroupId.Map.empty;
-      (* Initialized just below *)
-      backward_inputs_with_state = RegionGroupId.Map.empty;
+      backward_inputs = RegionGroupId.Map.empty;
       backward_outputs = None;
       (* Empty for now *)
       calls;
@@ -151,7 +189,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
       mk_return = None;
       mk_panic = None;
       mut_borrow_to_consumed = BorrowId.Map.empty;
-      var_id_to_default = Pure.LocalId.Map.empty;
+      var_id_to_default = Pure.FVarId.Map.empty;
     }
   in
 
@@ -176,19 +214,22 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
   in
 
   (* Add the backward inputs *)
-  let backward_inputs_no_state, backward_inputs_with_state = ([], []) in
-  let backward_inputs_no_state =
-    RegionGroupId.Map.of_list backward_inputs_no_state
-  in
-  let backward_inputs_with_state =
-    RegionGroupId.Map.of_list backward_inputs_with_state
-  in
-  let ctx = { ctx with backward_inputs_no_state; backward_inputs_with_state } in
+  let ctx = { ctx with backward_inputs = RegionGroupId.Map.of_list [] } in
 
   (* Translate the function *)
-  match symbolic_trans with
-  | None -> SymbolicToPure.translate_fun_decl ctx None
-  | Some (_, ast) -> SymbolicToPure.translate_fun_decl ctx (Some ast)
+  let f =
+    match symbolic_trans with
+    | None -> SymbolicToPure.translate_fun_decl ctx None
+    | Some (_, ast) -> SymbolicToPure.translate_fun_decl ctx (Some ast)
+  in
+
+  (* Sanity check:
+     - there are no free variables appearing in the body
+     - all the variables are properly bound *)
+  check_fun_decl_vars_are_well_bound trans_ctx f;
+
+  (* *)
+  f
 
 let translate_function_to_pure (trans_ctx : trans_ctx)
     (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t)
@@ -221,7 +262,7 @@ let translate_crate_to_pure (crate : crate) :
     * Pure.trait_decl list
     * Pure.trait_impl list =
   (* Debug *)
-  [%ldebug ""];
+  [%ltrace ""];
 
   (* Compute the translation context *)
   let trans_ctx = compute_contexts crate in

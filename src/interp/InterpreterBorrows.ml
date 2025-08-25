@@ -49,7 +49,7 @@ let end_borrow_get_borrow (span : Meta.span)
      - if we are inside an abstraction
      - there are inner loans
      (this exception is caught in a wrapper function) *)
-  let raise_if_priority (outer : outer) (borrowed_value : typed_value option) =
+  let raise_if_priority (outer : outer) (borrowed_value : tvalue option) =
     (* First, look for outer borrows or abstraction *)
     (match outer.abs_id with
     | Some abs -> (
@@ -141,9 +141,9 @@ let end_borrow_get_borrow (span : Meta.span)
             [%sanity_check] span (pm = PNone);
             (* Explore the shared value - we need to update the outer borrows *)
             let souter = update_outer_borrow outer (SharedLoan bid) in
-            let v = super#visit_typed_value souter v in
+            let v = super#visit_tvalue souter v in
             (* Explore the child avalue - we keep the same outer borrows *)
-            let av = super#visit_typed_avalue outer av in
+            let av = super#visit_tavalue outer av in
             (* Reconstruct *)
             ALoan (ASharedLoan (pm, bid, v, av))
         | AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
@@ -233,7 +233,7 @@ let end_borrow_get_borrow (span : Meta.span)
     Note that this function checks that there is exactly one loan to which we
     give the value back. TODO: this was not the case before, so some sanity
     checks are not useful anymore. *)
-let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : typed_value)
+let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : tvalue)
     (ctx : eval_ctx) : eval_ctx =
   (* Sanity check *)
   [%cassert] span
@@ -245,7 +245,7 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : typed_value)
   (* Debug *)
   [%ltrace
     "- bid: " ^ BorrowId.to_string bid ^ "\n- value: "
-    ^ typed_value_to_string ~span:(Some span) ctx nv
+    ^ tvalue_to_string ~span:(Some span) ctx nv
     ^ "\n- context:\n"
     ^ eval_ctx_to_string ~span:(Some span) ctx];
   (* We use a reference to check that we updated exactly one loan *)
@@ -262,14 +262,14 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : typed_value)
       inherit [_] map_eval_ctx as super
 
       (** This is a bit annoying, but as we need the type of the value we are
-          exploring, for sanity checks, we need to implement
-          {!visit_typed_avalue} instead of overriding {!visit_ALoan} *)
-      method! visit_typed_value opt_abs (v : typed_value) : typed_value =
+          exploring, for sanity checks, we need to implement {!visit_tavalue}
+          instead of overriding {!visit_ALoan} *)
+      method! visit_tvalue opt_abs (v : tvalue) : tvalue =
         match v.value with
         | VLoan lc ->
             let value = self#visit_typed_Loan opt_abs v.ty lc in
-            ({ v with value } : typed_value)
-        | _ -> super#visit_typed_value opt_abs v
+            ({ v with value } : tvalue)
+        | _ -> super#visit_tvalue opt_abs v
 
       method visit_typed_Loan opt_abs ty lc =
         match lc with
@@ -294,16 +294,16 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : typed_value)
 
       (** This is a bit annoying, but as we need the type of the avalue we are
           exploring, in order to be able to project the value we give back, we
-          need to reimplement {!visit_typed_avalue} instead of {!visit_ALoan} *)
-      method! visit_typed_avalue opt_abs (av : typed_avalue) : typed_avalue =
+          need to reimplement {!visit_tavalue} instead of {!visit_ALoan} *)
+      method! visit_tavalue opt_abs (av : tavalue) : tavalue =
         match av.value with
         | ALoan lc ->
             let value = self#visit_typed_ALoan opt_abs av.ty lc in
-            ({ av with value } : typed_avalue)
+            ({ av with value } : tavalue)
         | ABorrow bc ->
             let value = self#visit_typed_ABorrow opt_abs av.ty bc in
-            ({ av with value } : typed_avalue)
-        | _ -> super#visit_typed_avalue opt_abs av
+            ({ av with value } : tavalue)
+        | _ -> super#visit_tavalue opt_abs av
 
       (** We need to inspect ignored mutable borrows, to insert loan projectors
           if necessary. *)
@@ -329,7 +329,7 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : typed_value)
                       sv ty
                   in
                   (* Continue giving back in the child value *)
-                  let child = super#visit_typed_avalue opt_abs child in
+                  let child = super#visit_tavalue opt_abs child in
                   (* Return *)
                   ABorrow
                     (AEndedIgnoredMutBorrow
@@ -353,7 +353,7 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : typed_value)
           | Some abs -> abs.regions.owned
         in
         (* Rk.: there is a small issue with the types of the aloan values.
-         * See the comment at the level of definition of {!typed_avalue} *)
+         * See the comment at the level of definition of {!tavalue} *)
         let borrowed_value_aty =
           let _, ty, _ = ty_get_ref ty in
           ty
@@ -375,7 +375,7 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : typed_value)
                   borrowed_value_aty
               in
               (* Continue giving back in the child value *)
-              let child = super#visit_typed_avalue opt_abs child in
+              let child = super#visit_tavalue opt_abs child in
               (* Return the new value *)
               ALoan (AEndedMutLoan { child; given_back; given_back_meta }))
             else (* Continue exploring *)
@@ -403,7 +403,7 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : typed_value)
                   borrowed_value_aty
               in
               (* Continue giving back in the child value *)
-              let child = super#visit_typed_avalue opt_abs child in
+              let child = super#visit_tavalue opt_abs child in
               ALoan
                 (AEndedIgnoredMutLoan { given_back; child; given_back_meta })
             else super#visit_ALoan opt_abs lc
@@ -543,114 +543,6 @@ let give_back_symbolic_value (_config : config) (span : Meta.span)
   update_intersecting_aproj_loans span ~fail_if_unchanged:true
     ~include_owned:true ~include_outlive:true ended_regions proj subst ctx
 
-(** Auxiliary function to end borrows. See {!give_back}.
-
-    This function is similar to {!give_back_value} but gives back an {!avalue}
-    (coming from an abstraction).
-
-    It is used when ending a borrow inside an abstraction, when the
-    corresponding loan is inside the same abstraction (in which case we don't
-    need to end the whole abstraction).
-
-    REMARK: this function can't be used to give back the values borrowed by end
-    abstraction when ending this abstraction. When doing this, we need to
-    convert the {!avalue} to a {!type:value} by introducing the proper symbolic
-    values. *)
-let give_back_avalue_to_same_abstraction (_config : config) (span : Meta.span)
-    (bid : BorrowId.id) (nv : typed_avalue) (nsv : typed_value) (ctx : eval_ctx)
-    : eval_ctx =
-  (* We use a reference to check that we updated exactly one loan *)
-  let replaced : bool ref = ref false in
-  let set_replaced () =
-    [%cassert] span (not !replaced) "Exacly one loan should be updated";
-    replaced := true
-  in
-  let obj =
-    object (self)
-      inherit [_] map_eval_ctx as super
-
-      (** This is a bit annoying, but as we need the type of the avalue we are
-          exploring, in order to be able to project the value we give back, we
-          need to reimplement {!visit_typed_avalue} instead of {!visit_ALoan}.
-
-          TODO: it is possible to do this by remembering the type of the last
-          typed avalue we entered. *)
-      method! visit_typed_avalue opt_abs (av : typed_avalue) : typed_avalue =
-        match av.value with
-        | ALoan lc ->
-            let value = self#visit_typed_ALoan opt_abs av.ty lc in
-            ({ av with value } : typed_avalue)
-        | _ -> super#visit_typed_avalue opt_abs av
-
-      (** We are not specializing an already existing method, but adding a new
-          method (for projections, we need type information).
-
-          TODO: it is possible to do this by remembering the type of the last
-          typed avalue we entered. *)
-      method visit_typed_ALoan (opt_abs : abs option) (ty : rty)
-          (lc : aloan_content) : avalue =
-        match lc with
-        | AMutLoan (pm, bid', child) ->
-            [%sanity_check] span (pm = PNone);
-            if bid' = bid then (
-              (* Sanity check - about why we need to call {!ty_get_ref}
-               * (and don't do the same thing as in {!give_back_value})
-               * see the comment at the level of the definition of
-               * {!typed_avalue} *)
-              let _, expected_ty, _ = ty_get_ref ty in
-              if nv.ty <> expected_ty then
-                [%craise] span
-                  ("Value given back doesn't have the proper type:\n\
-                    - expected: " ^ ty_to_string ctx ty ^ "\n- received: "
-                 ^ ty_to_string ctx nv.ty);
-              (* This is the loan we are looking for: apply the projection to
-               * the value we give back and replaced this mutable loan with
-               * an ended loan *)
-              (* Register the insertion *)
-              set_replaced ();
-              (* Return the new value *)
-              ALoan
-                (AEndedMutLoan { given_back = nv; child; given_back_meta = nsv }))
-            else (* Continue exploring *)
-              super#visit_ALoan opt_abs lc
-        | ASharedLoan (PNone, _, _, _)
-        (* We are giving back a value to a *mutable* loan: nothing special to do *)
-        | AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
-        | AEndedSharedLoan (_, _) ->
-            (* Nothing special to do *)
-            super#visit_ALoan opt_abs lc
-        | ASharedLoan (_, _, _, _) ->
-            (* We get there if the projection marker is not [PNone] *)
-            [%internal_error] span
-        | AIgnoredMutLoan (bid_opt, child) ->
-            (* This loan is ignored, but we may have to project on a subvalue
-             * of the value which is given back *)
-            if bid_opt = Some bid then (
-              (* Note that we replace the ignored mut loan by an *ended* ignored
-               * mut loan. Also, this is not the loan we are looking for *per se*:
-               * we don't register the fact that we inserted the value somewhere
-               * (i.e., we don't call {!set_replaced}) *)
-              (* Sanity check *)
-              [%sanity_check] span (nv.ty = ty);
-              ALoan
-                (AEndedIgnoredMutLoan
-                   { given_back = nv; child; given_back_meta = nsv }))
-            else super#visit_ALoan opt_abs lc
-        | AEndedIgnoredMutLoan
-            { given_back = _; child = _; given_back_meta = _ }
-        | AIgnoredSharedLoan _ ->
-            (* Nothing special to do *)
-            super#visit_ALoan opt_abs lc
-    end
-  in
-
-  (* Explore the environment *)
-  let ctx = obj#visit_eval_ctx None ctx in
-  (* Check we gave back to exactly one loan *)
-  [%cassert] span !replaced "No loan updated";
-  (* Return *)
-  ctx
-
 (** Convert an {!type:avalue} to a {!type:value}.
 
     This function is used when ending abstractions: whenever we end a borrow in
@@ -666,7 +558,7 @@ let give_back_avalue_to_same_abstraction (_config : config) (span : Meta.span)
     should be ⊥. In practice, we will give back a symbolic value which can't be
     expanded (because expanding this symbolic value would require expanding a
     reference whose region has already ended). *)
-let convert_avalue_to_given_back_value (span : Meta.span) (av : typed_avalue) :
+let convert_avalue_to_given_back_value (span : Meta.span) (av : tavalue) :
     symbolic_value =
   mk_fresh_symbolic_value span av.ty
 
@@ -675,15 +567,8 @@ let convert_avalue_to_given_back_value (span : Meta.span) (av : typed_avalue) :
     When we end a mutable borrow, we need to "give back" the value it contained
     to its original owner by reinserting it at the proper position.
 
-    Rem.: this function is used when we end *one single* borrow (we don't end
-    this borrow as member of the group of borrows belonging to an abstraction).
-    If the borrow is an "abstract" borrow, it means we are ending a borrow
-    inside an abstraction (we end a borrow whose corresponding loan is in the
-    same abstraction - we are allowed to do so without ending the whole
-    abstraction). TODO: we should not treat this case here, and should only
-    consider internal borrows. This kind of internal reshuffling. should be
-    similar to ending abstractions (it is tantamount to ending
-    *sub*-abstractions). *)
+    Rem.: this function is used when we ending *concrete* borrows (we handle
+    borrows inside region abstractions elsewhere). *)
 let give_back (config : config) (span : Meta.span) (l : unique_borrow_id)
     (bc : g_borrow_content) (ctx : eval_ctx) : eval_ctx =
   (* Debug *)
@@ -719,45 +604,10 @@ let give_back (config : config) (span : Meta.span) (l : unique_borrow_id)
         (Option.is_some (lookup_loan_opt span sanity_ek bid ctx));
       (* We have nothing to update in the context *)
       ctx
-  | Abstract (AMutBorrow (pm, l', av)) ->
-      (* Sanity check *)
-      [%sanity_check] span (pm = PNone);
-      [%sanity_check] span (UMut l' = l);
-      (* Check that the corresponding loan is somewhere - purely a sanity check *)
-      [%sanity_check] span
-        (Option.is_some (lookup_loan_opt span sanity_ek l' ctx));
-      (* Convert the avalue to a (fresh symbolic) value.
-
-         Rem.: we shouldn't do this here. We should do this in a function
-         which takes care of ending *sub*-abstractions.
-      *)
-      let sv = convert_avalue_to_given_back_value span av in
-      (* Update the context - TODO: we shouldn't do this *)
-      give_back_avalue_to_same_abstraction config span l' av
-        (mk_typed_value_from_symbolic_value sv)
-        ctx
-  | Abstract (ASharedBorrow (pm, bid, l')) ->
-      (* Sanity check *)
-      [%sanity_check] span (pm = PNone);
-      [%sanity_check] span (UShared l' = l);
-      (* Check that the borrow is somewhere - purely a sanity check *)
-      [%sanity_check] span
-        (Option.is_some (lookup_loan_opt span sanity_ek bid ctx));
-      (* We have nothing to update in the context *)
-      ctx
-  | Abstract (AProjSharedBorrow asb) ->
-      (* Sanity check *)
-      [%sanity_check] span
-        (match l with
-        | UShared l -> borrow_in_asb l asb
-        | UMut _ -> false);
-      (* We have nothing to update in the context *)
-      ctx
-  | Abstract
-      ( AEndedMutBorrow _
-      | AIgnoredMutBorrow _
-      | AEndedIgnoredMutBorrow _
-      | AEndedSharedBorrow ) -> [%craise] span "Unreachable"
+  | Abstract _ ->
+      (* We shouldn't get here: ending borrows inside abstractions is taken care
+       of separately *)
+      [%internal_error] span
 
 let check_borrow_disappeared (span : Meta.span) (fun_name : string)
     (l : unique_borrow_id) (ctx0 : eval_ctx) (ctx : eval_ctx) : unit =
@@ -1270,7 +1120,7 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
             let ended_borrow = ABorrow (AEndedMutBorrow (meta, av)) in
             let ctx = update_aborrow span ek_all (UMut bid) ended_borrow ctx in
             (* Give the value back *)
-            let sv = mk_typed_value_from_symbolic_value sv in
+            let sv = mk_tvalue_from_symbolic_value sv in
             give_back_value span bid sv ctx
         | ASharedBorrow (pm, _, sid) ->
             [%sanity_check] span (pm = PNone);
@@ -1560,7 +1410,7 @@ let end_abstractions_no_synth config span ids ctx =
 
     The loan to update mustn't be a borrowed value. *)
 let promote_shared_loan_to_mut_loan (span : Meta.span) (l : BorrowId.id)
-    (bid : SharedBorrowId.id) (ctx : eval_ctx) : typed_value * eval_ctx =
+    (bid : SharedBorrowId.id) (ctx : eval_ctx) : tvalue * eval_ctx =
   (* Debug *)
   [%ltrace
     "- loan: " ^ BorrowId.to_string l ^ "\n- context:\n"
@@ -1609,7 +1459,7 @@ let promote_shared_loan_to_mut_loan (span : Meta.span) (l : BorrowId.id)
     This function updates a shared borrow to a mutable borrow (and that is all:
     it doesn't touch the corresponding loan). *)
 let replace_reserved_borrow_with_mut_borrow (span : Meta.span) (l : BorrowId.id)
-    (bid : SharedBorrowId.id) (borrowed_value : typed_value) (ctx : eval_ctx) :
+    (bid : SharedBorrowId.id) (borrowed_value : tvalue) (ctx : eval_ctx) :
     eval_ctx =
   (* Lookup the reserved borrow - note that we don't go inside borrows/loans:
      there can't be reserved borrows inside other borrows/loans
@@ -1657,8 +1507,7 @@ let rec promote_reserved_mut_borrow (config : config) (span : Meta.span)
           (* No loan to end inside the value *)
           (* Some sanity checks *)
           [%ltrace
-            "resulting value:\n"
-            ^ typed_value_to_string ~span:(Some span) ctx sv];
+            "resulting value:\n" ^ tvalue_to_string ~span:(Some span) ctx sv];
           [%sanity_check] span (not (concrete_loans_in_value sv));
           [%sanity_check] span (not (bottom_in_value ctx.ended_regions sv));
           [%sanity_check] span (not (reserved_in_value sv));
@@ -1706,8 +1555,8 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
   *)
   let push_fail _ = [%craise] span "Unreachable" in
   (* Function to explore an avalue and destructure it *)
-  let rec list_avalues (allow_borrows : bool) (push : typed_avalue -> unit)
-      (av : typed_avalue) : unit =
+  let rec list_avalues (allow_borrows : bool) (push : tavalue -> unit)
+      (av : tavalue) : unit =
     let ty = av.ty in
     match av.value with
     | ABottom | AIgnored _ -> ()
@@ -1857,7 +1706,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
             (* Just ignore *)
             ()
         | AEmpty -> ())
-  and list_values (v : typed_value) : typed_avalue list * typed_value =
+  and list_values (v : tvalue) : tavalue list * tvalue =
     let ty = v.ty in
     match v.value with
     | VLiteral _ -> ([], v)
@@ -1880,20 +1729,20 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
               (* Rem.: the shared value can't contain loans nor borrows *)
               [%cassert] span (ty_no_regions ty)
                 "Nested borrows are not supported yet";
-              let av : typed_avalue =
+              let av : tavalue =
                 [%sanity_check] span
                   (not (value_has_loans_or_borrows (Some span) ctx sv.value));
                 (* We introduce fresh ids for the symbolic values *)
-                let mk_value_with_fresh_sids (v : typed_value) : typed_value =
+                let mk_value_with_fresh_sids (v : tvalue) : tvalue =
                   let visitor =
                     object
-                      inherit [_] map_typed_avalue
+                      inherit [_] map_tavalue
 
                       method! visit_symbolic_value_id _ _ =
                         fresh_symbolic_value_id ()
                     end
                   in
-                  visitor#visit_typed_value () v
+                  visitor#visit_tvalue () v
                 in
                 let sv = mk_value_with_fresh_sids sv in
                 (* Create the new avalue *)
@@ -2096,7 +1945,7 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
              a borrow to end *)
           let visitor =
             object
-              inherit [_] map_typed_value as super
+              inherit [_] map_tvalue as super
 
               method! visit_VLoan end_borrows lc =
                 (* Check if we can end the loan, but don't dive inside *)
@@ -2134,7 +1983,7 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
                 else super#visit_value end_borrows v
             end
           in
-          let v = visitor#visit_typed_value true v in
+          let v = visitor#visit_tvalue true v in
           (* No exception was raised: continue *)
           EBinding (BDummy vid, v) :: explore_env ctx env
     | EBinding (BVar vid, v) :: env ->
@@ -2142,7 +1991,7 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
          We explore the value and raise an exception if it finds a borrow to end *)
         let visitor =
           object
-            inherit [_] map_typed_value as super
+            inherit [_] map_tvalue as super
 
             method! visit_VLoan end_borrows lc =
               (* Check if we can end the loan, but don't dive inside *)
@@ -2157,7 +2006,7 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
               | _ -> super#visit_VLoan false lc
           end
         in
-        let v = visitor#visit_typed_value true v in
+        let v = visitor#visit_tvalue true v in
         (* No exception was raised: continue *)
         EBinding (BVar vid, v) :: explore_env ctx env
     | EAbs abs :: env

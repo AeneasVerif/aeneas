@@ -30,7 +30,7 @@ val convert_value_to_abstractions :
   can_end:bool ->
   destructure_shared_values:bool ->
   eval_ctx ->
-  typed_value ->
+  tvalue ->
   abs list
 
 (** See {!merge_into_abstraction}.
@@ -42,11 +42,11 @@ type merge_duplicates_funcs = {
     borrow_id ->
     rty ->
     proj_marker ->
-    typed_avalue ->
+    tavalue ->
     rty ->
     proj_marker ->
-    typed_avalue ->
-    typed_avalue;
+    tavalue ->
+    tavalue;
       (** Parameters:
           - [id]
           - [ty0]
@@ -65,7 +65,7 @@ type merge_duplicates_funcs = {
     rty ->
     proj_marker ->
     shared_borrow_id ->
-    typed_avalue;
+    tavalue;
       (** Parameters:
           - [id]
           - [ty0]
@@ -78,11 +78,11 @@ type merge_duplicates_funcs = {
     loan_id ->
     rty ->
     proj_marker ->
-    typed_avalue ->
+    tavalue ->
     rty ->
     proj_marker ->
-    typed_avalue ->
-    typed_avalue;
+    tavalue ->
+    tavalue;
       (** Parameters:
           - [id]
           - [ty0]
@@ -97,13 +97,13 @@ type merge_duplicates_funcs = {
     loan_id ->
     rty ->
     proj_marker ->
-    typed_value ->
-    typed_avalue ->
+    tvalue ->
+    tavalue ->
     rty ->
     proj_marker ->
-    typed_value ->
-    typed_avalue ->
-    typed_avalue;
+    tvalue ->
+    tavalue ->
+    tavalue;
       (** Parameters:
           - [ids]
           - [ty0]
@@ -121,7 +121,7 @@ type merge_duplicates_funcs = {
     ty ->
     proj_marker ->
     aproj_borrows ->
-    typed_avalue;
+    tavalue;
       (** Parameters:
           - [ty0]
           - [pm0]
@@ -138,7 +138,7 @@ type merge_duplicates_funcs = {
     ty ->
     proj_marker ->
     aproj_loans ->
-    typed_avalue;
+    tavalue;
       (** Parameters:
           - [ty0]
           - [pm0]
