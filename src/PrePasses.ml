@@ -863,17 +863,17 @@ let decompose_str_borrows (f : fun_decl) : fun_decl =
     or a free variable that is either used immutably, mutably, or
     moved into the scope *)
 type captured =
-  | Local
-  | Immut
-  | Mut
-  | Move
+  | CLocal
+  | CImmut
+  | CMut
+  | CMove
 
 (* The captured type forms a lattice Immut < Mut < Move < Local *)
 let join_captured (x: captured) (y: captured) = match x, y with
-  | Local, _ | _, Local -> Local
-  | Move, _ | _, Move -> Move
-  | Mut, _ | _, Mut -> Mut
-  | _, _ -> Immut
+  | CLocal, _ | _, CLocal -> CLocal
+  | CMove, _ | _, CMove -> CMove
+  | CMut, _ | _, CMut -> CMut
+  | _, _ -> CImmut
 
 (* Lifting join_captured to a map from local ids to their captured
    state *)
@@ -892,11 +892,11 @@ let add_place (p: place) (c: captured) (m: captured LocalId.Map.t) =
    if it is an if/then/else *)
 let compute_captured_stmt (m: captured LocalId.Map.t) (s: statement) : captured LocalId.Map.t =
   match s.content with
-  | Assign (p, _rv) -> add_place p Mut m
+  | Assign (p, _rv) -> add_place p CMut m
   | SetDiscriminant _ -> failwith "set_discriminant"
   | Drop p ->
       (* To perform a drop, we need exclusive ownership *)
-      add_place p Move m
+      add_place p CMove m
   | Assert _ -> failwith "assert"
   | Call _ -> failwith "call"
   | Abort _ -> failwith "abort"
@@ -914,23 +914,25 @@ let compute_captured_stmt (m: captured LocalId.Map.t) (s: statement) : captured 
 
 let compute_captured_operand (m: captured LocalId.Map.t) (o: operand) : captured LocalId.Map.t =
   match o with
-  | Copy p -> add_place p Immut m
-  | Move p -> add_place p Move m
+  | Copy p -> add_place p CImmut m
+  | Move p -> add_place p CMove m
   | Constant _ -> m
 
-let computed_captured_block (m: captured LocalId.Map.t) (b: block) : captured LocalId.Map.t =
+let compute_captured_block (m: captured LocalId.Map.t) (b: block) : captured LocalId.Map.t =
   List.fold_left (fun m s -> compute_captured_stmt m s) m b.statements
+
+let default_span : Meta.span =
+  let file : Meta.file_id = { name = Local "tmp"; contents = None } in
+  let loc : Meta.loc = {line = 1; col = 0} in
+  let raw_span : Meta.raw_span = {file; beg_loc = loc; end_loc = loc} in
+  { span = raw_span; generated_from_span = None }
+
+let create_statement (s: raw_statement) : statement =
+  { span = default_span; content = s; comments_before = [] }
 
 (** Create a new function for statement [s], according to the state of
     variables computed in [m] *)
-let create_captured_fun (def_id: FunDeclId.id) (dis: Disambiguator.id) locals (m: captured LocalId.Map.t) (s: raw_statement) : fun_decl =
-  let default_span : Meta.span =
-    let file : Meta.file_id = { name = Local "tmp"; contents = None } in
-    let loc : Meta.loc = {line = 1; col = 0} in
-    let raw_span : Meta.raw_span = {file; beg_loc = loc; end_loc = loc} in
-    { span = raw_span; generated_from_span = None }
-  in
-
+let create_captured_fun (def_id: FunDeclId.id) (dis: Disambiguator.id) locals m_args m_locals (s: raw_statement) : fun_decl =
   let default_meta (name: name) : item_meta =
     let attr_info : Meta.attr_info = { attributes = []; inline = None; rename = None; public = true } in
     let span = default_span in
@@ -944,14 +946,8 @@ let create_captured_fun (def_id: FunDeclId.id) (dis: Disambiguator.id) locals (m
     { is_unsafe = false; generics = TypesUtils.empty_generic_params; inputs = []; output = TypesUtils.mk_unit_ty}
   in
 
-  let create_statement (s: raw_statement) : statement =
-    { span = default_span; content = s; comments_before = [] }
-  in
-
   (* TODO: Fix name *)
   let name = [PeIdent ("branches", Disambiguator.zero); PeIdent ("foobar", dis)] in
-  let m_args, m_locals = LocalId.Map.partition (fun _ c -> c <> Local) m in
-
 
   (* TODO: Need to build from region_ids initially present in function *)
   let _, region_gen = RegionId.fresh_stateful_generator () in
@@ -968,14 +964,14 @@ let create_captured_fun (def_id: FunDeclId.id) (dis: Disambiguator.id) locals (m
     match c with
     (* For variables that only need to be borrowed, we add a reference with a fresh region id.
        We keep the list of generated region ids to be added to the function signature. *)
-    | Immut ->
+    | CImmut ->
         let region_id = region_gen () in
         { l with var_ty = TRef (RVar (Free region_id), l.var_ty, RShared) } :: inp_acc, { index = region_id; name = None } :: reg_acc
-    | Mut ->
+    | CMut ->
         let region_id = region_gen () in
         { l with var_ty = TRef (RVar (Free region_id), l.var_ty, RMut) } :: inp_acc, { index = region_id; name = None } :: reg_acc
-    | Move -> l :: inp_acc, reg_acc
-    | Local -> internal_error __FILE__ __LINE__ default_span
+    | CMove -> l :: inp_acc, reg_acc
+    | CLocal -> internal_error __FILE__ __LINE__ default_span
     )
     m_args ([], []) in
   let input_tys = List.map (fun var -> var.var_ty) inputs |> List.rev in
@@ -1090,6 +1086,8 @@ let extract (crate: crate) (f: fun_decl) =
     let _, gen = FunDeclId.mk_stateful_generator_starting_at_id
       (FunDeclId.of_int (List.length (FunDeclId.Map.to_list crate.fun_decls))) in
     let _, dis_gen = Disambiguator.fresh_stateful_generator () in
+    let _, local_gen = LocalId.mk_stateful_generator_starting_at_id
+      (LocalId.of_int (List.length body.locals.locals)) in
 
     let visitor =
       object
@@ -1098,16 +1096,57 @@ let extract (crate: crate) (f: fun_decl) =
       method! visit_Switch _ s = match s with
       | If (o, sthen, selse) ->
           let m = compute_captured_operand LocalId.Map.empty o in
-          let m = computed_captured_block m sthen in
-          let m = computed_captured_block m selse in
+          let m = compute_captured_block m sthen in
+          let m = compute_captured_block m selse in
 
           let def_id = gen () in
           let dis = dis_gen () in
-          let new_f = create_captured_fun def_id dis body.locals.locals m (Switch s) in
+          let m_args, m_locals = LocalId.Map.partition (fun _ c -> c <> CLocal) m in
+          let new_f = create_captured_fun def_id dis body.locals.locals m_args m_locals (Switch s) in
           Format.printf "New function %s\n@." (Print.Crate.crate_fun_decl_to_string crate new_f);
           new_funs := new_f :: !new_funs;
           new_funs_ids := def_id :: !new_funs_ids;
+
+          let place_of_local (l: local) : place = { kind = PlaceLocal l.index; ty = l.var_ty } in
+
+          (* We need to create new locals for borrowing or moving arguments
+             passed to the function *)
+          let args, stmts = LocalId.Map.fold (fun id c (arg_acc, stmt_acc) ->
+            match c with
+            | CImmut | CMut ->
+                (* We need to create a new local for borrowing *)
+                let l = List.nth body.locals.locals (LocalId.to_int id) in
+                let var_id = local_gen () in
+                let var_ty = TRef (RErased, l.var_ty, if c = CImmut then RShared else RMut) in
+                let var = { index = var_id; name = l.name; var_ty } in
+                new_locals := var :: !new_locals;
+
+                let place = { kind = PlaceLocal var_id; ty = var_ty } in
+                let stmt = create_statement (Assign (place, RvRef (place_of_local l, if c = CImmut then BShared else BMut))) in
+                var :: arg_acc, stmt :: stmt_acc
+            | CMove ->
+                let l = List.nth body.locals.locals (LocalId.to_int id) in
+                l :: arg_acc, stmt_acc
+            | CLocal -> internal_error __FILE__ __LINE__ sthen.span
+          ) m_args ([], []) in
+
+          let args = List.map (fun (l: local) -> Move (place_of_local l)) args in
+
+          let ret_var_id = local_gen () in
+          let ret_var = { index = ret_var_id; name = None; var_ty = TypesUtils.mk_unit_ty} in
+          new_locals := ret_var :: !new_locals;
+
           (* TODO: Replace by Call *)
+          let call = {
+              func = FnOpRegular {
+                func = FunId (FRegular def_id);
+                generics = TypesUtils.empty_generic_args
+              };
+              args;
+              dest = { kind = PlaceLocal ret_var_id; ty = TypesUtils.mk_unit_ty}
+            } in
+
+
           Switch s
       | _ -> super#visit_Switch () s
     end
