@@ -248,26 +248,21 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
         in
         let updated_sv = mk_fresh_symbolic_value span ty in
         let copied_sv = mk_fresh_symbolic_value span ty in
-        let mk_abs (r_id : RegionId.id) (avalues : tavalue list) : abs =
-          let abs =
-            {
-              abs_id = fresh_abstraction_id ();
-              kind = CopySymbolicValue;
-              can_end = true;
-              parents = AbstractionId.Set.empty;
-              original_parents = [];
-              regions = { owned = RegionId.Set.singleton r_id };
-              avalues;
-            }
-          in
-          Invariants.opt_type_check_abs span ctx abs;
-          (* *)
-          abs
-        in
 
         let abs =
           List.map
             (fun rid ->
+              let owned = RegionId.Set.singleton rid in
+
+              (* Create the continuation, for the translation *)
+              let abs_cont : abs_cont =
+                (* Note that the values don't give back anything (we will
+                 simplify the given back value to unit when translating
+                 to pure) so we can simply ignore them. *)
+                { input = None; output = { value = EIgnored None; ty } }
+              in
+
+              (* Create the abstraction values *)
               let mk_proj (is_borrows : bool) sv_id : tavalue =
                 let proj : symbolic_proj = { sv_id; proj_ty = ty } in
                 let proj =
@@ -280,7 +275,23 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
               let sv = mk_proj true sp.sv_id in
               let updated_sv = mk_proj false updated_sv.sv_id in
               let copied_sv = mk_proj false copied_sv.sv_id in
-              mk_abs rid [ sv; updated_sv; copied_sv ])
+
+              let abs =
+                {
+                  abs_id = fresh_abstraction_id ();
+                  kind = CopySymbolicValue;
+                  can_end = true;
+                  parents = AbstractionId.Set.empty;
+                  original_parents = [];
+                  regions = { owned };
+                  avalues = [ sv; updated_sv; copied_sv ];
+                  cont = Some abs_cont;
+                }
+              in
+              Invariants.opt_type_check_abs span ctx abs;
+              (* *)
+              abs
+              (*mk_abs rid [ sv; updated_sv; copied_sv ]*))
             (RegionId.Map.values regions)
         in
         let abs = List.map (fun a -> EAbs a) (List.rev abs) in

@@ -16,7 +16,8 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
   [%ltrace tvalue_to_string ctx v];
   (* Convert the value to a list of avalues *)
   let absl = ref [] in
-  let push_abs (r_id : RegionId.id) (avalues : tavalue list) : unit =
+  let push_abs (r_id : RegionId.id) (avalues : tavalue list) (output : tevalue)
+      : unit =
     if avalues = [] then ()
     else begin
       (* Create the abs - note that we keep the order of the avalues as it is
@@ -37,6 +38,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
           original_parents = [];
           regions = { owned = RegionId.Set.singleton r_id };
           avalues;
+          cont = Some { output; input };
         }
       in
       [%ldebug "abs:\n" ^ abs_to_string span ctx abs];
@@ -53,51 +55,56 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
      is [true], this shared value will be stripped of its shared loans.
   *)
   let rec to_avalues ~(allow_borrows : bool) ~(inside_borrowed : bool)
-      ~(group : bool) (r_id : RegionId.id) (v : tvalue) : tavalue list * tvalue
-      =
+      ~(group : bool) (r_id : RegionId.id) (v : tvalue) :
+      tavalue list * tevalue * tevalue * tvalue =
     (* Debug *)
     [%ldebug "\n- value: " ^ tvalue_to_string ~span:(Some span) ctx v];
 
     let ty = v.ty in
+    let rty = subst_regions_in r_id ty in
     match v.value with
-    | VLiteral _ -> ([], v)
+    | VLiteral _ ->
+        ([], mk_eignored span rty (Some v), mk_eignored span rty (Some v), v)
     | VBottom ->
         (* Can happen: we *do* convert dummy values to abstractions, and dummy
            values can contain bottoms *)
-        ([], v)
+        ([], mk_ebottom span rty, mk_ebottom span rty, v)
     | VAdt adt ->
         (* Two cases, depending on whether we have to group all the borrows/loans
            inside one abstraction or not *)
-        let avl, field_values =
+        let avl, output, input, field_values =
           if group then
             (* Convert to avalues, and transmit to the parent *)
-            let avl, field_values =
-              List.split
+            let avl, outputs, inputs, field_values =
+              Collections.List.split4
                 (List.map
                    (to_avalues ~allow_borrows ~inside_borrowed ~group r_id)
                    adt.field_values)
             in
-            (List.concat avl, field_values)
+            (* TODO: the types might be wrong (they might contain erased regions) *)
+            let output = mk_eadt outputs in
+            let input = mk_eadt inputs in
+            (List.concat avl, output, input, field_values)
           else
             (* Create one abstraction per field, and transmit nothing to the parent *)
             let field_values =
               List.map
                 (fun fv ->
                   let r_id = fresh_region_id () in
-                  let avl, fv =
+                  let avl, output, input, fv =
                     to_avalues ~allow_borrows ~inside_borrowed ~group r_id fv
                   in
-                  push_abs r_id avl;
+                  push_abs r_id avl output input;
                   fv)
                 (* Slightly tricky: pay attention to the order in which the
                    abstractions are pushed (i.e.: the [List.rev] is important
                    to get a "good" environment, and a nice translation) *)
                 (List.rev adt.field_values)
             in
-            ([], field_values)
+            ([], mk_eignored span rty, mk_eignored span rty, field_values)
         in
         let adt = { adt with field_values } in
-        (avl, { v with value = VAdt adt })
+        (avl, output, input, { v with value = VAdt adt })
     | VBorrow bc -> (
         let _, ref_ty, kind = ty_as_ref ty in
         [%cassert] span (ty_no_regions ref_ty)
@@ -111,7 +118,10 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
               "Nested borrows are not supported yet";
             let ty = TRef (RVar (Free r_id), ref_ty, kind) in
             let value = ABorrow (ASharedBorrow (PNone, bid, sid)) in
-            ([ { value; ty } ], v)
+            ( [ { value; ty } ],
+              mk_eignored span rty None,
+              mk_eignored span rty None,
+              v )
         | VMutBorrow (bid, bv) ->
             (* We don't support nested borrows for now *)
             [%cassert] span
@@ -124,12 +134,20 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             let av : tavalue = { value = av; ty } in
             (* Continue exploring, looking for loans (and forbidding borrows,
                because we don't support nested borrows for now) *)
-            let avl, bv =
+            let avl, output, input, bv =
               to_avalues ~allow_borrows:false ~inside_borrowed:true ~group:true
                 r_id bv
             in
             let value = { v with value = VBorrow (VMutBorrow (bid, bv)) } in
-            (av :: avl, value)
+            (* Create the abstraction expressions *)
+            let output : tevalue =
+              { value = EBorrow (EMutBorrow (PNone, bid, output)); ty }
+            in
+            let input : tevalue =
+              { value = EBorrow (EIgnoredMutBorrow (None, input)); ty }
+            in
+            (* *)
+            (av :: avl, output, input, value)
         | VReservedMutBorrow _ ->
             (* This borrow should have been activated *)
             [%craise] span "Unexpected")
@@ -148,7 +166,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             (* For avalues, a loan has the type borrow (see the comments in [avalue]) *)
             let ty = mk_ref_ty (RVar (Free r_id)) ty RShared in
             (* Rem.: the shared value might contain loans *)
-            let avl, sv =
+            let avl, output, input, sv =
               to_avalues ~allow_borrows:false ~inside_borrowed:true ~group:true
                 r_id sv
             in
@@ -161,18 +179,33 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
               else VLoan (VSharedLoan (bids, sv))
             in
             let value = { v with value } in
-            (av :: avl, value)
+            (* Create the abstraction expressions *)
+            (* TODO: the type is not correct: it might contain erased regions *)
+            let output = mk_eignored ty None in
+            let input = mk_eignored ty None in
+            (* *)
+            (av :: avl, output, input, value)
         | VMutLoan bid ->
             (* Push the avalue *)
             [%cassert] span (ty_no_regions ty)
               "Nested borrows are not supported yet";
+            let inner_ty = ty in
             (* We use [AIgnore] for the inner value *)
             let ignored = mk_aignored span ty in
             (* For avalues, a loan has the type borrow (see the comments in [avalue]) *)
             let ty = mk_ref_ty (RVar (Free r_id)) ty RMut in
             let av = ALoan (AMutLoan (PNone, bid, ignored None)) in
             let av : tavalue = { value = av; ty } in
-            ([ av ], v))
+            (* Create the abstraction expressions *)
+            let output = mk_eignored ty None in
+            let input : tevalue =
+              {
+                value = ELoan (EMutLoan (PNone, bid, mk_eignored inner_ty));
+                ty;
+              }
+            in
+            (* *)
+            ([ av ], output, input, v))
     | VSymbolic sv ->
         (* Check that there are no nested borrows in the symbolic value -
            we don't support this case yet *)
@@ -192,7 +225,8 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
         if group then
           (* Check if the type contains regions: if not, simply ignore
              it (there are no projections to introduce) *)
-          if TypesUtils.ty_no_regions sv.sv_ty then ([], v)
+          if TypesUtils.ty_no_regions sv.sv_ty then
+            ([], mk_eignored ty, mk_eignored ty, v)
           else
             (* Substitute the regions in the type *)
             let visitor =
@@ -209,6 +243,10 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             let proj : symbolic_proj = { sv_id = sv.sv_id; proj_ty = ty } in
             let nv = ASymbolic (PNone, AProjBorrows { proj; loans = [] }) in
             let nv : tavalue = { value = nv; ty } in
+            (* Introduce the region expression *)
+            let output = { opat = OSymbolic sv.sv_id; opat_ty = norm_ty } in
+            let expr : abs_texpr = { e = ESymbolic sv.sv_id; ty = norm_ty } in
+            (* *)
             ([ nv ], v)
         else
           (* Introduce one abstraction per live region *)

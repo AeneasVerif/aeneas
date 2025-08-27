@@ -513,6 +513,10 @@ let create_empty_abstractions_from_abs_region_groups
       original_parents;
       regions;
       avalues = [];
+      (* For now the continuation is empty: we will initialize it later, when
+         actually inserting the avalues. TODO: this two-phase initialization is
+         not super clean. *)
+      cont = None;
     }
   in
   (* Apply *)
@@ -521,7 +525,8 @@ let create_empty_abstractions_from_abs_region_groups
 let create_push_abstractions_from_abs_region_groups
     (kind : RegionGroupId.id -> abs_kind) (rgl : abs_region_group list)
     (region_can_end : RegionGroupId.id -> bool)
-    (compute_abs_avalues : abs -> eval_ctx -> eval_ctx * tavalue list)
+    (compute_abs_avalues :
+      abs -> eval_ctx -> eval_ctx * tavalue list * abs_cont option)
     (ctx : eval_ctx) : eval_ctx =
   (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
   let empty_absl =
@@ -532,9 +537,9 @@ let create_push_abstractions_from_abs_region_groups
    * in the context. *)
   let insert_abs (ctx : eval_ctx) (abs : abs) : eval_ctx =
     (* Compute the values to insert in the abstraction *)
-    let ctx, avalues = compute_abs_avalues abs ctx in
+    let ctx, avalues, cont = compute_abs_avalues abs ctx in
     (* Add the avalues to the abstraction *)
-    let abs = { abs with avalues } in
+    let abs = { abs with avalues; cont } in
     (* Insert the abstraction in the context *)
     let ctx = { ctx with env = EAbs abs :: ctx.env } in
     (* Return *)
