@@ -221,10 +221,19 @@ module Values = struct
     | PLeft -> "|" ^ s ^ "|"
     | PRight -> "︙" ^ s ^ "︙"
 
-  let ended_mut_borrow_meta_to_string (env : fmt_env)
-      (mv : ended_mut_borrow_meta) : string =
-    let { bid; given_back } = mv in
+  let aended_mut_borrow_meta_to_string (env : fmt_env)
+      (mv : aended_mut_borrow_meta) : string =
+    let { bid; given_back } : aended_mut_borrow_meta = mv in
     "{ bid = " ^ BorrowId.to_string bid ^ "; given_back = "
+    ^ symbolic_value_to_string env given_back
+    ^ " }"
+
+  let eended_mut_borrow_meta_to_string (env : fmt_env)
+      (mv : eended_mut_borrow_meta) : string =
+    let { bid; initial_value; given_back } = mv in
+    "{ bid = " ^ BorrowId.to_string bid ^ "; initial_value = "
+    ^ option_to_string (tvalue_to_string env) initial_value
+    ^ "; given_back = "
     ^ symbolic_value_to_string env given_back
     ^ " }"
 
@@ -319,7 +328,7 @@ module Values = struct
         "@ended_mut_borrow("
         ^
         if with_ended then
-          "given_back= " ^ ended_mut_borrow_meta_to_string env mv
+          "given_back= " ^ aended_mut_borrow_meta_to_string env mv
         else "" ^ tavalue_to_string ~span ~with_ended env child ^ ")"
     | AEndedIgnoredMutBorrow { child; given_back; given_back_meta = _ } ->
         "@ended_ignored_mut_borrow{ "
@@ -604,7 +613,7 @@ module Values = struct
       ?(with_ended : bool = false) (env : fmt_env) (aenv : evalue_env)
       (indent : string) (indent_incr : string) (bc : eborrow_content) : string =
     match bc with
-    | EMutBorrow (pm, bid, av) ->
+    | EMutBorrow (pm, bid, _, av) ->
         "mb@" ^ BorrowId.to_string bid ^ " ("
         ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr av
         ^ ")"
@@ -619,7 +628,7 @@ module Values = struct
         "@ended_mut_borrow("
         ^
         if with_ended then
-          "given_back= " ^ ended_mut_borrow_meta_to_string env mv
+          "given_back= " ^ eended_mut_borrow_meta_to_string env mv
         else
           ""
           ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr

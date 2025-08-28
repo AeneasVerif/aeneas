@@ -247,6 +247,9 @@ exception FoundGBorrowContent of g_borrow_content
 exception FoundGLoanContent of g_loan_content
 
 (** Utility exception *)
+exception FoundEBorrowContent of eborrow_content
+
+(** Utility exception *)
 exception FoundAProjBorrows of aproj_borrows
 
 (** Utility exception *)

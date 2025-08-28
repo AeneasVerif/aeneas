@@ -263,11 +263,11 @@ let rec apply_eproj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
             match (bc, kind) with
             | VMutBorrow (bid, bv), RMut ->
                 (* Apply the projection on the borrowed value *)
-                let bv =
+                let bv' =
                   apply_eproj_borrows span check_symbolic_no_ended ctx regions
                     bv ref_ty
                 in
-                EBorrow (EMutBorrow (PNone, bid, bv))
+                EBorrow (EMutBorrow (PNone, bid, Some bv, bv'))
             | VSharedBorrow (_, _), RShared ->
                 (* We do not need to track shared borrows *)
                 EIgnored (Some v)

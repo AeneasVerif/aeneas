@@ -206,7 +206,21 @@ type ended_proj_borrow_meta = {
 }
 [@@deriving show, ord]
 
-type ended_mut_borrow_meta = { bid : borrow_id; given_back : msymbolic_value }
+type aended_mut_borrow_meta = {
+  bid : borrow_id;
+  given_back : msymbolic_value;
+      (** The value given back upon ending the borrow *)
+}
+[@@deriving show, ord]
+
+type eended_mut_borrow_meta = {
+  bid : borrow_id;
+  initial_value : mvalue option;
+      (** The value consumed upon inserting the mutable borrow into the region
+          abstraction *)
+  given_back : msymbolic_value;
+      (** The value given back upon ending the borrow *)
+}
 [@@deriving show, ord]
 
 (** TODO: make those variants of [abs_kind] *)
@@ -304,7 +318,12 @@ class ['self] iter_tavalue_base =
         =
       fun _ _ -> ()
 
-    method visit_ended_mut_borrow_meta : 'env -> ended_mut_borrow_meta -> unit =
+    method visit_aended_mut_borrow_meta : 'env -> aended_mut_borrow_meta -> unit
+        =
+      fun _ _ -> ()
+
+    method visit_eended_mut_borrow_meta : 'env -> eended_mut_borrow_meta -> unit
+        =
       fun _ _ -> ()
 
     method visit_abs_db_scope_id : 'env -> abs_db_scope_id -> unit =
@@ -362,8 +381,12 @@ class ['self] map_tavalue_base =
         'env -> ended_proj_borrow_meta -> ended_proj_borrow_meta =
       fun _ x -> x
 
-    method visit_ended_mut_borrow_meta :
-        'env -> ended_mut_borrow_meta -> ended_mut_borrow_meta =
+    method visit_aended_mut_borrow_meta :
+        'env -> aended_mut_borrow_meta -> aended_mut_borrow_meta =
+      fun _ x -> x
+
+    method visit_eended_mut_borrow_meta :
+        'env -> eended_mut_borrow_meta -> eended_mut_borrow_meta =
       fun _ x -> x
 
     method visit_abs_db_scope_id : 'env -> abs_db_scope_id -> abs_db_scope_id =
@@ -817,7 +840,7 @@ and aborrow_content =
           rules to specifically handle the case of AIgnoredMutBorrow with Some
           borrow id) and also remove the AEndedIgnoredMutBorrow variant. For
           now, we prefer to be more precise that required. *)
-  | AEndedMutBorrow of ended_mut_borrow_meta * tavalue
+  | AEndedMutBorrow of aended_mut_borrow_meta * tavalue
       (** The sole purpose of {!AEndedMutBorrow} is to store meta information
           for the synthesis, with in particular the (symbolic) value that was
           given back upon ending the borrow. *)
@@ -1233,7 +1256,7 @@ and eended_ignored_mut_loan = {
     Note that because shared borrows do not give back anything we do not track
     them. *)
 and eborrow_content =
-  | EMutBorrow of proj_marker * borrow_id * tevalue
+  | EMutBorrow of proj_marker * borrow_id * mvalue option * tevalue
       (** A mutable borrow owned by an abstraction.
 
           Is used when an abstraction "consumes" borrows, when giving borrows as
@@ -1251,7 +1274,9 @@ and eborrow_content =
             > x -> mut_loan l0
             > px -> ⊥
             > abs0 { a_mut_borrow l0 (U32 0) _ }
-          ]} *)
+          ]}
+
+          We remember the value consumed upon creating the mutable borrow. *)
   | EIgnoredMutBorrow of borrow_id option * tevalue
       (** An ignored mutable borrow.
 
@@ -1313,7 +1338,7 @@ and eborrow_content =
           rules to specifically handle the case of AIgnoredMutBorrow with Some
           borrow id) and also remove the EEndedIgnoredMutBorrow variant. For
           now, we prefer to be more precise that required. *)
-  | EEndedMutBorrow of ended_mut_borrow_meta * tevalue
+  | EEndedMutBorrow of eended_mut_borrow_meta * tevalue
       (** The sole purpose of {!EEndedMutBorrow} is to store meta information
           for the synthesis, with in particular the (symbolic) value that was
           given back upon ending the borrow. *)
@@ -1370,16 +1395,14 @@ and abs_cont = {
           introduced by the call to [id] applied to the value consumed upon
           ending [ML L1].
 
-          Similarly, we can do the following promotion to turn an anonymous
-          value into a region abstraction:
+          However, when we turn an anonymous value into a region abstraction we
+          do not need to introduce an input:
           {[
             _ -> MB l0 v
               ~>
-            abs { MB l0 }[[MB l0:IMB v]]
+            abs { MB l0 }[[MB l0 v]]
           ]}
-          This means that upon ending [l0] we get the value [v]. [IMB] is an
-          "ignored" mutable borrow: we must ignore borrows in the input, and
-          keep them for the outputs. *)
+          This means that upon ending [l0] we get the value [v]. *)
 }
 [@@deriving
   show,

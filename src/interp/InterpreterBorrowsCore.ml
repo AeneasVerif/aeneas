@@ -494,10 +494,50 @@ let lookup_borrow_opt (span : Meta.span) (ek : exploration_kind)
 
 (** Lookup a borrow content from a borrow id.
 
-    Raise an exception if no loan was found *)
+    Raise an borrow if no loan was found *)
 let lookup_borrow (span : Meta.span) (ek : exploration_kind)
     (l : unique_borrow_id) (ctx : eval_ctx) : g_borrow_content =
   match lookup_borrow_opt span ek l ctx with
+  | None -> [%craise] span "Unreachable"
+  | Some lc -> lc
+
+(** Lookup a borrow content appearing in an abstraction expression.
+
+    Note that abstraction expressions only track *mutable* borrows, which is why
+    we identify the borrow with a [borrow_id] and not a [unique_borrow_id]. *)
+let lookup_eborrow_opt (span : Meta.span) (ek : exploration_kind)
+    (l : borrow_id) (ctx : eval_ctx) : eborrow_content option =
+  let obj =
+    object
+      inherit [_] iter_eval_ctx as super
+
+      method! visit_eborrow_content env bc =
+        match bc with
+        | EMutBorrow (pm, bid, mv, av) ->
+            (* Sanity check: projection markers can only appear when we're doing a join *)
+            [%sanity_check] span (pm = PNone);
+            if bid = l then raise (FoundEBorrowContent bc)
+            else super#visit_EMutBorrow env pm bid mv av
+        | EIgnoredMutBorrow (_, _)
+        | EEndedMutBorrow _ | EEndedIgnoredMutBorrow _ ->
+            super#visit_eborrow_content env bc
+
+      method! visit_abs env abs =
+        if ek.enter_abs then super#visit_abs env abs else ()
+    end
+  in
+  (* We use exceptions *)
+  try
+    obj#visit_eval_ctx () ctx;
+    None
+  with FoundEBorrowContent bc -> Some bc
+
+(** Lookup a borrow content appearing in an abstraction expression.
+
+    Raise an exception if no borrow was found *)
+let lookup_eborrow (span : Meta.span) (ek : exploration_kind) (l : borrow_id)
+    (ctx : eval_ctx) : eborrow_content =
+  match lookup_eborrow_opt span ek l ctx with
   | None -> [%craise] span "Unreachable"
   | Some lc -> lc
 
@@ -589,7 +629,8 @@ let update_borrow (span : Meta.span) (ek : exploration_kind)
 
     This is a helper function: **it might break invariants**. *)
 let update_aborrow (span : Meta.span) (ek : exploration_kind)
-    (l : unique_borrow_id) (nv : avalue) (ctx : eval_ctx) : eval_ctx =
+    (l : unique_borrow_id) (nv : avalue) (nev : evalue option) (ctx : eval_ctx)
+    : eval_ctx =
   (* We use a reference to check that we update exactly one borrow: when updating
      inside values, we check we don't update more than one borrow. Then, upon
      returning we check that we updated at least once. *)
@@ -598,6 +639,15 @@ let update_aborrow (span : Meta.span) (ek : exploration_kind)
     [%sanity_check] span (not !r);
     r := true;
     nv
+  in
+
+  let r_evalue = ref false in
+  let update_evalue () : evalue =
+    [%sanity_check] span (not !r_evalue);
+    r_evalue := true;
+    match nev with
+    | None -> [%internal_error] span
+    | Some nv -> nv
   in
 
   let obj =
@@ -626,6 +676,16 @@ let update_aborrow (span : Meta.span) (ek : exploration_kind)
                 if borrow_in_asb l asb then update ()
                 else ABorrow (super#visit_AProjSharedBorrow env asb)
             | UMut _ -> super#visit_ABorrow env bc)
+
+      method! visit_EBorrow env bc =
+        match bc with
+        | EMutBorrow (pm, bid, mv, av) ->
+            (* Sanity check: projection markers can only appear when we're doing a join *)
+            [%sanity_check] span (pm = PNone);
+            if UMut bid = l then update_evalue ()
+            else EBorrow (super#visit_EMutBorrow env pm bid mv av)
+        | EIgnoredMutBorrow _ | EEndedMutBorrow _ | EEndedIgnoredMutBorrow _ ->
+            super#visit_EBorrow env bc
 
       method! visit_abs env abs =
         if ek.enter_abs then super#visit_abs env abs else abs

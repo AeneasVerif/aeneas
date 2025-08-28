@@ -1289,7 +1289,21 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
                it and store with it the freshly generated given back value *)
             let meta = { bid; given_back = sv } in
             let ended_borrow = ABorrow (AEndedMutBorrow (meta, av)) in
-            let ctx = update_aborrow span ek_all (UMut bid) ended_borrow ctx in
+            let ended_eborrow =
+              match lookup_eborrow_opt span ek_all bid ctx with
+              | None -> None
+              | Some (EMutBorrow (pm, bid, mv, av)) ->
+                  [%sanity_check] span (pm = PNone);
+                  let meta : eended_mut_borrow_meta =
+                    { bid; given_back = sv; initial_value = mv }
+                  in
+                  Some (EBorrow (EEndedMutBorrow (meta, av)))
+              | Some _ -> [%internal_error] span
+            in
+            let ctx =
+              update_aborrow span ek_all (UMut bid) ended_borrow ended_eborrow
+                ctx
+            in
             (* Give the value back *)
             let sv = mk_tvalue_from_symbolic_value sv in
             give_back_value span bid sv ctx
@@ -1297,7 +1311,7 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
             [%sanity_check] span (pm = PNone);
             (* Replace the shared borrow to account for the fact it ended *)
             let ended_borrow = ABorrow AEndedSharedBorrow in
-            update_aborrow span ek_all (UShared sid) ended_borrow ctx
+            update_aborrow span ek_all (UShared sid) ended_borrow None ctx
         | AProjSharedBorrow asb ->
             (* Retrieve the borrow ids *)
             let bids =
@@ -1313,7 +1327,7 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
             let repr_bid = List.hd bids in
             (* Replace the shared borrow with Bottom *)
             let ctx =
-              update_aborrow span ek_all (UShared repr_bid) ABottom ctx
+              update_aborrow span ek_all (UShared repr_bid) ABottom None ctx
             in
             (* Continue *)
             ctx

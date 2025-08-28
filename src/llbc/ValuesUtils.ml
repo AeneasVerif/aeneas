@@ -32,14 +32,32 @@ let mk_abottom (span : Meta.span) (ty : ty) : tavalue =
   [%sanity_check] span (ty_is_rty ty);
   { value = ABottom; ty }
 
+let mk_ebottom (ty : ty) : tevalue = { value = EBottom; ty }
+
 let mk_aignored (span : Meta.span) (ty : ty) (v : tvalue option) : tavalue =
   [%sanity_check] span (ty_is_rty ty);
   { value = AIgnored v; ty }
+
+let mk_eignored (ty : ty) (v : tvalue option) : tevalue =
+  { value = EIgnored v; ty }
 
 let value_as_symbolic (span : Meta.span) (v : value) : symbolic_value =
   match v with
   | VSymbolic v -> v
   | _ -> [%craise] span "Unexpected"
+
+let mk_etuple (vl : tevalue list) : tevalue =
+  let tys = List.map (fun (v : tevalue) -> v.ty) vl in
+  let generics = mk_generic_args_from_types tys in
+  {
+    value = EAdt { variant_id = None; field_values = vl };
+    ty = TAdt { id = TTuple; generics };
+  }
+
+let mk_simpl_etuple (vl : tevalue list) : tevalue =
+  match vl with
+  | [ v ] -> v
+  | _ -> mk_etuple vl
 
 (** Peel boxes as long as the value is of the form [Box<T>] *)
 let rec unbox_tvalue (span : Meta.span) (v : tvalue) : tvalue =
