@@ -491,6 +491,11 @@ module type MatchJoinState = sig
   val nabs : abs list ref
 
   val span : Meta.span
+
+  (** Whenever we create fresh abstractions, do we provide an abstraction
+      expression or not? We do not need to compute abstraction expressions when
+      computing fixed-points (but we need them for the synthesis). *)
+  val with_abs_conts : bool
 end
 
 (** Split an environment between the fixed abstractions, values, etc. and the

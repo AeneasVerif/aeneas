@@ -195,8 +195,8 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
   (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
   let call_id = fresh_fun_call_id () in
   [%sanity_check] span (call_id = FunCallId.zero);
-  let compute_abs_avalues (abs : abs) (ctx : eval_ctx) : eval_ctx * tavalue list
-      =
+  let compute_abs_avalues (rg_id : region_group_id) (abs : abs)
+      (_ctx : eval_ctx) : tavalue list * abs_cont option =
     (* Project over the values - we use *loan* projectors, as explained above *)
     let avalues =
       List.map
@@ -204,7 +204,23 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
           mk_aproj_loans_value_from_symbolic_value abs.regions.owned sv sv.sv_ty)
         input_svs
     in
-    (ctx, avalues)
+    (* The continuation expression *)
+    let cont : abs_cont =
+      (* We only create an input expression: no output is needed (we're only
+         interested in computing *which* values get consumed upon ending a
+         lifetime) *)
+      let inputs =
+        List.map
+          (fun (sv : symbolic_value) ->
+            mk_eproj_loans_value_from_symbolic_value abs.regions.owned sv
+              sv.sv_ty)
+          input_svs
+      in
+      (* Note that we don't really care about the type of the input *)
+      let input = { value = EApp (EInputAbs rg_id, inputs); ty = mk_unit_ty } in
+      { output = None; input = Some input }
+    in
+    (avalues, Some cont)
   in
   let region_can_end _ = false in
   let ctx =
@@ -296,13 +312,24 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
   let ctx =
     if is_regular_return then (
       let ret_value = Option.get ret_value in
-      let compute_abs_avalues (abs : abs) (ctx : eval_ctx) :
-          eval_ctx * tavalue list =
-        let ctx, avalue =
+      let compute_abs_avalues (rg_id : region_group_id) (abs : abs)
+          (ctx : eval_ctx) : tavalue list * abs_cont option =
+        (* Create the abstraction values *)
+        let avalue =
           apply_proj_borrows_on_input_value span ctx abs.regions.owned ret_value
             ret_rty
         in
-        (ctx, [ avalue ])
+        (* Create the abstraction continuation expression *)
+        let cont : abs_cont =
+          let output =
+            apply_eproj_borrows_on_input_value span ctx abs.regions.owned
+              ret_value ret_rty
+          in
+          let input = EApp (EOutputAbs rg_id, []) in
+          let input = { value = input; ty = ret_rty } in
+          { output = Some output; input = Some input }
+        in
+        ([ avalue ], Some cont)
       in
 
       (* Initialize and insert the abstractions in the context.

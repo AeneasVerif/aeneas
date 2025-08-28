@@ -606,6 +606,15 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
       let avalues = List.append borrows [ loan ] in
 
+      (* Create the abstraction expression *)
+      let cont : abs_cont option =
+        if S.with_abs_conts then
+          let output = Some (mk_eignored borrow_ty None) in
+          let input = Some (mk_eignored borrow_ty None) in
+          Some { output; input }
+        else None
+      in
+
       (* Generate the abstraction *)
       let abs =
         {
@@ -616,6 +625,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           original_parents = [];
           regions = { owned = RegionId.Set.singleton rid };
           avalues;
+          cont;
         }
       in
       push_abs abs;
@@ -724,6 +734,28 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
         let avalues = [ borrow_av; loan_av ] in
 
+        (* Generate the abstraction expression *)
+        let owned = RegionId.Set.singleton rid in
+        let cont : abs_cont option =
+          if S.with_abs_conts then
+            let input : tevalue =
+              let ty = borrow_ty in
+              let value =
+                EBorrow (EMutBorrow (PNone, bid0, None, mk_eignored bv_ty None))
+              in
+              { value; ty }
+            in
+            let output : tevalue =
+              let ty = borrow_ty in
+              let value =
+                ELoan (EMutLoan (PNone, nbid, mk_eignored bv_ty None))
+              in
+              { value; ty }
+            in
+            Some { output = Some output; input = Some input }
+          else None
+        in
+
         (* Generate the abstraction *)
         let abs =
           {
@@ -732,8 +764,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             can_end = true;
             parents = AbstractionId.Set.empty;
             original_parents = [];
-            regions = { owned = RegionId.Set.singleton rid };
+            regions = { owned };
             avalues;
+            cont;
           }
         in
         push_abs abs;
@@ -775,6 +808,43 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let loan : tavalue = { value = ALoan loan; ty = borrow_ty } in
 
       let avalues = List.append borrows [ loan ] in
+
+      (* Generate the abstraction expression.
+
+         We need to duplicate the input (loan) but we can't have twice the same loan
+         in an abstraction expression, so we create something of the shape:
+         {[
+           output := (MB bid0, MB bid1)
+           input := let x = ML bid in (x, x)
+         ]}
+      *)
+      let owned = RegionId.Set.singleton rid in
+      let cont : abs_cont option =
+        if S.with_abs_conts then
+          let input : tevalue =
+            let loan = EMutLoan (PNone, bid2, mk_eignored bv_ty None) in
+            (* Note that an aloan has a borrow type *)
+            let loan : tevalue = { value = ELoan loan; ty = borrow_ty } in
+
+            (* Create the let-binding *)
+            ()
+          in
+          let output : tevalue =
+            let mk_output (pm : proj_marker) (bid : borrow_id) (bv : tvalue) :
+                tevalue =
+              let bv_ty = bv.ty in
+              [%cassert] span (ty_no_regions bv_ty)
+                "Nested borrows are not supported yet";
+              let value =
+                EBorrow (EMutBorrow (pm, bid, None, mk_eignored bv_ty None))
+              in
+              { value; ty = borrow_ty }
+            in
+            mk_etuple [ mk_output PLeft bid0 bv0; mk_output PRight bid1 bv1 ]
+          in
+          Some { output = Some output; input = Some input }
+        else None
+      in
 
       (* Generate the abstraction *)
       let abs =
@@ -1337,7 +1407,7 @@ struct
     raise (Distinct "match_distinct_adts")
 
   let match_ashared_borrows (_ : tvalue_matcher) (_ : eval_ctx) (_ : eval_ctx)
-      _ty0 pm0 bid0 _sid0 _ty1 pm1 bid1 _sid1 ty =
+      _ty0 pm0 bid0 _sid0 _ty1 pm1 bid1 _sid1 ty : tavalue =
     (* We are checking whether that two environments are equivalent:
        there shouldn't be any projection markers *)
     [%sanity_check] span (pm0 = PNone && pm1 = PNone);
@@ -1348,7 +1418,7 @@ struct
     { value; ty }
 
   let match_amut_borrows (_ : tvalue_matcher) (_ : eval_ctx) (_ : eval_ctx) _ty0
-      pm0 bid0 _av0 _ty1 pm1 bid1 _av1 ty av =
+      pm0 bid0 _av0 _ty1 pm1 bid1 _av1 ty av : tavalue =
     (* We are checking whether that two environments are equivalent:
        there shouldn't be any projection markers *)
     [%sanity_check] span (pm0 = PNone && pm1 = PNone);
@@ -1357,7 +1427,7 @@ struct
     { value; ty }
 
   let match_ashared_loans (_ : tvalue_matcher) (_ : eval_ctx) (_ : eval_ctx)
-      _ty0 pm0 id0 _v0 _av0 _ty1 pm1 id1 _v1 _av1 ty v av =
+      _ty0 pm0 id0 _v0 _av0 _ty1 pm1 id1 _v1 _av1 ty v av : tavalue =
     (* We are checking whether that two environments are equivalent:
        there shouldn't be any projection markers *)
     [%sanity_check] span (pm0 = PNone && pm1 = PNone);
@@ -1366,7 +1436,7 @@ struct
     { value; ty }
 
   let match_amut_loans (_ : tvalue_matcher) (ctx0 : eval_ctx) (ctx1 : eval_ctx)
-      _ty0 pm0 id0 _av0 _ty1 pm1 id1 _av1 ty av =
+      _ty0 pm0 id0 _av0 _ty1 pm1 id1 _av1 ty av : tavalue =
     (* We are checking whether that two environments are equivalent:
        there shouldn't be any projection markers *)
     [%sanity_check] span (pm0 = PNone && pm1 = PNone);
@@ -1381,10 +1451,10 @@ struct
 
   let match_aproj_borrows (match_values : tvalue_matcher) (ctx0 : eval_ctx)
       (ctx1 : eval_ctx) _ty0 pm0 (proj0 : aproj_borrows) _ty1 pm1
-      (proj1 : aproj_borrows) ty proj_ty =
+      (proj1 : aproj_borrows) ty proj_ty : tavalue =
     [%sanity_check] span (pm0 = PNone && pm1 = PNone);
-    let { proj = proj0; loans = loans0 } = proj0 in
-    let { proj = proj1; loans = loans1 } = proj1 in
+    let { proj = proj0; loans = loans0 } : aproj_borrows = proj0 in
+    let { proj = proj1; loans = loans1 } : aproj_borrows = proj1 in
     [%sanity_check] span (loans0 = [] && loans1 = []);
     (* We only want to match the ids of the symbolic values, but in order
        to call [match_symbolic_values] we need to have types... *)
@@ -1396,7 +1466,7 @@ struct
 
   let match_aproj_loans (match_values : tvalue_matcher) (ctx0 : eval_ctx)
       (ctx1 : eval_ctx) _ty0 pm0 (proj0 : aproj_loans) _ty1 pm1
-      (proj1 : aproj_loans) ty proj_ty =
+      (proj1 : aproj_loans) ty proj_ty : tavalue =
     [%sanity_check] span (pm0 = PNone && pm1 = PNone);
     let { proj = proj0; consumed = consumed0; borrows = borrows0 } : aproj_loans
         =
