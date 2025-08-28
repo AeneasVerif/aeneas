@@ -38,7 +38,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
           original_parents = [];
           regions = { owned = RegionId.Set.singleton r_id };
           avalues;
-          cont = Some { output; input };
+          cont = Some { output = Some output; input = None };
         }
       in
       [%ldebug "abs:\n" ^ abs_to_string span ctx abs];
