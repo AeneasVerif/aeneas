@@ -526,18 +526,20 @@ let create_push_abstractions_from_abs_region_groups
     (kind : RegionGroupId.id -> abs_kind) (rgl : abs_region_group list)
     (region_can_end : RegionGroupId.id -> bool)
     (compute_abs_avalues :
-      abs -> eval_ctx -> eval_ctx * tavalue list * abs_cont option)
+      region_group_id -> abs -> eval_ctx -> tavalue list * abs_cont option)
     (ctx : eval_ctx) : eval_ctx =
   (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
   let empty_absl =
     create_empty_abstractions_from_abs_region_groups kind rgl region_can_end
   in
+  let rg_ids = RegionGroupId.mapi (fun rg_id _ -> rg_id) rgl in
 
   (* Compute and add the avalues to the abstractions, the insert the abstractions
    * in the context. *)
-  let insert_abs (ctx : eval_ctx) (abs : abs) : eval_ctx =
+  let insert_abs (ctx : eval_ctx) ((rg_id, abs) : region_group_id * abs) :
+      eval_ctx =
     (* Compute the values to insert in the abstraction *)
-    let ctx, avalues, cont = compute_abs_avalues abs ctx in
+    let avalues, cont = compute_abs_avalues rg_id abs ctx in
     (* Add the avalues to the abstraction *)
     let abs = { abs with avalues; cont } in
     (* Insert the abstraction in the context *)
@@ -545,7 +547,7 @@ let create_push_abstractions_from_abs_region_groups
     (* Return *)
     ctx
   in
-  List.fold_left insert_abs ctx empty_absl
+  List.fold_left insert_abs ctx (List.combine rg_ids empty_absl)
 
 (** Auxiliary helper for [eval_transparent_function_call_symbolic] Instantiate
     the signature and introduce fresh abstractions and region ids while doing
@@ -1267,13 +1269,13 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
     ^ String.concat ", " (List.map (operand_to_string ctx) args)
     ^ "\n- dest:\n" ^ place_to_string ctx dest];
 
+  (* Unique identifier for the call *)
+  let call_id = fresh_fun_call_id () in
+
   (* Generate a fresh symbolic value for the return value *)
   let ret_sv_ty = inst_sg.output in
   let ret_spc = mk_fresh_symbolic_value span ret_sv_ty in
   let ret_value = mk_tvalue_from_symbolic_value ret_spc in
-  let ret_av regions =
-    mk_aproj_loans_value_from_symbolic_value regions ret_spc ret_sv_ty
-  in
   let args_places =
     List.map (fun p -> S.mk_opt_place_from_op span p ctx) args
   in
@@ -1308,21 +1310,43 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
    * First, we define the function which, given an initialized, empty
    * abstraction, computes the avalues which should be inserted inside.
    *)
-  let compute_abs_avalues (abs : abs) (ctx : eval_ctx) : eval_ctx * tavalue list
-      =
+  let compute_abs_avalues (rg_id : RegionGroupId.id) (abs : abs)
+      (ctx : eval_ctx) : tavalue list * abs_cont option =
     (* Project over the input values *)
-    let ctx, args_projs =
-      List.fold_left_map
-        (fun ctx (arg, arg_rty) ->
+    let args_projs =
+      List.map
+        (fun (arg, arg_rty) ->
           apply_proj_borrows_on_input_value span ctx abs.regions.owned arg
             arg_rty)
-        ctx args_with_rtypes
+        args_with_rtypes
+    in
+    (* Introduce the output value *)
+    let ret_v =
+      mk_aproj_loans_value_from_symbolic_value abs.regions.owned ret_spc
+        ret_sv_ty
+    in
+    (* Compute the continuation used in the translation *)
+    let cont : abs_cont =
+      let outputs =
+        List.map
+          (fun (arg, arg_rty) ->
+            apply_eproj_borrows_on_input_value span ctx abs.regions.owned arg
+              arg_rty)
+          args_with_rtypes
+      in
+      let output = mk_simpl_etuple outputs in
+      let input =
+        mk_eproj_loans_value_from_symbolic_value abs.regions.owned ret_spc
+          ret_sv_ty
+      in
+      let input = EApp (EFunCall (call_id, rg_id), [ input ]) in
+      let input : tevalue = { value = input; ty = ret_sv_ty } in
+      { output = Some output; input = Some input }
     in
     (* Group the input and output values *)
-    (ctx, List.append args_projs [ ret_av abs.regions.owned ])
+    (List.append args_projs [ ret_v ], Some cont)
   in
   (* Actually initialize and insert the abstractions *)
-  let call_id = fresh_fun_call_id () in
   let region_can_end _ = true in
   let ctx =
     create_push_abstractions_from_abs_region_groups

@@ -103,9 +103,9 @@ val apply_eproj_borrows :
     We use this function to project input values into region abstractions when
     evaluating function calls. *)
 val apply_proj_borrows_on_input_value :
-  Meta.span -> eval_ctx -> RegionId.Set.t -> tvalue -> rty -> eval_ctx * tavalue
+  Meta.span -> eval_ctx -> RegionId.Set.t -> tvalue -> rty -> tavalue
 
 (** Similar to [apply_eproj_borrows_on_input_value] but evaluates to an
     abstraction expression *)
 val apply_eproj_borrows_on_input_value :
-  Meta.span -> eval_ctx -> RegionId.Set.t -> tvalue -> rty -> eval_ctx * tevalue
+  Meta.span -> eval_ctx -> RegionId.Set.t -> tvalue -> rty -> tevalue

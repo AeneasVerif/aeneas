@@ -1371,8 +1371,12 @@ and tevalue = {
     This is used by the translation, and is particularly useful to compute
     joins: when merging regions, we compose their continuations. *)
 and abs_cont = {
-  output : tevalue;
-  input : tevalue;
+  output : tevalue option;
+      (** All abstraction continuations should have an output *but* the input
+          abstractions introduced at initialization time for the purpose of
+          doing the synthesis. Because of this, those abstractions should never
+          be merged with other abstractions. *)
+  input : tevalue option;
       (** [output] gives the output borrows, while [input] is the computation
           which yields the value. If this computation is not present, it means
           that when ending a borrow we should give back the same value it holds.
@@ -1465,6 +1469,11 @@ type abs = {
           TODO: remove? *)
   regions : abs_regions;
   avalues : tavalue list;  (** The values in this abstraction *)
+  cont : abs_cont option;
+      (** The continuation representing the abstraction in the translation.
+
+          This continuation is optional: it is [none] when we are in the process
+          of computing loop fixed points. *)
 }
 
 and abs_regions = {

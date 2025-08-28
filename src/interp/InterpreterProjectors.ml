@@ -482,19 +482,13 @@ let apply_eproj_loans_on_symbolic_expansion (span : Meta.span)
 
 (** [ty] shouldn't have erased regions *)
 let apply_proj_borrows_on_input_value (span : Meta.span) (ctx : eval_ctx)
-    (regions : RegionId.Set.t) (v : tvalue) (ty : rty) : eval_ctx * tavalue =
+    (regions : RegionId.Set.t) (v : tvalue) (ty : rty) : tavalue =
   [%sanity_check] span (ty_is_rty ty);
   let check_symbolic_no_ended = true in
-  (* Apply the projector *)
-  let av = apply_proj_borrows span check_symbolic_no_ended ctx regions v ty in
-  (* Return *)
-  (ctx, av)
+  apply_proj_borrows span check_symbolic_no_ended ctx regions v ty
 
 let apply_eproj_borrows_on_input_value (span : Meta.span) (ctx : eval_ctx)
-    (regions : RegionId.Set.t) (v : tvalue) (ty : rty) : eval_ctx * tevalue =
+    (regions : RegionId.Set.t) (v : tvalue) (ty : rty) : tevalue =
   [%sanity_check] span (ty_is_rty ty);
   let check_symbolic_no_ended = true in
-  (* Apply the projector *)
-  let av = apply_eproj_borrows span check_symbolic_no_ended ctx regions v ty in
-  (* Return *)
-  (ctx, av)
+  apply_eproj_borrows span check_symbolic_no_ended ctx regions v ty
