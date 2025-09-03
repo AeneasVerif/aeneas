@@ -106,8 +106,7 @@ private theorem forIn'_loop_eq_forIn'_divRange [Monad m] (r : DivRange)
     simp only [forIn'.loop, divRange.loop, gt_iff_lt]
     dcases hStop : r.stop < i <;> simp only [hStop, ↓reduceDIte, ↓reduceIte, List.not_mem_nil,
       IsEmpty.forall_iff, implies_true, List.forIn'_nil, List.forIn'_cons]
-    apply letFun_val_congr
-    apply funext
+    apply bind_congr
     intro x
     cases x
     . simp
