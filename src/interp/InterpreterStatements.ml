@@ -995,7 +995,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
             (* Find the branch *)
             match
               List.find_opt
-                (fun (svl, _) -> List.mem sv (literal_list_to_scalar_list svl))
+                (fun (svl, _) -> List.mem sv (List.map literal_as_scalar svl))
                 stgts
             with
             | None -> eval_block config otherwise ctx
@@ -1017,7 +1017,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
               expand_symbolic_int span sv
                 (S.mk_opt_place_from_op span op ctx)
                 (literal_as_integer int_ty)
-                (literal_list_to_scalar_list values)
+                (List.map literal_as_scalar values)
                 ctx
             in
             (* Evaluate the branches: first the "regular" branches *)
