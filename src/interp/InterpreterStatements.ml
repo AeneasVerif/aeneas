@@ -989,13 +989,13 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
       (* Switch on the value *)
       let ctx_resl, cf_switch =
         match (op_v.value, int_ty) with
-        | VLiteral (VScalar sv), TInt _ | VLiteral (VScalar sv), TUInt _ -> (
+        | VLiteral (VScalar sv), (TInt _ | TUInt _) -> (
             (* Sanity check *)
             [%sanity_check] span (Scalars.get_ty sv = literal_as_integer int_ty);
             (* Find the branch *)
             match
               List.find_opt
-                (fun (svl, _) -> List.mem sv (List.map literal_as_scalar svl))
+                (fun (svl, _) -> List.mem (VScalar sv) svl)
                 stgts
             with
             | None -> eval_block config otherwise ctx
