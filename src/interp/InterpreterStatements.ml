@@ -994,9 +994,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
             [%sanity_check] span (Scalars.get_ty sv = literal_as_integer int_ty);
             (* Find the branch *)
             match
-              List.find_opt
-                (fun (svl, _) -> List.mem (VScalar sv) svl)
-                stgts
+              List.find_opt (fun (svl, _) -> List.mem (VScalar sv) svl) stgts
             with
             | None -> eval_block config otherwise ctx
             | Some (_, tgt) -> eval_block config tgt ctx)
