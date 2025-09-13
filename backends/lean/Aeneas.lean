@@ -7,6 +7,7 @@ import Aeneas.FCongr
 import Aeneas.Fin
 import Aeneas.FSimp
 import Aeneas.Int
+import Aeneas.Inv
 import Aeneas.Let
 import Aeneas.List
 import Aeneas.Nat
