@@ -280,7 +280,7 @@ let rec trait_instance_id_is_local_clause (id : trait_instance_id) : bool =
   match id with
   | Self | Clause _ -> true
   | ParentClause (tref, _) -> trait_instance_id_is_local_clause tref.trait_id
-  | TraitImpl _ | BuiltinOrAuto _ | UnknownTrait _ | Dyn _ -> false
+  | TraitImpl _ | BuiltinOrAuto _ | UnknownTrait _ | Dyn -> false
 
 (** Check that it is ok for a trait instance id not to be normalizable.
 

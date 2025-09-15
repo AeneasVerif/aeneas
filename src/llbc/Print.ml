@@ -651,10 +651,12 @@ module EvalCtx = struct
     let env = eval_ctx_to_fmt_env ctx in
     trait_decl_ref_to_string env x
 
+  (* Note: this will fail on `Dyn` and `BuiltinOrAuto` instances, because these
+     require the full `trait_ref` for printing. *)
   let trait_instance_id_to_string (ctx : eval_ctx) (x : trait_instance_id) :
       string =
     let env = eval_ctx_to_fmt_env ctx in
-    trait_instance_id_to_string env x
+    trait_instance_id_to_string env None x
 
   let borrow_content_to_string ?(span : Meta.span option = None)
       (ctx : eval_ctx) (bc : borrow_content) : string =
