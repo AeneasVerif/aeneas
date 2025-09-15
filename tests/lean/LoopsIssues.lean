@@ -91,7 +91,7 @@ def read_global_loop (n_rows : Usize) : Result Unit :=
   read_global_loop_loop
 
 /- [loops_issues::mut_loop_len]: loop 0:
-   Source: '/rustc/library/core/src/macros/mod.rs', lines 308:8-310:9 -/
+   Source: '/rustc/library/core/src/macros/mod.rs', lines 290:8-292:9 -/
 def mut_loop_len_loop (buf : Array U8 4#usize) : Result Unit :=
   do
   let s ← (↑(Array.to_slice buf) : Result (Slice U8))
