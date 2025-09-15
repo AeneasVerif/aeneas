@@ -75,7 +75,7 @@ and translate_trait_instance_id (span : Meta.span option)
   | ParentClause (tref, clause_id) ->
       let inst_id = translate_trait_instance_id tref.trait_id in
       ParentClause (inst_id, tref.trait_decl_ref.binder_value.id, clause_id)
-  | Dyn _ -> [%craise_opt_span] span "Dynamic trait types are not supported yet"
+  | Dyn -> [%craise_opt_span] span "Dynamic trait types are not supported yet"
   | UnknownTrait s -> [%craise_opt_span] span ("Unknown trait found: " ^ s)
 
 (** Translate a signature type - TODO: factor out the different translation
