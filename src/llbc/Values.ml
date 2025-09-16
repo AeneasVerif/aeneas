@@ -274,14 +274,14 @@ type abs_kind =
           containing borrows. *)
 [@@deriving show, ord]
 
-module AbsBoundVarId = IdGen ()
-module AbsFreeVarId = IdGen ()
+module AbsBVarId = IdGen ()
+module AbsFVarId = IdGen ()
 
 (** A DeBruijn index identifying a group of bound variables *)
 type abs_db_scope_id = int [@@deriving show, ord]
 
-type abs_bound_var_id = AbsBoundVarId.id [@@deriving show, ord]
-type abs_free_var_id = AbsFreeVarId.id [@@deriving show, ord]
+type abs_bvar_id = AbsBVarId.id [@@deriving show, ord]
+type abs_fvar_id = AbsFVarId.id [@@deriving show, ord]
 
 (** Ancestor for {!tavalue} iter visitor *)
 class ['self] iter_tavalue_base =
@@ -329,11 +329,8 @@ class ['self] iter_tavalue_base =
     method visit_abs_db_scope_id : 'env -> abs_db_scope_id -> unit =
       fun _ _ -> ()
 
-    method visit_abs_bound_var_id : 'env -> abs_bound_var_id -> unit =
-      fun _ _ -> ()
-
-    method visit_abs_free_var_id : 'env -> abs_free_var_id -> unit =
-      fun _ _ -> ()
+    method visit_abs_bvar_id : 'env -> abs_bvar_id -> unit = fun _ _ -> ()
+    method visit_abs_fvar_id : 'env -> abs_fvar_id -> unit = fun _ _ -> ()
   end
 
 (** Ancestor for {!tavalue} map visitor *)
@@ -392,12 +389,8 @@ class ['self] map_tavalue_base =
     method visit_abs_db_scope_id : 'env -> abs_db_scope_id -> abs_db_scope_id =
       fun _ x -> x
 
-    method visit_abs_bound_var_id : 'env -> abs_bound_var_id -> abs_bound_var_id
-        =
-      fun _ x -> x
-
-    method visit_abs_free_var_id : 'env -> abs_free_var_id -> abs_free_var_id =
-      fun _ x -> x
+    method visit_abs_bvar_id : 'env -> abs_bvar_id -> abs_bvar_id = fun _ x -> x
+    method visit_abs_fvar_id : 'env -> abs_fvar_id -> abs_fvar_id = fun _ x -> x
   end
 
 (** When giving shared borrows to functions (i.e., inserting shared borrows
@@ -1042,10 +1035,7 @@ and abs_toutput = {
   opat_ty : ty;  (** The type should have been normalized *)
 }
 
-and abs_bound_var = {
-  db_scope_id : abs_db_scope_id;
-  bvar_id : abs_bound_var_id;
-}
+and abs_bvar = { db_scope_id : abs_db_scope_id; bvar_id : abs_bvar_id }
 
 and abs_fun =
   | EOutputAbs of region_group_id
@@ -1074,10 +1064,12 @@ and abs_fun =
     When calling a function, we lose information about the borrow graph: part of
     it is thus "abstracted" away. *)
 and evalue =
-  | ELet of region_id_set * tapat * tevalue * tevalue
+  | ELet of region_id_set * tepat * tevalue * tevalue
       (** Because let-bindings are used to bind expressions refering to
           different sets of regions, we need to precise the regions projected in
           the bound expression. *)
+  | EBVar of abs_bvar
+  | EFVar of abs_fvar_id
   | EApp of abs_fun * tevalue list
   | EAdt of adt_evalue
   | EBottom (* TODO: remove once we change the way internal borrows are ended *)
@@ -1094,10 +1086,13 @@ and evalue =
           this value is not always present (when we introduce abstractions
           because of a join for instance). *)
 
-and apat = PVar of abs_bound_var_id | PAdt of variant_id option * tapat list
+and epat =
+  | POpen of abs_fvar_id * ty
+  | PBound of ty
+  | PAdt of variant_id option * tepat list
 
-and tapat = {
-  epat : apat;
+and tepat = {
+  epat : epat;
   epat_ty : ty;  (** The type should have been normalized *)
 }
 

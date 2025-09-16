@@ -91,7 +91,7 @@ type benv = var BVarId.Map.t list
     variables. *)
 type fenv = var FVarId.Map.t
 
-(** A iter visitor for expressions where the environment is the current
+(** An iter visitor for expressions where the environment is the current
     scope/level (we increment it whenever we enter a binder) *)
 class ['self] scoped_iter_expr =
   object (self : 'self)

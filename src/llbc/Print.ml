@@ -357,7 +357,24 @@ module Values = struct
       also use a unique identifier for all the bound variables. *)
   type evalue_env = {
     fresh_index : unit -> int;
-    map : string AbsBoundVarId.Map.t list;
+    bvars : string AbsBVarId.Map.t list;
+    bvars_stack : string AbsBVarId.Map.t option;
+        (** Partial map of bound variables that we're pushing.
+
+            This is useful when exploring a binder: we start accumulating the
+            names here, then push it in [bvars] when we're done.
+
+            The way to proceed is:
+            {[
+              let env = fmt_env_start_stack env in
+              ... (* Explore the binder to accumulate the mappings from bid to name *)
+              let env = fmt_env_push_stack in
+            ]} *)
+    bvar_id_counter : int;
+        (** We use this counter to generate unique names for the nameless bound
+            var ids *)
+    bvars_stack_counter : abs_bvar_id;
+        (** Id to use for the next bound variable we push in [bvars_stack] *)
   }
 
   let empty_evalue_env : evalue_env =
@@ -368,11 +385,56 @@ module Values = struct
            let i = !r in
            r := i + 1;
            i);
-      map = [];
+      bvars = [];
+      bvars_stack = None;
+      bvar_id_counter = 0;
+      bvars_stack_counter = AbsBVarId.zero;
     }
 
-  let abs_bound_var_to_pretty_string (bv : abs_bound_var)
-      (unique_name : string option) : string =
+  (** Start a new partial map (call this before exploring a binder) *)
+  let evalue_env_start_stack (env : evalue_env) : evalue_env =
+    assert (env.bvars_stack = None);
+    {
+      env with
+      bvars_stack = Some AbsBVarId.Map.empty;
+      bvars_stack_counter = AbsBVarId.zero;
+    }
+
+  (** After we're done accumulating the bound variables of a pattern in
+      [pbvars], push this partial map to [bvars] *)
+  let evalue_env_push_stack (env : evalue_env) : evalue_env =
+    let bvars_stack = Option.get env.bvars_stack in
+    {
+      env with
+      bvars = bvars_stack :: env.bvars;
+      bvars_stack = None;
+      bvars_stack_counter = AbsBVarId.zero;
+    }
+
+  (** Register a bound variable.
+
+      Only call this between [evalue_env_start_stack] and
+      [evalue_env_push_stack]. *)
+  let evalue_env_push_var (env : evalue_env) (_ty : ty) :
+      evalue_env * abs_bvar_id * string =
+    let bvars_stack = Option.get env.bvars_stack in
+    let uid = env.bvar_id_counter in
+    let counter = uid + 1 in
+    let name = "@" ^ string_of_int uid in
+    let bvar_id = env.bvars_stack_counter in
+    let bvars_stack = Some (AbsBVarId.Map.add bvar_id name bvars_stack) in
+    let env =
+      {
+        env with
+        bvars_stack;
+        bvar_id_counter = counter;
+        bvars_stack_counter = AbsBVarId.incr env.bvars_stack_counter;
+      }
+    in
+    (env, bvar_id, name)
+
+  let abs_bvar_to_pretty_string (bv : abs_bvar) (unique_name : string option) :
+      string =
     let unique_name =
       match unique_name with
       | None -> ""
@@ -381,43 +443,15 @@ module Values = struct
     "bv@(" ^ unique_name ^ "scope="
     ^ string_of_int bv.db_scope_id
     ^ ",id="
-    ^ AbsBoundVarId.to_string bv.bvar_id
+    ^ AbsBVarId.to_string bv.bvar_id
     ^ ")"
 
-  let evalue_env_get_bvar (aenv : evalue_env) (bv : abs_bound_var) : string =
-    match List.nth_opt aenv.map bv.db_scope_id with
-    | None -> abs_bound_var_to_pretty_string bv None
+  let evalue_env_get_bvar (aenv : evalue_env) (bv : abs_bvar) : string =
+    match List.nth_opt aenv.bvars bv.db_scope_id with
+    | None -> abs_bvar_to_pretty_string bv None
     | Some m ->
-        let unique_name = AbsBoundVarId.Map.find_opt bv.bvar_id m in
-        abs_bound_var_to_pretty_string bv unique_name
-
-  let evalue_env_push_pat (aenv : evalue_env) (pat : tapat) : evalue_env =
-    let m = ref AbsBoundVarId.Map.empty in
-    let fresh_index = aenv.fresh_index in
-    let aenv = ref aenv in
-    let rec run (pat : tapat) =
-      match pat.epat with
-      | PVar bid ->
-          let id = fresh_index () in
-          let name = string_of_int id in
-          m := AbsBoundVarId.Map.add bid name !m
-      | PAdt (_, pats) -> List.iter run pats
-    in
-    run pat;
-    { !aenv with map = !m :: !aenv.map }
-
-  let evalue_env_push_bound_vars (aenv : evalue_env)
-      (vars : abs_bound_var_id list) : evalue_env =
-    let m = ref AbsBoundVarId.Map.empty in
-    let fresh_index = aenv.fresh_index in
-    let aenv = ref aenv in
-    let run (bid : abs_bound_var_id) =
-      let id = fresh_index () in
-      let name = string_of_int id in
-      m := AbsBoundVarId.Map.add bid name !m
-    in
-    List.iter run vars;
-    { !aenv with map = !m :: !aenv.map }
+        let unique_name = AbsBVarId.Map.find_opt bv.bvar_id m in
+        abs_bvar_to_pretty_string bv unique_name
 
   let abs_fun_to_string (f : abs_fun) : string =
     match f with
@@ -526,12 +560,13 @@ module Values = struct
           tevalue_to_string ~span env aenv (indent ^ indent_incr) indent_incr
             bound
         in
-        let aenv = evalue_env_push_pat aenv pat in
-        let pat = tapat_to_string ~span env aenv indent indent_incr pat in
+        let aenv, pat = tepat_to_string ~span env aenv indent indent_incr pat in
         let next = tevalue_to_string ~span env aenv indent indent_incr next in
         indent ^ "let " ^ pat ^ " = ("
         ^ RegionId.Set.to_string None regions
         ^ ")" ^ bound ^ "\n" ^ indent ^ next
+    | EBVar bv -> evalue_env_get_bvar aenv bv
+    | EFVar fvid -> "@" ^ AbsFVarId.to_string fvid
     | EApp (f, args) ->
         let args =
           List.map
@@ -596,18 +631,36 @@ module Values = struct
             ml.given_back
         ^ "}"
 
-  and tapat_to_string ?(span : Meta.span option = None) (env : fmt_env)
-      (aenv : evalue_env) (indent : string) (indent_incr : string) (pat : tapat)
-      : string =
+  (** Not safe to use: call [tepat_to_string] directly *)
+  and tepat_to_string_core ?(span : Meta.span option = None) (env : fmt_env)
+      (aenv : evalue_env) (indent : string) (indent_incr : string) (pat : tepat)
+      : evalue_env * string =
     match pat.epat with
-    | PVar bvar_id -> evalue_env_get_bvar aenv { db_scope_id = 0; bvar_id }
+    | PBound ty ->
+        let aenv, _, s = evalue_env_push_var aenv ty in
+        (aenv, s)
+    | POpen (bid, _) -> (aenv, "@" ^ AbsFVarId.to_string bid)
     | PAdt (variant_id, fields) ->
-        let fields =
-          List.map (tapat_to_string ~span env aenv indent indent_incr) fields
+        let aenv, fields =
+          List.fold_left_map
+            (fun aenv field ->
+              tepat_to_string_core ~span env aenv indent indent_incr field)
+            aenv fields
         in
-        adt_to_string span env
-          (fun () -> show_tapat pat)
-          pat.epat_ty variant_id fields
+        ( aenv,
+          adt_to_string span env
+            (fun () -> show_tepat pat)
+            pat.epat_ty variant_id fields )
+
+  and tepat_to_string ?(span : Meta.span option = None) (env : fmt_env)
+      (aenv : evalue_env) (indent : string) (indent_incr : string) (pat : tepat)
+      : evalue_env * string =
+    let aenv = evalue_env_start_stack aenv in
+    let aenv, string =
+      tepat_to_string_core ~span env aenv indent indent_incr pat
+    in
+    let aenv = evalue_env_push_stack aenv in
+    (aenv, string)
 
   and eborrow_content_to_string ?(span : Meta.span option = None)
       ?(with_ended : bool = false) (env : fmt_env) (aenv : evalue_env)

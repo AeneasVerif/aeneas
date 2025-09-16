@@ -97,6 +97,12 @@ let ( abstraction_id_counter,
       fresh_abstraction_id ) =
   AbstractionId.fresh_marked_stateful_generator ()
 
+let ( abs_fvar_id_counter,
+      marked_abs_fvar_ids,
+      marked_abs_fvar_ids_insert_from_int,
+      fresh_abs_fvar_id ) =
+  AbsFVarId.fresh_marked_stateful_generator ()
+
 let loop_id_counter, fresh_loop_id = LoopId.fresh_stateful_generator ()
 
 let fun_call_id_counter, fresh_fun_call_id =
