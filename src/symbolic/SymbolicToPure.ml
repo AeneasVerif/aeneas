@@ -226,7 +226,13 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
   let parent_clauses =
     List.map (translate_trait_clause span) llbc_parent_clauses
   in
-  let types = List.map (fun (c : A.trait_assoc_ty) -> c.name) types in
+  if types <> [] then
+    (* Most associated types are removed by Charon's `--remove-associated-types`. *)
+    [%craise_opt_span] span
+      "Found an unhandled trait associated type; this can happen with \
+       mutually-recursive traits as well as GATs. Aeneas cannot handle such \
+       types today.";
+  let types = [] in
   let consts =
     List.map
       (fun (c : A.trait_assoc_const) -> (c.name, translate_ty c.ty))
@@ -272,7 +278,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     generics = llbc_generics;
     parent_trait_refs;
     consts;
-    types;
+    types = _;
     methods;
     vtable = _;
   } =
@@ -300,9 +306,8 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
         (name, translate_global_decl_ref span translate_ty gref))
       consts
   in
-  let types =
-    List.map (fun (name, ty_impl) -> (name, translate_ty ty_impl.T.value)) types
-  in
+  (* We checked that there were no types in the trait declaration already. *)
+  let types = [] in
   let methods =
     List.map
       (fun ((name, m) : string * T.fun_decl_ref T.binder) ->

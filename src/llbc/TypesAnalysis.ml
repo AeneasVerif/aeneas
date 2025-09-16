@@ -124,7 +124,7 @@ let rec trait_instance_id_reducible (span : Meta.span option)
   | Self | Clause _ -> false
   | ParentClause (tref, _) -> trait_instance_id_reducible span tref.trait_id
   | Dyn -> [%craise_opt_span] span "Unreachable"
-  | UnknownTrait _ -> false
+  | ItemClause _ | UnknownTrait _ -> false
 
 let analyze_full_ty (span : Meta.span option) (updated : bool ref)
     (infos : type_infos) (ty_info : partial_type_info) (ty : ty) :
