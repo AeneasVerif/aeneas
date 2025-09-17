@@ -839,7 +839,8 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
                       | BMut
                       | BTwoPhaseMut
                       | BShallow
-                      | BUniqueImmutable ) )
+                      | BUniqueImmutable ),
+                      _ )
                 | NullaryOp _
                 | UnaryOp _
                 | BinaryOp _
@@ -890,7 +891,7 @@ and eval_rvalue_global (config : config) (span : Meta.span) (dest : place)
  fun ctx ->
   (* One of the micro-passes makes sures there is only one case to handle *)
   match rv with
-  | RvRef ({ kind = PlaceGlobal gref; ty = _ }, BShared) ->
+  | RvRef ({ kind = PlaceGlobal gref; ty = _ }, BShared, _) ->
       eval_global_ref config span dest gref RShared ctx
   | _ ->
       [%craise] span

@@ -788,6 +788,7 @@ let unop_to_string (unop : unop) : string =
       "cast<" ^ literal_type_to_string src ^ "," ^ literal_type_to_string tgt
       ^ ">"
   | ArrayToSlice -> "array_to_slice"
+  | PtrMetadata -> "ptr_metadata"
 
 let binop_to_string = Print.Expressions.binop_to_string
 

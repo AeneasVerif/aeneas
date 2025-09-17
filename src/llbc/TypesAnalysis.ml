@@ -364,6 +364,7 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
         in
         analyze span expl_info ty_info output
     | TFnDef _ -> [%craise_opt_span] span "unsupported: FnDef"
+    | TPtrMetadata _ -> [%craise_opt_span] span "unsupported: PtrMetadata"
     | TError _ ->
         [%craise_opt_span] span "Found type error in the output of charon"
   in
@@ -649,7 +650,12 @@ let compute_outlive_proj_ty (span : Meta.span option)
                back values computed for the generated backward functions may \
                be incorrect.";
             ()
-        | TRawPtr _ | TDynTrait _ | TFnPtr _ | TFnDef _ | TError _ ->
+        | TRawPtr _
+        | TDynTrait _
+        | TFnPtr _
+        | TFnDef _
+        | TPtrMetadata _
+        | TError _ ->
             (* Don't know what to do *)
             [%craise_opt_span] span "Not handled yet"
     end

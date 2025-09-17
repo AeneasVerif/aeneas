@@ -796,6 +796,9 @@ let unop_name (unop : unop) : string =
   | Cast _ ->
       (* We never directly use the unop name in this case *)
       raise (Failure "Unsupported")
+  | PtrMetadata ->
+      (* Its output is never used to it should have been eliminated. *)
+      raise (Failure "Unsupported: PtrMetadata")
 
 (** Small helper to compute the name of a binary operation (note that many
     binary operations like "less than" are extracted to primitive operations,
