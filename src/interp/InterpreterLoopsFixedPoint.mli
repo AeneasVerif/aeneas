@@ -45,8 +45,12 @@ open InterpreterLoopsCore
       x -> SB l1
     ]}
 
-    we only introduce a fresh abstraction for [l1]. *)
-val prepare_ashared_loans : Meta.span -> loop_id option -> Cps.cm_fun
+    we only introduce a fresh abstraction for [l1].
+
+    The boolean is [with_abs_conts]: if [true] we synthesize continuations
+    expressions for the fresh region abstractions we introduce. *)
+val prepare_ashared_loans :
+  Meta.span -> loop_id option -> with_abs_conts:bool -> Cps.cm_fun
 
 (** Compute a fixed-point for the context at the entry of the loop. We also
     return:

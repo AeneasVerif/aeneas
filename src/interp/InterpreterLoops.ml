@@ -437,5 +437,7 @@ let eval_loop (config : config) (span : span) (eval_loop_body : stl_cm_fun) :
          introduce *fixed* abstractions, and again later to introduce
          *non-fixed* abstractions.
       *)
-      let ctx, cc = comp cc (prepare_ashared_loans span None ctx) in
+      let ctx, cc =
+        comp cc (prepare_ashared_loans span None ~with_abs_conts:true ctx)
+      in
       comp cc (eval_loop_symbolic config span eval_loop_body ctx)

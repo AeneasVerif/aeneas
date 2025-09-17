@@ -15,8 +15,8 @@ open InterpreterLoopsJoinCtxs
 (** The local logger *)
 let log = Logging.loops_fixed_point_log
 
-let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
-    cm_fun =
+let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
+    ~(with_abs_conts : bool) : cm_fun =
  fun ctx0 ->
   let ctx = ctx0 in
   [%ldebug "ctx0:\n" ^ eval_ctx_to_string ctx];
@@ -129,6 +129,11 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
     in
     let can_end = true in
     let regions : abs_regions = { owned = RegionId.Set.singleton nrid } in
+    let cont : abs_cont option =
+      if with_abs_conts then
+        Some { output = Some (mk_etuple []); input = Some (mk_etuple []) }
+      else None
+    in
     let fresh_abs =
       {
         abs_id = fresh_abstraction_id ();
@@ -138,6 +143,7 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
         original_parents = [];
         regions;
         avalues;
+        cont;
       }
     in
     fresh_absl := fresh_abs :: !fresh_absl;
@@ -209,8 +215,8 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
   (ctx, cf)
 
 let prepare_ashared_loans_no_synth (span : Meta.span) (loop_id : LoopId.id)
-    (ctx : eval_ctx) : eval_ctx =
-  fst (prepare_ashared_loans span (Some loop_id) ctx)
+    ~(with_abs_conts : bool) (ctx : eval_ctx) : eval_ctx =
+  fst (prepare_ashared_loans span (Some loop_id) ~with_abs_conts ctx)
 
 let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
     (loop_id : LoopId.id) (eval_loop_body : stl_cm_fun) (ctx0 : eval_ctx) :
@@ -222,7 +228,9 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
 
      For more details, see the comments for {!prepare_ashared_loans}
   *)
-  let ctx = prepare_ashared_loans_no_synth span loop_id ctx0 in
+  let ctx =
+    prepare_ashared_loans_no_synth span loop_id ~with_abs_conts:false ctx0
+  in
 
   (* Debug *)
   [%ltrace
