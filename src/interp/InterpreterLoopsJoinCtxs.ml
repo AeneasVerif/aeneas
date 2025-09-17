@@ -734,12 +734,14 @@ let collapse_ctx config (span : Meta.span) (loop_id : LoopId.id)
   ctx
 
 let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
-    (loop_id : LoopId.id) (ctx : eval_ctx) : merge_duplicates_funcs =
+    (loop_id : LoopId.id) (with_abs_conts : bool) (ctx : eval_ctx) :
+    merge_duplicates_funcs =
   (* Rem.: the merge functions raise exceptions (that we catch). *)
   let module S : MatchJoinState = struct
     let span = span
     let loop_id = loop_id
     let nabs = ref []
+    let with_abs_conts = with_abs_conts
   end in
   let module JM = MakeJoinMatcher (S) in
   let module M = MakeMatcher (JM) in
@@ -887,12 +889,14 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
   }
 
 let merge_into_first_abstraction (span : Meta.span) (loop_id : LoopId.id)
-    (abs_kind : abs_kind) (can_end : bool) (ctx : eval_ctx)
-    (aid0 : AbstractionId.id) (aid1 : AbstractionId.id) :
+    (abs_kind : abs_kind) ~(can_end : bool) ~(with_abs_conts : bool)
+    (ctx : eval_ctx) (aid0 : AbstractionId.id) (aid1 : AbstractionId.id) :
     eval_ctx * AbstractionId.id =
-  let merge_funs = mk_collapse_ctx_merge_duplicate_funs span loop_id ctx in
-  merge_into_first_abstraction span abs_kind can_end (Some merge_funs) ctx aid0
-    aid1
+  let merge_funs =
+    mk_collapse_ctx_merge_duplicate_funs span loop_id with_abs_conts ctx
+  in
+  InterpreterAbs.merge_into_first_abstraction span abs_kind can_end
+    (Some merge_funs) ctx aid0 aid1
 
 (** Collapse an environment, merging the duplicated borrows/loans.
 
@@ -902,13 +906,16 @@ let merge_into_first_abstraction (span : Meta.span) (loop_id : LoopId.id)
     We do this because when we join environments, we may introduce duplicated
     loans and borrows. See the explanations for {!join_ctxs}. *)
 let collapse_ctx_with_merge config (span : Meta.span) (loop_id : LoopId.id)
-    (old_ids : ids_sets) (ctx : eval_ctx) : eval_ctx =
-  let merge_funs = mk_collapse_ctx_merge_duplicate_funs span loop_id ctx in
+    (old_ids : ids_sets) ~(with_abs_conts : bool) (ctx : eval_ctx) : eval_ctx =
+  let merge_funs =
+    mk_collapse_ctx_merge_duplicate_funs span loop_id with_abs_conts ctx
+  in
   try collapse_ctx config span loop_id merge_funs old_ids ctx
   with ValueMatchFailure _ -> [%internal_error] span
 
 let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
-    (ctx0 : eval_ctx) (ctx1 : eval_ctx) : ctx_or_update =
+    ~(with_abs_conts : bool) (ctx0 : eval_ctx) (ctx1 : eval_ctx) : ctx_or_update
+    =
   (* Debug *)
   [%ltrace
     "\n- fixed_ids:\n" ^ show_ids_sets fixed_ids ^ "\n\n- ctx0:\n"
@@ -972,6 +979,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
     let span = span
     let loop_id = loop_id
     let nabs = nabs
+    let with_abs_conts = with_abs_conts
   end in
   let module JM = MakeJoinMatcher (S) in
   let module M = MakeMatcher (JM) in
@@ -1159,6 +1167,7 @@ let refresh_abs (old_abs : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
 let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
     (loop_id : LoopId.id) (fixed_ids : ids_sets) (old_ctx : eval_ctx)
     (ctxl : eval_ctx list) : (eval_ctx * eval_ctx list) * eval_ctx =
+  let with_abs_conts = false in
   (* # Join with the new contexts, one by one
 
      For every context, we repeteadly attempt to join it with the current
@@ -1167,7 +1176,7 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
   *)
   let joined_ctx = ref old_ctx in
   let rec join_one_aux (ctx : eval_ctx) : eval_ctx =
-    match join_ctxs span loop_id fixed_ids !joined_ctx ctx with
+    match join_ctxs span loop_id fixed_ids ~with_abs_conts !joined_ctx ctx with
     | Ok nctx ->
         joined_ctx := nctx;
         ctx
@@ -1231,7 +1240,8 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
 
     (* Collapse to eliminate the markers *)
     joined_ctx :=
-      collapse_ctx_with_merge config span loop_id fixed_ids !joined_ctx;
+      collapse_ctx_with_merge config span loop_id fixed_ids ~with_abs_conts
+        !joined_ctx;
     [%ltrace
       "join_one: after join-collapse:\n"
       ^ eval_ctx_to_string ~span:(Some span) !joined_ctx];

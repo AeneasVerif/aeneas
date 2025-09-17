@@ -11,6 +11,7 @@ open InterpreterLoopsCore
     - [loop_id]
     - [abs_kind]
     - [can_end]
+    - [with_abs_conts]
     - [ctx]
     - [aid0]
     - [aid1] *)
@@ -18,7 +19,8 @@ val merge_into_first_abstraction :
   Meta.span ->
   loop_id ->
   abs_kind ->
-  bool ->
+  can_end:bool ->
+  with_abs_conts:bool ->
   eval_ctx ->
   abstraction_id ->
   abstraction_id ->
@@ -81,10 +83,17 @@ val merge_into_first_abstraction :
     Parameters:
     - [loop_id]
     - [fixed_ids]
+    - 
     - [ctx0]
     - [ctx1] *)
 val join_ctxs :
-  Meta.span -> loop_id -> ids_sets -> eval_ctx -> eval_ctx -> ctx_or_update
+  Meta.span ->
+  loop_id ->
+  ids_sets ->
+  with_abs_conts:bool ->
+  eval_ctx ->
+  eval_ctx ->
+  ctx_or_update
 
 (** Join the context at the entry of the loop with the contexts upon reentry
     (upon reaching the [Continue] statement - the goal is to compute a fixed
@@ -93,7 +102,9 @@ val join_ctxs :
     As we may have to end loans in the environments before doing the join, we
     return those updated environments, and the joined environment.
 
-    This function is mostly built on top of {!join_ctxs}.
+    This function is mostly built on top of {!join_ctxs}. Note that as the goal
+    is to compute a fixed point we do not introduce continuations in the fresh
+    region abstractions.
 
     Parameters:
     - [config]

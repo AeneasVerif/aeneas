@@ -596,8 +596,8 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
                       ^ AbstractionId.to_string !id0];
                     (* Note that we merge *into* [id0] *)
                     let fp', id0' =
-                      merge_into_first_abstraction span loop_id abs_kind false
-                        !fp !id0 id
+                      merge_into_first_abstraction span loop_id abs_kind
+                        ~can_end:false ~with_abs_conts:false !fp !id0 id
                     in
                     fp := fp';
                     id0 := id0';
