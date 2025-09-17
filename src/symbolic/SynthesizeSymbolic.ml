@@ -98,6 +98,7 @@ let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
     | TFnPtr _
     | TRawPtr _
     | TDynTrait _
+    | TPtrMetadata _
     | TError _ -> [%craise] span "Ill-formed symbolic expansion"
   in
   Expansion (place, sv, expansion)

@@ -341,7 +341,7 @@ let lets_require_wrap_in_do (span : Meta.span)
 let extract_unop (span : Meta.span) (extract_expr : bool -> texpr -> unit)
     (fmt : F.formatter) (inside : bool) (unop : unop) (arg : texpr) : unit =
   match unop with
-  | Not _ | Neg _ | ArrayToSlice ->
+  | Not _ | Neg _ | ArrayToSlice | PtrMetadata ->
       let unop = unop_name unop in
       if inside then F.pp_print_string fmt "(";
       F.pp_print_string fmt unop;

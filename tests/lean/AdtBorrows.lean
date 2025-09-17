@@ -8,6 +8,13 @@ set_option linter.unusedVariables false
 
 namespace adt_borrows
 
+/- [UNIT_METADATA]
+   Source: 'tests/src/adt-borrows.rs', lines 0:0-0:0
+   Name pattern: [UNIT_METADATA] -/
+@[global_simps] def UNIT_METADATA_body : Result Unit := ok ()
+@[global_simps, irreducible]
+def UNIT_METADATA : Unit := eval_global UNIT_METADATA_body
+
 /- [adt_borrows::SharedWrapper]
    Source: 'tests/src/adt-borrows.rs', lines 7:0-7:35 -/
 @[reducible] def SharedWrapper (T : Type) := T

@@ -632,7 +632,22 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
         | CastRawPtr _ -> [%craise] ctx.span "Unsupported: raw ptr casts"
         | CastTransmute _ -> [%craise] ctx.span "Unsupported: transmute"
       end
-    | S.Unop E.PtrMetadata -> [%craise] ctx.span "Unsupported unop: PtrMetadata"
+    | S.Unop E.PtrMetadata -> (
+        match args with
+        | [ arg ] ->
+            let effect_info =
+              {
+                can_fail = false;
+                stateful_group = false;
+                stateful = false;
+                can_diverge = false;
+                is_rec = false;
+              }
+            in
+            let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
+            let dest = mk_tpattern_from_fvar dest dest_mplace in
+            (ctx, Unop PtrMetadata, effect_info, args, [], dest)
+        | _ -> [%craise] ctx.span "Unreachable")
     | S.Binop binop -> (
         match args with
         | [ arg0; arg1 ] ->

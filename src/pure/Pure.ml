@@ -904,6 +904,7 @@ type unop =
   | Neg of integer_type
   | Cast of literal_type * literal_type
   | ArrayToSlice
+  | PtrMetadata
 [@@deriving show, ord]
 
 type fun_id_or_trait_method_ref =

@@ -1030,7 +1030,7 @@ let simplify_duplicate_calls =
 (** A helper predicate *)
 let lift_unop (unop : unop) : bool =
   match unop with
-  | Not None -> false
+  | Not None | PtrMetadata -> false
   | Not (Some _) | Neg _ | Cast _ | ArrayToSlice -> true
 
 (** A helper predicate *)
@@ -3795,7 +3795,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
               | Fun fid -> begin compute_known_tys_from_fun_id qualif fid end
               | Unop unop -> begin
                   match unop with
-                  | Not _ | Neg _ | Cast _ | ArrayToSlice ->
+                  | Not _ | Neg _ | Cast _ | ArrayToSlice | PtrMetadata ->
                       (known_f_ty, known_args_tys, false)
                 end
               | Binop _ -> (known_f_ty, known_args_tys, false)
