@@ -133,6 +133,29 @@ let mk_aproj_loans (pm : proj_marker) (sv_id : symbolic_value_id) (proj_ty : ty)
     ty = proj_ty;
   }
 
+let mk_eproj_borrows (pm : proj_marker) (sv_id : symbolic_value_id)
+    (proj_ty : ty) : tevalue =
+  {
+    value =
+      ESymbolic (pm, EProjBorrows { proj = { sv_id; proj_ty }; loans = [] });
+    ty = proj_ty;
+  }
+
+let mk_eproj_loans (pm : proj_marker) (sv_id : symbolic_value_id) (proj_ty : ty)
+    : tevalue =
+  {
+    value =
+      ESymbolic
+        ( pm,
+          EProjLoans { proj = { sv_id; proj_ty }; consumed = []; borrows = [] }
+        );
+    ty = proj_ty;
+  }
+
+let symbolic_proj_to_esymbolic_proj (p : symbolic_proj) : esymbolic_proj =
+  let { sv_id; proj_ty } : symbolic_proj = p in
+  { sv_id; proj_ty }
+
 (** Check if a value contains a *concrete* borrow (i.e., a [Borrow] value - we
     don't check if there are borrows hidden in symbolic values). *)
 let concrete_borrows_in_value (v : tvalue) : bool =
@@ -406,10 +429,7 @@ let open_tepat (span : Meta.span) (fresh_fvar_id : unit -> abs_fvar_id)
     object
       inherit [_] map_tavalue
       method! visit_POpen _ _ = [%internal_error] span
-
-      method! visit_PBound _ ty =
-        let id = fresh_fvar_id () in
-        POpen (id, ty)
+      method! visit_PBound _ = POpen (fresh_fvar_id ())
     end
   in
   visitor#visit_tepat () pat
@@ -425,12 +445,12 @@ let close_tepat (span : Meta.span) (pat : tepat) :
     object
       inherit [_] map_tavalue
 
-      method! visit_POpen _ id ty =
+      method! visit_POpen _ id =
         let bid = fresh_bvar_id () in
         map := AbsFVarId.Map.add id bid !map;
-        PBound ty
+        PBound
 
-      method! visit_PBound _ _ = [%internal_error] span
+      method! visit_PBound _ = [%internal_error] span
     end
   in
   let pat = visitor#visit_tepat () pat in
@@ -504,3 +524,25 @@ let close_binder (span : Meta.span) (pat : tepat) (e : tevalue) :
   let pat, visitor = close_binder_visitor span pat in
   let e = visitor#visit_tevalue 0 e in
   (pat, e)
+
+let mk_fresh_abs_fvar (ty : ty) : tevalue =
+  let id = fresh_abs_fvar_id () in
+  { value = EFVar id; ty }
+
+let mk_epat_from_fvar (fv : tevalue) : tepat =
+  match fv.value with
+  | EFVar id -> { epat = POpen id; epat_ty = fv.ty }
+  | _ -> raise (Failure "Unexpected")
+
+(** Create a let-binding.
+
+    The pattern should be open (it should contain free variables): this helper
+    will close it by replacing the free variables with bound variables. *)
+let mk_let (span : Meta.span) (rid_set : region_id_set) (pat : tepat)
+    (bound : tevalue) (e : tevalue) : tevalue =
+  (* Close the pattern *)
+  let pat, e = close_binder span pat e in
+  (* Create the let-binding *)
+  let value = ELet (rid_set, pat, bound, e) in
+  let ty = e.ty in
+  { value; ty }

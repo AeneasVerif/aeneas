@@ -142,6 +142,7 @@ val ctxs_are_equivalent : Meta.span -> ids_sets -> eval_ctx -> eval_ctx -> bool
 
     **Parameters**:
     - [config]
+    - [span]
     - [loop_id]
     - [fixed_ids]
     - [src_ctx] *)

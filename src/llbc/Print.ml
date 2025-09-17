@@ -563,6 +563,12 @@ module Values = struct
         indent ^ "let " ^ pat ^ " = ("
         ^ RegionId.Set.to_string None regions
         ^ ")" ^ bound ^ "\n" ^ indent ^ next
+    | EProjMarker (left, right) ->
+        "proj_marker("
+        ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr left
+        ^ ", "
+        ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr right
+        ^ ")"
     | EBVar bv -> evalue_env_get_bvar aenv bv
     | EFVar fvid -> "@" ^ AbsFVarId.to_string fvid
     | EApp (f, args) ->
@@ -634,10 +640,10 @@ module Values = struct
       (aenv : evalue_env) (indent : string) (indent_incr : string) (pat : tepat)
       : evalue_env * string =
     match pat.epat with
-    | PBound ty ->
-        let aenv, _, s = evalue_env_push_var aenv ty in
+    | PBound ->
+        let aenv, _, s = evalue_env_push_var aenv pat.epat_ty in
         (aenv, s)
-    | POpen (bid, _) -> (aenv, "@" ^ AbsFVarId.to_string bid)
+    | POpen bid -> (aenv, "@" ^ AbsFVarId.to_string bid)
     | PAdt (variant_id, fields) ->
         let aenv, fields =
           List.fold_left_map

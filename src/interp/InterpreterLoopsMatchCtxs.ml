@@ -640,8 +640,12 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
   let match_mut_borrows (_ : tvalue_matcher) (ctx0 : eval_ctx) (_ : eval_ctx)
       (ty : ety) (bid0 : borrow_id) (bv0 : tvalue) (bid1 : borrow_id)
       (bv1 : tvalue) (bv : tvalue) : borrow_id * tvalue =
+    (* We distinguish two cases, depending on whether the borrow ids are the same
+       or not. *)
     if bid0 = bid1 then (
-      (* If the merged value is not the same as the original value, we introduce
+      (* TODO: remove this once we properly generalize the joins.
+
+         If the merged value is not the same as the original value, we introduce
          an abstraction:
 
          {[
@@ -734,27 +738,14 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
         let avalues = [ borrow_av; loan_av ] in
 
-        (* Generate the abstraction expression *)
+        (* Generate the abstraction expression.
+
+           Note that we should only get there when computing fixed points, meaning
+           we should not have to compute the abstraction expression.
+        *)
         let owned = RegionId.Set.singleton rid in
-        let cont : abs_cont option =
-          if S.with_abs_conts then
-            let input : tevalue =
-              let ty = borrow_ty in
-              let value =
-                EBorrow (EMutBorrow (PNone, bid0, None, mk_eignored bv_ty None))
-              in
-              { value; ty }
-            in
-            let output : tevalue =
-              let ty = borrow_ty in
-              let value =
-                ELoan (EMutLoan (PNone, nbid, mk_eignored bv_ty None))
-              in
-              { value; ty }
-            in
-            Some { output = Some output; input = Some input }
-          else None
-        in
+        [%sanity_check] span (not S.with_abs_conts);
+        let cont : abs_cont option = None in
 
         (* Generate the abstraction *)
         let abs =
@@ -774,7 +765,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         (* Return the new borrow *)
         (nbid, bv))
     else
-      (* We replace bid0 and bid1 with a fresh borrow id, and introduce
+      (* We replace bid0 and bid1 with a fresh borrow id (bid2), and introduce
          an abstraction which links all of them. This time we have to introduce
          markers:
          {[
@@ -814,8 +805,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
          We need to duplicate the input (loan) but we can't have twice the same loan
          in an abstraction expression, so we create something of the shape:
          {[
-           output := (MB bid0, MB bid1)
-           input := let x = ML bid in (x, x)
+           output := (|MB bid0|, ︙MB bid1︙)
+           input := let x = ML bid2 in (x, x)
          ]}
       *)
       let owned = RegionId.Set.singleton rid in
@@ -823,11 +814,14 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         if S.with_abs_conts then
           let input : tevalue =
             let loan = EMutLoan (PNone, bid2, mk_eignored bv_ty None) in
-            (* Note that an aloan has a borrow type *)
+            (* Note that an eloan has a borrow type *)
             let loan : tevalue = { value = ELoan loan; ty = borrow_ty } in
 
             (* Create the let-binding *)
-            ()
+            let fvar = mk_fresh_abs_fvar borrow_ty in
+            let pair = mk_etuple [ fvar; fvar ] in
+            let pat = mk_epat_from_fvar fvar in
+            mk_let span owned pat loan pair
           in
           let output : tevalue =
             let mk_output (pm : proj_marker) (bid : borrow_id) (bv : tvalue) :
@@ -854,8 +848,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           can_end = true;
           parents = AbstractionId.Set.empty;
           original_parents = [];
-          regions = { owned = RegionId.Set.singleton rid };
+          regions = { owned };
           avalues;
+          cont;
         }
       in
       push_abs abs;
@@ -946,6 +941,33 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         let avalues = [ proj_s0; proj_s1; proj_svj ] in
         List.iter
           (fun rid ->
+            let owned = RegionId.Set.singleton rid in
+            (* The abstraction expression continuation *)
+            let cont : abs_cont option =
+              if S.with_abs_conts then
+                (* The continuation should be of the shape (this is similar to
+                   the case of mutable borrows):
+                   {[
+                     output := (|proj_borrows (s0 <: ...)|, ︙proj_borrows (s1 <: ...︙)
+                     input := let x = proj_loans (s2 : ...)
+                   ]}
+                *)
+                let proj_s0 = mk_eproj_borrows PLeft sv0.sv_id proj_ty in
+                let proj_s1 = mk_eproj_borrows PRight sv1.sv_id proj_ty in
+                let proj_svj = mk_eproj_loans PNone svj.sv_id proj_ty in
+                let input : tevalue =
+                  let loan = proj_svj in
+                  (* Create the let-binding *)
+                  let fvar = mk_fresh_abs_fvar proj_ty in
+                  let pair = mk_etuple [ fvar; fvar ] in
+                  let pat = mk_epat_from_fvar fvar in
+                  mk_let span owned pat loan pair
+                in
+                let output : tevalue = mk_etuple [ proj_s0; proj_s1 ] in
+                Some { output = Some output; input = Some input }
+              else None
+            in
+            (* Create the abstraction *)
             let abs =
               {
                 abs_id = fresh_abstraction_id ();
@@ -953,8 +975,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
                 can_end = true;
                 parents = AbstractionId.Set.empty;
                 original_parents = [];
-                regions = { owned = RegionId.Set.singleton rid };
+                regions = { owned };
                 avalues;
+                cont;
               }
             in
             push_abs abs)
@@ -1598,6 +1621,8 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
       original_parents = original_parents0;
       regions = { owned = regions0 };
       avalues = avalues0;
+      (* We ignore the continuations *)
+      cont = _;
     } =
       abs0
     in
@@ -1610,6 +1635,8 @@ let match_ctxs (span : Meta.span) (check_equiv : bool) (fixed_ids : ids_sets)
       original_parents = original_parents1;
       regions = { owned = regions1 };
       avalues = avalues1;
+      (* We ignore the continuations *)
+      cont = _;
     } =
       abs1
     in
@@ -1784,6 +1811,12 @@ let prepare_loop_match_ctx_with_target (config : config) (span : Meta.span)
       let span = span
       let loop_id = loop_id
       let nabs = nabs
+
+      (* We're only preparing the match by ending loans, etc., and shouldn't introduce
+         fresh region abstractions: this parameter is not relevant (and we set it to
+         false by default).
+      *)
+      let with_abs_conts = false
     end in
     let module JM = MakeJoinMatcher (S) in
     let module M = MakeMatcher (JM) in

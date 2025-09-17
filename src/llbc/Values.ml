@@ -1074,6 +1074,10 @@ and evalue =
       (** Because let-bindings are used to bind expressions refering to
           different sets of regions, we need to precise the regions projected in
           the bound expression. *)
+  | EProjMarker of tevalue * tevalue
+      (** This expression is either the left expression (in case we project the
+          left markers) or the right expression (in case we project the right
+          markers). *)
   | EBVar of abs_bvar
   | EFVar of abs_fvar_id
   | EApp of abs_fun * tevalue list
@@ -1093,8 +1097,8 @@ and evalue =
           because of a join for instance). *)
 
 and epat =
-  | POpen of abs_fvar_id * ty
-  | PBound of ty
+  | POpen of abs_fvar_id
+  | PBound
   | PAdt of variant_id option * tepat list
 
 and tepat = {
