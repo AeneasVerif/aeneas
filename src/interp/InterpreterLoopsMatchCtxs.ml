@@ -609,8 +609,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Create the abstraction expression *)
       let cont : abs_cont option =
         if S.with_abs_conts then
-          let output = Some (mk_eignored borrow_ty None) in
-          let input = Some (mk_eignored borrow_ty None) in
+          let output = Some (mk_etuple []) in
+          let input = Some (mk_etuple []) in
           Some { output; input }
         else None
       in
