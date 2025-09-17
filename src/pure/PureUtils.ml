@@ -1000,7 +1000,7 @@ let open_binder (span : Meta.span) (pat : tpattern) (e : texpr) :
 
 (** Helper visitor to close a binder group.
 
-    Return the close binder (where the free variables have been replaced with
+    Return the closed binder (where the free variables have been replaced with
     bound variables).
 
     We use this when handling function bodies: the list of type patterns is the
@@ -1029,7 +1029,7 @@ let close_binders_visitor (span : Meta.span) (patl : tpattern list) =
 
 (** Close a binder group in an expression.
 
-    Return the close binder (where the free variables have been replaced with
+    Return the closed binder (where the free variables have been replaced with
     bound variables).
 
     We use this when handling function bodies: the list of type patterns is the

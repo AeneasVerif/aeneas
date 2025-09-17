@@ -122,14 +122,19 @@ let dummy_var_id_counter, fresh_dummy_var_id =
     - most importantly, it allows to always manipulate small values, which is
       always a lot more readable when debugging *)
 let reset_global_counters () =
+  (* This one comes from Values.ml *)
+  abs_fvar_id_counter := AbsFVarId.generator_zero;
+  (* *)
   symbolic_value_id_counter := SymbolicValueId.generator_zero;
   borrow_id_counter := BorrowId.generator_zero;
   shared_borrow_id_counter := SharedBorrowId.generator_zero;
   region_id_counter := RegionId.generator_zero;
   abstraction_id_counter := AbstractionId.generator_zero;
   loop_id_counter := LoopId.generator_zero;
-  (* We want the loop id to start at 1 *)
-  let _ = fresh_loop_id () in
+  let _ =
+    (* We want the loop id to start at 1 *)
+    fresh_loop_id ()
+  in
   fun_call_id_counter := FunCallId.generator_zero;
   dummy_var_id_counter := DummyVarId.generator_zero
 

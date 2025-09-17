@@ -370,3 +370,137 @@ let value_remove_shared_loans (v : tvalue) : tvalue =
     end
   in
   visitor#visit_tvalue () v
+
+(** An iter visitor for abstraction expressions where the environment is the
+    current scope/level (we increment it whenever we enter a binder) *)
+class ['self] scoped_iter_tevalue =
+  object (self : 'self)
+    inherit [_] iter_tavalue
+
+    method! visit_ELet scope _ pat bound next =
+      let scope' = scope + 1 in
+      self#visit_tepat scope pat;
+      self#visit_tevalue scope bound;
+      self#visit_tevalue scope' next
+  end
+
+(** A map visitor for expressions where the environment is the current
+    scope/level (we increment it whenever we enter a binder) *)
+class ['self] scoped_map_tevalue =
+  object (self : 'self)
+    inherit [_] map_tavalue
+
+    method! visit_ELet scope rid_set pat bound next =
+      let scope' = scope + 1 in
+      let pat = self#visit_tepat scope pat in
+      let bound = self#visit_tevalue scope bound in
+      let next = self#visit_tevalue scope' next in
+      ELet (rid_set, pat, bound, next)
+  end
+
+(** Open a typed expression pattern by introducing fresh free variables for the
+    bound variables. *)
+let open_tepat (span : Meta.span) (fresh_fvar_id : unit -> abs_fvar_id)
+    (pat : tepat) : tepat =
+  let visitor =
+    object
+      inherit [_] map_tavalue
+      method! visit_POpen _ _ = [%internal_error] span
+
+      method! visit_PBound _ ty =
+        let id = fresh_fvar_id () in
+        POpen (id, ty)
+    end
+  in
+  visitor#visit_tepat () pat
+
+(** Close a typed expression pattern by replacing its free variables with bound
+    variables. We also return the map from free variable ids to bound variables.
+*)
+let close_tepat (span : Meta.span) (pat : tepat) :
+    AbsBVarId.id AbsFVarId.Map.t * tepat =
+  let _, fresh_bvar_id = AbsBVarId.fresh_stateful_generator () in
+  let map = ref AbsFVarId.Map.empty in
+  let visitor =
+    object
+      inherit [_] map_tavalue
+
+      method! visit_POpen _ id ty =
+        let bid = fresh_bvar_id () in
+        map := AbsFVarId.Map.add id bid !map;
+        PBound ty
+
+      method! visit_PBound _ _ = [%internal_error] span
+    end
+  in
+  let pat = visitor#visit_tepat () pat in
+  (!map, pat)
+
+(** Open a binder in an abstraction expression.
+
+    Return the opened binder (where the bound variables have been replaced with
+    fresh free variables). *)
+let open_binder (span : Meta.span) (pat : tepat) (e : tevalue) : tepat * tevalue
+    =
+  (* We start by introducing the free variables in the pattern *)
+  (* The map from bound var ids to freshly introduced fvar ids *)
+  let m = ref AbsBVarId.Map.empty in
+  (* We need to count the bound vars *)
+  let _, fresh_abs_bvar_id = AbsBVarId.fresh_stateful_generator () in
+  let fresh_fvar_id _ =
+    let bid = fresh_abs_bvar_id () in
+    let fid = fresh_abs_fvar_id () in
+    m := AbsBVarId.Map.add bid fid !m;
+    fid
+  in
+  let pat = open_tepat span fresh_fvar_id pat in
+  (* We can now open the expression *)
+  let visitor =
+    object
+      inherit [_] scoped_map_tevalue
+
+      method! visit_EBVar scope (var : abs_bvar) =
+        if var.scope = scope then EFVar (AbsBVarId.Map.find var.bvar_id !m)
+        else (
+          [%sanity_check] span (var.scope < scope);
+          EBVar var)
+    end
+  in
+  let e = visitor#visit_tevalue 0 e in
+  (pat, e)
+
+(** Helper visitor to close a binder.
+
+    Return the closed binder (where the free variables have been replaced with
+    bound variables). *)
+let close_binder_visitor (span : Meta.span) (pat : tepat) =
+  (* Close the pattern *)
+  let map, pat = close_tepat span pat in
+  (* Use the map to update the expression *)
+  (* We can now open the expression *)
+  let visitor =
+    object
+      inherit [_] scoped_map_tevalue
+
+      method! visit_EFVar scope fid =
+        match AbsFVarId.Map.find_opt fid map with
+        | None -> EFVar fid
+        | Some bvar_id -> EBVar { scope; bvar_id }
+
+      method! visit_EBVar scope var =
+        (* We may need to increment the scope *)
+        if var.scope >= scope then EBVar { var with scope = var.scope + 1 }
+        else EBVar var
+    end
+  in
+  (pat, visitor)
+
+(** Close a binder in an expression.
+
+    Return the closed binder (where the free variables have been replaced with
+    bound variables). *)
+let close_binder (span : Meta.span) (pat : tepat) (e : tevalue) :
+    tepat * tevalue =
+  let pat, visitor = close_binder_visitor span pat in
+  let e = visitor#visit_tevalue 0 e in
+  (pat, e)

@@ -283,6 +283,12 @@ type abs_db_scope_id = int [@@deriving show, ord]
 type abs_bvar_id = AbsBVarId.id [@@deriving show, ord]
 type abs_fvar_id = AbsFVarId.id [@@deriving show, ord]
 
+let ( abs_fvar_id_counter,
+      marked_abs_fvar_ids,
+      marked_abs_fvar_ids_insert_from_int,
+      fresh_abs_fvar_id ) =
+  AbsFVarId.fresh_marked_stateful_generator ()
+
 (** Ancestor for {!tavalue} iter visitor *)
 class ['self] iter_tavalue_base =
   object (self : 'self)
@@ -1035,7 +1041,7 @@ and abs_toutput = {
   opat_ty : ty;  (** The type should have been normalized *)
 }
 
-and abs_bvar = { db_scope_id : abs_db_scope_id; bvar_id : abs_bvar_id }
+and abs_bvar = { scope : abs_db_scope_id; bvar_id : abs_bvar_id }
 
 and abs_fun =
   | EOutputAbs of region_group_id

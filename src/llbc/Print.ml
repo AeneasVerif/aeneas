@@ -440,14 +440,12 @@ module Values = struct
       | None -> ""
       | Some n -> "uid=" ^ n ^ ","
     in
-    "bv@(" ^ unique_name ^ "scope="
-    ^ string_of_int bv.db_scope_id
-    ^ ",id="
+    "bv@(" ^ unique_name ^ "scope=" ^ string_of_int bv.scope ^ ",id="
     ^ AbsBVarId.to_string bv.bvar_id
     ^ ")"
 
   let evalue_env_get_bvar (aenv : evalue_env) (bv : abs_bvar) : string =
-    match List.nth_opt aenv.bvars bv.db_scope_id with
+    match List.nth_opt aenv.bvars bv.scope with
     | None -> abs_bvar_to_pretty_string bv None
     | Some m ->
         let unique_name = AbsBVarId.Map.find_opt bv.bvar_id m in
