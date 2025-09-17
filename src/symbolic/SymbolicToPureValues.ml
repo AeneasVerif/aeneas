@@ -510,12 +510,14 @@ let abs_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs) :
     ^ Print.list_to_string (texpr_to_string ctx) values];
   values
 
-let translate_mprojection_elem (pe : E.projection_elem) :
+let translate_mprojection_elem span (pe : E.projection_elem) :
     mprojection_elem option =
   match pe with
   | Deref -> None
   | Field (pkind, field_id) -> Some { pkind; field_id }
   | ProjIndex _ | Subslice _ -> None
+  | PtrMetadata ->
+      [%craise_opt_span] span "supported place projection: pointer metadata"
 
 (** Translate a "meta"-place *)
 let rec translate_mplace span type_infos (p : S.mplace) : mplace =
@@ -528,7 +530,7 @@ let rec translate_mplace span type_infos (p : S.mplace) : mplace =
       PlaceGlobal { global_id = id; global_generics }
   | PlaceProjection (p, pe) -> (
       let p = translate_mplace span type_infos p in
-      let pe = translate_mprojection_elem pe in
+      let pe = translate_mprojection_elem span pe in
       match pe with
       | None -> p
       | Some pe -> PlaceProjection (p, pe))

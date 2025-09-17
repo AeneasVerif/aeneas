@@ -677,7 +677,10 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
            (otherwise it throws an exception) *)
         let _ = cast_unsize_to_modified_fields span ctx ty0 ty1 in
         ty1
-    | _ -> [%craise] span ("Invalid input for unop: " ^ unop_to_string ctx unop)
+    | _ ->
+        [%craise] span
+          ("Invalid input for unop: " ^ unop_to_string ctx unop ^ " on "
+         ^ ty_to_string ctx v.ty)
   in
   let res_sv = { sv_id = res_sv_id; sv_ty = res_sv_ty } in
   (* Compute the result *)
@@ -1039,7 +1042,8 @@ let eval_rvalue_not_global (config : config) (span : Meta.span)
   (* Delegate to the proper auxiliary function *)
   match rvalue with
   | Use op -> wrap_in_result (eval_operand config span op ctx)
-  | RvRef (p, bkind) -> wrap_in_result (eval_rvalue_ref config span p bkind ctx)
+  | RvRef (p, bkind, _) ->
+      wrap_in_result (eval_rvalue_ref config span p bkind ctx)
   | UnaryOp (unop, op) -> eval_unary_op config span unop op ctx
   | BinaryOp (binop, op1, op2) -> eval_binary_op config span binop op1 op2 ctx
   | Aggregate (aggregate_kind, ops) ->

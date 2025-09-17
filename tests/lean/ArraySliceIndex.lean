@@ -8,6 +8,13 @@ set_option linter.unusedVariables false
 
 namespace array_slice_index
 
+/- [UNIT_METADATA]
+   Source: 'tests/src/array_slice_index.rs', lines 0:0-0:0
+   Name pattern: [UNIT_METADATA] -/
+@[global_simps] def UNIT_METADATA_body : Result Unit := ok ()
+@[global_simps, irreducible]
+def UNIT_METADATA : Unit := eval_global UNIT_METADATA_body
+
 /- [array_slice_index::slice_use_index_range_from]:
    Source: 'tests/src/array_slice_index.rs', lines 5:0-7:1 -/
 def slice_use_index_range_from (s : Slice U32) : Result (Slice U32) :=

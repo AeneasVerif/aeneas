@@ -8,6 +8,12 @@ Import ListNotations.
 Local Open Scope Primitives_scope.
 Module Arrays.
 
+(** [UNIT_METADATA]
+    Source: 'tests/src/arrays.rs', lines 0:0-0:0
+    Name pattern: [UNIT_METADATA] *)
+Definition unit_metadata_body : result unit := Ok tt.
+Definition unit_metadata : unit := unit_metadata_body%global.
+
 (** [arrays::AB]
     Source: 'tests/src/arrays.rs', lines 7:0-10:1 *)
 Inductive AB_t := | AB_A : AB_t | AB_B : AB_t.
