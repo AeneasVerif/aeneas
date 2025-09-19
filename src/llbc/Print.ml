@@ -560,9 +560,9 @@ module Values = struct
         in
         let aenv, pat = tepat_to_string ~span env aenv indent indent_incr pat in
         let next = tevalue_to_string ~span env aenv indent indent_incr next in
-        indent ^ "let " ^ pat ^ " = ("
+        "let " ^ pat ^ " ="
         ^ RegionId.Set.to_string None regions
-        ^ ")" ^ bound ^ "\n" ^ indent ^ next
+        ^ " " ^ bound ^ " in\n" ^ indent ^ next
     | EJoinMarkers (left, right) ->
         "@join_markers("
         ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr left
@@ -724,6 +724,19 @@ module Values = struct
     | Identity -> "Identity"
     | CopySymbolicValue -> "CopySymbolicValue"
 
+  let abs_cont_to_string ?(span : Meta.span option = None) (env : fmt_env)
+      ?(with_ended : bool = false) (indent : string) (indent_incr : string)
+      (cont : abs_cont) : string =
+    let { output; input } = cont in
+    let to_string (e : tevalue option) =
+      match e with
+      | None -> "∅ "
+      | Some e ->
+          tevalue_to_string ~span ~with_ended env empty_evalue_env indent
+            indent_incr e
+    in
+    to_string output ^ " :\n" ^ indent ^ to_string input
+
   let abs_to_string ?(span : Meta.span option = None) (env : fmt_env)
       ?(with_ended : bool = false) (verbose : bool) (indent : string)
       (indent_incr : string) (abs : abs) : string =
@@ -738,13 +751,22 @@ module Values = struct
       if verbose then "kind:" ^ abs_kind_to_string abs.kind ^ "," else ""
     in
     let can_end = if abs.can_end then "endable" else "frozen" in
+    let cont =
+      match abs.cont with
+      | None -> ""
+      | Some cont ->
+          "⟦"
+          ^ abs_cont_to_string ~span env ~with_ended (indent ^ indent_incr)
+              indent_incr cont
+          ^ "⟧"
+    in
     indent ^ "abs@"
     ^ AbstractionId.to_string abs.abs_id
     ^ "{" ^ kind ^ "parents="
     ^ AbstractionId.Set.to_string None abs.parents
     ^ ",regions="
     ^ RegionId.Set.to_string None abs.regions.owned
-    ^ "," ^ can_end ^ "} {\n" ^ avs ^ "\n" ^ indent ^ "}"
+    ^ "," ^ can_end ^ "} {\n" ^ avs ^ "\n" ^ indent ^ "}" ^ cont
 
   let abs_region_group_to_string (gr : abs_region_group) : string =
     g_region_group_to_string RegionId.to_string AbstractionId.to_string gr
