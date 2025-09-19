@@ -1230,7 +1230,7 @@ let lookup_aproj_loans_opt (span : Meta.span) (abs_id : AbstractionId.id)
   let found_eproj = ref None in
   let set_found_eproj x =
     (* There is at most one projector which corresponds to the description *)
-    [%sanity_check] span (Option.is_none !found);
+    [%sanity_check] span (Option.is_none !found_eproj);
     found_eproj := Some x
   in
   (* The visitor *)
@@ -1299,7 +1299,7 @@ let update_aproj_loans (span : Meta.span) (abs_id : AbstractionId.id)
   let found_eproj = ref false in
   let update_eproj () =
     (* We update at most once *)
-    [%sanity_check] span (not !found);
+    [%sanity_check] span (not !found_eproj);
     found_eproj := true;
     match neproj with
     | None -> [%internal_error] span
