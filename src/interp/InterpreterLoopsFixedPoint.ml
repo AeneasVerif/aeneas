@@ -15,8 +15,8 @@ open InterpreterLoopsJoinCtxs
 (** The local logger *)
 let log = Logging.loops_fixed_point_log
 
-let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
-    cm_fun =
+let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
+    ~(with_abs_conts : bool) : cm_fun =
  fun ctx0 ->
   let ctx = ctx0 in
   [%ldebug "ctx0:\n" ^ eval_ctx_to_string ctx];
@@ -129,6 +129,11 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
     in
     let can_end = true in
     let regions : abs_regions = { owned = RegionId.Set.singleton nrid } in
+    let cont : abs_cont option =
+      if with_abs_conts then
+        Some { output = Some (mk_etuple []); input = Some (mk_etuple []) }
+      else None
+    in
     let fresh_abs =
       {
         abs_id = fresh_abstraction_id ();
@@ -138,6 +143,7 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
         original_parents = [];
         regions;
         avalues;
+        cont;
       }
     in
     fresh_absl := fresh_abs :: !fresh_absl;
@@ -209,8 +215,8 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option) :
   (ctx, cf)
 
 let prepare_ashared_loans_no_synth (span : Meta.span) (loop_id : LoopId.id)
-    (ctx : eval_ctx) : eval_ctx =
-  fst (prepare_ashared_loans span (Some loop_id) ctx)
+    ~(with_abs_conts : bool) (ctx : eval_ctx) : eval_ctx =
+  fst (prepare_ashared_loans span (Some loop_id) ~with_abs_conts ctx)
 
 let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
     (loop_id : LoopId.id) (eval_loop_body : stl_cm_fun) (ctx0 : eval_ctx) :
@@ -222,7 +228,9 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
 
      For more details, see the comments for {!prepare_ashared_loans}
   *)
-  let ctx = prepare_ashared_loans_no_synth span loop_id ctx0 in
+  let ctx =
+    prepare_ashared_loans_no_synth span loop_id ~with_abs_conts:false ctx0
+  in
 
   (* Debug *)
   [%ltrace
@@ -342,10 +350,9 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
   let equiv_ctxs (ctx1 : eval_ctx) (ctx2 : eval_ctx) : bool =
     [%ltrace "equiv_ctx:"];
     let fixed_ids = compute_fixed_ids [ ctx1; ctx2 ] in
-    let check_equivalent = true in
     let lookup_shared_value _ = [%craise] span "Unreachable" in
     Option.is_some
-      (match_ctxs span check_equivalent fixed_ids lookup_shared_value
+      (match_ctxs span ~check_equiv:true fixed_ids lookup_shared_value
          lookup_shared_value ctx1 ctx2)
   in
   let max_num_iter = Config.loop_fixed_point_max_num_iters in
@@ -588,8 +595,8 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
                       ^ AbstractionId.to_string !id0];
                     (* Note that we merge *into* [id0] *)
                     let fp', id0' =
-                      merge_into_first_abstraction span loop_id abs_kind false
-                        !fp !id0 id
+                      merge_into_first_abstraction span loop_id abs_kind
+                        ~can_end:false ~with_abs_conts:false !fp !id0 id
                     in
                     fp := fp';
                     id0 := id0';
@@ -689,7 +696,6 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
 
   (* Match the source context and the filtered target context *)
   let maps =
-    let check_equiv = false in
     let fixed_ids = ids_sets_empty_borrows_loans fixed_ids in
     let open InterpreterBorrowsCore in
     let lookup_shared_loan lid ctx : tvalue =
@@ -703,7 +709,7 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
     let lookup_in_tgt id = lookup_shared_loan id tgt_ctx in
     let lookup_in_src id = lookup_shared_loan id src_ctx in
     Option.get
-      (match_ctxs span check_equiv fixed_ids lookup_in_tgt lookup_in_src
+      (match_ctxs span ~check_equiv:false fixed_ids lookup_in_tgt lookup_in_src
          filt_tgt_ctx filt_src_ctx)
   in
 
