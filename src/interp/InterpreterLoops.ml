@@ -8,6 +8,7 @@ open Cps
 open InterpreterUtils
 open InterpreterLoopsCore
 open InterpreterLoopsMatchCtxs
+open InterpreterLoopsJoinCtxs
 open InterpreterLoopsFixedPoint
 
 (** The local logger *)

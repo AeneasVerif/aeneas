@@ -457,7 +457,7 @@ let ids_maps_to_string (ctx : eval_ctx) (m : ids_maps) : string =
   } =
     m
   in
-  let indent = Some "  " in
+  let indent = Some "    " in
   "{" ^ "\n  aid_map = "
   ^ AbstractionId.InjSubst.to_string indent aid_map
   ^ "\n  blid_map = "

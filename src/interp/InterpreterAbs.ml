@@ -1864,3 +1864,156 @@ let reorder_fresh_abs (span : Meta.span) (allow_markers : bool)
     (old_abs_ids : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
   reorder_loans_borrows_in_fresh_abs span allow_markers old_abs_ids ctx
   |> reorder_fresh_abs_aux span old_abs_ids
+
+let project_context (span : Meta.span) (fixed_ids : InterpreterUtils.ids_sets)
+    (pm : proj_marker) (ctx : eval_ctx) : eval_ctx =
+  [%cassert] span (pm = PLeft || pm = PRight) "Invalid input";
+
+  let preserve (pm' : proj_marker) =
+    match (pm, pm') with
+    | PLeft, (PNone | PLeft) -> true
+    | PRight, (PNone | PRight) -> true
+    | _ -> false
+  in
+
+  let visitor =
+    object (self)
+      inherit [_] map_eval_ctx as super
+
+      (* By overriding this method to raise an exception we make sure we do not
+         miss any projection marker *)
+      method! visit_proj_marker _ _ = [%internal_error] span
+
+      method! visit_ASymbolic env pm aproj =
+        if preserve pm then
+          let aproj = self#visit_aproj env aproj in
+          ASymbolic (PNone, aproj)
+        else begin
+          match aproj with
+          | AProjLoans { proj = _; consumed; borrows } ->
+              [%cassert] span (consumed = []) "Not implemented";
+              [%cassert] span (borrows = []) "Not implemented";
+              AIgnored None
+          | AProjBorrows { proj = _; loans } ->
+              [%cassert] span (loans = []) "Not implemented";
+              AIgnored None
+          | AEndedProjLoans { proj = _; consumed; borrows } ->
+              [%cassert] span (consumed = []) "Not implemented";
+              [%cassert] span (borrows = []) "Not implemented";
+              AIgnored None
+          | AEndedProjBorrows _ ->
+              (* We shouldn't find ended borrows inside a region abstraction *)
+              [%internal_error] span
+          | AEmpty -> AIgnored None
+        end
+
+      method! visit_ALoan env lc =
+        match lc with
+        | AMutLoan (pm, lid, child) ->
+            if preserve pm then
+              let child = self#visit_tavalue env child in
+              ALoan (AMutLoan (PNone, lid, child))
+            else (
+              [%cassert] span (is_aignored child.value) "Not implemented";
+              AIgnored None)
+        | ASharedLoan (pm, lid, shared, child) ->
+            if preserve pm then
+              let child = self#visit_tavalue env child in
+              ALoan (ASharedLoan (PNone, lid, shared, child))
+            else (
+              [%cassert] span (is_aignored child.value) "Not implemented";
+              AIgnored None)
+        | AEndedMutLoan _
+        | AEndedSharedLoan _
+        | AIgnoredMutLoan _
+        | AEndedIgnoredMutLoan _
+        | AIgnoredSharedLoan _ ->
+            (* Those do not have projection markers *)
+            super#visit_ALoan env lc
+
+      method! visit_ABorrow env bc =
+        match bc with
+        | AMutBorrow (pm, bid, child) ->
+            if preserve pm then
+              let child = self#visit_tavalue env child in
+              ABorrow (AMutBorrow (PNone, bid, child))
+            else (
+              [%cassert] span (is_aignored child.value) "Not implemented";
+              AIgnored None)
+        | ASharedBorrow (pm, bid, sid) ->
+            if preserve pm then ABorrow (ASharedBorrow (PNone, bid, sid))
+            else AIgnored None
+        | AIgnoredMutBorrow _
+        | AEndedMutBorrow _
+        | AEndedSharedBorrow
+        | AEndedIgnoredMutBorrow _
+        | AProjSharedBorrow _ ->
+            (* Those do not have projection markers *)
+            super#visit_ABorrow env bc
+
+      method! visit_ESymbolic env pm eproj =
+        if preserve pm then
+          let eproj = self#visit_eproj env eproj in
+          ESymbolic (PNone, eproj)
+        else
+          match eproj with
+          | EProjLoans { proj = _; consumed; borrows } ->
+              [%cassert] span (consumed = []) "Not implemented";
+              [%cassert] span (borrows = []) "Not implemented";
+              EIgnored None
+          | EProjBorrows { proj = _; loans } ->
+              [%cassert] span (loans = []) "Not implemented";
+              EIgnored None
+          | EEndedProjLoans { proj = _; consumed; borrows } ->
+              [%cassert] span (consumed = []) "Not implemented";
+              [%cassert] span (borrows = []) "Not implemented";
+              EIgnored None
+          | EEndedProjBorrows _ ->
+              (* We can't find ended borrows in live abstractions *)
+              [%internal_error] span
+          | EEmpty -> EIgnored None
+
+      method! visit_ELoan env lc =
+        match lc with
+        | EMutLoan (pm, lid, child) ->
+            if preserve pm then
+              let child = self#visit_tevalue env child in
+              ELoan (EMutLoan (PNone, lid, child))
+            else (
+              [%cassert] span (is_eignored child.value) "Not implemented";
+              EIgnored None)
+        | EEndedMutLoan _ | EIgnoredMutLoan _ | EEndedIgnoredMutLoan _ ->
+            (* Those do not have projection markers *)
+            super#visit_ELoan env lc
+
+      method! visit_EBorrow env lc =
+        match lc with
+        | EMutBorrow (pm, bid, mv, child) ->
+            if preserve pm then
+              let child = self#visit_tevalue env child in
+              EBorrow (EMutBorrow (PNone, bid, mv, child))
+            else (
+              [%cassert] span (is_eignored child.value) "Not implemented";
+              EIgnored None)
+        | EIgnoredMutBorrow _ | EEndedMutBorrow _ | EEndedIgnoredMutBorrow _ ->
+            (* Those do not have projection markers *)
+            super#visit_EBorrow env lc
+    end
+  in
+  (* Project *)
+  let ctx = visitor#visit_eval_ctx () ctx in
+
+  (* Simplify the region abstractions, and filter the ones which have become
+     empty because of the projection *)
+  let update_binding (e : env_elem) : env_elem option =
+    match e with
+    | EAbs abs ->
+        if AbstractionId.Set.mem abs.abs_id fixed_ids.aids then Some e
+        else
+          let keep_value (e : tavalue) : bool = not (is_aignored e.value) in
+          let avalues = List.filter keep_value abs.avalues in
+          if avalues = [] then None else Some (EAbs { abs with avalues })
+    | EBinding _ | EFrame -> Some e
+  in
+  let env = List.filter_map update_binding ctx.env in
+  { ctx with env }

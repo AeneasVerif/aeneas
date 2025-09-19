@@ -350,10 +350,9 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
   let equiv_ctxs (ctx1 : eval_ctx) (ctx2 : eval_ctx) : bool =
     [%ltrace "equiv_ctx:"];
     let fixed_ids = compute_fixed_ids [ ctx1; ctx2 ] in
-    let check_equivalent = true in
     let lookup_shared_value _ = [%craise] span "Unreachable" in
     Option.is_some
-      (match_ctxs span check_equivalent fixed_ids lookup_shared_value
+      (match_ctxs span ~check_equiv:true fixed_ids lookup_shared_value
          lookup_shared_value ctx1 ctx2)
   in
   let max_num_iter = Config.loop_fixed_point_max_num_iters in
@@ -697,7 +696,6 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
 
   (* Match the source context and the filtered target context *)
   let maps =
-    let check_equiv = false in
     let fixed_ids = ids_sets_empty_borrows_loans fixed_ids in
     let open InterpreterBorrowsCore in
     let lookup_shared_loan lid ctx : tvalue =
@@ -711,7 +709,7 @@ let compute_fixed_point_id_correspondance (span : Meta.span)
     let lookup_in_tgt id = lookup_shared_loan id tgt_ctx in
     let lookup_in_src id = lookup_shared_loan id src_ctx in
     Option.get
-      (match_ctxs span check_equiv fixed_ids lookup_in_tgt lookup_in_src
+      (match_ctxs span ~check_equiv:false fixed_ids lookup_in_tgt lookup_in_src
          filt_tgt_ctx filt_src_ctx)
   in
 
