@@ -190,6 +190,7 @@ type merge_duplicates_funcs = {
     Parameters:
     - [kind]
     - [can_end]
+    - [with_abs_conts]
     - [merge_funs]: those functions are used to merge borrows/loans with the
       *same ids* but different markers. This is necessary when doing a collapse
       (see the computation of joins). If [merge_funs] are not provided, we check
@@ -203,7 +204,8 @@ type merge_duplicates_funcs = {
 val merge_into_first_abstraction :
   Meta.span ->
   abs_kind ->
-  bool ->
+  can_end:bool ->
+  with_abs_conts:bool ->
   merge_duplicates_funcs option ->
   eval_ctx ->
   AbstractionId.id ->

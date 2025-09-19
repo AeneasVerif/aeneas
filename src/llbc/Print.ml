@@ -563,8 +563,8 @@ module Values = struct
         indent ^ "let " ^ pat ^ " = ("
         ^ RegionId.Set.to_string None regions
         ^ ")" ^ bound ^ "\n" ^ indent ^ next
-    | EProjMarker (left, right) ->
-        "proj_marker("
+    | EJoinMarkers (left, right) ->
+        "@join_markers("
         ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr left
         ^ ", "
         ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr right

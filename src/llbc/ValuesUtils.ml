@@ -544,6 +544,18 @@ let mk_epat_from_fvar (fv : tevalue) : tepat =
   | EFVar id -> { epat = POpen id; epat_ty = fv.ty }
   | _ -> raise (Failure "Unexpected")
 
+let tevalue_has_fvars (e : tevalue) : bool =
+  let visitor =
+    object
+      inherit [_] iter_tevalue
+      method! visit_EFVar _ _ = raise Found
+    end
+  in
+  try
+    visitor#visit_tevalue () e;
+    false
+  with Found -> true
+
 (** Create a let-binding.
 
     The pattern should be open (it should contain free variables): this helper

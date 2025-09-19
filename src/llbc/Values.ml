@@ -1077,7 +1077,7 @@ and evalue =
       (** Because let-bindings are used to bind expressions refering to
           different sets of regions, we need to precise the regions projected in
           the bound expression. *)
-  | EProjMarker of tevalue * tevalue
+  | EJoinMarkers of tevalue * tevalue
       (** This expression is either the left expression (in case we project the
           left markers) or the right expression (in case we project the right
           markers). *)
@@ -1439,6 +1439,16 @@ and abs_cont = {
       concrete = true;
       monomorphic = [ "env" ] (* We need this to allows duplicate field names *);
     }]
+
+class ['self] iter_tevalue =
+  object (_self : 'self)
+    inherit [_] iter_tavalue
+  end
+
+class ['self] map_tevalue =
+  object (_self : 'self)
+    inherit [_] map_tavalue
+  end
 
 (** Ancestor for {!abs} iter visitor *)
 class ['self] iter_abs_base =
