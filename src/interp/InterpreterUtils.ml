@@ -808,3 +808,46 @@ let compute_regions_hierarchy_for_fun_call (span : Meta.span option)
     inputs;
     output;
   }
+
+let abs_is_empty (abs : abs) : bool =
+  let visitor =
+    object
+      inherit [_] iter_abs as super
+
+      method! visit_ASymbolic env pm proj =
+        (match proj with
+        | AProjLoans _ | AProjBorrows _ -> raise Found
+        | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ());
+        super#visit_ASymbolic env pm proj
+
+      method! visit_ABorrow env bc =
+        (match bc with
+        | AMutBorrow _ | ASharedBorrow _ -> raise Found
+        | AIgnoredMutBorrow _
+        | AEndedMutBorrow _
+        | AEndedSharedBorrow
+        | AEndedIgnoredMutBorrow _
+        | AProjSharedBorrow _ -> ());
+        super#visit_ABorrow env bc
+
+      method! visit_abstract_shared_borrow _ _ = raise Found
+
+      method! visit_ALoan env lc =
+        (match lc with
+        | AMutLoan _ -> raise Found
+        | ASharedLoan _
+        | AEndedMutLoan _
+        | AEndedSharedLoan _
+        | AIgnoredMutLoan _
+        | AEndedIgnoredMutLoan _
+        | AIgnoredSharedLoan _ -> ());
+        super#visit_ALoan env lc
+
+      method! visit_VBorrow _ = raise Found
+      method! visit_VLoan _ _ = raise Found
+    end
+  in
+  try
+    visitor#visit_abs () abs;
+    true
+  with Found -> false
