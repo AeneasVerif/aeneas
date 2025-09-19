@@ -1271,7 +1271,7 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
     visitor#visit_abs () abs;
     (* No borrows: nothing to update *)
     (* Last sanity check: the region abstraction doesn't contain borrows in its *expression* *)
-    [%sanity_check] span (not (abs_has_eborrows abs));
+    [%sanity_check] span (not (abs_has_non_ended_eborrows abs));
     (ctx, fun e -> e)
   with
   (* There are concrete (i.e., not symbolic) borrows: end them, then re-explore *)

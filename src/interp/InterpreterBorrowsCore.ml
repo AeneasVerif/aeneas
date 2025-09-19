@@ -1461,11 +1461,17 @@ let no_aproj_over_symbolic_in_context (span : Meta.span)
   try obj#visit_eval_ctx () ctx
   with Found -> [%craise] span "update_aproj_loans_to_ended: failed"
 
-let abs_has_eborrows (abs : abs) : bool =
+let abs_has_non_ended_eborrows (abs : abs) : bool =
   let visitor =
     object
       inherit [_] iter_abs as super
-      method! visit_eborrow_content _ _ = raise Found
+
+      method! visit_eborrow_content env bc =
+        (match bc with
+        | EMutBorrow _ -> raise Found
+        | EIgnoredMutBorrow _ | EEndedMutBorrow _ | EEndedIgnoredMutBorrow _ ->
+            ());
+        super#visit_eborrow_content env bc
 
       method! visit_eproj env sproj =
         (match sproj with
@@ -1479,11 +1485,16 @@ let abs_has_eborrows (abs : abs) : bool =
     false
   with Found -> true
 
-let abs_has_eloans (abs : abs) : bool =
+let abs_has_non_ended_eloans (abs : abs) : bool =
   let visitor =
     object
       inherit [_] iter_abs as super
-      method! visit_eloan_content _ _ = raise Found
+
+      method! visit_eloan_content env lc =
+        (match lc with
+        | EMutLoan _ -> raise Found
+        | EEndedMutLoan _ | EIgnoredMutLoan _ | EEndedIgnoredMutLoan _ -> ());
+        super#visit_eloan_content env lc
 
       method! visit_eproj env sproj =
         (match sproj with
