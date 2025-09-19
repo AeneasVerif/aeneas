@@ -92,6 +92,11 @@ let is_aignored (v : avalue) : bool =
   | AIgnored _ -> true
   | _ -> false
 
+let is_eignored (v : evalue) : bool =
+  match v with
+  | EIgnored _ -> true
+  | _ -> false
+
 let is_symbolic (v : value) : bool =
   match v with
   | VSymbolic _ -> true
@@ -151,6 +156,11 @@ let mk_eproj_loans (pm : proj_marker) (sv_id : symbolic_value_id) (proj_ty : ty)
         );
     ty = proj_ty;
   }
+
+let proj_markers_intersect (pm0 : proj_marker) (pm1 : proj_marker) : bool =
+  match (pm0, pm1) with
+  | PNone, _ | _, PNone | PLeft, PLeft | PRight, PRight -> true
+  | _ -> false
 
 let symbolic_proj_to_esymbolic_proj (p : symbolic_proj) : esymbolic_proj =
   let { sv_id; proj_ty } : symbolic_proj = p in

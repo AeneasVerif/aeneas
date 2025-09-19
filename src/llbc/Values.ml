@@ -924,7 +924,10 @@ and eproj =
   | EProjBorrows of eproj_borrows
   | EEndedProjLoans of eended_proj_loans
   | EEndedProjBorrows of eended_proj_borrows
-  | EEmpty  (** Nothing to project (because there are no borrows, etc.) *)
+  | EEmpty
+      (** Nothing to project (because there are no borrows, etc.)
+
+          TODO: remove? We can use EIgnored instead. *)
 
 (** A projector of loans over a symbolic value.
 
@@ -978,7 +981,7 @@ and eproj_loans = {
           ancestor region ended *)
 }
 
-(** Note that an EprojBorrows only operates on a value which is not below a
+(** Note that an eproj_borrows only operates on a value which is not below a
     shared loan: under a shared loan, we use {!abstract_shared_borrow}.
 
     Also note that once given to a borrow projection, a symbolic value can't get
@@ -1086,6 +1089,7 @@ and evalue =
   | ELoan of eloan_content
   | EBorrow of eborrow_content
   | ESymbolic of proj_marker * eproj
+  | EValue of mvalue  (** A concrete value *)
   | EIgnored of mvalue option
       (** A value which doesn't contain borrows, or which borrows we don't own
           and thus ignore.
@@ -1100,6 +1104,7 @@ and epat =
   | POpen of abs_fvar_id
   | PBound
   | PAdt of variant_id option * tepat list
+  | PIgnored
 
 and tepat = {
   epat : epat;

@@ -837,12 +837,439 @@ let merge_abstractions_merge_markers (span : Meta.span)
   (* We're done *)
   !merged
 
+(** Information about a borrow which is output by a continuation and which was
+    bound in a let binding.
+
+    We distinguish different cases, depending on whether the borrow has a marker
+    or not. *)
+type bound_borrow = (proj_marker * AbsFVarId.id * ty) list
+
+(** Similar to [bound_borrow] but for symbolic projections *)
+type bound_symbolic = (proj_marker * norm_proj_ty * AbsFVarId.id * ty) list
+
+type bound_outputs = {
+  borrows : bound_borrow BorrowId.Map.t;
+  symbolic : bound_symbolic SymbolicValueId.Map.t;
+}
+
+let bound_outputs_add_borrow (span : Meta.span) (bid : BorrowId.id)
+    (pm : proj_marker) (fvid : AbsFVarId.id) (ty : ty) (out : bound_outputs) :
+    bound_outputs =
+  let borrow = (pm, fvid, ty) in
+  let borrows =
+    BorrowId.Map.update bid
+      (fun bound ->
+        match bound with
+        | None -> Some [ borrow ]
+        | Some bound ->
+            [%sanity_check] span
+              (List.for_all
+                 (fun (pm', _, _) -> not (proj_markers_intersect pm pm'))
+                 bound);
+            Some (borrow :: bound))
+      out.borrows
+  in
+  { out with borrows }
+
+let bound_outputs_get_borrow (span : Meta.span) (bid : BorrowId.id)
+    (pm : proj_marker) (out : bound_outputs) : tevalue option =
+  match BorrowId.Map.find_opt bid out.borrows with
+  | None -> None
+  | Some bound -> (
+      (* Filter the bound values which intersect the current proj marker *)
+      let bound =
+        List.filter (fun (pm', _, _) -> proj_markers_intersect pm pm') bound
+      in
+      match (pm, bound) with
+      | PLeft, [ (_, fvid, ty) ] -> Some { value = EFVar fvid; ty }
+      | PRight, [ (_, fvid, ty) ] -> Some { value = EFVar fvid; ty }
+      | ( PNone,
+          ( [ (PLeft, fvidl, tyl); (PRight, fvidr, tyr) ]
+          | [ (PRight, fvidr, tyr); (PLeft, fvidl, tyl) ] ) ) ->
+          let lv : tevalue = { value = EFVar fvidl; ty = tyl } in
+          let rv : tevalue = { value = EFVar fvidr; ty = tyr } in
+          Some { value = EProjMarker (lv, rv); ty = tyl }
+      | _ -> [%internal_error] span)
+
+let bound_outputs_add_symbolic (sid : SymbolicValueId.id) (pm : proj_marker)
+    (proj_ty : norm_proj_ty) (fvid : AbsFVarId.id) (ty : ty)
+    (out : bound_outputs) : bound_outputs =
+  let s = (pm, proj_ty, fvid, ty) in
+  let symbolic =
+    SymbolicValueId.Map.update sid
+      (fun bound ->
+        match bound with
+        | None -> Some [ s ]
+        | Some bound -> Some (s :: bound))
+      out.symbolic
+  in
+  { out with symbolic }
+
+let bound_outputs_get_symbolic (span : Meta.span) (sid : SymbolicValueId.id)
+    (pm : proj_marker) (proj_ty : norm_proj_ty) (out : bound_outputs) :
+    tevalue option =
+  match SymbolicValueId.Map.find_opt sid out.symbolic with
+  | None -> None
+  | Some bound -> (
+      (* Filter the bound values which intersect the current proj marker and projection *)
+      let bound =
+        List.filter
+          (fun (pm', proj_ty', _, _) ->
+            proj_markers_intersect pm pm'
+            && norm_proj_tys_intersect span proj_ty proj_ty')
+          bound
+      in
+      match (pm, bound) with
+      | PLeft, [ (_, proj_ty', fvid, ty) ] ->
+          [%cassert] span (proj_ty' = proj_ty) "Unimplemented";
+          Some { value = EFVar fvid; ty }
+      | PRight, [ (_, proj_ty', fvid, ty) ] ->
+          [%cassert] span (proj_ty' = proj_ty) "Unimplemented";
+          Some { value = EFVar fvid; ty }
+      | ( PNone,
+          ( [ (PLeft, proj_tyl, fvidl, tyl); (PRight, proj_tyr, fvidr, tyr) ]
+          | [ (PRight, proj_tyr, fvidr, tyr); (PLeft, proj_tyl, fvidl, tyl) ] )
+        ) ->
+          [%cassert] span (proj_tyl = proj_ty) "Unimplemented";
+          [%cassert] span (proj_tyr = proj_ty) "Unimplemented";
+          let lv : tevalue = { value = EFVar fvidl; ty = tyl } in
+          let rv : tevalue = { value = EFVar fvidr; ty = tyr } in
+          Some { value = EProjMarker (lv, rv); ty = tyl }
+      | _ -> [%internal_error] span)
+
+(** Bind the outputs from a continuation with no inputs.
+
+    See the documentation of [abs_cont] for more explanations about when this
+    case happens.
+
+    The [bound_outputs] is used to update the inputs, in case we already bound
+    values. We also update it to insert the newly bound outputs. *)
+let bind_outputs_from_single_output (span : Meta.span) (ctx : eval_ctx)
+    (regions : RegionId.Set.t) (bound : bound_outputs ref) (output : tevalue) :
+    tepat * tevalue =
+  (* This helper is used to support patterns of the shape:
+     [MB l0 (3, ML l1)]
+
+     we call it on the expressions appearing inside mutable borrows.
+   *)
+  let rec to_mut_borrow_value (output : tevalue) : tevalue =
+    match output.value with
+    | ELet (_, _, _, _)
+    | EProjMarker (_, _)
+    | EBVar _ | EFVar _
+    | EApp (_, _)
+    | EBottom ->
+        (* Remember that continuations don't have any inputs only when they were
+           introduced because we converted an anonymous value into an abstraction *)
+        [%craise] span "Unreachable"
+    | EAdt adt ->
+        let fields = List.map to_mut_borrow_value adt.field_values in
+        {
+          value = EAdt { variant_id = adt.variant_id; field_values = fields };
+          ty = output.ty;
+        }
+    | ELoan loan ->
+        (* Check if this loan was previously bound *)
+        begin
+          match loan with
+          | EMutLoan (pm, bid, child) ->
+              [%cassert] span (is_eignored child.value) "Unimplemented";
+              begin
+                match bound_outputs_get_borrow span bid pm !bound with
+                | None -> output
+                | Some e -> e
+              end
+          | EEndedMutLoan _ | EIgnoredMutLoan _ | EEndedIgnoredMutLoan _ ->
+              output
+        end
+    | ESymbolic (pm, proj) -> begin
+        match proj with
+        | EProjLoans { proj; consumed; borrows } ->
+            (* Not sure what to do in the following cases *)
+            [%cassert] span (consumed = []) "Unimplemented";
+            [%cassert] span (borrows = []) "Unimplemented";
+            (* Check if this projection was previously bound *)
+            begin
+              match
+                bound_outputs_get_symbolic span proj.sv_id pm proj.proj_ty
+                  !bound
+              with
+              | None -> output
+              | Some e -> e
+            end
+        | EEndedProjLoans _ -> output
+        | EProjBorrows _ | EEndedProjBorrows _ ->
+            [%craise] span "Nested borrows are not supported yet in this case"
+        | EEmpty ->
+            (* We shouldn't get here? *)
+            [%craise] span "Unexpected"
+      end
+    | EBorrow _ ->
+        [%craise] span "Nested borrows are not supported yet in this case"
+    | EValue _ -> output
+    | EIgnored mv -> (
+        (* There should be a value *)
+        match mv with
+        | None -> [%craise] span "Unexpected: missing value"
+        | Some mv -> { value = EValue mv; ty = output.ty })
+  in
+  let rec bind (output : tevalue) : tepat * tevalue =
+    match output.value with
+    | ELet (_, _, _, _)
+    | EProjMarker (_, _)
+    | EBVar _ | EFVar _
+    | EApp (_, _)
+    | EBottom ->
+        (* Remember that continuations don't have any inputs only when they were
+         introduced because we converted an anonymous value into an abstraction *)
+        [%craise] span "Unreachable"
+    | EAdt adt ->
+        let pats, fields = List.split (List.map bind adt.field_values) in
+        let pat : tepat =
+          { epat = PAdt (adt.variant_id, pats); epat_ty = output.ty }
+        in
+        let expr : tevalue =
+          {
+            value = EAdt { variant_id = adt.variant_id; field_values = fields };
+            ty = output.ty;
+          }
+        in
+        (pat, expr)
+    | ELoan _ ->
+        (* We shouldn't reach a loan if it is not itself inside a borrow *)
+        [%craise] span "Unexpected"
+    | EBorrow borrow ->
+        (* Two cases depending on whether we are inside a loan or not *)
+        begin
+          match borrow with
+          | EMutBorrow (pm, bid, _mv, child) ->
+              (* Compute the expression for the given back value *)
+              let child = to_mut_borrow_value child in
+              (* Compute the binding pattern *)
+              let fid = fresh_abs_fvar_id () in
+              let pat : tepat = { epat = POpen fid; epat_ty = output.ty } in
+              (* We need to register the binding *)
+              bound := bound_outputs_add_borrow span bid pm fid output.ty !bound;
+              (* *)
+              (pat, child)
+          | EEndedMutBorrow _ | EIgnoredMutBorrow _ | EEndedIgnoredMutBorrow _
+            ->
+              (* We shouldn't get there. If we find an ended borrow in a region
+               abstraction it means the abstraction was ended and thus removed
+               from the context: we shouldn't be in the process of merging it...
+            *)
+              [%craise] span "Unexpected"
+        end
+    | ESymbolic (pm, proj) ->
+        (* If we get here it means the symbolic value gets projected (we can't ignore it) *)
+        begin
+          match proj with
+          | EProjLoans _ | EEndedProjLoans _ ->
+              (* We shouldn't reach a loan which is not itself inside a borrow *)
+              [%craise] span "Unexpected"
+          | EProjBorrows { proj; loans } ->
+              [%sanity_check] span (loans = []);
+              (* Compute the expression for the given back value *)
+              let { sv_id; proj_ty } : esymbolic_proj = proj in
+              [%sanity_check] span (loans = []);
+              let value : tevalue =
+                (* TODO: not sure we're using the proper type in the symbolic value *)
+                let value : tvalue =
+                  { value = VSymbolic { sv_id; sv_ty = proj_ty }; ty = proj_ty }
+                in
+                { value = EValue value; ty = output.ty }
+              in
+              (* Compute the binding pattern *)
+              let fid = fresh_abs_fvar_id () in
+              let pat : tepat = { epat = POpen fid; epat_ty = output.ty } in
+              (* We need to register the binding *)
+              let norm_ty = normalize_proj_ty regions proj_ty in
+              bound :=
+                bound_outputs_add_symbolic sv_id pm norm_ty fid proj_ty !bound;
+              (* *)
+              (pat, value)
+          | EEndedProjBorrows _ ->
+              (* Same remark as for the ended borrows above *)
+              [%craise] span "Unexpected"
+          | EEmpty ->
+              (* We shouldn't get here? *)
+              [%craise] span "Unexpected"
+        end
+    | EValue mv ->
+        (* We're not inside a loan or a borrow: simply ignore it *)
+        let pat : tepat = { epat = PIgnored; epat_ty = output.ty } in
+        let value : tevalue = { value = EIgnored (Some mv); ty = output.ty } in
+        (pat, value)
+    | EIgnored _ ->
+        (* We're not inside a loan or a borrow: simply ignore it *)
+        let pat : tepat = { epat = PIgnored; epat_ty = output.ty } in
+        (pat, output)
+  in
+  bind output
+
+(** Bind the outputs from a continuation with no outputs *and* inputs.
+
+    See the documentation of [abs_cont]. *)
+let rec bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
+    (regions : RegionId.Set.t) (bound : bound_outputs ref) (output : tevalue)
+    (input : tevalue) : tepat * tevalue =
+  ()
+
+let rec abs_cont_bind_outputs (span : Meta.span) (ctx : eval_ctx)
+    (regions : RegionId.Set.t) (bound : bound_outputs ref) (cont : abs_cont) :
+    tepat * tevalue =
+  match (cont.output, cont.input) with
+  | Some output, None ->
+      bind_outputs_from_single_output span ctx regions bound output
+  | Some output, Some input ->
+      bind_outputs_from_output_input span ctx regions bound output input
+  | _ -> [%craise] span "Unrechable"
+
+let merge_abs_conts_aux (span : Meta.span) (ctx : eval_ctx)
+    (owned_regions : region_id_set) (abs0 : abs) (abs1 : abs) (cont0 : abs_cont)
+    (cont1 : abs_cont) : abs_cont =
+  (* The way we proceed is simple.
+
+     Let's say we want to merge A1 into A0:
+     {[
+       A0 { MB l0, ML l1 } ⟦ MB l0 = ML l1 ⟧
+       A1 { MB l1, MB l2, ML l3 } ⟦ (MB l1, MB l2) = if b then (ML l3, 1) else (0, ML l3) ⟧
+     ]}
+
+     We first bind all the values in the continuation in A1 like so:
+     {[
+       let (v_l1, v_l2) = if b then (ML l3, 1) else (0, ML l3) in
+     ]}
+
+     We then update the continuation in A0 to substitute the loans whose corresponding
+     borrows are outputs of the continuation of A1, and bind the outputs of A0 like so:
+     {[
+       let v_l0 = v_l1 in
+     ]}
+
+     Finally, we output all the outputs of A1 which are not inputs of A0, as well
+     as all the outputs of A0:
+     {[
+       (v_l0, v_l2)
+     ]}
+
+     The final, composed continuation is:
+     {[
+       (MB l0, MB l2) =
+         let (v_l1, v_l2) = if b then (ML l3, 1) else (0, ML l3) in
+         let v_l0 = v_l1 in
+         (v_l0, v_l2)
+     ]}
+  *)
+
+  (* First, bind all the outputs of the first continuation *)
+  let rec bind_outputs = () in
+
+  (* First, compute the information from the avalues. This gives us in particular the output values. *)
+  let info = compute_merge_abstraction_info span ctx owned_regions avalues in
+
+  (* Sanity check: no free variables in the expressions *)
+  sanity_check __FILE__ __LINE__ (abs_texpr_no_free_vars cont0.expr) span;
+  sanity_check __FILE__ __LINE__ (abs_texpr_no_free_vars cont1.expr) span;
+
+  (* Let-bind the outputs of abs1 (we're merging it into abs0, and as a
+     consequence part of its outputs might be inputs to abs0). We need to
+     remember which variable we introduced for which output.
+   *)
+  let _, fresh_fvar_id = AbsFreeVarId.fresh_stateful_generator () in
+  let mk_let1, outputs_to_fvars1 =
+    let_bind_abs_cont_outputs span fresh_fvar_id cont1
+  in
+  let emap1 =
+    AbsTExprMap.to_opt_subst (AbsTExprMap.of_list outputs_to_fvars1)
+  in
+
+  (* Substitute the outputs of abs1 in abs0, then let-bind the outputs of abs0
+     in the resulting expression. *)
+  let cont0 = { cont0 with expr = subst_abs_texpr emap1 cont0.expr } in
+  let mk_let0, outputs_to_fvars0 =
+    let_bind_abs_cont_outputs span fresh_fvar_id cont0
+  in
+
+  (* Compute the outputs of the continuation *)
+  let outputs =
+    let output_borrows =
+      List.filter_map
+        (fun bl ->
+          match bl with
+          | Borrow (marker, bid) ->
+              (* We don't support merging abstractions with markers for now *)
+              sanity_check __FILE__ __LINE__ (marker = PNone) span;
+              (* We need to lookup the type of the borrow *)
+              begin
+                match
+                  MarkedBorrowId.Map.find (marker, bid) info.borrow_to_content
+                with
+                | Concrete _ -> craise __FILE__ __LINE__ span "Unexpected"
+                | Abstract (ty, _) ->
+                    let ty = normalize_proj_ty owned_regions ty in
+                    Some { opat = OBorrow bid; opat_ty = ty }
+              end
+          | Loan _ -> None)
+        info.borrows_loans
+    in
+    let output_symbolic =
+      List.filter_map
+        (fun proj ->
+          match proj with
+          | Borrow proj ->
+              (* We don't support merging abstractions with markers for now *)
+              sanity_check __FILE__ __LINE__ (proj.pm = PNone) span;
+              Some { opat = OSymbolic proj.sv_id; opat_ty = proj.norm_proj_ty }
+          | Loan _ -> None)
+        info.borrow_loan_projs
+    in
+    List.append output_borrows output_symbolic
+  in
+  let outputs = List.map (fun o -> (o, PNone)) outputs in
+
+  (* Generate the output expression of the composed continuation. *)
+  let output_expr =
+    let output_to_expr =
+      List.append
+        (List.combine cont0.outputs outputs_to_fvars0)
+        (List.combine cont1.outputs outputs_to_fvars1)
+    in
+    let output_to_expr =
+      List.map (fun ((o, _), (_, fv)) -> (o, fv)) output_to_expr
+    in
+    let output_to_expr =
+      AbsTOutputMap.to_subst (AbsTOutputMap.of_list output_to_expr)
+    in
+    let outputs = List.map output_to_expr (List.map fst outputs) in
+    abs_texpr_mk_tuple outputs
+  in
+
+  (* Create the let expressions (this binds the free variables) *)
+  let expr = mk_let1 (mk_let0 output_expr) in
+
+  (* Put together *)
+  { expr; outputs }
+
+(** Merge the continuation expressions of two different abstractions. *)
+let merge_abs_conts (span : Meta.span) (ctx : eval_ctx) ~(with_abs_conts : bool)
+    (owned_regions : region_id_set) (abs0 : abs) (abs1 : abs) : abs_cont option
+    =
+  match (abs0.cont, abs1.cont) with
+  | None, None | None, Some _ | Some _, None ->
+      [%sanity_check] span (not with_abs_conts);
+      None
+  | Some cont0, Some cont1 ->
+      if with_abs_conts then
+        Some (merge_abs_conts_aux span ctx owned_regions abs0 abs1 cont0 cont1)
+      else None
+
 (** Auxiliary function.
 
     Merge two abstractions into one, without updating the context. *)
-let merge_abstractions (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
-    (merge_funs : merge_duplicates_funcs option) (ctx : eval_ctx) (abs0 : abs)
-    (abs1 : abs) : abs =
+let merge_abstractions (span : Meta.span) (abs_kind : abs_kind)
+    ~(can_end : bool) (merge_funs : merge_duplicates_funcs option)
+    ~(with_abs_conts : bool) (ctx : eval_ctx) (abs0 : abs) (abs1 : abs) : abs =
   [%ltrace
     "- abs0:\n"
     ^ abs_to_string span ctx abs0
@@ -915,6 +1342,9 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
           avalues
   in
 
+  (* Merge the expressions used for the pure translation. *)
+  let cont = merge_abs_conts span ctx ~with_abs_conts regions.owned abs0 abs1 in
+
   (* Create the new abstraction *)
   let abs_id = fresh_abstraction_id () in
   let abs =
@@ -926,6 +1356,7 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
       original_parents;
       regions;
       avalues;
+      cont;
     }
   in
 

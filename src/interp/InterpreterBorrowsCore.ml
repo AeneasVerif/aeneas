@@ -178,12 +178,13 @@ let rec compare_rtys (span : Meta.span) (default : bool)
     intersect the regions over which we project in the new abstraction. Note
     that the two abstractions have different views (in terms of regions) of the
     symbolic value (hence the two region types). *)
-let projections_intersect (span : Meta.span) (rset1 : RegionId.Set.t)
-    (ty1 : rty) (rset2 : RegionId.Set.t) (ty2 : rty) : bool =
+let projections_intersect (span : Meta.span) ?(allow_erased = false)
+    (rset1 : RegionId.Set.t) (ty1 : rty) (rset2 : RegionId.Set.t) (ty2 : rty) :
+    bool =
   let default = false in
   let combine b1 b2 = b1 || b2 in
   let compare_regions r1 r2 =
-    region_in_set r1 rset1 && region_in_set r2 rset2
+    region_in_set ~allow_erased r1 rset1 && region_in_set ~allow_erased r2 rset2
   in
   compare_rtys span default combine compare_regions ty1 ty2
 
@@ -1873,6 +1874,11 @@ and norm_proj_const_generics_union (span : Meta.span) (cg1 : const_generic)
 let norm_proj_ty_contains span (ty1 : rty) (ty2 : rty) : bool =
   let set = RegionId.Set.singleton RegionId.zero in
   projection_contains span set ty1 set ty2
+
+let norm_proj_tys_intersect span (ty1 : norm_proj_ty) (ty2 : norm_proj_ty) :
+    bool =
+  let rset = RegionId.Set.singleton RegionId.zero in
+  projections_intersect ~allow_erased:true span rset ty1 rset ty2
 
 (** Refresh the live region ids appearing in a type, and return the new type
     with the map from old regions to fresh regions. *)

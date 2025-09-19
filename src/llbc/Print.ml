@@ -596,6 +596,7 @@ module Values = struct
         eloan_content_to_string ~span ~with_ended env aenv indent indent_incr lc
     | ESymbolic (pm, proj) ->
         eproj_to_string ~with_ended env proj |> add_proj_marker pm
+    | EValue mv -> "@mvalue(" ^ tvalue_to_string ~span env mv ^ ")"
     | EIgnored _ -> "_"
 
   and eloan_content_to_string ?(span : Meta.span option = None)
@@ -655,6 +656,7 @@ module Values = struct
           adt_to_string span env
             (fun () -> show_tepat pat)
             pat.epat_ty variant_id fields )
+    | PIgnored -> (aenv, "_")
 
   and tepat_to_string ?(span : Meta.span option = None) (env : fmt_env)
       (aenv : evalue_env) (indent : string) (indent_incr : string) (pat : tepat)
