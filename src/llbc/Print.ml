@@ -309,7 +309,7 @@ module Values = struct
       string =
     match bc with
     | AMutBorrow (pm, bid, av) ->
-        "mb@" ^ BorrowId.to_string bid ^ " ("
+        "@mb(" ^ BorrowId.to_string bid ^ ", "
         ^ tavalue_to_string ~span ~with_ended env av
         ^ ")"
         |> add_proj_marker pm
@@ -673,7 +673,7 @@ module Values = struct
       (indent : string) (indent_incr : string) (bc : eborrow_content) : string =
     match bc with
     | EMutBorrow (pm, bid, _, av) ->
-        "mb@" ^ BorrowId.to_string bid ^ " ("
+        "@mb(" ^ BorrowId.to_string bid ^ ", "
         ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr av
         ^ ")"
         |> add_proj_marker pm

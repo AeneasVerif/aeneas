@@ -271,10 +271,6 @@ val loop_join_origin_with_continue_ctxs :
     - [loop_id]
     - [is_loop_entry]: [true] if first entry into the loop, [false] if re-entry
       (i.e., continue).
-    - [fp_bl_maps]: for the abstractions in the fixed-point (the source
-      context), the maps from loans to borrows and borrows to loans, if those
-      abstractions are seen as identity abstractions (for every of those
-      abstractions, there must be a bijection between the borrows and the loans)
     - [fp_input_svalues]: the list of symbolic values appearing in the fixed
       point (the source context) and which must be instantiated during the match
       (this is the list of input parameters of the loop).
@@ -284,8 +280,7 @@ val loop_match_ctx_with_target :
   config ->
   Meta.span ->
   loop_id ->
-  bool ->
-  borrow_loan_corresp ->
+  is_loop_entry:bool ->
   symbolic_value_id list ->
   ids_sets ->
   eval_ctx ->

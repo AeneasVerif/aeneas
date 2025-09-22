@@ -513,6 +513,25 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
   let push_abs (abs : abs) : unit = S.nabs := abs :: !S.nabs
   let push_absl (absl : abs list) : unit = List.iter push_abs absl
 
+  let add_symbolic_value (sv_id : SymbolicValueId.id) (left : tvalue)
+      (right : tvalue) : unit =
+    S.symbolic_to_value :=
+      SymbolicValueId.Map.add sv_id (left, right) !S.symbolic_to_value
+
+  let add_fresh_symbolic_value_from_no_regions_ty span ty (left : tvalue)
+      (right : tvalue) : tvalue =
+    let sv = mk_fresh_symbolic_tvalue_from_no_regions_ty span ty in
+    let sv_id = symbolic_tvalue_get_id span sv in
+    add_symbolic_value sv_id left right;
+    sv
+
+  let add_fresh_symbolic_value span ty (left : tvalue) (right : tvalue) : tvalue
+      =
+    let sv = mk_fresh_symbolic_tvalue span ty in
+    let sv_id = symbolic_tvalue_get_id span sv in
+    add_symbolic_value sv_id left right;
+    sv
+
   let match_etys _ _ ty0 ty1 =
     [%sanity_check] span (ty0 = ty1);
     ty0
@@ -524,8 +543,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     ty0
 
   let match_distinct_literals (_ : tvalue_matcher) (_ : eval_ctx) (_ : eval_ctx)
-      (ty : ety) (_ : literal) (_ : literal) : tvalue =
-    mk_fresh_symbolic_tvalue_from_no_regions_ty span ty
+      (ty : ety) (v0 : literal) (v1 : literal) : tvalue =
+    add_fresh_symbolic_value_from_no_regions_ty span ty
+      { value = VLiteral v0; ty }
+      { value = VLiteral v1; ty }
 
   let match_distinct_adts (_ : tvalue_matcher) (ctx0 : eval_ctx)
       (ctx1 : eval_ctx) (ty : ety) (adt0 : adt_value) (adt1 : adt_value) :
@@ -558,7 +579,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     then mk_bottom span ty
     else
       (* No borrows, no loans, no bottoms: we can introduce a symbolic value *)
-      mk_fresh_symbolic_tvalue_from_no_regions_ty span ty
+      add_fresh_symbolic_value_from_no_regions_ty span ty
+        { value = VAdt adt0; ty } { value = VAdt adt1; ty }
 
   let match_shared_borrows match_rec (ctx0 : eval_ctx) (ctx1 : eval_ctx)
       (ty : ety) (bid0 : borrow_id) (sid0 : shared_borrow_id) (bid1 : borrow_id)
@@ -774,9 +796,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let rid = fresh_region_id () in
       let bid2 = fresh_borrow_id () in
 
-      (* Generate a fresh symbolic value for the borrowed value *)
+      (* [bv] is the result of the join  *)
       let _, bv_ty, kind = ty_as_ref ty in
-      let sv = mk_fresh_symbolic_tvalue_from_no_regions_ty span bv_ty in
+      let sv = bv in
 
       let borrow_ty = mk_ref_ty (RVar (Free rid)) bv_ty kind in
 
@@ -933,9 +955,14 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         let fresh_regions, proj_ty =
           ty_refresh_regions (Some span) fresh_region_id sv0.sv_ty
         in
-        let svj = mk_fresh_symbolic_value span proj_ty in
+        let svj =
+          add_fresh_symbolic_value span proj_ty
+            { value = VSymbolic sv0; ty = sv0.sv_ty }
+            { value = VSymbolic sv1; ty = sv1.sv_ty }
+        in
         let proj_s0 = mk_aproj_borrows PLeft sv0.sv_id proj_ty in
         let proj_s1 = mk_aproj_borrows PRight sv1.sv_id proj_ty in
+        let svj = get_symbolic_tvalue span svj in
         let proj_svj = mk_aproj_loans PNone svj.sv_id proj_ty in
         let avalues = [ proj_s0; proj_s1; proj_svj ] in
         List.iter
@@ -984,7 +1011,12 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         svj)
       else
         (* Otherwise we simply introduce a fresh symbolic value *)
-        mk_fresh_symbolic_value span sv0.sv_ty)
+        let sv =
+          add_fresh_symbolic_value span sv0.sv_ty
+            { value = VSymbolic sv0; ty = sv0.sv_ty }
+            { value = VSymbolic sv1; ty = sv1.sv_ty }
+        in
+        get_symbolic_tvalue span sv)
 
   let match_symbolic_with_other (_ : tvalue_matcher) (ctx0 : eval_ctx)
       (ctx1 : eval_ctx) (left : bool) (sv : symbolic_value) (v : tvalue) :
@@ -1013,7 +1045,11 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       symbolic_value_has_ended_regions ctx0.ended_regions sv
       || bottom_in_value ctx1.ended_regions v
     then mk_bottom span sv.sv_ty
-    else mk_fresh_symbolic_tvalue span sv.sv_ty
+    else
+      let ty = sv.sv_ty in
+      let sv : tvalue = { value = VSymbolic sv; ty = sv.sv_ty } in
+      let left, right = if left then (sv, v) else (v, sv) in
+      add_fresh_symbolic_value span ty left right
 
   let match_bottom_with_other (_ : tvalue_matcher) (ctx0 : eval_ctx)
       (ctx1 : eval_ctx) (bottom_is_left : bool) (v : tvalue) : tvalue =
@@ -1818,6 +1854,7 @@ let prepare_loop_match_ctx_with_target (config : config) (span : Meta.span)
          false by default).
       *)
       let with_abs_conts = false
+      let symbolic_to_value = ref SymbolicValueId.Map.empty
     end in
     let module JM = MakeJoinMatcher (S) in
     let module M = MakeMatcher (JM) in

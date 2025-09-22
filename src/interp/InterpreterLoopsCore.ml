@@ -21,7 +21,14 @@ exception ValueMatchFailure of updt_env_kind
 (** Utility exception *)
 exception Distinct of string
 
-type ctx_or_update = (eval_ctx, updt_env_kind) result
+(** Information about the way contexts were joined *)
+type ctx_join_info = {
+  symbolic_to_value : (tvalue * tvalue) SymbolicValueId.Map.t;
+      (** Map from fresh symbolic value to the values coming from the left and
+          right contexts *)
+}
+
+type ctx_or_update = (eval_ctx * ctx_join_info, updt_env_kind) result
 
 (** A small utility.
 
@@ -496,6 +503,11 @@ module type MatchJoinState = sig
       expression or not? We do not need to compute abstraction expressions when
       computing fixed-points (but we need them for the synthesis). *)
   val with_abs_conts : bool
+
+  (** Map from the fresh symbolic values to the values coming from the left and
+      right environment and whose join led to the introduction of the symbolic
+      value *)
+  val symbolic_to_value : (tvalue * tvalue) SymbolicValueId.Map.t ref
 end
 
 (** Split an environment between the fixed abstractions, values, etc. and the

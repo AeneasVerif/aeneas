@@ -1397,10 +1397,9 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
 and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
     (ectx : C.eval_ctx)
     (loop_sid_maps :
-      (V.tvalue S.symbolic_value_id_map
-      * V.symbolic_value_id S.symbolic_value_id_map)
-      option) (fwd_e : S.expr) (back_e : S.expr S.region_group_id_map)
-    (ctx : bs_ctx) : texpr =
+      (V.tvalue S.symbolic_value_id_map * V.abs S.abs_id_map) option)
+    (fwd_e : S.expr) (back_e : S.expr S.region_group_id_map) (ctx : bs_ctx) :
+    texpr =
   (* Register the consumed mutable borrows to compute default values *)
   let ctx =
     match return_value with
@@ -1585,7 +1584,7 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
   | None ->
       (* "Regular" case: we reached a return *)
       translate_end ctx
-  | Some (loop_input_values_map, refreshed_sids) ->
+  | Some (loop_input_values_map, loop_input_abs) ->
       (* Loop *)
       let loop_id = Option.get ctx.loop_id in
 
@@ -1685,26 +1684,6 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
       in
       let ctx =
         { ctx with loops = LoopId.Map.add loop_id loop_info ctx.loops }
-      in
-
-      (* Introduce the refreshed input symbolic values.
-
-         TODO: remove. We used to need them, but we don't anymore, though we
-         have to make sure they are in the context.
-      *)
-      let ctx, _ =
-        List.fold_left_map
-          (fun ctx (sid, nid) ->
-            let sv_ty =
-              (SymbolicValueId.Map.find sid loop_input_values_map).ty
-            in
-            let sv : V.symbolic_value = { sv_ty; sv_id = sid } in
-            let nsv : V.symbolic_value = { sv_ty; sv_id = nid } in
-            let ctx, nsv = fresh_var_for_symbolic_value nsv ctx in
-            let sv = symbolic_value_to_texpr ctx sv in
-            (ctx, (PureUtils.mk_tpattern_from_fvar nsv None, sv)))
-          ctx
-          (SymbolicValueId.Map.bindings refreshed_sids)
       in
 
       (* Translate the end of the function *)

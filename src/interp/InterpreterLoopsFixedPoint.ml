@@ -425,6 +425,8 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
      already merged abstractions "vertically" and are now merging them
      "horizontally": the symbolic values contained in the abstractions (typically
      the shared values) will be preserved.
+
+     TODO: remove this once we generalize.
   *)
   let fp, rg_to_abs =
     (* List the loop abstractions in the fixed-point *)
@@ -610,7 +612,8 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
     let rg_to_abs = !rg_to_abs in
 
     (* Reorder the fresh abstractions in the fixed-point *)
-    let fp = reorder_fresh_abs span false (Option.get !fixed_ids).aids !fp in
+    let fixed_ids = Option.get !fixed_ids in
+    let fp = reorder_fresh_abs span false fixed_ids.aids !fp in
 
     (* Update the abstraction's [can_end] field and their kinds.
 
@@ -645,6 +648,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
               let can_end =
                 if !Config.borrow_check then true else remove_rg_id
               in
+
               { abs with can_end; kind }
           | _ -> abs
       end
@@ -652,7 +656,106 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
     let update_kinds_can_end (remove_rg_id : bool) ctx =
       (update_loop_abstractions remove_rg_id)#visit_eval_ctx () ctx
     in
+
+    (* Also introduce continuation expressions. *)
+    let add_abs_cont_to_abs (abs : abs) (loop_id : loop_id)
+        (rg_id : RegionGroupId.id) (kind : loop_abs_kind) : abs =
+      (* Retrieve the *mutable* borrows/loans from the abstraction values *)
+      let borrows : tevalue list ref = ref [] in
+      let loans : tevalue list ref = ref [] in
+      let get_borrow_loan (x : tavalue) : unit =
+        let ty = x.ty in
+        match x.value with
+        | ALoan lc -> (
+            match lc with
+            | AMutLoan (pm, bid, child) ->
+                [%sanity_check] span (is_aignored child.value);
+                let value : evalue =
+                  ELoan (EMutLoan (pm, bid, mk_eignored child.ty None))
+                in
+                loans := { value; ty } :: !loans
+            | ASharedLoan _ ->
+                (* We ignore shared loans *)
+                ()
+            | AEndedMutLoan _
+            | AEndedSharedLoan _
+            | AIgnoredMutLoan _
+            | AEndedIgnoredMutLoan _
+            | AIgnoredSharedLoan _ -> [%internal_error] span)
+        | ABorrow bc -> (
+            match bc with
+            | AMutBorrow (pm, bid, child) ->
+                [%sanity_check] span (is_aignored child.value);
+                let value : evalue =
+                  EBorrow
+                    (EMutBorrow (pm, bid, None, mk_eignored child.ty None))
+                in
+                borrows := { value; ty } :: !borrows
+            | ASharedBorrow _ -> (* We ignore shared borrows *) ()
+            | AIgnoredMutBorrow _
+            | AEndedMutBorrow _
+            | AEndedSharedBorrow
+            | AEndedIgnoredMutBorrow _
+            | AProjSharedBorrow _ -> [%internal_error] span)
+        | ASymbolic (pm, aproj) -> (
+            match aproj with
+            | AProjLoans { proj = { sv_id; proj_ty }; consumed; borrows } ->
+                [%sanity_check] span (consumed = []);
+                [%sanity_check] span (borrows = []);
+                let value : evalue =
+                  ESymbolic
+                    ( pm,
+                      EProjLoans
+                        {
+                          proj = { sv_id; proj_ty };
+                          consumed = [];
+                          borrows = [];
+                        } )
+                in
+                loans := { value; ty } :: !loans
+            | AProjBorrows { proj = { sv_id; proj_ty }; loans } ->
+                [%sanity_check] span (loans = []);
+                let value : evalue =
+                  ESymbolic
+                    (pm, EProjBorrows { proj = { sv_id; proj_ty }; loans = [] })
+                in
+                borrows := { value; ty } :: !borrows
+            | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty ->
+                [%internal_error] span)
+        | AAdt _ | ABottom | AIgnored _ -> [%internal_error] span
+      in
+      List.iter get_borrow_loan abs.avalues;
+
+      (* Transform them into input/output expressions *)
+      let output = mk_etuple (List.rev !borrows) in
+      let input = EApp (ELoop (loop_id, Some rg_id, kind), List.rev !loans) in
+      let input : tevalue = { value = input; ty = output.ty } in
+
+      (* Put everything together *)
+      let cont : abs_cont option =
+        Some { output = Some output; input = Some input }
+      in
+      { abs with cont }
+    in
+    let add_abs_conts ctx =
+      let visitor =
+        object
+          inherit [_] map_eval_ctx
+
+          method! visit_abs _ abs =
+            match abs.kind with
+            | Loop (loop_id, rg_id, kind) ->
+                [%sanity_check] span (abs.cont = None);
+                [%sanity_check] span (Option.is_some rg_id);
+                add_abs_cont_to_abs abs loop_id (Option.get rg_id) kind
+            | _ -> abs
+        end
+      in
+      visitor#visit_eval_ctx () ctx
+    in
+
     let fp = update_kinds_can_end false fp in
+    let fp = add_abs_conts fp in
 
     (* Sanity check: we still have a fixed point - we simply call [compute_fixed_point]
        while allowing exactly one iteration to see if it fails *)
@@ -667,181 +770,9 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
     (* Return *)
     (fp, rg_to_abs)
   in
-  let fixed_ids = compute_fixed_ids [ fp ] in
 
   (* Return *)
-  (fp, fixed_ids, rg_to_abs)
-
-let compute_fixed_point_id_correspondance (span : Meta.span)
-    (fixed_ids : ids_sets) (src_ctx : eval_ctx) (tgt_ctx : eval_ctx) :
-    borrow_loan_corresp =
-  [%ltrace
-    "\n- fixed_ids:\n" ^ show_ids_sets fixed_ids ^ "\n\n- src_ctx:\n"
-    ^ eval_ctx_to_string ~span:(Some span) src_ctx
-    ^ "\n\n- tgt_ctx:\n"
-    ^ eval_ctx_to_string ~span:(Some span) tgt_ctx
-    ^ "\n"];
-
-  let filt_src_env, _, _ = ctx_split_fixed_new span fixed_ids src_ctx in
-  let filt_src_ctx = { src_ctx with env = filt_src_env } in
-  let filt_tgt_env, new_absl, _ = ctx_split_fixed_new span fixed_ids tgt_ctx in
-  let filt_tgt_ctx = { tgt_ctx with env = filt_tgt_env } in
-
-  [%ltrace
-    "\n- fixed_ids:\n" ^ show_ids_sets fixed_ids ^ "\n\n- filt_src_ctx:\n"
-    ^ eval_ctx_to_string ~span:(Some span) filt_src_ctx
-    ^ "\n\n- filt_tgt_ctx:\n"
-    ^ eval_ctx_to_string ~span:(Some span) filt_tgt_ctx
-    ^ "\n"];
-
-  (* Match the source context and the filtered target context *)
-  let maps =
-    let fixed_ids = ids_sets_empty_borrows_loans fixed_ids in
-    let open InterpreterBorrowsCore in
-    let lookup_shared_loan lid ctx : tvalue =
-      match snd (lookup_loan span ek_all lid ctx) with
-      | Concrete (VSharedLoan (_, v)) -> v
-      | Abstract (ASharedLoan (pm, _, v, _)) ->
-          [%sanity_check] span (pm = PNone);
-          v
-      | _ -> [%craise] span "Unreachable"
-    in
-    let lookup_in_tgt id = lookup_shared_loan id tgt_ctx in
-    let lookup_in_src id = lookup_shared_loan id src_ctx in
-    Option.get
-      (match_ctxs span ~check_equiv:false fixed_ids lookup_in_tgt lookup_in_src
-         filt_tgt_ctx filt_src_ctx)
-  in
-
-  [%ltrace "\n- tgt_to_src_maps:\n" ^ ids_maps_to_string src_ctx maps ^ "\n"];
-
-  let src_to_tgt_borrow_map =
-    BorrowId.Map.of_list
-      (List.map
-         (fun (x, y) -> (y, x))
-         (BorrowId.InjSubst.bindings maps.borrow_id_map))
-  in
-  let src_to_tgt_sid_map =
-    SymbolicValueId.Map.of_list
-      (List.filter_map
-         (fun ((sid, v) : _ * tvalue) ->
-           match v.value with
-           | VSymbolic v -> Some (v.sv_id, sid)
-           | _ -> None)
-         (SymbolicValueId.Map.bindings maps.sid_to_value_map))
-  in
-
-  (* Sanity check: for every abstraction, the target loans and borrows are mapped
-     to the same set of source loans and borrows.
-
-     For instance, if we map the [env_fp] to [env0] (only looking at the bindings,
-     ignoring the abstractions) below:
-     {[
-       env0 = {
-         abs@0 { ML l0 }
-         ls -> MB l0 (s2 : loops::List<T>)
-         i -> s1 : u32
-       }
-
-       env_fp = {
-         abs@0 { ML l0 }
-         ls -> MB l1 (s3 : loops::List<T>)
-         i -> s4 : u32
-         abs@fp {
-           MB l0
-           ML l1
-         }
-       }
-     ]}
-
-     We get that l1 is mapped to l0. From there, we see that abs@fp consumes
-     the same borrows that it gives: it is indeed an identity function.
-
-     TODO: we should also check the mappings for the shared values (to
-     make sure the abstractions are indeed the identity)...
-  *)
-  List.iter
-    (fun abs ->
-      let ids, _ = compute_abs_ids abs in
-      (* Map the *loan* ids (we just match the corresponding *loans* ) *)
-      let loan_ids =
-        BorrowId.Set.map
-          (fun x -> BorrowId.InjSubst.find x maps.borrow_id_map)
-          ids.loan_ids
-      in
-      (* Check that the loans and borrows are related *)
-      [%sanity_check] span (BorrowId.Set.equal ids.borrow_ids loan_ids))
-    new_absl;
-
-  (* For every target abstraction (going back to the [list_nth_mut] example,
-     we have to visit [abs@fp { ML l0, MB l1 }]):
-     - go through the tgt borrows ([l1])
-     - for every tgt borrow, find the corresponding src borrow ([l0], because
-       we have: [borrows_map: { l1 -> l0 }])
-     - from there, find the corresponding tgt loan ([l0])
-
-     Note that this borrow does not necessarily appear in the src_to_tgt_borrow_map,
-     if it actually corresponds to a borrows introduced when decomposing the
-     abstractions to move the shared values out of the source context abstractions.
-  *)
-  let tgt_borrow_to_loan = ref BorrowId.InjSubst.empty in
-  let tgt_borrow_to_loan_proj = ref SymbolicValueId.InjSubst.empty in
-  let visit_tgt =
-    object
-      inherit [_] iter_abs
-
-      method! visit_borrow_id _ id =
-        (* Find the target borrow *)
-        let tgt_borrow_id = BorrowId.Map.find id src_to_tgt_borrow_map in
-        (* Update the map *)
-        tgt_borrow_to_loan :=
-          BorrowId.InjSubst.add id tgt_borrow_id !tgt_borrow_to_loan
-
-      method! visit_aproj _ proj =
-        match proj with
-        | AProjLoans { proj = _; consumed; borrows } ->
-            [%sanity_check] span (consumed = []);
-            [%sanity_check] span (borrows = []);
-            ()
-        | AProjBorrows { proj; loans } ->
-            [%sanity_check] span (loans = []);
-            (* Find the target borrow *)
-            let tgt_borrow_id =
-              SymbolicValueId.Map.find proj.sv_id src_to_tgt_sid_map
-            in
-            (* Update the map *)
-            tgt_borrow_to_loan_proj :=
-              SymbolicValueId.InjSubst.add proj.sv_id tgt_borrow_id
-                !tgt_borrow_to_loan_proj
-        | AEndedProjBorrows _ | AEndedProjLoans _ | AEmpty ->
-            (* We shouldn't get there *)
-            [%internal_error] span
-    end
-  in
-  List.iter (visit_tgt#visit_abs ()) new_absl;
-
-  (* Compute the map from loan to borrows *)
-  let tgt_loan_to_borrow =
-    BorrowId.InjSubst.of_list
-      (List.map
-         (fun (x, y) -> (y, x))
-         (BorrowId.InjSubst.bindings !tgt_borrow_to_loan))
-  in
-
-  let tgt_loan_to_borrow_proj =
-    SymbolicValueId.InjSubst.of_list
-      (List.map
-         (fun (x, y) -> (y, x))
-         (SymbolicValueId.InjSubst.bindings !tgt_borrow_to_loan_proj))
-  in
-
-  (* Return *)
-  {
-    borrow_to_loan_id_map = !tgt_borrow_to_loan;
-    loan_to_borrow_id_map = tgt_loan_to_borrow;
-    borrow_to_loan_proj_map = !tgt_borrow_to_loan_proj;
-    loan_to_borrow_proj_map = tgt_loan_to_borrow_proj;
-  }
+  (fp, Option.get !fixed_ids, rg_to_abs)
 
 let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
     (fp_ctx : eval_ctx) : SymbolicValueId.Set.t * symbolic_value list =

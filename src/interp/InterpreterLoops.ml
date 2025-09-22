@@ -1,12 +1,10 @@
 open Types
 open Values
 open Contexts
-open ValuesUtils
 open Meta
 module S = SynthesizeSymbolic
 open Cps
 open InterpreterUtils
-open InterpreterLoopsCore
 open InterpreterLoopsMatchCtxs
 open InterpreterLoopsJoinCtxs
 open InterpreterLoopsFixedPoint
@@ -85,10 +83,8 @@ let eval_loop_concrete (span : Meta.span) (eval_loop_body : stl_cm_fun) :
     borrow l1 to loan l3. *)
 let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
     (loop_id : LoopId.id) (init_ctx : eval_ctx) (fixed_ids : ids_sets)
-    (fp_ctx : eval_ctx) (fp_input_svalues : SymbolicValueId.id list)
-    (rg_to_abs : AbstractionId.id RegionGroupId.Map.t) :
-    ((eval_ctx * statement_eval_res) * (SymbolicAst.expr -> SymbolicAst.expr))
-    * borrow_loan_corresp =
+    (fp_ctx : eval_ctx) (fp_input_svalues : SymbolicValueId.id list) :
+    (eval_ctx * statement_eval_res) * (SymbolicAst.expr -> SymbolicAst.expr) =
   [%ltrace
     "about to reorganize the original context to match the fixed-point ctx \
      with it:\n\
@@ -111,135 +107,25 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
      - src ctx (fixed-point ctx)\n" ^ eval_ctx_to_string fp_ctx
     ^ "\n\n-tgt ctx (original context):\n" ^ eval_ctx_to_string ctx];
 
-  (* Compute the id correspondance between the contexts *)
-  let fp_bl_corresp =
-    compute_fixed_point_id_correspondance span fixed_ids ctx fp_ctx
-  in
-  [%ltrace
-    "about to match the fixed-point context with the original context:\n\
-     - src ctx (fixed-point ctx)"
-    ^ eval_ctx_to_string ~span:(Some span) fp_ctx
-    ^ "\n\n-tgt ctx (original context):\n"
-    ^ eval_ctx_to_string ~span:(Some span) ctx
-    ^ "\n\n- fp_bl_corresp:\n"
-    ^ show_borrow_loan_corresp fp_bl_corresp];
-
   (* Compute the end expression, that is the expresion corresponding to the
      end of the function where we call the loop (for now, when calling a loop
      we never get out) *)
-  let res_fun_end =
+  let (ctx, res), cc =
     comp cf_prepare
-      (loop_match_ctx_with_target config span loop_id true fp_bl_corresp
+      (loop_match_ctx_with_target config span loop_id ~is_loop_entry:true
          fp_input_svalues fixed_ids fp_ctx ctx)
   in
 
-  (* Sanity check: the mutable borrows/loans are properly ordered.
-     TODO: it seems that the way the fixed points are computed makes this check
-     always succeed. If it happens to fail we can reorder the borrows/loans
-     inside the region abstractions. *)
-  let check_abs (abs_id : AbstractionId.id) =
-    let abs = ctx_lookup_abs fp_ctx abs_id in
-    [%ltrace "checking abs:\n" ^ abs_to_string span ctx abs];
+  [%ltrace "Resulting context:\n- ctx" ^ eval_ctx_to_string ctx];
 
-    let is_borrow (av : tavalue) : bool =
-      match av.value with
-      | ABorrow _ | ASymbolic (_, AProjBorrows _) -> true
-      | ALoan _ | ASymbolic (_, AProjLoans _) -> false
-      | _ -> [%craise] span "Unreachable"
-    in
-    let borrows, loans = List.partition is_borrow abs.avalues in
-
-    let mut_borrows =
-      List.filter_map
-        (fun (av : tavalue) ->
-          match av.value with
-          | ABorrow (AMutBorrow (pm, bid, child_av)) ->
-              [%sanity_check] span (pm = PNone);
-              [%sanity_check] span (is_aignored child_av.value);
-              Some bid
-          | ABorrow (ASharedBorrow (pm, _, _)) ->
-              [%sanity_check] span (pm = PNone);
-              None
-          | ASymbolic (_, (AProjBorrows _ | AProjLoans _)) -> None
-          | _ -> [%craise] span "Unreachable")
-        borrows
-    in
-
-    let borrow_projs =
-      List.filter_map
-        (fun (av : tavalue) ->
-          match av.value with
-          | ASymbolic (pm, AProjBorrows { proj; loans }) ->
-              [%sanity_check] span (pm = PNone);
-              [%sanity_check] span (loans = []);
-              Some proj.sv_id
-          | _ -> None)
-        borrows
-    in
-
-    let mut_loans =
-      List.filter_map
-        (fun (av : tavalue) ->
-          match av.value with
-          | ALoan (AMutLoan (pm, bid, child_av)) ->
-              [%sanity_check] span (pm = PNone);
-              [%sanity_check] span (is_aignored child_av.value);
-              Some bid
-          | ALoan (ASharedLoan (pm, _, _, _)) ->
-              [%sanity_check] span (pm = PNone);
-              None
-          | ASymbolic (_, (AProjBorrows _ | AProjLoans _)) -> None
-          | _ -> [%craise] span "Unreachable")
-        loans
-    in
-
-    let loan_projs =
-      List.filter_map
-        (fun (av : tavalue) ->
-          match av.value with
-          | ASymbolic (pm, AProjLoans { proj; consumed; borrows }) ->
-              [%sanity_check] span (pm = PNone);
-              [%sanity_check] span (consumed = []);
-              [%sanity_check] span (borrows = []);
-              Some proj.sv_id
-          | _ -> None)
-        loans
-    in
-
-    [%sanity_check] span (List.length mut_borrows = List.length mut_loans);
-    [%sanity_check] span (List.length borrow_projs = List.length loan_projs);
-
-    let borrows_loans = List.combine mut_borrows mut_loans in
-    List.iter
-      (fun (bid, lid) ->
-        let lid_of_bid =
-          BorrowId.InjSubst.find bid fp_bl_corresp.borrow_to_loan_id_map
-        in
-        [%sanity_check] span (lid_of_bid = lid))
-      borrows_loans;
-
-    let borrow_loan_projs = List.combine borrow_projs loan_projs in
-    List.iter
-      (fun (bid, lid) ->
-        let lid_of_bid =
-          SymbolicValueId.InjSubst.find bid
-            fp_bl_corresp.borrow_to_loan_proj_map
-        in
-        [%sanity_check] span (lid_of_bid = lid))
-      borrow_loan_projs
-  in
-  List.iter check_abs (RegionGroupId.Map.values rg_to_abs);
-
-  (* Return *)
-  (res_fun_end, fp_bl_corresp)
+  ((ctx, res), cc)
 
 (** Auxiliary function for {!eval_loop_symbolic}.
 
     Synthesize the body of the loop. *)
 let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
     (eval_loop_body : stl_cm_fun) (loop_id : LoopId.id) (fixed_ids : ids_sets)
-    (fp_ctx : eval_ctx) (fp_input_svalues : SymbolicValueId.id list)
-    (fp_bl_corresp : borrow_loan_corresp) :
+    (fp_ctx : eval_ctx) (fp_input_svalues : SymbolicValueId.id list) :
     (eval_ctx * statement_eval_res) list
     * (SymbolicAst.expr list -> SymbolicAst.expr) =
   (* First, evaluate the loop body starting from the **fixed-point** context *)
@@ -268,7 +154,7 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
           ^ eval_ctx_to_string ~span:(Some span) fp_ctx
           ^ "\n\n-tgt ctx (ctx at continue):\n"
           ^ eval_ctx_to_string ~span:(Some span) ctx];
-        loop_match_ctx_with_target config span loop_id false fp_bl_corresp
+        loop_match_ctx_with_target config span loop_id ~is_loop_entry:false
           fp_input_svalues fixed_ids fp_ctx ctx
     | Unit | LoopReturn _ | EndEnterLoop _ | EndContinue _ ->
         (* For why we can't get [Unit], see the comments inside {!eval_loop_concrete}.
@@ -325,9 +211,9 @@ let eval_loop_symbolic (config : config) (span : span)
      We update the loop fixed point at the same time by reordering the borrows/
      loans which appear inside it.
   *)
-  let (res_fun_end, cf_fun_end), fp_bl_corresp =
+  let res_fun_end, cf_fun_end =
     eval_loop_symbolic_synthesize_fun_end config span loop_id ctx fixed_ids
-      fp_ctx fp_input_svalues rg_to_abs
+      fp_ctx fp_input_svalues
   in
 
   [%ltrace "matched the fixed-point context with the original context."];
@@ -335,7 +221,7 @@ let eval_loop_symbolic (config : config) (span : span)
   (* Synthesize the loop body *)
   let resl_loop_body, cf_loop_body =
     eval_loop_symbolic_synthesize_loop_body config span eval_loop_body loop_id
-      fixed_ids fp_ctx fp_input_svalues fp_bl_corresp
+      fixed_ids fp_ctx fp_input_svalues
   in
 
   [%ltrace

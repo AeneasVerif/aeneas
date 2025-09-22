@@ -389,7 +389,8 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
         | _ -> false
       in
       (* There is not necessarily an input synthesis abstraction specifically
-         for the loop.
+         for the loop. TODO: remove the case of loops here.
+
          If there is none, the input synthesis abstraction is actually the
          function input synthesis abstraction.
 
@@ -580,8 +581,10 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
         let back_el = RegionGroupId.Map.of_list back_el in
         (* Put everything together *)
         SA.ForwardEnd (Some (ctx_return, ret_value), ctx0, None, fwd_e, back_el)
-    | EndEnterLoop (loop_id, loop_input_values, refreshed_input_sids)
-    | EndContinue (loop_id, loop_input_values, refreshed_input_sids) ->
+    | EndContinue (loop_id, loop_input_values, loop_input_abs) ->
+        (* *)
+        SA.Continue (loop_id, loop_input_values, loop_input_abs)
+    | EndEnterLoop (loop_id, loop_input_values, loop_input_abs) ->
         (* Similar to [Return]: we have to play different endings *)
         let inside_loop =
           match res with
@@ -617,11 +620,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
         let back_el = RegionGroupId.Map.of_list back_el in
         (* Put everything together *)
         ForwardEnd
-          ( None,
-            ctx0,
-            Some (loop_input_values, refreshed_input_sids),
-            fwd_e,
-            back_el )
+          (None, ctx0, Some (loop_input_values, loop_input_abs), fwd_e, back_el)
     | Panic ->
         (* Note that as we explore all the execution branches, one of
          * the executions can lead to a panic *)

@@ -73,6 +73,7 @@ type espan =
 type variant_id = VariantId.id [@@deriving show]
 type global_decl_id = GlobalDeclId.id [@@deriving show]
 type 'a symbolic_value_id_map = 'a SymbolicValueId.Map.t [@@deriving show]
+type 'a abs_id_map = 'a AbstractionId.Map.t [@@deriving show]
 type 'a region_group_id_map = 'a RegionGroupId.Map.t [@@deriving show]
 
 (** Ancestor for {!expr} iter visitor.
@@ -103,6 +104,15 @@ class ['self] iter_expr_base =
         SymbolicValueId.Map.iter
           (fun id x ->
             self#visit_symbolic_value_id env id;
+            f env x)
+          m
+
+    method visit_abs_id_map :
+        'a. ('env -> 'a -> unit) -> 'env -> 'a abs_id_map -> unit =
+      fun f env m ->
+        AbstractionId.Map.iter
+          (fun id x ->
+            self#visit_abstraction_id env id;
             f env x)
           m
 
@@ -168,8 +178,7 @@ type expr =
   | ForwardEnd of
       ((Contexts.eval_ctx[@opaque]) * tvalue) option
       * (Contexts.eval_ctx[@opaque])
-      * (tvalue symbolic_value_id_map * symbolic_value_id symbolic_value_id_map)
-        option
+      * (tvalue symbolic_value_id_map * abs abs_id_map) option
       * expr
       * expr region_group_id_map
       (** We use this delimiter to indicate at which point we switch to the
@@ -201,6 +210,7 @@ type expr =
 
           TODO: because we store the returned value, the Return case may not be
           useful anymore? *)
+  | LoopContinue of loop_id * tvalue symbolic_value_id_map * abs abs_id_map
   | Loop of loop  (** Loop *)
   | ReturnWithLoop of loop_id * bool
       (** We reach a return while inside a loop. The boolean is [true]. TODO:
@@ -211,6 +221,7 @@ type expr =
 and loop = {
   loop_id : loop_id;
   input_svalues : symbolic_value list;  (** The input symbolic values *)
+  input_abs : abstraction_id list;  (** The abstractions *)
   fresh_svalues : symbolic_value_id_set;
       (** The symbolic values introduced by the loop fixed-point *)
   rg_to_given_back_tys : (Pure.ty list RegionGroupId.Map.t[@opaque]);

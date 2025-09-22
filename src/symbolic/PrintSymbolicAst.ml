@@ -88,12 +88,13 @@ let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
       let sid_to_value, refreshed_sids =
         match loop_sid_maps with
         | None -> ("None", "None")
-        | Some (sid_to_value, refreshed_sids) ->
+        | Some (sid_to_value, abs_id_to_abs) ->
             ( SymbolicValueId.Map.to_string None
                 (Values.tvalue_to_string env)
                 sid_to_value,
-              SymbolicValueId.Map.to_string None SymbolicValueId.to_string
-                refreshed_sids )
+              AbstractionId.Map.to_string None
+                (fun abs -> AbstractionId.to_string abs.abs_id)
+                abs_id_to_abs )
       in
       let sid_to_value = "sid_to_value = " ^ sid_to_value in
       let refreshed_sids = "refreshed_sids = " ^ refreshed_sids in

@@ -117,6 +117,16 @@ let mk_fresh_symbolic_tvalue_from_no_regions_ty (span : Meta.span) (ty : ty) :
   [%sanity_check] span (ty_no_regions ty);
   mk_fresh_symbolic_tvalue span ty
 
+let symbolic_tvalue_get_id (span : Meta.span) (v : tvalue) =
+  match v.value with
+  | VSymbolic v -> v.sv_id
+  | _ -> [%internal_error] span
+
+let get_symbolic_tvalue (span : Meta.span) (v : tvalue) : symbolic_value =
+  match v.value with
+  | VSymbolic v -> v
+  | _ -> [%internal_error] span
+
 (** Create a loans projector value from a symbolic value.
 
     Checks if the projector will actually project some regions. If not, returns
