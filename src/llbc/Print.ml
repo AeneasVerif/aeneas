@@ -461,17 +461,12 @@ module Values = struct
         ^ ",rg@"
         ^ RegionGroupId.to_string rg_id
         ^ ")"
-    | ELoop (lp_id, rg_id, kind) ->
-        let kind =
-          match kind with
-          | LoopSynthInput -> "synth_input"
-          | LoopCall -> "loop_call"
-        in
-        "Loop(loop_id@" ^ LoopId.to_string lp_id ^ ","
+    | ELoop (lp_id, rg_id) ->
+        "Loop(loop_id@" ^ LoopId.to_string lp_id ^ "," ^ "rg@"
         ^ option_to_string
             (fun rg_id -> "rg@" ^ RegionGroupId.to_string rg_id)
             rg_id
-        ^ "," ^ kind ^ ")"
+        ^ ")"
 
   let rec eproj_to_string ?(with_ended : bool = false) (env : fmt_env)
       (pv : eproj) : string =
@@ -701,11 +696,6 @@ module Values = struct
             given_back
         ^ ")"
 
-  let loop_abs_kind_to_string (kind : loop_abs_kind) : string =
-    match kind with
-    | LoopSynthInput -> "LoopSynthInput"
-    | LoopCall -> "LoopCall"
-
   let abs_kind_to_string (kind : abs_kind) : string =
     match kind with
     | FunCall (fid, rg_id) ->
@@ -715,11 +705,9 @@ module Values = struct
     | SynthInput rg_id ->
         "SynthInput(rg_id:" ^ RegionGroupId.to_string rg_id ^ ")"
     | SynthRet rg_id -> "SynthRet(rg_id:" ^ RegionGroupId.to_string rg_id ^ ")"
-    | Loop (lp_id, rg_id, abs_kind) ->
+    | Loop (lp_id, rg_id) ->
         "Loop(loop_id:" ^ LoopId.to_string lp_id ^ ", rg_id:"
         ^ option_to_string RegionGroupId.to_string rg_id
-        ^ ", loop abs kind: "
-        ^ loop_abs_kind_to_string abs_kind
         ^ ")"
     | Identity -> "Identity"
     | CopySymbolicValue -> "CopySymbolicValue"

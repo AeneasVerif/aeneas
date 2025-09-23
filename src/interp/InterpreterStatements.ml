@@ -784,13 +784,7 @@ and eval_statement_list (config : config) span (stmts : statement list) :
             (* Evaluation successful: evaluate the second statement *)
             | Unit -> eval_statement_list config span tl ctx
             (* Control-flow break: transmit. We enumerate the cases on purpose *)
-            | Panic
-            | Break _
-            | Continue _
-            | Return
-            | LoopReturn _
-            | EndEnterLoop _
-            | EndContinue _ ->
+            | Panic | Break _ | Continue _ | Return ->
                 ([ (ctx, res) ], cf_singleton __FILE__ __LINE__ span))
           ctx_resl
       in
@@ -1209,12 +1203,7 @@ and eval_transparent_function_call_concrete (config : config) (span : Meta.span)
                    its destination and continue *)
                 let ctx, cf = pop_frame_assign config span dest ctx in
                 ((ctx, Unit), cf)
-            | Break _
-            | Continue _
-            | Unit
-            | LoopReturn _
-            | EndEnterLoop _
-            | EndContinue _ -> [%craise] span "Unreachable")
+            | Break _ | Continue _ | Unit -> [%craise] span "Unreachable")
           ctx_resl
       in
       let ctx_resl, cfl = List.split ctx_resl_cfl in

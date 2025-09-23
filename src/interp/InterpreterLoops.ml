@@ -3,6 +3,7 @@ open Values
 open Contexts
 open Meta
 module S = SynthesizeSymbolic
+module SA = SymbolicAst
 open Cps
 open InterpreterUtils
 open InterpreterLoopsMatchCtxs
@@ -16,9 +17,6 @@ let log = Logging.loops_log
 let eval_loop_concrete (span : Meta.span) (eval_loop_body : stl_cm_fun) :
     stl_cm_fun =
  fun ctx ->
-  (* We need a loop id for the [LoopReturn]. In practice it won't be used
-     (it is useful only for the symbolic execution *)
-  let loop_id = fresh_loop_id () in
   (* Function to recursively evaluate the loop
 
      We need a specific function because of the {!Continue} case: in case we
@@ -28,7 +26,7 @@ let eval_loop_concrete (span : Meta.span) (eval_loop_body : stl_cm_fun) :
   let rec rec_eval_loop_body (ctx : eval_ctx) (res : statement_eval_res) =
     [%ltrace ""];
     match res with
-    | Return -> [ (ctx, LoopReturn loop_id) ]
+    | Return -> [ (ctx, Return) ]
     | Panic -> [ (ctx, Panic) ]
     | Break i ->
         (* Break out of the loop *)
@@ -52,9 +50,6 @@ let eval_loop_concrete (span : Meta.span) (eval_loop_body : stl_cm_fun) :
          * {!Unit} would account for the first iteration of the loop.
          * We prefer to write it this way for consistency and sanity,
          * though. *)
-        [%craise] span "Unreachable"
-    | LoopReturn _ | EndEnterLoop _ | EndContinue _ ->
-        (* We can't get there: this is only used in symbolic mode *)
         [%craise] span "Unreachable"
   in
 
@@ -81,10 +76,11 @@ let eval_loop_concrete (span : Meta.span) (eval_loop_body : stl_cm_fun) :
     ]}
     we want to make sure that borrow l0 actually corresponds to loan l2, and
     borrow l1 to loan l3. *)
-let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
+let eval_loop_symbolic_apply_loop (config : config) (span : span)
     (loop_id : LoopId.id) (init_ctx : eval_ctx) (fixed_ids : ids_sets)
     (fp_ctx : eval_ctx) (fp_input_svalues : SymbolicValueId.id list) :
-    (eval_ctx * statement_eval_res) * (SymbolicAst.expr -> SymbolicAst.expr) =
+    (eval_ctx * tvalue SymbolicValueId.Map.t * abs AbstractionId.Map.t)
+    * (SymbolicAst.expr -> SymbolicAst.expr) =
   [%ltrace
     "about to reorganize the original context to match the fixed-point ctx \
      with it:\n\
@@ -110,40 +106,53 @@ let eval_loop_symbolic_synthesize_fun_end (config : config) (span : span)
   (* Compute the end expression, that is the expresion corresponding to the
      end of the function where we call the loop (for now, when calling a loop
      we never get out) *)
-  let (ctx, res), cc =
+  let (ctx, input_values, input_abs), cc =
     comp cf_prepare
-      (loop_match_ctx_with_target config span loop_id ~is_loop_entry:true
-         fp_input_svalues fixed_ids fp_ctx ctx)
+      (loop_match_ctx_with_target config span loop_id fp_input_svalues fixed_ids
+         fp_ctx ctx)
   in
 
   [%ltrace "Resulting context:\n- ctx" ^ eval_ctx_to_string ctx];
 
-  ((ctx, res), cc)
+  ((ctx, input_values, input_abs), cc)
 
 (** Auxiliary function for {!eval_loop_symbolic}.
 
     Synthesize the body of the loop. *)
 let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
     (eval_loop_body : stl_cm_fun) (loop_id : LoopId.id) (fixed_ids : ids_sets)
-    (fp_ctx : eval_ctx) (fp_input_svalues : SymbolicValueId.id list) :
-    (eval_ctx * statement_eval_res) list
-    * (SymbolicAst.expr list -> SymbolicAst.expr) =
+    (fp_ctx : eval_ctx) (fp_input_svalues : SymbolicValueId.id list)
+    (break_ctx : eval_ctx) (break_input_svalues : SymbolicValueId.id list) :
+    SA.expr =
   (* First, evaluate the loop body starting from the **fixed-point** context *)
   let ctx_resl, cf_loop = eval_loop_body fp_ctx in
 
   (* Then, do a special treatment of the break and continue cases.
      For now, we forbid having breaks in loops (and eliminate breaks
      in the prepasses) *)
-  let eval_after_loop_iter (ctx, res) =
+  let eval_after_loop_iter (ctx, res) : SA.expr =
     [%ltrace ""];
     match res with
     | Return ->
-        (* We replace the [Return] with a [LoopReturn] *)
-        ((ctx, LoopReturn loop_id), fun e -> e)
-    | Panic -> ((ctx, res), fun e -> e)
-    | Break _ ->
-        (* Breaks should have been eliminated in the prepasses *)
-        [%craise] span "Unexpected break"
+        (* We don't support early returns *)
+        [%craise] span "Unexpected return"
+    | Panic -> SA.Panic
+    | Break i ->
+        (* We don't support nested loops for now *)
+        [%cassert] span (i = 0) "Nested loops are not supported yet";
+
+        [%ltrace
+          "about to match the break context with the context at a break:\n\
+           - src ctx (break ctx)"
+          ^ eval_ctx_to_string ~span:(Some span) break_ctx
+          ^ "\n\n-tgt ctx (ctx at this break):\n"
+          ^ eval_ctx_to_string ~span:(Some span) ctx];
+        raise (Failure "TODO");
+        let (_ctx, input_values, input_abs), cc =
+          loop_match_break_ctx_with_target config span loop_id
+            break_input_svalues fixed_ids break_ctx ctx
+        in
+        cc (SA.LoopBreak (loop_id, input_values, input_abs))
     | Continue i ->
         (* We don't support nested loops for now *)
         [%cassert] span (i = 0) "Nested loops are not supported yet";
@@ -154,9 +163,12 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
           ^ eval_ctx_to_string ~span:(Some span) fp_ctx
           ^ "\n\n-tgt ctx (ctx at continue):\n"
           ^ eval_ctx_to_string ~span:(Some span) ctx];
-        loop_match_ctx_with_target config span loop_id ~is_loop_entry:false
-          fp_input_svalues fixed_ids fp_ctx ctx
-    | Unit | LoopReturn _ | EndEnterLoop _ | EndContinue _ ->
+        let (_ctx, input_values, input_abs), cc =
+          loop_match_ctx_with_target config span loop_id fp_input_svalues
+            fixed_ids fp_ctx ctx
+        in
+        cc (SA.LoopContinue (loop_id, input_values, input_abs))
+    | Unit ->
         (* For why we can't get [Unit], see the comments inside {!eval_loop_concrete}.
            For [EndEnterLoop] and [EndContinue]: we don't support nested loops for now.
         *)
@@ -164,17 +176,12 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
   in
 
   (* Apply and compose *)
-  let ctx_resl, cfl = List.split (List.map eval_after_loop_iter ctx_resl) in
-  let cc (el : SymbolicAst.expr list) : SymbolicAst.expr =
-    let el = List.map (fun (cf, e) -> cf e) (List.combine cfl el) in
-    cf_loop el
-  in
-
-  (ctx_resl, cc)
+  let el = List.map eval_after_loop_iter ctx_resl in
+  cf_loop el
 
 (** Evaluate a loop in symbolic mode *)
 let eval_loop_symbolic (config : config) (span : span)
-    (eval_loop_body : stl_cm_fun) : stl_cm_fun =
+    (eval_loop_body : stl_cm_fun) : st_cm_fun =
  fun ctx ->
   (* Debug *)
   [%ltrace "Context:\n" ^ eval_ctx_to_string ~span:(Some span) ctx ^ "\n"];
@@ -186,42 +193,64 @@ let eval_loop_symbolic (config : config) (span : span)
   let fp_ctx, fixed_ids, rg_to_abs =
     compute_loop_entry_fixed_point config span loop_id eval_loop_body ctx
   in
+  let input_abs_list = RegionGroupId.Map.values rg_to_abs in
+
+  (* Compute the context at the breaks *)
+  let break_info =
+    compute_loop_break_context config span loop_id eval_loop_body fp_ctx
+      fixed_ids
+  in
+  [%cassert] span
+    (Option.is_some break_info)
+    "(Infinite) loops which do not contain breaks are not supported yet";
+  let break_ctx, break_abs = Option.get break_info in
 
   (* Debug *)
   [%ltrace
     "- Initial context:\n"
     ^ eval_ctx_to_string ~span:(Some span) ctx
     ^ "\n\n- Fixed point:\n"
-    ^ eval_ctx_to_string ~span:(Some span) fp_ctx
+    ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp_ctx
     ^ "\n\n- rg_to_abs:\n"
-    ^ RegionGroupId.Map.to_string None AbstractionId.to_string rg_to_abs];
+    ^ RegionGroupId.Map.to_string None AbstractionId.to_string rg_to_abs
+    ^ "\n\n- break_ctx:\n"
+    ^ eval_ctx_to_string ~span:(Some span) break_ctx];
 
   (* Compute the loop input parameters *)
-  let fresh_sids, input_svalues =
+  let fresh_sids, fp_input_svalues =
     compute_fp_ctx_symbolic_values span ctx fp_ctx
   in
-  let fp_input_svalues =
-    List.map (fun (sv : symbolic_value) -> sv.sv_id) input_svalues
+  let fp_input_svalue_ids =
+    List.map (fun (sv : symbolic_value) -> sv.sv_id) fp_input_svalues
   in
 
-  (* Synthesize the end of the function - we simply match the context at the
-     loop entry with the fixed point: in the synthesized code, the function
-     will end with a call to the loop translation.
+  let _fresh_sids, break_input_svalues =
+    compute_fp_ctx_symbolic_values span ctx break_ctx
+  in
+  let break_input_svalue_ids =
+    List.map (fun (sv : symbolic_value) -> sv.sv_id) break_input_svalues
+  in
 
-     We update the loop fixed point at the same time by reordering the borrows/
-     loans which appear inside it.
-  *)
-  let res_fun_end, cf_fun_end =
-    eval_loop_symbolic_synthesize_fun_end config span loop_id ctx fixed_ids
-      fp_ctx fp_input_svalues
+  [%ltrace
+    "\n- fp_input_svalues: "
+    ^ String.concat ", "
+        (List.map (symbolic_value_to_string ctx) fp_input_svalues)
+    ^ "\n- break_input_svalues: "
+    ^ String.concat ", "
+        (List.map (symbolic_value_to_string ctx) break_input_svalues)];
+
+  (* "Call" the loop *)
+  let (_ctx_after_loop, input_values, input_abs), cf_before_loop =
+    eval_loop_symbolic_apply_loop config span loop_id ctx fixed_ids fp_ctx
+      fp_input_svalue_ids
   in
 
   [%ltrace "matched the fixed-point context with the original context."];
 
   (* Synthesize the loop body *)
-  let resl_loop_body, cf_loop_body =
+  let loop_body =
     eval_loop_symbolic_synthesize_loop_body config span eval_loop_body loop_id
-      fixed_ids fp_ctx fp_input_svalues
+      fixed_ids fp_ctx fp_input_svalue_ids break_ctx break_input_svalue_ids
   in
 
   [%ltrace
@@ -233,8 +262,12 @@ let eval_loop_symbolic (config : config) (span : span)
     ^ SymbolicValueId.Set.show fixed_ids.sids
     ^ "\n- fresh_sids: "
     ^ SymbolicValueId.Set.show fresh_sids
-    ^ "\n- input_svalues: "
-    ^ Print.list_to_string (symbolic_value_to_string ctx) input_svalues
+    ^ "\n- fp_input_svalues: "
+    ^ Print.list_to_string (symbolic_value_to_string ctx) fp_input_svalues
+    ^ "\n- break ctx:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ~filter:false break_ctx
+    ^ "\n- break_input_svalues: "
+    ^ Print.list_to_string (symbolic_value_to_string ctx) break_input_svalues
     ^ "\n"];
 
   (* For every abstraction introduced by the fixed-point, compute the
@@ -245,7 +278,9 @@ let eval_loop_symbolic (config : config) (span : span)
      is important in {!SymbolicToPure}, where we expect the given back
      values to have a specific order.
 
-     Also, we filter the backward functions which and return nothing.
+     Also, we filter the backward functions which return nothing.
+
+     TODO: remove
   *)
   let rg_to_given_back =
     let compute_abs_given_back_tys (abs_id : AbstractionId.id) : Pure.ty list =
@@ -274,24 +309,27 @@ let eval_loop_symbolic (config : config) (span : span)
   in
 
   (* Put everything together *)
-  let cc (el : SymbolicAst.expr list) =
-    match el with
-    | [] -> [%internal_error] span
-    | e :: el ->
-        let fun_end_expr = cf_fun_end e in
-        let loop_expr = cf_loop_body el in
-        SymbolicAst.Loop
-          {
-            loop_id;
-            input_svalues;
-            fresh_svalues = fresh_sids;
-            rg_to_given_back_tys = rg_to_given_back;
-            end_expr = fun_end_expr;
-            loop_expr;
-            span;
-          }
+  let cc (next_expr : SA.expr) : SA.expr =
+    let loop_expr =
+      SymbolicAst.Loop
+        {
+          loop_id;
+          input_svalues = fp_input_svalues;
+          fresh_svalues = fresh_sids;
+          input_abs = input_abs_list;
+          input_value_to_value = input_values;
+          input_abs_to_abs = input_abs;
+          break_svalues = break_input_svalues;
+          break_abs = List.map (fun abs -> abs.abs_id) break_abs;
+          rg_to_given_back_tys = rg_to_given_back;
+          loop_expr = loop_body;
+          next_expr;
+          span;
+        }
+    in
+    cf_before_loop loop_expr
   in
-  (res_fun_end :: resl_loop_body, cc)
+  ((break_ctx, Unit), cc)
 
 let eval_loop (config : config) (span : span) (eval_loop_body : stl_cm_fun) :
     stl_cm_fun =
@@ -327,4 +365,12 @@ let eval_loop (config : config) (span : span) (eval_loop_body : stl_cm_fun) :
       let ctx, cc =
         comp cc (prepare_ashared_loans span None ~with_abs_conts:true ctx)
       in
-      comp cc (eval_loop_symbolic config span eval_loop_body ctx)
+      let (ctx, res), cc =
+        comp cc (eval_loop_symbolic config span eval_loop_body ctx)
+      in
+      let cf (el : SymbolicAst.expr list) : SymbolicAst.expr =
+        match el with
+        | [ e ] -> cc e
+        | _ -> [%internal_error] span
+      in
+      ([ (ctx, res) ], cf)

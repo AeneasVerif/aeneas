@@ -252,26 +252,19 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
     synthesis (mostly by ending abstractions).
 
     [is_regular_return]: [true] if we reached a [Return] instruction (i.e., the
-    result is {!constructor:Cps.statement_eval_res.Return} or
-    {!constructor:Cps.statement_eval_res.LoopReturn}).
-
-    [inside_loop]: [true] if we are *inside* a loop (result [EndContinue]). *)
+    result is {!constructor:Cps.statement_eval_res.Return}). TODO: remove this
+    parameter? *)
 let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
     (fdef : fun_decl) (inst_sg : inst_fun_sig) (back_id : RegionGroupId.id)
-    (loop_id : LoopId.id option) (is_regular_return : bool) (inside_loop : bool)
-    (ctx : eval_ctx) : SA.expr =
+    (is_regular_return : bool) (ctx : eval_ctx) : SA.expr =
   let span = fdef.item_meta.span in
   [%ltrace
     "- fname: "
     ^ Print.EvalCtx.name_to_string ctx fdef.item_meta.name
     ^ "\n- back_id: "
     ^ RegionGroupId.to_string back_id
-    ^ "\n- loop_id: "
-    ^ Print.option_to_string LoopId.to_string loop_id
     ^ "\n- is_regular_return: "
     ^ Print.bool_to_string is_regular_return
-    ^ "\n- inside_loop: "
-    ^ Print.bool_to_string inside_loop
     ^ "\n- ctx:\n"
     ^ Print.Contexts.eval_ctx_to_string ~span:(Some span) ctx];
   (* We need to instantiate the function signature - to retrieve
@@ -365,126 +358,14 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
    * end them in an order which follows the regions hierarchy: it should lead
    * to generated code which has a better consistency between the parent
    * and children backward functions.
-   *
-   * Note that we don't end the same abstraction if we are *inside* a loop (i.e.,
-   * we are evaluating an [EndContinue]) or not.
    *)
-  let current_abs_id, end_fun_synth_input =
-    let fun_abs_id =
-      (RegionGroupId.nth inst_sg.abs_regions_hierarchy back_id).id
-    in
-    if not inside_loop then (Some fun_abs_id, true)
-    else
-      (* We are inside a loop *)
-      let pred (abs : abs) =
-        match abs.kind with
-        | Loop (_, rg_id', kind) ->
-            let rg_id' = Option.get rg_id' in
-            let is_ret =
-              match kind with
-              | LoopSynthInput -> true
-              | LoopCall -> false
-            in
-            rg_id' = back_id && is_ret
-        | _ -> false
-      in
-      (* There is not necessarily an input synthesis abstraction specifically
-         for the loop. TODO: remove the case of loops here.
-
-         If there is none, the input synthesis abstraction is actually the
-         function input synthesis abstraction.
-
-         Example:
-         ========
-         {[
-           fn clear(v: &mut Vec<u32>) {
-               let mut i = 0;
-               while i < v.len() {
-                   v[i] = 0;
-                   i += 1;
-               }
-           }
-         ]}
-      *)
-      match ctx_find_abs ctx pred with
-      | None ->
-          (* The loop gives back nothing for this region group.
-             Ex.:
-             {[
-               pub fn ignore_input_mut_borrow(_a: &mut u32) {
-                   loop {}
-               }
-             ]}
-          *)
-          (* If we are borrow-checking: end the synth input abstraction to
-             check there is no borrow-checking issue.
-             Otherwise, do nothing.
-
-             We need this check because of the following:
-             {[
-               fn loop_reborrow_mut1<'a, 'b>(a: &'a mut u32, b: &'b mut u32) -> &'a mut u32 {
-                   let mut x = 0;
-                   while x > 0 {
-                       x += 1;
-                   }
-                   if x > 0 {
-                       a
-                   } else {
-                       b // Failure
-                   }
-               }
-             ]}
-             (remark: this is slightly ad-hoc, and we won't need to do that
-              once we make the handling of loops more general).
-          *)
-          if !Config.borrow_check then (Some fun_abs_id, true) else (None, false)
-      | Some abs -> (Some abs.abs_id, false)
+  let current_abs_id =
+    (RegionGroupId.nth inst_sg.abs_regions_hierarchy back_id).id
   in
   [%ltrace
-    "ending input abstraction: "
-    ^ Print.option_to_string AbstractionId.to_string current_abs_id];
+    "ending input abstraction: " ^ AbstractionId.to_string current_abs_id];
 
-  (* Set the proper abstractions as endable *)
-  let ctx =
-    let visit_loop_abs =
-      object
-        inherit [_] map_eval_ctx
-
-        method! visit_abs _ abs =
-          match abs.kind with
-          | Loop (loop_id', rg_id', LoopSynthInput) ->
-              (* We only allow to end the loop synth input abs for the region
-                 group [rg_id] *)
-              [%sanity_check] span
-                (if Option.is_some loop_id then loop_id = Some loop_id'
-                 else true);
-              (* Loop abstractions *)
-              let rg_id' = Option.get rg_id' in
-              if rg_id' = back_id && inside_loop then
-                { abs with can_end = true }
-              else abs
-          | Loop (loop_id', _, LoopCall) ->
-              (* We can end all the loop call abstractions *)
-              [%sanity_check] span (loop_id = Some loop_id');
-              { abs with can_end = true }
-          | SynthInput rg_id' ->
-              if rg_id' = back_id && end_fun_synth_input then
-                { abs with can_end = true }
-              else abs
-          | _ ->
-              (* Other abstractions *)
-              abs
-      end
-    in
-    visit_loop_abs#visit_eval_ctx () ctx
-  in
-
-  let current_abs_id =
-    match current_abs_id with
-    | None -> []
-    | Some id -> [ id ]
-  in
-  let target_abs_ids = List.append parent_input_abs_ids current_abs_id in
+  let target_abs_ids = List.append parent_input_abs_ids [ current_abs_id ] in
   let ctx, cc =
     comp cc
       (fold_left_apply_continuation
@@ -492,11 +373,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
          target_abs_ids ctx)
   in
   (* Generate the Return node *)
-  let return_expr =
-    match loop_id with
-    | None -> SA.Return (ctx, None)
-    | Some loop_id -> SA.ReturnWithLoop (loop_id, inside_loop)
-  in
+  let return_expr = SA.Return (ctx, None) in
   (* Apply *)
   cc return_expr
 
@@ -535,7 +412,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
     [%ltrace "cf_finish:\n" ^ Cps.show_statement_eval_res res];
 
     match res with
-    | Return | LoopReturn _ ->
+    | Return ->
         (* We have to "play different endings":
          * - one execution for the forward function
          * - one execution per backward function
@@ -561,17 +438,10 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
            abstractions to consume the return value, then end all the
            abstractions up to the one in which we are interested.
         *)
-        let loop_id =
-          match res with
-          | Return -> None
-          | LoopReturn loop_id -> Some loop_id
-          | _ -> [%craise] span "Unreachable"
-        in
         let is_regular_return = true in
-        let inside_loop = Option.is_some loop_id in
         let finish_back_eval back_id =
           evaluate_function_symbolic_synthesize_backward_from_return config fdef
-            inst_sg back_id loop_id is_regular_return inside_loop ctx
+            inst_sg back_id is_regular_return ctx
         in
         let back_el =
           RegionGroupId.mapi
@@ -581,46 +451,6 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
         let back_el = RegionGroupId.Map.of_list back_el in
         (* Put everything together *)
         SA.ForwardEnd (Some (ctx_return, ret_value), ctx0, None, fwd_e, back_el)
-    | EndContinue (loop_id, loop_input_values, loop_input_abs) ->
-        (* *)
-        SA.Continue (loop_id, loop_input_values, loop_input_abs)
-    | EndEnterLoop (loop_id, loop_input_values, loop_input_abs) ->
-        (* Similar to [Return]: we have to play different endings *)
-        let inside_loop =
-          match res with
-          | EndEnterLoop _ -> false
-          | EndContinue _ -> true
-          | _ -> [%craise] span "Unreachable"
-        in
-        (* Forward translation *)
-        let fwd_e =
-          (* Pop the frame - there is no returned value to pop: in the
-             translation we will simply call the loop function *)
-          let pop_return_value = false in
-          let _ret_value, _ctx, cc_pop =
-            pop_frame config span pop_return_value ctx
-          in
-          (* Generate the Return node *)
-          cc_pop (SA.ReturnWithLoop (loop_id, inside_loop))
-        in
-        (* Backward translation: introduce "return"
-           abstractions to consume the return value, then end all the
-           abstractions up to the one in which we are interested.
-        *)
-        let is_regular_return = false in
-        let finish_back_eval back_id =
-          evaluate_function_symbolic_synthesize_backward_from_return config fdef
-            inst_sg back_id (Some loop_id) is_regular_return inside_loop ctx
-        in
-        let back_el =
-          RegionGroupId.mapi
-            (fun gid _ -> (gid, finish_back_eval gid))
-            regions_hierarchy
-        in
-        let back_el = RegionGroupId.Map.of_list back_el in
-        (* Put everything together *)
-        ForwardEnd
-          (None, ctx0, Some (loop_input_values, loop_input_abs), fwd_e, back_el)
     | Panic ->
         (* Note that as we explore all the execution branches, one of
          * the executions can lead to a panic *)

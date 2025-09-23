@@ -640,7 +640,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let abs =
         {
           abs_id = fresh_abstraction_id ();
-          kind = Loop (S.loop_id, None, LoopSynthInput);
+          kind = Loop (S.loop_id, None);
           can_end = true;
           parents = AbstractionId.Set.empty;
           original_parents = [];
@@ -664,7 +664,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     (* We distinguish two cases, depending on whether the borrow ids are the same
        or not. *)
     if bid0 = bid1 then (
-      (* TODO: remove this once we properly generalize the joins.
+      (* TODO: this is deprecated.
 
          If the merged value is not the same as the original value, we introduce
          an abstraction:
@@ -731,14 +731,13 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       if bv0 = bv1 then (
         [%sanity_check] span (bv0 = bv);
         (bid0, bv))
-      else
+      else (bid0, bv))
+    (*(* TODO: remove this reborrow, we don't need it *)
         let rid = fresh_region_id () in
         let nbid = fresh_borrow_id () in
 
         let kind = RMut in
         let bv_ty = bv.ty in
-        [%cassert] span (ty_no_regions bv_ty)
-          "Nested borrows are not supported yet";
         let borrow_ty = mk_ref_ty (RVar (Free rid)) bv_ty kind in
 
         let borrow_av =
@@ -759,20 +758,30 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
         let avalues = [ borrow_av; loan_av ] in
 
-        (* Generate the abstraction expression.
-
-           Note that we should only get there when computing fixed points, meaning
-           we should not have to compute the abstraction expression.
-        *)
         let owned = RegionId.Set.singleton rid in
         [%sanity_check] span (not S.with_abs_conts);
-        let cont : abs_cont option = None in
+        let cont : abs_cont option =
+          if S.with_abs_conts then
+            let input : tevalue =
+              let loan = EMutLoan (PNone, nbid, mk_eignored bv_ty None) in
+              (* Note that an eloan has a borrow type *)
+              { value = ELoan loan; ty = borrow_ty }
+            in
+            let output : tevalue =
+              let value =
+                EBorrow (EMutBorrow (PNone, bid0, None, mk_eignored bv_ty None))
+              in
+              { value; ty = borrow_ty }
+            in
+            Some { output = Some output; input = Some input }
+          else None
+        in
 
         (* Generate the abstraction *)
         let abs =
           {
             abs_id = fresh_abstraction_id ();
-            kind = Loop (S.loop_id, None, LoopSynthInput);
+            kind = Loop (S.loop_id, None);
             can_end = true;
             parents = AbstractionId.Set.empty;
             original_parents = [];
@@ -784,8 +793,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         push_abs abs;
 
         (* Return the new borrow *)
-        (nbid, bv))
-    else
+          (nbid, bv))*)
+      else
       (* We replace bid0 and bid1 with a fresh borrow id (bid2), and introduce
          an abstraction which links all of them. This time we have to introduce
          markers:
@@ -865,7 +874,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let abs =
         {
           abs_id = fresh_abstraction_id ();
-          kind = Loop (S.loop_id, None, LoopSynthInput);
+          kind = Loop (S.loop_id, None);
           can_end = true;
           parents = AbstractionId.Set.empty;
           original_parents = [];
@@ -997,7 +1006,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             let abs =
               {
                 abs_id = fresh_abstraction_id ();
-                kind = Loop (S.loop_id, None, LoopSynthInput);
+                kind = Loop (S.loop_id, None);
                 can_end = true;
                 parents = AbstractionId.Set.empty;
                 original_parents = [];
@@ -1072,7 +1081,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             else raise (ValueMatchFailure (LoanInRight id)))
     | None ->
         (* Convert the value to an abstraction *)
-        let abs_kind : abs_kind = Loop (S.loop_id, None, LoopSynthInput) in
+        let abs_kind : abs_kind = Loop (S.loop_id, None) in
         let ctx = if value_is_left then ctx0 else ctx1 in
         let absl =
           convert_value_to_abstractions span abs_kind ~can_end:true

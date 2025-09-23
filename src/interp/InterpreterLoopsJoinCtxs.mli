@@ -1,6 +1,5 @@
 open Values
 open Contexts
-open Cps
 open InterpreterUtils
 open InterpreterLoopsCore
 
@@ -280,8 +279,23 @@ val loop_match_ctx_with_target :
   config ->
   Meta.span ->
   loop_id ->
-  is_loop_entry:bool ->
   symbolic_value_id list ->
   ids_sets ->
   eval_ctx ->
-  st_cm_fun
+  eval_ctx ->
+  (eval_ctx * tvalue SymbolicValueId.Map.t * abs AbstractionId.Map.t)
+  * (SymbolicAst.expr -> SymbolicAst.expr)
+
+val loop_join_break_ctxs :
+  config -> Meta.span -> loop_id -> ids_sets -> eval_ctx list -> eval_ctx
+
+val loop_match_break_ctx_with_target :
+  config ->
+  Meta.span ->
+  loop_id ->
+  symbolic_value_id list ->
+  ids_sets ->
+  eval_ctx ->
+  eval_ctx ->
+  (eval_ctx * tvalue SymbolicValueId.Map.t * abs AbstractionId.Map.t)
+  * (SymbolicAst.expr -> SymbolicAst.expr)

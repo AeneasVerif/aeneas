@@ -1,7 +1,6 @@
 (** This module defines various utilities to write the interpretation functions
     in continuation passing style. *)
 
-open Values
 open Contexts
 open Errors
 
@@ -15,28 +14,6 @@ type statement_eval_res =
   | Continue of int
   | Return
   | Panic
-  | LoopReturn of loop_id
-      (** We reached a return statement *while inside a loop* *)
-  | EndEnterLoop of
-      loop_id * tvalue SymbolicValueId.Map.t * abs AbstractionId.Map.t
-      (** When we enter a loop, we delegate the end of the function is
-          synthesized with a call to the loop translation. We use this
-          evaluation result to transmit the fact that we end evaluation because
-          we entered a loop.
-
-          We provide the list of values for the translated loop function call
-          (or to be more precise the input values instantiation).
-
-          We also provide the instantiation of region abstraction ids. *)
-  | EndContinue of
-      loop_id * tvalue SymbolicValueId.Map.t * abs AbstractionId.Map.t
-      (** For loop translations: we end with a continue (i.e., a recursive call
-          to the translation for the loop body).
-
-          We provide the list of values for the translated loop function call
-          (or to be more precise the input values instantiation).
-
-          We also provide the instantiation of region abstraction ids. *)
 [@@deriving show]
 
 (** Function which takes a context as input, and evaluates to:

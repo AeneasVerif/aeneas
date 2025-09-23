@@ -303,7 +303,7 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
 
   let with_markers = merge_funs <> None in
 
-  let abs_kind : abs_kind = Loop (loop_id, None, LoopSynthInput) in
+  let abs_kind : abs_kind = Loop (loop_id, None) in
   let can_end = true in
   let destructure_shared_values = true in
   let is_fresh_did (id : DummyVarId.id) : bool =
@@ -491,7 +491,7 @@ let collapse_ctx_collapse (span : Meta.span) (loop_id : LoopId.id)
     ^ eval_ctx_to_string ~span:(Some span) ctx
     ^ "\n"];
 
-  let abs_kind : abs_kind = Loop (loop_id, None, LoopSynthInput) in
+  let abs_kind : abs_kind = Loop (loop_id, None) in
   let can_end = true in
 
   let invert_proj_marker = function
@@ -1129,7 +1129,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
 let destructure_new_abs (span : Meta.span) (loop_id : LoopId.id)
     (old_abs_ids : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
   [%ltrace "ctx:\n\n" ^ eval_ctx_to_string ctx];
-  let abs_kind : abs_kind = Loop (loop_id, None, LoopSynthInput) in
+  let abs_kind : abs_kind = Loop (loop_id, None) in
   let can_end = true in
   let destructure_shared_values = true in
   let is_fresh_abs_id (id : AbstractionId.id) : bool =
@@ -1194,6 +1194,7 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
         ctx
     | Error err ->
         let ctx =
+          (* TODO: simplify *)
           match err with
           | LoanInRight bid ->
               InterpreterBorrows.end_loan_no_synth config span bid ctx
@@ -1280,11 +1281,139 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
   (* # Return *)
   ((old_ctx, ctxl), !joined_ctx)
 
+let loop_join_break_ctxs (config : config) (span : Meta.span)
+    (loop_id : LoopId.id) (fixed_ids : ids_sets) (ctxl : eval_ctx list) :
+    eval_ctx =
+  (* Simplify the contexts *)
+  let with_abs_conts = false in
+  let prepare_ctx (ctx : eval_ctx) : eval_ctx =
+    [%ltrace
+      "join_one: initial ctx:\n" ^ eval_ctx_to_string ~span:(Some span) ctx];
+
+    (* Simplify the dummy values, by removing as many as we can -
+       we ignore the synthesis continuation *)
+    let ctx, _ =
+      simplify_dummy_values_useless_abs config span fixed_ids.aids ctx
+    in
+    [%ltrace
+      "join_one: after simplify_dummy_values_useless_abs (fixed_ids.abs_ids = "
+      ^ AbstractionId.Set.to_string None fixed_ids.aids
+      ^ "):\n"
+      ^ eval_ctx_to_string ~span:(Some span) ctx];
+
+    (* Destructure the abstractions introduced in the new context *)
+    let ctx = destructure_new_abs span loop_id fixed_ids.aids ctx in
+    [%ltrace
+      "join_one: after destructure:\n"
+      ^ eval_ctx_to_string ~span:(Some span) ctx];
+
+    (* Reduce the context we want to add to the join *)
+    let ctx =
+      reduce_ctx config span ~with_abs_conts:false loop_id fixed_ids ctx
+    in
+    [%ltrace
+      "join_one: after reduce:\n" ^ eval_ctx_to_string ~span:(Some span) ctx];
+    (* Sanity check *)
+    if !Config.sanity_checks then Invariants.check_invariants span ctx;
+
+    (* Refresh the fresh abstractions *)
+    let ctx = refresh_abs fixed_ids.aids ctx in
+    (* Sanity check *)
+    if !Config.sanity_checks then Invariants.check_invariants span ctx;
+
+    ctx
+  in
+  let ctxl = List.map prepare_ctx ctxl in
+
+  match ctxl with
+  | [] -> [%internal_error] span
+  | [ ctx ] ->
+      (* Special case: simply remove the continuation expressions from the fresh abs *)
+      let update (e : env_elem) : env_elem =
+        match (e : env_elem) with
+        | EAbs abs ->
+            if AbstractionId.Set.mem abs.abs_id fixed_ids.aids then e
+            else EAbs { abs with cont = None; kind = Loop (loop_id, None) }
+        | EBinding _ | EFrame -> e
+      in
+      { ctx with env = List.map update ctx.env }
+  | ctx :: ctxl ->
+      let joined_ctx = ref ctx in
+
+      (* # Join the contexts, one by one.
+
+          For every context, we repeteadly attempt to join it with the current
+          result of the join: if we fail (because we need to end loans for instance),
+          we update the context and retry.
+       *)
+      let rec join_one_aux (ctx : eval_ctx) =
+        match
+          join_ctxs span loop_id fixed_ids ~with_abs_conts !joined_ctx ctx
+        with
+        | Ok (nctx, _) ->
+            joined_ctx := nctx;
+            ctx
+        | Error err ->
+            let ctx =
+              (* TODO: simplify *)
+              match err with
+              | LoanInRight bid ->
+                  InterpreterBorrows.end_loan_no_synth config span bid ctx
+              | LoansInRight bids ->
+                  InterpreterBorrows.end_loans_no_synth config span bids ctx
+              | LoanInLeft bid ->
+                  joined_ctx :=
+                    InterpreterBorrows.end_loan_no_synth config span bid
+                      !joined_ctx;
+                  ctx
+              | LoansInLeft bids ->
+                  joined_ctx :=
+                    InterpreterBorrows.end_loans_no_synth config span bids
+                      !joined_ctx;
+                  ctx
+              | AbsInRight _ | AbsInLeft _ -> [%craise] span "Unexpected"
+            in
+            join_one_aux ctx
+      in
+      let join_one (ctx : eval_ctx) =
+        (* Join the two contexts  *)
+        let ctx1 = join_one_aux ctx in
+        [%ltrace
+          "join_one: after join:\n" ^ eval_ctx_to_string ~span:(Some span) ctx1];
+
+        (* Collapse to eliminate the markers *)
+        joined_ctx :=
+          collapse_ctx_with_merge config span loop_id fixed_ids ~with_abs_conts
+            !joined_ctx;
+        [%ltrace
+          "join_one: after join-collapse:\n"
+          ^ eval_ctx_to_string ~span:(Some span) !joined_ctx];
+        (* Sanity check *)
+        if !Config.sanity_checks then
+          Invariants.check_invariants span !joined_ctx;
+
+        (* Reduce again to reach a fixed point *)
+        joined_ctx :=
+          reduce_ctx config span ~with_abs_conts:false loop_id fixed_ids
+            !joined_ctx;
+        [%ltrace
+          "join_one: after last reduce:\n"
+          ^ eval_ctx_to_string ~span:(Some span) !joined_ctx];
+
+        (* Sanity check *)
+        if !Config.sanity_checks then
+          Invariants.check_invariants span !joined_ctx
+      in
+      List.iter join_one ctxl;
+
+      (* Update the fresh region abstractions *)
+      !joined_ctx
+
 let loop_match_ctx_with_target (config : config) (span : Meta.span)
-    (loop_id : LoopId.id) ~(is_loop_entry : bool)
-    (fp_input_svalues : SymbolicValueId.id list) (fixed_ids : ids_sets)
-    (src_ctx : eval_ctx) : st_cm_fun =
- fun tgt_ctx ->
+    (loop_id : LoopId.id) (fp_input_svalues : SymbolicValueId.id list)
+    (fixed_ids : ids_sets) (src_ctx : eval_ctx) (tgt_ctx : eval_ctx) :
+    (eval_ctx * tvalue SymbolicValueId.Map.t * abs AbstractionId.Map.t)
+    * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Debug *)
   [%ltrace
     "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
@@ -1403,6 +1532,9 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
     ^ String.concat ", " (List.map SymbolicValueId.to_string fp_input_svalues)
     ^ "\n- src_to_joined_maps:\n"
     ^ ids_maps_to_string joined_ctx src_to_joined_maps
+    ^ "\n- joined_symbolic_to_tgt_value: "
+    ^ SymbolicValueId.Map.to_string (Some "  ") (tvalue_to_string src_ctx)
+        joined_symbolic_to_tgt_value
     ^ "\n- src_ctx:\n" ^ eval_ctx_to_string src_ctx ^ "\n- joined_ctx:\n"
     ^ eval_ctx_to_string joined_ctx];
   let input_values =
@@ -1413,10 +1545,29 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
                - source to joined (which *has* to be a symbolic value
                - joined to target *)
            let v =
-             SymbolicValueId.Map.find sid src_to_joined_maps.sid_to_value_map
+             match
+               SymbolicValueId.Map.find_opt sid
+                 src_to_joined_maps.sid_to_value_map
+             with
+             | Some v -> v
+             | None ->
+                 [%craise] span
+                   ("Could not find symbolic value @"
+                   ^ SymbolicValueId.to_string sid
+                   ^ " in src_to_joined_map")
            in
            let sid' = symbolic_tvalue_get_id span v in
-           let v = SymbolicValueId.Map.find sid' joined_symbolic_to_tgt_value in
+           let v =
+             match
+               SymbolicValueId.Map.find_opt sid' joined_symbolic_to_tgt_value
+             with
+             | Some v -> v
+             | None ->
+                 [%craise] span
+                   ("Could not find symbolic value @"
+                   ^ SymbolicValueId.to_string sid
+                   ^ " in joined_symbolic_to_tgt_map")
+           in
            (sid, v))
          fp_input_svalues)
   in
@@ -1443,12 +1594,107 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
         input_abs];
 
   (* *)
-  let res =
-    if is_loop_entry then EndEnterLoop (loop_id, input_values, input_abs)
-    else EndContinue (loop_id, input_values, input_abs)
-  in
-
   Invariants.check_invariants span joined_ctx;
 
   (* We continue with the *fixed-point* context *)
-  ((src_ctx, res), cc)
+  ((src_ctx, input_values, input_abs), cc)
+
+let loop_match_break_ctx_with_target (config : config) (span : Meta.span)
+    (loop_id : LoopId.id) (fp_input_svalues : SymbolicValueId.id list)
+    (fixed_ids : ids_sets) (src_ctx : eval_ctx) (tgt_ctx : eval_ctx) :
+    (eval_ctx * tvalue SymbolicValueId.Map.t * abs AbstractionId.Map.t)
+    * (SymbolicAst.expr -> SymbolicAst.expr) =
+  (* Debug *)
+  [%ltrace
+    "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
+    ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: " ^ eval_ctx_to_string tgt_ctx];
+
+  (* We have to consider the possibility that the break context is not the result
+     of a join (because there was a single break in the loop): in this case there
+     is no point in joining the break context with the target context, we directly
+     check if they are equivalent.
+
+     TODO: is this really useful?
+  *)
+  let src_to_tgt_maps =
+    let fixed_ids = ids_sets_empty_borrows_loans fixed_ids in
+    let open InterpreterBorrowsCore in
+    let lookup_shared_loan lid ctx : tvalue =
+      match snd (lookup_loan span ek_all lid ctx) with
+      | Concrete (VSharedLoan (_, v)) -> v
+      | Abstract (ASharedLoan (pm, _, v, _)) ->
+          [%sanity_check] span (pm = PNone);
+          v
+      | _ -> [%craise] span "Unreachable"
+    in
+    let lookup_in_src id = lookup_shared_loan id src_ctx in
+    let lookup_in_tgt id = lookup_shared_loan id tgt_ctx in
+    (* Match *)
+    match_ctxs span ~check_equiv:false ~check_kind:false ~check_can_end:false
+      fixed_ids lookup_in_src lookup_in_tgt src_ctx tgt_ctx
+  in
+
+  match src_to_tgt_maps with
+  | Some src_to_tgt_maps ->
+      [%ltrace
+        "The match was successful:" ^ "\n\n- src_ctx: "
+        ^ eval_ctx_to_string ~span:(Some span) src_ctx
+        ^ "\n\n- tgt_ctx: "
+        ^ eval_ctx_to_string ~span:(Some span) tgt_ctx
+        ^ "\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
+        ^ "\n\n- src_to_tgt_maps: "
+        ^ ids_maps_to_string tgt_ctx src_to_tgt_maps];
+
+      (* Sanity check *)
+      if !Config.sanity_checks then
+        Invariants.check_borrowed_values_invariant span tgt_ctx;
+
+      (* Compute the loop input values and abstractions *)
+      [%ltrace
+        "about to compute the input values and abstractions:"
+        ^ "\n- fp_input_svalues: "
+        ^ String.concat ", "
+            (List.map SymbolicValueId.to_string fp_input_svalues)
+        ^ "\n- src_to_tgt_maps:\n"
+        ^ ids_maps_to_string tgt_ctx src_to_tgt_maps
+        ^ "\n- src_ctx:\n" ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx:\n"
+        ^ eval_ctx_to_string tgt_ctx];
+      let input_values =
+        SymbolicValueId.Map.of_list
+          (List.map
+             (fun sid ->
+               let v =
+                 SymbolicValueId.Map.find sid src_to_tgt_maps.sid_to_value_map
+               in
+               (sid, v))
+             fp_input_svalues)
+      in
+      let input_abs =
+        let aid_map =
+          AbstractionId.Map.of_list
+            (AbstractionId.InjSubst.bindings src_to_tgt_maps.aid_map)
+        in
+        AbstractionId.Map.filter_map
+          (fun src_id tgt_id ->
+            if AbstractionId.Set.mem src_id fixed_ids.aids then None
+            else Some (ctx_lookup_abs tgt_ctx tgt_id))
+          aid_map
+      in
+
+      [%ltrace
+        "Input values:\n"
+        ^ SymbolicValueId.Map.to_string (Some "  ")
+            (tvalue_to_string ~span:(Some span) src_ctx)
+            input_values
+        ^ "\nInput abs:\n"
+        ^ AbstractionId.Map.to_string (Some "  ")
+            (abs_to_string span src_ctx)
+            input_abs];
+
+      (* We continue with the *break* context *)
+      ((src_ctx, input_values, input_abs), fun e -> e)
+  | _ ->
+      [%ltrace "Match not successful"];
+
+      loop_match_ctx_with_target config span loop_id fp_input_svalues fixed_ids
+        src_ctx tgt_ctx

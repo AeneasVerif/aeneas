@@ -211,25 +211,32 @@ type expr =
           TODO: because we store the returned value, the Return case may not be
           useful anymore? *)
   | LoopContinue of loop_id * tvalue symbolic_value_id_map * abs abs_id_map
-  | Loop of loop  (** Loop *)
-  | ReturnWithLoop of loop_id * bool
-      (** We reach a return while inside a loop. The boolean is [true]. TODO:
-          merge this with Return. *)
+  | LoopBreak of loop_id * tvalue symbolic_value_id_map * abs abs_id_map
+  | Loop of loop  (** Loop: call to a loop *)
   | Meta of (espan[@opaque]) * expr  (** Meta information *)
   | Error of Meta.span option * string
 
 and loop = {
   loop_id : loop_id;
   input_svalues : symbolic_value list;  (** The input symbolic values *)
-  input_abs : abstraction_id list;  (** The abstractions *)
   fresh_svalues : symbolic_value_id_set;
-      (** The symbolic values introduced by the loop fixed-point *)
+      (** The symbolic values introduced by the loop fixed-point/
+
+          TODO: remove? *)
+  input_abs : abstraction_id list;  (** The abstractions *)
+  input_value_to_value : tvalue symbolic_value_id_map;
+  input_abs_to_abs : abs abs_id_map;
+  break_svalues : symbolic_value list;
+      (** The symbolic values introduced in the break environment *)
+  break_abs : abstraction_id list;
+      (** The abstractions introduced in the break environment *)
   rg_to_given_back_tys : (Pure.ty list RegionGroupId.Map.t[@opaque]);
       (** The map from region group ids to the types of the values given back by
-          the corresponding loop abstractions. *)
-  end_expr : expr;
-      (** The end of the function (upon the moment it enters the loop) *)
+          the corresponding loop abstractions.
+
+          TODO: remove *)
   loop_expr : expr;  (** The symbolically executed loop body *)
+  next_expr : expr;  (** The expression for *after* the loop call *)
   span : Meta.span;  (** Information about the origin of the loop body *)
 }
 

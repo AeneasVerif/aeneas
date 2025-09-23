@@ -110,9 +110,10 @@ let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
       ^ fwd_end ^ "\n" ^ indent1 ^ "backs =\n" ^ indent1 ^ backs ^ "\n" ^ indent
       ^ "}"
   | Loop loop -> loop_to_string env indent indent_incr loop
-  | ReturnWithLoop (loop_id, is_continue) ->
-      indent ^ "return_with_loop (" ^ LoopId.to_string loop_id
-      ^ ", is_continue: " ^ bool_to_string is_continue ^ ")"
+  | LoopContinue (loop_id, _values, _abs) ->
+      indent ^ "loop_continue (" ^ LoopId.to_string loop_id ^ ")"
+  | LoopBreak (loop_id, _values, _abs) ->
+      indent ^ "loop_break (" ^ LoopId.to_string loop_id ^ ")"
   | Meta (_, next) -> expr_to_string env indent indent_incr next
   | Error (_, error) -> indent ^ "ERROR(" ^ error ^ ")"
 
@@ -163,8 +164,8 @@ and loop_to_string (env : fmt_env) (indent : string) (indent_incr : string)
   let indent1 = indent ^ indent_incr in
   let loop_id = LoopId.to_string loop.loop_id in
   let fresh_svalues = SymbolicValueId.Set.to_string None loop.fresh_svalues in
-  let end_expr = expr_to_string env indent1 indent_incr loop.end_expr in
+  let next_expr = expr_to_string env indent1 indent_incr loop.next_expr in
   let loop_expr = expr_to_string env indent1 indent_incr loop.loop_expr in
   "loop@" ^ loop_id ^ " {\n\n" ^ indent1 ^ "fresh_svalues = " ^ fresh_svalues
-  ^ "\n\n" ^ indent1 ^ "end_expr=\n" ^ end_expr ^ "\n\n" ^ indent1
-  ^ "loop_expr=\n" ^ loop_expr ^ "\n" ^ indent ^ "}"
+  ^ "\n\n" ^ indent1 ^ "loop_expr=\n" ^ loop_expr ^ "\n\n" ^ indent1
+  ^ "next_expr=\n" ^ next_expr ^ "\n" ^ indent ^ "}"

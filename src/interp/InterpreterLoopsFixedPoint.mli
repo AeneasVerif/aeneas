@@ -1,4 +1,5 @@
 open Values
+open Cps
 open Contexts
 open InterpreterUtils
 
@@ -85,3 +86,12 @@ val compute_fp_ctx_symbolic_values :
   eval_ctx ->
   eval_ctx ->
   symbolic_value_id_set * symbolic_value list
+
+val compute_loop_break_context :
+  config ->
+  Meta.span ->
+  LoopId.id ->
+  stl_cm_fun ->
+  eval_ctx ->
+  ids_sets ->
+  (eval_ctx * abs list) option

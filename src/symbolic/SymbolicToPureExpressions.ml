@@ -317,9 +317,6 @@ let rec translate_expr (e : S.expr) (ctx : bs_ctx) : texpr =
       (* We reached a return.
          Remark: we can't get there if we are inside a loop. *)
       translate_return ectx opt_v ctx
-  | ReturnWithLoop (loop_id, is_continue) ->
-      (* We reached a return and are inside a loop. *)
-      translate_return_with_loop loop_id is_continue ctx
   | Panic -> translate_panic ctx
   | FunCall (call, e) -> translate_function_call call e ctx
   | EndAbstraction (ectx, abs, e) -> translate_end_abstraction ectx abs e ctx
@@ -338,6 +335,8 @@ let rec translate_expr (e : S.expr) (ctx : bs_ctx) : texpr =
       translate_forward_end return_value ectx loop_sid_maps e back_e ctx
   | Loop loop -> translate_loop loop ctx
   | Error (span, msg) -> translate_error span msg
+  | LoopContinue (loop_id, input_values, input_abs) -> raise (Failure "TODO")
+  | LoopBreak (loop_id, input_values, input_abs) -> raise (Failure "TODO")
 
 and translate_panic (ctx : bs_ctx) : texpr = Option.get ctx.mk_panic
 
@@ -814,8 +813,8 @@ and translate_end_abstraction (ectx : C.eval_ctx) (abs : V.abs) (e : S.expr)
   | V.FunCall (call_id, rg_id) ->
       translate_end_abstraction_fun_call ectx abs e ctx call_id rg_id
   | V.SynthRet rg_id -> translate_end_abstraction_synth_ret ectx abs e ctx rg_id
-  | V.Loop (loop_id, rg_id, abs_kind) ->
-      translate_end_abstraction_loop ectx abs e ctx loop_id rg_id abs_kind
+  | V.Loop (loop_id, rg_id) ->
+      translate_end_abstraction_loop ectx abs e ctx loop_id rg_id
   | V.Identity | V.CopySymbolicValue ->
       translate_end_abstraction_identity ectx abs e ctx
 
@@ -1052,12 +1051,13 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
 
 and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expr) (ctx : bs_ctx) (loop_id : V.LoopId.id)
-    (rg_id : T.RegionGroupId.id option) (abs_kind : V.loop_abs_kind) : texpr =
+    (rg_id : T.RegionGroupId.id option) : texpr =
   let vloop_id = loop_id in
   let loop_id = V.LoopId.Map.find loop_id ctx.loop_ids_map in
   [%sanity_check] ctx.span (loop_id = Option.get ctx.loop_id);
   let rg_id = Option.get rg_id in
-  (* There are two cases depending on the [abs_kind] (whether this is a
+  raise (Failure "TODO")
+(*  (* There are two cases depending on the [abs_kind] (whether this is a
      synth input or a regular loop call) *)
   match abs_kind with
   | V.LoopSynthInput ->
@@ -1148,7 +1148,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
           in
 
           mk_closed_checked_let __FILE__ __LINE__ ctx effect_info.can_fail
-            output call next_e)
+            output call next_e) *)
 
 and translate_global_eval (gid : A.GlobalDeclId.id) (generics : T.generic_args)
     (sval : V.symbolic_value) (e : S.expr) (ctx : bs_ctx) : texpr =
@@ -1710,7 +1710,8 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
         loop_call next_e
 
 and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpr =
-  let loop_id = V.LoopId.Map.find loop.loop_id ctx.loop_ids_map in
+  raise (Failure "TODO")
+(*let loop_id = V.LoopId.Map.find loop.loop_id ctx.loop_ids_map in
 
   (* Translate the loop inputs - some inputs are symbolic values already
      in the context, some inputs are introduced by the loop fixed point:
@@ -1940,7 +1941,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpr =
     Loop loop
   in
   let ty = fun_end.ty in
-  { e = loop; ty }
+  { e = loop; ty }*)
 
 and translate_espan (span : S.espan) (e : S.expr) (ctx : bs_ctx) : texpr =
   let next_e = translate_expr e ctx in
