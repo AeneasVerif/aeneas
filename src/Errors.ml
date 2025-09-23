@@ -57,9 +57,16 @@ exception CFailure of cfailure
 
 let error_list : (string * int * Meta.span option * string) list ref = ref []
 
+(** Save an error and print it at the same time.
+
+    We prefer printing errors gradually rather than reporting everyting at the
+    very end. *)
 let push_error (file : string) (line : int) (span : Meta.span option)
     (msg : string) =
-  error_list := (file, line, span, msg) :: !error_list
+  error_list := (file, line, span, msg) :: !error_list;
+  if !Config.print_error_emitters then
+    log#serror (format_error_message_with_file_line file line span msg)
+  else log#serror (format_error_message span msg)
 
 (** Register an error, and throw an exception if [throw] is true *)
 let save_error_opt_span (file : string) (line : int) (span : Meta.span option)
