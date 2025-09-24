@@ -243,9 +243,8 @@ let rec check_texpr (span : Meta.span) (ctx : tc_ctx) (e : texpr) : unit =
           in
           List.iter check_branch branches)
   | Loop loop ->
-      [%pure_type_check] span (loop.fun_end.ty = e.ty);
-      check_texpr span ctx loop.fun_end;
-      check_texpr span ctx loop.loop_body
+      (* TODO: check the inputs *)
+      check_texpr span ctx loop.loop_body.loop_body
   | StructUpdate supd -> (
       (* Check the init value *)
       begin

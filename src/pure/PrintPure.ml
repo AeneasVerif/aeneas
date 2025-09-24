@@ -758,6 +758,7 @@ let pure_builtin_fun_id_to_string (fid : pure_builtin_fun_id) : string =
   | Return -> "@return"
   | Fail -> "@fail"
   | Assert -> "@assert"
+  | Loop n -> if n = 0 then "@loop" else "@loop(" ^ string_of_int n ^ ")"
   | ToResult -> "@toResult"
   | FuelDecrease -> "@fuel_decrease"
   | FuelEqZero -> "@fuel_eq_zero"
@@ -979,29 +980,40 @@ and loop_to_string ?(span : Meta.span option = None) (env : fmt_env)
     (indent : string) (indent_incr : string) (loop : loop) : string =
   let indent1 = indent ^ indent_incr in
   let indent2 = indent1 ^ indent_incr in
-  (* Print what can be printed before entering the binder *)
-  let output_ty = "output_ty: " ^ ty_to_string env false loop.output_ty in
-  let fun_end =
-    texpr_to_string ~span env false indent2 indent_incr loop.fun_end
+  let {
+    loop_id = _;
+    span = _;
+    output_tys = _;
+    num_output_conts = _;
+    output_ty = _;
+    inputs;
+    num_input_conts = _;
+    loop_body;
+  } =
+    loop
   in
+  "loop (\n" ^ indent1
+  ^ loop_body_to_string ~span env indent2 indent_incr loop_body
+  ^ "\n" ^ indent1 ^ ")"
+  ^ String.concat " "
+      (List.map (texpr_to_string ~span env true indent2 indent_incr) inputs)
+
+and loop_body_to_string ?(span : Meta.span option = None) (env : fmt_env)
+    (indent : string) (indent_incr : string) (body : loop_body) : string =
+  let { inputs; loop_body } = body in
   (* Introduce the inputs *)
-  let env, loop_inputs =
+  let env, inputs =
     let env = fmt_env_start_pbvars env in
-    let env, loop_inputs =
-      List.fold_left_map (tpattern_to_string_core span) env loop.inputs
+    let env, inputs =
+      List.fold_left_map (tpattern_to_string_core span) env inputs
     in
-    let loop_inputs = "loop_inputs: [" ^ String.concat "; " loop_inputs ^ "]" in
+    let inputs = String.concat " " ("fun" :: (inputs @ [ "=>" ])) in
     let env = fmt_env_push_pbvars env in
-    (env, loop_inputs)
+    (env, inputs)
   in
   (* *)
-  let loop_body =
-    texpr_to_string ~span env false indent2 indent_incr loop.loop_body
-  in
-  "loop {\n" ^ indent1 ^ "fun_end: {\n" ^ indent2 ^ fun_end ^ "\n" ^ indent1
-  ^ "}\n" ^ indent1 ^ loop_inputs ^ "\n" ^ indent1 ^ output_ty ^ "\n" ^ indent1
-  ^ "loop_body: {\n" ^ indent2 ^ loop_body ^ "\n" ^ indent1 ^ "}\n" ^ indent
-  ^ "}"
+  inputs ^ "\n" ^ indent
+  ^ texpr_to_string ~span env false indent indent_incr loop_body
 
 and emeta_to_string ?(span : Meta.span option = None) (env : fmt_env)
     (emeta : emeta) : string =

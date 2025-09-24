@@ -388,12 +388,13 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
         super#visit_Meta env meta e
 
       method! visit_loop env loop =
-        let info : loop_info = { inputs = loop.inputs; outputs = [] } in
+        let info : loop_info =
+          { inputs = loop.loop_body.inputs; outputs = [] }
+        in
         loop_infos := LoopId.Map.add loop.loop_id info !loop_infos;
         (* The body should be wrapped in "sym places" meta information: we want to use
-           it with priority 0 (rather than 1 as is done by default in visit_Meta).
-        *)
-        (match loop.loop_body.e with
+           it with priority 0 (rather than 1 as is done by default in visit_Meta). *)
+        (match loop.loop_body.loop_body.e with
         | Meta (SymbolicPlaces infos, _) ->
             List.iter
               (fun (var, name) -> register_texpr_has_name var name 0)
@@ -1284,8 +1285,7 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
   (* We then implement the transformation on *expressions* through a mapreduce.
      Note that the transformation is bottom-up.
      The map filters the useless assignments, the reduce computes the set of
-     used variables.
-  *)
+     used variables. *)
   let expr_visitor =
     object (self)
       inherit [_] mapreduce_expr as super
@@ -1346,10 +1346,31 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
             else (* There are used variables: don't filter *)
               dont_filter ()
         | Loop loop ->
-            (* We take care to ignore the varset computed on the *loop body* *)
-            let fun_end, s = self#visit_texpr () loop.fun_end in
-            let loop_body, _ = self#visit_texpr () loop.loop_body in
-            (Loop { loop with fun_end; loop_body }, s)
+            let {
+              loop_id = _;
+              span = _;
+              output_tys = _;
+              num_output_conts = _;
+              output_ty = _;
+              inputs;
+              num_input_conts = _;
+              loop_body;
+            } =
+              loop
+            in
+            let loop_body, used =
+              let { inputs; loop_body } = loop_body in
+              let loop_body, used = self#visit_texpr () loop_body in
+              (({ inputs; loop_body } : loop_body), used)
+            in
+            let used, inputs =
+              List.fold_left_map
+                (fun used input ->
+                  let input, used' = self#visit_texpr () input in
+                  (self#plus used used', input))
+                used inputs
+            in
+            (Loop { loop with inputs; loop_body }, used)
     end
     (* We filter only inside of transparent (i.e., non-opaque) definitions *)
   in
@@ -1836,7 +1857,8 @@ let simplify_aggregates_unchanged_fields =
     the {!Pure.Loop} node. *)
 let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
     fun_decl * fun_decl list =
-  let span = def.item_meta.span in
+  raise (Failure "TODO")
+(*let span = def.item_meta.span in
 
   (* Reset the fvart counter and open all the binders - it is easier to manipulate unique variable indices *)
   reset_fvar_id_counter ();
@@ -1940,7 +1962,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
   let body = close_all_fun_body span { body with body = body_expr } in
   let def = { def with body = Some body; num_loops } in
   let loops = List.map snd (LoopId.Map.bindings !loops) in
-  (def, loops)
+    (def, loops)*)
 
 let decompose_loops (ctx : ctx) (def : fun_decl) =
   match def.body with
@@ -3684,6 +3706,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
       in
       compute_known_tys ty args
     in
+    (* evaluate to: (function type, arguments types, needs annotations) *)
     let compute_known_tys_from_fun_id (qualif : qualif) (fid : fun_id) :
         ty * ty list * bool =
       match fid with
@@ -3697,6 +3720,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
                   else (known_f_ty, known_args_tys, false)
               | _ -> (known_f_ty, known_args_tys, false)
             end
+          | Loop _ -> (hole, mk_holes (), true)
           | Fail | Assert | FuelDecrease | FuelEqZero ->
               (f.ty, mk_known (), false)
           | UpdateAtIndex _ -> (known_f_ty, known_args_tys, false)

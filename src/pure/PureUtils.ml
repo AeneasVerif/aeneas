@@ -123,16 +123,11 @@ class ['self] scoped_iter_expr =
       self#visit_tpattern scope pat;
       self#visit_texpr scope' body
 
-    method! visit_loop scope loop =
-      let { fun_end; loop_id = _; span = _; inputs; output_ty; loop_body } =
-        loop
-      in
-      (* Visit what can be visited before entering the binder *)
-      self#visit_texpr scope fun_end;
-      self#visit_ty scope output_ty;
+    method! visit_loop_body scope body =
+      let { inputs; loop_body } = body in
       (* Visit the patterns *)
       List.iter (self#visit_tpattern scope) inputs;
-      (* Enter the inner expressions *)
+      (* Enter the inner expression *)
       let scope' = scope + 1 in
       self#visit_texpr scope' loop_body
   end
@@ -174,17 +169,14 @@ class ['self] scoped_map_expr =
       let body = self#visit_texpr scope' body in
       Lambda (pat, body)
 
-    method! visit_loop scope loop =
-      let { fun_end; loop_id; span; inputs; output_ty; loop_body } = loop in
-      (* Visit what can be visited before entering the binder *)
-      let fun_end = self#visit_texpr scope fun_end in
-      let output_ty = self#visit_ty scope output_ty in
+    method! visit_loop_body scope body =
+      let { inputs; loop_body } = body in
       (* Visit the patterns *)
       let inputs = List.map (self#visit_tpattern scope) inputs in
-      (* Enter the inner expressions *)
+      (* Enter the inner expression *)
       let scope' = scope + 1 in
       let loop_body = self#visit_texpr scope' loop_body in
-      { fun_end; loop_id; span; inputs; output_ty; loop_body }
+      { inputs; loop_body }
   end
 
 let opt_dest_arrow_ty (ty : ty) : (ty * ty) option =
@@ -1173,12 +1165,11 @@ let mk_closed_lambda span (x : tpattern) (e : texpr) : texpr =
   { e; ty }
 
 let close_loop span (loop : loop) : loop =
-  let { fun_end = _; loop_id = _; span = _; inputs; output_ty = _; loop_body } =
-    loop
-  in
+  let { inputs; loop_body } = loop.loop_body in
   let inputs, visitor = close_binders_visitor span inputs in
   let loop_body = visitor#visit_texpr 0 loop_body in
-  { loop with inputs; loop_body }
+  let loop_body : loop_body = { inputs; loop_body } in
+  { loop with loop_body }
 
 (** Make an open lambda expression.
 
@@ -1682,11 +1673,8 @@ class virtual ['self] open_close_all_visitor =
       self#pop_scope env;
       { inputs; body }
 
-    method! visit_loop env loop =
-      let { fun_end; loop_id; span; inputs; output_ty; loop_body } = loop in
-      (* Visit what can be visited before entering the binder *)
-      let fun_end = self#visit_texpr env fun_end in
-      let output_ty = self#visit_ty env output_ty in
+    method! visit_loop_body env body =
+      let { inputs; loop_body } = body in
       (* Visit the patterns to push a new scope *)
       self#start_scope env;
       let inputs = List.map (self#visit_tpattern env) inputs in
@@ -1696,7 +1684,7 @@ class virtual ['self] open_close_all_visitor =
       (* Pop the stack *)
       self#pop_scope env;
       (* *)
-      { fun_end; loop_id; span; inputs; output_ty; loop_body }
+      { inputs; loop_body }
 
     method! visit_FVar env (id : fvar_id) = BVar (self#get_fvar env id)
     method! visit_BVar env (v : bvar) = FVar (self#get_bvar env v)

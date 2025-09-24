@@ -108,6 +108,11 @@ type pure_builtin_fun_id =
   | Return  (** The monadic return *)
   | Fail  (** The monadic fail *)
   | Assert  (** Assertion *)
+  | Loop of int
+      (** A loop operator.
+
+          The integer represents the arity (by default the arity is 1, but for
+          some small arities we may introduce dedicated loop operators). *)
   | FuelDecrease
       (** Decrease fuel, provided it is non zero (used for F* ) - TODO: this is
           ugly *)
@@ -1086,25 +1091,40 @@ type expr =
 and switch_body = If of texpr * texpr | Match of match_branch list
 and match_branch = { pat : tpattern; branch : texpr }
 
-(** In {!SymbolicToPure}, whenever we encounter a loop we insert a {!loop} node,
-    which contains the end of the function (i.e., the call to the loop function)
-    as well as the *body* of the loop translation (to be more precise, the
-    bodies of the loop forward and backward function). We later split the
-    function definition in {!PureMicroPasses}, to remove this node.
+(** A loop.
 
-    Note that the loop body is a forward body if the function is a forward
-    function, and a backward body (for the corresponding region group) if the
-    function is a backward function. *)
+    This is later expanded to an explicit call to a loop fixed-point operator.
+*)
 and loop = {
-  fun_end : texpr;
   loop_id : loop_id;
   span : span; [@opaque]
-  output_ty : ty;  (** The output type of the loop *)
-  inputs : tpattern list;
-      (** Those should be variables.
+  output_tys : ty list;  (** The types of the output values. *)
+  num_output_conts : int;
+      (** The number of output continuations.
 
-          Those variables are the variables bound in [loop_body] (they are the
-          input arguments of the loop). *)
+          The outputs are divided between the output continuations, which come
+          from the output abstractions, and the output values, which come from
+          the output symbolic values. The output continuations come first in the
+          list of outputs. *)
+  output_ty : ty;  (** The output type of the loop *)
+  inputs : texpr list;
+      (** The inputs of the loop.loop receives as inputs, and which come from
+          the input region abstractions.
+
+          Those should be variables bound in the [loop_body]. *)
+  num_input_conts : int;
+      (** The number of input continuations.
+
+          This is similar to [num_output_conts]. *)
+  loop_body : loop_body;
+}
+
+(** A loop body.
+
+    We see loop bodies as functions, while a loop itself is a loop fixed-point
+    operator applied to such a loop body. *)
+and loop_body = {
+  inputs : tpattern list;  (** Binders for the inputs of the loop body. *)
   loop_body : texpr;
 }
 
