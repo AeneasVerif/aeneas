@@ -25,7 +25,7 @@ type mplace =
 [@@deriving show]
 
 type call_id =
-  | Fun of fun_id_or_trait_method_ref * FunCallId.id
+  | Fun of fn_ptr_kind * FunCallId.id
       (** A "regular" function (i.e., a function which is not a primitive
           operation) *)
   | Unop of unop

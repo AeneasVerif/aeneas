@@ -8,9 +8,7 @@ type fmt_env = Print.fmt_env
 let call_id_to_string (env : fmt_env) (call_id : call_id) : string =
   match call_id with
   | Fun (fid, call_id) ->
-      Types.fun_id_or_trait_method_ref_to_string env fid
-      ^ "@"
-      ^ FunCallId.to_string call_id
+      Types.fn_ptr_kind_to_string env fid ^ "@" ^ FunCallId.to_string call_id
   | Unop unop -> Expressions.unop_to_string env unop
   | Binop binop -> Expressions.binop_to_string binop
 

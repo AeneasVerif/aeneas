@@ -366,7 +366,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
   (* Evaluate *)
   match op with
   | Constant cv -> begin
-      match cv.value with
+      match cv.kind with
       | CLiteral lit -> (
           (* FIXME: the str type is not in [literal_type] *)
           match cv.ty with

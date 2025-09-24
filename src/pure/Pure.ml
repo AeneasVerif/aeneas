@@ -906,7 +906,7 @@ type unop =
   | ArrayToSlice
 [@@deriving show, ord]
 
-type fun_id_or_trait_method_ref =
+type fn_ptr_kind =
   | FunId of A.fun_id
   | TraitMethod of trait_ref * string * fun_decl_id
       (** The fun decl id is not really needed and here for convenience purposes
@@ -914,8 +914,7 @@ type fun_id_or_trait_method_ref =
 [@@deriving show, ord]
 
 (** A function id for a non-builtin function *)
-type regular_fun_id = fun_id_or_trait_method_ref * LoopId.id option
-[@@deriving show, ord]
+type regular_fun_id = fn_ptr_kind * LoopId.id option [@@deriving show, ord]
 
 (** A function identifier *)
 type fun_id =
