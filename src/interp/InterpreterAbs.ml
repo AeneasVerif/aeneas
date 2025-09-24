@@ -1408,6 +1408,8 @@ let merge_abs_conts_aux (span : Meta.span) (ctx : eval_ctx) (abs0 : abs)
     ^ "\n- cont1:\n  "
     ^ abs_cont_to_string span ctx ~indent:"  " cont1];
 
+  raise (Failure "TODO: register the inputs");
+
   (* The way we proceed is simple.
 
      Let's say we want to merge A1 into A0:
@@ -2039,18 +2041,18 @@ let project_context (span : Meta.span) (fixed_ids : InterpreterUtils.ids_sets)
           | EProjLoans { proj = _; consumed; borrows } ->
               [%cassert] span (consumed = []) "Not implemented";
               [%cassert] span (borrows = []) "Not implemented";
-              EIgnored None
+              EBottom
           | EProjBorrows { proj = _; loans } ->
               [%cassert] span (loans = []) "Not implemented";
-              EIgnored None
+              EBottom
           | EEndedProjLoans { proj = _; consumed; borrows } ->
               [%cassert] span (consumed = []) "Not implemented";
               [%cassert] span (borrows = []) "Not implemented";
-              EIgnored None
+              EBottom
           | EEndedProjBorrows _ ->
               (* We can't find ended borrows in live abstractions *)
               [%internal_error] span
-          | EEmpty -> EIgnored None
+          | EEmpty -> EBottom
 
       method! visit_ELoan env lc =
         match lc with
@@ -2060,7 +2062,7 @@ let project_context (span : Meta.span) (fixed_ids : InterpreterUtils.ids_sets)
               ELoan (EMutLoan (PNone, lid, child))
             else (
               [%cassert] span (is_eignored child.value) "Not implemented";
-              EIgnored None)
+              EBottom)
         | EEndedMutLoan _ | EIgnoredMutLoan _ | EEndedIgnoredMutLoan _ ->
             (* Those do not have projection markers *)
             super#visit_ELoan env lc
@@ -2073,7 +2075,7 @@ let project_context (span : Meta.span) (fixed_ids : InterpreterUtils.ids_sets)
               EBorrow (EMutBorrow (PNone, bid, mv, child))
             else (
               [%cassert] span (is_eignored child.value) "Not implemented";
-              EIgnored None)
+              EBottom)
         | EIgnoredMutBorrow _ | EEndedMutBorrow _ | EEndedIgnoredMutBorrow _ ->
             (* Those do not have projection markers *)
             super#visit_EBorrow env lc
