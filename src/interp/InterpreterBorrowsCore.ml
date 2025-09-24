@@ -1920,3 +1920,17 @@ let refresh_live_regions_in_ty (span : Meta.span) (ctx : eval_ctx) (ty : rty) :
   in
   let ty = visitor#visit_ty () ty in
   (!regions, ty)
+
+(** Set a list of abstractions as (non-)endable *)
+let update_endable (ctx : eval_ctx) (abs_ids : abstraction_id list)
+    ~(can_end : bool) : eval_ctx =
+  let abs_ids = AbstractionId.Set.of_list abs_ids in
+  let update (e : env_elem) : env_elem =
+    match e with
+    | EAbs abs ->
+        if AbstractionId.Set.mem abs.abs_id abs_ids then
+          EAbs { abs with can_end }
+        else EAbs abs
+    | _ -> e
+  in
+  { ctx with env = List.map update ctx.env }

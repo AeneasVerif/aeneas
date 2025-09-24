@@ -350,14 +350,14 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
     ^ Print.Contexts.eval_ctx_to_string ~span:(Some span) ctx];
 
   (* We now need to end the proper *input* abstractions - pay attention
-   * to the fact that we end the *input* abstractions, not the *return*
-   * abstractions (of course, the corresponding return abstractions will
-   * automatically be ended, because they consumed values coming from the
-   * input abstractions...) *)
+     to the fact that we end the *input* abstractions, not the *return*
+     abstractions (of course, the corresponding return abstractions will
+     automatically be ended, because they consumed values coming from the
+     input abstractions...) *)
   (* End the parent abstractions and the current abstraction - note that we
-   * end them in an order which follows the regions hierarchy: it should lead
-   * to generated code which has a better consistency between the parent
-   * and children backward functions.
+     end them in an order which follows the regions hierarchy: it should lead
+     to generated code which has a better consistency between the parent
+     and children backward functions.
    *)
   let current_abs_id =
     (RegionGroupId.nth inst_sg.abs_regions_hierarchy back_id).id
@@ -366,6 +366,13 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
     "ending input abstraction: " ^ AbstractionId.to_string current_abs_id];
 
   let target_abs_ids = List.append parent_input_abs_ids [ current_abs_id ] in
+
+  (* Set the abstrations as endable *)
+  let ctx =
+    InterpreterBorrowsCore.update_endable ctx target_abs_ids ~can_end:true
+  in
+
+  (* Actually end them *)
   let ctx, cc =
     comp cc
       (fold_left_apply_continuation

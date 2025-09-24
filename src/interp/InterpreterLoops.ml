@@ -151,7 +151,6 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
           loop_match_break_ctx_with_target config span loop_id
             break_input_svalues fixed_ids break_ctx ctx
         in
-        raise (Failure "TODO");
         cc (SA.LoopBreak (loop_id, input_values, input_abs))
     | Continue i ->
         (* We don't support nested loops for now *)
