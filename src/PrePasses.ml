@@ -333,7 +333,7 @@ let remove_useless_cf_merges (crate : crate) (f : fun_decl) : fun_decl =
    * but all the paths inside the whole statement have to.
    *)
   let rec can_be_moved_aux (must_end_with_exit : bool) (st : statement) : bool =
-    match st.content with
+    match st.kind with
     | SetDiscriminant _
     | CopyNonOverlapping _
     | Assert _
@@ -366,10 +366,9 @@ let remove_useless_cf_merges (crate : crate) (f : fun_decl) : fun_decl =
 
       method! visit_block_suffix env stmts =
         match stmts with
-        | ({ content = Switch switch; _ } as st) :: tl when can_be_moved_seq tl
-          ->
-            let content = super#visit_Switch env (append_to_switch switch tl) in
-            [ { st with content } ]
+        | ({ kind = Switch switch; _ } as st) :: tl when can_be_moved_seq tl ->
+            let kind = super#visit_Switch env (append_to_switch switch tl) in
+            [ { st with kind } ]
         | _ -> super#visit_block_suffix env stmts
     end
   in
@@ -487,12 +486,12 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
 
         method! visit_block_suffix entered_loop stmts =
           match stmts with
-          | ({ content = Loop loop; _ } as st) :: tl ->
+          | ({ kind = Loop loop; _ } as st) :: tl ->
               [%cassert] st.span (not entered_loop)
                 "Nested loops are not supported yet";
-              { st with content = super#visit_Loop true loop }
+              { st with kind = super#visit_Loop true loop }
               :: self#visit_block_suffix entered_loop tl
-          | ({ content = Break i; _ } as st) :: tl ->
+          | ({ kind = Break i; _ } as st) :: tl ->
               [%cassert] st.span (i = 0)
                 "Breaks to outer loops are not supported yet";
               new_stmts @ self#visit_block_suffix entered_loop tl
@@ -508,15 +507,15 @@ let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
 
       method! visit_block_suffix env stmts =
         match stmts with
-        | ({ content = Loop _; _ } as st) :: tl ->
+        | ({ kind = Loop _; _ } as st) :: tl ->
             [%cassert] st.span
               (List.for_all statement_has_no_loop_break_continue tl)
               "Sequences of loops are not supported yet";
             [ super#visit_statement env (replace_breaks_with st tl) ]
-        | ({ content = Switch switch; _ } as st) :: tl ->
+        | ({ kind = Switch switch; _ } as st) :: tl ->
             (* Push the remaining statements inside of the switch *)
-            let content = Switch (append_to_switch switch tl) in
-            let st = { st with content } in
+            let kind = Switch (append_to_switch switch tl) in
+            let st = { st with kind } in
             [ super#visit_statement env st ]
         | _ -> super#visit_block_suffix env stmts
     end
@@ -748,7 +747,7 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
                  the borrow, that we can finally move.
               *)
               method! visit_Constant env cv =
-                match (cv.value, cv.ty) with
+                match (cv.kind, cv.ty) with
                 | ( CLiteral (VStr str),
                     TRef
                       (_, (TAdt { id = TBuiltin TStr; _ } as str_ty), ref_kind)
@@ -758,13 +757,13 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
                     let local_id =
                       let local_id = fresh_local str_ty in
                       let new_cv : constant_expr =
-                        { value = CLiteral (VStr str); ty = str_ty }
+                        { kind = CLiteral (VStr str); ty = str_ty }
                       in
                       let st =
                         {
                           span;
                           statement_id = StatementId.zero;
-                          content =
+                          kind =
                             Assign
                               ( { kind = PlaceLocal local_id; ty = str_ty },
                                 Use (Constant new_cv) );
@@ -791,7 +790,7 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
                         {
                           span;
                           statement_id = StatementId.zero;
-                          content = Assign (lv, rv);
+                          kind = Assign (lv, rv);
                           comments_before = [];
                         }
                       in
@@ -811,7 +810,7 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
             {
               span;
               statement_id = StatementId.zero;
-              content = Assign (lv, rv);
+              kind = Assign (lv, rv);
               comments_before = [];
             }
           in
@@ -822,7 +821,7 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
 
         (* Visit all the statements and decompose the literals *)
         let decompose_in_statement (st : statement) : statement list =
-          match st.content with
+          match st.kind with
           | Assign (lv, rv) -> decompose_rvalue st.span lv rv
           | _ -> [ st ]
         in
@@ -919,7 +918,7 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
                     {
                       span;
                       statement_id = StatementId.zero;
-                      content =
+                      kind =
                         Assign
                           ( { kind = PlaceLocal local_id; ty = ref_ty },
                             RvRef ({ kind = PlaceGlobal gref; ty }, BShared) );
@@ -936,8 +935,8 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
             end
           in
 
-          let content =
-            match st.content with
+          let kind =
+            match st.kind with
             | Assign (lv, rv) -> Assign (lv, visitor#visit_rvalue mk_unit_ty rv)
             | CopyNonOverlapping { src; dst; count } ->
                 let src = visitor#visit_operand mk_unit_ty src in
@@ -961,9 +960,9 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
             | Nop
             | Switch _
             | Loop _
-            | Error _ -> st.content
+            | Error _ -> st.kind
           in
-          let st = { st with content } in
+          let st = { st with kind } in
 
           List.rev (st :: !new_statements)
         in

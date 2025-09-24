@@ -801,7 +801,7 @@ and eval_block (config : config) (b : block) : stl_cm_fun =
 and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
  fun ctx ->
   [%ltrace "statement:\n" ^ statement_to_string_with_tab ctx st ^ "\n"];
-  match st.content with
+  match st.kind with
   | Assign (p, rvalue) ->
       if
         (* We handle global assignments separately as a specific case. *)
