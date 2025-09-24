@@ -860,6 +860,46 @@ type bound_outputs = {
           (this is fine, because we only use this list to give us an order). *)
 }
 
+let bound_borrow_to_string ((bid, b) : BorrowId.id * bound_borrow) : string =
+  Print.list_to_string
+    (fun (pm, fid, _ty) ->
+      "fv@" ^ AbsFVarId.to_string fid ^ " <- "
+      ^ Print.Values.add_proj_marker pm ("l@" ^ BorrowId.to_string bid))
+    b
+
+let bound_symbolic_to_string (ctx : eval_ctx)
+    ((sid, b) : SymbolicValueId.id * bound_symbolic) : string =
+  Print.list_to_string
+    (fun (pm, norm_proj_ty, fid, _ty) ->
+      "fv@" ^ AbsFVarId.to_string fid ^ " <- "
+      ^ Print.Values.add_proj_marker pm
+          ("s@"
+          ^ SymbolicValueId.to_string sid
+          ^ " <: "
+          ^ ty_to_string ctx norm_proj_ty))
+    b
+
+let bound_outputs_to_string (ctx : eval_ctx) (b : bound_outputs) : string =
+  let { borrows; symbolic; all_bindings } = b in
+  let bindings_to_string (bindings : (loan_id, symbolic_value_id) Either.t list)
+      : string =
+    Print.list_to_string
+      (fun x ->
+        match x with
+        | Either.Left lid -> "l@" ^ BorrowId.to_string lid
+        | Right sid -> "s@" ^ SymbolicValueId.to_string sid)
+      bindings
+  in
+  "{\n  borrows: "
+  ^ Print.list_to_string bound_borrow_to_string (BorrowId.Map.bindings borrows)
+  ^ "\n  symbolic: "
+  ^ Print.list_to_string
+      (bound_symbolic_to_string ctx)
+      (SymbolicValueId.Map.bindings symbolic)
+  ^ "\n  all_bindings: "
+  ^ bindings_to_string all_bindings
+  ^ "\n}"
+
 let bound_outputs_add_borrow (span : Meta.span) (bid : BorrowId.id)
     (pm : proj_marker) (fvid : AbsFVarId.id) (ty : ty) (out : bound_outputs) :
     bound_outputs =
@@ -906,7 +946,15 @@ let bound_outputs_consume_borrow (span : Meta.span) (bid : BorrowId.id)
         | _ -> [%internal_error] span
       in
       let out =
-        { out with borrows = BorrowId.Map.add bid (bound @ bound') out.borrows }
+        let bound =
+          match bound @ bound' with
+          | [] -> None
+          | l -> Some l
+        in
+        {
+          out with
+          borrows = BorrowId.Map.update bid (fun _ -> bound) out.borrows;
+        }
       in
       (out, Some value)
 
@@ -967,9 +1015,15 @@ let bound_outputs_consume_symbolic (span : Meta.span) (sid : SymbolicValueId.id)
         | _ -> [%internal_error] span
       in
       let out =
+        let bound =
+          match bound @ bound' with
+          | [] -> None
+          | l -> Some l
+        in
         {
           out with
-          symbolic = SymbolicValueId.Map.add sid (bound @ bound') out.symbolic;
+          symbolic =
+            SymbolicValueId.Map.update sid (fun _ -> bound) out.symbolic;
         }
       in
       (out, Some value)
@@ -1340,10 +1394,20 @@ let abs_cont_bind_outputs (span : Meta.span) (ctx : eval_ctx)
       bind_outputs_from_single_output span ctx regions bound output
   | Some output, Some input ->
       bind_outputs_from_output_input span ctx regions bound output input
-  | _ -> [%craise] span "Unrechable"
+  | _ -> [%craise] span "Unreachable"
 
+(** Merge two abstraction continuations.
+
+    We merge from the right to the left, i.e.: we merge the (input) loans from
+    [abs0] with the (output) borrows from [abs1]. *)
 let merge_abs_conts_aux (span : Meta.span) (ctx : eval_ctx) (abs0 : abs)
     (abs1 : abs) (cont0 : abs_cont) (cont1 : abs_cont) : abs_cont =
+  [%ltrace
+    "- cont0:\n  "
+    ^ abs_cont_to_string span ctx ~indent:"  " cont0
+    ^ "\n- cont1:\n  "
+    ^ abs_cont_to_string span ctx ~indent:"  " cont1];
+
   (* The way we proceed is simple.
 
      Let's say we want to merge A1 into A0:
@@ -1363,8 +1427,8 @@ let merge_abs_conts_aux (span : Meta.span) (ctx : eval_ctx) (abs0 : abs)
        let v_l0 = v_l1 in
      ]}
 
-     Finally, we output all the outputs of A1 which are not inputs of A0, as well
-     as all the outputs of A0:
+     Finally, we output all the outputs of A1 which are not "consumed" by inputs of A0,
+     as well as all the outputs of A0:
      {[
        (v_l0, v_l2)
      ]}
@@ -1392,10 +1456,15 @@ let merge_abs_conts_aux (span : Meta.span) (ctx : eval_ctx) (abs0 : abs)
   let pat1, inputs1 =
     abs_cont_bind_outputs span ctx abs1.regions.owned bound cont1
   in
+  let bindings1 = !bound.all_bindings in
+  [%ltrace
+    "- pat1: " ^ tepat_to_string ctx pat1 ^ "\n- inputs1: "
+    ^ tevalue_to_string ctx inputs1
+    ^ "\n- bound_outputs:\n"
+    ^ bound_outputs_to_string ctx !bound];
 
   (* For the final order to be correct, because we bind the second continuation
      then the first, we need to reset the [all_bindings] field *)
-  let bindings1 = !bound.all_bindings in
   bound := { !bound with all_bindings = [] };
 
   (* Next, bind the outputs of the first continuation, while updating its inputs *)
@@ -1403,6 +1472,11 @@ let merge_abs_conts_aux (span : Meta.span) (ctx : eval_ctx) (abs0 : abs)
     abs_cont_bind_outputs span ctx abs0.regions.owned bound cont0
   in
   let bindings0 = !bound.all_bindings in
+  [%ltrace
+    "- pat0: " ^ tepat_to_string ctx pat0 ^ "\n- inputs0: "
+    ^ tevalue_to_string ctx inputs0
+    ^ "\n- bound_outputs:\n"
+    ^ bound_outputs_to_string ctx !bound];
 
   (* Create the output for the composed continuation, and its corresponding input.
 
@@ -1868,6 +1942,7 @@ let reorder_fresh_abs (span : Meta.span) (allow_markers : bool)
 let project_context (span : Meta.span) (fixed_ids : InterpreterUtils.ids_sets)
     (pm : proj_marker) (ctx : eval_ctx) : eval_ctx =
   [%cassert] span (pm = PLeft || pm = PRight) "Invalid input";
+  let project_left = pm = PLeft in
 
   let preserve (pm' : proj_marker) =
     match (pm, pm') with
@@ -1950,6 +2025,10 @@ let project_context (span : Meta.span) (fixed_ids : InterpreterUtils.ids_sets)
         | AProjSharedBorrow _ ->
             (* Those do not have projection markers *)
             super#visit_ABorrow env bc
+
+      method! visit_EJoinMarkers env left right =
+        let v = if project_left then left else right in
+        (self#visit_tevalue env v).value
 
       method! visit_ESymbolic env pm eproj =
         if preserve pm then

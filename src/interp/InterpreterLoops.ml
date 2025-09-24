@@ -147,11 +147,11 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
           ^ eval_ctx_to_string ~span:(Some span) break_ctx
           ^ "\n\n-tgt ctx (ctx at this break):\n"
           ^ eval_ctx_to_string ~span:(Some span) ctx];
-        raise (Failure "TODO");
         let (_ctx, input_values, input_abs), cc =
           loop_match_break_ctx_with_target config span loop_id
             break_input_svalues fixed_ids break_ctx ctx
         in
+        raise (Failure "TODO");
         cc (SA.LoopBreak (loop_id, input_values, input_abs))
     | Continue i ->
         (* We don't support nested loops for now *)

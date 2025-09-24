@@ -549,15 +549,15 @@ module Values = struct
       (indent : string) (indent_incr : string) (v : tevalue) : string =
     match v.value with
     | ELet (regions, pat, bound, next) ->
+        let indent1 = indent ^ indent_incr in
         let bound =
-          tevalue_to_string ~span env aenv (indent ^ indent_incr) indent_incr
-            bound
+          tevalue_to_string ~span env aenv indent1 indent_incr bound
         in
         let aenv, pat = tepat_to_string ~span env aenv indent indent_incr pat in
         let next = tevalue_to_string ~span env aenv indent indent_incr next in
         "let " ^ pat ^ " ="
         ^ RegionId.Set.to_string None regions
-        ^ " " ^ bound ^ " in\n" ^ indent ^ next
+        ^ "\n" ^ indent1 ^ bound ^ "\n" ^ indent ^ "in\n" ^ indent ^ next
     | EJoinMarkers (left, right) ->
         "@join_markers("
         ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr left
@@ -592,7 +592,10 @@ module Values = struct
     | ESymbolic (pm, proj) ->
         eproj_to_string ~with_ended env proj |> add_proj_marker pm
     | EValue mv -> "@mvalue(" ^ tvalue_to_string ~span env mv ^ ")"
-    | EIgnored _ -> "_"
+    | EIgnored mv -> (
+        match mv with
+        | None -> "_"
+        | Some mv -> "@ignored(" ^ tvalue_to_string ~span env mv ^ ")")
 
   and eloan_content_to_string ?(span : Meta.span option = None)
       ?(with_ended : bool = false) (env : fmt_env) (aenv : evalue_env)
@@ -744,7 +747,7 @@ module Values = struct
       | None -> ""
       | Some cont ->
           "⟦"
-          ^ abs_cont_to_string ~span env ~with_ended (indent ^ indent_incr)
+          ^ abs_cont_to_string ~span env ~with_ended:true (indent ^ indent_incr)
               indent_incr cont
           ^ "⟧"
     in
@@ -1052,6 +1055,18 @@ module EvalCtx = struct
     let env = eval_ctx_to_fmt_env ctx in
     tavalue_to_string ~span ~with_ended env v
 
+  let tevalue_to_string ?(span : Meta.span option = None)
+      ?(with_ended : bool = false) (ctx : eval_ctx) (v : tevalue) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    let aenv = empty_evalue_env in
+    tevalue_to_string ~span ~with_ended env aenv "" "  " v
+
+  let tepat_to_string ?(span : Meta.span option = None) (ctx : eval_ctx)
+      (v : tepat) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    let aenv = empty_evalue_env in
+    snd (tepat_to_string ~span env aenv "" "  " v)
+
   let place_to_string (ctx : eval_ctx) (op : place) : string =
     let env = eval_ctx_to_fmt_env ctx in
     place_to_string env op
@@ -1109,4 +1124,10 @@ module EvalCtx = struct
       (abs : abs) : string =
     let env = eval_ctx_to_fmt_env ctx in
     abs_to_string ~span env ~with_ended false indent indent_incr abs
+
+  let abs_cont_to_string ?(span : Meta.span option = None) (ctx : eval_ctx)
+      ?(with_ended : bool = false) (indent : string) (indent_incr : string)
+      (cont : abs_cont) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    abs_cont_to_string ~span env ~with_ended indent indent_incr cont
 end

@@ -1034,6 +1034,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     if id0 = id1 then (
       (* Sanity check *)
       [%sanity_check] span (sv0 = sv1);
+      (* We keep the same id, but we need to register the mapping *)
+      add_symbolic_value id0
+        (mk_tvalue_from_symbolic_value sv0)
+        (mk_tvalue_from_symbolic_value sv1);
       (* Return *)
       sv0)
     else (

@@ -28,6 +28,8 @@ let aloan_content_to_string = Print.EvalCtx.aloan_content_to_string
 let aproj_to_string = Print.EvalCtx.aproj_to_string
 let tvalue_to_string = Print.EvalCtx.tvalue_to_string
 let tavalue_to_string = Print.EvalCtx.tavalue_to_string
+let tevalue_to_string = Print.EvalCtx.tevalue_to_string
+let tepat_to_string = Print.EvalCtx.tepat_to_string
 let place_to_string = Print.EvalCtx.place_to_string
 let operand_to_string = Print.EvalCtx.operand_to_string
 let fun_sig_to_string = Print.EvalCtx.fun_sig_to_string
@@ -70,6 +72,11 @@ let env_to_string span ctx ?(filter = true) env =
 
 let abs_to_string span ?(with_ended = false) ctx =
   Print.EvalCtx.abs_to_string ~span:(Some span) ~with_ended ctx "" "  "
+
+let abs_cont_to_string span ?(with_ended = true) ?(indent = "")
+    ?(indent_incr = "  ") ctx =
+  Print.EvalCtx.abs_cont_to_string ~span:(Some span) ~with_ended ctx indent
+    indent_incr
 
 let same_symbolic_id (sv0 : symbolic_value) (sv1 : symbolic_value) : bool =
   sv0.sv_id = sv1.sv_id
