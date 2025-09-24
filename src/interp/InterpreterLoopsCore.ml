@@ -123,9 +123,11 @@ module type PrimMatcher = sig
 
   (** Parameters:
       - [match_values]
+      - [ctx0]
+      - [ctx1]
       - [ty]
-      - [ids0]
-      - [ids1]
+      - [id0]
+      - [id1]
       - [v]: the result of matching the shared values coming from the two loans
   *)
   val match_shared_loans :
@@ -136,7 +138,43 @@ module type PrimMatcher = sig
     loan_id ->
     loan_id ->
     tvalue ->
-    loan_id * tvalue
+    tvalue
+
+  (** Parameters:
+      - [match_values]
+      - [ctx0]
+      - [ctx1]
+      - [loan_is_left]
+      - [loan_id]
+      - [shared_value]
+      - [other_value] *)
+  val match_shared_loan_with_other :
+    tvalue_matcher ->
+    eval_ctx ->
+    eval_ctx ->
+    loan_is_left:bool ->
+    ty ->
+    loan_id ->
+    tvalue ->
+    tvalue ->
+    tvalue
+
+  (** Parameters:
+      - [match_values]
+      - [ctx0]
+      - [ctx1]
+      - [loan_is_left]
+      - [loan_id]
+      - [other_value] *)
+  val match_mut_loan_with_other :
+    tvalue_matcher ->
+    eval_ctx ->
+    eval_ctx ->
+    loan_is_left:bool ->
+    ty ->
+    loan_id ->
+    tvalue ->
+    tvalue
 
   val match_mut_loans :
     tvalue_matcher ->
@@ -145,7 +183,7 @@ module type PrimMatcher = sig
     ety ->
     loan_id ->
     loan_id ->
-    loan_id
+    tvalue
 
   (** There are no constraints on the input symbolic values *)
   val match_symbolic_values :
@@ -166,7 +204,7 @@ module type PrimMatcher = sig
     tvalue_matcher ->
     eval_ctx ->
     eval_ctx ->
-    bool ->
+    symbolic_is_left:bool ->
     symbolic_value ->
     tvalue ->
     tvalue
@@ -178,7 +216,12 @@ module type PrimMatcher = sig
       important when throwing exceptions, for instance when we need to end loans
       in one of the two environments). *)
   val match_bottom_with_other :
-    tvalue_matcher -> eval_ctx -> eval_ctx -> bool -> tvalue -> tvalue
+    tvalue_matcher ->
+    eval_ctx ->
+    eval_ctx ->
+    bottom_is_left:bool ->
+    tvalue ->
+    tvalue
 
   (** The input ADTs don't have the same variant *)
   val match_distinct_aadts :
