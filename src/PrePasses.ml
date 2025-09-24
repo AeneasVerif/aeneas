@@ -267,14 +267,14 @@ let update_array_default (crate : crate) : crate =
                   }
 
           method! visit_fn_ptr env fn_ptr =
-            match fn_ptr.func with
+            match fn_ptr.kind with
             | FunId (FRegular fid) -> begin
                 match FunDeclId.Map.find_opt fid methods with
                 | None -> super#visit_fn_ptr env fn_ptr
                 | Some n ->
                     let fn_ptr =
                       {
-                        func = FunId (FRegular merged_method);
+                        kind = FunId (FRegular merged_method);
                         generics =
                           { fn_ptr.generics with const_generics = [ n ] };
                       }

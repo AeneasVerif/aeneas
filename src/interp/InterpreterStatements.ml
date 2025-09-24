@@ -619,7 +619,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
       (* Closure case: TODO *)
       [%craise] span "Closures are not supported yet"
   | FnOpRegular func -> (
-      match func.func with
+      match func.kind with
       | FunId (FRegular fid) ->
           let def = ctx_lookup_fun_decl span ctx fid in
           [%ltrace
@@ -637,7 +637,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
             instantiate_fun_sig span ctx func.generics tr_self def.signature
               regions_hierarchy
           in
-          (func.func, func.generics, None, def, inst_sg)
+          (func.kind, func.generics, None, def, inst_sg)
       | FunId (FBuiltin _) ->
           (* Unreachable: must be a transparent function *)
           [%craise] span "Unreachable"
@@ -718,7 +718,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                 instantiate_fun_sig span ctx generics tr_self
                   method_def.signature regions_hierarchy
               in
-              ( func.func,
+              ( func.kind,
                 func.generics,
                 Some (generics, tr_self),
                 method_def,
@@ -1097,7 +1097,7 @@ and eval_function_call_concrete (config : config) (span : Meta.span)
   match call.func with
   | FnOpMove _ -> [%craise] span "Closures are not supported yet"
   | FnOpRegular func -> (
-      match func.func with
+      match func.kind with
       | FunId (FRegular fid) ->
           eval_transparent_function_call_concrete config span fid call ctx
       | FunId (FBuiltin fid) ->
@@ -1116,7 +1116,7 @@ and eval_function_call_symbolic (config : config) (span : Meta.span)
   match call.func with
   | FnOpMove _ -> [%craise] span "Closures are not supported yet"
   | FnOpRegular func -> (
-      match func.func with
+      match func.kind with
       | FunId (FRegular _) | TraitMethod _ ->
           eval_transparent_function_call_symbolic config span call
       | FunId (FBuiltin fid) ->
