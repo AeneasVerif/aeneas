@@ -15,7 +15,7 @@ let mk_closed_checked_lets file line ctx can_fail pat_bounds next =
   mk_closed_checked_lets file line ctx.span can_fail pat_bounds next
 
 (** TODO: not very clean. *)
-let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fun_id_or_trait_method_ref)
+let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fn_ptr_kind)
     (lid : V.LoopId.id option) (gid : T.RegionGroupId.id option) :
     fun_effect_info =
   match lid with
@@ -49,8 +49,7 @@ let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fun_id_or_trait_method_ref)
           | Some gid -> RegionGroupId.Map.find gid loop_info.back_effect_infos)
       | _ -> [%craise] ctx.span "Unreachable")
 
-let translate_fun_id_or_trait_method_ref (ctx : bs_ctx)
-    (id : A.fun_id_or_trait_method_ref) : fun_id_or_trait_method_ref =
+let translate_fn_ptr_kind (ctx : bs_ctx) (id : A.fn_ptr_kind) : fn_ptr_kind =
   match id with
   | FunId fun_id -> FunId fun_id
   | TraitMethod (trait_ref, method_name, fun_decl_id) ->
@@ -445,7 +444,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
     match call.call_id with
     | S.Fun (fid, call_id) ->
         (* Regular function call *)
-        let fid_t = translate_fun_id_or_trait_method_ref ctx fid in
+        let fid_t = translate_fn_ptr_kind ctx fid in
         let func = Fun (FromLlbc (fid_t, None)) in
         (* Retrieve the effect information about this function (can fail,
          * takes a state as input, etc.) *)

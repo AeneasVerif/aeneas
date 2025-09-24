@@ -47,9 +47,7 @@ let fn_ptr_to_string (ctx : eval_ctx) (fn_ptr : fn_ptr) : string =
 let trait_decl_ref_region_binder_to_string =
   Print.EvalCtx.trait_decl_ref_region_binder_to_string
 
-let fun_id_or_trait_method_ref_to_string =
-  Print.EvalCtx.fun_id_or_trait_method_ref_to_string
-
+let fn_ptr_kind_to_string = Print.EvalCtx.fn_ptr_kind_to_string
 let fun_decl_to_string = Print.EvalCtx.fun_decl_to_string
 let call_to_string = Print.EvalCtx.call_to_string
 

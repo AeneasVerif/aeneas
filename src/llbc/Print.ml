@@ -729,10 +729,9 @@ module EvalCtx = struct
     let env = eval_ctx_to_fmt_env ctx in
     inst_fun_sig_to_string env x
 
-  let fun_id_or_trait_method_ref_to_string (ctx : eval_ctx)
-      (x : fun_id_or_trait_method_ref) : string =
+  let fn_ptr_kind_to_string (ctx : eval_ctx) (x : fn_ptr_kind) : string =
     let env = eval_ctx_to_fmt_env ctx in
-    fun_id_or_trait_method_ref_to_string env x
+    fn_ptr_kind_to_string env x
 
   let statement_to_string (ctx : eval_ctx) (indent : string)
       (indent_incr : string) (e : statement) : string =

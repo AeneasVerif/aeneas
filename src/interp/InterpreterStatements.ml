@@ -609,7 +609,7 @@ let create_push_abstractions_from_abs_region_groups
     but directly to the method provided in the trait declaration. *)
 let eval_transparent_function_call_symbolic_inst (span : Meta.span)
     (call : call) (ctx : eval_ctx) :
-    fun_id_or_trait_method_ref
+    fn_ptr_kind
     * generic_args
     * (generic_args * trait_instance_id) option
     * fun_decl
@@ -1246,14 +1246,14 @@ and eval_transparent_function_call_symbolic (config : config) (span : Meta.span)
     overriding them. We treat them as regular method, which take an additional
     trait ref as input. *)
 and eval_function_call_symbolic_from_inst_sig (config : config)
-    (span : Meta.span) (fid : fun_id_or_trait_method_ref) (sg : fun_sig)
+    (span : Meta.span) (fid : fn_ptr_kind) (sg : fun_sig)
     (inst_sg : inst_fun_sig) (generics : generic_args)
     (trait_method_generics : (generic_args * trait_instance_id) option)
     (args : operand list) (dest : place) : stl_cm_fun =
  fun ctx ->
   [%ltrace
     "- fid: "
-    ^ fun_id_or_trait_method_ref_to_string ctx fid
+    ^ fn_ptr_kind_to_string ctx fid
     ^ "\n- inst_sg:\n"
     ^ inst_fun_sig_to_string ctx inst_sg
     ^ "\n- call.generics:\n"

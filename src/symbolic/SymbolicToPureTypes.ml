@@ -503,9 +503,9 @@ let list_ancestor_abstractions (ctx : bs_ctx) (abs : V.abs)
 
 (** Small utility. *)
 let compute_raw_fun_effect_info (span : Meta.span option)
-    (fun_infos : fun_info A.FunDeclId.Map.t)
-    (fun_id : A.fun_id_or_trait_method_ref) (lid : V.LoopId.id option)
-    (gid : T.RegionGroupId.id option) : fun_effect_info =
+    (fun_infos : fun_info A.FunDeclId.Map.t) (fun_id : A.fn_ptr_kind)
+    (lid : V.LoopId.id option) (gid : T.RegionGroupId.id option) :
+    fun_effect_info =
   match fun_id with
   | TraitMethod (_, _, fid) | FunId (FRegular fid) ->
       let info =
@@ -549,9 +549,8 @@ let compute_raw_fun_effect_info (span : Meta.span option)
     - [generic_args]: the generic arguments with which the uninstantiated
       signature was instantiated, leading to the current [sg] *)
 let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
-    (decls_ctx : C.decls_ctx) (fun_id : A.fun_id_or_trait_method_ref)
-    (sg : A.inst_fun_sig) (input_names : string option list) :
-    decomposed_fun_type =
+    (decls_ctx : C.decls_ctx) (fun_id : A.fn_ptr_kind) (sg : A.inst_fun_sig)
+    (input_names : string option list) : decomposed_fun_type =
   [%ltrace
     let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
     "- sg.regions_hierarchy: "
@@ -605,7 +604,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
       (lazy
         (let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
          "Nested borrows are not supported yet (found in the signature of: "
-         ^ Charon.PrintTypes.fun_id_or_trait_method_ref_to_string ctx fun_id
+         ^ Charon.PrintTypes.fn_ptr_kind_to_string ctx fun_id
          ^ ")"));
     (* For now, we don't allow nested borrows, so the additional inputs to the
        backward function can only come from borrows that were returned like
@@ -627,7 +626,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
         Print.list_to_string (PrintPure.ty_to_string pctx false) inputs
       in
       "translate_back_inputs_for_gid:" ^ "\n- function:"
-      ^ Charon.PrintTypes.fun_id_or_trait_method_ref_to_string ctx fun_id
+      ^ Charon.PrintTypes.fn_ptr_kind_to_string ctx fun_id
       ^ "\n- gid: "
       ^ RegionGroupId.to_string gid
       ^ "\n- output: " ^ output ^ "\n- back inputs: " ^ inputs];
@@ -666,7 +665,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
         Print.list_to_string (PrintPure.ty_to_string pctx false) outputs
       in
       "compute_back_outputs_for_gid:" ^ "\n- function:"
-      ^ Charon.PrintTypes.fun_id_or_trait_method_ref_to_string ctx fun_id
+      ^ Charon.PrintTypes.fn_ptr_kind_to_string ctx fun_id
       ^ "\n- gid: "
       ^ RegionGroupId.to_string gid
       ^ "\n- inputs: " ^ inputs ^ "\n- back outputs: " ^ outputs];
@@ -740,7 +739,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
   { fwd_inputs; fwd_output; back_sg; fwd_info }
 
 let translate_fun_sig_with_regions_hierarchy_to_decomposed (span : span option)
-    (decls_ctx : C.decls_ctx) (fun_id : A.fun_id_or_trait_method_ref)
+    (decls_ctx : C.decls_ctx) (fun_id : A.fn_ptr_kind)
     (regions_hierarchy : T.region_var_groups) (sg : A.fun_sig)
     (input_names : string option list) : decomposed_fun_sig =
   let inst_sg : LlbcAst.inst_fun_sig =
