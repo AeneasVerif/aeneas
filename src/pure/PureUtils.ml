@@ -749,7 +749,7 @@ let mk_adt_pattern (adt_ty : ty) (variant_id : VariantId.id option)
   let pat = PAdt { variant_id; fields = vl } in
   { pat; ty = adt_ty }
 
-let mk_adt_value (span : span) (adt_ty : ty) (variant_id : VariantId.id option)
+let mk_adt_texpr (span : span) (adt_ty : ty) (variant_id : VariantId.id option)
     (fields : texpr list) : texpr =
   let adt_id, generics = ty_as_adt span adt_ty in
   let qualif : expr =

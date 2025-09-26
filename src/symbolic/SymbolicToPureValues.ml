@@ -346,7 +346,7 @@ and adt_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
               let ty =
                 translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty
               in
-              Some (mk_adt_value ctx.span ty adt_v.variant_id fields)
+              Some (mk_adt_texpr ctx.span ty adt_v.variant_id fields)
           | TTuple -> Some (mk_simpl_tuple_texpr ctx.span fields)
         end
   | LoanProj borrow_kind -> begin
@@ -370,7 +370,7 @@ and adt_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
           let ty =
             translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty
           in
-          let pat = mk_adt_value ctx.span ty adt_v.variant_id fields in
+          let pat = mk_adt_texpr ctx.span ty adt_v.variant_id fields in
           Some pat
       | TBuiltin TBox -> begin
           (* The box type becomes the identity in the translation *)

@@ -7,6 +7,7 @@ open InterpreterUtils
 open SymbolicToPureCore
 open SymbolicToPureTypes
 open SymbolicToPureValues
+module NormSymbProjMap = InterpreterBorrowsCore.NormSymbProjMap
 
 (** Explore an abstraction value and compute the type of the value consumed upon
     ending the loans. *)
@@ -510,11 +511,24 @@ let tepat_to_tpattern (ctx : bs_ctx)
     (pat : V.tepat) : bs_ctx * tpattern =
   ()
 
+module NormSymbProjMap = InterpreterBorrowsCore.NormSymbProjMap
+
+(** Map inputs (i.e., (symbolic) loans) to free variables introduced when
+    analyzing the *avalues* of the abstraction (not the *evalues* ). We use this
+    in order to control the order in which we bind the inputs (it is fixed by
+    the avalues which act as a signature of the function). *)
+type bound_inputs = {
+  concrete : texpr V.BorrowId.Map.t;
+  symbolic : texpr NormSymbProjMap.t;
+}
+
 (** The boolean is [can_fail] (i.e., does the expression live in the error
-    monad?) *)
+    monad?).
+
+    [bound_inputs]: see the doc of [bound_inputs] *)
 let rec einput_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx)
-    (rids : T.RegionId.Set.t) (input : V.tevalue) : bs_ctx * bool * texpr option
-    =
+    (rids : T.RegionId.Set.t) (bound_inputs : bound_inputs) (input : V.tevalue)
+    : bs_ctx * bool * texpr option =
   let span = ctx.span in
   let type_infos = ctx.type_ctx.type_infos in
   let keep_region (r : T.region) =
@@ -524,7 +538,6 @@ let rec einput_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx)
   in
   (* Accumulating the inputs in the order we find them: we will use this
      to introduce the variables bound by the continuation *)
-  let inputs = ref [] in
   let fvar_to_texpr = ref V.AbsFVarId.Map.empty in
   let fvar_to_none = ref V.AbsFVarId.Set.empty in
   let rec to_texpr ~(filter : bool) (rids : T.RegionId.Set.t) (ctx : bs_ctx)
@@ -618,7 +631,7 @@ let rec einput_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx)
                 end
               in
               (ctx, can_fail, e)
-          | V.ELoop (abs_id, lid, rg_id) ->
+          | V.ELoop (abs_id, _lid, _rg_id) ->
               (* Lookup the variable introduced for the backward function *)
               let e =
                 match
@@ -630,14 +643,80 @@ let rec einput_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx)
                     None
                 | Some f -> Some (mk_apps span f args)
               in
-              (ctx, false, e)
+              let can_fail = false in
+              (ctx, can_fail, e)
         end
-    | V.EAdt _ -> _
-    | V.ELoan _ -> _
+    | V.EAdt { variant_id; field_values } ->
+        let filter =
+          match compute_tevalue_proj_kind span type_infos rids input with
+          | BorrowProj _ -> [%internal_error] span
+          | UnknownProj -> filter
+          | LoanProj BMut ->
+              [%sanity_check] span (not filter);
+              false
+          | LoanProj BShared -> filter
+        in
+        (* If we filter then ignore the value, otherwise translate everything *)
+        if filter then (ctx, false, None)
+        else
+          let ctx, fields =
+            List.fold_left_map
+              (fun ctx f ->
+                let ctx, can_fail, f = to_texpr ~filter rids ctx f in
+                (ctx, (can_fail, f)))
+              ctx field_values
+          in
+          let can_fail, fields = List.split fields in
+          let fields : texpr list =
+            List.filter_map
+              (fun (x : texpr option) ->
+                [%unwrap_with_span] span x "Unexpected")
+              fields
+          in
+          let ty = translate_fwd_ty (Some span) type_infos input.ty in
+          let can_fail = List.exists (fun x -> x) can_fail in
+          let e = mk_adt_texpr span ty variant_id fields in
+          [%sanity_check] span (not can_fail);
+          (ctx, can_fail, Some e)
+    | V.ELoan lc -> (
+        match lc with
+        | V.EMutLoan (pm, lid, child) ->
+            [%sanity_check] span (pm = PNone);
+            [%sanity_check] span (ValuesUtils.is_eignored child.value);
+            let e =
+              [%unwrap_with_span] span
+                (V.BorrowId.Map.find_opt lid bound_inputs.concrete)
+                "Unexpected"
+            in
+            (ctx, false, Some e)
+        | V.EEndedMutLoan _ | V.EIgnoredMutLoan _ | V.EEndedIgnoredMutLoan _ ->
+            [%internal_error] span)
     | V.EBorrow _ -> [%internal_error] span
-    | V.ESymbolic (_, _) -> _
-    | V.EValue _ -> _
-    | V.EIgnored _ -> _
+    | V.ESymbolic (pm, proj) -> begin
+        [%sanity_check] span (pm = PNone);
+        match proj with
+        | V.EProjLoans { proj = { sv_id; proj_ty }; consumed; borrows } ->
+            [%sanity_check] span (consumed = []);
+            [%sanity_check] span (borrows = []);
+            let norm_proj_ty =
+              InterpreterBorrowsCore.normalize_proj_ty rids proj_ty
+            in
+            let e =
+              [%unwrap_with_span] span
+                (NormSymbProjMap.find_opt { sv_id; norm_proj_ty }
+                   bound_inputs.symbolic)
+                "Unexpected"
+            in
+            (ctx, false, Some e)
+        | V.EProjBorrows _
+        | V.EEndedProjLoans _
+        | V.EEndedProjBorrows _
+        | V.EEmpty -> [%internal_error] span
+      end
+    | V.EValue (env, mv) ->
+        let e = tvalue_to_texpr ctx { ectx with env } mv in
+        (ctx, false, Some e)
+    | V.EIgnored _ -> (ctx, false, None)
     | V.EBottom -> [%internal_error] span
   in
   to_texpr ~filter:false rids ctx input

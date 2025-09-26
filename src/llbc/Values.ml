@@ -1119,12 +1119,16 @@ and evalue =
 
           In the comments, we display it as [_].
 
+          TODO: update to remove the meta-value. We want [EIgnored] to be
+          ignored by the translation (it should be translated to ()) while
+          [EValue] indicates there is a value to be translated. We could keep
+          one variant with an optional value to distinguish between the two,
+          though.
+
           Note that we store the ignored value as a meta value (together with
           the environment at the time we introduced the evalue - see the comment
           for [EValue]). Also note that this value is not always present (when
-          we introduce abstractions because of a join for instance).
-
-          TODO: remove and only keep [EValue]? *)
+          we introduce abstractions because of a join for instance). *)
 
 and epat =
   | POpen of abs_fvar_id
