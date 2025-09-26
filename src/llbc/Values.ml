@@ -1099,16 +1099,32 @@ and evalue =
   | ELoan of eloan_content
   | EBorrow of eborrow_content
   | ESymbolic of proj_marker * eproj
-  | EValue of mvalue  (** A concrete value *)
-  | EIgnored of mvalue option
+  | EValue of (env[@opaque]) * mvalue
+      (** A concrete value, that we remember as a meta-value (together with the
+          environment at the time we introduced this evalue - we need this to
+          translate the shared borrows, because translating them requires
+          looking up the corresponding loans) for the translation.
+
+          We need this when we convert anonymous values to region abstractions.
+          For instance, when converting [MB l 0] to a region abstraction, we
+          introduce the following abstraction continuation:
+          {[
+            MB l : EValue 0
+          ]}
+          this means that when ending borrow [l] we should output exactly the
+          value [0]. *)
+  | EIgnored of ((env[@opaque]) * mvalue) option
       (** A value which doesn't contain borrows, or which borrows we don't own
           and thus ignore.
 
           In the comments, we display it as [_].
 
-          Note that we store the ignored value as a meta value. Also note that
-          this value is not always present (when we introduce abstractions
-          because of a join for instance). *)
+          Note that we store the ignored value as a meta value (together with
+          the environment at the time we introduced the evalue - see the comment
+          for [EValue]). Also note that this value is not always present (when
+          we introduce abstractions because of a join for instance).
+
+          TODO: remove and only keep [EValue]? *)
 
 and epat =
   | POpen of abs_fvar_id

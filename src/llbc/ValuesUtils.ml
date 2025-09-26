@@ -38,10 +38,11 @@ let mk_aignored (span : Meta.span) (ty : ty) (v : tvalue option) : tavalue =
   [%sanity_check] span (ty_is_rty ty);
   { value = AIgnored v; ty }
 
-let mk_eignored (ty : ty) (v : tvalue option) : tevalue =
-  { value = EIgnored v; ty }
+let mk_eignored (ty : ty) (env_v : (env * tvalue) option) : tevalue =
+  { value = EIgnored env_v; ty }
 
-let mk_evalue (ty : ty) (v : tvalue) : tevalue = { value = EValue v; ty }
+let mk_evalue (env : env) (ty : ty) (v : tvalue) : tevalue =
+  { value = EValue (env, v); ty }
 
 let value_as_symbolic (span : Meta.span) (v : value) : symbolic_value =
   match v with

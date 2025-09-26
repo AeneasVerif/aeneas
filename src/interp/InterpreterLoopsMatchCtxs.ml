@@ -1290,7 +1290,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     { value = VLoan (VSharedLoan (nbid, joined_value)); ty }
 
   let match_mut_loan_with_other (_match_rec : tvalue_matcher) (ctx0 : eval_ctx)
-      (_ctx1 : eval_ctx) ~(loan_is_left : bool) (ty : ety) (lid : loan_id)
+      (ctx1 : eval_ctx) ~(loan_is_left : bool) (ty : ety) (lid : loan_id)
       (other : tvalue) : tvalue =
     (* Sanity checks *)
     [%cassert] span
@@ -1338,9 +1338,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             (* Note that an eloan has a borrow type *)
             { value = ELoan loan; ty = borrow_ty }
           in
+          let ctx_other = if loan_is_left then ctx1 else ctx0 in
           let other =
             (* This works because for now we forbid the value from having loans/borrows *)
-            { value = EValue other; ty = borrow_ty }
+            { value = EValue (ctx_other.env, other); ty = borrow_ty }
           in
           let lv, rv = if loan_is_left then (loan, other) else (other, loan) in
           let v = EJoinMarkers (lv, rv) in

@@ -1325,7 +1325,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
       in
       let output = mk_simpl_etuple outputs in
       let input =
-        mk_eproj_loans_value_from_symbolic_value abs.regions.owned ret_spc
+        mk_eproj_loans_value_from_symbolic_value ctx abs.regions.owned ret_spc
           ret_sv_ty
       in
       let input = EApp (EFunCall (call_id, rg_id), [ input ]) in

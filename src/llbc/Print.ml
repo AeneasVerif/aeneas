@@ -461,8 +461,10 @@ module Values = struct
         ^ ",rg@"
         ^ RegionGroupId.to_string rg_id
         ^ ")"
-    | ELoop (lp_id, rg_id) ->
-        "Loop(loop_id@" ^ LoopId.to_string lp_id ^ "," ^ "rg@"
+    | ELoop (abs_id, lp_id, rg_id) ->
+        "Loop(abs_id@"
+        ^ AbstractionId.to_string abs_id
+        ^ "loop_id@" ^ LoopId.to_string lp_id ^ "," ^ "rg@"
         ^ option_to_string
             (fun rg_id -> "rg@" ^ RegionGroupId.to_string rg_id)
             rg_id
@@ -591,11 +593,11 @@ module Values = struct
         eloan_content_to_string ~span ~with_ended env aenv indent indent_incr lc
     | ESymbolic (pm, proj) ->
         eproj_to_string ~with_ended env proj |> add_proj_marker pm
-    | EValue mv -> "@mvalue(" ^ tvalue_to_string ~span env mv ^ ")"
+    | EValue (_, mv) -> "@mvalue(" ^ tvalue_to_string ~span env mv ^ ")"
     | EIgnored mv -> (
         match mv with
         | None -> "_"
-        | Some mv -> "@ignored(" ^ tvalue_to_string ~span env mv ^ ")")
+        | Some (_, mv) -> "@ignored(" ^ tvalue_to_string ~span env mv ^ ")")
 
   and eloan_content_to_string ?(span : Meta.span option = None)
       ?(with_ended : bool = false) (env : fmt_env) (aenv : evalue_env)

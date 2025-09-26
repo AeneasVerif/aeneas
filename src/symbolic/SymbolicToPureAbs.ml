@@ -644,6 +644,15 @@ let rec einput_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx)
 
 let abs_cont_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
     (output : V.tevalue) (input : V.tevalue) : bs_ctx * texpr =
+  (* Go through the *avalues* to introduce free variables for the loans:
+     we need to do this to fix the order of the *inputs* (the order given
+     by the abstraction expression itself is arbitrary)
+  *)
+
+  (* Translate the abstraction expression *)
+
+  (* Go through the *avalues* to compute the order of the *outputs*. Same remark
+     as with the inputs: we do this to fix the order *)
   ()
 
 let abs_cont_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)

@@ -473,8 +473,8 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : tvalue)
                   (* The loan projector *)
                   let _, ty, _ = ty_as_ref ty in
                   let given_back =
-                    mk_eproj_loans_value_from_symbolic_value abs.regions.owned
-                      sv ty
+                    mk_eproj_loans_value_from_symbolic_value ctx
+                      abs.regions.owned sv ty
                   in
                   (* Continue giving back in the child value *)
                   let child = super#visit_tevalue opt_abs child in

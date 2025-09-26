@@ -320,7 +320,9 @@ let loop_abs_reorder_and_add_info (span : Meta.span) (loop_id : LoopId.id)
 
     (* Transform them into input/output expressions *)
     let output = mk_etuple (List.rev !borrows) in
-    let input = EApp (ELoop (loop_id, Some rg_id), List.rev !loans) in
+    let input =
+      EApp (ELoop (abs.abs_id, loop_id, Some rg_id), List.rev !loans)
+    in
     let input : tevalue = { value = input; ty = output.ty } in
 
     (* Put everything together *)

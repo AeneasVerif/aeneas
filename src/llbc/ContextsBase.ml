@@ -1,7 +1,5 @@
 open Types
-open Expressions
 open Values
-open Identifiers
 module L = Logging
 
 (** The local logger *)

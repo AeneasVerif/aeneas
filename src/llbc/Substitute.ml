@@ -5,7 +5,6 @@ include Charon.Substitute
 open Types
 open Values
 open LlbcAst
-open ContextsBase
 
 (* Fails if the variable is bound *)
 let expect_free_var span (var : 'id de_bruijn_var) : 'id =

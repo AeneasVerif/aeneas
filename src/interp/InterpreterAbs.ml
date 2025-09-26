@@ -71,7 +71,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
 
     let ty = v.ty in
     match v.value with
-    | VLiteral _ -> ([], Some (mk_evalue ty v), v)
+    | VLiteral _ -> ([], Some (mk_evalue ctx.env ty v), v)
     | VBottom ->
         (* Can happen: we *do* convert dummy values to abstractions, and dummy
            values can contain bottoms *)
@@ -132,7 +132,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
               "Nested borrows are not supported yet";
             let ty = TRef (RVar (Free r_id), ref_ty, kind) in
             let value = ABorrow (ASharedBorrow (PNone, bid, sid)) in
-            ([ { value; ty } ], Some (mk_evalue ty v), v)
+            ([ { value; ty } ], Some (mk_evalue ctx.env ty v), v)
         | VMutBorrow (bid, bv) ->
             (* We don't support nested borrows for now *)
             [%cassert] span
@@ -237,7 +237,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
           (* Check if the type contains regions: if not, simply ignore
              it (there are no projections to introduce) *)
           if TypesUtils.ty_no_regions sv.sv_ty then
-            ([], Some (mk_evalue ty v), v)
+            ([], Some (mk_evalue ctx.env ty v), v)
           else
             (* Substitute the regions in the type *)
             let visitor =
@@ -1035,7 +1035,7 @@ let bound_outputs_consume_symbolic (span : Meta.span) (sid : SymbolicValueId.id)
 
     The [bound_outputs] is used to update the inputs, in case we already bound
     values. We also update it to insert the newly bound outputs. *)
-let bind_outputs_from_single_output (span : Meta.span) (_ctx : eval_ctx)
+let bind_outputs_from_single_output (span : Meta.span) (ctx : eval_ctx)
     (regions : RegionId.Set.t) (bound : bound_outputs ref) (output : tevalue) :
     tepat * tevalue =
   (* This helper is used to support patterns of the shape:
@@ -1117,7 +1117,7 @@ let bind_outputs_from_single_output (span : Meta.span) (_ctx : eval_ctx)
         (* There should be a value *)
         match mv with
         | None -> [%craise] span "Unexpected: missing value"
-        | Some mv -> { value = EValue mv; ty = output.ty })
+        | Some (env, mv) -> { value = EValue (env, mv); ty = output.ty })
   in
   let rec bind (output : tevalue) : tepat * tevalue =
     match output.value with
@@ -1183,7 +1183,10 @@ let bind_outputs_from_single_output (span : Meta.span) (_ctx : eval_ctx)
                 let value : tvalue =
                   { value = VSymbolic { sv_id; sv_ty = proj_ty }; ty = proj_ty }
                 in
-                { value = EValue value; ty = output.ty }
+                (* Note that translating the symbolic value will not require looking
+                   up shared loans in the environment, so we can just store any
+                   environment here *)
+                { value = EValue (ctx.env, value); ty = output.ty }
               in
               (* Compute the binding pattern *)
               let fid = fresh_abs_fvar_id () in
@@ -1201,10 +1204,12 @@ let bind_outputs_from_single_output (span : Meta.span) (_ctx : eval_ctx)
               (* We shouldn't get here? *)
               [%craise] span "Unexpected"
         end
-    | EValue mv ->
+    | EValue (env, mv) ->
         (* We're not inside a loan or a borrow: simply ignore it *)
         let pat : tepat = { epat = PIgnored; epat_ty = output.ty } in
-        let value : tevalue = { value = EIgnored (Some mv); ty = output.ty } in
+        let value : tevalue =
+          { value = EIgnored (Some (env, mv)); ty = output.ty }
+        in
         (pat, value)
     | EIgnored _ ->
         (* We're not inside a loan or a borrow: simply ignore it *)
@@ -1313,7 +1318,7 @@ let bind_outputs_from_output_input (span : Meta.span) (_ctx : eval_ctx)
         (* There should be a value *)
         match mv with
         | None -> [%craise] span "Unexpected: missing value"
-        | Some mv -> { value = EValue mv; ty = input.ty })
+        | Some (env, mv) -> { value = EValue (env, mv); ty = input.ty })
   in
   let rec bind_output (regions : RegionId.Set.t) (output : tevalue) : tepat =
     match output.value with
@@ -1375,7 +1380,7 @@ let bind_outputs_from_output_input (span : Meta.span) (_ctx : eval_ctx)
               (* We shouldn't get here? *)
               [%craise] span "Unexpected"
         end
-    | EValue _mv ->
+    | EValue _ ->
         (* We're not inside a loan or a borrow: simply ignore it *)
         { epat = PIgnored; epat_ty = output.ty }
     | EIgnored _ ->
@@ -1407,8 +1412,6 @@ let merge_abs_conts_aux (span : Meta.span) (ctx : eval_ctx) (abs0 : abs)
     ^ abs_cont_to_string span ctx ~indent:"  " cont0
     ^ "\n- cont1:\n  "
     ^ abs_cont_to_string span ctx ~indent:"  " cont1];
-
-  raise (Failure "TODO: register the inputs");
 
   (* The way we proceed is simple.
 
