@@ -1,5 +1,6 @@
 open Identifiers
 open Types
+open Expressions
 include Charon.Values
 
 (* TODO(SH): I often write "abstract" (value, borrow content, etc.) while I should
@@ -279,8 +280,18 @@ let ( abs_fvar_id_counter,
       fresh_abs_fvar_id ) =
   AbsFVarId.fresh_marked_stateful_generator ()
 
-(** Ancestor for {!tavalue} iter visitor *)
-class ['self] iter_tavalue_base =
+(** The [Id] module for dummy variables in environments.
+
+    Dummy variables are used to store values that we don't want to forget in the
+    environment, because they contain borrows for instance, typically because
+    they might be overwritten during an assignment. *)
+module DummyVarId =
+IdGen ()
+
+type dummy_var_id = DummyVarId.id [@@deriving show, ord]
+
+(** Ancestor for {!env} iter visitor *)
+class ['self] iter_env_base =
   object (self : 'self)
     inherit [_] iter_tvalue
     method visit_fun_call_id : 'env -> fun_call_id -> unit = fun _ _ -> ()
@@ -326,10 +337,13 @@ class ['self] iter_tavalue_base =
 
     method visit_abs_bvar_id : 'env -> abs_bvar_id -> unit = fun _ _ -> ()
     method visit_abs_fvar_id : 'env -> abs_fvar_id -> unit = fun _ _ -> ()
+    method visit_local_id : 'env -> local_id -> unit = fun _ _ -> ()
+    method visit_dummy_var_id : 'env -> dummy_var_id -> unit = fun _ _ -> ()
+    method visit_abs_kind : 'env -> abs_kind -> unit = fun _ _ -> ()
   end
 
-(** Ancestor for {!tavalue} map visitor *)
-class ['self] map_tavalue_base =
+(** Ancestor for {!env} map visitor *)
+class ['self] map_env_base =
   object (self : 'self)
     inherit [_] map_tvalue
     method visit_fun_call_id : 'env -> fun_call_id -> fun_call_id = fun _ x -> x
@@ -382,6 +396,12 @@ class ['self] map_tavalue_base =
 
     method visit_abs_bvar_id : 'env -> abs_bvar_id -> abs_bvar_id = fun _ x -> x
     method visit_abs_fvar_id : 'env -> abs_fvar_id -> abs_fvar_id = fun _ x -> x
+    method visit_local_id : 'env -> local_id -> local_id = fun _ x -> x
+
+    method visit_dummy_var_id : 'env -> dummy_var_id -> dummy_var_id =
+      fun _ x -> x
+
+    method visit_abs_kind : 'env -> abs_kind -> abs_kind = fun _ x -> x
   end
 
 (** When giving shared borrows to functions (i.e., inserting shared borrows
@@ -1408,58 +1428,13 @@ and abs_cont = {
           ]}
           This means that upon ending [l0] we get the value [v]. *)
 }
-[@@deriving
-  show,
-  ord,
-  visitors
-    {
-      name = "iter_tavalue";
-      variety = "iter";
-      ancestors = [ "iter_tavalue_base" ];
-      nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
-      concrete = true;
-      monomorphic = [ "env" ] (* We need this to allows duplicate field names *);
-    },
-  visitors
-    {
-      name = "map_tavalue";
-      variety = "map";
-      ancestors = [ "map_tavalue_base" ];
-      nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
-      concrete = true;
-      monomorphic = [ "env" ] (* We need this to allows duplicate field names *);
-    }]
-
-class ['self] iter_tevalue =
-  object (_self : 'self)
-    inherit [_] iter_tavalue
-  end
-
-class ['self] map_tevalue =
-  object (_self : 'self)
-    inherit [_] map_tavalue
-  end
-
-(** Ancestor for {!abs} iter visitor *)
-class ['self] iter_abs_base =
-  object (_self : 'self)
-    inherit [_] iter_tavalue
-    method visit_abs_kind : 'env -> abs_kind -> unit = fun _ _ -> ()
-  end
-
-(** Ancestor for {!abs} map visitor *)
-class ['self] map_abs_base =
-  object (_self : 'self)
-    inherit [_] map_tavalue
-    method visit_abs_kind : 'env -> abs_kind -> abs_kind = fun _ x -> x
-  end
 
 (** Abstractions model the parts in the borrow graph where the borrowing
     relations have been abstracted because of a function call.
 
     In order to model the relations between the borrows, we use "abstraction
     values", which are a special kind of value. *)
-type abs = {
+and abs = {
   abs_id : abstraction_id;
   kind : abs_kind;
   can_end : bool;
@@ -1489,25 +1464,78 @@ type abs = {
 and abs_regions = {
   owned : region_id_set;  (** Regions owned by the abstraction *)
 }
+
+(** A binder used in an environment, to map a variable to a value *)
+and real_var_binder = {
+  index : local_id;  (** Unique variable identifier *)
+  name : string option;  (** Possible name *)
+}
+
+(** A binder, for a "real" variable or a dummy variable *)
+and var_binder = BVar of real_var_binder | BDummy of dummy_var_id
+
+(** Environment value: mapping from variable to value, abstraction (only used in
+    symbolic mode) or stack frame delimiter. *)
+and env_elem =
+  | EBinding of var_binder * tvalue
+      (** Variable binding - the binder is None if the variable is a dummy
+          variable (we use dummy variables to store temporaries while doing
+          bookkeeping such as ending borrows for instance). *)
+  | EAbs of abs
+  | EFrame
+
+and env = env_elem list
 [@@deriving
   show,
   ord,
   visitors
     {
-      name = "iter_abs";
+      name = "iter_env";
       variety = "iter";
-      ancestors = [ "iter_abs_base" ];
+      ancestors = [ "iter_env_base" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
+      monomorphic = [ "env" ] (* We need this to allows duplicate field names *);
     },
   visitors
     {
-      name = "map_abs";
+      name = "map_env";
       variety = "map";
-      ancestors = [ "map_abs_base" ];
+      ancestors = [ "map_env_base" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
+      monomorphic = [ "env" ] (* We need this to allows duplicate field names *);
     }]
+
+class ['self] iter_tavalue =
+  object (_self : 'self)
+    inherit [_] iter_env
+  end
+
+class ['self] map_tavalue =
+  object (_self : 'self)
+    inherit [_] map_env
+  end
+
+class ['self] iter_tevalue =
+  object (_self : 'self)
+    inherit [_] iter_env
+  end
+
+class ['self] map_tevalue =
+  object (_self : 'self)
+    inherit [_] map_env
+  end
+
+class ['self] iter_abs =
+  object (_self : 'self)
+    inherit [_] iter_env
+  end
+
+class ['self] map_abs =
+  object (_self : 'self)
+    inherit [_] map_env
+  end
 
 (** A symbolic expansion
 
