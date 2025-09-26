@@ -4,50 +4,10 @@ open InterpreterUtils
 open SymbolicToPureCore
 open SymbolicToPureTypes
 open SymbolicToPureValues
+open SymbolicToPureAbs
 
 (** The local logger *)
 let log = Logging.symbolic_to_pure_expressions_log
-
-let mk_closed_checked_let file line ctx can_fail pat bound next =
-  mk_closed_checked_let file line ctx.span can_fail pat bound next
-
-let mk_closed_checked_lets file line ctx can_fail pat_bounds next =
-  mk_closed_checked_lets file line ctx.span can_fail pat_bounds next
-
-(** TODO: not very clean. *)
-let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fun_id_or_trait_method_ref)
-    (lid : V.LoopId.id option) (gid : T.RegionGroupId.id option) :
-    fun_effect_info =
-  match lid with
-  | None -> (
-      match fun_id with
-      | TraitMethod (_, _, fid) | FunId (FRegular fid) ->
-          let dsg = A.FunDeclId.Map.find fid ctx.fun_dsigs in
-          let info =
-            match gid with
-            | None -> dsg.fun_ty.fwd_info.effect_info
-            | Some gid ->
-                (RegionGroupId.Map.find gid dsg.fun_ty.back_sg).effect_info
-          in
-          {
-            info with
-            is_rec = (info.is_rec || Option.is_some lid) && gid = None;
-          }
-      | FunId (FBuiltin _) ->
-          compute_raw_fun_effect_info (Some ctx.span) ctx.fun_ctx.fun_infos
-            fun_id lid gid)
-  | Some lid -> (
-      (* This is necessarily for the current function *)
-      match fun_id with
-      | FunId (FRegular fid) -> (
-          [%sanity_check] ctx.span (fid = ctx.fun_decl.def_id);
-          (* Lookup the loop *)
-          let lid = V.LoopId.Map.find lid ctx.loop_ids_map in
-          let loop_info = LoopId.Map.find lid ctx.loops in
-          match gid with
-          | None -> loop_info.fwd_effect_info
-          | Some gid -> RegionGroupId.Map.find gid loop_info.back_effect_infos)
-      | _ -> [%craise] ctx.span "Unreachable")
 
 let translate_fun_id_or_trait_method_ref (ctx : bs_ctx)
     (id : A.fun_id_or_trait_method_ref) : fun_id_or_trait_method_ref =
@@ -1400,6 +1360,7 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
       (V.tvalue S.symbolic_value_id_map * V.abs S.abs_id_map) option)
     (fwd_e : S.expr) (back_e : S.expr S.region_group_id_map) (ctx : bs_ctx) :
     texpr =
+  raise (Failure "TODO: remove the loop_sid_maps");
   (* Register the consumed mutable borrows to compute default values *)
   let ctx =
     match return_value with
@@ -1710,6 +1671,60 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
         loop_call next_e
 
 and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpr =
+  let loop_id = V.LoopId.Map.find loop.loop_id ctx.loop_ids_map in
+
+  (* Translate the loop input abstractions *)
+  let input_abs =
+    List.map
+      (fun abs_id -> V.AbstractionId.Map.find abs_id loop.input_abs_to_abs)
+      loop.input_abs
+  in
+  let input_abs =
+    List.filter_map (translate_abs_to_cont ctx loop.ctx) input_abs
+  in
+
+  (* Translate the loop input values *)
+  let inputs =
+    List.map
+      (fun (sv : V.symbolic_value) ->
+        V.SymbolicValueId.Map.find sv.sv_id loop.input_value_to_value)
+      loop.input_svalues
+  in
+  let inputs = List.map (tvalue_to_texpr ctx loop.ctx) input_value in
+
+  (* Translate the body *)
+  let loop_body = translate_loop_body loop ctx in
+
+  (* Introduce the binders for the loop outputs *)
+  let break_abs = () in
+  let break_outputs = () in
+  let outputs = break_abs @ break_outputs in
+  let output = mk_simpl_tuple_pattern outputs in
+
+  (* Make the loop call *)
+  let fid = T.FRegular ctx.fun_decl.def_id in
+  let effect_info = get_fun_effect_info ctx (FunId fid) None ctx.bid in
+  let loop_e : loop =
+    {
+      loop_id;
+      span = loop.span;
+      output_tys = List.map (fun (pat : tpattern) -> pat.ty) outputs;
+      num_output_conts = List.length break_abs;
+      inputs = input_abs @ inputs;
+      num_input_conts = List.length input_abs;
+      loop_body;
+    }
+  in
+  let loop_e : texpr = { e = Loop loop_e; ty = mk_result_ty output.ty } in
+
+  (* Translate the next expression *)
+  let next_e = translate_expr loop.next_expr ctx in
+
+  (* Create the let-binding *)
+  let all_inputs = input_abs @ inputs in
+  mk_closed_checked_let __FILE__ __LINE__ ctx true output loop_e next_e
+
+and translate_loop_body (loop : S.loop) (ctx : bs_ctx) : loop_body =
   raise (Failure "TODO")
 (*let loop_id = V.LoopId.Map.find loop.loop_id ctx.loop_ids_map in
 

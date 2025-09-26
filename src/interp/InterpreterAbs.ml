@@ -71,7 +71,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
 
     let ty = v.ty in
     match v.value with
-    | VLiteral _ -> ([], Some (mk_evalue ty (Some v)), v)
+    | VLiteral _ -> ([], Some (mk_evalue ty v), v)
     | VBottom ->
         (* Can happen: we *do* convert dummy values to abstractions, and dummy
            values can contain bottoms *)
@@ -132,7 +132,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
               "Nested borrows are not supported yet";
             let ty = TRef (RVar (Free r_id), ref_ty, kind) in
             let value = ABorrow (ASharedBorrow (PNone, bid, sid)) in
-            ([ { value; ty } ], Some (mk_evalue ty (Some v)), v)
+            ([ { value; ty } ], Some (mk_evalue ty v), v)
         | VMutBorrow (bid, bv) ->
             (* We don't support nested borrows for now *)
             [%cassert] span

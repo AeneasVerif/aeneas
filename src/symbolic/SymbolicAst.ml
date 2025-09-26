@@ -217,19 +217,25 @@ type expr =
   | Error of Meta.span option * string
 
 and loop = {
+  ctx : (Contexts.eval_ctx[@opaque]);
+      (** The evaluation context just before the loop *)
   loop_id : loop_id;
-  input_svalues : symbolic_value list;  (** The input symbolic values *)
+  input_svalues : symbolic_value list;
+      (** The input symbolic values, properly ordered *)
   fresh_svalues : symbolic_value_id_set;
       (** The symbolic values introduced by the loop fixed-point/
 
           TODO: remove? *)
-  input_abs : abstraction_id list;  (** The abstractions *)
+  input_abs : abstraction_id list;
+      (** The input abstractions, properly ordered *)
   input_value_to_value : tvalue symbolic_value_id_map;
   input_abs_to_abs : abs abs_id_map;
   break_svalues : symbolic_value list;
-      (** The symbolic values introduced in the break environment *)
+      (** The symbolic values introduced in the break environment (those are
+          output by the loop) *)
   break_abs : abstraction_id list;
-      (** The abstractions introduced in the break environment *)
+      (** The abstractions introduced in the break environment (those are output
+          by the loop) *)
   rg_to_given_back_tys : (Pure.ty list RegionGroupId.Map.t[@opaque]);
       (** The map from region group ids to the types of the values given back by
           the corresponding loop abstractions.

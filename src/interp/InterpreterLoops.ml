@@ -324,6 +324,7 @@ let eval_loop_symbolic (config : config) (span : span)
           loop_expr = loop_body;
           next_expr;
           span;
+          ctx;
         }
     in
     cf_before_loop loop_expr

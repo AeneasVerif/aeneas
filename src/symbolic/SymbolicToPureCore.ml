@@ -1,5 +1,6 @@
 open LlbcAstUtils
 open Pure
+open PureUtils
 open FunsAnalysis
 open TypesAnalysis
 open PrintSymbolicAst
@@ -50,7 +51,9 @@ type fun_ctx = {
 
 (** Whenever we translate a function call or an ended abstraction, we store the
     related information (this is useful when translating ended children
-    abstractions). *)
+    abstractions).
+
+    TODO: remove *)
 type call_info = {
   forward : S.call;
   forward_inputs : texpr list;
@@ -199,10 +202,14 @@ type bs_ctx = {
       (** The ended abstractions we encountered so far, with their additional
           input arguments. We store it here and not in {!call_info} because we
           need a map from abstraction id to abstraction (and not from call id +
-          region group id to abstraction). *)
+          region group id to abstraction).
+
+          TODO: remove. *)
   loop_ids_map : LoopId.id V.LoopId.Map.t;  (** Ids to use for the loops *)
   loops : loop_info LoopId.Map.t;
-      (** The loops we encountered so far.
+      (** TODO: remove
+
+          The loops we encountered so far.
 
           We are using a map to be general - in practice we will fail if we
           encounter more than one loop on a single path. *)
@@ -294,6 +301,17 @@ type bs_ctx = {
           when deconstructing an ended abstraction, to the default value that we
           can use when introducing the otherwise branch of the deconstructing
           match (see [mut_borrow_to_consumed]). *)
+  abs_id_to_fvar : texpr V.AbstractionId.Map.t;
+      (** For the abstractions output by loops/branchings: this maps the
+          abstraction ids to the corresponding variables we introduced in the
+          translation.
+
+          TODO: use this for all the region abstractions. *)
+  ignored_abs_ids : V.AbstractionId.Set.t;
+      (** For sanity purposes, we keep track of the region abstractions for
+          which we did not introduce any variable in the translation: when we
+          fail to lookup a region abstraction in [abs_id_to_fvar] we check that
+          it is registered in this set. *)
 }
 [@@deriving show]
 
@@ -486,3 +504,9 @@ let lookup_var_for_symbolic_value (id : V.symbolic_value_id) (ctx : bs_ctx) :
         ("Could not find var for symbolic value: "
         ^ V.SymbolicValueId.to_string id);
       None
+
+let mk_closed_checked_let file line ctx can_fail pat bound next =
+  mk_closed_checked_let file line ctx.span can_fail pat bound next
+
+let mk_closed_checked_lets file line ctx can_fail pat_bounds next =
+  mk_closed_checked_lets file line ctx.span can_fail pat_bounds next

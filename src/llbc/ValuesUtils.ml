@@ -41,6 +41,8 @@ let mk_aignored (span : Meta.span) (ty : ty) (v : tvalue option) : tavalue =
 let mk_eignored (ty : ty) (v : tvalue option) : tevalue =
   { value = EIgnored v; ty }
 
+let mk_evalue (ty : ty) (v : tvalue) : tevalue = { value = EValue v; ty }
+
 let value_as_symbolic (span : Meta.span) (v : value) : symbolic_value =
   match v with
   | VSymbolic v -> v

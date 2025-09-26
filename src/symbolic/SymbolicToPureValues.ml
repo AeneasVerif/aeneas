@@ -7,8 +7,10 @@ open SymbolicToPureTypes
 (** The local logger *)
 let log = Logging.symbolic_to_pure_values_log
 
-(** WARNING: do not call this function directly. Call
-    [fresh_named_var_for_symbolic_value] instead. *)
+(** WARNING: do not call this function directly when translating symbolic values
+    from LLBC. Call [fresh_named_var_for_symbolic_value] instead: it will
+    register the mapping from the LLBC symbolic value to the (fresh) pure
+    symbolic value. *)
 let fresh_var_llbc_ty (basename : string option) (ty : T.ty) (ctx : bs_ctx) :
     bs_ctx * fvar =
   let ty = ctx_translate_fwd_ty ctx ty in
@@ -49,7 +51,7 @@ let symbolic_value_to_texpr (ctx : bs_ctx) (sv : V.symbolic_value) : texpr =
   (* Translate the type *)
   let ty = ctx_translate_fwd_ty ctx sv.sv_ty in
   (* If the type is unit, directly return unit *)
-  if ty_is_unit ty then mk_unit_rvalue
+  if ty_is_unit ty then mk_unit_texpr
   else
     (* Otherwise lookup the variable *)
     match lookup_var_for_symbolic_value sv.sv_id ctx with
@@ -236,7 +238,6 @@ let compute_tavalue_proj_kind span type_infos (abs_regions : T.RegionId.Set.t)
             (* Continue exploring (same reasons as above) *)
             super#visit_ASymbolic ty pm aproj
         | AProjLoans _ ->
-            (* TODO: we should probably fail here *)
             has_loans := true;
             (* Continue exploring (same reasons as above) *)
             super#visit_ASymbolic ty pm aproj
@@ -250,7 +251,6 @@ let compute_tavalue_proj_kind span type_infos (abs_regions : T.RegionId.Set.t)
             (* Continue exploring (same reasons as above) *)
             super#visit_ASymbolic ty pm aproj
         | AProjBorrows _ ->
-            (* TODO: we should probably fail here *)
             has_borrows := true;
             (* Continue exploring (same reasons as above) *)
             super#visit_ASymbolic ty pm aproj

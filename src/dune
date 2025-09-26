@@ -79,6 +79,7 @@
   Substitute
   SymbolicAst
   SymbolicToPure
+  SymbolicToPureAbs
   SymbolicToPureCore
   SymbolicToPureExpressions
   SymbolicToPureTypes

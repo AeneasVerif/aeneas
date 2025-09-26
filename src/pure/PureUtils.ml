@@ -678,7 +678,7 @@ let mk_bool_value (b : bool) : texpr =
 let mk_true : texpr = mk_bool_value true
 let mk_false : texpr = mk_bool_value false
 
-let mk_unit_rvalue : texpr =
+let mk_unit_texpr : texpr =
   let id = AdtCons { adt_id = TTuple; variant_id = None } in
   let qualif = { id; generics = empty_generic_args } in
   let e = Qualif qualif in

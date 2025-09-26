@@ -939,3 +939,38 @@ let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
   in
   (* Finish the translation *)
   translate_fun_sig_from_decomposed sg
+
+(** TODO: not very clean. *)
+let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fun_id_or_trait_method_ref)
+    (lid : V.LoopId.id option) (gid : T.RegionGroupId.id option) :
+    fun_effect_info =
+  match lid with
+  | None -> (
+      match fun_id with
+      | TraitMethod (_, _, fid) | FunId (FRegular fid) ->
+          let dsg = A.FunDeclId.Map.find fid ctx.fun_dsigs in
+          let info =
+            match gid with
+            | None -> dsg.fun_ty.fwd_info.effect_info
+            | Some gid ->
+                (RegionGroupId.Map.find gid dsg.fun_ty.back_sg).effect_info
+          in
+          {
+            info with
+            is_rec = (info.is_rec || Option.is_some lid) && gid = None;
+          }
+      | FunId (FBuiltin _) ->
+          compute_raw_fun_effect_info (Some ctx.span) ctx.fun_ctx.fun_infos
+            fun_id lid gid)
+  | Some lid -> (
+      (* This is necessarily for the current function *)
+      match fun_id with
+      | FunId (FRegular fid) -> (
+          [%sanity_check] ctx.span (fid = ctx.fun_decl.def_id);
+          (* Lookup the loop *)
+          let lid = V.LoopId.Map.find lid ctx.loop_ids_map in
+          let loop_info = LoopId.Map.find lid ctx.loops in
+          match gid with
+          | None -> loop_info.fwd_effect_info
+          | Some gid -> RegionGroupId.Map.find gid loop_info.back_effect_infos)
+      | _ -> [%craise] ctx.span "Unreachable")

@@ -1414,7 +1414,7 @@ let simplify_let_then_ok_visitor _ctx (def : fun_decl) =
     | POpen (pv, _), FVar vid -> pv.id = vid
     | PDummy, _ ->
         (* It is ok only if we ignore the unit value *)
-        pat.ty = mk_unit_ty && e = mk_unit_rvalue
+        pat.ty = mk_unit_ty && e = mk_unit_texpr
     | PAdt padt, _ -> (
         let qualif, args = destruct_apps e in
         match qualif.e with
@@ -1988,7 +1988,7 @@ let unit_vars_to_unit _ (def : fun_decl) : fun_decl =
       (** Replace in "regular" expressions - note that we could limit ourselves
           to variables, but this is more powerful *)
       method! visit_texpr env e =
-        if e.ty = mk_unit_ty then mk_unit_rvalue else super#visit_texpr env e
+        if e.ty = mk_unit_ty then mk_unit_texpr else super#visit_texpr env e
     end
   in
   (* Update the body *)
