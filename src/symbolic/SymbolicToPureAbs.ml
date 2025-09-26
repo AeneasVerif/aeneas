@@ -46,9 +46,7 @@ and adt_avalue_to_consumed_ty_aux ~(filter : bool) (ctx : bs_ctx)
       (fun _ -> translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty)
       mk_simpl_tuple_ty ~filter ctx av av.ty adt_v.field_values
   in
-  match out with
-  | None -> None
-  | Some (_, ty) -> Some ty
+  Option.map snd out
 
 and aloan_content_to_consumed_ty_aux ~(filter : bool) (ctx : bs_ctx)
     (_abs_regions : T.RegionId.Set.t) (ty : T.ty) (lc : V.aloan_content) :
@@ -135,9 +133,7 @@ and adt_avalue_to_given_back_ty_aux ~(filter : bool)
       (fun _ -> translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty)
       mk_simpl_tuple_ty ~filter ctx av av.ty adt_v.field_values
   in
-  match out with
-  | None -> None
-  | Some (_, ty) -> Some ty
+  Option.map snd out
 
 and aborrow_content_to_given_back_ty_aux ~(filter : bool)
     (bc : V.aborrow_content) (ty : T.ty) (ctx : bs_ctx) : ty option =
@@ -385,7 +381,7 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
                 (ctx, pat)
         end
     | V.EAdt { variant_id; field_values } -> begin
-        let _, out =
+        let ctx, out =
           gtranslate_adt_fields ~project_borrows:true
             (fun ~filter ctx v ->
               let ctx, pat = to_pat ~filter ctx v in
@@ -402,9 +398,7 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
               mk_adt_pattern ty variant_id fields)
             mk_simpl_tuple_pattern ~filter ctx output output.ty field_values
         in
-        match out with
-        | None -> (ctx, None)
-        | Some (_, x) -> (ctx, Some x)
+        (ctx, Option.map snd out)
       end
     | V.EIgnored _ -> (ctx, None)
   in
@@ -422,6 +416,11 @@ let tepat_to_tpattern (ctx : bs_ctx)
     (pat : V.tepat) : bs_ctx * tpattern =
   let span = ctx.span in
   let type_infos = ctx.type_ctx.type_infos in
+  let keep_region (r : T.region) =
+    match r with
+    | T.RVar (Free rid) -> T.RegionId.Set.mem rid rids
+    | _ -> false
+  in
   let rec to_pat ~(filter : bool) (ctx : bs_ctx) (pat : V.tepat) :
       bs_ctx * tpattern option =
     match pat.epat with
@@ -431,38 +430,34 @@ let tepat_to_tpattern (ctx : bs_ctx)
     | V.PBound ->
         (* Binders should have been opened *)
         [%internal_error] span
-    | V.PAdt (variant_id, fields) ->
-        let filter =
-          match compute_tevalue_proj_kind span type_infos rids input with
-          | BorrowProj _ -> [%internal_error] span
-          | UnknownProj -> filter
-          | LoanProj BMut ->
-              [%sanity_check] span (not filter);
-              false
-          | LoanProj BShared -> filter
+    | V.PAdt (variant_id, fields) -> begin
+        (* Note that the [project_borrows] field doesn't matter *)
+        let project_borrows = true in
+        let compute_proj_kind (pat : V.tepat) : tavalue_kind =
+          if
+            TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
+              keep_region pat.epat_ty
+          then BorrowProj BMut
+          else BorrowProj BShared
         in
-        (* If we filter then ignore the value, otherwise translate everything *)
-        if filter then (ctx, false, None)
-        else
-          let ctx, fields =
-            List.fold_left_map
-              (fun ctx f ->
-                let ctx, can_fail, f = to_texpr ~filter rids ctx f in
-                (ctx, (can_fail, f)))
-              ctx field_values
-          in
-          let can_fail, fields = List.split fields in
-          let fields : texpr list =
-            List.filter_map
-              (fun (x : texpr option) ->
-                [%unwrap_with_span] span x "Unexpected")
-              fields
-          in
-          let ty = translate_fwd_ty (Some span) type_infos input.ty in
-          let can_fail = List.exists (fun x -> x) can_fail in
-          let e = mk_adt_texpr span ty variant_id fields in
-          [%sanity_check] span (not can_fail);
-          (ctx, can_fail, Some e)
+        let ctx, out =
+          gtranslate_adt_fields ~project_borrows
+            (fun ~filter ctx v ->
+              let ctx, pat = to_pat ~filter ctx v in
+              (ctx, Option.map (fun x -> ((), x)) pat))
+            compute_proj_kind
+            (fun fields ->
+              let ty =
+                translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos
+                  pat.epat_ty
+              in
+              mk_adt_pattern ty variant_id fields)
+            mk_simpl_tuple_pattern ~filter ctx pat pat.epat_ty fields
+        in
+        let out = Option.map snd out in
+        raise (Failure "TODO: register the ignored free variables");
+        (ctx, out)
+      end
     | V.PIgnored -> (ctx, None)
   in
   ()
