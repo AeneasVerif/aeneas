@@ -268,17 +268,18 @@ let compute_tavalue_proj_kind span type_infos (abs_regions : T.RegionId.Set.t)
 
 (** A smaller helper which allows us to isolate the logic by which we handle
     ADTs. *)
-let gtranslate_adt_fields
+let gtranslate_adt_fields ~(project_borrows : bool)
     (translate : filter:bool -> bs_ctx -> 'v -> bs_ctx * ('info * 'o) option)
     (compute_proj_kind : 'v -> tavalue_kind) (mk_adt : 'o list -> 'o)
     (mk_tuple : 'o list -> 'o) ~(filter : bool) (ctx : bs_ctx) (av : 'v)
     (av_ty : T.ty) (fields : 'v list) : bs_ctx * ('info list * 'o) option =
+  let span = ctx.span in
   (* We do not do the same thing depending on whether we visit a tuple
      or a "regular" ADT *)
   let adt_id, _ = TypesUtils.ty_as_adt av_ty in
   (* Check if the ADT contains borrows *)
-  match compute_proj_kind av with
-  | BorrowProj _ -> [%craise] ctx.span "Unreachable"
+  let proj_kind = compute_proj_kind av in
+  match proj_kind with
   | UnknownProj ->
       (* If we filter: ignore the value.
          Otherwise, translate everything. *)
@@ -294,7 +295,14 @@ let gtranslate_adt_fields
               (ctx, Some (infos, mk_adt fields))
           | TTuple -> (ctx, Some (infos, mk_tuple fields))
         end
-  | LoanProj borrow_kind -> begin
+  | BorrowProj borrow_kind | LoanProj borrow_kind -> begin
+      begin
+        match proj_kind with
+        | BorrowProj _ -> [%sanity_check] span project_borrows
+        | LoanProj _ -> [%sanity_check] span (not project_borrows)
+        | _ -> [%internal_error] span
+      end;
+
       (* Translate the field values *)
       let ctx, info_fields =
         let filter =
@@ -317,7 +325,7 @@ let gtranslate_adt_fields
           match info_fields with
           | [ None ] -> (ctx, None)
           | [ Some (info, v) ] -> (ctx, Some ([ info ], v))
-          | _ -> [%craise] ctx.span "Unreachable"
+          | _ -> [%craise] span "Unreachable"
         end
       | TBuiltin (TArray | TSlice | TStr) ->
           (* This case is unreachable:
@@ -325,7 +333,7 @@ let gtranslate_adt_fields
                we need to go through an index function
              - for strings: the [str] is not polymorphic.
           *)
-          [%craise] ctx.span "Unreachable"
+          [%craise] span "Unreachable"
       | TTuple ->
           (* If the filtering is activated, we ignore the fields which do not
              consume values (i.e., which do not contain ended mutable borrows). *)
@@ -399,7 +407,7 @@ and adt_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
     (ectx : C.eval_ctx) (abs_regions : T.RegionId.Set.t) (av : V.tavalue)
     (adt_v : V.adt_avalue) : texpr option =
   let _, out =
-    gtranslate_adt_fields
+    gtranslate_adt_fields ~project_borrows:false
       (fun ~filter ctx v ->
         ( ctx,
           match tavalue_to_consumed_aux ~filter ctx ectx abs_regions v with
@@ -622,7 +630,7 @@ and adt_avalue_to_given_back_aux ~(filter : bool)
     (abs_regions : T.RegionId.Set.t) (av : V.tavalue) (adt_v : V.adt_avalue)
     (ctx : bs_ctx) : bs_ctx * tpattern option =
   let ctx, out =
-    gtranslate_adt_fields
+    gtranslate_adt_fields ~project_borrows:true
       (fun ~filter ctx v ->
         let ctx, v = tavalue_to_given_back_aux ~filter abs_regions None v ctx in
         match v with

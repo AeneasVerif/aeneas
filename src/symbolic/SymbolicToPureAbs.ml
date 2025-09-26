@@ -9,83 +9,6 @@ open SymbolicToPureTypes
 open SymbolicToPureValues
 module NormSymbProjMap = InterpreterBorrowsCore.NormSymbProjMap
 
-(** A smaller helper which allows us to isolate the logic by which we handle
-    ADTs. *)
-let gtranslate_adt_fields
-    (translate : filter:bool -> bs_ctx -> 'v -> bs_ctx * ('info * 'o) option)
-    (compute_proj_kind : 'v -> tavalue_kind) (mk_adt : 'o list -> 'o)
-    (mk_tuple : 'o list -> 'o) ~(filter : bool) (ctx : bs_ctx) (av : 'v)
-    (av_ty : T.ty) (fields : 'v list) : bs_ctx * ('info list * 'o) option =
-  (* We do not do the same thing depending on whether we visit a tuple
-     or a "regular" ADT *)
-  let adt_id, _ = TypesUtils.ty_as_adt av_ty in
-  (* Check if the ADT contains borrows *)
-  match compute_proj_kind av with
-  | BorrowProj _ -> [%craise] ctx.span "Unreachable"
-  | UnknownProj ->
-      (* If we filter: ignore the value.
-         Otherwise, translate everything. *)
-      if filter then (ctx, None)
-      else
-        let ctx, info_fields =
-          List.fold_left_map (translate ~filter) ctx fields
-        in
-        let infos, fields = List.split (List.map Option.get info_fields) in
-        begin
-          match adt_id with
-          | TAdtId _ | TBuiltin (TBox | TArray | TSlice | TStr) ->
-              (ctx, Some (infos, mk_adt fields))
-          | TTuple -> (ctx, Some (infos, mk_tuple fields))
-        end
-  | LoanProj borrow_kind -> begin
-      (* Translate the field values *)
-      let ctx, info_fields =
-        let filter =
-          filter
-          &&
-          match adt_id with
-          | TTuple | TBuiltin TBox -> true
-          | TBuiltin _ | TAdtId _ -> borrow_kind = BShared
-        in
-        List.fold_left_map (translate ~filter) ctx fields
-      in
-      match adt_id with
-      | TAdtId _ ->
-          (* We should preserve all the fields *)
-          let infos, fields = List.split (List.map Option.get info_fields) in
-          let pat = mk_adt fields in
-          (ctx, Some (infos, pat))
-      | TBuiltin TBox -> begin
-          (* The box type becomes the identity in the translation *)
-          match info_fields with
-          | [ None ] -> (ctx, None)
-          | [ Some (info, v) ] -> (ctx, Some ([ info ], v))
-          | _ -> [%craise] ctx.span "Unreachable"
-        end
-      | TBuiltin (TArray | TSlice | TStr) ->
-          (* This case is unreachable:
-             - for array and slice: in order to access one of their elements
-               we need to go through an index function
-             - for strings: the [str] is not polymorphic.
-          *)
-          [%craise] ctx.span "Unreachable"
-      | TTuple ->
-          (* If the filtering is activated, we ignore the fields which do not
-             consume values (i.e., which do not contain ended mutable borrows). *)
-          if filter then
-            let info_fields = List.filter_map (fun x -> x) info_fields in
-            if info_fields = [] then (ctx, None)
-            else
-              (* Note that if there is exactly one field value,
-               * [mk_simpl_tuple_rvalue] is the identity *)
-              let info, fields = List.split info_fields in
-              (ctx, Some (info, mk_tuple fields))
-          else
-            (* If we do not filter the fields, all the values should be [Some ...] *)
-            let infos, fields = List.split (List.map Option.get info_fields) in
-            (ctx, Some (infos, mk_tuple fields))
-    end
-
 (** Explore an abstraction value and compute the type of the value consumed upon
     ending the loans. *)
 let rec tavalue_to_consumed_ty_aux ~(filter : bool) (ctx : bs_ctx)
@@ -113,7 +36,7 @@ and adt_avalue_to_consumed_ty_aux ~(filter : bool) (ctx : bs_ctx)
     (abs_regions : T.RegionId.Set.t) (av : V.tavalue) (adt_v : V.adt_avalue) :
     ty option =
   let _, out =
-    gtranslate_adt_fields
+    gtranslate_adt_fields ~project_borrows:false
       (fun ~filter ctx v ->
         ( ctx,
           match tavalue_to_consumed_ty_aux ~filter ctx abs_regions v with
@@ -202,7 +125,7 @@ and adt_avalue_to_given_back_ty_aux ~(filter : bool)
     (abs_regions : T.RegionId.Set.t) (av : V.tavalue) (adt_v : V.adt_avalue)
     (ctx : bs_ctx) : ty option =
   let _, out =
-    gtranslate_adt_fields
+    gtranslate_adt_fields ~project_borrows:true
       (fun ~filter ctx v ->
         ( ctx,
           match tavalue_to_given_back_ty_aux ~filter ctx abs_regions v with
@@ -463,7 +386,7 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
         end
     | V.EAdt { variant_id; field_values } -> begin
         let _, out =
-          gtranslate_adt_fields
+          gtranslate_adt_fields ~project_borrows:true
             (fun ~filter ctx v ->
               let ctx, pat = to_pat ~filter ctx v in
               ( ctx,
@@ -675,7 +598,7 @@ let rec einput_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx)
         end
     | V.EAdt { variant_id; field_values } -> begin
         let ctx, out =
-          gtranslate_adt_fields
+          gtranslate_adt_fields ~project_borrows:false
             (fun ~filter ctx v ->
               let ctx, can_fail, e = to_texpr ~filter rids ctx v in
               (ctx, Option.map (fun x -> (can_fail, x)) e))
