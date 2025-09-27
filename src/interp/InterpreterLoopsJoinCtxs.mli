@@ -274,7 +274,10 @@ val loop_join_origin_with_continue_ctxs :
       point (the source context) and which must be instantiated during the match
       (this is the list of input parameters of the loop).
     - [fixed_ids]
-    - [src_ctx] *)
+    - [src_ctx]
+
+    Outputs: the first context is the source context, the second context is the
+    (potentially updated) target context. *)
 val loop_match_ctx_with_target :
   config ->
   Meta.span ->
@@ -283,7 +286,7 @@ val loop_match_ctx_with_target :
   ids_sets ->
   eval_ctx ->
   eval_ctx ->
-  (eval_ctx * tvalue SymbolicValueId.Map.t * abs AbstractionId.Map.t)
+  (eval_ctx * eval_ctx * tvalue SymbolicValueId.Map.t * abs AbstractionId.Map.t)
   * (SymbolicAst.expr -> SymbolicAst.expr)
 
 val loop_join_break_ctxs :
@@ -297,5 +300,5 @@ val loop_match_break_ctx_with_target :
   ids_sets ->
   eval_ctx ->
   eval_ctx ->
-  (eval_ctx * tvalue SymbolicValueId.Map.t * abs AbstractionId.Map.t)
+  (eval_ctx * eval_ctx * tvalue SymbolicValueId.Map.t * abs AbstractionId.Map.t)
   * (SymbolicAst.expr -> SymbolicAst.expr)

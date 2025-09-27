@@ -1412,7 +1412,10 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
 let loop_match_ctx_with_target (config : config) (span : Meta.span)
     (loop_id : LoopId.id) (fp_input_svalues : SymbolicValueId.id list)
     (fixed_ids : ids_sets) (src_ctx : eval_ctx) (tgt_ctx : eval_ctx) :
-    (eval_ctx * tvalue SymbolicValueId.Map.t * abs AbstractionId.Map.t)
+    (eval_ctx
+    * eval_ctx
+    * tvalue SymbolicValueId.Map.t
+    * abs AbstractionId.Map.t)
     * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Debug *)
   [%ltrace
@@ -1597,12 +1600,15 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
   Invariants.check_invariants span joined_ctx;
 
   (* We continue with the *fixed-point* context *)
-  ((src_ctx, input_values, input_abs), cc)
+  ((src_ctx, tgt_ctx, input_values, input_abs), cc)
 
 let loop_match_break_ctx_with_target (config : config) (span : Meta.span)
     (loop_id : LoopId.id) (fp_input_svalues : SymbolicValueId.id list)
     (fixed_ids : ids_sets) (src_ctx : eval_ctx) (tgt_ctx : eval_ctx) :
-    (eval_ctx * tvalue SymbolicValueId.Map.t * abs AbstractionId.Map.t)
+    (eval_ctx
+    * eval_ctx
+    * tvalue SymbolicValueId.Map.t
+    * abs AbstractionId.Map.t)
     * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Debug *)
   [%ltrace
@@ -1692,7 +1698,7 @@ let loop_match_break_ctx_with_target (config : config) (span : Meta.span)
             input_abs];
 
       (* We continue with the *break* context *)
-      ((src_ctx, input_values, input_abs), fun e -> e)
+      ((src_ctx, tgt_ctx, input_values, input_abs), fun e -> e)
   | _ ->
       [%ltrace "Match not successful"];
 

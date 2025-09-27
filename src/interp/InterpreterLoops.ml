@@ -79,7 +79,10 @@ let eval_loop_concrete (span : Meta.span) (eval_loop_body : stl_cm_fun) :
 let eval_loop_symbolic_apply_loop (config : config) (span : span)
     (loop_id : LoopId.id) (init_ctx : eval_ctx) (fixed_ids : ids_sets)
     (fp_ctx : eval_ctx) (fp_input_svalues : SymbolicValueId.id list) :
-    (eval_ctx * tvalue SymbolicValueId.Map.t * abs AbstractionId.Map.t)
+    (eval_ctx
+    * eval_ctx
+    * tvalue SymbolicValueId.Map.t
+    * abs AbstractionId.Map.t)
     * (SymbolicAst.expr -> SymbolicAst.expr) =
   [%ltrace
     "about to reorganize the original context to match the fixed-point ctx \
@@ -106,7 +109,7 @@ let eval_loop_symbolic_apply_loop (config : config) (span : span)
   (* Compute the end expression, that is the expresion corresponding to the
      end of the function where we call the loop (for now, when calling a loop
      we never get out) *)
-  let (ctx, input_values, input_abs), cc =
+  let (ctx, tgt_ctx, input_values, input_abs), cc =
     comp cf_prepare
       (loop_match_ctx_with_target config span loop_id fp_input_svalues fixed_ids
          fp_ctx ctx)
@@ -114,18 +117,29 @@ let eval_loop_symbolic_apply_loop (config : config) (span : span)
 
   [%ltrace "Resulting context:\n- ctx" ^ eval_ctx_to_string ctx];
 
-  ((ctx, input_values, input_abs), cc)
+  ((ctx, tgt_ctx, input_values, input_abs), cc)
 
 (** Auxiliary function for {!eval_loop_symbolic}.
 
     Synthesize the body of the loop. *)
 let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
     (eval_loop_body : stl_cm_fun) (loop_id : LoopId.id) (fixed_ids : ids_sets)
-    (fp_ctx : eval_ctx) (fp_input_svalues : SymbolicValueId.id list)
-    (break_ctx : eval_ctx) (break_input_svalues : SymbolicValueId.id list) :
-    SA.expr =
+    (fp_ctx : eval_ctx) (fp_input_abs : AbstractionId.id list)
+    (fp_input_svalues : SymbolicValueId.id list) (break_ctx : eval_ctx)
+    (break_input_abs : AbstractionId.id list)
+    (break_input_svalues : SymbolicValueId.id list) : SA.expr =
   (* First, evaluate the loop body starting from the **fixed-point** context *)
   let ctx_resl, cf_loop = eval_loop_body fp_ctx in
+
+  (* Small helpers *)
+  let reorder_input_abs (map : abs AbstractionId.Map.t)
+      (absl : abstraction_id list) : abs list =
+    List.map (fun id -> AbstractionId.Map.find id map) absl
+  in
+  let reorder_input_values (map : tvalue SymbolicValueId.Map.t)
+      (values : symbolic_value_id list) : tvalue list =
+    List.map (fun id -> SymbolicValueId.Map.find id map) values
+  in
 
   (* Then, do a special treatment of the break and continue cases.
      For now, we forbid having breaks in loops (and eliminate breaks
@@ -147,11 +161,16 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
           ^ eval_ctx_to_string ~span:(Some span) break_ctx
           ^ "\n\n-tgt ctx (ctx at this break):\n"
           ^ eval_ctx_to_string ~span:(Some span) ctx];
-        let (_ctx, input_values, input_abs), cc =
+        let (_ctx, tgt_ctx, input_values, input_abs), cc =
           loop_match_break_ctx_with_target config span loop_id
             break_input_svalues fixed_ids break_ctx ctx
         in
-        cc (SA.LoopBreak (loop_id, input_values, input_abs))
+        let input_values =
+          reorder_input_values input_values break_input_svalues
+        in
+        let input_abs = reorder_input_abs input_abs break_input_abs in
+        (* Reorder the input values and the abstractions *)
+        cc (SA.LoopBreak (tgt_ctx, loop_id, input_values, input_abs))
     | Continue i ->
         (* We don't support nested loops for now *)
         [%cassert] span (i = 0) "Nested loops are not supported yet";
@@ -162,15 +181,15 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
           ^ eval_ctx_to_string ~span:(Some span) fp_ctx
           ^ "\n\n-tgt ctx (ctx at continue):\n"
           ^ eval_ctx_to_string ~span:(Some span) ctx];
-        let (_ctx, input_values, input_abs), cc =
+        let (_ctx, tgt_ctx, input_values, input_abs), cc =
           loop_match_ctx_with_target config span loop_id fp_input_svalues
             fixed_ids fp_ctx ctx
         in
-        cc (SA.LoopContinue (loop_id, input_values, input_abs))
+        let input_values = reorder_input_values input_values fp_input_svalues in
+        let input_abs = reorder_input_abs input_abs fp_input_abs in
+        cc (SA.LoopContinue (tgt_ctx, loop_id, input_values, input_abs))
     | Unit ->
-        (* For why we can't get [Unit], see the comments inside {!eval_loop_concrete}.
-           For [EndEnterLoop] and [EndContinue]: we don't support nested loops for now.
-        *)
+        (* For why we can't get [Unit], see the comments inside {!eval_loop_concrete}. *)
         [%craise] span "Unreachable"
   in
 
@@ -192,8 +211,8 @@ let eval_loop_symbolic (config : config) (span : span)
   let fp_ctx, fixed_ids, rg_to_abs =
     compute_loop_entry_fixed_point config span loop_id eval_loop_body ctx
   in
-  let input_abs_list = RegionGroupId.Map.values rg_to_abs in
-  let input_abs_list = List.map (ctx_lookup_abs fp_ctx) input_abs_list in
+  let input_abs_ids_list = RegionGroupId.Map.values rg_to_abs in
+  let input_abs_list = List.map (ctx_lookup_abs fp_ctx) input_abs_ids_list in
 
   (* Compute the context at the breaks *)
   let break_info =
@@ -204,6 +223,7 @@ let eval_loop_symbolic (config : config) (span : span)
     (Option.is_some break_info)
     "(Infinite) loops which do not contain breaks are not supported yet";
   let break_ctx, break_abs = Option.get break_info in
+  let break_input_abs_ids = List.map (fun (a : abs) -> a.abs_id) break_abs in
 
   (* Debug *)
   [%ltrace
@@ -240,7 +260,8 @@ let eval_loop_symbolic (config : config) (span : span)
         (List.map (symbolic_value_to_string ctx) break_input_svalues)];
 
   (* "Call" the loop *)
-  let (_ctx_after_loop, input_values, input_abs), cf_before_loop =
+  let (_ctx_after_loop, entry_loop_ctx, input_values, input_abs), cf_before_loop
+      =
     eval_loop_symbolic_apply_loop config span loop_id ctx fixed_ids fp_ctx
       fp_input_svalue_ids
   in
@@ -250,7 +271,8 @@ let eval_loop_symbolic (config : config) (span : span)
   (* Synthesize the loop body *)
   let loop_body =
     eval_loop_symbolic_synthesize_loop_body config span eval_loop_body loop_id
-      fixed_ids fp_ctx fp_input_svalue_ids break_ctx break_input_svalue_ids
+      fixed_ids fp_ctx input_abs_ids_list fp_input_svalue_ids break_ctx
+      break_input_abs_ids break_input_svalue_ids
   in
 
   [%ltrace
@@ -325,7 +347,7 @@ let eval_loop_symbolic (config : config) (span : span)
           loop_expr = loop_body;
           next_expr;
           span;
-          ctx;
+          ctx = entry_loop_ctx;
         }
     in
     cf_before_loop loop_expr

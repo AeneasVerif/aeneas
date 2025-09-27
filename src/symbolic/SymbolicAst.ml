@@ -210,8 +210,9 @@ type expr =
 
           TODO: because we store the returned value, the Return case may not be
           useful anymore? *)
-  | LoopContinue of loop_id * tvalue symbolic_value_id_map * abs abs_id_map
-  | LoopBreak of loop_id * tvalue symbolic_value_id_map * abs abs_id_map
+  | LoopContinue of
+      (Contexts.eval_ctx[@opaque]) * loop_id * tvalue list * abs list
+  | LoopBreak of (Contexts.eval_ctx[@opaque]) * loop_id * tvalue list * abs list
   | Loop of loop  (** Loop: call to a loop *)
   | Meta of (espan[@opaque]) * expr  (** Meta information *)
   | Error of Meta.span option * string

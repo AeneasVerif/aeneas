@@ -110,9 +110,9 @@ let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
       ^ fwd_end ^ "\n" ^ indent1 ^ "backs =\n" ^ indent1 ^ backs ^ "\n" ^ indent
       ^ "}"
   | Loop loop -> loop_to_string env indent indent_incr loop
-  | LoopContinue (loop_id, _values, _abs) ->
+  | LoopContinue (_, loop_id, _values, _abs) ->
       indent ^ "loop_continue (" ^ LoopId.to_string loop_id ^ ")"
-  | LoopBreak (loop_id, _values, _abs) ->
+  | LoopBreak (_, loop_id, _values, _abs) ->
       indent ^ "loop_break (" ^ LoopId.to_string loop_id ^ ")"
   | Meta (_, next) -> expr_to_string env indent indent_incr next
   | Error (_, error) -> indent ^ "ERROR(" ^ error ^ ")"

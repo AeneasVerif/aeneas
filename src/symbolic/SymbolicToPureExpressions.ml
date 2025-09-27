@@ -96,13 +96,13 @@ let mk_emeta_symbolic_assignments (vars : fvar list) (values : texpr list)
 
     We explore the LLBC context and look in which bindings the symbolic values
     appear: we use this information to derive naming information. *)
-let eval_ctx_to_symbolic_assignments_info (ctx : bs_ctx)
-    (ectx : Contexts.eval_ctx) : (fvar * string) list =
+let eval_ctx_to_symbolic_assignments_info (ctx : bs_ctx) (ectx : C.eval_ctx) :
+    (fvar * string) list =
   let info : (fvar * string) list ref = ref [] in
   let push_info fv name = info := (fv, name) :: !info in
   let visitor =
     object (self)
-      inherit [_] Contexts.iter_eval_ctx
+      inherit [_] C.iter_eval_ctx
 
       method! visit_env_elem _ ee =
         match ee with
@@ -295,8 +295,12 @@ let rec translate_expr (e : S.expr) (ctx : bs_ctx) : texpr =
       translate_forward_end return_value ectx loop_sid_maps e back_e ctx
   | Loop loop -> translate_loop loop ctx
   | Error (span, msg) -> translate_error span msg
-  | LoopContinue (loop_id, input_values, input_abs) -> raise (Failure "TODO")
-  | LoopBreak (loop_id, input_values, input_abs) -> raise (Failure "TODO")
+  | LoopContinue (ectx, loop_id, input_values, input_abs) ->
+      translate_continue_break ctx ~continue:true ectx loop_id input_values
+        input_abs
+  | LoopBreak (ectx, loop_id, input_values, input_abs) ->
+      translate_continue_break ctx ~continue:false ectx loop_id input_values
+        input_abs
 
 and translate_panic (ctx : bs_ctx) : texpr = Option.get ctx.mk_panic
 
@@ -1633,7 +1637,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpr =
     List.map (tvalue_to_texpr ctx loop.ctx) input_values
   in
   (* Introduce free variables for the inputs *)
-  let bind_inputs (ctx : bs_ctx) (ectx : Contexts.eval_ctx) (absl : V.abs list)
+  let bind_inputs (ctx : bs_ctx) (ectx : C.eval_ctx) (absl : V.abs list)
       (values : V.symbolic_value list) : bs_ctx * tpattern list * tpattern list
       =
     let ctx, absl =
@@ -1703,16 +1707,27 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpr =
     in
 
     (* Update the [mk_panic] and [mk_result] functions *)
+    let continue_ty = List.map (fun (e : texpr) -> e.ty) inputs in
+    let continue_ty = mk_simpl_tuple_ty continue_ty in
+    let break_ty = output.ty in
+    let output_ty = mk_loop_result_ty continue_ty break_ty in
     let mk_panic =
-      mk_result_fail_texpr_with_error_id ctx.span error_failure_id output.ty
+      mk_result_fail_texpr_with_error_id ctx.span error_failure_id output_ty
     in
-    let mk_return ctx v =
-      match v with
-      | None -> [%internal_error] loop.span
-      | Some output -> mk_result_ok_texpr ctx.span output
+    let mk_continue ctx output =
+      mk_result_ok_texpr ctx.span (mk_continue_texpr ctx.span output break_ty)
+    in
+    let mk_break ctx output =
+      mk_result_ok_texpr ctx.span (mk_break_texpr ctx.span continue_ty output)
     in
     let ctx =
-      { ctx with mk_panic = Some mk_panic; mk_return = Some mk_return }
+      {
+        ctx with
+        mk_panic = Some mk_panic;
+        mk_return = None;
+        mk_continue = Some mk_continue;
+        mk_break = Some mk_break;
+      }
     in
 
     (* Translate the body *)
@@ -1750,6 +1765,15 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpr =
 
   (* Create the let-binding *)
   mk_closed_checked_let __FILE__ __LINE__ ctx true output loop_e next_e
+
+and translate_continue_break (ctx : bs_ctx) ~(continue : bool)
+    (ectx : C.eval_ctx) (_loop_id : V.loop_id) (input_values : V.tvalue list)
+    (input_abs : V.abs list) : texpr =
+  let conts = List.filter_map (translate_abs_to_cont ctx ectx) input_abs in
+  let values = List.map (tvalue_to_texpr ctx ectx) input_values in
+  let output = mk_simpl_tuple_texpr ctx.span (conts @ values) in
+  if continue then Option.get ctx.mk_continue ctx output
+  else Option.get ctx.mk_break ctx output
 
 and translate_espan (span : S.espan) (e : S.expr) (ctx : bs_ctx) : texpr =
   let next_e = translate_expr e ctx in
