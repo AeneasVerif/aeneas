@@ -213,6 +213,9 @@ let builtin_types () : Pure.builtin_type_info list =
         mk_type "core::result::Result"
           ~kind:(KEnum [ ("Ok", None); ("Err", None) ])
           ();
+        mk_type "core::result::Sum"
+          ~kind:(KEnum [ ("Left", None); ("Right", None) ])
+          ();
         mk_type "core::fmt::Error" ();
         mk_type "core::array::TryFromSliceError" ();
         mk_type "core::ops::range::RangeFrom"

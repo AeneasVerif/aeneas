@@ -239,6 +239,8 @@ type bs_ctx = {
       (** Small helper: translate a [fail] expression.
 
           We initialize this at [None]. *)
+  mk_continue : (bs_ctx -> texpr -> texpr) option;
+  mk_break : (bs_ctx -> texpr -> texpr) option;
   mut_borrow_to_consumed : texpr V.BorrowId.Map.t;
       (** A map from mutable borrows consumed by region abstractions to consumed
           values.

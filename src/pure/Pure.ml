@@ -87,6 +87,12 @@ let reset_fvar_id_counter () = fvar_id_counter := FVarId.generator_zero
 type builtin_ty =
   | TState
   | TResult
+  | TSum  (** sum type with two variants: left and right *)
+  | TLoopResult
+      (** A continue or a break.
+
+          We introduce this provisionally: we eliminate it during a micro-pass
+      *)
   | TError
   | TFuel
   | TArray
@@ -213,6 +219,10 @@ let result_ok_id = VariantId.of_int 0
 let result_fail_id = VariantId.of_int 1
 let option_some_id = T.option_some_id
 let option_none_id = T.option_none_id
+let sum_left_id = VariantId.of_int 0
+let sum_right_id = VariantId.of_int 1
+let loop_result_continue_id = VariantId.of_int 0
+let loop_result_break_id = VariantId.of_int 1
 let error_failure_id = VariantId.of_int 0
 let error_out_of_fuel_id = VariantId.of_int 1
 

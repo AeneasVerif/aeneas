@@ -849,6 +849,28 @@ let mk_result_ok_pattern (v : tpattern) : tpattern =
   let pat = PAdt { variant_id = Some result_ok_id; fields = [ v ] } in
   { pat; ty }
 
+let mk_sum_ty (left : ty) (right : ty) : ty =
+  TAdt (TBuiltin TSum, mk_generic_args_from_types [ left; right ])
+
+let mk_sum_left_texpr (span : span) (left : texpr) (right : ty) : texpr =
+  let ty = mk_sum_ty left.ty right in
+  mk_adt_texpr span ty (Some sum_left_id) [ left ]
+
+let mk_sum_right_texpr (span : span) (left : ty) (right : texpr) : texpr =
+  let ty = mk_sum_ty left right.ty in
+  mk_adt_texpr span ty (Some sum_right_id) [ right ]
+
+let mk_loop_result_ty (continue : ty) (break : ty) : ty =
+  TAdt (TBuiltin TLoopResult, mk_generic_args_from_types [ continue; break ])
+
+let mk_continue_texpr (span : span) (continue : texpr) (break : ty) : texpr =
+  let ty = mk_loop_result_ty continue.ty break in
+  mk_adt_texpr span ty (Some loop_result_continue_id) [ continue ]
+
+let mk_break_texpr (span : span) (continue : ty) (break : texpr) : texpr =
+  let ty = mk_loop_result_ty continue break.ty in
+  mk_adt_texpr span ty (Some loop_result_continue_id) [ break ]
+
 let opt_unmeta_mplace (e : texpr) : mplace option * texpr =
   match e.e with
   | Meta (MPlace mp, e) -> (Some mp, e)

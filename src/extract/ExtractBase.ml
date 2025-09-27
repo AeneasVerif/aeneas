@@ -1864,6 +1864,8 @@ let ctx_compute_var_basename (span : Meta.span) (ctx : extraction_ctx)
           | TBuiltin TResult -> "r"
           | TBuiltin TError -> ConstStrings.error_basename
           | TBuiltin TFuel -> ConstStrings.fuel_basename
+          | TBuiltin TSum -> "s"
+          | TBuiltin TLoopResult -> "r"
           | TBuiltin TArray -> "a"
           | TBuiltin TSlice -> "s"
           | TBuiltin TStr -> "s"
