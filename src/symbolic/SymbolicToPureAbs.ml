@@ -1,7 +1,5 @@
-open LlbcAstUtils
 open Pure
 open PureUtils
-open FunsAnalysis
 open TypesAnalysis
 open InterpreterUtils
 open SymbolicToPureCore
@@ -360,7 +358,7 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
           | V.EProjBorrows { proj = _; loans } ->
               [%sanity_check] span (loans = []);
               (* Case disjunction depending on whether we actually need to give back
-             something or not *)
+                 something or not *)
               if
                 TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
                   keep_region output.ty
@@ -461,28 +459,28 @@ let tepat_to_tpattern (ctx : bs_ctx)
   in
   (ctx, pat)
 
-module NormSymbProjMap = InterpreterBorrowsCore.NormSymbProjMap
-
-(** Map inputs (i.e., (symbolic) loans) to free variables introduced when
-    analyzing the *avalues* of the abstraction (not the *evalues* ). We use this
-    in order to control the order in which we bind the inputs (it is fixed by
-    the avalues which act as a signature of the function). *)
-type bound_inputs = {
+(** Map inputs (i.e., (symbolic) loans) or ouputs (i.e., (symbolic) borrows) to
+    free variables introduced when analyzing the *avalues* of the abstraction
+    (not the *evalues* ). We use this in order to control the order in which we
+    bind the inputs (it is fixed by the avalues which act as a signature of the
+    function). *)
+type bound_borrows_loans = {
   concrete : texpr V.BorrowId.Map.t;
   symbolic : texpr NormSymbProjMap.t;
 }
+
+let empty_bound_borrows_loans : bound_borrows_loans =
+  { concrete = V.BorrowId.Map.empty; symbolic = NormSymbProjMap.empty }
 
 (** The boolean is [can_fail] (i.e., does the expression live in the error
     monad?).
 
     [bound_inputs]: see the doc of [bound_inputs] *)
-let rec einput_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx)
-    (rids : T.RegionId.Set.t) (bound_inputs : bound_inputs) (input : V.tevalue)
-    : bs_ctx * bool * texpr option =
+let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
+    (bound_inputs : bound_borrows_loans)
+    (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref) (input : V.tevalue) :
+    bs_ctx * bool * texpr =
   let span = ctx.span in
-  (* Accumulating the inputs in the order we find them: we will use this
-     to introduce the variables bound by the continuation *)
-  let fvar_to_texpr = ref V.AbsFVarId.Map.empty in
   let rec to_texpr ~(filter : bool) (rids : T.RegionId.Set.t) (ctx : bs_ctx)
       (input : V.tevalue) : bs_ctx * bool * texpr option =
     match input.value with
@@ -627,12 +625,10 @@ let rec einput_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx)
               InterpreterBorrowsCore.normalize_proj_ty rids proj_ty
             in
             let e =
-              [%unwrap_with_span] span
-                (NormSymbProjMap.find_opt { sv_id; norm_proj_ty }
-                   bound_inputs.symbolic)
-                "Unexpected"
+              NormSymbProjMap.find_opt { sv_id; norm_proj_ty }
+                bound_inputs.symbolic
             in
-            (ctx, false, Some e)
+            (ctx, false, e)
         | V.EProjBorrows _
         | V.EEndedProjLoans _
         | V.EEndedProjBorrows _
@@ -644,23 +640,207 @@ let rec einput_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx)
     | V.EIgnored _ -> (ctx, false, None)
     | V.EBottom -> [%internal_error] span
   in
-  to_texpr ~filter:false rids ctx input
+  let ctx, can_fail, e = to_texpr ~filter:false rids ctx input in
+  let e =
+    match e with
+    | None -> mk_unit_texpr
+    | Some e -> e
+  in
+  (ctx, can_fail, e)
+
+(** Go through some avalues to register the inputs (i.e., the borrows).
+
+    We need this to fix the order of the *inputs*: the *avalues* act as a
+    function signature, while the order of the borrows inside the *evalues* is
+    arbitrary. *)
+let register_inputs (ctx : bs_ctx) (rids : T.RegionId.Set.t)
+    (avl : V.tavalue list) : bound_borrows_loans * fvar list =
+  let span = ctx.span in
+  let type_infos = ctx.type_ctx.type_infos in
+  let concrete = ref V.BorrowId.Map.empty in
+  let symbolic = ref NormSymbProjMap.empty in
+  let ctx = ref ctx in
+  let fvars = ref [] in
+  let keep_region (r : T.region) =
+    match r with
+    | T.RVar (Free rid) -> T.RegionId.Set.mem rid rids
+    | _ -> false
+  in
+  let fresh_fvar (ty : T.ty) : texpr =
+    let ctx', fvar = fresh_var_llbc_ty None ty !ctx in
+    ctx := ctx';
+    fvars := fvar :: !fvars;
+    mk_texpr_from_fvar fvar
+  in
+  let add_symbolic (sv_id : SymbolicValueId.id) (proj_ty : T.ty) : unit =
+    let e = fresh_fvar proj_ty in
+    let norm_proj_ty = InterpreterBorrowsCore.normalize_proj_ty rids proj_ty in
+    symbolic := NormSymbProjMap.add { sv_id; norm_proj_ty } e !symbolic
+  in
+  let add_concrete (bid : V.BorrowId.id) (ty : T.ty) : unit =
+    let e = fresh_fvar ty in
+    concrete := V.BorrowId.Map.add bid e !concrete
+  in
+  let rec register (av : V.tavalue) : unit =
+    match av.value with
+    | V.AAdt { variant_id = _; field_values } -> List.iter register field_values
+    | V.ALoan lc -> (
+        match lc with
+        | V.AMutLoan (pm, bid, child) ->
+            [%sanity_check] span (pm = PNone);
+            add_concrete bid av.ty;
+            register child
+        | V.ASharedLoan (pm, _, _, child) ->
+            [%sanity_check] span (pm = PNone);
+            register child
+        | V.AIgnoredMutLoan (_, child) | V.AIgnoredSharedLoan child ->
+            register child
+        | V.AEndedMutLoan _ | V.AEndedSharedLoan _ | V.AEndedIgnoredMutLoan _ ->
+            [%internal_error] span)
+    | V.ABorrow bc -> (
+        match bc with
+        | V.AMutBorrow (_, _, child) | V.AIgnoredMutBorrow (_, child) ->
+            register child
+        | V.ASharedBorrow (_, _, _)
+        | V.AEndedMutBorrow _
+        | V.AEndedSharedBorrow
+        | V.AEndedIgnoredMutBorrow _ -> [%internal_error] span
+        | V.AProjSharedBorrow _ -> ())
+    | V.ASymbolic (pm, proj) -> (
+        [%sanity_check] span (pm = PNone);
+        match proj with
+        | V.AProjLoans { proj = { sv_id; proj_ty }; consumed; borrows } ->
+            [%sanity_check] span (consumed = []);
+            [%sanity_check] span (borrows = []);
+            if
+              TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
+                keep_region av.ty
+            then add_symbolic sv_id proj_ty
+            else ()
+        | V.AProjBorrows { proj = _; loans } ->
+            [%sanity_check] span (loans = []);
+            ()
+        | V.AEndedProjLoans _ | V.AEndedProjBorrows _ | V.AEmpty ->
+            [%internal_error] span)
+    | V.ABottom | V.AIgnored _ -> ()
+  in
+  List.iter register avl;
+  ({ concrete = !concrete; symbolic = !symbolic }, List.rev !fvars)
+
+(** Given some bound outputs, go through some avalues to sort those outputs in
+    the order given by the avalues.
+
+    The goal is similar to [register_inputs]: we want to use avalues as a
+    function signature. *)
+let register_outputs (ctx : bs_ctx) (bound_outputs : bound_borrows_loans)
+    (rids : T.RegionId.Set.t) (avl : V.tavalue list) : texpr list =
+  let span = ctx.span in
+  let type_infos = ctx.type_ctx.type_infos in
+  let outputs = ref [] in
+  let keep_region (r : T.region) =
+    match r with
+    | T.RVar (Free rid) -> T.RegionId.Set.mem rid rids
+    | _ -> false
+  in
+  let add_symbolic (sv_id : SymbolicValueId.id) (proj_ty : T.ty) : unit =
+    let norm_proj_ty = InterpreterBorrowsCore.normalize_proj_ty rids proj_ty in
+    let e =
+      NormSymbProjMap.find { sv_id; norm_proj_ty } bound_outputs.symbolic
+    in
+    outputs := e :: !outputs
+  in
+  let add_concrete (bid : V.BorrowId.id) : unit =
+    let e = V.BorrowId.Map.find bid bound_outputs.concrete in
+    outputs := e :: !outputs
+  in
+  let rec register (av : V.tavalue) : unit =
+    match av.value with
+    | V.AAdt { variant_id = _; field_values } -> List.iter register field_values
+    | V.ALoan lc -> (
+        match lc with
+        | V.AMutLoan (pm, _, child) | V.ASharedLoan (pm, _, _, child) ->
+            [%sanity_check] span (pm = PNone);
+            register child
+        | V.AIgnoredMutLoan (_, child) | V.AIgnoredSharedLoan child ->
+            register child
+        | V.AEndedMutLoan _ | V.AEndedSharedLoan _ | V.AEndedIgnoredMutLoan _ ->
+            [%internal_error] span)
+    | V.ABorrow bc -> (
+        match bc with
+        | V.AMutBorrow (pm, bid, child) ->
+            [%sanity_check] span (pm = PNone);
+            add_concrete bid;
+            register child
+        | V.AIgnoredMutBorrow (_, child) -> register child
+        | V.ASharedBorrow (_, _, _)
+        | V.AEndedMutBorrow _
+        | V.AEndedSharedBorrow
+        | V.AEndedIgnoredMutBorrow _ -> [%internal_error] span
+        | V.AProjSharedBorrow _ -> ())
+    | V.ASymbolic (pm, proj) -> (
+        [%sanity_check] span (pm = PNone);
+        match proj with
+        | V.AProjLoans { proj = _; consumed; borrows } ->
+            [%sanity_check] span (consumed = []);
+            [%sanity_check] span (borrows = [])
+        | V.AProjBorrows { proj = { sv_id; proj_ty }; loans } ->
+            [%sanity_check] span (loans = []);
+            if
+              TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
+                keep_region av.ty
+            then add_symbolic sv_id proj_ty
+            else ()
+        | V.AEndedProjLoans _ | V.AEndedProjBorrows _ | V.AEmpty ->
+            [%internal_error] span)
+    | V.ABottom | V.AIgnored _ -> ()
+  in
+  List.iter register avl;
+  List.rev !outputs
 
 let abs_cont_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
-    (output : V.tevalue) (input : V.tevalue) : bs_ctx * texpr =
+    (output : V.tevalue) (input : V.tevalue) : bs_ctx * texpr option =
+  let span = ctx.span in
   (* Go through the *avalues* to introduce free variables for the loans:
      we need to do this to fix the order of the *inputs* (the order given
      by the abstraction expression itself is arbitrary)
   *)
+  let bound, inputs = register_inputs ctx abs.regions.owned abs.avalues in
 
   (* Translate the abstraction expression *)
+  let fvar_to_texpr = ref V.AbsFVarId.Map.empty in
+  let ctx, can_fail, input_e =
+    einput_to_texpr ctx ectx abs.regions.owned bound fvar_to_texpr input
+  in
+  [%sanity_check] span (not can_fail);
+  let ctx, pat = eoutput_to_pat ctx fvar_to_texpr abs.regions.owned output in
 
   (* Go through the *avalues* to compute the order of the *outputs*. Same remark
      as with the inputs: we do this to fix the order *)
-  ()
+  let outputs = register_outputs ctx bound abs.regions.owned abs.avalues in
 
-let abs_cont_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
-    (cont : V.abs_cont) : bs_ctx * texpr =
+  if inputs = [] && outputs = [] then (ctx, None)
+  else
+    (* Put everything together *)
+    let output_e = mk_simpl_tuple_texpr span outputs in
+    let e =
+      mk_closed_checked_let __FILE__ __LINE__ ctx can_fail pat input_e output_e
+    in
+    let e =
+      mk_closed_lambdas span
+        (List.map (fun fv -> mk_tpattern_from_fvar fv None) inputs)
+        e
+    in
+    (ctx, Some e)
+
+(** Translate the continuation of a region abstraction to a pure continuation.
+
+    Returns [None] if the continuation has type [unit -> unit]. *)
+let translate_abs_to_cont (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs) :
+    bs_ctx * texpr option =
   match abs.cont with
   | None -> [%internal_error] ctx.span
-  | Some cont -> abs_cont_to_texpr_aux ctx ectx abs output input
+  | Some cont -> (
+      match (cont.output, cont.input) with
+      | Some output, Some input ->
+          abs_cont_to_texpr_aux ctx ectx abs output input
+      | _ -> [%internal_error] ctx.span)
