@@ -305,7 +305,6 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
 
   let abs_kind : abs_kind = Loop (loop_id, None) in
   let can_end = true in
-  let destructure_shared_values = true in
   let is_fresh_did (id : DummyVarId.id) : bool =
     not (DummyVarId.Set.mem id old_ids.dids)
   in
@@ -324,8 +323,7 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
            | EBinding (BDummy id, v) ->
                if is_fresh_did id then (
                  let absl =
-                   convert_value_to_abstractions span abs_kind ~can_end
-                     ~destructure_shared_values ctx v
+                   convert_value_to_abstractions span abs_kind ~can_end ctx v
                  in
                  Invariants.opt_type_check_absl span ctx absl;
                  List.map (fun abs -> EAbs abs) absl)

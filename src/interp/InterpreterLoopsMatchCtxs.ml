@@ -1205,8 +1205,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         let abs_kind : abs_kind = Loop (S.loop_id, None) in
         let ctx = if value_is_left then ctx0 else ctx1 in
         let absl =
-          convert_value_to_abstractions span abs_kind ~can_end:true
-            ~destructure_shared_values:true ctx v
+          convert_value_to_abstractions span abs_kind ~can_end:true ctx v
         in
         (* Add a marker to the abstraction indicating the provenance of the value *)
         let pm = if value_is_left then PLeft else PRight in

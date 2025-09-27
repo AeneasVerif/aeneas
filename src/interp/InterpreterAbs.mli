@@ -20,18 +20,10 @@ open Contexts
     Parameters:
     - [abs_kind]
     - [can_end]
-    - [destructure_shared_values]: this is similar to
-      [destructure_shared_values] for {!destructure_abs}.
     - [ctx]
     - [v] *)
 val convert_value_to_abstractions :
-  Meta.span ->
-  abs_kind ->
-  can_end:bool ->
-  destructure_shared_values:bool ->
-  eval_ctx ->
-  tvalue ->
-  abs list
+  Meta.span -> abs_kind -> can_end:bool -> eval_ctx -> tvalue -> abs list
 
 (** See {!merge_into_abstraction}.
 
