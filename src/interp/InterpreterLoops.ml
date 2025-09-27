@@ -193,6 +193,7 @@ let eval_loop_symbolic (config : config) (span : span)
     compute_loop_entry_fixed_point config span loop_id eval_loop_body ctx
   in
   let input_abs_list = RegionGroupId.Map.values rg_to_abs in
+  let input_abs_list = List.map (ctx_lookup_abs fp_ctx) input_abs_list in
 
   (* Compute the context at the breaks *)
   let break_info =

@@ -801,7 +801,7 @@ let register_outputs (ctx : bs_ctx) (bound_outputs : bound_borrows_loans)
   List.rev !outputs
 
 let abs_cont_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
-    (output : V.tevalue) (input : V.tevalue) : bs_ctx * texpr option =
+    (output : V.tevalue) (input : V.tevalue) : texpr option =
   let span = ctx.span in
   (* Go through the *avalues* to introduce free variables for the loans:
      we need to do this to fix the order of the *inputs* (the order given
@@ -821,7 +821,7 @@ let abs_cont_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
      as with the inputs: we do this to fix the order *)
   let outputs = register_outputs ctx bound abs.regions.owned abs.avalues in
 
-  if inputs = [] && outputs = [] then (ctx, None)
+  if inputs = [] && outputs = [] then None
   else
     (* Put everything together *)
     let output_e = mk_simpl_tuple_texpr span outputs in
@@ -833,14 +833,14 @@ let abs_cont_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
         (List.map (fun fv -> mk_tpattern_from_fvar fv None) inputs)
         e
     in
-    (ctx, Some e)
+    Some e
 
 (** Translate the continuation of a region abstraction to a pure continuation.
 
     Returns [None] if the continuation has type [unit] (i.e., it consumes
     nothing and returns nothing). *)
 let translate_abs_to_cont (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs) :
-    bs_ctx * texpr option =
+    texpr option =
   match abs.cont with
   | None -> [%internal_error] ctx.span
   | Some cont -> (

@@ -226,8 +226,13 @@ and loop = {
       (** The symbolic values introduced by the loop fixed-point/
 
           TODO: remove? *)
-  input_abs : abstraction_id list;
-      (** The input abstractions, properly ordered *)
+  input_abs : abs list;
+      (** The input abstractions, properly ordered. Note that those are the
+          abstractions from the *fixed-point*, they are not actually the
+          abstractions received as input from the loop (see [input_abs_to_abs]
+          instead). We store abstractions (rather than ids) because we need the
+          abstractions themselves to compute the type of the continuations
+          (i.e., the type of the loop) and doing this avoids a lookup. *)
   input_value_to_value : tvalue symbolic_value_id_map;
   input_abs_to_abs : abs abs_id_map;
   break_svalues : symbolic_value list;
