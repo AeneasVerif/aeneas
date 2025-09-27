@@ -284,8 +284,7 @@ let compute_tevalue_proj_kind (span : Meta.span) (type_infos : type_infos)
   else UnknownProj
 
 let abs_fvar_id_to_tpattern (ctx : bs_ctx)
-    (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
-    (fvar_to_none : V.AbsFVarId.Set.t ref) (rids : T.RegionId.Set.t)
+    (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref) (rids : T.RegionId.Set.t)
     ~(filter : bool) (fid : V.abs_fvar_id) (ty : T.ty) :
     bs_ctx * tpattern option =
   let type_infos = ctx.type_ctx.type_infos in
@@ -303,7 +302,6 @@ let abs_fvar_id_to_tpattern (ctx : bs_ctx)
   else
     let pat =
       if filter then begin
-        fvar_to_none := V.AbsFVarId.Set.add fid !fvar_to_none;
         None
       end
       else begin
@@ -321,8 +319,7 @@ let abs_fvar_id_to_tpattern (ctx : bs_ctx)
     want to eliminate it) we register it in [fvar_to_none] for sanity purposes.
 *)
 let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
-    (fvar_to_none : V.AbsFVarId.Set.t ref) (rids : T.RegionId.Set.t)
-    (output : V.tevalue) : bs_ctx * tpattern =
+    (rids : T.RegionId.Set.t) (output : V.tevalue) : bs_ctx * tpattern =
   let span = ctx.span in
   let type_infos = ctx.type_ctx.type_infos in
   let keep_region (r : T.region) =
@@ -341,8 +338,7 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
     | V.EValue _
     | V.ELoan _ -> [%internal_error] span
     | V.EFVar afid ->
-        abs_fvar_id_to_tpattern ctx fvar_to_texpr fvar_to_none rids ~filter afid
-          output.ty
+        abs_fvar_id_to_tpattern ctx fvar_to_texpr rids ~filter afid output.ty
     | V.EBorrow bc -> (
         match bc with
         | V.EIgnoredMutBorrow _
@@ -411,8 +407,7 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
   (ctx, pat)
 
 let tepat_to_tpattern (ctx : bs_ctx)
-    (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
-    (fvar_to_none : V.AbsFVarId.Set.t ref) (rids : T.RegionId.Set.t)
+    (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref) (rids : T.RegionId.Set.t)
     (pat : V.tepat) : bs_ctx * tpattern =
   let span = ctx.span in
   let type_infos = ctx.type_ctx.type_infos in
@@ -425,8 +420,7 @@ let tepat_to_tpattern (ctx : bs_ctx)
       bs_ctx * tpattern option =
     match pat.epat with
     | V.POpen fid ->
-        abs_fvar_id_to_tpattern ctx fvar_to_texpr fvar_to_none rids ~filter fid
-          pat.epat_ty
+        abs_fvar_id_to_tpattern ctx fvar_to_texpr rids ~filter fid pat.epat_ty
     | V.PBound ->
         (* Binders should have been opened *)
         [%internal_error] span
@@ -455,12 +449,17 @@ let tepat_to_tpattern (ctx : bs_ctx)
             mk_simpl_tuple_pattern ~filter ctx pat pat.epat_ty fields
         in
         let out = Option.map snd out in
-        raise (Failure "TODO: register the ignored free variables");
         (ctx, out)
       end
     | V.PIgnored -> (ctx, None)
   in
-  ()
+  let ctx, pat = to_pat ~filter:true ctx pat in
+  let pat =
+    match pat with
+    | Some pat -> pat
+    | None -> mk_dummy_pattern mk_unit_ty
+  in
+  (ctx, pat)
 
 module NormSymbProjMap = InterpreterBorrowsCore.NormSymbProjMap
 
@@ -484,7 +483,6 @@ let rec einput_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx)
   (* Accumulating the inputs in the order we find them: we will use this
      to introduce the variables bound by the continuation *)
   let fvar_to_texpr = ref V.AbsFVarId.Map.empty in
-  let fvar_to_none = ref V.AbsFVarId.Set.empty in
   let rec to_texpr ~(filter : bool) (rids : T.RegionId.Set.t) (ctx : bs_ctx)
       (input : V.tevalue) : bs_ctx * bool * texpr option =
     match input.value with
@@ -495,9 +493,7 @@ let rec einput_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx)
         let ctx, bound_can_fail, bound =
           to_texpr ~filter:false rids' ctx bound
         in
-        let ctx, pat =
-          tepat_to_tpattern ctx fvar_to_texpr fvar_to_none rids pat
-        in
+        let ctx, pat = tepat_to_tpattern ctx fvar_to_texpr rids pat in
         let ctx, next_can_fail, next = to_texpr ~filter:false rids ctx next in
         (* Create the let binding *)
         let bound =
@@ -525,13 +521,7 @@ let rec einput_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx)
            - there should be no bound variables *)
         [%internal_error] span
     | V.EFVar fvid ->
-        let e =
-          match V.AbsFVarId.Map.find_opt fvid !fvar_to_texpr with
-          | None ->
-              [%sanity_check] span (V.AbsFVarId.Set.mem fvid !fvar_to_none);
-              None
-          | Some e -> Some e
-        in
+        let e = V.AbsFVarId.Map.find_opt fvid !fvar_to_texpr in
         (ctx, false, e)
     | V.EApp (f, args) ->
         let ctx, args =

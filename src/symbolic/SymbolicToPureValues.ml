@@ -422,9 +422,7 @@ and adt_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
       (mk_simpl_tuple_texpr ctx.span)
       ~filter ctx av av.ty adt_v.field_values
   in
-  match out with
-  | None -> None
-  | Some (_, x) -> Some x
+  Option.map snd out
 
 and aloan_content_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
     (ectx : C.eval_ctx) (_abs_regions : T.RegionId.Set.t) (lc : V.aloan_content)
@@ -644,9 +642,7 @@ and adt_avalue_to_given_back_aux ~(filter : bool)
         mk_adt_pattern ty adt_v.variant_id fields)
       mk_simpl_tuple_pattern ~filter ctx av av.ty adt_v.field_values
   in
-  match out with
-  | None -> (ctx, None)
-  | Some (_, x) -> (ctx, Some x)
+  (ctx, Option.map snd out)
 
 and aborrow_content_to_given_back_aux ~(filter : bool) (mp : mplace option)
     (bc : V.aborrow_content) (ty : T.ty) (ctx : bs_ctx) :
