@@ -388,6 +388,106 @@ let remove_useless_cf_merges (crate : crate) (f : fun_decl) : fun_decl =
     ^ Print.Crate.crate_fun_decl_to_string crate f];
   f
 
+(** Check that loops:
+    - do not contain early returns
+    - do not continue/break to outer loops
+
+    We also attempt to update the loops so that they have the proper shape (for
+    instance, if a loop has returns but no breaks, we replace the returns with
+    breaks, and introduce returns after the loop). *)
+let update_loops (crate : crate) (f : fun_decl) : fun_decl =
+  let f0 = f in
+  let span = f.item_meta.span in
+
+  let visitor =
+    object (self)
+      inherit [_] map_statement as super
+
+      method update_statement (depth : int) (st : statement) : statement list =
+        match st.content with
+        | Loop loop -> (
+            try [ { st with content = super#visit_Loop (depth + 1) loop } ]
+            with Found ->
+              (* We found a return in the loop: attempt to replace it with a break *)
+              let block_has_no_breaks (b : block) : bool =
+                let visitor =
+                  object
+                    inherit [_] iter_statement
+                    method! visit_Break _ _ = raise Found
+                  end
+                in
+                try
+                  visitor#visit_block () b;
+                  true
+                with Found -> false
+              in
+              let block_replace_return_with_break (b : block) : block =
+                let visitor =
+                  object
+                    inherit [_] map_statement
+                    method! visit_Return _ = Break 0
+                  end
+                in
+                visitor#visit_block () b
+              in
+              if block_has_no_breaks loop then
+                let loop = block_replace_return_with_break loop in
+                let loop : statement = { st with content = Loop loop } in
+                let loop = super#visit_statement depth loop in
+                let return : statement =
+                  {
+                    span = st.span;
+                    statement_id =
+                      StatementId.zero (* we'll refresh this later *);
+                    content = Return;
+                    comments_before = [];
+                  }
+                in
+                [ loop; return ]
+              else
+                [%craise] span
+                  "Early returns inside of loops are not supported yet")
+        | _ -> [ super#visit_statement depth st ]
+
+      method! visit_block depth (block : block) : block =
+        {
+          block with
+          statements =
+            List.flatten
+              (List.map (self#update_statement depth) block.statements);
+        }
+
+      method! visit_Break depth i =
+        [%cassert] span (i = 0) "Breaks to outer loops are not supported yet";
+        super#visit_Break depth i
+
+      method! visit_Continue depth i =
+        [%cassert] span (i = 0) "Continue to outer loops are not supported yet";
+        super#visit_Continue depth i
+
+      method! visit_Return depth =
+        [%cassert] span (depth <= 1)
+          "Returns inside of nested loops are not supported yet";
+        (* If we are inside a loop we need to get rid of the return *)
+        if depth = 1 then raise Found else super#visit_Return depth
+    end
+  in
+
+  (* Map  *)
+  let body =
+    match f.body with
+    | Some body -> Some { body with body = visitor#visit_block 0 body.body }
+    | None -> None
+  in
+
+  let f : fun_decl = { f with body } in
+  [%ldebug
+    "Before/after [update_loops]:\n"
+    ^ Print.Crate.crate_fun_decl_to_string crate f0
+    ^ "\n\n"
+    ^ Print.Crate.crate_fun_decl_to_string crate f];
+  f
+
 (** This pass restructures the control-flow by inserting all the statements
     which occur after loops *inside* the loops, thus removing the need to have
     breaks (we later check that we removed all the breaks).
@@ -1014,7 +1114,7 @@ let apply_passes (crate : crate) : crate =
   (* Passes that apply to individual function bodies *)
   let function_passes =
     [
-      remove_loop_breaks;
+      update_loops;
       remove_shallow_borrows_storage_live_dead;
       decompose_str_borrows;
       unify_drops;

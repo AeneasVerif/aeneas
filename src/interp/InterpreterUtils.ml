@@ -28,6 +28,8 @@ let aloan_content_to_string = Print.EvalCtx.aloan_content_to_string
 let aproj_to_string = Print.EvalCtx.aproj_to_string
 let tvalue_to_string = Print.EvalCtx.tvalue_to_string
 let tavalue_to_string = Print.EvalCtx.tavalue_to_string
+let tevalue_to_string = Print.EvalCtx.tevalue_to_string
+let tepat_to_string = Print.EvalCtx.tepat_to_string
 let place_to_string = Print.EvalCtx.place_to_string
 let operand_to_string = Print.EvalCtx.operand_to_string
 let fun_sig_to_string = Print.EvalCtx.fun_sig_to_string
@@ -70,6 +72,11 @@ let env_to_string span ctx ?(filter = true) env =
 
 let abs_to_string span ?(with_ended = false) ctx =
   Print.EvalCtx.abs_to_string ~span:(Some span) ~with_ended ctx "" "  "
+
+let abs_cont_to_string span ?(with_ended = true) ?(indent = "")
+    ?(indent_incr = "  ") ctx =
+  Print.EvalCtx.abs_cont_to_string ~span:(Some span) ~with_ended ctx indent
+    indent_incr
 
 let same_symbolic_id (sv0 : symbolic_value) (sv1 : symbolic_value) : bool =
   sv0.sv_id = sv1.sv_id
@@ -117,6 +124,16 @@ let mk_fresh_symbolic_tvalue_from_no_regions_ty (span : Meta.span) (ty : ty) :
   [%sanity_check] span (ty_no_regions ty);
   mk_fresh_symbolic_tvalue span ty
 
+let symbolic_tvalue_get_id (span : Meta.span) (v : tvalue) =
+  match v.value with
+  | VSymbolic v -> v.sv_id
+  | _ -> [%internal_error] span
+
+let get_symbolic_tvalue (span : Meta.span) (v : tvalue) : symbolic_value =
+  match v.value with
+  | VSymbolic v -> v
+  | _ -> [%internal_error] span
+
 (** Create a loans projector value from a symbolic value.
 
     Checks if the projector will actually project some regions. If not, returns
@@ -144,6 +161,23 @@ let mk_aproj_loans_value_from_symbolic_value (proj_regions : RegionId.Set.t)
       ty = svalue.sv_ty;
     }
 
+let mk_eproj_loans_value_from_symbolic_value (proj_regions : RegionId.Set.t)
+    (svalue : symbolic_value) (proj_ty : ty) : tevalue =
+  if ty_has_regions_in_set proj_regions proj_ty then
+    let av =
+      ESymbolic
+        ( PNone,
+          EProjLoans
+            {
+              proj = { sv_id = svalue.sv_id; proj_ty };
+              consumed = [];
+              borrows = [];
+            } )
+    in
+    let av : tevalue = { value = av; ty = svalue.sv_ty } in
+    av
+  else { value = EIgnored; ty = svalue.sv_ty }
+
 (** Create a borrows projector from a symbolic value *)
 let mk_aproj_borrows_from_symbolic_value (span : Meta.span)
     (proj_regions : RegionId.Set.t) (svalue : symbolic_value) (proj_ty : ty) :
@@ -152,6 +186,14 @@ let mk_aproj_borrows_from_symbolic_value (span : Meta.span)
   if ty_has_regions_in_set proj_regions proj_ty then
     AProjBorrows { proj = { sv_id = svalue.sv_id; proj_ty }; loans = [] }
   else AEmpty
+
+let mk_eproj_borrows_from_symbolic_value (span : Meta.span)
+    (proj_regions : RegionId.Set.t) (svalue : symbolic_value) (proj_ty : ty) :
+    eproj =
+  [%sanity_check] span (ty_is_rty proj_ty);
+  if ty_has_regions_in_set proj_regions proj_ty then
+    EProjBorrows { proj = { sv_id = svalue.sv_id; proj_ty }; loans = [] }
+  else EEmpty
 
 (** TODO: move *)
 let borrow_is_asb (bid : SharedBorrowId.id) (asb : abstract_shared_borrow) :
@@ -216,6 +258,9 @@ exception FoundGBorrowContent of g_borrow_content
 
 (** Utility exception *)
 exception FoundGLoanContent of g_loan_content
+
+(** Utility exception *)
+exception FoundEBorrowContent of eborrow_content
 
 (** Utility exception *)
 exception FoundAProjBorrows of aproj_borrows
@@ -776,3 +821,46 @@ let compute_regions_hierarchy_for_fun_call (span : Meta.span option)
     inputs;
     output;
   }
+
+let abs_is_empty (abs : abs) : bool =
+  let visitor =
+    object
+      inherit [_] iter_abs as super
+
+      method! visit_ASymbolic env pm proj =
+        (match proj with
+        | AProjLoans _ | AProjBorrows _ -> raise Found
+        | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ());
+        super#visit_ASymbolic env pm proj
+
+      method! visit_ABorrow env bc =
+        (match bc with
+        | AMutBorrow _ | ASharedBorrow _ -> raise Found
+        | AIgnoredMutBorrow _
+        | AEndedMutBorrow _
+        | AEndedSharedBorrow
+        | AEndedIgnoredMutBorrow _
+        | AProjSharedBorrow _ -> ());
+        super#visit_ABorrow env bc
+
+      method! visit_abstract_shared_borrow _ _ = raise Found
+
+      method! visit_ALoan env lc =
+        (match lc with
+        | AMutLoan _ -> raise Found
+        | ASharedLoan _
+        | AEndedMutLoan _
+        | AEndedSharedLoan _
+        | AIgnoredMutLoan _
+        | AEndedIgnoredMutLoan _
+        | AIgnoredSharedLoan _ -> ());
+        super#visit_ALoan env lc
+
+      method! visit_VBorrow _ = raise Found
+      method! visit_VLoan _ _ = raise Found
+    end
+  in
+  try
+    visitor#visit_abs () abs;
+    true
+  with Found -> false

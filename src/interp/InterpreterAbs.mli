@@ -20,18 +20,10 @@ open Contexts
     Parameters:
     - [abs_kind]
     - [can_end]
-    - [destructure_shared_values]: this is similar to
-      [destructure_shared_values] for {!destructure_abs}.
     - [ctx]
     - [v] *)
 val convert_value_to_abstractions :
-  Meta.span ->
-  abs_kind ->
-  can_end:bool ->
-  destructure_shared_values:bool ->
-  eval_ctx ->
-  tvalue ->
-  abs list
+  Meta.span -> abs_kind -> can_end:bool -> eval_ctx -> tvalue -> abs list
 
 (** See {!merge_into_abstraction}.
 
@@ -190,6 +182,7 @@ type merge_duplicates_funcs = {
     Parameters:
     - [kind]
     - [can_end]
+    - [with_abs_conts]
     - [merge_funs]: those functions are used to merge borrows/loans with the
       *same ids* but different markers. This is necessary when doing a collapse
       (see the computation of joins). If [merge_funs] are not provided, we check
@@ -203,7 +196,8 @@ type merge_duplicates_funcs = {
 val merge_into_first_abstraction :
   Meta.span ->
   abs_kind ->
-  bool ->
+  can_end:bool ->
+  with_abs_conts:bool ->
   merge_duplicates_funcs option ->
   eval_ctx ->
   AbstractionId.id ->
@@ -230,3 +224,10 @@ val merge_into_first_abstraction :
     - [eval_ctx] *)
 val reorder_fresh_abs :
   Meta.span -> bool -> AbstractionId.Set.t -> eval_ctx -> eval_ctx
+
+(** Project a context to only preserve the values appearing on the left or the
+    values appearing on the right.
+
+    The [proj_marker] must be [PLeft] or [PRight]. *)
+val project_context :
+  Meta.span -> InterpreterUtils.ids_sets -> proj_marker -> eval_ctx -> eval_ctx
