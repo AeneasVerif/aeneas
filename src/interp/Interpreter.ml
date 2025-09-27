@@ -212,7 +212,7 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
       let inputs =
         List.map
           (fun (sv : symbolic_value) ->
-            mk_eproj_loans_value_from_symbolic_value ctx abs.regions.owned sv
+            mk_eproj_loans_value_from_symbolic_value abs.regions.owned sv
               sv.sv_ty)
           input_svs
       in

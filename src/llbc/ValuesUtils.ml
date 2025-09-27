@@ -38,8 +38,7 @@ let mk_aignored (span : Meta.span) (ty : ty) (v : tvalue option) : tavalue =
   [%sanity_check] span (ty_is_rty ty);
   { value = AIgnored v; ty }
 
-let mk_eignored (ty : ty) (env_v : (env * tvalue) option) : tevalue =
-  { value = EIgnored env_v; ty }
+let mk_eignored (ty : ty) : tevalue = { value = EIgnored; ty }
 
 let mk_evalue (env : env) (ty : ty) (v : tvalue) : tevalue =
   { value = EValue (env, v); ty }
@@ -97,7 +96,7 @@ let is_aignored (v : avalue) : bool =
 
 let is_eignored (v : evalue) : bool =
   match v with
-  | EIgnored _ -> true
+  | EIgnored -> true
   | _ -> false
 
 let is_symbolic (v : value) : bool =

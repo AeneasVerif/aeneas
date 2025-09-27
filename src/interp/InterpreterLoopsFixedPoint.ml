@@ -6,9 +6,7 @@ open ValuesUtils
 module S = SynthesizeSymbolic
 open Cps
 open InterpreterUtils
-open InterpreterBorrows
 open InterpreterAbs
-open InterpreterLoopsCore
 open InterpreterLoopsMatchCtxs
 open InterpreterLoopsJoinCtxs
 
@@ -267,7 +265,7 @@ let loop_abs_reorder_and_add_info (span : Meta.span) (loop_id : LoopId.id)
           | AMutLoan (pm, bid, child) ->
               [%sanity_check] span (is_aignored child.value);
               let value : evalue =
-                ELoan (EMutLoan (pm, bid, mk_eignored child.ty None))
+                ELoan (EMutLoan (pm, bid, mk_eignored child.ty))
               in
               loans := { value; ty } :: !loans
           | ASharedLoan _ ->
@@ -283,7 +281,7 @@ let loop_abs_reorder_and_add_info (span : Meta.span) (loop_id : LoopId.id)
           | AMutBorrow (pm, bid, child) ->
               [%sanity_check] span (is_aignored child.value);
               let value : evalue =
-                EBorrow (EMutBorrow (pm, bid, None, mk_eignored child.ty None))
+                EBorrow (EMutBorrow (pm, bid, None, mk_eignored child.ty))
               in
               borrows := { value; ty } :: !borrows
           | ASharedBorrow _ -> (* We ignore shared borrows *) ()

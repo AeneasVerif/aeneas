@@ -832,7 +832,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let cont : abs_cont option =
         if S.with_abs_conts then
           let input : tevalue =
-            let loan = EMutLoan (PNone, bid2, mk_eignored bv_ty None) in
+            let loan = EMutLoan (PNone, bid2, mk_eignored bv_ty) in
             (* Note that an eloan has a borrow type *)
             let loan : tevalue = { value = ELoan loan; ty = borrow_ty } in
 
@@ -849,7 +849,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
               [%cassert] span (ty_no_regions bv_ty)
                 "Nested borrows are not supported yet";
               let value =
-                EBorrow (EMutBorrow (pm, bid, None, mk_eignored bv_ty None))
+                EBorrow (EMutBorrow (pm, bid, None, mk_eignored bv_ty))
               in
               { value; ty = borrow_ty }
             in
@@ -988,7 +988,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         if S.with_abs_conts then
           let input : tevalue =
             let mk_loan pm lid =
-              let loan = EMutLoan (pm, lid, mk_eignored bv_ty None) in
+              let loan = EMutLoan (pm, lid, mk_eignored bv_ty) in
               (* Note that an eloan has a borrow type *)
               { value = ELoan loan; ty = borrow_ty }
             in
@@ -999,7 +999,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           in
           let output : tevalue =
             let value =
-              EBorrow (EMutBorrow (PNone, nbid, None, mk_eignored bv_ty None))
+              EBorrow (EMutBorrow (PNone, nbid, None, mk_eignored bv_ty))
             in
             { value; ty = borrow_ty }
           in
@@ -1334,7 +1334,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         let input : tevalue =
           let loan : tevalue =
             let pm = if loan_is_left then PLeft else PRight in
-            let loan = EMutLoan (pm, lid, mk_eignored bv_ty None) in
+            let loan = EMutLoan (pm, lid, mk_eignored bv_ty) in
             (* Note that an eloan has a borrow type *)
             { value = ELoan loan; ty = borrow_ty }
           in
@@ -1349,7 +1349,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         in
         let output : tevalue =
           let value =
-            EBorrow (EMutBorrow (PNone, nbid, None, mk_eignored bv_ty None))
+            EBorrow (EMutBorrow (PNone, nbid, None, mk_eignored bv_ty))
           in
           { value; ty = borrow_ty }
         in

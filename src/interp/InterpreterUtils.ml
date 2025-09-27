@@ -161,9 +161,8 @@ let mk_aproj_loans_value_from_symbolic_value (proj_regions : RegionId.Set.t)
       ty = svalue.sv_ty;
     }
 
-let mk_eproj_loans_value_from_symbolic_value (ctx : eval_ctx)
-    (proj_regions : RegionId.Set.t) (svalue : symbolic_value) (proj_ty : ty) :
-    tevalue =
+let mk_eproj_loans_value_from_symbolic_value (proj_regions : RegionId.Set.t)
+    (svalue : symbolic_value) (proj_ty : ty) : tevalue =
   if ty_has_regions_in_set proj_regions proj_ty then
     let av =
       ESymbolic
@@ -177,11 +176,7 @@ let mk_eproj_loans_value_from_symbolic_value (ctx : eval_ctx)
     in
     let av : tevalue = { value = av; ty = svalue.sv_ty } in
     av
-  else
-    {
-      value = EIgnored (Some (ctx.env, mk_tvalue_from_symbolic_value svalue));
-      ty = svalue.sv_ty;
-    }
+  else { value = EIgnored; ty = svalue.sv_ty }
 
 (** Create a borrows projector from a symbolic value *)
 let mk_aproj_borrows_from_symbolic_value (span : Meta.span)

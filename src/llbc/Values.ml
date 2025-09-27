@@ -1113,22 +1113,11 @@ and evalue =
           ]}
           this means that when ending borrow [l] we should output exactly the
           value [0]. *)
-  | EIgnored of ((env[@opaque]) * mvalue) option
+  | EIgnored
       (** A value which doesn't contain borrows, or which borrows we don't own
           and thus ignore.
 
-          In the comments, we display it as [_].
-
-          TODO: update to remove the meta-value. We want [EIgnored] to be
-          ignored by the translation (it should be translated to ()) while
-          [EValue] indicates there is a value to be translated. We could keep
-          one variant with an optional value to distinguish between the two,
-          though.
-
-          Note that we store the ignored value as a meta value (together with
-          the environment at the time we introduced the evalue - see the comment
-          for [EValue]). Also note that this value is not always present (when
-          we introduce abstractions because of a join for instance). *)
+          In the comments, we display it as [_]. *)
 
 and epat =
   | POpen of abs_fvar_id
@@ -1417,7 +1406,9 @@ and abs_cont = {
           doing the synthesis. Because of this, those abstractions should never
           be merged with other abstractions. *)
   input : tevalue option;
-      (** [output] gives the output borrows, while [input] is the computation
+      (** TODO: update explanations (those are wrong).
+
+          [output] gives the output borrows, while [input] is the computation
           which yields the value. If this computation is not present, it means
           that when ending a borrow we should give back the same value it holds.
 

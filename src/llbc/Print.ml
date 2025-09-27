@@ -594,10 +594,7 @@ module Values = struct
     | ESymbolic (pm, proj) ->
         eproj_to_string ~with_ended env proj |> add_proj_marker pm
     | EValue (_, mv) -> "@mvalue(" ^ tvalue_to_string ~span env mv ^ ")"
-    | EIgnored mv -> (
-        match mv with
-        | None -> "_"
-        | Some (_, mv) -> "@ignored(" ^ tvalue_to_string ~span env mv ^ ")")
+    | EIgnored -> "_"
 
   and eloan_content_to_string ?(span : Meta.span option = None)
       ?(with_ended : bool = false) (env : fmt_env) (aenv : evalue_env)

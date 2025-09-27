@@ -397,7 +397,7 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
         in
         (ctx, Option.map snd out)
       end
-    | V.EIgnored _ -> (ctx, None)
+    | V.EIgnored -> (ctx, None)
   in
   let ctx, pat = to_pat ~filter:true ctx output in
   let pat =
@@ -640,7 +640,7 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
     | V.EValue (env, mv) ->
         let e = tvalue_to_texpr ctx { ectx with env } mv in
         (ctx, false, Some e)
-    | V.EIgnored _ -> (ctx, false, None)
+    | V.EIgnored -> (ctx, false, None)
     | V.EBottom -> [%internal_error] span
   in
   let ctx, can_fail, e = to_texpr ~filter:false rids ctx input in
