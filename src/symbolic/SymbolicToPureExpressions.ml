@@ -874,7 +874,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
   in
   let effect_info = get_fun_effect_info ctx fun_id None (Some rg_id) in
   (* Retrieve the values consumed upon ending the loans inside this
-   * abstraction: those give us the remaining input values *)
+   * abstraction: those give us the input values *)
   let back_inputs = abs_to_consumed ctx ectx abs in
   (* Retrieve the values given back by this function: those are the output
    * values. We rely on the fact that there are no nested borrows to use the
@@ -1011,104 +1011,45 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
 
 and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expr) (ctx : bs_ctx) (loop_id : V.LoopId.id)
-    (rg_id : T.RegionGroupId.id option) : texpr =
-  let vloop_id = loop_id in
+    (_rg_id : T.RegionGroupId.id option) : texpr =
+  let span = ctx.span in
   let loop_id = V.LoopId.Map.find loop_id ctx.loop_ids_map in
   [%sanity_check] ctx.span (loop_id = Option.get ctx.loop_id);
-  let rg_id = Option.get rg_id in
-  raise (Failure "TODO")
-(*  (* There are two cases depending on the [abs_kind] (whether this is a
-     synth input or a regular loop call) *)
-  match abs_kind with
-  | V.LoopSynthInput ->
-      (* Actually the same case as [SynthInput] *)
-      translate_end_abstraction_synth_input ectx abs e ctx rg_id
-  | V.LoopCall -> (
-      (* We need to introduce a call to the backward function corresponding
-         to a forward call which happened earlier *)
-      let fun_id = T.FRegular ctx.fun_decl.def_id in
-      let effect_info =
-        get_fun_effect_info ctx (FunId fun_id) (Some vloop_id) (Some rg_id)
-      in
-      let loop_info = LoopId.Map.find loop_id ctx.loops in
-      (* Retrieve the additional backward inputs. Note that those are actually
-         the backward inputs of the function we are synthesizing (and that we
-         need to *transmit* to the loop backward function): they are not the
-         values consumed upon ending the abstraction (i.e., we don't use
-         [abs_to_consumed]) *)
-      let back_inputs_vars =
-        T.RegionGroupId.Map.find rg_id ctx.backward_inputs
-      in
-      let inputs = List.map mk_texpr_from_fvar back_inputs_vars in
-      (* Retrieve the values given back by this function *)
-      let ctx, outputs = abs_to_given_back None abs ctx in
-      (* Group the output values together: first the updated inputs *)
-      let output = mk_simpl_tuple_pattern outputs in
-      (* Translate the next expression *)
-      let next_e ctx = translate_expr e ctx in
-      (* Put everything together *)
-      let args_mplaces = List.map (fun _ -> None) inputs in
-      let args =
-        List.map
-          (fun (arg, mp) -> mk_opt_mplace_texpr mp arg)
-          (List.combine inputs args_mplaces)
-      in
-      (* Create the expression for the function:
-         - it is either a call to a top-level function, if we split the
-           forward/backward functions
-         - or a call to the variable we introduced for the backward function,
-           if we merge the forward/backward functions *)
-      let func =
-        RegionGroupId.Map.find rg_id (Option.get loop_info.back_funs)
-      in
-      (* We may have filtered the backward function elsewhere if it doesn't
-         do anything (doesn't consume anything and doesn't return anything) *)
-      match func with
-      | None -> next_e ctx
-      | Some func ->
-          let call = mk_apps ctx.span func args in
-          (* Create the let-binding - we may have to introduce a match *)
-          let ctx, (output, call) = decompose_let_match ctx (output, call) in
-
-          let next_e = next_e ctx in
-
-          (* Add meta-information - this is slightly hacky: we look at the
-             values consumed by the abstraction (note that those come from
-             *before* we applied the fixed-point context) and use them to
-             guide the naming of the output vars. Because of this, the meta
-             information might reference *some variables which are not in
-             the context*. This forces us to cleanup the meta-data later
-             to make sure the expressions are well-formed.
-
-             Also, we need to convert the backward outputs from patterns to
-             variables.
-
-             Finally, in practice, this works well only for loop bodies:
-             we do this only in this case.
-             TODO: improve the heuristics, to give weight to the hints for
-             instance.
-          *)
-          let next_e =
-            if ctx.inside_loop && Config.allow_unbound_variables_in_metadata
-            then
-              let consumed_values = abs_to_consumed ctx ectx abs in
-              let var_values = List.combine outputs consumed_values in
-              let var_values =
-                List.filter_map
-                  (fun ((var, v) : tpattern * _) ->
-                    match var.Pure.pat with
-                    | POpen (var, _) -> Some (var, v)
-                    | PBound _ -> [%internal_error] ctx.span
-                    | _ -> None)
-                  var_values
-              in
-              let vars, values = List.split var_values in
-              mk_emeta_symbolic_assignments vars values next_e
-            else next_e
-          in
-
-          mk_closed_checked_let __FILE__ __LINE__ ctx effect_info.can_fail
-            output call next_e) *)
+  (* Compute the input and output values *)
+  let back_inputs = abs_to_consumed ctx ectx abs in
+  let ctx, outputs = abs_to_given_back None abs ctx in
+  let output = mk_simpl_tuple_pattern outputs in
+  (* Lookup the continuation - it might not be there if the backward function
+     was filtered, if it consumes nothing and outputs nothing *)
+  let func = V.AbstractionId.Map.find_opt abs.abs_id ctx.abs_id_to_fvar in
+  (* Translate the next expression *)
+  let next_e ctx = translate_expr e ctx in
+  (* Put everything together *)
+  let inputs = back_inputs in
+  let args_mplaces = List.map (fun _ -> None) inputs in
+  let args =
+    List.map
+      (fun (arg, mp) -> mk_opt_mplace_texpr mp arg)
+      (List.combine inputs args_mplaces)
+  in
+  match func with
+  | None ->
+      [%sanity_check] span
+        (V.AbstractionId.Set.mem abs.abs_id ctx.ignored_abs_ids);
+      next_e ctx
+  | Some func ->
+      [%ltrace
+        let args = List.map (texpr_to_string ctx) args in
+        "func: " ^ texpr_to_string ctx func ^ "\nfunc type: "
+        ^ pure_ty_to_string ctx func.ty
+        ^ "\n\nargs:\n" ^ String.concat "\n" args];
+      let call = mk_apps ctx.span func args in
+      (* Introduce a match if necessary *)
+      let ctx, (output, call) = decompose_let_match ctx (output, call) in
+      (* Translate the next expression and construct the let *)
+      let can_fail = true in
+      mk_closed_checked_let __FILE__ __LINE__ ctx can_fail output call
+        (next_e ctx)
 
 and translate_global_eval (gid : A.GlobalDeclId.id) (generics : T.generic_args)
     (sval : V.symbolic_value) (e : S.expr) (ctx : bs_ctx) : texpr =
