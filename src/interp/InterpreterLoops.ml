@@ -319,7 +319,7 @@ let eval_loop_symbolic (config : config) (span : span)
           input_value_to_value = input_values;
           input_abs_to_abs = input_abs;
           break_svalues = break_input_svalues;
-          break_abs = List.map (fun abs -> abs.abs_id) break_abs;
+          break_abs;
           rg_to_given_back_tys = rg_to_given_back;
           loop_expr = loop_body;
           next_expr;

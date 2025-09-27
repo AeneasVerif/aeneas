@@ -233,7 +233,7 @@ and loop = {
   break_svalues : symbolic_value list;
       (** The symbolic values introduced in the break environment (those are
           output by the loop) *)
-  break_abs : abstraction_id list;
+  break_abs : abs list;
       (** The abstractions introduced in the break environment (those are output
           by the loop) *)
   rg_to_given_back_tys : (Pure.ty list RegionGroupId.Map.t[@opaque]);

@@ -195,11 +195,14 @@ let abs_to_input_output_tys (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs) :
 
 (** Compute the type of a region abstraction, seen as a continuation.
 
+    The result is [None] if the type is actually [unit].
+
     Remark: there shouldn't be any ended loans in this continuation. Also note
     that we flatten the values. *)
-let abs_to_ty (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs) : ty =
+let abs_to_ty (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs) : ty option =
   let inputs, outputs = abs_to_input_output_tys ctx ectx abs in
-  mk_arrows inputs (mk_simpl_tuple_ty outputs)
+  if inputs = [] && outputs = [] then None
+  else Some (mk_arrows inputs (mk_simpl_tuple_ty outputs))
 
 let compute_tevalue_proj_kind (span : Meta.span) (type_infos : type_infos)
     (abs_regions : T.RegionId.Set.t) (ev : V.tevalue) : tavalue_kind =
@@ -834,7 +837,8 @@ let abs_cont_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
 
 (** Translate the continuation of a region abstraction to a pure continuation.
 
-    Returns [None] if the continuation has type [unit -> unit]. *)
+    Returns [None] if the continuation has type [unit] (i.e., it consumes
+    nothing and returns nothing). *)
 let translate_abs_to_cont (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs) :
     bs_ctx * texpr option =
   match abs.cont with

@@ -1586,7 +1586,7 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
              because even though the loop function will ignore the forward output,
              the forward expression will still compute an output (which
              will have type unit - otherwise we can't ignore it). *)
-          (ctx, mk_unit_rvalue, [])
+          (ctx, mk_unit_texpr, [])
         else
           let ctx, output_var = fresh_var None ctx.sg.fun_ty.fwd_output ctx in
           ( ctx,
@@ -1673,32 +1673,85 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
 and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpr =
   let loop_id = V.LoopId.Map.find loop.loop_id ctx.loop_ids_map in
 
-  (* Translate the loop input abstractions *)
-  let input_abs =
-    List.map
-      (fun abs_id -> V.AbstractionId.Map.find abs_id loop.input_abs_to_abs)
-      loop.input_abs
+  (* Some helpers *)
+  let translate_input_abs (absl : V.abstraction_id list)
+      (abs_to_value : V.abs V.AbstractionId.Map.t) : bs_ctx * texpr list =
+    let input_abs =
+      List.map (fun abs_id -> V.AbstractionId.Map.find abs_id abs_to_value) absl
+    in
+    let ctx, conts =
+      List.fold_left_map
+        (fun ctx abs -> translate_abs_to_cont ctx loop.ctx abs)
+        ctx input_abs
+    in
+    (ctx, List.filter_map (fun x -> x) conts)
   in
-  let input_abs =
-    List.filter_map (translate_abs_to_cont ctx loop.ctx) input_abs
+  let translate_input_values (vl : V.symbolic_value list)
+      (symb_to_value : V.tvalue V.SymbolicValueId.Map.t) : texpr list =
+    let input_values =
+      List.map
+        (fun (sv : V.symbolic_value) ->
+          V.SymbolicValueId.Map.find sv.sv_id symb_to_value)
+        vl
+    in
+    List.map (tvalue_to_texpr ctx loop.ctx) input_values
+  in
+
+  (* Translate the loop input abstractions *)
+  let ctx, input_abs =
+    translate_input_abs loop.input_abs loop.input_abs_to_abs
   in
 
   (* Translate the loop input values *)
-  let inputs =
-    List.map
-      (fun (sv : V.symbolic_value) ->
-        V.SymbolicValueId.Map.find sv.sv_id loop.input_value_to_value)
-      loop.input_svalues
+  let input_values =
+    translate_input_values loop.input_svalues loop.input_value_to_value
   in
-  let inputs = List.map (tvalue_to_texpr ctx loop.ctx) input_value in
+  let inputs = input_abs @ input_values in
 
   (* Translate the body *)
   let loop_body = translate_loop_body loop ctx in
 
   (* Introduce the binders for the loop outputs *)
-  let break_abs = () in
-  let break_outputs = () in
-  let outputs = break_abs @ break_outputs in
+  let ctx, break_abs =
+    (* Compute the type of the break abstractions *)
+    let break_abs_tys = List.map (abs_to_ty ctx loop.ctx) loop.break_abs in
+    let break_abs_tys, ignored =
+      List.partition_map
+        (fun (abs, ty) ->
+          match ty with
+          | Some ty -> Left (abs.V.abs_id, ty)
+          | None -> Right abs.abs_id)
+        (List.combine loop.break_abs break_abs_tys)
+    in
+    (* Introduce free variables for the abs *)
+    let ctx, fvars =
+      List.fold_left_map
+        (fun ctx (aid, ty) ->
+          let ctx, fvar = fresh_var None ty ctx in
+          (ctx, (aid, fvar)))
+        ctx break_abs_tys
+    in
+    (* Register the mapping from abs to free variable *)
+    let ctx =
+      let fvars =
+        List.map (fun (aid, fv) -> (aid, mk_texpr_from_fvar fv)) fvars
+      in
+      {
+        ctx with
+        abs_id_to_fvar = V.AbstractionId.Map.add_list fvars ctx.abs_id_to_fvar;
+        ignored_abs_ids =
+          V.AbstractionId.Set.add_list ignored ctx.ignored_abs_ids;
+      }
+    in
+    (* *)
+    (ctx, List.map snd fvars)
+  in
+  let ctx, break_outputs =
+    fresh_vars_for_symbolic_values loop.break_svalues ctx
+  in
+  let outputs =
+    List.map (fun p -> mk_tpattern_from_fvar p None) (break_abs @ break_outputs)
+  in
   let output = mk_simpl_tuple_pattern outputs in
 
   (* Make the loop call *)
@@ -1710,18 +1763,24 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpr =
       span = loop.span;
       output_tys = List.map (fun (pat : tpattern) -> pat.ty) outputs;
       num_output_conts = List.length break_abs;
-      inputs = input_abs @ inputs;
+      inputs = input_abs @ input_values;
       num_input_conts = List.length input_abs;
       loop_body;
+      output_ty = output.ty;
     }
   in
-  let loop_e : texpr = { e = Loop loop_e; ty = mk_result_ty output.ty } in
+  let loop_ty =
+    mk_arrows
+      (List.map (fun (e : texpr) -> e.ty) inputs)
+      (mk_result_ty output.ty)
+  in
+  let loop_e : texpr = { e = Loop loop_e; ty = loop_ty } in
+  let loop_e = mk_apps loop.span loop_e inputs in
 
   (* Translate the next expression *)
   let next_e = translate_expr loop.next_expr ctx in
 
   (* Create the let-binding *)
-  let all_inputs = input_abs @ inputs in
   mk_closed_checked_let __FILE__ __LINE__ ctx true output loop_e next_e
 
 and translate_loop_body (loop : S.loop) (ctx : bs_ctx) : loop_body =
