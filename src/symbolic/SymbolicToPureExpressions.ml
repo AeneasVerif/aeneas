@@ -1849,7 +1849,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpr =
     let generics =
       let { types; const_generics; trait_clauses } = ctx.sg.generics in
       let types =
-        List.map (fun (ty : T.type_var) -> TVar (Free ty.T.index)) types
+        List.map (fun (ty : T.type_param) -> TVar (Free ty.T.index)) types
       in
       let const_generics =
         List.map

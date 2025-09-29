@@ -418,7 +418,7 @@ and trait_instance_id =
       polymorphic = false;
     }]
 
-type type_var = T.type_var [@@deriving show, ord]
+type type_var = T.type_param [@@deriving show, ord]
 
 (** Ancestor for iter visitor for [type_decl] *)
 class ['self] iter_type_decl_base =

@@ -527,7 +527,7 @@ let compute_ctx_ids (ctx : eval_ctx) : ids_sets * ids_to_values =
 let empty_ids_set = fst (compute_ctxs_ids [])
 
 let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
-    (region_groups : RegionGroupId.id list) (type_vars : type_var list)
+    (region_groups : RegionGroupId.id list) (type_vars : type_param list)
     (const_generic_vars : const_generic_var list) : eval_ctx =
   reset_global_counters ();
   let const_generic_vars_map =
@@ -613,7 +613,7 @@ let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
     - [sg]: the original, uninstantiated signature (we need to retrieve, for
       instance, the region outlives constraints) *)
 let compute_regions_hierarchy_for_fun_call (span : Meta.span option)
-    (crate : crate) (fun_name : string) (type_vars : type_var list)
+    (crate : crate) (fun_name : string) (type_vars : type_param list)
     (const_generic_vars : const_generic_var list) (generic_args : generic_args)
     (sg : fun_sig) : inst_fun_sig =
   (* We simply put everything into a "fake" signature, then call

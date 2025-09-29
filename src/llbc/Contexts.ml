@@ -68,7 +68,7 @@ type eval_ctx = {
   type_ctx : type_ctx;
   fun_ctx : fun_ctx;
   region_groups : RegionGroupId.id list;
-  type_vars : type_var list;
+  type_vars : type_param list;
   const_generic_vars : const_generic_var list;
   const_generic_vars_map : tvalue Types.ConstGenericVarId.Map.t;
       (** The map from const generic vars to their values. Those values can be
@@ -82,11 +82,11 @@ type eval_ctx = {
 }
 [@@deriving show]
 
-let lookup_type_var_opt (ctx : eval_ctx) (vid : TypeVarId.id) : type_var option
+let lookup_type_var_opt (ctx : eval_ctx) (vid : TypeVarId.id) : type_param option
     =
   TypeVarId.nth_opt ctx.type_vars vid
 
-let lookup_type_var (ctx : eval_ctx) (vid : TypeVarId.id) : type_var =
+let lookup_type_var (ctx : eval_ctx) (vid : TypeVarId.id) : type_param =
   TypeVarId.nth ctx.type_vars vid
 
 let lookup_const_generic_var_opt (ctx : eval_ctx) (vid : ConstGenericVarId.id) :

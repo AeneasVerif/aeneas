@@ -51,7 +51,7 @@ module Sig = struct
     { id = rg_id_0; regions = [ rvar_id_0 ]; parents = [] }
 
   (** Type parameter [T] of id 0 *)
-  let type_param_0 : type_var = { index = tvar_id_0; name = "T" }
+  let type_param_0 : type_param = { index = tvar_id_0; name = "T" }
 
   let usize_ty : ty = TLiteral (TUInt Usize)
 
