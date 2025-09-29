@@ -144,7 +144,7 @@ let type_db_var_to_string (env : fmt_env) (var : type_var_id de_bruijn_var) :
   in
   match lookup_var_in_env env find var with
   | None -> Print.Types.type_db_var_to_pretty_string var
-  | Some x -> Print.Types.type_var_to_string x
+  | Some x -> Print.Types.type_param_to_string x
 
 let const_generic_db_var_to_string (env : fmt_env)
     (var : const_generic_var_id de_bruijn_var) : string =

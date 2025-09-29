@@ -702,7 +702,7 @@ let compute_regions_hierarchy_for_fun_call (span : Meta.span option)
         generics
       in
       let fresh_regions = RegionId.Set.elements !fresh_regions in
-      let fresh_region_vars : region_var list =
+      let fresh_region_vars : region_param list =
         List.map (fun index -> { Types.index; name = None }) fresh_regions
       in
       let open Substitute in

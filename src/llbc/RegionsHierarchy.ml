@@ -61,7 +61,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
     let s_set = RegionSet.singleton RStatic in
     let m =
       List.map
-        (fun (r : region_var) -> (RVar (Free r.index), s_set))
+        (fun (r : region_param) -> (RVar (Free r.index), s_set))
         sg.generics.regions
     in
     let s = (RStatic, RegionSet.empty) in
