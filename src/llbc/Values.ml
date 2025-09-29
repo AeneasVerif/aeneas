@@ -1288,6 +1288,8 @@ and eborrow_content =
   | EMutBorrow of proj_marker * borrow_id * mvalue option * tevalue
       (** A mutable borrow owned by an abstraction.
 
+          TODO: remove the meta-value.
+
           Is used when an abstraction "consumes" borrows, when giving borrows as
           arguments to a function.
 

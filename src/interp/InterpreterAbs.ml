@@ -772,7 +772,7 @@ type bound_borrow = (proj_marker * AbsFVarId.id * ty) list
 (** Similar to [bound_borrow] but for symbolic projections *)
 type bound_symbolic = (proj_marker * norm_proj_ty * AbsFVarId.id * ty) list
 
-type bound_outputs = {
+type bound_inputs_outputs = {
   borrows : bound_borrow BorrowId.Map.t;
   symbolic : bound_symbolic SymbolicValueId.Map.t;
   all_bindings : (BorrowId.id, SymbolicValueId.id) Either.t list;
@@ -783,6 +783,17 @@ type bound_outputs = {
           values from the maps above, the values in [all_bindings] may contain
           duplicates, or may contain values which are not actually bound anymore
           (this is fine, because we only use this list to give us an order). *)
+  input_loans : (AbsFVarId.id * proj_marker list * ty) BorrowId.Map.t;
+      (** Map from an input loan id to:
+          - the free variable introduced to re-bind it
+          - the list of projection markers encountered in the merged
+            continuations (we collect the list of projection markers to compute
+            their union: the merged continuation will use the union) *)
+  input_symbolic :
+    (AbsFVarId.id * proj_marker list * norm_proj_ty * ty) SymbolicValueId.Map.t;
+      (** Similar to [input_symbolic] *)
+  all_input_bindings : (BorrowId.id, SymbolicValueId.id) Either.t list;
+      (** Same purpose as [all_bindings], but for the inputs *)
 }
 
 let bound_borrow_to_string ((bid, b) : BorrowId.id * bound_borrow) : string =
@@ -804,8 +815,38 @@ let bound_symbolic_to_string (ctx : eval_ctx)
           ^ ty_to_string ctx norm_proj_ty))
     b
 
-let bound_outputs_to_string (ctx : eval_ctx) (b : bound_outputs) : string =
-  let { borrows; symbolic; all_bindings } = b in
+let input_loan_to_string
+    ((bid, (fid, pml, _ty)) :
+      BorrowId.id * (AbsFVarId.id * proj_marker list * ty)) : string =
+  let bid = BorrowId.to_string bid in
+  "fv@" ^ AbsFVarId.to_string fid ^ " <- "
+  ^ Print.list_to_string (fun pm -> Print.Values.add_proj_marker pm bid) pml
+
+let input_symbolic_to_string (ctx : eval_ctx)
+    ((sid, (fid, pml, norm_proj_ty, _ty)) :
+      SymbolicValueId.id * (AbsFVarId.id * proj_marker list * norm_proj_ty * ty))
+    : string =
+  let sv =
+    "s@"
+    ^ SymbolicValueId.to_string sid
+    ^ " <: "
+    ^ ty_to_string ctx norm_proj_ty
+  in
+  "fv@" ^ AbsFVarId.to_string fid ^ " <- "
+  ^ Print.list_to_string (fun pm -> Print.Values.add_proj_marker pm sv) pml
+
+let bound_inputs_outputs_to_string (ctx : eval_ctx) (b : bound_inputs_outputs) :
+    string =
+  let {
+    borrows;
+    symbolic;
+    all_bindings;
+    input_loans;
+    input_symbolic;
+    all_input_bindings;
+  } =
+    b
+  in
   let bindings_to_string (bindings : (loan_id, symbolic_value_id) Either.t list)
       : string =
     Print.list_to_string
@@ -823,11 +864,20 @@ let bound_outputs_to_string (ctx : eval_ctx) (b : bound_outputs) : string =
       (SymbolicValueId.Map.bindings symbolic)
   ^ "\n  all_bindings: "
   ^ bindings_to_string all_bindings
+  ^ "\n  input_loans: "
+  ^ Print.list_to_string input_loan_to_string
+      (BorrowId.Map.bindings input_loans)
+  ^ "\n  input_symbolic: "
+  ^ Print.list_to_string
+      (input_symbolic_to_string ctx)
+      (SymbolicValueId.Map.bindings input_symbolic)
+  ^ "\n  input_bindings: "
+  ^ bindings_to_string all_input_bindings
   ^ "\n}"
 
-let bound_outputs_add_borrow (span : Meta.span) (bid : BorrowId.id)
-    (pm : proj_marker) (fvid : AbsFVarId.id) (ty : ty) (out : bound_outputs) :
-    bound_outputs =
+let bound_inputs_outputs_add_borrow (span : Meta.span) (bid : BorrowId.id)
+    (pm : proj_marker) (fvid : AbsFVarId.id) (ty : ty)
+    (out : bound_inputs_outputs) : bound_inputs_outputs =
   let borrow = (pm, fvid, ty) in
   let borrows =
     BorrowId.Map.update bid
@@ -844,11 +894,37 @@ let bound_outputs_add_borrow (span : Meta.span) (bid : BorrowId.id)
   in
   { out with borrows; all_bindings = Left bid :: out.all_bindings }
 
-let bound_outputs_consume_borrow (span : Meta.span) (bid : BorrowId.id)
-    (pm : proj_marker) (out : bound_outputs) : bound_outputs * tevalue option =
+(** Given an input loan, consume a registered output borrow. If there is no such
+    output borrow, register the input (it will be an input of the composed
+    continuation. *)
+let bound_inputs_outputs_update_input_loan (span : Meta.span)
+    (bid : BorrowId.id) (ty : ty) (pm : proj_marker)
+    (out : bound_inputs_outputs) : bound_inputs_outputs * tevalue =
   match BorrowId.Map.find_opt bid out.borrows with
-  | None -> (out, None)
+  | None ->
+      (* There is no corresponding input value: check if we already introduced a
+       free variable for this loan (for a complementary projector), if not,
+       introduce a fresh free variable *)
+      let fid, input_loans =
+        match BorrowId.Map.find_opt bid out.input_loans with
+        | None ->
+            let fid = fresh_abs_fvar_id () in
+            (fid, BorrowId.Map.add bid (fid, [ pm ], ty) out.input_loans)
+        | Some (fid, pml, ty') ->
+            (fid, BorrowId.Map.add bid (fid, pm :: pml, ty') out.input_loans)
+      in
+      let v : tevalue = { value = EFVar fid; ty } in
+      let out =
+        {
+          out with
+          input_loans;
+          all_input_bindings = Left bid :: out.all_input_bindings;
+        }
+      in
+      (* *)
+      (out, v)
   | Some bound ->
+      (* There is a corresponding output value: consume it *)
       (* Filter the bound values which intersect the current proj marker *)
       let bound, bound' =
         List.partition (fun (pm', _, _) -> proj_markers_intersect pm pm') bound
@@ -881,11 +957,11 @@ let bound_outputs_consume_borrow (span : Meta.span) (bid : BorrowId.id)
           borrows = BorrowId.Map.update bid (fun _ -> bound) out.borrows;
         }
       in
-      (out, Some value)
+      (out, value)
 
-let bound_outputs_add_symbolic (sid : SymbolicValueId.id) (pm : proj_marker)
-    (proj_ty : norm_proj_ty) (fvid : AbsFVarId.id) (ty : ty)
-    (out : bound_outputs) : bound_outputs =
+let bound_inputs_outputs_add_symbolic (sid : SymbolicValueId.id)
+    (pm : proj_marker) (proj_ty : norm_proj_ty) (fvid : AbsFVarId.id) (ty : ty)
+    (out : bound_inputs_outputs) : bound_inputs_outputs =
   let s = (pm, proj_ty, fvid, ty) in
   let symbolic =
     SymbolicValueId.Map.update sid
@@ -897,12 +973,41 @@ let bound_outputs_add_symbolic (sid : SymbolicValueId.id) (pm : proj_marker)
   in
   { out with symbolic; all_bindings = Right sid :: out.all_bindings }
 
-let bound_outputs_consume_symbolic (span : Meta.span) (sid : SymbolicValueId.id)
-    (pm : proj_marker) (proj_ty : norm_proj_ty) (out : bound_outputs) :
-    bound_outputs * tevalue option =
+let bound_inputs_outputs_update_input_symbolic (span : Meta.span)
+    (sid : SymbolicValueId.id) (pm : proj_marker) (ty : ty)
+    (proj_ty : norm_proj_ty) (out : bound_inputs_outputs) :
+    bound_inputs_outputs * tevalue =
   match SymbolicValueId.Map.find_opt sid out.symbolic with
-  | None -> (out, None)
+  | None ->
+      (* There is no corresponding input value: check if we already introduced a
+       free variable for this loan (for a complementary projector), if not,
+       introduce a fresh free variable *)
+      let fid, input_symbolic =
+        match SymbolicValueId.Map.find_opt sid out.input_symbolic with
+        | None ->
+            let fid = fresh_abs_fvar_id () in
+            ( fid,
+              SymbolicValueId.Map.add sid (fid, [ pm ], proj_ty, ty)
+                out.input_symbolic )
+        | Some (fid, pml, proj_ty', ty') ->
+            [%sanity_check] span (proj_ty = proj_ty');
+            ( fid,
+              SymbolicValueId.Map.add sid
+                (fid, pm :: pml, proj_ty', ty')
+                out.input_symbolic )
+      in
+      let v : tevalue = { value = EFVar fid; ty } in
+      let out =
+        {
+          out with
+          input_symbolic;
+          all_input_bindings = Right sid :: out.all_input_bindings;
+        }
+      in
+      (* *)
+      (out, v)
   | Some bound ->
+      (* There is a corresponding output value: consume it *)
       (* Filter the bound values which intersect the current proj marker and projection *)
       let bound, bound' =
         List.partition
@@ -951,9 +1056,9 @@ let bound_outputs_consume_symbolic (span : Meta.span) (sid : SymbolicValueId.id)
             SymbolicValueId.Map.update sid (fun _ -> bound) out.symbolic;
         }
       in
-      (out, Some value)
+      (out, value)
 
-(** Bind the outputs from a continuation with no outputs *and* inputs.
+(** Bind the outputs from an abs continuation.
 
     See the documentation of [abs_cont].
 
@@ -961,8 +1066,8 @@ let bound_outputs_consume_symbolic (span : Meta.span) (sid : SymbolicValueId.id)
     might have replaced some loans with free variables, in case the output of
     the corresponding borrows were bound elsewhere). *)
 let bind_outputs_from_output_input (span : Meta.span) (_ctx : eval_ctx)
-    (regions : RegionId.Set.t) (bound : bound_outputs ref) (output : tevalue)
-    (input : tevalue) : tepat * tevalue =
+    (regions : RegionId.Set.t) (bound : bound_inputs_outputs ref)
+    (output : tevalue) (input : tevalue) : tepat * tevalue =
   (* Update the input value by substituting expressions (such as a mutable loan)
      whose input have been bound earlier (because we bound an abstraction continuation
      earlier which has a mutable borrow corresponding to this mutable loan) *)
@@ -1001,13 +1106,12 @@ let bind_outputs_from_output_input (span : Meta.span) (_ctx : eval_ctx)
           match loan with
           | EMutLoan (pm, bid, child) ->
               [%cassert] span (is_eignored child.value) "Unimplemented";
-              let bound', e = bound_outputs_consume_borrow span bid pm !bound in
+              let bound', e =
+                bound_inputs_outputs_update_input_loan span bid input.ty pm
+                  !bound
+              in
               bound := bound';
-              begin
-                match e with
-                | None -> input
-                | Some e -> e
-              end
+              e
           | EEndedMutLoan { child; given_back = _; given_back_meta = _ } ->
               [%cassert] span (is_eignored child.value) "Unimplemented";
               input
@@ -1026,16 +1130,14 @@ let bind_outputs_from_output_input (span : Meta.span) (_ctx : eval_ctx)
             [%cassert] span (consumed = []) "Unimplemented";
             [%cassert] span (borrows = []) "Unimplemented";
             (* Check if this projection was previously bound *)
+            let ty = proj.proj_ty in
+            let norm_proj_ty = normalize_proj_ty regions ty in
             let bound', e =
-              bound_outputs_consume_symbolic span proj.sv_id pm proj.proj_ty
-                !bound
+              bound_inputs_outputs_update_input_symbolic span proj.sv_id pm ty
+                norm_proj_ty !bound
             in
             bound := bound';
-            begin
-              match e with
-              | None -> input
-              | Some e -> e
-            end
+            e
         | EEndedProjLoans { proj = _; consumed; borrows } ->
             [%cassert] span (consumed = []) "Unimplemented";
             [%cassert] span (borrows = []) "Unimplemented";
@@ -1072,7 +1174,8 @@ let bind_outputs_from_output_input (span : Meta.span) (_ctx : eval_ctx)
               let fid = fresh_abs_fvar_id () in
               let pat : tepat = { epat = POpen fid; epat_ty = output.ty } in
               (* We need to register the binding *)
-              bound := bound_outputs_add_borrow span bid pm fid output.ty !bound;
+              bound :=
+                bound_inputs_outputs_add_borrow span bid pm fid output.ty !bound;
               (* *)
               pat
           | EEndedMutBorrow _ | EIgnoredMutBorrow _ | EEndedIgnoredMutBorrow _
@@ -1100,7 +1203,8 @@ let bind_outputs_from_output_input (span : Meta.span) (_ctx : eval_ctx)
               (* We need to register the binding *)
               let norm_ty = normalize_proj_ty regions proj_ty in
               bound :=
-                bound_outputs_add_symbolic sv_id pm norm_ty fid proj_ty !bound;
+                bound_inputs_outputs_add_symbolic sv_id pm norm_ty fid proj_ty
+                  !bound;
               (* *)
               pat
           | EEndedProjBorrows _ ->
@@ -1122,110 +1226,30 @@ let bind_outputs_from_output_input (span : Meta.span) (_ctx : eval_ctx)
   (pat, input)
 
 let abs_cont_bind_outputs (span : Meta.span) (ctx : eval_ctx)
-    (regions : RegionId.Set.t) (bound : bound_outputs ref) (cont : abs_cont) :
-    tepat * tevalue =
+    (regions : RegionId.Set.t) (bound : bound_inputs_outputs ref)
+    (cont : abs_cont) : tepat * tevalue =
   match (cont.output, cont.input) with
   | Some output, Some input ->
       bind_outputs_from_output_input span ctx regions bound output input
   | _ -> [%craise] span "Unreachable"
 
-(** Merge two abstraction continuations.
+(** Create the output of a composed continuation, and its corresponding input
+    expression (without the let-bindings).
 
-    We merge from the right to the left, i.e.: we merge the (input) loans from
-    [abs0] with the (output) borrows from [abs1]. *)
-let merge_abs_conts_aux (span : Meta.span) (ctx : eval_ctx) (abs0 : abs)
-    (abs1 : abs) (cont0 : abs_cont) (cont1 : abs_cont) : abs_cont =
-  [%ltrace
-    "- cont0:\n  "
-    ^ abs_cont_to_string span ctx ~indent:"  " cont0
-    ^ "\n- cont1:\n  "
-    ^ abs_cont_to_string span ctx ~indent:"  " cont1];
-
-  (* The way we proceed is simple.
-
-     Let's say we want to merge A1 into A0:
-     {[
-       A0 { MB l0, ML l1 } ⟦ MB l0 = ML l1 ⟧
-       A1 { MB l1, MB l2, ML l3 } ⟦ (MB l1, MB l2) = if b then (ML l3, 1) else (0, ML l3) ⟧
-     ]}
-
-     We first bind all the values in the continuation in A1 like so:
-     {[
-       let (v_l1, v_l2) = if b then (ML l3, 1) else (0, ML l3) in
-     ]}
-
-     We then update the continuation in A0 to substitute the loans whose corresponding
-     borrows are outputs of the continuation of A1, and bind the outputs of A0 like so:
-     {[
-       let v_l0 = v_l1 in
-     ]}
-
-     Finally, we output all the outputs of A1 which are not "consumed" by inputs of A0,
-     as well as all the outputs of A0:
-     {[
-       (v_l0, v_l2)
-     ]}
-
-     The final, composed continuation is:
-     {[
-       (MB l0, MB l2) =
-         let (v_l1, v_l2) = if b then (ML l3, 1) else (0, ML l3) in
-         let v_l0 = v_l1 in
-         (v_l0, v_l2)
-     ]}
-  *)
-
-  (* Initialize the map containing the bound outputs *)
-  let bound : bound_outputs =
-    {
-      borrows = BorrowId.Map.empty;
-      symbolic = SymbolicValueId.Map.empty;
-      all_bindings = [];
-    }
-  in
-  let bound = ref bound in
-
-  (* First, bind all the outputs of the second continuation *)
-  let pat1, inputs1 =
-    abs_cont_bind_outputs span ctx abs1.regions.owned bound cont1
-  in
-  let bindings1 = !bound.all_bindings in
-  [%ltrace
-    "- pat1: " ^ tepat_to_string ctx pat1 ^ "\n- inputs1: "
-    ^ tevalue_to_string ctx inputs1
-    ^ "\n- bound_outputs:\n"
-    ^ bound_outputs_to_string ctx !bound];
-
-  (* For the final order to be correct, because we bind the second continuation
-     then the first, we need to reset the [all_bindings] field *)
-  bound := { !bound with all_bindings = [] };
-
-  (* Next, bind the outputs of the first continuation, while updating its inputs *)
-  let pat0, inputs0 =
-    abs_cont_bind_outputs span ctx abs0.regions.owned bound cont0
-  in
-  let bindings0 = !bound.all_bindings in
-  [%ltrace
-    "- pat0: " ^ tepat_to_string ctx pat0 ^ "\n- inputs0: "
-    ^ tevalue_to_string ctx inputs0
-    ^ "\n- bound_outputs:\n"
-    ^ bound_outputs_to_string ctx !bound];
-
-  (* Create the output for the composed continuation, and its corresponding input.
-
-     We simply list all the bound outputs which were not consumed (the free variables
-     give us the inputs, and the borrow themselves give us the outputs) by following
-     the order in which they were added to the map.
-  *)
-  (* Note that the bindings are listed in reverse order, and we want the bindings
-     from abs0 to appear first, hence the order of the concatenation *)
-  let bindings = bindings1 @ bindings0 in
-  let borrows = ref !bound.borrows in
-  let symbolic = ref !bound.symbolic in
+    We simply list all the bound outputs which were not consumed (the free
+    variables give us the inputs, and the borrow themselves give us the outputs)
+    by following the order in which they were added to the map. *)
+let merge_abs_conts_generate_output (span : Meta.span) (_ctx : eval_ctx)
+    (all_bindings : (BorrowId.id, SymbolicValueId.id) Either.t list)
+    (bound : bound_inputs_outputs) : tevalue * tevalue =
+  let bindings = all_bindings in
+  let borrows = ref bound.borrows in
+  let symbolic = ref bound.symbolic in
   let outputs = ref [] in
   let inputs = ref [] in
 
-  let add_binding (binding : (BorrowId.id, SymbolicValueId.id) Either.t) =
+  let add_output_binding (binding : (BorrowId.id, SymbolicValueId.id) Either.t)
+      =
     match binding with
     | Left bid -> begin
         match BorrowId.Map.find_opt bid !borrows with
@@ -1310,13 +1334,195 @@ let merge_abs_conts_aux (span : Meta.span) (ctx : eval_ctx) (abs0 : abs)
             inputs := input :: !inputs
       end
   in
-  List.iter add_binding bindings;
-  let input = mk_etuple !inputs in
-  let output = mk_etuple !outputs in
+  List.iter add_output_binding bindings;
+  let input = mk_etuple (List.rev !inputs) in
+  let output = mk_etuple (List.rev !outputs) in
+  (output, input)
+
+(** Create the input binding all inputs of a composed continuation. *)
+let merge_abs_conts_generate_input (span : Meta.span) (_ctx : eval_ctx)
+    (all_bindings : (BorrowId.id, SymbolicValueId.id) Either.t list)
+    (bound : bound_inputs_outputs) : tepat * tevalue =
+  let bindings = all_bindings in
+  let loans = ref bound.input_loans in
+  let symbolic = ref bound.input_symbolic in
+  let pats = ref [] in
+  let inputs = ref [] in
+
+  let add_input_binding (binding : (BorrowId.id, SymbolicValueId.id) Either.t) =
+    match binding with
+    | Left bid -> begin
+        match BorrowId.Map.find_opt bid !loans with
+        | None -> ()
+        | Some (fid, pml, ty) ->
+            let pm =
+              match pml with
+              | [ pm ] -> pm
+              | [ PLeft; PRight ] | [ PRight; PLeft ] -> PNone
+              | _ -> [%internal_error] span
+            in
+            let pat : tepat = { epat = POpen fid; epat_ty = ty } in
+            let input : tevalue =
+              { value = ELoan (EMutLoan (pm, bid, mk_eignored ty)); ty }
+            in
+            loans := BorrowId.Map.remove bid !loans;
+            pats := pat :: !pats;
+            inputs := input :: !inputs
+      end
+    | Right sv_id -> begin
+        match SymbolicValueId.Map.find_opt sv_id !symbolic with
+        | None -> ()
+        | Some (fid, pml, _, ty) ->
+            let pm =
+              match pml with
+              | [ pm ] -> pm
+              | [ PLeft; PRight ] | [ PRight; PLeft ] -> PNone
+              | _ -> [%internal_error] span
+            in
+            let pat : tepat = { epat = POpen fid; epat_ty = ty } in
+            let input : tevalue =
+              {
+                value =
+                  ESymbolic
+                    ( pm,
+                      EProjLoans
+                        {
+                          proj = { sv_id; proj_ty = ty };
+                          consumed = [];
+                          borrows = [];
+                        } );
+                ty;
+              }
+            in
+            symbolic := SymbolicValueId.Map.remove sv_id !symbolic;
+            pats := pat :: !pats;
+            inputs := input :: !inputs
+      end
+  in
+  List.iter add_input_binding bindings;
+  let pat = mk_epat_tuple (List.rev !pats) in
+  let input = mk_etuple (List.rev !inputs) in
+  (pat, input)
+
+(** Merge two abstraction continuations.
+
+    We merge from the right to the left, i.e.: we merge the (input) loans from
+    [abs0] with the (output) borrows from [abs1]. *)
+let merge_abs_conts_aux (span : Meta.span) (ctx : eval_ctx) (abs0 : abs)
+    (abs1 : abs) (cont0 : abs_cont) (cont1 : abs_cont) : abs_cont =
+  [%ltrace
+    "- cont0:\n  "
+    ^ abs_cont_to_string span ctx ~indent:"  " cont0
+    ^ "\n- cont1:\n  "
+    ^ abs_cont_to_string span ctx ~indent:"  " cont1];
+
+  (* The way we proceed is simple.
+
+     Let's say we want to merge A1 into A0:
+     {[
+       A0 { MB l0, ML l1 } ⟦ MB l0 = ML l1 ⟧
+       A1 { MB l1, MB l2, ML l3 } ⟦ (MB l1, MB l2) = if b then (ML l3, 1) else (0, ML l3) ⟧
+     ]}
+
+     We first bind all the values in the continuation in A1 like so:
+     {[
+       let (v_l1, v_l2) = if b then (ML l3, 1) else (0, ML l3) in
+     ]}
+
+     We then update the continuation in A0 to substitute the loans whose corresponding
+     borrows are outputs of the continuation of A1, and bind the outputs of A0 like so:
+     {[
+       let v_l0 = v_l1 in
+     ]}
+
+     We output all the outputs of A1 which are not "consumed" by inputs of A0,
+     as well as all the outputs of A0:
+     {[
+       (v_l0, v_l2)
+     ]}
+
+     Finally, we introduce binders for the remaining inputs of *both* continuations.
+     This allows us to control the order in which those inputs appear (this is
+     important for the translation, because it has an effect on the type of the
+     translated continuation).
+
+     The final, composed continuation is:
+     {[
+       (MB l0, MB l2) =
+         let v0 = ML l3 in
+         let (v_l1, v_l2) = if b then (v0, 1) else (0, v0) in
+         let v_l0 = v_l1 in
+         (v_l0, v_l2)
+     ]}
+  *)
+
+  (* Initialize the map containing the bound outputs *)
+  let bound : bound_inputs_outputs =
+    {
+      borrows = BorrowId.Map.empty;
+      symbolic = SymbolicValueId.Map.empty;
+      all_bindings = [];
+      input_loans = BorrowId.Map.empty;
+      input_symbolic = SymbolicValueId.Map.empty;
+      all_input_bindings = [];
+    }
+  in
+  let bound = ref bound in
+
+  (* Introduce binders for all the inputs of the second continuation *)
+
+  (* Bind all the outputs of the second continuation *)
+  let pat1, inputs1 =
+    abs_cont_bind_outputs span ctx abs1.regions.owned bound cont1
+  in
+  let bindings1 = !bound.all_bindings in
+  let input_bindings1 = !bound.all_input_bindings in
+  [%ltrace
+    "- pat1: " ^ tepat_to_string ctx pat1 ^ "\n- inputs1: "
+    ^ tevalue_to_string ctx inputs1
+    ^ "\n- bound_inputs_outputs:\n"
+    ^ bound_inputs_outputs_to_string ctx !bound];
+
+  (* For the final order to be correct, because we bind the second continuation
+     then the first, we need to reset the [all_bindings] field *)
+  bound := { !bound with all_bindings = []; all_input_bindings = [] };
+
+  (* Next, bind the outputs of the first continuation, while updating its inputs *)
+  let pat0, inputs0 =
+    abs_cont_bind_outputs span ctx abs0.regions.owned bound cont0
+  in
+  let bindings0 = !bound.all_bindings in
+  let input_bindings0 = !bound.all_input_bindings in
+  [%ltrace
+    "- pat0: " ^ tepat_to_string ctx pat0 ^ "\n- inputs0: "
+    ^ tevalue_to_string ctx inputs0
+    ^ "\n- bound_inputs_outputs:\n"
+    ^ bound_inputs_outputs_to_string ctx !bound];
+
+  (* Create the output for the composed continuation, and its corresponding input.
+
+     We simply list all the bound outputs which were not consumed (the free variables
+     give us the inputs, and the borrow themselves give us the outputs) by following
+     the order in which they were added to the map.
+  *)
+  let output, output_input_expr =
+    merge_abs_conts_generate_output span ctx
+      (List.rev (bindings1 @ bindings0))
+      !bound
+  in
+
+  (* Create the input expression and pattern *)
+  let input_pat, input_input =
+    merge_abs_conts_generate_input span ctx
+      (List.rev (input_bindings1 @ input_bindings0))
+      !bound
+  in
 
   (* Create the let-bindings (this is the input expression) *)
-  let input = mk_let span abs0.regions.owned pat0 inputs0 input in
+  let input = mk_let span abs0.regions.owned pat0 inputs0 output_input_expr in
   let input = mk_let span abs1.regions.owned pat1 inputs1 input in
+  let all_regions = RegionId.Set.union abs0.regions.owned abs1.regions.owned in
+  let input = mk_let span all_regions input_pat input_input input in
 
   (* Sanity check: no free variables in the expressions *)
   [%sanity_check] span (not (tevalue_has_fvars input));

@@ -56,6 +56,11 @@ let mk_etuple (vl : tevalue list) : tevalue =
     ty = TAdt { id = TTuple; generics };
   }
 
+let mk_epat_tuple (vl : tepat list) : tepat =
+  let tys = List.map (fun (v : tepat) -> v.epat_ty) vl in
+  let generics = mk_generic_args_from_types tys in
+  { epat = PAdt (None, vl); epat_ty = TAdt { id = TTuple; generics } }
+
 let mk_simpl_etuple (vl : tevalue list) : tevalue =
   match vl with
   | [ v ] -> v
