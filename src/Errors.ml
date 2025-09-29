@@ -30,7 +30,7 @@ let span_to_string (span : Meta.span) =
         "; this code is generated from a macro invocation at: "
         ^ span_data_to_string span
   in
-  "Source: " ^ span_data_to_string span.span ^ generated_from
+  "Source: " ^ span_data_to_string span.data ^ generated_from
 
 let format_error_message (span : Meta.span option) (msg : string) =
   let span =
