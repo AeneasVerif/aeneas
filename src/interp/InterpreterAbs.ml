@@ -11,14 +11,17 @@ open InterpreterBorrows
 let log = Logging.abs_log
 
 let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
-    ~(can_end : bool) ~(destructure_shared_values : bool) (ctx : eval_ctx)
-    (v : tvalue) : abs list =
+    ~(can_end : bool) (ctx : eval_ctx) (v : tvalue) : abs list =
   [%ltrace tvalue_to_string ctx v];
   (* Convert the value to a list of avalues *)
   let absl = ref [] in
-  let push_abs (r_id : RegionId.id) (avalues : tavalue list) : unit =
+  let push_abs (r_id : RegionId.id) (avalues : tavalue list)
+      (output : tevalue option) (input : tevalue option) : unit =
     if avalues = [] then ()
     else begin
+      (* There should be output and input expressions *)
+      let output = [%unwrap_with_span] span output "Unexpected error" in
+      let input = [%unwrap_with_span] span input "Unexpected error" in
       (* Create the abs - note that we keep the order of the avalues as it is
          (unlike the environments) *)
       [%ldebug
@@ -37,6 +40,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
           original_parents = [];
           regions = { owned = RegionId.Set.singleton r_id };
           avalues;
+          cont = Some { output = Some output; input = Some input };
         }
       in
       [%ldebug "abs:\n" ^ abs_to_string span ctx abs];
@@ -46,133 +50,144 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
     end
   in
 
-  (* [group]: group in one abstraction (because we dived into a borrow/loan)
-
-     We return one typed-value for the shared values: when we encounter a shared
-     loan, we need to compute the value which will be shared. If [destructure_shared_values]
-     is [true], this shared value will be stripped of its shared loans.
-  *)
-  let rec to_avalues ~(allow_borrows : bool) ~(inside_borrowed : bool)
-      ~(group : bool) (r_id : RegionId.id) (v : tvalue) : tavalue list * tvalue
-      =
-    (* Debug *)
-    [%ldebug "\n- value: " ^ tvalue_to_string ~span:(Some span) ctx v];
-
-    let ty = v.ty in
+  (* Decompose all the shared loans inside a value *)
+  let rec decompose_shared_value (rid : RegionId.id) (v : tvalue) :
+      tavalue list * tvalue =
     match v.value with
     | VLiteral _ -> ([], v)
-    | VBottom ->
-        (* Can happen: we *do* convert dummy values to abstractions, and dummy
-           values can contain bottoms *)
-        ([], v)
-    | VAdt adt ->
-        (* Two cases, depending on whether we have to group all the borrows/loans
-           inside one abstraction or not *)
-        let avl, field_values =
-          if group then
-            (* Convert to avalues, and transmit to the parent *)
-            let avl, field_values =
-              List.split
-                (List.map
-                   (to_avalues ~allow_borrows ~inside_borrowed ~group r_id)
-                   adt.field_values)
-            in
-            (List.concat avl, field_values)
-          else
-            (* Create one abstraction per field, and transmit nothing to the parent *)
-            let field_values =
-              List.map
-                (fun fv ->
-                  let r_id = fresh_region_id () in
-                  let avl, fv =
-                    to_avalues ~allow_borrows ~inside_borrowed ~group r_id fv
-                  in
-                  push_abs r_id avl;
-                  fv)
-                (* Slightly tricky: pay attention to the order in which the
-                   abstractions are pushed (i.e.: the [List.rev] is important
-                   to get a "good" environment, and a nice translation) *)
-                (List.rev adt.field_values)
-            in
-            ([], field_values)
+    | VAdt { variant_id; field_values } ->
+        let avll, field_values =
+          List.split (List.map (decompose_shared_value rid) field_values)
         in
-        let adt = { adt with field_values } in
-        (avl, { v with value = VAdt adt })
+        let v = { v with value = VAdt { variant_id; field_values } } in
+        (List.flatten avll, v)
+    | VBottom -> [%internal_error] span
+    | VBorrow _ -> [%craise] span "Nested borrows are not supported yet"
+    | VLoan lc -> (
+        match lc with
+        | VSharedLoan (bid, sv) ->
+            let vl, sv = decompose_shared_value rid sv in
+            [%cassert] span (ty_no_regions sv.ty)
+              "Nested borrows are not supported yet";
+
+            (* For avalues, a loan has the type borrow (see the comments in [avalue]) *)
+            let ty = mk_ref_ty (RVar (Free rid)) sv.ty RShared in
+            let av : tavalue =
+              let ignored = mk_aignored span v.ty None in
+              let value = ALoan (ASharedLoan (PNone, bid, sv, ignored)) in
+              { value; ty }
+            in
+
+            (* *)
+            (vl @ [ av ], sv)
+        | VMutLoan _ -> [%internal_error] span)
+    | VSymbolic _ ->
+        [%cassert] span (ty_no_regions v.ty)
+          "Nested borrows are not supported yet";
+        ([], v)
+  in
+
+  (* We only call this on values inside mutable borrows *)
+  let rec to_inputs (rid : RegionId.id) (v : tvalue) : tavalue list * tevalue =
+    match v.value with
+    | VLiteral _ -> ([], { value = EValue (ctx.env, v); ty = v.ty })
+    | VAdt { variant_id; field_values } ->
+        [%cassert] span (ty_no_regions v.ty)
+          "Nested borrows are not supported yet";
+        let avll, field_values =
+          List.split (List.map (to_inputs rid) field_values)
+        in
+        let value = EAdt { variant_id; field_values } in
+        let value : tevalue = { value; ty = v.ty } in
+        (List.flatten avll, value)
+    | VBottom ->
+        [%cassert] span (ty_no_regions v.ty)
+          "Nested borrows are not supported yet";
+        ([], mk_ebottom v.ty)
+    | VBorrow _ -> [%craise] span "Nested borrows are not supported yet"
+    | VLoan lc -> (
+        match lc with
+        | VSharedLoan _ ->
+            [%cassert] span (ty_no_regions v.ty)
+              "Nested borrows are not supported yet";
+            let avl, _ = decompose_shared_value rid v in
+            let ev : tevalue = { value = EValue (ctx.env, v); ty = v.ty } in
+            (avl, ev)
+        | VMutLoan bid ->
+            (* Push the avalue *)
+            [%cassert] span (ty_no_regions v.ty)
+              "Nested borrows are not supported yet";
+            let inner_ty = v.ty in
+            (* We use [AIgnore] for the inner value *)
+            let ignored = mk_aignored span v.ty in
+            (* For avalues, a loan has the type borrow (see the comments in [avalue]) *)
+            let ty = mk_ref_ty (RVar (Free rid)) v.ty RMut in
+            let av : tavalue =
+              let value = ALoan (AMutLoan (PNone, bid, ignored None)) in
+              { value; ty }
+            in
+            (* Create the input expression *)
+            let input : tevalue =
+              let value = ELoan (EMutLoan (PNone, bid, mk_eignored inner_ty)) in
+              { value; ty }
+            in
+            (* *)
+            ([ av ], input))
+    | VSymbolic _ ->
+        (* Check that there are no borrows in the symbolic value (otherwise it
+           can't be an input value and we're in a case of nested borrows) *)
+        [%cassert] span (ty_no_regions v.ty)
+          "Nested borrows are not supported yet";
+        ([], { value = EValue (ctx.env, v); ty = v.ty })
+  in
+
+  (* Convert a value to abstractions *)
+  let rec to_abs (v : tvalue) : unit =
+    match v.value with
+    | VLiteral _ | VBottom -> ()
+    | VAdt { variant_id = _; field_values } -> List.iter to_abs field_values
     | VBorrow bc -> (
-        let _, ref_ty, kind = ty_as_ref ty in
+        let _, ref_ty, kind = ty_as_ref v.ty in
         [%cassert] span (ty_no_regions ref_ty)
           "Nested borrows are not supported yet";
-        (* Sanity check *)
-        [%sanity_check] span allow_borrows;
-        (* Convert the borrow content *)
         match bc with
         | VSharedBorrow (bid, sid) ->
-            [%cassert] span (ty_no_regions ref_ty)
-              "Nested borrows are not supported yet";
-            let ty = TRef (RVar (Free r_id), ref_ty, kind) in
+            (* Push a region abstraction for this borrow *)
+            let rid = fresh_region_id () in
+            let ty = TRef (RVar (Free rid), ref_ty, kind) in
             let value = ABorrow (ASharedBorrow (PNone, bid, sid)) in
-            ([ { value; ty } ], v)
+            let value : tavalue = { value; ty } in
+            let ev = Some (mk_etuple []) in
+            push_abs rid [ value ] ev ev
         | VMutBorrow (bid, bv) ->
             (* We don't support nested borrows for now *)
             [%cassert] span
               (not (value_has_borrows (Some span) ctx bv.value))
               "Nested borrows are not supported yet";
             (* Create an avalue to push - note that we use [AIgnore] for the inner avalue *)
-            let ty = TRef (RVar (Free r_id), ref_ty, kind) in
-            let ignored = mk_aignored span ref_ty None in
-            let av = ABorrow (AMutBorrow (PNone, bid, ignored)) in
-            let av = { value = av; ty } in
-            (* Continue exploring, looking for loans (and forbidding borrows,
-               because we don't support nested borrows for now) *)
-            let avl, bv =
-              to_avalues ~allow_borrows:false ~inside_borrowed:true ~group:true
-                r_id bv
+            let rid = fresh_region_id () in
+            let ty = TRef (RVar (Free rid), ref_ty, kind) in
+            let av : tavalue =
+              let ignored = mk_aignored span ref_ty None in
+              let av = ABorrow (AMutBorrow (PNone, bid, ignored)) in
+              { value = av; ty }
             in
-            let value = { v with value = VBorrow (VMutBorrow (bid, bv)) } in
-            (av :: avl, value)
+            (* Create the output expression *)
+            let output : tevalue =
+              let ignored = mk_eignored ref_ty in
+              let value = EBorrow (EMutBorrow (PNone, bid, Some bv, ignored)) in
+              { value; ty }
+            in
+            (* Recursively explore the expression to look for shared loans
+               and create the input expression *)
+            let avl, input = to_inputs rid bv in
+            push_abs rid (av :: avl) (Some output) (Some input)
         | VReservedMutBorrow _ ->
             (* This borrow should have been activated *)
             [%craise] span "Unexpected")
-    | VLoan lc -> (
-        match lc with
-        | VSharedLoan (bids, sv) ->
-            (* We don't support nested borrows for now *)
-            [%cassert] span
-              (not (value_has_borrows (Some span) ctx sv.value))
-              "Nested borrows are not supported yet";
-            (* Push the avalue *)
-            [%cassert] span (ty_no_regions ty)
-              "Nested borrows are not supported yet";
-            (* We use [AIgnore] for the inner value *)
-            let ignored = mk_aignored span ty None in
-            (* For avalues, a loan has the type borrow (see the comments in [avalue]) *)
-            let ty = mk_ref_ty (RVar (Free r_id)) ty RShared in
-            (* Rem.: the shared value might contain loans *)
-            let avl, sv =
-              to_avalues ~allow_borrows:false ~inside_borrowed:true ~group:true
-                r_id sv
-            in
-            let av = ALoan (ASharedLoan (PNone, bids, sv, ignored)) in
-            let av = { value = av; ty } in
-            (* Continue exploring, looking for loans (and forbidding borrows,
-               because we don't support nested borrows for now) *)
-            let value : value =
-              if destructure_shared_values then sv.value
-              else VLoan (VSharedLoan (bids, sv))
-            in
-            let value = { v with value } in
-            (av :: avl, value)
-        | VMutLoan bid ->
-            (* Push the avalue *)
-            [%cassert] span (ty_no_regions ty)
-              "Nested borrows are not supported yet";
-            (* We use [AIgnore] for the inner value *)
-            let ignored = mk_aignored span ty in
-            (* For avalues, a loan has the type borrow (see the comments in [avalue]) *)
-            let ty = mk_ref_ty (RVar (Free r_id)) ty RMut in
-            let av = ALoan (AMutLoan (PNone, bid, ignored None)) in
-            let av = { value = av; ty } in
-            ([ av ], v))
+    | VLoan _ ->
+        (* An outer loan can't be placed inside an anonymous value *)
+        [%craise] span "Unexpected"
     | VSymbolic sv ->
         (* Check that there are no nested borrows in the symbolic value -
            we don't support this case yet *)
@@ -181,55 +196,29 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
              (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos sv.sv_ty))
           "Nested borrows are not supported yet";
 
-        (* If we don't need to group the borrows into one region (because the
-           symbolic value is inside a mutable borrow for instance) check that
-           none of the regions used by the symbolic value have ended. *)
-        [%sanity_check] span
-          (group || not (symbolic_value_has_ended_regions ctx.ended_regions sv));
-
-        (* If we group the borrows: simply introduce a projector.
-           Otherwise, introduce one abstraction per region *)
-        if group then
-          (* Check if the type contains regions: if not, simply ignore
-             it (there are no projections to introduce) *)
-          if TypesUtils.ty_no_regions sv.sv_ty then ([], v)
-          else
-            (* Substitute the regions in the type *)
-            let visitor =
-              object
-                inherit [_] map_ty
-
-                method! visit_RVar _ var =
-                  match var with
-                  | Free _ -> RVar (Free r_id)
-                  | Bound _ -> [%internal_error] span
-              end
-            in
-            let ty = visitor#visit_ty () sv.sv_ty in
+        (* Introduce one abstraction per live region *)
+        let regions, ty = refresh_live_regions_in_ty span ctx sv.sv_ty in
+        RegionId.Map.iter
+          (fun _ rid ->
             let proj : symbolic_proj = { sv_id = sv.sv_id; proj_ty = ty } in
             let nv = ASymbolic (PNone, AProjBorrows { proj; loans = [] }) in
             let nv : tavalue = { value = nv; ty } in
-            ([ nv ], v)
-        else
-          (* Introduce one abstraction per live region *)
-          let regions, ty = refresh_live_regions_in_ty span ctx sv.sv_ty in
-          RegionId.Map.iter
-            (fun _ rid ->
-              let proj : symbolic_proj = { sv_id = sv.sv_id; proj_ty = ty } in
-              let nv = ASymbolic (PNone, AProjBorrows { proj; loans = [] }) in
-              let nv : tavalue = { value = nv; ty } in
-              push_abs rid [ nv ])
-            regions;
-          ([], v)
+            (* Abstraction expression *)
+            let output =
+              ESymbolic
+                ( PNone,
+                  EProjBorrows
+                    { proj = { sv_id = sv.sv_id; proj_ty = ty }; loans = [] } )
+            in
+            let output = { value = output; ty } in
+            let input = { value = EValue (ctx.env, v); ty } in
+            (* *)
+            push_abs rid [ nv ] (Some output) (Some input))
+          regions
   in
 
-  (* Generate the avalues *)
-  let r_id = fresh_region_id () in
-  let values, _ =
-    to_avalues ~allow_borrows:true ~inside_borrowed:false ~group:false r_id v
-  in
-  (* Introduce an abstraction for the returned values *)
-  push_abs r_id values;
+  (* Apply *)
+  to_abs v;
   (* Return *)
   List.rev !absl
 
@@ -773,12 +762,793 @@ let merge_abstractions_merge_markers (span : Meta.span)
   (* We're done *)
   !merged
 
+(** Information about a borrow which is output by a continuation and which was
+    bound in a let binding.
+
+    We distinguish different cases, depending on whether the borrow has a marker
+    or not. *)
+type bound_borrow = (proj_marker * AbsFVarId.id * ty) list
+
+(** Similar to [bound_borrow] but for symbolic projections *)
+type bound_symbolic = (proj_marker * norm_proj_ty * AbsFVarId.id * ty) list
+
+type bound_inputs_outputs = {
+  borrows : bound_borrow BorrowId.Map.t;
+  symbolic : bound_symbolic SymbolicValueId.Map.t;
+  all_bindings : (BorrowId.id, SymbolicValueId.id) Either.t list;
+      (** We use this to remember the order in which values were inserted: we
+          use this to properly order the outputs of the composed continuation.
+
+          Note that as we do not store the projectors and as we allow removing
+          values from the maps above, the values in [all_bindings] may contain
+          duplicates, or may contain values which are not actually bound anymore
+          (this is fine, because we only use this list to give us an order). *)
+  input_loans : (AbsFVarId.id * proj_marker list * ty) BorrowId.Map.t;
+      (** Map from an input loan id to:
+          - the free variable introduced to re-bind it
+          - the list of projection markers encountered in the merged
+            continuations (we collect the list of projection markers to compute
+            their union: the merged continuation will use the union) *)
+  input_symbolic :
+    (AbsFVarId.id * proj_marker list * norm_proj_ty * ty) SymbolicValueId.Map.t;
+      (** Similar to [input_symbolic] *)
+  all_input_bindings : (BorrowId.id, SymbolicValueId.id) Either.t list;
+      (** Same purpose as [all_bindings], but for the inputs *)
+}
+
+let bound_borrow_to_string ((bid, b) : BorrowId.id * bound_borrow) : string =
+  Print.list_to_string
+    (fun (pm, fid, _ty) ->
+      "fv@" ^ AbsFVarId.to_string fid ^ " <- "
+      ^ Print.Values.add_proj_marker pm ("l@" ^ BorrowId.to_string bid))
+    b
+
+let bound_symbolic_to_string (ctx : eval_ctx)
+    ((sid, b) : SymbolicValueId.id * bound_symbolic) : string =
+  Print.list_to_string
+    (fun (pm, norm_proj_ty, fid, _ty) ->
+      "fv@" ^ AbsFVarId.to_string fid ^ " <- "
+      ^ Print.Values.add_proj_marker pm
+          ("s@"
+          ^ SymbolicValueId.to_string sid
+          ^ " <: "
+          ^ ty_to_string ctx norm_proj_ty))
+    b
+
+let input_loan_to_string
+    ((bid, (fid, pml, _ty)) :
+      BorrowId.id * (AbsFVarId.id * proj_marker list * ty)) : string =
+  let bid = BorrowId.to_string bid in
+  "fv@" ^ AbsFVarId.to_string fid ^ " <- "
+  ^ Print.list_to_string (fun pm -> Print.Values.add_proj_marker pm bid) pml
+
+let input_symbolic_to_string (ctx : eval_ctx)
+    ((sid, (fid, pml, norm_proj_ty, _ty)) :
+      SymbolicValueId.id * (AbsFVarId.id * proj_marker list * norm_proj_ty * ty))
+    : string =
+  let sv =
+    "s@"
+    ^ SymbolicValueId.to_string sid
+    ^ " <: "
+    ^ ty_to_string ctx norm_proj_ty
+  in
+  "fv@" ^ AbsFVarId.to_string fid ^ " <- "
+  ^ Print.list_to_string (fun pm -> Print.Values.add_proj_marker pm sv) pml
+
+let bound_inputs_outputs_to_string (ctx : eval_ctx) (b : bound_inputs_outputs) :
+    string =
+  let {
+    borrows;
+    symbolic;
+    all_bindings;
+    input_loans;
+    input_symbolic;
+    all_input_bindings;
+  } =
+    b
+  in
+  let bindings_to_string (bindings : (loan_id, symbolic_value_id) Either.t list)
+      : string =
+    Print.list_to_string
+      (fun x ->
+        match x with
+        | Either.Left lid -> "l@" ^ BorrowId.to_string lid
+        | Right sid -> "s@" ^ SymbolicValueId.to_string sid)
+      bindings
+  in
+  "{\n  borrows: "
+  ^ Print.list_to_string bound_borrow_to_string (BorrowId.Map.bindings borrows)
+  ^ "\n  symbolic: "
+  ^ Print.list_to_string
+      (bound_symbolic_to_string ctx)
+      (SymbolicValueId.Map.bindings symbolic)
+  ^ "\n  all_bindings: "
+  ^ bindings_to_string all_bindings
+  ^ "\n  input_loans: "
+  ^ Print.list_to_string input_loan_to_string
+      (BorrowId.Map.bindings input_loans)
+  ^ "\n  input_symbolic: "
+  ^ Print.list_to_string
+      (input_symbolic_to_string ctx)
+      (SymbolicValueId.Map.bindings input_symbolic)
+  ^ "\n  input_bindings: "
+  ^ bindings_to_string all_input_bindings
+  ^ "\n}"
+
+let bound_inputs_outputs_add_borrow (span : Meta.span) (bid : BorrowId.id)
+    (pm : proj_marker) (fvid : AbsFVarId.id) (ty : ty)
+    (out : bound_inputs_outputs) : bound_inputs_outputs =
+  let borrow = (pm, fvid, ty) in
+  let borrows =
+    BorrowId.Map.update bid
+      (fun bound ->
+        match bound with
+        | None -> Some [ borrow ]
+        | Some bound ->
+            [%sanity_check] span
+              (List.for_all
+                 (fun (pm', _, _) -> not (proj_markers_intersect pm pm'))
+                 bound);
+            Some (borrow :: bound))
+      out.borrows
+  in
+  { out with borrows; all_bindings = Left bid :: out.all_bindings }
+
+(** Given an input loan, consume a registered output borrow. If there is no such
+    output borrow, register the input (it will be an input of the composed
+    continuation. *)
+let bound_inputs_outputs_update_input_loan (span : Meta.span)
+    (bid : BorrowId.id) (ty : ty) (pm : proj_marker)
+    (out : bound_inputs_outputs) : bound_inputs_outputs * tevalue =
+  match BorrowId.Map.find_opt bid out.borrows with
+  | None ->
+      (* There is no corresponding input value: check if we already introduced a
+       free variable for this loan (for a complementary projector), if not,
+       introduce a fresh free variable *)
+      let fid, input_loans =
+        match BorrowId.Map.find_opt bid out.input_loans with
+        | None ->
+            let fid = fresh_abs_fvar_id () in
+            (fid, BorrowId.Map.add bid (fid, [ pm ], ty) out.input_loans)
+        | Some (fid, pml, ty') ->
+            (fid, BorrowId.Map.add bid (fid, pm :: pml, ty') out.input_loans)
+      in
+      let v : tevalue = { value = EFVar fid; ty } in
+      let out =
+        {
+          out with
+          input_loans;
+          all_input_bindings = Left bid :: out.all_input_bindings;
+        }
+      in
+      (* *)
+      (out, v)
+  | Some bound ->
+      (* There is a corresponding output value: consume it *)
+      (* Filter the bound values which intersect the current proj marker *)
+      let bound, bound' =
+        List.partition (fun (pm', _, _) -> proj_markers_intersect pm pm') bound
+      in
+      let bound, value =
+        match (pm, bound) with
+        | PLeft, [ (PLeft, fvid, ty) ] -> ([], { value = EFVar fvid; ty })
+        | PRight, [ (PRight, fvid, ty) ] -> ([], { value = EFVar fvid; ty })
+        | PLeft, [ (PNone, fvid, ty) ] ->
+            ([ (PRight, fvid, ty) ], { value = EFVar fvid; ty })
+        | PRight, [ (PNone, fvid, ty) ] ->
+            ([ (PLeft, fvid, ty) ], { value = EFVar fvid; ty })
+        | PNone, [ (PNone, fvid, ty) ] -> ([], { value = EFVar fvid; ty })
+        | ( PNone,
+            ( [ (PLeft, fvidl, tyl); (PRight, fvidr, tyr) ]
+            | [ (PRight, fvidr, tyr); (PLeft, fvidl, tyl) ] ) ) ->
+            let lv : tevalue = { value = EFVar fvidl; ty = tyl } in
+            let rv : tevalue = { value = EFVar fvidr; ty = tyr } in
+            ([], { value = EJoinMarkers (lv, rv); ty = tyl })
+        | _ -> [%internal_error] span
+      in
+      let out =
+        let bound =
+          match bound @ bound' with
+          | [] -> None
+          | l -> Some l
+        in
+        {
+          out with
+          borrows = BorrowId.Map.update bid (fun _ -> bound) out.borrows;
+        }
+      in
+      (out, value)
+
+let bound_inputs_outputs_add_symbolic (sid : SymbolicValueId.id)
+    (pm : proj_marker) (proj_ty : norm_proj_ty) (fvid : AbsFVarId.id) (ty : ty)
+    (out : bound_inputs_outputs) : bound_inputs_outputs =
+  let s = (pm, proj_ty, fvid, ty) in
+  let symbolic =
+    SymbolicValueId.Map.update sid
+      (fun bound ->
+        match bound with
+        | None -> Some [ s ]
+        | Some bound -> Some (s :: bound))
+      out.symbolic
+  in
+  { out with symbolic; all_bindings = Right sid :: out.all_bindings }
+
+let bound_inputs_outputs_update_input_symbolic (span : Meta.span)
+    (sid : SymbolicValueId.id) (pm : proj_marker) (ty : ty)
+    (proj_ty : norm_proj_ty) (out : bound_inputs_outputs) :
+    bound_inputs_outputs * tevalue =
+  match SymbolicValueId.Map.find_opt sid out.symbolic with
+  | None ->
+      (* There is no corresponding input value: check if we already introduced a
+       free variable for this loan (for a complementary projector), if not,
+       introduce a fresh free variable *)
+      let fid, input_symbolic =
+        match SymbolicValueId.Map.find_opt sid out.input_symbolic with
+        | None ->
+            let fid = fresh_abs_fvar_id () in
+            ( fid,
+              SymbolicValueId.Map.add sid (fid, [ pm ], proj_ty, ty)
+                out.input_symbolic )
+        | Some (fid, pml, proj_ty', ty') ->
+            [%sanity_check] span (proj_ty = proj_ty');
+            ( fid,
+              SymbolicValueId.Map.add sid
+                (fid, pm :: pml, proj_ty', ty')
+                out.input_symbolic )
+      in
+      let v : tevalue = { value = EFVar fid; ty } in
+      let out =
+        {
+          out with
+          input_symbolic;
+          all_input_bindings = Right sid :: out.all_input_bindings;
+        }
+      in
+      (* *)
+      (out, v)
+  | Some bound ->
+      (* There is a corresponding output value: consume it *)
+      (* Filter the bound values which intersect the current proj marker and projection *)
+      let bound, bound' =
+        List.partition
+          (fun (pm', proj_ty', _, _) ->
+            proj_markers_intersect pm pm'
+            && norm_proj_tys_intersect span proj_ty proj_ty')
+          bound
+      in
+      let bound, value =
+        match (pm, bound) with
+        | PLeft, [ (PLeft, proj_ty', fvid, ty) ] ->
+            [%cassert] span (proj_ty' = proj_ty) "Unimplemented";
+            ([], { value = EFVar fvid; ty })
+        | PLeft, [ (PNone, proj_ty', fvid, ty) ] ->
+            [%cassert] span (proj_ty' = proj_ty) "Unimplemented";
+            ([ (PRight, proj_ty', fvid, ty) ], { value = EFVar fvid; ty })
+        | PRight, [ (PRight, proj_ty', fvid, ty) ] ->
+            [%cassert] span (proj_ty' = proj_ty) "Unimplemented";
+            ([], { value = EFVar fvid; ty })
+        | PRight, [ (PNone, proj_ty', fvid, ty) ] ->
+            [%cassert] span (proj_ty' = proj_ty) "Unimplemented";
+            ([ (PLeft, proj_ty', fvid, ty) ], { value = EFVar fvid; ty })
+        | PNone, [ (PNone, proj_ty', fvid, ty') ] ->
+            [%cassert] span (proj_ty' = proj_ty) "Unimplemented";
+            ([], { value = EFVar fvid; ty = ty' })
+        | ( PNone,
+            ( [ (PLeft, proj_tyl, fvidl, tyl); (PRight, proj_tyr, fvidr, tyr) ]
+            | [ (PRight, proj_tyr, fvidr, tyr); (PLeft, proj_tyl, fvidl, tyl) ]
+              ) ) ->
+            [%cassert] span (proj_tyl = proj_ty) "Unimplemented";
+            [%cassert] span (proj_tyr = proj_ty) "Unimplemented";
+            let lv : tevalue = { value = EFVar fvidl; ty = tyl } in
+            let rv : tevalue = { value = EFVar fvidr; ty = tyr } in
+            ([], { value = EJoinMarkers (lv, rv); ty = tyl })
+        | _ -> [%internal_error] span
+      in
+      let out =
+        let bound =
+          match bound @ bound' with
+          | [] -> None
+          | l -> Some l
+        in
+        {
+          out with
+          symbolic =
+            SymbolicValueId.Map.update sid (fun _ -> bound) out.symbolic;
+        }
+      in
+      (out, value)
+
+(** Bind the outputs from an abs continuation.
+
+    See the documentation of [abs_cont].
+
+    We return the pattern (derived from the output) and the updated input (we
+    might have replaced some loans with free variables, in case the output of
+    the corresponding borrows were bound elsewhere). *)
+let bind_outputs_from_output_input (span : Meta.span) (_ctx : eval_ctx)
+    (regions : RegionId.Set.t) (bound : bound_inputs_outputs ref)
+    (output : tevalue) (input : tevalue) : tepat * tevalue =
+  (* Update the input value by substituting expressions (such as a mutable loan)
+     whose input have been bound earlier (because we bound an abstraction continuation
+     earlier which has a mutable borrow corresponding to this mutable loan) *)
+  let rec update_input (regions : RegionId.Set.t) (input : tevalue) : tevalue =
+    match input.value with
+    | ELet (regions', pat, bvalue, next) ->
+        (* Explore the bound expression *)
+        let bvalue = update_input regions bvalue in
+        (* Open the pattern *)
+        let pat, next = open_binder span pat next in
+        (* Explore the inner expression *)
+        let next = update_input regions' next in
+        (* Close the let (and the binders) *)
+        mk_let span regions' pat bvalue next
+    | EJoinMarkers (left, right) ->
+        let left = update_input regions left in
+        let right = update_input regions right in
+        { input with value = EJoinMarkers (left, right) }
+    | EApp (f, args) ->
+        let args = List.map (update_input regions) args in
+        { input with value = EApp (f, args) }
+    | EFVar _ -> input
+    | EBVar _ | EBottom ->
+        (* Shouldn't get there. Note in particular that all the patterns should
+           have been opened: we shouldn't find bound variables, only free variables. *)
+        [%craise] span "Unreachable"
+    | EAdt adt ->
+        let fields = List.map (update_input regions) adt.field_values in
+        {
+          value = EAdt { variant_id = adt.variant_id; field_values = fields };
+          ty = input.ty;
+        }
+    | ELoan loan ->
+        (* Check if this loan was previously bound *)
+        begin
+          match loan with
+          | EMutLoan (pm, bid, child) ->
+              [%cassert] span (is_eignored child.value) "Unimplemented";
+              let bound', e =
+                bound_inputs_outputs_update_input_loan span bid input.ty pm
+                  !bound
+              in
+              bound := bound';
+              e
+          | EEndedMutLoan { child; given_back = _; given_back_meta = _ } ->
+              [%cassert] span (is_eignored child.value) "Unimplemented";
+              input
+          | EIgnoredMutLoan (_lid, child) ->
+              [%cassert] span (is_eignored child.value) "Unimplemented";
+              input
+          | EEndedIgnoredMutLoan { child; given_back = _; given_back_meta = _ }
+            ->
+              [%cassert] span (is_eignored child.value) "Unimplemented";
+              input
+        end
+    | ESymbolic (pm, proj) -> begin
+        match proj with
+        | EProjLoans { proj; consumed; borrows } ->
+            (* Not sure what to do in the following cases *)
+            [%cassert] span (consumed = []) "Unimplemented";
+            [%cassert] span (borrows = []) "Unimplemented";
+            (* Check if this projection was previously bound *)
+            let ty = proj.proj_ty in
+            let norm_proj_ty = normalize_proj_ty regions ty in
+            let bound', e =
+              bound_inputs_outputs_update_input_symbolic span proj.sv_id pm ty
+                norm_proj_ty !bound
+            in
+            bound := bound';
+            e
+        | EEndedProjLoans { proj = _; consumed; borrows } ->
+            [%cassert] span (consumed = []) "Unimplemented";
+            [%cassert] span (borrows = []) "Unimplemented";
+            input
+        | EProjBorrows _ | EEndedProjBorrows _ ->
+            [%craise] span "Nested borrows are not supported yet in this case"
+        | EEmpty ->
+            (* We shouldn't get here? *)
+            [%craise] span "Unexpected"
+      end
+    | EBorrow _ ->
+        [%craise] span "Nested borrows are not supported yet in this case"
+    | EValue _ | EIgnored -> input
+  in
+  let rec bind_output (regions : RegionId.Set.t) (output : tevalue) : tepat =
+    match output.value with
+    | ELet _ | EJoinMarkers _ | EBVar _ | EFVar _ | EApp (_, _) | EBottom ->
+        (* Those expressions should not appear in the *output* expression
+           (some of them might appear only in the *input* expression) *)
+        [%craise] span "Unreachable"
+    | EAdt adt ->
+        let pats = List.map (bind_output regions) adt.field_values in
+        { epat = PAdt (adt.variant_id, pats); epat_ty = output.ty }
+    | ELoan _ ->
+        (* We shouldn't reach a loan which is not itself inside a borrow *)
+        [%craise] span "Unexpected"
+    | EBorrow borrow ->
+        (* Two cases depending on whether we are inside a loan or not *)
+        begin
+          match borrow with
+          | EMutBorrow (pm, bid, _mv, child) ->
+              [%cassert] span (is_eignored child.value) "Unimplemented";
+              (* Compute the binding pattern *)
+              let fid = fresh_abs_fvar_id () in
+              let pat : tepat = { epat = POpen fid; epat_ty = output.ty } in
+              (* We need to register the binding *)
+              bound :=
+                bound_inputs_outputs_add_borrow span bid pm fid output.ty !bound;
+              (* *)
+              pat
+          | EEndedMutBorrow _ | EIgnoredMutBorrow _ | EEndedIgnoredMutBorrow _
+            ->
+              (* We shouldn't get there. If we find an ended borrow in a region
+                 abstraction it means the abstraction was ended and thus removed
+                 from the context: we shouldn't be in the process of merging it...
+              *)
+              [%craise] span "Unexpected"
+        end
+    | ESymbolic (pm, proj) ->
+        (* If we get here it means the symbolic value gets projected (we can't ignore it) *)
+        begin
+          match proj with
+          | EProjLoans _ | EEndedProjLoans _ ->
+              (* We shouldn't reach a loan which is not itself inside a borrow *)
+              [%craise] span "Unexpected"
+          | EProjBorrows { proj; loans } ->
+              [%sanity_check] span (loans = []);
+              (* Compute the binding pattern *)
+              let { sv_id; proj_ty } : esymbolic_proj = proj in
+              [%sanity_check] span (loans = []);
+              let fid = fresh_abs_fvar_id () in
+              let pat : tepat = { epat = POpen fid; epat_ty = output.ty } in
+              (* We need to register the binding *)
+              let norm_ty = normalize_proj_ty regions proj_ty in
+              bound :=
+                bound_inputs_outputs_add_symbolic sv_id pm norm_ty fid proj_ty
+                  !bound;
+              (* *)
+              pat
+          | EEndedProjBorrows _ ->
+              (* Same remark as for the ended borrows above *)
+              [%craise] span "Unexpected"
+          | EEmpty ->
+              (* We shouldn't get here? *)
+              [%craise] span "Unexpected"
+        end
+    | EValue _ ->
+        (* We're not inside a loan or a borrow: simply ignore it *)
+        { epat = PIgnored; epat_ty = output.ty }
+    | EIgnored ->
+        (* We're not inside a loan or a borrow: simply ignore it *)
+        { epat = PIgnored; epat_ty = output.ty }
+  in
+  let input = update_input regions input in
+  let pat = bind_output regions output in
+  (pat, input)
+
+let abs_cont_bind_outputs (span : Meta.span) (ctx : eval_ctx)
+    (regions : RegionId.Set.t) (bound : bound_inputs_outputs ref)
+    (cont : abs_cont) : tepat * tevalue =
+  match (cont.output, cont.input) with
+  | Some output, Some input ->
+      bind_outputs_from_output_input span ctx regions bound output input
+  | _ -> [%craise] span "Unreachable"
+
+(** Create the output of a composed continuation, and its corresponding input
+    expression (without the let-bindings).
+
+    We simply list all the bound outputs which were not consumed (the free
+    variables give us the inputs, and the borrow themselves give us the outputs)
+    by following the order in which they were added to the map. *)
+let merge_abs_conts_generate_output (span : Meta.span) (_ctx : eval_ctx)
+    (all_bindings : (BorrowId.id, SymbolicValueId.id) Either.t list)
+    (bound : bound_inputs_outputs) : tevalue * tevalue =
+  let bindings = all_bindings in
+  let borrows = ref bound.borrows in
+  let symbolic = ref bound.symbolic in
+  let outputs = ref [] in
+  let inputs = ref [] in
+
+  let add_output_binding (binding : (BorrowId.id, SymbolicValueId.id) Either.t)
+      =
+    match binding with
+    | Left bid -> begin
+        match BorrowId.Map.find_opt bid !borrows with
+        | None -> ()
+        | Some values ->
+            let (output, input) : tevalue * tevalue =
+              match values with
+              | [ (pm, fid, ty) ] ->
+                  let output : tevalue =
+                    {
+                      value =
+                        EBorrow (EMutBorrow (pm, bid, None, mk_eignored ty));
+                      ty;
+                    }
+                  in
+                  let input : tevalue = { value = EFVar fid; ty } in
+                  (output, input)
+              | [ (PLeft, fidl, tyl); (PRight, fidr, tyr) ]
+              | [ (PRight, fidr, tyr); (PLeft, fidl, tyl) ] ->
+                  let inputl : tevalue = { value = EFVar fidl; ty = tyl } in
+                  let inputr : tevalue = { value = EFVar fidr; ty = tyr } in
+                  let input : tevalue =
+                    { value = EJoinMarkers (inputl, inputr); ty = tyl }
+                  in
+                  let output =
+                    {
+                      value =
+                        EBorrow (EMutBorrow (PNone, bid, None, mk_eignored tyl));
+                      ty = tyl;
+                    }
+                  in
+                  (output, input)
+              | _ -> [%internal_error] span
+            in
+            borrows := BorrowId.Map.remove bid !borrows;
+            outputs := output :: !outputs;
+            inputs := input :: !inputs
+      end
+    | Right sv_id -> begin
+        match SymbolicValueId.Map.find_opt sv_id !symbolic with
+        | None -> ()
+        | Some values ->
+            let (output, input) : tevalue * tevalue =
+              match values with
+              | [ (pm, _norm_proj_ty, fid, ty) ] ->
+                  let input : tevalue = { value = EFVar fid; ty } in
+                  let output : tevalue =
+                    {
+                      value =
+                        ESymbolic
+                          ( pm,
+                            EProjBorrows
+                              { proj = { sv_id; proj_ty = ty }; loans = [] } );
+                      ty;
+                    }
+                  in
+                  (output, input)
+              | [ (PLeft, proj_tyl, fidl, tyl); (PRight, proj_tyr, fidr, tyr) ]
+              | [ (PRight, proj_tyr, fidr, tyr); (PLeft, proj_tyl, fidl, tyl) ]
+                ->
+                  [%sanity_check] span (proj_tyl = proj_tyr);
+                  let inputl : tevalue = { value = EFVar fidl; ty = tyl } in
+                  let inputr : tevalue = { value = EFVar fidr; ty = tyr } in
+                  let input : tevalue =
+                    { value = EJoinMarkers (inputl, inputr); ty = tyl }
+                  in
+                  let output : tevalue =
+                    {
+                      value =
+                        ESymbolic
+                          ( PNone,
+                            EProjBorrows
+                              { proj = { sv_id; proj_ty = tyl }; loans = [] } );
+                      ty = tyl;
+                    }
+                  in
+                  (output, input)
+              | _ -> [%internal_error] span
+            in
+            symbolic := SymbolicValueId.Map.remove sv_id !symbolic;
+            outputs := output :: !outputs;
+            inputs := input :: !inputs
+      end
+  in
+  List.iter add_output_binding bindings;
+  let input = mk_etuple (List.rev !inputs) in
+  let output = mk_etuple (List.rev !outputs) in
+  (output, input)
+
+(** Create the input binding all inputs of a composed continuation. *)
+let merge_abs_conts_generate_input (span : Meta.span) (_ctx : eval_ctx)
+    (all_bindings : (BorrowId.id, SymbolicValueId.id) Either.t list)
+    (bound : bound_inputs_outputs) : tepat * tevalue =
+  let bindings = all_bindings in
+  let loans = ref bound.input_loans in
+  let symbolic = ref bound.input_symbolic in
+  let pats = ref [] in
+  let inputs = ref [] in
+
+  let add_input_binding (binding : (BorrowId.id, SymbolicValueId.id) Either.t) =
+    match binding with
+    | Left bid -> begin
+        match BorrowId.Map.find_opt bid !loans with
+        | None -> ()
+        | Some (fid, pml, ty) ->
+            let pm =
+              match pml with
+              | [ pm ] -> pm
+              | [ PLeft; PRight ] | [ PRight; PLeft ] -> PNone
+              | _ -> [%internal_error] span
+            in
+            let pat : tepat = { epat = POpen fid; epat_ty = ty } in
+            let input : tevalue =
+              { value = ELoan (EMutLoan (pm, bid, mk_eignored ty)); ty }
+            in
+            loans := BorrowId.Map.remove bid !loans;
+            pats := pat :: !pats;
+            inputs := input :: !inputs
+      end
+    | Right sv_id -> begin
+        match SymbolicValueId.Map.find_opt sv_id !symbolic with
+        | None -> ()
+        | Some (fid, pml, _, ty) ->
+            let pm =
+              match pml with
+              | [ pm ] -> pm
+              | [ PLeft; PRight ] | [ PRight; PLeft ] -> PNone
+              | _ -> [%internal_error] span
+            in
+            let pat : tepat = { epat = POpen fid; epat_ty = ty } in
+            let input : tevalue =
+              {
+                value =
+                  ESymbolic
+                    ( pm,
+                      EProjLoans
+                        {
+                          proj = { sv_id; proj_ty = ty };
+                          consumed = [];
+                          borrows = [];
+                        } );
+                ty;
+              }
+            in
+            symbolic := SymbolicValueId.Map.remove sv_id !symbolic;
+            pats := pat :: !pats;
+            inputs := input :: !inputs
+      end
+  in
+  List.iter add_input_binding bindings;
+  let pat = mk_epat_tuple (List.rev !pats) in
+  let input = mk_etuple (List.rev !inputs) in
+  (pat, input)
+
+(** Merge two abstraction continuations.
+
+    We merge from the right to the left, i.e.: we merge the (input) loans from
+    [abs0] with the (output) borrows from [abs1]. *)
+let merge_abs_conts_aux (span : Meta.span) (ctx : eval_ctx) (abs0 : abs)
+    (abs1 : abs) (cont0 : abs_cont) (cont1 : abs_cont) : abs_cont =
+  [%ltrace
+    "- cont0:\n  "
+    ^ abs_cont_to_string span ctx ~indent:"  " cont0
+    ^ "\n- cont1:\n  "
+    ^ abs_cont_to_string span ctx ~indent:"  " cont1];
+
+  (* The way we proceed is simple.
+
+     Let's say we want to merge A1 into A0:
+     {[
+       A0 { MB l0, ML l1 } ⟦ MB l0 = ML l1 ⟧
+       A1 { MB l1, MB l2, ML l3 } ⟦ (MB l1, MB l2) = if b then (ML l3, 1) else (0, ML l3) ⟧
+     ]}
+
+     We first bind all the values in the continuation in A1 like so:
+     {[
+       let (v_l1, v_l2) = if b then (ML l3, 1) else (0, ML l3) in
+     ]}
+
+     We then update the continuation in A0 to substitute the loans whose corresponding
+     borrows are outputs of the continuation of A1, and bind the outputs of A0 like so:
+     {[
+       let v_l0 = v_l1 in
+     ]}
+
+     We output all the outputs of A1 which are not "consumed" by inputs of A0,
+     as well as all the outputs of A0:
+     {[
+       (v_l0, v_l2)
+     ]}
+
+     Finally, we introduce binders for the remaining inputs of *both* continuations.
+     This allows us to control the order in which those inputs appear (this is
+     important for the translation, because it has an effect on the type of the
+     translated continuation).
+
+     The final, composed continuation is:
+     {[
+       (MB l0, MB l2) =
+         let v0 = ML l3 in
+         let (v_l1, v_l2) = if b then (v0, 1) else (0, v0) in
+         let v_l0 = v_l1 in
+         (v_l0, v_l2)
+     ]}
+  *)
+
+  (* Initialize the map containing the bound outputs *)
+  let bound : bound_inputs_outputs =
+    {
+      borrows = BorrowId.Map.empty;
+      symbolic = SymbolicValueId.Map.empty;
+      all_bindings = [];
+      input_loans = BorrowId.Map.empty;
+      input_symbolic = SymbolicValueId.Map.empty;
+      all_input_bindings = [];
+    }
+  in
+  let bound = ref bound in
+
+  (* Introduce binders for all the inputs of the second continuation *)
+
+  (* Bind all the outputs of the second continuation *)
+  let pat1, inputs1 =
+    abs_cont_bind_outputs span ctx abs1.regions.owned bound cont1
+  in
+  let bindings1 = !bound.all_bindings in
+  let input_bindings1 = !bound.all_input_bindings in
+  [%ltrace
+    "- pat1: " ^ tepat_to_string ctx pat1 ^ "\n- inputs1: "
+    ^ tevalue_to_string ctx inputs1
+    ^ "\n- bound_inputs_outputs:\n"
+    ^ bound_inputs_outputs_to_string ctx !bound];
+
+  (* For the final order to be correct, because we bind the second continuation
+     then the first, we need to reset the [all_bindings] field *)
+  bound := { !bound with all_bindings = []; all_input_bindings = [] };
+
+  (* Next, bind the outputs of the first continuation, while updating its inputs *)
+  let pat0, inputs0 =
+    abs_cont_bind_outputs span ctx abs0.regions.owned bound cont0
+  in
+  let bindings0 = !bound.all_bindings in
+  let input_bindings0 = !bound.all_input_bindings in
+  [%ltrace
+    "- pat0: " ^ tepat_to_string ctx pat0 ^ "\n- inputs0: "
+    ^ tevalue_to_string ctx inputs0
+    ^ "\n- bound_inputs_outputs:\n"
+    ^ bound_inputs_outputs_to_string ctx !bound];
+
+  (* Create the output for the composed continuation, and its corresponding input.
+
+     We simply list all the bound outputs which were not consumed (the free variables
+     give us the inputs, and the borrow themselves give us the outputs) by following
+     the order in which they were added to the map.
+  *)
+  let output, output_input_expr =
+    merge_abs_conts_generate_output span ctx
+      (List.rev (bindings1 @ bindings0))
+      !bound
+  in
+
+  (* Create the input expression and pattern *)
+  let input_pat, input_input =
+    merge_abs_conts_generate_input span ctx
+      (List.rev (input_bindings1 @ input_bindings0))
+      !bound
+  in
+
+  (* Create the let-bindings (this is the input expression) *)
+  let input = mk_let span abs0.regions.owned pat0 inputs0 output_input_expr in
+  let input = mk_let span abs1.regions.owned pat1 inputs1 input in
+  let all_regions = RegionId.Set.union abs0.regions.owned abs1.regions.owned in
+  let input = mk_let span all_regions input_pat input_input input in
+
+  (* Sanity check: no free variables in the expressions *)
+  [%sanity_check] span (not (tevalue_has_fvars input));
+  [%sanity_check] span (not (tevalue_has_fvars output));
+
+  (* The continuation itself *)
+  { output = Some output; input = Some input }
+
+(** Merge the continuation expressions of two different abstractions. *)
+let merge_abs_conts (span : Meta.span) (ctx : eval_ctx) ~(with_abs_conts : bool)
+    (abs0 : abs) (abs1 : abs) : abs_cont option =
+  match (abs0.cont, abs1.cont) with
+  | None, None | None, Some _ | Some _, None ->
+      [%sanity_check] span (not with_abs_conts);
+      None
+  | Some cont0, Some cont1 ->
+      if with_abs_conts then
+        Some (merge_abs_conts_aux span ctx abs0 abs1 cont0 cont1)
+      else None
+
 (** Auxiliary function.
 
     Merge two abstractions into one, without updating the context. *)
-let merge_abstractions (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
-    (merge_funs : merge_duplicates_funcs option) (ctx : eval_ctx) (abs0 : abs)
-    (abs1 : abs) : abs =
+let merge_abstractions (span : Meta.span) (abs_kind : abs_kind)
+    ~(can_end : bool) (merge_funs : merge_duplicates_funcs option)
+    ~(with_abs_conts : bool) (ctx : eval_ctx) (abs0 : abs) (abs1 : abs) : abs =
   [%ltrace
     "- abs0:\n"
     ^ abs_to_string span ctx abs0
@@ -851,6 +1621,9 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
           avalues
   in
 
+  (* Merge the expressions used for the pure translation. *)
+  let cont = merge_abs_conts span ctx ~with_abs_conts abs0 abs1 in
+
   (* Create the new abstraction *)
   let abs_id = fresh_abstraction_id () in
   let abs =
@@ -862,6 +1635,7 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
       original_parents;
       regions;
       avalues;
+      cont;
     }
   in
 
@@ -901,8 +1675,9 @@ let end_endable_shared_loans_at_abs (span : Meta.span) (ctx : eval_ctx)
   fst (ctx_subst_abs span ctx abs_id abs)
 
 let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
-    (can_end : bool) (merge_funs : merge_duplicates_funcs option)
-    (ctx : eval_ctx) (abs_id0 : AbstractionId.id) (abs_id1 : AbstractionId.id) :
+    ~(can_end : bool) ~(with_abs_conts : bool)
+    (merge_funs : merge_duplicates_funcs option) (ctx : eval_ctx)
+    (abs_id0 : AbstractionId.id) (abs_id1 : AbstractionId.id) :
     eval_ctx * AbstractionId.id =
   (* Small sanity check *)
   [%sanity_check] span (abs_id0 <> abs_id1);
@@ -913,7 +1688,8 @@ let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
 
   (* Merge them *)
   let nabs =
-    merge_abstractions span abs_kind can_end merge_funs ctx abs0 abs1
+    merge_abstractions span abs_kind ~can_end ~with_abs_conts merge_funs ctx
+      abs0 abs1
   in
   Invariants.opt_type_check_abs span ctx nabs;
 
@@ -1099,3 +1875,161 @@ let reorder_fresh_abs (span : Meta.span) (allow_markers : bool)
     (old_abs_ids : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
   reorder_loans_borrows_in_fresh_abs span allow_markers old_abs_ids ctx
   |> reorder_fresh_abs_aux span old_abs_ids
+
+let project_context (span : Meta.span) (fixed_ids : InterpreterUtils.ids_sets)
+    (pm : proj_marker) (ctx : eval_ctx) : eval_ctx =
+  [%cassert] span (pm = PLeft || pm = PRight) "Invalid input";
+  let project_left = pm = PLeft in
+
+  let preserve (pm' : proj_marker) =
+    match (pm, pm') with
+    | PLeft, (PNone | PLeft) -> true
+    | PRight, (PNone | PRight) -> true
+    | _ -> false
+  in
+
+  let visitor =
+    object (self)
+      inherit [_] map_eval_ctx as super
+
+      (* By overriding this method to raise an exception we make sure we do not
+         miss any projection marker *)
+      method! visit_proj_marker _ _ = [%internal_error] span
+
+      method! visit_ASymbolic env pm aproj =
+        if preserve pm then
+          let aproj = self#visit_aproj env aproj in
+          ASymbolic (PNone, aproj)
+        else begin
+          match aproj with
+          | AProjLoans { proj = _; consumed; borrows } ->
+              [%cassert] span (consumed = []) "Not implemented";
+              [%cassert] span (borrows = []) "Not implemented";
+              AIgnored None
+          | AProjBorrows { proj = _; loans } ->
+              [%cassert] span (loans = []) "Not implemented";
+              AIgnored None
+          | AEndedProjLoans { proj = _; consumed; borrows } ->
+              [%cassert] span (consumed = []) "Not implemented";
+              [%cassert] span (borrows = []) "Not implemented";
+              AIgnored None
+          | AEndedProjBorrows _ ->
+              (* We shouldn't find ended borrows inside a region abstraction *)
+              [%internal_error] span
+          | AEmpty -> AIgnored None
+        end
+
+      method! visit_ALoan env lc =
+        match lc with
+        | AMutLoan (pm, lid, child) ->
+            if preserve pm then
+              let child = self#visit_tavalue env child in
+              ALoan (AMutLoan (PNone, lid, child))
+            else (
+              [%cassert] span (is_aignored child.value) "Not implemented";
+              AIgnored None)
+        | ASharedLoan (pm, lid, shared, child) ->
+            if preserve pm then
+              let child = self#visit_tavalue env child in
+              ALoan (ASharedLoan (PNone, lid, shared, child))
+            else (
+              [%cassert] span (is_aignored child.value) "Not implemented";
+              AIgnored None)
+        | AEndedMutLoan _
+        | AEndedSharedLoan _
+        | AIgnoredMutLoan _
+        | AEndedIgnoredMutLoan _
+        | AIgnoredSharedLoan _ ->
+            (* Those do not have projection markers *)
+            super#visit_ALoan env lc
+
+      method! visit_ABorrow env bc =
+        match bc with
+        | AMutBorrow (pm, bid, child) ->
+            if preserve pm then
+              let child = self#visit_tavalue env child in
+              ABorrow (AMutBorrow (PNone, bid, child))
+            else (
+              [%cassert] span (is_aignored child.value) "Not implemented";
+              AIgnored None)
+        | ASharedBorrow (pm, bid, sid) ->
+            if preserve pm then ABorrow (ASharedBorrow (PNone, bid, sid))
+            else AIgnored None
+        | AIgnoredMutBorrow _
+        | AEndedMutBorrow _
+        | AEndedSharedBorrow
+        | AEndedIgnoredMutBorrow _
+        | AProjSharedBorrow _ ->
+            (* Those do not have projection markers *)
+            super#visit_ABorrow env bc
+
+      method! visit_EJoinMarkers env left right =
+        let v = if project_left then left else right in
+        (self#visit_tevalue env v).value
+
+      method! visit_ESymbolic env pm eproj =
+        if preserve pm then
+          let eproj = self#visit_eproj env eproj in
+          ESymbolic (PNone, eproj)
+        else
+          match eproj with
+          | EProjLoans { proj = _; consumed; borrows } ->
+              [%cassert] span (consumed = []) "Not implemented";
+              [%cassert] span (borrows = []) "Not implemented";
+              EBottom
+          | EProjBorrows { proj = _; loans } ->
+              [%cassert] span (loans = []) "Not implemented";
+              EBottom
+          | EEndedProjLoans { proj = _; consumed; borrows } ->
+              [%cassert] span (consumed = []) "Not implemented";
+              [%cassert] span (borrows = []) "Not implemented";
+              EBottom
+          | EEndedProjBorrows _ ->
+              (* We can't find ended borrows in live abstractions *)
+              [%internal_error] span
+          | EEmpty -> EBottom
+
+      method! visit_ELoan env lc =
+        match lc with
+        | EMutLoan (pm, lid, child) ->
+            if preserve pm then
+              let child = self#visit_tevalue env child in
+              ELoan (EMutLoan (PNone, lid, child))
+            else (
+              [%cassert] span (is_eignored child.value) "Not implemented";
+              EBottom)
+        | EEndedMutLoan _ | EIgnoredMutLoan _ | EEndedIgnoredMutLoan _ ->
+            (* Those do not have projection markers *)
+            super#visit_ELoan env lc
+
+      method! visit_EBorrow env lc =
+        match lc with
+        | EMutBorrow (pm, bid, mv, child) ->
+            if preserve pm then
+              let child = self#visit_tevalue env child in
+              EBorrow (EMutBorrow (PNone, bid, mv, child))
+            else (
+              [%cassert] span (is_eignored child.value) "Not implemented";
+              EBottom)
+        | EIgnoredMutBorrow _ | EEndedMutBorrow _ | EEndedIgnoredMutBorrow _ ->
+            (* Those do not have projection markers *)
+            super#visit_EBorrow env lc
+    end
+  in
+  (* Project *)
+  let ctx = visitor#visit_eval_ctx () ctx in
+
+  (* Simplify the region abstractions, and filter the ones which have become
+     empty because of the projection *)
+  let update_binding (e : env_elem) : env_elem option =
+    match e with
+    | EAbs abs ->
+        if AbstractionId.Set.mem abs.abs_id fixed_ids.aids then Some e
+        else
+          let keep_value (e : tavalue) : bool = not (is_aignored e.value) in
+          let avalues = List.filter keep_value abs.avalues in
+          if avalues = [] then None else Some (EAbs { abs with avalues })
+    | EBinding _ | EFrame -> Some e
+  in
+  let env = List.filter_map update_binding ctx.env in
+  { ctx with env }

@@ -75,7 +75,10 @@ let () =
            "cassert_warn";
            "silent_unwrap";
          ]
-      @ [ mk_check_rule "Errors" "unwrap_opt_span" ]
+      @ [
+          mk_check_rule "Errors" "unwrap_opt_span";
+          mk_check_rule "Errors" "unwrap_with_span";
+        ]
       (* The rules for the helpers in `ExtractErrors.ml` *)
       @ mk_check_rules "ExtractErrors"
           [ "extract_raise"; "admit_raise"; "admit_string" ]

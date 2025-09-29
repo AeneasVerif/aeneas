@@ -91,7 +91,7 @@ type benv = var BVarId.Map.t list
     variables. *)
 type fenv = var FVarId.Map.t
 
-(** A iter visitor for expressions where the environment is the current
+(** An iter visitor for expressions where the environment is the current
     scope/level (we increment it whenever we enter a binder) *)
 class ['self] scoped_iter_expr =
   object (self : 'self)
@@ -123,16 +123,11 @@ class ['self] scoped_iter_expr =
       self#visit_tpattern scope pat;
       self#visit_texpr scope' body
 
-    method! visit_loop scope loop =
-      let { fun_end; loop_id = _; span = _; inputs; output_ty; loop_body } =
-        loop
-      in
-      (* Visit what can be visited before entering the binder *)
-      self#visit_texpr scope fun_end;
-      self#visit_ty scope output_ty;
+    method! visit_loop_body scope body =
+      let { inputs; loop_body } = body in
       (* Visit the patterns *)
       List.iter (self#visit_tpattern scope) inputs;
-      (* Enter the inner expressions *)
+      (* Enter the inner expression *)
       let scope' = scope + 1 in
       self#visit_texpr scope' loop_body
   end
@@ -174,17 +169,14 @@ class ['self] scoped_map_expr =
       let body = self#visit_texpr scope' body in
       Lambda (pat, body)
 
-    method! visit_loop scope loop =
-      let { fun_end; loop_id; span; inputs; output_ty; loop_body } = loop in
-      (* Visit what can be visited before entering the binder *)
-      let fun_end = self#visit_texpr scope fun_end in
-      let output_ty = self#visit_ty scope output_ty in
+    method! visit_loop_body scope body =
+      let { inputs; loop_body } = body in
       (* Visit the patterns *)
       let inputs = List.map (self#visit_tpattern scope) inputs in
-      (* Enter the inner expressions *)
+      (* Enter the inner expression *)
       let scope' = scope + 1 in
       let loop_body = self#visit_texpr scope' loop_body in
-      { fun_end; loop_id; span; inputs; output_ty; loop_body }
+      { inputs; loop_body }
   end
 
 let opt_dest_arrow_ty (ty : ty) : (ty * ty) option =
@@ -686,7 +678,7 @@ let mk_bool_value (b : bool) : texpr =
 let mk_true : texpr = mk_bool_value true
 let mk_false : texpr = mk_bool_value false
 
-let mk_unit_rvalue : texpr =
+let mk_unit_texpr : texpr =
   let id = AdtCons { adt_id = TTuple; variant_id = None } in
   let qualif = { id; generics = empty_generic_args } in
   let e = Qualif qualif in
@@ -757,7 +749,7 @@ let mk_adt_pattern (adt_ty : ty) (variant_id : VariantId.id option)
   let pat = PAdt { variant_id; fields = vl } in
   { pat; ty = adt_ty }
 
-let mk_adt_value (span : span) (adt_ty : ty) (variant_id : VariantId.id option)
+let mk_adt_texpr (span : span) (adt_ty : ty) (variant_id : VariantId.id option)
     (fields : texpr list) : texpr =
   let adt_id, generics = ty_as_adt span adt_ty in
   let qualif : expr =
@@ -856,6 +848,28 @@ let mk_result_ok_pattern (v : tpattern) : tpattern =
   let ty = TAdt (TBuiltin TResult, mk_generic_args_from_types [ v.ty ]) in
   let pat = PAdt { variant_id = Some result_ok_id; fields = [ v ] } in
   { pat; ty }
+
+let mk_sum_ty (left : ty) (right : ty) : ty =
+  TAdt (TBuiltin TSum, mk_generic_args_from_types [ left; right ])
+
+let mk_sum_left_texpr (span : span) (left : texpr) (right : ty) : texpr =
+  let ty = mk_sum_ty left.ty right in
+  mk_adt_texpr span ty (Some sum_left_id) [ left ]
+
+let mk_sum_right_texpr (span : span) (left : ty) (right : texpr) : texpr =
+  let ty = mk_sum_ty left right.ty in
+  mk_adt_texpr span ty (Some sum_right_id) [ right ]
+
+let mk_loop_result_ty (continue : ty) (break : ty) : ty =
+  TAdt (TBuiltin TLoopResult, mk_generic_args_from_types [ continue; break ])
+
+let mk_continue_texpr (span : span) (continue : texpr) (break : ty) : texpr =
+  let ty = mk_loop_result_ty continue.ty break in
+  mk_adt_texpr span ty (Some loop_result_continue_id) [ continue ]
+
+let mk_break_texpr (span : span) (continue : ty) (break : texpr) : texpr =
+  let ty = mk_loop_result_ty continue break.ty in
+  mk_adt_texpr span ty (Some loop_result_continue_id) [ break ]
 
 let opt_unmeta_mplace (e : texpr) : mplace option * texpr =
   match e.e with
@@ -1000,7 +1014,7 @@ let open_binder (span : Meta.span) (pat : tpattern) (e : texpr) :
 
 (** Helper visitor to close a binder group.
 
-    Return the close binder (where the free variables have been replaced with
+    Return the closed binder (where the free variables have been replaced with
     bound variables).
 
     We use this when handling function bodies: the list of type patterns is the
@@ -1029,7 +1043,7 @@ let close_binders_visitor (span : Meta.span) (patl : tpattern list) =
 
 (** Close a binder group in an expression.
 
-    Return the close binder (where the free variables have been replaced with
+    Return the closed binder (where the free variables have been replaced with
     bound variables).
 
     We use this when handling function bodies: the list of type patterns is the
@@ -1173,12 +1187,11 @@ let mk_closed_lambda span (x : tpattern) (e : texpr) : texpr =
   { e; ty }
 
 let close_loop span (loop : loop) : loop =
-  let { fun_end = _; loop_id = _; span = _; inputs; output_ty = _; loop_body } =
-    loop
-  in
+  let { inputs; loop_body } = loop.loop_body in
   let inputs, visitor = close_binders_visitor span inputs in
   let loop_body = visitor#visit_texpr 0 loop_body in
-  { loop with inputs; loop_body }
+  let loop_body : loop_body = { inputs; loop_body } in
+  { loop with loop_body }
 
 (** Make an open lambda expression.
 
@@ -1682,11 +1695,8 @@ class virtual ['self] open_close_all_visitor =
       self#pop_scope env;
       { inputs; body }
 
-    method! visit_loop env loop =
-      let { fun_end; loop_id; span; inputs; output_ty; loop_body } = loop in
-      (* Visit what can be visited before entering the binder *)
-      let fun_end = self#visit_texpr env fun_end in
-      let output_ty = self#visit_ty env output_ty in
+    method! visit_loop_body env body =
+      let { inputs; loop_body } = body in
       (* Visit the patterns to push a new scope *)
       self#start_scope env;
       let inputs = List.map (self#visit_tpattern env) inputs in
@@ -1696,7 +1706,7 @@ class virtual ['self] open_close_all_visitor =
       (* Pop the stack *)
       self#pop_scope env;
       (* *)
-      { fun_end; loop_id; span; inputs; output_ty; loop_body }
+      { inputs; loop_body }
 
     method! visit_FVar env (id : fvar_id) = BVar (self#get_fvar env id)
     method! visit_BVar env (v : bvar) = FVar (self#get_bvar env v)

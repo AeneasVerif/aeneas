@@ -16,7 +16,7 @@ open LlbcAst
     information, etc.). We later use this place information to generate
     meaningful name, to prettify the generated code. *)
 type mplace =
-  | PlaceLocal of Contexts.real_var_binder
+  | PlaceLocal of real_var_binder
       (** It is important that we store the binder, and not just the variable
           id, because the most important information in a place is the name of
           the variable! *)
@@ -73,6 +73,7 @@ type espan =
 type variant_id = VariantId.id [@@deriving show]
 type global_decl_id = GlobalDeclId.id [@@deriving show]
 type 'a symbolic_value_id_map = 'a SymbolicValueId.Map.t [@@deriving show]
+type 'a abs_id_map = 'a AbstractionId.Map.t [@@deriving show]
 type 'a region_group_id_map = 'a RegionGroupId.Map.t [@@deriving show]
 
 (** Ancestor for {!expr} iter visitor.
@@ -85,11 +86,6 @@ class ['self] iter_expr_base =
     inherit [_] iter_abs
     method visit_eval_ctx : 'env -> Contexts.eval_ctx -> unit = fun _ _ -> ()
     method visit_call : 'env -> call -> unit = fun _ _ -> ()
-    method visit_loop_id : 'env -> loop_id -> unit = fun _ _ -> ()
-
-    method visit_region_group_id : 'env -> RegionGroupId.id -> unit =
-      fun _ _ -> ()
-
     method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
     method visit_espan : 'env -> espan -> unit = fun _ _ -> ()
 
@@ -108,6 +104,15 @@ class ['self] iter_expr_base =
         SymbolicValueId.Map.iter
           (fun id x ->
             self#visit_symbolic_value_id env id;
+            f env x)
+          m
+
+    method visit_abs_id_map :
+        'a. ('env -> 'a -> unit) -> 'env -> 'a abs_id_map -> unit =
+      fun f env m ->
+        AbstractionId.Map.iter
+          (fun id x ->
+            self#visit_abstraction_id env id;
             f env x)
           m
 
@@ -173,8 +178,7 @@ type expr =
   | ForwardEnd of
       ((Contexts.eval_ctx[@opaque]) * tvalue) option
       * (Contexts.eval_ctx[@opaque])
-      * (tvalue symbolic_value_id_map * symbolic_value_id symbolic_value_id_map)
-        option
+      * (tvalue symbolic_value_id_map * abs abs_id_map) option
       * expr
       * expr region_group_id_map
       (** We use this delimiter to indicate at which point we switch to the
@@ -206,24 +210,45 @@ type expr =
 
           TODO: because we store the returned value, the Return case may not be
           useful anymore? *)
-  | Loop of loop  (** Loop *)
-  | ReturnWithLoop of loop_id * bool
-      (** We reach a return while inside a loop. The boolean is [true]. TODO:
-          merge this with Return. *)
+  | LoopContinue of
+      (Contexts.eval_ctx[@opaque]) * loop_id * tvalue list * abs list
+  | LoopBreak of (Contexts.eval_ctx[@opaque]) * loop_id * tvalue list * abs list
+  | Loop of loop  (** Loop: call to a loop *)
   | Meta of (espan[@opaque]) * expr  (** Meta information *)
   | Error of Meta.span option * string
 
 and loop = {
+  ctx : (Contexts.eval_ctx[@opaque]);
+      (** The evaluation context just before the loop *)
   loop_id : loop_id;
-  input_svalues : symbolic_value list;  (** The input symbolic values *)
+  input_svalues : symbolic_value list;
+      (** The input symbolic values, properly ordered *)
   fresh_svalues : symbolic_value_id_set;
-      (** The symbolic values introduced by the loop fixed-point *)
+      (** The symbolic values introduced by the loop fixed-point/
+
+          TODO: remove? *)
+  input_abs : abs list;
+      (** The input abstractions, properly ordered. Note that those are the
+          abstractions from the *fixed-point*, they are not actually the
+          abstractions received as input from the loop (see [input_abs_to_abs]
+          instead). We store abstractions (rather than ids) because we need the
+          abstractions themselves to compute the type of the continuations
+          (i.e., the type of the loop) and doing this avoids a lookup. *)
+  input_value_to_value : tvalue symbolic_value_id_map;
+  input_abs_to_abs : abs abs_id_map;
+  break_svalues : symbolic_value list;
+      (** The symbolic values introduced in the break environment (those are
+          output by the loop) *)
+  break_abs : abs list;
+      (** The abstractions introduced in the break environment (those are output
+          by the loop) *)
   rg_to_given_back_tys : (Pure.ty list RegionGroupId.Map.t[@opaque]);
       (** The map from region group ids to the types of the values given back by
-          the corresponding loop abstractions. *)
-  end_expr : expr;
-      (** The end of the function (upon the moment it enters the loop) *)
+          the corresponding loop abstractions.
+
+          TODO: remove *)
   loop_expr : expr;  (** The symbolically executed loop body *)
+  next_expr : expr;  (** The expression for *after* the loop call *)
   span : Meta.span;  (** Information about the origin of the loop body *)
 }
 

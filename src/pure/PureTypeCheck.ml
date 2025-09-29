@@ -36,6 +36,28 @@ let get_adt_field_types (span : Meta.span)
           if variant_id = result_ok_id then [ ty ]
           else if variant_id = result_fail_id then [ mk_error_ty ]
           else [%craise] span "Unreachable: improper variant id for result type"
+      | TSum ->
+          let left, right =
+            match generics.types with
+            | [ left; right ] -> (left, right)
+            | _ -> [%internal_error] span
+          in
+          let variant_id = Option.get variant_id in
+          if variant_id = sum_left_id then [ left ]
+          else if variant_id = sum_right_id then [ right ]
+          else [%craise] span "Unreachable: improper variant id for sum type"
+      | TLoopResult ->
+          let continue, break =
+            match generics.types with
+            | [ continue; break ] -> (continue, break)
+            | _ -> [%internal_error] span
+          in
+          let variant_id = Option.get variant_id in
+          if variant_id = loop_result_continue_id then [ continue ]
+          else if variant_id = loop_result_break_id then [ break ]
+          else
+            [%craise] span
+              "Unreachable: improper variant id for loop result type"
       | TError ->
           [%sanity_check] span (generics = empty_generic_args);
           let variant_id = Option.get variant_id in
@@ -243,9 +265,8 @@ let rec check_texpr (span : Meta.span) (ctx : tc_ctx) (e : texpr) : unit =
           in
           List.iter check_branch branches)
   | Loop loop ->
-      [%pure_type_check] span (loop.fun_end.ty = e.ty);
-      check_texpr span ctx loop.fun_end;
-      check_texpr span ctx loop.loop_body
+      (* TODO: check the inputs *)
+      check_texpr span ctx loop.loop_body.loop_body
   | StructUpdate supd -> (
       (* Check the init value *)
       begin
