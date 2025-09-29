@@ -1532,7 +1532,7 @@ type trait_decl = {
           simplification of types like boxes and references. *)
   preds : predicates;
   parent_clauses : trait_clause list;
-  llbc_parent_clauses : Types.trait_clause list;
+  llbc_parent_clauses : Types.trait_param list;
   consts : (trait_item_name * ty) list;
   types : trait_item_name list;
   methods : (trait_item_name * fun_decl_ref binder) list;

@@ -146,7 +146,7 @@ let translate_strait_decl_ref (span : Meta.span option) (tr : T.trait_decl_ref)
     : trait_decl_ref =
   translate_trait_decl_ref span (translate_sty span) tr
 
-let translate_trait_clause (span : Meta.span option) (clause : T.trait_clause) :
+let translate_trait_clause (span : Meta.span option) (clause : T.trait_param) :
     trait_clause =
   let { T.clause_id; span = _; trait } = clause in
   let trait = translate_region_binder (translate_strait_decl_ref span) trait in

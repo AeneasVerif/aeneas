@@ -707,7 +707,7 @@ let compute_regions_hierarchy_for_fun_call (span : Meta.span option)
       in
       let open Substitute in
       let trait_clauses =
-        List.map (st_substitute_visitor#visit_trait_clause subst) trait_clauses
+        List.map (st_substitute_visitor#visit_trait_param subst) trait_clauses
       in
       let regions_outlive =
         List.map
