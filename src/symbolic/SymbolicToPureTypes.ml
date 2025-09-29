@@ -444,7 +444,7 @@ let mk_type_check_ctx (ctx : bs_ctx) : PureTypeCheck.tc_ctx =
   let const_generics =
     T.ConstGenericVarId.Map.of_list
       (List.map
-         (fun (cg : T.const_generic_var) ->
+         (fun (cg : T.const_generic_param) ->
            (cg.index, ctx_translate_fwd_ty ctx (T.TLiteral cg.ty)))
          ctx.sg.generics.const_generics)
   in

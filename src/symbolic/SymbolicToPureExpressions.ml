@@ -1853,7 +1853,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpr =
       in
       let const_generics =
         List.map
-          (fun (cg : T.const_generic_var) -> T.CgVar (Free cg.T.index))
+          (fun (cg : T.const_generic_param) -> T.CgVar (Free cg.T.index))
           const_generics
       in
       let trait_refs =
