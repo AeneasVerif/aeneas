@@ -500,7 +500,7 @@ let tavalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
      it contains mutable loans, then we generate a consumed value (because
      upon ending the borrow we consumed a value).
      Otherwise we ignore it. *)
-  [%ltrace tavalue_to_string ~with_ended:true ectx av];
+  [%ltrace tavalue_to_string ~with_ended:true ctx av];
   match
     compute_tavalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions av
   with

@@ -1637,12 +1637,12 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpr =
     List.map (tvalue_to_texpr ctx loop.ctx) input_values
   in
   (* Introduce free variables for the inputs *)
-  let bind_inputs (ctx : bs_ctx) (ectx : C.eval_ctx) (absl : V.abs list)
+  let bind_inputs (ctx : bs_ctx) (absl : V.abs list)
       (values : V.symbolic_value list) : bs_ctx * tpattern list * tpattern list
       =
     let ctx, absl =
       (* Compute the type of the break abstractions *)
-      let abs_tys = List.map (abs_to_ty ctx ectx) absl in
+      let abs_tys = List.map (abs_to_ty ctx) absl in
       let abs_tys, ignored =
         List.partition_map
           (fun (abs, ty) ->
@@ -1694,7 +1694,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpr =
 
   (* Introduce the binders for the loop outputs *)
   let ctx, break_abs, break_values =
-    bind_inputs ctx loop.ctx loop.break_abs loop.break_svalues
+    bind_inputs ctx loop.break_abs loop.break_svalues
   in
   let outputs = break_abs @ break_values in
   let output = mk_simpl_tuple_pattern outputs in
@@ -1703,7 +1703,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpr =
   let loop_body =
     (* Introduce free variables for the inputs *)
     let ctx, input_conts, input_values =
-      bind_inputs ctx loop.ctx loop.input_abs loop.input_svalues
+      bind_inputs ctx loop.input_abs loop.input_svalues
     in
 
     (* Update the [mk_panic] and [mk_result] functions *)

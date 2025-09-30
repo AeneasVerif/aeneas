@@ -351,6 +351,11 @@ let tvalue_to_string (ctx : bs_ctx) (v : V.tvalue) : string =
   let env = bs_ctx_to_fmt_env ctx in
   Print.Values.tvalue_to_string ~span:(Some ctx.span) env v
 
+let tavalue_to_string (ctx : bs_ctx) ?(with_ended = false) (v : V.tavalue) :
+    string =
+  let env = bs_ctx_to_fmt_env ctx in
+  Print.Values.tavalue_to_string ~span:(Some ctx.span) ~with_ended env v
+
 let pure_ty_to_string (ctx : bs_ctx) (ty : ty) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
   PrintPure.ty_to_string env false ty

@@ -7,6 +7,9 @@ open SymbolicToPureTypes
 open SymbolicToPureValues
 module NormSymbProjMap = InterpreterBorrowsCore.NormSymbProjMap
 
+(** The local logger *)
+let log = Logging.symbolic_to_pure_abs_log
+
 (** Explore an abstraction value and compute the type of the value consumed upon
     ending the loans. *)
 let rec tavalue_to_consumed_ty_aux ~(filter : bool) (ctx : bs_ctx)
@@ -79,13 +82,13 @@ and aproj_to_consumed_ty_aux (ctx : bs_ctx) (_abs_regions : T.RegionId.Set.t)
   | V.AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty | AProjBorrows _ ->
       [%craise] ctx.span "Unreachable"
 
-let tavalue_to_consumed_ty (ctx : bs_ctx) (ectx : C.eval_ctx)
-    (abs_regions : T.RegionId.Set.t) (av : V.tavalue) : ty option =
+let tavalue_to_consumed_ty (ctx : bs_ctx) (abs_regions : T.RegionId.Set.t)
+    (av : V.tavalue) : ty option =
   (* Check if the value was generated from a loan projector: if yes, and if
      it contains mutable loans, then we generate a consumed value (because
      upon ending the borrow we consumed a value).
      Otherwise we ignore it. *)
-  [%ltrace tavalue_to_string ~with_ended:true ectx av];
+  [%ltrace tavalue_to_string ~with_ended:true ctx av];
   match
     compute_tavalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions av
   with
@@ -179,12 +182,9 @@ let tavalue_to_given_back_ty (ctx : bs_ctx) (abs_regions : T.RegionId.Set.t)
 
     Remark: there shouldn't be any ended loans in this continuation. Also note
     that we flatten the values. *)
-let abs_to_input_output_tys (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs) :
-    ty list * ty list =
+let abs_to_input_output_tys (ctx : bs_ctx) (abs : V.abs) : ty list * ty list =
   let inputs =
-    List.filter_map
-      (tavalue_to_consumed_ty ctx ectx abs.regions.owned)
-      abs.avalues
+    List.filter_map (tavalue_to_consumed_ty ctx abs.regions.owned) abs.avalues
   in
 
   let outputs =
@@ -199,8 +199,8 @@ let abs_to_input_output_tys (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs) :
 
     Remark: there shouldn't be any ended loans in this continuation. Also note
     that we flatten the values. *)
-let abs_to_ty (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs) : ty option =
-  let inputs, outputs = abs_to_input_output_tys ctx ectx abs in
+let abs_to_ty (ctx : bs_ctx) (abs : V.abs) : ty option =
+  let inputs, outputs = abs_to_input_output_tys ctx abs in
   if inputs = [] && outputs = [] then None
   else Some (mk_arrows inputs (mk_simpl_tuple_ty outputs))
 
@@ -475,6 +475,15 @@ type bound_borrows_loans = {
 let empty_bound_borrows_loans : bound_borrows_loans =
   { concrete = V.BorrowId.Map.empty; symbolic = NormSymbProjMap.empty }
 
+let bound_borrows_loans_to_string (ctx : bs_ctx) (bound : bound_borrows_loans) :
+    string =
+  let { concrete; symbolic } = bound in
+  "{\n  concrete: "
+  ^ V.BorrowId.Map.to_string (Some "    ") (texpr_to_string ctx) concrete
+  ^ "\n  symbolic: "
+  ^ NormSymbProjMap.to_string (Some "    ") (texpr_to_string ctx) symbolic
+  ^ "\n}"
+
 (** The boolean is [can_fail] (i.e., does the expression live in the error
     monad?).
 
@@ -734,9 +743,18 @@ let register_inputs (ctx : bs_ctx) (rids : T.RegionId.Set.t)
     the order given by the avalues.
 
     The goal is similar to [register_inputs]: we want to use avalues as a
-    function signature. *)
+    function signature.
+
+    TODO: we shouldn't do this. The avalues should be independent from the
+    function signature. The signature should be contained within the abstraction
+    continuation. *)
 let register_outputs (ctx : bs_ctx) (bound_outputs : bound_borrows_loans)
     (rids : T.RegionId.Set.t) (avl : V.tavalue list) : texpr list =
+  [%ltrace
+    "- bound_outputs:\n"
+    ^ bound_borrows_loans_to_string ctx bound_outputs
+    ^ "- avl:\n"
+    ^ Print.list_to_string (SymbolicToPureCore.tavalue_to_string ctx) avl];
   let span = ctx.span in
   let type_infos = ctx.type_ctx.type_infos in
   let outputs = ref [] in
@@ -841,6 +859,7 @@ let abs_cont_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
     nothing and returns nothing). *)
 let translate_abs_to_cont (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs) :
     texpr option =
+  [%ltrace "abs:\n" ^ abs_to_string ctx abs];
   match abs.cont with
   | None -> [%internal_error] ctx.span
   | Some cont -> (

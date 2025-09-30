@@ -51,6 +51,9 @@ let symbolic_to_pure_types_log = create_logger "SymbolicToPureTypes"
 (** Logger for SymbolicToPureValues *)
 let symbolic_to_pure_values_log = create_logger "SymbolicToPureValues"
 
+(** Logger for SymbolicToPureAbs *)
+let symbolic_to_pure_abs_log = create_logger "SymbolicToPureAbs"
+
 (** Logger for SymbolicToPureExpressions *)
 let symbolic_to_pure_expressions_log = create_logger "SymbolicToPureExpressions"
 
