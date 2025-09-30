@@ -33,6 +33,7 @@ attribute [bvify_simps]
   Int.reducePow Int.reduceAdd Int.reduceSub Int.reduceMul Int.reduceDiv Int.reduceMod
   Int.reduceNegSucc Int.reduceNeg Int.reduceToNat
   BitVec.reduceMul BitVec.reduceAdd BitVec.reduceSub BitVec.reduceMod BitVec.reduceDiv
+  Nat.dvd_iff_mod_eq_zero
 
 @[simp, simp_scalar_simps, bvify_simps] theorem U8.UScalar_bv (x : U8) : UScalar.bv x = x.bv := by simp
 @[simp, simp_scalar_simps, bvify_simps] theorem U16.UScalar_bv (x : U16) : UScalar.bv x = x.bv := by simp
