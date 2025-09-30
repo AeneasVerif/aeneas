@@ -82,8 +82,8 @@ type eval_ctx = {
 }
 [@@deriving show]
 
-let lookup_type_var_opt (ctx : eval_ctx) (vid : TypeVarId.id) : type_param option
-    =
+let lookup_type_var_opt (ctx : eval_ctx) (vid : TypeVarId.id) :
+    type_param option =
   TypeVarId.nth_opt ctx.type_vars vid
 
 let lookup_type_var (ctx : eval_ctx) (vid : TypeVarId.id) : type_param =

@@ -614,8 +614,8 @@ let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
       instance, the region outlives constraints) *)
 let compute_regions_hierarchy_for_fun_call (span : Meta.span option)
     (crate : crate) (fun_name : string) (type_vars : type_param list)
-    (const_generic_vars : const_generic_param list) (generic_args : generic_args)
-    (sg : fun_sig) : inst_fun_sig =
+    (const_generic_vars : const_generic_param list)
+    (generic_args : generic_args) (sg : fun_sig) : inst_fun_sig =
   (* We simply put everything into a "fake" signature, then call
      [compute_regions_hierarchy_for_sig].
 

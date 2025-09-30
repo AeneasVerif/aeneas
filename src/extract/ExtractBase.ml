@@ -1681,9 +1681,7 @@ let ctx_compute_trait_clause_name (ctx : extraction_ctx)
     *)
     let prefix = Some current_def_name in
     let clause =
-      List.find
-        (fun (c : Types.trait_param) -> c.clause_id = clause_id)
-        clauses
+      List.find (fun (c : Types.trait_param) -> c.clause_id = clause_id) clauses
     in
     (* Note that we ignore the binder *)
     let clause_trait = clause.trait.binder_value in
