@@ -23,10 +23,10 @@ let fresh_regions_with_substs (region_vars : RegionId.id list)
   in
   fun id -> RegionId.Map.find id rid_map
 
-let fresh_regions_with_substs_from_vars (region_vars : region_var list)
+let fresh_regions_with_substs_from_vars (region_vars : region_param list)
     (fresh_region_id : unit -> region_id) : RegionId.id -> RegionId.id =
   fresh_regions_with_substs
-    (List.map (fun (r : region_var) -> r.index) region_vars)
+    (List.map (fun (r : region_param) -> r.index) region_vars)
     fresh_region_id
 
 (** Substitute a function signature, together with the regions hierarchy
