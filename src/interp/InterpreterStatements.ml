@@ -609,7 +609,7 @@ let create_push_abstractions_from_abs_region_groups
     but directly to the method provided in the trait declaration. *)
 let eval_transparent_function_call_symbolic_inst (span : Meta.span)
     (call : call) (ctx : eval_ctx) :
-    fun_id_or_trait_method_ref
+    fn_ptr_kind
     * generic_args
     * (generic_args * trait_instance_id) option
     * fun_decl
@@ -619,7 +619,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
       (* Closure case: TODO *)
       [%craise] span "Closures are not supported yet"
   | FnOpRegular func -> (
-      match func.func with
+      match func.kind with
       | FunId (FRegular fid) ->
           let def = ctx_lookup_fun_decl span ctx fid in
           [%ltrace
@@ -637,7 +637,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
             instantiate_fun_sig span ctx func.generics tr_self def.signature
               regions_hierarchy
           in
-          (func.func, func.generics, None, def, inst_sg)
+          (func.kind, func.generics, None, def, inst_sg)
       | FunId (FBuiltin _) ->
           (* Unreachable: must be a transparent function *)
           [%craise] span "Unreachable"
@@ -718,7 +718,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                 instantiate_fun_sig span ctx generics tr_self
                   method_def.signature regions_hierarchy
               in
-              ( func.func,
+              ( func.kind,
                 func.generics,
                 Some (generics, tr_self),
                 method_def,
@@ -801,7 +801,7 @@ and eval_block (config : config) (b : block) : stl_cm_fun =
 and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
  fun ctx ->
   [%ltrace "statement:\n" ^ statement_to_string_with_tab ctx st ^ "\n"];
-  match st.content with
+  match st.kind with
   | Assign (p, rvalue) ->
       if
         (* We handle global assignments separately as a specific case. *)
@@ -1101,7 +1101,7 @@ and eval_function_call_concrete (config : config) (span : Meta.span)
   match call.func with
   | FnOpMove _ -> [%craise] span "Closures are not supported yet"
   | FnOpRegular func -> (
-      match func.func with
+      match func.kind with
       | FunId (FRegular fid) ->
           eval_transparent_function_call_concrete config span fid call ctx
       | FunId (FBuiltin fid) ->
@@ -1120,7 +1120,7 @@ and eval_function_call_symbolic (config : config) (span : Meta.span)
   match call.func with
   | FnOpMove _ -> [%craise] span "Closures are not supported yet"
   | FnOpRegular func -> (
-      match func.func with
+      match func.kind with
       | FunId (FRegular _) | TraitMethod _ ->
           eval_transparent_function_call_symbolic config span call
       | FunId (FBuiltin fid) ->
@@ -1250,14 +1250,14 @@ and eval_transparent_function_call_symbolic (config : config) (span : Meta.span)
     overriding them. We treat them as regular method, which take an additional
     trait ref as input. *)
 and eval_function_call_symbolic_from_inst_sig (config : config)
-    (span : Meta.span) (fid : fun_id_or_trait_method_ref) (sg : fun_sig)
+    (span : Meta.span) (fid : fn_ptr_kind) (sg : fun_sig)
     (inst_sg : inst_fun_sig) (generics : generic_args)
     (trait_method_generics : (generic_args * trait_instance_id) option)
     (args : operand list) (dest : place) : stl_cm_fun =
  fun ctx ->
   [%ltrace
     "- fid: "
-    ^ fun_id_or_trait_method_ref_to_string ctx fid
+    ^ fn_ptr_kind_to_string ctx fid
     ^ "\n- inst_sg:\n"
     ^ inst_fun_sig_to_string ctx inst_sg
     ^ "\n- call.generics:\n"

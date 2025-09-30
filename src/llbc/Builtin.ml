@@ -44,22 +44,22 @@ module Sig = struct
   let cgvar_0 : const_generic = CgVar (Free cgvar_id_0)
 
   (** Region 'a of id 0 *)
-  let region_param_0 : region_var = { index = rvar_id_0; name = Some "'a" }
+  let region_param_0 : region_param = { index = rvar_id_0; name = Some "'a" }
 
   (** Region group: [{ parent={}; regions:{'a of id 0} }] *)
   let region_group_0 : region_var_group =
     { id = rg_id_0; regions = [ rvar_id_0 ]; parents = [] }
 
   (** Type parameter [T] of id 0 *)
-  let type_param_0 : type_var = { index = tvar_id_0; name = "T" }
+  let type_param_0 : type_param = { index = tvar_id_0; name = "T" }
 
   let usize_ty : ty = TLiteral (TUInt Usize)
 
   (** Const generic parameter [const N : usize] of id 0 *)
-  let cg_param_0 : const_generic_var =
+  let cg_param_0 : const_generic_param =
     { index = cgvar_id_0; name = "N"; ty = TUInt Usize }
 
-  let empty_const_generic_params : const_generic_var list = []
+  let empty_const_generic_params : const_generic_param list = []
 
   let mk_generic_args regions types const_generics : generic_args =
     { regions; types; const_generics; trait_refs = [] }
@@ -126,7 +126,7 @@ module Sig = struct
       Remarks: The [input_ty] and [output_ty] are parameterized by a type
       variable id. The [mut_borrow] boolean controls whether we use a shared or
       a mutable borrow. *)
-  let mk_array_slice_borrow_sig (cgs : const_generic_var list)
+  let mk_array_slice_borrow_sig (cgs : const_generic_param list)
       (input_ty : ty -> ty) (index_ty : ty option) (output_ty : ty -> ty)
       (is_mut : bool) : fun_sig =
     let generics =

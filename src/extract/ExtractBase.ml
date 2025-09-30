@@ -1659,7 +1659,7 @@ let ctx_compute_trait_decl_constructor (ctx : extraction_ctx)
     simplifies types like boxes and references. *)
 let ctx_compute_trait_clause_name (ctx : extraction_ctx)
     (current_def_name : Types.name) (params : Types.generic_params)
-    (clauses : Types.trait_clause list) (clause_id : trait_clause_id) : string =
+    (clauses : Types.trait_param list) (clause_id : trait_clause_id) : string =
   (* We derive the name of the clause from the trait instance.
      For instance, if the clause gives us an instance of `Foo<u32>`,
      we generate a name along the lines of "fooU32Inst".
@@ -1681,9 +1681,7 @@ let ctx_compute_trait_clause_name (ctx : extraction_ctx)
     *)
     let prefix = Some current_def_name in
     let clause =
-      List.find
-        (fun (c : Types.trait_clause) -> c.clause_id = clause_id)
-        clauses
+      List.find (fun (c : Types.trait_param) -> c.clause_id = clause_id) clauses
     in
     (* Note that we ignore the binder *)
     let clause_trait = clause.trait.binder_value in

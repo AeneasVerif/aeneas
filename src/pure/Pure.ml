@@ -35,7 +35,7 @@ module ConstGenericVarId = T.ConstGenericVarId
 type llbc_name = T.name [@@deriving show, ord]
 type integer_type = T.integer_type [@@deriving show, ord]
 type float_type = T.float_type [@@deriving show, ord]
-type const_generic_var = T.const_generic_var [@@deriving show, ord]
+type const_generic_var = T.const_generic_param [@@deriving show, ord]
 type const_generic = T.const_generic [@@deriving show, ord]
 type const_generic_var_id = T.const_generic_var_id [@@deriving show, ord]
 type trait_decl_id = T.trait_decl_id [@@deriving show, ord]
@@ -49,7 +49,7 @@ type region_group_id = T.region_group_id [@@deriving show, ord]
 type mutability = Mut | Const [@@deriving show, ord]
 type loc = Meta.loc [@@deriving show, ord]
 type file_name = Meta.file_name [@@deriving show, ord]
-type raw_span = Meta.raw_span [@@deriving show, ord]
+type span_data = Meta.span_data [@@deriving show, ord]
 type span = Meta.span [@@deriving show, ord]
 type ref_kind = Types.ref_kind [@@deriving show, ord]
 type 'a de_bruijn_var = 'a Types.de_bruijn_var [@@deriving show, ord]
@@ -418,7 +418,7 @@ and trait_instance_id =
       polymorphic = false;
     }]
 
-type type_var = T.type_var [@@deriving show, ord]
+type type_var = T.type_param [@@deriving show, ord]
 
 (** Ancestor for iter visitor for [type_decl] *)
 class ['self] iter_type_decl_base =
@@ -906,7 +906,7 @@ type unop =
   | ArrayToSlice
 [@@deriving show, ord]
 
-type fun_id_or_trait_method_ref =
+type fn_ptr_kind =
   | FunId of A.fun_id
   | TraitMethod of trait_ref * string * fun_decl_id
       (** The fun decl id is not really needed and here for convenience purposes
@@ -914,8 +914,7 @@ type fun_id_or_trait_method_ref =
 [@@deriving show, ord]
 
 (** A function id for a non-builtin function *)
-type regular_fun_id = fun_id_or_trait_method_ref * LoopId.id option
-[@@deriving show, ord]
+type regular_fun_id = fn_ptr_kind * LoopId.id option [@@deriving show, ord]
 
 (** A function identifier *)
 type fun_id =
@@ -1533,7 +1532,7 @@ type trait_decl = {
           simplification of types like boxes and references. *)
   preds : predicates;
   parent_clauses : trait_clause list;
-  llbc_parent_clauses : Types.trait_clause list;
+  llbc_parent_clauses : Types.trait_param list;
   consts : (trait_item_name * ty) list;
   types : trait_item_name list;
   methods : (trait_item_name * fun_decl_ref binder) list;
