@@ -33,6 +33,7 @@ attribute [bvify_simps]
   Int.reducePow Int.reduceAdd Int.reduceSub Int.reduceMul Int.reduceDiv Int.reduceMod
   Int.reduceNegSucc Int.reduceNeg Int.reduceToNat
   BitVec.reduceMul BitVec.reduceAdd BitVec.reduceSub BitVec.reduceMod BitVec.reduceDiv
+  Nat.dvd_iff_mod_eq_zero
 
 @[simp, simp_scalar_simps, bvify_simps] theorem U8.UScalar_bv (x : U8) : UScalar.bv x = x.bv := by simp
 @[simp, simp_scalar_simps, bvify_simps] theorem U16.UScalar_bv (x : U16) : UScalar.bv x = x.bv := by simp
@@ -455,5 +456,8 @@ example (x a b : U32) (h : x.val = a.val + b.val) : (x.val : ZMod 3329) = (a.val
   bvify 32 at *
   extract_goal1
   simp [h]
+
+example (byte : U8) : 8 ∣ (byte &&& 16#u8).val := by
+  bvify 8; bv_decide
 
 end Aeneas.Bvify
