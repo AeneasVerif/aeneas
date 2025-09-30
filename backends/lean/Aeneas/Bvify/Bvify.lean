@@ -457,4 +457,7 @@ example (x a b : U32) (h : x.val = a.val + b.val) : (x.val : ZMod 3329) = (a.val
   extract_goal1
   simp [h]
 
+example (byte : U8) : 8 ∣ (byte &&& 15#u8).val := by
+  bvify 8; bv_decide
+
 end Aeneas.Bvify
