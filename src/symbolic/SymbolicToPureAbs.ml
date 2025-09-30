@@ -313,6 +313,27 @@ let abs_fvar_id_to_tpattern (ctx : bs_ctx)
     in
     (ctx, pat)
 
+(** Map inputs (i.e., (symbolic) loans) or ouputs (i.e., (symbolic) borrows) to
+    free variables. We use this in order to control the order in which we bind
+    the inputs (it is fixed by the avalues which act as a signature of the
+    function). *)
+type bound_borrows_loans = {
+  concrete : texpr V.BorrowId.Map.t;
+  symbolic : texpr NormSymbProjMap.t;
+}
+
+let empty_bound_borrows_loans : bound_borrows_loans =
+  { concrete = V.BorrowId.Map.empty; symbolic = NormSymbProjMap.empty }
+
+let bound_borrows_loans_to_string (ctx : bs_ctx) (bound : bound_borrows_loans) :
+    string =
+  let { concrete; symbolic } = bound in
+  "{\n  concrete: "
+  ^ V.BorrowId.Map.to_string (Some "    ") (texpr_to_string ctx) concrete
+  ^ "\n  symbolic: "
+  ^ NormSymbProjMap.to_string (Some "    ") (texpr_to_string ctx) symbolic
+  ^ "\n}"
+
 (** We need [fvar_to_texpr] because variables may be bound inside intermediate
     let-bindings inside the region abstraction continuation, so we need to
     remember by which pure expression we translated the abstraction free
@@ -320,13 +341,32 @@ let abs_fvar_id_to_tpattern (ctx : bs_ctx)
     want to eliminate it) we register it in [fvar_to_none] for sanity purposes.
 *)
 let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
-    (rids : T.RegionId.Set.t) (output : V.tevalue) : bs_ctx * tpattern =
+    (rids : T.RegionId.Set.t) (output : V.tevalue) :
+    bs_ctx * bound_borrows_loans * tpattern =
   let span = ctx.span in
   let type_infos = ctx.type_ctx.type_infos in
+  let concrete = ref V.BorrowId.Map.empty in
+  let symbolic = ref NormSymbProjMap.empty in
   let keep_region (r : T.region) =
     match r with
     | T.RVar (Free rid) -> T.RegionId.Set.mem rid rids
     | _ -> false
+  in
+  let fresh_fvar ctx (ty : T.ty) : bs_ctx * texpr * tpattern =
+    let ctx, fvar = fresh_var_llbc_ty None ty ctx in
+    (ctx, mk_texpr_from_fvar fvar, mk_tpattern_from_fvar fvar None)
+  in
+  let add_symbolic ctx (sv_id : SymbolicValueId.id) (proj_ty : T.ty) :
+      bs_ctx * tpattern =
+    let ctx, e, pat = fresh_fvar ctx proj_ty in
+    let norm_proj_ty = InterpreterBorrowsCore.normalize_proj_ty rids proj_ty in
+    symbolic := NormSymbProjMap.add { sv_id; norm_proj_ty } e !symbolic;
+    (ctx, pat)
+  in
+  let add_concrete ctx (bid : V.BorrowId.id) (ty : T.ty) : bs_ctx * tpattern =
+    let ctx, e, pat = fresh_fvar ctx ty in
+    concrete := V.BorrowId.Map.add bid e !concrete;
+    (ctx, pat)
   in
   let rec to_pat ~(filter : bool) (ctx : bs_ctx) (output : V.tevalue) :
       bs_ctx * tpattern option =
@@ -345,11 +385,11 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
         | V.EIgnoredMutBorrow _
         | V.EEndedMutBorrow _
         | V.EEndedIgnoredMutBorrow _ -> [%internal_error] span
-        | V.EMutBorrow (pm, _bid, _mv, child) ->
+        | V.EMutBorrow (pm, bid, _mv, child) ->
             [%sanity_check] span (pm = PNone);
             [%sanity_check] span (ValuesUtils.is_eignored child.value);
-            let ctx, fvar = fresh_var_llbc_ty None output.ty ctx in
-            (ctx, Some (mk_tpattern_from_fvar fvar None)))
+            let ctx, e = add_concrete ctx bid output.ty in
+            (ctx, Some e))
     | V.ESymbolic (pm, proj) ->
         [%sanity_check] span (pm = PNone);
         begin
@@ -358,7 +398,7 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
           | V.EEndedProjLoans _
           | V.EEndedProjBorrows _
           | V.EEmpty -> [%internal_error] span
-          | V.EProjBorrows { proj = _; loans } ->
+          | V.EProjBorrows { proj; loans } ->
               [%sanity_check] span (loans = []);
               (* Case disjunction depending on whether we actually need to give back
                  something or not *)
@@ -366,8 +406,8 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
                 TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
                   keep_region output.ty
               then
-                let ctx, fvar = fresh_var_llbc_ty None output.ty ctx in
-                (ctx, Some (mk_tpattern_from_fvar fvar None))
+                let ctx, e = add_symbolic ctx proj.sv_id output.ty in
+                (ctx, Some e)
               else
                 let pat =
                   if filter then None
@@ -405,7 +445,8 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
     | None -> mk_dummy_pattern mk_unit_ty
     | Some pat -> pat
   in
-  (ctx, pat)
+  let bound = { concrete = !concrete; symbolic = !symbolic } in
+  (ctx, bound, pat)
 
 let tepat_to_tpattern (ctx : bs_ctx)
     (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref) (rids : T.RegionId.Set.t)
@@ -461,28 +502,6 @@ let tepat_to_tpattern (ctx : bs_ctx)
     | None -> mk_dummy_pattern mk_unit_ty
   in
   (ctx, pat)
-
-(** Map inputs (i.e., (symbolic) loans) or ouputs (i.e., (symbolic) borrows) to
-    free variables introduced when analyzing the *avalues* of the abstraction
-    (not the *evalues* ). We use this in order to control the order in which we
-    bind the inputs (it is fixed by the avalues which act as a signature of the
-    function). *)
-type bound_borrows_loans = {
-  concrete : texpr V.BorrowId.Map.t;
-  symbolic : texpr NormSymbProjMap.t;
-}
-
-let empty_bound_borrows_loans : bound_borrows_loans =
-  { concrete = V.BorrowId.Map.empty; symbolic = NormSymbProjMap.empty }
-
-let bound_borrows_loans_to_string (ctx : bs_ctx) (bound : bound_borrows_loans) :
-    string =
-  let { concrete; symbolic } = bound in
-  "{\n  concrete: "
-  ^ V.BorrowId.Map.to_string (Some "    ") (texpr_to_string ctx) concrete
-  ^ "\n  symbolic: "
-  ^ NormSymbProjMap.to_string (Some "    ") (texpr_to_string ctx) symbolic
-  ^ "\n}"
 
 (** The boolean is [can_fail] (i.e., does the expression live in the error
     monad?).
@@ -825,19 +844,25 @@ let abs_cont_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
      we need to do this to fix the order of the *inputs* (the order given
      by the abstraction expression itself is arbitrary)
   *)
-  let bound, inputs = register_inputs ctx abs.regions.owned abs.avalues in
+  let bound_inputs, inputs =
+    register_inputs ctx abs.regions.owned abs.avalues
+  in
 
   (* Translate the abstraction expression *)
   let fvar_to_texpr = ref V.AbsFVarId.Map.empty in
   let ctx, can_fail, input_e =
-    einput_to_texpr ctx ectx abs.regions.owned bound fvar_to_texpr input
+    einput_to_texpr ctx ectx abs.regions.owned bound_inputs fvar_to_texpr input
   in
   [%sanity_check] span (not can_fail);
-  let ctx, pat = eoutput_to_pat ctx fvar_to_texpr abs.regions.owned output in
+  let ctx, bound_outputs, pat =
+    eoutput_to_pat ctx fvar_to_texpr abs.regions.owned output
+  in
 
   (* Go through the *avalues* to compute the order of the *outputs*. Same remark
      as with the inputs: we do this to fix the order *)
-  let outputs = register_outputs ctx bound abs.regions.owned abs.avalues in
+  let outputs =
+    register_outputs ctx bound_outputs abs.regions.owned abs.avalues
+  in
 
   if inputs = [] && outputs = [] then None
   else
