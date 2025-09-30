@@ -1615,7 +1615,8 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
       mk_closed_checked_let __FILE__ __LINE__ ctx effect_info.can_fail out_pat
         loop_call next_e
 
-and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpr =
+and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
+  let ctx = ctx0 in
   let loop_id = V.LoopId.Map.find loop.loop_id ctx.loop_ids_map in
 
   (* Some helpers *)
@@ -1703,7 +1704,7 @@ and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpr =
   let loop_body =
     (* Introduce free variables for the inputs *)
     let ctx, input_conts, input_values =
-      bind_inputs ctx loop.input_abs loop.input_svalues
+      bind_inputs ctx0 loop.input_abs loop.input_svalues
     in
 
     (* Update the [mk_panic] and [mk_result] functions *)
