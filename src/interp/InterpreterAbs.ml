@@ -1065,7 +1065,7 @@ let bound_inputs_outputs_update_input_symbolic (span : Meta.span)
     We return the pattern (derived from the output) and the updated input (we
     might have replaced some loans with free variables, in case the output of
     the corresponding borrows were bound elsewhere). *)
-let bind_outputs_from_output_input (span : Meta.span) (_ctx : eval_ctx)
+let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
     (regions : RegionId.Set.t) (bound : bound_inputs_outputs ref)
     (output : tevalue) (input : tevalue) : tepat * tevalue =
   (* Update the input value by substituting expressions (such as a mutable loan)
@@ -1157,7 +1157,7 @@ let bind_outputs_from_output_input (span : Meta.span) (_ctx : eval_ctx)
     | ELet _ | EJoinMarkers _ | EBVar _ | EFVar _ | EApp (_, _) | EBottom ->
         (* Those expressions should not appear in the *output* expression
            (some of them might appear only in the *input* expression) *)
-        [%craise] span "Unreachable"
+        [%craise] span ("Unexpected expression: " ^ tevalue_to_string ctx output)
     | EAdt adt ->
         let pats = List.map (bind_output regions) adt.field_values in
         { epat = PAdt (adt.variant_id, pats); epat_ty = output.ty }
@@ -1876,6 +1876,10 @@ let reorder_fresh_abs (span : Meta.span) (allow_markers : bool)
   reorder_loans_borrows_in_fresh_abs span allow_markers old_abs_ids ctx
   |> reorder_fresh_abs_aux span old_abs_ids
 
+type proj_ctx = {
+  inside_output : bool;  (** Are we inside an abstraction output expression? *)
+}
+
 let project_context (span : Meta.span) (fixed_ids : InterpreterUtils.ids_sets)
     (pm : proj_marker) (ctx : eval_ctx) : eval_ctx =
   [%cassert] span (pm = PLeft || pm = PRight) "Invalid input";
@@ -2010,14 +2014,22 @@ let project_context (span : Meta.span) (fixed_ids : InterpreterUtils.ids_sets)
               EBorrow (EMutBorrow (PNone, bid, mv, child))
             else (
               [%cassert] span (is_eignored child.value) "Not implemented";
-              EBottom)
+              if env.inside_output then EIgnored else EBottom)
         | EIgnoredMutBorrow _ | EEndedMutBorrow _ | EEndedIgnoredMutBorrow _ ->
             (* Those do not have projection markers *)
             super#visit_EBorrow env lc
+
+      method! visit_abs_cont env abs =
+        let { output; input } = abs in
+        let output =
+          Option.map (self#visit_tevalue { inside_output = true }) output
+        in
+        let input = Option.map (self#visit_tevalue env) input in
+        { output; input }
     end
   in
   (* Project *)
-  let ctx = visitor#visit_eval_ctx () ctx in
+  let ctx = visitor#visit_eval_ctx { inside_output = false } ctx in
 
   (* Simplify the region abstractions, and filter the ones which have become
      empty because of the projection *)
