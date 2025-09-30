@@ -157,7 +157,7 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
 
         [%ltrace
           "about to match the break context with the context at a break:\n\
-           - src ctx (break ctx)"
+           - src ctx (break ctx):\n"
           ^ eval_ctx_to_string ~span:(Some span) break_ctx
           ^ "\n\n-tgt ctx (ctx at this break):\n"
           ^ eval_ctx_to_string ~span:(Some span) ctx];
@@ -165,6 +165,18 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
           loop_match_break_ctx_with_target config span loop_id
             break_input_svalues fixed_ids break_ctx ctx
         in
+        [%ldebug
+          "after matching the break context with the context at a break:\n\
+           - src ctx (break ctx):\n"
+          ^ eval_ctx_to_string ~span:(Some span) break_ctx
+          ^ "\n\n-tgt ctx (ctx at this break):\n"
+          ^ eval_ctx_to_string ~span:(Some span) ctx
+          ^ "\n\n-input_abs:\n"
+          ^ AbstractionId.Map.to_string None
+              (fun abs -> AbstractionId.to_string abs.abs_id)
+              input_abs
+          ^ "\n\n-break_input_abs:\n"
+          ^ Print.list_to_string AbstractionId.to_string break_input_abs];
         let input_values =
           reorder_input_values input_values break_input_svalues
         in
@@ -177,7 +189,7 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
         [%ltrace
           "about to match the fixed-point context with the context at a \
            continue:\n\
-           - src ctx (fixed-point ctx)"
+           - src ctx (fixed-point ctx):\n"
           ^ eval_ctx_to_string ~span:(Some span) fp_ctx
           ^ "\n\n-tgt ctx (ctx at continue):\n"
           ^ eval_ctx_to_string ~span:(Some span) ctx];

@@ -578,7 +578,8 @@ let compute_loop_break_context (config : config) (span : Meta.span)
       let get_fresh_abs (e : env_elem) : abs option =
         match e with
         | EAbs abs ->
-            if AbstractionId.Set.mem abs.abs_id fixed_ids.aids then Some abs
+            if not (AbstractionId.Set.mem abs.abs_id fixed_ids.aids) then
+              Some abs
             else None
         | EBinding _ | EFrame -> None
       in
