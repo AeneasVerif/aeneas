@@ -1453,7 +1453,7 @@ type fun_body = {
 }
 [@@deriving show]
 
-type item_kind = T.item_kind [@@deriving show]
+type item_kind = T.item_source [@@deriving show]
 
 (** Attributes to add to the generated code *)
 type backend_attributes = {
