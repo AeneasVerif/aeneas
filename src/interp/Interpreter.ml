@@ -123,8 +123,8 @@ let compute_contexts (crate : crate) : decls_ctx =
     We return a new context because we compute and add the type normalization
     map in the same step. *)
 let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
-    (sg : fun_sig) (regions_hierarchy : region_var_groups) (_kind : item_source) :
-    eval_ctx * inst_fun_sig =
+    (sg : fun_sig) (regions_hierarchy : region_var_groups) (_kind : item_source)
+    : eval_ctx * inst_fun_sig =
   let tr_self = UnknownTrait "symbolic_instantiate_fun_sig" in
   let generics =
     Substitute.generic_args_of_params_erase_regions (Some span) sg.generics
