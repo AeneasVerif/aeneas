@@ -577,7 +577,7 @@ let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
 
         method! visit_Assign env p rv =
           match (p.kind, rv) with
-          | PlaceLocal var_id, RvRef (_, BShallow) ->
+          | PlaceLocal var_id, RvRef (_, BShallow, _) ->
               (* Filter *)
               filtered := LocalId.Set.add var_id !filtered;
               Nop
@@ -773,6 +773,17 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
                       new_statements := st :: !new_statements;
                       local_id
                     in
+                    let str_len =
+                      Constant
+                        {
+                          kind =
+                            CLiteral
+                              (VScalar
+                                 (UnsignedScalar
+                                    (Usize, Z.of_int (String.length str))));
+                          ty = TLiteral (TUInt Usize);
+                        }
+                    in
                     (* Then the borrow *)
                     let local_id =
                       let nlocal_id = fresh_local cv.ty in
@@ -783,7 +794,9 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
                       in
                       let rv =
                         RvRef
-                          ({ kind = PlaceLocal local_id; ty = str_ty }, bkind)
+                          ( { kind = PlaceLocal local_id; ty = str_ty },
+                            bkind,
+                            str_len )
                       in
                       let lv = { kind = PlaceLocal nlocal_id; ty = cv.ty } in
                       let st =
@@ -914,6 +927,13 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
                 (* Introduce the intermediate reference *)
                 let local_id =
                   let local_id = fresh_local ref_ty in
+                  let metadata =
+                    Copy
+                      {
+                        kind = PlaceGlobal crate.unit_metadata;
+                        ty = mk_unit_ty;
+                      }
+                  in
                   let st =
                     {
                       span;
@@ -921,7 +941,10 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
                       kind =
                         Assign
                           ( { kind = PlaceLocal local_id; ty = ref_ty },
-                            RvRef ({ kind = PlaceGlobal gref; ty }, BShared) );
+                            RvRef
+                              ( { kind = PlaceGlobal gref; ty },
+                                BShared,
+                                metadata ) );
                       comments_before = [];
                     }
                   in

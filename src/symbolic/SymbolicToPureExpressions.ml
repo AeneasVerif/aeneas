@@ -631,7 +631,6 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
         | CastRawPtr _ -> [%craise] ctx.span "Unsupported: raw ptr casts"
         | CastTransmute _ -> [%craise] ctx.span "Unsupported: transmute"
       end
-    | S.Unop E.PtrMetadata -> [%craise] ctx.span "Unsupported unop: PtrMetadata"
     | S.Binop binop -> (
         match args with
         | [ arg0; arg1 ] ->

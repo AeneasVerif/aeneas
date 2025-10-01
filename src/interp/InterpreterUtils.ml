@@ -325,7 +325,7 @@ let rvalue_get_place (rv : rvalue) : place option =
   match rv with
   | Use (Copy p | Move p) -> Some p
   | Use (Constant _) -> None
-  | Len (p, _, _) | RvRef (p, _) | RawPtr (p, _) -> Some p
+  | Len (p, _, _) | RvRef (p, _, _) | RawPtr (p, _, _) -> Some p
   | NullaryOp _
   | UnaryOp _
   | BinaryOp _

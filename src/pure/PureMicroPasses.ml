@@ -3188,33 +3188,40 @@ let filter_loop_inputs_explore_one_visitor (ctx : ctx)
   reset_fvar_id_counter ();
   let body = open_all_fun_body span body in
   [%ldebug "After opening binders:\n" ^ fun_body_to_string ctx body];
+  (* Note that not all binders bind free variables: some of them might be `_` because
+     filtered the useless binders. *)
   let used =
-    ref (List.map (fun v -> ((fst (as_pat_open span v)).id, false)) body.inputs)
+    ref
+      (List.map
+         (fun (v : tpattern) ->
+           let id =
+             match v.pat with
+             | POpen (fv, _) -> Some fv.id
+             | _ -> None
+           in
+           (id, false))
+         body.inputs)
   in
   let inputs =
     List.map
-      (fun v ->
-        let v, _ = as_pat_open span v in
-        (v.id, mk_texpr_from_fvar v))
+      (fun (v : tpattern) ->
+        match v.pat with
+        | POpen (fv, _) -> Some (fv.id, mk_texpr_from_fvar fv)
+        | _ -> None)
       body.inputs
   in
   [%ltrace
     "inputs:\n"
     ^ String.concat ", " (List.map (tpattern_to_string ctx) body.inputs)];
   let inputs_set =
-    FVarId.Set.of_list
-      (List.map
-         (fun x ->
-           let x, _ = as_pat_open span x in
-           x.id)
-         body.inputs)
+    FVarId.Set.of_list (List.map fst (List.filter_map (fun x -> x) inputs))
   in
   [%sanity_check] decl.item_meta.span (Option.is_some decl.loop_id);
 
   let fun_id = (T.FRegular decl.def_id, decl.loop_id) in
 
   let set_used (vid : fvar_id) =
-    used := List.map (fun (vid', b) -> (vid', b || vid = vid')) !used
+    used := List.map (fun (vid', b) -> (vid', b || Some vid = vid')) !used
   in
 
   let visitor =
@@ -3245,10 +3252,13 @@ let filter_loop_inputs_explore_one_visitor (ctx : ctx)
                             (List.map (texpr_to_string ctx) args)];
                       let used_args = List.combine inputs args in
                       List.iter
-                        (fun ((vid, var), arg) ->
-                          if var <> arg then (
-                            self#visit_texpr env arg;
-                            set_used vid))
+                        (fun (input, arg) ->
+                          match input with
+                          | Some (vid, var) ->
+                              if var <> arg then (
+                                self#visit_texpr env arg;
+                                set_used vid)
+                          | None -> ())
                         used_args)
                     else super#visit_texpr env e
                 | _ -> super#visit_texpr env e)
@@ -3269,7 +3279,11 @@ let filter_loop_inputs_explore_one_visitor (ctx : ctx)
   [%ltrace
     "- used variables: "
     ^ String.concat ", "
-        (List.map (Print.pair_to_string FVarId.to_string string_of_bool) !used)];
+        (List.map
+           (Print.pair_to_string
+              (Print.option_to_string FVarId.to_string)
+              string_of_bool)
+           !used)];
 
   (* Save the filtering information, if there is anything to filter *)
   if List.exists (fun (_, b) -> not b) !used then
