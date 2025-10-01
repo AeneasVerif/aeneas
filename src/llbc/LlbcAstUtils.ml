@@ -37,7 +37,7 @@ let crate_get_opaque_non_builtin_decls (k : crate) (filter_builtin : bool) :
     d.body = None
     (* Something to pay attention to: we must ignore trait method *declarations*
        (which don't have a body but must not be considered as opaque) *)
-    && (match d.kind with
+    && (match d.src with
        | TraitDeclItem (_, _, false) -> false
        | _ -> true)
     && ((not filter_builtin)

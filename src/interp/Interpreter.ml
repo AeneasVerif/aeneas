@@ -123,8 +123,8 @@ let compute_contexts (crate : crate) : decls_ctx =
     We return a new context because we compute and add the type normalization
     map in the same step. *)
 let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
-    (sg : fun_sig) (regions_hierarchy : region_var_groups) (_kind : item_kind) :
-    eval_ctx * inst_fun_sig =
+    (sg : fun_sig) (regions_hierarchy : region_var_groups) (_kind : item_source)
+    : eval_ctx * inst_fun_sig =
   let tr_self = UnknownTrait "symbolic_instantiate_fun_sig" in
   let generics =
     Substitute.generic_args_of_params_erase_regions (Some span) sg.generics
@@ -186,7 +186,7 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
   *)
   let ctx, inst_sg =
     symbolic_instantiate_fun_sig span ctx fdef.signature regions_hierarchy
-      fdef.kind
+      fdef.src
   in
   (* Create fresh symbolic values for the inputs *)
   let input_svs =
@@ -267,7 +267,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
   in
   let _, ret_inst_sg =
     symbolic_instantiate_fun_sig span ctx fdef.signature regions_hierarchy
-      fdef.kind
+      fdef.src
   in
   let ret_rty = ret_inst_sg.output in
   (* Move the return value out of the return variable *)

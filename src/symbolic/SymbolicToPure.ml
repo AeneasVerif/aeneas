@@ -142,7 +142,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expr option) : fun_decl =
       def_id;
       item_meta = def.item_meta;
       builtin_info;
-      kind = def.kind;
+      kind = def.src;
       backend_attributes;
       num_loops;
       loop_id;
@@ -350,7 +350,7 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
     def_id;
     generics = llbc_generics;
     ty;
-    kind;
+    src;
     body = body_id;
     _;
   } =
@@ -383,6 +383,6 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
     explicit_info;
     preds;
     ty;
-    kind;
+    kind = src;
     body_id;
   }
