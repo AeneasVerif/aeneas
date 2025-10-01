@@ -178,7 +178,6 @@ type expr =
   | ForwardEnd of
       ((Contexts.eval_ctx[@opaque]) * tvalue) option
       * (Contexts.eval_ctx[@opaque])
-      * (tvalue symbolic_value_id_map * abs abs_id_map) option
       * expr
       * expr region_group_id_map
       (** We use this delimiter to indicate at which point we switch to the
@@ -189,17 +188,7 @@ type expr =
             value** with the value consumed by the return variable
           - the evaluation context at the moment we introduce the [ForwardEnd].
             We use it to translate the input values (see the comments for the
-            {!Return} variant).
-          - optional maps:
-          - from symbolic values to input values. We use this to compute the
-            input values for loops: upon entering a loop, in the translation we
-            call the loop translation function, which takes care of the end of
-            the execution.
-          - from input symbolic values to refreshed input symbolic value TODO:
-            this is a technical detail which shouldn't be here - we need it to
-            introduce intermediate let-bindings in the translation. We should
-            get rid of this once the translation of loops is cleaned up and
-            generalized.
+            {!Return} variant). TODO: it seems this is not necessary anymore.
           - the end of the translation for the forward function
           - a map from region group ids to expressions that give the end of the
             translation for the backward functions

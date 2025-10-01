@@ -832,50 +832,36 @@ let mk_back_output_ty_from_effect_info (effect_info : fun_effect_info)
 
 (** Compute the arrow types for all the backward functions.
 
-    If a backward function has no inputs/outputs we filter it.
-
-    We may also filter the region group ids (param [keep_rg_ids]). This is
-    useful for the loops: not all the parent function region groups can be
-    linked to a region abstraction introduced by the loop. *)
-let compute_back_tys_with_info (dsg : Pure.decomposed_fun_type)
-    (keep_rg_ids : RegionGroupId.Set.t option) : (back_sg_info * ty) option list
-    =
-  let keep_rg_id =
-    match keep_rg_ids with
-    | None -> fun _ -> true
-    | Some ids -> fun id -> RegionGroupId.Set.mem id ids
-  in
+    If a backward function has no inputs/outputs we filter it. *)
+let compute_back_tys_with_info (dsg : Pure.decomposed_fun_type) :
+    (back_sg_info * ty) option list =
   List.map
-    (fun ((rg_id, back_sg) : RegionGroupId.id * back_sg_info) ->
-      if keep_rg_id rg_id then
-        let effect_info = back_sg.effect_info in
-        (* Compute the input/output types *)
-        let inputs = List.map snd back_sg.inputs in
-        let outputs = back_sg.outputs in
-        (* Filter if necessary *)
-        if !Config.simplify_merged_fwd_backs && inputs = [] && outputs = [] then
-          None
-        else
-          let output = mk_simpl_tuple_ty outputs in
-          let output =
-            mk_back_output_ty_from_effect_info effect_info inputs output
-          in
-          let ty = mk_arrows inputs output in
-          Some (back_sg, ty)
-      else (* We ignore this region group *)
-        None)
-    (RegionGroupId.Map.bindings dsg.back_sg)
+    (fun (back_sg : back_sg_info) ->
+      let effect_info = back_sg.effect_info in
+      (* Compute the input/output types *)
+      let inputs = List.map snd back_sg.inputs in
+      let outputs = back_sg.outputs in
+      (* Filter if necessary *)
+      if !Config.simplify_merged_fwd_backs && inputs = [] && outputs = [] then
+        None
+      else
+        let output = mk_simpl_tuple_ty outputs in
+        let output =
+          mk_back_output_ty_from_effect_info effect_info inputs output
+        in
+        let ty = mk_arrows inputs output in
+        Some (back_sg, ty))
+    (RegionGroupId.Map.values dsg.back_sg)
 
-let compute_back_tys (dsg : Pure.decomposed_fun_type)
-    (keep_rg_ids : RegionGroupId.Set.t option) : ty option list =
-  List.map (Option.map snd) (compute_back_tys_with_info dsg keep_rg_ids)
+let compute_back_tys (dsg : Pure.decomposed_fun_type) : ty option list =
+  List.map (Option.map snd) (compute_back_tys_with_info dsg)
 
 (** Compute the output type of a function, from a decomposed signature (the
     output type contains the type of the value returned by the forward function
     as well as the types of the returned backward functions). *)
 let compute_output_ty_from_decomposed (dsg : Pure.decomposed_fun_type) : ty =
   (* Compute the arrow types for all the backward functions *)
-  let back_tys = List.filter_map (fun x -> x) (compute_back_tys dsg None) in
+  let back_tys = List.filter_map (fun x -> x) (compute_back_tys dsg) in
   (* Group the forward output and the types of the backward functions *)
   let effect_info = dsg.fwd_info.effect_info in
   let output =

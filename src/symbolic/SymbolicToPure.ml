@@ -59,7 +59,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expr option) : fun_decl =
               mk_result_fail_texpr_with_error_id ctx.span error_failure_id
                 output_ty
           in
-          let back_tys = compute_back_tys ctx.sg.fun_ty None in
+          let back_tys = compute_back_tys ctx.sg.fun_ty in
           let back_tys = List.filter_map (fun x -> x) back_tys in
           let tys =
             if ctx.sg.fun_ty.fwd_info.ignore_output then back_tys

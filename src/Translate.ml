@@ -129,10 +129,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     }
   in
 
-  (* Compute the set of loops, and find better ids for them (starting at 0).
-     Note that we only need to explore the forward function: the backward
-     functions should contain the same set of loops.
-  *)
+  (* Compute the set of loops, and find better ids for them (starting at 0). *)
   let loop_ids_map =
     match symbolic_trans with
     | None -> LoopId.Map.empty
@@ -182,8 +179,6 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
       (* Empty for now *)
       calls;
       abstractions;
-      loop_id = None;
-      inside_loop = false;
       loop_ids_map;
       loops = Pure.LoopId.Map.empty;
       mk_return = None;

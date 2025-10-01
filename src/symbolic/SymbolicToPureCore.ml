@@ -213,17 +213,6 @@ type bs_ctx = {
 
           We are using a map to be general - in practice we will fail if we
           encounter more than one loop on a single path. *)
-  loop_id : LoopId.id option;
-      (** [Some] if we reached a loop (we are synthesizing a function, and
-          reached a loop, or are synthesizing the loop body itself) *)
-  inside_loop : bool;
-      (** In case {!loop_id} is [Some]:
-          - if [true]: we are synthesizing a loop body
-          - if [false]: we reached a loop and are synthesizing the end of the
-            function (after the loop body)
-
-          Note that when a function contains a loop, we group the function
-          symbolic AST and the loop symbolic AST in a single function. *)
   mk_return : (bs_ctx -> texpr option -> texpr) option;
       (** Small helper: translate a [return] expression, given a value to
           "return". The translation of [return] depends on the context, and in

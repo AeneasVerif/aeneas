@@ -457,7 +457,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
         in
         let back_el = RegionGroupId.Map.of_list back_el in
         (* Put everything together *)
-        SA.ForwardEnd (Some (ctx_return, ret_value), ctx0, None, fwd_e, back_el)
+        SA.ForwardEnd (Some (ctx_return, ret_value), ctx0, fwd_e, back_el)
     | Panic ->
         (* Note that as we explore all the execution branches, one of
          * the executions can lead to a panic *)
