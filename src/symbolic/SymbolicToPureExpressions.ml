@@ -1513,7 +1513,9 @@ and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
 
     (* Put everything together *)
     let inputs = input_conts @ input_values in
-    let loop_body = mk_closed_lambdas loop.span inputs body in
+
+    (* We need to close the binders *)
+    let inputs, loop_body = close_binders ctx.span inputs body in
     { inputs; loop_body }
   in
 
