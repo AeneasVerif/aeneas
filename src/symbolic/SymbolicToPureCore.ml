@@ -127,6 +127,8 @@ type loop_info = {
 }
 [@@deriving show]
 
+type back_fun_info = { fvar : texpr; can_fail : bool } [@@deriving show]
+
 (** Body synthesis context *)
 type bs_ctx = {
   (* TODO: there are a lot of duplications with the various decls ctx *)
@@ -292,10 +294,10 @@ type bs_ctx = {
           when deconstructing an ended abstraction, to the default value that we
           can use when introducing the otherwise branch of the deconstructing
           match (see [mut_borrow_to_consumed]). *)
-  abs_id_to_fvar : texpr V.AbstractionId.Map.t;
+  abs_id_to_fvar : back_fun_info V.AbstractionId.Map.t;
       (** For the abstractions output by loops/branchings: this maps the
           abstraction ids to the corresponding variables we introduced in the
-          translation.
+          translation, together with additional information.
 
           TODO: use this for all the region abstractions. *)
   ignored_abs_ids : V.AbstractionId.Set.t;

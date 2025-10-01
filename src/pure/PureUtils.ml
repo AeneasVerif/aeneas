@@ -801,6 +801,13 @@ let unwrap_result_ty (span : Meta.span) (ty : ty) : ty =
         { types = [ ty ]; const_generics = []; trait_refs = [] } ) -> ty
   | _ -> [%craise] span "not a result type"
 
+let unwrap_result_ty_with_loc file line (span : Meta.span) (ty : ty) : ty =
+  match ty with
+  | TAdt
+      ( TBuiltin TResult,
+        { types = [ ty ]; const_generics = []; trait_refs = [] } ) -> ty
+  | _ -> Errors.craise file line span "not a result type"
+
 let mk_result_fail_texpr (span : Meta.span) (error : texpr) (ty : ty) : texpr =
   let type_args = [ ty ] in
   let generics = mk_generic_args_from_types type_args in
@@ -1476,7 +1483,9 @@ let mk_closed_lets span (monadic : bool) (lets : (tpattern * texpr) list)
 (** This helper closes the binder *)
 let mk_closed_checked_let file line span (monadic : bool) (lv : tpattern)
     (re : texpr) (next_e : texpr) : texpr =
-  let re_ty = if monadic then unwrap_result_ty span re.ty else re.ty in
+  let re_ty =
+    if monadic then unwrap_result_ty_with_loc file line span re.ty else re.ty
+  in
   if !Config.type_check_pure_code then
     Errors.sanity_check file line span (lv.ty = re_ty);
   mk_closed_let span monadic lv re next_e

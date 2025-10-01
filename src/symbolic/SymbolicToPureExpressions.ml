@@ -304,6 +304,7 @@ and translate_panic (ctx : bs_ctx) : texpr = Option.get ctx.mk_panic
     in [translate_forward_end]. *)
 and translate_return (ectx : C.eval_ctx) (opt_v : V.tvalue option)
     (ctx : bs_ctx) : texpr =
+  [%ldebug "e: return " ^ Print.option_to_string (tvalue_to_string ctx) opt_v];
   let opt_v = Option.map (tvalue_to_texpr ctx ectx) opt_v in
   (Option.get ctx.mk_return) ctx opt_v
 
@@ -967,7 +968,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
       [%sanity_check] span
         (V.AbstractionId.Set.mem abs.abs_id ctx.ignored_abs_ids);
       next_e ctx
-  | Some func ->
+  | Some { fvar = func; can_fail } ->
       [%ltrace
         let args = List.map (texpr_to_string ctx) args in
         "func: " ^ texpr_to_string ctx func ^ "\nfunc type: "
@@ -977,9 +978,13 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
       (* Introduce a match if necessary *)
       let ctx, (output, call) = decompose_let_match ctx (output, call) in
       (* Translate the next expression and construct the let *)
-      let can_fail = true in
-      mk_closed_checked_let __FILE__ __LINE__ ctx can_fail output call
-        (next_e ctx)
+      let next_e = next_e ctx in
+      [%ltrace
+        "About to reconstruct let-bindings:" ^ "\n- output: "
+        ^ tpattern_to_string ctx output
+        ^ "\n- call: " ^ texpr_to_string ctx call ^ "\n- next:\n"
+        ^ texpr_to_string ctx next_e];
+      mk_closed_checked_let __FILE__ __LINE__ ctx can_fail output call next_e
 
 and translate_global_eval (gid : A.GlobalDeclId.id) (generics : T.generic_args)
     (sval : V.symbolic_value) (e : S.expr) (ctx : bs_ctx) : texpr =
@@ -1432,7 +1437,10 @@ and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
       (* Register the mapping from abs to free variable *)
       let ctx =
         let fvars =
-          List.map (fun (aid, fv) -> (aid, mk_texpr_from_fvar fv)) fvars
+          List.map
+            (fun (aid, fv) ->
+              (aid, { fvar = mk_texpr_from_fvar fv; can_fail = false }))
+            fvars
         in
         {
           ctx with
