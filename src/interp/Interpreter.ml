@@ -186,7 +186,7 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
   *)
   let ctx, inst_sg =
     symbolic_instantiate_fun_sig span ctx fdef.signature regions_hierarchy
-      fdef.kind
+      fdef.src
   in
   (* Create fresh symbolic values for the inputs *)
   let input_svs =
@@ -267,7 +267,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
   in
   let _, ret_inst_sg =
     symbolic_instantiate_fun_sig span ctx fdef.signature regions_hierarchy
-      fdef.kind
+      fdef.src
   in
   let ret_rty = ret_inst_sg.output in
   (* Move the return value out of the return variable *)

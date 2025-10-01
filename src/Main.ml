@@ -441,7 +441,7 @@ let () =
               && (not (matches_name m d.item_meta.name names_map))
               (* We also ignore the trait method declarations *)
               &&
-              match d.kind with
+              match d.src with
               | TraitDeclItem _ -> false
               | _ -> true)
             fun_decls
