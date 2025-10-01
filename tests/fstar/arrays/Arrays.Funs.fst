@@ -7,12 +7,6 @@ include Arrays.Clauses
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
-(** [UNIT_METADATA]
-    Source: 'tests/src/arrays.rs', lines 0:0-0:0
-    Name pattern: [UNIT_METADATA] *)
-let unit_metadata_body : result unit = Ok ()
-let unit_metadata : unit = eval_global unit_metadata_body
-
 (** [arrays::incr]:
     Source: 'tests/src/arrays.rs', lines 12:0-14:1 *)
 let incr (x : u32) : result u32 =

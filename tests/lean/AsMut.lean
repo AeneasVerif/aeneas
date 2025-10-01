@@ -8,13 +8,6 @@ set_option linter.unusedVariables false
 
 namespace as_mut
 
-/- [UNIT_METADATA]
-   Source: 'tests/src/as_mut.rs', lines 0:0-0:0
-   Name pattern: [UNIT_METADATA] -/
-@[global_simps] def UNIT_METADATA_body : Result Unit := ok ()
-@[global_simps, irreducible]
-def UNIT_METADATA : Unit := eval_global UNIT_METADATA_body
-
 /- [as_mut::use_box_as_mut]:
    Source: 'tests/src/as_mut.rs', lines 2:0-4:1 -/
 def use_box_as_mut {T : Type} (x : T) : Result (T × (T → T)) :=

@@ -8,13 +8,6 @@ set_option linter.unusedVariables false
 
 namespace arrays_defs
 
-/- [UNIT_METADATA]
-   Source: 'tests/src/arrays_defs.rs', lines 0:0-0:0
-   Name pattern: [UNIT_METADATA] -/
-@[global_simps] def UNIT_METADATA_body : Result Unit := ok ()
-@[global_simps, irreducible]
-def UNIT_METADATA : Unit := eval_global UNIT_METADATA_body
-
 /- [arrays_defs::clone_array]:
    Source: 'tests/src/arrays_defs.rs', lines 3:0-5:1 -/
 def clone_array

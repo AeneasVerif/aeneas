@@ -8,13 +8,6 @@ set_option linter.unusedVariables false
 
 namespace arrays
 
-/- [UNIT_METADATA]
-   Source: 'tests/src/arrays.rs', lines 0:0-0:0
-   Name pattern: [UNIT_METADATA] -/
-@[global_simps] def UNIT_METADATA_body : Result Unit := ok ()
-@[global_simps, irreducible]
-def UNIT_METADATA : Unit := eval_global UNIT_METADATA_body
-
 /- [arrays::AB]
    Source: 'tests/src/arrays.rs', lines 7:0-10:1 -/
 inductive AB where
