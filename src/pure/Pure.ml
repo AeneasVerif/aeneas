@@ -1116,7 +1116,9 @@ and loop = {
           from the output abstractions, and the output values, which come from
           the output symbolic values. The output continuations come first in the
           list of outputs. *)
-  output_ty : ty;  (** The output type of the loop *)
+  output_ty : ty;
+      (** The output type of the loop, without the effect (i.e., the type
+          Result) *)
   inputs : texpr list;
       (** The inputs of the loop.loop receives as inputs, and which come from
           the input region abstractions.

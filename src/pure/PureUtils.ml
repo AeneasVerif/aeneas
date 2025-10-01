@@ -242,9 +242,9 @@ type subst = {
   tr_self : trait_instance_id;
 }
 
-let subst_visitor =
-  object
-    inherit [_] map_ty
+class ['self] subst_visitor =
+  object (_self : 'self)
+    inherit [_] map_expr
 
     method! visit_TVar subst var =
       subst.ty_subst (Substitute.expect_free_var None var)
@@ -260,7 +260,12 @@ let subst_visitor =
 
 (** Type substitution *)
 let ty_substitute (subst : subst) (ty : ty) : ty =
-  subst_visitor#visit_ty subst ty
+  let visitor =
+    object
+      inherit [_] subst_visitor
+    end
+  in
+  visitor#visit_ty subst ty
 
 let make_type_subst (vars : type_var list) (tys : ty list) : TypeVarId.id -> ty
     =
@@ -1970,3 +1975,134 @@ let iter_open_fun_decl_body (f : fun_body -> unit) (fdef : fun_decl) : unit =
     We reset the fvar id counter before doing this. *)
 let iter_open_fun_decl_body_expr (f : texpr -> unit) (fdef : fun_decl) : unit =
   iter_open_fun_decl_body (fun (fb : fun_body) -> f fb.body) fdef
+
+type generics_filter = {
+  types : bool list;  (** [true] means we should keep the parameter *)
+  const_generics : bool list;
+  trait_clauses : bool list;
+}
+
+(** Filter a list of generic arguments to only preserve the variables which are
+    inside of an expression. We also generate a substitution to re-index the
+    variables inside the expression. *)
+let filter_generic_params_used_in_texpr (generic : generic_params) (e : texpr) :
+    generic_params * generics_filter * subst =
+  (* Collect the sets of parameters used in the expression *)
+  let type_ids = ref TypeVarId.Set.empty in
+  let cg_ids = ref ConstGenericVarId.Set.empty in
+  let clause_ids = ref TraitClauseId.Set.empty in
+  let visitor =
+    object
+      inherit [_] iter_expr
+
+      method! visit_type_var_id _ id =
+        type_ids := TypeVarId.Set.add id !type_ids
+
+      method! visit_const_generic_var_id _ id =
+        cg_ids := ConstGenericVarId.Set.add id !cg_ids
+
+      method! visit_trait_clause_id _ id =
+        clause_ids := TraitClauseId.Set.add id !clause_ids
+    end
+  in
+  visitor#visit_texpr () e;
+
+  (* Filter *)
+  let { types; const_generics; trait_clauses } : generic_params = generic in
+  let types =
+    List.map
+      (fun (v : type_var) -> (TypeVarId.Set.mem v.index !type_ids, v))
+      types
+  in
+  let const_generics =
+    List.map
+      (fun (cg : const_generic_var) ->
+        (ConstGenericVarId.Set.mem cg.index !cg_ids, cg))
+      const_generics
+  in
+  let trait_clauses =
+    List.map
+      (fun (clause : trait_clause) ->
+        (TraitClauseId.Set.mem clause.clause_id !clause_ids, clause))
+      trait_clauses
+  in
+
+  let filter : generics_filter =
+    {
+      types = List.map fst types;
+      const_generics = List.map fst const_generics;
+      trait_clauses = List.map fst trait_clauses;
+    }
+  in
+
+  let types =
+    List.filter_map (fun (b, x) -> if b then Some x else None) types
+  in
+  let const_generics =
+    List.filter_map (fun (b, x) -> if b then Some x else None) const_generics
+  in
+  let trait_clauses =
+    List.filter_map (fun (b, x) -> if b then Some x else None) trait_clauses
+  in
+
+  let ty_subst =
+    let map =
+      TypeVarId.Map.of_list
+        (TypeVarId.mapi
+           (fun nid (v : type_var) -> (v.index, TVar (T.Free nid)))
+           types)
+    in
+    fun id -> TypeVarId.Map.find id map
+  in
+  let cg_subst =
+    let map =
+      ConstGenericVarId.Map.of_list
+        (ConstGenericVarId.mapi
+           (fun nid (v : const_generic_var) -> (v.index, T.CgVar (T.Free nid)))
+           const_generics)
+    in
+    fun id -> ConstGenericVarId.Map.find id map
+  in
+  let tr_subst =
+    let map =
+      TraitClauseId.Map.of_list
+        (TraitClauseId.mapi
+           (fun nid (v : trait_clause) -> (v.clause_id, Clause (T.Free nid)))
+           trait_clauses)
+    in
+    fun id -> TraitClauseId.Map.find id map
+  in
+  let tr_self = UnknownTrait "Unexpected self clause" in
+  let subst : subst = { ty_subst; cg_subst; tr_subst; tr_self } in
+
+  (* Reindex the generic params *)
+  let generics : generic_params = { types; const_generics; trait_clauses } in
+  let visitor =
+    object
+      inherit [_] subst_visitor
+    end
+  in
+  let generics = visitor#visit_generic_params subst generics in
+
+  (generics, filter, subst)
+
+let generic_args_of_params (generics : generic_params) : generic_args =
+  let types =
+    List.map (fun (v : type_var) -> TVar (Free v.index)) generics.types
+  in
+  let const_generics =
+    List.map
+      (fun (v : const_generic_var) -> T.CgVar (Free v.index))
+      generics.const_generics
+  in
+  let trait_refs =
+    List.map
+      (fun (c : trait_clause) ->
+        {
+          trait_id = Clause (Free c.clause_id);
+          trait_decl_ref =
+            { trait_decl_id = c.trait_id; decl_generics = c.generics };
+        })
+      generics.trait_clauses
+  in
+  { types; const_generics; trait_refs }
