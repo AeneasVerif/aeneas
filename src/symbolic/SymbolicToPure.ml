@@ -276,7 +276,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     item_meta;
     impl_trait = llbc_impl_trait;
     generics = llbc_generics;
-    parent_trait_refs;
+    implied_trait_refs;
     consts;
     types = _;
     methods;
@@ -298,7 +298,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
   let generics, preds = translate_generic_params span llbc_generics in
   let explicit_info = compute_explicit_info generics [] in
   let parent_trait_refs =
-    List.map (translate_strait_ref span) parent_trait_refs
+    List.map (translate_strait_ref span) implied_trait_refs
   in
   let consts =
     List.map
