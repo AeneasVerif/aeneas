@@ -504,20 +504,7 @@ let compute_ids () =
       method! visit_ASharedBorrow _ _ bid sid = add_shared_borrow bid sid
       method! visit_AsbBorrow _ bid sid = add_shared_borrow bid sid
       method! visit_abstraction_id _ id = aids := AbstractionId.Set.add id !aids
-
-      method! visit_region_id _ _ =
-        [%craise_opt_span] None
-          "Region ids should not be visited directly; the visitor should catch \
-           cases that contain region ids earlier."
-
-      method! visit_RVar _ var =
-        match var with
-        | Free id -> rids := RegionId.Set.add id !rids
-        | Bound _ -> ()
-
-      method! visit_abs_regions _ (regions : abs_regions) : unit =
-        let { owned } = regions in
-        rids := RegionId.Set.union owned !rids
+      method! visit_region_id _ id = rids := RegionId.Set.add id !rids
 
       method! visit_symbolic_value env sv =
         sids := SymbolicValueId.Set.add sv.sv_id !sids;

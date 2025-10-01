@@ -103,22 +103,7 @@ let subst_ids_visitor (subst : id_subst) =
     inherit [_] map_env
     method! visit_type_var_id _ id = subst.ty_subst id
     method! visit_const_generic_var_id _ id = subst.cg_subst id
-
-    method! visit_region_id _ _ =
-      [%craise_opt_span] None
-        "Region ids should not be visited directly; the visitor should catch \
-         cases that contain region ids earlier."
-
-    method! visit_abs_regions _ regions =
-      let { owned } = regions in
-      let owned = RegionId.Set.map subst.r_subst owned in
-      { owned }
-
-    method! visit_RVar _ var =
-      match var with
-      | Free rid -> RVar (Free (subst.r_subst rid))
-      | Bound _ -> RVar var
-
+    method! visit_region_id _ rid = subst.r_subst rid
     method! visit_borrow_id _ bid = subst.bsubst bid
     method! visit_shared_borrow_id _ sid = subst.sbsubst sid
     method! visit_loan_id _ bid = subst.bsubst bid
