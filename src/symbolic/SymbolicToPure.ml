@@ -205,7 +205,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     def_id;
     item_meta;
     generics = llbc_generics;
-    parent_clauses = llbc_parent_clauses;
+    implied_clauses = llbc_parent_clauses;
     consts;
     types;
     methods;

@@ -3224,7 +3224,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
             false trait_ref
         in
         extract_trait_impl_item ctx fmt item_name ty)
-      (List.combine trait_decl.parent_clauses impl.parent_trait_refs);
+      (List.combine trait_decl.implied_clauses impl.parent_trait_refs);
 
     (* The methods *)
     List.iter
