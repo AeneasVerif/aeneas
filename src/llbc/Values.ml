@@ -309,7 +309,9 @@ class ['self] iter_env_base =
     method visit_mgiven_back_symb : 'env -> mgiven_back_symb -> unit =
       fun _ _ -> ()
 
-    method visit_region_id_set : 'env -> region_id_set -> unit = fun _ _ -> ()
+    method visit_region_id_set : 'env -> region_id_set -> unit =
+      fun env ids -> RegionId.Set.iter (self#visit_region_id env) ids
+
     method visit_abstraction_id : 'env -> abstraction_id -> unit = fun _ _ -> ()
 
     method visit_abstraction_id_set : 'env -> abstraction_id_set -> unit =
@@ -365,7 +367,7 @@ class ['self] map_env_base =
       fun _ m -> m
 
     method visit_region_id_set : 'env -> region_id_set -> region_id_set =
-      fun _ s -> s
+      fun env ids -> RegionId.Set.map (self#visit_region_id env) ids
 
     method visit_abstraction_id : 'env -> abstraction_id -> abstraction_id =
       fun _ x -> x
@@ -1086,7 +1088,10 @@ and evalue =
   | ELet of region_id_set * tepat * tevalue * tevalue
       (** Because let-bindings are used to bind expressions refering to
           different sets of regions, we need to precise the regions projected in
-          the bound expression. *)
+          the bound expression.
+
+          Note that the set of regions applies to the projections inside the
+          bound value and inside the binding *pattern*. *)
   | EJoinMarkers of tevalue * tevalue
       (** This expression is either the left expression (in case we project the
           left markers) or the right expression (in case we project the right
@@ -1466,6 +1471,9 @@ and abs = {
       (** The original list of parents, ordered. This is used for synthesis.
           TODO: remove? *)
   regions : abs_regions;
+      (** TODO: actually we also (only?) need to put the regions at the level of
+          the values themselves, otherwise some projections are not precise
+          enough when merging region abstractions. *)
   avalues : tavalue list;  (** The values in this abstraction *)
   cont : abs_cont option;
       (** The continuation representing the abstraction in the translation.

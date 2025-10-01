@@ -438,7 +438,7 @@ module Values = struct
     let unique_name =
       match unique_name with
       | None -> ""
-      | Some n -> "uid=" ^ n ^ ","
+      | Some n -> n ^ ","
     in
     "bv@(" ^ unique_name ^ "scope=" ^ string_of_int bv.scope ^ ",id="
     ^ AbsBVarId.to_string bv.bvar_id
@@ -566,8 +566,10 @@ module Values = struct
         ^ ", "
         ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr right
         ^ ")"
-    | EBVar bv -> evalue_env_get_bvar aenv bv
-    | EFVar fvid -> "@" ^ AbsFVarId.to_string fvid
+    | EBVar bv ->
+        "(" ^ evalue_env_get_bvar aenv bv ^ " : " ^ ty_to_string env v.ty ^ ")"
+    | EFVar fvid ->
+        "(@" ^ AbsFVarId.to_string fvid ^ " : " ^ ty_to_string env v.ty ^ ")"
     | EApp (f, args) ->
         let args =
           List.map
@@ -588,22 +590,24 @@ module Values = struct
     | EBottom -> "⊥ : " ^ ty_to_string env v.ty
     | EBorrow bc ->
         eborrow_content_to_string ~span ~with_ended env aenv indent indent_incr
-          bc
+          v.ty bc
     | ELoan lc ->
-        eloan_content_to_string ~span ~with_ended env aenv indent indent_incr lc
+        eloan_content_to_string ~span ~with_ended env aenv indent indent_incr
+          v.ty lc
     | ESymbolic (pm, proj) ->
         eproj_to_string ~with_ended env proj |> add_proj_marker pm
     | EValue (_, mv) -> "@mvalue(" ^ tvalue_to_string ~span env mv ^ ")"
-    | EIgnored -> "_"
+    | EIgnored -> "_ : " ^ ty_to_string env v.ty ^ ")"
 
   and eloan_content_to_string ?(span : Meta.span option = None)
       ?(with_ended : bool = false) (env : fmt_env) (aenv : evalue_env)
-      (indent : string) (indent_incr : string) (lc : eloan_content) : string =
+      (indent : string) (indent_incr : string) (ty : ty) (lc : eloan_content) :
+      string =
     match lc with
     | EMutLoan (pm, bid, av) ->
         "@mut_loan(" ^ BorrowId.to_string bid ^ ", "
         ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr av
-        ^ ")"
+        ^ ") : " ^ ty_to_string env ty
         |> add_proj_marker pm
     | EEndedMutLoan ml ->
         let consumed =
@@ -640,8 +644,12 @@ module Values = struct
     match pat.epat with
     | PBound ->
         let aenv, _, s = evalue_env_push_var aenv pat.epat_ty in
-        (aenv, s)
-    | POpen bid -> (aenv, "@" ^ AbsFVarId.to_string bid)
+        (aenv, "(" ^ s ^ " : " ^ ty_to_string env pat.epat_ty ^ ")")
+    | POpen bid ->
+        ( aenv,
+          "(@" ^ AbsFVarId.to_string bid ^ " : "
+          ^ ty_to_string env pat.epat_ty
+          ^ ")" )
     | PAdt (variant_id, fields) ->
         let aenv, fields =
           List.fold_left_map
@@ -653,7 +661,7 @@ module Values = struct
           adt_to_string span env
             (fun () -> show_tepat pat)
             pat.epat_ty variant_id fields )
-    | PIgnored -> (aenv, "_")
+    | PIgnored -> (aenv, "(_ : " ^ ty_to_string env pat.epat_ty ^ ")")
 
   and tepat_to_string ?(span : Meta.span option = None) (env : fmt_env)
       (aenv : evalue_env) (indent : string) (indent_incr : string) (pat : tepat)
@@ -667,12 +675,13 @@ module Values = struct
 
   and eborrow_content_to_string ?(span : Meta.span option = None)
       ?(with_ended : bool = false) (env : fmt_env) (aenv : evalue_env)
-      (indent : string) (indent_incr : string) (bc : eborrow_content) : string =
+      (indent : string) (indent_incr : string) (ty : ty) (bc : eborrow_content)
+      : string =
     match bc with
     | EMutBorrow (pm, bid, _, av) ->
         "@mb(" ^ BorrowId.to_string bid ^ ", "
         ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr av
-        ^ ")"
+        ^ ") : " ^ ty_to_string env ty
         |> add_proj_marker pm
     | EIgnoredMutBorrow (opt_bid, av) ->
         "@ignored_mut_borrow("
@@ -725,7 +734,7 @@ module Values = struct
           tevalue_to_string ~span ~with_ended env empty_evalue_env indent
             indent_incr e
     in
-    to_string output ^ " :\n" ^ indent ^ to_string input
+    to_string output ^ " :=\n" ^ indent ^ to_string input
 
   let abs_to_string ?(span : Meta.span option = None) (env : fmt_env)
       ?(with_ended : bool = false) (verbose : bool) (indent : string)

@@ -1529,7 +1529,17 @@ let merge_abs_conts_aux (span : Meta.span) (ctx : eval_ctx) (abs0 : abs)
   [%sanity_check] span (not (tevalue_has_fvars output));
 
   (* The continuation itself *)
-  { output = Some output; input = Some input }
+  let abs_cont = { output = Some output; input = Some input } in
+
+  [%ltrace
+    "After merging:" ^ "\n\n- abs0:\n"
+    ^ abs_to_string span ctx abs0
+    ^ "\n\n- abs1:\n"
+    ^ abs_to_string span ctx abs1
+    ^ "\n\n- abs_cont:\n"
+    ^ abs_cont_to_string span ctx ~indent:"  " abs_cont];
+
+  abs_cont
 
 (** Merge the continuation expressions of two different abstractions. *)
 let merge_abs_conts (span : Meta.span) (ctx : eval_ctx) ~(with_abs_conts : bool)
@@ -1638,6 +1648,8 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind)
       cont;
     }
   in
+
+  [%ltrace "resulting abs:\n" ^ abs_to_string span ctx abs];
 
   (* Sanity check *)
   [%sanity_check] span (abs_is_destructured span true ctx abs);

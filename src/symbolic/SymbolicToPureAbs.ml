@@ -511,18 +511,43 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
     (bound_inputs : bound_borrows_loans)
     (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref) (input : V.tevalue) :
     bs_ctx * bool * texpr =
+  [%ltrace
+    "- rids: "
+    ^ T.RegionId.Set.to_string None rids
+    ^ "\n- input: "
+    ^ tevalue_to_string ectx input];
   let span = ctx.span in
   let rec to_texpr ~(filter : bool) (rids : T.RegionId.Set.t) (ctx : bs_ctx)
       (input : V.tevalue) : bs_ctx * bool * texpr option =
+    [%ltrace
+      "- input: "
+      ^ tevalue_to_string ectx input
+      ^ "\n- fvar_to_texpr:\n"
+      ^ V.AbsFVarId.Map.to_string (Some "  ") (texpr_to_string ctx)
+          !fvar_to_texpr];
     match input.value with
     | V.ELet (rids', pat, bound, next) ->
         (* Open the binders *)
         let pat, next = ValuesUtils.open_binder span pat next in
+        [%ltrace
+          "- input after opening the binders: "
+          ^ tevalue_to_string ectx
+              { input with value = ELet (rids', pat, bound, next) }];
+        [%ltrace
+          "- pat: " ^ tepat_to_string ectx pat ^ "\n- pat.ty: "
+          ^ InterpreterUtils.ty_to_string ectx pat.epat_ty];
         (* Translate *)
         let ctx, bound_can_fail, bound =
           to_texpr ~filter:false rids' ctx bound
         in
-        let ctx, pat = tepat_to_tpattern ctx fvar_to_texpr rids pat in
+        let llbc_pat = pat in
+        let ctx, pat = tepat_to_tpattern ctx fvar_to_texpr rids' pat in
+        [%ltrace
+          "Let-binding:\n- pat: " ^ tpattern_to_string ctx pat
+          ^ "\n- LLBC pat.ty: "
+          ^ InterpreterUtils.ty_to_string ectx llbc_pat.epat_ty
+          ^ "\n- bound: "
+          ^ Print.option_to_string (texpr_to_string ctx) bound];
         let ctx, next_can_fail, next = to_texpr ~filter:false rids ctx next in
         (* Create the let binding *)
         let bound =
