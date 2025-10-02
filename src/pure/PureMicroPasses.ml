@@ -860,6 +860,57 @@ let intro_struct_updates_visitor (ctx : ctx) (def : fun_decl) =
 
 let intro_struct_updates = lift_expr_map_visitor intro_struct_updates_visitor
 
+(** This performs the following simplification:
+    {[
+      fun x1 ... xn => g x1 ... xn
+      ...
+        ~~>
+      g
+      ...
+    ]} *)
+let simplify_lambdas_visitor (ctx : ctx) (def : fun_decl) =
+  let span = def.item_meta.span in
+  object (self)
+    inherit [_] map_expr as super
+
+    method! visit_texpr env e =
+      match e.e with
+      | Lambda _ ->
+          (* Arrow case *)
+          let pats, e = raw_destruct_lambdas e in
+          let g, args = destruct_apps e in
+          let default () =
+            let e = self#visit_texpr env e in
+            mk_opened_lambdas span pats e
+          in
+          if List.length pats = List.length args then
+            (* Check if the arguments are exactly the lambdas *)
+            let check_pat_arg ((pat, arg) : tpattern * texpr) =
+              match (pat.pat, arg.e) with
+              | POpen (v, _), FVar vid -> v.id = vid
+              | _ -> false
+            in
+            if List.for_all check_pat_arg (List.combine pats args) then
+              (* Check if the application is a tuple constructor
+                 or will be extracted as a projector: if
+                 it is, keep the lambdas, otherwise simplify *)
+              let simplify =
+                match g.e with
+                | Qualif { id = AdtCons { adt_id; _ }; _ } ->
+                    not
+                      (PureUtils.type_decl_from_type_id_is_tuple_struct
+                         ctx.trans_ctx.type_ctx.type_infos adt_id)
+                | Qualif { id = Proj _; _ } -> false
+                | _ -> true
+              in
+              if simplify then self#visit_texpr env g else default ()
+            else default ()
+          else default ()
+      | _ -> super#visit_texpr env e
+  end
+
+let simplify_lambdas = lift_expr_map_visitor simplify_lambdas_visitor
+
 (** Simplify the let-bindings by performing the following rewritings:
 
     Move inner let-bindings outside. This is especially useful to simplify the
@@ -900,15 +951,18 @@ let intro_struct_updates = lift_expr_map_visitor intro_struct_updates_visitor
       ...
     ]}
 
-    Simplify arrows:
+    Simplify identity functions:
     {[
-      let f := fun x => g x in
+      let f := fun x => x
       ...
+      f x
         ~~>
-      let f := g in
+      let f := fun x => x
       ...
+      x
     ]} *)
-let simplify_let_bindings_visitor (ctx : ctx) (def : fun_decl) =
+let simplify_let_bindings_visitor (_ctx : ctx) (def : fun_decl) =
+  let span = def.item_meta.span in
   object (self)
     inherit [_] map_expr as super
 
@@ -959,40 +1013,41 @@ let simplify_let_bindings_visitor (ctx : ctx) (def : fun_decl) =
                 super#visit_expr env e.e
             | _ -> super#visit_Let env monadic lv rv next
           else super#visit_Let env monadic lv rv next
-      | Lambda _ ->
-          if not monadic then
-            (* Arrow case *)
-            let pats, e = raw_destruct_lambdas rv in
-            let g, args = destruct_apps e in
-            if List.length pats = List.length args then
-              (* Check if the arguments are exactly the lambdas *)
-              let check_pat_arg ((pat, arg) : tpattern * texpr) =
-                match (pat.pat, arg.e) with
-                | POpen (v, _), FVar vid -> v.id = vid
-                | _ -> false
-              in
-              if List.for_all check_pat_arg (List.combine pats args) then
-                (* Check if the application is a tuple constructor
-                     or will be extracted as a projector: if
-                     it is, keep the lambdas, otherwise simplify *)
-                let simplify =
-                  match g.e with
-                  | Qualif { id = AdtCons { adt_id; _ }; _ } ->
-                      not
-                        (PureUtils.type_decl_from_type_id_is_tuple_struct
-                           ctx.trans_ctx.type_ctx.type_infos adt_id)
-                  | Qualif { id = Proj _; _ } -> false
-                  | _ -> true
+      | Lambda (pat, body) ->
+          (* Simplify:
+             {[
+               let f := fun x => x
+               ...
+               f x
+                 ~~>
+               let f := fun x => x
+               ...
+               x
+             ]}
+          *)
+          begin
+            match (pat.pat, body.e) with
+            | POpen (fv, _), FVar fid when fv.id = fid ->
+                let body =
+                  let env = FVarId.Set.add fid env in
+                  self#visit_texpr env body
                 in
-                if simplify then self#visit_Let env monadic lv g next
-                else super#visit_Let env monadic lv rv next
-              else super#visit_Let env monadic lv rv next
-            else super#visit_Let env monadic lv rv next
-          else super#visit_Let env monadic lv rv next
+                super#visit_Let env monadic lv rv
+                  (mk_opened_lambda span pat body)
+            | _ -> super#visit_Let env monadic lv rv next
+          end
       | _ -> super#visit_Let env monadic lv rv next
+
+    method! visit_App env f arg =
+      (* Check if this is the identity case *)
+      match f.e with
+      | FVar fid when FVarId.Set.mem fid env -> arg.e
+      | _ -> super#visit_App env f arg
   end
 
-let simplify_let_bindings = lift_expr_map_visitor simplify_let_bindings_visitor
+let simplify_let_bindings =
+  lift_expr_map_visitor_with_state simplify_let_bindings_visitor
+    FVarId.Set.empty
 
 (** Remove the duplicated function calls.
 
@@ -1370,7 +1425,7 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
               loop_id = _;
               span = _;
               output_tys = _;
-              num_output_conts = _;
+              num_output_values = _;
               output_ty = _;
               inputs;
               num_input_conts = _;
@@ -3296,6 +3351,8 @@ let end_passes :
     (None, "simplify_decompose_struct", simplify_decompose_struct);
     (* Introduce the special structure create/update expressions *)
     (None, "intro_struct_updates", intro_struct_updates);
+    (* Simplify the lambdas *)
+    (None, "simplify_lambdas", simplify_lambdas);
     (* Simplify the let-bindings *)
     (None, "simplify_let_bindings", simplify_let_bindings);
     (* Inline the useless variable reassignments *)
@@ -3345,9 +3402,11 @@ let end_passes :
     ( None,
       "simplify_aggregates_unchanged_fields",
       simplify_aggregates_unchanged_fields );
+    (* Simplify the lambdas again *)
+    (None, "simplify_lambdas (pass 2)", simplify_lambdas);
     (* Simplify the let-bindings - some simplifications may have been unlocked by
        the pass above (for instance, the lambda simplification) *)
-    (None, "simplify_let_bindings", simplify_let_bindings);
+    (None, "simplify_let_bindings (pass 2)", simplify_let_bindings);
     (* Inline the useless vars again *)
     ( None,
       "inline_useless_var_assignments (pass 2)",
