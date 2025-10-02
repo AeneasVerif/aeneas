@@ -2134,7 +2134,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
         llbc_generics;
         preds = { trait_type_constraints = [] };
         inputs = inputs_tys;
-        output;
+        output = mk_result_ty output;
         fwd_info = loop_fwd_sig_info;
         back_effect_info = fun_sig.back_effect_info;
       }
