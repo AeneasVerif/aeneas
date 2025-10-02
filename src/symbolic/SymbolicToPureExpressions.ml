@@ -571,7 +571,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
   in
   let func_ty = mk_arrows input_tys ret_ty in
   let func = { e = Qualif func; ty = func_ty } in
-  let call_e = mk_apps ctx.span func args in
+  let call_e = [%add_loc] mk_apps ctx.span func args in
   (* This is a **hack** for [Box::new]: introduce backward functions
      which are the identity if we instantiated [Box::new] with types
      containing mutable borrows.
@@ -598,7 +598,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
           match args with
           | [ x ] ->
               let call = { call with ty = mk_arrows [ x.ty ] x.ty } in
-              mk_app ctx.span call x
+              [%add_loc] mk_app ctx.span call x
           | _ -> [%internal_error] ctx.span
         in
         let call_e =
@@ -663,7 +663,7 @@ and translate_cast_unsize (call : S.call) (e : S.expr) (ty0 : T.ty) (ty1 : T.ty)
     let ret_ty = TAdt (TBuiltin TSlice, mk_generic_args_from_types [ ty ]) in
     let func_ty = mk_arrows [ input_ty ] ret_ty in
     let func = { e = Qualif func; ty = func_ty } in
-    mk_apps ctx.span func [ v ]
+    [%add_loc] mk_apps ctx.span func [ v ]
   in
 
   (* Create the cast expression *)
@@ -686,7 +686,7 @@ and translate_cast_unsize (call : S.call) (e : S.expr) (ty0 : T.ty) (ty1 : T.ty)
           let qualif : qualif = { id = Proj { adt_id; field_id }; generics } in
           let qualif_ty = mk_arrows [ adt_ty ] ty0 in
           let qualif = { e = Qualif qualif; ty = qualif_ty } in
-          mk_app ctx.span qualif arg
+          [%add_loc] mk_app ctx.span qualif arg
         in
 
         (* Create the array to slice expression *)
@@ -848,7 +848,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
         "func: " ^ texpr_to_string ctx func ^ "\nfunc type: "
         ^ pure_ty_to_string ctx func.ty
         ^ "\n\nargs:\n" ^ String.concat "\n" args];
-      let call = mk_apps ctx.span func args in
+      let call = [%add_loc] mk_apps ctx.span func args in
       (* Introduce a match if necessary *)
       let ctx, (output, call) = decompose_let_match ctx (output, call) in
       (* Translate the next expression and construct the let *)
@@ -974,7 +974,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
         "func: " ^ texpr_to_string ctx func ^ "\nfunc type: "
         ^ pure_ty_to_string ctx func.ty
         ^ "\n\nargs:\n" ^ String.concat "\n" args];
-      let call = mk_apps ctx.span func args in
+      let call = [%add_loc] mk_apps ctx.span func args in
       (* Introduce a match if necessary *)
       let ctx, (output, call) = decompose_let_match ctx (output, call) in
       (* Translate the next expression and construct the let *)
@@ -1011,7 +1011,7 @@ and translate_assertion (ectx : C.eval_ctx) (v : V.tvalue) (e : S.expr)
   in
   let func_ty = mk_arrow (TLiteral TBool) (mk_result_ty mk_unit_ty) in
   let func = { e = Qualif func; ty = func_ty } in
-  let assertion = mk_apps ctx.span func args in
+  let assertion = [%add_loc] mk_apps ctx.span func args in
   mk_closed_checked_let __FILE__ __LINE__ ctx monadic
     (mk_dummy_pattern mk_unit_ty)
     assertion next_e
@@ -1469,6 +1469,17 @@ and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
     translate_input_values loop.input_svalues loop.input_value_to_value
   in
   let inputs = input_abs @ input_values in
+  [%ldebug
+    "- loop input abstractions:\n "
+    ^ String.concat "\n\n"
+        (List.map (abs_to_string ctx)
+           (V.AbstractionId.Map.values loop.input_abs_to_abs))
+    ^ "\n\n- loop input values:\n"
+    ^ String.concat "\n"
+        (List.map (tvalue_to_string ctx)
+           (V.SymbolicValueId.Map.values loop.input_value_to_value))
+    ^ "\n\n- loop translated inputs:\n"
+    ^ String.concat "\n\n" (List.map (texpr_to_string ctx) inputs)];
 
   (* Introduce the binders for the loop outputs *)
   let ctx, break_abs, break_values =
@@ -1488,16 +1499,12 @@ and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
     let continue_ty = List.map (fun (e : texpr) -> e.ty) inputs in
     let continue_ty = mk_simpl_tuple_ty continue_ty in
     let break_ty = output.ty in
-    let output_ty = mk_loop_result_ty continue_ty break_ty in
     let mk_panic =
-      mk_result_fail_texpr_with_error_id ctx.span error_failure_id output_ty
+      mk_loop_result_fail_texpr_with_error_id ctx.span continue_ty break_ty
+        error_failure_id
     in
-    let mk_continue ctx output =
-      mk_result_ok_texpr ctx.span (mk_continue_texpr ctx.span output break_ty)
-    in
-    let mk_break ctx output =
-      mk_result_ok_texpr ctx.span (mk_break_texpr ctx.span continue_ty output)
-    in
+    let mk_continue ctx output = mk_continue_texpr ctx.span output break_ty in
+    let mk_break ctx output = mk_break_texpr ctx.span continue_ty output in
     let ctx =
       {
         ctx with
@@ -1532,13 +1539,17 @@ and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
       output_ty = output.ty;
     }
   in
+  [%sanity_check] loop.span
+    (List.length loop_e.loop_body.inputs = List.length inputs);
   let loop_ty =
     mk_arrows
       (List.map (fun (e : texpr) -> e.ty) inputs)
       (mk_result_ty output.ty)
   in
   let loop_e : texpr = { e = Loop loop_e; ty = loop_ty } in
-  let loop_e = mk_apps loop.span loop_e inputs in
+  let loop_e = [%add_loc] mk_apps loop.span loop_e inputs in
+
+  [%ltrace texpr_to_string ctx loop_e];
 
   (* Translate the next expression *)
   let next_e = translate_expr loop.next_expr ctx in

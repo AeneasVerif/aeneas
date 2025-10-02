@@ -25,6 +25,10 @@ let texpr_to_string (ctx : ctx) (x : texpr) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.texpr_to_string fmt false "" "  " x
 
+let ty_to_string (ctx : ctx) (x : ty) : string =
+  let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
+  PrintPure.ty_to_string fmt false x
+
 let fun_body_to_string (ctx : ctx) (x : fun_body) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.fun_body_to_string fmt x
@@ -651,7 +655,7 @@ let intro_massert_visitor (_ctx : ctx) (def : fun_decl) =
                 ty = mk_arrow mk_bool_ty (mk_result_ty mk_unit_ty);
               }
             in
-            let massert = mk_app span massert scrut in
+            let massert = [%add_loc] mk_app span massert scrut in
             (* Introduce the let-binding *)
             let monadic = true in
             let pat = mk_dummy_pattern mk_unit_ty in
@@ -737,7 +741,7 @@ let simplify_decompose_struct_visitor (ctx : ctx) (def : fun_decl) =
               let proj_e = Qualif qualif in
               let proj_ty = mk_arrow scrutinee.ty dest.ty in
               let proj = { e = proj_e; ty = proj_ty } in
-              mk_app span proj scrutinee
+              [%add_loc] mk_app span proj scrutinee
             in
             let id_var_pairs =
               FieldId.mapi (fun fid v -> (fid, v)) adt_pat.fields
@@ -783,7 +787,7 @@ let intro_struct_updates_visitor (ctx : ctx) (def : fun_decl) =
       | App _ -> (
           let app, args = destruct_apps e in
           let ignore () =
-            mk_apps def.item_meta.span (self#visit_texpr env app)
+            [%add_loc] mk_apps def.item_meta.span (self#visit_texpr env app)
               (List.map (self#visit_texpr env) args)
           in
           match app.e with
@@ -1849,6 +1853,116 @@ let simplify_aggregates_unchanged_fields =
   lift_expr_map_visitor_with_state simplify_aggregates_unchanged_fields_visitor
     { expand_map = ExprMap.empty; expanded = [] }
 
+(** Helper for [decompose_loops]: update the occurrences of continue and break
+*)
+let update_continue_breaks (ctx : ctx) (def : fun_decl) (loop_func : texpr)
+    (e : texpr) : texpr =
+  let span = def.item_meta.span in
+
+  let rec update (e : texpr) : texpr =
+    [%ldebug "e:\n" ^ texpr_to_string ctx e];
+    match e.e with
+    | FVar _ | BVar _ | CVar _ | Const _ -> e
+    | App _ | Qualif _ ->
+        let f, args = destruct_apps e in
+        begin
+          match f.e with
+          | Qualif
+              {
+                id = AdtCons { adt_id = TBuiltin TLoopResult; variant_id };
+                generics;
+              } ->
+              let variant_id =
+                [%unwrap_with_span] span variant_id
+                  "Internal error: please file an issue"
+              in
+              let _, break =
+                match generics with
+                | {
+                 types = [ continue; break ];
+                 const_generics = [];
+                 trait_refs = [];
+                } -> (continue, break)
+                | _ -> [%internal_error] span
+              in
+              (* There should be exactly one argument, which should be
+                 a tuple *)
+              let arg =
+                match args with
+                | [ x ] -> x
+                | _ -> [%internal_error] span
+              in
+              if variant_id = loop_result_continue_id then (
+                [%ldebug "continue expression: introducing a recursive call"];
+                let args =
+                  match opt_destruct_tuple_texpr span arg with
+                  | None -> [ arg ]
+                  | Some args -> args
+                in
+                [%ldebug
+                  "- loop_func: "
+                  ^ texpr_to_string ctx loop_func
+                  ^ "\n- loop_func.ty: "
+                  ^ ty_to_string ctx loop_func.ty
+                  ^ "\n- num args: "
+                  ^ string_of_int (List.length args)
+                  ^ "\n- args:\n"
+                  ^ String.concat "\n\n" (List.map (texpr_to_string ctx) args)];
+                [%add_loc] mk_apps span loop_func args)
+              else if variant_id = loop_result_break_id then (
+                [%ldebug "break expression: introducing an ok expression"];
+                mk_result_ok_texpr span arg)
+              else if variant_id = loop_result_fail_id then
+                mk_result_fail_texpr span arg break
+              else [%internal_error] span
+          | _ -> [%add_loc] mk_apps span f args
+        end
+    | Lambda (pat, body) ->
+        let body = update body in
+        mk_opened_lambda span pat body
+    | Let (monadic, pat, bound, next) ->
+        let bound = update bound in
+        let next = update next in
+        mk_opened_let monadic pat bound next
+    | Switch (scrut, body) ->
+        let scrut = update scrut in
+        let body, ty =
+          match body with
+          | If (e0, e1) ->
+              let e0 = update e0 in
+              let e1 = update e1 in
+              (If (e0, e1), e0.ty)
+          | Match branches ->
+              let branches =
+                List.map
+                  (fun ({ pat; branch } : match_branch) ->
+                    { pat; branch = update branch })
+                  branches
+              in
+              let ty =
+                match branches with
+                | [] -> [%internal_error] span
+                | { branch = b; _ } :: _ -> b.ty
+              in
+              (Match branches, ty)
+        in
+        { e = Switch (scrut, body); ty }
+    | Loop _ -> [%internal_error] span
+    | StructUpdate { struct_id; init; updates } ->
+        let init = Option.map update init in
+        let updates = List.map (fun (fid, e) -> (fid, update e)) updates in
+        { e with e = StructUpdate { struct_id; init; updates } }
+    | Meta (m, e) -> mk_emeta m (update e)
+    | EError _ ->
+        let ty =
+          match try_unwrap_loop_result e.ty with
+          | None -> e.ty
+          | Some (_, break) -> mk_result_ty break
+        in
+        { e with ty }
+  in
+  update e
+
 (** Retrieve the loop definitions from the function definition.
 
     Introduce auxiliary definitions for the loops. *)
@@ -1878,27 +1992,44 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
   (* Store the loops here *)
   let loops = ref LoopId.Map.empty in
 
-  (* Update the occurrences of continue and break *)
-  let update_continue_breaks (e : texpr) : texpr =
-    match e.e with
-    | FVar _ -> _
-    | BVar _ -> _
-    | CVar _ -> _
-    | Const _ -> _
-    | App (_, _) -> _
-    | Lambda (_, _) -> _
-    | Qualif _ -> _
-    | Let (_, _, _, _) -> _
-    | Switch (_, _) -> _
-    | Loop _ -> _
-    | StructUpdate _ -> _
-    | Meta (_, _) -> _
-    | EError (_, _) -> _
+  let compute_loop_fun_expr (loop : loop) (generics_filter : generics_filter) :
+      texpr =
+    let generic_args = generic_args_of_params def.signature.generics in
+    let { types; const_generics; trait_refs } : generic_args = generic_args in
+    let types =
+      List.filter_map
+        (fun (b, x) -> if b then Some x else None)
+        (List.combine generics_filter.types types)
+    in
+    let const_generics =
+      List.filter_map
+        (fun (b, x) -> if b then Some x else None)
+        (List.combine generics_filter.const_generics const_generics)
+    in
+    let trait_refs =
+      List.filter_map
+        (fun (b, x) -> if b then Some x else None)
+        (List.combine generics_filter.trait_clauses trait_refs)
+    in
+    let generics : generic_args = { types; const_generics; trait_refs } in
+
+    let output_ty = mk_result_ty loop.output_ty in
+    let input_tys = List.map (fun (e : texpr) -> e.ty) loop.inputs in
+    let func_ty = mk_arrows input_tys output_ty in
+    let func =
+      Qualif
+        {
+          id =
+            FunOrOp
+              (Fun (FromLlbc (FunId (FRegular def.def_id), Some loop.loop_id)));
+          generics;
+        }
+    in
+    { e = func; ty = func_ty }
   in
 
   (* Generate a function declaration from a loop body *)
-  let generate_loop_def visit_loop_body (loop : loop) :
-      fun_decl * generics_filter =
+  let generate_loop_def visit_loop_body (loop : loop) : fun_decl * texpr =
     let { output_ty; loop_body; _ } = loop in
 
     let subst_visitor =
@@ -1910,13 +2041,15 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
     (* First decompose the inner loops *)
     let loop_body = visit_loop_body loop_body in
 
-    (* Update the loop body to introduce recursive calls *)
-    let body = update_continue_breaks loop_body.loop_body in
-
     (* Compute the generic params *)
     let generics, generics_filter, subst =
-      filter_generic_params_used_in_texpr def.signature.generics body
+      filter_generic_params_used_in_texpr def.signature.generics
+        loop_body.loop_body
     in
+    let loop_func = compute_loop_fun_expr loop generics_filter in
+
+    (* Update the loop body to introduce recursive calls *)
+    let body = update_continue_breaks ctx def loop_func loop_body.loop_body in
 
     (* Update the generics in the loop body *)
     let loop_body =
@@ -2011,7 +2144,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
       }
     in
 
-    (loop_def, generics_filter)
+    (loop_def, loop_func)
   in
 
   let decompose_visitor =
@@ -2020,51 +2153,14 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
 
       method! visit_Loop env loop =
         (* Update the definition *)
-        let loop_def, generics_filter =
+        let loop_def, func =
           generate_loop_def (self#visit_loop_body env) loop
         in
 
         (* Store the loop definition *)
         loops := LoopId.Map.add_strict loop.loop_id loop_def !loops;
 
-        (* Generate the call to the loop *)
-        (* Generate and filter the generic arguments *)
-        let generic_args = generic_args_of_params def.signature.generics in
-        let { types; const_generics; trait_refs } : generic_args =
-          generic_args
-        in
-        let types =
-          List.filter_map
-            (fun (b, x) -> if b then Some x else None)
-            (List.combine generics_filter.types types)
-        in
-        let const_generics =
-          List.filter_map
-            (fun (b, x) -> if b then Some x else None)
-            (List.combine generics_filter.const_generics const_generics)
-        in
-        let trait_refs =
-          List.filter_map
-            (fun (b, x) -> if b then Some x else None)
-            (List.combine generics_filter.trait_clauses trait_refs)
-        in
-        let generics : generic_args = { types; const_generics; trait_refs } in
-
-        let output_ty = mk_result_ty loop.output_ty in
-        let input_tys = List.map (fun (e : texpr) -> e.ty) loop.inputs in
-        let func_ty = mk_arrows input_tys output_ty in
-        let func =
-          Qualif
-            {
-              id =
-                FunOrOp
-                  (Fun
-                     (FromLlbc (FunId (FRegular def.def_id), Some loop.loop_id)));
-              generics;
-            }
-        in
-        let func : texpr = { e = func; ty = func_ty } in
-        let loop = mk_apps span func loop.inputs in
+        let loop = [%add_loc] mk_apps span func loop.inputs in
         loop.e
     end
   in
@@ -2139,7 +2235,7 @@ let eliminate_box_functions_visitor (_ctx : ctx) (def : fun_decl) =
               match aid with
               | BoxNew ->
                   let arg, args = Collections.List.pop args in
-                  mk_apps def.item_meta.span arg args
+                  [%add_loc] mk_apps def.item_meta.span arg args
               | Index _
               | ArrayToSliceShared
               | ArrayToSliceMut
@@ -2184,11 +2280,11 @@ let apply_beta_reduction_visitor (_ctx : ctx) (def : fun_decl) =
           super#visit_texpr env body
         in
         (* Reconstruct the term *)
-        mk_apps span
+        [%add_loc] mk_apps span
           (mk_opened_lambdas span kept_pats (super#visit_texpr env body))
           kept_args
       else
-        mk_apps span
+        [%add_loc] mk_apps span
           (mk_opened_lambdas span pats (super#visit_texpr env body))
           args
   end
@@ -2281,7 +2377,7 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
             let qualif =
               { e = qualif; ty = mk_arrows [ a.ty; i.ty; back_v.ty ] e2.ty }
             in
-            mk_apps span qualif [ a; i; back_v ]
+            [%add_loc] mk_apps span qualif [ a; i; back_v ]
           in
           (* Attempt to remove the let-binding.
 
@@ -2671,7 +2767,7 @@ let lift_pure_function_calls_visitor (ctx : ctx) (def : fun_decl) =
       | Qualif { id = FunOrOp (Fun fun_id); _ } -> lift_fun ctx fun_id
       | _ -> false
     in
-    let app = mk_apps span f args in
+    let app = [%add_loc] mk_apps span f args in
     if lift then (true, mk_to_result_texpr span app) else (false, app)
   in
 
@@ -2691,7 +2787,7 @@ let lift_pure_function_calls_visitor (ctx : ctx) (def : fun_decl) =
             try_lift_expr (super#visit_texpr env) (self#visit_texpr env) app
           in
 
-          if lifted then app else mk_app span to_result_expr app
+          if lifted then app else [%add_loc] mk_app span to_result_expr app
       | { e = Let (monadic, pat, bound, next); ty }, [] ->
           let next = self#visit_texpr env next in
           (* Attempt to lift only if the let-expression is not already monadic *)
@@ -2704,7 +2800,7 @@ let lift_pure_function_calls_visitor (ctx : ctx) (def : fun_decl) =
       | f, args ->
           let f = super#visit_texpr env f in
           let args = List.map (self#visit_texpr env) args in
-          mk_apps span f args
+          [%add_loc] mk_apps span f args
   end
 
 let lift_pure_function_calls =
@@ -2785,7 +2881,8 @@ let add_fuel_and_state_one (ctx : ctx) (loops : fun_decl LoopId.Map.t)
       Option.map (fun f -> mk_tpattern_from_fvar f None) state'
     in
     let e =
-      mk_apps span f (Option.to_list fuel @ args @ Option.to_list state)
+      [%add_loc] mk_apps span f
+        (Option.to_list fuel @ args @ Option.to_list state)
     in
 
     (* Return *)
@@ -2906,7 +3003,8 @@ let add_fuel_and_state_one (ctx : ctx) (loops : fun_decl LoopId.Map.t)
                     in
                     [%sanity_check] span (List.length args = 1);
                     let arg = List.hd args in
-                    mk_app span f (mk_simpl_tuple_texpr span [ state; arg ]))
+                    [%add_loc] mk_app span f
+                      (mk_simpl_tuple_texpr span [ state; arg ]))
                   else (
                     [%sanity_check] span (variant_id = result_fail_id);
                     (* Simply update the type *)
@@ -2933,10 +3031,11 @@ let add_fuel_and_state_one (ctx : ctx) (loops : fun_decl LoopId.Map.t)
                     let f = { e = Qualif qualif; ty = mk_arrow input output } in
                     [%sanity_check] span (List.length args = 1);
                     let arg = List.hd args in
-                    mk_app span f (mk_simpl_tuple_texpr span [ state; arg ]))
-              | None -> mk_apps span f args
+                    [%add_loc] mk_app span f
+                      (mk_simpl_tuple_texpr span [ state; arg ]))
+              | None -> [%add_loc] mk_apps span f args
             end
-          | _ -> mk_apps span f args
+          | _ -> [%add_loc] mk_apps span f args
         end
     | Lambda _ ->
         (* Destruct the lambda. The expression itself is not stateful, but
@@ -3015,7 +3114,7 @@ let add_fuel_and_state_one (ctx : ctx) (loops : fun_decl LoopId.Map.t)
                 mk_opened_let monadic lv re next
               else
                 let next = update fuel state next in
-                mk_opened_let monadic lv (mk_apps span f args) next
+                mk_opened_let monadic lv ([%add_loc] mk_apps span f args) next
         end
     | Switch (scrut, If (e1, e2)) ->
         (* The scrutinee must be pure *)
@@ -3505,15 +3604,15 @@ let filter_loop_inputs_filter_in_one (_ctx : ctx)
                           let args = List.map (self#visit_texpr env) args in
 
                           (* Rebuild *)
-                          mk_apps decl.item_meta.span e_app args)
+                          [%add_loc] mk_apps decl.item_meta.span e_app args)
                   | _ ->
                       let e_app = self#visit_texpr env e_app in
                       let args = List.map (self#visit_texpr env) args in
-                      mk_apps decl.item_meta.span e_app args)
+                      [%add_loc] mk_apps decl.item_meta.span e_app args)
               | _ ->
                   let e_app = self#visit_texpr env e_app in
                   let args = List.map (self#visit_texpr env) args in
-                  mk_apps decl.item_meta.span e_app args)
+                  [%add_loc] mk_apps decl.item_meta.span e_app args)
           | _ -> super#visit_texpr env e
       end
     in
@@ -3998,7 +4097,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
       List.map (fun (ty, arg) -> visit ty arg) (List.combine args_tys args)
     in
     let f = visit f_ty f in
-    let e = mk_apps span f args in
+    let e = [%add_loc] mk_apps span f args in
     if need_annot then mk_type_annot e else e
   and visit_switch_body (ty : ty) (body : switch_body) : switch_body =
     match body with

@@ -930,7 +930,9 @@ and extract_field_projector (span : Meta.span) (ctx : extraction_ctx)
   | arg :: args ->
       (* Call extract_App again, but in such a way that the first argument is
        * isolated *)
-      extract_App span ctx fmt inside (mk_app span original_app arg) args
+      extract_App span ctx fmt inside
+        ([%add_loc] mk_app span original_app arg)
+        args
   | [] ->
       (* No argument: shouldn't happen *)
       [%admit_raise] span "Unreachable" fmt

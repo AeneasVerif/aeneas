@@ -112,7 +112,7 @@ let rec tvalue_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (v : V.tvalue) :
             let cons_ty = mk_arrows field_tys ty in
             let cons = { e = cons_e; ty = cons_ty } in
             (* Apply the constructor *)
-            mk_apps ctx.span cons field_values)
+            [%add_loc] mk_apps ctx.span cons field_values)
     | VBottom -> [%craise] ctx.span "Unexpected bottom value"
     | VLoan lc -> (
         match lc with

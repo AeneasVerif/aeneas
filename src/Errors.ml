@@ -73,6 +73,9 @@ let save_error_opt_span (file : string) (line : int) (span : Meta.span option)
 let save_error (file : string) (line : int) (span : Meta.span) (msg : string) =
   save_error_opt_span file line (Some span) msg
 
+let add_loc (file : string) (line : int) (x : string -> int -> 'a) : 'a =
+  x file line
+
 let craise_opt_span (file : string) (line : int) (span : Meta.span option)
     (msg : string) =
   if !Config.fail_hard then (

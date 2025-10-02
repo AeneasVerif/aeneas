@@ -223,6 +223,7 @@ let sum_left_id = VariantId.of_int 0
 let sum_right_id = VariantId.of_int 1
 let loop_result_continue_id = VariantId.of_int 0
 let loop_result_break_id = VariantId.of_int 1
+let loop_result_fail_id = VariantId.of_int 2
 let error_failure_id = VariantId.of_int 0
 let error_out_of_fuel_id = VariantId.of_int 1
 

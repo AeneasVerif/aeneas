@@ -616,7 +616,7 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
                   | None ->
                       [%sanity_check] span (args = []);
                       None
-                  | Some func -> Some (mk_apps span func args)
+                  | Some func -> Some ([%add_loc] mk_apps span func args)
                 end
               in
               (ctx, can_fail, e)
@@ -631,7 +631,7 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
                       (V.AbstractionId.Set.mem abs_id ctx.ignored_abs_ids);
                     (None, false)
                 | Some { fvar; can_fail } ->
-                    (Some (mk_apps span fvar args), can_fail)
+                    (Some ([%add_loc] mk_apps span fvar args), can_fail)
               in
               (ctx, can_fail, e)
         end

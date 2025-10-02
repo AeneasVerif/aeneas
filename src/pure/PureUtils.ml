@@ -562,10 +562,11 @@ let destruct_apps (e : texpr) : texpr * texpr list =
   aux [] e
 
 (** Make an [App (app, arg)] expr *)
-let mk_app (span : Meta.span) (app : texpr) (arg : texpr) : texpr =
+let mk_app (file : string) (line : int) (span : Meta.span) (app : texpr)
+    (arg : texpr) : texpr =
   let raise_or_return msg =
     (* We shouldn't get there, so we save an error (and eventually raise an exception) *)
-    [%save_error] span msg;
+    Errors.save_error file line span msg;
     let e = App (app, arg) in
     (* Dummy type - TODO: introduce an error type *)
     let ty = app.ty in
@@ -585,8 +586,9 @@ let mk_app (span : Meta.span) (app : texpr) (arg : texpr) : texpr =
   | _ -> raise_or_return "Expected an arrow type"
 
 (** The reverse of {!destruct_apps} *)
-let mk_apps (span : Meta.span) (app : texpr) (args : texpr list) : texpr =
-  List.fold_left (fun app arg -> mk_app span app arg) app args
+let mk_apps (file : string) (line : int) (span : Meta.span) (app : texpr)
+    (args : texpr list) : texpr =
+  List.fold_left (fun app arg -> mk_app file line span app arg) app args
 
 (** Destruct an expression into a qualif identifier and a list of arguments, *
     if possible *)
@@ -627,6 +629,17 @@ let opt_destruct_tuple (span : Meta.span) (ty : ty) : ty list option =
       [%sanity_check] span (generics.const_generics = []);
       [%sanity_check] span (generics.trait_refs = []);
       Some generics.types
+  | _ -> None
+
+let opt_destruct_tuple_texpr (span : Meta.span) (e : texpr) : texpr list option
+    =
+  match e.ty with
+  | TAdt (TTuple, generics) ->
+      [%sanity_check] span (generics.const_generics = []);
+      [%sanity_check] span (generics.trait_refs = []);
+      let fields = snd (destruct_apps e) in
+      [%sanity_check] span (List.length generics.types = List.length fields);
+      Some fields
   | _ -> None
 
 let destruct_arrow (span : Meta.span) (ty : ty) : ty * ty =
@@ -747,7 +760,7 @@ let mk_simpl_tuple_texpr (span : Meta.span) (vl : texpr list) : texpr =
       let qualif = { id; generics = mk_generic_args_from_types tys } in
       (* Put everything together *)
       let cons = { e = Qualif qualif; ty } in
-      mk_apps span cons vl
+      [%add_loc] mk_apps span cons vl
 
 let mk_adt_pattern (adt_ty : ty) (variant_id : VariantId.id option)
     (vl : tpattern list) : tpattern =
@@ -764,14 +777,14 @@ let mk_adt_texpr (span : span) (adt_ty : ty) (variant_id : VariantId.id option)
     mk_arrows (List.map (fun (f : texpr) -> f.ty) fields) adt_ty
   in
   let qualif = { e = qualif; ty = qualif_ty } in
-  mk_apps span qualif fields
+  [%add_loc] mk_apps span qualif fields
 
 let mk_adt_proj (span : span) (adt : texpr) (field_id : field_id)
     (field_ty : ty) : texpr =
   let adt_id, generics = ty_as_adt span adt.ty in
   let qualif = Qualif { id = Proj { adt_id; field_id }; generics } in
   let qualif = { e = qualif; ty = mk_arrow adt.ty field_ty } in
-  mk_app span qualif adt
+  [%add_loc] mk_app span qualif adt
 
 let ty_as_integer (span : Meta.span) (t : ty) : T.integer_type =
   match t with
@@ -806,12 +819,28 @@ let unwrap_result_ty (span : Meta.span) (ty : ty) : ty =
         { types = [ ty ]; const_generics = []; trait_refs = [] } ) -> ty
   | _ -> [%craise] span "not a result type"
 
-let unwrap_result_ty_with_loc file line (span : Meta.span) (ty : ty) : ty =
+let unwrap_result_or_loop_result_ty_with_loc file line (span : Meta.span)
+    (ty : ty) : ty =
   match ty with
   | TAdt
       ( TBuiltin TResult,
         { types = [ ty ]; const_generics = []; trait_refs = [] } ) -> ty
+  | TAdt
+      ( TBuiltin TLoopResult,
+        { types = [ _; break_ty ]; const_generics = []; trait_refs = [] } ) ->
+      break_ty
   | _ -> Errors.craise file line span "not a result type"
+
+let try_unwrap_loop_result (ty : ty) : (ty * ty) option =
+  match ty with
+  | TAdt
+      ( TBuiltin TLoopResult,
+        {
+          types = [ continue_ty; break_ty ];
+          const_generics = [];
+          trait_refs = [];
+        } ) -> Some (continue_ty, break_ty)
+  | _ -> None
 
 let mk_result_fail_texpr (span : Meta.span) (error : texpr) (ty : ty) : texpr =
   let type_args = [ ty ] in
@@ -824,7 +853,7 @@ let mk_result_fail_texpr (span : Meta.span) (error : texpr) (ty : ty) : texpr =
   let cons_e = Qualif qualif in
   let cons_ty = mk_arrow error.ty ty in
   let cons = { e = cons_e; ty = cons_ty } in
-  mk_app span cons error
+  [%add_loc] mk_app span cons error
 
 let mk_result_fail_texpr_with_error_id (span : Meta.span) (error : VariantId.id)
     (ty : ty) : texpr =
@@ -842,7 +871,7 @@ let mk_result_ok_texpr (span : Meta.span) (v : texpr) : texpr =
   let cons_e = Qualif qualif in
   let cons_ty = mk_arrow v.ty ty in
   let cons = { e = cons_e; ty = cons_ty } in
-  mk_app span cons v
+  [%add_loc] mk_app span cons v
 
 (** Create a [Fail err] pattern which captures the error *)
 let mk_result_fail_pattern (error_pat : pattern) (ty : ty) : tpattern =
@@ -875,13 +904,19 @@ let mk_sum_right_texpr (span : span) (left : ty) (right : texpr) : texpr =
 let mk_loop_result_ty (continue : ty) (break : ty) : ty =
   TAdt (TBuiltin TLoopResult, mk_generic_args_from_types [ continue; break ])
 
+let mk_loop_result_fail_texpr_with_error_id (span : span) (continue : ty)
+    (break : ty) (error : VariantId.id) : texpr =
+  let error = mk_error error in
+  let ty = mk_loop_result_ty continue break in
+  mk_adt_texpr span ty (Some loop_result_fail_id) [ error ]
+
 let mk_continue_texpr (span : span) (continue : texpr) (break : ty) : texpr =
   let ty = mk_loop_result_ty continue.ty break in
   mk_adt_texpr span ty (Some loop_result_continue_id) [ continue ]
 
 let mk_break_texpr (span : span) (continue : ty) (break : texpr) : texpr =
   let ty = mk_loop_result_ty continue break.ty in
-  mk_adt_texpr span ty (Some loop_result_continue_id) [ break ]
+  mk_adt_texpr span ty (Some loop_result_break_id) [ break ]
 
 let opt_unmeta_mplace (e : texpr) : mplace option * texpr =
   match e.e with
@@ -924,7 +959,7 @@ let rec tpattern_to_texpr (span : Meta.span) (pat : tpattern) : texpr option =
           let cons = { e = cons_e; ty = cons_ty } in
 
           (* Apply the constructor *)
-          Some (mk_apps span cons fields_values).e
+          Some ([%add_loc] mk_apps span cons fields_values).e
   in
   match e_opt with
   | None -> None
@@ -1367,7 +1402,7 @@ let mk_to_result_texpr (span : Meta.span) (e : texpr) : texpr =
   let qualif = Qualif qualif in
   let qualif_ty = mk_arrow e.ty ty in
   let qualif = { e = qualif; ty = qualif_ty } in
-  mk_app span qualif e
+  [%add_loc] mk_app span qualif e
 
 let append_generic_args (g0 : generic_args) (g1 : generic_args) : generic_args =
   {
@@ -1489,7 +1524,9 @@ let mk_closed_lets span (monadic : bool) (lets : (tpattern * texpr) list)
 let mk_closed_checked_let file line span (monadic : bool) (lv : tpattern)
     (re : texpr) (next_e : texpr) : texpr =
   let re_ty =
-    if monadic then unwrap_result_ty_with_loc file line span re.ty else re.ty
+    if monadic then
+      unwrap_result_or_loop_result_ty_with_loc file line span re.ty
+    else re.ty
   in
   if !Config.type_check_pure_code then
     Errors.sanity_check file line span (lv.ty = re_ty);
@@ -1589,7 +1626,7 @@ let wrap_in_match_fuel (span : Meta.span) (fuel0 : FVarId.id) (fuel : FVarId.id)
         in
         let func_ty = mk_arrow mk_fuel_ty mk_bool_ty in
         let func = { e = Qualif func; ty = func_ty } in
-        mk_app span func fuel0
+        [%add_loc] mk_app span func fuel0
       in
       (* Create the expression: [decrease fuel0] *)
       let decrease_fuel =
@@ -1601,13 +1638,13 @@ let wrap_in_match_fuel (span : Meta.span) (fuel0 : FVarId.id) (fuel : FVarId.id)
         in
         let func_ty = mk_arrow mk_fuel_ty mk_fuel_ty in
         let func = { e = Qualif func; ty = func_ty } in
-        mk_app span func fuel0
+        [%add_loc] mk_app span func fuel0
       in
 
       (* Create the success branch *)
       let monadic = false in
       let success_branch =
-        mk_let __FILE__ __LINE__ span monadic nfuel_pat decrease_fuel body
+        [%add_loc] mk_let span monadic nfuel_pat decrease_fuel body
       in
 
       (* Put everything together *)

@@ -478,6 +478,7 @@ let adt_variant_to_string ?(span = None) (env : fmt_env) (adt_id : type_id)
           let variant_id = Option.get variant_id in
           if variant_id = loop_result_continue_id then "@Continue"
           else if variant_id = loop_result_break_id then "@Break"
+          else if variant_id = loop_result_fail_id then "@Fail"
           else
             [%craise_opt_span] span
               "Unreachable: improper variant id for error type"
@@ -632,13 +633,14 @@ and adt_pattern_to_string_core (span : Meta.span option) (env : fmt_env)
             let variant_id = Option.get variant_id in
             let v =
               match fields with
-              | [ v ] -> v
+              | [ v ] -> " " ^ v
               | _ ->
                   [%craise_opt_span] span
                     "The LoopResult variants takes exactly one value"
             in
-            if variant_id = loop_result_continue_id then "@Continue " ^ v
-            else if variant_id = loop_result_break_id then "@Break " ^ v
+            if variant_id = loop_result_continue_id then "@Continue" ^ v
+            else if variant_id = loop_result_break_id then "@Break" ^ v
+            else if variant_id = loop_result_fail_id then "@Fail" ^ v
             else
               [%craise_opt_span] span
                 "Unreachable: improper variant id for error type"
