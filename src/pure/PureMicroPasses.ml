@@ -13,6 +13,10 @@ let fun_decl_to_string (ctx : ctx) (def : fun_decl) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.fun_decl_to_string fmt def
 
+let fun_id_to_string (ctx : ctx) (fid : fun_id) : string =
+  let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
+  PrintPure.regular_fun_id_to_string fmt fid
+
 let fun_sig_to_string (ctx : ctx) (sg : fun_sig) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.fun_sig_to_string fmt sg
@@ -2120,11 +2124,13 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
       }
     in
 
-    let loop_sig =
+    let explicit_info = compute_explicit_info generics inputs_tys in
+    let known_from_trait_refs = compute_known_info explicit_info generics in
+    let loop_sig : fun_sig =
       {
         generics;
-        explicit_info = fun_sig.explicit_info;
-        known_from_trait_refs = { known_types = []; known_const_generics = [] };
+        explicit_info;
+        known_from_trait_refs;
         llbc_generics;
         preds = { trait_type_constraints = [] };
         inputs = inputs_tys;
@@ -3780,9 +3786,8 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
     (trans_funs : pure_fun_translation FunDeclId.Map.t)
     (builtin_sigs : fun_sig Builtin.BuiltinFunIdMap.t)
     (type_decls : type_decl TypeDeclId.Map.t) (def : fun_decl) : fun_decl =
-  [%ldebug
-    let fmt = trans_ctx_to_pure_fmt_env trans_ctx in
-    PrintPure.fun_decl_to_string fmt def];
+  let fmt = trans_ctx_to_pure_fmt_env trans_ctx in
+  [%ldebug PrintPure.fun_decl_to_string fmt def];
   let span = def.item_meta.span in
   let fmt = trans_ctx_to_pure_fmt_env trans_ctx in
   let texpr_to_string (x : texpr) : string =
@@ -3933,6 +3938,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
     (* evaluate to: (function type, arguments types, needs annotations) *)
     let compute_known_tys_from_fun_id (qualif : qualif) (fid : fun_id) :
         ty * ty list * bool =
+      [%ldebug "fid: " ^ PrintPure.regular_fun_id_to_string fmt fid];
       match fid with
       | Pure fid -> begin
           match fid with

@@ -280,27 +280,16 @@ let gtranslate_adt_fields ~(project_borrows : bool)
   (* Check if the ADT contains borrows *)
   let proj_kind = compute_proj_kind av in
   match proj_kind with
-  | UnknownProj ->
+  | UnknownProj when filter ->
       (* If we filter: ignore the value.
-         Otherwise, translate everything. *)
-      if filter then (ctx, None)
-      else
-        let ctx, info_fields =
-          List.fold_left_map (translate ~filter) ctx fields
-        in
-        let infos, fields = List.split (List.map Option.get info_fields) in
-        begin
-          match adt_id with
-          | TAdtId _ | TBuiltin (TBox | TArray | TSlice | TStr) ->
-              (ctx, Some (infos, mk_adt fields))
-          | TTuple -> (ctx, Some (infos, mk_tuple fields))
-        end
-  | BorrowProj borrow_kind | LoanProj borrow_kind -> begin
+         Otherwise, translate everything (case below). *)
+      (ctx, None)
+  | UnknownProj | BorrowProj _ | LoanProj _ -> begin
       begin
         match proj_kind with
         | BorrowProj _ -> [%sanity_check] span project_borrows
         | LoanProj _ -> [%sanity_check] span (not project_borrows)
-        | _ -> [%internal_error] span
+        | UnknownProj -> ()
       end;
 
       (* Translate the field values *)
@@ -310,7 +299,10 @@ let gtranslate_adt_fields ~(project_borrows : bool)
           &&
           match adt_id with
           | TTuple | TBuiltin TBox -> true
-          | TBuiltin _ | TAdtId _ -> borrow_kind = BShared
+          | TBuiltin _ | TAdtId _ -> (
+              match proj_kind with
+              | UnknownProj | BorrowProj BShared | LoanProj BShared -> true
+              | _ -> false)
         in
         List.fold_left_map (translate ~filter) ctx fields
       in

@@ -1555,8 +1555,18 @@ and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
 and translate_continue_break (ctx : bs_ctx) ~(continue : bool)
     (ectx : C.eval_ctx) (_loop_id : V.loop_id) (input_values : V.tvalue list)
     (input_abs : V.abs list) : texpr =
+  [%ldebug
+    "- input_values:\n"
+    ^ String.concat "\n" (List.map (tvalue_to_string ctx) input_values)
+    ^ "\n- input_abs:\n"
+    ^ String.concat "\n\n" (List.map (abs_to_string ctx) input_abs)];
   let conts = List.filter_map (translate_abs_to_cont ctx ectx) input_abs in
   let values = List.map (tvalue_to_texpr ctx ectx) input_values in
+  [%ldebug
+    "- translated values:\n"
+    ^ String.concat "\n" (List.map (texpr_to_string ctx) values)
+    ^ "\n- translated abs:\n"
+    ^ String.concat "\n\n" (List.map (texpr_to_string ctx) conts)];
   let output = mk_simpl_tuple_texpr ctx.span (conts @ values) in
   if continue then Option.get ctx.mk_continue ctx output
   else Option.get ctx.mk_break ctx output
