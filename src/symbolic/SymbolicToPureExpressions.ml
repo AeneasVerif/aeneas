@@ -1483,7 +1483,7 @@ and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
   let ctx, break_abs, break_values =
     bind_inputs ctx loop.break_abs loop.break_svalues
   in
-  let outputs = break_abs @ break_values in
+  let outputs = break_values @ break_abs in
   let output = mk_simpl_tuple_pattern outputs in
 
   (* Translate the body *)
@@ -1530,7 +1530,7 @@ and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
       loop_id;
       span = loop.span;
       output_tys = List.map (fun (pat : tpattern) -> pat.ty) outputs;
-      num_output_conts = List.length break_abs;
+      num_output_values = List.length break_values;
       inputs = input_abs @ input_values;
       num_input_conts = List.length input_abs;
       loop_body;
@@ -1567,9 +1567,14 @@ and translate_continue_break (ctx : bs_ctx) ~(continue : bool)
     ^ String.concat "\n" (List.map (texpr_to_string ctx) values)
     ^ "\n- translated abs:\n"
     ^ String.concat "\n\n" (List.map (texpr_to_string ctx) conts)];
-  let output = mk_simpl_tuple_texpr ctx.span (conts @ values) in
-  if continue then Option.get ctx.mk_continue ctx output
-  else Option.get ctx.mk_break ctx output
+  (* Note that the order between the values and the continuations is not the same
+     depending on whether we reach a break or a continue *)
+  let outputs, mk =
+    if continue then (conts @ values, ctx.mk_continue)
+    else (values @ conts, ctx.mk_break)
+  in
+  let output = mk_simpl_tuple_texpr ctx.span outputs in
+  Option.get mk ctx output
 
 and translate_espan (span : S.espan) (e : S.expr) (ctx : bs_ctx) : texpr =
   let next_e = translate_expr e ctx in

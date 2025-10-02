@@ -1110,13 +1110,13 @@ and loop = {
   loop_id : loop_id;
   span : span; [@opaque]
   output_tys : ty list;  (** The types of the output values. *)
-  num_output_conts : int;
-      (** The number of output continuations.
+  num_output_values : int;
+      (** The number of output values.
 
-          The outputs are divided between the output continuations, which come
-          from the output abstractions, and the output values, which come from
-          the output symbolic values. The output continuations come first in the
-          list of outputs. *)
+          The outputs are divided between the output values, which come from the
+          output symbolic values, and the output continuations, which come from
+          the output abstractions. The output values come first in the list of
+          outputs. *)
   output_ty : ty;
       (** The output type of the loop, without the effect (i.e., the type
           Result) *)
@@ -1128,7 +1128,10 @@ and loop = {
   num_input_conts : int;
       (** The number of input continuations.
 
-          This is similar to [num_output_conts]. *)
+          This is similar to [num_output_values], with the difference that here
+          we count the number of input continuations, because for the inputs the
+          *continuations* come first (while for the outputs the *values* come
+          first). *)
   loop_body : loop_body;
 }
 

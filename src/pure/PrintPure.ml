@@ -1030,7 +1030,7 @@ and loop_to_string ?(span : Meta.span option = None) (env : fmt_env)
     loop_id = _;
     span = _;
     output_tys = _;
-    num_output_conts = _;
+    num_output_values = _;
     output_ty = _;
     inputs;
     num_input_conts = _;
