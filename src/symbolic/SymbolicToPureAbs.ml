@@ -437,7 +437,17 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
         in
         (ctx, Option.map snd out)
       end
-    | V.EIgnored -> (ctx, None)
+    | V.EIgnored ->
+        let ty = output.ty in
+        if
+          filter
+          && not
+               (TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
+                  keep_region ty)
+        then (ctx, None)
+        else
+          let ty = ctx_translate_fwd_ty ctx ty in
+          (ctx, Some (mk_dummy_pattern ty))
   in
   let ctx, pat = to_pat ~filter:true ctx output in
   let pat =
@@ -493,7 +503,17 @@ let tepat_to_tpattern (ctx : bs_ctx)
         let out = Option.map snd out in
         (ctx, out)
       end
-    | V.PIgnored -> (ctx, None)
+    | V.PIgnored ->
+        let ty = pat.epat_ty in
+        if
+          filter
+          && not
+               (TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
+                  keep_region ty)
+        then (ctx, None)
+        else
+          let ty = ctx_translate_fwd_ty ctx ty in
+          (ctx, Some (mk_dummy_pattern ty))
   in
   let ctx, pat = to_pat ~filter:true ctx pat in
   let pat =
