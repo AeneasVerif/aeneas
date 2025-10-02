@@ -779,66 +779,78 @@ let simplify_decompose_struct =
     Note however that we do not apply this transformation if the structure is to
     be extracted as a tuple. *)
 let intro_struct_updates_visitor (ctx : ctx) (def : fun_decl) =
+  let update_app visit_texpr (e : texpr) =
+    [%ldebug "- e:\n" ^ texpr_to_string ctx e];
+    let app, args = destruct_apps e in
+    [%ldebug
+      "- app: " ^ texpr_to_string ctx app ^ "\n- app.ty: "
+      ^ ty_to_string ctx app.ty ^ "\n- args:\n"
+      ^ String.concat "\n" (List.map (texpr_to_string ctx) args)];
+    let ignore () =
+      let app = visit_texpr app in
+      let args = List.map visit_texpr args in
+      [%ldebug
+        "Ignoring and recomposing the application:\n" ^ "- app': "
+        ^ texpr_to_string ctx app ^ "\n- app'.ty: " ^ ty_to_string ctx app.ty
+        ^ "\n- args':\n"
+        ^ String.concat "\n\n" (List.map (texpr_to_string ctx) args)];
+      [%add_loc] mk_apps def.item_meta.span app args
+    in
+    match app.e with
+    | Qualif
+        {
+          id = AdtCons { adt_id = TAdtId adt_id; variant_id = None };
+          generics = _;
+        } ->
+        (* Lookup the def *)
+        let decl =
+          TypeDeclId.Map.find adt_id ctx.trans_ctx.type_ctx.type_decls
+        in
+        (* Check if the def will be extracted as a tuple *)
+        if
+          TypesUtils.type_decl_from_decl_id_is_tuple_struct
+            ctx.trans_ctx.type_ctx.type_infos adt_id
+        then ignore ()
+        else
+          (* Check that there are as many arguments as there are fields - note
+             that the def should have a body (otherwise we couldn't use the
+             constructor) *)
+          let fields = TypesUtils.type_decl_get_fields decl None in
+          if List.length fields = List.length args then
+            (* Check if the definition is recursive *)
+            let is_rec =
+              match
+                TypeDeclId.Map.find adt_id
+                  ctx.trans_ctx.type_ctx.type_decls_groups
+              with
+              | NonRecGroup _ -> false
+              | RecGroup _ -> true
+            in
+            (* Convert, if possible - note that for now for Lean and Coq
+               we don't support the structure syntax on recursive structures *)
+            if
+              (Config.backend () <> Lean && Config.backend () <> Coq)
+              || not is_rec
+            then
+              let struct_id = TAdtId adt_id in
+              let init = None in
+              let updates =
+                FieldId.mapi (fun fid fe -> (fid, visit_texpr fe)) args
+              in
+              let ne = { struct_id; init; updates } in
+              let nty = e.ty in
+              { e = StructUpdate ne; ty = nty }
+            else ignore ()
+          else ignore ()
+    | _ -> ignore ()
+  in
+
   object (self)
     inherit [_] map_expr as super
 
     method! visit_texpr env (e : texpr) =
       match e.e with
-      | App _ -> (
-          let app, args = destruct_apps e in
-          let ignore () =
-            [%add_loc] mk_apps def.item_meta.span (self#visit_texpr env app)
-              (List.map (self#visit_texpr env) args)
-          in
-          match app.e with
-          | Qualif
-              {
-                id = AdtCons { adt_id = TAdtId adt_id; variant_id = None };
-                generics = _;
-              } ->
-              (* Lookup the def *)
-              let decl =
-                TypeDeclId.Map.find adt_id ctx.trans_ctx.type_ctx.type_decls
-              in
-              (* Check if the def will be extracted as a tuple *)
-              if
-                TypesUtils.type_decl_from_decl_id_is_tuple_struct
-                  ctx.trans_ctx.type_ctx.type_infos adt_id
-              then ignore ()
-              else
-                (* Check that there are as many arguments as there are fields - note
-                     that the def should have a body (otherwise we couldn't use the
-                     constructor) *)
-                let fields = TypesUtils.type_decl_get_fields decl None in
-                if List.length fields = List.length args then
-                  (* Check if the definition is recursive *)
-                  let is_rec =
-                    match
-                      TypeDeclId.Map.find adt_id
-                        ctx.trans_ctx.type_ctx.type_decls_groups
-                    with
-                    | NonRecGroup _ -> false
-                    | RecGroup _ -> true
-                  in
-                  (* Convert, if possible - note that for now for Lean and Coq
-                       we don't support the structure syntax on recursive structures *)
-                  if
-                    (Config.backend () <> Lean && Config.backend () <> Coq)
-                    || not is_rec
-                  then
-                    let struct_id = TAdtId adt_id in
-                    let init = None in
-                    let updates =
-                      FieldId.mapi
-                        (fun fid fe -> (fid, self#visit_texpr env fe))
-                        args
-                    in
-                    let ne = { struct_id; init; updates } in
-                    let nty = e.ty in
-                    { e = StructUpdate ne; ty = nty }
-                  else ignore ()
-                else ignore ()
-          | _ -> ignore ())
+      | App _ -> update_app (self#visit_texpr env) e
       | _ -> super#visit_texpr env e
   end
 
