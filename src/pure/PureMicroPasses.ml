@@ -3336,9 +3336,19 @@ let merge_let_app_then_decompose_tuple =
   lift_expr_map_visitor_with_state merge_let_app_then_decompose_tuple_visitor
     FVarId.Map.empty
 
+(* TODO: reorder the branches of the matches/switche
+   TODO: we might want to leverage more the assignment meta-data, for
+   aggregates for instance. *)
 let end_passes :
     ((unit -> bool) option * string * (ctx -> fun_decl -> fun_decl)) list =
   [
+    (* Find informative names for the unnamed variables *)
+    (None, "compute_pretty_names", compute_pretty_names);
+    (* Remove the meta-information (it's only useful to compute the pretty names).
+
+       Remark: some passes below use the fact that we removed the meta-data
+       (otherwise we would have to "unmeta" expressions before matching) *)
+    (None, "remove_meta_def", fun _ -> remove_meta);
     (* Convert the unit variables to [()] if they are used as right-values or
      * [_] if they are used as left values. *)
     (None, "unit_vars_to_unit", unit_vars_to_unit);
@@ -3442,8 +3452,8 @@ let end_passes :
       lift_pure_function_calls );
   ]
 
-(** Auxiliary function for {!apply_passes_to_def} *)
-let apply_end_passes_to_def (ctx : ctx) (def : fun_decl) : fun_decl =
+(** Apply all the micro-passes to a function. *)
+let apply_passes_to_def (ctx : ctx) (def : fun_decl) : fun_decl =
   List.fold_left
     (fun def (option, pass_name, pass) ->
       let apply =
@@ -3792,49 +3802,6 @@ let compute_reducible (_ctx : ctx) (transl : pure_fun_translation list) :
         | _ -> trans)
   in
   List.map update_one transl
-
-(** Apply all the micro-passes to a function.
-
-    As loops are initially directly integrated into the function definition,
-    {!apply_passes_to_def extracts those loops definitions from the body; it
-    thus returns the pair: (function def, loop defs). See {!decompose_loops}
-    for more information.
-
-    [ctx]: used only for printing. *)
-let apply_passes_to_def (ctx : ctx) (def : fun_decl) : fun_and_loops =
-  (* Debug *)
-  [%ltrace def.name];
-  [%ltrace "Original decl:\n\n" ^ fun_decl_to_string ctx def];
-
-  (* First, find names for the variables which are unnamed *)
-  [%ltrace "About to apply 'compute_pretty_names'"];
-  let def = compute_pretty_names ctx def in
-  [%ltrace "After 'compute_pretty_name':\n\n" ^ fun_decl_to_string ctx def];
-
-  (* TODO: we might want to leverage more the assignment meta-data, for
-   * aggregates for instance. *)
-
-  (* TODO: reorder the branches of the matches/switches *)
-
-  (* The meta-information is now useless: remove it.
-   * Rk.: some passes below use the fact that we removed the meta-data
-   * (otherwise we would have to "unmeta" expressions before matching) *)
-  let def = remove_meta def in
-  [%ltrace "Remove_meta:\n\n" ^ fun_decl_to_string ctx def];
-
-  (* Extract the loop definitions by removing the {!Loop} node *)
-  let def, loops = decompose_loops ctx def in
-  [%ltrace
-    let funs = def :: loops in
-    "After decomposing loops:\n\n"
-    ^ String.concat "\n\n" (List.map (fun_decl_to_string ctx) funs)];
-
-  (* Apply the remaining passes *)
-  let f = apply_end_passes_to_def ctx def in
-  let loops = List.map (apply_end_passes_to_def ctx) loops in
-
-  (* *)
-  { f; loops }
 
 (** Introduce type annotations.
 
@@ -4249,11 +4216,27 @@ let apply_passes_to_pure_fun_translations (trans_ctx : trans_ctx)
   let ctx = { trans_ctx; fun_decls } in
 
   (* Apply the micro-passes *)
-  let transl = List.map (apply_passes_to_def ctx) transl in
+  let apply (f : fun_decl) : pure_fun_translation =
+    (* Apply the micro-passes *)
+    let f = apply_passes_to_def ctx f in
+
+    (* Decompose the loops *)
+    let f, loops = decompose_loops ctx f in
+    [%ltrace
+      let funs = f :: loops in
+      "After decomposing loops:\n\n"
+      ^ String.concat "\n\n" (List.map (fun_decl_to_string ctx) funs)];
+
+    { f; loops }
+  in
+  let transl = List.map apply transl in
 
   (* Filter the useless inputs in the loop functions (loops are initially
      parameterized by *all* the symbolic values in the context, because
-     they may access any of them). *)
+     they may access any of them).
+
+     TODO: move
+  *)
   let transl = filter_loop_inputs ctx transl in
 
   (* Introduce the fuel and the state, if necessary.
