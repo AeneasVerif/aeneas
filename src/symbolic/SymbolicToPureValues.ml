@@ -1,6 +1,5 @@
 open Pure
 open PureUtils
-open InterpreterUtils
 open SymbolicToPureCore
 open SymbolicToPureTypes
 
