@@ -653,8 +653,7 @@ module EvalCtx = struct
 
   (* Note: this will fail on `Dyn` and `BuiltinOrAuto` instances, because these
      require the full `trait_ref` for printing. *)
-  let trait_ref_kind_to_string (ctx : eval_ctx) (x : trait_ref_kind) :
-      string =
+  let trait_ref_kind_to_string (ctx : eval_ctx) (x : trait_ref_kind) : string =
     let env = eval_ctx_to_fmt_env ctx in
     trait_ref_kind_to_string env None x
 

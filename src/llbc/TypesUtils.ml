@@ -290,8 +290,7 @@ let rec trait_ref_kind_is_local_clause (id : trait_ref_kind) : bool =
     - either it is a local clause
     - or it is a builtin trait (in particular, [core::marker::DiscriminantKind]
       can never be reduced) *)
-let check_non_normalizable_trait_ref_kind (trait_id : trait_ref_kind) :
-    bool =
+let check_non_normalizable_trait_ref_kind (trait_id : trait_ref_kind) : bool =
   trait_ref_kind_is_local_clause trait_id
   ||
   match trait_id with

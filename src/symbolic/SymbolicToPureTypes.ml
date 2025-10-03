@@ -139,8 +139,8 @@ and translate_strait_ref (span : Meta.span option) (tr : T.trait_ref) :
     trait_ref =
   translate_trait_ref span (translate_sty span) tr
 
-and translate_strait_ref_kind (span : Meta.span option)
-    (id : T.trait_ref_kind) : trait_instance_id =
+and translate_strait_ref_kind (span : Meta.span option) (id : T.trait_ref_kind)
+    : trait_instance_id =
   translate_trait_ref_kind span (translate_sty span) id
 
 let translate_strait_decl_ref (span : Meta.span option) (tr : T.trait_decl_ref)
