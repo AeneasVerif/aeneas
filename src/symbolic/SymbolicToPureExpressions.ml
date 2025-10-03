@@ -630,6 +630,8 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
             [%internal_error] ctx.span
         | CastRawPtr _ -> [%craise] ctx.span "Unsupported: raw ptr casts"
         | CastTransmute _ -> [%craise] ctx.span "Unsupported: transmute"
+        | CastConcretize _ ->
+            [%craise] ctx.span "Unsupported: `dyn Trait` concretization"
       end
     | S.Binop binop -> (
         match args with
