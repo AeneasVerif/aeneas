@@ -654,7 +654,7 @@ let unify_drops (_ : crate) (f : fun_decl) : fun_decl =
       method! visit_Drop _ p _ = Deinit p
 
       method! visit_StorageDead locals var_id =
-        let ty = (lookup_local locals var_id).var_ty in
+        let ty = (lookup_local locals var_id).local_ty in
         let p = { kind = PlaceLocal var_id; ty } in
         Deinit p
     end
@@ -725,7 +725,7 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
             (LocalId.of_int (List.length body.locals.locals))
         in
         let fresh_local ty =
-          let local = { index = gen (); var_ty = ty; name = None } in
+          let local = { index = gen (); local_ty = ty; name = None } in
           new_locals := local :: !new_locals;
           local.index
         in
@@ -904,7 +904,7 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
             (LocalId.of_int (List.length body.locals.locals))
         in
         let fresh_local ty =
-          let local = { index = gen (); var_ty = ty; name = None } in
+          let local = { index = gen (); local_ty = ty; name = None } in
           new_locals := local :: !new_locals;
           local.index
         in

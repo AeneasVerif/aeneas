@@ -196,7 +196,7 @@ let ctx_update_var_value (span : Meta.span) (ctx : eval_ctx) (vid : LocalId.id)
 let ctx_push_var (span : Meta.span) (ctx : eval_ctx) (var : local) (v : tvalue)
     : eval_ctx =
   [%cassert] span
-    (TypesUtils.ty_is_ety var.var_ty && var.var_ty = v.ty)
+    (TypesUtils.ty_is_ety var.local_ty && var.local_ty = v.ty)
     "The pushed variables and their values do not have the same type";
   let bv = var_to_binder var in
   { ctx with env = EBinding (BVar bv, v) :: ctx.env }
@@ -217,7 +217,7 @@ let ctx_push_vars (span : Meta.span) (ctx : eval_ctx)
   [%cassert] span
     (List.for_all
        (fun (var, (value : tvalue)) ->
-         TypesUtils.ty_is_ety var.var_ty && var.var_ty = value.ty)
+         TypesUtils.ty_is_ety var.local_ty && var.local_ty = value.ty)
        vars)
     "The pushed variables and their values do not have the same type";
   let vars =
@@ -277,14 +277,14 @@ let erase_regions (ty : ty) : ty =
     {!constructor:Values.value.VBottom}) *)
 let ctx_push_uninitialized_var (span : Meta.span) (ctx : eval_ctx) (var : local)
     : eval_ctx =
-  ctx_push_var span ctx var (mk_bottom span (erase_regions var.var_ty))
+  ctx_push_var span ctx var (mk_bottom span (erase_regions var.local_ty))
 
 (** Push a list of uninitialized variables (which thus map to
     {!constructor:Values.value.VBottom}) *)
 let ctx_push_uninitialized_vars (span : Meta.span) (ctx : eval_ctx)
     (vars : local list) : eval_ctx =
   let vars =
-    List.map (fun v -> (v, mk_bottom span (erase_regions v.var_ty))) vars
+    List.map (fun v -> (v, mk_bottom span (erase_regions v.local_ty))) vars
   in
   ctx_push_vars span ctx vars
 

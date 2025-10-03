@@ -351,7 +351,7 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
     generics = llbc_generics;
     ty;
     src;
-    body = body_id;
+    init = body_id;
     _;
   } =
     decl
