@@ -611,7 +611,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
     (call : call) (ctx : eval_ctx) :
     fn_ptr_kind
     * generic_args
-    * (generic_args * trait_instance_id) option
+    * (generic_args * trait_ref_kind) option
     * fun_decl
     * inst_fun_sig =
   match call.func with
@@ -657,7 +657,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
           (* Lookup the trait method signature - there are several possibilities
              depending on whethere we call a top-level trait method impl or the
              method from a local clause *)
-          match trait_ref.trait_id with
+          match trait_ref.kind with
           | TraitImpl { id = impl_id; generics = impl_generics } -> begin
               (* Lookup the trait impl *)
               let trait_impl = ctx_lookup_trait_impl span ctx impl_id in
@@ -672,7 +672,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
               let generics = fn_ref.generics in
               let method_def = ctx_lookup_fun_decl span ctx method_id in
               (* Instantiate *)
-              let tr_self = trait_ref.trait_id in
+              let tr_self = trait_ref.kind in
               let fid : fun_id = FRegular method_id in
               let regions_hierarchy =
                 LlbcAstUtils.FunIdMap.find fid ctx.fun_ctx.regions_hierarchies
@@ -713,7 +713,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                 LlbcAstUtils.FunIdMap.find (FRegular method_id)
                   ctx.fun_ctx.regions_hierarchies
               in
-              let tr_self = trait_ref.trait_id in
+              let tr_self = trait_ref.kind in
               let inst_sg =
                 instantiate_fun_sig span ctx generics tr_self
                   method_def.signature regions_hierarchy
@@ -1180,7 +1180,7 @@ and eval_transparent_function_call_concrete (config : config) (span : Meta.span)
         Collections.List.split_at locals body.locals.arg_count
       in
 
-      let ctx = push_var span ret_var (mk_bottom span ret_var.var_ty) ctx in
+      let ctx = push_var span ret_var (mk_bottom span ret_var.local_ty) ctx in
 
       (* 2. Push the input values *)
       let ctx =
@@ -1253,7 +1253,7 @@ and eval_transparent_function_call_symbolic (config : config) (span : Meta.span)
 and eval_function_call_symbolic_from_inst_sig (config : config)
     (span : Meta.span) (fid : fn_ptr_kind) (sg : fun_sig)
     (inst_sg : inst_fun_sig) (generics : generic_args)
-    (trait_method_generics : (generic_args * trait_instance_id) option)
+    (trait_method_generics : (generic_args * trait_ref_kind) option)
     (args : operand list) (dest : place) : stl_cm_fun =
  fun ctx ->
   [%ltrace

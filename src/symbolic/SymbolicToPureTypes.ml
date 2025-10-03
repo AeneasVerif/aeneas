@@ -31,7 +31,7 @@ let rec translate_generic_args (span : Meta.span option)
 
 and translate_trait_ref (span : Meta.span option) (translate_ty : T.ty -> ty)
     (tr : T.trait_ref) : trait_ref =
-  let trait_id = translate_trait_instance_id span translate_ty tr.trait_id in
+  let trait_id = translate_trait_ref_kind span translate_ty tr.kind in
   let trait_decl_ref =
     translate_region_binder
       (translate_trait_decl_ref span translate_ty)
@@ -54,10 +54,10 @@ and translate_global_decl_ref (span : Meta.span option)
   let global_generics = translate_generic_args span translate_ty gr.generics in
   { global_id = gr.id; global_generics }
 
-and translate_trait_instance_id (span : Meta.span option)
-    (translate_ty : T.ty -> ty) (id : T.trait_instance_id) : trait_instance_id =
+and translate_trait_ref_kind (span : Meta.span option)
+    (translate_ty : T.ty -> ty) (id : T.trait_ref_kind) : trait_instance_id =
   let translate_trait_instance_id =
-    translate_trait_instance_id span translate_ty
+    translate_trait_ref_kind span translate_ty
   in
   match id with
   | T.Self -> Self
@@ -73,7 +73,7 @@ and translate_trait_instance_id (span : Meta.span option)
       Clause var
       (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
   | ParentClause (tref, clause_id) ->
-      let inst_id = translate_trait_instance_id tref.trait_id in
+      let inst_id = translate_trait_instance_id tref.kind in
       ParentClause (inst_id, tref.trait_decl_ref.binder_value.id, clause_id)
   | ItemClause _ ->
       (* `ItemClause`s are removed by Charon's `--remove-associated-types`, except for GATs *)
@@ -139,9 +139,9 @@ and translate_strait_ref (span : Meta.span option) (tr : T.trait_ref) :
     trait_ref =
   translate_trait_ref span (translate_sty span) tr
 
-and translate_strait_instance_id (span : Meta.span option)
-    (id : T.trait_instance_id) : trait_instance_id =
-  translate_trait_instance_id span (translate_sty span) id
+and translate_strait_ref_kind (span : Meta.span option)
+    (id : T.trait_ref_kind) : trait_instance_id =
+  translate_trait_ref_kind span (translate_sty span) id
 
 let translate_strait_decl_ref (span : Meta.span option) (tr : T.trait_decl_ref)
     : trait_decl_ref =
@@ -326,9 +326,9 @@ and translate_fwd_trait_ref (span : Meta.span option) (type_infos : type_infos)
     (tr : T.trait_ref) : trait_ref =
   translate_trait_ref span (translate_fwd_ty span type_infos) tr
 
-and translate_fwd_trait_instance_id (span : Meta.span option)
-    (type_infos : type_infos) (id : T.trait_instance_id) : trait_instance_id =
-  translate_trait_instance_id span (translate_fwd_ty span type_infos) id
+and translate_fwd_trait_ref_kind (span : Meta.span option)
+    (type_infos : type_infos) (id : T.trait_ref_kind) : trait_instance_id =
+  translate_trait_ref_kind span (translate_fwd_ty span type_infos) id
 
 (** Simply calls [translate_fwd_ty] *)
 let ctx_translate_fwd_ty (ctx : bs_ctx) (ty : T.ty) : ty =
@@ -422,7 +422,7 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
       None
   | TTraitType (trait_ref, type_name) ->
       [%sanity_check_opt_span] span
-        (TypesUtils.trait_instance_id_is_local_clause trait_ref.trait_id);
+        (TypesUtils.trait_ref_kind_is_local_clause trait_ref.kind);
       if inside_mut then
         (* Translate the trait ref as a "forward" trait ref -
            we do not want to filter any type *)

@@ -34,8 +34,8 @@ let fresh_regions_with_substs_from_vars (region_vars : region_param list)
 let substitute_signature (asubst : RegionGroupId.id -> AbstractionId.id)
     (r_id_subst : RegionId.id -> RegionId.id) (ty_sb_subst : TypeVarId.id -> ty)
     (cg_sb_subst : ConstGenericVarId.id -> const_generic)
-    (tr_sb_subst : TraitClauseId.id -> trait_instance_id)
-    (tr_sb_self : trait_instance_id) (sg : fun_sig)
+    (tr_sb_subst : TraitClauseId.id -> trait_ref_kind)
+    (tr_sb_self : trait_ref_kind) (sg : fun_sig)
     (regions_hierarchy : region_var_groups) : inst_fun_sig =
   let r_sb_subst id = RVar (Free (r_id_subst id)) in
   let subst =

@@ -588,7 +588,7 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
   let global = GlobalDeclId.Map.find id global_decls in
   let trans =
     [%silent_unwrap_opt_span] None
-      (FunDeclId.Map.find_opt global.body ctx.trans_funs)
+      (FunDeclId.Map.find_opt global.init ctx.trans_funs)
   in
   [%sanity_check] global.item_meta.span (trans.loops = []);
   let body = trans.f in

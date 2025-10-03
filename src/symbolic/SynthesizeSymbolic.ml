@@ -111,7 +111,7 @@ let synthesize_symbolic_expansion_no_branching (span : Meta.span)
 let synthesize_function_call (span : Meta.span) (call_id : call_id)
     (ctx : Contexts.eval_ctx) (sg : (fun_sig * inst_fun_sig) option)
     (abstractions : AbstractionId.id list) (generics : generic_args)
-    (trait_method_generics : (generic_args * trait_instance_id) option)
+    (trait_method_generics : (generic_args * trait_ref_kind) option)
     (args : tvalue list) (args_places : mplace option list)
     (dest : symbolic_value) (dest_place : mplace option) (e : expr) : expr =
   let sg, inst_sg =
@@ -145,7 +145,7 @@ let synthesize_regular_function_call (span : Meta.span) (fun_id : fn_ptr_kind)
     (call_id : FunCallId.id) (ctx : Contexts.eval_ctx) (sg : fun_sig)
     (inst_sg : inst_fun_sig) (abstractions : AbstractionId.id list)
     (generics : generic_args)
-    (trait_method_generics : (generic_args * trait_instance_id) option)
+    (trait_method_generics : (generic_args * trait_ref_kind) option)
     (args : tvalue list) (args_places : mplace option list)
     (dest : symbolic_value) (dest_place : mplace option) (e : expr) : expr =
   synthesize_function_call span

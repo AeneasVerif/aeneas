@@ -232,9 +232,9 @@ let trait_ref_no_regions (x : trait_ref) : bool =
 
 (** Return [true] if the trait instance id doesn't contain regions (including
     erased regions) *)
-let trait_instance_id_no_regions (x : trait_instance_id) : bool =
+let trait_instance_id_no_regions (x : trait_ref_kind) : bool =
   try
-    raise_if_region_ty_visitor#visit_trait_instance_id () x;
+    raise_if_region_ty_visitor#visit_trait_ref_kind () x;
     true
   with Found -> false
 
@@ -276,11 +276,11 @@ let type_decl_from_type_id_is_tuple_struct (ctx : TypesAnalysis.type_infos)
 
 (** A trait instance id refers to a local clause if it only uses the variants:
     [Self], [Clause], [ParentClause] *)
-let rec trait_instance_id_is_local_clause (id : trait_instance_id) : bool =
+let rec trait_ref_kind_is_local_clause (id : trait_ref_kind) : bool =
   match id with
   | Self | Clause _ -> true
   | ParentClause (tref, _) | ItemClause (tref, _, _) ->
-      trait_instance_id_is_local_clause tref.trait_id
+      trait_ref_kind_is_local_clause tref.kind
   | TraitImpl _ | BuiltinOrAuto _ | UnknownTrait _ | Dyn -> false
 
 (** Check that it is ok for a trait instance id not to be normalizable.
@@ -290,9 +290,9 @@ let rec trait_instance_id_is_local_clause (id : trait_instance_id) : bool =
     - either it is a local clause
     - or it is a builtin trait (in particular, [core::marker::DiscriminantKind]
       can never be reduced) *)
-let check_non_normalizable_trait_instance_id (trait_id : trait_instance_id) :
+let check_non_normalizable_trait_ref_kind (trait_id : trait_ref_kind) :
     bool =
-  trait_instance_id_is_local_clause trait_id
+  trait_ref_kind_is_local_clause trait_id
   ||
   match trait_id with
   | BuiltinOrAuto _ -> true

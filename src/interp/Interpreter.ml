@@ -65,12 +65,12 @@ let compute_contexts (crate : crate) : decls_ctx =
      and ignore those *)
   (if mixed_groups <> [] then
      (* We detected mixed groups: print a nice error message *)
-     let any_decl_id_to_string (id : any_decl_id) : string =
-       let kind = any_decl_id_to_kind_name id in
+     let item_id_to_string (id : item_id) : string =
+       let kind = item_id_to_kind_name id in
        let meta = LlbcAstUtils.crate_get_item_meta crate id in
        let s =
          match meta with
-         | None -> show_any_decl_id id
+         | None -> show_item_id id
          | Some meta ->
              kind ^ "(" ^ span_to_string meta.span ^ "): "
              ^ Print.name_to_string fmt_env meta.name
@@ -79,7 +79,7 @@ let compute_contexts (crate : crate) : decls_ctx =
      in
      let group_to_msg (i : int) (g : mixed_declaration_group) : string =
        let ids = g_declaration_group_to_list g in
-       let decls = List.map any_decl_id_to_string ids in
+       let decls = List.map item_id_to_string ids in
        let local_requires =
          LlbcAstUtils.find_local_transitive_dep crate (AnyDeclIdSet.of_list ids)
        in

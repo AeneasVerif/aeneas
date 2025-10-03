@@ -72,8 +72,8 @@ let abs_to_string span ?(with_ended = false) ctx =
 let same_symbolic_id (sv0 : symbolic_value) (sv1 : symbolic_value) : bool =
   sv0.sv_id = sv1.sv_id
 
-let mk_var (index : LocalId.id) (name : string option) (var_ty : ty) : local =
-  { index; name; var_ty }
+let mk_var (index : LocalId.id) (name : string option) (local_ty : ty) : local =
+  { index; name; local_ty }
 
 (** Small helper - TODO: move *)
 let mk_place_from_var_id (ctx : eval_ctx) (span : Meta.span)
@@ -555,17 +555,17 @@ let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
     region ids. This is mostly used in preparation of function calls (when
     evaluating in symbolic mode). *)
 let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
-    (generics : generic_args) (tr_self : trait_instance_id) (sg : fun_sig)
+    (generics : generic_args) (tr_self : trait_ref_kind) (sg : fun_sig)
     (regions_hierarchy : region_var_groups) : inst_fun_sig =
   [%ldebug
     "- generics: "
     ^ Print.EvalCtx.generic_args_to_string ctx generics
     ^ "\n- tr_self: "
-    ^ Print.EvalCtx.trait_instance_id_to_string ctx tr_self
+    ^ Print.EvalCtx.trait_ref_kind_to_string ctx tr_self
     ^ "\n- sg: " ^ fun_sig_to_string ctx sg];
   (* Erase the regions in the generics we use for the instantiation *)
   let generics = Substitute.generic_args_erase_regions generics in
-  let tr_self = Substitute.trait_instance_id_erase_regions tr_self in
+  let tr_self = Substitute.trait_ref_kind_erase_regions tr_self in
   (* Generate fresh abstraction ids and create a substitution from region
    * group ids to abstraction ids *)
   let asubst_map : AbstractionId.id RegionGroupId.Map.t =
