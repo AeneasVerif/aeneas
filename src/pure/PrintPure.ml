@@ -522,30 +522,22 @@ let rec tpattern_to_string_core (span : Meta.span option) (env : fmt_env)
   | PBound (v, mp) ->
       let env, _, sv = fmt_env_push_var env v in
       let sv = var_to_string env { v with basename = Some sv } in
-      begin
+      let mp =
         match mp with
-        | None -> (env, sv)
-        | Some mp ->
-            let mp = "[@mplace=" ^ mplace_to_string env mp ^ "]" in
-            let s =
-              "(" ^ sv ^ " " ^ mp ^ " : " ^ ty_to_string env false v.ty ^ ")"
-            in
-            (env, s)
-      end
+        | None -> ""
+        | Some mp -> " [@mplace=" ^ mplace_to_string env mp ^ "]"
+      in
+      let s = "(" ^ sv ^ mp ^ " : " ^ ty_to_string env false v.ty ^ ")" in
+      (env, s)
   | POpen (v, mp) ->
       let sv = fvar_id_to_string env v.id in
-      begin
+      let mp =
         match mp with
-        | None -> (env, sv)
-        | Some mp ->
-            let mp = "[@mplace=" ^ mplace_to_string env mp ^ "]" in
-            let s =
-              "(" ^ fvar_id_to_string env v.id ^ " " ^ mp ^ " : "
-              ^ ty_to_string env false v.ty
-              ^ ")"
-            in
-            (env, s)
-      end
+        | None -> ""
+        | Some mp -> " [@mplace=" ^ mplace_to_string env mp ^ "]"
+      in
+      let s = "(" ^ sv ^ mp ^ " : " ^ ty_to_string env false v.ty ^ ")" in
+      (env, s)
   | PDummy -> (env, "_")
   | PAdt av -> adt_pattern_to_string_core span env av.variant_id av.fields v.ty
 
@@ -1031,7 +1023,6 @@ and loop_to_string ?(span : Meta.span option = None) (env : fmt_env)
     span = _;
     output_tys = _;
     num_output_values = _;
-    output_ty = _;
     inputs;
     num_input_conts = _;
     loop_body;

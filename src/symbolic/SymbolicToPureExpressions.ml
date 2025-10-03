@@ -259,8 +259,7 @@ let decompose_let_match (ctx : bs_ctx) ((pat, bound) : tpattern * texpr) :
     let bound = { e = switch_e; ty = match_e.ty } in
     (* Update the pattern itself *)
     let pat =
-      mk_simpl_tuple_pattern
-        (List.map (fun v -> mk_tpattern_from_fvar v None) vars)
+      mk_simpl_tuple_pattern (List.map (mk_tpattern_from_fvar None) vars)
     in
     (* *)
     (ctx, (pat, bound))
@@ -432,12 +431,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               ctx
           in
           let back_funs =
-            List.filter_map
-              (fun v ->
-                match v with
-                | None -> None
-                | Some v -> Some (mk_tpattern_from_fvar v None))
-              back_vars
+            List.filter_map (Option.map (mk_tpattern_from_fvar None)) back_vars
           in
           let gids =
             List.map
@@ -452,7 +446,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
         in
         (* Compute the pattern for the destination *)
         let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
-        let dest = mk_tpattern_from_fvar dest dest_mplace in
+        let dest = mk_tpattern_from_fvar dest_mplace dest in
         let dest =
           (* Here there is something subtle: as we might ignore the output
              of the forward function (because it translates to unit) we do NOT
@@ -494,7 +488,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               }
             in
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
-            let dest = mk_tpattern_from_fvar dest dest_mplace in
+            let dest = mk_tpattern_from_fvar dest_mplace dest in
             (ctx, Unop (Not ty), effect_info, args, [], dest)
         | _ -> [%craise] ctx.span "Unreachable")
     | S.Unop (E.Neg overflow) -> (
@@ -513,7 +507,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               }
             in
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
-            let dest = mk_tpattern_from_fvar dest dest_mplace in
+            let dest = mk_tpattern_from_fvar dest_mplace dest in
             (ctx, Unop (Neg int_ty), effect_info, args, [], dest)
         | _ -> [%craise] ctx.span "Unreachable")
     | S.Unop (E.Cast cast_kind) -> begin
@@ -530,7 +524,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               }
             in
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
-            let dest = mk_tpattern_from_fvar dest dest_mplace in
+            let dest = mk_tpattern_from_fvar dest_mplace dest in
             (ctx, Unop (Cast (src_ty, tgt_ty)), effect_info, args, [], dest)
         | CastFnPtr _ -> [%craise] ctx.span "TODO: function casts"
         | CastUnsize _ ->
@@ -560,7 +554,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               }
             in
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
-            let dest = mk_tpattern_from_fvar dest dest_mplace in
+            let dest = mk_tpattern_from_fvar dest_mplace dest in
             (ctx, Binop (binop, int_ty0), effect_info, args, [], dest)
         | _ -> [%craise] ctx.span "Unreachable")
   in
@@ -588,7 +582,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
             (fun ctx (f : tpattern) ->
               let ty, _ = dest_arrow_ty ctx.span f.ty in
               let ctx, v = fresh_var (Some "back") ty ctx in
-              let pat = mk_tpattern_from_fvar v None in
+              let pat = mk_tpattern_from_fvar None v in
               (ctx, mk_closed_lambda ctx.span pat (mk_texpr_from_fvar v)))
             ctx back_funs
         in
@@ -638,7 +632,7 @@ and translate_cast_unsize (call : S.call) (e : S.expr) (ty0 : T.ty) (ty1 : T.ty)
       call.dest_place
   in
   let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
-  let dest = mk_tpattern_from_fvar dest dest_mplace in
+  let dest = mk_tpattern_from_fvar dest_mplace dest in
   let arg =
     match call.args with
     | [ arg ] -> arg
@@ -773,7 +767,7 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
 
   (* Prepare the let-bindings by introducing a match if necessary *)
   let given_back_variables =
-    List.map (fun v -> mk_tpattern_from_fvar v None) given_back_variables
+    List.map (mk_tpattern_from_fvar None) given_back_variables
   in
   [%sanity_check] ctx.span
     (List.length given_back_variables = List.length consumed_values);
@@ -996,7 +990,7 @@ and translate_global_eval (gid : A.GlobalDeclId.id) (generics : T.generic_args)
   let gval = { e = Qualif global_expr; ty } in
   let e = translate_expr e ctx in
   [%add_loc] mk_closed_checked_let ctx false
-    (mk_tpattern_from_fvar var None)
+    (mk_tpattern_from_fvar None var)
     gval e
 
 and translate_assertion (ectx : C.eval_ctx) (v : V.tvalue) (e : S.expr)
@@ -1038,7 +1032,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
           let next_e = translate_expr e ctx in
           let monadic = false in
           [%add_loc] mk_closed_checked_let ctx monadic
-            (mk_tpattern_from_fvar var None)
+            (mk_tpattern_from_fvar None var)
             (mk_opt_mplace_texpr scrutinee_mplace scrutinee)
             next_e
       | SeAdt _ ->
@@ -1065,7 +1059,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
           let translate_branch (variant_id : T.VariantId.id option)
               (svl : V.symbolic_value list) (branch : S.expr) : match_branch =
             let ctx, vars = fresh_vars_for_symbolic_values svl ctx in
-            let vars = List.map (fun x -> mk_tpattern_from_fvar x None) vars in
+            let vars = List.map (fun x -> mk_tpattern_from_fvar None x) vars in
             let pat_ty = scrutinee.ty in
             let pat = mk_adt_pattern pat_ty variant_id vars in
             let branch = translate_expr branch ctx in
@@ -1150,14 +1144,14 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value) (scrutinee : texpr)
   let branch = translate_expr branch ctx in
   match type_id with
   | TAdtId _ ->
-      let lvars = List.map (fun v -> mk_tpattern_from_fvar v None) vars in
+      let lvars = List.map (fun v -> mk_tpattern_from_fvar None v) vars in
       let lv = mk_adt_pattern scrutinee.ty variant_id lvars in
       let monadic = false in
       [%add_loc] mk_closed_checked_let ctx monadic lv
         (mk_opt_mplace_texpr scrutinee_mplace scrutinee)
         branch
   | TTuple ->
-      let vars = List.map (fun x -> mk_tpattern_from_fvar x None) vars in
+      let vars = List.map (fun x -> mk_tpattern_from_fvar None x) vars in
       let monadic = false in
       [%add_loc] mk_closed_checked_let ctx monadic
         (mk_simpl_tuple_pattern vars)
@@ -1174,7 +1168,7 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value) (scrutinee : texpr)
        * identity when extracted ([box a = a]) *)
       let monadic = false in
       [%add_loc] mk_closed_checked_let ctx monadic
-        (mk_tpattern_from_fvar var None)
+        (mk_tpattern_from_fvar None var)
         (mk_opt_mplace_texpr scrutinee_mplace scrutinee)
         branch
   | TBuiltin (TArray | TSlice | TStr) ->
@@ -1226,7 +1220,7 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
 
   (* Make the let-binding *)
   let monadic = false in
-  let var = mk_tpattern_from_fvar var mplace in
+  let var = mk_tpattern_from_fvar mplace var in
   [%add_loc] mk_closed_checked_let ctx monadic var v next_e
 
 and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
@@ -1378,13 +1372,13 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
     List.fold_right
       (fun (var, evaluate, back_e) e ->
         [%add_loc] mk_closed_checked_let ctx evaluate
-          (mk_tpattern_from_fvar var None)
+          (mk_tpattern_from_fvar None var)
           back_e e)
       back_vars_els ret
   in
 
   (* Bind the expression for the forward output *)
-  let pat = mk_tpattern_from_fvar pure_fwd_var None in
+  let pat = mk_tpattern_from_fvar None pure_fwd_var in
   [%add_loc] mk_closed_checked_let ctx fwd_effect_info.can_fail pat fwd_e e
 
 and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
@@ -1451,7 +1445,7 @@ and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
       (ctx, List.map snd fvars)
     in
     let ctx, values = fresh_vars_for_symbolic_values values ctx in
-    let mk_pats = List.map (fun p -> mk_tpattern_from_fvar p None) in
+    let mk_pats = List.map (mk_tpattern_from_fvar None) in
     (ctx, mk_pats absl, mk_pats values)
   in
 
@@ -1534,7 +1528,6 @@ and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
       inputs = input_abs @ input_values;
       num_input_conts = List.length input_abs;
       loop_body;
-      output_ty = output.ty;
     }
   in
   [%sanity_check] loop.span

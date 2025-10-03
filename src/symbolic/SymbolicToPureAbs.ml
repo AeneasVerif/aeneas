@@ -299,7 +299,7 @@ let abs_fvar_id_to_tpattern (ctx : bs_ctx)
     let ctx, fvar = fresh_var_llbc_ty None ty ctx in
     fvar_to_texpr :=
       V.AbsFVarId.Map.add fid (mk_texpr_from_fvar fvar) !fvar_to_texpr;
-    (ctx, Some (mk_tpattern_from_fvar fvar None)))
+    (ctx, Some (mk_tpattern_from_fvar None fvar)))
   else
     let pat =
       if filter then begin
@@ -354,7 +354,7 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
   in
   let fresh_fvar ctx (ty : T.ty) : bs_ctx * texpr * tpattern =
     let ctx, fvar = fresh_var_llbc_ty None ty ctx in
-    (ctx, mk_texpr_from_fvar fvar, mk_tpattern_from_fvar fvar None)
+    (ctx, mk_texpr_from_fvar fvar, mk_tpattern_from_fvar None fvar)
   in
   let add_symbolic ctx (sv_id : SymbolicValueId.id) (proj_ty : T.ty) :
       bs_ctx * tpattern =
@@ -917,9 +917,7 @@ let abs_cont_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
       mk_closed_checked_let __FILE__ __LINE__ ctx can_fail pat input_e output_e
     in
     let e =
-      mk_closed_lambdas span
-        (List.map (fun fv -> mk_tpattern_from_fvar fv None) inputs)
-        e
+      mk_closed_lambdas span (List.map (mk_tpattern_from_fvar None) inputs) e
     in
     Some e
 

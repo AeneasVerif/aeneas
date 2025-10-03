@@ -645,7 +645,7 @@ and aborrow_content_to_given_back_aux ~(filter : bool) (mp : mplace option)
   | AEndedMutBorrow (msv, _) ->
       (* Return the meta symbolic-value *)
       let ctx, var = fresh_var_for_symbolic_value msv.given_back ctx in
-      let pat = mk_tpattern_from_fvar var mp in
+      let pat = mk_tpattern_from_fvar mp var in
       (* Lookup the default value and update the [var_id_to_default] map.
          Note that the default value might be missing, for instance for
          abstractions which were not introduced because of function calls but
@@ -679,7 +679,7 @@ and aproj_to_given_back_aux (mp : mplace option) (aproj : V.aproj) (ty : T.ty)
       [%cassert] ctx.span (loans = []) "Unreachable";
       (* Return the meta-value *)
       let ctx, var = fresh_var_for_symbolic_value mv.given_back ctx in
-      let pat = mk_tpattern_from_fvar var mp in
+      let pat = mk_tpattern_from_fvar mp var in
       (* Register the default value *)
       let ctx =
         (* Using the projection type as the type of the symbolic value - it

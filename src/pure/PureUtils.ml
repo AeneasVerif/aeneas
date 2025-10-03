@@ -179,6 +179,10 @@ class ['self] scoped_map_expr =
       { inputs; loop_body }
   end
 
+let mk_fresh_fvar ?(basename = None) (ty : ty) : fvar =
+  let id = fresh_fvar_id () in
+  { id; basename; ty }
+
 let opt_dest_arrow_ty (ty : ty) : (ty * ty) option =
   match ty with
   | TArrow (arg_ty, ret_ty) -> Some (arg_ty, ret_ty)
@@ -393,13 +397,13 @@ let is_pat_open (p : tpattern) : bool =
   | POpen _ -> true
   | _ -> false
 
-let as_pat_open span (p : tpattern) : fvar * mplace option =
+let as_pat_open file line span (p : tpattern) : fvar * mplace option =
   match p.pat with
   | POpen (v, pm) -> (v, pm)
-  | _ -> [%craise] span "Not an open binder"
+  | _ -> Errors.craise file line span "Not an open binder"
 
-let as_pat_open_fvar_id span (p : tpattern) : fvar_id =
-  (fst (as_pat_open span p)).id
+let as_pat_open_fvar_id file line span (p : tpattern) : fvar_id =
+  (fst (as_pat_open file line span p)).id
 
 let as_opt_pat_bound (p : tpattern) : (var * mplace option) option =
   match p.pat with
@@ -418,6 +422,11 @@ let as_opt_pat_tuple (p : tpattern) : tpattern list option =
   | { pat = PAdt { variant_id = None; fields }; ty = TAdt (TTuple, _) } ->
       Some fields
   | _ -> None
+
+let as_pat_tuple file line span (p : tpattern) : tpattern list =
+  match as_opt_pat_tuple p with
+  | Some fields -> fields
+  | None -> Errors.craise file line span "Not a tuple"
 
 (** Replace all the dummy variables in a pattern with free variables *)
 let tpattern_replace_dummy_vars_with_free_vars (fresh_fvar_id : unit -> fvar_id)
@@ -642,6 +651,11 @@ let opt_destruct_tuple_texpr (span : Meta.span) (e : texpr) : texpr list option
       Some fields
   | _ -> None
 
+let destruct_tuple_texpr file line span e =
+  match opt_destruct_tuple_texpr span e with
+  | None -> Errors.craise file line span "Not a tuple"
+  | Some fields -> fields
+
 let destruct_arrow (span : Meta.span) (ty : ty) : ty * ty =
   match ty with
   | TArrow (ty0, ty1) -> (ty0, ty1)
@@ -708,7 +722,7 @@ let mk_texpr_from_fvar (v : fvar) : texpr =
   let ty = v.ty in
   { e; ty }
 
-let mk_tpattern_from_fvar (v : fvar) (mp : mplace option) : tpattern =
+let mk_tpattern_from_fvar (mp : mplace option) (v : fvar) : tpattern =
   let pat = POpen (v, mp) in
   let ty = v.ty in
   { pat; ty }
@@ -733,6 +747,16 @@ let mk_opt_mplace_texpr (mp : mplace option) (e : texpr) : texpr =
   match mp with
   | None -> e
   | Some mp -> mk_mplace_texpr mp e
+
+let mk_switch file line span (scrut : texpr) (body : switch_body) : texpr =
+  let ty =
+    match body with
+    | If (e, _) -> e.ty
+    | Match [] ->
+        Errors.craise file line span "Unexpected: match with no branches"
+    | Match (br :: _) -> br.branch.ty
+  in
+  { e = Switch (scrut, body); ty }
 
 (** Make a "simplified" tuple value from a list of values:
     - if there is exactly one value, just return it
@@ -904,11 +928,15 @@ let mk_sum_right_texpr (span : span) (left : ty) (right : texpr) : texpr =
 let mk_loop_result_ty (continue : ty) (break : ty) : ty =
   TAdt (TBuiltin TLoopResult, mk_generic_args_from_types [ continue; break ])
 
+let mk_loop_result_fail_texpr (span : span) (continue : ty) (break : ty)
+    (error : texpr) : texpr =
+  let ty = mk_loop_result_ty continue break in
+  mk_adt_texpr span ty (Some loop_result_fail_id) [ error ]
+
 let mk_loop_result_fail_texpr_with_error_id (span : span) (continue : ty)
     (break : ty) (error : VariantId.id) : texpr =
   let error = mk_error error in
-  let ty = mk_loop_result_ty continue break in
-  mk_adt_texpr span ty (Some loop_result_fail_id) [ error ]
+  mk_loop_result_fail_texpr span continue break error
 
 let mk_continue_texpr (span : span) (continue : texpr) (break : ty) : texpr =
   let ty = mk_loop_result_ty continue.ty break in
@@ -1257,6 +1285,8 @@ let mk_opened_lambda span (x : tpattern) (e : texpr) : texpr =
 let mk_closed_lambdas span (xl : tpattern list) (e : texpr) : texpr =
   List.fold_right (mk_closed_lambda span) xl e
 
+let close_lambdas = mk_closed_lambdas
+
 let mk_opened_lambdas span (xl : tpattern list) (e : texpr) : texpr =
   List.fold_right (mk_opened_lambda span) xl e
 
@@ -1600,7 +1630,7 @@ let wrap_in_match_fuel (span : Meta.span) (fuel0 : FVarId.id) (fuel : FVarId.id)
   let fuel0_var = mk_fuel_fvar fuel0 in
   let fuel0 = mk_texpr_from_fvar fuel0_var in
   let nfuel_var = mk_fuel_fvar fuel in
-  let nfuel_pat = mk_tpattern_from_fvar nfuel_var None in
+  let nfuel_pat = mk_tpattern_from_fvar None nfuel_var in
   let fail_branch =
     mk_result_fail_texpr_with_error_id span error_out_of_fuel_id body.ty
   in
@@ -1680,10 +1710,6 @@ let wrap_in_match_fuel (span : Meta.span) (fuel0 : FVarId.id) (fuel : FVarId.id)
 let mk_closed_fun_body span (inputs : tpattern list) (body : texpr) : fun_body =
   let inputs, body = close_binders span inputs body in
   { inputs; body }
-
-let open_fun_body span (body : fun_body) : tpattern list * texpr =
-  let { inputs; body } = body in
-  open_binders span inputs body
 
 (** Helper visitor to open/close *all* the bound variables in an expression.
 
@@ -1940,6 +1966,26 @@ let close_all_texpr (span : Meta.span) (e : texpr) : texpr =
 let close_all_fun_body (span : Meta.span) (fbody : fun_body) : fun_body =
   (close_all_visitor span)#visit_fun_body (ref empty_close_all_env) fbody
 
+let open_fun_body (span : Meta.span) (fbody : fun_body) : fun_body =
+  let { inputs; body } = fbody in
+  let inputs, body = open_binders span inputs body in
+  { inputs; body }
+
+let close_fun_body (span : Meta.span) (fbody : fun_body) : fun_body =
+  let { inputs; body } = fbody in
+  let inputs, body = close_binders span inputs body in
+  { inputs; body }
+
+let open_loop_body (span : Meta.span) (body : loop_body) : loop_body =
+  let { inputs; loop_body } = body in
+  let inputs, loop_body = open_binders span inputs loop_body in
+  { inputs; loop_body }
+
+let close_loop_body (span : Meta.span) (body : loop_body) : loop_body =
+  let { inputs; loop_body } = body in
+  let inputs, loop_body = close_binders span inputs loop_body in
+  { inputs; loop_body }
+
 (** Open all the bound variables in a function body, apply a function, then
     close those bound variables *)
 let open_close_all_fun_body (span : Meta.span) (f : fun_body -> fun_body)
@@ -1970,7 +2016,7 @@ let open_close_all_fun_decl (f : fun_body -> fun_body) (fdef : fun_decl) :
     close those bound variables.
 
     We reset the fvar id counter before doing this. *)
-let map_open_fun_decl_body (f : fun_body -> fun_body) (fdef : fun_decl) :
+let map_open_all_fun_decl_body (f : fun_body -> fun_body) (fdef : fun_decl) :
     fun_decl =
   reset_fvar_id_counter ();
   let body =
@@ -1982,9 +2028,9 @@ let map_open_fun_decl_body (f : fun_body -> fun_body) (fdef : fun_decl) :
     close those bound variables.
 
     We reset the fvar id counter before doing this. *)
-let map_open_fun_decl_body_expr (f : texpr -> texpr) (fdef : fun_decl) :
+let map_open_all_fun_decl_body_expr (f : texpr -> texpr) (fdef : fun_decl) :
     fun_decl =
-  map_open_fun_decl_body
+  map_open_all_fun_decl_body
     (fun (fb : fun_body) -> { fb with body = f fb.body })
     fdef
 
@@ -1992,7 +2038,8 @@ let map_open_fun_decl_body_expr (f : texpr -> texpr) (fdef : fun_decl) :
     close those bound variables.
 
     We reset the fvar id counter before doing this. *)
-let iter_open_fun_decl_body (f : fun_body -> unit) (fdef : fun_decl) : unit =
+let iter_open_all_fun_decl_body (f : fun_body -> unit) (fdef : fun_decl) : unit
+    =
   reset_fvar_id_counter ();
   Option.iter
     (fun x ->
@@ -2010,8 +2057,9 @@ let iter_open_fun_decl_body (f : fun_body -> unit) (fdef : fun_decl) : unit =
     close those bound variables.
 
     We reset the fvar id counter before doing this. *)
-let iter_open_fun_decl_body_expr (f : texpr -> unit) (fdef : fun_decl) : unit =
-  iter_open_fun_decl_body (fun (fb : fun_body) -> f fb.body) fdef
+let iter_open_all_fun_decl_body_expr (f : texpr -> unit) (fdef : fun_decl) :
+    unit =
+  iter_open_all_fun_decl_body (fun (fb : fun_body) -> f fb.body) fdef
 
 type generics_filter = {
   types : bool list;  (** [true] means we should keep the parameter *)

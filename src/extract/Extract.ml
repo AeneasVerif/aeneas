@@ -1691,7 +1691,7 @@ let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
   F.pp_close_box fmt ();
   F.pp_print_space fmt ();
   (* Tuple of the arguments *)
-  let vars = List.map (as_pat_open_fvar_id span) def_body.inputs in
+  let vars = List.map ([%add_loc] as_pat_open_fvar_id span) def_body.inputs in
 
   if List.length vars = 1 then
     F.pp_print_string fmt
@@ -1966,7 +1966,7 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   (* Termination clause and proof for Lean *)
   if has_decreases_clause && backend () = Lean then (
     let def_body = Option.get def.body in
-    let vars = List.map (as_pat_open_fvar_id span) def_body.inputs in
+    let vars = List.map ([%add_loc] as_pat_open_fvar_id span) def_body.inputs in
 
     (* termination_by *)
     let terminates_name =
