@@ -860,7 +860,7 @@ let intro_struct_updates_visitor (ctx : ctx) (def : fun_decl) =
 
 let intro_struct_updates = lift_expr_map_visitor intro_struct_updates_visitor
 
-(** This performs the following simplification:
+(** This performs the following simplifications:
     {[
       fun x1 ... xn => g x1 ... xn
       ...
@@ -3713,8 +3713,15 @@ let passes :
        ]}
     *)
     (None, "simplify_let_then_ok", simplify_let_then_ok);
-    (* Simplify the loop outputs *)
+    (* Simplify and filter the loop outputs *)
     (None, "simplify_loop_output_conts", simplify_loop_output_conts);
+    (* [simplify_loop_output_conts] might have triggered simplification
+       opportunities for [apply_beta_reduction] and [inline_useless_var_assignments] *)
+    (None, "apply_beta_reduction (pass 2)", apply_beta_reduction);
+    ( None,
+      "inline_useless_var_assignments (pass 2)",
+      inline_useless_var_assignments ~inline_named:true ~inline_const:true
+        ~inline_pure:true ~inline_identity:true );
     (* TODO: filter the useless loop outputs *)
     (* TODO: change the structure of the loops that we will translate to
        recursive functions *)
