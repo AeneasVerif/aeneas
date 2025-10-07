@@ -521,7 +521,7 @@ let rec tpattern_to_string_core (span : Meta.span option) (env : fmt_env)
   | PConstant cv -> (env, literal_to_string cv)
   | PBound (v, mp) ->
       let env, _, sv = fmt_env_push_var env v in
-      let sv = var_to_string env { v with basename = Some sv } in
+      let sv = var_to_varname { v with basename = Some sv } in
       let mp =
         match mp with
         | None -> ""
@@ -538,7 +538,7 @@ let rec tpattern_to_string_core (span : Meta.span option) (env : fmt_env)
       in
       let s = "(" ^ sv ^ mp ^ " : " ^ ty_to_string env false v.ty ^ ")" in
       (env, s)
-  | PDummy -> (env, "_")
+  | PDummy -> (env, "(_ : " ^ ty_to_string env false v.ty ^ ")")
   | PAdt av -> adt_pattern_to_string_core span env av.variant_id av.fields v.ty
 
 (** Not safe to use (this function should be used between calls to
@@ -1119,12 +1119,6 @@ let fun_decl_to_string (env : fmt_env) (def : fun_decl) : string =
       let indent = "  " in
       let env, inputs =
         tpatterns_to_string_aux (Some def.item_meta.span) env body.inputs
-      in
-      let inputs =
-        List.map
-          (fun ((v, v') : _ * tpattern) ->
-            "(" ^ v ^ " : " ^ ty_to_string env false v'.ty ^ ")")
-          (List.combine inputs body.inputs)
       in
       let inputs =
         if inputs = [] then indent

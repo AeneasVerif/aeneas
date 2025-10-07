@@ -29,6 +29,10 @@ let texpr_to_string (ctx : ctx) (x : texpr) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.texpr_to_string fmt false "" "  " x
 
+let fvar_to_string (ctx : ctx) (x : fvar) : string =
+  let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
+  PrintPure.fvar_to_string fmt x
+
 let ty_to_string (ctx : ctx) (x : ty) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.ty_to_string fmt false x
@@ -1926,7 +1930,7 @@ let simplify_aggregates_unchanged_fields =
 (** Helper for [decompose_loops]: update the occurrences of continue and break
 *)
 let update_continue_breaks (ctx : ctx) (def : fun_decl) (loop_func : texpr)
-    (e : texpr) : texpr =
+    (constant_inputs : texpr list) (e : texpr) : texpr =
   let span = def.item_meta.span in
 
   let rec update (e : texpr) : texpr =
@@ -1978,6 +1982,7 @@ let update_continue_breaks (ctx : ctx) (def : fun_decl) (loop_func : texpr)
                   ^ string_of_int (List.length args)
                   ^ "\n- args:\n"
                   ^ String.concat "\n\n" (List.map (texpr_to_string ctx) args)];
+                let args = constant_inputs @ args in
                 [%add_loc] mk_apps span loop_func args)
               else if variant_id = loop_result_break_id then (
                 [%ldebug "break expression: introducing an ok expression"];
@@ -2042,7 +2047,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
 
   (* Reset the fvar counter and open all the binders - it is easier to manipulate unique variable indices *)
   reset_fvar_id_counter ();
-  let body = open_all_fun_body span body in
+  let fvars, body = open_all_fun_body_get_fvars span body in
 
   (* Count the number of loops *)
   let loops = ref LoopId.Set.empty in
@@ -2062,8 +2067,8 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
   (* Store the loops here *)
   let loops = ref LoopId.Map.empty in
 
-  let compute_loop_fun_expr (loop : loop) (generics_filter : generics_filter) :
-      texpr =
+  let compute_loop_fun_expr (loop : loop) (generics_filter : generics_filter)
+      (constant_inputs : ty list) : texpr =
     let generic_args = generic_args_of_params def.signature.generics in
     let { types; const_generics; trait_refs } : generic_args = generic_args in
     let types =
@@ -2085,6 +2090,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
 
     let output_ty = mk_result_ty (mk_simpl_tuple_ty loop.output_tys) in
     let input_tys = List.map (fun (e : texpr) -> e.ty) loop.inputs in
+    let input_tys = constant_inputs @ input_tys in
     let func_ty = mk_arrows input_tys output_ty in
     let func =
       Qualif
@@ -2098,8 +2104,16 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
     { e = func; ty = func_ty }
   in
 
-  (* Generate a function declaration from a loop body *)
-  let generate_loop_def visit_loop_body (loop : loop) : fun_decl * texpr =
+  (* Generate a function declaration from a loop body.
+
+     We return:
+     - the new declaration for the loop
+     - the additional constant inputs (constants refered to by the loop but not
+       bound by the loop body)
+     - the expression representing a call to the loop function (without any arguments)
+  *)
+  let generate_loop_def visit_loop_body (loop : loop) :
+      fun_decl * fvar list * texpr =
     let { output_tys; loop_body; _ } = loop in
     let output_ty = mk_simpl_tuple_ty output_tys in
 
@@ -2112,21 +2126,51 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
     (* First decompose the inner loops *)
     let loop_body = visit_loop_body loop_body in
 
+    (* Compute the list of *constant* inputs: those are variables used
+       by the loop but not bound by the loop itself (because they are
+       not modified through the loop iterations). *)
+    let constant_inputs =
+      let body_fvars = texpr_get_fvars loop_body.loop_body in
+      let bound_by_body = tpatterns_get_fvars loop_body.inputs in
+      List.filter_map
+        (fun fid ->
+          if FVarId.Set.mem fid body_fvars then None
+          else Some (FVarId.Map.find fid fvars))
+        (FVarId.Set.elements bound_by_body)
+    in
+    [%ldebug
+      "- body:\n"
+      ^ fun_body_to_string ctx body
+      ^ "\n- constant_inputs: "
+      ^ Print.list_to_string (fvar_to_string ctx) constant_inputs];
+    let constant_input_tys =
+      List.map (fun (e : fvar) -> e.ty) constant_inputs
+    in
+
     (* Compute the generic params *)
     let generics, generics_filter, subst =
       filter_generic_params_used_in_texpr def.signature.generics
         loop_body.loop_body
     in
-    let loop_func = compute_loop_fun_expr loop generics_filter in
+    let loop_func =
+      compute_loop_fun_expr loop generics_filter constant_input_tys
+    in
 
     (* Update the loop body to introduce recursive calls *)
-    let body = update_continue_breaks ctx def loop_func loop_body.loop_body in
+    let body =
+      update_continue_breaks ctx def loop_func
+        (List.map mk_texpr_from_fvar constant_inputs)
+        loop_body.loop_body
+    in
 
     (* Update the generics in the loop body *)
     let loop_body =
       let body = subst_visitor#visit_texpr subst body in
       let inputs =
         List.map (subst_visitor#visit_tpattern subst) loop_body.inputs
+      in
+      let inputs =
+        List.map (mk_tpattern_from_fvar None) constant_inputs @ inputs
       in
       close_all_fun_body loop.span { inputs; body }
     in
@@ -2146,7 +2190,8 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
       { effect_info = loop_fwd_effect_info; ignore_output }
     in
 
-    let inputs_tys = List.map (fun (v : tpattern) -> v.ty) loop_body.inputs in
+    let input_tys = List.map (fun (v : tpattern) -> v.ty) loop_body.inputs in
+    let input_tys = constant_input_tys @ input_tys in
     let output = subst_visitor#visit_ty subst output_ty in
 
     let llbc_generics : T.generic_params =
@@ -2179,7 +2224,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
       }
     in
 
-    let explicit_info = compute_explicit_info generics inputs_tys in
+    let explicit_info = compute_explicit_info generics input_tys in
     let known_from_trait_refs = compute_known_info explicit_info generics in
     let loop_sig : fun_sig =
       {
@@ -2188,7 +2233,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
         known_from_trait_refs;
         llbc_generics;
         preds = { trait_type_constraints = [] };
-        inputs = inputs_tys;
+        inputs = input_tys;
         output = mk_result_ty output;
         fwd_info = loop_fwd_sig_info;
         back_effect_info = fun_sig.back_effect_info;
@@ -2217,7 +2262,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
       }
     in
 
-    (loop_def, loop_func)
+    (loop_def, constant_inputs, loop_func)
   in
 
   let decompose_visitor =
@@ -2226,14 +2271,17 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
 
       method! visit_Loop env loop =
         (* Update the definition *)
-        let loop_def, func =
+        let loop_def, constant_inputs, func =
           generate_loop_def (self#visit_loop_body env) loop
         in
 
         (* Store the loop definition *)
         loops := LoopId.Map.add_strict loop.loop_id loop_def !loops;
 
-        let loop = [%add_loc] mk_apps span func loop.inputs in
+        let inputs =
+          List.map mk_texpr_from_fvar constant_inputs @ loop.inputs
+        in
+        let loop = [%add_loc] mk_apps span func inputs in
         loop.e
     end
   in
@@ -3394,6 +3442,22 @@ let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
       (body : loop_body) : loop_body =
     let body = open_loop_body span body in
 
+    (* Introduce an intermediate let-binding for a loop.
+
+       TODO: is this really useful? Can it happen that we find an loop
+       which is not bound by a let-binding? If useful, we should also use
+       it elsewhere.
+    *)
+    let rebind_loop (loop : loop) : texpr =
+      let fvars = List.map mk_fresh_fvar loop.output_tys in
+      let pats = List.map (mk_tpattern_from_fvar None) fvars in
+      let pat = mk_simpl_tuple_pattern pats in
+      let outputs = List.map mk_texpr_from_fvar fvars in
+      let output = mk_simpl_tuple_texpr span outputs in
+      let bound : texpr = { e = Loop loop; ty = mk_result_ty output.ty } in
+      mk_closed_let span true pat bound (mk_break_texpr span continue_ty output)
+    in
+
     let rec update (e : texpr) : texpr =
       match e.e with
       | FVar _ | BVar _ | CVar _ | Const _ | Lambda _ | StructUpdate _ ->
@@ -3401,39 +3465,16 @@ let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
           [%internal_error] span
       | Loop loop ->
           (* Introduce a let-binding and simplify (the simplification is implemented
-             for the App case, below) *)
-          let fvars = List.map mk_fresh_fvar loop.output_tys in
-          let pats = List.map (mk_tpattern_from_fvar None) fvars in
-          let pat = mk_simpl_tuple_pattern pats in
-          let outputs = List.map mk_texpr_from_fvar fvars in
-          let output = mk_simpl_tuple_texpr span outputs in
-          mk_closed_let span true pat e (mk_break_texpr span continue_ty output)
+             for the App case, below). *)
+          update (rebind_loop loop)
       | EError _ -> e
       | App _ | Qualif _ ->
           (* This might be a break or a continue *)
-          let f, args = destruct_apps e in
           begin
-            match f.e with
-            | Qualif
-                {
-                  id =
-                    AdtCons
-                      {
-                        adt_id = TBuiltin TLoopResult;
-                        variant_id = Some variant_id;
-                      };
-                  generics = _;
-                } ->
-                (* There should be exactly one argument, which should be a tuple *)
-                let arg =
-                  match args with
-                  | [ x ] -> x
-                  | _ -> [%internal_error] span
-                in
+            match opt_destruct_loop_result span e with
+            | None -> e
+            | Some (variant_id, outputs) ->
                 if variant_id = loop_result_break_id then
-                  (* The argument should be a tuple ¨*)
-                  let outputs = [%add_loc] destruct_tuple_texpr span arg in
-
                   (* Filter while computing the map from output var index to output expression *)
                   let outputs, map =
                     List.split
@@ -3474,16 +3515,15 @@ let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
                     mk_simpl_tuple_texpr span (outputs @ fresh_outputs)
                   in
                   mk_break_texpr span continue_ty outputs
-                else if
+                else if variant_id = loop_result_continue_id then
                   (* We leave the expression unchanged but have to modify its type *)
-                  variant_id = loop_result_continue_id
-                then mk_continue_texpr span arg break_ty
+                  mk_continue_texpr span
+                    (mk_simpl_tuple_texpr span outputs)
+                    break_ty
                 else (
                   [%sanity_check] span (variant_id = loop_result_fail_id);
+                  let arg = mk_simpl_tuple_texpr span outputs in
                   mk_loop_result_fail_texpr span continue_ty break_ty arg)
-            | _ ->
-                (* Shouldn't get there *)
-                [%internal_error] span
           end
       | Let (monadic, pat, bound, next) ->
           (* No need to update the bound expression *)
@@ -3524,9 +3564,10 @@ let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
     | App _
     | Qualif _
     | StructUpdate _
-    | Loop _
-    (* We can only simplify the output if the loop is bound in a let (and loops should always be) *)
     | EError _ -> e
+    | Loop _ ->
+        (* A loop should always be bound by a let *)
+        [%internal_error] span
     | Lambda _ ->
         let pats, body = open_lambdas span e in
         let body = update body in
@@ -3639,9 +3680,421 @@ let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
             let pat = mk_simpl_tuple_pattern pats in
             mk_closed_let span monadic pat loop next
         | _ ->
-            let bound = update bound in
+            (* No need to update the bound expression *)
             let next = update next in
             mk_closed_let span monadic pat bound next)
+  in
+  let body =
+    Option.map
+      (fun body ->
+        let body = open_fun_body span body in
+        let body = { body with body = update body.body } in
+        close_fun_body span body)
+      def.body
+  in
+  { def with body }
+
+type loop_rel = { inputs : texpr list list; outputs : texpr list list }
+
+(** Analyze a loop body to compute the relationship between its input and its
+    outputs.
+
+    Remark: we expect the loop body to have been opened (only the *inputs* of
+    the loop body, it is fine if the other variables are bound). *)
+let compute_loop_input_output_rel (span : Meta.span) (loop : loop) : loop_rel =
+  [%sanity_check] span (List.for_all tpattern_is_open loop.loop_body.inputs);
+
+  let body = loop.loop_body in
+  let inputs = List.map (fun _ -> ref []) body.inputs in
+  let outputs = List.map (fun _ -> ref []) loop.output_tys in
+
+  let visitor =
+    object
+      inherit [_] iter_expr as super
+
+      method! visit_texpr env e =
+        match e.e with
+        | Loop _ ->
+            (* We do not visit the inner loops *)
+            ()
+        | App _ -> begin
+            match opt_destruct_loop_result span e with
+            | None -> ()
+            | Some (variant_id, args) ->
+                if variant_id = loop_result_break_id then
+                  (* Update the output map *)
+                  List.iter
+                    (fun (l, arg) -> l := arg :: !l)
+                    (List.combine outputs args)
+                else if variant_id = loop_result_continue_id then
+                  (* Update the input map *)
+                  List.iter
+                    (fun (l, arg) -> l := arg :: !l)
+                    (List.combine inputs args)
+                else [%sanity_check] span (variant_id = loop_result_fail_id)
+          end
+        | _ -> super#visit_texpr env e
+    end
+  in
+  visitor#visit_texpr () body.loop_body;
+
+  let inputs = List.map (fun l -> List.rev !l) inputs in
+  let outputs = List.map (fun l -> List.rev !l) outputs in
+  { inputs; outputs }
+
+(** Filter the loop outputs which are actually equal to some of its inputs,
+    while filtering the inputs which are equal throughout the execution of the
+    loop.
+
+    For instance:
+    {[
+      let (i, y) =
+        loop (fun i x ->
+          if i < n then continue ((i + 1), y)
+          else break (i, y)) i0 y0
+      in
+      ...
+
+        ~>
+
+      let i =
+        loop (fun i x ->
+          if i < n then continue (i + 1)
+          else break i) i0
+      in
+      let y = y0 in
+      ...
+    ]} *)
+let filter_loop_unchanged_inputs_outputs (ctx : ctx) (def : fun_decl) =
+  let span = def.item_meta.span in
+
+  (* Helper to update the continue/breaks in a loop body *)
+  let update_loop_body (keep_outputs : bool list) (keep_inputs : bool list)
+      (continue_ty : ty) (break_ty : ty) (body : loop_body) : loop_body =
+    let rec update (e : texpr) : texpr =
+      match e.e with
+      | FVar _ | BVar _ | CVar _ | Const _ | Lambda _ | StructUpdate _ | Loop _
+        ->
+          (* Shouldn't happen *)
+          [%internal_error] span
+      | EError _ -> e
+      | App _ | Qualif _ ->
+          (* This might be a break or a continue *)
+          begin
+            match opt_destruct_loop_result span e with
+            | None -> e
+            | Some (variant_id, outputs) ->
+                let filter keep el =
+                  let el =
+                    List.filter_map
+                      (fun (keep, x) -> if keep then Some x else None)
+                      (List.combine keep el)
+                  in
+                  mk_simpl_tuple_texpr span el
+                in
+                if variant_id = loop_result_break_id then
+                  (* Filter *)
+                  let outputs = filter keep_outputs outputs in
+                  mk_break_texpr span continue_ty outputs
+                else if variant_id = loop_result_continue_id then
+                  (* We leave the expression unchanged but have to modify its type *)
+                  let inputs = filter keep_inputs outputs in
+                  mk_continue_texpr span inputs break_ty
+                else (
+                  [%sanity_check] span (variant_id = loop_result_fail_id);
+                  let arg = mk_simpl_tuple_texpr span outputs in
+                  mk_loop_result_fail_texpr span continue_ty break_ty arg)
+          end
+      | Let (monadic, pat, bound, next) ->
+          (* No need to update the bound expression *)
+          let pat, next = open_binder span pat next in
+          let next = update next in
+          mk_closed_let span monadic pat bound next
+      | Switch (scrut, switch) ->
+          (* No need to update the scrutinee *)
+          let switch =
+            match switch with
+            | If (e0, e1) -> If (update e0, update e1)
+            | Match branches ->
+                let branches =
+                  List.map
+                    (fun ({ pat; branch } : match_branch) ->
+                      let pat, branch = open_binder span pat branch in
+                      let branch = update branch in
+                      let pat, branch = close_binder span pat branch in
+                      { pat; branch })
+                    branches
+                in
+                Match branches
+          in
+          [%add_loc] mk_switch span scrut switch
+      | Meta (m, e) -> mk_emeta m (update e)
+    in
+
+    let inputs =
+      List.filter_map
+        (fun (keep, input) -> if keep then Some input else None)
+        (List.combine keep_inputs body.inputs)
+    in
+    let body = { inputs; loop_body = update body.loop_body } in
+    close_loop_body span body
+  in
+
+  let rec update (e : texpr) : texpr =
+    match e.e with
+    | FVar _
+    | BVar _
+    | CVar _
+    | Const _
+    | Lambda _
+    | App _
+    | Qualif _
+    | StructUpdate _
+    | EError _ -> e
+    | Loop _ ->
+        (* A loop should always be bound by a let *)
+        [%internal_error] span
+    | Meta (m, e) -> mk_emeta m (update e)
+    | Let (monadic, pat, bound, next) -> (
+        let pat, next = open_binder span pat next in
+
+        (* Check if the bound expression is a loop *)
+        match bound.e with
+        | Loop loop ->
+            let body = open_loop_body span loop.loop_body in
+
+            (* First explore the loop body: we want to simplify the inner loops *)
+            let body = { body with loop_body = update body.loop_body } in
+
+            (* Analyze the body *)
+            let rel =
+              compute_loop_input_output_rel span { loop with loop_body = body }
+            in
+
+            (* We go through the inputs and we filter those which are
+               mapped to exactly themselves (i.e., are transmitted unchanged).
+
+               We then go through the outputs: for a given output, if all the expressions
+               it is mapped to are actually the same, and this expression doesn't
+               contain variables which are locally bound in the loop, it means that
+               this output can be computed from the inputs of the loop only. If
+               those inputs were filtered above, it means they are left unchanged
+               throughout the loop and so that the output can be computed from
+               the *initial* input. We thus filter it.
+            *)
+            let output_vars = try_destruct_tuple_tpattern span pat in
+            let output_vars =
+              List.map ([%add_loc] as_pat_open span) output_vars
+            in
+            let output_vars = List.map fst output_vars in
+            let input_vars =
+              List.map ([%add_loc] as_pat_open span) body.inputs
+            in
+            let input_vars = List.map fst input_vars in
+            let input_var_ids =
+              List.map (fun (fv : fvar) -> fv.id) input_vars
+            in
+
+            (* First, the inputs *)
+            let keep_inputs =
+              List.map
+                (fun ((fv, el) : fvar * texpr list) ->
+                  (* Check if all the expressions are actually exactly the
+                     input expression *)
+                  not
+                    (List.for_all
+                       (fun (e : texpr) ->
+                         match e.e with
+                         | FVar fid -> fid = fv.id
+                         | _ -> false)
+                       el))
+                (List.combine input_vars rel.inputs)
+            in
+            let filtered_inputs =
+              FVarId.Set.of_list
+                (List.filter_map
+                   (fun ((keep, fv) : _ * fvar) ->
+                     if keep then None else Some fv.id)
+                   (List.combine keep_inputs input_vars))
+            in
+
+            (* Then, the outputs *)
+            let keep_outputs =
+              List.map
+                (fun el ->
+                  (* Check if there are bound vars *)
+                  let have_bvars =
+                    List.exists (fun x -> x) (List.map texpr_has_bvars el)
+                  in
+                  if have_bvars then true
+                  else
+                    match el with
+                    | [] ->
+                        (* Could happen with infinite loops, for now we forbid them *)
+                        [%internal_error] span
+                    | e :: el ->
+                        if List.for_all (fun e' -> e = e') el then
+                          (* All the expressions are the same: now check
+                             if all the free variables are filtered inputs *)
+                          let fvars = texpr_get_fvars e in
+                          not (FVarId.Set.subset fvars filtered_inputs)
+                        else true)
+                rel.outputs
+            in
+
+            [%ldebug
+              "- keep_inputs: "
+              ^ Print.list_to_string Print.bool_to_string keep_inputs
+              ^ "\n- keep_outputs: "
+              ^ Print.list_to_string Print.bool_to_string keep_outputs];
+
+            (* We need to compute the new expressions for the outputs we filter,
+               by substituting the free variables which appear in their expressions
+               (which are inputs bound locally in the loop) with the initial inputs
+               with which the loop is "called". We can then introduce the let-bindings. *)
+            let to_initial_input =
+              FVarId.Map.of_list (List.combine input_var_ids loop.inputs)
+            in
+            let update_initial_inputs (e : texpr) : texpr =
+              let visitor =
+                object
+                  inherit [_] map_expr
+
+                  method! visit_FVar _ fid =
+                    match FVarId.Map.find_opt fid to_initial_input with
+                    | None -> FVar fid
+                    | Some e -> e.e
+                end
+              in
+              visitor#visit_texpr () e
+            in
+            let updt_outputs =
+              List.filter_map
+                (fun (keep, el) ->
+                  match el with
+                  | [] -> [%internal_error] span
+                  | e :: _ ->
+                      if keep then None else Some (update_initial_inputs e))
+                (Collections.List.combine keep_outputs rel.outputs)
+            in
+
+            (* Update the loop body *)
+            let continue_ty =
+              let tys =
+                List.filter_map
+                  (fun ((keep, input) : _ * texpr) ->
+                    if keep then Some input.ty else None)
+                  (List.combine keep_inputs loop.inputs)
+              in
+              mk_simpl_tuple_ty tys
+            in
+            let break_ty =
+              let tys =
+                List.filter_map
+                  (fun ((keep, x) : _ * fvar) ->
+                    if keep then Some x.ty else None)
+                  (List.combine keep_outputs output_vars)
+              in
+              mk_simpl_tuple_ty tys
+            in
+
+            [%ldebug
+              "- continue_ty: "
+              ^ ty_to_string ctx continue_ty
+              ^ "\n- break_ty: " ^ ty_to_string ctx break_ty];
+
+            let body =
+              update_loop_body keep_outputs keep_inputs continue_ty break_ty
+                body
+            in
+            let filter keep xl =
+              List.filter_map
+                (fun (keep, x) -> if keep then Some x else None)
+                (List.combine keep xl)
+            in
+            let compute_num keep n =
+              List.length
+                (List.filter (fun b -> b) (Collections.List.prefix n keep))
+            in
+            let loop =
+              {
+                loop with
+                output_tys = filter keep_outputs loop.output_tys;
+                num_output_values =
+                  compute_num keep_outputs loop.num_output_values;
+                inputs = filter keep_inputs loop.inputs;
+                num_input_conts = compute_num keep_inputs loop.num_input_conts;
+                loop_body = body;
+              }
+            in
+            [%ldebug
+              "- output_tys: "
+              ^ Print.list_to_string (ty_to_string ctx) loop.output_tys
+              ^ "\n- num_output_values: "
+              ^ string_of_int loop.num_output_values
+              ^ "\n- inputs: "
+              ^ Print.list_to_string (texpr_to_string ctx) loop.inputs
+              ^ "\n- num_input_conts: "
+              ^ string_of_int loop.num_input_conts];
+
+            let loop : texpr =
+              {
+                e = Loop loop;
+                ty = mk_result_ty (mk_simpl_tuple_ty loop.output_tys);
+              }
+            in
+
+            (* Introduce the loop outputs we filtered by adding let-bindings
+               afterwards (they're not output by the loop anymore) *)
+            let kept_output_vars, filt_output_vars =
+              List.partition fst (List.combine keep_outputs output_vars)
+            in
+            let kept_output_vars = List.map snd kept_output_vars in
+            let filt_output_vars = List.map snd filt_output_vars in
+            let filt_output_vars =
+              List.map (mk_tpattern_from_fvar None) filt_output_vars
+            in
+            let next =
+              mk_closed_lets span false
+                (List.combine filt_output_vars updt_outputs)
+                next
+            in
+
+            (* Inline the useless vars in the expression after the loop body *)
+            let next =
+              (inline_useless_var_assignments_visitor ~inline_named:true
+                 ~inline_const:true ~inline_pure:false ~inline_identity:true ctx
+                 def)
+                #visit_texpr
+                FVarId.Map.empty next
+            in
+
+            (* Bind the loop *)
+            let pat =
+              mk_simpl_tuple_pattern
+                (List.map (mk_tpattern_from_fvar None) kept_output_vars)
+            in
+            mk_closed_let span monadic pat loop next
+        | _ ->
+            (* No need to update the bound expression *)
+            let next = update next in
+            mk_closed_let span monadic pat bound next)
+    | Switch (scrut, switch) ->
+        (* No need to update the scrutinee *)
+        let switch =
+          match switch with
+          | If (e0, e1) -> If (update e0, update e1)
+          | Match bl ->
+              Match
+                (List.map
+                   (fun ({ pat; branch } : match_branch) ->
+                     let pat, branch = open_binder span pat branch in
+                     let branch = update branch in
+                     let pat, branch = close_binder span pat branch in
+                     { pat; branch })
+                   bl)
+        in
+        [%add_loc] mk_switch span scrut switch
   in
   let body =
     Option.map
@@ -3716,13 +4169,23 @@ let passes :
     (* Simplify and filter the loop outputs *)
     (None, "simplify_loop_output_conts", simplify_loop_output_conts);
     (* [simplify_loop_output_conts] might have triggered simplification
-       opportunities for [apply_beta_reduction] and [inline_useless_var_assignments] *)
+       opportunities for [apply_beta_reduction] and [inline_useless_var_assignments].
+
+       In particular, it often introduces expressions of the shape:
+       {[
+         let x = (fun y -> y) v in
+         ...
+       ]}
+    *)
     (None, "apply_beta_reduction (pass 2)", apply_beta_reduction);
     ( None,
       "inline_useless_var_assignments (pass 2)",
       inline_useless_var_assignments ~inline_named:true ~inline_const:true
         ~inline_pure:true ~inline_identity:true );
-    (* TODO: filter the useless loop outputs *)
+    (* Filter the loop outputs which are actually unmodified inputs *)
+    ( None,
+      "filter_loop_unchanged_inputs_outputs",
+      filter_loop_unchanged_inputs_outputs );
     (* TODO: change the structure of the loops that we will translate to
        recursive functions *)
     (* TODO: update the loop input continuations *)
@@ -3805,9 +4268,13 @@ let apply_passes_to_def (ctx : ctx) (def : fun_decl) : fun_decl =
         def))
     def passes
 
-(** Small utility for {!filter_loop_inputs} *)
-let filter_prefix (keep : bool list) (ls : 'a list) : 'a list =
-  let ls0, ls1 = Collections.List.split_at ls (List.length keep) in
+(** Small utility for {!filter_loop_inputs}. *)
+let filter_prefix file line span (keep : bool list) (ls : 'a list) : 'a list =
+  let ls0, ls1 =
+    try Collections.List.split_at ls (List.length keep)
+    with Failure _ ->
+      Errors.craise file line span "Internal error: please file an issue"
+  in
   let ls0 =
     List.filter_map
       (fun (b, x) -> if b then Some x else None)
@@ -3944,6 +4411,7 @@ let filter_loop_inputs_filter_in_one (_ctx : ctx)
     (used_map : bool list FunLoopIdMap.t) (decl : fun_decl) : fun_decl =
   (* Filter the function signature *)
   let fun_id = (T.FRegular decl.def_id, decl.loop_id) in
+  let span = decl.item_meta.span in
   let decl =
     match FunLoopIdMap.find_opt fun_id used_map with
     | None -> (* Nothing to filter *) decl
@@ -3961,7 +4429,7 @@ let filter_loop_inputs_filter_in_one (_ctx : ctx)
         } =
           decl.signature
         in
-        let inputs = filter_prefix used_info inputs in
+        let inputs = [%add_loc] filter_prefix span used_info inputs in
         let explicit_info = compute_explicit_info generics inputs in
         let known_from_trait_refs = compute_known_info explicit_info generics in
         let signature =
@@ -3990,7 +4458,7 @@ let filter_loop_inputs_filter_in_one (_ctx : ctx)
       match FunLoopIdMap.find_opt fun_id used_map with
       | None -> (* Nothing to filter *) inputs
       | Some used_info ->
-          let inputs = filter_prefix used_info inputs in
+          let inputs = [%add_loc] filter_prefix span used_info inputs in
           inputs
     in
 
@@ -4014,12 +4482,16 @@ let filter_loop_inputs_filter_in_one (_ctx : ctx)
                       | Some used_info ->
                           (* Filter the types in the arrow type *)
                           let tys, ret_ty = destruct_arrows e_app.ty in
-                          let tys = filter_prefix used_info tys in
+                          let tys =
+                            [%add_loc] filter_prefix span used_info tys
+                          in
                           let ty = mk_arrows tys ret_ty in
                           let e_app = { e_app with ty } in
 
                           (* Filter the arguments *)
-                          let args = filter_prefix used_info args in
+                          let args =
+                            [%add_loc] filter_prefix span used_info args
+                          in
 
                           (* Explore the arguments *)
                           let args = List.map (self#visit_texpr env) args in

@@ -651,9 +651,27 @@ let opt_destruct_tuple_texpr (span : Meta.span) (e : texpr) : texpr list option
       Some fields
   | _ -> None
 
-let destruct_tuple_texpr file line span e =
+let try_destruct_tuple_texpr span e =
   match opt_destruct_tuple_texpr span e with
-  | None -> Errors.craise file line span "Not a tuple"
+  | None -> [ e ]
+  | Some fields -> fields
+
+let opt_destruct_tuple_tpattern (span : Meta.span) (e : tpattern) :
+    tpattern list option =
+  match e.ty with
+  | TAdt (TTuple, generics) ->
+      [%sanity_check] span (generics.const_generics = []);
+      [%sanity_check] span (generics.trait_refs = []);
+      begin
+        match e.pat with
+        | PAdt { fields; _ } -> Some fields
+        | _ -> [%internal_error] span
+      end
+  | _ -> None
+
+let try_destruct_tuple_tpattern span e =
+  match opt_destruct_tuple_tpattern span e with
+  | None -> [ e ]
   | Some fields -> fields
 
 let destruct_arrow (span : Meta.span) (ty : ty) : ty * ty =
@@ -1377,6 +1395,17 @@ let decompose_mplace_to_local (p : mplace) :
   in
   decompose [] p
 
+let tpatterns_get_fvars (x : tpattern list) : FVarId.Set.t =
+  let vars = ref FVarId.Set.empty in
+  let visitor =
+    object
+      inherit [_] iter_expr
+      method! visit_fvar_id _ var_id = vars := FVarId.Set.add var_id !vars
+    end
+  in
+  List.iter (visitor#visit_tpattern ()) x;
+  !vars
+
 let texpr_get_fvars (e : texpr) : FVarId.Set.t =
   let vars = ref FVarId.Set.empty in
   let visitor =
@@ -1797,10 +1826,11 @@ type open_all_env = {
           progressively and then push it to [benv]. This is similar to
           [PrintPure.fmt_env] *)
   pvarid : BVarId.id;
+  fvars : fvar FVarId.Map.t;
 }
 
 let empty_open_all_env : open_all_env =
-  { benv = []; penv = None; pvarid = BVarId.zero }
+  { benv = []; penv = None; pvarid = BVarId.zero; fvars = FVarId.Map.empty }
 
 (** Start a new partial map (call this before exploring a binder) *)
 let open_all_env_start_scope (env : open_all_env) : open_all_env =
@@ -1811,7 +1841,12 @@ let open_all_env_start_scope (env : open_all_env) : open_all_env =
     push this partial map to [bvars] *)
 let open_all_env_push_scope (env : open_all_env) : open_all_env =
   let penv = Option.get env.penv in
-  { benv = penv :: env.benv; penv = None; pvarid = BVarId.zero }
+  {
+    benv = penv :: env.benv;
+    penv = None;
+    pvarid = BVarId.zero;
+    fvars = env.fvars;
+  }
 
 let open_all_env_pop_scope (env : open_all_env) : open_all_env =
   assert (env.penv = None);
@@ -1821,12 +1856,21 @@ let open_all_env_pop_scope (env : open_all_env) : open_all_env =
 
     Only call this between [open_all_env_start_penv] and
     [open_all_env_push_penv]. *)
-let open_all_env_push_var (env : open_all_env) : open_all_env * fvar_id =
+let open_all_env_push_var (env : open_all_env) (v : var) :
+    open_all_env * fvar_id =
   let penv = Option.get env.penv in
   let bvar_id = env.pvarid in
   let fvar_id = fresh_fvar_id () in
   let penv = Some (BVarId.Map.add bvar_id fvar_id penv) in
-  let env = { env with penv; pvarid = BVarId.incr env.pvarid } in
+  let fvar : fvar = { id = fvar_id; basename = v.basename; ty = v.ty } in
+  let env =
+    {
+      env with
+      penv;
+      pvarid = BVarId.incr env.pvarid;
+      fvars = FVarId.Map.add_strict fvar_id fvar env.fvars;
+    }
+  in
   (env, fvar_id)
 
 let open_all_env_get_var span (env : open_all_env) (v : bvar) : fvar_id =
@@ -1858,8 +1902,8 @@ let open_all_visitor (span : Meta.span) =
     method pop_scope (env : open_all_env ref) =
       env := open_all_env_pop_scope !env
 
-    method push_var (env : open_all_env ref) _ =
-      let env', id = open_all_env_push_var !env in
+    method push_var (env : open_all_env ref) v =
+      let env', id = open_all_env_push_var !env v in
       env := env';
       id
 
@@ -1877,8 +1921,14 @@ let open_all_visitor (span : Meta.span) =
 let open_all_texpr (span : Meta.span) (e : texpr) : texpr =
   (open_all_visitor span)#visit_texpr (ref empty_open_all_env) e
 
+let open_all_fun_body_get_fvars (span : Meta.span) (fbody : fun_body) :
+    fvar FVarId.Map.t * fun_body =
+  let env = ref empty_open_all_env in
+  let fbody = (open_all_visitor span)#visit_fun_body env fbody in
+  (!env.fvars, fbody)
+
 let open_all_fun_body (span : Meta.span) (fbody : fun_body) : fun_body =
-  (open_all_visitor span)#visit_fun_body (ref empty_open_all_env) fbody
+  snd (open_all_fun_body_get_fvars span fbody)
 
 type close_all_env = {
   fenv : bvar FVarId.Map.t;
@@ -2191,3 +2241,32 @@ let generic_args_of_params (generics : generic_params) : generic_args =
       generics.trait_clauses
   in
   { types; const_generics; trait_refs }
+
+let opt_destruct_loop_result span (e : texpr) : (variant_id * texpr list) option
+    =
+  let f, args = destruct_apps e in
+  match f.e with
+  | Qualif
+      {
+        id =
+          AdtCons
+            { adt_id = TBuiltin TLoopResult; variant_id = Some variant_id };
+        generics = _;
+      } ->
+      (* There should be exactly one argument *)
+      let arg =
+        match args with
+        | [ x ] -> x
+        | _ -> [%internal_error] span
+      in
+      if variant_id = loop_result_break_id then
+        (* The argument should be a tuple *)
+        let outputs = try_destruct_tuple_texpr span arg in
+        Some (variant_id, outputs)
+      else if variant_id = loop_result_continue_id then
+        (* We leave the expression unchanged but have to modify its type *)
+        (* The argument should be a tuple *)
+        let outputs = try_destruct_tuple_texpr span arg in
+        Some (variant_id, outputs)
+      else Some (variant_id, [ arg ])
+  | _ -> None
