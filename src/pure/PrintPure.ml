@@ -839,7 +839,7 @@ let fun_or_op_id_to_string (env : fmt_env) (fun_id : fun_or_op_id) : string =
   | Fun fun_id -> regular_fun_id_to_string env fun_id
   | Unop unop -> unop_to_string unop
   | Binop (binop, int_ty) ->
-      binop_to_string binop ^ "<" ^ integer_type_to_string int_ty ^ ">"
+      binop_to_string binop ^ "::<" ^ integer_type_to_string int_ty ^ ">"
 
 (** [inside]: controls the introduction of parentheses *)
 let rec texpr_to_string ?(span : Meta.span option = None) (env : fmt_env)
@@ -894,7 +894,7 @@ and app_to_string ?(span : Meta.span option = None) (env : fmt_env)
   (* There are two possibilities: either the [app] is an instantiated,
    * top-level qualifier (function, ADT constructore...), or it is a "regular"
    * expression *)
-  let app, generics =
+  let app, generics, is_binop =
     match app.e with
     | Qualif qualif -> (
         (* Qualifier case *)
@@ -902,29 +902,34 @@ and app_to_string ?(span : Meta.span option = None) (env : fmt_env)
         | FunOrOp fun_id ->
             let generics = generic_args_to_strings env true qualif.generics in
             let qualif_s = fun_or_op_id_to_string env fun_id in
-            (qualif_s, generics)
+            let is_binop =
+              match fun_id with
+              | Binop _ -> true
+              | _ -> false
+            in
+            (qualif_s, generics, is_binop)
         | Global global_id ->
             let generics = generic_args_to_strings env true qualif.generics in
-            (global_decl_id_to_string env global_id, generics)
+            (global_decl_id_to_string env global_id, generics, false)
         | AdtCons adt_cons_id ->
             let variant_s =
               adt_variant_to_string ~span env adt_cons_id.adt_id
                 adt_cons_id.variant_id
             in
-            (ConstStrings.constructor_prefix ^ variant_s, [])
+            (ConstStrings.constructor_prefix ^ variant_s, [], false)
         | Proj { adt_id; field_id } ->
             let adt_s = adt_variant_to_string ~span env adt_id None in
             let field_s = adt_field_to_string ~span env adt_id field_id in
             (* Adopting an F*-like syntax *)
-            (ConstStrings.constructor_prefix ^ adt_s ^ "?." ^ field_s, [])
+            (ConstStrings.constructor_prefix ^ adt_s ^ "?." ^ field_s, [], false)
         | TraitConst (trait_ref, const_name) ->
             let trait_ref = trait_ref_to_string env true trait_ref in
             let qualif = trait_ref ^ "." ^ const_name in
-            (qualif, []))
+            (qualif, [], false))
     | _ ->
         (* "Regular" expression case *)
         let inside = args <> [] || (args = [] && inside) in
-        (texpr_to_string ~span env inside indent indent_incr app, [])
+        (texpr_to_string ~span env inside indent indent_incr app, [], false)
   in
   (* Convert the arguments.
    * The arguments are expressions, so indentation might get weird... (though
@@ -938,7 +943,9 @@ and app_to_string ?(span : Meta.span option = None) (env : fmt_env)
   let all_args = List.append generics args in
   (* Put together *)
   let e =
-    if all_args = [] then app else app ^ " " ^ String.concat " " all_args
+    match (is_binop, all_args) with
+    | true, [ arg0; arg1 ] -> arg0 ^ " " ^ app ^ " " ^ arg1
+    | _ -> if all_args = [] then app else app ^ " " ^ String.concat " " all_args
   in
   (* Add parentheses *)
   if all_args <> [] && inside then "(" ^ e ^ ")" else e
@@ -1036,8 +1043,10 @@ and loop_to_string ?(span : Meta.span option = None) (env : fmt_env)
   "loop (\n" ^ indent1
   ^ loop_body_to_string ~span env indent2 indent_incr loop_body
   ^ "\n" ^ indent1 ^ ")"
-  ^ String.concat " "
-      (List.map (texpr_to_string ~span env true indent2 indent_incr) inputs)
+  ^ String.concat ""
+      (List.map
+         (fun x -> " " ^ texpr_to_string ~span env true indent2 indent_incr x)
+         inputs)
 
 and loop_body_to_string ?(span : Meta.span option = None) (env : fmt_env)
     (indent : string) (indent_incr : string) (body : loop_body) : string =

@@ -1486,8 +1486,11 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
         ~~>
 
       f y
-    ]} *)
-let simplify_let_then_ok_visitor _ctx (def : fun_decl) =
+    ]}
+
+    If [ignore_loops] is true, we do not apply this transformation binds a loop
+    (this is useful to simplify some other micro-passes). *)
+let simplify_let_then_ok_visitor ~(ignore_loops : bool) _ctx (def : fun_decl) =
   (* Match a pattern and an expression: evaluates to [true] if the expression
      is actually exactly the pattern *)
   let rec match_pattern_and_expr (pat : tpattern) (e : texpr) : bool =
@@ -1528,28 +1531,34 @@ let simplify_let_then_ok_visitor _ctx (def : fun_decl) =
           (* Small shortcut to avoid doing the check on every let-binding *)
           not_simpl_e
       | _ -> (
-          if
-            (* Do the check *)
-            monadic
-          then
-            (* The first let-binding is monadic *)
-            match opt_destruct_ret next_e with
-            | Some e ->
-                if match_pattern_and_expr lv e then rv.e else not_simpl_e
-            | None -> not_simpl_e
-          else
-            (* The first let-binding is not monadic *)
-            match opt_destruct_ret next_e with
-            | Some e ->
-                if match_pattern_and_expr lv e then
-                  (* We need to wrap the right-value in a ret *)
-                  (mk_result_ok_texpr def.item_meta.span rv).e
-                else not_simpl_e
-            | None ->
-                if match_pattern_and_expr lv next_e then rv.e else not_simpl_e)
+          (* Ignore loops if the user instructs to do so *)
+          match rv.e with
+          | Loop _ when ignore_loops -> not_simpl_e
+          | _ -> (
+              if
+                (* Do the check *)
+                monadic
+              then
+                (* The first let-binding is monadic *)
+                match opt_destruct_ret next_e with
+                | Some e ->
+                    if match_pattern_and_expr lv e then rv.e else not_simpl_e
+                | None -> not_simpl_e
+              else
+                (* The first let-binding is not monadic *)
+                match opt_destruct_ret next_e with
+                | Some e ->
+                    if match_pattern_and_expr lv e then
+                      (* We need to wrap the right-value in a ret *)
+                      (mk_result_ok_texpr def.item_meta.span rv).e
+                    else not_simpl_e
+                | None ->
+                    if match_pattern_and_expr lv next_e then rv.e
+                    else not_simpl_e))
   end
 
-let simplify_let_then_ok = lift_expr_map_visitor simplify_let_then_ok_visitor
+let simplify_let_then_ok ~(ignore_loops : bool) =
+  lift_expr_map_visitor (simplify_let_then_ok_visitor ~ignore_loops)
 
 (** Simplify the aggregated ADTs. Ex.:
     {[
@@ -2111,13 +2120,18 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
        by the loop but not bound by the loop itself (because they are
        not modified through the loop iterations). *)
     let constant_inputs =
-      let body_fvars = texpr_get_fvars loop_body.loop_body in
-      let bound_by_body = tpatterns_get_fvars loop_body.inputs in
+      let used_in_body = texpr_get_fvars loop_body.loop_body in
+      let bound_in_body = loop_body_get_bound_fvars loop_body in
+      [%ldebug
+        "- used_in_body: "
+        ^ FVarId.Set.to_string None used_in_body
+        ^ "\n- bound_in_body: "
+        ^ FVarId.Set.to_string None bound_in_body];
       List.filter_map
         (fun fid ->
-          if FVarId.Set.mem fid body_fvars then None
+          if FVarId.Set.mem fid bound_in_body then None
           else Some (FVarId.Map.find fid fvars))
-        (FVarId.Set.elements bound_by_body)
+        (FVarId.Set.elements used_in_body)
     in
     [%ldebug
       "- body:\n"
@@ -2153,7 +2167,11 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
       let inputs =
         List.map (mk_tpattern_from_fvar None) constant_inputs @ inputs
       in
-      close_all_fun_body loop.span { inputs; body }
+      let body : fun_body = { inputs; body } in
+      [%ldebug
+        "body before closing the free variables:\n"
+        ^ fun_body_to_string ctx body];
+      close_all_fun_body loop.span body
     in
 
     (* *)
@@ -3587,7 +3605,7 @@ let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
         | Loop loop ->
             (* The output should be a tuple containing first the output values,
                then the output continuations *)
-            let pats = [%add_loc] as_pat_tuple span pat in
+            let pats = try_destruct_tuple_tpattern span pat in
             let as_pat_open_or_ignored (pat : tpattern) : fvar option =
               match pat.pat with
               | POpen (fv, _) -> Some fv
@@ -4476,6 +4494,11 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
                   continue_ty break_ty body
               in
 
+              (* Check that the body doesn't contain uses of the input continuations anymore *)
+              [%sanity_check] span
+                (let fvars = texpr_get_fvars body.loop_body in
+                 FVarId.Set.disjoint input_conts_fvids fvars);
+
               let loop =
                 {
                   loop with
@@ -4501,9 +4524,7 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
               mk_closed_let span monadic pat loop next)
             else
               (* Do not apply any transformation *)
-              let loop =
-                { loop with loop_body = close_loop_body span loop.loop_body }
-              in
+              let loop = { loop with loop_body = close_loop_body span body } in
               let bound = { bound with e = Loop loop } in
               mk_closed_let span monadic pat bound next
         | _ ->
@@ -4596,7 +4617,7 @@ let passes :
          f y
        ]}
     *)
-    (None, "simplify_let_then_ok", simplify_let_then_ok);
+    (None, "simplify_let_then_ok", simplify_let_then_ok ~ignore_loops:true);
     (* Simplify and filter the loop outputs *)
     (None, "simplify_loop_output_conts", simplify_loop_output_conts);
     (* [simplify_loop_output_conts] might have triggered simplification
@@ -4620,7 +4641,7 @@ let passes :
     (* Change the structure of the loops if we can simplify their backward
        functions. This is in preparation of [decompose_loops], which introduces
        auxiliary (and potentially recursive) functions. *)
-    (None, "loops_to_recursivxe", loops_to_recursive);
+    (None, "loops_to_recursive", loops_to_recursive);
     (* Simplify the aggregated ADTs.
 
        Ex.:
@@ -4651,13 +4672,17 @@ let passes :
     (None, "filter_useless (pass 2)", filter_useless);
     (* Simplify the let-then return again (the lambda simplification may have
        unlocked more simplifications here) *)
-    (None, "simplify_let_then_ok (pass 2)", simplify_let_then_ok);
+    ( None,
+      "simplify_let_then_ok (pass 2)",
+      simplify_let_then_ok ~ignore_loops:false );
     (* Simplify the array/slice manipulations by introducing calls to [array_update]
        [slice_update] *)
     (None, "simplify_array_slice_update", simplify_array_slice_update);
     (* Simplify the let-then return again (the array simplification may have
        unlocked more simplifications here) *)
-    (None, "simplify_let_then_ok (pass 3)", simplify_let_then_ok);
+    ( None,
+      "simplify_let_then_ok (pass 3)",
+      simplify_let_then_ok ~ignore_loops:false );
     (* Decompose the monadic let-bindings - used by Coq *)
     ( Some (fun _ -> !Config.decompose_monadic_let_bindings),
       "decompose_monadic_let_bindings",

@@ -1428,6 +1428,28 @@ let texpr_get_fvars (e : texpr) : FVarId.Set.t =
   visitor#visit_texpr () e;
   !vars
 
+let texpr_get_bound_fvars (e : texpr) : FVarId.Set.t =
+  let vars = ref FVarId.Set.empty in
+  let visitor =
+    object
+      inherit [_] iter_expr
+      method! visit_POpen _ fv _ = vars := FVarId.Set.add fv.id !vars
+    end
+  in
+  visitor#visit_texpr () e;
+  !vars
+
+let loop_body_get_bound_fvars (e : loop_body) : FVarId.Set.t =
+  let vars = ref FVarId.Set.empty in
+  let visitor =
+    object
+      inherit [_] iter_expr
+      method! visit_POpen _ fv _ = vars := FVarId.Set.add fv.id !vars
+    end
+  in
+  visitor#visit_loop_body () e;
+  !vars
+
 let texpr_has_fvars (e : texpr) : bool =
   let visitor =
     object

@@ -587,9 +587,13 @@ let compute_loop_break_context (config : config) (span : Meta.span)
 
       Some (break_ctx, abs)
 
-(* TODO: this could be drastically simplified *)
-let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
-    (fp_ctx : eval_ctx) : SymbolicValueId.Set.t * symbolic_value list =
+(* TODO: this could be drastically simplified.
+
+   TODO: the output set of fresh values is probably useless.
+*)
+let compute_fp_ctx_symbolic_values (span : Meta.span)
+    ~(only_modified_input_svalues : bool) (ctx : eval_ctx) (fp_ctx : eval_ctx) :
+    SymbolicValueId.Set.t * symbolic_value list =
   let old_ids, _ = compute_ctx_ids ctx in
   let fp_ids, fp_ids_maps = compute_ctx_ids fp_ctx in
   let fresh_sids = SymbolicValueId.Set.diff fp_ids.sids old_ids.sids in
@@ -664,7 +668,7 @@ let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
 
   (* Also remove the symbolic values which appear inside of projectors in
      fixed abstractions - those are "fixed" and not modified between iterations
-     of the loop, *)
+     of the loop *)
   [%ltrace
     "- sids_in_fixed_abs:"
     ^ SymbolicValueId.Set.show sids_in_fixed_abs
@@ -675,6 +679,16 @@ let compute_fp_ctx_symbolic_values (span : Meta.span) (ctx : eval_ctx)
     SymbolicValueId.Map.filter
       (fun sid _ -> not (SymbolicValueId.Set.mem sid sids_in_fixed_abs))
       sids_to_values
+  in
+
+  (* Remove the symbolic values which are not modified, if the option
+     [only_modified_input_svalues] is [true] *)
+  let sids_to_values =
+    if only_modified_input_svalues then
+      SymbolicValueId.Map.filter
+        (fun sid _ -> SymbolicValueId.Set.mem sid fresh_sids)
+        sids_to_values
+    else sids_to_values
   in
 
   (* List the input symbolic values in proper order.

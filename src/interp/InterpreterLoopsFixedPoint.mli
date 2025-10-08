@@ -80,9 +80,14 @@ val compute_loop_entry_fixed_point :
 
     We compute:
     - the set of symbolic value ids that are freshly introduced
-    - the list of input symbolic values *)
+    - the list of input symbolic values
+
+    If [only_modified_input_svalues] is true, we only include in the list of
+    input symbolic values the ones which are modified from one context to the
+    other. *)
 val compute_fp_ctx_symbolic_values :
   Meta.span ->
+  only_modified_input_svalues:bool ->
   eval_ctx ->
   eval_ctx ->
   symbolic_value_id_set * symbolic_value list
