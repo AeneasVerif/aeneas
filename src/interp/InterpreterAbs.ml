@@ -1739,19 +1739,20 @@ let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
 let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
     (old_abs_ids : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
   let reorder_in_fresh_abs (abs : abs) : abs =
+    [%ltrace "abs:\n" ^ abs_to_string span ctx abs];
     (* Split between the loans and borrows, and between the concrete
        and symbolic values. *)
     let is_borrow (av : tavalue) : bool =
       match av.value with
       | ABorrow _ | ASymbolic (_, AProjBorrows _) -> true
       | ALoan _ | ASymbolic (_, AProjLoans _) -> false
-      | _ -> [%craise] span "Unexpected"
+      | _ -> [%craise] span ("Unexpected avalue: " ^ tavalue_to_string ctx av)
     in
     let is_concrete (av : tavalue) : bool =
       match av.value with
       | ABorrow _ | ALoan _ -> true
       | ASymbolic (_, (AProjBorrows _ | AProjLoans _)) -> false
-      | _ -> [%craise] span "Unexpected"
+      | _ -> [%craise] span ("Unexpected avalue: " ^ tavalue_to_string ctx av)
     in
     let aborrows, aloans = List.partition is_borrow abs.avalues in
     let aborrows, borrow_projs = List.partition is_concrete aborrows in
@@ -1830,8 +1831,23 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
     { abs with avalues }
   in
 
+  (* Small helper: returns [true] if a region abstraction was introduced exactly
+     because of a function call *)
+  let abs_is_fun_call (abs : abs) =
+    match abs.cont with
+    | Some { output = _; input = Some { value = EApp (EFunCall _, _); _ } } ->
+        true
+    | _ -> false
+  in
+
   let reorder_in_abs (abs : abs) =
-    if AbstractionId.Set.mem abs.abs_id old_abs_ids then abs
+    (* We do not update the fixed region abstractions as well as the ones
+       which were introduced exactly by function calls (we update those which
+       were introduced when promoting anonymous values to region abstractions
+       or by merging region abstractions).
+     *)
+    if AbstractionId.Set.mem abs.abs_id old_abs_ids || abs_is_fun_call abs then
+      abs
     else reorder_in_fresh_abs abs
   in
 
