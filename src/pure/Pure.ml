@@ -119,6 +119,11 @@ type pure_builtin_fun_id =
 
           The integer represents the arity (by default the arity is 1, but for
           some small arities we may introduce dedicated loop operators). *)
+  | RecLoopCall of int
+      (** A recursive call to an outer loop. This is different from using a
+          [Continue] in that it allows binding the result of the loop and doing
+          something with it. We use this in the micro-passes, in preparation of
+          a translation which transforms loops to recursive functions. *)
   | FuelDecrease
       (** Decrease fuel, provided it is non zero (used for F* ) - TODO: this is
           ugly *)

@@ -964,6 +964,20 @@ let mk_break_texpr (span : span) (continue : ty) (break : texpr) : texpr =
   let ty = mk_loop_result_ty continue break.ty in
   mk_adt_texpr span ty (Some loop_result_break_id) [ break ]
 
+let mk_rec_loop_call_texpr file line (span : span) (input : texpr)
+    (output_ty : ty) : texpr =
+  let func =
+    Qualif
+      {
+        id = FunOrOp (Fun (Pure (RecLoopCall 0)));
+        generics = mk_generic_args_from_types [ input.ty; output_ty ];
+      }
+  in
+  let func : texpr =
+    { e = func; ty = mk_arrow input.ty (mk_result_ty output_ty) }
+  in
+  mk_app file line span func input
+
 let opt_unmeta_mplace (e : texpr) : mplace option * texpr =
   match e.e with
   | Meta (MPlace mp, e) -> (Some mp, e)
@@ -1087,10 +1101,7 @@ let open_binders (span : Meta.span) (patl : tpattern list) (e : texpr) :
       inherit [_] scoped_map_expr
 
       method! visit_BVar scope (var : bvar) =
-        if var.scope = scope then FVar (BVarId.Map.find var.id !m)
-        else (
-          [%sanity_check] span (var.scope < scope);
-          BVar var)
+        if var.scope = scope then FVar (BVarId.Map.find var.id !m) else BVar var
     end
   in
   let e = visitor#visit_texpr 0 e in
@@ -2242,8 +2253,15 @@ let generic_args_of_params (generics : generic_params) : generic_args =
   in
   { types; const_generics; trait_refs }
 
-let opt_destruct_loop_result span (e : texpr) : (variant_id * texpr list) option
-    =
+type decomposed_loop_result = {
+  variant_id : variant_id;
+  args : texpr list;  (** The decomposed tuple argument *)
+  arg : texpr;  (** The non-decomposed argument *)
+  continue_ty : ty;
+  break_ty : ty;
+}
+
+let opt_destruct_loop_result span (e : texpr) : decomposed_loop_result option =
   let f, args = destruct_apps e in
   match f.e with
   | Qualif
@@ -2251,7 +2269,7 @@ let opt_destruct_loop_result span (e : texpr) : (variant_id * texpr list) option
         id =
           AdtCons
             { adt_id = TBuiltin TLoopResult; variant_id = Some variant_id };
-        generics = _;
+        generics;
       } ->
       (* There should be exactly one argument *)
       let arg =
@@ -2259,14 +2277,49 @@ let opt_destruct_loop_result span (e : texpr) : (variant_id * texpr list) option
         | [ x ] -> x
         | _ -> [%internal_error] span
       in
+      let continue_ty, break_ty =
+        match generics with
+        | { types = [ continue; break ]; const_generics = []; trait_refs = [] }
+          -> (continue, break)
+        | _ -> [%internal_error] span
+      in
       if variant_id = loop_result_break_id then
         (* The argument should be a tuple *)
         let outputs = try_destruct_tuple_texpr span arg in
-        Some (variant_id, outputs)
+        Some { variant_id; args = outputs; arg; continue_ty; break_ty }
       else if variant_id = loop_result_continue_id then
         (* We leave the expression unchanged but have to modify its type *)
         (* The argument should be a tuple *)
         let outputs = try_destruct_tuple_texpr span arg in
-        Some (variant_id, outputs)
-      else Some (variant_id, [ arg ])
+        Some { variant_id; args = outputs; arg; continue_ty; break_ty }
+      else Some { variant_id; args = [ arg ]; arg; continue_ty; break_ty }
+  | _ -> None
+
+type decomposed_rec_loop_call = {
+  i : int;
+  args : texpr list;  (** The decomposed tuple argument *)
+  arg : texpr;  (** The non-decomposed argument *)
+  continue_ty : ty;
+  break_ty : ty;
+}
+
+let opt_destruct_rec_loop_call span (e : texpr) :
+    decomposed_rec_loop_call option =
+  let f, args = destruct_apps e in
+  match f.e with
+  | Qualif { id = FunOrOp (Fun (Pure (RecLoopCall i))); generics } ->
+      (* There should be exactly one argument *)
+      let arg =
+        match args with
+        | [ x ] -> x
+        | _ -> [%internal_error] span
+      in
+      let continue_ty, break_ty =
+        match generics with
+        | { types = [ continue; break ]; const_generics = []; trait_refs = [] }
+          -> (continue, break)
+        | _ -> [%internal_error] span
+      in
+      let args = try_destruct_tuple_texpr span arg in
+      Some { i; args; arg; continue_ty; break_ty }
   | _ -> None

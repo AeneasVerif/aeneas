@@ -183,7 +183,9 @@ let fvar_id_to_string (env : fmt_env) (id : fvar_id) : string =
   | Some name -> name ^ fvar_id_to_pretty_string id
 
 let fvar_to_string (env : fmt_env) (v : fvar) : string =
-  fvar_id_to_string env v.id
+  match v.basename with
+  | None -> fvar_id_to_string env v.id
+  | Some name -> name ^ fvar_id_to_pretty_string v.id
 
 let trait_clause_id_to_string = Print.Types.trait_clause_id_to_string
 
@@ -797,6 +799,8 @@ let pure_builtin_fun_id_to_string (fid : pure_builtin_fun_id) : string =
   | Fail -> "@fail"
   | Assert -> "@assert"
   | Loop n -> if n = 0 then "@loop" else "@loop(" ^ string_of_int n ^ ")"
+  | RecLoopCall n ->
+      if n = 0 then "@recLoopCall" else "@recLoopCall(" ^ string_of_int n ^ ")"
   | ToResult -> "@toResult"
   | FuelDecrease -> "@fuel_decrease"
   | FuelEqZero -> "@fuel_eq_zero"
