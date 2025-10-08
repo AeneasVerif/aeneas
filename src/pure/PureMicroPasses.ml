@@ -4435,10 +4435,13 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
               let break_ty = mk_simpl_tuple_ty loop.output_tys in
               (* TODO: names for the outputs *)
               let break_outputs =
-                List.map
-                  (fun ty ->
+                List.mapi
+                  (fun i ty ->
                     let id = fresh_fvar_id () in
-                    ({ id; basename = None; ty } : fvar))
+                    let basename =
+                      if i < loop.num_output_values then None else Some "back"
+                    in
+                    ({ id; basename; ty } : fvar))
                   loop.output_tys
               in
               let inputs =
@@ -4618,10 +4621,6 @@ let passes :
        functions. This is in preparation of [decompose_loops], which introduces
        auxiliary (and potentially recursive) functions. *)
     (None, "loops_to_recursivxe", loops_to_recursive);
-    (* TODO: change the structure of the loops that we will translate to
-       recursive functions *)
-    (* TODO: update the loop input continuations *)
-    (* TODO: filter the loop inputs *)
     (* Simplify the aggregated ADTs.
 
        Ex.:

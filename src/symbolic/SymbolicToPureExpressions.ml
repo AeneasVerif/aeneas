@@ -1422,7 +1422,7 @@ and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
       let ctx, fvars =
         List.fold_left_map
           (fun ctx (aid, ty) ->
-            let ctx, fvar = fresh_var None ty ctx in
+            let ctx, fvar = fresh_var (Some "back") ty ctx in
             (ctx, (aid, fvar)))
           ctx abs_tys
       in
