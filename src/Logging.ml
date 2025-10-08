@@ -12,8 +12,9 @@ let create_logger name =
   l#set_level Info;
   l
 
-let to_log_msg (f : string) (msg : string) : string =
-  if msg = "" then f ^ "\n" else f ^ ":\n" ^ msg ^ "\n"
+let to_log_msg (f : string) (line : int) (msg : string) : string =
+  let line = ", line " ^ string_of_int line in
+  if msg = "" then f ^ line ^ "\n" else f ^ line ^ ":\n" ^ msg ^ "\n"
 
 (** Logger for Errors *)
 let errors_log = create_logger "Errors"

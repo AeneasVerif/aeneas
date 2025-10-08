@@ -101,7 +101,11 @@ let mk_log_rule ~(lazylog : bool) (logfun : string) : Context_free.Rule.t =
     let msg =
       pexp_apply ~loc
         (evar ~loc "Logging.to_log_msg")
-        [ (Nolabel, evar ~loc "__FUNCTION__"); (Nolabel, msg) ]
+        [
+          (Nolabel, evar ~loc "__FUNCTION__");
+          (Nolabel, eint ~loc loc.loc_start.pos_lnum);
+          (Nolabel, msg);
+        ]
     in
     (* lazy (...) *)
     let exp = if lazylog then pexp_lazy ~loc msg else msg in
