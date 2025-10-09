@@ -128,6 +128,8 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
     (fp_input_svalues : SymbolicValueId.id list) (break_ctx : eval_ctx)
     (break_input_abs : AbstractionId.id list)
     (break_input_svalues : SymbolicValueId.id list) : SA.expr =
+  [%ldebug "fp_ctx:\n" ^ eval_ctx_to_string fp_ctx];
+
   (* First, evaluate the loop body starting from the **fixed-point** context *)
   let ctx_resl, cf_loop = eval_loop_body fp_ctx in
 

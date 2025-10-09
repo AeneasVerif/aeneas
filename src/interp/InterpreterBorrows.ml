@@ -2258,7 +2258,11 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
     simplify_dummy_values_useless_abs_aux config span fixed_abs_ids
   in
   try
-    (* Explore the environment *)
+    (* Explore the environment.
+
+       Note that we don't need to call [end_loan] whenever we need to end a shared
+       loan: we can directly update the value.
+    *)
     ({ ctx with env = explore_env ctx ctx.env }, fun e -> e)
   with
   | FoundAbsId abs_id ->

@@ -224,7 +224,7 @@ let loop_abs_reorder_and_add_info (span : Meta.span) (loop_id : LoopId.id)
   (* Reorder the fresh abstractions in the fixed-point *)
   let fp = reorder_fresh_abs span false fixed_ids.aids ctx in
 
-  (* Update the abstraction's [can_end] field and their kinds. *)
+  (* Update the abstractions' kinds. *)
   let rg_to_abs = ref RegionGroupId.Map.empty in
   let _, fresh_region_group_id = RegionGroupId.fresh_stateful_generator () in
   let update_loop_abstractions =
@@ -240,12 +240,7 @@ let loop_abs_reorder_and_add_info (span : Meta.span) (loop_id : LoopId.id)
 
             rg_to_abs := RegionGroupId.Map.add rg_id abs.abs_id !rg_to_abs;
 
-            (* If we borrow check we can always set the abstraction as
-                 endable. If we generate a pure translation we have a few
-                 more constraints. *)
-            let can_end = !Config.borrow_check in
-
-            { abs with can_end; kind }
+            { abs with kind }
         | _ -> abs
     end
   in
@@ -429,7 +424,6 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
     in
     ctx2
   in
-  [%ltrace "after join_ctxs"];
 
   (* Check if two contexts are equivalent - modulo alpha conversion on the
      existentially quantified borrows/abstractions/symbolic values.
