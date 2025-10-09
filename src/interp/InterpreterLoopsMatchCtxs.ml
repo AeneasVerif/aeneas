@@ -652,12 +652,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
   let match_shared_borrows match_rec (ctx0 : eval_ctx) (ctx1 : eval_ctx)
       (ty : ety) (bid0 : borrow_id) (sid0 : shared_borrow_id) (bid1 : borrow_id)
       (sid1 : shared_borrow_id) : borrow_id * shared_borrow_id =
-    (* Lookup the shared values and match them - we do this mostly
-       to make sure we end loans which might appear on one side
-       and not on the other. *)
-    let sv0 = lookup_shared_value span ctx0 bid0 in
-    let sv1 = lookup_shared_value span ctx1 bid1 in
-    let sv = match_rec sv0 sv1 in
     if bid0 = bid1 then
       (* We always generate a fresh borrow id: borrows may be duplicated, and
          we have to make sure that shared borrow ids remain unique.
@@ -687,6 +681,11 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let borrows =
         [ mk_aborrow PLeft bid0 sid0; mk_aborrow PRight bid1 sid1 ]
       in
+
+      (* Lookup the shared values and match them *)
+      let sv0 = lookup_shared_value span ctx0 bid0 in
+      let sv1 = lookup_shared_value span ctx1 bid1 in
+      let sv = match_rec sv0 sv1 in
 
       let loan = ASharedLoan (PNone, bid2, sv, mk_aignored span bv_ty None) in
       (* Note that an aloan has a borrow type *)
