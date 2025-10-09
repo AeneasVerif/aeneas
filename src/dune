@@ -53,6 +53,7 @@
   InterpreterLoops
   InterpreterPaths
   InterpreterProjectors
+  InterpreterReduceCollapse
   InterpreterStatements
   InterpreterUtils
   Invariants
