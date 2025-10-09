@@ -645,8 +645,14 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
       (List.map
          (fun sid ->
            (* We retrieve the value in two steps:
-               - source to joined (which *has* to be a symbolic value)
-               - joined to target *)
+              - source to joined
+              - joined to target
+              Note that joined to target is a partial map: it only maps
+              symbolic values appearing in the joined context, and in
+              particular appearing in the joined values (not in the region
+              abstractions). For all the missing symbolic values, the
+              substitution should be the identity.
+           *)
            let v =
              match
                SymbolicValueId.Map.find_opt sid
@@ -659,18 +665,21 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
                    ^ SymbolicValueId.to_string sid
                    ^ " in src_to_joined_map")
            in
-           let sid' = [%add_loc] symbolic_tvalue_get_id span v in
-           let v =
-             match
-               SymbolicValueId.Map.find_opt sid' joined_symbolic_to_tgt_value
-             with
-             | Some v -> v
-             | None ->
-                 [%craise] span
-                   ("Could not find symbolic value @"
-                   ^ SymbolicValueId.to_string sid
-                   ^ " in joined_symbolic_to_tgt_map")
+           (* Update the symbolic values appearing in [v] *)
+           let subst =
+             object
+               inherit [_] map_tvalue
+
+               method! visit_VSymbolic _ sv =
+                 match
+                   SymbolicValueId.Map.find_opt sv.sv_id
+                     joined_symbolic_to_tgt_value
+                 with
+                 | Some v -> v.value
+                 | None -> VSymbolic sv
+             end
            in
+           let v = subst#visit_tvalue () v in
            (sid, v))
          fp_input_svalues)
   in
