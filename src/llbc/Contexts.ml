@@ -428,6 +428,15 @@ class ['self] iter_eval_ctx =
       fun acc ctx -> super#visit_env acc ctx.env
   end
 
+(** The elements in an environment are in reverse order *)
+class ['self] iter_eval_ctx_regular_order =
+  object (_self : 'self)
+    inherit [_] iter_env as super
+
+    method visit_eval_ctx : 'acc -> eval_ctx -> unit =
+      fun acc ctx -> super#visit_env acc (List.rev ctx.env)
+  end
+
 (** Visitor to map the values in a context *)
 class ['self] map_eval_ctx =
   object (_self : 'self)
@@ -439,6 +448,17 @@ class ['self] map_eval_ctx =
         { ctx with env }
   end
 
+(** The elements in an environment are in reverse order *)
+class ['self] map_eval_ctx_regular_order =
+  object (_self : 'self)
+    inherit [_] map_env as super
+
+    method visit_eval_ctx : 'acc -> eval_ctx -> eval_ctx =
+      fun acc ctx ->
+        let env = List.rev (super#visit_env acc (List.rev ctx.env)) in
+        { ctx with env }
+  end
+
 let env_iter_abs (f : abs -> unit) (env : env) : unit =
   List.iter
     (fun (ee : env_elem) ->
@@ -446,6 +466,14 @@ let env_iter_abs (f : abs -> unit) (env : env) : unit =
       | EBinding _ | EFrame -> ()
       | EAbs abs -> f abs)
     env
+
+let env_iter_abs_regular_order (f : abs -> unit) (env : env) : unit =
+  List.iter
+    (fun (ee : env_elem) ->
+      match ee with
+      | EBinding _ | EFrame -> ()
+      | EAbs abs -> f abs)
+    (List.rev env)
 
 let env_map_abs (f : abs -> abs) (env : env) : env =
   List.map

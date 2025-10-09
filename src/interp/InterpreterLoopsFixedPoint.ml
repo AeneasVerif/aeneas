@@ -176,7 +176,7 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
   *)
   let visitor =
     object
-      inherit [_] map_eval_ctx as super
+      inherit [_] map_eval_ctx_regular_order as super
       method! visit_abs _ abs = (* Do not explore region abstractions *) abs
 
       method! visit_VSharedBorrow env bid sid =
