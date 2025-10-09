@@ -269,7 +269,62 @@ let update_array_default (crate : crate) : crate =
 
     We also attempt to update the loops so that they have the proper shape (for
     instance, if a loop has returns but no breaks, we replace the returns with
-    breaks, and move the returns after the loop). *)
+    breaks, and move the returns after the loop).
+
+    We do the following transformations:
+
+    # Transformation 1:
+    {[
+      loop {
+        if e {
+          return;
+        } else {
+          continue;
+        }
+      }
+
+        ~~>
+
+      loop {
+        if e {
+          break;
+        } else {
+          continue;
+        }
+      };
+      return;
+    ]}
+
+    # Transformation 2:
+    {[
+      loop {
+        if e0 {
+          st0;
+          return;
+        } else if e1 {
+          break;
+        } else {
+          continue;
+        }
+      }
+      st1;
+      return;
+
+        ~~>
+
+      loop {
+        if e0 {
+          st0;
+          break;
+        } else if e1 {
+          st1;
+          break;
+        } else {
+          continue;
+        }
+      }
+      return;
+    ]} *)
 let update_loops (crate : crate) (f : fun_decl) : fun_decl =
   let f0 = f in
   let span = f.item_meta.span in
@@ -278,12 +333,31 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
     object (self)
       inherit [_] map_statement as super
 
-      method update_statement (depth : int) (st : statement) : statement list =
+      (* [after]: the list of statements coming *after* this one in this block.
+
+         We return:
+         - the list of statements resulting from updating the current statement
+         - the list of statements to put after and that are yet to be updated
+           (the reason is that we might have moved some of those statements
+           inside the current statement).
+      *)
+      method update_statement (depth : int) (st : statement)
+          (after : statement list) : statement list * statement list =
         match st.content with
         | Loop loop -> (
-            try [ { st with content = super#visit_Loop (depth + 1) loop } ]
+            try
+              ( [ { st with content = super#visit_Loop (depth + 1) loop } ],
+                after )
             with Found ->
-              (* We found a return in the loop: attempt to replace it with a break *)
+              (* We found a return in the loop: attempt to replace it with a break.
+
+                 There are two cases:
+                 - either the loop does not contain any break, in which case we
+                   can simply replace the return with a break, and move the return
+                   after the loop (this is transformation 1 above)
+                 - or there is already a break in the loop: we can apply transformation
+                   2 if the statements after the loop end with a return.
+              *)
               let block_has_no_breaks (b : block) : bool =
                 let visitor =
                   object
@@ -296,17 +370,20 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
                   true
                 with Found -> false
               in
-              let block_replace_return_with_break (b : block) : block =
-                let visitor =
-                  object
-                    inherit [_] map_statement
-                    method! visit_Return _ = Break 0
-                  end
+              if block_has_no_breaks loop then (* Transformation 1 *)
+                let block_replace (b : block) : block =
+                  let visitor =
+                    object
+                      inherit [_] map_statement
+
+                      method! visit_Return _ =
+                        (* Replace the return with a break *)
+                        Break 0
+                    end
+                  in
+                  visitor#visit_block () b
                 in
-                visitor#visit_block () b
-              in
-              if block_has_no_breaks loop then
-                let loop = block_replace_return_with_break loop in
+                let loop = block_replace loop in
                 let loop : statement = { st with content = Loop loop } in
                 let loop = super#visit_statement depth loop in
                 let return : statement =
@@ -318,19 +395,51 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
                     comments_before = [];
                   }
                 in
-                [ loop; return ]
+                ([ loop; return ], after)
               else
-                [%craise] span
-                  "Early returns inside of loops are not supported yet")
-        | _ -> [ super#visit_statement depth st ]
+                (* Transformation 2 *)
+                (* Check if the statements after the loop end with a return *)
+                let rec decompose_after (after : statement list) :
+                    statement list * statement =
+                  match after with
+                  | [] ->
+                      [%craise] span
+                        "Early returns inside of loops are not supported yet"
+                  | st :: after -> (
+                      match st.content with
+                      | Return -> ([], st)
+                      | _ ->
+                          let after, return = decompose_after after in
+                          (st :: after, return))
+                in
+                let after, return = decompose_after after in
+                let replace (st : statement) : statement list =
+                  match st.content with
+                  | Return ->
+                      (* Replace the return with a break *)
+                      [ { st with content = Break 0 } ]
+                  | Break i ->
+                      (* Move the statements [after] before the break *)
+                      [%cassert] span (i = 0)
+                        "Breaks to outer loops are not supported yet";
+                      after @ [ st ]
+                  | _ -> [ st ]
+                in
+                let loop = map_statement replace loop in
+                let loop : statement = { st with content = Loop loop } in
+                let loop = super#visit_statement depth loop in
+                ([ loop; return ], []))
+        | _ -> ([ super#visit_statement depth st ], after)
 
       method! visit_block depth (block : block) : block =
-        {
-          block with
-          statements =
-            List.flatten
-              (List.map (self#update_statement depth) block.statements);
-        }
+        let rec update (stl : statement list) : statement list =
+          match stl with
+          | [] -> []
+          | st :: stl ->
+              let stl0, stl1 = self#update_statement depth st stl in
+              stl0 @ update stl1
+        in
+        { block with statements = update block.statements }
 
       method! visit_Break depth i =
         [%cassert] span (i = 0) "Breaks to outer loops are not supported yet";
@@ -839,18 +948,24 @@ let apply_passes (crate : crate) : crate =
   (* Passes that apply to individual function bodies *)
   let function_passes =
     [
-      update_loops;
-      remove_shallow_borrows_storage_live_dead;
-      decompose_str_borrows;
-      unify_drops;
-      decompose_global_accesses;
-      refresh_statement_ids;
+      ("update_loop", update_loops);
+      ( "remove_shallow_borrows_storage_live_dead",
+        remove_shallow_borrows_storage_live_dead );
+      ("decompose_str_borrows", decompose_str_borrows);
+      ("unify_drops", unify_drops);
+      ("decompose_global_accesses", decompose_global_accesses);
+      ("refresh_statement_ids", refresh_statement_ids);
     ]
   in
   (* Attempt to apply a pass: if it fails we replace the body by [None] *)
-  let apply_function_pass (pass : crate -> fun_decl -> fun_decl) (f : fun_decl)
-      =
-    try pass crate f
+  let apply_function_pass (pass_name : string)
+      (pass : crate -> fun_decl -> fun_decl) (f : fun_decl) =
+    try
+      let f = pass crate f in
+      [%ltrace
+        "After applying [" ^ pass_name ^ "]:\n"
+        ^ Print.Crate.crate_fun_decl_to_string crate f];
+      f
     with CFailure _ ->
       (* The error was already registered, we don't need to register it twice.
          However, we replace the body of the function, and save an error to
@@ -863,10 +978,11 @@ let apply_passes (crate : crate) : crate =
   in
   let fun_decls =
     List.fold_left
-      (fun fl pass -> FunDeclId.Map.map (apply_function_pass pass) fl)
+      (fun fl (name, pass) ->
+        FunDeclId.Map.map (apply_function_pass name pass) fl)
       crate.fun_decls function_passes
   in
   let crate = { crate with fun_decls } in
   let crate = filter_type_aliases crate in
-  [%ldebug "After pre-passes:\n" ^ Print.Crate.crate_to_string crate ^ "\n"];
+  [%ltrace "After pre-passes:\n" ^ Print.Crate.crate_to_string crate ^ "\n"];
   crate
