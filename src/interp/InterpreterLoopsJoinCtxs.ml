@@ -49,7 +49,9 @@ let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
     loan_proj_to_abs = loan_proj_to_nabs;
     _;
   } =
-    compute_abs_borrows_loans_maps span (fun _ -> true) [ EAbs nabs ]
+    compute_abs_borrows_loans_maps span ctx.ctx.type_ctx.type_infos
+      (fun _ -> true)
+      [ EAbs nabs ]
   in
   (* Retrieve the previous maps, so that we can update them *)
   let {
@@ -194,7 +196,10 @@ let repeat_iter_borrows_merge (span : Meta.span) (old_ids : ids_sets)
       not (AbstractionId.Set.mem id old_ids.aids)
     in
     let explore (abs : abs) = is_fresh_abs_id abs.abs_id in
-    let info = compute_abs_borrows_loans_maps span explore ctx.env in
+    let info =
+      compute_abs_borrows_loans_maps span ctx.type_ctx.type_infos explore
+        ctx.env
+    in
     { ctx; info }
   in
   (* Explore and merge *)

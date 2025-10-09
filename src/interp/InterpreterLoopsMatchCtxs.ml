@@ -18,8 +18,9 @@ module S = SynthesizeSymbolic
 (** The local logger *)
 let log = Logging.loops_match_ctxs_log
 
-let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
-    (env : env) : abs_borrows_loans_maps =
+let compute_abs_borrows_loans_maps (span : Meta.span)
+    (type_infos : TypesAnalysis.type_infos) (explore : abs -> bool) (env : env)
+    : abs_borrows_loans_maps =
   let abs_ids = ref [] in
   let abs_to_borrows = ref AbstractionId.Map.empty in
   let abs_to_non_unique_borrows = ref AbstractionId.Map.empty in
@@ -145,7 +146,19 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
             [%sanity_check] span (pm = PNone);
             (* Ignore the id of the loan, if there is *)
             self#visit_tavalue (abs, pm) child
-        | AEndedMutLoan _ | AEndedSharedLoan _ -> [%craise] span "Unreachable"
+        | AEndedMutLoan { child; given_back; given_back_meta = _ } ->
+            [%cassert] span (is_aignored child.value) "Not implemented yet";
+            [%cassert] span (is_aignored given_back.value) "Not implemented yet"
+        | AEndedSharedLoan (sv, child) ->
+            (* TODO: there may be a problem here, because we need the marker which was
+             in [ASharedLoan] to explore the shared value and register its borrows.
+             For now we check that there are no loans/borrows inside. *)
+            [%cassert] span
+              (not
+                 (ValuesUtils.value_has_loans_or_borrows (Some span) type_infos
+                    sv.value))
+              "Not implemented yet";
+            self#visit_tavalue (abs, pm) child
 
       (** Make sure we don't register the ignored ids *)
       method! visit_aborrow_content (abs, pm) bc =

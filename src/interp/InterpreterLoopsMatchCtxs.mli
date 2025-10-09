@@ -16,7 +16,11 @@ open InterpreterLoopsCore
     - [explore]: this function is used to filter abstractions.
     - [env] *)
 val compute_abs_borrows_loans_maps :
-  Meta.span -> (abs -> bool) -> env -> abs_borrows_loans_maps
+  Meta.span ->
+  TypesAnalysis.type_infos ->
+  (abs -> bool) ->
+  env ->
+  abs_borrows_loans_maps
 
 (** Generic functor to implement matching functions between values,
     environments, etc.
