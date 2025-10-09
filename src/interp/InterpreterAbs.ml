@@ -1735,11 +1735,64 @@ let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
 
 (** Reorder the loans and borrows inside the fresh abstractions.
 
-    See {!reorder_fresh_abs}. *)
+    See {!reorder_fresh_abs}.
+
+    TODO: having to do this is a bit annoying. We should rather generalize the
+    match/join operations to not be dependent on the order of the borrows/loans.
+*)
 let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
     (old_abs_ids : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
+  let type_infos = ctx.type_ctx.type_infos in
   let reorder_in_fresh_abs (abs : abs) : abs =
     [%ltrace "abs:\n" ^ abs_to_string span ctx abs];
+    (* Filter the avalues *)
+    let filter (v : tavalue) : bool =
+      match v.value with
+      | AAdt _ | ASymbolic _ -> true
+      | ALoan lc -> (
+          match lc with
+          | AMutLoan _ | ASharedLoan _ -> true
+          | AEndedMutLoan { child; given_back; given_back_meta = _ } ->
+              [%cassert] span (is_aignored child.value) "Not supported yet";
+              [%cassert] span (is_aignored given_back.value) "Not supported yet";
+              false
+          | AEndedSharedLoan (sv, child) ->
+              [%cassert] span (is_aignored child.value) "Not supported yet";
+              [%cassert] span
+                (not
+                   (ValuesUtils.value_has_loans_or_borrows (Some span)
+                      type_infos sv.value))
+                "Not implemented yet";
+              false
+          | AIgnoredMutLoan (_, child) ->
+              [%cassert] span (is_aignored child.value) "Not supported yet";
+              false
+          | AEndedIgnoredMutLoan { child; given_back; given_back_meta = _ } ->
+              [%cassert] span (is_aignored child.value) "Not supported yet";
+              [%cassert] span (is_aignored given_back.value) "Not supported yet";
+              false
+          | AIgnoredSharedLoan child ->
+              [%cassert] span (is_aignored child.value) "Not supported yet";
+              false)
+      | ABorrow bc -> (
+          match bc with
+          | AMutBorrow _ | ASharedBorrow _ -> true
+          | AIgnoredMutBorrow (_, child) ->
+              [%cassert] span (is_aignored child.value) "Not supported yet";
+              false
+          | AEndedMutBorrow (_, child) ->
+              [%cassert] span (is_aignored child.value) "Not supported yet";
+              false
+          | AEndedSharedBorrow -> false
+          | AEndedIgnoredMutBorrow { child; given_back; given_back_meta = _ } ->
+              [%cassert] span (is_aignored child.value) "Not supported yet";
+              [%cassert] span (is_aignored given_back.value) "Not supported yet";
+              false
+          | AProjSharedBorrow _ -> [%craise] span "Not supported yet")
+      | ABottom | AIgnored _ -> false
+    in
+    let avalues = List.filter filter abs.avalues in
+
     (* Split between the loans and borrows, and between the concrete
        and symbolic values. *)
     let is_borrow (av : tavalue) : bool =
@@ -1754,7 +1807,7 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
       | ASymbolic (_, (AProjBorrows _ | AProjLoans _)) -> false
       | _ -> [%craise] span ("Unexpected avalue: " ^ tavalue_to_string ctx av)
     in
-    let aborrows, aloans = List.partition is_borrow abs.avalues in
+    let aborrows, aloans = List.partition is_borrow avalues in
     let aborrows, borrow_projs = List.partition is_concrete aborrows in
     let aloans, loan_projs = List.partition is_concrete aloans in
 
@@ -1777,7 +1830,7 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
       | ABorrow (AMutBorrow (pm, bid, _) | ASharedBorrow (pm, bid, _)) ->
           [%sanity_check] span (allow_markers || pm = PNone);
           bid
-      | _ -> [%craise] span "Unexpected"
+      | _ -> [%craise] span ("Unexpected value: " ^ tavalue_to_string ctx av)
     in
     let get_loan_id (av : tavalue) : BorrowId.id =
       match av.value with
@@ -1787,7 +1840,7 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
       | ALoan (ASharedLoan (pm, lid, _, _)) ->
           [%sanity_check] span (allow_markers || pm = PNone);
           lid
-      | _ -> [%craise] span "Unexpected"
+      | _ -> [%craise] span ("Unexpected value: " ^ tavalue_to_string ctx av)
     in
     let get_symbolic_id (av : tavalue) : SymbolicValueId.id =
       match av.value with
@@ -1797,7 +1850,7 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
           | AProjLoans { proj; _ } | AProjBorrows { proj; _ } -> proj.sv_id
           | _ -> [%craise] span "Unexpected"
         end
-      | _ -> [%craise] span "Unexpected"
+      | _ -> [%craise] span ("Unexpected value: " ^ tavalue_to_string ctx av)
     in
     let compare_pair :
         'a. ('a -> 'a -> int) -> 'a * tavalue -> 'a * tavalue -> int =
@@ -1839,15 +1892,34 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
         true
     | _ -> false
   in
+  let abs_has_adt (abs : abs) =
+    let visitor =
+      object
+        inherit [_] iter_tavalue
+        method! visit_AAdt _ _ = raise Utils.Found
+      end
+    in
+    try
+      List.iter (visitor#visit_tavalue ()) abs.avalues;
+      false
+    with Utils.Found -> true
+  in
 
   let reorder_in_abs (abs : abs) =
     (* We do not update the fixed region abstractions as well as the ones
        which were introduced exactly by function calls (we update those which
        were introduced when promoting anonymous values to region abstractions
-       or by merging region abstractions).
+       or by merging region abstractions). We also do not reorder the abstractions
+       containing ADTs (those should actually have been introduced by function
+       calls).
+
+       TODO: remove the need to reorder the values by making the match/join operations
+       more general.
      *)
-    if AbstractionId.Set.mem abs.abs_id old_abs_ids || abs_is_fun_call abs then
-      abs
+    if
+      AbstractionId.Set.mem abs.abs_id old_abs_ids
+      || abs_is_fun_call abs || abs_has_adt abs
+    then abs
     else reorder_in_fresh_abs abs
   in
 
