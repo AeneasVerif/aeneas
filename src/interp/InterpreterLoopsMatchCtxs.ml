@@ -535,13 +535,13 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
   let add_fresh_symbolic_value_from_no_regions_ty ty (left : tvalue)
       (right : tvalue) : tvalue =
     let sv = mk_fresh_symbolic_tvalue_from_no_regions_ty span ty in
-    let sv_id = symbolic_tvalue_get_id span sv in
+    let sv_id = [%add_loc] symbolic_tvalue_get_id span sv in
     add_symbolic_value sv_id left right;
     sv
 
   let add_fresh_symbolic_value ty (left : tvalue) (right : tvalue) : tvalue =
     let sv = mk_fresh_symbolic_tvalue span ty in
-    let sv_id = symbolic_tvalue_get_id span sv in
+    let sv_id = [%add_loc] symbolic_tvalue_get_id span sv in
     add_symbolic_value sv_id left right;
     sv
 

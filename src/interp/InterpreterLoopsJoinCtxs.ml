@@ -1422,7 +1422,7 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
     * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Debug *)
   [%ltrace
-    "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
+    "- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
     ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: " ^ eval_ctx_to_string tgt_ctx];
 
   (* Simplify the target context *)
@@ -1430,14 +1430,14 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
     simplify_dummy_values_useless_abs config span fixed_ids.aids tgt_ctx
   in
   [%ltrace
-    "\n- tgt_ctx after simplify_dummy_values_useless_abs:\n"
+    "- tgt_ctx after simplify_dummy_values_useless_abs:\n"
     ^ eval_ctx_to_string tgt_ctx];
 
   (* Reduce the context *)
   let tgt_ctx =
     reduce_ctx config span ~with_abs_conts:true loop_id fixed_ids tgt_ctx
   in
-  [%ltrace "\n- tgt_ctx after reduce_ctx:\n" ^ eval_ctx_to_string tgt_ctx];
+  [%ltrace "- tgt_ctx after reduce_ctx:\n" ^ eval_ctx_to_string tgt_ctx];
 
   (* We first reorganize [tgt_ctx] so that we can match [src_ctx] with it (by
      ending loans for instance - remember that the [src_ctx] is the fixed point
@@ -1450,7 +1450,7 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
          tgt_ctx)
   in
   [%ltrace
-    "\nFinished preparing the match:" ^ "\n- fixed_ids: "
+    "Finished preparing the match:" ^ "\n- fixed_ids: "
     ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
     ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: " ^ eval_ctx_to_string tgt_ctx];
 
@@ -1468,7 +1468,7 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
     | Error _ -> [%craise] span "Could not join the contexts"
   in
   [%ltrace
-    "\nResult of the join:\n- joined_ctx:\n"
+    "Result of the join:\n- joined_ctx:\n"
     ^ eval_ctx_to_string joined_ctx
     ^ "\n- join_info: "
     ^ SymbolicValueId.Map.to_string (Some "  ")
@@ -1483,7 +1483,7 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
     SymbolicValueId.Map.map (fun (_, x) -> x) join_info.symbolic_to_value
   in
   [%ltrace
-    "\nAfter projection: joined_ctx:\n"
+    "After projection: joined_ctx:\n"
     ^ eval_ctx_to_string joined_ctx
     ^ "\n- joined_symbolic_to_tgt_value: "
     ^ SymbolicValueId.Map.to_string (Some "  ") (tvalue_to_string src_ctx)
@@ -1494,11 +1494,10 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
     reduce_ctx config span ~with_abs_conts:true loop_id fixed_ids joined_ctx
   in
   [%ltrace
-    "\nAfter reducing the context: joined_ctx:\n"
-    ^ eval_ctx_to_string joined_ctx];
+    "After reducing the context: joined_ctx:\n" ^ eval_ctx_to_string joined_ctx];
 
   [%ltrace
-    "\nAbout to match:" ^ "\n- src_ctx:\n" ^ eval_ctx_to_string src_ctx
+    "About to match:" ^ "\n- src_ctx:\n" ^ eval_ctx_to_string src_ctx
     ^ "\n- joined_ctx:\n"
     ^ eval_ctx_to_string joined_ctx];
 
@@ -1540,7 +1539,7 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
 
   (* Compute the loop input values and abstractions *)
   [%ltrace
-    "about to compute the input values and abstractions:"
+    "About to compute the input values and abstractions:"
     ^ "\n- fp_input_svalues: "
     ^ String.concat ", " (List.map SymbolicValueId.to_string fp_input_svalues)
     ^ "\n- src_to_joined_maps:\n"
@@ -1555,7 +1554,7 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
       (List.map
          (fun sid ->
            (* We retrieve the value in two steps:
-               - source to joined (which *has* to be a symbolic value
+               - source to joined (which *has* to be a symbolic value)
                - joined to target *)
            let v =
              match
@@ -1569,7 +1568,7 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
                    ^ SymbolicValueId.to_string sid
                    ^ " in src_to_joined_map")
            in
-           let sid' = symbolic_tvalue_get_id span v in
+           let sid' = [%add_loc] symbolic_tvalue_get_id span v in
            let v =
              match
                SymbolicValueId.Map.find_opt sid' joined_symbolic_to_tgt_value
@@ -1622,7 +1621,7 @@ let loop_match_break_ctx_with_target (config : config) (span : Meta.span)
     * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Debug *)
   [%ltrace
-    "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
+    "- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
     ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: " ^ eval_ctx_to_string tgt_ctx];
 
   (* We have to consider the possibility that the break context is not the result

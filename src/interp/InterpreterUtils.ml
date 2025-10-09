@@ -124,10 +124,10 @@ let mk_fresh_symbolic_tvalue_from_no_regions_ty (span : Meta.span) (ty : ty) :
   [%sanity_check] span (ty_no_regions ty);
   mk_fresh_symbolic_tvalue span ty
 
-let symbolic_tvalue_get_id (span : Meta.span) (v : tvalue) =
+let symbolic_tvalue_get_id file line (span : Meta.span) (v : tvalue) =
   match v.value with
   | VSymbolic v -> v.sv_id
-  | _ -> [%internal_error] span
+  | _ -> Errors.internal_error file line span
 
 let get_symbolic_tvalue (span : Meta.span) (v : tvalue) : symbolic_value =
   match v.value with
