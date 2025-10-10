@@ -777,10 +777,11 @@ let register_inputs (ctx : bs_ctx) (rids : T.RegionId.Set.t)
         match bc with
         | V.AMutBorrow (_, _, child) | V.AIgnoredMutBorrow (_, child) ->
             register child
-        | V.ASharedBorrow (_, _, _)
-        | V.AEndedMutBorrow _
-        | V.AEndedSharedBorrow
-        | V.AEndedIgnoredMutBorrow _ -> [%internal_error] span
+        | V.ASharedBorrow (pm, _, _) ->
+            (* Nothing to do *)
+            [%sanity_check] span (pm = PNone)
+        | V.AEndedMutBorrow _ | V.AEndedSharedBorrow -> [%internal_error] span
+        | V.AEndedIgnoredMutBorrow _ -> [%craise] span "Not implemented yet"
         | V.AProjSharedBorrow _ -> ())
     | V.ASymbolic (pm, proj) -> (
         [%sanity_check] span (pm = PNone);
@@ -857,10 +858,11 @@ let register_outputs (ctx : bs_ctx) (bound_outputs : bound_borrows_loans)
             add_concrete bid;
             register child
         | V.AIgnoredMutBorrow (_, child) -> register child
-        | V.ASharedBorrow (_, _, _)
-        | V.AEndedMutBorrow _
-        | V.AEndedSharedBorrow
-        | V.AEndedIgnoredMutBorrow _ -> [%internal_error] span
+        | V.ASharedBorrow (pm, _, _) ->
+            (* Nothing to do *)
+            [%sanity_check] span (pm = PNone)
+        | V.AEndedMutBorrow _ | V.AEndedSharedBorrow -> [%internal_error] span
+        | V.AEndedIgnoredMutBorrow _ -> [%craise] span "Not implemented yet"
         | V.AProjSharedBorrow _ -> ())
     | V.ASymbolic (pm, proj) -> (
         [%sanity_check] span (pm = PNone);
