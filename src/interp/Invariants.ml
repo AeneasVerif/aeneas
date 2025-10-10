@@ -886,6 +886,15 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
 
   M.iter check_info !infos
 
+(** Check that all abstraction ids are unique *)
+let check_unique_abs_ids (span : Meta.span) (ctx : eval_ctx) : unit =
+  let ids = ref AbstractionId.Set.empty in
+  env_iter_abs
+    (fun (abs : abs) ->
+      [%sanity_check] span (not (AbstractionId.Set.mem abs.abs_id !ids));
+      ids := AbstractionId.Set.add abs.abs_id !ids)
+    ctx.env
+
 let check_invariants (span : Meta.span) (ctx : eval_ctx) : unit =
   if !Config.sanity_checks then (
     [%ltrace
@@ -893,7 +902,8 @@ let check_invariants (span : Meta.span) (ctx : eval_ctx) : unit =
     check_loans_borrows_relation_invariant span ctx;
     check_borrowed_values_invariant span ctx;
     check_typing_invariant span ctx true;
-    check_symbolic_values span ctx)
+    check_symbolic_values span ctx;
+    check_unique_abs_ids span ctx)
   else [%ltrace "Not checking invariants (check is not activated)"]
 
 let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =

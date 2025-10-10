@@ -12,6 +12,31 @@ open InterpreterLoopsMatchCtxs
 (** The local logger *)
 let log = Logging.loops_join_ctxs_log
 
+let refresh_non_fixed_abs_ids (_span : Meta.span) (fixed_ids : ids_sets)
+    (ctx : eval_ctx) : eval_ctx =
+  (* Note that abstraction ids appear both inside of region abstractions
+     but also inside of evalues (some evalues refer to region abstractions).
+     We have to make sure that we keep things consistent: whenever we refresh
+     an id, we remember it. *)
+  let fresh_map = ref AbstractionId.Map.empty in
+
+  let visitor =
+    object
+      inherit [_] map_eval_ctx
+
+      method! visit_abstraction_id _ id =
+        if AbstractionId.Set.mem id fixed_ids.aids then id
+        else
+          match AbstractionId.Map.find_opt id !fresh_map with
+          | Some id -> id
+          | None ->
+              let nid = fresh_abstraction_id () in
+              fresh_map := AbstractionId.Map.add id nid !fresh_map;
+              nid
+    end
+  in
+  visitor#visit_eval_ctx () ctx
+
 let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
     ~(with_abs_conts : bool) (ctx0 : eval_ctx) (ctx1 : eval_ctx) : ctx_or_update
     =
@@ -22,6 +47,19 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
     ^ "\n\n- ctx1:\n"
     ^ eval_ctx_to_string ~span:(Some span) ~filter:true ctx1
     ^ "\n"];
+
+  (* Refresh the non fixed abstraction ids.
+
+     We need to refresh the non-fixed abstraction ids in one of the two contexts,
+     because otherwise the join might have twice an abstraction with the same id,
+     which is a problem.
+
+     TODO: make the join more general.
+  *)
+  let ctx1 = refresh_non_fixed_abs_ids span fixed_ids ctx1 in
+  [%ltrace
+    "After refreshing the non-fixed abstraction ids of ctx1:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ~filter:true ctx1];
 
   let env0 = List.rev ctx0.env in
   let env1 = List.rev ctx1.env in
@@ -216,6 +254,10 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
     let join_info : ctx_join_info =
       { symbolic_to_value = !symbolic_to_value }
     in
+
+    (* Sanity check *)
+    if !Config.sanity_checks then Invariants.check_unique_abs_ids span ctx;
+
     Ok (ctx, join_info)
   with ValueMatchFailure e -> Error e
 
@@ -709,6 +751,21 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
         (Print.pair_to_string (tvalue_to_string src_ctx)
            (tvalue_to_string src_ctx))
         join_info.symbolic_to_value];
+
+  (* Collapse the context.
+
+     We could directly project the context, but it is better to collapse it first
+     because by doing so we may merge some abstractions which would otherwise be
+     disjoint, leading to an issue when matching the source context with the
+     joined context afterwards.
+  *)
+  let joined_ctx =
+    collapse_ctx_with_merge config span ~with_abs_conts:true loop_id fixed_ids
+      joined_ctx
+  in
+  [%ltrace
+    "After collapsing the context: joined_ctx:\n"
+    ^ eval_ctx_to_string joined_ctx];
 
   (* Project the context to only preserve the right part, which corresponds to the
      target *)
