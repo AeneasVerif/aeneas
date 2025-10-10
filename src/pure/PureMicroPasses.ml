@@ -3398,7 +3398,10 @@ let merge_let_app_then_decompose_tuple =
 let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
 
-  (* Returns the updated expression and a map from the freshly introduced
+  (* Small helper to update the expression *after* the loop while detecting
+     which simplifications should be done on the outputs.
+
+     Returns the updated expression and a map from the freshly introduced
      fvar ids to their expressions. Those fresh fvars are continuations that
      should be added to the loop output.
 
@@ -3406,8 +3409,8 @@ let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
      continuations which collide each other: this is sound, but doesn't lead to
      the best output in the presence of branching after the loop.
   *)
-  let simplify_in (loop_vars : FVarId.Set.t) (e : texpr) :
-      (FVarId.id * texpr) list * texpr =
+  let simplify_in (loop_vars : FVarId.Set.t) (loop_conts : FVarId.Set.t)
+      (e : texpr) : (FVarId.id * texpr) list * texpr =
     let fresh = ref [] in
     let rec simplify (e : texpr) : texpr =
       match e.e with
@@ -3431,11 +3434,44 @@ let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
           (* This is the important case: this might be the composition of a
              backward function. We check if all the free variables appearing
              in its body are loop outputs: if yes, it is likely a backward
-             function which composes loop outputs, and we introduce a fresh
-             variable for it.
+             function which composes loop outputs
+
+             We also check whether it's worth merging the outputs.
+             For instance, if we have something like this:
+             {[
+               let (..., y, back0, back1) <- loop ...
+               let back := fun x ->
+                 back1 (Cons (y, back0 x))
+               ...
+             ]}
+             then we introduce an output for [back] because it allows merging
+             [back0], [back1] and [y] in a single output.
+
+             However, if we have something like this:
+             {[
+               let (..., back0, back1) <- loop ...
+               let back := fun (x, y) ->
+                 (back0 x, back1 y)
+               ...
+             ]}
+             then we don't merge anything, because it would only group
+             several backward functions into a single backward functions,
+             potentially limiting further optimizations like in
+             [loop_to_recursive].
+
+             For now we detect this situation with a simple check: we introduce
+             a simplified output for the lambda we found here only if this lambda
+             does not only use the backward functions of the loop (it also needs
+             to manipulate output values). This is not perfect, but should work
+             fine in combination with [filter_loop_useless_inputs_outputs].
+             In the future, we can implement something more sophisticated based
+             on a flow analysis.
           *)
           let fvars = texpr_get_fvars e in
-          if FVarId.Set.subset fvars loop_vars then (
+          if
+            FVarId.Set.subset fvars loop_vars
+            && not (FVarId.Set.subset fvars loop_conts)
+          then (
             (* It is a subset: introduce a fresh var *)
             let fid = fresh_fvar_id () in
             let fv : texpr = { e = FVar fid; ty = e.ty } in
@@ -3628,13 +3664,17 @@ let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
               | _ -> [%internal_error] span
             in
             let vars = List.map as_pat_open_or_ignored pats in
-            let loop_varset =
+            let to_set vars =
               FVarId.Set.of_list
                 (List.filter_map (Option.map (fun (v : fvar) -> v.id)) vars)
             in
+            let loop_varset = to_set vars in
+            let loop_conts =
+              to_set (Collections.List.drop loop.num_output_values vars)
+            in
 
-            (* Analyze the next expression to simplify the loop *)
-            let fresh_outputs, next = simplify_in loop_varset next in
+            (* Analyze the next expression to detect potential simplifications *)
+            let fresh_outputs, next = simplify_in loop_varset loop_conts next in
 
             (* Filter the output variables which are now useless *)
             let used_vars = texpr_get_fvars next in
@@ -3764,9 +3804,13 @@ let compute_loop_input_output_rel (span : Meta.span) (loop : loop) : loop_rel =
   let outputs = List.map (fun l -> List.rev !l) outputs in
   { inputs; outputs }
 
-(** Filter the loop outputs which are actually equal to some of its inputs,
-    while filtering the inputs which are equal throughout the execution of the
-    loop.
+(** We do several things.
+
+    1. We filter the loop outputs which are not used.
+
+    2. We filter the loop outputs which are actually equal to some of its
+    inputs, while filtering the inputs which are equal throughout the execution
+    of the loop.
 
     For instance:
     {[
@@ -3786,8 +3830,10 @@ let compute_loop_input_output_rel (span : Meta.span) (loop : loop) : loop_rel =
       in
       let y = y0 in
       ...
-    ]} *)
-let filter_loop_unchanged_inputs_outputs (ctx : ctx) (def : fun_decl) =
+    ]}
+
+    3. We filter the loop output backward functions which are the identity. *)
+let filter_loop_useless_inputs_outputs (ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
 
   (* Helper to substitute the unchanged variables with their (constant)
@@ -3923,9 +3969,15 @@ let filter_loop_unchanged_inputs_outputs (ctx : ctx) (def : fun_decl) =
             *)
             let output_vars = try_destruct_tuple_tpattern span pat in
             let output_vars =
-              List.map ([%add_loc] as_pat_open span) output_vars
+              List.map
+                (fun (p : tpattern) ->
+                  match p.pat with
+                  | POpen (v, _) -> Some v
+                  | PDummy -> None
+                  | _ ->
+                      [%craise] span "Not an open binder or an ignored pattern")
+                output_vars
             in
-            let output_vars = List.map fst output_vars in
             let input_vars =
               List.map ([%add_loc] as_pat_open span) body.inputs
             in
@@ -3957,28 +4009,52 @@ let filter_loop_unchanged_inputs_outputs (ctx : ctx) (def : fun_decl) =
                    (List.combine keep_inputs input_vars))
             in
 
-            (* Then, the outputs *)
-            let keep_outputs =
-              List.map
-                (fun el ->
-                  (* Check if there are bound vars *)
-                  let have_bvars =
-                    List.exists (fun x -> x) (List.map texpr_has_bvars el)
-                  in
-                  if have_bvars then true
-                  else
-                    match el with
-                    | [] ->
-                        (* Could happen with infinite loops, for now we forbid them *)
-                        [%internal_error] span
-                    | e :: el ->
-                        if List.for_all (fun e' -> e = e') el then
-                          (* All the expressions are the same: now check
+            (* Then, the outputs.
+               Check if the output can be computed statically from the
+               initial inputs.
+            *)
+            let output_known_statically (el : texpr list) : bool =
+              (* The output is known statically only if it contains:
+                 - free variables (those were introduced *before* the loop)
+                 - locally bound vars (those can appear in expressions like [fun x => x])
+                 The non-locally bound vars are bound in the loop body: if the
+                 expression contains such variables we have to preserve it, because
+                 it means its value depends on what happens inside the loop.
+
+                 We check the presence of non-locally bound vars in a simple
+                 way: we simply open all the variables bound in the body,
+                 and check if there are remaining bound variables - those must
+                 be bound elsewhere.
+               *)
+              (* Check if there are bound vars *)
+              let have_bvars =
+                List.exists
+                  (fun x -> x)
+                  (List.map
+                     (fun e -> texpr_has_bvars (open_all_texpr span e))
+                     el)
+              in
+              if have_bvars then false
+              else
+                match el with
+                | [] ->
+                    (* Could happen with infinite loops, for now we forbid them *)
+                    [%internal_error] span
+                | e :: el ->
+                    if List.for_all (fun e' -> e = e') el then
+                      (* All the expressions are the same: now check
                              if all the free variables are filtered inputs *)
-                          let fvars = texpr_get_fvars e in
-                          not (FVarId.Set.subset fvars filtered_inputs)
-                        else true)
-                rel.outputs
+                      let fvars = texpr_get_fvars e in
+                      FVarId.Set.subset fvars filtered_inputs
+                    else false
+            in
+            let keep_outputs =
+              let known_statically =
+                List.map output_known_statically rel.outputs
+              in
+              List.map
+                (fun (known, x) -> (not known) && Option.is_some x)
+                (List.combine known_statically output_vars)
             in
 
             [%ldebug
@@ -4009,12 +4085,13 @@ let filter_loop_unchanged_inputs_outputs (ctx : ctx) (def : fun_decl) =
             in
             let updt_outputs =
               List.filter_map
-                (fun (keep, el) ->
+                (fun (keep, output_var, el) ->
                   match el with
                   | [] -> [%internal_error] span
                   | e :: _ ->
-                      if keep then None else Some (update_initial_inputs e))
-                (Collections.List.combine keep_outputs rel.outputs)
+                      if keep || output_var = None then None
+                      else Some (update_initial_inputs e))
+                (Collections.List.combine3 keep_outputs output_vars rel.outputs)
             in
 
             (* Update the loop body *)
@@ -4030,8 +4107,10 @@ let filter_loop_unchanged_inputs_outputs (ctx : ctx) (def : fun_decl) =
             let break_ty =
               let tys =
                 List.filter_map
-                  (fun ((keep, x) : _ * fvar) ->
-                    if keep then Some x.ty else None)
+                  (fun ((keep, x) : _ * fvar option) ->
+                    match (keep, x) with
+                    | true, Some x -> Some x.ty
+                    | _ -> None)
                   (List.combine keep_outputs output_vars)
               in
               mk_simpl_tuple_ty tys
@@ -4102,11 +4181,17 @@ let filter_loop_unchanged_inputs_outputs (ctx : ctx) (def : fun_decl) =
             let kept_output_vars, filt_output_vars =
               List.partition fst (List.combine keep_outputs output_vars)
             in
-            let kept_output_vars = List.map snd kept_output_vars in
-            let filt_output_vars = List.map snd filt_output_vars in
+            let kept_output_vars = List.filter_map snd kept_output_vars in
+            let filt_output_vars = List.filter_map snd filt_output_vars in
             let filt_output_vars =
               List.map (mk_tpattern_from_fvar None) filt_output_vars
             in
+            [%ldebug
+              "- filt_output_vars:\n"
+              ^ String.concat "\n"
+                  (List.map (tpattern_to_string ctx) filt_output_vars)
+              ^ "\n- updt_outputs:\n"
+              ^ String.concat "\n" (List.map (texpr_to_string ctx) updt_outputs)];
             let next =
               mk_closed_lets span false
                 (List.combine filt_output_vars updt_outputs)
@@ -4664,9 +4749,11 @@ let passes :
        ]}
     *)
     (None, "simplify_let_then_ok", simplify_let_then_ok ~ignore_loops:true);
-    (* Simplify and filter the loop outputs *)
-    (None, "simplify_loop_output_conts", simplify_loop_output_conts);
-    (* [simplify_loop_output_conts] might have triggered simplification
+    (* Filter the useless loop inputs and outputs *)
+    ( None,
+      "filter_loop_useless_inputs_outputs",
+      filter_loop_useless_inputs_outputs );
+    (* [filter_loop_useless_inputs_outputs] might have triggered simplification
        opportunities for [apply_beta_reduction] and [inline_useless_var_assignments].
 
        In particular, it often introduces expressions of the shape:
@@ -4680,10 +4767,16 @@ let passes :
       "inline_useless_var_assignments (pass 2)",
       inline_useless_var_assignments ~inline_named:true ~inline_const:true
         ~inline_pure:true ~inline_identity:true );
-    (* Filter the loop outputs which are actually unmodified inputs *)
+    (* Simplify and filter the loop outputs *)
+    (None, "simplify_loop_output_conts", simplify_loop_output_conts);
+    (* [simplify_loop_output_conts] also introduces simplification opportunities
+       for those 2 passes.
+       TODO: it would be good to do both at once. *)
+    (None, "apply_beta_reduction (pass 3)", apply_beta_reduction);
     ( None,
-      "filter_loop_unchanged_inputs_outputs",
-      filter_loop_unchanged_inputs_outputs );
+      "inline_useless_var_assignments (pass 3)",
+      inline_useless_var_assignments ~inline_named:true ~inline_const:true
+        ~inline_pure:true ~inline_identity:true );
     (* Change the structure of the loops if we can simplify their backward
        functions. This is in preparation of [decompose_loops], which introduces
        auxiliary (and potentially recursive) functions. *)

@@ -1786,8 +1786,8 @@ class virtual ['self] open_close_all_visitor =
     method virtual pop_scope : 'env ref -> unit
     method virtual push_var : 'env ref -> var -> fvar_id
     method virtual push_fvar : 'env ref -> fvar -> var
-    method virtual get_bvar : 'env ref -> bvar -> fvar_id
-    method virtual get_fvar : 'env ref -> fvar_id -> bvar
+    method virtual get_bvar : 'env ref -> bvar -> fvar_id option
+    method virtual get_fvar : 'env ref -> fvar_id -> bvar option
 
     method! visit_POpen env v mp =
       let _ = self#push_fvar env v in
@@ -1847,8 +1847,15 @@ class virtual ['self] open_close_all_visitor =
       (* *)
       { inputs; loop_body }
 
-    method! visit_FVar env (id : fvar_id) = BVar (self#get_fvar env id)
-    method! visit_BVar env (v : bvar) = FVar (self#get_bvar env v)
+    method! visit_FVar env (id : fvar_id) =
+      match self#get_fvar env id with
+      | None -> FVar id
+      | Some bv -> BVar bv
+
+    method! visit_BVar env (v : bvar) =
+      match self#get_bvar env v with
+      | None -> BVar v
+      | Some fv -> FVar fv
   end
 
 type open_all_env = {
@@ -1906,14 +1913,11 @@ let open_all_env_push_var (env : open_all_env) (v : var) :
   in
   (env, fvar_id)
 
-let open_all_env_get_var span (env : open_all_env) (v : bvar) : fvar_id =
+let open_all_env_get_var span (env : open_all_env) (v : bvar) : fvar_id option =
   [%sanity_check] span (env.penv = None);
-  let scope = Collections.List.nth env.benv v.scope in
-  match BVarId.Map.find_opt v.id scope with
-  | None ->
-      [%craise] span
-        ("Internal error: could not find bound variable: " ^ show_bvar v)
-  | Some v -> v
+  match Collections.List.nth_opt env.benv v.scope with
+  | Some scope -> BVarId.Map.find_opt v.id scope
+  | None -> None
 
 (** Visitor to open *all* the bound variables in an expression.
 
@@ -1945,10 +1949,10 @@ let open_all_visitor (span : Meta.span) =
     method get_bvar (env : open_all_env ref) v =
       open_all_env_get_var span !env v
 
-    method get_fvar _ fid =
-      [%craise] span ("Internal error: could not find fvar: " ^ show_fvar_id fid)
+    method get_fvar _ _ = None
 
-    method! visit_POpen _ _ = [%internal_error] span
+    method! visit_POpen _ fv mp =
+      (* Leave it unchanged (it is already open) *) POpen (fv, mp)
   end
 
 let open_all_texpr (span : Meta.span) (e : texpr) : texpr =
@@ -2002,12 +2006,11 @@ let close_all_env_push_var (env : close_all_env) (fid : fvar_id) :
   let env = { env with fenv; bvar_id = Some (BVarId.incr bvar_id) } in
   (env, bvar_id)
 
-let close_all_env_get_var span (env : close_all_env) (fid : fvar_id) : bvar =
+let close_all_env_get_var _span (env : close_all_env) (fid : fvar_id) :
+    bvar option =
   match FVarId.Map.find_opt fid env.fenv with
-  | None ->
-      [%craise] span
-        ("Internal error: could not find fvar: " ^ FVarId.to_string fid)
-  | Some v -> { v with scope = env.scope - v.scope - 1 }
+  | None -> None
+  | Some v -> Some { v with scope = env.scope - v.scope - 1 }
 
 (** Visitor to close *all* the bound variables in an expression.
 
@@ -2037,10 +2040,14 @@ let close_all_visitor (span : Meta.span) =
       let { basename; ty; id = _ } = v in
       { basename; ty }
 
-    method get_bvar _ _ = [%internal_error] span
+    method get_bvar _ _ = None
 
     method get_fvar (env : close_all_env ref) v =
       close_all_env_get_var span !env v
+
+    method! visit_PBound _ var mp =
+      (* Leave it unchanged: it is already bound *)
+      PBound (var, mp)
   end
 
 let close_all_texpr (span : Meta.span) (e : texpr) : texpr =
