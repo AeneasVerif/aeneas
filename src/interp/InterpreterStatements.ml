@@ -36,7 +36,7 @@ let drop_value (config : config) (span : Meta.span) (p : place) : cm_fun =
   let ctx =
     (* Move the value at destination (that we will overwrite) to a dummy variable
      * to preserve the borrows it may contain *)
-    let mv = InterpreterPaths.read_place span access p ctx in
+    let _, mv = InterpreterPaths.read_place span access p ctx in
     let dummy_id = fresh_dummy_var_id () in
     let ctx = ctx_push_dummy_var ctx dummy_id mv in
     (* Update the destination to ⊥ *)
@@ -104,7 +104,7 @@ let assign_to_place (config : config) (span : Meta.span) (rv : tvalue)
   let rv, ctx = remove_dummy_var span rvalue_vid ctx in
   (* Move the value at destination (that we will overwrite) to a dummy variable
      to preserve the borrows *)
-  let mv = InterpreterPaths.read_place span Write p ctx in
+  let _, mv = InterpreterPaths.read_place span Write p ctx in
   let dest_vid = fresh_dummy_var_id () in
   let ctx = ctx_push_dummy_var ctx dest_vid mv in
   (* Write to the destination *)
@@ -1041,7 +1041,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
       (* Access the place *)
       let access = Read in
       let expand_prim_copy = false in
-      let p_v, ctx, cf_read_p =
+      let _, p_v, ctx, cf_read_p =
         access_rplace_reorganize_and_read config span expand_prim_copy access p
           ctx
       in

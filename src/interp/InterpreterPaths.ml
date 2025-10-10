@@ -61,11 +61,18 @@ type projection_access = {
 
 (* Projects a value with a `projection_elem`. Returns the projected value and a
    continuation that propagates any changes to the projected value back
-   to the original one. *)
+   to the original one.
+
+   The optional loan id we output is the id of the shared loan immediately above
+   the value, if there is one. We need this when creating shared references:
+   we introduce a shared loan if and only if there is not already one (TODO:
+   make this cleaner).
+*)
 let rec project_value (span : Meta.span) (access : projection_access)
     (ek : exploration_kind) (current_place : place) (ctx : eval_ctx)
     (pe : projection_elem) (v : tvalue) :
-    (tvalue * (eval_ctx * tvalue -> eval_ctx * tvalue)) path_access_result =
+    (loan_id option * tvalue * (eval_ctx * tvalue -> eval_ctx * tvalue))
+    path_access_result =
   match (pe, v.value, v.ty) with
   | ( Field (ProjAdt (def_id, opt_variant_id), field_id),
       VAdt adt,
@@ -81,7 +88,7 @@ let rec project_value (span : Meta.span) (access : projection_access)
         let value = VAdt { adt with field_values = nvalues } in
         (ctx, { v with value })
       in
-      Ok (fv, backward)
+      Ok (None, fv, backward)
     end
   (* Tuples *)
   | Field (ProjTuple arity, field_id), VAdt adt, TAdt { id = TTuple; _ } ->
@@ -94,7 +101,7 @@ let rec project_value (span : Meta.span) (access : projection_access)
         let value = VAdt { adt with field_values = nvalues } in
         (ctx, { v with value })
       in
-      Ok (fv, backward)
+      Ok (None, fv, backward)
     end
   | Field ((ProjAdt (_, _) | ProjTuple _), _), VBottom, _ ->
       (* If we reach Bottom, it may mean we need to expand an uninitialized
@@ -117,7 +124,7 @@ let rec project_value (span : Meta.span) (access : projection_access)
         let value = VAdt { variant_id = None; field_values = [ updated ] } in
         (ctx, { v with value })
       in
-      Ok (fv, backward)
+      Ok (None, fv, backward)
     end
   (* Borrows *)
   | Deref, VBorrow bc, _ ->
@@ -131,15 +138,14 @@ let rec project_value (span : Meta.span) (access : projection_access)
             match lookup_loan span ek bid ctx with
             | _, Concrete (VMutLoan _) ->
                 [%craise] span "Expected a shared loan"
-            | _, Concrete (VSharedLoan (bids, sv)) ->
+            | _, Concrete (VSharedLoan (bid, sv)) ->
                 (* Return the shared value *)
                 Ok
-                  ( sv,
+                  ( Some bid,
+                    sv,
                     fun (ctx, updated) ->
                       let ctx =
-                        update_loan span ek bid
-                          (VSharedLoan (bids, updated))
-                          ctx
+                        update_loan span ek bid (VSharedLoan (bid, updated)) ctx
                       in
                       (ctx, v) )
             | ( _,
@@ -151,12 +157,13 @@ let rec project_value (span : Meta.span) (access : projection_access)
                   | AEndedIgnoredMutLoan _
                   | AIgnoredSharedLoan _ ) ) ->
                 [%craise] span "Expected a shared (abstraction) loan"
-            | _, Abstract (ASharedLoan (pm, bids, sv, _av)) -> begin
+            | _, Abstract (ASharedLoan (pm, bid, sv, _av)) -> begin
                 (* Sanity check: projection markers can only appear when we're doing a join *)
                 [%sanity_check] span (pm = PNone);
                 (* Return the shared value *)
                 Ok
-                  ( sv,
+                  ( Some bid,
+                    sv,
                     fun (ctx, updated) ->
                       let av =
                         match lookup_loan span ek bid ctx with
@@ -165,7 +172,7 @@ let rec project_value (span : Meta.span) (access : projection_access)
                       in
                       let ctx =
                         update_aloan span ek bid
-                          (ASharedLoan (pm, bids, updated, av))
+                          (ASharedLoan (pm, bid, updated, av))
                           ctx
                       in
                       (ctx, v) )
@@ -177,7 +184,8 @@ let rec project_value (span : Meta.span) (access : projection_access)
             Error (FailBorrow bc)
         | VMutBorrow (bid, bv) ->
             Ok
-              ( bv,
+              ( None,
+                bv,
                 fun (ctx, updated) ->
                   let value = VBorrow (VMutBorrow (bid, updated)) in
                   (ctx, { v with value }) )
@@ -204,13 +212,13 @@ let rec project_value (span : Meta.span) (access : projection_access)
           *)
           match project_value span access ek current_place ctx pe sv with
           | Error err -> Error err
-          | Ok (fv, backward) ->
+          | Ok (lid, fv, backward) ->
               let backward (ctx, updated) =
                 let ctx, updated = backward (ctx, updated) in
                 let value = VLoan (VSharedLoan (bids, updated)) in
                 (ctx, { v with value })
               in
-              Ok (fv, backward)
+              Ok (lid, fv, backward)
         end
     end
   | _, VBottom, _ -> [%craise] span "Can not apply a projection to the ⊥ value"
@@ -228,7 +236,8 @@ let rec project_value (span : Meta.span) (access : projection_access)
     to the projected value back to the original local. *)
 let rec access_place (span : Meta.span) (access : projection_access)
     (ek : exploration_kind) (ctx : eval_ctx) (p : place) :
-    (tvalue * (eval_ctx * tvalue -> eval_ctx * tvalue)) path_access_result =
+    (loan_id option * tvalue * (eval_ctx * tvalue -> eval_ctx * tvalue))
+    path_access_result =
   match p.kind with
   | PlaceLocal var_id ->
       (* Lookup the variable's value *)
@@ -245,16 +254,16 @@ let rec access_place (span : Meta.span) (access : projection_access)
              destination");
         (ctx, updated)
       in
-      Ok (v, backward)
+      Ok (None, v, backward)
   | PlaceProjection (p', pe) -> begin
       match access_place span access ek ctx p' with
       | Error err -> Error err
-      | Ok (v, backward) -> begin
+      | Ok (_, v, backward) -> begin
           match project_value span access ek p' ctx pe v with
           | Error err -> Error err
-          | Ok (pv, new_back) -> begin
+          | Ok (lid, pv, new_back) -> begin
               let backward = Core.Fn.compose backward new_back in
-              Ok (pv, backward)
+              Ok (lid, pv, backward)
             end
         end
     end
@@ -269,7 +278,7 @@ let rec access_place (span : Meta.span) (access : projection_access)
 let access_update_place (span : Meta.span) (access : projection_access)
     (* Function to (eventually) update the value we find *)
       (update : tvalue -> tvalue) (p : place) (ctx : eval_ctx) :
-    (eval_ctx * tvalue) path_access_result =
+    (eval_ctx * loan_id option * tvalue) path_access_result =
   (* For looking up/updating shared loans *)
   let ek : exploration_kind =
     { enter_shared_loans = true; enter_mut_borrows = true; enter_abs = true }
@@ -277,11 +286,11 @@ let access_update_place (span : Meta.span) (access : projection_access)
   (* Apply the projection *)
   match access_place span access ek ctx p with
   | Error err -> Error err
-  | Ok (v, backward) ->
+  | Ok (lid, v, backward) ->
       let nv = update v in
       (* Update the ctx with the updated value *)
       let ctx, _ = backward (ctx, nv) in
-      Ok (ctx, v)
+      Ok (ctx, lid, v)
 
 type access_kind =
   | Read  (** We can go inside borrows and loans *)
@@ -316,13 +325,13 @@ let access_kind_to_projection_access (access : access_kind) : projection_access
     Note that we only access the value at the place, and do not check that the
     value is "well-formed" (for instance that it doesn't contain bottoms). *)
 let try_read_place (span : Meta.span) (access : access_kind) (p : place)
-    (ctx : eval_ctx) : tvalue path_access_result =
+    (ctx : eval_ctx) : (loan_id option * tvalue) path_access_result =
   let access = access_kind_to_projection_access access in
   (* The update function is the identity *)
   let update v = v in
   match access_update_place span access update p ctx with
   | Error err -> Error err
-  | Ok (ctx1, read_value) ->
+  | Ok (ctx1, lid, read_value) ->
       (* Note that we ignore the new environment: it should be the same as the
          original one.
       *)
@@ -333,13 +342,13 @@ let try_read_place (span : Meta.span) (access : access_kind) (p : place)
              ^ show_env ctx1.env ^ "\n\nOld environment:\n" ^ show_env ctx.env
            in
            [%craise] span msg);
-      Ok read_value
+      Ok (lid, read_value)
 
 let read_place (span : Meta.span) (access : access_kind) (p : place)
-    (ctx : eval_ctx) : tvalue =
+    (ctx : eval_ctx) : loan_id option * tvalue =
   match try_read_place span access p ctx with
   | Error e -> [%craise] span ("Unreachable: " ^ show_path_fail_kind e)
-  | Ok v -> v
+  | Ok (lid, v) -> (lid, v)
 
 (** Attempt to update the value at a given place, provided the place **does not
     refer to a global** (globals are handled elsewhere). *)
@@ -350,7 +359,7 @@ let try_write_place (span : Meta.span) (access : access_kind) (p : place)
   let update _ = nv in
   match access_update_place span access update p ctx with
   | Error err -> Error err
-  | Ok (ctx, _) ->
+  | Ok (ctx, _, _) ->
       (* We ignore the read value *)
       Ok ctx
 
@@ -552,7 +561,7 @@ let rec end_loans_at_place (config : config) (span : Meta.span)
   in
 
   (* First, retrieve the value *)
-  let v = read_place span access p ctx in
+  let _, v = read_place span access p ctx in
   (* Inspect the value and update the context while doing so.
      If the context gets updated: perform a recursive call (many things
      may have been updated in the context: we need to re-read the value
@@ -574,7 +583,7 @@ let drop_outer_loans_at_lplace (config : config) (span : Meta.span) (p : place)
   (* Move the current value in the place outside of this place and into
    * a temporary dummy variable *)
   let access = Write in
-  let v = read_place span access p ctx in
+  let _, v = read_place span access p ctx in
   let ctx = write_place span access p (mk_bottom span v.ty) ctx in
   let dummy_id = fresh_dummy_var_id () in
   let ctx = ctx_push_dummy_var ctx dummy_id v in
@@ -627,7 +636,7 @@ let prepare_lplace (config : config) (span : Meta.span) (p : place)
   (* End the loans at the place we are about to overwrite *)
   let ctx, cc = comp cc (drop_outer_loans_at_lplace config span p ctx) in
   (* Read the value and check it *)
-  let v = read_place span access p ctx in
+  let _, v = read_place span access p ctx in
   (* Sanity checks *)
   [%sanity_check] span (not (outer_loans_in_value v));
   (* Return *)
