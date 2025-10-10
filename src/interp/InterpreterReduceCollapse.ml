@@ -24,12 +24,19 @@ let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
     ~(can_end : bool) ~(with_abs_conts : bool)
     (merge_funs : merge_duplicates_funcs option) (ctx : ctx_with_info)
     (abs_id0 : AbstractionId.id) (abs_id1 : AbstractionId.id) : ctx_with_info =
+  [%ldebug
+    "Merging abstraction "
+    ^ AbstractionId.to_string abs_id1
+    ^ " into abstraction "
+    ^ AbstractionId.to_string abs_id0];
   (* Compute the new context and the new abstraction id *)
   let nctx, nabs_id =
     merge_into_first_abstraction span abs_kind ~can_end ~with_abs_conts
       merge_funs ctx.ctx abs_id0 abs_id1
   in
   let nabs = ctx_lookup_abs nctx nabs_id in
+  [%ldebug
+    "abstraction resulting from the merge:\n" ^ abs_to_string span ctx.ctx nabs];
   (* Update the information *)
   (* We start by computing the maps for an environment which only contains
      the new region abstraction *)
@@ -88,9 +95,9 @@ let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
        to region abstractions by using the old map and the information computed
        from the merged abstraction.
     *)
-    let update_to_abs (abs_to : S.t AbstractionId.Map.t)
-        (to_nabs : AbstractionId.Set.t M.t) (to_abs : AbstractionId.Set.t M.t) :
-        AbstractionId.Set.t M.t =
+    let update_to_abs (key_to_string : M.key -> string)
+        (abs_to : S.t AbstractionId.Map.t) (to_nabs : AbstractionId.Set.t M.t)
+        (to_abs : AbstractionId.Set.t M.t) : AbstractionId.Set.t M.t =
       (* Remove the old bindings from borrow/loan ids to the two region
          abstractions we just merged (because those two region abstractions
          do not exist anymore). *)
@@ -100,9 +107,14 @@ let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
       let to_abs = M.filter (fun id _ -> not (S.mem id abs01_elems)) to_abs in
       (* Add the new bindings from the borrows/loan ids that we find in the
          merged abstraction to this abstraction's id *)
-      let merge _ _ _ =
+      let merge (key : M.key) (abs0 : AbstractionId.Set.t)
+          (abs1 : AbstractionId.Set.t) =
         (* We shouldn't see the same key twice *)
-        [%craise] span "Unreachable"
+        [%craise] span
+          ("Unreachable:\n key: " ^ key_to_string key ^ "\n- abs0: "
+          ^ AbstractionId.Set.to_string None abs0
+          ^ "\n- abs1: "
+          ^ AbstractionId.Set.to_string None abs1)
       in
       M.union merge to_nabs to_abs
   end in
@@ -115,27 +127,39 @@ let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
   let module UpdateMarkedLoanId =
     UpdateToAbs (MarkedLoanId.Map) (MarkedLoanId.Set)
   in
+  let marked_unique_borrow_id_to_string
+      ((pm, bid, sid) : marked_unique_borrow_id) : string =
+    let s =
+      match sid with
+      | None -> "MB@" ^ show_borrow_id bid
+      | Some sid ->
+          "SB@" ^ show_borrow_id bid ^ "(^" ^ show_shared_borrow_id sid ^ ")"
+    in
+    Print.Values.add_proj_marker pm s
+  in
   let borrow_to_abs =
-    UpdateMarkedUniqueBorrowId.update_to_abs abs_to_borrows borrow_to_nabs
-      borrow_to_abs
+    UpdateMarkedUniqueBorrowId.update_to_abs marked_unique_borrow_id_to_string
+      abs_to_borrows borrow_to_nabs borrow_to_abs
   in
   let non_unique_borrow_to_abs =
-    UpdateMarkedBorrowId.update_to_abs abs_to_non_unique_borrows
-      non_unique_borrow_to_nabs non_unique_borrow_to_abs
+    UpdateMarkedBorrowId.update_to_abs show_marked_borrow_id
+      abs_to_non_unique_borrows non_unique_borrow_to_nabs
+      non_unique_borrow_to_abs
   in
   let loan_to_abs =
-    UpdateMarkedLoanId.update_to_abs abs_to_loans loan_to_nabs loan_to_abs
+    UpdateMarkedLoanId.update_to_abs show_marked_borrow_id abs_to_loans
+      loan_to_nabs loan_to_abs
   in
   let module UpdateSymbProj =
     UpdateToAbs (MarkedNormSymbProj.Map) (MarkedNormSymbProj.Set)
   in
   let borrow_proj_to_abs =
-    UpdateSymbProj.update_to_abs abs_to_borrow_projs borrow_proj_to_nabs
-      borrow_proj_to_abs
+    UpdateSymbProj.update_to_abs show_marked_norm_symb_proj abs_to_borrow_projs
+      borrow_proj_to_nabs borrow_proj_to_abs
   in
   let loan_proj_to_abs =
-    UpdateSymbProj.update_to_abs abs_to_loan_projs loan_proj_to_nabs
-      loan_proj_to_abs
+    UpdateSymbProj.update_to_abs show_marked_norm_symb_proj abs_to_loan_projs
+      loan_proj_to_nabs loan_proj_to_abs
   in
 
   (* Update the maps from abstractions to marked borrows/loans or

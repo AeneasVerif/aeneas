@@ -190,8 +190,8 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
         [%cassert] span (i = 0) "Nested loops are not supported yet";
         [%ltrace
           "about to match the fixed-point context with the context at a \
-           continue:\n\
-           - src ctx (fixed-point ctx):\n"
+           continue:" ^ "\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
+          ^ "\n\n- src ctx (fixed-point ctx):\n"
           ^ eval_ctx_to_string ~span:(Some span) fp_ctx
           ^ "\n\n-tgt ctx (ctx at continue):\n"
           ^ eval_ctx_to_string ~span:(Some span) ctx];
