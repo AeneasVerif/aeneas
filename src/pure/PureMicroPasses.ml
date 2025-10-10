@@ -3775,8 +3775,25 @@ let compute_loop_input_output_rel (span : Meta.span) (loop : loop) : loop_rel =
 let filter_loop_unchanged_inputs_outputs (ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
 
+  (* Helper to substitute the unchanged variables with their (constant)
+     values in the loop body. *)
+  let substitute_in_loop_body (subst : texpr FVarId.Map.t) (body : loop_body) :
+      loop_body =
+    let visitor =
+      object
+        inherit [_] map_expr
+
+        method! visit_FVar _ fid =
+          match FVarId.Map.find_opt fid subst with
+          | None -> FVar fid
+          | Some e -> e.e
+      end
+    in
+    visitor#visit_loop_body () body
+  in
+
   (* Helper to update the continue/breaks in a loop body *)
-  let update_loop_body (keep_outputs : bool list) (keep_inputs : bool list)
+  let update_continue_break (keep_outputs : bool list) (keep_inputs : bool list)
       (continue_ty : ty) (break_ty : ty) (body : loop_body) : loop_body =
     let rec update (e : texpr) : texpr =
       match e.e with
@@ -4010,9 +4027,23 @@ let filter_loop_unchanged_inputs_outputs (ctx : ctx) (def : fun_decl) =
               ^ ty_to_string ctx continue_ty
               ^ "\n- break_ty: " ^ ty_to_string ctx break_ty];
 
+            (* Substitute the constant values in the body *)
             let body =
-              update_loop_body keep_outputs keep_inputs continue_ty break_ty
-                body
+              let input_vars = List.map (fun (fv : fvar) -> fv.id) input_vars in
+              let bindings = List.combine input_vars loop.inputs in
+              let bindings =
+                List.filter_map
+                  (fun (keep, x) -> if keep then None else Some x)
+                  (List.combine keep_inputs bindings)
+              in
+              let subst = FVarId.Map.of_list bindings in
+              substitute_in_loop_body subst body
+            in
+
+            (* Filter the arguments of the continue/breaks *)
+            let body =
+              update_continue_break keep_outputs keep_inputs continue_ty
+                break_ty body
             in
             let filter keep xl =
               List.filter_map
