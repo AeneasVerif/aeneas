@@ -10,7 +10,7 @@ open InterpreterLoopsCore
 open InterpreterLoopsMatchCtxs
 
 (** The local logger *)
-let log = Logging.loops_reduce_collapse_log
+let log = Logging.reduce_collapse_log
 
 (** Utility.
 
@@ -666,6 +666,51 @@ let collapse_ctx_collapse (span : Meta.span) (loop_id : LoopId.id)
   (* Return the new context *)
   ctx
 
+(** Attempts to eliminate remaining markers over shared borrows.
+
+    We can eliminate a marker over a shared borrow if the corresponding loan in
+    the context doesn't have markers. The reason is that we are always allowed
+    to introduce a shared borrow for an existing shared loan: in order to remove
+    the marker, we can introduce a shared borrow in the other environment.
+
+    For instance, the following is legal:
+    {[
+      x -> SL l v
+      abs { |SB l| } // the left environment has a borrow, but not the right one
+
+        ~>
+
+      x -> SL l v
+      abs { SB l } // introduce SB l in the right environment and add it to the abstraction
+    ]} *)
+
+let eliminate_shared_borrow_markers (_span : Meta.span) (ctx : eval_ctx) :
+    eval_ctx =
+  (* Compute the set of loans without markers *)
+  let non_marked_loans = ref BorrowId.Set.empty in
+  let collect_loans =
+    object
+      inherit [_] iter_eval_ctx as super
+
+      method! visit_ASharedLoan env pm lid sv child =
+        if pm = PNone then
+          non_marked_loans := BorrowId.Set.add lid !non_marked_loans;
+        super#visit_ASharedLoan env pm lid sv child
+    end
+  in
+  collect_loans#visit_eval_ctx () ctx;
+
+  let update_borrows =
+    object
+      inherit [_] map_eval_ctx as super
+
+      method! visit_ASharedBorrow env pm bid sid =
+        let pm = if BorrowId.Set.mem bid !non_marked_loans then PNone else pm in
+        super#visit_ASharedBorrow env pm bid sid
+    end
+  in
+  update_borrows#visit_eval_ctx () ctx
+
 (** Small utility: check whether an environment contains markers *)
 let eval_ctx_has_markers (ctx : eval_ctx) : bool =
   let visitor =
@@ -721,13 +766,20 @@ let eval_ctx_has_markers (ctx : eval_ctx) : bool =
 let collapse_ctx config (span : Meta.span) (loop_id : LoopId.id)
     ~(with_abs_conts : bool) (merge_funs : merge_duplicates_funcs)
     (old_ids : ids_sets) (ctx0 : eval_ctx) : eval_ctx =
+  [%ltrace "ctx0:\n" ^ eval_ctx_to_string ctx0];
   let ctx =
     reduce_ctx_with_markers (Some merge_funs) span ~with_abs_conts loop_id
       old_ids ctx0
   in
+  [%ltrace "ctx after collapse:\n" ^ eval_ctx_to_string ctx];
   let ctx =
     collapse_ctx_collapse span ~with_abs_conts loop_id merge_funs old_ids ctx
   in
+  [%ltrace "ctx after reduce and collapse:\n" ^ eval_ctx_to_string ctx];
+  let ctx = eliminate_shared_borrow_markers span ctx in
+  [%ltrace
+    "ctx after reduce, collapse and eliminate_shared_borrow_markers:\n"
+    ^ eval_ctx_to_string ctx];
   (* Sanity check: there are no markers remaining *)
   [%sanity_check] span (not (eval_ctx_has_markers ctx));
   (* One last cleanup *)

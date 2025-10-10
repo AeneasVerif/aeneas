@@ -81,7 +81,7 @@ let interpreter_log = create_logger "Interpreter"
 let loops_match_ctxs_log = create_logger "Interpreter.LoopsMatchCtxs"
 
 (** Logger for InterpreterReduceCollapse *)
-let loops_reduce_collapse_log = create_logger "Interpreter.ReduceCollapse"
+let reduce_collapse_log = create_logger "Interpreter.ReduceCollapse"
 
 (** Logger for InterpreterLoopsJoinCtxs *)
 let loops_join_ctxs_log = create_logger "Interpreter.LoopsJoinCtxs"
