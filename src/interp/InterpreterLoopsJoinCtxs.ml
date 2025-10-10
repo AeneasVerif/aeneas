@@ -224,8 +224,6 @@ let destructure_new_abs (span : Meta.span) (loop_id : LoopId.id)
     (old_abs_ids : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
   [%ltrace "ctx:\n\n" ^ eval_ctx_to_string ctx];
   let abs_kind : abs_kind = Loop (loop_id, None) in
-  let can_end = true in
-  let destructure_shared_values = true in
   let is_fresh_abs_id (id : AbstractionId.id) : bool =
     not (AbstractionId.Set.mem id old_abs_ids)
   in
@@ -234,8 +232,8 @@ let destructure_new_abs (span : Meta.span) (loop_id : LoopId.id)
       (fun abs ->
         if is_fresh_abs_id abs.abs_id then
           let abs =
-            destructure_abs span abs_kind can_end destructure_shared_values ctx
-              abs
+            destructure_abs span abs_kind ~can_end:true
+              ~destructure_shared_values:true ctx abs
           in
           abs
         else abs)
@@ -503,6 +501,145 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
       (* Update the fresh region abstractions *)
       !joined_ctx
 
+(** TODO: this is a bit of a hack: remove one the avalues are properly
+    destructured. *)
+let destructure_shared_loans (span : Meta.span) : cm_fun =
+ fun ctx ->
+  let bindings = ref [] in
+
+  let rec copy_value (v : tvalue) : tvalue =
+    match v.value with
+    | VLiteral _ | VBottom -> v
+    | VAdt { variant_id; field_values } ->
+        let field_values = List.map copy_value field_values in
+        { v with value = VAdt { variant_id; field_values } }
+    | VBorrow _ | VLoan _ -> [%craise] span "Not implemented"
+    | VSymbolic sv ->
+        [%cassert] span
+          (not (symbolic_value_has_borrows (Some span) ctx sv))
+          "Not implemented";
+        let sv' = mk_fresh_symbolic_value_opt_span (Some span) sv.sv_ty in
+        bindings := (sv', v) :: !bindings;
+        { value = VSymbolic sv'; ty = sv.sv_ty }
+  in
+
+  let rec destructure_value (abs : abs) (v : tvalue) : tvalue * tavalue list =
+    let value, avl =
+      match v.value with
+      | VLiteral _ | VBottom | VSymbolic _ -> (v.value, [])
+      | VAdt { variant_id; field_values } ->
+          let field_values, avl =
+            List.split (List.map (destructure_value abs) field_values)
+          in
+          (VAdt { variant_id; field_values }, List.flatten avl)
+      | VBorrow bc -> (
+          match bc with
+          | VSharedBorrow _ -> (v.value, [])
+          | VMutBorrow (lid, v) ->
+              let v, avl = destructure_value abs v in
+              (VBorrow (VMutBorrow (lid, v)), avl)
+          | VReservedMutBorrow _ -> [%internal_error] span)
+      | VLoan lc -> (
+          match lc with
+          | VSharedLoan (lid, sv) ->
+              let sv, avl = destructure_value abs sv in
+              let ty = sv.ty in
+              [%cassert] span
+                (not
+                   (TypesUtils.ty_has_borrows (Some span)
+                      ctx.type_ctx.type_infos ty))
+                "Not implemented";
+              let rid = RegionId.Set.choose abs.regions.owned in
+              let ref_ty = TRef (RVar (Free rid), ty, RShared) in
+              let child = ValuesUtils.mk_aignored span ty None in
+              let av = ALoan (ASharedLoan (PNone, lid, copy_value sv, child)) in
+              let av : tavalue = { value = av; ty = ref_ty } in
+              (sv.value, av :: avl)
+          | VMutLoan _ -> (v.value, []))
+    in
+    ({ v with value }, avl)
+  in
+
+  let rec destructure_avalue (abs : abs) (av : tavalue) : tavalue * tavalue list
+      =
+    let value, avl =
+      match av.value with
+      | AAdt { variant_id; field_values } ->
+          let field_values, avl =
+            List.split (List.map (destructure_avalue abs) field_values)
+          in
+          (AAdt { variant_id; field_values }, List.flatten avl)
+      | ALoan lc ->
+          let lc, avl =
+            match lc with
+            | AMutLoan (pm, lid, child) ->
+                let child, avl = destructure_avalue abs child in
+                (AMutLoan (pm, lid, child), avl)
+            | ASharedLoan (pm, lid, sv, child) ->
+                let sv, avl0 = destructure_value abs sv in
+                let child, avl1 = destructure_avalue abs child in
+                (ASharedLoan (pm, lid, sv, child), avl0 @ avl1)
+            | AEndedMutLoan { child; given_back; given_back_meta } ->
+                let child, avl0 = destructure_avalue abs child in
+                let given_back, avl1 = destructure_avalue abs given_back in
+                ( AEndedMutLoan { child; given_back; given_back_meta },
+                  avl0 @ avl1 )
+            | AEndedSharedLoan (sv, child) ->
+                let sv, avl0 = destructure_value abs sv in
+                let child, avl1 = destructure_avalue abs child in
+                (AEndedSharedLoan (sv, child), avl0 @ avl1)
+            | AIgnoredMutLoan (lid, child) ->
+                let child, avl = destructure_avalue abs child in
+                (AIgnoredMutLoan (lid, child), avl)
+            | AEndedIgnoredMutLoan { child; given_back; given_back_meta } ->
+                let child, avl0 = destructure_avalue abs child in
+                let given_back, avl1 = destructure_avalue abs given_back in
+                ( AEndedIgnoredMutLoan { child; given_back; given_back_meta },
+                  avl0 @ avl1 )
+            | AIgnoredSharedLoan child ->
+                let child, avl = destructure_avalue abs child in
+                (AIgnoredSharedLoan child, avl)
+          in
+          (ALoan lc, avl)
+      | ABorrow bc ->
+          let bc, avl =
+            match bc with
+            | AMutBorrow (pm, lid, child) ->
+                let child, avl = destructure_avalue abs child in
+                (AMutBorrow (pm, lid, child), avl)
+            | ASharedBorrow _ -> (bc, [])
+            | AIgnoredMutBorrow (lid, child) ->
+                let child, avl = destructure_avalue abs child in
+                (AIgnoredMutBorrow (lid, child), avl)
+            | AEndedMutBorrow _ | AEndedSharedBorrow ->
+                (* Shouldn't find ended borrows in live abstractions *)
+                [%internal_error] span
+            | AEndedIgnoredMutBorrow _ -> (bc, [])
+            | AProjSharedBorrow _ -> [%craise] span "Not implemented"
+          in
+          (ABorrow bc, avl)
+      | ABottom | ASymbolic _ | AIgnored _ -> (av.value, [])
+    in
+    ({ av with value }, avl)
+  in
+  let destructure_abs (abs : abs) : abs =
+    let avalues = List.map (destructure_avalue abs) abs.avalues in
+    let avalues =
+      List.flatten (List.map (fun (av, avl) -> av :: avl) avalues)
+    in
+    { abs with avalues }
+  in
+  let ctx = { ctx with env = env_map_abs destructure_abs ctx.env } in
+
+  let cc e =
+    List.fold_right
+      (fun (nsv, v) e ->
+        SymbolicAst.IntroSymbolic (ctx, None, nsv, VaSingleValue v, e))
+      !bindings e
+  in
+
+  (ctx, cc)
+
 let loop_match_ctx_with_target (config : config) (span : Meta.span)
     (loop_id : LoopId.id) (fp_input_svalues : SymbolicValueId.id list)
     (fixed_ids : ids_sets) (src_ctx : eval_ctx) (tgt_ctx : eval_ctx) :
@@ -522,6 +659,12 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
   in
   [%ltrace
     "- tgt_ctx after simplify_dummy_values_useless_abs:\n"
+    ^ eval_ctx_to_string tgt_ctx];
+
+  (* Simplify the ended shared loans *)
+  let tgt_ctx, cc = comp cc (destructure_shared_loans span tgt_ctx) in
+  [%ltrace
+    "- tgt_ctx after simplify_ended_shared_loans:\n"
     ^ eval_ctx_to_string tgt_ctx];
 
   (* Reduce the context *)

@@ -151,8 +151,8 @@ let compute_abs_borrows_loans_maps (span : Meta.span)
             [%cassert] span (is_aignored given_back.value) "Not implemented yet"
         | AEndedSharedLoan (sv, child) ->
             (* TODO: there may be a problem here, because we need the marker which was
-             in [ASharedLoan] to explore the shared value and register its borrows.
-             For now we check that there are no loans/borrows inside. *)
+               in [ASharedLoan] to explore the shared value and register its borrows.
+               For now we check that there are no loans/borrows inside. *)
             [%cassert] span
               (not
                  (ValuesUtils.value_has_loans_or_borrows (Some span) type_infos

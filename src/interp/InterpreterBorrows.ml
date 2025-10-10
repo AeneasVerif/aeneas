@@ -1728,8 +1728,8 @@ let rec promote_reserved_mut_borrow (config : config) (span : Meta.span)
         "Can't activate a reserved mutable borrow referencing a loan inside\n\
         \         a region abstraction"
 
-let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
-    (destructure_shared_values : bool) (ctx : eval_ctx) (abs0 : abs) : abs =
+let destructure_abs (span : Meta.span) (abs_kind : abs_kind) ~(can_end : bool)
+    ~(destructure_shared_values : bool) (ctx : eval_ctx) (abs0 : abs) : abs =
   (* Accumulator to store the destructured values *)
   let avalues = ref [] in
   (* Utility function to store a value in the accumulator *)
@@ -1968,7 +1968,8 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) (can_end : bool)
 let abs_is_destructured (span : Meta.span) (destructure_shared_values : bool)
     (ctx : eval_ctx) (abs : abs) : bool =
   let abs' =
-    destructure_abs span abs.kind abs.can_end destructure_shared_values ctx abs
+    destructure_abs span abs.kind ~can_end:abs.can_end
+      ~destructure_shared_values ctx abs
   in
   abs = abs'
 

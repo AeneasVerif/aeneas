@@ -103,19 +103,26 @@ val promote_reserved_mut_borrow :
         the same value without the shared loan, and adding another ashared loan
         in the abstraction. For instance:
         {[
-          ML {l0} (0, ML {l1} 1)
+          abs { ML l0 (0, ML l1 1) }
 
-          ~~>
+              ~~>
 
-          ML {l0} (0, 1)
-          ML {l1} 1
+          abs {
+            ML l0 (0, 1),
+            ML l1 1 }
         ]}
      }
      {- [ctx] }
      {- [abs] }
     } *)
 val destructure_abs :
-  Meta.span -> abs_kind -> bool -> bool -> eval_ctx -> abs -> abs
+  Meta.span ->
+  abs_kind ->
+  can_end:bool ->
+  destructure_shared_values:bool ->
+  eval_ctx ->
+  abs ->
+  abs
 
 (** Return [true] if the values in an abstraction are destructured.
 

@@ -464,7 +464,7 @@ module Values = struct
     | ELoop (abs_id, lp_id, rg_id) ->
         "Loop(abs_id@"
         ^ AbstractionId.to_string abs_id
-        ^ "loop_id@" ^ LoopId.to_string lp_id ^ "," ^ "rg@"
+        ^ "loop_id@" ^ LoopId.to_string lp_id ^ ","
         ^ option_to_string
             (fun rg_id -> "rg@" ^ RegionGroupId.to_string rg_id)
             rg_id
