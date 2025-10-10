@@ -2369,7 +2369,7 @@ let eliminate_box_functions =
   lift_expr_map_visitor eliminate_box_functions_visitor
 
 (** Simplify the lambdas by applying beta-reduction *)
-let apply_beta_reduction_visitor (_ctx : ctx) (def : fun_decl) =
+let apply_beta_reduction_visitor (ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
 
   object (self)
@@ -2381,15 +2381,21 @@ let apply_beta_reduction_visitor (_ctx : ctx) (def : fun_decl) =
       | Some e -> e.e
 
     method! visit_texpr env e =
+      [%ldebug "e:\n" ^ texpr_to_string ctx e];
       let f, args = destruct_apps e in
       let args = List.map (self#visit_texpr env) args in
       let pats, body = raw_destruct_lambdas f in
-      if args <> [] && pats <> [] then
+      [%ldebug
+        "After decomposing:\n- pats: "
+        ^ Print.list_to_string (tpattern_to_string ctx) pats
+        ^ "\n- body: " ^ texpr_to_string ctx body ^ "\n- args: "
+        ^ Print.list_to_string (texpr_to_string ctx) args];
+      if args <> [] && pats <> [] then (
+        [%ldebug "Can simplify:\n" ^ texpr_to_string ctx e];
         (* Apply the beta-reduction
 
-             First split the arguments/patterns between those that
-             will disappear and those we have to preserve.
-          *)
+           First split the arguments/patterns between those that
+           will disappear and those we have to preserve. *)
         let min = Int.min (List.length args) (List.length pats) in
         let pats, kept_pats = Collections.List.split_at pats min in
         let args, kept_args = Collections.List.split_at args min in
@@ -2399,16 +2405,25 @@ let apply_beta_reduction_visitor (_ctx : ctx) (def : fun_decl) =
         in
         let body =
           let env = FVarId.Map.add_list (List.combine vars args) env in
-          super#visit_texpr env body
+          self#visit_texpr env body
         in
         (* Reconstruct the term *)
         [%add_loc] mk_apps span
-          (mk_opened_lambdas span kept_pats (super#visit_texpr env body))
-          kept_args
+          (mk_opened_lambdas span kept_pats body)
+          kept_args)
       else
-        [%add_loc] mk_apps span
-          (mk_opened_lambdas span pats (super#visit_texpr env body))
-          args
+        (* We may be exploring an expression of the shape:
+           [(fun y -> (fun x -> e) y))]
+           in which case we need to make sure we simplify the body:
+           [(fun x -> e) y ~> e[x/y]]
+
+           We also have to be careful about not infinitely looping.
+        *)
+        let body =
+          if pats <> [] then self#visit_texpr env body
+          else super#visit_texpr env body
+        in
+        [%add_loc] mk_apps span (mk_opened_lambdas span pats body) args
   end
 
 let apply_beta_reduction =
