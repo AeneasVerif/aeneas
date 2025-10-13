@@ -249,22 +249,16 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
     This is a continuation function called by the symbolic interpreter upon
     reaching the [return] instruction when synthesizing a *backward* function:
     this continuation takes care of doing the proper manipulations to finish the
-    synthesis (mostly by ending abstractions).
-
-    [is_regular_return]: [true] if we reached a [Return] instruction (i.e., the
-    result is {!constructor:Cps.statement_eval_res.Return}). TODO: remove this
-    parameter? *)
+    synthesis (mostly by ending abstractions). *)
 let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
     (fdef : fun_decl) (inst_sg : inst_fun_sig) (back_id : RegionGroupId.id)
-    (is_regular_return : bool) (ctx : eval_ctx) : SA.expr =
+    (ret_value : tvalue) (ctx : eval_ctx) : SA.expr =
   let span = fdef.item_meta.span in
   [%ltrace
     "- fname: "
     ^ Print.EvalCtx.name_to_string ctx fdef.item_meta.name
     ^ "\n- back_id: "
     ^ RegionGroupId.to_string back_id
-    ^ "\n- is_regular_return: "
-    ^ Print.bool_to_string is_regular_return
     ^ "\n- ctx:\n"
     ^ Print.Contexts.eval_ctx_to_string ~span:(Some span) ctx];
   (* We need to instantiate the function signature - to retrieve
@@ -279,9 +273,6 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
       fdef.kind
   in
   let ret_rty = ret_inst_sg.output in
-  (* Move the return value out of the return variable *)
-  let pop_return_value = is_regular_return in
-  let ret_value, ctx, cc = pop_frame config span pop_return_value ctx in
 
   (* We need to find the parents regions/abstractions of the region we
      will end - this will allow us to, first, mark the other return
@@ -303,47 +294,41 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
   (* Insert the return value in the return abstractions (by applying
    * borrow projections) *)
   let ctx =
-    if is_regular_return then (
-      let ret_value = Option.get ret_value in
-      let compute_abs_avalues (rg_id : region_group_id) (abs : abs)
-          (ctx : eval_ctx) : tavalue list * abs_cont option =
-        (* Create the abstraction values *)
-        let avalue =
-          apply_proj_borrows_on_input_value span ctx abs.regions.owned ret_value
-            ret_rty
-        in
-        (* Create the abstraction continuation expression *)
-        let cont : abs_cont =
-          let output =
-            apply_eproj_borrows_on_input_value span ctx abs.regions.owned
-              ret_value ret_rty
-          in
-          let input = EApp (EOutputAbs rg_id, []) in
-          let input = { value = input; ty = ret_rty } in
-          { output = Some output; input = Some input }
-        in
-        ([ avalue ], Some cont)
+    let compute_abs_avalues (rg_id : region_group_id) (abs : abs)
+        (ctx : eval_ctx) : tavalue list * abs_cont option =
+      (* Create the abstraction values *)
+      let avalue =
+        apply_proj_borrows_on_input_value span ctx abs.regions.owned ret_value
+          ret_rty
       in
+      (* Create the abstraction continuation expression *)
+      let cont : abs_cont =
+        let output =
+          apply_eproj_borrows_on_input_value span ctx abs.regions.owned
+            ret_value ret_rty
+        in
+        let input = EApp (EOutputAbs rg_id, []) in
+        let input = { value = input; ty = ret_rty } in
+        { output = Some output; input = Some input }
+      in
+      ([ avalue ], Some cont)
+    in
 
-      (* Initialize and insert the abstractions in the context.
+    (* Initialize and insert the abstractions in the context.
 
          We take care of allowing to end only the regions which should end (note
          that this is important for soundness: this is part of the borrow checking).
          Also see the documentation of the [can_end] field of [abs] for more
          information. *)
-      let parent_and_current_rgs = RegionGroupId.Set.add back_id parent_rgs in
-      let region_can_end rid =
-        RegionGroupId.Set.mem rid parent_and_current_rgs
-      in
-      [%sanity_check] span (region_can_end back_id);
-      let ctx =
-        create_push_abstractions_from_abs_region_groups
-          (fun rg_id -> SynthRet rg_id)
-          ret_inst_sg.abs_regions_hierarchy region_can_end compute_abs_avalues
-          ctx
-      in
-      ctx)
-    else ctx
+    let parent_and_current_rgs = RegionGroupId.Set.add back_id parent_rgs in
+    let region_can_end rid = RegionGroupId.Set.mem rid parent_and_current_rgs in
+    [%sanity_check] span (region_can_end back_id);
+    let ctx =
+      create_push_abstractions_from_abs_region_groups
+        (fun rg_id -> SynthRet rg_id)
+        ret_inst_sg.abs_regions_hierarchy region_can_end compute_abs_avalues ctx
+    in
+    ctx
   in
   [%ltrace
     "After putting the return value in the proper abstraction:\n" ^ "\n- ctx:\n"
@@ -374,10 +359,9 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
 
   (* Actually end them *)
   let ctx, cc =
-    comp cc
-      (fold_left_apply_continuation
-         (fun id ctx -> end_abstraction config span id ctx)
-         target_abs_ids ctx)
+    fold_left_apply_continuation
+      (fun id ctx -> end_abstraction config span id ctx)
+      target_abs_ids ctx
   in
   (* Generate the Return node *)
   let return_expr = SA.Return (ctx, None) in
@@ -416,7 +400,10 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
   let config = mk_config SymbolicMode in
   let finish (res : statement_eval_res) (ctx : eval_ctx) =
     let ctx0 = ctx in
-    [%ltrace "cf_finish:\n" ^ Cps.show_statement_eval_res res];
+    [%ltrace
+      "cf_finish:\n"
+      ^ Cps.show_statement_eval_res res
+      ^ "\n- ctx:\n" ^ eval_ctx_to_string ctx];
 
     match res with
     | Return ->
@@ -426,33 +413,32 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
          * We then group everything together.
          *)
         (* There are two cases:
-         * - if this is a forward translation, we retrieve the returned value.
-         * - if this is a backward translation, we introduce "return"
-         *   abstractions to consume the return value, then end all the
-         *   abstractions up to the one in which we are interested.
-         *)
-        (* Forward translation: retrieve the returned value *)
-        let fwd_e, ctx_return, ret_value =
-          (* Pop the frame and retrieve the returned value at the same time *)
+         - if this is a forward translation, we retrieve the returned value.
+         - if this is a backward translation, we introduce "return"
+           abstractions to consume the return value, then end all the
+           abstractions up to the one in which we are interested.
+        *)
+        (* Whatever the scenario, we need to pop the frame and retrieve the returned value *)
+        let ret_value, ctx, cc_pop =
           let pop_return_value = true in
-          let ret_value, ctx, cc_pop =
-            pop_frame config span pop_return_value ctx
-          in
-          (* Generate the Return node *)
-          (cc_pop (SA.Return (ctx, ret_value)), ctx, Option.get ret_value)
+          pop_frame config span pop_return_value ctx
         in
+        let ret_value = Option.get ret_value in
+        let ctx_return = ctx in
+
+        (* Forward translation: generate the Return node *)
+        let fwd_e = cc_pop (SA.Return (ctx, Some ret_value)) in
         (* Backward translation: introduce "return"
            abstractions to consume the return value, then end all the
            abstractions up to the one in which we are interested.
         *)
-        let is_regular_return = true in
         let finish_back_eval back_id =
           evaluate_function_symbolic_synthesize_backward_from_return config fdef
-            inst_sg back_id is_regular_return ctx
+            inst_sg back_id ret_value ctx
         in
         let back_el =
           RegionGroupId.mapi
-            (fun gid _ -> (gid, finish_back_eval gid))
+            (fun gid _ -> (gid, cc_pop (finish_back_eval gid)))
             regions_hierarchy
         in
         let back_el = RegionGroupId.Map.of_list back_el in
