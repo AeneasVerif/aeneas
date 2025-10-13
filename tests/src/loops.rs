@@ -379,7 +379,7 @@ pub fn ignore_input_shared_borrow(_a: &mut u32, mut i: u32) {
 }
 
 /// Comes from: https://github.com/AeneasVerif/aeneas/issues/500
-fn foo1(s: &mut bool) {
+fn issue500(s: &mut bool) {
     fn bar(_a: &mut bool) {}
 
     let mut a = *s;
@@ -390,7 +390,7 @@ fn foo1(s: &mut bool) {
 }
 
 /// Comes from: https://github.com/AeneasVerif/aeneas/issues/351
-fn foo2<'a>(h : &'a u8, mut t: &'a List<u8>) -> &'a u8 {
+fn issue351<'a>(h : &'a u8, mut t: &'a List<u8>) -> &'a u8 {
     let mut last = h;
     while let List::Cons(ht, tt) = t
     {
@@ -401,7 +401,7 @@ fn foo2<'a>(h : &'a u8, mut t: &'a List<u8>) -> &'a u8 {
 }
 
 /// https://github.com/AeneasVerif/aeneas/issues/270
-fn foo4(v: &List<List<u8>>) -> Option<&List<u8>> {
+fn issue270(v: &List<List<u8>>) -> Option<&List<u8>> {
     fn box_get_borrow<'a, T>(x : &Box<T>) -> &T {
         &*x
     }
@@ -417,5 +417,20 @@ fn foo4(v: &List<List<u8>>) -> Option<&List<u8>> {
     }
     else {
         None
+    }
+}
+
+/// https://github.com/AeneasVerif/aeneas/issues/400
+fn issue400_1(a: &mut i32, b: &mut i32, cond : bool) {
+    let mut y = &mut *a;
+    let mut i = 0;
+    while i < 32 {
+        if cond {
+            y = &mut *a;
+        }
+        else {
+            y = &mut *b;
+        }
+        i += 1;
     }
 }
