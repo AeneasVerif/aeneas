@@ -4,6 +4,15 @@
 //@ [coq,fstar] subdir=misc
 use std::vec::Vec;
 
+pub fn iter(max: u32) -> u32 {
+    let mut i = 0;
+    while i < max {
+        i += 1;
+    }
+
+    i
+}
+
 /// No borrows
 pub fn sum(max: u32) -> u32 {
     let mut i = 0;
@@ -366,5 +375,47 @@ pub fn incr_ignore_input_mut_borrow(a: &mut u32, mut i: u32) {
 pub fn ignore_input_shared_borrow(_a: &mut u32, mut i: u32) {
     while i > 0 {
         i -= 1;
+    }
+}
+
+/// Comes from: https://github.com/AeneasVerif/aeneas/issues/500
+fn foo1(s: &mut bool) {
+    fn bar(_a: &mut bool) {}
+
+    let mut a = *s;
+    while 0 < 0 {
+        bar(&mut a);
+    }
+    *s = a;
+}
+
+/// Comes from: https://github.com/AeneasVerif/aeneas/issues/351
+fn foo2<'a>(h : &'a u8, mut t: &'a List<u8>) -> &'a u8 {
+    let mut last = h;
+    while let List::Cons(ht, tt) = t
+    {
+        last = ht;
+        t = &*tt;
+    }
+    return last;
+}
+
+/// https://github.com/AeneasVerif/aeneas/issues/270
+fn foo4(v: &List<List<u8>>) -> Option<&List<u8>> {
+    fn box_get_borrow<'a, T>(x : &Box<T>) -> &T {
+        &*x
+    }
+    if let List::Cons(h, t) = v {
+        let mut t = box_get_borrow(t);
+        let mut last = h;
+        while let List::Cons(ht, tt) = t
+        {
+            last = ht;
+            t = box_get_borrow(tt);
+        }
+        Some(last)
+    }
+    else {
+        None
     }
 }
