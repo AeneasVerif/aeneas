@@ -544,7 +544,8 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
 
 (** TODO: this is a bit of a hack: remove one the avalues are properly
     destructured. *)
-let destructure_shared_loans (span : Meta.span) : cm_fun =
+let destructure_shared_loans (span : Meta.span) (fixed_ids : ids_sets) : cm_fun
+    =
  fun ctx ->
   let bindings = ref [] in
 
@@ -664,11 +665,13 @@ let destructure_shared_loans (span : Meta.span) : cm_fun =
     ({ av with value }, avl)
   in
   let destructure_abs (abs : abs) : abs =
-    let avalues = List.map (destructure_avalue abs) abs.avalues in
-    let avalues =
-      List.flatten (List.map (fun (av, avl) -> av :: avl) avalues)
-    in
-    { abs with avalues }
+    if not (AbstractionId.Set.mem abs.abs_id fixed_ids.aids) then
+      let avalues = List.map (destructure_avalue abs) abs.avalues in
+      let avalues =
+        List.flatten (List.map (fun (av, avl) -> av :: avl) avalues)
+      in
+      { abs with avalues }
+    else abs
   in
   let ctx = { ctx with env = env_map_abs destructure_abs ctx.env } in
 
@@ -703,7 +706,7 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
     ^ eval_ctx_to_string tgt_ctx];
 
   (* Simplify the ended shared loans *)
-  let tgt_ctx, cc = comp cc (destructure_shared_loans span tgt_ctx) in
+  let tgt_ctx, cc = comp cc (destructure_shared_loans span fixed_ids tgt_ctx) in
   [%ltrace
     "- tgt_ctx after simplify_ended_shared_loans:\n"
     ^ eval_ctx_to_string tgt_ctx];

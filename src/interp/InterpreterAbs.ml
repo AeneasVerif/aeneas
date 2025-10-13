@@ -512,13 +512,25 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
 
   (* Merge.
 
-     We take all the values in the left abstraction and add the values from
+     We take the values in the left abstraction and add the values from
      the right abstraction one at a time. Whenever we add a value, we go
      through all the *left* values in the abstraction to check if we need
      to eliminate a shared borrow because there is already a shared loan,
      or to check if we need to merge a mutable borrow and a mutable loan, etc.
+
+     Note that we also filter the left avalues to remove ended loans, etc.
   *)
-  let left_avalues = ref abs0.avalues in
+  let left_avalues =
+    let keep (v : tavalue) : bool =
+      match v.value with
+      | ALoan (AEndedSharedLoan (sv, child))
+        when (not (value_has_loans_or_borrows (Some span) ctx sv.value))
+             && is_aignored child.value -> false
+      | _ -> true
+    in
+    let avalues = List.filter keep abs0.avalues in
+    ref avalues
+  in
   let right_avalues = ref [] in
 
   (* Some preprocessing: save all the normalized types of the loan projectors in
