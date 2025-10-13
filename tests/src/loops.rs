@@ -434,3 +434,23 @@ fn issue400_1(a: &mut i32, b: &mut i32, cond : bool) {
         i += 1;
     }
 }
+
+/// https://github.com/AeneasVerif/aeneas/issues/400
+fn issue400_2(a: &mut i32, b: &mut i32, c: &mut i32, conds : &[bool]) {
+    let mut y = &mut *a;
+    let mut z = &mut *b;
+    let mut i = 0;
+    while i < conds.len() {
+        if conds[i] {
+            y = &mut *a;
+            z = &mut *b;
+        }
+        else {
+            y = &mut *b;
+            z = &mut *c;
+        }
+        i += 1;
+    }
+    *y += 3;
+    *z += 5;
+}
