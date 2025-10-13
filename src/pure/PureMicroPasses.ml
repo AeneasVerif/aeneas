@@ -1078,7 +1078,10 @@ let simplify_let_bindings =
       let a1 = array_update a i2 x2
     ]}
 
-    This micro pass removes those duplicate function calls. *)
+    This micro pass removes those duplicate function calls.
+
+    TODO: this micro-pass will not be sound anymore once we allow stateful
+    (backward) functions. *)
 let simplify_duplicate_calls_visitor (_ctx : ctx) (def : fun_decl) =
   object (self)
     inherit [_] map_expr as super
@@ -1086,9 +1089,18 @@ let simplify_duplicate_calls_visitor (_ctx : ctx) (def : fun_decl) =
     method! visit_Let env monadic pat bound next =
       let bound = self#visit_texpr env bound in
       (* Register the function call if the pattern doesn't contain dummy
-           variables *)
+         variables *)
       let env =
-        if monadic then
+        let factor =
+          monadic
+          ||
+          match destruct_apps bound with
+          | { e = FVar _; _ }, _ :: _ ->
+              (* May be a backward function call *)
+              true
+          | _ -> false
+        in
+        if factor then
           match tpattern_to_texpr def.item_meta.span pat with
           | None -> env
           | Some pat_expr -> TExprMap.add bound (monadic, pat_expr) env
