@@ -606,6 +606,7 @@ let ids_sets_empty_borrows_loans (ids : ids_sets) : ids_sets =
     blids = _;
     borrow_ids = _;
     loan_ids = _;
+    shared_loans_to_values = _;
     unique_borrow_ids = _;
     shared_borrow_ids = _;
     non_unique_shared_borrow_ids = _;
@@ -624,6 +625,7 @@ let ids_sets_empty_borrows_loans (ids : ids_sets) : ids_sets =
       unique_borrow_ids = UniqueBorrowIdSet.empty;
       shared_borrow_ids = SharedBorrowId.Set.empty;
       non_unique_shared_borrow_ids = BorrowId.Set.empty;
+      shared_loans_to_values = BorrowId.Map.empty;
       loan_ids = empty;
       dids;
       rids;

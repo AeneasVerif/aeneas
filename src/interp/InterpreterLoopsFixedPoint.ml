@@ -384,6 +384,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
       shared_borrow_ids;
       non_unique_shared_borrow_ids;
       loan_ids;
+      shared_loans_to_values;
       dids;
       rids;
       sids;
@@ -406,6 +407,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
         shared_borrow_ids;
         non_unique_shared_borrow_ids;
         loan_ids;
+        shared_loans_to_values;
         dids;
         rids;
         sids;

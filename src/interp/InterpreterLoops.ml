@@ -130,8 +130,12 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
     (break_input_svalues : SymbolicValueId.id list) : SA.expr =
   [%ldebug "fp_ctx:\n" ^ eval_ctx_to_string fp_ctx];
 
+  (* Save a snapshot of the context as meta-information: it is useful to
+     compute pretty names at extraction time *)
+  let cc = SynthesizeSymbolic.save_snapshot fp_ctx in
+
   (* First, evaluate the loop body starting from the **fixed-point** context *)
-  let ctx_resl, cf_loop = eval_loop_body fp_ctx in
+  let ctx_resl, cf_loop = comp cc (eval_loop_body fp_ctx) in
 
   (* Small helpers *)
   let reorder_input_abs (map : abs AbstractionId.Map.t)

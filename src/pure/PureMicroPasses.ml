@@ -416,6 +416,11 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
               (fun (var, name) -> register_texpr_has_name var name 0)
               infos
         | _ -> ());
+        (* Also link the loop bound variables to the input arguments *)
+        List.iter
+          (fun (pat, arg) -> register_assign pat arg)
+          (List.combine loop.loop_body.inputs loop.inputs);
+        (* Recurse *)
         super#visit_loop env loop
 
       method! visit_mplace _ mp =

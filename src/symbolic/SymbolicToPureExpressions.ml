@@ -97,6 +97,7 @@ let eval_ctx_to_symbolic_assignments_info (ctx : bs_ctx) (ectx : C.eval_ctx) :
     (fvar * string) list =
   let info : (fvar * string) list ref = ref [] in
   let push_info fv name = info := (fv, name) :: !info in
+  let shared_loans = (fst (compute_ctx_ids ectx)).shared_loans_to_values in
   let visitor =
     object (self)
       inherit [_] C.iter_eval_ctx
@@ -110,6 +111,9 @@ let eval_ctx_to_symbolic_assignments_info (ctx : bs_ctx) (ectx : C.eval_ctx) :
       method! visit_value name v =
         match v with
         | VLiteral _ | VBottom -> ()
+        | VBorrow (VSharedBorrow (bid, _)) ->
+            let v = V.BorrowId.Map.find bid shared_loans in
+            self#visit_tvalue name v
         | VBorrow (VMutBorrow (_, v)) | VLoan (VSharedLoan (_, v)) ->
             self#visit_tvalue name v
         | VSymbolic sv ->
@@ -283,7 +287,7 @@ let rec translate_expr (e : S.expr) (ctx : bs_ctx) : texpr =
   | IntroSymbolic (ectx, p, sv, v, e) ->
       translate_intro_symbolic ectx p sv v e ctx
   | SubstituteAbsIds (aids, e) -> translate_substitute_abs_ids ctx aids e
-  | Meta (span, e) -> translate_espan span e ctx
+  | Meta (meta, e) -> translate_emeta meta e ctx
   | ForwardEnd (return_value, ectx, e, back_e) ->
       (* Translate the end of a function (this is introduced when we reach a [return] statement). *)
       translate_forward_end return_value ectx e back_e ctx
@@ -1608,10 +1612,10 @@ and translate_substitute_abs_ids (ctx : bs_ctx)
   in
   translate_expr e ctx
 
-and translate_espan (span : S.espan) (e : S.expr) (ctx : bs_ctx) : texpr =
+and translate_emeta (meta : S.emeta) (e : S.expr) (ctx : bs_ctx) : texpr =
   let next_e = translate_expr e ctx in
-  let span =
-    match span with
+  let meta =
+    match meta with
     | S.Assignment (ectx, lp, rv, rp) ->
         let type_infos = ctx.type_ctx.type_infos in
         let lp = translate_mplace (Some ctx.span) type_infos lp in
@@ -1631,9 +1635,9 @@ and translate_espan (span : S.espan) (e : S.expr) (ctx : bs_ctx) : texpr =
           | _ -> Some (SymbolicPlaces infos)
         else None
   in
-  match span with
-  | Some span ->
-      let e = Meta (span, next_e) in
+  match meta with
+  | Some meta ->
+      let e = Meta (meta, next_e) in
       let ty = next_e.ty in
       { e; ty }
   | None -> next_e

@@ -435,6 +435,7 @@ type ids_sets = {
   non_unique_shared_borrow_ids : BorrowId.Set.t;
   shared_borrow_ids : SharedBorrowId.Set.t;
   loan_ids : BorrowId.Set.t;  (** Only the loan ids *)
+  shared_loans_to_values : tvalue BorrowId.Map.t;
   dids : DummyVarId.Set.t;
   rids : RegionId.Set.t;
       (** This should only contain **free** region ids (note that we have to be
@@ -456,6 +457,7 @@ let compute_ids () =
   let shared_borrow_ids = ref SharedBorrowId.Set.empty in
   let non_unique_shared_borrow_ids = ref BorrowId.Set.empty in
   let loan_ids = ref BorrowId.Set.empty in
+  let shared_loans_to_values = ref BorrowId.Map.empty in
   let aids = ref AbstractionId.Set.empty in
   let dids = ref DummyVarId.Set.empty in
   let rids = ref RegionId.Set.empty in
@@ -471,6 +473,7 @@ let compute_ids () =
       shared_borrow_ids = !shared_borrow_ids;
       non_unique_shared_borrow_ids = !non_unique_shared_borrow_ids;
       loan_ids = !loan_ids;
+      shared_loans_to_values = !shared_loans_to_values;
       dids = !dids;
       rids = !rids;
       sids = !sids;
@@ -503,6 +506,16 @@ let compute_ids () =
       method! visit_loan_id _ id =
         blids := BorrowId.Set.add id !blids;
         loan_ids := BorrowId.Set.add id !loan_ids
+
+      method! visit_VSharedLoan env bid sv =
+        shared_loans_to_values :=
+          BorrowId.Map.add bid sv !shared_loans_to_values;
+        super#visit_VSharedLoan env bid sv
+
+      method! visit_ASharedLoan env pm bid sv child =
+        shared_loans_to_values :=
+          BorrowId.Map.add bid sv !shared_loans_to_values;
+        super#visit_ASharedLoan env pm bid sv child
 
       method! visit_VSharedBorrow _ bid sid = add_shared_borrow bid sid
       method! visit_VReservedMutBorrow _ bid sid = add_shared_borrow bid sid

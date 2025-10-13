@@ -1979,6 +1979,7 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
       blids = _;
       borrow_ids;
       loan_ids;
+      shared_loans_to_values = _;
       unique_borrow_ids;
       shared_borrow_ids = _;
       non_unique_shared_borrow_ids = _;

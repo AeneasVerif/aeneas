@@ -27,7 +27,7 @@ let mk_opt_place_from_op (span : Meta.span) (op : operand)
   | Copy p | Move p -> Some (mk_mplace span p ctx)
   | Constant _ -> None
 
-let mk_espan (m : espan) (e : expr) : expr = Meta (m, e)
+let mk_emeta (m : emeta) (e : expr) : expr = Meta (m, e)
 
 let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
     (place : mplace option) (seel : symbolic_expansion option list)

@@ -62,7 +62,7 @@ type call = {
 
 (** Meta information for expressions, not necessary for synthesis but useful to
     guide it to generate a pretty output. *)
-type espan =
+type emeta =
   | Assignment of Contexts.eval_ctx * mplace * tvalue * mplace option
       (** We generated an assignment (destination, assigned value, src) *)
   | Snapshot of Contexts.eval_ctx
@@ -87,7 +87,7 @@ class ['self] iter_expr_base =
     method visit_eval_ctx : 'env -> Contexts.eval_ctx -> unit = fun _ _ -> ()
     method visit_call : 'env -> call -> unit = fun _ _ -> ()
     method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
-    method visit_espan : 'env -> espan -> unit = fun _ _ -> ()
+    method visit_emeta : 'env -> emeta -> unit = fun _ _ -> ()
 
     method visit_region_group_id_map :
         'a. ('env -> 'a -> unit) -> 'env -> 'a region_group_id_map -> unit =
@@ -209,7 +209,7 @@ type expr =
       (Contexts.eval_ctx[@opaque]) * loop_id * tvalue list * abs list
   | LoopBreak of (Contexts.eval_ctx[@opaque]) * loop_id * tvalue list * abs list
   | Loop of loop  (** Loop: call to a loop *)
-  | Meta of (espan[@opaque]) * expr  (** Meta information *)
+  | Meta of (emeta[@opaque]) * expr  (** Meta information *)
   | Error of Meta.span option * string
 
 and loop = {
