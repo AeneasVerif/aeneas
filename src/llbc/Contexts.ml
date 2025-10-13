@@ -491,6 +491,12 @@ let env_filter_abs (f : abs -> bool) (env : env) : env =
       | EAbs abs -> f abs)
     env
 
+let ctx_map_abs (f : abs -> abs) (ctx : eval_ctx) : eval_ctx =
+  { ctx with env = env_map_abs f ctx.env }
+
+let ctx_filter_abs (f : abs -> bool) (ctx : eval_ctx) : eval_ctx =
+  { ctx with env = env_filter_abs f ctx.env }
+
 (** Return the types of the properly instantiated ADT's variant, provided a
     context. *)
 let ctx_type_get_instantiated_variants_fields_types (span : Meta.span)

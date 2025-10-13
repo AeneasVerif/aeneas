@@ -404,9 +404,11 @@ let tavalue_split_marker (span : Meta.span) (ctx : eval_ctx) (av : tavalue) :
     if pm = PNone then mk_split mk_value else [ av ]
   in
   match av.value with
-  | AAdt _ | ABottom | AIgnored _ ->
-      [%craise] span
-        ("Internal error: unexpected value: " ^ tavalue_to_string ctx av)
+  | AAdt _ -> [%craise] span "Not implemented yet"
+  | ABottom -> [%internal_error] span
+  | AIgnored _ ->
+      (* Nothing to do *)
+      [ av ]
   | ABorrow bc -> (
       match bc with
       | AMutBorrow (pm, bid, child) ->
@@ -630,7 +632,9 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
         | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty ->
             [%craise] span "Unreachable"
       end
-    | AAdt _ | ABottom | AIgnored _ -> [%craise] span "Unreachable"
+    | AAdt _ -> [%craise] span "Not implemented yet"
+    | ABottom -> [%internal_error] span
+    | AIgnored _ -> (* Nothing to register *) ()
   in
   List.iter add_avalue abs1.avalues;
 

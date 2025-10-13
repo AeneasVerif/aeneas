@@ -754,6 +754,53 @@ let eliminate_shared_borrow_markers (_span : Meta.span) (ctx : eval_ctx) :
   in
   update_borrows#visit_eval_ctx () ctx
 
+(** Attempts to eliminate useless shared loans, in particular to get rid of the
+    remaining markers.
+
+    We simply eliminate shared loans which don't have corresponding shared
+    borrows.
+
+    TODO: that may actually not be necessary. *)
+let eliminate_shared_loans (span : Meta.span) (ctx : eval_ctx) : eval_ctx =
+  (* Compute the set of shared borrows *)
+  let ids, _ = compute_ctx_ids ctx in
+  let shared_borrows = ids.non_unique_shared_borrow_ids in
+
+  let update_loans =
+    object (self)
+      inherit [_] map_eval_ctx as super
+
+      method! visit_ASharedLoan env pm bid sv child =
+        if
+          (not (BorrowId.Set.mem bid shared_borrows))
+          &&
+          (* We have to pay attention to markers: if there is a borrow/loan
+              inside the shared value, by removing the shared loan we forget
+              about the marker, which can be a problem *)
+          not (value_has_loans_or_borrows (Some span) ctx sv.value)
+        then self#visit_AEndedSharedLoan env sv child
+        else super#visit_ASharedLoan env pm bid sv child
+    end
+  in
+  let ctx = update_loans#visit_eval_ctx () ctx in
+
+  (* Filter the avalues *)
+  let update_abs (abs : abs) : abs =
+    let keep (v : tavalue) : bool =
+      match v.value with
+      | ALoan (AEndedSharedLoan (sv, child))
+        when (not (value_has_loans_or_borrows (Some span) ctx sv.value))
+             && is_aignored child.value -> false
+      | _ -> true
+    in
+    let avalues = List.filter keep abs.avalues in
+    { abs with avalues }
+  in
+  let ctx = ctx_map_abs update_abs ctx in
+
+  (* *)
+  ctx
+
 (** Small utility: check whether an environment contains markers *)
 let eval_ctx_has_markers (ctx : eval_ctx) : bool =
   let visitor =
@@ -823,12 +870,20 @@ let collapse_ctx_aux config (span : Meta.span)
       old_ids ctx
   in
   [%ltrace "ctx after reduce and collapse:\n" ^ eval_ctx_to_string ctx];
+
   let ctx = eliminate_shared_borrow_markers span ctx in
   [%ltrace
     "ctx after reduce, collapse and eliminate_shared_borrow_markers:\n"
     ^ eval_ctx_to_string ctx];
+
+  let ctx = eliminate_shared_loans span ctx in
+  [%ltrace
+    "ctx after reduce, collapse and eliminate_shared_loans:\n"
+    ^ eval_ctx_to_string ctx];
+
   (* Sanity check: there are no markers remaining *)
   [%sanity_check] span (not (eval_ctx_has_markers ctx));
+
   (* One last cleanup *)
   let ctx, _ =
     InterpreterBorrows.simplify_dummy_values_useless_abs config span

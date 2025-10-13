@@ -1971,6 +1971,21 @@ let abs_is_destructured (span : Meta.span) (destructure_shared_values : bool)
     destructure_abs span abs.kind ~can_end:abs.can_end
       ~destructure_shared_values ctx abs
   in
+  [%ldebug
+    "- abs:\n" ^ abs_to_string span ctx abs ^ "\n- abs':\n"
+    ^ abs_to_string span ctx abs'];
+  (* TODO: the check is too precise, we need something more general (for instance,
+     [destructure_abs] tends to remove the optional meta values in [AIgnored],
+     making the check below fail if we directly compare the abstractions).
+     For now, we do a few ad-hoc modifications.
+  *)
+  let visitor =
+    object
+      inherit [_] map_abs
+      method! visit_AIgnored _ _ = AIgnored None
+    end
+  in
+  let abs = visitor#visit_abs () abs in
   abs = abs'
 
 exception FoundBorrowId of unique_borrow_id

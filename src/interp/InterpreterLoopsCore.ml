@@ -608,6 +608,7 @@ let ids_sets_empty_borrows_loans (ids : ids_sets) : ids_sets =
     loan_ids = _;
     unique_borrow_ids = _;
     shared_borrow_ids = _;
+    non_unique_shared_borrow_ids = _;
     dids;
     rids;
     sids;
@@ -622,6 +623,7 @@ let ids_sets_empty_borrows_loans (ids : ids_sets) : ids_sets =
       borrow_ids = empty;
       unique_borrow_ids = UniqueBorrowIdSet.empty;
       shared_borrow_ids = SharedBorrowId.Set.empty;
+      non_unique_shared_borrow_ids = BorrowId.Set.empty;
       loan_ids = empty;
       dids;
       rids;

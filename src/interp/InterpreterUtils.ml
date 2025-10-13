@@ -432,6 +432,7 @@ type ids_sets = {
   borrow_ids : BorrowId.Set.t;  (** Only the borrow ids *)
   unique_borrow_ids : UniqueBorrowIdSet.t;
       (** Only the borrow ids, where shared borrows are uniquely identified *)
+  non_unique_shared_borrow_ids : BorrowId.Set.t;
   shared_borrow_ids : SharedBorrowId.Set.t;
   loan_ids : BorrowId.Set.t;  (** Only the loan ids *)
   dids : DummyVarId.Set.t;
@@ -453,6 +454,7 @@ let compute_ids () =
   let borrow_ids = ref BorrowId.Set.empty in
   let unique_borrow_ids = ref UniqueBorrowIdSet.empty in
   let shared_borrow_ids = ref SharedBorrowId.Set.empty in
+  let non_unique_shared_borrow_ids = ref BorrowId.Set.empty in
   let loan_ids = ref BorrowId.Set.empty in
   let aids = ref AbstractionId.Set.empty in
   let dids = ref DummyVarId.Set.empty in
@@ -467,6 +469,7 @@ let compute_ids () =
       borrow_ids = !borrow_ids;
       unique_borrow_ids = !unique_borrow_ids;
       shared_borrow_ids = !shared_borrow_ids;
+      non_unique_shared_borrow_ids = !non_unique_shared_borrow_ids;
       loan_ids = !loan_ids;
       dids = !dids;
       rids = !rids;
@@ -478,7 +481,9 @@ let compute_ids () =
     blids := BorrowId.Set.add bid !blids;
     borrow_ids := BorrowId.Set.add bid !borrow_ids;
     unique_borrow_ids := UniqueBorrowIdSet.add (UShared sid) !unique_borrow_ids;
-    shared_borrow_ids := SharedBorrowId.Set.add sid !shared_borrow_ids
+    shared_borrow_ids := SharedBorrowId.Set.add sid !shared_borrow_ids;
+    non_unique_shared_borrow_ids :=
+      BorrowId.Set.add bid !non_unique_shared_borrow_ids
   in
   let obj =
     object

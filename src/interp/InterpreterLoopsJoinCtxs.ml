@@ -729,10 +729,20 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
     ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
     ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: " ^ eval_ctx_to_string tgt_ctx];
 
-  (* TODO: preparing the match might have moved some borrows to anonymous values,
-     so we could call [simplify_dummy_values_useless_abs] again, but if we do so
-     it would be better to call [reduce_ctx] and [prepare_loop_match_ctx_with_target]
-     again (potentially within a loop). *)
+  (* Reducing the context and preparing the match might have moved some borrows to
+     anonymous values or have transformed some shared loans into orphans, so we can
+     call [simplify_dummy_values_useless_abs] again.
+
+     TODO: it might be good to do something more general and repeatedly call
+     [reduce_ctx], [prepare_loop_match_ctx_with_target] and
+     [simplify_dummy_values_useless_abs] within a loop. *)
+  let tgt_ctx, cc =
+    comp cc
+      (simplify_dummy_values_useless_abs config span fixed_ids.aids tgt_ctx)
+  in
+  [%ltrace
+    "- tgt_ctx after simplify_dummy_values_useless_abs (pass 2):\n"
+    ^ eval_ctx_to_string tgt_ctx];
 
   (* Join the source context with the target context *)
   let joined_ctx, join_info =
@@ -776,7 +786,7 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
   *)
   let merge_seq = ref [] in
   let joined_ctx_not_projected =
-    collapse_ctx config span ~sequence:(Some merge_seq) ~with_abs_conts:true
+    collapse_ctx config span ~sequence:(Some merge_seq) ~with_abs_conts:false
       loop_id fixed_ids joined_ctx
   in
   let merge_seq = List.rev !merge_seq in
