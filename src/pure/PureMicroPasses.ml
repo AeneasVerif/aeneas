@@ -2134,22 +2134,24 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
     let constant_inputs =
       let used_in_body = texpr_get_fvars loop_body.loop_body in
       let bound_in_body = loop_body_get_bound_fvars loop_body in
+      let constant_inputs =
+        List.filter_map
+          (fun fid ->
+            if FVarId.Set.mem fid bound_in_body then None
+            else Some (FVarId.Map.find fid fvars))
+          (FVarId.Set.elements used_in_body)
+      in
       [%ldebug
-        "- used_in_body: "
+        "- body:\n"
+        ^ loop_body_to_string ctx loop_body
+        ^ "\n\n- used_in_body: "
         ^ FVarId.Set.to_string None used_in_body
         ^ "\n- bound_in_body: "
-        ^ FVarId.Set.to_string None bound_in_body];
-      List.filter_map
-        (fun fid ->
-          if FVarId.Set.mem fid bound_in_body then None
-          else Some (FVarId.Map.find fid fvars))
-        (FVarId.Set.elements used_in_body)
+        ^ FVarId.Set.to_string None bound_in_body
+        ^ "\n- constant_inputs: "
+        ^ Print.list_to_string (fvar_to_string ctx) constant_inputs];
+      constant_inputs
     in
-    [%ldebug
-      "- body:\n"
-      ^ fun_body_to_string ctx body
-      ^ "\n- constant_inputs: "
-      ^ Print.list_to_string (fvar_to_string ctx) constant_inputs];
     let constant_input_tys =
       List.map (fun (e : fvar) -> e.ty) constant_inputs
     in
@@ -2201,8 +2203,9 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
       { effect_info = loop_fwd_effect_info; ignore_output }
     in
 
+    (* Note that the loop body already binds the "constant" inputs: we don't
+       need to add them anymore *)
     let input_tys = List.map (fun (v : tpattern) -> v.ty) loop_body.inputs in
-    let input_tys = constant_input_tys @ input_tys in
     let output = subst_visitor#visit_ty subst output_ty in
 
     let llbc_generics : T.generic_params =
@@ -3008,6 +3011,7 @@ let add_fuel_one (ctx : ctx) (loops : fun_decl LoopId.Map.t) (def : fun_decl) :
 
   (* Update the body *)
   let rec update (fuel : texpr option) (e : texpr) : texpr =
+    [%ldebug "e:\n" ^ texpr_to_string ctx e];
     match e.e with
     | FVar _ | BVar _ | CVar _ | Const _ -> e
     | App _ | Qualif _ ->
@@ -3016,6 +3020,9 @@ let add_fuel_one (ctx : ctx) (loops : fun_decl LoopId.Map.t) (def : fun_decl) :
         (* The arguments *must* be pure (which means they can not be stateful
          nor divergent) *)
         let args = List.map (update None) args in
+        [%ldebug
+          "- f: " ^ texpr_to_string ctx f ^ "\n- args:\n"
+          ^ Print.list_to_string (texpr_to_string ctx) args];
         (* *)
         begin
           match f.e with
@@ -3032,6 +3039,9 @@ let add_fuel_one (ctx : ctx) (loops : fun_decl LoopId.Map.t) (def : fun_decl) :
                     [%sanity_check] span (fid' = def.def_id);
                     LoopId.Map.find lp_id loops
               in
+              [%ldebug
+                "def'.signature.inputs:\n"
+                ^ Print.list_to_string (ty_to_string ctx) def'.signature.inputs];
               (* This should be a full application *)
               [%sanity_check] span
                 (List.length args = List.length def'.signature.inputs);
