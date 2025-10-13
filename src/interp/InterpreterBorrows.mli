@@ -131,6 +131,11 @@ val destructure_abs :
     The input boolean is [destructure_shared_value]. See {!destructure_abs}. *)
 val abs_is_destructured : Meta.span -> bool -> eval_ctx -> abs -> bool
 
+(** Attempts to eliminate useless ended shared loans.
+
+    TODO: will not be necessary once we destructure the avalues. *)
+val eliminate_ended_shared_loans : Meta.span -> eval_ctx -> eval_ctx
+
 (** Simplify the dummy values in a context by removing as many as possible and
     ending as many borrows as possible.
 

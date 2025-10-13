@@ -2115,6 +2115,25 @@ let abs_mut_borrows_loans_in_fixed span (ctx : eval_ctx)
     false
   with Found -> true
 
+let eliminate_ended_shared_loans (span : Meta.span) (ctx : eval_ctx) : eval_ctx
+    =
+  (* Filter the avalues *)
+  let update_abs (abs : abs) : abs =
+    let keep (v : tavalue) : bool =
+      match v.value with
+      | ALoan (AEndedSharedLoan (sv, child))
+        when (not (value_has_loans_or_borrows (Some span) ctx sv.value))
+             && is_aignored child.value -> false
+      | _ -> true
+    in
+    let avalues = List.filter keep abs.avalues in
+    { abs with avalues }
+  in
+  let ctx = ctx_map_abs update_abs ctx in
+
+  (* *)
+  ctx
+
 (* Repeat until we can't simplify the context anymore:
    - end the borrows which appear in anonymous values and don't contain loans
    - end the region abstractions which can be ended (no loans)
@@ -2305,6 +2324,7 @@ let simplify_dummy_values_useless_abs (config : config) (span : Meta.span)
     if ctx = ctx0 then (ctx, cc) else comp cc (simplify ctx)
   in
   let ctx, cc = simplify ctx0 in
+  let ctx = eliminate_ended_shared_loans span ctx in
   [%ltrace
     "- fixed_aids: "
     ^ AbstractionId.Set.to_string None fixed_abs_ids

@@ -660,7 +660,11 @@ let tavalue_add_marker (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
         | ASharedLoan (pm0, bids, av, child) ->
             [%sanity_check] span (pm0 = PNone);
             super#visit_aloan_content env (ASharedLoan (pm, bids, av, child))
-        | _ -> [%internal_error] span
+        | _ ->
+            [%craise] span
+              ("(Internal error: please file an issue (unexpected value: "
+              ^ aloan_content_to_string ctx lc
+              ^ ")")
 
       method! visit_aborrow_content env bc =
         match bc with

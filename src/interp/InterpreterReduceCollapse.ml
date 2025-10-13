@@ -12,6 +12,93 @@ open InterpreterLoopsMatchCtxs
 (** The local logger *)
 let log = Logging.reduce_collapse_log
 
+(** Attempts to eliminate useless shared loans, in particular to get rid of
+    remaining markers.
+
+    We simply eliminate shared loans which don't have corresponding shared
+    borrows.
+
+    TODO: will not be necessary once we destructure the avalues. *)
+let eliminate_shared_loans (span : Meta.span) (fixed_ids : ids_sets)
+    (ctx : eval_ctx) : eval_ctx =
+  (* Compute the set of shared borrows *)
+  let ids, _ = compute_ctx_ids ctx in
+  let shared_borrows = ids.non_unique_shared_borrow_ids in
+
+  let update_loans =
+    object (self)
+      inherit [_] map_abs as super
+
+      method! visit_ASharedLoan env pm bid sv child =
+        if
+          (not (BorrowId.Set.mem bid shared_borrows))
+          &&
+          (* We have to pay attention to markers: if there is a borrow/loan
+              inside the shared value, by removing the shared loan we forget
+              about the marker, which can be a problem *)
+          not (value_has_loans_or_borrows (Some span) ctx sv.value)
+        then self#visit_AEndedSharedLoan env sv child
+        else super#visit_ASharedLoan env pm bid sv child
+    end
+  in
+  let update_abs (abs : abs) : abs =
+    if not (AbstractionId.Set.mem abs.abs_id fixed_ids.aids) then
+      update_loans#visit_abs () abs
+    else abs
+  in
+  let ctx = ctx_map_abs update_abs ctx in
+
+  (* Remove the ended shared loans, if possible *)
+  let ctx = InterpreterBorrows.eliminate_ended_shared_loans span ctx in
+
+  (* *)
+  ctx
+
+(** Attempts to eliminate remaining markers over shared borrows.
+
+    We can eliminate a marker over a shared borrow if the corresponding loan in
+    the context doesn't have markers. The reason is that we are always allowed
+    to introduce a shared borrow for an existing shared loan: in order to remove
+    the marker, we can introduce a shared borrow in the other environment.
+
+    For instance, the following is legal:
+    {[
+      x -> SL l v
+      abs { |SB l| } // the left environment has a borrow, but not the right one
+
+        ~>
+
+      x -> SL l v
+      abs { SB l } // introduce SB l in the right environment and add it to the abstraction
+    ]} *)
+
+let eliminate_shared_borrow_markers (_span : Meta.span) (ctx : eval_ctx) :
+    eval_ctx =
+  (* Compute the set of loans without markers *)
+  let non_marked_loans = ref BorrowId.Set.empty in
+  let collect_loans =
+    object
+      inherit [_] iter_eval_ctx as super
+
+      method! visit_ASharedLoan env pm lid sv child =
+        if pm = PNone then
+          non_marked_loans := BorrowId.Set.add lid !non_marked_loans;
+        super#visit_ASharedLoan env pm lid sv child
+    end
+  in
+  collect_loans#visit_eval_ctx () ctx;
+
+  let update_borrows =
+    object
+      inherit [_] map_eval_ctx as super
+
+      method! visit_ASharedBorrow env pm bid sid =
+        let pm = if BorrowId.Set.mem bid !non_marked_loans then PNone else pm in
+        super#visit_ASharedBorrow env pm bid sid
+    end
+  in
+  update_borrows#visit_eval_ctx () ctx
+
 (** Utility.
 
     An environment augmented with information about its
@@ -502,8 +589,11 @@ let reduce_ctx config (span : Meta.span)
       fixed_ids.aids ctx
   in
   (* Reduce *)
-  reduce_ctx_with_markers None sequence span ~with_abs_conts loop_id fixed_ids
-    ctx
+  let ctx =
+    reduce_ctx_with_markers None sequence span ~with_abs_conts loop_id fixed_ids
+      ctx
+  in
+  eliminate_shared_loans span fixed_ids ctx
 
 (** Auxiliary function for collapse (see below).
 
@@ -709,98 +799,6 @@ let collapse_ctx_collapse (span : Meta.span)
   (* Return the new context *)
   ctx
 
-(** Attempts to eliminate remaining markers over shared borrows.
-
-    We can eliminate a marker over a shared borrow if the corresponding loan in
-    the context doesn't have markers. The reason is that we are always allowed
-    to introduce a shared borrow for an existing shared loan: in order to remove
-    the marker, we can introduce a shared borrow in the other environment.
-
-    For instance, the following is legal:
-    {[
-      x -> SL l v
-      abs { |SB l| } // the left environment has a borrow, but not the right one
-
-        ~>
-
-      x -> SL l v
-      abs { SB l } // introduce SB l in the right environment and add it to the abstraction
-    ]} *)
-
-let eliminate_shared_borrow_markers (_span : Meta.span) (ctx : eval_ctx) :
-    eval_ctx =
-  (* Compute the set of loans without markers *)
-  let non_marked_loans = ref BorrowId.Set.empty in
-  let collect_loans =
-    object
-      inherit [_] iter_eval_ctx as super
-
-      method! visit_ASharedLoan env pm lid sv child =
-        if pm = PNone then
-          non_marked_loans := BorrowId.Set.add lid !non_marked_loans;
-        super#visit_ASharedLoan env pm lid sv child
-    end
-  in
-  collect_loans#visit_eval_ctx () ctx;
-
-  let update_borrows =
-    object
-      inherit [_] map_eval_ctx as super
-
-      method! visit_ASharedBorrow env pm bid sid =
-        let pm = if BorrowId.Set.mem bid !non_marked_loans then PNone else pm in
-        super#visit_ASharedBorrow env pm bid sid
-    end
-  in
-  update_borrows#visit_eval_ctx () ctx
-
-(** Attempts to eliminate useless shared loans, in particular to get rid of the
-    remaining markers.
-
-    We simply eliminate shared loans which don't have corresponding shared
-    borrows.
-
-    TODO: that may actually not be necessary. *)
-let eliminate_shared_loans (span : Meta.span) (ctx : eval_ctx) : eval_ctx =
-  (* Compute the set of shared borrows *)
-  let ids, _ = compute_ctx_ids ctx in
-  let shared_borrows = ids.non_unique_shared_borrow_ids in
-
-  let update_loans =
-    object (self)
-      inherit [_] map_eval_ctx as super
-
-      method! visit_ASharedLoan env pm bid sv child =
-        if
-          (not (BorrowId.Set.mem bid shared_borrows))
-          &&
-          (* We have to pay attention to markers: if there is a borrow/loan
-              inside the shared value, by removing the shared loan we forget
-              about the marker, which can be a problem *)
-          not (value_has_loans_or_borrows (Some span) ctx sv.value)
-        then self#visit_AEndedSharedLoan env sv child
-        else super#visit_ASharedLoan env pm bid sv child
-    end
-  in
-  let ctx = update_loans#visit_eval_ctx () ctx in
-
-  (* Filter the avalues *)
-  let update_abs (abs : abs) : abs =
-    let keep (v : tavalue) : bool =
-      match v.value with
-      | ALoan (AEndedSharedLoan (sv, child))
-        when (not (value_has_loans_or_borrows (Some span) ctx sv.value))
-             && is_aignored child.value -> false
-      | _ -> true
-    in
-    let avalues = List.filter keep abs.avalues in
-    { abs with avalues }
-  in
-  let ctx = ctx_map_abs update_abs ctx in
-
-  (* *)
-  ctx
-
 (** Small utility: check whether an environment contains markers *)
 let eval_ctx_has_markers (ctx : eval_ctx) : bool =
   let visitor =
@@ -876,7 +874,7 @@ let collapse_ctx_aux config (span : Meta.span)
     "ctx after reduce, collapse and eliminate_shared_borrow_markers:\n"
     ^ eval_ctx_to_string ctx];
 
-  let ctx = eliminate_shared_loans span ctx in
+  let ctx = eliminate_shared_loans span old_ids ctx in
   [%ltrace
     "ctx after reduce, collapse and eliminate_shared_loans:\n"
     ^ eval_ctx_to_string ctx];
