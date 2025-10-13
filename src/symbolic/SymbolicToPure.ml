@@ -88,36 +88,9 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expr option) : fun_decl =
         Some (mk_closed_fun_body def.item_meta.span inputs body)
   in
 
-  (* Cleanup the meta-data in the body: some meta-data may refer to variables which
-     are actually not bound. We remove those to make sure the body is well-formed.
-     TODO: this is really hacky.
-  *)
-  let body =
-    if Config.allow_unbound_variables_in_metadata then
-      Option.map
-        (fun (body : fun_body) ->
-          let visitor =
-            object
-              inherit [_] Pure.map_expr
-
-              (* We only need to visit those *)
-              method! visit_SymbolicAssignments () assigns =
-                SymbolicAssignments
-                  (List.filter_map
-                     (fun (var, value) ->
-                       if texpr_has_fvars value then None else Some (var, value))
-                     assigns)
-            end
-          in
-          { body with body = visitor#visit_texpr () body.body })
-        body
-    else body
-  in
-
   (* Note that for now, the loops are still *inside* the function body (and we
      haven't counted them): we will extract them from there later, in {!PureMicroPasses}
-     (by "splitting" the definition).
-  *)
+     (by "splitting" the definition). *)
   let num_loops = 0 in
   let loop_id = None in
 

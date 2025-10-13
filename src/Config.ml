@@ -400,8 +400,5 @@ let extract_external_name_patterns = ref true
 (** *)
 let match_patterns_with_trait_decl_refs = true
 
-(** *)
-let allow_unbound_variables_in_metadata = true
-
 (** Decompose loops to recursive functions *)
 let loops_to_recursive_functions = ref true
