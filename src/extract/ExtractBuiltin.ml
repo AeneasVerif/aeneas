@@ -1153,13 +1153,13 @@ let mk_builtin_funs_map () =
 
 let builtin_funs_map = mk_memoized mk_builtin_funs_map
 
-type effect_info = { can_fail : bool; stateful : bool }
+type effect_info = { can_fail : bool }
 
 let mk_builtin_fun_effects () : (pattern * effect_info) list =
   let builtin_funs : (pattern * Pure.builtin_fun_info) list = builtin_funs () in
   List.map
     (fun ((pattern, info) : _ * Pure.builtin_fun_info) ->
-      let info = { can_fail = info.can_fail; stateful = info.stateful } in
+      let info = { can_fail = info.can_fail } in
       (pattern, info))
     builtin_funs
 

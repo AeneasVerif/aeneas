@@ -103,16 +103,9 @@ let () =
         Arg.Set extract_decreases_clauses,
         " Use decreases clauses/termination measures for the recursive \
          definitions" );
-      ( "-state",
-        Arg.Set use_state,
-        " Use a *state*-error monads, instead of an error monads" );
       ( "-use-fuel",
         Arg.Set use_fuel,
         " Use a fuel parameter to control divergence" );
-      ( "-backward-state-update",
-        Arg.Set backward_state_update,
-        " Generate backward functions which update the state. THIS OPTION IS \
-         DEPRECATED." );
       ( "-no-template-clauses",
         Arg.Clear extract_template_decreases_clauses,
         " Do not generate templates for the required decreases \
@@ -288,9 +281,6 @@ let () =
     "-no-template-clauses" !extract_decreases_clauses "-decreases-clauses";
   if not !extract_decreases_clauses then
     extract_template_decreases_clauses := false;
-  (* Sanity check: -backward-state-update ==> -state *)
-  check_arg_implies !backward_state_update "-backward-state-update" !use_state
-    "-state";
   (* Sanity check: the use of decrease clauses is not compatible with the use of fuel *)
   check_arg_not !use_fuel "-use-fuel" !extract_decreases_clauses
     "-decreases-clauses";
@@ -311,8 +301,6 @@ let () =
       "Options -borrow-check and -test-trans-units are not compatible";
     check_not !extract_decreases_clauses
       "Options -borrow-check and -decreases-clauses are not compatible";
-    check_not !use_state
-      "Options -borrow-check and -use-state are not compatible";
     check_not !use_fuel "Options -borrow-check and -use-fuel are not compatible";
     check_not !split_files
       "Options -borrow-check and -split-files are not compatible");

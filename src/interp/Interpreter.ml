@@ -108,9 +108,7 @@ let compute_contexts (crate : crate) : decls_ctx =
   let type_ctx = { type_decls_groups; type_decls; type_infos } in
 
   let fun_decls = crate.fun_decls in
-  let fun_infos =
-    FunsAnalysis.analyze_module crate fun_decls !Config.use_state
-  in
+  let fun_infos = FunsAnalysis.analyze_module crate fun_decls in
   let regions_hierarchies =
     RegionsHierarchy.compute_regions_hierarchies crate
   in

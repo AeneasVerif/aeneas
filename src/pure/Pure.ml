@@ -80,12 +80,8 @@ let reset_fvar_id_counter () = fvar_id_counter := FVarId.generator_zero
     - [Error]: the kind of error, in case of failure (used by [Result])
     - [Fuel]: the fuel, to control recursion (some theorem provers like Coq
       don't support semantic termination, in which case we can use a fuel
-      parameter to do partial verification)
-    - [State]: the type of the state, when using state-error monads. Note that
-      this state is opaque to Aeneas (the user can define it, or leave it as
-      builtin) *)
+      parameter to do partial verification) *)
 type builtin_ty =
-  | TState
   | TResult
   | TSum  (** sum type with two variants: left and right *)
   | TLoopResult
@@ -1284,16 +1280,6 @@ and emeta =
 
 (** Information about the "effect" of a function *)
 type fun_effect_info = {
-  stateful_group : bool;
-      (** [true] if the function group is stateful. By *function group*, we mean
-          the set [{ forward function } U { backward functions }].
-
-          We need this because of the option
-          {!val:Config.backward_no_state_update}: if it is [true], then in case
-          of a backward function {!stateful} might be [false], but we might need
-          to know whether the corresponding forward function is stateful or not.
-      *)
-  stateful : bool;  (** [true] if the function is stateful (updates a state) *)
   can_fail : bool;  (** [true] if the return type is a [result] *)
   can_diverge : bool;
       (** [true] if the function can diverge (i.e., not terminate). It happens

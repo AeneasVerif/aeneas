@@ -47,17 +47,8 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expr option) : fun_decl =
         let mk_panic =
           (* TODO: we should use a [Fail] function *)
           let mk_output output_ty =
-            if effect_info.stateful then
-              (* Create the [Fail] value *)
-              let ret_ty = mk_simpl_tuple_ty [ mk_state_ty; output_ty ] in
-              let ret_v =
-                mk_result_fail_texpr_with_error_id ctx.span error_failure_id
-                  ret_ty
-              in
-              ret_v
-            else
-              mk_result_fail_texpr_with_error_id ctx.span error_failure_id
-                output_ty
+            mk_result_fail_texpr_with_error_id ctx.span error_failure_id
+              output_ty
           in
           let back_tys = compute_back_tys ctx.sg.fun_ty in
           let back_tys = List.filter_map (fun x -> x) back_tys in

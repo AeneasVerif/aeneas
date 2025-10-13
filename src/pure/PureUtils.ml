@@ -861,8 +861,6 @@ let ty_as_literal (span : Meta.span) (t : ty) : T.literal_type =
   | TLiteral ty -> ty
   | _ -> [%craise] span "Unreachable"
 
-let mk_state_ty : ty = TAdt (TBuiltin TState, empty_generic_args)
-
 let mk_result_ty (ty : ty) : ty =
   TAdt (TBuiltin TResult, mk_generic_args_from_types [ ty ])
 
@@ -1004,11 +1002,6 @@ let opt_unmeta_mplace (e : texpr) : mplace option * texpr =
   match e.e with
   | Meta (MPlace mp, e) -> (Some mp, e)
   | _ -> (None, e)
-
-let mk_state_fvar (id : FVarId.id) : fvar =
-  { id; basename = Some ConstStrings.state_basename; ty = mk_state_ty }
-
-let mk_state_texpr (id : FVarId.id) : texpr = { e = FVar id; ty = mk_state_ty }
 
 let mk_fuel_fvar (id : FVarId.id) : fvar =
   { id; basename = Some ConstStrings.fuel_basename; ty = mk_fuel_ty }

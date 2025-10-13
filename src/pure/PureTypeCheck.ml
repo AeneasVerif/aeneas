@@ -27,9 +27,6 @@ let get_adt_field_types (span : Meta.span)
   | TBuiltin aty -> (
       (* Builtin type *)
       match aty with
-      | TState ->
-          (* This type is opaque *)
-          [%craise] span "Unreachable: opaque type"
       | TResult ->
           let ty = Collections.List.to_cons_nil generics.types in
           let variant_id = Option.get variant_id in

@@ -423,8 +423,6 @@ type gen_config = {
           globals or types. TODO: update this. This is not trivial if we want to
           extract the opaque types in an opaque module, because some non-opaque
           types may refer to opaque types and vice-versa. *)
-  extract_state_type : bool;
-      (** If [true], generate a definition/declaration for the state type *)
   extract_globals : bool;
       (** If [true], generate a definition/declaration for top-level (global)
           declarations *)
@@ -856,13 +854,6 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
   in
   let export_trait_impl = export_trait_impl fmt config ctx in
 
-  let export_state_type () : unit =
-    let kind =
-      if config.interface then ExtractBase.Declared else ExtractBase.Builtin
-    in
-    Extract.extract_state_type fmt ctx kind
-  in
-
   let export_decl_group (dg : declaration_group) : unit =
     match dg with
     | TypeGroup (NonRecGroup id) ->
@@ -921,27 +912,13 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
           "Mixed-recursive declaration groups are not supported"
   in
 
-  (* If we need to export the state type: we try to export it after we defined
-   * the type definitions, because if the user wants to define a model for the
-   * type, they might want to reuse those in the state type.
-   * More specifically: if we extract functions in the same file as the type,
-   * we have no choice but to define the state type before the functions,
-   * because they may reuse this state type: in this case, we define/declare
-   * it at the very beginning. Otherwise, we define/declare it at the very end.
-   *)
-  if config.extract_state_type && config.extract_fun_decls then
-    export_state_type ();
-
   List.iter
     (fun g ->
       try export_decl_group g
       with CFailure _ ->
         (* An exception was raised: ignore it *)
         ())
-    ctx.crate.declarations;
-
-  if config.extract_state_type && not config.extract_fun_decls then
-    export_state_type ()
+    ctx.crate.declarations
 
 type extract_file_info = {
   filename : string;
@@ -1472,7 +1449,6 @@ let translate_crate (filename : string) (dest_dir : string)
          extract_trait_impls = false;
          extract_transparent = true;
          extract_opaque = false;
-         extract_state_type = false;
          extract_globals = false;
          interface = false;
          test_trans_unit_functions = false;
@@ -1484,7 +1460,6 @@ let translate_crate (filename : string) (dest_dir : string)
      let has_opaque_types, has_opaque_funs =
        crate_has_opaque_non_builtin_decls ctx true
      in
-     let has_opaque_types = has_opaque_types || !Config.use_state in
 
      (*
       * Extract the types
@@ -1522,7 +1497,6 @@ let translate_crate (filename : string) (dest_dir : string)
              extract_transparent = false;
              extract_types = true;
              extract_trait_decls = true;
-             extract_state_type = !Config.use_state;
              interface = true;
            }
          in
@@ -1714,7 +1688,6 @@ let translate_crate (filename : string) (dest_dir : string)
          extract_trait_impls = true;
          extract_transparent = true;
          extract_opaque = true;
-         extract_state_type = !Config.use_state;
          extract_globals = true;
          interface = false;
          test_trans_unit_functions = !Config.test_trans_unit_functions;

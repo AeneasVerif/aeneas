@@ -1045,40 +1045,30 @@ let keywords () =
   List.concat [ named_unops; named_binops; misc ]
 
 let builtin_adts () : (builtin_ty * string) list =
-  let state =
-    if !use_state then
-      match backend () with
-      | Lean -> [ (TState, "State") ]
-      | Coq | FStar | HOL4 -> [ (TState, "state") ]
-    else []
-  in
   (* We voluntarily omit the type [Error]: it is never directly
      referenced in the generated translation, and easily collides
      with user-defined types *)
-  let adts =
-    match backend () with
-    | Lean ->
-        [
-          (TResult, "Result");
-          (TFuel, "Nat");
-          (TArray, "Array");
-          (TSlice, "Slice");
-          (TStr, "Str");
-          (TRawPtr Mut, "MutRawPtr");
-          (TRawPtr Const, "ConstRawPtr");
-        ]
-    | Coq | FStar | HOL4 ->
-        [
-          (TResult, "result");
-          (TFuel, if backend () = HOL4 then "num" else "nat");
-          (TArray, "array");
-          (TSlice, "slice");
-          (TStr, "str");
-          (TRawPtr Mut, "mut_raw_ptr");
-          (TRawPtr Const, "const_raw_ptr");
-        ]
-  in
-  state @ adts
+  match backend () with
+  | Lean ->
+      [
+        (TResult, "Result");
+        (TFuel, "Nat");
+        (TArray, "Array");
+        (TSlice, "Slice");
+        (TStr, "Str");
+        (TRawPtr Mut, "MutRawPtr");
+        (TRawPtr Const, "ConstRawPtr");
+      ]
+  | Coq | FStar | HOL4 ->
+      [
+        (TResult, "result");
+        (TFuel, if backend () = HOL4 then "num" else "nat");
+        (TArray, "array");
+        (TSlice, "slice");
+        (TStr, "str");
+        (TRawPtr Mut, "mut_raw_ptr");
+        (TRawPtr Const, "const_raw_ptr");
+      ]
 
 let builtin_struct_constructors () : (builtin_ty * string) list =
   match backend () with
@@ -1869,7 +1859,6 @@ let ctx_compute_var_basename (span : Meta.span) (ctx : extraction_ctx)
           | TBuiltin TArray -> "a"
           | TBuiltin TSlice -> "s"
           | TBuiltin TStr -> "s"
-          | TBuiltin TState -> ConstStrings.state_basename
           | TBuiltin (TRawPtr _) -> "p"
           | TAdtId adt_id ->
               let def =

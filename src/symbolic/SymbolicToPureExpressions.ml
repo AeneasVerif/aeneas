@@ -480,13 +480,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               | _ -> [%craise] ctx.span "Unreachable"
             in
             let effect_info =
-              {
-                can_fail = false;
-                stateful_group = false;
-                stateful = false;
-                can_diverge = false;
-                is_rec = false;
-              }
+              { can_fail = false; can_diverge = false; is_rec = false }
             in
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
             let dest = mk_tpattern_from_fvar dest_mplace dest in
@@ -501,8 +495,6 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
             let effect_info =
               {
                 can_fail = overflow <> OWrap;
-                stateful_group = false;
-                stateful = false;
                 can_diverge = false;
                 is_rec = false;
               }
@@ -518,8 +510,6 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
             let effect_info =
               {
                 can_fail = not (Config.backend () = Lean);
-                stateful_group = false;
-                stateful = false;
                 can_diverge = false;
                 is_rec = false;
               }
@@ -548,8 +538,6 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
             let effect_info =
               {
                 can_fail = ExpressionsUtils.binop_can_fail binop;
-                stateful_group = false;
-                stateful = false;
                 can_diverge = false;
                 is_rec = false;
               }

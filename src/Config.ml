@@ -155,37 +155,8 @@ let dont_use_field_projectors = ref false
     such situations or not. *)
 let always_deconstruct_adts_with_matches = ref false
 
-(** Controls whether we need to use a state to model the external world (I/O,
-    for instance). *)
-let use_state = ref false
-
 (** Controls whether we use fuel to control termination. *)
 let use_fuel = ref false
-
-(** Controls whether backward functions update the state, in case we use a state
-    ({!use_state}).
-
-    If they update the state, we generate code of the following style:
-    {[
-      (st1, y)  <-- f_fwd x st0; // st0 is the state upon calling f_fwd
-      ...
-      (st3, x') <-- f_back x st0 y' st2; // st2 is the state upon calling f_back
-    ]}
-
-    Otherwise, we generate code of the following shape:
-    {[
-      (st1, y)  <-- f_fwd x st0;
-      ...
-      x' <-- f_back x st0 y';
-    ]}
-
-    The second format is easier to reason about, but the first one is necessary
-    to properly handle some Rust functions which use internal mutability such as
-    {{:https://doc.rust-lang.org/std/cell/struct.RefCell.html#method.try_borrow_mut}
-     [RefCell::try_mut_borrow]}: in order to model this behaviour we would need
-    a state, and calling the backward function would update the state by
-    reinserting the updated value in it. *)
-let backward_state_update = ref false
 
 (** Controls whether we split the generated definitions between different files
     for the types, clauses and functions, or if we group them in one file. *)

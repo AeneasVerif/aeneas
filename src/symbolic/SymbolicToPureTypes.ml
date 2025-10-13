@@ -508,15 +508,9 @@ let compute_raw_fun_effect_info (span : Meta.span option)
       let info =
         [%silent_unwrap_opt_span] span (A.FunDeclId.Map.find_opt fid fun_infos)
       in
-      let stateful_group = info.stateful in
-      let stateful =
-        stateful_group && (!Config.backward_state_update || gid = None)
-      in
       {
         (* Note that backward functions can't fail *)
         can_fail = info.can_fail && gid = None;
-        stateful_group;
-        stateful;
         can_diverge = info.can_diverge;
         is_rec = (info.is_rec || Option.is_some lid) && gid = None;
       }
@@ -525,8 +519,6 @@ let compute_raw_fun_effect_info (span : Meta.span option)
       {
         (* Note that backward functions can't fail *)
         can_fail = Builtin.builtin_fun_can_fail aid && gid = None;
-        stateful_group = false;
-        stateful = false;
         can_diverge = false;
         is_rec = false;
       }
@@ -700,11 +692,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
     *)
     let back_effect_info =
       let b = inputs <> [] in
-      {
-        back_effect_info with
-        stateful = back_effect_info.stateful && b;
-        can_fail = back_effect_info.can_fail && b;
-      }
+      { back_effect_info with can_fail = back_effect_info.can_fail && b }
     in
     let output_names, outputs = compute_back_outputs_for_gid gid in
     let filter =
