@@ -3967,7 +3967,7 @@ let filter_loop_useless_inputs_outputs (ctx : ctx) (def : fun_decl) =
                throughout the loop and so that the output can be computed from
                the *initial* input. We thus filter it.
             *)
-            let output_vars = try_destruct_tuple_tpattern span pat in
+            let output_vars = try_destruct_tuple_or_dummy_tpattern span pat in
             let output_vars =
               List.map
                 (fun (p : tpattern) ->

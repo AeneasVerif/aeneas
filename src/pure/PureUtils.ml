@@ -674,6 +674,28 @@ let try_destruct_tuple_tpattern span e =
   | None -> [ e ]
   | Some fields -> fields
 
+(** Attempt to destruct a tuple pattern.
+
+    If it is not a tuple, we return a singleton list (the original pattern). We
+    have a special case for the dummy pattern, if its type is a tuple: we
+    decompose it into a tuple of dummies, and thus return a list of dummy
+    patterns. *)
+let try_destruct_tuple_or_dummy_tpattern span (e : tpattern) =
+  match e.ty with
+  | TAdt (TTuple, generics) ->
+      [%sanity_check] span (generics.const_generics = []);
+      [%sanity_check] span (generics.trait_refs = []);
+      begin
+        match e.pat with
+        | PAdt { fields; _ } -> fields
+        | PDummy ->
+            List.map
+              (fun ty -> ({ pat = PDummy; ty } : tpattern))
+              generics.types
+        | _ -> [%internal_error] span
+      end
+  | _ -> [ e ]
+
 let destruct_arrow (span : Meta.span) (ty : ty) : ty * ty =
   match ty with
   | TArrow (ty0, ty1) -> (ty0, ty1)
