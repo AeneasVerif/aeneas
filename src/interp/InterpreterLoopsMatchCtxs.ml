@@ -1338,7 +1338,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     let avalues = [ borrow_av; loan_av ] in
 
     let owned = RegionId.Set.singleton rid in
-    [%sanity_check] span (not S.with_abs_conts);
     let cont : abs_cont option =
       if S.with_abs_conts then
         let input : tevalue =
