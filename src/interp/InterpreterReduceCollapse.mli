@@ -29,10 +29,25 @@ val merge_into_first_abstraction :
     instance.
 
     We use this to compute fixed-points: this is equivalent to a widening
-    operation. *)
+    operation.
+
+    **IMPORTANT**: the big difference between [reduce] and [collapse] is that
+    [collapse] operates on an environment with markers (the goal is to eliminate
+    them) while [reduce] operates on an environment without markers.
+
+    Arguments:
+    - config
+    - span
+    - sequence: used to save the sequence of merged abstractions, in reverse
+      order (the last merge is pushed to the front of the list).
+    - with_abs_conts
+    - loop id
+    - fixed ids
+    - ctx *)
 val reduce_ctx :
   config ->
   Meta.span ->
+  ?sequence:(abstraction_id * abstraction_id * abstraction_id) list ref option ->
   with_abs_conts:bool ->
   loop_id ->
   ids_sets ->
@@ -50,13 +65,38 @@ val reduce_ctx :
     Arguments:
     - config
     - span
+    - sequence: used to save the sequence of merged abstractions, in reverse
+      order (the last merge is pushed to the front of the list).
     - loop id
     - fixed ids
     - with_abs_conts
     - ctx *)
-val collapse_ctx_with_merge :
+val collapse_ctx :
   config ->
   Meta.span ->
+  ?sequence:(abstraction_id * abstraction_id * abstraction_id) list ref option ->
+  LoopId.id ->
+  ids_sets ->
+  with_abs_conts:bool ->
+  eval_ctx ->
+  eval_ctx
+
+(** It can happen that we want to join then collapse two environments, then
+    apply the exact same sequence of merges resulting from the collapse
+    operation to one of the two original environments (before the join).
+
+    [collapse_ctx] allows saving the sequence of merges which have been
+    performed for this reason. [collapse_ctx_no_markers_following_sequence] can
+    then use this sequence and apply it on the left or right environment. Note
+    that this environment *should not have markers*.
+
+    Also note that the sequence of merges the function expects should have the
+    merges ordered from the first to perform to the last. This means that if it
+    was computed by, e.g., [collapse_ctx], one should reverse the sequence
+    before calling [collapse_ctx_no_markers_following_sequence]. *)
+val collapse_ctx_no_markers_following_sequence :
+  Meta.span ->
+  (abstraction_id * abstraction_id * abstraction_id) list ->
   LoopId.id ->
   ids_sets ->
   with_abs_conts:bool ->

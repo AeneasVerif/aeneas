@@ -282,6 +282,7 @@ let rec translate_expr (e : S.expr) (ctx : bs_ctx) : texpr =
   | Expansion (p, sv, exp) -> translate_expansion p sv exp ctx
   | IntroSymbolic (ectx, p, sv, v, e) ->
       translate_intro_symbolic ectx p sv v e ctx
+  | SubstituteAbsIds (aids, e) -> translate_substitute_abs_ids ctx aids e
   | Meta (span, e) -> translate_espan span e ctx
   | ForwardEnd (return_value, ectx, e, back_e) ->
       (* Translate the end of a function (this is introduced when we reach a [return] statement). *)
@@ -1568,6 +1569,56 @@ and translate_continue_break (ctx : bs_ctx) ~(continue : bool)
   in
   let output = mk_simpl_tuple_texpr ctx.span outputs in
   Option.get mk ctx output
+
+and translate_substitute_abs_ids (ctx : bs_ctx)
+    (aids : V.abstraction_id V.AbstractionId.Map.t) (e : S.expr) : texpr =
+  (* We need to update the information we have in the various maps of the context *)
+  let { abstractions; abs_id_to_fvar; ignored_abs_ids; _ } = ctx in
+  let update (aid : V.AbstractionId.id) : V.AbstractionId.id =
+    match V.AbstractionId.Map.find_opt aid aids with
+    | Some aid -> aid
+    | None -> aid
+  in
+
+  (* *)
+  let abstractions' =
+    V.AbstractionId.Map.of_list
+      ((List.map (fun (aid, x) -> (update aid, x)))
+         (V.AbstractionId.Map.bindings abstractions))
+  in
+  (* Check for collisions *)
+  [%sanity_check] ctx.span
+    (V.AbstractionId.Map.cardinal abstractions
+    = V.AbstractionId.Map.cardinal abstractions');
+
+  (* *)
+  let abs_id_to_fvar' =
+    V.AbstractionId.Map.of_list
+      ((List.map (fun (aid, x) -> (update aid, x)))
+         (V.AbstractionId.Map.bindings abs_id_to_fvar))
+  in
+  (* Check for collisions *)
+  [%sanity_check] ctx.span
+    (V.AbstractionId.Map.cardinal abs_id_to_fvar
+    = V.AbstractionId.Map.cardinal abs_id_to_fvar');
+
+  (* *)
+  let ignored_abs_ids' = V.AbstractionId.Set.map update ignored_abs_ids in
+  (* Check for collisions *)
+  [%sanity_check] ctx.span
+    (V.AbstractionId.Set.cardinal ignored_abs_ids
+    = V.AbstractionId.Set.cardinal ignored_abs_ids');
+
+  (* Translate the next expression with the updated context *)
+  let ctx =
+    {
+      ctx with
+      abstractions = abstractions';
+      abs_id_to_fvar = abs_id_to_fvar';
+      ignored_abs_ids = ignored_abs_ids';
+    }
+  in
+  translate_expr e ctx
 
 and translate_espan (span : S.espan) (e : S.expr) (ctx : bs_ctx) : texpr =
   let next_e = translate_expr e ctx in

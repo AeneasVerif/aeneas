@@ -13,7 +13,7 @@ open InterpreterLoopsMatchCtxs
 let log = Logging.loops_join_ctxs_log
 
 let refresh_non_fixed_abs_ids (_span : Meta.span) (fixed_ids : ids_sets)
-    (ctx : eval_ctx) : eval_ctx =
+    (ctx : eval_ctx) : eval_ctx * abstraction_id AbstractionId.Map.t =
   (* Note that abstraction ids appear both inside of region abstractions
      but also inside of evalues (some evalues refer to region abstractions).
      We have to make sure that we keep things consistent: whenever we refresh
@@ -35,7 +35,8 @@ let refresh_non_fixed_abs_ids (_span : Meta.span) (fixed_ids : ids_sets)
               nid
     end
   in
-  visitor#visit_eval_ctx () ctx
+  let ctx = visitor#visit_eval_ctx () ctx in
+  (ctx, !fresh_map)
 
 let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
     ~(with_abs_conts : bool) (ctx0 : eval_ctx) (ctx1 : eval_ctx) : ctx_or_update
@@ -56,7 +57,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
 
      TODO: make the join more general.
   *)
-  let ctx1 = refresh_non_fixed_abs_ids span fixed_ids ctx1 in
+  let ctx1, refreshed_aids = refresh_non_fixed_abs_ids span fixed_ids ctx1 in
   [%ltrace
     "After refreshing the non-fixed abstraction ids of ctx1:\n"
     ^ eval_ctx_to_string ~span:(Some span) ~filter:true ctx1];
@@ -252,7 +253,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
       }
     in
     let join_info : ctx_join_info =
-      { symbolic_to_value = !symbolic_to_value }
+      { symbolic_to_value = !symbolic_to_value; refreshed_aids }
     in
 
     (* Sanity check *)
@@ -389,8 +390,7 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
 
     (* Collapse to eliminate the markers *)
     joined_ctx :=
-      collapse_ctx_with_merge config span loop_id fixed_ids ~with_abs_conts
-        !joined_ctx;
+      collapse_ctx config span loop_id fixed_ids ~with_abs_conts !joined_ctx;
     [%ltrace
       "join_one: after join-collapse:\n"
       ^ eval_ctx_to_string ~span:(Some span) !joined_ctx];
@@ -517,8 +517,7 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
 
         (* Collapse to eliminate the markers *)
         joined_ctx :=
-          collapse_ctx_with_merge config span loop_id fixed_ids ~with_abs_conts
-            !joined_ctx;
+          collapse_ctx config span loop_id fixed_ids ~with_abs_conts !joined_ctx;
         [%ltrace
           "join_one: after join-collapse:\n"
           ^ eval_ctx_to_string ~span:(Some span) !joined_ctx];
@@ -740,32 +739,57 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
     match
       join_ctxs span loop_id fixed_ids ~with_abs_conts:true src_ctx tgt_ctx
     with
-    | Ok ctx -> ctx
+    | Ok x -> x
     | Error _ -> [%craise] span "Could not join the contexts"
   in
   [%ltrace
     "Result of the join:\n- joined_ctx:\n"
     ^ eval_ctx_to_string joined_ctx
-    ^ "\n- join_info: "
+    ^ "\n- join_info.symbolic_to_value: "
     ^ SymbolicValueId.Map.to_string (Some "  ")
         (Print.pair_to_string (tvalue_to_string src_ctx)
            (tvalue_to_string src_ctx))
-        join_info.symbolic_to_value];
+        join_info.symbolic_to_value
+    ^ "\n- join_info.refreshed_aids: "
+    ^ AbstractionId.Map.to_string None AbstractionId.to_string
+        join_info.refreshed_aids];
 
-  (* Collapse the context.
-
-     We could directly project the context, but it is better to collapse it first
-     because by doing so we may merge some abstractions which would otherwise be
-     disjoint, leading to an issue when matching the source context with the
-     joined context afterwards.
-  *)
-  let joined_ctx =
-    collapse_ctx_with_merge config span ~with_abs_conts:true loop_id fixed_ids
-      joined_ctx
+  (* The id of some region abstractions might have been refreshed in the target
+     context: we need to register this because otherwise the translation will
+     fail. *)
+  let cc =
+    cc_comp cc (fun e -> SubstituteAbsIds (join_info.refreshed_aids, e))
   in
+
+  (* We need to collapse the context.
+
+     We have to collapse the context because otherwise some abstractions might not
+     get merged, leading to an issue when matching the source context with the
+     joined context afterwards. We also do not want to collapse the context then
+     project it, because the collapsed context uses elements from both the right
+     and left context in its abstraction expressions, which are a bit annoying
+     to project. What we do for now is merge the joined context, to register the
+     sequence of merges which have to be performed, then project the context
+     *before* the collapse, and apply the same sequence to this one.
+
+     TODO: we need to make the match more general so that we do not have to do this.
+  *)
+  let merge_seq = ref [] in
+  let joined_ctx_not_projected =
+    collapse_ctx config span ~sequence:(Some merge_seq) ~with_abs_conts:true
+      loop_id fixed_ids joined_ctx
+  in
+  let merge_seq = List.rev !merge_seq in
   [%ltrace
-    "After collapsing the context: joined_ctx:\n"
-    ^ eval_ctx_to_string joined_ctx];
+    "After collapsing the (unprojected) context: joined_ctx_not_projected:\n"
+    ^ eval_ctx_to_string joined_ctx_not_projected
+    ^ "\n\n- merge_seq:\n"
+    ^ String.concat "\n"
+        (List.map
+           (fun (a0, a1, a2) ->
+             "(" ^ AbstractionId.to_string a0 ^ "," ^ AbstractionId.to_string a1
+             ^ ") -> " ^ AbstractionId.to_string a2)
+           merge_seq)];
 
   (* Project the context to only preserve the right part, which corresponds to the
      target *)
@@ -780,12 +804,14 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
     ^ SymbolicValueId.Map.to_string (Some "  ") (tvalue_to_string src_ctx)
         joined_symbolic_to_tgt_value];
 
-  (* Reduce the context *)
+  (* Apply the sequence of merges to the projected context *)
   let joined_ctx =
-    reduce_ctx config span ~with_abs_conts:true loop_id fixed_ids joined_ctx
+    collapse_ctx_no_markers_following_sequence span merge_seq
+      ~with_abs_conts:true loop_id fixed_ids joined_ctx
   in
   [%ltrace
-    "After reducing the context: joined_ctx:\n" ^ eval_ctx_to_string joined_ctx];
+    "After collapsing the context: joined_ctx:\n"
+    ^ eval_ctx_to_string joined_ctx];
 
   [%ltrace
     "About to match:" ^ "\n- src_ctx:\n" ^ eval_ctx_to_string src_ctx
@@ -929,7 +955,7 @@ let loop_match_break_ctx_with_target (config : config) (span : Meta.span)
      is no point in joining the break context with the target context, we directly
      check if they are equivalent.
 
-     TODO: is this really useful?
+     TODO: is this really useful? It actually never works.
   *)
   let src_to_tgt_maps =
     let fixed_ids = ids_sets_empty_borrows_loans fixed_ids in

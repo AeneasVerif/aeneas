@@ -75,6 +75,12 @@ let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
       let v = value_aggregate_to_string env v in
       let next = expr_to_string env indent indent_incr next in
       indent ^ "let " ^ sv ^ " = " ^ v ^ "in\n" ^ next
+  | SubstituteAbsIds (aids, next) ->
+      let aids =
+        AbstractionId.Map.to_string None AbstractionId.to_string aids
+      in
+      let next = expr_to_string env indent indent_incr next in
+      indent ^ "subst " ^ aids ^ " in\n" ^ next
   | ForwardEnd (ret, _, fwd_end, backs) ->
       let indent1 = indent ^ indent_incr in
       let indent2 = indent1 ^ indent_incr in

@@ -175,6 +175,12 @@ type expr =
 
           The context is the evaluation context from before introducing the new
           value. It has the same purpose as for the {!Return} case. *)
+  | SubstituteAbsIds of abstraction_id abs_id_map * expr
+      (** We sometimes need to substitute abstraction ids to refresh them (in
+          particular when doing joins), which can be a problem especially as
+          some abstraction expressions refer to the abstractions through their
+          ids. In order to make the translation work, we need to save those
+          substitutions. *)
   | ForwardEnd of
       ((Contexts.eval_ctx[@opaque]) * tvalue) option
       * (Contexts.eval_ctx[@opaque])

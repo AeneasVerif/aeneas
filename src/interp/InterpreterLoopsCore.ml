@@ -26,6 +26,8 @@ type ctx_join_info = {
   symbolic_to_value : (tvalue * tvalue) SymbolicValueId.Map.t;
       (** Map from fresh symbolic value to the values coming from the left and
           right contexts *)
+  refreshed_aids : abstraction_id AbstractionId.Map.t;
+      (** The refreshed abstraction ids in the right environment *)
 }
 
 type ctx_or_update = (eval_ctx * ctx_join_info, updt_env_kind) result

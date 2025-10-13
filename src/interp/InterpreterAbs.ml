@@ -404,7 +404,9 @@ let tavalue_split_marker (span : Meta.span) (ctx : eval_ctx) (av : tavalue) :
     if pm = PNone then mk_split mk_value else [ av ]
   in
   match av.value with
-  | AAdt _ | ABottom | AIgnored _ -> [%internal_error] span
+  | AAdt _ | ABottom | AIgnored _ ->
+      [%craise] span
+        ("Internal error: unexpected value: " ^ tavalue_to_string ctx av)
   | ABorrow bc -> (
       match bc with
       | AMutBorrow (pm, bid, child) ->
@@ -492,10 +494,6 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
       (abs_is_destructured span destructure_shared_values ctx abs0);
     [%sanity_check] span
       (abs_is_destructured span destructure_shared_values ctx abs1));
-
-  (* Simplify the duplicated shared borrows *)
-  let abs0 = abs_simplify_duplicated_borrows span ctx abs0 in
-  let abs1 = abs_simplify_duplicated_borrows span ctx abs1 in
 
   (* Sanity check: no markers appear unless we allow merging duplicates.
      Also, the borrows must be disjoint, and the loans must be disjoint.
@@ -1589,6 +1587,16 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind)
     { owned }
   in
 
+  (* Simplify the duplicated shared borrows - TODO: is this really necessary? *)
+  let abs0 = abs_simplify_duplicated_borrows span ctx abs0 in
+  let abs1 = abs_simplify_duplicated_borrows span ctx abs1 in
+
+  [%ldebug
+    "After simplifying the duplicated shared borrows:\n- abs0:\n"
+    ^ abs_to_string span ctx abs0
+    ^ "\n\n- abs1:\n"
+    ^ abs_to_string span ctx abs1];
+
   (* Phase 1: split the markers (note that the presence of markers is controlled
      by [merge_funs]: if it is [Some] then there can be markers, otherwise there
      can't be).
@@ -1613,12 +1621,23 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind)
       (abs_split_markers span ctx abs0, abs_split_markers span ctx abs1)
     else (abs0, abs1)
   in
+  if allow_markers then
+    [%ldebug
+      "After splitting the markers:\n- abs0:\n"
+      ^ abs_to_string span ctx abs0
+      ^ "\n\n- abs1:\n"
+      ^ abs_to_string span ctx abs1]
+  else [%ldebug "Did not split the markers"];
 
   (* Phase 2: simplify the loans coming from the left abstraction with
      the borrows coming from the right abstraction. *)
   let avalues =
     merge_abstractions_merge_loan_borrow_pairs span ~allow_markers ctx abs0 abs1
   in
+  [%ldebug
+    "avalues after merging the loans from the left with the borrows from the \
+     right:\n"
+    ^ String.concat "\n" (List.map (tavalue_to_string ctx) avalues)];
 
   (* Phase 3: we now remove markers, by merging pairs of the same element with
      different markers into one element. To do so, we linearly traverse the list
@@ -1630,6 +1649,9 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind)
         merge_abstractions_merge_markers span merge_funs ctx regions.owned
           avalues
   in
+  [%ldebug
+    "avalues after removing markers:\n"
+    ^ String.concat "\n" (List.map (tavalue_to_string ctx) avalues)];
 
   (* Merge the expressions used for the pure translation. *)
   let cont = merge_abs_conts span ctx ~with_abs_conts abs0 abs1 in
