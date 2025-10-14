@@ -238,6 +238,11 @@ let compute_tavalue_proj_kind span type_infos (abs_regions : T.RegionId.Set.t)
             super#visit_ASymbolic ty pm aproj
         | AProjLoans _ ->
             has_loans := true;
+            (* We need to check wether the projected loans are mutable or not *)
+            if
+              TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
+                keep_region ty
+            then has_mut_loans := true;
             (* Continue exploring (same reasons as above) *)
             super#visit_ASymbolic ty pm aproj
         | AEndedProjBorrows _ ->
@@ -251,6 +256,11 @@ let compute_tavalue_proj_kind span type_infos (abs_regions : T.RegionId.Set.t)
             super#visit_ASymbolic ty pm aproj
         | AProjBorrows _ ->
             has_borrows := true;
+            (* We need to check wether the projected borrows are mutable or not *)
+            if
+              TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
+                keep_region ty
+            then has_mut_borrows := true;
             (* Continue exploring (same reasons as above) *)
             super#visit_ASymbolic ty pm aproj
         | AEmpty ->

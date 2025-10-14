@@ -1098,9 +1098,8 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
         "true_e.ty: "
         ^ pure_ty_to_string ctx true_e.ty
         ^ "\n\nfalse_e.ty: "
-        ^ pure_ty_to_string ctx false_e.ty];
-      [%ltrace
-        "true_e: " ^ texpr_to_string ctx true_e ^ " \n\nfalse_e: "
+        ^ pure_ty_to_string ctx false_e.ty
+        ^ "\n\n- true_e:\n" ^ texpr_to_string ctx true_e ^ " \n\nfalse_e:\n"
         ^ texpr_to_string ctx false_e];
       [%sanity_check] ctx.span (ty = false_e.ty);
       { e; ty }
@@ -1483,6 +1482,15 @@ and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
   in
   let outputs = break_values @ break_abs in
   let output = mk_simpl_tuple_pattern outputs in
+
+  [%ldebug
+    "- loop output values:\n"
+    ^ String.concat "\n"
+        (List.map (symbolic_value_to_string ctx) loop.break_svalues)
+    ^ "\n\n- loop output abstractions:\n"
+    ^ String.concat "\n\n" (List.map (abs_to_string ctx) loop.break_abs)
+    ^ "\n\n- loop translated outputs:\n"
+    ^ String.concat "\n" (List.map (tpattern_to_string ctx) outputs)];
 
   (* Translate the body *)
   let loop_body =
