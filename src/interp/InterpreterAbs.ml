@@ -1183,10 +1183,13 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
   in
   let rec bind_output (regions : RegionId.Set.t) (output : tevalue) : tepat =
     match output.value with
-    | ELet _ | EJoinMarkers _ | EBVar _ | EFVar _ | EApp (_, _) | EBottom ->
+    | ELet _ | EJoinMarkers _ | EBVar _ | EFVar _ | EApp (_, _) ->
         (* Those expressions should not appear in the *output* expression
            (some of them might appear only in the *input* expression) *)
         [%craise] span ("Unexpected expression: " ^ tevalue_to_string ctx output)
+    | EBottom ->
+        (* We're not inside a loan or a borrow: simply ignore it *)
+        { epat = PIgnored; epat_ty = output.ty }
     | EAdt adt ->
         let pats = List.map (bind_output regions) adt.field_values in
         { epat = PAdt (adt.variant_id, pats); epat_ty = output.ty }
@@ -2136,7 +2139,7 @@ let project_context (span : Meta.span) (fixed_ids : InterpreterUtils.ids_sets)
               EBottom
           | EProjBorrows { proj = _; loans } ->
               [%cassert] span (loans = []) "Not implemented";
-              EBottom
+              if env.inside_output then EIgnored else EBottom
           | EEndedProjLoans { proj = _; consumed; borrows } ->
               [%cassert] span (consumed = []) "Not implemented";
               [%cassert] span (borrows = []) "Not implemented";
@@ -2144,7 +2147,7 @@ let project_context (span : Meta.span) (fixed_ids : InterpreterUtils.ids_sets)
           | EEndedProjBorrows _ ->
               (* We can't find ended borrows in live abstractions *)
               [%internal_error] span
-          | EEmpty -> EBottom
+          | EEmpty -> EIgnored
 
       method! visit_ELoan env lc =
         match lc with
