@@ -954,8 +954,16 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
       [%ldebug
         "No backward function found for abstraction: "
         ^ V.AbstractionId.to_string abs.abs_id];
+      (* TODO: generalize. We should always translate the continuation expression
+         directly.
+
+         Note that we can get here when ending a loop abstraction which has
+         to be ignored, but also when ending an abstraction which comes from
+         converting the shared loan introduced when accessing a global value
+         through a reference. *)
       [%sanity_check] span
-        (V.AbstractionId.Set.mem abs.abs_id ctx.ignored_abs_ids);
+        (V.AbstractionId.Set.mem abs.abs_id ctx.ignored_abs_ids
+        || (back_inputs = [] && outputs = []));
       next_e ctx
   | Some { fvar = func; can_fail } ->
       [%ltrace
