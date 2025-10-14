@@ -203,18 +203,18 @@ def Key.atranspose_mut
   ok (self.atranspose, back)
 
 /- [loops_nested::shake_init]:
-   Source: 'tests/src/loops-nested.rs', lines 96:0-96:38 -/
+   Source: 'tests/src/loops-nested.rs', lines 98:0-98:40 -/
 def shake_init (_state : Array U8 8#usize) : Result (Array U8 8#usize) :=
   ok _state
 
 /- [loops_nested::shake_append]:
-   Source: 'tests/src/loops-nested.rs', lines 97:0-97:54 -/
+   Source: 'tests/src/loops-nested.rs', lines 99:0-99:56 -/
 def shake_append
   (_state : Array U8 8#usize) (_data : Slice U8) : Result (Array U8 8#usize) :=
   ok _state
 
 /- [loops_nested::shake_state_copy]:
-   Source: 'tests/src/loops-nested.rs', lines 98:0-98:58 -/
+   Source: 'tests/src/loops-nested.rs', lines 100:0-100:62 -/
 def shake_state_copy
   (_src : Array U8 8#usize) (_dst : Array U8 8#usize) :
   Result (Array U8 8#usize)
@@ -222,7 +222,7 @@ def shake_state_copy
   ok _dst
 
 /- [loops_nested::sample_ntt]:
-   Source: 'tests/src/loops-nested.rs', lines 99:0-99:54 -/
+   Source: 'tests/src/loops-nested.rs', lines 101:0-101:56 -/
 def sample_ntt
   (_state : Array U8 8#usize) (_dst : U16) :
   Result ((Array U8 8#usize) × U16)
@@ -230,7 +230,7 @@ def sample_ntt
   ok (_state, _dst)
 
 /- [loops_nested::generate_matrix_inner]: loop 0:
-   Source: 'tests/src/loops-nested.rs', lines 107:4-111:5 -/
+   Source: 'tests/src/loops-nested.rs', lines 109:4-113:5 -/
 def generate_matrix_inner_loop
   (key : Key) (state : Array U8 8#usize) (j : Usize) :
   Result (Key × (Array U8 8#usize))
@@ -249,7 +249,7 @@ def generate_matrix_inner_loop
 partial_fixpoint
 
 /- [loops_nested::generate_matrix_inner]:
-   Source: 'tests/src/loops-nested.rs', lines 102:0-112:1 -/
+   Source: 'tests/src/loops-nested.rs', lines 104:0-114:1 -/
 @[reducible]
 def generate_matrix_inner
   (key : Key) (state : Array U8 8#usize) :
@@ -258,7 +258,7 @@ def generate_matrix_inner
   generate_matrix_inner_loop key state 0#usize
 
 /- [loops_nested::generate_matrix]: loop 1:
-   Source: 'tests/src/loops-nested.rs', lines 130:8-138:9 -/
+   Source: 'tests/src/loops-nested.rs', lines 132:8-140:9 -/
 def generate_matrix_loop1
   (state_base : Array U8 8#usize) (i : U8) (key : Key)
   (state_work : Array U8 8#usize) (coordinates : Array U8 2#usize) (j : U8) :
@@ -286,7 +286,7 @@ def generate_matrix_loop1
 partial_fixpoint
 
 /- [loops_nested::generate_matrix]: loop 0:
-   Source: 'tests/src/loops-nested.rs', lines 127:4-140:5 -/
+   Source: 'tests/src/loops-nested.rs', lines 129:4-142:5 -/
 def generate_matrix_loop0
   (state_base : Array U8 8#usize) (key : Key) (state_work : Array U8 8#usize)
   (coordinates : Array U8 2#usize) (i : U8) :
@@ -305,7 +305,7 @@ def generate_matrix_loop0
 partial_fixpoint
 
 /- [loops_nested::generate_matrix]:
-   Source: 'tests/src/loops-nested.rs', lines 115:0-141:1 -/
+   Source: 'tests/src/loops-nested.rs', lines 117:0-143:1 -/
 def generate_matrix
   (key : Key) (state_base : Array U8 8#usize) (state_work : Array U8 8#usize) :
   Result (Key × (Array U8 8#usize) × (Array U8 8#usize))

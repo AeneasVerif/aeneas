@@ -93,15 +93,17 @@ impl Key {
     }
 }
 
-fn shake_init(_state: &mut [u8; 8]) {}
-fn shake_append(_state: &mut [u8; 8], _data: &[u8]) {}
-fn shake_state_copy(_src: &[u8; 8], _dst: &mut [u8; 8]) {}
-fn sample_ntt(_state: &mut [u8; 8], _dst: &mut u16) {}
+type HashState = [u8; 8];
+
+fn shake_init(_state: &mut HashState) {}
+fn shake_append(_state: &mut HashState, _data: &[u8]) {}
+fn shake_state_copy(_src: &HashState, _dst: &mut HashState) {}
+fn sample_ntt(_state: &mut HashState, _dst: &mut u16) {}
 
 /// This is adapted from [https://github.com/microsoft/SymCrypt/]
 fn generate_matrix_inner(
     key: &mut Key,
-    state: &mut [u8; 8],
+    state: &mut HashState,
 ) {
     let mut j = 0usize;
     while j < 4 {
@@ -114,8 +116,8 @@ fn generate_matrix_inner(
 /// This is adapted from [https://github.com/microsoft/SymCrypt/]
 fn generate_matrix(
     key: &mut Key,
-    state_base: &mut [u8; 8],
-    state_work: &mut [u8; 8],
+    state_base: &mut HashState,
+    state_work: &mut HashState,
 ) {
     let mut coordinates = [0u8; 2];
     let n_rows = 4;
