@@ -63,4 +63,94 @@ partial_fixpoint
 def sum (m : U32) (n : U32) : Result U32 :=
   sum_loop0 m n 0#u32 0#u32
 
+/- [loops_nested::FACTORS]
+   Source: 'tests/src/loops-nested.rs', lines 28:0-33:2 -/
+@[global_simps]
+def FACTORS_body : Result (Array U16 32#usize) :=
+  ok
+    (Array.make 32#usize [
+      2285#u16, 2571#u16, 2970#u16, 1812#u16, 1493#u16, 1422#u16, 287#u16,
+      202#u16, 3158#u16, 622#u16, 1577#u16, 182#u16, 962#u16, 2127#u16,
+      1855#u16, 1468#u16, 573#u16, 2004#u16, 264#u16, 383#u16, 2500#u16,
+      1458#u16, 1727#u16, 3199#u16, 2648#u16, 1017#u16, 732#u16, 608#u16,
+      1787#u16, 411#u16, 3124#u16, 1758#u16
+      ])
+@[global_simps, irreducible]
+def FACTORS : Array U16 32#usize := eval_global FACTORS_body
+
+/- [loops_nested::mod_add]:
+   Source: 'tests/src/loops-nested.rs', lines 35:0-37:1 -/
+def mod_add (a : U32) (b : U32) : Result U32 :=
+  do
+  let i ← a + b
+  i % 3329#u32
+
+/- [loops_nested::mod_sub]:
+   Source: 'tests/src/loops-nested.rs', lines 39:0-41:1 -/
+def mod_sub (a : U32) (b : U32) : Result U32 :=
+  do
+  let i ← a + 3329#u32
+  let i1 ← b % 3329#u32
+  let i2 ← i - i1
+  i2 % 3329#u32
+
+/- [loops_nested::ntt_layer]: loop 1:
+   Source: 'tests/src/loops-nested.rs', lines 51:8-63:9 -/
+def ntt_layer_loop1
+  (len : Usize) (start : Usize) (factor : U32) (a : Array U16 256#usize)
+  (j : Usize) :
+  Result (Array U16 256#usize)
+  :=
+  if j < len
+  then
+    do
+    let i ← start + j
+    let i1 ← Array.index_usize a i
+    let c0 ← core.convert.IntoFrom.into core.convert.FromU32U16 i1
+    let i2 ← i + len
+    let i3 ← Array.index_usize a i2
+    let c1 ← core.convert.IntoFrom.into core.convert.FromU32U16 i3
+    let c1_factor ← c1 * factor
+    let c11 ← mod_sub c0 c1_factor
+    let c01 ← mod_add c0 c1_factor
+    let (_, index_mut_back) ← Array.index_mut_usize a i
+    let i4 ← (↑(UScalar.cast .U16 c01) : Result U16)
+    let i5 ← i + len
+    let a1 := index_mut_back i4
+    let (_, index_mut_back1) ← Array.index_mut_usize a1 i5
+    let i6 ← (↑(UScalar.cast .U16 c11) : Result U16)
+    let j1 ← j + 1#usize
+    let a2 := index_mut_back1 i6
+    ntt_layer_loop1 len start factor a2 j1
+  else ok a
+partial_fixpoint
+
+/- [loops_nested::ntt_layer]: loop 0:
+   Source: 'tests/src/loops-nested.rs', lines 46:4-65:5 -/
+def ntt_layer_loop0
+  (len : Usize) (a : Array U16 256#usize) (k : Usize) (start : Usize) :
+  Result (Array U16 256#usize)
+  :=
+  if start < 256#usize
+  then
+    do
+    let i ← Array.index_usize FACTORS k
+    let factor ← core.convert.IntoFrom.into core.convert.FromU32U16 i
+    let k1 ← k + 1#usize
+    let a1 ← ntt_layer_loop1 len start factor a 0#usize
+    let i1 ← 2#usize * len
+    let start1 ← start + i1
+    ntt_layer_loop0 len a1 k1 start1
+  else ok a
+partial_fixpoint
+
+/- [loops_nested::ntt_layer]:
+   Source: 'tests/src/loops-nested.rs', lines 44:0-66:1 -/
+@[reducible]
+def ntt_layer
+  (a : Array U16 256#usize) (k : Usize) (len : Usize) :
+  Result (Array U16 256#usize)
+  :=
+  ntt_layer_loop0 len a k 0#usize
+
 end loops_nested
