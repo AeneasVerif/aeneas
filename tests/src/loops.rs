@@ -442,3 +442,13 @@ fn issue400_2(a: &mut i32, b: &mut i32, c: &mut i32, conds : &[bool]) {
     *y += 3;
     *z += 5;
 }
+
+/// Access a global in a loop
+fn copy_carray(a: &mut [u32; 2]) {
+    const CARRAY: [u32; 2] = [0,1];
+    let mut i = 0;
+    while i < 2 {
+        a[i] = CARRAY[i];
+        i += 1;
+    }
+}

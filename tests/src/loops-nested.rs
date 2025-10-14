@@ -25,6 +25,23 @@ pub fn sum(m: u32, n: u32) -> u32 {
     s
 }
 
+/// This is adapted from [https://github.com/microsoft/SymCrypt/]
+/// Updating the same array in the inner and outer loops.
+fn update_array() {
+    let mut out = [0u8; 4];
+
+    let mut i = 0usize;
+    while i < 4 {
+        out[i] = 0;
+        let mut j = 0usize;
+        while j < 4 {
+          out[j] = 1;
+          j += 1;
+        }
+        i += 1;
+    }
+}
+
 const FACTORS: [u16; 32] = [
     2285, 2571, 2970, 1812, 1493, 1422,  287,  202,
     3158,  622, 1577,  182,  962, 2127, 1855, 1468,
@@ -62,5 +79,63 @@ fn ntt_layer(a: &mut [u16; 256], mut k: usize, len: usize) {
             j += 1;
         }
         start += 2*len;
+    }
+}
+
+struct Key {
+    seed: [u8; 32],
+    atranspose: [u16; 32],
+}
+
+impl Key {
+    fn atranspose_mut(&mut self) -> &mut [u16; 32] {
+        &mut self.atranspose
+    }
+}
+
+fn shake_init(_state: &mut [u8; 8]) {}
+fn shake_append(_state: &mut [u8; 8], _data: &[u8]) {}
+fn shake_state_copy(_src: &[u8; 8], _dst: &mut [u8; 8]) {}
+fn sample_ntt(_state: &mut [u8; 8], _dst: &mut u16) {}
+
+/// This is adapted from [https://github.com/microsoft/SymCrypt/]
+fn generate_matrix_inner(
+    key: &mut Key,
+    state: &mut [u8; 8],
+) {
+    let mut j = 0usize;
+    while j < 4 {
+        let a_transpose = key.atranspose_mut();
+        sample_ntt(state, &mut a_transpose[j]);
+        j += 1;
+    }
+}
+    
+/// This is adapted from [https://github.com/microsoft/SymCrypt/]
+fn generate_matrix(
+    key: &mut Key,
+    state_base: &mut [u8; 8],
+    state_work: &mut [u8; 8],
+) {
+    let mut coordinates = [0u8; 2];
+    let n_rows = 4;
+
+    shake_init(state_base);
+    shake_append(state_base, &key.seed);
+
+    let mut i = 0u8;
+    while i < n_rows {
+        coordinates[1] = i;
+        let mut j = 0u8;
+        while j < n_rows {
+            coordinates[0] = j;
+            shake_state_copy(state_base, state_work);
+            shake_append(state_work, &coordinates);
+
+            let a_transpose = key.atranspose_mut();
+            sample_ntt(state_work, &mut a_transpose[(i*n_rows+j) as usize]);
+          j += 1;
+        }
+        i += 1;
     }
 }
