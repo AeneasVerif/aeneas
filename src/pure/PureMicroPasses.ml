@@ -4209,23 +4209,31 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
                     (List.length input_backl = List.length output_backl);
                   let update_back (input : texpr) (back : fvar)
                       (back_inputs : fvar list) : texpr =
-                    let pats, body = open_lambdas span input in
+                    [%ldebug
+                      "-  input: " ^ texpr_to_string ctx input ^ "\n- back: "
+                      ^ fvar_to_string ctx back ^ "\n- back_inputs: "
+                      ^ Print.list_to_string (fvar_to_string ctx) back_inputs];
+                    let lam_pats, body = open_lambdas span input in
+                    let let_pats, body = open_lets span body in
                     let f, args = destruct_apps body in
-                    match (f.e, pats, args) with
+                    match (f.e, lam_pats, args) with
                     | FVar _, [ pat ], [ arg ] ->
                         let back_inputs_el =
                           List.map mk_texpr_from_fvar back_inputs
                         in
                         let back = mk_texpr_from_fvar back in
-                        let let_e =
+                        let e =
+                          mk_closed_heterogeneous_lets span let_pats arg
+                        in
+                        let e =
                           mk_closed_let span false pat
                             ([%add_loc] mk_apps span back back_inputs_el)
-                            arg
+                            e
                         in
                         let back_inputs =
                           List.map (mk_tpattern_from_fvar None) back_inputs
                         in
-                        mk_closed_lambdas span back_inputs let_e
+                        mk_closed_lambdas span back_inputs e
                     | _ -> [%internal_error] span
                   in
 
@@ -4388,6 +4396,7 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
               ^ string_of_int loop.num_output_values];
             let is_call_to_input (x : texpr) : bool =
               let _pats, body = raw_destruct_lambdas x in
+              let _, body = raw_destruct_lets body in
               let f, _args = destruct_apps body in
               (* TODO: we also need to check that the input backward functions
                  are not used elsewhere. We do this after the fact, through

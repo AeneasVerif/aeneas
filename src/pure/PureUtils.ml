@@ -1186,12 +1186,11 @@ let close_binder (span : Meta.span) (pat : tpattern) (e : texpr) :
 
     We introduce free variables for the variables bound in the lets while doing
     so. *)
-let rec destruct_open_lets span (e : texpr) :
-    (bool * tpattern * texpr) list * texpr =
+let rec open_lets span (e : texpr) : (bool * tpattern * texpr) list * texpr =
   match e.e with
   | Let (monadic, lv, re, next_e) ->
       let lv, next_e = open_binder span lv next_e in
-      let lets, last_e = destruct_open_lets span next_e in
+      let lets, last_e = open_lets span next_e in
       ((monadic, lv, re) :: lets, last_e)
   | _ -> ([], e)
 
@@ -1625,6 +1624,13 @@ let mk_closed_lets span (monadic : bool) (lets : (tpattern * texpr) list)
     (next_e : texpr) : texpr =
   List.fold_right
     (fun (pat, value) (e : texpr) -> mk_closed_let span monadic pat value e)
+    lets next_e
+
+let mk_closed_heterogeneous_lets span (lets : (bool * tpattern * texpr) list)
+    (next_e : texpr) : texpr =
+  List.fold_right
+    (fun (monadic, pat, value) (e : texpr) ->
+      mk_closed_let span monadic pat value e)
     lets next_e
 
 (** This helper closes the binder *)
