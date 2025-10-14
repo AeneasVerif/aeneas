@@ -697,15 +697,35 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
     "- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
     ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: " ^ eval_ctx_to_string tgt_ctx];
 
-  (* Simplify the target context *)
+  (* We first reorganize [tgt_ctx] so that we can match [src_ctx] with it (by
+     ending loans for instance - remember that the [src_ctx] is the fixed point
+     context, which results from joins during which we ended the loans which
+     were introduced during the loop iterations).
+
+     This operation only ends loans/abstractions and moves some values to anonymous
+     values.
+  *)
   let tgt_ctx, cc =
-    simplify_dummy_values_useless_abs config span fixed_ids.aids tgt_ctx
+    prepare_loop_match_ctx_with_target config span loop_id fixed_ids src_ctx
+      tgt_ctx
+  in
+  [%ltrace
+    "Finished preparing the match:" ^ "\n- fixed_ids: "
+    ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
+    ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: " ^ eval_ctx_to_string tgt_ctx];
+
+  (* End all the unnecessary borrows/loans (note that it's better to call
+     [prepare_loop_match_ctx_with_target] *before* because it unlocks simplification
+     possibilities for [simplify_dummy_values_useless_abs]. *)
+  let tgt_ctx, cc =
+    comp cc
+      (simplify_dummy_values_useless_abs config span fixed_ids.aids tgt_ctx)
   in
   [%ltrace
     "- tgt_ctx after simplify_dummy_values_useless_abs:\n"
     ^ eval_ctx_to_string tgt_ctx];
 
-  (* Simplify the ended shared loans *)
+  (* Removed the ended shared loans and destructure the shared loans *)
   let tgt_ctx, cc = comp cc (destructure_shared_loans span fixed_ids tgt_ctx) in
   [%ltrace
     "- tgt_ctx after simplify_ended_shared_loans:\n"
@@ -716,36 +736,6 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
     reduce_ctx config span ~with_abs_conts:true loop_id fixed_ids tgt_ctx
   in
   [%ltrace "- tgt_ctx after reduce_ctx:\n" ^ eval_ctx_to_string tgt_ctx];
-
-  (* We first reorganize [tgt_ctx] so that we can match [src_ctx] with it (by
-     ending loans for instance - remember that the [src_ctx] is the fixed point
-     context, which results from joins during which we ended the loans which
-     were introduced during the loop iterations)
-  *)
-  let tgt_ctx, cc =
-    comp cc
-      (prepare_loop_match_ctx_with_target config span loop_id fixed_ids src_ctx
-         tgt_ctx)
-  in
-  [%ltrace
-    "Finished preparing the match:" ^ "\n- fixed_ids: "
-    ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
-    ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: " ^ eval_ctx_to_string tgt_ctx];
-
-  (* Reducing the context and preparing the match might have moved some borrows to
-     anonymous values or have transformed some shared loans into orphans, so we can
-     call [simplify_dummy_values_useless_abs] again.
-
-     TODO: it might be good to do something more general and repeatedly call
-     [reduce_ctx], [prepare_loop_match_ctx_with_target] and
-     [simplify_dummy_values_useless_abs] within a loop. *)
-  let tgt_ctx, cc =
-    comp cc
-      (simplify_dummy_values_useless_abs config span fixed_ids.aids tgt_ctx)
-  in
-  [%ltrace
-    "- tgt_ctx after simplify_dummy_values_useless_abs (pass 2):\n"
-    ^ eval_ctx_to_string tgt_ctx];
 
   (* Join the source context with the target context *)
   let joined_ctx, join_info =
