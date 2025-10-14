@@ -951,6 +951,9 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
   in
   match func with
   | None ->
+      [%ldebug
+        "No backward function found for abstraction: "
+        ^ V.AbstractionId.to_string abs.abs_id];
       [%sanity_check] span
         (V.AbstractionId.Set.mem abs.abs_id ctx.ignored_abs_ids);
       next_e ctx

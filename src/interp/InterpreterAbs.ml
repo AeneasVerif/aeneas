@@ -185,9 +185,23 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
         | VReservedMutBorrow _ ->
             (* This borrow should have been activated *)
             [%craise] span "Unexpected")
-    | VLoan _ ->
-        (* An outer loan can't be placed inside an anonymous value *)
-        [%craise] span "Unexpected"
+    | VLoan lc -> (
+        (* An outer loan can't be placed inside an anonymous value (because when
+           performing assignments we when end outer loans before moving values to
+           anonymous values), *but* when evaluating a reference to a global, because
+           for now when doing so we put the loan in an anonymous value.
+
+           Also note that we only support accessing globals through shared borrows. *)
+        match lc with
+        | VSharedLoan _ ->
+            [%cassert] span (ty_no_regions v.ty)
+              "Nested borrows are not supported yet";
+            (* We simply introduce an abstraction with no outputs *)
+            let rid = fresh_region_id () in
+            let avl, input = to_inputs rid v in
+            let output = mk_eignored mk_unit_ty in
+            push_abs rid avl (Some output) (Some input)
+        | VMutLoan _ -> [%internal_error] span)
     | VSymbolic sv ->
         (* Check that there are no nested borrows in the symbolic value -
            we don't support this case yet *)
