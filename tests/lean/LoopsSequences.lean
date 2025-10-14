@@ -91,7 +91,7 @@ partial_fixpoint
 def key_expand_loop1
   (state_base : Array U8 8#usize) (key : Key) (state_work : Array U8 8#usize)
   (sample_buffer : Array U8 1#usize) (i : I32) :
-  Result (Key × (Array U8 8#usize) × (Array U8 1#usize) × I32)
+  Result (Key × (Array U8 8#usize))
   :=
   if i < 32#i32
   then
@@ -113,7 +113,7 @@ def key_expand_loop1
     let key1 := t_mut_back a1
     let sample_buffer2 := to_slice_mut_back s2
     key_expand_loop1 state_base key1 state_work2 sample_buffer2 i2
-  else ok (key, state_work, sample_buffer, i)
+  else ok (key, state_work)
 partial_fixpoint
 
 /- [loops_sequences::key_expand]:
@@ -129,7 +129,7 @@ def key_expand
   let (key1, state_work1, sample_buffer) ←
     key_expand_loop0 state_base2 key state_work (Array.make 1#usize [ 0#u8 ])
       0#i32
-  let (key2, state_work2, _, _) ←
+  let (key2, state_work2) ←
     key_expand_loop1 state_base2 key1 state_work1 sample_buffer 0#i32
   ok (key2, state_base2, state_work2)
 

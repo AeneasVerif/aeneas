@@ -3793,6 +3793,9 @@ let filter_loop_useless_inputs_outputs (ctx : ctx) (def : fun_decl) =
     | Let (monadic, pat, bound, next) -> (
         let pat, next = open_binder span pat next in
 
+        (* Update the next expression first - there may be loops in there *)
+        let next = update next in
+
         (* Check if the bound expression is a loop *)
         match bound.e with
         | Loop loop ->
@@ -4065,7 +4068,6 @@ let filter_loop_useless_inputs_outputs (ctx : ctx) (def : fun_decl) =
             mk_closed_let span monadic pat loop next
         | _ ->
             (* No need to update the bound expression *)
-            let next = update next in
             mk_closed_let span monadic pat bound next)
     | Switch (scrut, switch) ->
         (* No need to update the scrutinee *)
