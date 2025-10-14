@@ -370,12 +370,12 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
 
   (* The fixed ids *)
   let fixed_ids, _ = compute_ctx_ids ctx0 in
+  let fixed_ids = ref fixed_ids in
 
-  (* Compute the set of fixed ids - for the symbolic ids, we compute the
-     intersection of ids between the original environment and the list
-     of new environments *)
-  let compute_fixed_ids (ctxl : eval_ctx list) : ids_sets =
-    let fixed_ids, _ = compute_ctx_ids ctx0 in
+  (* Update the set of fixed ids - for the symbolic and abstraction ids, we
+     compute the intersection of ids between the original environment and the
+     list of new environments *)
+  let update_fixed_ids (ctxl : eval_ctx list) =
     let {
       aids;
       blids;
@@ -389,18 +389,19 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
       rids;
       sids;
     } =
-      fixed_ids
+      !fixed_ids
     in
     let sids = ref sids in
+    let aids = ref aids in
     List.iter
       (fun ctx ->
         let fixed_ids, _ = compute_ctx_ids ctx in
-        sids := SymbolicValueId.Set.inter !sids fixed_ids.sids)
+        sids := SymbolicValueId.Set.inter !sids fixed_ids.sids;
+        aids := AbstractionId.Set.inter !aids fixed_ids.aids)
       ctxl;
-    let sids = !sids in
-    let fixed_ids =
+    fixed_ids :=
       {
-        aids;
+        aids = !aids;
         blids;
         borrow_ids;
         unique_borrow_ids;
@@ -410,10 +411,8 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
         shared_loans_to_values;
         dids;
         rids;
-        sids;
+        sids = !sids;
       }
-    in
-    fixed_ids
   in
 
   (* Join the contexts at the loop entry - ctx1 is the current joined
@@ -422,8 +421,9 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
   let join_ctxs (ctx1 : eval_ctx) (ctxs : eval_ctx list) : eval_ctx =
     [%ltrace "join_ctxs"];
     (* Join the context with the context at the loop entry *)
+    update_fixed_ids ctxs;
     let (_, _), ctx2 =
-      loop_join_origin_with_continue_ctxs config span loop_id fixed_ids ctx1
+      loop_join_origin_with_continue_ctxs config span loop_id !fixed_ids ctx1
         ctxs
     in
     ctx2
@@ -434,10 +434,10 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
   *)
   let equiv_ctxs (ctx1 : eval_ctx) (ctx2 : eval_ctx) : bool =
     [%ltrace "equiv_ctx:"];
-    let fixed_ids = compute_fixed_ids [ ctx1; ctx2 ] in
+    update_fixed_ids [ ctx2 ];
     let lookup_shared_value _ = [%craise] span "Unreachable" in
     Option.is_some
-      (match_ctxs span ~check_equiv:true fixed_ids lookup_shared_value
+      (match_ctxs span ~check_equiv:true !fixed_ids lookup_shared_value
          lookup_shared_value ctx1 ctx2)
   in
   let max_num_iter = Config.loop_fixed_point_max_num_iters in
@@ -501,11 +501,13 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
     ^ "\n"];
 
   (* Update the region abstractions to introduce continuation expressions, etc. *)
-  let fixed_ids = compute_fixed_ids [ ctx0; fp ] in
-  let fp, rg_to_abs = loop_abs_reorder_and_add_info span loop_id fixed_ids fp in
+  update_fixed_ids [ fp ];
+  let fp, rg_to_abs =
+    loop_abs_reorder_and_add_info span loop_id !fixed_ids fp
+  in
 
   (* Return *)
-  (fp, fixed_ids, rg_to_abs)
+  (fp, !fixed_ids, rg_to_abs)
 
 let compute_loop_break_context (config : config) (span : Meta.span)
     (loop_id : LoopId.id) (eval_loop_body : stl_cm_fun) (fp_ctx : eval_ctx)

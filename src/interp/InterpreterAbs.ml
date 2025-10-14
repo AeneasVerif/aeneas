@@ -540,6 +540,7 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
       | ALoan (AEndedSharedLoan (sv, child))
         when (not (value_has_loans_or_borrows (Some span) ctx sv.value))
              && is_aignored child.value -> false
+      | AIgnored _ -> false
       | _ -> true
     in
     let avalues = List.filter keep abs0.avalues in
