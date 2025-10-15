@@ -228,7 +228,7 @@ let compute_tevalue_proj_kind (span : Meta.span) (type_infos : type_infos)
         (* Remember the type of the current value *)
         super#visit_tevalue ev.ty ev
 
-      method! visit_ELoan env lc =
+      method! visit_ELoan ty lc =
         has_loans := true;
         begin
           match lc with
@@ -236,9 +236,9 @@ let compute_tevalue_proj_kind (span : Meta.span) (type_infos : type_infos)
           | EMutLoan _ | EEndedMutLoan _ -> has_mut_loans := true
         end;
         (* Continue exploring as a sanity check: we want to make sure we don't find borrows *)
-        super#visit_ELoan env lc
+        super#visit_ELoan ty lc
 
-      method! visit_EBorrow env bc =
+      method! visit_EBorrow ty bc =
         has_borrows := true;
         begin
           match bc with
@@ -246,7 +246,17 @@ let compute_tevalue_proj_kind (span : Meta.span) (type_infos : type_infos)
           | EMutBorrow _ | EEndedMutBorrow _ -> has_mut_borrows := true
         end;
         (* Continue exploring as a sanity check: we want to make sure we don't find loans *)
-        super#visit_EBorrow env bc
+        super#visit_EBorrow ty bc
+
+      method! visit_EFVar ty _ =
+        if
+          TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos keep_region
+            ty
+        then (
+          (* It may seem counterintuitive, but we consider the free variables
+             as a **loan** (because it binds an input loan). *)
+          has_loans := true;
+          has_mut_loans := true)
 
       method! visit_ESymbolic ty pm eproj =
         [%sanity_check] span (pm = PNone);
@@ -536,15 +546,15 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
     (bound_inputs : bound_borrows_loans)
     (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref) (input : V.tevalue) :
     bs_ctx * bool * texpr =
-  [%ltrace
+  [%ldebug
     "- rids: "
     ^ T.RegionId.Set.to_string None rids
     ^ "\n- input: "
     ^ tevalue_to_string ectx input];
   let span = ctx.span in
-  let rec to_texpr ~(filter : bool) (rids : T.RegionId.Set.t) (ctx : bs_ctx)
+  let rec to_texpr_aux ~(filter : bool) (rids : T.RegionId.Set.t) (ctx : bs_ctx)
       (input : V.tevalue) : bs_ctx * bool * texpr option =
-    [%ltrace
+    [%ldebug
       "- input: "
       ^ tevalue_to_string ectx input
       ^ "\n- fvar_to_texpr:\n"
@@ -552,28 +562,27 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
           !fvar_to_texpr];
     match input.value with
     | V.ELet (rids', pat, bound, next) ->
+        [%ldebug "let"];
         (* Open the binders *)
         let pat, next = ValuesUtils.open_binder span pat next in
-        [%ltrace
+        [%ldebug
           "- input after opening the binders: "
           ^ tevalue_to_string ectx
               { input with value = ELet (rids', pat, bound, next) }];
-        [%ltrace
+        [%ldebug
           "- pat: " ^ tepat_to_string ectx pat ^ "\n- pat.ty: "
           ^ InterpreterUtils.ty_to_string ectx pat.epat_ty];
         (* Translate *)
-        let ctx, bound_can_fail, bound =
-          to_texpr ~filter:false rids' ctx bound
-        in
+        let ctx, bound_can_fail, bound = to_texpr ~filter rids' ctx bound in
         let llbc_pat = pat in
         let ctx, pat = tepat_to_tpattern ctx fvar_to_texpr rids' pat in
-        [%ltrace
+        [%ldebug
           "Let-binding:\n- pat: " ^ tpattern_to_string ctx pat
           ^ "\n- LLBC pat.ty: "
           ^ InterpreterUtils.ty_to_string ectx llbc_pat.epat_ty
           ^ "\n- bound: "
           ^ Print.option_to_string (texpr_to_string ctx) bound];
-        let ctx, next_can_fail, next = to_texpr ~filter:false rids ctx next in
+        let ctx, next_can_fail, next = to_texpr ~filter rids ctx next in
         (* Create the let binding *)
         let bound =
           match bound with
@@ -600,13 +609,19 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
            - there should be no bound variables *)
         [%internal_error] span
     | V.EFVar fvid ->
+        [%ldebug
+          "- input is fvar: " ^ V.AbsFVarId.to_string fvid
+          ^ "\n- fvar_to_texpr:\n"
+          ^ V.AbsFVarId.Map.to_string (Some "  ") (texpr_to_string ctx)
+              !fvar_to_texpr];
         let e = V.AbsFVarId.Map.find_opt fvid !fvar_to_texpr in
         (ctx, false, e)
     | V.EApp (f, args) ->
+        [%ldebug "app"];
         let ctx, args =
           List.fold_left_map
             (fun ctx arg ->
-              let ctx, can_fail, arg = to_texpr ~filter:false rids ctx arg in
+              let ctx, can_fail, arg = to_texpr ~filter rids ctx arg in
               [%sanity_check] span (not can_fail);
               (ctx, arg))
             ctx args
@@ -661,6 +676,7 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
               (ctx, can_fail, e)
         end
     | V.EAdt { variant_id; field_values } -> begin
+        [%ldebug "adt"];
         let ctx, out =
           gtranslate_adt_fields ~project_borrows:false
             (fun ~filter ctx v ->
@@ -683,6 +699,7 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
             (ctx, false, Some x)
       end
     | V.ELoan lc -> (
+        [%ldebug "loan"];
         match lc with
         | V.EMutLoan (pm, lid, child) ->
             [%sanity_check] span (pm = PNone);
@@ -697,6 +714,7 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
             [%internal_error] span)
     | V.EBorrow _ -> [%internal_error] span
     | V.ESymbolic (pm, proj) -> begin
+        [%ldebug "symbolic"];
         [%sanity_check] span (pm = PNone);
         match proj with
         | V.EProjLoans { proj = { sv_id; proj_ty }; consumed; borrows } ->
@@ -716,12 +734,29 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
         | V.EEmpty -> [%internal_error] span
       end
     | V.EValue (env, mv) ->
+        [%ldebug "value"];
         let e = tvalue_to_texpr ctx { ectx with env } mv in
         (ctx, false, Some e)
-    | V.EIgnored -> (ctx, false, None)
-    | V.EBottom -> [%internal_error] span
+    | V.EIgnored ->
+        [%ldebug "ignored"];
+        (ctx, false, None)
+    | V.EBottom ->
+        [%ldebug "bottom"];
+        [%internal_error] span
+  and to_texpr ~(filter : bool) (rids : T.RegionId.Set.t) (ctx : bs_ctx)
+      (input : V.tevalue) : bs_ctx * bool * texpr option =
+    let e = to_texpr_aux ~filter rids ctx input in
+    [%ldebug
+      let _, _, e = e in
+      "- rids: "
+      ^ T.RegionId.Set.to_string None rids
+      ^ "\n- input:\n"
+      ^ tevalue_to_string ectx input
+      ^ "\n\n- resulting expr:\n"
+      ^ Print.option_to_string (texpr_to_string ctx) e];
+    e
   in
-  let ctx, can_fail, e = to_texpr ~filter:false rids ctx input in
+  let ctx, can_fail, e = to_texpr ~filter:true rids ctx input in
   let e =
     match e with
     | None -> mk_unit_texpr
