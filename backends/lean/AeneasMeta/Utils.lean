@@ -164,7 +164,7 @@ partial def mapreduceVisit {a : Type} (k : Nat → a → Expr → MetaM (a × Ex
       lambdaLetTelescope e fun xs b =>
         mapreduceVisitBinders state xs fun state => do
         let (state, b) ← visit (i + 1) state b
-        let e' ← mkLambdaFVars xs b (usedLetOnly := false)
+        let e' ← mkLambdaFVars xs b (usedLetOnly := false) (generalizeNondepLet := false)
         return (state, e')
     | .forallE .. => do
       forallTelescope e fun xs b =>
@@ -176,7 +176,7 @@ partial def mapreduceVisit {a : Type} (k : Nat → a → Expr → MetaM (a × Ex
       lambdaLetTelescope e fun xs b =>
         mapreduceVisitBinders state xs fun state => do
         let (state, b) ← visit (i + 1) state b
-        let e' ← mkLambdaFVars xs b (usedLetOnly := false)
+        let e' ← mkLambdaFVars xs b (usedLetOnly := false) (generalizeNondepLet := false)
         return (state, e')
     | .mdata _ b => do
       let (state, b) ← visit (i + 1) state b
