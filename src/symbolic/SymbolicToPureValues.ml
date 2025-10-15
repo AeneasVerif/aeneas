@@ -278,6 +278,7 @@ let compute_tavalue_proj_kind span type_infos (abs_regions : T.RegionId.Set.t)
 (** A smaller helper which allows us to isolate the logic by which we handle
     ADTs. *)
 let gtranslate_adt_fields ~(project_borrows : bool)
+    (input_to_string : 'v -> string) (output_to_string : 'o -> string)
     (translate : filter:bool -> bs_ctx -> 'v -> bs_ctx * ('info * 'o) option)
     (compute_proj_kind : 'v -> tavalue_kind) (mk_adt : 'o list -> 'o)
     (mk_tuple : 'o list -> 'o) ~(filter : bool) (ctx : bs_ctx) (av : 'v)
@@ -302,25 +303,41 @@ let gtranslate_adt_fields ~(project_borrows : bool)
       end;
 
       (* Translate the field values *)
-      let ctx, info_fields =
-        let filter =
-          filter
-          &&
-          match adt_id with
-          | TTuple | TBuiltin TBox -> true
-          | TBuiltin _ | TAdtId _ -> (
-              match proj_kind with
-              | UnknownProj | BorrowProj BShared | LoanProj BShared -> true
-              | _ -> false)
-        in
-        List.fold_left_map (translate ~filter) ctx fields
+      let filter_fields =
+        filter
+        &&
+        match adt_id with
+        | TTuple | TBuiltin TBox -> true
+        | TBuiltin _ | TAdtId _ -> (
+            match proj_kind with
+            | UnknownProj | BorrowProj BShared | LoanProj BShared -> true
+            | _ -> false)
       in
+      let ctx, info_fields =
+        List.fold_left_map (translate ~filter:filter_fields) ctx fields
+      in
+      [%ldebug
+        "- input fields (length: "
+        ^ string_of_int (List.length fields)
+        ^ "):\n"
+        ^ String.concat "\n" (List.map input_to_string fields)
+        ^ "\n- output fields:\n"
+        ^ String.concat "\n"
+            (List.map
+               (Print.option_to_string (fun (_, x) -> output_to_string x))
+               info_fields)];
       match adt_id with
       | TAdtId _ ->
-          (* We should preserve all the fields *)
-          let infos, fields = List.split (List.map Option.get info_fields) in
-          let pat = mk_adt fields in
-          (ctx, Some (infos, pat))
+          if filter_fields then (
+            [%sanity_check] span (List.for_all Option.is_none info_fields);
+            (ctx, None))
+          else
+            (* We should preserve all the fields *)
+            let infos, fields =
+              List.split (List.map ([%try_unwrap] span) info_fields)
+            in
+            let pat = mk_adt fields in
+            (ctx, Some (infos, pat))
       | TBuiltin TBox -> begin
           (* The box type becomes the identity in the translation *)
           match info_fields with
@@ -408,7 +425,8 @@ and adt_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
     (ectx : C.eval_ctx) (abs_regions : T.RegionId.Set.t) (av : V.tavalue)
     (adt_v : V.adt_avalue) : texpr option =
   let _, out =
-    gtranslate_adt_fields ~project_borrows:false
+    gtranslate_adt_fields ~project_borrows:false (tavalue_to_string ctx)
+      (texpr_to_string ctx)
       (fun ~filter ctx v ->
         ( ctx,
           match tavalue_to_consumed_aux ~filter ctx ectx abs_regions v with
@@ -629,7 +647,8 @@ and adt_avalue_to_given_back_aux ~(filter : bool)
     (abs_regions : T.RegionId.Set.t) (av : V.tavalue) (adt_v : V.adt_avalue)
     (ctx : bs_ctx) : bs_ctx * tpattern option =
   let ctx, out =
-    gtranslate_adt_fields ~project_borrows:true
+    gtranslate_adt_fields ~project_borrows:true (tavalue_to_string ctx)
+      (tpattern_to_string ctx)
       (fun ~filter ctx v ->
         let ctx, v = tavalue_to_given_back_aux ~filter abs_regions None v ctx in
         match v with

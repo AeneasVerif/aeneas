@@ -153,7 +153,7 @@ let unwrap_opt_span (file : string) (line : int) (span : Meta.span option)
     (x : 'a option) (msg : string) : 'a =
   match x with
   | Some x -> x
-  | None -> craise_opt_span_silent file line span msg
+  | None -> craise_opt_span file line span msg
 
 let unwrap_with_span (file : string) (line : int) (span : Meta.span)
     (x : 'a option) (msg : string) : 'a =
@@ -161,7 +161,16 @@ let unwrap_with_span (file : string) (line : int) (span : Meta.span)
 
 let silent_unwrap_opt_span (file : string) (line : int)
     (span : Meta.span option) (x : 'a option) : 'a =
-  unwrap_opt_span file line span x "Internal error: please file an issue"
+  match x with
+  | Some x -> x
+  | None ->
+      craise_opt_span file line span "Internal error: please file an issue"
+
+let try_unwrap (file : string) (line : int) (span : Meta.span) (x : 'a option) :
+    'a =
+  match x with
+  | Some x -> x
+  | None -> craise file line span "Internal error: please file an issue"
 
 let silent_unwrap (file : string) (line : int) (span : Meta.span)
     (x : 'a option) : 'a =

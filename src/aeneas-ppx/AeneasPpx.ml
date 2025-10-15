@@ -81,6 +81,7 @@ let () =
       @ [
           mk_check_rule "Errors" "unwrap_opt_span";
           mk_check_rule "Errors" "unwrap_with_span";
+          mk_check_rule "Errors" "try_unwrap";
         ]
       (* The rules for the helpers in `ExtractErrors.ml` *)
       @ mk_check_rules "ExtractErrors"

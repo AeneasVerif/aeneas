@@ -1,7 +1,6 @@
 open Pure
 open PureUtils
 open TypesAnalysis
-open InterpreterUtils
 open SymbolicToPureCore
 open SymbolicToPureTypes
 open SymbolicToPureValues
@@ -37,7 +36,8 @@ and adt_avalue_to_consumed_ty_aux ~(filter : bool) (ctx : bs_ctx)
     (abs_regions : T.RegionId.Set.t) (av : V.tavalue) (adt_v : V.adt_avalue) :
     ty option =
   let _, out =
-    gtranslate_adt_fields ~project_borrows:false
+    gtranslate_adt_fields ~project_borrows:false (tavalue_to_string ctx)
+      (pure_ty_to_string ctx)
       (fun ~filter ctx v ->
         ( ctx,
           match tavalue_to_consumed_ty_aux ~filter ctx abs_regions v with
@@ -124,7 +124,8 @@ and adt_avalue_to_given_back_ty_aux ~(filter : bool)
     (abs_regions : T.RegionId.Set.t) (av : V.tavalue) (adt_v : V.adt_avalue)
     (ctx : bs_ctx) : ty option =
   let _, out =
-    gtranslate_adt_fields ~project_borrows:true
+    gtranslate_adt_fields ~project_borrows:true (tavalue_to_string ctx)
+      (pure_ty_to_string ctx)
       (fun ~filter ctx v ->
         ( ctx,
           match tavalue_to_given_back_ty_aux ~filter ctx abs_regions v with
@@ -434,7 +435,8 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
         end
     | V.EAdt { variant_id; field_values } -> begin
         let ctx, out =
-          gtranslate_adt_fields ~project_borrows:true
+          gtranslate_adt_fields ~project_borrows:true (tevalue_to_string ctx)
+            (tpattern_to_string ctx)
             (fun ~filter ctx v ->
               let ctx, pat = to_pat ~filter ctx v in
               ( ctx,
@@ -502,7 +504,8 @@ let tepat_to_tpattern (ctx : bs_ctx)
           else BorrowProj BShared
         in
         let ctx, out =
-          gtranslate_adt_fields ~project_borrows
+          gtranslate_adt_fields ~project_borrows (tepat_to_string ctx)
+            (tpattern_to_string ctx)
             (fun ~filter ctx v ->
               let ctx, pat = to_pat ~filter ctx v in
               (ctx, Option.map (fun x -> ((), x)) pat))
@@ -550,13 +553,13 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
     "- rids: "
     ^ T.RegionId.Set.to_string None rids
     ^ "\n- input: "
-    ^ tevalue_to_string ectx input];
+    ^ tevalue_to_string ctx input];
   let span = ctx.span in
   let rec to_texpr_aux ~(filter : bool) (rids : T.RegionId.Set.t) (ctx : bs_ctx)
       (input : V.tevalue) : bs_ctx * bool * texpr option =
     [%ldebug
       "- input: "
-      ^ tevalue_to_string ectx input
+      ^ tevalue_to_string ctx input
       ^ "\n- fvar_to_texpr:\n"
       ^ V.AbsFVarId.Map.to_string (Some "  ") (texpr_to_string ctx)
           !fvar_to_texpr];
@@ -567,10 +570,10 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
         let pat, next = ValuesUtils.open_binder span pat next in
         [%ldebug
           "- input after opening the binders: "
-          ^ tevalue_to_string ectx
+          ^ tevalue_to_string ctx
               { input with value = ELet (rids', pat, bound, next) }];
         [%ldebug
-          "- pat: " ^ tepat_to_string ectx pat ^ "\n- pat.ty: "
+          "- pat: " ^ tepat_to_string ctx pat ^ "\n- pat.ty: "
           ^ InterpreterUtils.ty_to_string ectx pat.epat_ty];
         (* Translate *)
         let ctx, bound_can_fail, bound = to_texpr ~filter rids' ctx bound in
@@ -678,7 +681,8 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
     | V.EAdt { variant_id; field_values } -> begin
         [%ldebug "adt"];
         let ctx, out =
-          gtranslate_adt_fields ~project_borrows:false
+          gtranslate_adt_fields ~project_borrows:false (tevalue_to_string ctx)
+            (texpr_to_string ctx)
             (fun ~filter ctx v ->
               let ctx, can_fail, e = to_texpr ~filter rids ctx v in
               (ctx, Option.map (fun x -> (can_fail, x)) e))
@@ -751,7 +755,7 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
       "- rids: "
       ^ T.RegionId.Set.to_string None rids
       ^ "\n- input:\n"
-      ^ tevalue_to_string ectx input
+      ^ tevalue_to_string ctx input
       ^ "\n\n- resulting expr:\n"
       ^ Print.option_to_string (texpr_to_string ctx) e];
     e

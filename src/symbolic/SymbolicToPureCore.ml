@@ -347,6 +347,18 @@ let tavalue_to_string (ctx : bs_ctx) ?(with_ended = false) (v : V.tavalue) :
   let env = bs_ctx_to_fmt_env ctx in
   Print.Values.tavalue_to_string ~span:(Some ctx.span) ~with_ended env v
 
+let tepat_to_string (ctx : bs_ctx) (v : V.tepat) : string =
+  let env = bs_ctx_to_fmt_env ctx in
+  snd
+    (Print.Values.tepat_to_string ~span:(Some ctx.span) env
+       Print.Values.empty_evalue_env "" "  " v)
+
+let tevalue_to_string (ctx : bs_ctx) ?(with_ended = false) (v : V.tevalue) :
+    string =
+  let env = bs_ctx_to_fmt_env ctx in
+  Print.Values.tevalue_to_string ~span:(Some ctx.span) ~with_ended env
+    Print.Values.empty_evalue_env "" "  " v
+
 let pure_ty_to_string (ctx : bs_ctx) (ty : ty) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
   PrintPure.ty_to_string env false ty
