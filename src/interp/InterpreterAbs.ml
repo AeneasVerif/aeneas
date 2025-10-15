@@ -534,16 +534,20 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
 
      Note that we also filter the left avalues to remove ended loans, etc.
   *)
+  let keep_avalue (v : tavalue) : bool =
+    match v.value with
+    | ALoan (AEndedSharedLoan (sv, child))
+      when (not (value_has_loans_or_borrows (Some span) ctx sv.value))
+           && is_aignored child.value -> false
+    | AIgnored _ -> false
+    | ASymbolic (_, AEndedProjLoans { proj = _; consumed = _; borrows })
+      when borrows = [] -> false
+    | ALoan (AEndedMutLoan { child; given_back = _; given_back_meta = _ })
+      when is_aignored child.value -> false
+    | _ -> true
+  in
   let left_avalues =
-    let keep (v : tavalue) : bool =
-      match v.value with
-      | ALoan (AEndedSharedLoan (sv, child))
-        when (not (value_has_loans_or_borrows (Some span) ctx sv.value))
-             && is_aignored child.value -> false
-      | AIgnored _ -> false
-      | _ -> true
-    in
-    let avalues = List.filter keep abs0.avalues in
+    let avalues = List.filter keep_avalue abs0.avalues in
     ref avalues
   in
   let right_avalues = ref [] in
@@ -657,13 +661,15 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
               (* Do not eliminate *)
               push_right_avalue av
         | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty ->
-            [%craise] span "Unreachable"
+            [%craise] span
+              ("Internal error: please file an issue.\nUnexpected value: "
+             ^ tavalue_to_string ctx av)
       end
     | AAdt _ -> [%craise] span "Not implemented yet"
     | ABottom -> [%internal_error] span
     | AIgnored _ -> (* Nothing to register *) ()
   in
-  List.iter add_avalue abs1.avalues;
+  List.iter add_avalue (List.filter keep_avalue abs1.avalues);
 
   (* We are done *)
   !left_avalues @ List.rev !right_avalues

@@ -258,9 +258,12 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
               (* Create the continuation, for the translation *)
               let abs_cont : abs_cont =
                 (* Note that the values don't give back anything (we will
-                 simplify the given back value to unit when translating
-                 to pure) so we can simply ignore them. *)
-                { input = None; output = Some { value = EIgnored; ty } }
+                   simplify the given back value to unit when translating
+                   to pure) so we can simply ignore them. *)
+                {
+                  input = Some (mk_eignored mk_unit_ty);
+                  output = Some { value = EIgnored; ty };
+                }
               in
 
               (* Create the abstraction values *)
