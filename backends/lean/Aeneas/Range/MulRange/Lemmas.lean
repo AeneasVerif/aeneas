@@ -114,8 +114,7 @@ private theorem forIn'_loop_eq_forIn'_MulRange [Monad m] (r : MulRange)
     dcases hStop : i < r.stop <;> simp only [hStop, ↓reduceDIte, ↓reduceIte, List.forIn'_cons,
       id_eq, Int.reduceNeg, Int.reduceAdd, List.not_mem_nil,
       IsEmpty.forall_iff, implies_true, List.forIn'_nil]
-    apply letFun_val_congr
-    apply funext
+    apply bind_congr
     intro x
     cases x
     . simp
