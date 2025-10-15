@@ -377,11 +377,12 @@ def IScalar.hBounds {ty} (x : IScalar ty) :
   -2^(ty.numBits - 1) ≤ x.val ∧ x.val < 2^(ty.numBits - 1) := by
   match x with
   | ⟨ ⟨ fin ⟩ ⟩ =>
-    simp [val, min, max, BitVec.toInt]
-    cases ty <;> simp at * <;> try omega
+    simp [val, BitVec.toInt]
     have hFinLt := fin.isLt
+    cases ty <;> simp at * <;> try omega
+
     cases h: System.Platform.numBits_eq <;>
-    simp_all only [IScalarTy.Isize_numBits_eq, true_or, Nat.add_one_sub_one] <;>
+    simp_all only [true_or, Nat.add_one_sub_one] <;>
     omega
 
 def IScalar.rMin_eq_pow_numBits (ty : IScalarTy) : IScalar.rMin ty = -2^(ty.numBits - 1) := by
