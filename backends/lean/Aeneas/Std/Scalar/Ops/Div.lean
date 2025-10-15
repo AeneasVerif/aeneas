@@ -158,7 +158,7 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
 
   . -- 0 ≤ x.bv.toInt
     -- 0 ≤ y.bv.toInt
-    rw [BitVec.toInt_ofNat]
+    rw [BitVec.toInt_ofNat']
     simp only [Int.natCast_ediv]
     have hx : x.bv.toNat = x.bv.toInt := by
       have := @BitVec.toInt_eq_msb_cond _ x.bv
@@ -208,7 +208,7 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
       rw [hy]
       simp only [neg_sub, Int.toNat_sub']
       norm_cast
-    rw [BitVec.toInt_neg, BitVec.toInt_ofNat]
+    rw [BitVec.toInt_neg, BitVec.toInt_ofNat']
     simp only [Int.natCast_ediv, Int.natCast_emod, Nat.cast_pow, Nat.cast_ofNat]
     rw [hyToNat]
     have : ((-y.val).toNat : Int) % 2^ty.numBits = -(y.val : Int) := by
@@ -263,7 +263,7 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
       rw [hx]
       simp only [neg_sub, Int.toNat_sub']
       norm_cast
-    rw [BitVec.toInt_neg, BitVec.toInt_ofNat]
+    rw [BitVec.toInt_neg, BitVec.toInt_ofNat']
     simp only [Int.natCast_ediv, Int.natCast_emod, Nat.cast_pow, Nat.cast_ofNat]
 
     rw [hxToNat]
@@ -342,7 +342,7 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
       omega
     rw [this]
 
-    rw [BitVec.toInt_ofNat]
+    rw [BitVec.toInt_ofNat']
 
     /- We have to treat separately the degenerate case where `x` touches the lower bound
        and `y = -1`, because then `x / y` actually overflows -/

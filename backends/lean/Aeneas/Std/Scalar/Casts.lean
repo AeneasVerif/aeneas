@@ -168,7 +168,7 @@ theorem UScalar.cast_fromBool_val_eq ty (b : Bool) : (UScalar.cast_fromBool ty b
 theorem IScalar.cast_fromBool_val_eq ty (b : Bool) :(IScalar.cast_fromBool ty b).val = b.toInt := by
   simp [cast_fromBool]
   split <;> simp only [val, *] <;> simp
-  cases ty <;> simp
+  cases ty <;> simp [BitVec.toInt]
   have := System.Platform.numBits_eq
   cases this <;>
   rename_i h <;>
