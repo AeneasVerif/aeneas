@@ -260,7 +260,7 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
   borrows_visitor#visit_eval_ctx () ctx;
 
   (* Debugging *)
-  [%ltrace "About to check context invariant:\n" ^ context_to_string ()];
+  [%ldebug "About to check context invariant:\n" ^ context_to_string ()];
 
   (* Finally, check that everything is consistant *)
   (* First, check all the ignored loans are present at the proper place *)
@@ -834,7 +834,7 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
 
   (* Check *)
   let check_info id info =
-    [%ltrace
+    [%ldebug
       "checking info (sid: )"
       ^ SymbolicValueId.to_string id
       ^ ":\n" ^ sv_info_to_string ctx info];
@@ -843,6 +843,10 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
       (* TODO: check that:
        * - the borrows are mutually disjoint
        *)
+      (* The borrows of a symbolic value must come from somewhere: if we find a
+         symbolic values with live borrows (and particular a projection over the
+         borrows of a symbolic value), there *must* be a projection over its loans
+         (otherwise its borrows don't have corresponding loans). *)
       [%sanity_check] span (info.aproj_borrows = [] || info.aproj_loans <> []);
       (* Check that the loan projections don't intersect and compute
          the normalized union of those projections *)
@@ -898,13 +902,13 @@ let check_unique_abs_ids (span : Meta.span) (ctx : eval_ctx) : unit =
 let check_invariants (span : Meta.span) (ctx : eval_ctx) : unit =
   if !Config.sanity_checks then (
     [%ltrace
-      "Checking invariants:\n" ^ eval_ctx_to_string ~span:(Some span) ctx];
+      "Checking invariants in context:\n"
+      ^ eval_ctx_to_string ~span:(Some span) ctx];
     check_loans_borrows_relation_invariant span ctx;
     check_borrowed_values_invariant span ctx;
     check_typing_invariant span ctx true;
     check_symbolic_values span ctx;
     check_unique_abs_ids span ctx)
-  else [%ltrace "Not checking invariants (check is not activated)"]
 
 let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
   if !Config.sanity_checks then check_typing_invariant span ctx true

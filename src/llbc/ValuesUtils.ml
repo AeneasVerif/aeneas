@@ -48,6 +48,9 @@ let value_as_symbolic (span : Meta.span) (v : value) : symbolic_value =
   | VSymbolic v -> v
   | _ -> [%craise] span "Unexpected"
 
+let tvalue_as_symbolic (span : Meta.span) (v : tvalue) : symbolic_value =
+  value_as_symbolic span v.value
+
 let mk_etuple (vl : tevalue list) : tevalue =
   let tys = List.map (fun (v : tevalue) -> v.ty) vl in
   let generics = mk_generic_args_from_types tys in

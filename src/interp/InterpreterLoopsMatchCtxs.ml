@@ -289,6 +289,9 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
 
   let rec match_tvalues (ctx0 : eval_ctx) (ctx1 : eval_ctx) (v0 : tvalue)
       (v1 : tvalue) : tvalue =
+    [%ldebug
+      "- v0: " ^ tvalue_to_string ctx0 v0 ^ "\n- v1: "
+      ^ tvalue_to_string ctx1 v1];
     let match_rec = match_tvalues ctx0 ctx1 in
     let ty = M.match_etys ctx0 ctx1 v0.ty v1.ty in
     (* Using ValuesUtils.value_ has_borrows on purpose here: we want
@@ -312,12 +315,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
             VAdt { variant_id = av0.variant_id; field_values }
           in
           { value; ty = v1.ty }
-        else (
-          (* For now, we don't merge ADTs which contain borrows *)
-          [%sanity_check] M.span (not (value_has_borrows v0.value));
-          [%sanity_check] M.span (not (value_has_borrows v1.value));
-          (* Merge *)
-          M.match_distinct_adts match_rec ctx0 ctx1 ty av0 av1)
+        else M.match_distinct_adts match_rec ctx0 ctx1 ty av0 av1
     | VBottom, VBottom -> v0
     | VBorrow bc0, VBorrow bc1 ->
         let bc =
@@ -596,58 +594,130 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       { value = VLiteral v0; ty }
       { value = VLiteral v1; ty }
 
+  (* Helper *)
+  let to_symbolic_value_with_borrows (ctx0 : eval_ctx) (ctx1 : eval_ctx)
+      (v0 : tvalue) (v1 : tvalue) : tvalue =
+    (* Introduce a fresh region id for each erased region appearing in the type.
+
+         TODO: we might have to do some unification to determine whether some
+         regions should be equal or not.
+      *)
+    let fresh_regions, ty_with_regions =
+      ty_refresh_regions (Some span) fresh_region_id v0.ty
+    in
+
+    (* Introduce a fresh symbolic value for the join *)
+    let sv = add_fresh_symbolic_value ty_with_regions v0 v1 in
+    let sv_s = tvalue_as_symbolic span sv in
+
+    (* Project the ADTs into different region abstractions *)
+    let project (rid : RegionId.id) =
+      let regions = RegionId.Set.singleton rid in
+      let avl0, output0 =
+        convert_value_to_output_avalues span ctx0 PLeft v0 regions
+          ty_with_regions
+      in
+      let avl1, output1 =
+        convert_value_to_output_avalues span ctx1 PRight v1 regions
+          ty_with_regions
+      in
+      let av : tavalue =
+        let proj : symbolic_proj =
+          { sv_id = sv_s.sv_id; proj_ty = ty_with_regions }
+        in
+        let value =
+          ASymbolic (PNone, AProjLoans { proj; consumed = []; borrows = [] })
+        in
+        { value; ty = ty_with_regions }
+      in
+
+      (* Create the abstraction expression *)
+      let cont : abs_cont option =
+        if S.with_abs_conts then
+          let input : tevalue =
+            let proj : esymbolic_proj =
+              { sv_id = sv_s.sv_id; proj_ty = ty_with_regions }
+            in
+            let value =
+              ESymbolic (PNone, EProjLoans { proj; consumed = []; borrows = [] })
+            in
+            { value; ty = ty_with_regions }
+          in
+
+          let output : tevalue =
+            let value = EJoinMarkers (output0, output1) in
+            { value; ty = ty_with_regions }
+          in
+          Some { output = Some output; input = Some input }
+        else None
+      in
+
+      (* Generate the abstraction *)
+      let abs =
+        {
+          abs_id = fresh_abstraction_id ();
+          kind = Loop (S.loop_id, None);
+          can_end = true;
+          parents = AbstractionId.Set.empty;
+          original_parents = [];
+          regions = { owned = RegionId.Set.singleton rid };
+          avalues = avl0 @ avl1 @ [ av ];
+          cont;
+        }
+      in
+      [%ldebug "Pushing abs:\n" ^ abs_to_string span ctx0 abs];
+      push_abs abs
+    in
+    List.iter project fresh_regions;
+
+    (* *)
+    sv
+
   let match_distinct_adts (_ : tvalue_matcher) (ctx0 : eval_ctx)
       (ctx1 : eval_ctx) (ty : ety) (adt0 : adt_value) (adt1 : adt_value) :
       tvalue =
-    (* Check that the ADTs don't contain borrows - this is redundant with checks
-       performed by the caller, but we prefer to be safe with regards to future
-       updates.
+    [%cassert] span
+      (not (ety_has_nested_borrows (Some span) ctx0.type_ctx.type_infos ty))
+      "Nested borrows are not supported yet.";
 
-       TODO: add support for those.
-    *)
-    let check_no_borrows ctx (v : tvalue) =
-      [%sanity_check] span (not (value_has_borrows (Some span) ctx v.value))
+    let has_borrows ctx (v : tvalue) =
+      value_has_borrows (Some span) ctx v.value
     in
-    List.iter (check_no_borrows ctx0) adt0.field_values;
-    List.iter (check_no_borrows ctx1) adt1.field_values;
+    let has_borrows0 = List.exists (has_borrows ctx0) adt0.field_values in
+    let has_borrows1 = List.exists (has_borrows ctx1) adt1.field_values in
 
-    (* If there is a bottom in one of the two values, return bottom *)
-    if
-      bottom_in_adt_value ctx0.ended_regions adt0
-      || bottom_in_adt_value ctx1.ended_regions adt1
-    then begin
-      (* If there are loans in the field, we need to end them.
-         TODO: make it more general (by adding loans to the value?) *)
-      let check_loans (left : bool) (fields : tvalue list) : unit =
-        match InterpreterBorrowsCore.get_first_loan_in_values fields with
-        | Some (VSharedLoan (id, _) | VMutLoan id) ->
-            if left then raise (ValueMatchFailure (LoanInLeft id))
-            else raise (ValueMatchFailure (LoanInRight id))
-        | None -> ()
-      in
-      check_loans true adt0.field_values;
-      check_loans false adt1.field_values;
+    (* If there are loans in the field, we need to end them.
 
-      (* The bottom value itself *)
-      mk_bottom span ty
-    end
-    else begin
-      (* Check if there are loans: we do not support this case for now.
+       TODO: add support for this. *)
+    let check_loans (left : bool) (fields : tvalue list) : unit =
+      match InterpreterBorrowsCore.get_first_loan_in_values fields with
+      | Some (VSharedLoan (id, _) | VMutLoan id) ->
+          if left then raise (ValueMatchFailure (LoanInLeft id))
+          else raise (ValueMatchFailure (LoanInRight id))
+      | None -> ()
+    in
+    check_loans true adt0.field_values;
+    check_loans false adt1.field_values;
 
-         TODO: we should introduce a loan for the join.
-       *)
-      let has_loans =
-        Option.is_some
-          (InterpreterBorrowsCore.get_first_loan_in_values
-             (adt0.field_values @ adt1.field_values))
-      in
-      [%cassert] span (not has_loans)
-        "Not implemented yet: join of different variants of ADTs containing \
-         loans";
-      (* No borrows, no loans, no bottoms: we can introduce a symbolic value *)
-      add_fresh_symbolic_value_from_no_regions_ty ty { value = VAdt adt0; ty }
+    (* For now we treat the case with borrows separately *)
+    if (not has_borrows0) && not has_borrows1 then
+      if
+        (* If there is a bottom in one of the two values, return bottom *)
+        bottom_in_adt_value ctx0.ended_regions adt0
+        || bottom_in_adt_value ctx1.ended_regions adt1
+      then begin
+        (* The bottom value itself *)
+        mk_bottom span ty
+      end
+      else begin
+        (* No borrows, no loans, no bottoms: we can introduce a symbolic value *)
+        add_fresh_symbolic_value_from_no_regions_ty ty { value = VAdt adt0; ty }
+          { value = VAdt adt1; ty }
+      end
+    else
+      (* TODO: use the original type of the adts, not the joined type? *)
+      to_symbolic_value_with_borrows ctx0 ctx1 { value = VAdt adt0; ty }
         { value = VAdt adt1; ty }
-    end
 
   let match_shared_borrows match_rec (ctx0 : eval_ctx) (ctx1 : eval_ctx)
       (ty : ety) (bid0 : borrow_id) (sid0 : shared_borrow_id) (bid1 : borrow_id)
@@ -1165,33 +1235,44 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
        - there are no borrows in the "regular" value
     *)
     let type_infos = ctx0.type_ctx.type_infos in
-    [%sanity_check] span (not (ty_has_borrows (Some span) type_infos sv.sv_ty));
-    [%sanity_check] span
-      (not (ValuesUtils.value_has_borrows (Some span) type_infos v.value));
-    let value_is_left = not symbolic_is_left in
-    (* If there are loans in the regular value, raise an exception.
+    if
+      (not (ty_has_borrows (Some span) type_infos sv.sv_ty))
+      && not (ValuesUtils.value_has_borrows (Some span) type_infos v.value)
+    then (
+      let value_is_left = not symbolic_is_left in
+      (* If there are loans in the regular value, raise an exception.
 
-       TODO: generalize
-    *)
-    (match InterpreterBorrowsCore.get_first_loan_in_value v with
-    | None -> ()
-    | Some (VSharedLoan (id, _) | VMutLoan id) ->
-        if value_is_left then raise (ValueMatchFailure (LoanInLeft id))
-        else raise (ValueMatchFailure (LoanInRight id)));
+          TODO: generalize
+       *)
+      (match InterpreterBorrowsCore.get_first_loan_in_value v with
+      | None -> ()
+      | Some (VSharedLoan (id, _) | VMutLoan id) ->
+          if value_is_left then raise (ValueMatchFailure (LoanInLeft id))
+          else raise (ValueMatchFailure (LoanInRight id)));
 
-    (* There might be a bottom in the other value. We're being conservative:
+      (* There might be a bottom in the other value. We're being conservative:
        if there is a bottom anywhere (it includes the case where part of the
        value contains bottom) the result of the join is bottom. Otherwise,
        we generate a fresh symbolic value. *)
-    if
-      symbolic_value_has_ended_regions ctx0.ended_regions sv
-      || bottom_in_value ctx1.ended_regions v
-    then mk_bottom span sv.sv_ty
-    else
-      let ty = sv.sv_ty in
-      let sv : tvalue = { value = VSymbolic sv; ty = sv.sv_ty } in
-      let left, right = if symbolic_is_left then (sv, v) else (v, sv) in
-      add_fresh_symbolic_value ty left right
+      if
+        symbolic_value_has_ended_regions ctx0.ended_regions sv
+        || bottom_in_value ctx1.ended_regions v
+      then mk_bottom span sv.sv_ty
+      else
+        let ty = sv.sv_ty in
+        let sv : tvalue = { value = VSymbolic sv; ty = sv.sv_ty } in
+        let left, right = if symbolic_is_left then (sv, v) else (v, sv) in
+        add_fresh_symbolic_value ty left right)
+    else (
+      [%cassert] span
+        (not (symbolic_value_has_ended_regions ctx0.ended_regions sv))
+        "Not implemented yet";
+      [%cassert] span
+        (not (bottom_in_value ctx1.ended_regions v))
+        "Not implemented yet";
+      let sv = mk_tvalue_from_symbolic_value sv in
+      let v0, v1 = if symbolic_is_left then (sv, v) else (v, sv) in
+      to_symbolic_value_with_borrows ctx0 ctx1 v0 v1)
 
   let match_bottom_with_other (_ : tvalue_matcher) (ctx0 : eval_ctx)
       (ctx1 : eval_ctx) ~(bottom_is_left : bool) (v : tvalue) : tvalue =

@@ -4,6 +4,8 @@ open Contexts
 
 (** Turn a value into a abstractions.
 
+    This should be used only to turn *anonymous* values to abstractions.
+
     We are conservative, and don't group borrows/loans into the same abstraction
     unless necessary.
 
@@ -24,6 +26,20 @@ open Contexts
     - [v] *)
 val convert_value_to_abstractions :
   Meta.span -> abs_kind -> can_end:bool -> eval_ctx -> tvalue -> abs list
+
+(** Convert a value to a list of *output* avalues (the value should contain
+    borrows but no loans), and output and input expressions, so that we can put
+    it in a region abstraction.
+
+    We use this when performing joins. *)
+val convert_value_to_output_avalues :
+  Meta.span ->
+  eval_ctx ->
+  proj_marker ->
+  tvalue ->
+  RegionId.Set.t ->
+  ty ->
+  tavalue list * tevalue
 
 (** See {!merge_into_abstraction}.
 

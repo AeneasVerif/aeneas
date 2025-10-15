@@ -430,7 +430,9 @@ and abstract_shared_borrows = abstract_shared_borrow list
 
 (** Remark: the projection type inside the [symbolic_proj] is redundant with the
     type contained in the typed avalue it belongs to. We duplicate this type
-    because in practice it is extremely convenient to also have them here. *)
+    because in practice it is extremely convenient to also have them here.
+
+    TODO: we also need to add the original type of the symbolic value. *)
 and symbolic_proj = { sv_id : symbolic_value_id; proj_ty : ty }
 
 and aproj =

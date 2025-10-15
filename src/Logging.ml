@@ -114,7 +114,7 @@ let borrows_log = create_logger "InterpreterBorrows"
 let abs_log = create_logger "InterpreterAbs"
 
 (** Logger for Invariants *)
-let invariants_log = create_logger "InterpreterInvariants"
+let invariants_log = create_logger "Invariants"
 
 (** Logger for SCC *)
 let scc_log = create_logger "SCC"

@@ -236,6 +236,122 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
   (* Return *)
   List.rev !absl
 
+let convert_value_to_output_avalues (span : Meta.span) (ctx : eval_ctx)
+    (pm : proj_marker) (v : tvalue) (regions : RegionId.Set.t) (proj_ty : ty) :
+    tavalue list * tevalue =
+  [%ltrace tvalue_to_string ctx v];
+
+  let keep_region (r : region) =
+    match r with
+    | RVar (Free rid) -> RegionId.Set.mem rid regions
+    | _ -> false
+  in
+
+  (* We only call this on values inside mutable borrows *)
+  let rec check_inputs (v : tvalue) (proj_ty : ty) : unit =
+    match (v.value, proj_ty) with
+    | VLiteral _, _ -> ()
+    | VAdt { variant_id; field_values }, TAdt { id; generics } ->
+        [%cassert] span (ty_no_regions v.ty)
+          "Nested borrows are not supported yet";
+        let field_types =
+          ctx_adt_get_instantiated_field_types span ctx id variant_id generics
+        in
+        List.iter2 check_inputs field_values field_types
+    | VBottom, _ -> [%internal_error] span
+    | VBorrow _, _ -> [%craise] span "Nested borrows are not supported yet"
+    | VLoan _, _ -> [%internal_error] span
+    | VSymbolic _, _ ->
+        if ty_no_regions v.ty then () else [%craise] span "Not implemented yet"
+    | _ -> [%internal_error] span
+  in
+
+  (* Convert a value to abstractions *)
+  let rec to_abs (v : tvalue) (proj_ty : ty) : tavalue list * tevalue =
+    match (v.value, proj_ty) with
+    | VLiteral _, _ -> ([], mk_eignored proj_ty)
+    | VBottom, _ -> [%internal_error] span
+    | VAdt { variant_id; field_values }, TAdt { id; generics } ->
+        let field_types =
+          ctx_adt_get_instantiated_field_types span ctx id variant_id generics
+        in
+        let avalues, outputs =
+          List.split (List.map2 to_abs field_values field_types)
+        in
+        ( List.flatten avalues,
+          { value = EAdt { variant_id; field_values = outputs }; ty = proj_ty }
+        )
+    | VBorrow bc, TRef (rid, ref_ty, kind) ->
+        [%cassert] span (ty_no_regions ref_ty)
+          "Nested borrows are not supported yet";
+        if keep_region rid then
+          match bc with
+          | VSharedBorrow (bid, sid) ->
+              (* Push a region abstraction for this borrow *)
+              let rid = fresh_region_id () in
+              let ty = TRef (RVar (Free rid), ref_ty, kind) in
+              let value = ABorrow (ASharedBorrow (pm, bid, sid)) in
+              let value : tavalue = { value; ty } in
+              let ev = mk_etuple [] in
+              ([ value ], ev)
+          | VMutBorrow (bid, bv) ->
+              (* We don't support nested borrows for now *)
+              [%cassert] span
+                (not (value_has_borrows (Some span) ctx bv.value))
+                "Nested borrows are not supported yet";
+              (* Create an avalue to push - note that we use [AIgnore] for the inner avalue *)
+              let av : tavalue =
+                let ignored = mk_aignored span ref_ty None in
+                let av = ABorrow (AMutBorrow (pm, bid, ignored)) in
+                { value = av; ty = proj_ty }
+              in
+              (* Create the output expression *)
+              let output : tevalue =
+                let ignored = mk_eignored ref_ty in
+                let value = EBorrow (EMutBorrow (pm, bid, Some bv, ignored)) in
+                { value; ty = proj_ty }
+              in
+              (* Check the borrowed value *)
+              check_inputs bv ref_ty;
+              ([ av ], output)
+          | VReservedMutBorrow _ ->
+              (* This borrow should have been activated *)
+              [%craise] span "Unexpected"
+        else ([], mk_eignored proj_ty)
+    | VLoan _, _ ->
+        (* TODO: should we project it or not (in which region abstraction should we put it)?
+           We probably need to look at the borrows *inside*. *)
+        [%craise] span "Not implemented yet"
+    | VSymbolic sv, _ ->
+        (* Check that there are no nested borrows in the symbolic value -
+           we don't support this case yet *)
+        [%cassert] span
+          (not
+             (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos sv.sv_ty))
+          "Nested borrows are not supported yet";
+
+        (* Check if there is an intersection with the current regions *)
+        if ty_has_regions_in_set regions proj_ty then
+          let proj : symbolic_proj = { sv_id = sv.sv_id; proj_ty } in
+          let nv = ASymbolic (pm, AProjBorrows { proj; loans = [] }) in
+          let nv : tavalue = { value = nv; ty = proj_ty } in
+          (* Abstraction expression *)
+          let output =
+            ESymbolic
+              ( pm,
+                EProjBorrows
+                  { proj = { sv_id = sv.sv_id; proj_ty }; loans = [] } )
+          in
+          let output = { value = output; ty = proj_ty } in
+          (* *)
+          ([ nv ], output)
+        else ([], mk_eignored proj_ty)
+    | _ -> [%internal_error] span
+  in
+
+  (* Apply *)
+  to_abs v proj_ty
+
 (** Simplify the duplicated shared borrows in a region abstraction.
 
     {[
