@@ -915,8 +915,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       in
 
       (* Lookup the shared values and match them *)
-      let sv0 = lookup_shared_value span ctx0 bid0 in
-      let sv1 = lookup_shared_value span ctx1 bid1 in
+      let sv0 = ctx_lookup_shared_value span ctx0 bid0 in
+      let sv1 = ctx_lookup_shared_value span ctx1 bid1 in
       let sv = match_rec sv0 sv1 in
 
       let loan = ASharedLoan (PNone, bid2, sv, mk_aignored span bv_ty None) in

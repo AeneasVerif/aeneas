@@ -54,7 +54,7 @@ let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
           | VSharedBorrow (bid, _), RShared ->
               (* Lookup the shared value *)
               let ek = ek_all in
-              let sv = lookup_loan span ek bid ctx in
+              let sv = ctx_lookup_loan span ek bid ctx in
               let asb =
                 match sv with
                 | _, Concrete (VSharedLoan (_, sv))
@@ -176,7 +176,7 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
               | VSharedBorrow (bid, _), RShared ->
                   (* Lookup the shared value *)
                   let ek = ek_all in
-                  let sv = lookup_loan span ek bid ctx in
+                  let sv = ctx_lookup_loan span ek bid ctx in
                   let asb =
                     match sv with
                     | _, Concrete (VSharedLoan (_, sv))

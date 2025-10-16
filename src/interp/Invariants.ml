@@ -486,7 +486,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
                    checking the loan itself. *)
                 lookups
               then
-                let _, glc = lookup_loan span ek_all bid ctx in
+                let _, glc = ctx_lookup_loan span ek_all bid ctx in
                 match glc with
                 | Concrete (VSharedLoan (_, sv))
                 | Abstract (ASharedLoan (_, _, sv, _)) ->
@@ -600,7 +600,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
               [%sanity_check] span (region_is_owned abs region);
               if lookups then
                 (* Lookup the borrowed value to check it has the proper type *)
-                let _, glc = lookup_loan span ek_all bid ctx in
+                let _, glc = ctx_lookup_loan span ek_all bid ctx in
                 match glc with
                 | Concrete (VSharedLoan (_, sv))
                 | Abstract (ASharedLoan (_, _, sv, _)) ->

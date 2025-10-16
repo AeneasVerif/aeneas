@@ -782,7 +782,7 @@ let give_back_concrete (span : Meta.span) (l : unique_borrow_id)
       [%sanity_check] span (not (concrete_loans_in_value tv));
       (* Check that the corresponding loan is somewhere - purely a sanity check *)
       [%sanity_check] span
-        (Option.is_some (lookup_loan_opt span sanity_ek l' ctx));
+        (Option.is_some (ctx_lookup_loan_opt span sanity_ek l' ctx));
       (* Update the context *)
       give_back_value span l' tv ctx
   | Concrete (VSharedBorrow (bid, l') | VReservedMutBorrow (bid, l')) ->
@@ -790,7 +790,7 @@ let give_back_concrete (span : Meta.span) (l : unique_borrow_id)
       [%sanity_check] span (UShared l' = l);
       (* Check that the borrow is somewhere - purely a sanity check *)
       [%sanity_check] span
-        (Option.is_some (lookup_loan_opt span sanity_ek bid ctx));
+        (Option.is_some (ctx_lookup_loan_opt span sanity_ek bid ctx));
       (* We have nothing to update in the context *)
       ctx
   | Abstract _ ->
@@ -815,7 +815,7 @@ let check_borrow_disappeared (span : Meta.span) (fun_name : string)
   match l with
   | UShared _ -> ()
   | UMut l -> (
-      match lookup_loan_opt span ek_all l ctx with
+      match ctx_lookup_loan_opt span ek_all l ctx with
       | None -> () (* Ok *)
       | Some _ ->
           log#ltrace
@@ -939,7 +939,7 @@ and try_end_loan_aux (config : config) (span : Meta.span)
     add_borrow_loan_abs_id_to_chain span "end_borrow_aux: " (LoanId l) chain
   in
   (* Lookup the loan to identify whether this is a shared loan or a mutable loan *)
-  match lookup_loan_opt span ek_all l ctx with
+  match ctx_lookup_loan_opt span ek_all l ctx with
   | None ->
       [%sanity_check] span (not must_end);
       (ctx, fun id -> id)
@@ -1615,7 +1615,7 @@ let promote_shared_loan_to_mut_loan (span : Meta.span) (l : BorrowId.id)
   let ek =
     { enter_shared_loans = false; enter_mut_borrows = true; enter_abs = false }
   in
-  match lookup_loan span ek l ctx with
+  match ctx_lookup_loan span ek l ctx with
   | _, Concrete (VMutLoan _) ->
       [%craise] span "Expected a shared loan, found a mut loan"
   | _, Concrete (VSharedLoan (_, sv)) ->
@@ -1675,7 +1675,7 @@ let rec promote_reserved_mut_borrow (config : config) (span : Meta.span)
   let ek =
     { enter_shared_loans = false; enter_mut_borrows = true; enter_abs = false }
   in
-  match lookup_loan span ek l ctx with
+  match ctx_lookup_loan span ek l ctx with
   | _, Concrete (VMutLoan _) -> [%craise] span "Unreachable"
   | _, Concrete (VSharedLoan (_, sv)) -> (
       (* If there are loans inside the value, end them. Note that there can't be
@@ -2084,7 +2084,7 @@ let abs_mut_borrows_loans_in_fixed span (ctx : eval_ctx)
         match lc with
         | AMutBorrow (_, bid, _) ->
             (* Lookup the loan *)
-            let abs_or_var, _ = lookup_loan span ek_all bid ctx in
+            let abs_or_var, _ = ctx_lookup_loan span ek_all bid ctx in
             begin
               match abs_or_var with
               | AbsId abs_id ->
@@ -2153,7 +2153,7 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
      does not belong to an abstraction in the fixed set.
   *)
   let loan_id_not_in_fixed_abs (lid : BorrowId.id) : bool =
-    match fst (lookup_loan span ek_all lid ctx) with
+    match fst (ctx_lookup_loan span ek_all lid ctx) with
     | AbsId abs_id -> not (AbstractionId.Set.mem abs_id fixed_abs_ids)
     | _ -> true
   in

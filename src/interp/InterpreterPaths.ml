@@ -135,7 +135,7 @@ let rec project_value (span : Meta.span) (access : projection_access)
             Error (FailBorrow bc)
         | VSharedBorrow (bid, _) -> begin
             (* Lookup the loan content, and explore from there *)
-            match lookup_loan span ek bid ctx with
+            match ctx_lookup_loan span ek bid ctx with
             | _, Concrete (VMutLoan _) ->
                 [%craise] span "Expected a shared loan"
             | _, Concrete (VSharedLoan (bid, sv)) ->
@@ -166,7 +166,7 @@ let rec project_value (span : Meta.span) (access : projection_access)
                     sv,
                     fun (ctx, updated) ->
                       let av =
-                        match lookup_loan span ek bid ctx with
+                        match ctx_lookup_loan span ek bid ctx with
                         | _, Abstract (ASharedLoan (_, _, _, av)) -> av
                         | _ -> [%craise] span "Unexpected"
                       in

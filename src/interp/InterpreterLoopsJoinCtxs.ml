@@ -828,7 +828,7 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
     let fixed_ids = ids_sets_empty_borrows_loans fixed_ids in
     let open InterpreterBorrowsCore in
     let lookup_shared_loan lid ctx : tvalue =
-      match snd (lookup_loan span ek_all lid ctx) with
+      match snd (ctx_lookup_loan span ek_all lid ctx) with
       | Concrete (VSharedLoan (_, v)) -> v
       | Abstract (ASharedLoan (pm, _, v, _)) ->
           [%sanity_check] span (pm = PNone);
@@ -965,7 +965,7 @@ let loop_match_break_ctx_with_target (config : config) (span : Meta.span)
     let fixed_ids = ids_sets_empty_borrows_loans fixed_ids in
     let open InterpreterBorrowsCore in
     let lookup_shared_loan lid ctx : tvalue =
-      match snd (lookup_loan span ek_all lid ctx) with
+      match snd (ctx_lookup_loan span ek_all lid ctx) with
       | Concrete (VSharedLoan (_, v)) -> v
       | Abstract (ASharedLoan (pm, _, v, _)) ->
           [%sanity_check] span (pm = PNone);

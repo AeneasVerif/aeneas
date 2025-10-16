@@ -213,7 +213,7 @@ let projection_contains (span : Meta.span) (rset1 : RegionId.Set.t) (ty1 : rty)
     {!constructor:Aeneas.InterpreterUtils.abs_or_var_id.DummyVarId}: there can
     be concrete loans in abstractions (in the shared values). *)
 let lookup_loan_opt (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
-    (ctx : eval_ctx) : (abs_or_var_id * g_loan_content) option =
+    (env : env) : (abs_or_var_id * g_loan_content) option =
   (* We store here whether we are inside an abstraction or a value - note that we
    * could also track that with the environment, it would probably be more idiomatic
    * and cleaner *)
@@ -296,7 +296,7 @@ let lookup_loan_opt (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
   in
   (* We use exceptions *)
   try
-    obj#visit_eval_ctx () ctx;
+    obj#visit_env () env;
     None
   with FoundGLoanContent lc -> (
     match !abs_or_var with
@@ -308,10 +308,13 @@ let lookup_loan_opt (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
     The loan is referred to by a borrow id. Raises an exception if no loan was
     found. *)
 let lookup_loan (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
-    (ctx : eval_ctx) : abs_or_var_id * g_loan_content =
-  match lookup_loan_opt span ek l ctx with
+    (env : env) : abs_or_var_id * g_loan_content =
+  match lookup_loan_opt span ek l env with
   | None -> [%craise] span "Unreachable"
   | Some res -> res
+
+let ctx_lookup_loan_opt span ek l ctx = lookup_loan_opt span ek l ctx.env
+let ctx_lookup_loan span ek l ctx = lookup_loan span ek l ctx.env
 
 (** Update a loan content.
 
@@ -1572,9 +1575,9 @@ let get_first_non_ignored_aloan_in_abstraction (span : Meta.span) (abs : abs) :
       (* There are loan projections over symbolic values *)
       Some (SymbolicValue proj)
 
-let lookup_shared_value_opt (span : Meta.span) (ctx : eval_ctx)
-    (bid : BorrowId.id) : tvalue option =
-  match lookup_loan_opt span ek_all bid ctx with
+let lookup_shared_value_opt (span : Meta.span) (env : env) (bid : BorrowId.id) :
+    tvalue option =
+  match lookup_loan_opt span ek_all bid env with
   | None -> None
   | Some (_, lc) -> (
       match lc with
@@ -1582,9 +1585,11 @@ let lookup_shared_value_opt (span : Meta.span) (ctx : eval_ctx)
           Some sv
       | _ -> None)
 
-let lookup_shared_value (span : Meta.span) (ctx : eval_ctx) (bid : BorrowId.id)
-    : tvalue =
-  Option.get (lookup_shared_value_opt span ctx bid)
+let lookup_shared_value (span : Meta.span) (env : env) (bid : BorrowId.id) :
+    tvalue =
+  Option.get (lookup_shared_value_opt span env bid)
+
+let ctx_lookup_shared_value span ctx = lookup_shared_value span ctx.env
 
 (** A marked borrow id *)
 type marked_borrow_id = proj_marker * borrow_id [@@deriving show, ord]

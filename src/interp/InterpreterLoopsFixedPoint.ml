@@ -709,7 +709,7 @@ let compute_fp_ctx_symbolic_values (span : Meta.span)
         method! visit_VSharedBorrow env bid _ =
           let open InterpreterBorrowsCore in
           let v =
-            match snd (lookup_loan span ek_all bid fp_ctx) with
+            match snd (ctx_lookup_loan span ek_all bid fp_ctx) with
             | Concrete (VSharedLoan (_, v)) -> v
             | Abstract (ASharedLoan (pm, _, v, _)) ->
                 [%sanity_check] span (pm = PNone);
