@@ -129,6 +129,21 @@ type loop_info = {
 
 type back_fun_info = { fvar : texpr; can_fail : bool } [@@deriving show]
 
+(** Some meta-information. See [bs_ctx.meta_symb_places] *)
+type meta_symb_place = texpr * string [@@deriving show, ord]
+
+module MetaSymbPlaceOrd :
+  Collections.OrderedType with type t = meta_symb_place = struct
+  type t = meta_symb_place
+
+  let compare = compare_meta_symb_place
+  let to_string = show_meta_symb_place
+  let pp_t = pp_meta_symb_place
+  let show_t = show_meta_symb_place
+end
+
+module MetaSymbPlaceSet = Collections.MakeSet (MetaSymbPlaceOrd)
+
 (** Body synthesis context *)
 type bs_ctx = {
   (* TODO: there are a lot of duplications with the various decls ctx *)
@@ -305,6 +320,10 @@ type bs_ctx = {
           which we did not introduce any variable in the translation: when we
           fail to lookup a region abstraction in [abs_id_to_fvar] we check that
           it is registered in this set. *)
+  meta_symb_places : MetaSymbPlaceSet.t;
+      (** Keep track of the [SymbolicPlaces] meta-information that we already
+          inserted, to prevent duplication (there tends to be a *lot* of
+          meta-information in the generated expressions. *)
 }
 [@@deriving show]
 

@@ -1632,28 +1632,36 @@ and translate_substitute_abs_ids (ctx : bs_ctx)
   translate_expr e ctx
 
 and translate_emeta (meta : S.emeta) (e : S.expr) (ctx : bs_ctx) : texpr =
-  let next_e = translate_expr e ctx in
-  let meta =
+  let ctx, meta =
     match meta with
     | S.Assignment (ectx, lp, rv, rp) ->
         let type_infos = ctx.type_ctx.type_infos in
         let lp = translate_mplace (Some ctx.span) type_infos lp in
         let rv = tvalue_to_texpr ctx ectx rv in
         let rp = translate_opt_mplace (Some ctx.span) type_infos rp in
-        Some (Assignment (lp, rv, rp))
+        (ctx, Some (Assignment (lp, rv, rp)))
     | S.Snapshot ectx ->
         let infos = eval_ctx_to_symbolic_assignments_info ctx ectx in
         let infos =
           List.map (fun (fv, s) -> (mk_texpr_from_fvar fv, s)) infos
         in
-        if infos <> [] then
-          (* If often happens that the next expression contains exactly the
-             same meta information *)
-          match next_e.e with
-          | Meta (SymbolicPlaces infos1, _) when infos1 = infos -> None
-          | _ -> Some (SymbolicPlaces infos)
-        else None
+        (* Filter the information to remove the redundant bits *)
+        let infos =
+          List.filter
+            (fun x -> not (MetaSymbPlaceSet.mem x ctx.meta_symb_places))
+            infos
+        in
+        let ctx =
+          {
+            ctx with
+            meta_symb_places =
+              MetaSymbPlaceSet.add_list infos ctx.meta_symb_places;
+          }
+        in
+        let infos = if infos <> [] then Some (SymbolicPlaces infos) else None in
+        (ctx, infos)
   in
+  let next_e = translate_expr e ctx in
   match meta with
   | Some meta ->
       let e = Meta (meta, next_e) in

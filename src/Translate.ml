@@ -189,6 +189,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
       var_id_to_default = Pure.FVarId.Map.empty;
       abs_id_to_fvar = AbstractionId.Map.empty;
       ignored_abs_ids = AbstractionId.Set.empty;
+      meta_symb_places = SymbolicToPureCore.MetaSymbPlaceSet.empty;
     }
   in
 
