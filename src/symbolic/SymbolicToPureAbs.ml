@@ -222,7 +222,7 @@ let compute_tevalue_proj_kind (span : Meta.span) (type_infos : type_infos)
     | _ -> false
   in
   let visitor =
-    object
+    object (self)
       inherit [_] V.iter_tavalue as super
 
       method! visit_tevalue _ ev =
@@ -291,6 +291,13 @@ let compute_tevalue_proj_kind (span : Meta.span) (type_infos : type_infos)
         | EEmpty ->
             (* Continue exploring (same reasons as above) *)
             super#visit_ESymbolic ty pm eproj
+
+      method! visit_EMutBorrowInput ty x =
+        let r, _, _ = TypesUtils.ty_get_ref ty in
+        if keep_region r then (
+          has_loans := true;
+          has_mut_loans := true);
+        self#visit_tevalue ty x
     end
   in
   visitor#visit_tevalue ev.ty ev;
@@ -393,7 +400,8 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
     | V.EApp _
     | V.EBottom
     | V.EValue _
-    | V.ELoan _ -> [%internal_error] span
+    | V.ELoan _
+    | V.EMutBorrowInput _ -> [%internal_error] span
     | V.EFVar afid ->
         abs_fvar_id_to_tpattern ctx fvar_to_texpr rids ~filter afid output.ty
     | V.EBorrow bc -> (
@@ -747,6 +755,15 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
     | V.EBottom ->
         [%ldebug "bottom"];
         [%internal_error] span
+    | V.EMutBorrowInput inner ->
+        let r, _, _ = TypesUtils.ty_as_ref input.ty in
+        let keep_region (r : T.region) =
+          match r with
+          | T.RVar (Free rid) -> T.RegionId.Set.mem rid rids
+          | _ -> false
+        in
+        let filter = if keep_region r then false else filter in
+        to_texpr ~filter rids ctx inner
   and to_texpr ~(filter : bool) (rids : T.RegionId.Set.t) (ctx : bs_ctx)
       (input : V.tevalue) : bs_ctx * bool * texpr option =
     let e = to_texpr_aux ~filter rids ctx input in

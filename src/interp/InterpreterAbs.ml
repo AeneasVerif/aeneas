@@ -1377,11 +1377,14 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
       end
     | EBorrow _ ->
         [%craise] span "Nested borrows are not supported yet in this case"
+    | EMutBorrowInput x ->
+        { input with value = EMutBorrowInput (update_input regions x) }
     | EValue _ | EIgnored -> input
   in
   let rec bind_output (regions : RegionId.Set.t) (output : tevalue) : tepat =
     match output.value with
-    | ELet _ | EJoinMarkers _ | EBVar _ | EFVar _ | EApp (_, _) ->
+    | ELet _ | EJoinMarkers _ | EBVar _ | EFVar _ | EApp _ | EMutBorrowInput _
+      ->
         (* Those expressions should not appear in the *output* expression
            (some of them might appear only in the *input* expression) *)
         [%craise] span ("Unexpected expression: " ^ tevalue_to_string ctx output)

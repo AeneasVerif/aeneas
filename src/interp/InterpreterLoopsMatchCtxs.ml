@@ -820,20 +820,23 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
       let lid = fresh_borrow_id () in
       if tvalue_has_mutable_loans v0 || tvalue_has_mutable_loans v1 then (
+        let ref_ty = mk_ref_ty (RVar (Free rid)) ty RMut in
         let av : tavalue =
           let value =
             ABorrow (AMutBorrow (PNone, lid, mk_aignored span ty None))
           in
-          let ty = mk_ref_ty (RVar (Free rid)) ty RMut in
-          { value; ty }
+          { value; ty = ref_ty }
         in
         let output : tevalue =
           let value = EBorrow (EMutBorrow (PNone, lid, None, mk_eignored ty)) in
-          let ty = mk_ref_ty (RVar (Free rid)) ty RMut in
-          { value; ty }
+          { value; ty = ref_ty }
         in
         let input : tevalue =
-          let value = EJoinMarkers (input0, input1) in
+          (* We need this to make sure no values are filtered when translating *)
+          let wrap (v : tevalue) : tevalue =
+            { value = EMutBorrowInput v; ty = ref_ty }
+          in
+          let value = EJoinMarkers (wrap input0, wrap input1) in
           let ty = input0.ty in
           { value; ty }
         in
@@ -1560,6 +1563,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             let loan = EMutLoan (loan_pm, lid, mk_eignored bv_ty) in
             (* Note that an eloan has a borrow type *)
             { value = ELoan loan; ty = borrow_ty }
+          in
+          let other_input : tevalue =
+            (* We need this to make sure no values are filtered when translating *)
+            { value = EMutBorrowInput other_input; ty = borrow_ty }
           in
           let lv, rv =
             if loan_is_left then (loan, other_input) else (other_input, loan)

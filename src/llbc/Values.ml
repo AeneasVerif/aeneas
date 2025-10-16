@@ -1120,6 +1120,15 @@ and evalue =
           ]}
           this means that when ending borrow [l] we should output exactly the
           value [0]. *)
+  | EMutBorrowInput of tevalue
+      (** This is the input of a mut loan.
+
+          This happens when we convert a value like [MB l0 (ML l1 v, 0)] to a
+          region abstraction: we need to remember that [(ML l1 v, 0)] will be
+          the input of a mutable borrow, so we shouldn't filter any value when
+          generating the pure translation.
+
+          TODO: this is not very clean. *)
   | EIgnored
       (** A value which doesn't contain borrows, or which borrows we don't own
           and thus ignore.
