@@ -87,7 +87,9 @@ module type PrimMatcher = sig
     eval_ctx ->
     eval_ctx ->
     ety ->
+    ety ->
     adt_value ->
+    ety ->
     adt_value ->
     tvalue
 

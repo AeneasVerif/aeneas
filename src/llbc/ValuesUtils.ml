@@ -39,6 +39,7 @@ let mk_aignored (span : Meta.span) (ty : ty) (v : tvalue option) : tavalue =
   { value = AIgnored v; ty }
 
 let mk_eignored (ty : ty) : tevalue = { value = EIgnored; ty }
+let mk_epat_ignored (ty : ty) : tepat = { epat = PIgnored; epat_ty = ty }
 
 let mk_evalue (env : env) (ty : ty) (v : tvalue) : tevalue =
   { value = EValue (env, v); ty }
@@ -368,6 +369,44 @@ let value_has_loans (v : value) : bool =
     object
       inherit [_] iter_tvalue
       method! visit_loan_content _env _ = raise Found
+    end
+  in
+  (* We use exceptions *)
+  try
+    obj#visit_value () v;
+    false
+  with Found -> true
+
+(** Check if a value contains outer loans.
+
+    Note that loans are necessarily concrete (there can't be loans hidden inside
+    symbolic values). *)
+let value_has_outer_loans (v : value) : bool =
+  let obj =
+    object
+      inherit [_] iter_tvalue
+      method! visit_loan_content _env _ = raise Found
+
+      method! visit_borrow_content _ _ =
+        (* Don't dive inside of borrows *)
+        ()
+    end
+  in
+  (* We use exceptions *)
+  try
+    obj#visit_value () v;
+    false
+  with Found -> true
+
+(** Check if a value contains mutable loans.
+
+    Note that loans are necessarily concrete (there can't be loans hidden inside
+    symbolic values). *)
+let value_has_mutable_loans (v : value) : bool =
+  let obj =
+    object
+      inherit [_] iter_tvalue
+      method! visit_VMutLoan _ _ = raise Found
     end
   in
   (* We use exceptions *)

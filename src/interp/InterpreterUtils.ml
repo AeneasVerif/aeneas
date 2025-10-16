@@ -348,6 +348,9 @@ let bottom_in_adt_value (ended_regions : RegionId.Set.t) (v : adt_value) : bool
     false
   with Found -> true
 
+let tvalue_has_bottom (ctx : eval_ctx) (v : tvalue) : bool =
+  bottom_in_value ctx.ended_regions v
+
 let value_has_ret_symbolic_value_with_borrow_under_mut span (ctx : eval_ctx)
     (v : tvalue) : bool =
   let obj =
@@ -390,12 +393,39 @@ let symbolic_value_has_borrows span (ctx : eval_ctx) (sv : symbolic_value) :
 let value_has_borrows span (ctx : eval_ctx) (v : value) : bool =
   ValuesUtils.value_has_borrows span ctx.type_ctx.type_infos v
 
+(** See {!ValuesUtils.value_has_borrows}. *)
+let tvalue_has_borrows span (ctx : eval_ctx) (v : tvalue) : bool =
+  ValuesUtils.value_has_borrows span ctx.type_ctx.type_infos v.value
+
 (** See {!ValuesUtils.value_has_loans_or_borrows}. *)
 let value_has_loans_or_borrows span (ctx : eval_ctx) (v : value) : bool =
   ValuesUtils.value_has_loans_or_borrows span ctx.type_ctx.type_infos v
 
+(** See {!ValuesUtils.value_has_loans_or_borrows}. *)
+let tvalue_has_loans_or_borrows span (ctx : eval_ctx) (v : tvalue) : bool =
+  ValuesUtils.value_has_loans_or_borrows span ctx.type_ctx.type_infos v.value
+
 (** See {!ValuesUtils.value_has_loans}. *)
 let value_has_loans (v : value) : bool = ValuesUtils.value_has_loans v
+
+(** See {!ValuesUtils.value_has_loans}. *)
+let tvalue_has_loans (v : tvalue) : bool = ValuesUtils.value_has_loans v.value
+
+(** See {!ValuesUtils.value_has_outer_loans}. *)
+let value_has_outer_loans (v : value) : bool =
+  ValuesUtils.value_has_outer_loans v
+
+(** See {!ValuesUtils.value_has_outer_loans}. *)
+let tvalue_has_outer_loans (v : tvalue) : bool =
+  ValuesUtils.value_has_outer_loans v.value
+
+(** See {!ValuesUtils.value_has_mutable_loans}. *)
+let value_has_mutable_loans (v : value) : bool =
+  ValuesUtils.value_has_mutable_loans v
+
+(** See {!ValuesUtils.value_has_mutable_loans}. *)
+let tvalue_has_mutable_loans (v : tvalue) : bool =
+  ValuesUtils.value_has_mutable_loans v.value
 
 (** The borrow id of shared borrows doesn't uniquely identify shared borrows:
     when we need to uniquely identify a borrow, we use the borrow id for mutable

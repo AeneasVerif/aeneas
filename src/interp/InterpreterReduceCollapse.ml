@@ -141,9 +141,7 @@ let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
     loan_proj_to_abs = loan_proj_to_nabs;
     _;
   } =
-    compute_abs_borrows_loans_maps span ctx.ctx.type_ctx.type_infos
-      (fun _ -> true)
-      [ EAbs nabs ]
+    compute_abs_borrows_loans_maps span (fun _ -> true) ctx.ctx [ EAbs nabs ]
   in
   (* Retrieve the previous maps, so that we can update them *)
   let {
@@ -310,10 +308,7 @@ let repeat_iter_borrows_merge (span : Meta.span) (old_ids : ids_sets)
       not (AbstractionId.Set.mem id old_ids.aids)
     in
     let explore (abs : abs) = is_fresh_abs_id abs.abs_id in
-    let info =
-      compute_abs_borrows_loans_maps span ctx.type_ctx.type_infos explore
-        ctx.env
-    in
+    let info = compute_abs_borrows_loans_maps span explore ctx ctx.env in
     { ctx; info }
   in
   (* Explore and merge *)
@@ -857,25 +852,25 @@ let collapse_ctx_aux config (span : Meta.span)
     (loop_id : LoopId.id) ~(with_abs_conts : bool)
     (merge_funs : merge_duplicates_funcs) (old_ids : ids_sets) (ctx0 : eval_ctx)
     : eval_ctx =
-  [%ltrace "ctx0:\n" ^ eval_ctx_to_string ctx0];
+  [%ldebug "ctx0:\n" ^ eval_ctx_to_string ctx0];
   let ctx =
     reduce_ctx_with_markers (Some merge_funs) sequence span ~with_abs_conts
       loop_id old_ids ctx0
   in
-  [%ltrace "ctx after collapse:\n" ^ eval_ctx_to_string ctx];
+  [%ldebug "ctx after collapse:\n" ^ eval_ctx_to_string ctx];
   let ctx =
     collapse_ctx_collapse span ~with_abs_conts sequence loop_id merge_funs
       old_ids ctx
   in
-  [%ltrace "ctx after reduce and collapse:\n" ^ eval_ctx_to_string ctx];
+  [%ldebug "ctx after reduce and collapse:\n" ^ eval_ctx_to_string ctx];
 
   let ctx = eliminate_shared_borrow_markers span ctx in
-  [%ltrace
+  [%ldebug
     "ctx after reduce, collapse and eliminate_shared_borrow_markers:\n"
     ^ eval_ctx_to_string ctx];
 
   let ctx = eliminate_shared_loans span old_ids ctx in
-  [%ltrace
+  [%ldebug
     "ctx after reduce, collapse and eliminate_shared_loans:\n"
     ^ eval_ctx_to_string ctx];
 
@@ -1060,6 +1055,7 @@ let collapse_ctx config (span : Meta.span)
         (abstraction_id * abstraction_id * abstraction_id) list ref option =
       None) (loop_id : LoopId.id) (old_ids : ids_sets) ~(with_abs_conts : bool)
     (ctx : eval_ctx) : eval_ctx =
+  [%ldebug "Initial ctx:\n" ^ eval_ctx_to_string ctx];
   let merge_funs =
     mk_collapse_ctx_merge_duplicate_funs span loop_id with_abs_conts ctx
   in

@@ -12,15 +12,13 @@ open InterpreterLoopsCore
 (** Compute various maps linking the abstractions and the borrows/loans they
     contain.
 
+    We compute the map for the [env]. The evaluation context is used only for
+    printing purposes.
+
     Parameters:
-    - [explore]: this function is used to filter abstractions.
-    - [env] *)
+    - [explore]: this function is used to filter abstractions. *)
 val compute_abs_borrows_loans_maps :
-  Meta.span ->
-  TypesAnalysis.type_infos ->
-  (abs -> bool) ->
-  env ->
-  abs_borrows_loans_maps
+  Meta.span -> (abs -> bool) -> eval_ctx -> env -> abs_borrows_loans_maps
 
 (** Generic functor to implement matching functions between values,
     environments, etc.

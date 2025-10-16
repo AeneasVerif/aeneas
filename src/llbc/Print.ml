@@ -77,8 +77,8 @@ module Values = struct
             [%craise_opt_span] span
               ("Inconsistent value: " ^ value_to_debug_string ()))
     | _ ->
-        [%craise_opt_span] span "Inconsistently typed value: "
-        ^ value_to_debug_string ()
+        [%craise_opt_span] span
+          ("Inconsistently typed value: " ^ value_to_debug_string ())
 
   (* TODO: it may be a good idea to try to factorize this function with
    * tavalue_to_string. At some point we had done it, because [tvalue]
