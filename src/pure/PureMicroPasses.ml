@@ -3244,6 +3244,151 @@ let merge_let_app_then_decompose_tuple =
   lift_expr_map_visitor_with_state merge_let_app_then_decompose_tuple_visitor
     FVarId.Map.empty
 
+(** Returns true if the continuations listed in [loop_conts] are used in a
+    chained manner.
+
+    For instance, given [loop_conts = {f0, f1}], they are in:
+    {[
+      let x1 = f0 x0 in
+      f1 x1
+    ]}
+    but not in:
+    {[
+      f0 x0, f1 x1
+    ]}
+
+    We do this by doing a (slightly imprecise) control-flow analysis. *)
+let expr_chains_loop_conts span _ctx (loop_vars : FVarId.Set.t) (e : texpr) :
+    bool =
+  let flatten_set_list (s : FVarId.Set.t list) : FVarId.Set.t =
+    List.fold_left (fun s0 s1 -> FVarId.Set.union s0 s1) FVarId.Set.empty s
+  in
+  let flatten_set_list_opt (sl : FVarId.Set.t list option) : FVarId.Set.t =
+    match sl with
+    | None -> FVarId.Set.empty
+    | Some sl -> flatten_set_list sl
+  in
+  let flatten_set_list_opt_list (sl : FVarId.Set.t list option list) :
+      FVarId.Set.t =
+    let sl = List.flatten (List.filter_map (fun x -> x) sl) in
+    flatten_set_list sl
+  in
+  let merge_sets_lists (sl : FVarId.Set.t list list) : FVarId.Set.t list =
+    (* Attempt to combine the sets if the lists all have the same length,
+       otherwise group everything in a single set *)
+    match sl with
+    | [] -> [ FVarId.Set.empty ]
+    | s :: sl ->
+        let n = List.length s in
+        if List.for_all (fun s -> List.length s = n) sl then
+          let rec merge sl =
+            match sl with
+            | [] -> s
+            | s :: sl ->
+                let s' = merge sl in
+                List.map
+                  (fun (s, s') -> FVarId.Set.union s s')
+                  (List.combine s s')
+          in
+          merge sl
+        else [ flatten_set_list (List.flatten (s :: sl)) ]
+  in
+  let merge_sets_opt_lists (sl : FVarId.Set.t list option list) :
+      FVarId.Set.t list option =
+    let sl = List.filter_map (fun x -> x) sl in
+    if sl = [] then None else Some (merge_sets_lists sl)
+  in
+  let extend_env (env : FVarId.Set.t FVarId.Map.t) (pat : tpattern)
+      (deps : FVarId.Set.t) : FVarId.Set.t FVarId.Map.t =
+    let fvars = tpattern_get_fvars pat in
+    FVarId.Map.add_list
+      (List.map (fun fid -> (fid, deps)) (FVarId.Set.elements fvars))
+      env
+  in
+  let rec check (env : FVarId.Set.t FVarId.Map.t) (e : texpr) :
+      FVarId.Set.t list option =
+    match e.e with
+    | FVar fid -> (
+        if FVarId.Set.mem fid loop_vars then Some [ FVarId.Set.singleton fid ]
+        else
+          match FVarId.Map.find_opt fid env with
+          | None -> Some [ FVarId.Set.empty ]
+          | Some deps -> Some [ deps ])
+    | BVar _ -> [%internal_error] span
+    | CVar _ | Const _ | Qualif _ | EError _ -> Some [ FVarId.Set.empty ]
+    | App _ -> (
+        (* Ignore the continues, pay attention to structures *)
+        let f, args = destruct_apps e in
+        match f.e with
+        | Qualif
+            {
+              id =
+                AdtCons { adt_id = TBuiltin TLoopResult; variant_id = Some id };
+              _;
+            }
+          when id = loop_result_continue_id -> None
+        | Qualif { id = AdtCons { adt_id = _; variant_id = None }; _ } ->
+            let args = List.map (check env) args in
+            if List.for_all Option.is_some args then
+              Some (List.map (fun x -> flatten_set_list (Option.get x)) args)
+            else Some [ flatten_set_list_opt_list args ]
+        | _ ->
+            let f = check env f in
+            let args = List.map (check env) args in
+            Some [ flatten_set_list_opt_list (f :: args) ])
+    | Lambda _ ->
+        let _, body = open_lambdas span e in
+        check env body
+    | Let (_, pat, bound, next) ->
+        let bound = flatten_set_list_opt (check env bound) in
+        let pat, next = open_binder span pat next in
+        (* Update the environment - this is not very precise *)
+        let env = extend_env env pat bound in
+        check env next
+    | Switch (scrut, switch) -> (
+        let scrut = flatten_set_list_opt (check env scrut) in
+        match switch with
+        | If (e0, e1) ->
+            let e0 = check env e0 in
+            let e1 = check env e1 in
+            merge_sets_opt_lists [ e0; e1 ]
+        | Match branches ->
+            let branches =
+              List.map
+                (fun ({ pat; branch } : match_branch) ->
+                  let pat, branch = open_binder span pat branch in
+                  let env = extend_env env pat scrut in
+                  check env branch)
+                branches
+            in
+            merge_sets_opt_lists branches)
+    | Loop { inputs; loop_body = { inputs = input_pats; loop_body }; _ } ->
+        let inputs = List.map (check env) inputs in
+        let input_pats, loop_body = open_binders span input_pats loop_body in
+        let env =
+          List.fold_left2
+            (fun env pat bound ->
+              match bound with
+              | None -> env
+              | Some bound -> extend_env env pat (flatten_set_list bound))
+            env input_pats inputs
+        in
+        check env loop_body
+    | StructUpdate { struct_id = _; init; updates } ->
+        let init =
+          match init with
+          | None -> None
+          | Some init -> check env init
+        in
+        let updates = List.map (fun (_, x) -> check env x) updates in
+        Some [ flatten_set_list_opt_list (init :: updates) ]
+    | Meta (_, e) -> check env e
+  in
+  let outputs = check FVarId.Map.empty e in
+  match outputs with
+  | None -> false
+  | Some outputs -> List.for_all (fun s -> FVarId.Set.cardinal s > 1) outputs
+
 (** Simplify the outputs of a loop. *)
 let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
@@ -3309,18 +3454,12 @@ let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
              potentially limiting further optimizations like in
              [loop_to_recursive].
 
-             For now we detect this situation with a simple check: we introduce
-             a simplified output for the lambda we found here only if this lambda
-             does not only use the backward functions of the loop (it also needs
-             to manipulate output values). This is not perfect, but should work
-             fine in combination with [filter_loop_useless_inputs_outputs].
-             In the future, we can implement something more sophisticated based
-             on a flow analysis.
+             We detect this by doing a flow analysis.
           *)
-          let fvars = texpr_get_fvars e in
           if
-            FVarId.Set.subset fvars loop_vars
-            && not (FVarId.Set.subset fvars loop_conts)
+            expr_chains_loop_conts span ctx
+              (FVarId.Set.union loop_vars loop_conts)
+              e
           then (
             (* It is a subset: introduce a fresh var *)
             let fid = fresh_fvar_id () in
@@ -4165,10 +4304,14 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
                      We simply remove the call to the input backward function.
                   *)
                   let update_back (e : texpr) =
-                    let pats, body = open_lambdas span e in
+                    [%ldebug "- e:\n" ^ texpr_to_string ctx e];
+                    let lam_pats, body = open_lambdas span e in
+                    let lets, body = open_lets span body in
                     let _, args = destruct_apps body in
                     match args with
-                    | [ arg ] -> mk_closed_lambdas span pats arg
+                    | [ arg ] ->
+                        mk_closed_lambdas span lam_pats
+                          (mk_closed_heterogeneous_lets span lets arg)
                     | _ -> [%internal_error] span
                   in
                   let values, backl =
@@ -4210,7 +4353,7 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
                   let update_back (input : texpr) (back : fvar)
                       (back_inputs : fvar list) : texpr =
                     [%ldebug
-                      "-  input: " ^ texpr_to_string ctx input ^ "\n- back: "
+                      "- input: " ^ texpr_to_string ctx input ^ "\n- back: "
                       ^ fvar_to_string ctx back ^ "\n- back_inputs: "
                       ^ Print.list_to_string (fvar_to_string ctx) back_inputs];
                     let lam_pats, body = open_lambdas span input in
@@ -4410,34 +4553,44 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
             let { inputs; outputs } : loop_rel = rel in
             [%ldebug "loop_rel:\n" ^ loop_rel_to_string ctx rel];
             let input_conts =
-              List.concat (Collections.List.prefix loop.num_input_conts inputs)
+              Collections.List.prefix loop.num_input_conts inputs
             in
             let output_conts =
-              List.concat (Collections.List.drop loop.num_output_values outputs)
+              Collections.List.drop loop.num_output_values outputs
             in
             [%ldebug
               "- input_conts:"
-              ^ Print.list_to_string (texpr_to_string ctx) input_conts
+              ^ Print.list_to_string ~sep:"\n"
+                  (Print.list_to_string (texpr_to_string ctx))
+                  input_conts
               ^ "\n- output_conts:"
-              ^ Print.list_to_string (texpr_to_string ctx) output_conts];
+              ^ Print.list_to_string ~sep:"\n"
+                  (Print.list_to_string (texpr_to_string ctx))
+                  output_conts];
             let inputs_are_calls_to_inputs =
-              List.for_all is_call_to_input input_conts
+              List.map (List.map is_call_to_input) input_conts
             in
             let outputs_are_calls_to_inputs =
-              List.for_all is_call_to_input output_conts
+              List.map (List.map is_call_to_input) output_conts
             in
 
             [%ldebug
               "- all_inputs_are_id: "
               ^ string_of_bool all_inputs_are_id
               ^ "\n- inputs_are_calls_to_inputs: "
-              ^ string_of_bool inputs_are_calls_to_inputs
+              ^ Print.list_to_string ~sep:"\n"
+                  (Print.list_to_string string_of_bool)
+                  inputs_are_calls_to_inputs
               ^ "\n- outputs_are_calls_to_inputs: "
-              ^ string_of_bool outputs_are_calls_to_inputs];
+              ^ Print.list_to_string ~sep:"\n"
+                  (Print.list_to_string string_of_bool)
+                  outputs_are_calls_to_inputs];
 
+            let for_all = List.for_all (List.for_all (fun x -> x)) in
             if
               input_conts <> [] && all_inputs_are_id
-              && inputs_are_calls_to_inputs && outputs_are_calls_to_inputs
+              && for_all inputs_are_calls_to_inputs
+              && for_all outputs_are_calls_to_inputs
               && List.length input_conts = List.length output_conts
             then (
               (* Transform the loop to introduce recursive calls and simplify

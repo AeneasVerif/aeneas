@@ -1431,6 +1431,8 @@ let tpatterns_get_fvars (x : tpattern list) : FVarId.Set.t =
   List.iter (visitor#visit_tpattern ()) x;
   !vars
 
+let tpattern_get_fvars (x : tpattern) : FVarId.Set.t = tpatterns_get_fvars [ x ]
+
 let texpr_get_fvars (e : texpr) : FVarId.Set.t =
   let vars = ref FVarId.Set.empty in
   let visitor =
@@ -1487,17 +1489,6 @@ let texpr_has_bvars (e : texpr) : bool =
     visitor#visit_texpr () e;
     false
   with Utils.Found -> true
-
-let tpattern_get_fvars (pat : tpattern) : FVarId.Set.t =
-  let vars = ref FVarId.Set.empty in
-  let visitor =
-    object
-      inherit [_] iter_expr
-      method! visit_fvar_id _ var_id = vars := FVarId.Set.add var_id !vars
-    end
-  in
-  visitor#visit_tpattern () pat;
-  !vars
 
 let mk_to_result_texpr (span : Meta.span) (e : texpr) : texpr =
   let type_args = [ e.ty ] in
