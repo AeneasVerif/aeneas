@@ -761,7 +761,8 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
      context: we need to register this because otherwise the translation will
      fail. *)
   let cc =
-    cc_comp cc (fun e -> SubstituteAbsIds (join_info.refreshed_aids, e))
+    if AbstractionId.Map.is_empty join_info.refreshed_aids then cc
+    else cc_comp cc (fun e -> SubstituteAbsIds (join_info.refreshed_aids, e))
   in
 
   (* We need to collapse the context.

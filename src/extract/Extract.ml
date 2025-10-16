@@ -162,8 +162,17 @@ let extract_adt_g_value (span : Meta.span)
            the syntax is: `let ⟨ x0, ..., xn ⟩ := ...`.
 
            Otherwise, it is: `let Cons x0 ... xn = ...`
+
+           Note that we only do so if the variant is [None]. This means that
+           in case the extraction is erroneous (i.e., we did not transform
+           a single let pattern into a match, like in:
+           [let Some x := y ~> let x = match y with | Some x -> x | None -> ...])
+           we might generate erroneous code (e.g., [let Some x := y in ...]).
+           This is fine because the code would be erroneous anyway, and it's
+           a lot more informative (to debug the error) to see something like
+           [let Some x := y in ...] rather than [let ⟨ x ⟩ := y in ...]
         *)
-        is_single_pat && backend () = Lean
+        is_single_pat && backend () = Lean && variant_id = None
       then (
         F.pp_print_string fmt "⟨";
         F.pp_print_space fmt ();
@@ -276,7 +285,7 @@ let fun_builtin_filter_types (id : FunDeclId.id) (types : 'a list)
     As a pattern can introduce new variables, we return an extraction context
     updated with new bindings. *)
 let rec extract_tpattern (span : Meta.span) (ctx : extraction_ctx)
-    (fmt : F.formatter) (is_let : bool) (inside : bool) ?(with_type = false)
+    (fmt : F.formatter) ~(is_let : bool) ~(inside : bool) ?(with_type = false)
     (v : tpattern) : extraction_ctx =
   if with_type then F.pp_print_string fmt "(";
   let is_pattern = true in
@@ -299,7 +308,7 @@ let rec extract_tpattern (span : Meta.span) (ctx : extraction_ctx)
         ctx
     | PAdt av ->
         let extract_value ctx inside v =
-          extract_tpattern span ctx fmt is_let inside v
+          extract_tpattern span ctx fmt ~is_let ~inside v
         in
         extract_adt_g_value span extract_value fmt ctx is_let inside
           av.variant_id av.fields v.ty
@@ -955,7 +964,7 @@ and extract_Lambda (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
     List.fold_left
       (fun ctx x ->
         F.pp_print_space fmt ();
-        extract_tpattern span ctx fmt true true ~with_type x)
+        extract_tpattern span ctx fmt ~is_let:true ~inside:true ~with_type x)
       ctx xl
   in
   F.pp_print_space fmt ();
@@ -1019,7 +1028,7 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       if monadic && (backend () = Coq || backend () = HOL4) then (
         (* Box for the let .. <- *)
         F.pp_open_hovbox fmt ctx.indent_incr;
-        let ctx = extract_tpattern span ctx fmt true true lv in
+        let ctx = extract_tpattern span ctx fmt ~is_let:true ~inside:false lv in
         F.pp_print_space fmt ();
         let arrow =
           match backend () with
@@ -1059,7 +1068,9 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
             else (
               F.pp_print_string fmt "let";
               F.pp_print_space fmt ());
-            let ctx = extract_tpattern span ctx fmt true true lv in
+            let ctx =
+              extract_tpattern span ctx fmt ~is_let:true ~inside:false lv
+            in
             F.pp_print_space fmt ();
             let eq =
               match backend () with
@@ -1243,7 +1254,9 @@ and extract_Switch (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
         (* Print the pattern *)
         F.pp_print_string fmt "|";
         F.pp_print_space fmt ();
-        let ctx = extract_tpattern span ctx fmt false false br.pat in
+        let ctx =
+          extract_tpattern span ctx fmt ~is_let:false ~inside:false br.pat
+        in
         F.pp_print_space fmt ();
         let arrow =
           match backend () with
@@ -1507,7 +1520,8 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
             F.pp_open_hovbox fmt 0;
             F.pp_print_string fmt "(";
             let ctx =
-              extract_tpattern def.item_meta.span ctx fmt true false lv
+              extract_tpattern def.item_meta.span ctx fmt ~is_let:true
+                ~inside:false lv
             in
             F.pp_print_space fmt ();
             F.pp_print_string fmt ":";
@@ -1920,7 +1934,8 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
           (fun ctx (lv : tpattern) ->
             F.pp_print_space fmt ();
             let ctx =
-              extract_tpattern def.item_meta.span ctx fmt true false lv
+              extract_tpattern def.item_meta.span ctx fmt ~is_let:true
+                ~inside:false lv
             in
             ctx)
           ctx inputs_lvs

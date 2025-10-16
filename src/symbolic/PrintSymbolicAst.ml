@@ -101,12 +101,38 @@ let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
       ^ "fwd_end =\n" ^ fwd_end ^ "\n" ^ indent1 ^ "backs =\n" ^ indent1 ^ backs
       ^ "\n" ^ indent ^ "}"
   | Loop loop -> loop_to_string env indent indent_incr loop
-  | LoopContinue (_, loop_id, _values, _abs) ->
-      indent ^ "loop_continue (" ^ LoopId.to_string loop_id ^ ")"
-  | LoopBreak (_, loop_id, _values, _abs) ->
-      indent ^ "loop_break (" ^ LoopId.to_string loop_id ^ ")"
+  | LoopContinue (ectx, loop_id, values, abs) ->
+      loop_continue_break_to_string env indent indent_incr ~is_continue:true
+        ectx loop_id values abs
+  | LoopBreak (ectx, loop_id, values, abs) ->
+      loop_continue_break_to_string env indent indent_incr ~is_continue:false
+        ectx loop_id values abs
   | Meta (_, next) -> expr_to_string env indent indent_incr next
   | Error (_, error) -> indent ^ "ERROR(" ^ error ^ ")"
+
+and loop_continue_break_to_string (env : fmt_env) (indent : string)
+    (indent_incr : string) ~(is_continue : bool) _ctx (loop_id : loop_id)
+    (values : tvalue list) (abs : abs list) : string =
+  let indent1 = indent ^ indent_incr in
+  let indent2 = indent1 ^ indent_incr in
+  let keyword = if is_continue then "@continue" else "@break" in
+  let loop_id = "loop_id@" ^ LoopId.to_string loop_id in
+  let values =
+    List.map
+      (fun v -> indent2 ^ Print.Values.tvalue_to_string env v ^ ",\n")
+      values
+  in
+  let abs =
+    List.map
+      (fun a ->
+        Print.Values.abs_to_string ~with_ended:true env true indent2 indent_incr
+          a
+        ^ ",\n")
+      abs
+  in
+  indent ^ keyword ^ " {\n" ^ indent1 ^ loop_id ^ ",\n" ^ indent1
+  ^ "values = [\n" ^ String.concat "" values ^ indent1 ^ "]\n\n" ^ indent1
+  ^ "abs = [\n" ^ String.concat "" abs ^ indent1 ^ "]\n" ^ indent ^ "}"
 
 and expansion_to_string (env : fmt_env) (indent : string) (indent_incr : string)
     (scrut : symbolic_value) (e : expansion) : string =
