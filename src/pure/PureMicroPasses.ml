@@ -7,7 +7,11 @@ open TranslateCore
 (** The local logger *)
 let log = Logging.pure_micro_passes_log
 
-type ctx = { fun_decls : fun_decl FunDeclId.Map.t; trans_ctx : trans_ctx }
+type ctx = {
+  fun_decls : fun_decl FunDeclId.Map.t;
+  type_decls : type_decl TypeDeclId.Map.t;
+  trans_ctx : trans_ctx;
+}
 
 let fun_decl_to_string (ctx : ctx) (def : fun_decl) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
@@ -4703,6 +4707,216 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
   in
   { def with body }
 
+let let_to_match (ctx : ctx) (def : fun_decl) =
+  let span = def.item_meta.span in
+  let pat_needs_update pat = tpattern_decomposes_enum span ctx.type_decls pat in
+  let needs_update (e : texpr) : bool =
+    let expr_visitor =
+      object
+        inherit [_] iter_expr as super
+
+        method! visit_Let env monadic pat bound next =
+          if pat_needs_update pat then raise Utils.Found;
+          super#visit_Let env monadic pat bound next
+      end
+    in
+    try
+      expr_visitor#visit_texpr () e;
+      false
+    with Utils.Found -> true
+  in
+
+  let add_expr (env : (int * texpr) TyMap.t) (size : int) (e : texpr) :
+      (int * texpr) TyMap.t =
+    TyMap.update e.ty
+      (fun x ->
+        match x with
+        | None -> Some (size, e)
+        | Some (size', e') ->
+            if size <= size' then Some (size, e) else Some (size', e'))
+      env
+  in
+
+  let rec add_pat_aux (env : (int * texpr) TyMap.t) (p : tpattern) :
+      (int * texpr) TyMap.t * int * texpr option =
+    match p.pat with
+    | PConstant lit -> (env, 1, Some { e = Const lit; ty = p.ty })
+    | PBound _ -> [%internal_error] span
+    | PDummy -> (env, 1, None)
+    | POpen (fv, _) -> (env, 1, Some { e = FVar fv.id; ty = fv.ty })
+    | PAdt { variant_id; fields } ->
+        let (env, size), fields =
+          List.fold_left_map
+            (fun (env, size) e ->
+              let env, size', e = add_pat env e in
+              ((env, size + size' + 1), e))
+            (env, 0) fields
+        in
+        let e =
+          if List.for_all Option.is_some fields then
+            let fields = List.map Option.get fields in
+
+            (* Retrieve the type id and the type args from the pat type (simpler this way *)
+            let adt_id, generics = ty_as_adt span p.ty in
+
+            (* Create the constructor *)
+            let qualif_id = AdtCons { adt_id; variant_id } in
+            let qualif = { id = qualif_id; generics } in
+            let cons_e = Qualif qualif in
+            let field_tys = List.map (fun (v : texpr) -> v.ty) fields in
+            let cons_ty = mk_arrows field_tys p.ty in
+            let cons = { e = cons_e; ty = cons_ty } in
+
+            (* Apply the constructor *)
+            Some ([%add_loc] mk_apps span cons fields)
+          else None
+        in
+
+        (env, size, e)
+  and add_pat (env : (int * texpr) TyMap.t) (p : tpattern) :
+      (int * texpr) TyMap.t * int * texpr option =
+    let env, size, e = add_pat_aux env p in
+    let env =
+      match e with
+      | None -> env
+      | Some e -> add_expr env size e
+    in
+    (env, size, e)
+  in
+
+  let add_pat env p =
+    let env, size, _ = add_pat env p in
+    (env, size)
+  in
+
+  let update_let (env : (int * texpr) TyMap.t) (pat : tpattern) (bound : texpr)
+      : tpattern * texpr =
+    let refresh_var (var : fvar) =
+      mk_fresh_fvar ~basename:var.basename var.ty
+    in
+    let get_default_expr (var : fvar) =
+      match TyMap.find_opt var.ty env with
+      | Some (_, e) -> e
+      | None -> [%internal_error] span
+    in
+    decompose_let_match span refresh_var get_default_expr ctx.type_decls pat
+      bound
+  in
+
+  let rec update_aux (env : (int * texpr) TyMap.t) (e : texpr) :
+      (int * texpr) TyMap.t * int * texpr =
+    match e.e with
+    | FVar _ | BVar _ | CVar _ | Const _ | EError _ | Qualif _ -> (env, 1, e)
+    | App (f, x) ->
+        let env, nf, f = update env f in
+        let env, nx, x = update env x in
+        (env, nf + nx + 1, [%add_loc] mk_app span f x)
+    | Lambda (pat, body) ->
+        let pat, body = open_binder span pat body in
+        let env', size = add_pat env pat in
+        let _, size', body = update env' body in
+        (env, size + size' + 1, mk_closed_lambda span pat body)
+    | Let (monadic, pat, bound, next) ->
+        let pat, next = open_binder span pat next in
+        let pat, bound = update_let env pat bound in
+        let env, s0, bound = update env bound in
+        let env', s1 = add_pat env pat in
+        let _, s2, next = update env' next in
+        (env, s0 + s1 + s2 + 1, mk_closed_let span monadic pat bound next)
+    | Switch (scrut, switch) ->
+        let env, s0, scrut = update env scrut in
+        let env, s1, switch =
+          match switch with
+          | If (e0, e1) ->
+              let env, s1, e0 = update env e0 in
+              let env, s2, e1 = update env e1 in
+              (env, s1 + s2, If (e0, e1))
+          | Match branches ->
+              let sizes, branches =
+                List.split
+                  (List.map
+                     (fun ({ pat; branch } : match_branch) ->
+                       let pat, branch = open_binder span pat branch in
+                       let env, size = add_pat env pat in
+                       let _, size', branch = update env branch in
+                       let pat, branch = close_binder span pat branch in
+                       (size + size', ({ pat; branch } : match_branch)))
+                     branches)
+              in
+              let size = List.fold_left (fun n n' -> n + n') 0 sizes in
+              (env, size, Match branches)
+        in
+        (env, s0 + s1 + 1, { e with e = Switch (scrut, switch) })
+    | Loop loop ->
+        let (env, size), inputs =
+          List.fold_left_map
+            (fun (env, size) e ->
+              let env, size', e = update env e in
+              ((env, size + size' + 1), e))
+            (env, 0) loop.inputs
+        in
+        let size', loop_body =
+          let ({ inputs; loop_body } : loop_body) = loop.loop_body in
+          let inputs, loop_body = open_binders span inputs loop_body in
+          let env', size =
+            List.fold_left
+              (fun (env, size) input ->
+                let env, size' = add_pat env input in
+                (env, size + size'))
+              (env, 0) inputs
+          in
+          let _, size', loop_body = update env' loop_body in
+          let inputs, loop_body = close_binders span inputs loop_body in
+          let loop_body : loop_body = { inputs; loop_body } in
+          (size + size', loop_body)
+        in
+        let loop = { loop with inputs; loop_body } in
+        (env, size + size' + 1, { e with e = Loop loop })
+    | StructUpdate { struct_id; init; updates } ->
+        let env, size, init =
+          match init with
+          | None -> (env, 0, None)
+          | Some init ->
+              let env, size, init = update env init in
+              (env, size, Some init)
+        in
+        let (env, size), updates =
+          List.fold_left_map
+            (fun (env, size) (fid, e) ->
+              let env, size', e = update env e in
+              ((env, size + size' + 1), (fid, e)))
+            (env, size) updates
+        in
+        (env, size, { e with e = StructUpdate { struct_id; init; updates } })
+    | Meta (m, e') ->
+        let env, size, e' = update env e' in
+        (env, size + 1, { e with e = Meta (m, e') })
+  and update env e =
+    let env, size, e = update_aux env e in
+    let env = add_expr env size e in
+    (env, size, e)
+  in
+
+  let body =
+    Option.map
+      (fun (body : fun_body) ->
+        if needs_update body.body then
+          let body = open_fun_body span body in
+          let env =
+            List.fold_left
+              (fun env input ->
+                let env, _ = add_pat env input in
+                env)
+              TyMap.empty body.inputs
+          in
+          let _, _, e = update env body.body in
+          let body = { body with body = e } in
+          close_fun_body span body
+        else body)
+      def.body
+  in
+  { def with body }
+
 (* TODO: reorder the branches of the matches/switche
    TODO: we might want to leverage more the assignment meta-data, for
    aggregates for instance. *)
@@ -4795,6 +5009,8 @@ let passes :
        functions. This is in preparation of [decompose_loops], which introduces
        auxiliary (and potentially recursive) functions. *)
     (None, "loops_to_recursive", loops_to_recursive);
+    (* Introduce match expressions where let-bindings need to open enumerations *)
+    (None, "let_to_match", let_to_match);
     (* Simplify the aggregated ADTs.
 
        Ex.:
@@ -5628,7 +5844,7 @@ let apply_passes_to_pure_fun_translations (trans_ctx : trans_ctx)
     TypeDeclId.Map.of_list
       (List.map (fun (d : type_decl) -> (d.def_id, d)) type_decls)
   in
-  let ctx = { trans_ctx; fun_decls } in
+  let ctx = { trans_ctx; type_decls; fun_decls } in
 
   (* Apply the micro-passes *)
   let apply (f : fun_decl) : pure_fun_translation =

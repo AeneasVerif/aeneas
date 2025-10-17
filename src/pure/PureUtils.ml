@@ -3,6 +3,17 @@ open Pure
 (** Default logger *)
 let log = Logging.pure_utils_log
 
+module TyOrd = struct
+  type t = ty
+
+  let compare = compare_ty
+  let to_string = show_ty
+  let pp_t = pp_ty
+  let show_t = show_ty
+end
+
+module TyMap = Collections.MakeMap (TyOrd)
+
 module RegularFunIdOrderedType = struct
   type t = regular_fun_id
 
@@ -2364,3 +2375,110 @@ let opt_destruct_rec_loop_call span (e : texpr) :
       let args = try_destruct_tuple_texpr span arg in
       Some { i; args; arg; continue_ty; break_ty }
   | _ -> None
+
+(** Return [true] if the pattern decomposes an enumeration with > 1 variants *)
+let tpattern_decomposes_enum span (type_decls : type_decl TypeDeclId.Map.t)
+    (pat : tpattern) : bool =
+  let visitor =
+    object
+      inherit [_] iter_expr as super
+      method! visit_tpattern _ pat = super#visit_tpattern pat.ty pat
+
+      method! visit_adt_pattern ty pat =
+        (* Lookup the type decl *)
+        let type_id, _ = ty_as_adt span ty in
+        match type_id with
+        | TAdtId id ->
+            let decl = TypeDeclId.Map.find id type_decls in
+            begin
+              match decl.kind with
+              | Struct _ | Opaque -> ()
+              | Enum vl -> if List.length vl > 1 then raise Utils.Found
+            end;
+            super#visit_adt_pattern ty pat
+        | TTuple ->
+            (* ok *)
+            super#visit_adt_pattern ty pat
+        | TBuiltin _ ->
+            (* Shouldn't happen *)
+            [%craise] span "Unreachable"
+    end
+  in
+  try
+    visitor#visit_tpattern pat.ty pat;
+    false
+  with Utils.Found -> true
+
+(** Small helper.
+
+    We use this to properly deconstruct the values given back by backward
+    functions in the presence of enumerations.
+
+    This helper transforms a let-bound pattern and a bound expression to
+    properly introduce matches if necessary.
+
+    For instance, we use it to transform this:
+    {[
+      let Some x = e in
+          ^^^^^^   ^
+           pat     let-bound expression
+    ]}
+    into:
+    {[
+       let x = match e with | Some x -> x | _ -> default_value in
+           ^   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      new pat     new let-bound expression
+    ]}
+
+    The input function [get_default_expr] is called on all the variables found
+    in the pattern to compute a default expression for this variable, to
+    construct the "otherwise" branch.
+
+    **Remarks:** the function receives an open pattern and outputs an open
+    pattern. *)
+let decompose_let_match span (refresh_var : fvar -> fvar)
+    (get_default_expr : fvar -> texpr) (type_decls : type_decl TypeDeclId.Map.t)
+    (pat : tpattern) (bound : texpr) : tpattern * texpr =
+  (* We update the pattern if it deconstructs an enumeration with > 1 variants *)
+  let found_enum = tpattern_decomposes_enum span type_decls pat in
+
+  (* *)
+  if found_enum then
+    (* Found an enumeration with > 1 variants: we have to deconstruct
+       the pattern *)
+    (* First, refresh the variables - we will use fresh variables
+       in the patterns of the internal match *)
+    let visitor =
+      object
+        inherit [_] mapreduce_expr
+        method zero : (fvar * fvar) list = []
+        method plus vars0 vars1 = vars0 @ vars1
+        method! visit_PBound _ _ _ = [%internal_error] span
+
+        method! visit_POpen _ var mp =
+          let var' = refresh_var var in
+          (POpen (var', mp), [ (var, var') ])
+      end
+    in
+    let match_pat, subst = visitor#visit_tpattern pat.ty pat in
+    let vars, fresh_vars = List.split subst in
+
+    (* Create the correct branch *)
+    let match_e = List.map mk_texpr_from_fvar fresh_vars in
+    let match_e = mk_simpl_tuple_texpr span match_e in
+    let match_branch = close_branch span match_pat match_e in
+    (* Create the otherwise branch *)
+    let default_e = List.map get_default_expr vars in
+    let default_e = mk_simpl_tuple_texpr span default_e in
+    let default_pat = mk_dummy_pattern pat.ty in
+    let default_branch = close_branch span default_pat default_e in
+    let switch_e = Switch (bound, Match [ match_branch; default_branch ]) in
+    let bound = { e = switch_e; ty = match_e.ty } in
+    (* Update the pattern itself *)
+    let pat =
+      mk_simpl_tuple_pattern (List.map (mk_tpattern_from_fvar None) vars)
+    in
+    (* *)
+    (pat, bound)
+  else (* Nothing to do *)
+    (pat, bound)

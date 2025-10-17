@@ -144,131 +144,43 @@ let translate_error (span : Meta.span option) (msg : string) : texpr =
 
     We use this to properly deconstruct the values given back by backward
     functions in the presence of enumerations. See
-    [bs_ctx.mut_borrow_to_consumed].
-
-    This helper transforms a let-bound pattern and a bound expression to
-    properly introduce matches if necessary.
-
-    For instance, we use it to transform this:
-    {[
-      let Some x = e in
-          ^^^^^^   ^
-           pat     let-bound expression
-    ]}
-    into:
-    {[
-       let x = match e with | Some x -> x | _ -> default_value in
-           ^   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      new pat     new let-bound expression
-    ]}
-
-    **Remarks:** the function receives an open pattern and outputs an open
-    pattern. *)
-let decompose_let_match (ctx : bs_ctx) ((pat, bound) : tpattern * texpr) :
+    [bs_ctx.mut_borrow_to_consumed] and [PureUtils.decompose_let_match]. *)
+let decompose_let_match (ctx : bs_ctx) (pat : tpattern) (bound : texpr) :
     bs_ctx * (tpattern * texpr) =
   [%ltrace
     "- pat: " ^ tpattern_to_string ctx pat ^ "\n- bound: "
     ^ texpr_to_string ctx bound];
-
-  let found_enum = ref false in
-  (* We update the pattern if it deconstructs an enumeration with > 1 variants *)
-  let visitor =
-    object
-      inherit [_] reduce_expr as super
-      method zero : fvar list = []
-      method plus vars0 vars1 = vars0 @ vars1
-      method! visit_tpattern _ pat = super#visit_tpattern pat.ty pat
-
-      method! visit_adt_pattern ty pat =
-        (* Lookup the type decl *)
-        let type_id, _ = ty_as_adt ctx.span ty in
-        match type_id with
-        | TAdtId id ->
-            let decl = bs_ctx_lookup_type_decl id ctx in
-            begin
-              match decl.kind with
-              | Struct _ | Opaque -> ()
-              | Enum vl -> if List.length vl > 1 then found_enum := true else ()
-            end;
-            super#visit_adt_pattern ty pat
-        | TTuple ->
-            (* ok *)
-            super#visit_adt_pattern ty pat
-        | TBuiltin _ ->
-            (* Shouldn't happen *)
-            [%craise] ctx.span "Unreachable"
-
-      method! visit_PBound _ _ _ = [%internal_error] ctx.span
-      method! visit_POpen _ var _ = [ var ]
-    end
+  let span = ctx.span in
+  let ctx = ref ctx in
+  let refresh_var (var : fvar) =
+    let ctx', var' = fresh_var var.basename var.ty !ctx in
+    ctx := ctx';
+    var'
   in
-
-  (* Visit the pattern *)
-  let vars : fvar list = visitor#visit_tpattern pat.ty pat in
-
-  (* *)
-  if !found_enum then
-    (* Found an enumeration with > 1 variants: we have to deconstruct
-       the pattern *)
-    (* First, refresh the variables - we will use fresh variables
-       in the patterns of the internal match *)
-    let (ctx, fresh_vars) : _ * fvar list =
-      List.fold_left_map
-        (fun ctx (var : fvar) -> fresh_var var.basename var.ty ctx)
-        ctx vars
-    in
-    (* Create the new pattern for the match, with the fresh variables *)
-    let subst =
-      FVarId.Map.of_list
-        (List.map2 (fun (v0 : fvar) (v1 : fvar) -> (v0.id, v1)) vars fresh_vars)
-    in
-    let subst_visitor =
-      object
-        inherit [_] map_expr
-        method! visit_POpen _ v mp = POpen (FVarId.Map.find v.id subst, mp)
-        method! visit_PBound _ _ = [%internal_error] ctx.span
-      end
-    in
-    (* Create the correct branch *)
-    let match_pat = subst_visitor#visit_tpattern () pat in
-    let match_e = List.map mk_texpr_from_fvar fresh_vars in
-    let match_e = mk_simpl_tuple_texpr ctx.span match_e in
-    let match_branch = close_branch ctx.span match_pat match_e in
-    (* Create the otherwise branch *)
-    let default_e =
-      List.map
-        (fun (v : fvar) ->
-          (* We need to lookup the default values corresponding to
+  (* Using [bs_ctx.mut_borrow_to_consumed] *)
+  let get_default_expr (v : fvar) =
+    (* We need to lookup the default values corresponding to
              each given back symbolic value *)
-          match FVarId.Map.find_opt v.id ctx.var_id_to_default with
-          | Some e -> e
-          | None ->
-              (* This is a bug, but we might want to continue generating the model:
+    match FVarId.Map.find_opt v.id !ctx.var_id_to_default with
+    | Some e -> e
+    | None ->
+        (* This is a bug, but we might want to continue generating the model:
                  as an escape hatch, simply use the original variable (this will
                  lead to incorrect code of course) *)
-              [%save_error] ctx.span
-                ("Internal error: could not find variable. Please report an \
-                  issue. Debugging information:" ^ "\n- v.id: "
-               ^ FVarId.to_string v.id ^ "\n- ctx.var_id_to_default: "
-                ^ FVarId.Map.to_string None (texpr_to_string ctx)
-                    ctx.var_id_to_default
-                ^ "\n");
-              mk_texpr_from_fvar v)
-        vars
-    in
-    let default_e = mk_simpl_tuple_texpr ctx.span default_e in
-    let default_pat = mk_dummy_pattern pat.ty in
-    let default_branch = close_branch ctx.span default_pat default_e in
-    let switch_e = Switch (bound, Match [ match_branch; default_branch ]) in
-    let bound = { e = switch_e; ty = match_e.ty } in
-    (* Update the pattern itself *)
-    let pat =
-      mk_simpl_tuple_pattern (List.map (mk_tpattern_from_fvar None) vars)
-    in
-    (* *)
-    (ctx, (pat, bound))
-  else (* Nothing to do *)
-    (ctx, (pat, bound))
+        [%save_error] span
+          ("Internal error: could not find variable. Please report an issue. \
+            Debugging information:" ^ "\n- v.id: " ^ FVarId.to_string v.id
+         ^ "\n- ctx.var_id_to_default: "
+          ^ FVarId.Map.to_string None (texpr_to_string !ctx)
+              !ctx.var_id_to_default
+          ^ "\n");
+        mk_texpr_from_fvar v
+  in
+  let pat, bound =
+    PureUtils.decompose_let_match span refresh_var get_default_expr
+      !ctx.type_ctx.type_decls pat bound
+  in
+  (!ctx, (pat, bound))
 
 let rec translate_expr (e : S.expr) (ctx : bs_ctx) : texpr =
   [%ldebug "e:\n" ^ bs_ctx_expr_to_string ctx e];
@@ -836,7 +748,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
         ^ "\n\nargs:\n" ^ String.concat "\n" args];
       let call = [%add_loc] mk_apps ctx.span func args in
       (* Introduce a match if necessary *)
-      let ctx, (output, call) = decompose_let_match ctx (output, call) in
+      let ctx, (output, call) = decompose_let_match ctx output call in
       (* Translate the next expression and construct the let *)
       [%add_loc] mk_closed_checked_let ctx effect_info.can_fail output call
         (next_e ctx)
@@ -920,7 +832,9 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
     List.map (fun (v, e) -> (v, mk_texpr_from_fvar e)) given_back_inputs
   in
   let ctx, given_back_inputs =
-    List.fold_left_map decompose_let_match ctx given_back_inputs
+    List.fold_left_map
+      (fun ctx (v, e) -> decompose_let_match ctx v e)
+      ctx given_back_inputs
   in
   (* Translate the next expression *)
   let next_e = translate_expr e ctx in
@@ -973,7 +887,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
         ^ "\n\nargs:\n" ^ String.concat "\n" args];
       let call = [%add_loc] mk_apps ctx.span func args in
       (* Introduce a match if necessary *)
-      let ctx, (output, call) = decompose_let_match ctx (output, call) in
+      let ctx, (output, call) = decompose_let_match ctx output call in
       (* Translate the next expression and construct the let *)
       let next_e = next_e ctx in
       [%ltrace
