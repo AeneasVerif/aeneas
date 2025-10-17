@@ -4707,9 +4707,17 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
   in
   { def with body }
 
+(** Introduce match expressions where a let-binding decomposes an enumeration
+    with > 1 variants (see [decompose_let_match]).
+
+    Such patterns can be introduced when calling backward functions. *)
 let let_to_match (ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
+
+  (* A pattern appearing in a let-binding needs to be updated if it deconstructs
+     an enumeration with > 1 variants *)
   let pat_needs_update pat = tpattern_decomposes_enum span ctx.type_decls pat in
+  (* Quick check: does the expression contains a let-binding which needs to be updated? *)
   let needs_update (e : texpr) : bool =
     let expr_visitor =
       object
@@ -4726,6 +4734,10 @@ let let_to_match (ctx : ctx) (def : fun_decl) =
     with Utils.Found -> true
   in
 
+  (* When introducing the match, we need to find default values in the "otherwise"
+     branch. We do so by computing a map from type to expression found so far.
+     We also store the size of the expression in order to use the smallest expressions
+     as possible. *)
   let add_expr (env : (int * texpr) TyMap.t) (size : int) (e : texpr) :
       (int * texpr) TyMap.t =
     TyMap.update e.ty
@@ -4737,6 +4749,9 @@ let let_to_match (ctx : ctx) (def : fun_decl) =
       env
   in
 
+  (* Patterns can be converted to expressions (if they don't contain dummy patterns '_').
+     We can use those as default expressions as well: this helper explores a pattern
+     and registers all the expressions we find inside it. *)
   let rec add_pat_aux (env : (int * texpr) TyMap.t) (p : tpattern) :
       (int * texpr) TyMap.t * int * texpr option =
     match p.pat with
@@ -4784,11 +4799,13 @@ let let_to_match (ctx : ctx) (def : fun_decl) =
     (env, size, e)
   in
 
+  (* See [add_pat] above *)
   let add_pat env p =
     let env, size, _ = add_pat env p in
     (env, size)
   in
 
+  (* Update a let-binding by introducing a match, if necessary *)
   let update_let (env : (int * texpr) TyMap.t) (pat : tpattern) (bound : texpr)
       : tpattern * texpr =
     let refresh_var (var : fvar) =
@@ -4803,6 +4820,7 @@ let let_to_match (ctx : ctx) (def : fun_decl) =
       bound
   in
 
+  (* Recursively update an expression to decompose all the let-bindings *)
   let rec update_aux (env : (int * texpr) TyMap.t) (e : texpr) :
       (int * texpr) TyMap.t * int * texpr =
     match e.e with
@@ -4900,6 +4918,7 @@ let let_to_match (ctx : ctx) (def : fun_decl) =
   let body =
     Option.map
       (fun (body : fun_body) ->
+        (* Quick check: explore while updating only if necessary *)
         if needs_update body.body then
           let body = open_fun_body span body in
           let env =
