@@ -41,6 +41,10 @@ let fvar_to_string (ctx : ctx) (x : fvar) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.fvar_to_string fmt x
 
+let generic_params_to_string (ctx : ctx) (x : generic_params) : string =
+  let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
+  PrintPure.generic_params_to_string fmt x
+
 let ty_to_string (ctx : ctx) (x : ty) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.ty_to_string fmt false x
@@ -2128,12 +2132,6 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
     let { output_tys; loop_body; _ } = loop in
     let output_ty = mk_simpl_tuple_ty output_tys in
 
-    let subst_visitor =
-      object
-        inherit [_] subst_visitor
-      end
-    in
-
     (* First decompose the inner loops *)
     let loop_body = visit_loop_body loop_body in
 
@@ -2165,11 +2163,17 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
       List.map (fun (e : fvar) -> e.ty) constant_inputs
     in
 
-    (* Compute the generic params *)
-    let generics, generics_filter, subst =
+    (* Compute the generic params - note that the indices are not updated,
+       meaning we do not need to update those in the body *)
+    let generics, generics_filter =
       filter_generic_params_used_in_texpr def.signature.generics
         loop_body.loop_body
     in
+    [%ldebug
+      "- generic_params:\n"
+      ^ generic_params_to_string ctx generics
+      ^ "\n- generics_filter:\n"
+      ^ show_generics_filter generics_filter];
     let loop_func =
       compute_loop_fun_expr loop generics_filter constant_input_tys
     in
@@ -2181,14 +2185,10 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
         loop_body.loop_body
     in
 
-    (* Update the generics in the loop body *)
+    (* Update the inputs and close the loop body *)
     let loop_body =
-      let body = subst_visitor#visit_texpr subst body in
       let inputs =
-        List.map (subst_visitor#visit_tpattern subst) loop_body.inputs
-      in
-      let inputs =
-        List.map (mk_tpattern_from_fvar None) constant_inputs @ inputs
+        List.map (mk_tpattern_from_fvar None) constant_inputs @ loop_body.inputs
       in
       let body : fun_body = { inputs; body } in
       [%ldebug
@@ -2215,7 +2215,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
     (* Note that the loop body already binds the "constant" inputs: we don't
        need to add them anymore *)
     let input_tys = List.map (fun (v : tpattern) -> v.ty) loop_body.inputs in
-    let output = subst_visitor#visit_ty subst output_ty in
+    let output = output_ty in
 
     let llbc_generics : T.generic_params =
       let { types; const_generics; trait_clauses; _ } : T.generic_params =

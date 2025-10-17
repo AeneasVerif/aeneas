@@ -635,7 +635,7 @@ and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
 and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (inside : bool) (fid : fun_or_op_id)
     (generics : generic_args) (args : texpr list) : unit =
-  [%ltrace
+  [%ldebug
     fun_or_op_id_to_string ctx fid
     ^ "\n- generics: "
     ^ generic_args_to_string ctx generics
@@ -1799,6 +1799,7 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   let def_name =
     ctx_get_local_function def.item_meta.span def.def_id def.loop_id ctx
   in
+  [%ltrace "Extracting function: " ^ def_name];
   (* Open the binders - it is easier to only manipulate variables which have unique ids *)
   reset_fvar_id_counter ();
   let def =
@@ -2661,7 +2662,7 @@ let extract_trait_decl_register_names (ctx : extraction_ctx)
 (** Similar to {!extract_type_decl_register_names} *)
 let extract_trait_impl_register_names (ctx : extraction_ctx)
     (trait_impl : trait_impl) : extraction_ctx =
-  [%ltrace
+  [%ldebug
     "trait_impl.impl_trait" ^ trait_decl_ref_to_string ctx trait_impl.impl_trait];
   let decl_id = trait_impl.impl_trait.trait_decl_id in
   let trait_decl = TraitDeclId.Map.find decl_id ctx.trans_trait_decls in

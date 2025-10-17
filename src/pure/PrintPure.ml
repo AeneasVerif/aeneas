@@ -356,6 +356,11 @@ let generic_params_to_strings (env : fmt_env) (generics : generic_params) :
   in
   List.concat [ tys; cgs; trait_clauses ]
 
+let generic_params_to_string (env : fmt_env) (generics : generic_params) :
+    string =
+  let generics = generic_params_to_strings env generics in
+  String.concat " " generics
+
 let field_to_string env inside (f : field) : string =
   match f.field_name with
   | None -> ty_to_string env inside f.field_ty

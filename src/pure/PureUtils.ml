@@ -282,6 +282,15 @@ let ty_substitute (subst : subst) (ty : ty) : ty =
   in
   visitor#visit_ty subst ty
 
+let generic_args_substitute (subst : subst) (generics : generic_args) :
+    generic_args =
+  let visitor =
+    object
+      inherit [_] subst_visitor
+    end
+  in
+  visitor#visit_generic_args subst generics
+
 let make_type_subst (vars : type_var list) (tys : ty list) : TypeVarId.id -> ty
     =
   let var_ids = List.map (fun k -> (k : type_var).index) vars in
@@ -2179,12 +2188,22 @@ type generics_filter = {
   const_generics : bool list;
   trait_clauses : bool list;
 }
+[@@deriving show]
 
 (** Filter a list of generic arguments to only preserve the variables which are
-    inside of an expression. We also generate a substitution to re-index the
-    variables inside the expression. *)
+    inside of an expression.
+
+    We *do not* re-index the variables, because it is a bit tricky to do
+    correctly (in particular, propagating the changes can be tricky). Instead,
+    we leverage the fact that all functions which lookup generics from the
+    generic params do not assume anything about the indices they use (in
+    particular, they do not have to be contiguous).
+
+    Side remark: some functions (for computing names for trait clauses) actually
+    *need* the indices of the trait clauses to be preserved from the LLBC code
+    to the pure code. *)
 let filter_generic_params_used_in_texpr (generic : generic_params) (e : texpr) :
-    generic_params * generics_filter * subst =
+    generic_params * generics_filter =
   (* Collect the sets of parameters used in the expression *)
   let type_ids = ref TypeVarId.Set.empty in
   let cg_ids = ref ConstGenericVarId.Set.empty in
@@ -2239,50 +2258,15 @@ let filter_generic_params_used_in_texpr (generic : generic_params) (e : texpr) :
   let const_generics =
     List.filter_map (fun (b, x) -> if b then Some x else None) const_generics
   in
+  (* WARNING: the indices and generics inside the trait clause are not correct!
+     We update them below. *)
   let trait_clauses =
     List.filter_map (fun (b, x) -> if b then Some x else None) trait_clauses
   in
 
-  let ty_subst =
-    let map =
-      TypeVarId.Map.of_list
-        (TypeVarId.mapi
-           (fun nid (v : type_var) -> (v.index, TVar (T.Free nid)))
-           types)
-    in
-    fun id -> TypeVarId.Map.find id map
-  in
-  let cg_subst =
-    let map =
-      ConstGenericVarId.Map.of_list
-        (ConstGenericVarId.mapi
-           (fun nid (v : const_generic_var) -> (v.index, T.CgVar (T.Free nid)))
-           const_generics)
-    in
-    fun id -> ConstGenericVarId.Map.find id map
-  in
-  let tr_subst =
-    let map =
-      TraitClauseId.Map.of_list
-        (TraitClauseId.mapi
-           (fun nid (v : trait_clause) -> (v.clause_id, Clause (T.Free nid)))
-           trait_clauses)
-    in
-    fun id -> TraitClauseId.Map.find id map
-  in
-  let tr_self = UnknownTrait "Unexpected self clause" in
-  let subst : subst = { ty_subst; cg_subst; tr_subst; tr_self } in
-
   (* Reindex the generic params *)
   let generics : generic_params = { types; const_generics; trait_clauses } in
-  let visitor =
-    object
-      inherit [_] subst_visitor
-    end
-  in
-  let generics = visitor#visit_generic_params subst generics in
-
-  (generics, filter, subst)
+  (generics, filter)
 
 let generic_args_of_params (generics : generic_params) : generic_args =
   let types =

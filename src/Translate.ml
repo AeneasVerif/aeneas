@@ -666,7 +666,8 @@ let export_functions_group_scc (fmt : Format.formatter) (config : gen_config)
   (* Filter the definitions - we generate a list of continuations *)
   let extract_defs =
     List.mapi
-      (fun i def ->
+      (fun i (def : Pure.fun_decl) ->
+        [%ltrace name_to_string ctx.trans_ctx def.Pure.item_meta.name];
         let is_opaque = Option.is_none def.Pure.body in
         let kind =
           if is_opaque then
