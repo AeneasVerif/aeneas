@@ -53,6 +53,8 @@ type raw_span = Meta.raw_span [@@deriving show, ord]
 type span = Meta.span [@@deriving show, ord]
 type ref_kind = Types.ref_kind [@@deriving show, ord]
 type 'a de_bruijn_var = 'a Types.de_bruijn_var [@@deriving show, ord]
+type llbc_fun_id = A.fun_id [@@deriving show, ord]
+type binop = E.binop [@@deriving show, ord]
 
 (** A DeBruijn index identifying a group of bound variables *)
 type db_scope_id = int [@@deriving show, ord]
@@ -288,6 +290,7 @@ type type_id = TAdtId of type_decl_id | TTuple | TBuiltin of builtin_ty
       name = "iter_type_id";
       variety = "iter";
       ancestors = [ "iter_type_id_base" ];
+      monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
       polymorphic = false;
@@ -297,6 +300,7 @@ type type_id = TAdtId of type_decl_id | TTuple | TBuiltin of builtin_ty
       name = "map_type_id";
       variety = "map";
       ancestors = [ "map_type_id_base" ];
+      monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
       polymorphic = false;
@@ -306,6 +310,7 @@ type type_id = TAdtId of type_decl_id | TTuple | TBuiltin of builtin_ty
       name = "reduce_type_id";
       variety = "reduce";
       ancestors = [ "reduce_type_id_base" ];
+      monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       polymorphic = false;
     },
@@ -314,6 +319,7 @@ type type_id = TAdtId of type_decl_id | TTuple | TBuiltin of builtin_ty
       name = "mapreduce_type_id";
       variety = "mapreduce";
       ancestors = [ "mapreduce_type_id_base" ];
+      monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       polymorphic = false;
     }]
@@ -405,6 +411,7 @@ and trait_instance_id =
       name = "iter_ty";
       variety = "iter";
       ancestors = [ "iter_ty_base" ];
+      monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
       polymorphic = false;
@@ -414,6 +421,7 @@ and trait_instance_id =
       name = "map_ty";
       variety = "map";
       ancestors = [ "map_ty_base" ];
+      monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.map} *);
       concrete = true;
       polymorphic = false;
@@ -423,6 +431,7 @@ and trait_instance_id =
       name = "reduce_ty";
       variety = "reduce";
       ancestors = [ "reduce_ty_base" ];
+      monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.reduce} *);
       polymorphic = false;
     },
@@ -431,6 +440,7 @@ and trait_instance_id =
       name = "mapreduce_ty";
       variety = "mapreduce";
       ancestors = [ "mapreduce_ty_base" ];
+      monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.mapreduce} *);
       polymorphic = false;
     }]
@@ -592,6 +602,7 @@ and predicates = { trait_type_constraints : trait_type_constraint list }
       name = "iter_type_decl_base1";
       variety = "iter";
       ancestors = [ "iter_type_decl_base" ];
+      monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
       polymorphic = false;
@@ -601,6 +612,7 @@ and predicates = { trait_type_constraints : trait_type_constraint list }
       name = "map_type_decl_base1";
       variety = "map";
       ancestors = [ "map_type_decl_base" ];
+      monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.map} *);
       concrete = true;
       polymorphic = false;
@@ -610,6 +622,7 @@ and predicates = { trait_type_constraints : trait_type_constraint list }
       name = "reduce_type_decl_base1";
       variety = "reduce";
       ancestors = [ "reduce_type_decl_base" ];
+      monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.reduce} *);
       polymorphic = false;
     },
@@ -618,6 +631,7 @@ and predicates = { trait_type_constraints : trait_type_constraint list }
       name = "mapreduce_type_decl_base1";
       variety = "mapreduce";
       ancestors = [ "mapreduce_type_decl_base" ];
+      monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.mapreduce} *);
       polymorphic = false;
     }]
@@ -661,6 +675,7 @@ and type_decl = {
       name = "iter_type_decl";
       variety = "iter";
       ancestors = [ "iter_type_decl_base1" ];
+      monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
       polymorphic = false;
@@ -670,6 +685,7 @@ and type_decl = {
       name = "map_type_decl";
       variety = "map";
       ancestors = [ "map_type_decl_base1" ];
+      monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.map} *);
       concrete = true;
       polymorphic = false;
@@ -679,6 +695,7 @@ and type_decl = {
       name = "reduce_type_decl";
       variety = "reduce";
       ancestors = [ "reduce_type_decl_base1" ];
+      monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.reduce} *);
       polymorphic = false;
     },
@@ -687,6 +704,7 @@ and type_decl = {
       name = "mapreduce_type_decl";
       variety = "mapreduce";
       ancestors = [ "mapreduce_type_decl_base1" ];
+      monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.mapreduce} *);
       polymorphic = false;
     }]
@@ -744,6 +762,7 @@ class ['self] iter_tpattern_base =
     method visit_bvar_id : 'env -> bvar_id -> unit = fun _ _ -> ()
     method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
     method visit_variant_id : 'env -> variant_id -> unit = fun _ _ -> ()
+    method visit_loop_id : 'env -> loop_id -> unit = fun _ _ -> ()
 
     method visit_var : 'env -> var -> unit =
       fun e var ->
@@ -755,6 +774,14 @@ class ['self] iter_tpattern_base =
         self#visit_fvar_id e var.id;
         self#visit_option self#visit_string e var.basename;
         self#visit_ty e var.ty
+
+    method visit_llbc_fun_id : 'env -> llbc_fun_id -> unit = fun _ _ -> ()
+
+    method visit_pure_builtin_fun_id : 'env -> pure_builtin_fun_id -> unit =
+      fun _ _ -> ()
+
+    method visit_binop : 'env -> binop -> unit = fun _ _ -> ()
+    method visit_field_id : 'env -> field_id -> unit = fun _ _ -> ()
   end
 
 (** Ancestor for {!map_tpattern} visitor *)
@@ -765,6 +792,7 @@ class ['self] map_tpattern_base =
     method visit_bvar_id : 'env -> bvar_id -> bvar_id = fun _ x -> x
     method visit_mplace : 'env -> mplace -> mplace = fun _ x -> x
     method visit_variant_id : 'env -> variant_id -> variant_id = fun _ x -> x
+    method visit_loop_id : 'env -> loop_id -> loop_id = fun _ x -> x
 
     method visit_var : 'env -> var -> var =
       fun e var ->
@@ -780,6 +808,15 @@ class ['self] map_tpattern_base =
           basename = self#visit_option self#visit_string e var.basename;
           ty = self#visit_ty e var.ty;
         }
+
+    method visit_llbc_fun_id : 'env -> llbc_fun_id -> llbc_fun_id = fun _ x -> x
+
+    method visit_pure_builtin_fun_id :
+        'env -> pure_builtin_fun_id -> pure_builtin_fun_id =
+      fun _ x -> x
+
+    method visit_binop : 'env -> binop -> binop = fun _ x -> x
+    method visit_field_id : 'env -> field_id -> field_id = fun _ x -> x
   end
 
 (** Ancestor for {!reduce_tpattern} visitor *)
@@ -790,6 +827,7 @@ class virtual ['self] reduce_tpattern_base =
     method visit_bvar_id : 'env -> bvar_id -> 'a = fun _ _ -> self#zero
     method visit_mplace : 'env -> mplace -> 'a = fun _ _ -> self#zero
     method visit_variant_id : 'env -> variant_id -> 'a = fun _ _ -> self#zero
+    method visit_loop_id : 'env -> loop_id -> 'a = fun _ _ -> self#zero
 
     method visit_var : 'env -> var -> 'a =
       fun e var ->
@@ -803,6 +841,14 @@ class virtual ['self] reduce_tpattern_base =
         let x1 = self#visit_option self#visit_string e var.basename in
         let x2 = self#visit_ty e var.ty in
         self#plus (self#plus x0 x1) x2
+
+    method visit_llbc_fun_id : 'env -> llbc_fun_id -> 'a = fun _ _ -> self#zero
+
+    method visit_pure_builtin_fun_id : 'env -> pure_builtin_fun_id -> 'a =
+      fun _ _ -> self#zero
+
+    method visit_binop : 'env -> binop -> 'a = fun _ _ -> self#zero
+    method visit_field_id : 'env -> field_id -> 'a = fun _ _ -> self#zero
   end
 
 (** Ancestor for {!mapreduce_tpattern} visitor *)
@@ -822,6 +868,9 @@ class virtual ['self] mapreduce_tpattern_base =
     method visit_variant_id : 'env -> variant_id -> variant_id * 'a =
       fun _ x -> (x, self#zero)
 
+    method visit_loop_id : 'env -> loop_id -> loop_id * 'a =
+      fun _ x -> (x, self#zero)
+
     method visit_var : 'env -> var -> var * 'a =
       fun e var ->
         let basename, x1 = self#visit_option self#visit_string e var.basename in
@@ -834,6 +883,18 @@ class virtual ['self] mapreduce_tpattern_base =
         let basename, x1 = self#visit_option self#visit_string e var.basename in
         let ty, x2 = self#visit_ty e var.ty in
         ({ id; basename; ty }, self#plus (self#plus x0 x1) x2)
+
+    method visit_llbc_fun_id : 'env -> llbc_fun_id -> llbc_fun_id * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_pure_builtin_fun_id :
+        'env -> pure_builtin_fun_id -> pure_builtin_fun_id * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_binop : 'env -> binop -> binop * 'a = fun _ x -> (x, self#zero)
+
+    method visit_field_id : 'env -> field_id -> field_id * 'a =
+      fun _ x -> (x, self#zero)
   end
 
 (** A pattern (which appears on the left of assignments, in matches, etc.). *)
@@ -886,6 +947,7 @@ and tpattern = { pat : pattern; ty : ty }
       name = "iter_tpattern";
       variety = "iter";
       ancestors = [ "iter_tpattern_base" ];
+      monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
       polymorphic = false;
@@ -895,6 +957,7 @@ and tpattern = { pat : pattern; ty : ty }
       name = "map_tpattern";
       variety = "map";
       ancestors = [ "map_tpattern_base" ];
+      monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
       polymorphic = false;
@@ -904,6 +967,7 @@ and tpattern = { pat : pattern; ty : ty }
       name = "reduce_tpattern";
       variety = "reduce";
       ancestors = [ "reduce_tpattern_base" ];
+      monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       polymorphic = false;
     },
@@ -912,6 +976,7 @@ and tpattern = { pat : pattern; ty : ty }
       name = "mapreduce_tpattern";
       variety = "mapreduce";
       ancestors = [ "mapreduce_tpattern_base" ];
+      monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       polymorphic = false;
     }]
@@ -921,21 +986,18 @@ type unop =
   | Neg of integer_type
   | Cast of literal_type * literal_type
   | ArrayToSlice
-[@@deriving show, ord]
 
-type fun_id_or_trait_method_ref =
-  | FunId of A.fun_id
+and fun_id_or_trait_method_ref =
+  | FunId of llbc_fun_id
   | TraitMethod of trait_ref * string * fun_decl_id
-      (** The fun decl id is not really needed and here for convenience purposes
-      *)
-[@@deriving show, ord]
+      (** The fun decl id is not really needed and only provided for convenience
+          purposes *)
 
 (** A function id for a non-builtin function *)
-type regular_fun_id = fun_id_or_trait_method_ref * LoopId.id option
-[@@deriving show, ord]
+and regular_fun_id = fun_id_or_trait_method_ref * loop_id option
 
 (** A function identifier *)
-type fun_id =
+and fun_id =
   | FromLlbc of regular_fun_id
       (** A function coming from LLBC.
 
@@ -946,49 +1008,76 @@ type fun_id =
           backward function, [None] if it is a forward function. *)
   | Pure of pure_builtin_fun_id
       (** A function only used in the pure translation *)
-[@@deriving show, ord]
-
-type binop = E.binop [@@deriving show, ord]
 
 (** A function or an operation id *)
-type fun_or_op_id =
+and fun_or_op_id =
   | Fun of fun_id
   | Unop of unop
   | Binop of binop * integer_type
-[@@deriving show, ord]
 
 (** An identifier for an ADT constructor *)
-type adt_cons_id = { adt_id : type_id; variant_id : variant_id option }
-[@@deriving show, ord]
+and adt_cons_id = { adt_id : type_id; variant_id : variant_id option }
 
 (** Projection - For now we don't support projection of tuple fields (because
     not all the backends have syntax for this). *)
-type projection = { adt_id : type_id; field_id : field_id }
-[@@deriving show, ord]
+and projection = { adt_id : type_id; field_id : field_id }
 
-type qualif_id =
+and qualif_id =
   | FunOrOp of fun_or_op_id  (** A function or an operation *)
   | Global of global_decl_id
   | AdtCons of adt_cons_id  (** A function or ADT constructor identifier *)
   | Proj of projection  (** Field projector *)
   | TraitConst of trait_ref * string  (** A trait associated constant *)
-[@@deriving show, ord]
 
 (** An instantiated qualifier.
 
     Note that for now we have a clear separation between types and expressions,
     which explains why we have the [generics] field: a function or ADT
     constructor is always fully instantiated. *)
-type qualif = { id : qualif_id; generics : generic_args } [@@deriving show, ord]
+and qualif = { id : qualif_id; generics : generic_args }
+[@@deriving
+  show,
+  ord,
+  visitors
+    {
+      name = "iter_qualif";
+      variety = "iter";
+      ancestors = [ "iter_tpattern" ];
+      monomorphic = [ "env" ];
+      nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
+      concrete = true;
+    },
+  visitors
+    {
+      name = "map_qualif";
+      variety = "map";
+      ancestors = [ "map_tpattern" ];
+      monomorphic = [ "env" ];
+      nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
+      concrete = true;
+    },
+  visitors
+    {
+      name = "reduce_qualif";
+      variety = "reduce";
+      ancestors = [ "reduce_tpattern" ];
+      monomorphic = [ "env" ];
+      nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
+    },
+  visitors
+    {
+      name = "mapreduce_qualif";
+      variety = "mapreduce";
+      ancestors = [ "mapreduce_tpattern" ];
+      monomorphic = [ "env" ];
+      nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
+    }]
 
 (** Ancestor for {!iter_expr} visitor *)
 class ['self] iter_expr_base =
   object (_self : 'self)
-    inherit [_] iter_tpattern
+    inherit [_] iter_qualif
     inherit! [_] iter_type_id
-    method visit_qualif : 'env -> qualif -> unit = fun _ _ -> ()
-    method visit_loop_id : 'env -> loop_id -> unit = fun _ _ -> ()
-    method visit_field_id : 'env -> field_id -> unit = fun _ _ -> ()
     method visit_span : 'env -> Meta.span -> unit = fun _ _ -> ()
     method visit_db_scope_id : 'env -> db_scope_id -> unit = fun _ _ -> ()
   end
@@ -996,11 +1085,8 @@ class ['self] iter_expr_base =
 (** Ancestor for {!map_expr} visitor *)
 class ['self] map_expr_base =
   object (_self : 'self)
-    inherit [_] map_tpattern
+    inherit [_] map_qualif
     inherit! [_] map_type_id
-    method visit_qualif : 'env -> qualif -> qualif = fun _ x -> x
-    method visit_loop_id : 'env -> loop_id -> loop_id = fun _ x -> x
-    method visit_field_id : 'env -> field_id -> field_id = fun _ x -> x
     method visit_span : 'env -> Meta.span -> Meta.span = fun _ x -> x
     method visit_db_scope_id : 'env -> db_scope_id -> db_scope_id = fun _ x -> x
   end
@@ -1008,11 +1094,8 @@ class ['self] map_expr_base =
 (** Ancestor for {!reduce_expr} visitor *)
 class virtual ['self] reduce_expr_base =
   object (self : 'self)
-    inherit [_] reduce_tpattern
+    inherit [_] reduce_qualif
     inherit! [_] reduce_type_id
-    method visit_qualif : 'env -> qualif -> 'a = fun _ _ -> self#zero
-    method visit_loop_id : 'env -> loop_id -> 'a = fun _ _ -> self#zero
-    method visit_field_id : 'env -> field_id -> 'a = fun _ _ -> self#zero
     method visit_span : 'env -> Meta.span -> 'a = fun _ _ -> self#zero
     method visit_db_scope_id : 'env -> db_scope_id -> 'a = fun _ _ -> self#zero
   end
@@ -1020,17 +1103,8 @@ class virtual ['self] reduce_expr_base =
 (** Ancestor for {!mapreduce_expr} visitor *)
 class virtual ['self] mapreduce_expr_base =
   object (self : 'self)
-    inherit [_] mapreduce_tpattern
+    inherit [_] mapreduce_qualif
     inherit! [_] mapreduce_type_id
-
-    method visit_qualif : 'env -> qualif -> qualif * 'a =
-      fun _ x -> (x, self#zero)
-
-    method visit_loop_id : 'env -> loop_id -> loop_id * 'a =
-      fun _ x -> (x, self#zero)
-
-    method visit_field_id : 'env -> field_id -> field_id * 'a =
-      fun _ x -> (x, self#zero)
 
     method visit_span : 'env -> Meta.span -> Meta.span * 'a =
       fun _ x -> (x, self#zero)
@@ -1252,6 +1326,7 @@ and emeta =
       name = "iter_expr";
       variety = "iter";
       ancestors = [ "iter_expr_base" ];
+      monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
     },
@@ -1260,6 +1335,7 @@ and emeta =
       name = "map_expr";
       variety = "map";
       ancestors = [ "map_expr_base" ];
+      monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
     },
@@ -1268,6 +1344,7 @@ and emeta =
       name = "reduce_expr";
       variety = "reduce";
       ancestors = [ "reduce_expr_base" ];
+      monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
     },
   visitors
@@ -1275,6 +1352,7 @@ and emeta =
       name = "mapreduce_expr";
       variety = "mapreduce";
       ancestors = [ "mapreduce_expr_base" ];
+      monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
     }]
 
