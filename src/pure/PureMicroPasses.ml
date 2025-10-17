@@ -1672,7 +1672,7 @@ let simplify_aggregates_visitor (ctx : ctx) (def : fun_decl) =
       | StructUpdate { struct_id; init = None; updates } ->
           let adt_ty = e.ty in
           (* Attempt to convert all the field updates to projections
-               of fields from an ADT with the same type *)
+             of fields from an ADT with the same type *)
           let to_expr_proj ((fid, arg) : FieldId.id * texpr) : texpr option =
             match arg.e with
             | App (proj, x) -> (
@@ -1746,6 +1746,90 @@ let simplify_aggregates_visitor (ctx : ctx) (def : fun_decl) =
   end
 
 let simplify_aggregates = lift_expr_map_visitor simplify_aggregates_visitor
+
+(** Helper: flatten nested struct updates and projections of struct updates.
+
+    Ex.:
+    [
+      { { x with field0 = 0 } with field0 = 1; field1 = 2 }
+
+        ~~>
+
+      { x with field1 = 1; field1 = 2 }
+    ]
+
+    [
+      { x with field1 = 1 }.field1 ~> 1
+      { x with field1 = 1 }.field2 ~> x.field1
+    ]
+*)
+let flatten_struct_updates (_ctx : ctx) (def : fun_decl) : fun_decl =
+  let span = def.item_meta.span in
+  let visitor =
+    object (self)
+      inherit [_] map_expr as super
+
+      method! visit_StructUpdate env { struct_id; init; updates } =
+        (* Flatten nested struct updates *)
+        match init with
+        | None -> super#visit_StructUpdate env { struct_id; init; updates }
+        | Some init -> (
+            let init = self#visit_texpr env init in
+            let visit_update (fid, e) = (fid, self#visit_texpr env e) in
+            let updates = List.map visit_update updates in
+            match init.e with
+            | StructUpdate
+                { struct_id = struct_id'; init = init'; updates = updates' } ->
+                [%sanity_check] span (struct_id = struct_id');
+                let fids = FieldId.Set.of_list (List.map fst updates) in
+                let updates' =
+                  List.filter
+                    (fun (fid, _) -> not (FieldId.Set.mem fid fids))
+                    updates'
+                in
+                let updates' = List.map visit_update updates' in
+                let updates = updates' @ updates in
+                StructUpdate { struct_id; init = init'; updates }
+            | _ -> StructUpdate { struct_id; init = Some init; updates })
+
+      method! visit_App env f arg =
+        let f = self#visit_texpr env f in
+        let arg = self#visit_texpr env arg in
+        match f.e with
+        | Qualif { id = Proj { field_id; _ }; _ } -> (
+            match arg.e with
+            | StructUpdate { struct_id = _; init; updates } -> (
+                (* Simplify projections.
+
+                Check if the field we project is listed in the updates. *)
+                match
+                  List.find_opt (fun (fid, _) -> fid = field_id) updates
+                with
+                | Some (_, field) ->
+                    (* We found the field: simply evaluate to the updated expression *)
+                    field.e
+                | None -> (
+                    (* Could not find the field: there *must* be an init value *)
+                    match init with
+                    | None -> [%internal_error] span
+                    | Some init ->
+                        (* Project directly the init value *)
+                        ([%add_loc] mk_app span f init).e))
+            | App _ -> (
+                let f, args = destruct_apps f in
+                (* Check if this is a call to a constructor *)
+                match f.e with
+                | Qualif { id = AdtCons _; _ } -> (
+                    (* Let's select the proper argument *)
+                    match FieldId.nth_opt args field_id with
+                    | Some e -> e.e
+                    | None -> [%internal_error] span)
+                | _ -> ([%add_loc] mk_app span f arg).e)
+            | _ -> ([%add_loc] mk_app span f arg).e)
+        | _ -> ([%add_loc] mk_app span f arg).e
+    end
+  in
+  map_open_all_fun_decl_body_expr (visitor#visit_texpr ()) def
 
 (** Remark: it might be better to use egraphs *)
 type simp_aggr_env = {
@@ -5030,6 +5114,7 @@ let passes :
     (None, "loops_to_recursive", loops_to_recursive);
     (* Introduce match expressions where let-bindings need to open enumerations *)
     (None, "let_to_match", let_to_match);
+    (None, "flatten_struct_updates", flatten_struct_updates);
     (* Simplify the aggregated ADTs.
 
        Ex.:
