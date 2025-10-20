@@ -30,7 +30,6 @@ package «tests» {}
 @[default_target] lean_lib Loops
 @[default_target] lean_lib LoopsIssues
 @[default_target] lean_lib MiniTree
-@[default_target] lean_lib MutuallyRecursiveTraits
 @[default_target] lean_lib NoNestedBorrows
 @[default_target] lean_lib Options
 @[default_target] lean_lib Order
