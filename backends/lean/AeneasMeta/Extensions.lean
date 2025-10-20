@@ -32,7 +32,7 @@ def mkSetDeclarationExtension (name : Name := by exact decl_name%) :
   IO SetDeclarationExtension :=
   registerSimplePersistentEnvExtension {
     name          := name,
-    addImportedFn := fun a => a.foldl (fun s a => a.foldl (fun s v => s.insert v) s) RBMap.empty,
+    addImportedFn := fun a => a.foldl (fun s a => a.foldl (fun s v => s.insert v) s) NameSet.empty,
     addEntryFn    := fun s n => s.insert n,
     toArrayFn     := fun es => es.toArray.qsort (fun a b => Name.quickLt a b)
   }

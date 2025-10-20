@@ -69,7 +69,6 @@ structure Info where
   /-- The universe levels of the bifurcation -/
   uLevels: List Lean.Level
 
-  /-- -/
   params: Array Expr
   deriving Repr
 
