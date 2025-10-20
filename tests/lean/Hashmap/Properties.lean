@@ -535,11 +535,11 @@ theorem move_elements_from_list_spec
         simp_all [Slots.lookup, Aeneas.Simp.neq_imp]
     . intro key' v hLookup1
       if h: key' = key then
-        fsimp_all
+        simp_all
       else
         have := hLookup12 key' h
         have := hLookup22 key' v
-        fsimp_all
+        simp_all
     . intro key' v hLookup1
       if h: key' = key then
         have := hLookup22 key' v
@@ -644,14 +644,15 @@ private theorem move_one_slot_lookup_equiv {α : Type} (ntable ntable1 ntable2 :
       have := hLookup2 key v
       fsimp_all [Slots.lookup]
       have := hLookup3 key v
-      fsimp_all
+      simp_all
+
     else
       -- We lookup in slots
       have := hLookup4 key v
-      fsimp_all [Slots.lookup]
+      simp_all [Slots.lookup]
   . have := hLookup1 key v
     have := hLookup3 key v
-    fsimp_all
+    simp_all
 
 private theorem slots_lookup_none_imp_slot_lookup_none
   (slots : Slots α) (hInv : slots_t_inv slots) (i : Nat) (hi : i < slots.val.length) :
