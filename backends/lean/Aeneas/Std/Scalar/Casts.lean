@@ -151,7 +151,7 @@ def IScalar.hcast_inBounds_spec {src_ty : IScalarTy}
   y.val = x.val := by
   simp [toResult, hcast, BitVec.signExtend, bv_toInt_eq, ok.injEq, exists_eq_left']
   simp only [IScalar.val, UScalar.val]
-  simp [UScalar.max, bv_toInt_eq, BitVec.toInt_ofInt] at *
+  simp [UScalar.max, bv_toInt_eq] at *
   have : 0 < 2^tgt_ty.numBits := by simp
   have : x.val % 2^tgt_ty.numBits = x.val := by apply Int.emod_eq_of_lt <;> scalar_tac
   simp [this]
@@ -183,14 +183,14 @@ theorem UScalar.cast_fromBool_bound_eq ty (b : Bool) : (UScalar.cast_fromBool ty
 
 @[simp]
 theorem UScalar.cast_fromBool_bv_eq ty (b : Bool) : (UScalar.cast_fromBool ty b).bv = (BitVec.ofBool b).zeroExtend _ := by
-  simp [cast_fromBool, BitVec.setWidth_eq]
+  simp [cast_fromBool]
   cases b <;> simp
   apply @BitVec.toNat_injective ty.numBits
   simp
 
 @[simp]
 theorem IScalar.cast_fromBool_bv_eq ty (b : Bool) :(IScalar.cast_fromBool ty b).bv = (BitVec.ofBool b).zeroExtend _ := by
-  simp [cast_fromBool, BitVec.setWidth_eq]
+  simp [cast_fromBool]
   cases b <;> simp
   apply @BitVec.toNat_injective ty.numBits
   simp
@@ -294,7 +294,7 @@ example : ((U32.ofNat 42).cast .U16).val = 42 := by simp
 theorem IScalar.cast_val_eq {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty) :
   (cast tgt_ty x).val = Int.bmod x.val (2^(Min.min tgt_ty.numBits src_ty.numBits)) := by
   simp only [cast, val]
-  simp only [BitVec.toInt_signExtend, val]
+  simp only [BitVec.toInt_signExtend]
 
 @[simp]
 theorem IScalar.val_mod_pow_greater_numBits {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty) (h : src_ty.numBits ≤ tgt_ty.numBits) :

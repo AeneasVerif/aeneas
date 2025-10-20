@@ -109,11 +109,9 @@ private theorem forIn'_loop_eq_forIn'_MulRange [Monad m] (r : MulRange)
     have : ¬ i < r.stop := by omega
     simp [*]
   . rename_i fuel
-    simp only [forIn'.loop, gt_iff_lt]
+    simp only [forIn'.loop]
     unfold mulRange
-    dcases hStop : i < r.stop <;> simp only [hStop, ↓reduceDIte, ↓reduceIte, List.forIn'_cons,
-      id_eq, Int.reduceNeg, Int.reduceAdd, List.not_mem_nil,
-      IsEmpty.forall_iff, implies_true, List.forIn'_nil]
+    dcases hStop : i < r.stop <;> simp only [hStop, ↓reduceDIte, ↓reduceIte, List.forIn'_cons, List.forIn'_nil]
     apply bind_congr
     intro x
     cases x
@@ -143,7 +141,7 @@ private theorem pow_ineq (r: MulRange) :
 @[simp] theorem forIn_eq_forIn_MulRange [Monad m] (r : MulRange)
     (init : β) (f : Nat → β → m (ForInStep β)) :
     forIn r init f = forIn (mulRange r.stop r.mul r.mul_pos r.start r.start_pos) init f := by
-  simp only [forIn, forIn', MulRange, MulRange.forIn']
+  simp only [forIn, forIn', MulRange.forIn']
   rw [forIn'_loop_eq_forIn'_MulRange]
   . simp
   . apply pow_ineq
@@ -153,7 +151,7 @@ private theorem pow_ineq (r: MulRange) :
     forIn' r init f =
       forIn' (mulRange r.stop r.mul r.mul_pos r.start r.start_pos) init
         (fun a h => f a (mem_of_mem_MulRange r a h)) := by
-  simp only [forIn, forIn', MulRange, MulRange.forIn']
+  simp only [forIn', MulRange.forIn']
   rw [forIn'_loop_eq_forIn'_MulRange]
   . simp
   . apply pow_ineq

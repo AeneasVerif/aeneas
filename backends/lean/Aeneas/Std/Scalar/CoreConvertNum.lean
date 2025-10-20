@@ -612,12 +612,12 @@ iscalar_no_isize def core.num.«%S».from_be_bytes (a : Array I8 (%Size)#usize) 
 uscalar_no_usize @[progress]
 theorem core.num.«%S».to_le_bytes.progress_spec (x : «%S») :
   ∃ y, toResult (core.num.«%S».to_le_bytes x) = ok y ∧ y.val = x.bv.toLEBytes.map (@UScalar.mk UScalarTy.U8) := by
-  simp only [id_eq, toResult, to_le_bytes, UScalarTy.U8_numBits_eq, ok.injEq, exists_eq_left']
+  simp only [toResult, to_le_bytes, UScalarTy.U8_numBits_eq, ok.injEq, exists_eq_left']
 
 iscalar_no_isize @[progress]
 theorem core.num.«%S».to_le_bytes.progress_spec (x : «%S») :
   ∃ y, toResult (core.num.«%S».to_le_bytes x) = ok y ∧ y.val = x.bv.toLEBytes.map (@IScalar.mk IScalarTy.I8) := by
-  simp only [id_eq, toResult, to_le_bytes, IScalarTy.I8_numBits_eq, ok.injEq, exists_eq_left']
+  simp only [toResult, to_le_bytes, IScalarTy.I8_numBits_eq, ok.injEq, exists_eq_left']
 
 /-!
 # Progress theorems: From Little-Endian
@@ -625,12 +625,12 @@ theorem core.num.«%S».to_le_bytes.progress_spec (x : «%S») :
 uscalar_no_usize @[progress]
 theorem core.num.«%S».from_le_bytes.progress_spec (x : Array U8 (%Size)#usize) :
   ∃ y, toResult (core.num.«%S».from_le_bytes x) = ok y ∧ y.bv = (BitVec.fromLEBytes (x.val.map U8.bv)).cast (by simp) := by
-  simp only [toResult, from_le_bytes, UScalarTy.U8_numBits_eq, ok.injEq, id_eq, exists_eq_left']
+  simp only [toResult, from_le_bytes, ok.injEq, exists_eq_left']
 
 iscalar_no_isize @[progress]
 theorem core.num.«%S».from_le_bytes.progress_spec (x : Array I8 (%Size)#usize) :
   ∃ y, toResult (core.num.«%S».from_le_bytes x) = ok y ∧ y.bv = (BitVec.fromLEBytes (x.val.map I8.bv)).cast (by simp) := by
-  simp only [toResult, from_le_bytes, IScalarTy.I8_numBits_eq, ok.injEq, id_eq, exists_eq_left']
+  simp only [toResult, from_le_bytes, ok.injEq, exists_eq_left']
 
 end Std
 

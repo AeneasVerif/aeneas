@@ -170,7 +170,7 @@ theorem foldWhile_shift_start {α : Type u} (max step : Nat) (hStep : 0 < step) 
     . have := foldWhile_shift_start max step hStep f (start + step) (f init start)
       simp only [this]
       have := foldWhile_shift_start (max - start) step hStep (fun x i => f x (i + start)) step (f init start)
-      simp only [Nat.zero_add, this]
+      simp only [this]
       have : max - (start + step) = max - start - step := by omega
       rw [this]; clear this
       have hi i : i + step + start = i + (start + step) := by omega

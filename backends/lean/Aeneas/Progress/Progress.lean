@@ -879,59 +879,59 @@ info: example
     (hmax : x.val + y.val ≤ UScalar.max ty) :
     ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
     progress keep _ as ⟨ z, h1 ⟩
-    simp [*, h1]
+    simp [*]
 
   example {ty} {x y : IScalar ty}
     (hmin : IScalar.min ty ≤ x.val + y.val)
     (hmax : x.val + y.val ≤ IScalar.max ty) :
     ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
     progress keep _ as ⟨ z, h1 ⟩
-    simp [*, h1]
+    simp [*]
 
   example {ty} {x y : UScalar ty}
     (hmax : x.val + y.val ≤ UScalar.max ty) :
     ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
     progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with UScalar.add_spec as ⟨ z, h1 ⟩
-    simp [*, h1]
+    simp [*]
 
   example {ty} {x y : IScalar ty}
     (hmin : IScalar.min ty ≤ x.val + y.val)
     (hmax : x.val + y.val ≤ IScalar.max ty) :
     ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
     progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with IScalar.add_spec as ⟨ z, h1 ⟩
-    simp [*, h1]
+    simp [*]
 
   example {ty} {x y : UScalar ty}
     (hmax : x.val + y.val ≤ UScalar.max ty) :
     ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
     progress keep h with UScalar.add_spec as ⟨ z ⟩
-    simp [*, h]
+    simp [*]
 
   example {ty} {x y : IScalar ty}
     (hmin : IScalar.min ty ≤ x.val + y.val)
     (hmax : x.val + y.val ≤ IScalar.max ty) :
     ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
     progress keep h with IScalar.add_spec as ⟨ z ⟩
-    simp [*, h]
+    simp [*]
 
   example {x y : U32}
     (hmax : x.val + y.val ≤ U32.max) :
     ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
     -- This spec theorem is suboptimal, but it is good to check that it works
     progress with UScalar.add_spec as ⟨ z, h1 ⟩
-    simp [*, h1]
+    simp [*]
 
   example {x y : U32}
     (hmax : x.val + y.val ≤ U32.max) :
     ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
     progress with U32.add_spec as ⟨ z, h1 ⟩
-    simp [*, h1]
+    simp [*]
 
   example {x y : U32}
     (hmax : x.val + y.val ≤ U32.max) :
     ∃ z, x + y = ok z ∧ z.val = x.val + y.val := by
     progress keep _ as ⟨ z, h1 ⟩
-    simp [*, h1]
+    simp [*]
 
   /- Checking that universe instantiation works: the original spec uses
      `α : Type u` where u is quantified, while here we use `α : Type 0` -/
@@ -983,7 +983,7 @@ info: example
     False ∨ (∃ z, x + y = ok z ∧ z.val = x.val + y.val) := by
     right
     progress keep _ as ⟨ z, h1 ⟩
-    simp [*, h1]
+    simp [*]
 
   example {ty} {x y : IScalar ty}
     (hmin : IScalar.min ty ≤ x.val + y.val)
@@ -991,7 +991,7 @@ info: example
     False ∨ (∃ z, x + y = ok z ∧ z.val = x.val + y.val) := by
     right
     progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with IScalar.add_spec as ⟨ z, h1 ⟩
-    simp [*, h1]
+    simp [*]
 
   /--
 error: unsolved goals

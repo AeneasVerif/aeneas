@@ -72,7 +72,7 @@ theorem IScalar.bv_signExtend (x : IScalar ty) : x.bv.signExtend ty.numBits = x.
 
 @[simp, simp_scalar_simps, bvify_simps]
 theorem UScalar.cast_bv (x : UScalar ty) : (UScalar.cast tgt x).bv = x.bv.setWidth tgt.numBits := by
-  simp [cast]
+  simp
 
 theorem BitVec.lt_pow_ofNat_le {n : Nat} (a b : Nat) (h0 : b < 2^n) (h1 : a ≤ b) :
   BitVec.ofNat n a ≤ BitVec.ofNat n b := by
@@ -197,7 +197,7 @@ theorem BitVec.ofNat_sub' (n a b : Nat) (h : b ≤ a) :
 @[bvify_simps]
 theorem BitVec.ofNat_mul (n a b : Nat) :
   BitVec.ofNat n (a * b) = BitVec.ofNat n a * BitVec.ofNat n b := by
-  simp [BitVec.toNat_eq]
+  simp
 
 @[bvify_simps]
 theorem BitVec.ofNat_div (n a b : Nat)

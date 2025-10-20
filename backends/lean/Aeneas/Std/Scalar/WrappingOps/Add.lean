@@ -42,7 +42,7 @@ iscalar @[simp, bvify_simps] theorem «%S».wrapping_add_bv_eq (x y : «%S») :
   simp only [wrapping_add, val, size]
   have : 0 < 2^ty.numBits := by simp
   have : 2 ^ ty.numBits - 1 + 1 = 2^ty.numBits := by omega
-  simp [this]
+  simp []
 
 uscalar @[simp] theorem «%S».wrapping_add_val_eq (x y : «%S») :
   (core.num.«%S».wrapping_add x y).val = (x.val + y.val) % (UScalar.size .«%S») :=

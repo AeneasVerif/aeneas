@@ -68,16 +68,16 @@ theorem BitVec.getElem_set {n} {bv: BitVec n} {b: Bool} {i: Fin n} {j: Nat}
   split
   case isTrue h =>
     subst h
-    simp [Nat.testBit, BitVec.getLsbD]
-    cases bv[i] <;> cases b <;> simp [n_pos]
+    simp []
+    cases bv[i] <;> cases b <;> simp []
   case isFalse =>
     simp
     if h: j < i then
       simp [h]
     else
       have: j > i := by omega
-      simp [this, h]
-      cases bv[i] <;> cases b <;> simp [n_pos, (by simp; omega: decide (j - i = 0) = false)]
+      simp [h]
+      cases bv[i] <;> cases b <;> simp [(by simp; omega: decide (j - i = 0) = false)]
 
 @[simp] theorem BitVec.cast_set {n m} (h: n = m) (bv: BitVec n) (i: Nat) (b: Bool) (i_idx: i < n)
 : (bv.set ⟨i, i_idx⟩ b).cast h = (bv.cast h).set ⟨i, h ▸ i_idx⟩ b
@@ -213,7 +213,7 @@ theorem BitVec.and_two_pow_sub_one_eq_mod {w} (x : BitVec w) (n : Nat) :
         rw [this, Nat.pow_add]
         simp only [Nat.mul_mod_right]
       simp only [this]
-      simp only [Fin.mk_zero', BitVec.ofNat_eq_ofNat, BitVec.ofNat, Fin.ofNat_eq_cast, Nat.cast_zero]
+      simp only [Fin.mk_zero', BitVec.ofNat_eq_ofNat, BitVec.ofNat, Fin.ofNat_eq_cast]
       rfl
     rw [this]
     simp only [ofNat_eq_ofNat, BitVec.zero_sub, umod_zero]
@@ -262,7 +262,7 @@ theorem BitVec.getElem!_shiftLeft_false {w} (v : BitVec w) (n i : ℕ) (h : i < 
 theorem BitVec.getElem!_shiftLeft_eq {w} (v : BitVec w) (n i : ℕ) (h : n ≤ i ∧ i < w) :
   (v <<< n)[i]! = v[i - n]! := by
   simp only [getElem!_eq_testBit_toNat, toNat_shiftLeft, Nat.testBit_mod_two_pow, h, decide_true,
-    Nat.testBit_shiftLeft, ge_iff_le, Bool.true_and]
+    Nat.testBit_shiftLeft, Bool.true_and]
 
 @[simp, simp_lists_simps]
 theorem BitVec.getElem!_shiftRight {w} (v : BitVec w) (n i : ℕ) :
@@ -302,7 +302,7 @@ theorem BitVec.getElem!_mod_pow2_eq {w} (x : BitVec w) (i j : ℕ) (h : j < i) :
 @[simp, simp_lists_simps]
 theorem BitVec.getElem!_mod_pow2_false {w} (x : BitVec w) (i j : ℕ) (h : i ≤ j) :
   (x % 2#w ^ i)[j]! = false := by
-  simp [BitVec.getElem!_eq_testBit_toNat, h]
+  simp [BitVec.getElem!_eq_testBit_toNat]
   have : x.toNat < 2^w := by omega
   by_cases hw: w ≤ 1
   . have hw : w = 0 ∨ w = 1 := by omega
@@ -396,7 +396,7 @@ theorem BitVec.toLEBytes_length {w} (v : BitVec w) (h : w % 8 = 0) :
     . have : w ≥ 8 := by omega
       have : w = (w  - 8) + 8 := by omega
       conv => rhs; rw [this]
-      simp only [Nat.ofNat_pos, Nat.add_div_right, Nat.add_left_inj]
+      simp only [Nat.ofNat_pos, Nat.add_div_right]
     . omega
 
 @[simp, simp_lists_simps]
@@ -480,7 +480,7 @@ theorem BitVec.fromLEBytes_toLEBytes {w : ℕ} (h : w % 8 = 0) (b : BitVec w) :
   BitVec.fromLEBytes b.toLEBytes = BitVec.cast (by simp only [toLEBytes_length, Nat.dvd_iff_mod_eq_zero, Nat.mul_div_cancel', h]) b := by
   simp only [eq_iff, fromLEBytes_getElem!, getElem!_cast]
   simp_lists
-  simp only [toLEBytes_length, Nat.dvd_iff_mod_eq_zero, Nat.mul_div_cancel', h]
+  simp only [Nat.dvd_iff_mod_eq_zero, Nat.mul_div_cancel', h]
   simp only [Nat.div_add_mod, implies_true]
 
 @[simp]

@@ -42,7 +42,7 @@ iscalar @[simp, bvify_simps] theorem «%S».wrapping_sub_bv_eq (x y : «%S») :
   simp only [wrapping_sub, val, size]
   have : 0 < 2^ty.numBits := by simp
   have : 2 ^ ty.numBits - 1 + 1 = 2^ty.numBits := by omega
-  simp [this]
+  simp []
   ring_nf
 
 uscalar @[simp] theorem «%S».wrapping_sub_val_eq (x y : «%S») :

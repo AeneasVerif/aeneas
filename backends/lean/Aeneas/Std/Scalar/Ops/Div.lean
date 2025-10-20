@@ -85,7 +85,7 @@ theorem UScalar.div_bv_spec {ty} (x : UScalar ty) {y : UScalar ty}
     zify at h
     simp_all
   conv => congr; ext; lhs; simp [HDiv.hDiv]
-  simp [hzero', div, tryMk, tryMkOpt, ofOption, hmax, ofNatCore]
+  simp [hzero', div]
   simp only [val]
   simp
 
