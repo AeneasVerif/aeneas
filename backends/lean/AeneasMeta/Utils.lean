@@ -925,9 +925,25 @@ def normCastAt (loc : Location) : TacticM (Option (Array (FVarId))) := do
     else
       throwError msg
 
+/-- Since Lean 4.22, non-dependent let expressions are automatically rewritten
+    into have expressions. However, Lean.Meta.zetaReduce does not reduce have
+    expressions, therefore hindering the let-binding normalization step below.
+    This function is a reimplementation of Lean's zetaReduce, with the addition of
+    `allowNondep := true`, which permits reduction of have expressions.
+    https://github.com/leanprover/lean4/issues/10850 tracks this issue,
+    and this function should be removed if it is upstreamed in more recent versions.
+-/
+def zetaHaveReduce (e : Expr) : MetaM Expr := do
+  let pre (e : Expr) : MetaM TransformStep := do
+    let .fvar fvarId := e | return .continue
+    let some localDecl := (← getLCtx).find? fvarId | return .done e
+    let some value := localDecl.value? (allowNondep := true) | return .done e
+    return .visit (← instantiateMVars value)
+  transform e (pre := pre) (usedLetOnly := true)
+
 /-- Normalize the let-bindings by inlining them -/
 def normalizeLetBindings (e : Expr) : MetaM Expr :=
-  zetaReduce e
+  zetaHaveReduce e
 
 section
   variable [Monad m] [MonadOptions m] [MonadTrace m] [MonadLiftT IO m] [AddMessageContext m] [MonadError m]
