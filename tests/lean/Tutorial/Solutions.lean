@@ -391,6 +391,9 @@ theorem add_with_carry_loop_spec
         option, which allows it to make a case disjunction over
         the `if then else` appearing in the context.
        -/
+      -- scalar_tac_preprocess +split
+
+
       scalar_tac +split
     progress as ⟨ c4, x1, _, _, hc4 ⟩
     -- Proving the post-condition
@@ -422,7 +425,7 @@ theorem add_with_carry_loop_spec
         simp [hConv2', hConv1]
         simp [*, U32.size_eq]
         scalar_eq_nf
-      . simp [*, U32.size_eq]
+      . simp [*]
         scalar_eq_nf
   . simp_all
     scalar_tac
