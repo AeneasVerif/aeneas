@@ -32,19 +32,19 @@ def traceGoalWithNode (msg : String) : TacticM Unit := Utils.traceGoalWithNode `
 -- tactic. We should find a way of controling reduction. For now we use rewriting
 -- lemmas to make sure the goal remains clean, but this complexifies proof terms.
 -- It seems there used to be a `fold` tactic. Update: there is a `refold_let` in Mathlib
-theorem uscalar_u8_eq    : Std.UScalar .U8 = Std.U8 := by rfl
-theorem uscalar_u16_eq   : Std.UScalar .U16 = Std.U16 := by rfl
-theorem uscalar_u32_eq   : Std.UScalar .U32 = Std.U32 := by rfl
-theorem uscalar_u64_eq   : Std.UScalar .U64 = Std.U64 := by rfl
-theorem uscalar_u128_eq  : Std.UScalar .U128 = Std.U128 := by rfl
-theorem uscalar_usize_eq : Std.UScalar .Usize = Std.Usize := by rfl
+@[defeq] theorem uscalar_u8_eq    : Std.UScalar .U8 = Std.U8 := by rfl
+@[defeq] theorem uscalar_u16_eq   : Std.UScalar .U16 = Std.U16 := by rfl
+@[defeq] theorem uscalar_u32_eq   : Std.UScalar .U32 = Std.U32 := by rfl
+@[defeq] theorem uscalar_u64_eq   : Std.UScalar .U64 = Std.U64 := by rfl
+@[defeq] theorem uscalar_u128_eq  : Std.UScalar .U128 = Std.U128 := by rfl
+@[defeq] theorem uscalar_usize_eq : Std.UScalar .Usize = Std.Usize := by rfl
 
-theorem iscalar_i8_eq    : Std.IScalar .I8 = Std.I8 := by rfl
-theorem iscalar_i16_eq   : Std.IScalar .I16 = Std.I16 := by rfl
-theorem iscalar_i32_eq   : Std.IScalar .I32 = Std.I32 := by rfl
-theorem iscalar_i64_eq   : Std.IScalar .I64 = Std.I64 := by rfl
-theorem iscalar_i128_eq  : Std.IScalar .I128 = Std.I128 := by rfl
-theorem iscalar_isize_eq : Std.IScalar .Isize = Std.Isize := by rfl
+@[defeq] theorem iscalar_i8_eq    : Std.IScalar .I8 = Std.I8 := by rfl
+@[defeq] theorem iscalar_i16_eq   : Std.IScalar .I16 = Std.I16 := by rfl
+@[defeq] theorem iscalar_i32_eq   : Std.IScalar .I32 = Std.I32 := by rfl
+@[defeq] theorem iscalar_i64_eq   : Std.IScalar .I64 = Std.I64 := by rfl
+@[defeq] theorem iscalar_i128_eq  : Std.IScalar .I128 = Std.I128 := by rfl
+@[defeq] theorem iscalar_isize_eq : Std.IScalar .Isize = Std.Isize := by rfl
 def scalar_eqs := #[
   ``uscalar_usize_eq, ``uscalar_u8_eq, ``uscalar_u16_eq, ``uscalar_u32_eq, ``uscalar_u64_eq, ``uscalar_u128_eq,
   ``iscalar_isize_eq, ``iscalar_i8_eq, ``iscalar_i16_eq, ``iscalar_i32_eq, ``iscalar_i64_eq, ``iscalar_i128_eq
