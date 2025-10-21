@@ -2313,6 +2313,20 @@ type decomposed_loop_result = {
   break_ty : ty;
 }
 
+(** Attempt to destruct a [LoopResult::Continue], [LoopResult::Break] or
+    [LoopResult::Panic] expression, by decomposing its arguments.
+
+    In case we find [Continue] or [Break] we analyze the argument, which should
+    have the type tuple, and decompose it. This helper is required by the
+    micro-passes to always be able to decompose the tuple argument into its
+    sub-elements. If the tuple expression is not actually a tuple (for instance,
+    it is a call to a function evaluating to a tuple), we decompose the
+    expression by either introducing an intermediate let-binding (if [intro_let]
+    is [true]) or by duplicating the expression and projecting it (e.g.,
+    [f x ~> ((f x).0, (f x).1)]).
+
+    The returned continuation allows reconstructing the decomposition, in case
+    we introduced a let-binding. *)
 let opt_destruct_loop_result_decompose_outputs span ~(intro_let : bool)
     (e : texpr) : (decomposed_loop_result * (texpr -> texpr)) option =
   let f, args = destruct_apps e in
