@@ -6098,14 +6098,6 @@ let apply_passes_to_pure_fun_translations (trans_ctx : trans_ctx)
   in
   let transl = List.map apply transl in
 
-  (* Filter the useless inputs in the loop functions (loops are initially
-     parameterized by *all* the symbolic values in the context, because
-     they may access any of them).
-
-     TODO: move
-  *)
-  (*let transl = filter_loop_inputs ctx transl in*)
-
   (* Introduce the fuel and the state, if necessary.
 
      We do this last, because some other passes need to manipulate the
