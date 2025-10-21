@@ -666,8 +666,12 @@ let opt_destruct_tuple_texpr (span : Meta.span) (e : texpr) : texpr list option
   | TAdt (TTuple, generics) ->
       [%sanity_check] span (generics.const_generics = []);
       [%sanity_check] span (generics.trait_refs = []);
-      let fields = snd (destruct_apps e) in
-      [%sanity_check] span (List.length generics.types = List.length fields);
+      let cons, fields = destruct_apps e in
+      [%sanity_check] span
+        (match cons.e with
+        | Qualif { id = AdtCons { adt_id = TTuple; _ }; _ } ->
+            List.length generics.types = List.length fields
+        | _ -> true);
       Some fields
   | _ -> None
 
@@ -675,6 +679,11 @@ let try_destruct_tuple_texpr span e =
   match opt_destruct_tuple_texpr span e with
   | None -> [ e ]
   | Some fields -> fields
+
+let try_destruct_tuple span ty =
+  match opt_destruct_tuple span ty with
+  | None -> [ ty ]
+  | Some tys -> tys
 
 let opt_destruct_tuple_tpattern (span : Meta.span) (e : tpattern) :
     tpattern list option =
@@ -1117,16 +1126,19 @@ let close_tpattern (span : Meta.span) (pat : tpattern) :
     We use this when handling function bodies: the list of type patterns is the
     list of input variables, that we treat as a single binder group. *)
 let open_binders (span : Meta.span) (patl : tpattern list) (e : texpr) :
-    tpattern list * texpr =
+    fvar FVarId.Map.t * tpattern list * texpr =
   (* We start by introducing the free variables in the pattern *)
   (* The map from bound var ids to freshly introduced fvar ids *)
   let m = ref BVarId.Map.empty in
+  let fvars : fvar FVarId.Map.t ref = ref FVarId.Map.empty in
   (* We need to count the bound vars *)
   let _, fresh_bvar_id = BVarId.fresh_stateful_generator () in
-  let fresh_fvar_id (_ : var) =
+  let fresh_fvar_id (v : var) =
     let bid = fresh_bvar_id () in
     let fid = fresh_fvar_id () in
     m := BVarId.Map.add bid fid !m;
+    fvars :=
+      FVarId.Map.add fid { id = fid; ty = v.ty; basename = v.basename } !fvars;
     fid
   in
   let patl = List.map (open_tpattern span fresh_fvar_id) patl in
@@ -1140,16 +1152,16 @@ let open_binders (span : Meta.span) (patl : tpattern list) (e : texpr) :
     end
   in
   let e = visitor#visit_texpr 0 e in
-  (patl, e)
+  (!fvars, patl, e)
 
 (** Open a binder in an expression.
 
     Return the opened binder (where the bound variables have been replaced with
     fresh free variables).*)
 let open_binder (span : Meta.span) (pat : tpattern) (e : texpr) :
-    tpattern * texpr =
-  let patl, e = open_binders span [ pat ] e in
-  (List.hd patl, e)
+    fvar FVarId.Map.t * tpattern * texpr =
+  let fvars, patl, e = open_binders span [ pat ] e in
+  (fvars, List.hd patl, e)
 
 (** Helper visitor to close a binder group.
 
@@ -1206,11 +1218,12 @@ let close_binder (span : Meta.span) (pat : tpattern) (e : texpr) :
 
     We introduce free variables for the variables bound in the lets while doing
     so. *)
-let rec open_lets span (e : texpr) : (bool * tpattern * texpr) list * texpr =
+let rec open_lets span ?(fresh_fvars : FVarId.Set.t ref option = None)
+    (e : texpr) : (bool * tpattern * texpr) list * texpr =
   match e.e with
   | Let (monadic, lv, re, next_e) ->
-      let lv, next_e = open_binder span lv next_e in
-      let lets, last_e = open_lets span next_e in
+      let _, lv, next_e = open_binder span lv next_e in
+      let lets, last_e = open_lets ~fresh_fvars span next_e in
       ((monadic, lv, re) :: lets, last_e)
   | _ -> ([], e)
 
@@ -1383,13 +1396,16 @@ let mk_opened_lambdas_from_fvars span (vars : fvar list)
 
     We introduce free variables for the variables bound in the lambdas while
     doing so. *)
-let rec open_lambdas span (e : texpr) : tpattern list * texpr =
+let rec open_lambdas span (e : texpr) :
+    fvar FVarId.Map.t * tpattern list * texpr =
   match e.e with
   | Lambda (pat, e) ->
-      let pat, e = open_binder span pat e in
-      let pats, e = open_lambdas span e in
-      (pat :: pats, e)
-  | _ -> ([], e)
+      let fvars, pat, e = open_binder span pat e in
+      let fvars', pats, e = open_lambdas span e in
+      ( FVarId.Map.union (fun _ _ _ -> [%internal_error] span) fvars fvars',
+        pat :: pats,
+        e )
+  | _ -> (FVarId.Map.empty, [], e)
 
 (** Destruct lambdas without introducing free variables
 
@@ -1679,7 +1695,8 @@ let mk_opened_checked_let file line span (monadic : bool) (lv : tpattern)
   mk_opened_let monadic lv re next_e
 
 (** This helper opens the binder *)
-let open_branch span (branch : match_branch) : tpattern * texpr =
+let open_branch span (branch : match_branch) :
+    fvar FVarId.Map.t * tpattern * texpr =
   let { pat; branch } = branch in
   open_binder span pat branch
 
@@ -1990,14 +2007,11 @@ let open_all_visitor (span : Meta.span) =
 let open_all_texpr (span : Meta.span) (e : texpr) : texpr =
   (open_all_visitor span)#visit_texpr (ref empty_open_all_env) e
 
-let open_all_fun_body_get_fvars (span : Meta.span) (fbody : fun_body) :
+let open_all_fun_body (span : Meta.span) (fbody : fun_body) :
     fvar FVarId.Map.t * fun_body =
   let env = ref empty_open_all_env in
   let fbody = (open_all_visitor span)#visit_fun_body env fbody in
   (!env.fvars, fbody)
-
-let open_all_fun_body (span : Meta.span) (fbody : fun_body) : fun_body =
-  snd (open_all_fun_body_get_fvars span fbody)
 
 type close_all_env = {
   fenv : bvar FVarId.Map.t;
@@ -2088,20 +2102,22 @@ let close_all_texpr (span : Meta.span) (e : texpr) : texpr =
 let close_all_fun_body (span : Meta.span) (fbody : fun_body) : fun_body =
   (close_all_visitor span)#visit_fun_body (ref empty_close_all_env) fbody
 
-let open_fun_body (span : Meta.span) (fbody : fun_body) : fun_body =
+let open_fun_body (span : Meta.span) (fbody : fun_body) :
+    fvar FVarId.Map.t * fun_body =
   let { inputs; body } = fbody in
-  let inputs, body = open_binders span inputs body in
-  { inputs; body }
+  let fvars, inputs, body = open_binders span inputs body in
+  (fvars, { inputs; body })
 
 let close_fun_body (span : Meta.span) (fbody : fun_body) : fun_body =
   let { inputs; body } = fbody in
   let inputs, body = close_binders span inputs body in
   { inputs; body }
 
-let open_loop_body (span : Meta.span) (body : loop_body) : loop_body =
+let open_loop_body (span : Meta.span) (body : loop_body) :
+    fvar FVarId.Map.t * loop_body =
   let { inputs; loop_body } = body in
-  let inputs, loop_body = open_binders span inputs loop_body in
-  { inputs; loop_body }
+  let fvars, inputs, loop_body = open_binders span inputs loop_body in
+  (fvars, { inputs; loop_body })
 
 let close_loop_body (span : Meta.span) (body : loop_body) : loop_body =
   let { inputs; loop_body } = body in
@@ -2114,7 +2130,7 @@ let open_close_all_fun_body (span : Meta.span) (f : fun_body -> fun_body)
     (fbody : fun_body) : fun_body =
   if !Config.sanity_checks then
     [%sanity_check] span (not (texpr_has_fvars fbody.body));
-  let fbody = open_all_fun_body span fbody in
+  let _, fbody = open_all_fun_body span fbody in
   if !Config.sanity_checks then
     [%sanity_check] span (not (texpr_has_bvars fbody.body));
   let fbody = f fbody in
@@ -2297,7 +2313,8 @@ type decomposed_loop_result = {
   break_ty : ty;
 }
 
-let opt_destruct_loop_result span (e : texpr) : decomposed_loop_result option =
+let opt_destruct_loop_result_decompose_outputs span ~(intro_let : bool)
+    (e : texpr) : (decomposed_loop_result * (texpr -> texpr)) option =
   let f, args = destruct_apps e in
   match f.e with
   | Qualif
@@ -2319,16 +2336,74 @@ let opt_destruct_loop_result span (e : texpr) : decomposed_loop_result option =
           -> (continue, break)
         | _ -> [%internal_error] span
       in
+
+      (* Attempt to destruct a tuple. If the type is a tuple but the expression
+         is not a tuple constructor applied to some fields (for instance, it is
+         a function call), introduce an intermediate let-binding to deconstruct
+         the tuple. *)
+      let destruct_rebind_tuple (span : Meta.span) (e : texpr) :
+          texpr list * texpr * (texpr -> texpr) =
+        match e.ty with
+        | TAdt (TTuple, generics) -> (
+            [%sanity_check] span (generics.const_generics = []);
+            [%sanity_check] span (generics.trait_refs = []);
+            let cons, fields = destruct_apps e in
+            match cons.e with
+            | Qualif { id = AdtCons { adt_id = TTuple; _ }; _ } ->
+                [%sanity_check] span
+                  (List.length generics.types = List.length fields);
+                (fields, e, fun x -> x)
+            | _ ->
+                (* We need to decompose the tuple. Either we introduce projectors
+                   (this duplicates the expression) or we introduce an intermediate
+                   let-bindings *)
+                if intro_let then
+                  let fvars = List.map mk_fresh_fvar generics.types in
+                  let pat =
+                    mk_simpl_tuple_pattern
+                      (List.map (mk_tpattern_from_fvar None) fvars)
+                  in
+                  let fields = List.map mk_texpr_from_fvar fvars in
+                  let tuple = mk_simpl_tuple_texpr span fields in
+                  let mk_bind e' = mk_closed_let span false pat e e' in
+                  (fields, tuple, mk_bind)
+                else
+                  let fields =
+                    FieldId.mapi
+                      (fun field_id ty ->
+                        let proj =
+                          let ty = mk_arrow e.ty ty in
+                          let e =
+                            Qualif
+                              {
+                                id = Proj { adt_id = TTuple; field_id };
+                                generics;
+                              }
+                          in
+                          ({ e; ty } : texpr)
+                        in
+                        [%add_loc] mk_app span proj e)
+                      generics.types
+                  in
+                  (fields, e, fun e -> e))
+        | _ -> ([ e ], e, fun e -> e)
+      in
+
       if variant_id = loop_result_break_id then
-        (* The argument should be a tuple *)
-        let outputs = try_destruct_tuple_texpr span arg in
-        Some { variant_id; args = outputs; arg; continue_ty; break_ty }
+        (* The argument should be a tuple, but may be a function call *)
+        let outputs, arg, mk_bind = destruct_rebind_tuple span arg in
+        Some
+          ({ variant_id; args = outputs; arg; continue_ty; break_ty }, mk_bind)
       else if variant_id = loop_result_continue_id then
         (* We leave the expression unchanged but have to modify its type *)
         (* The argument should be a tuple *)
-        let outputs = try_destruct_tuple_texpr span arg in
-        Some { variant_id; args = outputs; arg; continue_ty; break_ty }
-      else Some { variant_id; args = [ arg ]; arg; continue_ty; break_ty }
+        let outputs, arg, mk_bind = destruct_rebind_tuple span arg in
+        Some
+          ({ variant_id; args = outputs; arg; continue_ty; break_ty }, mk_bind)
+      else
+        Some
+          ( { variant_id; args = [ arg ]; arg; continue_ty; break_ty },
+            fun e -> e )
   | _ -> None
 
 type decomposed_rec_loop_call = {

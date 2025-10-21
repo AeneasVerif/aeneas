@@ -1018,8 +1018,8 @@ and fun_or_op_id =
 (** An identifier for an ADT constructor *)
 and adt_cons_id = { adt_id : type_id; variant_id : variant_id option }
 
-(** Projection - For now we don't support projection of tuple fields (because
-    not all the backends have syntax for this). *)
+(** Projection - Note that generally speaking we avoid using projections of
+    tuple fields (because not all backends support it). *)
 and projection = { adt_id : type_id; field_id : field_id }
 
 and qualif_id =

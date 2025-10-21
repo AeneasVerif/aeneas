@@ -1591,7 +1591,10 @@ let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
   let def =
     {
       def with
-      body = Option.map (open_all_fun_body def.item_meta.span) def.body;
+      body =
+        Option.map
+          (fun b -> snd (open_all_fun_body def.item_meta.span b))
+          def.body;
     }
   in
   (* Add a break before *)
@@ -1666,7 +1669,10 @@ let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
   let def =
     {
       def with
-      body = Option.map (open_all_fun_body def.item_meta.span) def.body;
+      body =
+        Option.map
+          (fun b -> snd (open_all_fun_body def.item_meta.span b))
+          def.body;
     }
   in
   (* Retrieve the function name *)
@@ -1805,7 +1811,10 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   let def =
     {
       def with
-      body = Option.map (open_all_fun_body def.item_meta.span) def.body;
+      body =
+        Option.map
+          (fun b -> snd (open_all_fun_body def.item_meta.span b))
+          def.body;
     }
   in
   let span = def.item_meta.span in
@@ -2084,7 +2093,10 @@ let extract_fun_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
   let def =
     {
       def with
-      body = Option.map (open_all_fun_body def.item_meta.span) def.body;
+      body =
+        Option.map
+          (fun b -> snd (open_all_fun_body def.item_meta.span b))
+          def.body;
     }
   in
   [%cassert] def.item_meta.span
@@ -2306,7 +2318,10 @@ let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
   let body =
     {
       body with
-      body = Option.map (open_all_fun_body body.item_meta.span) body.body;
+      body =
+        Option.map
+          (fun b -> snd (open_all_fun_body body.item_meta.span b))
+          body.body;
     }
   in
   (* Add a break then the name of the corresponding LLBC declaration *)

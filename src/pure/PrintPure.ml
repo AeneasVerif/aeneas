@@ -499,9 +499,7 @@ let adt_variant_to_string ?(span = None) (env : fmt_env) (adt_id : type_id)
 let adt_field_to_string ?(span = None) (env : fmt_env) (adt_id : type_id)
     (field_id : FieldId.id) : string =
   match adt_id with
-  | TTuple ->
-      [%craise_opt_span] span "Unreachable"
-      (* Tuples don't use the opaque field id for the field indices, but [int] *)
+  | TTuple -> FieldId.to_string field_id
   | TAdtId def_id -> (
       (* "Regular" ADT *)
       let fields = adt_field_names env def_id None in
