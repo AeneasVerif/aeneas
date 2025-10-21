@@ -68,15 +68,16 @@ theorem BitVec.getElem_set {n} {bv: BitVec n} {b: Bool} {i: Fin n} {j: Nat}
   split
   case isTrue h =>
     subst h
-    simp []
-    cases bv[i] <;> cases b <;> simp []
+    simp only [Fin.getElem_fin, natCast_eq_ofNat, getElem_xor, getElem_shiftLeft, lt_self_iff_false,
+      decide_false, Bool.not_false, tsub_self, Bool.true_and]
+    cases bv[i] <;> cases b <;> simp
   case isFalse =>
     simp
     if h: j < i then
-      simp [h]
+      simp only [h, decide_true, Bool.not_true, Bool.false_and, Bool.bne_false]
     else
       have: j > i := by omega
-      simp [h]
+      simp only [h, decide_false, Bool.not_false, Bool.true_and]
       cases bv[i] <;> cases b <;> simp [(by simp; omega: decide (j - i = 0) = false)]
 
 @[simp] theorem BitVec.cast_set {n m} (h: n = m) (bv: BitVec n) (i: Nat) (b: Bool) (i_idx: i < n)
