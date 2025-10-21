@@ -288,7 +288,7 @@ theorem length_flatten_set_eq {α : Type u} (ls : List (List α)) (i : Nat) (x :
   (h1 : i < ls.length) :
   (ls.set i x).flatten.length + (ls[i]!).length = ls.flatten.length + x.length := by
   revert i
-  induction ls <;> intro i <;> simp_all []
+  induction ls <;> intro i <;> simp_all
   cases i <;> simp_all
   . scalar_tac
   . rename Nat => i
