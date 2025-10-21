@@ -21,6 +21,10 @@ let loop_body_to_string (ctx : ctx) (x : loop_body) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.loop_body_to_string fmt "" "  " x
 
+let loop_to_string (ctx : ctx) (x : loop) : string =
+  let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
+  PrintPure.loop_to_string fmt "" "  " x
+
 let fun_id_to_string (ctx : ctx) (fid : fun_id) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.regular_fun_id_to_string fmt fid
@@ -3919,14 +3923,22 @@ let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
   in
   { def with body }
 
-type loop_rel = { inputs : texpr list list; outputs : texpr list list }
+type loop_rel = {
+  inputs : texpr list list;
+  outputs : texpr list list;
+  used_fvars : FVarId.Set.t;
+      (** The set of fvars which are actually used by the loop (not simply
+          transmitted to the continues *)
+}
 
 let loop_rel_to_string (ctx : ctx) (rel : loop_rel) : string =
-  let { inputs; outputs } = rel in
+  let { inputs; outputs; used_fvars } = rel in
   "{\n  inputs = "
   ^ Print.list_to_string (Print.list_to_string (texpr_to_string ctx)) inputs
   ^ ";\n  outputs = "
   ^ Print.list_to_string (Print.list_to_string (texpr_to_string ctx)) outputs
+  ^ ";\n  used_fvars = "
+  ^ FVarId.Set.to_string None used_fvars
   ^ "\n}"
 
 (** Analyze a loop body to compute the relationship between its input and its
@@ -3941,16 +3953,18 @@ let compute_loop_input_output_rel (span : Meta.span) (ctx : ctx) (loop : loop) :
   let body = loop.loop_body in
   let inputs = List.map (fun _ -> ref []) body.inputs in
   let outputs = List.map (fun _ -> ref []) loop.output_tys in
+  let used_fvars = ref FVarId.Set.empty in
+  let inputs_fvars = tpatterns_get_fvars body.inputs in
 
   let visitor =
-    object
+    object (self)
       inherit [_] iter_expr as super
 
       method! visit_texpr env e =
         match e.e with
-        | Loop _ ->
+        | Loop loop ->
             (* We do not visit the inner loops *)
-            ()
+            List.iter (self#visit_texpr env) loop.inputs
         | App _ -> begin
             [%ldebug
               "- e.ty: " ^ ty_to_string ctx e.ty ^ "\n- e:\n"
@@ -3958,7 +3972,9 @@ let compute_loop_input_output_rel (span : Meta.span) (ctx : ctx) (loop : loop) :
             match
               opt_destruct_loop_result_decompose_outputs span ~intro_let:false e
             with
-            | None -> ()
+            | None ->
+                (* We need to visit the sub-expressions *)
+                super#visit_texpr env e
             | Some ({ variant_id; args; _ }, _) ->
                 [%ldebug
                   "- outputs:\n"
@@ -3968,26 +3984,36 @@ let compute_loop_input_output_rel (span : Meta.span) (ctx : ctx) (loop : loop) :
                   ^ "\n\n- args:\n"
                   ^ Print.list_to_string ~sep:"\n" (texpr_to_string ctx) args];
 
-                if variant_id = loop_result_break_id then
+                if variant_id = loop_result_break_id then (
                   (* Update the output map *)
                   List.iter
                     (fun (l, arg) -> l := arg :: !l)
-                    (List.combine outputs args)
+                    (List.combine outputs args);
+                  (* Also visit the arguments: we want to register the used variables *)
+                  List.iter (self#visit_texpr env) args)
                 else if variant_id = loop_result_continue_id then
                   (* Update the input map *)
                   List.iter
                     (fun (l, arg) -> l := arg :: !l)
                     (List.combine inputs args)
-                else [%sanity_check] span (variant_id = loop_result_fail_id)
+                else (
+                  [%sanity_check] span (variant_id = loop_result_fail_id);
+                  (* Also visit the arguments: we want to register the used variables *)
+                  List.iter (self#visit_texpr env) args)
           end
         | _ -> super#visit_texpr env e
+
+      method! visit_fvar_id _ fid = used_fvars := FVarId.Set.add fid !used_fvars
     end
   in
   visitor#visit_texpr () body.loop_body;
 
   let inputs = List.map (fun l -> List.rev !l) inputs in
   let outputs = List.map (fun l -> List.rev !l) outputs in
-  { inputs; outputs }
+  let used_fvars =
+    FVarId.Set.filter (fun fid -> FVarId.Set.mem fid inputs_fvars) !used_fvars
+  in
+  { inputs; outputs; used_fvars }
 
 (** We do several things.
 
@@ -3995,7 +4021,9 @@ let compute_loop_input_output_rel (span : Meta.span) (ctx : ctx) (loop : loop) :
 
     2. We filter the loop outputs which are actually equal to some of its
     inputs, while filtering the inputs which are equal throughout the execution
-    of the loop.
+    of the loop (we do the latter only if [filter_constant_inputs] is [true] -
+    we have this option because we want to filter those inputs *after*
+    introducing auxiliary functions, if there are).
 
     For instance:
     {[
@@ -4018,7 +4046,8 @@ let compute_loop_input_output_rel (span : Meta.span) (ctx : ctx) (loop : loop) :
     ]}
 
     3. We filter the loop output backward functions which are the identity. *)
-let filter_loop_useless_inputs_outputs (ctx : ctx) (def : fun_decl) =
+let filter_loop_useless_inputs_outputs (ctx : ctx)
+    ~(filter_constant_inputs : bool) (def : fun_decl) =
   let span = def.item_meta.span in
 
   (* Helper to substitute the unchanged variables with their (constant)
@@ -4148,8 +4177,17 @@ let filter_loop_useless_inputs_outputs (ctx : ctx) (def : fun_decl) =
                 { loop with loop_body = body }
             in
 
-            (* We go through the inputs and we filter those which are
-               mapped to exactly themselves (i.e., are transmitted unchanged).
+            [%ldebug
+              "- used_inputs: "
+              ^ FVarId.Set.to_string None rel.used_fvars
+              ^ "\n- loop: "
+              ^ loop_to_string ctx { loop with loop_body = body }];
+
+            (* We go through the inputs and identify those which are
+               mapped to exactly themselves (i.e., remain unchanged throughout
+               the loop). If [filter_constant_inputs] is [true] we filter them.
+               Otherwise, we filter only the inputs which are actually not used
+               within the loop (and are just passed throughout the recursive calls).
 
                We then go through the outputs: for a given output, if all the expressions
                it is mapped to are actually the same, and this expression doesn't
@@ -4179,7 +4217,7 @@ let filter_loop_useless_inputs_outputs (ctx : ctx) (def : fun_decl) =
             in
 
             (* First, the inputs *)
-            let keep_inputs =
+            let non_constant_inputs =
               List.map
                 (fun ((fv, el) : fvar * texpr list) ->
                   (* Check if all the expressions are actually exactly the
@@ -4193,14 +4231,18 @@ let filter_loop_useless_inputs_outputs (ctx : ctx) (def : fun_decl) =
                        el))
                 (List.combine input_vars rel.inputs)
             in
-            let filtered_inputs =
+            let used_inputs =
+              List.map
+                (fun (fv : fvar) -> FVarId.Set.mem fv.id rel.used_fvars)
+                input_vars
+            in
+            let constant_inputs =
               FVarId.Set.of_list
                 (List.filter_map
                    (fun ((keep, fv) : _ * fvar) ->
                      if keep then None else Some fv.id)
-                   (List.combine keep_inputs input_vars))
+                   (List.combine non_constant_inputs input_vars))
             in
-
             (* Then, the outputs.
                Check if the output can be computed statically from the
                initial inputs.
@@ -4209,6 +4251,7 @@ let filter_loop_useless_inputs_outputs (ctx : ctx) (def : fun_decl) =
               (* The output is known statically only if it contains:
                  - free variables (those were introduced *before* the loop)
                  - locally bound vars (those can appear in expressions like [fun x => x])
+
                  The non-locally bound vars are bound in the loop body: if the
                  expression contains such variables we have to preserve it, because
                  it means its value depends on what happens inside the loop.
@@ -4235,9 +4278,9 @@ let filter_loop_useless_inputs_outputs (ctx : ctx) (def : fun_decl) =
                 | e :: el ->
                     if List.for_all (fun e' -> e = e') el then
                       (* All the expressions are the same: now check
-                             if all the free variables are filtered inputs *)
+                         if all the free variables are filtered inputs *)
                       let fvars = texpr_get_fvars e in
-                      FVarId.Set.subset fvars filtered_inputs
+                      FVarId.Set.subset fvars constant_inputs
                     else false
             in
             let keep_outputs =
@@ -4247,6 +4290,16 @@ let filter_loop_useless_inputs_outputs (ctx : ctx) (def : fun_decl) =
               List.map
                 (fun (known, x) -> (not known) && Option.is_some x)
                 (List.combine known_statically output_vars)
+            in
+
+            let keep_inputs =
+              let non_constant_inputs =
+                if filter_constant_inputs then non_constant_inputs
+                else List.map (fun _ -> true) input_vars
+              in
+              List.map
+                (fun (b0, b1) -> b0 && b1)
+                (List.combine non_constant_inputs used_inputs)
             in
 
             [%ldebug
@@ -4762,7 +4815,7 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
               | FVar fid -> FVarId.Set.mem fid input_conts_fvids
               | _ -> false
             in
-            let { inputs; outputs } : loop_rel = rel in
+            let { inputs; outputs; _ } : loop_rel = rel in
             [%ldebug "loop_rel:\n" ^ loop_rel_to_string ctx rel];
             let input_conts =
               Collections.List.prefix loop.num_input_conts inputs
@@ -5204,10 +5257,21 @@ let passes :
        ]}
     *)
     (None, "simplify_let_then_ok", simplify_let_then_ok ~ignore_loops:true);
-    (* Filter the useless loop inputs and outputs *)
+    (* Filter the useless loop inputs and outputs.
+
+       For now we do not filter the constant inputs: we will do this after
+       (optionally) introducing auxiliary definitions for the loops: this allows
+       us to make sure we preserve the order of the constant inputs. *)
     ( None,
       "filter_loop_useless_inputs_outputs",
-      filter_loop_useless_inputs_outputs );
+      filter_loop_useless_inputs_outputs ~filter_constant_inputs:false );
+    (* Because we use [filter_constant_inputs = false], the first application of
+       [filter_loop_useless_inputs_outputs] filters all the outputs that need
+       to be filtered, but may leave some unused inputs (which became unused because
+       they were used in some outputs which got filtered). We thus have to call it again. *)
+    ( None,
+      "filter_loop_useless_inputs_outputs (pass 2)",
+      filter_loop_useless_inputs_outputs ~filter_constant_inputs:false );
     (* [filter_loop_useless_inputs_outputs] might have triggered simplification
        opportunities for [apply_beta_reduction] and [inline_useless_var_assignments].
 
@@ -6081,10 +6145,18 @@ let apply_passes_to_pure_fun_translations (trans_ctx : trans_ctx)
 
     (* Decompose the loops *)
     let f, loops = decompose_loops ctx f in
-    (* Decomposing the loops might have introduced expressions of the shape:
-         [let (x, y) = e in ok (x, y)]
-         We need to resimplify those.
-    *)
+
+    (* Filter the constant inputs *)
+    let simplify =
+      filter_loop_useless_inputs_outputs ~filter_constant_inputs:true ctx
+    in
+    let f = simplify f in
+    let loops = List.map simplify loops in
+
+    (* Decomposing the loops and filtering the inputs might have introduced
+       expressions of the shape:
+       [let (x, y) = e in ok (x, y)]
+       We need to resimplify those. *)
     let simplify = simplify_let_then_ok ~ignore_loops:false ctx in
     let f = simplify f in
     let loops = List.map simplify loops in
