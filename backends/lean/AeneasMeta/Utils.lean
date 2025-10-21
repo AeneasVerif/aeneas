@@ -1334,7 +1334,8 @@ elab tk:"extract_assert" : tactic => do
   extractAssert tk
 
 /--
-info: Try this: have : y ≥ x := by sorry
+info: Try this:
+  have : y ≥ x := by sorry
 -/
 #guard_msgs in
 example (x : Nat) (y : Nat) (_ : Nat) (h : x ≤ y) : y ≥ x := by
