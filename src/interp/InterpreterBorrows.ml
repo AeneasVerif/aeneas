@@ -2161,25 +2161,32 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
     match env with
     | [] -> [] (* Done *)
     | EBinding (BDummy vid, v) :: env ->
+        [%ldebug
+          "Dummy value " ^ DummyVarId.to_string vid ^ ":\n"
+          ^ tvalue_to_string ctx v];
         (* If the symbolic value doesn't contain concrete borrows or loans
            we simply ignore it *)
-        if not (concrete_borrows_loans_in_value v.value) then
-          explore_env ctx env
-        else
+        if not (concrete_borrows_loans_in_value v.value) then (
+          [%ldebug "Eliminating the value"];
+          explore_env ctx env)
+        else (
+          [%ldebug "Diving into the value"];
           (* Explore the anonymous value - raises an exception if it finds
              a borrow to end *)
           let visitor =
-            object
+            object (self)
               inherit [_] map_tvalue as super
 
               method! visit_VLoan end_borrows lc =
                 (* Check if we can end the loan, but don't dive inside *)
                 match lc with
                 | VSharedLoan (l, value) -> begin
+                    [%ldebug
+                      "Found shared loan:\n" ^ loan_content_to_string ctx lc];
                     match lookup_shared_reserved_borrows l ctx with
                     | [] ->
                         (* End the loan *)
-                        super#visit_value end_borrows value.value
+                        self#visit_value end_borrows value.value
                     | _ -> super#visit_VLoan false lc
                   end
                 | _ -> super#visit_VLoan false lc
@@ -2190,14 +2197,20 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
                   (* Check if we can end the borrow, do not enter inside if we can't *)
                   match bc with
                   | VSharedBorrow (_, sid) | VReservedMutBorrow (_, sid) ->
+                      (* We could directly end the borrow actually
+                         (replace it with bottom). But it's also good to
+                         raise an exception and call [end_borrow], as it
+                         allows to make the implementation more consistent. *)
                       raise (FoundBorrowId (UShared sid))
                   | VMutBorrow (bid, v) ->
                       if
                         (not (concrete_loans_in_value v))
                         && loan_id_not_in_fixed_abs bid
                       then raise (FoundBorrowId (UMut bid))
-                      else (* Stop there *)
-                        VBorrow bc
+                      else
+                        (* There might be shared loans to end inside the borrow *)
+                        let v = self#visit_tvalue false v in
+                        VBorrow (VMutBorrow (bid, v))
                 else VBorrow bc
 
               (* If no concrete borrows/loans and we can end borrows (we are not
@@ -2210,22 +2223,34 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
           in
           let v = visitor#visit_tvalue true v in
           (* No exception was raised: continue *)
-          EBinding (BDummy vid, v) :: explore_env ctx env
+          let env = explore_env ctx env in
+          (* Check if we eliminated all remaining loans and borrows (we might
+             have removed shared loans): we ignore the value if it is the case *)
+          if not (concrete_borrows_loans_in_value v.value) then env
+          else EBinding (BDummy vid, v) :: env)
     | EBinding (BVar vid, v) :: env ->
+        [%ldebug
+          "Value (name: "
+          ^ Print.option_to_string (fun x -> x) vid.name
+          ^ ",id: "
+          ^ Expressions.LocalId.to_string vid.index
+          ^ "):\n" ^ tvalue_to_string ctx v];
         (* End the shared loans which don't have corresponding borrows.
-         We explore the value and raise an exception if it finds a borrow to end *)
+           We explore the value and raise an exception if it finds a borrow to end *)
         let visitor =
-          object
+          object (self)
             inherit [_] map_tvalue as super
 
             method! visit_VLoan end_borrows lc =
               (* Check if we can end the loan, but don't dive inside *)
               match lc with
               | VSharedLoan (l, value) -> begin
+                  [%ldebug
+                    "Found shared loan:\n" ^ loan_content_to_string ctx lc];
                   match lookup_shared_reserved_borrows l ctx with
                   | [] ->
                       (* End the loan *)
-                      super#visit_value end_borrows value.value
+                      self#visit_value end_borrows value.value
                   | _ -> super#visit_VLoan false lc
                 end
               | _ -> super#visit_VLoan false lc
@@ -2237,6 +2262,7 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
     | EAbs abs :: env
       when simplify_abs && abs.can_end
            && not (AbstractionId.Set.mem abs.abs_id fixed_abs_ids) -> (
+        [%ldebug "Diving into abs:\n" ^ abs_to_string span ctx abs];
         (* End the shared loans with no corresponding borrows *)
         let visitor =
           object
@@ -2315,13 +2341,19 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
 let simplify_dummy_values_useless_abs (config : config) (span : Meta.span)
     (fixed_abs_ids : AbstractionId.Set.t) : cm_fun =
  fun ctx0 ->
+  [%ldebug eval_ctx_to_string ctx0];
   (* Simplify the context as long as it leads to changes - TODO: make this more efficient *)
   let rec simplify ctx0 =
     let ctx, cc =
       simplify_dummy_values_useless_abs_aux config span fixed_abs_ids ctx0
     in
     Invariants.check_invariants span ctx;
-    if ctx = ctx0 then (ctx, cc) else comp cc (simplify ctx)
+    if ctx = ctx0 then (
+      [%ldebug "Done:\n" ^ eval_ctx_to_string ctx];
+      (ctx, cc))
+    else (
+      [%ldebug "Not finished:\n" ^ eval_ctx_to_string ctx];
+      comp cc (simplify ctx))
   in
   let ctx, cc = simplify ctx0 in
   let ctx = eliminate_ended_shared_loans span ctx in
