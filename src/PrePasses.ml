@@ -520,8 +520,8 @@ let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
 
     let filter_storage (st : statement) : statement list =
       match st.content with
-      | (StorageLive loc | StorageDead loc) when LocalId.Set.mem loc !filtered
-        -> []
+      | StorageLive _ -> []
+      | StorageDead loc when LocalId.Set.mem loc !filtered -> []
       | _ -> [ st ]
     in
 
