@@ -506,39 +506,28 @@ let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
   let filter_in_body (body : block) : block =
     let filtered = ref LocalId.Set.empty in
 
-    let filter_visitor =
-      object
-        inherit [_] map_statement as super
-
-        method! visit_Assign env p rv =
+    let filter_shallow (st : statement) : statement list =
+      match st.content with
+      | Assign (p, rv) -> (
           match (p.kind, rv) with
           | PlaceLocal var_id, RvRef (_, BShallow) ->
               (* Filter *)
               filtered := LocalId.Set.add var_id !filtered;
-              Nop
-          | _ ->
-              (* Don't filter *)
-              super#visit_Assign env p rv
-      end
+              []
+          | _ -> [ st ])
+      | _ -> [ st ]
     in
 
-    let storage_rem_visitor =
-      object
-        inherit [_] map_statement as super
-
-        method! visit_StorageLive env loc =
-          if LocalId.Set.mem loc !filtered then Nop
-          else super#visit_StorageLive env loc
-
-        method! visit_StorageDead env loc =
-          if LocalId.Set.mem loc !filtered then Nop
-          else super#visit_StorageDead env loc
-      end
+    let filter_storage (st : statement) : statement list =
+      match st.content with
+      | (StorageLive loc | StorageDead loc) when LocalId.Set.mem loc !filtered
+        -> []
+      | _ -> [ st ]
     in
 
     (* Filter the variables *)
-    let body = filter_visitor#visit_block () body in
-    let body = storage_rem_visitor#visit_block () body in
+    let body = map_statement filter_shallow body in
+    let body = map_statement filter_storage body in
 
     (* Check that the filtered variables have completely disappeared from the body *)
     let check_visitor =
