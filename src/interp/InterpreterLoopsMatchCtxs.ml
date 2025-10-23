@@ -706,7 +706,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let abs =
         {
           abs_id = fresh_abstraction_id ();
-          kind = Loop (S.loop_id, None);
+          kind = Loop S.loop_id;
           can_end = true;
           parents = AbstractionId.Set.empty;
           original_parents = [];
@@ -767,7 +767,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         tvalue_has_outer_loans v0 || tvalue_has_outer_loans v1
       in
       (* Move the values to region abstractions *)
-      let abs_kind = Loop (S.loop_id, None) in
+      let abs_kind = Loop S.loop_id in
       let to_absl pm ctx v =
         let absl =
           convert_value_to_abstractions span abs_kind ~can_end:true ctx v
@@ -851,7 +851,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         let abs =
           {
             abs_id = fresh_abstraction_id ();
-            kind = Loop (S.loop_id, None);
+            kind = Loop S.loop_id;
             can_end = true;
             parents = AbstractionId.Set.empty;
             original_parents = [];
@@ -938,7 +938,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let abs =
         {
           abs_id = fresh_abstraction_id ();
-          kind = Loop (S.loop_id, None);
+          kind = Loop S.loop_id;
           can_end = true;
           parents = AbstractionId.Set.empty;
           original_parents = [];
@@ -1107,7 +1107,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let abs =
         {
           abs_id = fresh_abstraction_id ();
-          kind = Loop (S.loop_id, None);
+          kind = Loop S.loop_id;
           can_end = true;
           parents = AbstractionId.Set.empty;
           original_parents = [];
@@ -1177,7 +1177,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let abs =
         {
           abs_id = fresh_abstraction_id ();
-          kind = Loop (S.loop_id, None);
+          kind = Loop S.loop_id;
           can_end = true;
           parents = AbstractionId.Set.empty;
           original_parents = [];
@@ -1255,7 +1255,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let abs =
         {
           abs_id = fresh_abstraction_id ();
-          kind = Loop (S.loop_id, None);
+          kind = Loop S.loop_id;
           can_end = true;
           parents = AbstractionId.Set.empty;
           original_parents = [];
@@ -1368,7 +1368,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             let abs =
               {
                 abs_id = fresh_abstraction_id ();
-                kind = Loop (S.loop_id, None);
+                kind = Loop S.loop_id;
                 can_end = true;
                 parents = AbstractionId.Set.empty;
                 original_parents = [];
@@ -1417,7 +1417,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             else raise (ValueMatchFailure (LoanInRight id)))
     | None ->
         (* Convert the value to an abstraction *)
-        let abs_kind : abs_kind = Loop (S.loop_id, None) in
+        let abs_kind : abs_kind = Loop S.loop_id in
         let ctx = if value_is_left then ctx0 else ctx1 in
         let absl =
           convert_value_to_abstractions span abs_kind ~can_end:true ctx v
@@ -1488,7 +1488,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     let abs =
       {
         abs_id = fresh_abstraction_id ();
-        kind = Loop (S.loop_id, None);
+        kind = Loop S.loop_id;
         can_end = true;
         parents = AbstractionId.Set.empty;
         original_parents = [];
@@ -1588,7 +1588,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     let abs =
       {
         abs_id = fresh_abstraction_id ();
-        kind = Loop (S.loop_id, None);
+        kind = Loop S.loop_id;
         can_end = true;
         parents = AbstractionId.Set.empty;
         original_parents = [];

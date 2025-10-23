@@ -462,14 +462,10 @@ module Values = struct
         ^ ",rg@"
         ^ RegionGroupId.to_string rg_id
         ^ ")"
-    | ELoop (abs_id, lp_id, rg_id) ->
+    | ELoop (abs_id, lp_id) ->
         "Loop(abs_id@"
         ^ AbstractionId.to_string abs_id
-        ^ ",loop_id@" ^ LoopId.to_string lp_id ^ ","
-        ^ option_to_string
-            (fun rg_id -> "rg@" ^ RegionGroupId.to_string rg_id)
-            rg_id
-        ^ ")"
+        ^ ",loop_id@" ^ LoopId.to_string lp_id ^ ")"
 
   let rec eproj_to_string ?(with_ended : bool = false) (env : fmt_env)
       (pv : eproj) : string =
@@ -721,10 +717,7 @@ module Values = struct
     | SynthInput rg_id ->
         "SynthInput(rg_id:" ^ RegionGroupId.to_string rg_id ^ ")"
     | SynthRet rg_id -> "SynthRet(rg_id:" ^ RegionGroupId.to_string rg_id ^ ")"
-    | Loop (lp_id, rg_id) ->
-        "Loop(loop_id:" ^ LoopId.to_string lp_id ^ ", rg_id:"
-        ^ option_to_string RegionGroupId.to_string rg_id
-        ^ ")"
+    | Loop lp_id -> "Loop(loop_id:" ^ LoopId.to_string lp_id ^ ")"
     | Identity -> "Identity"
     | CopySymbolicValue -> "CopySymbolicValue"
 

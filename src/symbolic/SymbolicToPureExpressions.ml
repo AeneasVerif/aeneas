@@ -620,8 +620,7 @@ and translate_end_abstraction (ectx : C.eval_ctx) (abs : V.abs) (e : S.expr)
   | V.FunCall (call_id, rg_id) ->
       translate_end_abstraction_fun_call ectx abs e ctx call_id rg_id
   | V.SynthRet rg_id -> translate_end_abstraction_synth_ret ectx abs e ctx rg_id
-  | V.Loop (loop_id, rg_id) ->
-      translate_end_abstraction_loop ectx abs e ctx loop_id rg_id
+  | V.Loop loop_id -> translate_end_abstraction_loop ectx abs e ctx loop_id
   | V.Identity | V.CopySymbolicValue ->
       translate_end_abstraction_identity ectx abs e ctx
 
@@ -843,8 +842,7 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
   mk_closed_checked_lets __FILE__ __LINE__ ctx monadic given_back_inputs next_e
 
 and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
-    (e : S.expr) (ctx : bs_ctx) (_loop_id : V.LoopId.id)
-    (_rg_id : T.RegionGroupId.id option) : texpr =
+    (e : S.expr) (ctx : bs_ctx) (_loop_id : V.LoopId.id) : texpr =
   let span = ctx.span in
   (* Compute the input and output values *)
   let back_inputs = abs_to_consumed ctx ectx abs in

@@ -1,4 +1,3 @@
-open Types
 open Values
 open Contexts
 open Meta
@@ -226,11 +225,24 @@ let eval_loop_symbolic (config : config) (span : span)
   let loop_id = fresh_loop_id () in
 
   (* Compute the fixed point at the loop entrance *)
-  let fp_ctx, fixed_ids, rg_to_abs =
+  let fp_ctx, fixed_ids =
     compute_loop_entry_fixed_point config span loop_id eval_loop_body ctx
   in
-  let input_abs_ids_list = RegionGroupId.Map.values rg_to_abs in
-  let input_abs_list = List.map (ctx_lookup_abs fp_ctx) input_abs_ids_list in
+  let input_abs_list =
+    List.rev
+      (env_filter_map_abs
+         (fun abs ->
+           match abs.kind with
+           | Loop id when id = loop_id -> Some abs
+           | _ -> None)
+         fp_ctx.env)
+  in
+  let input_abs_ids_list =
+    List.map (fun (abs : abs) -> abs.abs_id) input_abs_list
+  in
+
+  [%ltrace
+    "fixed point:\n- fp:\n" ^ eval_ctx_to_string ~span:(Some span) fp_ctx];
 
   (* Compute the context at the breaks *)
   let break_info =
@@ -249,8 +261,6 @@ let eval_loop_symbolic (config : config) (span : span)
     ^ eval_ctx_to_string ~span:(Some span) ctx
     ^ "\n\n- Fixed point:\n"
     ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp_ctx
-    ^ "\n\n- rg_to_abs:\n"
-    ^ RegionGroupId.Map.to_string None AbstractionId.to_string rg_to_abs
     ^ "\n\n- break_ctx:\n"
     ^ eval_ctx_to_string ~span:(Some span) break_ctx];
 
@@ -304,51 +314,15 @@ let eval_loop_symbolic (config : config) (span : span)
     ^ SymbolicValueId.Set.show fixed_ids.sids
     ^ "\n- fresh_sids: "
     ^ SymbolicValueId.Set.show fresh_sids
+    ^ "\n- fp_input_abs: "
+    ^ Print.list_to_string AbstractionId.to_string input_abs_ids_list
     ^ "\n- fp_input_svalues: "
     ^ Print.list_to_string (symbolic_value_to_string ctx) fp_input_svalues
-    ^ "\n- break ctx:\n"
+    ^ "\n\n- break ctx:\n"
     ^ eval_ctx_to_string ~span:(Some span) ~filter:false break_ctx
-    ^ "\n- break_input_svalues: "
+    ^ "\n\n- break_input_svalues: "
     ^ Print.list_to_string (symbolic_value_to_string ctx) break_input_svalues
     ^ "\n"];
-
-  (* For every abstraction introduced by the fixed-point, compute the
-     types of the given back values.
-
-     We need to explore the abstractions, looking for the mutable borrows.
-     Moreover, we list the borrows in the same order as the loans (this
-     is important in {!SymbolicToPure}, where we expect the given back
-     values to have a specific order.
-
-     Also, we filter the backward functions which return nothing.
-
-     TODO: remove
-  *)
-  let rg_to_given_back =
-    let compute_abs_given_back_tys (abs_id : AbstractionId.id) : Pure.ty list =
-      let abs = ctx_lookup_abs fp_ctx abs_id in
-      [%ltrace "- abs:\n" ^ abs_to_string span ~with_ended:true ctx abs];
-
-      let is_borrow (av : tavalue) : bool =
-        match av.value with
-        | ABorrow _ | ASymbolic (_, AProjBorrows _) -> true
-        | ALoan _ | ASymbolic (_, AProjLoans _) -> false
-        | _ -> [%craise] span "Unreachable"
-      in
-      let borrows, _ = List.partition is_borrow abs.avalues in
-
-      List.filter_map
-        (fun (av : tavalue) ->
-          SymbolicToPureTypes.translate_back_ty (Some span)
-            ctx.type_ctx.type_infos
-            (function
-              | RVar (Free rid) -> RegionId.Set.mem rid abs.regions.owned
-              | _ -> false)
-            false av.ty)
-        borrows
-    in
-    RegionGroupId.Map.map compute_abs_given_back_tys rg_to_abs
-  in
 
   (* Put everything together *)
   let cc (next_expr : SA.expr) : SA.expr =
@@ -363,7 +337,6 @@ let eval_loop_symbolic (config : config) (span : span)
           input_abs_to_abs = input_abs;
           break_svalues = break_input_svalues;
           break_abs;
-          rg_to_given_back_tys = rg_to_given_back;
           loop_expr = loop_body;
           next_expr;
           span;

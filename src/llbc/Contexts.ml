@@ -483,6 +483,14 @@ let env_map_abs (f : abs -> abs) (env : env) : env =
       | EAbs abs -> EAbs (f abs))
     env
 
+let env_filter_map_abs (f : abs -> 'a option) (env : env) : 'a list =
+  List.filter_map
+    (fun (ee : env_elem) ->
+      match ee with
+      | EBinding _ | EFrame -> None
+      | EAbs abs -> f abs)
+    env
+
 let env_filter_abs (f : abs -> bool) (env : env) : env =
   List.filter
     (fun (ee : env_elem) ->

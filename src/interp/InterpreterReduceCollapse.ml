@@ -423,7 +423,7 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
 
   let with_markers = merge_funs <> None in
 
-  let abs_kind : abs_kind = Loop (loop_id, None) in
+  let abs_kind : abs_kind = Loop loop_id in
   let can_end = true in
   let is_fresh_did (id : DummyVarId.id) : bool =
     not (DummyVarId.Set.mem id old_ids.dids)
@@ -619,7 +619,7 @@ let collapse_ctx_collapse (span : Meta.span)
     ^ eval_ctx_to_string ~span:(Some span) ctx
     ^ "\n"];
 
-  let abs_kind : abs_kind = Loop (loop_id, None) in
+  let abs_kind : abs_kind = Loop loop_id in
   let can_end = true in
 
   let invert_proj_marker = function
@@ -1084,7 +1084,7 @@ let collapse_ctx_following_sequence (span : Meta.span)
     | None -> aid
     | Some aid -> aid
   in
-  let abs_kind : abs_kind = Loop (loop_id, None) in
+  let abs_kind : abs_kind = Loop loop_id in
   List.iter
     (fun (abs0, abs1, nabs) ->
       (* Substitute - the ids may have changed *)

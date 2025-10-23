@@ -266,7 +266,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
 let destructure_new_abs (span : Meta.span) (loop_id : LoopId.id)
     (old_abs_ids : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
   [%ltrace "ctx:\n\n" ^ eval_ctx_to_string ctx];
-  let abs_kind : abs_kind = Loop (loop_id, None) in
+  let abs_kind : abs_kind = Loop loop_id in
   let is_fresh_abs_id (id : AbstractionId.id) : bool =
     not (AbstractionId.Set.mem id old_abs_ids)
   in
@@ -467,7 +467,7 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
         match (e : env_elem) with
         | EAbs abs ->
             if AbstractionId.Set.mem abs.abs_id fixed_ids.aids then e
-            else EAbs { abs with cont = None; kind = Loop (loop_id, None) }
+            else EAbs { abs with cont = None; kind = Loop loop_id }
         | EBinding _ | EFrame -> e
       in
       { ctx with env = List.map update ctx.env }

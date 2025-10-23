@@ -74,7 +74,7 @@ val compute_loop_entry_fixed_point :
      is mutually recursive with [eval_statement], but doesn't live in the same module. *)
   Cps.stl_cm_fun ->
   eval_ctx ->
-  eval_ctx * ids_sets * AbstractionId.id SymbolicAst.region_group_id_map
+  eval_ctx * ids_sets
 
 (** Compute the set of "quantified" symbolic value ids in a fixed-point context.
 

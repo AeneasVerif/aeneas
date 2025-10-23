@@ -671,7 +671,7 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
                 end
               in
               (ctx, can_fail, e)
-          | V.ELoop (abs_id, _lid, _rg_id) ->
+          | V.ELoop (abs_id, _lid) ->
               (* Lookup the variable introduced for the backward function *)
               let e, can_fail =
                 match

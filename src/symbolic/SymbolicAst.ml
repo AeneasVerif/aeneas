@@ -237,11 +237,6 @@ and loop = {
   break_abs : abs list;
       (** The abstractions introduced in the break environment (those are output
           by the loop) *)
-  rg_to_given_back_tys : (Pure.ty list RegionGroupId.Map.t[@opaque]);
-      (** The map from region group ids to the types of the values given back by
-          the corresponding loop abstractions.
-
-          TODO: remove *)
   loop_expr : expr;  (** The symbolically executed loop body *)
   next_expr : expr;  (** The expression for *after* the loop call *)
   span : Meta.span;  (** Information about the origin of the loop body *)

@@ -2198,6 +2198,9 @@ end
 
 let reorder_fresh_abs_aux (span : Meta.span) (old_abs_ids : AbstractionId.Set.t)
     (ctx : eval_ctx) : eval_ctx =
+  (* **WARNING:** remember that the environments store the bindings in *reverse*
+     order (the fresh values/abstractions get pushed at the beginning of the list,
+     and when printing the environments we reverse them first) *)
   (* Split between the fresh abstractions and the rest of the context *)
   let env, fresh_abs =
     List.partition

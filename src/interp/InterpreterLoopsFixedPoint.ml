@@ -122,7 +122,7 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
     let avalues = [ borrow_value; loan_value ] in
     let kind : abs_kind =
       match loop_id with
-      | Some loop_id -> Loop (loop_id, None)
+      | Some loop_id -> Loop loop_id
       | None -> Identity
     in
     let can_end = true in
@@ -218,37 +218,13 @@ let prepare_ashared_loans_no_synth (span : Meta.span) (loop_id : LoopId.id)
 
 (** Update the abstractions introduced by a loop with additional information,
     such as region group ids, continuation expressions, etc. *)
-let loop_abs_reorder_and_add_info (span : Meta.span) (loop_id : LoopId.id)
-    (fixed_ids : ids_sets) (ctx : eval_ctx) :
-    eval_ctx * AbstractionId.id RegionGroupId.Map.t =
+let loop_abs_reorder_and_add_info (span : Meta.span) (fixed_ids : ids_sets)
+    (ctx : eval_ctx) : eval_ctx =
   (* Reorder the fresh abstractions in the fixed-point *)
   let fp = reorder_fresh_abs span false fixed_ids.aids ctx in
 
-  (* Update the abstractions' kinds. *)
-  let rg_to_abs = ref RegionGroupId.Map.empty in
-  let _, fresh_region_group_id = RegionGroupId.fresh_stateful_generator () in
-  let update_loop_abstractions =
-    object
-      inherit [_] map_eval_ctx
-
-      method! visit_abs _ abs =
-        match abs.kind with
-        | Loop (loop_id', _) ->
-            [%sanity_check] span (loop_id' = loop_id);
-            let rg_id = fresh_region_group_id () in
-            let kind : abs_kind = Loop (loop_id, Some rg_id) in
-
-            rg_to_abs := RegionGroupId.Map.add rg_id abs.abs_id !rg_to_abs;
-
-            { abs with kind }
-        | _ -> abs
-    end
-  in
-  let fp = update_loop_abstractions#visit_eval_ctx () fp in
-
-  (* Also introduce continuation expressions. *)
-  let add_abs_cont_to_abs (abs : abs) (loop_id : loop_id)
-      (rg_id : RegionGroupId.id) : abs =
+  (* Introduce continuation expressions. *)
+  let add_abs_cont_to_abs (abs : abs) (loop_id : loop_id) : abs =
     (* Retrieve the *mutable* borrows/loans from the abstraction values *)
     let borrows : tevalue list ref = ref [] in
     let loans : tevalue list ref = ref [] in
@@ -313,9 +289,7 @@ let loop_abs_reorder_and_add_info (span : Meta.span) (loop_id : LoopId.id)
 
     (* Transform them into input/output expressions *)
     let output = mk_etuple (List.rev !borrows) in
-    let input =
-      EApp (ELoop (abs.abs_id, loop_id, Some rg_id), List.rev !loans)
-    in
+    let input = EApp (ELoop (abs.abs_id, loop_id), List.rev !loans) in
     let input : tevalue = { value = input; ty = output.ty } in
 
     (* Put everything together *)
@@ -331,10 +305,9 @@ let loop_abs_reorder_and_add_info (span : Meta.span) (loop_id : LoopId.id)
 
         method! visit_abs _ abs =
           match abs.kind with
-          | Loop (loop_id, rg_id) ->
+          | Loop loop_id ->
               [%sanity_check] span (abs.cont = None);
-              [%sanity_check] span (Option.is_some rg_id);
-              add_abs_cont_to_abs abs loop_id (Option.get rg_id)
+              add_abs_cont_to_abs abs loop_id
           | _ -> abs
       end
     in
@@ -344,11 +317,11 @@ let loop_abs_reorder_and_add_info (span : Meta.span) (loop_id : LoopId.id)
   let fp = add_abs_conts fp in
 
   (* Return *)
-  (fp, !rg_to_abs)
+  fp
 
 let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
     (loop_id : LoopId.id) (eval_loop_body : stl_cm_fun) (ctx0 : eval_ctx) :
-    eval_ctx * ids_sets * AbstractionId.id RegionGroupId.Map.t =
+    eval_ctx * ids_sets =
   (* Introduce "reborrows" for the shared values in the abstractions, so that
      the shared values in the fixed abstractions never get modified (technically,
      they are immutable, but in practice we can introduce more shared loans, or
@@ -493,21 +466,16 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
   in
   let fp = compute_fixed_point ctx max_num_iter max_num_iter in
 
-  (* Debug *)
-  [%ltrace
-    "fixed point computed before matching with input region groups:"
-    ^ "\n\n- fp:\n"
-    ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp
-    ^ "\n"];
-
   (* Update the region abstractions to introduce continuation expressions, etc. *)
   update_fixed_ids [ fp ];
-  let fp, rg_to_abs =
-    loop_abs_reorder_and_add_info span loop_id !fixed_ids fp
-  in
+  let fp = loop_abs_reorder_and_add_info span !fixed_ids fp in
+
+  [%ltrace
+    "fixed point:\n- fp:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp];
 
   (* Return *)
-  (fp, !fixed_ids, rg_to_abs)
+  (fp, !fixed_ids)
 
 let compute_loop_break_context (config : config) (span : Meta.span)
     (loop_id : LoopId.id) (eval_loop_body : stl_cm_fun) (fp_ctx : eval_ctx)
@@ -523,9 +491,9 @@ let compute_loop_break_context (config : config) (span : Meta.span)
       match (e : env_elem) with
       | EAbs abs -> (
           match abs.kind with
-          | Loop (loop_id', _) ->
+          | Loop loop_id' ->
               if loop_id' = loop_id then
-                EAbs { abs with cont = None; kind = Loop (loop_id, None) }
+                EAbs { abs with cont = None; kind = Loop loop_id }
               else e
           | _ -> e)
       | EBinding _ | EFrame -> e
@@ -583,7 +551,8 @@ let compute_loop_break_context (config : config) (span : Meta.span)
             else None
         | EBinding _ | EFrame -> None
       in
-      let abs = List.filter_map get_fresh_abs break_ctx.env in
+      (* Pay attention to the fact that the elements are stored in reverse order *)
+      let abs = List.rev (List.filter_map get_fresh_abs break_ctx.env) in
 
       Some (break_ctx, abs)
 
