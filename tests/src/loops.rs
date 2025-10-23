@@ -85,8 +85,7 @@ pub fn list_mem(x: &u32, mut ls: &List<u32>) -> bool {
     false
 }
 
-/// Same as [list_nth_mut] but with a loop
-pub fn list_nth_mut_loop<T>(mut ls: &mut List<T>, mut i: u32) -> &mut T {
+pub fn list_nth_mut<T>(mut ls: &mut List<T>, mut i: u32) -> &mut T {
     while let List::Cons(x, tl) = ls {
         if i == 0 {
             return x;
@@ -98,8 +97,8 @@ pub fn list_nth_mut_loop<T>(mut ls: &mut List<T>, mut i: u32) -> &mut T {
     panic!()
 }
 
-/// Same as [list_nth_mut_loop] but with shared borrows
-pub fn list_nth_shared_loop<T>(mut ls: &List<T>, mut i: u32) -> &T {
+/// Same as [list_nth_mut] but with shared borrows
+pub fn list_nth_shared<T>(mut ls: &List<T>, mut i: u32) -> &T {
     while let List::Cons(x, tl) = ls {
         if i == 0 {
             return x;
@@ -151,8 +150,8 @@ pub fn id_shared<T>(ls: &List<T>) -> &List<T> {
     ls
 }
 
-/// Small variation of [list_nth_mut_loop]
-pub fn list_nth_mut_loop_with_id<T>(ls: &mut List<T>, mut i: u32) -> &mut T {
+/// Small variation of [list_nth_mut]
+pub fn list_nth_mut_with_id<T>(ls: &mut List<T>, mut i: u32) -> &mut T {
     let mut ls = id_mut(ls);
     while let List::Cons(x, tl) = ls {
         if i == 0 {
@@ -165,8 +164,8 @@ pub fn list_nth_mut_loop_with_id<T>(ls: &mut List<T>, mut i: u32) -> &mut T {
     panic!()
 }
 
-/// Small variation of [list_nth_shared_loop]
-pub fn list_nth_shared_loop_with_id<T>(ls: &List<T>, mut i: u32) -> &T {
+/// Small variation of [list_nth_shared]
+pub fn list_nth_shared_with_id<T>(ls: &List<T>, mut i: u32) -> &T {
     let mut ls = id_shared(ls);
     while let List::Cons(x, tl) = ls {
         if i == 0 {
@@ -182,7 +181,7 @@ pub fn list_nth_shared_loop_with_id<T>(ls: &List<T>, mut i: u32) -> &T {
 /// Same as [list_nth_mut] but on a pair of lists.
 ///
 /// This test checks that we manage to decompose a loop into disjoint regions.
-pub fn list_nth_mut_loop_pair<'a, 'b, T>(
+pub fn list_nth_mut_pair<'a, 'b, T>(
     mut ls0: &'a mut List<T>,
     mut ls1: &'b mut List<T>,
     mut i: u32,
@@ -205,8 +204,8 @@ pub fn list_nth_mut_loop_pair<'a, 'b, T>(
     }
 }
 
-/// Same as [list_nth_mut_loop_pair] but with shared borrows.
-pub fn list_nth_shared_loop_pair<'a, 'b, T>(
+/// Same as [list_nth_mut_pair] but with shared borrows.
+pub fn list_nth_shared_pair<'a, 'b, T>(
     mut ls0: &'a List<T>,
     mut ls1: &'b List<T>,
     mut i: u32,
@@ -229,9 +228,9 @@ pub fn list_nth_shared_loop_pair<'a, 'b, T>(
     }
 }
 
-/// Same as [list_nth_mut_loop_pair] but this time we force the two loop
+/// Same as [list_nth_mut_pair] but this time we force the two loop
 /// regions to be merged.
-pub fn list_nth_mut_loop_pair_merge<'a, T>(
+pub fn list_nth_mut_pair_merge<'a, T>(
     mut ls0: &'a mut List<T>,
     mut ls1: &'a mut List<T>,
     mut i: u32,
@@ -248,8 +247,8 @@ pub fn list_nth_mut_loop_pair_merge<'a, T>(
     panic!()
 }
 
-/// Same as [list_nth_mut_loop_pair_merge] but with shared borrows.
-pub fn list_nth_shared_loop_pair_merge<'a, T>(
+/// Same as [list_nth_mut_pair_merge] but with shared borrows.
+pub fn list_nth_shared_pair_merge<'a, T>(
     mut ls0: &'a List<T>,
     mut ls1: &'a List<T>,
     mut i: u32,
@@ -267,7 +266,7 @@ pub fn list_nth_shared_loop_pair_merge<'a, T>(
 }
 
 /// Mixing mutable and shared borrows.
-pub fn list_nth_mut_shared_loop_pair<'a, 'b, T>(
+pub fn list_nth_mut_shared_pair<'a, 'b, T>(
     mut ls0: &'a mut List<T>,
     mut ls1: &'b List<T>,
     mut i: u32,
@@ -284,9 +283,9 @@ pub fn list_nth_mut_shared_loop_pair<'a, 'b, T>(
     panic!()
 }
 
-/// Same as [list_nth_mut_shared_loop_pair] but this time we force the two loop
+/// Same as [list_nth_mut_shared_pair] but this time we force the two loop
 /// regions to be merged.
-pub fn list_nth_mut_shared_loop_pair_merge<'a, T>(
+pub fn list_nth_mut_shared_pair_merge<'a, T>(
     mut ls0: &'a mut List<T>,
     mut ls1: &'a List<T>,
     mut i: u32,
@@ -303,9 +302,9 @@ pub fn list_nth_mut_shared_loop_pair_merge<'a, T>(
     panic!()
 }
 
-/// Same as [list_nth_mut_shared_loop_pair], but we switched the positions of
+/// Same as [list_nth_mut_shared_pair], but we switched the positions of
 /// the mutable and shared borrows.
-pub fn list_nth_shared_mut_loop_pair<'a, 'b, T>(
+pub fn list_nth_shared_mut_pair<'a, 'b, T>(
     mut ls0: &'a List<T>,
     mut ls1: &'b mut List<T>,
     mut i: u32,
@@ -322,9 +321,9 @@ pub fn list_nth_shared_mut_loop_pair<'a, 'b, T>(
     panic!()
 }
 
-/// Same as [list_nth_mut_shared_loop_pair_merge], but we switch the positions of
+/// Same as [list_nth_mut_shared_pair_merge], but we switch the positions of
 /// the mutable and shared borrows.
-pub fn list_nth_shared_mut_loop_pair_merge<'a, T>(
+pub fn list_nth_shared_mut_pair_merge<'a, T>(
     mut ls0: &'a List<T>,
     mut ls1: &'a mut List<T>,
     mut i: u32,
@@ -342,7 +341,7 @@ pub fn list_nth_shared_mut_loop_pair_merge<'a, T>(
 }
 
 // We do not use the input borrow inside the loop
-#[allow(clippy::empty_loop)]
+#[allow(clippy::empty)]
 pub fn ignore_input_mut_borrow(_a: &mut u32, mut i: u32) {
     while i > 0 {
         i -= 1;
@@ -350,7 +349,7 @@ pub fn ignore_input_mut_borrow(_a: &mut u32, mut i: u32) {
 }
 
 // We do not use the input borrow inside the loop
-#[allow(clippy::empty_loop)]
+#[allow(clippy::empty)]
 pub fn incr_ignore_input_mut_borrow(a: &mut u32, mut i: u32) {
     *a += 1;
     while i > 0 {
@@ -359,7 +358,7 @@ pub fn incr_ignore_input_mut_borrow(a: &mut u32, mut i: u32) {
 }
 
 // We do not use the input borrow inside the loop
-#[allow(clippy::empty_loop)]
+#[allow(clippy::empty)]
 pub fn ignore_input_shared_borrow(_a: &mut u32, mut i: u32) {
     while i > 0 {
         i -= 1;
