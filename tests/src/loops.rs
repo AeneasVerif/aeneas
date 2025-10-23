@@ -367,7 +367,7 @@ pub fn ignore_input_shared_borrow(_a: &mut u32, mut i: u32) {
 }
 
 /// Comes from: https://github.com/AeneasVerif/aeneas/issues/500
-fn issue500(s: &mut bool) {
+fn issue500_1(s: &mut bool) {
     fn bar(_a: &mut bool) {}
 
     let mut a = *s;
@@ -375,6 +375,26 @@ fn issue500(s: &mut bool) {
         bar(&mut a);
     }
     *s = a;
+}
+
+/// Comes from: https://github.com/AeneasVerif/aeneas/issues/500
+fn issue500_2(s: &mut [bool; 1]) {
+    struct A([bool; 1]);
+    fn bar(_a: &mut [bool; 1]) {}
+
+    let mut a = A(*s);
+    while false {
+        bar(&mut a.0);
+    }
+    *s = a.0;
+}
+
+/// Comes from: https://github.com/AeneasVerif/aeneas/issues/500
+fn issue500_3(s: &mut [bool; 1]) {
+    struct A([bool; 1]);
+    let mut a = A(*s);
+    while 0 < 0 { }
+    *s = a.0;
 }
 
 /// Comes from: https://github.com/AeneasVerif/aeneas/issues/351
