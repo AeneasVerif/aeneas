@@ -814,7 +814,8 @@ x y : UScalar ty
     let* ⟨ z, h1 ⟩ ← *
 
   /--
-  info: Try this: let* ⟨ z, h1 ⟩ ← UScalar.add_spec
+  info: Try this:
+  let* ⟨ z, h1 ⟩ ← UScalar.add_spec
   -/
   #guard_msgs in
   example {ty} {x y : UScalar ty} (h : x.val + y.val ≤ UScalar.max ty) :
@@ -1195,19 +1196,19 @@ info: example
       wfArray peSrc1
       := by
       unfold ntt
-      progress; fsimp [Nat.log2]
-      progress
-      progress; fsimp [Nat.log2]
-      progress; fsimp [Nat.log2]
-      progress; fsimp [Nat.log2]
-      progress; fsimp [Nat.log2]
-      progress; fsimp [Nat.log2]
-      progress; fsimp [Nat.log2]
-      progress; fsimp [Nat.log2]
-      progress; fsimp [Nat.log2]
-      progress; fsimp [Nat.log2]
-      progress; fsimp [Nat.log2]
-      progress; fsimp [Nat.log2]
+      progress; fsimp [Nat.log2_def]
+      progress;
+      progress; fsimp [Nat.log2_def]
+      progress; fsimp [Nat.log2_def]
+      progress; fsimp [Nat.log2_def]
+      progress; fsimp [Nat.log2_def]
+      progress; fsimp [Nat.log2_def]
+      progress; fsimp [Nat.log2_def]
+      progress; fsimp [Nat.log2_def]
+      progress; fsimp [Nat.log2_def]
+      progress; fsimp [Nat.log2_def]
+      progress; fsimp [Nat.log2_def]
+      progress; fsimp [Nat.log2_def]
       assumption
 
     set_option maxHeartbeats 800000
@@ -1217,19 +1218,19 @@ info: example
       wfArray peSrc1
       := by
       unfold ntt
-      progress by fsimp [Nat.log2]
-      progress
-      progress by fsimp [Nat.log2]
-      progress by fsimp [Nat.log2]
-      progress by fsimp [Nat.log2]
-      progress by fsimp [Nat.log2]
-      progress by fsimp [Nat.log2]
-      progress by fsimp [Nat.log2]
-      progress by fsimp [Nat.log2]
-      progress by fsimp [Nat.log2]
-      progress by fsimp [Nat.log2]
-      progress by fsimp [Nat.log2]
-      progress by fsimp [Nat.log2]
+      progress; fsimp [Nat.log2_def]
+      progress;
+      progress; fsimp [Nat.log2_def]
+      progress; fsimp [Nat.log2_def]
+      progress; fsimp [Nat.log2_def]
+      progress; fsimp [Nat.log2_def]
+      progress; fsimp [Nat.log2_def]
+      progress; fsimp [Nat.log2_def]
+      progress; fsimp [Nat.log2_def]
+      progress; fsimp [Nat.log2_def]
+      progress; fsimp [Nat.log2_def]
+      progress; fsimp [Nat.log2_def]
+      progress; fsimp [Nat.log2_def]
       assumption
 
   end Ntt

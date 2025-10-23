@@ -159,7 +159,7 @@ theorem Int.gcd_add_mul_self (a b k : ℤ) :
 theorem Int.gcd_mod_same {a b : ℤ} :
   Int.gcd (a % b) b = Int.gcd a b := by
   have h1 : a % b = a - b * (a / b) := by
-    have heq := Int.ediv_add_emod a b
+    have heq := Int.mul_ediv_add_emod a b
     linarith
   have h2 := Int.gcd_add_mul_self b a (- (a / b))
   rw [h1]
@@ -628,10 +628,8 @@ theorem Int.neg_tmod (x y : Int) : (- x).tmod y = - x.tmod y := by
       simp at hx
       omega
     simp [this]
-  . cases xn <;> simp_all
-    omega
-  . cases xn <;> simp_all
-    omega
+  . grind
+  . grind
 
 theorem Int.tmod_ge_of_neg (x y : Int) (hx : x < 0) :
   x ≤ x.tmod y := by
