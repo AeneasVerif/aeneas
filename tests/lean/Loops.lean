@@ -762,4 +762,34 @@ def issue400_2
   let y1 ← y + 3#i32
   let z1 ← z + 5#i32
   ok (back y1 z1)
+
+/- [loops::copy_carray::CARRAY]
+   Source: 'tests/src/loops.rs', lines 467:4-467:35 -/
+@[global_simps]
+def copy_carray.CARRAY_body : Result (Array U32 2#usize) :=
+  ok (Array.make 2#usize [ 0#u32, 1#u32 ])
+@[global_simps, irreducible]
+def copy_carray.CARRAY : Array U32 2#usize :=
+  eval_global copy_carray.CARRAY_body
+
+/- [loops::copy_carray]: loop 0:
+   Source: 'tests/src/loops.rs', lines 469:4-472:5 -/
+def copy_carray_loop
+  (a : Array U32 2#usize) (i : Usize) : Result (Array U32 2#usize) :=
+  if i < 2#usize
+  then
+    do
+    let i1 ← Array.index_usize copy_carray.CARRAY i
+    let a1 ← Array.update a i i1
+    let i2 ← i + 1#usize
+    copy_carray_loop a1 i2
+  else ok a
+partial_fixpoint
+
+/- [loops::copy_carray]:
+   Source: 'tests/src/loops.rs', lines 466:0-473:1 -/
+@[reducible]
+def copy_carray (a : Array U32 2#usize) : Result (Array U32 2#usize) :=
+  copy_carray_loop a 0#usize
+
 end loops
