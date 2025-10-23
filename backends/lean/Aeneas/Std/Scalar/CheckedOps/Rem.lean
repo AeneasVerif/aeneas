@@ -50,7 +50,7 @@ theorem «%S».checked_rem_bv_spec (x y : «%S») :
   | some z => y.val ≠ 0 ∧ z.val = x.val % y.val ∧ z.bv = x.bv % y.bv
   | none => y.val = 0 := by
   have := core.num.checked_rem_UScalar_bv_spec x y
-  simp_all [«%S».checked_rem, UScalar.max, «%S».bv]
+  simp_all [«%S».checked_rem, «%S».bv]
   cases h: core.num.checked_rem_UScalar x y <;> simp_all
 
 /-!
@@ -78,7 +78,7 @@ theorem «%S».checked_rem_bv_spec (x y : «%S») :
   | some z => y.val ≠ 0 ∧ z.val = Int.tmod x.val y.val ∧ z.bv = BitVec.srem x.bv y.bv
   | none => y.val = 0 := by
   have := core.num.checked_rem_IScalar_bv_spec x y
-  simp_all only [«%S».checked_rem, «%S».bv, IScalar.min]
+  simp_all only [«%S».bv]
   cases h: core.num.checked_rem_IScalar x y <;> simp_all
 
 end Aeneas.Std

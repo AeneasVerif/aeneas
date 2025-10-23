@@ -77,7 +77,7 @@ Theorems with a specification which uses integers and bit-vectors
 theorem UScalar.rem_bv_spec {ty} (x : UScalar ty) {y : UScalar ty} (hzero : y.val ≠ 0) :
   ∃ z, x % y = ok z ∧ (↑z : Nat) = ↑x % ↑y ∧ z.bv = x.bv % y.bv := by
   conv => congr; ext; lhs; simp [HMod.hMod]
-  simp [hzero, rem, tryMk, tryMkOpt, ofOption, hmax, ofNatCore]
+  simp [hzero, rem]
   simp only [val]
   simp
 

@@ -422,7 +422,7 @@ theorem add_with_carry_loop_spec
         simp [hConv2', hConv1]
         simp [*, U32.size_eq]
         scalar_eq_nf
-      . simp [*, U32.size_eq]
+      . simp [*]
         scalar_eq_nf
   . simp_all
     scalar_tac

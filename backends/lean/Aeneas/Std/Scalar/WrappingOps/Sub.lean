@@ -23,7 +23,7 @@ def core.num.«%S».wrapping_sub : «%S» → «%S» → «%S»  := @IScalar.wra
 
 @[simp, bvify_simps] theorem UScalar.wrapping_sub_bv_eq {ty} (x y : UScalar ty) :
   (wrapping_sub x y).bv = x.bv - y.bv := by
-  simp [wrapping_sub]
+  simp only [wrapping_sub]
 
 uscalar @[simp, bvify_simps] theorem «%S».wrapping_sub_bv_eq (x y : «%S») :
   (core.num.«%S».wrapping_sub x y).bv = x.bv - y.bv := by
@@ -31,7 +31,7 @@ uscalar @[simp, bvify_simps] theorem «%S».wrapping_sub_bv_eq (x y : «%S») :
 
 @[simp, bvify_simps] theorem IScalar.wrapping_sub_bv_eq {ty} (x y : IScalar ty) :
   (wrapping_sub x y).bv = x.bv - y.bv := by
-  simp [wrapping_sub]
+  simp only [wrapping_sub]
 
 iscalar @[simp, bvify_simps] theorem «%S».wrapping_sub_bv_eq (x y : «%S») :
   (core.num.«%S».wrapping_sub x y).bv = x.bv - y.bv := by
@@ -42,7 +42,7 @@ iscalar @[simp, bvify_simps] theorem «%S».wrapping_sub_bv_eq (x y : «%S») :
   simp only [wrapping_sub, val, size]
   have : 0 < 2^ty.numBits := by simp
   have : 2 ^ ty.numBits - 1 + 1 = 2^ty.numBits := by omega
-  simp [this]
+  simp only [BitVec.toNat_sub, bv_toNat]
   ring_nf
 
 uscalar @[simp] theorem «%S».wrapping_sub_val_eq (x y : «%S») :
@@ -52,7 +52,7 @@ uscalar @[simp] theorem «%S».wrapping_sub_val_eq (x y : «%S») :
 @[simp] theorem IScalar.wrapping_sub_val_eq {ty} (x y : IScalar ty) :
   (wrapping_sub x y).val = Int.bmod (x.val - y.val) (2^ty.numBits) := by
   simp only [wrapping_sub, val]
-  simp
+  simp only [BitVec.toInt_sub, bv_toInt_eq]
 
 iscalar @[simp] theorem «%S».wrapping_sub_val_eq (x y : «%S») :
   (core.num.«%S».wrapping_sub x y).val = Int.bmod (x.val - y.val) (2^ %BitWidth) :=

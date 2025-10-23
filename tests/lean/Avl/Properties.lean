@@ -343,7 +343,7 @@ theorem Node.rotate_left_spec
     split_conjs
     . -- Partial invariant for the final tree starting at z
       fsimp [Node.invAux, balanceFactor, *]
-      split_conjs <;> (try omega) <;> tauto
+      split_conjs <;> (try omega)
     . -- Partial invariant for the subtree x
       fsimp [Node.invAux, balanceFactor, *]
       split_conjs <;> (try omega) <;> fsimp_all
@@ -379,7 +379,7 @@ theorem Node.rotate_left_spec
     split_conjs
     . -- Invariant for whole tree (starting at z)
       fsimp [invAux, balanceFactor]
-      split_conjs <;> (try omega) <;> tauto
+      split_conjs <;> (try omega)
     . -- Invariant for subtree x
       fsimp [invAux, balanceFactor]
       split_conjs <;> (try omega) <;> fsimp_all
@@ -455,7 +455,7 @@ theorem Node.rotate_right_spec
     split_conjs
     . -- Partial invariant for the final tree starting at z
       fsimp [Node.invAux, balanceFactor, *]
-      split_conjs <;> (try omega) <;> tauto
+      split_conjs <;> (try omega)
     . -- Partial invariant for the subtree x
       fsimp [Node.invAux, balanceFactor, *]
       split_conjs <;> (try omega) <;> fsimp_all
@@ -491,7 +491,7 @@ theorem Node.rotate_right_spec
     split_conjs
     . -- Invariant for whole tree (starting at z)
       fsimp [invAux, balanceFactor]
-      split_conjs <;> (try omega) <;> tauto
+      split_conjs <;> (try omega)
     . -- Invariant for subtree x
       fsimp [invAux, balanceFactor]
       split_conjs <;> (try omega) <;> fsimp_all
@@ -590,7 +590,7 @@ theorem Node.rotate_left_right_spec
     fsimp [balanceFactor] at *
     split_conjs <;> (try fsimp [Node.invAux, balanceFactor, *])
     . -- invAux for y
-      split_conjs <;> (try omega) <;> (try tauto)
+      split_conjs <;> (try omega)
     . -- invAux for z
       split_conjs <;> (try assumption) <;> (try scalar_tac)
     . -- invAux for x
@@ -605,7 +605,7 @@ theorem Node.rotate_left_right_spec
       fsimp [balanceFactor] at *
       split_conjs <;> (try fsimp [Node.invAux, balanceFactor, *])
       . -- invAux for y
-        split_conjs <;> (try omega) <;> (try tauto)
+        split_conjs <;> (try omega)
       . -- invAux for z
         split_conjs <;> (try assumption) <;> (try scalar_tac)
       . -- invAux for x
@@ -618,7 +618,7 @@ theorem Node.rotate_left_right_spec
       have : bf_y.val = 1 := by fsimp [Node.invAux] at *; omega
       split_conjs <;> (try fsimp [Node.invAux, balanceFactor, *])
       . -- invAux for y
-        split_conjs <;> (try omega) <;> (try tauto)
+        split_conjs <;> (try omega)
       . -- invAux for z
         split_conjs <;> (try assumption) <;> (try scalar_tac)
       . -- invAux for x
@@ -715,7 +715,7 @@ theorem Node.rotate_right_left_spec
     fsimp [balanceFactor] at *
     split_conjs <;> (try fsimp [Node.invAux, balanceFactor, *])
     . -- invAux for y
-      split_conjs <;> (try omega) <;> (try tauto)
+      split_conjs <;> (try omega)
     . -- invAux for z
       split_conjs <;> (try assumption) <;> (try scalar_tac)
     . -- invAux for x
@@ -730,7 +730,7 @@ theorem Node.rotate_right_left_spec
       fsimp [balanceFactor] at *
       split_conjs <;> (try fsimp [Node.invAux, balanceFactor, *])
       . -- invAux for y
-        split_conjs <;> (try omega) <;> (try tauto)
+        split_conjs <;> (try omega)
       . -- invAux for z
         split_conjs <;> (try assumption) <;> (try scalar_tac)
       . -- invAux for x
@@ -743,7 +743,7 @@ theorem Node.rotate_right_left_spec
       have : bf_y.val = -1 := by fsimp [Node.invAux] at *; omega
       split_conjs <;> (try fsimp [Node.invAux, balanceFactor, *])
       . -- invAux for y
-        split_conjs <;> (try omega) <;> (try tauto)
+        split_conjs <;> (try omega)
       . -- invAux for z
         split_conjs <;> (try assumption) <;> (try scalar_tac)
       . -- invAux for x

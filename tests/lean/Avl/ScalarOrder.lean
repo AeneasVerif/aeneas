@@ -24,7 +24,7 @@ instance : OrdSpecLinearOrderEq OrdI32 where
     . scalar_tac
     . split <;> simp <;> scalar_tac
   symmetry := fun a b => by
-    simp [Ordering.toDualOrdering, LinearOrder.compare_eq_compareOfLessAndEq, compareOfLessAndEq]
+    simp [LinearOrder.compare_eq_compareOfLessAndEq, compareOfLessAndEq]
     rw [compare, Ord.opposite]
     simp [LinearOrder.compare_eq_compareOfLessAndEq, compareOfLessAndEq]
     split_ifs with hab hba hba' hab' hba'' _ hba₃ _ <;> (try simp_all) <;> try omega
@@ -34,6 +34,6 @@ instance : OrdSpecLinearOrderEq OrdI32 where
     unfold OrdI32
     unfold OrdI32.cmp
     simp only []
-    split_ifs <;> simp [Result.ok.injEq, not_false_eq_true, IsEmpty.forall_iff]; tauto; try assumption
+    split_ifs <;> simp [Result.ok.injEq, IsEmpty.forall_iff]; tauto; try assumption
 
 end avl

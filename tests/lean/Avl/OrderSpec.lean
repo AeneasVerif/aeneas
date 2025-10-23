@@ -86,7 +86,7 @@ theorem rustCmpEq [_root_.Ord T] [O: OrdSpec H]: H.cmp a b = .ok o <-> compare a
   . intro Hcmp
     obtain ⟨ o', ⟨ Hcmp', Hcompare ⟩ ⟩ := O.infallible a b
     rw [Hcmp', ok.injEq] at Hcmp
-    simp [Hcompare, Hcmp', Hcmp]
+    simp [Hcompare, Hcmp]
   . intro Hcompare
     obtain ⟨ o', ⟨ Hcmp', Hcompare' ⟩ ⟩ := O.infallible a b
     rw [Hcompare', avl.Ordering.toLeanOrdering.injEq] at Hcompare
@@ -142,7 +142,7 @@ theorem compare_eq_gt_iff [LinOrd : LinearOrder T] (x y : T) :
   compare x y = Ordering.gt ↔ y < x := by
   simp_all [LinOrd.compare_eq_compareOfLessAndEq, compareOfLessAndEq]
   split <;> simp_all
-  . rw [lt_iff_le_not_le] at *; tauto
+  . rw [lt_iff_le_not_ge] at *; tauto
   . constructor
     . intro Hneq
       apply lt_of_le_of_ne <;> tauto

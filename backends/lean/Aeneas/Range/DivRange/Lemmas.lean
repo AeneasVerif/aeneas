@@ -104,8 +104,7 @@ private theorem forIn'_loop_eq_forIn'_divRange [Monad m] (r : DivRange)
     simp [divRange.loop]
   . rename_i fuel
     simp only [forIn'.loop, divRange.loop, gt_iff_lt]
-    dcases hStop : r.stop < i <;> simp only [hStop, ↓reduceDIte, ↓reduceIte, List.not_mem_nil,
-      IsEmpty.forall_iff, implies_true, List.forIn'_nil, List.forIn'_cons]
+    dcases hStop : r.stop < i <;> simp only [hStop, ↓reduceDIte, ↓reduceIte, List.forIn'_nil, List.forIn'_cons]
     apply bind_congr
     intro x
     cases x
@@ -149,7 +148,7 @@ private theorem pow_ineq (r: DivRange) :
     forIn' r init f =
       forIn' (divRange r.start r.stop r.divisor ) init
         (fun a h => f a (mem_of_mem_divRange r a h)) := by
-  simp only [forIn, forIn', divRange, DivRange.forIn']
+  simp only [forIn', divRange, DivRange.forIn']
   rw [forIn'_loop_eq_forIn'_divRange]
   . simp
   . apply pow_ineq

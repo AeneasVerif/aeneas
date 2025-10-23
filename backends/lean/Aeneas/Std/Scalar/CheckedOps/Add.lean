@@ -67,7 +67,7 @@ theorem «%S».checked_add_bv_spec (x y : «%S») :
   | some z => «%S».min ≤ x.val + y.val ∧ x.val + y.val ≤ «%S».max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
   | none => ¬ («%S».min ≤ x.val + y.val ∧ x.val + y.val ≤ «%S».max) := by
   have := core.num.checked_add_IScalar_bv_spec x y
-  simp_all only [«%S».checked_add, IScalar.min, IScalar.max, «%S».bv, «%S».min, «%S».max, «%S».numBits]
-  cases h: core.num.checked_add_IScalar x y <;> simp_all only [«%S».numBits] <;> simp
+  simp_all only [IScalar.min, IScalar.max, «%S».bv, «%S».min, «%S».max, «%S».numBits]
+  cases h: core.num.checked_add_IScalar x y <;> simp_all only [] <;> simp
 
 end Aeneas.Std

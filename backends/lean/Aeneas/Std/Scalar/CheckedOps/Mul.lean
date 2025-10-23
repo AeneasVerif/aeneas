@@ -42,7 +42,7 @@ theorem «%S».checked_mul_bv_spec (x y : «%S») :
   | some z => x.val * y.val ≤ «%S».max ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
   | none => «%S».max < x.val * y.val := by
   have := core.num.checked_mul_UScalar_bv_spec x y
-  simp_all only [«%S».checked_mul, UScalar.max, «%S».bv, min, «%S».max, «%S».numBits]
+  simp_all only [«%S».checked_mul, UScalar.max, «%S».bv, «%S».max, «%S».numBits]
   cases h: core.num.checked_mul_UScalar x y <;> simp_all only [and_self]
 
 /-!
@@ -62,7 +62,7 @@ theorem «%S».checked_mul_bv_spec (x y : «%S») :
   | some z => «%S».min ≤ x.val * y.val ∧ x.val * y.val ≤ «%S».max ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
   | none => ¬ («%S».min ≤ x.val * y.val ∧ x.val * y.val ≤ «%S».max) := by
   have := core.num.checked_mul_IScalar_bv_spec x y
-  simp_all only [«%S».checked_mul, IScalar.min, IScalar.max, «%S».bv, «%S».min, «%S».max, «%S».numBits]
+  simp_all only [IScalar.min, IScalar.max, «%S».bv, «%S».min, «%S».max, «%S».numBits]
   cases h: core.num.checked_mul_IScalar x y <;> simp_all only [not_false_eq_true, and_self]
 
 end Aeneas.Std

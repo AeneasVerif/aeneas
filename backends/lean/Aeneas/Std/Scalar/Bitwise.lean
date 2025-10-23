@@ -179,7 +179,7 @@ theorem UScalar.ShiftRight_IScalar_spec {ty0 ty1} (x : UScalar ty0) (y : IScalar
   ∃ z, x >>> y = ok z ∧ z.val = x.val >>> y.toNat ∧ z.bv = x.bv >>> y.toNat
   := by
   have hy1 : y.toNat < ty0.numBits := by scalar_tac
-  simp only [HShiftRight.hShiftRight, shiftRight_IScalar, shiftRight, hy0, hy1, reduceIte]
+  simp only [HShiftRight.hShiftRight, shiftRight_IScalar, shiftRight, hy1, reduceIte]
   simp only [BitVec.ushiftRight_eq, ok.injEq, _root_.exists_eq_left', val, Nat.instShiftRight]
   simp only [IScalar.toNat, BitVec.toNat_ushiftRight, bv_toNat, Nat.shiftRight_eq, and_self]
 
@@ -208,7 +208,8 @@ theorem UScalar.ShiftLeft_IScalar_spec {ty0 ty1} (x : UScalar ty0) (y : IScalar 
   z.bv = x.bv <<< y.toNat
   := by
   have hy1 : y.toNat < ty0.numBits := by scalar_tac
-  simp only [HShiftLeft.hShiftLeft, shiftLeft_IScalar, shiftLeft, hy0, hy1, reduceIte, hsize, UScalar.size]
+  simp only [HShiftLeft.hShiftLeft, shiftLeft_IScalar, shiftLeft, hy1, reduceIte, hsize,
+    UScalar.size]
   simp only [BitVec.shiftLeft_eq, ok.injEq, _root_.exists_eq_left', val]
   simp only [IScalar.toNat, BitVec.toNat_shiftLeft, bv_toNat, ShiftLeft.shiftLeft,
     Nat.shiftLeft_eq', and_self]
