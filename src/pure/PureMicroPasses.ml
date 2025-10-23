@@ -4631,7 +4631,7 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
                   let call =
                     [%add_loc] mk_rec_loop_call_texpr span inputs break_ty
                   in
-                  (* Bind the outputs s *)
+                  (* Bind the outputs *)
                   let output_values, output_backl =
                     Collections.List.split_at break_outputs num_output_values
                   in
@@ -4834,14 +4834,32 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
               tpatterns_get_fvars
                 (Collections.List.prefix loop.num_input_conts body.inputs)
             in
+            let input_conts_fvids_to_index =
+              FVarId.Map.of_list
+                (List.filter_map
+                   (fun x -> x)
+                   (List.mapi
+                      (fun i (p : tpattern) ->
+                        match p.pat with
+                        | PDummy -> None
+                        | POpen (fvar, _) -> Some (fvar.id, i)
+                        | _ -> [%internal_error] span)
+                      (Collections.List.prefix loop.num_input_conts body.inputs)))
+            in
             [%ldebug
               "input_conts_fvids: "
               ^ FVarId.Set.to_string None input_conts_fvids
+              ^ "\n- input_conts_fvids_to_index: "
+              ^ FVarId.Map.to_string None string_of_int
+                  input_conts_fvids_to_index
               ^ "\n- num_input_conts: "
               ^ string_of_int loop.num_input_conts
               ^ "\n- num_output_values: "
               ^ string_of_int loop.num_output_values];
-            let is_call_to_input (x : texpr) : bool =
+            let is_call_to_input (i : int) (x : texpr) : bool =
+              [%ldebug
+                "- index: " ^ string_of_int i ^ "\n- x:\n"
+                ^ texpr_to_string ctx x];
               let _pats, body = raw_destruct_lambdas x in
               let _, body = raw_destruct_lets body in
               let f, _args = destruct_apps body in
@@ -4851,7 +4869,11 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
                  no use of the input backward functions remains), but it would be
                  better to do it before) *)
               match f.e with
-              | FVar fid -> FVarId.Set.mem fid input_conts_fvids
+              | FVar fid ->
+                  FVarId.Set.mem fid input_conts_fvids
+                  (* Also check that the order is correct - TODO: the first check
+                     is subsumed by the second one *)
+                  && FVarId.Map.find_opt fid input_conts_fvids_to_index = Some i
               | _ -> false
             in
             let { inputs; outputs; _ } : loop_rel = rel in
@@ -4872,10 +4894,10 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
                   (Print.list_to_string (texpr_to_string ctx))
                   output_conts];
             let inputs_are_calls_to_inputs =
-              List.map (List.map is_call_to_input) input_conts
+              List.mapi (fun i -> List.map (is_call_to_input i)) input_conts
             in
             let outputs_are_calls_to_inputs =
-              List.map (List.map is_call_to_input) output_conts
+              List.mapi (fun i -> List.map (is_call_to_input i)) output_conts
             in
 
             [%ldebug
