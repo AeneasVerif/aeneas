@@ -286,41 +286,45 @@ def list_nth_shared_with_id {T : Type} (ls : List T) (i : U32) : Result T :=
   do
   let ls1 ← id_shared ls
   list_nth_shared_with_id_loop i ls1
+
+/- [loops::list_nth_mut_pair]: loop 0:
+   Source: 'tests/src/loops.rs', lines 190:8-190:24 -/
+def list_nth_mut_pair_loop
+  {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
+  Result (T × T × (T → List T) × (T → List T))
   :=
   match ls0 with
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
       if i = 0#u32
-      then
-        let back'a := fun ret => List.Cons ret tl0
-        let back'b := fun ret => List.Cons ret tl1
-        ok ((x0, x1), back'a, back'b)
+      then ok (x0, x1, fun t => List.Cons t tl0, fun t => List.Cons t tl1)
       else
         do
         let i1 ← i - 1#u32
-        let (p, back'a, back'b) ← list_nth_mut_loop_pair_loop tl0 tl1 i1
-        let back'a1 := fun ret => let tl01 := back'a ret
-                                  List.Cons x0 tl01
-        let back'b1 := fun ret => let tl11 := back'b ret
-                                  List.Cons x1 tl11
-        ok (p, back'a1, back'b1)
+        let (t, t1, back, back1) ← list_nth_mut_pair_loop tl0 tl1 i1
+        let back2 := fun t2 => let l := back t2
+                               List.Cons x0 l
+        let back3 := fun t2 => let l := back1 t2
+                               List.Cons x1 l
+        ok (t, t1, back2, back3)
     | List.Nil => fail panic
   | List.Nil => fail panic
 partial_fixpoint
 
-/- [loops::list_nth_mut_loop_pair]:
-   Source: 'tests/src/loops.rs', lines 188:0-209:1 -/
-@[reducible]
-def list_nth_mut_loop_pair
+/- [loops::list_nth_mut_pair]:
+   Source: 'tests/src/loops.rs', lines 184:0-205:1 -/
+def list_nth_mut_pair
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → List T) × (T → List T))
   :=
-  list_nth_mut_loop_pair_loop ls0 ls1 i
+  do
+  let (t, t1, back, back1) ← list_nth_mut_pair_loop ls0 ls1 i
+  ok ((t, t1), back, back1)
 
-/- [loops::list_nth_shared_loop_pair]: loop 0:
-   Source: 'tests/src/loops.rs', lines 218:8-218:24 -/
-def list_nth_shared_loop_pair_loop
+/- [loops::list_nth_shared_pair]: loop 0:
+   Source: 'tests/src/loops.rs', lines 214:8-214:24 -/
+def list_nth_shared_pair_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
   match ls0 with
   | List.Cons x0 tl0 =>
@@ -330,59 +334,62 @@ def list_nth_shared_loop_pair_loop
       then ok (x0, x1)
       else do
            let i1 ← i - 1#u32
-           list_nth_shared_loop_pair_loop tl0 tl1 i1
+           list_nth_shared_pair_loop tl0 tl1 i1
     | List.Nil => fail panic
   | List.Nil => fail panic
 partial_fixpoint
 
-/- [loops::list_nth_shared_loop_pair]:
-   Source: 'tests/src/loops.rs', lines 212:0-233:1 -/
+/- [loops::list_nth_shared_pair]:
+   Source: 'tests/src/loops.rs', lines 208:0-229:1 -/
 @[reducible]
-def list_nth_shared_loop_pair
+def list_nth_shared_pair
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
-  list_nth_shared_loop_pair_loop ls0 ls1 i
+  list_nth_shared_pair_loop ls0 ls1 i
 
-/- [loops::list_nth_mut_loop_pair_merge]: loop 0:
-   Source: 'tests/src/loops.rs', lines 242:4-252:1 -/
-def list_nth_mut_loop_pair_merge_loop
+/- [loops::list_nth_mut_pair_merge]: loop 0:
+   Source: 'tests/src/loops.rs', lines 238:4-248:1 -/
+def list_nth_mut_pair_merge_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
-  Result ((T × T) × ((T × T) → ((List T) × (List T))))
+  Result (T × T × (T → List T) × (T → List T))
   :=
   match ls0 with
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
       if i = 0#u32
-      then
-        let back :=
-          fun ret => let (t, t1) := ret
-                     (List.Cons t tl0, List.Cons t1 tl1)
-        ok ((x0, x1), back)
+      then ok (x0, x1, fun t => List.Cons t tl0, fun t => List.Cons t tl1)
       else
         do
         let i1 ← i - 1#u32
-        let (p, back) ← list_nth_mut_loop_pair_merge_loop tl0 tl1 i1
-        let back1 :=
-          fun ret =>
-            let (tl01, tl11) := back ret
-            (List.Cons x0 tl01, List.Cons x1 tl11)
-        ok (p, back1)
+        let (t, t1, back, back1) ← list_nth_mut_pair_merge_loop tl0 tl1 i1
+        let back2 := fun t2 => let l := back t2
+                               List.Cons x0 l
+        let back3 := fun t2 => let l := back1 t2
+                               List.Cons x1 l
+        ok (t, t1, back2, back3)
     | List.Nil => fail panic
   | List.Nil => fail panic
 partial_fixpoint
 
-/- [loops::list_nth_mut_loop_pair_merge]:
-   Source: 'tests/src/loops.rs', lines 237:0-252:1 -/
-@[reducible]
-def list_nth_mut_loop_pair_merge
+/- [loops::list_nth_mut_pair_merge]:
+   Source: 'tests/src/loops.rs', lines 233:0-248:1 -/
+def list_nth_mut_pair_merge
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × ((T × T) → ((List T) × (List T))))
   :=
-  list_nth_mut_loop_pair_merge_loop ls0 ls1 i
+  do
+  let (t, t1, back, back1) ← list_nth_mut_pair_merge_loop ls0 ls1 i
+  let back2 :=
+    fun ret =>
+      let (t2, t3) := ret
+      let ls01 := back t2
+      let ls11 := back1 t3
+      (ls01, ls11)
+  ok ((t, t1), back2)
 
-/- [loops::list_nth_shared_loop_pair_merge]: loop 0:
-   Source: 'tests/src/loops.rs', lines 260:4-270:1 -/
-def list_nth_shared_loop_pair_merge_loop
+/- [loops::list_nth_shared_pair_merge]: loop 0:
+   Source: 'tests/src/loops.rs', lines 256:4-266:1 -/
+def list_nth_shared_pair_merge_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
   match ls0 with
   | List.Cons x0 tl0 =>
@@ -390,152 +397,151 @@ def list_nth_shared_loop_pair_merge_loop
     | List.Cons x1 tl1 =>
       if i = 0#u32
       then ok (x0, x1)
-      else
-        do
-        let i1 ← i - 1#u32
-        list_nth_shared_loop_pair_merge_loop tl0 tl1 i1
+      else do
+           let i1 ← i - 1#u32
+           list_nth_shared_pair_merge_loop tl0 tl1 i1
     | List.Nil => fail panic
   | List.Nil => fail panic
 partial_fixpoint
 
-/- [loops::list_nth_shared_loop_pair_merge]:
-   Source: 'tests/src/loops.rs', lines 255:0-270:1 -/
+/- [loops::list_nth_shared_pair_merge]:
+   Source: 'tests/src/loops.rs', lines 251:0-266:1 -/
 @[reducible]
-def list_nth_shared_loop_pair_merge
+def list_nth_shared_pair_merge
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
-  list_nth_shared_loop_pair_merge_loop ls0 ls1 i
+  list_nth_shared_pair_merge_loop ls0 ls1 i
 
-/- [loops::list_nth_mut_shared_loop_pair]: loop 0:
-   Source: 'tests/src/loops.rs', lines 278:4-288:1 -/
-def list_nth_mut_shared_loop_pair_loop
+/- [loops::list_nth_mut_shared_pair]: loop 0:
+   Source: 'tests/src/loops.rs', lines 274:4-284:1 -/
+def list_nth_mut_shared_pair_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
-  Result ((T × T) × (T → List T))
+  Result (T × T × (T → List T))
   :=
   match ls0 with
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
       if i = 0#u32
-      then let back := fun ret => List.Cons ret tl0
-           ok ((x0, x1), back)
+      then ok (x0, x1, fun t => List.Cons t tl0)
       else
         do
         let i1 ← i - 1#u32
-        let (p, back) ← list_nth_mut_shared_loop_pair_loop tl0 tl1 i1
-        let back1 := fun ret => let tl01 := back ret
-                                List.Cons x0 tl01
-        ok (p, back1)
+        let (t, t1, back) ← list_nth_mut_shared_pair_loop tl0 tl1 i1
+        let back1 := fun t2 => let l := back t2
+                               List.Cons x0 l
+        ok (t, t1, back1)
     | List.Nil => fail panic
   | List.Nil => fail panic
 partial_fixpoint
 
-/- [loops::list_nth_mut_shared_loop_pair]:
-   Source: 'tests/src/loops.rs', lines 273:0-288:1 -/
-@[reducible]
-def list_nth_mut_shared_loop_pair
+/- [loops::list_nth_mut_shared_pair]:
+   Source: 'tests/src/loops.rs', lines 269:0-284:1 -/
+def list_nth_mut_shared_pair
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → List T))
   :=
-  list_nth_mut_shared_loop_pair_loop ls0 ls1 i
+  do
+  let (t, t1, back) ← list_nth_mut_shared_pair_loop ls0 ls1 i
+  ok ((t, t1), back)
 
-/- [loops::list_nth_mut_shared_loop_pair_merge]: loop 0:
-   Source: 'tests/src/loops.rs', lines 297:4-307:1 -/
-def list_nth_mut_shared_loop_pair_merge_loop
+/- [loops::list_nth_mut_shared_pair_merge]: loop 0:
+   Source: 'tests/src/loops.rs', lines 293:4-303:1 -/
+def list_nth_mut_shared_pair_merge_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
-  Result ((T × T) × (T → List T))
+  Result (T × T × (T → List T))
   :=
   match ls0 with
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
       if i = 0#u32
-      then let back := fun ret => List.Cons ret tl0
-           ok ((x0, x1), back)
+      then ok (x0, x1, fun t => List.Cons t tl0)
       else
         do
         let i1 ← i - 1#u32
-        let (p, back) ← list_nth_mut_shared_loop_pair_merge_loop tl0 tl1 i1
-        let back1 := fun ret => let tl01 := back ret
-                                List.Cons x0 tl01
-        ok (p, back1)
+        let (t, t1, back) ← list_nth_mut_shared_pair_merge_loop tl0 tl1 i1
+        let back1 := fun t2 => let l := back t2
+                               List.Cons x0 l
+        ok (t, t1, back1)
     | List.Nil => fail panic
   | List.Nil => fail panic
 partial_fixpoint
 
-/- [loops::list_nth_mut_shared_loop_pair_merge]:
-   Source: 'tests/src/loops.rs', lines 292:0-307:1 -/
-@[reducible]
-def list_nth_mut_shared_loop_pair_merge
+/- [loops::list_nth_mut_shared_pair_merge]:
+   Source: 'tests/src/loops.rs', lines 288:0-303:1 -/
+def list_nth_mut_shared_pair_merge
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → List T))
   :=
-  list_nth_mut_shared_loop_pair_merge_loop ls0 ls1 i
+  do
+  let (t, t1, back) ← list_nth_mut_shared_pair_merge_loop ls0 ls1 i
+  ok ((t, t1), back)
 
-/- [loops::list_nth_shared_mut_loop_pair]: loop 0:
-   Source: 'tests/src/loops.rs', lines 316:4-326:1 -/
-def list_nth_shared_mut_loop_pair_loop
+/- [loops::list_nth_shared_mut_pair]: loop 0:
+   Source: 'tests/src/loops.rs', lines 312:4-322:1 -/
+def list_nth_shared_mut_pair_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
-  Result ((T × T) × (T → List T))
+  Result (T × T × (T → List T))
   :=
   match ls0 with
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
       if i = 0#u32
-      then let back := fun ret => List.Cons ret tl1
-           ok ((x0, x1), back)
+      then ok (x0, x1, fun t => List.Cons t tl1)
       else
         do
         let i1 ← i - 1#u32
-        let (p, back) ← list_nth_shared_mut_loop_pair_loop tl0 tl1 i1
-        let back1 := fun ret => let tl11 := back ret
-                                List.Cons x1 tl11
-        ok (p, back1)
+        let (t, t1, back) ← list_nth_shared_mut_pair_loop tl0 tl1 i1
+        let back1 := fun t2 => let l := back t2
+                               List.Cons x1 l
+        ok (t, t1, back1)
     | List.Nil => fail panic
   | List.Nil => fail panic
 partial_fixpoint
 
-/- [loops::list_nth_shared_mut_loop_pair]:
-   Source: 'tests/src/loops.rs', lines 311:0-326:1 -/
-@[reducible]
-def list_nth_shared_mut_loop_pair
+/- [loops::list_nth_shared_mut_pair]:
+   Source: 'tests/src/loops.rs', lines 307:0-322:1 -/
+def list_nth_shared_mut_pair
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → List T))
   :=
-  list_nth_shared_mut_loop_pair_loop ls0 ls1 i
+  do
+  let (t, t1, back) ← list_nth_shared_mut_pair_loop ls0 ls1 i
+  ok ((t, t1), back)
 
-/- [loops::list_nth_shared_mut_loop_pair_merge]: loop 0:
-   Source: 'tests/src/loops.rs', lines 335:4-345:1 -/
-def list_nth_shared_mut_loop_pair_merge_loop
+/- [loops::list_nth_shared_mut_pair_merge]: loop 0:
+   Source: 'tests/src/loops.rs', lines 331:4-341:1 -/
+def list_nth_shared_mut_pair_merge_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
-  Result ((T × T) × (T → List T))
+  Result (T × T × (T → List T))
   :=
   match ls0 with
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
       if i = 0#u32
-      then let back := fun ret => List.Cons ret tl1
-           ok ((x0, x1), back)
+      then ok (x0, x1, fun t => List.Cons t tl1)
       else
         do
         let i1 ← i - 1#u32
-        let (p, back) ← list_nth_shared_mut_loop_pair_merge_loop tl0 tl1 i1
-        let back1 := fun ret => let tl11 := back ret
-                                List.Cons x1 tl11
-        ok (p, back1)
+        let (t, t1, back) ← list_nth_shared_mut_pair_merge_loop tl0 tl1 i1
+        let back1 := fun t2 => let l := back t2
+                               List.Cons x1 l
+        ok (t, t1, back1)
     | List.Nil => fail panic
   | List.Nil => fail panic
 partial_fixpoint
 
-/- [loops::list_nth_shared_mut_loop_pair_merge]:
-   Source: 'tests/src/loops.rs', lines 330:0-345:1 -/
-@[reducible]
-def list_nth_shared_mut_loop_pair_merge
+/- [loops::list_nth_shared_mut_pair_merge]:
+   Source: 'tests/src/loops.rs', lines 326:0-341:1 -/
+def list_nth_shared_mut_pair_merge
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → List T))
   :=
-  list_nth_shared_mut_loop_pair_merge_loop ls0 ls1 i
+  do
+  let (t, t1, back) ← list_nth_shared_mut_pair_merge_loop ls0 ls1 i
+  ok ((t, t1), back)
 
 /- [loops::ignore_input_mut_borrow]: loop 0:
    Source: 'tests/src/loops.rs', lines 346:4-348:5 -/
