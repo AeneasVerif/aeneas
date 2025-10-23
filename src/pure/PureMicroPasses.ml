@@ -2585,7 +2585,7 @@ let apply_beta_reduction =
 (** This pass simplifies uses of array/slice index operations.
 
     We perform the following transformations:
-    {[
+    [
       let (_, back) = Array.index_mut_usize a i in
       let a' = back x in
       ...
@@ -2594,12 +2594,18 @@ let apply_beta_reduction =
 
       let a' = Array.update a i x in
       ...
-    ]}
+    ]
 
-    {[
+    TODO: this is not done anymore, but will be necessary if we make backward
+    functions stateful again.
+    [
       let _, back = Array.index_mut_usize a i in
-      back x ~~>Array.update a i x
-    ]} *)
+      back x
+
+         ~~>
+
+       Array.update a i x
+    ] *)
 let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
 
@@ -2609,12 +2615,130 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
      The micro-pass is written in a general way: for instance we do not leverage
      the fact that a backward function should be used only once.
   *)
+
+  (* Small helper: given an expression:
+     [let (_, back) = index_mut a i in e2]
+     attempt to simplify the let-binding.
+   *)
+  let try_simplify (monadic : bool) (pat : tpattern) (e1 : texpr) (e2 : texpr)
+      (back_var : fvar) (is_array : bool) (index_generics : generic_args)
+      (a : texpr) (i : texpr) : texpr =
+    (* Helper: outputs the input argument if this is a call to the backward function *)
+    let is_call_to_back (e : texpr) : texpr option =
+      let f, args = destruct_apps e in
+      match (f.e, args) with
+      | FVar id, [ v ] when id = back_var.id -> Some v
+      | _ -> None
+    in
+    (* Helper to introduce a call to the proper update function *)
+    let mk_call_to_update (v : texpr) =
+      let array_or_slice = if is_array then Array else Slice in
+      let qualif =
+        Qualif
+          {
+            id = FunOrOp (Fun (Pure (UpdateAtIndex array_or_slice)));
+            generics = index_generics;
+          }
+      in
+      let qualif = { e = qualif; ty = mk_arrows [ a.ty; i.ty; v.ty ] e2.ty } in
+      [%add_loc] mk_apps span qualif [ a; i; v ]
+    in
+
+    (* We repeteadly destruct the let-bindings in the next expression until
+       the moment we find the call to the backward function. We remove this
+       call and insert instead a call to [update]. As the call to the backward
+       function may use variables introduced *after* the call to [index_mut]
+       we do not necessarily insert it at the position of the backward call
+       and may have to introduce it before: we try to introduce it as close
+       as possible to the call to [index_mut].
+
+       For instance:
+       [
+         let (_, back) = index_mut a i in
+         let v1 = v + 1 in
+         let i1 = i + 1 in
+         let a1 = back v1 in
+         ...
+
+           ~>
+
+         let v1 = v + 1 in
+         let a1 = update a i v1 in (* HERE *)
+         let i1 = i + 1 in
+         ...
+       ]
+
+       In order to do this, we keep track of the fresh variables introduced since
+       the call to [index_mut].
+    *)
+    let rec update (fresh_vars : FVarId.Set.t) (next : texpr) :
+        (tpattern * texpr * FVarId.Set.t) option * bool * texpr =
+      match next.e with
+      | Let (monadic', pat', bound, next') -> (
+          (* Check if we are calling the backward function *)
+          match is_call_to_back bound with
+          | None -> (
+              (* Continue *)
+              let tpat_fvars = tpattern_get_fvars pat' in
+              let fresh_vars' = FVarId.Set.union fresh_vars tpat_fvars in
+              let back_call, updated, next' = update fresh_vars' next' in
+              (* Check if we already updated *)
+              if updated then
+                (back_call, updated, mk_opened_let monadic' pat' bound next')
+              else
+                (* Check if we found the backward call *)
+                match back_call with
+                | None ->
+                    (* Nothing to do *)
+                    (back_call, updated, mk_opened_let monadic' pat' bound next')
+                | Some (back_pat, v, v_vars) ->
+                    (* Check if the input value given to the backward call requires
+                    variables that were introduced in exactly this let-binding:
+                    if yes, we insert it here, otherwise we insert it higher up *)
+                    if
+                      not
+                        (FVarId.Set.is_empty
+                           (FVarId.Set.inter v_vars tpat_fvars))
+                    then
+                      (* Insert here *)
+                      let next' =
+                        mk_opened_let true back_pat (mk_call_to_update v) next'
+                      in
+                      (back_call, true, mk_opened_let monadic' pat' bound next')
+                    else
+                      (* Do not insert here *)
+                      ( back_call,
+                        updated,
+                        mk_opened_let monadic' pat' bound next' ))
+          | Some v ->
+              (* Ignore this let-binding and return information about the backward
+               call, so that we can insert it before *)
+              (Some (pat', v, tpattern_get_fvars pat'), false, next'))
+      | _ ->
+          (* Stop *)
+          (None, false, next)
+    in
+    (* Update *)
+    let back_call, updated, next = update FVarId.Set.empty e2 in
+    (* Check if we managed to update: if no, we need to insert the call to [update] here *)
+    if updated then next
+    else
+      match back_call with
+      | None ->
+          (* Could not find the call to the backward function: reconstruct the expression *)
+          mk_opened_let monadic pat e1 e2
+      | Some (back_pat, back_v, _) ->
+          mk_opened_let true back_pat (mk_call_to_update back_v) next
+  in
+
   object (self)
     inherit [_] map_expr as super
 
     method! visit_Let env monadic pat e1 e2 =
       (* Update the first expression *)
-      let e1 = super#visit_texpr env e1 in
+      let e1 = self#visit_texpr env e1 in
+      (* Update the second expression *)
+      let e2 = self#visit_texpr env e2 in
       (* Check if the current let-binding is a call to an index function *)
       let e1_app, e1_args = destruct_apps e1 in
       match (pat.pat, e1_app.e, e1_args) with
@@ -2647,197 +2771,25 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
             "identified a pattern to simplify:\n"
             ^ texpr_to_string ctx { e = Let (monadic, pat, e1, e2); ty = e2.ty }];
 
-          (* Some auxiliary functions *)
-          (* Helper to check if an expression is actually the backward function *)
-          let is_call_to_back (app : texpr) =
-            match app.e with
-            | FVar id -> id = back_var.id
-            | _ -> false
-          in
-          (* Helper to introduce a call to the proper update function *)
-          let mk_call_to_update (back_v : texpr) =
-            let array_or_slice = if is_array then Array else Slice in
-            let qualif =
-              Qualif
-                {
-                  id = FunOrOp (Fun (Pure (UpdateAtIndex array_or_slice)));
-                  generics = index_generics;
-                }
-            in
-            let qualif =
-              { e = qualif; ty = mk_arrows [ a.ty; i.ty; back_v.ty ] e2.ty }
-            in
-            [%add_loc] mk_apps span qualif [ a; i; back_v ]
-          in
-          (* Attempt to remove the let-binding.
+          (* Attempt to simplify the let-binding.
 
-               We perform two attempts:
-               1. we check if we can actually insert the update in place of the index
-                 function as it leads to a more natural translation. We do so if:
-                 - there is a single call to the backward function
-                 - the inputs to this call only use variables which have been introduced
-                   *before*
-               2. otherwise, we check that we manage to replace all the uses to the
-                 backward function before comitting the changes . *)
+             We first check that there is only a single use of the backward
+             function. TODO: generalize
+          *)
           let count = ref 0 in
-          let back_call = ref None in
-          let back_call_with_fresh = ref None in
-          let fresh_vars = ref FVarId.Set.empty in
-          let register_back_call pat arg =
-            count := !count + 1;
-            back_call_with_fresh := Some (pat, arg);
-            (* Check that the argument doesn't use fresh vars *)
-            if
-              FVarId.Set.is_empty
-                (FVarId.Set.inter (texpr_get_fvars arg) !fresh_vars)
-            then back_call := Some (pat, arg)
-          in
-          let updt_visitor1 =
+          let count_visitor =
             object
-              inherit [_] map_expr as super
-              method! visit_PBound _ _ _ = [%internal_error] span
+              inherit [_] iter_expr
 
-              method! visit_POpen env var mp =
-                fresh_vars := FVarId.Set.add var.id !fresh_vars;
-                super#visit_POpen env var mp
-
-              method! visit_Let env monadic' pat' e' e3 =
-                (* Check if this is a call to the backward function *)
-                match e'.e with
-                | App (app, v) when is_result_ty e3.ty && is_call_to_back app ->
-                    register_back_call pat' v;
-                    (self#visit_texpr env e3).e
-                | _ -> super#visit_Let env monadic' pat' e' e3
-
-              method! visit_App env app x =
-                (* Look for: [ok (back x)] *)
-                match app.e with
-                | Qualif
-                    {
-                      id =
-                        AdtCons
-                          {
-                            adt_id = TBuiltin TResult;
-                            variant_id = Some variant_id;
-                          };
-                      _;
-                    }
-                  when variant_id = result_ok_id -> begin
-                    match x.e with
-                    | App (app', v) when is_call_to_back app' ->
-                        let id = fresh_fvar_id () in
-                        let var : fvar = { id; basename = None; ty = x.ty } in
-                        register_back_call (mk_tpattern_from_fvar None var) v;
-                        super#visit_App env app (mk_texpr_from_fvar var)
-                    | _ -> super#visit_App env app x
-                  end
-                | _ -> super#visit_App env app x
+              method! visit_fvar_id _ fid =
+                if fid = back_var.id then count := !count + 1 else ()
             end
           in
-          let e' = updt_visitor1#visit_texpr () e2 in
-          [%ldebug "e':\n" ^ texpr_to_string ctx e'];
-
-          (* Should we keep the change? *)
-          if !count = 1 && Option.is_some !back_call then (
-            [%ldebug "keeping the change"];
-            let pat, arg = Option.get !back_call in
-            let call = mk_call_to_update arg in
-            (* Recurse on the updated expression *)
-            super#visit_expr env (Let (true, pat, call, e')))
-          else
-            (* Sometimes the call to the backward function needs to
-                 use fresh variables which are introduced *after* the
-                 call to the backward function, but the call itself happens
-                 quite late (because we end region abstractions in a lazy manner),
-                 while we could introduce it earlier.
-                 If it is the case, we insert the call to the backward function
-                 as close as possible to the position of the call to the forward
-                 function, that is: as soon as all the variables needed for its
-                 arguments have been introduced.
-              *)
-            let _ = [%ldebug "not keeping the change"] in
-            let e'' =
-              if !count = 1 then (
-                let back_pat, back_arg = Option.get !back_call_with_fresh in
-                let fresh_vars =
-                  FVarId.Set.inter !fresh_vars (texpr_get_fvars back_arg)
-                in
-                let rec insert_call_below (fresh_vars : FVarId.Set.t) e =
-                  [%ldebug
-                    "insert_call_below:" ^ "\n- fresh_vars:\n"
-                    ^ FVarId.Set.to_string None fresh_vars
-                    ^ "\n- e:\n" ^ texpr_to_string ctx e];
-                  match e.e with
-                  | Let (monadic, pat, e1, e2) ->
-                      let fresh_vars =
-                        FVarId.Set.diff fresh_vars (tpattern_get_fvars pat)
-                      in
-                      if FVarId.Set.is_empty fresh_vars then
-                        let call = mk_call_to_update back_arg in
-                        let e' = Let (true, back_pat, call, e2) in
-                        let e' = { e = e'; ty = e.ty } in
-                        (true, { e = Let (monadic, pat, e1, e'); ty = e.ty })
-                      else
-                        let ok, e2 = insert_call_below fresh_vars e2 in
-                        (ok, { e = Let (monadic, pat, e1, e2); ty = e.ty })
-                  | _ -> (false, e)
-                in
-                [%ldebug "insert_call_below: START"];
-                let ok, e'' = insert_call_below fresh_vars e' in
-                if ok then Some e''.e else None)
-              else None
-            in
-            if Option.is_some e'' then Option.get e''
-            else
-              (* Attempt 1. didn't work: perform attempt 2. (see above) *)
-              let ok = ref true in
-              let updt_visitor2 =
-                object
-                  inherit [_] map_expr as super
-
-                  method! visit_FVar env var_id =
-                    (* If we find a use of the backward function which was not
-                         replaced then we set the [ok] boolean to false, meaning
-                         we should not remove the call to the index function. *)
-                    if var_id = back_var.id then ok := false else ();
-                    super#visit_FVar env var_id
-
-                  method! visit_Let env monadic' pat' e' e3 =
-                    (* Check if this is a call to the backward function*)
-                    match e'.e with
-                    | App (app, v)
-                      when is_result_ty e3.ty && is_call_to_back app ->
-                        super#visit_expr env
-                          (Let (true, pat', mk_call_to_update v, e3))
-                    | _ -> super#visit_Let env monadic' pat' e' e3
-
-                  method! visit_App env app x =
-                    (* Look for: [ok (back x)] *)
-                    match app.e with
-                    | Qualif
-                        {
-                          id =
-                            AdtCons
-                              {
-                                adt_id = TBuiltin TResult;
-                                variant_id = Some variant_id;
-                              };
-                          _;
-                        }
-                      when variant_id = result_ok_id -> begin
-                        match x.e with
-                        | App (app, back_v) when is_call_to_back app ->
-                            (super#visit_texpr env (mk_call_to_update back_v)).e
-                        | _ -> super#visit_App env app x
-                      end
-                    | _ -> super#visit_App env app x
-                end
-              in
-              let e' = updt_visitor2#visit_texpr () e2 in
-
-              (* Should we keep the change? *)
-              if !ok then (self#visit_texpr env e').e
-              else super#visit_Let env monadic pat e1 e2
+          count_visitor#visit_texpr () e2;
+          if !count = 1 then
+            (try_simplify monadic pat e1 e2 back_var is_array index_generics a i)
+              .e
+          else super#visit_Let env monadic pat e1 e2
       | _ -> super#visit_Let env monadic pat e1 e2
   end
 
