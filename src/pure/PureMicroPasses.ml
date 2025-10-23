@@ -1192,6 +1192,11 @@ let lift_fun (ctx : ctx) (fun_id : fun_id) : bool =
 (** A helper predicate *)
 let inline_fun (_ : fun_id) : bool = false
 
+type inline_env = { subst : texpr FVarId.Map.t; loop_back_funs : FVarId.Set.t }
+
+let empty_inline_env : inline_env =
+  { subst = FVarId.Map.empty; loop_back_funs = FVarId.Set.empty }
+
 (** Inline the useless variable (re-)assignments:
 
     A lot of intermediate variable assignments are introduced through the
@@ -1216,19 +1221,22 @@ let inline_fun (_ : fun_id) : bool = false
     [inline_identity]: if [true], inline the identity functions (i.e., lambda
     functions of the shape [fun x -> x]).
 
+    [inline_loop_back_calls]: inline calls to loop backward functions. This is
+    useful to trigger simplifications, for instance in [loop_to_recursive].
+
     TODO: we have a smallish issue which is that rvalues should be merged with
     expressions... For now, this forces us to substitute whenever we can, but
     leave the let-bindings where they are, and eliminated them in a subsequent
     pass (if they are useless). *)
 let inline_useless_var_assignments_visitor ~(inline_named : bool)
     ~(inline_const : bool) ~(inline_pure : bool) ~(inline_identity : bool)
-    (ctx : ctx) (def : fun_decl) =
+    ?(inline_loop_back_calls : bool = false) (ctx : ctx) (def : fun_decl) =
   object (self)
     inherit [_] map_expr as super
 
     (** Visit the let-bindings to filter the useless ones (and update the
         substitution map while doing so *)
-    method! visit_Let (env : texpr FVarId.Map.t) monadic lv re e =
+    method! visit_Let (env : inline_env) monadic lv re e =
       (* In order to filter, we need to check first that:
            - the let-binding is not monadic
            - the left-value is a variable
@@ -1285,7 +1293,20 @@ let inline_useless_var_assignments_visitor ~(inline_named : bool)
               | StructUpdate _ -> true (* ADT constructor *)
               | _ -> false
             in
-            filter_left && (var_or_global || const_re || pure_re)
+
+            (* Or:
+               1.3 the right-expression is a call to a loop backward function,
+               and [inline_loop_back_calls] is [true] *)
+            let back_call =
+              inline_loop_back_calls
+              &&
+              let f, _ = destruct_apps re in
+              match f.e with
+              | FVar fid -> FVarId.Set.mem fid env.loop_back_funs
+              | _ -> false
+            in
+
+            filter_left && (var_or_global || const_re || pure_re || back_call)
           in
 
           (* Or if: 2. the let-binding bounds the identity function *)
@@ -1304,7 +1325,11 @@ let inline_useless_var_assignments_visitor ~(inline_named : bool)
            * better to do them *before* we inline it *)
           let re = self#visit_texpr env re in
           (* Update the substitution environment *)
-          let env = if filter then FVarId.Map.add lv_var.id re env else env in
+          let env =
+            if filter then
+              { env with subst = FVarId.Map.add lv_var.id re env.subst }
+            else env
+          in
           (* Update the next expression *)
           let e = self#visit_texpr env e in
           (* Reconstruct the [let], only if the binding is not filtered *)
@@ -1327,7 +1352,9 @@ let inline_useless_var_assignments_visitor ~(inline_named : bool)
                  ctx.trans_ctx.type_ctx.type_infos adt_id
           then
             (* Update the substitution environment *)
-            let env = FVarId.Map.add lv_var.id re env in
+            let env =
+              { env with subst = FVarId.Map.add lv_var.id re env.subst }
+            in
             (* Update the next expression *)
             let e = self#visit_texpr env e in
             (* We filter the [let], and thus do not reconstruct it *)
@@ -1337,8 +1364,8 @@ let inline_useless_var_assignments_visitor ~(inline_named : bool)
       | _ -> super#visit_Let env monadic lv re e
 
     (** Substitute the variables *)
-    method! visit_FVar (env : texpr FVarId.Map.t) (vid : FVarId.id) =
-      match FVarId.Map.find_opt vid env with
+    method! visit_FVar (env : inline_env) (vid : FVarId.id) =
+      match FVarId.Map.find_opt vid env.subst with
       | None -> (* No substitution *) super#visit_FVar env vid
       | Some ne ->
           (* Substitute - note that we need to reexplore, because
@@ -1347,14 +1374,26 @@ let inline_useless_var_assignments_visitor ~(inline_named : bool)
            * var1 --> var2.
            *)
           self#visit_expr env ne.e
+
+    method! visit_loop_body (env : inline_env) (body : loop_body) =
+      (* Register the loop inputs.
+
+         TODO: for now we register all the inputs, but we should only register
+         the backward functions. *)
+      let { inputs; loop_body } = body in
+      let fvars = tpatterns_get_fvars inputs in
+      let env =
+        { env with loop_back_funs = FVarId.Set.union env.loop_back_funs fvars }
+      in
+      { inputs; loop_body = self#visit_texpr env loop_body }
   end
 
 let inline_useless_var_assignments ~inline_named ~inline_const ~inline_pure
-    ~inline_identity =
+    ~inline_identity ?(inline_loop_back_calls = false) =
   lift_expr_map_visitor_with_state
     (inline_useless_var_assignments_visitor ~inline_named ~inline_const
-       ~inline_pure ~inline_identity)
-    FVarId.Map.empty
+       ~inline_pure ~inline_identity ~inline_loop_back_calls)
+    empty_inline_env
 
 (** Filter the useless assignments (removes the useless variables, filters the
     function calls) *)
@@ -5230,7 +5269,7 @@ let passes :
     ( None,
       "inline_useless_var_assignments",
       inline_useless_var_assignments ~inline_named:true ~inline_const:true
-        ~inline_pure:true ~inline_identity:true );
+        ~inline_pure:true ~inline_identity:true ~inline_loop_back_calls:false );
     (* Simplify the lambdas by applying beta-reduction *)
     (None, "apply_beta_reduction", apply_beta_reduction);
     (* Eliminate the box functions - note that the "box" types were eliminated
@@ -5285,7 +5324,7 @@ let passes :
     ( None,
       "inline_useless_var_assignments (pass 2)",
       inline_useless_var_assignments ~inline_named:true ~inline_const:true
-        ~inline_pure:true ~inline_identity:true );
+        ~inline_pure:true ~inline_identity:true ~inline_loop_back_calls:false );
     (* Simplify and filter the loop outputs *)
     (None, "simplify_loop_output_conts", simplify_loop_output_conts);
     (* [simplify_loop_output_conts] also introduces simplification opportunities
@@ -5295,7 +5334,7 @@ let passes :
     ( None,
       "inline_useless_var_assignments (pass 3)",
       inline_useless_var_assignments ~inline_named:true ~inline_const:true
-        ~inline_pure:true ~inline_identity:true );
+        ~inline_pure:true ~inline_identity:true ~inline_loop_back_calls:true );
     (* Change the structure of the loops if we can simplify their backward
        functions. This is in preparation of [decompose_loops], which introduces
        auxiliary (and potentially recursive) functions. *)
@@ -5326,9 +5365,10 @@ let passes :
     (None, "simplify_let_bindings (pass 2)", simplify_let_bindings);
     (* Inline the useless vars again *)
     ( None,
-      "inline_useless_var_assignments (pass 2)",
+      "inline_useless_var_assignments (pass 4)",
       inline_useless_var_assignments ~inline_named:true ~inline_const:true
-        ~inline_pure:false ~inline_identity:true );
+        ~inline_pure:false ~inline_identity:true ~inline_loop_back_calls:false
+    );
     (* Filter the useless variables again *)
     (None, "filter_useless (pass 2)", filter_useless);
     (* Simplify the let-then return again (the lambda simplification may have
