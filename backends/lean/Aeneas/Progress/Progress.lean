@@ -1196,7 +1196,7 @@ info: example
       := by
       unfold ntt
       progress; fsimp [Nat.log2]
-      progress; fsimp [Nat.log2]
+      progress
       progress; fsimp [Nat.log2]
       progress; fsimp [Nat.log2]
       progress; fsimp [Nat.log2]
@@ -1218,7 +1218,7 @@ info: example
       := by
       unfold ntt
       progress by fsimp [Nat.log2]
-      progress by fsimp [Nat.log2]
+      progress
       progress by fsimp [Nat.log2]
       progress by fsimp [Nat.log2]
       progress by fsimp [Nat.log2]
