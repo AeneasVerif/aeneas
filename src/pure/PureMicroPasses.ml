@@ -4495,7 +4495,7 @@ let filter_loop_useless_inputs_outputs (ctx : ctx)
                  ~inline_const:true ~inline_pure:false ~inline_identity:true ctx
                  def)
                 #visit_texpr
-                FVarId.Map.empty next
+                empty_inline_env next
             in
 
             (* Bind the loop *)
