@@ -4489,7 +4489,7 @@ let filter_loop_useless_inputs_outputs (ctx : ctx)
 (** Reorder the outputs of loops, in particular to trigger simplifications with
     [loops_to_recursive].
 
-    There are two issues:
+    There are several issues linked to [loops_to_recursive]:
     {ul
      {- in order for [loops_to_recursive] to be triggered, it needs the backward
         functions to be used in the *output* in exactly the same order as they
@@ -4515,13 +4515,32 @@ let filter_loop_useless_inputs_outputs (ctx : ctx)
         can trigger. Of course we could do everything inside of
         [loops_to_recursive], but that would make the code quite complex.
      }
-    } *)
+    }
+
+    In case we do not reorder the outputs for [loops_to_recursive], this
+    micro-pass will try to reorder the outputs to solve the following case:
+    {[
+      def foo ... :=
+        let (x, y) <- loop (fun ... ->
+         ok (x, y))
+        ok (y, x)
+
+         ~~>
+
+      def foo ... :=
+        loop (fun ... ->
+         ok (y, x))
+    ]} *)
 let reorder_loop_outputs (ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
 
   (* Helper to update the breaks in a loop body. *)
-  let update_loop_body (output_indices : int list) (continue_ty : ty)
-      (body : loop_body) : loop_body =
+  let update_and_close_loop_body (explore : texpr -> texpr)
+      (output_indices : int list) (num_output_backs : int) (loop : loop) : texpr
+      =
+    let continue_ty =
+      mk_simpl_tuple_ty (List.map (fun (e : texpr) -> e.ty) loop.inputs)
+    in
     let rec update (e : texpr) : texpr =
       match e.e with
       | FVar _ | BVar _ | CVar _ | Const _ | Lambda _ | StructUpdate _ | Loop _
@@ -4578,8 +4597,38 @@ let reorder_loop_outputs (ctx : ctx) (def : fun_decl) =
       | Meta (m, e) -> mk_emeta m (update e)
     in
 
+    let body = loop.loop_body in
     let body = { body with loop_body = update body.loop_body } in
-    close_loop_body span body
+
+    (* Recursively explore the loop body *)
+    let body = { body with loop_body = explore body.loop_body } in
+
+    (* Close the loop body *)
+    let body = close_loop_body span body in
+
+    (* Rebuild the loop *)
+    let num_outputs = List.length loop.output_tys in
+    let num_output_values = num_outputs - num_output_backs in
+    let output_tys =
+      List.map (fun i -> Collections.List.nth loop.output_tys i) output_indices
+    in
+    let loop =
+      {
+        loop with
+        output_tys;
+        num_output_values;
+        inputs = loop.inputs;
+        num_input_conts = loop.num_input_conts;
+        loop_body = body;
+      }
+    in
+
+    let loop : texpr =
+      { e = Loop loop; ty = mk_result_ty (mk_simpl_tuple_ty loop.output_tys) }
+    in
+    [%ldebug "loop:\n" ^ texpr_to_string ctx loop];
+
+    loop
   in
 
   (* Small helper: update a let-binding binding a loop, after we reordred the
@@ -4595,6 +4644,257 @@ let reorder_loop_outputs (ctx : ctx) (def : fun_decl) =
 
     (* Create the let-binding *)
     mk_closed_let span monadic pat loop next
+  in
+
+  (* Small helper: attempt to compute a new order which would be useful for
+     [loops_to_recursive] *)
+  let compute_outputs_indices_to_reorder_backs (loop : loop) :
+      (int list * int) option =
+    (* Analyze the body *)
+    let rel = compute_loop_input_output_rel span ctx loop in
+
+    (* Go through all the outputs, check if some of them are actually
+       calls to input backward functions *)
+    (* Helper: is a continuation exactly a call to an input backward function? *)
+    let input_conts_fvids_to_index =
+      FVarId.Map.of_list
+        (List.filter_map
+           (fun x -> x)
+           (List.mapi
+              (fun i (p : tpattern) ->
+                match p.pat with
+                | PDummy -> None
+                | POpen (fvar, _) -> Some (fvar.id, i)
+                | _ -> [%internal_error] span)
+              (Collections.List.prefix loop.num_input_conts
+                 loop.loop_body.inputs)))
+    in
+    [%ldebug
+      "- input_conts_fvids_to_index: "
+      ^ FVarId.Map.to_string None string_of_int input_conts_fvids_to_index
+      ^ "\n- num_input_conts: "
+      ^ string_of_int loop.num_input_conts
+      ^ "\n- num_output_values: "
+      ^ string_of_int loop.num_output_values];
+
+    let is_call_to_input (x : texpr) : int option =
+      let _pats, body = raw_destruct_lambdas x in
+      let _, body = raw_destruct_lets body in
+      let f, _args = destruct_apps body in
+      match f.e with
+      | FVar fid -> FVarId.Map.find_opt fid input_conts_fvids_to_index
+      | _ -> None
+    in
+    let { outputs; _ } : loop_rel = rel in
+    [%ldebug "loop_rel:\n" ^ loop_rel_to_string ctx rel];
+    let outputs_call_inputs =
+      List.filter_map
+        (fun (i, xl) ->
+          match List.find_opt Option.is_some xl with
+          | None -> None
+          | Some x ->
+              let x = Option.get x in
+              if List.for_all (fun x' -> x' = Some x) xl then Some (i, x)
+              else None)
+        (List.mapi
+           (fun i x -> (i, x))
+           (List.map (List.map is_call_to_input) outputs))
+    in
+    [%ldebug
+      "outputs_call_inputs:\n"
+      ^ Print.list_to_string
+          (fun (x, i) -> string_of_int x ^ " -> " ^ string_of_int i)
+          outputs_call_inputs];
+
+    (* We reorder only if every input backward function has a corresponding
+       output. We first compute the map from input backward function (refered
+       to by its index) to output index.
+
+       TODO: it would be good to generalize, but it's unclear what we should do,
+       so it should be driven by examples. *)
+    let input_to_output =
+      ref
+        (Collections.IntMap.of_list
+           (List.init loop.num_input_conts (fun i -> (i, []))))
+    in
+    List.iter
+      (fun (output_index, input_index) ->
+        input_to_output :=
+          Collections.IntMap.add_to_list input_index output_index
+            !input_to_output)
+      outputs_call_inputs;
+    let input_to_output = !input_to_output in
+
+    (* Check that every input backward function maps to exactly one output *)
+    let reorder =
+      Collections.IntMap.for_all
+        (fun _ x ->
+          match x with
+          | [ _ ] -> true
+          | _ -> false)
+        input_to_output
+      && not (Collections.IntMap.is_empty input_to_output)
+    in
+    [%ldebug "reorder: " ^ string_of_bool reorder];
+
+    if not reorder then None
+    else
+      (* First, simplify the map from input index to output index so that
+         it maps to a single index (rather than a list of indices) *)
+      let input_to_output =
+        Collections.IntMap.map (fun xl -> List.hd xl) input_to_output
+      in
+
+      (* Then, compute the indices of the outputs to reorder - we need this
+         to partition the outputs between those we put in front and the others *)
+      let outputs_to_reorder =
+        Collections.IntSet.of_list (Collections.IntMap.values input_to_output)
+      in
+
+      (* Finally, compute the list of the indices to use for the outputs.
+         e.g., if we want the output to follow the order:
+         output at index 2, output at index 0, then output at index 1,
+         the list is [2; 0; 1] *)
+      let num_outputs = List.length loop.output_tys in
+      let output_indices =
+        (* The prefix: the values which are not considered to be continuations *)
+        List.filter_map
+          (fun out_i ->
+            (* We simply remove the outputs that will be moved to the end,
+               because they are continuations that we want to reorder *)
+            if Collections.IntSet.mem out_i outputs_to_reorder then None
+            else Some out_i)
+          (List.init num_outputs (fun i -> i))
+        (* The suffix: the reordered continuations. *)
+        @ Collections.IntMap.values input_to_output
+      in
+      [%sanity_check] span (List.length output_indices = num_outputs);
+
+      Some (output_indices, Collections.IntMap.cardinal input_to_output)
+  in
+
+  (* Small helper: analyze the next expression to check if it is exactly
+     [ok ...] or [break ...] called on the loop outputs, but in a different
+     order.
+   *)
+  let compute_outputs_indices_if_followed_by_ok (loop : loop) (pat : tpattern)
+      (next : texpr) =
+    (* Check if the next expression is [ok (...)] or [break (...)],
+       and reorder the outputs accordingly. *)
+    (* Deconstruct the pattern and check that it is a tuple of free variables *)
+    [%ldebug "pat: " ^ tpattern_to_string ctx pat];
+    let patl = try_destruct_tuple_or_dummy_or_open_tpattern span pat in
+    let patl_fvars =
+      List.map
+        (fun (p : tpattern) ->
+          match p.pat with
+          | POpen (fv, _) -> Some fv
+          | _ -> None)
+        patl
+    in
+    if not (List.for_all Option.is_some patl_fvars) then None
+    else
+      let patl_fvars = List.map Option.get patl_fvars in
+      [%ldebug
+        "patl_fvars: " ^ Print.list_to_string (fvar_to_string ctx) patl_fvars];
+
+      (* Deconstruct the [next] expression *)
+      let f, args = destruct_apps next in
+      let is_ok_or_break =
+        match f.e with
+        | Qualif
+            {
+              id =
+                AdtCons { adt_id = TBuiltin tid; variant_id = Some variant_id };
+              _;
+            } -> (
+            match tid with
+            | TResult when variant_id = result_ok_id -> true
+            | TLoopResult when variant_id = loop_result_break_id -> true
+            | _ -> false)
+        | _ -> false
+      in
+      [%ldebug "is_ok_or_break: " ^ Print.bool_to_string is_ok_or_break];
+
+      if (not is_ok_or_break) || List.length args <> 1 then None
+      else
+        (* Analyze the arguments to check if they are all variables,
+           and if they are exactly the variables introduced by [patl]
+           but in a different order. *)
+        let args = try_destruct_tuple_texpr span (List.hd args) in
+        let args_fvars =
+          List.map
+            (fun (a : texpr) ->
+              match a.e with
+              | FVar fid -> Some fid
+              | _ -> None)
+            args
+        in
+        [%ldebug
+          "args_fvars: "
+          ^ Print.list_to_string
+              (Print.option_to_string FVarId.to_string)
+              args_fvars];
+
+        if not (List.for_all Option.is_some args_fvars) then None
+        else
+          let args_fvars = List.map Option.get args_fvars in
+          [%ldebug
+            "args_fvars: " ^ Print.list_to_string FVarId.to_string args_fvars];
+
+          (* Check that the arguments are exactly the fvars bound by the let-binding
+             but in a different order *)
+          (* First, compute a map from pattern fvar id to index (which gives the position) *)
+          let pat_fvar_to_index =
+            FVarId.Map.of_list
+              (List.mapi (fun i (fv : fvar) -> (fv.id, i)) patl_fvars)
+          in
+          [%ldebug
+            "pat_fvar_to_index: "
+            ^ FVarId.Map.to_string None string_of_int pat_fvar_to_index];
+
+          (* Map every argument to the index of the fvar it uses, if it uses an fvar
+             bound in the let *)
+          let arg_to_index =
+            List.mapi
+              (fun arg_i fid ->
+                match FVarId.Map.find_opt fid pat_fvar_to_index with
+                | None -> None
+                | Some pat_index -> Some (arg_i, pat_index))
+              args_fvars
+          in
+          [%ldebug
+            "arg_to_index: "
+            ^ Print.list_to_string
+                (Print.option_to_string
+                   (Print.pair_to_string string_of_int string_of_int))
+                arg_to_index];
+
+          (* Check that we could map all the arguments to some input, and that
+             the order is not respected *)
+          if not (List.for_all Option.is_some arg_to_index) then None
+          else
+            let arg_to_index = List.map Option.get arg_to_index in
+            if List.for_all (fun (i, i') -> i = i') arg_to_index then
+              (* Order is the same: no need to reorder *)
+              None
+            else
+              (* Order is not the same: we need to reorder *)
+              let output_indices = List.map snd arg_to_index in
+              (* Computing the number of output continuations is slightly annoying.
+                 We do something approximate: we compute the length of the longest
+                 suffix of the reordered outputs made of only continuations. *)
+              let num_outputs = List.length loop.output_tys in
+              let num_output_conts =
+                match
+                  List.find_index
+                    (fun i -> i < loop.num_output_values)
+                    (List.rev output_indices)
+                with
+                | Some i -> i
+                | None -> num_outputs
+              in
+              Some (output_indices, num_output_conts)
   in
 
   let rec explore (e : texpr) : texpr =
@@ -4614,183 +4914,62 @@ let reorder_loop_outputs (ctx : ctx) (def : fun_decl) =
     | Meta (m, e) -> mk_emeta m (explore e)
     | Let (monadic, pat, bound, next) -> (
         let _, pat, next = open_binder span pat next in
+        (* Simplify the next expression *)
+        let next = explore next in
 
         (* Check if the bound expression is a loop *)
         match bound.e with
-        | Loop loop ->
+        | Loop loop -> (
             let _, body = open_loop_body span loop.loop_body in
             [%ldebug "body:\n" ^ loop_body_to_string ctx body];
 
-            (* Explore the loop body: we want to simplify the inner loops *)
-            let body = { body with loop_body = explore body.loop_body } in
+            let loop = { loop with loop_body = body } in
 
-            (* Analyze the body *)
-            let rel =
-              compute_loop_input_output_rel span ctx
-                { loop with loop_body = body }
-            in
+            (* Check if we should reorder the output in an attempt to trigger the simplification
+               implemented by [loops_to_recursive] *)
+            match compute_outputs_indices_to_reorder_backs loop with
+            | Some (output_indices, num_output_backs) ->
+                (* Apply the update to the loop body - note that this *closes* the loop body *)
+                let loop =
+                  update_and_close_loop_body explore output_indices
+                    num_output_backs loop
+                in
 
-            (* Go through all the outputs, check if some of them are actually
-               calls to input backward functions *)
-            (* Helper: is a continuation exactly a call to an input backward function? *)
-            let input_conts_fvids_to_index =
-              FVarId.Map.of_list
-                (List.filter_map
-                   (fun x -> x)
-                   (List.mapi
-                      (fun i (p : tpattern) ->
-                        match p.pat with
-                        | PDummy -> None
-                        | POpen (fvar, _) -> Some (fvar.id, i)
-                        | _ -> [%internal_error] span)
-                      (Collections.List.prefix loop.num_input_conts body.inputs)))
-            in
-            [%ldebug
-              "- input_conts_fvids_to_index: "
-              ^ FVarId.Map.to_string None string_of_int
-                  input_conts_fvids_to_index
-              ^ "\n- num_input_conts: "
-              ^ string_of_int loop.num_input_conts
-              ^ "\n- num_output_values: "
-              ^ string_of_int loop.num_output_values];
+                (* Apply the let-binding (we need to reorder the variables in the pattern) *)
+                let next = explore next in
+                let e = update_let monadic pat loop next output_indices in
+                [%ldebug "let-expression:\n" ^ texpr_to_string ctx e];
+                e
+            | None -> (
+                match
+                  compute_outputs_indices_if_followed_by_ok loop pat next
+                with
+                | Some (output_indices, num_output_backs) ->
+                    (* Apply the update to the loop body - note that this *closes* the loop body *)
+                    let loop =
+                      update_and_close_loop_body explore output_indices
+                        num_output_backs loop
+                    in
 
-            let is_call_to_input (x : texpr) : int option =
-              let _pats, body = raw_destruct_lambdas x in
-              let _, body = raw_destruct_lets body in
-              let f, _args = destruct_apps body in
-              match f.e with
-              | FVar fid -> FVarId.Map.find_opt fid input_conts_fvids_to_index
-              | _ -> None
-            in
-            let { outputs; _ } : loop_rel = rel in
-            [%ldebug "loop_rel:\n" ^ loop_rel_to_string ctx rel];
-            let outputs_call_inputs =
-              List.filter_map
-                (fun (i, xl) ->
-                  match List.find_opt Option.is_some xl with
-                  | None -> None
-                  | Some x ->
-                      let x = Option.get x in
-                      if List.for_all (fun x' -> x' = Some x) xl then Some (i, x)
-                      else None)
-                (List.mapi
-                   (fun i x -> (i, x))
-                   (List.map (List.map is_call_to_input) outputs))
-            in
-            [%ldebug
-              "outputs_call_inputs:\n"
-              ^ Print.list_to_string
-                  (fun (x, i) -> string_of_int x ^ " -> " ^ string_of_int i)
-                  outputs_call_inputs];
-
-            (* We reorder only if every input backward function has a corresponding
-               output. We first compute the map from input backward function (refered
-               to by its index) to output index.
-
-               TODO: it would be good to generalize, but it's unclear what we should do,
-               so it should be driven by examples.
-            *)
-            let input_to_output =
-              ref
-                (Collections.IntMap.of_list
-                   (List.init loop.num_input_conts (fun i -> (i, []))))
-            in
-            List.iter
-              (fun (output_index, input_index) ->
-                input_to_output :=
-                  Collections.IntMap.add_to_list input_index output_index
-                    !input_to_output)
-              outputs_call_inputs;
-            let input_to_output = !input_to_output in
-
-            (* Check that every input backward function maps to exactly one output *)
-            let reorder =
-              Collections.IntMap.for_all
-                (fun _ x ->
-                  match x with
-                  | [ _ ] -> true
-                  | _ -> false)
-                input_to_output
-            in
-            [%ldebug "reorder: " ^ string_of_bool reorder];
-
-            if not reorder then
-              (* Do not apply any transformation *)
-              let loop = { loop with loop_body = close_loop_body span body } in
-              let bound = { bound with e = Loop loop } in
-              mk_closed_let span monadic pat bound next
-            else (* Apply the transformation *)
-              (* First, simplify the map from input index to output index so that
-                 it maps to a single index (rather than a list of indices) *)
-              let input_to_output =
-                Collections.IntMap.map (fun xl -> List.hd xl) input_to_output
-              in
-
-              (* First, compute the indices of the outputs to reorder - we need this
-                 to partition the outputs between those we put in front and the others *)
-              let outputs_to_reorder =
-                Collections.IntSet.of_list
-                  (Collections.IntMap.values input_to_output)
-              in
-
-              (* Finally, compute the list of the indices to use for the outputs.
-                 e.g., if we want the output to follow the order:
-                 output at index 2, output at index 0, then output at index 1,
-                 the list is [2; 0; 1] *)
-              let num_outputs = List.length loop.output_tys in
-              let output_indices =
-                (* The prefix: the values which are not considered to be continuations *)
-                List.filter_map
-                  (fun out_i ->
-                    (* We simply remove the outputs that will be moved to the end,
-                       because they are continuations that we want to reorder *)
-                    if Collections.IntSet.mem out_i outputs_to_reorder then None
-                    else Some out_i)
-                  (List.init num_outputs (fun i -> i))
-                (* The suffix: the reordered continuations. *)
-                @ Collections.IntMap.values input_to_output
-              in
-              [%sanity_check] span (List.length output_indices = num_outputs);
-
-              (* Apply the update to the loop body *)
-              let continue_ty =
-                mk_simpl_tuple_ty
-                  (List.map (fun (e : texpr) -> e.ty) loop.inputs)
-              in
-              let body = update_loop_body output_indices continue_ty body in
-
-              let num_output_values =
-                num_outputs - Collections.IntMap.cardinal input_to_output
-              in
-              let output_tys =
-                List.map
-                  (fun i -> Collections.List.nth loop.output_tys i)
-                  output_indices
-              in
-              let loop =
-                {
-                  loop with
-                  output_tys;
-                  num_output_values;
-                  inputs = loop.inputs;
-                  num_input_conts = loop.num_input_conts;
-                  loop_body = body;
-                }
-              in
-
-              let loop : texpr =
-                {
-                  e = Loop loop;
-                  ty = mk_result_ty (mk_simpl_tuple_ty loop.output_tys);
-                }
-              in
-
-              [%ldebug "loop:\n" ^ texpr_to_string ctx loop];
-
-              (* Apply the let-binding (we need to reorder the variables in the pattern) *)
-              let e = update_let monadic pat loop next output_indices in
-              [%ldebug "let-expression:\n" ^ texpr_to_string ctx e];
-              e
+                    (* Apply the let-binding (we need to reorder the variables in the pattern) *)
+                    let next = explore next in
+                    let e = update_let monadic pat loop next output_indices in
+                    [%ldebug "let-expression:\n" ^ texpr_to_string ctx e];
+                    e
+                | None ->
+                    (* Do not reorder the output but recursively explore the loop body *)
+                    let loop_body =
+                      {
+                        loop.loop_body with
+                        loop_body = explore loop.loop_body.loop_body;
+                      }
+                    in
+                    let loop =
+                      { loop with loop_body = close_loop_body span loop_body }
+                    in
+                    let bound = { bound with e = Loop loop } in
+                    let next = explore next in
+                    mk_closed_let span monadic pat bound next))
         | _ ->
             (* No need to update the bound expression *)
             let next = explore next in
