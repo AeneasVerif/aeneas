@@ -4945,8 +4945,6 @@ let reorder_loop_outputs (ctx : ctx) (def : fun_decl) =
     | Meta (m, e) -> mk_emeta m (explore e)
     | Let (monadic, pat, bound, next) -> (
         let _, pat, next = open_binder span pat next in
-        (* Simplify the next expression *)
-        let next = explore next in
 
         (* Check if the bound expression is a loop *)
         match bound.e with
