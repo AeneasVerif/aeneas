@@ -3,7 +3,6 @@
 module Hashmap.Funs
 open Primitives
 include Hashmap.Types
-include Hashmap.FunsExternal
 include Hashmap.Clauses
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
@@ -120,8 +119,9 @@ let rec hashMap_insert_in_list_loop
     if ckey = key
     then Ok (false, (AList_Cons ckey value tl))
     else
-      let* (b, tl1) = hashMap_insert_in_list_loop key value tl in
-      Ok (b, (AList_Cons ckey cvalue tl1))
+      let* (b, back) = hashMap_insert_in_list_loop key value tl in
+      let back1 = AList_Cons ckey cvalue back in
+      Ok (b, back1)
   | AList_Nil -> Ok (true, (AList_Cons key value AList_Nil))
   end
 
@@ -307,18 +307,15 @@ let rec hashMap_get_mut_in_list_loop
   | AList_Cons ckey cvalue tl ->
     if ckey = key
     then
-      let back =
-        fun ret ->
+      Ok ((Some cvalue),
+        (fun ret ->
           let x = begin match ret with | Some x1 -> x1 | _ -> cvalue end in
-          AList_Cons ckey x tl
-      in
-      Ok ((Some cvalue), back)
+          AList_Cons ckey x tl))
     else
       let* (o, back) = hashMap_get_mut_in_list_loop tl key in
-      let back1 = fun ret -> let tl1 = back ret in AList_Cons ckey cvalue tl1
-      in
+      let back1 = fun ret -> let a = back ret in AList_Cons ckey cvalue a in
       Ok (o, back1)
-  | AList_Nil -> let back = fun ret -> AList_Nil in Ok (None, back)
+  | AList_Nil -> Ok (None, (fun ret -> AList_Nil))
   end
 
 (** [hashmap::{hashmap::HashMap<T>}::get_mut_in_list]:
@@ -368,8 +365,9 @@ let rec hashMap_remove_from_list_loop
       | AList_Nil -> Fail Failure
       end
     else
-      let* (o, tl1) = hashMap_remove_from_list_loop key tl in
-      Ok (o, (AList_Cons ckey x tl1))
+      let* (o, back) = hashMap_remove_from_list_loop key tl in
+      let back1 = AList_Cons ckey x back in
+      Ok (o, back1)
   | AList_Nil -> Ok (None, AList_Nil)
   end
 
@@ -402,12 +400,4 @@ let hashMap_remove
     let v = index_mut_back a1 in
     Ok (x, { self with num_entries = i1; slots = v })
   end
-
-(** [hashmap::insert_on_disk]:
-    Source: 'tests/src/hashmap.rs', lines 334:0-341:1 *)
-let insert_on_disk
-  (key : usize) (value : u64) (st : state) : result (state & unit) =
-  let* (st1, hm) = utils_deserialize st in
-  let* hm1 = hashMap_insert hm key value in
-  utils_serialize hm1 st1
 
