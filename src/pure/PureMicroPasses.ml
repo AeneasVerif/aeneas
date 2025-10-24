@@ -2763,7 +2763,7 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
   in
 
   object (self)
-    inherit [_] map_expr as super
+    inherit [_] map_expr
 
     method! visit_Let env monadic pat e1 e2 =
       (* Update the first expression *)
@@ -2820,8 +2820,8 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
           if !count = 1 then
             (try_simplify monadic pat e1 e2 back_var is_array index_generics a i)
               .e
-          else super#visit_Let env monadic pat e1 e2
-      | _ -> super#visit_Let env monadic pat e1 e2
+          else (mk_opened_let monadic pat e1 e2).e
+      | _ -> (mk_opened_let monadic pat e1 e2).e
   end
 
 let simplify_array_slice_update =
