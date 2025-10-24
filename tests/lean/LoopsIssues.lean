@@ -99,7 +99,7 @@ def read_global_loop (b : Bool) (n_rows : Usize) : Result Unit :=
   read_global_loop_loop b
 
 /- [loops_issues::mut_loop_len]: loop 0:
-   Source: 'tests/src/loops-issues.rs', lines 54:10-54:11 -/
+   Source: 'tests/src/loops-issues.rs', lines 55:10-55:11 -/
 def mut_loop_len_loop (buf : Array U8 4#usize) (b : Bool) : Result Unit :=
   if b
   then
@@ -113,7 +113,7 @@ def mut_loop_len_loop (buf : Array U8 4#usize) (b : Bool) : Result Unit :=
 partial_fixpoint
 
 /- [loops_issues::mut_loop_len]:
-   Source: 'tests/src/loops-issues.rs', lines 51:0-57:1 -/
+   Source: 'tests/src/loops-issues.rs', lines 52:0-58:1 -/
 def mut_loop_len (i : U32) (b : Bool) : Result U32 :=
   do
   let buf := Array.repeat 4#usize 0#u8
@@ -121,7 +121,7 @@ def mut_loop_len (i : U32) (b : Bool) : Result U32 :=
   ok i
 
 /- [loops_issues::test]: loop 0:
-   Source: 'tests/src/loops-issues.rs', lines 64:4-70:5 -/
+   Source: 'tests/src/loops-issues.rs', lines 65:4-71:5 -/
 def test_loop (b0 : Bool) (b1 : Bool) (buf : Array U8 4#usize) : Result Unit :=
   if b0
   then
@@ -137,7 +137,7 @@ def test_loop (b0 : Bool) (b1 : Bool) (buf : Array U8 4#usize) : Result Unit :=
 partial_fixpoint
 
 /- [loops_issues::test]:
-   Source: 'tests/src/loops-issues.rs', lines 60:0-71:1 -/
+   Source: 'tests/src/loops-issues.rs', lines 61:0-72:1 -/
 def test (b0 : Bool) (b1 : Bool) : Result Unit :=
   let buf := Array.repeat 4#usize 0#u8
   test_loop b0 b1 buf
