@@ -1,6 +1,15 @@
 //@ [!lean] skip
 use std::vec::Vec;
 
+pub fn iter(max: u32) -> u32 {
+    let mut i = 0;
+    while i < max {
+        i += 1;
+    }
+
+    i
+}
+
 /// No borrows
 pub fn sum(max: u32) -> u32 {
     let mut i = 0;
