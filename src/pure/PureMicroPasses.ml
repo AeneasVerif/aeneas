@@ -4486,6 +4486,342 @@ let filter_loop_useless_inputs_outputs (ctx : ctx)
   in
   { def with body }
 
+(** Reorder the outputs of loops, in particular to trigger simplifications with
+    [loops_to_recursive].
+
+    There are two issues:
+    {ul
+     {- in order for [loops_to_recursive] to be triggered, it needs the backward
+        functions to be used in the *output* in exactly the same order as they
+        are received as input (the main reason is that it makes the code of
+        [loops_to_recursive] slightly easier).
+     }
+     {- it can happen that some output *value* is actually a call to a loop
+        backward function, while [loops_to_recursive] will only analyse the loop
+        output backward functions, not the loop output values.
+
+        For instance, we sometimes generate code like this:
+        {[
+          def loop (back : ...) (l : List a) :=
+            match l with
+            | Nil => ok (back ...) (* HERE *)
+            | Cons ... => ...
+        ]}
+        where in [ok (back ...)], the expression [back ...] is tagged as an
+        output value.
+
+        This micro-pass changes the order of the output values and updates the
+        split between values and backward functions so that [loops_to_recursive]
+        can trigger. Of course we could do everything inside of
+        [loops_to_recursive], but that would make the code quite complex.
+     }
+    } *)
+let reorder_loop_outputs (ctx : ctx) (def : fun_decl) =
+  let span = def.item_meta.span in
+
+  (* Helper to update the breaks in a loop body. *)
+  let update_loop_body (output_indices : int list) (continue_ty : ty)
+      (body : loop_body) : loop_body =
+    let rec update (e : texpr) : texpr =
+      match e.e with
+      | FVar _ | BVar _ | CVar _ | Const _ | Lambda _ | StructUpdate _ | Loop _
+        ->
+          (* Shouldn't happen *)
+          [%internal_error] span
+      | EError _ -> e
+      | App _ | Qualif _ ->
+          (* This might be a break or a continue *)
+          begin
+            match
+              opt_destruct_loop_result_decompose_outputs span ~intro_let:true e
+            with
+            | None -> e
+            | Some ({ variant_id; args; _ }, rebind) ->
+                if variant_id = loop_result_break_id then (
+                  (* Reorder the outputs *)
+                  [%sanity_check] span
+                    (List.length args = List.length output_indices);
+                  let args =
+                    List.map
+                      (fun i -> Collections.List.nth args i)
+                      output_indices
+                  in
+                  let args = mk_simpl_tuple_texpr span args in
+                  rebind (mk_break_texpr span continue_ty args))
+                else
+                  (* Nothing to do *)
+                  e
+          end
+      | Let (monadic, pat, bound, next) ->
+          (* No need to update the bound expression *)
+          let _, pat, next = open_binder span pat next in
+          let next = update next in
+          mk_closed_let span monadic pat bound next
+      | Switch (scrut, switch) ->
+          (* No need to update the scrutinee *)
+          let switch =
+            match switch with
+            | If (e0, e1) -> If (update e0, update e1)
+            | Match branches ->
+                let branches =
+                  List.map
+                    (fun ({ pat; branch } : match_branch) ->
+                      let _, pat, branch = open_binder span pat branch in
+                      let branch = update branch in
+                      let pat, branch = close_binder span pat branch in
+                      { pat; branch })
+                    branches
+                in
+                Match branches
+          in
+          [%add_loc] mk_switch span scrut switch
+      | Meta (m, e) -> mk_emeta m (update e)
+    in
+
+    let body = { body with loop_body = update body.loop_body } in
+    close_loop_body span body
+  in
+
+  (* Small helper: update a let-binding binding a loop, after we reordred the
+     outputs *inside* the loop (i.e., the arguments given to the breaks) *)
+  let update_let (monadic : bool) (pat : tpattern) (loop : texpr) (next : texpr)
+      (output_indices : int list) : texpr =
+    (* Decompose the pattern, which should be a tuple *)
+    let patl = try_destruct_tuple_or_dummy_tpattern span pat in
+
+    (* Reorder *)
+    let patl = List.map (fun i -> Collections.List.nth patl i) output_indices in
+    let pat = mk_simpl_tuple_pattern patl in
+
+    (* Create the let-binding *)
+    mk_closed_let span monadic pat loop next
+  in
+
+  let rec explore (e : texpr) : texpr =
+    match e.e with
+    | FVar _
+    | BVar _
+    | CVar _
+    | Const _
+    | Lambda _
+    | App _
+    | Qualif _
+    | StructUpdate _
+    | EError _ -> e
+    | Loop _ ->
+        (* A loop should always be bound by a let *)
+        [%internal_error] span
+    | Meta (m, e) -> mk_emeta m (explore e)
+    | Let (monadic, pat, bound, next) -> (
+        let _, pat, next = open_binder span pat next in
+
+        (* Check if the bound expression is a loop *)
+        match bound.e with
+        | Loop loop ->
+            let _, body = open_loop_body span loop.loop_body in
+            [%ldebug "body:\n" ^ loop_body_to_string ctx body];
+
+            (* Explore the loop body: we want to simplify the inner loops *)
+            let body = { body with loop_body = explore body.loop_body } in
+
+            (* Analyze the body *)
+            let rel =
+              compute_loop_input_output_rel span ctx
+                { loop with loop_body = body }
+            in
+
+            (* Go through all the outputs, check if some of them are actually
+               calls to input backward functions *)
+            (* Helper: is a continuation exactly a call to an input backward function? *)
+            let input_conts_fvids_to_index =
+              FVarId.Map.of_list
+                (List.filter_map
+                   (fun x -> x)
+                   (List.mapi
+                      (fun i (p : tpattern) ->
+                        match p.pat with
+                        | PDummy -> None
+                        | POpen (fvar, _) -> Some (fvar.id, i)
+                        | _ -> [%internal_error] span)
+                      (Collections.List.prefix loop.num_input_conts body.inputs)))
+            in
+            [%ldebug
+              "- input_conts_fvids_to_index: "
+              ^ FVarId.Map.to_string None string_of_int
+                  input_conts_fvids_to_index
+              ^ "\n- num_input_conts: "
+              ^ string_of_int loop.num_input_conts
+              ^ "\n- num_output_values: "
+              ^ string_of_int loop.num_output_values];
+
+            let is_call_to_input (x : texpr) : int option =
+              let _pats, body = raw_destruct_lambdas x in
+              let _, body = raw_destruct_lets body in
+              let f, _args = destruct_apps body in
+              match f.e with
+              | FVar fid -> FVarId.Map.find_opt fid input_conts_fvids_to_index
+              | _ -> None
+            in
+            let { outputs; _ } : loop_rel = rel in
+            [%ldebug "loop_rel:\n" ^ loop_rel_to_string ctx rel];
+            let outputs_call_inputs =
+              List.filter_map
+                (fun (i, xl) ->
+                  match List.find_opt Option.is_some xl with
+                  | None -> None
+                  | Some x ->
+                      let x = Option.get x in
+                      if List.for_all (fun x' -> x' = Some x) xl then Some (i, x)
+                      else None)
+                (List.mapi
+                   (fun i x -> (i, x))
+                   (List.map (List.map is_call_to_input) outputs))
+            in
+            [%ldebug
+              "outputs_call_inputs:\n"
+              ^ Print.list_to_string
+                  (fun (x, i) -> string_of_int x ^ " -> " ^ string_of_int i)
+                  outputs_call_inputs];
+
+            (* We reorder only if every input backward function has a corresponding
+               output. We first compute the map from input backward function (refered
+               to by its index) to output index.
+
+               TODO: it would be good to generalize, but it's unclear what we should do,
+               so it should be driven by examples.
+            *)
+            let input_to_output =
+              ref
+                (Collections.IntMap.of_list
+                   (List.init loop.num_input_conts (fun i -> (i, []))))
+            in
+            List.iter
+              (fun (output_index, input_index) ->
+                input_to_output :=
+                  Collections.IntMap.add_to_list input_index output_index
+                    !input_to_output)
+              outputs_call_inputs;
+            let input_to_output = !input_to_output in
+
+            (* Check that every input backward function maps to exactly one output *)
+            let reorder =
+              Collections.IntMap.for_all
+                (fun _ x ->
+                  match x with
+                  | [ _ ] -> true
+                  | _ -> false)
+                input_to_output
+            in
+            [%ldebug "reorder: " ^ string_of_bool reorder];
+
+            if not reorder then
+              (* Do not apply any transformation *)
+              let loop = { loop with loop_body = close_loop_body span body } in
+              let bound = { bound with e = Loop loop } in
+              mk_closed_let span monadic pat bound next
+            else (* Apply the transformation *)
+              (* First, simplify the map from input index to output index so that
+                 it maps to a single index (rather than a list of indices) *)
+              let input_to_output =
+                Collections.IntMap.map (fun xl -> List.hd xl) input_to_output
+              in
+
+              (* First, compute the indices of the outputs to reorder - we need this
+                 to partition the outputs between those we put in front and the others *)
+              let outputs_to_reorder =
+                Collections.IntSet.of_list
+                  (Collections.IntMap.values input_to_output)
+              in
+
+              (* Finally, compute the list of the indices to use for the outputs.
+                 e.g., if we want the output to follow the order:
+                 output at index 2, output at index 0, then output at index 1,
+                 the list is [2; 0; 1] *)
+              let num_outputs = List.length loop.output_tys in
+              let output_indices =
+                (* The prefix: the values which are not considered to be continuations *)
+                List.filter_map
+                  (fun out_i ->
+                    (* We simply remove the outputs that will be moved to the end,
+                       because they are continuations that we want to reorder *)
+                    if Collections.IntSet.mem out_i outputs_to_reorder then None
+                    else Some out_i)
+                  (List.init num_outputs (fun i -> i))
+                (* The suffix: the reordered continuations. *)
+                @ Collections.IntMap.values input_to_output
+              in
+              [%sanity_check] span (List.length output_indices = num_outputs);
+
+              (* Apply the update to the loop body *)
+              let continue_ty =
+                mk_simpl_tuple_ty
+                  (List.map (fun (e : texpr) -> e.ty) loop.inputs)
+              in
+              let body = update_loop_body output_indices continue_ty body in
+
+              let num_output_values =
+                num_outputs - Collections.IntMap.cardinal input_to_output
+              in
+              let output_tys =
+                List.map
+                  (fun i -> Collections.List.nth loop.output_tys i)
+                  output_indices
+              in
+              let loop =
+                {
+                  loop with
+                  output_tys;
+                  num_output_values;
+                  inputs = loop.inputs;
+                  num_input_conts = loop.num_input_conts;
+                  loop_body = body;
+                }
+              in
+
+              let loop : texpr =
+                {
+                  e = Loop loop;
+                  ty = mk_result_ty (mk_simpl_tuple_ty loop.output_tys);
+                }
+              in
+
+              [%ldebug "loop:\n" ^ texpr_to_string ctx loop];
+
+              (* Apply the let-binding (we need to reorder the variables in the pattern) *)
+              let e = update_let monadic pat loop next output_indices in
+              [%ldebug "let-expression:\n" ^ texpr_to_string ctx e];
+              e
+        | _ ->
+            (* No need to update the bound expression *)
+            let next = explore next in
+            mk_closed_let span monadic pat bound next)
+    | Switch (scrut, switch) ->
+        (* No need to update the scrutinee *)
+        let switch =
+          match switch with
+          | If (e0, e1) -> If (explore e0, explore e1)
+          | Match bl ->
+              Match
+                (List.map
+                   (fun ({ pat; branch } : match_branch) ->
+                     let _, pat, branch = open_binder span pat branch in
+                     let branch = explore branch in
+                     let pat, branch = close_binder span pat branch in
+                     { pat; branch })
+                   bl)
+        in
+        [%add_loc] mk_switch span scrut switch
+  in
+  let body =
+    Option.map
+      (fun body ->
+        let _, body = open_fun_body span body in
+        let body = { body with body = explore body.body } in
+        close_fun_body span body)
+      def.body
+  in
+  { def with body }
+
 (** Attempts to transform loops to recursive functions which receive no backward
     functions as inputs and only *output* backward functions.
 
@@ -5309,6 +5645,8 @@ let passes :
       "inline_useless_var_assignments (pass 3)",
       inline_useless_var_assignments ~inline_named:true ~inline_const:true
         ~inline_pure:true ~inline_identity:true ~inline_loop_back_calls:true );
+    (* Reorder some of the loop outputs to permit [loops_to_recursive] to succeed *)
+    (None, "reorder_loop_outputs", reorder_loop_outputs);
     (* Change the structure of the loops if we can simplify their backward
        functions. This is in preparation of [decompose_loops], which introduces
        auxiliary (and potentially recursive) functions. *)
