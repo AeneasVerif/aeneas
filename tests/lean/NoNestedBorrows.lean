@@ -302,17 +302,24 @@ def list_rev {T : Type} (l : List T) : Result (List T) :=
    Source: 'tests/src/no_nested_borrows.rs', lines 319:0-333:1 -/
 def test_list_functions : Result Unit :=
   do
-  let l := List.Cons 2#i32 List.Nil
-  let l1 := List.Cons 1#i32 l
-  let i ← list_length (List.Cons 0#i32 l1)
+  let i ←
+    list_length (List.Cons 0#i32 (List.Cons 1#i32 (List.Cons 2#i32 List.Nil)))
   massert (i = 3#u32)
-  let i1 ← list_nth_shared (List.Cons 0#i32 l1) 0#u32
+  let i1 ←
+    list_nth_shared (List.Cons 0#i32 (List.Cons 1#i32 (List.Cons 2#i32
+      List.Nil))) 0#u32
   massert (i1 = 0#i32)
-  let i2 ← list_nth_shared (List.Cons 0#i32 l1) 1#u32
+  let i2 ←
+    list_nth_shared (List.Cons 0#i32 (List.Cons 1#i32 (List.Cons 2#i32
+      List.Nil))) 1#u32
   massert (i2 = 1#i32)
-  let i3 ← list_nth_shared (List.Cons 0#i32 l1) 2#u32
+  let i3 ←
+    list_nth_shared (List.Cons 0#i32 (List.Cons 1#i32 (List.Cons 2#i32
+      List.Nil))) 2#u32
   massert (i3 = 2#i32)
-  let (_, list_nth_mut_back) ← list_nth_mut (List.Cons 0#i32 l1) 1#u32
+  let (_, list_nth_mut_back) ←
+    list_nth_mut (List.Cons 0#i32 (List.Cons 1#i32 (List.Cons 2#i32 List.Nil)))
+      1#u32
   let ls := list_nth_mut_back 3#i32
   let i4 ← list_nth_shared ls 0#u32
   massert (i4 = 0#i32)

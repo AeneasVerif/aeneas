@@ -74,12 +74,12 @@ let rec sum (l : list_t i32) : result i32 =
 (** [paper::test_nth]:
     Source: 'tests/src/paper.rs', lines 70:0-75:1 *)
 let test_nth : result unit =
-  let l = List_Cons 3 List_Nil in
-  let l1 = List_Cons 2 l in
-  let* (x, list_nth_mut_back) = list_nth_mut (List_Cons 1 l1) 2 in
+  let* (x, list_nth_mut_back) =
+    list_nth_mut (List_Cons 1 (List_Cons 2 (List_Cons 3 List_Nil))) 2
+  in
   let* x1 = i32_add x 1 in
-  let l2 = list_nth_mut_back x1 in
-  let* i = sum l2 in
+  let l = list_nth_mut_back x1 in
+  let* i = sum l in
   if i = 7 then Ok () else Fail Failure
 
 (** Unit test for [paper::test_nth] *)

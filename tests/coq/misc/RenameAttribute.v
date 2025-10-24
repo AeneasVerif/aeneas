@@ -97,14 +97,14 @@ Fixpoint no_borrows_sum_loop
       s1 <- u32_add s i;
       i1 <- u32_add i 1%u32;
       no_borrows_sum_loop n1 max i1 s1)
-    else u32_mul s 2%u32
+    else Ok s
   end
 .
 
 (** [rename_attribute::sum]:
     Source: 'tests/src/rename_attribute.rs', lines 66:0-76:1 *)
 Definition no_borrows_sum (n : nat) (max : u32) : result u32 :=
-  no_borrows_sum_loop n max 0%u32 0%u32
+  s <- no_borrows_sum_loop n max 0%u32 0%u32; u32_mul s 2%u32
 .
 
 End RenameAttribute.

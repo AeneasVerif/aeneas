@@ -86,12 +86,12 @@ partial_fixpoint
    Source: 'tests/src/paper.rs', lines 70:0-75:1 -/
 def test_nth : Result Unit :=
   do
-  let l := List.Cons 3#i32 List.Nil
-  let l1 := List.Cons 2#i32 l
-  let (x, list_nth_mut_back) ← list_nth_mut (List.Cons 1#i32 l1) 2#u32
+  let (x, list_nth_mut_back) ←
+    list_nth_mut (List.Cons 1#i32 (List.Cons 2#i32 (List.Cons 3#i32 List.Nil)))
+      2#u32
   let x1 ← x + 1#i32
-  let l2 := list_nth_mut_back x1
-  let i ← sum l2
+  let l := list_nth_mut_back x1
+  let i ← sum l
   massert (i = 7#i32)
 
 /- Unit test for [paper::test_nth] -/
