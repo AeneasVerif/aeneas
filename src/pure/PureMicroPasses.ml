@@ -2609,11 +2609,9 @@ let apply_beta_reduction =
       ...
     ]
 
-    TODO: this is not done anymore, but will be necessary if we make backward
-    functions stateful again.
     [
       let _, back = Array.index_mut_usize a i in
-      back x
+      ok (back x)
 
          ~~>
 
@@ -2727,6 +2725,26 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
               (* Ignore this let-binding and return information about the backward
                call, so that we can insert it before *)
               (Some (pat', v, tpattern_get_fvars pat'), false, next'))
+      | App (f, arg) -> (
+          (* Check if this is the [ok (back v)] case *)
+          match f.e with
+          | Qualif
+              {
+                id =
+                  AdtCons
+                    { adt_id = TBuiltin TResult; variant_id = Some variant_id };
+                _;
+              }
+            when variant_id = result_ok_id -> (
+              (* Check if we are calling the backward function *)
+              match is_call_to_back arg with
+              | Some v ->
+                  (* Introduce the backward call here (there is no point in moving it up higher).
+                  Note that it's ok to output [None] for the information about the backward
+                  call: the option will be matched on only if the boolean [updated] is false. *)
+                  (None, true, mk_call_to_update v)
+              | None -> (None, false, next))
+          | _ -> (None, false, next))
       | _ ->
           (* Stop *)
           (None, false, next)
