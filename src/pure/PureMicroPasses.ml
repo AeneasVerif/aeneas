@@ -53,6 +53,10 @@ let ty_to_string (ctx : ctx) (x : ty) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.ty_to_string fmt false x
 
+let let_to_string (ctx : ctx) monadic lv re next : string =
+  let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
+  PrintPure.let_to_string fmt "" "  " monadic lv re next
+
 let fun_body_to_string (ctx : ctx) (x : fun_body) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.fun_body_to_string fmt x
@@ -986,14 +990,16 @@ let simplify_lambdas = lift_expr_map_visitor simplify_lambdas_visitor
       ...
       x
     ]} *)
-let simplify_let_bindings_visitor (_ctx : ctx) (def : fun_decl) =
+let simplify_let_bindings_visitor (ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
   object (self)
     inherit [_] map_expr as super
 
     method! visit_Let env monadic lv rv next =
+      [%ldebug "Visiting let:\n" ^ let_to_string ctx monadic lv rv next];
       match rv.e with
       | Let (rmonadic, rlv, rrv, rnext) ->
+          [%ldebug "Case: inner let"];
           (* Case 1: move the inner let outside then re-visit *)
           let rnext1 = Let (monadic, lv, rnext, next) in
           let rnext1 = { ty = next.ty; e = rnext1 } in
@@ -1014,6 +1020,7 @@ let simplify_let_bindings_visitor (_ctx : ctx) (def : fun_decl) =
               ty = _;
             },
             x ) ->
+          [%ldebug "Case: result"];
           (* return/fail case *)
           if variant_id = result_ok_id then
             (* Return case - note that the simplification we just perform
@@ -1024,6 +1031,7 @@ let simplify_let_bindings_visitor (_ctx : ctx) (def : fun_decl) =
             self#visit_expr env rv.e
           else [%craise] def.item_meta.span "Unexpected"
       | App _ ->
+          [%ldebug "Case: app"];
           (* This might be the tuple case *)
           if not monadic then
             match (opt_dest_struct_pattern lv, opt_dest_tuple_texpr rv) with
@@ -1039,6 +1047,7 @@ let simplify_let_bindings_visitor (_ctx : ctx) (def : fun_decl) =
             | _ -> super#visit_Let env monadic lv rv next
           else super#visit_Let env monadic lv rv next
       | Lambda (pat, body) ->
+          [%ldebug "Case: lambda"];
           (* Simplify:
              {[
                let f := fun x => x
@@ -1053,17 +1062,21 @@ let simplify_let_bindings_visitor (_ctx : ctx) (def : fun_decl) =
           begin
             match (pat.pat, body.e) with
             | POpen (fv, _), FVar fid when fv.id = fid ->
-                let body =
+                [%ldebug "Simplifying the lambda"];
+                let next =
                   let env = FVarId.Set.add fid env in
-                  self#visit_texpr env body
+                  self#visit_texpr env next
                 in
-                super#visit_Let env monadic lv rv
-                  (mk_opened_lambda span pat body)
-            | _ -> super#visit_Let env monadic lv rv next
+                (mk_opened_let monadic lv rv next).e
+            | _ ->
+                [%ldebug "Not simplifying the lambda"];
+                super#visit_Let env monadic lv rv next
           end
       | _ -> super#visit_Let env monadic lv rv next
 
     method! visit_App env f arg =
+      [%ldebug
+        "Visiting app: " ^ texpr_to_string ctx ([%add_loc] mk_app span f arg)];
       (* Check if this is the identity case *)
       match f.e with
       | FVar fid when FVarId.Set.mem fid env -> arg.e
