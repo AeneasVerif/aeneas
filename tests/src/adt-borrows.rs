@@ -1,4 +1,4 @@
-//@ [coq,fstar] skip
+//@ [!lean] skip
 //! This file contains tests with ADTs containing borrows.
 
 //
