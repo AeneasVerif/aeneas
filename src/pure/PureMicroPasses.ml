@@ -2704,8 +2704,8 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
                     (back_call, updated, mk_opened_let monadic' pat' bound next')
                 | Some (back_pat, v, v_vars) ->
                     (* Check if the input value given to the backward call requires
-                    variables that were introduced in exactly this let-binding:
-                    if yes, we insert it here, otherwise we insert it higher up *)
+                       variables that were introduced in this let-binding:
+                       if yes, we insert it here, otherwise we insert it higher up *)
                     if
                       not
                         (FVarId.Set.is_empty
@@ -2724,7 +2724,7 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
           | Some v ->
               (* Ignore this let-binding and return information about the backward
                call, so that we can insert it before *)
-              (Some (pat', v, tpattern_get_fvars pat'), false, next'))
+              (Some (pat', v, texpr_get_fvars v), false, next'))
       | App (f, arg) -> (
           (* Check if this is the [ok (back v)] case *)
           match f.e with
@@ -2740,8 +2740,8 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
               match is_call_to_back arg with
               | Some v ->
                   (* Introduce the backward call here (there is no point in moving it up higher).
-                  Note that it's ok to output [None] for the information about the backward
-                  call: the option will be matched on only if the boolean [updated] is false. *)
+                     Note that it's ok to output [None] for the information about the backward
+                     call: the option will be matched on only if the boolean [updated] is false. *)
                   (None, true, mk_call_to_update v)
               | None -> (None, false, next))
           | _ -> (None, false, next))
