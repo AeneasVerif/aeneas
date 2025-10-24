@@ -70,9 +70,8 @@ def update_array_loop1
   if j < 4#usize
   then
     do
-    let (_, index_mut_back) ← Array.index_mut_usize out j
+    let out1 ← Array.update out j 1#u8
     let j1 ← j + 1#usize
-    let out1 := index_mut_back 1#u8
     update_array_loop1 out1 j1
   else ok out
 partial_fixpoint
@@ -83,8 +82,7 @@ def update_array_loop0 (out : Array U8 4#usize) (i : Usize) : Result Unit :=
   if i < 4#usize
   then
     do
-    let (_, index_mut_back) ← Array.index_mut_usize out i
-    let out1 := index_mut_back 0#u8
+    let out1 ← Array.update out i 0#u8
     let out2 ← update_array_loop1 out1 0#usize
     let i1 ← i + 1#usize
     update_array_loop0 out2 i1
@@ -147,14 +145,12 @@ def ntt_layer_loop1
     let c1_factor ← c1 * factor
     let c11 ← mod_sub c0 c1_factor
     let c01 ← mod_add c0 c1_factor
-    let (_, index_mut_back) ← Array.index_mut_usize a i
     let i4 ← (↑(UScalar.cast .U16 c01) : Result U16)
+    let a1 ← Array.update a i i4
     let i5 ← i + len
-    let a1 := index_mut_back i4
-    let (_, index_mut_back1) ← Array.index_mut_usize a1 i5
     let i6 ← (↑(UScalar.cast .U16 c11) : Result U16)
+    let a2 ← Array.update a1 i5 i6
     let j1 ← j + 1#usize
-    let a2 := index_mut_back1 i6
     ntt_layer_loop1 len start factor a2 j1
   else ok a
 partial_fixpoint
@@ -267,19 +263,18 @@ def generate_matrix_loop1
   if j < 4#u8
   then
     do
-    let (_, index_mut_back) ← Array.index_mut_usize coordinates 0#usize
+    let coordinates1 ← Array.update coordinates 0#usize j
     let state_work1 ← shake_state_copy state_base state_work
-    let coordinates1 := index_mut_back j
     let s ← (↑(Array.to_slice coordinates1) : Result (Slice U8))
     let state_work2 ← shake_append state_work1 s
     let (a_transpose, atranspose_mut_back) ← Key.atranspose_mut key
     let i1 ← i * 4#u8
     let i2 ← i1 + j
     let i3 ← (↑(UScalar.cast .Usize i2) : Result Usize)
-    let (i4, index_mut_back1) ← Array.index_mut_usize a_transpose i3
+    let (i4, index_mut_back) ← Array.index_mut_usize a_transpose i3
     let (state_work3, i5) ← sample_ntt state_work2 i4
     let j1 ← j + 1#u8
-    let a_transpose1 := index_mut_back1 i5
+    let a_transpose1 := index_mut_back i5
     let key1 := atranspose_mut_back a_transpose1
     generate_matrix_loop1 state_base i key1 state_work3 coordinates1 j1
   else ok (key, state_work, coordinates)
@@ -295,8 +290,7 @@ def generate_matrix_loop0
   if i < 4#u8
   then
     do
-    let (_, index_mut_back) ← Array.index_mut_usize coordinates 1#usize
-    let coordinates1 := index_mut_back i
+    let coordinates1 ← Array.update coordinates 1#usize i
     let (key1, state_work1, coordinates2) ←
       generate_matrix_loop1 state_base i key state_work coordinates1 0#u8
     let i1 ← i + 1#u8

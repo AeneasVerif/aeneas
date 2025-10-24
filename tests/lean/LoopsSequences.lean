@@ -66,10 +66,9 @@ def key_expand_loop0
   if i < 32#i32
   then
     do
-    let (_, index_mut_back) ← Array.index_mut_usize sample_buffer 0#usize
     let i1 ← (↑(IScalar.hcast .U8 i) : Result U8)
+    let sample_buffer1 ← Array.update sample_buffer 0#usize i1
     let state_work1 ← shake_state_copy state_base state_work
-    let sample_buffer1 := index_mut_back i1
     let s ← (↑(Array.to_slice sample_buffer1) : Result (Slice U8))
     let state_work2 ← shake_append state_work1 s
     let (s1, to_slice_mut_back) ←
@@ -96,10 +95,9 @@ def key_expand_loop1
   if i < 32#i32
   then
     do
-    let (_, index_mut_back) ← Array.index_mut_usize sample_buffer 0#usize
     let i1 ← (↑(IScalar.hcast .U8 i) : Result U8)
+    let sample_buffer1 ← Array.update sample_buffer 0#usize i1
     let state_work1 ← shake_state_copy state_base state_work
-    let sample_buffer1 := index_mut_back i1
     let s ← (↑(Array.to_slice sample_buffer1) : Result (Slice U8))
     let state_work2 ← shake_append state_work1 s
     let (s1, to_slice_mut_back) ←
