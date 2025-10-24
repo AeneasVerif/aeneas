@@ -792,4 +792,34 @@ partial_fixpoint
 def copy_carray (a : Array U32 2#usize) : Result (Array U32 2#usize) :=
   copy_carray_loop a 0#usize
 
+/- [loops::iter_local_mut_borrow]: loop 0:
+   Source: 'tests/src/loops.rs', lines 479:4-484:5 -/
+def iter_local_mut_borrow_loop (p : I32) : Result Unit :=
+  do
+  let p1 ← p + 1#i32
+  if p1 = 10#i32
+  then ok ()
+  else iter_local_mut_borrow_loop p1
+partial_fixpoint
+
+/- [loops::iter_local_mut_borrow]:
+   Source: 'tests/src/loops.rs', lines 476:0-485:1 -/
+@[reducible]
+def iter_local_mut_borrow : Result Unit :=
+  iter_local_mut_borrow_loop 0#i32
+
+/- [loops::iter_local_shared_borrow]: loop 0:
+   Source: 'tests/src/loops.rs', lines 491:4-495:5 -/
+def iter_local_shared_borrow_loop : Result Unit :=
+  if 0#i32 = 0#i32
+  then ok ()
+  else iter_local_shared_borrow_loop
+partial_fixpoint
+
+/- [loops::iter_local_shared_borrow]:
+   Source: 'tests/src/loops.rs', lines 488:0-496:1 -/
+@[reducible]
+def iter_local_shared_borrow : Result Unit :=
+  iter_local_shared_borrow_loop
+
 end loops

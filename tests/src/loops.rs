@@ -471,3 +471,26 @@ fn copy_carray(a: &mut [u32; 2]) {
         i += 1;
     }
 }
+
+/// This test used to be only borrow-checked
+fn iter_local_mut_borrow() {
+    let mut x = 0;
+    let mut p = &mut x;
+    loop {
+        p = &mut (*p);
+        *p += 1;
+
+        if *p == 10 { break }
+    }
+}
+
+/// This test used to be only borrow-checked
+fn iter_local_shared_borrow() {
+    let mut x = 0;
+    let mut p = &x;
+    loop {
+        p = &(*p);
+
+        if x == 0 { break }
+    }
+}
