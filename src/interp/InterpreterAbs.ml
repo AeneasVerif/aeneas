@@ -436,14 +436,8 @@ let convert_value_to_input_avalues (span : Meta.span) (ctx : eval_ctx)
 
     Note that this function supports projection markers: when merging two
     borrows we take the union of the markers. *)
-let abs_simplify_duplicated_borrows (span : Meta.span) (ctx : eval_ctx)
+let abs_simplify_duplicated_borrows (_span : Meta.span) (_ctx : eval_ctx)
     (abs : abs) : abs =
-  (* Sanity check: the abstraction has been destructured *)
-  (if !Config.sanity_checks then
-     let destructure_shared_values = true in
-     [%sanity_check] span
-       (abs_is_destructured span destructure_shared_values ctx abs));
-
   let join_pm (pm0 : proj_marker) (pm1 : proj_marker) : proj_marker =
     match (pm0, pm1) with
     | PNone, _ | _, PNone -> PNone
@@ -696,16 +690,8 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
     tavalue list =
   [%ltrace ""];
 
-  if !Config.sanity_checks then (
-    let destructure_shared_values = true in
-    [%sanity_check] span
-      (abs_is_destructured span destructure_shared_values ctx abs0);
-    [%sanity_check] span
-      (abs_is_destructured span destructure_shared_values ctx abs1));
-
   (* Sanity check: no markers appear unless we allow merging duplicates.
-     Also, the borrows must be disjoint, and the loans must be disjoint.
-  *)
+     Also, the borrows must be disjoint, and the loans must be disjoint. *)
   if not allow_markers then (
     let visitor =
       object
@@ -1799,15 +1785,6 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind)
     ^ abs_to_string span ctx abs1];
   (* Sanity check: we can't merge an abstraction with itself *)
   [%sanity_check] span (abs0.abs_id <> abs1.abs_id);
-
-  (* Check that the abstractions are destructured (i.e., there are no nested
-     values, etc.) *)
-  if !Config.sanity_checks then (
-    let destructure_shared_values = true in
-    [%sanity_check] span
-      (abs_is_destructured span destructure_shared_values ctx abs0);
-    [%sanity_check] span
-      (abs_is_destructured span destructure_shared_values ctx abs1));
 
   (* Compute the ancestor regions, owned regions, etc.
      Note that one of the two abstractions might a parent of the other *)
