@@ -103,7 +103,6 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
   let fvars_tys = Pure.FVarId.Map.map (fun (v : Pure.fvar) -> v.ty) fvars in
 
   let calls = FunCallId.Map.empty in
-  let abstractions = AbsId.Map.empty in
   let recursive_type_decls =
     TypeDeclId.Set.of_list
       (List.filter_map
@@ -178,7 +177,6 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
       backward_outputs = None;
       (* Empty for now *)
       calls;
-      abstractions;
       loop_ids_map;
       mk_return = None;
       mk_panic = None;

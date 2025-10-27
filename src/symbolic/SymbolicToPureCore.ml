@@ -201,13 +201,6 @@ type bs_ctx = {
           [Some] afterwards. *)
   calls : S.call V.FunCallId.Map.t;
       (** The function calls we encountered so far *)
-  abstractions : (V.abs * texpr list) V.AbsId.Map.t;
-      (** The ended abstractions we encountered so far, with their additional
-          input arguments. We store it here and not in {!call_info} because we
-          need a map from abstraction id to abstraction (and not from call id +
-          region group id to abstraction).
-
-          TODO: remove. *)
   loop_ids_map : LoopId.id V.LoopId.Map.t;  (** Ids to use for the loops *)
   mk_return : (bs_ctx -> texpr option -> texpr) option;
       (** Small helper: translate a [return] expression, given a value to

@@ -1499,22 +1499,12 @@ and translate_continue_break (ctx : bs_ctx) ~(continue : bool)
 and translate_substitute_abs_ids (ctx : bs_ctx) (aids : V.abs_id V.AbsId.Map.t)
     (e : S.expr) : texpr =
   (* We need to update the information we have in the various maps of the context *)
-  let { abstractions; abs_id_to_info; ignored_abs_ids; _ } = ctx in
+  let { abs_id_to_info; ignored_abs_ids; _ } = ctx in
   let update (aid : V.AbsId.id) : V.AbsId.id =
     match V.AbsId.Map.find_opt aid aids with
     | Some aid -> aid
     | None -> aid
   in
-
-  (* *)
-  let abstractions' =
-    V.AbsId.Map.of_list
-      ((List.map (fun (aid, x) -> (update aid, x)))
-         (V.AbsId.Map.bindings abstractions))
-  in
-  (* Check for collisions *)
-  [%sanity_check] ctx.span
-    (V.AbsId.Map.cardinal abstractions = V.AbsId.Map.cardinal abstractions');
 
   (* *)
   let abs_id_to_info' =
@@ -1537,7 +1527,6 @@ and translate_substitute_abs_ids (ctx : bs_ctx) (aids : V.abs_id V.AbsId.Map.t)
   let ctx =
     {
       ctx with
-      abstractions = abstractions';
       abs_id_to_info = abs_id_to_info';
       ignored_abs_ids = ignored_abs_ids';
     }
