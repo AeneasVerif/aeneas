@@ -6409,19 +6409,18 @@ let apply_passes_to_pure_fun_translations (trans_ctx : trans_ctx)
       "After decomposing loops:\n\n"
       ^ String.concat "\n\n" (List.map (fun_decl_to_string ctx) funs)];
 
-    { f; loops }
+    let trans : pure_fun_translation = { f; loops } in
+
+    (* Introduce the fuel and the state, if necessary.
+
+       We do this last, because some other passes need to manipulate the
+       functions *wihout* fuel and state (otherwise it messes up the
+       parameter manipulations). *)
+    let trans = if !Config.use_fuel then add_fuel ctx trans else trans in
+
+    trans
   in
   let transl = List.map apply transl in
-
-  (* Introduce the fuel and the state, if necessary.
-
-     We do this last, because some other passes need to manipulate the
-     functions *wihout* fuel and state (otherwise it messes up the
-     parameter manipulations).
-   *)
-  let transl =
-    if !Config.use_fuel then List.map (add_fuel ctx) transl else transl
-  in
 
   (* Add the type annotations - we add those only now because we need
      to use the final types of the functions (in particular, we introduce
