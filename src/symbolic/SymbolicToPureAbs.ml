@@ -493,9 +493,9 @@ let tepat_to_tpattern (ctx : bs_ctx)
   in
   let rec to_pat ~(filter : bool) (ctx : bs_ctx) (pat : V.tepat) :
       bs_ctx * tpattern option =
-    match pat.epat with
+    match pat.pat with
     | V.POpen fid ->
-        abs_fvar_id_to_tpattern ctx fvar_to_texpr rids ~filter fid pat.epat_ty
+        abs_fvar_id_to_tpattern ctx fvar_to_texpr rids ~filter fid pat.ty
     | V.PBound ->
         (* Binders should have been opened *)
         [%internal_error] span
@@ -505,7 +505,7 @@ let tepat_to_tpattern (ctx : bs_ctx)
         let compute_proj_kind (pat : V.tepat) : proj_kind =
           if
             TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
-              keep_region pat.epat_ty
+              keep_region pat.ty
           then BorrowProj BMut
           else BorrowProj BShared
         in
@@ -518,17 +518,16 @@ let tepat_to_tpattern (ctx : bs_ctx)
             compute_proj_kind
             (fun fields ->
               let ty =
-                translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos
-                  pat.epat_ty
+                translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos pat.ty
               in
               mk_adt_pattern ty variant_id fields)
-            mk_simpl_tuple_pattern ~filter ctx pat pat.epat_ty fields
+            mk_simpl_tuple_pattern ~filter ctx pat pat.ty fields
         in
         let out = Option.map snd out in
         (ctx, out)
       end
     | V.PIgnored ->
-        let ty = pat.epat_ty in
+        let ty = pat.ty in
         if
           filter
           && not
@@ -580,7 +579,7 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
               { input with value = ELet (rids', pat, bound, next) }];
         [%ldebug
           "- pat: " ^ tepat_to_string ctx pat ^ "\n- pat.ty: "
-          ^ InterpreterUtils.ty_to_string ectx pat.epat_ty];
+          ^ InterpreterUtils.ty_to_string ectx pat.ty];
         (* Translate *)
         let ctx, bound_can_fail, bound = to_texpr ~filter rids' ctx bound in
         let llbc_pat = pat in
@@ -588,7 +587,7 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
         [%ldebug
           "Let-binding:\n- pat: " ^ tpattern_to_string ctx pat
           ^ "\n- LLBC pat.ty: "
-          ^ InterpreterUtils.ty_to_string ectx llbc_pat.epat_ty
+          ^ InterpreterUtils.ty_to_string ectx llbc_pat.ty
           ^ "\n- bound: "
           ^ Print.option_to_string (texpr_to_string ctx) bound];
         let ctx, next_can_fail, next = to_texpr ~filter rids ctx next in

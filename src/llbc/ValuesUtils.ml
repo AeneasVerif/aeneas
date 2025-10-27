@@ -35,7 +35,7 @@ let mk_aignored (span : Meta.span) (ty : ty) (v : tvalue option) : tavalue =
   { value = AIgnored v; ty }
 
 let mk_eignored (ty : ty) : tevalue = { value = EIgnored; ty }
-let mk_epat_ignored (ty : ty) : tepat = { epat = PIgnored; epat_ty = ty }
+let mk_epat_ignored (ty : ty) : tepat = { pat = PIgnored; ty }
 
 let mk_evalue (env : env) (ty : ty) (v : tvalue) : tevalue =
   { value = EValue (env, v); ty }
@@ -57,9 +57,9 @@ let mk_etuple (vl : tevalue list) : tevalue =
   }
 
 let mk_epat_tuple (vl : tepat list) : tepat =
-  let tys = List.map (fun (v : tepat) -> v.epat_ty) vl in
+  let tys = List.map (fun (v : tepat) -> v.ty) vl in
   let generics = mk_generic_args_from_types tys in
-  { epat = PAdt (None, vl); epat_ty = TAdt { id = TTuple; generics } }
+  { pat = PAdt (None, vl); ty = TAdt { id = TTuple; generics } }
 
 let mk_simpl_etuple (vl : tevalue list) : tevalue =
   match vl with
@@ -586,7 +586,7 @@ let mk_fresh_abs_fvar (ty : ty) : tevalue =
 
 let mk_epat_from_fvar (fv : tevalue) : tepat =
   match fv.value with
-  | EFVar id -> { epat = POpen id; epat_ty = fv.ty }
+  | EFVar id -> { pat = POpen id; ty = fv.ty }
   | _ -> raise (Failure "Unexpected")
 
 let tevalue_has_fvars (e : tevalue) : bool =

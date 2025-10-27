@@ -1368,10 +1368,10 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
         [%craise] span ("Unexpected expression: " ^ tevalue_to_string ctx output)
     | EBottom ->
         (* We're not inside a loan or a borrow: simply ignore it *)
-        { epat = PIgnored; epat_ty = output.ty }
+        { pat = PIgnored; ty = output.ty }
     | EAdt adt ->
         let pats = List.map (bind_output regions) adt.fields in
-        { epat = PAdt (adt.variant_id, pats); epat_ty = output.ty }
+        { pat = PAdt (adt.variant_id, pats); ty = output.ty }
     | ELoan _ ->
         (* We shouldn't reach a loan which is not itself inside a borrow *)
         [%craise] span "Unexpected"
@@ -1383,7 +1383,7 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
               [%cassert] span (is_eignored child.value) "Unimplemented";
               (* Compute the binding pattern *)
               let fid = fresh_abs_fvar_id () in
-              let pat : tepat = { epat = POpen fid; epat_ty = output.ty } in
+              let pat : tepat = { pat = POpen fid; ty = output.ty } in
               (* We need to register the binding *)
               bound :=
                 bound_inputs_outputs_add_borrow span bid pm fid output.ty !bound;
@@ -1410,7 +1410,7 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
               let { sv_id; proj_ty } : esymbolic_proj = proj in
               [%sanity_check] span (loans = []);
               let fid = fresh_abs_fvar_id () in
-              let pat : tepat = { epat = POpen fid; epat_ty = output.ty } in
+              let pat : tepat = { pat = POpen fid; ty = output.ty } in
               (* We need to register the binding *)
               let norm_ty = normalize_proj_ty regions proj_ty in
               bound :=
@@ -1427,10 +1427,10 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
         end
     | EValue _ ->
         (* We're not inside a loan or a borrow: simply ignore it *)
-        { epat = PIgnored; epat_ty = output.ty }
+        { pat = PIgnored; ty = output.ty }
     | EIgnored ->
         (* We're not inside a loan or a borrow: simply ignore it *)
-        { epat = PIgnored; epat_ty = output.ty }
+        { pat = PIgnored; ty = output.ty }
   in
   let input = update_input regions input in
   let pat = bind_output regions output in
@@ -1572,7 +1572,7 @@ let merge_abs_conts_generate_input (span : Meta.span) (_ctx : eval_ctx)
               | [ PLeft; PRight ] | [ PRight; PLeft ] -> PNone
               | _ -> [%internal_error] span
             in
-            let pat : tepat = { epat = POpen fid; epat_ty = ty } in
+            let pat : tepat = { pat = POpen fid; ty } in
             let input : tevalue =
               { value = ELoan (EMutLoan (pm, bid, mk_eignored ty)); ty }
             in
@@ -1590,7 +1590,7 @@ let merge_abs_conts_generate_input (span : Meta.span) (_ctx : eval_ctx)
               | [ PLeft; PRight ] | [ PRight; PLeft ] -> PNone
               | _ -> [%internal_error] span
             in
-            let pat : tepat = { epat = POpen fid; epat_ty = ty } in
+            let pat : tepat = { pat = POpen fid; ty } in
             let input : tevalue =
               {
                 value =

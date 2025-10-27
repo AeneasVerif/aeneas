@@ -1042,16 +1042,6 @@ and eended_proj_borrows = {
   loans : (mconsumed_symb * eproj) list;
 }
 
-and abs_output =
-  | OBorrow of borrow_id  (** A *mutable* borrow *)
-  | OSymbolic of symbolic_value_id
-  | OAdt of variant_id option * abs_toutput list
-
-and abs_toutput = {
-  opat : abs_output;
-  opat_ty : ty;  (** The type should have been normalized *)
-}
-
 and abs_bvar = { scope : abs_db_scope_id; bvar_id : abs_bvar_id }
 
 and abs_fun =
@@ -1136,10 +1126,7 @@ and epat =
   | PAdt of variant_id option * tepat list
   | PIgnored
 
-and tepat = {
-  epat : epat;
-  epat_ty : ty;  (** The type should have been normalized *)
-}
+and tepat = { pat : epat; ty : ty  (** The type should have been normalized *) }
 
 and adt_evalue = {
   variant_id : (VariantId.id option[@opaque]);

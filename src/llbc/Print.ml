@@ -338,18 +338,6 @@ module Values = struct
     | AProjSharedBorrow sb ->
         "@proj_shared_borrow(" ^ abstract_shared_borrows_to_string env sb ^ ")"
 
-  let rec abs_toutput_to_string ?(span : Meta.span option = None)
-      (env : fmt_env) (o : abs_toutput) : string =
-    match o.opat with
-    | OBorrow bid -> "mut_borrow@" ^ BorrowId.to_string bid
-    | OSymbolic sv_id ->
-        symbolic_value_to_string env { sv_id; sv_ty = o.opat_ty }
-    | OAdt (variant_id, fields) ->
-        let fields = List.map (abs_toutput_to_string env) fields in
-        adt_to_string span env
-          (fun () -> show_abs_toutput o)
-          o.opat_ty variant_id fields
-
   (** An environment specific to abstraction expressions. We use it to properly
       print the bound variables: as it is hard to interpret deBruijn indices, we
       also use a unique identifier for all the bound variables. *)
@@ -639,15 +627,14 @@ module Values = struct
   and tepat_to_string_core ?(span : Meta.span option = None) (env : fmt_env)
       (aenv : evalue_env) (indent : string) (indent_incr : string) (pat : tepat)
       : evalue_env * string =
-    match pat.epat with
+    match pat.pat with
     | PBound ->
-        let aenv, _, s = evalue_env_push_var aenv pat.epat_ty in
-        (aenv, "(" ^ s ^ " : " ^ ty_to_string env pat.epat_ty ^ ")")
+        let aenv, _, s = evalue_env_push_var aenv pat.ty in
+        (aenv, "(" ^ s ^ " : " ^ ty_to_string env pat.ty ^ ")")
     | POpen bid ->
         ( aenv,
-          "(@" ^ AbsFVarId.to_string bid ^ " : "
-          ^ ty_to_string env pat.epat_ty
-          ^ ")" )
+          "(@" ^ AbsFVarId.to_string bid ^ " : " ^ ty_to_string env pat.ty ^ ")"
+        )
     | PAdt (variant_id, fields) ->
         let aenv, fields =
           List.fold_left_map
@@ -658,8 +645,8 @@ module Values = struct
         ( aenv,
           adt_to_string span env
             (fun () -> show_tepat pat)
-            pat.epat_ty variant_id fields )
-    | PIgnored -> (aenv, "(_ : " ^ ty_to_string env pat.epat_ty ^ ")")
+            pat.ty variant_id fields )
+    | PIgnored -> (aenv, "(_ : " ^ ty_to_string env pat.ty ^ ")")
 
   and tepat_to_string ?(span : Meta.span option = None) (env : fmt_env)
       (aenv : evalue_env) (indent : string) (indent_incr : string) (pat : tepat)
