@@ -441,12 +441,7 @@ module Values = struct
     match f with
     | EOutputAbs rg_id -> "OutputAbs@" ^ RegionGroupId.to_string rg_id
     | EInputAbs rg_id -> "InputAbs@" ^ RegionGroupId.to_string rg_id
-    | EFunCall (call_id, rg_id) ->
-        "FunCall(call@"
-        ^ FunCallId.to_string call_id
-        ^ ",rg@"
-        ^ RegionGroupId.to_string rg_id
-        ^ ")"
+    | EFunCall aid -> "FunCall(abs_id@" ^ AbsId.to_string aid ^ ")"
     | ELoop (abs_id, lp_id) ->
         "Loop(abs_id@" ^ AbsId.to_string abs_id ^ ",loop_id@"
         ^ LoopId.to_string lp_id ^ ")"

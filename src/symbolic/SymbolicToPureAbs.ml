@@ -637,37 +637,12 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
           | V.EOutputAbs _ | V.EInputAbs _ ->
               (* Those shouln't get merged *)
               [%internal_error] span
-          | V.EFunCall (call_id, rg_id) ->
-              let call_info = V.FunCallId.Map.find call_id ctx.calls in
-              let call = call_info.forward in
-              let fun_id =
-                match call.call_id with
-                | S.Fun (fun_id, _) -> fun_id
-                | Unop _ | Binop _ ->
-                    (* Those don't have backward functions *)
-                    [%craise] ctx.span "Unreachable"
-              in
-              let effect_info = get_fun_effect_info ctx fun_id (Some rg_id) in
-              let can_fail = effect_info.can_fail in
-              (* Lookup the variable introduced for the backward function *)
-              let func =
-                RegionGroupId.Map.find rg_id (Option.get call_info.back_funs)
-              in
-              let e =
-                begin
-                  match func with
-                  | None ->
-                      [%sanity_check] span (args = []);
-                      None
-                  | Some func -> Some ([%add_loc] mk_apps span func args)
-                end
-              in
-              (ctx, can_fail, e)
-          | V.ELoop (abs_id, _lid) ->
+          | V.EFunCall abs_id | V.ELoop (abs_id, _) ->
               (* Lookup the variable introduced for the backward function *)
               let e, can_fail =
-                match V.AbsId.Map.find_opt abs_id ctx.abs_id_to_fvar with
+                match V.AbsId.Map.find_opt abs_id ctx.abs_id_to_info with
                 | None ->
+                    [%sanity_check] span (args = []);
                     [%sanity_check] span
                       (V.AbsId.Set.mem abs_id ctx.ignored_abs_ids);
                     (None, false)

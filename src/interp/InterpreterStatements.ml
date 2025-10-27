@@ -1304,7 +1304,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
    * First, we define the function which, given an initialized, empty
    * abstraction, computes the avalues which should be inserted inside.
    *)
-  let compute_abs_avalues (rg_id : RegionGroupId.id) (abs : abs)
+  let compute_abs_avalues (_rg_id : RegionGroupId.id) (abs : abs)
       (ctx : eval_ctx) : tavalue list * abs_cont option =
     (* Project over the input values *)
     let args_projs =
@@ -1333,7 +1333,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
         mk_eproj_loans_value_from_symbolic_value abs.regions.owned ret_spc
           ret_sv_ty
       in
-      let input = EApp (EFunCall (call_id, rg_id), [ input ]) in
+      let input = EApp (EFunCall abs.abs_id, [ input ]) in
       let input : tevalue = { value = input; ty = ret_sv_ty } in
       { output = Some output; input = Some input }
     in

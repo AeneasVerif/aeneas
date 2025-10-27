@@ -275,7 +275,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
         let effect_info = get_fun_effect_info ctx fid None in
         (* Generate the variables for the backward functions returned by the forward
            function. *)
-        let ctx, ignore_fwd_output, back_funs_map, back_funs =
+        let ctx, ignore_fwd_output, back_funs =
           (* We need to compute the signatures of the backward functions. *)
           let sg = Option.get call.sg in
           let inst_sg = Option.get call.inst_sg in
@@ -349,16 +349,35 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
           let back_funs =
             List.filter_map (Option.map (mk_tpat_from_fvar None)) back_vars
           in
-          let gids =
-            List.map
-              (fun (g : T.region_var_group) -> g.id)
-              inst_sg.regions_hierarchy
+
+          (* Update the information about the backward functions *)
+          let ctx =
+            let backs, ignored =
+              List.partition
+                (fun (_, v) -> Option.is_some v)
+                (List.combine call.abstractions back_vars)
+            in
+            let ignored = List.map fst ignored in
+            let backs =
+              List.map
+                (fun (aid, fv) ->
+                  let fvar = mk_texpr_from_fvar (Option.get fv) in
+                  (aid, { fvar; can_fail = false }))
+                backs
+            in
+            let ctx =
+              {
+                ctx with
+                abs_id_to_info = V.AbsId.Map.add_list backs ctx.abs_id_to_info;
+                ignored_abs_ids =
+                  V.AbsId.Set.add_list ignored ctx.ignored_abs_ids;
+              }
+            in
+            ctx
           in
-          let back_vars = List.map (Option.map mk_texpr_from_fvar) back_vars in
-          let back_funs_map =
-            RegionGroupId.Map.of_list (List.combine gids back_vars)
-          in
-          (ctx, dsg.fwd_info.ignore_output, Some back_funs_map, back_funs)
+
+          (* *)
+          (ctx, dsg.fwd_info.ignore_output, back_funs)
         in
         (* Compute the pattern for the destination *)
         let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
@@ -378,9 +397,11 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
           in
           mk_simpl_tuple_pat vars
         in
-        (* Register the function call *)
+        (* Register the forward call (some information, for instance about
+           the places where the values come from, will be useful later to
+           compute names for the values given back by the backward functions) *)
         let ctx =
-          bs_ctx_register_forward_call call_id call args back_funs_map ctx
+          { ctx with calls = V.FunCallId.Map.add call_id call ctx.calls }
         in
         (ctx, func, effect_info, args, back_funs, dest)
     | S.Unop E.Not -> (
@@ -617,8 +638,8 @@ and translate_end_abs (ectx : C.eval_ctx) (abs : V.abs) (e : S.expr)
   match abs.kind with
   | V.SynthInput rg_id ->
       translate_end_abstraction_synth_input ectx abs e ctx rg_id
-  | V.FunCall (call_id, rg_id) ->
-      translate_end_abstraction_fun_call ectx abs e ctx call_id rg_id
+  | V.FunCall (call_id, _) ->
+      translate_end_abstraction_fun_call ectx abs e call_id ctx
   | V.SynthRet rg_id -> translate_end_abstraction_synth_ret ectx abs e ctx rg_id
   | V.Loop loop_id -> translate_end_abstraction_loop ectx abs e ctx loop_id
   | V.Identity | V.CopySymbolicValue ->
@@ -691,18 +712,9 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
   mk_closed_checked_lets __FILE__ __LINE__ ctx monadic variables_values next_e
 
 and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
-    (e : S.expr) (ctx : bs_ctx) (call_id : V.FunCallId.id)
-    (rg_id : T.RegionGroupId.id) : texpr =
-  let call_info = V.FunCallId.Map.find call_id ctx.calls in
-  let call = call_info.forward in
-  let fun_id =
-    match call.call_id with
-    | S.Fun (fun_id, _) -> fun_id
-    | Unop _ | Binop _ ->
-        (* Those don't have backward functions *)
-        [%craise] ctx.span "Unreachable"
-  in
-  let effect_info = get_fun_effect_info ctx fun_id (Some rg_id) in
+    (e : S.expr) (call_id : V.fun_call_id) (ctx : bs_ctx) : texpr =
+  let call = V.FunCallId.Map.find call_id ctx.calls in
+  let info = V.AbsId.Map.find_opt abs.abs_id ctx.abs_id_to_info in
   (* Retrieve the values consumed upon ending the loans inside this
    * abstraction: those give us the input values *)
   let back_inputs = abs_to_consumed ctx ectx abs in
@@ -720,11 +732,6 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
   let ctx, outputs = abs_to_given_back (Some output_mpl) abs ctx in
   (* Group the output values together *)
   let output = mk_simpl_tuple_pat outputs in
-  (* Retrieve the function id, and register the function call in the context
-     if necessary. *)
-  let ctx, func =
-    bs_ctx_register_backward_call abs call_id rg_id back_inputs ctx
-  in
   (* Translate the next expression *)
   let next_e ctx = translate_expr e ctx in
   (* Put everything together *)
@@ -737,19 +744,21 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
   in
   (* The backward function might have been filtered if it does nothing
      (consumes unit and returns unit). *)
-  match func with
+  match info with
   | None -> next_e ctx
-  | Some func ->
+  | Some info ->
       [%ltrace
         let args = List.map (texpr_to_string ctx) args in
-        "func: " ^ texpr_to_string ctx func ^ "\nfunc type: "
-        ^ pure_ty_to_string ctx func.ty
+        "func: "
+        ^ texpr_to_string ctx info.fvar
+        ^ "\nfunc type: "
+        ^ pure_ty_to_string ctx info.fvar.ty
         ^ "\n\nargs:\n" ^ String.concat "\n" args];
-      let call = [%add_loc] mk_apps ctx.span func args in
+      let call = [%add_loc] mk_apps ctx.span info.fvar args in
       (* Introduce a match if necessary *)
       let ctx, (output, call) = decompose_let_match ctx output call in
       (* Translate the next expression and construct the let *)
-      [%add_loc] mk_closed_checked_let ctx effect_info.can_fail output call
+      [%add_loc] mk_closed_checked_let ctx info.can_fail output call
         (next_e ctx)
 
 and translate_end_abs_identity (ectx : C.eval_ctx) (abs : V.abs) (e : S.expr)
@@ -850,7 +859,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
   let output = mk_simpl_tuple_pat outputs in
   (* Lookup the continuation - it might not be there if the backward function
      was filtered, if it consumes nothing and outputs nothing *)
-  let func = V.AbsId.Map.find_opt abs.abs_id ctx.abs_id_to_fvar in
+  let func = V.AbsId.Map.find_opt abs.abs_id ctx.abs_id_to_info in
   (* Translate the next expression *)
   let next_e ctx = translate_expr e ctx in
   (* Put everything together *)
@@ -1346,7 +1355,7 @@ and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
         in
         {
           ctx with
-          abs_id_to_fvar = V.AbsId.Map.add_list fvars ctx.abs_id_to_fvar;
+          abs_id_to_info = V.AbsId.Map.add_list fvars ctx.abs_id_to_info;
           ignored_abs_ids = V.AbsId.Set.add_list ignored ctx.ignored_abs_ids;
         }
       in
@@ -1490,7 +1499,7 @@ and translate_continue_break (ctx : bs_ctx) ~(continue : bool)
 and translate_substitute_abs_ids (ctx : bs_ctx) (aids : V.abs_id V.AbsId.Map.t)
     (e : S.expr) : texpr =
   (* We need to update the information we have in the various maps of the context *)
-  let { abstractions; abs_id_to_fvar; ignored_abs_ids; _ } = ctx in
+  let { abstractions; abs_id_to_info; ignored_abs_ids; _ } = ctx in
   let update (aid : V.AbsId.id) : V.AbsId.id =
     match V.AbsId.Map.find_opt aid aids with
     | Some aid -> aid
@@ -1508,14 +1517,14 @@ and translate_substitute_abs_ids (ctx : bs_ctx) (aids : V.abs_id V.AbsId.Map.t)
     (V.AbsId.Map.cardinal abstractions = V.AbsId.Map.cardinal abstractions');
 
   (* *)
-  let abs_id_to_fvar' =
+  let abs_id_to_info' =
     V.AbsId.Map.of_list
       ((List.map (fun (aid, x) -> (update aid, x)))
-         (V.AbsId.Map.bindings abs_id_to_fvar))
+         (V.AbsId.Map.bindings abs_id_to_info))
   in
   (* Check for collisions *)
   [%sanity_check] ctx.span
-    (V.AbsId.Map.cardinal abs_id_to_fvar = V.AbsId.Map.cardinal abs_id_to_fvar');
+    (V.AbsId.Map.cardinal abs_id_to_info = V.AbsId.Map.cardinal abs_id_to_info');
 
   (* *)
   let ignored_abs_ids' = V.AbsId.Set.map update ignored_abs_ids in
@@ -1529,7 +1538,7 @@ and translate_substitute_abs_ids (ctx : bs_ctx) (aids : V.abs_id V.AbsId.Map.t)
     {
       ctx with
       abstractions = abstractions';
-      abs_id_to_fvar = abs_id_to_fvar';
+      abs_id_to_info = abs_id_to_info';
       ignored_abs_ids = ignored_abs_ids';
     }
   in

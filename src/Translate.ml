@@ -186,7 +186,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
       mk_break = None;
       mut_borrow_to_consumed = BorrowId.Map.empty;
       var_id_to_default = Pure.FVarId.Map.empty;
-      abs_id_to_fvar = AbsId.Map.empty;
+      abs_id_to_info = AbsId.Map.empty;
       ignored_abs_ids = AbsId.Set.empty;
       meta_symb_places = SymbolicToPureCore.MetaSymbPlaceSet.empty;
     }

@@ -49,35 +49,6 @@ type fun_ctx = {
 }
 [@@deriving show]
 
-(** Whenever we translate a function call or an ended abstraction, we store the
-    related information (this is useful when translating ended children
-    abstractions).
-
-    TODO: remove *)
-type call_info = {
-  forward : S.call;
-  forward_inputs : texpr list;
-      (** Remember the list of inputs given to the forward function.
-
-          Those inputs include the fuel and the state, if pertinent. *)
-  back_funs : texpr option RegionGroupId.Map.t option;
-      (** If we do not split between the forward/backward functions: the
-          variables we introduced for the backward functions.
-
-          Example:
-          {[
-            let x, back = Vec.index_mut n v in
-                   ^^^^
-                   here
-            ...
-          ]}
-
-          The expression might be [None] in case the backward function has to be
-          filtered (because it does nothing - the backward functions for shared
-          borrows for instance). *)
-}
-[@@deriving show]
-
 (** Contains information about a loop we entered.
 
     Note that a path in a translated function body can have at most one call to
@@ -120,8 +91,23 @@ type loop_info = {
       (** The map from region group ids to the types of the values given back by
           the corresponding loop abstractions. This map is partial. *)
   back_funs : texpr option RegionGroupId.Map.t option;
-      (** Same as {!call_info.back_funs}. Initialized with [None], gets updated
-          to [Some] only if we merge the fwd/back functions. *)
+      (** If we do not split between the forward/backward functions: the
+          variables we introduced for the backward functions.
+
+          Example:
+          {[
+            let x, back = Vec.index_mut n v in
+                   ^^^^
+                   here
+            ...
+          ]}
+
+          The expression might be [None] in case the backward function has to be
+          filtered (because it does nothing - the backward functions for shared
+          borrows for instance).
+
+          Initialized with [None], gets updated to [Some] only if we merge the
+          fwd/back functions. *)
   fwd_effect_info : fun_effect_info;
   back_effect_infos : fun_effect_info RegionGroupId.Map.t;
 }
@@ -213,7 +199,7 @@ type bs_ctx = {
 
           The option is [None] before we detect the ended input abstraction, and
           [Some] afterwards. *)
-  calls : call_info V.FunCallId.Map.t;
+  calls : S.call V.FunCallId.Map.t;
       (** The function calls we encountered so far *)
   abstractions : (V.abs * texpr list) V.AbsId.Map.t;
       (** The ended abstractions we encountered so far, with their additional
@@ -302,12 +288,10 @@ type bs_ctx = {
           when deconstructing an ended abstraction, to the default value that we
           can use when introducing the otherwise branch of the deconstructing
           match (see [mut_borrow_to_consumed]). *)
-  abs_id_to_fvar : back_fun_info V.AbsId.Map.t;
-      (** For the abstractions output by loops/branchings: this maps the
-          abstraction ids to the corresponding variables we introduced in the
-          translation, together with additional information.
-
-          TODO: use this for all the region abstractions. *)
+  abs_id_to_info : back_fun_info V.AbsId.Map.t;
+      (** This maps the abstraction ids to the corresponding variables we
+          introduced in the translation, together with additional information.
+      *)
   ignored_abs_ids : V.AbsId.Set.t;
       (** For sanity purposes, we keep track of the region abstractions for
           which we did not introduce any variable in the translation: when we
@@ -450,39 +434,6 @@ let bs_ctx_lookup_llbc_fun_decl (id : A.FunDeclId.id) (ctx : bs_ctx) :
 
 let bs_ctx_lookup_type_decl (id : TypeDeclId.id) (ctx : bs_ctx) : type_decl =
   TypeDeclId.Map.find id ctx.type_ctx.type_decls
-
-let bs_ctx_register_forward_call (call_id : V.FunCallId.id) (forward : S.call)
-    (args : texpr list) (back_funs : texpr option RegionGroupId.Map.t option)
-    (ctx : bs_ctx) : bs_ctx =
-  let calls = ctx.calls in
-  [%sanity_check] ctx.span (not (V.FunCallId.Map.mem call_id calls));
-  let info = { forward; forward_inputs = args; back_funs } in
-  let calls = V.FunCallId.Map.add call_id info calls in
-  { ctx with calls }
-
-(** [inherit_args]: the list of inputs inherited from the forward function and
-    the ancestors backward functions, if pertinent. [back_args]: the
-    *additional* list of inputs received by the backward function, including the
-    state.
-
-    Returns the updated context and the expression corresponding to the function
-    that we need to call. This function may be [None] if it has to be ignored
-    (because it does nothing). *)
-let bs_ctx_register_backward_call (abs : V.abs) (call_id : V.FunCallId.id)
-    (back_id : T.RegionGroupId.id) (back_args : texpr list) (ctx : bs_ctx) :
-    bs_ctx * texpr option =
-  (* Insert the abstraction in the call informations *)
-  let info = V.FunCallId.Map.find call_id ctx.calls in
-  let calls = V.FunCallId.Map.add call_id info ctx.calls in
-  (* Insert the abstraction in the abstractions map *)
-  let abstractions = ctx.abstractions in
-  [%sanity_check] ctx.span (not (V.AbsId.Map.mem abs.abs_id abstractions));
-  let abstractions = V.AbsId.Map.add abs.abs_id (abs, back_args) abstractions in
-  (* Compute the expression corresponding to the function.
-     We simply lookup the variable introduced for the backward function. *)
-  let func = RegionGroupId.Map.find back_id (Option.get info.back_funs) in
-  (* Update the context and return *)
-  ({ ctx with calls; abstractions }, func)
 
 (** This generates a fresh variable **which is not to be linked to any symbolic
     value** *)
