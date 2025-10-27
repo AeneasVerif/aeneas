@@ -149,9 +149,9 @@ let rec tvalue_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (v : V.tvalue) :
 
 type borrow_kind = BMut | BShared
 
-(** An avalue is either produced from a borrow projector (if it is an input to a
-    function) or from a loan projector (if it is an ouptput). This means that an
-    avalue has either:
+(** An avalue/evalue is either produced from a borrow projector (if it is an
+    input to a function) or from a loan projector (if it is an ouptput). This
+    means that an avalue has either:
     - only borrows and borrow projections over symbolic values
     - only loans and loan projections over symbolic values
     - none of those
@@ -160,7 +160,7 @@ type borrow_kind = BMut | BShared
     an ended proj loan can contain borrows in one of its children. In this
     situation, we will need to first project the avalues at the proper level,
     before translating them. *)
-type tavalue_kind =
+type proj_kind =
   | BorrowProj of borrow_kind
       (** The value was produced by a borrow projector (it contains borrows or
           borrow projections).
@@ -178,7 +178,7 @@ type tavalue_kind =
           sure *)
 
 let compute_tavalue_proj_kind span type_infos (abs_regions : T.RegionId.Set.t)
-    (av : V.tavalue) : tavalue_kind =
+    (av : V.tavalue) : proj_kind =
   let has_borrows = ref false in
   let has_mut_borrows = ref false in
   let has_loans = ref false in
@@ -280,7 +280,7 @@ let compute_tavalue_proj_kind span type_infos (abs_regions : T.RegionId.Set.t)
 let gtranslate_adt_fields ~(project_borrows : bool)
     (input_to_string : 'v -> string) (output_to_string : 'o -> string)
     (translate : filter:bool -> bs_ctx -> 'v -> bs_ctx * ('info * 'o) option)
-    (compute_proj_kind : 'v -> tavalue_kind) (mk_adt : 'o list -> 'o)
+    (compute_proj_kind : 'v -> proj_kind) (mk_adt : 'o list -> 'o)
     (mk_tuple : 'o list -> 'o) ~(filter : bool) (ctx : bs_ctx) (av : 'v)
     (av_ty : T.ty) (fields : 'v list) : bs_ctx * ('info list * 'o) option =
   let span = ctx.span in

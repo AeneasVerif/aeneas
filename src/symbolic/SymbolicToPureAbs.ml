@@ -209,7 +209,7 @@ let abs_to_ty (ctx : bs_ctx) (abs : V.abs) : ty option =
   else Some (mk_arrows inputs (mk_simpl_tuple_ty outputs))
 
 let compute_tevalue_proj_kind (span : Meta.span) (type_infos : type_infos)
-    (abs_regions : T.RegionId.Set.t) (ev : V.tevalue) : tavalue_kind =
+    (abs_regions : T.RegionId.Set.t) (ev : V.tevalue) : proj_kind =
   let has_borrows = ref false in
   let has_mut_borrows = ref false in
   let has_loans = ref false in
@@ -502,7 +502,7 @@ let tepat_to_tpattern (ctx : bs_ctx)
     | V.PAdt (variant_id, fields) -> begin
         (* Note that the [project_borrows] field doesn't matter *)
         let project_borrows = true in
-        let compute_proj_kind (pat : V.tepat) : tavalue_kind =
+        let compute_proj_kind (pat : V.tepat) : proj_kind =
           if
             TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
               keep_region pat.epat_ty
