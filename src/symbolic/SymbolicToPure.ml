@@ -106,7 +106,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expr option) : fun_decl =
       def_id;
       item_meta = def.item_meta;
       builtin_info;
-      kind = def.kind;
+      src = def.src;
       backend_attributes;
       num_loops;
       loop_id;
@@ -141,21 +141,27 @@ let translate_type_decls (ctx : Contexts.decls_ctx) : type_decl list =
         None)
     (TypeDeclId.Map.values ctx.type_ctx.type_decls)
 
-let translate_trait_method (span : span option) (translate_ty : T.ty -> ty)
-    (bound_fn : T.fun_decl_ref T.binder) : fun_decl_ref binder =
-  let binder_llbc_generics = bound_fn.T.binder_params in
+let translate_binder (span : span option) (translate_inside : 'a -> 'b)
+    (x : 'a T.binder) : 'b binder =
+  let binder_llbc_generics = x.T.binder_params in
   let binder_generics, binder_preds =
     translate_generic_params span binder_llbc_generics
   in
   let binder_explicit_info = compute_explicit_info binder_generics [] in
   {
-    binder_value =
-      translate_fun_decl_ref span translate_ty bound_fn.T.binder_value;
+    binder_value = translate_inside x.T.binder_value;
     binder_generics;
     binder_preds;
     binder_explicit_info;
     binder_llbc_generics;
   }
+
+let translate_trait_method (span : span option) (translate_ty : T.ty -> ty)
+    (bound_method : A.trait_method T.binder) : fun_decl_ref binder =
+  translate_binder span
+    (fun (m : A.trait_method) ->
+      translate_fun_decl_ref span translate_ty m.item)
+    bound_method
 
 let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     : trait_decl =
@@ -163,7 +169,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     def_id;
     item_meta;
     generics = llbc_generics;
-    parent_clauses = llbc_parent_clauses;
+    implied_clauses = llbc_parent_clauses;
     consts;
     types;
     methods;
@@ -184,11 +190,22 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
   let parent_clauses =
     List.map (translate_trait_clause span) llbc_parent_clauses
   in
-  let consts = List.map (fun (name, ty) -> (name, translate_ty ty)) consts in
+  if types <> [] then
+    (* Most associated types are removed by Charon's `--remove-associated-types`. *)
+    [%craise_opt_span] span
+      "Found an unhandled trait associated type; this can happen with \
+       mutually-recursive traits as well as GATs. Aeneas cannot handle such \
+       types today.";
+  let types = [] in
+  let consts =
+    List.map
+      (fun (c : A.trait_assoc_const) -> (c.name, translate_ty c.ty))
+      consts
+  in
   let methods =
     List.map
-      (fun (name, bound_fn) ->
-        (name, translate_trait_method span translate_ty bound_fn))
+      (fun (m : A.trait_method T.binder) ->
+        (m.binder_value.name, translate_trait_method span translate_ty m))
       methods
   in
   (* Lookup the builtin information, if there is *)
@@ -223,9 +240,9 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     item_meta;
     impl_trait = llbc_impl_trait;
     generics = llbc_generics;
-    parent_trait_refs;
+    implied_trait_refs;
     consts;
-    types;
+    types = _;
     methods;
     vtable = _;
   } =
@@ -245,7 +262,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
   let generics, preds = translate_generic_params span llbc_generics in
   let explicit_info = compute_explicit_info generics [] in
   let parent_trait_refs =
-    List.map (translate_strait_ref span) parent_trait_refs
+    List.map (translate_strait_ref span) implied_trait_refs
   in
   let consts =
     List.map
@@ -253,11 +270,13 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
         (name, translate_global_decl_ref span translate_ty gref))
       consts
   in
-  let types = List.map (fun (name, ty) -> (name, translate_ty ty)) types in
+  (* We checked that there were no types in the trait declaration already. *)
+  let types = [] in
   let methods =
     List.map
-      (fun (name, bound_fn) ->
-        (name, translate_trait_method span translate_ty bound_fn))
+      (fun ((name, m) : string * T.fun_decl_ref T.binder) ->
+        ( name,
+          translate_binder span (translate_fun_decl_ref span translate_ty) m ))
       methods
   in
   (* Lookup the builtin information, if there is *)
@@ -295,8 +314,8 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
     def_id;
     generics = llbc_generics;
     ty;
-    kind;
-    body = body_id;
+    src;
+    init = body_id;
     _;
   } =
     decl
@@ -328,6 +347,6 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
     explicit_info;
     preds;
     ty;
-    kind;
+    src;
     body_id;
   }

@@ -151,24 +151,25 @@ def IScalar.hcast_inBounds_spec {src_ty : IScalarTy}
   y.val = x.val := by
   simp [toResult, hcast, BitVec.signExtend, bv_toInt_eq, ok.injEq, exists_eq_left']
   simp only [IScalar.val, UScalar.val]
-  simp [UScalar.max, bv_toInt_eq, BitVec.toInt_ofInt] at *
+  simp only [UScalar.max, Nat.ofNat_pos, pow_pos, Nat.cast_pred, Nat.cast_pow, Nat.cast_ofNat,
+    bv_toInt_eq, BitVec.toNat_ofInt, Int.ofNat_toNat] at *
   have : 0 < 2^tgt_ty.numBits := by simp
   have : x.val % 2^tgt_ty.numBits = x.val := by apply Int.emod_eq_of_lt <;> scalar_tac
-  simp [this]
+  simp only [this, sup_eq_left, ge_iff_le]
   scalar_tac
 
 @[simp, progress_pure cast_fromBool ty b]
 theorem UScalar.cast_fromBool_val_eq ty (b : Bool) : (UScalar.cast_fromBool ty b).val = b.toNat := by
-  simp [cast_fromBool]
+  simp only [cast_fromBool]
   split <;> simp only [val, *] <;> simp
   have := ty.numBits_nonzero
   omega
 
 @[simp, progress_pure cast_fromBool ty b]
 theorem IScalar.cast_fromBool_val_eq ty (b : Bool) :(IScalar.cast_fromBool ty b).val = b.toInt := by
-  simp [cast_fromBool]
+  simp only [cast_fromBool]
   split <;> simp only [val, *] <;> simp
-  cases ty <;> simp
+  cases ty <;> simp [BitVec.toInt]
   have := System.Platform.numBits_eq
   cases this <;>
   rename_i h <;>
@@ -176,21 +177,21 @@ theorem IScalar.cast_fromBool_val_eq ty (b : Bool) :(IScalar.cast_fromBool ty b)
 
 @[scalar_tac UScalar.cast_fromBool ty b]
 theorem UScalar.cast_fromBool_bound_eq ty (b : Bool) : (UScalar.cast_fromBool ty b).val ≤ 1 := by
-  simp [cast_fromBool]
+  simp only [cast_fromBool]
   split <;> simp only [val] <;> simp
   have := @Nat.mod_eq_of_lt 1 (2^ty.numBits) (by simp [ty.numBits_nonzero])
   rw [this]
 
 @[simp]
 theorem UScalar.cast_fromBool_bv_eq ty (b : Bool) : (UScalar.cast_fromBool ty b).bv = (BitVec.ofBool b).zeroExtend _ := by
-  simp [cast_fromBool, BitVec.setWidth_eq]
+  simp only [cast_fromBool, BitVec.truncate_eq_setWidth]
   cases b <;> simp
   apply @BitVec.toNat_injective ty.numBits
   simp
 
 @[simp]
 theorem IScalar.cast_fromBool_bv_eq ty (b : Bool) :(IScalar.cast_fromBool ty b).bv = (BitVec.ofBool b).zeroExtend _ := by
-  simp [cast_fromBool, BitVec.setWidth_eq]
+  simp only [cast_fromBool, BitVec.truncate_eq_setWidth]
   cases b <;> simp
   apply @BitVec.toNat_injective ty.numBits
   simp
@@ -198,7 +199,7 @@ theorem IScalar.cast_fromBool_bv_eq ty (b : Bool) :(IScalar.cast_fromBool ty b).
 @[scalar_tac IScalar.cast_fromBool ty b]
 theorem IScalar.cast_fromBool_bound_eq ty (b : Bool) :
   0 ≤ (IScalar.cast_fromBool ty b).val ∧ (IScalar.cast_fromBool ty b).val ≤ 1 := by
-  simp [cast_fromBool]
+  simp only [cast_fromBool]
   split <;> simp only [val]
   . have : (1#ty.numBits).toInt  = 1 := by
       simp [BitVec.toInt]
@@ -294,7 +295,7 @@ example : ((U32.ofNat 42).cast .U16).val = 42 := by simp
 theorem IScalar.cast_val_eq {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty) :
   (cast tgt_ty x).val = Int.bmod x.val (2^(Min.min tgt_ty.numBits src_ty.numBits)) := by
   simp only [cast, val]
-  simp only [BitVec.toInt_signExtend, val]
+  simp only [BitVec.toInt_signExtend]
 
 @[simp]
 theorem IScalar.val_mod_pow_greater_numBits {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty) (h : src_ty.numBits ≤ tgt_ty.numBits) :

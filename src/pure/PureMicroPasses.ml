@@ -2416,7 +2416,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
         def_id = def.def_id;
         item_meta;
         builtin_info = def.builtin_info;
-        kind = def.kind;
+        src = def.src;
         backend_attributes = def.backend_attributes;
         num_loops;
         loop_id = Some loop.loop_id;

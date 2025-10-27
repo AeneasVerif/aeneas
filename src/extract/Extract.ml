@@ -25,7 +25,7 @@ let texpr_to_string (ctx : extraction_ctx) =
 let extract_fun_decl_register_names (ctx : extraction_ctx)
     (has_decreases_clause : fun_decl -> bool) (def : pure_fun_translation) :
     extraction_ctx =
-  match def.f.kind with
+  match def.f.src with
   | TraitDeclItem (_, _, false) ->
       (* Ignore the trait methods **declarations** (rem.: we do not ignore the trait
          method implementations): we do not need to refer to them directly. We will
@@ -2445,7 +2445,7 @@ let extract_trait_decl_register_parent_clause_names (ctx : extraction_ctx)
     match builtin_info with
     | None ->
         List.map
-          (fun (c : trait_clause) ->
+          (fun (c : trait_param) ->
             let name = ctx_compute_trait_parent_clause_name ctx trait_decl c in
             (* Add a prefix if necessary *)
             let name =
@@ -3257,7 +3257,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
             false trait_ref
         in
         extract_trait_impl_item ctx fmt item_name ty)
-      (List.combine trait_decl.parent_clauses impl.parent_trait_refs);
+      (List.combine trait_decl.implied_clauses impl.parent_trait_refs);
 
     (* The methods *)
     List.iter

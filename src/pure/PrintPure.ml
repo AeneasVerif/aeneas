@@ -140,22 +140,22 @@ let type_db_var_to_string (env : fmt_env) (var : type_var_id de_bruijn_var) :
     string =
   (* Note that the types are not necessarily ordered following their indices *)
   let find (generics : generic_params) varid =
-    List.find_opt (fun (v : type_var) -> v.index = varid) generics.types
+    List.find_opt (fun (v : type_param) -> v.index = varid) generics.types
   in
   match lookup_var_in_env env find var with
   | None -> Print.Types.type_db_var_to_pretty_string var
-  | Some x -> Print.Types.type_var_to_string x
+  | Some x -> Print.Types.type_param_to_string x
 
 let const_generic_db_var_to_string (env : fmt_env)
     (var : const_generic_var_id de_bruijn_var) : string =
   let find (generics : generic_params) varid =
     List.find_opt
-      (fun (v : const_generic_var) -> v.index = varid)
+      (fun (v : const_generic_param) -> v.index = varid)
       generics.const_generics
   in
   match lookup_var_in_env env find var with
   | None -> Print.Types.const_generic_db_var_to_pretty_string var
-  | Some x -> Print.Types.const_generic_var_to_string x
+  | Some x -> Print.Types.const_generic_param_to_string x
 
 let bvar_to_pretty_string (v : bvar) : string =
   "^(" ^ string_of_int v.scope ^ "," ^ BVarId.to_string v.id ^ ")"
@@ -232,9 +232,9 @@ let adt_field_names (env : fmt_env) =
 
 let option_to_string = Print.option_to_string
 let literal_type_to_string = Print.Values.literal_type_to_string
-let type_var_to_string (v : type_var) = "(" ^ v.name ^ ": Type)"
+let type_var_to_string (v : type_param) = "(" ^ v.name ^ ": Type)"
 
-let const_generic_var_to_string (v : const_generic_var) =
+let const_generic_var_to_string (v : const_generic_param) =
   "(" ^ v.name ^ " : " ^ literal_type_to_string v.ty ^ ")"
 
 let integer_type_to_string = Print.Values.integer_type_to_string
@@ -339,7 +339,7 @@ and trait_instance_id_to_string (env : fmt_env) (id : trait_instance_id) :
       "parent(" ^ inst_id ^ ")::" ^ clause_id
   | UnknownTrait msg -> "UNKNOWN(" ^ msg ^ ")"
 
-let trait_clause_to_string (env : fmt_env) (clause : trait_clause) : string =
+let trait_clause_to_string (env : fmt_env) (clause : trait_param) : string =
   let trait_id = trait_decl_id_to_string env clause.trait_id in
   let generics = generic_args_to_strings env true clause.generics in
   let generics =

@@ -164,7 +164,7 @@ partial def mapreduceVisit {a : Type} (k : Nat → a → Expr → MetaM (a × Ex
       lambdaLetTelescope e fun xs b =>
         mapreduceVisitBinders state xs fun state => do
         let (state, b) ← visit (i + 1) state b
-        let e' ← mkLambdaFVars xs b (usedLetOnly := false)
+        let e' ← mkLambdaFVars xs b (usedLetOnly := false) (generalizeNondepLet := false)
         return (state, e')
     | .forallE .. => do
       forallTelescope e fun xs b =>
@@ -173,10 +173,10 @@ partial def mapreduceVisit {a : Type} (k : Nat → a → Expr → MetaM (a × Ex
          let e' ← mkForallFVars xs b
          return (state, e')
     | .letE .. => do
-      lambdaLetTelescope e fun xs b =>
+      lambdaLetTelescope (preserveNondepLet := false) e fun xs b =>
         mapreduceVisitBinders state xs fun state => do
         let (state, b) ← visit (i + 1) state b
-        let e' ← mkLambdaFVars xs b (usedLetOnly := false)
+        let e' ← mkLambdaFVars xs b (usedLetOnly := false) (generalizeNondepLet := false)
         return (state, e')
     | .mdata _ b => do
       let (state, b) ← visit (i + 1) state b
@@ -925,9 +925,25 @@ def normCastAt (loc : Location) : TacticM (Option (Array (FVarId))) := do
     else
       throwError msg
 
+/-- Since Lean 4.22, non-dependent let expressions are automatically rewritten
+    into have expressions. However, Lean.Meta.zetaReduce does not reduce have
+    expressions, therefore hindering the let-binding normalization step below.
+    This function is a reimplementation of Lean's zetaReduce, with the addition of
+    `allowNondep := true`, which permits reduction of have expressions.
+    https://github.com/leanprover/lean4/issues/10850 tracks this issue,
+    and this function should be removed if it is upstreamed in more recent versions.
+-/
+def zetaHaveReduce (e : Expr) : MetaM Expr := do
+  let pre (e : Expr) : MetaM TransformStep := do
+    let .fvar fvarId := e | return .continue
+    let some localDecl := (← getLCtx).find? fvarId | return .done e
+    let some value := localDecl.value? (allowNondep := true) | return .done e
+    return .visit (← instantiateMVars value)
+  transform e (pre := pre) (usedLetOnly := true)
+
 /-- Normalize the let-bindings by inlining them -/
 def normalizeLetBindings (e : Expr) : MetaM Expr :=
-  zetaReduce e
+  zetaHaveReduce e
 
 section
   variable [Monad m] [MonadOptions m] [MonadTrace m] [MonadLiftT IO m] [AddMessageContext m] [MonadError m]
@@ -1318,7 +1334,8 @@ elab tk:"extract_assert" : tactic => do
   extractAssert tk
 
 /--
-info: Try this: have : y ≥ x := by sorry
+info: Try this:
+  have : y ≥ x := by sorry
 -/
 #guard_msgs in
 example (x : Nat) (y : Nat) (_ : Nat) (h : x ≤ y) : y ≥ x := by

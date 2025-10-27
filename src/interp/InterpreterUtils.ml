@@ -49,9 +49,7 @@ let fn_ptr_to_string (ctx : eval_ctx) (fn_ptr : fn_ptr) : string =
 let trait_decl_ref_region_binder_to_string =
   Print.EvalCtx.trait_decl_ref_region_binder_to_string
 
-let fun_id_or_trait_method_ref_to_string =
-  Print.EvalCtx.fun_id_or_trait_method_ref_to_string
-
+let fn_ptr_kind_to_string = Print.EvalCtx.fn_ptr_kind_to_string
 let fun_decl_to_string = Print.EvalCtx.fun_decl_to_string
 let call_to_string = Print.EvalCtx.call_to_string
 
@@ -81,8 +79,8 @@ let abs_cont_to_string span ?(with_ended = true) ?(indent = "")
 let same_symbolic_id (sv0 : symbolic_value) (sv1 : symbolic_value) : bool =
   sv0.sv_id = sv1.sv_id
 
-let mk_var (index : LocalId.id) (name : string option) (var_ty : ty) : local =
-  { index; name; var_ty }
+let mk_var (index : LocalId.id) (name : string option) (local_ty : ty) : local =
+  { index; name; local_ty }
 
 (** Small helper - TODO: move *)
 let mk_place_from_var_id (ctx : eval_ctx) (span : Meta.span)
@@ -375,7 +373,7 @@ let rvalue_get_place (rv : rvalue) : place option =
   match rv with
   | Use (Copy p | Move p) -> Some p
   | Use (Constant _) -> None
-  | Len (p, _, _) | RvRef (p, _) | RawPtr (p, _) -> Some p
+  | Len (p, _, _) | RvRef (p, _, _) | RawPtr (p, _, _) -> Some p
   | NullaryOp _
   | UnaryOp _
   | BinaryOp _
@@ -609,13 +607,13 @@ let compute_ctx_ids (ctx : eval_ctx) : ids_sets * ids_to_values =
 let empty_ids_set = fst (compute_ctxs_ids [])
 
 let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
-    (region_groups : RegionGroupId.id list) (type_vars : type_var list)
-    (const_generic_vars : const_generic_var list) : eval_ctx =
+    (region_groups : RegionGroupId.id list) (type_vars : type_param list)
+    (const_generic_vars : const_generic_param list) : eval_ctx =
   reset_global_counters ();
   let const_generic_vars_map =
     ConstGenericVarId.Map.of_list
       (List.map
-         (fun (cg : const_generic_var) ->
+         (fun (cg : const_generic_param) ->
            let ty = TLiteral cg.ty in
            let cv = mk_fresh_symbolic_tvalue_opt_span span ty in
            (cg.index, cv))
@@ -637,17 +635,17 @@ let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
     region ids. This is mostly used in preparation of function calls (when
     evaluating in symbolic mode). *)
 let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
-    (generics : generic_args) (tr_self : trait_instance_id) (sg : fun_sig)
+    (generics : generic_args) (tr_self : trait_ref_kind) (sg : fun_sig)
     (regions_hierarchy : region_var_groups) : inst_fun_sig =
   [%ldebug
     "- generics: "
     ^ Print.EvalCtx.generic_args_to_string ctx generics
     ^ "\n- tr_self: "
-    ^ Print.EvalCtx.trait_instance_id_to_string ctx tr_self
+    ^ Print.EvalCtx.trait_ref_kind_to_string ctx tr_self
     ^ "\n- sg: " ^ fun_sig_to_string ctx sg];
   (* Erase the regions in the generics we use for the instantiation *)
   let generics = Substitute.generic_args_erase_regions generics in
-  let tr_self = Substitute.trait_instance_id_erase_regions tr_self in
+  let tr_self = Substitute.trait_ref_kind_erase_regions tr_self in
   (* Generate fresh abstraction ids and create a substitution from region
    * group ids to abstraction ids *)
   let asubst_map : AbstractionId.id RegionGroupId.Map.t =
@@ -695,9 +693,9 @@ let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
     - [sg]: the original, uninstantiated signature (we need to retrieve, for
       instance, the region outlives constraints) *)
 let compute_regions_hierarchy_for_fun_call (span : Meta.span option)
-    (crate : crate) (fun_name : string) (type_vars : type_var list)
-    (const_generic_vars : const_generic_var list) (generic_args : generic_args)
-    (sg : fun_sig) : inst_fun_sig =
+    (crate : crate) (fun_name : string) (type_vars : type_param list)
+    (const_generic_vars : const_generic_param list)
+    (generic_args : generic_args) (sg : fun_sig) : inst_fun_sig =
   (* We simply put everything into a "fake" signature, then call
      [compute_regions_hierarchy_for_sig].
 
@@ -784,12 +782,12 @@ let compute_regions_hierarchy_for_fun_call (span : Meta.span option)
         generics
       in
       let fresh_regions = RegionId.Set.elements !fresh_regions in
-      let fresh_region_vars : region_var list =
+      let fresh_region_vars : region_param list =
         List.map (fun index -> { Types.index; name = None }) fresh_regions
       in
       let open Substitute in
       let trait_clauses =
-        List.map (st_substitute_visitor#visit_trait_clause subst) trait_clauses
+        List.map (st_substitute_visitor#visit_trait_param subst) trait_clauses
       in
       let regions_outlive =
         List.map

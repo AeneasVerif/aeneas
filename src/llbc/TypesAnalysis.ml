@@ -118,13 +118,13 @@ let partial_type_info_to_ty_info (info : partial_type_info) : ty_info =
   info.borrows_info
 
 let rec trait_instance_id_reducible (span : Meta.span option)
-    (id : trait_instance_id) : bool =
+    (id : trait_ref_kind) : bool =
   match id with
   | BuiltinOrAuto _ | TraitImpl _ -> true
   | Self | Clause _ -> false
-  | ParentClause (tref, _) -> trait_instance_id_reducible span tref.trait_id
-  | Dyn _ -> [%craise_opt_span] span "Unreachable"
-  | UnknownTrait _ -> false
+  | ParentClause (tref, _) -> trait_instance_id_reducible span tref.kind
+  | Dyn -> [%craise_opt_span] span "Unreachable"
+  | ItemClause _ | UnknownTrait _ -> false
 
 let analyze_full_ty (span : Meta.span option) (updated : bool ref)
     (infos : type_infos) (ty_info : partial_type_info) (ty : ty) :
@@ -205,7 +205,7 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
         (* TODO: normalize the trait types.
            For now we only emit a warning because it makes some tests fail. *)
         [%cassert_warn_opt_span] span
-          (not (trait_instance_id_reducible span tref.trait_id))
+          (not (trait_instance_id_reducible span tref.kind))
           "Found an unexpected trait impl associated type which was not \
            inlined while analyzing a type. This is a case we currently do not \
            handle in all generality. As a result,the consumed/given back \
@@ -364,6 +364,7 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
         in
         analyze span expl_info ty_info output
     | TFnDef _ -> [%craise_opt_span] span "unsupported: FnDef"
+    | TPtrMetadata _ -> [%craise_opt_span] span "unsupported: PtrMetadata"
     | TError _ ->
         [%craise_opt_span] span "Found type error in the output of charon"
   in
@@ -642,14 +643,19 @@ let compute_outlive_proj_ty (span : Meta.span option)
             (* TODO: normalize the trait types.
                For now we only emit a warning because it makes some tests fail. *)
             [%cassert_warn_opt_span] span
-              (not (trait_instance_id_reducible span tref.trait_id))
+              (not (trait_instance_id_reducible span tref.kind))
               "Found an unexpected trait impl associated type which was not \
                inlined while analyzing a type. This is a case we currently do \
                not handle in all generality. As a result,the consumed/given \
                back values computed for the generated backward functions may \
                be incorrect.";
             ()
-        | TRawPtr _ | TDynTrait _ | TFnPtr _ | TFnDef _ | TError _ ->
+        | TRawPtr _
+        | TDynTrait _
+        | TFnPtr _
+        | TFnDef _
+        | TPtrMetadata _
+        | TError _ ->
             (* Don't know what to do *)
             [%craise_opt_span] span "Not handled yet"
     end

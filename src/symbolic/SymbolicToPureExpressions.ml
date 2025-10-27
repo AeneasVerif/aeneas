@@ -9,8 +9,7 @@ open SymbolicToPureAbs
 (** The local logger *)
 let log = Logging.symbolic_to_pure_expressions_log
 
-let translate_fun_id_or_trait_method_ref (ctx : bs_ctx)
-    (id : A.fun_id_or_trait_method_ref) : fun_id_or_trait_method_ref =
+let translate_fn_ptr_kind (ctx : bs_ctx) (id : A.fn_ptr_kind) : fn_ptr_kind =
   match id with
   | FunId fun_id -> FunId fun_id
   | TraitMethod (trait_ref, method_name, fun_decl_id) ->
@@ -269,7 +268,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
     match call.call_id with
     | S.Fun (fid, call_id) ->
         (* Regular function call *)
-        let fid_t = translate_fun_id_or_trait_method_ref ctx fid in
+        let fid_t = translate_fn_ptr_kind ctx fid in
         let func = Fun (FromLlbc (fid_t, None)) in
         (* Retrieve the effect information about this function (can fail,
          * takes a state as input, etc.) *)
@@ -440,8 +439,9 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
             [%internal_error] ctx.span
         | CastRawPtr _ -> [%craise] ctx.span "Unsupported: raw ptr casts"
         | CastTransmute _ -> [%craise] ctx.span "Unsupported: transmute"
+        | CastConcretize _ ->
+            [%craise] ctx.span "Unsupported: `dyn Trait` concretization"
       end
-    | S.Unop E.PtrMetadata -> [%craise] ctx.span "Unsupported unop: PtrMetadata"
     | S.Binop binop -> (
         match args with
         | [ arg0; arg1 ] ->

@@ -35,7 +35,7 @@ module ConstGenericVarId = T.ConstGenericVarId
 type llbc_name = T.name [@@deriving show, ord]
 type integer_type = T.integer_type [@@deriving show, ord]
 type float_type = T.float_type [@@deriving show, ord]
-type const_generic_var = T.const_generic_var [@@deriving show, ord]
+type const_generic_param = T.const_generic_param [@@deriving show, ord]
 type const_generic = T.const_generic [@@deriving show, ord]
 type const_generic_var_id = T.const_generic_var_id [@@deriving show, ord]
 type trait_decl_id = T.trait_decl_id [@@deriving show, ord]
@@ -49,7 +49,7 @@ type region_group_id = T.region_group_id [@@deriving show, ord]
 type mutability = Mut | Const [@@deriving show, ord]
 type loc = Meta.loc [@@deriving show, ord]
 type file_name = Meta.file_name [@@deriving show, ord]
-type raw_span = Meta.raw_span [@@deriving show, ord]
+type span_data = Meta.span_data [@@deriving show, ord]
 type span = Meta.span [@@deriving show, ord]
 type ref_kind = Types.ref_kind [@@deriving show, ord]
 type 'a de_bruijn_var = 'a Types.de_bruijn_var [@@deriving show, ord]
@@ -445,19 +445,19 @@ and trait_instance_id =
       polymorphic = false;
     }]
 
-type type_var = T.type_var [@@deriving show, ord]
+type type_param = T.type_param [@@deriving show, ord]
 
 (** Ancestor for iter visitor for [type_decl] *)
 class ['self] iter_type_decl_base =
   object (self : 'self)
     inherit [_] iter_ty
 
-    method visit_type_var : 'env -> type_var -> unit =
+    method visit_type_param : 'env -> type_param -> unit =
       fun e var ->
         self#visit_type_var_id e var.index;
         self#visit_string e var.name
 
-    method visit_const_generic_var : 'env -> const_generic_var -> unit =
+    method visit_const_generic_param : 'env -> const_generic_param -> unit =
       fun e var ->
         self#visit_const_generic_var_id e var.index;
         self#visit_string e var.name;
@@ -477,15 +477,15 @@ class ['self] map_type_decl_base =
   object (self : 'self)
     inherit [_] map_ty
 
-    method visit_type_var : 'env -> type_var -> type_var =
+    method visit_type_param : 'env -> type_param -> type_param =
       fun e var ->
         {
           index = self#visit_type_var_id e var.index;
           name = self#visit_string e var.name;
         }
 
-    method visit_const_generic_var :
-        'env -> const_generic_var -> const_generic_var =
+    method visit_const_generic_param :
+        'env -> const_generic_param -> const_generic_param =
       fun e var ->
         {
           index = self#visit_const_generic_var_id e var.index;
@@ -508,13 +508,13 @@ class virtual ['self] reduce_type_decl_base =
   object (self : 'self)
     inherit [_] reduce_ty
 
-    method visit_type_var : 'env -> type_var -> 'a =
+    method visit_type_param : 'env -> type_param -> 'a =
       fun e var ->
         let x0 = self#visit_type_var_id e var.index in
         let x1 = self#visit_string e var.name in
         self#plus x0 x1
 
-    method visit_const_generic_var : 'env -> const_generic_var -> 'a =
+    method visit_const_generic_param : 'env -> const_generic_param -> 'a =
       fun e var ->
         let x0 = self#visit_const_generic_var_id e var.index in
         let x1 = self#visit_string e var.name in
@@ -535,14 +535,14 @@ class virtual ['self] mapreduce_type_decl_base =
   object (self : 'self)
     inherit [_] mapreduce_ty
 
-    method visit_type_var : 'env -> type_var -> type_var * 'a =
+    method visit_type_param : 'env -> type_param -> type_param * 'a =
       fun e var ->
         let index, x0 = self#visit_type_var_id e var.index in
         let name, x1 = self#visit_string e var.name in
         ({ index; name }, self#plus x0 x1)
 
-    method visit_const_generic_var :
-        'env -> const_generic_var -> const_generic_var * 'a =
+    method visit_const_generic_param :
+        'env -> const_generic_param -> const_generic_param * 'a =
       fun e var ->
         let index, x0 = self#visit_const_generic_var_id e var.index in
         let name, x1 = self#visit_string e var.name in
@@ -575,16 +575,16 @@ and variant = {
 
 and type_decl_kind = Struct of field list | Enum of variant list | Opaque
 
-and trait_clause = {
+and trait_param = {
   clause_id : trait_clause_id;
   trait_id : trait_decl_id;
   generics : generic_args;
 }
 
 and generic_params = {
-  types : type_var list;
-  const_generics : const_generic_var list;
-  trait_clauses : trait_clause list;
+  types : type_param list;
+  const_generics : const_generic_param list;
+  trait_clauses : trait_param list;
 }
 
 and trait_type_constraint = {
@@ -987,14 +987,14 @@ type unop =
   | Cast of literal_type * literal_type
   | ArrayToSlice
 
-and fun_id_or_trait_method_ref =
+and fn_ptr_kind =
   | FunId of llbc_fun_id
   | TraitMethod of trait_ref * string * fun_decl_id
       (** The fun decl id is not really needed and only provided for convenience
           purposes *)
 
 (** A function id for a non-builtin function *)
-and regular_fun_id = fun_id_or_trait_method_ref * loop_id option
+and regular_fun_id = fn_ptr_kind * loop_id option
 
 (** A function identifier *)
 and fun_id =
@@ -1556,7 +1556,7 @@ type fun_body = {
 }
 [@@deriving show]
 
-type item_kind = T.item_kind [@@deriving show]
+type item_source = T.item_source [@@deriving show]
 
 (** Attributes to add to the generated code *)
 type backend_attributes = {
@@ -1581,7 +1581,7 @@ type fun_decl = {
   def_id : FunDeclId.id;
   item_meta : T.item_meta;
   builtin_info : builtin_fun_info option;
-  kind : item_kind;
+  src : item_source;
   backend_attributes : backend_attributes;
   num_loops : int;
       (** The number of loops in the parent forward function (basically the
@@ -1614,7 +1614,7 @@ type global_decl = {
       (** Information about which inputs parameters are explicit/implicit *)
   preds : predicates;
   ty : ty;
-  kind : item_kind;
+  src : item_source;
   body_id : FunDeclId.id;
 }
 [@@deriving show]
@@ -1634,8 +1634,8 @@ type trait_decl = {
           derive them from the original LLBC types from before the
           simplification of types like boxes and references. *)
   preds : predicates;
-  parent_clauses : trait_clause list;
-  llbc_parent_clauses : Types.trait_clause list;
+  parent_clauses : trait_param list;
+  llbc_parent_clauses : Types.trait_param list;
   consts : (trait_item_name * ty) list;
   types : trait_item_name list;
   methods : (trait_item_name * fun_decl_ref binder) list;

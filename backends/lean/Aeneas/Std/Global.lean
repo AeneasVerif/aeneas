@@ -9,12 +9,10 @@ initialize globalSimpExt : SimpExtension ←
     The `global_simps` attribute registers simp lemmas to be used when proving
     that global/constant definitions successfully evaluate."
 
-initialize scalarTacSimprocsRef : IO.Ref Simprocs ← IO.mkRef {}
-
-/-- The `global_simps_proc` simp attribute for the simp rocs. -/
+/-- The `global_simps_proc` simp attribute for the simp procs. -/
 initialize globalSimprocExt : Simp.SimprocExtension ←
   Simp.registerSimprocAttr `global_simps_proc "\
-    The `global_simps_roc` attribute registers simp procedures to be used when proving
-    that global/constant definitions successfully evaluate." (some scalarTacSimprocsRef)
+    The `global_simps_proc` attribute registers simp procedures to be used when proving
+    that global/constant definitions successfully evaluate." none
 
 end Aeneas.Std

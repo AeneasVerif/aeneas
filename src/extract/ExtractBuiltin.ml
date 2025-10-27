@@ -60,7 +60,16 @@ let builtin_globals () : (string * string) list =
   let mk_ints_globals name =
     List.map (fun ty -> mk_int_global ty name) all_int_names
   in
-  List.concat [ mk_ints_globals "MIN"; mk_ints_globals "MAX" ]
+  List.concat
+    [
+      mk_ints_globals "MIN";
+      mk_ints_globals "MAX";
+      [
+        (* UNIT_METADATA should be eliminated through a micro-pass and should
+           never appear in the code.. *)
+        ("UNIT_METADATA", "UNIT_METADATA");
+      ];
+    ]
 
 let mk_builtin_globals_map () : Pure.builtin_global_info NameMatcherMap.t =
   NameMatcherMap.of_list

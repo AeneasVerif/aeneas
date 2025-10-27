@@ -33,6 +33,7 @@ attribute [bvify_simps]
   Int.reducePow Int.reduceAdd Int.reduceSub Int.reduceMul Int.reduceDiv Int.reduceMod
   Int.reduceNegSucc Int.reduceNeg Int.reduceToNat
   BitVec.reduceMul BitVec.reduceAdd BitVec.reduceSub BitVec.reduceMod BitVec.reduceDiv
+  Nat.dvd_iff_mod_eq_zero
 
 @[simp, simp_scalar_simps, bvify_simps] theorem U8.UScalar_bv (x : U8) : UScalar.bv x = x.bv := by simp
 @[simp, simp_scalar_simps, bvify_simps] theorem U16.UScalar_bv (x : U16) : UScalar.bv x = x.bv := by simp
@@ -71,7 +72,7 @@ theorem IScalar.bv_signExtend (x : IScalar ty) : x.bv.signExtend ty.numBits = x.
 
 @[simp, simp_scalar_simps, bvify_simps]
 theorem UScalar.cast_bv (x : UScalar ty) : (UScalar.cast tgt x).bv = x.bv.setWidth tgt.numBits := by
-  simp [cast]
+  simp
 
 theorem BitVec.lt_pow_ofNat_le {n : Nat} (a b : Nat) (h0 : b < 2^n) (h1 : a ≤ b) :
   BitVec.ofNat n a ≤ BitVec.ofNat n b := by
@@ -196,7 +197,7 @@ theorem BitVec.ofNat_sub' (n a b : Nat) (h : b ≤ a) :
 @[bvify_simps]
 theorem BitVec.ofNat_mul (n a b : Nat) :
   BitVec.ofNat n (a * b) = BitVec.ofNat n a * BitVec.ofNat n b := by
-  simp [BitVec.toNat_eq]
+  simp
 
 @[bvify_simps]
 theorem BitVec.ofNat_div (n a b : Nat)
@@ -455,5 +456,8 @@ example (x a b : U32) (h : x.val = a.val + b.val) : (x.val : ZMod 3329) = (a.val
   bvify 32 at *
   extract_goal1
   simp [h]
+
+example (byte : U8) : 8 ∣ (byte &&& 16#u8).val := by
+  bvify 8; bv_decide
 
 end Aeneas.Bvify

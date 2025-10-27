@@ -65,12 +65,12 @@ let compute_contexts (crate : crate) : decls_ctx =
      and ignore those *)
   (if mixed_groups <> [] then
      (* We detected mixed groups: print a nice error message *)
-     let any_decl_id_to_string (id : any_decl_id) : string =
-       let kind = any_decl_id_to_kind_name id in
+     let item_id_to_string (id : item_id) : string =
+       let kind = item_id_to_kind_name id in
        let meta = LlbcAstUtils.crate_get_item_meta crate id in
        let s =
          match meta with
-         | None -> show_any_decl_id id
+         | None -> show_item_id id
          | Some meta ->
              kind ^ "(" ^ span_to_string meta.span ^ "): "
              ^ Print.name_to_string fmt_env meta.name
@@ -79,7 +79,7 @@ let compute_contexts (crate : crate) : decls_ctx =
      in
      let group_to_msg (i : int) (g : mixed_declaration_group) : string =
        let ids = g_declaration_group_to_list g in
-       let decls = List.map any_decl_id_to_string ids in
+       let decls = List.map item_id_to_string ids in
        let local_requires =
          LlbcAstUtils.find_local_transitive_dep crate (AnyDeclIdSet.of_list ids)
        in
@@ -121,8 +121,8 @@ let compute_contexts (crate : crate) : decls_ctx =
     We return a new context because we compute and add the type normalization
     map in the same step. *)
 let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
-    (sg : fun_sig) (regions_hierarchy : region_var_groups) (_kind : item_kind) :
-    eval_ctx * inst_fun_sig =
+    (sg : fun_sig) (regions_hierarchy : region_var_groups) (_kind : item_source)
+    : eval_ctx * inst_fun_sig =
   let tr_self = UnknownTrait "symbolic_instantiate_fun_sig" in
   let generics =
     Substitute.generic_args_of_params_erase_regions (Some span) sg.generics
@@ -184,7 +184,7 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
   *)
   let ctx, inst_sg =
     symbolic_instantiate_fun_sig span ctx fdef.signature regions_hierarchy
-      fdef.kind
+      fdef.src
   in
   (* Create fresh symbolic values for the inputs *)
   let input_svs =
@@ -268,7 +268,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
   in
   let _, ret_inst_sg =
     symbolic_instantiate_fun_sig span ctx fdef.signature regions_hierarchy
-      fdef.kind
+      fdef.src
   in
   let ret_rty = ret_inst_sg.output in
 

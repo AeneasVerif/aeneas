@@ -12,13 +12,11 @@ initialize zmodifySimpExt : SimpExtension ←
   registerSimpAttr `zmodify_simps "\
     The `zmodify_simps` attribute registers simp lemmas to be used by `zmodify`."
 
-initialize zmodifySimprocsRef : IO.Ref Simprocs ← IO.mkRef {}
-
 /-- The `zmodify_simps_proc` simp attribute for the simp rocs. -/
 initialize zmodifySimprocExt : Simp.SimprocExtension ←
   Simp.registerSimprocAttr `zmodify_simps_proc "\
     The `zmodify_simps_proc` attribute registers simp procedures to be used by `zmodify`
-    during its preprocessing phase." (some zmodifySimprocsRef)
+    during its preprocessing phase." none
 
 /-- The `zmodify_hyps_simp` simp attribute. -/
 initialize zmodifyHypsSimpExt : SimpExtension ←

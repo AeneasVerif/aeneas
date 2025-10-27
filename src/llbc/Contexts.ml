@@ -68,8 +68,8 @@ type eval_ctx = {
   type_ctx : type_ctx;
   fun_ctx : fun_ctx;
   region_groups : RegionGroupId.id list;
-  type_vars : type_var list;
-  const_generic_vars : const_generic_var list;
+  type_vars : type_param list;
+  const_generic_vars : const_generic_param list;
   const_generic_vars_map : tvalue Types.ConstGenericVarId.Map.t;
       (** The map from const generic vars to their values. Those values can be
           symbolic values or concrete values (in the latter case: if we run in
@@ -82,19 +82,19 @@ type eval_ctx = {
 }
 [@@deriving show]
 
-let lookup_type_var_opt (ctx : eval_ctx) (vid : TypeVarId.id) : type_var option
-    =
+let lookup_type_var_opt (ctx : eval_ctx) (vid : TypeVarId.id) :
+    type_param option =
   TypeVarId.nth_opt ctx.type_vars vid
 
-let lookup_type_var (ctx : eval_ctx) (vid : TypeVarId.id) : type_var =
+let lookup_type_var (ctx : eval_ctx) (vid : TypeVarId.id) : type_param =
   TypeVarId.nth ctx.type_vars vid
 
 let lookup_const_generic_var_opt (ctx : eval_ctx) (vid : ConstGenericVarId.id) :
-    const_generic_var option =
+    const_generic_param option =
   ConstGenericVarId.nth_opt ctx.const_generic_vars vid
 
 let lookup_const_generic_var (ctx : eval_ctx) (vid : ConstGenericVarId.id) :
-    const_generic_var =
+    const_generic_param =
   ConstGenericVarId.nth ctx.const_generic_vars vid
 
 (** Lookup a variable in the current frame *)
@@ -196,7 +196,7 @@ let ctx_update_var_value (span : Meta.span) (ctx : eval_ctx) (vid : LocalId.id)
 let ctx_push_var (span : Meta.span) (ctx : eval_ctx) (var : local) (v : tvalue)
     : eval_ctx =
   [%cassert] span
-    (TypesUtils.ty_is_ety var.var_ty && var.var_ty = v.ty)
+    (TypesUtils.ty_is_ety var.local_ty && var.local_ty = v.ty)
     "The pushed variables and their values do not have the same type";
   let bv = var_to_binder var in
   { ctx with env = EBinding (BVar bv, v) :: ctx.env }
@@ -217,7 +217,7 @@ let ctx_push_vars (span : Meta.span) (ctx : eval_ctx)
   [%cassert] span
     (List.for_all
        (fun (var, (value : tvalue)) ->
-         TypesUtils.ty_is_ety var.var_ty && var.var_ty = value.ty)
+         TypesUtils.ty_is_ety var.local_ty && var.local_ty = value.ty)
        vars)
     "The pushed variables and their values do not have the same type";
   let vars =
@@ -277,14 +277,14 @@ let erase_regions (ty : ty) : ty =
     {!constructor:Values.value.VBottom}) *)
 let ctx_push_uninitialized_var (span : Meta.span) (ctx : eval_ctx) (var : local)
     : eval_ctx =
-  ctx_push_var span ctx var (mk_bottom span (erase_regions var.var_ty))
+  ctx_push_var span ctx var (mk_bottom span (erase_regions var.local_ty))
 
 (** Push a list of uninitialized variables (which thus map to
     {!constructor:Values.value.VBottom}) *)
 let ctx_push_uninitialized_vars (span : Meta.span) (ctx : eval_ctx)
     (vars : local list) : eval_ctx =
   let vars =
-    List.map (fun v -> (v, mk_bottom span (erase_regions v.var_ty))) vars
+    List.map (fun v -> (v, mk_bottom span (erase_regions v.local_ty))) vars
   in
   ctx_push_vars span ctx vars
 

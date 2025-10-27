@@ -39,7 +39,7 @@ theorem if_true {α} (b : Prop) [Decidable b] (x y : α) (hb : b) : (if b then x
 
 @[simp_ifs_simps]
 theorem if_false {α} (b : Prop) [Decidable b] (x y : α) (hb : ¬ b) : (if b then x else y) = y := by
-  simp only [hb, Bool.false_eq_true, ↓reduceIte]
+  simp only [hb, ↓reduceIte]
 
 @[simp_ifs_simps]
 theorem dite_true {α} (c : Prop) [Decidable c] (h : c) (t : c → α) (e : ¬c → α) :

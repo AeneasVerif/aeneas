@@ -616,9 +616,9 @@ let create_push_abstractions_from_abs_region_groups
     but directly to the method provided in the trait declaration. *)
 let eval_transparent_function_call_symbolic_inst (span : Meta.span)
     (call : call) (ctx : eval_ctx) :
-    fun_id_or_trait_method_ref
+    fn_ptr_kind
     * generic_args
-    * (generic_args * trait_instance_id) option
+    * (generic_args * trait_ref_kind) option
     * fun_decl
     * inst_fun_sig =
   match call.func with
@@ -626,7 +626,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
       (* Closure case: TODO *)
       [%craise] span "Closures are not supported yet"
   | FnOpRegular func -> (
-      match func.func with
+      match func.kind with
       | FunId (FRegular fid) ->
           let def = ctx_lookup_fun_decl span ctx fid in
           [%ltrace
@@ -644,7 +644,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
             instantiate_fun_sig span ctx func.generics tr_self def.signature
               regions_hierarchy
           in
-          (func.func, func.generics, None, def, inst_sg)
+          (func.kind, func.generics, None, def, inst_sg)
       | FunId (FBuiltin _) ->
           (* Unreachable: must be a transparent function *)
           [%craise] span "Unreachable"
@@ -664,7 +664,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
           (* Lookup the trait method signature - there are several possibilities
              depending on whethere we call a top-level trait method impl or the
              method from a local clause *)
-          match trait_ref.trait_id with
+          match trait_ref.kind with
           | TraitImpl { id = impl_id; generics = impl_generics } -> begin
               (* Lookup the trait impl *)
               let trait_impl = ctx_lookup_trait_impl span ctx impl_id in
@@ -679,7 +679,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
               let generics = fn_ref.generics in
               let method_def = ctx_lookup_fun_decl span ctx method_id in
               (* Instantiate *)
-              let tr_self = trait_ref.trait_id in
+              let tr_self = trait_ref.kind in
               let fid : fun_id = FRegular method_id in
               let regions_hierarchy =
                 LlbcAstUtils.FunIdMap.find fid ctx.fun_ctx.regions_hierarchies
@@ -720,12 +720,12 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                 LlbcAstUtils.FunIdMap.find (FRegular method_id)
                   ctx.fun_ctx.regions_hierarchies
               in
-              let tr_self = trait_ref.trait_id in
+              let tr_self = trait_ref.kind in
               let inst_sg =
                 instantiate_fun_sig span ctx generics tr_self
                   method_def.signature regions_hierarchy
               in
-              ( func.func,
+              ( func.kind,
                 func.generics,
                 Some (generics, tr_self),
                 method_def,
@@ -802,7 +802,7 @@ and eval_block (config : config) (b : block) : stl_cm_fun =
 and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
  fun ctx ->
   [%ltrace "statement:\n" ^ statement_to_string_with_tab ctx st ^ "\n"];
-  match st.content with
+  match st.kind with
   | Assign (p, rvalue) ->
       if
         (* We handle global assignments separately as a specific case. *)
@@ -840,7 +840,8 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
                       | BMut
                       | BTwoPhaseMut
                       | BShallow
-                      | BUniqueImmutable ) )
+                      | BUniqueImmutable ),
+                      _ )
                 | NullaryOp _
                 | UnaryOp _
                 | BinaryOp _
@@ -891,7 +892,7 @@ and eval_rvalue_global (config : config) (span : Meta.span) (dest : place)
  fun ctx ->
   (* One of the micro-passes makes sures there is only one case to handle *)
   match rv with
-  | RvRef ({ kind = PlaceGlobal gref; ty = _ }, BShared) ->
+  | RvRef ({ kind = PlaceGlobal gref; ty = _ }, BShared, _) ->
       eval_global_ref config span dest gref RShared ctx
   | _ ->
       [%craise] span
@@ -950,7 +951,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
    * (and would thus floating in thin air...)!
    * *)
   (* Match on the targets *)
-  match switch with
+  match (switch : LlbcAst.switch) with
   | If (op, true_block, false_block) ->
       (* Evaluate the operand *)
       let op_v, ctx, cf_eval_op = eval_operand config span op ctx in
@@ -984,20 +985,22 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
       in
       (* Compose *)
       (ctx_resl, cc_comp cf_eval_op cf_if)
-  | SwitchInt (op, int_ty, stgts, otherwise) ->
+  | SwitchInt (op, (int_ty : literal_type), stgts, otherwise) ->
       (* Evaluate the operand *)
       let op_v, ctx, cf_eval_op = eval_operand config span op ctx in
       (* Switch on the value *)
       let ctx_resl, cf_switch =
-        match op_v.value with
-        | VLiteral (VScalar sv) -> (
+        match (op_v.value, int_ty) with
+        | VLiteral (VScalar sv), (TInt _ | TUInt _) -> (
             (* Sanity check *)
-            [%sanity_check] span (Scalars.get_ty sv = int_ty);
+            [%sanity_check] span (Scalars.get_ty sv = literal_as_integer int_ty);
             (* Find the branch *)
-            match List.find_opt (fun (svl, _) -> List.mem sv svl) stgts with
+            match
+              List.find_opt (fun (svl, _) -> List.mem (VScalar sv) svl) stgts
+            with
             | None -> eval_block config otherwise ctx
             | Some (_, tgt) -> eval_block config tgt ctx)
-        | VSymbolic sv ->
+        | VSymbolic sv, _ ->
             (* Several branches may be grouped together: every branch is described
                by a pair (list of values, branch expression).
                In order to do a symbolic evaluation, we make this "flat" by
@@ -1013,7 +1016,9 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
             let (ctx_branches, ctx_otherwise), cf_int =
               expand_symbolic_int span sv
                 (S.mk_opt_place_from_op span op ctx)
-                int_ty values ctx
+                (literal_as_integer int_ty)
+                (List.map literal_as_scalar values)
+                ctx
             in
             (* Evaluate the branches: first the "regular" branches *)
             let resl_branches =
@@ -1098,7 +1103,7 @@ and eval_function_call_concrete (config : config) (span : Meta.span)
   match call.func with
   | FnOpMove _ -> [%craise] span "Closures are not supported yet"
   | FnOpRegular func -> (
-      match func.func with
+      match func.kind with
       | FunId (FRegular fid) ->
           eval_transparent_function_call_concrete config span fid call ctx
       | FunId (FBuiltin fid) ->
@@ -1117,7 +1122,7 @@ and eval_function_call_symbolic (config : config) (span : Meta.span)
   match call.func with
   | FnOpMove _ -> [%craise] span "Closures are not supported yet"
   | FnOpRegular func -> (
-      match func.func with
+      match func.kind with
       | FunId (FRegular _) | TraitMethod _ ->
           eval_transparent_function_call_symbolic config span call
       | FunId (FBuiltin fid) ->
@@ -1176,7 +1181,7 @@ and eval_transparent_function_call_concrete (config : config) (span : Meta.span)
         Collections.List.split_at locals body.locals.arg_count
       in
 
-      let ctx = push_var span ret_var (mk_bottom span ret_var.var_ty) ctx in
+      let ctx = push_var span ret_var (mk_bottom span ret_var.local_ty) ctx in
 
       (* 2. Push the input values *)
       let ctx =
@@ -1242,14 +1247,14 @@ and eval_transparent_function_call_symbolic (config : config) (span : Meta.span)
     overriding them. We treat them as regular method, which take an additional
     trait ref as input. *)
 and eval_function_call_symbolic_from_inst_sig (config : config)
-    (span : Meta.span) (fid : fun_id_or_trait_method_ref) (sg : fun_sig)
+    (span : Meta.span) (fid : fn_ptr_kind) (sg : fun_sig)
     (inst_sg : inst_fun_sig) (generics : generic_args)
-    (trait_method_generics : (generic_args * trait_instance_id) option)
+    (trait_method_generics : (generic_args * trait_ref_kind) option)
     (args : operand list) (dest : place) : stl_cm_fun =
  fun ctx ->
   [%ltrace
     "- fid: "
-    ^ fun_id_or_trait_method_ref_to_string ctx fid
+    ^ fn_ptr_kind_to_string ctx fid
     ^ "\n- inst_sg:\n"
     ^ inst_fun_sig_to_string ctx inst_sg
     ^ "\n- call.generics:\n"

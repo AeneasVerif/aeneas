@@ -25,7 +25,7 @@ type mplace =
 [@@deriving show]
 
 type call_id =
-  | Fun of fun_id_or_trait_method_ref * FunCallId.id
+  | Fun of fn_ptr_kind * FunCallId.id
       (** A "regular" function (i.e., a function which is not a primitive
           operation) *)
   | Unop of unop
@@ -49,7 +49,7 @@ type call = {
   abstractions : AbstractionId.id list;
       (** The region abstractions introduced upon calling the function *)
   generics : generic_args;
-  trait_method_generics : (generic_args * trait_instance_id) option;
+  trait_method_generics : (generic_args * trait_ref_kind) option;
       (** In case the call is to a trait method, we may need an additional type
           parameter ([Self]) and the self trait clause to instantiate the
           function signature. *)

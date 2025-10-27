@@ -31,7 +31,7 @@ let rec translate_generic_args (span : Meta.span option)
 
 and translate_trait_ref (span : Meta.span option) (translate_ty : T.ty -> ty)
     (tr : T.trait_ref) : trait_ref =
-  let trait_id = translate_trait_instance_id span translate_ty tr.trait_id in
+  let trait_id = translate_trait_ref_kind span translate_ty tr.kind in
   let trait_decl_ref =
     translate_region_binder
       (translate_trait_decl_ref span translate_ty)
@@ -54,10 +54,10 @@ and translate_global_decl_ref (span : Meta.span option)
   let global_generics = translate_generic_args span translate_ty gr.generics in
   { global_id = gr.id; global_generics }
 
-and translate_trait_instance_id (span : Meta.span option)
-    (translate_ty : T.ty -> ty) (id : T.trait_instance_id) : trait_instance_id =
+and translate_trait_ref_kind (span : Meta.span option)
+    (translate_ty : T.ty -> ty) (id : T.trait_ref_kind) : trait_instance_id =
   let translate_trait_instance_id =
-    translate_trait_instance_id span translate_ty
+    translate_trait_ref_kind span translate_ty
   in
   match id with
   | T.Self -> Self
@@ -73,9 +73,12 @@ and translate_trait_instance_id (span : Meta.span option)
       Clause var
       (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
   | ParentClause (tref, clause_id) ->
-      let inst_id = translate_trait_instance_id tref.trait_id in
+      let inst_id = translate_trait_instance_id tref.kind in
       ParentClause (inst_id, tref.trait_decl_ref.binder_value.id, clause_id)
-  | Dyn _ -> [%craise_opt_span] span "Dynamic trait types are not supported yet"
+  | ItemClause _ ->
+      (* `ItemClause`s are removed by Charon's `--remove-associated-types`, except for GATs *)
+      [%craise_opt_span] span "Generic Associated Types are not supported yet"
+  | Dyn -> [%craise_opt_span] span "Dynamic trait types are not supported yet"
   | UnknownTrait s -> [%craise_opt_span] span ("Unknown trait found: " ^ s)
 
 (** Translate a signature type - TODO: factor out the different translation
@@ -124,6 +127,7 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
       [%craise_opt_span] span "Arrow types are not supported yet"
   | TDynTrait _ ->
       [%craise_opt_span] span "Dynamic trait types are not supported yet"
+  | TPtrMetadata _ -> [%craise_opt_span] span "unsupported: PtrMetadata"
   | TError _ ->
       [%craise_opt_span] span "Found type error in the output of charon"
 
@@ -135,16 +139,16 @@ and translate_strait_ref (span : Meta.span option) (tr : T.trait_ref) :
     trait_ref =
   translate_trait_ref span (translate_sty span) tr
 
-and translate_strait_instance_id (span : Meta.span option)
-    (id : T.trait_instance_id) : trait_instance_id =
-  translate_trait_instance_id span (translate_sty span) id
+and translate_strait_ref_kind (span : Meta.span option) (id : T.trait_ref_kind)
+    : trait_instance_id =
+  translate_trait_ref_kind span (translate_sty span) id
 
 let translate_strait_decl_ref (span : Meta.span option) (tr : T.trait_decl_ref)
     : trait_decl_ref =
   translate_trait_decl_ref span (translate_sty span) tr
 
-let translate_trait_clause (span : Meta.span option) (clause : T.trait_clause) :
-    trait_clause =
+let translate_trait_clause (span : Meta.span option) (clause : T.trait_param) :
+    trait_param =
   let { T.clause_id; span = _; trait } = clause in
   let trait = translate_region_binder (translate_strait_decl_ref span) trait in
   { clause_id; trait_id = trait.trait_decl_id; generics = trait.decl_generics }
@@ -310,6 +314,7 @@ let rec translate_fwd_ty (span : Meta.span option) (type_infos : type_infos)
       [%craise_opt_span] span "Arrow types are not supported yet"
   | TDynTrait _ ->
       [%craise_opt_span] span "Dynamic trait types are not supported yet"
+  | TPtrMetadata _ -> [%craise_opt_span] span "unsupported: PtrMetadata"
   | TError _ ->
       [%craise_opt_span] span "Found type error in the output of charon"
 
@@ -321,9 +326,9 @@ and translate_fwd_trait_ref (span : Meta.span option) (type_infos : type_infos)
     (tr : T.trait_ref) : trait_ref =
   translate_trait_ref span (translate_fwd_ty span type_infos) tr
 
-and translate_fwd_trait_instance_id (span : Meta.span option)
-    (type_infos : type_infos) (id : T.trait_instance_id) : trait_instance_id =
-  translate_trait_instance_id span (translate_fwd_ty span type_infos) id
+and translate_fwd_trait_ref_kind (span : Meta.span option)
+    (type_infos : type_infos) (id : T.trait_ref_kind) : trait_instance_id =
+  translate_trait_ref_kind span (translate_fwd_ty span type_infos) id
 
 (** Simply calls [translate_fwd_ty] *)
 let ctx_translate_fwd_ty (ctx : bs_ctx) (ty : T.ty) : ty =
@@ -417,7 +422,7 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
       None
   | TTraitType (trait_ref, type_name) ->
       [%sanity_check_opt_span] span
-        (TypesUtils.trait_instance_id_is_local_clause trait_ref.trait_id);
+        (TypesUtils.trait_ref_kind_is_local_clause trait_ref.kind);
       if inside_mut then
         (* Translate the trait ref as a "forward" trait ref -
            we do not want to filter any type *)
@@ -428,6 +433,7 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
       [%craise_opt_span] span "Arrow types are not supported yet"
   | TDynTrait _ ->
       [%craise_opt_span] span "Dynamic trait types are not supported yet"
+  | TPtrMetadata _ -> [%craise_opt_span] span "unsupported: PtrMetadata"
   | TError _ ->
       [%craise_opt_span] span "Found type error in the output of charon"
 
@@ -441,7 +447,7 @@ let mk_type_check_ctx (ctx : bs_ctx) : PureTypeCheck.tc_ctx =
   let const_generics =
     T.ConstGenericVarId.Map.of_list
       (List.map
-         (fun (cg : T.const_generic_var) ->
+         (fun (cg : T.const_generic_param) ->
            (cg.index, ctx_translate_fwd_ty ctx (T.TLiteral cg.ty)))
          ctx.sg.generics.const_generics)
   in
@@ -500,9 +506,9 @@ let list_ancestor_abstractions (ctx : bs_ctx) (abs : V.abs)
 
 (** Small utility. *)
 let compute_raw_fun_effect_info (span : Meta.span option)
-    (fun_infos : fun_info A.FunDeclId.Map.t)
-    (fun_id : A.fun_id_or_trait_method_ref) (lid : V.LoopId.id option)
-    (gid : T.RegionGroupId.id option) : fun_effect_info =
+    (fun_infos : fun_info A.FunDeclId.Map.t) (fun_id : A.fn_ptr_kind)
+    (lid : V.LoopId.id option) (gid : T.RegionGroupId.id option) :
+    fun_effect_info =
   match fun_id with
   | TraitMethod (_, _, fid) | FunId (FRegular fid) ->
       let info =
@@ -538,9 +544,8 @@ let compute_raw_fun_effect_info (span : Meta.span option)
     - [generic_args]: the generic arguments with which the uninstantiated
       signature was instantiated, leading to the current [sg] *)
 let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
-    (decls_ctx : C.decls_ctx) (fun_id : A.fun_id_or_trait_method_ref)
-    (sg : A.inst_fun_sig) (input_names : string option list) :
-    decomposed_fun_type =
+    (decls_ctx : C.decls_ctx) (fun_id : A.fn_ptr_kind) (sg : A.inst_fun_sig)
+    (input_names : string option list) : decomposed_fun_type =
   [%ltrace
     let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
     "- sg.regions_hierarchy: "
@@ -594,7 +599,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
       (lazy
         (let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
          "Nested borrows are not supported yet (found in the signature of: "
-         ^ Charon.PrintTypes.fun_id_or_trait_method_ref_to_string ctx fun_id
+         ^ Charon.PrintTypes.fn_ptr_kind_to_string ctx fun_id
          ^ ")"));
     (* For now, we don't allow nested borrows, so the additional inputs to the
        backward function can only come from borrows that were returned like
@@ -616,7 +621,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
         Print.list_to_string (PrintPure.ty_to_string pctx false) inputs
       in
       "translate_back_inputs_for_gid:" ^ "\n- function:"
-      ^ Charon.PrintTypes.fun_id_or_trait_method_ref_to_string ctx fun_id
+      ^ Charon.PrintTypes.fn_ptr_kind_to_string ctx fun_id
       ^ "\n- gid: "
       ^ RegionGroupId.to_string gid
       ^ "\n- output: " ^ output ^ "\n- back inputs: " ^ inputs];
@@ -655,7 +660,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
         Print.list_to_string (PrintPure.ty_to_string pctx false) outputs
       in
       "compute_back_outputs_for_gid:" ^ "\n- function:"
-      ^ Charon.PrintTypes.fun_id_or_trait_method_ref_to_string ctx fun_id
+      ^ Charon.PrintTypes.fn_ptr_kind_to_string ctx fun_id
       ^ "\n- gid: "
       ^ RegionGroupId.to_string gid
       ^ "\n- inputs: " ^ inputs ^ "\n- back outputs: " ^ outputs];
@@ -725,7 +730,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
   { fwd_inputs; fwd_output; back_sg; fwd_info }
 
 let translate_fun_sig_with_regions_hierarchy_to_decomposed (span : span option)
-    (decls_ctx : C.decls_ctx) (fun_id : A.fun_id_or_trait_method_ref)
+    (decls_ctx : C.decls_ctx) (fun_id : A.fn_ptr_kind)
     (regions_hierarchy : T.region_var_groups) (sg : A.fun_sig)
     (input_names : string option list) : decomposed_fun_sig =
   let inst_sg : LlbcAst.inst_fun_sig =
@@ -915,7 +920,7 @@ let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
   translate_fun_sig_from_decomposed sg
 
 (** TODO: not very clean. *)
-let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fun_id_or_trait_method_ref)
+let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fn_ptr_kind)
     (lid : V.LoopId.id option) (gid : T.RegionGroupId.id option) :
     fun_effect_info =
   match lid with

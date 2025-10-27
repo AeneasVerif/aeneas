@@ -1057,7 +1057,7 @@ let extract_comment_with_span (ctx : extraction_ctx) (fmt : F.formatter)
 
 let extract_trait_clause_type (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t)
-    (clause : trait_clause) : unit =
+    (clause : trait_param) : unit =
   let trait_name = ctx_get_trait_decl span clause.trait_id ctx in
   F.pp_print_string fmt trait_name;
   (* let span = (TraitDeclId.Map.find clause.trait_id ctx.trans_trait_decls).span in
@@ -1110,8 +1110,8 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
       F.pp_print_string fmt "forall");
     (* Small helper - we may need to split the parameters *)
     let print_generics (type_params : (explicit * string) list)
-        (const_generics : (explicit * const_generic_var) list)
-        (trait_clauses : (explicit * trait_clause) list) : unit =
+        (const_generics : (explicit * const_generic_param) list)
+        (trait_clauses : (explicit * trait_param) list) : unit =
       (* Note that in HOL4 we don't print the type parameters. *)
       if backend () <> HOL4 then (
         (* Print the type parameters *)
@@ -1135,7 +1135,7 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
             F.pp_print_string fmt "->"));
         (* Print the const generic parameters *)
         List.iter
-          (fun ((expl, var) : explicit * const_generic_var) ->
+          (fun ((expl, var) : explicit * const_generic_param) ->
             insert_req_space ();
             (* ( *)
             left_bracket expl;
@@ -1154,7 +1154,7 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
           const_generics);
       (* Print the trait clauses *)
       List.iter
-        (fun ((expl, clause) : explicit * trait_clause) ->
+        (fun ((expl, clause) : explicit * trait_param) ->
           insert_req_space ();
           (* ( *)
           left_bracket expl;

@@ -288,7 +288,7 @@ theorem length_flatten_set_eq {α : Type u} (ls : List (List α)) (i : Nat) (x :
   (h1 : i < ls.length) :
   (ls.set i x).flatten.length + (ls[i]!).length = ls.flatten.length + x.length := by
   revert i
-  induction ls <;> intro i <;> simp_all [default]
+  induction ls <;> intro i <;> simp_all
   cases i <;> simp_all
   . scalar_tac
   . rename Nat => i
@@ -301,7 +301,7 @@ theorem length_flatten_set_eq {α : Type u} (ls : List (List α)) (i : Nat) (x :
 theorem length_flatten_set_eq_disj {α : Type u} (ls : List (List α)) (i : Nat) (x : List α) :
   ls.length ≤ i ∨
   (ls.set i x).flatten.length + (ls[i]!).length = ls.flatten.length + x.length := by
-  cases h: (ls.length ≤ i : Bool) <;> simp_all only [decide_eq_false_iff_not, not_le, false_or, decide_eq_true_eq, true_or]
+  cases h: (ls.length ≤ i : Bool) <;> simp_all only [decide_eq_false_iff_not, not_le, decide_eq_true_eq, true_or]
   rw [length_flatten_set_eq] <;> simp [*]
 
 theorem length_flatten_set_as_int_eq {α : Type u} (ls : List (List α)) (i : Nat) (x : List α)
@@ -335,9 +335,8 @@ theorem getElem!_default [Inhabited α] (ls : List α) (i : ℕ)
   . intros i h
     simp only [getElem!_eq_getElem?_getD, getElem?_nil, Option.getD_none]
   . intros i h
-    cases i <;> simp_all [getElem!_eq_getElem?_getD, length_cons, nonpos_iff_eq_zero,
-      AddLeftCancelMonoid.add_eq_zero, List.length_eq_zero_iff, one_ne_zero, and_false, not_false_eq_true,
-      neq_imp, add_le_add_iff_right, getElem?_cons_succ]
+    cases i <;> simp_all [length_cons, nonpos_iff_eq_zero, List.length_eq_zero_iff,
+      one_ne_zero, and_false, not_false_eq_true, neq_imp, add_le_add_iff_right]
 
 @[simp, simp_lists_simps]
 theorem getElem!_map_default [Inhabited α] [Inhabited β] (ls : List α) (i : ℕ) (f : α → β)
@@ -402,11 +401,11 @@ theorem getElem!_range' (i start n: ℕ) :
 
 @[simp] theorem getElem!_range'_lt (i start n: ℕ) (h : i < n) :
   (List.range' start n)[i]! = start + i := by
-  simp [getElem!_range', *]
+  simp [*]
 
 @[simp] theorem getElem!_range'_not_lt (i start n: ℕ) (h : n ≤ i) :
   (List.range' start n)[i]! = 0 := by
-  simp [getElem!_range', *]
+  simp [*]
 
 theorem getElem!_range (i n: ℕ) :
   (List.range n)[i]! = if i < n then i else 0 := by
@@ -416,11 +415,11 @@ theorem getElem!_range (i n: ℕ) :
 
 @[simp, simp_lists_simps] theorem getElem!_range_of_lt (i n: ℕ) (h : i < n) :
   (List.range n)[i]! = i := by
-  simp [getElem!_range, *]
+  simp [*]
 
 @[simp, simp_lists_simps] theorem getElem!_range_zero (i n: ℕ) (h : n ≤ i) :
   (List.range n)[i]! = 0 := by
-  simp [getElem!_range, *]
+  simp [*]
 
 end
 
@@ -530,7 +529,7 @@ section -- setSlice!
     simp only [setSlice!, append_assoc]
     simp_lists
     by_cases h1: j < s.length <;> simp_lists
-    simp (disch := omega) only [inf_of_le_left, min_self, add_add_tsub_cancel,
+    simp (disch := omega) only [inf_of_le_left, add_add_tsub_cancel,
       add_tsub_cancel_of_le]
 
   @[simp_lists_simps]
@@ -568,7 +567,7 @@ section -- setSlice!
     simp only [setSlice!, append_assoc]
     simp_lists
     by_cases h1: j < s.length <;> simp_lists
-    simp (disch := omega) only [inf_of_le_left, min_self, add_add_tsub_cancel,
+    simp (disch := omega) only [inf_of_le_left, add_add_tsub_cancel,
       add_tsub_cancel_of_le, getElem?_eq_getElem]
 
   @[simp_lists_simps]
@@ -600,7 +599,7 @@ theorem forall_imp_foldl_eq {α β} (l : List β) (s0 s1 : α) (f1 f2 : α → �
   simp [h0]; clear h0 s0
   revert s1 h1
   induction l
-  . simp_all only [not_mem_nil, IsEmpty.forall_iff, implies_true, foldl_nil, imp_self]
+  . simp_all only [not_mem_nil, IsEmpty.forall_iff, implies_true, foldl_nil]
   . simp_all only [mem_cons, forall_eq_or_imp, foldl_cons, implies_true]
 
 /- This one might be expensive -/

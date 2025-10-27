@@ -1018,10 +1018,11 @@ module EvalCtx = struct
     let env = eval_ctx_to_fmt_env ctx in
     trait_decl_ref_to_string env x
 
-  let trait_instance_id_to_string (ctx : eval_ctx) (x : trait_instance_id) :
-      string =
+  (* Note: this will fail on `Dyn` and `BuiltinOrAuto` instances, because these
+     require the full `trait_ref` for printing. *)
+  let trait_ref_kind_to_string (ctx : eval_ctx) (x : trait_ref_kind) : string =
     let env = eval_ctx_to_fmt_env ctx in
-    trait_instance_id_to_string env x
+    trait_ref_kind_to_string env None x
 
   let borrow_content_to_string ?(span : Meta.span option = None)
       (ctx : eval_ctx) (bc : borrow_content) : string =
@@ -1106,10 +1107,9 @@ module EvalCtx = struct
     let env = eval_ctx_to_fmt_env ctx in
     inst_fun_sig_to_string env x
 
-  let fun_id_or_trait_method_ref_to_string (ctx : eval_ctx)
-      (x : fun_id_or_trait_method_ref) : string =
+  let fn_ptr_kind_to_string (ctx : eval_ctx) (x : fn_ptr_kind) : string =
     let env = eval_ctx_to_fmt_env ctx in
-    fun_id_or_trait_method_ref_to_string env x
+    fn_ptr_kind_to_string env x
 
   let statement_to_string (ctx : eval_ctx) (indent : string)
       (indent_incr : string) (e : statement) : string =

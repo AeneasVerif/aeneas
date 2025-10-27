@@ -1875,8 +1875,8 @@ and norm_proj_regions_union (span : Meta.span) (r1 : region) (r2 : region) :
 
 and norm_proj_trait_refs_union (span : Meta.span) (tr1 : trait_ref)
     (tr2 : trait_ref) : trait_ref =
-  let { trait_id = trait_id1; trait_decl_ref = decl_ref1 } = tr1 in
-  let { trait_id = trait_id2; trait_decl_ref = decl_ref2 } = tr2 in
+  let { kind = trait_id1; trait_decl_ref = decl_ref1 } = tr1 in
+  let { kind = trait_id2; trait_decl_ref = decl_ref2 } = tr2 in
   [%sanity_check] span (trait_id1 = trait_id2);
   (* There might be regions but let's ignore this for now... *)
   [%sanity_check] span (decl_ref1 = decl_ref2);

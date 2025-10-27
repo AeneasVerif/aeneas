@@ -244,14 +244,14 @@ let update_array_default (crate : crate) : crate =
                   }
 
           method! visit_fn_ptr env fn_ptr =
-            match fn_ptr.func with
+            match fn_ptr.kind with
             | FunId (FRegular fid) -> begin
                 match FunDeclId.Map.find_opt fid methods with
                 | None -> super#visit_fn_ptr env fn_ptr
                 | Some n ->
                     let fn_ptr =
                       {
-                        func = FunId (FRegular merged_method);
+                        kind = FunId (FRegular merged_method);
                         generics =
                           { fn_ptr.generics with const_generics = [ n ] };
                       }
@@ -343,11 +343,9 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
       *)
       method update_statement (depth : int) (st : statement)
           (after : statement list) : statement list * statement list =
-        match st.content with
+        match st.kind with
         | Loop loop -> (
-            try
-              ( [ { st with content = super#visit_Loop (depth + 1) loop } ],
-                after )
+            try ([ { st with kind = super#visit_Loop (depth + 1) loop } ], after)
             with Found ->
               (* We found a return in the loop: attempt to replace it with a break.
 
@@ -384,14 +382,14 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
                   visitor#visit_block () b
                 in
                 let loop = block_replace loop in
-                let loop : statement = { st with content = Loop loop } in
+                let loop : statement = { st with kind = Loop loop } in
                 let loop = super#visit_statement depth loop in
                 let return : statement =
                   {
                     span = st.span;
                     statement_id =
                       StatementId.zero (* we'll refresh this later *);
-                    content = Return;
+                    kind = Return;
                     comments_before = [];
                   }
                 in
@@ -406,7 +404,7 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
                       [%craise] span
                         "Early returns inside of loops are not supported yet"
                   | st :: after -> (
-                      match st.content with
+                      match st.kind with
                       | Return -> ([], st)
                       | _ ->
                           let after, return = decompose_after after in
@@ -414,10 +412,10 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
                 in
                 let after, return = decompose_after after in
                 let replace (st : statement) : statement list =
-                  match st.content with
+                  match st.kind with
                   | Return ->
                       (* Replace the return with a break *)
-                      [ { st with content = Break 0 } ]
+                      [ { st with kind = Break 0 } ]
                   | Break i ->
                       (* Move the statements [after] before the break *)
                       [%cassert] span (i = 0)
@@ -426,7 +424,7 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
                   | _ -> [ st ]
                 in
                 let loop = map_statement replace loop in
-                let loop : statement = { st with content = Loop loop } in
+                let loop : statement = { st with kind = Loop loop } in
                 let loop = super#visit_statement depth loop in
                 ([ loop; return ], []))
         | _ -> ([ super#visit_statement depth st ], after)
@@ -507,10 +505,10 @@ let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
     let filtered = ref LocalId.Set.empty in
 
     let filter_shallow (st : statement) : statement list =
-      match st.content with
+      match st.kind with
       | Assign (p, rv) -> (
           match (p.kind, rv) with
-          | PlaceLocal var_id, RvRef (_, BShallow) ->
+          | PlaceLocal var_id, RvRef (_, BShallow, _) ->
               (* Filter *)
               filtered := LocalId.Set.add var_id !filtered;
               []
@@ -519,7 +517,7 @@ let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
     in
 
     let filter_storage (st : statement) : statement list =
-      match st.content with
+      match st.kind with
       | StorageLive _ -> []
       | StorageDead loc when LocalId.Set.mem loc !filtered -> []
       | _ -> [ st ]
@@ -578,7 +576,7 @@ let unify_drops (_ : crate) (f : fun_decl) : fun_decl =
       method! visit_Drop _ p _ = Deinit p
 
       method! visit_StorageDead locals var_id =
-        let ty = (lookup_local locals var_id).var_ty in
+        let ty = (lookup_local locals var_id).local_ty in
         let p = { kind = PlaceLocal var_id; ty } in
         Deinit p
     end
@@ -649,7 +647,7 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
             (LocalId.of_int (List.length body.locals.locals))
         in
         let fresh_local ty =
-          let local = { index = gen (); var_ty = ty; name = None } in
+          let local = { index = gen (); local_ty = ty; name = None } in
           new_locals := local :: !new_locals;
           local.index
         in
@@ -670,8 +668,8 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
                  intermediate statements: the string initialization, then
                  the borrow, that we can finally move.
               *)
-              method! visit_Constant env cv =
-                match (cv.value, cv.ty) with
+              method! visit_Constant env (cv : constant_expr) =
+                match (cv.kind, cv.ty) with
                 | ( CLiteral (VStr str),
                     TRef
                       (_, (TAdt { id = TBuiltin TStr; _ } as str_ty), ref_kind)
@@ -681,13 +679,13 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
                     let local_id =
                       let local_id = fresh_local str_ty in
                       let new_cv : constant_expr =
-                        { value = CLiteral (VStr str); ty = str_ty }
+                        { kind = CLiteral (VStr str); ty = str_ty }
                       in
                       let st =
                         {
                           span;
                           statement_id = StatementId.zero;
-                          content =
+                          kind =
                             Assign
                               ( { kind = PlaceLocal local_id; ty = str_ty },
                                 Use (Constant new_cv) );
@@ -696,6 +694,17 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
                       in
                       new_statements := st :: !new_statements;
                       local_id
+                    in
+                    let str_len =
+                      Constant
+                        {
+                          kind =
+                            CLiteral
+                              (VScalar
+                                 (UnsignedScalar
+                                    (Usize, Z.of_int (String.length str))));
+                          ty = TLiteral (TUInt Usize);
+                        }
                     in
                     (* Then the borrow *)
                     let local_id =
@@ -707,14 +716,16 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
                       in
                       let rv =
                         RvRef
-                          ({ kind = PlaceLocal local_id; ty = str_ty }, bkind)
+                          ( { kind = PlaceLocal local_id; ty = str_ty },
+                            bkind,
+                            str_len )
                       in
                       let lv = { kind = PlaceLocal nlocal_id; ty = cv.ty } in
                       let st =
                         {
                           span;
                           statement_id = StatementId.zero;
-                          content = Assign (lv, rv);
+                          kind = Assign (lv, rv);
                           comments_before = [];
                         }
                       in
@@ -734,7 +745,7 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
             {
               span;
               statement_id = StatementId.zero;
-              content = Assign (lv, rv);
+              kind = Assign (lv, rv);
               comments_before = [];
             }
           in
@@ -745,7 +756,7 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
 
         (* Visit all the statements and decompose the literals *)
         let decompose_in_statement (st : statement) : statement list =
-          match st.content with
+          match st.kind with
           | Assign (lv, rv) -> decompose_rvalue st.span lv rv
           | _ -> [ st ]
         in
@@ -815,7 +826,7 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
             (LocalId.of_int (List.length body.locals.locals))
         in
         let fresh_local ty =
-          let local = { index = gen (); var_ty = ty; name = None } in
+          let local = { index = gen (); local_ty = ty; name = None } in
           new_locals := local :: !new_locals;
           local.index
         in
@@ -838,14 +849,24 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
                 (* Introduce the intermediate reference *)
                 let local_id =
                   let local_id = fresh_local ref_ty in
+                  let metadata =
+                    Copy
+                      {
+                        kind = PlaceGlobal crate.unit_metadata;
+                        ty = mk_unit_ty;
+                      }
+                  in
                   let st =
                     {
                       span;
                       statement_id = StatementId.zero;
-                      content =
+                      kind =
                         Assign
                           ( { kind = PlaceLocal local_id; ty = ref_ty },
-                            RvRef ({ kind = PlaceGlobal gref; ty }, BShared) );
+                            RvRef
+                              ( { kind = PlaceGlobal gref; ty },
+                                BShared,
+                                metadata ) );
                       comments_before = [];
                     }
                   in
@@ -859,8 +880,8 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
             end
           in
 
-          let content =
-            match st.content with
+          let kind =
+            match st.kind with
             | Assign (lv, rv) -> Assign (lv, visitor#visit_rvalue mk_unit_ty rv)
             | CopyNonOverlapping { src; dst; count } ->
                 let src = visitor#visit_operand mk_unit_ty src in
@@ -884,9 +905,9 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
             | Nop
             | Switch _
             | Loop _
-            | Error _ -> st.content
+            | Error _ -> st.kind
           in
-          let st = { st with content } in
+          let st = { st with kind } in
 
           List.rev (st :: !new_statements)
         in

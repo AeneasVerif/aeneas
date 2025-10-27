@@ -291,17 +291,17 @@ let generic_args_substitute (subst : subst) (generics : generic_args) :
   in
   visitor#visit_generic_args subst generics
 
-let make_type_subst (vars : type_var list) (tys : ty list) : TypeVarId.id -> ty
-    =
-  let var_ids = List.map (fun k -> (k : type_var).index) vars in
+let make_type_subst (vars : type_param list) (tys : ty list) :
+    TypeVarId.id -> ty =
+  let var_ids = List.map (fun k -> (k : type_param).index) vars in
   let mp = TypeVarId.Map.of_list (List.combine var_ids tys) in
   fun id -> TypeVarId.Map.find id mp
 
-let make_const_generic_subst (vars : const_generic_var list)
+let make_const_generic_subst (vars : const_generic_param list)
     (cgs : const_generic list) : ConstGenericVarId.id -> const_generic =
   Substitute.make_const_generic_subst_from_vars vars cgs
 
-let make_trait_subst (clauses : trait_clause list) (refs : trait_ref list) :
+let make_trait_subst (clauses : trait_param list) (refs : trait_ref list) :
     TraitClauseId.id -> trait_instance_id =
   let clauses = List.map (fun x -> x.clause_id) clauses in
   let refs = List.map (fun (x : trait_ref) -> x.trait_id) refs in
@@ -1615,12 +1615,12 @@ let mk_visited_params_visitor () =
 let compute_explicit_info (generics : Pure.generic_params) (input_tys : ty list)
     : explicit_info =
   let visitor, implicit_tys, implicit_cgs = mk_visited_params_visitor () in
-  List.iter (visitor#visit_trait_clause ()) generics.trait_clauses;
+  List.iter (visitor#visit_trait_param ()) generics.trait_clauses;
   List.iter (visitor#visit_ty ()) input_tys;
-  let make_explicit_ty (v : Pure.type_var) : Pure.explicit =
+  let make_explicit_ty (v : type_param) : Pure.explicit =
     if Pure.TypeVarId.Set.mem v.index !implicit_tys then Implicit else Explicit
   in
-  let make_explicit_cg (v : Pure.const_generic_var) : Pure.explicit =
+  let make_explicit_cg (v : const_generic_param) : Pure.explicit =
     if Pure.ConstGenericVarId.Set.mem v.index !implicit_cgs then Implicit
     else Explicit
   in
@@ -1636,12 +1636,12 @@ let compute_explicit_info (generics : Pure.generic_params) (input_tys : ty list)
 let compute_known_info (explicit : explicit_info)
     (generics : Pure.generic_params) : known_info =
   let visitor, known_tys, known_cgs = mk_visited_params_visitor () in
-  List.iter (visitor#visit_trait_clause ()) generics.trait_clauses;
-  let make_known_ty ((e, v) : explicit * Pure.type_var) : Pure.known =
+  List.iter (visitor#visit_trait_param ()) generics.trait_clauses;
+  let make_known_ty ((e, v) : explicit * type_param) : Pure.known =
     if e = Explicit || Pure.TypeVarId.Set.mem v.index !known_tys then Known
     else Unknown
   in
-  let make_known_cg ((e, v) : explicit * Pure.const_generic_var) : Pure.known =
+  let make_known_cg ((e, v) : explicit * const_generic_param) : Pure.known =
     if e = Explicit || Pure.ConstGenericVarId.Set.mem v.index !known_cgs then
       Known
     else Unknown
@@ -2261,18 +2261,18 @@ let filter_generic_params_used_in_texpr (generic : generic_params) (e : texpr) :
   let { types; const_generics; trait_clauses } : generic_params = generic in
   let types =
     List.map
-      (fun (v : type_var) -> (TypeVarId.Set.mem v.index !type_ids, v))
+      (fun (v : type_param) -> (TypeVarId.Set.mem v.index !type_ids, v))
       types
   in
   let const_generics =
     List.map
-      (fun (cg : const_generic_var) ->
+      (fun (cg : const_generic_param) ->
         (ConstGenericVarId.Set.mem cg.index !cg_ids, cg))
       const_generics
   in
   let trait_clauses =
     List.map
-      (fun (clause : trait_clause) ->
+      (fun (clause : trait_param) ->
         (TraitClauseId.Set.mem clause.clause_id !clause_ids, clause))
       trait_clauses
   in
@@ -2303,16 +2303,16 @@ let filter_generic_params_used_in_texpr (generic : generic_params) (e : texpr) :
 
 let generic_args_of_params (generics : generic_params) : generic_args =
   let types =
-    List.map (fun (v : type_var) -> TVar (Free v.index)) generics.types
+    List.map (fun (v : type_param) -> TVar (Free v.index)) generics.types
   in
   let const_generics =
     List.map
-      (fun (v : const_generic_var) -> T.CgVar (Free v.index))
+      (fun (v : const_generic_param) -> T.CgVar (Free v.index))
       generics.const_generics
   in
   let trait_refs =
     List.map
-      (fun (c : trait_clause) ->
+      (fun (c : trait_param) ->
         {
           trait_id = Clause (Free c.clause_id);
           trait_decl_ref =

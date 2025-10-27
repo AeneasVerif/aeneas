@@ -586,7 +586,7 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
   let global = GlobalDeclId.Map.find id global_decls in
   let trans =
     [%silent_unwrap_opt_span] None
-      (FunDeclId.Map.find_opt global.body ctx.trans_funs)
+      (FunDeclId.Map.find_opt global.init ctx.trans_funs)
   in
   [%sanity_check] global.item_meta.span (trans.loops = []);
   let body = trans.f in
@@ -872,7 +872,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
            separate type definitions) *)
         match pure_fun with
         | Some pure_fun -> (
-            match pure_fun.f.Pure.kind with
+            match pure_fun.f.Pure.src with
             | TraitDeclItem (_, _, false) -> ()
             (* Global initializers are translated along with the global definition *)
             | _ when pure_fun.f.is_global_decl_body -> ()
