@@ -19,7 +19,7 @@ fn loop_access_array(k: usize) {
 }
 
 /// This comes from an issue found in SymCrust and minimized
-fn loop_array_len(b : bool) {
+fn loop_array_len(b: bool) {
     let buf = [0u8; 4];
     let _: usize = buf.len();
 
@@ -29,7 +29,7 @@ fn loop_array_len(b : bool) {
 }
 
 /// This comes from an issue found in SymCrust and minimized
-fn loop_array_len_write(b0 : bool, b1: bool) {
+fn loop_array_len_write(b0: bool, b1: bool) {
     let mut buf = [0u8; 4];
     let _: usize = buf.len();
 
@@ -43,13 +43,13 @@ fn loop_array_len_write(b0 : bool, b1: bool) {
 const MAX_NROWS: usize = 4;
 
 /// This comes from an issue found in SymCrust and minimized
-fn read_global_loop(b : bool, n_rows: usize) {
+fn read_global_loop(b: bool, n_rows: usize) {
     debug_assert!(n_rows <= MAX_NROWS);
     while b {}
 }
 
 #[allow(unused_comparisons)]
-fn mut_loop_len(_: &mut u32, b : bool) {
+fn mut_loop_len(_: &mut u32, b: bool) {
     let buf = [0u8; 4];
 
     while b {
@@ -58,7 +58,7 @@ fn mut_loop_len(_: &mut u32, b : bool) {
 }
 
 /// This comes from an issue found in SymCrust and minimized
-fn test(b0 : bool, b1: bool) {
+fn test(b0: bool, b1: bool) {
     let mut buf = [0u8; 4];
     let _ = buf.len();
 

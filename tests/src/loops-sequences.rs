@@ -24,7 +24,7 @@ fn key_expand(key: &mut Key, state_base: &mut HashState, state_work: &mut HashSt
     shake_init(state_base);
     shake_append(state_base, &key.seed);
 
-    let mut sample_buffer : [u8; 1] = [0];
+    let mut sample_buffer: [u8; 1] = [0];
     let mut i = 0;
     while i < 32 {
         sample_buffer[0] = i as u8;

@@ -656,7 +656,7 @@ def issue500_2 (s : Array Bool 1#usize) : Result (Array Bool 1#usize) :=
 @[reducible] def issue500_3.A := (Array Bool 1#usize)
 
 /- [loops::issue500_3]: loop 0:
-   Source: 'tests/src/loops.rs', lines 404:4-404:19 -/
+   Source: 'tests/src/loops.rs', lines 404:4-404:18 -/
 def issue500_3_loop : Result Unit :=
   if 0#i32 < 0#i32
   then issue500_3_loop
@@ -671,7 +671,7 @@ def issue500_3 (s : Array Bool 1#usize) : Result (Array Bool 1#usize) :=
   ok s
 
 /- [loops::issue351]: loop 0:
-   Source: 'tests/src/loops.rs', lines 411:4-415:5 -/
+   Source: 'tests/src/loops.rs', lines 411:4-414:5 -/
 def issue351_loop (t : List U8) (last : U8) : Result U8 :=
   match t with
   | List.Cons ht tt => issue351_loop tt ht
@@ -679,18 +679,18 @@ def issue351_loop (t : List U8) (last : U8) : Result U8 :=
 partial_fixpoint
 
 /- [loops::issue351]:
-   Source: 'tests/src/loops.rs', lines 409:0-417:1 -/
+   Source: 'tests/src/loops.rs', lines 409:0-416:1 -/
 @[reducible]
 def issue351 (h : U8) (t : List U8) : Result U8 :=
   issue351_loop t h
 
 /- [loops::issue270::box_get_borrow]:
-   Source: 'tests/src/loops.rs', lines 421:4-423:5 -/
+   Source: 'tests/src/loops.rs', lines 420:4-422:5 -/
 def issue270.box_get_borrow {T : Type} (x : T) : Result T :=
   ok x
 
 /- [loops::issue270]: loop 0:
-   Source: 'tests/src/loops.rs', lines 427:8-431:9 -/
+   Source: 'tests/src/loops.rs', lines 426:8-429:9 -/
 def issue270_loop (t : List (List U8)) (last : List U8) : Result (List U8) :=
   match t with
   | List.Cons ht tt =>
@@ -701,7 +701,7 @@ def issue270_loop (t : List (List U8)) (last : List U8) : Result (List U8) :=
 partial_fixpoint
 
 /- [loops::issue270]:
-   Source: 'tests/src/loops.rs', lines 420:0-437:1 -/
+   Source: 'tests/src/loops.rs', lines 419:0-434:1 -/
 def issue270 (v : List (List U8)) : Result (Option (List U8)) :=
   match v with
   | List.Cons h t =>
@@ -712,7 +712,7 @@ def issue270 (v : List (List U8)) : Result (Option (List U8)) :=
   | List.Nil => ok none
 
 /- [loops::issue400_1]: loop 0:
-   Source: 'tests/src/loops.rs', lines 443:4-451:5 -/
+   Source: 'tests/src/loops.rs', lines 440:4-447:5 -/
 def issue400_1_loop
   (back : I32 → (I32 × I32)) (cond : Bool) (y : I32) (i : I32) :
   Result (I32 × I32)
@@ -734,13 +734,13 @@ def issue400_1_loop
 partial_fixpoint
 
 /- [loops::issue400_1]:
-   Source: 'tests/src/loops.rs', lines 440:0-452:1 -/
+   Source: 'tests/src/loops.rs', lines 437:0-448:1 -/
 @[reducible]
 def issue400_1 (a : I32) (b : I32) (cond : Bool) : Result (I32 × I32) :=
   issue400_1_loop (fun i => (i, b)) cond a 0#i32
 
 /- [loops::issue400_2]: loop 0:
-   Source: 'tests/src/loops.rs', lines 459:4-469:5 -/
+   Source: 'tests/src/loops.rs', lines 455:4-464:5 -/
 def issue400_2_loop
   (back : I32 → I32 → (I32 × I32 × I32)) (conds : Slice Bool) (y : I32)
   (z : I32) (i : Usize) :
@@ -766,7 +766,7 @@ def issue400_2_loop
 partial_fixpoint
 
 /- [loops::issue400_2]:
-   Source: 'tests/src/loops.rs', lines 455:0-472:1 -/
+   Source: 'tests/src/loops.rs', lines 451:0-467:1 -/
 def issue400_2
   (a : I32) (b : I32) (c : I32) (conds : Slice Bool) :
   Result (I32 × I32 × I32)
@@ -779,7 +779,7 @@ def issue400_2
   ok (back y1 z1)
 
 /- [loops::copy_carray::CARRAY]
-   Source: 'tests/src/loops.rs', lines 476:4-476:35 -/
+   Source: 'tests/src/loops.rs', lines 471:4-471:36 -/
 @[global_simps]
 def copy_carray.CARRAY_body : Result (Array U32 2#usize) :=
   ok (Array.make 2#usize [ 0#u32, 1#u32 ])
@@ -788,7 +788,7 @@ def copy_carray.CARRAY : Array U32 2#usize :=
   eval_global copy_carray.CARRAY_body
 
 /- [loops::copy_carray]: loop 0:
-   Source: 'tests/src/loops.rs', lines 478:4-481:5 -/
+   Source: 'tests/src/loops.rs', lines 473:4-476:5 -/
 def copy_carray_loop
   (a : Array U32 2#usize) (i : Usize) : Result (Array U32 2#usize) :=
   if i < 2#usize
@@ -802,13 +802,13 @@ def copy_carray_loop
 partial_fixpoint
 
 /- [loops::copy_carray]:
-   Source: 'tests/src/loops.rs', lines 475:0-482:1 -/
+   Source: 'tests/src/loops.rs', lines 470:0-477:1 -/
 @[reducible]
 def copy_carray (a : Array U32 2#usize) : Result (Array U32 2#usize) :=
   copy_carray_loop a 0#usize
 
 /- [loops::iter_local_mut_borrow]: loop 0:
-   Source: 'tests/src/loops.rs', lines 488:4-493:5 -/
+   Source: 'tests/src/loops.rs', lines 483:4-490:5 -/
 def iter_local_mut_borrow_loop (p : I32) : Result Unit :=
   do
   let p1 ← p + 1#i32
@@ -818,13 +818,13 @@ def iter_local_mut_borrow_loop (p : I32) : Result Unit :=
 partial_fixpoint
 
 /- [loops::iter_local_mut_borrow]:
-   Source: 'tests/src/loops.rs', lines 485:0-494:1 -/
+   Source: 'tests/src/loops.rs', lines 480:0-491:1 -/
 @[reducible]
 def iter_local_mut_borrow : Result Unit :=
   iter_local_mut_borrow_loop 0#i32
 
 /- [loops::iter_local_shared_borrow]: loop 0:
-   Source: 'tests/src/loops.rs', lines 500:4-504:5 -/
+   Source: 'tests/src/loops.rs', lines 497:4-503:5 -/
 def iter_local_shared_borrow_loop : Result Unit :=
   if 0#i32 = 0#i32
   then ok ()
@@ -832,7 +832,7 @@ def iter_local_shared_borrow_loop : Result Unit :=
 partial_fixpoint
 
 /- [loops::iter_local_shared_borrow]:
-   Source: 'tests/src/loops.rs', lines 497:0-505:1 -/
+   Source: 'tests/src/loops.rs', lines 494:0-504:1 -/
 @[reducible]
 def iter_local_shared_borrow : Result Unit :=
   iter_local_shared_borrow_loop

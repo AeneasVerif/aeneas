@@ -401,15 +401,14 @@ fn issue500_2(s: &mut [bool; 1]) {
 fn issue500_3(s: &mut [bool; 1]) {
     struct A([bool; 1]);
     let mut a = A(*s);
-    while 0 < 0 { }
+    while 0 < 0 {}
     *s = a.0;
 }
 
 /// Comes from: https://github.com/AeneasVerif/aeneas/issues/351
-fn issue351<'a>(h : &'a u8, mut t: &'a List<u8>) -> &'a u8 {
+fn issue351<'a>(h: &'a u8, mut t: &'a List<u8>) -> &'a u8 {
     let mut last = h;
-    while let List::Cons(ht, tt) = t
-    {
+    while let List::Cons(ht, tt) = t {
         last = ht;
         t = &*tt;
     }
@@ -418,33 +417,30 @@ fn issue351<'a>(h : &'a u8, mut t: &'a List<u8>) -> &'a u8 {
 
 /// https://github.com/AeneasVerif/aeneas/issues/270
 fn issue270(v: &List<List<u8>>) -> Option<&List<u8>> {
-    fn box_get_borrow<'a, T>(x : &Box<T>) -> &T {
+    fn box_get_borrow<'a, T>(x: &Box<T>) -> &T {
         &*x
     }
     if let List::Cons(h, t) = v {
         let mut t = box_get_borrow(t);
         let mut last = h;
-        while let List::Cons(ht, tt) = t
-        {
+        while let List::Cons(ht, tt) = t {
             last = ht;
             t = box_get_borrow(tt);
         }
         Some(last)
-    }
-    else {
+    } else {
         None
     }
 }
 
 /// https://github.com/AeneasVerif/aeneas/issues/400
-fn issue400_1(a: &mut i32, b: &mut i32, cond : bool) {
+fn issue400_1(a: &mut i32, b: &mut i32, cond: bool) {
     let mut y = &mut *a;
     let mut i = 0;
     while i < 32 {
         if cond {
             y = &mut *a;
-        }
-        else {
+        } else {
             y = &mut *b;
         }
         i += 1;
@@ -452,7 +448,7 @@ fn issue400_1(a: &mut i32, b: &mut i32, cond : bool) {
 }
 
 /// https://github.com/AeneasVerif/aeneas/issues/400
-fn issue400_2(a: &mut i32, b: &mut i32, c: &mut i32, conds : &[bool]) {
+fn issue400_2(a: &mut i32, b: &mut i32, c: &mut i32, conds: &[bool]) {
     let mut y = &mut *a;
     let mut z = &mut *b;
     let mut i = 0;
@@ -460,8 +456,7 @@ fn issue400_2(a: &mut i32, b: &mut i32, c: &mut i32, conds : &[bool]) {
         if conds[i] {
             y = &mut *a;
             z = &mut *b;
-        }
-        else {
+        } else {
             y = &mut *b;
             z = &mut *c;
         }
@@ -473,7 +468,7 @@ fn issue400_2(a: &mut i32, b: &mut i32, c: &mut i32, conds : &[bool]) {
 
 /// Access a global in a loop
 fn copy_carray(a: &mut [u32; 2]) {
-    const CARRAY: [u32; 2] = [0,1];
+    const CARRAY: [u32; 2] = [0, 1];
     let mut i = 0;
     while i < 2 {
         a[i] = CARRAY[i];
@@ -489,7 +484,9 @@ fn iter_local_mut_borrow() {
         p = &mut (*p);
         *p += 1;
 
-        if *p == 10 { break }
+        if *p == 10 {
+            break;
+        }
     }
 }
 
@@ -500,6 +497,8 @@ fn iter_local_shared_borrow() {
     loop {
         p = &(*p);
 
-        if x == 0 { break }
+        if x == 0 {
+            break;
+        }
     }
 }
