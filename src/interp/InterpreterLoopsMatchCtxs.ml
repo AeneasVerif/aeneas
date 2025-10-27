@@ -353,13 +353,9 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
         else M.match_distinct_literals match_rec ctx0 ctx1 ty lv0 lv1
     | VAdt av0, VAdt av1 ->
         if av0.variant_id = av1.variant_id then
-          let fields = List.combine av0.field_values av1.field_values in
-          let field_values =
-            List.map (fun (f0, f1) -> match_rec f0 f1) fields
-          in
-          let value : value =
-            VAdt { variant_id = av0.variant_id; field_values }
-          in
+          let fields = List.combine av0.fields av1.fields in
+          let fields = List.map (fun (f0, f1) -> match_rec f0 f1) fields in
+          let value : value = VAdt { variant_id = av0.variant_id; fields } in
           { value; ty = v1.ty }
         else M.match_distinct_adts match_rec ctx0 ctx1 ty v0.ty av0 v1.ty av1
     | VBottom, VBottom -> v0
@@ -473,13 +469,9 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
     match (v0.value, v1.value) with
     | AAdt av0, AAdt av1 ->
         if av0.variant_id = av1.variant_id then
-          let fields = List.combine av0.field_values av1.field_values in
-          let field_values =
-            List.map (fun (f0, f1) -> match_arec f0 f1) fields
-          in
-          let value : avalue =
-            AAdt { variant_id = av0.variant_id; field_values }
-          in
+          let fields = List.combine av0.fields av1.fields in
+          let fields = List.map (fun (f0, f1) -> match_arec f0 f1) fields in
+          let value : avalue = AAdt { variant_id = av0.variant_id; fields } in
           { value; ty }
         else (* Merge *)
           M.match_distinct_aadts match_rec ctx0 ctx1 v0.ty av0 v1.ty av1 ty
@@ -595,9 +587,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       match v.value with
       | VLiteral _ -> v.value
       | VBottom -> [%craise] span "Unexpected"
-      | VAdt { variant_id; field_values } ->
-          let field_values = List.map refresh field_values in
-          VAdt { variant_id; field_values }
+      | VAdt { variant_id; fields } ->
+          let fields = List.map refresh fields in
+          VAdt { variant_id; fields }
       | VBorrow bc -> (
           match bc with
           | VSharedBorrow _ | VReservedMutBorrow _ -> v.value

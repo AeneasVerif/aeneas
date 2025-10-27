@@ -186,13 +186,11 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
             in
             ((ctx, cc_comp cc cc1), (v, copied)))
           (ctx, fun e -> e)
-          av.field_values
+          av.fields
       in
       let fields, copied_fields = List.split fields in
-      let copied =
-        { v with value = VAdt { av with field_values = copied_fields } }
-      in
-      let v = { v with value = VAdt { av with field_values = fields } } in
+      let copied = { v with value = VAdt { av with fields = copied_fields } } in
+      let v = { v with value = VAdt { av with fields } } in
       (v, copied, ctx, cc)
   | VBottom -> [%craise] span "Can't copy ⊥"
   | VBorrow bc -> (
@@ -974,7 +972,7 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
         match type_id with
         | TTuple ->
             let tys = List.map (fun (v : tvalue) -> v.ty) values in
-            let v = VAdt { variant_id = None; field_values = values } in
+            let v = VAdt { variant_id = None; fields = values } in
             let generics = mk_generic_args [] tys [] [] in
             let ty = TAdt { id = TTuple; generics } in
             let aggregated : tvalue = { value = v; ty } in
@@ -993,7 +991,7 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
               (expected_field_types = List.map (fun (v : tvalue) -> v.ty) values);
             (* Construct the value *)
             let av : adt_value =
-              { variant_id = opt_variant_id; field_values = values }
+              { variant_id = opt_variant_id; fields = values }
             in
             let aty = TAdt { id = TAdtId def_id; generics } in
             let aggregated : tvalue = { value = VAdt av; ty = aty } in
@@ -1029,7 +1027,7 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
            array doesn't contain borrows.
         *)
         if ty_has_borrows (Some span) ctx.type_ctx.type_infos ty then
-          let value = VAdt { variant_id = None; field_values = values } in
+          let value = VAdt { variant_id = None; fields = values } in
           let value : tvalue = { value; ty } in
           (value, fun e -> e)
         else

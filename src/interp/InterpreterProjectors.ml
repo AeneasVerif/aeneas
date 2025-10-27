@@ -31,7 +31,7 @@ let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
         in
 
         (* Project over the field values *)
-        let fields_types = List.combine adt.field_values field_types in
+        let fields_types = List.combine adt.fields field_types in
         let proj_fields =
           List.map
             (fun (fv, fty) ->
@@ -108,7 +108,7 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
               generics
           in
           (* Project over the field values *)
-          let fields_types = List.combine adt.field_values field_types in
+          let fields_types = List.combine adt.fields field_types in
           let proj_fields =
             List.map
               (fun (fv, fty) ->
@@ -116,7 +116,7 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
                   fty)
               fields_types
           in
-          AAdt { variant_id = adt.variant_id; field_values = proj_fields }
+          AAdt { variant_id = adt.variant_id; fields = proj_fields }
       | VBottom, _ -> [%craise] span "Unreachable"
       | VBorrow bc, TRef (r, ref_ty, kind) ->
           if
@@ -242,7 +242,7 @@ let rec apply_eproj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
               generics
           in
           (* Project over the field values *)
-          let fields_types = List.combine adt.field_values field_types in
+          let fields_types = List.combine adt.fields field_types in
           let proj_fields =
             List.map
               (fun (fv, fty) ->
@@ -250,7 +250,7 @@ let rec apply_eproj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
                   fty)
               fields_types
           in
-          EAdt { variant_id = adt.variant_id; field_values = proj_fields }
+          EAdt { variant_id = adt.variant_id; fields = proj_fields }
       | VBottom, _ -> [%craise] span "Unreachable"
       | VBorrow bc, TRef (r, ref_ty, kind) ->
           if
@@ -337,11 +337,9 @@ let symbolic_expansion_non_borrow_to_value (span : Meta.span)
   let value =
     match see with
     | SeLiteral cv -> VLiteral cv
-    | SeAdt (variant_id, field_values) ->
-        let field_values =
-          List.map mk_tvalue_from_symbolic_value field_values
-        in
-        VAdt { variant_id; field_values }
+    | SeAdt (variant_id, fields) ->
+        let fields = List.map mk_tvalue_from_symbolic_value fields in
+        VAdt { variant_id; fields }
     | SeMutRef (_, _) | SeSharedRef (_, _) ->
         [%craise] span "Unexpected symbolic reference expansion"
   in
@@ -376,18 +374,18 @@ let apply_proj_loans_on_symbolic_expansion (span : Meta.span)
     | SeLiteral lit, TLiteral _ ->
         ( AIgnored (Some { value = VLiteral lit; ty = original_sv_ty }),
           original_sv_ty )
-    | SeAdt (variant_id, field_values), TAdt { id = adt_id; generics } ->
+    | SeAdt (variant_id, fields), TAdt { id = adt_id; generics } ->
         (* Project over the field values *)
         let field_types =
           ctx_adt_get_instantiated_field_types span ctx adt_id variant_id
             generics
         in
-        let field_values =
+        let fields =
           List.map2
             (mk_aproj_loans_value_from_symbolic_value regions)
-            field_values field_types
+            fields field_types
         in
-        (AAdt { variant_id; field_values }, original_sv_ty)
+        (AAdt { variant_id; fields }, original_sv_ty)
     | SeMutRef (bid, spc), TRef (r, ref_ty, RMut) ->
         (* Sanity check *)
         [%sanity_check] span (spc.sv_ty = ref_ty);
@@ -438,18 +436,18 @@ let apply_eproj_loans_on_symbolic_expansion (span : Meta.span)
   let (value, ty) : evalue * ty =
     match (see, proj_ty) with
     | SeLiteral _, TLiteral _ -> (EIgnored, original_sv_ty)
-    | SeAdt (variant_id, field_values), TAdt { id = adt_id; generics } ->
+    | SeAdt (variant_id, fields), TAdt { id = adt_id; generics } ->
         (* Project over the field values *)
         let field_types =
           ctx_adt_get_instantiated_field_types span ctx adt_id variant_id
             generics
         in
-        let field_values =
+        let fields =
           List.map2
             (mk_eproj_loans_value_from_symbolic_value regions)
-            field_values field_types
+            fields field_types
         in
-        (EAdt { variant_id; field_values }, original_sv_ty)
+        (EAdt { variant_id; fields }, original_sv_ty)
     | SeMutRef (bid, spc), TRef (r, ref_ty, RMut) ->
         (* Sanity check *)
         [%sanity_check] span (spc.sv_ty = ref_ty);

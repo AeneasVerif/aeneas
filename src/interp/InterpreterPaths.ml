@@ -81,11 +81,11 @@ let rec project_value (span : Meta.span) (access : projection_access)
       [%sanity_check] span (def_id = def_id');
       [%sanity_check] span (opt_variant_id = adt.variant_id);
       (* Actually project *)
-      let fv = FieldId.nth adt.field_values field_id in
+      let fv = FieldId.nth adt.fields field_id in
       let backward (ctx, updated) =
         (* Update the field value *)
-        let nvalues = FieldId.update_nth adt.field_values field_id updated in
-        let value = VAdt { adt with field_values = nvalues } in
+        let nvalues = FieldId.update_nth adt.fields field_id updated in
+        let value = VAdt { adt with fields = nvalues } in
         (ctx, { v with value })
       in
       Ok (None, fv, backward)
@@ -93,12 +93,12 @@ let rec project_value (span : Meta.span) (access : projection_access)
   (* Tuples *)
   | Field (ProjTuple arity, field_id), VAdt adt, TAdt { id = TTuple; _ } ->
   begin
-      [%sanity_check] span (arity = List.length adt.field_values);
-      let fv = FieldId.nth adt.field_values field_id in
+      [%sanity_check] span (arity = List.length adt.fields);
+      let fv = FieldId.nth adt.fields field_id in
       let backward (ctx, updated) =
         (* Update the field value *)
-        let nvalues = FieldId.update_nth adt.field_values field_id updated in
-        let value = VAdt { adt with field_values = nvalues } in
+        let nvalues = FieldId.update_nth adt.fields field_id updated in
+        let value = VAdt { adt with fields = nvalues } in
         (ctx, { v with value })
       in
       Ok (None, fv, backward)
@@ -113,7 +113,7 @@ let rec project_value (span : Meta.span) (access : projection_access)
       Error (FailSymbolic (current_place, sp))
   (* Box dereferencement *)
   | ( Deref,
-      VAdt { variant_id = None; field_values = [ fv ] },
+      VAdt { variant_id = None; fields = [ fv ] },
       TAdt { id = TBuiltin TBox; _ } ) -> begin
       (* We allow moving outside of boxes. In practice, this kind of
        * manipulations should happen only inside unsafe code, so
@@ -121,7 +121,7 @@ let rec project_value (span : Meta.span) (access : projection_access)
        * when implementing box dereferencement for the concrete
        * interpreter *)
       let backward (ctx, updated) =
-        let value = VAdt { variant_id = None; field_values = [ updated ] } in
+        let value = VAdt { variant_id = None; fields = [ updated ] } in
         (ctx, { v with value })
       in
       Ok (None, fv, backward)
@@ -387,7 +387,7 @@ let compute_expanded_bottom_adt_value (span : Meta.span) (ctx : eval_ctx)
   in
   (* Initialize the expanded value *)
   let fields = List.map (mk_bottom span) field_types in
-  let av = VAdt { variant_id = opt_variant_id; field_values = fields } in
+  let av = VAdt { variant_id = opt_variant_id; fields } in
   let ty = TAdt { id = TAdtId def_id; generics } in
   { value = av; ty }
 
@@ -395,7 +395,7 @@ let compute_expanded_bottom_tuple_value (span : Meta.span)
     (field_types : ety list) : tvalue =
   (* Generate the field values *)
   let fields = List.map (mk_bottom span) field_types in
-  let v = VAdt { variant_id = None; field_values = fields } in
+  let v = VAdt { variant_id = None; fields } in
   let generics = TypesUtils.mk_generic_args [] field_types [] [] in
   let ty = TAdt { id = TTuple; generics } in
   { value = v; ty }

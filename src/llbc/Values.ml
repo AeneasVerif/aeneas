@@ -93,7 +93,7 @@ and value =
           appearing in regular values are interpreted as *borrow* projectors,
           they can never be *loan* projectors. *)
 
-and adt_value = { variant_id : variant_id option; field_values : tvalue list }
+and adt_value = { variant_id : variant_id option; fields : tvalue list }
 
 and borrow_content =
   | VSharedBorrow of borrow_id * shared_borrow_id
@@ -568,7 +568,7 @@ and avalue =
 
 and adt_avalue = {
   variant_id : (VariantId.id option[@opaque]);
-  field_values : tavalue list;
+  fields : tavalue list;
 }
 
 (** A loan content as stored in an abstraction.
@@ -1143,7 +1143,7 @@ and tepat = {
 
 and adt_evalue = {
   variant_id : (VariantId.id option[@opaque]);
-  field_values : tevalue list;
+  fields : tevalue list;
 }
 
 (** A loan content as stored in an abstraction.

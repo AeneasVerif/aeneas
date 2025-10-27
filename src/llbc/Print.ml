@@ -40,11 +40,11 @@ module Values = struct
 
   let adt_to_string (span : Meta.span option) (env : fmt_env)
       (value_to_debug_string : unit -> string) (ty : ty)
-      (variant_id : variant_id option) (field_values : string list) : string =
+      (variant_id : variant_id option) (fields : string list) : string =
     match ty with
     | TAdt { id = TTuple; _ } ->
         (* Tuple *)
-        "(" ^ String.concat ", " field_values ^ ")"
+        "(" ^ String.concat ", " fields ^ ")"
     | TAdt { id = TAdtId def_id; _ } ->
         (* "Regular" ADT *)
         let adt_ident =
@@ -52,28 +52,28 @@ module Values = struct
           | Some vid -> adt_variant_to_string env def_id vid
           | None -> type_decl_id_to_string env def_id
         in
-        if List.length field_values > 0 then
+        if List.length fields > 0 then
           match adt_field_names env def_id variant_id with
           | None ->
-              let field_values = String.concat ", " field_values in
-              adt_ident ^ " (" ^ field_values ^ ")"
+              let fields = String.concat ", " fields in
+              adt_ident ^ " (" ^ fields ^ ")"
           | Some field_names ->
-              let field_values = List.combine field_names field_values in
-              let field_values =
+              let fields = List.combine field_names fields in
+              let fields =
                 List.map
                   (fun (field, value) -> field ^ " = " ^ value ^ ";")
-                  field_values
+                  fields
               in
-              let field_values = String.concat " " field_values in
-              adt_ident ^ " { " ^ field_values ^ " }"
+              let fields = String.concat " " fields in
+              adt_ident ^ " { " ^ fields ^ " }"
         else adt_ident
     | TAdt { id = TBuiltin aty; _ } -> (
         (* Builtin type *)
-        match (aty, field_values) with
+        match (aty, fields) with
         | TBox, [ bv ] -> "@Box(" ^ bv ^ ")"
         | TArray, _ ->
             (* Happens when we aggregate values *)
-            "@Array[" ^ String.concat ", " field_values ^ "]"
+            "@Array[" ^ String.concat ", " fields ^ "]"
         | _ ->
             [%craise_opt_span] span
               ("Inconsistent value: " ^ value_to_debug_string ()))
@@ -90,12 +90,10 @@ module Values = struct
     match v.value with
     | VLiteral cv -> literal_to_string cv
     | VAdt av ->
-        let field_values =
-          List.map (tvalue_to_string ~span env) av.field_values
-        in
+        let fields = List.map (tvalue_to_string ~span env) av.fields in
         adt_to_string span env
           (fun () -> show_tvalue v)
-          v.ty av.variant_id field_values
+          v.ty av.variant_id fields
     | VBottom -> "⊥ : " ^ ty_to_string env v.ty
     | VBorrow bc -> borrow_content_to_string ~span env bc
     | VLoan lc -> loan_content_to_string ~span env lc
@@ -242,12 +240,12 @@ module Values = struct
       ?(with_ended : bool = false) (env : fmt_env) (v : tavalue) : string =
     match v.value with
     | AAdt av ->
-        let field_values =
-          List.map (tavalue_to_string ~span ~with_ended env) av.field_values
+        let fields =
+          List.map (tavalue_to_string ~span ~with_ended env) av.fields
         in
         adt_to_string span env
           (fun () -> show_tavalue v)
-          v.ty av.variant_id field_values
+          v.ty av.variant_id fields
     | ABorrow bc -> aborrow_content_to_string ~span ~with_ended env bc
     | ALoan lc -> aloan_content_to_string ~span ~with_ended env lc
     | ASymbolic (pm, proj) ->
@@ -578,7 +576,7 @@ module Values = struct
         let fields =
           List.map
             (tevalue_to_string ~span env aenv indent indent_incr)
-            av.field_values
+            av.fields
         in
         adt_to_string span env
           (fun () -> show_tevalue v)
@@ -789,10 +787,8 @@ module Values = struct
     match se with
     | SeLiteral lit -> literal_to_string lit
     | SeAdt (variant_id, svl) ->
-        let field_values =
-          List.map ValuesUtils.mk_tvalue_from_symbolic_value svl
-        in
-        let v : tvalue = { value = VAdt { variant_id; field_values }; ty } in
+        let fields = List.map ValuesUtils.mk_tvalue_from_symbolic_value svl in
+        let v : tvalue = { value = VAdt { variant_id; fields }; ty } in
         tvalue_to_string env v
     | SeMutRef (bid, sv) ->
         "MB " ^ BorrowId.to_string bid ^ " " ^ symbolic_value_to_string env sv

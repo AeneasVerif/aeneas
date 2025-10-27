@@ -147,10 +147,8 @@ and expansion_to_string (env : fmt_env) (indent : string) (indent_incr : string)
       let branch_to_string
           ((variant_id, svl, branch) :
             variant_id option * symbolic_value list * expr) : string =
-        let field_values =
-          List.map ValuesUtils.mk_tvalue_from_symbolic_value svl
-        in
-        let v : tvalue = { value = VAdt { variant_id; field_values }; ty } in
+        let fields = List.map ValuesUtils.mk_tvalue_from_symbolic_value svl in
+        let v : tvalue = { value = VAdt { variant_id; fields }; ty } in
         indent ^ "| "
         ^ Values.tvalue_to_string env v
         ^ " ->\n"

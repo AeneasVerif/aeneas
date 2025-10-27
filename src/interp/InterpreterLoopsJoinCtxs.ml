@@ -552,9 +552,9 @@ let destructure_shared_loans (span : Meta.span) (fixed_ids : ids_sets) : cm_fun
   let rec copy_value (v : tvalue) : tvalue =
     match v.value with
     | VLiteral _ | VBottom -> v
-    | VAdt { variant_id; field_values } ->
-        let field_values = List.map copy_value field_values in
-        { v with value = VAdt { variant_id; field_values } }
+    | VAdt { variant_id; fields } ->
+        let fields = List.map copy_value fields in
+        { v with value = VAdt { variant_id; fields } }
     | VBorrow _ | VLoan _ -> [%craise] span "Not implemented"
     | VSymbolic sv ->
         [%cassert] span
@@ -569,11 +569,11 @@ let destructure_shared_loans (span : Meta.span) (fixed_ids : ids_sets) : cm_fun
     let value, avl =
       match v.value with
       | VLiteral _ | VBottom | VSymbolic _ -> (v.value, [])
-      | VAdt { variant_id; field_values } ->
-          let field_values, avl =
-            List.split (List.map (destructure_value abs) field_values)
+      | VAdt { variant_id; fields } ->
+          let fields, avl =
+            List.split (List.map (destructure_value abs) fields)
           in
-          (VAdt { variant_id; field_values }, List.flatten avl)
+          (VAdt { variant_id; fields }, List.flatten avl)
       | VBorrow bc -> (
           match bc with
           | VSharedBorrow _ -> (v.value, [])
@@ -606,11 +606,11 @@ let destructure_shared_loans (span : Meta.span) (fixed_ids : ids_sets) : cm_fun
       =
     let value, avl =
       match av.value with
-      | AAdt { variant_id; field_values } ->
-          let field_values, avl =
-            List.split (List.map (destructure_avalue abs) field_values)
+      | AAdt { variant_id; fields } ->
+          let fields, avl =
+            List.split (List.map (destructure_avalue abs) fields)
           in
-          (AAdt { variant_id; field_values }, List.flatten avl)
+          (AAdt { variant_id; fields }, List.flatten avl)
       | ALoan lc ->
           let lc, avl =
             match lc with

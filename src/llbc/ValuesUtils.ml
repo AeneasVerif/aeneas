@@ -8,7 +8,7 @@ include Charon.ValuesUtils
 exception FoundSymbolicValue of symbolic_value
 
 let mk_unit_value : tvalue =
-  { value = VAdt { variant_id = None; field_values = [] }; ty = mk_unit_ty }
+  { value = VAdt { variant_id = None; fields = [] }; ty = mk_unit_ty }
 
 let mk_bool_value (b : bool) : tvalue =
   { value = VLiteral (VBool b); ty = TLiteral TBool }
@@ -52,7 +52,7 @@ let mk_etuple (vl : tevalue list) : tevalue =
   let tys = List.map (fun (v : tevalue) -> v.ty) vl in
   let generics = mk_generic_args_from_types tys in
   {
-    value = EAdt { variant_id = None; field_values = vl };
+    value = EAdt { variant_id = None; fields = vl };
     ty = TAdt { id = TTuple; generics };
   }
 
@@ -70,7 +70,7 @@ let mk_simpl_etuple (vl : tevalue list) : tevalue =
 let rec unbox_tvalue (span : Meta.span) (v : tvalue) : tvalue =
   match (v.value, v.ty) with
   | VAdt av, TAdt { id = TBuiltin TBox; _ } -> (
-      match av.field_values with
+      match av.fields with
       | [ bv ] -> unbox_tvalue span bv
       | _ -> [%internal_error] span)
   | _ -> v
@@ -86,7 +86,7 @@ let mk_tvalue_from_symbolic_value (svalue : symbolic_value) : tvalue =
 (** Box a value *)
 let mk_box_value (span : Meta.span) (v : tvalue) : tvalue =
   let box_ty = mk_box_ty v.ty in
-  let box_v = VAdt { variant_id = None; field_values = [ v ] } in
+  let box_v = VAdt { variant_id = None; fields = [ v ] } in
   mk_tvalue span box_ty box_v
 
 let is_bottom (v : value) : bool =
@@ -123,7 +123,7 @@ let is_unit (v : tvalue) : bool =
   ty_is_unit v.ty
   &&
   match v.value with
-  | VAdt av -> av.variant_id = None && av.field_values = []
+  | VAdt av -> av.variant_id = None && av.fields = []
   | _ -> false
 
 let mk_aproj_borrows (pm : proj_marker) (sv_id : symbolic_value_id)

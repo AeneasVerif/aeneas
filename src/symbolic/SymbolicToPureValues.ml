@@ -93,12 +93,12 @@ let rec tvalue_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (v : V.tvalue) :
     | VLiteral cv -> { e = Const cv; ty }
     | VAdt av -> (
         let variant_id = av.variant_id in
-        let field_values = List.map translate av.field_values in
+        let fields = List.map translate av.fields in
         (* Eliminate the tuple wrapper if it is a tuple with exactly one field *)
         match v.ty with
         | TAdt { id = TTuple; _ } ->
             [%sanity_check] ctx.span (variant_id = None);
-            mk_simpl_tuple_texpr ctx.span field_values
+            mk_simpl_tuple_texpr ctx.span fields
         | _ ->
             (* Retrieve the type and the translated generics from the translated
                type (simpler this way) *)
@@ -107,11 +107,11 @@ let rec tvalue_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (v : V.tvalue) :
             let qualif_id = AdtCons { adt_id; variant_id = av.variant_id } in
             let qualif = { id = qualif_id; generics } in
             let cons_e = Qualif qualif in
-            let field_tys = List.map (fun (v : texpr) -> v.ty) field_values in
+            let field_tys = List.map (fun (v : texpr) -> v.ty) fields in
             let cons_ty = mk_arrows field_tys ty in
             let cons = { e = cons_e; ty = cons_ty } in
             (* Apply the constructor *)
-            [%add_loc] mk_apps ctx.span cons field_values)
+            [%add_loc] mk_apps ctx.span cons fields)
     | VBottom -> [%craise] ctx.span "Unexpected bottom value"
     | VLoan lc -> (
         match lc with
@@ -438,7 +438,7 @@ and adt_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
         in
         mk_adt_texpr ctx.span ty adt_v.variant_id fields)
       (mk_simpl_tuple_texpr ctx.span)
-      ~filter ctx av av.ty adt_v.field_values
+      ~filter ctx av av.ty adt_v.fields
   in
   Option.map snd out
 
@@ -660,7 +660,7 @@ and adt_avalue_to_given_back_aux ~(filter : bool)
           translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty
         in
         mk_adt_pattern ty adt_v.variant_id fields)
-      mk_simpl_tuple_pattern ~filter ctx av av.ty adt_v.field_values
+      mk_simpl_tuple_pattern ~filter ctx av av.ty adt_v.fields
   in
   (ctx, Option.map snd out)
 

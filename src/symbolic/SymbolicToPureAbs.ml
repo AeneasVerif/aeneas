@@ -44,7 +44,7 @@ and adt_avalue_to_consumed_ty_aux ~(filter : bool) (ctx : bs_ctx)
           | Some x -> Some ((), x) ))
       (compute_tavalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions)
       (fun _ -> translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty)
-      mk_simpl_tuple_ty ~filter ctx av av.ty adt_v.field_values
+      mk_simpl_tuple_ty ~filter ctx av av.ty adt_v.fields
   in
   Option.map snd out
 
@@ -131,7 +131,7 @@ and adt_avalue_to_given_back_ty_aux ~(filter : bool)
           | Some x -> Some ((), x) ))
       (compute_tavalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions)
       (fun _ -> translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty)
-      mk_simpl_tuple_ty ~filter ctx av av.ty adt_v.field_values
+      mk_simpl_tuple_ty ~filter ctx av av.ty adt_v.fields
   in
   Option.map snd out
 
@@ -439,7 +439,7 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
                 in
                 (ctx, pat)
         end
-    | V.EAdt { variant_id; field_values } -> begin
+    | V.EAdt { variant_id; fields } -> begin
         let ctx, out =
           gtranslate_adt_fields ~project_borrows:true (tevalue_to_string ctx)
             (tpattern_to_string ctx)
@@ -456,7 +456,7 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
                   output.ty
               in
               mk_adt_pattern ty variant_id fields)
-            mk_simpl_tuple_pattern ~filter ctx output output.ty field_values
+            mk_simpl_tuple_pattern ~filter ctx output output.ty fields
         in
         (ctx, Option.map snd out)
       end
@@ -684,7 +684,7 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
               in
               (ctx, can_fail, e)
         end
-    | V.EAdt { variant_id; field_values } -> begin
+    | V.EAdt { variant_id; fields } -> begin
         [%ldebug "adt"];
         let ctx, out =
           gtranslate_adt_fields ~project_borrows:false (tevalue_to_string ctx)
@@ -700,7 +700,7 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
               in
               mk_adt_texpr span ty variant_id fields)
             (mk_simpl_tuple_texpr span)
-            ~filter ctx input input.ty field_values
+            ~filter ctx input input.ty fields
         in
         match out with
         | None -> (ctx, false, None)
@@ -818,7 +818,7 @@ let register_inputs (ctx : bs_ctx) (rids : T.RegionId.Set.t)
   in
   let rec register (av : V.tavalue) : unit =
     match av.value with
-    | V.AAdt { variant_id = _; field_values } -> List.iter register field_values
+    | V.AAdt { variant_id = _; fields } -> List.iter register fields
     | V.ALoan lc -> (
         match lc with
         | V.AMutLoan (pm, bid, child) ->
@@ -900,7 +900,7 @@ let register_outputs (ctx : bs_ctx) (bound_outputs : bound_borrows_loans)
   in
   let rec register (av : V.tavalue) : unit =
     match av.value with
-    | V.AAdt { variant_id = _; field_values } -> List.iter register field_values
+    | V.AAdt { variant_id = _; fields } -> List.iter register fields
     | V.ALoan lc -> (
         match lc with
         | V.AMutLoan (pm, _, child) | V.ASharedLoan (pm, _, _, child) ->

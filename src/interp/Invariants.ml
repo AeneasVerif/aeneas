@@ -428,7 +428,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
             Substitute.type_decl_get_instantiated_field_etypes def av.variant_id
               generics
           in
-          let fields_with_types = List.combine av.field_values field_types in
+          let fields_with_types = List.combine av.fields field_types in
           List.iter
             (fun ((v, ty) : tvalue * ty) -> [%sanity_check] span (v.ty = ty))
             fields_with_types
@@ -439,7 +439,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
           [%sanity_check] span (av.variant_id = None);
           (* Check that the fields have the proper values - and check that there
            * are as many fields as field types at the same time *)
-          let fields_with_types = List.combine av.field_values generics.types in
+          let fields_with_types = List.combine av.fields generics.types in
           List.iter
             (fun ((v, ty) : tvalue * ty) -> [%sanity_check] span (v.ty = ty))
             fields_with_types
@@ -448,7 +448,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
           [%sanity_check] span (av.variant_id = None);
           match
             ( aty_id,
-              av.field_values,
+              av.fields,
               generics.regions,
               generics.types,
               generics.const_generics )
@@ -552,7 +552,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
             Substitute.type_decl_get_instantiated_field_types def av.variant_id
               generics
           in
-          let fields_with_types = List.combine av.field_values field_types in
+          let fields_with_types = List.combine av.fields field_types in
           List.iter
             (fun ((v, ty) : tavalue * ty) -> [%sanity_check] span (v.ty = ty))
             fields_with_types
@@ -563,7 +563,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
           [%sanity_check] span (av.variant_id = None);
           (* Check that the fields have the proper values - and check that there
            * are as many fields as field types at the same time *)
-          let fields_with_types = List.combine av.field_values generics.types in
+          let fields_with_types = List.combine av.fields generics.types in
           List.iter
             (fun ((v, ty) : tavalue * ty) -> [%sanity_check] span (v.ty = ty))
             fields_with_types
@@ -572,7 +572,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
           [%sanity_check] span (av.variant_id = None);
           match
             ( aty_id,
-              av.field_values,
+              av.fields,
               generics.regions,
               generics.types,
               generics.const_generics )

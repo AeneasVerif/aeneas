@@ -1751,7 +1751,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) ~(can_end : bool)
     | AIgnored _ -> ()
     | AAdt adt ->
         (* Simply explore the children *)
-        List.iter (list_avalues allow_borrows push) adt.field_values
+        List.iter (list_avalues allow_borrows push) adt.fields
     | ALoan lc -> (
         (* Explore the loan content *)
         match lc with
@@ -1900,11 +1900,9 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) ~(can_end : bool)
     match v.value with
     | VLiteral _ -> ([], v)
     | VAdt adt ->
-        let avll, field_values =
-          List.split (List.map list_values adt.field_values)
-        in
+        let avll, fields = List.split (List.map list_values adt.fields) in
         let avl = List.concat avll in
-        let adt = { adt with field_values } in
+        let adt = { adt with fields } in
         (avl, { v with value = VAdt adt })
     | VBottom -> [%craise] span "Unreachable"
     | VBorrow _ ->

@@ -15,11 +15,11 @@ let rec decompose_shared_value span pm (rid : RegionId.id) (v : tvalue) :
     tavalue list * tvalue =
   match v.value with
   | VLiteral _ -> ([], v)
-  | VAdt { variant_id; field_values } ->
-      let avll, field_values =
-        List.split (List.map (decompose_shared_value span pm rid) field_values)
+  | VAdt { variant_id; fields } ->
+      let avll, fields =
+        List.split (List.map (decompose_shared_value span pm rid) fields)
       in
-      let v = { v with value = VAdt { variant_id; field_values } } in
+      let v = { v with value = VAdt { variant_id; fields } } in
       (List.flatten avll, v)
   | VBottom -> [%internal_error] span
   | VBorrow _ -> [%craise] span "Nested borrows are not supported yet"
@@ -90,13 +90,11 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
   let rec to_inputs (rid : RegionId.id) (v : tvalue) : tavalue list * tevalue =
     match v.value with
     | VLiteral _ -> ([], { value = EValue (ctx.env, v); ty = v.ty })
-    | VAdt { variant_id; field_values } ->
+    | VAdt { variant_id; fields } ->
         [%cassert] span (ty_no_regions v.ty)
           "Nested borrows are not supported yet";
-        let avll, field_values =
-          List.split (List.map (to_inputs rid) field_values)
-        in
-        let value = EAdt { variant_id; field_values } in
+        let avll, fields = List.split (List.map (to_inputs rid) fields) in
+        let value = EAdt { variant_id; fields } in
         let value : tevalue = { value; ty = v.ty } in
         (List.flatten avll, value)
     | VBottom ->
@@ -144,7 +142,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
   let rec to_abs (v : tvalue) : unit =
     match v.value with
     | VLiteral _ | VBottom -> ()
-    | VAdt { variant_id = _; field_values } -> List.iter to_abs field_values
+    | VAdt { variant_id = _; fields } -> List.iter to_abs fields
     | VBorrow bc -> (
         let _, ref_ty, kind = ty_as_ref v.ty in
         [%cassert] span (ty_no_regions ref_ty)
@@ -247,13 +245,13 @@ let convert_value_to_output_avalues (span : Meta.span) (ctx : eval_ctx)
   let rec check_inputs (v : tvalue) (proj_ty : ty) : unit =
     match (v.value, proj_ty) with
     | VLiteral _, _ -> ()
-    | VAdt { variant_id; field_values }, TAdt { id; generics } ->
+    | VAdt { variant_id; fields }, TAdt { id; generics } ->
         [%cassert] span (ty_no_regions v.ty)
           "Nested borrows are not supported yet";
         let field_types =
           ctx_adt_get_instantiated_field_types span ctx id variant_id generics
         in
-        List.iter2 check_inputs field_values field_types
+        List.iter2 check_inputs fields field_types
     | VBottom, _ -> [%internal_error] span
     | VBorrow _, _ -> [%craise] span "Nested borrows are not supported yet"
     | VLoan _, _ -> [%internal_error] span
@@ -267,16 +265,15 @@ let convert_value_to_output_avalues (span : Meta.span) (ctx : eval_ctx)
     match (v.value, proj_ty) with
     | VLiteral _, _ -> ([], mk_eignored proj_ty)
     | VBottom, _ -> [%internal_error] span
-    | VAdt { variant_id; field_values }, TAdt { id; generics } ->
+    | VAdt { variant_id; fields }, TAdt { id; generics } ->
         let field_types =
           ctx_adt_get_instantiated_field_types span ctx id variant_id generics
         in
         let avalues, outputs =
-          List.split (List.map2 to_output field_values field_types)
+          List.split (List.map2 to_output fields field_types)
         in
         ( List.flatten avalues,
-          { value = EAdt { variant_id; field_values = outputs }; ty = proj_ty }
-        )
+          { value = EAdt { variant_id; fields = outputs }; ty = proj_ty } )
     | VBorrow bc, TRef (rid, ref_ty, kind) ->
         [%cassert] span (ty_no_regions ref_ty)
           "Nested borrows are not supported yet";
@@ -358,10 +355,10 @@ let convert_value_to_input_avalues (span : Meta.span) (ctx : eval_ctx)
     match v.value with
     | VLiteral _ -> ([], mk_evalue ctx.env v.ty v)
     | VBottom -> [%internal_error] span
-    | VAdt { variant_id; field_values } ->
-        let avalues, outputs = List.split (List.map to_input field_values) in
+    | VAdt { variant_id; fields } ->
+        let avalues, outputs = List.split (List.map to_input fields) in
         ( List.flatten avalues,
-          { value = EAdt { variant_id; field_values = outputs }; ty = v.ty } )
+          { value = EAdt { variant_id; fields = outputs }; ty = v.ty } )
     | VBorrow _ -> [%craise] span "Not implemented yet"
     | VLoan lc -> (
         match lc with
@@ -1306,11 +1303,8 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
            have been opened: we shouldn't find bound variables, only free variables. *)
         [%craise] span "Unreachable"
     | EAdt adt ->
-        let fields = List.map (update_input regions) adt.field_values in
-        {
-          value = EAdt { variant_id = adt.variant_id; field_values = fields };
-          ty = input.ty;
-        }
+        let fields = List.map (update_input regions) adt.fields in
+        { value = EAdt { variant_id = adt.variant_id; fields }; ty = input.ty }
     | ELoan loan ->
         (* Check if this loan was previously bound *)
         begin
@@ -1376,7 +1370,7 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
         (* We're not inside a loan or a borrow: simply ignore it *)
         { epat = PIgnored; epat_ty = output.ty }
     | EAdt adt ->
-        let pats = List.map (bind_output regions) adt.field_values in
+        let pats = List.map (bind_output regions) adt.fields in
         { epat = PAdt (adt.variant_id, pats); epat_ty = output.ty }
     | ELoan _ ->
         (* We shouldn't reach a loan which is not itself inside a borrow *)

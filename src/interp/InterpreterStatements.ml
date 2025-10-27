@@ -395,7 +395,7 @@ let eval_box_new_concrete (config : config) (span : Meta.span)
       (* Create the box value *)
       let generics = TypesUtils.mk_generic_args_from_types [ boxed_ty ] in
       let box_ty = TAdt { id = TBuiltin TBox; generics } in
-      let box_v = VAdt { variant_id = None; field_values = [ v ] } in
+      let box_v = VAdt { variant_id = None; fields = [ v ] } in
       let box_v = mk_tvalue span box_ty box_v in
 
       (* Move this value to the return variable *)
