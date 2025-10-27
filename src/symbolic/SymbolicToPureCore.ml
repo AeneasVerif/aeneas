@@ -142,11 +142,9 @@ type bs_ctx = {
   bid : RegionGroupId.id option;
       (** TODO: rename
 
-          The id of the group region we are currently translating. If we split
-          the forward/backward functions, we set this id at the very beginning
-          of the translation. If we don't split, we set it to `None`, then
-          update it when we enter an expression which is specific to a backward
-          function. *)
+          The id of the group region we are currently translating. We initially
+          set it to `None`, then update it when we enter an expression which is
+          specific to a backward function. *)
   sg : decomposed_fun_sig;
       (** Information about the function signature - useful in particular to
           translate [Panic] *)
