@@ -435,7 +435,11 @@ and aproj =
   | AProjBorrows of aproj_borrows
   | AEndedProjLoans of aended_proj_loans
   | AEndedProjBorrows of aended_proj_borrows
-  | AEmpty  (** Nothing to project (because there are no borrows, etc.) *)
+  | AEmpty
+      (** Nothing to project (because there are no borrows, etc.).
+
+          Note that we can't replace [AEmpty] with [AIgnored] because [aproj] is
+          recursive with itself through types like [aproj_loans]. *)
 
 (** A projector of loans over a symbolic value.
 
@@ -929,9 +933,10 @@ and eproj =
   | EEndedProjLoans of eended_proj_loans
   | EEndedProjBorrows of eended_proj_borrows
   | EEmpty
-      (** Nothing to project (because there are no borrows, etc.)
+      (** Nothing to project (because there are no borrows, etc.).
 
-          TODO: remove? We can use EIgnored instead. *)
+          Note that we can't replace [EEmpty] with [EIgnored] because [eproj] is
+          recursive with itself through types like [eproj_loans]. *)
 
 (** A projector of loans over a symbolic value.
 
