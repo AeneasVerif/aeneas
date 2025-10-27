@@ -542,7 +542,7 @@ let rec tpattern_to_string_core (span : Meta.span option) (env : fmt_env)
       in
       let s = "(" ^ sv ^ mp ^ " : " ^ ty_to_string env false v.ty ^ ")" in
       (env, s)
-  | PDummy -> (env, "(_ : " ^ ty_to_string env false v.ty ^ ")")
+  | PIgnored -> (env, "(_ : " ^ ty_to_string env false v.ty ^ ")")
   | PAdt av -> adt_pattern_to_string_core span env av.variant_id av.fields v.ty
 
 (** Not safe to use (this function should be used between calls to

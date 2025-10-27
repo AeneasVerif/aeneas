@@ -627,13 +627,13 @@ let rec tavalue_to_given_back_aux ~(filter : bool)
         [%sanity_check] ctx.span (pm = PNone);
         aproj_to_given_back_aux mp aproj av.ty ctx
     | AIgnored _ ->
-        (* If we do not filter, we have to create a dummy pattern *)
+        (* If we do not filter, we have to create an ignored pattern *)
         if filter then (ctx, None)
         else
           let ty =
             translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty
           in
-          (ctx, Some (mk_dummy_pattern ty))
+          (ctx, Some (mk_ignored_pattern ty))
   in
   (* Sanity checks - Rk.: we do this at every recursive call, which is a bit
    * expansive... *)
@@ -698,7 +698,7 @@ and aborrow_content_to_given_back_aux ~(filter : bool) (mp : mplace option)
       if filter then (ctx, None)
       else
         let ty = translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos ty in
-        (ctx, Some (mk_dummy_pattern ty))
+        (ctx, Some (mk_ignored_pattern ty))
 
 and aproj_to_given_back_aux (mp : mplace option) (aproj : V.aproj) (ty : T.ty)
     (ctx : bs_ctx) : bs_ctx * tpattern option =

@@ -448,16 +448,16 @@ let as_pat_tuple file line span (p : tpattern) : tpattern list =
   | Some fields -> fields
   | None -> Errors.craise file line span "Not a tuple"
 
-(** Replace all the dummy variables in a pattern with free variables *)
-let tpattern_replace_dummy_vars_with_free_vars (fresh_fvar_id : unit -> fvar_id)
-    (p : tpattern) : tpattern =
+(** Replace all the ignored variables in a pattern with free variables *)
+let tpattern_replace_ignored_vars_with_free_vars
+    (fresh_fvar_id : unit -> fvar_id) (p : tpattern) : tpattern =
   let visitor =
     object
       inherit [_] map_tpattern as super
 
       method! visit_tpattern env p =
         match p.pat with
-        | PDummy ->
+        | PIgnored ->
             let pat = { id = fresh_fvar_id (); basename = None; ty = p.ty } in
             { p with pat = POpen (pat, None) }
         | _ -> super#visit_tpattern env p
@@ -706,10 +706,10 @@ let try_destruct_tuple_tpattern span e =
 (** Attempt to destruct a tuple pattern.
 
     If it is not a tuple, we return a singleton list (the original pattern). We
-    have a special case for the dummy pattern, if its type is a tuple: we
-    decompose it into a tuple of dummies, and thus return a list of dummy
+    have a special case for the ignored pattern, if its type is a tuple: we
+    decompose it into a tuple of dummies, and thus return a list of ignored
     patterns. *)
-let try_destruct_tuple_or_dummy_tpattern span (e : tpattern) =
+let try_destruct_tuple_or_ignored_tpattern span (e : tpattern) =
   match e.ty with
   | TAdt (TTuple, generics) ->
       [%sanity_check] span (generics.const_generics = []);
@@ -717,15 +717,15 @@ let try_destruct_tuple_or_dummy_tpattern span (e : tpattern) =
       begin
         match e.pat with
         | PAdt { fields; _ } -> fields
-        | PDummy ->
+        | PIgnored ->
             List.map
-              (fun ty -> ({ pat = PDummy; ty } : tpattern))
+              (fun ty -> ({ pat = PIgnored; ty } : tpattern))
               generics.types
         | _ -> [%internal_error] span
       end
   | _ -> [ e ]
 
-let try_destruct_tuple_or_dummy_or_open_tpattern span (e : tpattern) =
+let try_destruct_tuple_or_ignored_or_open_tpattern span (e : tpattern) =
   match e.ty with
   | TAdt (TTuple, generics) ->
       [%sanity_check] span (generics.const_generics = []);
@@ -733,9 +733,9 @@ let try_destruct_tuple_or_dummy_or_open_tpattern span (e : tpattern) =
       begin
         match e.pat with
         | PAdt { fields; _ } -> fields
-        | PDummy ->
+        | PIgnored ->
             List.map
-              (fun ty -> ({ pat = PDummy; ty } : tpattern))
+              (fun ty -> ({ pat = PIgnored; ty } : tpattern))
               generics.types
         | POpen _ -> [ e ]
         | _ -> [%internal_error] span
@@ -813,13 +813,13 @@ let mk_tpattern_from_fvar (mp : mplace option) (v : fvar) : tpattern =
   let ty = v.ty in
   { pat; ty }
 
-let mk_dummy_pattern (ty : ty) : tpattern =
-  let pat = PDummy in
+let mk_ignored_pattern (ty : ty) : tpattern =
+  let pat = PIgnored in
   { pat; ty }
 
-let is_dummy_pattern (p : tpattern) : bool =
+let is_ignored_pattern (p : tpattern) : bool =
   match p.pat with
-  | PDummy -> true
+  | PIgnored -> true
   | _ -> false
 
 let mk_emeta (m : emeta) (e : texpr) : texpr =
@@ -990,7 +990,7 @@ let mk_result_fail_pattern (error_pat : pattern) (ty : ty) : tpattern =
 
 (** Create a [Fail _] pattern (we ignore the error) *)
 let mk_result_fail_pattern_ignore_error (ty : ty) : tpattern =
-  let error_pat : pattern = PDummy in
+  let error_pat : pattern = PIgnored in
   mk_result_fail_pattern error_pat ty
 
 let mk_result_ok_pattern (v : tpattern) : tpattern =
@@ -1061,7 +1061,7 @@ let rec tpattern_to_texpr (span : Meta.span) (pat : tpattern) : texpr option =
     | PConstant pv -> Some (Const pv)
     | POpen (v, _) -> Some (FVar v.id)
     | PBound (_, _) -> [%internal_error] span
-    | PDummy -> None
+    | PIgnored -> None
     | PAdt av ->
         let fields = List.map (tpattern_to_texpr span) av.fields in
         if List.mem None fields then None
@@ -2560,7 +2560,7 @@ let decompose_let_match span (refresh_var : fvar -> fvar)
     (* Create the otherwise branch *)
     let default_e = List.map get_default_expr vars in
     let default_e = mk_simpl_tuple_texpr span default_e in
-    let default_pat = mk_dummy_pattern pat.ty in
+    let default_pat = mk_ignored_pattern pat.ty in
     let default_branch = close_branch span default_pat default_e in
     let switch_e = Switch (bound, Match [ match_branch; default_branch ]) in
     let bound = { e = switch_e; ty = match_e.ty } in

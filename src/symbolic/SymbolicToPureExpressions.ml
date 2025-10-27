@@ -922,7 +922,7 @@ and translate_assertion (ectx : C.eval_ctx) (v : V.tvalue) (e : S.expr)
   let func = { e = Qualif func; ty = func_ty } in
   let assertion = [%add_loc] mk_apps ctx.span func args in
   [%add_loc] mk_closed_checked_let ctx monadic
-    (mk_dummy_pattern mk_unit_ty)
+    (mk_ignored_pattern mk_unit_ty)
     assertion next_e
 
 and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
@@ -1027,7 +1027,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
       let branches = List.map translate_branch branches in
       let otherwise = translate_expr otherwise ctx in
       let pat_ty = TLiteral (TypesUtils.integer_as_literal int_ty) in
-      let otherwise_pat : tpattern = { pat = PDummy; ty = pat_ty } in
+      let otherwise_pat : tpattern = { pat = PIgnored; ty = pat_ty } in
       let otherwise : match_branch =
         { pat = otherwise_pat; branch = otherwise }
       in

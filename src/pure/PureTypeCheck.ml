@@ -132,7 +132,7 @@ let rec check_tpattern_aux (span : Meta.span) (ctx : tc_ctx) (v : tpattern) :
   | PConstant cv ->
       check_literal span cv (ty_as_literal span v.ty);
       ctx
-  | PDummy -> ctx
+  | PIgnored -> ctx
   | PBound (var, _) ->
       [%pure_type_check] span (var.ty = v.ty);
       tc_ctx_push_bvar ctx var

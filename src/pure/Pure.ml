@@ -906,7 +906,7 @@ type pattern =
       (** The index of the variable is determined by its position (it is the
           index given by a depth-first search, which is consistent with the way
           visitors work). *)
-  | PDummy  (** Ignored value: [_]. *)
+  | PIgnored  (** Ignored value: [_]. *)
   | POpen of fvar * mplace option
       (** We replace [PBound] with [POpen] when opening binders.
 

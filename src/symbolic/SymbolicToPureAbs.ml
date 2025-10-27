@@ -329,7 +329,7 @@ let abs_fvar_id_to_tpattern (ctx : bs_ctx)
       else begin
         fvar_to_texpr := V.AbsFVarId.Map.add fid mk_unit_texpr !fvar_to_texpr;
         let ty = ctx_translate_fwd_ty ctx ty in
-        Some (mk_dummy_pattern ty)
+        Some (mk_ignored_pattern ty)
       end
     in
     (ctx, pat)
@@ -435,7 +435,7 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
                   if filter then None
                   else
                     let ty = ctx_translate_fwd_ty ctx output.ty in
-                    Some (mk_dummy_pattern ty)
+                    Some (mk_ignored_pattern ty)
                 in
                 (ctx, pat)
         end
@@ -470,12 +470,12 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
         then (ctx, None)
         else
           let ty = ctx_translate_fwd_ty ctx ty in
-          (ctx, Some (mk_dummy_pattern ty))
+          (ctx, Some (mk_ignored_pattern ty))
   in
   let ctx, pat = to_pat ~filter:true ctx output in
   let pat =
     match pat with
-    | None -> mk_dummy_pattern mk_unit_ty
+    | None -> mk_ignored_pattern mk_unit_ty
     | Some pat -> pat
   in
   let bound = { concrete = !concrete; symbolic = !symbolic } in
@@ -537,13 +537,13 @@ let tepat_to_tpattern (ctx : bs_ctx)
         then (ctx, None)
         else
           let ty = ctx_translate_fwd_ty ctx ty in
-          (ctx, Some (mk_dummy_pattern ty))
+          (ctx, Some (mk_ignored_pattern ty))
   in
   let ctx, pat = to_pat ~filter:true ctx pat in
   let pat =
     match pat with
     | Some pat -> pat
-    | None -> mk_dummy_pattern mk_unit_ty
+    | None -> mk_ignored_pattern mk_unit_ty
   in
   (ctx, pat)
 

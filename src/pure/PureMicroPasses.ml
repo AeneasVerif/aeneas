@@ -188,7 +188,7 @@ let rec decompose_tpattern span (x : tpattern) : (fvar * int) option =
         (fun (vid, depth) -> (vid, depth + 1))
         (decompose_tpattern span x)
     end
-  | PConstant _ | PDummy | PAdt _ -> None
+  | PConstant _ | PIgnored | PAdt _ -> None
 
 let rec decompose_texpr span (x : texpr) : (fvar_id * int) option =
   match x.e with
@@ -691,7 +691,7 @@ let intro_massert_visitor (_ctx : ctx) (def : fun_decl) =
             let massert = [%add_loc] mk_app span massert scrut in
             (* Introduce the let-binding *)
             let monadic = true in
-            let pat = mk_dummy_pattern mk_unit_ty in
+            let pat = mk_ignored_pattern mk_unit_ty in
             super#visit_Let env monadic pat massert e_true
           end
           else super#visit_Switch env scrut switch
@@ -1118,7 +1118,7 @@ let simplify_duplicate_calls_visitor (_ctx : ctx) (def : fun_decl) =
 
     method! visit_Let env monadic pat bound next =
       let bound = self#visit_texpr env bound in
-      (* Register the function call if the pattern doesn't contain dummy
+      (* Register the function call if the pattern doesn't contain ignored
          variables *)
       let env =
         let factor =
@@ -1435,7 +1435,7 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
 
       method! visit_POpen env v mp =
         if FVarId.Set.mem v.id env then (POpen (v, mp), fun _ -> false)
-        else (PDummy, fun _ -> true)
+        else (PIgnored, fun _ -> true)
 
       method! visit_PBound _ _ _ = [%internal_error] span
     end
@@ -1490,11 +1490,11 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
             let dont_filter () =
               let re, used_re = self#visit_texpr env re in
               let used = FVarId.Set.union used (used_re ()) in
-              (* Simplify the left pattern if it only contains dummy variables *)
+              (* Simplify the left pattern if it only contains ignored variables *)
               let lv =
                 if all_dummies then
                   let ty = lv.ty in
-                  let pat = PDummy in
+                  let pat = PIgnored in
                   { pat; ty }
                 else lv
               in
@@ -1578,7 +1578,7 @@ let simplify_let_then_ok_visitor ~(ignore_loops : bool) _ctx (def : fun_decl) =
     match (pat.pat, e.e) with
     | PConstant plit, Const lit -> plit = lit
     | POpen (pv, _), FVar vid -> pv.id = vid
-    | PDummy, _ ->
+    | PIgnored, _ ->
         (* It is ok only if we ignore the unit value *)
         pat.ty = mk_unit_ty && e = mk_unit_texpr
     | PAdt padt, _ -> (
@@ -2476,7 +2476,7 @@ let unit_vars_to_unit _ (def : fun_decl) : fun_decl =
 
       (** Replace in patterns *)
       method! visit_POpen _ v mp =
-        if v.ty = mk_unit_ty then PDummy else POpen (v, mp)
+        if v.ty = mk_unit_ty then PIgnored else POpen (v, mp)
 
       method! visit_PBound _ _ _ = [%internal_error] span
 
@@ -2777,7 +2777,8 @@ let simplify_array_slice_update_visitor (ctx : ctx) (def : fun_decl) =
           PAdt
             {
               variant_id = None;
-              fields = [ { pat = PDummy; _ }; { pat = POpen (back_var, _); _ } ];
+              fields =
+                [ { pat = PIgnored; _ }; { pat = POpen (back_var, _); _ } ];
             },
           (* ... = Array.index_mut_usize a i *)
           Qualif
@@ -2878,7 +2879,7 @@ let decompose_let_bindings_visitor (decompose_monadic : bool)
 
         method! visit_tpattern (inside : bool) (pat : tpattern) : tpattern =
           match pat.pat with
-          | PConstant _ | POpen _ | PDummy -> pat
+          | PConstant _ | POpen _ | PIgnored -> pat
           | PBound _ -> [%internal_error] span
           | PAdt _ ->
               if not inside then super#visit_tpattern true pat
@@ -2909,7 +2910,7 @@ let decompose_let_bindings_visitor (decompose_monadic : bool)
            * - if not, make the decomposition in two steps
            *)
           match lv.pat with
-          | POpen _ | PDummy ->
+          | POpen _ | PIgnored ->
               (* Variable: nothing to do *)
               (monadic, lv, re, next_e)
           | PBound _ -> [%internal_error] span
@@ -3327,10 +3328,10 @@ let merge_let_app_then_decompose_tuple_visitor (_ctx : ctx) (def : fun_decl) =
           -> begin
             (* Check if we are decomposing a tuple *)
             if is_pat_tuple pat1 then
-              (* Introduce fresh variables for all the dummy variables
+              (* Introduce fresh variables for all the ignored variables
                    to make sure we can turn the pattern into an expression *)
               let pat1 =
-                tpattern_replace_dummy_vars_with_free_vars fresh_fvar_id pat1
+                tpattern_replace_ignored_vars_with_free_vars fresh_fvar_id pat1
               in
               let pat1_expr = Option.get (tpattern_to_texpr span pat1) in
               (* Register the mapping from the variable we remove to the expression *)
@@ -3810,7 +3811,7 @@ let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
             let as_pat_open_or_ignored (pat : tpattern) : fvar option =
               match pat.pat with
               | POpen (fv, _) -> Some fv
-              | PDummy -> None
+              | PIgnored -> None
               | _ -> [%internal_error] span
             in
             let pvars = List.map as_pat_open_or_ignored pats in
@@ -4219,13 +4220,13 @@ let filter_loop_useless_inputs_outputs (ctx : ctx)
                throughout the loop and so that the output can be computed from
                the *initial* input. We thus filter it.
             *)
-            let output_vars = try_destruct_tuple_or_dummy_tpattern span pat in
+            let output_vars = try_destruct_tuple_or_ignored_tpattern span pat in
             let output_vars =
               List.map
                 (fun (p : tpattern) ->
                   match p.pat with
                   | POpen (v, _) -> Some v
-                  | PDummy -> None
+                  | PIgnored -> None
                   | _ ->
                       [%craise] span "Not an open binder or an ignored pattern")
                 output_vars
@@ -4667,7 +4668,7 @@ let reorder_loop_outputs (ctx : ctx) (def : fun_decl) =
   let update_let (monadic : bool) (pat : tpattern) (loop : texpr) (next : texpr)
       (output_indices : int list) : texpr =
     (* Decompose the pattern, which should be a tuple *)
-    let patl = try_destruct_tuple_or_dummy_tpattern span pat in
+    let patl = try_destruct_tuple_or_ignored_tpattern span pat in
 
     (* Reorder *)
     let patl = List.map (fun i -> Collections.List.nth patl i) output_indices in
@@ -4694,7 +4695,7 @@ let reorder_loop_outputs (ctx : ctx) (def : fun_decl) =
            (List.mapi
               (fun i (p : tpattern) ->
                 match p.pat with
-                | PDummy -> None
+                | PIgnored -> None
                 | POpen (fvar, _) -> Some (fvar.id, i)
                 | _ -> [%internal_error] span)
               (Collections.List.prefix loop.num_input_conts
@@ -4814,7 +4815,7 @@ let reorder_loop_outputs (ctx : ctx) (def : fun_decl) =
        and reorder the outputs accordingly. *)
     (* Deconstruct the pattern and check that it is a tuple of free variables *)
     [%ldebug "pat: " ^ tpattern_to_string ctx pat];
-    let patl = try_destruct_tuple_or_dummy_or_open_tpattern span pat in
+    let patl = try_destruct_tuple_or_ignored_or_open_tpattern span pat in
     let patl_fvars =
       List.map
         (fun (p : tpattern) ->
@@ -5337,7 +5338,7 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
                    (List.mapi
                       (fun i (p : tpattern) ->
                         match p.pat with
-                        | PDummy -> None
+                        | PIgnored -> None
                         | POpen (fvar, _) -> Some (fvar.id, i)
                         | _ -> [%internal_error] span)
                       (Collections.List.prefix loop.num_input_conts body.inputs)))
@@ -5567,7 +5568,7 @@ let let_to_match (ctx : ctx) (def : fun_decl) =
       env
   in
 
-  (* Patterns can be converted to expressions (if they don't contain dummy patterns '_').
+  (* Patterns can be converted to expressions (if they don't contain ignored patterns '_').
      We can use those as default expressions as well: this helper explores a pattern
      and registers all the expressions we find inside it. *)
   let rec add_pat_aux (env : (int * texpr) TyMap.t) (p : tpattern) :
@@ -5575,7 +5576,7 @@ let let_to_match (ctx : ctx) (def : fun_decl) =
     match p.pat with
     | PConstant lit -> (env, 1, Some { e = Const lit; ty = p.ty })
     | PBound _ -> [%internal_error] span
-    | PDummy -> (env, 1, None)
+    | PIgnored -> (env, 1, None)
     | POpen (fv, _) -> (env, 1, Some { e = FVar fv.id; ty = fv.ty })
     | PAdt { variant_id; fields } ->
         let (env, size), fields =

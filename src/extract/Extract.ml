@@ -303,7 +303,7 @@ let rec extract_tpattern (span : Meta.span) (ctx : extraction_ctx)
         let ctx, vname = ctx_add_var span vname v.id ctx in
         F.pp_print_string fmt vname;
         ctx
-    | PDummy ->
+    | PIgnored ->
         F.pp_print_string fmt "_";
         ctx
     | PAdt av ->
@@ -1048,7 +1048,7 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
         (* Check if we can ignore the [let] - it is possible for some backends,
            if the monadic expression evaluates to [()] *)
         let ignore_let =
-          monadic && is_dummy_pattern lv && ty_is_unit lv.ty
+          monadic && is_ignored_pattern lv && ty_is_unit lv.ty
           && backend () = Lean
         in
         (* Print the [let] *)
