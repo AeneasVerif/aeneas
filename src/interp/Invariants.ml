@@ -705,7 +705,7 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) (lookups : bool)
     ctx
 
 type proj_borrows_info = {
-  abs_id : AbstractionId.id;
+  abs_id : AbsId.id;
   regions : RegionId.Set.t;
   proj_ty : rty;  (** The regions shouldn't be erased *)
   as_shared_value : bool;  (** True if the value is below a shared borrow *)
@@ -713,7 +713,7 @@ type proj_borrows_info = {
 [@@deriving show]
 
 type proj_loans_info = {
-  abs_id : AbstractionId.id;
+  abs_id : AbsId.id;
   regions : RegionId.Set.t;
   proj_ty : rty;
 }
@@ -729,9 +729,7 @@ type sv_info = {
 let proj_borrows_info_to_string (ctx : eval_ctx) (info : proj_borrows_info) :
     string =
   let { abs_id; regions; proj_ty; as_shared_value } = info in
-  "{ abs_id = "
-  ^ AbstractionId.to_string abs_id
-  ^ "; regions = "
+  "{ abs_id = " ^ AbsId.to_string abs_id ^ "; regions = "
   ^ RegionId.Set.to_string None regions
   ^ "; proj_ty = " ^ ty_to_string ctx proj_ty ^ "; as_shared_value = "
   ^ Print.bool_to_string as_shared_value
@@ -740,9 +738,7 @@ let proj_borrows_info_to_string (ctx : eval_ctx) (info : proj_borrows_info) :
 let proj_loans_info_to_string (ctx : eval_ctx) (info : proj_loans_info) : string
     =
   let { abs_id; regions; proj_ty } = info in
-  "{ abs_id = "
-  ^ AbstractionId.to_string abs_id
-  ^ "; regions = "
+  "{ abs_id = " ^ AbsId.to_string abs_id ^ "; regions = "
   ^ RegionId.Set.to_string None regions
   ^ "; proj_ty = " ^ ty_to_string ctx proj_ty ^ "}"
 
@@ -887,11 +883,11 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
 
 (** Check that all abstraction ids are unique *)
 let check_unique_abs_ids (span : Meta.span) (ctx : eval_ctx) : unit =
-  let ids = ref AbstractionId.Set.empty in
+  let ids = ref AbsId.Set.empty in
   env_iter_abs
     (fun (abs : abs) ->
-      [%sanity_check] span (not (AbstractionId.Set.mem abs.abs_id !ids));
-      ids := AbstractionId.Set.add abs.abs_id !ids)
+      [%sanity_check] span (not (AbsId.Set.mem abs.abs_id !ids));
+      ids := AbsId.Set.add abs.abs_id !ids)
     ctx.env
 
 let check_invariants (span : Meta.span) (ctx : eval_ctx) : unit =

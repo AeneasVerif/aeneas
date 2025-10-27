@@ -49,7 +49,7 @@ let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
       let call = call_to_string env indent call in
       let next = expr_to_string env indent indent_incr next in
       call ^ "\n" ^ next
-  | EndAbstraction (_, abs, next) ->
+  | EndAbs (_, abs, next) ->
       let indent1 = indent ^ indent_incr in
       let verbose = false in
       let abs =
@@ -74,9 +74,7 @@ let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
       let next = expr_to_string env indent indent_incr next in
       indent ^ "let " ^ sv ^ " = " ^ v ^ "in\n" ^ next
   | SubstituteAbsIds (aids, next) ->
-      let aids =
-        AbstractionId.Map.to_string None AbstractionId.to_string aids
-      in
+      let aids = AbsId.Map.to_string None AbsId.to_string aids in
       let next = expr_to_string env indent indent_incr next in
       indent ^ "subst " ^ aids ^ " in\n" ^ next
   | ForwardEnd (ret, _, fwd_end, backs) ->

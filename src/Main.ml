@@ -265,7 +265,7 @@ let () =
           match String.get id 0 with
           | 's' -> marked_symbolic_value_ids_insert_from_int i
           | 'b' -> marked_borrow_ids_insert_from_int i
-          | 'a' -> marked_abstraction_ids_insert_from_int i
+          | 'a' -> marked_abs_ids_insert_from_int i
           | 'r' -> marked_region_ids_insert_from_int i
           | 'f' -> Pure.marked_fvar_ids_insert_from_int i
           | _ ->

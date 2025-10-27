@@ -7,10 +7,10 @@ open InterpreterUtils
 open InterpreterBorrowsCore
 
 type updt_env_kind =
-  | AbsInLeft of AbstractionId.id
+  | AbsInLeft of AbsId.id
   | LoanInLeft of BorrowId.id
   | LoansInLeft of BorrowId.Set.t
-  | AbsInRight of AbstractionId.id
+  | AbsInRight of AbsId.id
   | LoanInRight of BorrowId.id
   | LoansInRight of BorrowId.Set.t
 [@@deriving show]
@@ -26,7 +26,7 @@ type ctx_join_info = {
   symbolic_to_value : (tvalue * tvalue) SymbolicValueId.Map.t;
       (** Map from fresh symbolic value to the values coming from the left and
           right contexts *)
-  refreshed_aids : abstraction_id AbstractionId.Map.t;
+  refreshed_aids : abs_id AbsId.Map.t;
       (** The refreshed abstraction ids in the right environment *)
 }
 
@@ -41,19 +41,19 @@ type ctx_or_update = (eval_ctx * ctx_join_info, updt_env_kind) result
     markers because we performed a join and are progressively transforming the
     environment to get rid of those markers). *)
 type abs_borrows_loans_maps = {
-  abs_ids : AbstractionId.id list;
-  abs_to_borrows : MarkedUniqueBorrowId.Set.t AbstractionId.Map.t;
-  abs_to_non_unique_borrows : MarkedBorrowId.Set.t AbstractionId.Map.t;
-  abs_to_loans : MarkedLoanId.Set.t AbstractionId.Map.t;
-  borrow_to_abs : AbstractionId.Set.t MarkedUniqueBorrowId.Map.t;
-  non_unique_borrow_to_abs : AbstractionId.Set.t MarkedBorrowId.Map.t;
+  abs_ids : AbsId.id list;
+  abs_to_borrows : MarkedUniqueBorrowId.Set.t AbsId.Map.t;
+  abs_to_non_unique_borrows : MarkedBorrowId.Set.t AbsId.Map.t;
+  abs_to_loans : MarkedLoanId.Set.t AbsId.Map.t;
+  borrow_to_abs : AbsId.Set.t MarkedUniqueBorrowId.Map.t;
+  non_unique_borrow_to_abs : AbsId.Set.t MarkedBorrowId.Map.t;
       (** A map from a non unique borrow id (in case of shared borrows) to the
           set of region abstractions refering to this borrow *)
-  loan_to_abs : AbstractionId.Set.t MarkedLoanId.Map.t;
-  abs_to_borrow_projs : MarkedNormSymbProj.Set.t AbstractionId.Map.t;
-  abs_to_loan_projs : MarkedNormSymbProj.Set.t AbstractionId.Map.t;
-  borrow_proj_to_abs : AbstractionId.Set.t MarkedNormSymbProj.Map.t;
-  loan_proj_to_abs : AbstractionId.Set.t MarkedNormSymbProj.Map.t;
+  loan_to_abs : AbsId.Set.t MarkedLoanId.Map.t;
+  abs_to_borrow_projs : MarkedNormSymbProj.Set.t AbsId.Map.t;
+  abs_to_loan_projs : MarkedNormSymbProj.Set.t AbsId.Map.t;
+  borrow_proj_to_abs : AbsId.Set.t MarkedNormSymbProj.Map.t;
+  loan_proj_to_abs : AbsId.Set.t MarkedNormSymbProj.Map.t;
 }
 
 type tvalue_matcher = tvalue -> tvalue -> tvalue
@@ -460,7 +460,7 @@ module type MatchCheckEquivState = sig
 
   val sid_map : SymbolicValueId.InjSubst.t ref
   val sid_to_value_map : tvalue SymbolicValueId.Map.t ref
-  val aid_map : AbstractionId.InjSubst.t ref
+  val aid_map : AbsId.InjSubst.t ref
   val lookup_shared_value_in_ctx0 : BorrowId.id -> tvalue
   val lookup_shared_value_in_ctx1 : BorrowId.id -> tvalue
 end
@@ -468,14 +468,9 @@ end
 module type CheckEquivMatcher = sig
   include PrimMatcher
 
-  val match_aid : abstraction_id -> abstraction_id -> abstraction_id
-
-  val match_aidl :
-    abstraction_id list -> abstraction_id list -> abstraction_id list
-
-  val match_aids :
-    abstraction_id_set -> abstraction_id_set -> abstraction_id_set
-
+  val match_aid : abs_id -> abs_id -> abs_id
+  val match_aidl : abs_id list -> abs_id list -> abs_id list
+  val match_aids : abs_id_set -> abs_id_set -> abs_id_set
   val match_rid : region_id -> region_id -> region_id
   val match_rids : region_id_set -> region_id_set -> region_id_set
   val match_borrow_id : borrow_id -> borrow_id -> borrow_id
@@ -488,7 +483,7 @@ end
 
 (** See {!InterpreterLoopsMatchCtxs.match_ctxs} *)
 type ids_maps = {
-  aid_map : AbstractionId.InjSubst.t;
+  aid_map : AbsId.InjSubst.t;
   blid_map : BorrowId.InjSubst.t;
       (** Substitution for the loan and borrow ids *)
   borrow_id_map : BorrowId.InjSubst.t;  (** Substitution for the borrow ids *)
@@ -513,7 +508,7 @@ let ids_maps_to_string (ctx : eval_ctx) (m : ids_maps) : string =
   in
   let indent = Some "    " in
   "{" ^ "\n  aid_map = "
-  ^ AbstractionId.InjSubst.to_string indent aid_map
+  ^ AbsId.InjSubst.to_string indent aid_map
   ^ "\n  blid_map = "
   ^ BorrowId.InjSubst.to_string indent blid_map
   ^ "\n  borrow_id_map = "
@@ -566,8 +561,8 @@ let ctx_split_fixed_new (span : Meta.span) (fixed_ids : ids_sets)
   let is_fresh_did (id : DummyVarId.id) : bool =
     not (DummyVarId.Set.mem id fixed_ids.dids)
   in
-  let is_fresh_abs_id (id : AbstractionId.id) : bool =
-    not (AbstractionId.Set.mem id fixed_ids.aids)
+  let is_fresh_abs_id (id : AbsId.id) : bool =
+    not (AbsId.Set.mem id fixed_ids.aids)
   in
   (* Filter the new abstractions and dummy variables (there shouldn't be any new dummy variable
      though) in the target context *)

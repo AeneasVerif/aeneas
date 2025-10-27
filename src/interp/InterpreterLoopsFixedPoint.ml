@@ -97,7 +97,7 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
     in
 
     (* Rem.: the below sanity checks are not really necessary *)
-    [%sanity_check] span (AbstractionId.Set.is_empty abs.parents);
+    [%sanity_check] span (AbsId.Set.is_empty abs.parents);
     [%sanity_check] span (abs.original_parents = []);
 
     (* Introduce the new abstraction for the shared values *)
@@ -134,10 +134,10 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
     in
     let fresh_abs =
       {
-        abs_id = fresh_abstraction_id ();
+        abs_id = fresh_abs_id ();
         kind;
         can_end;
-        parents = AbstractionId.Set.empty;
+        parents = AbsId.Set.empty;
         original_parents = [];
         regions;
         avalues;
@@ -370,7 +370,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
       (fun ctx ->
         let fixed_ids, _ = compute_ctx_ids ctx in
         sids := SymbolicValueId.Set.inter !sids fixed_ids.sids;
-        aids := AbstractionId.Set.inter !aids fixed_ids.aids)
+        aids := AbsId.Set.inter !aids fixed_ids.aids)
       ctxl;
     fixed_ids :=
       {
@@ -546,8 +546,7 @@ let compute_loop_break_context (config : config) (span : Meta.span)
       let get_fresh_abs (e : env_elem) : abs option =
         match e with
         | EAbs abs ->
-            if not (AbstractionId.Set.mem abs.abs_id fixed_ids.aids) then
-              Some abs
+            if not (AbsId.Set.mem abs.abs_id fixed_ids.aids) then Some abs
             else None
         | EBinding _ | EFrame -> None
       in
@@ -585,7 +584,7 @@ let compute_fp_ctx_symbolic_values (span : Meta.span)
         (fun (ee : env_elem) ->
           match ee with
           | EBinding _ | EFrame -> false
-          | EAbs abs -> AbstractionId.Set.mem abs.abs_id old_ids.aids)
+          | EAbs abs -> AbsId.Set.mem abs.abs_id old_ids.aids)
         ctx.env
     in
 

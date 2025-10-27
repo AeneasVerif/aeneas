@@ -448,9 +448,8 @@ module Values = struct
         ^ RegionGroupId.to_string rg_id
         ^ ")"
     | ELoop (abs_id, lp_id) ->
-        "Loop(abs_id@"
-        ^ AbstractionId.to_string abs_id
-        ^ ",loop_id@" ^ LoopId.to_string lp_id ^ ")"
+        "Loop(abs_id@" ^ AbsId.to_string abs_id ^ ",loop_id@"
+        ^ LoopId.to_string lp_id ^ ")"
 
   let rec eproj_to_string ?(with_ended : bool = false) (env : fmt_env)
       (pv : eproj) : string =
@@ -741,16 +740,14 @@ module Values = struct
               indent_incr cont
           ^ "⟧"
     in
-    indent ^ "abs@"
-    ^ AbstractionId.to_string abs.abs_id
-    ^ "{" ^ kind ^ "parents="
-    ^ AbstractionId.Set.to_string None abs.parents
+    indent ^ "abs@" ^ AbsId.to_string abs.abs_id ^ "{" ^ kind ^ "parents="
+    ^ AbsId.Set.to_string None abs.parents
     ^ ",regions="
     ^ RegionId.Set.to_string None abs.regions.owned
     ^ "," ^ can_end ^ "} {\n" ^ avs ^ "\n" ^ indent ^ "}" ^ cont
 
   let abs_region_group_to_string (gr : abs_region_group) : string =
-    g_region_group_to_string RegionId.to_string AbstractionId.to_string gr
+    g_region_group_to_string RegionId.to_string AbsId.to_string gr
 
   let abs_region_groups_to_string (gl : abs_region_groups) : string =
     String.concat "\n" (List.map abs_region_group_to_string gl)

@@ -2,9 +2,7 @@ open Types
 open Values
 include Charon.LlbcAst
 
-type abs_region_group = (RegionId.id, AbstractionId.id) g_region_group
-[@@deriving show]
-
+type abs_region_group = (RegionId.id, AbsId.id) g_region_group [@@deriving show]
 type abs_region_groups = abs_region_group list [@@deriving show]
 
 (** A function signature, after instantiation *)

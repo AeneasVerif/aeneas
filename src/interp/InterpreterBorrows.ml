@@ -36,18 +36,16 @@ let log = Logging.borrows_log
       shared borrows and mutable borrows inside of **shared values**; the other
       borrows are taken care of differently. *)
 let end_concrete_borrow_get_borrow_core (span : Meta.span)
-    (allowed_abs : AbstractionId.id option) (l : unique_borrow_id)
-    (ctx : eval_ctx) :
-    ( eval_ctx * (AbstractionId.id option * g_borrow_content) option,
+    (allowed_abs : AbsId.id option) (l : unique_borrow_id) (ctx : eval_ctx) :
+    ( eval_ctx * (AbsId.id option * g_borrow_content) option,
       priority_borrow_or_abs )
     result =
   (* We use a reference to communicate the kind of borrow we found, if we
    * find one *)
-  let replaced_bc : (AbstractionId.id option * g_borrow_content) option ref =
+  let replaced_bc : (AbsId.id option * g_borrow_content) option ref =
     ref None
   in
-  let set_replaced_bc (abs_id : AbstractionId.id option) (bc : g_borrow_content)
-      =
+  let set_replaced_bc (abs_id : AbsId.id option) (bc : g_borrow_content) =
     [%sanity_check] span (Option.is_none !replaced_bc);
     replaced_bc := Some (abs_id, bc)
   in
@@ -235,14 +233,14 @@ let end_concrete_borrow_get_borrow_core (span : Meta.span)
 (** See [end_borrow_get_borrow] *)
 let end_concrete_borrow_get_borrow (span : Meta.span) (l : unique_borrow_id)
     (ctx : eval_ctx) :
-    ( eval_ctx * (AbstractionId.id option * g_borrow_content) option,
+    ( eval_ctx * (AbsId.id option * g_borrow_content) option,
       priority_borrow_or_abs )
     result =
   end_concrete_borrow_get_borrow_core span None l ctx
 
-let end_concrete_borrow_in_abs_get_borrow (span : Meta.span)
-    (abs_id : abstraction_id) (l : unique_borrow_id) (ctx : eval_ctx) :
-    ( eval_ctx * (AbstractionId.id option * g_borrow_content) option,
+let end_concrete_borrow_in_abs_get_borrow (span : Meta.span) (abs_id : abs_id)
+    (l : unique_borrow_id) (ctx : eval_ctx) :
+    ( eval_ctx * (AbsId.id option * g_borrow_content) option,
       priority_borrow_or_abs )
     result =
   end_concrete_borrow_get_borrow_core span (Some abs_id) l ctx
@@ -1064,7 +1062,7 @@ and end_shared_loan_aux (config : config) (span : Meta.span)
   (ctx, cc)
 
 and end_abstraction_aux (config : config) (span : Meta.span)
-    (chain : borrow_loan_abs_ids) (abs_id : AbstractionId.id) : cm_fun =
+    (chain : borrow_loan_abs_ids) (abs_id : AbsId.id) : cm_fun =
  fun ctx ->
   (* Check that we don't loop *)
   let chain =
@@ -1074,8 +1072,7 @@ and end_abstraction_aux (config : config) (span : Meta.span)
   (* Remember the original context for printing purposes *)
   let ctx0 = ctx in
   [%ltrace
-    AbstractionId.to_string abs_id
-    ^ "\n- original context:\n"
+    AbsId.to_string abs_id ^ "\n- original context:\n"
     ^ eval_ctx_to_string ~span:(Some span) ctx0];
 
   (* Lookup the abstraction - note that if we end a list of abstractions [A1, A0],
@@ -1085,23 +1082,20 @@ and end_abstraction_aux (config : config) (span : Meta.span)
   match ctx_lookup_abs_opt ctx abs_id with
   | None ->
       [%ltrace
-        "abs not found (already ended): "
-        ^ AbstractionId.to_string abs_id
-        ^ "\n"];
+        "abs not found (already ended): " ^ AbsId.to_string abs_id ^ "\n"];
       (ctx, fun e -> e)
   | Some abs ->
       (* Check that we can end the abstraction *)
       if abs.can_end then ()
       else
         [%craise] span
-          ("Can't end abstraction "
-          ^ AbstractionId.to_string abs.abs_id
-          ^ " as it is set as non-endable");
+          ("Can't end abstraction " ^ AbsId.to_string abs.abs_id
+         ^ " as it is set as non-endable");
 
       (* End the parent abstractions first *)
       let ctx, cc = end_abstractions_aux config span chain abs.parents ctx in
       [%ltrace
-        AbstractionId.to_string abs_id
+        AbsId.to_string abs_id
         ^ "\n- context after parent abstractions ended:\n"
         ^ eval_ctx_to_string ~span:(Some span) ctx];
 
@@ -1110,8 +1104,7 @@ and end_abstraction_aux (config : config) (span : Meta.span)
         comp cc (end_abstraction_loans config span chain abs_id ctx)
       in
       [%ltrace
-        AbstractionId.to_string abs_id
-        ^ "\n- context after loans ended:\n"
+        AbsId.to_string abs_id ^ "\n- context after loans ended:\n"
         ^ eval_ctx_to_string ~span:(Some span) ctx];
 
       (* End the abstraction itself by redistributing the borrows it contains *)
@@ -1138,8 +1131,7 @@ and end_abstraction_aux (config : config) (span : Meta.span)
 
       (* Debugging *)
       [%ltrace
-        AbstractionId.to_string abs_id
-        ^ "\n- original context:\n"
+        AbsId.to_string abs_id ^ "\n- original context:\n"
         ^ eval_ctx_to_string ~span:(Some span) ctx0
         ^ "\n\n- new context:\n"
         ^ eval_ctx_to_string ~span:(Some span) ctx];
@@ -1154,23 +1146,22 @@ and end_abstraction_aux (config : config) (span : Meta.span)
       (ctx, cc)
 
 and end_abstractions_aux (config : config) (span : Meta.span)
-    (chain : borrow_loan_abs_ids) (abs_ids : AbstractionId.Set.t) : cm_fun =
+    (chain : borrow_loan_abs_ids) (abs_ids : AbsId.Set.t) : cm_fun =
  fun ctx ->
   (* This is not necessary, but we prefer to reorder the abstraction ids,
    * so that we actually end from the smallest id to the highest id - just
    * a matter of taste, and may make debugging easier *)
-  let abs_ids = AbstractionId.Set.fold (fun id ids -> id :: ids) abs_ids [] in
+  let abs_ids = AbsId.Set.fold (fun id ids -> id :: ids) abs_ids [] in
   fold_left_apply_continuation
     (fun id ctx -> end_abstraction_aux config span chain id ctx)
     abs_ids ctx
 
 and end_abstraction_loans (config : config) (span : Meta.span)
-    (chain : borrow_loan_abs_ids) (abs_id : AbstractionId.id) : cm_fun =
+    (chain : borrow_loan_abs_ids) (abs_id : AbsId.id) : cm_fun =
  fun ctx ->
   [%ltrace
-    "- abs_id: "
-    ^ AbstractionId.to_string abs_id
-    ^ "\n- ctx:\n" ^ eval_ctx_to_string ctx];
+    "- abs_id: " ^ AbsId.to_string abs_id ^ "\n- ctx:\n"
+    ^ eval_ctx_to_string ctx];
   (* Lookup the abstraction *)
   let abs = ctx_lookup_abs ctx abs_id in
   (* End the first loan we find.
@@ -1198,9 +1189,9 @@ and end_abstraction_loans (config : config) (span : Meta.span)
       comp cc (end_abstraction_loans config span chain abs_id ctx)
 
 and end_abstraction_borrows (config : config) (span : Meta.span)
-    (chain : borrow_loan_abs_ids) (abs_id : AbstractionId.id) : cm_fun =
+    (chain : borrow_loan_abs_ids) (abs_id : AbsId.id) : cm_fun =
  fun ctx ->
-  [%ltrace "abs_id: " ^ AbstractionId.to_string abs_id];
+  [%ltrace "abs_id: " ^ AbsId.to_string abs_id];
   (* Note that the abstraction mustn't contain any loans *)
   (* We end the borrows, starting with the *inner* ones. This is important
      when considering nested borrows which have the same lifetime.
@@ -1386,7 +1377,7 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
 
 (** Remove an abstraction from the context, as well as all its references *)
 and end_abstraction_remove_from_context (_config : config) (span : Meta.span)
-    (abs_id : AbstractionId.id) : cm_fun =
+    (abs_id : AbsId.id) : cm_fun =
  fun ctx ->
   let ctx, abs = ctx_remove_abs span ctx abs_id in
   let abs = Option.get abs in
@@ -1415,13 +1406,11 @@ and end_abstraction_remove_from_context (_config : config) (span : Meta.span)
     We thus have to be careful about the fact that maybe the loan projector
     actually doesn't exist anymore when we get here. *)
 and end_proj_loans_symbolic (config : config) (span : Meta.span)
-    (chain : borrow_loan_abs_ids) (abs_id : AbstractionId.id)
-    (regions : RegionId.Set.t) (proj : symbolic_proj) : cm_fun =
+    (chain : borrow_loan_abs_ids) (abs_id : AbsId.id) (regions : RegionId.Set.t)
+    (proj : symbolic_proj) : cm_fun =
  fun ctx ->
   [%ltrace
-    "- abs_id: "
-    ^ AbstractionId.to_string abs_id
-    ^ "\n- regions: "
+    "- abs_id: " ^ AbsId.to_string abs_id ^ "\n- regions: "
     ^ RegionId.Set.to_string None regions
     ^ "\n- sv: "
     ^ symbolic_value_id_to_pretty_string proj.sv_id
@@ -1480,8 +1469,8 @@ and end_proj_loans_symbolic (config : config) (span : Meta.span)
         let abs_ids = List.map fst external_projs in
         let abs_ids =
           List.fold_left
-            (fun s id -> AbstractionId.Set.add id s)
-            AbstractionId.Set.empty abs_ids
+            (fun s id -> AbsId.Set.add id s)
+            AbsId.Set.empty abs_ids
         in
         (* End the abstractions and continue *)
         end_abstractions_aux config span chain abs_ids ctx
@@ -1988,7 +1977,7 @@ let abs_is_destructured (span : Meta.span) (destructure_shared_values : bool)
   abs = abs'
 
 exception FoundBorrowId of unique_borrow_id
-exception FoundAbsId of AbstractionId.id
+exception FoundAbsId of AbsId.id
 
 (** Find the first endable loan projector in an abstraction.
 
@@ -2048,7 +2037,7 @@ let find_first_endable_loan_proj_in_abs (span : Meta.span) (ctx : eval_ctx)
     their corresponding loans: return [true] if one of those loans is inside an
     abstraction identified by the set [fixed_abs_ids]. *)
 let abs_mut_borrows_loans_in_fixed span (ctx : eval_ctx)
-    (fixed_abs_ids : AbstractionId.Set.t) (abs : abs) : bool =
+    (fixed_abs_ids : AbsId.Set.t) (abs : abs) : bool =
   (* Iterate through the loan projectors which intersect a given borrow projector *)
   let visit_proj_loans (proj : symbolic_proj) =
     object
@@ -2087,8 +2076,7 @@ let abs_mut_borrows_loans_in_fixed span (ctx : eval_ctx)
             begin
               match abs_or_var with
               | AbsId abs_id ->
-                  if AbstractionId.Set.mem abs_id fixed_abs_ids then raise Found
-                  else ()
+                  if AbsId.Set.mem abs_id fixed_abs_ids then raise Found else ()
               | LocalId _ | DummyVarId _ -> ()
             end;
             super#visit_aborrow_content env lc
@@ -2144,7 +2132,7 @@ let eliminate_ended_shared_loans (span : Meta.span) (ctx : eval_ctx) : eval_ctx
    However we ignore the "fixed" abstractions.
 *)
 let rec simplify_dummy_values_useless_abs_aux (config : config)
-    (span : Meta.span) (fixed_abs_ids : AbstractionId.Set.t) : cm_fun =
+    (span : Meta.span) (fixed_abs_ids : AbsId.Set.t) : cm_fun =
  fun ctx ->
   let simplify_abs = true in
   let simplify_borrows = true in
@@ -2153,7 +2141,7 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
   *)
   let loan_id_not_in_fixed_abs (lid : BorrowId.id) : bool =
     match fst (ctx_lookup_loan span ek_all lid ctx) with
-    | AbsId abs_id -> not (AbstractionId.Set.mem abs_id fixed_abs_ids)
+    | AbsId abs_id -> not (AbsId.Set.mem abs_id fixed_abs_ids)
     | _ -> true
   in
   let rec explore_env (ctx : eval_ctx) (env : env) : env =
@@ -2260,7 +2248,7 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
         EBinding (BVar vid, v) :: explore_env ctx env
     | EAbs abs :: env
       when simplify_abs && abs.can_end
-           && not (AbstractionId.Set.mem abs.abs_id fixed_abs_ids) -> (
+           && not (AbsId.Set.mem abs.abs_id fixed_abs_ids) -> (
         [%ldebug "Diving into abs:\n" ^ abs_to_string span ctx abs];
         (* End the shared loans with no corresponding borrows *)
         let visitor =
@@ -2338,7 +2326,7 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
       rec_call ctx
 
 let simplify_dummy_values_useless_abs (config : config) (span : Meta.span)
-    (fixed_abs_ids : AbstractionId.Set.t) : cm_fun =
+    (fixed_abs_ids : AbsId.Set.t) : cm_fun =
  fun ctx0 ->
   [%ldebug eval_ctx_to_string ctx0];
   (* Simplify the context as long as it leads to changes - TODO: make this more efficient *)
@@ -2358,7 +2346,7 @@ let simplify_dummy_values_useless_abs (config : config) (span : Meta.span)
   let ctx = eliminate_ended_shared_loans span ctx in
   [%ltrace
     "- fixed_aids: "
-    ^ AbstractionId.Set.to_string None fixed_abs_ids
+    ^ AbsId.Set.to_string None fixed_abs_ids
     ^ "\n- ctx0:\n" ^ eval_ctx_to_string ctx0 ^ "\n- ctx1:\n"
     ^ if ctx = ctx0 then "UNCHANGED" else eval_ctx_to_string ctx];
   (ctx, cc)

@@ -21,10 +21,10 @@ val end_loan : config -> Meta.span -> loan_id -> cm_fun
 val end_loans : config -> Meta.span -> loan_id_set -> cm_fun
 
 (** End an abstraction while preserving the invariants. *)
-val end_abstraction : config -> Meta.span -> AbstractionId.id -> cm_fun
+val end_abstraction : config -> Meta.span -> AbsId.id -> cm_fun
 
 (** End a set of abstractions while preserving the invariants. *)
-val end_abstractions : config -> Meta.span -> AbstractionId.Set.t -> cm_fun
+val end_abstractions : config -> Meta.span -> AbsId.Set.t -> cm_fun
 
 (** End a borrow and return the resulting environment, ignoring synthesis *)
 val end_borrow_no_synth :
@@ -53,12 +53,12 @@ val try_end_loans_no_synth :
 (** End an abstraction and return the resulting environment, ignoring synthesis
 *)
 val end_abstraction_no_synth :
-  config -> Meta.span -> AbstractionId.id -> eval_ctx -> eval_ctx
+  config -> Meta.span -> AbsId.id -> eval_ctx -> eval_ctx
 
 (** End a set of abstractions and return the resulting environment, ignoring
     synthesis *)
 val end_abstractions_no_synth :
-  config -> Meta.span -> AbstractionId.Set.t -> eval_ctx -> eval_ctx
+  config -> Meta.span -> AbsId.Set.t -> eval_ctx -> eval_ctx
 
 (** Promote a reserved mut borrow to a mut borrow, while preserving the
     invariants.
@@ -153,4 +153,4 @@ val eliminate_ended_shared_loans : Meta.span -> eval_ctx -> eval_ctx
       abstractions which are specified by the set of abstraction ids (we do not
       end them, nor their loans). *)
 val simplify_dummy_values_useless_abs :
-  config -> Meta.span -> AbstractionId.Set.t -> cm_fun
+  config -> Meta.span -> AbsId.Set.t -> cm_fun

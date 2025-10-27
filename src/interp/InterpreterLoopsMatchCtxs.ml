@@ -21,11 +21,11 @@ let log = Logging.loops_match_ctxs_log
 let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
     (ctx : eval_ctx) (env : env) : abs_borrows_loans_maps =
   let abs_ids = ref [] in
-  let abs_to_borrows = ref AbstractionId.Map.empty in
-  let abs_to_non_unique_borrows = ref AbstractionId.Map.empty in
-  let abs_to_loans = ref AbstractionId.Map.empty in
-  let abs_to_borrow_projs = ref AbstractionId.Map.empty in
-  let abs_to_loan_projs = ref AbstractionId.Map.empty in
+  let abs_to_borrows = ref AbsId.Map.empty in
+  let abs_to_non_unique_borrows = ref AbsId.Map.empty in
+  let abs_to_loans = ref AbsId.Map.empty in
+  let abs_to_borrow_projs = ref AbsId.Map.empty in
+  let abs_to_loan_projs = ref AbsId.Map.empty in
   let borrow_to_abs = ref MarkedUniqueBorrowId.Map.empty in
   let non_unique_borrow_to_abs = ref MarkedBorrowId.Map.empty in
   let loan_to_abs = ref MarkedLoanId.Map.empty in
@@ -72,21 +72,17 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
                 Some (S.add id1 ids))
           !map
 
-    let register_abs_id (id : AbstractionId.id)
-        (map : S.t AbstractionId.Map.t ref) =
-      if AbstractionId.Map.mem id !map then ()
-      else map := AbstractionId.Map.add id S.empty !map
+    let register_abs_id (id : AbsId.id) (map : S.t AbsId.Map.t ref) =
+      if AbsId.Map.mem id !map then () else map := AbsId.Map.add id S.empty !map
   end in
-  let module RAbsUniqueBorrow = R (AbstractionId.Map) (MarkedUniqueBorrowId.Set)
-  in
-  let module RAbsBorrow = R (AbstractionId.Map) (MarkedBorrowId.Set) in
-  let module RAbsLoan = R (AbstractionId.Map) (MarkedLoanId.Set) in
-  let module RBorrowAbs = R (MarkedBorrowId.Map) (AbstractionId.Set) in
-  let module RUniqueBorrowAbs = R (MarkedUniqueBorrowId.Map) (AbstractionId.Set)
-  in
-  let module RLoanAbs = R (MarkedLoanId.Map) (AbstractionId.Set) in
-  let module RAbsSymbProj = R (AbstractionId.Map) (MarkedNormSymbProj.Set) in
-  let module RSymbProjAbs = R (MarkedNormSymbProj.Map) (AbstractionId.Set) in
+  let module RAbsUniqueBorrow = R (AbsId.Map) (MarkedUniqueBorrowId.Set) in
+  let module RAbsBorrow = R (AbsId.Map) (MarkedBorrowId.Set) in
+  let module RAbsLoan = R (AbsId.Map) (MarkedLoanId.Set) in
+  let module RBorrowAbs = R (MarkedBorrowId.Map) (AbsId.Set) in
+  let module RUniqueBorrowAbs = R (MarkedUniqueBorrowId.Map) (AbsId.Set) in
+  let module RLoanAbs = R (MarkedLoanId.Map) (AbsId.Set) in
+  let module RAbsSymbProj = R (AbsId.Map) (MarkedNormSymbProj.Set) in
+  let module RSymbProjAbs = R (MarkedNormSymbProj.Map) (AbsId.Set) in
   let register_abs_id abs_id =
     RAbsUniqueBorrow.register_abs_id abs_id abs_to_borrows;
     RAbsBorrow.register_abs_id abs_id abs_to_non_unique_borrows;
@@ -111,7 +107,7 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
   let loan_to_string (pm, bid) =
     "loan@" ^ BorrowId.to_string bid |> Print.Values.add_proj_marker pm
   in
-  let abs_id_to_string aid = "abs@" ^ AbstractionId.to_string aid in
+  let abs_id_to_string aid = "abs@" ^ AbsId.to_string aid in
   let binding_to_string fmt0 fmt1 x0 x1 = fmt0 x0 ^ " -> " ^ fmt1 x1 in
   let borrow_proj_to_string x =
     "@borrow_proj(" ^ marked_norm_symb_proj_to_string ctx x ^ ")"
@@ -256,13 +252,13 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
       register_abs_id abs.abs_id;
       if explore abs then (
         abs_to_borrows :=
-          AbstractionId.Map.add abs.abs_id MarkedUniqueBorrowId.Set.empty
+          AbsId.Map.add abs.abs_id MarkedUniqueBorrowId.Set.empty
             !abs_to_borrows;
         abs_to_non_unique_borrows :=
-          AbstractionId.Map.add abs.abs_id MarkedBorrowId.Set.empty
+          AbsId.Map.add abs.abs_id MarkedBorrowId.Set.empty
             !abs_to_non_unique_borrows;
         abs_to_loans :=
-          AbstractionId.Map.add abs.abs_id MarkedLoanId.Set.empty !abs_to_loans;
+          AbsId.Map.add abs.abs_id MarkedLoanId.Set.empty !abs_to_loans;
         abs_ids := abs.abs_id :: !abs_ids;
         List.iter (explore_abs#visit_tavalue (abs, PNone)) abs.avalues)
       else ())
@@ -696,10 +692,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Generate the abstraction *)
       let abs =
         {
-          abs_id = fresh_abstraction_id ();
+          abs_id = fresh_abs_id ();
           kind = Loop S.loop_id;
           can_end = true;
-          parents = AbstractionId.Set.empty;
+          parents = AbsId.Set.empty;
           original_parents = [];
           regions = { owned = RegionId.Set.singleton rid };
           avalues = avl0 @ avl1 @ [ av ];
@@ -841,10 +837,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
         let abs =
           {
-            abs_id = fresh_abstraction_id ();
+            abs_id = fresh_abs_id ();
             kind = Loop S.loop_id;
             can_end = true;
-            parents = AbstractionId.Set.empty;
+            parents = AbsId.Set.empty;
             original_parents = [];
             regions = { owned = RegionId.Set.singleton rid };
             avalues = av :: (avl0 @ avl1);
@@ -928,10 +924,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Generate the abstraction *)
       let abs =
         {
-          abs_id = fresh_abstraction_id ();
+          abs_id = fresh_abs_id ();
           kind = Loop S.loop_id;
           can_end = true;
-          parents = AbstractionId.Set.empty;
+          parents = AbsId.Set.empty;
           original_parents = [];
           regions = { owned = RegionId.Set.singleton rid };
           avalues;
@@ -1097,10 +1093,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Generate the abstraction *)
       let abs =
         {
-          abs_id = fresh_abstraction_id ();
+          abs_id = fresh_abs_id ();
           kind = Loop S.loop_id;
           can_end = true;
-          parents = AbstractionId.Set.empty;
+          parents = AbsId.Set.empty;
           original_parents = [];
           regions = { owned };
           avalues;
@@ -1167,10 +1163,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Generate the abstraction *)
       let abs =
         {
-          abs_id = fresh_abstraction_id ();
+          abs_id = fresh_abs_id ();
           kind = Loop S.loop_id;
           can_end = true;
-          parents = AbstractionId.Set.empty;
+          parents = AbsId.Set.empty;
           original_parents = [];
           regions = { owned };
           avalues;
@@ -1245,10 +1241,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Generate the abstraction *)
       let abs =
         {
-          abs_id = fresh_abstraction_id ();
+          abs_id = fresh_abs_id ();
           kind = Loop S.loop_id;
           can_end = true;
-          parents = AbstractionId.Set.empty;
+          parents = AbsId.Set.empty;
           original_parents = [];
           regions = { owned };
           avalues;
@@ -1358,10 +1354,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             (* Create the abstraction *)
             let abs =
               {
-                abs_id = fresh_abstraction_id ();
+                abs_id = fresh_abs_id ();
                 kind = Loop S.loop_id;
                 can_end = true;
-                parents = AbstractionId.Set.empty;
+                parents = AbsId.Set.empty;
                 original_parents = [];
                 regions = { owned };
                 avalues;
@@ -1478,10 +1474,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     (* Generate the abstraction *)
     let abs =
       {
-        abs_id = fresh_abstraction_id ();
+        abs_id = fresh_abs_id ();
         kind = Loop S.loop_id;
         can_end = true;
-        parents = AbstractionId.Set.empty;
+        parents = AbsId.Set.empty;
         original_parents = [];
         regions = { owned };
         avalues;
@@ -1578,10 +1574,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     (* Generate the abstraction *)
     let abs =
       {
-        abs_id = fresh_abstraction_id ();
+        abs_id = fresh_abs_id ();
         kind = Loop S.loop_id;
         can_end = true;
-        parents = AbstractionId.Set.empty;
+        parents = AbsId.Set.empty;
         original_parents = [];
         regions = { owned };
         avalues;
@@ -1861,7 +1857,7 @@ struct
     else GetSetBid.match_es "match_loan_ids: " S.loan_id_map
 
   module GetSetSid = MkGetSetM (SymbolicValueId)
-  module GetSetAid = MkGetSetM (AbstractionId)
+  module GetSetAid = MkGetSetM (AbsId)
 
   let match_aid = GetSetAid.match_e "match_aid: " S.aid_map
   let match_aidl = GetSetAid.match_el "match_aidl: " S.aid_map
@@ -2148,7 +2144,7 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
     IdMap.mk_map_ref fixed_ids.loan_ids
   in
   let aid_map =
-    let module IdMap = IdMap (AbstractionId) in
+    let module IdMap = IdMap (AbsId) in
     IdMap.mk_map_ref fixed_ids.aids
   in
   let sid_map =
@@ -2198,7 +2194,7 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
     } =
       ids
     in
-    AbstractionId.Set.subset aids fixed_ids.aids
+    AbsId.Set.subset aids fixed_ids.aids
     && BorrowId.Set.subset borrow_ids fixed_ids.borrow_ids
     && UniqueBorrowIdSet.subset unique_borrow_ids fixed_ids.unique_borrow_ids
     && BorrowId.Set.subset loan_ids fixed_ids.loan_ids
@@ -2271,7 +2267,7 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
       ^ "\n- sid_map: "
       ^ SymbolicValueId.InjSubst.show_t !sid_map
       ^ "\n- aid_map: "
-      ^ AbstractionId.InjSubst.show_t !aid_map
+      ^ AbsId.InjSubst.show_t !aid_map
       ^ "\n\n- ctx0:\n"
       ^ eval_ctx_to_string ~span:(Some span) ~filter:false
           { ctx0 with env = List.rev env0 }
@@ -2304,7 +2300,7 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
     | EAbs abs0 :: env0', EAbs abs1 :: env1' ->
         [%ldebug "match_envs: matching abs"];
         (* Same as for the dummy values: there are two cases *)
-        if AbstractionId.Set.mem abs0.abs_id fixed_ids.aids then (
+        if AbsId.Set.mem abs0.abs_id fixed_ids.aids then (
           [%ldebug "match_envs: matching abs: fixed abs"];
           (* Still in the prefix: the abstractions must be the same *)
           [%sanity_check] span (abs0 = abs1);

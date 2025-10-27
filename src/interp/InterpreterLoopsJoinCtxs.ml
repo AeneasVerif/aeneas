@@ -13,25 +13,25 @@ open InterpreterLoopsMatchCtxs
 let log = Logging.loops_join_ctxs_log
 
 let refresh_non_fixed_abs_ids (_span : Meta.span) (fixed_ids : ids_sets)
-    (ctx : eval_ctx) : eval_ctx * abstraction_id AbstractionId.Map.t =
+    (ctx : eval_ctx) : eval_ctx * abs_id AbsId.Map.t =
   (* Note that abstraction ids appear both inside of region abstractions
      but also inside of evalues (some evalues refer to region abstractions).
      We have to make sure that we keep things consistent: whenever we refresh
      an id, we remember it. *)
-  let fresh_map = ref AbstractionId.Map.empty in
+  let fresh_map = ref AbsId.Map.empty in
 
   let visitor =
     object
       inherit [_] map_eval_ctx
 
-      method! visit_abstraction_id _ id =
-        if AbstractionId.Set.mem id fixed_ids.aids then id
+      method! visit_abs_id _ id =
+        if AbsId.Set.mem id fixed_ids.aids then id
         else
-          match AbstractionId.Map.find_opt id !fresh_map with
+          match AbsId.Map.find_opt id !fresh_map with
           | Some id -> id
           | None ->
-              let nid = fresh_abstraction_id () in
-              fresh_map := AbstractionId.Map.add id nid !fresh_map;
+              let nid = fresh_abs_id () in
+              fresh_map := AbsId.Map.add id nid !fresh_map;
               nid
     end
   in
@@ -88,8 +88,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
       | EBinding (BDummy did, _) ->
           [%sanity_check] span (not (DummyVarId.Set.mem did fixed_ids.dids))
       | EAbs abs ->
-          [%sanity_check] span
-            (not (AbstractionId.Set.mem abs.abs_id fixed_ids.aids))
+          [%sanity_check] span (not (AbsId.Set.mem abs.abs_id fixed_ids.aids))
       | EFrame ->
           (* This should have been eliminated *)
           [%craise] span "Unreachable"
@@ -181,7 +180,7 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
           ^ "\n"];
 
         (* Same as for the dummy values: there are two cases *)
-        if AbstractionId.Set.mem abs0.abs_id fixed_ids.aids then (
+        if AbsId.Set.mem abs0.abs_id fixed_ids.aids then (
           (* Still in the prefix: the abstractions must be the same *)
           [%sanity_check] span (abs0 = abs1);
           (* Continue *)
@@ -264,11 +263,11 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
 
 (** Destructure all the new abstractions *)
 let destructure_new_abs (span : Meta.span) (loop_id : LoopId.id)
-    (old_abs_ids : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
+    (old_abs_ids : AbsId.Set.t) (ctx : eval_ctx) : eval_ctx =
   [%ltrace "ctx:\n\n" ^ eval_ctx_to_string ctx];
   let abs_kind : abs_kind = Loop loop_id in
-  let is_fresh_abs_id (id : AbstractionId.id) : bool =
-    not (AbstractionId.Set.mem id old_abs_ids)
+  let is_fresh_abs_id (id : AbsId.id) : bool =
+    not (AbsId.Set.mem id old_abs_ids)
   in
   let env =
     env_map_abs
@@ -292,17 +291,17 @@ let destructure_new_abs (span : Meta.span) (loop_id : LoopId.id)
     We do this because {!prepare_ashared_loans} introduces some non-fixed
     abstractions in contexts which are later joined: we have to make sure two
     contexts we join don't have non-fixed abstractions with the same ids. *)
-let refresh_abs (old_abs : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
+let refresh_abs (old_abs : AbsId.Set.t) (ctx : eval_ctx) : eval_ctx =
   let ids, _ = compute_ctx_ids ctx in
-  let abs_to_refresh = AbstractionId.Set.diff ids.aids old_abs in
+  let abs_to_refresh = AbsId.Set.diff ids.aids old_abs in
   let aids_subst =
     List.map
-      (fun id -> (id, fresh_abstraction_id ()))
-      (AbstractionId.Set.elements abs_to_refresh)
+      (fun id -> (id, fresh_abs_id ()))
+      (AbsId.Set.elements abs_to_refresh)
   in
-  let aids_subst = AbstractionId.Map.of_list aids_subst in
+  let aids_subst = AbsId.Map.of_list aids_subst in
   let asubst id =
-    match AbstractionId.Map.find_opt id aids_subst with
+    match AbsId.Map.find_opt id aids_subst with
     | None -> id
     | Some id -> id
   in
@@ -359,7 +358,7 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
     in
     [%ltrace
       "join_one: after simplify_dummy_values_useless_abs (fixed_ids.abs_ids = "
-      ^ AbstractionId.Set.to_string None fixed_ids.aids
+      ^ AbsId.Set.to_string None fixed_ids.aids
       ^ "):\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx];
 
@@ -431,7 +430,7 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
     in
     [%ltrace
       "join_one: after simplify_dummy_values_useless_abs (fixed_ids.abs_ids = "
-      ^ AbstractionId.Set.to_string None fixed_ids.aids
+      ^ AbsId.Set.to_string None fixed_ids.aids
       ^ "):\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx];
 
@@ -466,7 +465,7 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
       let update (e : env_elem) : env_elem =
         match (e : env_elem) with
         | EAbs abs ->
-            if AbstractionId.Set.mem abs.abs_id fixed_ids.aids then e
+            if AbsId.Set.mem abs.abs_id fixed_ids.aids then e
             else EAbs { abs with cont = None; kind = Loop loop_id }
         | EBinding _ | EFrame -> e
       in
@@ -665,7 +664,7 @@ let destructure_shared_loans (span : Meta.span) (fixed_ids : ids_sets) : cm_fun
     ({ av with value }, avl)
   in
   let destructure_abs (abs : abs) : abs =
-    if not (AbstractionId.Set.mem abs.abs_id fixed_ids.aids) then
+    if not (AbsId.Set.mem abs.abs_id fixed_ids.aids) then
       let avalues = List.map (destructure_avalue abs) abs.avalues in
       let avalues =
         List.flatten (List.map (fun (av, avl) -> av :: avl) avalues)
@@ -687,10 +686,7 @@ let destructure_shared_loans (span : Meta.span) (fixed_ids : ids_sets) : cm_fun
 let loop_match_ctx_with_target (config : config) (span : Meta.span)
     (loop_id : LoopId.id) (fp_input_svalues : SymbolicValueId.id list)
     (fixed_ids : ids_sets) (src_ctx : eval_ctx) (tgt_ctx : eval_ctx) :
-    (eval_ctx
-    * eval_ctx
-    * tvalue SymbolicValueId.Map.t
-    * abs AbstractionId.Map.t)
+    (eval_ctx * eval_ctx * tvalue SymbolicValueId.Map.t * abs AbsId.Map.t)
     * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Debug *)
   [%ltrace
@@ -754,14 +750,13 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
            (tvalue_to_string src_ctx))
         join_info.symbolic_to_value
     ^ "\n- join_info.refreshed_aids: "
-    ^ AbstractionId.Map.to_string None AbstractionId.to_string
-        join_info.refreshed_aids];
+    ^ AbsId.Map.to_string None AbsId.to_string join_info.refreshed_aids];
 
   (* The id of some region abstractions might have been refreshed in the target
      context: we need to register this because otherwise the translation will
      fail. *)
   let cc =
-    if AbstractionId.Map.is_empty join_info.refreshed_aids then cc
+    if AbsId.Map.is_empty join_info.refreshed_aids then cc
     else cc_comp cc (fun e -> SubstituteAbsIds (join_info.refreshed_aids, e))
   in
 
@@ -791,8 +786,8 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
     ^ String.concat "\n"
         (List.map
            (fun (a0, a1, a2) ->
-             "(" ^ AbstractionId.to_string a0 ^ "," ^ AbstractionId.to_string a1
-             ^ ") -> " ^ AbstractionId.to_string a2)
+             "(" ^ AbsId.to_string a0 ^ "," ^ AbsId.to_string a1 ^ ") -> "
+             ^ AbsId.to_string a2)
            merge_seq)];
 
   (* Project the context to only preserve the right part, which corresponds to the
@@ -915,12 +910,11 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
   in
   let input_abs =
     let aid_map =
-      AbstractionId.Map.of_list
-        (AbstractionId.InjSubst.bindings src_to_joined_maps.aid_map)
+      AbsId.Map.of_list (AbsId.InjSubst.bindings src_to_joined_maps.aid_map)
     in
-    AbstractionId.Map.filter_map
+    AbsId.Map.filter_map
       (fun src_id joined_id ->
-        if AbstractionId.Set.mem src_id fixed_ids.aids then None
+        if AbsId.Set.mem src_id fixed_ids.aids then None
         else Some (ctx_lookup_abs joined_ctx joined_id))
       aid_map
   in
@@ -931,9 +925,7 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
         (tvalue_to_string ~span:(Some span) src_ctx)
         input_values
     ^ "\nInput abs:\n"
-    ^ AbstractionId.Map.to_string (Some "  ")
-        (abs_to_string span src_ctx)
-        input_abs];
+    ^ AbsId.Map.to_string (Some "  ") (abs_to_string span src_ctx) input_abs];
 
   (* *)
   Invariants.check_invariants span joined_ctx;
@@ -944,10 +936,7 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
 let loop_match_break_ctx_with_target (config : config) (span : Meta.span)
     (loop_id : LoopId.id) (fp_input_svalues : SymbolicValueId.id list)
     (fixed_ids : ids_sets) (src_ctx : eval_ctx) (tgt_ctx : eval_ctx) :
-    (eval_ctx
-    * eval_ctx
-    * tvalue SymbolicValueId.Map.t
-    * abs AbstractionId.Map.t)
+    (eval_ctx * eval_ctx * tvalue SymbolicValueId.Map.t * abs AbsId.Map.t)
     * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Debug *)
   [%ltrace
@@ -1016,12 +1005,11 @@ let loop_match_break_ctx_with_target (config : config) (span : Meta.span)
       in
       let input_abs =
         let aid_map =
-          AbstractionId.Map.of_list
-            (AbstractionId.InjSubst.bindings src_to_tgt_maps.aid_map)
+          AbsId.Map.of_list (AbsId.InjSubst.bindings src_to_tgt_maps.aid_map)
         in
-        AbstractionId.Map.filter_map
+        AbsId.Map.filter_map
           (fun src_id tgt_id ->
-            if AbstractionId.Set.mem src_id fixed_ids.aids then None
+            if AbsId.Set.mem src_id fixed_ids.aids then None
             else Some (ctx_lookup_abs tgt_ctx tgt_id))
           aid_map
       in
@@ -1032,9 +1020,7 @@ let loop_match_break_ctx_with_target (config : config) (span : Meta.span)
             (tvalue_to_string ~span:(Some span) src_ctx)
             input_values
         ^ "\nInput abs:\n"
-        ^ AbstractionId.Map.to_string (Some "  ")
-            (abs_to_string span src_ctx)
-            input_abs];
+        ^ AbsId.Map.to_string (Some "  ") (abs_to_string span src_ctx) input_abs];
 
       (* We continue with the *break* context *)
       ((src_ctx, tgt_ctx, input_values, input_abs), fun e -> e)

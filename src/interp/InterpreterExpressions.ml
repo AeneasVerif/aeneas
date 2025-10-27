@@ -280,10 +280,10 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
 
               let abs =
                 {
-                  abs_id = fresh_abstraction_id ();
+                  abs_id = fresh_abs_id ();
                   kind = CopySymbolicValue;
                   can_end = true;
-                  parents = AbstractionId.Set.empty;
+                  parents = AbsId.Set.empty;
                   original_parents = [];
                   regions = { owned };
                   avalues = [ sv; updated_sv; copied_sv ];

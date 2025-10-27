@@ -21,9 +21,9 @@ val merge_into_first_abstraction :
   can_end:bool ->
   with_abs_conts:bool ->
   eval_ctx ->
-  abstraction_id ->
-  abstraction_id ->
-  eval_ctx * abstraction_id
+  abs_id ->
+  abs_id ->
+  eval_ctx * abs_id
 
 (** Reduce a context to simplify it, by merging abstractions together for
     instance.
@@ -47,7 +47,7 @@ val merge_into_first_abstraction :
 val reduce_ctx :
   config ->
   Meta.span ->
-  ?sequence:(abstraction_id * abstraction_id * abstraction_id) list ref option ->
+  ?sequence:(abs_id * abs_id * abs_id) list ref option ->
   with_abs_conts:bool ->
   loop_id ->
   ids_sets ->
@@ -74,7 +74,7 @@ val reduce_ctx :
 val collapse_ctx :
   config ->
   Meta.span ->
-  ?sequence:(abstraction_id * abstraction_id * abstraction_id) list ref option ->
+  ?sequence:(abs_id * abs_id * abs_id) list ref option ->
   LoopId.id ->
   ids_sets ->
   with_abs_conts:bool ->
@@ -96,7 +96,7 @@ val collapse_ctx :
     before calling [collapse_ctx_no_markers_following_sequence]. *)
 val collapse_ctx_no_markers_following_sequence :
   Meta.span ->
-  (abstraction_id * abstraction_id * abstraction_id) list ->
+  (abs_id * abs_id * abs_id) list ->
   LoopId.id ->
   ids_sets ->
   with_abs_conts:bool ->

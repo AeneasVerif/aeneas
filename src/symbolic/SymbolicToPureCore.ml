@@ -215,7 +215,7 @@ type bs_ctx = {
           [Some] afterwards. *)
   calls : call_info V.FunCallId.Map.t;
       (** The function calls we encountered so far *)
-  abstractions : (V.abs * texpr list) V.AbstractionId.Map.t;
+  abstractions : (V.abs * texpr list) V.AbsId.Map.t;
       (** The ended abstractions we encountered so far, with their additional
           input arguments. We store it here and not in {!call_info} because we
           need a map from abstraction id to abstraction (and not from call id +
@@ -309,13 +309,13 @@ type bs_ctx = {
           when deconstructing an ended abstraction, to the default value that we
           can use when introducing the otherwise branch of the deconstructing
           match (see [mut_borrow_to_consumed]). *)
-  abs_id_to_fvar : back_fun_info V.AbstractionId.Map.t;
+  abs_id_to_fvar : back_fun_info V.AbsId.Map.t;
       (** For the abstractions output by loops/branchings: this maps the
           abstraction ids to the corresponding variables we introduced in the
           translation, together with additional information.
 
           TODO: use this for all the region abstractions. *)
-  ignored_abs_ids : V.AbstractionId.Set.t;
+  ignored_abs_ids : V.AbsId.Set.t;
       (** For sanity purposes, we keep track of the region abstractions for
           which we did not introduce any variable in the translation: when we
           fail to lookup a region abstraction in [abs_id_to_fvar] we check that
@@ -483,11 +483,8 @@ let bs_ctx_register_backward_call (abs : V.abs) (call_id : V.FunCallId.id)
   let calls = V.FunCallId.Map.add call_id info ctx.calls in
   (* Insert the abstraction in the abstractions map *)
   let abstractions = ctx.abstractions in
-  [%sanity_check] ctx.span
-    (not (V.AbstractionId.Map.mem abs.abs_id abstractions));
-  let abstractions =
-    V.AbstractionId.Map.add abs.abs_id (abs, back_args) abstractions
-  in
+  [%sanity_check] ctx.span (not (V.AbsId.Map.mem abs.abs_id abstractions));
+  let abstractions = V.AbsId.Map.add abs.abs_id (abs, back_args) abstractions in
   (* Compute the expression corresponding to the function.
      We simply lookup the variable introduced for the backward function. *)
   let func = RegionGroupId.Map.find back_id (Option.get info.back_funs) in

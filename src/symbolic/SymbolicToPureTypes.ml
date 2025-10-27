@@ -478,31 +478,29 @@ let type_check_texpr (ctx : bs_ctx) (e : texpr) : unit =
 
 (** List the ancestors of an abstraction *)
 let list_ancestor_abstractions_ids (ctx : bs_ctx) (abs : V.abs)
-    (call_id : V.FunCallId.id) : V.AbstractionId.id list =
+    (call_id : V.FunCallId.id) : V.AbsId.id list =
   (* We could do something more "elegant" without references, but it is
    * so much simpler to use references... *)
-  let abs_set = ref V.AbstractionId.Set.empty in
-  let rec gather (abs_id : V.AbstractionId.id) : unit =
-    if V.AbstractionId.Set.mem abs_id !abs_set then ()
+  let abs_set = ref V.AbsId.Set.empty in
+  let rec gather (abs_id : V.AbsId.id) : unit =
+    if V.AbsId.Set.mem abs_id !abs_set then ()
     else (
-      abs_set := V.AbstractionId.Set.add abs_id !abs_set;
-      let abs, _ = V.AbstractionId.Map.find abs_id ctx.abstractions in
+      abs_set := V.AbsId.Set.add abs_id !abs_set;
+      let abs, _ = V.AbsId.Map.find abs_id ctx.abstractions in
       List.iter gather abs.original_parents)
   in
   List.iter gather abs.original_parents;
   let ids = !abs_set in
   (* List the ancestors, in the proper order *)
   let call_info = V.FunCallId.Map.find call_id ctx.calls in
-  List.filter
-    (fun id -> V.AbstractionId.Set.mem id ids)
-    call_info.forward.abstractions
+  List.filter (fun id -> V.AbsId.Set.mem id ids) call_info.forward.abstractions
 
 (** List the ancestor abstractions of an abstraction introduced because of a
     function call *)
 let list_ancestor_abstractions (ctx : bs_ctx) (abs : V.abs)
     (call_id : V.FunCallId.id) : (V.abs * texpr list) list =
   let abs_ids = list_ancestor_abstractions_ids ctx abs call_id in
-  List.map (fun id -> V.AbstractionId.Map.find id ctx.abstractions) abs_ids
+  List.map (fun id -> V.AbsId.Map.find id ctx.abstractions) abs_ids
 
 (** Small utility. *)
 let compute_raw_fun_effect_info (span : Meta.span option)
@@ -737,7 +735,7 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed (span : span option)
     let ({ A.inputs; output; _ } : A.fun_sig) = sg in
     [%sanity_check_opt_span] span (sg.generics.trait_type_constraints = []);
 
-    let _, fresh_abs_id = V.AbstractionId.fresh_stateful_generator () in
+    let _, fresh_abs_id = V.AbsId.fresh_stateful_generator () in
     let region_gr_id_abs_id_list =
       List.map
         (fun (rg : T.region_var_group) -> (rg.id, fresh_abs_id ()))

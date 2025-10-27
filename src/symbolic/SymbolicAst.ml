@@ -46,7 +46,7 @@ type call = {
           names in the translation. *)
   inst_sg : inst_fun_sig option;
       (** The instantiated function signature, if this is not a unop/binop *)
-  abstractions : AbstractionId.id list;
+  abstractions : AbsId.id list;
       (** The region abstractions introduced upon calling the function *)
   generics : generic_args;
   trait_method_generics : (generic_args * trait_ref_kind) option;
@@ -73,7 +73,7 @@ type emeta =
 type variant_id = VariantId.id [@@deriving show]
 type global_decl_id = GlobalDeclId.id [@@deriving show]
 type 'a symbolic_value_id_map = 'a SymbolicValueId.Map.t [@@deriving show]
-type 'a abs_id_map = 'a AbstractionId.Map.t [@@deriving show]
+type 'a abs_id_map = 'a AbsId.Map.t [@@deriving show]
 type 'a region_group_id_map = 'a RegionGroupId.Map.t [@@deriving show]
 
 (** Ancestor for {!expr} iter visitor.
@@ -110,9 +110,9 @@ class ['self] iter_expr_base =
     method visit_abs_id_map :
         'a. ('env -> 'a -> unit) -> 'env -> 'a abs_id_map -> unit =
       fun f env m ->
-        AbstractionId.Map.iter
+        AbsId.Map.iter
           (fun id x ->
-            self#visit_abstraction_id env id;
+            self#visit_abs_id env id;
             f env x)
           m
 
@@ -138,7 +138,7 @@ type expr =
           to look up the shared values in the context). *)
   | Panic
   | FunCall of call * expr
-  | EndAbstraction of (Contexts.eval_ctx[@opaque]) * abs * expr
+  | EndAbs of (Contexts.eval_ctx[@opaque]) * abs * expr
       (** The context is the evaluation context upon ending the abstraction,
           just after we removed the abstraction from the context.
 
@@ -175,7 +175,7 @@ type expr =
 
           The context is the evaluation context from before introducing the new
           value. It has the same purpose as for the {!Return} case. *)
-  | SubstituteAbsIds of abstraction_id abs_id_map * expr
+  | SubstituteAbsIds of abs_id abs_id_map * expr
       (** We sometimes need to substitute abstraction ids to refresh them (in
           particular when doing joins), which can be a problem especially as
           some abstraction expressions refer to the abstractions through their

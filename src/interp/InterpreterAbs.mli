@@ -224,9 +224,9 @@ val merge_into_first_abstraction :
   with_abs_conts:bool ->
   merge_duplicates_funcs option ->
   eval_ctx ->
-  AbstractionId.id ->
-  AbstractionId.id ->
-  eval_ctx * AbstractionId.id
+  AbsId.id ->
+  AbsId.id ->
+  eval_ctx * AbsId.id
 
 (** Reorder the fresh abstractions, as well as the loans and borrows inside
     them.
@@ -246,8 +246,7 @@ val merge_into_first_abstraction :
       markers don't appear).
     - [old_abs_ids]
     - [eval_ctx] *)
-val reorder_fresh_abs :
-  Meta.span -> bool -> AbstractionId.Set.t -> eval_ctx -> eval_ctx
+val reorder_fresh_abs : Meta.span -> bool -> AbsId.Set.t -> eval_ctx -> eval_ctx
 
 (** Project a context to only preserve the values appearing on the left or the
     values appearing on the right.

@@ -481,8 +481,8 @@ let create_empty_abstractions_from_abs_region_groups
    * - the regions of the ancestors of abs_id
    * - the regions of abs_id
    *)
-  let abs_to_ancestors_regions : RegionId.Set.t AbstractionId.Map.t ref =
-    ref AbstractionId.Map.empty
+  let abs_to_ancestors_regions : RegionId.Set.t AbsId.Map.t ref =
+    ref AbsId.Map.empty
   in
   (* Auxiliary function to create one abstraction *)
   let create_abs (rg_id : RegionGroupId.id) (rg : abs_region_group) : abs =
@@ -490,8 +490,8 @@ let create_empty_abstractions_from_abs_region_groups
     let original_parents = rg.parents in
     let parents =
       List.fold_left
-        (fun s pid -> AbstractionId.Set.add pid s)
-        AbstractionId.Set.empty rg.parents
+        (fun s pid -> AbsId.Set.add pid s)
+        AbsId.Set.empty rg.parents
     in
     let regions =
       let owned = RegionId.Set.of_list rg.regions in
@@ -502,7 +502,7 @@ let create_empty_abstractions_from_abs_region_groups
     in
     let can_end = region_can_end rg_id in
     abs_to_ancestors_regions :=
-      AbstractionId.Map.add abs_id ancestors_regions_union_current_regions
+      AbsId.Map.add abs_id ancestors_regions_union_current_regions
         !abs_to_ancestors_regions;
     (* Create the abstraction *)
     {
@@ -1372,7 +1372,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
           (* Lookup the abstraction *)
           let abs = ctx_lookup_abs ctx abs_id in
           (* Check if it has parents *)
-          AbstractionId.Set.is_empty abs.parents
+          AbsId.Set.is_empty abs.parents
           (* Check if it contains non-ignored loans *)
           && Option.is_none
                (InterpreterBorrowsCore
@@ -1384,7 +1384,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
       (* Update the reference to the list of asbtraction ids, for the recursive calls *)
       abs_ids := with_loans_abs;
       (* End the abstractions which can be ended *)
-      let no_loans_abs = AbstractionId.Set.of_list no_loans_abs in
+      let no_loans_abs = AbsId.Set.of_list no_loans_abs in
       let ctx, cc =
         InterpreterBorrows.end_abstractions config span no_loans_abs ctx
       in

@@ -345,8 +345,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
   let current_abs_id =
     (RegionGroupId.nth inst_sg.abs_regions_hierarchy back_id).id
   in
-  [%ltrace
-    "ending input abstraction: " ^ AbstractionId.to_string current_abs_id];
+  [%ltrace "ending input abstraction: " ^ AbsId.to_string current_abs_id];
 
   let target_abs_ids = List.append parent_input_abs_ids [ current_abs_id ] in
 

@@ -42,7 +42,7 @@ let eliminate_shared_loans (span : Meta.span) (fixed_ids : ids_sets)
     end
   in
   let update_abs (abs : abs) : abs =
-    if not (AbstractionId.Set.mem abs.abs_id fixed_ids.aids) then
+    if not (AbsId.Set.mem abs.abs_id fixed_ids.aids) then
       update_loans#visit_abs () abs
     else abs
   in
@@ -110,13 +110,10 @@ type ctx_with_info = { ctx : eval_ctx; info : abs_borrows_loans_maps }
 let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
     ~(can_end : bool) ~(with_abs_conts : bool)
     (merge_funs : merge_duplicates_funcs option) (ctx : ctx_with_info)
-    (abs_id0 : AbstractionId.id) (abs_id1 : AbstractionId.id) :
-    ctx_with_info * abstraction_id =
+    (abs_id0 : AbsId.id) (abs_id1 : AbsId.id) : ctx_with_info * abs_id =
   [%ldebug
-    "Merging abstraction "
-    ^ AbstractionId.to_string abs_id1
-    ^ " into abstraction "
-    ^ AbstractionId.to_string abs_id0];
+    "Merging abstraction " ^ AbsId.to_string abs_id1 ^ " into abstraction "
+    ^ AbsId.to_string abs_id0];
   (* Compute the new context and the new abstraction id *)
   let nctx, nabs_id =
     merge_into_first_abstraction span abs_kind ~can_end ~with_abs_conts
@@ -182,25 +179,24 @@ let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
        from the merged abstraction.
     *)
     let update_to_abs (key_to_string : M.key -> string)
-        (abs_to : S.t AbstractionId.Map.t) (to_nabs : AbstractionId.Set.t M.t)
-        (to_abs : AbstractionId.Set.t M.t) : AbstractionId.Set.t M.t =
+        (abs_to : S.t AbsId.Map.t) (to_nabs : AbsId.Set.t M.t)
+        (to_abs : AbsId.Set.t M.t) : AbsId.Set.t M.t =
       (* Remove the old bindings from borrow/loan ids to the two region
          abstractions we just merged (because those two region abstractions
          do not exist anymore). *)
-      let abs0_elems = AbstractionId.Map.find abs_id0 abs_to in
-      let abs1_elems = AbstractionId.Map.find abs_id1 abs_to in
+      let abs0_elems = AbsId.Map.find abs_id0 abs_to in
+      let abs1_elems = AbsId.Map.find abs_id1 abs_to in
       let abs01_elems = S.union abs0_elems abs1_elems in
       let to_abs = M.filter (fun id _ -> not (S.mem id abs01_elems)) to_abs in
       (* Add the new bindings from the borrows/loan ids that we find in the
          merged abstraction to this abstraction's id *)
-      let merge (key : M.key) (abs0 : AbstractionId.Set.t)
-          (abs1 : AbstractionId.Set.t) =
+      let merge (key : M.key) (abs0 : AbsId.Set.t) (abs1 : AbsId.Set.t) =
         (* We shouldn't see the same key twice *)
         [%craise] span
           ("Unreachable:\n key: " ^ key_to_string key ^ "\n- abs0: "
-          ^ AbstractionId.Set.to_string None abs0
+          ^ AbsId.Set.to_string None abs0
           ^ "\n- abs1: "
-          ^ AbstractionId.Set.to_string None abs1)
+          ^ AbsId.Set.to_string None abs1)
       in
       M.union merge to_nabs to_abs
   end in
@@ -253,13 +249,9 @@ let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
   *)
   let update_abs_to nabs_to abs_to =
     (* Remove the two region abstractions we merged *)
-    let m =
-      AbstractionId.Map.remove abs_id0 (AbstractionId.Map.remove abs_id1 abs_to)
-    in
+    let m = AbsId.Map.remove abs_id0 (AbsId.Map.remove abs_id1 abs_to) in
     (* Add the merged abstraction *)
-    AbstractionId.Map.add_strict nabs_id
-      (AbstractionId.Map.find nabs_id nabs_to)
-      m
+    AbsId.Map.add_strict nabs_id (AbsId.Map.find nabs_id nabs_to) m
   in
   let abs_to_borrows = update_abs_to nabs_to_borrows abs_to_borrows in
   let abs_to_non_unique_borrows =
@@ -287,7 +279,7 @@ let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
   in
   ({ ctx = nctx; info }, nabs_id)
 
-exception AbsToMerge of abstraction_id * abstraction_id
+exception AbsToMerge of abs_id * abs_id
 
 (** Repeatedly iterate through the borrows/loans in an environment and merge the
     abstractions that have to be merged according to a user-provided policy.
@@ -296,16 +288,15 @@ exception AbsToMerge of abstraction_id * abstraction_id
     merges are pushed at the front). *)
 let repeat_iter_borrows_merge (span : Meta.span) (old_ids : ids_sets)
     (abs_kind : abs_kind) ~(can_end : bool) ~(with_abs_conts : bool)
-    (sequence :
-      (abstraction_id * abstraction_id * abstraction_id) list ref option)
+    (sequence : (abs_id * abs_id * abs_id) list ref option)
     (merge_funs : merge_duplicates_funcs option)
     (iter : ctx_with_info -> ('a -> unit) -> unit)
-    (policy : ctx_with_info -> 'a -> (abstraction_id * abstraction_id) option)
-    (ctx : eval_ctx) : eval_ctx =
+    (policy : ctx_with_info -> 'a -> (abs_id * abs_id) option) (ctx : eval_ctx)
+    : eval_ctx =
   (* Compute the information *)
   let ctx =
-    let is_fresh_abs_id (id : AbstractionId.id) : bool =
-      not (AbstractionId.Set.mem id old_ids.aids)
+    let is_fresh_abs_id (id : AbsId.id) : bool =
+      not (AbsId.Set.mem id old_ids.aids)
     in
     let explore (abs : abs) = is_fresh_abs_id abs.abs_id in
     let info = compute_abs_borrows_loans_maps span explore ctx ctx.env in
@@ -411,8 +402,7 @@ let repeat_iter_borrows_merge (span : Meta.span) (old_ids : ids_sets)
       abs@2 { MB l1 }
     ]} *)
 let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
-    (sequence :
-      (abstraction_id * abstraction_id * abstraction_id) list ref option)
+    (sequence : (abs_id * abs_id * abs_id) list ref option)
     ~(with_abs_conts : bool) (span : Meta.span) (loop_id : LoopId.id)
     (old_ids : ids_sets) (ctx0 : eval_ctx) : eval_ctx =
   (* Debug *)
@@ -473,11 +463,8 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
       (Set : Collections.Set with type elt = Map.key)
       (Marked : sig
         val get_marker : Map.key -> proj_marker
-
-        val get_borrow_to_abs :
-          abs_borrows_loans_maps -> AbstractionId.Set.t Map.t
-
-        val get_to_loans : abs_borrows_loans_maps -> Set.t AbstractionId.Map.t
+        val get_borrow_to_abs : abs_borrows_loans_maps -> AbsId.Set.t Map.t
+        val get_to_loans : abs_borrows_loans_maps -> Set.t AbsId.Map.t
       end) =
   struct
     (* We iterate over the *new* abstractions, then over the **loans**
@@ -486,14 +473,11 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
        We do this because we want to control the order in which abstractions
        are merged (the ids are iterated in increasing order). Otherwise, we
        could simply iterate over all the borrows in [loan_to_abs] for instance... *)
-    let iterate_loans (ctx : ctx_with_info)
-        (merge : abstraction_id * Map.key -> unit) =
+    let iterate_loans (ctx : ctx_with_info) (merge : abs_id * Map.key -> unit) =
       List.iter
         (fun abs_id0 ->
           (* Iterate over the loans *)
-          let lids =
-            AbstractionId.Map.find abs_id0 (Marked.get_to_loans ctx.info)
-          in
+          let lids = AbsId.Map.find abs_id0 (Marked.get_to_loans ctx.info) in
           Set.iter (fun lid -> merge (abs_id0, lid)) lids)
         ctx.info.abs_ids
 
@@ -514,15 +498,12 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
         | None -> (* Nothing to to *) None
         | Some abs_ids1 -> (
             (* We need to merge *)
-            match AbstractionId.Set.elements abs_ids1 with
+            match AbsId.Set.elements abs_ids1 with
             | [] -> None
             | abs_id1 :: _ ->
                 [%ltrace
-                  "merging abstraction "
-                  ^ AbstractionId.to_string abs_id1
-                  ^ " into "
-                  ^ AbstractionId.to_string abs_id0
-                  ^ ":\n\n"
+                  "merging abstraction " ^ AbsId.to_string abs_id1 ^ " into "
+                  ^ AbsId.to_string abs_id0 ^ ":\n\n"
                   ^ eval_ctx_to_string ~span:(Some span) ctx.ctx];
                 Some (abs_id0, abs_id1))
 
@@ -574,9 +555,8 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
 
 (** reduce_ctx can only be called in a context with no markers *)
 let reduce_ctx config (span : Meta.span)
-    ?(sequence :
-        (abstraction_id * abstraction_id * abstraction_id) list ref option =
-      None) ~(with_abs_conts : bool) (loop_id : loop_id) (fixed_ids : ids_sets)
+    ?(sequence : (abs_id * abs_id * abs_id) list ref option = None)
+    ~(with_abs_conts : bool) (loop_id : loop_id) (fixed_ids : ids_sets)
     (ctx : eval_ctx) : eval_ctx =
   (* Simplify the context *)
   let ctx, _ =
@@ -608,8 +588,7 @@ let reduce_ctx config (span : Meta.span)
       abs@2 { MB l0 _, ML l1, ML l2 }
     ]} *)
 let collapse_ctx_collapse (span : Meta.span)
-    (sequence :
-      (abstraction_id * abstraction_id * abstraction_id) list ref option)
+    (sequence : (abs_id * abs_id * abs_id) list ref option)
     (loop_id : LoopId.id) ~(with_abs_conts : bool)
     (merge_funs : merge_duplicates_funcs) (old_ids : ids_sets) (ctx : eval_ctx)
     : eval_ctx =
@@ -648,20 +627,15 @@ let collapse_ctx_collapse (span : Meta.span)
 
         (* Invert a marker *)
         val invert_proj_marker : Map.key -> Map.key
-        val get_to_borrows : abs_borrows_loans_maps -> Set.t AbstractionId.Map.t
-        val get_to_loans : abs_borrows_loans_maps -> Set.t AbstractionId.Map.t
-
-        val get_borrow_to_abs :
-          abs_borrows_loans_maps -> AbstractionId.Set.t Map.t
-
-        val get_loan_to_abs :
-          abs_borrows_loans_maps -> AbstractionId.Set.t Map.t
+        val get_to_borrows : abs_borrows_loans_maps -> Set.t AbsId.Map.t
+        val get_to_loans : abs_borrows_loans_maps -> Set.t AbsId.Map.t
+        val get_borrow_to_abs : abs_borrows_loans_maps -> AbsId.Set.t Map.t
+        val get_loan_to_abs : abs_borrows_loans_maps -> AbsId.Set.t Map.t
       end) =
   struct
     (* The iter function: iterate over the abstractions, and inside an abstraction
        over the borrows (projectors) then the loan (projectors) *)
-    let iter (ctx : ctx_with_info)
-        (f : AbstractionId.id * bool * Map.key -> unit) =
+    let iter (ctx : ctx_with_info) (f : AbsId.id * bool * Map.key -> unit) =
       List.iter
         (fun abs_id0 ->
           (* Small helper *)
@@ -670,7 +644,7 @@ let collapse_ctx_collapse (span : Meta.span)
               if is_borrow then Marked.get_to_borrows ctx.info
               else Marked.get_to_loans ctx.info
             in
-            let ids = AbstractionId.Map.find abs_id0 m in
+            let ids = AbsId.Map.find abs_id0 m in
             Set.iter (fun id -> f (abs_id0, is_borrow, id)) ids
           in
           (* Iterate over the borrows *)
@@ -701,19 +675,18 @@ let collapse_ctx_collapse (span : Meta.span)
        (which shouldn't happen) then there isn't much we can do, and whatever
        the order in which we merge, we will preserve the cycle.
     *)
-    let swap_abs (info : abs_borrows_loans_maps) (abs_id0 : abstraction_id)
-        (abs_id1 : abstraction_id) =
+    let swap_abs (info : abs_borrows_loans_maps) (abs_id0 : abs_id)
+        (abs_id1 : abs_id) =
       let abs0_borrows =
         Set.of_list
           (List.map Marked.unmark
              (Set.elements
-                (AbstractionId.Map.find abs_id0 (Marked.get_to_borrows info))))
+                (AbsId.Map.find abs_id0 (Marked.get_to_borrows info))))
       in
       let abs1_loans =
         Set.of_list
           (List.map Marked.unmark
-             (Set.elements
-                (AbstractionId.Map.find abs_id1 (Marked.get_to_loans info))))
+             (Set.elements (AbsId.Map.find abs_id1 (Marked.get_to_loans info))))
       in
       not (Set.disjoint abs0_borrows abs1_loans)
 
@@ -733,7 +706,7 @@ let collapse_ctx_collapse (span : Meta.span)
         | None -> (* Nothing to do *) None
         | Some abs_ids1 -> (
             (* We need to merge *)
-            match AbstractionId.Set.elements abs_ids1 with
+            match AbsId.Set.elements abs_ids1 with
             | [] -> None
             | abs_id1 :: _ ->
                 (* Check if we need to swap *)
@@ -847,8 +820,7 @@ let eval_ctx_has_markers (ctx : eval_ctx) : bool =
     At the end of the second step, all markers should have been removed from the
     resulting environment. *)
 let collapse_ctx_aux config (span : Meta.span)
-    (sequence :
-      (abstraction_id * abstraction_id * abstraction_id) list ref option)
+    (sequence : (abs_id * abs_id * abs_id) list ref option)
     (loop_id : LoopId.id) ~(with_abs_conts : bool)
     (merge_funs : merge_duplicates_funcs) (old_ids : ids_sets) (ctx0 : eval_ctx)
     : eval_ctx =
@@ -1042,8 +1014,7 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
 
 let merge_into_first_abstraction (span : Meta.span) (loop_id : LoopId.id)
     (abs_kind : abs_kind) ~(can_end : bool) ~(with_abs_conts : bool)
-    (ctx : eval_ctx) (aid0 : AbstractionId.id) (aid1 : AbstractionId.id) :
-    eval_ctx * AbstractionId.id =
+    (ctx : eval_ctx) (aid0 : AbsId.id) (aid1 : AbsId.id) : eval_ctx * AbsId.id =
   let merge_funs =
     mk_collapse_ctx_merge_duplicate_funs span loop_id with_abs_conts ctx
   in
@@ -1051,9 +1022,8 @@ let merge_into_first_abstraction (span : Meta.span) (loop_id : LoopId.id)
     ~with_abs_conts (Some merge_funs) ctx aid0 aid1
 
 let collapse_ctx config (span : Meta.span)
-    ?(sequence :
-        (abstraction_id * abstraction_id * abstraction_id) list ref option =
-      None) (loop_id : LoopId.id) (old_ids : ids_sets) ~(with_abs_conts : bool)
+    ?(sequence : (abs_id * abs_id * abs_id) list ref option = None)
+    (loop_id : LoopId.id) (old_ids : ids_sets) ~(with_abs_conts : bool)
     (ctx : eval_ctx) : eval_ctx =
   [%ldebug "Initial ctx:\n" ^ eval_ctx_to_string ctx];
   let merge_funs =
@@ -1066,21 +1036,20 @@ let collapse_ctx config (span : Meta.span)
 
 (** Collapse a context following a sequence *)
 let collapse_ctx_following_sequence (span : Meta.span)
-    (sequence : (abstraction_id * abstraction_id * abstraction_id) list)
-    (loop_id : LoopId.id) ~(with_abs_conts : bool) (old_ids : ids_sets)
-    (ctx0 : eval_ctx) : eval_ctx =
+    (sequence : (abs_id * abs_id * abs_id) list) (loop_id : LoopId.id)
+    ~(with_abs_conts : bool) (old_ids : ids_sets) (ctx0 : eval_ctx) : eval_ctx =
   [%ltrace
     "- ctx0:\n" ^ eval_ctx_to_string ctx0 ^ "\n- sequence:\n"
     ^ String.concat "\n"
         (List.map
            (fun (a0, a1, a2) ->
-             "(" ^ AbstractionId.to_string a0 ^ "," ^ AbstractionId.to_string a1
-             ^ ") -> " ^ AbstractionId.to_string a2)
+             "(" ^ AbsId.to_string a0 ^ "," ^ AbsId.to_string a1 ^ ") -> "
+             ^ AbsId.to_string a2)
            sequence)];
   let ctx = ref ctx0 in
-  let nabs_map = ref AbstractionId.Map.empty in
-  let get_id (aid : abstraction_id) : abstraction_id =
-    match AbstractionId.Map.find_opt aid !nabs_map with
+  let nabs_map = ref AbsId.Map.empty in
+  let get_id (aid : abs_id) : abs_id =
+    match AbsId.Map.find_opt aid !nabs_map with
     | None -> aid
     | Some aid -> aid
   in
@@ -1096,35 +1065,26 @@ let collapse_ctx_following_sequence (span : Meta.span)
       | Some _, Some _ ->
           (* Merge and register the new id *)
           [%ldebug
-            "Merging: "
-            ^ AbstractionId.to_string abs0
-            ^ " <- "
-            ^ AbstractionId.to_string abs1];
+            "Merging: " ^ AbsId.to_string abs0 ^ " <- " ^ AbsId.to_string abs1];
           let nctx, nabs' =
             InterpreterAbs.merge_into_first_abstraction span abs_kind
               ~can_end:true ~with_abs_conts None !ctx abs0 abs1
           in
           ctx := nctx;
           [%ldebug
-            "Context after merging "
-            ^ AbstractionId.to_string nabs'
-            ^ " := ("
-            ^ AbstractionId.to_string abs0
-            ^ " <- "
-            ^ AbstractionId.to_string abs1
-            ^ "):\n" ^ eval_ctx_to_string !ctx];
-          nabs_map := AbstractionId.Map.add nabs nabs' !nabs_map
+            "Context after merging " ^ AbsId.to_string nabs' ^ " := ("
+            ^ AbsId.to_string abs0 ^ " <- " ^ AbsId.to_string abs1 ^ "):\n"
+            ^ eval_ctx_to_string !ctx];
+          nabs_map := AbsId.Map.add nabs nabs' !nabs_map
       | None, Some abs | Some abs, None ->
           (* We don't have to merge anything, meaning the abstraction resulting
            from the merge is exactly the abstraction we found (what happened is
            that we're in the situation where we had to merge an abstraction
            from one side with another abstracction from the other side). *)
           [%ldebug
-            "Registering: "
-            ^ AbstractionId.to_string nabs
-            ^ " --> "
-            ^ AbstractionId.to_string abs.abs_id];
-          nabs_map := AbstractionId.Map.add nabs abs.abs_id !nabs_map
+            "Registering: " ^ AbsId.to_string nabs ^ " --> "
+            ^ AbsId.to_string abs.abs_id];
+          nabs_map := AbsId.Map.add nabs abs.abs_id !nabs_map
       | None, None ->
           (* The abs, after substitution of its id, should be in one of the two environments *)
           [%internal_error] span)
@@ -1135,9 +1095,8 @@ let collapse_ctx_following_sequence (span : Meta.span)
   ctx
 
 let collapse_ctx_no_markers_following_sequence (span : Meta.span)
-    (sequence : (abstraction_id * abstraction_id * abstraction_id) list)
-    (loop_id : LoopId.id) (old_ids : ids_sets) ~(with_abs_conts : bool)
-    (ctx : eval_ctx) : eval_ctx =
+    (sequence : (abs_id * abs_id * abs_id) list) (loop_id : LoopId.id)
+    (old_ids : ids_sets) ~(with_abs_conts : bool) (ctx : eval_ctx) : eval_ctx =
   try
     collapse_ctx_following_sequence span ~with_abs_conts sequence loop_id
       old_ids ctx

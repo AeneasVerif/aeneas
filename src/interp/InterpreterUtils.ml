@@ -238,7 +238,7 @@ type g_borrow_content = (borrow_content, aborrow_content) concrete_or_abs
 [@@deriving show]
 
 type abs_or_var_id =
-  | AbsId of AbstractionId.id
+  | AbsId of AbsId.id
   | LocalId of LocalId.id
   | DummyVarId of DummyVarId.id
 
@@ -266,7 +266,7 @@ exception FoundAProjBorrows of aproj_borrows
 (** Utility exception *)
 exception FoundAProjLoans of aproj_loans
 
-exception FoundAbsProj of abstraction_id * symbolic_value_id
+exception FoundAbsProj of abs_id * symbolic_value_id
 
 let symbolic_value_id_in_ctx (sv_id : SymbolicValueId.id) (ctx : eval_ctx) :
     bool =
@@ -455,7 +455,7 @@ type unique_borrow_id_set = UniqueBorrowIdSet.t [@@deriving show, ord]
 
 (** See {!compute_tvalue_ids}, {!compute_context_ids}, etc. *)
 type ids_sets = {
-  aids : AbstractionId.Set.t;
+  aids : AbsId.Set.t;
   blids : BorrowId.Set.t;  (** All the borrow/loan ids *)
   borrow_ids : BorrowId.Set.t;  (** Only the borrow ids *)
   unique_borrow_ids : UniqueBorrowIdSet.t;
@@ -486,7 +486,7 @@ let compute_ids () =
   let non_unique_shared_borrow_ids = ref BorrowId.Set.empty in
   let loan_ids = ref BorrowId.Set.empty in
   let shared_loans_to_values = ref BorrowId.Map.empty in
-  let aids = ref AbstractionId.Set.empty in
+  let aids = ref AbsId.Set.empty in
   let dids = ref DummyVarId.Set.empty in
   let rids = ref RegionId.Set.empty in
   let sids = ref SymbolicValueId.Set.empty in
@@ -549,7 +549,7 @@ let compute_ids () =
       method! visit_VReservedMutBorrow _ bid sid = add_shared_borrow bid sid
       method! visit_ASharedBorrow _ _ bid sid = add_shared_borrow bid sid
       method! visit_AsbBorrow _ bid sid = add_shared_borrow bid sid
-      method! visit_abstraction_id _ id = aids := AbstractionId.Set.add id !aids
+      method! visit_abs_id _ id = aids := AbsId.Set.add id !aids
       method! visit_region_id _ id = rids := RegionId.Set.add id !rids
 
       method! visit_symbolic_value env sv =
@@ -648,11 +648,11 @@ let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
   let tr_self = Substitute.trait_ref_kind_erase_regions tr_self in
   (* Generate fresh abstraction ids and create a substitution from region
    * group ids to abstraction ids *)
-  let asubst_map : AbstractionId.id RegionGroupId.Map.t =
+  let asubst_map : AbsId.id RegionGroupId.Map.t =
     RegionGroupId.Map.of_list
-      (List.map (fun rg -> (rg.id, fresh_abstraction_id ())) regions_hierarchy)
+      (List.map (fun rg -> (rg.id, fresh_abs_id ())) regions_hierarchy)
   in
-  let asubst (rg_id : RegionGroupId.id) : AbstractionId.id =
+  let asubst (rg_id : RegionGroupId.id) : AbsId.id =
     RegionGroupId.Map.find rg_id asubst_map
   in
   (* Generate fresh regions *)
@@ -832,11 +832,11 @@ let compute_regions_hierarchy_for_fun_call (span : Meta.span option)
      Remark: the region ids used here are fresh (we generated them
      just above).
   *)
-  let asubst_map : AbstractionId.id RegionGroupId.Map.t =
+  let asubst_map : AbsId.id RegionGroupId.Map.t =
     RegionGroupId.Map.of_list
-      (List.map (fun rg -> (rg.id, fresh_abstraction_id ())) regions_hierarchy)
+      (List.map (fun rg -> (rg.id, fresh_abs_id ())) regions_hierarchy)
   in
-  let asubst (rg_id : RegionGroupId.id) : AbstractionId.id =
+  let asubst (rg_id : RegionGroupId.id) : AbsId.id =
     RegionGroupId.Map.find rg_id asubst_map
   in
   let subst_abs_region_group (rg : region_var_group) : abs_region_group =

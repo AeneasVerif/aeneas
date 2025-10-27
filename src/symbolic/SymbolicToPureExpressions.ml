@@ -190,7 +190,7 @@ let rec translate_expr (e : S.expr) (ctx : bs_ctx) : texpr =
       translate_return ectx opt_v ctx
   | Panic -> translate_panic ctx
   | FunCall (call, e) -> translate_function_call call e ctx
-  | EndAbstraction (ectx, abs, e) -> translate_end_abstraction ectx abs e ctx
+  | EndAbs (ectx, abs, e) -> translate_end_abs ectx abs e ctx
   | EvalGlobal (gid, generics, sv, e) ->
       translate_global_eval gid generics sv e ctx
   | Assertion (ectx, v, e) -> translate_assertion ectx v e ctx
@@ -611,7 +611,7 @@ and translate_cast_unsize (call : S.call) (e : S.expr) (ty0 : T.ty) (ty1 : T.ty)
   let monadic = false in
   [%add_loc] mk_closed_checked_let ctx monadic dest cast_expr next_e
 
-and translate_end_abstraction (ectx : C.eval_ctx) (abs : V.abs) (e : S.expr)
+and translate_end_abs (ectx : C.eval_ctx) (abs : V.abs) (e : S.expr)
     (ctx : bs_ctx) : texpr =
   [%ltrace "abstraction kind: " ^ V.show_abs_kind abs.kind];
   match abs.kind with
@@ -622,7 +622,7 @@ and translate_end_abstraction (ectx : C.eval_ctx) (abs : V.abs) (e : S.expr)
   | V.SynthRet rg_id -> translate_end_abstraction_synth_ret ectx abs e ctx rg_id
   | V.Loop loop_id -> translate_end_abstraction_loop ectx abs e ctx loop_id
   | V.Identity | V.CopySymbolicValue ->
-      translate_end_abstraction_identity ectx abs e ctx
+      translate_end_abs_identity ectx abs e ctx
 
 and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expr) (ctx : bs_ctx) (rg_id : T.RegionGroupId.id) : texpr =
@@ -752,8 +752,8 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
       [%add_loc] mk_closed_checked_let ctx effect_info.can_fail output call
         (next_e ctx)
 
-and translate_end_abstraction_identity (ectx : C.eval_ctx) (abs : V.abs)
-    (e : S.expr) (ctx : bs_ctx) : texpr =
+and translate_end_abs_identity (ectx : C.eval_ctx) (abs : V.abs) (e : S.expr)
+    (ctx : bs_ctx) : texpr =
   (* We simply check that the abstraction only contains shared borrows/loans,
      and translate the next expression *)
 
@@ -850,7 +850,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
   let output = mk_simpl_tuple_pattern outputs in
   (* Lookup the continuation - it might not be there if the backward function
      was filtered, if it consumes nothing and outputs nothing *)
-  let func = V.AbstractionId.Map.find_opt abs.abs_id ctx.abs_id_to_fvar in
+  let func = V.AbsId.Map.find_opt abs.abs_id ctx.abs_id_to_fvar in
   (* Translate the next expression *)
   let next_e ctx = translate_expr e ctx in
   (* Put everything together *)
@@ -865,7 +865,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
   | None ->
       [%ldebug
         "No backward function found for abstraction: "
-        ^ V.AbstractionId.to_string abs.abs_id];
+        ^ V.AbsId.to_string abs.abs_id];
       (* TODO: generalize. We should always translate the continuation expression
          directly.
 
@@ -874,7 +874,7 @@ and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
          converting the shared loan introduced when accessing a global value
          through a reference. *)
       [%sanity_check] span
-        (V.AbstractionId.Set.mem abs.abs_id ctx.ignored_abs_ids
+        (V.AbsId.Set.mem abs.abs_id ctx.ignored_abs_ids
         || (back_inputs = [] && outputs = []));
       next_e ctx
   | Some { fvar = func; can_fail } ->
@@ -1301,10 +1301,10 @@ and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
   let loop_id = V.LoopId.Map.find loop.loop_id ctx.loop_ids_map in
 
   (* Some helpers *)
-  let translate_input_abs (absl : V.abstraction_id list)
-      (abs_to_value : V.abs V.AbstractionId.Map.t) : texpr list =
+  let translate_input_abs (absl : V.abs_id list)
+      (abs_to_value : V.abs V.AbsId.Map.t) : texpr list =
     let input_abs =
-      List.map (fun abs_id -> V.AbstractionId.Map.find abs_id abs_to_value) absl
+      List.map (fun abs_id -> V.AbsId.Map.find abs_id abs_to_value) absl
     in
     List.filter_map (translate_abs_to_cont ctx loop.ctx) input_abs
   in
@@ -1351,9 +1351,8 @@ and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
         in
         {
           ctx with
-          abs_id_to_fvar = V.AbstractionId.Map.add_list fvars ctx.abs_id_to_fvar;
-          ignored_abs_ids =
-            V.AbstractionId.Set.add_list ignored ctx.ignored_abs_ids;
+          abs_id_to_fvar = V.AbsId.Map.add_list fvars ctx.abs_id_to_fvar;
+          ignored_abs_ids = V.AbsId.Set.add_list ignored ctx.ignored_abs_ids;
         }
       in
       (* *)
@@ -1380,7 +1379,7 @@ and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
     "- loop input abstractions:\n "
     ^ String.concat "\n\n"
         (List.map (abs_to_string ctx)
-           (V.AbstractionId.Map.values loop.input_abs_to_abs))
+           (V.AbsId.Map.values loop.input_abs_to_abs))
     ^ "\n\n- loop input values:\n"
     ^ String.concat "\n"
         (List.map (tvalue_to_string ctx)
@@ -1493,44 +1492,42 @@ and translate_continue_break (ctx : bs_ctx) ~(continue : bool)
   let output = mk_simpl_tuple_texpr ctx.span outputs in
   Option.get mk ctx output
 
-and translate_substitute_abs_ids (ctx : bs_ctx)
-    (aids : V.abstraction_id V.AbstractionId.Map.t) (e : S.expr) : texpr =
+and translate_substitute_abs_ids (ctx : bs_ctx) (aids : V.abs_id V.AbsId.Map.t)
+    (e : S.expr) : texpr =
   (* We need to update the information we have in the various maps of the context *)
   let { abstractions; abs_id_to_fvar; ignored_abs_ids; _ } = ctx in
-  let update (aid : V.AbstractionId.id) : V.AbstractionId.id =
-    match V.AbstractionId.Map.find_opt aid aids with
+  let update (aid : V.AbsId.id) : V.AbsId.id =
+    match V.AbsId.Map.find_opt aid aids with
     | Some aid -> aid
     | None -> aid
   in
 
   (* *)
   let abstractions' =
-    V.AbstractionId.Map.of_list
+    V.AbsId.Map.of_list
       ((List.map (fun (aid, x) -> (update aid, x)))
-         (V.AbstractionId.Map.bindings abstractions))
+         (V.AbsId.Map.bindings abstractions))
   in
   (* Check for collisions *)
   [%sanity_check] ctx.span
-    (V.AbstractionId.Map.cardinal abstractions
-    = V.AbstractionId.Map.cardinal abstractions');
+    (V.AbsId.Map.cardinal abstractions = V.AbsId.Map.cardinal abstractions');
 
   (* *)
   let abs_id_to_fvar' =
-    V.AbstractionId.Map.of_list
+    V.AbsId.Map.of_list
       ((List.map (fun (aid, x) -> (update aid, x)))
-         (V.AbstractionId.Map.bindings abs_id_to_fvar))
+         (V.AbsId.Map.bindings abs_id_to_fvar))
   in
   (* Check for collisions *)
   [%sanity_check] ctx.span
-    (V.AbstractionId.Map.cardinal abs_id_to_fvar
-    = V.AbstractionId.Map.cardinal abs_id_to_fvar');
+    (V.AbsId.Map.cardinal abs_id_to_fvar = V.AbsId.Map.cardinal abs_id_to_fvar');
 
   (* *)
-  let ignored_abs_ids' = V.AbstractionId.Set.map update ignored_abs_ids in
+  let ignored_abs_ids' = V.AbsId.Set.map update ignored_abs_ids in
   (* Check for collisions *)
   [%sanity_check] ctx.span
-    (V.AbstractionId.Set.cardinal ignored_abs_ids
-    = V.AbstractionId.Set.cardinal ignored_abs_ids');
+    (V.AbsId.Set.cardinal ignored_abs_ids
+    = V.AbsId.Set.cardinal ignored_abs_ids');
 
   (* Translate the next expression with the updated context *)
   let ctx =

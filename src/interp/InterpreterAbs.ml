@@ -69,10 +69,10 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
                avalues)];
       let abs =
         {
-          abs_id = fresh_abstraction_id ();
+          abs_id = fresh_abs_id ();
           kind = abs_kind;
           can_end;
-          parents = AbstractionId.Set.empty;
+          parents = AbsId.Set.empty;
           original_parents = [];
           regions = { owned = RegionId.Set.singleton r_id };
           avalues;
@@ -1781,11 +1781,11 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind)
   (* Compute the ancestor regions, owned regions, etc.
      Note that one of the two abstractions might a parent of the other *)
   let parents =
-    AbstractionId.Set.diff
-      (AbstractionId.Set.union abs0.parents abs1.parents)
-      (AbstractionId.Set.of_list [ abs0.abs_id; abs1.abs_id ])
+    AbsId.Set.diff
+      (AbsId.Set.union abs0.parents abs1.parents)
+      (AbsId.Set.of_list [ abs0.abs_id; abs1.abs_id ])
   in
-  let original_parents = AbstractionId.Set.elements parents in
+  let original_parents = AbsId.Set.elements parents in
   let regions =
     let owned = RegionId.Set.union abs0.regions.owned abs1.regions.owned in
     { owned }
@@ -1861,7 +1861,7 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind)
   let cont = merge_abs_conts span ctx ~with_abs_conts abs0 abs1 in
 
   (* Create the new abstraction *)
-  let abs_id = fresh_abstraction_id () in
+  let abs_id = fresh_abs_id () in
   let abs =
     {
       abs_id;
@@ -1892,7 +1892,7 @@ let ctx_merge_regions (ctx : eval_ctx) (rid : RegionId.id)
 (** End the shared loans in a given abstraction which do not have corresponding
     shared borrows in the context *)
 let end_endable_shared_loans_at_abs (span : Meta.span) (ctx : eval_ctx)
-    (abs_id : AbstractionId.id) : eval_ctx =
+    (abs_id : AbsId.id) : eval_ctx =
   (* Compute the set of shared borrows appearing in the context *)
   let bids = (fst (compute_ctx_ids ctx)).borrow_ids in
 
@@ -1915,8 +1915,7 @@ let end_endable_shared_loans_at_abs (span : Meta.span) (ctx : eval_ctx)
 let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
     ~(can_end : bool) ~(with_abs_conts : bool)
     (merge_funs : merge_duplicates_funcs option) (ctx : eval_ctx)
-    (abs_id0 : AbstractionId.id) (abs_id1 : AbstractionId.id) :
-    eval_ctx * AbstractionId.id =
+    (abs_id0 : AbsId.id) (abs_id1 : AbsId.id) : eval_ctx * AbsId.id =
   (* Small sanity check *)
   [%sanity_check] span (abs_id0 <> abs_id1);
 
@@ -1967,7 +1966,7 @@ let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
     match/join operations to not be dependent on the order of the borrows/loans.
 *)
 let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
-    (old_abs_ids : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
+    (old_abs_ids : AbsId.Set.t) (ctx : eval_ctx) : eval_ctx =
   let type_infos = ctx.type_ctx.type_infos in
   let reorder_in_fresh_abs (abs : abs) : abs =
     [%ltrace "abs:\n" ^ abs_to_string span ctx abs];
@@ -2143,7 +2142,7 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
        more general.
      *)
     if
-      AbstractionId.Set.mem abs.abs_id old_abs_ids
+      AbsId.Set.mem abs.abs_id old_abs_ids
       || abs_is_fun_call abs || abs_has_adt abs
     then abs
     else reorder_in_fresh_abs abs
@@ -2165,7 +2164,7 @@ module OrderedTypedAvalueList :
   let show_t x = show_tavalue_list x
 end
 
-let reorder_fresh_abs_aux (span : Meta.span) (old_abs_ids : AbstractionId.Set.t)
+let reorder_fresh_abs_aux (span : Meta.span) (old_abs_ids : AbsId.Set.t)
     (ctx : eval_ctx) : eval_ctx =
   (* **WARNING:** remember that the environments store the bindings in *reverse*
      order (the fresh values/abstractions get pushed at the beginning of the list,
@@ -2174,7 +2173,7 @@ let reorder_fresh_abs_aux (span : Meta.span) (old_abs_ids : AbstractionId.Set.t)
   let env, fresh_abs =
     List.partition
       (function
-        | EAbs abs -> AbstractionId.Set.mem abs.abs_id old_abs_ids
+        | EAbs abs -> AbsId.Set.mem abs.abs_id old_abs_ids
         | _ -> true)
       ctx.env
   in
@@ -2201,7 +2200,7 @@ let reorder_fresh_abs_aux (span : Meta.span) (old_abs_ids : AbstractionId.Set.t)
   { ctx with env }
 
 let reorder_fresh_abs (span : Meta.span) (allow_markers : bool)
-    (old_abs_ids : AbstractionId.Set.t) (ctx : eval_ctx) : eval_ctx =
+    (old_abs_ids : AbsId.Set.t) (ctx : eval_ctx) : eval_ctx =
   reorder_loans_borrows_in_fresh_abs span allow_markers old_abs_ids ctx
   |> reorder_fresh_abs_aux span old_abs_ids
 
@@ -2371,7 +2370,7 @@ let project_context (span : Meta.span) (fixed_ids : InterpreterUtils.ids_sets)
   let update_binding (e : env_elem) : env_elem option =
     match e with
     | EAbs abs ->
-        if AbstractionId.Set.mem abs.abs_id fixed_ids.aids then Some e
+        if AbsId.Set.mem abs.abs_id fixed_ids.aids then Some e
         else
           let keep_value (e : tavalue) : bool = not (is_aignored e.value) in
           let avalues = List.filter keep_value abs.avalues in

@@ -79,11 +79,9 @@ let ( region_id_counter,
       fresh_region_id ) =
   RegionId.fresh_marked_stateful_generator ()
 
-let ( abstraction_id_counter,
-      marked_abstraction_ids,
-      marked_abstraction_ids_insert_from_int,
-      fresh_abstraction_id ) =
-  AbstractionId.fresh_marked_stateful_generator ()
+let abs_id_counter, marked_abs_ids, marked_abs_ids_insert_from_int, fresh_abs_id
+    =
+  AbsId.fresh_marked_stateful_generator ()
 
 let ( abs_fvar_id_counter,
       marked_abs_fvar_ids,
@@ -117,7 +115,7 @@ let reset_global_counters () =
   borrow_id_counter := BorrowId.generator_zero;
   shared_borrow_id_counter := SharedBorrowId.generator_zero;
   region_id_counter := RegionId.generator_zero;
-  abstraction_id_counter := AbstractionId.generator_zero;
+  abs_id_counter := AbsId.generator_zero;
   loop_id_counter := LoopId.generator_zero;
   let _ =
     (* We want the loop id to start at 1 *)

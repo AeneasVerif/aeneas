@@ -38,7 +38,7 @@ exception FoundBorrowId of BorrowId.id
 type priority_borrow_or_abs =
   | OuterMutBorrow of borrow_id
   | OuterSharedLoan of borrow_id
-  | OuterAbs of AbstractionId.id
+  | OuterAbs of AbsId.id
   | InnerLoan of loan_id
 [@@deriving show]
 
@@ -61,13 +61,13 @@ type loan_or_borrow_content =
 type borrow_loan_abs_id =
   | BorrowId of unique_borrow_id
   | LoanId of loan_id
-  | AbsId of AbstractionId.id
+  | AbsId of AbsId.id
 
 type borrow_loan_abs_ids = borrow_loan_abs_id list
 
 let borrow_loan_abs_id_to_string (id : borrow_loan_abs_id) : string =
   match id with
-  | AbsId id -> "abs@" ^ AbstractionId.to_string id
+  | AbsId id -> "abs@" ^ AbsId.to_string id
   | BorrowId id -> unique_borrow_id_to_string id
   | LoanId id -> "l@" ^ BorrowId.to_string id
 
@@ -706,7 +706,7 @@ type mut_borrow_or_shared_loan_id =
   | SharedLoan of loan_id  (** Shared loan *)
 
 type outer = {
-  abs_id : AbstractionId.id option;
+  abs_id : AbsId.id option;
   borrow_loan : mut_borrow_or_shared_loan_id option;
 }
 
@@ -807,8 +807,8 @@ let proj_borrows_intersects_proj_loans (span : Meta.span)
     The result contains the ids of the abstractions in which the projectors were
     found, as well as the projection types used in those abstractions. *)
 type looked_up_aproj_borrows =
-  | NonSharedProj of AbstractionId.id * rty
-  | SharedProjs of (AbstractionId.id * rty) list
+  | NonSharedProj of AbsId.id * rty
+  | SharedProjs of (AbsId.id * rty) list
 
 (** Lookup the aproj_borrows (including aproj_shared_borrows) over a symbolic
     value which intersect a given set of regions.
@@ -821,12 +821,12 @@ let lookup_intersecting_aproj_borrows_opt (span : Meta.span)
     (lookup_shared : bool) (regions : RegionId.Set.t) (proj : symbolic_proj)
     (ctx : eval_ctx) : looked_up_aproj_borrows option =
   let found : looked_up_aproj_borrows option ref = ref None in
-  let set_non_shared ((id, ty) : AbstractionId.id * rty) : unit =
+  let set_non_shared ((id, ty) : AbsId.id * rty) : unit =
     match !found with
     | None -> found := Some (NonSharedProj (id, ty))
     | Some _ -> [%craise] span "Unreachable"
   in
-  let add_shared (x : AbstractionId.id * rty) : unit =
+  let add_shared (x : AbsId.id * rty) : unit =
     match !found with
     | None -> found := Some (SharedProjs [ x ])
     | Some (SharedProjs pl) -> found := Some (SharedProjs (x :: pl))
@@ -889,7 +889,7 @@ let lookup_intersecting_aproj_borrows_opt (span : Meta.span)
     this abstraction. *)
 let lookup_intersecting_aproj_borrows_not_shared_opt (span : Meta.span)
     (regions : RegionId.Set.t) (proj : symbolic_proj) (ctx : eval_ctx) :
-    (AbstractionId.id * rty) option =
+    (AbsId.id * rty) option =
   let lookup_shared = false in
   match
     lookup_intersecting_aproj_borrows_opt span lookup_shared regions proj ctx
@@ -1220,7 +1220,7 @@ let update_intersecting_aproj_loans (span : Meta.span)
 
     Sanity check: we check that there is not more than one projector which
     corresponds to the couple (abstraction id, symbolic value). *)
-let lookup_aproj_loans_opt (span : Meta.span) (abs_id : AbstractionId.id)
+let lookup_aproj_loans_opt (span : Meta.span) (abs_id : AbsId.id)
     (sv_id : symbolic_value_id) (ctx : eval_ctx) :
     (aproj_loans * eproj_loans option) option =
   (* Small helpers for sanity checks *)
@@ -1274,7 +1274,7 @@ let lookup_aproj_loans_opt (span : Meta.span) (abs_id : AbstractionId.id)
   | None -> None
   | Some aproj -> Some (aproj, !found_eproj)
 
-let lookup_aproj_loans (span : Meta.span) (abs_id : AbstractionId.id)
+let lookup_aproj_loans (span : Meta.span) (abs_id : AbsId.id)
     (sv_id : symbolic_value_id) (ctx : eval_ctx) :
     aproj_loans * eproj_loans option =
   Option.get (lookup_aproj_loans_opt span abs_id sv_id ctx)
@@ -1288,7 +1288,7 @@ let lookup_aproj_loans (span : Meta.span) (abs_id : AbstractionId.id)
     to the couple (abstraction id, symbolic value).
 
     This function updates abstraction values *and* abstraction expressions. *)
-let update_aproj_loans (span : Meta.span) (abs_id : AbstractionId.id)
+let update_aproj_loans (span : Meta.span) (abs_id : AbsId.id)
     (sv_id : symbolic_value_id) (nproj : aproj) (neproj : eproj option)
     (ctx : eval_ctx) : eval_ctx =
   (* Small helpers for sanity checks *)
@@ -1353,7 +1353,7 @@ let update_aproj_loans (span : Meta.span) (abs_id : AbstractionId.id)
     to the couple (abstraction id, symbolic value).
 
     TODO: factorize with {!update_aproj_loans}? *)
-let update_aproj_borrows (span : Meta.span) (abs_id : AbstractionId.id)
+let update_aproj_borrows (span : Meta.span) (abs_id : AbsId.id)
     (sv : symbolic_value) (nproj : aproj) (neproj : eproj) (ctx : eval_ctx) :
     eval_ctx =
   (* Small helpers for sanity checks *)
@@ -1415,7 +1415,7 @@ let update_aproj_borrows (span : Meta.span) (abs_id : AbstractionId.id)
 
     **Remark:** the loan projector is allowed not to exist in the context
     anymore, in which case this function does nothing. *)
-let update_aproj_loans_to_ended (span : Meta.span) (abs_id : AbstractionId.id)
+let update_aproj_loans_to_ended (span : Meta.span) (abs_id : AbsId.id)
     (sv_id : symbolic_value_id) (ctx : eval_ctx) : eval_ctx =
   (* Lookup the projector of loans *)
   match lookup_aproj_loans_opt span abs_id sv_id ctx with
@@ -1927,14 +1927,13 @@ let refresh_live_regions_in_ty (span : Meta.span) (ctx : eval_ctx) (ty : rty) :
   (!regions, ty)
 
 (** Set a list of abstractions as (non-)endable *)
-let update_endable (ctx : eval_ctx) (abs_ids : abstraction_id list)
-    ~(can_end : bool) : eval_ctx =
-  let abs_ids = AbstractionId.Set.of_list abs_ids in
+let update_endable (ctx : eval_ctx) (abs_ids : abs_id list) ~(can_end : bool) :
+    eval_ctx =
+  let abs_ids = AbsId.Set.of_list abs_ids in
   let update (e : env_elem) : env_elem =
     match e with
     | EAbs abs ->
-        if AbstractionId.Set.mem abs.abs_id abs_ids then
-          EAbs { abs with can_end }
+        if AbsId.Set.mem abs.abs_id abs_ids then EAbs { abs with can_end }
         else EAbs abs
     | _ -> e
   in

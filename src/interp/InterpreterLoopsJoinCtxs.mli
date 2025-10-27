@@ -249,7 +249,7 @@ val loop_match_ctx_with_target :
   ids_sets ->
   eval_ctx ->
   eval_ctx ->
-  (eval_ctx * eval_ctx * tvalue SymbolicValueId.Map.t * abs AbstractionId.Map.t)
+  (eval_ctx * eval_ctx * tvalue SymbolicValueId.Map.t * abs AbsId.Map.t)
   * (SymbolicAst.expr -> SymbolicAst.expr)
 
 val loop_join_break_ctxs :
@@ -263,5 +263,5 @@ val loop_match_break_ctx_with_target :
   ids_sets ->
   eval_ctx ->
   eval_ctx ->
-  (eval_ctx * eval_ctx * tvalue SymbolicValueId.Map.t * abs AbstractionId.Map.t)
+  (eval_ctx * eval_ctx * tvalue SymbolicValueId.Map.t * abs AbsId.Map.t)
   * (SymbolicAst.expr -> SymbolicAst.expr)

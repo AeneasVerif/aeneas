@@ -103,7 +103,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
   let fvars_tys = Pure.FVarId.Map.map (fun (v : Pure.fvar) -> v.ty) fvars in
 
   let calls = FunCallId.Map.empty in
-  let abstractions = AbstractionId.Map.empty in
+  let abstractions = AbsId.Map.empty in
   let recursive_type_decls =
     TypeDeclId.Set.of_list
       (List.filter_map
@@ -187,8 +187,8 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
       mk_break = None;
       mut_borrow_to_consumed = BorrowId.Map.empty;
       var_id_to_default = Pure.FVarId.Map.empty;
-      abs_id_to_fvar = AbstractionId.Map.empty;
-      ignored_abs_ids = AbstractionId.Set.empty;
+      abs_id_to_fvar = AbsId.Map.empty;
+      ignored_abs_ids = AbsId.Set.empty;
       meta_symb_places = SymbolicToPureCore.MetaSymbPlaceSet.empty;
     }
   in

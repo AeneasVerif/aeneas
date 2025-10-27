@@ -30,7 +30,7 @@ let fresh_regions_with_substs_from_vars (region_vars : region_param list)
 
 (** Substitute a function signature, together with the regions hierarchy
     associated to that signature. *)
-let substitute_signature (asubst : RegionGroupId.id -> AbstractionId.id)
+let substitute_signature (asubst : RegionGroupId.id -> AbsId.id)
     (r_id_subst : RegionId.id -> RegionId.id) (ty_sb_subst : TypeVarId.id -> ty)
     (cg_sb_subst : ConstGenericVarId.id -> const_generic)
     (tr_sb_subst : TraitClauseId.id -> trait_ref_kind)
@@ -80,7 +80,7 @@ type id_subst = {
   ssubst : SymbolicValueId.id -> SymbolicValueId.id;
   bsubst : BorrowId.id -> BorrowId.id;
   sbsubst : SharedBorrowId.id -> SharedBorrowId.id;
-  asubst : AbstractionId.id -> AbstractionId.id;
+  asubst : AbsId.id -> AbsId.id;
 }
 
 let empty_id_subst =
@@ -115,7 +115,7 @@ let subst_ids_visitor (subst : id_subst) =
     (** We *do* visit meta-values *)
     method! visit_mvalue env v = self#visit_tvalue env v
 
-    method! visit_abstraction_id _ id = subst.asubst id
+    method! visit_abs_id _ id = subst.asubst id
   end
 
 let tvalue_subst_ids (subst : id_subst) (v : tvalue) : tvalue =

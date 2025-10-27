@@ -298,13 +298,13 @@ let env_find_abs (env : env) (pred : abs -> bool) : abs option =
   in
   lookup env
 
-let env_lookup_abs_opt (env : env) (abs_id : AbstractionId.id) : abs option =
+let env_lookup_abs_opt (env : env) (abs_id : AbsId.id) : abs option =
   env_find_abs env (fun abs -> abs.abs_id = abs_id)
 
 (** Remove an abstraction from the context, as well as all the references to
     this abstraction (for instance, remove the abs id from all the parent sets
     of all the other abstractions). *)
-let env_remove_abs (span : Meta.span) (env : env) (abs_id : AbstractionId.id) :
+let env_remove_abs (span : Meta.span) (env : env) (abs_id : AbsId.id) :
     env * abs option =
   let rec remove (env : env) : env * abs option =
     match env with
@@ -318,7 +318,7 @@ let env_remove_abs (span : Meta.span) (env : env) (abs_id : AbstractionId.id) :
         else
           let env, abs_opt = remove env in
           (* Update the parents set *)
-          let parents = AbstractionId.Set.remove abs_id abs.parents in
+          let parents = AbsId.Set.remove abs_id abs.parents in
           (EAbs { abs with parents } :: env, abs_opt)
   in
   remove env
@@ -329,7 +329,7 @@ let env_remove_abs (span : Meta.span) (env : env) (abs_id : AbstractionId.id) :
     different abstraction which **doesn't necessarily have the same id**.
     Because of this, we also substitute the abstraction id wherever it is used
     (i.e., in the parent sets of the other abstractions). *)
-let env_subst_abs (span : Meta.span) (env : env) (abs_id : AbstractionId.id)
+let env_subst_abs (span : Meta.span) (env : env) (abs_id : AbsId.id)
     (nabs : abs) : env * abs option =
   let rec update (env : env) : env * abs option =
     match env with
@@ -345,39 +345,38 @@ let env_subst_abs (span : Meta.span) (env : env) (abs_id : AbstractionId.id)
           (* Update the parents set *)
           let parents = abs.parents in
           let parents =
-            if AbstractionId.Set.mem abs_id parents then
-              let parents = AbstractionId.Set.remove abs_id parents in
-              AbstractionId.Set.add nabs.abs_id parents
+            if AbsId.Set.mem abs_id parents then
+              let parents = AbsId.Set.remove abs_id parents in
+              AbsId.Set.add nabs.abs_id parents
             else parents
           in
           (EAbs { abs with parents } :: env, opt_abs)
   in
   update env
 
-let ctx_lookup_abs_opt (ctx : eval_ctx) (abs_id : AbstractionId.id) : abs option
-    =
+let ctx_lookup_abs_opt (ctx : eval_ctx) (abs_id : AbsId.id) : abs option =
   env_lookup_abs_opt ctx.env abs_id
 
-let ctx_lookup_abs (ctx : eval_ctx) (abs_id : AbstractionId.id) : abs =
+let ctx_lookup_abs (ctx : eval_ctx) (abs_id : AbsId.id) : abs =
   Option.get (ctx_lookup_abs_opt ctx abs_id)
 
 let ctx_find_abs (ctx : eval_ctx) (p : abs -> bool) : abs option =
   env_find_abs ctx.env p
 
 (** See the comments for {!env_remove_abs} *)
-let ctx_remove_abs (span : Meta.span) (ctx : eval_ctx)
-    (abs_id : AbstractionId.id) : eval_ctx * abs option =
+let ctx_remove_abs (span : Meta.span) (ctx : eval_ctx) (abs_id : AbsId.id) :
+    eval_ctx * abs option =
   let env, abs = env_remove_abs span ctx.env abs_id in
   ({ ctx with env }, abs)
 
 (** See the comments for {!env_subst_abs} *)
-let ctx_subst_abs (span : Meta.span) (ctx : eval_ctx)
-    (abs_id : AbstractionId.id) (nabs : abs) : eval_ctx * abs option =
+let ctx_subst_abs (span : Meta.span) (ctx : eval_ctx) (abs_id : AbsId.id)
+    (nabs : abs) : eval_ctx * abs option =
   let env, abs_opt = env_subst_abs span ctx.env abs_id nabs in
   ({ ctx with env }, abs_opt)
 
-let ctx_set_abs_can_end (span : Meta.span) (ctx : eval_ctx)
-    (abs_id : AbstractionId.id) (can_end : bool) : eval_ctx =
+let ctx_set_abs_can_end (span : Meta.span) (ctx : eval_ctx) (abs_id : AbsId.id)
+    (can_end : bool) : eval_ctx =
   let abs = ctx_lookup_abs ctx abs_id in
   let abs = { abs with can_end } in
   fst (ctx_subst_abs span ctx abs_id abs)

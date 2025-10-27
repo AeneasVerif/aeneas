@@ -78,10 +78,7 @@ let eval_loop_concrete (span : Meta.span) (eval_loop_body : stl_cm_fun) :
 let eval_loop_symbolic_apply_loop (config : config) (span : span)
     (loop_id : LoopId.id) (init_ctx : eval_ctx) (fixed_ids : ids_sets)
     (fp_ctx : eval_ctx) (fp_input_svalues : SymbolicValueId.id list) :
-    (eval_ctx
-    * eval_ctx
-    * tvalue SymbolicValueId.Map.t
-    * abs AbstractionId.Map.t)
+    (eval_ctx * eval_ctx * tvalue SymbolicValueId.Map.t * abs AbsId.Map.t)
     * (SymbolicAst.expr -> SymbolicAst.expr) =
   [%ltrace
     "about to reorganize the original context to match the fixed-point ctx \
@@ -123,9 +120,9 @@ let eval_loop_symbolic_apply_loop (config : config) (span : span)
     Synthesize the body of the loop. *)
 let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
     (eval_loop_body : stl_cm_fun) (loop_id : LoopId.id) (fixed_ids : ids_sets)
-    (fp_ctx : eval_ctx) (fp_input_abs : AbstractionId.id list)
+    (fp_ctx : eval_ctx) (fp_input_abs : AbsId.id list)
     (fp_input_svalues : SymbolicValueId.id list) (break_ctx : eval_ctx)
-    (break_input_abs : AbstractionId.id list)
+    (break_input_abs : AbsId.id list)
     (break_input_svalues : SymbolicValueId.id list) : SA.expr =
   [%ldebug "fp_ctx:\n" ^ eval_ctx_to_string fp_ctx];
 
@@ -137,9 +134,9 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
   let ctx_resl, cf_loop = comp cc (eval_loop_body fp_ctx) in
 
   (* Small helpers *)
-  let reorder_input_abs (map : abs AbstractionId.Map.t)
-      (absl : abstraction_id list) : abs list =
-    List.map (fun id -> AbstractionId.Map.find id map) absl
+  let reorder_input_abs (map : abs AbsId.Map.t) (absl : abs_id list) : abs list
+      =
+    List.map (fun id -> AbsId.Map.find id map) absl
   in
   let reorder_input_values (map : tvalue SymbolicValueId.Map.t)
       (values : symbolic_value_id list) : tvalue list =
@@ -177,11 +174,11 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
           ^ "\n\n-tgt ctx (ctx at this break):\n"
           ^ eval_ctx_to_string ~span:(Some span) ctx
           ^ "\n\n-input_abs:\n"
-          ^ AbstractionId.Map.to_string None
-              (fun abs -> AbstractionId.to_string abs.abs_id)
+          ^ AbsId.Map.to_string None
+              (fun abs -> AbsId.to_string abs.abs_id)
               input_abs
           ^ "\n\n-break_input_abs:\n"
-          ^ Print.list_to_string AbstractionId.to_string break_input_abs];
+          ^ Print.list_to_string AbsId.to_string break_input_abs];
         let input_values =
           reorder_input_values input_values break_input_svalues
         in
@@ -315,7 +312,7 @@ let eval_loop_symbolic (config : config) (span : span)
     ^ "\n- fresh_sids: "
     ^ SymbolicValueId.Set.show fresh_sids
     ^ "\n- fp_input_abs: "
-    ^ Print.list_to_string AbstractionId.to_string input_abs_ids_list
+    ^ Print.list_to_string AbsId.to_string input_abs_ids_list
     ^ "\n- fp_input_svalues: "
     ^ Print.list_to_string (symbolic_value_to_string ctx) fp_input_svalues
     ^ "\n\n- break ctx:\n"
@@ -357,7 +354,7 @@ let eval_loop (config : config) (span : span) (eval_loop_body : stl_cm_fun) :
          rid of the useless symbolic values (which are in anonymous variables) *)
       let ctx, cc =
         InterpreterBorrows.simplify_dummy_values_useless_abs config span
-          AbstractionId.Set.empty ctx
+          AbsId.Set.empty ctx
       in
 
       (* We want to make sure the loop will *not* manipulate shared avalues

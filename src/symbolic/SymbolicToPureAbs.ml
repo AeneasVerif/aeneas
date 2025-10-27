@@ -671,12 +671,10 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
           | V.ELoop (abs_id, _lid) ->
               (* Lookup the variable introduced for the backward function *)
               let e, can_fail =
-                match
-                  V.AbstractionId.Map.find_opt abs_id ctx.abs_id_to_fvar
-                with
+                match V.AbsId.Map.find_opt abs_id ctx.abs_id_to_fvar with
                 | None ->
                     [%sanity_check] span
-                      (V.AbstractionId.Set.mem abs_id ctx.ignored_abs_ids);
+                      (V.AbsId.Set.mem abs_id ctx.ignored_abs_ids);
                     (None, false)
                 | Some { fvar; can_fail } ->
                     (Some ([%add_loc] mk_apps span fvar args), can_fail)

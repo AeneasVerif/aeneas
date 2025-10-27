@@ -110,7 +110,7 @@ let synthesize_symbolic_expansion_no_branching (span : Meta.span)
 
 let synthesize_function_call (span : Meta.span) (call_id : call_id)
     (ctx : Contexts.eval_ctx) (sg : (fun_sig * inst_fun_sig) option)
-    (abstractions : AbstractionId.id list) (generics : generic_args)
+    (abstractions : AbsId.id list) (generics : generic_args)
     (trait_method_generics : (generic_args * trait_ref_kind) option)
     (args : tvalue list) (args_places : mplace option list)
     (dest : symbolic_value) (dest_place : mplace option) (e : expr) : expr =
@@ -143,7 +143,7 @@ let synthesize_global_eval (gref : global_decl_ref) (dest : symbolic_value)
 
 let synthesize_regular_function_call (span : Meta.span) (fun_id : fn_ptr_kind)
     (call_id : FunCallId.id) (ctx : Contexts.eval_ctx) (sg : fun_sig)
-    (inst_sg : inst_fun_sig) (abstractions : AbstractionId.id list)
+    (inst_sg : inst_fun_sig) (abstractions : AbsId.id list)
     (generics : generic_args)
     (trait_method_generics : (generic_args * trait_ref_kind) option)
     (args : tvalue list) (args_places : mplace option list)
@@ -172,7 +172,7 @@ let synthesize_binary_op (span : Meta.span) (ctx : Contexts.eval_ctx)
 
 let synthesize_end_abstraction (ctx : Contexts.eval_ctx) (abs : abs) (e : expr)
     : expr =
-  EndAbstraction (ctx, abs, e)
+  EndAbs (ctx, abs, e)
 
 let synthesize_assignment (ctx : Contexts.eval_ctx) (lplace : mplace)
     (rvalue : tvalue) (rplace : mplace option) (e : expr) : expr =
