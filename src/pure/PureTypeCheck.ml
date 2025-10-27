@@ -90,9 +90,9 @@ let texpr_to_string (ctx : tc_ctx) (e : texpr) : string =
   let fmt = PrintPure.decls_ctx_to_fmt_env ctx.decls_ctx in
   PrintPure.texpr_to_string fmt false "" "  " e
 
-let tpattern_to_string (ctx : tc_ctx) (x : tpattern) : string =
+let tpat_to_string (ctx : tc_ctx) (x : tpat) : string =
   let fmt = PrintPure.decls_ctx_to_fmt_env ctx.decls_ctx in
-  PrintPure.tpattern_to_string fmt x
+  PrintPure.tpat_to_string fmt x
 
 let ty_to_string (ctx : tc_ctx) (x : ty) : string =
   let fmt = PrintPure.decls_ctx_to_fmt_env ctx.decls_ctx in
@@ -125,9 +125,8 @@ let tc_ctx_push_bvar (ctx : tc_ctx) (v : var) : tc_ctx =
   let pbenv = BVarId.Map.add id v.ty (Option.get ctx.pbenv) in
   { ctx with pbenv = Some pbenv; bvar_counter = counter }
 
-let rec check_tpattern_aux (span : Meta.span) (ctx : tc_ctx) (v : tpattern) :
-    tc_ctx =
-  [%ltrace tpattern_to_string ctx v];
+let rec check_tpat_aux (span : Meta.span) (ctx : tc_ctx) (v : tpat) : tc_ctx =
+  [%ltrace tpat_to_string ctx v];
   match v.pat with
   | PConstant cv ->
       check_literal span cv (ty_as_literal span v.ty);
@@ -145,13 +144,13 @@ let rec check_tpattern_aux (span : Meta.span) (ctx : tc_ctx) (v : tpattern) :
       let field_tys =
         get_adt_field_types span ctx.type_decls type_id av.variant_id generics
       in
-      let check_value (ctx : tc_ctx) (ty : ty) (v : tpattern) : tc_ctx =
+      let check_value (ctx : tc_ctx) (ty : ty) (v : tpat) : tc_ctx =
         if ty <> v.ty then
           (* TODO: we need to normalize the types *)
           [%craise] span
             ("Inconsistent types:" ^ "\n- ty: " ^ show_ty ty ^ "\n- v.ty: "
            ^ show_ty v.ty);
-        check_tpattern_aux span ctx v
+        check_tpat_aux span ctx v
       in
       (* Check the field types: check that the field patterns have the expected
        * types, and check that the field patterns themselves are well-typed *)
@@ -160,8 +159,8 @@ let rec check_tpattern_aux (span : Meta.span) (ctx : tc_ctx) (v : tpattern) :
         ctx
         (List.combine field_tys av.fields)
 
-let check_tpattern (span : Meta.span) (ctx : tc_ctx) (v : tpattern) : tc_ctx =
-  tc_ctx_push_pbenv (check_tpattern_aux span (tc_ctx_start_pbenv ctx) v)
+let check_tpat (span : Meta.span) (ctx : tc_ctx) (v : tpat) : tc_ctx =
+  tc_ctx_push_pbenv (check_tpat_aux span (tc_ctx_start_pbenv ctx) v)
 
 let rec check_texpr (span : Meta.span) (ctx : tc_ctx) (e : texpr) : unit =
   [%ltrace texpr_to_string ctx e];
@@ -194,7 +193,7 @@ let rec check_texpr (span : Meta.span) (ctx : tc_ctx) (e : texpr) : unit =
       [%pure_type_check] span (pat.ty = pat_ty);
       [%pure_type_check] span (body.ty = body_ty);
       (* Check the pattern and register the introduced variables at the same time *)
-      let ctx = check_tpattern span ctx pat in
+      let ctx = check_tpat span ctx pat in
       check_texpr span ctx body
   | Qualif qualif -> (
       match qualif.id with
@@ -242,7 +241,7 @@ let rec check_texpr (span : Meta.span) (ctx : tc_ctx) (e : texpr) : unit =
       (* Check the right-expression *)
       check_texpr span ctx re;
       (* Check the pattern and register the introduced variables at the same time *)
-      let ctx = check_tpattern span ctx pat in
+      let ctx = check_tpat span ctx pat in
       (* Check the next expression *)
       check_texpr span ctx e_next
   | Switch (scrut, switch_body) -> (
@@ -257,7 +256,7 @@ let rec check_texpr (span : Meta.span) (ctx : tc_ctx) (e : texpr) : unit =
       | Match branches ->
           let check_branch (br : match_branch) : unit =
             [%pure_type_check] span (br.pat.ty = scrut.ty);
-            let ctx = check_tpattern span ctx br.pat in
+            let ctx = check_tpat span ctx br.pat in
             check_texpr span ctx br.branch
           in
           List.iter check_branch branches)

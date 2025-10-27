@@ -119,25 +119,25 @@ class ['self] scoped_iter_expr =
           List.iter
             (fun (b : match_branch) ->
               let { pat; branch } = b in
-              self#visit_tpattern scope pat;
+              self#visit_tpat scope pat;
               self#visit_texpr scope' branch)
             branches
 
     method! visit_Let scope _ pat bound next =
       let scope' = scope + 1 in
-      self#visit_tpattern scope pat;
+      self#visit_tpat scope pat;
       self#visit_texpr scope bound;
       self#visit_texpr scope' next
 
     method! visit_Lambda scope pat body =
       let scope' = scope + 1 in
-      self#visit_tpattern scope pat;
+      self#visit_tpat scope pat;
       self#visit_texpr scope' body
 
     method! visit_loop_body scope body =
       let { inputs; loop_body } = body in
       (* Visit the patterns *)
-      List.iter (self#visit_tpattern scope) inputs;
+      List.iter (self#visit_tpat scope) inputs;
       (* Enter the inner expression *)
       let scope' = scope + 1 in
       self#visit_texpr scope' loop_body
@@ -160,7 +160,7 @@ class ['self] scoped_map_expr =
               (List.map
                  (fun (b : match_branch) ->
                    let { pat; branch } = b in
-                   let pat = self#visit_tpattern scope pat in
+                   let pat = self#visit_tpat scope pat in
                    let branch = self#visit_texpr (scope + 1) branch in
                    { pat; branch })
                  branches)
@@ -169,21 +169,21 @@ class ['self] scoped_map_expr =
 
     method! visit_Let scope monadic pat bound next =
       let scope' = scope + 1 in
-      let pat = self#visit_tpattern scope pat in
+      let pat = self#visit_tpat scope pat in
       let bound = self#visit_texpr scope bound in
       let next = self#visit_texpr scope' next in
       Let (monadic, pat, bound, next)
 
     method! visit_Lambda scope pat body =
       let scope' = scope + 1 in
-      let pat = self#visit_tpattern scope pat in
+      let pat = self#visit_tpat scope pat in
       let body = self#visit_texpr scope' body in
       Lambda (pat, body)
 
     method! visit_loop_body scope body =
       let { inputs; loop_body } = body in
       (* Visit the patterns *)
-      let inputs = List.map (self#visit_tpattern scope) inputs in
+      let inputs = List.map (self#visit_tpat scope) inputs in
       (* Enter the inner expression *)
       let scope' = scope + 1 in
       let loop_body = self#visit_texpr scope' loop_body in
@@ -232,7 +232,7 @@ let compute_literal_type (cv : literal) : literal_type =
 
 let fvar_get_id (v : fvar) : fvar_id = v.id
 
-let mk_tpattern_from_literal (cv : literal) : tpattern =
+let mk_tpat_from_literal (cv : literal) : tpat =
   let ty = TLiteral (compute_literal_type cv) in
   { pat = PConstant cv; ty }
 
@@ -412,60 +412,60 @@ let is_cvar (e : texpr) : bool =
   | CVar _ -> true
   | _ -> false
 
-let is_pat_open (p : tpattern) : bool =
+let is_pat_open (p : tpat) : bool =
   match p.pat with
   | POpen _ -> true
   | _ -> false
 
-let as_pat_open file line span (p : tpattern) : fvar * mplace option =
+let as_pat_open file line span (p : tpat) : fvar * mplace option =
   match p.pat with
   | POpen (v, pm) -> (v, pm)
   | _ -> Errors.craise file line span "Not an open binder"
 
-let as_pat_open_fvar_id file line span (p : tpattern) : fvar_id =
+let as_pat_open_fvar_id file line span (p : tpat) : fvar_id =
   (fst (as_pat_open file line span p)).id
 
-let as_opt_pat_bound (p : tpattern) : (var * mplace option) option =
+let as_opt_pat_bound (p : tpat) : (var * mplace option) option =
   match p.pat with
   | PBound (v, mp) -> Some (v, mp)
   | _ -> None
 
-let as_pat_bound (span : Meta.span) (p : tpattern) : var * mplace option =
+let as_pat_bound (span : Meta.span) (p : tpat) : var * mplace option =
   match as_opt_pat_bound p with
   | None -> [%craise] span "Not a var"
   | Some (v, mp) -> (v, mp)
 
-let is_pat_bound (p : tpattern) : bool = Option.is_some (as_opt_pat_bound p)
+let is_pat_bound (p : tpat) : bool = Option.is_some (as_opt_pat_bound p)
 
-let as_opt_pat_tuple (p : tpattern) : tpattern list option =
+let as_opt_pat_tuple (p : tpat) : tpat list option =
   match p with
   | { pat = PAdt { variant_id = None; fields }; ty = TAdt (TTuple, _) } ->
       Some fields
   | _ -> None
 
-let as_pat_tuple file line span (p : tpattern) : tpattern list =
+let as_pat_tuple file line span (p : tpat) : tpat list =
   match as_opt_pat_tuple p with
   | Some fields -> fields
   | None -> Errors.craise file line span "Not a tuple"
 
 (** Replace all the ignored variables in a pattern with free variables *)
-let tpattern_replace_ignored_vars_with_free_vars
-    (fresh_fvar_id : unit -> fvar_id) (p : tpattern) : tpattern =
+let tpat_replace_ignored_vars_with_free_vars (fresh_fvar_id : unit -> fvar_id)
+    (p : tpat) : tpat =
   let visitor =
     object
-      inherit [_] map_tpattern as super
+      inherit [_] map_tpat as super
 
-      method! visit_tpattern env p =
+      method! visit_tpat env p =
         match p.pat with
         | PIgnored ->
             let pat = { id = fresh_fvar_id (); basename = None; ty = p.ty } in
             { p with pat = POpen (pat, None) }
-        | _ -> super#visit_tpattern env p
+        | _ -> super#visit_tpat env p
     end
   in
-  visitor#visit_tpattern () p
+  visitor#visit_tpat () p
 
-let is_pat_tuple (p : tpattern) : bool = Option.is_some (as_opt_pat_tuple p)
+let is_pat_tuple (p : tpat) : bool = Option.is_some (as_opt_pat_tuple p)
 
 let is_global (e : texpr) : bool =
   match e.e with
@@ -685,8 +685,7 @@ let try_destruct_tuple span ty =
   | None -> [ ty ]
   | Some tys -> tys
 
-let opt_destruct_tuple_tpattern (span : Meta.span) (e : tpattern) :
-    tpattern list option =
+let opt_destruct_tuple_tpat (span : Meta.span) (e : tpat) : tpat list option =
   match e.ty with
   | TAdt (TTuple, generics) ->
       [%sanity_check] span (generics.const_generics = []);
@@ -698,8 +697,8 @@ let opt_destruct_tuple_tpattern (span : Meta.span) (e : tpattern) :
       end
   | _ -> None
 
-let try_destruct_tuple_tpattern span e =
-  match opt_destruct_tuple_tpattern span e with
+let try_destruct_tuple_tpat span e =
+  match opt_destruct_tuple_tpat span e with
   | None -> [ e ]
   | Some fields -> fields
 
@@ -709,7 +708,7 @@ let try_destruct_tuple_tpattern span e =
     have a special case for the ignored pattern, if its type is a tuple: we
     decompose it into a tuple of dummies, and thus return a list of ignored
     patterns. *)
-let try_destruct_tuple_or_ignored_tpattern span (e : tpattern) =
+let try_destruct_tuple_or_ignored_tpat span (e : tpat) =
   match e.ty with
   | TAdt (TTuple, generics) ->
       [%sanity_check] span (generics.const_generics = []);
@@ -718,14 +717,12 @@ let try_destruct_tuple_or_ignored_tpattern span (e : tpattern) =
         match e.pat with
         | PAdt { fields; _ } -> fields
         | PIgnored ->
-            List.map
-              (fun ty -> ({ pat = PIgnored; ty } : tpattern))
-              generics.types
+            List.map (fun ty -> ({ pat = PIgnored; ty } : tpat)) generics.types
         | _ -> [%internal_error] span
       end
   | _ -> [ e ]
 
-let try_destruct_tuple_or_ignored_or_open_tpattern span (e : tpattern) =
+let try_destruct_tuple_or_ignored_or_open_tpat span (e : tpat) =
   match e.ty with
   | TAdt (TTuple, generics) ->
       [%sanity_check] span (generics.const_generics = []);
@@ -734,9 +731,7 @@ let try_destruct_tuple_or_ignored_or_open_tpattern span (e : tpattern) =
         match e.pat with
         | PAdt { fields; _ } -> fields
         | PIgnored ->
-            List.map
-              (fun ty -> ({ pat = PIgnored; ty } : tpattern))
-              generics.types
+            List.map (fun ty -> ({ pat = PIgnored; ty } : tpat)) generics.types
         | POpen _ -> [ e ]
         | _ -> [%internal_error] span
       end
@@ -808,16 +803,16 @@ let mk_texpr_from_fvar (v : fvar) : texpr =
   let ty = v.ty in
   { e; ty }
 
-let mk_tpattern_from_fvar (mp : mplace option) (v : fvar) : tpattern =
+let mk_tpat_from_fvar (mp : mplace option) (v : fvar) : tpat =
   let pat = POpen (v, mp) in
   let ty = v.ty in
   { pat; ty }
 
-let mk_ignored_pattern (ty : ty) : tpattern =
+let mk_ignored_pat (ty : ty) : tpat =
   let pat = PIgnored in
   { pat; ty }
 
-let is_ignored_pattern (p : tpattern) : bool =
+let is_ignored_pat (p : tpat) : bool =
   match p.pat with
   | PIgnored -> true
   | _ -> false
@@ -847,16 +842,16 @@ let mk_switch file line span (scrut : texpr) (body : switch_body) : texpr =
 (** Make a "simplified" tuple value from a list of values:
     - if there is exactly one value, just return it
     - if there is > one value: wrap them in a tuple *)
-let mk_simpl_tuple_pattern (vl : tpattern list) : tpattern =
+let mk_simpl_tuple_pat (vl : tpat list) : tpat =
   match vl with
   | [ v ] -> v
   | _ ->
-      let tys = List.map (fun (v : tpattern) -> v.ty) vl in
+      let tys = List.map (fun (v : tpat) -> v.ty) vl in
       let ty = TAdt (TTuple, mk_generic_args_from_types tys) in
       let pat = PAdt { variant_id = None; fields = vl } in
       { pat; ty }
 
-(** Similar to {!mk_simpl_tuple_pattern} *)
+(** Similar to {!mk_simpl_tuple_pat} *)
 let mk_simpl_tuple_texpr (span : Meta.span) (vl : texpr list) : texpr =
   match vl with
   | [ v ] -> v
@@ -872,8 +867,8 @@ let mk_simpl_tuple_texpr (span : Meta.span) (vl : texpr list) : texpr =
       let cons = { e = Qualif qualif; ty } in
       [%add_loc] mk_apps span cons vl
 
-let mk_adt_pattern (adt_ty : ty) (variant_id : VariantId.id option)
-    (vl : tpattern list) : tpattern =
+let mk_adt_pat (adt_ty : ty) (variant_id : VariantId.id option) (vl : tpat list)
+    : tpat =
   let pat = PAdt { variant_id; fields = vl } in
   { pat; ty = adt_ty }
 
@@ -982,18 +977,18 @@ let mk_result_ok_texpr (span : Meta.span) (v : texpr) : texpr =
   [%add_loc] mk_app span cons v
 
 (** Create a [Fail err] pattern which captures the error *)
-let mk_result_fail_pattern (error_pat : pattern) (ty : ty) : tpattern =
-  let error_pat : tpattern = { pat = error_pat; ty = mk_error_ty } in
+let mk_result_fail_pat (error_pat : pat) (ty : ty) : tpat =
+  let error_pat : tpat = { pat = error_pat; ty = mk_error_ty } in
   let ty = TAdt (TBuiltin TResult, mk_generic_args_from_types [ ty ]) in
   let pat = PAdt { variant_id = Some result_fail_id; fields = [ error_pat ] } in
   { pat; ty }
 
 (** Create a [Fail _] pattern (we ignore the error) *)
-let mk_result_fail_pattern_ignore_error (ty : ty) : tpattern =
-  let error_pat : pattern = PIgnored in
-  mk_result_fail_pattern error_pat ty
+let mk_result_fail_pat_ignore_error (ty : ty) : tpat =
+  let error_pat : pat = PIgnored in
+  mk_result_fail_pat error_pat ty
 
-let mk_result_ok_pattern (v : tpattern) : tpattern =
+let mk_result_ok_pat (v : tpat) : tpat =
   let ty = TAdt (TBuiltin TResult, mk_generic_args_from_types [ v.ty ]) in
   let pat = PAdt { variant_id = Some result_ok_id; fields = [ v ] } in
   { pat; ty }
@@ -1055,7 +1050,7 @@ let mk_fuel_fvar (id : FVarId.id) : fvar =
 let mk_fuel_texpr (id : FVarId.id) : texpr = { e = FVar id; ty = mk_fuel_ty }
 
 (** Convert an **open** pattern to an expression *)
-let rec tpattern_to_texpr (span : Meta.span) (pat : tpattern) : texpr option =
+let rec tpat_to_texpr (span : Meta.span) (pat : tpat) : texpr option =
   let e_opt =
     match pat.pat with
     | PConstant pv -> Some (Const pv)
@@ -1063,7 +1058,7 @@ let rec tpattern_to_texpr (span : Meta.span) (pat : tpattern) : texpr option =
     | PBound (_, _) -> [%internal_error] span
     | PIgnored -> None
     | PAdt av ->
-        let fields = List.map (tpattern_to_texpr span) av.fields in
+        let fields = List.map (tpat_to_texpr span) av.fields in
         if List.mem None fields then None
         else
           let fields_values = List.map (fun e -> Option.get e) fields in
@@ -1088,11 +1083,11 @@ let rec tpattern_to_texpr (span : Meta.span) (pat : tpattern) : texpr option =
 
 (** Open a typed pattern by introducing fresh free variables for the bound
     variables. *)
-let open_tpattern (span : Meta.span) (fresh_fvar_id : var -> fvar_id)
-    (pat : tpattern) : tpattern =
+let open_tpat (span : Meta.span) (fresh_fvar_id : var -> fvar_id) (pat : tpat) :
+    tpat =
   let visitor =
     object
-      inherit [_] map_tpattern
+      inherit [_] map_tpat
       method! visit_POpen _ _ = [%internal_error] span
 
       method! visit_PBound _ v m =
@@ -1101,20 +1096,20 @@ let open_tpattern (span : Meta.span) (fresh_fvar_id : var -> fvar_id)
         POpen ({ id; basename; ty }, m)
     end
   in
-  visitor#visit_tpattern () pat
+  visitor#visit_tpat () pat
 
 (** Close a list of typed patterns by replacing their free variables with bound
     variables. We also return the map from free variable ids to bound variables.
 
     We use this when handling function bodies: the list of type patterns is the
     list of input variables, that we treat as a single binder group. *)
-let close_tpatterns (span : Meta.span) (patl : tpattern list) :
-    BVarId.id FVarId.Map.t * tpattern list =
+let close_tpats (span : Meta.span) (patl : tpat list) :
+    BVarId.id FVarId.Map.t * tpat list =
   let _, fresh_bvar_id = BVarId.fresh_stateful_generator () in
   let map = ref FVarId.Map.empty in
   let visitor =
     object
-      inherit [_] map_tpattern
+      inherit [_] map_tpat
 
       method! visit_POpen _ v m =
         let bid = fresh_bvar_id () in
@@ -1125,14 +1120,13 @@ let close_tpatterns (span : Meta.span) (patl : tpattern list) :
       method! visit_PBound _ _ _ = [%internal_error] span
     end
   in
-  let patl = List.map (visitor#visit_tpattern ()) patl in
+  let patl = List.map (visitor#visit_tpat ()) patl in
   (!map, patl)
 
 (** Close a typed pattern by replacing its free variables with bound variables.
     We also return the map from free variable ids to bound variables. *)
-let close_tpattern (span : Meta.span) (pat : tpattern) :
-    BVarId.id FVarId.Map.t * tpattern =
-  let map, patl = close_tpatterns span [ pat ] in
+let close_tpat (span : Meta.span) (pat : tpat) : BVarId.id FVarId.Map.t * tpat =
+  let map, patl = close_tpats span [ pat ] in
   (map, List.hd patl)
 
 (** Open a binder in an expression.
@@ -1142,8 +1136,8 @@ let close_tpattern (span : Meta.span) (pat : tpattern) :
 
     We use this when handling function bodies: the list of type patterns is the
     list of input variables, that we treat as a single binder group. *)
-let open_binders (span : Meta.span) (patl : tpattern list) (e : texpr) :
-    fvar FVarId.Map.t * tpattern list * texpr =
+let open_binders (span : Meta.span) (patl : tpat list) (e : texpr) :
+    fvar FVarId.Map.t * tpat list * texpr =
   (* We start by introducing the free variables in the pattern *)
   (* The map from bound var ids to freshly introduced fvar ids *)
   let m = ref BVarId.Map.empty in
@@ -1158,7 +1152,7 @@ let open_binders (span : Meta.span) (patl : tpattern list) (e : texpr) :
       FVarId.Map.add fid { id = fid; ty = v.ty; basename = v.basename } !fvars;
     fid
   in
-  let patl = List.map (open_tpattern span fresh_fvar_id) patl in
+  let patl = List.map (open_tpat span fresh_fvar_id) patl in
   (* We can now open the expression *)
   let visitor =
     object
@@ -1175,8 +1169,8 @@ let open_binders (span : Meta.span) (patl : tpattern list) (e : texpr) :
 
     Return the opened binder (where the bound variables have been replaced with
     fresh free variables).*)
-let open_binder (span : Meta.span) (pat : tpattern) (e : texpr) :
-    fvar FVarId.Map.t * tpattern * texpr =
+let open_binder (span : Meta.span) (pat : tpat) (e : texpr) :
+    fvar FVarId.Map.t * tpat * texpr =
   let fvars, patl, e = open_binders span [ pat ] e in
   (fvars, List.hd patl, e)
 
@@ -1187,9 +1181,9 @@ let open_binder (span : Meta.span) (pat : tpattern) (e : texpr) :
 
     We use this when handling function bodies: the list of type patterns is the
     list of input variables, that we treat as a single binder group. *)
-let close_binders_visitor (span : Meta.span) (patl : tpattern list) =
+let close_binders_visitor (span : Meta.span) (patl : tpat list) =
   (* Close the pattern *)
-  let map, patl = close_tpatterns span patl in
+  let map, patl = close_tpats span patl in
   (* Use the map to update the expression *)
   (* We can now open the expression *)
   let visitor =
@@ -1216,8 +1210,8 @@ let close_binders_visitor (span : Meta.span) (patl : tpattern list) =
 
     We use this when handling function bodies: the list of type patterns is the
     list of input variables, that we treat as a single binder group. *)
-let close_binders (span : Meta.span) (patl : tpattern list) (e : texpr) :
-    tpattern list * texpr =
+let close_binders (span : Meta.span) (patl : tpat list) (e : texpr) :
+    tpat list * texpr =
   let patl, visitor = close_binders_visitor span patl in
   let e = visitor#visit_texpr 0 e in
   (patl, e)
@@ -1226,8 +1220,7 @@ let close_binders (span : Meta.span) (patl : tpattern list) (e : texpr) :
 
     Return the close binder (where the free variables have been replaced with
     bound variables). *)
-let close_binder (span : Meta.span) (pat : tpattern) (e : texpr) :
-    tpattern * texpr =
+let close_binder (span : Meta.span) (pat : tpat) (e : texpr) : tpat * texpr =
   let patl, e = close_binders span [ pat ] e in
   (List.hd patl, e)
 
@@ -1236,7 +1229,7 @@ let close_binder (span : Meta.span) (pat : tpattern) (e : texpr) :
     We introduce free variables for the variables bound in the lets while doing
     so. *)
 let rec open_lets span ?(fresh_fvars : FVarId.Set.t ref option = None)
-    (e : texpr) : (bool * tpattern * texpr) list * texpr =
+    (e : texpr) : (bool * tpat * texpr) list * texpr =
   match e.e with
   | Let (monadic, lv, re, next_e) ->
       let _, lv, next_e = open_binder span lv next_e in
@@ -1248,7 +1241,7 @@ let rec open_lets span ?(fresh_fvars : FVarId.Set.t ref option = None)
 
     We expect the binders to be open and *do not* introduce fresh free
     variables. *)
-let rec raw_destruct_lets (e : texpr) : (bool * tpattern * texpr) list * texpr =
+let rec raw_destruct_lets (e : texpr) : (bool * tpat * texpr) list * texpr =
   match e.e with
   | Let (monadic, lv, re, next_e) ->
       let lets, last_e = raw_destruct_lets next_e in
@@ -1261,7 +1254,7 @@ let rec raw_destruct_lets (e : texpr) : (bool * tpattern * texpr) list * texpr =
     We expect the binders to be open and do not introduce fresh free variables.
 *)
 let raw_destruct_lets_no_interleave (span : Meta.span) (e : texpr) :
-    (bool * tpattern * texpr) list * texpr =
+    (bool * tpat * texpr) list * texpr =
   (* Find the "kind" of the first let (monadic or non-monadic) *)
   let m =
     match e.e with
@@ -1269,7 +1262,7 @@ let raw_destruct_lets_no_interleave (span : Meta.span) (e : texpr) :
     | _ -> [%craise] span "Not a let-binding"
   in
   (* Destruct the rest *)
-  let rec destruct_lets (e : texpr) : (bool * tpattern * texpr) list * texpr =
+  let rec destruct_lets (e : texpr) : (bool * tpat * texpr) list * texpr =
     match e.e with
     | Let (monadic, lv, re, next_e) ->
         if monadic = m then
@@ -1321,15 +1314,15 @@ let trait_impl_is_empty (trait_impl : trait_impl) : bool =
   in
   parent_trait_refs = [] && consts = [] && types = [] && methods = []
 
-let tpattern_is_open (pat : tpattern) : bool =
+let tpat_is_open (pat : tpat) : bool =
   let visitor =
     object
-      inherit [_] iter_tpattern
+      inherit [_] iter_tpat
       method! visit_PBound _ _ = raise Utils.Found
     end
   in
   try
-    visitor#visit_tpattern () pat;
+    visitor#visit_tpat () pat;
     true
   with Utils.Found -> false
 
@@ -1348,7 +1341,7 @@ let type_decl_from_type_id_is_tuple_struct (ctx : TypesAnalysis.type_infos)
 
     The typed pattern should be open (i.e., use free variables): this function
     will close the binders while making the lambda. *)
-let mk_closed_lambda span (x : tpattern) (e : texpr) : texpr =
+let mk_closed_lambda span (x : tpat) (e : texpr) : texpr =
   let ty = TArrow (x.ty, e.ty) in
   let x, e = close_binder span x e in
   let e = Lambda (x, e) in
@@ -1365,8 +1358,8 @@ let close_loop span (loop : loop) : loop =
 
     The typed pattern should be open (i.e., use free variables) and will be left
     open. *)
-let mk_opened_lambda span (x : tpattern) (e : texpr) : texpr =
-  [%sanity_check] span (tpattern_is_open x);
+let mk_opened_lambda span (x : tpat) (e : texpr) : texpr =
+  [%sanity_check] span (tpat_is_open x);
   let ty = TArrow (x.ty, e.ty) in
   let e = Lambda (x, e) in
   { e; ty }
@@ -1375,12 +1368,12 @@ let mk_opened_lambda span (x : tpattern) (e : texpr) : texpr =
 
     The typed pattern should be open (i.e., use free variables): this function
     will close the binders while making the lambda. *)
-let mk_closed_lambdas span (xl : tpattern list) (e : texpr) : texpr =
+let mk_closed_lambdas span (xl : tpat list) (e : texpr) : texpr =
   List.fold_right (mk_closed_lambda span) xl e
 
 let close_lambdas = mk_closed_lambdas
 
-let mk_opened_lambdas span (xl : tpattern list) (e : texpr) : texpr =
+let mk_opened_lambdas span (xl : tpat list) (e : texpr) : texpr =
   List.fold_right (mk_opened_lambda span) xl e
 
 let mk_closed_lambda_from_fvar span (var : fvar) (mp : mplace option)
@@ -1413,8 +1406,7 @@ let mk_opened_lambdas_from_fvars span (vars : fvar list)
 
     We introduce free variables for the variables bound in the lambdas while
     doing so. *)
-let rec open_lambdas span (e : texpr) :
-    fvar FVarId.Map.t * tpattern list * texpr =
+let rec open_lambdas span (e : texpr) : fvar FVarId.Map.t * tpat list * texpr =
   match e.e with
   | Lambda (pat, e) ->
       let fvars, pat, e = open_binder span pat e in
@@ -1427,7 +1419,7 @@ let rec open_lambdas span (e : texpr) :
 (** Destruct lambdas without introducing free variables
 
     TODO: rename *)
-let rec raw_destruct_lambdas (e : texpr) : tpattern list * texpr =
+let rec raw_destruct_lambdas (e : texpr) : tpat list * texpr =
   match e.e with
   | Lambda (pat, e) ->
       let pats, e = raw_destruct_lambdas e in
@@ -1441,7 +1433,7 @@ let opt_dest_tuple_texpr (e : texpr) : texpr list option =
     -> Some args
   | _ -> None
 
-let opt_dest_struct_pattern (pat : tpattern) : tpattern list option =
+let opt_dest_struct_pat (pat : tpat) : tpat list option =
   match pat.pat with
   | PAdt { variant_id = None; fields } -> Some fields
   | _ -> None
@@ -1473,7 +1465,7 @@ let decompose_mplace_to_local (p : mplace) :
   in
   decompose [] p
 
-let tpatterns_get_fvars (x : tpattern list) : FVarId.Set.t =
+let tpats_get_fvars (x : tpat list) : FVarId.Set.t =
   let vars = ref FVarId.Set.empty in
   let visitor =
     object
@@ -1481,10 +1473,10 @@ let tpatterns_get_fvars (x : tpattern list) : FVarId.Set.t =
       method! visit_fvar_id _ var_id = vars := FVarId.Set.add var_id !vars
     end
   in
-  List.iter (visitor#visit_tpattern ()) x;
+  List.iter (visitor#visit_tpat ()) x;
   !vars
 
-let tpattern_get_fvars (x : tpattern) : FVarId.Set.t = tpatterns_get_fvars [ x ]
+let tpat_get_fvars (x : tpat) : FVarId.Set.t = tpats_get_fvars [ x ]
 
 let texpr_get_fvars (e : texpr) : FVarId.Set.t =
   let vars = ref FVarId.Set.empty in
@@ -1656,7 +1648,7 @@ let compute_known_info (explicit : explicit_info)
   }
 
 (** This helper closes the binder *)
-let mk_closed_let span (monadic : bool) (lv : tpattern) (re : texpr)
+let mk_closed_let span (monadic : bool) (lv : tpat) (re : texpr)
     (next_e : texpr) : texpr =
   let lv, next_e = close_binder span lv next_e in
   let e = Let (monadic, lv, re, next_e) in
@@ -1664,13 +1656,13 @@ let mk_closed_let span (monadic : bool) (lv : tpattern) (re : texpr)
   { e; ty }
 
 (** This helper closes the binders *)
-let mk_closed_lets span (monadic : bool) (lets : (tpattern * texpr) list)
+let mk_closed_lets span (monadic : bool) (lets : (tpat * texpr) list)
     (next_e : texpr) : texpr =
   List.fold_right
     (fun (pat, value) (e : texpr) -> mk_closed_let span monadic pat value e)
     lets next_e
 
-let mk_closed_heterogeneous_lets span (lets : (bool * tpattern * texpr) list)
+let mk_closed_heterogeneous_lets span (lets : (bool * tpat * texpr) list)
     (next_e : texpr) : texpr =
   List.fold_right
     (fun (monadic, pat, value) (e : texpr) ->
@@ -1678,7 +1670,7 @@ let mk_closed_heterogeneous_lets span (lets : (bool * tpattern * texpr) list)
     lets next_e
 
 (** This helper closes the binder *)
-let mk_closed_checked_let file line span (monadic : bool) (lv : tpattern)
+let mk_closed_checked_let file line span (monadic : bool) (lv : tpat)
     (re : texpr) (next_e : texpr) : texpr =
   let re_ty =
     if monadic then
@@ -1690,21 +1682,21 @@ let mk_closed_checked_let file line span (monadic : bool) (lv : tpattern)
   mk_closed_let span monadic lv re next_e
 
 (** This helper does not close the binder *)
-let mk_opened_let (monadic : bool) (lv : tpattern) (re : texpr) (next_e : texpr)
-    : texpr =
+let mk_opened_let (monadic : bool) (lv : tpat) (re : texpr) (next_e : texpr) :
+    texpr =
   let e = Let (monadic, lv, re, next_e) in
   let ty = next_e.ty in
   { e; ty }
 
 (** This helper does not close the binders *)
-let mk_opened_lets (monadic : bool) (lets : (tpattern * texpr) list)
+let mk_opened_lets (monadic : bool) (lets : (tpat * texpr) list)
     (next_e : texpr) : texpr =
   List.fold_right
     (fun (pat, value) (e : texpr) -> mk_opened_let monadic pat value e)
     lets next_e
 
 (** This helper does not close the binder *)
-let mk_opened_checked_let file line span (monadic : bool) (lv : tpattern)
+let mk_opened_checked_let file line span (monadic : bool) (lv : tpat)
     (re : texpr) (next_e : texpr) : texpr =
   let re_ty = if monadic then unwrap_result_ty span re.ty else re.ty in
   if !Config.type_check_pure_code then
@@ -1712,27 +1704,27 @@ let mk_opened_checked_let file line span (monadic : bool) (lv : tpattern)
   mk_opened_let monadic lv re next_e
 
 (** This helper opens the binder *)
-let open_branch span (branch : match_branch) :
-    fvar FVarId.Map.t * tpattern * texpr =
+let open_branch span (branch : match_branch) : fvar FVarId.Map.t * tpat * texpr
+    =
   let { pat; branch } = branch in
   open_binder span pat branch
 
 (** This helper closes the binder *)
-let close_branch span (pat : tpattern) (branch : texpr) : match_branch =
+let close_branch span (pat : tpat) (branch : texpr) : match_branch =
   let pat, branch = close_binder span pat branch in
   { pat; branch }
 
 (** This helper does not close the binder *)
-let mk_opened_branch (pat : tpattern) (branch : texpr) : match_branch =
+let mk_opened_branch (pat : tpat) (branch : texpr) : match_branch =
   { pat; branch }
 
 (** This helper closes the binder *)
 let mk_closed_checked_lets file line span (monadic : bool)
-    (lets : (tpattern * texpr) list) (next_e : texpr) : texpr =
+    (lets : (tpat * texpr) list) (next_e : texpr) : texpr =
   if !Config.type_check_pure_code then
     Errors.sanity_check file line span
       (List.for_all
-         (fun ((pat, e) : tpattern * texpr) ->
+         (fun ((pat, e) : tpat * texpr) ->
            let e_ty = if monadic then unwrap_result_ty span e.ty else e.ty in
            pat.ty = e_ty)
          lets);
@@ -1740,11 +1732,11 @@ let mk_closed_checked_lets file line span (monadic : bool)
 
 (** This helper does not close the binder *)
 let mk_opened_checked_lets file line span (monadic : bool)
-    (lets : (tpattern * texpr) list) (next_e : texpr) : texpr =
+    (lets : (tpat * texpr) list) (next_e : texpr) : texpr =
   if !Config.type_check_pure_code then
     Errors.sanity_check file line span
       (List.for_all
-         (fun ((pat, e) : tpattern * texpr) ->
+         (fun ((pat, e) : tpat * texpr) ->
            let e_ty = if monadic then unwrap_result_ty span e.ty else e.ty in
            pat.ty = e_ty)
          lets);
@@ -1758,7 +1750,7 @@ let wrap_in_match_fuel (span : Meta.span) (fuel0 : FVarId.id) (fuel : FVarId.id)
   let fuel0_var = mk_fuel_fvar fuel0 in
   let fuel0 = mk_texpr_from_fvar fuel0_var in
   let nfuel_var = mk_fuel_fvar fuel in
-  let nfuel_pat = mk_tpattern_from_fvar None nfuel_var in
+  let nfuel_pat = mk_tpat_from_fvar None nfuel_var in
   let fail_branch =
     mk_result_fail_texpr_with_error_id span error_out_of_fuel_id body.ty
   in
@@ -1819,11 +1811,11 @@ let wrap_in_match_fuel (span : Meta.span) (fuel0 : FVarId.id) (fuel : FVarId.id)
          }]
       *)
       (* Create the fail branch *)
-      let fail_pat = mk_adt_pattern mk_fuel_ty (Some fuel_zero_id) [] in
+      let fail_pat = mk_adt_pat mk_fuel_ty (Some fuel_zero_id) [] in
       let fail_branch = mk_branch fail_pat fail_branch in
       (* Create the success branch *)
       let success_pat =
-        mk_adt_pattern mk_fuel_ty (Some fuel_succ_id) [ nfuel_pat ]
+        mk_adt_pat mk_fuel_ty (Some fuel_succ_id) [ nfuel_pat ]
       in
       let success_branch = body in
       let success_branch = mk_branch success_pat success_branch in
@@ -1835,7 +1827,7 @@ let wrap_in_match_fuel (span : Meta.span) (fuel0 : FVarId.id) (fuel : FVarId.id)
       (* We should have checked the command line arguments before *)
       raise (Failure "Unexpected")
 
-let mk_closed_fun_body span (inputs : tpattern list) (body : texpr) : fun_body =
+let mk_closed_fun_body span (inputs : tpat list) (body : texpr) : fun_body =
   let inputs, body = close_binders span inputs body in
   { inputs; body }
 
@@ -1867,7 +1859,7 @@ class virtual ['self] open_close_all_visitor =
 
     method! visit_Lambda env pat inner =
       self#start_scope env;
-      let pat = self#visit_tpattern env pat in
+      let pat = self#visit_tpat env pat in
       self#push_scope env;
       let inner = self#visit_texpr env inner in
       self#pop_scope env;
@@ -1876,7 +1868,7 @@ class virtual ['self] open_close_all_visitor =
     method! visit_Let env monadic pat bound next =
       let bound = self#visit_texpr env bound in
       self#start_scope env;
-      let pat = self#visit_tpattern env pat in
+      let pat = self#visit_tpat env pat in
       self#push_scope env;
       let next = self#visit_texpr env next in
       self#pop_scope env;
@@ -1885,7 +1877,7 @@ class virtual ['self] open_close_all_visitor =
     method! visit_match_branch env branch =
       let { pat; branch } : match_branch = branch in
       self#start_scope env;
-      let pat = self#visit_tpattern env pat in
+      let pat = self#visit_tpat env pat in
       self#push_scope env;
       let branch = self#visit_texpr env branch in
       self#pop_scope env;
@@ -1894,7 +1886,7 @@ class virtual ['self] open_close_all_visitor =
     method visit_fun_body env (fbody : fun_body) : fun_body =
       let { inputs; body } = fbody in
       self#start_scope env;
-      let inputs = List.map (self#visit_tpattern env) inputs in
+      let inputs = List.map (self#visit_tpat env) inputs in
       self#push_scope env;
       let body = self#visit_texpr env body in
       self#pop_scope env;
@@ -1902,9 +1894,9 @@ class virtual ['self] open_close_all_visitor =
 
     method! visit_loop_body env body =
       let { inputs; loop_body } = body in
-      (* Visit the patterns to push a new scope *)
+      (* Visit the pats to push a new scope *)
       self#start_scope env;
-      let inputs = List.map (self#visit_tpattern env) inputs in
+      let inputs = List.map (self#visit_tpat env) inputs in
       self#push_scope env;
       (* Enter the inner expression *)
       let loop_body = self#visit_texpr env loop_body in
@@ -2391,8 +2383,7 @@ let opt_destruct_loop_result_decompose_outputs span ~(intro_let : bool)
                 if intro_let then
                   let fvars = List.map mk_fresh_fvar generics.types in
                   let pat =
-                    mk_simpl_tuple_pattern
-                      (List.map (mk_tpattern_from_fvar None) fvars)
+                    mk_simpl_tuple_pat (List.map (mk_tpat_from_fvar None) fvars)
                   in
                   let fields = List.map mk_texpr_from_fvar fvars in
                   let tuple = mk_simpl_tuple_texpr span fields in
@@ -2467,14 +2458,14 @@ let opt_destruct_rec_loop_call span (e : texpr) :
   | _ -> None
 
 (** Return [true] if the pattern decomposes an enumeration with > 1 variants *)
-let tpattern_decomposes_enum span (type_decls : type_decl TypeDeclId.Map.t)
-    (pat : tpattern) : bool =
+let tpat_decomposes_enum span (type_decls : type_decl TypeDeclId.Map.t)
+    (pat : tpat) : bool =
   let visitor =
     object
       inherit [_] iter_expr as super
-      method! visit_tpattern _ pat = super#visit_tpattern pat.ty pat
+      method! visit_tpat _ pat = super#visit_tpat pat.ty pat
 
-      method! visit_adt_pattern ty pat =
+      method! visit_adt_pat ty pat =
         (* Lookup the type decl *)
         let type_id, _ = ty_as_adt span ty in
         match type_id with
@@ -2485,17 +2476,17 @@ let tpattern_decomposes_enum span (type_decls : type_decl TypeDeclId.Map.t)
               | Struct _ | Opaque -> ()
               | Enum vl -> if List.length vl > 1 then raise Utils.Found
             end;
-            super#visit_adt_pattern ty pat
+            super#visit_adt_pat ty pat
         | TTuple ->
             (* ok *)
-            super#visit_adt_pattern ty pat
+            super#visit_adt_pat ty pat
         | TBuiltin _ ->
             (* Shouldn't happen *)
             [%craise] span "Unreachable"
     end
   in
   try
-    visitor#visit_tpattern pat.ty pat;
+    visitor#visit_tpat pat.ty pat;
     false
   with Utils.Found -> true
 
@@ -2528,9 +2519,9 @@ let tpattern_decomposes_enum span (type_decls : type_decl TypeDeclId.Map.t)
     pattern. *)
 let decompose_let_match span (refresh_var : fvar -> fvar)
     (get_default_expr : fvar -> texpr) (type_decls : type_decl TypeDeclId.Map.t)
-    (pat : tpattern) (bound : texpr) : tpattern * texpr =
+    (pat : tpat) (bound : texpr) : tpat * texpr =
   (* We update the pattern if it deconstructs an enumeration with > 1 variants *)
-  let found_enum = tpattern_decomposes_enum span type_decls pat in
+  let found_enum = tpat_decomposes_enum span type_decls pat in
 
   (* *)
   if found_enum then
@@ -2550,7 +2541,7 @@ let decompose_let_match span (refresh_var : fvar -> fvar)
           (POpen (var', mp), [ (var, var') ])
       end
     in
-    let match_pat, subst = visitor#visit_tpattern pat.ty pat in
+    let match_pat, subst = visitor#visit_tpat pat.ty pat in
     let vars, fresh_vars = List.split subst in
 
     (* Create the correct branch *)
@@ -2560,14 +2551,12 @@ let decompose_let_match span (refresh_var : fvar -> fvar)
     (* Create the otherwise branch *)
     let default_e = List.map get_default_expr vars in
     let default_e = mk_simpl_tuple_texpr span default_e in
-    let default_pat = mk_ignored_pattern pat.ty in
+    let default_pat = mk_ignored_pat pat.ty in
     let default_branch = close_branch span default_pat default_e in
     let switch_e = Switch (bound, Match [ match_branch; default_branch ]) in
     let bound = { e = switch_e; ty = match_e.ty } in
     (* Update the pattern itself *)
-    let pat =
-      mk_simpl_tuple_pattern (List.map (mk_tpattern_from_fvar None) vars)
-    in
+    let pat = mk_simpl_tuple_pat (List.map (mk_tpat_from_fvar None) vars) in
     (* *)
     (pat, bound)
   else (* Nothing to do *)

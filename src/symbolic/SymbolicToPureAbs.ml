@@ -305,10 +305,9 @@ let compute_tevalue_proj_kind (span : Meta.span) (type_infos : type_infos)
   else if !has_loans then LoanProj (to_borrow_kind !has_mut_loans)
   else UnknownProj
 
-let abs_fvar_id_to_tpattern (ctx : bs_ctx)
+let abs_fvar_id_to_tpat (ctx : bs_ctx)
     (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref) (rids : T.RegionId.Set.t)
-    ~(filter : bool) (fid : V.abs_fvar_id) (ty : T.ty) :
-    bs_ctx * tpattern option =
+    ~(filter : bool) (fid : V.abs_fvar_id) (ty : T.ty) : bs_ctx * tpat option =
   let type_infos = ctx.type_ctx.type_infos in
   let keep_region (r : T.region) =
     match r with
@@ -320,7 +319,7 @@ let abs_fvar_id_to_tpattern (ctx : bs_ctx)
     let ctx, fvar = fresh_var_llbc_ty None ty ctx in
     fvar_to_texpr :=
       V.AbsFVarId.Map.add fid (mk_texpr_from_fvar fvar) !fvar_to_texpr;
-    (ctx, Some (mk_tpattern_from_fvar None fvar)))
+    (ctx, Some (mk_tpat_from_fvar None fvar)))
   else
     let pat =
       if filter then begin
@@ -329,7 +328,7 @@ let abs_fvar_id_to_tpattern (ctx : bs_ctx)
       else begin
         fvar_to_texpr := V.AbsFVarId.Map.add fid mk_unit_texpr !fvar_to_texpr;
         let ty = ctx_translate_fwd_ty ctx ty in
-        Some (mk_ignored_pattern ty)
+        Some (mk_ignored_pat ty)
       end
     in
     (ctx, pat)
@@ -363,7 +362,7 @@ let bound_borrows_loans_to_string (ctx : bs_ctx) (bound : bound_borrows_loans) :
 *)
 let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
     (rids : T.RegionId.Set.t) (output : V.tevalue) :
-    bs_ctx * bound_borrows_loans * tpattern =
+    bs_ctx * bound_borrows_loans * tpat =
   let span = ctx.span in
   let type_infos = ctx.type_ctx.type_infos in
   let concrete = ref V.BorrowId.Map.empty in
@@ -373,24 +372,24 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
     | T.RVar (Free rid) -> T.RegionId.Set.mem rid rids
     | _ -> false
   in
-  let fresh_fvar ctx (ty : T.ty) : bs_ctx * texpr * tpattern =
+  let fresh_fvar ctx (ty : T.ty) : bs_ctx * texpr * tpat =
     let ctx, fvar = fresh_var_llbc_ty None ty ctx in
-    (ctx, mk_texpr_from_fvar fvar, mk_tpattern_from_fvar None fvar)
+    (ctx, mk_texpr_from_fvar fvar, mk_tpat_from_fvar None fvar)
   in
   let add_symbolic ctx (sv_id : SymbolicValueId.id) (proj_ty : T.ty) :
-      bs_ctx * tpattern =
+      bs_ctx * tpat =
     let ctx, e, pat = fresh_fvar ctx proj_ty in
     let norm_proj_ty = InterpreterBorrowsCore.normalize_proj_ty rids proj_ty in
     symbolic := NormSymbProjMap.add { sv_id; norm_proj_ty } e !symbolic;
     (ctx, pat)
   in
-  let add_concrete ctx (bid : V.BorrowId.id) (ty : T.ty) : bs_ctx * tpattern =
+  let add_concrete ctx (bid : V.BorrowId.id) (ty : T.ty) : bs_ctx * tpat =
     let ctx, e, pat = fresh_fvar ctx ty in
     concrete := V.BorrowId.Map.add bid e !concrete;
     (ctx, pat)
   in
   let rec to_pat ~(filter : bool) (ctx : bs_ctx) (output : V.tevalue) :
-      bs_ctx * tpattern option =
+      bs_ctx * tpat option =
     match output.value with
     | V.ELet _
     | V.EJoinMarkers _
@@ -401,7 +400,7 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
     | V.ELoan _
     | V.EMutBorrowInput _ -> [%internal_error] span
     | V.EFVar afid ->
-        abs_fvar_id_to_tpattern ctx fvar_to_texpr rids ~filter afid output.ty
+        abs_fvar_id_to_tpat ctx fvar_to_texpr rids ~filter afid output.ty
     | V.EBorrow bc -> (
         match bc with
         | V.EIgnoredMutBorrow _
@@ -435,14 +434,14 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
                   if filter then None
                   else
                     let ty = ctx_translate_fwd_ty ctx output.ty in
-                    Some (mk_ignored_pattern ty)
+                    Some (mk_ignored_pat ty)
                 in
                 (ctx, pat)
         end
     | V.EAdt { variant_id; fields } -> begin
         let ctx, out =
           gtranslate_adt_fields ~project_borrows:true (tevalue_to_string ctx)
-            (tpattern_to_string ctx)
+            (tpat_to_string ctx)
             (fun ~filter ctx v ->
               let ctx, pat = to_pat ~filter ctx v in
               ( ctx,
@@ -455,8 +454,8 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
                 translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos
                   output.ty
               in
-              mk_adt_pattern ty variant_id fields)
-            mk_simpl_tuple_pattern ~filter ctx output output.ty fields
+              mk_adt_pat ty variant_id fields)
+            mk_simpl_tuple_pat ~filter ctx output output.ty fields
         in
         (ctx, Option.map snd out)
       end
@@ -470,20 +469,19 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
         then (ctx, None)
         else
           let ty = ctx_translate_fwd_ty ctx ty in
-          (ctx, Some (mk_ignored_pattern ty))
+          (ctx, Some (mk_ignored_pat ty))
   in
   let ctx, pat = to_pat ~filter:true ctx output in
   let pat =
     match pat with
-    | None -> mk_ignored_pattern mk_unit_ty
+    | None -> mk_ignored_pat mk_unit_ty
     | Some pat -> pat
   in
   let bound = { concrete = !concrete; symbolic = !symbolic } in
   (ctx, bound, pat)
 
-let tepat_to_tpattern (ctx : bs_ctx)
-    (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref) (rids : T.RegionId.Set.t)
-    (pat : V.tepat) : bs_ctx * tpattern =
+let tepat_to_tpat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
+    (rids : T.RegionId.Set.t) (pat : V.tepat) : bs_ctx * tpat =
   let span = ctx.span in
   let type_infos = ctx.type_ctx.type_infos in
   let keep_region (r : T.region) =
@@ -492,10 +490,10 @@ let tepat_to_tpattern (ctx : bs_ctx)
     | _ -> false
   in
   let rec to_pat ~(filter : bool) (ctx : bs_ctx) (pat : V.tepat) :
-      bs_ctx * tpattern option =
+      bs_ctx * tpat option =
     match pat.pat with
     | V.POpen fid ->
-        abs_fvar_id_to_tpattern ctx fvar_to_texpr rids ~filter fid pat.ty
+        abs_fvar_id_to_tpat ctx fvar_to_texpr rids ~filter fid pat.ty
     | V.PBound ->
         (* Binders should have been opened *)
         [%internal_error] span
@@ -511,7 +509,7 @@ let tepat_to_tpattern (ctx : bs_ctx)
         in
         let ctx, out =
           gtranslate_adt_fields ~project_borrows (tepat_to_string ctx)
-            (tpattern_to_string ctx)
+            (tpat_to_string ctx)
             (fun ~filter ctx v ->
               let ctx, pat = to_pat ~filter ctx v in
               (ctx, Option.map (fun x -> ((), x)) pat))
@@ -520,8 +518,8 @@ let tepat_to_tpattern (ctx : bs_ctx)
               let ty =
                 translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos pat.ty
               in
-              mk_adt_pattern ty variant_id fields)
-            mk_simpl_tuple_pattern ~filter ctx pat pat.ty fields
+              mk_adt_pat ty variant_id fields)
+            mk_simpl_tuple_pat ~filter ctx pat pat.ty fields
         in
         let out = Option.map snd out in
         (ctx, out)
@@ -536,13 +534,13 @@ let tepat_to_tpattern (ctx : bs_ctx)
         then (ctx, None)
         else
           let ty = ctx_translate_fwd_ty ctx ty in
-          (ctx, Some (mk_ignored_pattern ty))
+          (ctx, Some (mk_ignored_pat ty))
   in
   let ctx, pat = to_pat ~filter:true ctx pat in
   let pat =
     match pat with
     | Some pat -> pat
-    | None -> mk_ignored_pattern mk_unit_ty
+    | None -> mk_ignored_pat mk_unit_ty
   in
   (ctx, pat)
 
@@ -583,10 +581,9 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
         (* Translate *)
         let ctx, bound_can_fail, bound = to_texpr ~filter rids' ctx bound in
         let llbc_pat = pat in
-        let ctx, pat = tepat_to_tpattern ctx fvar_to_texpr rids' pat in
+        let ctx, pat = tepat_to_tpat ctx fvar_to_texpr rids' pat in
         [%ldebug
-          "Let-binding:\n- pat: " ^ tpattern_to_string ctx pat
-          ^ "\n- LLBC pat.ty: "
+          "Let-binding:\n- pat: " ^ tpat_to_string ctx pat ^ "\n- LLBC pat.ty: "
           ^ InterpreterUtils.ty_to_string ectx llbc_pat.ty
           ^ "\n- bound: "
           ^ Print.option_to_string (texpr_to_string ctx) bound];
@@ -975,7 +972,7 @@ let abs_cont_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
       mk_closed_checked_let __FILE__ __LINE__ ctx can_fail pat input_e output_e
     in
     let e =
-      mk_closed_lambdas span (List.map (mk_tpattern_from_fvar None) inputs) e
+      mk_closed_lambdas span (List.map (mk_tpat_from_fvar None) inputs) e
     in
     Some e
 

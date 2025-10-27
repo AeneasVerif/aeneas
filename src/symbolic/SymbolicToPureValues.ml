@@ -614,8 +614,8 @@ type borrow_or_symbolic_id =
     - the pattern *)
 let rec tavalue_to_given_back_aux ~(filter : bool)
     (abs_regions : T.RegionId.Set.t) (mp : mplace option) (av : V.tavalue)
-    (ctx : bs_ctx) : bs_ctx * tpattern option =
-  let (ctx, value) : _ * tpattern option =
+    (ctx : bs_ctx) : bs_ctx * tpat option =
+  let (ctx, value) : _ * tpat option =
     match av.value with
     | AAdt adt_v ->
         adt_avalue_to_given_back_aux ~filter abs_regions av adt_v ctx
@@ -633,22 +633,22 @@ let rec tavalue_to_given_back_aux ~(filter : bool)
           let ty =
             translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty
           in
-          (ctx, Some (mk_ignored_pattern ty))
+          (ctx, Some (mk_ignored_pat ty))
   in
   (* Sanity checks - Rk.: we do this at every recursive call, which is a bit
    * expansive... *)
   (match value with
   | None -> ()
-  | Some value -> type_check_pattern ctx value);
+  | Some value -> type_check_pat ctx value);
   (* Return *)
   (ctx, value)
 
 and adt_avalue_to_given_back_aux ~(filter : bool)
     (abs_regions : T.RegionId.Set.t) (av : V.tavalue) (adt_v : V.adt_avalue)
-    (ctx : bs_ctx) : bs_ctx * tpattern option =
+    (ctx : bs_ctx) : bs_ctx * tpat option =
   let ctx, out =
     gtranslate_adt_fields ~project_borrows:true (tavalue_to_string ctx)
-      (tpattern_to_string ctx)
+      (tpat_to_string ctx)
       (fun ~filter ctx v ->
         let ctx, v = tavalue_to_given_back_aux ~filter abs_regions None v ctx in
         match v with
@@ -659,14 +659,13 @@ and adt_avalue_to_given_back_aux ~(filter : bool)
         let ty =
           translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty
         in
-        mk_adt_pattern ty adt_v.variant_id fields)
-      mk_simpl_tuple_pattern ~filter ctx av av.ty adt_v.fields
+        mk_adt_pat ty adt_v.variant_id fields)
+      mk_simpl_tuple_pat ~filter ctx av av.ty adt_v.fields
   in
   (ctx, Option.map snd out)
 
 and aborrow_content_to_given_back_aux ~(filter : bool) (mp : mplace option)
-    (bc : V.aborrow_content) (ty : T.ty) (ctx : bs_ctx) :
-    bs_ctx * tpattern option =
+    (bc : V.aborrow_content) (ty : T.ty) (ctx : bs_ctx) : bs_ctx * tpat option =
   match bc with
   | V.AMutBorrow _ | ASharedBorrow _ | AIgnoredMutBorrow _ ->
       (* All the borrows should have been ended upon ending the abstraction *)
@@ -674,7 +673,7 @@ and aborrow_content_to_given_back_aux ~(filter : bool) (mp : mplace option)
   | AEndedMutBorrow (msv, _) ->
       (* Return the meta symbolic-value *)
       let ctx, var = fresh_var_for_symbolic_value msv.given_back ctx in
-      let pat = mk_tpattern_from_fvar mp var in
+      let pat = mk_tpat_from_fvar mp var in
       (* Lookup the default value and update the [var_id_to_default] map.
          Note that the default value might be missing, for instance for
          abstractions which were not introduced because of function calls but
@@ -698,17 +697,17 @@ and aborrow_content_to_given_back_aux ~(filter : bool) (mp : mplace option)
       if filter then (ctx, None)
       else
         let ty = translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos ty in
-        (ctx, Some (mk_ignored_pattern ty))
+        (ctx, Some (mk_ignored_pat ty))
 
 and aproj_to_given_back_aux (mp : mplace option) (aproj : V.aproj) (ty : T.ty)
-    (ctx : bs_ctx) : bs_ctx * tpattern option =
+    (ctx : bs_ctx) : bs_ctx * tpat option =
   match aproj with
   | V.AEndedProjLoans _ -> [%craise] ctx.span "Unreachable"
   | AEndedProjBorrows { mvalues = mv; loans } ->
       [%cassert] ctx.span (loans = []) "Unreachable";
       (* Return the meta-value *)
       let ctx, var = fresh_var_for_symbolic_value mv.given_back ctx in
-      let pat = mk_tpattern_from_fvar mp var in
+      let pat = mk_tpat_from_fvar mp var in
       (* Register the default value *)
       let ctx =
         (* Using the projection type as the type of the symbolic value - it
@@ -726,7 +725,7 @@ and aproj_to_given_back_aux (mp : mplace option) (aproj : V.aproj) (ty : T.ty)
   | AEmpty | AProjLoans _ | AProjBorrows _ -> [%craise] ctx.span "Unreachable"
 
 let tavalue_to_given_back (abs_regions : T.RegionId.Set.t) (mp : mplace option)
-    (v : V.tavalue) (ctx : bs_ctx) : bs_ctx * tpattern option =
+    (v : V.tavalue) (ctx : bs_ctx) : bs_ctx * tpat option =
   (* Check if the value was generated from a borrow projector: if yes, and if
      it contains mutable borrows we generate a given back pattern (because
      upon ending the borrow the abstraction gave back a value).
@@ -746,7 +745,7 @@ let tavalue_to_given_back (abs_regions : T.RegionId.Set.t) (mp : mplace option)
 
     See [tavalue_to_given_back]. *)
 let abs_to_given_back (mpl : mplace option list option) (abs : V.abs)
-    (ctx : bs_ctx) : bs_ctx * tpattern list =
+    (ctx : bs_ctx) : bs_ctx * tpat list =
   let avalues =
     match mpl with
     | None -> List.map (fun av -> (None, av)) abs.avalues
@@ -762,12 +761,11 @@ let abs_to_given_back (mpl : mplace option list option) (abs : V.abs)
     "- abs: "
     ^ abs_to_string ~with_ended:true ctx abs
     ^ "\n- values: "
-    ^ Print.list_to_string (tpattern_to_string ctx) values];
+    ^ Print.list_to_string (tpat_to_string ctx) values];
   (ctx, values)
 
 (** Simply calls [abs_to_given_back] *)
-let abs_to_given_back_no_mp (abs : V.abs) (ctx : bs_ctx) :
-    bs_ctx * tpattern list =
+let abs_to_given_back_no_mp (abs : V.abs) (ctx : bs_ctx) : bs_ctx * tpat list =
   let mpl = List.map (fun _ -> None) abs.avalues in
   abs_to_given_back (Some mpl) abs ctx
 

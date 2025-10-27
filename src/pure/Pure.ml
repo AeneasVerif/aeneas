@@ -754,8 +754,8 @@ type fvar = {
 }
 [@@deriving show, ord]
 
-(** Ancestor for {!iter_tpattern} visitor *)
-class ['self] iter_tpattern_base =
+(** Ancestor for {!iter_tpat} visitor *)
+class ['self] iter_tpat_base =
   object (self : 'self)
     inherit [_] iter_type_decl
     method visit_fvar_id : 'env -> fvar_id -> unit = fun _ _ -> ()
@@ -784,8 +784,8 @@ class ['self] iter_tpattern_base =
     method visit_field_id : 'env -> field_id -> unit = fun _ _ -> ()
   end
 
-(** Ancestor for {!map_tpattern} visitor *)
-class ['self] map_tpattern_base =
+(** Ancestor for {!map_tpat} visitor *)
+class ['self] map_tpat_base =
   object (self : 'self)
     inherit [_] map_type_decl
     method visit_fvar_id : 'env -> fvar_id -> fvar_id = fun _ x -> x
@@ -819,8 +819,8 @@ class ['self] map_tpattern_base =
     method visit_field_id : 'env -> field_id -> field_id = fun _ x -> x
   end
 
-(** Ancestor for {!reduce_tpattern} visitor *)
-class virtual ['self] reduce_tpattern_base =
+(** Ancestor for {!reduce_tpat} visitor *)
+class virtual ['self] reduce_tpat_base =
   object (self : 'self)
     inherit [_] reduce_type_decl
     method visit_fvar_id : 'env -> fvar_id -> 'a = fun _ _ -> self#zero
@@ -851,8 +851,8 @@ class virtual ['self] reduce_tpattern_base =
     method visit_field_id : 'env -> field_id -> 'a = fun _ _ -> self#zero
   end
 
-(** Ancestor for {!mapreduce_tpattern} visitor *)
-class virtual ['self] mapreduce_tpattern_base =
+(** Ancestor for {!mapreduce_tpat} visitor *)
+class virtual ['self] mapreduce_tpat_base =
   object (self : 'self)
     inherit [_] mapreduce_type_decl
 
@@ -898,7 +898,7 @@ class virtual ['self] mapreduce_tpattern_base =
   end
 
 (** A pattern (which appears on the left of assignments, in matches, etc.). *)
-type pattern =
+type pat =
   | PConstant of literal
       (** {!PConstant} is necessary because we merge the switches over integer
           values and the matches over enumerations *)
@@ -934,19 +934,19 @@ type pattern =
           update the pattern to [(_,y)] and close the expression by reforming
           the let: [y] now has the index 0 and we get the expected expression:
           [let (_, BVar) = v in BVar 0]. *)
-  | PAdt of adt_pattern
+  | PAdt of adt_pat
 
-and adt_pattern = { variant_id : variant_id option; fields : tpattern list }
+and adt_pat = { variant_id : variant_id option; fields : tpat list }
 
-and tpattern = { pat : pattern; ty : ty }
+and tpat = { pat : pat; ty : ty }
 [@@deriving
   show,
   ord,
   visitors
     {
-      name = "iter_tpattern";
+      name = "iter_tpat";
       variety = "iter";
-      ancestors = [ "iter_tpattern_base" ];
+      ancestors = [ "iter_tpat_base" ];
       monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
@@ -954,9 +954,9 @@ and tpattern = { pat : pattern; ty : ty }
     },
   visitors
     {
-      name = "map_tpattern";
+      name = "map_tpat";
       variety = "map";
-      ancestors = [ "map_tpattern_base" ];
+      ancestors = [ "map_tpat_base" ];
       monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
@@ -964,18 +964,18 @@ and tpattern = { pat : pattern; ty : ty }
     },
   visitors
     {
-      name = "reduce_tpattern";
+      name = "reduce_tpat";
       variety = "reduce";
-      ancestors = [ "reduce_tpattern_base" ];
+      ancestors = [ "reduce_tpat_base" ];
       monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       polymorphic = false;
     },
   visitors
     {
-      name = "mapreduce_tpattern";
+      name = "mapreduce_tpat";
       variety = "mapreduce";
-      ancestors = [ "mapreduce_tpattern_base" ];
+      ancestors = [ "mapreduce_tpat_base" ];
       monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       polymorphic = false;
@@ -1042,7 +1042,7 @@ and qualif = { id : qualif_id; generics : generic_args }
     {
       name = "iter_qualif";
       variety = "iter";
-      ancestors = [ "iter_tpattern" ];
+      ancestors = [ "iter_tpat" ];
       monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
@@ -1051,7 +1051,7 @@ and qualif = { id : qualif_id; generics : generic_args }
     {
       name = "map_qualif";
       variety = "map";
-      ancestors = [ "map_tpattern" ];
+      ancestors = [ "map_tpat" ];
       monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
       concrete = true;
@@ -1060,7 +1060,7 @@ and qualif = { id : qualif_id; generics : generic_args }
     {
       name = "reduce_qualif";
       variety = "reduce";
-      ancestors = [ "reduce_tpattern" ];
+      ancestors = [ "reduce_tpat" ];
       monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
     },
@@ -1068,7 +1068,7 @@ and qualif = { id : qualif_id; generics : generic_args }
     {
       name = "mapreduce_qualif";
       variety = "mapreduce";
-      ancestors = [ "mapreduce_tpattern" ];
+      ancestors = [ "mapreduce_tpat" ];
       monomorphic = [ "env" ];
       nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
     }]
@@ -1129,9 +1129,9 @@ type expr =
           argument): this would allow us to replace some field accesses with
           calls to projectors over fields (when there are clashes of field
           names, some provers like F* get pretty bad...) *)
-  | Lambda of tpattern * texpr  (** Lambda abstraction: [λ x => e] *)
+  | Lambda of tpat * texpr  (** Lambda abstraction: [λ x => e] *)
   | Qualif of qualif  (** A top-level qualifier *)
-  | Let of bool * tpattern * texpr * texpr
+  | Let of bool * tpat * texpr * texpr
       (** Let binding.
 
           TODO: the boolean should be replaced by an enum: sometimes we use the
@@ -1175,7 +1175,7 @@ type expr =
   | EError of Meta.span option * string
 
 and switch_body = If of texpr * texpr | Match of match_branch list
-and match_branch = { pat : tpattern; branch : texpr }
+and match_branch = { pat : tpat; branch : texpr }
 
 (** A loop.
 
@@ -1212,7 +1212,7 @@ and loop = {
     We see loop bodies as functions, while a loop itself is a loop fixed-point
     operator applied to such a loop body. *)
 and loop_body = {
-  inputs : tpattern list;  (** Binders for the inputs of the loop body. *)
+  inputs : tpat list;  (** Binders for the inputs of the loop body. *)
   loop_body : texpr;
 }
 
@@ -1549,7 +1549,7 @@ type fun_sig = {
 type inst_fun_sig = { inputs : ty list; output : ty } [@@deriving show]
 
 type fun_body = {
-  inputs : tpattern list;
+  inputs : tpat list;
       (** Note that we consider the inputs as a single binder group when
           computing de bruijn indices *)
   body : texpr;

@@ -464,10 +464,10 @@ let mk_type_check_ctx (ctx : bs_ctx) : PureTypeCheck.tc_ctx =
     bvar_counter = BVarId.zero;
   }
 
-let type_check_pattern (ctx : bs_ctx) (v : tpattern) : unit =
+let type_check_pat (ctx : bs_ctx) (v : tpat) : unit =
   let span = ctx.span in
   let ctx = mk_type_check_ctx ctx in
-  let _ = PureTypeCheck.check_tpattern span ctx v in
+  let _ = PureTypeCheck.check_tpat span ctx v in
   ()
 
 let type_check_texpr (ctx : bs_ctx) (e : texpr) : unit =
