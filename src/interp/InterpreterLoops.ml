@@ -262,7 +262,7 @@ let eval_loop_symbolic (config : config) (span : span)
     ^ eval_ctx_to_string ~span:(Some span) break_ctx];
 
   (* Compute the loop input parameters *)
-  let fresh_sids, fp_input_svalues =
+  let _fresh_sids, fp_input_svalues =
     compute_fp_ctx_symbolic_values span ~only_modified_input_svalues:true ctx
       fp_ctx
   in
@@ -309,8 +309,6 @@ let eval_loop_symbolic (config : config) (span : span)
     ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp_ctx
     ^ "\n- fixed_sids: "
     ^ SymbolicValueId.Set.show fixed_ids.sids
-    ^ "\n- fresh_sids: "
-    ^ SymbolicValueId.Set.show fresh_sids
     ^ "\n- fp_input_abs: "
     ^ Print.list_to_string AbsId.to_string input_abs_ids_list
     ^ "\n- fp_input_svalues: "
@@ -328,7 +326,6 @@ let eval_loop_symbolic (config : config) (span : span)
         {
           loop_id;
           input_svalues = fp_input_svalues;
-          fresh_svalues = fresh_sids;
           input_abs = input_abs_list;
           input_value_to_value = input_values;
           input_abs_to_abs = input_abs;

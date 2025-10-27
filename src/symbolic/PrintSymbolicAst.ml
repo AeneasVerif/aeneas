@@ -174,9 +174,7 @@ and loop_to_string (env : fmt_env) (indent : string) (indent_incr : string)
     (loop : loop) : string =
   let indent1 = indent ^ indent_incr in
   let loop_id = LoopId.to_string loop.loop_id in
-  let fresh_svalues = SymbolicValueId.Set.to_string None loop.fresh_svalues in
   let next_expr = expr_to_string env indent1 indent_incr loop.next_expr in
   let loop_expr = expr_to_string env indent1 indent_incr loop.loop_expr in
-  "loop@" ^ loop_id ^ " {\n\n" ^ indent1 ^ "fresh_svalues = " ^ fresh_svalues
-  ^ "\n\n" ^ indent1 ^ "loop_expr=\n" ^ loop_expr ^ "\n\n" ^ indent1
-  ^ "next_expr=\n" ^ next_expr ^ "\n" ^ indent ^ "}"
+  "loop@" ^ loop_id ^ " {\n\n" ^ indent1 ^ "loop_expr=\n" ^ loop_expr ^ "\n\n"
+  ^ indent1 ^ "next_expr=\n" ^ next_expr ^ "\n" ^ indent ^ "}"

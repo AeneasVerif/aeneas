@@ -218,10 +218,6 @@ and loop = {
   loop_id : loop_id;
   input_svalues : symbolic_value list;
       (** The input symbolic values, properly ordered *)
-  fresh_svalues : symbolic_value_id_set;
-      (** The symbolic values introduced by the loop fixed-point/
-
-          TODO: remove? *)
   input_abs : abs list;
       (** The input abstractions, properly ordered. Note that those are the
           abstractions from the *fixed-point*, they are not actually the
