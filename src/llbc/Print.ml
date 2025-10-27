@@ -248,7 +248,6 @@ module Values = struct
         adt_to_string span env
           (fun () -> show_tavalue v)
           v.ty av.variant_id field_values
-    | ABottom -> "⊥ : " ^ ty_to_string env v.ty
     | ABorrow bc -> aborrow_content_to_string ~span ~with_ended env bc
     | ALoan lc -> aloan_content_to_string ~span ~with_ended env lc
     | ASymbolic (pm, proj) ->

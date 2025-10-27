@@ -553,7 +553,6 @@ and aended_proj_borrows = {
     it is thus "abstracted" away. *)
 and avalue =
   | AAdt of adt_avalue
-  | ABottom (* TODO: remove once we change the way internal borrows are ended *)
   | ALoan of aloan_content
   | ABorrow of aborrow_content
   | ASymbolic of proj_marker * aproj

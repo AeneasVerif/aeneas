@@ -660,7 +660,7 @@ let destructure_shared_loans (span : Meta.span) (fixed_ids : ids_sets) : cm_fun
             | AProjSharedBorrow _ -> [%craise] span "Not implemented"
           in
           (ABorrow bc, avl)
-      | ABottom | ASymbolic _ | AIgnored _ -> (av.value, [])
+      | ASymbolic _ | AIgnored _ -> (av.value, [])
     in
     ({ av with value }, avl)
   in

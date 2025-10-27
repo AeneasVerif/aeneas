@@ -290,10 +290,6 @@ let check_borrowed_values_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
         [%sanity_check] span
           (Config.allow_bottom_below_borrow || not info.outer_borrow)
 
-      method! visit_ABottom _info =
-        (* ⊥ inside an abstraction is not the same as in a regular value *)
-        ()
-
       method! visit_loan_content info lc =
         (* Update the info *)
         let info =
@@ -585,7 +581,6 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
           | TBox, [ boxed_value ], [], [ boxed_ty ], [] ->
               [%sanity_check] span (boxed_value.ty = boxed_ty)
           | _ -> [%craise] span "Erroneous type")
-      | ABottom, _ -> (* Nothing to check *) ()
       | ABorrow bc, TRef (region, ref_ty, rkind) -> (
           let abs = Option.get info in
           (* Check the borrow content *)

@@ -28,10 +28,6 @@ let mk_bottom (span : Meta.span) (ty : ty) : tvalue =
   [%sanity_check] span (ty_is_ety ty);
   { value = VBottom; ty }
 
-let mk_abottom (span : Meta.span) (ty : ty) : tavalue =
-  [%sanity_check] span (ty_is_rty ty);
-  { value = ABottom; ty }
-
 let mk_ebottom (ty : ty) : tevalue = { value = EBottom; ty }
 
 let mk_aignored (span : Meta.span) (ty : ty) (v : tvalue option) : tavalue =

@@ -188,8 +188,8 @@ let end_concrete_borrow_get_borrow_core (span : Meta.span)
               (* Register the update *)
               set_replaced_bc outer.abs_id (Abstract bc);
               (* Update the value - note that we are necessarily in the second
-               * of the two cases described above *)
-              ABottom)
+                 of the two cases described above *)
+              ABorrow AEndedSharedBorrow)
             else super#visit_ABorrow outer bc
         | AIgnoredMutBorrow (_, _)
         | AEndedMutBorrow _
@@ -1327,7 +1327,8 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
             let repr_bid = List.hd bids in
             (* Replace the shared borrow with Bottom *)
             let ctx =
-              update_aborrow span ek_all (UShared repr_bid) ABottom None ctx
+              update_aborrow span ek_all (UShared repr_bid)
+                (ABorrow AEndedSharedBorrow) None ctx
             in
             (* Continue *)
             ctx
@@ -1747,7 +1748,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) ~(can_end : bool)
       (av : tavalue) : unit =
     let ty = av.ty in
     match av.value with
-    | ABottom | AIgnored _ -> ()
+    | AIgnored _ -> ()
     | AAdt adt ->
         (* Simply explore the children *)
         List.iter (list_avalues allow_borrows push) adt.field_values

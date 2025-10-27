@@ -283,7 +283,7 @@ let loop_abs_reorder_and_add_info (span : Meta.span) (fixed_ids : ids_sets)
               borrows := { value; ty } :: !borrows
           | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty ->
               [%internal_error] span)
-      | AAdt _ | ABottom | AIgnored _ -> [%internal_error] span
+      | AAdt _ | AIgnored _ -> [%internal_error] span
     in
     List.iter get_borrow_loan abs.avalues;
 

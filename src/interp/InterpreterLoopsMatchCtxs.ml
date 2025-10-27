@@ -483,7 +483,6 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
           { value; ty }
         else (* Merge *)
           M.match_distinct_aadts match_rec ctx0 ctx1 v0.ty av0 v1.ty av1 ty
-    | ABottom, ABottom -> mk_abottom M.span ty
     | AIgnored _, AIgnored _ -> mk_aignored M.span ty None
     | ABorrow bc0, ABorrow bc1 -> (
         [%ltrace "borrows"];

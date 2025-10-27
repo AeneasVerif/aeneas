@@ -605,7 +605,6 @@ let tavalue_split_marker (span : Meta.span) (ctx : eval_ctx) (av : tavalue) :
   in
   match av.value with
   | AAdt _ -> [%craise] span "Not implemented yet"
-  | ABottom -> [%internal_error] span
   | AIgnored _ ->
       (* Nothing to do *)
       [ av ]
@@ -844,7 +843,6 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
              ^ tavalue_to_string ctx av)
       end
     | AAdt _ -> [%craise] span "Not implemented yet"
-    | ABottom -> [%internal_error] span
     | AIgnored _ -> (* Nothing to register *) ()
   in
   List.iter add_avalue (List.filter keep_avalue abs1.avalues);
@@ -2023,7 +2021,7 @@ let reorder_loans_borrows_in_fresh_abs (span : Meta.span) (allow_markers : bool)
               [%cassert] span (is_aignored given_back.value) "Not supported yet";
               false
           | AProjSharedBorrow _ -> [%craise] span "Not supported yet")
-      | ABottom | AIgnored _ -> false
+      | AIgnored _ -> false
     in
     let avalues = List.filter filter abs.avalues in
 
