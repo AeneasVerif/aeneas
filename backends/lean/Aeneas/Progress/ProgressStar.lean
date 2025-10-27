@@ -69,7 +69,6 @@ structure Info where
   /-- The universe levels of the bifurcation -/
   uLevels: List Lean.Level
 
-  /-- -/
   params: Array Expr
   deriving Repr
 
@@ -541,7 +540,8 @@ section Examples
 
 /--
 info: Try this:
-simp only [progress_simps]
+
+    simp only [progress_simps]
 -/
 #guard_msgs in
 example : True := by progress*?
@@ -555,9 +555,10 @@ def add1 (x0 x1 : U32) : Std.Result U32 := do
 
 /--
 info: Try this:
-  let* ⟨ x2, x2_post ⟩ ← U32.add_spec
-  let* ⟨ x3, x3_post ⟩ ← U32.add_spec
-  let* ⟨ res, res_post ⟩ ← U32.add_spec
+
+      let* ⟨ x2, x2_post ⟩ ← U32.add_spec
+    let* ⟨ x3, x3_post ⟩ ← U32.add_spec
+    let* ⟨ res, res_post ⟩ ← U32.add_spec
 -/
 #guard_msgs in
 example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
@@ -567,11 +568,12 @@ example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
 
 /--
 info: Try this:
-  simp only [progress_simps]
-  let* ⟨ x2, x2_post ⟩ ← U32.add_spec
-  let* ⟨ x3, x3_post ⟩ ← U32.add_spec
-  let* ⟨ res, res_post ⟩ ← U32.add_spec
-  scalar_tac
+
+      simp only [progress_simps]
+    let* ⟨ x2, x2_post ⟩ ← U32.add_spec
+    let* ⟨ x3, x3_post ⟩ ← U32.add_spec
+    let* ⟨ res, res_post ⟩ ← U32.add_spec
+    scalar_tac
 -/
 #guard_msgs in
 example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
@@ -591,12 +593,13 @@ def add2 (b : Bool) (x0 x1 : U32) : Std.Result U32 := do
 
 /--
 info: Try this:
-  split
-  . let* ⟨ x2, x2_post ⟩ ← U32.add_spec
-    let* ⟨ x3, x3_post ⟩ ← U32.add_spec
-    let* ⟨ res, res_post ⟩ ← U32.add_spec
-  . let* ⟨ y, y_post ⟩ ← U32.add_spec
-    let* ⟨ res, res_post ⟩ ← U32.add_spec
+
+      split
+    . let* ⟨ x2, x2_post ⟩ ← U32.add_spec
+      let* ⟨ x3, x3_post ⟩ ← U32.add_spec
+      let* ⟨ res, res_post ⟩ ← U32.add_spec
+    . let* ⟨ y, y_post ⟩ ← U32.add_spec
+      let* ⟨ res, res_post ⟩ ← U32.add_spec
 -/
 #guard_msgs in
 example b (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
@@ -606,17 +609,18 @@ example b (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
 
 /--
 info: Try this:
-  split
-  . let* ⟨ x2, x2_post ⟩ ← U32.add_spec
-    · sorry
-    let* ⟨ x3, x3_post ⟩ ← U32.add_spec
-    · sorry
-    let* ⟨ res, res_post ⟩ ← U32.add_spec
-    · sorry
-  . let* ⟨ y, y_post ⟩ ← U32.add_spec
-    · sorry
-    let* ⟨ res, res_post ⟩ ← U32.add_spec
-    · sorry
+
+      split
+    . let* ⟨ x2, x2_post ⟩ ← U32.add_spec
+      · sorry
+      let* ⟨ x3, x3_post ⟩ ← U32.add_spec
+      · sorry
+      let* ⟨ res, res_post ⟩ ← U32.add_spec
+      · sorry
+    . let* ⟨ y, y_post ⟩ ← U32.add_spec
+      · sorry
+      let* ⟨ res, res_post ⟩ ← U32.add_spec
+      · sorry
 ---
 error: unsolved goals
 case isTrue.hmax
@@ -625,7 +629,7 @@ x y : U32
 h✝ : b = true
 ⊢ ↑x + ↑y ≤ U32.max
 
-case intro.hmax
+case hmax
 b : Bool
 x y : U32
 h✝ : b = true
@@ -634,7 +638,7 @@ _ : [> let x2 ← x + y <]
 x2_post : ↑x2 = ↑x + ↑y
 ⊢ ↑x2 + ↑x2 ≤ U32.max
 
-case intro.hmax
+case hmax
 b : Bool
 x y : U32
 h✝ : b = true
@@ -652,7 +656,7 @@ x y : U32
 h✝ : ¬b = true
 ⊢ ↑x + ↑y ≤ U32.max
 
-case intro.hmax
+case hmax
 b : Bool
 x y✝ : U32
 h✝ : ¬b = true

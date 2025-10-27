@@ -33,7 +33,7 @@ theorem IScalar.neg_imp_toNat_neg_eq_neg_toInt {ty} (x : IScalar ty) (hNeg : x.v
     simp_all
 
   conv => lhs; simp only [Neg.neg, BitVec.neg]
-  simp only [BitVec.toInt_eq_toNat_bmod, BitVec.toNat_umod]
+  simp only [BitVec.toInt_eq_toNat_bmod]
 
   have hxToNatMod : (x.bv.toNat : Int) % 2^ty.numBits = x.bv.toNat := by
     apply Int.emod_eq_of_lt <;> omega
@@ -73,7 +73,7 @@ theorem IScalar.neg_imp_toNat_neg_eq_neg_toInt {ty} (x : IScalar ty) (hNeg : x.v
         by_contra
         have hxz : x.bv.toNat = 0 := by omega
         have : x.bv.toInt = 0 := by
-          simp only [BitVec.toInt_eq_toNat_bmod, BitVec.toNat_umod, Int.bmod_def, hxz]
+          simp only [BitVec.toInt_eq_toNat_bmod, Int.bmod_def, hxz]
           simp [hPow]
         omega
       omega
@@ -173,7 +173,7 @@ theorem IScalar.neg_imp_toNat_neg_eq_neg_toInt {ty} (x : IScalar ty) (hNeg : x.v
   constructor <;> intro h
   . replace ⟨ a, hp, h ⟩ := h
     cases a'
-    simp_all only [val, eq_comm]
+    simp_all only [val]
     rw [BitVec.toInt_inj] at h
     simp [h]
     apply hp
@@ -190,7 +190,7 @@ theorem IScalar.neg_imp_toNat_neg_eq_neg_toInt {ty} (x : IScalar ty) (hNeg : x.v
 
 theorem UScalar.ofNatCore_bv_lt_equiv {ty} (x y : Nat) (hx) (hy) :
   (@UScalar.ofNatCore ty x hx).bv < (@UScalar.ofNatCore ty y hy).bv ↔ x < y := by
-  simp only [ofNatCore, BitVec.ofNat_lt_ofNat]
+  simp only [ofNatCore]
   have := Nat.mod_eq_of_lt hx
   have := Nat.mod_eq_of_lt hy
   simp only [BitVec.lt_ofFin, Fin.mk_lt_mk]

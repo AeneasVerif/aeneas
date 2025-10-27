@@ -92,18 +92,58 @@ let greedy_expand_symbolics_with_borrows = true
     TODO: remove (always true now), but check that when we panic/call a function
     there is no bottom below a borrow.
 
-    We sometimes want to temporarily break the invariant that there is no bottom
-    value below a borrow. If this value is true, we don't check the invariant,
-    and the rule becomes: we can't end a borrow *if* it contains a bottom value.
-    The consequence is that it becomes ok to temporarily have bottom below a
-    borrow, if we put something else inside before ending the borrow.
+    We use this in two situations:
+
+    1. We sometimes want to temporarily break the invariant that there is no
+    bottom value below a *mutable* borrow. If this value is true, we don't check
+    the invariant, and the rule becomes: we can't end a borrow *if* it contains
+    a bottom value. The consequence is that it becomes ok to temporarily have
+    bottom below a borrow, if we put something else inside before ending the
+    borrow.
 
     For instance, when evaluating an assignment, we move the value which will be
     overwritten then do some administrative tasks with the borrows, then move
     the rvalue to its destination. We currently want to be able to check the
     invariants every time we end a borrow/an abstraction, meaning at
     intermediate steps of the assignment where the invariants might actually be
-    broken. *)
+    broken.
+
+    2. We sometimes need to join a value containing loans with a value
+    containing bottoms. For instance, when joining:
+    {[
+      v -> bottom   U   v -> SL l 0
+    ]}
+
+    A problem is that we can't move [SL l 0] to a region abstraction or an
+    anonymous values, because it is an **outer** loan: doing so would allow the
+    loan to live indefinitely, and in particuler we would be allowed to
+    overwrite [v] without ending it.
+
+    A possibility is to force [l] to end, but then it might lead to a borrow
+    checking issue later on, when trying to use the borrow [l]. Our solution is
+    to use a shared loan containing the value bottom, leading to the following
+    environment:
+
+    {[
+      v -> SL l' bottom
+      abs { SB l', SL l 0 }
+    ]}
+
+    This way, the borrow [l] is preserved, but upon overwriting [v] we have to
+    en [l'], which in turns requires ending [l]. We also can't *read* from [v],
+    because after we ended the loan, [v] maps to [bottom] (we can only write to
+    it). Also note that the shared borrow [l'] can't be used in any way (in
+    particular, it can't be dereferenced).
+
+    Finally, this solution works for mutable borrows/loans:
+    {[
+      v -> bottom   U   v -> ML l
+
+        ~>
+
+      v -> SL l' bottom
+      abs { SB l', ML l }
+    ]} *)
 let allow_bottom_below_borrow = true
 
 (** If a function doesn't return any borrows, we can immediately call its
@@ -155,37 +195,8 @@ let dont_use_field_projectors = ref false
     such situations or not. *)
 let always_deconstruct_adts_with_matches = ref false
 
-(** Controls whether we need to use a state to model the external world (I/O,
-    for instance). *)
-let use_state = ref false
-
 (** Controls whether we use fuel to control termination. *)
 let use_fuel = ref false
-
-(** Controls whether backward functions update the state, in case we use a state
-    ({!use_state}).
-
-    If they update the state, we generate code of the following style:
-    {[
-      (st1, y)  <-- f_fwd x st0; // st0 is the state upon calling f_fwd
-      ...
-      (st3, x') <-- f_back x st0 y' st2; // st2 is the state upon calling f_back
-    ]}
-
-    Otherwise, we generate code of the following shape:
-    {[
-      (st1, y)  <-- f_fwd x st0;
-      ...
-      x' <-- f_back x st0 y';
-    ]}
-
-    The second format is easier to reason about, but the first one is necessary
-    to properly handle some Rust functions which use internal mutability such as
-    {{:https://doc.rust-lang.org/std/cell/struct.RefCell.html#method.try_borrow_mut}
-     [RefCell::try_mut_borrow]}: in order to model this behaviour we would need
-    a state, and calling the backward function would update the state by
-    reinserting the updated value in it. *)
-let backward_state_update = ref false
 
 (** Controls whether we split the generated definitions between different files
     for the types, clauses and functions, or if we group them in one file. *)
@@ -429,5 +440,5 @@ let extract_external_name_patterns = ref true
 (** *)
 let match_patterns_with_trait_decl_refs = true
 
-(** *)
-let allow_unbound_variables_in_metadata = true
+(** Decompose loops to recursive functions *)
+let loops_to_recursive_functions = ref true

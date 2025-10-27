@@ -35,8 +35,8 @@ type fun_info = {
 (** Various information about a module's functions *)
 type modules_funs_info = fun_info FunDeclId.Map.t
 
-let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
-    (use_state : bool) : modules_funs_info =
+let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
+    modules_funs_info =
   let fmt_env = Charon.PrintLlbcAst.Crate.crate_to_fmt_env m in
   let infos = ref FunDeclId.Map.empty in
   let register_info (id : FunDeclId.id) (info : fun_info) : unit =
@@ -129,7 +129,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
                    the closure *)
                 ()
             | FnOpRegular func -> (
-                match func.func with
+                match func.kind with
                 | FunId (FRegular id) -> self#visit_fid env id
                 | FunId (FBuiltin id) ->
                     (* None of the builtin functions can diverge nor are considered stateful *)
@@ -159,16 +159,12 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
       group_has_builtin_info := !group_has_builtin_info || has_builtin_info;
       match f.body with
       | None ->
-          let info_can_fail, info_stateful =
+          let info_can_fail =
             match builtin_info with
-            | None -> (true, use_state)
-            | Some { can_fail; stateful } -> (can_fail, stateful)
+            | None -> true
+            | Some { can_fail } -> can_fail
           in
-          obj#may_fail info_can_fail;
-          obj#maybe_stateful
-            (if Option.is_some f.is_global_initializer then false
-             else if not use_state then false
-             else info_stateful)
+          obj#may_fail info_can_fail
       | Some body -> obj#visit_block body.body.span body.body
     in
     List.iter visit_fun d;
@@ -248,7 +244,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
             declarations or functions and traits, for instance) are not \
             supported yet: ["
           ^ String.concat ", "
-              (List.map Charon.PrintGAst.any_decl_id_to_string
+              (List.map Charon.PrintGAst.item_id_to_string
                  (Charon.GAstUtils.g_declaration_group_to_list ids))
           ^ "]")
   in

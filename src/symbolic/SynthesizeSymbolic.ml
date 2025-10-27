@@ -27,7 +27,7 @@ let mk_opt_place_from_op (span : Meta.span) (op : operand)
   | Copy p | Move p -> Some (mk_mplace span p ctx)
   | Constant _ -> None
 
-let mk_espan (m : espan) (e : expr) : expr = Meta (m, e)
+let mk_emeta (m : emeta) (e : expr) : expr = Meta (m, e)
 
 let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
     (place : mplace option) (seel : symbolic_expansion option list)
@@ -98,6 +98,7 @@ let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
     | TFnPtr _
     | TRawPtr _
     | TDynTrait _
+    | TPtrMetadata _
     | TError _ -> [%craise] span "Ill-formed symbolic expansion"
   in
   Expansion (place, sv, expansion)
@@ -109,8 +110,8 @@ let synthesize_symbolic_expansion_no_branching (span : Meta.span)
 
 let synthesize_function_call (span : Meta.span) (call_id : call_id)
     (ctx : Contexts.eval_ctx) (sg : (fun_sig * inst_fun_sig) option)
-    (abstractions : AbstractionId.id list) (generics : generic_args)
-    (trait_method_generics : (generic_args * trait_instance_id) option)
+    (abstractions : AbsId.id list) (generics : generic_args)
+    (trait_method_generics : (generic_args * trait_ref_kind) option)
     (args : tvalue list) (args_places : mplace option list)
     (dest : symbolic_value) (dest_place : mplace option) (e : expr) : expr =
   let sg, inst_sg =
@@ -140,11 +141,11 @@ let synthesize_global_eval (gref : global_decl_ref) (dest : symbolic_value)
     (e : expr) : expr =
   EvalGlobal (gref.id, gref.generics, dest, e)
 
-let synthesize_regular_function_call (span : Meta.span)
-    (fun_id : fun_id_or_trait_method_ref) (call_id : FunCallId.id)
-    (ctx : Contexts.eval_ctx) (sg : fun_sig) (inst_sg : inst_fun_sig)
-    (abstractions : AbstractionId.id list) (generics : generic_args)
-    (trait_method_generics : (generic_args * trait_instance_id) option)
+let synthesize_regular_function_call (span : Meta.span) (fun_id : fn_ptr_kind)
+    (call_id : FunCallId.id) (ctx : Contexts.eval_ctx) (sg : fun_sig)
+    (inst_sg : inst_fun_sig) (abstractions : AbsId.id list)
+    (generics : generic_args)
+    (trait_method_generics : (generic_args * trait_ref_kind) option)
     (args : tvalue list) (args_places : mplace option list)
     (dest : symbolic_value) (dest_place : mplace option) (e : expr) : expr =
   synthesize_function_call span
@@ -171,7 +172,7 @@ let synthesize_binary_op (span : Meta.span) (ctx : Contexts.eval_ctx)
 
 let synthesize_end_abstraction (ctx : Contexts.eval_ctx) (abs : abs) (e : expr)
     : expr =
-  EndAbstraction (ctx, abs, e)
+  EndAbs (ctx, abs, e)
 
 let synthesize_assignment (ctx : Contexts.eval_ctx) (lplace : mplace)
     (rvalue : tvalue) (rplace : mplace option) (e : expr) : expr =

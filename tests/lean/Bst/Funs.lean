@@ -45,24 +45,22 @@ def TreeSet.insert_loop
   Result (Bool × (Option (Node T)))
   :=
   match current_tree with
-  | none => let n := Node.mk value none none
-            ok (true, some n)
+  | none => ok (true, some (Node.mk value none none))
   | some current_node =>
     do
     let o ← OrdInst.cmp current_node.value value
     match o with
     | Ordering.Less =>
       do
-      let (b, current_tree1) ←
-        TreeSet.insert_loop OrdInst value current_node.right
-      ok (b, some (Node.mk current_node.value current_node.left current_tree1))
+      let (b, back) ← TreeSet.insert_loop OrdInst value current_node.right
+      let back1 := some (Node.mk current_node.value current_node.left back)
+      ok (b, back1)
     | Ordering.Equal => ok (false, current_tree)
     | Ordering.Greater =>
       do
-      let (b, current_tree1) ←
-        TreeSet.insert_loop OrdInst value current_node.left
-      ok (b, some (Node.mk current_node.value current_tree1
-        current_node.right))
+      let (b, back) ← TreeSet.insert_loop OrdInst value current_node.left
+      let back1 := some (Node.mk current_node.value back current_node.right)
+      ok (b, back1)
 partial_fixpoint
 
 /- [bst::{bst::TreeSet<T>}::insert]:
@@ -72,7 +70,7 @@ def TreeSet.insert
   Result (Bool × (TreeSet T))
   :=
   do
-  let (b, current_tree) ← TreeSet.insert_loop OrdInst value self.root
-  ok (b, { root := current_tree })
+  let (b, o) ← TreeSet.insert_loop OrdInst value self.root
+  ok (b, { root := o })
 
 end bst

@@ -181,8 +181,7 @@ theorem Slice.subslice_spec {α : Type u} [Inhabited α] (s : Slice α) (r : Ran
   ns.val = s.slice r.start.val r.end_.val ∧
   (∀ i, i + r.start.val < r.end_.val → ns[i]! = s[r.start.val + i]!)
   := by
-  simp_all only [subslice, length, and_self, ite_true, ok.injEq, slice, get!, exists_eq_left',
-    true_and]
+  simp_all only [subslice, length, and_self, ite_true, ok.injEq, slice, exists_eq_left', true_and]
   intro i _
   have := List.getElem!_slice r.start.val r.end_.val i s.val (by scalar_tac)
   simp only [List.getElem!_eq_getElem?_getD, getElem!_Nat_eq] at *

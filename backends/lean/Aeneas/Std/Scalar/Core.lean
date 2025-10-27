@@ -214,19 +214,19 @@ theorem IScalarTy.numBits_nonzero (ty : IScalarTy) : ty.numBits ≠ 0 := by
   cases ty <;> simp [numBits]
   cases System.Platform.numBits_eq <;> simp_all
 
-@[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps] theorem UScalarTy.U8_numBits_eq    : UScalarTy.U8.numBits    = 8 := by rfl
-@[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps] theorem UScalarTy.U16_numBits_eq   : UScalarTy.U16.numBits   = 16 := by rfl
-@[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps] theorem UScalarTy.U32_numBits_eq   : UScalarTy.U32.numBits   = 32 := by rfl
-@[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps] theorem UScalarTy.U64_numBits_eq   : UScalarTy.U64.numBits   = 64 := by rfl
-@[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps] theorem UScalarTy.U128_numBits_eq  : UScalarTy.U128.numBits  = 128 := by rfl
-@[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps] theorem UScalarTy.Usize_numBits_eq : UScalarTy.Usize.numBits = System.Platform.numBits := by rfl
+@[defeq, simp, scalar_tac_simps, simp_scalar_simps, bvify_simps] theorem UScalarTy.U8_numBits_eq    : UScalarTy.U8.numBits    = 8 := by rfl
+@[defeq, simp, scalar_tac_simps, simp_scalar_simps, bvify_simps] theorem UScalarTy.U16_numBits_eq   : UScalarTy.U16.numBits   = 16 := by rfl
+@[defeq, simp, scalar_tac_simps, simp_scalar_simps, bvify_simps] theorem UScalarTy.U32_numBits_eq   : UScalarTy.U32.numBits   = 32 := by rfl
+@[defeq, simp, scalar_tac_simps, simp_scalar_simps, bvify_simps] theorem UScalarTy.U64_numBits_eq   : UScalarTy.U64.numBits   = 64 := by rfl
+@[defeq, simp, scalar_tac_simps, simp_scalar_simps, bvify_simps] theorem UScalarTy.U128_numBits_eq  : UScalarTy.U128.numBits  = 128 := by rfl
+@[defeq, simp, scalar_tac_simps, simp_scalar_simps, bvify_simps] theorem UScalarTy.Usize_numBits_eq : UScalarTy.Usize.numBits = System.Platform.numBits := by rfl
 
-@[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps] theorem IScalarTy.I8_numBits_eq    : IScalarTy.I8.numBits    = 8 := by rfl
-@[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps] theorem IScalarTy.I16_numBits_eq   : IScalarTy.I16.numBits   = 16 := by rfl
-@[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps] theorem IScalarTy.I32_numBits_eq   : IScalarTy.I32.numBits   = 32 := by rfl
-@[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps] theorem IScalarTy.I64_numBits_eq   : IScalarTy.I64.numBits   = 64 := by rfl
-@[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps] theorem IScalarTy.I128_numBits_eq  : IScalarTy.I128.numBits  = 128 := by rfl
-@[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps] theorem IScalarTy.Isize_numBits_eq : IScalarTy.Isize.numBits = System.Platform.numBits := by rfl
+@[defeq, simp, scalar_tac_simps, simp_scalar_simps, bvify_simps] theorem IScalarTy.I8_numBits_eq    : IScalarTy.I8.numBits    = 8 := by rfl
+@[defeq, simp, scalar_tac_simps, simp_scalar_simps, bvify_simps] theorem IScalarTy.I16_numBits_eq   : IScalarTy.I16.numBits   = 16 := by rfl
+@[defeq, simp, scalar_tac_simps, simp_scalar_simps, bvify_simps] theorem IScalarTy.I32_numBits_eq   : IScalarTy.I32.numBits   = 32 := by rfl
+@[defeq, simp, scalar_tac_simps, simp_scalar_simps, bvify_simps] theorem IScalarTy.I64_numBits_eq   : IScalarTy.I64.numBits   = 64 := by rfl
+@[defeq, simp, scalar_tac_simps, simp_scalar_simps, bvify_simps] theorem IScalarTy.I128_numBits_eq  : IScalarTy.I128.numBits  = 128 := by rfl
+@[defeq, simp, scalar_tac_simps, simp_scalar_simps, bvify_simps] theorem IScalarTy.Isize_numBits_eq : IScalarTy.Isize.numBits = System.Platform.numBits := by rfl
 
 @[simp] theorem UScalar.max_UScalarTy_U8_eq    : UScalar.max .U8 = U8.max := by simp [UScalar.max, U8.max, U8.numBits]
 @[simp] theorem UScalar.max_UScalarTy_U16_eq   : UScalar.max .U16 = U16.max := by simp [UScalar.max, U16.max, U16.numBits]
@@ -269,7 +269,7 @@ local macro_rules
 
 theorem Usize.bounds_eq :
   Usize.max = U32.max ∨ Usize.max = U64.max := by
-  simp [Usize.max, UScalar.max, Usize.numBits]
+  simp [Usize.max, Usize.numBits]
   cases System.Platform.numBits_eq <;>
   simp [*] <;>
   simp_bounds
@@ -277,7 +277,7 @@ theorem Usize.bounds_eq :
 theorem Isize.bounds_eq :
   (Isize.min = I32.min ∧ Isize.max = I32.max)
   ∨ (Isize.min = I64.min ∧ Isize.max = I64.max) := by
-  simp [Isize.min, Isize.max, IScalar.min, IScalar.max, Isize.numBits]
+  simp [Isize.min, Isize.max, Isize.numBits]
   cases System.Platform.numBits_eq <;>
   simp [*] <;> simp [*, I32.min, I32.numBits, I32.max, I64.min, I64.numBits, I64.max]
 
@@ -377,15 +377,16 @@ def IScalar.hBounds {ty} (x : IScalar ty) :
   -2^(ty.numBits - 1) ≤ x.val ∧ x.val < 2^(ty.numBits - 1) := by
   match x with
   | ⟨ ⟨ fin ⟩ ⟩ =>
-    simp [val, min, max, BitVec.toInt]
+    simp [val, BitVec.toInt]
     cases ty <;> simp at * <;> try omega
+
     have hFinLt := fin.isLt
     cases h: System.Platform.numBits_eq <;>
     simp_all only [IScalarTy.Isize_numBits_eq, true_or, Nat.add_one_sub_one] <;>
     omega
 
 def IScalar.rMin_eq_pow_numBits (ty : IScalarTy) : IScalar.rMin ty = -2^(ty.numBits - 1) := by
-  cases ty <;> simp [cMax] <;> simp_bounds
+  cases ty <;> simp <;> simp_bounds
 
 def IScalar.rMax_eq_pow_numBits (ty : IScalarTy) : IScalar.rMax ty = 2^(ty.numBits - 1) - 1 := by
   cases ty <;> simp [rMax] <;> simp_bounds
@@ -547,7 +548,7 @@ theorem UScalar.tryMkOpt_eq (ty : UScalarTy) (x : Nat) :
   simp [tryMkOpt, ofNatCore]
   have h := check_bounds_eq_inBounds ty x
   split_ifs <;> simp_all
-  simp [UScalar.val, UScalarTy.numBits, max] at *
+  simp [UScalar.val, UScalarTy.numBits] at *
 
 theorem UScalar.tryMk_eq (ty : UScalarTy) (x : Nat) :
   match tryMk ty x with
@@ -565,12 +566,10 @@ theorem IScalar.tryMkOpt_eq (ty : IScalarTy) (x : Int) :
   simp [tryMkOpt, ofIntCore]
   have h := check_bounds_eq_inBounds ty x
   split_ifs <;> simp_all
-  simp [IScalar.val, IScalarTy.numBits, min, max] at *
+  simp [IScalar.val, IScalarTy.numBits] at *
   cases ty <;>
-  simp_all [I8.min, I16.min, I32.min, I64.min, I128.min, Isize.min,
-            I8.max, I16.max, I32.max, I64.max, I128.max, Isize.max,
-            min, max] <;>
-  simp [Int.bmod, BitVec.toInt] <;> split <;> (try omega) <;>
+  simp_all [] <;>
+  simp [Int.bmod] <;> split <;> (try omega) <;>
   cases h: System.Platform.numBits_eq <;> simp_all <;> omega
 
 theorem IScalar.tryMk_eq (ty : IScalarTy) (x : Int) :
@@ -579,7 +578,7 @@ theorem IScalar.tryMk_eq (ty : IScalarTy) (x : Int) :
   | fail _ => ¬ (inBounds ty x)
   | _ => False := by
   have := tryMkOpt_eq ty x
-  simp [tryMk, ofIntCore]
+  simp [tryMk]
   cases h : tryMkOpt ty x <;> simp_all
 
 @[simp] theorem UScalar.zero_in_cbounds {ty : UScalarTy} : 0 < 2^ty.numBits := by
@@ -640,7 +639,7 @@ abbrev I128.ofInt  := @IScalar.ofInt .I128
 @[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps]
 theorem UScalar.ofNat_val_eq {ty : UScalarTy} (h : x < 2^ty.numBits) :
   (UScalar.ofNatCore x h).val = x := by
-  simp [UScalar.ofNat, UScalar.ofNatCore, UScalar.val, max]
+  simp [UScalar.ofNatCore, UScalar.val]
 
 @[simp, scalar_tac_simps]
 theorem U8.ofNat_val_eq (h : x < 2^UScalarTy.U8.numBits) : (U8.ofNatCore x h).val = x := by
@@ -669,10 +668,10 @@ theorem Usize.ofNat_val_eq (h : x < 2^UScalarTy.Usize.numBits) : (Usize.ofNatCor
 @[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps]
 theorem IScalar.ofInt_val_eq {ty : IScalarTy} (h : - 2^(ty.numBits - 1) ≤ x ∧ x < 2^(ty.numBits - 1)) :
   (IScalar.ofIntCore x h).val = x := by
-  simp [IScalar.ofInt, IScalar.ofIntCore, IScalar.val]
+  simp [IScalar.ofIntCore, IScalar.val]
   cases ty <;>
   simp_all <;>
-  simp [Int.bmod, BitVec.toInt] <;> split <;> (try omega) <;>
+  simp [Int.bmod] <;> split <;> (try omega) <;>
   cases h: System.Platform.numBits_eq <;> simp_all <;> omega
 
 @[simp, scalar_tac_simps]
@@ -712,7 +711,7 @@ theorem UScalar.eq_equiv_bv_eq {ty : UScalarTy} (x y : UScalar ty) :
 
 theorem UScalar.ofNatCore_bv {ty : UScalarTy} (x : Nat) h :
   (@UScalar.ofNatCore ty x h).bv = BitVec.ofNat _ x := by
-  simp only [ofNatCore, BitVec.ofNat, Fin.ofNat, Nat.mod_eq_of_lt h]
+  simp only [ofNatCore, BitVec.ofNat, Fin.Internal.ofNat, Nat.mod_eq_of_lt h]
 
 @[simp, simp_scalar_simps, bvify_simps] theorem U8.ofNat_bv (x : Nat) h : (U8.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
 @[simp, simp_scalar_simps, bvify_simps] theorem U16.ofNat_bv (x : Nat) h : (U16.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
@@ -778,7 +777,7 @@ theorem IScalar.min_le_max (ty : IScalarTy) : IScalar.min ty ≤ IScalar.max ty 
 @[reducible] def core.num.U128.MIN : U128 := UScalar.ofNat 0
 @[reducible] def core.num.U128.MAX : U128 := UScalar.ofNat U128.rMax
 @[reducible] def core.num.Usize.MIN : Usize := UScalar.ofNatCore 0 (by simp)
-@[reducible] def core.num.Usize.MAX : Usize := UScalar.ofNatCore Usize.max (by simp [Usize.max, Usize.numBits, UScalar.rMax])
+@[reducible] def core.num.Usize.MAX : Usize := UScalar.ofNatCore Usize.max (by simp [Usize.max, Usize.numBits])
 
 @[reducible] def core.num.I8.MIN : I8 := IScalar.ofInt I8.rMin
 @[reducible] def core.num.I8.MAX : I8 := IScalar.ofInt I8.rMax
@@ -790,8 +789,8 @@ theorem IScalar.min_le_max (ty : IScalarTy) : IScalar.min ty ≤ IScalar.max ty 
 @[reducible] def core.num.I64.MAX : I64 := IScalar.ofInt I64.rMax
 @[reducible] def core.num.I128.MIN : I128 := IScalar.ofInt I128.rMin
 @[reducible] def core.num.I128.MAX : I128 := IScalar.ofInt I128.rMax
-@[reducible] def core.num.Isize.MIN : Isize := IScalar.ofIntCore Isize.min (by simp [Isize.min, Isize.numBits, Isize.rMin])
-@[reducible] def core.num.Isize.MAX : Isize := IScalar.ofIntCore Isize.max (by simp [Isize.max, Isize.numBits, Isize.rMax]; (have : (0 : Int) < 2 ^ (System.Platform.numBits - 1) := by simp); omega)
+@[reducible] def core.num.Isize.MIN : Isize := IScalar.ofIntCore Isize.min (by simp [Isize.min, Isize.numBits])
+@[reducible] def core.num.Isize.MAX : Isize := IScalar.ofIntCore Isize.max (by simp [Isize.max, Isize.numBits]; (have : (0 : Int) < 2 ^ (System.Platform.numBits - 1) := by simp); omega)
 
 
 /-! # Comparisons -/
@@ -1058,7 +1057,7 @@ theorem IScalar.ofInt_val (x : IScalar ty) (hInBounds : IScalar.cMin ty ≤ x.va
 
 @[simp, bvify_simps]
 theorem IScalar.BitVec_ofInt_val (x : IScalar ty) : BitVec.ofInt ty.numBits x.val = x.bv := by
-  cases x; simp only [IScalar.val, BitVec.ofInt_toInt, BitVec.setWidth]
+  cases x; simp only [IScalar.val, BitVec.ofInt_toInt]
 
 @[simp, bvify_simps] theorem I8.BitVec_ofInt_val (x : I8) : BitVec.ofInt 8 x.val = x.bv := IScalar.BitVec_ofInt_val x
 @[simp, bvify_simps] theorem I16.BitVec_ofInt_val (x : I16) : BitVec.ofInt 16 x.val = x.bv := IScalar.BitVec_ofInt_val x

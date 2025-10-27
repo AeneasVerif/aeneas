@@ -120,12 +120,12 @@ theorem list_nth_mut1_spec' {T: Type} [Inhabited T] (l : CList T) (i : U32)
         simp [*]
   . simp_all
 
-/-- Theorem about `list_tail`: verbose version -/
+/-- Theorem about `list_tail_loop`: verbose version -/
 @[progress]
-theorem list_tail_spec {T : Type} (l : CList T) :
-  ∃ back, list_tail l = ok (CList.CNil, back) ∧
+theorem list_tail_loop_spec {T : Type} (l : CList T) :
+  ∃ back, list_tail_loop l = ok back ∧
   ∀ tl', (back tl').toList = l.toList ++ tl'.toList := by
-  unfold list_tail list_tail_loop
+  unfold list_tail_loop
   split
   . rename_i hd tl
     simp
@@ -139,19 +139,20 @@ theorem list_tail_spec {T : Type} (l : CList T) :
   . -- Quite a few things automatically happen here
     simp
 
-/-- Theorem about `list_tail: simple version -/
+/-- Theorem about `list_tail_loop: simple version -/
 @[progress]
-theorem list_tail_spec' {T : Type} (l : CList T) :
+theorem list_tail_loop_spec' {T : Type} (l : CList T) :
+  ∃ back, list_tail_loop l = ok back ∧
+  ∀ tl', (back tl').toList = l.toList ++ tl'.toList := by
+  unfold list_tail_loop
+  progress*
+
+@[progress]
+theorem list_tail_spec {T : Type} (l : CList T) :
   ∃ back, list_tail l = ok (CList.CNil, back) ∧
   ∀ tl', (back tl').toList = l.toList ++ tl'.toList := by
-  unfold list_tail list_tail_loop
-  split
-  . simp
-    progress as ⟨ back ⟩
-    simp
-    -- Proving the post-condition about the backward function
-    simp [*]
-  . simp
+  unfold list_tail
+  progress*
 
 /-- Theorem about `append_in_place` -/
 @[progress]
@@ -422,7 +423,7 @@ theorem add_with_carry_loop_spec
         simp [hConv2', hConv1]
         simp [*, U32.size_eq]
         scalar_eq_nf
-      . simp [*, U32.size_eq]
+      . simp [*]
         scalar_eq_nf
   . simp_all
     scalar_tac

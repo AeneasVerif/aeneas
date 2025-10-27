@@ -26,7 +26,7 @@ partial_fixpoint
    Source: 'tests/src/issue-270-loop-list.rs', lines 7:0-14:1 -/
 def foo (v : List (List U8)) : Result Unit :=
   match v with
-  | List.Cons l t => foo_loop t
+  | List.Cons _ t => foo_loop t
   | List.Nil => ok ()
 
 end issue_270_loop_list

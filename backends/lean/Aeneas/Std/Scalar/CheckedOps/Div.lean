@@ -50,7 +50,7 @@ theorem «%S».checked_div_bv_spec (x y : «%S») :
   | some z => y.val ≠ 0 ∧ z.val = x.val / y.val ∧ z.bv = x.bv / y.bv
   | none => y.val = 0 := by
   have := core.num.checked_div_UScalar_bv_spec x y
-  simp_all [«%S».checked_div, UScalar.max, «%S».bv]
+  simp_all [«%S».checked_div, «%S».bv]
   cases h: core.num.checked_div_UScalar x y <;> simp_all
 
 /-!
@@ -69,7 +69,7 @@ theorem core.num.checked_div_IScalar_bv_spec {ty} (x y : IScalar ty) :
     have hnz' : y.val ≠ 0 := by zify at *; simp_all
     have ⟨ z, hz ⟩ := @IScalar.div_bv_spec _ x y hnz' (by simp; tauto)
     have : x / y = x.div y := by rfl
-    simp [this, IScalar.div, hnz, hNoOverflow] at hz
+    simp [this, IScalar.div, hnz] at hz
     split_ifs at hz
     simp at hz
     simp [hz, hnz']
@@ -82,7 +82,7 @@ theorem «%S».checked_div_bv_spec (x y : «%S») :
   | some z => y.val ≠ 0 ∧ ¬ (x.val = «%S».min ∧ y.val = -1) ∧ z.val = Int.tdiv x.val y.val ∧ z.bv = BitVec.sdiv x.bv y.bv
   | none => y.val = 0 ∨ (x.val = «%S».min ∧ y.val = -1) := by
   have := core.num.checked_div_IScalar_bv_spec x y
-  simp_all only [«%S».checked_div, «%S».bv, IScalar.min, «%S».min, «%S».max, «%S».numBits]
-  cases h: core.num.checked_div_IScalar x y <;> simp_all only [ne_eq, not_false_eq_true, and_self, this]
+  simp_all only [«%S».bv, IScalar.min, «%S».min, «%S».numBits]
+  cases h: core.num.checked_div_IScalar x y <;> simp_all only [ne_eq, not_false_eq_true, and_self]
 
 end Aeneas.Std

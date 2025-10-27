@@ -9,18 +9,18 @@
 
 let log = Logging.errors_log
 
-let raw_span_to_string (raw_span : Meta.raw_span) =
+let span_data_to_string (span_data : Meta.span_data) =
   let file =
-    match raw_span.file.name with
+    match span_data.file.name with
     | Virtual s | Local s -> s
   in
   let loc_to_string (l : Meta.loc) : string =
     string_of_int l.line ^ ":" ^ string_of_int l.col
   in
   "'" ^ file ^ "', lines "
-  ^ loc_to_string raw_span.beg_loc
+  ^ loc_to_string span_data.beg_loc
   ^ "-"
-  ^ loc_to_string raw_span.end_loc
+  ^ loc_to_string span_data.end_loc
 
 let span_to_string (span : Meta.span) =
   let generated_from =
@@ -28,9 +28,9 @@ let span_to_string (span : Meta.span) =
     | None -> ""
     | Some span ->
         "; this code is generated from a macro invocation at: "
-        ^ raw_span_to_string span
+        ^ span_data_to_string span
   in
-  "Source: " ^ raw_span_to_string span.span ^ generated_from
+  "Source: " ^ span_data_to_string span.data ^ generated_from
 
 let format_error_message (span : Meta.span option) (msg : string) =
   let span =
@@ -79,6 +79,9 @@ let save_error_opt_span (file : string) (line : int) (span : Meta.span option)
 
 let save_error (file : string) (line : int) (span : Meta.span) (msg : string) =
   save_error_opt_span file line (Some span) msg
+
+let add_loc (file : string) (line : int) (x : string -> int -> 'a) : 'a =
+  x file line
 
 let craise_opt_span (file : string) (line : int) (span : Meta.span option)
     (msg : string) =
@@ -159,13 +162,22 @@ let unwrap_opt_span (file : string) (line : int) (span : Meta.span option)
   | Some x -> x
   | None -> craise_opt_span file line span msg
 
+let unwrap_with_span (file : string) (line : int) (span : Meta.span)
+    (x : 'a option) (msg : string) : 'a =
+  unwrap_opt_span file line (Some span) x msg
+
 let silent_unwrap_opt_span (file : string) (line : int)
     (span : Meta.span option) (x : 'a option) : 'a =
   match x with
   | Some x -> x
   | None ->
-      craise_opt_span_silent file line span
-        "Internal error: please file an issue"
+      craise_opt_span file line span "Internal error: please file an issue"
+
+let try_unwrap (file : string) (line : int) (span : Meta.span) (x : 'a option) :
+    'a =
+  match x with
+  | Some x -> x
+  | None -> craise file line span "Internal error: please file an issue"
 
 let silent_unwrap (file : string) (line : int) (span : Meta.span)
     (x : 'a option) : 'a =

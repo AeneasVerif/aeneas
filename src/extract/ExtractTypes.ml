@@ -1057,7 +1057,7 @@ let extract_comment_with_span (ctx : extraction_ctx) (fmt : F.formatter)
 
 let extract_trait_clause_type (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t)
-    (clause : trait_clause) : unit =
+    (clause : trait_param) : unit =
   let trait_name = ctx_get_trait_decl span clause.trait_id ctx in
   F.pp_print_string fmt trait_name;
   (* let span = (TraitDeclId.Map.find clause.trait_id ctx.trans_trait_decls).span in
@@ -1110,8 +1110,8 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
       F.pp_print_string fmt "forall");
     (* Small helper - we may need to split the parameters *)
     let print_generics (type_params : (explicit * string) list)
-        (const_generics : (explicit * const_generic_var) list)
-        (trait_clauses : (explicit * trait_clause) list) : unit =
+        (const_generics : (explicit * const_generic_param) list)
+        (trait_clauses : (explicit * trait_param) list) : unit =
       (* Note that in HOL4 we don't print the type parameters. *)
       if backend () <> HOL4 then (
         (* Print the type parameters *)
@@ -1135,7 +1135,7 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
             F.pp_print_string fmt "->"));
         (* Print the const generic parameters *)
         List.iter
-          (fun ((expl, var) : explicit * const_generic_var) ->
+          (fun ((expl, var) : explicit * const_generic_param) ->
             insert_req_space ();
             (* ( *)
             left_bracket expl;
@@ -1154,7 +1154,7 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
           const_generics);
       (* Print the trait clauses *)
       List.iter
-        (fun ((expl, clause) : explicit * trait_clause) ->
+        (fun ((expl, clause) : explicit * trait_param) ->
           insert_req_space ();
           (* ( *)
           left_bracket expl;
@@ -1838,70 +1838,3 @@ let extract_type_decl_extra_info (ctx : extraction_ctx) (fmt : F.formatter)
         if backend () = Lean then
           extract_type_decl_record_field_projectors_simp_lemmas ctx fmt kind
             decl)
-
-(** Extract the state type declaration. *)
-let extract_state_type (fmt : F.formatter) (ctx : extraction_ctx)
-    (kind : decl_kind) : unit =
-  (* Add a break before *)
-  F.pp_print_break fmt 0 0;
-  (* Print a comment  *)
-  extract_comment fmt [ "The state type used in the state-error monad" ];
-  F.pp_print_break fmt 0 0;
-  (* Open a box for the definition, so that whenever possible it gets printed on
-   * one line *)
-  F.pp_open_hvbox fmt 0;
-  (* Retrieve the name *)
-  let state_name = ctx_get_builtin_type None TState ctx in
-  (* The syntax for Lean and Coq is almost identical. *)
-  let print_axiom () =
-    let axiom =
-      match backend () with
-      | Coq -> "Axiom"
-      | Lean -> "axiom"
-      | FStar | HOL4 -> raise (Failure "Unexpected")
-    in
-    F.pp_print_string fmt axiom;
-    F.pp_print_space fmt ();
-    F.pp_print_string fmt state_name;
-    F.pp_print_space fmt ();
-    F.pp_print_string fmt ":";
-    F.pp_print_space fmt ();
-    F.pp_print_string fmt "Type";
-    if backend () = Coq then F.pp_print_string fmt "."
-  in
-  (* The kind should be [Builtin] or [Declared] *)
-  (match kind with
-  | SingleNonRec | SingleRec | MutRecFirst | MutRecInner | MutRecLast ->
-      raise (Failure "Unexpected")
-  | Builtin -> (
-      match backend () with
-      | FStar ->
-          F.pp_print_string fmt "assume";
-          F.pp_print_space fmt ();
-          F.pp_print_string fmt "type";
-          F.pp_print_space fmt ();
-          F.pp_print_string fmt state_name;
-          F.pp_print_space fmt ();
-          F.pp_print_string fmt ":";
-          F.pp_print_space fmt ();
-          F.pp_print_string fmt "Type0"
-      | HOL4 ->
-          F.pp_print_string fmt ("val _ = new_type (\"" ^ state_name ^ "\", 0)")
-      | Coq | Lean -> print_axiom ())
-  | Declared -> (
-      match backend () with
-      | FStar ->
-          F.pp_print_string fmt "val";
-          F.pp_print_space fmt ();
-          F.pp_print_string fmt state_name;
-          F.pp_print_space fmt ();
-          F.pp_print_string fmt ":";
-          F.pp_print_space fmt ();
-          F.pp_print_string fmt "Type0"
-      | HOL4 ->
-          F.pp_print_string fmt ("val _ = new_type (\"" ^ state_name ^ "\", 0)")
-      | Coq | Lean -> print_axiom ()));
-  (* Close the box for the definition *)
-  F.pp_close_box fmt ();
-  (* Add breaks to insert new lines between definitions *)
-  F.pp_print_break fmt 0 0

@@ -25,7 +25,7 @@ let texpr_to_string (ctx : extraction_ctx) =
 let extract_fun_decl_register_names (ctx : extraction_ctx)
     (has_decreases_clause : fun_decl -> bool) (def : pure_fun_translation) :
     extraction_ctx =
-  match def.f.kind with
+  match def.f.src with
   | TraitDeclItem (_, _, false) ->
       (* Ignore the trait methods **declarations** (rem.: we do not ignore the trait
          method implementations): we do not need to refer to them directly. We will
@@ -162,8 +162,17 @@ let extract_adt_g_value (span : Meta.span)
            the syntax is: `let ⟨ x0, ..., xn ⟩ := ...`.
 
            Otherwise, it is: `let Cons x0 ... xn = ...`
+
+           Note that we only do so if the variant is [None]. This means that
+           in case the extraction is erroneous (i.e., we did not transform
+           a single let pattern into a match, like in:
+           [let Some x := y ~> let x = match y with | Some x -> x | None -> ...])
+           we might generate erroneous code (e.g., [let Some x := y in ...]).
+           This is fine because the code would be erroneous anyway, and it's
+           a lot more informative (to debug the error) to see something like
+           [let Some x := y in ...] rather than [let ⟨ x ⟩ := y in ...]
         *)
-        is_single_pat && backend () = Lean
+        is_single_pat && backend () = Lean && variant_id = None
       then (
         F.pp_print_string fmt "⟨";
         F.pp_print_space fmt ();
@@ -275,9 +284,9 @@ let fun_builtin_filter_types (id : FunDeclId.id) (types : 'a list)
 
     As a pattern can introduce new variables, we return an extraction context
     updated with new bindings. *)
-let rec extract_tpattern (span : Meta.span) (ctx : extraction_ctx)
-    (fmt : F.formatter) (is_let : bool) (inside : bool) ?(with_type = false)
-    (v : tpattern) : extraction_ctx =
+let rec extract_tpat (span : Meta.span) (ctx : extraction_ctx)
+    (fmt : F.formatter) ~(is_let : bool) ~(inside : bool) ?(with_type = false)
+    (v : tpat) : extraction_ctx =
   if with_type then F.pp_print_string fmt "(";
   let is_pattern = true in
   let inside = inside && not with_type in
@@ -294,12 +303,12 @@ let rec extract_tpattern (span : Meta.span) (ctx : extraction_ctx)
         let ctx, vname = ctx_add_var span vname v.id ctx in
         F.pp_print_string fmt vname;
         ctx
-    | PDummy ->
+    | PIgnored ->
         F.pp_print_string fmt "_";
         ctx
     | PAdt av ->
         let extract_value ctx inside v =
-          extract_tpattern span ctx fmt is_let inside v
+          extract_tpat span ctx fmt ~is_let ~inside v
         in
         extract_adt_g_value span extract_value fmt ctx is_let inside
           av.variant_id av.fields v.ty
@@ -315,7 +324,7 @@ let rec extract_tpattern (span : Meta.span) (ctx : extraction_ctx)
 (** Return true if we need to wrap a succession of let-bindings in a [do ...]
     block (because some of them are monadic) *)
 let lets_require_wrap_in_do (span : Meta.span)
-    (lets : (bool * tpattern * texpr) list) : bool =
+    (lets : (bool * tpat * texpr) list) : bool =
   match backend () with
   | Lean ->
       (* For Lean, we wrap in a block iff at least one of the let-bindings is monadic *)
@@ -626,7 +635,7 @@ and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
 and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (inside : bool) (fid : fun_or_op_id)
     (generics : generic_args) (args : texpr list) : unit =
-  [%ltrace
+  [%ldebug
     fun_or_op_id_to_string ctx fid
     ^ "\n- generics: "
     ^ generic_args_to_string ctx generics
@@ -930,13 +939,15 @@ and extract_field_projector (span : Meta.span) (ctx : extraction_ctx)
   | arg :: args ->
       (* Call extract_App again, but in such a way that the first argument is
        * isolated *)
-      extract_App span ctx fmt inside (mk_app span original_app arg) args
+      extract_App span ctx fmt inside
+        ([%add_loc] mk_app span original_app arg)
+        args
   | [] ->
       (* No argument: shouldn't happen *)
       [%admit_raise] span "Unreachable" fmt
 
 and extract_Lambda (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
-    (inside : bool) (xl : tpattern list) (e : texpr) : unit =
+    (inside : bool) (xl : tpat list) (e : texpr) : unit =
   (* Open a box for the abs expression *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* Open parentheses *)
@@ -953,7 +964,7 @@ and extract_Lambda (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
     List.fold_left
       (fun ctx x ->
         F.pp_print_space fmt ();
-        extract_tpattern span ctx fmt true true ~with_type x)
+        extract_tpat span ctx fmt ~is_let:true ~inside:true ~with_type x)
       ctx xl
   in
   F.pp_print_space fmt ();
@@ -997,7 +1008,7 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
     | FStar | Coq | Lean -> raw_destruct_lets e
   in
   (* Extract the let-bindings *)
-  let extract_let (ctx : extraction_ctx) (monadic : bool) (lv : tpattern)
+  let extract_let (ctx : extraction_ctx) (monadic : bool) (lv : tpat)
       (re : texpr) : extraction_ctx =
     (* Open a box for the let-binding *)
     F.pp_open_hvbox fmt 0;
@@ -1017,7 +1028,7 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       if monadic && (backend () = Coq || backend () = HOL4) then (
         (* Box for the let .. <- *)
         F.pp_open_hovbox fmt ctx.indent_incr;
-        let ctx = extract_tpattern span ctx fmt true true lv in
+        let ctx = extract_tpat span ctx fmt ~is_let:true ~inside:false lv in
         F.pp_print_space fmt ();
         let arrow =
           match backend () with
@@ -1037,8 +1048,7 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
         (* Check if we can ignore the [let] - it is possible for some backends,
            if the monadic expression evaluates to [()] *)
         let ignore_let =
-          monadic && is_dummy_pattern lv && ty_is_unit lv.ty
-          && backend () = Lean
+          monadic && is_ignored_pat lv && ty_is_unit lv.ty && backend () = Lean
         in
         (* Print the [let] *)
         let ctx, end_let =
@@ -1057,7 +1067,7 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
             else (
               F.pp_print_string fmt "let";
               F.pp_print_space fmt ());
-            let ctx = extract_tpattern span ctx fmt true true lv in
+            let ctx = extract_tpat span ctx fmt ~is_let:true ~inside:false lv in
             F.pp_print_space fmt ();
             let eq =
               match backend () with
@@ -1241,7 +1251,9 @@ and extract_Switch (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
         (* Print the pattern *)
         F.pp_print_string fmt "|";
         F.pp_print_space fmt ();
-        let ctx = extract_tpattern span ctx fmt false false br.pat in
+        let ctx =
+          extract_tpat span ctx fmt ~is_let:false ~inside:false br.pat
+        in
         F.pp_print_space fmt ();
         let arrow =
           match backend () with
@@ -1499,13 +1511,14 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
     | None -> ctx
     | Some body ->
         List.fold_left
-          (fun ctx (lv : tpattern) ->
+          (fun ctx (lv : tpat) ->
             insert_req_space fmt space;
             (* Open a box for the input parameter *)
             F.pp_open_hovbox fmt 0;
             F.pp_print_string fmt "(";
             let ctx =
-              extract_tpattern def.item_meta.span ctx fmt true false lv
+              extract_tpat def.item_meta.span ctx fmt ~is_let:true ~inside:false
+                lv
             in
             F.pp_print_space fmt ();
             F.pp_print_string fmt ":";
@@ -1575,7 +1588,10 @@ let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
   let def =
     {
       def with
-      body = Option.map (open_all_fun_body def.item_meta.span) def.body;
+      body =
+        Option.map
+          (fun b -> snd (open_all_fun_body def.item_meta.span b))
+          def.body;
     }
   in
   (* Add a break before *)
@@ -1650,7 +1666,10 @@ let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
   let def =
     {
       def with
-      body = Option.map (open_all_fun_body def.item_meta.span) def.body;
+      body =
+        Option.map
+          (fun b -> snd (open_all_fun_body def.item_meta.span b))
+          def.body;
     }
   in
   (* Retrieve the function name *)
@@ -1689,7 +1708,7 @@ let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
   F.pp_close_box fmt ();
   F.pp_print_space fmt ();
   (* Tuple of the arguments *)
-  let vars = List.map (as_pat_open_fvar_id span) def_body.inputs in
+  let vars = List.map ([%add_loc] as_pat_open_fvar_id span) def_body.inputs in
 
   if List.length vars = 1 then
     F.pp_print_string fmt
@@ -1783,12 +1802,16 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   let def_name =
     ctx_get_local_function def.item_meta.span def.def_id def.loop_id ctx
   in
+  [%ltrace "Extracting function: " ^ def_name];
   (* Open the binders - it is easier to only manipulate variables which have unique ids *)
   reset_fvar_id_counter ();
   let def =
     {
       def with
-      body = Option.map (open_all_fun_body def.item_meta.span) def.body;
+      body =
+        Option.map
+          (fun b -> snd (open_all_fun_body def.item_meta.span b))
+          def.body;
     }
   in
   let span = def.item_meta.span in
@@ -1915,10 +1938,11 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
          patterns *)
       let _ =
         List.fold_left
-          (fun ctx (lv : tpattern) ->
+          (fun ctx (lv : tpat) ->
             F.pp_print_space fmt ();
             let ctx =
-              extract_tpattern def.item_meta.span ctx fmt true false lv
+              extract_tpat def.item_meta.span ctx fmt ~is_let:true ~inside:false
+                lv
             in
             ctx)
           ctx inputs_lvs
@@ -1964,7 +1988,7 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   (* Termination clause and proof for Lean *)
   if has_decreases_clause && backend () = Lean then (
     let def_body = Option.get def.body in
-    let vars = List.map (as_pat_open_fvar_id span) def_body.inputs in
+    let vars = List.map ([%add_loc] as_pat_open_fvar_id span) def_body.inputs in
 
     (* termination_by *)
     let terminates_name =
@@ -2066,7 +2090,10 @@ let extract_fun_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
   let def =
     {
       def with
-      body = Option.map (open_all_fun_body def.item_meta.span) def.body;
+      body =
+        Option.map
+          (fun b -> snd (open_all_fun_body def.item_meta.span b))
+          def.body;
     }
   in
   [%cassert] def.item_meta.span
@@ -2288,7 +2315,10 @@ let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
   let body =
     {
       body with
-      body = Option.map (open_all_fun_body body.item_meta.span) body.body;
+      body =
+        Option.map
+          (fun b -> snd (open_all_fun_body body.item_meta.span b))
+          body.body;
     }
   in
   (* Add a break then the name of the corresponding LLBC declaration *)
@@ -2412,7 +2442,7 @@ let extract_trait_decl_register_parent_clause_names (ctx : extraction_ctx)
     match builtin_info with
     | None ->
         List.map
-          (fun (c : trait_clause) ->
+          (fun (c : trait_param) ->
             let name = ctx_compute_trait_parent_clause_name ctx trait_decl c in
             (* Add a prefix if necessary *)
             let name =
@@ -2644,7 +2674,7 @@ let extract_trait_decl_register_names (ctx : extraction_ctx)
 (** Similar to {!extract_type_decl_register_names} *)
 let extract_trait_impl_register_names (ctx : extraction_ctx)
     (trait_impl : trait_impl) : extraction_ctx =
-  [%ltrace
+  [%ldebug
     "trait_impl.impl_trait" ^ trait_decl_ref_to_string ctx trait_impl.impl_trait];
   let decl_id = trait_impl.impl_trait.trait_decl_id in
   let trait_decl = TraitDeclId.Map.find decl_id ctx.trans_trait_decls in
@@ -3224,7 +3254,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
             false trait_ref
         in
         extract_trait_impl_item ctx fmt item_name ty)
-      (List.combine trait_decl.parent_clauses impl.parent_trait_refs);
+      (List.combine trait_decl.implied_clauses impl.parent_trait_refs);
 
     (* The methods *)
     List.iter

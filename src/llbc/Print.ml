@@ -13,8 +13,9 @@ open Contexts
 module Types = Charon.PrintTypes
 module Expressions = Charon.PrintExpressions
 
-let list_to_string (to_string : 'a -> string) (ls : 'a list) : string =
-  "[" ^ String.concat "; " (List.map to_string ls) ^ "]"
+let list_to_string ?(sep = " ") (to_string : 'a -> string) (ls : 'a list) :
+    string =
+  "[" ^ String.concat (";" ^ sep) (List.map to_string ls) ^ "]"
 
 let pair_to_string (to_string0 : 'a -> string) (to_string1 : 'b -> string)
     ((x, y) : 'a * 'b) : string =
@@ -37,6 +38,49 @@ module Values = struct
       (rty : ty) : string =
     symbolic_value_id_to_pretty_string sv_id ^ " <: " ^ ty_to_string env rty
 
+  let adt_to_string (span : Meta.span option) (env : fmt_env)
+      (value_to_debug_string : unit -> string) (ty : ty)
+      (variant_id : variant_id option) (fields : string list) : string =
+    match ty with
+    | TAdt { id = TTuple; _ } ->
+        (* Tuple *)
+        "(" ^ String.concat ", " fields ^ ")"
+    | TAdt { id = TAdtId def_id; _ } ->
+        (* "Regular" ADT *)
+        let adt_ident =
+          match variant_id with
+          | Some vid -> adt_variant_to_string env def_id vid
+          | None -> type_decl_id_to_string env def_id
+        in
+        if List.length fields > 0 then
+          match adt_field_names env def_id variant_id with
+          | None ->
+              let fields = String.concat ", " fields in
+              adt_ident ^ " (" ^ fields ^ ")"
+          | Some field_names ->
+              let fields = List.combine field_names fields in
+              let fields =
+                List.map
+                  (fun (field, value) -> field ^ " = " ^ value ^ ";")
+                  fields
+              in
+              let fields = String.concat " " fields in
+              adt_ident ^ " { " ^ fields ^ " }"
+        else adt_ident
+    | TAdt { id = TBuiltin aty; _ } -> (
+        (* Builtin type *)
+        match (aty, fields) with
+        | TBox, [ bv ] -> "@Box(" ^ bv ^ ")"
+        | TArray, _ ->
+            (* Happens when we aggregate values *)
+            "@Array[" ^ String.concat ", " fields ^ "]"
+        | _ ->
+            [%craise_opt_span] span
+              ("Inconsistent value: " ^ value_to_debug_string ()))
+    | _ ->
+        [%craise_opt_span] span
+          ("Inconsistently typed value: " ^ value_to_debug_string ())
+
   (* TODO: it may be a good idea to try to factorize this function with
    * tavalue_to_string. At some point we had done it, because [tvalue]
    * and [tavalue] were instances of the same general type [g_tvalue],
@@ -45,47 +89,11 @@ module Values = struct
       (v : tvalue) : string =
     match v.value with
     | VLiteral cv -> literal_to_string cv
-    | VAdt av -> (
-        let field_values =
-          List.map (tvalue_to_string ~span env) av.field_values
-        in
-        match v.ty with
-        | TAdt { id = TTuple; _ } ->
-            (* Tuple *)
-            "(" ^ String.concat ", " field_values ^ ")"
-        | TAdt { id = TAdtId def_id; _ } ->
-            (* "Regular" ADT *)
-            let adt_ident =
-              match av.variant_id with
-              | Some vid -> adt_variant_to_string env def_id vid
-              | None -> type_decl_id_to_string env def_id
-            in
-            if List.length field_values > 0 then
-              match adt_field_names env def_id av.variant_id with
-              | None ->
-                  let field_values = String.concat ", " field_values in
-                  adt_ident ^ " (" ^ field_values ^ ")"
-              | Some field_names ->
-                  let field_values = List.combine field_names field_values in
-                  let field_values =
-                    List.map
-                      (fun (field, value) -> field ^ " = " ^ value ^ ";")
-                      field_values
-                  in
-                  let field_values = String.concat " " field_values in
-                  adt_ident ^ " { " ^ field_values ^ " }"
-            else adt_ident
-        | TAdt { id = TBuiltin aty; _ } -> (
-            (* Builtin type *)
-            match (aty, field_values) with
-            | TBox, [ bv ] -> "@Box(" ^ bv ^ ")"
-            | TArray, _ ->
-                (* Happens when we aggregate values *)
-                "@Array[" ^ String.concat ", " field_values ^ "]"
-            | _ ->
-                [%craise_opt_span] span ("Inconsistent value: " ^ show_tvalue v)
-            )
-        | _ -> [%craise_opt_span] span "Inconsistent typed value")
+    | VAdt av ->
+        let fields = List.map (tvalue_to_string ~span env) av.fields in
+        adt_to_string span env
+          (fun () -> show_tvalue v)
+          v.ty av.variant_id fields
     | VBottom -> "⊥ : " ^ ty_to_string env v.ty
     | VBorrow bc -> borrow_content_to_string ~span env bc
     | VLoan lc -> loan_content_to_string ~span env lc
@@ -212,8 +220,15 @@ module Values = struct
     | PLeft -> "|" ^ s ^ "|"
     | PRight -> "︙" ^ s ^ "︙"
 
-  let ended_mut_borrow_meta_to_string (env : fmt_env)
-      (mv : ended_mut_borrow_meta) : string =
+  let aended_mut_borrow_meta_to_string (env : fmt_env)
+      (mv : aended_mut_borrow_meta) : string =
+    let { bid; given_back } : aended_mut_borrow_meta = mv in
+    "{ bid = " ^ BorrowId.to_string bid ^ "; given_back = "
+    ^ symbolic_value_to_string env given_back
+    ^ " }"
+
+  let eended_mut_borrow_meta_to_string (env : fmt_env)
+      (mv : eended_mut_borrow_meta) : string =
     let { bid; given_back } = mv in
     "{ bid = " ^ BorrowId.to_string bid ^ "; given_back = "
     ^ symbolic_value_to_string env given_back
@@ -222,43 +237,13 @@ module Values = struct
   let rec tavalue_to_string ?(span : Meta.span option = None)
       ?(with_ended : bool = false) (env : fmt_env) (v : tavalue) : string =
     match v.value with
-    | AAdt av -> (
-        let field_values =
-          List.map (tavalue_to_string ~span ~with_ended env) av.field_values
+    | AAdt av ->
+        let fields =
+          List.map (tavalue_to_string ~span ~with_ended env) av.fields
         in
-        match v.ty with
-        | TAdt { id = TTuple; _ } ->
-            (* Tuple *)
-            "(" ^ String.concat ", " field_values ^ ")"
-        | TAdt { id = TAdtId def_id; _ } ->
-            (* "Regular" ADT *)
-            let adt_ident =
-              match av.variant_id with
-              | Some vid -> adt_variant_to_string env def_id vid
-              | None -> type_decl_id_to_string env def_id
-            in
-            if List.length field_values > 0 then
-              match adt_field_names env def_id av.variant_id with
-              | None ->
-                  let field_values = String.concat ", " field_values in
-                  adt_ident ^ " (" ^ field_values ^ ")"
-              | Some field_names ->
-                  let field_values = List.combine field_names field_values in
-                  let field_values =
-                    List.map
-                      (fun (field, value) -> field ^ " = " ^ value ^ ";")
-                      field_values
-                  in
-                  let field_values = String.concat " " field_values in
-                  adt_ident ^ " { " ^ field_values ^ " }"
-            else adt_ident
-        | TAdt { id = TBuiltin aty; _ } -> (
-            (* Builtin type *)
-            match (aty, field_values) with
-            | TBox, [ bv ] -> "@Box(" ^ bv ^ ")"
-            | _ -> [%craise_opt_span] span "Inconsistent value")
-        | _ -> [%craise_opt_span] span "Inconsistent typed value")
-    | ABottom -> "⊥ : " ^ ty_to_string env v.ty
+        adt_to_string span env
+          (fun () -> show_tavalue v)
+          v.ty av.variant_id fields
     | ABorrow bc -> aborrow_content_to_string ~span ~with_ended env bc
     | ALoan lc -> aloan_content_to_string ~span ~with_ended env lc
     | ASymbolic (pm, proj) ->
@@ -320,7 +305,7 @@ module Values = struct
       string =
     match bc with
     | AMutBorrow (pm, bid, av) ->
-        "mb@" ^ BorrowId.to_string bid ^ " ("
+        "@mb(" ^ BorrowId.to_string bid ^ ", "
         ^ tavalue_to_string ~span ~with_ended env av
         ^ ")"
         |> add_proj_marker pm
@@ -339,7 +324,7 @@ module Values = struct
         "@ended_mut_borrow("
         ^
         if with_ended then
-          "given_back= " ^ ended_mut_borrow_meta_to_string env mv
+          "given_back= " ^ aended_mut_borrow_meta_to_string env mv
         else "" ^ tavalue_to_string ~span ~with_ended env child ^ ")"
     | AEndedIgnoredMutBorrow { child; given_back; given_back_meta = _ } ->
         "@ended_ignored_mut_borrow{ "
@@ -349,14 +334,355 @@ module Values = struct
         ^ ")"
     | AEndedSharedBorrow -> "@ended_shared_borrow"
     | AProjSharedBorrow sb ->
-        "@ignored_shared_borrow("
-        ^ abstract_shared_borrows_to_string env sb
+        "@proj_shared_borrow(" ^ abstract_shared_borrows_to_string env sb ^ ")"
+
+  (** An environment specific to abstraction expressions. We use it to properly
+      print the bound variables: as it is hard to interpret deBruijn indices, we
+      also use a unique identifier for all the bound variables. *)
+  type evalue_env = {
+    fresh_index : unit -> int;
+    bvars : string AbsBVarId.Map.t list;
+    bvars_stack : string AbsBVarId.Map.t option;
+        (** Partial map of bound variables that we're pushing.
+
+            This is useful when exploring a binder: we start accumulating the
+            names here, then push it in [bvars] when we're done.
+
+            The way to proceed is:
+            {[
+              let env = fmt_env_start_stack env in
+              ... (* Explore the binder to accumulate the mappings from bid to name *)
+              let env = fmt_env_push_stack in
+            ]} *)
+    bvar_id_counter : int;
+        (** We use this counter to generate unique names for the nameless bound
+            var ids *)
+    bvars_stack_counter : abs_bvar_id;
+        (** Id to use for the next bound variable we push in [bvars_stack] *)
+  }
+
+  let empty_evalue_env : evalue_env =
+    {
+      fresh_index =
+        (let r = ref 0 in
+         fun () ->
+           let i = !r in
+           r := i + 1;
+           i);
+      bvars = [];
+      bvars_stack = None;
+      bvar_id_counter = 0;
+      bvars_stack_counter = AbsBVarId.zero;
+    }
+
+  (** Start a new partial map (call this before exploring a binder) *)
+  let evalue_env_start_stack (env : evalue_env) : evalue_env =
+    assert (env.bvars_stack = None);
+    {
+      env with
+      bvars_stack = Some AbsBVarId.Map.empty;
+      bvars_stack_counter = AbsBVarId.zero;
+    }
+
+  (** After we're done accumulating the bound variables of a pattern in
+      [pbvars], push this partial map to [bvars] *)
+  let evalue_env_push_stack (env : evalue_env) : evalue_env =
+    let bvars_stack = Option.get env.bvars_stack in
+    {
+      env with
+      bvars = bvars_stack :: env.bvars;
+      bvars_stack = None;
+      bvars_stack_counter = AbsBVarId.zero;
+    }
+
+  (** Register a bound variable.
+
+      Only call this between [evalue_env_start_stack] and
+      [evalue_env_push_stack]. *)
+  let evalue_env_push_var (env : evalue_env) (_ty : ty) :
+      evalue_env * abs_bvar_id * string =
+    let bvars_stack = Option.get env.bvars_stack in
+    let uid = env.bvar_id_counter in
+    let counter = uid + 1 in
+    let name = "@" ^ string_of_int uid in
+    let bvar_id = env.bvars_stack_counter in
+    let bvars_stack = Some (AbsBVarId.Map.add bvar_id name bvars_stack) in
+    let env =
+      {
+        env with
+        bvars_stack;
+        bvar_id_counter = counter;
+        bvars_stack_counter = AbsBVarId.incr env.bvars_stack_counter;
+      }
+    in
+    (env, bvar_id, name)
+
+  let abs_bvar_to_pretty_string (bv : abs_bvar) (unique_name : string option) :
+      string =
+    let unique_name =
+      match unique_name with
+      | None -> ""
+      | Some n -> n ^ ","
+    in
+    "bv@(" ^ unique_name ^ "scope=" ^ string_of_int bv.scope ^ ",id="
+    ^ AbsBVarId.to_string bv.bvar_id
+    ^ ")"
+
+  let evalue_env_get_bvar (aenv : evalue_env) (bv : abs_bvar) : string =
+    match List.nth_opt aenv.bvars bv.scope with
+    | None -> abs_bvar_to_pretty_string bv None
+    | Some m ->
+        let unique_name = AbsBVarId.Map.find_opt bv.bvar_id m in
+        abs_bvar_to_pretty_string bv unique_name
+
+  let abs_fun_to_string (f : abs_fun) : string =
+    match f with
+    | EOutputAbs rg_id -> "OutputAbs@" ^ RegionGroupId.to_string rg_id
+    | EInputAbs rg_id -> "InputAbs@" ^ RegionGroupId.to_string rg_id
+    | EFunCall aid -> "FunCall(abs_id@" ^ AbsId.to_string aid ^ ")"
+    | ELoop (abs_id, lp_id) ->
+        "Loop(abs_id@" ^ AbsId.to_string abs_id ^ ",loop_id@"
+        ^ LoopId.to_string lp_id ^ ")"
+
+  let rec eproj_to_string ?(with_ended : bool = false) (env : fmt_env)
+      (pv : eproj) : string =
+    match pv with
+    | EProjLoans { proj; consumed; borrows } ->
+        let consumed =
+          if consumed = [] then ""
+          else
+            let consumed = List.map snd consumed in
+            let consumed =
+              List.map (eproj_to_string ~with_ended env) consumed
+            in
+            ", consumed=[" ^ String.concat "," consumed ^ "]"
+        in
+        let borrows =
+          if borrows = [] then ""
+          else
+            let borrows = List.map snd borrows in
+            let borrows = List.map (eproj_to_string ~with_ended env) borrows in
+            ", borrows=[" ^ String.concat "," borrows ^ "]"
+        in
+        "⌊"
+        ^ symbolic_value_proj_to_string env proj.sv_id proj.proj_ty
+        ^ consumed ^ borrows ^ "⌋"
+    | EProjBorrows { proj; loans } ->
+        let loans =
+          if loans = [] then ""
+          else
+            let loans = List.map snd loans in
+            let loans = List.map (eproj_to_string ~with_ended env) loans in
+            ", loans=[" ^ String.concat "," loans ^ "]"
+        in
+        "("
+        ^ symbolic_value_proj_to_string env proj.sv_id proj.proj_ty
+        ^ loans ^ ")"
+    | EEndedProjLoans { proj = msv; consumed; borrows } ->
+        let msv =
+          if with_ended then
+            "original_loan = " ^ symbolic_value_id_to_pretty_string msv
+          else "_"
+        in
+        let consumed =
+          if consumed = [] then ""
+          else
+            let consumed = List.map snd consumed in
+            let consumed =
+              List.map (eproj_to_string ~with_ended env) consumed
+            in
+            ", consumed=[" ^ String.concat "," consumed ^ "]"
+        in
+        let borrows =
+          if borrows = [] then ""
+          else
+            let borrows = List.map snd borrows in
+            let borrows = List.map (eproj_to_string ~with_ended env) borrows in
+            ", borrows=[" ^ String.concat "," borrows ^ "]"
+        in
+        "ended_aproj_loans (" ^ msv ^ consumed ^ borrows ^ ")"
+    | EEndedProjBorrows { mvalues; loans } ->
+        let meta =
+          if with_ended then
+            "original_borrow = "
+            ^ symbolic_value_id_to_pretty_string mvalues.consumed
+            ^ ", given_back = "
+            ^ symbolic_value_to_string env mvalues.given_back
+          else "_"
+        in
+        let loans =
+          if loans = [] then ""
+          else
+            let loans = List.map snd loans in
+            let loans = List.map (eproj_to_string ~with_ended env) loans in
+            ", loans=[" ^ String.concat "," loans ^ "]"
+        in
+        "ended_aproj_borrows (" ^ meta ^ loans ^ "])"
+    | EEmpty -> "_"
+
+  let rec tevalue_to_string ?(span : Meta.span option = None)
+      ?(with_ended : bool = false) (env : fmt_env) (aenv : evalue_env)
+      (indent : string) (indent_incr : string) (v : tevalue) : string =
+    match v.value with
+    | ELet (regions, pat, bound, next) ->
+        let indent1 = indent ^ indent_incr in
+        let bound =
+          tevalue_to_string ~span env aenv indent1 indent_incr bound
+        in
+        let aenv, pat = tepat_to_string ~span env aenv indent indent_incr pat in
+        let next = tevalue_to_string ~span env aenv indent indent_incr next in
+        "let " ^ pat ^ " ="
+        ^ RegionId.Set.to_string None regions
+        ^ "\n" ^ indent1 ^ bound ^ "\n" ^ indent ^ "in\n" ^ indent ^ next
+    | EJoinMarkers (left, right) ->
+        "@join_markers("
+        ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr left
+        ^ ", "
+        ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr right
+        ^ ")"
+    | EBVar bv ->
+        "(" ^ evalue_env_get_bvar aenv bv ^ " : " ^ ty_to_string env v.ty ^ ")"
+    | EFVar fvid ->
+        "(@" ^ AbsFVarId.to_string fvid ^ " : " ^ ty_to_string env v.ty ^ ")"
+    | EApp (f, args) ->
+        let args =
+          List.map
+            (tevalue_to_string ~span env aenv (indent ^ indent_incr) indent_incr)
+            args
+        in
+        let f = abs_fun_to_string f in
+        f ^ "(" ^ String.concat ", " args ^ ")"
+    | EAdt av ->
+        let fields =
+          List.map
+            (tevalue_to_string ~span env aenv indent indent_incr)
+            av.fields
+        in
+        adt_to_string span env
+          (fun () -> show_tevalue v)
+          v.ty av.variant_id fields
+    | EBottom -> "⊥ : " ^ ty_to_string env v.ty
+    | EBorrow bc ->
+        eborrow_content_to_string ~span ~with_ended env aenv indent indent_incr
+          v.ty bc
+    | ELoan lc ->
+        eloan_content_to_string ~span ~with_ended env aenv indent indent_incr
+          v.ty lc
+    | ESymbolic (pm, proj) ->
+        eproj_to_string ~with_ended env proj |> add_proj_marker pm
+    | EValue (_, mv) -> "@mvalue(" ^ tvalue_to_string ~span env mv ^ ")"
+    | EIgnored -> "_ : " ^ ty_to_string env v.ty ^ ")"
+    | EMutBorrowInput x ->
+        "@mut_input("
+        ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr x
         ^ ")"
 
-  let loop_abs_kind_to_string (kind : loop_abs_kind) : string =
-    match kind with
-    | LoopSynthInput -> "LoopSynthInput"
-    | LoopCall -> "LoopCall"
+  and eloan_content_to_string ?(span : Meta.span option = None)
+      ?(with_ended : bool = false) (env : fmt_env) (aenv : evalue_env)
+      (indent : string) (indent_incr : string) (ty : ty) (lc : eloan_content) :
+      string =
+    match lc with
+    | EMutLoan (pm, bid, av) ->
+        "@mut_loan(" ^ BorrowId.to_string bid ^ ", "
+        ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr av
+        ^ ") : " ^ ty_to_string env ty
+        |> add_proj_marker pm
+    | EEndedMutLoan ml ->
+        let consumed =
+          if with_ended then
+            "consumed = " ^ tvalue_to_string env ml.given_back_meta ^ ", "
+          else ""
+        in
+        "@ended_mut_loan{" ^ consumed
+        ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr
+            ml.child
+        ^ "; "
+        ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr
+            ml.given_back
+        ^ " }"
+    | EIgnoredMutLoan (opt_bid, av) ->
+        "@ignored_mut_loan("
+        ^ option_to_string BorrowId.to_string opt_bid
+        ^ ", "
+        ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr av
+        ^ ")"
+    | EEndedIgnoredMutLoan ml ->
+        "@ended_ignored_mut_loan{ "
+        ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr
+            ml.child
+        ^ "; "
+        ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr
+            ml.given_back
+        ^ "}"
+
+  (** Not safe to use: call [tepat_to_string] directly *)
+  and tepat_to_string_core ?(span : Meta.span option = None) (env : fmt_env)
+      (aenv : evalue_env) (indent : string) (indent_incr : string) (pat : tepat)
+      : evalue_env * string =
+    match pat.pat with
+    | PBound ->
+        let aenv, _, s = evalue_env_push_var aenv pat.ty in
+        (aenv, "(" ^ s ^ " : " ^ ty_to_string env pat.ty ^ ")")
+    | POpen bid ->
+        ( aenv,
+          "(@" ^ AbsFVarId.to_string bid ^ " : " ^ ty_to_string env pat.ty ^ ")"
+        )
+    | PAdt (variant_id, fields) ->
+        let aenv, fields =
+          List.fold_left_map
+            (fun aenv field ->
+              tepat_to_string_core ~span env aenv indent indent_incr field)
+            aenv fields
+        in
+        ( aenv,
+          adt_to_string span env
+            (fun () -> show_tepat pat)
+            pat.ty variant_id fields )
+    | PIgnored -> (aenv, "(_ : " ^ ty_to_string env pat.ty ^ ")")
+
+  and tepat_to_string ?(span : Meta.span option = None) (env : fmt_env)
+      (aenv : evalue_env) (indent : string) (indent_incr : string) (pat : tepat)
+      : evalue_env * string =
+    let aenv = evalue_env_start_stack aenv in
+    let aenv, string =
+      tepat_to_string_core ~span env aenv indent indent_incr pat
+    in
+    let aenv = evalue_env_push_stack aenv in
+    (aenv, string)
+
+  and eborrow_content_to_string ?(span : Meta.span option = None)
+      ?(with_ended : bool = false) (env : fmt_env) (aenv : evalue_env)
+      (indent : string) (indent_incr : string) (ty : ty) (bc : eborrow_content)
+      : string =
+    match bc with
+    | EMutBorrow (pm, bid, av) ->
+        "@mb(" ^ BorrowId.to_string bid ^ ", "
+        ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr av
+        ^ ") : " ^ ty_to_string env ty
+        |> add_proj_marker pm
+    | EIgnoredMutBorrow (opt_bid, av) ->
+        "@ignored_mut_borrow("
+        ^ option_to_string BorrowId.to_string opt_bid
+        ^ ", "
+        ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr av
+        ^ ")"
+    | EEndedMutBorrow (mv, child) ->
+        "@ended_mut_borrow("
+        ^
+        if with_ended then
+          "given_back= " ^ eended_mut_borrow_meta_to_string env mv
+        else
+          ""
+          ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr
+              child
+          ^ ")"
+    | EEndedIgnoredMutBorrow { child; given_back; given_back_meta = _ } ->
+        "@ended_ignored_mut_borrow{ "
+        ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr child
+        ^ "; "
+        ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr
+            given_back
+        ^ ")"
 
   let abs_kind_to_string (kind : abs_kind) : string =
     match kind with
@@ -367,14 +693,22 @@ module Values = struct
     | SynthInput rg_id ->
         "SynthInput(rg_id:" ^ RegionGroupId.to_string rg_id ^ ")"
     | SynthRet rg_id -> "SynthRet(rg_id:" ^ RegionGroupId.to_string rg_id ^ ")"
-    | Loop (lp_id, rg_id, abs_kind) ->
-        "Loop(loop_id:" ^ LoopId.to_string lp_id ^ ", rg_id:"
-        ^ option_to_string RegionGroupId.to_string rg_id
-        ^ ", loop abs kind: "
-        ^ loop_abs_kind_to_string abs_kind
-        ^ ")"
+    | Loop lp_id -> "Loop(loop_id:" ^ LoopId.to_string lp_id ^ ")"
     | Identity -> "Identity"
     | CopySymbolicValue -> "CopySymbolicValue"
+
+  let abs_cont_to_string ?(span : Meta.span option = None) (env : fmt_env)
+      ?(with_ended : bool = false) (indent : string) (indent_incr : string)
+      (cont : abs_cont) : string =
+    let { output; input } = cont in
+    let to_string (e : tevalue option) =
+      match e with
+      | None -> "∅ "
+      | Some e ->
+          tevalue_to_string ~span ~with_ended env empty_evalue_env indent
+            indent_incr e
+    in
+    to_string output ^ " :=\n" ^ indent ^ to_string input
 
   let abs_to_string ?(span : Meta.span option = None) (env : fmt_env)
       ?(with_ended : bool = false) (verbose : bool) (indent : string)
@@ -390,16 +724,23 @@ module Values = struct
       if verbose then "kind:" ^ abs_kind_to_string abs.kind ^ "," else ""
     in
     let can_end = if abs.can_end then "endable" else "frozen" in
-    indent ^ "abs@"
-    ^ AbstractionId.to_string abs.abs_id
-    ^ "{" ^ kind ^ "parents="
-    ^ AbstractionId.Set.to_string None abs.parents
+    let cont =
+      match abs.cont with
+      | None -> ""
+      | Some cont ->
+          "⟦"
+          ^ abs_cont_to_string ~span env ~with_ended:true (indent ^ indent_incr)
+              indent_incr cont
+          ^ "⟧"
+    in
+    indent ^ "abs@" ^ AbsId.to_string abs.abs_id ^ "{" ^ kind ^ "parents="
+    ^ AbsId.Set.to_string None abs.parents
     ^ ",regions="
     ^ RegionId.Set.to_string None abs.regions.owned
-    ^ "," ^ can_end ^ "} {\n" ^ avs ^ "\n" ^ indent ^ "}"
+    ^ "," ^ can_end ^ "} {\n" ^ avs ^ "\n" ^ indent ^ "}" ^ cont
 
   let abs_region_group_to_string (gr : abs_region_group) : string =
-    g_region_group_to_string RegionId.to_string AbstractionId.to_string gr
+    g_region_group_to_string RegionId.to_string AbsId.to_string gr
 
   let abs_region_groups_to_string (gl : abs_region_groups) : string =
     String.concat "\n" (List.map abs_region_group_to_string gl)
@@ -423,10 +764,8 @@ module Values = struct
     match se with
     | SeLiteral lit -> literal_to_string lit
     | SeAdt (variant_id, svl) ->
-        let field_values =
-          List.map ValuesUtils.mk_tvalue_from_symbolic_value svl
-        in
-        let v : tvalue = { value = VAdt { variant_id; field_values }; ty } in
+        let fields = List.map ValuesUtils.mk_tvalue_from_symbolic_value svl in
+        let v : tvalue = { value = VAdt { variant_id; fields }; ty } in
         tvalue_to_string env v
     | SeMutRef (bid, sv) ->
         "MB " ^ BorrowId.to_string bid ^ " " ^ symbolic_value_to_string env sv
@@ -651,10 +990,11 @@ module EvalCtx = struct
     let env = eval_ctx_to_fmt_env ctx in
     trait_decl_ref_to_string env x
 
-  let trait_instance_id_to_string (ctx : eval_ctx) (x : trait_instance_id) :
-      string =
+  (* Note: this will fail on `Dyn` and `BuiltinOrAuto` instances, because these
+     require the full `trait_ref` for printing. *)
+  let trait_ref_kind_to_string (ctx : eval_ctx) (x : trait_ref_kind) : string =
     let env = eval_ctx_to_fmt_env ctx in
-    trait_instance_id_to_string env x
+    trait_ref_kind_to_string env None x
 
   let borrow_content_to_string ?(span : Meta.span option = None)
       (ctx : eval_ctx) (bc : borrow_content) : string =
@@ -694,6 +1034,18 @@ module EvalCtx = struct
     let env = eval_ctx_to_fmt_env ctx in
     tavalue_to_string ~span ~with_ended env v
 
+  let tevalue_to_string ?(span : Meta.span option = None)
+      ?(with_ended : bool = false) (ctx : eval_ctx) (v : tevalue) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    let aenv = empty_evalue_env in
+    tevalue_to_string ~span ~with_ended env aenv "" "  " v
+
+  let tepat_to_string ?(span : Meta.span option = None) (ctx : eval_ctx)
+      (v : tepat) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    let aenv = empty_evalue_env in
+    snd (tepat_to_string ~span env aenv "" "  " v)
+
   let place_to_string (ctx : eval_ctx) (op : place) : string =
     let env = eval_ctx_to_fmt_env ctx in
     place_to_string env op
@@ -727,10 +1079,9 @@ module EvalCtx = struct
     let env = eval_ctx_to_fmt_env ctx in
     inst_fun_sig_to_string env x
 
-  let fun_id_or_trait_method_ref_to_string (ctx : eval_ctx)
-      (x : fun_id_or_trait_method_ref) : string =
+  let fn_ptr_kind_to_string (ctx : eval_ctx) (x : fn_ptr_kind) : string =
     let env = eval_ctx_to_fmt_env ctx in
-    fun_id_or_trait_method_ref_to_string env x
+    fn_ptr_kind_to_string env x
 
   let statement_to_string (ctx : eval_ctx) (indent : string)
       (indent_incr : string) (e : statement) : string =
@@ -751,4 +1102,10 @@ module EvalCtx = struct
       (abs : abs) : string =
     let env = eval_ctx_to_fmt_env ctx in
     abs_to_string ~span env ~with_ended false indent indent_incr abs
+
+  let abs_cont_to_string ?(span : Meta.span option = None) (ctx : eval_ctx)
+      ?(with_ended : bool = false) (indent : string) (indent_incr : string)
+      (cont : abs_cont) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    abs_cont_to_string ~span env ~with_ended indent indent_incr cont
 end

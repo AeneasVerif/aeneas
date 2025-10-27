@@ -236,7 +236,7 @@ theorem new_with_capacity_spec
   . scalar_tac
   . fsimp_all [alloc.vec.Vec.len, alloc.vec.Vec.new]
   . fsimp_all [al_v, Slots.al_v, v]
-  . simp_all [HashMap.v, length]
+  . simp_all [HashMap.v]
   . fsimp [lookup]
     intro k
     simp_lists [Hnil]
@@ -300,7 +300,10 @@ theorem insert_in_list_spec_aux {α : Type} (l : Nat) (key: Usize) (value: α) (
         fsimp [distinct_keys] at *
         fsimp [*]
       -- TODO: canonize addition by default?
-      simp_all [Int.add_assoc, Int.add_comm, Int.add_left_comm]
+      simp_all only [hash_mod_key_eq, AList.v, slot_s_inv_hash_cons, distinct_keys_cons,
+        UScalar.neq_to_neq_val, and_true, AList.lookup, ne_eq, length, true_and, not_false_eq_true,
+        and_self, exists_and_left, exists_eq_left', List.lookup, implies_true, List.length_cons,
+        Nat.add_right_cancel_iff, List.allP_cons]
       split <;> fsimp_all
 
 @[progress]
@@ -532,14 +535,14 @@ theorem move_elements_from_list_spec
       else
         have := hLookup12 key'
         split <;>
-        simp_all [Slots.lookup, Aeneas.Simp.neq_imp]
+        simp_all [Aeneas.Simp.neq_imp]
     . intro key' v hLookup1
       if h: key' = key then
-        fsimp_all
+        simp_all
       else
         have := hLookup12 key' h
         have := hLookup22 key' v
-        fsimp_all
+        simp_all
     . intro key' v hLookup1
       if h: key' = key then
         have := hLookup22 key' v
@@ -644,14 +647,15 @@ private theorem move_one_slot_lookup_equiv {α : Type} (ntable ntable1 ntable2 :
       have := hLookup2 key v
       fsimp_all [Slots.lookup]
       have := hLookup3 key v
-      fsimp_all
+      simp_all
+
     else
       -- We lookup in slots
       have := hLookup4 key v
-      fsimp_all [Slots.lookup]
+      simp_all [Slots.lookup]
   . have := hLookup1 key v
     have := hLookup3 key v
-    fsimp_all
+    simp_all
 
 private theorem slots_lookup_none_imp_slot_lookup_none
   (slots : Slots α) (hInv : slots_t_inv slots) (i : Nat) (hi : i < slots.val.length) :
@@ -773,7 +777,7 @@ theorem move_elements_loop_spec
         have := hEmpty j (by scalar_tac)
         fsimp_all
     . have : i.val < (List.map AList.v slots.val).length := by simp; scalar_tac
-      simp_all [Slots.al_v, List.length_flatten_set_eq, List.length_flatten_set_as_int_eq]
+      simp_all [Slots.al_v, List.length_flatten_set_as_int_eq]
       scalar_tac
 
     simp
@@ -991,7 +995,7 @@ theorem get_mut_in_list_spec {α} (key : Usize) (slot : AList α)
     -- TODO: progress by
     progress as ⟨ opt_v, back, _, hBackNone, hBackSome ⟩
     . fsimp_all [slot_t_inv]
-    . simp [*, Aeneas.Simp.neq_imp]
+    . simp [*]
       -- Proving the post-condition about back
       -- Case disjunction on v
       split_conjs
@@ -1081,7 +1085,7 @@ theorem remove_from_list_spec {α} (key : Usize) (slot : AList α) {l i} (hInv :
       fsimp [hKey]
       have hInv' : slot_t_inv l i tl := by fsimp_all [slot_t_inv]
       progress as ⟨ v1, tl1, _, _, hLookupTl1, _ ⟩
-      simp [*, Aeneas.Simp.neq_imp]
+      simp [*]
       split <;> fsimp_all
 
 private theorem lookup_not_none_imp_len_s_pos (hm : HashMap α) (key : Usize) (hLookup : hm.lookup key ≠ none)

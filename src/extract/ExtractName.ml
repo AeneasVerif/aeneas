@@ -49,7 +49,7 @@ end
 
     For impl blocks, we simply use the name of the type (without its arguments)
     if all the arguments are variables. *)
-let pattern_to_extract_name (span : Meta.span option) (name : pattern) :
+let pattern_to_extract_name (_span : Meta.span option) (name : pattern) :
     string list =
   let c = { tgt = TkName } in
   let all_vars =
@@ -91,12 +91,10 @@ let pattern_to_extract_name (span : Meta.span option) (name : pattern) :
 
       method! visit_PImpl _ ty =
         match ty with
-        | EComp id -> (
+        | EComp id ->
             (* Only keep the last ident *)
             let id = Collections.List.last id in
-            match id with
-            | PIdent (_, _, _) -> super#visit_PImpl () (EComp [ id ])
-            | PImpl _ -> [%craise_opt_span] span "Unreachable")
+            super#visit_PImpl () (EComp [ id ])
         | _ -> super#visit_PImpl () ty
 
       method! visit_EPrimAdt _ adt g =

@@ -12,8 +12,9 @@ let create_logger name =
   l#set_level Info;
   l
 
-let to_log_msg (f : string) (msg : string) : string =
-  if msg = "" then f ^ "\n" else f ^ ":\n" ^ msg ^ "\n"
+let to_log_msg (f : string) (line : int) (msg : string) : string =
+  let line = ", line " ^ string_of_int line in
+  if msg = "" then f ^ line ^ "\n" else f ^ line ^ ":\n" ^ msg ^ "\n"
 
 (** Logger for Errors *)
 let errors_log = create_logger "Errors"
@@ -51,6 +52,9 @@ let symbolic_to_pure_types_log = create_logger "SymbolicToPureTypes"
 (** Logger for SymbolicToPureValues *)
 let symbolic_to_pure_values_log = create_logger "SymbolicToPureValues"
 
+(** Logger for SymbolicToPureAbs *)
+let symbolic_to_pure_abs_log = create_logger "SymbolicToPureAbs"
+
 (** Logger for SymbolicToPureExpressions *)
 let symbolic_to_pure_expressions_log = create_logger "SymbolicToPureExpressions"
 
@@ -74,43 +78,46 @@ let builtin_log = create_logger "Builtin"
 let interpreter_log = create_logger "Interpreter"
 
 (** Logger for InterpreterLoopsMatchCtxs *)
-let loops_match_ctxs_log = create_logger "Interpreter.LoopsMatchCtxs"
+let loops_match_ctxs_log = create_logger "InterpreterLoopsMatchCtxs"
+
+(** Logger for InterpreterReduceCollapse *)
+let reduce_collapse_log = create_logger "InterpreterReduceCollapse"
 
 (** Logger for InterpreterLoopsJoinCtxs *)
-let loops_join_ctxs_log = create_logger "Interpreter.LoopsJoinCtxs"
+let loops_join_ctxs_log = create_logger "InterpreterLoopsJoinCtxs"
 
 (** Logger for InterpreterLoopsFixedPoint *)
-let loops_fixed_point_log = create_logger "Interpreter.LoopsFixedPoint"
+let loops_fixed_point_log = create_logger "InterpreterLoopsFixedPoint"
 
 (** Logger for InterpreterLoops *)
-let loops_log = create_logger "Interpreter.Loops"
+let loops_log = create_logger "InterpreterLoops"
 
 (** Logger for InterpreterStatements *)
-let statements_log = create_logger "Interpreter.Statements"
+let statements_log = create_logger "InterpreterStatements"
 
 (** Logger for InterpreterExpressions *)
-let expressions_log = create_logger "Interpreter.Expressions"
+let expressions_log = create_logger "InterpreterExpressions"
 
 (** Logger for InterpreterPaths *)
-let paths_log = create_logger "Interpreter.Paths"
+let paths_log = create_logger "InterpreterPaths"
 
 (** Logger for InterpreterExpansion *)
-let expansion_log = create_logger "Interpreter.Expansion"
+let expansion_log = create_logger "InterpreterExpansion"
 
 (** Logger for InterpreterProjectors *)
-let projectors_log = create_logger "Interpreter.Projectors"
+let projectors_log = create_logger "InterpreterProjectors"
 
 (** Logger for InterpreterBorrows *)
-let borrows_log = create_logger "Interpreter.Borrows"
+let borrows_log = create_logger "InterpreterBorrows"
 
 (** Logger for InterpreterAbs *)
-let abs_log = create_logger "Interpreter.Abs"
+let abs_log = create_logger "InterpreterAbs"
 
 (** Logger for Invariants *)
-let invariants_log = create_logger "Interpreter.Invariants"
+let invariants_log = create_logger "Invariants"
 
 (** Logger for SCC *)
-let scc_log = create_logger "Graph.SCC"
+let scc_log = create_logger "SCC"
 
-(** Logger for ReorderDecls *)
-let reorder_decls_log = create_logger "Graph.ReorderDecls"
+(** Logger for pure/ReorderDecls *)
+let reorder_decls_log = create_logger "ReorderDecls"

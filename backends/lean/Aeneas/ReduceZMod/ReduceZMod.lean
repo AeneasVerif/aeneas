@@ -130,7 +130,7 @@ namespace Test
         (@AddGroupWithOne.toAddMonoidWithOne Zq
           (@Ring.toAddGroupWithOne Zq
             (@CommRing.toRing Zq (ZMod.commRing (@OfNat.ofNat Nat 3329 (instOfNatNat 3329)))))))
-      (@instNatAtLeastTwo (@OfNat.ofNat Nat 3327 (instOfNatNat 3327))))) = 0 := by
+      _)) = 0 := by
       simp only [reduceZMod]
 
   /-!

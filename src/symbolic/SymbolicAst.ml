@@ -16,7 +16,7 @@ open LlbcAst
     information, etc.). We later use this place information to generate
     meaningful name, to prettify the generated code. *)
 type mplace =
-  | PlaceLocal of Contexts.real_var_binder
+  | PlaceLocal of real_var_binder
       (** It is important that we store the binder, and not just the variable
           id, because the most important information in a place is the name of
           the variable! *)
@@ -25,7 +25,7 @@ type mplace =
 [@@deriving show]
 
 type call_id =
-  | Fun of fun_id_or_trait_method_ref * FunCallId.id
+  | Fun of fn_ptr_kind * FunCallId.id
       (** A "regular" function (i.e., a function which is not a primitive
           operation) *)
   | Unop of unop
@@ -46,10 +46,10 @@ type call = {
           names in the translation. *)
   inst_sg : inst_fun_sig option;
       (** The instantiated function signature, if this is not a unop/binop *)
-  abstractions : AbstractionId.id list;
+  abstractions : AbsId.id list;
       (** The region abstractions introduced upon calling the function *)
   generics : generic_args;
-  trait_method_generics : (generic_args * trait_instance_id) option;
+  trait_method_generics : (generic_args * trait_ref_kind) option;
       (** In case the call is to a trait method, we may need an additional type
           parameter ([Self]) and the self trait clause to instantiate the
           function signature. *)
@@ -62,7 +62,7 @@ type call = {
 
 (** Meta information for expressions, not necessary for synthesis but useful to
     guide it to generate a pretty output. *)
-type espan =
+type emeta =
   | Assignment of Contexts.eval_ctx * mplace * tvalue * mplace option
       (** We generated an assignment (destination, assigned value, src) *)
   | Snapshot of Contexts.eval_ctx
@@ -73,6 +73,7 @@ type espan =
 type variant_id = VariantId.id [@@deriving show]
 type global_decl_id = GlobalDeclId.id [@@deriving show]
 type 'a symbolic_value_id_map = 'a SymbolicValueId.Map.t [@@deriving show]
+type 'a abs_id_map = 'a AbsId.Map.t [@@deriving show]
 type 'a region_group_id_map = 'a RegionGroupId.Map.t [@@deriving show]
 
 (** Ancestor for {!expr} iter visitor.
@@ -85,13 +86,8 @@ class ['self] iter_expr_base =
     inherit [_] iter_abs
     method visit_eval_ctx : 'env -> Contexts.eval_ctx -> unit = fun _ _ -> ()
     method visit_call : 'env -> call -> unit = fun _ _ -> ()
-    method visit_loop_id : 'env -> loop_id -> unit = fun _ _ -> ()
-
-    method visit_region_group_id : 'env -> RegionGroupId.id -> unit =
-      fun _ _ -> ()
-
     method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
-    method visit_espan : 'env -> espan -> unit = fun _ _ -> ()
+    method visit_emeta : 'env -> emeta -> unit = fun _ _ -> ()
 
     method visit_region_group_id_map :
         'a. ('env -> 'a -> unit) -> 'env -> 'a region_group_id_map -> unit =
@@ -108,6 +104,15 @@ class ['self] iter_expr_base =
         SymbolicValueId.Map.iter
           (fun id x ->
             self#visit_symbolic_value_id env id;
+            f env x)
+          m
+
+    method visit_abs_id_map :
+        'a. ('env -> 'a -> unit) -> 'env -> 'a abs_id_map -> unit =
+      fun f env m ->
+        AbsId.Map.iter
+          (fun id x ->
+            self#visit_abs_id env id;
             f env x)
           m
 
@@ -133,7 +138,7 @@ type expr =
           to look up the shared values in the context). *)
   | Panic
   | FunCall of call * expr
-  | EndAbstraction of (Contexts.eval_ctx[@opaque]) * abs * expr
+  | EndAbs of (Contexts.eval_ctx[@opaque]) * abs * expr
       (** The context is the evaluation context upon ending the abstraction,
           just after we removed the abstraction from the context.
 
@@ -170,11 +175,15 @@ type expr =
 
           The context is the evaluation context from before introducing the new
           value. It has the same purpose as for the {!Return} case. *)
+  | SubstituteAbsIds of abs_id abs_id_map * expr
+      (** We sometimes need to substitute abstraction ids to refresh them (in
+          particular when doing joins), which can be a problem especially as
+          some abstraction expressions refer to the abstractions through their
+          ids. In order to make the translation work, we need to save those
+          substitutions. *)
   | ForwardEnd of
       ((Contexts.eval_ctx[@opaque]) * tvalue) option
       * (Contexts.eval_ctx[@opaque])
-      * (tvalue symbolic_value_id_map * symbolic_value_id symbolic_value_id_map)
-        option
       * expr
       * expr region_group_id_map
       (** We use this delimiter to indicate at which point we switch to the
@@ -185,17 +194,7 @@ type expr =
             value** with the value consumed by the return variable
           - the evaluation context at the moment we introduce the [ForwardEnd].
             We use it to translate the input values (see the comments for the
-            {!Return} variant).
-          - optional maps:
-          - from symbolic values to input values. We use this to compute the
-            input values for loops: upon entering a loop, in the translation we
-            call the loop translation function, which takes care of the end of
-            the execution.
-          - from input symbolic values to refreshed input symbolic value TODO:
-            this is a technical detail which shouldn't be here - we need it to
-            introduce intermediate let-bindings in the translation. We should
-            get rid of this once the translation of loops is cleaned up and
-            generalized.
+            {!Return} variant). TODO: it seems this is not necessary anymore.
           - the end of the translation for the forward function
           - a map from region group ids to expressions that give the end of the
             translation for the backward functions
@@ -206,24 +205,36 @@ type expr =
 
           TODO: because we store the returned value, the Return case may not be
           useful anymore? *)
-  | Loop of loop  (** Loop *)
-  | ReturnWithLoop of loop_id * bool
-      (** We reach a return while inside a loop. The boolean is [true]. TODO:
-          merge this with Return. *)
-  | Meta of (espan[@opaque]) * expr  (** Meta information *)
+  | LoopContinue of
+      (Contexts.eval_ctx[@opaque]) * loop_id * tvalue list * abs list
+  | LoopBreak of (Contexts.eval_ctx[@opaque]) * loop_id * tvalue list * abs list
+  | Loop of loop  (** Loop: call to a loop *)
+  | Meta of (emeta[@opaque]) * expr  (** Meta information *)
   | Error of Meta.span option * string
 
 and loop = {
+  ctx : (Contexts.eval_ctx[@opaque]);
+      (** The evaluation context just before the loop *)
   loop_id : loop_id;
-  input_svalues : symbolic_value list;  (** The input symbolic values *)
-  fresh_svalues : symbolic_value_id_set;
-      (** The symbolic values introduced by the loop fixed-point *)
-  rg_to_given_back_tys : (Pure.ty list RegionGroupId.Map.t[@opaque]);
-      (** The map from region group ids to the types of the values given back by
-          the corresponding loop abstractions. *)
-  end_expr : expr;
-      (** The end of the function (upon the moment it enters the loop) *)
+  input_svalues : symbolic_value list;
+      (** The input symbolic values, properly ordered *)
+  input_abs : abs list;
+      (** The input abstractions, properly ordered. Note that those are the
+          abstractions from the *fixed-point*, they are not actually the
+          abstractions received as input from the loop (see [input_abs_to_abs]
+          instead). We store abstractions (rather than ids) because we need the
+          abstractions themselves to compute the type of the continuations
+          (i.e., the type of the loop) and doing this avoids a lookup. *)
+  input_value_to_value : tvalue symbolic_value_id_map;
+  input_abs_to_abs : abs abs_id_map;
+  break_svalues : symbolic_value list;
+      (** The symbolic values introduced in the break environment (those are
+          output by the loop) *)
+  break_abs : abs list;
+      (** The abstractions introduced in the break environment (those are output
+          by the loop) *)
   loop_expr : expr;  (** The symbolically executed loop body *)
+  next_expr : expr;  (** The expression for *after* the loop call *)
   span : Meta.span;  (** Information about the origin of the loop body *)
 }
 

@@ -5,7 +5,6 @@ include Charon.Substitute
 open Types
 open Values
 open LlbcAst
-open ContextsBase
 
 (* Fails if the variable is bound *)
 let expect_free_var span (var : 'id de_bruijn_var) : 'id =
@@ -23,19 +22,19 @@ let fresh_regions_with_substs (region_vars : RegionId.id list)
   in
   fun id -> RegionId.Map.find id rid_map
 
-let fresh_regions_with_substs_from_vars (region_vars : region_var list)
+let fresh_regions_with_substs_from_vars (region_vars : region_param list)
     (fresh_region_id : unit -> region_id) : RegionId.id -> RegionId.id =
   fresh_regions_with_substs
-    (List.map (fun (r : region_var) -> r.index) region_vars)
+    (List.map (fun (r : region_param) -> r.index) region_vars)
     fresh_region_id
 
 (** Substitute a function signature, together with the regions hierarchy
     associated to that signature. *)
-let substitute_signature (asubst : RegionGroupId.id -> AbstractionId.id)
+let substitute_signature (asubst : RegionGroupId.id -> AbsId.id)
     (r_id_subst : RegionId.id -> RegionId.id) (ty_sb_subst : TypeVarId.id -> ty)
     (cg_sb_subst : ConstGenericVarId.id -> const_generic)
-    (tr_sb_subst : TraitClauseId.id -> trait_instance_id)
-    (tr_sb_self : trait_instance_id) (sg : fun_sig)
+    (tr_sb_subst : TraitClauseId.id -> trait_ref_kind)
+    (tr_sb_self : trait_ref_kind) (sg : fun_sig)
     (regions_hierarchy : region_var_groups) : inst_fun_sig =
   let r_sb_subst id = RVar (Free (r_id_subst id)) in
   let subst =
@@ -81,7 +80,7 @@ type id_subst = {
   ssubst : SymbolicValueId.id -> SymbolicValueId.id;
   bsubst : BorrowId.id -> BorrowId.id;
   sbsubst : SharedBorrowId.id -> SharedBorrowId.id;
-  asubst : AbstractionId.id -> AbstractionId.id;
+  asubst : AbsId.id -> AbsId.id;
 }
 
 let empty_id_subst =
@@ -104,22 +103,7 @@ let subst_ids_visitor (subst : id_subst) =
     inherit [_] map_env
     method! visit_type_var_id _ id = subst.ty_subst id
     method! visit_const_generic_var_id _ id = subst.cg_subst id
-
-    method! visit_region_id _ _ =
-      [%craise_opt_span] None
-        "Region ids should not be visited directly; the visitor should catch \
-         cases that contain region ids earlier."
-
-    method! visit_abs_regions _ regions =
-      let { owned } = regions in
-      let owned = RegionId.Set.map subst.r_subst owned in
-      { owned }
-
-    method! visit_RVar _ var =
-      match var with
-      | Free rid -> RVar (Free (subst.r_subst rid))
-      | Bound _ -> RVar var
-
+    method! visit_region_id _ rid = subst.r_subst rid
     method! visit_borrow_id _ bid = subst.bsubst bid
     method! visit_shared_borrow_id _ sid = subst.sbsubst sid
     method! visit_loan_id _ bid = subst.bsubst bid
@@ -131,7 +115,7 @@ let subst_ids_visitor (subst : id_subst) =
     (** We *do* visit meta-values *)
     method! visit_mvalue env v = self#visit_tvalue env v
 
-    method! visit_abstraction_id _ id = subst.asubst id
+    method! visit_abs_id _ id = subst.asubst id
   end
 
 let tvalue_subst_ids (subst : id_subst) (v : tvalue) : tvalue =

@@ -1,3 +1,3 @@
 [[92mInfo[39m ] Imported: tests/llbc/loops_borrow_check_negative.llbc
-[[91mError[39m] Can't end abstraction 16 as it is set as non-endable
+[[91mError[39m] Can't end abstraction 8 as it is set as non-endable
 Source: 'tests/src/loops-borrow-check-negative.rs', lines 19:0-29:1

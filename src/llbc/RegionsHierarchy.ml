@@ -61,7 +61,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
     let s_set = RegionSet.singleton RStatic in
     let m =
       List.map
-        (fun (r : region_var) -> (RVar (Free r.index), s_set))
+        (fun (r : region_param) -> (RVar (Free r.index), s_set))
         sg.generics.regions
     in
     let s = (RStatic, RegionSet.empty) in
@@ -156,7 +156,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
            (otherwise it should have been normalized), or a special builtin
            trait (in particular, [core::marker::DiscriminantKind]) *)
         [%sanity_check_opt_span] span
-          (check_non_normalizable_trait_instance_id trait_ref.trait_id);
+          (check_non_normalizable_trait_ref_kind trait_ref.kind);
         (* We have nothing to do *)
         ()
     | TFnPtr binder ->
@@ -170,6 +170,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
     | TFnDef _ -> [%craise_opt_span] span "unsupported: FnDef"
     | TDynTrait _ ->
         [%craise_opt_span] span "Dynamic trait types are not supported yet"
+    | TPtrMetadata _ -> [%craise_opt_span] span "unsupported: PtrMetadata"
     | TError _ ->
         [%craise_opt_span] span "Found type error in the output of charon"
   and explore_generics (outer : region list) (generics : generic_args) =

@@ -21,10 +21,10 @@ val end_loan : config -> Meta.span -> loan_id -> cm_fun
 val end_loans : config -> Meta.span -> loan_id_set -> cm_fun
 
 (** End an abstraction while preserving the invariants. *)
-val end_abstraction : config -> Meta.span -> AbstractionId.id -> cm_fun
+val end_abstraction : config -> Meta.span -> AbsId.id -> cm_fun
 
 (** End a set of abstractions while preserving the invariants. *)
-val end_abstractions : config -> Meta.span -> AbstractionId.Set.t -> cm_fun
+val end_abstractions : config -> Meta.span -> AbsId.Set.t -> cm_fun
 
 (** End a borrow and return the resulting environment, ignoring synthesis *)
 val end_borrow_no_synth :
@@ -53,12 +53,12 @@ val try_end_loans_no_synth :
 (** End an abstraction and return the resulting environment, ignoring synthesis
 *)
 val end_abstraction_no_synth :
-  config -> Meta.span -> AbstractionId.id -> eval_ctx -> eval_ctx
+  config -> Meta.span -> AbsId.id -> eval_ctx -> eval_ctx
 
 (** End a set of abstractions and return the resulting environment, ignoring
     synthesis *)
 val end_abstractions_no_synth :
-  config -> Meta.span -> AbstractionId.Set.t -> eval_ctx -> eval_ctx
+  config -> Meta.span -> AbsId.Set.t -> eval_ctx -> eval_ctx
 
 (** Promote a reserved mut borrow to a mut borrow, while preserving the
     invariants.
@@ -103,19 +103,26 @@ val promote_reserved_mut_borrow :
         the same value without the shared loan, and adding another ashared loan
         in the abstraction. For instance:
         {[
-          ML {l0} (0, ML {l1} 1)
+          abs { ML l0 (0, ML l1 1) }
 
-          ~~>
+              ~~>
 
-          ML {l0} (0, 1)
-          ML {l1} 1
+          abs {
+            ML l0 (0, 1),
+            ML l1 1 }
         ]}
      }
      {- [ctx] }
      {- [abs] }
     } *)
 val destructure_abs :
-  Meta.span -> abs_kind -> bool -> bool -> eval_ctx -> abs -> abs
+  Meta.span ->
+  abs_kind ->
+  can_end:bool ->
+  destructure_shared_values:bool ->
+  eval_ctx ->
+  abs ->
+  abs
 
 (** Return [true] if the values in an abstraction are destructured.
 
@@ -123,6 +130,11 @@ val destructure_abs :
 
     The input boolean is [destructure_shared_value]. See {!destructure_abs}. *)
 val abs_is_destructured : Meta.span -> bool -> eval_ctx -> abs -> bool
+
+(** Attempts to eliminate useless ended shared loans.
+
+    TODO: will not be necessary once we destructure the avalues. *)
+val eliminate_ended_shared_loans : Meta.span -> eval_ctx -> eval_ctx
 
 (** Simplify the dummy values in a context by removing as many as possible and
     ending as many borrows as possible.
@@ -141,4 +153,4 @@ val abs_is_destructured : Meta.span -> bool -> eval_ctx -> abs -> bool
       abstractions which are specified by the set of abstraction ids (we do not
       end them, nor their loans). *)
 val simplify_dummy_values_useless_abs :
-  config -> Meta.span -> AbstractionId.Set.t -> cm_fun
+  config -> Meta.span -> AbsId.Set.t -> cm_fun

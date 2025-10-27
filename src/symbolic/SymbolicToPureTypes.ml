@@ -31,7 +31,7 @@ let rec translate_generic_args (span : Meta.span option)
 
 and translate_trait_ref (span : Meta.span option) (translate_ty : T.ty -> ty)
     (tr : T.trait_ref) : trait_ref =
-  let trait_id = translate_trait_instance_id span translate_ty tr.trait_id in
+  let trait_id = translate_trait_ref_kind span translate_ty tr.kind in
   let trait_decl_ref =
     translate_region_binder
       (translate_trait_decl_ref span translate_ty)
@@ -54,10 +54,10 @@ and translate_global_decl_ref (span : Meta.span option)
   let global_generics = translate_generic_args span translate_ty gr.generics in
   { global_id = gr.id; global_generics }
 
-and translate_trait_instance_id (span : Meta.span option)
-    (translate_ty : T.ty -> ty) (id : T.trait_instance_id) : trait_instance_id =
+and translate_trait_ref_kind (span : Meta.span option)
+    (translate_ty : T.ty -> ty) (id : T.trait_ref_kind) : trait_instance_id =
   let translate_trait_instance_id =
-    translate_trait_instance_id span translate_ty
+    translate_trait_ref_kind span translate_ty
   in
   match id with
   | T.Self -> Self
@@ -73,9 +73,12 @@ and translate_trait_instance_id (span : Meta.span option)
       Clause var
       (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
   | ParentClause (tref, clause_id) ->
-      let inst_id = translate_trait_instance_id tref.trait_id in
+      let inst_id = translate_trait_instance_id tref.kind in
       ParentClause (inst_id, tref.trait_decl_ref.binder_value.id, clause_id)
-  | Dyn _ -> [%craise_opt_span] span "Dynamic trait types are not supported yet"
+  | ItemClause _ ->
+      (* `ItemClause`s are removed by Charon's `--remove-associated-types`, except for GATs *)
+      [%craise_opt_span] span "Generic Associated Types are not supported yet"
+  | Dyn -> [%craise_opt_span] span "Dynamic trait types are not supported yet"
   | UnknownTrait s -> [%craise_opt_span] span ("Unknown trait found: " ^ s)
 
 (** Translate a signature type - TODO: factor out the different translation
@@ -124,6 +127,7 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
       [%craise_opt_span] span "Arrow types are not supported yet"
   | TDynTrait _ ->
       [%craise_opt_span] span "Dynamic trait types are not supported yet"
+  | TPtrMetadata _ -> [%craise_opt_span] span "unsupported: PtrMetadata"
   | TError _ ->
       [%craise_opt_span] span "Found type error in the output of charon"
 
@@ -135,16 +139,16 @@ and translate_strait_ref (span : Meta.span option) (tr : T.trait_ref) :
     trait_ref =
   translate_trait_ref span (translate_sty span) tr
 
-and translate_strait_instance_id (span : Meta.span option)
-    (id : T.trait_instance_id) : trait_instance_id =
-  translate_trait_instance_id span (translate_sty span) id
+and translate_strait_ref_kind (span : Meta.span option) (id : T.trait_ref_kind)
+    : trait_instance_id =
+  translate_trait_ref_kind span (translate_sty span) id
 
 let translate_strait_decl_ref (span : Meta.span option) (tr : T.trait_decl_ref)
     : trait_decl_ref =
   translate_trait_decl_ref span (translate_sty span) tr
 
-let translate_trait_clause (span : Meta.span option) (clause : T.trait_clause) :
-    trait_clause =
+let translate_trait_clause (span : Meta.span option) (clause : T.trait_param) :
+    trait_param =
   let { T.clause_id; span = _; trait } = clause in
   let trait = translate_region_binder (translate_strait_decl_ref span) trait in
   { clause_id; trait_id = trait.trait_decl_id; generics = trait.decl_generics }
@@ -310,6 +314,7 @@ let rec translate_fwd_ty (span : Meta.span option) (type_infos : type_infos)
       [%craise_opt_span] span "Arrow types are not supported yet"
   | TDynTrait _ ->
       [%craise_opt_span] span "Dynamic trait types are not supported yet"
+  | TPtrMetadata _ -> [%craise_opt_span] span "unsupported: PtrMetadata"
   | TError _ ->
       [%craise_opt_span] span "Found type error in the output of charon"
 
@@ -321,9 +326,9 @@ and translate_fwd_trait_ref (span : Meta.span option) (type_infos : type_infos)
     (tr : T.trait_ref) : trait_ref =
   translate_trait_ref span (translate_fwd_ty span type_infos) tr
 
-and translate_fwd_trait_instance_id (span : Meta.span option)
-    (type_infos : type_infos) (id : T.trait_instance_id) : trait_instance_id =
-  translate_trait_instance_id span (translate_fwd_ty span type_infos) id
+and translate_fwd_trait_ref_kind (span : Meta.span option)
+    (type_infos : type_infos) (id : T.trait_ref_kind) : trait_instance_id =
+  translate_trait_ref_kind span (translate_fwd_ty span type_infos) id
 
 (** Simply calls [translate_fwd_ty] *)
 let ctx_translate_fwd_ty (ctx : bs_ctx) (ty : T.ty) : ty =
@@ -417,7 +422,7 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
       None
   | TTraitType (trait_ref, type_name) ->
       [%sanity_check_opt_span] span
-        (TypesUtils.trait_instance_id_is_local_clause trait_ref.trait_id);
+        (TypesUtils.trait_ref_kind_is_local_clause trait_ref.kind);
       if inside_mut then
         (* Translate the trait ref as a "forward" trait ref -
            we do not want to filter any type *)
@@ -428,6 +433,7 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
       [%craise_opt_span] span "Arrow types are not supported yet"
   | TDynTrait _ ->
       [%craise_opt_span] span "Dynamic trait types are not supported yet"
+  | TPtrMetadata _ -> [%craise_opt_span] span "unsupported: PtrMetadata"
   | TError _ ->
       [%craise_opt_span] span "Found type error in the output of charon"
 
@@ -441,7 +447,7 @@ let mk_type_check_ctx (ctx : bs_ctx) : PureTypeCheck.tc_ctx =
   let const_generics =
     T.ConstGenericVarId.Map.of_list
       (List.map
-         (fun (cg : T.const_generic_var) ->
+         (fun (cg : T.const_generic_param) ->
            (cg.index, ctx_translate_fwd_ty ctx (T.TLiteral cg.ty)))
          ctx.sg.generics.const_generics)
   in
@@ -458,10 +464,10 @@ let mk_type_check_ctx (ctx : bs_ctx) : PureTypeCheck.tc_ctx =
     bvar_counter = BVarId.zero;
   }
 
-let type_check_pattern (ctx : bs_ctx) (v : tpattern) : unit =
+let type_check_pat (ctx : bs_ctx) (v : tpat) : unit =
   let span = ctx.span in
   let ctx = mk_type_check_ctx ctx in
-  let _ = PureTypeCheck.check_tpattern span ctx v in
+  let _ = PureTypeCheck.check_tpat span ctx v in
   ()
 
 let type_check_texpr (ctx : bs_ctx) (e : texpr) : unit =
@@ -470,63 +476,25 @@ let type_check_texpr (ctx : bs_ctx) (e : texpr) : unit =
     let ctx = mk_type_check_ctx ctx in
     PureTypeCheck.check_texpr span ctx e
 
-(** List the ancestors of an abstraction *)
-let list_ancestor_abstractions_ids (ctx : bs_ctx) (abs : V.abs)
-    (call_id : V.FunCallId.id) : V.AbstractionId.id list =
-  (* We could do something more "elegant" without references, but it is
-   * so much simpler to use references... *)
-  let abs_set = ref V.AbstractionId.Set.empty in
-  let rec gather (abs_id : V.AbstractionId.id) : unit =
-    if V.AbstractionId.Set.mem abs_id !abs_set then ()
-    else (
-      abs_set := V.AbstractionId.Set.add abs_id !abs_set;
-      let abs, _ = V.AbstractionId.Map.find abs_id ctx.abstractions in
-      List.iter gather abs.original_parents)
-  in
-  List.iter gather abs.original_parents;
-  let ids = !abs_set in
-  (* List the ancestors, in the proper order *)
-  let call_info = V.FunCallId.Map.find call_id ctx.calls in
-  List.filter
-    (fun id -> V.AbstractionId.Set.mem id ids)
-    call_info.forward.abstractions
-
-(** List the ancestor abstractions of an abstraction introduced because of a
-    function call *)
-let list_ancestor_abstractions (ctx : bs_ctx) (abs : V.abs)
-    (call_id : V.FunCallId.id) : (V.abs * texpr list) list =
-  let abs_ids = list_ancestor_abstractions_ids ctx abs call_id in
-  List.map (fun id -> V.AbstractionId.Map.find id ctx.abstractions) abs_ids
-
 (** Small utility. *)
 let compute_raw_fun_effect_info (span : Meta.span option)
-    (fun_infos : fun_info A.FunDeclId.Map.t)
-    (fun_id : A.fun_id_or_trait_method_ref) (lid : V.LoopId.id option)
+    (fun_infos : fun_info A.FunDeclId.Map.t) (fun_id : A.fn_ptr_kind)
     (gid : T.RegionGroupId.id option) : fun_effect_info =
   match fun_id with
   | TraitMethod (_, _, fid) | FunId (FRegular fid) ->
       let info =
         [%silent_unwrap_opt_span] span (A.FunDeclId.Map.find_opt fid fun_infos)
       in
-      let stateful_group = info.stateful in
-      let stateful =
-        stateful_group && (!Config.backward_state_update || gid = None)
-      in
       {
         (* Note that backward functions can't fail *)
         can_fail = info.can_fail && gid = None;
-        stateful_group;
-        stateful;
         can_diverge = info.can_diverge;
-        is_rec = (info.is_rec || Option.is_some lid) && gid = None;
+        is_rec = info.is_rec && gid = None;
       }
   | FunId (FBuiltin aid) ->
-      [%sanity_check_opt_span] span (lid = None);
       {
         (* Note that backward functions can't fail *)
         can_fail = Builtin.builtin_fun_can_fail aid && gid = None;
-        stateful_group = false;
-        stateful = false;
         can_diverge = false;
         is_rec = false;
       }
@@ -546,9 +514,8 @@ let compute_raw_fun_effect_info (span : Meta.span option)
     - [generic_args]: the generic arguments with which the uninstantiated
       signature was instantiated, leading to the current [sg] *)
 let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
-    (decls_ctx : C.decls_ctx) (fun_id : A.fun_id_or_trait_method_ref)
-    (sg : A.inst_fun_sig) (input_names : string option list) :
-    decomposed_fun_type =
+    (decls_ctx : C.decls_ctx) (fun_id : A.fn_ptr_kind) (sg : A.inst_fun_sig)
+    (input_names : string option list) : decomposed_fun_type =
   [%ltrace
     let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
     "- sg.regions_hierarchy: "
@@ -566,7 +533,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
 
   (* Is the forward function stateful, and can it fail? *)
   let fwd_effect_info =
-    compute_raw_fun_effect_info span fun_infos fun_id None None
+    compute_raw_fun_effect_info span fun_infos fun_id None
   in
   (* Compute the forward inputs *)
   let fwd_inputs = List.map (translate_fwd_ty span type_infos) sg.inputs in
@@ -602,7 +569,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
       (lazy
         (let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
          "Nested borrows are not supported yet (found in the signature of: "
-         ^ Charon.PrintTypes.fun_id_or_trait_method_ref_to_string ctx fun_id
+         ^ Charon.PrintTypes.fn_ptr_kind_to_string ctx fun_id
          ^ ")"));
     (* For now, we don't allow nested borrows, so the additional inputs to the
        backward function can only come from borrows that were returned like
@@ -624,7 +591,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
         Print.list_to_string (PrintPure.ty_to_string pctx false) inputs
       in
       "translate_back_inputs_for_gid:" ^ "\n- function:"
-      ^ Charon.PrintTypes.fun_id_or_trait_method_ref_to_string ctx fun_id
+      ^ Charon.PrintTypes.fn_ptr_kind_to_string ctx fun_id
       ^ "\n- gid: "
       ^ RegionGroupId.to_string gid
       ^ "\n- output: " ^ output ^ "\n- back inputs: " ^ inputs];
@@ -663,7 +630,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
         Print.list_to_string (PrintPure.ty_to_string pctx false) outputs
       in
       "compute_back_outputs_for_gid:" ^ "\n- function:"
-      ^ Charon.PrintTypes.fun_id_or_trait_method_ref_to_string ctx fun_id
+      ^ Charon.PrintTypes.fn_ptr_kind_to_string ctx fun_id
       ^ "\n- gid: "
       ^ RegionGroupId.to_string gid
       ^ "\n- inputs: " ^ inputs ^ "\n- back outputs: " ^ outputs];
@@ -673,7 +640,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
       RegionGroupId.id * back_sg_info =
     let gid = rg.id in
     let back_effect_info =
-      compute_raw_fun_effect_info span fun_infos fun_id None (Some gid)
+      compute_raw_fun_effect_info span fun_infos fun_id (Some gid)
     in
     let inputs = translate_back_inputs_for_gid gid in
     let inputs = List.map (fun ty -> (Some "ret", ty)) inputs in
@@ -700,11 +667,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
     *)
     let back_effect_info =
       let b = inputs <> [] in
-      {
-        back_effect_info with
-        stateful = back_effect_info.stateful && b;
-        can_fail = back_effect_info.can_fail && b;
-      }
+      { back_effect_info with can_fail = back_effect_info.can_fail && b }
     in
     let output_names, outputs = compute_back_outputs_for_gid gid in
     let filter =
@@ -737,14 +700,14 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
   { fwd_inputs; fwd_output; back_sg; fwd_info }
 
 let translate_fun_sig_with_regions_hierarchy_to_decomposed (span : span option)
-    (decls_ctx : C.decls_ctx) (fun_id : A.fun_id_or_trait_method_ref)
+    (decls_ctx : C.decls_ctx) (fun_id : A.fn_ptr_kind)
     (regions_hierarchy : T.region_var_groups) (sg : A.fun_sig)
     (input_names : string option list) : decomposed_fun_sig =
   let inst_sg : LlbcAst.inst_fun_sig =
     let ({ A.inputs; output; _ } : A.fun_sig) = sg in
     [%sanity_check_opt_span] span (sg.generics.trait_type_constraints = []);
 
-    let _, fresh_abs_id = V.AbstractionId.fresh_stateful_generator () in
+    let _, fresh_abs_id = V.AbsId.fresh_stateful_generator () in
     let region_gr_id_abs_id_list =
       List.map
         (fun (rg : T.region_var_group) -> (rg.id, fresh_abs_id ()))
@@ -832,50 +795,36 @@ let mk_back_output_ty_from_effect_info (effect_info : fun_effect_info)
 
 (** Compute the arrow types for all the backward functions.
 
-    If a backward function has no inputs/outputs we filter it.
-
-    We may also filter the region group ids (param [keep_rg_ids]). This is
-    useful for the loops: not all the parent function region groups can be
-    linked to a region abstraction introduced by the loop. *)
-let compute_back_tys_with_info (dsg : Pure.decomposed_fun_type)
-    (keep_rg_ids : RegionGroupId.Set.t option) : (back_sg_info * ty) option list
-    =
-  let keep_rg_id =
-    match keep_rg_ids with
-    | None -> fun _ -> true
-    | Some ids -> fun id -> RegionGroupId.Set.mem id ids
-  in
+    If a backward function has no inputs/outputs we filter it. *)
+let compute_back_tys_with_info (dsg : Pure.decomposed_fun_type) :
+    (back_sg_info * ty) option list =
   List.map
-    (fun ((rg_id, back_sg) : RegionGroupId.id * back_sg_info) ->
-      if keep_rg_id rg_id then
-        let effect_info = back_sg.effect_info in
-        (* Compute the input/output types *)
-        let inputs = List.map snd back_sg.inputs in
-        let outputs = back_sg.outputs in
-        (* Filter if necessary *)
-        if !Config.simplify_merged_fwd_backs && inputs = [] && outputs = [] then
-          None
-        else
-          let output = mk_simpl_tuple_ty outputs in
-          let output =
-            mk_back_output_ty_from_effect_info effect_info inputs output
-          in
-          let ty = mk_arrows inputs output in
-          Some (back_sg, ty)
-      else (* We ignore this region group *)
-        None)
-    (RegionGroupId.Map.bindings dsg.back_sg)
+    (fun (back_sg : back_sg_info) ->
+      let effect_info = back_sg.effect_info in
+      (* Compute the input/output types *)
+      let inputs = List.map snd back_sg.inputs in
+      let outputs = back_sg.outputs in
+      (* Filter if necessary *)
+      if !Config.simplify_merged_fwd_backs && inputs = [] && outputs = [] then
+        None
+      else
+        let output = mk_simpl_tuple_ty outputs in
+        let output =
+          mk_back_output_ty_from_effect_info effect_info inputs output
+        in
+        let ty = mk_arrows inputs output in
+        Some (back_sg, ty))
+    (RegionGroupId.Map.values dsg.back_sg)
 
-let compute_back_tys (dsg : Pure.decomposed_fun_type)
-    (keep_rg_ids : RegionGroupId.Set.t option) : ty option list =
-  List.map (Option.map snd) (compute_back_tys_with_info dsg keep_rg_ids)
+let compute_back_tys (dsg : Pure.decomposed_fun_type) : ty option list =
+  List.map (Option.map snd) (compute_back_tys_with_info dsg)
 
 (** Compute the output type of a function, from a decomposed signature (the
     output type contains the type of the value returned by the forward function
     as well as the types of the returned backward functions). *)
 let compute_output_ty_from_decomposed (dsg : Pure.decomposed_fun_type) : ty =
   (* Compute the arrow types for all the backward functions *)
-  let back_tys = List.filter_map (fun x -> x) (compute_back_tys dsg None) in
+  let back_tys = List.filter_map (fun x -> x) (compute_back_tys dsg) in
   (* Group the forward output and the types of the backward functions *)
   let effect_info = dsg.fwd_info.effect_info in
   let output =
@@ -939,3 +888,20 @@ let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
   in
   (* Finish the translation *)
   translate_fun_sig_from_decomposed sg
+
+(** TODO: not very clean. *)
+let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fn_ptr_kind)
+    (gid : T.RegionGroupId.id option) : fun_effect_info =
+  match fun_id with
+  | TraitMethod (_, _, fid) | FunId (FRegular fid) ->
+      let dsg = A.FunDeclId.Map.find fid ctx.fun_dsigs in
+      let info =
+        match gid with
+        | None -> dsg.fun_ty.fwd_info.effect_info
+        | Some gid ->
+            (RegionGroupId.Map.find gid dsg.fun_ty.back_sg).effect_info
+      in
+      { info with is_rec = info.is_rec && gid = None }
+  | FunId (FBuiltin _) ->
+      compute_raw_fun_effect_info (Some ctx.span) ctx.fun_ctx.fun_infos fun_id
+        gid

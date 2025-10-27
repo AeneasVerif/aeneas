@@ -27,7 +27,7 @@ Fixpoint foo_loop (t : List_t (List_t u8)) : result unit :=
 (** [issue_270_loop_list::foo]:
     Source: 'tests/src/issue-270-loop-list.rs', lines 7:0-14:1 *)
 Definition foo (v : List_t (List_t u8)) : result unit :=
-  match v with | List_Cons l t => foo_loop t | List_Nil => Ok tt end
+  match v with | List_Cons _ t => foo_loop t | List_Nil => Ok tt end
 .
 
 End Issue270LoopList.

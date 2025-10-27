@@ -67,7 +67,7 @@ theorem Usize.cMax_bound : UScalar.cMax .Usize ≤ Usize.max ∧ Usize.max + 1 =
 
 @[scalar_tac Usize.size]
 theorem Usize.size_scalarTac_eq : Usize.size = Usize.max + 1 ∧ Usize.size = 2^System.Platform.numBits := by
-  simp [Usize.max, UScalar.cMax, UScalar.rMax, U32.rMax, Usize.numBits, Usize.size]
+  simp [Usize.max, Usize.numBits, Usize.size]
   have := System.Platform.numBits_eq; cases this <;> simp [*]
 
 abbrev Usize.maxAbbrevPow := 2^System.Platform.numBits
@@ -80,8 +80,7 @@ theorem Usize.cMax_bound'' : UScalar.cMax .Usize ≤ Usize.max ∧ Usize.max + 1
 
 @[scalar_tac Isize.min]
 theorem Isize.cMin_bound : Isize.min ≤ IScalar.cMin .Isize ∧ Isize.min = - 2^(System.Platform.numBits - 1) := by
-  simp [Isize.min, IScalar.cMin, IScalar.rMin, I32.rMin, Isize.numBits,
-        Isize.max, IScalar.cMax, IScalar.rMax, I32.rMax]
+  simp [Isize.min, IScalar.cMin, IScalar.rMin, I32.rMin, Isize.numBits]
   have := System.Platform.numBits_eq; cases this <;> simp [*]
 
 abbrev Isize.minAbbrevPow :Int := -2^(System.Platform.numBits-1)
@@ -94,13 +93,12 @@ theorem Isize.cMin_bound'' : Isize.min ≤ IScalar.cMin .Isize ∧ Isize.min = -
 
 @[scalar_tac Isize.max]
 theorem Isize.cMax_bound : IScalar.cMax .Isize ≤ Isize.max ∧ Isize.max + 1 = 2^(System.Platform.numBits - 1) := by
-  simp [Isize.min, IScalar.cMin, IScalar.rMin, I32.rMin, Isize.numBits,
-        Isize.max, IScalar.cMax, IScalar.rMax, I32.rMax]
+  simp [Isize.numBits, Isize.max, IScalar.cMax, IScalar.rMax, I32.rMax]
   have := System.Platform.numBits_eq; cases this <;> simp [*]
 
 @[scalar_tac Usize.size]
 theorem Isize.size_scalarTac_eq : Isize.size = 2^System.Platform.numBits := by
-  simp [Isize.max, Isize.numBits, Isize.size]
+  simp [Isize.numBits, Isize.size]
 
 abbrev Isize.maxAbbrevPow : Int := 2^(System.Platform.numBits-1)
 @[scalar_tac Isize.maxAbbrevPow]

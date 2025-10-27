@@ -60,7 +60,16 @@ let builtin_globals () : (string * string) list =
   let mk_ints_globals name =
     List.map (fun ty -> mk_int_global ty name) all_int_names
   in
-  List.concat [ mk_ints_globals "MIN"; mk_ints_globals "MAX" ]
+  List.concat
+    [
+      mk_ints_globals "MIN";
+      mk_ints_globals "MAX";
+      [
+        (* UNIT_METADATA should be eliminated through a micro-pass and should
+           never appear in the code.. *)
+        ("UNIT_METADATA", "UNIT_METADATA");
+      ];
+    ]
 
 let mk_builtin_globals_map () : Pure.builtin_global_info NameMatcherMap.t =
   NameMatcherMap.of_list
@@ -212,6 +221,9 @@ let builtin_types () : Pure.builtin_type_info list =
         mk_type "core::fmt::Formatter" ();
         mk_type "core::result::Result"
           ~kind:(KEnum [ ("Ok", None); ("Err", None) ])
+          ();
+        mk_type "core::result::Sum"
+          ~kind:(KEnum [ ("Left", None); ("Right", None) ])
           ();
         mk_type "core::fmt::Error" ();
         mk_type "core::array::TryFromSliceError" ();
@@ -1150,13 +1162,13 @@ let mk_builtin_funs_map () =
 
 let builtin_funs_map = mk_memoized mk_builtin_funs_map
 
-type effect_info = { can_fail : bool; stateful : bool }
+type effect_info = { can_fail : bool }
 
 let mk_builtin_fun_effects () : (pattern * effect_info) list =
   let builtin_funs : (pattern * Pure.builtin_fun_info) list = builtin_funs () in
   List.map
     (fun ((pattern, info) : _ * Pure.builtin_fun_info) ->
-      let info = { can_fail = info.can_fail; stateful = info.stateful } in
+      let info = { can_fail = info.can_fail } in
       (pattern, info))
     builtin_funs
 

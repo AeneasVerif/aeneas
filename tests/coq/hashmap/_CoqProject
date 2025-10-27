@@ -4,9 +4,5 @@
 -arg all
 
 Hashmap_Funs.v 
-Hashmap_FunsExternal.v 
-Hashmap_FunsExternal_Template.v 
 Hashmap_Types.v 
-Hashmap_TypesExternal.v 
-Hashmap_TypesExternal_Template.v 
 Primitives.v

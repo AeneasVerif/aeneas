@@ -8,9 +8,7 @@ type fmt_env = Print.fmt_env
 let call_id_to_string (env : fmt_env) (call_id : call_id) : string =
   match call_id with
   | Fun (fid, call_id) ->
-      Types.fun_id_or_trait_method_ref_to_string env fid
-      ^ "@"
-      ^ FunCallId.to_string call_id
+      Types.fn_ptr_kind_to_string env fid ^ "@" ^ FunCallId.to_string call_id
   | Unop unop -> Expressions.unop_to_string env unop
   | Binop binop -> Expressions.binop_to_string binop
 
@@ -51,7 +49,7 @@ let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
       let call = call_to_string env indent call in
       let next = expr_to_string env indent indent_incr next in
       call ^ "\n" ^ next
-  | EndAbstraction (_, abs, next) ->
+  | EndAbs (_, abs, next) ->
       let indent1 = indent ^ indent_incr in
       let verbose = false in
       let abs =
@@ -75,7 +73,11 @@ let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
       let v = value_aggregate_to_string env v in
       let next = expr_to_string env indent indent_incr next in
       indent ^ "let " ^ sv ^ " = " ^ v ^ "in\n" ^ next
-  | ForwardEnd (ret, _, loop_sid_maps, fwd_end, backs) ->
+  | SubstituteAbsIds (aids, next) ->
+      let aids = AbsId.Map.to_string None AbsId.to_string aids in
+      let next = expr_to_string env indent indent_incr next in
+      indent ^ "subst " ^ aids ^ " in\n" ^ next
+  | ForwardEnd (ret, _, fwd_end, backs) ->
       let indent1 = indent ^ indent_incr in
       let indent2 = indent1 ^ indent_incr in
       let indent3 = indent2 ^ indent_incr in
@@ -85,35 +87,48 @@ let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
         | Some (_, ret) -> "Some " ^ Values.tvalue_to_string env ret
       in
       let ret = "ret = " ^ ret in
-      let sid_to_value, refreshed_sids =
-        match loop_sid_maps with
-        | None -> ("None", "None")
-        | Some (sid_to_value, refreshed_sids) ->
-            ( SymbolicValueId.Map.to_string None
-                (Values.tvalue_to_string env)
-                sid_to_value,
-              SymbolicValueId.Map.to_string None SymbolicValueId.to_string
-                refreshed_sids )
-      in
-      let sid_to_value = "sid_to_value = " ^ sid_to_value in
-      let refreshed_sids = "refreshed_sids = " ^ refreshed_sids in
-
       let fwd_end = expr_to_string env indent2 indent_incr fwd_end in
       let backs =
         RegionGroupId.Map.to_string (Some indent2)
           (fun e -> "\n" ^ expr_to_string env indent3 indent_incr e)
           backs
       in
-      indent ^ "forward_end {\n" ^ indent1 ^ ret ^ "\n" ^ indent1 ^ sid_to_value
-      ^ "\n" ^ indent1 ^ refreshed_sids ^ "\n" ^ indent1 ^ "fwd_end =\n"
-      ^ fwd_end ^ "\n" ^ indent1 ^ "backs =\n" ^ indent1 ^ backs ^ "\n" ^ indent
-      ^ "}"
+      indent ^ "forward_end {\n" ^ indent1 ^ ret ^ "\n" ^ indent1
+      ^ "fwd_end =\n" ^ fwd_end ^ "\n" ^ indent1 ^ "backs =\n" ^ indent1 ^ backs
+      ^ "\n" ^ indent ^ "}"
   | Loop loop -> loop_to_string env indent indent_incr loop
-  | ReturnWithLoop (loop_id, is_continue) ->
-      indent ^ "return_with_loop (" ^ LoopId.to_string loop_id
-      ^ ", is_continue: " ^ bool_to_string is_continue ^ ")"
+  | LoopContinue (ectx, loop_id, values, abs) ->
+      loop_continue_break_to_string env indent indent_incr ~is_continue:true
+        ectx loop_id values abs
+  | LoopBreak (ectx, loop_id, values, abs) ->
+      loop_continue_break_to_string env indent indent_incr ~is_continue:false
+        ectx loop_id values abs
   | Meta (_, next) -> expr_to_string env indent indent_incr next
   | Error (_, error) -> indent ^ "ERROR(" ^ error ^ ")"
+
+and loop_continue_break_to_string (env : fmt_env) (indent : string)
+    (indent_incr : string) ~(is_continue : bool) _ctx (loop_id : loop_id)
+    (values : tvalue list) (abs : abs list) : string =
+  let indent1 = indent ^ indent_incr in
+  let indent2 = indent1 ^ indent_incr in
+  let keyword = if is_continue then "@continue" else "@break" in
+  let loop_id = "loop_id@" ^ LoopId.to_string loop_id in
+  let values =
+    List.map
+      (fun v -> indent2 ^ Print.Values.tvalue_to_string env v ^ ",\n")
+      values
+  in
+  let abs =
+    List.map
+      (fun a ->
+        Print.Values.abs_to_string ~with_ended:true env true indent2 indent_incr
+          a
+        ^ ",\n")
+      abs
+  in
+  indent ^ keyword ^ " {\n" ^ indent1 ^ loop_id ^ ",\n" ^ indent1
+  ^ "values = [\n" ^ String.concat "" values ^ indent1 ^ "]\n\n" ^ indent1
+  ^ "abs = [\n" ^ String.concat "" abs ^ indent1 ^ "]\n" ^ indent ^ "}"
 
 and expansion_to_string (env : fmt_env) (indent : string) (indent_incr : string)
     (scrut : symbolic_value) (e : expansion) : string =
@@ -130,10 +145,8 @@ and expansion_to_string (env : fmt_env) (indent : string) (indent_incr : string)
       let branch_to_string
           ((variant_id, svl, branch) :
             variant_id option * symbolic_value list * expr) : string =
-        let field_values =
-          List.map ValuesUtils.mk_tvalue_from_symbolic_value svl
-        in
-        let v : tvalue = { value = VAdt { variant_id; field_values }; ty } in
+        let fields = List.map ValuesUtils.mk_tvalue_from_symbolic_value svl in
+        let v : tvalue = { value = VAdt { variant_id; fields }; ty } in
         indent ^ "| "
         ^ Values.tvalue_to_string env v
         ^ " ->\n"
@@ -161,9 +174,7 @@ and loop_to_string (env : fmt_env) (indent : string) (indent_incr : string)
     (loop : loop) : string =
   let indent1 = indent ^ indent_incr in
   let loop_id = LoopId.to_string loop.loop_id in
-  let fresh_svalues = SymbolicValueId.Set.to_string None loop.fresh_svalues in
-  let end_expr = expr_to_string env indent1 indent_incr loop.end_expr in
+  let next_expr = expr_to_string env indent1 indent_incr loop.next_expr in
   let loop_expr = expr_to_string env indent1 indent_incr loop.loop_expr in
-  "loop@" ^ loop_id ^ " {\n\n" ^ indent1 ^ "fresh_svalues = " ^ fresh_svalues
-  ^ "\n\n" ^ indent1 ^ "end_expr=\n" ^ end_expr ^ "\n\n" ^ indent1
-  ^ "loop_expr=\n" ^ loop_expr ^ "\n" ^ indent ^ "}"
+  "loop@" ^ loop_id ^ " {\n\n" ^ indent1 ^ "loop_expr=\n" ^ loop_expr ^ "\n\n"
+  ^ indent1 ^ "next_expr=\n" ^ next_expr ^ "\n" ^ indent ^ "}"
